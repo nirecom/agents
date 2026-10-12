@@ -26,7 +26,7 @@ const CANONICAL_ROUTES = [
   "Canonical routes: review loops are wrapper-managed (the wrapper owns round numbers and terminals);",
   "  exit-6 residual accept: bin/accept-exit6-residual; worker payloads: bin/worker-dispatch-payload;",
   "  risk signals: bin/record-risk-signal; stuck: skills/_shared/codex-review-loop/exit-codes.md \"Escalation by format\".",
-  "Scratch notes belong in <sid>-note-<topic>.<ext> under WORKFLOW_PLANS_DIR, or in the session scratchpad.",
+  `Scratch notes belong in <sid>-note-<topic>.<ext> under WORKFLOW_PLANS_DIR, or in the session scratchpad; <sid>-user-requested-<topic>.<ext> follows the usage rule in ${STATE_DIRS_DOC} (Artifacts table).`,
   "WORKFLOW=off allows it (the placement guard lifts; clearance tokens and markers stay protected).",
 ];
 const PLACEMENT_MESSAGES = Object.freeze({

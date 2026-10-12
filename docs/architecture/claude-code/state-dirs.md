@@ -63,8 +63,9 @@ guard refuse every model write there without touching the artifact workflow.
 | `<fmt>-finalize-diagnostic.txt` | `concern-ledger finalize` (on failure) | Human |
 | `worker-<name>[-<seq>].draft.json` | Model (WD-2) | `bin/worker-dispatch-payload` only; deleted on publish |
 | `notes-backup/` | `capture-env.sh` | worktree-end |
-| `issue-create-dispatch.txt`, `issue-create-survey.json`, `sweep-issues-{survivors,decisions}.tsv`, `refactor-prompts-scan.json` | Model, subagents, scratchpad scripts | Owning skill |
+| `issue-create-dispatch.txt`, `issue-create-survey.json`, `sweep-issues-{survivors,decisions}.tsv`, `refactor-prompts-scan.json`, `sweep-plans-approved-sessions.txt` | Model, subagents, scratchpad scripts | Owning skill |
 | `note-<topic>.{md,txt,json,tsv}` | Model scratch notes | Human |
+| `user-requested-<topic>.{md,txt,json,tsv}` | Model, only when the user explicitly asks for a separate file (the model's own scratch stays `note-`) | Human |
 
 ### Control files (in `<sid>.control/`, stored without the `<sid>-` prefix)
 
@@ -85,14 +86,13 @@ guard refuse every model write there without touching the artifact workflow.
 | `handoff-{risk,pressure,flush-mark}.json` | handoff-sidecar.js (one writer each: `recordRiskSignal`, the nudge hook, `handoff-append`) | handoff-pressure.js, handoff-risk-signal.js |
 | `companion-precheck.json`, `intent-scan-block.txt`, `guard-attempt.tmp` | precheck-companions.sh, clarify-commit-scope.sh, clarify-guard-loop.sh | clarify-intent |
 | `calibration-asked.txt` | `skills/run-tests/scripts/mark-calibration-asked.sh` (before the dialog), `answer-calibration.sh` | `probe-calibration.sh` |
+| `sweep-plans-gate.tsv` | `bin/sweep-plans/gate-artifact.js` (pass 1 of `--include-plan-and-user-requested`) | The same script in pass 2, which consumes it |
 
 Named exceptions:
 
 - The sid-less `cache/` lives at `<WORKFLOW_STATE_DIR>/cache/`.
 - Sid-less worker logs live at `<WORKFLOW_STATE_DIR>/worker-logs/` (see "Worker logs").
-- Never moved: `*.lock`, `*.tmp`, `*.migrating.*.tmp`, `.sg-*`, `.prev-*`.
-  `guard-attempt.tmp` is a short-lived marker that expires in place
-  (`MIGRATABLE_KINDS` excludes it).
+- Never moved: `*.lock`, `*.tmp`, `*.migrating.*.tmp`, `.sg-*`, `.prev-*`. `guard-attempt.tmp` is a short-lived marker that expires in place (`MIGRATABLE_KINDS` excludes it).
 - Never migrated from the plans dir: `worker-outcome` and `worker-ingested`, so a
   forged outcome placed there cannot be carried into the control dir (#2544).
 
@@ -312,5 +312,4 @@ renaming it needs a migration. Rule:
 - `zombie-cleanup` removes regular files directly under `<wf>/worker-logs/`
   older than 30 days. It uses `lstat`: a symlinked `worker-logs` or entry is
   never followed, and subdirectories and the directory itself are kept.
-- `sweep-plans.sh` keeps handling PLANS_DIR artifacts only. `sweep-worktrees`
-  and session-close never delete a control directory.
+- `sweep-plans.sh` handles PLANS_DIR artifacts only, by each kind's registry retention class: `non-plan` is deleted by default, `plan` and `user-requested` only through `/sweep-plans --include-plan-and-user-requested` after approval, and a name matching no kind or several readings (`unknown`) is kept; as a named exception, an empty-prefix name on the #847 allowlist is classified by kind too; `sweep-worktrees` and session-close never delete a control directory.

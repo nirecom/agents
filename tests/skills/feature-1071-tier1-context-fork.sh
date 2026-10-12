@@ -2,17 +2,11 @@
 # tests/skills/feature-1071-tier1-context-fork.sh
 # Tests: skills/sweep-branches/SKILL.md, skills/sweep-worktrees/SKILL.md, skills/sweep-plans/SKILL.md
 # Tags: static, skill, fork, sweep, context-fork, scope:issue-specific
-#
-# Tier 1 static contract test for issue #1071 (skill/agent fork+worker audit).
-# Asserts the three sweep skills declare `context: fork` in frontmatter while
-# retaining `user-invocable` and their skill body.
-# Expected RED until #1071 adds `context: fork` to the three sweep SKILL.md files.
-#
-# L3 gap (what this test does NOT catch):
-# - actual fork dispatch at runtime (requires a real claude -p session)
-# - whether the forked context behaves correctly when invoked
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
+# Tier 1 static contract (#1071): sweep-branches/sweep-worktrees declare `context: fork`;
+# sweep-plans does not (its approval gate needs the parent conversation). All three
+# keep `user-invocable` and their skill body.
+# L3 gap: runtime fork dispatch needs a real claude -p session; checked at the
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh skill-orchestration).
 
 set -u
 
@@ -45,6 +39,20 @@ assert_context_fork() {
     fi
 }
 
+# The inverse: sweep-plans must NOT fork (AskUserQuestion gate).
+assert_no_context_fork() {
+    local file="$1" label="$2"
+    if [ ! -f "$file" ]; then
+        fail "$label: $(basename "$(dirname "$file")")/SKILL.md missing"
+        return
+    fi
+    if frontmatter "$file" | grep -qE '^context:[[:space:]]*fork[[:space:]]*$'; then
+        fail "$label: frontmatter still declares 'context: fork'"
+    else
+        pass "$label: frontmatter declares no 'context: fork'"
+    fi
+}
+
 assert_user_invocable_present() {
     local file="$1" label="$2"
     if [ ! -f "$file" ]; then
@@ -71,10 +79,10 @@ assert_body_not_stripped() {
     fi
 }
 
-# ── Tests 1–3: context: fork present in each sweep skill ──────────────────────
+# ── Tests 1–3: context: fork on branches/worktrees; none on sweep-plans ───────
 assert_context_fork "$SB_MD" "1: sweep-branches context:fork"
 assert_context_fork "$SW_MD" "2: sweep-worktrees context:fork"
-assert_context_fork "$SP_MD" "3: sweep-plans context:fork"
+assert_no_context_fork "$SP_MD" "3: sweep-plans no context:fork (approval gate needs the parent conversation)"
 
 # ── Tests 4–6: user-invocable still present (regression guard) ────────────────
 assert_user_invocable_present "$SB_MD" "4: sweep-branches user-invocable retained"

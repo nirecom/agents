@@ -60,8 +60,9 @@ A2="$SID-worker-x-1.draft.json"
 A3="$SID-note-x.md"
 A4="$SID-sweep-issues-survivors.tsv"
 A5="some-random-file.txt"
+A6="$SID-user-requested-x.md"
 
-for bn in "$A1" "$A2" "$A3" "$A4" "$A5"; do
+for bn in "$A1" "$A2" "$A3" "$A4" "$A5" "$A6"; do
     expect_approve "c-allow $bn" "$(local_classify "$(local_run_hook "$WFN" "$(mk_file_in Write "$PLDN/$bn")")")"
 done
 
@@ -71,6 +72,21 @@ expect_approve "c-allow bash-decisions-tsv" "$(local_classify "$(local_run_hook 
 # Sanctioned-artifact counterpart of c-block bash-plansvar-control.
 expect_approve "c-allow bash-plansvar-artifact" \
     "$(local_classify "$(local_run_hook "$WFN" "$(mk_bash_in "echo x > \${WORKFLOW_PLANS_DIR}/$SID-detail.md")")")"
+
+case_end
+
+# ════════════════════════════════════════════════════════════════════
+case_begin "plans-unregistered-message-routes" "hooks/block-clearance-token-write/placement-guard.js"
+
+# The block message names both sanctioned free-form spellings: the model's own
+# scratch (-note-<topic>) and the user-asked separate file (-user-requested-<topic>).
+MSG_PROBE="try{const g=require(process.argv[1]);const m=String((g.PLACEMENT_MESSAGES||{})['plans-unregistered']||'');process.stdout.write((m.includes('-note-<topic>')?'note':'no-note')+','+(m.includes('-user-requested-<topic>')?'ur':'no-ur'));}catch(e){process.stdout.write('ERR');}"
+MSG_GOT="$("$RWT" 8 node -e "$MSG_PROBE" "$(np "$GUARD_JS")" 2>/dev/null)"
+if [ "$MSG_GOT" = "note,ur" ]; then
+    pass "plans-unregistered message names -note-<topic> and -user-requested-<topic>"
+else
+    fail "plans-unregistered message names -note-<topic> and -user-requested-<topic>" "got=$MSG_GOT"
+fi
 
 case_end
 

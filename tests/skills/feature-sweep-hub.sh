@@ -328,7 +328,7 @@ T12_sweep_shell_snapshots_exists_user_invocable() {
 #        nothing about the script is a /sweep-shell-snapshots that sweeps
 #        nothing, and T13 (hub → sub-skill) stays green throughout. This closes
 #        the last hop of the chain, mirroring how sweep-plans/SKILL.md names
-#        `bin/sweep-plans.sh` in its Usage section.
+#        `bin/sweep-plans.sh` in its Procedure.
 # ─────────────────────────────────────────────────────────────────────────────
 
 T12b_sweep_shell_snapshots_delegates_to_script() {
@@ -431,6 +431,8 @@ T14_sweep_hub_worktree_on_references_last_dispatch
 # cases at source time and uses the pass/fail helpers defined above.
 # shellcheck source=tests/skills/feature-sweep-hub/skill-host-integration.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-sweep-hub/skill-host-integration.sh"
+# shellcheck source=tests/skills/feature-sweep-hub/plans-gate.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-sweep-hub/plans-gate.sh"
 
 echo ""
 echo "─────────────────────────────────────────"

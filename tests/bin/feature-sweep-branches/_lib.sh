@@ -81,7 +81,8 @@ make_branch_reachable_from_origin_main() {
 # is reached only when the sweep is launched from this copy ($1/bin/sweep-branches.sh).
 copy_sweep_into() {
     script_checkout_fixture_copy "$1" \
-        bin/sweep-branches.sh bin/sweep-branches bin/lib/sweep-write-mode.sh bin/lib/main-worktree.sh
+        bin/sweep-branches.sh bin/sweep-branches bin/lib/sweep-write-mode.sh \
+        bin/lib/main-worktree.sh bin/lib/sweep-numeric.sh
 }
 
 # Create a stub checkout at $1: the sweep copy plus is-github-dotcom-remote (exits 0).

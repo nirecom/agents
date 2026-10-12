@@ -12,7 +12,7 @@ set -uo pipefail
 
 DISPATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/feature-sweep-plans" && pwd)"
 
-TEST_GROUPS=(core validation)
+TEST_GROUPS=(core validation skill)
 
 TOTAL_PASS=0
 TOTAL_FAIL=0

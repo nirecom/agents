@@ -1,60 +1,39 @@
 #!/bin/bash
-# bin/sweep-plans.sh — reclaim stale ~/.workflow-plans/ session artifacts. A
-# "candidate" is a group of files sharing a session-id prefix (YYYYMMDD-HHMMSS
-# or UUID) whose newest member is older than SWEEP_AGE_DAYS days.
-# Usage: sweep-plans.sh [--dry-run|--apply] [--ci-mode] [--sweep-age-days N]
-# Deletes by default; pass --dry-run to preview.
-# Exit codes: 0 normal completion; 2 SWEEP_AGE_DAYS validation error.
+# bin/sweep-plans.sh — reclaim stale ~/.workflow-plans/ session artifacts. A candidate is a
+# group of files sharing a session-id prefix whose newest member is older than SWEEP_AGE_DAYS.
+# A run deletes non-plan files by default, only lists plan / user-requested files, and always
+# keeps unknown ones (classes: hooks/lib/plans-artifact-registry.js). --include-plan-and-user-requested
+# opens the two-pass approval gate the /sweep-plans skill drives. Pass --dry-run to preview.
+# Entrypoint only (rules/coding/file-split.md Pattern A); logic lives in bin/sweep-plans/.
+# Exit codes: 0 normal completion; 1 unknown flag; 2 SWEEP_AGE_DAYS validation error,
+# internal-protocol misuse, or approval gate verification failure.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/sweep-write-mode.sh
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
+# shellcheck source=lib/sweep-numeric.sh
+source "$SCRIPT_DIR/lib/sweep-numeric.sh"
+# shellcheck source=./sweep-plans/summary.sh
+source "$SCRIPT_DIR/sweep-plans/summary.sh"
+# shellcheck source=./sweep-plans/discover.sh
+source "$SCRIPT_DIR/sweep-plans/discover.sh"
+# shellcheck source=./sweep-plans/delete-passes.sh
+source "$SCRIPT_DIR/sweep-plans/delete-passes.sh"
 
-# ─── Defaults ──────────────────────────────────────────────────────────────
+# ─── Defaults & flag parsing ───────────────────────────────────────────────
 
 sweep_write_mode_init
 CI_MODE=0
+INCLUDE_APPROVAL=0
+GATE_SESSION=""
+GATE_ID=""
+APPROVED_FILE=""
+INTERNAL_FLAG_SEEN=0
 SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
-# ─── Validators ────────────────────────────────────────────────────────────
-
-validate_sweep_age_days() {
-  local v="$1"
-  case "$v" in
-    ''|*[!0-9]*)
-      printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
-      exit 2
-      ;;
-    0?*)
-      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
-      # error and 010 silently means 8; reject instead of guessing the intent.
-      printf 'ERROR: SWEEP_AGE_DAYS must not have a leading zero (bash reads it as octal) (got: %s)\n' "$v" >&2
-      exit 2
-      ;;
-    ?????????????????*)
-      # >17 digits always overflows once multiplied by 86400; the precise
-      # bound below (SWEEP_AGE_DAYS_SAFE_MAX) covers the tighter cases.
-      printf 'ERROR: SWEEP_AGE_DAYS is too large (got: %s)\n' "$v" >&2
-      exit 2
-      ;;
-  esac
-  if [[ "$v" -lt 1 ]]; then
-    printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
-    exit 2
-  fi
-  # Largest N for which N * 86400 does not overflow 64-bit signed arithmetic
-  # (106751991167300 * 86400 = 9223372036854720000 <= INT64_MAX); a larger
-  # value would silently wrap in the `$(( SWEEP_AGE_DAYS * 86400 ))` below.
-  local -r SWEEP_AGE_DAYS_SAFE_MAX=106751991167300
-  if [[ "$v" -gt "$SWEEP_AGE_DAYS_SAFE_MAX" ]]; then
-    printf 'ERROR: SWEEP_AGE_DAYS must be at most %s (got: %s)\n' "$SWEEP_AGE_DAYS_SAFE_MAX" "$v" >&2
-    exit 2
-  fi
-}
-
-validate_sweep_age_days "$SWEEP_AGE_DAYS"
+sweep_validate_uint SWEEP_AGE_DAYS "$SWEEP_AGE_DAYS" 1 86400 2
 
 usage() {
   cat <<'EOF'
@@ -64,10 +43,18 @@ Options:
 EOF
   sweep_write_mode_usage_lines
   cat <<'EOF'
-  --ci-mode             Emit JSON summary on stdout (instead of plain text).
+  --include-plan-and-user-requested
+                        Also offer plan and user-requested files of old sessions
+                        for deletion through the /sweep-plans approval gate.
+  --ci-mode             Emit exactly one JSON line on stdout; human-readable lines go to stderr.
   --sweep-age-days N    Age threshold in days (default 30; env SWEEP_AGE_DAYS).
   -h, --help            Show this help and exit.
 EOF
+}
+
+protocol_error() {
+  printf 'ERROR: sweep-plans: %s\n' "$1" >&2
+  exit 2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -75,10 +62,22 @@ while [[ $# -gt 0 ]]; do
     --apply) sweep_write_mode_apply ;;
     --dry-run) sweep_write_mode_dry_run ;;
     --ci-mode) CI_MODE=1 ;;
+    --include-plan-and-user-requested) INCLUDE_APPROVAL=1 ;;
     --sweep-age-days)
       shift
       SWEEP_AGE_DAYS="${1:?--sweep-age-days requires a value}"
-      validate_sweep_age_days "$SWEEP_AGE_DAYS"
+      sweep_validate_uint SWEEP_AGE_DAYS "$SWEEP_AGE_DAYS" 1 86400 2
+      ;;
+    # Internal protocol with the /sweep-plans skill; not in usage.
+    --gate-session|--gate-id|--approved-sessions-file)
+      [[ $# -ge 2 ]] || protocol_error "$1 requires a value"
+      case "$1" in
+        --gate-session) GATE_SESSION="$2" ;;
+        --gate-id) GATE_ID="$2" ;;
+        --approved-sessions-file) APPROVED_FILE="$2" ;;
+      esac
+      INTERNAL_FLAG_SEEN=1
+      shift
       ;;
     -h|--help) usage; exit 0 ;;
     *)
@@ -90,6 +89,17 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+if [[ "$INTERNAL_FLAG_SEEN" == "1" && "$INCLUDE_APPROVAL" == "0" ]]; then
+  protocol_error "--gate-session, --gate-id and --approved-sessions-file need --include-plan-and-user-requested"
+fi
+if [[ -n "$APPROVED_FILE" || -n "$GATE_ID" ]]; then
+  [[ -n "$GATE_SESSION" && -n "$GATE_ID" && -n "$APPROVED_FILE" ]] \
+    || protocol_error "pass 2 needs --gate-session, --gate-id and --approved-sessions-file together"
+  [[ "$GATE_ID" =~ ^[0-9a-f]{32}$ ]] || protocol_error "approval gate artifact missing or mismatched; nothing deleted"
+fi
+PASS2=0
+if [[ -n "$APPROVED_FILE" ]]; then PASS2=1; fi
+
 # ─── PLANS_DIR resolution ──────────────────────────────────────────────────
 
 if [[ -x "$SCRIPT_DIR/workflow-plans-dir" ]]; then
@@ -99,206 +109,35 @@ else
 fi
 
 if [[ ! -d "$PLANS_DIR" ]]; then
-  if [[ "$CI_MODE" == "1" ]]; then
-    printf '{"scanned":0,"groups_candidates":0,"groups_removed":0,"groups_skipped_young":0,"groups_skipped_revived":0,"files_removed":0,"files_skipped_unrecognized":0,"errors":[]}\n'
-  else
-    printf 'plans dir not found: %s\n' "$PLANS_DIR"
-  fi
+  # Pass 2 binds to the plans dir pass 1 saw; a vanished dir is a mismatch.
+  if [[ "$PASS2" == "1" ]]; then _gate_fail "approval gate artifact missing or mismatched"; fi
+  sweep_plans_summary_no_dir
+  exit 0
+fi
+# Scan, revival recheck and gate all act on one physical dir (find does not follow a
+# symlinked start dir); a symlink retargeted between passes is then a gate mismatch.
+if ! PLANS_DIR="$(cd "$PLANS_DIR" 2>/dev/null && pwd -P)"; then
+  if [[ "$PASS2" == "1" ]]; then _gate_fail "approval gate artifact missing or mismatched"; fi
+  sweep_plans_summary_no_dir
   exit 0
 fi
 
-# ─── Counters ──────────────────────────────────────────────────────────────
+# ─── Passes (pass 2 verification precedes every deletion) ─────────────────
 
-scanned=0
-groups_candidates=0
-groups_removed=0
-groups_skipped_young=0
-groups_skipped_revived=0
-files_removed=0
-files_skipped_unrecognized=0
-errors=()
-
-# ─── Helpers ───────────────────────────────────────────────────────────────
-
-file_mtime() {
-  local f="$1"
-  stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || true
-}
-
-format_date() {
-  local epoch="$1"
-  date -d "@${epoch}" +%Y-%m-%d 2>/dev/null \
-    || date -r "${epoch}" +%Y-%m-%d 2>/dev/null \
-    || printf '%s' "$epoch"
-}
-
-# ─── Group discovery ───────────────────────────────────────────────────────
-# Walk depth-1 files under PLANS_DIR; group by session-id prefix. Accepted
-# shapes: YYYYMMDD-HHMMSS, UUID, <epoch>-<pid>, or empty (basename starts
-# with '-', prefix=""). Non-matching files are skipped silently.
-#
-# Bash rejects empty-string array subscripts, so the empty-prefix bucket is
-# keyed by sentinel EMPTY_PREFIX_KEY (contains '@', never a valid prefix
-# shape, so it cannot collide with a real session id).
-declare -A PREFIX_FILES=()
-EMPTY_PREFIX_KEY="__empty@@__"
-
-# #847 guard — SSOT for which hyphen-prefixed basenames may enter the
-# empty-SID bucket. Only workflow-generated artifacts match: a lowercase-kebab
-# stem (allowing '.' and '_' as inner separators) plus one known machine
-# extension. Anything else ("-scratch", "-My Notes.docx") is left on disk and
-# counted in files_skipped_unrecognized.
-#
-# Fail-safe direction is deliberate: an unknown shape is never deleted. A new
-# artifact kind that lands in the empty-SID bucket therefore accumulates rather
-# than being lost, and the accumulation is observable via the counter.
-EMPTY_PREFIX_ALLOW_RE='^-[a-z0-9]+([._-][a-z0-9]+)*\.(md|txt|json|jsonl|log|built|tmp|tsv|err|out|status|patch)$'
-
-while IFS= read -r -d '' f; do
-  scanned=$(( scanned + 1 ))
-  basename="${f##*/}"
-  if [[ "$basename" =~ ^([0-9]{8}-[0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]{10}-[0-9]+)- ]]; then
-    key="${BASH_REMATCH[1]}"
-  elif [[ "$basename" == -* ]]; then
-    if [[ ! "$basename" =~ $EMPTY_PREFIX_ALLOW_RE ]]; then
-      files_skipped_unrecognized=$(( files_skipped_unrecognized + 1 ))
-      continue
-    fi
-    key="$EMPTY_PREFIX_KEY"
-  else
-    continue
-  fi
-  PREFIX_FILES["$key"]+="$f"$'\n'
-done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -print0 2>/dev/null)
-
-# ─── Age computation + candidate selection ─────────────────────────────────
-
+sweep_plans_counters_init
 now_epoch="$(date +%s)"
-threshold_epoch=$(( now_epoch - SWEEP_AGE_DAYS * 86400 ))
-
-# Track candidate groups for the apply pass.
-declare -a CAND_PREFIXES=()
-
-for key in "${!PREFIX_FILES[@]}"; do
-  files_blob="${PREFIX_FILES[$key]}"
-  if [[ "$key" == "$EMPTY_PREFIX_KEY" ]]; then
-    prefix=""
-  else
-    prefix="$key"
-  fi
-  min_mtime=0
-  max_mtime=0
-  file_count=0
-  while IFS= read -r gf; do
-    [[ -z "$gf" ]] && continue
-    file_count=$(( file_count + 1 ))
-    m="$(file_mtime "$gf")"
-    # Unparsable/unavailable mtime → treat as "now" (see file_mtime above).
-    if [[ ! "$m" =~ ^[0-9]+$ ]]; then m="$now_epoch"; fi
-    if [[ "$file_count" -eq 1 ]]; then
-      min_mtime="$m"
-      max_mtime="$m"
-    else
-      [[ "$m" -lt "$min_mtime" ]] && min_mtime="$m"
-      [[ "$m" -gt "$max_mtime" ]] && max_mtime="$m"
-    fi
-  done <<< "$files_blob"
-
-  if [[ "$max_mtime" -ge "$threshold_epoch" ]]; then
-    groups_skipped_young=$(( groups_skipped_young + 1 ))
-    continue
-  fi
-
-  groups_candidates=$(( groups_candidates + 1 ))
-  CAND_PREFIXES+=("$key")
-
-  if [[ "$DRY_RUN" == "1" ]]; then
-    printf 'DRY-RUN: candidate session=%s files=%d oldest=%s newest=%s\n' \
-      "$prefix" "$file_count" \
-      "$(format_date "$min_mtime")" "$(format_date "$max_mtime")"
-  fi
-done
-
-# ─── Apply pass ────────────────────────────────────────────────────────────
-
-if [[ "$APPLY" == "1" ]] && [[ "${#CAND_PREFIXES[@]}" -gt 0 ]]; then
-  for key in "${CAND_PREFIXES[@]}"; do
-    files_blob="${PREFIX_FILES[$key]}"
-    if [[ "$key" == "$EMPTY_PREFIX_KEY" ]]; then
-      prefix=""
-    else
-      prefix="$key"
-    fi
-    # TOCTOU re-check: a session may have written or touched a matching file
-    # after the scan. Recompute the group's newest mtime — including files
-    # that appeared *after* the scan via the same prefix glob — and skip the
-    # whole group if anything is now newer than the threshold.
-    recheck_max=0
-    while IFS= read -r gf; do
-      [[ -z "$gf" ]] && continue
-      [[ ! -e "$gf" ]] && continue
-      rm="$(file_mtime "$gf")"
-      [[ "$rm" =~ ^[0-9]+$ ]] || rm="$now_epoch"
-      [[ "$rm" -gt "$recheck_max" ]] && recheck_max="$rm"
-    done <<< "$files_blob"
-    while IFS= read -r -d '' newgf; do
-      # find returns a FULL PATH; EMPTY_PREFIX_ALLOW_RE is anchored at '^-', so
-      # match on the basename. Scope the re-check to exactly what the delete
-      # pass can touch: for the empty-SID bucket that is the allowlist, not
-      # every '-' prefixed basename (#847, S1-2(b)).
-      newgf_base="${newgf##*/}"
-      if [[ "$key" == "$EMPTY_PREFIX_KEY" ]] && [[ ! "$newgf_base" =~ $EMPTY_PREFIX_ALLOW_RE ]]; then
-        continue
-      fi
-      rm="$(file_mtime "$newgf")"
-      [[ "$rm" =~ ^[0-9]+$ ]] || rm="$now_epoch"
-      [[ "$rm" -gt "$recheck_max" ]] && recheck_max="$rm"
-    done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -name "${prefix}-*" -print0 2>/dev/null)  # prefix="" → -name "-*": all '-' prefixed basenames, narrowed to EMPTY_PREFIX_ALLOW_RE above; portable on GNU and BSD find
-    if [[ "$recheck_max" -ge "$threshold_epoch" ]]; then
-      groups_skipped_revived=$(( groups_skipped_revived + 1 ))
-      printf 'WARN: session %s touched since scan; skipping (revived)\n' "$prefix" >&2
-      continue
-    fi
-
-    group_removed_any=0
-    while IFS= read -r gf; do
-      [[ -z "$gf" ]] && continue
-      if rm -f -- "$gf" 2>/dev/null; then
-        files_removed=$(( files_removed + 1 ))
-        group_removed_any=1
-      else
-        errors+=("rm-failed:$gf")
-      fi
-    done <<< "$files_blob"
-    if [[ "$group_removed_any" -eq 1 ]]; then
-      groups_removed=$(( groups_removed + 1 ))
-    fi
-  done
+sweep_plans_scan
+sweep_plans_classify
+sweep_plans_select
+if [[ "$PASS2" == "1" ]]; then
+  sweep_plans_gate_verify
 fi
-
-# ─── Summary output ────────────────────────────────────────────────────────
-
-if [[ "$CI_MODE" == "1" ]]; then
-  errs_json="[]"
-  if [[ ${#errors[@]} -gt 0 ]]; then
-    errs_json="$(printf '%s\n' "${errors[@]}" | node -e \
-      'const xs=require("fs").readFileSync(0,"utf8").split(/\r?\n/).filter(Boolean);process.stdout.write(JSON.stringify(xs))')"
-  fi
-  printf '{"scanned":%d,"groups_candidates":%d,"groups_removed":%d,"groups_skipped_young":%d,"groups_skipped_revived":%d,"files_removed":%d,"files_skipped_unrecognized":%d,"errors":%s}\n' \
-    "$scanned" "$groups_candidates" "$groups_removed" \
-    "$groups_skipped_young" "$groups_skipped_revived" \
-    "$files_removed" "$files_skipped_unrecognized" "$errs_json"
-else
-  printf 'sweep-plans summary:\n'
-  printf '  scanned: %d\n' "$scanned"
-  printf '  groups_candidates: %d\n' "$groups_candidates"
-  printf '  groups_removed: %d\n' "$groups_removed"
-  printf '  groups_skipped_young: %d\n' "$groups_skipped_young"
-  printf '  groups_skipped_revived: %d\n' "$groups_skipped_revived"
-  printf '  files_removed: %d\n' "$files_removed"
-  printf '  files_skipped_unrecognized: %d\n' "$files_skipped_unrecognized"
-  printf '  errors: %d\n' "${#errors[@]}"
-  sweep_write_mode_footer
+sweep_plans_list
+if [[ "$INCLUDE_APPROVAL" == "1" && -n "$GATE_SESSION" && "$PASS2" == "0" && "$DRY_RUN" == "0" ]]; then
+  sweep_plans_gate_write
 fi
+sweep_plans_delete
+sweep_plans_gate_block
+sweep_plans_summary
 
 exit 0

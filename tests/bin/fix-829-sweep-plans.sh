@@ -2,14 +2,11 @@
 # tests/bin/fix-829-sweep-plans.sh
 # Tests: bin/sweep-plans.sh
 # Tags: sweep, plans, orphan-prefix, epoch-pid, empty-sid, fix, scope:issue-specific
-#
-# Tests for issue #829: sweep-plans regex skips orphan staging files with
-# unix-epoch-PID or empty session-id prefix.
-#
+# Issue #829: orphan files with a unix-epoch-PID or empty session-id prefix are grouped.
 # T8  — epoch-PID prefix (1780226527-4457-...) is grouped as candidate
 # T11a — empty-SID prefix (-foo.log) dry-run → groups_candidates=1
-# T11b — empty-SID prefix --apply removes file
-# T12  — epoch-PID prefix --apply removes file
+# T11b — empty-SID prefix --apply keeps an unregistered name (unknown class)
+# T12  — epoch-PID prefix --apply removes the non-plan file, keeps the plan file
 
 set -uo pipefail
 
@@ -133,9 +130,9 @@ T11a_empty_sid_dry_run() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T11b — empty-SID --apply end-to-end: groups_removed=1, files_removed=1,
-#        file deleted. Exercises bin/sweep-plans.sh:194 with prefix="" →
-#        find -name "-*" path.
+# T11b — empty-SID --apply end-to-end: -commit-push-worker.log passes the
+#        empty-prefix allowlist but matches no registry kind, so it is
+#        `unknown` and kept: groups_removed=0, files_removed=0.
 # ─────────────────────────────────────────────────────────────────────────────
 
 T11b_empty_sid_apply() {
@@ -163,24 +160,28 @@ T11b_empty_sid_apply() {
     local nr nf
     nr="$(ci_field "$out" groups_removed)"
     nf="$(ci_field "$out" files_removed)"
-    if [ "${nr:-0}" = "1" ] && [ "${nf:-0}" = "1" ] && [ ! -e "$f" ]; then
-        pass "T11b empty_sid_apply (groups_removed=1, files_removed=1, file deleted)"
+    if [ "${nr:-?}" = "0" ] && [ "${nf:-?}" = "0" ] && [ -e "$f" ]; then
+        pass "T11b empty_sid_apply (unknown kept: groups_removed=0, files_removed=0)"
     else
         fail "T11b empty_sid_apply: groups_removed=${nr:-?}, files_removed=${nf:-?}, file_exists=$([ -e "$f" ] && echo yes || echo no), out=$out"
     fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T12 — epoch-PID --apply end-to-end: groups_removed=1, files_removed=1,
-#        file deleted
+# T12 — epoch-PID --apply end-to-end: the group is still one epoch-pid group;
+#        its non-plan raw file is removed (groups_removed=1, files_removed=1)
+#        and its plan file (intent) is kept.
 # ─────────────────────────────────────────────────────────────────────────────
 
 T12_epoch_pid_apply() {
     local plans_dir="$TMPDIR_BASE/t12-plans"
     mkdir -p "$plans_dir"
     local f="$plans_dir/1700000000-12345-intent.md"
+    local raw="$plans_dir/1700000000-12345-detail-codex-round-1-raw.md"
     printf 'epoch-pid staging file\n' > "$f"
+    printf 'epoch-pid raw file\n' > "$raw"
     backdate "$f"
+    backdate "$raw"
 
     if [ ! -f "$SWEEP" ]; then
         fail "T12 epoch_pid_apply: $SWEEP not found"
@@ -200,10 +201,10 @@ T12_epoch_pid_apply() {
     local nr nf
     nr="$(ci_field "$out" groups_removed)"
     nf="$(ci_field "$out" files_removed)"
-    if [ "${nr:-0}" = "1" ] && [ "${nf:-0}" = "1" ] && [ ! -e "$f" ]; then
-        pass "T12 epoch_pid_apply (groups_removed=1, files_removed=1, file deleted)"
+    if [ "${nr:-0}" = "1" ] && [ "${nf:-0}" = "1" ] && [ -e "$f" ] && [ ! -e "$raw" ]; then
+        pass "T12 epoch_pid_apply (groups_removed=1, files_removed=1, raw gone, intent kept)"
     else
-        fail "T12 epoch_pid_apply: groups_removed=${nr:-?}, files_removed=${nf:-?}, file_exists=$([ -e "$f" ] && echo yes || echo no), out=$out"
+        fail "T12 epoch_pid_apply: groups_removed=${nr:-?}, files_removed=${nf:-?}, intent_exists=$([ -e "$f" ] && echo yes || echo no), raw_exists=$([ -e "$raw" ] && echo yes || echo no), out=$out"
     fi
 }
 

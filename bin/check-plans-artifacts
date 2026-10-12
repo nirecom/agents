@@ -7,6 +7,7 @@
 //     ambiguous, unregistered and statically undecidable names are errors (exit 1), unless
 //     listed in SOURCE_LINT_EXCEPTIONS with a reason. An empty reason, or an exception whose
 //     file is scanned but no longer matches, is itself an error.
+//     A registry kind without a valid retention class is an error too.
 //   --dir: classifies the direct entries of a real plans dir (investigation mode, not CI).
 //     control / ambiguous -> error (exit 1); unregistered -> warning (exit 0, counted).
 // Exit: 0 clean; 1 violations; 2 usage or scan error.
@@ -152,7 +153,10 @@ function main(argv) {
   const mode = argv[0];
   if (mode === "--source" && argv.length <= 2) {
     const root = path.resolve(argv[1] || process.cwd());
-    const findings = scanSource(root, [...REG.SOURCE_LINT_EXCEPTIONS]);
+    const findings = [
+      ...scanSource(root, [...REG.SOURCE_LINT_EXCEPTIONS]),
+      ...REG.retentionCoverageErrors().map((e) => `hooks/lib/plans-artifact-registry.js: retention class missing or invalid: ${e}`),
+    ];
     for (const f of findings) process.stdout.write(`${f}\n`);
     if (findings.length > 0) {
       process.stdout.write(`check-plans-artifacts: ${findings.length} violation(s); register the name or move the file to the session control dir (docs/architecture/claude-code/state-dirs.md)\n`);

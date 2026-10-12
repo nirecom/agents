@@ -213,6 +213,49 @@ T23_separate_git_dir_linked_fails_closed() {
     fi
 }
 
+# T24-T26 — --timeout-seconds goes through sweep_validate_uint (min 1, exit 1):
+# a leading zero, 19 digits and 0 are each rejected with one ERROR line.
+run_timeout_seconds_rejected() {
+    local label="$1" value="$2" want_msg="$3"
+    local tag="${label%% *}"
+    local repo="$TMPDIR_BASE/${tag}-repo"
+    local stubdir="$TMPDIR_BASE/${tag}-stub"
+    init_repo "$repo"
+    make_stub_checkout "$stubdir"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "$label: $SWEEP not found / not executable"
+        return
+    fi
+
+    local stdout_file="$TMPDIR_BASE/${tag}.out"
+    local stderr_file="$TMPDIR_BASE/${tag}.err"
+    local exit_code=0
+    (cd "$repo" && run_with_timeout bash "$stubdir/bin/sweep-branches.sh" --dry-run --ci-mode --timeout-seconds "$value" \
+        >"$stdout_file" 2>"$stderr_file") || exit_code=$?
+    local err
+    err="$(tr -d '\r' < "$stderr_file" 2>/dev/null || true)"
+
+    if [ "$exit_code" -eq 1 ] && printf '%s' "$err" | grep -qF "ERROR: --timeout-seconds" \
+        && printf '%s' "$err" | grep -qF "$want_msg"; then
+        pass "$label (exit=$exit_code)"
+    else
+        fail "$label: exit=$exit_code (want 1, msg~'$want_msg'), stderr=[$err]"
+    fi
+}
+
+T24_timeout_seconds_leading_zero_rejected() {
+    run_timeout_seconds_rejected "T24 timeout_seconds_leading_zero_rejected" 010 "must not have a leading zero"
+}
+
+T25_timeout_seconds_19_digits_rejected() {
+    run_timeout_seconds_rejected "T25 timeout_seconds_19_digits_rejected" 1000000000000000000 "is too large"
+}
+
+T26_timeout_seconds_zero_rejected() {
+    run_timeout_seconds_rejected "T26 timeout_seconds_zero_rejected" 0 "must be at least 1"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,6 +267,9 @@ T20_sweep_age_days_safe_max_boundary_rejected
 T21_min_age_hours_leading_zero_rejected
 T22_min_age_hours_overflow_rejected
 T23_separate_git_dir_linked_fails_closed
+T24_timeout_seconds_leading_zero_rejected
+T25_timeout_seconds_19_digits_rejected
+T26_timeout_seconds_zero_rejected
 
 echo ""
 echo "─────────────────────────────────────────"

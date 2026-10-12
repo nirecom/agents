@@ -47,10 +47,11 @@ T15_sweep_shell_snapshots_frontmatter_is_exact() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T16 — CPR-ORTH over the forked dispatch family. sweep-plans is the template
-#       the plan names; worktrees and branches are its existing siblings. The
-#       new skill joins that family, so one row per member keeps a future
-#       divergence visible instead of letting the newcomer drift alone.
+# T16 — CPR-ORTH over the forked dispatch family: worktrees, branches and
+#       shell-snapshots, one row per member so a future divergence stays
+#       visible. sweep-plans left the family on purpose: its approval gate needs
+#       the parent conversation (AskUserQuestion), so it carries no context: fork
+#       (pinned by tests/skills/feature-1071-tier1-context-fork.sh test 3).
 # ─────────────────────────────────────────────────────────────────────────────
 
 _shi_forked_member() {
@@ -73,7 +74,7 @@ _shi_forked_member() {
 
 T16_forked_dispatch_family_is_uniform() {
     local m
-    for m in sweep-plans sweep-worktrees sweep-branches sweep-shell-snapshots; do
+    for m in sweep-worktrees sweep-branches sweep-shell-snapshots; do
         _shi_forked_member "$m"
     done
 }
