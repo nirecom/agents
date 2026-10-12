@@ -176,6 +176,21 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
       CLS[i]="undetermined"; DET[i]="unsupported-at-base"
     elif [ "$RTB_EXEC_DECOY" = "1" ]; then
       CLS[i]="undetermined"; DET[i]="root-decoy-hit-at-base"
+    elif [ "$RTB_EXEC_UNRUNNABLE" = "1" ]; then
+      CLS[i]="undetermined"; DET[i]="unrunnable-at-base"
+    elif [ -n "$RTB_EXEC_STATE" ]; then
+      # The launcher already told TIMEOUT apart (.timedout), so a FAIL with 124/142 is the
+      # test's own failure; only a signal death (137/143) stays ambiguous.
+      case "$RTB_EXEC_STATE:$RTB_EXEC_RC" in
+        SKIP:*) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;
+        PASS:*) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$t" pass ;;
+        FAIL:137|FAIL:143) CLS[i]="undetermined"; DET[i]="ambiguous-exit-$RTB_EXEC_RC" ;;
+        FAIL:*) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$t" fail ;;
+        *) CLS[i]="undetermined"; DET[i]="state-$RTB_EXEC_STATE-at-base" ;;
+      esac
+    elif tlr_match "$t" && _tlr_get "$TLR_ID" launch.wrapper && [ -n "$_TLR_V" ]; then
+      # A base launcher that predates #2501 ran a wrapper language raw: its rc is no result.
+      CLS[i]="undetermined"; DET[i]="base-launcher-predates-result-conversion"
     else
       case "$RTB_EXEC_RC" in
         77) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;
@@ -190,7 +205,8 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
   [ -d "$LOGDIR" ] && printf 'run-tests-baseline: base-run logs: %s\n' "$LOGDIR" >&2
 fi
 
-# 7. Hand the classification to the state side; it alone may complete run_tests.
+# 7. Hand the classification to the state side; it alone may complete run_tests. Its
+#    output goes to stderr so a refusal's reason reaches the user (stdout stays BASELINE lines).
 CLS_FILE="$TMP_BASE/classification-$(date +%s)-$$.tsv"
 : >"$CLS_FILE" 2>/dev/null || die 1 "cannot write $CLS_FILE"
 N_PRE=0 N_INH=0 N_BRK=0 N_UND=0
@@ -204,7 +220,7 @@ for i in "${!TESTS[@]}"; do
   esac
 done
 node "$(rtb_wt_native "$RTB_EVIDENCE")" record --session "$SID" --seq "$SEQ" \
-  --classification "$(rtb_wt_native "$CLS_FILE")" --base "$B2" >/dev/null
+  --classification "$(rtb_wt_native "$CLS_FILE")" --base "$B2" >&2
 REC_RC=$?
 rm -f "$CLS_FILE"
 
@@ -219,7 +235,7 @@ if [ $((N_BRK + N_UND)) -eq 0 ]; then
   case "$REC_RC" in
     0) exit 0 ;;
     3) die 3 "run_tests changed while classifying; re-run /run-tests" ;;
-    *) die 1 "recording the classification failed (exit $REC_RC)" ;;
+    *) die 1 "run_tests was not completed (evidence exit $REC_RC; its reason is above)" ;;
   esac
 fi
 exit 1

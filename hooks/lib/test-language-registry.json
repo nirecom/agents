@@ -27,13 +27,22 @@
       "nameStrip": { "prefix": "", "suffix": ".Tests.ps1" },
       "siblingSuiteDir": false,
       "header": { "commentPrefix": "#" },
-      "launch": { "unit": "file", "requires": "pwsh", "prepare": null, "command": ["pwsh", "-NoProfile", "-Command", "Invoke-Pester -Path '{nativePathSq}' -CI"], "timeoutSeconds": 180, "suiteRootMarker": null },
+      "launch": {
+        "unit": "file",
+        "requires": "pwsh",
+        "prepare": null,
+        "command": ["pwsh", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "{wrapper}", "-Path", "{nativePath}", "-MinVersion", "{minVersion}"],
+        "wrapper": "bin/lib/test-wrappers/pester.ps1",
+        "minVersion": { "runtime": "Pester", "version": "5.0" },
+        "timeoutSeconds": 180,
+        "suiteRootMarker": null
+      },
       "caseMarkerReader": null,
       "caseEmbedRules": null,
       "tableDrivenDetector": null,
       "helperLibrary": null,
       "diagnostics": { "nameLabel": ".Tests.ps1" },
-      "note": "The path goes inside a single-quoted PowerShell string, so {nativePathSq} doubles each quote and nothing in the name is evaluated."
+      "note": "The wrapper takes the path as a -File argument, so nothing in the name is evaluated; it writes testResults.xml into the result directory, never the working directory. -ExecutionPolicy Bypass applies to this process only."
     },
     {
       "id": "pytest",
@@ -43,29 +52,47 @@
       "nameStrip": { "prefix": "", "suffix": ".py" },
       "siblingSuiteDir": false,
       "header": { "commentPrefix": "#" },
-      "launch": { "unit": "file", "requires": "uv", "prepare": null, "command": ["uv", "run", "--no-project", "--with", "pytest", "pytest", "-q", "{nativePath}"], "timeoutSeconds": 180, "suiteRootMarker": null },
+      "launch": {
+        "unit": "file",
+        "requires": "uv",
+        "prepare": null,
+        "command": ["uv", "run", "--no-project", "--with", "pytest>={minVersion}", "python", "{wrapper}", "{nativePath}", "{minVersion}"],
+        "wrapper": "bin/lib/test-wrappers/pytest.py",
+        "minVersion": { "runtime": "pytest", "version": "7.0" },
+        "timeoutSeconds": 180,
+        "suiteRootMarker": null
+      },
       "caseMarkerReader": null,
       "caseEmbedRules": null,
       "tableDrivenDetector": null,
       "helperLibrary": null,
       "diagnostics": { "nameLabel": "test_*.py" },
-      "note": "uv supplies pytest per run, so no project environment is needed."
+      "note": "uv supplies pytest per run, so no project environment is needed. The agents installer pre-fetches pytest into uv's cache, so a uv that cannot supply it fails the run as FAIL."
     },
     {
       "id": "js",
-      "status": "recognized-only",
+      "status": "supported",
       "patterns": ["*.js"],
       "selfIdentifying": false,
       "nameStrip": { "prefix": "", "suffix": ".js" },
       "siblingSuiteDir": false,
       "header": { "commentPrefix": "//" },
-      "launch": null,
+      "launch": {
+        "unit": "file",
+        "requires": "node",
+        "prepare": null,
+        "command": ["node", "{wrapper}", "{nativePath}", "{minVersion}"],
+        "wrapper": "bin/lib/test-wrappers/node.js",
+        "minVersion": { "runtime": "node", "version": "20.0" },
+        "timeoutSeconds": 180,
+        "suiteRootMarker": null
+      },
       "caseMarkerReader": null,
       "caseEmbedRules": null,
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/js.sh", "function": "has_table_driven_js" },
       "helperLibrary": null,
-      "diagnostics": {},
-      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory (three files today), where run-all reports it UNSUPPORTED instead of running it."
+      "diagnostics": { "nameLabel": ".js" },
+      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs a node:test file under node --test with a case reporter, and any other file as a plain node script."
     },
     {
       "id": "test-naming-convention",

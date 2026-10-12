@@ -12,13 +12,21 @@
 
 const { run: spawnRun, scriptExists } = require("../spawn");
 
-const FAIL_LINE_RE = /^FAIL:\s+(.+?)\s+\(exit\s+-?\d+\)\s*$/;
-const RESULTS_LINE_RE = /^Results:\s*(.+?)\s*$/;
-// Deliberately the SAME shape (and the same leading-whitespace tolerance) as
-// hooks/workflow-run-tests.js's parser: this worker lifts the line OUT of the
+// Separators are ASCII blanks only: each one is in run-all-report.sh _RAR_REPORT_RE's set, so a line
+// matched here is one the runner's neutralizer prefixes when a child prints it.
+const FAIL_LINE_RE = /^FAIL:[ \t]+(.+?)[ \t]+\(exit[ \t]+-?\d+\)[ \t]*$/;
+const RESULTS_LINE_RE = /^Results:[ \t]*(.+?)[ \t]*$/;
+// The hook's own parser (hooks/lib/run-contract.js): this worker lifts the line OUT of the
 // output so the renderer can put exactly one copy where the hook will look, and
 // the two would silently disagree if they recognised different strings.
-const CONTRACT_LINE_RE = /^[ \t]*RUN_CONTRACT: PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)/;
+const { CONTRACT_PREFIX_RE, findSingleContract } = require("../../../hooks/lib/run-contract");
+// run-all's whole-run exit for "nothing executed" (all SKIP, nothing selected, nothing launched).
+const EXIT_NOTHING_EXECUTED = 77;
+// Passing case lines would push the failing unit's context out of the tail window.
+// `.*` as in _RAR_REPORT_RE: a path may hold blanks, and a child's own line of this shape is prefixed.
+const PASSING_CASE_LINE_RE = /^(PASS|SKIP|XFAIL) .*::/;
+// Line-anchored: a nested suite's copy arrives neutralized (prefixed), never at column 0.
+const MISSING_RUNTIMES_LINE_RE = /^Missing runtimes: /;
 const TAIL_LINES = 40;
 
 function splitLines(text) {
@@ -53,19 +61,26 @@ function parseResults(lines) {
  * emitted one anyway would be manufacturing a verdict the suite never gave.
  *
  * @param {string[]} lines
- * @returns {{pass: number, fail: number, skip: number, executed: number}|null}
+ * @returns {{shape, pass, fail, skip, executed, unrunnable, timeout}|null} legacy: unrunnable/timeout null
  */
 function parseRunContract(lines) {
-  const matches = [];
-  for (const line of Array.isArray(lines) ? lines : []) {
-    const m = CONTRACT_LINE_RE.exec(String(line));
-    if (m !== null) matches.push(m);
-  }
-  if (matches.length !== 1) return null;
-  const [, p, f, s, e] = matches[0];
-  const nums = [p, f, s, e].map((n) => parseInt(n, 10));
-  if (nums.some((n) => !Number.isFinite(n))) return null;
-  return { pass: nums[0], fail: nums[1], skip: nums[2], executed: nums[3] };
+  const c = findSingleContract((Array.isArray(lines) ? lines : []).map(String));
+  return c.reason === undefined ? c : null;
+}
+
+// Top to bottom: a current contract with UNRUNNABLE>0 on a clean or nothing-executed exit,
+// then exit 77 (nothing executed is no failure), then exit 0; anything else fails.
+function statusOf(exitCode, contract) {
+  const clean = exitCode === 0 || exitCode === EXIT_NOTHING_EXECUTED;
+  if (clean && contract !== null && contract.shape === "current" && contract.unrunnable > 0) return "unrunnable";
+  if (exitCode === EXIT_NOTHING_EXECUTED) return "skip";
+  return exitCode === 0 ? "pass" : "fail";
+}
+
+function lastMissingRuntimesLine(lines) {
+  let found = null;
+  for (const line of lines) if (MISSING_RUNTIMES_LINE_RE.test(line)) found = line.trim();
+  return found;
 }
 
 // Contract lines are removed from the log source in ALL cases, including the
@@ -73,7 +88,7 @@ function parseRunContract(lines) {
 // into the transcript as fact. Removal is exactly one line per match, so the
 // failing test's own output — which sits directly above it — is untouched.
 function stripContractLines(lines) {
-  return lines.filter((l) => !CONTRACT_LINE_RE.test(String(l)));
+  return lines.filter((l) => !CONTRACT_PREFIX_RE.test(String(l)));
 }
 
 function run(payload, ctx) {
@@ -126,7 +141,9 @@ function run(payload, ctx) {
   const lines = splitLines(res.stdout).concat(splitLines(res.stderr));
   const nonEmpty = lines.filter((l) => l.trim() !== "");
   const runContract = parseRunContract(nonEmpty);
-  const logTail = stripContractLines(nonEmpty).slice(-TAIL_LINES);
+  const logTail = stripContractLines(nonEmpty)
+    .filter((l) => !PASSING_CASE_LINE_RE.test(l))
+    .slice(-TAIL_LINES);
   const failingTests = parseFailingTests(nonEmpty);
   const results = parseResults(nonEmpty);
 
@@ -154,8 +171,13 @@ function run(payload, ctx) {
   }
 
   const exitCode = typeof res.status === "number" ? res.status : -1;
-  const status = exitCode === 0 ? "pass" : "fail";
+  // A clean exit with unlaunched files is not a pass: the runtime the user must install
+  // is named in the summary, so the reader sees the remedy without opening log_tail.
+  const status = statusOf(exitCode, runContract);
   let summary = results !== null ? results : `exit_code=${exitCode}; ${nonEmpty.length} output lines`;
+  const missing = lastMissingRuntimesLine(nonEmpty);
+  // First, because the renderer cuts a long summary at its end and the runtimes are the remedy.
+  if (missing !== null) summary = `${missing}; ${summary}`;
 
   // Never report an empty failing list for a failing suite without saying why —
   // a silent [] reads as "nothing failed", which is the opposite of the truth.

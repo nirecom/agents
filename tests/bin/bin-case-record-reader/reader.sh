@@ -35,7 +35,7 @@ none|none.sh|none|||0
 conforming|conforming.sh|conforming|||2
 malformed|malformed.sh|malformed|3|grammar|0
 uncertain|uncertain.sh|uncertain|5|depth|0
-recognized-only-js|x.test.js|unsupported|||0
+js-without-reader|x.test.js|unsupported|||0
 supported-without-reader|x.Tests.ps1|unsupported|||0
 unmatched-name|notes.txt|unsupported|||0
 heredoc-pseudo-markers|heredoc-pseudo.sh|none|||0

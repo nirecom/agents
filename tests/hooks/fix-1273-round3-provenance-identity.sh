@@ -114,7 +114,7 @@ assert_eq "H2a/unresolvable-absolute-behind-timeout-must-not-be-trusted" "(none)
 SID="h2ghost-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 drive_hook "bash $FORGE_ROOT/tests/run-all.sh" 0 "$SID" \
-    "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1" "$AGENTS_WIN"
+    "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "H2a/unresolvable-emitter-must-not-complete-run-tests" "pending" "$(run_tests_status "$SID")"
 
 # CONTROL, opposite verdict: without it "return null always" passes every H2 row.
@@ -135,9 +135,9 @@ if command -v git >/dev/null 2>&1; then
     mkdir -p "$THROWAWAY/tests" "$THROWAWAY/bin"
     git -C "$THROWAWAY" init -q >/dev/null 2>&1 || git init -q "$THROWAWAY" >/dev/null 2>&1
     git -C "$THROWAWAY" config core.hooksPath /dev/null >/dev/null 2>&1 || true
-    printf '#!/usr/bin/env bash\necho "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"\n' \
+    printf '#!/usr/bin/env bash\necho "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"\n' \
         > "$THROWAWAY/tests/run-all.sh"
-    printf 'process.stdout.write("RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1\\n");\n' \
+    printf 'process.stdout.write("RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0\\n");\n' \
         > "$THROWAWAY/bin/worker-dispatch.js"
     THROWAWAY_WIN="$(nodepath "$THROWAWAY")"
 
@@ -160,7 +160,7 @@ if command -v git >/dev/null 2>&1; then
         SID="m1throw-$$-$RANDOM"
         seed_step "$SID" "write_tests" "complete"
         drive_hook "bash $THROWAWAY_WIN/tests/run-all.sh" 0 "$SID" \
-            "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1" "$THROWAWAY_WIN"
+            "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0" "$THROWAWAY_WIN"
         assert_eq "M1/unrelated-throwaway-repo-must-not-complete-run-tests" "pending" \
             "$(run_tests_status "$SID")"
 

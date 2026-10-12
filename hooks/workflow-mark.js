@@ -33,6 +33,7 @@ const confirmApprovalHandler = require("./workflow-mark/confirm-approval-handler
 const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
+const runTestsAcceptHandler = require("./workflow-mark/run-tests-accept-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const resetHandler = require("./workflow-mark/reset-handler");
 
@@ -158,6 +159,7 @@ for (const cmd of sentinelParts) {
   // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner
   // (mark-step-handler would otherwise process a manual MARK_STEP form here).
   if (reviewTestsHandler.handle({ ...ctx, cmd })) continue;
+  if (runTestsAcceptHandler.handle({ ...ctx, cmd })) continue;
   if (markStepHandler.handle({ ...ctx, cmd })) continue;
   if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;
   if (resetHandler.handle({ ...ctx, cmd })) continue;

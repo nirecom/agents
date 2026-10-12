@@ -247,35 +247,7 @@ run_cli_undetermined_cases() {
   cli_assert_not_completed "C3-home-claude-ref" "hom-$$" "$t_home"
 }
 
-# Timeout/kill-shaped exit codes at base (124/137/142/143) are ambiguous — the test may have
-# been killed rather than failed — so each must be undetermined ambiguous-exit-<rc>, never
-# preexisting. The fixture test exits the code directly; the watchdog never fires.
-run_cli_ambiguous_exit_cases() {
-  local repo="$TMPROOT/repo-ambig" rc t
-  mk_fixture_repo "$repo" >/dev/null
-  git -C "$repo" checkout -q main
-  for rc in 124 137 142 143; do
-    printf '#!/usr/bin/env bash\nexit %s\n' "$rc" > "$repo/tests/bin/test-exit-$rc.sh"
-    chmod +x "$repo/tests/bin/test-exit-$rc.sh"
-  done
-  git -C "$repo" add tests/
-  git -C "$repo" commit -q -m "ambiguous-exit tests at base"
-  git -C "$repo" checkout -q feature
-  git -C "$repo" merge -q --no-edit main
-  for rc in 124 137 142 143; do
-    t="tests/bin/test-exit-$rc.sh"
-    seed_failing "amb$rc-$$" "$t"
-    rtb_cli_run "$(cli_case_cache "amb$rc")" "$repo" "amb$rc-$$"
-    if printf '%s\n' "$RTB_CLI_OUT" \
-        | grep -qE "^BASELINE: undetermined[[:space:]]+$t[[:space:]]+ambiguous-exit-$rc\$"; then
-      pass "C3-ambiguous-exit-$rc: exit $rc at base classified undetermined ambiguous-exit-$rc"
-    else
-      fail "C3-ambiguous-exit-$rc: expected undetermined ambiguous-exit-$rc; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
-    fi
-    cli_assert_undetermined_only "C3-ambiguous-exit-$rc" "$t"
-    cli_assert_not_completed "C3-ambiguous-exit-$rc" "amb$rc-$$" "$t"
-  done
-}
+# Exit codes 124/137/142/143 at base: cli-state.sh (state-aware since #2501).
 
 # A base checkout whose bin/lib/run-all-launch.sh cannot be sourced gives no verdict at all:
 # rtb_exec_one returns 2 and the CLI must say undetermined exec-setup-failed, never preexisting.

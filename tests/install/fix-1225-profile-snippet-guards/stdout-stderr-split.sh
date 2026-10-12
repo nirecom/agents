@@ -133,6 +133,7 @@ tc_split_no_variable_leak() {
 printf 'FETCHVAR=%s\n' "${AGENTS_SESSION_SYNC_FETCH_MARKER+SET}"
 printf 'REPAIRVAR=%s\n' "${AGENTS_SYMLINK_REPAIR_MARKER+SET}"
 printf 'SSHVAR=%s\n' "${GIT_SSH_COMMAND+SET}"
+if declare -F _agents_is_cc_shell >/dev/null 2>&1; then echo 'CCFN=SET'; else echo 'CCFN=UNSET'; fi
 EOF
     run_mirror_driver_split bash "$sb" "$drv" on
     local out; out="$(cat "$sb/stdout.out" 2>/dev/null)"
@@ -140,15 +141,18 @@ EOF
     echo "$out" | grep -q 'FETCHVAR=SET' && runtime_clean=0
     echo "$out" | grep -q 'REPAIRVAR=SET' && runtime_clean=0
     echo "$out" | grep -q 'SSHVAR=SET' && runtime_clean=0
+    # #2221: the CC-shell guard helper is a scratch function and must not outlive the source.
+    echo "$out" | grep -q 'CCFN=SET' && runtime_clean=0
 
     local static_ok=0
     if grep -Eq '^[[:space:]]*unset[[:space:]].*AGENTS_SESSION_SYNC_FETCH_MARKER' "$SNIPPET" \
-        && grep -Eq '^[[:space:]]*unset[[:space:]].*AGENTS_SYMLINK_REPAIR_MARKER' "$SNIPPET"; then
+        && grep -Eq '^[[:space:]]*unset[[:space:]].*AGENTS_SYMLINK_REPAIR_MARKER' "$SNIPPET" \
+        && grep -Eq '^[[:space:]]*unset[[:space:]]+-f[[:space:]].*_agents_is_cc_shell' "$SNIPPET"; then
         static_ok=1
     fi
 
     if [ "$runtime_clean" = "1" ] && [ "$static_ok" = "1" ]; then
-        pass "TC-SPLIT3: marker vars and GIT_SSH_COMMAND unset after source (not merely empty)"
+        pass "TC-SPLIT3: marker vars, GIT_SSH_COMMAND and _agents_is_cc_shell unset after source (not merely empty)"
     else
         fail "TC-SPLIT3: variable leak (runtime_clean=$runtime_clean static_ok=$static_ok). stdout=[$out]"
     fi
@@ -260,6 +264,32 @@ tc_split_stdout_pure_with_core_sshcommand() {
     rm -rf "$sb"
 }
 
+# TC-SPLIT9 — #2221: inside a Claude Code shell (CLAUDECODE set, non-TTY stdout)
+# the symlink repair must hand dotfileslink.sh WAIT_CC_RESULT=timeout so it never
+# blocks snapshot capture; outside one the variable must stay unset. The mirror's
+# dotfileslink stub records the value it saw into $HOME/wait-cc.env.
+# TL3 gap: whether the real dotfileslink.sh then returns within the timeout is a
+# real-time property of the Windows host; only a live Claude Code startup shows it.
+_sss_wait_cc_row() {
+    local cc_mode="$1" want="$2" sb; sb="$(make_mirror_sandbox 1)"
+    rm -f "$sb/real_CLAUDE.md"
+    local drv="$sb/drv_wait_cc.sh"
+    printf '. "$SNIPPET"\necho "DONE"\n' > "$drv"
+    run_mirror_driver_split bash "$sb" "$drv" UNSET with-node "$cc_mode"
+    local got; got="$(cat "$sb/home/wait-cc.env" 2>/dev/null || echo NOT-RUN)"
+    local stdout_body; stdout_body="$(cat "$sb/stdout.out" 2>/dev/null)"
+    if [ "$got" = "$want" ] && [ "$stdout_body" = "DONE" ]; then
+        pass "TC-SPLIT9[$cc_mode]: dotfileslink.sh saw WAIT_CC_RESULT=$got; stdout is DONE alone"
+    else
+        fail "TC-SPLIT9[$cc_mode]: WAIT_CC_RESULT seen by dotfileslink.sh='$got' (want '$want'), stdout=[$stdout_body] stderr=[$(cat "$sb/stderr.out" 2>/dev/null)]"
+    fi
+    rm -rf "$sb"
+}
+tc_split_wait_cc_result_in_cc_shell() {
+    _sss_wait_cc_row cc-set timeout
+    _sss_wait_cc_row cc-unset UNSET
+}
+
 # --- Leaky-fetch fixture (TC-SPLIT7 / TC-SPLIT8) -----------------------------
 # The shipped fake `git fetch` writes nothing to real stdout, so reverting
 # either fetch branch's `>/dev/null 2>&1` back to `2>/dev/null` leaves every
@@ -341,6 +371,7 @@ tc_split_no_variable_leak           # TC-SPLIT3
 tc_split_claudecode_snapshot_capture  # TC-SPLIT4
 tc_split_steady_state_stdout_silent   # TC-SPLIT5
 tc_split_stdout_pure_with_core_sshcommand  # TC-SPLIT6
+tc_split_wait_cc_result_in_cc_shell   # TC-SPLIT9
 # TC-SPLIT7 / TC-SPLIT8 — the two fetch branches are symmetric, so both carry the
 # same stream contract; a fix applied to one only is what this pair catches.
 _sss_leaky_case "TC-SPLIT7" "-" "ssh -o BatchMode=yes" \

@@ -336,8 +336,11 @@ fi
 case_begin "retired-recovery-prose-absent-file-wide" "skills/run-tests/SKILL.md"
 # Only grep's exit 1 proves absence: a crashed grep (seen: SIGABRT with -iF on
 # Windows) also returns non-zero and would otherwise pass vacuously.
+# No pipe into grep -q: it exits at the first match, and under pipefail the writer's
+# SIGPIPE (rc=141) would then read as an errored probe.
+SKILL_TEXT="$(cat "$SKILL")"
 for phrase in "surgical[- ]?recovery" "reproduces on main"; do
-  printf '%s' "$(cat "$SKILL")" | grep -qiE -- "$phrase"
+  grep -qiE -- "$phrase" <<<"$SKILL_TEXT"
   rc=$?
   case "$rc" in
     0) fail "S2431-k: SKILL.md still carries retired prose /$phrase/ outside RNT-9 scope" ;;
@@ -346,7 +349,7 @@ for phrase in "surgical[- ]?recovery" "reproduces on main"; do
   esac
 done
 # Control: the same probe must find a phrase that is present, or rc=1 above proves nothing.
-printf '%s' "$(cat "$SKILL")" | grep -qiE -- 'bin/run-tests-baseline'
+grep -qiE -- 'bin/run-tests-baseline' <<<"$SKILL_TEXT"
 rc=$?
 if [ "$rc" -eq 0 ]; then
   pass "S2431-k0: the file-wide probe detects a present phrase"

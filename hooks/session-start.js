@@ -14,6 +14,13 @@ const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { createDeadline } = require("./lib/hook-deadline");
+
+// Must equal the settings.json SessionStart timeout (seconds) x 1000. Every child spawn
+// and the snapshot repair take a slice of this one budget, leaving TAIL_RESERVE_MS spare.
+const HOOK_TIMEOUT_MS = 5000;
+const TAIL_RESERVE_MS = 400;
+const dl = createDeadline({ hookTimeoutMs: HOOK_TIMEOUT_MS });
 
 const hookInput = readHookInput();
 if (hookInput.kind !== "ok") {
@@ -207,9 +214,10 @@ function buildWorkflowStatus(sessionId) {
   if (sessionId) {
     try {
       const nextStepBin = path.join(__dirname, "..", "bin", "workflow", "next-step");
-      if (fs.existsSync(nextStepBin)) {
+      const t = dl.sliceMs(3000, TAIL_RESERVE_MS);
+      if (t > 0 && fs.existsSync(nextStepBin)) {
         const r = spawnSync(process.execPath, [nextStepBin, "--session", sessionId], {
-          encoding: "utf8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"],
+          encoding: "utf8", timeout: t, stdio: ["ignore", "pipe", "ignore"],
         });
         if (r.status === 0 && r.stdout) {
           let nextStepAction = "";
@@ -237,10 +245,11 @@ function buildWorkflowStatus(sessionId) {
   // Resume hint — non-fatal, fail-open.
   try {
     const detectBin = path.join(__dirname, "..", "bin", "resume-session-detect");
-    if (fs.existsSync(detectBin)) {
+    const t = dl.sliceMs(3000, TAIL_RESERVE_MS);
+    if (t > 0 && fs.existsSync(detectBin)) {
       const r = spawnSync(
         process.execPath, [detectBin],
-        { encoding: "utf8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"] }
+        { encoding: "utf8", timeout: t, stdio: ["ignore", "pipe", "ignore"] }
       );
       if (r.status === 0 && r.stdout) {
         let parsed = null;
@@ -292,6 +301,15 @@ try {
     lines.push("");
     lines.push("WARNING: ~/.claude/settings.json drift detected — run: node \"" + path.join(__dirname, "..", "install", "assemble-settings.js") + "\"");
     lines.push("  reason: " + r);
+  }
+} catch (_e) { /* fail-open */ }
+// #2221: repair Windows-form PATH lines in the shell snapshots (warn on what stays broken).
+try {
+  const { buildShellSnapshotNotice } = require("./lib/shell-snapshot-repair");
+  const snap = buildShellSnapshotNotice({ homeDir: os.homedir(), source: sessionSource, deadline: dl });
+  if (snap.length > 0) {
+    lines.push("");
+    for (const l of snap) lines.push(l);
   }
 } catch (_e) { /* fail-open */ }
 try {
