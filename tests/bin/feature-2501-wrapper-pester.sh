@@ -273,5 +273,57 @@ else
 fi
 case_end
 
+# The test code runs under the default session preferences (StrictMode off, EAP Continue), as
+# under a plain Invoke-Pester; only the wrapper's own code is strict. P3 is the failing control.
+cat >"$T/fx/strictoff.Tests.ps1" <<'EOF'
+Describe 'strictoff' {
+  It 'unset-script-var' { if ($null -ne $script:neverSet2501) { throw 'unexpected value' }; $true | Should -BeTrue }
+  It 'unset-lastexitcode' { $code = $LASTEXITCODE; $null -eq $code -or $code -is [int] | Should -BeTrue }
+}
+EOF
+cat >"$T/fx/eapcontinue.Tests.ps1" <<'EOF'
+Describe 'eapcontinue' {
+  It 'non-terminating-error-continues' { Write-Error 'nonterminating-2501'; $reached = $true; $reached | Should -BeTrue }
+}
+EOF
+cat >"$T/fx/realfail.Tests.ps1" <<'EOF'
+Describe 'realfail' {
+  It 'assert' { 1 | Should -Be 2 }
+  It 'throws' { throw 'real-failure-2501' }
+}
+EOF
+
+# expect_pass_records <resdir> <label> <case>... — exit 0, each case a PASS record, no FAIL record.
+expect_pass_records() {
+  local res="$1" label="$2" c miss=""
+  shift 2
+  for c in "$@"; do
+    awk -F'\t' -v c="$c" '$2=="PASS" && $3==c{f=1} END{exit !f}' "$res/cases.tsv" 2>/dev/null || miss="$miss $c"
+  done
+  if [ "$PRC" = 0 ] && [ -z "$miss" ] && [ "$(tsv_count "$res" FAIL)" = 0 ]; then
+    pass "$label: exit 0 and PASS records for $*"
+  else
+    fail "$label: rc=$PRC missing-PASS=[${miss# }]" "$(grep -E 'cannot be retrieved|nonterminating-2501|\[-\]' "$res.out" | head -n 4 | tr '\n' '|')"
+  fi
+}
+
+case_begin "test-code-runs-strict-mode-off" "bin/lib/test-wrappers/pester.ps1"
+run_pester "$T/r-strictoff" "$T/fx/strictoff.Tests.ps1" 5.0
+expect_pass_records "$T/r-strictoff" "P1. unset \$script: var and unset \$LASTEXITCODE" strictoff.unset-script-var strictoff.unset-lastexitcode
+case_end
+
+case_begin "test-code-runs-eap-continue" "bin/lib/test-wrappers/pester.ps1"
+run_pester "$T/r-eap" "$T/fx/eapcontinue.Tests.ps1" 5.0
+expect_pass_records "$T/r-eap" "P2. a non-terminating Write-Error does not stop the It" eapcontinue.non-terminating-error-continues
+case_end
+
+case_begin "real-failure-still-fails-under-reset" "bin/lib/test-wrappers/pester.ps1"
+run_pester "$T/r-realfail" "$T/fx/realfail.Tests.ps1" 5.0
+assert_eq "P3. real failures rc: $PRC" "P3. real failures rc: 1"
+assert_eq "P3. FAIL records: $(tsv_count "$T/r-realfail" FAIL) PASS records: $(tsv_count "$T/r-realfail" PASS)" "P3. FAIL records: 2 PASS records: 0"
+case_end
+# P4 (the wrapper's own strictness survives): syntax-error-file-is-container-fail-exit-1 and
+# before-all-throw-is-container-fail-exit-1 above already cover it.
+
 echo "Results: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 [ "$FAIL" -eq 0 ]

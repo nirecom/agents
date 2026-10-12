@@ -49,7 +49,8 @@ $config.Run.Exit = $false
 $config.Output.Verbosity = 'Detailed'
 $config.TestResult.Enabled = $true
 $config.TestResult.OutputPath = Join-Path -Path $resultDir -ChildPath 'testResults.xml'
-$run = Invoke-Pester -Configuration $config
+# Test code runs under default session preferences, as under a plain Invoke-Pester; only this wrapper stays strict.
+$run = & { Set-StrictMode -Off; $ErrorActionPreference = 'Continue'; Invoke-Pester -Configuration $config }
 
 $stateOf = @{ Passed = 'PASS'; Failed = 'FAIL'; Skipped = 'SKIP'; Inconclusive = 'SKIP' }
 $seq = 0

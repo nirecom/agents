@@ -96,8 +96,11 @@ is_self() {
 }
 
 WORK=(); UNSUP=()   # UNSUP: files no supported registry entry covers — listed, never run
+MISSING=()          # MISSING: explicit arguments naming no regular file — reported UNRUNNABLE, never run
+ADDED_FILE=0   # set by add_work once a regular file (self included) is taken in
 add_work() {
   [ -f "$1" ] || return 0
+  ADDED_FILE=1
   is_self "$1" && return 0
   if tlr_match "$1" && [ "$TLR_STATUS" = supported ]; then WORK+=("$1"); else UNSUP+=("$1"); fi
   return 0
@@ -106,7 +109,10 @@ add_work() {
 # Empty IFS: pathname expansion without word splitting, so spaced patterns glob sans eval.
 expand_pattern() {
   local IFS='' f
+  ADDED_FILE=0
   for f in $1; do add_work "$f"; done
+  # An argument that contributed no regular file (missing path, empty glob, directories only) is missing.
+  [ "$ADDED_FILE" -eq 1 ] || MISSING+=("$1")
   return 0
 }
 
@@ -474,6 +480,7 @@ if [ "$DEADLINE_HIT" -eq 1 ]; then
 fi
 
 if declare -F run_all_root_decoy_report >/dev/null 2>&1; then run_all_root_decoy_report || RAR_FAIL=$((RAR_FAIL + 1)); fi # counted before the counts print
+rar_missing ${MISSING[@]+"${MISSING[@]}"}
 rar_tail ${UNSUP[@]+"${UNSUP[@]}"}
 cleanup_all
 # A run that passed nothing is no pass, exactly as a single file's 77 (test-result-contract.md).

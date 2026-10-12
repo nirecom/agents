@@ -58,19 +58,30 @@ JSCODE
 
 next_sid() { printf 'be-%s-%s' "${1:-ev}" "$$"; }
 
-# seed_events <sid> <events-json-array>
+# seed_events <sid> <events-json-array> — a seed that wrote nothing is a FAIL, never silent,
+# so a refusal (exit 3) can never pass on a state that was not seeded at all.
 seed_events() {
-  run_with_timeout 30 node "$(np "$SEED_JS")" "$AGENTS_WIN" "$1" "$2" >/dev/null 2>&1 || true
+  run_with_timeout 30 node "$(np "$SEED_JS")" "$AGENTS_WIN" "$1" "$2" >/dev/null 2>&1 && return 0
+  fail "fixture: seed_events wrote no state for $1"
+  return 1
 }
 
-# seed_pending_fail <sid> <test-path...> — pending + run_outcome=fail + failing_tests, plus
-# unrunnable_count from SEED_UNRUNNABLE (default 0; "absent" leaves the annotation out).
-seed_pending_fail() {
-  local sid="$1" list="" p unr=""; shift
+# seed_pending_outcome <sid> <run-outcome|absent> <unrunnable-count|absent> <test-path...> —
+# pending + run_outcome + failing_tests + unrunnable_count; "absent" leaves that annotation out.
+# Every caller passes both values: no ambient variable can flip a verdict.
+seed_pending_outcome() {
+  local sid="$1" outcome="$2" ucount="$3" list="" p ro="" unr=""; shift 3
   for p in "$@"; do list="$list${list:+,}\"$p\""; done
   local ann='{"kind":"step_annotation","step":"run_tests"'
-  [ "${SEED_UNRUNNABLE:-0}" = absent ] || unr=",$ann,\"key\":\"unrunnable_count\",\"value\":${SEED_UNRUNNABLE:-0}}"
-  seed_events "$sid" "[{\"kind\":\"step_status\",\"step\":\"run_tests\",\"status\":\"pending\"},$ann,\"key\":\"run_outcome\",\"value\":\"fail\"},$ann,\"key\":\"failing_tests\",\"value\":[$list]}$unr]"
+  [ "$outcome" = absent ] || ro=",$ann,\"key\":\"run_outcome\",\"value\":\"$outcome\"}"
+  [ "$ucount" = absent ] || unr=",$ann,\"key\":\"unrunnable_count\",\"value\":$ucount}"
+  seed_events "$sid" "[{\"kind\":\"step_status\",\"step\":\"run_tests\",\"status\":\"pending\"}$ro,$ann,\"key\":\"failing_tests\",\"value\":[$list]}$unr]"
+}
+
+# seed_pending_fail <sid> <unrunnable-count|absent> <test-path...> — run_outcome=fail.
+seed_pending_fail() {
+  local sid="$1" ucount="$2"; shift 2
+  seed_pending_outcome "$sid" fail "$ucount" "$@"
 }
 
 # read_step_field <sid> <step> <field>
@@ -146,7 +157,7 @@ case_end
 
 case_begin "failing-exit3-empty-failing-tests" "bin/workflow/run-tests-baseline-evidence"
 SID="$(next_sid eft)"
-seed_pending_fail "$SID"
+seed_pending_fail "$SID" 0
 if [ "$CLI_EXISTS" = "1" ]; then
   run_failing "$SID"
   [ "$EV_RC" -eq 3 ] && pass "failing-exit3-empty-failing-tests: exits 3 when failing_tests is empty" \
@@ -158,7 +169,7 @@ case_end
 
 case_begin "failing-success-output" "bin/workflow/run-tests-baseline-evidence"
 SID="$(next_sid fs)"
-seed_pending_fail "$SID" "tests/bin/alpha.sh" "tests/bin/beta.sh"
+seed_pending_fail "$SID" 0 "tests/bin/alpha.sh" "tests/bin/beta.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   run_failing "$SID"
   if [ "$EV_RC" -eq 0 ]; then
@@ -179,7 +190,7 @@ case_end
 
 case_begin "record-unmet-conditions-pending" "bin/workflow/lib/run-tests-baseline-evidence.js"
 SID="$(next_sid ruc)"
-seed_pending_fail "$SID" "tests/bin/gamma.sh"
+seed_pending_fail "$SID" 0 "tests/bin/gamma.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-unmet.txt"
@@ -201,7 +212,7 @@ case_end
 # Condition (3) is a SET cover: a duplicated line must not stand in for an omitted path.
 case_begin "record-duplicate-row-no-cover" "bin/workflow/lib/run-tests-baseline-evidence.js"
 SID="$(next_sid dup)"
-seed_pending_fail "$SID" "tests/bin/zeta.sh" "tests/bin/eta.sh"
+seed_pending_fail "$SID" 0 "tests/bin/zeta.sh" "tests/bin/eta.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-dup.txt"
@@ -217,7 +228,7 @@ case_end
 # path identity, so the substituted row must not authorize completion.
 case_begin "record-substituted-path-no-cover" "bin/workflow/lib/run-tests-baseline-evidence.js"
 SID="$(next_sid sub)"
-seed_pending_fail "$SID" "tests/bin/theta.sh" "tests/bin/iota.sh"
+seed_pending_fail "$SID" 0 "tests/bin/theta.sh" "tests/bin/iota.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-sub.txt"
@@ -233,7 +244,7 @@ case_end
 # a partial cover must not authorize completion even though every listed row is preexisting.
 case_begin "record-omitted-path-no-cover" "bin/workflow/lib/run-tests-baseline-evidence.js"
 SID="$(next_sid omit)"
-seed_pending_fail "$SID" "tests/bin/lambda.sh" "tests/bin/mu.sh"
+seed_pending_fail "$SID" 0 "tests/bin/lambda.sh" "tests/bin/mu.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-omit.txt"
@@ -249,7 +260,7 @@ case_end
 
 case_begin "record-success-complete" "bin/workflow/lib/run-tests-baseline-evidence.js"
 SID="$(next_sid rsc)"
-seed_pending_fail "$SID" "tests/bin/delta.sh"
+seed_pending_fail "$SID" 0 "tests/bin/delta.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   CLASSFILE="$TMPROOT/cls-success.txt"
@@ -273,12 +284,12 @@ case_end
 
 # A run that also left a selected test UNRUNNABLE is never completed by a baseline, even when
 # every failure pre-existed; neither is a run whose unrunnable count was not recorded at all.
-# Table: <label>|<SEED_UNRUNNABLE>|<stderr text>
+# Table: <label>|<unrunnable-count|absent>|<stderr text>
 while IFS='|' read -r ulabel useed uwant; do
   [ -n "$ulabel" ] || continue
   case_begin "record-unrunnable-$ulabel-not-completed" "bin/workflow/lib/run-tests-baseline-evidence.js"
   SID="$(next_sid "u$ulabel")"
-  SEED_UNRUNNABLE="$useed" seed_pending_fail "$SID" "tests/bin/kappa.sh"
+  seed_pending_fail "$SID" "$useed" "tests/bin/kappa.sh"
   if [ "$CLI_EXISTS" = "1" ]; then
     SEQ_VAL="$(get_seq "$SID")"
     CLASSFILE="$TMPROOT/cls-unr-$ulabel.txt"
@@ -307,7 +318,7 @@ TABLE
 
 case_begin "record-race-new-write" "bin/workflow/lib/run-tests-baseline-evidence.js"
 SID="$(next_sid race)"
-seed_pending_fail "$SID" "tests/bin/epsilon.sh"
+seed_pending_fail "$SID" 0 "tests/bin/epsilon.sh"
 if [ "$CLI_EXISTS" = "1" ]; then
   SEQ_VAL="$(get_seq "$SID")"
   seed_events "$SID" '[{"kind":"step_status","step":"run_tests","status":"pending","origin":"race-interloper"}]'
@@ -336,6 +347,10 @@ else
 fi
 case_end
 
+# Every failing run_outcome value, and the classification file's parse/read errors.
+# shellcheck source=tests/bin/feature-2431-baseline-evidence/outcomes-and-classfile.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2431-baseline-evidence/outcomes-and-classfile.sh"
+
 # ---------------------------------------------------------------------------
 # #2544 — the failing list may come from a dispatch outcome. The comparison must refuse
 # while a newer test-runner dispatch is unsettled, and when the outcome file that state
@@ -359,16 +374,17 @@ bos_ck() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$(printf '%q
 bos_sid() { printf 'bos-%s-%s' "$1" "$$"; }
 bos_seq_of() { bos_tool field "$1" run_tests updated_seq; }
 
-# bos_seed_ingested <sid> — one settled failing dispatch whose outcome state recorded, the
-# way the hook leaves it: pending, fail, failing_tests, unrunnable_count, outcome_source, .ingested.
+# bos_seed_ingested <sid> [unrunnable-count] — one settled failing dispatch whose outcome state
+# recorded, the way the hook leaves it: pending, fail, failing_tests, unrunnable_count (default 0),
+# outcome_source, .ingested.
 bos_seed_ingested() {
-  local stem psha osha
+  local stem psha osha unr="${2:-0}"
   stem="$(dispatch_outcome_place "$1" 1 fail 0 1 0 "$AGENTS_WIN" "$BOS_FAILING")"
   bos_ck "fixture: stem ($1)" "worker-test-runner-1" "$stem"
   bos_ck "fixture: ingested marker ($1)" "ok" "$(bos_tool ctl "$1" "$stem.ingested" '')"
   psha="$(bos_tool sha "$1" "$stem.json")"
   osha="$(bos_tool sha "$1" "$stem.outcome.json")"
-  bos_ck "fixture: state seeded ($1)" "" "$(bos_tool seed "$1" "[{\"kind\":\"step_status\",\"step\":\"run_tests\",\"status\":\"pending\"},$BOS_EV_RT\"run_outcome\",\"value\":\"fail\"},$BOS_EV_RT\"failing_tests\",\"value\":$BOS_FAILING},$BOS_EV_RT\"unrunnable_count\",\"value\":0},$BOS_EV_RT\"outcome_source\",\"value\":{\"stem\":\"$stem\",\"payload_sha256\":\"$psha\",\"outcome_sha256\":\"$osha\"}}]")"
+  bos_ck "fixture: state seeded ($1)" "" "$(bos_tool seed "$1" "[{\"kind\":\"step_status\",\"step\":\"run_tests\",\"status\":\"pending\"},$BOS_EV_RT\"run_outcome\",\"value\":\"fail\"},$BOS_EV_RT\"failing_tests\",\"value\":$BOS_FAILING},$BOS_EV_RT\"unrunnable_count\",\"value\":$unr},$BOS_EV_RT\"outcome_source\",\"value\":{\"stem\":\"$stem\",\"payload_sha256\":\"$psha\",\"outcome_sha256\":\"$osha\"}}]")"
 }
 # bos_failing <sid> — sets BOS_RC and BOS_OUT; runs from a neutral directory.
 bos_failing() {
@@ -395,7 +411,9 @@ bos_refused() {
 }
 
 case_begin "matching-outcome-source-keeps-the-classification-path" "bin/workflow/run-tests-baseline-evidence"
-SID="$(bos_sid match)"; bos_seed_ingested "$SID"
+# UNRUNNABLE=0 is pinned here, not inherited from the seed default: any other count flips record to UNMET.
+SID="$(bos_sid match)"; bos_seed_ingested "$SID" 0
+bos_ck "match: control — unrunnable_count is an exact 0" "0" "$(bos_tool field "$SID" run_tests unrunnable_count)"
 bos_failing "$SID"
 bos_ck "match: failing exits 0" "0" "$BOS_RC"
 bos_ck "match: SEQ is the state seq" "SEQ=$(bos_seq_of "$SID")" "$(printf '%s\n' "$BOS_OUT" | sed -n 1p)"

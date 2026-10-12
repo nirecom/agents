@@ -75,6 +75,39 @@ TABLE
   done
 }
 
+# The 6-field run_contract (#2501): unrunnable/timeout are present together or absent
+# together, each a non-negative integer. Both verdicts in one table. TIMEOUT<=FAIL is not
+# a shape rule here: the ingest's strict parser drops such a contract (b-ingest.sh).
+f2544_a_run_contract_shapes() {
+  local sid="f2544-a-rc" stem="$F2544_T-1" name over want got
+  f2544_probe payload "$sid" "$stem" "$F2544_ROOT_N"
+  while IFS='|' read -r name over want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    want="${want//[[:space:]]/}"
+    got="$(f2544_probe validate "$sid" "$stem" "{\"worker_result\":{\"run_contract\":$over}}")"
+    [[ "$want" == "ok" ]] && want="ok:$stem"
+    f2544_eq "A/run_contract $name" "$got" "$want"
+  done <<'TABLE'
+current-shape-all-zero|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":0,"timeout":0}|ok
+current-shape-unrunnable|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":2,"timeout":0}|ok
+current-shape-timeout|{"pass":2,"fail":1,"skip":0,"executed":3,"unrunnable":0,"timeout":1}|ok
+legacy-four-fields|{"pass":3,"fail":0,"skip":0,"executed":3}|ok
+timeout-over-fail-is-shape-valid|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":0,"timeout":1}|ok
+only-unrunnable|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":0}|reject:with-reason
+only-timeout|{"pass":3,"fail":0,"skip":0,"executed":3,"timeout":0}|reject:with-reason
+unrunnable-as-string|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":"0","timeout":0}|reject:with-reason
+timeout-as-string|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":0,"timeout":"0"}|reject:with-reason
+negative-unrunnable|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":-1,"timeout":0}|reject:with-reason
+negative-timeout|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":0,"timeout":-1}|reject:with-reason
+non-integer-unrunnable|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":1.5,"timeout":0}|reject:with-reason
+non-integer-timeout|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":0,"timeout":0.5}|reject:with-reason
+null-timeout-beside-unrunnable|{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":0,"timeout":null}|reject:with-reason
+missing-executed|{"pass":3,"fail":0,"skip":0,"unrunnable":0,"timeout":0}|reject:with-reason
+negative-pass|{"pass":-1,"fail":0,"skip":0,"executed":3,"unrunnable":0,"timeout":0}|reject:with-reason
+run-contract-not-an-object|[3,0,0,3]|reject:with-reason
+TABLE
+}
+
 f2544_a_registry() {
   local sid="f2544areg" suffix kind kinds=""
   f2544_eq "A/registry control: a payload name is still the payload kind" \
@@ -125,6 +158,10 @@ case_end
 
 case_begin "outcome-validation-rejects-malformed-shapes" "hooks/lib/worker-outcome-contract.js"
 f2544_a_rejections
+case_end
+
+case_begin "run-contract-six-field-shape-validation" "hooks/lib/worker-outcome-contract.js"
+f2544_a_run_contract_shapes
 case_end
 
 case_begin "registry-new-control-kinds-do-not-overlap-payload" "hooks/lib/plans-artifact-registry.js"

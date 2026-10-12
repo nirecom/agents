@@ -3,6 +3,7 @@
 # neutralize_stream <file>          replay a child stream, prefixing every line shaped like a report line.
 # rar_unit <script> <resultdir> <rc> [<state> <missing> <timeout>]
 #                                   one unit's file-level line, then its case-level lines; sets RAR_STATE.
+# rar_missing [<arg>...]            one UNRUNNABLE line per explicit argument that named no test file.
 # rar_tail [<unsupported-file>...]  UNSUPPORTED list, Missing runtimes, Results and RUN_CONTRACT.
 # Contract: docs/architecture/claude-code/test-runner-parallelism.md.
 
@@ -138,6 +139,17 @@ rar_unit() {
   _rar_cases "$s" "$cst" "$dir/cases.tsv"
 }
 
+# A missing file counts as UNRUNNABLE but carries no runtime label, so 'Missing runtimes:' never names it.
+rar_missing() {
+  local a d
+  for a in "$@"; do
+    _rar_disp d "$a"
+    echo "UNRUNNABLE: $d (missing: test file)"
+    RAR_UNRUNNABLE=$((RAR_UNRUNNABLE + 1))
+  done
+  return 0
+}
+
 rar_tail() {
   local f i line="" d
   for f in "$@"; do
@@ -146,7 +158,7 @@ rar_tail() {
     printf 'UNSUPPORTED: %s (language: %s; not run)\n' "$d" "${TLR_ID:-unknown}"
   done
   echo ""
-  if [ "$RAR_UNRUNNABLE" -gt 0 ]; then
+  if [ "${#_RAR_LABELS[@]}" -gt 0 ]; then
     for ((i = 0; i < ${#_RAR_LABELS[@]}; i++)); do
       f="files"
       [ "${_RAR_LABEL_N[i]}" -eq 1 ] && f="file"

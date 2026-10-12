@@ -152,6 +152,29 @@ case_end() {
   _harness_case_record "$st"
 }
 
+# harness_discard_pass <cmd> [args...] — run <cmd> as a dry pass (e.g. to prefetch probes): output
+# discarded, return code ignored, no cases.tsv line written, and the counters plus every case-state
+# variable restored afterwards. Stdin is the caller's to redirect; caller-owned counters stay its own.
+_HARNESS_DISCARD_VARS=(PASS FAIL SKIP XFAIL_N XPASS_N CURRENT_CASE CURRENT_CASE_TARGET _HARNESS_CASES_FILE
+  _HARNESS_CASE_OPEN _HARNESS_CASE_FAILED _HARNESS_CASE_SEQ _HARNESS_CASE_NAME _HARNESS_CASE_TARGET _HARNESS_CASE_AT)
+harness_discard_pass() {
+  local _hdp_v _hdp_i=0
+  local -a _hdp_saved=()
+  for _hdp_v in "${_HARNESS_DISCARD_VARS[@]}"; do
+    if [ -n "${!_hdp_v+x}" ]; then _hdp_saved+=("1${!_hdp_v}"); else _hdp_saved+=("0"); fi
+  done
+  _HARNESS_CASES_FILE=""
+  "$@" >/dev/null 2>&1 || true
+  for _hdp_v in "${_HARNESS_DISCARD_VARS[@]}"; do
+    case "${_hdp_saved[_hdp_i]}" in
+      1*) printf -v "$_hdp_v" '%s' "${_hdp_saved[_hdp_i]#1}" ;;
+      *) unset "$_hdp_v" ;;
+    esac
+    _hdp_i=$((_hdp_i + 1))
+  done
+  return 0
+}
+
 # 1e. Fixture helpers.
 
 # np() — normalize path for node: cygpath -m on Windows, passthrough elsewhere.
