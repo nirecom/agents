@@ -18,6 +18,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 # shellcheck source=lib/main-worktree.sh
 source "$SCRIPT_DIR/lib/main-worktree.sh"
+# shellcheck source=lib/sweep-numeric.sh
+source "$SCRIPT_DIR/lib/sweep-numeric.sh"
 # shellcheck source=./sweep-branches/pr-state.sh
 source "$SCRIPT_DIR/sweep-branches/pr-state.sh"
 # shellcheck source=./sweep-branches/gates.sh
@@ -37,69 +39,10 @@ DELETE_NO_PR=0
 TIMEOUT_SECONDS=120
 SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
-validate_sweep_age_days() {
-  local v="$1"
-  case "$v" in
-    ''|*[!0-9]*)
-      printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
-      exit 2
-      ;;
-    0?*)
-      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
-      # error and 010 silently means 8; reject instead of guessing the intent.
-      printf 'ERROR: SWEEP_AGE_DAYS must not have a leading zero (bash reads it as octal) (got: %s)\n' "$v" >&2
-      exit 2
-      ;;
-    ?????????????????*)
-      # >17 digits always overflows once multiplied by 86400; the precise
-      # bound below (SWEEP_AGE_DAYS_SAFE_MAX) covers the tighter cases.
-      printf 'ERROR: SWEEP_AGE_DAYS is too large (got: %s)\n' "$v" >&2
-      exit 2
-      ;;
-  esac
-  if [[ "$v" -lt 1 ]]; then
-    printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
-    exit 2
-  fi
-  # Largest N for which N * 86400 does not overflow 64-bit signed arithmetic
-  # (106751991167300 * 86400 = 9223372036854720000 <= INT64_MAX); a larger
-  # value would silently wrap in gates.sh's `SWEEP_AGE_DAYS * 86400`.
-  local -r SWEEP_AGE_DAYS_SAFE_MAX=106751991167300
-  if [[ "$v" -gt "$SWEEP_AGE_DAYS_SAFE_MAX" ]]; then
-    printf 'ERROR: SWEEP_AGE_DAYS must be at most %s (got: %s)\n' "$SWEEP_AGE_DAYS_SAFE_MAX" "$v" >&2
-    exit 2
-  fi
-}
-
-validate_min_age_hours() {
-  local v="$1"
-  case "$v" in
-    ''|*[!0-9]*)
-      printf 'ERROR: --min-age-hours must be a non-negative integer, got: %s\n' "$v" >&2
-      exit 1
-      ;;
-    0?*)
-      # `$(( ))` reads a leading-zero numeral as octal, so 08 is an arithmetic
-      # error and 010 silently means 8; reject instead of guessing the intent.
-      printf 'ERROR: --min-age-hours must not have a leading zero (bash reads it as octal), got: %s\n' "$v" >&2
-      exit 1
-      ;;
-    ?????????????????*)
-      printf 'ERROR: --min-age-hours is too large, got: %s\n' "$v" >&2
-      exit 1
-      ;;
-  esac
-  # 0 is valid and means "no age gate" (immediate eligibility) — unlike
-  # SWEEP_AGE_DAYS, --min-age-hours has no business reason to require >=1.
-  # Largest N for which N * 3600 does not overflow 64-bit signed arithmetic
-  # (2562047788015215 * 3600 = 9223372036854774000 <= INT64_MAX); this is the
-  # tightest of gates.sh's *3600/*60 uses, so it safely bounds both.
-  local -r MIN_AGE_HOURS_SAFE_MAX=2562047788015215
-  if [[ "$v" -gt "$MIN_AGE_HOURS_SAFE_MAX" ]]; then
-    printf 'ERROR: --min-age-hours must be at most %s, got: %s\n' "$MIN_AGE_HOURS_SAFE_MAX" "$v" >&2
-    exit 1
-  fi
-}
+# Bounds live in bin/lib/sweep-numeric.sh. --min-age-hours 0 means "no age gate";
+# 3600 is the tightest multiplier gates.sh applies to it.
+validate_sweep_age_days() { sweep_validate_uint SWEEP_AGE_DAYS "$1" 1 86400 2; }
+validate_min_age_hours() { sweep_validate_uint --min-age-hours "$1" 0 3600 1; }
 
 validate_sweep_age_days "$SWEEP_AGE_DAYS"
 
@@ -146,10 +89,7 @@ while [[ $# -gt 0 ]]; do
     --timeout-seconds)
       shift
       TIMEOUT_SECONDS="${1:?--timeout-seconds requires a value}"
-      if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TIMEOUT_SECONDS" -lt 1 ]]; then
-        printf 'ERROR: --timeout-seconds must be a positive integer, got: %s\n' "$TIMEOUT_SECONDS" >&2
-        exit 1
-      fi
+      sweep_validate_uint --timeout-seconds "$TIMEOUT_SECONDS" 1 1 1
       ;;
     -h|--help) usage; exit 0 ;;
     *)
