@@ -727,3 +727,7 @@ Changes: Test suite for #2434 complexity stage routing (#2572): fixed the featur
 ### FEATURE: PR #2616 (2026-10-12)
 Background: fix(#2589): finish the root-name replacement in hooks, CLIs and installers
 Changes: Fixed: an inline SYSTEM_OPS_APPROVED=1 typed by the assistant can no longer approve system-state-changing commands; only the operator exporting it before launching Claude Code does.
+
+### FEATURE: PR #2626 (2026-10-12)
+Background: feat(#2513): split plan confirmation into presentation and approval t...
+Changes: Plans now appear as a tappable link in the main conversation, so you can open them from the Claude app on another device before approving.;Denying a plan confirmation (intent, outline or detail) now actually stops the workflow until the plan is approved.;Stop hooks no longer falsely block a turn whose final text had not yet been written to the transcript.
