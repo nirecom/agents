@@ -848,6 +848,28 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/postuse-shell-snapshot-repair.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/postuse-shell-snapshot-repair.js\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },

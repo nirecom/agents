@@ -7,7 +7,7 @@ model: sonnet
 
 Hub skill for periodic maintenance sweeps. Dispatches to one or more sub-skills
 that each reclaim a specific class of residual state. A flagless run applies
-(deletes); pass `--dry-run` to preview without writing.
+(deletes); `/sweep-plans` deletes only non-plan files and prints a count hint for plan and user-requested files. Pass `--dry-run` to preview without writing.
 
 ## Procedure
 
@@ -30,7 +30,7 @@ SW-2c. After worktree removal, retry `git branch -D` for each WORKTREE-LOCKED
    cascade rule no longer prevents deletion. Failures are ignored (reclaimed
    next cycle).
 SW-2d. Emit `echo <<WORKFLOW_ENFORCE_WORKTREE_ON: sweep hub — SW-2b/SW-2c fallback complete>>` after SW-2c, regardless of outcome.
-SW-3. Invoke `/sweep-plans` (deletes by default; pass `--dry-run` to preview).
+SW-3. Invoke `/sweep-plans` (deletes non-plan files by default and prints only a count hint for plan and user-requested files; pass `--dry-run` to preview).
 SW-4. Invoke `/sweep-tests` (deletes by default; `--dry-run` and `--fix-headers` are forwarded when passed).
 SW-5. Invoke `/sweep-issues` (tier-1 meta-parent closes apply by default; `--dry-run` previews).
    Tier-2 candidates are human-gated and only surface under `--deep`.
@@ -39,15 +39,16 @@ SW-7. Future sub-skills to be added in subsequent PRs:
    - `/sweep-wip` — stale WIP fingerprints
    - `/sweep-logs` — old terminal logs / temp files
 
-Forward `--dry-run` (and any other flags) to each invoked sub-skill verbatim.
+Forward `--dry-run` (and any other flags) to each invoked sub-skill verbatim, except `--include-plan-and-user-requested`, which the hub never forwards.
 
 ## Rules
 
 - Each sub-skill is independent; one failure does not stop the chain.
-- A flagless run deletes; pass `--dry-run` to preview. `--apply` remains accepted as an explicit synonym of the default.
+- A flagless run deletes; pass `--dry-run` to preview. `--apply` remains accepted as an explicit synonym of the default. For `/sweep-plans` the flagless write scope is non-plan files only.
 - Both the nightly cron (`.github/workflows/sweep.yml`) and manual `/sweep` use this hub.
 - The nightly cron acts as a workflow health check; zombie reclamation primarily
   relies on manual `/sweep` on the developer's machine, since CI runners do not
   see local worktrees.
 - Never pass `--force` — none of the sub-skills accept it by design.
 - Never add `--deep` automatically for `/sweep-issues`; it is for human sessions only, so cron and hub runs never stop at a tier-2 gate.
+- Never add or forward `--include-plan-and-user-requested` for `/sweep-plans`; deleting plan and user-requested files is for a direct `/sweep-plans` run only, so hub runs never stop at an approval gate.

@@ -403,6 +403,15 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
   repository it means the compiler sense (a parse-based intermediate representation).
 - **Related**: #1253
 
+### Windows-form snapshot
+
+- **Definition**: A Claude Code shell snapshot whose `PATH` line holds Windows-style
+  `;`-separated drive paths instead of a POSIX list. Sourced in Git Bash it makes
+  `/usr/bin` unreachable, so every Bash call exits 127. The SessionStart and
+  PostToolUse(Failure) hooks rewrite the line to POSIX form; `/sweep-shell-snapshots`
+  lists the ones left behind.
+- **Related**: [architecture/claude-code/shell-snapshot-repair.md](architecture/claude-code/shell-snapshot-repair.md), #2221
+
 ### plan-sync
 
 - **Definition**: The mechanism that pushes each final plan file (`*-intent.md`,

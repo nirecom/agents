@@ -16,6 +16,7 @@
 11. [Test Language Registry](claude-code/test-language-registry.md) — the one table of test file names per language, its readers, per-language parts, the `UNSUPPORTED:` display, and the residue check
 12. [Test Result Contract](claude-code/test-result-contract.md) — language-independent exit codes and unit states (PASS / FAIL / SKIP / UNRUNNABLE / TIMEOUT), `cases.tsv` and case-level result lines, `RUN_CONTRACT:` / `Missing runtimes:`, neutralization, `run_outcome=unrunnable`, the UNRUNNABLE acceptance sentinel
 13. [Plan Sync](claude-code/plan-sync.md) — final plan files pushed to a private GitHub or GitLab remote on the project's own host so the model can write a URL readable from mobile apps or a browser; provisioning, interactive setup, send rule, plan link, visibility policy, risks
+14. [Shell Snapshot Repair](claude-code/shell-snapshot-repair.md) — Windows-form `PATH` in shell snapshots makes every Bash call exit 127; the SessionStart and PostToolUse(Failure) repair, `cygpath` lookup, recovery, and `native_path` for `gh.exe`
 
 ## 5. EM Supervisor (alert/audit two-mode design)
 

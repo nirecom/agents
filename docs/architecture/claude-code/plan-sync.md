@@ -189,8 +189,8 @@ internal repo ([../../scan-outbound.md](../../scan-outbound.md)).
 
 ## Retention
 
-Plans live in the remote repository's history. Deleting a plan locally (for example via
-`sweep-plans`) does not purge it from the remote, and sync never deletes remote files.
+Plans live in the remote repository's history. Deleting a plan locally (`sweep-plans` deletes `plan` files only with `--include-plan-and-user-requested` after an approval prompt)
+does not purge it from the remote, and sync never deletes remote files.
 Purging requires the user to rewrite or prune the plan repository itself.
 
 ## Risks
