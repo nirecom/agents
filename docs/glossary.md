@@ -327,7 +327,7 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 ### UNRUNNABLE
 
 - **Full name**: Unrunnable test state
-- **Definition**: The state of a test file that could not run because its runtime is missing from PATH or older than the registry's minimum version (exit 79 with a validated `unrunnable` marker). It counts as neither pass, fail nor skip, and it keeps the `run_tests` step from completing until the runtime is installed or the user accepts the gap with the `RUN_TESTS_UNRUNNABLE_ACCEPTED` sentinel.
+- **Definition**: The state of a test file that could not run because its runtime is missing from PATH or older than the registry's minimum version (exit 79 with a validated `unrunnable` marker), or because an explicitly named test path resolves to no regular file (`missing: test file`). It counts as neither pass, fail nor skip, and it keeps the `run_tests` step from completing until the runtime is installed or the user accepts the gap with the `RUN_TESTS_UNRUNNABLE_ACCEPTED` sentinel.
 - **Related**: [architecture/claude-code/test-result-contract.md](architecture/claude-code/test-result-contract.md)
 
 ### case-level result line
