@@ -21,7 +21,7 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 harness_isolate "$TMP_ROOT/state"
 unset CLAUDE_CODE_SESSION_ID
 
-. "$SCRIPT_DIR/feature-2590-command-guard/setup.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-2590-command-guard/setup.sh"
 
 MAIN_JS="$(np "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard/main.js")"
 readonly MAIN_JS

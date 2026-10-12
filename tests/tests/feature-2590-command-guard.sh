@@ -19,7 +19,7 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 harness_isolate "$TMP_ROOT/state"
 unset CLAUDE_CODE_SESSION_ID
 
-PARTS="$SCRIPT_DIR/feature-2590-command-guard"
+PARTS="$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-2590-command-guard"
 . "$PARTS/setup.sh"
 . "$PARTS/sentinel-cases.sh"
 . "$PARTS/git-cases.sh"

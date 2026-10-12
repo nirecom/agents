@@ -23,7 +23,7 @@ expect_has() { case "$2" in *"$3"*) pass "$1" ;; *) fail "$1" "missing: $3 in: $
 lines() { if [[ -f "$1" ]]; then grep -c . "$1" || true; else echo 0; fi; }
 
 PRELOAD="$(np "$SCRIPT_CHECKOUT_ROOT/tests/fixtures/spawn-record-preload.js")"
-DRIVER="$(np "$SCRIPT_DIR/feature-2590-spawn-record-family/driver.js")"
+DRIVER="$(np "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-2590-spawn-record-family/driver.js")"
 NODE_REAL="$(node -p 'process.execPath')"
 mkdir -p "$TMP_ROOT/node only"
 cp "$NODE_REAL" "$TMP_ROOT/node only/" || { echo "cannot copy node" >&2; exit 1; }

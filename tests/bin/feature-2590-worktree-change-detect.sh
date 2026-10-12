@@ -19,7 +19,7 @@ unset CLAUDE_CODE_SESSION_ID
 ROOT_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
 TAB="$(printf '\t')"
 
-. "$SCRIPT_DIR/feature-2590-worktree-change-detect/setup.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2590-worktree-change-detect/setup.sh"
 wcd_setup || { echo "FAIL: fixture setup"; exit 1; }
 
 FX_TREE="$MAIN_CO"

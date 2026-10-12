@@ -18,7 +18,7 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 harness_isolate "$TMP_ROOT/state"
 unset CLAUDE_CODE_SESSION_ID
 
-. "$SCRIPT_DIR/feature-2590-command-guard/setup.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-2590-command-guard/setup.sh"
 
 cg_setup || { echo "FAIL: fixture setup"; exit 1; }
 
