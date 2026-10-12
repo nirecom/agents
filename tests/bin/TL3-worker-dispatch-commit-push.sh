@@ -132,14 +132,17 @@ write_payload() {
 status_of() { printf '%s' "$1" | grep -oE '"?status"?[": ]+[a-z_]+' | head -1 | grep -oE '[a-z_]+$'; }
 
 # ===========================================================================
-# Scenario 1 — the gate really blocks: no state file for this session
+# Scenario 1 — the gate really blocks: begun workflow, user_verification pending
 #
-# workflow-gate.js fails closed on missing state. If the gate never ran, or ran
-# without WORKFLOW_STATE_DIR reaching it, the commit lands and this fails.
+# workflow-gate.js blocks commits when the workflow has begun but is incomplete.
+# Before #1633, an absent state file caused a fail-closed block; since #1633 the
+# gate approves when the WF has not begun (no state). Scenario 1 must therefore
+# use a state that is begun but incomplete so the gate still blocks.
 # ===========================================================================
 scenario_blocked() {
     local before after res rc out
-    mkdir -p "$TMPD/state-blocked"   # deliberately empty: no <sid>.json
+    mkdir -p "$TMPD/state-blocked"
+    write_state "$TMPD/state-blocked" "tl3sidblocked" "pending"
     stage_change "blocked-run"
     before="$(git -C "$WT" rev-parse HEAD)"
     write_payload "$TMPD/pay-blocked.json" "tl3sidblocked" "test: must not be committed"

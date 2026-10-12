@@ -90,15 +90,16 @@ COMMIT_JSON='{"tool_name":"Bash","tool_input":{"command":"git commit -m \"test\"
 
 run_gate() {
     local repo="$1" json="$2"
-    # AGENTS_MAIN_ROOT="$repo" so isAgentsSessionRepo() (issue #1138) treats the
-    # commit target as the agents session repo — i.e. the gate enforces workflow
-    # state, matching the historical single-repo behavior these tests assume.
+    # Fixtures carry no cwd, so the WF target repo set is unknown and the commit is
+    # checked (#1633) — the historical single-repo behavior these tests assume.
+    # AGENTS_MAIN_ROOT="$repo" is kept from #1138; it no longer decides the scope.
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" AGENTS_MAIN_ROOT="$repo" node "$GATE_HOOK" 2>/dev/null || true
 }
 
-# Cross-repo variant (issue #1138): the agents session lives in $agents_repo but
-# the commit targets $target_repo. When $target_repo is NOT the agents session
-# repo, the gate must skip workflow-state enforcement (approve / bypass).
+# Cross-repo variant (issue #1138): the commit targets $target_repo while
+# AGENTS_MAIN_ROOT is $agents_repo. Since #1633 the scope is the WF target repo set
+# (state cwd + intent worktrees), not AGENTS_MAIN_ROOT: a case expecting approve must
+# put a cwd outside $target_repo into the state; without a cwd the commit is checked.
 # $json should carry a `git -C <target_repo> commit ...` command so resolveRepoDir
 # points at the foreign repo.
 run_gate_cross_repo() {

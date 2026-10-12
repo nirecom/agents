@@ -99,9 +99,9 @@ expect_eq "B7. isCommitCommand(git add -A && rtk git commit -m x) → true (comm
 case_end
 
 # --- Hook-level: hooks/workflow-gate.js end to end --------------------------
-# The gate runs from a copy of this checkout attached to the fixture repo, so
-# isAgentsSessionRepo() keeps it armed; run_tests is pending, so any commit that reaches the
-# gate is BLOCKed.
+# The state carries no cwd, so the WF target repo set is unknown and the commit is checked
+# (#1633); run_tests is pending, so any commit that reaches the gate is BLOCKed. The copy of
+# this checkout attached to the fixture repo is kept; it no longer decides the scope.
 WG_REPO="$(np "$T/wg-repo")"
 mkdir -p "$WG_REPO"
 git -C "$WG_REPO" init -q -b main

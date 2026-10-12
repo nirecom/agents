@@ -13,12 +13,31 @@ run_cross_repo_commit_tests() {
     REPO_B=$(setup_repo)
     REPO_C=$(setup_repo)
 
-    # L2-a: repoA all complete, git -C repoA issued from repoB context → approve
+    # #1633: a commit is checked once the WF has begun AND its target is in the WF target
+    # repo set (the state's session-start cwd plus intent worktrees). Fixtures without a cwd
+    # leave the set unknown, so the gate is applied to them.
+
+    # L2-a: cwd=repoB + detail=pending, git -C repoA from repoB → approve
+    # (repoA is outside the WF target repo set: the one approve-by-scope case in this section).
     SID_2A="l2a-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    write_state "$SID_2A" "$(ALL_COMPLETE_JSON "$SID_2A")"
+    L2A_STATE="$(ALL_COMPLETE_JSON "$SID_2A")"
+    L2A_FROM='"detail":            {"status": "complete"'
+    L2A_TO='"detail":            {"status": "pending"'
+    L2A_STATE="${L2A_STATE/"$L2A_FROM"/"$L2A_TO"}"
+    case "$L2A_STATE" in *"$L2A_TO"*) ;; *) fail "L2-a. fixture did not set detail=pending" ;; esac
+    L2A_CWD="$REPO_B"
+    command -v cygpath >/dev/null 2>&1 && L2A_CWD="$(cygpath -m "$REPO_B")"
+    L2A_STATE="${L2A_STATE/\"created_at\"/\"cwd\": \"$L2A_CWD\", \"created_at\"}"
+    case "$L2A_STATE" in *"\"cwd\": \"$L2A_CWD\""*) ;; *) fail "L2-a. fixture did not set cwd=repoB" ;; esac
+    write_state "$SID_2A" "$L2A_STATE"
     L2A_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2A\"}"
-    expect_approve_gate "L2-a. repoA all complete, git -C repoA from repoB → approve" \
-        "$REPO_B" "$L2A_JSON"
+    L2A_RESULT=$(echo "$L2A_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
+        node "$GATE_HOOK" 2>/dev/null || true)
+    if echo "$L2A_RESULT" | grep -q '"approve"'; then
+        pass "L2-a. cwd=repoB + detail=pending, git -C repoA → approve (outside the WF target repo set)"
+    else
+        fail "L2-a. cwd=repoB + detail=pending, git -C repoA — expected approve, got: $L2A_RESULT"
+    fi
 
     # L2-b: repoA write_tests=pending, git -C repoA from repoB → block (mentions write_tests)
     SID_2B="l2b-$(printf '%04x%04x' $RANDOM $RANDOM)"
@@ -41,8 +60,8 @@ run_cross_repo_commit_tests() {
 EOF
 )"
     L2B_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2B\"}"
-    # Inline call: CLAUDE_PROJECT_DIR=REPO_B (invoking session), the gate's checkout is
-    # attached to REPO_A (agents session repo), git -C REPO_A → same git dir → enforce.
+    # Inline call: CLAUDE_PROJECT_DIR=REPO_B, no cwd → the target set is unknown → checked.
+    # The checkout attach to REPO_A is kept as a guard that it no longer decides the bypass.
     session_repo_fixture_attach "$ARMED_GATE_CHECKOUT" "$REPO_A" || return 1
     L2B_RESULT=$(echo "$L2B_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         AGENTS_MAIN_ROOT="$REPO_A" node "$ARMED_GATE_HOOK" 2>/dev/null || true)
@@ -196,16 +215,28 @@ EOF
     expect_approve_gate "L2-e. CLAUDE_PROJECT_DIR=third-repo, -C repoA → state from WORKFLOW_DIR" \
         "$REPO_C" "$L2E_JSON"
 
-    # L2-f: git -C /nonexistent → block (no crash)
+    # L2-f: git -C /nonexistent, WF begun (cwd unknown → fail-closed) → block
     SID_2F="l2f-$(printf '%04x%04x' $RANDOM $RANDOM)"
     NONEXISTENT="$TMPDIR_BASE/nonexistent-l2f-$$"
+    write_state "$SID_2F" "$(ALL_PENDING_JSON "$SID_2F")"
     L2F_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $NONEXISTENT commit -m test\"},\"session_id\":\"$SID_2F\"}"
     L2F_RESULT=$(echo "$L2F_JSON" | CLAUDE_PROJECT_DIR="$REPO_A" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
     if echo "$L2F_RESULT" | grep -q '"block"'; then
-        pass "L2-f. git -C /nonexistent → block (no crash)"
+        pass "L2-f. git -C /nonexistent, begun (cwd unknown) → block (fail-closed)"
     else
         fail "L2-f. git -C /nonexistent — expected block, got: $L2F_RESULT"
+    fi
+
+    # L2-f2: git -C /nonexistent with no state → WF not begun → approve (#1633)
+    SID_2F2="l2f2-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    L2F2_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $NONEXISTENT commit -m test\"},\"session_id\":\"$SID_2F2\"}"
+    L2F2_RESULT=$(echo "$L2F2_JSON" | CLAUDE_PROJECT_DIR="$REPO_A" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
+        node "$GATE_HOOK" 2>/dev/null || true)
+    if echo "$L2F2_RESULT" | grep -q '"approve"'; then
+        pass "L2-f2. git -C /nonexistent, no state → WF not begun → approve (#1633)"
+    else
+        fail "L2-f2. git -C /nonexistent no state — expected approve, got: $L2F2_RESULT"
     fi
 
     # L2-g(DQ): double-quoted -C argument correctly resolved
@@ -326,8 +357,20 @@ EOF
     REPO_2K_SRC=$(setup_repo)
     REPO_2K_EXT=$(setup_repo)
     mkdir -p "$REPO_2K_EXT/docs"
+    # Since #1633 these sessions have no cwd (target set unknown), so the gate stays armed and the
+    # docs evidence check really runs. Git Bash `ln -s` silently COPIES the directory,
+    # so prove the link shares content; fall back to an NTFS junction, else skip.
     JUNCTION_OK=0
-    ln -sfn "$REPO_2K_EXT/docs" "$REPO_2K_SRC/docs" 2>/dev/null && JUNCTION_OK=1 || true
+    ln -sfn "$REPO_2K_EXT/docs" "$REPO_2K_SRC/docs" 2>/dev/null || true
+    if l2k_link_shares; then
+        JUNCTION_OK=1
+    elif command -v cygpath >/dev/null 2>&1 && command -v cmd >/dev/null 2>&1; then
+        rm -rf "$REPO_2K_SRC/docs"
+        # MSYS path conversion would mangle the /J switch into a path.
+        MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' cmd /c mklink /J \
+            "$(cygpath -w "$REPO_2K_SRC/docs")" "$(cygpath -w "$REPO_2K_EXT/docs")" >/dev/null 2>&1 || true
+        l2k_link_shares && JUNCTION_OK=1
+    fi
 
     if [ "$JUNCTION_OK" = "1" ]; then
         # L2-k: docs staged in junction target → approve
@@ -395,6 +438,15 @@ EOF
 
         rm -rf "$REPO_2K_SRC/docs"
     else
-        echo "SKIP: L2-k/L2-l (symlink or junction creation not available)"
+        echo "SKIP: L2-k/L2-l (no content-sharing symlink or junction: ln copied the dir and mklink /J unavailable)"
     fi
+}
+
+# l2k_link_shares — true only when REPO_2K_SRC/docs is a live view of REPO_2K_EXT/docs.
+l2k_link_shares() {
+    local probe="l2k-probe-$$" rc=1
+    : > "$REPO_2K_EXT/docs/$probe"
+    [ -e "$REPO_2K_SRC/docs/$probe" ] && rc=0
+    rm -f "$REPO_2K_EXT/docs/$probe"
+    return "$rc"
 }

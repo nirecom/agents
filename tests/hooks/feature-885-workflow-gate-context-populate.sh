@@ -89,14 +89,15 @@ fi
 rm -rf "$TMP_WG1"
 
 # --- WG2: late block (after repoDir resolved) — context.cwd + git_root_resolved=true
-# Strategy: trigger a workflow-gate block on a `git commit` from the main worktree
-# without a workflow state present → blocks with "no workflow state found".
+# Strategy: trigger a workflow-gate block on a `git commit` from the main worktree with a
+# corrupt state file present (#1633: no state means the WF has not begun → approve).
 SID_WG2="sid-wg2-$$"
 TMP_WG2=$(make_tmp)
 if command -v cygpath >/dev/null 2>&1; then TMP_WG2_NODE=$(cygpath -m "$TMP_WG2"); else TMP_WG2_NODE="$TMP_WG2"; fi
 if [ -z "$MAIN_WT" ] || [ ! -d "$MAIN_WT" ]; then
     skip "WG2: cannot resolve main worktree"
 else
+    printf '{not json' > "$TMP_WG2/${SID_WG2}.json"
     JSON='{"tool_name":"Bash","tool_input":{"command":"git commit -m x","cwd":"'"$MAIN_WT_NODE"'"},"session_id":"'"$SID_WG2"'"}'
     WORKFLOW_PLANS_DIR="$TMP_WG2_NODE" WORKFLOW_STATE_DIR="$TMP_WG2_NODE" ENFORCE_WORKTREE=on \
         run_with_timeout 15 bash -c "echo '$JSON' | node '$HOOK'" >/dev/null 2>&1 || true

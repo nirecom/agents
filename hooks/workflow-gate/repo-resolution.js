@@ -9,7 +9,6 @@ const { normalizeForWindows } = require("./path-normalize");
 const { isLinkedWorktree } = require("./worktree-context");
 const { hasStagedChanges } = require("./staged-evidence");
 const { parseGitCArg, parseCdCommand } = require("../lib/parse-git-args");
-const { getGitCommonDir } = require("../lib/git-common-dir");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 
@@ -51,40 +50,48 @@ function resolveRepoDir(command, input) {
   const cdArg = normalizeForWindows(parseCdCommand(command));
   if (cdArg) return cdArg;
 
+  return resolveCommandIndependentRepoDir(input);
+}
+
+const REPO_DIR_SOURCES = Object.freeze({
+  PAYLOAD_CWD: "payload-cwd",
+  PROJECT_DIR: "project-dir",
+  PROCESS_CWD: "process-cwd",
+  STAGED_ADDITIONAL_DIRECTORY: "staged-additional-directory",
+});
+
+// Tiers 3-4 of resolveRepoDir: the repo a command lands in when its own text
+// names none (no -C, no leading cd), with the tier that produced it.
+function resolveCommandIndependentRepo(input) {
   // Tier 3 — hook payload cwd, gated by isLinkedWorktree. Authoritative under
   // Windows VS Code where process.cwd() drifts to the main worktree (CC #27343).
   // Gate prevents stale/main-checkout cwd from bypassing Tier 4's staged-change
   // search across CLAUDE_PROJECT_DIR + additionalDirectories.
   const payloadCwd = input && typeof input.cwd === 'string' ? input.cwd : null;
   const normPayloadCwd = normalizeForWindows(payloadCwd);
-  if (normPayloadCwd && isLinkedWorktree(normPayloadCwd)) return normPayloadCwd;
-  // else: fall through to Tier 4
+  if (normPayloadCwd && isLinkedWorktree(normPayloadCwd)) {
+    return { dir: normPayloadCwd, source: REPO_DIR_SOURCES.PAYLOAD_CWD };
+  }
 
   const primary = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const primarySource = process.env.CLAUDE_PROJECT_DIR ? REPO_DIR_SOURCES.PROJECT_DIR : REPO_DIR_SOURCES.PROCESS_CWD;
   const norm = (p) => p.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
-  if (hasStagedChanges(primary)) return primary;
+  if (hasStagedChanges(primary)) return { dir: primary, source: primarySource };
   for (const dir of findAdditionalDirectories()) {
     if (norm(dir) === norm(primary)) continue;
-    if (hasStagedChanges(dir)) return dir;
+    if (hasStagedChanges(dir)) return { dir, source: REPO_DIR_SOURCES.STAGED_ADDITIONAL_DIRECTORY };
   }
-  return primary;
+  return { dir: primary, source: primarySource };
 }
 
-// True when repoDir is (or is a linked worktree of) the agents session repo.
-// Fail-closed: returns true on any error so gate enforcement is never skipped
-// due to a transient git failure. Returns false only when git confirms the two
-// repos have different common-dirs.
-function isAgentsSessionRepo(repoDir) {
-  if (!repoDir) return true;
-  try {
-    const targetCommonDir = getGitCommonDir(repoDir);
-    const agentsCommonDir = getGitCommonDir(SCRIPT_CHECKOUT_ROOT);
-    if (!targetCommonDir || !agentsCommonDir) return true;
-    const norm = (p) => p.replace(/\\/g, "/").toLowerCase();
-    return norm(targetCommonDir) === norm(agentsCommonDir);
-  } catch (_) {
-    return true;
-  }
+function resolveCommandIndependentRepoDir(input) {
+  return resolveCommandIndependentRepo(input).dir;
 }
 
-module.exports = { findAdditionalDirectories, resolveRepoDir, isAgentsSessionRepo };
+module.exports = {
+  findAdditionalDirectories,
+  resolveRepoDir,
+  resolveCommandIndependentRepoDir,
+  resolveCommandIndependentRepo,
+  REPO_DIR_SOURCES,
+};

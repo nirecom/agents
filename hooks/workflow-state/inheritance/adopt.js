@@ -13,7 +13,7 @@ const {
   compareRepoContentEquivalence,
   compareRepoIdentity,
   VERDICTS,
-} = require("../../../bin/workflow/lib/next-step/repo-dir-guard");
+} = require("../../lib/repo-identity");
 
 const GRANULARITY_CONTEXT_INDEPENDENT_ONLY = "context-independent-only";
 

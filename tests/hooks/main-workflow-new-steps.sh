@@ -32,6 +32,8 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# The parent session's id would let no-session_id cases resolve a live state file.
+unset CLAUDE_CODE_SESSION_ID
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,33 +59,17 @@ write_state() {
 }
 
 read_state_status() {
-    local sid="$1" step="$2"
-    local state_file="$WORKFLOW_DIR/${sid}.json"
-    if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-    node -e "
-      try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const step = s.steps && s.steps['$step'];
-        console.log(step && step.status ? step.status : 'MISSING');
-      } catch (e) { console.log('MISSING'); }
-    " "$state_file" 2>/dev/null || echo "MISSING"
+    read_state_field "$1" "$2" status
 }
 
+# Reads through readState (workflow-state-tool field), so a v4 event-stream file
+# projects its steps instead of exposing no raw `steps` key (#1787 sibling).
 read_state_field() {
-    local sid="$1" step="$2" field="$3"
-    local state_file="$WORKFLOW_DIR/${sid}.json"
-    if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-    node -e "
-      try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const step = s.steps && s.steps['$step'];
-        if (!step || step['$field'] === undefined || step['$field'] === null) {
-          console.log('MISSING');
-        } else {
-          console.log(step['$field']);
-        }
-      } catch (e) { console.log('MISSING'); }
-    " "$state_file" 2>/dev/null || echo "MISSING"
+    local sid="$1" step="$2" field="$3" out root
+    if [ ! -f "$WORKFLOW_DIR/${sid}.json" ]; then echo "MISSING"; return; fi
+    root="$(echo "$DOTFILES_DIR" | sed 's|^/\([a-zA-Z]\)/|\1:/|')"
+    out="$(node "$root/tests/lib/workflow-state-tool.js" "$root" field "$sid" "$step" "$field" 2>/dev/null)" || out=""
+    case "$out" in ""|"(absent)"|ERR:*) echo "MISSING" ;; *) echo "$out" ;; esac
 }
 
 expect_state_step() {

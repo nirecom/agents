@@ -81,9 +81,11 @@ fresh_workflow_dir() {
     to_node_path "$d"
 }
 
+# write_complete_state <wfdir> <sid> [cwd] — all steps complete; [cwd] is the session-start
+# repo that seeds the WF target repo set (#1633). Without it the set is unknown.
 write_complete_state() {
-    local wfdir="$1" sid="$2"
-    node -e "
+    local wfdir="$1" sid="$2" cwd="${3:-}"
+    STATE_CWD="$cwd" node -e "
 const fs = require('fs');
 const path = require('path');
 const { VALID_STEPS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js');
@@ -91,6 +93,7 @@ const steps = {};
 const now = new Date().toISOString();
 for (const s of VALID_STEPS) steps[s] = { status: 'complete', updated_at: now };
 const state = { version: 1, session_id: '$sid', created_at: now, steps };
+if (process.env.STATE_CWD) state.cwd = process.env.STATE_CWD;
 fs.writeFileSync(path.join('$wfdir', '$sid' + '.json'), JSON.stringify(state, null, 2));
 "
 }
@@ -101,7 +104,8 @@ write_workflow_off_marker() {
 }
 
 # Checkout fixtures. The hook decides both things from the checkout it is launched from (CPR-SC):
-#   1. isAgentsSessionRepo() — Gate 2 is armed only for the repo that checkout belongs to.
+#   1. Gate 2 is armed unless every commit lands outside the WF target repo set (#1633: the
+#      state's session-start cwd plus intent worktrees) — no cwd, the set is unknown and armed.
 #   2. resolveScriptCheckoutRoot() — bin/review-code-size is the one inside that checkout.
 # run_hook therefore launches a copy of this checkout attached to the repo under test.
 # AGENTS_MAIN_ROOT (the cfg dir) only supplies the settings file.
@@ -237,6 +241,7 @@ run_all() {
     test_4_workflow_off_bypass
     test_5_wip_does_not_bypass
     test_6_cross_repo_bypass
+    test_6b_no_cwd_blocks
     test_7_split_passes
     test_8_bash_missing_blocks
     test_9_script_missing_blocks

@@ -65,6 +65,12 @@ function main() {
   const hasStateFile = fs.existsSync(statePath);
   if (hasStateFile && !readState(sid)) return;
 
+  // A wf-init dispatch marks the WF begun (#1633) — a separate fact from the WI-10 lookahead.
+  if (policy.isWfInitDispatch(input.tool_name, dispatchedSkill)) {
+    require("./lib/wf-init-begun-mark").markWorkflowInitBegun(sid);
+    return;
+  }
+
   // WI-10 lookahead: during /workflow-init the first Agent dispatch happens
   // before (or at) workflow_init, so the step that owns the dispatch is the one
   // that comes next — `research`. Bounded to exactly that window (CPR-UNV).

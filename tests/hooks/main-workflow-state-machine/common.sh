@@ -124,9 +124,9 @@ EOF
 
 run_gate() {
     local repo="$1" json="$2"
-    # Attach the gate's own checkout to "$repo" so isAgentsSessionRepo() (#1138) treats
-    # it as the agents session repo — enforcement always applies. Cross-repo tests that
-    # need a different session repo attach it themselves and call the hook inline.
+    # Fixtures carry no cwd, so the WF target repo set is unknown and every commit is checked (#1633).
+    # The checkout attach predates that rule (#1138 isAgentsSessionRepo) and is kept
+    # so the result does not depend on which rule is in force.
     session_repo_fixture_attach "$ARMED_GATE_CHECKOUT" "$repo" || return 1
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         AGENTS_MAIN_ROOT="$repo" node "$ARMED_GATE_HOOK" 2>/dev/null || true
@@ -165,17 +165,14 @@ run_mark_hook() {
         node "$MARK_HOOK" 2>/dev/null || true
 }
 
+# Reads through readState (workflow-state-tool field), so a v4 event-stream file
+# projects its steps instead of exposing no raw `steps` key (#1787 sibling).
 read_state_status() {
-    local sid="$1" step="$2"
-    local state_file="$WORKFLOW_DIR/${sid}.json"
-    if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-    node -e "
-      try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const st = s.steps && s.steps['$step'];
-        console.log(st && st.status ? st.status : 'MISSING');
-      } catch (e) { console.log('MISSING'); }
-    " "$state_file" 2>/dev/null || echo "MISSING"
+    local sid="$1" step="$2" out root
+    if [ ! -f "$WORKFLOW_DIR/${sid}.json" ]; then echo "MISSING"; return; fi
+    root="$(to_node_path "$DOTFILES_DIR")"
+    out="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$root/tests/lib/workflow-state-tool.js" "$root" field "$sid" "$step" status 2>/dev/null)" || out=""
+    case "$out" in ""|"(absent)"|ERR:*) echo "MISSING" ;; *) echo "$out" ;; esac
 }
 
 expect_state_step() {

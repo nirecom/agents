@@ -74,4 +74,4 @@ function extractCommitSegmentText(ir) {
   return "git " + argv.map(quoteIfNeeded).join(" ");
 }
 
-module.exports = { isCommitCommand, extractCommitSegmentText, quoteIfNeeded };
+module.exports = { isCommitCommand, isCommitArgv, extractCommitSegmentText, quoteIfNeeded };
