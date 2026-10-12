@@ -20,8 +20,9 @@ const ADOPTION_EVENT_KINDS = ["step_status"];
 // is and why session-inherit / next-step auto-persist origins are excluded.
 const ADOPTION_ORIGINS = ["mark-step", "migration-v1-to-v2", "reset-sentinel"];
 
-// Origin hooks/postuse-step-in-flight-mark.js's WI-10 lookahead mark passes to markStep —
-// distinct from markStep's own default ("mark-step") so isLookaheadOnlyInFlight can key on it.
+// Origin this hook family passes to markStep — WI-10 lookahead mark and the
+// wf-init invocation mark both use it so adoption, TTL exemption, and
+// resume-session-detect all treat the wf-init observation the same as lookahead.
 const LOOKAHEAD_ORIGIN = "postuse-in-flight";
 
 function isSettledStatus(status) {

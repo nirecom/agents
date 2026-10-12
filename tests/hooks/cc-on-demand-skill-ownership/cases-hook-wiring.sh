@@ -89,9 +89,9 @@ else
 HW_STATE_EOF
     }
 
-    # The gate self-limits to the repo its own checkout belongs to (isAgentsSessionRepo), so a
-    # gate run from this checkout would wave the fixture repo through and every assertion below
-    # would pass without the gate ever deciding. It runs from a copy attached to the fixture.
+    # The state carries no cwd, so the WF target repo set is unknown and the gate checks the
+    # commit (#1633). The gate still runs from a copy attached to the fixture (kept from the
+    # #1138 checkout-scoped rule) so the result does not depend on which rule is in force.
     # shellcheck source=tests/lib/session-repo-fixture.sh
     . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
     HW_GATE_CHECKOUT="$HW_ROOT/gate-checkout"

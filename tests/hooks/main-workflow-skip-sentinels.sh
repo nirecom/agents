@@ -196,10 +196,9 @@ to_node_path() {
 run_gate() {
     local json="$1"
     # Extract the -C <repo-path> from the gate command and attach the gate's checkout to that
-    # repo. isAgentsSessionRepo() compares the git common-dirs of the target repo and the
-    # hook's own checkout; when they match, the gate enforces workflow state rather than
-    # short-circuiting via the cross-repo bypass (#1138). This is correct: the test exercises
-    # the gate logic itself, not which physical repo the commit targets.
+    # repo. Fixtures carry no cwd, so the WF target repo set is unknown and the commit is
+    # checked (#1633); the attach predates that rule (#1138) and is kept so the result does
+    # not depend on it. The test exercises the gate logic itself, not which repo is targeted.
     local gate_repo
     gate_repo=$(echo "$json" | node -e "
       const s = JSON.parse(require('fs').readFileSync(0,'utf8'));

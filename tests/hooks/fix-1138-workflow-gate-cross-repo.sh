@@ -6,11 +6,11 @@
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 
 # Covers two issues:
-#   #1138 — cross-repo bypass: commits to a repo OTHER than the agents session repo must skip agents workflow-state enforcement (approve).
+#   #1138 — cross-repo bypass: a commit to a repo OTHER than the session's work-target repo skips workflow-state enforcement.
 #   #1112 — cleanup exemption: cleanup=pending must be exempted in a linked worktree context (parallel to the user_verification exemption), but must still block in the main worktree context.
 
-# TDD status: the source changes (isAgentsSessionRepo + cross-repo bypass for #1138, and the cleanup isWorktreeContext() exemption for #1112) do NOT exist yet.
-# Cases marked "RED until impl" are expected to FAIL against current source; each prints "(expected RED until <issue> implemented)" on failure.
+# #1633: checked only once the WF has begun AND the target is in the WF target repo set (state cwd + intent worktrees); no cwd → set unknown → checked.
+# The gate-checkout attach + AGENTS_MAIN_ROOT stay as a regression guard: they must no longer bypass.
 
 set -u
 
@@ -135,6 +135,12 @@ new_wf() {
     echo "$wf"
 }
 
+# with_cwd <state-json> <cwd> — the same state carrying the session-start cwd (#1633 target set).
+with_cwd() {
+    local s="$1"
+    printf '%s' "${s/\"created_at\"/\"cwd\": \"$2\", \"created_at\"}"
+}
+
 assert_approve() {
     local desc="$1" result="$2" red_note="${3:-}"
     if echo "$result" | grep -q '"approve"'; then pass "$desc"
@@ -164,41 +170,64 @@ echo "=== fix-1138 / fix-1112: cross-repo bypass + cleanup exemption ==="
 # Cross-repo bypass (#1138)
 # ---------------------------------------------------------------------------
 
-# Case 1: git -C <foreign-repo> + INCOMPLETE agents workflow → approve (bypass).
-# RED until #1138: foreign repo is not the agents session repo, so workflow
-# enforcement must be skipped even though `detail` is pending.
+# Case 1: begun, cwd=work repo, git -C <foreign-repo> + INCOMPLETE workflow → approve (outside the set).
 AGENTS1=$(mk_repo "$TEST_ROOT/c1-agents")
 FOREIGN1=$(mk_repo "$TEST_ROOT/c1-foreign")
-WF1=$(new_wf "c1" "$(state_with detail pending)")
+WF1=$(new_wf "c1" "$(with_cwd "$(state_with detail pending)" "$AGENTS1")")
 R1=$(run_gate_win "$WF1" "$FOREIGN1" "$AGENTS1" "$(COMMIT_JSON_TARGET "$FOREIGN1")")
-assert_approve "1. foreign repo + incomplete agents workflow → approve (cross-repo bypass)" "$R1" \
-    "(expected RED until #1138 implemented)"
+assert_approve "1. cwd=work repo + foreign repo commit + incomplete workflow → approve (outside the WF target set)" "$R1"
 
-# Case 2: git -C <foreign-repo> + COMPLETE agents workflow → approve (always exempt).
-# GREEN now (complete state approves) and after #1138 (bypass). Pins that a
-# foreign-repo commit is never harder to land than an agents-repo commit.
+# Case 1b: same commit with NO cwd in the state → block. The target set cannot be built,
+# so the gate cannot prove the target is outside it and applies.
+AGENTS1B=$(mk_repo "$TEST_ROOT/c1b-agents")
+FOREIGN1B=$(mk_repo "$TEST_ROOT/c1b-foreign")
+WF1B=$(new_wf "c1b" "$(state_with detail pending)")
+R1B=$(run_gate_win "$WF1B" "$FOREIGN1B" "$AGENTS1B" "$(COMMIT_JSON_TARGET "$FOREIGN1B")")
+assert_block "1b. no cwd (target set unknown) + foreign repo commit + incomplete → block" "$R1B"
+
+# Case 1c: workflow_init pending (the WF has not begun) + commit to the work repo → approve.
+AGENTS1C=$(mk_repo "$TEST_ROOT/c1c-agents")
+# Build the fixture with node: bash ${.../pattern/replacement} closes at the first }
+# in the replacement string, so {"status": "pending"} produced malformed JSON.
+WF1C="$TEST_ROOT/wf-c1c"
+mkdir -p "$WF1C"
+WF1C_HELPER="$TEST_ROOT/c1c-state.js"
+cat >"$WF1C_HELPER" <<'JS'
+"use strict";
+const [, , root, out, cwd] = process.argv;
+const { VALID_STEPS } = require(root + "/hooks/workflow-state");
+const steps = {};
+for (const s of VALID_STEPS) steps[s] = { status: "complete", updated_at: "2026-06-27T10:00:00.000Z" };
+steps.workflow_init = { status: "pending", updated_at: "2026-06-27T10:00:00.000Z" };
+steps.detail = { status: "pending", updated_at: "2026-06-27T10:00:00.000Z" };
+const st = { version: 1, session_id: "sess", cwd, created_at: "2026-06-27T10:00:00.000Z", steps };
+require("fs").writeFileSync(out, JSON.stringify(st));
+JS
+run_with_timeout node "$WF1C_HELPER" "$SCRIPT_CHECKOUT_ROOT" "$WF1C/sess.json" "$AGENTS1C"
+R1C=$(run_gate_win "$WF1C" "$AGENTS1C" "$AGENTS1C" "$(COMMIT_JSON_TARGET "$AGENTS1C")")
+assert_approve "1c. workflow_init pending (not begun) + work repo commit + incomplete → approve" "$R1C"
+
+# Case 2: cwd=work repo, git -C <foreign-repo> + COMPLETE workflow → approve (always exempt).
+# Pins that a foreign-repo commit is never harder to land than a work-repo commit.
 AGENTS2=$(mk_repo "$TEST_ROOT/c2-agents")
 FOREIGN2=$(mk_repo "$TEST_ROOT/c2-foreign")
-WF2=$(new_wf "c2" "$(state_with)")
+WF2=$(new_wf "c2" "$(with_cwd "$(state_with)" "$AGENTS2")")
 R2=$(run_gate_win "$WF2" "$FOREIGN2" "$AGENTS2" "$(COMMIT_JSON_TARGET "$FOREIGN2")")
 assert_approve "2. foreign repo + complete agents workflow → approve (always exempt)" "$R2"
 
-# Case 3: git -C <linked-worktree-of-agents> + INCOMPLETE → block (enforce).
-# A linked worktree of the agents repo shares the same git common-dir, so it IS
-# the agents session repo — enforcement must apply. GREEN now and after #1138.
+# Case 3: cwd=work repo, git -C <linked-worktree-of-work-repo> + INCOMPLETE → block.
+# A linked worktree shares the git common-dir, so it is the same repo in the target set.
 AGENTS3=$(mk_repo "$TEST_ROOT/c3-agents")
 WT3=$(add_worktree "$AGENTS3" "$TEST_ROOT/c3-wt" "fix1138-c3")
-WF3=$(new_wf "c3" "$(state_with detail pending)")
+WF3=$(new_wf "c3" "$(with_cwd "$(state_with detail pending)" "$AGENTS3")")
 R3=$(run_gate_win "$WF3" "$WT3" "$AGENTS3" "$(COMMIT_JSON_TARGET "$WT3")")
 assert_block "3. linked worktree of agents + incomplete → block (same git common-dir → enforce)" "$R3"
 
-# Case 4: git -C <nonexistent-path> + INCOMPLETE → block (fail-closed).
-# A nonexistent target cannot be proven to be a foreign (non-agents) repo, so the
-# bypass must NOT engage; the gate falls through to state enforcement and blocks.
-# GREEN now and after #1138 (fail-closed is the safe default).
+# Case 4: cwd=work repo, git -C <nonexistent-path> + INCOMPLETE → block (fail-closed).
+# A nonexistent target cannot be proven outside the set, so it is checked.
 AGENTS4=$(mk_repo "$TEST_ROOT/c4-agents")
 NONEXIST4="$TEST_ROOT/c4-does-not-exist-xyz"
-WF4=$(new_wf "c4" "$(state_with detail pending)")
+WF4=$(new_wf "c4" "$(with_cwd "$(state_with detail pending)" "$AGENTS4")")
 R4=$(run_gate_win "$WF4" "$NONEXIST4" "$AGENTS4" "$(COMMIT_JSON_TARGET "$NONEXIST4")")
 assert_block "4. nonexistent target path + incomplete → block (fail-closed)" "$R4"
 
@@ -232,5 +261,5 @@ assert_block "6. main worktree context + cleanup=pending → block (cleanup not 
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== Cross-repo bypass + cleanup exemption tests ==="
-echo "PASS: $PASS, FAIL: $FAIL (Cases 1 and 5 are expected RED until #1138/#1112 source impl is done)"
+echo "PASS: $PASS, FAIL: $FAIL"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
