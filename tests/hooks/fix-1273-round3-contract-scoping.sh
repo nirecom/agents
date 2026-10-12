@@ -155,7 +155,7 @@ seed_step "$SID" "write_tests" "complete"
 drive_hook "$RUNALL_CMD" 0 "$SID" "Running tests/fix-1378-worker-log-tail-integrity.sh
   case: renderer emits log_tail: |
 PASS: renderer-block-scalar
-RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$AGENTS_WIN"
+RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "M2/control-indented-marker-shaped-line-is-already-harmless" "complete" \
     "$(run_tests_status "$SID")"
 
@@ -168,7 +168,7 @@ seed_step "$SID" "write_tests" "complete"
 drive_hook "$RUNALL_CMD" 0 "$SID" "Running tests/emit-render.sh
 log_tail: |
 expected renderer output above
-RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$AGENTS_WIN"
+RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "M2a/run-all-route-must-see-contract-after-column0-marker" "complete" \
     "$(run_tests_status "$SID")"
 
@@ -180,7 +180,7 @@ assert_eq "M2a/run-all-route-must-see-contract-after-column0-marker" "complete" 
 SID="m2win-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 seed_step "$SID" "run_tests" "complete"
-drive_hook "$RUNALL_CMD" 0 "$SID" "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9
+drive_hook "$RUNALL_CMD" 0 "$SID" "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0
 log_tail: |
 (the real run continues below)
 RUN_CONTRACT: PASS=0 FAIL=3 SKIP=0 EXECUTED=3" "$AGENTS_WIN"
@@ -192,7 +192,7 @@ SID="m2ctl-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 drive_hook "$RUNALL_CMD" 0 "$SID" "Running tests/foo.sh
 PASS: everything
-RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$AGENTS_WIN"
+RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "M2/control-run-all-plain-output-completes" "complete" "$(run_tests_status "$SID")"
 
 # CONTROL, opposite route (CPR-ORTH): the worker-dispatch route MUST keep the
@@ -209,7 +209,7 @@ summary: 'suite failed'
 failing_tests:
   - 'tests/broken.sh'
 log_tail: |
-  RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1" "$AGENTS_WIN"
+  RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "M2/control-worker-dispatch-route-keeps-log-tail-scoping" "pending" \
     "$(run_tests_status "$SID")"
 
@@ -255,7 +255,7 @@ assert_eq "L1/emit-js-holds-definition-only-no-call-site" "1" "$(occurrences "$E
 # The renderer's own vocabulary is pass | fail | timeout | runner-error, so the
 # allowlist is a one-element set: `pass`.
 # ===========================================================================
-CONTRACT_HEADER="RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3"
+CONTRACT_HEADER="RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0"
 
 # l2_case <label> <status_value> <want_status>
 l2_case() {

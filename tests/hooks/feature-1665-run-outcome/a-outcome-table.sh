@@ -3,29 +3,19 @@
 # Tests: hooks/workflow-run-tests/outcome.js
 # Tags: workflow, run-outcome, classifier, table-driven, mutation-probe, TL1, scope:issue-specific
 #
-# TL1 — resolveRunOutcome / isContractTrusted called directly.
-#
-# Three layers, deliberately separated (CPR-SC):
-#   (A) LITERAL DECISION TABLE — hand-written want values, one row per verdict per
-#       axis. No logic in the test, per skills/_shared/test-design/parser-regex-tests.md.
-#       Covers every verdict of the classifier, not only "fail" (CPR-ORTH).
-#   (B) MUTATION PROBE — the 6 conjuncts of isContractTrusted flipped ONE at a time
-#       from an all-true base. Each flip must collapse both isContractTrusted to
-#       false AND resolveRunOutcome to null. This is what stops R3's SSOT-ised
-#       predicate from silently dropping a conjunct (!ambiguous and !vetoed are the
-#       two most easily lost — #1273 ambiguity and #1242 C' veto).
-#   (C) EXHAUSTIVE SWEEP — the full 360-row cross product
-#       emitter x ambiguous x attributed x vetoed x contract x workerStatus.
-#       Hand-writing 360 want values would be transcription, not verification, so
-#       the sweep asserts INVARIANTS derived from the plan's 4-row decision table
-#       instead. Layer (A) supplies the exact values; (C) proves no combination
-#       escapes the table's shape.
+# TL1 — resolveRunOutcome / isContractTrusted called directly, in three layers (CPR-SC):
+# (A) literal decision table, one row per verdict per axis (CPR-ORTH);
+# (B) mutation probe flipping each isContractTrusted conjunct once from an all-true base;
+# (C) exhaustive 360-row sweep asserting invariants of the plan's 4-row table.
 
 C_NULL='null'
 C_PASS='{"pass":3,"fail":0,"skip":0,"executed":3}'
 C_FAIL='{"pass":3,"fail":2,"skip":0,"executed":5}'
 C_ZEROEXEC='{"pass":3,"fail":0,"skip":0,"executed":0}'
 C_ALLSKIP='{"pass":0,"fail":0,"skip":5,"executed":5}'
+C_UNRUN='{"pass":3,"fail":0,"skip":0,"executed":3,"unrunnable":2,"timeout":0}'
+C_FAILUNRUN='{"pass":2,"fail":1,"skip":0,"executed":3,"unrunnable":2,"timeout":0}'
+C_ALLUNRUN='{"pass":0,"fail":0,"skip":0,"executed":0,"unrunnable":2,"timeout":0}'
 
 # contract_json <key> → the JSON literal for a table cell
 contract_json() {
@@ -35,6 +25,9 @@ contract_json() {
         FAIL) echo "$C_FAIL" ;;
         ZEROEXEC) echo "$C_ZEROEXEC" ;;
         ALLSKIP) echo "$C_ALLSKIP" ;;
+        UNRUN) echo "$C_UNRUN" ;;
+        FAILUNRUN) echo "$C_FAILUNRUN" ;;
+        ALLUNRUN) echo "$C_ALLUNRUN" ;;
         *) echo "null" ;;
     esac
 }
@@ -63,8 +56,13 @@ run_a_outcome_table_cases() {
     echo "=== a-outcome-table (TL1: resolveRunOutcome / isContractTrusted) ==="
 
     # --- vocabulary -------------------------------------------------------
-    # No new words: emit.js's renderer vocabulary is the whole outcome domain.
-    assert_eq "A0/RUN_OUTCOME_VALUES" "pass,fail,timeout,runner-error" "$(probe values '{}')"
+    # No new words: emit.js's renderer vocabulary is the whole outcome domain
+    # (#2501 adds `unrunnable` to both the renderer and this list).
+    assert_eq "A0/RUN_OUTCOME_VALUES" "pass,fail,timeout,runner-error,unrunnable" "$(probe values '{}')"
+    case ",$(probe values '{}')," in
+        *",unrunnable,"*) pass "A0b/RUN_OUTCOME_VALUES-contains-unrunnable" ;;
+        *) fail "A0b/RUN_OUTCOME_VALUES-contains-unrunnable" "got=$(probe values '{}')" ;;
+    esac
 
     # --- (A) literal decision table ---------------------------------------
     # name | emitter | ambiguous | attributed | vetoed | contract | workerStatus | want
@@ -115,6 +113,20 @@ wd-fail-but-ambiguous          | worker-dispatch | true  | true  | true  | FAIL 
 wd-fail-but-unattributed       | worker-dispatch | false | false | true  | FAIL     | fail | (null)
 wd-timeout-but-ambiguous       | worker-dispatch | true  | true  | true  | NULL     | timeout | (null)
 wd-timeout-but-unattributed    | worker-dispatch | false | false | true  | NULL     | timeout | (null)
+# --- unrunnable (#2501 D5-3): FAIL=0 with UNRUNNABLE>0 is its own verdict on both routes ---
+runall-trusted-unrunnable      | run-all         | false | true  | false | UNRUN     | - | unrunnable
+runall-fail-beats-unrunnable   | run-all         | false | true  | false | FAILUNRUN | - | fail
+runall-unrunnable-ambiguous    | run-all         | true  | true  | false | UNRUN     | - | (null)
+runall-unrunnable-unattributed | run-all         | false | false | false | UNRUN     | - | (null)
+wd-status-unrunnable           | worker-dispatch | false | true  | true  | UNRUN     | unrunnable | unrunnable
+wd-unrunnable-but-ambiguous    | worker-dispatch | true  | true  | true  | UNRUN     | unrunnable | (null)
+# --- nothing executed, every selected test unrunnable: the same word on both routes ---
+runall-all-unrunnable          | run-all         | false | true  | false | ALLUNRUN  | - | unrunnable
+wd-all-unrunnable              | worker-dispatch | false | true  | false | ALLUNRUN  | unrunnable | unrunnable
+runall-all-unrunnable-ambig    | run-all         | true  | true  | false | ALLUNRUN  | - | (null)
+runall-all-unrunnable-unattrib | run-all         | false | false | false | ALLUNRUN  | - | (null)
+runall-all-unrunnable-vetoed   | run-all         | false | true  | true  | ALLUNRUN  | - | (null)
+runall-zero-exec-no-unrunnable | run-all         | false | true  | false | ZEROEXEC  | - | (null)
 TABLE
 
     # --- (B) mutation probe over the 6 conjuncts of isContractTrusted ------

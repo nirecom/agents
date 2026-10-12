@@ -31,9 +31,9 @@ x.Tests.ps1|pester|supported
 .Tests.ps1|-|-
 test_a.py|pytest|supported
 test_.py|test-naming-convention|recognized-only
-a.js|js|recognized-only
-a.test.js|js|recognized-only
-a.spec.js|js|recognized-only
+a.js|js|supported
+a.test.js|js|supported
+a.spec.js|js|supported
 test_a.sh|bash|supported
 a_test.sh|bash|supported
 test_a.Tests.ps1|pester|supported
@@ -106,7 +106,7 @@ drv dump "$READER" >"$RD_DIR/dump"
 same_text "toShellDump() equals the CLI shell output" "$RD_DIR/dump" "$RD_DIR/cli-shell"
 T=$'\t'
 for want in "schema${T}1" "headerMaxLines${T}10" "tableDrivenFallbackEntry${T}bash" \
-  "entry${T}bash${T}supported${T}0" "entry${T}pester${T}supported${T}1" "entry${T}js${T}recognized-only${T}0" \
+  "entry${T}bash${T}supported${T}0" "entry${T}pester${T}supported${T}1" "entry${T}js${T}supported${T}0" \
   "pattern${T}bash${T}*.sh" "glob${T}bash${T}?*.sh" "glob${T}pytest${T}test_?*.py" \
   "field${T}bash${T}caseMarkerReader.function${T}trp_parse_case_markers" \
   "field${T}bash${T}diagnostics.flatRejectCode${T}FLAT_TEST_SH_REJECTED" \
@@ -115,7 +115,7 @@ for want in "schema${T}1" "headerMaxLines${T}10" "tableDrivenFallbackEntry${T}ba
   has_line "shell line $(printf '%q' "$want")" "$CLI_OUT" "$want"
 done
 assert_eq "$(printf '%s\n' "$CLI_OUT" | awk -F'\t' '$1=="entry"{printf "%s ", $2}')" "$(json_ids "$TABLE")"
-assert_eq "$(printf '%s\n' "$CLI_OUT" | awk -F'\t' '$1=="arg" && $2=="pester" && $3=="command"{printf "[%s]", $4}')" "[pwsh][-NoProfile][-Command][Invoke-Pester -Path '{nativePathSq}' -CI]"
+assert_eq "$(printf '%s\n' "$CLI_OUT" | awk -F'\t' '$1=="arg" && $2=="pester" && $3=="command"{printf "[%s]", $4}')" "[pwsh][-NoProfile][-NonInteractive][-ExecutionPolicy][Bypass][-File][{wrapper}][-Path][{nativePath}][-MinVersion][{minVersion}]"
 case_end
 
 case_begin "cli-json-format" "bin/test-language-registry"

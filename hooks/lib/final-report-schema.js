@@ -281,6 +281,13 @@ function renderFinalReport(sessionId, inputs) {
   for (const [token, value] of Object.entries(substitutions)) {
     out = out.split(token).join(value);
   }
+  // #2501 D5-7: an UNRUNNABLE-accepted run_tests adds one line under Merged PR, after the
+  // substitution so its text is never read as a token; `<TOKEN>` shapes are escaped for the guard.
+  const note = typeof inputs.runTestsNote === "string" ? inputs.runTestsNote.replace(/[\r\n]/g, " ") : "";
+  if (note !== "") {
+    const escaped = note.replace(/<([A-Z][A-Z0-9_]+)>/g, "&lt;$1&gt;");
+    out = out.replace(/^(- State: .*)$/m, (line) => `${line}\n${escaped}`);
+  }
   return out;
 }
 

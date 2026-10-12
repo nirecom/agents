@@ -35,7 +35,7 @@ B_GREEN_RUNALL_STDOUT="Running tests/alpha.sh
 PASS: alpha
 
 Results: PASS=5  FAIL=0  SKIP=0
-RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5"
+RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0"
 
 run_b_direct_run_failure_cases() {
     echo ""

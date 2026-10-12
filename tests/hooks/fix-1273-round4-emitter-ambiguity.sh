@@ -182,7 +182,7 @@ SWAPPED_CMD="$DISPATCH_CMD; bash $AGENTS_WIN/tests/run-all.sh --help"
 # A worker payload in emit.js's real shape (contract first, then status /
 # exit_code / duration / summary / failing_tests, then the indented log_tail
 # block scalar that runs to end-of-output).
-FAILING_PAYLOAD="RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3
+FAILING_PAYLOAD="RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0
 status: fail
 exit_code: 1
 duration_seconds: 4
@@ -201,7 +201,7 @@ duration_seconds: 2
 summary: 'ok'
 failing_tests: []
 log_tail: |
-  RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+  RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
 
 # ===========================================================================
 # N1a — the veto is gated off by an earlier, unrelated verifying position
@@ -285,7 +285,7 @@ SID="n1c-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 drive_hook "$RUNALL_CMD" 0 "$SID" "Running tests/foo.sh
 PASS: everything
-RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$AGENTS_WIN"
+RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "N1c/control-plain-run-all-with-valid-contract-completes" "complete" \
     "$(run_tests_status "$SID")"
 
@@ -300,7 +300,7 @@ assert_eq "N1c/control-plain-run-all-resolves-run-all" "run-all" \
 SID="n1c2-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 drive_hook "$RUNALL_CMD; bash $AGENTS_WIN/tests/run-all.sh --help" 0 "$SID" \
-    "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$AGENTS_WIN"
+    "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "N1c/control-same-emitter-twice-is-not-ambiguous" "complete" \
     "$(run_tests_status "$SID")"
 
@@ -311,7 +311,7 @@ assert_eq "N1c/control-same-emitter-twice-is-not-ambiguous" "complete" \
 SID="n1c3-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 drive_hook "$RUNALL_CMD --note bin/worker-dispatch.js" 0 "$SID" \
-    "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$AGENTS_WIN"
+    "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$AGENTS_WIN"
 assert_eq "N1c/control-dispatcher-name-as-argument-value-is-not-a-position" "complete" \
     "$(run_tests_status "$SID")"
 
@@ -356,7 +356,7 @@ assert_eq "N1d/control-dispatch-alone-scopes-log-tail-contract-away" "pending" \
 # the caller supplies is the ORDER of two segments.
 # ===========================================================================
 E2E_PAYLOAD="usage: run-all.sh [--list] [--filter <pat>]
-RUN_CONTRACT: PASS=42 FAIL=0 SKIP=0 EXECUTED=42
+RUN_CONTRACT: PASS=42 FAIL=0 SKIP=0 EXECUTED=42 UNRUNNABLE=0 TIMEOUT=0
 status: fail
 exit_code: 2
 duration_seconds: 61

@@ -305,6 +305,189 @@ assert_eq "R3/header-order-unchanged-without-contract" \
     "status exit_code duration_seconds summary failing_tests log_tail " "$order"
 case_end
 
+# #2501 D5-3: the 6-field contract (UNRUNNABLE / TIMEOUT), status `unrunnable`, the
+# `Missing runtimes:` summary, and case-level result lines kept out of log_tail.
+yaml_status() { printf '%s\n' "$DOUT" | sed -n 's/^status: //p' | head -1; }
+yaml_summary() { printf '%s\n' "$DOUT" | sed -n 's/^summary: //p' | head -1; }
+first_line() { printf '%s\n' "$DOUT" | head -1; }
+
+case_begin "test-runner-unrunnable-status" "bin/worker-dispatch/workers/test-runner.js"
+set_run 0 "PASS: tests/a.sh" \
+    "UNRUNNABLE: tests/p.Tests.ps1 (missing: Pester>=5.0)" \
+    "UNRUNNABLE: tests/q.Tests.ps1 (missing: Pester>=5.0)" \
+    "Missing runtimes: Pester>=5.0 (2 files)" \
+    "Results: PASS=3  FAIL=0  SKIP=0  UNRUNNABLE=2  TIMEOUT=0" \
+    "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=2 TIMEOUT=0"
+dispatch
+assert_eq "U1/exit0-with-unrunnable-is-status-unrunnable" "unrunnable" "$(yaml_status)"
+assert_eq "U1/six-field-contract-is-the-first-line" \
+    "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=2 TIMEOUT=0" "$(first_line)"
+assert_eq "U1/exactly-one-contract-line" "1" "$(contract_count "$DOUT")"
+case "$(yaml_summary)" in
+    *"Missing runtimes: Pester>=5.0 (2 files)"*) pass "U1/summary-carries-missing-runtimes" ;;
+    *) fail "U1/summary-carries-missing-runtimes" "summary=$(yaml_summary)" ;;
+esac
+case "$(yaml_summary)" in
+    *"Missing runtimes: Pester>=5.0 (2 files); PASS=3 "*) pass "U1/missing-runtimes-precede-the-totals" ;;
+    *) fail "U1/missing-runtimes-precede-the-totals" "summary=$(yaml_summary)" ;;
+esac
+
+# A real failure outranks the missing runtime.
+set_run 1 "FAIL: tests/b.sh (exit 1)" \
+    "UNRUNNABLE: tests/p.Tests.ps1 (missing: Pester>=5.0)" \
+    "Missing runtimes: Pester>=5.0 (1 file)" \
+    "Results: PASS=0  FAIL=1  SKIP=0  UNRUNNABLE=1  TIMEOUT=0" \
+    "RUN_CONTRACT: PASS=0 FAIL=1 SKIP=0 EXECUTED=1 UNRUNNABLE=1 TIMEOUT=0"
+dispatch
+assert_eq "U2/nonzero-exit-with-unrunnable-stays-fail" "fail" "$(yaml_status)"
+
+# Symmetric control: UNRUNNABLE=0 on exit 0 is an ordinary pass.
+set_run 0 "Results: PASS=2  FAIL=0  SKIP=0  UNRUNNABLE=0  TIMEOUT=0" \
+    "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0"
+dispatch
+assert_eq "U3/exit0-without-unrunnable-is-pass" "pass" "$(yaml_status)"
+assert_eq "U3/six-field-input-renders-verbatim" \
+    "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0" "$(first_line)"
+case_end
+
+case_begin "emit-keeps-contract-shape" "bin/worker-dispatch/emit.js"
+# Legacy 4-field suite output stays 4 fields: zero-filling it would let the hook read it as current (#2501 C3).
+set_run 0 "Results: PASS=4  FAIL=0  SKIP=0" "RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4"
+dispatch
+assert_eq "E1/four-field-input-renders-four-fields" \
+    "RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4" "$(first_line)"
+assert_eq "E1/four-field-input-status-pass" "pass" "$(yaml_status)"
+
+E_RENDERED="$(run_with_timeout 30 node -e '
+const { renderTestRunnerYaml } = require(process.argv[1]);
+const base = { exitCode: 0, durationSeconds: 1, summary: "s", failingTests: [], logTail: ["x"] };
+const out = [
+  renderTestRunnerYaml({ ...base, status: "unrunnable",
+    runContract: { pass: 2, fail: 1, skip: 0, executed: 3, unrunnable: 2, timeout: 1 } }),
+  renderTestRunnerYaml({ ...base, status: "pass",
+    runContract: { pass: 3, fail: 0, skip: 0, executed: 3 } }),
+  renderTestRunnerYaml({ ...base, status: "pass",
+    runContract: "PASS=1 FAIL=5 SKIP=0 EXECUTED=6 UNRUNNABLE=4 TIMEOUT=5" }),
+];
+process.stdout.write(out.map((y) => y.split("\n").slice(0, 2).join("|")).join("\n"));
+' "$(nodepath "$EMIT_JS")" 2>&1)"
+assert_eq "E2/object-with-new-fields-renders-them" \
+    "RUN_CONTRACT: PASS=2 FAIL=1 SKIP=0 EXECUTED=3 UNRUNNABLE=2 TIMEOUT=1|status: unrunnable" \
+    "$(printf '%s\n' "$E_RENDERED" | sed -n 1p)"
+assert_eq "E3/object-without-new-fields-keeps-legacy-shape" \
+    "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3|status: pass" \
+    "$(printf '%s\n' "$E_RENDERED" | sed -n 2p)"
+assert_eq "E4/six-field-string-renders-verbatim" \
+    "RUN_CONTRACT: PASS=1 FAIL=5 SKIP=0 EXECUTED=6 UNRUNNABLE=4 TIMEOUT=5|status: pass" \
+    "$(printf '%s\n' "$E_RENDERED" | sed -n 3p)"
+case_end
+
+case_begin "test-runner-missing-runtimes-anchor" "bin/worker-dispatch/workers/test-runner.js"
+# Only a line-start `Missing runtimes:` is the suite's own; the LAST one wins, and a
+# neutralized nested copy (prefix `[run-all:neutralized] `) is never picked.
+set_run 0 "Missing runtimes: stale>=1.0 (1 file)" \
+    "Missing runtimes: Pester>=5.0 (2 files)" \
+    "[run-all:neutralized] Missing runtimes: decoy>=9.9 (9 files)" \
+    "Results: PASS=1  FAIL=0  SKIP=0  UNRUNNABLE=2  TIMEOUT=0" \
+    "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=2 TIMEOUT=0"
+dispatch
+M_SUMMARY="$(yaml_summary)"
+case "$M_SUMMARY" in
+    *"Missing runtimes: Pester>=5.0 (2 files)"*) pass "M1/summary-has-the-last-anchored-line" ;;
+    *) fail "M1/summary-has-the-last-anchored-line" "summary=$M_SUMMARY" ;;
+esac
+case "$M_SUMMARY" in
+    *decoy*) fail "M2/summary-ignores-the-neutralized-line" "summary=$M_SUMMARY" ;;
+    *"Missing runtimes:"*) pass "M2/summary-ignores-the-neutralized-line" ;;
+    *) fail "M2/summary-ignores-the-neutralized-line" "no Missing runtimes in summary=$M_SUMMARY" ;;
+esac
+case "$M_SUMMARY" in
+    *stale*) fail "M3/summary-ignores-an-earlier-anchored-line" "summary=$M_SUMMARY" ;;
+    *"Missing runtimes:"*) pass "M3/summary-ignores-an-earlier-anchored-line" ;;
+    *) fail "M3/summary-ignores-an-earlier-anchored-line" "no Missing runtimes in summary=$M_SUMMARY" ;;
+esac
+case_end
+
+case_begin "test-runner-log-tail-drops-passing-case-lines" "bin/worker-dispatch/workers/test-runner.js"
+set_run 1 "child stdout alpha" \
+    "PASS: tests/a.sh" \
+    "PASS tests/a.sh::c1 target=bin/x.sh" \
+    "SKIP tests/a.sh::c2 target=bin/x.sh" \
+    "XFAIL tests/a.sh::c3 target=bin/x.sh" \
+    "child stdout beta" \
+    "FAIL: tests/b.sh (exit 1)" \
+    "FAIL tests/b.sh::c4 target=bin/y.sh" \
+    "XPASS tests/b.sh::c5 target=bin/y.sh" \
+    "Results: PASS=1  FAIL=1  SKIP=0  UNRUNNABLE=0  TIMEOUT=0" \
+    "RUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0"
+dispatch
+assert_eq "L1/log_tail-drops-PASS-case-lines" "0" "$(count_in_tail '^  PASS [^ ]*::')"
+assert_eq "L1/log_tail-drops-SKIP-case-lines" "0" "$(count_in_tail '^  SKIP [^ ]*::')"
+assert_eq "L1/log_tail-drops-XFAIL-case-lines" "0" "$(count_in_tail '^  XFAIL [^ ]*::')"
+assert_eq "L2/log_tail-keeps-FAIL-case-line" "1" "$(count_in_tail '^  FAIL tests/b\.sh::c4 target=bin/y\.sh$')"
+assert_eq "L2/log_tail-keeps-XPASS-case-line" "1" "$(count_in_tail '^  XPASS tests/b\.sh::c5 target=bin/y\.sh$')"
+assert_eq "L3/log_tail-keeps-file-level-FAIL-line" "1" "$(count_in_tail '^  FAIL: tests/b\.sh \(exit 1\)$')"
+assert_eq "L3/log_tail-keeps-file-level-PASS-line" "1" "$(count_in_tail '^  PASS: tests/a\.sh$')"
+assert_eq "L3/log_tail-keeps-child-stdout" "2" "$(count_in_tail '^  child stdout (alpha|beta)$')"
+assert_eq "L4/failing_tests-lists-only-the-file" "  - 'tests/b.sh'" \
+    "$(printf '%s\n' "$DOUT" | grep "^  - '" | tr -d '\r')"
+
+# The point of the filter: 45 passing case lines must not push the failing unit's
+# context out of the 40-line window.
+LINES=("FAIL: tests/b.sh (exit 1)" "  assertion failed: want=x got=y")
+for i in $(seq 1 45); do LINES+=("PASS tests/a.sh::case-$i target=bin/x.sh"); done
+set_run 1 "${LINES[@]}" "RUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0"
+dispatch
+assert_eq "L5/failure-context-survives-many-pass-case-lines" "1" "$(count_in_tail 'assertion failed: want=x got=y')"
+case_end
+
+# Security round: FAIL_LINE_RE separators are ASCII blanks only. JS `\s` also matches NBSP,
+# U+2028, U+3000 …, which run-all.sh's neutralizer need not prefix — so a child line with
+# those separators would land in failing_tests as if the runner had printed it.
+case_begin "fail-line-separators-are-ascii-blanks" "bin/worker-dispatch/workers/test-runner.js"
+# name:hex code point:want (1 = a FAIL line, 0 = not one)
+SEP_ROWS="space:0020:1 tab:0009:1 nbsp:00a0:0 lsep:2028:0 ideo:3000:0 emsp:2003:0 nnbsp:202f:0"
+SEP_GOT="$(run_with_timeout 30 node -e '
+const { parseFailingTests } = require(process.argv[1]);
+const fs = require("fs");
+const lines = [], out = [];
+for (const row of process.argv[3].split(" ")) {
+  const [name, hex] = row.split(":");
+  const s = String.fromCodePoint(parseInt(hex, 16));
+  const line = "FAIL:" + s + "tests/s.sh" + s + "(exit" + s + "1)";
+  lines.push(line);
+  out.push(name + "=" + parseFailingTests([line]).length);
+}
+fs.writeFileSync(process.argv[2], lines.join("\n") + "\n");
+process.stdout.write(out.join(" "));
+' "$(nodepath "$RUNNER_JS")" "$(nodepath "$TMPD/sep-lines.txt")" "$SEP_ROWS" 2>&1)"
+sep_i=0
+for row in $SEP_ROWS; do
+    sep_i=$((sep_i + 1))
+    sep_name="${row%%:*}" sep_want="${row##*:}"
+    sep_js=" $SEP_GOT "
+    sep_js="${sep_js#* "$sep_name"=}"
+    sep_js="${sep_js%% *}"
+    assert_eq "S1/$sep_name-separator-FAIL-line-match" "$sep_want" "$sep_js"
+done
+# Cross-check with the shell side: a line the JS parser reads as FAIL must be one the
+# neutralizer prefixes, or a child could still forge it.
+( . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-report.sh" && rar_neutralize "$TMPD/sep-lines.txt" ) >"$TMPD/sep-neut.txt" 2>/dev/null
+sep_i=0
+for row in $SEP_ROWS; do
+    sep_i=$((sep_i + 1))
+    sep_name="${row%%:*}"
+    sep_js=" $SEP_GOT "
+    sep_js="${sep_js#* "$sep_name"=}"
+    sep_js="${sep_js%% *}"
+    sep_line="$(sed -n "${sep_i}p" "$TMPD/sep-neut.txt")"
+    case "$sep_js:$sep_line" in
+        "0:"* | "1:[run-all:neutralized] "*) pass "S2/$sep_name-js-match-implies-neutralized" ;;
+        *) fail "S2/$sep_name-js-match-implies-neutralized" "js=$sep_js line=$(printf '%q' "$sep_line")" ;;
+    esac
+done
+case_end
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 exit $((FAIL > 0 ? 1 : 0))

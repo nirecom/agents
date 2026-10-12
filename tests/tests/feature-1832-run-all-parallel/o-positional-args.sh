@@ -129,12 +129,12 @@ case_overlapping_patterns() {
 # 2. Error / edge cases — patterns that match nothing
 # ===========================================================================
 
-# OBSERVED, MERELY CURRENT: an unmatched pattern is silent (EXECUTED=0, exit 0) —
-# a typo looks like a green run. Pinned as-is; a future issue should fix it.
+# An unmatched pattern selects nothing (EXECUTED=0), so the run exits 77 (#2501: zero
+# selected is a skip) — a typo no longer looks like a green run, nor like a failure.
 case_unmatched_pattern() {
     run_all "tests/nomatch-zzz-*.sh"
     assert_eq "o-pos/unmatched/executed-is-0" "0" "$(executed_of)"
-    assert_eq "o-pos/unmatched/exit-is-zero-not-an-error" "0" "$RC"
+    assert_eq "o-pos/unmatched/exit-is-77-zero-selected" "77" "$RC"
     assert_eq "o-pos/unmatched/nothing-ran" "" "$(order_of)"
 
     # A matched pattern beside an unmatched one still runs: the miss is skipped,

@@ -347,15 +347,16 @@ $out"
     fi
 }
 
-# C11 (#2500): recognized-only test files (registry status recognized-only, e.g. *.js and
-# *.test.*) are never selected; the same-stem supported widget-probe.sh is, so the run is not vacuous.
+# C11 (#2500): recognized-only test files (registry status recognized-only, e.g. *.test.* and
+# *_test.*; js is supported since #2501) are never selected; the same-stem supported
+# widget-probe.sh is, so the run is not vacuous.
 test_C11_recognized_only_not_selected() {
     local fake="$TMPDIR_BASE/c11-agents" repo="$TMPDIR_BASE/c11-repo" out problems="" n
     make_fake_selector "$fake"
     mkdir -p "$repo/bin"
     : > "$fake/tests/bin/widget-probe.sh"
-    : > "$fake/tests/bin/widget-probe.js"
-    : > "$fake/tests/bin/widget-probe.test.js"
+    : > "$fake/tests/bin/widget-probe.test.ts"
+    : > "$fake/tests/bin/widget-probe_test.rb"
     git -C "$repo" init -q
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
@@ -368,11 +369,11 @@ test_C11_recognized_only_not_selected() {
     git -C "$repo" -c core.hooksPath= commit -q -m "head"
     out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
     has_suffix_line "$out" "/tests/bin/widget-probe.sh" || problems="$problems supported-control-not-selected"
-    for n in widget-probe.js widget-probe.test.js; do
+    for n in widget-probe.test.ts widget-probe_test.rb; do
         has_suffix_line "$out" "/tests/bin/$n" && problems="$problems $n-selected"
     done
     if [ -z "$problems" ]; then
-        pass "C11_recognized_only_not_selected: widget-probe.js / widget-probe.test.js not selected, widget-probe.sh is"
+        pass "C11_recognized_only_not_selected: widget-probe.test.ts / widget-probe_test.rb not selected, widget-probe.sh is"
     else
         fail "C11_recognized_only_not_selected:$problems
 --- output ---

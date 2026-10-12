@@ -33,7 +33,7 @@ run_contract_trust_tests() {
         0 \
         "$SID" \
         "Results: PASS=2  FAIL=0  SKIP=1
-RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
+RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "complete" ]; then
         pass "C-VALID. run-all.sh + exit=0 + valid contract (PASS=2 FAIL=0 SKIP=1) + write_tests=complete → complete"
@@ -56,7 +56,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
         "bash tests/foo.sh" \
         0 \
         "$SID" \
-        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "C-NOPROV. bash tests/foo.sh (no run-all.sh) + valid contract → pending (provenance fail)"
@@ -72,7 +72,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
         "bash tests/run-all.sh" \
         0 \
         "$SID" \
-        "RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0"
+        "RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "C-NOMATCH. run-all.sh + executed=0 contract → pending (no-match gate)"
@@ -88,7 +88,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
         "bash tests/run-all.sh" \
         0 \
         "$SID" \
-        "RUN_CONTRACT: PASS=0 FAIL=0 SKIP=3 EXECUTED=3"
+        "RUN_CONTRACT: PASS=0 FAIL=0 SKIP=3 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "C-ALLSKIP. run-all.sh + all-skip contract (PASS+FAIL=0) → pending (all-skip boundary)"
@@ -121,7 +121,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
         "bash tests/run-all.sh" \
         1 \
         "$SID" \
-        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "C-FAIL. run-all.sh + exit=1 + valid contract → pending (exit≠0 fast-path)"
@@ -137,7 +137,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
         "bash tests/run-all.sh" \
         0 \
         "$SID" \
-        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" != "complete" ]; then
         pass "C-GUARD. valid contract + write_tests=pending → NOT complete (write_tests guard preserved), got: $STATUS"
@@ -153,7 +153,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
         "bash tests/run-all.sh" \
         0 \
         "$SID" \
-        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "complete" ]; then
         pass "C-WRTSKIP. valid contract + write_tests=skipped → complete (skipped passes guard)"
@@ -167,12 +167,12 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
     SID="cdupforge-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
     run_run_tests_hook_with_stdout \
-        "bash tests/run-all.sh foo.sh; echo 'RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1'" \
+        "bash tests/run-all.sh foo.sh; echo 'RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0'" \
         0 \
         "$SID" \
         "Results: PASS=1  FAIL=0  SKIP=0
-RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1
-RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0
+RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "C-DUPFORGE. 2 RUN_CONTRACT lines (real+forged) → pending (exactly-one: ambiguous)"
@@ -190,8 +190,8 @@ RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
         0 \
         "$SID" \
         "Results: PASS=1  FAIL=0  SKIP=0
-RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1
-RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0
+RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "C-DUPLEGIT. 2 RUN_CONTRACT lines (fixture collision, no echo in cmd) → pending (exactly-one: ambiguous)"
@@ -213,7 +213,7 @@ RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
         "bash tests/run-all.sh" \
         0 \
         "$SID" \
-        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+        "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "complete" ]; then
         pass "C-XFORM. run-all.sh + valid contract (deliberate sed-rewrite injected) → complete (accepted scope boundary)"
@@ -303,13 +303,13 @@ RUN_CONTRACT: PASS=1 SKIP=0 FAIL=0 EXECUTED=1"
         0 \
         "$SID" \
         "Results: PASS=2  FAIL=0  SKIP=1
-RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
+RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0"
     run_run_tests_hook_with_stdout \
         "bash tests/run-all.sh tests/foo.sh" \
         0 \
         "$SID" \
         "Results: PASS=2  FAIL=0  SKIP=1
-RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3"
+RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "complete" ]; then
         pass "C-VALID-IDEMP. two successive valid-contract runs → complete (idempotency)"

@@ -9,8 +9,8 @@
 # unsettled, the stdout route records exactly as before (outcome_source stays null).
 
 F2544_E_RUN_ALL="bash tests/run-all.sh tests/foo.sh"
-F2544_E_PASS_OUT="$(printf 'Results: PASS=2  FAIL=0  SKIP=1\nRUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3')"
-F2544_E_FAIL_OUT="$(printf 'FAIL: tests/foo.sh (exit 1)\nResults: PASS=1  FAIL=1  SKIP=0\nRUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2')"
+F2544_E_PASS_OUT="$(printf 'Results: PASS=2  FAIL=0  SKIP=1\nRUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0')"
+F2544_E_FAIL_OUT="$(printf 'FAIL: tests/foo.sh (exit 1)\nResults: PASS=1  FAIL=1  SKIP=0\nRUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0')"
 
 f2544_e_stdout_route_unchanged() {
   local sid="f2544-e-direct-pass" keys
@@ -69,8 +69,8 @@ f2544_e_unsettled_blocks_stdout_pass() {
   sid="f2544-e-poc-run-all"
   f2544_ready "$sid"
   f2544_dispatched "$sid" "$stem"
-  cmd='bash tests/run-all.sh --help; printf "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9\n"'
-  f2544_hook "$sid" "$cmd" 0 "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9" "$F2544_ROOT_N"
+  cmd='bash tests/run-all.sh --help; printf "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0\n"'
+  f2544_hook "$sid" "$cmd" 0 "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0" "$F2544_ROOT_N"
   f2544_ne "E/#1901 PoC: forged run-all success does not settle an unsettled dispatch" "$(f2544_status "$sid")" "complete"
 
   sid="f2544-e-worker-legacy-demote"

@@ -118,10 +118,11 @@ Z_EXEC="$(fx_contract_field "$Z_OUT" EXECUTED)"
 Z_DIR=absent
 [ -e "$(fx_ledger_dir)" ] && Z_DIR=present
 
-if [ "$Z_RC" -eq 0 ] && [ "$Z_EXEC" = "0" ] && [ "$Z_DIR" = "absent" ]; then
-    fx_pass "N36. a pattern matching no test exited 0 with EXECUTED=0 and left no durations/ directory"
+# Zero selected exits 77 (#2501), not 0.
+if [ "$Z_RC" -eq 77 ] && [ "$Z_EXEC" = "0" ] && [ "$Z_DIR" = "absent" ]; then
+    fx_pass "N36. a pattern matching no test exited 77 with EXECUTED=0 and left no durations/ directory"
 else
-    fx_fail "N36. want exit 0, EXECUTED=0 and no durations/ directory, got exit $Z_RC EXECUTED=${Z_EXEC:-absent} durations=$Z_DIR"
+    fx_fail "N36. want exit 77, EXECUTED=0 and no durations/ directory, got exit $Z_RC EXECUTED=${Z_EXEC:-absent} durations=$Z_DIR"
     fx_show_tail "$Z_ERR" 6
 fi
 

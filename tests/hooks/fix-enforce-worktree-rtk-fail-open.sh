@@ -113,11 +113,9 @@ rtk_batch_run() {
 }
 
 rtk_batched() {
-    local p="$PASS" f="$FAIL" s="$SKIP"
     RTK_PREFETCH=1
-    "$@" > /dev/null 2>&1 || true
+    harness_discard_pass "$@"
     RTK_PREFETCH=0
-    PASS="$p"; FAIL="$f"; SKIP="$s"
     rtk_batch_run "$1"
     "$@"
     RTK_CACHE=()

@@ -147,7 +147,9 @@ try {
     { kind: "step_annotation", step: "run_tests", key: "run_outcome", value: "fail",
       provenance: "observed", origin: "run-tests-hook" },
     { kind: "step_annotation", step: "run_tests", key: "failing_tests", value: tests,
-      provenance: "observed", origin: "run-tests-hook" }
+      provenance: "observed", origin: "run-tests-hook" },
+    { kind: "step_annotation", step: "run_tests", key: "unrunnable_count",
+      value: Number(process.env.SEED_UNRUNNABLE || 0), provenance: "observed", origin: "run-tests-hook" }
   ]);
 } catch (e) {
   process.stderr.write("seed-err: " + e.message + "\n");

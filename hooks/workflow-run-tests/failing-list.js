@@ -8,6 +8,8 @@ const path = require("path");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { tryLoadRegistry, matchBasename } = require("../lib/test-language-registry");
 
+// The file-level FAIL: line is the SSOT (a TIMEOUT unit prints one too); case lines,
+// TIMEOUT: and UNRUNNABLE: lines never match, so the names count equals contract.fail.
 const RUN_ALL_FAIL_RE = /^FAIL: (.+) \(exit -?\d+\)$/;
 const LOG_TAIL_RE = /^log_tail:[ \t]*\|/;
 const WORKER_ITEM_RE = /^ {2}- '((?:[^']|'')*)'\s*$/;

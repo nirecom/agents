@@ -59,7 +59,7 @@ const reg = require(root + "/hooks/lib/worker-dispatch-registry.js");
 process.stdout.write(emit.render(reg.workers["test-runner"], {
   status: "fail", exitCode: 1, durationSeconds: 1, summary: "PASS=3 FAIL=12 SKIP=1",
   failingTests: JSON.parse(failing), logTail: JSON.parse(tail),
-  runContract: { pass: 3, fail: 12, skip: 1, executed: 16 },
+  runContract: { pass: 3, fail: 12, skip: 1, executed: 16, unrunnable: 0, timeout: 0 },
 }));
 JS
 }
@@ -109,7 +109,7 @@ ck "present: line 2" "OUTCOME=present" "$(line_n 2)"
 ck "present: line 3" "OUTCOME_REASON=-" "$(line_n 3)"
 ck "present: line 4 separator" "---" "$(line_n 4)"
 YAML="$(after_sep)"
-ck "present: RUN_CONTRACT line first after the separator" "RUN_CONTRACT: PASS=3 FAIL=12 SKIP=1 EXECUTED=16" "$(printf '%s\n' "$YAML" | sed -n 1p)"
+ck "present: RUN_CONTRACT line first after the separator" "RUN_CONTRACT: PASS=3 FAIL=12 SKIP=1 EXECUTED=16 UNRUNNABLE=0 TIMEOUT=0" "$(printf '%s\n' "$YAML" | sed -n 1p)"
 ck "present: all twelve failing tests listed" "12" "$(printf '%s\n' "$YAML" | grep -c "^  - 'tests/bin/f[0-9][0-9]\.sh'$")"
 WANT="$(foreground_yaml)"
 if [ -n "$WANT" ]; then pass "oracle: foreground render produced YAML"; else fail "oracle: foreground render empty"; fi

@@ -228,7 +228,7 @@ if run_case "EV8/annotation-keys"; then
 const bad = [];
 const want = ["baseline_classification", "completion_basis", "failing_tests", "reopen_reason",
   "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
-  "skip_verdict", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
+  "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
 if (exported.join(",") !== want.join(",")) bad.push("STEP_ANNOTATION_KEYS=" + exported.join(","));
 want.forEach((k) => {

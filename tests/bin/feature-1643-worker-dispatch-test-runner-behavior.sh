@@ -200,9 +200,10 @@ group_bounds() {
     local args=() i
     for i in $(seq 1 15); do args+=("FAIL: tests/s$i.sh (exit 1)"); done
     for i in $(seq 1 100); do args+=("log line $i"); done
-    args+=("Results: PASS=0  FAIL=15  SKIP=0")
+    args+=("PASS tests/a b/x.sh::spaced-2501" "Results: PASS=0  FAIL=15  SKIP=0")
     set_run 1 "${args[@]}"
     dispatch_tr "$MAIN" "$PAYLOAD"
+    assert_eq "bounds/spaced-path-case-line-dropped" "0" "$(printf '%s\n' "$DOUT" | grep -c 'spaced-2501')"
     assert_eq "bounds/status" "fail" "$(field_of status)"
     assert_eq "bounds/failing-tests-uncapped-all-15-kept" "15" "$(failing_count)"
     assert_eq "bounds/log-tail-capped-at-40" "40" "$(tail_lines)"
@@ -411,6 +412,7 @@ WORKFLOW_PLANS_DIR=[$PLANS]"
 # WHY: CONTRACT_LINE_RE runs on stdout+stderr concatenated after CRLF/blank-line
 # normalisation; this matrix (skills/_shared/test-design/parser-regex-tests.md)
 # drives the real stub -> worker -> renderer pipeline and asserts the rendered value.
+# A legacy 4-field line keeps its 4 fields: zero-filling it would read as current (#2501 C3).
 set_run_streams() {
     node -e '
 const fs = require("fs");
@@ -456,13 +458,18 @@ double-space-between  | RUN_CONTRACT: PASS=1  FAIL=0 SKIP=0 EXECUTED=1    |     
 lowercase-keyword     | run_contract: PASS=1 FAIL=0 SKIP=0 EXECUTED=1     |                                                   | (none)
 embedded-mid-line     | echo RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1|                                                   | (none)
 crlf-line-ending      | RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2\r\nResults: PASS=2  FAIL=0  SKIP=0 |                    | PASS=2 FAIL=0 SKIP=0 EXECUTED=2
-lone-cr-after-fields  | RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2\rtrailing                          |                    | PASS=2 FAIL=0 SKIP=0 EXECUTED=2
+lone-cr-after-fields  | RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2\rtrailing                          |                    | (none)
 leading-spaces        |     RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 |                                                   | PASS=3 FAIL=0 SKIP=0 EXECUTED=3
 leading-tab           | \tRUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3   |                                                   | PASS=3 FAIL=0 SKIP=0 EXECUTED=3
 leading-mixed-ws      | \t  \tRUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 |                                                 | PASS=3 FAIL=0 SKIP=0 EXECUTED=3
 leading-nbsp-like     | . RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3   |                                                   | (none)
-trailing-extra-field  | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 EXTRA=9 |                                               | PASS=1 FAIL=0 SKIP=0 EXECUTED=1
-leading-zeros         | RUN_CONTRACT: PASS=007 FAIL=0 SKIP=0 EXECUTED=007 |                                                   | PASS=7 FAIL=0 SKIP=0 EXECUTED=7
+trailing-extra-field  | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 EXTRA=9 |                                               | (none)
+# Six-field, cut-off and trailing-junk rows (#2501): tests/bin/fix-1378-worker-yaml-contract-roundtrip.sh (7).
+four-trailing-blanks  | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1  \t |                                                 | PASS=1 FAIL=0 SKIP=0 EXECUTED=1
+four-trailing-cr      | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1\r|                                                    | PASS=1 FAIL=0 SKIP=0 EXECUTED=1
+leading-zeros        | RUN_CONTRACT: PASS=007 FAIL=0 SKIP=0 EXECUTED=007 |                                                   | PASS=7 FAIL=0 SKIP=0 EXECUTED=7
+largest-exact-integer | RUN_CONTRACT: PASS=9007199254740991 FAIL=0 SKIP=0 EXECUTED=9007199254740991 |                         | PASS=9007199254740991 FAIL=0 SKIP=0 EXECUTED=9007199254740991
+past-exact-integers   | RUN_CONTRACT: PASS=9007199254740992 FAIL=0 SKIP=0 EXECUTED=9007199254740992 |                         | (none)
 stderr-only           | Results: PASS=1  FAIL=0  SKIP=0                   | RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4     | PASS=4 FAIL=0 SKIP=0 EXECUTED=4
 one-per-stream        | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1     | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1     | (none)
 blank-output          |                                                   |                                                   | (none)

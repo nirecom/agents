@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: tests/run-all.sh, bin/lib/run-all-launch.sh
-# Tags: bin, tests, pwsh, python, scope:issue-specific, TL2
+# Tags: bin, tests, pwsh, python, scope:issue-specific, TL2, pester, parallel, exit-77
 # run-all.sh discovers tests/<category>/ test files and launches each through run_all_exec
 # (bin/lib/run-all-launch.sh) per the test language registry: pwsh / uv+pytest / bash; other
 # files print UNSUPPORTED (#2007 / #1765 / #2392 / #2500). B3/B4 need uv/pwsh on PATH.
@@ -59,24 +59,29 @@ else
     fail "S3: --all discovery mismatch — rc=$RC got=<<$s3_plan>>"
 fi
 
-# B1: a *.Tests.ps1 passed as positional arg exits 77 (SKIP) when pwsh is absent.
+# B1 (#2501): a *.Tests.ps1 passed as positional arg is UNRUNNABLE (not SKIP) when pwsh is
+# absent. An UNRUNNABLE-only run executed nothing (PASS=0), so it exits 77 (D5-2) with a
+# 6-field contract carrying UNRUNNABLE=1.
 if ! command -v pwsh >/dev/null 2>&1; then
     PS1_FILE="$TMPDIR_FX/noop.Tests.ps1"
     printf 'Describe "noop" { It "passes" { $true | Should -BeTrue } }\n' >"$PS1_FILE"
     run_all_fx "$PS1_FILE"
-    if echo "$OUT" | grep -qiE 'skip.*pwsh|pwsh.*not.*path' && [ "$RC" = "0" ]; then
-        pass "B1: positional .Tests.ps1 skips (exit 77) when pwsh not on PATH"
+    if echo "$OUT" | grep -qF 'UNRUNNABLE: missing pwsh' && echo "$OUT" | grep -qE '^UNRUNNABLE: .*noop\.Tests\.ps1' \
+        && echo "$OUT" | grep -qxF 'RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=1 TIMEOUT=0' \
+        && [ "$RC" = "77" ]; then
+        pass "B1: positional .Tests.ps1 is UNRUNNABLE (missing pwsh), 6-field contract, rc=77 when pwsh not on PATH"
     else
-        fail "B1: expected SKIP + rc=0 for .Tests.ps1 without pwsh — got rc=$RC output=$(echo "$OUT" | tail -3)"
+        fail "B1: expected 'UNRUNNABLE: missing pwsh' + file-level UNRUNNABLE line + UNRUNNABLE=1 contract + rc=77 — got rc=$RC output=$(echo "$OUT" | tail -3)"
     fi
 else
     echo "INFO: B1 skipped — pwsh is on PATH; behavioural skip-gate not verifiable"
 fi
 
-# B2: with uv absent, run_all_exec SKIPs a test_*.py with rc 77. An empty PATH makes uv
-# absent on every host; the SKIP path uses shell builtins only.
+# B2 (#2501): with uv absent, run_all_exec reports a test_*.py UNRUNNABLE: rc 79, the
+# 'UNRUNNABLE: missing uv' out line, and an <resultdir>/unrunnable marker naming uv. An
+# empty PATH makes uv absent on every host; that path uses shell builtins only.
 if [ -f "$LAUNCH_LIB" ]; then
-    mkdir -p "$TMPDIR_FX/emptybin" "$TMPDIR_FX/b2"
+    mkdir -p "$TMPDIR_FX/emptybin" "$TMPDIR_FX/b2" "$TMPDIR_FX/b2/rd"
     printf 'def test_x():\n    assert True\n' >"$TMPDIR_FX/b2/test_x.py"
     # The launch reads the registry through node, so node alone stays reachable via a shim.
     if B2_NODE="$(command -v node)"; then
@@ -87,13 +92,14 @@ if [ -f "$LAUNCH_LIB" ]; then
     ( PATH="$TMPDIR_FX/emptybin"
       # shellcheck source=/dev/null
       . "$LAUNCH_LIB"
-      run_all_exec "$TMPDIR_FX/b2/test_x.py" "$TMPDIR_FX/b2/out" "$TMPDIR_FX/b2/err" )
+      run_all_exec "$TMPDIR_FX/b2/test_x.py" "$TMPDIR_FX/b2/out" "$TMPDIR_FX/b2/err" "$TMPDIR_FX/b2/rd" )
     b2_rc=$?
     b2_out="$(cat "$TMPDIR_FX/b2/out" 2>/dev/null)"
-    if [ "$b2_rc" = "77" ] && [[ "$b2_out" == *"SKIP: uv not on PATH"* ]]; then
-        pass "B2: test_*.py without uv → 'SKIP: uv not on PATH' + rc 77"
+    b2_marker="$(cat "$TMPDIR_FX/b2/rd/unrunnable" 2>/dev/null)"
+    if [ "$b2_rc" = "79" ] && [[ "$b2_out" == *"UNRUNNABLE: missing uv"* ]] && [[ "$b2_marker" == *uv* ]]; then
+        pass "B2: test_*.py without uv → 'UNRUNNABLE: missing uv' + rc 79 + unrunnable marker"
     else
-        fail "B2: expected rc 77 + 'SKIP: uv not on PATH' — got rc=$b2_rc out=<<$b2_out>>"
+        fail "B2: expected rc 79 + 'UNRUNNABLE: missing uv' + marker naming uv — got rc=$b2_rc out=<<$b2_out>> marker=<<$b2_marker>>"
     fi
 else
     fail "B2: bin/lib/run-all-launch.sh missing — run_all_exec not implemented"
@@ -220,22 +226,22 @@ console.log("trusted=" + isContractTrusted({ attributed: true, contract }) +
 JS
 u_hook() { node "$TMPDIR_FX/u_hook.js" "$1" "$FXR" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests"; }
 
-# U1: --all — js shown once, after the result lines and before Results:; tallies/exit/contract unchanged.
+# U1: --all — a recognized-only *.test.ts (js runs since #2501) shown once, after the result lines and before Results:; tallies/exit/contract unchanged.
 u_run u1-base --all; base_rc=$U_RC; base_tail="$(u_tail "$U_OUT")"
-: >"$FXR/tests/hooks/a.test.js"
+: >"$FXR/tests/hooks/foo.test.ts"
 u_run u1 --all
-want_line="UNSUPPORTED: $FXR/tests/hooks/a.test.js (language: js; not run)"
+want_line="UNSUPPORTED: $FXR/tests/hooks/foo.test.ts (language: test-naming-convention; not run)"
 u1_lines="$(printf '%s\n' "$U_OUT" | grep -c '^UNSUPPORTED: ')"
 u_ln="$(printf '%s\n' "$U_OUT" | grep -nxF -- "$want_line" | cut -d: -f1)"
 r_ln="$(printf '%s\n' "$U_OUT" | grep -n '^Results:' | cut -d: -f1)"
 t_ln="$(printf '%s\n' "$U_OUT" | grep -nE '^(PASS|FAIL|SKIP): ' | tail -n 1 | cut -d: -f1)"
 if [ -n "$u_ln" ] && [ "$u1_lines" = "1" ] && [ -n "$r_ln" ] && [ -n "$t_ln" ] && [ "$t_ln" -lt "$u_ln" ] && [ "$u_ln" -lt "$r_ln" ]; then
-    pass "U1a: --all prints one UNSUPPORTED line for a.test.js between the result lines and Results:"
+    pass "U1a: --all prints one UNSUPPORTED line for foo.test.ts between the result lines and Results:"
 else
     fail "U1a: --all UNSUPPORTED line missing or misplaced — lines=$u1_lines at=$u_ln last-result=$t_ln results=$r_ln"
 fi
 if [ "$U_RC" = "$base_rc" ] && [ "$base_rc" = "1" ] && [ "$(u_tail "$U_OUT")" = "$base_tail" ] && [ -n "$base_tail" ]; then
-    pass "U1b: --all tallies, RUN_CONTRACT and exit code equal the run without a.test.js"
+    pass "U1b: --all tallies, RUN_CONTRACT and exit code equal the run without foo.test.ts"
 else
     fail "U1b: --all changed — rc=$U_RC base_rc=$base_rc tail=<<$(u_tail "$U_OUT" | tr '\n' '|')>> base=<<${base_tail//$'\n'/|}>>"
 fi
@@ -251,22 +257,22 @@ else
     fail "U1c: dual-match x.test.sh — unsupported=$u1c_lines (want $u1_lines) dual=$u1c_dual out=$(printf '%s' "$U_OUT" | tail -n 6 | tr '\n' '|')"
 fi
 
-# U2: named — js and an unmatched file each get one line; the hook reads the same as without them.
+# U2: named — a recognized-only *.test.ts and an unmatched file each get one line; the hook reads the same as without them.
 : >"$FXR/tests/hooks/notes.txt"
 u_run u2-base tests/hooks/ok.sh tests/hooks/ng.sh; base_rc=$U_RC; base_tail="$(u_tail "$U_OUT")"
-u_run u2 tests/hooks/ok.sh tests/hooks/ng.sh tests/hooks/a.test.js tests/hooks/notes.txt
+u_run u2 tests/hooks/ok.sh tests/hooks/ng.sh tests/hooks/foo.test.ts tests/hooks/notes.txt
 u2_have=0
-for l in "UNSUPPORTED: tests/hooks/a.test.js (language: js; not run)" "UNSUPPORTED: tests/hooks/notes.txt (language: unknown; not run)"; do
+for l in "UNSUPPORTED: tests/hooks/foo.test.ts (language: test-naming-convention; not run)" "UNSUPPORTED: tests/hooks/notes.txt (language: unknown; not run)"; do
     printf '%s\n' "$U_OUT" | grep -qxF -- "$l" && u2_have=$((u2_have + 1))
 done
 if [ "$u2_have" = "2" ] && [ "$U_RC" = "$base_rc" ] && [ "$(u_tail "$U_OUT")" = "$base_tail" ]; then
-    pass "U2a: named js / unknown files print UNSUPPORTED (language: js|unknown); tallies and exit unchanged"
+    pass "U2a: named test-naming-convention / unknown files print UNSUPPORTED; tallies and exit unchanged"
 else
     fail "U2a: named UNSUPPORTED — found=$u2_have rc=$U_RC base_rc=$base_rc tail=<<$(u_tail "$U_OUT" | tr '\n' '|')>> base=<<${base_tail//$'\n'/|}>>"
 fi
 u2_hook="$(u_hook "$TMPDIR_FX/u2.out")"; u2_base_hook="$(u_hook "$TMPDIR_FX/u2-base.out")"
 if [ "$u2_hook" = "$u2_base_hook" ] && [ "$u2_hook" = 'trusted=true failing=["tests/hooks/ng.sh"]' ] \
-    && ! grep -qE '^FAIL: .*(a\.test\.js|notes\.txt)' "$TMPDIR_FX/u2.out"; then
+    && ! grep -qE '^FAIL: .*(foo\.test\.ts|notes\.txt)' "$TMPDIR_FX/u2.out"; then
     pass "U2b: failing-list and RUN_CONTRACT readers see the same result as without the unsupported files"
 else
     fail "U2b: hook reading differs — with=<<$u2_hook>> without=<<$u2_base_hook>>"
@@ -280,11 +286,11 @@ else
     fail "U3: --print-plan output — rc=$U_RC out=$(printf '%s' "$U_OUT" | tr '\n' '|')"
 fi
 
-# U4: unsupported-only — EXECUTED=0, exit 0, and the hook does not trust the contract.
-u_run u4 tests/hooks/a.test.js tests/hooks/notes.txt
-if [ "$U_RC" = "0" ] && printf '%s\n' "$U_OUT" | grep -qxF 'RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0' \
+# U4: unsupported-only — EXECUTED=0, exit 77 (PASS=0, #2501 D1), and the hook does not trust the contract.
+u_run u4 tests/hooks/foo.test.ts tests/hooks/notes.txt
+if [ "$U_RC" = "77" ] && printf '%s\n' "$U_OUT" | grep -qxF 'RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=0 TIMEOUT=0' \
     && [ "$(printf '%s\n' "$U_OUT" | grep -c '^UNSUPPORTED: ')" = "2" ] && [ "$(u_hook "$TMPDIR_FX/u4.out")" = "trusted=false failing=[]" ]; then
-    pass "U4: unsupported-only run → 2 UNSUPPORTED, EXECUTED=0, exit 0, contract not trusted"
+    pass "U4: unsupported-only run → 2 UNSUPPORTED, EXECUTED=0, exit 77, contract not trusted"
 else
     fail "U4: unsupported-only — rc=$U_RC hook=<<$(u_hook "$TMPDIR_FX/u4.out")>> out=$(printf '%s' "$U_OUT" | tail -n 4 | tr '\n' '|')"
 fi
@@ -318,6 +324,8 @@ case_end
 
 # shellcheck source=feature-2007-run-all-ps1-dispatch/pester-quoting.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-2007-run-all-ps1-dispatch/pester-quoting.sh"
+# shellcheck source=feature-2007-run-all-ps1-dispatch/pester-parallel.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-2007-run-all-ps1-dispatch/pester-parallel.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

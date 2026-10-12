@@ -1,35 +1,15 @@
 "use strict";
-// Stage 5 of reconcileEffectiveState: the write_code resume cascade.
-//
-// When `run_tests` records a FAILING outcome, every step that was settled
-// BEFORE that failure signed off on code which is about to change. The cascade
-// reopens those settlements (derived-only, never written to disk) so the
+// Stage 5 of reconcileEffectiveState: the write_code resume cascade. A FAILING
+// run_tests outcome reopens (derived-only) every step settled before it, so the
 // session goes back through /write-code before it can commit.
-//
-// Split out of effective-state.js per rules/coding/file-split.md pattern A.
-//
-// Inputs: the trigger (`run_outcome`) and the seq values compared come from the
-// RAW projection, not the derived one — the derived entry built by
-// effective-state.js is deliberately minimal (`{ status, resolved_from, ... }`)
-// and must not be widened to carry `updated_seq`, or this stage's read and the
-// raw fact it depends on would drift apart. Only `status` itself comes from the
-// derived side, respecting stages 1-4's prior masking.
-//
-// This cascade does not need a `provenance: "backfilled"` check: it answers "is
-// this completion older than the observed failure?" (a seq comparison), not
-// "did this session genuinely observe it?" (hasGenuineRecordedComplete's
-// question, used elsewhere for resumability). Inherited and v1-migrated
-// completions are masked automatically because they always carry a smaller
-// seq than a later run_tests failure. The v2→v3 backfill (see
-// state-io/migrations/v2-to-v3.js) is the one path that writes `write_code` at
-// the tail of a stream with a larger seq, but it's inert here regardless: its
-// trigger annotation (`run_outcome`) ships in the same schema version as the
-// backfill itself, so a file eligible for backfilling can never carry a
-// `run_outcome` yet. Any later failure appends after the backfilled record,
-// restoring normal ordering.
+// `run_outcome` and the compared seqs come from the RAW projection (the derived
+// entry stays minimal); only `status` comes from the derived side (stages 1-4).
+// No provenance check is needed: this is a seq comparison, inherited/v1 completions
+// always carry a smaller seq, and the v2→v3 backfill (state-io/migrations/v2-to-v3.js)
+// can never coexist with a `run_outcome` of the same schema version.
 
-// Outcomes that mean "the run reported a failure". Absent / null / "pass" do
-// NOT fire the cascade — "no outcome recorded" is not evidence of failure.
+// Outcomes that mean "the run reported a failure"; absent / null / "pass" are not.
+// "unrunnable" is excluded: a missing runtime is not a code defect to resume write_code for.
 const FAILING_RUN_OUTCOMES = ["fail", "timeout", "runner-error"];
 
 const RESOLVED_FROM = "write-code-resumed";

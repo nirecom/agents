@@ -196,7 +196,7 @@ cal_check_report() {
     [ "$CR_FAILED" -eq 0 ] || cal_inconclusive run-failed "the measurement command failed ($ph, width $w)"
     is_uint "$CR_MS" || cal_inconclusive run-failed "no elapsed time from the $ph run at width $w"
     case "$CR_RC" in
-        0|1|3) ;;
+        0|1|3|77) ;;
         *) cal_inconclusive run-failed "the $ph run at width $w exited $CR_RC" ;;
     esac
     [ "$ph" = "probe" ] && return 0

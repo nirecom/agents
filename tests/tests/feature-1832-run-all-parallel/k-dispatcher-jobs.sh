@@ -170,10 +170,10 @@ case_jobs_omitted() {
     assert_eq "k-jobs/auto/status-pass" "pass" "$(yaml_field status)"
     assert_eq "k-jobs/auto/exit-code-zero" "0" "$(yaml_field exit_code)"
     assert_eq "k-jobs/auto/all-four-ran" "4" "$(started)"
-    if printf '%s\n' "$DOUT" | grep -qE '^RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4$'; then
+    if printf '%s\n' "$DOUT" | grep -qE '^RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0$'; then
         pass "k-jobs/auto/contract-rendered"
     else fail "k-jobs/auto/contract-rendered" \
-        "the worker did not render 'RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4'"; fi
+        "the worker did not render 'RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0'"; fi
     # An absent `jobs` is a deferral, not a number: the worker adds no -j and the
     # suite resolves `auto` itself (no cache here, so the conservative 4).
     case "$line" in

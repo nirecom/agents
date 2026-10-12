@@ -120,7 +120,7 @@ YAML_CHECK_JS="$TMPD/yaml-check.js"
 cat > "$YAML_CHECK_JS" <<'YCJS'
 // The `## Output contract` (fenced YAML) of the deleted agents/test-runner.md,
 // now owned by bin/worker-dispatch/workers/test-runner.js:
-//   status: pass | fail | timeout | runner-error
+//   status: pass | fail | timeout | runner-error | unrunnable | skip (last two: #2501)
 //   exit_code: <int>   duration_seconds: <int>   summary: <=300-char human summary
 //   failing_tests:
 //     - <up to 10 test names>
@@ -135,15 +135,14 @@ const top = lines.filter((l) => /^[a-z_]+:/.test(l)).map((l) => l.split(":")[0])
 const want = ["status", "exit_code", "duration_seconds", "summary", "failing_tests", "log_tail"];
 if (top.join(",") !== want.join(",")) bad(`top-level keys want=${want.join(",")} got=${top.join(",")}`);
 const status = (raw.match(/^status:\s*(\S+)/m) || [])[1];
-if (!["pass", "fail", "timeout", "runner-error"].includes(status)) bad(`status '${status}'`);
+if (!["pass", "fail", "timeout", "runner-error", "unrunnable", "skip"].includes(status)) bad(`status '${status}'`);
 if (!/^exit_code:\s*-?\d+$/m.test(raw)) bad("exit_code not an int");
 if (!/^duration_seconds:\s*\d+$/m.test(raw)) bad("duration_seconds not an int");
 const summary = (raw.match(/^summary:\s*(.*)$/m) || ["", ""])[1];
 if (summary.length > 300) bad(`summary ${summary.length} chars > 300`);
 const ft = raw.slice(raw.indexOf("failing_tests:")).split("log_tail:")[0];
 if (status === "pass" && !/^failing_tests:\s*\[\]\s*$/m.test(ft)) bad("status pass requires 'failing_tests: []'");
-const ftItems = (ft.match(/^\s+- /gm) || []).length;
-if (ftItems > 10) bad(`failing_tests ${ftItems} > 10`);
+for (const l of ft.split("\n").slice(1)) if (l.trim() !== "" && !/^  - '.*'$/.test(l)) bad("failing_tests item not a quoted list entry");
 if (!/^log_tail: \|\s*$/m.test(raw)) bad("log_tail must use the '|' block scalar");
 const tail = raw.split(/^log_tail: \|\s*$/m)[1] || "";
 const tailLines = tail.split("\n").filter((l) => l.trim() !== "");
@@ -160,7 +159,8 @@ for (const l of tailLines) if (l !== "" && !/^\s\s+/.test(l)) bad("log_tail line
 const CONTRACT_RE = /^[ \t]*RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+/gm;
 const contractLines = raw.match(CONTRACT_RE) || [];
 if (contractLines.length === 1) {
-  if (!/^RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+$/.test(lines[0] || "")) {
+  // #2501: every stub here is a current run-all, and the renderer keeps the parsed shape (C3).
+  if (!/^RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+ UNRUNNABLE=\d+ TIMEOUT=\d+$/.test(lines[0] || "")) {
     bad(`single contract line must be the first line, got '${lines[0]}'`);
   }
   if (/^[ \t]+RUN_CONTRACT:/m.test(tail)) bad("contract line must not remain inside log_tail");
@@ -221,10 +221,27 @@ chmod +x "$STUB/gh" "$STUB/uv" "$STUB/docker"
 # sentinel-stdout stub deliberately emits hostile text and the canary stub exists
 # to prove nothing was written, and giving either a contract line would make them
 # assert something they are not about.
+STUB_MODE="$MAIN_RAW/tests/stub-mode"
+# $STUB_MODE selects the run: absent = one pass; `unrunnable` = a clean exit with one
+# unlaunched file; `many-fail` = twelve failing files.
 cat > "$MAIN_RAW/tests/run-all.sh" <<'RASTUB'
 #!/usr/bin/env bash
+mode="$(cat "$(dirname "$0")/stub-mode" 2>/dev/null)"
+case "$mode" in
+  unrunnable)
+    echo "UNRUNNABLE: tests/x/a.Tests.ps1 (pwsh)"
+    echo "Missing runtimes: pwsh"
+    echo "Results: PASS=1  FAIL=0  SKIP=0"
+    echo "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=1 TIMEOUT=0"
+    exit 0 ;;
+  many-fail)
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12; do echo "FAIL: tests/x/f$i.sh (exit 1)"; done
+    echo "Results: PASS=0  FAIL=12  SKIP=0"
+    echo "RUN_CONTRACT: PASS=0 FAIL=12 SKIP=0 EXECUTED=12 UNRUNNABLE=0 TIMEOUT=0"
+    exit 1 ;;
+esac
 echo "Results: PASS=1  FAIL=0  SKIP=0"
-echo "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+echo "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
 exit 0
 RASTUB
 chmod +x "$MAIN_RAW/tests/run-all.sh"
@@ -276,6 +293,16 @@ group_checker_selftest() {
         MISMATCH:*) pass "checker/yaml-rejects-missing-failing-tests" ;;
         *) fail "checker/yaml-rejects-missing-failing-tests" ;;
     esac
+    printf 'status: skipped\nexit_code: 0\nduration_seconds: 1\nsummary: ok\nfailing_tests: []\nlog_tail: |\n  a\n' > "$f"
+    case "$(node "$YAML_CHECK_JS" "$(nodepath "$f")" 2>&1)" in
+        MISMATCH:*) pass "checker/yaml-rejects-unknown-status" ;;
+        *) fail "checker/yaml-rejects-unknown-status" ;;
+    esac
+    printf "status: fail\nexit_code: 1\nduration_seconds: 1\nsummary: ok\nfailing_tests:\n  - 'a.sh'\n  bare\nlog_tail: |\n  a\n" > "$f"
+    case "$(node "$YAML_CHECK_JS" "$(nodepath "$f")" 2>&1)" in
+        MISMATCH:*) pass "checker/yaml-rejects-malformed-failing-item" ;;
+        *) fail "checker/yaml-rejects-malformed-failing-item" ;;
+    esac
 }
 
 # ===========================================================================
@@ -308,6 +335,29 @@ group_test_runner_yaml() {
     out="$TMPD/out-test-runner.txt"
     dispatch test-runner "$p" > "$out"
     assert_eq "contract/test-runner" "OK" "$(node "$YAML_CHECK_JS" "$(nodepath "$out")" 2>&1)"
+
+    # #2501: a clean exit with an unlaunched file renders `unrunnable` and names the runtime.
+    printf 'unrunnable' > "$STUB_MODE"
+    out="$TMPD/out-test-runner-unrunnable.txt"
+    dispatch test-runner "$p" > "$out"
+    assert_eq "contract/test-runner-unrunnable" "OK" "$(node "$YAML_CHECK_JS" "$(nodepath "$out")" 2>&1)"
+    assert_eq "contract/test-runner-unrunnable/contract-line" "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=1 TIMEOUT=0" "$(sed -n '1p' "$out" | tr -d '\r')"
+    assert_eq "contract/test-runner-unrunnable/status" "unrunnable" "$(sed -n 's/^status: //p' "$out" | tr -d '\r')"
+    assert_eq "contract/test-runner-unrunnable/failing-tests-empty" "failing_tests: []" "$(grep '^failing_tests:' "$out" | tr -d '\r')"
+    case "$(sed -n 's/^summary: //p' "$out")" in
+        *"Missing runtimes: pwsh"*) pass "contract/test-runner-unrunnable/summary-names-runtime" ;;
+        *) fail "contract/test-runner-unrunnable/summary-names-runtime — got=$(sed -n 's/^summary: //p' "$out")" ;;
+    esac
+
+    # #2431: every failing path is listed; twelve is past the old cap of ten.
+    printf 'many-fail' > "$STUB_MODE"
+    out="$TMPD/out-test-runner-many-fail.txt"
+    dispatch test-runner "$p" > "$out"
+    assert_eq "contract/test-runner-many-fail" "OK" "$(node "$YAML_CHECK_JS" "$(nodepath "$out")" 2>&1)"
+    assert_eq "contract/test-runner-many-fail/status" "fail" "$(sed -n 's/^status: //p' "$out" | tr -d '\r')"
+    assert_eq "contract/test-runner-many-fail/all-twelve-listed" "12" "$(grep -c "^  - 'tests/x/f[0-9]*\.sh'" "$out")"
+    assert_eq "contract/test-runner-many-fail/last-one-listed" "1" "$(grep -c "^  - 'tests/x/f12\.sh'" "$out")"
+    rm -f "$STUB_MODE"
 }
 
 # ===========================================================================

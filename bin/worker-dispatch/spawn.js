@@ -12,6 +12,7 @@ const { spawnSync } = require("child_process");
 
 const registryData = require("../../hooks/lib/worker-dispatch-registry");
 const { realAbs, samePath, resolveAgentsMainRoot } = require("./anchor");
+const { effectiveExternal, effectiveExternalCommands } = require("./registry");
 
 const DEFAULT_TIMEOUT_MS = 120000;
 const MAX_BUFFER = 32 * 1024 * 1024;
@@ -40,9 +41,10 @@ function resolveScript(entry, scriptKey, anchors, familyCwd) {
   return abs;
 }
 
+// Both layers include the runtimes derived from the test-language registry (fail-closed).
 function assertCommandAllowed(entry, command) {
-  const declared = entry.binaries && Array.isArray(entry.binaries.external) ? entry.binaries.external : [];
-  if (!registryData.EXTERNAL_COMMANDS.includes(command)) {
+  const declared = effectiveExternal(entry);
+  if (!effectiveExternalCommands().includes(command)) {
     throw new Error(`command '${command}' is not in the dispatcher's external command table`);
   }
   if (!declared.includes(command)) {

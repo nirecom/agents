@@ -19,6 +19,22 @@ Every child process the dispatcher starts holds all three:
    the resolved script checkout root anchor and is never inherited, so a poisoned parent env
    cannot redirect a child at a planted checkout.
 
+## External commands derived from the test language registry
+
+A worker that sets `binaries.externalFromTestLanguages: true` (strictly boolean;
+today only `test-runner`) also gets, as external commands, every supported test
+language registry entry's `launch.requires` and `launch.command[0]` (`pwsh`, `uv`,
+`node`, …). `effectiveExternal(entry)` and `effectiveExternalCommands()` in
+`bin/worker-dispatch/registry.js` compute this, and `assertCommandAllowed` checks
+both layers against it, so adding a language never means hand-editing a second list.
+The hand list `EXTERNAL_COMMANDS` stays builtins-only.
+
+It is fail-closed: when the registry cannot be loaded nothing is derived and only
+the declared commands are allowed. The check covers only the command spawn itself
+starts — for `test-runner` that is `bash` running `tests/run-all.sh`. The runtimes
+that script starts (`pwsh`, `uv`, `node`) are grandchildren: spawn does not vet them,
+and whether they run depends on PATH under the `CHILD_ENV_ALLOWLIST` env.
+
 ## Anchors
 
 `anchorRoot()` resolves `script-checkout-root`, `target-main-root` and `family-worktree`.

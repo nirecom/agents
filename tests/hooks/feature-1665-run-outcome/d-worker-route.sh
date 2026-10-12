@@ -63,7 +63,7 @@ status-runner-error |                                              | runner-erro
 # uppercase must normalise: parseWorkerVerdict lowercases before the allowlist
 status-upper-fail   |                                              | FAIL         | fail
 # the worker's word outranks a green contract in the same payload
-fail-beats-green    | RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 | fail         | fail
+fail-beats-green    | RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0 | fail         | fail
 TABLE
 
     # --- D4: status: pass but the contract is not trustworthy -------------
@@ -71,7 +71,7 @@ TABLE
     # own "pass" is NOT a row-1 value, so there is no rescue: outcome is null.
     sid="f1665-d-pass-allskip"
     seed_step "$sid" write_tests complete
-    out="$(_wd_payload "RUN_CONTRACT: PASS=0 FAIL=0 SKIP=5 EXECUTED=5" pass 0)"
+    out="$(_wd_payload "RUN_CONTRACT: PASS=0 FAIL=0 SKIP=5 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" pass 0)"
     drive_hook "$DISPATCH_CMD" 0 "$sid" "$out" >/dev/null
     assert_eq "D4/all-skip-outcome-null" "(absent)" "$(step_field "$sid" run_tests run_outcome)"
     assert_eq "D4/all-skip-status-pending" "pending" "$(step_field "$sid" run_tests status)"
@@ -85,7 +85,7 @@ TABLE
     # --- D5: an explicit veto (exit_code != 0 with status: pass) ----------
     sid="f1665-d-veto"
     seed_step "$sid" write_tests complete
-    out="$(_wd_payload "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" pass 3)"
+    out="$(_wd_payload "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" pass 3)"
     drive_hook "$DISPATCH_CMD" 0 "$sid" "$out" >/dev/null
     assert_eq "D5/vetoed-outcome-null" "(absent)" "$(step_field "$sid" run_tests run_outcome)"
     assert_eq "D5/vetoed-status-pending" "pending" "$(step_field "$sid" run_tests status)"
@@ -93,7 +93,7 @@ TABLE
     # --- D6: a missing status: line vetoes (allowlist, not denylist) ------
     sid="f1665-d-nostatus"
     seed_step "$sid" write_tests complete
-    out="RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5
+    out="RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0
 exit_code: 0
 summary: 'no status line at all'
 log_tail: |
@@ -107,7 +107,7 @@ log_tail: |
     # fix that demotes everything would look correct.
     sid="f1665-d-green"
     seed_step "$sid" write_tests complete
-    out="$(_wd_payload "RUN_CONTRACT: PASS=7 FAIL=0 SKIP=0 EXECUTED=7" pass 0)"
+    out="$(_wd_payload "RUN_CONTRACT: PASS=7 FAIL=0 SKIP=0 EXECUTED=7 UNRUNNABLE=0 TIMEOUT=0" pass 0)"
     drive_hook "$DISPATCH_CMD" 0 "$sid" "$out" >/dev/null
     assert_eq "D7/green-status-complete" "complete" "$(step_field "$sid" run_tests status)"
     assert_eq "D7/green-outcome-pass" "pass" "$(step_field "$sid" run_tests run_outcome)"

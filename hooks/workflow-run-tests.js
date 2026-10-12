@@ -5,6 +5,7 @@
 //     any Bash call (./workflow-run-tests/dispatch-outcome.js, #2544);
 //   stdout route — the RUN_CONTRACT line of tests/run-all.sh or the worker in this
 //     call's stdout (#1242, C′), which cannot complete while a dispatch is unsettled.
+// Only a current-shape contract with executed>0, fail==0, unrunnable==0 completes (#2501).
 // Detection and provenance live in ./workflow-run-tests/exec-model.js (#1273).
 // Trust model summary: docs/architecture/claude-code/settings/hooks.md.
 
@@ -12,9 +13,11 @@ const fs = require("fs");
 const { resolveSessionId } = require("./workflow-state");
 const { isTestCommand, resolveTestProvenance } = require("./workflow-run-tests/exec-model");
 const { parseWorkerVerdict, workerVerdictVetoes } = require("./workflow-run-tests/outcome");
+const { demotionReason } = require("./workflow-run-tests/demotion");
 const { extractFailingTests, emitterRoot } = require("./workflow-run-tests/failing-list");
 const { applyDispatchOutcome } = require("./workflow-run-tests/dispatch-outcome");
 const { recordRun } = require("./workflow-run-tests/record-run");
+const { CONTRACT_PREFIX_RE, findSingleContract, runtimeLabels } = require("./lib/run-contract");
 const { sanitizeLine, collapseControl, redactSecrets } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
 
@@ -41,6 +44,7 @@ function sanitizeTrigger(command) {
 // first and unindented, then `log_tail: |` with suite-chosen bytes; on THAT route
 // reads are scoped to the header by position. Run-all stdout is read whole.
 const LOG_TAIL_MARKER_RE = /^log_tail:[ \t]*\|.*$/m;
+const LOG_TAIL_MARKER_SCAN_RE = /^log_tail:[ \t]*\|.*$/gm;
 
 function payloadHeader(stdout) {
   const m = LOG_TAIL_MARKER_RE.exec(stdout);
@@ -58,30 +62,22 @@ function responseHeader(toolResponse, emitter) {
 
 // --- stdout attribution (#1273 round 5 / H1) ---------------------------------
 // Which bytes of a compound command's stdout belong to the emitter, by position:
-//   worker-dispatch — at most one unindented contract, at offset 0, and exactly
-//     one `log_tail: |` marker; run-all — the single contract is the last thing.
-// Failing either means NOT TRUSTED. Zero contracts is contract-absent instead.
-const LOG_TAIL_MARKER_SCAN_RE = /^log_tail:[ \t]*\|.*$/gm;
-const CONTRACT_SCAN_RE = /^[ \t]*RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+/gm;
-
-function scanAll(re, s) {
-  return [...s.matchAll(new RegExp(re.source, re.flags))];
-}
-
+//   worker-dispatch — at most one contract line, the first line, and exactly
+//     one `log_tail: |` marker; run-all — the single contract line is the last
+//     non-empty line. Failing either means NOT TRUSTED. Zero contracts is
+//     contract-absent instead.
 function stdoutAttributed(toolResponse, emitter) {
   const stdout = responseStdout(toolResponse);
   if (stdout === "") return true;
-  const contracts = scanAll(CONTRACT_SCAN_RE, stdout);
+  const lines = stdout.split("\n");
+  const at = lines.map((l, i) => (CONTRACT_PREFIX_RE.test(l) ? i : -1)).filter((i) => i !== -1);
   if (emitter === "worker-dispatch") {
-    if (scanAll(LOG_TAIL_MARKER_SCAN_RE, stdout).length !== 1) return false;
-    if (contracts.length === 0) return true;
-    return contracts.length === 1 && contracts[0].index === 0;
+    if ([...stdout.matchAll(LOG_TAIL_MARKER_SCAN_RE)].length !== 1) return false;
+    return at.length === 0 || (at.length === 1 && at[0] === 0);
   }
   if (emitter === "run-all") {
-    if (contracts.length === 0) return true;
-    if (contracts.length !== 1) return false;
-    const m = contracts[0];
-    return stdout.slice(m.index + m[0].length).trim() === "";
+    if (at.length === 0) return true;
+    return at.length === 1 && lines.slice(at[0] + 1).every((l) => l.trim() === "");
   }
   return true;
 }
@@ -100,37 +96,30 @@ function workerStatusOf(toolResponse, emitter) {
   return parseWorkerVerdict(responseHeader(toolResponse, "worker-dispatch")).status;
 }
 
-// Exactly one well-formed RUN_CONTRACT line in the scoped stdout, else null.
-// Format is fixed: PASS FAIL SKIP EXECUTED (lockstep with run-all.sh, #1241).
-function parseContract(toolResponse, emitter) {
+// The runtimes a contract-unrunnable run lacks, as "a,b" (D5-7: the accept handler reads this,
+// never stdout). run-all prints a line-anchored `Missing runtimes:` line (neutralized child
+// lines carry a prefix); the worker leads its header `summary:` with the same text.
+const RUNALL_MISSING_RE = /^Missing runtimes: ([^\r\n]+)$/gm;
+const WORKER_MISSING_RE = /^summary:[ \t]*'?Missing runtimes: ([^;'\r\n]+)/m;
+function missingRuntimes(toolResponse, emitter) {
   const header = responseHeader(toolResponse, emitter);
-  if (!header) return null;
-  const matches = [...header.matchAll(new RegExp(CONTRACT_SCAN_RE.source, CONTRACT_SCAN_RE.flags))];
-  if (matches.length !== 1) return null;
-  const nums = matches[0][0].match(/\d+/g).map((n) => parseInt(n, 10));
-  if (nums.length !== 4 || nums.some((n) => isNaN(n))) return null;
-  return { pass: nums[0], fail: nums[1], skip: nums[2], executed: nums[3] };
-}
-
-// Which failure mode caused a demotion. Diagnostics only — never read back.
-function demotionReason(t, toolResponse) {
-  if (!t.hasProvenance) return "provenance-absent";
-  if (t.ambiguous) return "provenance-ambiguous";
-  if (!t.attributed) return "stdout-unattributed";
-  if (t.vetoed) return "worker-status-veto";
-  if (t.contract !== null) return "contract-invalid";
-  const header = responseHeader(toolResponse, t.emitter);
-  return scanAll(CONTRACT_SCAN_RE, header).length >= 2 ? "contract-ambiguous" : "contract-absent";
+  if (emitter === "worker-dispatch") {
+    const m = WORKER_MISSING_RE.exec(header);
+    return m === null ? null : runtimeLabels(m[1]);
+  }
+  const all = [...header.matchAll(RUNALL_MISSING_RE)];
+  return all.length === 0 ? null : runtimeLabels(all[all.length - 1][1]);
 }
 
 const UNTRUSTED = {
-  hasProvenance: false, ambiguous: false, emitter: null, contract: null,
+  hasProvenance: false, ambiguous: false, emitter: null, contract: null, contractMiss: null,
   attributed: false, vetoed: false, workerStatus: null, failingRoot: null,
 };
 
 // C′ trust conditions: (a) provenance names an authorised emitter, (a′) only one,
-// (a″) attributed stdout, (b) exactly one contract, (d) no worker veto. Computed
-// before the exit-code fast path (#1665 / C1); a throw resolves to NOT TRUSTED (R2).
+// (a″) attributed stdout, (b) exactly one well-formed contract (hooks/lib/run-contract.js),
+// (d) no worker veto. Computed before the exit-code fast path (#1665 / C1); a throw
+// resolves to NOT TRUSTED (R2).
 function stdoutTrust(command, toolInput, toolResponse) {
   try {
     const toolCwd = toolInput && typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
@@ -138,11 +127,14 @@ function stdoutTrust(command, toolInput, toolResponse) {
     const provenance = resolveTestProvenance(command, commandCwd);
     const hasProvenance = provenance !== null;
     const emitter = hasProvenance ? provenance.emitter : null;
+    const found = hasProvenance ? findSingleContract(responseHeader(toolResponse, emitter).split("\n")) : null;
+    const contract = found !== null && found.reason === undefined ? found : null;
     return {
       hasProvenance,
       ambiguous: hasProvenance && provenance.ambiguous === true,
       emitter,
-      contract: hasProvenance ? parseContract(toolResponse, emitter) : null,
+      contract,
+      contractMiss: found !== null && contract === null ? found : null,
       attributed: !hasProvenance || stdoutAttributed(toolResponse, emitter),
       vetoed: emitter === "worker-dispatch" && stdoutVerdictVetoes(toolResponse),
       workerStatus: workerStatusOf(toolResponse, emitter),
@@ -207,6 +199,7 @@ try {
   // An ingested outcome file is authoritative; stdout must not overwrite it.
   if (dispatch.ingested) done(dispatch.message);
   const t = stdoutTrust(command, input.tool_input, toolResponse);
+  const reason = demotionReason(t);
   const message = recordRun({
     sessionId,
     exitCode,
@@ -220,8 +213,9 @@ try {
       workerStatus: t.workerStatus,
     },
     failingTests: stdoutFailingTests(t, toolResponse),
+    unrunnableRuntimes: reason === "contract-unrunnable" ? missingRuntimes(toolResponse, t.emitter) : null,
     contractAbsent: !t.hasProvenance || t.contract === null,
-    reason: demotionReason(t, toolResponse),
+    reason,
     unsettledStem: dispatch.unsettledStem,
     stampRisk: true,
   });

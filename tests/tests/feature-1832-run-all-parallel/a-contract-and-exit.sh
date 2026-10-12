@@ -55,9 +55,11 @@ case "$LAST_NONEMPTY" in
     *) fx_fail "A2. -j 4: last non-empty stdout line is not the contract line (got: ${LAST_NONEMPTY:-<empty>})" ;;
 esac
 
-GOT="PASS=$A_PASS FAIL=$A_FAIL SKIP=$A_SKIP EXECUTED=$A_EXEC"
-[ "$GOT" = "PASS=2 FAIL=2 SKIP=1 EXECUTED=5" ]
-fx_check $? "A3. -j 4: contract counts are correct (want PASS=2 FAIL=2 SKIP=1 EXECUTED=5, got $GOT)"
+A_UNR="$(fx_contract_field "$MIX_OUT" UNRUNNABLE)"
+A_TMO="$(fx_contract_field "$MIX_OUT" TIMEOUT)"
+GOT="PASS=$A_PASS FAIL=$A_FAIL SKIP=$A_SKIP EXECUTED=$A_EXEC UNRUNNABLE=$A_UNR TIMEOUT=$A_TMO"
+[ "$GOT" = "PASS=2 FAIL=2 SKIP=1 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" ]
+fx_check $? "A3. -j 4: contract counts are correct (want PASS=2 FAIL=2 SKIP=1 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0, got $GOT)"
 
 [ "$MIX_RC" -eq 1 ]
 fx_check $? "A4. -j 4: FAIL>0 exits 1 (got exit $MIX_RC)"

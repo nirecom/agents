@@ -213,6 +213,11 @@ fx_new_root() {
     # Omitting this silently disables the ledger in EVERY fixture, which would turn
     # the ledger cases green without any of the behaviour under test being present.
     cp "$FX_REPO_ROOT/bin/lib/run-all-durations.sh" "$root/bin/lib/run-all-durations.sh" 2>/dev/null || true
+    # #2501 aggregation lib, copied when present so a runner that sources it next to itself keeps working.
+    # The launcher stays the repo's (via RUN_ALL_REGISTRY_LIB) so {wrapper} resolves against the real checkout.
+    if [ -f "$FX_REPO_ROOT/bin/lib/run-all-report.sh" ]; then
+        cp "$FX_REPO_ROOT/bin/lib/run-all-report.sh" "$root/bin/lib/run-all-report.sh"
+    fi
     # Same hazard for the #2079 migration module: without it the fixture silently skips migration.
     cp "$FX_REPO_ROOT/bin/lib/run-all-ledger-migrate.sh" "$root/bin/lib/run-all-ledger-migrate.sh" 2>/dev/null || true
     # ... and for #2079 S7b consolidation: without it the fixture silently never consolidates.

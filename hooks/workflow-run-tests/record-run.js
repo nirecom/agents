@@ -6,15 +6,16 @@
 
 const { markStep, readState } = require("../workflow-state");
 const { isContractTrusted, resolveRunOutcome } = require("./outcome");
+const { demotionReason, demotionMessage } = require("./demotion");
 const { stampTestFailureRisk } = require("./test-failure-risk");
 
-// Baseline evidence (#2431) belongs to ONE observed failing run: any new run
-// clears it, so a later completion can never inherit an older classification.
-const BASELINE_TOMBSTONES = { baseline_classification: null, completion_basis: null };
-
-const DEMOTION_HINT =
-  "Completion requires tests/run-all.sh (or the worker-dispatch test-runner) " +
-  "and exactly one valid RUN_CONTRACT line in its output.";
+// Evidence that belongs to ONE observed run: baseline (#2431) and an UNRUNNABLE accept
+// (#2501 D5-7). Any new run clears it, so a later state never inherits an older verdict.
+const RUN_TOMBSTONES = {
+  baseline_classification: null,
+  completion_basis: null,
+  unrunnable_accept_reason: null,
+};
 
 // outcome_source names the outcome file a record came from (null on stdout);
 // dispatch_unsettled names a dispatch whose outcome has not arrived yet.
@@ -29,7 +30,9 @@ function recordFailedExit(r) {
     trigger_command: r.triggerCommand,
     run_outcome: r.runOutcome,
     failing_tests: r.failingTests,
-    ...BASELINE_TOMBSTONES,
+    unrunnable_count: r.unrunnableCount,
+    unrunnable_runtimes: null,
+    ...RUN_TOMBSTONES,
     ...sourceFields(r.source, r.unsettledStem),
   });
   // #2430: a red suite outside the red-expected steps is a handoff risk. Never throws.
@@ -38,17 +41,21 @@ function recordFailedExit(r) {
 }
 
 // Returns the human-facing diagnostic; nothing reads it back as a judgement input.
+// Exit 77 is "nothing passed" (all skipped or unrunnable), not a failure, so it demotes here.
 function recordDemotion(r) {
   markStep(r.sessionId, "run_tests", "pending", {
     last_run_failed: false,
+    ...(r.exitCode === 77 ? { last_exit_code: 77 } : {}),
     contract_absent: r.contractAbsent,
     trigger_command: r.triggerCommand,
     run_outcome: r.runOutcome,
     failing_tests: r.failingTests,
-    ...BASELINE_TOMBSTONES,
+    unrunnable_count: r.unrunnableCount,
+    unrunnable_runtimes: r.reason === "contract-unrunnable" ? r.unrunnableRuntimes : null,
+    ...RUN_TOMBSTONES,
     ...sourceFields(r.source, r.unsettledStem),
   });
-  return `run_tests demoted to pending (${r.reason}). ${DEMOTION_HINT}`;
+  return demotionMessage(r.reason, r.contract);
 }
 
 // The PR #1165 guard: complete only once write_tests is complete or skipped.
@@ -64,7 +71,9 @@ function recordPass(r) {
     trigger_command: null,
     run_outcome: "pass",
     failing_tests: null,
-    ...BASELINE_TOMBSTONES,
+    unrunnable_count: null,
+    unrunnable_runtimes: null,
+    ...RUN_TOMBSTONES,
     ...sourceFields(r.source, null),
   }, { origin: "workflow-run-tests-auto-detect" });
   return null;
@@ -74,19 +83,31 @@ function recordPass(r) {
 function recordUnsettled({ sessionId, stem, triggerCommand }) {
   return recordDemotion({
     sessionId,
+    exitCode: null,
+    contract: null,
     contractAbsent: null,
     triggerCommand,
     runOutcome: null,
     failingTests: null,
+    unrunnableCount: null,
+    unrunnableRuntimes: null,
     source: null,
     unsettledStem: stem,
     reason: "dispatch-unsettled",
   });
 }
 
-function defaultReason(input) {
-  if (input.vetoed === true) return "worker-status-veto";
-  return input.contract === null || input.contract === undefined ? "contract-absent" : "contract-invalid";
+// Only a current-shape contract can say how many selected tests never ran: a legacy one
+// counted a missing runtime as SKIP. bin/run-tests-baseline reads the count.
+function unrunnableCountOf(input, contract) {
+  const readable = input.ambiguous !== true && input.attributed === true && contract !== null;
+  return readable && contract.shape === "current" ? contract.unrunnable : null;
+}
+
+// Green needs a trusted current-shape contract with no failure and no unrunnable test.
+function isGreen(input, contract) {
+  return isContractTrusted(input) && contract.shape === "current"
+    && contract.fail === 0 && contract.unrunnable === 0;
 }
 
 // -> the systemMessage to surface, or null. `unsettledStem` blocks completion:
@@ -96,23 +117,36 @@ function recordRun(r) {
   const input = r.outcomeInput || {};
   const contract = input.contract === undefined ? null : input.contract;
   const unsettledStem = r.unsettledStem || null;
+  const settled = unsettledStem === null;
   const base = {
     sessionId: r.sessionId,
     exitCode: r.exitCode,
+    contract,
     triggerCommand: r.triggerCommand,
-    runOutcome: unsettledStem === null ? resolveRunOutcome(input) : null,
-    failingTests: unsettledStem === null && r.failingTests !== undefined ? r.failingTests : null,
+    runOutcome: settled ? resolveRunOutcome(input) : null,
+    failingTests: settled && r.failingTests !== undefined ? r.failingTests : null,
+    unrunnableCount: settled ? unrunnableCountOf(input, contract) : null,
+    unrunnableRuntimes: r.unrunnableRuntimes === undefined ? null : r.unrunnableRuntimes,
     source: r.source || null,
     unsettledStem,
     stampRisk: r.stampRisk === true,
     contractAbsent: r.contractAbsent === undefined ? contract === null : r.contractAbsent,
   };
-  if (r.exitCode !== 0) return recordFailedExit(base);
-  if (unsettledStem !== null) return recordDemotion(Object.assign(base, { reason: "dispatch-unsettled" }));
-  if (!(isContractTrusted(input) && contract.fail === 0)) {
-    return recordDemotion(Object.assign(base, { reason: r.reason || defaultReason(input) }));
+  if (r.exitCode !== 0 && r.exitCode !== 77) return recordFailedExit(base);
+  if (!settled) return recordDemotion(Object.assign(base, { reason: "dispatch-unsettled" }));
+  if (r.exitCode !== 0 || !isGreen(input, contract)) {
+    const reason = r.reason || demotionReason({
+      hasProvenance: true,
+      ambiguous: input.ambiguous === true,
+      attributed: input.attributed === true,
+      contract,
+      contractMiss: null,
+      vetoed: input.vetoed === true,
+      workerStatus: input.workerStatus === undefined ? null : input.workerStatus,
+    });
+    return recordDemotion(Object.assign(base, { reason }));
   }
   return recordPass(base);
 }
 
-module.exports = { BASELINE_TOMBSTONES, recordRun, recordUnsettled };
+module.exports = { RUN_TOMBSTONES, recordRun, recordUnsettled };

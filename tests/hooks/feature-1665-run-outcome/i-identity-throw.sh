@@ -87,7 +87,7 @@ catch (e) { process.stdout.write("threw"); }
     local sid2="f1665-i2"
     seed_step "$sid2" write_tests complete
     seed_step "$sid2" run_tests complete
-    drive_hook "$RUNALL_CMD" 0 "$sid2" "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$poison" >/dev/null
+    drive_hook "$RUNALL_CMD" 0 "$sid2" "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$poison" >/dev/null
     assert_ne "I2/not-completed-on-unverifiable-identity" "complete" \
         "$(step_field "$sid2" run_tests status)"
     assert_eq "I2/outcome-withheld" "(absent)" "$(step_field "$sid2" run_tests run_outcome)"
@@ -96,7 +96,7 @@ catch (e) { process.stdout.write("threw"); }
     local sid3="f1665-i3"
     seed_step "$sid3" write_tests complete
     seed_step "$sid3" run_tests pending run_outcome pass
-    drive_hook "$RUNALL_CMD" 1 "$sid3" "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5" "$poison" >/dev/null
+    drive_hook "$RUNALL_CMD" 1 "$sid3" "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0" "$poison" >/dev/null
     assert_eq "I3/stale-outcome-cleared" "(absent)" "$(step_field "$sid3" run_tests run_outcome)"
 
     # --- I4: the hook still exits cleanly (fail-open preserved) -------------

@@ -3,8 +3,8 @@
 # const NAME = /regex/; declarations one at a time with /(?!)/ and verifies the test FAILs.
 # Usage: mutation-probe.sh [--help] [--test-cmd CMD] [--threshold PCT] <target-js-file>
 # Exit: 0 score meets threshold / 1 below threshold or no constants found /
-#       2 usage error, file not found, unreadable registry, or a mutant not run /
-#       77 the auto-detected test's launch.requires tool is not on PATH (nothing mutated)
+#       2 usage error, file not found, unreadable registry, or a mutant not run
+#         (a missing runtime surfaces as UNRUNNABLE -> NOT RUN)
 
 set -uo pipefail
 
@@ -26,8 +26,7 @@ Exit codes:
   0 = mutation score meets threshold
   1 = mutation score below threshold or no regex constants found
   2 = usage error, target file not found, unreadable test language registry,
-      or a mutant whose test was not launched (NOT RUN; no score)
-  77 = the auto-detected test needs a tool that is not on PATH (nothing mutated)
+      or a mutant whose test was not launched or not observed (NOT RUN; no score)
 
 Partial coverage: only single-line const NAME = /regex/; form is handled.
 Multi-line forms and WRITE_PATTERNS arrays are excluded (T1-E2/Stryker target).
@@ -130,10 +129,7 @@ if [[ -z "$TEST_CMD" ]]; then
             [[ -n "$found_test" ]] && break
         done < <(tlr_globs supported)
         if [[ -n "$found_test" ]]; then
-            if tlr_match "$found_test" && _tlr_get "$TLR_ID" launch.requires && ! command -v "$_TLR_V" >/dev/null 2>&1; then
-                echo "SKIP: $_TLR_V not on PATH (mutation probe not run)"
-                exit 77
-            fi
+            # A missing runtime is the launcher's to report (UNRUNNABLE -> NOT RUN below).
             # shellcheck source=lib/run-all-launch.sh
             [[ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh" ]] && . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh"
             declare -F run_all_exec >/dev/null || run_all_exec() { tlr_exec_plain "$@"; }
@@ -187,7 +183,7 @@ for match in "${MATCHES[@]}"; do
     # Auto-detect case: use array to avoid quote-injection (M1 security fix)
     # --test-cmd case: trusted operator input, bash -c is acceptable
     test_rc=0
-    unset RUN_ALL_EXEC_LAUNCHED
+    unset RUN_ALL_EXEC_LAUNCHED RUN_ALL_EXEC_STATE
     if $USE_ARGV; then
         "${TEST_CMD_ARGV[@]}" >/dev/null 2>&1 || test_rc=$?
     else
@@ -197,16 +193,28 @@ for match in "${MATCHES[@]}"; do
     # Restore from backup
     mv "$BACKUP" "$TARGET_ABS"
 
-    # A launcher that leaves RUN_ALL_EXEC_LAUNCHED unset is taken to have launched.
+    # Via the launcher its state decides: PASS -> LIVE, FAIL / TIMEOUT -> KILLED, anything
+    # else (SKIP, UNRUNNABLE, UNSUPPORTED, not launched) -> NOT RUN. A launcher that sets no
+    # state falls back to the exit code (77 is a skip, so NOT RUN).
+    verdict=LIVE
     if $VIA_EXEC && [[ "${RUN_ALL_EXEC_LAUNCHED:-1}" == 0 ]]; then
-        echo "NOT RUN: $const_name (line $lineno — test not launched)"
-        NOT_RUN=$((NOT_RUN + 1))
+        verdict="NOT RUN:test not launched"
+    elif $VIA_EXEC && [[ -n "${RUN_ALL_EXEC_STATE:-}" ]]; then
+        case "$RUN_ALL_EXEC_STATE" in
+            PASS) verdict=LIVE ;;
+            FAIL|TIMEOUT) verdict=KILLED ;;
+            *) verdict="NOT RUN:test state ${RUN_ALL_EXEC_STATE}" ;;
+        esac
+    elif $VIA_EXEC && [[ $test_rc -eq 77 ]]; then
+        verdict="NOT RUN:test skipped"
     elif [[ $test_rc -ne 0 ]]; then
-        echo "KILLED: $const_name (line $lineno)"
-        KILLED=$((KILLED + 1))
-    else
-        echo "LIVE:   $const_name (line $lineno — coverage gap)"
+        verdict=KILLED
     fi
+    case "$verdict" in
+        KILLED) echo "KILLED: $const_name (line $lineno)"; KILLED=$((KILLED + 1)) ;;
+        LIVE) echo "LIVE:   $const_name (line $lineno — coverage gap)" ;;
+        *) echo "NOT RUN: $const_name (line $lineno — ${verdict#NOT RUN:})"; NOT_RUN=$((NOT_RUN + 1)) ;;
+    esac
 done
 
 if [[ $TOTAL -eq 0 ]]; then
@@ -216,7 +224,7 @@ if [[ $TOTAL -eq 0 ]]; then
 fi
 
 if [[ $NOT_RUN -gt 0 ]]; then
-    echo "ERROR: $NOT_RUN of $TOTAL mutant(s) not run (test not launched); no score" >&2
+    echo "ERROR: $NOT_RUN of $TOTAL mutant(s) not run (test not launched or not observed); no score" >&2
     exit 2
 fi
 

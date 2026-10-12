@@ -81,7 +81,7 @@ f2544_fail_outcome() { f2544_probe outcome "$1" "$2" fail 2 1 "[\"$F2544_FAILING
 
 # f2544_worker_yaml <status> — the dispatcher's rendered stdout shape, contract first.
 f2544_worker_yaml() {
-  printf 'RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9\n'
+  printf 'RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0\n'
   printf 'status: %s\nexit_code: 0\nduration_seconds: 4\n' "$1"
   printf "summary: 'worker run'\nfailing_tests: []\nlog_tail: |\n  PASS: alpha\n"
 }

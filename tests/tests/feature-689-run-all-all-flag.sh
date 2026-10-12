@@ -119,6 +119,14 @@ make_fixture_repo() {
     local dir="$1"
     make_fixture_tests "$dir"
     cp "$RUN_ALL" "$dir/tests/run-all"
+    # #2501 report/classify/timed-exec libs resolve from <dir>/bin/lib; copied when present.
+    # run-all-launch.sh is NOT copied: without its sibling registry loader it would return 2.
+    local lib
+    mkdir -p "$dir/bin/lib"
+    for lib in run-all-report.sh run-all-classify.sh timed-exec.sh; do
+        [ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/$lib" ] && cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/$lib" "$dir/bin/lib/$lib"
+    done
+    return 0
 }
 
 # tests/run-all.sh honours an inherited TESTS_DIR only once /write-code lands
@@ -147,11 +155,11 @@ test_C1_all_flag_iterates() {
     out="$(TESTS_DIR="$FX/tests" run_with_timeout 60 bash "$RUN_ALL" --all 2>&1)"
     rc=$?
     dispatch="$(count_lines '^(PASS|FAIL|SKIP): ' "$out")"
-    contract="$(count_lines '^RUN_CONTRACT: PASS=2 FAIL=1 SKIP=1 EXECUTED=4$' "$out")"
+    contract="$(count_lines '^RUN_CONTRACT: PASS=2 FAIL=1 SKIP=1 EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0$' "$out")"
     if [ "$dispatch" = "4" ] && [ "$contract" = "1" ] && [ "$rc" = "1" ]; then
         pass "C1_all_flag_iterates: --all swept exactly the 4 fixture tests (rc=$rc)"
     else
-        fail "C1_all_flag_iterates: dispatch=$dispatch contract=$contract rc=$rc (want 4 verdict lines, one contract line PASS=2 FAIL=1 SKIP=1 EXECUTED=4, rc=1)"
+        fail "C1_all_flag_iterates: dispatch=$dispatch contract=$contract rc=$rc (want 4 verdict lines, one contract line PASS=2 FAIL=1 SKIP=1 EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0, rc=1)"
         diag "$out"
     fi
 }
@@ -184,7 +192,7 @@ test_C3_default_excludes_archive() {
     local out rc
     out="$(TESTS_DIR="$FX/tests" run_with_timeout 60 bash "$RUN_ALL" 2>&1)"
     rc=$?
-    if ! has_line 'MARKER_ARCHIVE_LEAKED' "$out" && has_line 'EXECUTED=4$' "$out"; then
+    if ! has_line 'MARKER_ARCHIVE_LEAKED' "$out" && has_line 'EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0$' "$out"; then
         pass "C3_default_excludes_archive: default sweep ran the 4 bin/ fixture tests and skipped _archive/"
     else
         fail "C3_default_excludes_archive: archive sentinel leaked or EXECUTED was not 4 (rc=$rc)"
@@ -192,7 +200,7 @@ test_C3_default_excludes_archive() {
     fi
 }
 
-# C4(a): a TESTS_DIR pointing at a non-existent directory sweeps nothing.
+# C4(a): a TESTS_DIR pointing at a non-existent directory sweeps nothing (zero selected → 77, #2501).
 test_C4a_missing_tests_dir() {
     if ! tests_dir_override_supported; then
         fail "C4a_missing_tests_dir: $MISSING_OVERRIDE"
@@ -201,10 +209,10 @@ test_C4a_missing_tests_dir() {
     local out rc
     out="$(TESTS_DIR="$TMPROOT/does-not-exist" run_with_timeout 60 bash "$RUN_ALL" --all 2>&1)"
     rc=$?
-    if has_line 'EXECUTED=0$' "$out" && [ "$rc" = "0" ]; then
-        pass "C4a_missing_tests_dir: non-existent TESTS_DIR executes nothing and exits 0"
+    if has_line 'EXECUTED=0 UNRUNNABLE=0 TIMEOUT=0$' "$out" && [ "$rc" = "77" ]; then
+        pass "C4a_missing_tests_dir: non-existent TESTS_DIR executes nothing and exits 77"
     else
-        fail "C4a_missing_tests_dir: rc=$rc (want an EXECUTED=0 contract line and rc=0)"
+        fail "C4a_missing_tests_dir: rc=$rc (want an EXECUTED=0 contract line and rc=77)"
         diag "$out"
     fi
 }
@@ -218,10 +226,10 @@ test_C4b_default_from_agents_dir() {
     rc=$?
     unset_out="$(unset TESTS_DIR; run_with_timeout 60 bash "$FIXTURE_RUNNER" --all 2>&1)"
     unset_rc=$?
-    has_line 'EXECUTED=4$' "$out" || ok=0
+    has_line 'EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0$' "$out" || ok=0
     has_line 'MARKER_T1' "$out" || ok=0
     [ "$rc" = "1" ] || ok=0
-    has_line 'EXECUTED=4$' "$unset_out" || ok=0
+    has_line 'EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0$' "$unset_out" || ok=0
     has_line 'MARKER_T1' "$unset_out" || ok=0
     [ "$unset_rc" = "1" ] || ok=0
     # Mechanical proof that the repository's own suite was not swept.
@@ -378,7 +386,7 @@ test_C7_ambient_sanitized() {
     hostile_out="$(run_with_timeout 60 bash "$FIXTURE_RUNNER" --all 2>&1)"
     local hostile_rc=$?
     unset TEST_MAX_JOBS_PER_RUN RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
-    has_line 'EXECUTED=4$' "$hostile_out" || ok=0
+    has_line 'EXECUTED=4 UNRUNNABLE=0 TIMEOUT=0$' "$hostile_out" || ok=0
     has_line 'MARKER_T1' "$hostile_out" || ok=0
     [ "$hostile_rc" = "1" ] || ok=0
     if [ "$ok" = "1" ]; then
@@ -425,10 +433,10 @@ test_C8_not_launched_unsupported_not_counted() {
     [ "$(count_lines '^(PASS|FAIL|SKIP): .*c\.fakesuite' "$out")" = "0" ] || ok=0
     has_fixed "FAIL: $x78 (exit 78)" "$out" || ok=0
     has_fixed "PASS: $okt" "$out" || ok=0
-    has_line '^RUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2$' "$out" || ok=0
+    has_line '^RUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0$' "$out" || ok=0
     [ "$rc" = "1" ] || ok=0
     has_fixed "UNSUPPORTED: $lone (language: fake-suite; no suite root fake.root)" "$ctl_out" || ok=0
-    has_line '^RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1$' "$ctl_out" || ok=0
+    has_line '^RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0$' "$ctl_out" || ok=0
     [ "$ctl_rc" = "0" ] || ok=0
     if [ "$ok" = "1" ]; then
         pass "C8_not_launched_unsupported_not_counted: declined file is UNSUPPORTED and uncounted; launched exit 78 is FAIL (rc=$rc, control rc=$ctl_rc)"

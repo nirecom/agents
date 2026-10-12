@@ -7,11 +7,12 @@
 # unsupported-at-base, no ledger record. A launched test exiting 78 itself is an ordinary failure.
 
 run_cli_unsupported_at_base_cases() {
-  local repo="$TMPROOT/repo-unsup" t_uns="tests/bin/test-unsup.js" t_78="tests/bin/test-exit78.sh"
+  local repo="$TMPROOT/repo-unsup" t_uns="tests/bin/test-unsup.test.ts" t_78="tests/bin/test-exit78.sh"
   local cache base logdir n_uns idx f
   mk_fixture_repo "$repo" >/dev/null
   git -C "$repo" checkout -q main
-  # .js is recognized-only in the registry, so run_all_exec reports UNSUPPORTED and never runs it.
+  # *.test.ts is recognized-only (test-naming-convention; js is supported since #2501), so
+  # run_all_exec reports UNSUPPORTED and never runs it.
   printf 'process.exit(1);\n' > "$repo/$t_uns"
   printf '#!/usr/bin/env bash\nexit 78\n' > "$repo/$t_78"
   chmod +x "$repo/$t_78"
@@ -67,7 +68,7 @@ run_cli_unsupported_at_base_cases() {
     done
   fi
   if [ "$n_uns" -eq 1 ] && grep -qF "UNSUPPORTED: " "$logdir/$idx.out" 2>/dev/null \
-    && grep -qF "test-unsup.js" "$logdir/$idx.out" 2>/dev/null; then
+    && grep -qF "test-unsup.test.ts" "$logdir/$idx.out" 2>/dev/null; then
     pass "C3-unsupported-at-base: one .unsupported marker, for the not-launched test only"
   else
     fail "C3-unsupported-at-base: expected one .unsupported marker for $t_uns; logdir=[$logdir] count=$n_uns"

@@ -392,32 +392,24 @@ runner such a line was already a latent hazard; under replay it is guaranteed to
 reach the parent's stdout. Since the downstream parsers require *exactly one* match,
 one such line is enough to break the commit gate.
 
-Replay therefore never uses `cat`. Every captured stream goes through
-`neutralize_stream`, a single awk process that prefixes `[run-all:neutralized] ` onto
-any line matching `^[ \t]*RUN_CONTRACT:` — applied to **both** the stdout and the
-stderr replay, because the worker concatenates the two before parsing.
+Replay therefore never uses `cat`: both the stdout and the stderr replay (the worker
+concatenates the two before parsing) go through `neutralize_stream`, which prefixes
+`[run-all:neutralized] ` onto every result-shaped line. The matched line set and its
+owner: [test-result-contract.md](test-result-contract.md) §Neutralization of child output.
 
-Three properties make this the right shape:
-
-- The match condition ignores the numeric fields entirely. It is a deliberate
-  superset of both downstream regexes, so it cannot be narrower than what it must
-  defend.
-- Only a prefix is added; the original bytes remain intact behind it, so a run
-  remains auditable with `grep -n 'run-all:neutralized'`.
-- It cannot break a child's assertions. Only bytes the parent replays *after* the
-  child has already exited are rewritten; every child decides its own verdict inside
-  its own process. The only tests that could be affected are those that run
-  `run-all` as a child and count contract lines in its output.
-
-Two costs are accepted: a file with no trailing newline gains one, and output
-containing NUL bytes is not covered. Both apply uniformly regardless of `-j`, so
-determinism is preserved, and awk costs no extra process over the `cat` it replaced.
+- Only a prefix is added; the original bytes remain behind it, so a run stays
+  auditable with `grep -n 'run-all:neutralized'`.
+- Only bytes replayed *after* the child exited are rewritten, so no child's own
+  assertions change; only tests that run `run-all` as a child and count its lines see it.
+- A file with no trailing newline gains one and NUL bytes are not covered, uniformly
+  at every `-j`, so determinism is preserved.
 
 ## 8. Known residual risks
 
-- **A single hung test occupies a slot indefinitely.** A per-test timeout ceiling is
-  a non-goal here; the mitigations are the stderr progress lines (which name the
-  occupying file) and the whole-run `--deadline`.
+- **A single hung bash test occupies a slot until `--deadline`.** Pester, pytest and
+  js files are killed at their registry `timeoutSeconds` (180 s) and reported
+  `TIMEOUT:`; bash has no per-test limit (deferred to #2557), so the mitigations are the stderr
+  progress lines (which name the occupying file) and the whole-run `--deadline`.
 - **Windows worker timeout, fully in-flight hang.** `--deadline` covers "the suite is
   merely slower than the budget". The one uncovered case is every in-flight job
   hanging at once so that the reap never returns, at which point `spawnSync`'s
@@ -434,44 +426,27 @@ determinism is preserved, and awk costs no extra process over the `cat` it repla
 
 ## 8a. Files the runner recognizes but does not run
 
-Which files are unsupported, and what other tools do with them, is owned by
-`test-language-registry.md` ("Unsupported files"). Such a file never enters the work list. After the last
-test's result line and before the blank line and `Results:`, the runner prints one stdout
-line per such file:
+Which files are unsupported is owned by `test-language-registry.md` ("Unsupported
+files"); such a file never enters the work list. run-all prints its `UNSUPPORTED:` line
+after the last result line, counts it toward nothing, and omits it under `--print-plan`.
+When every named file is unsupported the contract reads `EXECUTED=0` and run-all exits 77;
+`isContractTrusted` rejects it — the same outcome as a pattern that matched nothing.
 
-    UNSUPPORTED: <path> (language: <id>; not run)
-
-`<id>` is `unknown` when no entry matches. The line is not printed under `--print-plan`.
-It matches none of the downstream parsers (`RUN_ALL_FAIL_RE`, the `RUN_CONTRACT:` readers,
-`RESULTS_LINE_RE`), and the file counts toward none of PASS / FAIL / SKIP / EXECUTED, so
-the contract line and the exit code are what they would be without the file. When every
-named file is unsupported the run prints `RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0`
-and exits 0; `isContractTrusted` rejects an EXECUTED=0 contract, so the hook does not
-complete `run_tests` — the same outcome as a pattern that matched nothing.
-
-`run_all_exec <script> <out> <err>` (`bin/lib/run-all-launch.sh`) returns:
-
-| rc | Meaning | `RUN_ALL_EXEC_LAUNCHED` |
-|---|---|---|
-| child rc | the entry's command ran (0 pass, 77 skip, other fail — read as before) | 1 |
-| 77 | `launch.requires` is not on PATH; `SKIP:` line written to `<out>` | 0 |
-| 78 | not launched: no supported entry matches, or a suite file has no suite root; `UNSUPPORTED:` line written to `<out>` | 0 |
-| 2 | no registry readable beside the library | 0 |
-
-`RUN_ALL_EXEC_LAUNCHED` tells a caller whether a 77 or other rc came from a started
-process. run-all sorts unsupported files out before launching, but a suite file whose
-suite root is missing still reaches the launcher: run-all counts that not-launched 78 as
-`UNSUPPORTED` (neither pass, fail nor skip). A 78 with `RUN_ALL_EXEC_LAUNCHED=1` came from
-the test itself and is a FAIL.
+A suite file whose suite root is missing still reaches the launcher; run-all counts that
+not-launched 78 as `UNSUPPORTED`, while a 78 with `RUN_ALL_EXEC_LAUNCHED=1` came from the
+test itself and is a FAIL. A launcher that could not set a test up at all (rc 2) is a FAIL
+too, so the run exits non-zero. The full exit-code / state table, the result directory and
+every report line: [test-result-contract.md](test-result-contract.md).
 
 ## 9. Where things live
 
 | Path | Role |
 |---|---|
-| `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, `neutralize_stream`, process-group reaping, bounded abort, max-jobs-per-run resolution, LPT sort, duration measurement |
+| `tests/run-all.sh` | Scheduler, argument surface, serial barrier, progress, `--print-plan`, `--deadline`, replay, process-group reaping, bounded abort, max-jobs-per-run resolution, LPT sort, duration measurement |
 | `bin/lib/run-all-parallelism.sh` | SSOT for the measured record's schema and non-evaluating parser, host identity, OS attribute, and both limits' `.env` lookup; sourced, never executed |
 | `bin/lib/run-all-durations.sh` | SSOT for the per-test duration ledger schema, key/tier computation, and the append-only segment reader/writer; sourced, never executed |
-| `bin/lib/run-all-launch.sh` | Per-file launch as the matched test language registry entry's `launch` says (`test-language-registry.md`); SKIP 77 when `launch.requires` is absent, 78 when not launched; and the per-run state-dir pin; sourced, never executed |
+| `bin/lib/run-all-launch.sh` | Per-file launch as the matched registry entry's `launch` says (`test-language-registry.md`), and the per-run state-dir pin; sourced, never executed |
+| `bin/lib/run-all-classify.sh`, `bin/lib/run-all-report.sh`, `bin/lib/timed-exec.sh` | Unit state, report lines and `neutralize_stream`, per-file timeout ([test-result-contract.md](test-result-contract.md)); sourced, never executed |
 | `bin/lib/run-all-ledger-migrate.sh` | Time-limited carry-over of pre-#2079 duration and baseline segments; sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool (modules in `bin/calibrate-test-parallelism/`); unreachable from a normal run |
 | `bin/lib/test-host-lanes.sh` | Max jobs per host, the host width rule, and the lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed |

@@ -196,9 +196,9 @@ bg_batch_run() {
 # bg_batched <table-fn> [args] -- see BATCHED TABLES. bg_batched_stdin also replays the
 # function's stdin (a heredoc table) into both passes.
 bg_batched() {
-    local p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
-    BG_PREFETCH=1; "$@" > /dev/null 2>&1; BG_PREFETCH=0
-    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    local r="$ROWS"
+    BG_PREFETCH=1; harness_discard_pass "$@"; BG_PREFETCH=0
+    ROWS="$r"
     bg_batch_run "$1"
     "$@"
     BG_CACHE=()
@@ -207,9 +207,9 @@ bg_batched_stdin() {
     local buf=""
     IFS= read -r -d '' buf || true
     printf '%s' "$buf" > "$BG_BATCH_STDIN"
-    local p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
-    BG_PREFETCH=1; "$@" < "$BG_BATCH_STDIN" > /dev/null 2>&1; BG_PREFETCH=0
-    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    local r="$ROWS"
+    BG_PREFETCH=1; harness_discard_pass "$@" < "$BG_BATCH_STDIN"; BG_PREFETCH=0
+    ROWS="$r"
     bg_batch_run "$1"
     "$@" < "$BG_BATCH_STDIN"
     BG_CACHE=()

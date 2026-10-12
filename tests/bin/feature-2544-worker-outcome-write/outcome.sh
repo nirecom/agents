@@ -38,7 +38,7 @@ group_outcome_normal() {
     dispatch test-runner "$p"
     assert_eq "normal/exit-0" "0" "$DRC"
     assert_eq "normal/stdout-status" "pass" "$(field_of status)"
-    assert_eq "normal/stdout-leads-with-run-contract" "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2" "$(printf '%s\n' "$DOUT" | head -1)"
+    assert_eq "normal/stdout-leads-with-run-contract" "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0" "$(printf '%s\n' "$DOUT" | head -1)"
     one_outcome "normal" "$sid" "$stem"
     f="$(outcome_fields "$sid" "$stem")"
     outcome_identity "normal" "$sid" "$stem" "$f"
@@ -48,7 +48,7 @@ group_outcome_normal() {
     assert_eq "normal/failing-tests-empty" "[]" "$(kv "$f" failing_tests)"
     assert_eq "normal/log-tail-recorded" "yes" "$(kv "$f" log_tail_present)"
     assert_eq "normal/summary-is-the-stdout-summary" "$(field_of summary)" "$(kv "$f" summary)"
-    assert_eq "normal/run-contract-recorded" '{"pass":2,"fail":0,"skip":0,"executed":2}' "$(kv "$f" run_contract)"
+    assert_eq "normal/run-contract-recorded" '{"pass":2,"fail":0,"skip":0,"executed":2,"unrunnable":0,"timeout":0}' "$(kv "$f" run_contract)"
     assert_eq "normal/stderr-quiet" "" "$DERR"
 }
 

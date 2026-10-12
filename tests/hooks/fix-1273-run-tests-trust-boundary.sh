@@ -145,7 +145,7 @@ failing_tests:
 log_tail: |
   Running tests/broken.sh
   FAIL: assertion 3 — want=1 got=0
-  RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+  RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
 
 SID="h1forged-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
@@ -168,7 +168,7 @@ summary: 'ok'
 failing_tests: []
 log_tail: |
   Some suite echoed a contract into its own stdout:
-  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9"
+  RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0"
 assert_eq "H1/log-tail-only-contract-must-not-complete" "pending" "$(run_tests_status "$SID")"
 
 # H1-c — CONTROL, opposite verdict (CPR-ORTH / test-design classifier rule).
@@ -177,7 +177,7 @@ assert_eq "H1/log-tail-only-contract-must-not-complete" "pending" "$(run_tests_s
 # silently break the only green path there is.
 SID="h1ctl-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
-drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9
+drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=9 FAIL=0 SKIP=0 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0
 status: pass
 exit_code: 0
 duration_seconds: 2
@@ -202,7 +202,7 @@ assert_eq "H1/control-authoritative-header-still-completes" "complete" "$(run_te
 SID="h1bstatus-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 seed_step "$SID" "run_tests" "complete"
-drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3
+drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0
 status: fail
 exit_code: 1
 duration_seconds: 7
@@ -219,7 +219,7 @@ assert_eq "H1b/worker-status-fail-must-veto-clean-contract" "pending" "$(run_tes
 SID="h1brunerr-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 seed_step "$SID" "run_tests" "complete"
-drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3
+drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0
 status: runner-error
 exit_code: -1
 duration_seconds: 0
@@ -233,7 +233,7 @@ assert_eq "H1b/runner-error-status-must-veto-clean-contract" "pending" "$(run_te
 # contract is the sanctioned green path and must stay green.
 SID="h1bctl-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
-drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3
+drive_hook "$DISPATCH_CMD" 0 "$SID" "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0
 status: pass
 exit_code: 0
 duration_seconds: 7
@@ -261,8 +261,8 @@ assert_eq "H1b/control-status-pass-completes" "complete" "$(run_tests_status "$S
 # ===========================================================================
 SPOOF="$TMPD/spoof"
 mkdir -p "$SPOOF/tests"
-printf '#!/usr/bin/env bash\necho "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"\n' > "$SPOOF/tests/run-all.sh"
-printf 'process.stdout.write("RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1\\n");\n' > "$SPOOF/worker-dispatch.js"
+printf '#!/usr/bin/env bash\necho "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"\n' > "$SPOOF/tests/run-all.sh"
+printf 'process.stdout.write("RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0\\n");\n' > "$SPOOF/worker-dispatch.js"
 SPOOF_WIN="$(nodepath "$SPOOF")"
 
 # provenance <command> → run-all | worker-dispatch | (none) | ERR
@@ -296,7 +296,7 @@ assert_eq "H2/spoofed-dispatcher-path-must-not-be-trusted" "(none)" \
 SID="h2spoof-$$-$RANDOM"
 seed_step "$SID" "write_tests" "complete"
 drive_hook "bash $SPOOF_WIN/tests/run-all.sh" 0 "$SID" \
-    "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1"
+    "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
 assert_eq "H2/spoofed-emitter-must-not-complete-run-tests" "pending" "$(run_tests_status "$SID")"
 
 # ===========================================================================

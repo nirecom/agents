@@ -18,8 +18,8 @@ PLANS_RAW="$TMPD/plans"
 CANNED="$TMPD/canned.json"
 CALLLOG="$TMPD/calls.jsonl"
 
-PASS_CANNED='[{"status":0,"stdout":"Results: PASS=2 FAIL=0 SKIP=0\nRUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2\n"}]'
-FAIL_CANNED='[{"status":1,"stdout":"FAIL: tests/bin/a.sh (exit 1)\nResults: PASS=1 FAIL=1 SKIP=0\nRUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2\n"}]'
+PASS_CANNED='[{"status":0,"stdout":"Results: PASS=2 FAIL=0 SKIP=0\nRUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0\n"}]'
+FAIL_CANNED='[{"status":1,"stdout":"FAIL: tests/bin/a.sh (exit 1)\nResults: PASS=1 FAIL=1 SKIP=0\nRUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0\n"}]'
 FINALIZE_CANNED='[{"stdout":"STATUS=init_done\nOWNER_REPO=o/r\n"}]'
 
 assert_eq() {

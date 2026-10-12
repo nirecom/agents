@@ -106,9 +106,13 @@ if (inv.sessionForm || inv.supervisorArg) {
   if (fs.existsSync(supervisorPath)) supervisorState = readJson(supervisorPath);
 }
 
+// #2501 D5-7: a run_tests completed by the UNRUNNABLE accept must say so. Fail-open: null.
+const { readUnrunnableAcceptNote } = require(path.resolve(__dirname, "../hooks/lib/run-tests-unrunnable-note"));
+const runTestsNote = readUnrunnableAcceptNote(sessionId);
+
 try {
   const { renderFinalReport } = require(path.resolve(__dirname, "../hooks/lib/final-report-schema"));
-  const result = renderFinalReport(sessionId, { env, outcome, closesIssues, notesSections, supervisorState });
+  const result = renderFinalReport(sessionId, { env, outcome, closesIssues, notesSections, supervisorState, runTestsNote });
   process.stdout.write(result);
 } catch (err) {
   fail(`render-final-report: ${err.message}\n`);

@@ -12,10 +12,13 @@ A tool decides with two inputs: placement (its own) × language (the table).
 | Path | Role |
 |---|---|
 | `hooks/lib/test-language-registry.json` | The table. Pure data, no code |
-| `hooks/lib/test-language-registry.js` | Reader for Node: load, validate, match, glob conversion, shell dump |
+| `hooks/lib/test-language-registry.js` | Reader for Node: load, match, glob conversion, shell dump |
+| `hooks/lib/test-language-registry/validate.js` | Table validator (`validate(table, repoRoot)`), including the `launch` block rules below |
 | `bin/test-language-registry` | CLI over the reader (`--format shell` / `--format json`, `--file <table>`). Needs the executable bit |
 | `bin/lib/test-language-registry.sh` | Bash loader (source only). Calls the CLI once per process and answers from arrays |
+| `bin/lib/test-language-registry-plain.sh` | `tlr_exec_plain`, the fallback launcher when `run-all-launch.sh` is absent |
 | `bin/lib/test-language-parts/<lang>.sh` | A language's parts (e.g. `has_table_driven_sh`, `has_table_driven_js`) |
+| `bin/lib/test-wrappers/` | Language wrappers named by `launch.wrapper` (`pester.ps1`, `pytest.py`, `node.js` + `node-reporter.mjs` + `node-guard.cjs`) |
 
 The table is replaced only by an argument (`loadRegistry(file)`, CLI `--file`, `tlr_load <file>`).
 There is no environment-variable override, so a test using a fixture table can never leak it to a child, and hooks always read the default table.
@@ -26,7 +29,7 @@ Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# T
 
 | Field | Meaning |
 |---|---|
-| `id` | Entry name, `[a-z0-9-]+`. Supported ids equal the kinds `failing-list.js` reports (`bash`, `pester`, `pytest`) |
+| `id` | Entry name, `[a-z0-9-]+`. Supported ids equal the kinds `failing-list.js` reports (`bash`, `pester`, `pytest`, `js`) |
 | `status` | `supported` (run and checked) or `recognized-only` (known to be a test, never run) |
 | `patterns` | File-name patterns (basename only) |
 | `selfIdentifying` | The name alone marks a test, wherever it lives |
@@ -45,10 +48,10 @@ Current entries, in order:
 
 | id | status | patterns | launch |
 |---|---|---|---|
-| `bash` | supported | `*.sh` | file, `bash {path}` |
-| `pester` | supported | `*.Tests.ps1` | file, requires `pwsh`, `Invoke-Pester -Path '{nativePathSq}' -CI`, 180 s |
-| `pytest` | supported | `test_*.py` | file, requires `uv`, `uv run --no-project --with pytest pytest -q {nativePath}`, 180 s |
-| `js` | recognized-only | `*.js` | none |
+| `bash` | supported | `*.sh` | file, `bash {path}`, no per-file timeout |
+| `pester` | supported | `*.Tests.ps1` | file, requires `pwsh`, `pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File {wrapper} -Path {nativePath} -MinVersion {minVersion}`, Pester wrapper `pester.ps1`, `Pester` 5.0, 180 s |
+| `pytest` | supported | `test_*.py` | file, requires `uv`, `uv run --no-project --with pytest>={minVersion} python {wrapper} {nativePath} {minVersion}`, pytest wrapper `pytest.py`, `pytest` 7.0, 180 s |
+| `js` | supported | `*.js` | file, requires `node`, `node {wrapper} {nativePath} {minVersion}`, node wrapper `node.js`, `node` 20.0, 180 s |
 | `test-naming-convention` | recognized-only | `*.test.*`, `*.spec.*`, `*_test.*`, `test_*` | none |
 
 Only `bash` has a case-marker reader and a helper library, so only bash tests are case-marker targets and harness-checked today.
@@ -100,20 +103,34 @@ Shared code separates **capability** (is the field non-null) from **ownership** 
 
 ## Launch
 
-`launch` fields: `unit` (`file` / `suite`), `requires` (a tool on PATH, or null), `prepare` (argv run once before the command, or null), `command` (argv), `timeoutSeconds` (or null), `suiteRootMarker` (required for `suite`).
-Substitutions in `command` / `prepare`: `{path}`, `{nativePath}` (`cygpath -m` when present), `{nativePathSq}` (the same with `'` doubled).
+| Field | Meaning |
+|---|---|
+| `unit` | `file` or `suite` |
+| `requires` | A tool that must be on PATH, or null |
+| `prepare` | argv run before the command on every launch (`file` and `suite` alike), or null |
+| `command` | argv |
+| `wrapper` | Repo-relative language wrapper (no `..`; must exist under the reader's repo root), or null |
+| `minVersion` | `{runtime, version}` (`<major>[.<minor>[.<patch>]]`) the wrapper enforces, or null |
+| `timeoutSeconds` | Positive integer, or null (no per-file limit) |
+| `suiteRootMarker` | Required for `suite` |
 
-`run_all_exec` in `bin/lib/run-all-launch.sh` interprets every entry the same way:
+Placeholders in `command` / `prepare`: `{path}`, `{nativePath}` (`cygpath -m` when present), `{nativePathSq}` (the same with ASCII `'` and U+2018..U+201B doubled), `{wrapper}` (the wrapper's native path; needs `wrapper`), `{minVersion}` (the version string only; needs `minVersion`).
+The test-path placeholders (`{path}`, `{nativePath}`, `{nativePathSq}`) are rejected in `suite` units; `{wrapper}` and `{minVersion}` are allowed there, because they name the launcher's own file and the entry's version. Every string must be free of tabs and newlines (the shell dump is tab-separated). `validate.js` enforces all of this at load time.
 
-1. Load the loader next to itself (its key holds the CLI path, so another checkout's table already in memory is re-read). No loader beside it and none loaded: rc 2.
+`run_all_exec <script> <out> <err> [<resultdir>]` in `bin/lib/run-all-launch.sh` interprets every entry the same way:
+
+1. Source the loader, `run-all-classify.sh` and `timed-exec.sh` next to itself (the loader's key holds the CLI path, so another checkout's table already in memory is re-read). Any missing: rc 2.
 2. Not matched or not supported: write `UNSUPPORTED: <path> (language: <id>; not run)`, rc 78.
-3. `requires` missing from PATH: write `SKIP: <tool> not on PATH`, rc 77.
-4. `file`: substitute and run.
-5. `suite`: find the root by walking up for `suiteRootMarker` (never above the repo root). No root: `UNSUPPORTED: … no suite root <marker>`, rc 78. Otherwise run `prepare` once in the root (its failure is returned and the command is skipped), then `command` in the root; substitutions name the root.
-6. `timeoutSeconds` wraps both `prepare` and `command` with `bin/run-with-timeout.sh`.
+3. `requires` missing from PATH: write the tool name to `<resultdir>/unrunnable` and `UNRUNNABLE: missing <tool>`, rc 79.
+4. `file`: substitute and run. `{wrapper}` resolves, for either unit, to an absolute path under the launcher's own checkout root, so a base checkout runs its own wrapper and a suite's change of directory does not move it. A path starting with `-` is passed as `./-…`.
+5. `suite`: find the root by walking up for `suiteRootMarker` (never above the repo root). No root: `UNSUPPORTED: … no suite root <marker>`, rc 78. Otherwise run in the root; substitutions name the root, and the step 3 lookup of what `prepare` and `command` start with is made from the root, so a root-relative executable (`./runner`) counts as present.
+6. `prepare`, when set, runs before `command` for either unit — once per launch, so once per file for `file` and once per suite for `suite`. Its failure is returned and the command is skipped; the executable it starts with must be on PATH like `requires` (step 3).
+7. `timeoutSeconds`, capped by a caller-set `RUN_ALL_TIMEOUT_SECONDS`, is one limit for the unit: `prepare` runs under it with `timed_exec` (`bin/lib/timed-exec.sh`) and `command` under what `prepare` left (nothing left: rc 124, TIMEOUT); null with no cap runs them unwrapped, leaving hangs to the caller's `--deadline`.
+8. The child alone sees `RUN_ALL_RESULT_DIR` / `RUN_ALL_RESULT_OWNER`; `rac_classify` then sets `RUN_ALL_EXEC_STATE` / `_RC` / `_MISSING` and the returned rc.
 
-`RUN_ALL_EXEC_LAUNCHED` is 1 only when a command actually started; `bin/mutation-probe.sh` uses it to report `NOT RUN:` instead of counting a mutant as killed.
-The rc table and how callers read it: [test-runner-parallelism.md](test-runner-parallelism.md) §8a.
+`RUN_ALL_EXEC_LAUNCHED` is 1 only when a command actually started; `bin/mutation-probe.sh` uses it and `RUN_ALL_EXEC_STATE` to report `NOT RUN:` instead of counting a mutant as killed.
+Exit codes, states, the result directory and the report lines: [test-result-contract.md](test-result-contract.md).
+Without `run-all-launch.sh`, `tlr_exec_plain` runs only a bare `bash {path}` file entry with no `requires` or `wrapper`; any other supported entry is rc 2, state FAIL, `not run: … launcher library not found` (a run must not pass over a test it was meant to run), and a file no supported entry matches is rc 78 `UNSUPPORTED: … launcher library not found`.
 
 **Suite dedupe**: `tests/run-all.sh` passes its work list through `tlr_dedupe_suites`, keeping the first file by name per (id, suite root); other files keep their order. The result line names that representative file.
 `bin/run-tests-baseline` launches named tests one by one and does not dedupe: naming two files of one suite runs it twice.
@@ -139,7 +156,7 @@ Always call `node <path-to>/bin/test-language-registry …`; never rely on the s
 
 An unsupported file is never run and never blocks anything: it is reported, and counted as neither pass, fail nor skip.
 
-- `tests/run-all.sh`: by default / `--all`, files directly in a category that match a `recognized-only` entry; when named, any expanded file no supported entry matches. Today this is the three Node tests under `tests/hooks/` (#2501 will run them). The `UNSUPPORTED:` line, its effect on counts and `RUN_CONTRACT:`, and the not-launched rc 78: [test-runner-parallelism.md](test-runner-parallelism.md) §8a.
+- `tests/run-all.sh`: by default / `--all`, files directly in a category that match a `recognized-only` entry; when named, any expanded file no supported entry matches. Since #2501 runs `*.js`, only `test-naming-convention` files remain. The `UNSUPPORTED:` line, its effect on counts and `RUN_CONTRACT:`, and the not-launched rc 78: [test-result-contract.md](test-result-contract.md).
 - `bin/run-tests-baseline`: a test the base checkout's launcher does not launch (rc 78 with `RUN_ALL_EXEC_LAUNCHED=0`) is classified `undetermined` with reason `unsupported-at-base`, and nothing is appended to the base-result ledger (`bin/lib/run-tests-baseline-ledger.sh`).
 - Pre-commit: a staged category-level `recognized-only` file prints `UNSUPPORTED: <path> (language: <id>; not checked)` to stderr; the commit is not blocked.
 ## When the table cannot be read

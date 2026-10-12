@@ -82,8 +82,9 @@ mkdir -p "$LD_DIR/sup/dir.sh" "$LD_DIR/rec"
 for f in z.sh a.sh b.Tests.ps1 a.Tests.ps1 test_b.py test_a.py x.js README.md .sh; do : >"$LD_DIR/sup/$f"; done
 for f in x.js a.test.js foo_test.rb test_q.txt README.md; do : >"$LD_DIR/rec/$f"; done
 list_names() { tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_list_dir "$1" "$2"' "$1" "$2" | sed 's#.*/##' | tr '\n' ' '; }
-assert_eq "supported: $(list_names "$LD_DIR/sup" supported)" "supported: a.sh z.sh a.Tests.ps1 b.Tests.ps1 test_a.py test_b.py "
-assert_eq "recognized-only: $(list_names "$LD_DIR/rec" recognized-only)" "recognized-only: a.test.js x.js foo_test.rb test_q.txt "
+assert_eq "supported: $(list_names "$LD_DIR/sup" supported)" "supported: a.sh z.sh a.Tests.ps1 b.Tests.ps1 test_a.py test_b.py x.js "
+# js is supported (#2501): its files never appear in the recognized-only listing.
+assert_eq "recognized-only: $(list_names "$LD_DIR/rec" recognized-only)" "recognized-only: foo_test.rb test_q.txt "
 mkdir -p "$LD_DIR/empty"
 got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_list_dir "$1" supported; echo "rc=$?"' "$LD_DIR/empty")"
 assert_eq "empty dir: [$got]" "empty dir: [rc=0]"

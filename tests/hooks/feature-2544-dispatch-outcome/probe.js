@@ -44,7 +44,13 @@ function rawEvents(sid) {
   return Array.isArray(raw.events) ? raw.events : [];
 }
 
-function buildOutcome(sid, stem, status, pass, fail, failing) {
+// counts: optional { skip, unrunnable, timeout }, each 0 when absent. EXECUTED stays
+// PASS+FAIL+SKIP, the self-consistency rule of hooks/lib/run-contract.js.
+function buildOutcome(sid, stem, status, pass, fail, failing, counts) {
+  const n = counts && typeof counts === "object" ? counts : {};
+  const skip = Number.isInteger(n.skip) ? n.skip : 0;
+  const unrunnable = Number.isInteger(n.unrunnable) ? n.unrunnable : 0;
+  const timeout = Number.isInteger(n.timeout) ? n.timeout : 0;
   const bytes = fs.readFileSync(controlFile(sid, `${stem}.json`));
   const fields = {
     schema_version: 1,
@@ -57,7 +63,7 @@ function buildOutcome(sid, stem, status, pass, fail, failing) {
     exit_code: status === "pass" ? 0 : 1,
     duration_ms: 1200,
     worker_result: {
-      run_contract: { pass, fail, skip: 0, executed: pass + fail },
+      run_contract: { pass, fail, skip, executed: pass + fail + skip, unrunnable, timeout },
       failing_tests: failing,
       log_tail: ["PASS: alpha"],
       summary: `${status}: ${pass} passed, ${fail} failed`,
@@ -194,7 +200,9 @@ const MODES = {
     fs.writeFileSync(controlFile(a[0], `${a[1]}.json`), `${JSON.stringify(body)}\n`);
   },
   outcome() {
-    const o = buildOutcome(a[0], a[1], a[2], Number(a[3]), Number(a[4]), JSON.parse(a[5] || "[]"));
+    // outcome <sid> <stem> <status> <pass> <fail> [failing-json] [override-json] [counts-json]
+    const counts = a[7] ? JSON.parse(a[7]) : {};
+    const o = buildOutcome(a[0], a[1], a[2], Number(a[3]), Number(a[4]), JSON.parse(a[5] || "[]"), counts);
     const over = a[6] ? JSON.parse(a[6]) : {};
     const merged = Object.assign({}, o, over);
     if (over.worker_result) merged.worker_result = Object.assign({}, o.worker_result, over.worker_result);

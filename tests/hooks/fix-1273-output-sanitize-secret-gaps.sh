@@ -248,8 +248,8 @@ assert_absent "S3/control-slack-token" "xoxb-1234567890-ABCDEFGHIJKL" \
     'curl -d token=xoxb-1234567890-ABCDEFGHIJKL https://slack.com/api/x'
 # CONTROL: a base64-looking blob that is NOT credential material must survive —
 # over-redacting ordinary log output destroys the only diagnostic a human gets.
-assert_present "S3/control-plain-text-untouched" "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3" \
-    'RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3'
+assert_present "S3/control-plain-text-untouched" "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0" \
+    'RUN_CONTRACT: PASS=2 FAIL=0 SKIP=1 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0'
 assert_present "S3/control-commit-sha-untouched" "50b3812" \
     'git show 50b3812 -- tests/run-all.sh'
 

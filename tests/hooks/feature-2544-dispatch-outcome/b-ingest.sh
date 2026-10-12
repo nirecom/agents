@@ -84,6 +84,78 @@ f2544_b_no_test_ran() {
   f2544_eq "B/$tag: control — and outcome_source names that run" "$(f2544_source_stem "$sid")" "$next"
 }
 
+# f2544_b_has <name> <haystack> <needle> — substring assertion on the hook's systemMessage.
+f2544_b_has() {
+  if [[ "$2" == *"$3"* ]]; then pass "$1"
+  else fail "$1" "want substring [$3] got=[$2]"; fi
+}
+
+# f2544_b_unrunnable <tag> <pass> <unrunnable> <exit> <want-last-exit>: the worker's
+# `unrunnable` word over a current contract with UNRUNNABLE>0 (bin/worker-dispatch/
+# workers/test-runner.js statusOf; tests/run-all.sh exits 0 with passes, 77 without).
+# run_tests starts complete so a demotion is observable, not a pending that never moved.
+# The closing control re-runs the same pass count with UNRUNNABLE=0 and must complete.
+f2544_b_unrunnable() {
+  local tag="$1" sid="f2544-b-$1" stem="$F2544_T-1" next="$F2544_T-2" pass_n="$2" unr="$3"
+  local over="{\"exit_code\":$4,\"worker_result\":{\"summary\":\"Missing runtimes: python ($3 files)\"}}"
+  f2544_ready "$sid"
+  f2544_probe seed "$sid" run_tests complete
+  f2544_dispatched "$sid" "$stem"
+  f2544_probe outcome "$sid" "$stem" unrunnable "$pass_n" 0 '[]' "$over" "{\"unrunnable\":$unr}"
+  f2544_eq "B/$tag: control — the outcome carries UNRUNNABLE=$unr" \
+    "$(f2544_probe validate --raw "$(cat "$(f2544_probe file "$sid" "$stem.outcome.json")")")" "ok:$stem"
+  f2544_hook "$sid" "$F2544_UNRELATED_CMD"
+  f2544_ingested "B/$tag: ingested marker written" "$sid" "$stem" || return 0
+  f2544_eq "B/$tag: run_tests is demoted to pending" "$(f2544_status "$sid")" "pending"
+  f2544_b_has "B/$tag: the demotion reason is contract-unrunnable" "$F2544_HOOK_OUT" "(contract-unrunnable)"
+  f2544_b_has "B/$tag: the message names the unrunnable count" "$F2544_HOOK_OUT" "UNRUNNABLE: $unr."
+  f2544_eq "B/$tag: run_outcome is unrunnable" "$(f2544_field "$sid" run_outcome)" "unrunnable"
+  f2544_eq "B/$tag: unrunnable_count is the contract's" "$(f2544_field "$sid" unrunnable_count)" "$unr"
+  f2544_eq "B/$tag: unrunnable_runtimes comes from the summary" "$(f2544_field "$sid" unrunnable_runtimes)" "python"
+  f2544_eq "B/$tag: not recorded as a failed run" "$(f2544_field "$sid" last_run_failed)" "false"
+  f2544_eq "B/$tag: last_exit_code" "$(f2544_field "$sid" last_exit_code)" "$5"
+  f2544_eq "B/$tag: outcome_source names the dispatch" "$(f2544_source_stem "$sid")" "$stem"
+  f2544_hook_times 2 "$sid" "$F2544_UNRELATED_CMD"
+  f2544_eq "B/$tag: later hook calls never complete it" "$(f2544_status "$sid")" "pending"
+
+  f2544_dispatched "$sid" "$next"
+  f2544_probe outcome "$sid" "$next" pass "$((pass_n > 0 ? pass_n : 3))" 0 '[]' '{}' '{"unrunnable":0}'
+  f2544_hook "$sid" "$F2544_UNRELATED_CMD"
+  f2544_eq "B/$tag: control — the same shape with UNRUNNABLE=0 completes" "$(f2544_status "$sid")" "complete"
+  f2544_eq "B/$tag: control — unrunnable_count is cleared" "$(f2544_field "$sid" unrunnable_count)" "absent"
+  f2544_eq "B/$tag: control — unrunnable_runtimes is cleared" "$(f2544_field "$sid" unrunnable_runtimes)" "absent"
+}
+
+# A failing run whose failure is a per-file timeout: TIMEOUT>0 is a failure, not unrunnable.
+f2544_b_timeout_count() {
+  local sid="f2544-b-tocount" stem="$F2544_T-1"
+  f2544_ready "$sid"
+  f2544_probe seed "$sid" run_tests complete
+  f2544_dispatched "$sid" "$stem"
+  f2544_probe outcome "$sid" "$stem" fail 2 1 "[\"$F2544_FAILING_REL\"]" '{}' '{"timeout":1}'
+  f2544_hook "$sid" "$F2544_UNRELATED_CMD"
+  f2544_ingested "B/timeout count: ingested marker written" "$sid" "$stem" || return 0
+  f2544_eq "B/timeout count: run_tests is pending" "$(f2544_status "$sid")" "pending"
+  f2544_eq "B/timeout count: run_outcome is fail" "$(f2544_field "$sid" run_outcome)" "fail"
+  f2544_eq "B/timeout count: recorded as a failed run" "$(f2544_field "$sid" last_run_failed)" "true"
+  f2544_eq "B/timeout count: unrunnable_count is a current-shape 0, not absent" "$(f2544_field "$sid" unrunnable_count)" "0"
+}
+
+# TIMEOUT>FAIL passes the shape validator but is no contract to the strict parser, so a
+# pass word over it reads as contract-absent and never completes.
+f2544_b_timeout_over_fail() {
+  local sid="f2544-b-tooverfail" stem="$F2544_T-1"
+  f2544_ready "$sid"
+  f2544_dispatched "$sid" "$stem"
+  f2544_probe outcome "$sid" "$stem" pass 3 0 '[]' '{}' '{"timeout":1}'
+  f2544_hook "$sid" "$F2544_UNRELATED_CMD"
+  f2544_ingested "B/timeout>fail: the outcome is consumed" "$sid" "$stem" || return 0
+  f2544_ne "B/timeout>fail: a self-inconsistent contract does not complete" "$(f2544_status "$sid")" "complete"
+  f2544_b_has "B/timeout>fail: the demotion reason is contract-absent" "$F2544_HOOK_OUT" "(contract-absent)"
+  f2544_eq "B/timeout>fail: contract_absent is recorded" "$(f2544_field "$sid" contract_absent)" "true"
+  f2544_eq "B/timeout>fail: run_outcome is not recorded" "$(f2544_field "$sid" run_outcome)" "absent"
+}
+
 f2544_b_write_tests_not_settled() {
   local sid="f2544-b-nowt" stem="$F2544_T-1"
   f2544_probe seed "$sid" workflow_init complete
@@ -166,11 +238,27 @@ f2544_b_pass_status_with_failing_contract
 case_end
 
 case_begin "pass-status-with-zero-executed-does-not-complete" "hooks/workflow-run-tests/dispatch-outcome.js"
-f2544_b_no_test_ran "zero-executed" '{"pass":0,"fail":0,"skip":0,"executed":0}'
+f2544_b_no_test_ran "zero-executed" '{"pass":0,"fail":0,"skip":0,"executed":0,"unrunnable":0,"timeout":0}'
 case_end
 
 case_begin "pass-status-with-every-test-skipped-does-not-complete" "hooks/workflow-run-tests/dispatch-outcome.js"
-f2544_b_no_test_ran "all-skipped" '{"pass":0,"fail":0,"skip":4,"executed":4}'
+f2544_b_no_test_ran "all-skipped" '{"pass":0,"fail":0,"skip":4,"executed":4,"unrunnable":0,"timeout":0}'
+case_end
+
+case_begin "unrunnable-outcome-with-passes-demotes-as-contract-unrunnable" "hooks/workflow-run-tests/record-run.js"
+f2544_b_unrunnable "unrunnable-mixed" 3 2 0 absent
+case_end
+
+case_begin "all-unrunnable-outcome-demotes-as-contract-unrunnable" "hooks/workflow-run-tests/record-run.js"
+f2544_b_unrunnable "unrunnable-all" 0 3 77 77
+case_end
+
+case_begin "timeout-count-outcome-is-a-failed-run" "hooks/workflow-run-tests/record-run.js"
+f2544_b_timeout_count
+case_end
+
+case_begin "timeout-over-fail-contract-does-not-complete" "hooks/workflow-run-tests/dispatch-outcome.js"
+f2544_b_timeout_over_fail
 case_end
 
 case_begin "passing-outcome-needs-write-tests-settled" "hooks/workflow-run-tests/record-run.js"

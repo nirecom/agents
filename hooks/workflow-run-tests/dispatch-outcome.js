@@ -17,6 +17,7 @@ const {
   validateOutcome,
 } = require("../lib/worker-outcome-contract");
 const { normalizeCwd } = require("../lib/path-normalize");
+const { parseContractLine, formatContract, runtimeLabels } = require("../lib/run-contract");
 const { workerVerdictVetoes } = require("./outcome");
 const { validateFailingNames } = require("./failing-list");
 const { recordRun, recordUnsettled } = require("./record-run");
@@ -84,9 +85,24 @@ function trustedFailingList(outcome, contract) {
   return names.every((rel) => fs.existsSync(path.join(root, rel))) ? names : null;
 }
 
+// The record's contract re-parsed by the one strict parser, so it carries its shape and a
+// self-inconsistent count is no contract — exactly as the same line on stdout would be.
+function parsedContract(value) {
+  if (value === null || value === undefined) return null;
+  const shape = value.unrunnable !== undefined ? "current" : "legacy";
+  return parseContractLine(formatContract(Object.assign({}, value, { shape })));
+}
+
+// The worker leads its summary with the suite's `Missing runtimes:` text (D5-7).
+const SUMMARY_MISSING_RE = /^Missing runtimes: ([^;\r\n]+)/;
+function summaryRuntimes(summary) {
+  const m = SUMMARY_MISSING_RE.exec(typeof summary === "string" ? summary : "");
+  return m === null ? null : runtimeLabels(m[1]);
+}
+
 function buildIngest(stem, trusted) {
   const o = trusted.outcome;
-  const contract = o.worker_result.run_contract;
+  const contract = parsedContract(o.worker_result.run_contract);
   return {
     stem,
     outcome: o,
@@ -101,6 +117,7 @@ function buildIngest(stem, trusted) {
       workerStatus: o.status,
     },
     failingTests: trustedFailingList(o, contract),
+    unrunnableRuntimes: summaryRuntimes(o.worker_result.summary),
   };
 }
 
@@ -163,6 +180,7 @@ function recordIngest(sessionId, ingest) {
       triggerCommand: `worker-dispatch outcome ${ingest.stem}`,
       outcomeInput: ingest.outcomeInput,
       failingTests: ingest.failingTests,
+      unrunnableRuntimes: ingest.unrunnableRuntimes,
       source: { stem: ingest.stem, payload_sha256: ingest.payloadSha, outcome_sha256: ingest.outcomeSha },
     });
   }

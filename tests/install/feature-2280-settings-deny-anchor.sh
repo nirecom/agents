@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/install/feature-2280-settings-deny-anchor.sh
 # Tests: settings.json
-# Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2
+# Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2, ask, unrunnable, sentinel
 #
 # Run wrapped: bin/run-with-timeout.sh 120 bash tests/install/feature-2280-settings-deny-anchor.sh
 #
@@ -210,14 +210,55 @@ t_retired_readonly_allow() {
 }
 t_retired_readonly_allow
 
+# #2501 D5-7: the UNRUNNABLE accept sentinel completes run_tests without a green run, so it
+# must always prompt (permissions.ask), never auto-run via an allow rule. The node step
+# re-homes permissions.allow / permissions.ask as `deny` arrays in fixture files so the
+# shared matcher (DENY_MATCH_JS) answers both questions, rather than a second copy of it.
+UA_RULE='Bash(echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: *>>")'
+UA_CMD='echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: Pester 5 missing here>>"'
+UA_SPLIT_JS='
+const fs = require("fs");
+const [settingsPath, outDir, rule] = process.argv.slice(-3);
+let p;
+try { p = JSON.parse(fs.readFileSync(settingsPath, "utf8")).permissions || {}; }
+catch (e) { process.stdout.write("ERROR:unreadable-settings\0"); process.exit(0); }
+const arr = (v) => (Array.isArray(v) ? v : []);
+for (const k of ["allow", "ask"]) {
+  fs.writeFileSync(outDir + "/ua-" + k + "-as-deny.json", JSON.stringify({ permissions: { deny: arr(p[k]) } }));
+}
+process.stdout.write(String(arr(p.ask).includes(rule)) + "\0");
+'
+t_unrunnable_accept_ask() {
+    local ua=() tmp_np
+    dp_node_path "$TMPROOT"; tmp_np="$DP_NODE_PATH"
+    dp_node_path "$SETTINGS"
+    mapfile -d '' -t ua < <(node -e "$UA_SPLIT_JS" "$DP_NODE_PATH" "$tmp_np" "$UA_RULE")
+    if (( ${#ua[@]} != 1 )) || [[ "${ua[0]}" == ERROR:* ]]; then
+        echo "FAIL: harness -- unrunnable-accept split returned [${ua[*]}]"; exit 1
+    fi
+    ROWS=$((ROWS + 1))
+    assert_eq "UA1: permissions.ask carries the exact UNRUNNABLE_ACCEPTED sentinel rule" "true" "${ua[0]}"
+    dp_req ua-allow "$tmp_np/ua-allow-as-deny.json" "$UA_CMD"
+    dp_req ua-ask "$tmp_np/ua-ask-as-deny.json" "$UA_CMD"
+    dp_run "unrunnable-accept"
+    ROWS=$((ROWS + 1))
+    dp_get ua-allow
+    assert_eq "UA2: no permissions.allow Bash rule auto-approves the accept sentinel (hits: ${DENY_HITS:-none})" \
+        "NO-MATCH" "$DENY_VERDICT"
+    ROWS=$((ROWS + 1))
+    dp_get ua-ask
+    assert_eq "UA3: the permissions.ask rule matches the accept sentinel command" "MATCHED" "$DENY_VERDICT"
+}
+t_unrunnable_accept_ask
+
 # EXECUTED-ROW BUDGET. Every table increments ROWS; a drifted delimiter or an early return
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
 # crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
 # N6-N13 MUST-trigger narration rows + L6-L15 sanctioned-command counterweights + P37
 # refspec compound tail) + launch-form completeness 48 (12 triggers x 4 launch forms -- round-4
 # C8 added +refspec/positional-force/git-clean triggers, PEND under ANCHORED=0) +
-# bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403).
-ROWS_EXPECTED=166
+# bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501).
+ROWS_EXPECTED=169
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

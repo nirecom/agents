@@ -15,6 +15,10 @@ const NAME_CHAR = /[A-Za-z0-9_-]/;
 const ALNUM = /[A-Za-z0-9]/;
 const PREFIX_FOLLOW = new Set(["*", "[", "$", "{"]);
 const LOCATION_RE = /(?<![A-Za-z0-9_])(?:tests|TESTS_DIR|tests_dir)(?![A-Za-z0-9_])/;
+// A test runner invoked directly (`Invoke-Pester -Path ... -CI`) is a launch that bypasses the
+// runner wrapper (#2501): only the wrapper layer may call the runner, the table names the wrapper.
+const RUNNER_RE = /(?<![A-Za-z0-9_-])Invoke-Pester(?![A-Za-z0-9_-])/;
+const RUNNER_HOME = "bin/lib/test-wrappers/";
 // `*` opens a comment line only as a block-comment continuation (`* text`, a lone `*/`):
 // a case arm such as `*/test_*.py)` is code.
 const COMMENT_RE = /^(?:#|\/\/|\/\*|\*(?:\s|$)|\*\/\s*$)/;
@@ -220,6 +224,23 @@ function scanFile(p, lines, w, cmpRes, srcRe, allow, out) {
   }
 }
 
+// The runner rule covers the table files too (a table command must name the wrapper, not the
+// runner); only the wrapper directory itself is exempt.
+function runnerScope(p) {
+  if (p.startsWith(RUNNER_HOME)) return false;
+  return TABLE_FILES.has(p) || inScope(p);
+}
+
+function runnerHits(p, lines, allow, out) {
+  const mine = allow.filter((r) => r.p === p);
+  for (const l of lines) {
+    if (!RUNNER_RE.test(l.text)) continue;
+    const allowed = mine.filter((r) => l.raw.includes(r.s));
+    if (allowed.length > 0) { allowed.forEach((r) => { r.used = true; }); continue; }
+    out.push(`d-runner ${p}:${l.n} ${l.raw.trim()}`);
+  }
+}
+
 function main() {
   const a = parseArgs(process.argv.slice(2));
   let table;
@@ -239,11 +260,13 @@ function main() {
   const out = [];
   const cmpRes = compareRes(w.ids);
   const srcRe = sourceRootRe(files);
-  for (const p of files.filter((f) => inScope(f)).sort()) {
+  for (const p of files.filter((f) => inScope(f) || runnerScope(f)).sort()) {
     let content;
     try { content = fs.readFileSync(path.join(a.root, p), "utf8"); } catch (e) { continue; }
     if (content.includes("\0")) continue;
-    scanFile(p, scanLines(p, content), w, cmpRes, srcRe, allow, out);
+    const lines = scanLines(p, content);
+    if (inScope(p)) scanFile(p, lines, w, cmpRes, srcRe, allow, out);
+    if (runnerScope(p)) runnerHits(p, lines, allow, out);
   }
   for (const r of allow) if (!r.used) errors.push(`ALLOWLIST stale line ${r.line}: ${r.p}\t${r.s}`);
   [...out, ...errors].forEach((l) => console.log(l));
