@@ -147,4 +147,4 @@ function inlineBodiesOf(commandText) {
   return { bodies: acc.bodies, unparsedLines: acc.unparsedLines, overflow: acc.overflow };
 }
 
-module.exports = { isInlineBodyFlag, attachedBodyOf, skipShellOptions, inlineBodiesOf, POSIX_SHELLS, MAX_BODIES, MAX_TOTAL_BYTES };
+module.exports = { isInlineBodyFlag, attachedBodyOf, skipShellOptions, inlineBodiesOf, logicalLines, POSIX_SHELLS, PWSH_SHELLS, MAX_DEPTH, MAX_BODIES, MAX_TOTAL_BYTES };

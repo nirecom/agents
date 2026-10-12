@@ -3,11 +3,10 @@
 # Tests: hooks/workflow-gate.js
 # Tags: workflow, gate, hook, bin, git, scope:issue-specific
 
-# PR2: hooks/workflow-gate.js must early-return (approve) when
-# <workflowDir>/<sid>.workflow-off marker exists for the calling session.
-#
+# PR2: hooks/workflow-gate.js approves early when <workflowDir>/<sid>.workflow-off exists.
 # Contract:
-#   - Without marker, `git commit` with no workflow state → block (baseline).
+#   - Without marker, `git commit` with a begun, incomplete state → block (baseline).
+#   - Without marker and without state (WF not begun) → approve (#1633).
 #   - With marker + valid sid → approve.
 #   - With traversal sid → bypass MUST NOT apply (still block).
 
@@ -45,8 +44,8 @@ export WORKFLOW_PLANS_DIR
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_STATE_DIR"
 
-# workflow-gate gates only the repo its own checkout belongs to: the hook is launched from a
-# copy of this checkout, which setup_repo attaches to the repo it builds.
+# The hook is launched from a copy of this checkout, which setup_repo attaches to the repo it
+# builds (kept from the #1138 checkout-scoped rule; since #1633 the scope is the state's cwd).
 # shellcheck source=tests/lib/session-repo-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
 GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
@@ -136,12 +135,29 @@ run_hook() {
 # Tests
 # ============================================================================
 
-# A: No marker, no workflow state → git commit blocked (baseline).
+# write_begun_state <wfdir> <sid> — workflow_init complete (the WF has begun), every other
+# step pending, no cwd (target set unknown → checked, #1633).
+write_begun_state() {
+    local wfdir="$1" sid="$2"
+    node -e "
+const fs = require('fs'), path = require('path');
+const { VALID_STEPS } = require(process.argv[1] + '/hooks/workflow-state.js');
+const now = new Date().toISOString();
+const steps = {};
+for (const s of VALID_STEPS) steps[s] = { status: 'pending', updated_at: null };
+steps.workflow_init = { status: 'complete', updated_at: now };
+const st = { version: 1, session_id: process.argv[2], created_at: now, steps };
+fs.writeFileSync(path.join(process.argv[3], process.argv[2] + '.json'), JSON.stringify(st, null, 2));
+" "$_SCRIPT_CHECKOUT_ROOT_NODE" "$sid" "$wfdir"
+}
+
+# A: No marker, begun + incomplete workflow state → git commit blocked (baseline).
 test_A_no_marker_blocks() {
     require_hook "A" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="testsession123"
     local repo; repo="$(setup_repo "a-repo")"
+    write_begun_state "$wfdir" "$sid"
     local payload; payload="$(build_commit_payload "$sid" "$repo")"
     run_hook "$payload" "$wfdir"
     if [ "$HOOK_RC" -ne 0 ]; then
@@ -149,18 +165,40 @@ test_A_no_marker_blocks() {
         return
     fi
     if echo "$HOOK_OUT" | grep -q '"decision":"block"'; then
-        pass "A: no marker + no state → git commit blocked (baseline)"
+        pass "A: no marker + begun incomplete state → git commit blocked (baseline)"
     else
         fail "A: expected block but got: $HOOK_OUT"
     fi
 }
 
-# B: Marker present + valid sid → approve.
+# A2: No marker, no workflow state → the WF has not begun → approve (#1633).
+test_A2_no_state_approves() {
+    require_hook "A2" || return
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="testsession124"
+    local repo; repo="$(setup_repo "a2-repo")"
+    local payload; payload="$(build_commit_payload "$sid" "$repo")"
+    run_hook "$payload" "$wfdir"
+    if [ "$HOOK_RC" -ne 0 ]; then
+        fail "A2: hook crashed rc=$HOOK_RC (out: $HOOK_OUT)"
+        return
+    fi
+    if echo "$HOOK_OUT" | grep -q '"decision":"approve"'; then
+        pass "A2: no marker + no state (WF not begun) → git commit approved"
+    else
+        fail "A2: expected approve but got: $HOOK_OUT"
+    fi
+}
+
+# B: Marker present + begun state → approve (workflow-off bypass).
+# The fixture mirrors A: same begun+incomplete state, only the marker differs.
+# This proves that the marker itself is what flips block→approve, not absent state.
 test_B_marker_approves() {
     require_hook "B" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="testsession123"
     local repo; repo="$(setup_repo "b-repo")"
+    write_begun_state "$wfdir" "$sid"
     write_marker_file "$wfdir" "$sid"
     local payload; payload="$(build_commit_payload "$sid" "$repo")"
     run_hook "$payload" "$wfdir"
@@ -173,7 +211,7 @@ test_B_marker_approves() {
         return
     fi
     if echo "$HOOK_OUT" | grep -q '"decision":"approve"'; then
-        pass "B: marker present → git commit approved (workflow-off bypass)"
+        pass "B: marker present + begun incomplete state → git commit approved (workflow-off bypass)"
     else
         fail "B: expected explicit approve but got: $HOOK_OUT"
     fi
@@ -202,6 +240,7 @@ test_C_traversal_sid_no_bypass() {
 
 run_all() {
     test_A_no_marker_blocks
+    test_A2_no_state_approves
     test_B_marker_approves
     test_C_traversal_sid_no_bypass
 }

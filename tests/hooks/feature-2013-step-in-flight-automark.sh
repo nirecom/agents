@@ -62,6 +62,8 @@ skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
 . "$CASE_DIR/e-lookahead-guard.sh"
 # shellcheck source=/dev/null
 . "$CASE_DIR/f-skill-name.sh"
+# shellcheck source=/dev/null
+. "$CASE_DIR/g-wf-init-begun-mark.sh"
 
 # Sourced-fragment sanity gate (same rationale as the #1794 suite): a fragment
 # that dies half-way leaves some functions defined and the rest missing, and
@@ -92,7 +94,9 @@ require_defined \
     run_B22 run_B23 run_B24 \
     run_F1 run_F2 run_F3 \
     run_C1 run_C2 run_C3 \
-    run_Ca run_Cb run_Cc run_Cd run_Ce run_Cf run_Cg run_Ch
+    run_Ca run_Cb run_Cc run_Cd run_Ce run_Cf run_Cg run_Ch \
+    run_G1 run_G2 run_G3 run_G4 run_G5 run_G6 run_G7 run_G8 run_G9 run_G10 \
+    run_G11 run_G12 run_G13 run_G14 run_G15 run_G16
 
 # A1-A15 — predicate + policy + registration
 run_A1
@@ -166,6 +170,25 @@ run_Cg
 # C-h — the two lanes' findings in ONE session: the exemption is per-finding, so
 # an exempt lookahead mark must not carry a genuine stall out with it (#2213).
 run_Ch
+
+# G1-G9 — a /workflow-init Skill dispatch records the WF-begun mark (#1633);
+# G10-G16 — that mark leaves the WI-10 readers where they were.
+run_G1
+run_G2
+run_G3
+run_G4
+run_G5
+run_G6
+run_G7
+run_G8
+run_G9
+run_G10
+run_G11
+run_G12
+run_G13
+run_G14
+run_G15
+run_G16
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

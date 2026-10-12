@@ -17,7 +17,7 @@ const {
   VERDICTS,
   compareRepoIdentity,
   compareRepoContentEquivalence,
-} = require("../../workflow/lib/next-step/repo-dir-guard");
+} = require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
 const { readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
 
