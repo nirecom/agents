@@ -49,6 +49,9 @@ rj_write_state() {
     done
     printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2403-allow-read-only-gh-read","steps":{%s},"workflow_type":"wf-code"}' \
         "$sid" "${steps#,}" > "$WORKFLOW_STATE_DIR/$sid.json"
+    # #2277: the gated completes settle only with a plan_approval record (no-op for "pending").
+    node "$(np "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js")" inject-complete \
+        "$(np "$WORKFLOW_STATE_DIR/$sid.json")" clarify_intent outline detail >/dev/null 2>&1
 }
 rj_write_state "sid-bg-armed" "complete"
 

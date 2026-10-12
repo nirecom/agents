@@ -3,26 +3,12 @@
 # Tests: hooks/lib/stop-exemption-policy.js, hooks/lib/session-markers.js, hooks/lib/sentinel-patterns.js, hooks/lib/protected-basenames.js, hooks/stop-premature-stop-guard.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-state/state-io/zombie-cleanup.js, bin/workflow/lib/next-step/verdict.js, settings.json, rules/stop-guard-exemptions.md
 # Tags: stop-hook, exemption, session-marker, sentinel, removal, background-work, step-in-flight, regression-1665, scope:issue-specific, pwsh-not-required, TL1
 
-# #1665 commit 4 — the `.background-work` primitive is REMOVED and its C4 role
-# is taken over by the state-derived `step-in-flight` exemption (renamed and
-# widened from `write-code-in-flight` by #2013; SSOT: rules/stop-guard-exemptions.md).
-
-# Every case is paired with a counter-anchor on a sibling primitive that must
-# survive (`next-step-paused`, `workflow-off`, `pre-workflow-init`). A removal
-# that over-reaches — ripping out the whole marker family, the whole sentinel
-# table, the whole zombie-sweep arm — fails the counter-anchor, so "0 hits" can
-# never be reached by deleting the mechanism wholesale.
-
-# TL3 gap (what this test does NOT catch):
-# - Whether Claude Code itself still routes a stale `<<WORKFLOW_BACKGROUND_WORK_START>>`
-#   typed by a user through the real PostToolUse chain (here only the pure
-#   sentinel-patterns predicates are exercised)
-# - Whether the real Stop hook, driven by Claude Code, silences C4 for an
-#   in-flight write_code session (covered by feature-1665-seq-cascade i-c4-exemption)
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
-
 set -u
+# #1665: `.background-work` is removed; `step-in-flight` (#2013) takes its C4 role (SSOT: rules/stop-guard-exemptions.md).
+# Each case has a counter-anchor on a surviving sibling, so "0 hits" cannot come from deleting the mechanism wholesale.
+# TL3 gap: the real PostToolUse routing of a stale BACKGROUND_WORK sentinel, and the real Stop hook
+# silencing C4 for in-flight write_code (feature-1665-seq-cascade i-c4-exemption) are not exercised here.
+# Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
@@ -367,9 +353,46 @@ require('$STATEIO_NODE').cleanupZombies();" >/dev/null 2>&1
     fi
 }
 
+# ---------------------------------------------------------------------------
+# M3 (#2277): `REASON=awaiting-plan-approval: <step>` (ACTION=invoke) keeps C4 quiet — the user owes
+#     the approval. Row {c4:true, c2:false, nextStep:false, promptNotify:false}, next-step-output
+#     phase, reason prefix match. Counter-anchors: near-miss reasons miss; delegated-reason survives.
+# ---------------------------------------------------------------------------
+run_M3() {
+    local out
+    out="$("$RWT" 20 node -e "
+const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
+const g = require('$GUARD_NODE');
+const row = EXEMPTION_MATRIX['awaiting-plan-approval'];
+const problems = [];
+const want = { c4: true, c2: false, nextStep: false, promptNotify: false };
+if (!row) problems.push('[matrix row awaiting-plan-approval missing]');
+else for (const k of Object.keys(want)) if (row[k] !== want[k]) problems.push('[matrix ' + k + '=' + row[k] + ']');
+const c4 = (g.C4_EXEMPTIONS || []).find((e) => e.id === 'awaiting-plan-approval');
+if (!c4) problems.push('[C4_EXEMPTIONS row missing]');
+else if (c4.phase !== 'next-step-output') problems.push('[C4 row phase=' + c4.phase + ']');
+const hit = (reason) => { try { return g.firstExemption('next-step-output', { sid: 'm3-sid', reason }, {}, []); } catch (e) { return 'THREW:' + e.message; } };
+for (const step of ['clarify_intent', 'outline', 'detail']) {
+  const r = hit('awaiting-plan-approval: ' + step);
+  if (r !== 'awaiting-plan-approval') problems.push('[prefix reason for ' + step + ' -> ' + r + ']');
+}
+for (const reason of ['plan-approval', 'awaiting-approval: outline', 'outline', 'x awaiting-plan-approval: outline']) {
+  if (hit(reason) === 'awaiting-plan-approval') problems.push('[non-matching reason \"' + reason + '\" hit the row]');
+}
+if (hit('pre_final_report_gate') !== 'delegated-reason') problems.push('[delegated-reason counter-anchor lost]');
+process.stdout.write(problems.join(' '));
+" 2>&1)"
+    if [ -z "$out" ]; then
+        pass "M3: awaiting-plan-approval is a C4-only next-step-output exemption matched by reason prefix"
+    else
+        fail "M3: awaiting-plan-approval exemption wrong; $out"
+    fi
+}
+
 run_G1
 run_G2
 run_M1
+run_M3
 run_M2
 run_K1
 run_E1

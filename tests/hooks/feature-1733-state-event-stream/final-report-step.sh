@@ -100,7 +100,7 @@ fi
 echo "== F6: final_report closes the stream — nothing is appended for it by default =="
 if run_case "F6/not-auto-completed"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    nodejs "$SID" "$PRE$APPROVE_GATED_JS"'
 for (const s of ["workflow_init", "clarify_intent", "run_tests", "cleanup"]) S.markStep(sid, s, "complete");
 const st = S.readState(sid);
 console.log("projected=" + st.steps.final_report.status +

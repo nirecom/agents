@@ -2,27 +2,12 @@
 # tests/hooks/feature-1733-state-event-stream/robustness.sh
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/lock.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations.js, bin/workflow/set-workflow-type
 # Tags: workflow-state, event-stream, security, error-handling, edge-case, path-traversal, malformed-input, forensic-integrity, schema-version, scope:issue-specific, pwsh-not-required, TL2
-#
-# Adversarial and malformed-input coverage for the append-only stream — the
-# test-design.md categories the behavioural files above do not reach:
-#   security  — the session id now resolves TWO paths (state file + lock file), so a
-#               traversal-shaped id must not be able to split them across directories,
-#               and no annotation value may leak into an error message.
-#   error     — a v2 file whose `events` is not an array, or whose seq numbering is
-#               broken by an out-of-band editor, must fail open rather than throw.
-#   edge      — an empty stream, a single event, and a long stream (collection
-#               boundaries), plus an extremely long annotation value.
-#   forensic  — a state file that cannot be parsed at all is EVIDENCE. Every writer
-#               must leave those bytes alone (X9), a file written by a NEWER schema
-#               must not be downgraded in place (X10), and a malformed v2 stream must
-#               not be folded into a status a gate would trust (X11).
-#
-# TL3 gap (what this test does NOT catch):
-# - a real host's filesystem semantics for the lock file (SMB/network shares, a
-#   read-only workflow dir, antivirus file locking on Windows). Everything here runs
-#   on a local temp dir.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Adversarial/malformed-input coverage for the append-only stream: security (traversal ids
+# split no paths, no value leaks into errors), error (non-array events / broken seq fail open),
+# edge (0/1/250 events, huge values), forensic (unparseable file untouched X9, future schema
+# not downgraded X10, malformed v2 stream never trusted X11).
+# TL3 gap: real host filesystem lock semantics (SMB, read-only dir, AV locking); mitigation:
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="rob"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -32,7 +17,7 @@ echo "== X1: a traversal-shaped session id is refused, and nothing outside the w
 if run_case "X1/traversal-refused"; then
     # The session id now resolves TWO paths (state file + lock file). The earlier
     # version of this case only asked that the two stay paired, which a traversal id
-    # satisfies trivially by landing BOTH outside WORKFLOW_STATE_DIR  a pair of files
+    # satisfies trivially by landing BOTH outside WORKFLOW_STATE_DIR  a pair of files
     # written into someone else's directory is not a pass. The invariant asserted here
     # is absolute: a traversal-shaped id is refused outright, and the filesystem outside
     # the workflow dir is byte-identical afterwards.
@@ -83,7 +68,7 @@ echo "== X3: an error message never quotes the annotation value that caused it =
 if run_case "X3/no-value-in-error"; then
     next_sid
     nodejs "$SID" "$PRE"'
-const SECRET = "ghp_EXAMPLESECRET000000000000000000000000";
+const SECRET = "ghp_" + "EXAMPLESECRET000000000000000000000000";
 let msg = "NO-THROW";
 try {
   const st = S.readState(sid) || S.createInitialState(sid, S.getCurrentContext());
@@ -138,9 +123,11 @@ if run_case "X5/broken-seq-refused"; then
     nodejs "$SID" "$PRE"'
 const E = require("./hooks/workflow-state/state-io/events");
 S.markStep(sid, "workflow_init", "complete");
-S.markStep(sid, "clarify_intent", "complete");
+// #2277: a non-gated second step keeps the stream at exactly two plain events (a gated
+// clarify_intent complete now needs a plan_approval record first).
+S.markStep(sid, "docs", "complete");
 const o = rd();
-o.events[1].seq = 99;              // out-of-band edit: a gap no appender could produce
+o.events[1].seq = 99;             // out-of-band edit: a gap no appender could produce
 wraw(o);
 const before = raw();
 let verdict = "ACCEPTED";
@@ -221,13 +208,9 @@ fi
 echo "== X9: every writer leaves an UNPARSEABLE state file byte-identical (forensic evidence) =="
 if run_case "X9/corrupt-state-not-clobbered"; then
     # NEW (codex review-tests HIGH finding 1). A truncated/invalid state file is the only
-    # forensic record of whatever produced it — a crashed writer, a full disk, an
-    # out-of-band editor. Overwriting it with a freshly created initial state destroys
-    # that record AND silently resurrects a session whose real history is gone.
-    #
-    # The assertion is a BYTE diff (read the file before, read it again after), not a
-    # "did it throw" check: a writer may legitimately fail open, but it may not write.
-    #
+    # forensic record of whatever produced it (crashed writer, full disk, out-of-band edit);
+    # overwriting it destroys that record AND silently resurrects a session whose history is gone.
+    # Asserted as a BYTE diff, not "did it throw": a writer may fail open, but it may not write.
     # CURRENTLY RED — live defect: readRawState() returns null on JSON.parse failure, so
     # markStep/appendEvents/updateTopLevel/set-workflow-type all fall through to
     # createInitialState() and writeStateLocked() replaces the corrupt bytes.
@@ -266,14 +249,9 @@ fi
 echo "== X10: a FUTURE schema version is never silently downgraded to v2 =="
 if run_case "X10/future-schema-not-downgraded"; then
     # NEW (codex review-tests HIGH finding 2). A `version: 3` file was written by a newer
-    # release of this repo — possibly by another concurrent session on the same machine
-    # after an upgrade. This code cannot know what v3 means, so the only safe answers are
-    # "refuse" or "fail open and leave it alone". Rewriting it as v2 downgrades a file
-    # this process does not understand and destroys whatever v3 added.
-    #
-    # The assertion is on the ON-DISK version after each operation, which covers both safe
-    # answers at once: a refusal and a fail-open read both leave `version: 3` on disk.
-    #
+    # release (possibly a concurrent session after an upgrade); this code cannot know what
+    # v3 means, so only "refuse" or "fail open and leave it alone" are safe — rewriting it as
+    # v2 destroys whatever v3 added. The ON-DISK version after each operation covers both.
     # CURRENTLY RED — live defect: normalizeStateVersion() branches only on `version === 2`
     # and treats EVERYTHING else as v1, so a v3 file is fed to migrateV1ToV2() and
     # persistMigratedState() writes it back as version 2 (dropping unknown top-level keys).
@@ -320,37 +298,21 @@ fi
 
 echo "== X11: a malformed v2 stream yields no trusted status, and reading mutates nothing =="
 if run_case "X11/malformed-stream-not-trusted"; then
-    # NEW (codex review-tests HIGH finding 3). X4 already covers `events` not being an
-    # array. This case covers the harder shape: `events` IS a well-formed array whose
-    # RECORDS are corrupt. Six independent corruptions of the second event, each of which
-    # a legitimate appender can never produce, so their presence proves the stream was
-    # edited out of band:
-    #   missing_seq / duplicate_seq / out_of_order — the ordering identity is destroyed,
-    #                                                so "the latest status" is undecidable
-    #   invalid_status / invalid_provenance / missing_provenance — validateEvent() would
-    #                                                have refused these on the write path
-    #
-    # Two assertions per variant, and they are separate concerns (CPR-SC):
-    #   trusted_complete=false — a gate must not read `complete` off a stream it can see
-    #                            has been tampered with (the FIRST event is a genuine
-    #                            workflow_init complete; the point is that a corrupt
-    #                            NEIGHBOUR must taint the whole fold, not just itself)
-    #   unchanged=true         — readState is a READ. It must not rewrite the file it
-    #                            just found to be corrupt.
-    #
-    # GREEN for every variant, and the reason matters: the guarantee does NOT come from
-    # projectState(). The fold still assigns `steps[step].status = e.status` verbatim and
-    # still never branches on `e.seq` or `e.provenance` — it never sees a tampered stream,
-    # because readState() runs assertStreamIntegrity() first (contiguous 1-based seq, valid
-    # provenance, valid status) and returns null when it throws. So the tamper check lives
-    # one layer up, and a refactor that folds without that gate would fail this case.
-    # (#1665 does not move that boundary: the `updated_seq` it projects is the fold POSITION
-    # `i + 1`, deliberately not `e.seq` — batch events carry no seq at fold time.)
+    # NEW (codex review-tests HIGH finding 3). X4 covers non-array `events`; this covers a
+    # well-formed array whose second RECORD is corrupt in one of six ways no appender can
+    # produce (seq: missing/duplicate/out_of_order; status/provenance invalid or missing).
+    # Separate concerns (CPR-SC): trusted_complete=false — a corrupt NEIGHBOUR must taint the
+    # whole fold, including the genuine first workflow_init complete; unchanged=true — a READ
+    # never rewrites the corrupt file. GREEN because readState() runs assertStreamIntegrity()
+    # before projectState() (which folds statuses verbatim, never branching on seq/provenance)
+    # and returns null on throw, so a refactor folding without that gate fails here. #1665's
+    # `updated_seq` is the fold POSITION `i + 1`, not `e.seq`, so it does not move that boundary.
+    # #2277: the second event is a non-gated step (a gated complete now needs plan_approval).
     for VARIANT in missing_seq duplicate_seq out_of_order invalid_status invalid_provenance missing_provenance; do
         next_sid
         nodejs_env "VARIANT=$VARIANT" "$SID" "$PRE"'
 S.markStep(sid, "workflow_init", "complete");
-S.markStep(sid, "clarify_intent", "complete");
+S.markStep(sid, "docs", "complete");
 const o = rd();
 const e2 = o.events[1];
 switch (process.env.VARIANT) {

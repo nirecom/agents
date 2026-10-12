@@ -8,6 +8,8 @@ const {
   markStep, recordSessionWorktree, readState, recordMergeBaseBaseline, setDeliveryPath,
 } = require("../workflow-state");
 const { isMainWorktree } = require("../workflow-state/resolve-worktree-path");
+const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
+const { recoveryFor } = require("../workflow-state/completion-approval");
 const {
   BRANCHING_COMPLETE_RE_DQ, BRANCHING_COMPLETE_LOOKSLIKE_RE,
   BRANCHING_DECIDED_RE_DQ, BRANCHING_DECIDED_LOOKSLIKE_RE,
@@ -45,6 +47,16 @@ function handle(ctx) {
       signalFatal(
         `workflow-mark: could not resolve session_id — branching_complete NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: ${v.reason}>>"`
+      );
+      return true;
+    }
+    // #2277 S12: the merge-base baseline is write-once, so nothing is recorded before the detail
+    // plan it follows is approved. Fail-closed: only approved / skipped proceed.
+    const approval = checkPlanApproval(sessionId, "detail").verdict;
+    if (approval !== "approved" && approval !== "skipped") {
+      pushMessage(
+        `workflow-mark: branching_complete NOT recorded — detail approval is ${approval}. ` +
+          recoveryFor("detail") + " Then re-run the BRANCHING_COMPLETE echo."
       );
       return true;
     }

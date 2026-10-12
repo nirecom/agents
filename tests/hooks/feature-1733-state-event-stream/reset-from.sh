@@ -131,8 +131,9 @@ console.log("gated_before=" + gatedBefore.join(",") +
             " hash_status=" + one.artifact_hash_status +
             " provenance=" + one.provenance);
 '
+    # #2277: clarify_intent joined the approval-gated class (plan-stage-table.js).
     assert_eq "R6/gated-approval-synthesised" \
-        "gated_before=outline missing=0 hash_status=not-applicable provenance=declared" "$NODE_OUT"
+        "gated_before=clarify_intent,outline missing=0 hash_status=not-applicable provenance=declared" "$NODE_OUT"
 fi
 
 echo "== R7: history from before the reset is still readable (the point of #1733) =="

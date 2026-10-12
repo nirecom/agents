@@ -9,9 +9,8 @@
 // a renamed upstream tool makes this hook go SILENT BY DESIGN.
 "use strict";
 
-const fs = require("fs");
-
 const { readHookInput } = require("./lib/read-stdin");
+const { readTranscriptLines } = require("./lib/transcript-reader");
 
 const ADVISORY =
   "[Workflow] EnterWorktree was used in this session but ExitWorktree was never called before session stop. Call the ExitWorktree tool to release the extension-host worktree binding — see skills/_shared/worktree-transition.md.";
@@ -27,12 +26,8 @@ if (require.main === module) {
   let transcriptExited = false;
   const transcriptPath = input.transcript_path;
   if (transcriptPath) {
-    let lines = [];
-    try {
-      lines = fs.readFileSync(transcriptPath, "utf8").split("\n");
-    } catch (_) {
-      lines = [];
-    }
+    // Whole-transcript scan of past EnterWorktree tool_use: no flush wait needed (#2610).
+    const lines = readTranscriptLines(transcriptPath);
     let order = 0;
     let lastEnterIdx = -1;
     let lastExitIdx = -1;

@@ -5,7 +5,7 @@
 // inconsistency scan so it cannot false-abort (#1148). NEVER writes state
 // (Approach B: read-time derivation); the caller persists only evidence
 // resolutions, and only after the scan passes. ORDERING (do not reorder):
-// 1 effectiveStatus input-gate → 2 veto de-skip → 3 post-veto reset →
+// 1 effectiveStatus input-gate → 2 veto de-skip → 3 post-veto reset / unapproved-complete →
 // 3b delivery boundary (navigate only) → 4 evidence(+approval) resolution → 5 write_code resume mask (second pass,
 // overrides 4). Detail: effective-state/write-code-resume.js and the #1681/
 // #1665 suites. Resolution stops at the first unsettled step unless opts.resolveAll.
@@ -61,6 +61,19 @@ function canResolveFromEvidence(step, state, sessionId, opts) {
   if (!isApprovalGatedStep(step)) return true;
   const verdict = evaluateCompletionApproval(sessionId, step, state);
   return verdict.approved === true;
+}
+
+// isUnapprovedGatedComplete(step, raw, state, sessionId) → true when a gated step is recorded
+// complete but its approval no longer verifies (#2277 S13). Read-time only: the record and its
+// downstream steps stay as written, so a re-approval resumes from the recorded position.
+function isUnapprovedGatedComplete(step, raw, state, sessionId) {
+  if (raw !== "complete" || !isApprovalGatedStep(step)) return false;
+  try {
+    const sid = sessionId || (state && state.session_id) || null;
+    return evaluateCompletionApproval(sid, step, state).approved !== true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // recordedEventsOf(state) → the events actually recorded for this state, or
@@ -226,6 +239,10 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
       status = "pending";
       resolvedFrom = "post-veto-reset";
       derived = true;
+    } else if (status === "complete" && isUnapprovedGatedComplete(step, raw, state, sessionId)) {
+      status = "pending";
+      resolvedFrom = "unapproved-complete";
+      derived = true;
     }
 
     // 3b. delivery boundary — navigation callers only (./effective-state/delivery-boundary.js).
@@ -275,6 +292,7 @@ module.exports = {
   NETWORK_EVIDENCE_STEPS,
   APPROVAL_GATED_STEPS,
   effectiveStatus,
+  isUnapprovedGatedComplete,
   reconcileEffectiveState,
   evaluateResumability,
   evaluateInheritance,

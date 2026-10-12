@@ -15,6 +15,7 @@ const {
   probeConfirmGateSync, posixJoin,
 } = require("../../../../hooks/lib/confirm-gate/probe");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("./gate-line");
+const { rowFor } = require("../../../../hooks/workflow-state/plan-stage-table");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
 
@@ -78,7 +79,11 @@ function runGate(rawSession, opts) {
   const value = probeConfirmGateSync(key, NEXT_STEP_GATE_PROBE_TIMEOUT_MS);
   const gateLine = "GATE_" + key + "=" + value;
   const reasons = [step + ": " + key + "=" + value];
-  let action = value === "OFF" ? "proceed" : "ask";
+  // #2277: a stage whose approval has no off waiver (intent) always asks.
+  const row = rowFor(step);
+  const waivable = !row || row.offWaivable;
+  if (value === "OFF" && !waivable) reasons.push("no-off-waiver");
+  let action = value === "OFF" && waivable ? "proceed" : "ask";
   let hint = HINTS[action];
 
   if (step === "detail") {

@@ -3,19 +3,9 @@
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/inheritance/apply.js
 # Tags: workflow-state, updated-seq, reserved-keys, guard, orthogonality, scope:issue-specific, pwsh-not-required, TL1
 #
-# D — `updated_seq` is STRUCTURE, so it must be reserved at all three sites that
-# can turn an arbitrary key into a step annotation.
-#
-# WHY: an annotation named `updated_seq` would overwrite the projected fold
-# position with an attacker- or migration-supplied number, and the cascade in
-# case E trusts that number to decide which steps get reset. The three sites are
-# deliberately asymmetric in HOW they refuse (throw / silently skip / drop),
-# because their callers are: a validated event producer, a convenience API, and a
-# pure data converter respectively.
-#
-# Classifier coverage (CPR-ORTH): every reserved key is checked, and a sanctioned
-# annotation key is checked too — a guard that rejects everything is as broken as
-# one that rejects nothing.
+# D — `updated_seq` is STRUCTURE, reserved at all three sites that turn a key into a step
+# annotation (a forged value would steer case E's cascade). The sites refuse asymmetrically
+# (throw / skip / drop) per caller kind. CPR-ORTH: every reserved key plus a sanctioned key.
 
 CASE_TAG=d
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -64,6 +54,7 @@ const donor = "seq1665-d4donor";
 const heir = "seq1665-d4heir";
 S.markStep(donor, "research", "complete", { skip_reason: "r" });
 S.markStep(donor, "workflow_init", "complete");
+require(process.env.M_FIX).approveLive(donor, "clarify_intent"); // #2277 gated complete
 S.markStep(donor, "clarify_intent", "complete");
 const d = S.readState(donor);
 console.log("D4.donor_seq=" + JSON.stringify(d.steps.research.updated_seq));

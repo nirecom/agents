@@ -365,12 +365,12 @@ fi
 echo ""
 echo "=== CLARIFY_INTENT_COMPLETE sentinel ==="
 
-# C1: echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>" → clarify_intent status becomes "complete"
+# C1: #2277 S9 — CLARIFY_INTENT_COMPLETE without a CONFIRM_INTENT approval leaves clarify_intent pending
 SID="c1-$$"
 write_state "$SID" "$(ALL_COMPLETE_CI_PENDING_JSON "$SID")"
 C1_JSON=$(build_mark_json 'echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"' "$SID")
 run_mark "$C1_JSON" > /dev/null
-expect_state_step "C1. CLARIFY_INTENT_COMPLETE → clarify_intent=complete" "$SID" "clarify_intent" "complete"
+expect_state_step "C1. unapproved CLARIFY_INTENT_COMPLETE → clarify_intent stays pending" "$SID" "clarify_intent" "pending"
 
 # C2: No session_id → error message emitted, state not written
 C2_CMD='echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"'
@@ -392,13 +392,13 @@ else
     fail "C2b. expected clarify_intent=pending, got: $C2_CI_STATUS"
 fi
 
-# C3: Idempotency — running twice produces complete status without error
+# C3: Idempotency — running twice without approval stays pending (#2277 S9) and raises no error
 SID="c3-$$"
 write_state "$SID" "$(ALL_COMPLETE_CI_PENDING_JSON "$SID")"
 C3_JSON=$(build_mark_json 'echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"' "$SID")
 C3_OUT1=$(run_mark "$C3_JSON")
 C3_OUT2=$(run_mark "$C3_JSON")
-expect_state_step "C3a. CLARIFY_INTENT_COMPLETE idempotency → still complete after second run" "$SID" "clarify_intent" "complete"
+expect_state_step "C3a. unapproved CLARIFY_INTENT_COMPLETE idempotency → still pending after second run" "$SID" "clarify_intent" "pending"
 # Check no error in second run
 if echo "$C3_OUT2" | node -e "
 try {

@@ -65,6 +65,7 @@ seed_started() {
     WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" "$RWT" 15 node -e "
 const wf = require('$STATEIO_NODE');
 wf.markStep('$2', 'workflow_init', 'complete');
+require('$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js').approveLive('$2', 'clarify_intent'); // #2277
 wf.markStep('$2', 'clarify_intent', 'complete');" >/dev/null 2>&1
 }
 

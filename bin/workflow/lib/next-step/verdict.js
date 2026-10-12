@@ -282,6 +282,16 @@ function computeVerdict(rawSid, _didAutoRepair) {
     if (v !== null) return v;
   }
 
+  // #2277 S14: an unapproved gated stage answers "awaiting approval" before the
+  // scan below, which would otherwise abort on the later steps left complete.
+  {
+    const wait = require("./approval-reason").approvalWaitFor(sid, currentStep, state);
+    if (wait) {
+      emit("invoke", STEP_TO_SKILL[currentStep], wait.hint, wait.reason, "", resolveGateLine(currentStep));
+      return;
+    }
+  }
+
   // Inconsistency: later step is complete OR invalid status anywhere.
   // Runs AGAINST THE SNAPSHOT (#1148): steps already resolved from evidence read
   // as complete here, so a pending-but-evidenced step can no longer false-abort.

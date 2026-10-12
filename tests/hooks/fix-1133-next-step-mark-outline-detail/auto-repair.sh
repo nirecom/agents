@@ -1,17 +1,13 @@
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, mark, auto-repair, scope:issue-specific
-# ===========================================================================
 # === A1-A9: outline/detail evidence-based auto-repair + mid-review guard ===
-# ===========================================================================
-# Post-#1133: evidence alone is NOT authority for the approval-gated steps.
-# A plan file on disk cannot distinguish "review not started" from "review done
-# but unapproved", so next-step must refuse to auto-complete outline/detail and
-# report the inconsistency (ACTION=abort) instead. Auto-repair still fires once
-# a plan_approvals record exists — asserted by the A1d / A2c approved variants.
+# Post-#1133: evidence alone is NOT authority for the approval-gated steps, so next-step
+# never auto-completes outline/detail from a plan file; since #2277 (S14) it asks for the
+# approval (awaiting-plan-approval) instead of aborting. Auto-repair fires once an approval
+# exists (A1d/A2c).
 
-# outline=pending with no later step complete (clean walk → currentStep=outline).
-# Used by A3-A5 so the verdict is the plain `invoke make-outline-plan` path
-# rather than the inconsistency abort that OUTLINE_PENDING_DETAIL_COMPLETE hits.
+# outline=pending with no later step complete (clean walk → currentStep=outline); A3-A5 use it
+# for the plain `invoke make-outline-plan` path.
 OUTLINE_PENDING_CLEAN() {
   local sid="${1:-test-session}"
   cat <<EOF
@@ -72,7 +68,7 @@ EOF
 }
 
 echo ""
-echo "=== A1: outline=pending + detail=complete + outline.md, NO approval → abort, outline stays pending ==="
+echo "=== A1: outline=pending + detail=complete + outline.md, NO approval → awaiting approval, outline stays pending ==="
 
 SID="a1-$$"
 write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
@@ -80,13 +76,14 @@ write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
 touch "$PLANS_DIR/${SID}-outline.md"
 
 OUT=$(run_next_step --session "$SID")
-ACTION=""; NEXT_SKILL=""
+ACTION=""; NEXT_SKILL=""; REASON=""
 eval "$OUT" 2>/dev/null || true
 
-check "A1. outline.md exists but unapproved → ACTION=abort (no auto-complete)" \
-  "abort" "${ACTION:-}"
-check "A1b. unapproved gated step → NEXT_SKILL='' (no skill dispatched)" \
-  "" "${NEXT_SKILL:-}"
+# #2277 S14: the approval wait returns before the inconsistency scan (was ACTION=abort).
+check "A1. outline.md exists but unapproved → REASON awaiting-plan-approval: outline" \
+  "awaiting-plan-approval: outline" "${REASON:-}"
+check "A1b. unapproved gated step → ACTION=invoke (re-present, not abort)" \
+  "invoke" "${ACTION:-}"
 check "A1c. unapproved outline.md → state still shows outline=pending" \
   "pending" "$(read_state_status "$SID" "outline")"
 
@@ -114,18 +111,18 @@ check "A1f. approved auto-repair → state shows outline=complete" \
 rm -f "$PLANS_DIR/${SID}-outline.md"
 
 echo ""
-echo "=== A2: detail=pending + detail.md, NO approval → abort, detail stays pending (symmetric to A1) ==="
+echo "=== A2: detail=pending + detail.md, NO approval → awaiting approval, detail stays pending (symmetric to A1) ==="
 
 SID="a2-$$"
 write_state "$SID" "$(DETAIL_PENDING_BRANCHING_COMPLETE $SID)"
 touch "$PLANS_DIR/${SID}-detail.md"
 
 OUT=$(run_next_step --session "$SID")
-ACTION=""; NEXT_SKILL=""
+ACTION=""; NEXT_SKILL=""; REASON=""
 eval "$OUT" 2>/dev/null || true
 
-check "A2. detail.md exists but unapproved → ACTION=abort (no auto-complete)" \
-  "abort" "${ACTION:-}"
+check "A2. detail.md exists but unapproved → REASON awaiting-plan-approval: detail (#2277 S14)" \
+  "awaiting-plan-approval: detail" "${REASON:-}"
 check "A2b. unapproved detail.md → state still shows detail=pending" \
   "pending" "$(read_state_status "$SID" "detail")"
 

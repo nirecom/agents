@@ -4,7 +4,7 @@
 // Read-only: never mutates state. hasCompletionEvidence() tells callers whether a
 // `pending` step can be treated as complete from on-disk artifacts; any error or
 // missing file yields false (fail-open, never throws).
-// NON-AUTHORITATIVE for approval-gated steps (outline / detail): the on-disk shape
+// NON-AUTHORITATIVE for approval-gated steps (clarify_intent / outline / detail): the on-disk shape
 // cannot tell "review not started" from "reviewed, not approved". Authority is the
 // approval record in completion-approval.js; a true result here is necessary, never sufficient.
 
@@ -171,7 +171,11 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
 // @returns {string[]}
 function describeEvidence(step) {
   if (step === "clarify_intent") {
-    return ["<PLANS_DIR>/<sessionId>-intent.md exists"];
+    return [
+      "<PLANS_DIR>/<sessionId>-intent.md exists",
+      "NOT sufficient: completion additionally requires a recorded user approval "
+        + "(plan_approvals.clarify_intent via WORKFLOW_CONFIRM_INTENT; no off waiver)",
+    ];
   }
   if (step === "docs") {
     return [

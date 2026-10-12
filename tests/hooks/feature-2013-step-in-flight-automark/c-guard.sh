@@ -4,24 +4,10 @@
 # Tests: hooks/stop-premature-stop-guard.js, hooks/lib/stop-exemption-policy.js, hooks/lib/step-in-flight-policy.js
 # Tags: step-in-flight, stop-hook, c4, allowlist, matrix, regression-2013, scope:issue-specific, pwsh-not-required, TL2
 
-# A-cases assert the predicate and B-cases assert the write, but #2013 is a
-# complaint about the GUARD: the user was nudged mid-dispatch. Between the
-# predicate and that experience sit the exemption policy and the guard's own
-# ordering, and neither is exercised by calling isStepInFlight directly.
-
-# The matrix is deliberately full — 4 allowlisted steps x 4 record states — for
-# CPR-ORTH: the four steps are symmetric members of one class, so an exemption
-# wired up for `research` alone (the step in the original report) would satisfy
-# a single-step test while leaving the other three reproducing the bug.
-
-# _seed_row <tmp> <sid> <prereqs> <step> <state> — write the state file directly,
-# the way tests/hooks/feature-1498-stop-premature-stop-guard/state-seeds.sh does.
-#
-# markStep is NOT usable here: the approval-gated steps (outline in particular)
-# refuse a plain complete, so a markStep-built fixture leaves outline pending
-# behind a complete detail. next-step then reports that compaction gap and emits
-# ACTION=abort — and the guard is silent for a reason that has nothing to do with
-# the record under test. Writing the state directly keeps the matrix honest.
+# #2013 is about the GUARD (nudged mid-dispatch); the full matrix (4 steps x 4 states)
+# is CPR-ORTH. _seed_row <tmp> <sid> <prereqs> <step> <state> writes the state file
+# directly (as feature-1498 state-seeds.sh): a markStep-built fixture would leave gated
+# steps pending, next-step would abort, and the guard would go silent for that reason.
 _seed_row() {
     local tmp="$1" sid="$2" prereqs="$3" step="$4" state="$5" age=0
     case "$state" in
@@ -49,6 +35,10 @@ fs.writeFileSync(process.env.P, JSON.stringify({ version: 1, session_id: process
     # emits `blocked`, which the guard passes over in silence. Supplying the
     # upstream artifact keeps the detail rows measuring the in-flight record.
     : > "$tmp/$sid-intent.md"
+    # #2277: the seeded gated completes count only with a plan_approval record
+    # (hashed after the artifact above is in place, so the sha stays valid).
+    WORKFLOW_PLANS_DIR="$(node_path "$tmp")" "$RWT" 15 node "$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js" \
+        inject-complete "$(node_path "$tmp/$sid.json")" clarify_intent outline detail >/dev/null 2>&1
 }
 
 # _row_env <tmp> — a per-row throwaway repo, so the git-evidence resolver cannot

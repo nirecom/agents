@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark/branching-handler.js, hooks/workflow-state/state-io.js, hooks/workflow-state/resolve-worktree-path.js
-# Tags: fix, branching-handler, state-io, session-worktree, scope:issue-specific
+# Tags: fix, branching-handler, state-io, session-worktree, scope:issue-specific, plan-approval
 
 # Issue #950: branching-handler.js must write state.session_worktree when the
 # WORKFLOW_BRANCHING_COMPLETE decision includes a "worktree:" segment.
 # BH-1 worktree: path → session_worktree written; BH-2 regression guard: branching_complete.decision still written;
 # BH-3 stale clear: main-only decision → session_worktree=null; BH-4 non-existent path → not written / null.
-# BH-1/3/4 are EXPECTED TO FAIL until the source fix lands; BH-2 MUST PASS both before and after.
+# #2277 (S12): branching is recorded only when detail is approved or skipped, so BH-1..4 seed
+# detail=skipped; BH-5..8 (detail unapproved / corrupt state / no state) must write nothing.
 # L3 gap: real-session hook firing on an actual sentinel, and sentinel → dispatch → persisted → resolveSessionWorktreePath end-to-end.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
@@ -44,6 +45,7 @@ WF_DIR="$TMPDIR_BASE/workflow-state"
 SESSION_ID="fix-950-test-sid"
 
 cleanup() {
+  cd / 2>/dev/null || true
   git -C "$MAIN_REPO" worktree remove --force "$WTA" 2>/dev/null || true
   rm -rf "$TMPDIR_BASE" 2>/dev/null || true
 }
@@ -82,6 +84,14 @@ WORKFLOW_PLANS_DIR="$(cygpath -m "$WORKFLOW_PLANS_DIR" 2>/dev/null || echo "$WOR
 export WORKFLOW_PLANS_DIR
 # isolation (#2512): the state dir is pinned file-wide too, not only per hook call.
 export WORKFLOW_STATE_DIR="$WF_DIR_NODE"
+# #2277: the CONFIRM_DETAIL off waiver is read from $AGENTS_MAIN_ROOT/.env — pin it on in a
+# decoy root; never resolve the live session, the developer's transcripts, or the worktree repo.
+mkdir -p "$TMPDIR_BASE/decoy-root" "$TMPDIR_BASE/no-transcripts"
+printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$TMPDIR_BASE/decoy-root/.env"
+export AGENTS_MAIN_ROOT="$(cygpath -m "$TMPDIR_BASE/decoy-root" 2>/dev/null || echo "$TMPDIR_BASE/decoy-root")"
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/no-transcripts"
+unset CLAUDE_CODE_SESSION_ID CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
+cd "$TMPDIR_BASE" || exit 1
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -89,15 +99,19 @@ export WORKFLOW_STATE_DIR="$WF_DIR_NODE"
 
 # Write a minimal workflow state JSON with cwd pointing to the main worktree.
 # (Simulates a session started from main — the mid-session /worktree-start case.)
+# $1: detail status (default skipped: #2277 records branching only after detail is approved/skipped)
+# $2: session id (default $SESSION_ID)
 write_state_main_cwd() {
-  cat > "$WF_DIR/$SESSION_ID.json" <<EOF
+  local detail_status="${1:-skipped}" sid="${2:-$SESSION_ID}"
+  cat > "$WF_DIR/$sid.json" <<EOF
 {
   "version": 1,
-  "session_id": "$SESSION_ID",
+  "session_id": "$sid",
   "created_at": "2026-07-18T00:00:00.000Z",
   "cwd": "$MAIN_NODE",
   "git_branch": "main",
   "steps": {
+    "detail": { "status": "$detail_status", "updated_at": "2026-07-18T00:00:00.000Z" },
     "branching_complete": { "status": "pending", "updated_at": null }
   }
 }
@@ -154,16 +168,15 @@ try {
 " 2>/dev/null
 }
 
-# Read steps[branching_complete].decision from state file.
+# Read steps[branching_complete].decision through readState (a v2 file keeps steps as events).
 read_bc_decision() {
   node -e "
-const fs = require('fs');
 try {
-  const s = JSON.parse(fs.readFileSync('$WF_DIR_NODE/$SESSION_ID.json', 'utf8'));
+  const s = require(process.argv[1] + '/hooks/workflow-state').readState('$SESSION_ID');
   const v = s && s.steps && s.steps.branching_complete && s.steps.branching_complete.decision;
   process.stdout.write(v === null || v === undefined ? '' : String(v));
 } catch(e) { process.stdout.write('READ_ERROR'); }
-" 2>/dev/null
+" "$AGENTS_NODE" 2>/dev/null
 }
 
 # ===========================================================================
@@ -191,7 +204,7 @@ write_state_main_cwd
 DECISION_PLAIN="branch:wt-branch-950 worktree:$WTA_NODE"
 run_hook "echo \"<<WORKFLOW_BRANCHING_COMPLETE: $DECISION_PLAIN>>\""
 bh2_got="$(read_bc_decision)"
-if [[ -n "$bh2_got" ]]; then
+if [[ "$bh2_got" = "$DECISION_PLAIN" ]]; then
   pass "BH-2: steps.branching_complete.decision='$bh2_got' (not dropped)"
 else
   fail "BH-2: steps.branching_complete.decision is empty — regression! decision field must still be written"
@@ -213,6 +226,7 @@ cat > "$WF_DIR/$SESSION_ID.json" <<EOF
   "session_worktree": "$WTA_NODE",
   "git_branch": "main",
   "steps": {
+    "detail": { "status": "skipped", "updated_at": "2026-07-18T00:00:00.000Z" },
     "branching_complete": { "status": "pending", "updated_at": null }
   }
 }
@@ -240,6 +254,85 @@ if [[ -z "$bh4_got" ]]; then
   pass "BH-4: state.session_worktree empty for non-existent path (rejected)"
 else
   fail "BH-4: state.session_worktree='$bh4_got', expected empty/null for non-existent path [expected FAIL before source fix]"
+fi
+
+# ===========================================================================
+# BH-5..9 (#2277 S12): BRANCHING_COMPLETE records nothing unless detail is
+# approved or skipped — no branching_complete, session_worktree or baseline.
+# ===========================================================================
+
+# bc_snapshot <sid> — "bc=<status> decision=<d> wt=<path> mbb=<yes|no>" via readState.
+bc_snapshot() {
+  node -e "
+const ws = require(process.argv[1] + '/hooks/workflow-state');
+try {
+  const s = ws.readState(process.argv[2]);
+  if (!s) { process.stdout.write('NO_STATE'); process.exit(0); }
+  const bc = (s.steps && s.steps.branching_complete) || {};
+  process.stdout.write('bc=' + (bc.status || '') + ' decision=' + (bc.decision || '') +
+    ' wt=' + (s.session_worktree || '') + ' mbb=' + (s.merge_base_baseline ? 'yes' : 'no'));
+} catch (e) { process.stdout.write('READ_ERROR ' + e.message); }
+" "$AGENTS_NODE" "$1" 2>/dev/null
+}
+
+DECISION_GATED="branch:wt-branch-950 worktree:$WTA_NODE"
+NOTHING_WRITTEN="bc=pending decision= wt= mbb=no"
+
+# _bh_unapproved <id> <detail-status>
+_bh_unapproved() {
+  local id="$1" sid="fix-950-${1,,}"
+  write_state_main_cwd "$2" "$sid"
+  run_hook "echo \"<<WORKFLOW_BRANCHING_COMPLETE: $DECISION_GATED>>\"" "$sid"
+  local got; got="$(bc_snapshot "$sid")"
+  if [[ "$got" = "$NOTHING_WRITTEN" ]]; then
+    pass "$id: detail=$2 without approval → nothing recorded ($got)"
+  else
+    fail "$id: detail=$2 without approval → got '$got', expected '$NOTHING_WRITTEN'"
+  fi
+  if [[ "$MARK_OUT$MARK_ERR" == *WORKFLOW_CONFIRM_DETAIL* ]]; then
+    pass "$id: refusal guidance names WORKFLOW_CONFIRM_DETAIL"
+  else
+    fail "$id: refusal guidance does not name WORKFLOW_CONFIRM_DETAIL (out='$MARK_OUT' err='$MARK_ERR')"
+  fi
+}
+
+echo "--- BH-5/6: detail unapproved → branching not recorded ---"
+_bh_unapproved "BH-5" complete
+_bh_unapproved "BH-6" pending
+
+echo "--- BH-7: corrupt state (APPROVAL unknown) → state file untouched ---"
+SID7="fix-950-bh-7"
+printf '{ this is not json' > "$WF_DIR/$SID7.json"
+run_hook "echo \"<<WORKFLOW_BRANCHING_COMPLETE: $DECISION_GATED>>\"" "$SID7"
+bh7_got="$(cat "$WF_DIR/$SID7.json" 2>/dev/null)"
+if [[ "$bh7_got" = "{ this is not json" ]]; then
+  pass "BH-7: corrupt state left byte-identical (nothing recorded)"
+else
+  fail "BH-7: corrupt state was rewritten: '$(printf '%s' "$bh7_got" | head -c 200)'"
+fi
+
+echo "--- BH-8: no state file (APPROVAL not-applicable) → no state created ---"
+SID8="fix-950-bh-8"
+rm -f "$WF_DIR/$SID8.json"
+run_hook "echo \"<<WORKFLOW_BRANCHING_COMPLETE: $DECISION_GATED>>\"" "$SID8"
+if [[ ! -e "$WF_DIR/$SID8.json" ]]; then
+  pass "BH-8: no state file created for an out-of-workflow session"
+else
+  fail "BH-8: a state file was created: $(bc_snapshot "$SID8")"
+fi
+
+echo "--- BH-9: control — CONFIRM_DETAIL=off waiver counts as approved → recorded ---"
+SID9="fix-950-bh-9"
+mkdir -p "$TMPDIR_BASE/decoy-root-off"
+printf 'CONFIRM_DETAIL=off\n' > "$TMPDIR_BASE/decoy-root-off/.env"
+write_state_main_cwd complete "$SID9"
+OFF_ROOT_DIR="$(cygpath -m "$TMPDIR_BASE/decoy-root-off" 2>/dev/null || echo "$TMPDIR_BASE/decoy-root-off")"
+AGENTS_MAIN_ROOT="$OFF_ROOT_DIR" run_hook "echo \"<<WORKFLOW_BRANCHING_COMPLETE: $DECISION_GATED>>\"" "$SID9"
+bh9_got="$(bc_snapshot "$SID9")"
+if [[ "$bh9_got" == "bc=complete decision=$DECISION_GATED wt=$WTA_NODE "* ]]; then
+  pass "BH-9: off-waived detail → branching_complete + session_worktree recorded"
+else
+  fail "BH-9: off-waived detail → got '$bh9_got'"
 fi
 
 # ---------------------------------------------------------------------------

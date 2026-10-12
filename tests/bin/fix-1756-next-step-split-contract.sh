@@ -120,6 +120,10 @@ const state = { version: 1, session_id: sid, git_branch: "main", is_bugfix: fals
   plan_approvals: { outline: approval(), detail: approval() } };
 require("fs").writeFileSync(out, JSON.stringify(state, null, 2), "utf8");
 ' "$sid" "$overrides" "$(to_node_path "$WORKFLOW_DIR/$sid.json")"
+    # #2277: a complete clarify_intent counts only with a real approval record.
+    node "$(to_node_path "$SCRIPT_CHECKOUT_ROOT")/tests/lib/plan-approval-fixture.js" inject-complete \
+        "$(to_node_path "$WORKFLOW_DIR/$sid.json")" clarify_intent outline detail >/dev/null \
+        || { echo "FAIL: plan-approval fixture inject failed for $sid"; exit 1; }
 }
 
 raw_step_field() {

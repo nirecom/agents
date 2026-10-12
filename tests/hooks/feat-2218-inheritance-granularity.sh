@@ -73,6 +73,7 @@ process.stdout.write(missing.join(','));
 DONOR_JS="
 writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep(donorSid, 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(donorSid, 'clarify_intent');
 markStep(donorSid, 'clarify_intent', 'complete');
 markStep(donorSid, 'research', 'complete');
 markStep(donorSid, 'outline', 'skipped', { skip_reason: 'trivial' });
@@ -270,14 +271,10 @@ const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/
 const problems = [];
 const donorSid = 'donor-g5';
 $donor_js_g5
-// DONOR_JS marks clarify_intent complete; evaluateResumability's S3 check
-// demotes to context-independent-only when the intent.md artifact backing
-// that completion is missing (#1681 symptom 2) — write the stub so this test
-// exercises full granularity rather than the degraded path.
-const fs = require('fs');
-const path = require('path');
-fs.mkdirSync(process.env.WORKFLOW_PLANS_DIR, { recursive: true });
-fs.writeFileSync(path.join(process.env.WORKFLOW_PLANS_DIR, donorSid + '-intent.md'), '# intent\n');
+// DONOR_JS approves clarify_intent through the plan-approval fixture, which also writes
+// the intent.md artifact; evaluateResumability's S3 check (#1681 symptom 2) therefore
+// finds it and this test exercises full granularity. Do not rewrite intent.md here:
+// the approval record pins its digest.
 writeState('heir-g5a', createInitialState('heir-g5a', { cwd: '$wt_n', git_branch: 'feature/x' }));
 const withFlag = adoptState({ heirSid: 'heir-g5a', donorSid, granularity: 'full', verifiedEquivalent: true });
 if (withFlag.ok !== true) problems.push('verified-equivalent-rejected:' + JSON.stringify(withFlag));

@@ -32,6 +32,7 @@ const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-
 const donorSid = 'donor-2218-eq';
 writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep(donorSid, 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(donorSid, 'clarify_intent');
 markStep(donorSid, 'clarify_intent', 'complete');
 markStep(donorSid, 'outline', 'skipped', { skip_reason: 'trivial' });
 markStep(donorSid, 'detail', 'complete');

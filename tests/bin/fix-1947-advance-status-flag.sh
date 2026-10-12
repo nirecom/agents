@@ -70,6 +70,9 @@ make_state() {
     json="$json\"$s\":{\"status\":\"$st\"}"
   done
   printf '%s' "$json},\"closes_issues\":[1947]}" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277: an unapproved complete plan stage reads as pending; bind approvals.
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete \
+    "$(nrm "$WORKFLOW_DIR/${sid}.json")" clarify_intent outline detail >/dev/null 2>&1 || true
 }
 # research pending and outline pending — the shape F1-F11e need.
 at_research() { make_state "$1" "workflow_init clarify_intent"; }
