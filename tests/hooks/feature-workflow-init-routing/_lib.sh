@@ -67,6 +67,9 @@ write_state() {
     local sid="$1" json="$2"
     mkdir -p "$WORKFLOW_DIR"
     printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+    # #2277: seeded gated completes count only with a plan_approval record.
+    node "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" \
+        inject-complete "$WORKFLOW_DIR/${sid}.json" clarify_intent outline detail >/dev/null 2>&1
 }
 
 # Legacy state: no workflow_init key, clarify_intent absent

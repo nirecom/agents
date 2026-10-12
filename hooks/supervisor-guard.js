@@ -109,8 +109,8 @@ if (require.main === module) {
 
   const supervisorPath = path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor.md");
 
-  const askUserQuestionTurn = detectAskUserQuestionTurn(input.transcript_path || "");
-  const hangDetected = detectSentinelHang(input.transcript_path || "");
+  const askUserQuestionTurn = detectAskUserQuestionTurn(input.transcript_path || "", input.last_assistant_message);
+  const hangDetected = detectSentinelHang(input.transcript_path || "", input.last_assistant_message);
 
   let stateFilePath = "";
   try {

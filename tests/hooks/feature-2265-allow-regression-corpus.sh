@@ -39,6 +39,9 @@ fx_settled_state() {
   done
   printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2265-fixture","steps":{%s},"workflow_type":"wf-code"}' \
     "$sid" "${steps#,}" > "$WORKFLOW_STATE_DIR/$sid.json"
+  # #2277: the gated completes settle only with a plan_approval record.
+  node "$(np "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js")" inject-complete \
+    "$(np "$WORKFLOW_STATE_DIR/$sid.json")" clarify_intent outline detail >/dev/null 2>&1
 }
 
 # fx_layout <dst>: the real SSOT pair and every entry it lists, copied from the checkout under test.

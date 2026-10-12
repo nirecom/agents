@@ -114,6 +114,10 @@ const state = { version: 1, session_id: sid, git_branch: "main", is_bugfix: fals
   plan_approvals: { outline: approval("outline"), detail: approval("detail") } };
 require("fs").writeFileSync(out, JSON.stringify(state, null, 2), "utf8");
 ' "$sid" "$overrides" "$(to_node_path "$WORKFLOW_DIR/$sid.json")"
+    # #2277: a complete clarify_intent counts only with a real approval record.
+    node "$(to_node_path "$SCRIPT_CHECKOUT_ROOT")/tests/lib/plan-approval-fixture.js" inject-complete \
+        "$(to_node_path "$WORKFLOW_DIR/$sid.json")" clarify_intent outline detail >/dev/null \
+        || { echo "FAIL: plan-approval fixture inject failed for $sid"; exit 1; }
 }
 
 raw_step_field() {
@@ -199,7 +203,9 @@ check_contains "V4: commit gate blocks while outline is vetoed" '"block"' "$V4_R
 # V5: detail has no usable input (no intent.md, no outline.md) → blocked.
 # ---------------------------------------------------------------------------
 V5_SID="v5-$(printf '%04x%04x' $RANDOM $RANDOM)"
-write_state "$V5_SID" "{$PRE_OUTLINE,\"outline\":{\"status\":\"skipped\",\"skip_reason\":\"not needed\"},\"detail\":{\"status\":\"pending\"}}"
+# #2277: a complete clarify_intent needs intent.md for its approval sha, so the
+# no-intent.md premise is only consistent with clarify_intent skipped (later key wins).
+write_state "$V5_SID" "{$PRE_OUTLINE,\"clarify_intent\":{\"status\":\"skipped\",\"skip_reason\":\"not needed\"},\"outline\":{\"status\":\"skipped\",\"skip_reason\":\"not needed\"},\"detail\":{\"status\":\"pending\"}}"
 rm -f "$PLANS_DIR/${V5_SID}-intent.md" "$PLANS_DIR/${V5_SID}-outline.md"
 ACTION=""; NEXT_SKILL=""; REASON=""; NEXT_HINT=""
 V5_OUT="$(run_next_step --session "$V5_SID")"

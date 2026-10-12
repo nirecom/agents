@@ -1,15 +1,10 @@
 #!/bin/bash
 # Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, reset, write_tests, scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - Real Claude Code session where the hook fires and next-step is consulted interactively
-# - Actual PostToolUse hook registration and event chain
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
-#
-# Covers #1139 (run_tests guard) + #1133 (compaction-inconsistency recovery):
-#   --reset <step> flag (R1-R3) and scoped abort hint for the
-#   run_tests=complete + write_tests=pending pattern (H1-H3).
+# L3 gap: a real interactive session and the live PostToolUse hook chain; checked at
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration
+# Covers #1139 + #1133: --reset <step> (R1-R3) and the scoped abort hint for
+# run_tests=complete + write_tests=pending (H1-H3).
 
 set -euo pipefail
 
@@ -91,6 +86,10 @@ check_nonzero() {
 write_state() {
   local sid="$1" json="$2"
   printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277: a complete clarify_intent / outline / detail counts only with a real approval record.
+  WORKFLOW_PLANS_DIR="$(to_node_path "$PLANS_DIR")" node "$(to_node_path "$SCRIPT_CHECKOUT_ROOT")/tests/lib/plan-approval-fixture.js" \
+    inject-complete "$(to_node_path "$WORKFLOW_DIR/${sid}.json")" clarify_intent outline detail >/dev/null \
+    || { echo "FAIL: plan-approval fixture inject failed for $sid"; exit 1; }
 }
 
 read_state_status() {

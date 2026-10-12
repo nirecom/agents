@@ -7,8 +7,23 @@
 echo ""
 echo "=== H1: outline=pending + detail=complete + no outline.md → abort + hint has --mark outline complete ==="
 
+# #2277: an unapproved gated complete now reads as pending, so the complete steps that
+# frame the gap (clarify_intent, detail) carry a hash-exempt approval; H1 stays about outline.
+seed_exempt_approvals() {
+  node -e "
+    const fs = require('fs');
+    const [file, ...steps] = process.argv.slice(1);
+    const s = JSON.parse(fs.readFileSync(file, 'utf8'));
+    s.plan_approvals = s.plan_approvals || {};
+    for (const step of steps) s.plan_approvals[step] = { source: 'reset-sentinel', reason: 'seeded by test fixture',
+      artifact_sha256: null, artifact_hash_status: 'not-applicable', recorded_at: '2026-06-20T10:00:00.000Z' };
+    fs.writeFileSync(file, JSON.stringify(s, null, 2));
+  " "$WORKFLOW_DIR/${1}.json" "${@:2}"
+}
+
 SID="h1-$$"
 write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
+seed_exempt_approvals "$SID" clarify_intent detail
 # No outline.md → no evidence → auto-repair does not fire → inconsistency scan fires.
 
 OUT=$(run_next_step --session "$SID")

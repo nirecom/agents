@@ -155,7 +155,7 @@ for (const cmd of sentinelParts) {
   if (notNeededHandlers.handle({ ...ctx, cmd })) continue;
   if (clarifyIntentCompleteHandler.handle({ ...ctx, cmd })) continue;
   if (branchingHandler.handle({ ...ctx, cmd })) continue;
-  // CONFIRM_OUTLINE / CONFIRM_DETAIL record the plan approval that the
+  // CONFIRM_INTENT / _OUTLINE / _DETAIL record the plan approval that the
   // completion-boundary invariant requires; must precede mark-step-handler so a
   // chained "CONFIRM && MARK_STEP" records the approval before the completion.
   if (confirmApprovalHandler.handle({ ...ctx, cmd })) continue;

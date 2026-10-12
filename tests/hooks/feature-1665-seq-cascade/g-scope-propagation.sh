@@ -9,14 +9,10 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-# G — R5 propagation scope: the cascade lives INSIDE reconcileEffectiveState, so
-# every consumer inherits it for free — it must be one implementation and not
-# three, or `next-step` could reopen write_code while the gate still saw it
-# complete, letting a session commit code no one re-reviewed after a failing
-# test run. This case drives all three user-visible consumers as real
-# subprocesses and asserts they agree, with each assertion paired (CPR-ORTH)
-# against a run_outcome=pass control so over-blocking fails as loudly as
-# under-blocking.
+# G — R5 propagation scope: the cascade lives INSIDE reconcileEffectiveState, so next-step,
+# --list and the gate must agree (else the gate could pass unreviewed code). All three run as
+# real subprocesses, each paired (CPR-ORTH) with a run_outcome=pass control.
+
 # TL3 gap: whether workflow-gate.js is registered as a PreToolUse hook in the deployed
 # settings.json is not checked here — see WORKFLOW_USER_VERIFIED preflight (hook-registration).
 
@@ -45,6 +41,7 @@ seed() {
     js_g '
 const S = require(process.env.M_SIO);
 const sid = process.env.SEED_SID;
+require(process.env.M_FIX).approveLive(sid, "clarify_intent"); // #2277 gated complete
 for (const [s, st] of [
   ["workflow_init", "complete"], ["clarify_intent", "complete"],
   ["research", "skipped"], ["outline", "skipped"], ["detail", "skipped"],

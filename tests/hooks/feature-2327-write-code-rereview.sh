@@ -58,7 +58,7 @@ export -f pass fail check check_contains check_not_contains check_nonzero run_wi
 rr_repo() {
   mkdir -p "$1"
   git -C "$1" init -q
-  git -C "$1" config user.email t@test.com
+  git -C "$1" config user.email t@test
   git -C "$1" config user.name T
   git -C "$1" config core.hooksPath /dev/null
   printf 'seed\n' > "$1/README.md"
@@ -94,6 +94,8 @@ const st = {version:1, session_id:sid, steps, closes_issues:[2327]};
 if(wt) st.session_worktree = wt;
 fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + ".json"), JSON.stringify(st));
 ' "$1" "$2" "${3:-}" "${4:-}"
+  # #2277: the gated completes count only with a plan_approval record.
+  node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete "$WORKFLOW_STATE_DIR/$1.json" clarify_intent outline detail >/dev/null
 }
 
 # rr_view <sid>: projected write_code / review_tests fields as one JSON line.

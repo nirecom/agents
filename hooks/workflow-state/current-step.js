@@ -2,14 +2,16 @@
 // "Which step is this session on right now?" — the cheap, read-only answer.
 //
 // Distinct from the walk inside bin/workflow/next-step, which needs the full
-// reconciled snapshot (git evidence, skip verdicts, approval gates). Consumers
-// here only need to know WHICH step to attribute a dispatch or a pause to, so
-// they must stay side-effect-free and never touch the repo.
+// reconciled snapshot (git evidence, skip verdicts). Consumers here only need to
+// know WHICH step to attribute a dispatch or a pause to, so they stay
+// side-effect-free and never touch the repo. A gated step recorded complete
+// without a verifying approval still counts as current (#2277 S13).
 const { VALID_STEPS, TERMINAL_STEPS, isSettledStatus, readState } = require("./state-io");
-const { effectiveStatus } = require("./effective-state");
+const { effectiveStatus, isUnapprovedGatedComplete } = require("./effective-state");
 
 // resolveCurrentStep(state, opts): the first non-terminal step whose EFFECTIVE
-// status is not settled, or null when every step is settled. Pure.
+// status is not settled, or null when every step is settled. Writes nothing; the
+// approval check reads the plan artifacts.
 function resolveCurrentStep(state, opts) {
   const isWfMeta = !!(opts && opts.isWfMeta);
   const steps = (state && state.steps) || {};
@@ -18,6 +20,7 @@ function resolveCurrentStep(state, opts) {
     const entry = steps[step];
     const raw = (entry && entry.status) || "pending";
     if (!isSettledStatus(effectiveStatus(step, raw, isWfMeta))) return step;
+    if (isUnapprovedGatedComplete(step, raw, state, opts && opts.sessionId)) return step;
   }
   return null;
 }
@@ -29,7 +32,7 @@ function resolveCurrentEffectiveStep(sid) {
   try {
     const state = readState(sid);
     if (!state || !state.steps) return null;
-    return resolveCurrentStep(state, { isWfMeta: state.workflow_type === "wf-meta" });
+    return resolveCurrentStep(state, { isWfMeta: state.workflow_type === "wf-meta", sessionId: sid });
   } catch (_e) {
     return null;
   }

@@ -93,6 +93,10 @@ make_state() {
   done
   json="$json},\"closes_issues\":[1644]$extra}"
   printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277: a complete plan stage without a verifying approval reads as pending, which
+  # would move currentStep back; bind approvals for the complete ones.
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete \
+    "$(nrm "$WORKFLOW_DIR/${sid}.json")" clarify_intent outline detail >/dev/null 2>&1 || true
 }
 
 # Fixture shorthands. The named step is the first non-settled one, i.e. currentStep.

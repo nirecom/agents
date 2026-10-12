@@ -17,6 +17,7 @@ bg_write_state() {
     done
     printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2134-bash-guard-pretooluse","steps":{%s},"workflow_type":"wf-code"}' \
         "$sid" "${steps#,}" > "$WORKFLOW_STATE_DIR/$sid.json"
+    bg_approve_gated "$sid"
 }
 
 # I1: gate armed (every step pending, no marker). Status reports active, and the guard defers

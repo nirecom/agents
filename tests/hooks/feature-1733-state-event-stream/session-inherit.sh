@@ -236,8 +236,8 @@ console.log("steps=" + steps.join(",") +
             " events=" + rd().events.filter((e) => e.kind === "plan_approval").length);
 '
     # An empty approvals map here would mean writeState threw no-approval-record and the
-    # heir got no state file at all — the exact #1133 symptom.
-    assert_eq "SI6/plan-approvals-1133" "steps=detail,outline wrong_artifact_sid=0 events=2" "$NODE_OUT"
+    # heir got no state file at all — the exact #1133 symptom. #2277 adds clarify_intent to the gated class.
+    assert_eq "SI6/plan-approvals-1133" "steps=clarify_intent,detail,outline wrong_artifact_sid=0 events=3" "$NODE_OUT"
 fi
 
 echo "== SI7: session_model / complexity_evaluation / worktree_* are NOT inherited =="

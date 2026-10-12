@@ -1,19 +1,22 @@
 "use strict";
 
-const fs = require("fs");
+const { readTurnTail, readTranscriptLines } = require("../lib/transcript-reader");
+
+// The last assistant entry once the turn's final line is flushed (#2610); null when there is
+// none or the flush is undecidable (the detectors then report nothing).
+function lastAssistantOf(transcriptPath, lastAssistantMessage) {
+  const tail = readTurnTail({
+    input: { transcript_path: transcriptPath, last_assistant_message: lastAssistantMessage },
+  });
+  return tail.undecidable ? null : tail.lastAssistantEntry;
+}
 
 // Returns true if the last assistant turn's content array ends with a MARK_STEP
 // Bash tool_use and no tool_use follows it in the same array (sentinel hang).
 // CONFIRM_* Bash calls are exempt (they pause for approval, not a hang).
 // Uses MARKER_RE_DQ + MARKER_RE_SQ from sentinel-patterns.js (SSOT); fails open if unavailable.
-function detectSentinelHang(transcriptPath) {
+function detectSentinelHang(transcriptPath, lastAssistantMessage) {
   if (!transcriptPath) return false;
-  let lines;
-  try {
-    lines = fs.readFileSync(transcriptPath, "utf8").split("\n");
-  } catch (_) {
-    return false;
-  }
   let MARKER_RE_DQ, MARKER_RE_SQ;
   try {
     ({ MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns"));
@@ -24,15 +27,7 @@ function detectSentinelHang(transcriptPath) {
   // session's TERMINAL step (SSOT: state-io TERMINAL_STEPS) and `pre_final_report_gate`
   // is the pause immediately before it — stopping there is the expected outcome, not a hang.
   const SENTINEL_HANG_EXEMPT_STEPS = new Set(["final_report", "pre_final_report_gate"]);
-  const tail = lines.slice(-100);
-  let lastAssistant = null;
-  for (const line of tail) {
-    if (!line.trim()) continue;
-    try {
-      const entry = JSON.parse(line);
-      if (entry.type === "assistant") lastAssistant = entry;
-    } catch (_) {}
-  }
+  const lastAssistant = lastAssistantOf(transcriptPath, lastAssistantMessage);
   if (!lastAssistant) return false;
   const content =
     lastAssistant.message &&
@@ -60,23 +55,9 @@ function detectSentinelHang(transcriptPath) {
 // Returns true if the last assistant turn's content array's LAST tool_use is
 // an AskUserQuestion. When true, the user is mid-dialog and alert mode block
 // branches must be suppressed (#903).
-function detectAskUserQuestionTurn(transcriptPath) {
+function detectAskUserQuestionTurn(transcriptPath, lastAssistantMessage) {
   if (!transcriptPath) return false;
-  let lines;
-  try {
-    lines = fs.readFileSync(transcriptPath, "utf8").split("\n");
-  } catch (_) {
-    return false;
-  }
-  const tail = lines.slice(-100);
-  let lastAssistant = null;
-  for (const line of tail) {
-    if (!line.trim()) continue;
-    try {
-      const entry = JSON.parse(line);
-      if (entry.type === "assistant") lastAssistant = entry;
-    } catch (_) {}
-  }
+  const lastAssistant = lastAssistantOf(transcriptPath, lastAssistantMessage);
   if (!lastAssistant) return false;
   const content =
     lastAssistant.message &&
@@ -94,8 +75,8 @@ function detectAskUserQuestionTurn(transcriptPath) {
 // Parses the JSONL transcript into [{role,content}] format for collectAuditCandidates.
 function parseTranscriptForAudit(transcriptPath) {
   if (!transcriptPath) return [];
-  let lines;
-  try { lines = fs.readFileSync(transcriptPath, "utf8").split("\n"); } catch (_) { return []; }
+  // Whole-transcript scan: a late final line does not change it, so no flush wait (#2610).
+  const lines = readTranscriptLines(transcriptPath);
   const result = [];
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -117,12 +98,8 @@ function parseTranscriptForAudit(transcriptPath) {
 // and must agree on visibility.
 function detectOffProposal(transcriptPath) {
   if (!transcriptPath) return { detected: false, kind: null };
-  let lines;
-  try {
-    lines = fs.readFileSync(transcriptPath, "utf8").split("\n");
-  } catch (_) {
-    return { detected: false, kind: null };
-  }
+  // Whole-transcript scan of past tool_use: no flush wait (#2610).
+  const lines = readTranscriptLines(transcriptPath);
   let WORKTREE_OFF_DQ, WORKTREE_OFF_LL, WORKTREE_ON_DQ, WORKTREE_ON_LL;
   let WORKFLOW_OFF_DQ, WORKFLOW_OFF_LL, WORKFLOW_ON_DQ, WORKFLOW_ON_LL;
   let WORKTREE_OFF_EMG_DQ, WORKTREE_OFF_EMG_LL, WORKFLOW_OFF_EMG_DQ, WORKFLOW_OFF_EMG_LL;

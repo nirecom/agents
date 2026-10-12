@@ -1,27 +1,14 @@
 #!/bin/bash
 # Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/reset-handler.js, bin/workflow/next-step, bin/workflow/reconcile-state, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, approval-gate, outline, detail, confirm-sentinel, scope:common, pwsh-not-required
-#
-# TL3 gap (what this test does NOT catch):
-# - A real Claude Code session where PostToolUse fires workflow-mark.js and the
-#   CONFIRM_OUTLINE/CONFIRM_DETAIL dialog is surfaced by confirm-checkpoint.js.
-# - The live next-step consultation triggered by PostCompact / SessionStart hooks.
-# These tests spawn the real node subprocesses (next-step, reconcile-state,
-# workflow-mark.js) against real on-disk state/plans fixtures (TL2 broad
-# integration), but never drive a real `claude -p` turn.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Covers #1133 + #1148 (approval gate for outline/detail completion):
-#   Completion of the approval-gated steps (outline, detail) must NEVER be
-#   persisted without a recorded plan_approvals[step] approval, across ALL write
-#   paths (direct markStep, MARK_STEP sentinel, next-step evidence auto-complete,
-#   reconcile-state), and the #1148 inconsistency-scan reordering around a
-#   read-only effective-state snapshot.
-#
-# fail-before-fix: the approval invariant, plan_approvals state, completion-approval.js,
-# effective-state.js, and confirm-approval-handler.js do NOT exist in the pre-fix
-# codebase, so these tests are EXPECTED to fail now. That is correct for this step.
+
+# TL3 gap: no real Claude Code turn (PostToolUse workflow-mark.js, the confirm-checkpoint.js
+# dialog, the PostCompact / SessionStart next-step consultation). TL2: real node subprocesses on
+# on-disk fixtures. Mitigation: bin/check-verification-gate.sh skill-orchestration preflight.
+
+# Covers #1133 + #1148: a gated completion is never persisted without a plan_approvals[step]
+# record on any write path (markStep, MARK_STEP, next-step evidence, reconcile-state), plus the
+# #1148 inconsistency-scan reordering around the read-only effective-state snapshot.
 
 set -uo pipefail
 
@@ -148,9 +135,15 @@ gen_state() {
   run_with_timeout node "$MK_STATE" "$1" "$wt" "$extra"
 }
 
+# write_state <sid> <json>. #2277 gated clarify_intent with no migration: a fixture that records
+# clarify_intent complete without its own approval gets a real confirm-sentinel record (plus
+# intent.md when absent) so the case keeps testing outline/detail, not the intent gate.
+PLAN_APPROVAL_FIXTURE="$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js"
 write_state() {
-  local sid="$1" json="$2"
-  printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+  local sid="$1" json="$2" f="$WORKFLOW_DIR/${1}.json"
+  printf '%s' "$json" > "$f"
+  run_with_timeout node "$PLAN_APPROVAL_FIXTURE" inject-complete "$(to_node_path "$f")" clarify_intent >/dev/null ||
+    echo "FAIL: write_state($sid): could not inject the clarify_intent approval"
 }
 
 # The three raw readers below accept BOTH state shapes: the legacy top-level
