@@ -122,6 +122,9 @@ echo "=== RS-2: intent.md present + clarify_intent=pending → repaired to compl
 SID="rs2-$$"
 write_state "$SID" "$(CI_PENDING_STATE $SID)"
 touch "$PLANS_DIR/${SID}-intent.md"
+# #2277: completing clarify_intent requires an approval bound to the intent artifact;
+# without one the repair is refused (UnapprovedCompletionError).
+WORKFLOW_PLANS_DIR="$PLANS_DIR" node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" approve "$SID" clarify_intent >/dev/null 2>&1 || true
 
 run_reconcile --session "$SID"
 

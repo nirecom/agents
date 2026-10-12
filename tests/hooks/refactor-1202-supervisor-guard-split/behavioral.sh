@@ -129,15 +129,17 @@ fi
 
 # ─── GROUP D — boundary / shape / undefined-path tests ───────────────────────
 
-# 34. detectSentinelHang — tail-100 boundary: MARK_STEP only in line 1 of 200 → false
-if [ ! -f "$DETECT_PATH" ]; then skip "detectSentinelHang tail-100 boundary: MARK_STEP outside window → false (detect.js missing)"
+# 34. detectSentinelHang — turn boundary: MARK_STEP only in line 1 of 200, later real user prompts → false
+# #2610: the window is the current turn (transcript-reader), not the last 100 lines, so the
+# padding must be real user prompts (message.content string) that close the MARK_STEP's turn.
+if [ ! -f "$DETECT_PATH" ]; then skip "detectSentinelHang turn boundary: MARK_STEP in a previous turn → false (detect.js missing)"
 else
     _f=$(mktemp); _fn="$(to_node_path "$_f")"
     printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\""}}]}}' > "$_f"
-    for i in $(seq 2 200); do printf '%s\n' '{"type":"user","message":"padding"}' >> "$_f"; done
-    out=$(run_with_timeout 10 node -e "const m=require('${DETECT_JS}');const r=m.detectSentinelHang('${_fn}');if(r!==false){console.log('FAIL: expected false (MARK_STEP outside tail-100), got '+r);process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
-    if [ "$out" = "OK" ]; then pass "detectSentinelHang tail-100 boundary: MARK_STEP only in line 1 of 200-line transcript → false"
-    else fail "detectSentinelHang tail-100 boundary: MARK_STEP only in line 1 of 200-line transcript → false" "$out"; fi
+    for i in $(seq 2 200); do printf '%s\n' '{"type":"user","message":{"role":"user","content":"padding"}}' >> "$_f"; done
+    out=$(run_with_timeout 10 node -e "const m=require('${DETECT_JS}');const r=m.detectSentinelHang('${_fn}');if(r!==false){console.log('FAIL: expected false (MARK_STEP in a previous turn), got '+r);process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
+    if [ "$out" = "OK" ]; then pass "detectSentinelHang turn boundary: MARK_STEP only in line 1 of 200-line transcript → false"
+    else fail "detectSentinelHang turn boundary: MARK_STEP only in line 1 of 200-line transcript → false" "$out"; fi
 fi
 
 # 35. detectOffProposal — whole-transcript scan: ENFORCE_WORKTREE_OFF in line 1 of 200 → {detected:true}

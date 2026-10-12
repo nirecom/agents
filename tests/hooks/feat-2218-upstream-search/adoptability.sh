@@ -179,6 +179,7 @@ fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(dir, 'legacydonor-sess-13-intent.md'), '**Title:** Legacy donor' + NL + 'Granularity, #2218.' + NL);
 writeState('legacydonor-sess-13', createInitialState('legacydonor-sess-13', { cwd: null, git_branch: 'feature/donor' }));
 markStep('legacydonor-sess-13', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('legacydonor-sess-13', 'clarify_intent'); // #2277
 markStep('legacydonor-sess-13', 'clarify_intent', 'complete');
 const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 const tdir = path.join('$TMP_NODE/u13/transcripts', encoded);
@@ -249,7 +250,11 @@ fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(dir, 'iamdonor-sess-17-outline.md'), '**Title:** Intent-artifact-missing donor' + NL + 'Degradable resumability reason, #2279.' + NL);
 writeState('iamdonor-sess-17', createInitialState('iamdonor-sess-17', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 markStep('iamdonor-sess-17', 'workflow_init', 'complete');
+// #2277: completing clarify_intent needs an approval bound to a real intent.md, so the
+// fixture approves against a transient one and then removes it to reach the S3 shape.
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('iamdonor-sess-17', 'clarify_intent');
 markStep('iamdonor-sess-17', 'clarify_intent', 'complete');
+fs.unlinkSync(path.join(dir, 'iamdonor-sess-17-intent.md'));
 writeState('iamheir-sess-17', createInitialState('iamheir-sess-17', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 const tdir = path.join('$TMP_NODE/u17/transcripts', encoded);
@@ -349,6 +354,7 @@ fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(dir, 'searchonly-sess-18-intent.md'), '**Title:** Search-only donor' + NL + 'Adoptable but unannounced, #2279.' + NL);
 writeState('searchonly-sess-18', createInitialState('searchonly-sess-18', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 markStep('searchonly-sess-18', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('searchonly-sess-18', 'clarify_intent'); // #2277
 markStep('searchonly-sess-18', 'clarify_intent', 'complete');
 writeState('soheir-sess-18', createInitialState('soheir-sess-18', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');

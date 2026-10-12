@@ -76,6 +76,10 @@ check_not_contains() {
 write_state() {
   local sid="$1" json="$2"
   printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277: a complete plan stage without an approval record is treated as unapproved;
+  # bind approvals to fixture artifacts in PLANS_DIR so the docs-step routing is reached.
+  WORKFLOW_PLANS_DIR="$PLANS_DIR" node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" \
+    inject-complete "$(to_node_path "$WORKFLOW_DIR/${sid}.json")" clarify_intent outline detail >/dev/null 2>&1 || true
 }
 
 read_state_status() {

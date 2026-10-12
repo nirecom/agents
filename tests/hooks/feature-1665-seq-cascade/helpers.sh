@@ -52,6 +52,8 @@ M_POLICY="$SCRIPT_CHECKOUT_ROOT_N/hooks/lib/stop-exemption-policy.js"; export M_
 M_GUARD="$SCRIPT_CHECKOUT_ROOT_N/hooks/stop-premature-stop-guard.js"; export M_GUARD
 # #2013: the in-flight TTL moved out of lifecycle.js into the policy SSOT.
 M_STEP_POLICY="$SCRIPT_CHECKOUT_ROOT_N/hooks/lib/step-in-flight-policy.js"; export M_STEP_POLICY
+# #2277: a gated complete (clarify_intent/outline/detail) needs a real approval record.
+M_FIX="$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js"; export M_FIX
 
 NEXT_STEP="$_HELPERS_SCRIPT_CHECKOUT_ROOT/bin/workflow/next-step"
 GATE_HOOK="$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"

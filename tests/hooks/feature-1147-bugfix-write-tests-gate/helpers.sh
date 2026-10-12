@@ -51,6 +51,12 @@ write_state() {
   "workflow_type": "wf-code"
 }
 EOF
+    approve_complete_gates "$sid"
+}
+
+# #2277: a gated `complete` (clarify_intent) counts only with a plan-approval record.
+approve_complete_gates() {
+    node "$WIN_SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" inject-complete "$WORKFLOW_STATE_DIR/$1.json" clarify_intent outline detail >/dev/null
 }
 
 # write_state_with_steps <sid> <is_bugfix> <git_branch> <write_tests_status> <review_tests_status> [user_verification_status=pending]
@@ -84,6 +90,7 @@ write_state_with_steps() {
   "workflow_type": "wf-code"
 }
 EOF
+    approve_complete_gates "$sid"
 }
 
 # #1733: state on disk is an append-only event stream (no top-level .steps);

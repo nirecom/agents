@@ -301,6 +301,10 @@ else
 fi
 rm -f "$ISOLATED_CFG_DIR/.env"
 
+# ── T25-T28 (#2277): CONFIRM_INTENT=off no longer skips (even with the stage table unloadable); CONFIRM_DETAIL/OUTLINE=off still do ──
+# shellcheck source=feature-confirm-checkpoint/off-per-stage.sh
+. "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/off-per-stage.sh"
+
 # ── T13-T15 (#2513): published blob URL, push failure, no editor launch ──────
 # shellcheck source=feature-confirm-checkpoint/plan-sync.sh
 . "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/plan-sync.sh"

@@ -12,11 +12,21 @@ const RT = (text) => ({
   message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: text }] },
 });
 const R = () => RT("ok");
+// RTE — the tool_result of t1 marked is_error (a denied CONFIRM echo).
+const RTE = (text) => ({
+  type: "user",
+  message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", is_error: true, content: text }] },
+});
+// UMETA / UCOMPACT — user entries that are not real prompts (meta injection, compaction summary).
+const UMETA = (text) => ({ type: "user", isMeta: true, message: { role: "user", content: text } });
+const UCOMPACT = (text) => ({ type: "user", isCompactSummary: true, message: { role: "user", content: text } });
 const A = (...content) => ({ type: "assistant", message: { role: "assistant", content } });
 const T = (text) => ({ type: "text", text });
 const B = (command) => ({ type: "tool_use", id: "t1", name: "Bash", input: { command } });
 const S = (skill) => ({ type: "tool_use", id: "t2", name: "Skill", input: { skill } });
 const C = (stage) => B('echo "<<WORKFLOW_CONFIRM_' + stage.toUpperCase() + ': ok>>"');
+// W — a file-writing tool_use (Write / Edit / MultiEdit) on file_path.
+const W = (file_path, name) => ({ type: "tool_use", id: "t3", name: name || "Write", input: { file_path, content: "x" } });
 
 const fwdOf = (p) => p.replace(/\\/g, "/");
 const uriOf = (p) => {
@@ -47,4 +57,4 @@ function runUnit(body) {
   process.stdout.write(out.join("\n") + "\n");
 }
 
-module.exports = { path, U, R, RT, A, T, B, S, C, fwdOf, uriOf, runUnit };
+module.exports = { path, U, R, RT, RTE, UMETA, UCOMPACT, A, T, B, S, C, W, fwdOf, uriOf, runUnit };

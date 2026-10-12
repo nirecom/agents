@@ -15,8 +15,15 @@ plant_record() {
   " 2>/dev/null || true
 }
 
+# #2277: approve the complete gated steps after plant_valid_skip, which truncates the artifact the sha binds.
+approve_gated() {
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete \
+    "$WORKFLOW_DIR_N/$1.json" clarify_intent outline detail >/dev/null 2>&1 || echo "APPROVE_ERR:$1"
+}
+
 run_next() {
   local sid="$1"
+  approve_gated "$sid"
   WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout node "$NEXT_STEP" --session "$sid" 2>/dev/null || echo "ERROR"
 }
 
@@ -57,22 +64,8 @@ check_contains "RV-16c: second run advances to detail (not outline)" "NEXT_SKILL
 check_not_contains "RV-16d: second run not an abort" "ACTION=abort" "$OUT2"
 
 # ---------------------------------------------------------------------------
-# RV-REC-1: markStep persistence failure in outline skip block must NOT
-# infinite-recurse.  Fault injection: create a directory at <sid>.json.tmp so
-# writeFileSync throws EISDIR -> markStep throws -> the unfixed code's
-# unconditional `return computeVerdict` recurses O(stack-depth) times before
-# the RangeError is caught by the outer catch.  The fix moves the
-# `return computeVerdict` call to inside the try block so it is only reached
-# when markStep succeeds; on failure it falls through without recursing.
-#
-# Observable regression: the unfixed code attempts fs.writeFileSync to
-# *.json.tmp thousands of times (each recursive computeVerdict call re-enters
-# markStep), while the fixed code attempts it exactly once per invocation.
-# The hvsj-call-counter.js preload counts *.json.tmp write attempts and writes
-# the total to HVSJ_COUNTER_FILE on exit.  We assert count == 1.
-#
-# These cases FAIL on the unfixed code (count >> 1) and PASS after the fix
-# (count == 1).
+# RV-REC-1: an EISDIR markStep failure in the outline skip block must not recurse into
+# computeVerdict; hvsj-call-counter.js counts state tmp-write attempts (unfixed: >>1, fixed: 1).
 # ---------------------------------------------------------------------------
 HVSJ_COUNTER_PRELOAD_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js")"
 NEXT_STEP_N="$(cygpath -m "$NEXT_STEP" 2>/dev/null || echo "$NEXT_STEP")"
@@ -98,6 +91,7 @@ RVREC1_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
 ")"
 : > "$PLANS_GLOBAL_DIR/rvrec1-intent.md"
 write_state "rvrec1" "$RVREC1_JSON"
+approve_gated rvrec1
 
 # Sanity-guard: verify hasValidSkipJudgment returns true for this fixture so
 # we know the skip branch is actually entered (false → test would never hit
@@ -215,6 +209,7 @@ RVREC2_JSON="$(printf '%s' "$JSON_AT_DETAIL" | node -e "
 ")"
 : > "$PLANS_GLOBAL_DIR/rvrec2-outline.md"
 write_state "rvrec2" "$RVREC2_JSON"
+approve_gated rvrec2
 
 # Sanity-guard for the detail fixture.
 HVSJ_CHECK2="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" node -e "
@@ -247,23 +242,9 @@ check_contains "RV-REC-2c: fell through to normal detail handling — NEXT_SKILL
 
 
 # ---------------------------------------------------------------------------
-# RV-36: hardening #3/#7 (plan RV-17b) — single-read: applyRecordedVerdictSkip
-# reads skip_judgment exactly once per outline-skip invocation.
-#
-# Uses a new preload read-skip-judgment-counter.js that wraps readSkipJudgment
-# in skip-signal-resolver.js and counts calls. Writes count to RSJ_COUNTER_FILE.
-# Assert count == 1 (no double-read race).
-#
-# The preload wraps resolverModule.readSkipJudgment (the function exported by
-# skip-signal-resolver.js). After hardening #3/#7, next-step reads it once inside
-# applyRecordedVerdictSkip. Wrapping the resolver export is observed because
-# --require runs before next-step loads, so the module is already patched in cache
-# when next-step's require() calls resolve.
-#
-# Sanity-guard: hasValidSkipJudgment must be TRUE for the fixture so the skip
-# branch is actually entered; otherwise count==0 would be a false green.
-# RED if the helper reads readSkipJudgment zero times (skip branch not entered)
-# or more than once (double-read race).
+# RV-36: applyRecordedVerdictSkip reads skip_judgment exactly once per outline skip.
+# read-skip-judgment-counter.js (--require preload) wraps the resolver export and counts
+# calls; 0 means the skip branch was never entered, >1 is a double-read race.
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-36: hardening #3/#7 — applyRecordedVerdictSkip reads skip_judgment exactly once ==="
@@ -286,6 +267,7 @@ RV36_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
 ")"
 : > "$PLANS_GLOBAL_DIR/rv36-intent.md"
 write_state "rv36" "$RV36_JSON"
+approve_gated rv36
 
 # Sanity-guard: hasValidSkipJudgment must be TRUE for this fixture.
 RV36_HVSJ="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" node -e "
