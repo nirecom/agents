@@ -67,6 +67,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/block-case-markers.js` | PreToolUse | **No** | **No** |
 | `hooks/postuse-step-in-flight-mark.js` | PostToolUse | **No** | **No** |
 | `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |
+| `hooks/postuse-shell-snapshot-repair.js` | PostToolUse, PostToolUseFailure | **No** | **No** |
 | `hooks/jev-shadow-pre.js` | PreToolUse | **No** | **No** |
 | `hooks/jev-shadow-post.js` | PostToolUse | **No** | **No** |
 | `hooks/subagent-dispatch-prompt.js` | PreToolUse | **No** | **No** |

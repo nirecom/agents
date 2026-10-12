@@ -177,10 +177,13 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   success detection uses the shared 3-field contract (`exit_code ?? exitCode ?? success`).
   Deliberately limited to exactly one pattern + one message (#1443) — generalizing git-error
   guidance into a table is #1447's scope
+- `postuse-shell-snapshot-repair.js` (PostToolUse + PostToolUseFailure, matcher: `Bash`) — rewrites a
+  Windows-form `PATH` line in shell snapshots to POSIX form so Bash stops exiting 127; fail-open, never
+  re-runs the failed command (#2221). See [../shell-snapshot-repair.md](../shell-snapshot-repair.md)
 - `session-start.js` (SessionStart) — inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](../workflow.md)); otherwise creates fresh state; outputs
   `additionalContext` containing session_id, every step status, and a `NEXT ACTION:` line
-  from next-step (`bin/workflow/next-step`); runs zombie cleanup
+  from next-step (`bin/workflow/next-step`); runs zombie cleanup; repairs Windows-form shell snapshots
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
 - `instructions-loaded-audit.js` (InstructionsLoaded) — classifies ONE loaded instruction
