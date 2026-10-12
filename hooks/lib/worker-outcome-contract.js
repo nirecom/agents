@@ -8,8 +8,10 @@
 const crypto = require("crypto");
 
 const SCHEMA_VERSION = 1;
-const OUTCOME_STATUSES = Object.freeze(["pass", "fail", "timeout", "runner-error"]);
+const OUTCOME_STATUSES = Object.freeze(["pass", "fail", "timeout", "runner-error", "unrunnable", "skip"]);
 const RUN_CONTRACT_KEYS = Object.freeze(["pass", "fail", "skip", "executed"]);
+// Present together in a current-shape contract (#2501), absent together in a legacy one.
+const RUN_CONTRACT_CURRENT_KEYS = Object.freeze(["unrunnable", "timeout"]);
 // Equals the YAML renderer's summary cap, so the record re-renders without truncation.
 const MAX_OUTCOME_SUMMARY = 296;
 
@@ -39,6 +41,9 @@ function copyRunContract(value) {
   if (!isPlainObject(value)) return orNull(value);
   const out = {};
   for (const key of RUN_CONTRACT_KEYS) out[key] = value[key];
+  if (RUN_CONTRACT_CURRENT_KEYS.some((key) => value[key] !== undefined)) {
+    for (const key of RUN_CONTRACT_CURRENT_KEYS) out[key] = value[key];
+  }
   return out;
 }
 
@@ -74,6 +79,10 @@ function runContractProblem(value) {
   if (value === null || value === undefined) return null;
   if (!isPlainObject(value)) return "worker_result.run_contract must be an object or null";
   for (const key of RUN_CONTRACT_KEYS) {
+    if (!isCount(value[key])) return `worker_result.run_contract.${key} must be a non-negative integer`;
+  }
+  if (!RUN_CONTRACT_CURRENT_KEYS.some((key) => value[key] !== undefined)) return null;
+  for (const key of RUN_CONTRACT_CURRENT_KEYS) {
     if (!isCount(value[key])) return `worker_result.run_contract.${key} must be a non-negative integer`;
   }
   return null;

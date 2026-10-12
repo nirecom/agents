@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# tests/run-all.sh — Run all (or specified) test scripts in parallel; exit 77 = skip.
+# tests/run-all.sh — Run all (or specified) test scripts in parallel; exit 77 (per file and for the whole run) = nothing executed, all SKIP.
 # Tests: tests/run-all.sh
 # Tags: bin, env, config, tests, scope:common
 # Usage: tests/run-all.sh [-j N|auto] [--deadline SECS] [--print-plan] [--all | <glob-or-file> ...]
 # Env:   FEATURE_644_PHASE, TEST_MAX_JOBS_PER_RUN, RUN_ALL_DEADLINE, RUN_ALL_PROGRESS, RUN_ALL_REAP
-# Exit:  0 pass / 1 fail / 2 argument error / 3 deadline abort / 4 no test lane / 5 registry unreadable / 130 interrupted
+# Exit:  0 pass / 1 fail / 77 nothing passed / 2 argument error / 3 deadline abort / 4 no test lane
+#        5 registry or report lib unreadable / 130 interrupted
 # See docs/architecture/claude-code/test-runner-parallelism.md for the full contract.
 
 set -uo pipefail
@@ -14,6 +15,11 @@ TESTS_DIR="${TESTS_DIR:-$SCRIPT_CHECKOUT_ROOT/tests}"
 REGISTRY_LIB="${RUN_ALL_REGISTRY_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh}"
 # shellcheck source=/dev/null
 { [ -f "$REGISTRY_LIB" ] && . "$REGISTRY_LIB" && tlr_load; } || { echo "[run-all] test language registry not readable: $REGISTRY_LIB (RUN_ALL_REGISTRY_LIB)" >&2; exit 5; }
+# A runner copied alone (a fixture) finds the report layer beside the registry loader it was pointed at.
+REPORT_LIB="${RUN_ALL_REPORT_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-report.sh}"
+[ -n "${RUN_ALL_REPORT_LIB:-}" ] || [ -f "$REPORT_LIB" ] || REPORT_LIB="${REGISTRY_LIB%/*}/run-all-report.sh"
+# shellcheck source=/dev/null
+{ [ -f "$REPORT_LIB" ] && . "$REPORT_LIB"; } || { echo "[run-all] report library not readable: $REPORT_LIB (RUN_ALL_REPORT_LIB)" >&2; exit 5; }
 
 export FEATURE_644_PHASE="${FEATURE_644_PHASE:-0}"
 
@@ -90,8 +96,11 @@ is_self() {
 }
 
 WORK=(); UNSUP=()   # UNSUP: files no supported registry entry covers — listed, never run
+MISSING=()          # MISSING: explicit arguments naming no regular file — reported UNRUNNABLE, never run
+ADDED_FILE=0   # set by add_work once a regular file (self included) is taken in
 add_work() {
   [ -f "$1" ] || return 0
+  ADDED_FILE=1
   is_self "$1" && return 0
   if tlr_match "$1" && [ "$TLR_STATUS" = supported ]; then WORK+=("$1"); else UNSUP+=("$1"); fi
   return 0
@@ -100,7 +109,10 @@ add_work() {
 # Empty IFS: pathname expansion without word splitting, so spaced patterns glob sans eval.
 expand_pattern() {
   local IFS='' f
+  ADDED_FILE=0
   for f in $1; do add_work "$f"; done
+  # An argument that contributed no regular file (missing path, empty glob, directories only) is missing.
+  [ "$ADDED_FILE" -eq 1 ] || MISSING+=("$1")
   return 0
 }
 
@@ -120,7 +132,7 @@ TOTAL=${#WORK[@]}
 WORKDIR="$(mktemp -d 2>/dev/null)" || usage_error "cannot create a temporary work directory"
 
 CLEANUP_DONE=0; INFLIGHT=()
-declare -a JOB_PID JOB_START JOB_RC DONE_FLAG LANE TIER KEY
+declare -a JOB_PID JOB_START JOB_RC JOB_ST JOB_MISS JOB_TO DONE_FLAG LANE TIER KEY
 
 signal_tree() {
   local sig="$1" pid="$2" kid
@@ -311,9 +323,7 @@ resolve_jobs
 
 if [ "$PRINT_PLAN" -eq 1 ]; then
   [ "$LANES_LIB_OK" -eq 1 ] && { thl_plan "$RUN_JOBS"; RUN_JOBS="$THL_PLAN_JOBS"; say "plan: $THL_NOTE"; }
-  printf 'tests_dir=%s\n' "$TESTS_DIR"
-  printf 'jobs=%s\n' "$RUN_JOBS"
-  printf 'serial_count=%s\n' "$SERIAL_COUNT"
+  printf 'tests_dir=%s\njobs=%s\nserial_count=%s\n' "$TESTS_DIR" "$RUN_JOBS" "$SERIAL_COUNT"
   for ((idx = 0; idx < TOTAL; idx++)); do
     printf 'plan\t%s\t%s\t%s\t%s\n' "$idx" "${LANE[$idx]}" "${WORK[$idx]}" "${TIER[$idx]:-$UNMEASURED}"
   done
@@ -340,7 +350,7 @@ esac
 say "reap: $REAP"
 
 # --- scheduler -------------------------------------------------------------
-PASS=0; FAIL=0; SKIP=0; NEXT=0; REPORTED=0; HARVESTED=0
+NEXT=0; REPORTED=0; HARVESTED=0
 SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0; START_TS=$SECONDS
 # Host-wide lanes (#2455): the lease can only narrow RUN_JOBS, never widen it.
 if [ "$LANES_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; then
@@ -348,21 +358,6 @@ if [ "$LANES_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; then
     echo "[run-all] no test lane freed within ${THL_WAIT_CAP_USED}s; inspect holders with: bash bin/test-lanes-status.sh" >&2; exit 4; }
   RUN_JOBS="$THL_GRANTED"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
 fi
-
-# Only a line-initial RUN_CONTRACT marker is disarmed, by prefixing.
-# Shell builtins only — a fork per line would outcost the run on MSYS.
-neutralize_stream() {
-  local line
-  [ -s "$1" ] || return 0
-  while IFS= read -r line || [ -n "$line" ]; do
-    if [[ $line =~ ^[[:blank:]]*RUN_CONTRACT: ]]; then
-      printf '[run-all:neutralized] %s\n' "$line"
-    else
-      printf '%s\n' "$line"
-    fi
-  done <"$1"
-  return 0
-}
 
 LAUNCH_LIB="${RUN_ALL_LAUNCH_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh}"
 # shellcheck source=/dev/null
@@ -374,11 +369,16 @@ launch() {
   local i="$1" script="${WORK[$1]}"
   # The duration is measured child-side and written BEFORE the rc file, which stays the
   # sole completion signal — a harvest that sees <i>.rc always sees a finished <i>.dur.
+  # The rc line is "<rc>\t<state>\t<missing>\t<timeout>" ('-' where a stateless launcher set none); an
+  # UNRUNNABLE unit's launcher note is dropped because its file-level line says the same.
   ( __t0=$SECONDS
-    run_all_exec "$script" "$WORKDIR/$i.out" "$WORKDIR/$i.err"
+    unset RUN_ALL_EXEC_LAUNCHED RUN_ALL_EXEC_STATE RUN_ALL_EXEC_MISSING RAC_EFFECTIVE_TIMEOUT
+    mkdir -p "$WORKDIR/$i.res"
+    run_all_exec "$script" "$WORKDIR/$i.out" "$WORKDIR/$i.err" "$WORKDIR/$i.res"
     __rc=$?; [ "$__rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && __rc=U
+    [ "${RUN_ALL_EXEC_STATE:-}" = UNRUNNABLE ] && : >"$WORKDIR/$i.out"
     echo $((SECONDS - __t0)) >"$WORKDIR/$i.dur"
-    echo "$__rc" >"$WORKDIR/$i.rc" ) &
+    printf '%s\t%s\t%s\t%s\n' "$__rc" "${RUN_ALL_EXEC_STATE:--}" "${RUN_ALL_EXEC_MISSING:--}" "${RAC_EFFECTIVE_TIMEOUT:--}" >"$WORKDIR/$i.rc" ) &
   JOB_PID[$i]=$!
   JOB_START[$i]=$SECONDS
   INFLIGHT+=("$i")
@@ -391,14 +391,14 @@ launch() {
 # The <i>.rc file is the source of truth for job completion; read only
 # after waiting on the pid, so the file is guaranteed whole.
 harvest() {
-  local i rc rest=()
+  local i rc st miss to rest=()
   HARVESTED=0
   for i in ${INFLIGHT[@]+"${INFLIGHT[@]}"}; do
     if [ -e "$WORKDIR/$i.rc" ]; then
       wait "${JOB_PID[$i]}" 2>/dev/null
-      rc=""
-      read -r rc <"$WORKDIR/$i.rc" 2>/dev/null
-      JOB_RC[$i]="$rc"
+      rc="" st="" miss="" to=""
+      IFS=$'\t' read -r rc st miss to <"$WORKDIR/$i.rc" 2>/dev/null
+      JOB_RC[$i]="$rc" JOB_ST[$i]="$st" JOB_MISS[$i]="$miss" JOB_TO[$i]="$to"
       DONE_FLAG[$i]=1
       ledger_record "$i"
       [ "${LANE[$i]}" = serial ] && SERIAL_INFLIGHT=0
@@ -413,23 +413,15 @@ harvest() {
 
 # Replay is strictly in SUBMISSION order, so stdout is byte-identical at any -j.
 flush() {
-  local i script rc verdict
+  local i script
   while [ "$REPORTED" -lt "$NEXT" ]; do
     i="$REPORTED"
     [ "${DONE_FLAG[$i]:-0}" = "1" ] || break
     script="${WORK[$i]}"
-    rc="${JOB_RC[$i]:-1}"; case "$rc" in U) ;; ''|*[!0-9]*) rc=1 ;; esac
     neutralize_stream "$WORKDIR/$i.out"
     neutralize_stream "$WORKDIR/$i.err" >&2
-    if [ "$rc" = U ]; then verdict=UNSUPPORTED  # not launched; <i>.out already holds its UNSUPPORTED line
-    elif [ "$rc" -eq 0 ]; then
-      echo "PASS: $script"; PASS=$((PASS + 1)); verdict=PASS
-    elif [ "$rc" -eq 77 ]; then
-      echo "SKIP: $script"; SKIP=$((SKIP + 1)); verdict=SKIP
-    else
-      echo "FAIL: $script (exit $rc)"; FAIL=$((FAIL + 1)); verdict=FAIL
-    fi
-    say "$((i + 1))/$TOTAL $verdict $script $((SECONDS - ${JOB_START[$i]}))s"
+    rar_unit "$script" "$WORKDIR/$i.res" "${JOB_RC[$i]:-1}" "${JOB_ST[$i]:--}" "${JOB_MISS[$i]:--}" "${JOB_TO[$i]:--}"
+    say "$((i + 1))/$TOTAL $RAR_STATE $script $((SECONDS - ${JOB_START[$i]}))s"
     REPORTED=$((REPORTED + 1))
   done
   return 0
@@ -452,12 +444,8 @@ reap_wait() {
     wait "${JOB_PID[${INFLIGHT[0]}]}" 2>/dev/null
   fi
   harvest
-  if [ "$HARVESTED" -gt 0 ]; then
-    IDLE_SPINS=0
-  else
-    IDLE_SPINS=$((IDLE_SPINS + 1))
-    [ "$IDLE_SPINS" -ge 3 ] && sleep 1
-  fi
+  if [ "$HARVESTED" -gt 0 ]; then IDLE_SPINS=0; else IDLE_SPINS=$((IDLE_SPINS + 1)); fi
+  [ "$IDLE_SPINS" -ge 3 ] && sleep 1
   return 0
 }
 
@@ -491,10 +479,9 @@ if [ "$DEADLINE_HIT" -eq 1 ]; then
   exit 3
 fi
 
-for f in ${UNSUP[@]+"${UNSUP[@]}"}; do tlr_match "$f"; printf 'UNSUPPORTED: %s (language: %s; not run)\n' "$f" "${TLR_ID:-unknown}"; done
-echo ""
-if declare -F run_all_hit_report >/dev/null 2>&1; then run_all_hit_report || FAIL=$((FAIL + 1)); fi # counted before the counts print
-echo "Results: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"
-echo "RUN_CONTRACT: PASS=$PASS FAIL=$FAIL SKIP=$SKIP EXECUTED=$((PASS + FAIL + SKIP))"
+if declare -F run_all_hit_report >/dev/null 2>&1; then run_all_hit_report || RAR_FAIL=$((RAR_FAIL + 1)); fi # counted before the counts print
+rar_missing ${MISSING[@]+"${MISSING[@]}"}
+rar_tail ${UNSUP[@]+"${UNSUP[@]}"}
 cleanup_all
-[ "$FAIL" -eq 0 ] && exit 0 || exit 1
+# A run that passed nothing is no pass, exactly as a single file's 77 (test-result-contract.md).
+if [ "$RAR_FAIL" -gt 0 ]; then exit 1; elif [ "$RAR_PASS" -eq 0 ]; then exit 77; else exit 0; fi

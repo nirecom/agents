@@ -1,22 +1,11 @@
 #!/usr/bin/env bash
-#
-# bin/lib/sweep-write-mode.sh
-#
-# SSOT for the write-mode semantics shared by the /sweep family
-# (sweep-branches / sweep-plans / sweep-worktrees / audit-tests /
-# audit-tests-common / sweep-issues).
-#
-# Convention (matches bin/vscode-cc-repair/cli.js:31):
-#   no flag    → production run: writes / deletes
-#   --dry-run  → classify and report only; write nothing
-#   --apply    → accepted, backward-compatible synonym of "no flag"
-#
-# What is shared here is the SEMANTICS, not the argv parser: the sweep-*.sh
-# scripts use a trailing `shift` loop while the audit-tests*.sh scripts use
-# per-arm `shift N`. Each caller keeps its own grammar and calls the setters
-# from its own case arms.
-#
-# Source-only; not executable.
+# bin/lib/sweep-write-mode.sh — SSOT for the /sweep family write-mode SEMANTICS (not the argv parser;
+# each caller calls the setters from its own case arms). Source-only; not executable.
+# Convention (matches bin/vscode-cc-repair/cli.js:31): no flag → production run (writes / deletes);
+#   --dry-run → classify and report only; --apply → backward-compatible synonym of "no flag".
+# Named exception (sweep-plans): the flagless write scope is only `non-plan` retention-class files;
+#   `plan` / `user-requested` files need --include-plan-and-user-requested plus the skill's approval
+#   gate, and --apply never widens it (docs/architecture/claude-code/state-dirs.md, Cleanup).
 
 # Apply-by-default. Call once before parsing argv.
 sweep_write_mode_init() {

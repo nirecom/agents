@@ -12,6 +12,12 @@ const {
   sanitizeLine,
   MAX_LINE,
 } = require("../../hooks/lib/output-sanitize");
+const {
+  CONTRACT_PREFIX_RE,
+  findSingleContract,
+  formatContract,
+  parseContractLine,
+} = require("../../hooks/lib/run-contract");
 
 const SENTINEL_SCAN_RE = /<<\s*WORKFLOW/i;
 
@@ -23,7 +29,7 @@ const FALLBACK_MSG = "output withheld (sentinel-like content detected)";
 const FALLBACK_TRIPLE = `status: failed\nsummary: ${FALLBACK_MSG}\nartifact_path: (none)\n`;
 const FALLBACK_TRIPLE_QUOTED = `status: failed\nsummary: "${FALLBACK_MSG}"\nartifact_path: "(none)"\n`;
 // `runner-error`, not `failed`: the YAML renderer's status vocabulary is
-// pass | fail | timeout | runner-error, and /run-tests RNT-9 branches on it.
+// pass | fail | timeout | runner-error | unrunnable | skip, and /run-tests RNT-9 branches on it.
 const FALLBACK_YAML =
   "status: runner-error\nexit_code: -1\nduration_seconds: 0\n" +
   `summary: '${FALLBACK_MSG}'\nfailing_tests: []\nlog_tail: |\n  ${FALLBACK_MSG}\n`;
@@ -65,39 +71,33 @@ function renderStatusTriple(result, quoted) {
 // The worker reports the suite's contract as structured data; this renders it
 // back as ONE line, unindented, at the very top — the only place the run_tests
 // hook can read it without parsing the `log_tail` block scalar (#1378).
-// Both spellings the worker may hand over are accepted (object today, plain
-// string historically); anything else yields no line at all, because a contract
-// this renderer invented would be a verdict the suite never gave.
+// The line keeps the shape it was parsed in: a legacy 4-field contract padded to six
+// would read as current and complete the step (#2501 C3). An object without `shape`
+// is legacy unless it carries unrunnable/timeout. Whatever would not re-parse strictly — the hook's own
+// parser — yields no line: a contract this renderer invented is a verdict the suite never gave.
+// Both spellings a worker may hand over are accepted: an object today, a plain string historically.
 function formatRunContract(value) {
-  if (value === null || value === undefined) return null;
   if (typeof value === "string") {
-    const m = /^\s*(?:RUN_CONTRACT:\s*)?PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)\s*$/.exec(value);
-    return m === null ? null : `PASS=${m[1]} FAIL=${m[2]} SKIP=${m[3]} EXECUTED=${m[4]}`;
+    const c = parseContractLine(`RUN_CONTRACT: ${value.trim().replace(/^RUN_CONTRACT:[ \t]*/, "")}`);
+    return c === null ? null : formatContract(c);
   }
-  if (typeof value !== "object") return null;
-  const nums = ["pass", "fail", "skip", "executed"].map((k) => value[k]);
-  if (nums.some((n) => typeof n !== "number" || !Number.isFinite(n) || n < 0)) return null;
-  const [p, f, s, e] = nums.map((n) => Math.trunc(n));
-  return `PASS=${p} FAIL=${f} SKIP=${s} EXECUTED=${e}`;
+  if (value === null || typeof value !== "object") return null;
+  const current = value.shape !== undefined
+    ? value.shape === "current"
+    : value.unrunnable !== undefined || value.timeout !== undefined;
+  const fields = ["pass", "fail", "skip", "executed"].concat(current ? ["unrunnable", "timeout"] : []);
+  if (!fields.every((k) => Number.isSafeInteger(value[k]) && value[k] >= 0)) return null;
+  const line = formatContract(Object.assign({}, value, { shape: current ? "current" : "legacy" }));
+  return parseContractLine(line) === null ? null : line;
 }
-
-// Same shape the hook's parser recognises, so "would the parser see two of
-// these?" is answered with the parser's own question.
-const CONTRACT_LINE_RE = /^[ \t]*RUN_CONTRACT: PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+/;
-const CONTRACT_CAPTURE_RE =
-  /^[ \t]*RUN_CONTRACT: (PASS=\d+ FAIL=\d+ SKIP=\d+ EXECUTED=\d+)[ \t]*$/;
 
 // RETIRED, DEFINITION ONLY — deliberately not called (#1273 round 3 / NEW-L1):
 // lifting log-tail text into the verdict slot laundered untrusted bytes. Kept
 // unwired so a future caller must add the source-identity check it never had.
 // eslint-disable-next-line no-unused-vars
 function promoteContractFromTail(tailSource) {
-  const found = [];
-  for (const l of tailSource) {
-    const m = CONTRACT_CAPTURE_RE.exec(sanitizeLine(l, MAX_LINE));
-    if (m !== null) found.push(m[1]);
-  }
-  return found.length === 1 ? found[0] : null;
+  const c = findSingleContract(tailSource.map((l) => sanitizeLine(l, MAX_LINE)));
+  return c.reason === undefined ? formatContract(c) : null;
 }
 
 function renderTestRunnerYaml(result) {
@@ -107,7 +107,7 @@ function renderTestRunnerYaml(result) {
   // Structured worker data is its ONLY source: see the retired promotion helper
   // above for why log-tail text may not reach this slot.
   const contract = formatRunContract(result.runContract);
-  if (contract !== null) lines.push(`RUN_CONTRACT: ${contract}`);
+  if (contract !== null) lines.push(contract);
   lines.push(`status: ${plainValue(result.status, 64, "runner-error")}`);
   lines.push(`exit_code: ${toInt(result.exitCode, -1)}`);
   lines.push(`duration_seconds: ${Math.max(0, toInt(result.durationSeconds, 0))}`);
@@ -130,7 +130,7 @@ function renderTestRunnerYaml(result) {
   const tail = tailSource
     .map((l) => sanitizeLine(l, MAX_LINE))
     .filter((l) => l.trim() !== "")
-    .filter((l) => contract === null || !CONTRACT_LINE_RE.test(l))
+    .filter((l) => contract === null || !CONTRACT_PREFIX_RE.test(l))
     .slice(-MAX_TAIL_LINES);
   if (tail.length === 0) lines.push("  (no output)");
   else for (const l of tail) lines.push(`  ${l}`);
@@ -196,10 +196,14 @@ function write(entry, result) {
 // background dispatch re-rendered from its outcome prints what the foreground
 // dispatch would have printed: same sanitizing, same caps, same fallback.
 
+// The record keeps the contract in its parsed shape: a legacy one carries no
+// unrunnable/timeout keys, so a re-render cannot pad it to the current shape.
 function contractObject(line) {
-  if (line === null) return null;
-  const m = /^PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)$/.exec(line);
-  return { pass: Number(m[1]), fail: Number(m[2]), skip: Number(m[3]), executed: Number(m[4]) };
+  const c = line === null ? null : parseContractLine(line);
+  if (c === null) return null;
+  const out = { pass: c.pass, fail: c.fail, skip: c.skip, executed: c.executed };
+  if (c.shape === "current") Object.assign(out, { unrunnable: c.unrunnable, timeout: c.timeout });
+  return out;
 }
 
 function renderedFields(result) {
@@ -222,7 +226,7 @@ function renderedFields(result) {
       log_tail: tailSource
         .map((l) => sanitizeLine(l, MAX_LINE))
         .filter((l) => l.trim() !== "")
-        .filter((l) => contract === null || !CONTRACT_LINE_RE.test(l))
+        .filter((l) => contract === null || !CONTRACT_PREFIX_RE.test(l))
         .slice(-MAX_TAIL_LINES),
       summary: summary === "" ? "no summary" : summary,
     },

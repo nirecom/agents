@@ -126,6 +126,9 @@ const workers = {
     },
     binaries: {
       external: ["bash"],
+      // Boolean only: adds the test-language registry's runtimes (launch.requires and
+      // launch.command[0]) via bin/worker-dispatch/registry.js effectiveExternal().
+      externalFromTestLanguages: true,
       // family-worktree, not target-main-root: run-all.sh derives its test directory from
       // its own location, so a target-main-root anchor would run main's suite regardless
       // of `cwd` — verifying the wrong tree while reporting success.

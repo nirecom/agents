@@ -34,6 +34,7 @@ wcd_checkout() {
   cp -R "$ROOT_N/bin/lib" "$d/bin/" || return 1
   cp "$ROOT_N/bin/run-with-timeout.sh" "$ROOT_N/bin/test-language-registry" "$ROOT_N/bin/get-config-var" "$d/bin/" || return 1
   cp "$ROOT_N"/hooks/lib/test-language-registry.* "$ROOT_N/hooks/lib/load-env.js" "$d/hooks/lib/" || return 1
+  cp -R "$ROOT_N/hooks/lib/test-language-registry" "$d/hooks/lib/" || return 1
   cp -R "$ROOT_N/tests/lib" "$d/tests/" || return 1
   cp "$ROOT_N/tests/bin/feature-2561-root-names-residue.sh" "$d/tests/bin/" || return 1
   printf 'clean\n' >"$d/clean.txt"

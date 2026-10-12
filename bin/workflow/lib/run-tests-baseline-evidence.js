@@ -10,6 +10,7 @@ const path = require("path");
 
 const STATE_IO = path.join(__dirname, "..", "..", "..", "hooks", "workflow-state", "state-io");
 const ORIGIN = "run-tests-baseline-evidence";
+// "unrunnable" is excluded: a missing runtime is fixed by installing it, never by a baseline.
 const FAILING_OUTCOMES = ["fail", "timeout", "runner-error"];
 const PREEXISTING_CLASSES = ["preexisting", "preexisting-inherited"];
 const VALID_CLASSES = PREEXISTING_CLASSES.concat(["broken", "undetermined"]);
@@ -117,6 +118,15 @@ function record(sessionId, seq, entries, base) {
     if (notPre.length > 0) {
       verdict.code = EXIT.UNMET;
       verdict.reason = `${notPre.length} failing test(s) are not pre-existing at the merge base`;
+      return [classification];
+    }
+    // A selected test that never ran (UNRUNNABLE) proves nothing about itself, so the step stays
+    // pending however the failures classify; only the hook's own exact 0 clears this.
+    if (entry.unrunnable_count !== 0) {
+      verdict.code = EXIT.UNMET;
+      verdict.reason = Number.isInteger(entry.unrunnable_count)
+        ? `${entry.unrunnable_count} selected test(s) were UNRUNNABLE; install the missing runtime and re-run /run-tests`
+        : "the failing run recorded no unrunnable_count; re-run /run-tests";
       return [classification];
     }
     verdict.code = EXIT.OK;

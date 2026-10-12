@@ -92,7 +92,7 @@ run_quoted_arg_and_provenance_tests() {
     SID="qwd-ok-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
     run_run_tests_hook_with_stdout "$WD_COMMAND" 0 "$SID" \
-        "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3
+        "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0
 status: pass
 exit_code: 0
 duration_seconds: 4
@@ -171,7 +171,7 @@ log_tail: |
     SID="qsysmsg-quiet-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
     run_run_tests_hook_with_stdout "bash tests/run-all.sh" 0 "$SID" \
-        "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2" >/dev/null
+        "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0" >/dev/null
     if printf '%s' "$LAST_HOOK_STDOUT" | grep -q '"systemMessage"'; then
         fail "QA-SYSMSG. a valid contract must NOT emit systemMessage, got: $LAST_HOOK_STDOUT"
     else
@@ -203,7 +203,7 @@ log_tail: |
     run_run_tests_hook_with_stdout \
         "bash /srv/checkout/agents/tests/run-all.sh" 0 "$SID" \
         "Results: PASS=2  FAIL=0  SKIP=0
-RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2"
+RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "QA-ABS. unresolvable absolute run-all.sh outside any repo → demoted to pending"
@@ -219,7 +219,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2"
     seed_write_tests "$SID" "complete"
     run_run_tests_hook_with_stdout \
         "timeout 300 bash /srv/checkout/agents/tests/run-all.sh" 0 "$SID" \
-        "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2"
+        "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "QA-ABS-TO. timeout-wrapped unresolvable absolute run-all.sh → demoted to pending"
@@ -237,7 +237,7 @@ RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2"
     seed_write_tests "$SID" "complete"
     run_run_tests_hook_with_stdout \
         "bash C:/git/checkout/agents/tests/run-all.sh" 0 "$SID" \
-        "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2"
+        "RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
         pass "QA-ABS-WIN. unresolvable drive-letter absolute run-all.sh → demoted to pending"

@@ -163,22 +163,27 @@ while IFS='|' read -r name files mode expect; do
 done <<'TABLE'
 # (1) allowlisted machine artifact in the empty-SID bucket is still a candidate
 allowlisted-log-dry-run       | -issue-close-stage-worker-665.log@old                                    | dry-run | groups_candidates=1,exists:-issue-close-stage-worker-665.log
-# (1b) …and is actually deleted on the apply-by-default (flagless) run
-allowlisted-log-default-apply | -issue-close-stage-worker-665.log@old                                    | default | gone:-issue-close-stage-worker-665.log,files_removed=1
+# (1b) …but matches no registry kind, so it is `unknown` and kept on the flagless run
+allowlisted-log-default-apply | -issue-close-stage-worker-665.log@old                                    | default | exists:-issue-close-stage-worker-665.log,files_removed=0
+# (1c) an allowlisted name classed `non-plan` is deleted on the flagless run
+allowlisted-non-plan-default-apply | -detail-codex-round-1-raw.md@old                                    | default | gone:-detail-codex-round-1-raw.md,files_removed=1
+# (1d) an allowlisted name classed `plan` is kept on the flagless run
+allowlisted-plan-default-kept | -intent.md@old                                                           | default | exists:-intent.md,files_removed=0
 # (2) extension-less user file is NOT deleted and IS counted as unrecognized
 no-extension-file-kept        | -scratch@old                                                            | apply   | exists:-scratch,files_skipped_unrecognized>=1,files_removed=0
 # (3) unknown-extension user file with spaces/uppercase is NOT deleted
 unknown-extension-kept        | -My~Notes.docx@old                                                        | apply   | exists:-My~Notes.docx,files_skipped_unrecognized>=1,files_removed=0
 # (4) a normal-SID group in the same dir does not drag (2)/(3) into deletion
-normal-sid-coexists           | 20240101-000000-intent.md@old,-scratch@old,-My~Notes.docx@old             | apply   | exists:-scratch,exists:-My~Notes.docx,gone:20240101-000000-intent.md
-# (5) a FRESH non-allowlisted file no longer shields the bucket (S1-2(b) change)
-fresh-unrecognized-no-shield  | -scratch@new,-issue-close-stage-worker-665.log@old                       | apply   | gone:-issue-close-stage-worker-665.log,exists:-scratch,groups_skipped_revived=0
+normal-sid-coexists           | 20240101-000000-intent.md@old,20240101-000000-detail-codex-round-1-raw.md@old,-scratch@old,-My~Notes.docx@old | apply | exists:-scratch,exists:-My~Notes.docx,exists:20240101-000000-intent.md,gone:20240101-000000-detail-codex-round-1-raw.md
+# (5) a FRESH non-allowlisted file no longer shields the bucket (S1-2(b) change);
+#     the stale allowlisted log is `unknown` (no kind), so it is kept
+fresh-unrecognized-no-shield  | -scratch@new,-issue-close-stage-worker-665.log@old                       | apply   | exists:-issue-close-stage-worker-665.log,exists:-scratch,groups_skipped_revived=0,files_removed=0
 TABLE
 
 # #2513 S6: PLANS_DIR may be a plan-sync working tree. sweep must leave .git/ and
-# .gitignore in place and remove only the stale sid group.
+# .gitignore in place and remove only the stale sid group's non-plan files.
 git_dir="$TMPDIR_BASE/case-plan-sync-tree"
-build_plans_dir "$git_dir" "20240101-000000-intent.md@old,20240101-000000-outline.md@old,29990101-000000-intent.md@new"
+build_plans_dir "$git_dir" "20240101-000000-intent.md@old,20240101-000000-outline.md@old,20240101-000000-detail-codex-round-1-raw.md@old,29990101-000000-intent.md@new"
 GIT_CONFIG_NOSYSTEM=1 git init -q "$git_dir" >/dev/null 2>&1
 git -C "$git_dir" config core.hooksPath /dev/null
 printf '/*\n!/*-intent.md\n' > "$git_dir/.gitignore"
@@ -191,7 +196,7 @@ elif [ ! -f "$git_dir/.git/HEAD" ]; then
     fail "plan-sync-tree-survives-sweep — .git/ was removed or never created"
 else
     check_expect "plan-sync-tree-survives-sweep" "$git_dir" "$out" \
-        "exists:.gitignore,exists:29990101-000000-intent.md,gone:20240101-000000-intent.md,gone:20240101-000000-outline.md"
+        "exists:.gitignore,exists:29990101-000000-intent.md,exists:20240101-000000-intent.md,exists:20240101-000000-outline.md,gone:20240101-000000-detail-codex-round-1-raw.md"
 fi
 
 echo ""

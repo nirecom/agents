@@ -209,6 +209,11 @@ tlr_list_dir() {
 }
 tlr_list_dir_into() {
   local dir="$1" e=0 i rc pat n f seen=$'\n' opts IFS=''
+  # A supported entry wins over a recognized-only one (as in tlr_match), so its files are not listed here.
+  if [ "$2" = recognized-only ]; then
+    tlr_list_dir_into "$dir" supported || return
+    for f in "${TLR_LIST[@]}"; do seen="$seen$f"$'\n'; done
+  fi
   TLR_LIST=()
   # A table `*` is one or more of any character, a leading dot included (a dot-prefixed test name still matches).
   opts="$(shopt -p extglob dotglob)" || true
@@ -285,27 +290,6 @@ tlr_suite_root() {
   return 1
 }
 
-# tlr_exec_plain <file> <out> <err> — fallback when bin/lib/run-all-launch.sh is absent: runs <file>
-# only when its supported entry's whole launch is a bare `bash {path}`; else rc 78, not launched.
-tlr_exec_plain() {
-  local i=0 argv="" unit=""
-  RUN_ALL_EXEC_LAUNCHED=0
-  if tlr_match "$1" && [ "$TLR_STATUS" = supported ] && ! _tlr_get "$TLR_ID" launch.requires && ! _tlr_get "$TLR_ID" launch.timeoutSeconds; then
-    _tlr_get "$TLR_ID" launch.unit && unit="$_TLR_V"
-    while [ "$i" -lt "${#_TLR_A_ID[@]}" ]; do
-      [ "${_TLR_A_ID[$i]}" = "$TLR_ID" ] && argv="$argv|${_TLR_A_KIND[$i]}:${_TLR_A_VAL[$i]}"
-      i=$((i + 1))
-    done
-  fi
-  if [ "$unit" = file ] && [ "$argv" = "|command:bash|command:{path}" ]; then
-    RUN_ALL_EXEC_LAUNCHED=1
-    bash "$1" >"$2" 2>"$3" </dev/null
-    return
-  fi
-  printf 'UNSUPPORTED: %s (language: %s; launcher library not found)\n' "$1" "${TLR_ID:-unknown}" >"$2"
-  return 78
-}
-
 # tlr_dedupe_suites — stdin file list; one file per (suite entry, suite root), first by name,
 # at the group's first position. Other files, and suite files without a root, pass through.
 # tlr_dedupe_suites_into <file...> fills TLR_LIST instead, safe for names holding LF.
@@ -341,3 +325,8 @@ tlr_dedupe_suites_into() {
     i=$((i + 1))
   done
 }
+
+if [ -f "$_tlr_dir/test-language-registry-plain.sh" ]; then
+  # shellcheck source=bin/lib/test-language-registry-plain.sh
+  . "$_tlr_dir/test-language-registry-plain.sh"
+fi
