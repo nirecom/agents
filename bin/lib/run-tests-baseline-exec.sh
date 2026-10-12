@@ -7,8 +7,8 @@
 # The default <timeout> is owned by run-tests-baseline-timeout.sh (RTB_TIMEOUT_DEFAULT).
 # RTB_EXEC_UNSUPPORTED=1 when run_all_exec did not launch (78 with RUN_ALL_EXEC_LAUNCHED=0),
 # flagged via <logdir>/<i>.unsupported so a test that itself exits 78 is not mistaken for it.
-# RTB_EXEC_DECOY=1 when the run reached the root decoy (<logdir>/<i>.decoyhit): its exit
-# code then says nothing about the base, whatever it is.
+# RTB_EXEC_DECOY=1 when the run hit the root decoy, the command guard or worktree change
+# detection (<logdir>/<i>.decoyhit): its exit code then says nothing about the base.
 
 case "${BASH_SOURCE[0]}" in
   */*) RTB_EXEC_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
@@ -54,7 +54,7 @@ rtb_exec_one() {
     [ -f "$launcher" ] || launcher="$RTB_EXEC_LIB_DIR/run-all-launch.sh"
     [ -f "$launcher" ] || return 2
     # Per-run workflow/plans/transcript dirs: a base test must never resolve the live
-    # session or write real workflow state. HOME stays (the run_all cache lives there).
+    # session or write real workflow state. HOME stays; build caches live in the host temp area.
     iso="$(mktemp -d 2>/dev/null)" || return 2
     if command -v cygpath >/dev/null 2>&1; then iso="$(cygpath -m "$iso")"; fi
     mkdir -p "$iso/workflow" "$iso/plans" "$iso/transcripts" 2>/dev/null || { rm -rf "$iso"; return 2; }
@@ -80,12 +80,26 @@ rtb_exec_one() {
         if declare -F run_all_pin_root_decoy >/dev/null 2>&1; then
             run_all_pin_root_decoy || { : >"$logdir/$i.nolaunch"; exit 2; }
         fi
+        # The isolation dir is the run root, with the command guard and worktree change
+        # detection as in tests/run-all.sh (a base launcher without them gets the decoy only).
+        if declare -F test_run_root_ensure >/dev/null 2>&1 && declare -F run_all_pin_command_guard >/dev/null 2>&1; then
+            export TEST_RUN_ROOT="$iso"
+            test_run_root_ensure || { : >"$logdir/$i.nolaunch"; exit 2; }
+            run_all_pin_command_guard || { : >"$logdir/$i.nolaunch"; exit 2; }
+        fi
+        if declare -F run_all_pin_worktree_change_detect >/dev/null 2>&1; then
+            run_all_pin_worktree_change_detect "$logdir/$i.worktree-change" || { : >"$logdir/$i.nolaunch"; exit 2; }
+        fi
         run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
         rc=$?
         [ "$rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.unsupported"
-        # A base test that reached the decoy is not a valid green, as in tests/run-all.sh.
-        if declare -F run_all_root_decoy_report >/dev/null 2>&1; then
-            run_all_root_decoy_report 2>>"$logdir/$i.err" || { : >"$logdir/$i.decoyhit"; [ "$rc" = 0 ] && rc=1; }
+        # A base test with a decoy, guard or worktree change hit is not a valid green, as in tests/run-all.sh.
+        report=""
+        if declare -F run_all_hit_report >/dev/null 2>&1; then report=run_all_hit_report
+        elif declare -F run_all_root_decoy_report >/dev/null 2>&1; then report=run_all_root_decoy_report
+        fi
+        if [ -n "$report" ]; then
+            "$report" 2>>"$logdir/$i.err" || { : >"$logdir/$i.decoyhit"; [ "$rc" = 0 ] && rc=1; }
         fi
         exit "$rc"
     )</dev/null >/dev/null 2>&1 &

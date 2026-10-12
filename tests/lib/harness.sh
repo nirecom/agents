@@ -126,6 +126,14 @@ esac
 # shellcheck source=tests/lib/root-decoy.sh
 . "$_HARNESS_LIB_DIR/root-decoy.sh" || exit 1
 root_decoy_ensure || exit 1
+# Run root (TMPDIR pinned inside it) and the command guard in front of git/gh/glab/codex;
+# docs/architecture/claude-code/test-command-guard.md. Both fail closed like the decoy.
+# shellcheck source=tests/lib/test-run-root.sh
+. "$_HARNESS_LIB_DIR/test-run-root.sh" || exit 1
+test_run_root_ensure || exit 1
+# shellcheck source=tests/lib/command-guard.sh
+. "$_HARNESS_LIB_DIR/command-guard.sh" || exit 1
+command_guard_ensure || exit 1
 
 # harness_isolate [<tmpdir>] — dual-pin per rules/test/fixture-isolation.md,
 # so tests never write the developer's real ~/.workflow-plans. Idempotent.

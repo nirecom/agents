@@ -493,7 +493,7 @@ fi
 
 for f in ${UNSUP[@]+"${UNSUP[@]}"}; do tlr_match "$f"; printf 'UNSUPPORTED: %s (language: %s; not run)\n' "$f" "${TLR_ID:-unknown}"; done
 echo ""
-if declare -F run_all_root_decoy_report >/dev/null 2>&1; then run_all_root_decoy_report || FAIL=$((FAIL + 1)); fi # counted before the counts print
+if declare -F run_all_hit_report >/dev/null 2>&1; then run_all_hit_report || FAIL=$((FAIL + 1)); fi # counted before the counts print
 echo "Results: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"
 echo "RUN_CONTRACT: PASS=$PASS FAIL=$FAIL SKIP=$SKIP EXECUTED=$((PASS + FAIL + SKIP))"
 cleanup_all

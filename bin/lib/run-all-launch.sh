@@ -4,15 +4,22 @@
 # says (launch.unit / requires / prepare / command / timeoutSeconds), reading the table that sits
 # beside this file. Returns the child rc; 77 (SKIP) when launch.requires is not on PATH; 78 when
 # not launched (no supported entry matches, or a suite has no root); 2 when no table is readable.
-# Sets RUN_ALL_EXEC_LAUNCHED to 1 when a process was started, else 0.
-# run_all_pin_test_env <root> — the per-run pins: carried settings, root decoy
-# (run_all_pin_root_decoy), state dirs (run_all_pin_state_dirs); each is described at its function.
-# Contract: docs/architecture/claude-code/test-runner-parallelism.md.
+# Sets RUN_ALL_EXEC_LAUNCHED to 1 when a process was started, else 0; each test is wrapped in
+# worktree change detection. run_all_pin_test_env <root> — the per-run pins (settings, decoy,
+# run root, command guard, state dirs, change detection). run_all_hit_report — the end-of-run report.
+# Contract: docs/architecture/claude-code/test-runner-parallelism.md, test-command-guard.md.
 
 case "${BASH_SOURCE[0]}" in
   */*) RUN_ALL_LAUNCH_DIR="${BASH_SOURCE[0]%/*}" ;;
   *)   RUN_ALL_LAUNCH_DIR="." ;;
 esac
+
+# shellcheck source=tests/lib/test-run-root.sh
+[ -f "$RUN_ALL_LAUNCH_DIR/../../tests/lib/test-run-root.sh" ] && . "$RUN_ALL_LAUNCH_DIR/../../tests/lib/test-run-root.sh"
+# shellcheck source=tests/lib/command-guard.sh
+[ -f "$RUN_ALL_LAUNCH_DIR/../../tests/lib/command-guard.sh" ] && . "$RUN_ALL_LAUNCH_DIR/../../tests/lib/command-guard.sh"
+# shellcheck source=bin/lib/run-all-worktree-change-detect.sh
+[ -f "$RUN_ALL_LAUNCH_DIR/run-all-worktree-change-detect.sh" ] && . "$RUN_ALL_LAUNCH_DIR/run-all-worktree-change-detect.sh"
 
 # run_all_pin_state_dirs <root> — exports WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR as fresh
 # subdirectories of <root>; non-zero when they cannot be created.
@@ -65,8 +72,25 @@ _run_all_real_setting() {
   env ${bridge[@]+"${bridge[@]}"} bash "$getcv" "$1" 2>/dev/null || true
 }
 
+_RUN_ALL_GUARD_DIR=""
+_RUN_ALL_GUARD_REPORTED=0
+_RUN_ALL_HITS_REPORTED=0
+
+# run_all_pin_command_guard — a fresh guard instance in $TEST_RUN_ROOT/command-guard, first on
+# PATH (tests/lib/command-guard.sh); an inherited COMMAND_GUARD_DIR is never reused here.
+run_all_pin_command_guard() {
+  if ! declare -F command_guard_ensure >/dev/null 2>&1; then
+    printf '[run-all-launch] tests/lib/command-guard.sh not loaded; refusing to run without the command guard\n' >&2
+    return 1
+  fi
+  unset COMMAND_GUARD_DIR
+  command_guard_ensure || return 1
+  _RUN_ALL_GUARD_DIR="$COMMAND_GUARD_DIR"
+}
+
 # run_all_pin_test_env <root> — carries RUN_TL3 / RUN_TL4 over from the real settings (a value
-# already in the environment wins), then pins the root decoy and the state dirs under <root>.
+# already in the environment wins), then pins the root decoy, <root> as the run root, the command
+# guard, the state dirs under <root>, and worktree change detection.
 run_all_pin_test_env() {
   local key
   local -a carried=()
@@ -78,20 +102,63 @@ run_all_pin_test_env() {
     if [ -n "${carried[0]}" ]; then export "$key=${carried[0]}"; fi
     carried=("${carried[@]:1}")
   done
+  [ -n "${1:-}" ] && declare -F test_run_root_ensure >/dev/null 2>&1 || return 1
+  export TEST_RUN_ROOT="$1"
+  test_run_root_ensure || return 1
+  run_all_pin_command_guard || return 1
   run_all_pin_state_dirs "${1:-}" || return 1
   _RUN_ALL_DECOY_SINCE="${WORKFLOW_STATE_DIR%/workflow}/root-decoy-since"
   : >"$_RUN_ALL_DECOY_SINCE" || return 1
+  if declare -F run_all_pin_worktree_change_detect >/dev/null 2>&1; then
+    run_all_pin_worktree_change_detect "$1/worktree-change.log" || return 1
+  fi
+  if declare -F run_all_worktree_change_begin >/dev/null 2>&1; then
+    run_all_worktree_change_begin
+    declare -F _run_all_wcd_write_slot_before >/dev/null 2>&1 && _run_all_wcd_write_slot_before
+  fi
   # tests/run-all.sh reports a hit itself before it prints its counts; this teardown wrapper
   # covers the exits that never get there (deadline, signal), and the report runs only once.
   if declare -F cleanup_all >/dev/null 2>&1 && ! declare -F _run_all_cleanup_all_inner >/dev/null 2>&1; then
     eval "_run_all_cleanup_all_inner ()"$'\n'"$(declare -f cleanup_all | tail -n +2)"
     # shellcheck disable=SC2034,SC2317  # FAIL belongs to tests/run-all.sh.
     cleanup_all() {
-      run_all_root_decoy_report || FAIL=$((${FAIL:-0} + 1))
+      run_all_hit_report || FAIL=$((${FAIL:-0} + 1))
       _run_all_cleanup_all_inner
     }
   fi
   return 0
+}
+
+# run_all_command_guard_report — one stderr line per call the guard refused during this run
+# ("<tool><TAB><test id><TAB><target>"); non-zero when there was one. Runs once.
+run_all_command_guard_report() {
+  local stub id target n=0
+  [ "$_RUN_ALL_GUARD_REPORTED" -eq 0 ] || return 0
+  _RUN_ALL_GUARD_REPORTED=1
+  [ -n "$_RUN_ALL_GUARD_DIR" ] && declare -F command_guard_hits >/dev/null 2>&1 || return 0
+  while IFS=$'\t' read -r stub id target; do
+    [ -n "$stub" ] || continue
+    [ -n "$_RUN_ALL_DECOY_RUN" ] && id="${id#"$_RUN_ALL_DECOY_RUN":}"
+    n=$((n + 1))
+    printf '[run-all] command guard hit: %s\t%s\t%s\n' "$stub" "${id:-(no test id)}" "$target" >&2
+  done < <(command_guard_hits "$_RUN_ALL_GUARD_DIR")
+  [ "$n" -eq 0 ] && return 0
+  printf '[run-all] %s command guard hit(s): a test ran a command the guard refused; the run fails\n' "$n" >&2
+  return 1
+}
+
+# run_all_hit_report — the root decoy, command guard and worktree change reports, once per run;
+# non-zero when any of them is.
+run_all_hit_report() {
+  local rc=0
+  [ "$_RUN_ALL_HITS_REPORTED" -eq 0 ] || return 0
+  _RUN_ALL_HITS_REPORTED=1
+  run_all_root_decoy_report || rc=1
+  run_all_command_guard_report || rc=1
+  if declare -F run_all_worktree_change_report >/dev/null 2>&1; then
+    run_all_worktree_change_report || rc=1
+  fi
+  return "$rc"
 }
 
 # run_all_root_decoy_report — one stderr line per stub this run reached ("<stub><TAB><test id>"),
@@ -163,6 +230,14 @@ _rae_argv() {
 }
 
 run_all_exec() {
+  local rc=0
+  declare -F run_all_worktree_change_begin >/dev/null 2>&1 && run_all_worktree_change_begin
+  _run_all_exec_inner "$@" || rc=$?
+  declare -F run_all_worktree_change_check >/dev/null 2>&1 && run_all_worktree_change_check "$1"
+  return "$rc"
+}
+
+_run_all_exec_inner() {
   local script="$1" out="$2" err="$3" id native root rc=0 rto
   local -a tmo=() prep=() cmd=()
   RUN_ALL_EXEC_LAUNCHED=0

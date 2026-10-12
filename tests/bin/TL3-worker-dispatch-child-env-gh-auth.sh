@@ -13,6 +13,9 @@
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# TL3 legitimately uses the real gh: take the command guard (#2590) off PATH.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard.sh"
+command_guard_use_real
 
 # Environment gate — EVALUATED here, ACTED ON only after stage 1. Exiting 77
 # before stage 1 would let a broken classify()/exit_verdict()/expect_class()

@@ -126,7 +126,7 @@ case "$test_rel" in
 esac
 cd "$JAIL_TREE" || exit 2
 
-# The decoy cache lands under the swapped HOME, so nothing is built outside $iso. A tree
+# Build caches land under the host temp area (tests/lib/test-cache-base.js), never HOME. A tree
 # whose launcher lacks a pin function gets the strongest pin it does have.
 if [[ "$pin_mode" == none ]]; then
     echo "PINNED: none"
@@ -154,9 +154,13 @@ fi
 
 bash bin/run-with-timeout.sh "$secs" bash "$test_rel"
 rc=$?
-if declare -F run_all_root_decoy_report >/dev/null 2>&1; then
-    if ! run_all_root_decoy_report; then
-        echo "PINNED: root decoy was hit (tests/run-all.sh would count one FAIL)"
+report=""
+if declare -F run_all_hit_report >/dev/null 2>&1; then report=run_all_hit_report
+elif declare -F run_all_root_decoy_report >/dev/null 2>&1; then report=run_all_root_decoy_report
+fi
+if [[ -n "$report" ]]; then
+    if ! "$report"; then
+        echo "PINNED: root decoy, command guard or worktree change hit (tests/run-all.sh would count one FAIL)"
         [[ "$rc" -eq 0 ]] && rc=92
     fi
 fi
