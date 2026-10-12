@@ -37,8 +37,8 @@ export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
 
 # Pre-change event stream for the fixture donor: 13 session-inherit events,
 # sha256 over the normalized projection joined by newline.
-GOLDEN_SHA="a935f223cbe7b434030c6a71f97e08676dae718435baf1c48f2a2e2306d5e646"
-GOLDEN_COUNT="13"
+GOLDEN_SHA="c1fbab387a4a1229cec235e8745258b5558459b07d2d45f54872991d80432996"
+GOLDEN_COUNT="14"
 
 # The granularity capability under test. apply.js already exists, so the RED
 # signal here is the missing 4th parameter / the missing describe export.
@@ -71,6 +71,7 @@ const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-
 const donorSid = 'donor-2218-eq';
 writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep(donorSid, 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(donorSid, 'clarify_intent');
 markStep(donorSid, 'clarify_intent', 'complete');
 markStep(donorSid, 'outline', 'skipped', { skip_reason: 'trivial' });
 markStep(donorSid, 'detail', 'complete');
@@ -152,6 +153,7 @@ const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/
 const problems = [];
 writeState('donor-e3', createInitialState('donor-e3', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep('donor-e3', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('donor-e3', 'clarify_intent');
 markStep('donor-e3', 'clarify_intent', 'complete');
 writeState('heir-e3', createInitialState('heir-e3', { cwd: '/other/repo', git_branch: 'main' }));
 const r = adoptState({ heirSid: 'heir-e3', donorSid: 'donor-e3' });

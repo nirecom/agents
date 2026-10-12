@@ -400,3 +400,11 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
   remote's host. `bin/plan-link` prints a session's plan-link line (the URL, else the local
   path and a reason). Distinct from session-sync, which syncs session history.
 - **Related**: [architecture/claude-code/plan-sync.md](architecture/claude-code/plan-sync.md), #2513
+
+### presentation turn
+
+- **Definition**: The turn in which the model presents a plan stage (intent, outline or
+  detail) to the user and ends, with the stage's plan-link line in its last text block. The
+  `CONFIRM_<STAGE>` echo belongs to a later turn, after the user replies;
+  `hooks/confirm-checkpoint.js` denies an echo whose preceding turn was not a presentation turn.
+- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md), #2513, #2277

@@ -2,6 +2,7 @@
 # run-completion.sh — clarify-intent Completion orchestrator (#1465)
 # Args: --session-id <sid> --plans-dir <dir> [--non-github (silently ignored; gate is internal)]
 # Stdout: single token on last line: PROCEED | NEED_ISSUE | RETRY_EXHAUSTED | CLOSED_ENTRY | CREATED:<N> | CLOSED:<N> | RC2
+#         | UNAPPROVED | APPROVAL_UNKNOWN (Phase 1 approval gate, #2277)
 # Exit: 0 on token output, 1 on hard error (missing args)
 set -uo pipefail
 
@@ -21,6 +22,21 @@ done
 
 [[ -z "$SESSION_ID" ]] && { echo "[run-completion] --session-id is required" >&2; exit 1; }
 [[ -z "$PLANS_DIR" ]]  && { echo "[run-completion] --plans-dir is required" >&2; exit 1; }
+
+# Phase 1 — plan approval gate (#2277): no side effect runs before the intent is approved.
+# The CLI prints exactly one APPROVAL=<v> line; anything else is unreadable and fails closed.
+APPROVAL_RC=0
+APPROVAL_OUT="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/check-plan-approval" \
+    --session "$SESSION_ID" --step clarify_intent 2>/dev/null)" || APPROVAL_RC=$?
+APPROVAL_OUT="${APPROVAL_OUT%$'\r'}"
+if [[ $APPROVAL_RC -ne 0 ]]; then
+    echo "APPROVAL_UNKNOWN"; exit 0
+fi
+case "$APPROVAL_OUT" in
+    "APPROVAL=approved") : ;;
+    "APPROVAL=unapproved") echo "UNAPPROVED"; exit 0 ;;
+    *) echo "APPROVAL_UNKNOWN"; exit 0 ;;
+esac
 
 # Phase 2 — NON_GITHUB gate (internal; never rely on caller-passed flag)
 NON_GITHUB_ARG=()

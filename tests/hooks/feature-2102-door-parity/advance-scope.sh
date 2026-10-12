@@ -77,6 +77,12 @@ make_state_at() {
     wf.VALID_STEPS.forEach((s, i) => { steps[s] = { status: i < idx ? "complete" : "pending" }; });
     fs.writeFileSync(path.join(process.env.WF_OUT, process.env.SID + ".json"),
       JSON.stringify({ steps, closes_issues: [2102] }));'
+  approve_seeded "$1"
+}
+
+# #2277: the seeded gated completes count only with a plan_approval record.
+approve_seeded() {
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete "$WF_OUT/$1.json" clarify_intent outline detail >/dev/null
 }
 
 # Same shape, with ONE hole: the step at HOLE is left raw-pending even though it sits
@@ -94,6 +100,7 @@ make_state_hole() {
     });
     fs.writeFileSync(path.join(process.env.WF_OUT, process.env.SID + ".json"),
       JSON.stringify({ steps, closes_issues: [2102] }));'
+  approve_seeded "$1"
 }
 
 # write_tests is gated on real staged test evidence at BOTH the record side
@@ -220,6 +227,8 @@ echo "=== A6: the exclusion is scoped to the settle target, not to the whole wal
 # swapped the reconciled walk for raw state passes all five.
 make_state_hole a6 $IDX_WRITE_TESTS $IDX_CLARIFY
 printf '# fixture intent\n' > "$PLANS_DIR/a6-intent.md"
+# #2277: the artifact is necessary, not sufficient -- the evidence also needs the approval.
+run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" approve a6 clarify_intent >/dev/null
 if [ -f "$PLANS_DIR/a6-intent.md" ]; then pass "A6a: the clarify_intent evidence artifact exists"
 else fail "A6a: the clarify_intent evidence artifact was not written"; fi
 run_advance "$LINKED_N" --session a6 --advance --step "$S_WRITE_TESTS" --complete --next

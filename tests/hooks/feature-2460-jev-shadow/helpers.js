@@ -83,6 +83,10 @@ function seedStep() {
   const { resolveCurrentEffectiveStep } = require(path.join(REPO, "hooks", "workflow-state", "current-step.js"));
   for (const s of io.VALID_STEPS) {
     if (s === target) break;
+    // #2277: a gated step counts as complete only with a plan_approval record.
+    if (s === "clarify_intent" || s === "outline" || s === "detail") {
+      require(path.join(REPO, "tests", "lib", "plan-approval-fixture.js")).approveLive(sid, s);
+    }
     io.markStep(sid, s, "complete");
   }
   print(String(resolveCurrentEffectiveStep(sid)));

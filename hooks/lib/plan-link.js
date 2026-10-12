@@ -113,13 +113,15 @@ function linkForFile(absPath, opts) {
 }
 
 // entryLine({stage, url?, path?, reason?}) -> one line, shared by the hooks and the CLI.
+// The local path is inline code so it is never a second, mistappable link beside the URL on
+// mobile; the URL stays bare so the reply auto-links it.
 function entryLine(entry) {
   const e = entry || {};
   const stage = STAGES.includes(e.stage) ? e.stage : "plan";
   const p = typeof e.path === "string" && e.path ? e.path : "";
-  if (typeof e.url === "string" && /^https?:\/\//.test(e.url)) return p ? `${stage}: ${e.url} (${p})` : `${stage}: ${e.url}`;
+  if (typeof e.url === "string" && /^https?:\/\//.test(e.url)) return p ? `${stage}: ${e.url} (\`${p}\`)` : `${stage}: ${e.url}`;
   const reason = REASON_VALUES.includes(e.reason) ? e.reason : REASONS.NOT_PUBLISHED;
-  return p ? `${stage}: ${p} (no URL: ${reason})` : `${stage}: (unavailable: ${reason})`;
+  return p ? `${stage}: \`${p}\` (no URL: ${reason})` : `${stage}: (unavailable: ${reason})`;
 }
 
 // renderModelContext(entries, {when: "after-write" | "confirm"}) -> additionalContext text.
@@ -135,8 +137,8 @@ function renderModelContext(entries, opts) {
     lines.push(hasUrl ? line : `${line} — ${REASON_TEXT[reason]}`);
   }
   lines.push(confirm
-    ? "Write each line above as-is in your response body text before the CONFIRM echo; never put it inside the echo."
-    : "Write each line above as-is in your response body text so the user can open the plan.");
+    ? "End the final body text of the presentation turn with each line above as-is and close the turn; the CONFIRM echo comes in a later turn, after the user's reply, and never carries the line."
+    : "End the final body text of this turn with each line above as-is and close the turn so the user can open the plan; the CONFIRM echo comes after the user's reply.");
   lines.push(`When asked later where a plan is, run ${PLAN_LINK_COMMAND} and write its output as-is; never send the plan with SendUserFile.`);
   return lines.join("\n");
 }

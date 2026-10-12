@@ -24,7 +24,9 @@ seed_lookahead_research() {
     WORKFLOW_STATE_DIR="$root/state" WORKFLOW_PLANS_DIR="$root/plans" \
         SID="$sid" SETTLED="$*" run_with_timeout node -e "
 const io = require('$SIO_NODE');
+const approval = require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js');
 for (const s of String(process.env.SETTLED).split(' ').filter(Boolean)) {
+  if (s === 'clarify_intent') approval.approveLive(process.env.SID, s); // #2277: gated complete needs approval
   io.markStep(process.env.SID, s, 'complete');
 }
 io.markStep(process.env.SID, 'research', 'in_progress', {}, { provenance: 'observed', origin: 'postuse-in-flight' });

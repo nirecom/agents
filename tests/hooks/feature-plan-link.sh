@@ -266,6 +266,34 @@ ok("after-write and confirm wording differ", a !== c, show([a, c]));
 ')"
 case_end
 
+# #2513 S4: the local path is inline code; the URL stays bare so the reply auto-links it.
+case_begin "entry-line-inline-code" "hooks/lib/plan-link.js"
+pl_report "$(pl_node '
+const url = "https://example.invalid/test-owner/test-repo/blob/main/s-intent.md";
+const p = "/tmp/plan-link-test/s-intent.md";
+const e = (x) => { try { return String(pl.entryLine(x)); } catch (err) { return "THREW:" + err.message; } };
+const bt = String.fromCharCode(96);
+const eq = (n, got, want) => ok(n, got === want, "got=" + show(got) + " want=" + show(want));
+eq("url entry: the path is backticked, the URL is not", e({ stage: "intent", url, path: p }), "intent: " + url + " (" + bt + p + bt + ")");
+eq("reason entry: the path is backticked", e({ stage: "outline", reason: "plan-sync-off", path: p }), "outline: " + bt + p + bt + " (no URL: plan-sync-off)");
+eq("url without a path: unchanged", e({ stage: "detail", url }), "detail: " + url);
+eq("absent plan: unchanged", e({ stage: "detail", reason: "no-artifact" }), "detail: (unavailable: no-artifact)");
+const ctx = (() => { try { return pl.renderModelContext([{ stage: "intent", url, path: p }], { when: "confirm" }); } catch (err) { return "THREW:" + err.message; } })();
+ok("renderModelContext carries the backticked entry line", String(ctx).includes("intent: " + url + " (" + bt + p + bt + ")"), show(ctx));
+ok("renderModelContext never backticks the URL", !String(ctx).includes(bt + url), show(ctx));
+')"
+PL_CLI_PLAN="$WORKFLOW_PLANS_DIR/$PL_SID-intent.md"
+printf 'cli intent\n' > "$PL_CLI_PLAN"
+PL_CLI_OUT="$(PLAN_SYNC_REMOTE_URL="" psf_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/plan-link" --session "$PL_SID" --stage intent 2>&1)"
+PL_CLI_P="$(printf '%s' "$PL_CLI_OUT" | sed -n 's/^intent: `\(.*\)` (no URL: plan-sync-off)$/\1/p')"
+if [ -n "$PL_CLI_P" ] && [ "${PL_CLI_P%"$PL_SID-intent.md"}" != "$PL_CLI_P" ]; then
+  pass "bin/plan-link prints the backticked local path"
+else
+  fail "bin/plan-link prints the backticked local path" "out=$PL_CLI_OUT"
+fi
+rm -f "$PL_CLI_PLAN"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

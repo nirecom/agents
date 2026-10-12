@@ -89,7 +89,7 @@ Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) w
 - `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3) that carries the plan-link line (protocol CPA-2).
 - `GATE_ACTION=present-and-stop`: present the scope change line from `GATE_HINT` and the relevant detail plan section, then end the turn.
 - After `present-and-stop`, on approval run the standalone `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION` (normally `proceed`); on a change request, loop to MDP-5.
-- `GATE_ACTION=ask`: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
+- `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"` alone in the next turn; after Allow, run Completion and co-emit either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation.
 
 ## Research Escalation
 
@@ -125,4 +125,5 @@ See `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts/skip-conditions.sh"
 
 1. Run: `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step detail --complete --next` (ENTIRE Bash command — no pipes / && / redirection). MUST run only after the `<<WORKFLOW_CONFIRM_DETAIL: ...>>` sentinel (MDP-7) has already fired in an earlier response — never combine them in the same Bash call. Follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md` for the `write-tests` invocation below.
 2. Record branching: Read `rules/branch.md` and `rules/worktree.md` (both on-demand-only, never auto-injected), then run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"`.
+   The branching record is not written while the detail plan is unapproved; get the CONFIRM_DETAIL Allow first.
 3. Invoke `write-tests` via Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`) — matches the `ACTION=invoke NEXT_SKILL=write-tests` result from the `next-step --advance` call above.

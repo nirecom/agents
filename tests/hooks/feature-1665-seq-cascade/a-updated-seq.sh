@@ -3,15 +3,9 @@
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, updated-seq, causal-order, projection, batch-fold, scope:issue-specific, pwsh-not-required, TL1
 #
-# A — `steps[step].updated_seq` is derived from the FOLD LOOP POSITION, never
-# from `e.seq`.
-#
-# WHY the distinction matters: appendEvents folds the batch (projectState(withBatch))
-# BEFORE it assigns `seq`, so an implementation written as `= e.seq` yields
-# `undefined` for every event in the batch being appended — and yet reads back
-# correct forever after, because the persisted `current` cache is rewritten from a
-# stream whose seq is already assigned. A4/A5 fold a SEQ-LESS array — the exact
-# shape appendEvents hands the projector — so the regression cannot hide.
+# A — `steps[step].updated_seq` is derived from the FOLD LOOP POSITION, never from `e.seq`:
+# appendEvents folds the batch BEFORE assigning seq, so `= e.seq` yields undefined in-batch
+# yet reads back correct later. A4/A5 fold a SEQ-LESS array so the regression cannot hide.
 
 CASE_TAG=a
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -24,6 +18,7 @@ const S = require(process.env.M_SIO);
 // step_status event; never-touched steps stay null.
 const sid = "seq1665-a1";
 S.markStep(sid, "workflow_init", "complete");
+require(process.env.M_FIX).approveLive(sid, "clarify_intent"); // #2277 gated complete
 S.markStep(sid, "clarify_intent", "complete", { skip_reason: "n/a" });
 S.markStep(sid, "workflow_init", "in_progress");
 const st = S.readState(sid);
@@ -70,7 +65,8 @@ console.log("A7.updated_at_type=" + typeof st6.steps.docs.updated_at);
 '
 if require_js_ok "A: durable-stream probe"; then
     assert_js "A1 every entry carries its last step_status seq" A1.mismatches "none"
-    assert_js "A1 re-marked step takes the LATER seq" A1.workflow_init "4"
+    # 5 (was 4): the #2277 fixture approval adds one plan_approval event to the stream.
+    assert_js "A1 re-marked step takes the LATER seq" A1.workflow_init "5"
     assert_js "A2 never-settled step has null updated_seq" A2.untouched "null"
     assert_js "A3 seq before annotations_cleared" A3.before "1"
     assert_js "A3 seq survives annotations_cleared" A3.after "1"

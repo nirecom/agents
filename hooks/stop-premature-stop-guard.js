@@ -40,6 +40,8 @@ const C4_EXEMPTIONS = [
   { id: "step-in-flight",    phase: "session", test: (c, d) => !!d.anyStepInFlight(c.sid) },
   { id: "delegated-reason",  phase: "next-step-output",
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
+  { id: "awaiting-plan-approval", phase: "next-step-output",
+    test: (c, _d) => typeof c.reason === "string" && c.reason.startsWith("awaiting-plan-approval:") },
 ];
 
 // Per-finding exemptions that apply to the mechanism-failure lane only. The

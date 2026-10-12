@@ -3,20 +3,10 @@
 # Tests: hooks/workflow-state/effective-state/write-code-resume.js, hooks/workflow-state/inheritance/apply.js
 # Tags: workflow-state, write-code-resume, inheritance, null-seq, fail-safe, scope:issue-specific, pwsh-not-required, TL1
 #
-# F — the null-seq rule.
-#
-# WHY: session inheritance carries a donor's step STATUSES forward but the heir's
-# stream is brand new, so a step the donor never re-settled can arrive with a
-# `run_outcome` annotation and no step_status event at all — leaving
-# run_tests.updated_seq null. "Unknown when the failure happened" must not be
-# read as "the failure happened at position 0", which would mask nothing at all
-# and let a stale write_code sign-off survive into the heir session.
-#
-# Rule: resumeSeq = Number.isFinite(run_tests.updated_seq) ? value : Infinity.
-# The Infinity branch is fail-SAFE — it masks EVERY downstream step, including
-# those whose own updated_seq is non-numeric. The finite branch is deliberately
-# NOT symmetric: with a real baseline in hand, a downstream step whose position is
-# unknown cannot be proven stale, so it is left alone.
+# F — the null-seq rule: an inherited run_outcome can arrive with run_tests.updated_seq null,
+# which must not read as position 0. resumeSeq = isFinite(seq) ? seq : Infinity; Infinity is
+# fail-SAFE (masks every downstream step), while the finite branch leaves a downstream step
+# with an unknown position alone (it cannot be proven stale).
 
 CASE_TAG=f
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -30,6 +20,7 @@ const { reconcileEffectiveState } = require(process.env.M_ES);
 function inherit(tag, outcome) {
   const donor = "seq1665-f" + tag + "d";
   const heir = "seq1665-f" + tag + "h";
+  require(process.env.M_FIX).approveLive(donor, "clarify_intent"); // #2277 gated complete
   for (const [s, st] of [
     ["workflow_init", "complete"], ["clarify_intent", "complete"],
     ["research", "skipped"], ["outline", "skipped"], ["detail", "skipped"],

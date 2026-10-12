@@ -147,8 +147,10 @@ if (require.main === module) {
   let finalReportBody = "";
   let headingFound = false;
   try {
-    const raw = fs.readFileSync(transcriptPath, "utf8");
-    const lines = raw.split("\n");
+    // Wait for the final text to be flushed (#2610); an undecidable flush passes.
+    const tail = require("./lib/transcript-reader").readTurnTail({ input });
+    if (tail.undecidable || tail.lines.length === 0) process.exit(0);
+    const lines = tail.lines;
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i];
       if (!line.trim()) continue;

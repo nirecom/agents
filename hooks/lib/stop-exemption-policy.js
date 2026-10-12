@@ -23,6 +23,8 @@ const EXEMPTION_MATRIX = Object.freeze({
   // promptNotify:false — this primitive only exists once next-step has spoken;
   // the UserPromptSubmit notifier never invokes next-step, so it can't occur.
   "delegated-reason":  { c4: true,  c2: false, nextStep: false, promptNotify: false },
+  // #2277: a presentation turn rightly ends while next-step waits for the user's plan approval.
+  "awaiting-plan-approval": { c4: true, c2: false, nextStep: false, promptNotify: false },
 });
 
 module.exports = { EXEMPTION_MATRIX };

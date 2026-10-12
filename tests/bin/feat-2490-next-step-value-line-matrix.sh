@@ -12,6 +12,8 @@ set -uo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+# Pin here: the checker does not credit common.sh's pin to this file; common.sh re-pins under GT_BASE.
+harness_isolate
 # shellcheck source=feat-2490-next-step-gate/common.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2490-next-step-gate/common.sh"
 
@@ -70,6 +72,8 @@ for row in "clarify_intent|research" "run_tests|review_security"; do
   from="${row%%|*}"; to="${row#*|}"; sid="mx-adv-ng-$from"
   write_state "$sid" "$(json_at "$from")"
   put_plan "$sid" intent "$INTENT_FULL"
+  # #2277: completing clarify_intent requires an approval bound to the intent artifact.
+  [ "$from" = "clarify_intent" ] && node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" approve "$sid" clarify_intent >/dev/null 2>&1
   ns --session "$sid" --advance --step "$from" --complete --next
   check "$from->$to: exit 0" 0 "$RC"
   check "$from->$to: verdict block starts with ACTION=invoke" "ACTION=invoke" "$(line_n 3)"

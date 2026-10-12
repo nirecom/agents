@@ -2,26 +2,12 @@
 # tests/hooks/feature-1733-state-event-stream/provenance.sh
 # Tests: hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io/events.js, hooks/workflow-mark/not-needed-handlers.js
 # Tags: workflow-state, event-stream, provenance, effective-state, genuine-complete, scope:issue-specific, pwsh-not-required, TL2
-#
-# Before #1733, "did this step really complete or did something synthesise it?" was
-# inferred from a raw-JSON heuristic: the key exists AND updated_at is a non-empty
-# string. `provenance` replaces that heuristic with a recorded fact, and the migration
-# must be BEHAVIOUR-PRESERVING: observed/declared keep counting as genuine (a
-# RESET_FROM force-complete did, and still does), only migration- and inheritance-
-# synthesised records are excluded. Both verdicts of the classifier are covered, not
-# just the newly-excluded one (test-design.md "Classifier / guard cases").
-#
-# The classifier is observed through its ONE live consumer, evaluateInheritance's S3
-# rule (see the genuine() contract in common.sh) — the subject is therefore always
-# clarify_intent, and `true` below means "S3 stopped inheritance", which under this
-# harness's empty WORKFLOW_PLANS_DIR is exactly the classifier's verdict.
-#
-# TL3 gap (what this test does NOT catch):
-# - the other consumers of the classifier (evidence resolution, next-step advisories)
-#   are not driven end-to-end here.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
-
+# `provenance` (#1733) replaces the raw "key + non-empty updated_at" genuineness heuristic,
+# behaviour-preserving: observed/declared stay genuine, only migration/inheritance-synthesised
+# records are excluded; both verdicts are covered. Observed through evaluateInheritance's S3
+# rule (genuine() contract in common.sh): subject clarify_intent, `true` = "S3 stopped inheritance".
+# TL3 gap: the classifier's other consumers (evidence resolution, next-step advisories) are not
+# driven end-to-end here; mitigation: bin/check-verification-gate.sh category: hook-registration.
 # isolation (#2512): pin state and plans dirs once for this file
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 _ISOLATION_TMP_ROOT="$(mktemp -d)"; readonly _ISOLATION_TMP_ROOT
@@ -38,7 +24,7 @@ MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
 echo "== G1: an ordinary markStep complete is genuine (observed) =="
 if run_case "G1/observed-is-genuine"; then
     next_sid
-    nodejs "$SID" "$PRE$GENUINE_JS"'
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
 S.markStep(sid, GENUINE_SUBJECT, "complete");
 console.log("genuine=" + genuine(sid));
 '
@@ -61,7 +47,7 @@ fi
 echo "== G3: a backfilled complete is NOT genuine =="
 if run_case "G3/backfilled-not-genuine"; then
     next_sid
-    nodejs "$SID" "$PRE$GENUINE_JS"'
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
 E.appendEvents(sid, [{ kind: "step_status", step: GENUINE_SUBJECT, status: "complete",
                        provenance: "backfilled", origin: "session-inherit",
@@ -76,7 +62,7 @@ fi
 echo "== G4: the LATEST step_status decides, not any earlier one =="
 if run_case "G4/latest-event-decides"; then
     next_sid
-    nodejs "$SID" "$PRE$GENUINE_JS"'
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
 S.markStep(sid, GENUINE_SUBJECT, "complete");
 const genuineFirst = genuine(sid);
@@ -169,7 +155,7 @@ if run_case "G9/adapter-control"; then
     # WORKFLOW_PLANS_DIR empty. Restoring the artifact must flip the verdict, and
     # removing it again must flip it back — proving the pin is load-bearing and that
     # the observation is attributable to the classifier.
-    nodejs "$SID" "$PRE$GENUINE_JS"'
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
 S.markStep(sid, GENUINE_SUBJECT, "complete");
 const noArtifact = genuine(sid);
 plan_artifact(sid, true);

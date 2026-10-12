@@ -68,7 +68,7 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS
 CI-4a. **Record `closes_issues` into session state** (the only point where Path C's `closes_issues` gets populated): `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
 
 CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
-Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
+Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"` alone in the next turn; after Allow, run Completion and co-emit the `make-outline-plan` Skill invocation. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
 
 CI-5a. When `closes_issues` is non-empty and a Revise loop substantively changed intent.md, run per issue N: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `closes_issues` is empty (Path C).
 
@@ -89,6 +89,8 @@ Run `bash "$AGENTS_MAIN_ROOT/skills/clarify-intent/scripts/run-completion.sh" --
 CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on its single stdout token:
 
 - `PROCEED` → proceed to CI-C1 (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
+- `UNAPPROVED` → stop Completion; restart from the CI-5 presentation turn.
+- `APPROVAL_UNKNOWN` → stop Completion; tell the user the intent approval could not be confirmed, then end the turn.
 - `CREATED:<N>` (Path C) → backfill `## Issues` from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>`, where `<title>` is the `**Title:**` line's content (matches the created issue's actual title) (Read + Edit). Re-run **guard-loop only**: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"` → branch on its token below.
 - `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from closes_issues and continue" (when `len(closes_issues) >= 2` only) / "Abort session" → re-run run-completion.sh.
   - Remove-and-continue branch: after removing the issue from closes_issues, also remove the corresponding `- #N: title` line from the `## Issues` section of the in-progress `intent.md` (and from `outline.md` if it already exists).

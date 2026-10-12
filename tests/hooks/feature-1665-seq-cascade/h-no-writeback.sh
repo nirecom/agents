@@ -2,24 +2,11 @@
 # tests/hooks/feature-1665-seq-cascade/h-no-writeback.sh
 # Tests: bin/workflow/lib/next-step/verdict.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/effective-state/write-code-resume.js
 # Tags: workflow-state, write-code-resume, cascade, persist-resolutions, append-only, scope:issue-specific, pwsh-not-required, TL2
-#
-# H — a masked step is never written back to the event stream.
-#
-# WHY: stage-4 evidence resolution ends by calling persistResolutions(), which
-# appends a real `step_status: complete` event with origin
-# "next-step-evidence-resolution". If the cascade masked a step but left it in
-# the `resolutions` array, that append would durably record a completion the
-# session had just decided to reopen — an append-only stream cannot take it back.
-# So the cascade must REMOVE masked steps from `resolutions`, not merely rewrite
-# their derived status.
-#
-# The control session proves the harness can actually observe a write-back: if it
-# could not, H1 would be vacuously true.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether next-step is invoked by the real session loop at the right moment.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
+# H — a masked step is never written back: persistResolutions() appends a real complete for
+# every entry in `resolutions`, so the cascade must REMOVE masked steps from it. The control
+# session proves a write-back is observable (else H1 is vacuous).
+# TL3 gap: whether the real session loop invokes next-step at the right moment; checked at
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, skill-orchestration).
 
 CASE_TAG=h
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -40,6 +27,7 @@ seed() { # env: SEED_SID, SEED_OUTCOME ("" = none)
 const S = require(process.env.M_SIO);
 const sid = process.env.SEED_SID;
 const outcome = process.env.SEED_OUTCOME;
+require(process.env.M_FIX).approveLive(sid, "clarify_intent"); // #2277 gated complete
 for (const [s, st] of [
   ["workflow_init", "complete"], ["clarify_intent", "complete"],
   ["research", "skipped"], ["outline", "skipped"], ["detail", "skipped"],

@@ -76,6 +76,10 @@ check_not_contains() {
 write_state() {
   local sid="$1" json="$2"
   printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277: a complete clarify_intent / outline / detail counts only with a real approval record.
+  WORKFLOW_PLANS_DIR="$(to_node_path "$PLANS_DIR")" node "$(to_node_path "$SCRIPT_CHECKOUT_ROOT")/tests/lib/plan-approval-fixture.js" \
+    inject-complete "$(to_node_path "$WORKFLOW_DIR/${sid}.json")" clarify_intent outline detail >/dev/null \
+    || { echo "FAIL: plan-approval fixture inject failed for $sid"; exit 1; }
 }
 
 read_state_status() {

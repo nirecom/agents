@@ -110,6 +110,8 @@ at_run_tests() {
   done
   json="$json},\"closes_issues\":[1644]}"
   printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277: a gated `complete` (clarify_intent / outline / detail) counts only with an approval record.
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete "$(nrm "$WORKFLOW_DIR/${sid}.json")" clarify_intent outline detail >/dev/null
 }
 
 NS_OUT=""; NS_ERR=""; NS_RC=0

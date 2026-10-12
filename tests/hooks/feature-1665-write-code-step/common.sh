@@ -57,6 +57,10 @@ build_state() {
   done
   entries="${entries#,}"
   printf '{%s"steps":{%s},"closes_issues":[1665]}' "$extra" "$entries" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277 (no migration): a gated complete counts only with a valid approval record.
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete \
+    "$(nrm "$WORKFLOW_DIR/${sid}.json")" clarify_intent outline detail >/dev/null ||
+    fail "build_state($sid): could not inject the plan approvals"
 }
 
 # stamp_step_at <sid> <step> — give one already-built step entry an explicit

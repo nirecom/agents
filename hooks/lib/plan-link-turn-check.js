@@ -1,27 +1,21 @@
-// Turn-end plan-link check of the confirm-plan Stop guard (hooks/stop-confirm-plan-guard.js):
-// a turn that wrote a plan artifact or CONFIRMed a plan stage must show that stage's plan-link
-// output in its assistant text — the blob URL when one exists, otherwise the plan's local path.
+// Plan-link turn checks shared by the confirm-plan Stop guard (hooks/stop-confirm-plan-guard.js)
+// and the CONFIRM dialog (hooks/confirm-checkpoint.js): a plan stage's plan-link output — the
+// blob URL when one exists, otherwise the plan's local path — must end the presentation turn.
 // Pure helpers; the caller supplies the transcript entries and the link resolver. Fail-open.
 "use strict";
 
 const os = require("os");
+const path = require("path");
 const { isCommandTool, commandTextOf } = require("./tool-command-text");
-// The detector that opens the CONFIRM dialog decides what counts as a CONFIRM here too, so a
-// command the dialog fires on (e.g. an echo inside a compound command) is never missed.
-const { parseSentinel } = require("../confirm-checkpoint");
+const { parseSentinel } = require("./confirm-sentinel");
+const { isRealUserPrompt, parseLines, splitTurns } = require("./transcript-reader");
 const { STAGES, PLAN_LINK_COMMAND } = require("./plan-link");
 
 // A link ends where path characters stop; one trailing "." or ")" is prose, not the link.
 const CONTINUES_RE = /^\.?[A-Za-z0-9_~%/\\-]/;
-
-// A real user prompt opens a turn; a user entry carrying only tool_result items does not.
-function isRealUserPrompt(entry) {
-  if (!entry || entry.type !== "user") return false;
-  const content = entry.message && entry.message.content;
-  if (typeof content === "string") return true;
-  if (!Array.isArray(content)) return false;
-  return content.some((it) => !it || it.type !== "tool_result");
-}
+const PLAN_WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
+const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep"]);
+const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
 
 // turnEntriesOf(entries) -> the entries after the last real user prompt (the current turn).
 function turnEntriesOf(entries) {
@@ -46,31 +40,84 @@ function turnEntriesFromLines(lines) {
   return out.reverse();
 }
 
+// previousTurnEntriesFromLines(lines) -> the entries between the last two real prompts; [] when
+// no real prompt precedes the last one.
+function previousTurnEntriesFromLines(lines) {
+  return splitTurns(parseLines(lines)).prevTurnEntries;
+}
+
 function assistantContent(entry) {
   if (!entry || entry.type !== "assistant") return [];
   const c = entry.message && entry.message.content;
   return Array.isArray(c) ? c : [];
 }
 
-// collectTurnAssistantText(entries) -> the current turn's assistant text items, in order.
-// Tool inputs and tool results are excluded: the user never reads them as the reply.
-function collectTurnAssistantText(entries) {
+function textItems(entries) {
   const texts = [];
-  for (const entry of turnEntriesOf(entries)) {
+  for (const entry of entries) {
     for (const item of assistantContent(entry)) {
       if (item && item.type === "text" && typeof item.text === "string") texts.push(item.text);
     }
   }
-  return texts.join("\n");
+  return texts;
 }
 
-// stagesToCheck({ markers, turnEntries }) -> deduplicated plan stages written or CONFIRMed this turn.
-function stagesToCheck({ markers, turnEntries } = {}) {
+// collectTurnAssistantText(entries) -> the current turn's assistant text items, in order.
+// Tool inputs and tool results are excluded: the user never reads them as the reply.
+function collectTurnAssistantText(entries) {
+  return textItems(turnEntriesOf(entries)).join("\n");
+}
+
+// lastTextBlockOf(entries) -> the current turn's last assistant text item, or null.
+function lastTextBlockOf(entries) {
+  const texts = textItems(turnEntriesOf(entries));
+  return texts.length > 0 ? texts[texts.length - 1] : null;
+}
+
+function samePath(a, b) {
+  const norm = (p) => {
+    const r = path.resolve(String(p)).replace(/\\/g, "/");
+    return process.platform === "win32" ? r.toLowerCase() : r;
+  };
+  try { return norm(a) === norm(b); } catch (_) { return false; }
+}
+
+function isConfirmEcho(item) {
+  return isCommandTool(item.name) && parseSentinel(commandTextOf(item.name, item.input)) !== null;
+}
+
+// Any non-read tool naming the plan's basename may write it (a Bash redirect, a script, ...).
+function mentionsBasename(item, base) {
+  if (READ_ONLY_TOOLS.has(item.name) || isConfirmEcho(item)) return false;
+  let s = "";
+  try { s = JSON.stringify(item.input === undefined ? null : item.input) || ""; } catch (_) { return false; }
+  return s.toLowerCase().includes(base);
+}
+
+// currentTurnWritesStage(entries, absPath) -> whether this turn wrote (or may have written) the plan.
+function currentTurnWritesStage(entries, absPath) {
+  if (typeof absPath !== "string" || !absPath) return false;
+  const base = absPath.replace(/\\/g, "/").split("/").pop().toLowerCase();
+  for (const entry of turnEntriesOf(entries)) {
+    for (const item of assistantContent(entry)) {
+      if (!item || item.type !== "tool_use") continue;
+      const fp = item.input && item.input.file_path;
+      if (PLAN_WRITE_TOOLS.has(item.name) && typeof fp === "string" && fp && samePath(fp, absPath)) return true;
+      if (base && mentionsBasename(item, base)) return true;
+    }
+  }
+  return false;
+}
+
+// stagesToCheck({ markers, turnEntries, includeConfirm }) -> deduplicated plan stages written
+// (turn marker) or, unless includeConfirm is false, CONFIRMed this turn.
+function stagesToCheck({ markers, turnEntries, includeConfirm } = {}) {
   const found = new Set();
   for (const m of Array.isArray(markers) ? markers : []) {
     if (m && STAGES.includes(m.suffix)) found.add(m.suffix);
   }
-  for (const entry of Array.isArray(turnEntries) ? turnEntries : []) {
+  const entries = includeConfirm === false ? [] : Array.isArray(turnEntries) ? turnEntries : [];
+  for (const entry of entries) {
     for (const item of assistantContent(entry)) {
       // Every command tool confirm-checkpoint recognizes, not only Bash.
       if (!item || item.type !== "tool_use" || !isCommandTool(item.name)) continue;
@@ -81,13 +128,33 @@ function stagesToCheck({ markers, turnEntries } = {}) {
   return STAGES.filter((s) => found.has(s));
 }
 
-function containsLink(text, link) {
+// inlineCodeRanges(text) -> [start, end) ranges of CommonMark inline code spans: a backtick run
+// of length N closes at the next run of exactly N; an unmatched opener is literal text.
+function inlineCodeRanges(text) {
+  const runs = [];
+  const re = /`+/g;
+  let m;
+  while ((m = re.exec(text)) !== null) runs.push({ at: m.index, len: m[0].length });
+  const ranges = [];
+  for (let k = 0; k < runs.length; k++) {
+    const close = runs.findIndex((r, j) => j > k && r.len === runs[k].len);
+    if (close === -1) continue;
+    ranges.push([runs[k].at, runs[close].at + runs[close].len]);
+    k = close;
+  }
+  return ranges;
+}
+
+function containsLink(text, link, { bareOnly = false } = {}) {
   if (!link) return false;
+  const spans = bareOnly ? inlineCodeRanges(text) : [];
   let from = 0;
   for (;;) {
     const i = text.indexOf(link, from);
     if (i === -1) return false;
-    if (!CONTINUES_RE.test(text.slice(i + link.length))) return true;
+    // A URL inside inline code cannot be tapped, so it is not shown.
+    const inCode = spans.some(([s, e]) => i >= s && i < e);
+    if (!inCode && !CONTINUES_RE.test(text.slice(i + link.length))) return true;
     from = i + 1;
   }
 }
@@ -112,17 +179,47 @@ function localPathForms(absPath) {
   return [...new Set(forms)];
 }
 
-// shown(link, text) -> null when the stage needs nothing, else whether the reply shows it.
-function shown(link, text) {
-  if (!link || typeof link !== "object") return null;
-  if (typeof link.url === "string" && link.url) return containsLink(text, link.url);
-  if (typeof link.path !== "string" || !link.path) return null;
-  return localPathForms(link.path).some((form) => containsLink(text, form));
+// stripFencedCode(text) -> text without CommonMark fenced code blocks; an unclosed fence runs to the end.
+function stripFencedCode(text) {
+  const out = [];
+  let fence = null;
+  for (const line of String(text).split("\n")) {
+    if (fence) {
+      const close = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+      continue;
+    }
+    const open = line.match(FENCE_OPEN_RE);
+    if (open && !(open[1][0] === "`" && line.slice(open[0].length).includes("`"))) {
+      fence = open[1];
+      out.push("");
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
-// checkPlanUrlInTurn({ stages, turnText, resolve }) -> { block, reason? }.
+// shown(link, text) -> null when the stage needs nothing, else whether the reply shows it outside a code fence.
+function shown(link, text) {
+  if (!link || typeof link !== "object") return null;
+  const prose = stripFencedCode(text);
+  if (typeof link.url === "string" && link.url) return containsLink(prose, link.url, { bareOnly: true });
+  if (typeof link.path !== "string" || !link.path) return null;
+  return localPathForms(link.path).some((form) => containsLink(prose, form));
+}
+
+function stopReason(missing) {
+  return "[confirm-plan] plan-link: this turn wrote the " + missing.join(", ") +
+    " plan but its last text block does not carry the plan-link line (the URL when one exists, otherwise the" +
+    " local path) — run " + PLAN_LINK_COMMAND + ", end the final body text of the turn with its output as-is" +
+    " and close the turn; the CONFIRM echo comes in the turn after the user's reply. (Hook: stop-confirm-plan-guard.js)";
+}
+
+// checkPlanUrlInTurn({ stages, turnText, resolve, reasonFor }) -> { block, reason? }.
 // resolve(stage) returns plan-link's { url?, path?, reason? }; a throw or no path never blocks.
-function checkPlanUrlInTurn({ stages, turnText, resolve } = {}) {
+// reasonFor(missingStages) words the block; omitted, it is the Stop guard's reason.
+function checkPlanUrlInTurn({ stages, turnText, resolve, reasonFor } = {}) {
   const text = typeof turnText === "string" ? turnText : "";
   const missing = [];
   for (const stage of Array.isArray(stages) ? stages : []) {
@@ -131,13 +228,17 @@ function checkPlanUrlInTurn({ stages, turnText, resolve } = {}) {
     if (shown(link, text) === false) missing.push(stage);
   }
   if (missing.length === 0) return { block: false };
-  return {
-    block: true,
-    reason: "[confirm-plan] plan-link: this turn wrote or confirmed the " + missing.join(", ") +
-      " plan but its plan-link line is not in the response text (the URL when one exists, otherwise the" +
-      " local path) — run " + PLAN_LINK_COMMAND + " and write its output as-is in the response text." +
-      " (Hook: stop-confirm-plan-guard.js)",
-  };
+  return { block: true, reason: typeof reasonFor === "function" ? reasonFor(missing) : stopReason(missing) };
 }
 
-module.exports = { collectTurnAssistantText, stagesToCheck, checkPlanUrlInTurn, turnEntriesOf, turnEntriesFromLines };
+module.exports = {
+  collectTurnAssistantText,
+  stagesToCheck,
+  checkPlanUrlInTurn,
+  turnEntriesOf,
+  turnEntriesFromLines,
+  lastTextBlockOf,
+  previousTurnEntriesFromLines,
+  currentTurnWritesStage,
+  shown,
+};

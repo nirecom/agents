@@ -88,6 +88,10 @@ write_state() {
     local sid="$1" json="$2"
     mkdir -p "$WORKFLOW_DIR"
     printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+    # #2277: a complete plan stage without a verifying approval reads as pending; bind
+    # approvals for the complete ones so the commit-gate cases reach the gate under test.
+    node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" \
+        inject-complete "$WORKFLOW_DIR/${sid}.json" clarify_intent outline detail >/dev/null 2>&1 || true
 }
 
 read_state_step() {

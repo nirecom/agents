@@ -1,27 +1,17 @@
 # tests/hooks/feature-534-stop-final-report-guard/g28-trigger/no-env-cases.sh
 # Tests: hooks/stop-final-report-guard.js, bin/workflow/next-step
 # Tags: hook, stop-guard, workflow-state, scope:issue-specific, TL2
-#
-# Sourced by ../g28-trigger.sh — no shebang, no runner. Owns the 系統B cases
-# where the env file is ABSENT: G33 (gate reached, no report → block), G34
-# (hand-written full report still blocks), G35..G39 (mid-workflow, no state,
-# gate yield, workflow-off marker, gate already complete → exit 0) and G40
-# (non-default WORKFLOW_STATE_DIR still reaches the spawned next-step).
-#
-# Depends on ../g28-trigger.sh for: b_mk_state, b_run, b_stdin, b_is_block,
-# b_reason_has, B_OUT, B_CODE — and on the grandparent for TMPDIR_BASE,
-# HOOK_JS, node_path, require_hook, run_with_timeout, pass, fail, skip and the
-# transcript-writing helpers.
+# Sourced by ../g28-trigger.sh: lane B cases with the env file ABSENT (G33..G40); helpers from ../g28-trigger.sh and ../helpers.sh.
 
 # ---------------------------------------------------------------------------
-# G33: 系統B core — no env file + gate reached + no FR heading → exit 2 + block
+# G33: lane B core — no env file + gate reached + no FR heading → exit 2 + block
 # ---------------------------------------------------------------------------
 test_G33_no_env_gate_reached_no_report_blocks() {
     require_hook "G33_no_env_gate_reached_no_report_blocks" || return
     local sid="g33-sid"
     local plans_dir="$TMPDIR_BASE/g33-plans" wf_dir="$TMPDIR_BASE/g33-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g33-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "All done, wrapping up here."
@@ -46,7 +36,7 @@ test_G34_no_env_handwritten_full_report_still_blocks() {
     local sid="g34-sid"
     local plans_dir="$TMPDIR_BASE/g34-plans" wf_dir="$TMPDIR_BASE/g34-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g34-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "$(full_canonical_report_text "$sid")"
@@ -70,7 +60,7 @@ test_G35_no_env_midworkflow_exit0() {
     local sid="g35-sid"
     local plans_dir="$TMPDIR_BASE/g35-plans" wf_dir="$TMPDIR_BASE/g35-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" docs user_verification cleanup pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" docs user_verification cleanup pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g35-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "Still working on the docs step."
@@ -108,14 +98,14 @@ test_G36_no_env_no_state_exit0() {
 }
 
 # ---------------------------------------------------------------------------
-# G37: 系統B escape hatch (a) — session-close gate says yield → exit 0
+# G37: lane B escape hatch (a) — session-close gate says yield → exit 0
 # ---------------------------------------------------------------------------
 test_G37_no_env_gate_yield_exit0() {
     require_hook "G37_no_env_gate_yield_exit0" || return
     local sid="g37-sid"
     local plans_dir="$TMPDIR_BASE/g37-plans" wf_dir="$TMPDIR_BASE/g37-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
     printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 
     local transcript="$TMPDIR_BASE/g37-transcript.jsonl"
@@ -125,21 +115,21 @@ test_G37_no_env_gate_yield_exit0() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "0" ]; then
-        pass "G37: 系統B + gate_action:yield → exit 0 (escape hatch a)"
+        pass "G37: lane B + gate_action:yield → exit 0 (escape hatch a)"
     else
         fail "G37: expected exit 0, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# G38: 系統B escape hatch (b) — <sid>.workflow-off marker → exit 0
+# G38: lane B escape hatch (b) — <sid>.workflow-off marker → exit 0
 # ---------------------------------------------------------------------------
 test_G38_no_env_workflow_off_exit0() {
     require_hook "G38_no_env_workflow_off_exit0" || return
     local sid="g38-sid"
     local plans_dir="$TMPDIR_BASE/g38-plans" wf_dir="$TMPDIR_BASE/g38-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
     printf 'off' > "$wf_dir/${sid}.workflow-off"
 
     local transcript="$TMPDIR_BASE/g38-transcript.jsonl"
@@ -149,21 +139,21 @@ test_G38_no_env_workflow_off_exit0() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "0" ]; then
-        pass "G38: 系統B + workflow-off marker → exit 0 (escape hatch b)"
+        pass "G38: lane B + workflow-off marker → exit 0 (escape hatch b)"
     else
         fail "G38: expected exit 0, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# G39: 系統B escape hatch (c) — pre_final_report_gate manually complete → exit 0
+# G39: lane B escape hatch (c) — pre_final_report_gate manually complete → exit 0
 # ---------------------------------------------------------------------------
 test_G39_no_env_gate_complete_exit0() {
     require_hook "G39_no_env_gate_complete_exit0" || return
     local sid="g39-sid"
     local plans_dir="$TMPDIR_BASE/g39-plans" wf_dir="$TMPDIR_BASE/g39-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid"   # every step complete, gate included
+    b_mk_state "$wf_dir" "$plans_dir" "$sid"   # every step complete, gate included
 
     local transcript="$TMPDIR_BASE/g39-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "Gate was marked complete by hand."
@@ -172,7 +162,7 @@ test_G39_no_env_gate_complete_exit0() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "0" ]; then
-        pass "G39: 系統B + pre_final_report_gate complete → exit 0 (escape hatch c)"
+        pass "G39: lane B + pre_final_report_gate complete → exit 0 (escape hatch c)"
     else
         fail "G39: expected exit 0, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi
@@ -189,7 +179,7 @@ test_G40_nondefault_workflow_dir_env_inheritance() {
     local plans_dir="$TMPDIR_BASE/g40-plans"
     local wf_dir="$TMPDIR_BASE/g40-nested/deeper/wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g40-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "Done; state lives in a non-default workflow dir."
@@ -198,7 +188,7 @@ test_G40_nondefault_workflow_dir_env_inheritance() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "2" ] && b_is_block; then
-        pass "G40: non-default WORKFLOW_STATE_DIR still reaches 系統B → exit 2 (env inherited by next-step)"
+        pass "G40: non-default WORKFLOW_STATE_DIR still reaches lane B → exit 2 (env inherited by next-step)"
     else
         fail "G40: expected exit 2 + block (env inheritance regression), got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi

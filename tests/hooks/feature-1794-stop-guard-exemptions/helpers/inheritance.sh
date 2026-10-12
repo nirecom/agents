@@ -84,7 +84,11 @@ const S = require('$STATEIO_NODE');
 const sid = '$donor';
 S.writeState(sid, S.createInitialState(sid, S.getCurrentContext()));
 S.markStep(sid, 'workflow_init', 'complete');
-if ('$mode' === 'complete') S.markStep(sid, 'clarify_intent', 'complete');
+if ('$mode' === 'complete') {
+  // #2277: a gated complete needs the approval record (intent artifact written above).
+  require('$PLAN_FIXTURE_NODE').approveLive(sid, 'clarify_intent');
+  S.markStep(sid, 'clarify_intent', 'complete');
+}
 " || return 1
     inh_node "$tmp" --hook "$heir"
     [ "$mode" = "complete" ] && return 0

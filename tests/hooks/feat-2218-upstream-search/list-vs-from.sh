@@ -33,6 +33,7 @@ for (const [sid, cwd] of donors) {
   fs.writeFileSync(path.join(dir, sid + '-intent.md'), '**Title:** ' + sid + NL + 'Cross-check donor, #2279.' + NL);
   writeState(sid, createInitialState(sid, { cwd, git_branch: 'feature/donor' }));
   markStep(sid, 'workflow_init', 'complete');
+  require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(sid, 'clarify_intent'); // #2277
   markStep(sid, 'clarify_intent', 'complete');
   writeState('heirclone-' + sid, createInitialState('heirclone-' + sid, { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 }
@@ -118,6 +119,7 @@ fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(dir, 'sscdonor-sess-15-intent.md'), '**Title:** SSC donor' + NL + 'session_start_context-only heir, #2279.' + NL);
 writeState('sscdonor-sess-15', createInitialState('sscdonor-sess-15', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 markStep('sscdonor-sess-15', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('sscdonor-sess-15', 'clarify_intent'); // #2277
 markStep('sscdonor-sess-15', 'clarify_intent', 'complete');
 writeState('sscheir-sess-15', createInitialState('sscheir-sess-15', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
@@ -227,6 +229,7 @@ fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(dir, 'clidonor-sess-16-intent.md'), '**Title:** CLI donor' + NL + 'runList heir-context wiring, #2279.' + NL);
 writeState('clidonor-sess-16', createInitialState('clidonor-sess-16', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 markStep('clidonor-sess-16', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('clidonor-sess-16', 'clarify_intent'); // #2277
 markStep('clidonor-sess-16', 'clarify_intent', 'complete');
 writeState('cliheir-sess-16', createInitialState('cliheir-sess-16', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');

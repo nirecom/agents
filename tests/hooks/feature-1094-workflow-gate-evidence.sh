@@ -88,6 +88,13 @@ read_state_status() {
   " "$sid" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js" 2>/dev/null || echo "MISSING"
 }
 
+# approve_intent <sid>: #2277 — intent.md alone is no longer sufficient evidence; clarify_intent
+# reads complete only with an approval bound to the artifact. Call after the intent.md exists.
+approve_intent() {
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+    node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" approve "$1" clarify_intent >/dev/null 2>&1 || true
+}
+
 run_gate() {
   local json="$1"
   echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" run_with_timeout node "$GATE_HOOK" 2>/dev/null
@@ -157,6 +164,7 @@ echo "=== WGE-1: intent.md present + clarify_intent=pending → gate passes (aut
 SID="wge1-$$"
 write_state "$SID" "$(CI_PENDING_STATE $SID)"
 touch "$PLANS_DIR/${SID}-intent.md"
+approve_intent "$SID"
 
 GATE_INPUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"/tmp/test.txt","content":"x"},"session_id":"%s"}' "$SID")
 GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -199,6 +207,7 @@ echo "=== WGE-3: intent.md present + clarify_intent=complete → gate passes (no
 SID="wge3-$$"
 write_state "$SID" "$(CI_COMPLETE_STATE $SID)"
 touch "$PLANS_DIR/${SID}-intent.md"
+approve_intent "$SID"
 
 GATE_INPUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"/tmp/test.txt","content":"x"},"session_id":"%s"}' "$SID")
 GATE_OUT=$(run_gate "$GATE_INPUT")

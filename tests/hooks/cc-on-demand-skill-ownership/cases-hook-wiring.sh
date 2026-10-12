@@ -87,6 +87,10 @@ else
  "write_tests":$f,"review_tests":$f,"run_tests":$f,"review_security":$f,"docs":$f,
  "user_verification":$f,"cleanup":$f,"pre_final_report_gate":$f}}
 HW_STATE_EOF
+        # #2277: an unapproved complete plan stage reads as pending; bind approvals so the
+        # control state is genuinely all-complete.
+        WORKFLOW_PLANS_DIR="$(node_path "$HW_PLANS")" node "$(node_path "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js")" \
+            inject-complete "$(node_path "$HW_WF/hwsid2037.json")" clarify_intent outline detail >/dev/null 2>&1 || true
     }
 
     # The gate self-limits to the repo its own checkout belongs to (isAgentsSessionRepo), so a

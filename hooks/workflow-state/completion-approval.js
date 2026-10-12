@@ -1,33 +1,24 @@
 "use strict";
-// Completion-approval authority for the approval-gated workflow steps (#1133).
+// Completion-approval authority for the approval-gated workflow steps (#1133, #2277).
 //
-// `hasCompletionEvidence()` (evidence-resolver.js) is a heuristic: for outline /
-// detail it cannot distinguish "review not started" from "review finished but
-// the user has not approved yet" — both look identical on disk. This module owns
-// the authoritative answer: a gated step may only be persisted `complete` when a
-// `plan_approvals[step]` record exists on the session state (or the user has
-// pre-waived the gate via CONFIRM_<STAGE>=off).
-//
-// Storage note (#1733): approvals are no longer a mutable top-level field. Each
-// approval is a `plan_approval` event and each withdrawal a `plan_approval_revoked`
-// event; `state.plan_approvals` is the projection folded from that stream, so the
-// evidence behind a superseded or revoked approval stays readable forever.
-//
-// Failure contract: read paths fail-open (malformed → null / no record), but the
-// verdict itself is FAIL-CLOSED — every uncomputable or mismatching artifact hash
-// is a rejection, never a downgrade to an existence-only check.
+// `hasCompletionEvidence()` (evidence-resolver.js) only sees that a plan file exists; it cannot
+// tell "review finished" from "the user approved". A gated step may be persisted `complete` only
+// when a `plan_approvals[step]` record exists (or CONFIRM_<STAGE>=off waives an off-waivable gate).
+// Approvals are `plan_approval` / `plan_approval_revoked` events; `state.plan_approvals` is their
+// projection (#1733). Read paths fail open; the verdict fails closed — an uncomputable or
+// mismatching artifact hash is a rejection. Contract: docs/architecture/claude-code/workflow.md.
 
 const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 
-const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
+const { getPlansArtifactPath } = require("../lib/plans-artifact-registry");
 const { isConfirmOffForStageFromFile } = require("../lib/plan-confirm-flag");
 const { SESSION_ID_VALID_RE, readState } = require("./state-io");
+const { PLAN_STAGE_TABLE, rowFor } = require("./plan-stage-table");
 
-// The ONLY enumeration of the approval-gated step class. Every check iterates
-// this array — never hardcode one member without the other (CPR-ORTH).
-const APPROVAL_GATED_STEPS = Object.freeze(["outline", "detail"]);
+// The ONLY enumeration of the approval-gated step class, in workflow order. Every check iterates
+// this array; the per-stage values live in plan-stage-table.js (CPR-ORTH).
+const APPROVAL_GATED_STEPS = Object.freeze(Object.keys(PLAN_STAGE_TABLE));
 
 // Frozen closed set of named exceptions. 1:1 with the sanctioned override
 // inventory. An unknown token is a caller bug and throws — a typo must never
@@ -89,18 +80,49 @@ function isApprovalGatedStep(step) {
 }
 
 function confirmSentinelFor(step) {
-  return "WORKFLOW_CONFIRM_" + String(step).toUpperCase();
+  const row = rowFor(step);
+  return row ? row.sentinel : "WORKFLOW_CONFIRM_" + String(step).toUpperCase();
 }
 
 // Human-readable recovery instruction. Never contains a single quote — callers
 // embed it in single-quoted NEXT_HINT/REASON output.
 function recoveryFor(step) {
+  const row = rowFor(step);
+  const waiver = row && row.offWaivable
+    ? " (or set " + row.confirmFlag + "=off to waive the gate)"
+    : " (this gate has no off waiver)";
   return (
-    "Approval for " + step + " is not on record. Emit: echo \"<<" +
-    confirmSentinelFor(step) + ": {summary}>>\" to record user approval " +
-    "(or set " + (step === "outline" ? "CONFIRM_OUTLINE" : "CONFIRM_DETAIL") +
-    "=off to waive the gate). Do NOT use --mark."
+    "Approval for " + step + " is not on record. Re-present the plan and end that turn with " +
+    "the plan-link line (bin/plan-link); after the user replies with approval, emit echo \"<<" +
+    confirmSentinelFor(step) + ": {summary}>>\" on its own to record it" +
+    waiver + ". Do NOT use --mark."
   );
+}
+
+// isOffWaived(step) -> whether the CONFIRM_* flag in the config FILE waives this gate. Never
+// process.env: bin/workflow/next-step is spawnable by the Bash tool, so an inline
+// `CONFIRM_<STAGE>=off node ...` prefix would otherwise mint a fake user-waiver record.
+function isOffWaived(step) {
+  const row = rowFor(step);
+  if (!row || !row.offWaivable) return false;
+  try { return isConfirmOffForStageFromFile(row.suffix) === true; } catch (_) { return false; }
+}
+
+// Named exception (CPR-UNV): a row's digestExcludes H2 sections are cut from the heading line up
+// to the next H2 before hashing. A heading that appears more than once is not cut, so an
+// ambiguous artifact falls back to the full-text digest (fail-closed).
+function digestBody(buf, excludes) {
+  if (!excludes || excludes.length === 0) return buf;
+  let lines = buf.toString("utf8").split("\n");
+  for (const title of excludes) {
+    const heading = "## " + title;
+    const hits = lines.map((l, i) => (l.replace(/\s+$/, "") === heading ? i : -1)).filter((i) => i !== -1);
+    if (hits.length !== 1) continue;
+    let end = hits[0] + 1;
+    while (end < lines.length && !/^## /.test(lines[end])) end++;
+    lines = lines.slice(0, hits[0]).concat(lines.slice(end));
+  }
+  return Buffer.from(lines.join("\n"), "utf8");
 }
 
 // Validates a sanctioned token against the frozen set. Returns the token on
@@ -117,16 +139,16 @@ function assertSanctionedSource(token, step) {
   return token;
 }
 
-// sha256 of <PLANS_DIR>/<sid>-<step>.md. Returns null on ANY anomaly (invalid
-// sessionId, missing/unreadable artifact). null means "anomaly" — callers must
+// sha256 of <PLANS_DIR>/<sid>-<suffix>.md minus the row's digestExcludes. Returns null on ANY
+// anomaly (invalid sessionId, missing/unreadable artifact). null means "anomaly" — callers must
 // treat it fail-closed, never as "skip the check".
 function computeArtifactSha(sessionId, step) {
   try {
     if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return null;
     if (!isApprovalGatedStep(step)) return null;
-    const plansDir = getWorkflowPlansDir();
-    const artifact = path.join(plansDir, sessionId + "-" + step + ".md");
-    const buf = fs.readFileSync(artifact);
+    const row = rowFor(step);
+    const artifact = getPlansArtifactPath(sessionId, row.suffix);
+    const buf = digestBody(fs.readFileSync(artifact), row.digestExcludes);
     return crypto.createHash("sha256").update(buf).digest("hex");
   } catch (_) {
     return null;
@@ -165,7 +187,7 @@ function recordPlanApproval(sessionId, step, fields = {}) {
       reason: fields.reason || null,
       artifact_sha256: fields.artifactSha || null,
       // Session whose artifact the recorded hash was taken from. Artifacts are
-      // named <sid>-<step>.md, so a record inherited by a LATER session must keep
+      // named <sid>-<suffix>.md, so a record inherited by a LATER session must keep
       // pointing at the session that owns the approved artifact (#1133).
       artifact_session_id: fields.artifactSha ? sessionId : null,
       artifact_hash_status: fields.artifactHashStatus || "unknown",
@@ -202,18 +224,10 @@ function buildAuditApprovalEvent(step, source, reason, origin) {
   });
 }
 
-// Authoritative verdict for "may this gated step be persisted complete?".
-// Returns { approved, code, source }. Used at BOTH the effective-state snapshot
-// stage and the writeState boundary — divergence between the two would produce
-// "scan passed but write rejected" inconsistencies.
-//
-// Artifact-hash transition table (all uncomputable/mismatch cases fail closed):
-//   confirm-sentinel + recorded sha + current sha matches   → APPROVED
-//   confirm-sentinel + recorded sha + current sha differs   → artifact-hash-mismatch
-//   confirm-sentinel + recorded sha + uncomputable now      → artifact-hash-unverifiable
-//   confirm-sentinel + no recorded sha                      → artifact-hash-unverifiable
-//   reset-sentinel / confirm-flag-off (audit record)        → APPROVED (no hash check)
-//   no record                                               → no-approval-record
+// Authoritative verdict for "may this gated step be persisted complete?" -> { approved, code,
+// source }. Shared by the effective-state snapshot and the write boundary so they never diverge.
+// confirm-sentinel needs a recorded sha equal to the current one (else artifact-hash-mismatch /
+// -unverifiable); HASH_EXEMPT_SOURCES approve without a hash; no record -> no-approval-record.
 function evaluateCompletionApproval(sessionId, step, state) {
   if (!isApprovalGatedStep(step)) {
     return { approved: true, code: null, source: null };
@@ -222,14 +236,8 @@ function evaluateCompletionApproval(sessionId, step, state) {
   ensureEnvLoaded();
   const record = readPlanApproval(state, step);
 
-  // CONFIRM_<STAGE>=off: user pre-waived the gate via config.
-  if (!record || record.source === "confirm-flag-off") {
-    // Config-file-only read: bin/workflow/next-step and bin/workflow/reconcile-state
-    // are spawnable by the Bash tool, so an inline `CONFIRM_<STAGE>=off node ...`
-    // prefix would otherwise waive the gate and mint a fake user-waiver record.
-    let off = false;
-    try { off = isConfirmOffForStageFromFile(step) === true; } catch (_) { off = false; }
-    if (off) return { approved: true, code: null, source: "confirm-flag-off" };
+  if ((!record || record.source === "confirm-flag-off") && isOffWaived(step)) {
+    return { approved: true, code: null, source: "confirm-flag-off" };
   }
 
   if (!record) {
@@ -237,6 +245,10 @@ function evaluateCompletionApproval(sessionId, step, state) {
   }
 
   const source = record.source;
+  // A non-offWaivable step has no off waiver, so a stored confirm-flag-off record proves nothing.
+  if (source === "confirm-flag-off" && !(rowFor(step) || {}).offWaivable) {
+    return { approved: false, code: "no-approval-record", source };
+  }
   if (HASH_EXEMPT_SOURCES.indexOf(source) !== -1) {
     return { approved: true, code: null, source };
   }
@@ -250,7 +262,7 @@ function evaluateCompletionApproval(sessionId, step, state) {
     return { approved: false, code: "artifact-hash-unverifiable", source };
   }
   // A record inherited across a session boundary stays bound to the artifact it
-  // was approved against (<owner-sid>-<step>.md), so the hash still verifies.
+  // was approved against (<owner-sid>-<suffix>.md), so the hash still verifies.
   const artifactSessionId = record.artifact_session_id || sessionId;
   const currentSha = computeArtifactSha(artifactSessionId, step);
   if (!currentSha) {
@@ -262,27 +274,11 @@ function evaluateCompletionApproval(sessionId, step, state) {
   return { approved: true, code: null, source };
 }
 
-// Completion-boundary invariant for the approval-gated steps (#1133), expressed
-// over a BATCH of events (#1733).
-//
-// `prevProjection` is the fold of the stream as it stands on disk; `nextProjection`
-// is the fold of that stream PLUS the batch about to be appended. Comparing the two
-// folds — rather than a keyed step map before/after a rewrite — is what keeps the
-// gate on the only remaining write path, appendEvents.
-//
-// Order is significant:
-//   1. approval invalidation — a gated step LEAVING complete revokes its approval,
-//      so a stale approval can never re-validate a later re-completion.
-//   2. sanctioned bypass     — a validated opts.sanctioned token skips the check
-//      and stamps an audit record for each gated completion transition.
-//   3. invariant enforcement — an unsanctioned →complete transition must satisfy
-//      evaluateCompletionApproval, else it throws.
-// A complete→complete rewrite is not a transition and passes through, as does a
-// transition to `skipped`.
-//
-// Returns the extra events the caller must append INSIDE the same batch (audit
-// approvals and revocations). Throws UnapprovedCompletionError on a violation,
-// before any byte is written.
+// Completion-boundary invariant over a BATCH of events (#1133, #1733): compares the on-disk fold
+// with the fold plus the batch. Per gated step, in order: (1) leaving complete revokes the
+// approval; (2) a validated opts.sanctioned token stamps an audit record instead of checking;
+// (3) an unsanctioned ->complete transition must pass evaluateCompletionApproval or this throws
+// UnapprovedCompletionError before any byte is written. Returns the extra events for the batch.
 function completionBoundaryEventsForBatch(sessionId, prevProjection, nextProjection, opts) {
   const extra = [];
   const statusOf = (proj, step) => {
@@ -318,7 +314,10 @@ function completionBoundaryEventsForBatch(sessionId, prevProjection, nextProject
 
     if (before === "complete" || after !== "complete") continue;
 
-    // 2. Sanctioned bypass.
+    // 2. Sanctioned bypass. session-inherit never vouches for a stage with no off waiver
+    // (intent): the inherited complete stays unapproved, so the effective state falls back
+    // to pending until the user confirms that stage in this session.
+    if (sanctioned === "session-inherit" && !(rowFor(step) || {}).offWaivable) continue;
     if (sanctioned) {
       extra.push(buildAuditApprovalEvent(step, sanctioned, opts && opts.reason, origin));
       continue;
@@ -363,4 +362,5 @@ module.exports = {
   completionBoundaryEventsForBatch,
   recoveryFor,
   confirmSentinelFor,
+  isOffWaived,
 };

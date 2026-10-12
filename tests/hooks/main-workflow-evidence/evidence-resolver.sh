@@ -72,12 +72,19 @@ STATEOF
       touch "$PLANS_TMP/${SID}-intent.md"
 
       GATE_INPUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"/tmp/test.txt","content":"x"},"session_id":"%s"}' "$SID")
+      # #2277: intent.md alone is no longer completion evidence — the approval record is.
       GATE_OUT=$(WORKFLOW_PLANS_DIR="$PLANS_TMP" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" <<< "$GATE_INPUT" 2>/dev/null)
-
-      if echo "$GATE_OUT" | grep -q '"approve"' || ! echo "$GATE_OUT" | grep -q 'clarify_intent'; then
-        pass "WS-EV-16. intent.md present + clarify_intent=pending → gate does not block clarify_intent"
+      if echo "$GATE_OUT" | grep -q '"block"' && echo "$GATE_OUT" | grep -q 'clarify_intent'; then
+        pass "WS-EV-16a. intent.md present but unapproved → gate still blocks on clarify_intent"
       else
-        fail "WS-EV-16. expected gate to pass/not block clarify_intent, got: $GATE_OUT"
+        fail "WS-EV-16a. expected a clarify_intent block without an approval, got: $GATE_OUT"
+      fi
+      WORKFLOW_PLANS_DIR="$PLANS_TMP" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$DOTFILES_DIR/tests/lib/plan-approval-fixture.js" approve "$SID" clarify_intent >/dev/null 2>&1
+      GATE_OUT=$(WORKFLOW_PLANS_DIR="$PLANS_TMP" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" <<< "$GATE_INPUT" 2>/dev/null)
+      if echo "$GATE_OUT" | grep -q '"approve"' || ! echo "$GATE_OUT" | grep -q 'clarify_intent'; then
+        pass "WS-EV-16b. intent.md + approval record → gate does not block clarify_intent"
+      else
+        fail "WS-EV-16b. expected gate to pass/not block clarify_intent, got: $GATE_OUT"
       fi
       rm -rf "$PLANS_TMP"
     else

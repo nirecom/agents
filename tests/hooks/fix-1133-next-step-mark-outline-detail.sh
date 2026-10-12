@@ -94,9 +94,14 @@ check_nonzero() {
   fi
 }
 
+# #2277 (no migration): every recorded-complete gated step without an approval gets a real one
+# (tests/lib/plan-approval-fixture.js); a case's own plan_approvals entry is never overridden.
+PLAN_APPROVAL_FIXTURE="$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js"
 write_state() {
   local sid="$1" json="$2"
   printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+  run_with_timeout node "$PLAN_APPROVAL_FIXTURE" inject-complete "$WORKFLOW_DIR/${sid}.json" \
+    clarify_intent outline detail >/dev/null || echo "FAIL: write_state($sid): could not inject plan approvals"
 }
 
 read_state_status() {
@@ -283,20 +288,9 @@ seed_approval() {
   local sid="$1" step="$2"
   local artifact="$PLANS_DIR/${sid}-${step}.md"
   [ -f "$artifact" ] || printf 'plan\n' > "$artifact"
-  node -e "
-    const fs = require('fs'), crypto = require('crypto');
-    const [stateFile, artifact, step] = process.argv.slice(1);
-    const s = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-    s.plan_approvals = s.plan_approvals || {};
-    s.plan_approvals[step] = {
-      source: 'confirm-sentinel',
-      reason: 'seeded by test fixture',
-      artifact_sha256: crypto.createHash('sha256').update(fs.readFileSync(artifact)).digest('hex'),
-      artifact_hash_status: 'verified',
-      recorded_at: '2026-06-20T10:00:00.000Z'
-    };
-    fs.writeFileSync(stateFile, JSON.stringify(s, null, 2));
-  " "$WORKFLOW_DIR/${sid}.json" "$artifact" "$step"
+  # The sha comes from the real computeArtifactSha (#2277), not a raw file digest.
+  run_with_timeout node "$PLAN_APPROVAL_FIXTURE" inject "$WORKFLOW_DIR/${sid}.json" "$step" >/dev/null ||
+    echo "FAIL: seed_approval($sid, $step): could not record the approval"
 }
 
 setup_repo() {

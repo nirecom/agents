@@ -40,7 +40,7 @@ PLANS="$WORKFLOW_PLANS_DIR"
 TDIR="$PSF_ROOT/transcripts"
 UPG_HOME_DIR="$PSF_ROOT/home dir"
 mkdir -p "$UPG_HOME_DIR"
-UPG_JS_HELPERS='const { path, U, R, RT, A, T, B, S, C, fwdOf, uriOf, runUnit } = require(process.env.UPG_DRIVER); '
+UPG_JS_HELPERS='const { path, U, R, RT, RTE, UMETA, UCOMPACT, A, T, B, S, C, W, fwdOf, uriOf, runUnit } = require(process.env.UPG_DRIVER); '
 
 # tc_node <js> — runs <js> inside runUnit (tc, ok, show, isBlock in scope); PASS|/FAIL| lines out.
 # The home directory is the fixture's, so a "~" path form never names a real one.
@@ -115,6 +115,10 @@ case_begin "unit-check-plan-url" "hooks/lib/plan-link-turn-check.js"
 . "$SUB_DIR/unit-check-plan-link.sh"
 case_end
 
+case_begin "unit-turn-split" "hooks/lib/plan-link-turn-check.js"
+. "$SUB_DIR/unit-turn-split.sh"
+case_end
+
 # ══ Hook: hooks/stop-confirm-plan-guard.js ══════════════════════════════════
 
 . "$SUB_DIR/hook-fixture.sh"
@@ -140,8 +144,27 @@ upg_case "P4 no record, already at the destination, URL in the reply — allow" 
 case_end
 
 case_begin "hook-url-earlier-in-turn" "hooks/stop-confirm-plan-guard.js"
-upg_case "H3 URL in an earlier assistant entry of the same turn — allow" "$SID_PUB" intent \
-  '[U("go"), A(T("Plan: " + URL_INTENT), B("ls")), R(), A(T("All done."))]' allow -
+upg_case "H3 URL in an earlier assistant entry, final text block without it — plan-link block (#2513)" "$SID_PUB" intent \
+  '[U("go"), A(T("Plan: " + URL_INTENT), B("ls")), R(), A(T("All done."))]' block "$PL_PREFIX"
+upg_case "T1 two text blocks in the final entry, URL only in the first — plan-link block" "$SID_PUB" intent \
+  '[U("go"), A(T("Plan: " + URL_INTENT), T("Done."))]' block "$PL_PREFIX"
+upg_case "T2 same, last_assistant_message joins both blocks — still a plan-link block" "$SID_PUB" intent \
+  '[U("go"), A(T("Plan: " + URL_INTENT), T("Done."))]' block "$PL_PREFIX" ',"last_assistant_message":"Plan: '"$UPG_BLOB/$SID_PUB-intent.md"'\n\nDone."'
+upg_case "T3 URL in the last text block of the final entry — allow" "$SID_PUB" intent \
+  '[U("go"), A(T("Done."), T("Plan: " + URL_INTENT))]' allow -
+case_end
+
+case_begin "hook-last-assistant-message" "hooks/stop-confirm-plan-guard.js"
+upg_case "LM1 last_assistant_message never matches the transcript (undecidable) — allow" "$SID_PUB" intent \
+  '[U("go"), A(T("The intent plan is written."))]' allow - ',"last_assistant_message":"A final text that is never flushed."'
+upg_case "LM2 last_assistant_message matches, no link — plan-link block" "$SID_PUB" intent \
+  '[U("go"), A(T("The intent plan is written."))]' block "$PL_PREFIX" ',"last_assistant_message":"The intent plan is written."'
+upg_case "LM3 last_assistant_message matches, link present — allow" "$SID_PUB" intent \
+  '[U("go"), A(T("Plan: " + URL_INTENT))]' allow - ',"last_assistant_message":"Plan: '"$UPG_BLOB/$SID_PUB-intent.md"'"'
+upg_case "E1 CONFIRM_OUTLINE denied (is_error tool_result), no follow-up — allow" "$SID_PUB" - \
+  '[U("ok"), A(T("Confirmed."), C("outline")), RTE("denied by hook")]' allow -
+upg_case "E2 CONFIRM_OUTLINE succeeded (tool_result ok), no follow-up — Layer 2 block" "$SID_PUB" - \
+  '[U("ok"), A(T("Confirmed."), C("outline")), R()]' block "$L2_FOLLOWUP_PREFIX"
 case_end
 
 case_begin "hook-url-only-previous-turn" "hooks/stop-confirm-plan-guard.js"
@@ -150,8 +173,8 @@ upg_case "H4 URL only in the previous turn — plan-link block" "$SID_PUB" inten
 case_end
 
 case_begin "hook-confirm-without-marker" "hooks/stop-confirm-plan-guard.js"
-upg_case "H5 no marker, CONFIRM_OUTLINE + follow-up, no URL — plan-link block" "$SID_PUB" - \
-  '[U("ok"), A(T("Confirmed."), C("outline"), S("make-detail-plan"))]' block "$PL_PREFIX"
+upg_case "H5 no marker, CONFIRM_OUTLINE + follow-up, no URL — not evaluated at Stop (allow)" "$SID_PUB" - \
+  '[U("ok"), A(T("Confirmed."), C("outline"), S("make-detail-plan"))]' allow -
 upg_case "H6 no marker, CONFIRM_OUTLINE + follow-up, URL shown — allow" "$SID_PUB" - \
   '[U("ok"), A(T("Outline: " + URL_OUTLINE), C("outline"), S("make-detail-plan"))]' allow -
 upg_case "H7 CONFIRM_TESTS only, no URL — not evaluated (allow)" "$SID_PUB" - \
@@ -159,19 +182,19 @@ upg_case "H7 CONFIRM_TESTS only, no URL — not evaluated (allow)" "$SID_PUB" - 
 case_end
 
 case_begin "hook-confirm-intent-detail" "hooks/stop-confirm-plan-guard.js"
-upg_case "H13 no marker, CONFIRM_INTENT + follow-up, no URL — plan-link block" "$SID_PUB" - \
-  '[U("ok"), A(T("Confirmed."), C("intent"), S("make-outline-plan"))]' block "$PL_PREFIX"
+upg_case "H13 no marker, CONFIRM_INTENT + follow-up, no URL — not evaluated at Stop (allow)" "$SID_PUB" - \
+  '[U("ok"), A(T("Confirmed."), C("intent"), S("make-outline-plan"))]' allow -
 upg_case "H14 no marker, CONFIRM_INTENT + follow-up, URL shown — allow" "$SID_PUB" - \
   '[U("ok"), A(T("Intent: " + URL_INTENT), C("intent"), S("make-outline-plan"))]' allow -
-upg_case "H15 no marker, CONFIRM_DETAIL + follow-up, no URL — plan-link block" "$SID_PUB" - \
-  '[U("ok"), A(T("Confirmed."), C("detail"), S("write-tests"))]' block "$PL_PREFIX"
+upg_case "H15 no marker, CONFIRM_DETAIL + follow-up, no URL — not evaluated at Stop (allow)" "$SID_PUB" - \
+  '[U("ok"), A(T("Confirmed."), C("detail"), S("write-tests"))]' allow -
 upg_case "H16 no marker, CONFIRM_DETAIL + follow-up, URL shown — allow" "$SID_PUB" - \
   '[U("ok"), A(T("Detail: " + URL_DETAIL), C("detail"), S("write-tests"))]' allow -
 case_end
 
 case_begin "hook-wrong-or-hidden-url" "hooks/stop-confirm-plan-guard.js"
-upg_case "H17 CONFIRM_OUTLINE + follow-up, only the intent URL shown — plan-link block" "$SID_PUB" - \
-  '[U("ok"), A(T("Plan: " + URL_INTENT), C("outline"), S("make-detail-plan"))]' block "$PL_PREFIX"
+upg_case "H17 CONFIRM_OUTLINE + follow-up, only the intent URL shown — not evaluated at Stop (allow)" "$SID_PUB" - \
+  '[U("ok"), A(T("Plan: " + URL_INTENT), C("outline"), S("make-detail-plan"))]' allow -
 upg_case "H18 marker intent, another session's blob URL shown — plan-link block" "$SID_PUB" intent \
   '[U("go"), A(T("Plan: " + URL_INTENT.replace("'"$SID_PUB"'", "'"$SID_LOCAL"'")))]' block "$PL_PREFIX"
 upg_case "H19 marker intent, URL only in tool input and tool_result — plan-link block" "$SID_PUB" intent \
@@ -220,8 +243,8 @@ case_end
 case_begin "hook-confirm-no-url" "hooks/stop-confirm-plan-guard.js"
 upg_case "K1 no marker, CONFIRM_INTENT + follow-up, no URL exists, local path in the reply — allow" "$SID_LOCAL" - \
   '[U("ok"), A(T("Intent: " + nat("intent")), C("intent"), S("make-outline-plan"))]' allow -
-upg_case "K2 no marker, CONFIRM_INTENT + follow-up, no URL exists, neither in the reply — plan-link block" "$SID_LOCAL" - \
-  '[U("ok"), A(T("Confirmed."), C("intent"), S("make-outline-plan"))]' block "$PL_PREFIX"
+upg_case "K2 no marker, CONFIRM_INTENT + follow-up, no URL exists, neither in the reply — not evaluated at Stop (allow)" "$SID_LOCAL" - \
+  '[U("ok"), A(T("Confirmed."), C("intent"), S("make-outline-plan"))]' allow -
 case_end
 
 case_begin "hook-unresolvable-plan-passes" "hooks/stop-confirm-plan-guard.js"

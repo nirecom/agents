@@ -4,9 +4,8 @@
 // before session stop. Advisory only; never blocks.
 "use strict";
 
-const fs = require("fs");
-
 const { readHookInput } = require("./lib/read-stdin");
+const { readTranscriptLines } = require("./lib/transcript-reader");
 
 if (require.main === module) {
   const r = readHookInput();
@@ -30,12 +29,9 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  let lines;
-  try {
-    lines = fs.readFileSync(transcriptPath, "utf8").split("\n");
-  } catch (_) {
-    process.exit(0);
-  }
+  // Whole-transcript scan of past Bash tool_use: a late final line does not matter, no wait (#2610).
+  const lines = readTranscriptLines(transcriptPath);
+  if (lines.length === 0) process.exit(0);
 
   let cmdOrder = 0;
   let lastOffIdx = -1;

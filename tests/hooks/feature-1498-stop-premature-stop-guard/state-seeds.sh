@@ -1,6 +1,17 @@
 # state-seeds.sh — workflow/supervisor state seeding helpers for T1-T18 and H1-H8 tests
 # Sourced by tests/hooks/feature-1498-stop-premature-stop-guard.sh
 
+# #2277: approve the complete gated steps against <tmp>/plans, the plans dir every case runs the hook with.
+# $1=tmp_dir $2=sid
+seed_plan_approvals() {
+    local wf_file="$1/workflow/$2.json" plans_dir="$1/plans"
+    if command -v cygpath >/dev/null 2>&1; then
+        wf_file="$(cygpath -m "$wf_file")"; plans_dir="$(cygpath -m "$plans_dir")"
+    fi
+    WORKFLOW_PLANS_DIR="$plans_dir" run_with_timeout 10 node "$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js" \
+        inject-complete "$wf_file" clarify_intent outline detail >/dev/null 2>&1 || fail "seed_plan_approvals $2"
+}
+
 # Seed a workflow state that has workflow_init=complete and clarify_intent=complete
 # and a given step ACTION by writing the next-step output into env.
 # $1=tmp_dir $2=sid $3=action (invoke|done|blocked)
@@ -35,6 +46,7 @@ const state = { version: 1, session_id: sid, created_at: now, steps, workflow_ty
 fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
 " >/dev/null 2>&1
+    seed_plan_approvals "$tmp" "$sid"
 }
 
 # Seed a workflow state with workflow_init NOT complete (pending).
@@ -104,6 +116,7 @@ const state = { version: 1, session_id: sid, created_at: now, steps, workflow_ty
 fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
 " >/dev/null 2>&1
+    seed_plan_approvals "$tmp" "$sid"
 }
 
 # Seed a workflow state that causes next-step to return ACTION=blocked.

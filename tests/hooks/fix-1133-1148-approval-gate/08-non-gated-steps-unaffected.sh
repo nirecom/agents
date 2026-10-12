@@ -4,10 +4,9 @@
 # (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================
 # G08: regression net — non-gated steps are unaffected by the approval gate.
-# Only outline/detail are in APPROVAL_GATED_STEPS. Every other step must still
-# complete via markStep / evidence auto-complete WITHOUT any approval record,
-# and must NOT gain a plan_approvals entry. Passes both pre- and post-fix by
-# design (control that guards against over-broad gating).
+# Since #2277 clarify_intent/outline/detail are APPROVAL_GATED_STEPS. Every other
+# step must still complete WITHOUT any approval record and gain no plan_approvals
+# entry; G08b pins that intent.md evidence alone no longer completes clarify_intent.
 # ===========================================================================
 
 echo ""
@@ -25,10 +24,15 @@ check "G08a. non-gated research completes (no throw)" "NOERROR" "$OUT"
 check "G08a2. research complete" "complete" "$(read_state_status "$SID" research)"
 check "G08a3. no plan_approvals fabricated for non-gated step" "no" "$(has_approval "$SID" research)"
 
-# G08b: clarify_intent evidence auto-complete (intent.md) still works, no approval.
+# G08b (#2277 S9/S13): intent.md evidence alone leaves clarify_intent pending and fabricates
+# no approval; G08c: once the intent is approved the same evidence auto-completes it.
 SID="g08b-$$"
 write_state "$SID" "$(gen_state '{"workflow_init":"complete"}')"
 touch "$PLANS_DIR/${SID}-intent.md"
 run_next_step --session "$SID" >/dev/null
-check "G08b. clarify_intent auto-completes via intent.md evidence" "complete" "$(read_state_status "$SID" clarify_intent)"
+check_ne "G08b. unapproved intent.md evidence does not complete clarify_intent" "complete" "$(read_state_status "$SID" clarify_intent)"
 check "G08b2. no plan_approvals for clarify_intent" "no" "$(has_approval "$SID" clarify_intent)"
+run_with_timeout node "$PLAN_APPROVAL_FIXTURE" approve "$SID" clarify_intent >/dev/null ||
+  echo "FAIL: G08c setup: could not record the clarify_intent approval"
+run_next_step --session "$SID" >/dev/null
+check "G08c. approved intent.md evidence auto-completes clarify_intent" "complete" "$(read_state_status "$SID" clarify_intent)"

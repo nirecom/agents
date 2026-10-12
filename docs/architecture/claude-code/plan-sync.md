@@ -135,10 +135,14 @@ reason, with a hint to run `bin/plan-sync-init`.
 - **Plan link for the model.** `show-plan-link.js` (after a write) and
   `confirm-checkpoint.js` (before a CONFIRM) hand the model one `[plan-link]` line per plan
   as `additionalContext`: `<stage>: <blob URL> (<local path>)` when published, otherwise
-  `<stage>: <local path> (no URL: <reason>)`. The URL exists only when `origin/main` holds
-  byte-identical content to the local file. The model writes the line as-is in its
-  response text (`skills/_shared/confirm-plan.md` CPA-2), and the Stop guard checks it
-  ([settings/hooks.md](settings/hooks.md)).
+  `<stage>: <local path> (no URL: <reason>)`, with the local path written as inline code. The
+  URL exists only when `origin/main` holds byte-identical content to the local file.
+- **Three-turn order.** The model ends the final body text of the presentation turn with the
+  line as-is and closes the turn; the `CONFIRM_<STAGE>` echo comes alone in a later turn,
+  after the user's reply; after Allow the next skill follows in that same turn
+  (`skills/_shared/confirm-plan.md` CPA-2/CPA-3). The URL belongs only in that last text
+  block, never in the echo. The Stop guard checks the presentation turn and
+  `confirm-checkpoint.js` denies an echo that skipped it ([settings/hooks.md](settings/hooks.md)).
 - **Breadcrumb `systemMessage`.** `show-plan-link.js` shows the user `Plan file:` plus a
   `[plan-sync]` status line only when something needs attention: no URL for a reason other
   than the project-host verdict. A published plan or a held-back plan shows nothing extra.

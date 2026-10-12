@@ -1,10 +1,10 @@
 # tests/hooks/feature-534-stop-final-report-guard/g28-trigger/env-and-failopen-cases.sh
 # Tests: hooks/stop-final-report-guard.js, hooks/stop-premature-stop-guard.js, settings.json
 # Tags: hook, settings, config, stop-guard, workflow-state, scope:issue-specific, TL2
-# Sourced by ../g28-trigger.sh: 系統A side + fail-open contract (G41..G50); helpers from ../g28-trigger.sh and ../helpers.sh.
+# Sourced by ../g28-trigger.sh: lane A side + fail-open contract (G41..G50); helpers from ../g28-trigger.sh and ../helpers.sh.
 
 # ---------------------------------------------------------------------------
-# G41 (系統A preserved): env file present + complete 13-heading report → exit 0
+# G41 (lane A preserved): env file present + complete 13-heading report → exit 0
 # ---------------------------------------------------------------------------
 test_G41_env_present_full_report_exit0() {
     require_hook "G41_env_present_full_report_exit0" || return
@@ -12,7 +12,7 @@ test_G41_env_present_full_report_exit0() {
     local plans_dir="$TMPDIR_BASE/g41-plans" wf_dir="$TMPDIR_BASE/g41-wf"
     mkdir -p "$plans_dir" "$wf_dir"
     write_default_env_file "$(envfile_for "$sid" "$wf_dir")"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g41-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "$(full_canonical_report_text "$sid")"
@@ -21,14 +21,14 @@ test_G41_env_present_full_report_exit0() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "0" ]; then
-        pass "G41: 系統A preserved — env-file + all 13 headings → exit 0"
+        pass "G41: lane A preserved — env-file + all 13 headings → exit 0"
     else
         fail "G41: expected exit 0, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# G42 (系統A preserved): env file present + `### Bugs Found` missing → exit 2
+# G42 (lane A preserved): env file present + `### Bugs Found` missing → exit 2
 # ---------------------------------------------------------------------------
 test_G42_env_present_missing_heading_blocks() {
     require_hook "G42_env_present_missing_heading_blocks" || return
@@ -36,7 +36,7 @@ test_G42_env_present_missing_heading_blocks() {
     local plans_dir="$TMPDIR_BASE/g42-plans" wf_dir="$TMPDIR_BASE/g42-wf"
     mkdir -p "$plans_dir" "$wf_dir"
     write_default_env_file "$(envfile_for "$sid" "$wf_dir")"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g42-transcript.jsonl"
     local body
@@ -47,7 +47,7 @@ test_G42_env_present_missing_heading_blocks() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "2" ] && b_is_block && b_reason_has "### Bugs Found"; then
-        pass "G42: 系統A preserved — env-file + missing '### Bugs Found' → exit 2 + block"
+        pass "G42: lane A preserved — env-file + missing '### Bugs Found' → exit 2 + block"
     else
         fail "G42: expected exit 2 + block naming '### Bugs Found', got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi
@@ -55,7 +55,7 @@ test_G42_env_present_missing_heading_blocks() {
 
 # ---------------------------------------------------------------------------
 # G43: malformed env file must stay fail-open (exit 0) and must NOT fall
-# through to 系統B — a broken env file is evidence that /session-close DID run.
+# through to lane B — a broken env file is evidence that /session-close DID run.
 # ---------------------------------------------------------------------------
 test_G43_env_malformed_does_not_fall_through_to_B() {
     require_hook "G43_env_malformed_does_not_fall_through_to_B" || return
@@ -63,7 +63,7 @@ test_G43_env_malformed_does_not_fall_through_to_B() {
     local plans_dir="$TMPDIR_BASE/g43-plans" wf_dir="$TMPDIR_BASE/g43-wf"
     mkdir -p "$plans_dir" "$wf_dir"
     printf '{ this is not json' > "$(envfile_for "$sid" "$wf_dir")"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g43-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "No report; env file is corrupt."
@@ -72,21 +72,21 @@ test_G43_env_malformed_does_not_fall_through_to_B() {
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "0" ]; then
-        pass "G43: malformed env-file → exit 0 (fail-open, no 系統B fall-through)"
+        pass "G43: malformed env-file → exit 0 (fail-open, no lane B fall-through)"
     else
         fail "G43: expected exit 0, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# G44: stop_hook_active:true short-circuits 系統B too (loop prevention).
+# G44: stop_hook_active:true short-circuits lane B too (loop prevention).
 # ---------------------------------------------------------------------------
 test_G44_stop_hook_active_exit0() {
     require_hook "G44_stop_hook_active_exit0" || return
     local sid="g44-sid"
     local plans_dir="$TMPDIR_BASE/g44-plans" wf_dir="$TMPDIR_BASE/g44-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g44-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "Re-entered after a block."
@@ -97,7 +97,7 @@ test_G44_stop_hook_active_exit0() {
     b_run "$HOOK_JS" "$stdin_json" "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
     if [ "$B_CODE" = "0" ]; then
-        pass "G44: stop_hook_active:true → exit 0 even when 系統B would fire"
+        pass "G44: stop_hook_active:true → exit 0 even when lane B would fire"
     else
         fail "G44: expected exit 0, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
     fi
@@ -115,7 +115,7 @@ test_G45_premature_guard_delegates_gate_reason() {
     local sid="g45-sid"
     local plans_dir="$TMPDIR_BASE/g45-plans" wf_dir="$TMPDIR_BASE/g45-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g45-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "Stopping before session-close."
@@ -141,7 +141,7 @@ test_G46_premature_guard_other_invoke_still_blocks() {
     local sid="g46-sid"
     local plans_dir="$TMPDIR_BASE/g46-plans" wf_dir="$TMPDIR_BASE/g46-wf"
     mkdir -p "$plans_dir" "$wf_dir"
-    b_mk_state "$wf_dir" "$sid" docs user_verification cleanup pre_final_report_gate
+    b_mk_state "$wf_dir" "$plans_dir" "$sid" docs user_verification cleanup pre_final_report_gate
 
     local transcript="$TMPDIR_BASE/g46-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "Stopping while docs is still pending."
@@ -157,7 +157,7 @@ test_G46_premature_guard_other_invoke_still_blocks() {
 }
 
 # ---------------------------------------------------------------------------
-# G47: settings.json — the 系統B path spawns `next-step` (3s budget), so the
+# G47: settings.json — the lane B path spawns `next-step` (3s budget), so the
 # Stop registration for this hook must carry timeout 10, not the old 5.
 # Registration count is asserted too: two competing entries would make the
 # effective timeout ambiguous.
@@ -196,7 +196,7 @@ try {
 }
 
 # ---------------------------------------------------------------------------
-# G48/G49: 系統B spawns a child process. Any child failure — non-zero exit,
+# G48/G49: lane B spawns a child process. Any child failure — non-zero exit,
 # unparsable stdout, or a state file the tool cannot digest — must fail OPEN
 # (exit 0), never block the user on infrastructure trouble.
 # ---------------------------------------------------------------------------

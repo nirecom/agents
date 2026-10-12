@@ -186,8 +186,10 @@ const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
 writeState('$1', createInitialState('$1', { cwd: '$2', git_branch: 'feature/heir' }));
 writeState('$3', createInitialState('$3', { cwd: '$(node_path "$tmp")/base', git_branch: 'feature/base' }));
-for (const s of ['workflow_init', 'clarify_intent', 'detail', 'branching_complete', 'write_tests']) markStep('$3', s, 'complete');
 fs.writeFileSync(path.join(dir, '$3' + '-intent.md'), 'intent body' + String.fromCharCode(10));
+// Since #2277/#2513 clarify_intent completes only with an approval record over the intent.md just written.
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('$3', 'clarify_intent');
+for (const s of ['workflow_init', 'clarify_intent', 'detail', 'branching_complete', 'write_tests']) markStep('$3', s, 'complete');
 " >/dev/null 2>&1
     }
     read_step() {

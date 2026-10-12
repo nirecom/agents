@@ -2,20 +2,12 @@
 # tests/hooks/feature-1610-workflow-gate-worktree-entry.sh
 # Tests: hooks/workflow-gate/worktree-entry-gate.js, hooks/workflow-gate.js, hooks/enforce-worktree/worktree-remedy.js, hooks/enforce-worktree.js
 # Tags: workflow-gate, enforce-worktree, worktree-entry, tier3, hook, TL2, pwsh-not-required, scope:issue-specific
-#
-# Issue #1610 — Tier 3 "session created a linked worktree but CWD is outside it"
-# gate (Section G) and the double-block / deferral contract between
-# workflow-gate.js and enforce-worktree.js (Section H).
-# Section P0 guards the guards: the four sources have shipped, so their absence is a
-# deletion, and it must turn this file RED rather than skipping every case green.
-#
-# TL3 gap (what this test does NOT catch):
-# - How Claude Code presents TWO PreToolUse hooks that both return decision:block
-#   (both reasons listed, or first-wins, and in which order) — observable only on a
-#   real host. This test pins each hook's stdout contract, nothing beyond it.
-# - Real PreToolUse payload shape drift (whether `cwd` is present on every event).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Issue #1610 — Tier 3 "linked worktree created but CWD outside it" gate (Section G), the
+# workflow-gate.js / enforce-worktree.js double-block contract (Section H), and Section P0:
+# a deleted source turns this file RED rather than skipping every case green.
+# TL3 gap (what this test does NOT catch): how Claude Code presents TWO PreToolUse blocks
+# (order / first-wins) and real payload drift (`cwd` on every event) — host-only. Mitigation:
+# WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -50,16 +42,10 @@ suite_status() { if [ "$FAIL" -gt 0 ]; then echo 1; else echo 0; fi; }
 
 # ---------------------------------------------------------------- Section P0 --
 # Source presence: a deleted source must turn this file RED, never green-with-SKIPs.
-#
-# Why: require_source() reports a missing file as SKIP ("source not implemented yet"),
-# and h_setup() collapses the same condition into H_READY=0 -> h_skip for every
-# Section H case. That wording was true while #1610 was unimplemented; all four files
-# below have shipped since. Today "missing" can only mean a deletion or a rename — and
-# on the SKIP path FAIL stays 0, so every G and H case silently stops running while the
-# suite still exits 0. Total loss of coverage for a shipped feature, reported as green.
-# This check is deliberately NOT routed through require_source(): the behaviour under
-# test is precisely "absence must not be a skip", so reusing the skipping helper to
-# guard it would be circular.
+# require_source() and h_setup() answer a missing file with SKIP; all four files have shipped,
+# so "missing" now means a deletion or rename that would silently stop every G/H case while
+# the suite exits 0. This check deliberately bypasses require_source(): reusing the skipping
+# helper to guard "absence must not be a skip" would be circular.
 SOURCE_FILES=("$GATE_HOOK" "$EW_HOOK" "$ENTRY_GATE" "$REMEDY")
 
 # run_source_presence_check <path>... — prints "MISSING <path>" per absent file; rc=0
@@ -167,6 +153,8 @@ if(swt) state.session_worktree=swt;
 if(extra) Object.assign(state,JSON.parse(extra));
 fs.writeFileSync(path.join(dir,sid+".json"),JSON.stringify(state,null,2));
 ' "$WORKFLOW_STATE_DIR" "$SID" "$MAIN_N" "$2" "$1" "${3:-}"
+    # #2277: a gated `complete` (clarify_intent) counts only with a plan-approval record.
+    node "$(np "$SCRIPT_CHECKOUT_ROOT")/tests/lib/plan-approval-fixture.js" inject-complete "$WORKFLOW_STATE_DIR/$SID.json" clarify_intent >/dev/null
 }
 
 # mk_payload <tool> <tool_input_key|""> <value> <cwd|__OMIT__> <agent_id|"">

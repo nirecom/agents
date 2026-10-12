@@ -1,14 +1,13 @@
 "use strict";
-// Handles the WORKFLOW_CONFIRM_OUTLINE / WORKFLOW_CONFIRM_DETAIL sentinels.
+// Handles the WORKFLOW_CONFIRM_INTENT / _OUTLINE / _DETAIL sentinels.
 //
 // These sentinels are `permissions.ask` in settings.json — reaching this handler
 // means the user explicitly approved the plan stage. That approval is recorded as
 // a plan_approvals entry bound to the sha256 of the plan artifact, which is what
-// the completion-boundary invariant in state-io.writeState consults (#1133).
-//
-// WORKFLOW_CONFIRM_INTENT is NOT an approval-gated stage — it falls through.
+// the completion-boundary invariant consults (#1133, #2277).
 
 const {
+  CONFIRM_INTENT_RE_DQ,
   CONFIRM_OUTLINE_RE_DQ,
   CONFIRM_DETAIL_RE_DQ,
 } = require("../lib/sentinel-patterns");
@@ -18,16 +17,20 @@ const {
   confirmSentinelFor,
 } = require("../workflow-state/completion-approval");
 
+const STAGE_PATTERNS = [
+  { step: "clarify_intent", re: CONFIRM_INTENT_RE_DQ },
+  { step: "outline", re: CONFIRM_OUTLINE_RE_DQ },
+  { step: "detail", re: CONFIRM_DETAIL_RE_DQ },
+];
+
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;
 
   let stage = null;
-  let m = cmd.match(CONFIRM_OUTLINE_RE_DQ);
-  if (m) {
-    stage = "outline";
-  } else {
-    m = cmd.match(CONFIRM_DETAIL_RE_DQ);
-    if (m) stage = "detail";
+  let m = null;
+  for (const p of STAGE_PATTERNS) {
+    m = cmd.match(p.re);
+    if (m) { stage = p.step; break; }
   }
   if (!stage) return false;
 

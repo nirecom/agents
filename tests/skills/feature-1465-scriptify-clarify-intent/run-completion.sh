@@ -52,6 +52,7 @@ process.stdout.write(JSON.stringify([{number:1,repo:null}]));
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 0
+    mock_plan_approval "APPROVAL=approved"
     write_mock "$TEST_DIR/bin/github-issues/clarify-commit-scope.sh" 0 ""
     write_mock "$TEST_DIR/bin/github-issues/clarify-guard-loop.sh" 0 "$guard_token"
 
@@ -86,6 +87,7 @@ process.stdout.write(JSON.stringify([]));
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 0
+    mock_plan_approval "APPROVAL=approved"
     write_mock "$TEST_DIR/bin/github-issues/clarify-commit-scope.sh" 0 "CREATED:42"
 
     local guard_marker="$TEST_DIR/guard_invoked"
@@ -123,6 +125,7 @@ process.stdout.write(JSON.stringify([{number:7,repo:null}]));
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 0
+    mock_plan_approval "APPROVAL=approved"
     write_mock "$TEST_DIR/bin/github-issues/clarify-commit-scope.sh" 2 "CLOSED:7"
 
     local guard_marker="$TEST_DIR/guard_invoked"
@@ -160,6 +163,7 @@ process.stdout.write(JSON.stringify([{number:1,repo:null}]));
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 0
+    mock_plan_approval "APPROVAL=approved"
     write_mock "$TEST_DIR/bin/github-issues/clarify-commit-scope.sh" 2 "RC2"
 
     local guard_marker="$TEST_DIR/guard_invoked"
@@ -197,6 +201,7 @@ process.stdout.write(JSON.stringify([]));
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 1
+    mock_plan_approval "APPROVAL=approved"
 
     local scope_args_file="$TEST_DIR/scope_args.txt"
     cat > "$TEST_DIR/bin/github-issues/clarify-commit-scope.sh" <<MOCK
@@ -245,6 +250,7 @@ process.stdout.write(JSON.stringify([{number:1,repo:null}]));
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 2
+    mock_plan_approval "APPROVAL=approved"
 
     local scope_args_file="$TEST_DIR/scope_args.txt"
     cat > "$TEST_DIR/bin/github-issues/clarify-commit-scope.sh" <<MOCK
@@ -294,6 +300,7 @@ process.stdout.write(JSON.stringify([{number:3,repo:null},{number:7,repo:null}])
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 0
+    mock_plan_approval "APPROVAL=approved"
 
     # Record args passed to clarify-commit-scope.sh (--issues <csv> per script interface)
     local scope_args_file="$TEST_DIR/scope_args.txt"
@@ -344,6 +351,7 @@ process.stdout.write(JSON.stringify([]));
 JS
 
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 0
+    mock_plan_approval "APPROVAL=approved"
     write_mock "$TEST_DIR/bin/github-issues/clarify-commit-scope.sh" 0 ""
     write_mock "$TEST_DIR/bin/github-issues/clarify-guard-loop.sh" 0 "PROCEED"
 

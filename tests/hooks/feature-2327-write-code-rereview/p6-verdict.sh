@@ -8,6 +8,8 @@
 # run_tests complete → abort); reopen write failure diagnostic.
 
 STEPS_MOD="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/lib/next-step/steps.js"
+# #2277: the seeded gated completes count only with a plan_approval record.
+p6_approve() { node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete "$WORKFLOW_STATE_DIR/$1.json" clarify_intent outline detail >/dev/null; }
 
 echo "=== P6: verdict / record-step-verdict behavior ==="
 
@@ -48,7 +50,7 @@ fi
 # State: write_code complete, review_tests pending with reopen_reason=write-code-stale
 V2_REPO="$TMPDIR_BASE/v2-repo"
 mkdir -p "$V2_REPO"
-(cd "$V2_REPO" && git init -q && git config user.email t@test.com && git config user.name T && git config core.hooksPath /dev/null && printf 'seed\n' > README.md && git add README.md && git commit -qm init) >/dev/null 2>&1
+(cd "$V2_REPO" && git init -q && git config user.email t@test && git config user.name T && git config core.hooksPath /dev/null && printf 'seed\n' > README.md && git add README.md && git commit -qm init) >/dev/null 2>&1
 V2_REPO_N="$(np "$V2_REPO")"
 
 node - <<JS 2>/dev/null
@@ -68,6 +70,7 @@ const steps = {
 fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v2rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
+p6_approve v2rere
 
 V2_OUT="$(cd "$V2_REPO_N" && CLAUDE_PROJECT_DIR="$V2_REPO_N" run_with_timeout node "$NEXT_STEP_N" --session v2rere 2>/dev/null)" || true
 check_contains "V2a: after reopen ACTION=invoke" "ACTION=invoke" "$V2_OUT"
@@ -106,6 +109,7 @@ const steps = {
 fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v3rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
+p6_approve v3rere
 
 V3_OUT="$(cd "$V2_REPO_N" && CLAUDE_PROJECT_DIR="$V2_REPO_N" run_with_timeout node "$NEXT_STEP_N" --session v3rere 2>/dev/null)" || true
 check_contains "V3: after rereview complete, run_tests advances (ACTION=invoke)" "ACTION=invoke" "$V3_OUT"
@@ -131,6 +135,7 @@ const steps = {
 fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v4rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
+p6_approve v4rere
 
 V4_OUT="$(cd "$V2_REPO_N" && CLAUDE_PROJECT_DIR="$V2_REPO_N" run_with_timeout node "$NEXT_STEP_N" --session v4rere 2>/dev/null)" || true
 # Without reopen_reason, a pending review_tests in this position is an inconsistency
@@ -155,6 +160,7 @@ const steps = {
 fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v5rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
+p6_approve v5rere
 
 V5_OUT="$(cd "$V2_REPO_N" && CLAUDE_PROJECT_DIR="$V2_REPO_N" run_with_timeout node "$NEXT_STEP_N" --session v5rere 2>/dev/null)" || true
 check_not_contains "V5: write-code-missing reopen_reason is not an inconsistency (no abort)" "abort" "$V5_OUT"
@@ -179,6 +185,7 @@ const steps = {
 fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, "v6rere.json"),
   JSON.stringify({steps,closes_issues:[2327]}));
 JS
+p6_approve v6rere
 
 V6_OUT="$(cd "$V2_REPO_N" && CLAUDE_PROJECT_DIR="$V2_REPO_N" run_with_timeout node "$NEXT_STEP_N" --session v6rere 2>/dev/null)" || true
 # review_tests is complete so run_tests should be the current step

@@ -132,17 +132,24 @@ for flag in "" "--scope-change-approved"; do
 done
 case_end
 
-echo "=== seven gates, OFF -> proceed, ON -> ask ==="
+echo "=== seven gates, OFF -> proceed (intent: ask), ON -> ask ==="
 case_begin "seven-gate-table" "bin/workflow/lib/next-step/gate-mode.js"
 for step in $GATE_STEPS; do
   key="$(gate_key_of "$step")"; sid="gm-t-$step"
   [ "$step" = "detail" ] && sid="gm-same"
   [ "$step" = "detail" ] || write_state "$sid" "$(json_at "$step")"
-  for row in off:proceed on:ask; do
+  # #2277: the intent stage has no off waiver, so CONFIRM_INTENT=off still asks.
+  rows="off:proceed on:ask"
+  [ "$step" = "clarify_intent" ] && rows="off:ask on:ask"
+  for row in $rows; do
     export "$key=${row%%:*}"
     gate --session "$sid"
     check "$step ${row%%:*}: ${row#*:}" "${row#*:}" "$(val GATE_ACTION)"
   done
+  if [ "$step" = "clarify_intent" ]; then
+    export "$key=off"; gate --session "$sid"
+    check "clarify_intent off: REASON says no-off-waiver" yes "$(has no-off-waiver "$(reason)")"
+  fi
   export "$key=on"
 done
 export CONFIRM_TESTS=off

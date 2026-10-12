@@ -71,6 +71,12 @@ write_state() {
     printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
 }
 
+# #2277: a complete clarify_intent counts only with a plan-approval record (tests/lib/plan-approval-fixture.js).
+approve_intent() {
+    run_with_timeout node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" \
+        inject-complete "$WORKFLOW_DIR/$1.json" clarify_intent >/dev/null
+}
+
 run_gate() {
     local input="$1"
     echo "$input" | run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
@@ -128,6 +134,7 @@ assert_decision "pending_notebookedit_blocks" "$(input_notebookedit "$SID" "/c/g
 # 6. complete + Edit → approve  [guardrail — earlyGate must not over-block]
 SID="sid-complete-edit"
 write_state "$SID" "$(complete_state "$SID")"
+approve_intent "$SID"
 assert_decision "complete_edit_approves" "$(input_edit "$SID" "/c/git/myproject/src/foo.js")" "approve"
 
 # 7. skipped + Edit → approve  [guardrail — earlyGate must not over-block]
@@ -172,13 +179,14 @@ mkdir -p "$COMMIT_REPO"
     echo hello > a.txt
     git add a.txt
     # Use core.hooksPath="" to bypass the global hooks (core.hooksPath is set globally
-    # to C:\git\agents\hooks which includes enforce-worktree; temp repos must bypass it)
+    # to the agents main checkout's hooks dir, which includes enforce-worktree; temp repos must bypass it)
     git -c core.hooksPath="" commit -q -m initial
     echo world >> a.txt
     git add a.txt
 )
 SID="sid-commit-regression"
 write_state "$SID" "$(complete_state "$SID")"
+approve_intent "$SID"
 # The commit gate fires only for the repo the hook's own checkout belongs to: this case launches
 # the hook from a copy of this checkout attached to COMMIT_REPO.
 # shellcheck source=tests/lib/session-repo-fixture.sh

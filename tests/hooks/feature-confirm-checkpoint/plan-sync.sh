@@ -273,16 +273,17 @@ fi
 clear_markers
 rm -f "$T15_ABS"
 
-echo "=== T16: CONFIRM_INTENT=off -> skipped systemMessage, no additionalContext ==="
+# #2277 S6: intent has no off waiver (T25 pins that), so the off-skip contract is pinned on outline.
+echo "=== T16: CONFIRM_OUTLINE=off -> skipped systemMessage, no additionalContext ==="
 clear_markers
-T16_ABS="$PLANS_DIR/sess-off-intent.md"
+T16_ABS="$PLANS_DIR/sess-off-outline.md"
 touch "$T16_ABS"
-write_marker "intent" "$T16_ABS"
-T16_OUT=$(export CONFIRM_INTENT=off; run_hook "$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")")
-if [ "$(psf_sysmsg "$T16_OUT")" = "[confirm-skipped: CONFIRM_INTENT=off]" ] && ! psf_has_hso "$T16_OUT"; then
-  pass "T16 CONFIRM_INTENT=off -> skipped message only, no hookSpecificOutput"
+write_marker "outline" "$T16_ABS"
+T16_OUT=$(export CONFIRM_OUTLINE=off; run_hook "$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")")
+if [ "$(psf_sysmsg "$T16_OUT")" = "[confirm-skipped: CONFIRM_OUTLINE=off]" ] && ! psf_has_hso "$T16_OUT"; then
+  pass "T16 CONFIRM_OUTLINE=off -> skipped message only, no hookSpecificOutput"
 else
-  fail "T16 CONFIRM_INTENT=off -> skipped message only, no hookSpecificOutput — got: $T16_OUT"
+  fail "T16 CONFIRM_OUTLINE=off -> skipped message only, no hookSpecificOutput — got: $T16_OUT"
 fi
 clear_markers
 rm -f "$T16_ABS"

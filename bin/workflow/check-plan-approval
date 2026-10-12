@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+"use strict";
+
+// check-plan-approval: print whether a gated plan stage is approved (#2277).
+//
+// Usage: node bin/workflow/check-plan-approval --session <sid> --step <clarify_intent|outline|detail>
+// Stdout: exactly one line, APPROVAL=approved|unapproved|skipped|not-applicable|unknown. Exit 0.
+// Verdicts: hooks/workflow-state/plan-approval-check.js. Bad arguments print APPROVAL=unknown.
+
+function parseArgs(argv) {
+  const out = { session: null, step: null };
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--session") out.session = argv[++i] || null;
+    else if (argv[i] === "--step") out.step = argv[++i] || null;
+  }
+  return out;
+}
+
+function main() {
+  let verdict = "unknown";
+  try {
+    const { session, step } = parseArgs(process.argv.slice(2));
+    if (session && step) {
+      const { checkPlanApproval } = require("../../hooks/workflow-state/plan-approval-check");
+      verdict = checkPlanApproval(session, step).verdict;
+    }
+  } catch (_) {
+    verdict = "unknown";
+  }
+  process.stdout.write("APPROVAL=" + verdict + "\n");
+}
+
+main();

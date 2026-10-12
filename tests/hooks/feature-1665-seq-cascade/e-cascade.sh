@@ -3,21 +3,10 @@
 # Tests: hooks/workflow-state/effective-state/write-code-resume.js, hooks/workflow-state/effective-state.js
 # Tags: workflow-state, write-code-resume, cascade, updated-seq, derived-state, scope:issue-specific, pwsh-not-required, TL1
 #
-# E — the write-code resume cascade.
-#
-# WHY: when run_tests records a failing outcome, every step SETTLED BEFORE that
-# failure is stale — the code it signed off on is about to change. The cascade
-# reopens write_code and masks the downstream steps whose settlement predates the
-# failing run (updated_seq <= run_tests.updated_seq), while steps settled AFTER
-# the failure keep their status.
-#
-# The masking is DERIVED ONLY: it happens inside reconcileEffectiveState and is
-# never written back to the event stream (see case h).
-#
-# E8 additionally pins the layering: the derived entry from
-# reconcileEffectiveState exposes only {status, resolved_from} — no updated_seq —
-# so the cascade must read its inputs from the RAW projection it is handed, not
-# from the derived snapshot it is mutating.
+# E — the write-code resume cascade: a failing run_tests reopens write_code and masks the
+# downstream steps settled before it (updated_seq <= run_tests.updated_seq); later ones keep
+# their status. Derived only, never written back (case h). E8 pins that the cascade reads the
+# RAW projection, since the derived entry exposes only {status, resolved_from}.
 
 CASE_TAG=e
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -116,6 +105,7 @@ const seq = [
   ["review_tests", "complete"], ["write_code", "complete"],
   ["review_security", "complete"],
 ];
+require(process.env.M_FIX).approveLive(sid, "clarify_intent"); // #2277 gated complete
 for (const [step, status] of seq) S.markStep(sid, step, status);
 S.markStep(sid, "run_tests", "pending", { run_outcome: "fail" });
 S.markStep(sid, "docs", "complete");

@@ -4,6 +4,7 @@
 
 const { markStep } = require("../workflow-state");
 const { CLARIFY_INTENT_COMPLETE_RE_DQ } = require("../lib/sentinel-patterns");
+const { UnapprovedCompletionError } = require("../workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal } = ctx;
@@ -20,6 +21,10 @@ function handle(ctx) {
     try {
       markStep(sessionId, "clarify_intent", "complete");
     } catch (e) {
+      if (e instanceof UnapprovedCompletionError) {
+        pushMessage(`workflow-mark: clarify_intent NOT completed — no approval is on record. ${e.recovery}`);
+        return true;
+      }
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
       );

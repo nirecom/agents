@@ -627,6 +627,16 @@
         ]
       },
       {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-plan-skill-advance.js\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "SendUserFile",
         "hooks": [
           {

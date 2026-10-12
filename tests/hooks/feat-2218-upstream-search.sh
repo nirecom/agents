@@ -73,6 +73,7 @@ for (let i = 0; i < 12; i++) {
 }
 writeState('ctxdonor-sess-04', createInitialState('ctxdonor-sess-04', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
 markStep('ctxdonor-sess-04', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('ctxdonor-sess-04', 'clarify_intent'); // #2277
 markStep('ctxdonor-sess-04', 'clarify_intent', 'complete');
 const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 const tdir = path.join('$TMP_NODE/transcripts', encoded);
