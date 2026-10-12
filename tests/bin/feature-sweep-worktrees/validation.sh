@@ -2,7 +2,7 @@
 # tests/bin/feature-sweep-worktrees/validation.sh
 # Tests: bin/sweep-worktrees.sh
 # Tags: sweep, worktrees, validation, maintenance, bin, scope:common
-# Input/env validation + error-path tests: T11, T22..T28.
+# Input/env validation + error-path tests: T11, T22..T28, T32..T36.
 # Standalone-runnable; sourced helpers live in _lib.sh.
 
 # shellcheck source=./_lib.sh
@@ -298,6 +298,123 @@ T29_separate_git_dir_linked_fails_closed() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T32..T36 — a rejected numeric input aborts before any removal. Each case runs
+#   --apply against a stale, clean, merged (--skip-gh-check) worktree that the
+#   sweep removes when inputs are valid (T36 proves it), then asserts non-zero
+#   exit, stderr naming the input, and that the worktree and branch survive.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_REJECT_SEQ=0
+
+_make_removable_candidate() {
+    _REJECT_SEQ=$((_REJECT_SEQ + 1))
+    FX_REPO="$TMPDIR_BASE/rej${_REJECT_SEQ}-repo"
+    FX_WT="$TMPDIR_BASE/rej${_REJECT_SEQ}-wt"
+    FX_WBASE="$TMPDIR_BASE/rej${_REJECT_SEQ}-wbase"
+    FX_BRANCH="feature/rej${_REJECT_SEQ}"
+    mkdir -p "$FX_WBASE"
+    init_repo "$FX_REPO"
+    git -C "$FX_REPO" config core.hooksPath /dev/null
+    add_worktree "$FX_REPO" "$FX_WT" "$FX_BRANCH"
+    make_stale "$FX_WT"
+}
+
+_candidate_survives() {
+    [ -d "$FX_WT" ] &&
+        git -C "$FX_REPO" rev-parse --verify --quiet "refs/heads/$FX_BRANCH" >/dev/null &&
+        [[ "$(git -C "$FX_REPO" worktree list 2>/dev/null)" == *"$FX_BRANCH"* ]]
+}
+
+# $1: SWEEP_AGE_DAYS env value; rest: flags. Sets RUN_EXIT / RUN_ERR.
+_run_sweep_on_candidate() {
+    local age_days="$1"
+    shift
+    local err_file="$TMPDIR_BASE/rej${_REJECT_SEQ}.err"
+    RUN_EXIT=0
+    (cd "$FX_REPO" && SWEEP_SKIP_GH=1 SWEEP_AGE_DAYS="$age_days" WORKTREE_BASE_DIR="$FX_WBASE" \
+        run_with_timeout bash "$SWEEP" --skip-gh-check "$@" \
+        >/dev/null 2>"$err_file") || RUN_EXIT=$?
+    RUN_ERR="$(cat "$err_file" 2>/dev/null || true)"
+}
+
+# $1: label, $2/$3: accepted input names in stderr, $4: SWEEP_AGE_DAYS, rest: flags.
+_expect_rejected_without_removal() {
+    local label="$1" name_a="$2" name_b="$3" age_days="$4"
+    shift 4
+    if [ ! -x "$SWEEP" ]; then
+        fail "$label: $SWEEP not found / not executable"
+        return
+    fi
+    _make_removable_candidate
+    _run_sweep_on_candidate "$age_days" --apply "$@"
+    if [ "$RUN_EXIT" -eq 0 ]; then
+        fail "$label: exit=0, expected non-zero; stderr=[$RUN_ERR]"
+    elif [[ "$RUN_ERR" != *"$name_a"* && "$RUN_ERR" != *"$name_b"* ]]; then
+        fail "$label: stderr does not name $name_a; stderr=[$RUN_ERR]"
+    elif ! _candidate_survives; then
+        fail "$label: candidate worktree or branch removed despite rejection"
+    else
+        pass "$label (exit=$RUN_EXIT)"
+    fi
+}
+
+T32_sweep_age_days_env_rejected_without_removal() {
+    local v
+    for v in 08 0 -1 abc 99999999999999999999 106751991167301; do
+        _expect_rejected_without_removal "T32 sweep_age_days_env_rejected_without_removal[$v]" \
+            SWEEP_AGE_DAYS SWEEP_AGE_DAYS "$v"
+    done
+}
+
+T33_sweep_age_days_flag_rejected_without_removal() {
+    local v
+    for v in 08 99999999999999999999; do
+        _expect_rejected_without_removal "T33 sweep_age_days_flag_rejected_without_removal[$v]" \
+            --sweep-age-days SWEEP_AGE_DAYS 30 --sweep-age-days "$v"
+    done
+}
+
+T34_min_age_hours_rejected_without_removal() {
+    local v
+    for v in 08 -1 abc 99999999999999999999 2562047788015216; do
+        _expect_rejected_without_removal "T34 min_age_hours_rejected_without_removal[$v]" \
+            --min-age-hours --min-age-hours 30 --min-age-hours "$v"
+    done
+}
+
+# T35 — --min-age-hours 0 is valid ("no age gate"); --dry-run removes nothing.
+T35_min_age_hours_zero_accepted() {
+    if [ ! -x "$SWEEP" ]; then
+        fail "T35 min_age_hours_zero_accepted: $SWEEP not found / not executable"
+        return
+    fi
+    _make_removable_candidate
+    _run_sweep_on_candidate 30 --dry-run --min-age-hours 0
+    if [ "$RUN_EXIT" -eq 0 ] && _candidate_survives; then
+        pass "T35 min_age_hours_zero_accepted"
+    else
+        fail "T35 min_age_hours_zero_accepted: exit=$RUN_EXIT, stderr=[$RUN_ERR]"
+    fi
+}
+
+# T36 — control: with valid inputs the T32..T34 fixture IS removed by --apply,
+#       so their "candidate survives" assertion is not vacuous.
+T36_valid_inputs_remove_candidate_control() {
+    if [ ! -x "$SWEEP" ]; then
+        fail "T36 valid_inputs_remove_candidate_control: $SWEEP not found / not executable"
+        return
+    fi
+    _make_removable_candidate
+    _run_sweep_on_candidate 30 --apply --sweep-age-days 30 --min-age-hours 24
+    if [ "$RUN_EXIT" -eq 0 ] && [ ! -d "$FX_WT" ] &&
+        ! git -C "$FX_REPO" rev-parse --verify --quiet "refs/heads/$FX_BRANCH" >/dev/null; then
+        pass "T36 valid_inputs_remove_candidate_control"
+    else
+        fail "T36 valid_inputs_remove_candidate_control: exit=$RUN_EXIT, wt_exists=$([ -d "$FX_WT" ] && echo 1 || echo 0), stderr=[$RUN_ERR]"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -310,6 +427,11 @@ T26_min_age_hours_leading_zero_rejected
 T27_min_age_hours_overflow_rejected
 T28_min_age_hours_non_numeric_rejected
 T29_separate_git_dir_linked_fails_closed
+T32_sweep_age_days_env_rejected_without_removal
+T33_sweep_age_days_flag_rejected_without_removal
+T34_min_age_hours_rejected_without_removal
+T35_min_age_hours_zero_accepted
+T36_valid_inputs_remove_candidate_control
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

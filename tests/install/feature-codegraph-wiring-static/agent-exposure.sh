@@ -64,12 +64,12 @@ done <<'W7_TABLE'
 W7-01 | agents/survey-code.md           | Read Glob Grep Bash Write mcp__codegraph__codegraph_explore
 W7-02 | agents/detail-planner.md        | Read Glob Grep Bash WebFetch Write mcp__codegraph__codegraph_explore
 W7-03 | agents/outline-planner.md       | Read Glob Grep Bash WebFetch Write mcp__codegraph__codegraph_explore
-W7-04 | agents/detail-reviewer.md       | Read Glob Grep mcp__codegraph__codegraph_explore
-W7-05 | agents/outline-reviewer.md      | Read Glob Grep mcp__codegraph__codegraph_explore
+W7-04 | agents/detail-reviewer.md       | Read Glob Grep Bash mcp__codegraph__codegraph_explore
+W7-05 | agents/outline-reviewer.md      | Read Glob Grep Bash mcp__codegraph__codegraph_explore
 W7-06 | agents/security-scanner.md      | Read Glob Grep Bash mcp__codegraph__codegraph_explore
-W7-07 | agents/test-reviewer.md         | Read Glob Grep mcp__codegraph__codegraph_explore
+W7-07 | agents/test-reviewer.md         | Read Glob Grep Bash mcp__codegraph__codegraph_explore
 W7-08 | agents/skip-verifier.md         | Read Glob Grep Bash mcp__codegraph__codegraph_explore
-W7-09 | agents/plan-security-reviewer.md| Read Glob Grep mcp__codegraph__codegraph_explore
+W7-09 | agents/plan-security-reviewer.md| Read Glob Grep Bash mcp__codegraph__codegraph_explore
 W7_TABLE
 
 AGENT_FM_OUT="$TMPDIR_LOCAL/agent-frontmatter.txt"
