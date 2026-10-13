@@ -1,34 +1,18 @@
+# shellcheck shell=bash
 # tests/lib/xfail.sh — expected-failure (xfail) assertions pinned to a source bug.
 # Tests: tests/lib/xfail.sh
 # Tags: test-infrastructure, xfail, known-gap, shared-lib, scope:common
 
-# Why this file exists. A test suite written alongside a change sometimes finds
-# a defect in the source it was written against. There are only three things a
-# test can then do, and two of them are wrong: assert the buggy behaviour (which
-# blesses it as the contract and makes the eventual fix look like a regression),
-# or delete the case (which loses the finding entirely). The third is to assert
-# the CORRECT behaviour and mark the case as a known gap.
-
-# So every xfail_* assertion below takes the expectation the source SHOULD
-# satisfy, and reports:
-#   - expectation not met -> XFAIL. Reported, counted in XFAIL_N, not a failure.
-#   - expectation met     -> XPASS, counted as a FAILURE, because the gap is
-#                            closed and the case must be converted to a plain
-#                            assert_* and unpinned from its issue.
-# The XPASS-is-a-failure half is what keeps this honest: without it an xfail is
-# just a permanently silenced test.
-
-# Pinned issue: nirecom/agents#2032 — the source defects in the concern-ledger
-# stack that #1992 deliberately does NOT fix (it is a test-only PR). Override
-# XFAIL_ISSUE before sourcing to pin to another issue.
-
-# Usage (the sourcing suite owns PASS / FAIL and its own pass() helper):
-#   . "$AGENTS_ROOT/tests/lib/xfail.sh"
-#   xfail_eq "3: a '..' session id is rejected before any write" "rejected" "$got"
-#   xfail_summary          # prints the known-gap line, before the Results line
+# A test that finds a source defect asserts the CORRECT behaviour and marks the gap, instead of
+# blessing the bug or deleting the case: unmet -> XFAIL (counted in XFAIL_N, not a failure);
+# met -> XPASS, a FAILURE (counted in FAIL and XPASS_N) so the stale pin gets converted to assert_*.
+# Pinned issue: nirecom/agents#2032 by default; override XFAIL_ISSUE before sourcing.
+# Usage (the sourcing suite owns PASS / FAIL):
+#   . "$AGENTS_ROOT/tests/lib/xfail.sh"; xfail_eq "<name>" "<want-correct>" "$got"; xfail_summary
 
 XFAIL_ISSUE="${XFAIL_ISSUE:-#2032}"
 XFAIL_N=0
+XPASS_N=0
 
 # _xfail_note <name> — the expectation is still unmet: the known gap is intact.
 _xfail_note() {
@@ -41,6 +25,9 @@ _xfail_note() {
 _xpass_fail() {
     echo "FAIL: $1 — XPASS: the $XFAIL_ISSUE gap appears CLOSED. Convert this case to a plain assert_* and drop the xfail pin."
     FAIL=$((FAIL + 1))
+    XPASS_N=$((XPASS_N + 1))
+    # tests/lib/harness.sh, when sourced: the open case's immediate FAIL record.
+    if declare -F _harness_case_failed >/dev/null; then _harness_case_failed; fi
 }
 
 # xfail_eq <name> <want-correct> <got>

@@ -330,6 +330,18 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: The one table that decides, for every test language, which files are tests, how their headers are read and how they are launched. Test tools consult it instead of checking file extensions themselves.
 - **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
 
+### UNRUNNABLE
+
+- **Full name**: Unrunnable test state
+- **Definition**: The state of a test file that could not run because its runtime is missing from PATH or older than the registry's minimum version (exit 79 with a validated `unrunnable` marker), or because an explicitly named test path resolves to no regular file (`missing: test file`). It counts as neither pass, fail nor skip, and it keeps the `run_tests` step from completing until the runtime is installed or the user accepts the gap with the `RUN_TESTS_UNRUNNABLE_ACCEPTED` sentinel.
+- **Related**: [architecture/claude-code/test-result-contract.md](architecture/claude-code/test-result-contract.md)
+
+### case-level result line
+
+- **Full name**: Case-level result line
+- **Definition**: The run-all report line `<STATE> <file>::<case> target=<target>` that gives one case's result inside a test file, printed after that file's `PASS:` / `FAIL:` / `SKIP:` line in every test language.
+- **Related**: [architecture/claude-code/test-result-contract.md](architecture/claude-code/test-result-contract.md)
+
 ## Run tests recording
 
 ### dispatch settlement
@@ -345,6 +357,26 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Level**: 2
 - **Definition**: A field in the `run_tests` state entry that records the stem, payload SHA-256 (`payload_sha256`), and outcome SHA-256 (`outcome_sha256`) of the worker outcome file from which the state was last written. `bin/workflow/lib/run-tests-baseline-evidence.js` reads it to verify that the recorded outcome bytes have not been replaced before accepting a failing baseline as pre-existing.
 - **Related**: [hooks/workflow-run-tests/dispatch-outcome.js](../hooks/workflow-run-tests/dispatch-outcome.js), [bin/workflow/lib/run-tests-baseline-evidence.js](../bin/workflow/lib/run-tests-baseline-evidence.js), #2544
+
+## Test harness
+
+### run root
+
+- **Full name**: Test run root
+- **Definition**: The per-run isolation directory that every test in a run writes inside. Set via `TEST_RUN_ROOT`; created under `<TEST_HOST_TMPDIR>/agents-test-runs-<user>/run-<pid>-<rand>` when not already set. `TMPDIR`, `TMP` and `TEMP` are pinned to its `tmp/` subdirectory so that `mktemp` and temp-file helpers land inside it. Build caches (root decoy, command-guard binaries) sit under `<TEST_HOST_TMPDIR>/agents-test-cache-<user>`, owned by `tests/lib/test-cache-base.js`.
+- **Related**: [architecture/claude-code/test-command-guard.md](architecture/claude-code/test-command-guard.md), `tests/lib/test-run-root.sh`
+
+### command guard
+
+- **Full name**: Command guard
+- **Definition**: The layer that puts stub binaries for `git`, `gh`, `glab` and `codex` first on `PATH` during a test run. Each stub reads its policy from `../guard.conf` and either runs the real tool, delegates to `tests/lib/command-guard/main.js`, or exits 97 (refused) and writes a hit file. On POSIX the stubs are bash scripts; on Windows a single compiled C# launcher (`launcher.cs`) serves all four tools. A refused call is a test failure, reported by `run_all_hit_report`.
+- **Related**: [architecture/claude-code/test-command-guard.md](architecture/claude-code/test-command-guard.md), `tests/lib/command-guard.sh`
+
+### spawn record
+
+- **Full name**: Spawn record
+- **Definition**: A Node.js `--require` preload (`tests/fixtures/spawn-record-preload.js`) that patches `child_process` to record every `spawn`/`execFile` call. A test that needs to assert on what commands a script invokes loads it via `NODE_OPTIONS=--require <preload>`, then reads the hit files after the run. The preload stores hits in the command guard's `hits/` directory so they are co-located with guard hits and cleaned up together.
+- **Related**: `tests/fixtures/spawn-record-preload.js`, `tests/lib/spawn-record.sh`
 
 ## Test retirement
 
@@ -397,6 +429,15 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
   repository it means the compiler sense (a parse-based intermediate representation).
 - **Related**: #1253
 
+### Windows-form snapshot
+
+- **Definition**: A Claude Code shell snapshot whose `PATH` line holds Windows-style
+  `;`-separated drive paths instead of a POSIX list. Sourced in Git Bash it makes
+  `/usr/bin` unreachable, so every Bash call exits 127. The SessionStart and
+  PostToolUse(Failure) hooks rewrite the line to POSIX form; `/sweep-shell-snapshots`
+  lists the ones left behind.
+- **Related**: [architecture/claude-code/shell-snapshot-repair.md](architecture/claude-code/shell-snapshot-repair.md), #2221
+
 ### plan-sync
 
 - **Definition**: The mechanism that pushes each final plan file (`*-intent.md`,
@@ -406,3 +447,11 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
   remote's host. `bin/plan-link` prints a session's plan-link line (the URL, else the local
   path and a reason). Distinct from session-sync, which syncs session history.
 - **Related**: [architecture/claude-code/plan-sync.md](architecture/claude-code/plan-sync.md), #2513
+
+### presentation turn
+
+- **Definition**: The turn in which the model presents a plan stage (intent, outline or
+  detail) to the user and ends, with the stage's plan-link line in its last text block. The
+  `CONFIRM_<STAGE>` echo belongs to a later turn, after the user replies;
+  `hooks/confirm-checkpoint.js` denies an echo whose preceding turn was not a presentation turn.
+- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md), #2513, #2277

@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
 # Launch helpers for tests/run-all.sh; sourced, never executed.
-# run_all_exec <script> <out> <err> — launch one test the way its test-language registry entry
-# says (launch.unit / requires / prepare / command / timeoutSeconds), reading the table that sits
-# beside this file. Returns the child rc; 77 (SKIP) when launch.requires is not on PATH; 78 when
-# not launched (no supported entry matches, or a suite has no root); 2 when no table is readable.
-# Sets RUN_ALL_EXEC_LAUNCHED to 1 when a process was started, else 0.
-# run_all_pin_test_env <root> — the per-run pins: carried settings, root decoy
-# (run_all_pin_root_decoy), state dirs (run_all_pin_state_dirs); each is described at its function.
-# Contract: docs/architecture/claude-code/test-runner-parallelism.md.
+# run_all_exec <script> <out> <err> [<resultdir>] — launch one test the way its registry entry says,
+# then classify it (bin/lib/run-all-classify.sh). Sets RUN_ALL_EXEC_LAUNCHED / _STATE / _RC / _MISSING
+# and returns that rc. Only the child sees RUN_ALL_RESULT_DIR / RUN_ALL_RESULT_OWNER; without
+# <resultdir> a temporary one is used and removed. Contract: docs/architecture/claude-code/test-result-contract.md.
+# Each test is wrapped in worktree change detection.
+# run_all_pin_test_env <root> — the per-run pins: carried settings, root decoy, run root, command
+# guard, state dirs, change detection; each is described at its function.
+# run_all_hit_report — the end-of-run report.
+# Contract: docs/architecture/claude-code/test-runner-parallelism.md, test-command-guard.md.
 
 case "${BASH_SOURCE[0]}" in
   */*) RUN_ALL_LAUNCH_DIR="${BASH_SOURCE[0]%/*}" ;;
   *)   RUN_ALL_LAUNCH_DIR="." ;;
 esac
+
+# shellcheck source=tests/lib/test-run-root.sh
+[ -f "$RUN_ALL_LAUNCH_DIR/../../tests/lib/test-run-root.sh" ] && . "$RUN_ALL_LAUNCH_DIR/../../tests/lib/test-run-root.sh"
+# shellcheck source=tests/lib/command-guard.sh
+[ -f "$RUN_ALL_LAUNCH_DIR/../../tests/lib/command-guard.sh" ] && . "$RUN_ALL_LAUNCH_DIR/../../tests/lib/command-guard.sh"
+# shellcheck source=bin/lib/run-all-worktree-change-detect.sh
+[ -f "$RUN_ALL_LAUNCH_DIR/run-all-worktree-change-detect.sh" ] && . "$RUN_ALL_LAUNCH_DIR/run-all-worktree-change-detect.sh"
 
 # run_all_pin_state_dirs <root> — exports WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR as fresh
 # subdirectories of <root>; non-zero when they cannot be created.
@@ -35,7 +43,13 @@ _RUN_ALL_CARRIED_KEYS="RUN_TL3 RUN_TL4"
 
 # run_all_pin_root_decoy — points AGENTS_MAIN_ROOT and the retired root names at the stub trees
 # of tests/lib/root-decoy.sh; non-zero (nothing switched) when the decoy is unavailable.
+# Exception: a launcher copied without tests/lib (a fixture) keeps a decoy its caller already pinned.
 run_all_pin_root_decoy() {
+  if [ ! -f "$_RUN_ALL_DECOY_LIB" ] && [ -n "${ROOT_DECOY_DIR:-}" ] && [ -d "$ROOT_DECOY_DIR/main" ] &&
+    [ "${AGENTS_MAIN_ROOT:-}" = "$ROOT_DECOY_DIR/main" ]; then
+    _RUN_ALL_DECOY_RUN="run-$$-$RANDOM$RANDOM"
+    return 0
+  fi
   if [ ! -f "$_RUN_ALL_DECOY_LIB" ]; then
     printf '[run-all-launch] %s not found; refusing to run without the root decoy\n' "$_RUN_ALL_DECOY_LIB" >&2
     return 1
@@ -65,8 +79,34 @@ _run_all_real_setting() {
   env ${bridge[@]+"${bridge[@]}"} bash "$getcv" "$1" 2>/dev/null || true
 }
 
+_RUN_ALL_GUARD_DIR=""
+_RUN_ALL_GUARD_REPORTED=0
+_RUN_ALL_HITS_REPORTED=0
+
+# run_all_pin_command_guard — a fresh guard instance in $TEST_RUN_ROOT/command-guard, first on
+# PATH (tests/lib/command-guard.sh); an inherited COMMAND_GUARD_DIR is never reused here.
+run_all_pin_command_guard() {
+  if ! declare -F command_guard_ensure >/dev/null 2>&1; then
+    printf '[run-all-launch] tests/lib/command-guard.sh not loaded; refusing to run without the command guard\n' >&2
+    return 1
+  fi
+  unset COMMAND_GUARD_DIR
+  command_guard_ensure || return 1
+  _RUN_ALL_GUARD_DIR="$COMMAND_GUARD_DIR"
+}
+
+# _run_all_fixture_pins_inherited — the run root / command guard side of the fixture exception at
+# run_all_pin_root_decoy: a launcher copied without tests/lib keeps the pair its caller pinned.
+_run_all_fixture_pins_inherited() {
+  [ ! -f "$RUN_ALL_LAUNCH_DIR/../../tests/lib/test-run-root.sh" ] &&
+    [ ! -f "$RUN_ALL_LAUNCH_DIR/../../tests/lib/command-guard.sh" ] &&
+    [ -n "${TEST_RUN_ROOT:-}" ] && [ -d "$TEST_RUN_ROOT" ] &&
+    [ -n "${COMMAND_GUARD_DIR:-}" ] && [ -f "$COMMAND_GUARD_DIR/guard.conf" ]
+}
+
 # run_all_pin_test_env <root> — carries RUN_TL3 / RUN_TL4 over from the real settings (a value
-# already in the environment wins), then pins the root decoy and the state dirs under <root>.
+# already in the environment wins), then pins the root decoy, <root> as the run root, the command
+# guard, the state dirs under <root>, and worktree change detection.
 run_all_pin_test_env() {
   local key
   local -a carried=()
@@ -78,20 +118,65 @@ run_all_pin_test_env() {
     if [ -n "${carried[0]}" ]; then export "$key=${carried[0]}"; fi
     carried=("${carried[@]:1}")
   done
+  if ! _run_all_fixture_pins_inherited; then
+    [ -n "${1:-}" ] && declare -F test_run_root_ensure >/dev/null 2>&1 || return 1
+    export TEST_RUN_ROOT="$1"
+    test_run_root_ensure || return 1
+    run_all_pin_command_guard || return 1
+  fi
   run_all_pin_state_dirs "${1:-}" || return 1
   _RUN_ALL_DECOY_SINCE="${WORKFLOW_STATE_DIR%/workflow}/root-decoy-since"
   : >"$_RUN_ALL_DECOY_SINCE" || return 1
+  if declare -F run_all_pin_worktree_change_detect >/dev/null 2>&1; then
+    run_all_pin_worktree_change_detect "$1/worktree-change.log" || return 1
+  fi
+  if declare -F run_all_worktree_change_begin >/dev/null 2>&1; then
+    run_all_worktree_change_begin
+    declare -F _run_all_wcd_write_slot_before >/dev/null 2>&1 && _run_all_wcd_write_slot_before
+  fi
   # tests/run-all.sh reports a hit itself before it prints its counts; this teardown wrapper
   # covers the exits that never get there (deadline, signal), and the report runs only once.
   if declare -F cleanup_all >/dev/null 2>&1 && ! declare -F _run_all_cleanup_all_inner >/dev/null 2>&1; then
     eval "_run_all_cleanup_all_inner ()"$'\n'"$(declare -f cleanup_all | tail -n +2)"
-    # shellcheck disable=SC2034,SC2317  # FAIL belongs to tests/run-all.sh.
+    # shellcheck disable=SC2034,SC2317  # RAR_FAIL belongs to tests/run-all.sh.
     cleanup_all() {
-      run_all_root_decoy_report || FAIL=$((${FAIL:-0} + 1))
+      run_all_hit_report || RAR_FAIL=$((${RAR_FAIL:-0} + 1))
       _run_all_cleanup_all_inner
     }
   fi
   return 0
+}
+
+# run_all_command_guard_report — one stderr line per call the guard refused during this run
+# ("<tool><TAB><test id><TAB><target>"); non-zero when there was one. Runs once.
+run_all_command_guard_report() {
+  local stub id target n=0
+  [ "$_RUN_ALL_GUARD_REPORTED" -eq 0 ] || return 0
+  _RUN_ALL_GUARD_REPORTED=1
+  [ -n "$_RUN_ALL_GUARD_DIR" ] && declare -F command_guard_hits >/dev/null 2>&1 || return 0
+  while IFS=$'\t' read -r stub id target; do
+    [ -n "$stub" ] || continue
+    [ -n "$_RUN_ALL_DECOY_RUN" ] && id="${id#"$_RUN_ALL_DECOY_RUN":}"
+    n=$((n + 1))
+    printf '[run-all] command guard hit: %s\t%s\t%s\n' "$stub" "${id:-(no test id)}" "$target" >&2
+  done < <(command_guard_hits "$_RUN_ALL_GUARD_DIR")
+  [ "$n" -eq 0 ] && return 0
+  printf '[run-all] %s command guard hit(s): a test ran a command the guard refused; the run fails\n' "$n" >&2
+  return 1
+}
+
+# run_all_hit_report — the root decoy, command guard and worktree change reports, once per run;
+# non-zero when any of them is.
+run_all_hit_report() {
+  local rc=0
+  [ "$_RUN_ALL_HITS_REPORTED" -eq 0 ] || return 0
+  _RUN_ALL_HITS_REPORTED=1
+  run_all_root_decoy_report || rc=1
+  run_all_command_guard_report || rc=1
+  if declare -F run_all_worktree_change_report >/dev/null 2>&1; then
+    run_all_worktree_change_report || rc=1
+  fi
+  return "$rc"
 }
 
 # run_all_root_decoy_report — one stderr line per stub this run reached ("<stub><TAB><test id>"),
@@ -132,10 +217,17 @@ run_all_root_decoy_report() {
 
 # The loader keys its cache by its own CLI path, so sourcing this checkout's loader makes
 # tlr_load re-read this checkout's table even when the caller loaded another checkout's.
-if [ -f "$RUN_ALL_LAUNCH_DIR/test-language-registry.sh" ]; then
-  # shellcheck source=bin/lib/test-language-registry.sh
-  . "$RUN_ALL_LAUNCH_DIR/test-language-registry.sh"
-fi
+for _rae_lib in test-language-registry.sh run-all-classify.sh timed-exec.sh; do
+  # shellcheck source=/dev/null
+  if [ -f "$RUN_ALL_LAUNCH_DIR/$_rae_lib" ]; then . "$RUN_ALL_LAUNCH_DIR/$_rae_lib"; fi
+done
+unset _rae_lib
+
+# _rae_native <path> — the mixed (C:/...) form Windows-native tools and Node accept, into _RAE_N.
+_rae_native() {
+  _RAE_N="$1"
+  if command -v cygpath >/dev/null 2>&1; then _RAE_N="$(cygpath -m "$1")"; fi
+}
 
 # _rae_sub <text> <token> <value> — literal replace-all into _RAE_S (no pattern or & semantics).
 _rae_sub() {
@@ -147,68 +239,136 @@ _rae_sub() {
   _RAE_S="$out$s"
 }
 
-# _rae_argv <id> <prepare|command> <path> <native> — the entry's argv into _RAE_ARGV.
+# _rae_argv <id> <prepare|command> <path> <native> <wrapper> <minVersion> — the argv into _RAE_ARGV.
 _rae_argv() {
-  local i=0 q="'"
+  local i=0 q sq="$4"
   _RAE_ARGV=()
+  # PowerShell closes a '...' string at ASCII ' and at U+2018..U+201B alike; doubling escapes each.
+  for q in "'" $'\xe2\x80\x98' $'\xe2\x80\x99' $'\xe2\x80\x9a' $'\xe2\x80\x9b'; do sq="${sq//$q/$q$q}"; done
   while [ "$i" -lt "${#_TLR_A_ID[@]}" ]; do
     if [ "${_TLR_A_ID[$i]}" = "$1" ] && [ "${_TLR_A_KIND[$i]}" = "$2" ]; then
-      _rae_sub "${_TLR_A_VAL[$i]}" '{nativePathSq}' "${4//$q/$q$q}"
+      _rae_sub "${_TLR_A_VAL[$i]}" '{nativePathSq}' "$sq"
       _rae_sub "$_RAE_S" '{nativePath}' "$4"
       _rae_sub "$_RAE_S" '{path}' "$3"
+      _rae_sub "$_RAE_S" '{wrapper}' "$5"
+      _rae_sub "$_RAE_S" '{minVersion}' "$6"
       _RAE_ARGV+=("$_RAE_S")
     fi
     i=$((i + 1))
   done
 }
 
+# _rae_timed <dir> <secs> <cmd...> — timed_exec (its firing marked in <dir>), or the bare command.
+_rae_timed() {
+  local dir="$1" secs="$2"
+  shift 2
+  if [[ "$secs" =~ ^[1-9][0-9]*$ ]]; then timed_exec --fired-file "$dir/timed-out" "$secs" "$@"; else "$@"; fi
+}
+
+# _rae_launch <owner> <out> <err> <resultdir> <unit> <eff> <root> — the child, in a subshell so the
+# result-dir env and the suite's cd never reach the caller.
+_rae_launch() {
+  local owner="$1" out="$2" err="$3" dir="$4" unit="$5" eff="$6" root="$7" p0 rc
+  (
+    _rae_native "$dir"
+    export RUN_ALL_RESULT_DIR="$_RAE_N" RUN_ALL_RESULT_OWNER="$owner"
+    # Redirect before cd so a relative <out>/<err> still names the caller's file.
+    exec >"$out" 2>"$err" </dev/null
+    if [ "$unit" = suite ]; then cd "$root" || exit 2; fi
+    # prepare belongs to the entry, not to the unit: a file entry runs it too, before each file.
+    if [ "${#_RAE_PREP[@]}" -gt 0 ]; then
+      p0=$SECONDS
+      rc=0
+      _rae_timed "$dir" "$eff" "${_RAE_PREP[@]}" || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        if [ ! -e "$dir/timed-out" ]; then : >"$dir/prepare-failed"; fi
+        exit "$rc"
+      fi
+      # One limit covers the unit: the command gets what prepare left of it.
+      if [[ "$eff" =~ ^[1-9][0-9]*$ ]]; then
+        eff=$((eff - (SECONDS - p0)))
+        if [ "$eff" -lt 1 ]; then
+          : >"$dir/timed-out"
+          exit 124
+        fi
+      fi
+    fi
+    _rae_timed "$dir" "$eff" "${_RAE_CMD[@]}"
+  )
+}
+
+# A test the launcher could not even set up was not run: FAIL, never UNSUPPORTED (which a run ignores).
+_rae_setup_failed() {
+  # shellcheck disable=SC2034 # read by the sourcing caller
+  RUN_ALL_EXEC_STATE=FAIL RUN_ALL_EXEC_RC=2
+  return 2
+}
+
 run_all_exec() {
-  local script="$1" out="$2" err="$3" id native root rc=0 rto
-  local -a tmo=() prep=() cmd=()
+  local rc=0
+  declare -F run_all_worktree_change_begin >/dev/null 2>&1 && run_all_worktree_change_begin
+  _run_all_exec_inner "$@" || rc=$?
+  declare -F run_all_worktree_change_check >/dev/null 2>&1 && run_all_worktree_change_check "$1"
+  return "$rc"
+}
+
+_run_all_exec_inner() {
+  # shellcheck disable=SC2034 # RAC_LABELS: set by rac_entry_labels, read by rac_classify
+  local script="$1" out="$2" err="$3" dir="${4:-}" tmpdir="" id unit root="" wrap="" minv="" rc=0 lpath RAC_LABELS
   RUN_ALL_EXEC_LAUNCHED=0
+  # shellcheck disable=SC2034 # read by the sourcing caller
+  RUN_ALL_EXEC_STATE=UNSUPPORTED RUN_ALL_EXEC_RC=78 RUN_ALL_EXEC_MISSING=""
   if [ -n "$_RUN_ALL_DECOY_RUN" ]; then local -x ROOT_DECOY_TEST_ID="$_RUN_ALL_DECOY_RUN:$script"; fi
-  if ! declare -F tlr_load >/dev/null 2>&1; then
-    printf '[run-all-launch] test language registry loader not found beside %s\n' "$RUN_ALL_LAUNCH_DIR" >&2
-    return 2
+  if ! declare -F tlr_load >/dev/null 2>&1 || ! declare -F rac_classify >/dev/null 2>&1 || ! declare -F timed_exec >/dev/null 2>&1; then
+    printf '[run-all-launch] launcher libraries not found beside %s\n' "$RUN_ALL_LAUNCH_DIR" >&2
+    _rae_setup_failed
+    return
   fi
-  tlr_load || return 2
+  tlr_load || { _rae_setup_failed; return; }
   if ! tlr_match "$script" || [ "$TLR_STATUS" != supported ]; then
     printf 'UNSUPPORTED: %s (language: %s; not run)\n' "$script" "${TLR_ID:-unknown}" >"$out"
     return 78
   fi
   id="$TLR_ID"
-  if _tlr_get "$id" launch.requires && ! command -v "$_TLR_V" >/dev/null 2>&1; then
-    printf 'SKIP: %s not on PATH\n' "$_TLR_V" >"$out"
-    return 77
-  fi
-  rto="$RUN_ALL_LAUNCH_DIR/../run-with-timeout.sh"
-  if _tlr_get "$id" launch.timeoutSeconds && [ -f "$rto" ]; then tmo=(bash "$rto" "$_TLR_V"); fi
-  native="$script"
-  command -v cygpath >/dev/null 2>&1 && native="$(cygpath -m "$script")"
-  _rae_argv "$id" prepare "$script" "$native"
-  prep=(${_RAE_ARGV[@]+"${_RAE_ARGV[@]}"})
-  _rae_argv "$id" command "$script" "$native"
-  cmd=(${_RAE_ARGV[@]+"${_RAE_ARGV[@]}"})
   _tlr_get "$id" launch.unit || true
-  if [ "$_TLR_V" != suite ]; then
-    RUN_ALL_EXEC_LAUNCHED=1
-    ${tmo[@]+"${tmo[@]}"} "${cmd[@]}" >"$out" 2>"$err" </dev/null
-    return
-  fi
-  if ! root="$(tlr_suite_root "$id" "$script")"; then
+  unit="$_TLR_V"
+  if [ "$unit" = suite ] && ! root="$(tlr_suite_root "$id" "$script")"; then
     _tlr_get "$id" launch.suiteRootMarker || true
     printf 'UNSUPPORTED: %s (language: %s; no suite root %s)\n' "$script" "$id" "$_TLR_V" >"$out"
     return 78
   fi
-  RUN_ALL_EXEC_LAUNCHED=1
-  # Redirect before cd so a relative <out>/<err> still names the caller's file.
-  (
-    exec >"$out" 2>"$err" </dev/null
-    cd "$root" || exit 2
-    if [ "${#prep[@]}" -gt 0 ]; then
-      ${tmo[@]+"${tmo[@]}"} "${prep[@]}" || exit
-    fi
-    ${tmo[@]+"${tmo[@]}"} "${cmd[@]}"
-  ) || rc=$?
-  return "$rc"
+  if [ -z "$dir" ]; then
+    tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/run-all-result.XXXXXX")" || { _rae_setup_failed; return; }
+    dir="$tmpdir"
+  fi
+  if _tlr_get "$id" launch.wrapper; then
+    _rae_native "$(cd "$RUN_ALL_LAUNCH_DIR/../.." && pwd)/$_TLR_V"
+    wrap="$_RAE_N"
+  fi
+  if _tlr_get "$id" launch.minVersion; then minv="${_TLR_V##*>=}"; fi
+  # A relative path starting with '-' would read as an option to the runtime (and to cygpath).
+  lpath="$script"
+  case "$lpath" in -*) lpath="./$lpath" ;; esac
+  _rae_native "$lpath"
+  _rae_argv "$id" prepare "$lpath" "$_RAE_N" "$wrap" "$minv"
+  _RAE_PREP=(${_RAE_ARGV[@]+"${_RAE_ARGV[@]}"})
+  _rae_argv "$id" command "$lpath" "$_RAE_N" "$wrap" "$minv"
+  _RAE_CMD=(${_RAE_ARGV[@]+"${_RAE_ARGV[@]}"})
+  if rac_missing_exe "$id" "$unit" "$root" "${_RAE_PREP[0]:-}" "${_RAE_CMD[0]:-}"; then
+    printf '%s\n' "$RAC_MISSING" >"$dir/unrunnable"
+    printf 'UNRUNNABLE: missing %s\n' "$RAC_MISSING" >"$out"
+    rc=79
+  else
+    _tlr_get "$id" launch.timeoutSeconds || _TLR_V=""
+    rac_effective_timeout "$_TLR_V"
+    RUN_ALL_EXEC_LAUNCHED=1
+    # The owner is the path as launched: the harness compares it with its own $0.
+    _rae_launch "$lpath" "$out" "$err" "$dir" "$unit" "$RAC_EFFECTIVE_TIMEOUT" "$root" || rc=$?
+    # A failed prepare never started the command: not launched, though still a FAIL (D3-4).
+    if [ -f "$dir/prepare-failed" ]; then RUN_ALL_EXEC_LAUNCHED=0; fi
+  fi
+  rac_entry_labels "$id" "$RUN_ALL_EXEC_LAUNCHED"
+  rac_classify "$rc" "$RUN_ALL_EXEC_LAUNCHED" "$dir"
+  if [ -n "$tmpdir" ]; then rm -rf "$tmpdir"; fi
+  return "$RUN_ALL_EXEC_RC"
 }

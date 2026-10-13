@@ -72,3 +72,18 @@ exit $exit_code
 EOF
     chmod +x "$path"
 }
+
+# #2277: run-completion.sh runs `node <root>/bin/workflow/check-plan-approval`, so the
+# mock is a JS file. Prints <stdout> (literal "APPROVAL=..." line), exits <exit>, and
+# records its argv (one per line) to <args-file> when one is given.
+mock_plan_approval() {
+    local stdout_text="$1" exit_code="${2:-0}" args_file="${3:-}"
+    local file="$TEST_DIR/bin/workflow/check-plan-approval"
+    local args_node=""
+    [ -n "$args_file" ] && args_node="$(cygpath -m "$args_file" 2>/dev/null || printf '%s' "$args_file")"
+    printf '%s\n' "const fs = require('fs');" \
+        "const a = process.argv.slice(2).join('\\n') + '\\n';" \
+        "if ('$args_node') fs.writeFileSync('$args_node', a);" \
+        "if ('$stdout_text') process.stdout.write('$stdout_text\\n');" \
+        "process.exit($exit_code);" > "$file"
+}

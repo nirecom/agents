@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/github-issues/reopen-with-update.sh, bin/github-issues/issue-create-dispatch.sh, bin/lib/gh-outbound-guard.sh
+# Tests: bin/github-issues/reopen-with-update.sh, bin/github-issues/issue-create-dispatch.sh, bin/lib/gh-outbound-guard.sh, bin/lib/native-path.sh
 # Tags: issue-create, reopen, outbound-guard, note, security, gh-mock, scope:issue-specific, pwsh-not-required, TL2
 # TL3 gap: the real scan-outbound.sh ruleset (mocked here) and real GitHub comment
 # PATCH/create semantics. Mitigation: WORKFLOW_USER_VERIFIED preflight via
@@ -29,6 +29,7 @@ FAKE_SCRIPT_CHECKOUT_ROOT="$WORK/fake-script-checkout-root"
 mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/lib"
 cp "$RWU" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/reopen-with-update.sh"
 cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/lib/gh-outbound-guard.sh"
+cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/native-path.sh" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/lib/native-path.sh"
 RWU_COPY="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/reopen-with-update.sh"
 cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/scan-outbound.sh" <<'SCAN'
 #!/usr/bin/env bash

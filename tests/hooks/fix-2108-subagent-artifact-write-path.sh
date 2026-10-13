@@ -151,6 +151,9 @@ write_state() {
     local sid="$1" wi="$2" ci="$3"
     printf '{"version":1,"session_id":"%s","created_at":"%s","cwd":"/tmp","git_branch":"main","steps":{"workflow_init":{"status":"%s","updated_at":"%s"},"clarify_intent":{"status":"%s","updated_at":null},"research":{"status":"pending","updated_at":null},"outline":{"status":"pending","updated_at":null},"detail":{"status":"pending","updated_at":null}}}' \
         "$sid" "$NOW_ISO" "$wi" "$NOW_ISO" "$ci" > "$WFDIR_SH/${sid}.json"
+    # #2277: a seeded clarify_intent complete counts only with a plan_approval record.
+    node "$AGENTS_NODE/tests/lib/plan-approval-fixture.js" inject-complete \
+        "$(node_path "$WFDIR_SH/${sid}.json")" clarify_intent >/dev/null 2>&1
 }
 SID_T1="sid2108t1"
 SID_T2="sid2108t2"

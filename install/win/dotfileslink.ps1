@@ -190,6 +190,16 @@ Write-Launcher "$LocalBin\doc-append-plain.cmd" $dapCmdContent "doc-append-plain
 $rvCmdContent = "@echo off`r`nuv run `"$SCRIPT_CHECKOUT_ROOT\bin\repo-visibility.py`" %*`r`n"
 Write-Launcher "$LocalBin\repo-visibility.cmd" $rvCmdContent "repo-visibility.cmd"
 
+# --- pytest pre-fetch into uv's cache ---
+# The test launcher runs pytest through `uv run --with pytest`; warming the cache here means a
+# failing pytest run is a test failure, not uv being unable to supply pytest.
+if (Get-Command uv -ErrorAction SilentlyContinue) {
+    & uv run --no-project --with pytest python -c "import pytest"
+    if ($LASTEXITCODE -ne 0) { Write-Warning "pytest pre-fetch via uv failed (exit $LASTEXITCODE); pytest tests will try to fetch it on first run" }
+} else {
+    Write-Warning "uv not found on PATH; pytest pre-fetch skipped"
+}
+
 # Convert SCRIPT_CHECKOUT_ROOT Windows path to bash-compatible Unix path
 $agentsDrive = $SCRIPT_CHECKOUT_ROOT[0].ToString().ToLower()
 $agentsUnixPath = "/$agentsDrive" + $SCRIPT_CHECKOUT_ROOT.Substring(2).Replace('\', '/')

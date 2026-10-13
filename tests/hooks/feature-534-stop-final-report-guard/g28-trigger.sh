@@ -1,36 +1,16 @@
 # tests/hooks/feature-534-stop-final-report-guard/g28-trigger.sh
 # Tests: hooks/stop-final-report-guard.js, hooks/stop-premature-stop-guard.js, bin/workflow/next-step, settings.json
 # Tags: hook, settings, config, stop-guard, workflow-state, scope:issue-specific, TL2
-#
-# Trigger-decoupling tests for issue #1611 (Track B: env-file-independent trigger).
-# Sourced by feature-534-stop-final-report-guard.sh — no shebang, no runner.
-#
-# Function numbering continues at G33 because G28–G32 are already taken by
-# g21-g27.sh; the filename follows the plan, the numbering follows the suite.
-#
-# Contract under test (new):
-#   Track A — env file readable+parsable → Final Report shape validation (unchanged).
-#   Track B — env file ABSENT and `bin/workflow/next-step --session <sid>` reports
-#           ACTION=invoke with REASON='pre_final_report_gate' → the close
-#           procedure was never started; block unconditionally (exit 2), WITHOUT
-#           scanning the transcript. A hand-written 13-heading report must NOT
-#           be accepted.
-#   Escape hatches for Track B: <sid>-session-close-gate.json gate_action:yield,
-#           <sid>.workflow-off marker, pre_final_report_gate marked complete.
-#   Anything else → exit 0.
-#
-# These tests also pin the child-process environment inheritance regression:
-# next-step is spawned from the hook and must still see WORKFLOW_STATE_DIR.
-
-# ---------------------------------------------------------------------------
-# Local fixture helpers (parent-scope: TMPDIR_BASE, HOOK_JS, node_path, ...)
-# ---------------------------------------------------------------------------
+# #1611 Track B (env-file-independent trigger) cases G33..G50, sourced by feature-534-stop-final-report-guard.sh.
+# Contract owner: hooks/stop-final-report-guard.js header; helpers use parent-scope TMPDIR_BASE, HOOK_JS, node_path.
 
 PREMATURE_HOOK_JS="$(dirname "$HOOK_JS")/stop-premature-stop-guard.js"
 
-# b_mk_state <workflow-dir> <sid> [pending-step ...]
+# b_mk_state <workflow-dir> <plans-dir> <sid> [pending-step ...]
 # Writes a workflow state file with every step complete except the listed ones.
+# #2277: complete gated steps carry a plan approval against <plans-dir> (the hook's plans dir).
 b_mk_state() {
+    local wf="$1" plans="$2"; shift 2
     node -e '
 const fs = require("fs");
 const dir = process.argv[1], sid = process.argv[2];
@@ -49,7 +29,9 @@ for (const s of pendings) steps[s] = { status: "pending", updated_at: null };
 fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(dir + "/" + sid + ".json", JSON.stringify(
   { version: 1, session_id: sid, created_at: now, steps, workflow_type: "wf-code" }, null, 2));
-' "$@"
+' "$wf" "$@"
+    WORKFLOW_PLANS_DIR="$(node_path "$plans")" node "$(dirname "$HOOK_JS")/../tests/lib/plan-approval-fixture.js" \
+        inject-complete "$(node_path "$wf")/$1.json" clarify_intent outline detail >/dev/null
 }
 
 # b_run <hook-js> <stdin-json> <plans-dir> <workflow-dir>

@@ -5,23 +5,18 @@
 #
 # TL3 — single real seam: the real `gh` CLI's `issue list` flag surface.
 #
-# Why this exists: agents/issue-reconcile-worker.md instructed paging with
-# `gh issue list --page N`, a flag `gh` has never had. The old LLM worker papered
-# over it; a plain script cannot. A TL2 stub can only ever confirm the stub, so
-# the flag contract is asserted against the real binary here.
-#
-# Detects, in both directions:
-#   (a) a breaking `gh` change that removes a flag the dispatcher passes
-#   (b) `--page` creeping back into the dispatcher's assumptions
-#
-# Gate: RUN_TL3=on and a real `gh` on PATH. Exits 77 (SKIP) otherwise.
-# Read-only: runs only `--help`; no issue is created, listed, or mutated.
+# Why: `gh issue list --page N` never existed; a TL2 stub only confirms the stub.
+# Detects (a) a gh change removing a flag the dispatcher passes, (b) `--page` returning.
+# Gate: RUN_TL3=on and a real `gh` on PATH, else exit 77. Read-only (`--help` only).
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
 "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+# TL3 legitimately uses the real gh: take the command guard (#2590) off PATH.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard.sh"
+command_guard_use_real
 command -v gh >/dev/null 2>&1 || exit 77
 
 PASS=0

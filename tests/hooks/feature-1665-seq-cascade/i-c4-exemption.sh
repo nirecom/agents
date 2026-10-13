@@ -2,26 +2,11 @@
 # tests/hooks/feature-1665-seq-cascade/i-c4-exemption.sh
 # Tests: hooks/stop-premature-stop-guard.js, hooks/workflow-state/lifecycle.js
 # Tags: workflow-state, write-code, stop-guard, c4, exemption, ttl, fail-closed, guard, scope:issue-specific, pwsh-not-required, TL2
-#
-# I — the C4 premature-stop guard must stay quiet while write_code is genuinely
-# in flight.
-#
-# WHY: /write-code runs for many turns without settling a tracked next-step step,
-# so without an exemption C4 re-nudges the session on every Stop. The exemption is
-# TTL-bounded (4h) and fail-CLOSED: a missing, non-string, or unparseable
-# timestamp means "cannot prove it is in flight", which must resolve to BLOCK —
-# an unbounded quiet window would silently disable the guard for the rest of the
-# session.
-#
-# Classifier coverage (CPR-ORTH): both verdicts are exercised, plus a second,
-# pre-existing exemption row (pre-workflow-init) so a change that accidentally
-# short-circuits the whole exemption chain is caught here too.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the Stop event actually reaches this script in the deployed
-#   settings.json wiring (the hook is spawned directly here).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
+# I — C4 stays quiet while write_code is genuinely in flight; the exemption is TTL-bounded
+# (4h) and fail-CLOSED (a missing/unparseable timestamp BLOCKS). CPR-ORTH: both verdicts plus
+# the pre-workflow-init row, so a short-circuited exemption chain is caught too.
+# TL3 gap: the deployed Stop wiring (hook spawned directly here); checked at
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, hook-registration).
 
 CASE_TAG=i
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -44,6 +29,7 @@ seed_started() { # env: SEED_SID
     "$RWT" 120 node -e '
 const S = require(process.env.M_SIO);
 S.markStep(process.env.SEED_SID, "workflow_init", "complete");
+require(process.env.M_FIX).approveLive(process.env.SEED_SID, "clarify_intent"); // #2277 gated complete
 S.markStep(process.env.SEED_SID, "clarify_intent", "complete");
 ' >/dev/null 2>&1
 }

@@ -132,7 +132,7 @@ that is a different fact.
 
 ### `plan_approvals` (approval-gated steps)
 
-`outline` and `detail` carry an approval record, folded from `plan_approval` /
+`clarify_intent`, `outline` and `detail` carry an approval record, folded from `plan_approval` /
 `plan_approval_revoked` events into `current.plan_approvals`:
 
 ```json
@@ -160,13 +160,26 @@ silently disabling the gate:
 
 | Source | Recorded by | Hash-bound |
 |---|---|---|
-| `confirm-sentinel` | `<<WORKFLOW_CONFIRM_OUTLINE\|DETAIL: {summary}>>` | yes — a re-edited plan artifact invalidates the approval |
-| `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver | no (audit record) |
+| `confirm-sentinel` | `<<WORKFLOW_CONFIRM_INTENT\|OUTLINE\|DETAIL: {summary}>>` | yes — a re-edited plan artifact invalidates the approval (intent's `## Issues` section is outside the hash) |
+| `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver; intent has none | no (audit record) |
 | `reset-sentinel` | `<<WORKFLOW_RESET_FROM_*>>` re-seeding steps below the reset point | no (audit record) |
+| `session-inherit` | inheritance of a donor's `complete` gated step when the donor holds no record; never for intent, which stays unapproved until `CONFIRM_INTENT` in the new session | no (audit record) |
 
 Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rejection,
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its
 record, so a stale approval can never re-validate a later re-completion.
+
+Recovery: a gated step recorded `complete` without a valid approval (no record, or a hash
+mismatch) reads as `pending` in the effective state. `next-step` answers it with
+`REASON=awaiting-plan-approval: <step>` and `ACTION=invoke` before its inconsistency scan, so
+later steps left `complete` do not abort the session; once the approval is recorded, the
+session resumes from the recorded position. That reason is a Stop exemption
+(`hooks/lib/stop-exemption-policy.js`): a presentation turn rightly ends while the user reads the plan.
+
+Progress gates: `gate-plan-skill-advance.js` only deters (it denies the next skill on
+`unapproved` and passes every unreadable state), while the side-effect owners fail closed —
+the completion sentinels and `--advance` record nothing without approval, and
+`run-completion.sh` stops on anything but `APPROVAL=approved` from `bin/workflow/check-plan-approval`.
 
 `session_start_context` records where the session began and never changes; `current.cwd` /
 `current.git_branch` track where it is now, folded from `worktree` events. `git_branch` is
@@ -369,7 +382,7 @@ the gate, not in the file.
 1. **wf-meta auto-skip** — non-applicable WF-CODE steps are treated as `skipped`.
 2. **skip_verdict gate** — outline/detail steps with a pending or vetoed `skip_verdict` are held at `pending`/`skipped` accordingly (see `skip_verdict` field above).
 3. **Post-veto reset** — when outline or detail is veto-de-skipped, downstream steps that were `complete` in the raw record are treated as `pending` until the plan is re-approved.
-4. **Evidence + approval resolution** — for `pending` steps in `EVIDENCE_STEPS`, `hasCompletionEvidence()` is checked; for approval-gated steps (`outline`, `detail`), `evaluateCompletionApproval()` is also checked. Only when both pass is the effective status `complete`. This derivation is read-only and does not mutate the state file.
+4. **Evidence + approval resolution** — for `pending` steps in `EVIDENCE_STEPS`, `hasCompletionEvidence()` is checked; for approval-gated steps (`clarify_intent`, `outline`, `detail`), `evaluateCompletionApproval()` is also checked. Only when both pass is the effective status `complete`. This derivation is read-only and does not mutate the state file.
 
 `clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending` in the effective view, evidence already resolves it to `complete` inside the snapshot — no write-back occurs (Approach B). This resolves compaction gaps where the step completed but the marker was lost.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/fix-1378-worker-yaml-contract-roundtrip.sh
 # Tests: bin/worker-dispatch/emit.js, bin/worker-dispatch/workers/test-runner.js, hooks/workflow-run-tests.js
-# Tags: worker-dispatch, test-runner, yaml, contract, hook, outcome, dispatch-outcome, TL2, scope:common
+# Tags: worker-dispatch, test-runner, yaml, contract, hook, outcome, dispatch-outcome, TL2, scope:common, status-derivation, run-contract, exit-77, unrunnable, parser, table-driven
 # Issue #1378 — generator and detector were each self-consistent yet could not talk:
 # renderTestRunnerYaml() emits the YAML, hooks/workflow-run-tests.js reads it back as
 # tool_response.stdout. Other tests cover one side of that seam only, so a contract the
@@ -173,11 +173,12 @@ case_end
 
 # (1) C4 — the renderer emits the contract as its own TOP-LEVEL first line; log_tail has
 # none. (C3, a parser anchor relaxed to accept an indented contract, was retired; see 2.)
+# #2501: a current (6-field) contract renders as 6 fields; a legacy one would pend.
 case_begin "top-level-contract-completes-the-step" "bin/worker-dispatch/emit.js"
-roundtrip "1/top-level-contract-completes-the-step" '{"status":"pass","exitCode":0,"durationSeconds":12,"summary":"PASS=5 FAIL=0 SKIP=1","failingTests":[],"runContract":{"pass":5,"fail":0,"skip":1,"executed":6},"logTail":["PASS: tests/alpha.sh","Results: PASS=5  FAIL=0  SKIP=1"]}' "complete"
+roundtrip "1/top-level-contract-completes-the-step" '{"status":"pass","exitCode":0,"durationSeconds":12,"summary":"PASS=5 FAIL=0 SKIP=1","failingTests":[],"runContract":{"pass":5,"fail":0,"skip":1,"executed":6,"unrunnable":0,"timeout":0},"logTail":["PASS: tests/alpha.sh","Results: PASS=5  FAIL=0  SKIP=1"]}' "complete"
 assert_eq "1/renderer-emits-exactly-one-contract-line" "1" "$(contract_line_count "$LAST_YAML")"
 case "$(printf '%s\n' "$LAST_YAML" | head -1)" in
-    "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=1 EXECUTED=6")
+    "RUN_CONTRACT: PASS=5 FAIL=0 SKIP=1 EXECUTED=6 UNRUNNABLE=0 TIMEOUT=0")
         pass "1/contract-is-the-very-first-line" ;;
     *)
         fail "1/contract-is-the-very-first-line" "got=$(printf '%s\n' "$LAST_YAML" | head -1)" ;;
@@ -192,6 +193,7 @@ case_end
 # text is still PRESENT (indented, inside log_tail), NOT promoted, and the step pends.
 case_begin "log-tail-only-contract-does-not-complete" "bin/worker-dispatch/emit.js"
 roundtrip "2/log_tail-only-contract-does-not-complete-the-step" '{"status":"pass","exitCode":0,"durationSeconds":9,"summary":"PASS=4 FAIL=0 SKIP=0","failingTests":[],"logTail":["Results: PASS=4  FAIL=0  SKIP=0","RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4"]}' "pending"
+# Present, but only where the suite itself put it: still inside the block scalar.
 case "$(printf '%s\n' "$LAST_YAML" | grep -E '^[ \t]+RUN_CONTRACT: PASS=4 FAIL=0 SKIP=0 EXECUTED=4')" in
     "") fail "2/log_tail-keeps-the-suite-contract-line-verbatim" "$LAST_YAML" ;;
     *)  pass "2/log_tail-keeps-the-suite-contract-line-verbatim" ;;
@@ -207,7 +209,7 @@ case_end
 # Risk 5), so the renderer must suppress the log_tail copy. Status alone cannot tell one
 # line from zero, so the count is asserted too.
 case_begin "double-source-keeps-exactly-one-contract" "bin/worker-dispatch/emit.js"
-roundtrip "3/double-source-does-not-break-exactly-one" '{"status":"pass","exitCode":0,"durationSeconds":11,"summary":"PASS=7 FAIL=0 SKIP=2","failingTests":[],"runContract":{"pass":7,"fail":0,"skip":2,"executed":9},"logTail":["Results: PASS=7  FAIL=0  SKIP=2","RUN_CONTRACT: PASS=7 FAIL=0 SKIP=2 EXECUTED=9"]}' "complete"
+roundtrip "3/double-source-does-not-break-exactly-one" '{"status":"pass","exitCode":0,"durationSeconds":11,"summary":"PASS=7 FAIL=0 SKIP=2","failingTests":[],"runContract":{"pass":7,"fail":0,"skip":2,"executed":9,"unrunnable":0,"timeout":0},"logTail":["Results: PASS=7  FAIL=0  SKIP=2","RUN_CONTRACT: PASS=7 FAIL=0 SKIP=2 EXECUTED=9 UNRUNNABLE=0 TIMEOUT=0"]}' "complete"
 assert_eq "3/still-exactly-one-contract-line" "1" "$(contract_line_count "$LAST_YAML")"
 # Suppression must be surgical: the diagnostic lines around the contract stay.
 case "$LAST_YAML" in
@@ -266,7 +268,7 @@ const line = (y, k) => { const l = y.split("\n").find((x) => x.startsWith(k + ":
 const twelve = Array.from({ length: 12 }, (_, i) => `tests/bin/f${String(i + 1).padStart(2, "0")}.sh`);
 const cases = {
   pass: { status: "pass", exitCode: 0, durationSeconds: 12.6, summary: "PASS=5 FAIL=0 SKIP=1", failingTests: [],
-    runContract: { pass: 5, fail: 0, skip: 1, executed: 6 }, logTail: ["PASS: tests/alpha.sh", "Results: PASS=5  FAIL=0  SKIP=1"] },
+    runContract: { pass: 5, fail: 0, skip: 1, executed: 6, unrunnable: 0, timeout: 0 }, logTail: ["PASS: tests/alpha.sh", "Results: PASS=5  FAIL=0  SKIP=1"] },
   "fail-twelve": { status: "fail", exitCode: 1, durationSeconds: 40, summary: "PASS=3 FAIL=12 SKIP=0", failingTests: twelve,
     runContract: { pass: 3, fail: 12, skip: 0, executed: 15 },
     logTail: ["Results: PASS=3  FAIL=12  SKIP=0", "RUN_CONTRACT: PASS=3 FAIL=12 SKIP=0 EXECUTED=15"] },
@@ -292,7 +294,8 @@ for (const [label, r] of Object.entries(cases)) {
   put(label, "status", line(yaml, "status"), String(fields.status));
   put(label, "exit-code", line(yaml, "exit_code"), String(fields.exit_code));
   const rc = fields.worker_result && fields.worker_result.run_contract;
-  put(label, "run-contract", line(yaml, "RUN_CONTRACT"), rc ? `PASS=${rc.pass} FAIL=${rc.fail} SKIP=${rc.skip} EXECUTED=${rc.executed}` : "(none)");
+  const six = rc && rc.unrunnable !== undefined ? ` UNRUNNABLE=${rc.unrunnable} TIMEOUT=${rc.timeout}` : "";
+  put(label, "run-contract", line(yaml, "RUN_CONTRACT"), rc ? `PASS=${rc.pass} FAIL=${rc.fail} SKIP=${rc.skip} EXECUTED=${rc.executed}${six}` : "(none)");
 }
 process.stdout.write(out.join("\n") + "\n");
 RTJS
@@ -308,6 +311,116 @@ for label in pass fail-twelve no-contract odd-status long-text tainted; do
         else fail "7/$label/$check" "$got"; fi
     done
 done
+case_end
+
+# ===========================================================================
+# (8) #2501 D5-4 — the test-runner worker itself, over a canned suite run
+#     (spawn-stub.js). Exit 77 is `skip`, not `fail`; a current contract with
+#     UNRUNNABLE>0 is `unrunnable` on exit 0 or 77; neither carries the
+#     parse-degraded note. The contract is rendered in the shape it was parsed.
+# ===========================================================================
+WD_PRELOAD="$AGENTS_WIN/tests/feature-1643-worker-dispatch-lib/spawn-stub.js"
+WD_MAIN_RAW="$TMPD/mainrepo"
+mkdir -p "$WD_MAIN_RAW/tests"
+git -C "$WD_MAIN_RAW" init -q -b main
+git -C "$WD_MAIN_RAW" config core.hooksPath /dev/null
+printf '#!/usr/bin/env bash\nexit 0\n' >"$WD_MAIN_RAW/tests/run-all.sh"
+WD_MAIN="$(nodepath "$WD_MAIN_RAW")"
+WD_CANNED="$(nodepath "$TMPD/canned.json")"
+WD_PLAN="$(nodepath "$WORKFLOW_PLANS_DIR/tr.json")"
+printf '{"cwd":"%s","timeout_seconds":30}' "$WD_MAIN" >"$WORKFLOW_PLANS_DIR/tr.json"
+unset TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+
+# run_tr <exit> <stdout> — dispatches the worker over a canned suite run; output in DOUT.
+DOUT=""
+run_tr() {
+    node -e '
+const fs = require("fs");
+const un = (s) => String(s).replace(/\\r/g, "\r").replace(/\\t/g, "\t").replace(/\\n/g, "\n");
+fs.writeFileSync(process.argv[1], JSON.stringify([{ status: Number(process.argv[2]), stdout: un(process.argv[3]) + "\n", stderr: "" }]));
+' "$WD_CANNED" "$1" "$2"
+    : >"$TMPD/calls.jsonl"
+    DOUT="$(run_with_timeout 90 env "WD_SPAWN_MODULE=$AGENTS_WIN/bin/worker-dispatch/spawn.js" \
+        "WD_CANNED=$WD_CANNED" "WD_CALL_LOG=$(nodepath "$TMPD/calls.jsonl")" \
+        node -r "$WD_PRELOAD" "$AGENTS_WIN/bin/worker-dispatch.js" test-runner "$WD_MAIN" "$WD_PLAN" 2>/dev/null)" || true
+}
+field_of() {
+    local v
+    v="$(printf '%s\n' "$DOUT" | sed -n "s/^$1: //p" | head -1)"
+    v="${v%\'}"; v="${v#\'}"
+    printf '%s' "$v"
+}
+# Only the value is read back: re-printing the payload would put a contract-shaped line in this output.
+contract_of() {
+    local v
+    v="$(printf '%s\n' "$DOUT" | sed -n 's/^RUN_CONTRACT: //p' | head -1)"
+    printf '%s' "${v:-(none)}"
+}
+degraded_of() { case "$(field_of summary)" in *parse-degraded*) printf 'degraded' ;; *) printf 'clean' ;; esac; }
+trim() { printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'; }
+
+case_begin "worker-status-from-exit-and-contract" "bin/worker-dispatch/workers/test-runner.js"
+# Table: <label> | <suite exit> | <suite stdout> | <status> | <exit_code> | <degraded note>.
+while IFS='|' read -r label rc so want_status want_rc want_note; do
+    label="$(trim "$label")"
+    [ -n "$label" ] || continue
+    run_tr "$(trim "$rc")" "$(trim "$so")"
+    assert_eq "8/status/$label" "$(trim "$want_status") $(trim "$want_rc") $(trim "$want_note")" \
+        "$(field_of status) $(field_of exit_code) $(degraded_of)"
+done <<'ROWS'
+all-skip-exit77         | 77 | Results: PASS=0  FAIL=0  SKIP=2\nRUN_CONTRACT: PASS=0 FAIL=0 SKIP=2 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0 | skip       | 77 | clean
+nothing-selected-exit77 | 77 | Results: PASS=0  FAIL=0  SKIP=0\nRUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=0 TIMEOUT=0 | skip       | 77 | clean
+exit77-no-contract      | 77 | Results: PASS=0  FAIL=0  SKIP=0                                                                      | skip       | 77 | clean
+exit77-legacy-contract  | 77 | RUN_CONTRACT: PASS=0 FAIL=0 SKIP=2 EXECUTED=2                                                        | skip       | 77 | clean
+all-unrunnable-exit77   | 77 | Missing runtimes: Pester>=5.0 (2 files)\nRUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=2 TIMEOUT=0 | unrunnable | 77 | clean
+unrunnable-exit0        | 0  | Missing runtimes: Pester>=5.0 (1 files)\nRUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=1 TIMEOUT=0 | unrunnable | 0  | clean
+green-exit0             | 0  | RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0                                 | pass       | 0  | clean
+red-exit1               | 1  | something went wrong\nResults: PASS=0  FAIL=1  SKIP=0                                              | fail       | 1  | degraded
+red-with-unrunnable     | 1  | FAIL: tests/a.sh (exit 1)\nRUN_CONTRACT: PASS=0 FAIL=1 SKIP=0 EXECUTED=1 UNRUNNABLE=1 TIMEOUT=0     | fail       | 1  | clean
+ROWS
+case_end
+
+case_begin "worker-contract-parse-shape" "bin/worker-dispatch/workers/test-runner.js"
+# Table: <label> | <stdout> | <rendered contract value>. Anything but whitespace after the fields is
+# no contract: a cut-off pair used to parse as its 4-field prefix, reading UNRUNNABLE as 0.
+# A self-inconsistent count (EXECUTED != PASS+FAIL+SKIP, TIMEOUT > FAIL) is no contract either.
+while IFS='|' read -r label so want; do
+    label="$(trim "$label")"
+    [ -n "$label" ] || continue
+    run_tr 0 "$(trim "$so")"
+    assert_eq "8/contract/$label" "$(trim "$want")" "$(contract_of)"
+    case "$label" in cutoff-*|inconsistent-*) assert_eq "8/contract/$label/status" "pass" "$(field_of status)" ;; esac
+done <<'ROWS'
+six-field-passthrough   | RUN_CONTRACT: PASS=1 FAIL=2 SKIP=0 EXECUTED=3 UNRUNNABLE=4 TIMEOUT=1            | PASS=1 FAIL=2 SKIP=0 EXECUTED=3 UNRUNNABLE=4 TIMEOUT=1
+legacy-stays-four       | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1                                    | PASS=1 FAIL=0 SKIP=0 EXECUTED=1
+cutoff-timeout-value    | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=1 TIMEOUT=              | (none)
+cutoff-pair-half        | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=1                       | (none)
+junk-after-fields       | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 junk                               | (none)
+junk-after-six-fields   | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=1 TIMEOUT=0 junk        | (none)
+six-trailing-blanks     | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=2 TIMEOUT=0  \t         | PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=2 TIMEOUT=0
+six-trailing-cr         | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=2 TIMEOUT=0\r           | PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=2 TIMEOUT=0
+unrunnable-past-exact   | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=9007199254740993 TIMEOUT=0 | (none)
+inconsistent-executed   | RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0            | (none)
+inconsistent-legacy     | RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=2                                    | (none)
+inconsistent-timeout    | RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=1            | (none)
+ROWS
+case_end
+
+# (9) #2501 C3 round trip: a self-inconsistent 6-field contract the renderer was
+#     handed must not complete the step through the hook.
+case_begin "inconsistent-contract-does-not-complete" "hooks/workflow-run-tests.js"
+roundtrip "9/inconsistent-executed-does-not-complete" '{
+  "status": "pass", "exitCode": 0, "durationSeconds": 3,
+  "summary": "PASS=3 FAIL=0 SKIP=0", "failingTests": [],
+  "runContract": { "pass": 3, "fail": 0, "skip": 0, "executed": 5, "unrunnable": 0, "timeout": 0 },
+  "logTail": ["Results: PASS=3  FAIL=0  SKIP=0"]
+}' "pending"
+roundtrip "9/timeout-above-fail-does-not-complete" '{
+  "status": "pass", "exitCode": 0, "durationSeconds": 3,
+  "summary": "PASS=2 FAIL=0 SKIP=0", "failingTests": [],
+  "runContract": { "pass": 2, "fail": 0, "skip": 0, "executed": 2, "unrunnable": 0, "timeout": 1 },
+  "logTail": ["Results: PASS=2  FAIL=0  SKIP=0"]
+}' "pending"
 case_end
 
 echo ""

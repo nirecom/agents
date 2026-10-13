@@ -2,13 +2,13 @@
 # One test re-run at the merge base for bin/run-tests-baseline (#2431). Source-only.
 # rtb_exec_one <wt> <rel-path> <timeout> <logdir> launches through run_all_exec (the
 # checkout's own bin/lib/run-all-launch.sh when present, else this checkout's), so each
-# test kind starts exactly as tests/run-all.sh would start it. A watchdog enforces the
-# timeout; RTB_EXEC_TIMEDOUT comes from <logdir>/<i>.timedout, never from the exit code.
-# The default <timeout> is owned by run-tests-baseline-timeout.sh (RTB_TIMEOUT_DEFAULT).
-# RTB_EXEC_UNSUPPORTED=1 when run_all_exec did not launch (78 with RUN_ALL_EXEC_LAUNCHED=0),
-# flagged via <logdir>/<i>.unsupported so a test that itself exits 78 is not mistaken for it.
-# RTB_EXEC_DECOY=1 when the run reached the root decoy (<logdir>/<i>.decoyhit): its exit
-# code then says nothing about the base, whatever it is.
+# test kind starts exactly as tests/run-all.sh would start it. The launcher's TIMEOUT is the
+# authority (RUN_ALL_TIMEOUT_SECONDS); the watchdog is a +10 s backstop. The default <timeout>
+# is owned by run-tests-baseline-timeout.sh (RTB_TIMEOUT_DEFAULT). Outcomes come from
+# <logdir>/<i>.{state,timedout,unrunnable,unsupported,decoyhit} markers, never from the exit
+# code alone: RTB_EXEC_STATE ("" from a launcher that predates #2501), RTB_EXEC_TIMEDOUT,
+# RTB_EXEC_UNRUNNABLE, RTB_EXEC_UNSUPPORTED (not launched, so a test exiting 78 is not it),
+# RTB_EXEC_DECOY (decoy, command guard or worktree change hit: the exit code says nothing about the base).
 
 case "${BASH_SOURCE[0]}" in
   */*) RTB_EXEC_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
@@ -21,6 +21,8 @@ RTB_EXEC_RC=""
 RTB_EXEC_TIMEDOUT=""
 RTB_EXEC_UNSUPPORTED=""
 RTB_EXEC_DECOY=""
+RTB_EXEC_STATE=""
+RTB_EXEC_UNRUNNABLE=""
 RTB_EXEC_SEQ=0
 
 # rtb_exec_kill_group <pid> <signal> — the job's process group first, the pid as fallback.
@@ -46,6 +48,8 @@ rtb_exec_one() {
     RTB_EXEC_TIMEDOUT=""
     RTB_EXEC_UNSUPPORTED=""
     RTB_EXEC_DECOY=""
+    RTB_EXEC_STATE=""
+    RTB_EXEC_UNRUNNABLE=""
     [ -n "$wt" ] && [ -n "$rel" ] && [ -n "$logdir" ] || return 2
     case "$timeout" in ''|*[!0-9]*) timeout="$RTB_TIMEOUT_DEFAULT" ;; esac
     mkdir -p "$logdir" 2>/dev/null || return 2
@@ -54,14 +58,15 @@ rtb_exec_one() {
     [ -f "$launcher" ] || launcher="$RTB_EXEC_LIB_DIR/run-all-launch.sh"
     [ -f "$launcher" ] || return 2
     # Per-run workflow/plans/transcript dirs: a base test must never resolve the live
-    # session or write real workflow state. HOME stays (the run_all cache lives there).
+    # session or write real workflow state. HOME stays; build caches live in the host temp area.
     iso="$(mktemp -d 2>/dev/null)" || return 2
     if command -v cygpath >/dev/null 2>&1; then iso="$(cygpath -m "$iso")"; fi
     mkdir -p "$iso/workflow" "$iso/plans" "$iso/transcripts" 2>/dev/null || { rm -rf "$iso"; return 2; }
 
     RTB_EXEC_SEQ=$((RTB_EXEC_SEQ + 1))
     i="$RTB_EXEC_SEQ"
-    rm -f "$logdir/$i.timedout" "$logdir/$i.nolaunch" "$logdir/$i.unsupported" "$logdir/$i.decoyhit"
+    rm -f "$logdir/$i.timedout" "$logdir/$i.nolaunch" "$logdir/$i.unsupported" "$logdir/$i.decoyhit" \
+        "$logdir/$i.state" "$logdir/$i.unrunnable"
 
     # Job control gives each background job its own process group, so the watchdog
     # can take down the whole test tree, not just the launching subshell.
@@ -72,26 +77,50 @@ rtb_exec_one() {
         # shellcheck source=bin/lib/run-all-launch.sh
         . "$launcher" || { : >"$logdir/$i.nolaunch"; exit 2; }
         cd "$wt" || { : >"$logdir/$i.nolaunch"; exit 2; }
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE \
+            RUN_ALL_EXEC_STATE RUN_ALL_EXEC_MISSING RUN_ALL_EXEC_LAUNCHED
         export WORKFLOW_STATE_DIR="$iso/workflow" \
-            WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts"
+            WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts" \
+            RUN_ALL_TIMEOUT_SECONDS="$timeout"
         # The base test finds its tools from its own checkout; the launcher's decoy pin
         # makes any reach through a root variable visible instead of silently working.
         if declare -F run_all_pin_root_decoy >/dev/null 2>&1; then
             run_all_pin_root_decoy || { : >"$logdir/$i.nolaunch"; exit 2; }
         fi
+        # The isolation dir is the run root, with the command guard and worktree change
+        # detection as in tests/run-all.sh (a base launcher without them gets the decoy only).
+        if declare -F test_run_root_ensure >/dev/null 2>&1 && declare -F run_all_pin_command_guard >/dev/null 2>&1; then
+            export TEST_RUN_ROOT="$iso"
+            test_run_root_ensure || { : >"$logdir/$i.nolaunch"; exit 2; }
+            run_all_pin_command_guard || { : >"$logdir/$i.nolaunch"; exit 2; }
+        fi
+        if declare -F run_all_pin_worktree_change_detect >/dev/null 2>&1; then
+            run_all_pin_worktree_change_detect "$logdir/$i.worktree-change" || { : >"$logdir/$i.nolaunch"; exit 2; }
+        fi
         run_all_exec "$wt/$rel" "$logdir/$i.out" "$logdir/$i.err"
         rc=$?
         [ "$rc" = 78 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.unsupported"
-        # A base test that reached the decoy is not a valid green, as in tests/run-all.sh.
-        if declare -F run_all_root_decoy_report >/dev/null 2>&1; then
-            run_all_root_decoy_report 2>>"$logdir/$i.err" || { : >"$logdir/$i.decoyhit"; [ "$rc" = 0 ] && rc=1; }
+        # The launcher could not set the test up (its own rc 2): the test never ran, so no verdict.
+        [ "$rc" = 2 ] && [ "${RUN_ALL_EXEC_LAUNCHED:-1}" = 0 ] && : >"$logdir/$i.nolaunch"
+        if [ -n "${RUN_ALL_EXEC_STATE:-}" ]; then
+            printf '%s\n' "$RUN_ALL_EXEC_STATE" >"$logdir/$i.state"
+            [ "$RUN_ALL_EXEC_STATE" = TIMEOUT ] && : >"$logdir/$i.timedout"
+            [ "$RUN_ALL_EXEC_STATE" = UNRUNNABLE ] \
+                && printf '%s\n' "${RUN_ALL_EXEC_MISSING:-unknown}" >"$logdir/$i.unrunnable"
+        fi
+        # A base test with a decoy, guard or worktree change hit is not a valid green, as in tests/run-all.sh.
+        report=""
+        if declare -F run_all_hit_report >/dev/null 2>&1; then report=run_all_hit_report
+        elif declare -F run_all_root_decoy_report >/dev/null 2>&1; then report=run_all_root_decoy_report
+        fi
+        if [ -n "$report" ]; then
+            "$report" 2>>"$logdir/$i.err" || { : >"$logdir/$i.decoyhit"; [ "$rc" = 0 ] && rc=1; }
         fi
         exit "$rc"
     )</dev/null >/dev/null 2>&1 &
     cpid=$!
     (
-        sleep "$timeout"
+        sleep "$((timeout + 10))"
         : >"$logdir/$i.timedout"
         rtb_exec_kill_group "$cpid" TERM
         sleep 2
@@ -115,5 +144,9 @@ rtb_exec_one() {
     if [ -e "$logdir/$i.unsupported" ]; then RTB_EXEC_UNSUPPORTED=1; else RTB_EXEC_UNSUPPORTED=0; fi
     # shellcheck disable=SC2034
     if [ -e "$logdir/$i.decoyhit" ]; then RTB_EXEC_DECOY=1; else RTB_EXEC_DECOY=0; fi
+    # shellcheck disable=SC2034
+    if [ -e "$logdir/$i.unrunnable" ]; then RTB_EXEC_UNRUNNABLE=1; else RTB_EXEC_UNRUNNABLE=0; fi
+    # shellcheck disable=SC2034
+    if [ -f "$logdir/$i.state" ]; then RTB_EXEC_STATE="$(tr -d '\r\n' <"$logdir/$i.state")"; fi
     return 0
 }

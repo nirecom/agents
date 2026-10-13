@@ -6,8 +6,15 @@
 # skipped when a valid recorded judgment exists and advances the verdict.
 # Relies on helpers.sh being sourced by the dispatcher.
 
+# #2277: approve the complete gated steps after plant_valid_skip, which truncates the artifact the sha binds.
+approve_gated() {
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete \
+    "$WORKFLOW_DIR_N/$1.json" clarify_intent outline detail >/dev/null 2>&1 || echo "APPROVE_ERR:$1"
+}
+
 run_next() {
   local sid="$1"
+  approve_gated "$sid"
   WORKFLOW_STATE_DIR="$WORKFLOW_DIR" run_with_timeout node "$NEXT_STEP" --session "$sid" 2>/dev/null || echo "ERROR"
 }
 
@@ -78,10 +85,8 @@ check_contains "RV-16c: second run advances to detail (not outline)" "NEXT_SKILL
 check_not_contains "RV-16d: second run not an abort" "ACTION=abort" "$OUT2"
 
 # ---------------------------------------------------------------------------
-# RV-REC-1: a markStep persistence failure in the outline skip block must not
-# recurse. hvsj-call-counter.js injects EISDIR on the atomic-write tmp path
-# (keyed on HVSJ_FAULT_SID) and counts write attempts into HVSJ_COUNTER_FILE;
-# the unfixed code retried thousands of times, the fixed code exactly once.
+# RV-REC-1: an EISDIR markStep failure in the outline skip block must not recurse into
+# computeVerdict; hvsj-call-counter.js counts state tmp-write attempts (unfixed: >>1, fixed: 1).
 # ---------------------------------------------------------------------------
 HVSJ_COUNTER_PRELOAD_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/hvsj-call-counter.js")"
 NEXT_STEP_N="$(cygpath -m "$NEXT_STEP" 2>/dev/null || echo "$NEXT_STEP")"
@@ -90,6 +95,7 @@ echo ""
 echo "=== RV-REC-1: markStep failure in outline skip must not infinite-recurse ==="
 : > "$PLANS_GLOBAL_DIR/rvrec1-intent.md"
 write_state "rvrec1" "$(embed_skip_judgment "$JSON_AT_OUTLINE" outline subagent '{so_c1:true,so_c2:true}')"
+approve_gated rvrec1
 hvsj_sanity "RV-REC-1" rvrec1 outline
 RVREC1_CTR_FILE="$WORKFLOW_DIR/rvrec1-write-counter.txt"
 RVREC1_CTR_FILE_N="$(cygpath -m "$RVREC1_CTR_FILE" 2>/dev/null || echo "$RVREC1_CTR_FILE")"
@@ -124,6 +130,7 @@ echo ""
 echo "=== RV-REC-2: markStep failure in detail skip must not infinite-recurse ==="
 : > "$PLANS_GLOBAL_DIR/rvrec2-outline.md"
 write_state "rvrec2" "$(embed_skip_judgment "$JSON_AT_DETAIL" detail jev '{sd_single_approach:true,sd_no_open_decision:true}')"
+approve_gated rvrec2
 hvsj_sanity "RV-REC-2" rvrec2 detail
 RVREC2_CTR_FILE="$WORKFLOW_DIR/rvrec2-write-counter.txt"
 RVREC2_CTR_FILE_N="$(cygpath -m "$RVREC2_CTR_FILE" 2>/dev/null || echo "$RVREC2_CTR_FILE")"
@@ -135,15 +142,16 @@ check_contains "RV-REC-2c: fell through to normal detail handling — NEXT_SKILL
   "NEXT_SKILL=make-detail-plan" "$RVREC2_OUT"
 
 # ---------------------------------------------------------------------------
-# RV-36: applyRecordedVerdictSkip reads skip_judgment exactly once per outline
-# skip. read-skip-judgment-counter.js wraps the resolver export (loaded via
-# --require before next-step) and writes the call count to RSJ_COUNTER_FILE.
+# RV-36: applyRecordedVerdictSkip reads skip_judgment exactly once per outline skip.
+# read-skip-judgment-counter.js (--require preload) wraps the resolver export and counts
+# calls; 0 means the skip branch was never entered, >1 is a double-read race.
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-36: applyRecordedVerdictSkip reads skip_judgment exactly once ==="
 RSJ_COUNTER_PRELOAD_N="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js" 2>/dev/null || echo "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js")"
 : > "$PLANS_GLOBAL_DIR/rv36-intent.md"
 write_state "rv36" "$(embed_skip_judgment "$JSON_AT_OUTLINE" outline mixed '{so_c1:true,so_c2:true}')"
+approve_gated rv36
 hvsj_sanity "RV-36" rv36 outline
 RV36_CTR_FILE="$WORKFLOW_DIR/rv36-rsj-counter.txt"
 RV36_CTR_FILE_N="$(cygpath -m "$RV36_CTR_FILE" 2>/dev/null || echo "$RV36_CTR_FILE")"

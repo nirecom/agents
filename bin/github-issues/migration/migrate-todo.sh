@@ -3,7 +3,6 @@
 # Each ## section becomes one open issue (type:task label, NOT closed).
 # After full migration completes (no canary, not dry-run, all sections done),
 # rewrite docs/todo.md as a thin ID index.
-#
 # Usage:
 #   bin/github-issues/migration/migrate-todo.sh <repo_dir> [--dry-run] [--canary N]
 #     --dry-run : print titles without calling gh
@@ -15,6 +14,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
+# shellcheck source=../../lib/native-path.sh
+source "$SCRIPT_DIR/../../lib/native-path.sh"
 
 TARGET_CHECKOUT_ROOT="${1:?usage: migrate-todo.sh <repo_dir> [--dry-run] [--canary N]}"
 shift
@@ -122,7 +123,7 @@ for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
   issue_url=$(cd "$TARGET_CHECKOUT_ROOT" && gh issue create \
     --title "$title" \
     --label "type:task" \
-    --body-file "$body_file")
+    --body-file "$(native_path "$body_file")")
   issue_num="${issue_url##*/}"
   if [ -z "$issue_num" ]; then
     echo "ERROR: could not parse issue number from: $issue_url" >&2

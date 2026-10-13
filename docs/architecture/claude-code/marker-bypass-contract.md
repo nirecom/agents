@@ -50,6 +50,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/check-japanese-in-docs.js` | PreToolUse | **No** | **No** |
 | `hooks/show-user-verified-context.js` | PreToolUse | **No** | **No** |
 | `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
+| `hooks/gate-plan-skill-advance.js` | PreToolUse | **No** | **No** |
 | `hooks/block-send-user-file.js` | PreToolUse | **No** | **No** |
 | `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
 | `hooks/supervisor-off-proposal-shim.js` | PreToolUse | Yes | Yes (only when the OFF proposal's target is `worktree`) |
@@ -67,6 +68,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/block-case-markers.js` | PreToolUse | **No** | **No** |
 | `hooks/postuse-step-in-flight-mark.js` | PostToolUse | **No** | **No** |
 | `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |
+| `hooks/postuse-shell-snapshot-repair.js` | PostToolUse, PostToolUseFailure | **No** | **No** |
 | `hooks/jev-shadow-pre.js` | PreToolUse | **No** | **No** |
 | `hooks/jev-shadow-post.js` | PostToolUse | **No** | **No** |
 | `hooks/subagent-dispatch-prompt.js` | PreToolUse | **No** | **No** |
@@ -103,6 +105,11 @@ to suspend. Their only switch is `JEV` — see [jev.md](../jev.md).
 
 `hooks/subagent-dispatch-prompt.js` (#2263) is **No/No** as well: it only rewrites a dispatch
 prompt through `updatedInput` and never blocks, so there is no marker for it to read.
+
+`hooks/confirm-checkpoint.js` and `hooks/gate-plan-skill-advance.js` (#2513 / #2277) read no
+marker. The checkpoint's plan-link deny is waived only by its own `CONFIRM_<STAGE>=off`, which
+never covers intent. The Skill gate denies only on an `unapproved` stage; a session with no
+state file reads as `not-applicable` and passes, so work outside the workflow is never stopped.
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
 scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users

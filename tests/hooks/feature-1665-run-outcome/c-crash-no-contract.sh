@@ -62,7 +62,7 @@ run_c_crash_no_contract_cases() {
     local sid4="f1665-c4"
     seed_step "$sid4" write_tests complete
     seed_step "$sid4" run_tests pending run_outcome pass
-    drive_hook "$RUNALL_CMD" 0 "$sid4" "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1
+    drive_hook "$RUNALL_CMD" 0 "$sid4" "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0
 RUN_CONTRACT: PASS=3 FAIL=2 SKIP=0 EXECUTED=5" >/dev/null
     assert_eq "C4/status-pending" "pending" "$(step_field "$sid4" run_tests status)"
     assert_eq "C4/ambiguous-outcome-cleared" "(absent)" "$(step_field "$sid4" run_tests run_outcome)"

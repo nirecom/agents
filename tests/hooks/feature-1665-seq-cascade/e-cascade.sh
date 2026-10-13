@@ -3,21 +3,11 @@
 # Tests: hooks/workflow-state/effective-state/write-code-resume.js, hooks/workflow-state/effective-state.js
 # Tags: workflow-state, write-code-resume, cascade, updated-seq, derived-state, scope:issue-specific, pwsh-not-required, TL1
 #
-# E — the write-code resume cascade.
-#
-# WHY: when run_tests records a failing outcome, every step SETTLED BEFORE that
-# failure is stale — the code it signed off on is about to change. The cascade
-# reopens write_code and masks the downstream steps whose settlement predates the
-# failing run (updated_seq <= run_tests.updated_seq), while steps settled AFTER
-# the failure keep their status.
-#
-# The masking is DERIVED ONLY: it happens inside reconcileEffectiveState and is
-# never written back to the event stream (see case h).
-#
-# E8 additionally pins the layering: the derived entry from
-# reconcileEffectiveState exposes only {status, resolved_from} — no updated_seq —
-# so the cascade must read its inputs from the RAW projection it is handed, not
-# from the derived snapshot it is mutating.
+# E — the write-code resume cascade: a failing run_tests reopens write_code and masks the
+# downstream steps settled before it (updated_seq <= run_tests.updated_seq); later ones keep
+# their status. Derived only, never written back (case h). E8 pins that the cascade reads the
+# RAW projection, since the derived entry exposes only {status, resolved_from}.
+# E9/E10: an "unrunnable" outcome (missing runtime, #2501) never fires the cascade.
 
 CASE_TAG=e
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -64,6 +54,13 @@ console.log("E3.pass=" + scenario("pass").steps.write_code.status);
 console.log("E4.timeout=" + scenario("timeout").steps.write_code.status);
 console.log("E5.runner_error=" + scenario("runner-error").steps.write_code.status);
 
+// E9 — "unrunnable" (a missing runtime, #2501) is not a code defect: no cascade at all.
+const r9 = scenario("unrunnable");
+console.log("E9.write_code=" + r9.steps.write_code.status);
+console.log("E9.write_code_from=" + r9.steps.write_code.resolved_from);
+console.log("E9.docs=" + r9.steps.docs.status);
+console.log("E9.resolutions=" + r9.resolutions.map((x) => x.step).join(",") + ".");
+
 // E6 — idempotent: an already-reopened write_code keeps its earlier provenance.
 const r6 = scenario("fail", { writeCodeStatus: "pending", writeCodeFrom: "post-veto-reset" });
 console.log("E6.status=" + r6.steps.write_code.status);
@@ -98,6 +95,10 @@ if require_js_ok "E: cascade unit probe"; then
     assert_js "E3 passing run: no cascade" E3.pass "complete"
     assert_js "E4 timeout outcome fires the cascade" E4.timeout "pending"
     assert_js "E5 runner-error outcome fires the cascade" E5.runner_error "pending"
+    assert_js "E9 unrunnable outcome: write_code stays settled" E9.write_code "complete"
+    assert_js "E9 unrunnable outcome: no cascade attribution" E9.write_code_from "state"
+    assert_js "E9 unrunnable outcome: pre-run downstream not masked" E9.docs "complete"
+    assert_js "E9 unrunnable outcome: resolutions untouched" E9.resolutions "docs."
     assert_js "E6 idempotent on an already-pending write_code" E6.status "pending"
     assert_js "E6 existing provenance is not overwritten" E6.from "post-veto-reset"
     assert_js "E7 a pre-failure skipped step is masked too" E7.docs "pending"
@@ -116,6 +117,7 @@ const seq = [
   ["review_tests", "complete"], ["write_code", "complete"],
   ["review_security", "complete"],
 ];
+require(process.env.M_FIX).approveLive(sid, "clarify_intent"); // #2277 gated complete
 for (const [step, status] of seq) S.markStep(sid, step, status);
 S.markStep(sid, "run_tests", "pending", { run_outcome: "fail" });
 S.markStep(sid, "docs", "complete");
@@ -142,6 +144,37 @@ if require_js_ok "E8: reconcile integration probe"; then
     assert_js "E8 post-failure downstream survives" E8.docs "complete"
     assert_js "E8 run_tests unchanged" E8.run_tests "pending"
     assert_js "E8 raw stream is NOT rewritten (derived-only)" E8.raw_write_code "complete"
+fi
+
+# ---------------------------------------------- E10: unrunnable vs fail, integration
+# Same stream shape as E8, one session per outcome: only "fail" reopens write_code.
+js_g '
+const S = require(process.env.M_SIO);
+const { reconcileEffectiveState } = require(process.env.M_ES);
+const seq = [
+  ["workflow_init", "complete"], ["clarify_intent", "complete"],
+  ["research", "skipped"], ["outline", "skipped"], ["detail", "skipped"],
+  ["branching_complete", "complete"], ["write_tests", "complete"],
+  ["review_tests", "complete"], ["write_code", "complete"],
+  ["review_security", "complete"],
+];
+for (const outcome of ["pass", "unrunnable", "fail"]) {
+  const sid = "seq1665-e10-" + outcome;
+  for (const [step, status] of seq) S.markStep(sid, step, status);
+  S.markStep(sid, "run_tests", "pending", { run_outcome: outcome });
+  const eff = reconcileEffectiveState(S.readState(sid), sid, { resolveAll: true });
+  console.log("E10." + outcome + ".write_code=" + eff.steps.write_code.status);
+  console.log("E10." + outcome + ".review_security=" + eff.steps.review_security.status);
+}
+'
+
+if require_js_ok "E10: unrunnable reconcile probe"; then
+    assert_js "E10 pass: write_code stays complete" E10.pass.write_code "complete"
+    assert_js "E10 pass: downstream stays complete" E10.pass.review_security "complete"
+    assert_js "E10 unrunnable: write_code stays complete" E10.unrunnable.write_code "complete"
+    assert_js "E10 unrunnable: downstream stays complete" E10.unrunnable.review_security "complete"
+    assert_js "E10 fail: write_code reopens" E10.fail.write_code "pending"
+    assert_js "E10 fail: pre-failure downstream masked" E10.fail.review_security "pending"
 fi
 
 finish

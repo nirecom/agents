@@ -119,6 +119,8 @@ async function main() {
       for (const s of io.VALID_STEPS) {
         if (mode === "clarify" && s === "clarify_intent") break;
         // outline/detail completion needs a plan approval; skipped settles them just the same.
+        // clarify_intent cannot be skipped, so it gets its approval record first (#2277).
+        if (s === "clarify_intent") lib("tests/lib/plan-approval-fixture.js").approveLive(nsid, s);
         io.markStep(nsid, s, s === "outline" || s === "detail" ? "skipped" : "complete");
       }
       io.recordSessionWorktree(nsid, cwd);

@@ -386,6 +386,16 @@ Use `session-sync reset` when you also want to sync with the remote git reposito
 (it restores mtime as part of the reset). Use `cc-session-mtime` when you only need
 mtime repair without a full git sync.
 
+## Windows: every Bash command exits 127
+
+Symptom: on Windows, each Bash tool call fails with `Exit code 127` (command not found). Cause: the session's shell snapshot captured `PATH` in Windows form (`C:\...;C:\...`).
+
+- Automatic: the SessionStart and PostToolUse(Failure) hooks rewrite the `PATH` line to POSIX form and add an `additionalContext` notice. The fix applies from the next Bash call; re-run the failed command only after checking that it did not change state before exiting 127.
+- If the notice says `not rewritten (windows-form, cygpath-unavailable)` or `windows-unrepairable`: restart Claude Code so it takes a fresh snapshot, then run `/sweep-shell-snapshots --dry-run` to list stale snapshots (older than 1440 minutes only).
+- `bin/shell-snapshot-path-classify.js -- <file>...` classifies snapshots read-only.
+
+Details: [architecture/claude-code/shell-snapshot-repair.md](architecture/claude-code/shell-snapshot-repair.md).
+
 ## Lightweight measurement
 
 ```sh

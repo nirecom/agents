@@ -88,6 +88,13 @@ bg_settled_state() {
     done
     printf '{"version":1,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","is_bugfix":false,"git_branch":"feature/2134-bash-guard-pretooluse","steps":{%s},"workflow_type":"wf-code"}' \
         "$sid" "${steps#,}" > "$WORKFLOW_STATE_DIR/$sid.json"
+    bg_approve_gated "$sid"
+}
+# #2277: a gated complete settles only with a plan_approval record; inject-complete adds it
+# to the complete-but-unapproved gated steps and leaves every other state untouched.
+bg_approve_gated() {
+    node "$(node_path "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js")" inject-complete \
+        "$(node_path "$WORKFLOW_STATE_DIR/$1.json")" clarify_intent outline detail >/dev/null 2>&1
 }
 bg_settled_state "sid-bg-armed"
 
@@ -189,9 +196,9 @@ bg_batch_run() {
 # bg_batched <table-fn> [args] -- see BATCHED TABLES. bg_batched_stdin also replays the
 # function's stdin (a heredoc table) into both passes.
 bg_batched() {
-    local p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
-    BG_PREFETCH=1; "$@" > /dev/null 2>&1; BG_PREFETCH=0
-    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    local r="$ROWS"
+    BG_PREFETCH=1; harness_discard_pass "$@"; BG_PREFETCH=0
+    ROWS="$r"
     bg_batch_run "$1"
     "$@"
     BG_CACHE=()
@@ -200,9 +207,9 @@ bg_batched_stdin() {
     local buf=""
     IFS= read -r -d '' buf || true
     printf '%s' "$buf" > "$BG_BATCH_STDIN"
-    local p="$PASS" f="$FAIL" s="$SKIP" r="$ROWS"
-    BG_PREFETCH=1; "$@" < "$BG_BATCH_STDIN" > /dev/null 2>&1; BG_PREFETCH=0
-    PASS="$p"; FAIL="$f"; SKIP="$s"; ROWS="$r"
+    local r="$ROWS"
+    BG_PREFETCH=1; harness_discard_pass "$@" < "$BG_BATCH_STDIN"; BG_PREFETCH=0
+    ROWS="$r"
     bg_batch_run "$1"
     "$@" < "$BG_BATCH_STDIN"
     BG_CACHE=()

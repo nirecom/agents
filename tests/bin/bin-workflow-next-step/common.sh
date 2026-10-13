@@ -74,7 +74,24 @@ write_state() {
   printf '%s' "$json" > "$TMPDIR_WT/${sid}.json"
 }
 
+# Since #2277/#2513 a gated `complete` (clarify_intent / outline / detail) counts only with a
+# plan-approval record whose digest matches the plan artifact. A fixture records one complete
+# without it, so the approval is attached at run time, against the WORKFLOW_PLANS_DIR the run
+# itself sees (cases write their own intent.md after write_state). Only complete-and-unapproved
+# steps are touched; an unparseable fixture (JSON_CORRUPT) makes the helper fail and is left alone.
+approve_fixture_state() {
+  local sid="" prev="" a f
+  for a in "$@"; do
+    if [ "$prev" = "--session" ]; then sid="$a"; fi
+    prev="$a"
+  done
+  f="$TMPDIR_WT/${sid}.json"
+  [ -n "$sid" ] && [ -f "$f" ] || return 0
+  node "$NEXT_STEP_AGENTS_DIR/tests/lib/plan-approval-fixture.js" inject-complete "$(cygpath -m "$f" 2>/dev/null || echo "$f")" clarify_intent outline detail >/dev/null 2>&1 || true
+}
+
 run_next_step() {
+  approve_fixture_state "$@"
   run_with_timeout node "$NEXT_STEP_AGENTS_DIR/bin/workflow/next-step" "$@"
 }
 

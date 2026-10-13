@@ -67,7 +67,9 @@ run_wf_meta_evidence_tests() {
     ACTION=""; NEXT_SKILL=""
     write_state "case30" "$JSON_WFINIT_COMPLETE"
     # Create intent.md so evidence-resolver returns true for clarify_intent
-    touch "$PLANS_DIR_WT/case30-intent.md"
+    # Since #2277/#2513 the artifact alone no longer completes clarify_intent: the auto-repair also
+    # needs the user's approval record, so seed both (the fixture writes intent.md into the pinned plans dir).
+    WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" node "$NEXT_STEP_AGENTS_DIR/tests/lib/plan-approval-fixture.js" approve case30 clarify_intent >/dev/null 2>&1
     OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" run_next_step --session "case30" 2>/dev/null || true)"
     eval "$OUT" 2>/dev/null || true
     # After auto-repair, next-step should advance past clarify_intent to research/survey-code

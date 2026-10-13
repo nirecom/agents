@@ -198,7 +198,7 @@ case_boundary_table() {
         runtime_lane_of "$root"
         assert_eq "h2/runtime-lane/$name" "$lane" "$RUNTIME_LANE"
         # Both fillers and the subject ran: a row that executed nothing cannot pass.
-        assert_eq "h2/executed-all-3/$name" "PASS=3 FAIL=0 SKIP=0 EXECUTED=3" "$RUN_CONTRACT_SEEN"
+        assert_eq "h2/executed-all-3/$name" "PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=0 TIMEOUT=0" "$RUN_CONTRACT_SEEN"
         [ "$name" = "absent-control" ] && CONTROL_PEERS="$PEERS_SEEN"
     done <<'TABLE'
 first-line          | 1  | # Serial: boundary row at the very first line | serial   | ok

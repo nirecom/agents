@@ -32,35 +32,22 @@ write_state() {
 }
 
 read_state_status() {
-    local sid="$1" step="$2"
-    local state_file="$WORKFLOW_DIR/${sid}.json"
-    if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-    node -e "
-      try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const step = s.steps && s.steps['$step'];
-        console.log(step && step.status ? step.status : 'MISSING');
-      } catch (e) { console.log('MISSING'); }
-    " "$state_file" 2>/dev/null || echo "MISSING"
+    read_state_field "$1" "$2" status
 }
 
-# Read an arbitrary nested field from steps.<step>.<field> (e.g. skip_reason).
+# Read steps.<step>.<field> (e.g. skip_reason) through readState's current.steps
+# projection (#1787), so v1 and event-stream state files read alike.
 # Prints "MISSING" when the file, step, or field is absent.
 read_state_field() {
-    local sid="$1" step="$2" field="$3"
+    local sid="$1" step="$2" field="$3" got
     local state_file="$WORKFLOW_DIR/${sid}.json"
     if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-    node -e "
-      try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const step = s.steps && s.steps['$step'];
-        if (!step || step['$field'] === undefined || step['$field'] === null) {
-          console.log('MISSING');
-        } else {
-          console.log(step['$field']);
-        }
-      } catch (e) { console.log('MISSING'); }
-    " "$state_file" 2>/dev/null || echo "MISSING"
+    got="$(node "$(to_node_path "$DOTFILES_DIR")/tests/lib/workflow-state-tool.js" \
+        "$(to_node_path "$DOTFILES_DIR")" field "$sid" "$step" "$field" 2>/dev/null)" || got=""
+    case "$got" in
+        ""|"(absent)"|ERR:*) echo "MISSING" ;;
+        *) echo "$got" ;;
+    esac
 }
 
 expect_state_step() {

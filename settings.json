@@ -237,6 +237,7 @@
       "Bash(echo \"<<WORKFLOW_CONFIRM_INTENT: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_OUTLINE: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_DETAIL: *>>\")",
+      "Bash(echo \"<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: *>>\")",
       "Bash(uv run bin/doc-rotate.py *)",
       "Bash(*aws * create*)",
       "Bash(*aws * put*)",
@@ -361,6 +362,11 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/record-off-skill-invocation.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/user-prompt-submit-wf-init-mark.js\"",
             "timeout": 5
           },
           {
@@ -627,6 +633,16 @@
         ]
       },
       {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-plan-skill-advance.js\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "SendUserFile",
         "hooks": [
           {
@@ -835,6 +851,28 @@
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/jev-shadow-post.js\"",
             "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/postuse-shell-snapshot-repair.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/postuse-shell-snapshot-repair.js\"",
+            "timeout": 5
           }
         ]
       }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-2430-risk-signal-sources.sh
 # Tests: hooks/lib/handoff-risk-signal.js, hooks/post-compact.js, hooks/workflow-gate/handoff-record.js, hooks/workflow-mark/reset-handler.js, bin/supervisor-write-audit-verdict, bin/supervisor-write-audit, hooks/lib/supervisor-state-writer/append.js, hooks/workflow-run-tests.js
-# Tags: handoff, risk-signal, nudge-trigger, post-compact, gate-block, reset-from, supervisor-verdict, supervisor-finding, run-tests, fail-open, regression-2430, scope:issue-specific, pwsh-not-required, TL2
+# Tags: handoff, risk-signal, nudge-trigger, post-compact, gate-block, reset-from, supervisor-verdict, supervisor-finding, run-tests, fail-open, regression-2430, exit-77, scope:issue-specific, pwsh-not-required, TL2
 
 # Issue #2430 — a "risk" is an event after which unrecorded working knowledge is most likely to be lost, so the omission-check nudge restarts its timer and halves its limits. Six producers stamp <WORKFLOW_STATE_DIR>/<sid>.control/handoff-risk.json; everything else must leave it alone, or the halved limits become the permanent default. A test failure while tests are expected to be red (write_tests / review_tests / write_code) is the named exception.
 
@@ -84,7 +84,7 @@ verdict_cli() { run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-w
 # run_tests_hook <sid> <exit> — the PostToolUse envelope after tests/run-all.sh.
 run_tests_hook() {
     local contract="RUN_CONTRACT: PASS=3 FAIL=2 SKIP=0 EXECUTED=5"
-    [ "$2" = "0" ] && contract="RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5"
+    [ "$2" = "0" ] && contract="RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0"
     printf '{"tool_name":"Bash","tool_input":{"command":"bash %s/tests/run-all.sh","cwd":"%s"},"tool_response":{"exit_code":%s,"stdout":"%s\\n"},"session_id":"%s"}' \
         "$AGENTS" "$AGENTS" "$2" "$contract" "$1" \
         | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js" >/dev/null 2>&1
@@ -196,6 +196,23 @@ seed rk-io-tests run_tests; mkdir -p "$TMP/wf/rk-io-tests.control/handoff-risk.j
 run_tests_hook rk-io-tests 1; RC=$?
 expect "I1: the run-tests hook keeps exit 0" "$RC" "0"
 expect "I1: the run-tests hook still records the failed run" "$(nj observed.js rk-io-tests)" "yes"
+case_end
+
+# #2501 C1: run-all exit 77 means nothing ran (all SKIP / none selected), not a red suite.
+case_begin "exit-77-stamps-no-risk" "hooks/workflow-run-tests.js"
+cat > "$TMP/exit77.js" <<'JS'
+// node exit77.js <sid> — "<last_run_failed>/<last_exit_code>" of run_tests (non-vacuity guard).
+const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
+const st = S.readState(process.argv[2]);
+const e = (st && st.steps && st.steps.run_tests) || {};
+process.stdout.write(String(e.last_run_failed) + '/' + String(e.last_exit_code));
+JS
+seed rk-tests-77 run_tests
+printf '{"tool_name":"Bash","tool_input":{"command":"bash %s/tests/run-all.sh","cwd":"%s"},"tool_response":{"exit_code":77,"stdout":"%s\\n"},"session_id":"rk-tests-77"}' \
+    "$AGENTS" "$AGENTS" "RUN_CONTRACT: PASS=0 FAIL=0 SKIP=2 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0" \
+    | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests.js" >/dev/null 2>&1
+expect "N6: the hook recorded exit 77 as a not-failed run" "$(nj exit77.js rk-tests-77)" "false/77"
+expect "N6: an exit-77 run at run_tests stamps nothing" "$(risk rk-tests-77 0)" "NONE"
 case_end
 
 echo ""

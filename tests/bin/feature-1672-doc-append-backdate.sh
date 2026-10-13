@@ -235,8 +235,11 @@ EOF
 Background: b
 Changes: c
 EOF
+    mkdir -p "$T11/stubbin"
+    printf '#!/bin/bash\nexit 1\n' > "$T11/stubbin/gh"
+    chmod +x "$T11/stubbin/gh"
     BEFORE11=$(sha256sum "$T11/repo/docs/history.md" | awk '{print $1}')
-    OUT11=$(bash "$ISSUE_TO_HISTORY" 1901 --target-checkout-root "$T11/cfg" \
+    OUT11=$(PATH="$T11/stubbin:$PATH" bash "$ISSUE_TO_HISTORY" 1901 --target-checkout-root "$T11/cfg" \
         --target "$T11/repo/docs/history.md" --allow-backdate --no-auto-rotate 2>&1)
     RC11=$?
     AFTER11=$(sha256sum "$T11/repo/docs/history.md" | awk '{print $1}')

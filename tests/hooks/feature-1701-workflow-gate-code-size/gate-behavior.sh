@@ -2,16 +2,8 @@
 # tests/hooks/feature-1701-workflow-gate-code-size/gate-behavior.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
-#
-# Fragment of tests/hooks/feature-1701-workflow-gate-code-size.sh — sourced by the
-# parent, not run directly. Owns cases 1-7: the Gate 2 decision itself against a
-# real staged tree (hard-limit block, under-limit approve, untracked-only,
-# WORKFLOW_OFF bypass, WIP non-bypass, cross-repo bypass, post-split approve).
-#
-# Depends on the parent for: TMPDIR_BASE, fresh_workflow_dir, setup_repo,
-# make_plain_cfg_root, make_foreign_git_cfg_root, write_complete_state,
-# write_workflow_off_marker, make_lines, build_commit_payload, run_hook,
-# assert_approve, assert_block, HOOK_OUT, pass, fail, skip.
+# Fragment sourced by tests/hooks/feature-1701-workflow-gate-code-size.sh (not run directly): cases 1-7,
+# the Gate 2 decision against a real staged tree. Every helper it calls is defined by that parent.
 
 # 1. staged 501-line .js + all steps complete -> block, reason names the file.
 test_1_hard_limit_block() {
@@ -92,18 +84,33 @@ test_5_wip_does_not_bypass() {
     assert_block "5: WIP commit + staged 501-line .js -> still blocked" "big.js"
 }
 
-# 6. Commit targeting a different repo -> approve (isAgentsSessionRepo fires first).
+# 6. The state's cwd is a different repo -> the commit lands outside the WF target repo set ->
+#    approve (Gate 2 not reached). The checkout attach to the foreign repo no longer decides this.
 test_6_cross_repo_bypass() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2006"
     local repo; repo="$(setup_repo "r6")"
     local cfg; cfg="$(make_foreign_git_cfg_root "c6")"
+    write_complete_state "$wfdir" "$sid" "$cfg"
+    mkdir -p "$repo/bin"
+    make_lines 501 > "$repo/bin/big.js"
+    git -C "$repo" add bin/big.js
+    run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
+    assert_approve "6: commit outside the WF target repo set (cwd=other repo) -> approve (Gate 2 not reached)"
+}
+
+# 6b. Same layout without a cwd in the state -> set unknown -> Gate 2 armed -> block (#1633).
+test_6b_no_cwd_blocks() {
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="gate2006b"
+    local repo; repo="$(setup_repo "r6b")"
+    local cfg; cfg="$(make_foreign_git_cfg_root "c6b")"
     write_complete_state "$wfdir" "$sid"
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"
     git -C "$repo" add bin/big.js
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
-    assert_approve "6: cross-repo commit -> approve (Gate 2 not reached)"
+    assert_block "6b: no cwd (set unknown) + foreign checkout attach + 501-line .js -> block" "big.js"
 }
 
 # 7. Split file: big.js reduced to 120 lines + new big/part.js 200 lines -> approve.

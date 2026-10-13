@@ -38,9 +38,47 @@ function loadModule(name) {
   return mod && typeof mod.run === "function" ? mod : null;
 }
 
+// Runtimes the supported test languages launch: launch.requires + launch.command[0].
+// Fail-closed: an unreadable language table derives nothing, so pwsh & co. stay denied.
+function testLanguageRuntimes() {
+  let reg = null;
+  try {
+    reg = require("../../hooks/lib/test-language-registry").tryLoadRegistry();
+  } catch (_e) {
+    reg = null;
+  }
+  const out = [];
+  if (!reg || !Array.isArray(reg.entries)) return out;
+  for (const e of reg.entries) {
+    if (!e || e.status !== "supported" || !e.launch) continue;
+    const { requires, command } = e.launch;
+    if (typeof requires === "string" && requires !== "") out.push(requires);
+    if (Array.isArray(command) && typeof command[0] === "string" && command[0] !== "") out.push(command[0]);
+  }
+  return out;
+}
+
+// A worker's declared external commands, plus the derived runtimes when it opts in with
+// `binaries.externalFromTestLanguages: true` (strictly boolean; anything else is ignored).
+function effectiveExternal(entry) {
+  const b = entry && entry.binaries ? entry.binaries : {};
+  const declared = Array.isArray(b.external) ? b.external : [];
+  const derived = b.externalFromTestLanguages === true ? testLanguageRuntimes() : [];
+  return Array.from(new Set(declared.concat(derived)));
+}
+
+// The dispatcher-wide table: the hand list EXTERNAL_COMMANDS plus every worker's effective set.
+function effectiveExternalCommands() {
+  let all = data.EXTERNAL_COMMANDS.slice();
+  for (const name of Object.keys(data.workers)) all = all.concat(effectiveExternal(data.workers[name]));
+  return Array.from(new Set(all));
+}
+
 module.exports = {
   get,
   loadModule,
+  effectiveExternal,
+  effectiveExternalCommands,
   names: data.WORKER_NAMES,
   workers: data.workers,
   data,

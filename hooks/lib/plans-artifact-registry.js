@@ -3,6 +3,7 @@
 // The one registry of what may live in WORKFLOW_PLANS_DIR (artifacts) and what
 // belongs in <WORKFLOW_STATE_DIR>/<sid>.control/ (control files). Shared by the
 // placement guard, bin/check-plans-artifacts and the control-dir migration.
+// Each kind carries its retention class (plan / user-requested / non-plan); sweep-plans deletes by it.
 // Policy: docs/architecture/claude-code/state-dirs.md.
 const fs = require("fs");
 const path = require("path");
@@ -16,39 +17,42 @@ const F = `(?:${FORMAT_TOKENS.join("|")})`;
 const STAGE = "(?:outline|detail|security-plan|security-code|test-review)";
 const WORKER = "worker-[a-z0-9]+(?:-[a-z0-9]+)*";
 
-const k = (kind, source) => Object.freeze({ kind, re: new RegExp(`^${source}$`) });
+const k = (kind, source, retention) => Object.freeze({ kind, re: new RegExp(`^${source}$`), retention });
+// Retention classes a kind may carry; "unknown" is a classification result, never a kind's class.
+const RETENTION_CLASSES = Object.freeze(["plan", "user-requested", "non-plan"]);
+const N = "non-plan";
 
 const CONTROL_KINDS = Object.freeze([
-  k("review-round-state", `${F}-(?:round-number|last-round|terminal)\\.txt`),
-  k("unresolved-concerns", `${F}-unresolved-concerns\\.json`),
-  k("concern-ledger", `${F}-concern-ledger(?:-cycle[0-9]+|-cap-snapshot)?\\.txt`),
-  k("concern-carrier", `${F}-concern-carrier\\.md`),
-  k("round-delta", `${F}-round-[0-9]+-delta-[a-z0-9]+(?:-[a-z0-9]+)*\\.txt`),
-  k("exit6-accepted", "(?:security-code|review-plan-security|review-tests)-exit6-accepted\\.txt"),
-  k("risk-signal", "(?:outline|detail)-risk-signal\\.txt"),
-  k("worker-payload", `${WORKER}\\.json`),
-  k("worker-dispatched", `${WORKER}\\.dispatched`),
-  k("worker-outcome", `${WORKER}\\.outcome\\.json`),
-  k("worker-ingested", `${WORKER}\\.ingested`),
-  k("codex-context", "codex-context\\.md"),
-  k("codex-context-built", `codex-context\\.${F}\\.built`),
-  k("plan-log", "plan\\.jsonl"),
-  k("changed-files", "changed-files\\.txt"),
-  k("judge-signals", "(?:complexity|outline|detail|write-tests|write-code)-signals\\.txt"),
-  k("finalize-state", "finalize-state-[0-9]+\\.json"),
-  k("finalize-binding", "finalize-binding-[0-9]+\\.json"),
-  k("issue-close-outcome", "issue-close-outcome\\.json"),
-  k("session-close-gate", "session-close-gate\\.json"),
-  k("final-report-env", "final-report-env\\.json"),
-  k("supervisor-state", "supervisor-state\\.json"),
-  k("wi-checkpoint", "wi-checkpoint\\.json"),
-  k("handoff", "handoff\\.md"),
-  k("handoff-sidecar", "handoff-(?:risk|pressure|flush-mark)\\.json"),
-  k("wt-cleanup-active", "wt-cleanup-active"),
-  k("workflow-init-aborted", "workflow-init-aborted-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\\.md"),
-  k("companion-precheck", "companion-precheck\\.json"),
-  k("intent-scan-block", "intent-scan-block\\.txt"),
-  k("guard-attempt", "guard-attempt\\.tmp"),
+  k("review-round-state", `${F}-(?:round-number|last-round|terminal)\\.txt`, N),
+  k("unresolved-concerns", `${F}-unresolved-concerns\\.json`, N),
+  k("concern-ledger", `${F}-concern-ledger(?:-cycle[0-9]+|-cap-snapshot)?\\.txt`, N),
+  k("concern-carrier", `${F}-concern-carrier\\.md`, N),
+  k("round-delta", `${F}-round-[0-9]+-delta-[a-z0-9]+(?:-[a-z0-9]+)*\\.txt`, N),
+  k("exit6-accepted", "(?:security-code|review-plan-security|review-tests)-exit6-accepted\\.txt", N),
+  k("risk-signal", "(?:outline|detail)-risk-signal\\.txt", N),
+  k("worker-payload", `${WORKER}\\.json`, N),
+  k("worker-dispatched", `${WORKER}\\.dispatched`, N),
+  k("worker-outcome", `${WORKER}\\.outcome\\.json`, N),
+  k("worker-ingested", `${WORKER}\\.ingested`, N),
+  k("codex-context", "codex-context\\.md", N),
+  k("codex-context-built", `codex-context\\.${F}\\.built`, N),
+  k("plan-log", "plan\\.jsonl", N),
+  k("changed-files", "changed-files\\.txt", N),
+  k("judge-signals", "(?:complexity|outline|detail|write-tests|write-code)-signals\\.txt", N),
+  k("finalize-state", "finalize-state-[0-9]+\\.json", N),
+  k("finalize-binding", "finalize-binding-[0-9]+\\.json", N),
+  k("issue-close-outcome", "issue-close-outcome\\.json", N),
+  k("session-close-gate", "session-close-gate\\.json", N),
+  k("final-report-env", "final-report-env\\.json", N),
+  k("supervisor-state", "supervisor-state\\.json", N),
+  k("wi-checkpoint", "wi-checkpoint\\.json", N),
+  k("handoff", "handoff\\.md", N),
+  k("handoff-sidecar", "handoff-(?:risk|pressure|flush-mark)\\.json", N),
+  k("wt-cleanup-active", "wt-cleanup-active", N),
+  k("workflow-init-aborted", "workflow-init-aborted-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\\.md", N),
+  k("companion-precheck", "companion-precheck\\.json", N),
+  k("intent-scan-block", "intent-scan-block\\.txt", N),
+  k("guard-attempt", "guard-attempt\\.tmp", N),
 ]);
 
 const SHORT_LIVED = new Set(["guard-attempt"]);
@@ -59,24 +63,27 @@ const MIGRATABLE_KINDS = Object.freeze(
 );
 
 const ARTIFACT_KINDS = Object.freeze([
-  k("plan-artifact", "(?:intent|outline|detail|context)\\.md"),
-  k("survey", "survey-[a-z0-9]+(?:-[a-z0-9]+)*\\.md"),
-  k("issue-prefill", "issue-prefill\\.md"),
-  k("test-review", "test-review\\.md"),
-  k("test-review-fallback-raw", "test-review-fallback-raw\\.md"),
-  k("concerns-log", `(?:${STAGE}-)?concerns-log\\.md`),
-  k("codex-round-raw", `(?:${STAGE}-)?codex-round-[0-9]+-raw\\.md`),
-  k("debug-log", `${STAGE}-debug\\.log`),
-  k("judge-raw", "(?:complexity|outline|detail|write-tests|write-code)-judge-raw\\.txt"),
-  k("write-code-files", "write-code-files\\.txt"),
-  k("finalize-diagnostic", `${F}-finalize-diagnostic\\.txt`),
-  k("worker-draft", `${WORKER}\\.draft\\.json`),
-  k("notes-backup", "notes-backup"),
-  k("issue-create-dispatch", "issue-create-dispatch\\.txt"),
-  k("issue-create-survey", "issue-create-survey\\.json"),
-  k("sweep-issues", "sweep-issues-(?:survivors|decisions)\\.tsv"),
-  k("refactor-prompts-scan", "refactor-prompts-scan\\.json"),
-  k("note", "note-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)"),
+  k("plan-artifact", "(?:intent|outline|detail|context)\\.md", "plan"),
+  k("survey", "survey-[a-z0-9]+(?:-[a-z0-9]+)*\\.md", N),
+  k("issue-prefill", "issue-prefill\\.md", N),
+  k("test-review", "test-review\\.md", N),
+  k("test-review-fallback-raw", "test-review-fallback-raw\\.md", N),
+  k("concerns-log", `(?:${STAGE}-)?concerns-log\\.md`, N),
+  k("codex-round-raw", `(?:${STAGE}-)?codex-round-[0-9]+-raw\\.md`, N),
+  k("debug-log", `${STAGE}-debug\\.log`, N),
+  k("judge-raw", "(?:complexity|outline|detail|write-tests|write-code)-judge-raw\\.txt", N),
+  k("write-code-files", "write-code-files\\.txt", N),
+  k("finalize-diagnostic", `${F}-finalize-diagnostic\\.txt`, N),
+  k("worker-draft", `${WORKER}\\.draft\\.json`, N),
+  k("notes-backup", "notes-backup", N),
+  k("issue-create-dispatch", "issue-create-dispatch\\.txt", N),
+  k("issue-create-survey", "issue-create-survey\\.json", N),
+  k("sweep-issues", "sweep-issues-(?:survivors|decisions)\\.tsv", N),
+  k("refactor-prompts-scan", "refactor-prompts-scan\\.json", N),
+  k("note", "note-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)", N),
+  // Usage rule (only when the user explicitly asks for a separate file): docs/architecture/claude-code/state-dirs.md, Artifacts table.
+  k("user-requested", "user-requested-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)", "user-requested"),
+  k("sweep-plans-approved-sessions", "sweep-plans-approved-sessions\\.txt", N),
 ]);
 
 // Unregistered names are never allowed a silent pass; each exception needs a reason.
@@ -172,7 +179,31 @@ const ARTIFACT_NAMES = Object.freeze({
   "worker-draft": (p) => `worker-${p.worker}${p.seq !== undefined ? `-${p.seq}` : ""}.draft.json`,
   survey: (p) => `survey-${p.name}.md`,
   note: (p) => `note-${p.topic}.${p.ext || "md"}`,
+  "user-requested": (p) => `user-requested-${p.topic}.${p.ext || "md"}`,
 });
+
+function retentionOfKind(kind) {
+  const entry = [...CONTROL_KINDS, ...ARTIFACT_KINDS].find((e) => e.kind === kind);
+  return entry ? entry.retention : undefined;
+}
+
+// Classified only through parsePlansEntry, so the ambiguity rule stays in one place;
+// a sid-less name or a sid other than expectedSid is "unknown".
+function retentionClassOf(name, expectedSid) {
+  const parsed = parsePlansEntry(name);
+  if (!parsed || parsed.verdict === "ambiguous") return "unknown";
+  if (parsed.sid !== expectedSid) return "unknown";
+  const retention = retentionOfKind(parsed.kind);
+  return RETENTION_CLASSES.includes(retention) ? retention : "unknown";
+}
+
+function retentionCoverageErrors(table) {
+  const controlKinds = (table && table.controlKinds) || CONTROL_KINDS;
+  const artifactKinds = (table && table.artifactKinds) || ARTIFACT_KINDS;
+  return [...controlKinds, ...artifactKinds]
+    .filter((e) => !RETENTION_CLASSES.includes(e.retention))
+    .map((e) => `${e.kind}: ${e.retention}`);
+}
 
 function getPlansArtifactPath(sid, kind, opts) {
   const build = Object.prototype.hasOwnProperty.call(ARTIFACT_NAMES, kind) ? ARTIFACT_NAMES[kind] : null;
@@ -205,6 +236,9 @@ module.exports = {
   MIGRATABLE_KINDS,
   ARTIFACT_KINDS,
   SOURCE_LINT_EXCEPTIONS,
+  RETENTION_CLASSES,
+  retentionClassOf,
+  retentionCoverageErrors,
   parsePlansEntry,
   classifyPlansEntry,
   legacyBasename,

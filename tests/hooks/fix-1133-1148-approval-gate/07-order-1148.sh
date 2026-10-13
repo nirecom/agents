@@ -2,21 +2,19 @@
 # Tests: hooks/workflow-state/effective-state.js, bin/workflow/next-step, hooks/workflow-state/evidence-resolver.js, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, docs, ordering, scope:common
 # (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
-# ===========================================================================
-# G07: #1148 inconsistency-scan ordering. State has docs=pending while a LATER
-# step (user_verification) is complete, and staged docs evidence exists. Pre-fix
-# the inconsistency scan runs BEFORE docs evidence auto-complete, so it false-
-# aborts ("later step complete but docs pending"). Post-fix a read-only effective
-# -state snapshot resolves docs from evidence first, so no abort fires and docs
-# is completed.
-# fail-before-fix: pre-fix emits ACTION=abort and leaves docs pending.
-# ===========================================================================
+
+# G07: #1148 inconsistency-scan ordering. docs=pending while a LATER step is complete and
+# staged docs evidence exists: the effective-state snapshot must resolve docs from evidence
+# before the inconsistency scan, so no false abort fires.
 
 echo ""
 echo "=== G07: #1148 — docs-pending + later-step-complete + evidence must NOT abort ==="
 
 SID="g07-$$"
 write_state "$SID" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete","detail":"complete","branching_complete":"complete","write_tests":"complete","review_tests":"complete","write_code":"complete","run_tests":"complete","review_security":"complete","user_verification":"complete"}')"
+# #2277 S13: an unapproved outline/detail complete reads pending, so approve both (G07 is about docs).
+run_with_timeout node "$PLAN_APPROVAL_FIXTURE" inject-complete "$(to_node_path "$WORKFLOW_DIR/${SID}.json")" outline detail >/dev/null ||
+  echo "FAIL: G07 setup: could not inject outline/detail approvals"
 
 REPO=$(setup_repo)
 REPO_N=$(to_node_path "$REPO")

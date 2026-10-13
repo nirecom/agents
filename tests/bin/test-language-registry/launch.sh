@@ -16,11 +16,13 @@ printf '%s\n' 'echo plain-bash' >"$SU/x.sh"
 printf '%s\n' 'echo never' >"$SU/u.zzz"
 
 # lch <checkout> <test> <tag> — run_all_exec of that checkout; prints "rc=N launched=V"
-# and leaves the output in $TMPBASE/lch-<tag>.out.
+# and leaves the output in $TMPBASE/lch-<tag>.out and the result dir (unrunnable marker)
+# in $TMPBASE/lch-<tag>.res.
 lch() {
+  mkdir -p "$TMPBASE/lch-$3.res"
   tlr_bash "$1" '. "$1/bin/lib/run-all-launch.sh" || exit 95
-run_all_exec "$2" "$3" "$4"; printf "rc=%s launched=%s" "$?" "${RUN_ALL_EXEC_LAUNCHED:-unset}"' \
-    "$1" "$2" "$TMPBASE/lch-$3.out" "$TMPBASE/lch-$3.err"
+run_all_exec "$2" "$3" "$4" "$5"; printf "rc=%s launched=%s" "$?" "${RUN_ALL_EXEC_LAUNCHED:-unset}"' \
+    "$1" "$2" "$TMPBASE/lch-$3.out" "$TMPBASE/lch-$3.err" "$TMPBASE/lch-$3.res"
 }
 lines_of() { if [ -f "$1" ]; then tr '\n' ' ' <"$1"; else printf '<absent>'; fi; }
 
@@ -67,7 +69,7 @@ for s in s1 s2; do
 done
 got="$(grep -E '^(PASS|FAIL|SKIP): ' "$TMPBASE/rr.out" | sed "s#^\([A-Z]*\): $RR/#\1 #" | LC_ALL=C sort | tr '\n' ' ')"
 assert_eq "run-all result lines: $got" "run-all result lines: PASS s1/a.fakesuite PASS s2/a.fakesuite "
-assert_eq "run-all contract: $(grep -E '^RUN_CONTRACT: ' "$TMPBASE/rr.out")" "run-all contract: RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2"
+assert_eq "run-all contract: $(grep -E '^RUN_CONTRACT: ' "$TMPBASE/rr.out")" "run-all contract: RUN_CONTRACT: PASS=2 FAIL=0 SKIP=0 EXECUTED=2 UNRUNNABLE=0 TIMEOUT=0"
 case_end
 
 case_begin "suite-without-root-is-78" "bin/lib/run-all-launch.sh"
@@ -80,11 +82,14 @@ case_begin "unsupported-file-is-78" "bin/lib/run-all-launch.sh"
 got="$(lch "$FX_SUITE" "$SU/u.zzz" unknown)"
 assert_eq "unknown: $got" "unknown: rc=78 launched=0"
 has_line "unknown: UNSUPPORTED line" "$(cat "$TMPBASE/lch-unknown.out" 2>/dev/null)" "UNSUPPORTED: $SU/u.zzz (language: unknown; not run)"
-mkdir -p "$TMPBASE/js"
-echo 'process.exit(0)' >"$TMPBASE/js/x.js"
-got="$(lch "$SCRIPT_CHECKOUT_ROOT" "$TMPBASE/js/x.js" js)"
-assert_eq "recognized-only js: $got" "recognized-only js: rc=78 launched=0"
-has_line "js: UNSUPPORTED line" "$(cat "$TMPBASE/lch-js.out" 2>/dev/null)" "UNSUPPORTED: $TMPBASE/js/x.js (language: js; not run)"
+# A recognized-only entry (rec-d of overlap.json, pattern y*) is named but never launched.
+FX_OVERLAP="$TMPBASE/co-overlap-launch"
+fx_checkout "$FX_OVERLAP" "$FIXTURES/overlap.json"
+mkdir -p "$TMPBASE/recd"
+echo 'exit 0' >"$TMPBASE/recd/yb"
+got="$(lch "$FX_OVERLAP" "$TMPBASE/recd/yb" recd)"
+assert_eq "recognized-only rec-d: $got" "recognized-only rec-d: rc=78 launched=0"
+has_line "rec-d: UNSUPPORTED line" "$(cat "$TMPBASE/lch-recd.out" 2>/dev/null)" "UNSUPPORTED: $TMPBASE/recd/yb (language: rec-d; not run)"
 got="$(lch "$FX_SUITE" "$SU/x.sh" bash)"
 assert_eq "bash control: $got" "bash control: rc=0 launched=1"
 case_end
@@ -104,19 +109,30 @@ case_begin "suite-prepare-failure-and-missing-tool" "bin/lib/run-all-launch.sh"
 suite_co pfail 't.entries[1].launch.prepare = ["bash", "-c", "echo prep >> prep.log; exit 3"];'
 got="$(lch "$SCO" "$SCO/tests/s1/a.fakesuite" pfail)"
 assert_eq "failing prepare: ${got%% *}" "failing prepare: rc=3"
+# #2501 D3: a failed suite prepare never launched the command, so launched=0 plus a marker.
+assert_eq "failing prepare launched: ${got#* }" "failing prepare launched: launched=0"
+if [ -e "$TMPBASE/lch-pfail.res/prepare-failed" ]; then pass "failing prepare: prepare-failed marker"
+else fail "failing prepare: prepare-failed marker" "$(ls -A "$TMPBASE/lch-pfail.res" 2>&1 | tr '\n' ' ')"; fi
 assert_eq "failing prepare ran: $(lines_of "$SCO/tests/s1/prep.log")" "failing prepare ran: prep "
 assert_eq "command after failing prepare: $(lines_of "$SCO/tests/s1/run.log")" "command after failing prepare: <absent>"
 suite_co tool 't.entries[1].launch.requires = "no-such-tool-tlr";'
 got="$(lch "$SCO" "$SCO/tests/s1/a.fakesuite" tool)"
-assert_eq "missing tool: $got" "missing tool: rc=77 launched=0"
-has_line "missing tool: SKIP line" "$(cat "$TMPBASE/lch-tool.out" 2>/dev/null)" "SKIP: no-such-tool-tlr not on PATH"
+# A missing requires is UNRUNNABLE (rc 79 + marker in the result dir), never a SKIP.
+assert_eq "missing tool: $got" "missing tool: rc=79 launched=0"
+has_line "missing tool: UNRUNNABLE line" "$(cat "$TMPBASE/lch-tool.out" 2>/dev/null)" "UNRUNNABLE: missing no-such-tool-tlr"
+if grep -qF no-such-tool-tlr "$TMPBASE/lch-tool.res/unrunnable" 2>/dev/null; then
+  pass "missing tool: unrunnable marker names the tool"
+else
+  fail "missing tool: unrunnable marker names the tool" "$(ls -A "$TMPBASE/lch-tool.res" 2>&1 | tr '\n' ' ')"
+fi
+if grep -q '^SKIP:' "$TMPBASE/lch-tool.out" 2>/dev/null; then fail "missing tool: no SKIP line" "$(cat "$TMPBASE/lch-tool.out")"; else pass "missing tool: no SKIP line"; fi
 assert_eq "missing tool ran nothing: $(lines_of "$SCO/tests/s1/prep.log")" "missing tool ran nothing: <absent>"
 case_end
 
 case_begin "suite-timeout-bounds-prepare-and-command" "bin/lib/run-all-launch.sh"
 # timeoutSeconds (2) bounds prepare and command alike; a prepare that overruns stops the launch
-# before the command. rc 124 (timeout) and 142 (perl alarm) both mean the wrapper cut it off.
-timed_out() { if [ "$1" = rc=124 ] || [ "$1" = rc=142 ]; then printf 'timed out'; else printf '%s' "$1"; fi; }
+# before the command. The launcher normalizes a cut-off to the TIMEOUT rc 124 on every host.
+timed_out() { if [ "$1" = rc=124 ]; then printf 'timed out'; else printf '%s' "$1"; fi; }
 suite_co pslow 't.entries[1].launch.timeoutSeconds = 2; t.entries[1].launch.prepare = ["bash", "-c", "echo prep >> prep.log; sleep 8"];'
 got="$(lch "$SCO" "$SCO/tests/s1/a.fakesuite" pslow)"
 assert_eq "prepare overrun: $(timed_out "${got%% *}")" "prepare overrun: timed out"

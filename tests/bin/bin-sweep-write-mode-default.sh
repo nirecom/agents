@@ -3,10 +3,10 @@
 # Tests: bin/lib/sweep-write-mode.sh, bin/sweep-branches.sh, bin/sweep-plans.sh, bin/sweep-worktrees.sh, bin/sweep-supervisor-state.sh, bin/sweep-shell-snapshots.sh, bin/audit-tests.sh, bin/audit-tests-common.sh, .github/workflows/sweep.yml
 # Tags: sweep, write-mode, defaults, cron, scope:common, TL2
 # Pins the apply-by-default write-mode inversion across the whole /sweep series:
-# no flag = production run, --dry-run = report only, --apply = its synonym. The
-# ONE named exception (D1) is bin/sweep-supervisor-state.sh, dry-run by default
-# because it deletes governance audit records, not regenerable derivatives; the
-# exception lives in this table (CPR-SSOT) so a bulk edit cannot flip it back.
+# no flag = production run, --dry-run = report only, --apply = its synonym. Two
+# named exceptions live in this table (CPR-SSOT) so a bulk edit cannot flip them:
+# D1 sweep-supervisor-state.sh (dry-run by default) and D2 sweep-plans.sh (the
+# default write scope is non-plan files only; plan/user-requested are kept).
 # Three surfaces must stay in lock-step (CPR-ORTH / CPR-E2E): A the semantics
 # SSOT, B each member's flag face and side effects, C the unattended callers.
 
@@ -119,6 +119,10 @@ case_end
 
 case_begin "supervisor-state-exception" "bin/sweep-supervisor-state.sh"
 D1_sweep_supervisor_state_is_dry_run_by_default
+case_end
+
+case_begin "sweep-plans-exception" "bin/sweep-plans.sh"
+D2_sweep_plans_flagless_keeps_plan_and_user_requested
 case_end
 
 echo ""

@@ -82,6 +82,8 @@ make_state() {
     json="$json\"$s\":{\"status\":\"$st\"}"
   done
   printf '%s' "$json},\"closes_issues\":[2102]}" > "$WORKFLOW_DIR/${sid}.json"
+  # #2277: the seeded gated completes count only with a plan_approval record.
+  node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" inject-complete "$WORKFLOW_STATE_DIR/${sid}.json" clarify_intent outline detail >/dev/null
 }
 at_write_tests() { make_state "$1" "workflow_init clarify_intent research outline detail branching_complete"; }
 at_research()    { make_state "$1" "workflow_init clarify_intent"; }

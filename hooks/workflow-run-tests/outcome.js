@@ -1,11 +1,11 @@
 "use strict";
-// The run_tests OUTCOME axis (pass/fail/timeout/runner-error, emit.js's renderer
-// vocabulary): "what did the run report?", orthogonal to the complete/pending
+// The run_tests OUTCOME axis (pass/fail/timeout/runner-error/unrunnable, emit.js's
+// renderer vocabulary): "what did the run report?", orthogonal to the complete/pending
 // STATUS axis. Decides a value, never writes state, and never reads raw stdout —
 // callers hand in judgements or the `log_tail`-stripped header.
 // Trust model: docs/architecture/claude-code/settings/hooks.md.
 
-const RUN_OUTCOME_VALUES = ["pass", "fail", "timeout", "runner-error"];
+const RUN_OUTCOME_VALUES = ["pass", "fail", "timeout", "runner-error", "unrunnable"];
 
 // Allowlist: a renamed word, a typo, or a value clipped by emit.js reads as NOT-pass.
 const WORKER_PASS_STATUS = "pass";
@@ -51,8 +51,23 @@ function isContractTrusted(input) {
     && (c.pass + c.fail) > 0;
 }
 
+// The one untrusted contract that still names its own verdict: the same emitter
+// conditions as isContractTrusted, with no executed test and UNRUNNABLE > 0.
+function isNothingRanButUnrunnable(i) {
+  const c = i.contract;
+  return i.ambiguous !== true
+    && i.attributed === true
+    && i.vetoed !== true
+    && c !== null && c !== undefined
+    && c.executed === 0
+    && c.fail === 0
+    && c.unrunnable > 0;
+}
+
 // -> one of RUN_OUTCOME_VALUES, or null (a tombstone: no trustworthy observation).
-// An attributed worker failure word wins verbatim; else a trusted contract decides.
+// An attributed worker failure word wins verbatim; else a trusted contract decides by
+// its fail count, then its unrunnable count. A run where nothing executed because
+// every selected test was unrunnable says so on either route.
 function resolveRunOutcome(input) {
   const i = input || {};
   if (
@@ -64,8 +79,12 @@ function resolveRunOutcome(input) {
     return i.workerStatus;
   }
   if (isContractTrusted(i)) {
-    return i.contract.fail > 0 ? "fail" : "pass";
+    if (i.contract.fail > 0) return "fail";
+    // A legacy 4-field contract cannot prove UNRUNNABLE=0 (#2501 C3): no pass evidence.
+    if (i.contract.shape === "legacy") return null;
+    return i.contract.unrunnable > 0 ? "unrunnable" : "pass";
   }
+  if (isNothingRanButUnrunnable(i)) return "unrunnable";
   return null;
 }
 

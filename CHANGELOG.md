@@ -727,3 +727,23 @@ Changes: Test suite for #2434 complexity stage routing (#2572): fixed the featur
 ### FEATURE: PR #2616 (2026-10-12)
 Background: fix(#2589): finish the root-name replacement in hooks, CLIs and installers
 Changes: Fixed: an inline SYSTEM_OPS_APPROVED=1 typed by the assistant can no longer approve system-state-changing commands; only the operator exporting it before launching Claude Code does.
+
+### FEATURE: PR #2626 (2026-10-12)
+Background: feat(#2513): split plan confirmation into presentation and approval t...
+Changes: Plans now appear as a tappable link in the main conversation, so you can open them from the Claude app on another device before approving.;Denying a plan confirmation (intent, outline or detail) now actually stops the workflow until the plan is approved.;Stop hooks no longer falsely block a turn whose final text had not yet been written to the transcript.
+
+### FEATURE: PR #2637 (2026-10-13)
+Background: feat(#2615): rework sweep-plans retention, approval gate, and flagless output (#2637)
+Changes: sweep-plans deletes only non-plan files by default; plan and user-requested files need --include-plan-and-user-requested and an explicit approval, and the scan is much faster on Windows.;Numeric age and timeout flags of the sweep scripts reject octal-looking and oversized values.
+
+### FEATURE: PR #2640 (2026-10-13)
+Background: fix(#2221): repair Windows-form PATH in Claude Code shell snapshots
+Changes: On Windows, when a Claude Code session starts with a broken shell snapshot that makes every Bash command fail with "command not found" (exit 127), the PATH is now repaired automatically and a notice is shown. If it cannot be repaired, restart Claude Code and run `/sweep-shell-snapshots --dry-run` to list stale snapshots. GitHub CLI calls that read the issue or PR body from a temp file now work from Git Bash on Windows.
+
+### FEATURE: PR #2639 (2026-10-13)
+Background: feat(#2501): language-neutral test runs with UNRUNNABLE reporting
+Changes: Test runs now cover every registered language and report tests that could not run (missing runtime or missing test file) as UNRUNNABLE instead of silently passing or failing.
+
+### FEATURE: PR #2641 (2026-10-13)
+Background: test(#2590): add test harness layers — run root, command guard, spawn record, worktree change detection
+Changes: tests: add run-root isolation, command guard, spawn-record preload, and worktree change detection to the test harness; fix slot-file overhead in run-all change detection
