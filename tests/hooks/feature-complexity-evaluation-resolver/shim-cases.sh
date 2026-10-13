@@ -60,23 +60,20 @@ SHIM4_OUT="$(node_read_json "$SID")"
 assert_eq "SHIM-4. unknown legacy verdict → null" 'null' "$SHIM4_OUT"
 
 # ==========================================================================
-# SHIM-5: legacy sonnet+[] → resolveSkipConditionsFromComplexity returns populated
-# (end-to-end shim: skip resolver reads through the shim and returns conditions)
+# SHIM-5: legacy sonnet+[] reads as level=low, but no longer yields skip conditions
+# (#2460 retired the zero-signal auto-skip and its resolver entry point)
 # ==========================================================================
 echo ""
-echo "=== SHIM-5: legacy sonnet+[] → resolveSkipConditionsFromComplexity populated ==="
+echo "=== SHIM-5: legacy sonnet+[] → level=low, no complexity-derived skip ==="
 SID="shim5-$$"
 write_raw_state "$SID" '{"session_id":"shim5","complexity_evaluation":{"verdict":"sonnet","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
 SHIM5_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
   const r = require('$RESOLVER_N');
-  const v = r.resolveSkipConditionsFromComplexity('$SID', 'outline');
-  if (v === null || v === undefined) { console.log('null'); }
-  else {
-    const allTrue = Object.values(v).every(x => x === true);
-    console.log(allTrue ? 'POPULATED' : 'WRONG:' + JSON.stringify(v));
-  }
+  const v = r.readComplexityEvaluation('$SID');
+  const fn = typeof r.resolveSkipConditionsFromComplexity;
+  console.log((v === null ? 'null' : v.level) + ' skip-entry=' + fn);
 " 2>/dev/null)"
-assert_eq "SHIM-5. legacy sonnet+[] → skip conditions populated (end-to-end)" 'POPULATED' "$SHIM5_OUT"
+assert_eq "SHIM-5. legacy sonnet+[] reads level=low and the resolver offers no complexity skip" 'low skip-entry=undefined' "$SHIM5_OUT"
 
 # ==========================================================================
 # CE-LEVEL-INVALID: invalid level values → hasComplexityEvaluation false / null

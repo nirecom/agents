@@ -79,11 +79,10 @@ run_skip_hint_tests() {
   line_count="$(printf '%s\n' "$OUT" | grep -cE '^(ACTION|NEXT_SKILL|NEXT_HINT|REASON|SKIP_HINT)=' || true)"
   check "45: missing intent.md → exactly 4 KEY=value lines" "4" "$line_count"
 
-  # ---- Cases 46–53: recorded-verdict skip (#1286) ----
+  # ---- Cases 46–55: recorded-verdict skip (#1286, #2460 sources/keys) ----
   # These cases require recordSkipJudgment / hasValidSkipJudgment in skip-signal-resolver.js.
-  # Expected RED until #1286 write-code implements the recorded-verdict feature.
-  # Guarded-skip count = total assertions in cases 46-53:
-  #   46(2)+47(1)+48(2)+49(1)+50(2)+51(1)+52(2)+53(2) = 13.
+  # Guarded-skip count = total assertions in cases 46-55:
+  #   46(2)+47(1)+48(2)+49(1)+50(2)+51(1)+52(2)+53(2)+54(2)+55(2) = 17.
 
   local RESOLVER_N
   RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js")"
@@ -93,8 +92,8 @@ run_skip_hint_tests() {
     const r = require('$RESOLVER_N');
     if (typeof r.recordSkipJudgment !== 'function') process.exit(1);
   " 2>/dev/null; then
-    echo "SKIP: 46-53: recorded-verdict skip (recordSkipJudgment not yet implemented)"
-    PASS=$((PASS + 13))
+    echo "SKIP: 46-55: recorded-verdict skip (recordSkipJudgment not yet implemented)"
+    PASS=$((PASS + 17))
     return 0
   fi
 
@@ -121,7 +120,7 @@ run_skip_hint_tests() {
 
   # ---- Case 48: detail current + valid skip_judgment → ACTION=invoke (branching_complete next) ----
   write_state "case48" "$JSON_AT_DETAIL"
-  plant_valid_skip "$PLANS_DIR_SH" "case48" "detail" "{ sd_c1: true, sd_c2: true, sd_c3: true }"
+  plant_valid_skip "$PLANS_DIR_SH" "case48" "detail" "{ sd_single_approach: true, sd_no_open_decision: true }" "jev"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case48" 2>/dev/null || true)"
   check_contains "48: valid detail record → ACTION=invoke" "ACTION=invoke" "$OUT"
   check_not_contains "48: valid detail record → NOT detail skill" "NEXT_SKILL=make-detail-plan" "$OUT"
@@ -144,7 +143,7 @@ run_skip_hint_tests() {
   write_state "case50" "$JSON_AT_OUTLINE"
   run_with_timeout node -e "
     const r = require('$RESOLVER_N');
-    r.recordSkipJudgment('case50', 'outline', { so_c1: true, so_c2: false }, 'orchestrator');
+    r.recordSkipJudgment('case50', 'outline', { so_c1: true, so_c2: false }, 'subagent');
   " 2>/dev/null || true
   printf 'Fix typo in helper.\n' > "$PLANS_DIR_SH/case50-intent.md"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case50" 2>/dev/null || true)"
@@ -172,10 +171,23 @@ run_skip_hint_tests() {
   # output-advance gap left by cases 48-49 (which only checked step statuses).
   write_state "case53" "$JSON_AT_OUTLINE"
   plant_valid_skip "$PLANS_DIR_SH" "case53" "outline" "{ so_c1: true, so_c2: true }"
-  plant_valid_skip "$PLANS_DIR_SH" "case53" "detail" "{ sd_c1: true, sd_c2: true, sd_c3: true }"
+  plant_valid_skip "$PLANS_DIR_SH" "case53" "detail" "{ sd_single_approach: true, sd_no_open_decision: true }" "mixed"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case53" 2>/dev/null || true)"
   check_contains "53: both records → cascade output REASON=branching_complete" "REASON='branching_complete'" "$OUT"
   check_not_contains "53: both records → output not pointing at outline" "NEXT_SKILL=make-outline-plan" "$OUT"
+
+  # ---- Cases 54–55 (#2460): retired record shapes no longer skip; the step runs ----
+  write_state "case54" "$JSON_AT_OUTLINE"
+  plant_valid_skip "$PLANS_DIR_SH" "case54" "outline" "{ so_c1: true, so_c2: true }" "orchestrator"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case54" 2>/dev/null || true)"
+  check_contains "54: source=orchestrator outline record → NEXT_SKILL=make-outline-plan" "NEXT_SKILL=make-outline-plan" "$OUT"
+  check_not_contains "54: source=orchestrator outline record → not advanced to detail" "NEXT_SKILL=make-detail-plan" "$OUT"
+
+  write_state "case55" "$JSON_AT_DETAIL"
+  plant_valid_skip "$PLANS_DIR_SH" "case55" "detail" "{ sd_c1: true, sd_c2: true, sd_c3: true }" "jev"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case55" 2>/dev/null || true)"
+  check_contains "55: retired detail keys sd_c1..sd_c3 → NEXT_SKILL=make-detail-plan" "NEXT_SKILL=make-detail-plan" "$OUT"
+  check_not_contains "55: retired detail keys → not advanced to branching_complete" "REASON='branching_complete'" "$OUT"
 
   rm -rf "$PLANS_DIR_SH"
 }

@@ -123,11 +123,11 @@ fx_row() {
   printf '<absent>'
 }
 
-# fx_run <mode-flag> <file> -> run-corpus.js output against the fixture.
+# fx_run <mode-flag> <file> [runner-arg...] -> run-corpus.js output against the fixture.
 fx_run() {
   run_with_timeout 300 node "$(np "$PART_DIR/run-corpus.js")" \
     "$1" "$(np "$2")" --main "$FX_MAIN" --wt "$FX_WT" --foreign "$FX_FOREIGN" --plain "$FX_PLAIN" \
-    --fakewt "$FX_FAKEWT" --session "$FX_SESSION"
+    --fakewt "$FX_FAKEWT" --session "$FX_SESSION" "${@:3}"
 }
 
 # The corpus carries UNQUOTED <R> spellings (abs, win-unq), which only name the root when it has

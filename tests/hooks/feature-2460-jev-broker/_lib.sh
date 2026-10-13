@@ -87,7 +87,7 @@ async function main() {
     out(r === null ? "null" : [r.jev.status, String(r.jev.http_status), JSON.stringify(r.jev.latency_ms)].join("|"));
   } else if (cmd === "record") {
     const r = broker.recordShadow({ point: val(args[0]), sessionId: "sid-1", toolUseId: "toolu_b_record",
-      llmText: "SIGNALS: S1-multi-file", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
+      llmText: "SIGNALS: S2-architecture", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
     out(r === null ? "null" : typeof r === "object" && !Array.isArray(r) ? "record" : typeof r);
   } else if (cmd === "qt") {
     const r = await broker.queryShadow({ point: "complexity-judge", sessionId: "sid-1", toolUseId: args[0],
@@ -96,13 +96,13 @@ async function main() {
     out(r === null ? "null" : [r.jev.status, l === null ? "null" : Number.isFinite(l) && l >= 0 ? "finite" : "bad:" + l].join("|"));
   } else if (cmd === "rt") {
     const r = broker.recordShadow({ point: "complexity-judge", sessionId: "sid-1", toolUseId: args[0],
-      llmText: "SIGNALS: S1-multi-file", toolInput: { subagent_type: "complexity-judge" }, step: "outline",
+      llmText: "SIGNALS: S2-architecture", toolInput: { subagent_type: "complexity-judge" }, step: "outline",
       endTs: args[1] === undefined ? undefined : val(args[1]) });
     out(r === null ? "null" : typeof r === "object" && !Array.isArray(r) ? "record" : typeof r);
   } else if (cmd === "rt-normalizer") {
     // rt-normalizer <toolUseId> <stubNormalizer mode>: recordShadow with that LLM-side normalizer.
     const r = broker.recordShadow({ point: "complexity-judge", sessionId: "sid-1", toolUseId: args[0],
-      llmText: "SIGNALS: S1-multi-file", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
+      llmText: "SIGNALS: S2-architecture", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
     out(r === null ? "null" : [r.llm.status, r.llm.answer, String(r.agreement), r.jev && r.jev.status, childCalls].join("|"));
   } else if (cmd === "sweep") {
     out(broker.sweepSession("sid-1", { pendingTtlMs: Number(args[0]) || undefined }));
@@ -156,7 +156,7 @@ names() { ls -A "$1" 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//'; }
 stray_files() { find "$FX" \( -name 'norm-*' -o -name '*-signals.txt' -o -name '*.control' \) 2>/dev/null | wc -l | tr -d ' '; }
 # fx_tree: every path in the fixture except the probe's stderr sink, sorted (a before/after snapshot).
 fx_tree() { find "$FX" -mindepth 1 ! -path "$FX/io/*" 2>/dev/null | sort; }
-RAW='"SIGNALS: S1-multi-file"'
+RAW='"SIGNALS: S2-architecture"'
 POINT='"complexity-judge"'
 
 log_state() { [ -e "$LOG" ] && echo present || echo absent; }

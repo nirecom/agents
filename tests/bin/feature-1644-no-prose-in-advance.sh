@@ -80,23 +80,16 @@ echo "=== S1: Stage-5 SKILL.md call-site --next pinning (#1644 waste-type-5 regr
 # --next (its ACTION block IS consumed). A drive-by edit that adds/drops --next
 # silently changes which contract applies -- pin both directions here.
 
+# #2460: the skill-level record-complexity-and-skip and record-skip-judgment call
+# sites are gone at the end state (jev-judge finalize is the only skip writer), so
+# only the workflow_init sites remain pinned here.
 NO_NEXT_FILES=(
   "skills/workflow-init/SKILL.md"
   "skills/workflow-init/SKILL.md"
-  "skills/workflow-init/SKILL.md"
-  "skills/workflow-init/SKILL.md"
-  "skills/clarify-intent/SKILL.md"
-  "skills/make-outline-plan/SKILL.md"
-  "skills/make-outline-plan/SKILL.md"
 )
 NO_NEXT_TEXT=(
   'node "$AGENTS_MAIN_ROOT/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete'
   'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step workflow_init --complete'
-  '--target outline --advance --so-c1 <true|false> --so-c2 <true|false> | tail -1)`'
-  'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 true --c2 true'
-  '--target outline --advance --so-c1 <true|false> --so-c2 <true|false> | tail -1)`'
-  'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance --c1 <true|false> --c2 <true|false>`'
-  'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --advance --c1 <true|false> --c2 <true|false> --c3 <true|false>`'
 )
 
 for i in "${!NO_NEXT_FILES[@]}"; do

@@ -1,37 +1,48 @@
-> Shared rubric. Read explicitly by `workflow-init` (A3a), `clarify-intent`
-> (CI-C1b), and `make-outline-plan` (MOP-1d, MOP-C1) when evaluating
-> whether the outline or detail planning stage can be skipped. Not invoked via
-> the Skill tool — the caller reads this rubric and evaluates the criteria in
-> its own output, then passes the resulting booleans to `record-skip-judgment`.
+> Shared rubric for the outline-skip and detail-skip judgments (#2460).
+> Read by the shared procedure `skills/_shared/jev-two-stage-judge.md`, by Jev (one question per key),
+> and by the `agents/plan-skip-judge.md` subagent. Not invoked via the Skill tool.
+> This file is the sole place the criteria text lives; call sites reference it by path and never restate it.
 
-Two independent checklists exist. The **outline-skip checklist** (so_c1/so_c2)
-is evaluated against `intent.md`, before outline.md exists. The **detail-skip
-checklist** (sd_c1/sd_c2/sd_c3) is evaluated against `outline.md`, before the
-detail stage runs. A stage may be skipped only when **every** criterion in its
-own checklist is true — a single false criterion forces the stage to run.
+Two independent checklists exist: the outline-skip checklist against `intent.md` (before outline.md exists), and the detail-skip checklist against `outline.md` (before the detail stage runs).
+A stage may be skipped only when every key of its own checklist is true; one false key runs the stage.
 
-## Outline-skip criteria (so_*)
+## Outline-skip criteria
 
-| ID | Criterion | Pass example | Fail example |
-|----|-----------|---------------|---------------|
-| so_c1 | A single obvious approach exists — no plausible competing direction remains after reading intent.md | "Rename an env var across 3 known files" — there is exactly one sane way to do this | "Add a caching layer" — could be in-process LRU, Redis, or a CDN; a genuine direction choice exists |
-| so_c2 | Change files/locations are uniquely identified — intent.md (or survey artifacts) names specific files/modules, not just a goal | intent.md says "edit `bin/foo.sh` around line 40 to add a new flag" | intent.md says "improve error handling in the workflow" without naming any file |
+### so_c1
 
-Routing: so_c1 AND so_c2 both true → outline stage may be skipped. Either false → run the outline stage.
+Criterion (true = skip allowed): a single obvious approach exists — no plausible competing direction remains after reading intent.md.
+Pass example: "Rename an env var across 3 known files" — there is exactly one sane way to do this.
+Fail example: "Add a caching layer" — in-process LRU, Redis or a CDN are all plausible; a genuine direction choice exists.
 
-## Detail-skip criteria (sd_*)
+### so_c2
 
-| ID | Criterion | Pass example | Fail example |
-|----|-----------|---------------|---------------|
-| sd_c1 | All changed files are listed by path | outline.md enumerates every file to touch, e.g. `skills/foo/SKILL.md`, `bin/foo` | outline.md says "update the relevant skill files" without naming them |
-| sd_c2 | Each file's edit content is clear | outline.md states the exact change per file ("add a 1-line pointer after step X") | outline.md states only the goal per file, leaving the edit shape open |
-| sd_c3 | No unresolved multi-layer design decisions | outline.md's Adopted approach is final; no "TBD: decide schema vs config" note remains | outline.md's Delivery plan defers a cross-cutting decision (e.g. "decide CLI flag shape during detail") |
+Criterion (true = skip allowed): the files or locations to change are uniquely identified — intent.md (or the survey artifacts) names specific files or modules, not just a goal.
+Pass example: intent.md says "edit `bin/foo.sh` around line 40 to add a new flag".
+Fail example: intent.md says "improve error handling in the workflow" without naming any file.
 
-Routing: sd_c1 AND sd_c2 AND sd_c3 all true → detail stage may be skipped. Any false → run the detail stage.
+## Detail-skip criteria
 
-## Rules
+### sd_single_approach
 
-- Evaluate every criterion in the applicable checklist before emitting a verdict — do not short-circuit on the first pass/fail.
-- Parse failure or ambiguous context → treat the criterion as false (err toward running the stage, not skipping it).
-- The two checklists are evaluated independently — a true so_c1/so_c2 does not imply anything about sd_c1–sd_c3, and vice versa.
-- Callers pass raw booleans (`--c1`/`--c2`[/`--c3`]) to `record-skip-judgment` — this file is the sole place the criteria text lives; call sites reference it by path and must not restate the criteria inline.
+Criterion (true = skip allowed): no comparison of several kinds of approach, with stated comparison axes, is needed — outline.md leaves one implementation shape.
+Pass example: outline.md adopts "add one flag to `bin/report` and print it in `report.js`"; nothing else is on the table.
+Fail example: outline.md leaves "a config key vs a CLI flag vs an env var" open, to be weighed on discoverability and migration cost.
+
+### sd_no_open_decision
+
+Criterion (true = skip allowed): no undecided judgment on UX, requirements, risk acceptance or boundary conditions remains in outline.md.
+Pass example: outline.md fixes the user-visible message, the accepted risk and the edge cases ("empty input prints nothing").
+Fail example: outline.md says "decide during detail whether an empty input is an error or a no-op".
+
+## Judgment rules
+
+- Evaluate every key of the applicable checklist; do not stop at the first pass or fail.
+- Ambiguous or unclear context means false (run the stage, not skip it).
+- The two checklists are independent: a value of one never implies a value of the other.
+- A false sd_no_open_decision only runs the detail stage; it never sends the task back to intent or outline (interim until #2620).
+
+## Output rules
+
+- The subagent answers with exactly one line `SKIP_CONDITIONS: <key>=<true|false>, ...` and nothing else.
+- The line names every key of the checklist, delegated or not, each exactly once.
+- Only `jev-judge finalize` records the values; no caller passes booleans of its own.

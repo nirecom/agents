@@ -27,7 +27,7 @@ WD-BG. Background dispatch — `test-runner` only (no other worker writes an out
 Name the form on every dispatch line — the three kinds are spawned by different mechanisms, and an unmarked name leaves the reader guessing which one runs.
 
 - Plain-script worker (this protocol): put the word worker next to the name — the `doc-append` worker.
-- LLM subagent (Task tool, `agents/<name>.md`): put the word subagent next to the name — the `skip-verifier` subagent.
+- LLM subagent (Task tool, `agents/<name>.md`): put the word subagent next to the name — the `plan-skip-judge` subagent.
 - Skill (`skills/<name>/SKILL.md`): use the slash form — /commit-push.
 
 Carry exactly one marker per line; two markers are as ambiguous as none.

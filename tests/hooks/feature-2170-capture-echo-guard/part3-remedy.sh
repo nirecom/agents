@@ -220,12 +220,12 @@ assert_eq "C-15c-contained-sibling-still-matches" "bare-only" "$(classify "$OUT"
 # branchA renders the hit's remaining argv after the entry, so the author is told to
 # reissue the command that was actually blocked. Only bare shell words the shell
 # cannot rewrite (SAFE_ARG_RE) may be pasted verbatim; anything else degrades.
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --target outline --advance')"
+OUT="$(run_remedy "$CONFIG_REAL" 'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --target outline --advance')"
 assert_eq "C-16a-registered-with-safe-args-branch-a" "bare-only" "$(classify "$OUT")"
 assert_eq "C-16b-recipe-keeps-arguments" "yes" "$(has_substr "$OUT" "--target outline --advance")"
 # An argument carrying an expansion would be re-expanded (or mis-expanded) if pasted,
 # so the whole invocation degrades rather than handing back a misleading recipe.
-OUT="$(run_remedy "$CONFIG_REAL" 'bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --target outline --advance')"
+OUT="$(run_remedy "$CONFIG_REAL" 'node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --advance')"
 assert_eq "C-16c-unsafe-arg-degrades" "scratchpad-only" "$(classify "$OUT")"
 assert_eq "C-16d-unsafe-arg-no-bare-recipe" "no" "$(has_substr "$OUT" "$RECIPE")"
 

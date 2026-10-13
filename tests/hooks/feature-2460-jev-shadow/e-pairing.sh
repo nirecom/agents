@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/jev/pending.js, hooks/lib/jev/decision-record.js, hooks/jev-shadow-pre.js, hooks/jev-shadow-post.js, hooks/lib/jev/dispatch-gate.js, hooks/lib/jev/state-paths.js
-# Tags: TL2, hooks, jev, pairing, agreement, pending, orphan-sweep, orphan-retry, scope:issue-specific, pwsh-not-required, tid-of, has-entries, min-claim-age, rewrite-claim, unlogged-record
+# Tags: TL2, hooks, jev, pairing, agreement, pending, orphan-sweep, orphan-retry, scope:issue-specific, pwsh-not-required, tid-of, has-entries, min-claim-age, rewrite-claim, unlogged-record, schema-v2, agreement-by-signal, unknown-point-discarded
 
 # pre and post pair through tool_use_id into exactly one decision record. Agreement is
-# compared only when both sides are ok, with the rubric's S1b => S1 implication applied
-# to both sides (a side listing S1b without S1 disagrees); a missing post becomes "llm missing" after the TTL, a missing pre becomes
+# compared only when both sides are ok, as a plain set comparison per signal id;
+# a missing post becomes "llm missing" after the TTL, a missing pre becomes
 # "jev not-run" (so does a duplicate post), and hostile session/tool_use ids never touch
 # the filesystem.
 
@@ -14,6 +14,9 @@
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 harness_isolate "$TMPROOT/iso"   # the guard reads a fragment's own top-level pin, not _lib's
 mock_start
+# AGR: a record's overall agreement, derived from agreement_by_signal ("null" when not compared;
+# a missing agreement_by_signal reads as "false", never as agreement).
+AGR='(r.agreement_by_signal === null ? "null" : String(Object.values(r.agreement_by_signal || { missing: 0 }).every(v => v === true)))'
 
 echo "=== one record per dispatch, with step and stage ==="
 case_begin "e-pair-one-record-outline" "hooks/jev-shadow-post.js"
@@ -21,11 +24,11 @@ fx_new e-basic
 SID="jev2460-e-basic"
 check "fixture: the workflow state sits at outline" "outline" "$(hq seed-step "$SID" outline)"
 mock_mode '{}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_e_basic
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_e_basic
 check "exactly one record for the tool_use_id" "1" "$(rq toolu_e_basic 'recs.length')"
-check "v/point/mode/adopted/session/step/stage" "1|complexity-judge|shadow|llm|$SID|outline|outline" \
-  "$(rq toolu_e_basic 'r && [r.v, r.point, r.mode, r.adopted, r.session_id, r.step, r.stage].join("|")')"
-check "both sides ok and agree" "ok|ok|true" "$(rq toolu_e_basic 'r && [r.jev.status, r.llm.status, r.agreement].join("|")')"
+check "version/record_type/point/mode/adopted/session/step/stage" "2|decision|complexity-judge|shadow|llm|$SID|outline|outline" \
+  "$(rq toolu_e_basic 'r && [r.version, r.record_type, r.point, r.mode, r.adopted, r.session_id, r.step, r.stage].join("|")')"
+check "both sides ok and agree" "ok|ok|true" "$(rq toolu_e_basic "r && [r.jev.status, r.llm.status, $AGR].join(\"|\")")"
 check "the pending file is consumed" "0" "$(pending_count)"
 case_end
 
@@ -37,55 +40,47 @@ agree_row() {
   mock_mode "$2"
   LLM_TEXT="$3" pair "$SID" "$1"
   check "$1: agreement|jev.status|llm.status" "$4" \
-    "$(rq "$1" 'r && [String(r.agreement), r.jev.status, r.llm.status].join("|")')"
+    "$(rq "$1" "r && [$AGR, r.jev.status, r.llm.status].join(\"|\")")"
 }
 case_begin "e-agree-match" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_match '{"answers":{"S1-multi-file":0.97,"S2-architecture":0.95}}' \
-  "SIGNALS: S1-multi-file, S2-architecture" "true|ok|ok"
-check "match: every per-signal entry is true" "7|true" \
-  "$(rq toolu_e_match 'r && r.agreement_by_signal && Object.keys(r.agreement_by_signal).length + "|" + Object.values(r.agreement_by_signal).every(v => v === true)')"
+agree_row toolu_e_match '{"answers":{"S2-architecture":0.97,"S3-security":0.95}}' \
+  "SIGNALS: S2-architecture, S3-security" "true|ok|ok"
+check "match: one per-signal entry per signal id, every one true" "S1b-wide-change,S2-architecture,S3-security,S4-installer,S5-breaking|true" \
+  "$(rq toolu_e_match 'r && r.agreement_by_signal && Object.keys(r.agreement_by_signal).join(",") + "|" + Object.values(r.agreement_by_signal).every(v => v === true)')"
 case_end
 case_begin "e-agree-mismatch" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_mismatch '{"answers":{"S1-multi-file":0.02,"S2-architecture":0.95}}' \
-  "SIGNALS: S3-security" "false|ok|ok"
-check "mismatch: per-signal S1 true, S2 false, S3 false" "true|false|false" \
-  "$(rq toolu_e_mismatch 'r && ["S1-multi-file","S2-architecture","S3-security"].map(k => r.agreement_by_signal[k]).join("|")')"
-case_end
-case_begin "e-agree-implication-jev-side" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_impl_jev '{"answers":{"S1-multi-file":0.02,"S1b-wide-change":0.95}}' \
-  "SIGNALS: S1-multi-file, S1b-wide-change" "false|ok|ok"
-check "jev S1b without S1 is a rubric violation: logged answer stays S1b alone; per-signal S1 false, S1b true" \
-  "S1b-wide-change|false|true" \
-  "$(rq toolu_e_impl_jev 'r && [r.jev.answer, r.agreement_by_signal["S1-multi-file"], r.agreement_by_signal["S1b-wide-change"]].join("|")')"
-case_end
-case_begin "e-agree-implication-llm-side" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_impl_llm '{"answers":{"S1-multi-file":0.97,"S1b-wide-change":0.95}}' \
-  "SIGNALS: S1b-wide-change" "false|ok|ok"
-check "llm S1b without S1: per-signal S1 false" "false" "$(rq toolu_e_impl_llm 'r && String(r.agreement_by_signal["S1-multi-file"])')"
-case_end
-case_begin "e-agree-implication-valid-pair" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_impl_pair '{"answers":{"S1-multi-file":0.97,"S1b-wide-change":0.95}}' \
-  "SIGNALS: S1-multi-file, S1b-wide-change" "true|ok|ok"
+agree_row toolu_e_mismatch '{"answers":{"S2-architecture":0.02,"S3-security":0.95}}' \
+  "SIGNALS: S5-breaking" "false|ok|ok"
+check "mismatch: per-signal S2 true, S3 false, S5 false" "true|false|false" \
+  "$(rq toolu_e_mismatch 'r && ["S2-architecture","S3-security","S5-breaking"].map(k => r.agreement_by_signal[k]).join("|")')"
 case_end
 case_begin "e-llm-parse-fallback" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_pfb '{}' $'SIGNALS: S1-multi-file\nand some trailing prose' "null|ok|parse-fallback"
+agree_row toolu_e_pfb '{}' $'SIGNALS: S2-architecture\nand some trailing prose' "null|ok|parse-fallback"
 check "parse-fallback: agreement_by_signal is null" "null" "$(rq toolu_e_pfb 'r && String(r.agreement_by_signal)')"
 case_end
-case_begin "e-jev-low-confidence" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_lowc '{"answers":{"S2-architecture":0.6}}' "SIGNALS: S1-multi-file" "null|low-confidence|ok"
-check "low-confidence: no per-signal agreement, reason recorded, probabilities kept" "null|low-confidence|0.6" \
-  "$(rq toolu_e_lowc 'r && [String(r.agreement_by_signal), r.fallback_reason, r.jev.probabilities["S2-architecture"]].join("|")')"
+case_begin "e-llm-removed-signal-id-is-parse-fallback" "hooks/lib/jev/decision-record.js"
+agree_row toolu_e_s1 '{}' "SIGNALS: S1-multi-file" "null|ok|parse-fallback"
+check "a retired signal id (S1-multi-file) is not vocabulary: the llm answer is the S0 fallback" "S0-undecidable" \
+  "$(rq toolu_e_s1 'r && r.llm.answer')"
+case_end
+# The shadow path carries no confidence verdict: the record keeps the p, min_confidence and the
+# point's per-direction threshold, and the p >= 0.5 reading is what is compared.
+case_begin "e-jev-below-threshold-recorded-with-threshold" "hooks/lib/jev/decision-record.js"
+agree_row toolu_e_lowc '{"answers":{"S2-architecture":0.6}}' "SIGNALS: S2-architecture" "true|ok|ok"
+check "p = 0.6 under the 0.7 threshold: answer, p, min_confidence and both thresholds recorded, no fallback reason" \
+  "S2-architecture|0.6|0.6|0.7|0.7|null" \
+  "$(rq toolu_e_lowc 'r && [r.jev.answer, r.jev.probabilities["S2-architecture"], r.jev.min_confidence, r.threshold.true, r.threshold.false, String(r.fallback_reason)].join("|")')"
 case_end
 case_begin "e-llm-undecidable-vs-jev-none-not-compared" "hooks/lib/jev/decision-record.js"
-NONE_MODE='{"answers":{"S1-multi-file":0.02}}'
+NONE_MODE='{"answers":{"S2-architecture":0.02}}'
 agree_row toolu_e_s0_none "$NONE_MODE" "SIGNALS: S0-undecidable" "null|ok|ok"
 check "S0 vs none: answers recorded, no per-signal agreement, no fallback reason" "|S0-undecidable|null|null" \
   "$(rq toolu_e_s0_none 'r && [r.jev.answer, r.llm.answer, String(r.agreement_by_signal), String(r.fallback_reason)].join("|")')"
 agree_row toolu_e_none_none "$NONE_MODE" "SIGNALS: none" "true|ok|ok"
 case_end
 case_begin "e-llm-undecidable-vs-jev-signals-not-compared" "hooks/lib/jev/decision-record.js"
-agree_row toolu_e_s0_sig '{"answers":{"S1-multi-file":0.97,"S3-security":0.95}}' "SIGNALS: S0-undecidable" "null|ok|ok"
-check "S0 vs signals: jev answer kept, agreement_by_signal null" "S1-multi-file,S3-security|null" \
+agree_row toolu_e_s0_sig '{"answers":{"S2-architecture":0.97,"S3-security":0.95}}' "SIGNALS: S0-undecidable" "null|ok|ok"
+check "S0 vs signals: jev answer kept, agreement_by_signal null" "S2-architecture,S3-security|null" \
   "$(rq toolu_e_s0_sig 'r && [r.jev.answer, String(r.agreement_by_signal)].join("|")')"
 case_end
 case_begin "e-llm-preamble-then-s0-line-ok" "hooks/jev-shadow-post.js"
@@ -96,21 +91,7 @@ case_begin "e-llm-empty-is-missing" "hooks/jev-shadow-post.js"
 agree_row toolu_e_empty '{}' "" "null|ok|missing"
 case_end
 
-echo "=== closeImplications is symmetric and comparison-only ==="
-case_begin "e-close-implications" "hooks/lib/jev/decision-record.js"
-CI_JS="$TMPROOT/close-implications.js"
-cat > "$CI_JS" <<'JS'
-try {
-  const { closeImplications } = require(process.argv[2]);
-  const s = (x) => Array.from(x).sort().join(",");
-  const input = new Set(["S1b-wide-change"]);
-  const out = closeImplications(input);
-  process.stdout.write([s(out), s(input), s(closeImplications(new Set(["S2-architecture"]))), s(closeImplications(new Set()))].join("|"));
-} catch (e) { process.stdout.write("THREW:" + (e.code || e.message)); }
-JS
-CI_OUT="$(run_with_timeout 30 node "$(np "$CI_JS")" "$RECORD_JS" 2>/dev/null)"
-check "S1b adds S1; input untouched; other sets unchanged" "S1-multi-file,S1b-wide-change|S1b-wide-change|S2-architecture|" "$CI_OUT"
-case_end
+echo "=== compare: S0 on either side is not compared ==="
 case_begin "e-compare-undecidable-either-side" "hooks/lib/jev/decision-record.js"
 CMP_JS="$TMPROOT/compare-undecidable.js"
 cat > "$CMP_JS" <<'JS'
@@ -118,7 +99,7 @@ try {
   const { compare } = require(process.argv[2]);
   const ok = (answer) => ({ status: "ok", answer });
   const f = (c) => String(c.agreement) + "/" + String(c.agreement_by_signal);
-  process.stdout.write([f(compare(ok("S0-undecidable"), ok(""))), f(compare(ok("S1-multi-file"), ok("S1-multi-file,S0-undecidable"))),
+  process.stdout.write([f(compare(ok("S0-undecidable"), ok(""))), f(compare(ok("S2-architecture"), ok("S2-architecture,S0-undecidable"))),
     String(compare(ok(""), ok("")).agreement)].join("|"));
 } catch (e) { process.stdout.write("THREW:" + (e.code || e.message)); }
 JS
@@ -134,7 +115,7 @@ mock_mode '{}'
 mkpayload "$FX/io/post.json" post "$SID" toolu_e_postonly
 run_hook post "$FX/io/post.json"
 check "post without pre: one record, jev not-run, llm ok, agreement null" "1|not-run|ok|null" \
-  "$(rq toolu_e_postonly 'recs.length + "|" + (r && [r.jev.status, r.llm.status, String(r.agreement)].join("|"))')"
+  "$(rq toolu_e_postonly "recs.length + \"|\" + (r && [r.jev.status, r.llm.status, $AGR].join(\"|\"))")"
 check "post without pre sends nothing to Jev" "0" "$(mock_count systemone)"
 case_end
 
@@ -149,7 +130,7 @@ hq age "$(np "$JEVDIR/$SID/pending")" 3900000 --recursive
 mkpayload "$FX/io/post2.json" post "$SID" toolu_e_trigger1
 run_hook post "$FX/io/post2.json"
 check "after the 60-min TTL: one llm-missing record with null agreement" "1|missing|ok|null" \
-  "$(rq toolu_e_orphan 'recs.length + "|" + (r && [r.llm.status, r.jev.status, String(r.agreement)].join("|"))')"
+  "$(rq toolu_e_orphan "recs.length + \"|\" + (r && [r.llm.status, r.jev.status, $AGR].join(\"|\"))")"
 mkpayload "$FX/io/post3.json" post "$SID" toolu_e_trigger2
 run_hook post "$FX/io/post3.json"
 check "a second sweep does not duplicate the orphan record" "1" "$(rq toolu_e_orphan 'recs.length')"
@@ -232,7 +213,7 @@ case_begin "e-id-128-chars-accepted-control" "hooks/lib/jev/state-paths.js"
 fx_new e-id128
 SID128="${LONG_ID:1}"
 mock_mode '{}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID128" toolu_e_id128
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID128" toolu_e_id128
 check "control: a 128-char session_id pairs into one record after one Jev query" "1|1|$SID128" \
   "$(rq toolu_e_id128 'recs.length')|$(mock_count systemone)|$(rq toolu_e_id128 'r && r.session_id')"
 case_end
@@ -242,18 +223,18 @@ case_begin "e-duplicate-post-not-paired-twice" "hooks/lib/jev/pending.js"
 fx_new e-dup
 SID="jev2460-e-dup"
 mock_mode '{}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_e_dup
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_e_dup
 check "fixture: the first post pairs with the pre (jev ok)" "0|1|ok" \
   "$HOOK_RC|$(rq toolu_e_dup 'recs.length')|$(rq toolu_e_dup 'r && r.jev.status')"
-LLM_TEXT="SIGNALS: S1-multi-file" run_hook post "$FX/io/post-toolu_e_dup.json"
+LLM_TEXT="SIGNALS: S2-architecture" run_hook post "$FX/io/post-toolu_e_dup.json"
 check "second post exits 0" "0" "$HOOK_RC"
 check "second post appends one record that claims no Jev pairing" "2|ok|not-run|null" \
-  "$(rq toolu_e_dup 'recs.length + "|" + recs.map(x => x.jev.status).join("|") + "|" + String(recs[1] && recs[1].agreement)')"
+  "$(rq toolu_e_dup "recs.length + \"|\" + recs.map(x => x.jev.status).join(\"|\") + \"|\" + (recs[1] ? ((r) => $AGR)(recs[1]) : \"none\")")"
 check "no second Jev query, no pending or .claimed leftovers" "1|0|0" \
   "$(mock_count systemone)|$(pending_count)|$(find "$JEVDIR" -name '*.claimed-*' 2>/dev/null | wc -l | tr -d ' ')"
 case_end
 
-echo "=== a pending file's own point is file content, never trusted ==="
+echo "=== a pending file's own point is file content: an unknown point is discarded ==="
 # orphan_with_point <tag> <point-json>: a real pre-hook pending whose point is rewritten.
 orphan_with_point() {
   mkpayload "$FX/io/pre-$1.json" pre "$SID" "toolu_e_pt_$1"
@@ -265,7 +246,7 @@ pending_points() {
   local t
   for t in ctor proto unreg num; do hq json-get "$(np "$JEVDIR/$SID/pending/toolu_e_pt_$t.json")" point; done
 }
-case_begin "e-orphan-point-not-taken-from-file" "hooks/jev-shadow-post.js"
+case_begin "e-orphan-unknown-point-discarded" "hooks/jev-shadow-post.js"
 fx_new e-orphan-point
 SID="jev2460-e-orphan-point"
 mock_mode '{}'
@@ -281,10 +262,10 @@ run_hook post "$FX/io/post-trigger.json"
 check "the sweeping post hook exits 0, writes nothing to stdout and still logs its own record" "0|empty|1" \
   "$HOOK_RC|$(stdout_state)|$(rq toolu_e_pt_trigger 'recs.length')"
 for t in ctor proto unreg num; do
-  check "$t: one llm-missing orphan record, filed under the registered point, jev side kept" "1|complexity-judge|missing|ok" \
-    "$(rq "toolu_e_pt_$t" 'recs.length + "|" + (r && [r.point, r.llm.status, r.jev.status].join("|"))')"
+  check "$t: a hand whose point is not registered is discarded, never recorded under a default point" "0" \
+    "$(rq "toolu_e_pt_$t" 'recs.length')"
 done
-check "every record in the log names the registered point; all pending files are gone" "5|complexity-judge|0" \
+check "the log holds only the trigger's own record; all pending files are gone" "1|complexity-judge|0" \
   "$(hq qa "$(np "$LOG")" 'recs.length + "|" + Array.from(new Set(recs.map((x) => String(x.point)))).join(",")')|$(pending_count)"
 case_end
 
@@ -298,8 +279,8 @@ mkdir -p "$FX/ostmp"
 NORM_ENV=("TMPDIR=$OSTMP_N" "TEMP=$OSTMP_N" "TMP=$OSTMP_N")
 check "fixture: a node child given these variables resolves os.tmpdir() to the fixture dir" "true" \
   "$(env "${NORM_ENV[@]}" bash "$RWT" 30 node -e 'const p = require("path"); process.stdout.write(String(p.resolve(require("os").tmpdir()).toLowerCase() === p.resolve(process.argv[1]).toLowerCase()))' "$OSTMP_N" 2>/dev/null)"
-LLM_TEXT="SIGNALS: S1-multi-file, S3-security" pair "$SID" toolu_e_norm "${NORM_ENV[@]}"
-check "both hooks exit 0; both sides were normalised (normalised answers recorded)" "0|0|S1-multi-file|S1-multi-file,S3-security" \
+LLM_TEXT="SIGNALS: S2-architecture, S3-security" pair "$SID" toolu_e_norm "${NORM_ENV[@]}"
+check "both hooks exit 0; both sides were normalised (normalised answers recorded)" "0|0|S2-architecture|S2-architecture,S3-security" \
   "$PRE_RC|$HOOK_RC|$(rq toolu_e_norm 'r && [r.jev.answer, r.llm.answer].join("|")')"
 check "the session state dir exists and no norm-* entry is left anywhere under the Jev state dir" "present|0" \
   "$([ -d "$JEVDIR/$SID" ] && echo present || echo absent)|$(find "$JEVDIR" -name 'norm-*' 2>/dev/null | wc -l | tr -d ' ')"
@@ -477,13 +458,13 @@ fx_new e-unlogged
 SID="jev2460-e-unlogged"
 mock_mode '{}'
 printf 'not a directory\n' > "$FX/state/logs"
-LLM_TEXT="SIGNALS: S1-multi-file" mkpayload "$FX/io/post.json" post "$SID" toolu_e_ul
+LLM_TEXT="SIGNALS: S2-architecture" mkpayload "$FX/io/post.json" post "$SID" toolu_e_ul
 run_hook post "$FX/io/post.json"
 check "post exits 0 and writes nothing to stdout" "0|empty" "$HOOK_RC|$(stdout_state)"
 check "exactly one .unlogged-<pid>-<ts> file, no .json or claim" "1|1|0" \
   "$(find "$JEVDIR/$SID/pending" -name 'toolu_e_ul.unlogged-*' 2>/dev/null | grep -cE '\.unlogged-[0-9]+-[0-9]+$')|$(pending_count)|$(find "$JEVDIR" -name '*.claimed-*' 2>/dev/null | wc -l | tr -d ' ')"
 UL="$(find "$JEVDIR/$SID/pending" -name 'toolu_e_ul.unlogged-*' 2>/dev/null | head -n 1)"
-check "it carries the observed llm side and jev not-run" "ok|S1-multi-file|not-run" \
+check "it carries the observed llm side and jev not-run" "ok|S2-architecture|not-run" \
   "$(hq json-expr "$(np "$UL")" 'o && [o.llm_observed.status, o.llm_observed.answer, o.jev.status].join("|")')"
 case_end
 

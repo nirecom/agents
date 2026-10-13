@@ -186,7 +186,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
     emit(
       "blocked", "",
-      gatedStep + " speculative skip is pending verification by skip-verifier. Re-run next-step after verifier completes.",
+      gatedStep + " speculative skip is pending verification; resolve it with record-skip-verdict, then re-run next-step.",
       "speculative-skip-pending"
     );
     return;

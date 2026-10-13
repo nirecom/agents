@@ -34,6 +34,8 @@ ENV_EXAMPLE="$REPO_ROOT/.env.example"
 CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
 NODEJS_RULES="$REPO_ROOT/rules/coding/nodejs.md"
 PYTHON_RULES="$REPO_ROOT/rules/coding/python.md"
+JEV_JUDGE_PROC="$REPO_ROOT/skills/_shared/jev-two-stage-judge.md"
+COMPLEXITY_JUDGE_AGENT="$REPO_ROOT/agents/complexity-judge.md"
 
 case_begin() { echo "--- group: $1 ---"; }
 case_end()   { :; }
@@ -231,10 +233,27 @@ if require_file "$WRITE_CODE_SKILL"; then
     else
         fail "SKILL.md missing 'Model selected:'"
     fi
-    if has_fixed "subagent_type: complexity-judge" "$WRITE_CODE_SKILL"; then
-        pass "SKILL.md dispatches 'subagent_type: complexity-judge'"
+    # #2460 moved the dispatch into the shared procedure: pin each link of
+    # SKILL.md -> shared procedure -> complexity-judge agent -> rubric.
+    if has_fixed 'follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge`' "$WRITE_CODE_SKILL"; then
+        pass "SKILL.md routes the complexity-judge point through skills/_shared/jev-two-stage-judge.md"
     else
-        fail "SKILL.md missing 'subagent_type: complexity-judge' dispatch"
+        fail "SKILL.md does not route point=complexity-judge through skills/_shared/jev-two-stage-judge.md"
+    fi
+    if require_file "$JEV_JUDGE_PROC"; then
+        if has_fixed 'Dispatch `subagent_type: <SUBAGENT>`' "$JEV_JUDGE_PROC"; then
+            pass "jev-two-stage-judge.md dispatches 'subagent_type: <SUBAGENT>'"
+        else
+            fail "jev-two-stage-judge.md missing the 'subagent_type: <SUBAGENT>' dispatch"
+        fi
+    fi
+    if require_file "$COMPLEXITY_JUDGE_AGENT"; then
+        if has '^name: complexity-judge$' "$COMPLEXITY_JUDGE_AGENT" \
+            && has_fixed 'skills/_shared/judge-task-complexity.md' "$COMPLEXITY_JUDGE_AGENT"; then
+            pass "agents/complexity-judge.md is the dispatched agent and reads the rubric"
+        else
+            fail "agents/complexity-judge.md is not named complexity-judge or does not read skills/_shared/judge-task-complexity.md"
+        fi
     fi
 fi
 
@@ -354,25 +373,37 @@ if require_file "$WRITE_CODE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# t. WCD-3 consumes the write_code-specific session-facts keys, not the
-#    write-tests sibling's keys (a wrong-key copy-paste from write-tests/
-#    SKILL.md's WT-6 would still pass every prior check in this file).
+# t. WCD-3 judges its own stage, not the write-tests sibling's (a wrong-stage
+#    copy-paste from write-tests/SKILL.md's WT-6 would still pass every prior
+#    check in this file). #2460: WCD-3 re-judges every run, so it reuses no
+#    stored evaluation key either.
 # ---------------------------------------------------------------------------
-echo "=== t. WCD-3 consumes COMPLEXITY_LEVEL_write_code / COMPLEXITY_SIGNALS ==="
+echo "=== t. WCD-3 judges stage=write-code and reuses no stored evaluation ==="
 if require_file "$WRITE_CODE_SKILL"; then
     wcd3_section=$(sed -n '/^WCD-3\./,/^WCD-3a\./p' "$WRITE_CODE_SKILL")
     if [ -z "$wcd3_section" ]; then
         fail "t. WCD-3 section not found in SKILL.md"
     else
-        if printf '%s\n' "$wcd3_section" | grep -qF 'COMPLEXITY_LEVEL_write_code'; then
-            pass "t. WCD-3 names 'COMPLEXITY_LEVEL_write_code'"
+        if printf '%s\n' "$wcd3_section" | grep -qF 'follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`write-code`'; then
+            pass "t. WCD-3 follows the shared procedure with point=complexity-judge stage=write-code"
         else
-            fail "t. WCD-3 does not name 'COMPLEXITY_LEVEL_write_code'"
+            fail "t. WCD-3 does not follow the shared procedure with point=complexity-judge stage=write-code"
         fi
-        if printf '%s\n' "$wcd3_section" | grep -qF 'COMPLEXITY_SIGNALS'; then
-            pass "t. WCD-3 names 'COMPLEXITY_SIGNALS'"
+        if printf '%s\n' "$wcd3_section" | grep -qF 'stage=`write-tests`'; then
+            fail "t. WCD-3 leaks the sibling stage 'write-tests' (copy-paste from write-tests)"
         else
-            fail "t. WCD-3 does not name 'COMPLEXITY_SIGNALS'"
+            pass "t. WCD-3 does not leak the sibling stage 'write-tests'"
+        fi
+        if printf '%s\n' "$wcd3_section" | grep -qF 'SIGNALS_CSV'; then
+            pass "t. WCD-3 takes its signals from the shared procedure's 'SIGNALS_CSV'"
+        else
+            fail "t. WCD-3 does not name 'SIGNALS_CSV'"
+        fi
+        stored_keys=$(printf '%s\n' "$wcd3_section" | grep -oE 'COMPLEXITY_(LEVEL|MODEL)_write_code|COMPLEXITY_SIGNALS' | sort -u | tr '\n' ' ')
+        if [ -z "$stored_keys" ]; then
+            pass "t. WCD-3 reuses no stored evaluation key"
+        else
+            fail "t. WCD-3 still reuses a stored evaluation key: $stored_keys"
         fi
         if printf '%s\n' "$wcd3_section" | grep -qF 'COMPLEXITY_LEVEL_write_tests'; then
             fail "t. WCD-3 leaks the sibling key 'COMPLEXITY_LEVEL_write_tests' (copy-paste from write-tests)"

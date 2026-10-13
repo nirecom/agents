@@ -32,7 +32,11 @@ SKIP_JUDGMENT_RESOLVER_N="$RESOLVER_N"
 . "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# Also removes the runner's isolation root, whose own trap this one replaces.
+trap 'rm -rf "$TMPDIR_BASE" ${_ISOLATION_TMP_ROOT:+"$_ISOLATION_TMP_ROOT"}' EXIT
+unset CLAUDE_CODE_SESSION_ID
+# Neutral cwd: hooks that call git rev-parse must not resolve the real worktree.
+cd "$TMPDIR_BASE" || exit 1
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"

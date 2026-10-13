@@ -9,7 +9,7 @@
 # The fix is a naming convention with one visible marker per form:
 #
 #   worker    the word "worker" adjacent to the name  — `doc-append` worker
-#   subagent  the word "subagent" adjacent to the name — `skip-verifier` subagent
+#   subagent  the word "subagent" adjacent to the name — `plan-skip-judge` subagent
 #   skill     the slash form                           — /commit-push
 #
 # The worker roster is read from the registry SSOT (hooks/lib/worker-dispatch-
@@ -233,7 +233,7 @@ group_marker_oracle_cases() {
     ENT_KINDS_FILE="$TMPD/oracle-kinds.txt"
     cat > "$ENT_KINDS_FILE" <<'KINDS'
 doc-append worker
-skip-verifier subagent
+plan-skip-judge subagent
 commit-push skill
 survey-code subagent skill
 KINDS
@@ -252,10 +252,10 @@ KINDS
         fi
     done <<'TABLE'
 worker-correct|doc-append|ok|WE-21. Dispatch the `doc-append` worker to append the entry.
-subagent-correct|skip-verifier|ok|Dispatch the `skip-verifier` subagent for the verdict.
+subagent-correct|plan-skip-judge|ok|Dispatch the `plan-skip-judge` subagent for the verdict.
 skill-correct|commit-push|ok|Dispatch /commit-push once the gate clears (`commit-push`).
 dual-kind-either-marker|survey-code|ok|Dispatch the `survey-code` subagent to map the callsites.
-subagent-mislabelled-worker|skip-verifier|reject|Dispatch the `skip-verifier` worker for the verdict.
+subagent-mislabelled-worker|plan-skip-judge|reject|Dispatch the `plan-skip-judge` worker for the verdict.
 worker-mislabelled-subagent|doc-append|reject|Dispatch the `doc-append` subagent to append the entry.
 skill-mislabelled-worker|commit-push|reject|Dispatch the `commit-push` worker when the gate clears.
 both-markers-ambiguous|doc-append|reject|Dispatch the `doc-append` worker via the subagent path.

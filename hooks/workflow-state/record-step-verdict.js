@@ -26,6 +26,7 @@ const {
 } = require("./completion-approval");
 const { isSkipAllowedForCliPath } = require("./plan-skip-allowance");
 const { validateSkipReason } = require("../workflow-mark/skip-reason");
+const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas");
 
 // ---- exported discriminators ----------------------------------------------
 
@@ -41,17 +42,15 @@ const ADVANCE_ORIGINS = {
   "next-step": "next-step-advance",
   "record-skip-judgment": "record-skip-judgment-advance",
   "set-workflow-type": "set-workflow-type-advance",
-  "record-complexity-and-skip": "record-complexity-and-skip-advance",
 };
 
 // The A-4 pass discriminator (#1286): a skip_reason carrying this prefix was
 // authorized by a recorded orchestrator judgment, not by model-authored text.
 // verdict.js imports it instead of re-spelling the literal.
 const RECORDED_VERDICT_PREFIX = "recorded-verdict:";
-const RECORDED_VERDICT_REASONS = {
-  outline: RECORDED_VERDICT_PREFIX + " so_c1+so_c2 met",
-  detail: RECORDED_VERDICT_PREFIX + " sd_c1+sd_c2+sd_c3 met",
-};
+const reasonsFrom = (schemas) => Object.freeze(Object.fromEntries(
+  Object.entries(schemas).map(([t, keys]) => [t, `${RECORDED_VERDICT_PREFIX} ${keys.join("+")} met`])));
+const RECORDED_VERDICT_REASONS = reasonsFrom(CONDITION_SCHEMAS);
 
 // Steps a declaring caller may never complete. Each is guarded elsewhere by an
 // ask-gated or evidence-carrying route; a declaration must not route around it.
@@ -303,7 +302,7 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
 
   // Idempotent repeat — ADVANCE GATE ONLY. Returning before the write is what
   // keeps a re-issued --advance from re-firing the workflow_init downstream reset
-  // or overwriting an A-4 verdict that skip-verifier has since resolved.
+  // or overwriting an A-4 verdict that record-skip-verdict has since resolved.
   // The sentinel/mark/reset/recorded-verdict gates deliberately keep their
   // pre-#1644 re-write behaviour: re-emitting a NOT_NEEDED sentinel with a new
   // reason must still replace the recorded skip_reason (migration note 5).
@@ -420,8 +419,8 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
 
   // --- co-written facts owned by the same writer --------------------------
   if (status === "skipped" && APPROVAL_GATED_STEPS.indexOf(step) !== -1) {
-    // A-4 (#1681): a skip of an approval-gated step is speculative until
-    // skip-verifier resolves it. Dropping this co-write is the single regression
+    // A-4 (#1681): a manual sentinel skip of an approval-gated step stays pending
+    // for audit until record-skip-verdict resolves it. Dropping this co-write is the single regression
     // that would make such a skip final without review.
     try {
       const source = typeof opts.skipVerdictSource === "string" && opts.skipVerdictSource !== ""

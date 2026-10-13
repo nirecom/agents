@@ -81,7 +81,7 @@ A session may close multiple issues in a single PR. Quick reference:
 
 - `closes_issues` is the flat list of issues the session closes. `ISSUES[0]`
   is the first entry in insertion order (no special representational status).
-  All entries are treated symmetrically for WIP, labels, history, and PR markers.
+  All entries are treated alike for WIP, labels, history, and PR markers.
 - One `history.md` entry per closed issue.
 - One `Closes #<N>` line and one `<!-- issue-close-pr-of: <N> -->` marker
   per closed issue in the PR body.
@@ -281,30 +281,75 @@ reports `source=dotenv` (or `env`) after the run.
 
 Design rationale: [test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md) Section 5.
 
-## Jev shadow mode
+## Jev
 
-Jev is a second-opinion complexity classifier that only logs; the LLM judge's
-answer is always the one used. Default is off.
+Jev is the first judge for task complexity and for the outline / detail skip
+decisions; a subagent answers whatever Jev is not confident about. Default is off.
 
-Enable (after release):
+Enable:
 
 1. In the global agents `.env` (under the agents main root), set `JEV=on` and `TYPESAFE_API_KEY=<key>`. A project `.env.local` cannot set either key (they are refused there). See `.env.example`.
-2. Verify in a linked worktree first. The main worktree stays off until the rollout decision.
+2. Verify in a linked worktree first.
 
-Disable: set `JEV=off` in the same `.env`, or remove the line. The feature is
-fail-open: an outage, missing key, or bad response never blocks the agent call; it only skips the shadow record.
+Disable: set `JEV=off` in the same `.env`, or remove the line. Every judgment
+then goes to the subagent. Jev never blocks a judgment: an outage, missing key,
+or bad response delegates to the subagent, and a failure of the procedure itself
+resolves to the safe side (highest complexity level, or run the planning stage).
 
-Report (reads local files only, never contacts Jev):
+### Reading the report
 
 ```
 node bin/jev-report
-node bin/jev-report --point complexity-judge --json
+node bin/jev-report --point detail-skip --json
 node bin/jev-report --log <path> --no-sweep
 ```
 
-Flags: `--log <path>` (default decision log), `--point <name>` (one consumer), `--json`, `--no-sweep` (skip the pending-orphan sweep and 7-day state retention that run by default).
+Flags: `--log <path>` (default decision log), `--point <name>` (one judgment point), `--json`, `--no-sweep` (skip the orphan sweep and 7-day state retention that run by default). It reads local files only and never contacts Jev.
 
-Where things live:
+| Section | What to look at |
+|---|---|
+| Adoption | **LLM call rate**: how often a subagent dispatch was requested — the cost Jev is meant to remove. `adopted` and `by_mode` show whose answers decided. |
+| Adoption | Short-circuit rate (skip points): how often one confident "run" answer decided the point. Watch its trend; it is the everyday view of the run direction. |
+| Adoption | `answer_missing`, `finalize_absent`: dispatches whose answer never arrived, and tickets nobody finalized. Persistent non-zero values mean a caller is not completing the procedure. |
+| Adoption | `input_insufficient`: tickets where Jev was not asked because a required section was not whole. Read its breakdown (issue body, detail, `copy-failed`, `over-cap`). An issue-body shortfall comes from a long issue combined with a long plan and is a designed cost, not a fault. |
+| Adoption | `superseded_count`: non-zero means two callers advanced the same step in parallel. The newer judgment is the valid one; the older caller stopped without writing. |
+| Retune | Per-key agreement and, per candidate threshold, whether lowering is supported (below). |
+| Legacy | Version 1 records from the shadow period, with their original metrics. Never mixed into the sections above. |
+
+`duplicate_ticket_records`, `unknown_version` and unreadable log generations are data-quality counters; each should be zero.
+
+### Lowering a skip threshold
+
+The skip points shipped with 0.7 for the run direction, 0.9 for the skip
+direction, and short-circuit on "run". Those values come from a threshold sweep
+that traded precision against the share of judgments Jev decides alone. They
+are estimates: the sweep measured earlier questions with different wording, and
+`so_c2` has no measurement at all — it borrows `so_c1`'s value.
+
+The only retune this procedure covers is lowering the skip-direction threshold.
+
+1. Run `node bin/jev-report --point <outline-skip|detail-skip>` and read the retune section.
+2. A candidate is supported when it shows `retune_ready=true`. The conditions (candidate values, minimum answer count, minimum agreement) are `RETUNE_POLICY` in `bin/lib/jev-report-aggregate/retune.js`; the report prints them.
+3. Decide. `retune_ready` is evidence, not an instruction — a person makes the change, in `hooks/lib/jev/registry.js`.
+
+Each candidate `t` is judged only on answers in the band `[t, current)`: the
+answers that would newly be adopted. Answers at or above the current threshold
+are not counted — lowering the threshold does not change them, and a ticket Jev
+decided alone has no subagent answer, so counting them would skew the figure
+toward tickets that happened to need a subagent.
+
+To measure run-direction agreement, set the point's `mode` to `"shadow"` for a
+while, let `run_direction` fill, then set it back to `"production"`.
+
+### Rolling back
+
+A registry change takes effect from the next ticket queried; a ticket already
+queried finishes under the policy it started with (at most its one-hour lifetime).
+
+- **Jev's adoption** — by data, no revert: set the point's `mode` to `"shadow"` in `hooks/lib/jev/registry.js` (the subagent judges every key, Jev is logged only), raise a threshold there, or set `JEV=off`.
+- **Everything else that shipped with the switch** — `git revert` only: the retired complexity signals, the end of the zero-signal automatic skip, the retired skip verifier and its scripts, the replaced detail-skip criteria. Changing `mode` does not restore them.
+
+### Where things live
 
 - State: `$AGENTS_STATE_DIR/jev` (default `~/.agents/jev`), one directory per session.
 - Decision log: `jev-decisions.log` (JSONL), rotated by size. Deleting it loses only the evidence collected so far.

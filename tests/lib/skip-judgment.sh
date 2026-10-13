@@ -1,26 +1,14 @@
 # shellcheck shell=bash
-# tests/lib/skip-judgment.sh — shared helper for planting valid skip judgments.
-# Sourced (not executed) by test files that need to plant a valid recorded
-# skip judgment with its artifact file already present.
-#
-# Required in-scope symbols (must be set/defined BEFORE first use of plant_valid_skip):
-#   SKIP_JUDGMENT_RESOLVER_N  — Windows-native (or POSIX) path to
-#                               hooks/workflow-state/skip-signal-resolver.js
-#   api_exists                — shell function; returns 0 if recordSkipJudgment
-#                               exists in the resolver, non-zero otherwise
-#   run_with_timeout          — shell function; wraps a command with a timeout
+# tests/lib/skip-judgment.sh — sourced helper that plants a valid recorded skip judgment.
+# Caller must define SKIP_JUDGMENT_RESOLVER_N (resolver path), api_exists and run_with_timeout.
 
-# plant_valid_skip <plans_dir> <sid> <target> <cond>
-#
-# Plants a valid skip judgment for <sid>/<target> by:
-#   1. Creating (touching) the artifact file FIRST so artifact mtime <= recorded_at.
-#      Artifact suffix: target=="detail" → "-outline.md", else "-intent.md".
-#   2. Calling recordSkipJudgment via the resolver.
-#
-# When api_exists returns non-zero (pre-implementation), this is a no-op so
-# callers can be guarded-skip-safe.
+# plant_valid_skip <plans_dir> <sid> <target> <cond> [source]
+# Touches the artifact first (detail → -outline.md, else -intent.md) so its mtime
+# <= recorded_at, then records <cond>. [source] defaults to "subagent" (a member of
+# JUDGMENT_SOURCES since #2460); pass another value only to plant an invalid record.
+# No-op when api_exists fails, so callers stay guarded-skip-safe.
 plant_valid_skip() {
-  local plans_dir="$1" sid="$2" target="$3" cond="$4"
+  local plans_dir="$1" sid="$2" target="$3" cond="$4" source="${5:-subagent}"
   api_exists || return 0
   local suffix
   if [ "$target" = "detail" ]; then
@@ -31,6 +19,6 @@ plant_valid_skip() {
   : > "${plans_dir}/${sid}${suffix}"
   run_with_timeout node -e "
     const r = require('$SKIP_JUDGMENT_RESOLVER_N');
-    r.recordSkipJudgment('$sid', '$target', $cond, 'orchestrator');
+    r.recordSkipJudgment('$sid', '$target', $cond, '$source');
   " 2>/dev/null || true
 }

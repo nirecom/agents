@@ -168,7 +168,7 @@ SID_TEST="20260509-bundle-a"
 case_begin "source-scan-matrix" "bin/check-plans-artifacts"
 # C11: table-driven matrix over artifact/control/unregistered/token-spelling/malformed-path.
 # Columns: label | content written to fixture file | expected exit code | file extension.
-# The lint scans all files regardless of extension per plan Step 7-2 ("全ファイル").
+# The lint scans all files regardless of extension per plan Step 7-2 ("all files").
 while IFS='|' read -r LABEL CONTENT WANT_RC EXT; do
   FX="$T/scan-$LABEL"; make_tree "$FX"
   printf '%s\n' "$CONTENT" > "$FX/bin/m.$EXT"
@@ -222,7 +222,7 @@ else
   fail "dir-unregistered-warning" "want exit 0; got $L_RC: $L_OUT"
 fi
 # A lint that exits 0 without detecting anything must not pass: the warning names
-# the file, its classification, and the count (plan Step 7-1 "件数を表示").
+# the file, its classification, and the count (plan Step 7-1 "show the count").
 UNK_LINE="$(printf '%s\n' "$L_OUT" | grep -F "$UNK_NAME" | head -n 1)"
 check "dir-unregistered-warning: the diagnostic names the unregistered file" \
   "yes" "$([ -n "$UNK_LINE" ] && printf yes || printf no)"
@@ -352,6 +352,7 @@ complexity-judge-raw.txt                            | artifact
 detail-judge-raw.txt                                | artifact
 write-tests-judge-raw.txt                           | artifact
 write-code-judge-raw.txt                            | artifact
+write-code-files.txt                                | artifact
 worker-commit-push.draft.json                       | artifact
 worker-x-1.draft.json                               | artifact
 issue-create-dispatch.txt                           | artifact

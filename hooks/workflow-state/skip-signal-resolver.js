@@ -6,15 +6,16 @@
 //
 // isTrivial: WEAK SUPPLEMENTARY hint only (demoted from sole gate by #1286).
 // Fails open to FALSE (uncertain ⇒ full workflow); mirrors evidence-resolver.js.
-// skip_judgment schema — state.steps[targetStep].skip_judgment: recorded_at (ISO
-// string), judgment_source ("orchestrator" is the only authoritative value),
-// conditions (per-target booleans keyed per CONDITION_SCHEMAS), all_conditions_met.
+// skip_judgment: recorded_at, judgment_source + conditions (see condition-schemas.js),
+// all_conditions_met, and the jev-judge ticket if any.
 
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
-const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas");
+const { CONDITION_SCHEMAS, JUDGMENT_SOURCES } = require("./skip-signal-resolver/condition-schemas");
+
+const TICKET_RE = /^[0-9a-f]{16}$/;
 const complexity = require("./skip-signal-resolver/complexity");
 
 // ---- isTrivial keyword sets (module-level frozen, referenced by tests + describe) ----
@@ -74,8 +75,8 @@ function isTrivial(sessionId, plansDir) {
 function isRecordedVerdictValid(sj, targetStep) {
   try {
     if (!sj || typeof sj !== "object" || Array.isArray(sj)) return false;
-    if (sj.judgment_source !== "orchestrator") return false;
-    if (sj.all_conditions_met !== true) return false;
+    if (!JUDGMENT_SOURCES.includes(sj.judgment_source)) return false;
+    if (!Object.prototype.hasOwnProperty.call(CONDITION_SCHEMAS, targetStep)) return false;
     const expectedKeys = CONDITION_SCHEMAS[targetStep];
     if (!expectedKeys) return false;
     const cond = sj.conditions;
@@ -83,9 +84,9 @@ function isRecordedVerdictValid(sj, targetStep) {
     const actualKeys = Object.keys(cond);
     if (actualKeys.length !== expectedKeys.length) return false;
     for (const k of expectedKeys) {
-      if (cond[k] !== true) return false;
+      if (typeof cond[k] !== "boolean") return false;
     }
-    return true;
+    return sj.all_conditions_met === expectedKeys.every((k) => cond[k] === true);
   } catch (_) {
     return false;
   }
@@ -93,15 +94,24 @@ function isRecordedVerdictValid(sj, targetStep) {
 
 // ---- Recorded-verdict API (#1286) -----------------------------------------
 
-// recordSkipJudgment(sessionId, targetStep, conditions, source):
+// recordSkipJudgment(sessionId, targetStep, conditions, source, opts = {}):
 // Attaches a skip_judgment record to state.steps[targetStep] WITHOUT changing
-// the step's status. Fail-open: any error → silent return.
-function recordSkipJudgment(sessionId, targetStep, conditions, source) {
+// the step's status. opts.ticket is kept only when it is a 16-hex ticket id.
+// Fail-open: any error → silent return.
+function recordSkipJudgment(sessionId, targetStep, conditions, source, opts = {}) {
   try {
     if (targetStep !== "outline" && targetStep !== "detail") return;
     const { appendEvents } = require("./state-io");
     const condVals = Object.values(conditions || {});
     const all_conditions_met = condVals.length > 0 && condVals.every((v) => v === true);
+    const value = {
+      recorded_at: new Date().toISOString(),
+      judgment_source: source,
+      conditions: conditions || {},
+      all_conditions_met,
+    };
+    const ticket = opts && opts.ticket;
+    if (typeof ticket === "string" && TICKET_RE.test(ticket)) value.ticket = ticket;
     // A judgment is a fact ABOUT the step, so it is its own annotation event.
     // Pre-#1733 this had to re-read the status and pass it back through markStep
     // (which replaced the whole step object) purely to avoid resetting it (#1733).
@@ -110,12 +120,7 @@ function recordSkipJudgment(sessionId, targetStep, conditions, source) {
         kind: "step_annotation",
         step: targetStep,
         key: "skip_judgment",
-        value: {
-          recorded_at: new Date().toISOString(),
-          judgment_source: source,
-          conditions: conditions || {},
-          all_conditions_met,
-        },
+        value,
         provenance: "observed",
         origin: "record-skip-judgment",
       },
@@ -144,9 +149,8 @@ function readSkipJudgment(sessionId, targetStep) {
 }
 
 // hasValidSkipJudgment(sessionId, targetStep):
-// Returns true iff readSkipJudgment returns a non-null object AND
-// judgment_source === "orchestrator" AND all_conditions_met === true AND
-// conditions matches the per-target schema exactly (hardening #2, #1300).
+// Returns true iff the judgment is newer than its artifact AND
+// isRecordedVerdictValid accepts it (hardening #2, #1300).
 // Never throws (fail to false).
 function hasValidSkipJudgment(sessionId, targetStep) {
   try {
@@ -168,7 +172,7 @@ function hasValidSkipJudgment(sessionId, targetStep) {
     if (isNaN(recordedAtMs)) return false;
     // Floor to ms precision to match toISOString() truncation on sub-ms filesystems (NTFS).
     if (Math.floor(artifactMtimeMs) > recordedAtMs) return false;
-    return isRecordedVerdictValid(sj, targetStep);
+    return sj.all_conditions_met === true && isRecordedVerdictValid(sj, targetStep);
   } catch (_) {
     return false;
   }
@@ -197,6 +201,7 @@ module.exports = {
   BROAD_RE,
   NEW_API_RE,
   CONDITION_SCHEMAS,
+  JUDGMENT_SOURCES,
   isRecordedVerdictValid,
   recordSkipJudgment,
   readSkipJudgment,
@@ -207,5 +212,4 @@ module.exports = {
   readComplexityEvaluation: complexity.readComplexityEvaluation,
   hasComplexityEvaluation: complexity.hasComplexityEvaluation,
   readStageComplexityLevel: complexity.readStageComplexityLevel,
-  resolveSkipConditionsFromComplexity: complexity.resolveSkipConditionsFromComplexity,
 };

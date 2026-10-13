@@ -11,6 +11,9 @@ const {
   renderNoIssueSection,
 } = require("../issue-comments");
 
+// The Issue body of a session with no issue; the Jev snapshot treats it as an exempt section.
+const NO_ISSUE_BODY = "(none — no issue)";
+
 /**
  * Phase: write-context — writes <session>-context.md into WORKFLOW_PLANS_DIR.
  * Section layout is pinned by tests/feature-workflow-init-driver.
@@ -53,7 +56,7 @@ function writeContext(state, plansDir, sessionId) {
 
   const issuesStr = issues.length > 0 ? issues.map((n) => `#${n}`).join(", ") : "(none)";
 
-  let bodyStr = "(none — no issue)";
+  let bodyStr = NO_ISSUE_BODY;
   let titleStr = "(none)";
   let stateStr = "(none)";
   let labelsStr = "(none)";
@@ -116,4 +119,4 @@ function writeContext(state, plansDir, sessionId) {
   return { done: false };
 }
 
-module.exports = { writeContext };
+module.exports = { writeContext, NO_ISSUE_BODY };

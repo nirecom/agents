@@ -267,12 +267,14 @@ folded into the step's own entry as a step annotation:
 }
 ```
 
-`verdict` is `pending` (skip-verifier not yet run), `approve` (skip confirmed safe), or
+`verdict` is `pending` (a manual sentinel skip not yet resolved), `approve` (skip confirmed safe), or
 `veto` (skip rejected — step must run). A `veto` verdict de-skips the step at read time:
 `reconcileEffectiveState` treats a step whose raw status is `skipped` but whose
 `skip_verdict.verdict === "veto"` as `pending`, forcing `next-step` to schedule it.
-A `pending` verdict blocks next-step with a `"skip_verdict_pending"` hint until the
-verifier resolves.
+A `pending` verdict blocks next-step with a `"skip_verdict_pending"` hint until it is
+resolved by hand with `bin/workflow/record-skip-verdict`. Only a manual sentinel skip
+starts as `pending`; a skip judged through `bin/workflow/jev-judge` is recorded as a
+`skip_judgment` and needs no verdict.
 
 ### `complexity_evaluation` (per-stage routing levels, #2099)
 
@@ -286,7 +288,7 @@ verdict per stage so each step routes on its own evidence:
   "complexity_evaluation": {
     "level": "high",
     "levels": { "outline": "low", "detail": "high", "write_tests": "low", "write_code": "high" },
-    "signals": ["S1-multi-file", "S3-security"],
+    "signals": ["S2-architecture", "S3-security"],
     "recorded_at": "2026-08-20T10:00:00.000Z"
   }
 }

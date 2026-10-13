@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/jev/breaker.js, hooks/lib/jev/liveness.js, hooks/jev-shadow-pre.js, hooks/lib/jev/broker.js
-# Tags: TL2, hooks, jev, circuit-breaker, liveness, time-travel-by-state-file, scope:issue-specific, pwsh-not-required, try-acquire, half-open, concurrency, bad-response, late-success, admitted-at
+# Tags: TL2, hooks, jev, circuit-breaker, liveness, time-travel-by-state-file, scope:issue-specific, pwsh-not-required, try-acquire, half-open, concurrency, bad-response, late-success, admitted-at, breaker-scope, transport-scope, mapping-scope, versioned-state, legacy-state
 
 # A sick Jev must not add latency to every dispatch: three consecutive transport or HTTP
 # failures open the per-session breaker for 10 minutes, and a successful /v1/models probe
@@ -35,7 +35,7 @@ check "breaker.json counts 3 consecutive failures, last status http-error" "3|\"
   "$(breaker_field "$SID" consecutive_failures)|$(breaker_field "$SID" last_failure_status)"
 check "open_until_ms is about 10 minutes ahead" "true" \
   "$(hq json-expr "$(np "$JEVDIR/$SID/breaker.json")" 'o && (o.open_until_ms - now) > 540000 && (o.open_until_ms - now) <= 600000')"
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_f_fourth
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_f_fourth
 check "the 4th dispatch sends no query" "3" "$(mock_count systemone)"
 check "the 4th dispatch is recorded as breaker-open" "breaker-open|breaker-open" \
   "$(rq toolu_f_fourth 'r && [r.jev.status, r.fallback_reason].join("|")')"
@@ -80,17 +80,20 @@ check "four low-confidence answers: all four queries sent" "4" "$(mock_count sys
 check "four low-confidence answers: the failure count stays 0" "0" "$(breaker_field "$SID" consecutive_failures)"
 case_end
 
-echo "=== a malformed answer set is an outage (bad-response) ==="
-# ust <n>: jev.status of the n-th f-unmap hand-off.
+echo "=== a malformed answer set is a mapping outage (bad-response, per point) ==="
+# ust <n>: jev.status of the n-th f-unmap hand-off. map_field: the complexity-judge mapping scope.
 ust() { hq json-expr "$(np "$JEVDIR/$SID/pending/toolu_f_unmap_$1.json")" 'o && o.jev.status'; }
+map_field() { hq json-get "$(np "$JEVDIR/$1/breaker-complexity-judge.json")" "$2"; }
 case_begin "f-unmappable-counts-as-bad-response" "hooks/lib/jev/breaker.js"
 fx_new f-unmap
 SID="jev2460-f-unmap"
 mock_mode '{"systemone":"missing"}'
 pre_n "$SID" unmap 4
 check "four unmappable answers: three queries sent, the 4th is held back by the open breaker" "3" "$(mock_count systemone)"
-check "breaker.json counts 3 consecutive bad-response failures" '3|"bad-response"' \
-  "$(breaker_field "$SID" consecutive_failures)|$(breaker_field "$SID" last_failure_status)"
+check "breaker-complexity-judge.json counts 3 consecutive bad-response failures" '3|"bad-response"' \
+  "$(map_field "$SID" consecutive_failures)|$(map_field "$SID" last_failure_status)"
+check "the transport scope counts none of them" "true" \
+  "$([[ ! -e "$JEVDIR/$SID/breaker.json" ]] && echo true || hq json-expr "$(np "$JEVDIR/$SID/breaker.json")" 'o && !o.consecutive_failures')"
 check "the hand-offs keep unmappable for the three answered, breaker-open for the 4th" "unmappable|unmappable|unmappable|breaker-open" \
   "$(ust 1)|$(ust 2)|$(ust 3)|$(ust 4)"
 case_end
@@ -99,32 +102,98 @@ fx_new f-unmap-ok
 SID="jev2460-f-unmap-ok"
 mock_mode '{"systemone":"missing"}'
 pre_n "$SID" a 2
+check "fixture: two unmappable answers counted in the mapping scope" "2" "$(map_field "$SID" consecutive_failures)"
 mock_mode '{}'
 pre_n "$SID" b 1
-check "unmappable, unmappable, ok: the ok answer resets the count to 0" "0" "$(breaker_field "$SID" consecutive_failures)"
+check "unmappable, unmappable, ok: the ok answer resets the mapping count to 0" "0" "$(map_field "$SID" consecutive_failures)"
 case_end
 
 echo "=== tryAcquire: closed, open and half-open (injected clock) ==="
-HPROBE="$(np "$LIBDIR/hardening-probe.js")"
-# kp <cmd> [args...]: one hardening-probe process in the current fixture, away from the worktree.
+# The v2 breaker API takes the judgment point: tryAcquire(sid, point, opts), recordFailure(sid,
+# point, status, opts), recordSuccess(sid, point, opts). Transport outages land in breaker.json
+# (shared by every point); bad-response lands in breaker-<point>.json. Prints one line.
+BPROBE="$TMPROOT/breaker-probe.js"
+cat > "$BPROBE" <<'JS'
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const [repo, cmd, ...a] = process.argv.slice(2);
+const out = (s) => process.stdout.write(String(s));
+const clock = (ms) => ({ now: () => Number(ms) });
+const dir = (sid) => path.join(process.env.AGENTS_STATE_DIR, "jev", sid);
+const state = (sid) => { try { return fs.readFileSync(path.join(dir(sid), "breaker.json"), "utf8"); } catch (_e) { return "absent"; } };
+const pt = (p) => p || "complexity-judge";
+const files = (sid) => { try { return "files:" + fs.readdirSync(dir(sid)).filter((f) => /^breaker.*\.json$/.test(f)).sort().join(","); } catch (_e) { return "files:"; } };
+const field = (sid, f, k) => { try { return String(JSON.parse(fs.readFileSync(path.join(dir(sid), f), "utf8"))[k]); } catch (_e) { return "absent"; } };
+try {
+  if (cmd === "acquire-lockfail") require(path.join(repo, "hooks/lib/jsonl-rotating-log.js")).withLock = () => { throw new Error("lock unavailable"); };
+  const b = require(path.join(repo, "hooks/lib/jev/breaker.js"));
+  if (cmd === "acquire" || cmd === "acquire-lockfail") {
+    // acquire <sid> <nowMs> [point]: the verdict, then breaker.json as it is afterwards.
+    out(b.tryAcquire(a[0], pt(a[2]), clock(a[1])) + "|" + state(a[0]));
+  } else if (cmd === "fail") {
+    // fail <sid> <status> <nowMs> [point]
+    b.recordFailure(a[0], pt(a[3]), a[1], clock(a[2]));
+    out(state(a[0]));
+  } else if (cmd === "succeed") {
+    // succeed <sid> [admittedAtMs|-] [point]: without admittedAtMs the reset is unconditional.
+    if (a[1] === undefined || a[1] === "-") b.recordSuccess(a[0], pt(a[2]));
+    else b.recordSuccess(a[0], pt(a[2]), { admittedAtMs: Number(a[1]) });
+    out(state(a[0]));
+  } else if (cmd === "consts") {
+    out([b.FAILURE_THRESHOLD, b.OPEN_MS, b.TRIAL_MS, b.BREAKER_VERSION].join("|"));
+  } else if (cmd === "race") {
+    const at = Number(a[1]);
+    while (Date.now() < at) { /* barrier */ }
+    out(b.tryAcquire(a[0], "complexity-judge"));
+  } else if (cmd === "scope") {
+    // scope <sid> <nowMs> <status>: three failures of <status> on complexity-judge, then
+    // "<files>|<transport count>|<mapping count>|<transport version>|<acquire outline-skip>|<acquire complexity-judge>".
+    const t = Number(a[1]);
+    for (let i = 0; i < 3; i++) b.recordFailure(a[0], "complexity-judge", a[2], clock(t));
+    out([files(a[0]), field(a[0], "breaker.json", "consecutive_failures"), field(a[0], "breaker-complexity-judge.json", "consecutive_failures"),
+      field(a[0], "breaker.json", "version"), b.tryAcquire(a[0], "outline-skip", clock(t + 1)), b.tryAcquire(a[0], "complexity-judge", clock(t + 1))].join("|"));
+  } else if (cmd === "scope-reset") {
+    // scope-reset <sid> <nowMs>: three timeouts and three bad-responses, then recordSuccess;
+    // "<transport>,<mapping> counts before|after|<acquire complexity-judge after>".
+    const t = Number(a[1]);
+    for (let i = 0; i < 3; i++) { b.recordFailure(a[0], "complexity-judge", "timeout", clock(t)); b.recordFailure(a[0], "complexity-judge", "bad-response", clock(t)); }
+    const counts = () => field(a[0], "breaker.json", "consecutive_failures") + "," + field(a[0], "breaker-complexity-judge.json", "consecutive_failures");
+    const before = counts();
+    b.recordSuccess(a[0], "complexity-judge");
+    out([before, counts(), b.tryAcquire(a[0], "complexity-judge", clock(t + 1))].join("|"));
+  } else if (cmd === "bad-point") {
+    // bad-point <sid> <nowMs>: bad-response for unregistered/invalid points, then the registered control;
+    // "<files after>|<escape file>|<files after control>".
+    const t = Number(a[1]);
+    fs.mkdirSync(dir(a[0]), { recursive: true });
+    for (const p of ["no-such-point", "../escape", "constructor"]) b.recordFailure(a[0], p, "bad-response", clock(t));
+    const after = files(a[0]);
+    const esc = fs.existsSync(path.join(dir(a[0]), "..", "escape.json")) || fs.existsSync(path.join(dir(a[0]), "breaker-..")) ? "present" : "absent";
+    b.recordFailure(a[0], "complexity-judge", "bad-response", clock(t));
+    out([after, esc, files(a[0])].join("|"));
+  } else out("UNKNOWN-CMD:" + cmd);
+} catch (e) { out("THREW:" + e.message); }
+JS
+# kp <cmd> [args...]: one breaker-probe process in the current fixture, away from the worktree.
 kp() {
   (
     cd "$FX/cwd" || exit 97
     env -u CLAUDE_CODE_SESSION_ID -u CLAUDECODE \
-      bash "$RWT" 60 node "$HPROBE" "$REPO_N" "$@" 2>> "$ERR_ALL" < /dev/null
+      bash "$RWT" 60 node "$(np "$BPROBE")" "$REPO_N" "$@" 2>> "$ERR_ALL" < /dev/null
   )
 }
-# seed_breaker <sid> <failures> <open_until_ms>: write breaker.json; BSTATE holds its exact text.
+# seed_breaker <sid> <failures> <open_until_ms>: write a v2 breaker.json; BSTATE holds its exact text.
 seed_breaker() {
   mkdir -p "$JEVDIR/$1"
-  BSTATE="{\"consecutive_failures\":$2,\"open_until_ms\":$3,\"last_failure_status\":\"timeout\"}"
+  BSTATE="{\"version\":2,\"consecutive_failures\":$2,\"open_until_ms\":$3,\"last_failure_status\":\"timeout\"}"
   printf '%s' "$BSTATE" > "$JEVDIR/$1/breaker.json"
 }
 bexpr() { hq json-expr "$(np "$JEVDIR/$1/breaker.json")" "$2"; }
 T0=1700000000000
 case_begin "f-try-acquire-table" "hooks/lib/jev/breaker.js"
 fx_new f-acq
-check "fixture: threshold|OPEN_MS|TRIAL_MS" "3|600000|30000" "$(kp consts)"
+check "fixture: threshold|OPEN_MS|TRIAL_MS|BREAKER_VERSION" "3|600000|30000|2" "$(kp consts)"
 check "no breaker.json: true, and nothing is written" "true|absent" "$(kp acquire jev2460-f-acq-none "$T0")"
 seed_breaker jev2460-f-acq-closed 2 0
 check "2 failures, not open: true, breaker.json byte-identical" "true|$BSTATE" "$(kp acquire jev2460-f-acq-closed "$T0")"
@@ -251,7 +320,7 @@ until grep -qF '"path":"/v1/systemone"' "$MOCK_REQ" 2>/dev/null || [[ "$_w" -ge 
 check "fixture: the query is in flight and no breaker.json existed at admission" "1|absent" \
   "$(grep -cF '"path":"/v1/systemone"' "$MOCK_REQ")|$([[ -e "$JEVDIR/$SID/breaker.json" ]] && echo present || echo absent)"
 LATE_OPEN=$(( $(hq now) + 600000 ))
-LATE_STATE="{\"consecutive_failures\":3,\"open_until_ms\":$LATE_OPEN,\"trial_at_ms\":0,\"last_failure_status\":\"timeout\"}"
+LATE_STATE="{\"version\":2,\"consecutive_failures\":3,\"open_until_ms\":$LATE_OPEN,\"trial_at_ms\":0,\"last_failure_status\":\"timeout\"}"
 mkdir -p "$JEVDIR/$SID"
 printf '%s' "$LATE_STATE" > "$JEVDIR/$SID/breaker.json.tmp"
 mv -f "$JEVDIR/$SID/breaker.json.tmp" "$JEVDIR/$SID/breaker.json"
@@ -264,12 +333,44 @@ check "the breaker is still open with count 3" "3|true" \
   "$(breaker_field "$SID" consecutive_failures)|$(bexpr "$SID" 'o && o.open_until_ms > now')"
 case_end
 
+echo "=== scopes: transport is shared across points, mapping is per point ==="
+case_begin "f-transport-scope-blocks-other-points" "hooks/lib/jev/breaker.js"
+fx_new f-scope-t
+check "three timeouts on complexity-judge: only breaker.json (v2, count 3); outline-skip and complexity-judge both refused" \
+  "files:breaker.json|3|absent|2|false|false" "$(kp scope jev2460-f-scope-t "$T0" timeout)"
+case_end
+case_begin "f-mapping-scope-stays-per-point" "hooks/lib/jev/breaker.js"
+fx_new f-scope-m
+check "three bad-responses on complexity-judge: only breaker-complexity-judge.json (count 3); outline-skip passes, complexity-judge refused" \
+  "files:breaker-complexity-judge.json|absent|3|absent|true|false" "$(kp scope jev2460-f-scope-m "$T0" bad-response)"
+case_end
+case_begin "f-success-resets-both-scopes" "hooks/lib/jev/breaker.js"
+fx_new f-scope-both
+check "both scopes at 3, recordSuccess resets transport and mapping to 0, then complexity-judge passes" "3,3|0,0|true" \
+  "$(kp scope-reset jev2460-f-scope-both "$T0")"
+case_end
+case_begin "f-legacy-unversioned-breaker-is-closed" "hooks/lib/jev/breaker.js"
+fx_new f-legacy
+SID="jev2460-f-legacy"
+mkdir -p "$JEVDIR/$SID"
+printf '{"consecutive_failures":3,"open_until_ms":%s,"last_failure_status":"timeout"}' $((T0 + 600000)) > "$JEVDIR/$SID/breaker.json"
+check "an open breaker.json without a version is read as absent: tryAcquire passes" "true" \
+  "$(kp acquire "$SID" "$T0" complexity-judge | cut -d'|' -f1)"
+seed_breaker jev2460-f-legacy-v2 3 $((T0 + 600000))
+check "control: the same state with version 2 is refused" "false" "$(kp acquire jev2460-f-legacy-v2 "$T0" complexity-judge | cut -d'|' -f1)"
+case_end
+case_begin "f-unregistered-point-writes-nothing" "hooks/lib/jev/breaker.js"
+fx_new f-badpoint
+check "bad-response for unregistered or invalid points writes no breaker file; the registered control does" \
+  "files:|absent|files:breaker-complexity-judge.json" "$(kp bad-point jev2460-f-badpoint "$T0")"
+case_end
+
 echo "=== liveness probe ==="
 case_begin "f-probe-http-error-keeps-status" "hooks/lib/jev/liveness.js"
 fx_new f-probe500
 SID="jev2460-f-probe500"
 mock_mode '{"models":"http:500"}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_f_probe500
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_f_probe500
 check "/v1/models 500: no systemone query" "0|1" "$(mock_count systemone)|$(mock_count models)"
 check "/v1/models 500: recorded as http-error with http_status 500" "http-error|500|http-error" \
   "$(rq toolu_f_probe500 'r && [r.jev.status, r.jev.http_status, r.fallback_reason].join("|")')"
@@ -281,7 +382,7 @@ case_begin "f-probe-timeout-keeps-status" "hooks/lib/jev/liveness.js"
 fx_new f-probeslow
 SID="jev2460-f-probeslow"
 mock_mode '{"models":"slow","delayMs":4000}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_f_probeslow JEV_HTTP_TIMEOUT_MS=500
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_f_probeslow JEV_HTTP_TIMEOUT_MS=500
 check "slow /v1/models: no systemone query" "0" "$(mock_count systemone)"
 check "slow /v1/models: recorded as timeout with http_status null" "timeout|null|timeout" \
   "$(rq toolu_f_probeslow 'r && [r.jev.status, String(r.jev.http_status), r.fallback_reason].join("|")')"
@@ -292,7 +393,7 @@ case_begin "f-probe-401-bad-key-is-http-error" "hooks/lib/jev/provider-core.js"
 fx_new f-probe401
 SID="jev2460-f-probe401"
 mock_mode '{"models":"http:401"}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_f_probe401
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_f_probe401
 check "/v1/models 401: no systemone query" "0|1" "$(mock_count systemone)|$(mock_count models)"
 check "/v1/models 401: http-error, http_status 401, fallback_reason http-error" "http-error|401|http-error" \
   "$(rq toolu_f_probe401 'r && [r.jev.status, r.jev.http_status, r.fallback_reason].join("|")')"
@@ -307,7 +408,7 @@ CLOSED_PORT="$(run_with_timeout 30 node -e 'const s = require("net").createServe
 check "fixture: a released loopback port number was obtained" "true" \
   "$([[ "$CLOSED_PORT" =~ ^[0-9]+$ ]] && echo true || echo "false:$CLOSED_PORT")"
 # A generous timeout keeps Windows' slow refused-connect retry from reading as a timeout.
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_f_probe_refused \
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_f_probe_refused \
   "JEV_BASE_URL=http://127.0.0.1:$CLOSED_PORT" JEV_HTTP_TIMEOUT_MS=10000
 check "refused /v1/models: unreachable, http_status null, fallback_reason unreachable" "unreachable|null|unreachable" \
   "$(rq toolu_f_probe_refused 'r && [r.jev.status, String(r.jev.http_status), r.fallback_reason].join("|")')"

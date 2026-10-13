@@ -1,26 +1,12 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-state/plan-skip-allowance.js, hooks/gate-plan-skip-sentinel.js, bin/workflow/lib/next-step/advance.js, hooks/workflow-state/record-step-verdict.js
 # Tags: tl1, tl2, static, workflow, advance, skip-allowance, ssot, scope:issue-specific
-#
-# #1644 — one skip-allowance policy, two callers.
-#
-# Why: after this change a plan step can be skipped through two doors — the
-# sentinel the model echoes (gated by hooks/gate-plan-skip-sentinel.js) and the
-# CLI's --advance --status skipped. If each door carried its own copy of "is
-# this skip permitted", the two would drift and the stricter one would become
-# advisory. Both must read the same module.
-#
-# The two paths deliberately differ in ONE respect: the sentinel path reads
-# process.env (the hook runs inside the session's environment), while the CLI
-# path must read the config FILE only — an inline `CONFIRM_TESTS=off <cmd>`
-# prefix is model-issued text and must never be self-approval (#1644 A16).
-# Written BEFORE the implementation: RED until plan-skip-allowance.js lands.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real Claude Code PreToolUse registration actually routes the
-#   sentinel command to gate-plan-skip-sentinel.js in a live session.
-# Closest-to-action mitigation: surfaced at WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# #1644 — one skip-allowance policy, two callers (the echoed sentinel and the CLI's
+# --advance --status skipped) must read one module, or the stricter door drifts into
+# advisory. They differ in ONE respect: the sentinel reads process.env, the CLI reads
+# the config FILE only — an inline `CONFIRM_TESTS=off <cmd>` is never self-approval (A16).
+# TL3 gap: live PreToolUse routing of the sentinel to gate-plan-skip-sentinel.js;
+# mitigation: bin/check-verification-gate.sh category skill-orchestration.
 
 set -uo pipefail
 
@@ -180,14 +166,15 @@ M="$(module_verdict p4a outline)"
 check "P4a: outline with no recorded verdict -- hook says deny" "deny" "$H"
 check "P4a: outline with no recorded verdict -- module agrees with the hook" "$H" "$M"
 
-# Case 2 — detail with a recorded orchestrator verdict: both must allow.
+# Case 2 — detail with a recorded jev verdict: both must allow.
 make_state p4b "workflow_init clarify_intent research outline"
 # hasValidSkipJudgment requires the upstream artifact to exist and to be no newer
 # than the recording (a stale verdict must not authorize a skip), so the artifact
 # has to be in place BEFORE the judgment is written.
 printf '# outline\n' > "$PLANS_DIR/p4b-outline.md"
 run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment" \
-  --session p4b --target detail --c1 true --c2 true --c3 true >/dev/null 2>&1
+  --session p4b --target detail --cond sd_single_approach=true --cond sd_no_open_decision=true \
+  --source jev --ticket 0123456789abcdef >/dev/null 2>&1
 H="$(hook_verdict p4b 'echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: recorded verdict satisfied>>\"')"
 M="$(module_verdict p4b detail)"
 check "P4b: detail with a recorded verdict -- hook says allow" "allow" "$H"
@@ -203,7 +190,7 @@ check "P4c: write_tests with CONFIRM_TESTS=off -- module agrees with the hook" "
 echo ""
 echo "=== P5: the CLI door reads the same recorded-judgment axis as the sentinel door ==="
 # P3 exercised the ONE axis on which the two doors are supposed to differ (env vs
-# config file). This case covers the other axis — a recorded orchestrator verdict —
+# config file). This case covers the other axis — a recorded jev verdict —
 # where they must NOT differ: the asymmetry is about how much the ENVIRONMENT is
 # trusted, never about what counts as a permitted skip. Without this, "one policy,
 # two callers" is only proven for the sentinel door (P4b).
@@ -216,11 +203,12 @@ cli_verdict() {
   ) 2>/dev/null || echo "PROBE_FAIL"
 }
 
-# Case 1 — detail WITH a recorded orchestrator verdict.
+# Case 1 — detail WITH a recorded jev verdict.
 make_state p5a "workflow_init clarify_intent research outline"
 printf '# outline\n' > "$PLANS_DIR/p5a-outline.md"
 run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment" \
-  --session p5a --target detail --c1 true --c2 true --c3 true >/dev/null 2>&1
+  --session p5a --target detail --cond sd_single_approach=true --cond sd_no_open_decision=true \
+  --source jev --ticket 0123456789abcdef >/dev/null 2>&1
 C="$(cli_verdict p5a detail)"
 check "P5a: detail with a recorded verdict -- the CLI door allows the skip" "true" "$C"
 # ...and the two doors reach the same answer from the same recorded fact.

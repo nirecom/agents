@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/jev-shadow-pre.js, hooks/jev-shadow-post.js, bin/workflow/lib/jev-complexity-adapter.js, bin/workflow/normalize-judge-signals, settings.json
-# Tags: TL3, hooks, jev, shadow-mode, agent-dispatch, payload-shape, hook-registration, live-host-dispatch, scope:issue-specific, pwsh-not-required
+# Tags: TL3, hooks, jev, shadow-mode, agent-dispatch, payload-shape, hook-registration, live-host-dispatch, scope:issue-specific, pwsh-not-required, schema-v2
 
 # Every TL2 fragment of feature-2460-jev-shadow.sh feeds payloads this repo composed. This
 # drives one real `claude -p` Agent dispatch of a haiku fixture complexity-judge through
@@ -21,7 +21,8 @@ SESSION_UUID="3c2a9e71-2460-4b6f-9d1e-7a5b3c2d1e0f"
 
 # R1: the payload fields T1-T3 rely on must be the fields the shipped sources read.
 case_begin "R1-sources-read-the-asserted-fields" "hooks/jev-shadow-pre.js"
-R1_SRCS=("$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-pre.js" "$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-post.js" "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/jev-complexity-adapter.js")
+# The adapter entrypoint only re-exports; its tool_response read lives in the private llm.js module.
+R1_SRCS=("$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-pre.js" "$SCRIPT_CHECKOUT_ROOT/hooks/jev-shadow-post.js" "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/jev-complexity-adapter.js" "$SCRIPT_CHECKOUT_ROOT/bin/workflow/lib/jev-complexity-adapter/llm.js")
 R1_MISSING=""
 for f in "${R1_SRCS[@]}"; do [ -f "$f" ] || R1_MISSING="$R1_MISSING ${f#"$SCRIPT_CHECKOUT_ROOT"/}"; done
 if [ -n "$R1_MISSING" ]; then
@@ -33,7 +34,8 @@ else
       grep -qF "$field" "$f" || R1_PROBLEMS="$R1_PROBLEMS [${f#"$SCRIPT_CHECKOUT_ROOT"/} never reads $field]"
     done
   done
-  grep -qF tool_response "${R1_SRCS[2]}" || R1_PROBLEMS="$R1_PROBLEMS [the adapter never reads tool_response]"
+  grep -qF 'extractLlmText: llm.extractLlmText' "${R1_SRCS[2]}" || R1_PROBLEMS="$R1_PROBLEMS [the adapter does not export llm.js's extractLlmText]"
+  grep -qF tool_response "${R1_SRCS[3]}" || R1_PROBLEMS="$R1_PROBLEMS [the adapter never reads tool_response]"
   if [ -z "$R1_PROBLEMS" ]; then pass "R1: hooks read subagent_type and tool_use_id; the adapter reads tool_response"
   else fail "R1: the sources and this test disagree about the Agent payload;$R1_PROBLEMS"; fi
 fi
@@ -61,7 +63,7 @@ model: haiku
 tools: Read
 ---
 
-Output exactly the single line `SIGNALS: S1-multi-file` and nothing else. Do not use any tool.
+Output exactly the single line `SIGNALS: S2-architecture` and nothing else. Do not use any tool.
 EOF
 cat > "$FX/io/record.js" <<'EOF'
 const fs = require("fs");
@@ -93,6 +95,9 @@ case_end
 [ "$REG_OK" = "ok" ] || { finish; exit; }
 
 unset CLAUDECODE
+# The shipped registry is production, where the hook pair observes nothing: the hooks run on
+# the registry rolled back to shadow (the data-only rollback), inherited through NODE_OPTIONS.
+use_rollback_registry
 ( cd "$REPO_FX" && env -u CLAUDE_CODE_SESSION_ID \
     -u JEV_HTTP_TIMEOUT_MS -u JEV_PENDING_TTL_MS AGENTS_MAIN_ROOT="$REPO_N" JEV=on TYPESAFE_API_KEY="$SENTINEL_KEY" JEV_BASE_URL="$MOCK_URL" \
     TL3_RECORD_FILE="$(np "$RECORD")" \
@@ -132,13 +137,16 @@ T2_GOT="$(AD="$ADAPTER_JS" NJS="$PARSER" run_with_timeout 30 node -e '
   fs.writeFileSync(process.argv[2], raw);
   process.stdout.write(String(require(process.env.NJS).normalize(raw)));
 ' "$(np "$FX/io/payload.json")" "$(np "$T2_RAW")" 2>/dev/null | tr -d '\r\n')"
-if [ "$T2_GOT" = "S1-multi-file" ]; then pass "T2: extractLlmText -> parser gives S1-multi-file on the real payload"
+if [ "$T2_GOT" = "S2-architecture" ]; then pass "T2: extractLlmText -> parser gives S2-architecture on the real payload"
 else fail "T2: extractLlmText -> parser gave [$T2_GOT]" "extracted tail: $(tail -c 200 "$T2_RAW" 2>/dev/null | tr -d '\r' | tr '\n' ' ')"; fi
 case_end
 
 case_begin "T3-one-record-both-ok" "hooks/jev-shadow-post.js"
-check "T3: exactly one record for the tool_use_id; jev ok, llm ok, llm answer S1-multi-file" "1|ok|ok|S1-multi-file" \
+check "T3: exactly one record for the tool_use_id; jev ok, llm ok, llm answer S2-architecture" "1|ok|ok|S2-architecture" \
   "$(rq "$TID" 'recs.length + "|" + (r && [r.jev.status, r.llm.status, r.llm.answer].join("|"))')"
+check "T3: the record is v2 (version 2, decision, shadow/llm, no ticket, llm needed and received, no v or llm_called key)" \
+  "2|decision|shadow|llm|null|true|true|false|false" \
+  "$(rq "$TID" 'r && [r.version, r.record_type, r.mode, r.adopted, String(r.ticket), r.llm_needed, r.llm_answer_received, "v" in r, "llm_called" in r].join("|")')"
 case_end
 
 case_begin "T4-no-jev-block-in-transcript" "hooks/jev-shadow-post.js"

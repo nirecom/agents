@@ -68,6 +68,7 @@ const ARTIFACT_KINDS = Object.freeze([
   k("codex-round-raw", `(?:${STAGE}-)?codex-round-[0-9]+-raw\\.md`),
   k("debug-log", `${STAGE}-debug\\.log`),
   k("judge-raw", "(?:complexity|outline|detail|write-tests|write-code)-judge-raw\\.txt"),
+  k("write-code-files", "write-code-files\\.txt"),
   k("finalize-diagnostic", `${F}-finalize-diagnostic\\.txt`),
   k("worker-draft", `${WORKER}\\.draft\\.json`),
   k("notes-backup", "notes-backup"),

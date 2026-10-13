@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/agents/feature-2100-model-effort-lint.sh
-# Tests: agents/outline-planner.md, agents/detail-planner.md, agents/outline-reviewer.md, agents/detail-reviewer.md, agents/test-reviewer.md, agents/plan-security-reviewer.md, agents/security-scanner.md, agents/supervisor-audit.md, agents/supervisor.md, agents/complexity-judge.md, agents/skip-verifier.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, skills/review-docs/SKILL.md, skills/review-tests/SKILL.md, skills/review-plan-security/SKILL.md, skills/review-code-security/SKILL.md, skills/review-code-codex/SKILL.md, skills/review-plan-codex/SKILL.md, skills/commit-push/SKILL.md
+# Tests: agents/outline-planner.md, agents/detail-planner.md, agents/outline-reviewer.md, agents/detail-reviewer.md, agents/test-reviewer.md, agents/plan-security-reviewer.md, agents/security-scanner.md, agents/supervisor-audit.md, agents/supervisor.md, agents/complexity-judge.md, agents/plan-skip-judge.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, skills/review-docs/SKILL.md, skills/review-tests/SKILL.md, skills/review-plan-security/SKILL.md, skills/review-code-security/SKILL.md, skills/review-code-codex/SKILL.md, skills/review-plan-codex/SKILL.md, skills/commit-push/SKILL.md
 # Tags: agents, skills, frontmatter, lint, model-routing, static, scope:issue-specific
 # L-1..L-6 (#2100, TL1): model:/effort: frontmatter lint. Only the FIRST `---`
 # pair is frontmatter; body mentions never count. L-1 routed-agent fallback
@@ -171,8 +171,14 @@ case_end
 case_begin "L-5 complexity-judge" "agents/complexity-judge.md"
 lint_value "L-5 complexity-judge" "agents/complexity-judge.md" model opus
 case_end
-case_begin "L-5 skip-verifier" "agents/skip-verifier.md"
-lint_value "L-5 skip-verifier" "agents/skip-verifier.md" model sonnet
+# #2460: plan-skip-judge replaces the retired skip-verifier agent.
+case_begin "L-5 plan-skip-judge" "agents/plan-skip-judge.md"
+lint_value "L-5 plan-skip-judge" "agents/plan-skip-judge.md" model sonnet
+if [ -e "$SCRIPT_CHECKOUT_ROOT/agents/skip-verifier.md" ]; then
+    fail "L-5 skip-verifier is retired" "agents/skip-verifier.md still exists"
+else
+    pass "L-5 skip-verifier is retired"
+fi
 case_end
 
 # --- L-6: negative control — the extractor detects planted keys, ignores body -

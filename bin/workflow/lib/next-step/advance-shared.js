@@ -1,9 +1,8 @@
 "use strict";
 // The forward operation (`--advance`), shared by every member of the advance
-// class: bin/workflow/next-step, record-skip-judgment, set-workflow-type and
-// (by delegation) record-complexity-and-skip (#1644).
+// class: bin/workflow/next-step, record-skip-judgment and set-workflow-type (#1644).
 //
-// Why shared rather than per-CLI: the four members differ only in how they
+// Why shared rather than per-CLI: the members differ only in how they
 // derive the target step. The transaction shape — read the pre-write current
 // step, record, then optionally ask for the next action — must be identical, or
 // a caller could advance without the gates another caller applies.
@@ -69,9 +68,10 @@ function resolveCurrentStep(sessionId, opts) {
 // every path exits the process.
 //
 // opts: { session, binary, step, status, skipReason, skipJudgment,
-//         skipVerdictSource, repoDir, next, prefix }
+//         skipVerdictSource, repoDir, next, prefix, suffix }
 // `prefix` is the CLI's own leading stdout (already newline-terminated); it is
 // written only after the session id resolves, so a usage error prints nothing.
+// `suffix` follows the ADVANCED= line, only once the record succeeded.
 function runAdvance(opts) {
   const rawSession = opts.session;
   const sid = resolveSessionId({ sessionIdFromInput: rawSession });
@@ -109,6 +109,7 @@ function runAdvance(opts) {
   process.stdout.write(
     "ADVANCED=" + opts.step + " status=" + opts.status + (res.already ? " already=true" : "") + "\n"
   );
+  if (opts.suffix) process.stdout.write(opts.suffix);
   // #2327: the review_tests reopen notice is emitted regardless of --next.
   const reopenNotice = formatReviewTestsReopenNotice(res);
   if (reopenNotice) process.stderr.write(opts.binary + ": " + reopenNotice + "\n");

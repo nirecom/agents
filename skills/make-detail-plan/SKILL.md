@@ -24,7 +24,7 @@ Run `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts/surface-delivery-pl
 ### MDP-3 — Choose planner model
 
 Run `bash -c 'node "$AGENTS_MAIN_ROOT/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage detail'`. If line 1 is not `NONE`, use its `model=<alias>` and `signals=<csv-or-none>` lines directly.
-If `NONE` (fail-open for sessions without persisted evaluation): dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` paths + task context (rubric: `skills/_shared/judge-task-complexity.md`). Write the raw output to `<PLANS_DIR>/<session-id>-detail-judge-raw.txt` (Write tool — untrusted text via file only). Run `node "$AGENTS_MAIN_ROOT/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-detail-judge-raw.txt" --session "<session-id>" --stage detail`. Run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage detail --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
+If `NONE` (fail-open for sessions without persisted evaluation): follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`detail`; use its `model=` and `SIGNALS_CSV` — never judge the level inline.
 Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
 
 ### MDP-4 — Initial draft

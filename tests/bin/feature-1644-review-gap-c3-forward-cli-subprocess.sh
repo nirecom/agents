@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/state-ops.js, bin/workflow/record-skip-judgment, bin/workflow/record-complexity-and-skip, bin/workflow/set-workflow-type, bin/workflow/record-skip-verdict, hooks/workflow-state/record-step-verdict.js
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/state-ops.js, bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/record-skip-verdict, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, forward-cli, subprocess, idempotency, event-stream, scope:issue-specific, pwsh-not-required
 
-# Observes the forward operation through a REAL subprocess boundary on all four
+# Observes the forward operation through a REAL subprocess boundary on all three
 # advance-class CLIs. Idempotency is a statement about the raw append-only event
 # stream (the folded projection hides a duplicate event), so these cases read it
 # via the shared state-probe `eventcount` mode. Not repeated here: ADVANCE_SCOPE
@@ -23,7 +23,6 @@ NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
 RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
 SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
 RSV="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-verdict"
-RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
 WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
@@ -94,6 +93,9 @@ step_sub()    { probe "$1" "$2" sub "$3"; }
 # can tell "appended nothing" apart from "appended an identical duplicate".
 ev_count()    { probe "$1" "$2" eventcount "${3:-}"; }
 action_lines() { printf '%s\n' "$OUT" | grep -c '^ACTION=' || true; }
+# #2460 record-skip-judgment form; a repeat reuses the same ticket (idempotent replay).
+RSJ_O=(--cond so_c1=true --cond so_c2=true --source subagent --ticket 0123456789abcdef)
+RSJ_D=(--cond sd_single_approach=true --cond sd_no_open_decision=true --source jev --ticket fedcba9876543210)
 
 echo "=== C3-1: next-step --advance status matrix through a real subprocess ==="
 # complete
@@ -140,14 +142,14 @@ echo "=== C3-2: ADVANCE_SCOPE on the SIBLING CLIs, --next present and absent ===
 # SHARED runAdvance, so a sibling that forgets to forward `next` would still
 # pass every next-step case.
 at_outline c32a
-run_cli node "$RSJ" --session c32a --target outline --c1 true --c2 true --advance --next
+run_cli node "$RSJ" --session c32a --target outline "${RSJ_O[@]}" --advance --next
 check "C3-2a: record-skip-judgment --advance --next exits 0" 0 "$RC"
 check_contains "C3-2a: scope is current-step" "ADVANCE_SCOPE=current-step" "$OUT"
 check "C3-2a: exactly one ACTION line" 1 "$(action_lines)"
 
 # Same call WITHOUT --next: no scope line and no ACTION block at all.
 at_outline c32b
-run_cli node "$RSJ" --session c32b --target outline --c1 true --c2 true --advance
+run_cli node "$RSJ" --session c32b --target outline "${RSJ_O[@]}" --advance
 check "C3-2b: without --next exits 0" 0 "$RC"
 check_not_contains "C3-2b: no ADVANCE_SCOPE line without --next" "ADVANCE_SCOPE=" "$OUT"
 check "C3-2b: no ACTION line without --next" 0 "$(action_lines)"
@@ -155,7 +157,7 @@ check "C3-2b: no ACTION line without --next" 0 "$(action_lines)"
 # not-current-step arm: the session is at outline, so settling `detail` is out of
 # scope and the ACTION block must be withheld even though --next was asked for.
 make_state c32c ""
-run_cli node "$RSJ" --session c32c --target detail --c1 true --c2 true --c3 true --advance --next
+run_cli node "$RSJ" --session c32c --target detail "${RSJ_D[@]}" --advance --next
 check "C3-2c: out-of-scope sibling advance still exits 0" 0 "$RC"
 check_contains "C3-2c: the record is still reported" "ADVANCED=detail status=skipped" "$OUT"
 check_contains "C3-2c: scope is not-current-step" "ADVANCE_SCOPE=not-current-step" "$OUT"
@@ -193,10 +195,10 @@ check "C3-3a: the repeat appended NO second step_status event" "$C33A_N" "$(ev_c
 
 # record-skip-judgment arm — same statement on a sibling.
 at_outline c33b
-run_cli node "$RSJ" --session c33b --target outline --c1 true --c2 true --advance
+run_cli node "$RSJ" --session c33b --target outline "${RSJ_O[@]}" --advance
 C33B_N="$(ev_count c33b outline step_status)"
 check "C3-3b: exactly one step_status event after the first call" 1 "$C33B_N"
-run_cli node "$RSJ" --session c33b --target outline --c1 true --c2 true --advance
+run_cli node "$RSJ" --session c33b --target outline "${RSJ_O[@]}" --advance
 check "C3-3b: the repeat exits 0" 0 "$RC"
 check "C3-3b: the repeat appended NO second step_status event" "$C33B_N" "$(ev_count c33b outline step_status)"
 
@@ -207,20 +209,6 @@ C33C_N="$(ev_count c33c workflow_init step_status)"
 run_cli node "$SWT" --session c33c --type wf-meta --advance --step workflow_init --status complete
 check "C3-3c: the repeat exits 0" 0 "$RC"
 check "C3-3c: the repeat appended NO second step_status event" "$C33C_N" "$(ev_count c33c workflow_init step_status)"
-
-# record-complexity-and-skip arm (delegates to record-skip-judgment --advance).
-# RCAS finds its siblings from its own location, so the real checkout's copy is launched.
-make_state c33d "workflow_init clarify_intent research"
-printf '# intent\n' > "$PLANS_DIR/c33d-intent.md"
-run_cli env bash "$RCAS" \
-  --session c33d --signals "" --target outline --advance
-check "C3-3d: first record-complexity-and-skip --advance exits 0" 0 "$RC"
-C33D_N="$(ev_count c33d outline step_status)"
-check "C3-3d: exactly one step_status event after the first call" 1 "$C33D_N"
-run_cli env bash "$RCAS" \
-  --session c33d --signals "" --target outline --advance
-check "C3-3d: the repeat exits 0" 0 "$RC"
-check "C3-3d: the repeat appended NO second step_status event" "$C33D_N" "$(ev_count c33d outline step_status)"
 
 echo ""
 echo "=== C3-4: a repeated workflow_init advance does not re-run the downstream reset ==="
@@ -240,9 +228,9 @@ check "C3-4: the whole event stream is unchanged" "$C34_ALL" "$(ev_count c34 '')
 
 echo ""
 echo "=== C3-5: a repeated --advance does not overwrite a resolved skip verdict ==="
-# The A-4 co-write (#1681) writes skip_verdict=pending. Once skip-verifier has
+# The A-4 co-write (#1681) writes skip_verdict=pending. Once record-skip-verdict has
 # resolved it to `confirm`, a re-issued --advance must NOT reset it to pending —
-# that would silently re-open a decision the verifier already made.
+# that would silently re-open a decision already made.
 at_outline c35
 run_cli node "$NS" --session c35 --advance --step outline --status skipped \
   --skip-reason "the approach is already fixed by the issue body"
@@ -259,10 +247,10 @@ check "C3-5: the resolved verdict SURVIVES the repeat" '"confirm"' "$(step_sub c
 # Symmetric arm on a sibling: record-skip-judgment reaches the same writer, so
 # the same protection must hold there or the guarantee is next-step-only.
 at_outline c35b
-run_cli node "$RSJ" --session c35b --target outline --c1 true --c2 true --advance
+run_cli node "$RSJ" --session c35b --target outline "${RSJ_O[@]}" --advance
 run_cli node "$RSV" --session c35b --target outline --verdict confirm --reason "verified against the intent artifact"
 check "C3-5b: the verdict is confirm before the repeat" '"confirm"' "$(step_sub c35b outline skip_verdict.verdict)"
-run_cli node "$RSJ" --session c35b --target outline --c1 true --c2 true --advance
+run_cli node "$RSJ" --session c35b --target outline "${RSJ_O[@]}" --advance
 check "C3-5b: the repeat exits 0" 0 "$RC"
 check "C3-5b: the resolved verdict SURVIVES the sibling repeat" \
   '"confirm"' "$(step_sub c35b outline skip_verdict.verdict)"

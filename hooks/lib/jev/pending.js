@@ -11,9 +11,14 @@
 
 const fs = require("fs");
 const path = require("path");
-const { isValidId, sessionDir } = require("./state-paths");
+const { isValidId, sessionDir, readVersioned } = require("./state-paths");
 
+// Every hand carries this version; another version (or an unparseable hand) reads as absent.
+const PENDING_VERSION = 2;
 const DEFAULT_PENDING_TTL_MS = 3600000;
+// A finalize re-run takes over a previous claim of the same ticket only when its owner
+// process is gone or the claim has not been touched for this long.
+const FINALIZE_CLAIM_STALE_MS = 600000;
 const CLAIMED_MARK = ".claimed-";
 const UNLOGGED_MARK = ".unlogged-";
 // Suffix after the last mark: <pid>[-sweep] or <sweep id>-sweep for a claim, <pid>-<ts> for an unlogged record.
@@ -42,9 +47,13 @@ function writeEntryAtomic(sid, tmpName, finalName, obj) {
   }
 }
 
+function versioned(obj) {
+  return Object.assign({}, obj, { version: PENDING_VERSION });
+}
+
 function writePending(sid, tid, obj) {
   if (!isValidId(tid)) throw new Error("invalid tool_use_id");
-  writeEntryAtomic(sid, `${tid}.${process.pid}.tmp`, `${tid}.json`, obj);
+  writeEntryAtomic(sid, `${tid}.${process.pid}.tmp`, `${tid}.json`, versioned(obj));
 }
 
 function touch(p, ms) {
@@ -65,13 +74,7 @@ function takeByRename(src, dst, touchMs) {
     return { taken: false, obj: null };
   }
   touch(dst, touchMs);
-  let obj = null;
-  try {
-    obj = JSON.parse(fs.readFileSync(dst, "utf8"));
-  } catch (_e) {
-    obj = null;
-  }
-  return { taken: true, obj };
+  return { taken: true, obj: readVersioned(dst, PENDING_VERSION) };
 }
 
 function removeQuietly(p) {
@@ -82,13 +85,56 @@ function claimedPath(sid, tid) {
   return path.join(pendingDir(sid), `${tid}${CLAIMED_MARK}${process.pid}`);
 }
 
-// null when there is nothing to claim.
+// null when there is nothing to claim; {} when the claimed hand is unreadable or of another version.
 function claimPending(sid, tid) {
   if (!isValidId(tid)) return null;
   const dst = claimedPath(sid, tid);
   const r = takeByRename(path.join(pendingDir(sid), `${tid}.json`), dst, Date.now());
   if (!r.taken) return null;
   return r.obj || {};
+}
+
+// False only when pid is known to be gone (ESRCH); EPERM means it exists under another user.
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return !(e && e.code === "ESRCH");
+  }
+}
+
+// takeOverClaim(sid, tid, {now, staleMs}): a finalize re-run's take-over of a previous
+// <tid>.claimed-<pid> whose owner has exited or whose mtime is older than staleMs
+// (FINALIZE_CLAIM_STALE_MS). The claim is renamed to this process's claim name and its
+// contents returned ({} when unreadable or of another version); null when no claim can be
+// taken (none, or the owner is alive and the claim fresh — that name is left as it is).
+function takeOverClaim(sid, tid, opts = {}) {
+  if (!isValidId(tid)) return null;
+  const now = typeof opts.now === "function" ? opts.now() : Date.now();
+  const staleMs = Number.isFinite(opts.staleMs) && opts.staleMs >= 0 ? opts.staleMs : FINALIZE_CLAIM_STALE_MS;
+  let names;
+  try {
+    names = fs.readdirSync(pendingDir(sid));
+  } catch (_e) {
+    return null;
+  }
+  const prefix = `${tid}${CLAIMED_MARK}`;
+  for (const name of names) {
+    if (!name.startsWith(prefix)) continue;
+    const suffix = name.slice(prefix.length);
+    if (!/^\d+$/.test(suffix)) continue;
+    const pid = Number(suffix);
+    if (pid === process.pid) continue;
+    const src = path.join(pendingDir(sid), name);
+    let st;
+    try { st = fs.lstatSync(src); } catch (_e) { continue; }
+    if (!st.isFile()) continue;
+    if (processAlive(pid) && now - st.mtimeMs <= staleMs) continue;
+    const r = takeByRename(src, claimedPath(sid, tid), now);
+    if (r.taken) return r.obj || {};
+  }
+  return null;
 }
 
 // Call only after the decision record is appended.
@@ -104,7 +150,7 @@ function rewriteClaim(sid, tid, obj) {
   try {
     if (!isValidId(tid)) return false;
     tmp = path.join(pendingDir(sid), `${tid}.${process.pid}.claim.tmp`);
-    fs.writeFileSync(tmp, JSON.stringify(obj));
+    fs.writeFileSync(tmp, JSON.stringify(versioned(obj)));
     fs.renameSync(tmp, claimedPath(sid, tid));
     return true;
   } catch (_e) {
@@ -117,7 +163,7 @@ function rewriteClaim(sid, tid, obj) {
 function writeUnlogged(sid, tid, obj) {
   try {
     if (!isValidId(tid)) return false;
-    writeEntryAtomic(sid, `${tid}.${process.pid}.unlogged.tmp`, `${tid}${UNLOGGED_MARK}${process.pid}-${Date.now()}`, obj);
+    writeEntryAtomic(sid, `${tid}.${process.pid}.unlogged.tmp`, `${tid}${UNLOGGED_MARK}${process.pid}-${Date.now()}`, versioned(obj));
     return true;
   } catch (_e) {
     return false;
@@ -220,6 +266,7 @@ function hasEntries(sid) {
 }
 
 module.exports = {
-  DEFAULT_PENDING_TTL_MS, pendingDir, writePending, claimPending, releaseClaim, rewriteClaim, writeUnlogged,
+  PENDING_VERSION, DEFAULT_PENDING_TTL_MS, FINALIZE_CLAIM_STALE_MS,
+  pendingDir, writePending, claimPending, takeOverClaim, releaseClaim, rewriteClaim, writeUnlogged,
   sweepOrphans, hasEntries, hasEntriesIn,
 };

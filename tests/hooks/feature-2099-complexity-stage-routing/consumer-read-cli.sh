@@ -8,13 +8,19 @@
 # Single-path # Tests: (the sourcing runner) — the calling cases own the targets.
 D2099_READ_CLI_LOADED=1
 
+# The consumer skill's SKILL.md in the checkout under test.
+d2099_skill_file() { echo "$SCRIPT_CHECKOUT_ROOT/skills/$1/SKILL.md"; }
+
 # --- which CLI each consumer reads its stored evaluation THROUGH --------------
 # #2102 replaced write-tests'/write-code's direct `read-complexity-evaluation
 # --stage <s>` call with ONE bundled read at WT-0 / WCD-0: `read-session-facts
 # --session "$SESSION_ID"`, whose record carries `COMPLEXITY_LEVEL_<stage>=` and
 # `COMPLEXITY_SIGNALS=` — the same two values, other spelling. make-detail-plan
 # still calls the direct reader, so CLI, line shape and owning section are all
-# per-consumer now.
+# per-consumer now. #2460: write-code no longer consumes a stored level at all
+# (WCD-3 always runs the shared judge procedure), so only make-detail-plan and
+# write-tests are stored-read consumers; the write-code row stays for callers
+# that still walk every consumer.
 d2099_read_cli() {
     case "$1" in
         write-tests|write-code) echo "read-session-facts" ;;
@@ -29,16 +35,6 @@ d2099_read_step() {
         write-tests) echo "WT-0" ;;
         write-code)  echo "WCD-0" ;;
         *)           echo "MDP-3" ;;
-    esac
-}
-
-# The section stating that consumer's level→model mapping. For make-detail-plan it
-# is the read step itself; for the other two the read moved to WT-0 / WCD-0 while
-# the mapping stayed with the level step (WT-6 / WCD-3 — the derive CLI's section).
-d2099_model_map_cli() {
-    case "$1" in
-        write-tests|write-code) echo "derive-complexity-level" ;;
-        *) echo "read-complexity-evaluation" ;;
     esac
 }
 

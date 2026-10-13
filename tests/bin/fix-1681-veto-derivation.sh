@@ -147,7 +147,7 @@ run_gate() {
 PRE_OUTLINE='"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"}'
 # Everything after detail, all cleared (used by the "only the veto blocks" fixtures).
 POST_DETAIL='"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"complete"},"pre_final_report_gate":{"status":"complete"}'
-VETOED_OUTLINE='"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-07-01T00:00:00.000Z"}}'
+VETOED_OUTLINE='"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"veto","source":"record-skip-verdict-cli:test-veto","recorded_at":"2026-07-01T00:00:00.000Z"}}'
 PENDING_VERDICT_OUTLINE='"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"pending","source":"next-step-recorded-verdict","recorded_at":"2026-07-01T00:00:00.000Z"}}'
 
 echo "=== fix-1681: veto de-skip derivation (TL2) ==="

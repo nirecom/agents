@@ -103,7 +103,7 @@ Note (CPR-ORTH Orthogonality): no new workflow sentinel is introduced. Interacti
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_MAIN_ROOT/bin/cc-session-title" set-issue "<PLANS_DIR>"` (the CLI defaults `<cwd>` to its own working directory; mirrors workflow-init Path A A1b; call after intent.md is written).
-CI-C1b. **Complexity evaluation + outline-skip dispatch**: follow `skills/_shared/complexity-and-outline-skip.md` end to end (judge → Write the signals CSV → one `record-complexity-and-skip --dispatch-only` call → branch on the printed `SKIP_DISPATCH` value). Its COS-4 branch outcome resumes here at CI-C2.
+CI-C1b. **Complexity evaluation + outline-skip judgment**: follow `skills/_shared/complexity-and-outline-skip.md` end to end; its COS-3 outcome resumes here at CI-C2.
 CI-C2. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
    - Both valid → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.

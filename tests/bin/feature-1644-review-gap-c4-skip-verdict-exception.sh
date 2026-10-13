@@ -3,13 +3,13 @@
 # Tags: tl2, workflow, advance, named-exception, record-skip-verdict, class-completeness, scope:issue-specific, pwsh-not-required
 
 # #1644 review gap C4 — record-skip-verdict is the NAMED EXCEPTION to the advance
-# class: its only caller is the skip-verifier subagent, which must not advance the
+# class: it resolves a pending skip verdict by hand and must not advance the
 # workflow itself (rationale: the CLI's own header). This file pins that intent: it
 # fails if the CLI learns --advance/--next, or stops recording verdicts. Beyond
 # feature-1644-sibling-cli-advance.sh S11 it proves the registration has a
 # source-level rationale and that the flags are refused at runtime with no state effect.
 
-# TL3 gap: the real skip-verifier's argv shape and the main conversation's follow-up
+# TL3 gap: the real manual-resolution argv shape and the main conversation's follow-up
 # `next-step --advance --next`; settings.json admission of this argv form.
 
 set -uo pipefail
@@ -164,7 +164,9 @@ echo "=== C4-5: the exception is registered, not merely unimplemented ==="
 HDR="$(sed -n '1,20p' "$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-verdict")"
 check_contains "C4-5a: the source declares itself a NAMED EXCEPTION" "NAMED EXCEPTION" "$HDR"
 check_contains "C4-5a: ...to the #1644 advance class specifically" "advance class" "$HDR"
-check_contains "C4-5a: ...and names the subagent rationale" "subagent" "$HDR"
+# #2460 stage 5 retires the skip-verifier agent; the CLI stays as the manual
+# resolver of a pending sentinel skip, so its header must stop naming that agent.
+check_not_contains "C4-5a: ...and no longer names the retired skip-verifier caller" "skip-verifier" "$HDR"
 # The absence check is what makes this an exception rather than a member: no
 # --advance implementation may quietly appear in the file. Only the `//` comment
 # lines that document the exception are allowed to mention the token.
