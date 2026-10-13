@@ -140,9 +140,15 @@ contents: the judgment queried later wins.
 
 - **complexity**: `<stage>-signals-owner.json` guards the fixed
   `<stage>-signals.txt`. `finalize` writes the file only as the newest owner.
-  A write with no marker after this ticket's query also supersedes it.
+  A write with no marker after this ticket's query also supersedes it, and so
+  does one that lands after this ticket's own interrupted write: a replay keeps
+  the newer value instead of writing over it.
 - **skip**: `<target>-skip-owner.json` is taken at query time. Only the owner
   records the skip judgment, and only while the step is still pending.
+  A later query or fail-safe revokes a standing judgment, so both doors that
+  act on one — `next-step`'s recorded-verdict skip and a `*_NOT_NEEDED`
+  sentinel whose reason starts with `recorded-verdict:` — re-read it and write
+  the skip under the same owner lock.
 
 A superseded ticket prints `SETTLE=superseded` and appends a second record of
 type `settle` with the reason (`newer-owner`, `unowned-write` or
