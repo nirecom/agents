@@ -11,21 +11,13 @@ set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
-# Run standalone, the harness would build its decoy under the real ~/.claude/run-all.
-OWN_CACHE_DIR=""
-if [[ -z "${RUN_ALL_CACHE_DIR:-}" ]]; then
-  OWN_CACHE_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t root-decoy-cache)"
-  [[ -n "$OWN_CACHE_DIR" && -d "$OWN_CACHE_DIR" ]] || { echo "cannot create a decoy cache directory" >&2; exit 1; }
-  export RUN_ALL_CACHE_DIR="$OWN_CACHE_DIR"
-fi
-readonly OWN_CACHE_DIR
 # shellcheck source=tests/lib/harness.sh
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMP_ROOT="$(np "$(make_tmp)")"
 [[ -n "$TMP_ROOT" && -d "$TMP_ROOT" ]] || { echo "cannot create a temp root" >&2; exit 1; }
 readonly TMP_ROOT
-trap 'rm -rf "$TMP_ROOT"; [[ -z "$OWN_CACHE_DIR" ]] || rm -rf "$OWN_CACHE_DIR"' EXIT
+trap 'rm -rf "$TMP_ROOT"' EXIT
 harness_isolate "$TMP_ROOT"
 
 ROOT_N="$(np "$SCRIPT_CHECKOUT_ROOT")"
@@ -44,6 +36,7 @@ expect_ne() { if [[ "$2" != "$3" ]]; then pass "$1"; else fail "$1" "both sides 
 expect_has() { case "$2" in *"$3"*) pass "$1" ;; *) fail "$1" "missing: $3 in: $2" ;; esac; }
 expect_lacks() { case "$2" in *"$3"*) fail "$1" "unexpected: $3 in: $2" ;; *) pass "$1" ;; esac; }
 field() { printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -n 1; }
+nlow() { np "$1" | tr 'A-Z\\' 'a-z/'; }
 marker_of() { cat "$1/.env" 2>/dev/null || true; }
 
 TAB="$(printf '\t')"
@@ -56,13 +49,13 @@ while IFS= read -r name; do
   [[ -n "$name" ]] && RETIRED_NAMES+=("$name")
 done <<<"$RETIRED_LIST"
 [[ "${#RETIRED_NAMES[@]}" -ge 1 ]] || { echo "the retired environment name list is empty" >&2; exit 1; }
-UNSET_ARGS=(-u ROOT_DECOY_DIR -u ROOT_DECOY_REAL_AGENTS_MAIN_ROOT -u ROOT_DECOY_TEST_ID -u RUN_TL3 -u RUN_TL4)
+UNSET_ARGS=(-u ROOT_DECOY_DIR -u ROOT_DECOY_REAL_AGENTS_MAIN_ROOT -u ROOT_DECOY_TEST_ID -u RUN_TL3 -u RUN_TL4 -u TEST_RUN_ROOT -u TEST_HOST_TMPDIR -u COMMAND_GUARD_DIR)
 for name in ${RETIRED_NAMES[@]+"${RETIRED_NAMES[@]}"}; do UNSET_ARGS+=(-u "$name"); done
 # launched <command...> — a 120 s run from a neutral directory in the state a developer shell
-# has before any decoy exists: the main root names the pretend-real settings, the cache is a
-# temp dir, and no decoy or retired variable is inherited.
+# has before any decoy exists: the main root names the pretend-real settings, the host temp
+# (decoy cache base) is a temp dir, and no decoy, run root or retired variable is inherited.
 launched() {
-  (cd "$TMP_ROOT/neutral" && env "${UNSET_ARGS[@]}" RUN_ALL_CACHE_DIR="$CACHE" RUN_ALL_PROGRESS=off AGENTS_MAIN_ROOT="$REAL_CFG" bash "$RWT" 120 "$@")
+  (cd "$TMP_ROOT/neutral" && env "${UNSET_ARGS[@]}" TEST_HOST_TMPDIR="$CACHE" RUN_ALL_CACHE_DIR="$CACHE" RUN_ALL_PROGRESS=off AGENTS_MAIN_ROOT="$REAL_CFG" bash "$RWT" 120 "$@")
 }
 
 cat >"$TMP_ROOT/pin-driver.sh" <<'DRIVER'
@@ -97,12 +90,12 @@ sleep 1
 printf 'stub=fresh/no-id.js\ntest_id=\n' >"$main_hits/case-fresh.hit"
 printf 'stub=mine/own.js\ntest_id=%s:tests/x.sh\n' "$_RUN_ALL_DECOY_RUN" >"$old_hits/case-mine.hit"
 printf 'RUN=%s\n' "$_RUN_ALL_DECOY_RUN"
-run_all_root_decoy_report 2>"$3"
+run_all_hit_report 2>"$3"
 printf 'REPORT_RC=%s\n' "$?"
 for f in "$main_hits/case-other.hit" "$main_hits/case-stale.hit" "$main_hits/case-fresh.hit" "$old_hits/case-mine.hit"; do
   if [[ -e "$f" ]]; then printf 'KEPT:%s\n' "${f##*/}"; else printf 'GONE:%s\n' "${f##*/}"; fi
 done
-run_all_root_decoy_report 2>>"$3"
+run_all_hit_report 2>>"$3"
 printf 'SECOND_RC=%s\n' "$?"
 rm -f "$main_hits"/case-*.hit "$old_hits"/case-*.hit
 DRIVER
@@ -154,7 +147,7 @@ case_begin "pin-test-env-switches-main-root-to-the-decoy" "bin/lib/run-all-launc
 expect_lacks "run_all_pin_root_decoy is defined" "$PIN_OUT" "MISSING:run_all_pin_root_decoy"
 expect_lacks "run_all_pin_test_env is defined" "$PIN_OUT" "MISSING:run_all_pin_test_env"
 expect_eq "run_all_pin_test_env succeeds" "$PIN_RC" "0"
-expect_has "the decoy lives under the run-all cache dir" "$PIN_DIR" "$CACHE/"
+expect_has "the decoy lives under the host temp cache base" "$(nlow "$PIN_DIR")" "$(nlow "$CACHE")/agents-test-cache-"
 expect_eq "the main root is the decoy main tree" "$(field "$PIN_OUT" MAIN)" "$PIN_DIR/main"
 expect_eq "the decoy main tree carries the main marker" "$(marker_of "$PIN_DIR/main")" "ROOT_DECOY_MARKER=main"
 expect_has "the switch is exported to child processes" "$PIN_OUT" "CHILD=$PIN_DIR/main|$PIN_DIR|"
@@ -254,7 +247,8 @@ REPORT_RUN="$(field "$REPORT_OUT" RUN)"
 
 case_begin "hit-report-counts-only-this-run-and-fresh-unnamed-records" "bin/lib/run-all-launch.sh"
 expect_ne "the run has a token" "$REPORT_RUN" ""
-expect_eq "two hits fail the report" "$(field "$REPORT_OUT" REPORT_RC)" "1"
+expect_ne "two hits fail the combined report" "$(field "$REPORT_OUT" REPORT_RC)" "0"
+expect_ne "the combined report ran" "$(field "$REPORT_OUT" REPORT_RC)" "127"
 expect_has "the count covers exactly the two records" "$REPORT_TEXT" "] 2 root decoy hit(s)"
 expect_has "this run's record is reported with its test id" "$REPORT_TEXT" "root decoy hit: old/mine/own.js$TAB${REPORT_RUN:-<no run>}:tests/x.sh"
 expect_has "a fresh record without a test id is reported" "$REPORT_TEXT" "root decoy hit: main/fresh/no-id.js$TAB(no test id)"
@@ -268,11 +262,11 @@ expect_eq "a second report in the same run is silent" "$(field "$REPORT_OUT" SEC
 expect_eq "the hits are reported once" "$(printf '%s\n' "$REPORT_TEXT" | grep -c -F -- 'root decoy hit:' || true)" "2"
 case_end
 
-HARNESS_OUT="$(cd "$TMP_ROOT/neutral" && env "${UNSET_ARGS[@]}" -u AGENTS_MAIN_ROOT RUN_ALL_CACHE_DIR="$TMP_ROOT/harness cache" bash "$RWT" 120 bash "$TMP_ROOT/harness-driver.sh" "$ROOT_N" ${RETIRED_NAMES[@]+"${RETIRED_NAMES[@]}"} 2>&1)"
+HARNESS_OUT="$(cd "$TMP_ROOT/neutral" && env "${UNSET_ARGS[@]}" -u AGENTS_MAIN_ROOT TEST_HOST_TMPDIR="$TMP_ROOT/harness cache" bash "$RWT" 120 bash "$TMP_ROOT/harness-driver.sh" "$ROOT_N" ${RETIRED_NAMES[@]+"${RETIRED_NAMES[@]}"} 2>&1)"
 HARNESS_DIR="$(field "$HARNESS_OUT" DIR)"
 
 case_begin "harness-alone-builds-and-exports-the-decoy" "tests/lib/harness.sh"
-expect_has "a standalone test gets a decoy under the cache dir" "$HARNESS_DIR" "$TMP_ROOT/harness cache/"
+expect_has "a standalone test gets a decoy under the host temp cache base" "$(nlow "$HARNESS_DIR")" "$(nlow "$TMP_ROOT/harness cache")/agents-test-cache-"
 expect_eq "its main root is the decoy main tree" "$(field "$HARNESS_OUT" MAIN)" "${HARNESS_DIR:-<no decoy>}/main"
 expect_eq "the main tree carries the main marker" "$(marker_of "$HARNESS_DIR/main")" "ROOT_DECOY_MARKER=main"
 expect_has "the main root is exported to child processes" "$HARNESS_OUT" "CHILD=${HARNESS_DIR:-<no decoy>}/main"
@@ -285,14 +279,14 @@ case_begin "harness-reuses-the-decoy-the-launcher-provided" "tests/lib/harness.s
 GIVEN="$TMP_ROOT/given decoy"
 run_with_timeout 120 node "$BUILDER" --out "$GIVEN"
 expect_eq "a decoy can be built for the launcher role" "$?" "0"
-GIVEN_OUT="$(cd "$TMP_ROOT/neutral" && env "${UNSET_ARGS[@]}" ROOT_DECOY_DIR="$GIVEN" ROOT_DECOY_REAL_AGENTS_MAIN_ROOT="$REAL_CFG" AGENTS_MAIN_ROOT="$GIVEN/main" RUN_ALL_CACHE_DIR="$TMP_ROOT/unused cache" bash "$RWT" 120 bash "$TMP_ROOT/harness-driver.sh" "$ROOT_N" ${RETIRED_NAMES[@]+"${RETIRED_NAMES[@]}"} 2>&1)"
+GIVEN_OUT="$(cd "$TMP_ROOT/neutral" && env "${UNSET_ARGS[@]}" ROOT_DECOY_DIR="$GIVEN" ROOT_DECOY_REAL_AGENTS_MAIN_ROOT="$REAL_CFG" AGENTS_MAIN_ROOT="$GIVEN/main" TEST_HOST_TMPDIR="$TMP_ROOT/unused cache" bash "$RWT" 120 bash "$TMP_ROOT/harness-driver.sh" "$ROOT_N" ${RETIRED_NAMES[@]+"${RETIRED_NAMES[@]}"} 2>&1)"
 expect_eq "the provided decoy is kept" "$(field "$GIVEN_OUT" DIR)" "$GIVEN"
 expect_eq "the main root stays on the provided decoy" "$(field "$GIVEN_OUT" MAIN)" "$GIVEN/main"
 expect_eq "the launcher-recorded real value is kept" "$(field "$GIVEN_OUT" REAL)" "$REAL_CFG"
 for name in ${RETIRED_NAMES[@]+"${RETIRED_NAMES[@]}"}; do
   expect_has "the harness points $name at the provided old tree" "$GIVEN_OUT" "OLD:$name=$GIVEN/old"
 done
-if [[ -e "$TMP_ROOT/unused cache" ]]; then fail "no second decoy is built" "$TMP_ROOT/unused cache exists"; else pass "no second decoy is built"; fi
+expect_eq "no second decoy is built" "$(find "$TMP_ROOT/unused cache" -path '*/root-decoy/*' -prune 2>/dev/null | wc -l | tr -d ' ')" "0"
 case_end
 
 echo ""

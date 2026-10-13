@@ -48,7 +48,7 @@ fi
 #   GH_MOCK_RESOLVE_AFTER_ADD  item id returned by 2nd resolve_item_id call
 #   GH_MOCK_ARGS_LOG           append-only call log
 
-TMP=""
+TMP="" ORIG_PATH="$PATH"
 
 setup_mock() {
     TMP="$(mktemp -d)"
@@ -130,7 +130,7 @@ case "$ARGS" in
 esac
 MOCK_EOF
     chmod +x "$TMP/mock-bin/gh"
-    export PATH="$TMP/mock-bin:$PATH"
+    export PATH="$TMP/mock-bin:$ORIG_PATH"
     export GH_MOCK_ARGS_LOG="$TMP/gh-args.log"
     : > "$GH_MOCK_ARGS_LOG"
     export GH_MOCK_RESOLVE_COUNTER_FILE="$TMP/resolve-counter"
@@ -199,7 +199,7 @@ SAVED_PATH="$PATH"
 # Run with a minimal env. Helper must not abort with "AGENTS_MAIN_ROOT unset".
 STDERR_FILE="$TMP/standalone-stderr.log"
 # run_with_timeout is a shell function, so it wraps `env -i` (env cannot exec a function).
-run_with_timeout 30 env -i PATH="$SAVED_PATH" HOME="$HOME" \
+run_with_timeout 30 env -i PATH="$SAVED_PATH" HOME="$HOME" WORKFLOW_STATE_DIR="$TMP/state" WORKFLOW_PLANS_DIR="$TMP/plans" \
     ISSUE_CREATE_PROJECT_ID="PVT_kwHOAMF_jc4BXf9E" \
     ISSUE_CREATE_PROJECT_NUM="1" \
     ISSUE_CREATE_OWNER="nirecom" \

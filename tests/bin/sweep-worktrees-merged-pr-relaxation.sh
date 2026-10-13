@@ -2,27 +2,10 @@
 # Tests: bin/sweep-worktrees.sh
 # Tags: unit, sweep, scope:issue-specific
 #
-# Test suite for sweep-worktrees merged-PR clean-check relaxation (#1393).
-# Also validates is_fresh protection (#1414): fresh worktrees must be skipped
-# regardless of merged-PR state.
-#
-# Before the relaxation, `is_clean_wt()` rejects ALL worktrees with untracked
-# files regardless of PR merge state. After the relaxation (change A), merged-PR
-# worktrees use `is_clean_tracked_only()` which ignores untracked files, while
-# non-merged-PR worktrees are still rejected early via `skipped_unmerged`.
-#
-# Test cases:
-#   TC1: merged-PR with clean worktree -> candidate (both old and new behavior)
-#   TC2: merged-PR with untracked file -> candidate (new behavior; was skipped before)
-#   TC3: non-merged-PR with clean worktree -> skipped_unmerged (both old and new)
-#   TC4: non-merged-PR with untracked files -> skipped_unmerged (both old and new)
-#   TC5: non-existent worktree path -> is_clean_wt() does not crash
-#   TC6: detached HEAD worktree -> skipped with warning (no crash)
-#   TC7: fresh worktree (< MIN_AGE_HOURS) with merged-PR + untracked -> skipped
-#        by is_fresh (#1414 regression guard)
-#
-# L3 gap: real claude -p session with actual linked worktrees is not covered.
-#          See tests/claude-e2e.md for L3 acceptance criteria.
+# sweep-worktrees merged-PR clean-check relaxation (#1393) + is_fresh protection (#1414).
+# Merged-PR worktrees ignore untracked files; non-merged-PR ones are skipped_unmerged.
+# TC1/TC3 merged candidates; TC2/TC4 unmerged (gh stubbed, #2590); TC5 missing path;
+# TC6 detached HEAD; TC7 fresh worktree skipped. L3 gap: tests/claude-e2e.md.
 set -euo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -50,6 +33,15 @@ run_test() {
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 
+# Keep the orphan/empty-parent scans off the real worktree base (--apply would act on it).
+mkdir -p "$TEST_DIR/wtbase"
+export WORKTREE_BASE_DIR="$TEST_DIR/wtbase"
+
+# Fake gh: every branch reports "no merged PR" so TC2/TC4 never reach real gh (#2590).
+mkdir -p "$TEST_DIR/stubbin"
+printf '#!/bin/bash\necho false\n' > "$TEST_DIR/stubbin/gh"
+chmod +x "$TEST_DIR/stubbin/gh"
+
 ENFORCE_WORKTREE=off git init "$TEST_DIR/main"
 git -C "$TEST_DIR/main" config core.hooksPath /dev/null 2>/dev/null || true
 cd "$TEST_DIR/main"
@@ -72,7 +64,7 @@ run_test "TC1: merged-PR + untracked file -> candidate" "candidates: 1" "$output
 cd "$TEST_DIR/main"
 ENFORCE_WORKTREE=off git worktree add --force "$TEST_DIR/wt2" test-branch
 touch "$TEST_DIR/wt2/untracked.txt"
-output2=$(bash "$SCRIPT" --apply --min-age-hours 0 --ci-mode 2>&1 || true)
+output2=$(PATH="$TEST_DIR/stubbin:$PATH" bash "$SCRIPT" --apply --min-age-hours 0 --ci-mode 2>&1 || true)
 run_test "TC2: non-merged-PR + untracked file -> skipped_unmerged" '"skipped_unmerged"' "$output2"
 
 # --- TC3: merged-PR + clean worktree (no untracked) -> candidate ---
@@ -84,7 +76,7 @@ run_test "TC3: merged-PR + clean -> candidate" "candidates:" "$output3"
 # --- TC4: non-merged-PR + clean worktree -> skipped_unmerged ---
 cd "$TEST_DIR/main"
 ENFORCE_WORKTREE=off git worktree add --force "$TEST_DIR/wt4" test-branch
-output4=$(bash "$SCRIPT" --apply --min-age-hours 0 --ci-mode 2>&1 || true)
+output4=$(PATH="$TEST_DIR/stubbin:$PATH" bash "$SCRIPT" --apply --min-age-hours 0 --ci-mode 2>&1 || true)
 run_test "TC4: non-merged-PR + clean -> skipped_unmerged" '"skipped_unmerged"' "$output4"
 
 # --- Clean up worktrees used in TC1-TC4 (they block test-branch checkout) ---

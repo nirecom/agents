@@ -5,6 +5,7 @@
 # statically separable from legitimate use); completeness is NOT claimed.
 # (2) Retired-relay tombstone (#1091): the retired relay names may not appear anywhere in the
 # tracked tree outside append-only records, the test archive and TOMBSTONE_EXEMPT; no waivers.
+# Test isolation lines that only clear them pass (tombstone_isolation_line, #2590).
 # Usage: check-session-id-ssot.sh [--staged] [file ...]   Exit: 0 clean | 1 violations | 2 usage.
 # Contract and rationale: docs/architecture/claude-code/session-id-resolution.md
 
@@ -28,9 +29,7 @@ WAIVER_RE="session-id-ssot: waived \\([^)]*\\)[[:space:]]*—[[:space:]]*[^[:spa
 
 # Tombstone: the names are retired, so no use is legitimate and no waiver applies. The exempt
 # files must still spell them: this guard, its test, the one-shot purge migration and its test,
-# the doc that records the retirement, and the test-isolation points that unset the retired
-# names so a leftover CLAUDE_ENV_FILE cannot reach the purge and rewrite a real env file
-# (the two shared ones, then the tests and the fixture that unset them on their own).
+# and the doc that records the retirement.
 TOMBSTONE_RE='(^|[^A-Za-z0-9_])(CLAUDE_SESSION_ID|CLAUDE_ENV_FILE)([^A-Za-z0-9_]|$)'
 TOMBSTONE_EXEMPT=(
   "bin/check-session-id-ssot.sh"
@@ -38,14 +37,13 @@ TOMBSTONE_EXEMPT=(
   "hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js"
   "tests/hooks/legacy-session-id-relay-purge.sh"
   "docs/architecture/claude-code/session-id-resolution.md"
-  "tests/lib/harness.sh"
-  "bin/lib/run-tests-baseline-exec.sh"
-  "tests/bin/feature-step-durations.sh"
-  "tests/hooks/feat-2511-session-relocation.sh"
-  "tests/hooks/feature-confirm-checkpoint.sh"
-  "tests/hooks/fix-524-confirm-plan-guard.sh"
-  "tests/lib/plan-sync-fixture.sh"
 )
+# Test isolation must still clear the names, so a leftover CLAUDE_ENV_FILE cannot reach the
+# purge and rewrite a real env file. In tests/<dir>/**/*.sh and these shared points, a line passes
+# when every retired name on it is an operand of a whole-line `unset` or of `-u <name>`.
+TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS=("bin/lib/run-tests-baseline-exec.sh")
+TOMBSTONE_UNSET_LINE_RE='^[[:space:]]*unset([[:space:]]+[A-Za-z_][A-Za-z0-9_]*)+([[:space:]]+2>[[:space:]]*/dev/null)?([[:space:]]*\|\|[[:space:]]*true)?[[:space:]]*$'
+TOMBSTONE_DASH_U_RE='(^|[[:space:]])-u[[:space:]]+(CLAUDE_SESSION_ID|CLAUDE_ENV_FILE)([^A-Za-z0-9_]|$)'
 
 usage() {
     echo "usage: check-session-id-ssot.sh [--staged] [file ...]" >&2
@@ -115,11 +113,35 @@ scan_grep() {
     fi
 }
 
+# tombstone_isolation_file <path> — 0 when the line rule applies to <path>.
+tombstone_isolation_file() {
+    local s
+    case "$1" in tests/*/*.sh) return 0 ;; esac
+    for s in "${TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS[@]}"; do
+        [ "$1" = "$s" ] && return 0
+    done
+    return 1
+}
+
+# tombstone_isolation_line <text> — 0 when every retired name on the line only clears it.
+tombstone_isolation_line() {
+    local text="$1"
+    [[ "$text" =~ $TOMBSTONE_UNSET_LINE_RE ]] && return 0
+    while [[ "$text" =~ $TOMBSTONE_DASH_U_RE ]]; do
+        text="${text/"${BASH_REMATCH[0]}"/ ${BASH_REMATCH[3]}}"
+    done
+    [[ "$text" =~ $TOMBSTONE_RE ]] && return 1
+    return 0
+}
+
 TOMBSTONES=0
 if [ "${#TSCAN[@]}" -gt 0 ]; then
     scan_grep "$TOMBSTONE_RE" "${TSCAN[@]}"
     while IFS= read -r hit; do
         [ -n "$hit" ] || continue
+        file="${hit%%:*}"
+        rest="${hit#*:}"
+        if tombstone_isolation_file "$file" && tombstone_isolation_line "${rest#*:}"; then continue; fi
         echo "$hit"
         TOMBSTONES=$((TOMBSTONES + 1))
     done <<< "$SCAN_OUT"

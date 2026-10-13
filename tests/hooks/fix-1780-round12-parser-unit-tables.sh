@@ -1,70 +1,14 @@
 #!/usr/bin/env bash
-# tests/hooks/fix-1780-round12-parser-unit-tables.sh
+# tests/hooks/fix-1780-round12-parser-unit-tables.sh — table-driven and mutation-evidence unit tests (#1780 round-12).
 # Tests: hooks/block-clearance-token-write/bash-scan/argv-scan.js, hooks/block-clearance-token-write/bash-scan/assignment-text.js, hooks/block-clearance-token-write/interpreter-scan.js, hooks/block-clearance-token-write/nested-bodies.js, hooks/lib/basename-glob-normalize.js, hooks/lib/basename-glob-normalize/brace-ansi-expand.js, hooks/lib/protected-basenames.js
 # Tags: off-clearance, session-marker, protected-basename, parser, regex, table-driven, mutation-evidence, allowlist, glob, brace-expansion, ansi-c-quoting, interpreter, interpreter-identity, heredoc, here-string, eval, stdin-program, argv-operand, assignment-chain, pwsh-env, classifier, security, unit, scope:common, pwsh-not-required, TL1
-# TL3 gap (what this test does NOT catch):
-# - Nothing about the HOOK. Every function here is called in-process; whether the
-#   entrypoint routes a real tool call into them is asserted by the TL2 sibling
-#   tests/hooks/fix-1780-round12-classifier-attack-shapes.sh and, for PreToolUse
-#   registration, statically by tests/hooks/enforce-protected-marker-write.sh (X6).
-# - Real shell / OS behaviour. That bash expands `{f..f}`, that `$'\x66'` decodes
-#   to `f`, and that NTFS folds `x::$DATA` onto `x` are all PREMISES here; what is
-#   asserted is only that these modules model them.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration.
-#
-# ---------------------------------------------------------------------------
-# WHY THIS FILE EXISTS (#1780 round-12, /review-tests gap 6)
-#
-# The six modules named above are parsers, regex constants and allowlists — the
-# exact target class for which skills/_shared/test-design/parser-regex-tests.md
-# makes table-driven cases and mutation evidence MANDATORY. They were reached
-# only through the hook until now: every assertion about them was a BLOCK/ALLOW
-# verdict several layers downstream, which cannot distinguish "the regex is
-# right" from "something else upstream happened to answer the same way".
-#
-# Two obligations, both discharged here:
-#
-#   TABLE-DRIVEN (Sections N/G/B/A/S/I/D). Every row is `name|want|fn|input`,
-#   iterated with `IFS='|' read -r`, and the row NAME is injected into the
-#   assertion message — the pattern the rule prescribes. Each behaviour is
-#   carried by a PAIR of rows differing by exactly the property under test
-#   (`cat` vs `catx`, `-o` vs `--log`, `$A` vs `"$A"`, `{a,b}` vs `{x}`,
-#   `node -e` vs `node script.js`), so a row that passes for the wrong reason
-#   has a sibling that fails.
-#
-#   MUTATION EVIDENCE (Section M). Paired rows argue that a case is DISCRIMINATING;
-#   they cannot prove which code decides it. Section M copies hooks/ to a throwaway
-#   directory, replaces ONE named regex constant with the never-matching `/(?!)/`
-#   (tests/hooks/fix-1780-round12-parser-unit-tables/mutate.js), and asserts that the row
-#   keyed on that constant FLIPS to a stated different value. A constant whose
-#   mutant leaves every row unchanged is dead code as far as this suite is
-#   concerned, and the assertion says so by name.
-#
-#   Why not bin/mutation-probe.sh: it handles the single-line `const NAME = /re/;`
-#   form only (its own header says so), and every constant that matters in
-#   interpreter-scan.js / argv-scan.js / assignment-text.js is a multi-line
-#   `new RegExp(String.raw`…`)`. Section M covers both forms.
-#
-# WHAT IS BEING DEFENDED. hooks/lib/session-markers.js authorizes on a marker
-# file's EXISTENCE alone, so every one of these parsers sits on the path between
-# "a shell command that creates a file" and "full session clearance". A widening
-# regex over-blocks ordinary work (CPR-ORTH, the ALLOW-side rows); a narrowing one
-# is a one-command forge of WORKFLOW_OFF.
-#
-# NO PROTECTED NAME IS HARDCODED. The marker and token spellings are read from
-# hooks/lib/protected-basenames.js at run time and substituted into the tables
-# via @MK@ / @MK1@ / @TOK@ / @TOK1@, so a marker kind added to the SSOT later
-# cannot leave these tables quietly testing a name that no longer exists.
-#
-# LAYOUT (rules/coding/file-split.md). This file is the harness — setup, the SSOT
-# introspection, _expand(), run_table() and dispatch. The case tables themselves
-# live in tests/hooks/fix-1780-round12-parser-unit-tables/:
-#   cases-basename-glob.sh   Sections N, G, B
-#   cases-bash-scan.sh       Sections A, S
-#   cases-interpreter.sh     Sections I, D
-#   cases-mutation.sh        Section M
-# ---------------------------------------------------------------------------
+# TL3 gap: hook routing (TL2 sibling fix-1780-round12-classifier-attack-shapes.sh; X6 of enforce-protected-marker-write.sh)
+#   and real shell / OS behaviour ({f..f}, $'\x66', x::$DATA) are premises here, not asserted.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
+# Rows are `name|want|fn|input`, paired by the property under test; Section M swaps one regex constant for `/(?!)/`
+#   (mutate.js) and asserts its row flips. Protected spellings come from hooks/lib/protected-basenames.js (@MK@/@TOK@).
+# Pattern and rationale: skills/_shared/test-design/parser-regex-tests.md. Tables in fix-1780-round12-parser-unit-tables/:
+#   cases-basename-glob.sh (N, G, B), cases-bash-scan.sh (A, S), cases-interpreter.sh (I, D), cases-mutation.sh (M).
 
 set -u
 
@@ -129,19 +73,12 @@ _expand() {
     printf '%s' "$t"
 }
 
-# run_table <section> — the pattern from parser-regex-tests.md, with the probe as
-# `eval_subject`. The table is read TWICE: once to feed the probe (one node
-# process for the whole section) and once to assert. Rows are `name|want|fn|input`;
-# with IFS='|' and four `read` targets the whole remainder of the line lands in
-# `input`, separators included, so pipeline inputs survive intact.
-#
-# `want` is the SECOND column, not the last, precisely because the input may
-# contain `|`: a trailing `want` could not be split off without truncating the
-# pipeline rows this suite exists to cover.
-#
-# Column padding is trimmed. Two escapes buy back what trimming and line-based
-# reading cost: `\n` is a real newline (heredoc rows) and `\s` a literal space
-# (a trailing space is itself a normalizer rule under test).
+# run_table <section> — the parser-regex-tests.md pattern with the probe as `eval_subject`. The
+# table is read twice: once to feed the probe (one node process per section), once to assert.
+# Rows are `name|want|fn|input`; with IFS='|' the rest of the line lands in `input`, so a `|`
+# inside an input survives, which is why `want` is the second column. Padding is trimmed; `\n`
+# is a real newline and `\s` a literal space. The table file has no final newline, so the loop
+# also takes the last, unterminated row.
 run_table() {
     local section="$1" tbl res
     tbl="$SANDBOX/$section.tbl"
@@ -155,7 +92,7 @@ run_table() {
         *__MODULES__*) fail "$section probe could not load the modules under test: $res"; return ;;
     esac
     local name want fn input got
-    while IFS='|' read -r name want fn input; do
+    while IFS='|' read -r name want fn input || [ -n "$name" ]; do
         [ -z "${name:-}" ] && continue
         case "$name" in \#*) continue ;; esac
         name="$(printf '%s' "$name" | sed 's/^ *//; s/ *$//')"
@@ -164,6 +101,14 @@ run_table() {
         assert_eq "$section $name" "$want" "$got"
     done < "$tbl"
 }
+
+# H2: run_table must assert the last, unterminated row; a wrong want there has to fail. Runs in a
+# subshell so the deliberate failure never reaches the real counters.
+H2_OUT="$(printf 'H2-first | s1@MK@ | norm | s1@MK@\nH2-last | WRONG-ON-PURPOSE | norm | s1@MK@' | run_table H2)"
+case "$H2_OUT" in *"FAIL: H2 H2-last"*) pass "H2 a wrong want on the unterminated last row fails" ;;
+    *) fail "H2 a wrong want on the unterminated last row went unasserted: $H2_OUT" ;; esac
+case "$H2_OUT" in *"PASS: H2 H2-first"*) pass "H2 the rows before it still pass" ;;
+    *) fail "H2 the first row did not pass: $H2_OUT" ;; esac
 
 # shellcheck source=./fix-1780-round12-parser-unit-tables/cases-basename-glob.sh
 . "$PARTS_DIR/cases-basename-glob.sh"

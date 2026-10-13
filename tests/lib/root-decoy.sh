@@ -3,7 +3,7 @@
 # environment name at a tree of stubs (tests/lib/root-decoy-build.js), so a test that reaches
 # the wrong root fails loudly. A test that needs the real main worktree settings opts back in
 # with root_decoy_use_real_main_root.
-#   root_decoy_ensure                reuse ROOT_DECOY_DIR or build under the cache dir, then export
+#   root_decoy_ensure                reuse ROOT_DECOY_DIR or build under the test cache base, then export
 #   root_decoy_use_real_main_root    export AGENTS_MAIN_ROOT from ROOT_DECOY_REAL_AGENTS_MAIN_ROOT
 #   root_decoy_hits <tree>           one "<stub path><TAB><test id>" line per recorded hit
 #   root_decoy_hit_count <tree>      number of recorded hits
@@ -14,16 +14,8 @@ _root_decoy_native() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
 }
 
-_root_decoy_cache_base() {
-  if declare -F run_all_cache_dir >/dev/null 2>&1; then
-    printf '%s/root-decoy\n' "$(run_all_cache_dir)"
-  else
-    printf '%s/root-decoy\n' "${RUN_ALL_CACHE_DIR:-${HOME:-.}/.claude/run-all}"
-  fi
-}
-
 root_decoy_ensure() {
-  local builder names name dir key
+  local builder names name dir
   builder="$(_root_decoy_native "$_ROOT_DECOY_SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js")"
   if ! names="$(node "$builder" --print-retired-env-names)" || [[ -z "$names" ]]; then
     echo "root_decoy_ensure: the retired environment names are unavailable; refusing to run without the old-name decoy" >&2
@@ -31,11 +23,11 @@ root_decoy_ensure() {
   fi
   dir="${ROOT_DECOY_DIR:-}"
   if [[ -z "$dir" ]]; then
-    if ! key="$(node "$builder" --cache-key)" || [[ -z "$key" ]]; then
-      echo "root_decoy_ensure: cannot compute the decoy cache key" >&2
+    # The cache sits under the host temp area (tests/lib/test-cache-base.js), never under $HOME.
+    if ! dir="$(node "$builder" --cache-dir)" || [[ -z "$dir" ]]; then
+      echo "root_decoy_ensure: cannot compute the decoy cache dir" >&2
       return 1
     fi
-    dir="$(_root_decoy_cache_base)/$key"
   fi
   dir="$(_root_decoy_native "$dir")"
   if ! node "$builder" --out "$dir"; then

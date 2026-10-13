@@ -479,7 +479,7 @@ if [ "$DEADLINE_HIT" -eq 1 ]; then
   exit 3
 fi
 
-if declare -F run_all_root_decoy_report >/dev/null 2>&1; then run_all_root_decoy_report || RAR_FAIL=$((RAR_FAIL + 1)); fi # counted before the counts print
+if declare -F run_all_hit_report >/dev/null 2>&1; then run_all_hit_report || RAR_FAIL=$((RAR_FAIL + 1)); fi # counted before the counts print
 rar_missing ${MISSING[@]+"${MISSING[@]}"}
 rar_tail ${UNSUP[@]+"${UNSUP[@]}"}
 cleanup_all

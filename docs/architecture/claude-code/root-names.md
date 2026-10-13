@@ -91,8 +91,9 @@ A test that reached a tool through `AGENTS_MAIN_ROOT` would pass against the ins
 
 - `tests/lib/root-decoy-build.js` builds a stub tree mirroring the tracked files under `bin`, `hooks` and `skills` of its own checkout. A stub script records one hit file under the tree's `hits/` directory and exits 97.
 - `tests/lib/harness.sh` calls `root_decoy_ensure` when it is sourced and exits if the decoy cannot be set up. `root_decoy_ensure` exports `AGENTS_MAIN_ROOT` pointing at the stub tree, points the retired variable names at a second stub tree, and keeps the real value in `ROOT_DECOY_REAL_AGENTS_MAIN_ROOT`.
-- With no `ROOT_DECOY_DIR` set, the decoy is built once under `<run-all cache dir>/root-decoy/<key>` and shared by every later run; the cache dir is `RUN_ALL_CACHE_DIR`, else `~/.claude/run-all`, and the key follows the tracked path list.
-- `bin/lib/run-all-launch.sh` pins the same decoy for a whole run, tags each test with `ROOT_DECOY_TEST_ID`, and reports every hit at the end; a hit counts as a failure of the run.
+- With no `ROOT_DECOY_DIR` set, the decoy is built once under `<test cache base>/root-decoy/<key>` and shared by every later run; `tests/lib/test-cache-base.js` owns the cache base (the OS temp area, never `$HOME`), and the key follows the tracked path list.
+- `bin/lib/run-all-launch.sh` pins the same decoy for a whole run, tags each test with `ROOT_DECOY_TEST_ID`, and reports every hit at the end through `run_all_hit_report`; a hit counts as a failure of the run.
+- The decoy covers reaches through a root name; the command guard and worktree change detection cover git writes and network CLIs that need no root name at all: [test-command-guard.md](test-command-guard.md).
 - A test that must read the real main worktree calls `root_decoy_use_real_main_root`. The gate rejects that call in a shell file whose exception does not carry the form `leave-decoy`.
 
 ## The gate

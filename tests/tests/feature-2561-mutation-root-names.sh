@@ -11,14 +11,6 @@ set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
-# Run standalone, the harness would build its decoy under the real ~/.claude/run-all.
-OWN_CACHE_DIR=""
-if [[ -z "${RUN_ALL_CACHE_DIR:-}" ]]; then
-  OWN_CACHE_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t root-decoy-cache)"
-  [[ -n "$OWN_CACHE_DIR" && -d "$OWN_CACHE_DIR" ]] || { echo "cannot create a decoy cache directory" >&2; exit 1; }
-  export RUN_ALL_CACHE_DIR="$OWN_CACHE_DIR"
-fi
-readonly OWN_CACHE_DIR
 # shellcheck source=tests/lib/harness.sh
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/script-checkout-fixture.sh
@@ -27,7 +19,7 @@ source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 TMP_ROOT="$(np "$(make_tmp)")"
 [[ -n "$TMP_ROOT" && -d "$TMP_ROOT" ]] || { echo "cannot create a temp root" >&2; exit 1; }
 readonly TMP_ROOT
-trap 'touch "$TMP_ROOT/stop"; rm -rf "$TMP_ROOT"; [[ -z "$OWN_CACHE_DIR" ]] || rm -rf "$OWN_CACHE_DIR"' EXIT
+trap 'touch "$TMP_ROOT/stop"; rm -rf "$TMP_ROOT"' EXIT
 harness_isolate "$TMP_ROOT"
 unset CLAUDE_CODE_SESSION_ID
 . "$(dirname "$0")/feature-2561-mutation-root-names/timeout-cases.sh"
@@ -59,7 +51,8 @@ leftovers() { find "$TMP_ROOT/mtmp" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ';
 script_checkout_fixture_copy "$FXM" bin/lib/run-all-launch.sh bin/lib/test-language-registry.sh bin/lib/run-all-parallelism.sh bin/run-with-timeout.sh bin/test-language-registry hooks/lib/test-language-registry.js hooks/lib/test-language-registry.json
 mkdir -p "$FXM/tests/mutation" "$FXM/tests/lib" "$FXM/tests/bin" "$FXM/tests/unit"
 cp "$SCRIPT_CHECKOUT_ROOT/$PROBE" "$FXM/tests/mutation/"
-cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh" "$FXM/tests/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh" "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-cache-base.js" "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-run-root.sh" "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard.sh" "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard-build.js" "$FXM/tests/lib/"
+cp -R "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard" "$FXM/tests/lib/"
 printf '%s\n' '# retired-names:begin' "# env ROOT_NAMES_FIXTURE_RETIRED" '# retired-names:end' >"$FXM/$NAMES_REL"
 printf 'DATA\n' >"$FXM/bin/data.txt"
 printf 'exit 0\n' >"$FXM/bin/helper.sh"
@@ -190,9 +183,9 @@ cat >"$TMP_ROOT/diag.table" <<'TABLE'
 type-error|KILLED-CRASH|-|TypeError: Cannot read properties of undefined (reading 'trim')
 arg-type|KILLED-CRASH|-|  code: 'ERR_INVALID_ARG_TYPE'
 command-failed|KILLED-CRASH|-|Error: Command failed: git rev-parse --show-toplevel
-command-not-found|KILLED-CRASH|-|/x/bin/tool.sh: line 3: absent-tool: command not found
-no-such-file|KILLED-CRASH|-|/x/bin/tool.sh: line 3: /x/bin/lib.sh: No such file or directory
-tool-no-such-file|KILLED-DYNAMIC|-|cat: /x/bin/data.txt: No such file or directory
+command-not-found|KILLED-CRASH|-|/stub/bin/tool.sh: line 3: absent-tool: command not found
+no-such-file|KILLED-CRASH|-|/stub/bin/tool.sh: line 3: /stub/bin/lib.sh: No such file or directory
+tool-no-such-file|KILLED-DYNAMIC|-|cat: /stub/bin/data.txt: No such file or directory
 prose-command-failed|KILLED-DYNAMIC|-|FAIL: Command failed to print DATA
 prose-not-found|KILLED-DYNAMIC|-|FAIL: the log says command not found
 printed-before-too|KILLED-DYNAMIC|always|Error: Command failed: probe of an absent tool
