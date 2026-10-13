@@ -2,19 +2,19 @@
 "use strict";
 // Builds the root decoy: a tree of stubs mirroring this checkout's tracked bin/hooks/skills
 // paths. Every script stub records one hit under <tree>/hits/ and exits non-zero, so a test
-// that resolves code or settings through the wrong root fails loudly instead of silently
-// running the developer's real checkout.
+// that resolves code or settings through the wrong root fails loudly, never running the real checkout.
 // Usage:
 //   root-decoy-build.js --out <dir>                    build <dir>/main and <dir>/old (atomic, no-op when present)
 //   root-decoy-build.js --single <dir> --marker <v>    build one tree directly under <dir>
 //   root-decoy-build.js --print-retired-env-names [--retired-names-from <file>]
-//   root-decoy-build.js --cache-key
+//   root-decoy-build.js --cache-dir                    print <test cache base>/root-decoy/<key>
 // Exit: 0 ok, 1 build failure, 2 usage error or unreadable retired-name list.
 
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
+const { testCacheBase } = require("./test-cache-base");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const MIRRORED_PREFIXES = ["bin", "hooks", "skills"];
@@ -262,18 +262,18 @@ function retiredEnvNames(fileArg) {
   return names;
 }
 
-function cacheKey() {
+function cacheDir() {
   const h = crypto.createHash("sha256");
   h.update(fs.readFileSync(__filename));
   h.update("\0");
   h.update(listPaths().join("\n"));
-  return h.digest("hex").slice(0, 16);
+  return `${testCacheBase()}/root-decoy/${h.digest("hex").slice(0, 16)}`;
 }
 
 function main(argv) {
   const opts = {};
   const valued = new Set(["--out", "--single", "--marker", "--retired-names-from"]);
-  const flags = new Set(["--print-retired-env-names", "--cache-key"]);
+  const flags = new Set(["--print-retired-env-names", "--cache-dir"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (valued.has(a)) {
@@ -285,14 +285,14 @@ function main(argv) {
       die(2, `unknown argument: ${a}`);
     }
   }
-  const modes = ["--out", "--single", "--print-retired-env-names", "--cache-key"].filter((m) => m in opts);
-  if (modes.length !== 1) die(2, "give exactly one of --out, --single, --print-retired-env-names, --cache-key");
+  const modes = ["--out", "--single", "--print-retired-env-names", "--cache-dir"].filter((m) => m in opts);
+  if (modes.length !== 1) die(2, "give exactly one of --out, --single, --print-retired-env-names, --cache-dir");
   if (modes[0] === "--out") return buildOut(opts["--out"]);
   if (modes[0] === "--single") {
     if (!("--marker" in opts)) die(2, "--single requires --marker <value>");
     return buildSingle(opts["--single"], opts["--marker"]);
   }
-  if (modes[0] === "--cache-key") return void process.stdout.write(`${cacheKey()}\n`);
+  if (modes[0] === "--cache-dir") return void process.stdout.write(`${cacheDir()}\n`);
   return void process.stdout.write(`${retiredEnvNames(opts["--retired-names-from"]).join("\n")}\n`);
 }
 

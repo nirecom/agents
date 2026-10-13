@@ -410,6 +410,64 @@ else
   fail "T11 (TOMBSTONE_EXEMPT mirrors the guard source): missing in guard:$t11_bad"
 fi
 
+# L1-L6 (#2590): the seven isolation files leave the whole-file exemption; only whole
+# `unset <names>` lines and `-u <name>` operands in tests/**/*.sh (plus the one shared
+# isolation point bin/lib/run-tests-baseline-exec.sh) pass. Positional runs scan only those.
+L_SHARED="bin/lib/run-tests-baseline-exec.sh"
+L_SEVEN=(tests/lib/harness.sh "$L_SHARED" tests/bin/feature-step-durations.sh tests/hooks/feat-2511-session-relocation.sh
+  tests/hooks/feature-confirm-checkpoint.sh tests/hooks/fix-524-confirm-plan-guard.sh tests/lib/plan-sync-fixture.sh)
+# $1 label, $2 path:line prefix, $3 wanted count of report lines starting with it
+expect_hits() {
+  local got; got="$(printf '%s\n' "$GUARD_OUT" | grep -c "^$2" || true)"
+  if [[ "$got" == "$3" ]]; then pass "$1"; else fail "$1: want=$3 got=$got (out: $(echo "$GUARD_OUT" | head -3 | tr '\n' ' '))"; fi
+}
+
+make_fixture l1
+add_file "tests/hooks/unset-plain.sh" "#!/usr/bin/env bash" "unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE"
+add_file "tests/hooks/unset-quiet.sh" "  unset TERM_PROGRAM CLAUDE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true"
+add_file "tests/lib/dash-u.sh" "DENV=(env -u WORKFLOW_STATE_DIR -u CLAUDE_SESSION_ID" "  -u CLAUDE_CODE_SESSION_ID -u CLAUDE_ENV_FILE)"
+run_guard "$FIXTURE" tests/hooks/unset-plain.sh tests/hooks/unset-quiet.sh tests/lib/dash-u.sh
+expect_rc "L1 (unset and -u lines in tests/**/*.sh pass)" 0
+expect_hits "L1b (no unset or -u line is reported)" "tests/" 0
+
+make_fixture l2
+add_file "tests/hooks/mixed.sh" "unset CLAUDE_SESSION_ID 2>/dev/null || true" "# CLAUDE_ENV_FILE is cleared above" \
+  "CLAUDE_ENV_FILE=/tmp/x" "export CLAUDE_SESSION_ID=abc"
+run_guard "$FIXTURE" tests/hooks/mixed.sh
+expect_rc "L2 (comment and assignments beside an unset still fail)" 1
+expect_hits "L2b (the comment and both assignments are reported)" "tests/hooks/mixed.sh:" 3
+expect_hits "L2c (the unset line is not reported)" "tests/hooks/mixed.sh:1:" 0
+
+make_fixture l3
+add_file "tests/hooks/chained.sh" 'unset CLAUDE_SESSION_ID && echo "$CLAUDE_ENV_FILE"' "unset FOO" 'echo "$CLAUDE_SESSION_ID" -u CLAUDE_ENV_FILE'
+run_guard "$FIXTURE" tests/hooks/chained.sh
+expect_hits "L3 (an unset followed by a use fails)" "tests/hooks/chained.sh:1:" 1
+expect_hits "L3b (a use beside a -u operand fails)" "tests/hooks/chained.sh:3:" 1
+
+make_fixture l4
+add_file "bin/lib/other-exec.sh" "        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE"
+add_file "tests/hooks/note.txt" "unset CLAUDE_SESSION_ID"
+add_file "$L_SHARED" "        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE" "# CLAUDE_SESSION_ID comment"
+run_guard "$FIXTURE" bin/lib/other-exec.sh tests/hooks/note.txt "$L_SHARED"
+expect_rc "L4 (unset outside tests/**/*.sh fails)" 1
+expect_hits "L4b (an unset line in another bin file is reported)" "bin/lib/other-exec.sh:" 1
+expect_hits "L4c (an unset line in a non-.sh test file is reported)" "tests/hooks/note.txt:" 1
+expect_hits "L4d (the shared point's unset line passes)" "$L_SHARED:1:" 0
+expect_hits "L4e (the shared point's comment line is reported)" "$L_SHARED:2:" 1
+
+make_fixture l5
+for p in "${L_SEVEN[@]}"; do add_file "$p" "# CLAUDE_ENV_FILE named in a comment"; done
+run_guard "$FIXTURE" "${L_SEVEN[@]}"
+expect_hits "L5 (the seven files are no longer whole-file exempt)" "[a-z]*/[^:]*:1:" 7
+
+# L6: read-only run over the real seven files, plus the guard source no longer exempting them.
+run_guard "$SCRIPT_CHECKOUT_ROOT" "${L_SEVEN[@]}"
+expect_rc "L6 (the real seven files are clean under the line rule)" 0
+l6_left=0
+l6_block="$(sed -n '/^TOMBSTONE_EXEMPT=(/,/^)/p' "$GUARD" 2>/dev/null)"
+for p in "${L_SEVEN[@]}"; do case "$l6_block" in *"\"$p\""*) l6_left=$((l6_left + 1)) ;; esac; done
+if [[ "$l6_left" -eq 0 ]]; then pass "L6b (none of the seven is in the guard's TOMBSTONE_EXEMPT)"; else fail "L6b: $l6_left of the seven still exempt"; fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]] && exit 0 || exit 1

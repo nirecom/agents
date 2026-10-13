@@ -11,21 +11,13 @@ set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
-# Run standalone, the harness would build its decoy under the real ~/.claude/run-all.
-OWN_CACHE_DIR=""
-if [[ -z "${RUN_ALL_CACHE_DIR:-}" ]]; then
-  OWN_CACHE_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t root-decoy-cache)"
-  [[ -n "$OWN_CACHE_DIR" && -d "$OWN_CACHE_DIR" ]] || { echo "cannot create a decoy cache directory" >&2; exit 1; }
-  export RUN_ALL_CACHE_DIR="$OWN_CACHE_DIR"
-fi
-readonly OWN_CACHE_DIR
 # shellcheck source=tests/lib/harness.sh
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 TMP_ROOT="$(np "$(make_tmp)")"
 [[ -n "$TMP_ROOT" && -d "$TMP_ROOT" ]] || { echo "cannot create a temp root" >&2; exit 1; }
 readonly TMP_ROOT
-trap 'rm -rf "$TMP_ROOT"; [[ -z "$OWN_CACHE_DIR" ]] || rm -rf "$OWN_CACHE_DIR"' EXIT
+trap 'rm -rf "$TMP_ROOT"' EXIT
 harness_isolate "$TMP_ROOT"
 
 readonly FX="$TMP_ROOT/fx checkout"

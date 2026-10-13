@@ -11,14 +11,7 @@ set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
-# Run standalone, the harness would build its decoy under the real ~/.claude/run-all.
-OWN_CACHE_DIR=""
-if [[ -z "${RUN_ALL_CACHE_DIR:-}" ]]; then
-  OWN_CACHE_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t root-decoy-cache)"
-  [[ -n "$OWN_CACHE_DIR" && -d "$OWN_CACHE_DIR" ]] || { echo "cannot create a decoy cache directory" >&2; exit 1; }
-  export RUN_ALL_CACHE_DIR="$OWN_CACHE_DIR"
-fi
-readonly OWN_CACHE_DIR
+# The harness builds its decoy under the OS temp area (tests/lib/test-cache-base.js), never under HOME.
 # shellcheck source=tests/lib/harness.sh
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 # shellcheck source=tests/lib/root-decoy.sh
@@ -27,7 +20,7 @@ source "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh"
 TMP_ROOT="$(np "$(make_tmp)")"
 [[ -n "$TMP_ROOT" && -d "$TMP_ROOT" ]] || { echo "cannot create a temp root" >&2; exit 1; }
 readonly TMP_ROOT
-trap 'rm -rf "$TMP_ROOT"; [[ -z "$OWN_CACHE_DIR" ]] || rm -rf "$OWN_CACHE_DIR"' EXIT
+trap 'rm -rf "$TMP_ROOT"' EXIT
 harness_isolate "$TMP_ROOT"
 unset ROOT_DECOY_TEST_ID
 . "$(dirname "$0")/feature-2561-root-decoy-build/stub-cases.sh"
@@ -57,7 +50,7 @@ tracked_list() { git -C "$1" -c core.quotePath=false ls-files -z -- bin hooks sk
 tree_list() { (cd "$1" && find bin hooks skills -type f | LC_ALL=C sort); }
 
 mkdir -p "$FX/tests/lib" "$FX/tests/bin" "$FX/bin/sub dir" "$FX/hooks/lib" "$FX/skills/demo"
-cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh" "$FX/tests/lib/"
+cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh" "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-cache-base.js" "$FX/tests/lib/"
 printf '#!/usr/bin/env node\nprocess.stdout.write("REAL-CONTENT\\n");\n' >"$FX/bin/nodecli"
 printf '#!/usr/bin/env bash\necho REAL-CONTENT\n' >"$FX/bin/bashcli"
 printf 'no shebang REAL-CONTENT\n' >"$FX/bin/plainfile"
@@ -205,21 +198,23 @@ printf '%s\n' '# retired-names:begin' '# env BAD;touch${IFS}INJECTED' '# retired
 expect_eq "entry that is not a variable name exits 2" "$(rc_of build --print-retired-env-names --retired-names-from "$NAMES_FILE")" "2"
 case_end
 
-case_begin "cache-key-follows-the-tracked-path-list" "tests/lib/root-decoy-build.js"
-KEY_A="$(build --cache-key)"
-expect_eq "cache key is a 16-digit hex string" "$(printf '%s' "$KEY_A" | grep -c -E '^[0-9a-f]{16}$' || true)" "1"
-expect_eq "cache key is stable" "$(build --cache-key)" "$KEY_A"
+case_begin "cache-dir-follows-the-tracked-path-list" "tests/lib/root-decoy-build.js"
+KEY_A="$(TEST_HOST_TMPDIR="$TMP_ROOT/host tmp" build --cache-dir)"
+expect_eq "cache dir ends in root-decoy/<16-digit hex key>" "$(printf '%s' "$KEY_A" | grep -c -E '/root-decoy/[0-9a-f]{16}$' || true)" "1"
+expect_has "cache dir lies under the per-user host temp base" "$(np "$KEY_A")" "/host tmp/agents-test-cache-"
+expect_eq "cache dir is stable" "$(TEST_HOST_TMPDIR="$TMP_ROOT/host tmp" build --cache-dir)" "$KEY_A"
 git -C "$FX" add bin/untracked.sh
-expect_ne "cache key changes when a tracked path is added" "$(build --cache-key)" "$KEY_A"
+expect_ne "cache dir changes when a tracked path is added" "$(TEST_HOST_TMPDIR="$TMP_ROOT/host tmp" build --cache-dir)" "$KEY_A"
 git -C "$FX" rm -q --cached bin/untracked.sh
-expect_eq "cache key returns with the path list" "$(build --cache-key)" "$KEY_A"
+expect_eq "cache dir returns with the path list" "$(TEST_HOST_TMPDIR="$TMP_ROOT/host tmp" build --cache-dir)" "$KEY_A"
+expect_eq "the retired cache-key mode is a usage error" "$(rc_of build --cache-key)" "2"
 case_end
 
 case_begin "usage-errors-exit-2" "tests/lib/root-decoy-build.js"
 expect_eq "unknown argument" "$(rc_of build --no-such-option)" "2"
 expect_eq "no mode" "$(rc_of build)" "2"
 expect_eq "single without marker" "$(rc_of build --single "$TMP_ROOT/never")" "2"
-expect_eq "two modes at once" "$(rc_of build --cache-key --print-retired-env-names)" "2"
+expect_eq "two modes at once" "$(rc_of build --cache-dir --print-retired-env-names)" "2"
 expect_eq "rejected single build writes nothing" "$(rc_of test -e "$TMP_ROOT/never")" "1"
 expect_eq "marker with a line break" "$(rc_of build --single "$TMP_ROOT/never two" --marker $'first\nSECOND_KEY=injected')" "2"
 # Assigned outside the substitution: bash on MSYS drops a CR written inside $( ).
@@ -232,7 +227,7 @@ case_begin "ensure-builds-under-the-cache-dir-and-exports" "tests/lib/root-decoy
 ensure_case_builds_under_the_cache_dir
 case_end
 
-case_begin "ensure-without-a-cache-dir-builds-under-home-and-reuses-it" "tests/lib/root-decoy.sh"
+case_begin "ensure-builds-under-the-host-temp-cache-and-reuses-it" "tests/lib/root-decoy.sh"
 ensure_case_default_location "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-parallelism.sh"
 case_end
 

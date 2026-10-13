@@ -20,6 +20,9 @@ set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 [ -x "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" ] || exit 77
 "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
+# TL3 legitimately uses the real gh: take the command guard (#2590) off PATH.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard.sh"
+command_guard_use_real
 command -v gh >/dev/null 2>&1 || exit 77
 command -v git >/dev/null 2>&1 || exit 77
 
