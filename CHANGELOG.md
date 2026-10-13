@@ -747,3 +747,7 @@ Changes: Test runs now cover every registered language and report tests that cou
 ### FEATURE: PR #2641 (2026-10-13)
 Background: test(#2590): add test harness layers — run root, command guard, spawn record, worktree change detection
 Changes: tests: add run-root isolation, command guard, spawn-record preload, and worktree change detection to the test harness; fix slot-file overhead in run-all change detection
+
+### FEATURE: PR #2625 (2026-10-13)
+Background: feat(#2527): split deliverable type x PM type and make the release ph...
+Changes: Workflow release is now explicit steps (push branch, user verification, merge to main, cleanup, final report gate); `next-step` no longer stalls before `/worktree-end` when worktrees are enforced.;Merge approval is a single prompt, and it is only offered after the PR is confirmed open and mergeable (GitHub and GitLab).;`set-deliverable-type` replaces `set-workflow-type` for choosing planning-only (wf-meta) vs implementation (wf-code) sessions; existing session state migrates automatically.
