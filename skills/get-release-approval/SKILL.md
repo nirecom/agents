@@ -12,7 +12,8 @@ This skill is the only issuer of `<<WORKFLOW_USER_VERIFIED: reason>>`; protocol 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 GA-1. **Confirm the step:** run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"`.
-   `REASON=` other than `user_verification` → do not emit; follow its `ACTION` instead.
+   `REASON=` `web-merge-pending` or `web-merge-not-ready` → continue to GA-2; its preflight decides the wait.
+   Any other `REASON=` than `user_verification` → do not emit; follow its `ACTION` instead.
 
 GA-2. **Preflight:** run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/scripts/preflight.sh" --session "<session-id>"` as one standalone call.
    Handle `RUN_TL4=`, `GATE_RC=`, and the `CATEGORY:` lines per `skills/_shared/user-verified.md` "Preflight".
@@ -23,14 +24,16 @@ GA-2. **Preflight:** run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/sc
    `PREFLIGHT=web_merge_closed` → show `PREFLIGHT_REASON`, then stop without the sentinel.
    `PREFLIGHT=web_merge_pending` → no sentinel; show `PR_URL` as the PR the human merges on the web, then GA-2b.
 
-GA-2b. **Wait for the web merge:** run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/scripts/wait-web-merge.sh" --session "<session-id>" --repo "<WORKTREE_PATH>"` with `run_in_background: true`, then end the turn.
-   On its completion notice read `WEB_MERGE=`: `merged` → GA-4; `closed` → say the PR was closed without merge and stop; `error` → surface its stderr and stop; `already-running` → end the turn (a poller already waits).
-   `WEB_MERGE=timeout` → tell the human, in the conversation language, that polling has ended and that any message sent after the merge resumes the flow, then end the turn.
-
 GA-3. **Emit the sentinel** per `skills/_shared/user-verified.md` "Protocol", as its own Bash call.
    Reason on the pull_request path: `PR #<PR_NUMBER> — approving merge to main` (or `PR #<PR_NUMBER> merged via web UI` for `merged_on_web`).
    Reason on the direct path: a one-line summary of what will be committed and pushed.
    Deny → stop; do not retry.
+
+## Web-merge wait
+
+GA-2b. **Wait for the web merge:** run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/scripts/wait-web-merge.sh" --session "<session-id>" --repo "<WORKTREE_PATH>"` with `run_in_background: true`, then end the turn.
+   On its completion notice read `WEB_MERGE=`: `merged` → GA-4; `closed` → say the PR was closed without merge and stop; `error` → surface its stderr and stop; `already-running` → end the turn (a poller already waits).
+   `WEB_MERGE=timeout` → tell the human, in the conversation language, that polling has ended and that any message sent after the merge resumes the flow, then end the turn.
 
 ## Completion
 

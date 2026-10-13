@@ -13,7 +13,7 @@ const GH_API_WRITE_REGEX =
 const GH_REPO_WRITE_REGEX = /\bgh\b\s+repo\s+(?:create|edit)\b/;
 const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
 const PR_STATES = new Set(["OPEN", "MERGED", "CLOSED"]);
-const { isPrPresentOrUnknown } = require("./pr-state");
+const { isPrPresentOrUnknown, stateForLocalHead } = require("./pr-state");
 
 // gh exits 1 both for "no pull requests found" and for network/auth failures, so
 // only the no-PR message reads as NONE; any other failure is UNKNOWN (fail-closed).
@@ -109,14 +109,15 @@ const codehostGithub = {
   hasOpenPrForBranch(repoDir) {
     return isPrPresentOrUnknown(codehostGithub.prStateForBranch(repoDir));
   },
-  // { state, number } of the current branch's PR (bin/workflow/pr-state); number "" when none.
+  // { state, number } of the current branch's PR (bin/workflow/pr-state); number "" when none,
+  // and when the PR was merged from another commit than the local HEAD (./pr-state.js).
   prForBranch(repoDir, opts) {
     const { findGhInPath, toMsys2Path } = require("../../workflow-gate/gh-detect");
     const { spawnSync } = require("child_process");
     const ghPath = findGhInPath();
     let r;
     try {
-      r = spawnSync("bash", ["-c", '"$1" pr view --json state,number', "--", ghPath ? toMsys2Path(ghPath) : "gh"], {
+      r = spawnSync("bash", ["-c", '"$1" pr view --json state,number,headRefOid', "--", ghPath ? toMsys2Path(ghPath) : "gh"], {
         cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts),
       });
     } catch (e) {
@@ -126,8 +127,10 @@ const codehostGithub = {
     if (!r || r.status !== 0) return { state: "UNKNOWN", number: "" };
     try {
       const pr = JSON.parse(String(r.stdout || "").trim());
-      const state = String(pr.state || "").toUpperCase();
-      return { state: PR_STATES.has(state) ? state : "UNKNOWN", number: Number.isInteger(pr.number) ? String(pr.number) : "" };
+      const raw = String(pr.state || "").toUpperCase();
+      const reported = PR_STATES.has(raw) ? raw : "UNKNOWN";
+      const state = stateForLocalHead(repoDir, reported, pr.headRefOid);
+      return { state, number: state === reported && Number.isInteger(pr.number) ? String(pr.number) : "" };
     } catch (e) {
       return { state: "UNKNOWN", number: "" };
     }
@@ -140,7 +143,7 @@ const codehostGithub = {
     const timeoutMs = (opts && opts.timeoutMs) || ms.FORGE_QUERY_TIMEOUT_MS;
     let r;
     try {
-      r = spawnSync("gh", ["pr", "view", "--json", "state,number,mergeStateStatus,url"],
+      r = spawnSync("gh", ["pr", "view", "--json", "state,number,mergeStateStatus,url,headRefOid"],
         { cwd: repoDir, encoding: "utf8", timeout: timeoutMs, windowsHide: true });
     } catch (e) {
       return ms.unknownMergeState("gh failed to start: " + (e && e.message));
@@ -153,13 +156,13 @@ const codehostGithub = {
       const pr = JSON.parse(String(r.stdout || "").trim());
       const state = String(pr.state || "").toUpperCase();
       if (!PR_STATES.has(state)) return ms.unknownMergeState("gh answered an unreadable PR state");
-      return {
+      return ms.mergeStateForLocalHead(repoDir, {
         state,
         number: Number.isInteger(pr.number) ? String(pr.number) : "",
         mergeState: String(pr.mergeStateStatus || "").toUpperCase(),
         url: typeof pr.url === "string" ? pr.url : "",
         error: "",
-      };
+      }, pr.headRefOid);
     } catch (e) {
       return ms.unknownMergeState("gh answered malformed JSON");
     }

@@ -29,6 +29,15 @@ function unknownMergeState(error) {
   return { state: "UNKNOWN", number: "", mergeState: "", url: "", error: String(error || "unknown forge failure") };
 }
 
+// mergeStateForLocalHead(repoDir, answer, headOid) -> answer, or its demotion when the PR/MR
+// was built from another commit than the local HEAD (rule: ./pr-state.js stateForLocalHead).
+function mergeStateForLocalHead(repoDir, answer, headOid) {
+  const state = require("./pr-state").stateForLocalHead(repoDir, answer.state, headOid);
+  if (state === answer.state) return answer;
+  if (state === "UNKNOWN") return unknownMergeState("local HEAD unreadable");
+  return { state, number: "", mergeState: "", url: "", error: "" };
+}
+
 // spawnFailure(r, cli, timeoutMs) -> a one-line reason for a spawn that never produced an exit.
 function spawnFailure(r, cli, timeoutMs) {
   const e = r && r.error;
@@ -86,6 +95,7 @@ module.exports = {
   GITLAB_MERGE_STATUS_MAP,
   gitlabMergeState,
   unknownMergeState,
+  mergeStateForLocalHead,
   spawnFailure,
   mergeStateForBranch,
   createForgeMemo,

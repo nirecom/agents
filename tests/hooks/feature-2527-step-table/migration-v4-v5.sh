@@ -225,5 +225,39 @@ mk_state '{"sid":"m12g","type":"wf-meta","steps":"workflow_init=complete;branchi
 check "M12g wf-meta with session_worktree -> none" "$(field "$(mig m12g)" DP)" "<absent>"
 case_end
 
+# Only a wf-code session has release steps: the same settled tail backfills nothing elsewhere.
+RELEASED="user_verification=complete;cleanup=complete;pre_final_report_gate=complete;final_report=complete"
+BF_BOTH="step_status:push_branch:complete:migration-v4-to-v5:true,step_status:merge_to_main:complete:migration-v4-to-v5:true"
+case_begin "M13-no-backfill-outside-wf-code" "hooks/workflow-state/state-io/migrations/v4-to-v5.js"
+mk_state "{\"sid\":\"m13a\",\"type\":\"wf-meta\",\"steps\":\"$THRU_RD;$RELEASED\",\"entered\":true,\"lastPushed\":\"abc1234\"}"
+o="$(mig m13a)"
+check "M13a sanity: migrated as wf-meta" "$(field "$o" DT)" "wf-meta"
+check "M13b wf-meta, later steps settled + sha -> no backfilled events" "$(field "$o" BF)" ""
+check_not_contains "M13c ... no push_branch event in the stream" "$(field "$o" JSON)" '"step":"push_branch"'
+check_not_contains "M13d ... no merge_to_main event in the stream" "$(field "$o" JSON)" '"step":"merge_to_main"'
+check "M13e ... stream integrity holds" "$(field "$o" INTEG)" "ok"
+mk_state "{\"sid\":\"m13f\",\"type\":\"wf-meta\",\"steps\":\"$THRU_RD;user_verification=complete;user_verification=pending\",\"uvReset\":\"post-merge\",\"lastPushed\":\"abc1234\"}"
+o="$(mig m13f)"
+check "M13f wf-meta, UV pending post-merge + sha -> no backfilled events" "$(field "$o" BF)" ""
+check "M13g ... no post-push annotation" "$(field "$o" UVR)" "post-merge"
+mk_state "{\"sid\":\"m13h\",\"type\":\"wf-docs\",\"steps\":\"$THRU_RD;$RELEASED\",\"entered\":true}"
+o="$(mig m13h)"
+check "M13h any other non-wf-code type -> no backfilled events" "$(field "$o" BF)" ""
+check "M13i ... and no delivery_path" "$(field "$o" DP)" "<absent>"
+case_end
+
+case_begin "M14-wf-code-and-untyped-backfill" "hooks/workflow-state/state-io/migrations/v4-to-v5.js"
+mk_state "{\"sid\":\"m14a\",\"steps\":\"$THRU_RD;$RELEASED\",\"entered\":true,\"lastPushed\":\"abc1234\"}"
+o="$(mig m14a)"
+check "M14a sanity: migrated as wf-code" "$(field "$o" DT)" "wf-code"
+check "M14b wf-code with the same tail -> both steps backfilled" "$(field "$o" BF)" "$BF_BOTH"
+mk_state "{\"sid\":\"m14c\",\"type\":null,\"steps\":\"$THRU_RD;$RELEASED\",\"entered\":true,\"lastPushed\":\"abc1234\"}"
+o="$(mig m14c)"
+check "M14c sanity: the v4 file carries no type" "$(field "$o" DT)" "<absent>"
+check "M14d untyped v4 state is wf-code -> both steps backfilled" "$(field "$o" BF)" "$BF_BOTH"
+check "M14e ... and the delivery path is recorded" "$(field "$o" DP)" "pull_request"
+check "M14f ... stream integrity holds" "$(field "$o" INTEG)" "ok"
+case_end
+
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

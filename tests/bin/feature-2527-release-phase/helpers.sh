@@ -103,7 +103,7 @@ rp_fake_forge() {
   export NODE_OPTIONS="--require \"$(np "$_rp_here/fake-forge.js")\""
   export FAKE_FORGE_LOG="$(np "$RP_TMP/forge.log")"
   : > "$RP_TMP/forge.log"
-  unset FAKE_FORGE_STATE FAKE_FORGE_MERGE FAKE_GLAB_MERGE FAKE_GLAB_DRAFT FAKE_FORGE_NUMBER
+  unset FAKE_FORGE_STATE FAKE_FORGE_MERGE FAKE_GLAB_MERGE FAKE_GLAB_DRAFT FAKE_FORGE_NUMBER FAKE_FORGE_HEAD
 }
 
 # rp_setup — isolated state dirs, an AGENTS_MAIN_ROOT holding only an empty .env, a fake gh first on PATH, pinned

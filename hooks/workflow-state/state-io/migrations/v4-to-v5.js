@@ -4,8 +4,8 @@
 // stream. Three changes, all pure functions of the input (no env, no markers,
 // no clock): workflow_type is renamed to deliverable_type; a wf-code session
 // past branching records the delivery path its stream proves; and the new
-// push_branch / merge_to_main steps are backfilled when the stream proves the old
-// flow already did that work. `v4State` is never mutated.
+// push_branch / merge_to_main steps are backfilled for a wf-code session when the
+// stream proves the old flow already did that work. `v4State` is never mutated.
 
 const ORIGIN = "migration-v4-to-v5";
 const PUSH_EVIDENCE_STEPS = ["user_verification", "cleanup", "pre_final_report_gate", "final_report"];
@@ -20,11 +20,15 @@ function lastStatusInStream(events, step) {
   return rows.length ? rows[rows.length - 1].status : null;
 }
 
+// Only a wf-code session has a delivery path and release steps; a v4 stream with no type is wf-code.
+function isWfCode(src) {
+  return src.deliverable_type === undefined || src.deliverable_type === "wf-code";
+}
+
 // Recorded only when branching is settled: before that the session has not yet
 // chosen a path, and the live config decides it later (session-profile.js).
 function deriveDeliveryPath(src) {
-  const type = src.deliverable_type === undefined ? "wf-code" : src.deliverable_type;
-  if (type !== "wf-code") return null;
+  if (!isWfCode(src)) return null;
   const bc = lastStatusInStream(src.events, "branching_complete");
   if (bc !== "complete" && bc !== "skipped") return null;
   const entered = src.events.some((e) => e && e.kind === "worktree" && e.transition === "entered");
@@ -48,6 +52,7 @@ function migrateV4ToV5(v4State) {
     src.delivery_path = path;
     src.delivery_path_origin = ORIGIN;
   }
+  if (!isWfCode(src)) return src;
 
   // Lazy require: this module loads from within core.js's own
   // normalizeStateVersion, so a top-level require could see a half-init core.js.

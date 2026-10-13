@@ -27,7 +27,7 @@ function encodePath(p) {
 }
 
 const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
-const { isPrPresentOrUnknown } = require("./pr-state");
+const { isPrPresentOrUnknown, stateForLocalHead } = require("./pr-state");
 const GLAB_MR_STATES = Object.freeze({ opened: "OPEN", merged: "MERGED", closed: "CLOSED", locked: "CLOSED" });
 // Defense-in-depth: only a plain hostname may become glab's --hostname argument.
 const GLAB_HOSTNAME_SHAPE = /^[a-z0-9.-]+$/;
@@ -140,10 +140,25 @@ const codehostGitlab = {
     return isPrPresentOrUnknown(codehostGitlab.prStateForBranch(repoDir));
   },
   // { state, number } of the current branch's MR (bin/workflow/pr-state); number is the MR iid.
+  // A MERGED MR is checked against the local HEAD (./pr-state.js) at the cost of one more read.
   prForBranch(repoDir, opts) {
     const state = codehostGitlab.prStateForBranch(repoDir, opts);
     if (state === "NONE" || state === "UNKNOWN") return { state, number: "" };
     const { spawnSync } = require("child_process");
+    if (state === "MERGED") {
+      let sha = "";
+      try {
+        const r = spawnSync("glab", ["mr", "view", "--json", "sha", "--jq", ".sha"],
+          { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
+        const out = r.status === 0 ? String(r.stdout || "").trim() : "";
+        // --jq prints "null" for an absent field: only a commit id counts as reported.
+        sha = /^[0-9a-f]{40,64}$/i.test(out) ? out : "";
+      } catch (e) {
+        sha = "";
+      }
+      const forHead = stateForLocalHead(repoDir, state, sha);
+      if (forHead !== state) return { state: forHead, number: "" };
+    }
     try {
       const r = spawnSync("glab", ["mr", "view", "--json", "iid", "--jq", ".iid"],
         { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
@@ -177,13 +192,14 @@ const codehostGitlab = {
       const state = GLAB_MR_STATES[String((mr && mr.state) || "").toLowerCase()];
       if (!state) return ms.unknownMergeState("glab answered an unreadable MR state");
       const iid = mr.iid !== undefined && mr.iid !== null ? String(mr.iid) : "";
-      return {
+      // mr.sha is the MR's head commit.
+      return ms.mergeStateForLocalHead(repoDir, {
         state,
         number: /^\d+$/.test(iid) ? iid : "",
         mergeState: ms.gitlabMergeState(mr),
         url: typeof mr.web_url === "string" ? mr.web_url : "",
         error: "",
-      };
+      }, mr.sha);
     } catch (e) {
       return ms.unknownMergeState("glab answered malformed JSON");
     }

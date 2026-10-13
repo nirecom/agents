@@ -41,13 +41,14 @@ function isDirectDelivered(repoDir) {
 }
 
 // prStateOf(repoDir, opts) — this run's memoized forge answer when one exists (opts.forgeMemo,
-// filled by mergeStateForBranch), else a fresh PR-state read bounded by the next-step budget.
+// filled by mergeStateForBranch), else a fresh prForBranch read bounded by the next-step budget.
+// Both carry the head-commit check: MERGED is never the answer for another commit's PR.
 function prStateOf(repoDir, opts) {
   const ms = require("../../lib/forge/merge-state");
   const cached = ms.cachedMergeState(repoDir, opts && opts.forgeMemo);
   if (cached) return cached.state;
-  const { prStateForBranch } = require("../../workflow-gate/gh-detect");
-  return prStateForBranch(repoDir, { timeoutMs: ms.FORGE_QUERY_TIMEOUT_MS });
+  const { prForBranch } = require("../../workflow-gate/gh-detect");
+  return prForBranch(repoDir, { timeoutMs: ms.FORGE_QUERY_TIMEOUT_MS }).state;
 }
 
 function hasReleaseEvidence(step, sessionId, opts) {
@@ -75,7 +76,8 @@ function hasReleaseEvidence(step, sessionId, opts) {
 function describeReleaseEvidence(step) {
   if (step === "push_branch") {
     return [
-      "pull_request path: the current branch's PR state (prStateForBranch) is OPEN or MERGED",
+      "pull_request path: the current branch's PR state (prForBranch) is OPEN, or MERGED "
+        + "with the PR's head commit equal to the local HEAD",
       "direct path: no evidence (the step table skips push_branch there)",
       "queried only for the evaluated step of next-step's verdict (evidencePolicy.network)",
     ];
@@ -83,14 +85,16 @@ function describeReleaseEvidence(step) {
   if (step === "user_verification") {
     return [
       "web-merge channel (pull_request + AUTO_MERGE_PR=off fixed at branching): the current branch's "
-        + "PR state (mergeStateForBranch) is MERGED — the human's web merge is the release approval",
+        + "PR state (mergeStateForBranch) is MERGED with the PR's head commit equal to the local HEAD "
+        + "— the human's web merge is the release approval",
       "user-verified-dialog channel: no evidence (no forge query); the USER_VERIFIED dialog records it",
       "queried only for the evaluated step of next-step's verdict (evidencePolicy.network)",
     ];
   }
   if (step === "merge_to_main") {
     return [
-      "pull_request path: the current branch's PR state (prStateForBranch) is MERGED",
+      "pull_request path: the current branch's PR state (prForBranch) is MERGED with the "
+        + "PR's head commit equal to the local HEAD",
       "direct path: the default branch is checked out, `git status --porcelain` is empty (untracked "
         + "included), and HEAD equals origin/<default> (not ahead, not diverged; no fetch)",
       "queried only for the evaluated step of next-step's verdict (evidencePolicy.network)",
