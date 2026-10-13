@@ -286,19 +286,20 @@ while IFS='|' read -r name origin st merge draft want reason; do
   fi
 done <<'TABLE'
 wm-gh-clean     | github | OPEN   | CLEAN    | 0 | web_merge_pending |
-wm-gh-behind    | github | OPEN   | BEHIND   | 0 | blocked           | BEHIND the base branch
-wm-gh-dirty     | github | OPEN   | DIRTY    | 0 | blocked           | merge conflicts (DIRTY)
-wm-gh-blocked   | github | OPEN   | BLOCKED  | 0 | blocked           | is BLOCKED — wait for required checks
-wm-gh-unstable  | github | OPEN   | UNSTABLE | 0 | blocked           | is UNSTABLE — wait for required checks
-wm-gh-draft     | github | OPEN   | DRAFT    | 0 | blocked           | is a draft
+wm-gh-behind    | github | OPEN   | BEHIND   | 0 | web_merge_blocked | BEHIND the base branch
+wm-gh-dirty     | github | OPEN   | DIRTY    | 0 | web_merge_blocked | merge conflicts (DIRTY)
+wm-gh-blocked   | github | OPEN   | BLOCKED  | 0 | web_merge_blocked | is BLOCKED — wait for required checks
+wm-gh-unstable  | github | OPEN   | UNSTABLE | 0 | web_merge_blocked | is UNSTABLE — wait for required checks
+wm-gh-draft     | github | OPEN   | DRAFT    | 0 | web_merge_blocked | is a draft
+wm-gh-none      | github | NONE   | CLEAN    | 0 | web_merge_blocked | no pull request for the current branch
 wm-gh-merged    | github | MERGED | UNKNOWN  | 0 | web_merge_done    |
 wm-gh-closed    | github | CLOSED | CLEAN    | 0 | web_merge_closed  |
 wm-gl-clean     | gitlab | OPEN   | mergeable        | 0 | web_merge_pending |
-wm-gl-conflict  | gitlab | OPEN   | conflict         | 0 | blocked | merge conflicts (DIRTY)
-wm-gl-rebase    | gitlab | OPEN   | need_rebase      | 0 | blocked | BEHIND the base branch
-wm-gl-ci        | gitlab | OPEN   | ci_still_running | 0 | blocked | is BLOCKED — wait for required checks
-wm-gl-draft     | gitlab | OPEN   | mergeable        | 1 | blocked | is a draft
-wm-gl-checking  | gitlab | OPEN   | checking         | 0 | blocked | mergeability is CHECKING — wait for the forge
+wm-gl-conflict  | gitlab | OPEN   | conflict         | 0 | web_merge_blocked | merge conflicts (DIRTY)
+wm-gl-rebase    | gitlab | OPEN   | need_rebase      | 0 | web_merge_blocked | BEHIND the base branch
+wm-gl-ci        | gitlab | OPEN   | ci_still_running | 0 | web_merge_blocked | is BLOCKED — wait for required checks
+wm-gl-draft     | gitlab | OPEN   | mergeable        | 1 | web_merge_blocked | is a draft
+wm-gl-checking  | gitlab | OPEN   | checking         | 0 | web_merge_blocked | mergeability is CHECKING — wait for the forge
 wm-gl-merged    | gitlab | MERGED | mergeable        | 0 | web_merge_done   |
 wm-gl-closed    | gitlab | CLOSED | mergeable        | 0 | web_merge_closed |
 TABLE

@@ -210,6 +210,18 @@ st rd-bootstrap '"path":"pull_request","amp":"off","annotate":"push_branch.decis
 expect_refused "bootstrap + git push origin main" rd-bootstrap "$PUSH_MAIN"
 case_end
 
+case_begin "refused: the USER_VERIFIED sentinel on the web-merge channel; accepted elsewhere" "hooks/workflow-gate.js"
+UV_ECHO='echo "<<WORKFLOW_USER_VERIFIED: PR #42 — approving merge to main>>"'
+st uv-wm '"path":"pull_request","amp":"off"' "user_verification=pending"
+expect_refused "off + pull_request" uv-wm "$UV_ECHO"
+st uv-direct '"path":"direct","amp":"off"' "user_verification=pending"
+check_not_contains "off + direct: no refusal text" "$(gate_bash uv-direct "$AMP_REPO_M" "$UV_ECHO")" "AUTO_MERGE_PR=off"
+st uv-on '"path":"pull_request","amp":"on"' "user_verification=pending"
+check_not_contains "on + pull_request: no refusal text" "$(gate_bash uv-on "$AMP_REPO_M" "$UV_ECHO")" "AUTO_MERGE_PR=off"
+st uv-bs '"path":"pull_request","amp":"off","annotate":"push_branch.decision=bootstrap"' "user_verification=pending"
+check_not_contains "off + bootstrap push: no refusal text" "$(gate_bash uv-bs "$AMP_REPO_M" "$UV_ECHO")" "AUTO_MERGE_PR=off"
+case_end
+
 # Plan 4-3a: a judge exception never blocks — the gate goes on (uv complete -> approve) and
 # attaches a notice as systemMessage. Two injection points: judgeRelease itself, and the
 # resolveRepoDir the judge path calls after a prefilter hit.

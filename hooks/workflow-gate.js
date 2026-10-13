@@ -209,6 +209,19 @@ if (require.main === module) {
 
     // A clean sentinel emission carrying <<WORKFLOW_USER_VERIFIED>>.
     if (sentinelAnalysis.uvHit) {
+      // WEB-MERGE CHANNEL (#2527 4-5): under AUTO_MERGE_PR=off + pull_request the human's merge
+      // on the web is the only approval, so the sentinel is refused. A judge failure never blocks.
+      let uvRefused = false;
+      try {
+        uvRefused = releaseJudge.refusesUserVerified((sessionId && readState(sessionId)) || {}, freshnessCwd);
+      } catch (_) { /* fail-open, like the release refusal above */ }
+      if (uvRefused) {
+        block(
+          "workflow-gate: AUTO_MERGE_PR=off — <<WORKFLOW_USER_VERIFIED>> is not accepted on a pull_request delivery.\n" +
+          "The human's merge on the web is the release approval; /get-release-approval waits for it."
+        );
+      }
+
       // PREMATURE USER_VERIFIED GUARD (#577, #2527 3-5): in a worktree with
       // ENFORCE_WORKTREE=on, block emission until an OPEN/MERGED PR exists. Bootstrap
       // (remote default branch absent) is exempt: no PR can exist yet. No Bash cwd -> fail-open.

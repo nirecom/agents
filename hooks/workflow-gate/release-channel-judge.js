@@ -44,4 +44,16 @@ function judgeRelease(input, deps) {
   return { refuse: deliveryPath === "pull_request", kind: hit.kind, notice: null };
 }
 
-module.exports = { judgeRelease };
+// refusesUserVerified(state, repoDir, deps?) -> boolean. On the web-merge channel (off +
+// pull_request, no bootstrap push) the human's merge is the only approval, so the
+// USER_VERIFIED sentinel is refused too. Same value resolution as judgeRelease.
+function refusesUserVerified(state, repoDir, deps) {
+  const d = Object.assign(defaultDeps(), deps || {});
+  const s = state && typeof state === "object" ? state : {};
+  const push = s.steps && s.steps.push_branch;
+  if (push && push.decision === "bootstrap") return false;
+  if (autoMergePrOf(s, repoDir, d).value !== "off") return false;
+  return d.resolveDeliveryPath(s, repoDir) === "pull_request";
+}
+
+module.exports = { judgeRelease, refusesUserVerified };

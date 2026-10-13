@@ -5,7 +5,7 @@
 #   CATEGORY lines, [PR_URL=<url>,] PR_NUMBER=<n>, then PREFLIGHT=<verdict> and PREFLIGHT_REASON=<text>.
 # PR mergeability (pull_request path only): CLEAN -> ok, MERGED -> merged_on_web, anything else -> blocked.
 # Web-merge channel (AUTO_MERGE_PR=off): MERGED -> web_merge_done, CLOSED -> web_merge_closed,
-#   OPEN + CLEAN -> web_merge_pending (with PR_URL); OPEN otherwise -> the same blocked texts.
+#   OPEN + CLEAN -> web_merge_pending (with PR_URL); anything not ready -> web_merge_blocked (same texts).
 # A pull_request session whose push_branch recorded decision=bootstrap (empty remote) is ok with no PR check.
 # Exit: 0 whenever a PREFLIGHT line was printed; 1 usage error.
 set -euo pipefail
@@ -23,7 +23,10 @@ done
 [[ -n "$SID" ]] || { printf 'Usage: preflight.sh --session <sid> [--repo <dir>]\n' >&2; exit 1; }
 
 finish() {
-  printf 'PR_NUMBER=%s\nPREFLIGHT=%s\nPREFLIGHT_REASON=%s\n' "${PR_NUMBER:-}" "$1" "$2"
+  local verdict="$1"
+  # The web-merge channel never raises an ask: its not-ready verdict carries the web_merge_ prefix too.
+  if [[ "${CHANNEL:-}" == "web-merge" && "$verdict" == "blocked" ]]; then verdict="web_merge_blocked"; fi
+  printf 'PR_NUMBER=%s\nPREFLIGHT=%s\nPREFLIGHT_REASON=%s\n' "${PR_NUMBER:-}" "$verdict" "$2"
   exit 0
 }
 

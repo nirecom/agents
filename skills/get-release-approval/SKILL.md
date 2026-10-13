@@ -22,7 +22,7 @@ GA-2. **Preflight:** run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/sc
    `PREFLIGHT=merged_on_web` → the PR was merged outside this session; continue to GA-3 with a reason that says so.
    `PREFLIGHT=ok` → continue to GA-3.
    `PREFLIGHT=web_merge_done` → the human merged on the web; no sentinel; go to GA-4.
-   `PREFLIGHT=web_merge_closed` → show `PREFLIGHT_REASON`, then stop without the sentinel.
+   `PREFLIGHT=web_merge_closed` or `web_merge_blocked` → show `PREFLIGHT_REASON`, then stop without the sentinel.
    `PREFLIGHT=web_merge_pending` → no sentinel; show `PR_URL` as the PR the human merges on the web, then GA-2b.
 
 GA-3. **Emit the sentinel** per `skills/_shared/user-verified.md` "Protocol", as its own Bash call.
