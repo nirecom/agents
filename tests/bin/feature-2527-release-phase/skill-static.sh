@@ -115,6 +115,7 @@ asks="$( [ -f "$GA_MD" ] && grep -ciE 'let me know|tell me when|report (back|the
 check "no wording asking the human to report the merge" "${asks:-0}" "0"
 to_lines="$( [ -f "$GA_MD" ] && grep -c 'WEB_MERGE=timeout' "$GA_MD" || true)"
 check "WEB_MERGE=timeout reported on one line" "${to_lines:-0}" "1"
+check_contains "GA-2: PREFLIGHT=web_merge_* raises no AskUserQuestion" "$ga" '`PREFLIGHT=web_merge_*` → raise no `AskUserQuestion`; follow that file'"'"'s "Web-merge channel" (the web merge is the only approval).'
 case_end
 
 case_begin ".env.example: decision-G AUTO_MERGE_PR comment block" ".env.example"

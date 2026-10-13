@@ -140,19 +140,18 @@ const codehostGitlab = {
     return isPrPresentOrUnknown(codehostGitlab.prStateForBranch(repoDir));
   },
   // { state, number } of the current branch's MR (bin/workflow/pr-state); number is the MR iid.
-  // A MERGED MR is checked against the local HEAD (./pr-state.js) at the cost of one more read.
+  // An OPEN or MERGED MR is checked against the local HEAD (./pr-state.js) at the cost of one more read.
   prForBranch(repoDir, opts) {
     const state = codehostGitlab.prStateForBranch(repoDir, opts);
     if (state === "NONE" || state === "UNKNOWN") return { state, number: "" };
     const { spawnSync } = require("child_process");
-    if (state === "MERGED") {
+    if (state === "OPEN" || state === "MERGED") {
       let sha = "";
       try {
         const r = spawnSync("glab", ["mr", "view", "--json", "sha", "--jq", ".sha"],
           { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
-        const out = r.status === 0 ? String(r.stdout || "").trim() : "";
-        // --jq prints "null" for an absent field: only a commit id counts as reported.
-        sha = /^[0-9a-f]{40,64}$/i.test(out) ? out : "";
+        // --jq prints "null" for an absent field; stateForLocalHead accepts only a commit id.
+        sha = r.status === 0 ? String(r.stdout || "").trim() : "";
       } catch (e) {
         sha = "";
       }

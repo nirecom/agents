@@ -71,6 +71,7 @@ CUR_INTERVAL="$INTERVAL"
 FAILURES=0
 LAST_ERR=""
 while :; do
+  touch "$PID_FILE"   # heartbeat: next-step announces WAIT only while this file is fresh
   OUT="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/pr-state" --repo "$REPO" --merge-state 2>"$ERR_FILE" || true)"
   STATE="$(printf '%s\n' "$OUT" | sed -n 's/^PR_STATE=//p' | head -n 1)"
   case "$STATE" in

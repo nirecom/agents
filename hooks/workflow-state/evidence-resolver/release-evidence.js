@@ -42,7 +42,7 @@ function isDirectDelivered(repoDir) {
 
 // prStateOf(repoDir, opts) — this run's memoized forge answer when one exists (opts.forgeMemo,
 // filled by mergeStateForBranch), else a fresh prForBranch read bounded by the next-step budget.
-// Both carry the head-commit check: MERGED is never the answer for another commit's PR.
+// Both carry the head-commit check: OPEN / MERGED is never the answer for another commit's PR.
 function prStateOf(repoDir, opts) {
   const ms = require("../../lib/forge/merge-state");
   const cached = ms.cachedMergeState(repoDir, opts && opts.forgeMemo);
@@ -76,7 +76,7 @@ function hasReleaseEvidence(step, sessionId, opts) {
 function describeReleaseEvidence(step) {
   if (step === "push_branch") {
     return [
-      "pull_request path: the current branch's PR state (prForBranch) is OPEN, or MERGED "
+      "pull_request path: the current branch's PR state (prForBranch) is OPEN or MERGED "
         + "with the PR's head commit equal to the local HEAD",
       "direct path: no evidence (the step table skips push_branch there)",
       "queried only for the evaluated step of next-step's verdict (evidencePolicy.network)",

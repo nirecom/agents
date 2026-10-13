@@ -38,6 +38,11 @@ When `$CI` or `$CLAUDE_NON_INTERACTIVE` is set:
 - Log each matched category to `WORKTREE_NOTES.md ## Unverified Categories`.
 - Proceed with sentinel emission.
 
+### Web-merge channel
+
+`PREFLIGHT=web_merge_*` (pull_request + `AUTO_MERGE_PR=off`) → raise no `AskUserQuestion` in any mode and never emit the sentinel; log matched categories as in Non-interactive mode.
+The human's merge on the web is the only approval; `/get-release-approval` owns the wait.
+
 ### Failure mode
 
 `GATE_RC=3` → fail-safe. In interactive mode ask "Verification gate could not run — proceed anyway?" (Yes/No). In non-interactive mode: log warning, proceed.

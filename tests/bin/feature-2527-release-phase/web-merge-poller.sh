@@ -130,6 +130,8 @@ out="$(poll --session wp-single --repo "$RP_REPO_M" --interval 0)"
 check "second launch: WEB_MERGE already-running" "$(field "$out" WEB_MERGE)" "already-running"
 check "already-running: exit 0" "$(prc)" "0"
 check "first poller still alive" "$(kill -0 "$first" 2>/dev/null && echo alive || echo dead)" "alive"
+# Heartbeat: every poll touches the pid file, so it is fresh while the poller polls.
+check "pid file is fresh while polling (mtime within the last minute)" "$([ -n "$(find "$(pidfile wp-single)" -mmin -1 2>/dev/null)" ] && echo fresh || echo stale)" "fresh"
 printf 'MERGED\n' > "$RP_TMP/seq"
 for _ in $(seq 1 150); do kill -0 "$first" 2>/dev/null || break; sleep 0.2; done
 if kill -0 "$first" 2>/dev/null; then kill "$first" 2>/dev/null; fi

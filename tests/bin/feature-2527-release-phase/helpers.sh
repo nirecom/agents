@@ -38,7 +38,8 @@ field() {
 }
 
 # rp_fake_gh <dir> — a gh stub driven by RP_GH_MODE (OPEN|MERGED|CLOSED|NONE|fail) that
-# logs every argv to RP_GH_LOG; `pr list` reports RP_GH_HEAD as the PR's headRefOid. gh.cmd lets cmd.exe (execSync on Windows) reach it too.
+# logs every argv to RP_GH_LOG; `pr list` reports RP_GH_HEAD as the PR's headRefOid, `pr view`
+# RP_GH_VIEW_HEAD (default: the HEAD of the repo it runs in). gh.cmd lets cmd.exe (execSync on Windows) reach it too.
 rp_fake_gh() {
   mkdir -p "$1"
   cat > "$1/gh" <<'EOF'
@@ -51,7 +52,7 @@ case "$1 $2" in
     if [ "$mode" = "NONE" ]; then echo "no pull requests found for branch" >&2; exit 1; fi
     case " $* " in
       *" -q "*|*" --jq "*) echo "$mode" ;;
-      *) printf '{"state":"%s","number":42,"mergeStateStatus":"CLEAN","url":"https://github.com/example/repo/pull/42"}\n' "$mode" ;;
+      *) printf '{"state":"%s","number":42,"mergeStateStatus":"CLEAN","url":"https://github.com/example/repo/pull/42","headRefOid":"%s"}\n' "$mode" "${RP_GH_VIEW_HEAD-$(git rev-parse HEAD 2>/dev/null)}" ;;
     esac ;;
   "pr list")
     if [ "$mode" = "NONE" ]; then echo "[]"; exit 0; fi
@@ -103,7 +104,9 @@ rp_fake_forge() {
   export NODE_OPTIONS="--require \"$(np "$_rp_here/fake-forge.js")\""
   export FAKE_FORGE_LOG="$(np "$RP_TMP/forge.log")"
   : > "$RP_TMP/forge.log"
-  unset FAKE_FORGE_STATE FAKE_FORGE_MERGE FAKE_GLAB_MERGE FAKE_GLAB_DRAFT FAKE_FORGE_NUMBER FAKE_FORGE_HEAD
+  unset FAKE_FORGE_STATE FAKE_FORGE_MERGE FAKE_GLAB_MERGE FAKE_GLAB_DRAFT FAKE_FORGE_NUMBER
+  # Default: the PR/MR is built from the HEAD of the repo asked about, so OPEN / MERGED stand.
+  export FAKE_FORGE_HEAD=@cwd
 }
 
 # rp_setup — isolated state dirs, an AGENTS_MAIN_ROOT holding only an empty .env, a fake gh first on PATH, pinned

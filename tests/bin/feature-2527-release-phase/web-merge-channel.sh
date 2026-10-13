@@ -27,9 +27,17 @@ ns() {
 ev_len() { ev_query "$1" "e.length"; }
 uv_complete_n() { ev_query "$1" 'e.filter((x) => x.kind === "step_status" && x.step === "user_verification" && x.status === "complete").length'; }
 now_ms() { date +%s%3N; }
+poller_pid_file() { printf '%s/web-merge-poller-%s.pid' "$WORKFLOW_STATE_DIR" "$1"; }
+# poller_alive <sid> — the pid file a polling wait-web-merge.sh keeps fresh (non-empty, mtime now).
+poller_alive() { printf '12345\n' > "$(poller_pid_file "$1")"; }
+# age_file <file> <minutes> — set the file's mtime that many minutes into the past.
+age_file() {
+  run_with_timeout 30 node -e 'const t = Date.now() / 1000 - Number(process.argv[2]) * 60; require("fs").utimesSync(process.argv[1], t, t);' "$1" "$2"
+}
 
-case_begin "OPEN + CLEAN: invoke get-release-approval with WAIT=human-web-merge, state unchanged" "bin/workflow/lib/next-step/release-wait.js"
+case_begin "OPEN + CLEAN with a live poller: invoke get-release-approval with WAIT=human-web-merge, state unchanged" "bin/workflow/lib/next-step/release-wait.js"
 mk_state "{\"sid\":\"wm-clean\",$WAIT_SPEC}"
+poller_alive wm-clean
 before="$(ev_len wm-clean)"
 : > "$RP_TMP/forge.log"
 out="$(ns OPEN CLEAN wm-clean)"
@@ -41,6 +49,31 @@ check "user_verification still pending" "$(last_status wm-clean user_verificatio
 check_contains "the forge was queried" "$(cat "$RP_TMP/forge.log")" "|gh pr view"
 # Plan 4-4: evidence + mergeStateForBranch share one memoized gh call per next-step run.
 check "exactly one gh pr view per next-step run (memoized forge query)" "$(grep -cF '|gh pr view' "$RP_TMP/forge.log")" "1"
+case_end
+
+case_begin "OPEN + CLEAN without a live poller: same verdict, no WAIT line" "bin/workflow/lib/next-step/release-wait.js"
+# nowait <label> <sid> — the web-merge-pending verdict of <sid> carries no WAIT line.
+nowait() {
+  local out
+  out="$(ns OPEN CLEAN "$2")"
+  check "$1: ACTION invoke" "$(field "$out" ACTION)" "invoke"
+  check "$1: NEXT_SKILL get-release-approval" "$(field "$out" NEXT_SKILL)" "get-release-approval"
+  check "$1: REASON web-merge-pending" "$(field "$out" REASON)" "web-merge-pending"
+  check_not_contains "$1: no WAIT line" "$out" "WAIT="
+}
+mk_state "{\"sid\":\"wm-nopid\",$WAIT_SPEC}"
+nowait "no pid file" wm-nopid
+mk_state "{\"sid\":\"wm-emptypid\",$WAIT_SPEC}"
+: > "$(poller_pid_file wm-emptypid)"
+nowait "empty pid file" wm-emptypid
+mk_state "{\"sid\":\"wm-stalepid\",$WAIT_SPEC}"
+poller_alive wm-stalepid
+age_file "$(np "$(poller_pid_file wm-stalepid)")" 12
+nowait "pid file older than 11 minutes" wm-stalepid
+age_file "$(np "$(poller_pid_file wm-stalepid)")" 9
+check "pid file 9 minutes old: WAIT line" "$(field "$(ns OPEN CLEAN wm-stalepid)" WAIT)" "human-web-merge"
+mk_state "{\"sid\":\"wm-otherpid\",$WAIT_SPEC}"
+nowait "another session's live poller does not count" wm-otherpid
 case_end
 
 case_begin "OPEN + not CLEAN: invoke without a WAIT line (recovery is Claude's work)" "bin/workflow/lib/next-step/release-wait.js"
@@ -98,6 +131,7 @@ case_end
 
 case_begin "web-merge: a delivery-boundary reset is no approval; OPEN + CLEAN still waits" "hooks/workflow-state/release-approval.js"
 mk_state '{"sid":"wm-reset","path":"pull_request","autoMerge":"off","entered":true,"upto":"user_verification","steps":"user_verification=complete;user_verification=pending","uvReset":"post-push"}'
+poller_alive wm-reset
 out="$(ns OPEN CLEAN wm-reset)"
 check "NEXT_SKILL get-release-approval" "$(field "$out" NEXT_SKILL)" "get-release-approval"
 check "WAIT line" "$(field "$out" WAIT)" "human-web-merge"

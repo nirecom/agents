@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# feature-2527-local-head-state.sh — #2527: a MERGED forge answer stands only for the local HEAD.
+# feature-2527-local-head-state.sh — #2527: an OPEN / MERGED forge answer stands only for the local HEAD.
 # Tests: hooks/lib/forge/pr-state.js, hooks/lib/forge/merge-state.js
 # Tags: scope:issue-specific, workflow, release-phase, forge, pr-state, issue-2527
 # TL2: calls stateForLocalHead / mergeStateForLocalHead in-process against fixture git repos
@@ -42,6 +42,8 @@ git -C "$REPO" commit -q -m two
 HEAD_OID="$(git -C "$REPO" rev-parse HEAD)"
 REPO_M="$(np "$REPO")"
 OTHER_OID="1111111111111111111111111111111111111111"
+# The local HEAD with its last hex digit replaced by another one.
+if [[ "${HEAD_OID: -1}" == "0" ]]; then NEAR_OID="${HEAD_OID%?}1"; else NEAR_OID="${HEAD_OID%?}0"; fi
 
 UNBORN="$LH_TMP/unborn"
 harness_git_init "$UNBORN"
@@ -81,7 +83,7 @@ case_end
 case_begin "A1 MERGED with a head commit other than the local HEAD -> NONE" "hooks/lib/forge/pr-state.js"
 check "unrelated commit id" "$(slh "$REPO_M" MERGED "\"$OTHER_OID\"")" "NONE"
 check "an earlier commit of the same branch" "$(slh "$REPO_M" MERGED "\"$FIRST\"")" "NONE"
-check "a prefix of the local HEAD is not the local HEAD" "$(slh "$REPO_M" MERGED "\"${HEAD_OID:0:12}\"")" "NONE"
+check "the local HEAD with one digit changed" "$(slh "$REPO_M" MERGED "\"$NEAR_OID\"")" "NONE"
 case_end
 
 case_begin "A2 MERGED with the local HEAD as head commit -> MERGED" "hooks/lib/forge/pr-state.js"
@@ -97,37 +99,62 @@ check "repoDir is not a git repo" "$(slh "$PLAIN_M" MERGED "\"$HEAD_OID\"")" "UN
 check "repo without a commit (unborn HEAD)" "$(slh "$UNBORN_M" MERGED "\"$HEAD_OID\"")" "UNKNOWN"
 case_end
 
-case_begin "A4 a forge that reported no head commit is taken at its word" "hooks/lib/forge/pr-state.js"
-check "empty string" "$(slh "$REPO_M" MERGED '""')" "MERGED"
-check "undefined" "$(slh "$REPO_M" MERGED undefined)" "MERGED"
-check "null" "$(slh "$REPO_M" MERGED null)" "MERGED"
-check "whitespace only" "$(slh "$REPO_M" MERGED '"  \n"')" "MERGED"
-check "undefined + unreadable HEAD: HEAD is never consulted" "$(slh "$MISSING_M" MERGED undefined)" "MERGED"
+case_begin "A4 no usable head commit reported -> UNKNOWN (OPEN and MERGED)" "hooks/lib/forge/pr-state.js"
+for st in OPEN MERGED; do
+  check "$st + empty string" "$(slh "$REPO_M" "$st" '""')" "UNKNOWN"
+  check "$st + undefined" "$(slh "$REPO_M" "$st" undefined)" "UNKNOWN"
+  check "$st + null" "$(slh "$REPO_M" "$st" null)" "UNKNOWN"
+  check "$st + whitespace only" "$(slh "$REPO_M" "$st" '"  \n"')" "UNKNOWN"
+  check "$st + the literal string null" "$(slh "$REPO_M" "$st" '"null"')" "UNKNOWN"
+  check "$st + a 12-digit prefix of the local HEAD" "$(slh "$REPO_M" "$st" "\"${HEAD_OID:0:12}\"")" "UNKNOWN"
+  check "$st + 39 hex digits" "$(slh "$REPO_M" "$st" "\"${HEAD_OID:0:39}\"")" "UNKNOWN"
+  check "$st + a non-hex character in a 40-character id" "$(slh "$REPO_M" "$st" "\"${HEAD_OID:0:39}z\"")" "UNKNOWN"
+  check "$st + a non-string head (number)" "$(slh "$REPO_M" "$st" 42)" "UNKNOWN"
+  check "$st + undefined + unreadable HEAD" "$(slh "$MISSING_M" "$st" undefined)" "UNKNOWN"
+done
 case_end
 
-case_begin "A5 every state other than MERGED passes through unchanged" "hooks/lib/forge/pr-state.js"
-for st in OPEN NONE UNKNOWN CLOSED; do
+case_begin "A5 OPEN stands only for the local HEAD" "hooks/lib/forge/pr-state.js"
+check "OPEN + unrelated head -> NONE" "$(slh "$REPO_M" OPEN "\"$OTHER_OID\"")" "NONE"
+check "OPEN + earlier commit (a local commit not yet pushed) -> NONE" "$(slh "$REPO_M" OPEN "\"$FIRST\"")" "NONE"
+check "OPEN + matching head -> OPEN" "$(slh "$REPO_M" OPEN "\"$HEAD_OID\"")" "OPEN"
+check "OPEN + upper-case matching head with CRLF -> OPEN" "$(slh "$REPO_M" OPEN "\"${HEAD_OID^^}\\r\\n\"")" "OPEN"
+check "OPEN + valid head + repoDir does not exist -> UNKNOWN" "$(slh "$MISSING_M" OPEN "\"$HEAD_OID\"")" "UNKNOWN"
+check "OPEN + valid head + unborn HEAD -> UNKNOWN" "$(slh "$UNBORN_M" OPEN "\"$HEAD_OID\"")" "UNKNOWN"
+case_end
+
+case_begin "A5 CLOSED / NONE / UNKNOWN pass through unchanged whatever the head" "hooks/lib/forge/pr-state.js"
+for st in CLOSED NONE UNKNOWN; do
   check "$st + mismatched head" "$(slh "$REPO_M" "$st" "\"$OTHER_OID\"")" "$st"
+  check "$st + matching head" "$(slh "$REPO_M" "$st" "\"$HEAD_OID\"")" "$st"
+  check "$st + no head reported" "$(slh "$REPO_M" "$st" undefined)" "$st"
   check "$st + unreadable HEAD" "$(slh "$MISSING_M" "$st" "\"$OTHER_OID\"")" "$st"
 done
 case_end
 
 FULL="42|CLEAN|https://github.com/example/repo/pull/42|"
+UNK="UNKNOWN||||PR head commit or local HEAD unreadable|same=false"
 case_begin "A6 mergeStateForLocalHead: an unchanged state returns the answer itself" "hooks/lib/forge/merge-state.js"
 check "MERGED + matching head" "$(mslh "$REPO_M" MERGED "\"$HEAD_OID\"")" "MERGED|$FULL|same=true"
-check "MERGED + no head reported" "$(mslh "$REPO_M" MERGED undefined)" "MERGED|$FULL|same=true"
-check "OPEN + mismatched head" "$(mslh "$REPO_M" OPEN "\"$OTHER_OID\"")" "OPEN|$FULL|same=true"
+check "OPEN + matching head" "$(mslh "$REPO_M" OPEN "\"$HEAD_OID\"")" "OPEN|$FULL|same=true"
 check "CLOSED + mismatched head" "$(mslh "$REPO_M" CLOSED "\"$OTHER_OID\"")" "CLOSED|$FULL|same=true"
+check "CLOSED + no head reported" "$(mslh "$REPO_M" CLOSED undefined)" "CLOSED|$FULL|same=true"
 case_end
 
 case_begin "A6 mergeStateForLocalHead: a demotion to NONE clears number, mergeState and url" "hooks/lib/forge/merge-state.js"
 check "MERGED + unrelated head" "$(mslh "$REPO_M" MERGED "\"$OTHER_OID\"")" "NONE|||||same=false"
 check "MERGED + earlier commit" "$(mslh "$REPO_M" MERGED "\"$FIRST\"")" "NONE|||||same=false"
+check "OPEN + unrelated head" "$(mslh "$REPO_M" OPEN "\"$OTHER_OID\"")" "NONE|||||same=false"
+check "OPEN + earlier commit" "$(mslh "$REPO_M" OPEN "\"$FIRST\"")" "NONE|||||same=false"
 case_end
 
-case_begin "A6 mergeStateForLocalHead: an unreadable HEAD answers the unknownMergeState shape" "hooks/lib/forge/merge-state.js"
-check "repoDir does not exist" "$(mslh "$MISSING_M" MERGED "\"$HEAD_OID\"")" "UNKNOWN||||local HEAD unreadable|same=false"
-check "unborn HEAD" "$(mslh "$UNBORN_M" MERGED "\"$HEAD_OID\"")" "UNKNOWN||||local HEAD unreadable|same=false"
+case_begin "A6 mergeStateForLocalHead: no head commit or an unreadable HEAD answers the unknownMergeState shape" "hooks/lib/forge/merge-state.js"
+check "MERGED + no head reported" "$(mslh "$REPO_M" MERGED undefined)" "$UNK"
+check "OPEN + no head reported" "$(mslh "$REPO_M" OPEN undefined)" "$UNK"
+check "OPEN + the literal string null" "$(mslh "$REPO_M" OPEN '"null"')" "$UNK"
+check "MERGED + a prefix of the local HEAD" "$(mslh "$REPO_M" MERGED "\"${HEAD_OID:0:12}\"")" "$UNK"
+check "MERGED + repoDir does not exist" "$(mslh "$MISSING_M" MERGED "\"$HEAD_OID\"")" "$UNK"
+check "OPEN + unborn HEAD" "$(mslh "$UNBORN_M" OPEN "\"$HEAD_OID\"")" "$UNK"
 case_end
 
 echo ""

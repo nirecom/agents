@@ -23,13 +23,13 @@ function localHead(repoDir) {
 }
 
 // stateForLocalHead(repoDir, state, headOid) -> state. The forge answers for the branch NAME,
-// so a MERGED PR of an earlier use of that name must not certify this HEAD: MERGED stands only
-// when the PR's head commit is the local HEAD (NONE otherwise; UNKNOWN when HEAD is unreadable).
-// A forge that reported no head commit is taken at its word.
+// so a PR of an earlier use of that name, or one that lacks a local commit not yet pushed, must
+// not certify this HEAD: OPEN and MERGED stand only when the PR's head commit is the local HEAD
+// (NONE otherwise; UNKNOWN when the forge reported no head commit or HEAD is unreadable).
 function stateForLocalHead(repoDir, state, headOid) {
-  if (state !== "MERGED") return state;
+  if (state !== "OPEN" && state !== "MERGED") return state;
   const oid = typeof headOid === "string" ? headOid.trim().toLowerCase() : "";
-  if (!oid) return state;
+  if (!/^[0-9a-f]{40,64}$/.test(oid)) return "UNKNOWN";
   const head = localHead(repoDir);
   if (!head) return "UNKNOWN";
   return head === oid ? state : "NONE";

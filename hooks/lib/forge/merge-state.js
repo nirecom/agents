@@ -34,7 +34,7 @@ function unknownMergeState(error) {
 function mergeStateForLocalHead(repoDir, answer, headOid) {
   const state = require("./pr-state").stateForLocalHead(repoDir, answer.state, headOid);
   if (state === answer.state) return answer;
-  if (state === "UNKNOWN") return unknownMergeState("local HEAD unreadable");
+  if (state === "UNKNOWN") return unknownMergeState("PR head commit or local HEAD unreadable");
   return { state, number: "", mergeState: "", url: "", error: "" };
 }
 

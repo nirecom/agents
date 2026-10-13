@@ -17,6 +17,7 @@ GA-1. **Confirm the step:** run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step"
 
 GA-2. **Preflight:** run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/scripts/preflight.sh" --session "<session-id>"` as one standalone call.
    Handle `RUN_TL4=`, `GATE_RC=`, and the `CATEGORY:` lines per `skills/_shared/user-verified.md` "Preflight".
+   `PREFLIGHT=web_merge_*` → raise no `AskUserQuestion`; follow that file's "Web-merge channel" (the web merge is the only approval).
    `PREFLIGHT=blocked` → show `PREFLIGHT_REASON` and its recovery (rebase or update the branch, resolve conflicts, wait for CI or reviews, mark the PR ready), then stop without the sentinel.
    `PREFLIGHT=merged_on_web` → the PR was merged outside this session; continue to GA-3 with a reason that says so.
    `PREFLIGHT=ok` → continue to GA-3.

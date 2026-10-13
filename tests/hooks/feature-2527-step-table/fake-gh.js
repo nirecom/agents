@@ -23,6 +23,8 @@ if (base(process.execPath) === "gh" || base(process.argv0) === "gh") {
       mergedAt: state === "MERGED" ? "2026-01-01T00:00:00Z" : null,
       mergeStateStatus: "CLEAN",
     };
+    // FAKE_GH_HEAD: the PR's head commit; unset = the forge reports none.
+    if (process.env.FAKE_GH_HEAD) pr.headRefOid = process.env.FAKE_GH_HEAD;
     const jq = a.includes("--jq") || a.includes("-q");
     if (a[1] === "list") {
       if (jq) say(state === "NONE" ? "" : state, 0);

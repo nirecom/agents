@@ -179,6 +179,26 @@ the merge. If the PR number at merge time differs from the approved one, `/merge
 `/get-release-approval` is re-run. The merge gate still blocks any merge or protected-branch push
 until `user_verification` is complete.
 
+### `AUTO_MERGE_PR=off` — you merge on the web
+
+Applies only to pull_request delivery (`ENFORCE_WORKTREE=on`); the value is fixed for the session
+when the branch is recorded, so change it before starting a session.
+
+1. `/commit-push` opens the PR as usual.
+2. `/get-release-approval` shows the PR URL and starts a background poller. There is no
+   USER_VERIFIED dialog and no verification question: your merge on the web is the approval.
+3. Merge the PR on GitHub / GitLab. The poller notices within about 30 seconds and the workflow
+   continues to cleanup. `/merge-to-main` performs no merge.
+4. The poller gives up after one hour. Send any message after merging and the flow resumes.
+
+The merged PR counts only when its head commit is the session's local HEAD; a PR that lacks a local
+commit not yet pushed, or an older PR of the same branch name, does not complete the step — push
+first. Closing the PR without merging stops the flow; reopen it or re-run `/commit-push`.
+
+Claude's own merge (`gh pr merge`, `glab mr merge`, a push to a protected branch) is refused by
+`workflow-gate.js` while `off` is in force, and `WORKFLOW_OFF` does not lift that. The refusal
+recognises those command forms only — keep branch protection on the forge as the real barrier.
+
 ---
 
 ## CodeGraph

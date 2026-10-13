@@ -6,9 +6,17 @@
 //      FAKE_FORGE_MERGE gh mergeStateStatus (default CLEAN); FAKE_GLAB_MERGE glab
 //        detailed_merge_status (default mergeable); FAKE_GLAB_DRAFT=1; FAKE_FORGE_NUMBER (default 42);
 //      FAKE_FORGE_LOG appends "<cwd>|<name> <args>"; FAKE_FORGE_DELAY_MS delays gh / glab;
-//      FAKE_FORGE_HEAD the PR/MR head commit (gh headRefOid, glab sha); unset -> not reported.
+//      FAKE_FORGE_HEAD the PR/MR head commit (gh headRefOid, glab sha); unset -> not reported;
+//        "@cwd" -> the HEAD of the repo the CLI runs in (not reported when that is unreadable).
 const path = require("path");
 const fs = require("fs");
+
+function fakeHead() {
+  const v = process.env.FAKE_FORGE_HEAD;
+  if (v !== "@cwd") return v;
+  const r = require("child_process").spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true });
+  return r.status === 0 ? String(r.stdout || "").trim() : undefined;
+}
 
 const base = (p) => path.basename(String(p || "")).replace(/\.exe$/i, "").toLowerCase();
 const me = [base(process.execPath), base(process.argv0)].find((b) => b === "gh" || b === "glab");
@@ -61,7 +69,8 @@ if (me) {
   if (me === "gh") {
     const pr = { number: num, state, mergeStateStatus: env.FAKE_FORGE_MERGE || "CLEAN",
       url: "https://github.com/example/repo/pull/" + num };
-    if (env.FAKE_FORGE_HEAD !== undefined) pr.headRefOid = env.FAKE_FORGE_HEAD;
+    const prHead = fakeHead();
+    if (prHead !== undefined) pr.headRefOid = prHead;
     const fields = String(flag("--json") || "").split(",").filter(Boolean);
     if (a.includes("--jq") || a.includes("-q")) say(fields.map((f) => String(pr[f])).join(" "), 0);
     const o = {};
@@ -76,7 +85,8 @@ if (me) {
     draft: env.FAKE_GLAB_DRAFT === "1",
     web_url: "https://gitlab.com/example/repo/-/merge_requests/" + num,
   };
-  if (env.FAKE_FORGE_HEAD !== undefined) mr.sha = env.FAKE_FORGE_HEAD;
+  const mrHead = fakeHead();
+  if (mrHead !== undefined) mr.sha = mrHead;
   const jq = flag("--jq");
   // jq prints "null" for a field the MR does not carry.
   if (jq) { const v = mr[jq.replace(/^\./, "")]; say(v === undefined ? "null" : String(v), 0); }

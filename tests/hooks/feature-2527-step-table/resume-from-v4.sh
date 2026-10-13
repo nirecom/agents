@@ -35,6 +35,8 @@ export PATH="$CLI_STUB_DIR:$PATH"
 export NODE_OPTIONS="--require \"$(np "$_s27_here/fake-gh.js")\""
 export FAKE_GH_LOG="$(np "$S27_TMP/gh.log")"
 export FAKE_GH_STATE=NONE
+# The PR stands for the fixture's HEAD: an OPEN/MERGED answer counts only for that commit.
+export FAKE_GH_HEAD="$HEAD_SHA"
 
 # fx <sid> <steps> [extra spec json fragment] — v4 fixture rooted at the repo. #2277: the
 # complete plan steps carry an approval record, or next-step reads them as pending.
