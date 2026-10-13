@@ -1,7 +1,7 @@
 "use strict";
 // hooks/lib/jev/two-stage/settle-skip.js — the skip owner marker MS (<target>-skip-owner.json)
-// of outline-skip / detail-skip (#2460). The newest query owns MS from query time on; only the
-// owner calls record-skip-judgment, under <target>-skip-owner.lock for the whole settle.
+// of outline-skip / detail-skip (#2460). The newest query owns MS from the start of its query
+// on; only the owner calls record-skip-judgment, under <target>-skip-owner.lock for the whole settle.
 
 const fs = require("fs");
 const path = require("path");
@@ -10,6 +10,7 @@ const { spawnSync } = require("child_process");
 const { readVersioned } = require("../state-paths");
 const { controlPath } = require("../../../workflow-state/state-io/control-dir");
 const { compareOwner, acquireLock } = require("./settle-complexity");
+const { sourcesChanged } = require("./source-fresh");
 
 const SKIP_OWNER_VERSION = 1;
 const RSJ = path.join(__dirname, "..", "..", "..", "..", "bin", "workflow", "record-skip-judgment");
@@ -57,16 +58,36 @@ function takeSkipOwnerAtQuery(sid, target, ownerArg) {
   });
 }
 
-// settleSkip(sid, target, conditions, source, owner, tid) -> {settle, detail, owner, rsj_lines}.
-// A newer MS supersedes without calling record-skip-judgment; otherwise MS is (re)written and
-// record-skip-judgment --advance runs under the lock. Throws when it fails.
-function settleSkip(sid, target, conditions, source, ownerArg, tid) {
+// True when this ticket's own settle already skipped the step: a re-run then only replays
+// that outcome, and the sources may have moved on since without making it stale.
+function skippedBy(sid, target, tid) {
+  const { readSkipJudgment, readState } = require(WS);
+  const sj = readSkipJudgment(sid, target);
+  const state = readState(sid);
+  const step = state && state.steps && state.steps[target];
+  return Boolean(sj) && sj.ticket === tid && sj.all_conditions_met === true && Boolean(step) && step.status === "skipped";
+}
+
+// settleSkip(sid, target, conditions, source, owner, tid, {stage, artifacts_sha256}) ->
+// {settle, detail, owner, rsj_lines}. A newer MS supersedes without calling
+// record-skip-judgment; otherwise MS is (re)written and record-skip-judgment --advance runs
+// under the lock. A skip-authorizing judgment is recorded only while the stage sources are
+// still the bytes fingerprinted at query time; otherwise nothing is recorded and the stage
+// runs (source-changed). Throws when it fails.
+function settleSkip(sid, target, conditions, source, ownerArg, tid, fingerprint) {
   const owner = norm(ownerArg);
   return underLock(sid, target, (m, f) => {
     if (m && compareOwner(m, owner) > 0) {
       return { settle: "superseded", detail: "newer-owner", owner: m.owner_id, rsj_lines: [] };
     }
     writeOwner(f.marker, owner);
+    const fp = fingerprint || {};
+    const authorizes = Object.values(conditions).every((v) => v === true);
+    if (authorizes && !skippedBy(sid, target, tid) && sourcesChanged(sid, fp.stage, fp.artifacts_sha256)) {
+      // An interrupted earlier settle of this ticket may have left its judgment standing.
+      revokeStandingSkip(sid, target);
+      return { settle: "superseded", detail: "source-changed", owner: null, rsj_lines: [] };
+    }
     const args = [RSJ, "--session", sid, "--target", target];
     for (const k of Object.keys(conditions)) args.push("--cond", `${k}=${conditions[k] === true}`);
     args.push("--source", source, "--ticket", tid, "--advance");

@@ -28,8 +28,9 @@ const stripBlank = (s) => s.replace(/^[ \t]+|[ \t]+$/g, "");
 
 // parseSubagent(raw|null, target) -> {status: ok|parse-fallback|missing, values, answered}.
 // values holds every key (false unless answered true); answered only the keys with a literal
-// true/false. Anything but exactly one nonblank line, a SKIP_CONDITIONS: line, or an unknown
-// or repeated key rejects the whole answer; a non-literal value rejects that key alone.
+// true/false. Anything but exactly one nonblank line, a SKIP_CONDITIONS: line, or an empty
+// token, an unknown or a repeated key rejects the whole answer; a non-literal value rejects
+// that key alone.
 function parseSubagent(raw, target) {
   const reject = (status) => ({ status, values: fillConditions(target, {}), answered: {} });
   if (raw === null || raw === undefined) return reject("parse-fallback");
@@ -43,7 +44,7 @@ function parseSubagent(raw, target) {
   let partial = false;
   for (const tok of lines[0].trim().slice(LINE_PREFIX.length).split(",")) {
     const t = stripBlank(tok);
-    if (t === "") continue;
+    if (t === "") return reject("parse-fallback");
     const eq = t.indexOf("=");
     const key = stripBlank(eq < 0 ? t : t.slice(0, eq));
     if (!schema.includes(key) || seen.has(key)) return reject("parse-fallback");

@@ -7,12 +7,13 @@ const fs = require("fs");
 const path = require("path");
 
 const { sessionDir, readVersioned, writeJsonAtomic } = require("../state-paths");
+const { pendingDir, PENDING_VERSION } = require("../pending");
 const { sessionControlDir } = require("../../../workflow-state/state-io/control-dir");
 
 const TICKET_RE = /^[0-9a-f]{16}$/;
 const DONE_VERSION = 1;
 // Every frozen policy field a ticket must carry before finalize, replay or the sweep uses it.
-const FROZEN_FIELDS = Object.freeze(["mode", "recording_owner", "threshold", "short_circuit_answer"]);
+const FROZEN_FIELDS = Object.freeze(["mode", "recording_owner", "threshold", "short_circuit_answer", "adapter"]);
 
 const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 const own = (o, k) => Boolean(o) && Object.prototype.hasOwnProperty.call(o, k);
@@ -70,16 +71,33 @@ const slashed = (p) => String(p).replace(/\\/g, "/");
 
 // A ticket hand is usable when it is a cli-ticket of a registered point and stage carrying
 // every frozen field; the registry is consulted for registration only, never for policy.
+// A point whose adapter is no longer the one the ticket was queried with invalidates the
+// ticket: another adapter would reinterpret the frozen answers.
 function validHand(hand, resolveEntry) {
   if (!hand || typeof hand !== "object" || hand.kind !== "cli-ticket") return null;
   const entry = pointStageEntry(hand.point, hand.stage, resolveEntry);
   if (!entry) return null;
   if (!FROZEN_FIELDS.every((k) => own(hand, k) && hand[k] !== undefined)) return null;
   if (!hand.threshold || typeof hand.threshold !== "object") return null;
+  if (typeof hand.adapter !== "string" || hand.adapter !== entry.adapter) return null;
   return entry;
 }
 
+// Every claim of the ticket (a finalize's or the sweep's) that reads as a hand.
+function readClaims(sid, tid) {
+  let dir;
+  let names;
+  try {
+    dir = pendingDir(sid);
+    names = fs.readdirSync(dir);
+  } catch (_e) {
+    return [];
+  }
+  return names.filter((n) => n.startsWith(`${tid}.claimed-`))
+    .map((n) => readVersioned(path.join(dir, n), PENDING_VERSION)).filter(Boolean);
+}
+
 module.exports = {
-  TICKET_RE, DONE_VERSION, FROZEN_FIELDS, sha256, own, newTicketId, sourcesDir, removeSources,
-  donePath, readDone, writeDone, errorResult, crash, frozenEntry, pointStageEntry, slashed, validHand,
+  TICKET_RE, DONE_VERSION, FROZEN_FIELDS, sha256, own, newTicketId, sourcesDir, removeSources, donePath,
+  readDone, writeDone, errorResult, crash, frozenEntry, pointStageEntry, slashed, validHand, readClaims,
 };

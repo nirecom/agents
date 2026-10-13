@@ -1,6 +1,7 @@
 "use strict";
 // hooks/lib/jev/two-stage/query.js — `jev-judge query` (#2460): freeze the point's policy,
-// snapshot and copy the stage sources, ask Jev only when the CLI owns the record and every
+// take the stage's owner marker, snapshot and copy the stage sources (the snapshot names the
+// copies only; SOURCES_DIR says where they are), ask Jev only when the CLI owns the record and every
 // required section is whole, gate the answers, and leave the cli-ticket for finalize.
 // The test overrides are captured before anything below can load .env into process.env.
 const { captureTestOverrides } = require("../test-overrides");
@@ -15,6 +16,7 @@ const pending = require("../pending");
 const { registryEntry, recordingOwner } = require("../registry");
 const { isValidId } = require("../state-paths");
 const { applyGate } = require("./gate");
+const { takeSignalsOwnerAtQuery } = require("./settle-complexity");
 const { takeSkipOwnerAtQuery } = require("./settle-skip");
 const { buildSnapshot, answerPath } = require("./snapshot");
 const { TICKET_RE, sha256, newTicketId, removeSources, pointStageEntry, slashed } = require("./paths");
@@ -30,8 +32,15 @@ function freezePolicy(entry) {
     mode: entry.mode, recording_owner: owner, record_decision: broker.isEnabled() && owner === "cli",
     threshold: Object.assign({}, entry.confidence_threshold_by_answer),
     short_circuit_answer: entry.short_circuit_answer === undefined ? null : entry.short_circuit_answer,
-    backup_subagent: entry.backup_subagent, fallback: entry.fallback,
+    backup_subagent: entry.backup_subagent, fallback: entry.fallback, adapter: entry.adapter,
   };
+}
+
+// The stage's owner marker is taken before anything is read or asked: from here on an older
+// judgment still in flight can no longer settle, however long this query takes. Throws on failure.
+function takeOwnerAtQuery(sid, stage, entry, owner) {
+  if (entry.target) takeSkipOwnerAtQuery(sid, entry.target, owner);
+  else takeSignalsOwnerAtQuery(sid, stage, owner);
 }
 
 // S1b / S4 from the verified write-code list copy only (null outside the deterministic stage).
@@ -82,15 +91,18 @@ async function judge(ctx) {
   return { jev, gate };
 }
 
-function stdoutFor(frozen, tid, gate, snapFile, answerFile) {
+// SOURCES_DIR is where the copies named in the snapshot header are: the snapshot itself is
+// sent to Jev, so it never carries a local path.
+function stdoutFor(frozen, tid, gate, snap, answerFile) {
   const need = gate.delegated.length > 0;
   return [
     `RESULT=${need ? "need-subagent" : "final"}`,
     `TICKET=${tid}`,
     `SUBAGENT=${need ? frozen.backup_subagent : "-"}`,
     `DELEGATED=${need ? gate.delegated.join(",") : "-"}`,
-    `SNAPSHOT_FILE=${slashed(snapFile)}`,
+    `SNAPSHOT_FILE=${slashed(snap.file)}`,
     `ANSWER_FILE=${need ? slashed(answerFile) : "-"}`,
+    `SOURCES_DIR=${need ? slashed(snap.sources_dir) : "-"}`,
   ];
 }
 
@@ -119,6 +131,7 @@ async function query(args, optsArg = {}) {
   const required = (entry.required_sections_by_stage && entry.required_sections_by_stage[a.stage]) || [];
   let snap;
   try {
+    takeOwnerAtQuery(sid, a.stage, entry, { id: tid, created_ms: createdMs });
     snap = buildSnapshot(sid, a.stage, tid, required, {
       maxArtifactBytes: opts.maxArtifactBytes, failCopyFor: opts.failCopyFor, afterCopy: opts.afterCopy, repoRoot: a.repoRoot,
     });
@@ -157,7 +170,7 @@ async function query(args, optsArg = {}) {
     deterministic, jev: judged.jev, adopted_jev: gate.adopted, delegated: gate.delegated,
     llm_needed: gate.delegated.length > 0, input_insufficient: !req.met,
     snapshot_file: snap.file, snapshot_sha256: snap.sha256, sources: snap.sources, sources_sha256: snap.sources_sha256,
-    answer_file: answerFile, repo_root: a.repoRoot || null, input: inputOf(snap, req, required),
+    artifacts_sha256: snap.artifacts_sha256, answer_file: answerFile, repo_root: a.repoRoot || null, input: inputOf(snap, req, required),
   });
   try {
     pending.writePending(sid, tid, ticket);
@@ -165,16 +178,7 @@ async function query(args, optsArg = {}) {
     removeSources(sid, tid);
     return { exit: 3, stdout_lines: [] };
   }
-  if (entry.target) {
-    try {
-      takeSkipOwnerAtQuery(sid, entry.target, { id: tid, created_ms: createdMs });
-    } catch (_e) {
-      try { fs.unlinkSync(path.join(pending.pendingDir(sid), `${tid}.json`)); } catch (_e2) { /* already gone */ }
-      removeSources(sid, tid);
-      return { exit: 3, stdout_lines: [] };
-    }
-  }
-  return { exit: 0, stdout_lines: stdoutFor(frozen, tid, gate, snap.file, answerFile) };
+  return { exit: 0, stdout_lines: stdoutFor(frozen, tid, gate, snap, answerFile) };
 }
 
 module.exports = { query, runQuery: query, freezePolicy, deterministicFor };

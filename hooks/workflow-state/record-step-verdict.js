@@ -24,7 +24,7 @@ const {
   UnapprovedCompletionError,
   confirmSentinelFor,
 } = require("./completion-approval");
-const { isSkipAllowedForCliPath } = require("./plan-skip-allowance");
+const { isSkipAllowedForCliPath, hasRecordedSkipJudgment } = require("./plan-skip-allowance");
 const { validateSkipReason } = require("../workflow-mark/skip-reason");
 const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas");
 const { resolveTrustedRepoDir } = require("./record-step-verdict/trusted-repo-dir");
@@ -140,16 +140,20 @@ function checkSkipAllowance(sessionId, step, opts) {
     case "research":
     case "cleanup":
       return { ok: true, code: 0 };
-    // Approval-gated pair, deliberately left unconditional on THIS gate.
-    // KNOWN GAP (follow-up): the A-4 verdict co-written below is an audit
-    // annotation, not enforcement — recordSkipVerdict() writes
-    // skip_verdict.verdict="pending", but no gate reads hasSpeculativeSkipPending()
-    // to block on it. Making this gate call isSkipAllowedForCliPath() (like
-    // write_tests) was tried and reverted: the parity contract the #1644 suites
-    // pin exercises this unconditional path as their baseline, so tightening it is
-    // a coordinated CLI-vs-sentinel redesign, not a local fix. File a follow-up.
+    // Approval-gated pair, left unconditional on THIS gate: the #1644 parity suites pin
+    // that baseline, so calling isSkipAllowedForCliPath() here is a coordinated redesign.
+    // The recorded-verdict reason is the exception: next-step lets a skip carrying it past
+    // the pending-verdict gate, so it is admitted only while a recorded skip judgment
+    // stands. No owner lock here — the settle that reaches this gate already holds it.
     case "outline":
     case "detail":
+      if (String(opts.skipReason || "").startsWith(RECORDED_VERDICT_PREFIX) && !hasRecordedSkipJudgment(sessionId, step)) {
+        return fail(
+          3,
+          `record-step-verdict: ${step} skip refused — a "${RECORDED_VERDICT_PREFIX}" reason needs a ` +
+            "recorded skip judgment with every condition met, and none stands."
+        );
+      }
       return { ok: true, code: 0 };
     case "write_tests":
       if (!isSkipAllowedForCliPath(sessionId, "write_tests")) {
@@ -346,7 +350,7 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
         return fail(1, "record-step-verdict: " + v.msg);
       }
       skipReason = v.reason;
-      const allowance = checkSkipAllowance(sessionId, step, { repoDir: opts.repoDir });
+      const allowance = checkSkipAllowance(sessionId, step, { repoDir: opts.repoDir, skipReason });
       if (!allowance.ok) return allowance;
     }
   }

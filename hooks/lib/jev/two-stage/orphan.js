@@ -11,8 +11,7 @@ const { absentRecord } = require("./merge");
 const { replayFinalized } = require("./replay");
 
 function handleTicketOrphan(sid, tid, hand) {
-  const entry = validHand(hand, registryEntry);
-  if (!entry || hand.ticket !== tid || hand.session_id !== sid) {
+  if (!validHand(hand, registryEntry) || hand.ticket !== tid || hand.session_id !== sid) {
     removeSources(sid, tid);
     return { ok: true };
   }
@@ -22,7 +21,7 @@ function handleTicketOrphan(sid, tid, hand) {
       return { ok: true };
     }
     if (hand.record_decision) {
-      const r = appendDecisionOnce(absentRecord(sid, tid, hand, require(entry.adapter)));
+      const r = appendDecisionOnce(absentRecord(sid, tid, hand, require(hand.adapter)));
       if (!r || !r.ok) return { ok: false };
     }
     removeSources(sid, tid);

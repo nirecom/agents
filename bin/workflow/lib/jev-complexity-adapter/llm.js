@@ -83,10 +83,11 @@ function resolveExecutorModel(toolInput) {
 
 // stripDeterministicTokens("SIGNALS: ...") -> {line, override}: the deterministic ids the LLM
 // named are removed (they are computed, never judged) and returned as override; nothing left
-// is "SIGNALS: none". Other tokens pass through untouched for the strict parser to judge.
+// is "SIGNALS: none". Other tokens — an empty one included — pass through untouched for the
+// strict parser to judge: a malformed list is never repaired into a well-formed one.
 function stripDeterministicTokens(selectedLine) {
   const payload = String(selectedLine).slice("SIGNALS:".length);
-  const tokens = payload.split(",").map((t) => t.trim()).filter((t) => t !== "");
+  const tokens = payload.split(",").map((t) => t.trim());
   const override = tokens.filter((t) => DETERMINISTIC_SIGNAL_IDS.includes(t));
   const kept = tokens.filter((t) => !DETERMINISTIC_SIGNAL_IDS.includes(t));
   return { line: kept.length ? "SIGNALS: " + kept.join(", ") : "SIGNALS: none", override };

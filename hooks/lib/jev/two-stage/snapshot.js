@@ -11,6 +11,7 @@ const path = require("path");
 const { StringDecoder } = require("string_decoder");
 
 const { sha256, sourcesDir } = require("./paths");
+const { artifactSha } = require("./source-fresh");
 const {
   SCRIPT_CHECKOUT_ROOT, MAX_STATE_CHARS, MAX_ARTIFACT_READ_BYTES, STAGE_SOURCE_SECTIONS,
   SECTION_ORDER, artifactPathsFor, readCappedBytes, issueBodyOf, sliceUnits, redactOutbound,
@@ -46,7 +47,7 @@ function sectionText(section, read, repoRoot) {
   if (section === "write-code files") return redactOutbound(writeCodeListText(read, repoRoot));
   const raw = read.over_cap ? new StringDecoder("utf8").write(read.bytes) : read.bytes.toString("utf8");
   const text = raw.replace(/\r\n/g, "\n");
-  const body = section === "issue body" ? issueBodyOf(text) : text;
+  const body = section === "issue body" ? issueBodyOf(text, read.over_cap) : text;
   if (body === null || body.trim() === "") return null;
   return redactOutbound(body);
 }
@@ -101,7 +102,9 @@ function packBody(order, texts, overCap, budget) {
 }
 
 // buildSnapshot(sid, stage, tid, required, opts) -> {file, text, sha256, sections, truncated,
-// included, copies, sources, sources_sha256, sources_failed, sources_failed_reasons}.
+// included, copies, sources, sources_sha256, sources_dir, artifacts_sha256, sources_failed,
+// sources_failed_reasons}. artifacts_sha256 names every source artifact present at query time
+// (null when it could not be hashed whole): the fingerprint a settle re-checks.
 function buildSnapshot(sid, stage, tid, required, opts = {}) {
   const cap = Number.isSafeInteger(opts.maxArtifactBytes) && opts.maxArtifactBytes > 0
     ? opts.maxArtifactBytes : MAX_ARTIFACT_READ_BYTES;
@@ -112,9 +115,11 @@ function buildSnapshot(sid, stage, tid, required, opts = {}) {
   const failed = [];
   const reasons = {};
   const overCap = [];
+  const artifactsSha = {};
   for (const art of artifactPathsFor(sid, stage)) {
     let read;
-    try { read = readCappedBytes(art.file, cap); } catch (_e) { continue; }
+    try { read = readCappedBytes(art.file, cap); } catch (_e) { artifactsSha[art.section] = null; continue; }
+    artifactsSha[art.section] = artifactSha(read);
     texts[art.section] = sectionText(art.section, read, opts.repoRoot);
     if (read.over_cap) overCap.push(art.section);
     const reason = copyArtifact(art, read, dir, opts, copies);
@@ -123,9 +128,11 @@ function buildSnapshot(sid, stage, tid, required, opts = {}) {
   if (typeof opts.afterCopy === "function") opts.afterCopy();
   const order = orderedSections(stage, required);
   const copied = SECTION_ORDER.filter((s) => copies[s]);
+  // The snapshot leaves the machine: a copy is named by its file name only, and the caller
+  // learns the directory from query's SOURCES_DIR line.
   const headerOf = (stateOf) => [`stage: ${stage}`]
     .concat(order.map((s) => `${s}: ${stateOf(s)}`))
-    .concat(["sources:"], copied.map((s) => copies[s].path.replace(/\\/g, "/")))
+    .concat(["sources:"], copied.map((s) => path.basename(copies[s].path)))
     .concat([`sources_unavailable: ${failed.length ? failed.join(",") : "-"}`]).join("\n");
   const artifacts = `## artifacts\n${copied.map((s) => `- ${path.basename(copies[s].path)}`).join("\n")}\n`;
   const fixed = headerOf(() => WIDEST_STATE).length + 2 + artifacts.length;
@@ -140,8 +147,8 @@ function buildSnapshot(sid, stage, tid, required, opts = {}) {
     file, text, sha256: crypto.createHash("sha256").update(text).digest("hex"),
     sections: states, truncated: order.some((s) => states[s] === "truncated"),
     included: order.filter((s) => states[s] !== "absent"), copies,
-    sources: copied.map((s) => copies[s].path), sources_sha256: sourcesSha,
-    sources_failed: failed, sources_failed_reasons: reasons,
+    sources: copied.map((s) => copies[s].path), sources_sha256: sourcesSha, sources_dir: dir,
+    artifacts_sha256: artifactsSha, sources_failed: failed, sources_failed_reasons: reasons,
   };
 }
 

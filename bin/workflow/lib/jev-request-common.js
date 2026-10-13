@@ -58,22 +58,24 @@ function rubricSection(rubric, id) {
 // The body of a "## <heading>" section, trimmed; null when absent. It ends at the next "## "
 // line, or, when `until` is given, only at the LAST "## <until>" line (else at the end of the
 // text): a section of third-party text may carry that line itself, and only the last one is the
-// writer's.
+// writer's. `until` null means the end of the text: no line is a delimiter.
 function mdSection(text, heading, until) {
   const lines = String(text).replace(/\r\n/g, "\n").split("\n");
   const start = lines.indexOf("## " + heading);
   if (start < 0) return null;
-  let end = until === undefined
-    ? lines.findIndex((l, i) => i > start && l.startsWith("## "))
-    : lines.lastIndexOf("## " + until);
+  let end = lines.length;
+  if (until === undefined) end = lines.findIndex((l, i) => i > start && l.startsWith("## "));
+  else if (until !== null) end = lines.lastIndexOf("## " + until);
   if (end <= start) end = lines.length;
   return lines.slice(start + 1, end).join("\n").trim();
 }
 
-// The Issue body of a context.md text; null when the section is absent.
-function issueBodyOf(text) {
+// The Issue body of a context.md text; null when the section is absent. `capped` says the
+// text is a prefix cut at the read cap: the writer's closing heading may lie beyond the cut,
+// so the last such line in the prefix can be the issue's own text and nothing delimits.
+function issueBodyOf(text, capped) {
   const { ISSUE_BODY_SECTION } = require(path.join(__dirname, "workflow-init", "phases", "write-context.js"));
-  return mdSection(text, ISSUE_BODY_SECTION.heading, ISSUE_BODY_SECTION.next);
+  return mdSection(text, ISSUE_BODY_SECTION.heading, capped === true ? null : ISSUE_BODY_SECTION.next);
 }
 
 // The rubric's "## Judgment rules" section, read at runtime (the rubric stays the SSOT).
@@ -147,7 +149,9 @@ function artifactPathsFor(sid, stage) {
 function readIssueBody(sid) {
   if (!validSid(sid)) return null;
   try {
-    return issueBodyOf(readCapped(path.join(plansDir(), `${sid}-context.md`), MAX_ARTIFACT_READ_BYTES));
+    const r = readCappedBytes(path.join(plansDir(), `${sid}-context.md`), MAX_ARTIFACT_READ_BYTES);
+    const text = r.over_cap ? new StringDecoder("utf8").write(r.bytes) : r.bytes.toString("utf8");
+    return issueBodyOf(text, r.over_cap);
   } catch (_e) {
     return null;
   }

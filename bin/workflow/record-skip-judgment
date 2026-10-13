@@ -4,7 +4,8 @@
 // record-skip-judgment --session <sid> --target <outline|detail> --cond <key>=<true|false> ...
 //   --source <jev|subagent|mixed> --ticket <16 hex> [--advance [--next]]
 // --cond names exactly CONDITION_SCHEMAS[target]; anything off-schema or unknown is exit 2.
-// The ticket makes the call an idempotent resume (resumeAction: RECORDED=superseded / REPLAYED=1).
+// The ticket must be a finalized one in the broker's own store with this very answer (verifyTicket),
+// and makes the call an idempotent resume (resumeAction: RECORDED=superseded / REPLAYED=1).
 // Prints RECORDED=<target> all_conditions_met=<true|false> with unchanged bytes in every mode;
 // --advance (#1644) settles the step as skipped when every condition is true, --next adds ACTION.
 
@@ -14,6 +15,9 @@ const { recordSkipJudgment, readSkipJudgment, readState } = require(WS);
 const { runAdvance } = require(path.join(__dirname, "lib", "next-step", "advance-shared"));
 const { RECORDED_VERDICT_REASONS } = require(path.join(WS, "record-step-verdict"));
 const { CONDITION_SCHEMAS, JUDGMENT_SOURCES } = require(path.join(WS, "skip-signal-resolver", "condition-schemas"));
+const TWO_STAGE = path.join(__dirname, "..", "..", "hooks", "lib", "jev", "two-stage");
+const { readClaims } = require(path.join(TWO_STAGE, "paths"));
+const { sourcesChanged } = require(path.join(TWO_STAGE, "source-fresh"));
 
 const TICKET_RE = /^[0-9a-f]{16}$/;
 const COND_RE = /^([a-z][a-z0-9_]*)=(true|false)$/;
@@ -70,6 +74,22 @@ function parseArgs(argv) {
   return out;
 }
 
+// The command line is not evidence of a judgment: the ticket must be one the broker finalized
+// for this session and target, and its written-ahead answer must be exactly the one supplied.
+// Returns the ticket's claim; exit 2 otherwise.
+function verifyTicket(sid, target, form) {
+  const claim = readClaims(sid, form.ticket).find((h) => h.kind === "cli-ticket" && h.finalized === true
+    && h.session_id === sid && h.ticket === form.ticket && h.target === target);
+  const r = claim && claim.result;
+  if (!r || r.target !== target || r.source !== form.source) fail(2, "--ticket is not a finalized ticket of this session and target");
+  const rc = r.conditions && typeof r.conditions === "object" ? r.conditions : {};
+  const keys = Object.keys(form.conditions);
+  if (Object.keys(rc).length !== keys.length || !keys.every((k) => rc[k] === form.conditions[k])) {
+    fail(2, "--cond differs from the ticket's finalized answer");
+  }
+  return claim;
+}
+
 // {conditions, source, ticket, reason}; exit 2 on anything off-schema.
 function judgmentForm(args) {
   if (!args.conds) fail(2, "--cond is required");
@@ -111,6 +131,7 @@ function main() {
   if (args.target !== "outline" && args.target !== "detail") fail(1, "--target must be outline or detail");
   const form = judgmentForm(args);
   const sid = args.session.trim();
+  const claim = verifyTicket(sid, args.target, form);
   const allMet = Object.values(form.conditions).every((v) => v === true);
   const recordedLine = "RECORDED=" + args.target + " all_conditions_met=" + allMet + "\n";
   // The judgment is already its own annotation; copying it onto the status write
@@ -124,6 +145,10 @@ function main() {
   if (action === "superseded") {
     process.stdout.write("RECORDED=superseded\n");
     process.exit(0);
+  }
+  // A skip that is still to be written or advanced must describe the sources as they are now.
+  if (allMet && action !== "replay" && sourcesChanged(sid, claim.stage, claim.artifacts_sha256)) {
+    fail(2, "the ticket's sources changed since its query");
   }
   if (action === "advance" && args.advance) advance("REPLAYED=1\n");
   const replayed = action !== "write";

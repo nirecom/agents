@@ -73,8 +73,9 @@ function claimTicket(sid, tid) {
   return { error: hasOtherClaim(sid, tid) ? "in-progress" : "ticket-missing" };
 }
 
-function judge(sid, tid, hand, entry) {
-  const adapter = require(entry.adapter);
+// The adapter is the ticket's own (validHand: the registry still names the same one).
+function judge(sid, tid, hand) {
+  const adapter = require(hand.adapter);
   if (hand.target) return judgeSkip(sid, tid, hand, adapter);
   return judgeComplexity(sid, tid, hand, adapter, require(NORMALIZER).normalize);
 }
@@ -100,13 +101,12 @@ async function finalize(args, optsArg = {}) {
       return late ? reoutput(sid, tid, late) : errorResult(c.error);
     }
     let hand = c.hand;
-    const entry = validHand(hand, resolveEntry);
-    if (!entry || hand.ticket !== tid || hand.session_id !== sid) {
+    if (!validHand(hand, resolveEntry) || hand.ticket !== tid || hand.session_id !== sid) {
       pending.releaseClaim(sid, tid);
       return errorResult("ticket-invalid");
     }
     if (hand.finalized !== true) {
-      const j = judge(sid, tid, hand, entry);
+      const j = judge(sid, tid, hand);
       hand = Object.assign({}, hand, { finalized: true, result: j.result, record: j.record });
       if (!pending.rewriteClaim(sid, tid, hand)) return { exit: 3, stdout_lines: [] };
       crash(opts, "after-wal");
