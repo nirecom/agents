@@ -12,7 +12,7 @@ paths:
 - Incident entries use `### #N:` prefix for identification.
 - New entries go at the **end** — never insert in the middle.
 - Use `doc-append` CLI to append (see below). Do NOT use Edit tool — it requires a prior Read, consuming context.
-- Under `ENFORCE_WORKTREE=on`, `/update-docs` stages bullets into `WORKTREE_NOTES.md` `## History Notes`. `bin/compose-doc-append-entry` appends them to `history.md` from the main worktree during `/worktree-end` Step WE-21.
+- Under `ENFORCE_WORKTREE=on`, `/update-docs` stages bullets into `WORKTREE_NOTES.md` `## History Notes`. `bin/compose-doc-append-entry` appends them to `history.md` from the main worktree during `/worktree-end` Step WE-17.
 - Format:
   ```
   ### Subject (YYYY-MM-DD, commits)

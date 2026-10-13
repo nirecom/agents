@@ -179,7 +179,8 @@ run_tests() {
     return
   fi
 
-  check "3b: workflow_type=wf-meta" "wf-meta" "$(json_val "$STATE3" 's.workflow_type')"
+  # #2527: the shim persists the renamed deliverable_type key.
+  check "3b: deliverable_type=wf-meta" "wf-meta" "$(json_val "$STATE3" 's.deliverable_type')"
   check "3c: session_id matches" "$SID3" "$(json_val "$STATE3" 's.session_id')"
   check "3d: workflow_init status=pending" "pending" "$(json_val "$STATE3" 's.steps.workflow_init.status')"
 
@@ -190,7 +191,7 @@ run_tests() {
   run_script "$SID4" "wf-meta"
   local STATE4="$TMPDIR_WT/${SID4}.json"
 
-  check "4a: workflow_type overwritten to wf-meta" "wf-meta" "$(json_val "$STATE4" 's.workflow_type')"
+  check "4a: v1 workflow_type migrated and overwritten to deliverable_type=wf-meta" "wf-meta" "$(json_val "$STATE4" 's.deliverable_type')"
   check "4b: closes_issues[0] preserved" "999" "$(json_val "$STATE4" 's.closes_issues[0]')"
   check "4c: workflow_init.status preserved" "complete" "$(json_val "$STATE4" 's.steps.workflow_init.status')"
 
@@ -206,9 +207,9 @@ run_tests() {
     const st=readState('$SID5');
     writeState('$SID5',st);
     const st2=readState('$SID5');
-    console.log(st2.workflow_type??'__NULL__');
+    console.log(st2.deliverable_type??'__NULL__');
   " 2>/dev/null || echo "__ERROR__")"
-  check "5: workflow_type preserved after readState+writeState" "wf-meta" "$PRESERVED"
+  check "5: deliverable_type preserved after readState+writeState" "wf-meta" "$PRESERVED"
 
   # ---- 6: wf-plan now rejected (renamed to wf-meta) --------------------------
 

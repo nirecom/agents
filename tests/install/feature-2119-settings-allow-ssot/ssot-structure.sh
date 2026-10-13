@@ -152,8 +152,8 @@ case_end
 # The three that PR #2158's security review removed (get-config-var, request-off-clearance,
 # worker-dispatch.js) stay out. #2201 admitted two; #2102 admitted read-session-facts (it was
 # never pinned here, so the count row is what caught it); #2075 admitted find-tests-for-source.sh;
-# #2265 handoff-append; #2455 test-lanes-status.sh; #2079 the calibration probe and session
-# mark; #2460 swapped record-complexity-and-skip for jev-judge.
+# #2265 handoff-append; #2455 test-lanes-status.sh; #2079 calibration probe and session mark; #2527
+# deliverable-type, pr-state, release-channel, release-approval scripts; #2460 jev-judge swap.
 case_begin "t3b-snapshot" "install/settings-allow-commands.txt"
 t3b_snapshot() {
     local entry n
@@ -173,6 +173,10 @@ bin/confirm-off
 bin/parse-closes-issues
 bin/workflow/set-workflow-type
 bin/workflow/jev-judge
+bin/workflow/set-deliverable-type
+bin/workflow/pr-state
+skills/get-release-approval/scripts/preflight.sh
+skills/get-release-approval/scripts/wait-web-merge.sh
 skills/worktree-start/scripts/derive-worktree-name.sh
 bin/workflow/read-complexity-evaluation
 bin/workflow/derive-complexity-level
@@ -191,9 +195,10 @@ bin/workflow/handoff-append
 bin/test-lanes-status.sh
 skills/run-tests/scripts/probe-calibration.sh
 skills/run-tests/scripts/mark-calibration-asked.sh
+bin/workflow/release-channel
 T3B_CASES
     n="$(printf '%s\n' "$SSOT_LIST" | grep -c . || true)"
-    assert_eq "T3b: the SSOT holds exactly the 29 pinned entries and nothing else" "29" "${n:-0}"
+    assert_eq "T3b: the SSOT holds exactly the 34 pinned entries and nothing else" "34" "${n:-0}"
 }
 t3b_snapshot
 case_end

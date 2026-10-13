@@ -31,9 +31,18 @@ function isKnownStep(step) {
   if (step === STATE_PSEUDO_STEP) return true;
   try {
     const { VALID_STEPS } = require("./workflow-state/state-io");
-    return Array.isArray(VALID_STEPS) && VALID_STEPS.indexOf(step) !== -1;
+    const { canonicalStepName } = require("./workflow-state/step-table");
+    return Array.isArray(VALID_STEPS) && VALID_STEPS.indexOf(canonicalStepName(step)) !== -1;
   } catch (_e) {
     return false;
+  }
+}
+
+function canonicalStepNameSafe(step) {
+  try {
+    return require("./workflow-state/step-table").canonicalStepName(step);
+  } catch (_e) {
+    return step;
   }
 }
 
@@ -48,7 +57,7 @@ function reportableFindings(sid) {
 
 function describe(findings) {
   const items = findings
-    .map((f) => "'" + (isKnownStep(f.step) ? f.step : "(unrecognized-step)") + "' (" + f.kind + ")")
+    .map((f) => "'" + (isKnownStep(f.step) ? canonicalStepNameSafe(f.step) : "(unrecognized-step)") + "' (" + f.kind + ")")
     .join(", ");
   return (
     "mechanism-failure: the workflow mechanism has stalled — " + items + ". " +

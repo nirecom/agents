@@ -4,14 +4,11 @@ const { spawnSync } = require("child_process");
 const path = require("path");
 const { parseGitCPath, findRepoRoot } = require("./git-repo-detection");
 const { isCoveredByEntryList } = require("../lib/path-coverage-match");
+const { isOffValue } = require("../lib/off-value");
 
-
+// Default ON — only OFF for a recognised off value (padded values stay ON, fail-safe).
 function isEnforceWorktreeOn() {
-  const raw = process.env.ENFORCE_WORKTREE;
-  // No trim — whitespace-padded values are unknown and default ON (fail-safe block)
-  const v = (raw || "").toLowerCase();
-  // Default ON — only OFF when explicitly set to a recognised falsy value
-  return !["off", "0", "false", "no", "disabled"].includes(v);
+  return !isOffValue(process.env.ENFORCE_WORKTREE);
 }
 
 function getProtectedBranches(repoCwd) {

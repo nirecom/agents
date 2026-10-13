@@ -176,13 +176,14 @@ run_list_render_tests() {
     FAIL=$((FAIL + 1))
   fi
 
-  # ---- Case 22b: non-skill step (user_verification) — NEXT_SKILL empty ------
-  ACTION=""; NEXT_SKILL="SENTINEL"; NEXT_HINT=""
+  # ---- Case 22b: user_verification maps to /get-release-approval (#2527) ------
+  ACTION=""; NEXT_SKILL="SENTINEL"; NEXT_HINT=""; REASON=""
   write_state "case22b" "$JSON_USER_VERIFICATION_NEXT"
   OUT="$(run_next_step --session "case22b" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
   check "22b: user_verification ACTION=invoke" "invoke" "${ACTION:-}"
-  check "22b: user_verification NEXT_SKILL empty" "" "${NEXT_SKILL:-}"
+  check "22b: user_verification REASON=user_verification" "user_verification" "${REASON:-}"
+  check "22b: user_verification NEXT_SKILL=get-release-approval" "get-release-approval" "${NEXT_SKILL:-}"
   if [ -n "${NEXT_HINT:-}" ]; then
     echo "PASS: 22b: user_verification NEXT_HINT non-empty"
     PASS=$((PASS + 1))

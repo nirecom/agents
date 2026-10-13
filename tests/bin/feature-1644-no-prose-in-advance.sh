@@ -88,7 +88,7 @@ NO_NEXT_FILES=(
   "skills/workflow-init/SKILL.md"
 )
 NO_NEXT_TEXT=(
-  'node "$AGENTS_MAIN_ROOT/bin/workflow/set-workflow-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete'
+  'node "$AGENTS_MAIN_ROOT/bin/workflow/set-deliverable-type" --session "$SESSION_ID" --type wf-meta --advance --step workflow_init --complete'
   'node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step workflow_init --complete'
 )
 

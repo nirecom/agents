@@ -42,6 +42,9 @@ const C4_EXEMPTIONS = [
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
   { id: "awaiting-plan-approval", phase: "next-step-output",
     test: (c, _d) => typeof c.reason === "string" && c.reason.startsWith("awaiting-plan-approval:") },
+  // #2527 4-4: the human merges the PR on the web; the background poller resumes the session.
+  { id: "human-web-merge-wait", phase: "next-step-output",
+    test: (c, _d) => c.wait === "human-web-merge" },
 ];
 
 // Per-finding exemptions that apply to the mechanism-failure lane only. The
@@ -217,32 +220,38 @@ if (require.main === module) {
     // Delegate reasons owned by a dedicated Stop hook (REASON is single-quoted).
     const reasonLine = lines.find((l) => l.startsWith("REASON="));
     const reasonValue = reasonLine ? reasonLine.slice("REASON=".length).replace(/^'|'$/g, "") : "";
-    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue }, deps, degraded)) {
+    // #2527 4-4: WAIT names a wait on a human outside Claude (the web merge); unquoted value.
+    const waitLine = lines.find((l) => l.startsWith("WAIT="));
+    const waitValue = waitLine ? waitLine.slice("WAIT=".length).trim() : "";
+    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue, wait: waitValue }, deps, degraded)) {
       process.exit(0);
     }
 
     // Extract NEXT_SKILL for the continuation message.
     const skillLine = lines.find((l) => l.startsWith("NEXT_SKILL="));
     const nextSkill = skillLine ? skillLine.replace("NEXT_SKILL=", "").trim() : "";
+    // A skill-less step (e.g. branching_complete) carries its recovery in NEXT_HINT (#2527 4-2).
+    const hintLine = lines.find((l) => l.startsWith("NEXT_HINT="));
+    const nextHint = hintLine ? hintLine.slice("NEXT_HINT=".length).trim().replace(/^'|'$/g, "") : "";
 
     // Record warning/workflow finding (fail-open — do not suppress continuation on error).
     try {
       appendFinding(sessionId, {
         categories: ["workflow"],
         severity: "warning",
-        detail: `premature-stop: ACTION=invoke ignored (skill: ${nextSkill || "(unknown)"})`,
+        detail: `premature-stop: ACTION=invoke ignored (${nextSkill ? "skill: " + nextSkill : "no skill; hint: " + (nextHint || "-")})`,
         reporter: "stop-premature-stop-guard",
       });
     } catch (_) {}
 
-    // Output decision:block to auto-resume Claude with the pending skill.
-    const skillNote = nextSkill
-      ? `Run /${nextSkill} now via the Skill tool to continue the workflow.`
-      : "Re-run next-step to determine the pending workflow skill.";
+    // Output decision:block to auto-resume Claude with the pending skill or recovery.
+    const pendingNote = nextSkill
+      ? `ACTION=invoke was pending (NEXT_SKILL=${nextSkill}). Run /${nextSkill} now via the Skill tool to continue the workflow.`
+      : `ACTION=invoke was pending for a step with no skill. Recovery: ${nextHint || "see bin/workflow/next-step --list for the pending step."}`;
     const degradedNote = degraded.length
       ? ` [warning: exemption predicate(s) failed: ${degraded.join(",")}]`
       : "";
-    const reason = `[C4 premature-stop] ACTION=invoke was pending (NEXT_SKILL=${nextSkill || "(unknown)"}). ${skillNote} (Hook: stop-premature-stop-guard.js)${degradedNote}`;
+    const reason = `[C4 premature-stop] ${pendingNote} (Hook: stop-premature-stop-guard.js)${degradedNote}`;
     if (degraded.length) {
       try {
         process.stderr.write(`stop-premature-stop-guard: exemption predicate(s) failed: ${degraded.join(",")}\n`);

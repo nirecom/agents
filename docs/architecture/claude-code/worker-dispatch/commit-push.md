@@ -31,7 +31,7 @@ reader of either document is looking at the same procedure:
 | 2 | `bin/check-unstaged-tracked.sh` | Gate 3 staging verification (skipped in `wip_mode`) |
 | 3 | D1-a: workflow-gate before commit | see D1 below |
 | 4 | `git commit` | `--no-verify` is prohibited; `hooks/pre-commit` still runs |
-| 5 | `bin/probe-remote-bootstrap.sh` | empty remote → defer to `/worktree-end` |
+| 5 | `bin/probe-remote-bootstrap.sh` | empty remote → `bootstrap_pending`, deferred to `/merge-to-main` (MM-3b) |
 | 6 | D1-b: workflow-gate before push | see D1 below |
 | 7 | `git push`, 3 attempts, rebase ladder | never a force flag |
 | 8 | `enforce_worktree=off` / non-GitHub remote | → no PR |

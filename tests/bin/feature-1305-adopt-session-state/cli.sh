@@ -21,15 +21,35 @@ assert_list_row "AD-1c. the candidate's row carries its branch" "$AD1_D" "$BRANC
 # finished (S1) or plan-less (S3) session would invite the user to adopt state
 # that resolveInheritanceDonor itself would refuse.
 AD2_S1="ad2s1-$$"; AD2_S3="ad2s3-$$"; AD2_OK="ad2ok-$$"; AD2_H="ad2heir-$$"
-write_state_v2 "$AD2_S1" "$CWD" "$BRANCH" "$STEPS_USER_VERIFIED"
+write_state_v2 "$AD2_S1" "$CWD" "$BRANCH" "$STEPS_DELIVERED"
 write_state_v2 "$AD2_S3" "$CWD" "$BRANCH" "$STEPS_INTENT_DONE"
 write_state_v2 "$AD2_OK" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD2_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 announce_donor "$AD2_S1" "$CWD"; announce_donor "$AD2_S3" "$CWD"; announce_donor "$AD2_OK" "$CWD"
 adopt "$AD2_H" "$REPO" --list
 assert_contains "AD-2a. positive control: the eligible candidate IS listed" "$AD2_OK" "$ADOPT_OUT"
-assert_not_contains_guarded cli_ran "AD-2b. a user-verified (S1) session is not offered" "$AD2_S1" "$ADOPT_OUT"
+assert_not_contains_guarded cli_ran "AD-2b. a delivered (merge_to_main complete, S1) session is not offered" "$AD2_S1" "$ADOPT_OUT"
 assert_not_contains_guarded cli_ran "AD-2c. clarify_intent complete without intent.md (S3) is not offered" "$AD2_S3" "$ADOPT_OUT"
+
+# AD-2d: approval alone does not finish a session — merge_to_main is the
+# step after it, so user_verification complete + merge_to_main pending stays offered.
+AD2D_AP="ad2dap-$$"; AD2D_H="ad2dheir-$$"
+write_state_v2 "$AD2D_AP" "$CWD" "$BRANCH" "$STEPS_APPROVED_NOT_DELIVERED"
+write_state_v2 "$AD2D_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
+announce_donor "$AD2D_AP" "$CWD"
+adopt "$AD2D_H" "$REPO" --list
+assert_eq_desc "AD-2d-rc. --list exits 0" "0" "$ADOPT_RC"
+assert_list_row "AD-2d. an approved-but-not-delivered session IS still offered" "$AD2D_AP" "$BRANCH"
+
+# AD-2e: merge_to_main alone decides S1 — merge_to_main complete without user_verification
+# complete is still a finished session and must not be offered.
+AD2E_DO="ad2edo-$$"; AD2E_H="ad2eheir-$$"
+write_state_v2 "$AD2E_DO" "$CWD" "$BRANCH" "$STEPS_DELIVERED_ONLY"
+write_state_v2 "$AD2E_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
+announce_donor "$AD2E_DO" "$CWD"
+adopt "$AD2E_H" "$REPO" --list
+assert_eq_desc "AD-2e-rc. --list exits 0" "0" "$ADOPT_RC"
+assert_not_contains_guarded cli_ran "AD-2e. merge_to_main complete without approval is not offered (merge_to_main alone decides S1)" "$AD2E_DO" "$ADOPT_OUT"
 
 # --- AD-3: --from performs the adoption through the SAME applyInheritance the
 # hook uses, so the appended events must carry the append-only provenance
@@ -64,12 +84,23 @@ REPO2="$(setup_repo other)"
 CWD2="$(resolve_path "$REPO2")"
 AD5_MIS="ad5mismatch-$$"; AD5_S1="ad5s1-$$"; AD5_H="ad5heir-$$"
 write_state_v2 "$AD5_MIS" "$CWD2" "other-branch" "$STEPS_INHERITABLE"
-write_state_v2 "$AD5_S1" "$CWD" "$BRANCH" "$STEPS_USER_VERIFIED"
+write_state_v2 "$AD5_S1" "$CWD" "$BRANCH" "$STEPS_DELIVERED"
 write_state_v2 "$AD5_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 announce_donor "$AD5_MIS" "$CWD2"; announce_donor "$AD5_S1" "$CWD"
 adopt "$AD5_H" "$REPO" --from "$AD5_MIS"
 assert_rc_nonzero "AD-5a. a context-mismatched donor is refused" "$ADOPT_RC" "$ADOPT_OUT"
 assert_eq_guarded cli_ran "AD-5b. the heir stays untouched after the mismatch refusal" "pending" "$(step_status "$AD5_H" outline)"
 adopt "$AD5_H" "$REPO" --from "$AD5_S1"
-assert_rc_nonzero "AD-5c. a non-resumable (S1) donor is refused" "$ADOPT_RC" "$ADOPT_OUT"
+assert_rc_nonzero "AD-5c. a non-resumable delivered (S1) donor is refused" "$ADOPT_RC" "$ADOPT_OUT"
 assert_eq_guarded cli_ran "AD-5d. the heir stays untouched after the resumability refusal" "pending" "$(step_status "$AD5_H" outline)"
+
+# AD-5e: an approved-but-undelivered donor is adoptable, and the heir can then
+# continue to merge_to_main (approval carried over, merge_to_main not already complete).
+AD5E_D="ad5edonor-$$"; AD5E_H="ad5eheir-$$"
+write_state_v2 "$AD5E_D" "$CWD" "$BRANCH" "$STEPS_APPROVED_NOT_DELIVERED"
+write_state_v2 "$AD5E_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
+announce_donor "$AD5E_D" "$CWD"
+adopt "$AD5E_H" "$REPO" --from "$AD5E_D"
+assert_eq_desc "AD-5e-rc. adopting an approved-but-undelivered donor exits 0" "0" "$ADOPT_RC"
+assert_eq_guarded cli_ran "AD-5e-uv. the heir carries the donor's user_verification completion" "complete" "$(step_status "$AD5E_H" user_verification)"
+assert_eq_guarded cli_ran "AD-5e-dl. the heir's merge_to_main step is still pending (it can still merge)" "pending" "$(step_status "$AD5E_H" merge_to_main)"
