@@ -743,3 +743,7 @@ Changes: On Windows, when a Claude Code session starts with a broken shell snaps
 ### FEATURE: PR #2639 (2026-10-13)
 Background: feat(#2501): language-neutral test runs with UNRUNNABLE reporting
 Changes: Test runs now cover every registered language and report tests that could not run (missing runtime or missing test file) as UNRUNNABLE instead of silently passing or failing.
+
+### FEATURE: PR #2641 (2026-10-13)
+Background: test(#2590): add test harness layers — run root, command guard, spawn record, worktree change detection
+Changes: tests: add run-root isolation, command guard, spawn-record preload, and worktree change detection to the test harness; fix slot-file overhead in run-all change detection

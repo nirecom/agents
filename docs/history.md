@@ -337,4 +337,8 @@ Changes: #2221: Repair Windows-form PATH in Claude Code shell snapshots. Cause: 
 
 ### FEATURE: PR #2639 — feature/2501-1 (2026-10-13, 5d090e8ac00178287ef3deacc7b202d3a1b5c897, #2639)
 Background: feat(#2501): language-neutral test runs with UNRUNNABLE reporting
-Changes: #2501: test runs are language-neutral. run-all dispatches each file through the language registry, reports UNRUNNABLE (missing runtime or missing explicit test file) separately from pass/fail, and prints a RUN_CONTRACT line; the Pester wrapper isolates test scope; the harness gains a discard pass for silent record runs. <!-- compose-doc-append-sentinel: branch=feature/2501-1 pr=#2639 -->
+Changes: #2501: test runs are language-neutral. run-all dispatches each file through the language registry, reports UNRUNNABLE (missing runtime or missing explicit test file) separately from pass/fail, and prints a RUN_CONTRACT line; the Pester wrapper isolates test scope; the harness gains a discard pass for silent record runs. <!-- compose-doc-append-sentinel: branch=feature/2501-1 pr=#2639 -->
+
+### FEATURE: PR #2641 — feature/2590-root-2561-test-test-harness (2026-10-13, d19460a05bc30dea113130b55e36d20dce55ccf2, #2641)
+Background: test(#2590): add test harness layers — run root, command guard, spawn record, worktree change detection
+Changes: #2590: test harness — run root isolation, command guard (git/gh/glab/codex intercept), spawn-record preload, worktree change detection, and slot-file performance fix for run-all-worktree-change-detect; fixes root-name test coverage gaps found in #2561 <!-- compose-doc-append-sentinel: branch=feature/2590-root-2561-test-test-harness pr=#2641 -->
