@@ -11,10 +11,10 @@
 run_list_reset_tests() {
   local list_out line_count mark_out
 
-  # ---- B1/B2: --list renders 17 rows including write_code -------------------
+  # ---- B1/B2: --list renders 19 rows (#2527 release split) incl. write_code --
   list_out="$(run_next_step --list 2>/dev/null || true)"
   line_count="$(printf '%s\n' "$list_out" | grep -c . || true)"
-  check "B1: --list emits 17 rows" "17" "$line_count"
+  check "B1: --list emits 19 rows" "19" "$line_count"
   check_contains "B2: --list names write_code" "write_code" "$list_out"
 
   # ---- B3: write_code renders between review_tests and run_tests -----------

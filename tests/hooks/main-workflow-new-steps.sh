@@ -85,6 +85,19 @@ run_mark() {
     echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
 }
 
+# #2527 3-13: BRANCHING_COMPLETE now reconciles the delivery path against the declared
+# worktree. B1/B2/B7 declare no worktree, so they are main-direct work: pin enforcement off
+# and the repo cwd to a throwaway main repo (never the inherited real linked worktree).
+DIRECT_REPO=""
+run_mark_direct() {
+    local json="$1"
+    [ -n "$DIRECT_REPO" ] || DIRECT_REPO=$(setup_repo)
+    local repo_n
+    repo_n=$(cygpath -m "$DIRECT_REPO" 2>/dev/null || echo "$DIRECT_REPO")
+    echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" ENFORCE_WORKTREE=off ENFORCE_WORKTREE_EXCLUDE= \
+        CLAUDE_PROJECT_DIR="$repo_n" node "$MARK_HOOK" 2>/dev/null || true
+}
+
 run_gate() {
     local json="$1"
     echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null || true
@@ -409,7 +422,7 @@ echo "=== BRANCHING_COMPLETE sentinel ==="
 SID="b1-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
 B1_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_COMPLETE: working on main>>"' "$SID")
-run_mark "$B1_JSON" > /dev/null
+run_mark_direct "$B1_JSON" > /dev/null
 expect_state_step "B1a. BRANCHING_COMPLETE 'working on main' → branching_complete=complete" "$SID" "branching_complete" "complete"
 B1_DECISION=$(read_state_field "$SID" "branching_complete" "decision")
 if [ "$B1_DECISION" = "working on main" ]; then
@@ -422,7 +435,7 @@ fi
 SID="b2-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
 B2_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: feat/foo>>"' "$SID")
-run_mark "$B2_JSON" > /dev/null
+run_mark_direct "$B2_JSON" > /dev/null
 expect_state_step "B2a. BRANCHING_COMPLETE 'branch: feat/foo' → branching_complete=complete" "$SID" "branching_complete" "complete"
 B2_DECISION=$(read_state_field "$SID" "branching_complete" "decision")
 if [ "$B2_DECISION" = "branch: feat/foo" ]; then
@@ -496,8 +509,8 @@ fi
 SID="b7-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
 B7_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED: main direct work>>"' "$SID")
-run_mark "$B7_JSON" > /dev/null
-B7_OUT2=$(run_mark "$B7_JSON")
+run_mark_direct "$B7_JSON" > /dev/null
+B7_OUT2=$(run_mark_direct "$B7_JSON")
 expect_state_step "B7a. BRANCHING_DECIDED idempotency → still complete after second run" "$SID" "branching_complete" "complete"
 if echo "$B7_OUT2" | node -e "
 try {

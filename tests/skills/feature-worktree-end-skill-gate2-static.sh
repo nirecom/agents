@@ -1,15 +1,18 @@
 #!/bin/bash
 # tests/skills/feature-worktree-end-skill-gate2-static.sh
-# Tests: skills/worktree-end/SKILL.md
-# Tags: static, skill, worktree-end, gate2, unstaged-tracked, scope:issue-specific, gitlab, glab, forge
+# Tests: skills/worktree-end/SKILL.md, skills/merge-to-main/SKILL.md, bin/worker-dispatch/workers/commit-push/pr.js
+# Tags: static, skill, worktree-end, gate2, unstaged-tracked, scope:issue-specific, gitlab, glab, forge, deliver, merge-to-main
 #
 # Static contract test for Gate 2 (worktree-end pre-flight).
 # WE-2.5 was renumbered to WE-3 (and WE-3..WE-21 shifted to WE-4..WE-22) in #971.
+# #2527: the merge moved to /merge-to-main and PR/MR creation to the commit-push worker (pr.js).
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SKILL_MD="${SCRIPT_CHECKOUT_ROOT}/skills/worktree-end/SKILL.md"
+MERGE_TO_MAIN_MD="${SCRIPT_CHECKOUT_ROOT}/skills/merge-to-main/SKILL.md"
+PR_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/workers/commit-push/pr.js"
 
 PASS=0
 FAIL=0
@@ -139,32 +142,37 @@ test_6_gitlab_tool_preflight() {
     fi
 }
 
-# Test 7: MR-create path documents `glab mr view` reuse and `glab mr create`.
+# Test 7: worktree-end reads the PR/MR through the forge-neutral bin/workflow/pr-state
+# (#2527 WE-4); MR creation is owned by the commit-push worker, which spawns glab with
+# the `mr create` argv.
+GITLAB_JS="${SCRIPT_CHECKOUT_ROOT}/hooks/lib/forge/gitlab.js"
 test_7_gitlab_mr_create() {
-    if grep -qF 'glab mr view' "$SKILL_MD" \
-        && grep -qF 'glab mr create' "$SKILL_MD"; then
-        pass "7: documents glab mr view (reuse) and glab mr create"
+    if grep -qF 'bin/workflow/pr-state' "$SKILL_MD" \
+        && grep -qF '"mr", "create"' "$PR_JS"; then
+        pass "7: worktree-end reads pr-state; pr.js spawns glab mr create"
     else
-        fail "7: missing glab mr view / glab mr create"
+        fail "7: missing bin/workflow/pr-state (worktree-end) / glab mr create argv (pr.js)"
     fi
 }
 
-# Test 8: PR number is read from the MR's `.iid` via `glab mr view --output json`.
+# Test 8: the MR number behind pr-state is the MR's iid, read via `glab mr view`
+# in the gitlab forge module; worktree-end consumes it as PR_NUMBER=.
 test_8_gitlab_iid_readback() {
-    if grep -qF 'glab mr view --output json' "$SKILL_MD" \
-        && grep -qF '.iid' "$SKILL_MD"; then
-        pass "8: PR number read from glab mr view --output json .iid"
+    if grep -qF '"mr", "view", "--json", "iid"' "$GITLAB_JS" \
+        && grep -qF 'PR_NUMBER=' "$SKILL_MD"; then
+        pass "8: MR number read from glab mr view iid (forge/gitlab.js) and consumed as PR_NUMBER="
     else
-        fail "8: missing .iid readback from glab mr view --output json"
+        fail "8: missing glab mr view iid readback (forge/gitlab.js) / PR_NUMBER= (worktree-end)"
     fi
 }
 
-# Test 9: merge path documents the gitlab squash-merge with source-branch removal.
+# Test 9: merge path documents the gitlab squash-merge of the approved MR number
+# with source-branch removal.
 test_9_gitlab_mr_merge() {
-    if grep -qF 'glab mr merge --squash --remove-source-branch' "$SKILL_MD"; then
-        pass "9: documents glab mr merge --squash --remove-source-branch"
+    if grep -qF 'glab mr merge <PR_NUMBER> --squash --remove-source-branch' "$MERGE_TO_MAIN_MD"; then
+        pass "9: /merge-to-main documents glab mr merge <PR_NUMBER> --squash --remove-source-branch"
     else
-        fail "9: missing glab mr merge --squash --remove-source-branch"
+        fail "9: skills/merge-to-main/SKILL.md missing glab mr merge <PR_NUMBER> --squash --remove-source-branch"
     fi
 }
 
@@ -172,7 +180,7 @@ test_9_gitlab_mr_merge() {
 # proving both forges are covered — neither branch was dropped for the other.
 test_10_github_orth_pair() {
     if grep -qF 'gh --version' "$SKILL_MD" \
-        && grep -qF 'gh pr merge --squash --delete-branch' "$SKILL_MD"; then
+        && grep -qF 'gh pr merge <PR_NUMBER> --squash --delete-branch' "$MERGE_TO_MAIN_MD"; then
         pass "10: github PR counterparts (gh --version, gh pr merge) still documented"
     else
         fail "10: github ORTH counterparts missing"

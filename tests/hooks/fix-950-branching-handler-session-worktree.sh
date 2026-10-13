@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark/branching-handler.js, hooks/workflow-state/state-io.js, hooks/workflow-state/resolve-worktree-path.js
-# Tags: fix, branching-handler, state-io, session-worktree, scope:issue-specific, plan-approval
+# Tags: fix, branching-handler, state-io, session-worktree, scope:issue-specific, plan-approval, delivery-reconcile
 
 # Issue #950: branching-handler.js must write state.session_worktree when the
 # WORKFLOW_BRANCHING_COMPLETE decision includes a "worktree:" segment.
@@ -91,6 +91,13 @@ printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$TMPDIR_B
 export AGENTS_MAIN_ROOT="$(cygpath -m "$TMPDIR_BASE/decoy-root" 2>/dev/null || echo "$TMPDIR_BASE/decoy-root")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMPDIR_BASE/no-transcripts"
 unset CLAUDE_CODE_SESSION_ID CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
+# #2527 3-13: BRANCHING_COMPLETE reconciles the delivery path against the declared worktree
+# and the repo cwd. Pin both: the repo cwd is the fixture MAIN repo (never the inherited real
+# linked worktree) and enforcement is on, so the WTA decisions are pull_request + linked
+# worktree of the same repo; BH-3 (no worktree:) runs with enforcement off (main-direct).
+export CLAUDE_PROJECT_DIR="$MAIN_NODE"
+export ENFORCE_WORKTREE=on
+export ENFORCE_WORKTREE_EXCLUDE=
 cd "$TMPDIR_BASE" || exit 1
 
 # ---------------------------------------------------------------------------
@@ -232,7 +239,7 @@ cat > "$WF_DIR/$SESSION_ID.json" <<EOF
 }
 EOF
 DECISION_MAIN_ONLY="working-directly-on-main"
-run_hook "echo \"<<WORKFLOW_BRANCHING_COMPLETE: $DECISION_MAIN_ONLY>>\""
+ENFORCE_WORKTREE=off run_hook "echo \"<<WORKFLOW_BRANCHING_COMPLETE: $DECISION_MAIN_ONLY>>\""
 bh3_got="$(read_state_field '.session_worktree')"
 if [[ -z "$bh3_got" ]]; then
   pass "BH-3: state.session_worktree is empty/null after main-only decision (stale cleared)"

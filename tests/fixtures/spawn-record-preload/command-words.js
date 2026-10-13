@@ -1,4 +1,6 @@
 "use strict";
+// Tests: tests/lib/spawn-record.sh
+// Tags: scope:common, test-infra, spawn-record
 // tests/fixtures/spawn-record-preload/command-words.js — the commands a child_process call would
 // really start (#2590). effectiveCommands(fileOrString, args, shell) returns [{ cmd, args }]:
 // a shell string is split into simple commands; leading NAME=value words, `env` and its options,

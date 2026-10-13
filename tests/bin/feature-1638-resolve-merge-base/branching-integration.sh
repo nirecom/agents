@@ -19,6 +19,12 @@ to_node_path() { # <path>
 BI_RC=0
 BI_OUT=""
 BI_ERR=""
+# #2527 3-13: BRANCHING_COMPLETE reconciles the delivery path against the declared worktree and
+# the repo cwd before anything is recorded. Each row pins both: BI_REPO (the hook's repo cwd —
+# the fixture MAIN repo, never the inherited real linked worktree) and BI_ENFORCE (on → a
+# pull_request decision that must name a linked worktree; off → main-direct work).
+BI_REPO=""
+BI_ENFORCE="on"
 
 # Drives the real hook entrypoint the way Claude Code does: a PostToolUse payload whose
 # tool_input.command is the sentinel echo.
@@ -34,6 +40,8 @@ dispatch_branching() { # <sid> <decision>
   printf '%s' "$payload" | env \
     "WORKFLOW_STATE_DIR=$(to_node_path "$WFDIR")" \
     "AGENTS_MAIN_ROOT=$(to_node_path "$SCRIPT_CHECKOUT_ROOT")" \
+    "CLAUDE_PROJECT_DIR=$(to_node_path "$BI_REPO")" \
+    "ENFORCE_WORKTREE=$BI_ENFORCE" "ENFORCE_WORKTREE_EXCLUDE=" \
     node "$MARK_HOOK" >"$o" 2>"$e" || BI_RC=$?
   BI_OUT="$(cat "$o")"
   BI_ERR="$(cat "$e")"
@@ -75,6 +83,7 @@ b1_records_for_the_resolved_worktree() {
   fi
   # The session started in the MAIN worktree — the mid-session /worktree-start shape.
   node_state init "$sid" "$(to_node_path "$main")" main >/dev/null
+  BI_REPO="$main"; BI_ENFORCE=on
   dispatch_branching "$sid" "branch:$branch worktree:$(to_node_path "$wt")"
 
   got="$(baseline_field "$sid" base)"
@@ -98,6 +107,7 @@ b2_second_dispatch_does_not_overwrite() {
   main="${trio%%|*}"; trio="${trio#*|}"
   wt="${trio%%|*}"; branch="${trio#*|}"
   node_state init "$sid" "$(to_node_path "$main")" main >/dev/null
+  BI_REPO="$main"; BI_ENFORCE=on
   dispatch_branching "$sid" "branch:$branch worktree:$(to_node_path "$wt")"
   first="$(baseline_field "$sid" base)"
   # A new commit changes what a second recording would compute, so an overwrite is visible.
@@ -119,6 +129,9 @@ b3_recording_failure_is_not_fatal() {
   # fails there, which is the recording failure without breaking anything else.
   notrepo="$(mktemp -d "$TMPROOT/notrepo.XXXXXX")"
   node_state init "$sid" "$(to_node_path "$main")" main >/dev/null
+  # main-direct (enforcement off): a non-git `worktree:` is not a linked worktree, so the
+  # reconcile admits it and the baseline recording is what fails.
+  BI_REPO="$main"; BI_ENFORCE=off
   dispatch_branching "$sid" "branch:bi-work worktree:$(to_node_path "$notrepo")"
 
   if [ "$BI_RC" = "2" ]; then
@@ -150,6 +163,7 @@ b4_main_worktree_session_still_records() {
   head="$(git -C "$repo" rev-parse HEAD)"
   node_state init "$sid" "$(to_node_path "$repo")" work >/dev/null
   # No `worktree:` segment — the session works directly in the repository at state.cwd.
+  BI_REPO="$repo"; BI_ENFORCE=off
   dispatch_branching "$sid" "main: trivial change, no worktree"
   check "B4: a decision with no worktree segment records the baseline for state.cwd" \
     "$head" "$(baseline_field "$sid" base)"

@@ -25,6 +25,9 @@ const EXEMPTION_MATRIX = Object.freeze({
   "delegated-reason":  { c4: true,  c2: false, nextStep: false, promptNotify: false },
   // #2277: a presentation turn rightly ends while next-step waits for the user's plan approval.
   "awaiting-plan-approval": { c4: true, c2: false, nextStep: false, promptNotify: false },
+  // #2527 4-4: next-step's WAIT=human-web-merge — the human merges on the web while a
+  // background poller waits, so the turn rightly ends.
+  "human-web-merge-wait": { c4: true, c2: false, nextStep: false, promptNotify: false },
 });
 
 module.exports = { EXEMPTION_MATRIX };

@@ -226,8 +226,8 @@ if run_case "EV8/annotation-keys"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const bad = [];
-const want = ["baseline_classification", "completion_basis", "failing_tests", "reopen_reason",
-  "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
+const want = ["baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests",
+  "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
   "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
 if (exported.join(",") !== want.join(",")) bad.push("STEP_ANNOTATION_KEYS=" + exported.join(","));
@@ -251,20 +251,21 @@ fi
 case_end
 
 case_begin "ev9-persisted-keys-set-equality" "hooks/workflow-state/state-io/projection.js"
-echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twelve documented keys =="
+echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the eighteen documented keys (v5, #2527) =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
-const want = ["closes_issues", "created_at", "current", "events", "last_pushed_sha",
-  "merge_base_baseline", "session_id", "session_start_context", "session_worktree", "verbose_prompt",
-  "version", "workflow_type"].sort();
+const want = ["auto_merge_pr", "auto_merge_pr_origin", "auto_merge_pr_source", "closes_issues", "created_at", "current", "deliverable_type", "delivery_path",
+  "delivery_path_origin", "events", "last_pushed_sha", "merge_base_baseline",
+  "project_management_type", "session_id", "session_start_context", "session_worktree",
+  "verbose_prompt", "version"].sort();
 const got = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []).slice().sort();
 console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GOT:" + got.join(",")));
 JS
 )
     nodejs "$SID" "$PRE$_ev_script"
-    assert_eq "EV9/persisted-keys-set-equality" "12 MATCH" "$NODE_OUT"
+    assert_eq "EV9/persisted-keys-set-equality" "18 MATCH" "$NODE_OUT"
 fi
 case_end
 
@@ -277,12 +278,28 @@ const P = require("./hooks/workflow-state/state-io/projection");
 const bad = [];
 // Caller-set keys, one per updateTopLevel call so a failure names the key.
 const WRITABLE = {
-  workflow_type: "wf-code",
+  deliverable_type: "wf-code",
+  project_management_type: "waterfall",
+  delivery_path: "pull_request",
+  delivery_path_origin: "fixture-1733-ev10",
   closes_issues: [1733],
   last_pushed_sha: "0123456789abcdef0123456789abcdef01234567",
   session_worktree: { path: "/w", branch: "fix/x" },
   verbose_prompt: true,
   session_start_context: { cwd: "/w", git_branch: "main" },
+  merge_base_baseline: {
+    recorded_at: "2026-01-01T00:00:00.000Z",
+    base: "0123456789abcdef0123456789abcdef01234567",
+    branch: "fix/x",
+    branch_head: "89abcdef0123456789abcdef0123456789abcdef",
+    repo_root: "/w",
+    source: "recorded-baseline",
+    head_committed_at: "2026-01-01T00:00:00.000Z",
+    session_created_at: null,
+    post_session_head: false,
+    alt_base: null,
+    approved_reason: null,
+  },
 };
 Object.keys(WRITABLE).forEach((k) => {
   try { S.updateTopLevel(sid, (st) => { st[k] = WRITABLE[k]; }); }
@@ -320,7 +337,7 @@ if run_case "EV11/unknown-top-level-key"; then
 S.updateTopLevel(sid, () => {});
 const bad = [];
 const before = raw();
-["bogus_key", "steps_v3", "started_at", "updated_at", "notes"].forEach((k) => {
+["bogus_key", "steps_v3", "started_at", "updated_at", "notes", "workflow_type"].forEach((k) => {
   let name = "NO-THROW";
   try { S.updateTopLevel(sid, (st) => { st[k] = "x"; }); }
   catch (e) { name = e.name; }

@@ -1,6 +1,7 @@
 // hooks/lib/merge-detect.js — classifier for "merge to protected branch" commands.
 // Consumed by workflow-gate.js (PreToolUse hard gate) and workflow-mark.js (post-push reset).
-// Returns { hit, kind }: "gh-pr-merge" | "git-push-protected" | null.
+// Returns { hit, kind }: "gh-pr-merge" | "glab-mr-merge" | "git-push-protected" | null
+// (GraphQL merge mutations reuse the forge kinds: merge-detect/graphql.js).
 // Only canonical flag forms are parsed, and only Claude Code Bash calls reach it — the
 // gate is a workflow assistant, not OS-level access control.
 // Segmentation owner: hooks/lib/command-ir/ (canary-1 consumer of parse()).
@@ -12,12 +13,15 @@ const { parseGitGlobalOptions } = require("./parse-git-args");
 const { parse, analysisOf } = require("./command-ir");
 const { resolveEffectiveCommand, resolveEffectiveArgv, scanWrappedVerb, commandBasename } = require("./bash-write-patterns/segment-utils");
 const { quoteIfNeeded } = require("./commit-detect");
+const { hasSubcommandPath } = require("./merge-detect/subcommand-path");
+const { checkGraphqlMerge } = require("./merge-detect/graphql");
 
-const RECONSTRUCTED_HEADS = new Set(["gh", "git"]);
+const RECONSTRUCTED_HEADS = new Set(["gh", "glab", "git"]);
 
-// Rewrite a wrapped segment (`rtk gh pr merge`, `env git push`) to its effective
-// `gh ...` / `git ...` text so the head-anchored checks below see it. An AMBIGUOUS
-// peel falls back to the raw argv after the first gh/git token (fail-closed).
+// Rewrite a wrapped segment (`rtk gh pr merge`, `env glab mr merge`, `env git push`)
+// to its effective `gh ...` / `glab ...` / `git ...` text so the head-anchored checks
+// below see it. An AMBIGUOUS peel falls back to the raw argv after the first
+// gh/glab/git token (fail-closed).
 function effectiveSegmentText(segment) {
   const ir = parse(segment);
   if (ir.parseFailure === true || !Array.isArray(ir.segments) || ir.segments.length === 0) return segment;
@@ -69,13 +73,40 @@ function getProtectedBranches() {
   return env.length ? env : ["main", "master"];
 }
 
+const GH_API_MERGE_RE = /(^|\/)pulls\/[^/\s]+\/merge\/?$/;
+const GLAB_API_MERGE_RE = /merge_requests\/[^/\s]+\/merge\/?$/;
+
+// True when `segment` is `<head> api ... <merge endpoint> ... <PUT method flag>`.
+// The merge endpoints answer only PUT, and gh/glab api never default to PUT,
+// so an explicit -X/--method PUT is required.
+function isApiMergePut(segment, head, endpointRe) {
+  if (!hasSubcommandPath(segment, head, ["api"])) return false;
+  const unq = (t) => t.replace(/["']/g, "");
+  const tokens = (segment.trim().match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || []).map(unq);
+  let put = false;
+  let endpoint = false;
+  for (let i = tokens.indexOf("api") + 1; i < tokens.length; i++) {
+    const t = tokens[i];
+    const next = (tokens[i + 1] || "").toUpperCase();
+    if (/^(-X|--method=)PUT$/i.test(t) || ((t === "-X" || t === "--method") && next === "PUT")) put = true;
+    else if (!t.startsWith("-") && endpointRe.test(t)) endpoint = true;
+  }
+  return put && endpoint;
+}
+
 function checkText(segment) {
   if (!segment) return { hit: false, kind: null };
 
   // gh pr merge — any flags (--auto, --squash, --rebase, --merge, --delete-branch, etc.)
-  if (/^\s*gh\s+pr\s+merge\b/.test(segment)) {
+  if (hasSubcommandPath(segment, "gh", ["pr", "merge"]) || isApiMergePut(segment, "gh", GH_API_MERGE_RE)) {
     return { hit: true, kind: "gh-pr-merge" };
   }
+  // glab mr merge — `merge` as a whole token (mergeable / merged-list are not merges).
+  if (hasSubcommandPath(segment, "glab", ["mr", "merge"]) || isApiMergePut(segment, "glab", GLAB_API_MERGE_RE)) {
+    return { hit: true, kind: "glab-mr-merge" };
+  }
+  const graphql = checkGraphqlMerge(segment);
+  if (graphql.hit) return graphql;
 
   // Must start with "git" to be a git push
   if (!/^\s*git\b/.test(segment)) {

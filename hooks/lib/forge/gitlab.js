@@ -27,6 +27,8 @@ function encodePath(p) {
 }
 
 const VISIBILITY_VALUES = new Set(["public", "private", "internal"]);
+const { isPrPresentOrUnknown, stateForLocalHead } = require("./pr-state");
+const GLAB_MR_STATES = Object.freeze({ opened: "OPEN", merged: "MERGED", closed: "CLOSED", locked: "CLOSED" });
 // Defense-in-depth: only a plain hostname may become glab's --hostname argument.
 const GLAB_HOSTNAME_SHAPE = /^[a-z0-9.-]+$/;
 
@@ -114,21 +116,103 @@ const codehostGitlab = {
     return listVisibilityTagged("glab", ["api", "projects?membership=true&per_page=100", "--paginate",
       "--jq", ".[]|[.visibility,.path_with_namespace]|@tsv"]);
   },
-  hasOpenPrForBranch(repoDir) {
+  // MR state mapped onto the shared PR vocabulary (./pr-state.js).
+  // opts.timeoutMs (default 8000) bounds the glab call.
+  prStateForBranch(repoDir, opts) {
     const { spawnSync } = require("child_process");
     try {
       const r = spawnSync("glab", ["mr", "view", "--json", "state", "--jq", ".state"],
-        { cwd: repoDir, encoding: "utf8", timeout: 8000 });
-      if (r.error) return true; // fail-safe: glab not found
+        { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
+      if (r.error) return "UNKNOWN"; // glab not found
       if (r.status === 0) {
-        const state = (r.stdout || "").trim();
-        return state === "opened" || state === "merged";
+        const state = (r.stdout || "").trim().toLowerCase();
+        if (state === "") return "UNKNOWN"; // exit 0 with no state is unexplained: fail closed
+        return GLAB_MR_STATES[state] || "UNKNOWN";
       }
-      return false; // status 1 = no MR for current branch
+      // glab exits 1 both for "no MR" and for an API failure, so only the no-MR
+      // message reads as NONE; any other failure is UNKNOWN (fail-closed).
+      return isNoMrStderr(r.stderr) ? "NONE" : "UNKNOWN";
     } catch (e) {
-      return true;
+      return "UNKNOWN";
+    }
+  },
+  hasOpenPrForBranch(repoDir) {
+    return isPrPresentOrUnknown(codehostGitlab.prStateForBranch(repoDir));
+  },
+  // { state, number } of the current branch's MR (bin/workflow/pr-state); number is the MR iid.
+  // An OPEN or MERGED MR is checked against the local HEAD (./pr-state.js) at the cost of one more read.
+  prForBranch(repoDir, opts) {
+    const state = codehostGitlab.prStateForBranch(repoDir, opts);
+    if (state === "NONE" || state === "UNKNOWN") return { state, number: "" };
+    const { spawnSync } = require("child_process");
+    if (state === "OPEN" || state === "MERGED") {
+      let sha = "";
+      try {
+        const r = spawnSync("glab", ["mr", "view", "--json", "sha", "--jq", ".sha"],
+          { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
+        // --jq prints "null" for an absent field; stateForLocalHead accepts only a commit id.
+        sha = r.status === 0 ? String(r.stdout || "").trim() : "";
+      } catch (e) {
+        sha = "";
+      }
+      const forHead = stateForLocalHead(repoDir, state, sha);
+      if (forHead !== state) return { state: forHead, number: "" };
+    }
+    try {
+      const r = spawnSync("glab", ["mr", "view", "--json", "iid", "--jq", ".iid"],
+        { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
+      const n = r.status === 0 ? String(r.stdout || "").trim() : "";
+      return { state, number: /^\d+$/.test(n) ? n : "" };
+    } catch (e) {
+      return { state, number: "" };
+    }
+  },
+  // { state, number, mergeState, url, error } from one glab MR JSON read; the
+  // detailed_merge_status mapping lives in ./merge-state.js (SSOT).
+  mergeStateForBranch(repoDir, opts) {
+    const ms = require("./merge-state");
+    const { spawnSync } = require("child_process");
+    const timeoutMs = (opts && opts.timeoutMs) || ms.FORGE_QUERY_TIMEOUT_MS;
+    let r;
+    try {
+      r = spawnSync("glab", ["mr", "view", "--output", "json"],
+        { cwd: repoDir, encoding: "utf8", timeout: timeoutMs, windowsHide: true });
+    } catch (e) {
+      return ms.unknownMergeState("glab failed to start: " + (e && e.message));
+    }
+    const failure = ms.spawnFailure(r, "glab", timeoutMs);
+    if (failure) return ms.unknownMergeState(failure);
+    if (r.status !== 0) {
+      if (isNoMrStderr(r.stderr)) return { state: "NONE", number: "", mergeState: "", url: "", error: "" };
+      return ms.unknownMergeState(String(r.stderr || "").trim() || `glab exited ${r.status}`);
+    }
+    try {
+      const mr = JSON.parse(String(r.stdout || "").trim());
+      const state = GLAB_MR_STATES[String((mr && mr.state) || "").toLowerCase()];
+      if (!state) return ms.unknownMergeState("glab answered an unreadable MR state");
+      const iid = mr.iid !== undefined && mr.iid !== null ? String(mr.iid) : "";
+      // mr.sha is the MR's head commit.
+      return ms.mergeStateForLocalHead(repoDir, {
+        state,
+        number: /^\d+$/.test(iid) ? iid : "",
+        mergeState: ms.gitlabMergeState(mr),
+        url: typeof mr.web_url === "string" ? mr.web_url : "",
+        error: "",
+      }, mr.sha);
+    } catch (e) {
+      return ms.unknownMergeState("glab answered malformed JSON");
     }
   },
 };
+
+// glab exits 1 both for "no MR" and for an API failure, so only the no-MR message reads as NONE.
+function isNoMrStderr(stderr) {
+  return /no open merge request|merge request not found|no merge requests? found/i.test(String(stderr || ""));
+}
+
+function timeoutOf(opts) {
+  const t = opts && Number(opts.timeoutMs);
+  return Number.isFinite(t) && t > 0 ? t : 8000;
+}
 
 module.exports = { trackerGitlab, codehostGitlab, encodePath, glabHostArg, GLAB_SCAN_TARGET_REGEX, GLAB_API_WRITE_REGEX };

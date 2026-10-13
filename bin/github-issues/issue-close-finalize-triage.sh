@@ -1,21 +1,13 @@
 #!/bin/bash
 # issue-close-finalize-triage.sh <N>
-#
-# Phase 2 (issue-close-finalize) routing. Outputs eval-able shell assignments
-# to stdout: STATE, SENTINEL, ACTION, NEXT_STEPS.
+# Phase 2 (issue-close-finalize) routing: prints eval-able STATE, SENTINEL, ACTION, NEXT_STEPS.
 # Caller: `eval "$(bash issue-close-finalize-triage.sh <N>)"`.
-#
-# NEXT_STEPS is a comma-separated list of step letters the caller must execute
-# in order. Step letters: B=sub-issue-gate (Phase 1 only), E=doc-append,
-# G=parent-body-update, H=gh-issue-close, J=resolved-by+sentinel,
-# K=wip-state-clear. auto_close_path omits B intentionally — the parent is
-# already CLOSED, so the gate's pre-close protection is moot. (#366)
-# meta_pending_subs: no steps when ACTION=meta_pending_subs — graceful no-op,
-# recursion terminates here. (OPEN + meta label + open sub-issues: parent left
-# OPEN until subs close; cascade close fires via ICF-F recursion later.)
-#
-# Uses `gh --jq` (built into the gh CLI) — no external jq dependency.
-# Exit non-zero on argument / environment / gh failures.
+# NEXT_STEPS: comma-separated step letters run in order — B=sub-issue-gate (Phase 1 only),
+# E=doc-append, G=parent-body-update, H=gh-issue-close, J=resolved-by+sentinel, K=wip-state-clear.
+# auto_close_path omits B: the parent is already CLOSED, so the pre-close gate is moot (#366).
+# ACTION=meta_pending_subs runs no steps (graceful no-op; recursion ends): an OPEN meta parent
+# with open sub-issues stays OPEN until they close, then ICF-F recursion cascades the close.
+# Uses `gh --jq` (built into gh; no external jq). Exit non-zero on argument / environment / gh failures.
 
 set -uo pipefail
 
@@ -117,7 +109,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         ;;
     OPEN:pending)
         # #690: Step E (doc-append) removed — docs/history.md is now written by
-        # /worktree-end Step WE-21 from WORKTREE_NOTES.md.
+        # /worktree-end Step WE-17 from WORKTREE_NOTES.md.
         ACTION=resume_e
         NEXT_STEPS="F,G,H,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
@@ -129,7 +121,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         ;;
     CLOSED:appended)
         # #690: Step E (doc-append) removed — docs/history.md is now written by
-        # /worktree-end Step WE-21 from WORKTREE_NOTES.md.
+        # /worktree-end Step WE-17 from WORKTREE_NOTES.md.
         ACTION=resume_j
         NEXT_STEPS="G,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
@@ -164,7 +156,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         # orphan `pending` is harmless — consumers match only on the
         # `appended` prefix.
         # #690: Step E removed — history.md write is owned by /worktree-end
-        # Step WE-21. If the history entry is missing, use /issue-reconcile to
+        # Step WE-17. If the history entry is missing, use /issue-reconcile to
         # backfill via the standalone issue-to-history.sh.
         ACTION=stuck_sentinel_only
         NEXT_STEPS="G,J,K"

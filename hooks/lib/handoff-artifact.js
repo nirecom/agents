@@ -28,8 +28,8 @@ const HANDOFF_CLASSES = Object.freeze(["A", "B", "C", "D", "E", "F", "G"]);
 // Writers accept only these; the reader does not check origin, so entries
 // written under a retired value ("step-end") still read back.
 const HANDOFF_ORIGINS = Object.freeze(["procedure-point", "gate-block", "auto-record", "flush"]);
-// commit_push is a skill the workflow does not track as a workflow step, and
-// "-" is the stepless entry; both are legitimate producers of handoff micro-state.
+// commit_push stays so entries written before #2527 (now push_branch, derived from
+// VALID_STEPS) still read back; "-" is the stepless entry.
 const HANDOFF_STEPS = Object.freeze(VALID_STEPS.concat(["commit_push", "-"]));
 const KEY_VALID_RE = /^[A-Za-z0-9_.:-]+$/;
 
