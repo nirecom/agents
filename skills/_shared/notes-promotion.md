@@ -1,6 +1,6 @@
 # Notes Promotion Protocol
 
-SSOT for turning `WORKTREE_NOTES.md` findings into GitHub issues. Referenced by `/worktree-end` (WE-11), `/session-close` (SC-8), and `/issue-close-finalize` (residual pass). Each callsite owns its own trigger condition; the pass itself is identical at all three, and no callsite may restate or re-order the steps below.
+SSOT for turning `WORKTREE_NOTES.md` findings into GitHub issues. Referenced by `/worktree-end` (WE-7), `/session-close` (SC-8), and `/issue-close-finalize` (residual pass). Each callsite owns its own trigger condition; the pass itself is identical at all three, and no callsite may restate or re-order the steps below.
 
 **Resolve the notes path first, NP-1.** `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" resolve <caller-arguments>`; never hand-build the path.
 

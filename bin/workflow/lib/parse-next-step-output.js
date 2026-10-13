@@ -1,6 +1,6 @@
 "use strict";
 
-// parseNextStepOutput(stdout) -> { ACTION, NEXT_SKILL, NEXT_HINT, REASON }
+// parseNextStepOutput(stdout) -> { ACTION, NEXT_SKILL, NEXT_HINT, REASON, ...OPTIONAL_KEYS }
 // Handles both KEY='value' and KEY=value forms.
 // next-step invariant: no single-quote chars in values -> safe single-quote parse.
 
@@ -9,7 +9,15 @@ const REQUIRED_KEYS = ["ACTION", "NEXT_SKILL", "NEXT_HINT", "REASON"];
 // Optional keys (#485): present only when next-step emits them. SKIP_HINT is an
 // advisory plan-skip hint at the outline/detail steps; absent on every other
 // step. Kept out of REQUIRED_KEYS so the legacy 4-line next-step output still parses.
-const OPTIONAL_KEYS = ["SKIP_HINT"];
+// DELIVERY_PATH_MISMATCH (#2527): recorded vs live delivery path disagree.
+// WAIT (#2527 4-4): the session waits on a human outside Claude (human-web-merge).
+// An absent optional key parses to "".
+const OPTIONAL_KEYS = ["SKIP_HINT", "DELIVERY_PATH_MISMATCH", "WAIT"];
+
+function withOptionalKeys(base, result) {
+  for (const k of OPTIONAL_KEYS) base[k] = result[k] !== undefined ? result[k] : "";
+  return base;
+}
 
 function parseNextStepOutput(stdout) {
   const result = {};
@@ -33,17 +41,16 @@ function parseNextStepOutput(stdout) {
   if (result.ACTION === "") {
     return malformed();
   }
-  return {
+  return withOptionalKeys({
     ACTION: result.ACTION,
     NEXT_SKILL: result.NEXT_SKILL,
     NEXT_HINT: result.NEXT_HINT,
     REASON: result.REASON,
-    SKIP_HINT: result.SKIP_HINT !== undefined ? result.SKIP_HINT : "",
-  };
+  }, result);
 }
 
 function malformed() {
-  return { ACTION: "abort", NEXT_SKILL: "", NEXT_HINT: "", REASON: "next-step-output-malformed", SKIP_HINT: "" };
+  return withOptionalKeys({ ACTION: "abort", NEXT_SKILL: "", NEXT_HINT: "", REASON: "next-step-output-malformed" }, {});
 }
 
 module.exports = { parseNextStepOutput, REQUIRED_KEYS, OPTIONAL_KEYS };

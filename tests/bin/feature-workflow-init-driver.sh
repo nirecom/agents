@@ -12,15 +12,17 @@
 
 set -uo pipefail
 
-# Timeout guard. 420s, not 120s: every split group spawns a node process per driver
+# Timeout guard. 1800s, not 120s: every split group spawns a node process per driver
 # run, the aggregate crossed 120s once untrusted-title and answer-validation joined,
-# and issue-comments (#2063) adds ~20 more driver runs on top.
+# and issue-comments (#2063) adds ~20 more driver runs on top. Raised from 420s in
+# #2527: a fully passing serial run on a Windows host varied from 209s to 1428s with
+# host load, so the guard only catches a genuine hang, not a slow host.
 if [ -z "${_TIMEOUT_WRAPPED:-}" ]; then
     export _TIMEOUT_WRAPPED=1
     if command -v timeout >/dev/null 2>&1; then
-        exec timeout 420 bash "$0" "$@"
+        exec timeout 1800 bash "$0" "$@"
     else
-        exec perl -e 'alarm 420; exec @ARGV' -- bash "$0" "$@"
+        exec perl -e 'alarm 1800; exec @ARGV' -- bash "$0" "$@"
     fi
 fi
 

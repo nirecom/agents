@@ -39,7 +39,7 @@ sc_s_context() {
 }
 
 # rel | label | start-prefix | end-prefix | max-lines | phase-coverage (yes|-)
-SERIAL_TABLE="skills/worktree-end/SKILL.md|C1-WE-9|### WE-9|### WE-10|30|-
+SERIAL_TABLE="skills/worktree-end/SKILL.md|C1-WE-5|### WE-5|### WE-6|30|-
 skills/issue-close-finalize/SKILL.md|C2-ICF-initial|## Delegation — initial pass|## ICF-D..ICF-G loop|40|yes"
 
 # The three issue-close-finalize-worker pass types. A serial annotation that

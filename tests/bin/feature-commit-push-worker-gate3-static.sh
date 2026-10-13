@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/bin/feature-commit-push-worker-gate3-static.sh
-# Tests: bin/worker-dispatch/workers/commit-push/procedure.js, skills/commit-push/SKILL.md
+# Tests: bin/worker-dispatch/workers/commit-push/procedure.js, skills/commit-push/SKILL.md, skills/_shared/commit-push-dispatch.md
 # Tags: static, agent, skill, commit-push, gate3, unstaged-tracked, scope:common
 #
 # Static contract test for Gate 3 (commit-push pre-flight staging check).
@@ -17,6 +17,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # scan that single file — test 2's line-number ordering needs one source.
 WORKER_MD="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/workers/commit-push/procedure.js"
 CP_SKILL_MD="${SCRIPT_CHECKOUT_ROOT}/skills/commit-push/SKILL.md"
+# #2527: CP-1 staging and the CP-2 outcome table moved into the shared dispatch procedure.
+CP_DISPATCH_MD="${SCRIPT_CHECKOUT_ROOT}/skills/_shared/commit-push-dispatch.md"
 
 PASS=0
 FAIL=0
@@ -83,44 +85,46 @@ test_3_status_enum_values() {
 test_4_rules_skip_sentence() {
     # Caller-side rule: the worker module carries no prose, so the skip
     # condition is pinned where the decision is actually made.
-    if [ ! -f "$CP_SKILL_MD" ]; then
-        fail "4: $CP_SKILL_MD missing"
+    if [ ! -f "$CP_DISPATCH_MD" ]; then
+        fail "4: $CP_DISPATCH_MD missing"
         return
     fi
-    if grep -qF 'Staging verification (CP-2) is skipped only when' "$CP_SKILL_MD"; then
-        pass "4: SKILL.md contains 'Staging verification (CP-2) is skipped only when'"
+    if grep -qF 'The worker skips staging verification only when `wip_mode: true`' "$CP_DISPATCH_MD"; then
+        pass "4: commit-push-dispatch.md pins the 'skips staging verification only when wip_mode: true' rule"
     else
-        fail "4: SKILL.md missing CP-2 skip sentence"
+        fail "4: commit-push-dispatch.md missing the staging-verification skip sentence"
     fi
 }
 
-# Test 5: skills/commit-push/SKILL.md Step CP-1 area mentions the CLI literal
+# Test 5: the CP-1 Stage procedure mentions the CLI literal, and CP-1 routes through it
 test_5_cp_skill_step1_mentions_cli() {
-    if [ ! -f "$CP_SKILL_MD" ]; then
-        fail "5: $CP_SKILL_MD missing"
+    if [ ! -f "$CP_DISPATCH_MD" ] || [ ! -f "$CP_SKILL_MD" ]; then
+        fail "5: $CP_DISPATCH_MD or $CP_SKILL_MD missing"
         return
     fi
-    if grep -qF 'bin/check-unstaged-tracked.sh' "$CP_SKILL_MD"; then
-        pass "5: skills/commit-push/SKILL.md mentions bin/check-unstaged-tracked.sh"
+    if ! grep -qF 'bin/check-unstaged-tracked.sh' "$CP_DISPATCH_MD"; then
+        fail "5: commit-push-dispatch.md missing bin/check-unstaged-tracked.sh"
+    elif grep -qE '^CP-1\..*skills/_shared/commit-push-dispatch\.md.*"Stage"' "$CP_SKILL_MD"; then
+        pass "5: CP-1 delegates to commit-push-dispatch.md Stage, which runs bin/check-unstaged-tracked.sh"
     else
-        fail "5: skills/commit-push/SKILL.md missing bin/check-unstaged-tracked.sh"
+        fail "5: skills/commit-push/SKILL.md CP-1 does not route through commit-push-dispatch.md \"Stage\""
     fi
 }
 
-# Test 6: skills/commit-push/SKILL.md step CP-2 block handles staging_incomplete and staging_check_failed
+# Test 6: the shared Outcomes table handles staging_incomplete and staging_check_failed
 test_6_cp_skill_handles_staging_statuses() {
-    if [ ! -f "$CP_SKILL_MD" ]; then
-        fail "6: $CP_SKILL_MD missing"
+    if [ ! -f "$CP_DISPATCH_MD" ]; then
+        fail "6: $CP_DISPATCH_MD missing"
         return
     fi
     local has_inc has_chk
     has_inc=0; has_chk=0
-    grep -qF 'staging_incomplete' "$CP_SKILL_MD" && has_inc=1
-    grep -qF 'staging_check_failed' "$CP_SKILL_MD" && has_chk=1
+    grep -qF '`staging_incomplete`' "$CP_DISPATCH_MD" && has_inc=1
+    grep -qF '`staging_check_failed`' "$CP_DISPATCH_MD" && has_chk=1
     if [ "$has_inc" -eq 1 ] && [ "$has_chk" -eq 1 ]; then
-        pass "6: skills/commit-push/SKILL.md handles staging_incomplete AND staging_check_failed"
+        pass "6: commit-push-dispatch.md handles staging_incomplete AND staging_check_failed"
     else
-        fail "6: SKILL.md missing staging status handlers" \
+        fail "6: commit-push-dispatch.md missing staging status handlers" \
             "staging_incomplete=$has_inc staging_check_failed=$has_chk"
     fi
 }

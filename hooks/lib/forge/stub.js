@@ -7,6 +7,9 @@ const codehostStub = {
   isPrivateRepo(_remoteUrl) { return false; },
   shouldScanAsPublicTarget(_ownerRepo) { return true; },
   listPrivateRepoNames() { return []; },
+  prStateForBranch(_repoDir) { return "UNKNOWN"; },
+  prForBranch(_repoDir) { return { state: "UNKNOWN", number: "" }; },
+  mergeStateForBranch(_repoDir) { return require("./merge-state").unknownMergeState("no forge handler for the origin host"); },
   hasOpenPrForBranch(_repoDir) { return true; },
   repoVisibility(_remoteUrl) { return null; },
 };

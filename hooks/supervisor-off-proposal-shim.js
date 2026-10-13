@@ -381,8 +381,8 @@ process.stdin.on("end", () => {
       if (isWtEnd) {
         return langPrefix +
           "[EM Supervisor] OFF sentinel emit blocked.\n" +
-          "This looks like the worktree-end cleanup phase. If 'git worktree remove' (WE-15) failed, WORKTREE_OFF is NOT needed — /sweep-worktrees reclaims the worktree automatically later.\n" +
-          "Follow the WE-16 fallback: skip to WE-20 and continue.";
+          "This looks like the worktree-end cleanup phase. If 'git worktree remove' (WE-11) failed, WORKTREE_OFF is NOT needed — /sweep-worktrees reclaims the worktree automatically later.\n" +
+          "Follow the WE-12 fallback: skip to WE-16 and continue.";
       }
       const head = langPrefix + "[EM Supervisor] OFF sentinel emit blocked.\n";
       if (kind === "consume-failed") {

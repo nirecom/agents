@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/release-channel
+// Which channel the release approval goes through, for a SKILL.md Bash call (#2527 4-2).
+//
+// Usage:
+//   release-channel --session <sid>
+//
+// Prints exactly three lines and exits 0:
+//   CHANNEL=web-merge|user-verified-dialog
+//   AUTO_MERGE_PR=on|off
+//   SOURCE=recorded|recorded-fallback|provisional|unreadable
+// A missing or corrupt state is CHANNEL=user-verified-dialog / SOURCE=unreadable: an
+// unknown session never moves the release decision to the web. Exits 1 only on a
+// malformed request, with a message on stderr.
+
+const path = require("path");
+const HOOKS = path.join(__dirname, "..", "..", "hooks");
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+const TOOL = "release-channel";
+
+function usageError(message) {
+  process.stderr.write(`${TOOL}: ${message}\n`);
+  process.exit(1);
+}
+
+function emit(channel, amp, source) {
+  process.stdout.write(`CHANNEL=${channel}\nAUTO_MERGE_PR=${amp}\nSOURCE=${source}\n`);
+  process.exit(0);
+}
+
+function main() {
+  const argv = process.argv.slice(2);
+  let session = null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--session") session = argv[++i] || null;
+    else usageError(`unknown argument: ${argv[i]}`);
+  }
+  if (!session || !SESSION_ID_RE.test(session)) {
+    usageError("--session is required and must match /^[A-Za-z0-9_-]+$/");
+  }
+
+  let state = null;
+  try {
+    state = require(path.join(HOOKS, "workflow-state")).readState(session);
+  } catch (_) {
+    state = null;
+  }
+  if (!state || typeof state !== "object") emit("user-verified-dialog", "on", "unreadable");
+
+  try {
+    const { resolveSessionProfile, releaseApprovalChannelOf } = require(path.join(HOOKS, "workflow-state", "session-profile"));
+    const repoDir = (typeof state.cwd === "string" && state.cwd) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+    const profile = resolveSessionProfile(state, session, { repoDir });
+    emit(releaseApprovalChannelOf(state, profile), profile.autoMergePr, profile.sources.autoMergePr);
+  } catch (_) {
+    emit("user-verified-dialog", "on", "unreadable");
+  }
+}
+
+main();

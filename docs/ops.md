@@ -162,24 +162,42 @@ Neither sibling currently has branch protection, so the direct push succeeds tod
 
 ---
 
-## Worktree-end / Merge Operations
+## Release phase / Merge Operations
 
-### `AUTO_MERGE_PR=on` — do not press the GitHub UI merge button
+### Who merges, and the one confirmation
 
-Under the default `AUTO_MERGE_PR=on` mode, `/worktree-end` performs the squash-merge
-locally via `gh pr merge --squash --delete-branch`. The skill **does not** currently
-detect a PR that was already merged via the GitHub web UI before `/worktree-end` ran —
-the `on` path jumps straight from Step 3 to Step 4 without a `gh pr view --json state`
-pre-check. If you press "Squash & merge" on the web first, the local `gh pr merge`
-call fails on a PR that is already MERGED, and the cleanup path stalls.
+The release phase is `push_branch` → `user_verification` → `merge_to_main` → `cleanup`, one skill each
+(step list: [workflow.md](architecture/claude-code/workflow.md)). `/commit-push` stops at the PR;
+`/get-release-approval` issues the single USER_VERIFIED dialog; `/merge-to-main` performs the squash-merge
+of that PR by number (`gh pr merge <PR number> --squash --delete-branch`, or `glab mr merge` on
+GitLab); `/worktree-end` only cleans up and never merges.
 
-**Constraint:** with `AUTO_MERGE_PR=on`, leave the merge to Claude Code — do not press
-the GitHub UI merge button. Tracked in #358 (auto-detect of pre-merged PRs); when
-that lands, this constraint goes away.
+`/merge-to-main` reads the PR state with `bin/workflow/pr-state` first. A PR already `MERGED` completes the
+step without a second merge, so pressing the GitHub UI merge button before `/merge-to-main` is safe:
+`/get-release-approval` records the approval with a "merged via web UI" reason and `/merge-to-main` skips
+the merge. If the PR number at merge time differs from the approved one, `/merge-to-main` stops and
+`/get-release-approval` is re-run. The merge gate still blocks any merge or protected-branch push
+until `user_verification` is complete.
 
-The `off` mode (`AUTO_MERGE_PR=off`) already supports a `wait-for-web-merge` branch
-that polls `gh pr view --json state` for `MERGED`. If you prefer the UI-merge workflow,
-set `AUTO_MERGE_PR=off` in `.env`.
+### `AUTO_MERGE_PR=off` — you merge on the web
+
+Applies only to pull_request delivery (`ENFORCE_WORKTREE=on`); the value is fixed for the session
+when the branch is recorded, so change it before starting a session.
+
+1. `/commit-push` opens the PR as usual.
+2. `/get-release-approval` shows the PR URL and starts a background poller. There is no
+   USER_VERIFIED dialog and no verification question: your merge on the web is the approval.
+3. Merge the PR on GitHub / GitLab. The poller notices within about 30 seconds and the workflow
+   continues to cleanup. `/merge-to-main` performs no merge.
+4. The poller gives up after one hour. Send any message after merging and the flow resumes.
+
+The merged PR counts only when its head commit is the session's local HEAD; a PR that lacks a local
+commit not yet pushed, or an older PR of the same branch name, does not complete the step — push
+first. Closing the PR without merging stops the flow; reopen it or re-run `/commit-push`.
+
+Claude's own merge (`gh pr merge`, `glab mr merge`, a push to a protected branch) is refused by
+`workflow-gate.js` while `off` is in force, and `WORKFLOW_OFF` does not lift that. The refusal
+recognises those command forms only — keep branch protection on the forge as the real barrier.
 
 ---
 
@@ -241,7 +259,7 @@ E2E tests that spawn real `claude -p` sessions are opt-in. They are gated on the
 makes the test skip with TAP exit code 77 when the flag is off. Set
 `RUN_TL3=on` in the agents config `.env` to run them locally.
 
-The verification-gate ask is gated separately on `RUN_TL4`. When `RUN_TL4=off` it is suppressed: matched risk categories are still recorded to `WORKTREE_NOTES.md ## Unverified Categories` as a log-only trace, but no `AskUserQuestion` is raised. The ask fires before commit (the `ENFORCE_WORKTREE=off` commit-push path) or before merge (the worktree-end path); set `RUN_TL4=on` to re-activate it.
+The verification-gate ask is gated separately on `RUN_TL4`. When `RUN_TL4=off` it is suppressed: matched risk categories are still recorded to `WORKTREE_NOTES.md ## Unverified Categories` as a log-only trace, but no `AskUserQuestion` is raised. The ask fires before commit (the `ENFORCE_WORKTREE=off` commit-push path) or before merge (the `/get-release-approval` preflight, `pull_request` path); set `RUN_TL4=on` to re-activate it.
 
 When `claude` is not on `PATH`, gates also exit 77
 (`command -v claude >/dev/null 2>&1 || exit 77`). This keeps CI green on hosts

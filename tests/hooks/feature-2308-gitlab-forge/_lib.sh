@@ -75,6 +75,11 @@ const hasJq = args.includes("--jq") || args.some((a) => a.startsWith("--jq="));
 function out(s) { process.stdout.write(s); process.exit(0); }
 if (/merge_request/.test(joined) || /\bmr\b/.test(joined)) {
   const open = (process.env.GLAB_MOCK_MR || "none") === "open";
+  // Real glab answers `mr view` with no MR by exit 1 + this stderr; exit 0 + empty reads as UNKNOWN (#2527).
+  if (!open && /\bmr view\b/.test(joined)) {
+    process.stderr.write("no open merge request available for \"feature/x\"\n");
+    process.exit(1);
+  }
   if (hasJq) out(open ? "opened\n" : "");
   out(open ? '[{"iid":3,"state":"opened","web_url":"https://gitlab.com/acme/widgets/-/merge_requests/3"}]\n' : "[]\n");
 }

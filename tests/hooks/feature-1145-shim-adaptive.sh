@@ -2,7 +2,7 @@
 # tests/hooks/feature-1145-shim-adaptive.sh
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/lib/worktree-end-env-anchor.js
 # Tags: supervisor, em-supervisor, pretooluse, off-proposal, shim, we15, adaptive-message, scope:issue-specific, pwsh-not-required, hook-registration
-# L2: wt-cleanup-active control-file marker switches the OFF-block reason to adaptive WE-15/16 text; T4j = env-json alone must not.
+# L2: wt-cleanup-active control-file marker switches the OFF-block reason to adaptive WE-11/12 text; T4j = env-json alone must not.
 # L3 gap: live PreToolUse registration + real wsid resolution — checked at USER_VERIFIED via bin/check-verification-gate.sh (hook-registration).
 
 set -u
@@ -98,18 +98,18 @@ run_t4e() {
     if [ $rc -ne 2 ]; then fail "T4e: must exit 2, got rc=$rc"; return; fi
     if ! echo "$out" | grep -q '/sweep-worktrees'; then
         fail "T4e: adaptive text must mention /sweep-worktrees"; return; fi
-    if ! echo "$out" | grep -q 'WE-20'; then
-        fail "T4e: adaptive text must mention WE-20"; return; fi
-    pass "T4e: cleanup marker + blocking finding → exit 2 + adaptive (/sweep-worktrees + WE-20)"
+    if ! echo "$out" | grep -q 'WE-16'; then
+        fail "T4e: adaptive text must mention WE-16"; return; fi
+    pass "T4e: cleanup marker + blocking finding → exit 2 + adaptive (/sweep-worktrees + WE-16)"
 }
 
-# --- T4f: NO marker file (post-WE-22 scenario) + blocking finding → fixed text (no adaptive) ---
+# --- T4f: NO marker file (post-WE-18a scenario) + blocking finding → fixed text (no adaptive) ---
 run_t4f() {
     local tmp tmp_node sid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4f-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
-    # no marker file — simulates post-WE-22 scenario where marker has been deleted
+    # no marker file — simulates post-WE-18a scenario where marker has been deleted
     hook_input=$(build_hook_input "$sid")
 
     out=$(WORKFLOW_PLANS_DIR="$tmp_node" WORKFLOW_STATE_DIR="$tmp_node/wf" AGENTS_MAIN_ROOT="$tmp_node" \
@@ -121,17 +121,17 @@ run_t4f() {
         fail "T4f: must emit decision:block (findings path)"; return; fi
     if [ $rc -ne 2 ]; then fail "T4f: must exit 2, got rc=$rc"; return; fi
     if echo "$out" | grep -q '/sweep-worktrees'; then
-        fail "T4f: no marker (post-WE-22) must NOT use adaptive text (found /sweep-worktrees)"; return; fi
-    pass "T4f: no marker (post-WE-22) → exit 2 + fixed text (no /sweep-worktrees)"
+        fail "T4f: no marker (post-WE-18a) must NOT use adaptive text (found /sweep-worktrees)"; return; fi
+    pass "T4f: no marker (post-WE-18a) → exit 2 + fixed text (no /sweep-worktrees)"
 }
 
-# --- T4g: marker deleted after cleanup → no adaptive (WE-22 cleanup scenario) ---
+# --- T4g: marker deleted after cleanup → no adaptive (WE-18a cleanup scenario) ---
 run_t4g() {
     local tmp tmp_node sid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4g-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
-    # Create the marker then delete it (simulates WE-22 cleanup having run)
+    # Create the marker then delete it (simulates WE-18a cleanup having run)
     touch "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     rm "$(ctl "$tmp" "$sid" wt-cleanup-active)"
     hook_input=$(build_hook_input "$sid")
@@ -146,7 +146,7 @@ run_t4g() {
     if [ $rc -ne 2 ]; then fail "T4g: must exit 2, got rc=$rc"; return; fi
     if echo "$out" | grep -q '/sweep-worktrees'; then
         fail "T4g: deleted marker must fail-open to fixed text (found /sweep-worktrees)"; return; fi
-    pass "T4g: marker deleted (WE-22 cleanup) → exit 2 + fixed text (no /sweep-worktrees)"
+    pass "T4g: marker deleted (WE-18a cleanup) → exit 2 + fixed text (no /sweep-worktrees)"
 }
 
 # --- T4h: ENOENT state file + cleanup marker present → adaptive block text ---
@@ -168,9 +168,9 @@ run_t4h() {
     if [ $rc -ne 2 ]; then fail "T4h: must exit 2, got rc=$rc"; return; fi
     if ! echo "$out" | grep -q '/sweep-worktrees'; then
         fail "T4h: ENOENT site adaptive text must mention /sweep-worktrees"; return; fi
-    if ! echo "$out" | grep -q 'WE-20'; then
-        fail "T4h: ENOENT site adaptive text must mention WE-20"; return; fi
-    pass "T4h: ENOENT state + marker present → exit 2 + adaptive (/sweep-worktrees + WE-20)"
+    if ! echo "$out" | grep -q 'WE-16'; then
+        fail "T4h: ENOENT site adaptive text must mention WE-16"; return; fi
+    pass "T4h: ENOENT state + marker present → exit 2 + adaptive (/sweep-worktrees + WE-16)"
 }
 
 # --- T4i: ccSid != wsid; marker named by wsid; adaptive resolves via wsid fallback ---
@@ -203,21 +203,21 @@ run_t4i() {
     if [ $rc -ne 2 ]; then fail "T4i: must exit 2, got rc=$rc"; return; fi
     if ! echo "$out" | grep -q '/sweep-worktrees'; then
         fail "T4i: wsid-resolved adaptive text must mention /sweep-worktrees"; return; fi
-    if ! echo "$out" | grep -q 'WE-20'; then
-        fail "T4i: wsid-resolved adaptive text must mention WE-20"; return; fi
-    pass "T4i: ccSid != wsid, marker named by wsid → adaptive fires via wsid fallback (/sweep-worktrees + WE-20)"
+    if ! echo "$out" | grep -q 'WE-16'; then
+        fail "T4i: wsid-resolved adaptive text must mention WE-16"; return; fi
+    pass "T4i: ccSid != wsid, marker named by wsid → adaptive fires via wsid fallback (/sweep-worktrees + WE-16)"
 }
 
 # --- T4j (NEW — KEY REGRESSION): old final-report-env.json exists + blocking finding + NO marker → NO adaptive ---
 # Proves the false-positive scenario is fixed: old code keyed on env-json content, so
-# stale env-json after WE-22 would incorrectly trigger adaptive text in a later session.
+# stale env-json after WE-18a would incorrectly trigger adaptive text in a later session.
 run_t4j() {
     local tmp tmp_node sid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4j-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
     # Write valid old-style env-json (as the old implementation would leave behind)
-    # but NO cleanup marker (simulates post-WE-22 state where marker was deleted)
+    # but NO cleanup marker (simulates post-WE-18a state where marker was deleted)
     printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$(ctl "$tmp" "$sid" final-report-env.json)"
     hook_input=$(build_hook_input "$sid")
 

@@ -196,11 +196,12 @@ writeState('heir-g3a', createInitialState('heir-g3a', { cwd: '/other/repo', git_
 markStep('heir-g3a', 'workflow_init', 'complete');
 const a = adoptState({ heirSid: 'heir-g3a', donorSid, granularity: 'context-independent-only' });
 if (a.ok !== false) problems.push('isAllPending-bypassed:' + JSON.stringify(a));
-// (b) donor already user-verified -> evaluateResumability rejects.
+// (b) donor already delivered (#2527: merge_to_main, not approval, ends a session) -> evaluateResumability rejects.
 const donor2 = 'donor-g3b';
 writeState(donor2, createInitialState(donor2, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 markStep(donor2, 'workflow_init', 'complete');
 markStep(donor2, 'user_verification', 'complete');
+markStep(donor2, 'merge_to_main', 'complete');
 writeState('heir-g3b', createInitialState('heir-g3b', { cwd: '/other/repo', git_branch: 'main' }));
 const b = adoptState({ heirSid: 'heir-g3b', donorSid: donor2, granularity: 'context-independent-only' });
 if (b.ok !== false) problems.push('evaluateResumability-bypassed:' + JSON.stringify(b));

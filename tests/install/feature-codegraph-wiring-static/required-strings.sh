@@ -48,7 +48,7 @@ W1-17 | bin/codegraph-lifecycle/index-health.js | nodes
 # worktree lifecycle call sites (ST-12 / ST-13)
 W1-18 | skills/worktree-start/SKILL.md       | WS-7a
 W1-19 | skills/worktree-start/SKILL.md       | codegraph-lifecycle.js
-W1-20 | skills/worktree-end/scripts/cleanup-cascade.md | ## WE-14c
+W1-20 | skills/worktree-end/scripts/cleanup-cascade.md | ## WE-10c
 W1-21 | skills/worktree-end/scripts/cleanup-cascade.md | codegraph-lifecycle.js
 # the one tool the agents deliberately expose is pre-approved (ST-10)
 W1-22 | settings.json                        | mcp__codegraph__codegraph_explore
@@ -56,7 +56,7 @@ W1-22 | settings.json                        | mcp__codegraph__codegraph_explore
 # discovery pointer (the procedure itself stays in cleanup-cascade.md); the
 # sweeper SKILL.md carries the ST-15 rule that records the same obligation for
 # the third deletion path. Both are MUST rows of the plan's Files to modify table.
-W1-23 | skills/worktree-end/SKILL.md         | WE-14c
+W1-23 | skills/worktree-end/SKILL.md         | WE-10c
 W1-24 | skills/worktree-end/SKILL.md         | CodeGraph index lock
 W1-25 | skills/sweep-worktrees/SKILL.md      | CodeGraph index lock
 W1-26 | skills/sweep-worktrees/SKILL.md      | never killed

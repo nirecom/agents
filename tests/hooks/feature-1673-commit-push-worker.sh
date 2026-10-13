@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1673-commit-push-worker.sh
-# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js, bin/worker-dispatch/workers/commit-push/procedure.js, bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/capability.js, skills/commit-push/SKILL.md
+# Tests: hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/workers/commit-push.js, bin/worker-dispatch/workers/commit-push/gate.js, bin/worker-dispatch/workers/commit-push/procedure.js, bin/worker-dispatch/workers/commit-push/push.js, bin/worker-dispatch/workers/commit-push/pr.js, bin/worker-dispatch/capability.js, skills/commit-push/SKILL.md, skills/_shared/commit-push-dispatch.md
 # Tags: worker-dispatch, commit-push, registry, capability, payload, status-vocabulary, env-passthrough, TL1, scope:issue-specific
 #
 # Issue #1673 — the commit-push worker's DECLARED capability surface: registry
@@ -29,6 +29,8 @@ WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push.js"
 WORKER_DIR="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push"
 WORKER_SRCS=("$WORKER_JS" "$WORKER_DIR/gate.js" "$WORKER_DIR/procedure.js" "$WORKER_DIR/push.js" "$WORKER_DIR/pr.js")
 SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/commit-push/SKILL.md"
+# #2527: the status branch table moved out of SKILL.md into the shared dispatch procedure.
+DISPATCH_MD="$SCRIPT_CHECKOUT_ROOT/skills/_shared/commit-push-dispatch.md"
 
 # A shrunken file list would report an absent literal as a missing feature and,
 # worse, turn the ISSUE_CLOSE_SKILL row green because the file that could hold
@@ -352,12 +354,12 @@ group_e() {
     local s absent
     absent="$(worker_srcs_missing)"
     for s in $STATUSES; do
-        if [ ! -f "$SKILL_MD" ]; then
-            fail "skill-vocab/$s" "missing skills/commit-push/SKILL.md"
-        elif grep -qF -- "\`$s\`" "$SKILL_MD"; then
+        if [ ! -f "$DISPATCH_MD" ]; then
+            fail "skill-vocab/$s" "missing skills/_shared/commit-push-dispatch.md"
+        elif grep -qF -- "\`$s\`" "$DISPATCH_MD"; then
             pass "skill-vocab/$s"
         else
-            fail "skill-vocab/$s" "status not present in the SKILL.md branch table"
+            fail "skill-vocab/$s" "status not present in the commit-push-dispatch.md Outcomes table"
         fi
         if [ -n "$absent" ]; then
             fail "worker-vocab/$s" "implementation missing: $absent"
@@ -369,8 +371,8 @@ group_e() {
     done
     # Non-vacuity guard: a status the plan does NOT define must not appear, or
     # the grep above would pass for any string at all.
-    if [ -f "$SKILL_MD" ] && grep -qF -- '`force_pushed`' "$SKILL_MD"; then
-        fail "skill-vocab/no-undeclared-status" "'force_pushed' present in SKILL.md"
+    if grep -qF -- '`force_pushed`' "$SKILL_MD" "$DISPATCH_MD" 2>/dev/null; then
+        fail "skill-vocab/no-undeclared-status" "'force_pushed' present in SKILL.md or commit-push-dispatch.md"
     else
         pass "skill-vocab/no-undeclared-status"
     fi

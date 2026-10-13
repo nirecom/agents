@@ -2,22 +2,17 @@
 // Claude Code PostCompact hook: re-inject session ID into conversation context
 
 const { getConvLangInjection } = require("./lib/conv-lang");
-const { readState, getStatePath } = require("./workflow-state");
+const { readState, getStatePath, VALID_STEPS } = require("./workflow-state");
+const { isDeliveryBoundaryReset } = require("./workflow-state/effective-state/delivery-boundary");
 const { SESSION_ID_ANNOUNCE_PREFIX } = require("./lib/session-announce");
 
-const WORKFLOW_STEPS = [
-  "workflow_init",
-  "clarify_intent",
-  "research",
-  "outline",
-  "detail",
-  "write_tests",
-  "review_security",
-  "docs",
-  "review_docs",
-  "user_verification",
-  "cleanup",
-];
+// Steps left out of the post-compact summary: sentinel-driven or sub-steps the
+// model does not act on from this list, and the session-close tail.
+const POST_COMPACT_HIDDEN_STEPS = new Set([
+  "branching_complete", "review_tests", "write_code", "run_tests",
+  "pre_final_report_gate", "final_report",
+]);
+const WORKFLOW_STEPS = VALID_STEPS.filter((s) => !POST_COMPACT_HIDDEN_STEPS.has(s));
 
 const { readHookInput } = require("./lib/read-stdin");
 
@@ -67,12 +62,13 @@ try {
       for (const step of WORKFLOW_STEPS) {
         const s = state.steps[step] || {};
         const status = s.status || "pending";
-        const annotation =
-          (step === "user_verification" && status === "pending" && s.reset_reason === "post-merge")
-            ? " (reset after pr merge — expected)"
-            : "";
+        // #2527: a delivery-boundary reset records a delivery, not outstanding work.
+        const boundary = step === "user_verification" && isDeliveryBoundaryReset(s);
+        const annotation = !boundary ? ""
+          : s.reset_reason === "post-merge" ? " (reset after pr merge — expected)"
+            : " (reset after protected push — expected)";
         lines.push(`- ${step}: ${status}${annotation}`);
-        if (status === "pending" && !(step === "user_verification" && s.reset_reason === "post-merge")) {
+        if (status === "pending" && !boundary) {
           pendingCount++;
         }
       }

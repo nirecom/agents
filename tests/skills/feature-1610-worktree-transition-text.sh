@@ -100,14 +100,14 @@ run_X4() {
     fi
 }
 
-# X5 — worktree-end gains WE-13a and defers to the fragment.
+# X5 — worktree-end gains WE-9a (WE-13a before #2527 renumber) and defers to the fragment.
 run_X5() {
-    require_source "$FRAGMENT" "X5: worktree-end WE-13a references the fragment" || return
-    require_source "$WE" "X5: worktree-end WE-13a references the fragment" || return
-    if grep -qF "WE-13a" "$WE" && grep -qF "skills/_shared/worktree-transition.md" "$WE"; then
-        pass "X5: worktree-end WE-13a references the fragment"
+    require_source "$FRAGMENT" "X5: worktree-end WE-9a references the fragment" || return
+    require_source "$WE" "X5: worktree-end WE-9a references the fragment" || return
+    if grep -qF "### WE-9a" "$WE" && grep -qF "skills/_shared/worktree-transition.md" "$WE"; then
+        pass "X5: worktree-end WE-9a references the fragment"
     else
-        fail "X5: worktree-end WE-13a references the fragment (WE-13a or fragment path missing)"
+        fail "X5: worktree-end WE-9a references the fragment (WE-9a or fragment path missing)"
     fi
 }
 
@@ -124,12 +124,16 @@ run_X7() {
         "skills/_shared/worktree-transition.md" "$REMEDY"
 }
 
-# X8 — pinned regression: the WE-13 ordering warning must not be lost.
+# X8 — pinned regression: the CWD-switch ordering warning must not be lost.
+# #2527 renumbered WE-13 → WE-9 and dropped the merge step that carried one copy;
+# the CWD rule stays in ## Rules and the ExitWorktree-after-cd order is stated twice.
 run_X8() {
-    require_source "$WE" "X8: WE-13 ordering warning still stated twice" || return
-    local n; n="$(count_lit "$WE" "do not switch to main worktree before WE-13")"
-    if [ "$n" -ge 2 ]; then pass "X8: WE-13 ordering warning still stated twice ($n)"
-    else fail "X8: WE-13 ordering warning count is $n (must be >= 2)"; fi
+    require_source "$WE" "X8: WE-9 ordering warning still stated" || return
+    local cwd n
+    cwd="$(count_lit "$WE" "CWD must remain in the linked worktree through WE-8; switch to main worktree only at WE-9")"
+    n="$(count_lit "$WE" 'the WE-9 `cd`')"
+    if [ "$cwd" -ge 1 ] && [ "$n" -ge 2 ]; then pass "X8: WE-9 ordering warning still stated (cwd=$cwd cd-order=$n)"
+    else fail "X8: WE-9 ordering warning lost (cwd=$cwd must be >= 1, cd-order=$n must be >= 2)"; fi
 }
 
 # X9 — rules/prompt.md 4.1: decimal step labels are prohibited.
@@ -227,33 +231,11 @@ run_X12() {
     fi
 }
 
-# X12e/f/g — extend X12d's mechanics-literal check symmetrically to the three
-# prose/CLI referrers already tracked by this file (WS, WE, NEXT_STEP): they
-# must not inline the EnterWorktree/ExitWorktree entry procedure either.
-#
-# Content was verified before writing these asserts (per the false-red
-# caution) — each of WS/WE/NEXT_STEP already uses one or more of X12d's raw
-# tokens for an unrelated, legitimate, pre-existing purpose, so the full
-# 3-token set cannot be applied verbatim without a guaranteed false-red:
-#   - WS  (worktree-start SKILL.md): WS-8 legitimately names the
-#     `EnterWorktree` tool; WS-7 legitimately uses `git rev-parse
-#     --show-toplevel` to resolve the main worktree root; line 59 legitimately does
-#     `cd "$AGENTS_MAIN_ROOT"` to invoke bin/confirm-off. Only the exclusion-
-#     scoped `cd "` check is meaningful here.
-#   - WE  (worktree-end SKILL.md): WE-2 legitimately uses `git rev-parse
-#     --git-dir` / `--git-common-dir` for the linked-worktree preflight; line
-#     37 does the same `cd "$AGENTS_MAIN_ROOT"` idiom as WS; WE-13 legitimately
-#     does `cd "<main-worktree-root>"` (pre-existing CWD-switch step, distinct
-#     from the WE-13a EnterWorktree/ExitWorktree protocol). `EnterWorktree` has
-#     no legitimate current use in this file, so it is checked as a blanket
-#     absence; `cd "` is checked with those two lines excluded.
-#   - NEXT_STEP (bin/workflow/lib/next-step/steps.js): the branching_complete STEP_HINT
-#     legitimately mentions `EnterWorktree` as advisory text, and multiple
-#     call sites legitimately use `git rev-parse --show-toplevel` to resolve
-#     the repo root. Only `cd "` (verified absent) is checked.
-# `git rev-parse` is excluded from all three targets: it is a generic git
-# command already used for unrelated purposes in every referrer, unlike a JS
-# hook source file where its presence would itself be suspicious.
+# X12e/f/g — X12d's mechanics-literal check, extended to WS, WE and NEXT_STEP.
+# Each legitimately uses some X12d tokens for unrelated purposes, so only the
+# narrowed checks below apply: WS/WE exclude `cd "$AGENTS_MAIN_ROOT"`, WE also
+# excludes the WE-9 `cd "<main-worktree-root>"` CWD switch, and `git rev-parse`
+# (generic, used everywhere) is never checked. EnterWorktree is blanket-absent in WE.
 run_X12e() {
     local label
 

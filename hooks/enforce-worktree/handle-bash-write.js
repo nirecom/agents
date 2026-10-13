@@ -124,7 +124,7 @@ function handleBashWrite(ctx) {
         "ENFORCE_WORKTREE: git branch -d/-D blocked — target branch is still " +
         "checked out in a worktree, force-delete was issued without the " +
         "`WORKTREE_END_SKILL=1 git -C <path> branch -D <branch>` inline prefix " +
-        "shape required for /worktree-end Step WE-19 authorization, or " +
+        "shape required for /worktree-end Step WE-15 authorization, or " +
         "`git worktree list` failed.\n" +
         "- If the worktree is still active: run `/worktree-end` first to remove it, then retry.\n" +
         "- If the worktree was already removed but the registry is stale: run " +

@@ -2,24 +2,9 @@
 # lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 # Tests: hooks/workflow-state/session-facts.js, hooks/lib/parse-closes-issues.js, bin/workflow/next-step, bin/workflow/lib/next-step/verdict.js, hooks/workflow-state/state-io/projection.js
 # Tags: tl2, workflow, session-facts, closes-issues, caching, scope:issue-specific
-#
-# #1644 stage 4 — 型2: セッション内キャッシュの一度きり解決.
-#
-# session-facts.js wraps parseClosesIssues() with a write-once cache stored in
-# the EXISTING `closes_issues` top-level state key: once state.closes_issues is
-# non-empty, getClosesIssues() must return it as-is and never touch intent.md
-# again. getSessionRepoContext() is a read-only synthesis over the existing
-# `session_start_context` key -- it never writes.
-# Written BEFORE the implementation: RED until hooks/workflow-state/session-facts.js lands.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether workflow-init-driver (Path A/B/META) and skills/clarify-intent (Path
-#   C's CI-4) actually call getClosesIssues at the call sites the plan names,
-#   rather than continuing to call parseClosesIssues directly.
-# - Whether the migrated consumers (session-title.js, render-final-report.js,
-#   issue-close-write-outcome.js) were actually switched over.
-# Closest-to-action mitigation: covered by the stage-4 implementation's own
-# call-site tests, not this contract-level file.
+# #1644 stage 4: getClosesIssues() is a write-once cache in `closes_issues`;
+# getSessionRepoContext() is a read-only synthesis over `session_start_context`.
+# TL3 gap: real call sites / migrated consumers; covered by stage-4 call-site tests.
 
 set -uo pipefail
 
@@ -219,8 +204,9 @@ echo "=== G8: stage 4 introduces no new persisted top-level state key ==="
 # PERSISTED_TOP_LEVEL_KEYS as of the start of stage 4 (#1644). The storage
 # mapping decided for this stage reuses closes_issues / session_worktree /
 # session_start_context -- none of which are new -- so this list must be
-# byte-for-byte unchanged after the implementation lands.
-BASELINE='["closes_issues","created_at","current","events","last_pushed_sha","merge_base_baseline","session_id","session_start_context","session_worktree","verbose_prompt","version","workflow_type"]'
+# byte-for-byte unchanged after the implementation lands. #2527 (schema v5) later
+# renamed workflow_type and added the session-profile keys; the baseline tracks that.
+BASELINE='["auto_merge_pr","auto_merge_pr_origin","auto_merge_pr_source","closes_issues","created_at","current","deliverable_type","delivery_path","delivery_path_origin","events","last_pushed_sha","merge_base_baseline","project_management_type","session_id","session_start_context","session_worktree","verbose_prompt","version"]'
 ACTUAL="$(WFM="$WFSTATE_MODULE_N" run_with_timeout node "$TOPKEYS_PROBE" 2>/dev/null || echo "")"
 check "G8: PERSISTED_TOP_LEVEL_KEYS is unchanged from the pre-stage-4 baseline" "$BASELINE" "$ACTUAL"
 

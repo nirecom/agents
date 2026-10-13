@@ -12,12 +12,12 @@ backstop. It does not restate what claude-code.md already covers.
 The old design ran the pre-merge audit only when `gh pr merge` fired — that is,
 **after** `USER_VERIFIED` was already issued. A WARN or BLOCK surfaced after the
 user had approved, forcing a whole extra revise cycle (issue #2160 / PR #2253).
-The WE-7 path (a PR already `MERGED` outside the session) ran neither `gh pr
+The web-merged path (a PR already `MERGED` outside the session) ran neither `gh pr
 merge` nor a protected-branch push, so its gate condition was never met and the
 audit was skipped entirely — an asymmetry between the two merge-approval paths.
 
 The fix moves the final decision point to just before `USER_VERIFIED`, which both
-WE-7 and WE-8 always pass. Audits fire on **step-completion transitions**, and a
+paths always pass (since #2527 both are issued by `/get-release-approval`). Audits fire on **step-completion transitions**, and a
 ledger records which step's audit judged which version of which artifact and when,
 so the final point re-uses settled judgments instead of re-running them. No new
 agent and no new state machine are introduced: the existing single-slot

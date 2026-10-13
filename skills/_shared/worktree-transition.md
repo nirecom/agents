@@ -12,7 +12,7 @@ Confirm once after entering that `git rev-parse --show-toplevel` returns the wor
 
 ## Exit — before session close
 
-Call the native `ExitWorktree` tool right after `/worktree-end` WE-13 has changed CWD to the main worktree.
+Call the native `ExitWorktree` tool right after `/worktree-end` WE-9 has changed CWD to the main worktree.
 When that tool is unavailable in the current execution context, skip silently.
 Skipping it leaves the extension host holding the session worktree binding, and the session disappears from the thread list after a restart.
 

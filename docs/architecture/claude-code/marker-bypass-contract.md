@@ -73,6 +73,14 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/jev-shadow-post.js` | PostToolUse | **No** | **No** |
 | `hooks/subagent-dispatch-prompt.js` | PreToolUse | **No** | **No** |
 
+`hooks/workflow-gate.js` has one check no marker lifts: the `AUTO_MERGE_PR=off` release refusal
+(`hooks/workflow-gate/release-channel-judge.js`, #2527). It runs before the `.workflow-off`
+approve, so on a pull_request delivery with `AUTO_MERGE_PR=off` Claude's own merge to a protected
+branch is denied whatever markers exist — the human's merge on the web is the release approval.
+It is a guard against the recognised merge commands (`hooks/lib/merge-detect.js`), not a
+substitute for branch protection: a merge issued in a form the detector does not recognise is
+not refused.
+
 `hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
 gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and
 the prompt-extraction backstop (`bin/check-prompt-extraction --staged` runner added in

@@ -20,7 +20,7 @@ const GRANULARITY_CONTEXT_INDEPENDENT_ONLY = "context-independent-only";
 // Resumability verdicts that mean "the EVIDENCE aged out", not "this record must
 // not be reused": a plan artifact past the 7-day retention leaves the donor's
 // work record intact. Explicit adoption degrades on these (the missing artifact
-// is reported, not fatal) while `all-pending` and `user-verified` — statements
+// is reported, not fatal) while `all-pending` and `delivered` — statements
 // about the WORK itself — stay hard refusals.
 const DEGRADABLE_RESUMABILITY_REASONS = Object.freeze(["intent-artifact-missing"]);
 

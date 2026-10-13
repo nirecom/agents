@@ -1,4 +1,6 @@
 "use strict";
+// Tests: tests/lib/spawn-record.sh
+// Tags: scope:common, test-infra, spawn-record
 // tests/fixtures/spawn-record-preload/held-results.js — what a held call answers instead of running
 // (#2590): a sync call gets an empty success, an async call a child that exits 0 on the next tick.
 

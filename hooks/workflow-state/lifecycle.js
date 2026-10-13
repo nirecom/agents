@@ -4,6 +4,7 @@
 // cross-session state replay never counts as adoption. Rationale + full
 // origin list: docs/architecture/claude-code/workflow-runtime.md#exemptions (#1794).
 const { readState, isGenuineProvenance } = require("./state-io");
+const { canonicalStepName } = require("./step-table");
 const {
   STEP_IN_FLIGHT_ALLOWLIST,
   STEP_IN_FLIGHT_TTL_MS,
@@ -136,7 +137,7 @@ function isLookaheadOnlyInFlightState(state, step) {
     if (!state || !Array.isArray(state.events)) return false;
     for (let i = state.events.length - 1; i >= 0; i--) {
       const e = state.events[i];
-      if (e && e.kind === "step_status" && e.step === step) {
+      if (e && e.kind === "step_status" && canonicalStepName(e.step) === step) {
         return e.origin === LOOKAHEAD_ORIGIN;
       }
     }

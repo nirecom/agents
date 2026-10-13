@@ -61,14 +61,14 @@ After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`
 UD-8. Complete delivery (Path A — `ENFORCE_WORKTREE=on` mandatory).
 
 UD-8a. Append history bullets to `<worktree>/WORKTREE_NOTES.md` `## History Notes`. Replace `- (none)` on first append.
-   - **MANDATORY when `closes_issues` is non-empty**: write one bullet per closed issue (matching the `closes_issues` count). `/worktree-end` WE-21 is the canonical writer of `docs/history.md` (Approach C, #690) and consumes these bullets via `compose-doc-append-entry --closes-issues-count N`. The CLI fail-fasts (non-zero exit) when `closes_issues > 0` AND `## History Notes` is absent / contains only `- (none)`.
+   - **MANDATORY when `closes_issues` is non-empty**: write one bullet per closed issue (matching the `closes_issues` count). `/worktree-end` WE-17 is the canonical writer of `docs/history.md` (Approach C, #690) and consumes these bullets via `compose-doc-append-entry --closes-issues-count N`. The CLI fail-fasts (non-zero exit) when `closes_issues > 0` AND `## History Notes` is absent / contains only `- (none)`.
    - When bullet count is below `closes_issues` count, the CLI emits a soft warning to stderr but proceeds.
 UD-8b. For public repos: append user-facing bullets to `## Changelog Notes`. Replace `- (none)` on first append.
-UD-8c. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` WE-21 (single canonical writer for both files).
+UD-8c. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` WE-17 (single canonical writer for both files).
 UD-8d. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
    - A no-op `git add docs/` is expected on this path — history and changelog content sits in `WORKTREE_NOTES.md`, not under `docs/`; the `docs_complete` sentinel alone satisfies the gate.
 UD-8e. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
-UD-8f. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; next-step owns `user_verification` (deferred to `/worktree-end` under `ENFORCE_WORKTREE=on`).
+UD-8f. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; `user_verification` is owned by `/get-release-approval`.
 
 ### Path B — ENFORCE_WORKTREE=off
 
@@ -78,4 +78,4 @@ UD-9a. History entry — dispatch the `doc-append` worker per `skills/_shared/wo
 UD-9b. For public repos — changelog entry: same dispatch with `mode: "changelog"` and no `commits` (payload sequence suffix `-2`).
    On `failed` status: surface `summary` + `artifact_path` to the user and stop.
 UD-9c. `git add docs/ README.md CHANGELOG.md`
-UD-9d. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; next-step owns `user_verification` (emitted just before `/commit-push` under `ENFORCE_WORKTREE=off`).
+UD-9d. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; `user_verification` is owned by `/get-release-approval`.

@@ -1,0 +1,150 @@
+#!/usr/bin/env node
+"use strict";
+// Usage:
+//   set-deliverable-type <session-id> <type>                    (positional, frozen)
+//   set-deliverable-type --session <sid> --type <t>
+//                        [--advance --step <step> --complete|--skipped|--pending [--next]]
+//
+// The two argument forms are mutually exclusive: mixing them is exit 1, because
+// a call carrying both has two candidate session ids and no rule says which wins.
+// Without --advance the stdout stays empty, exactly as before (#1644).
+// bin/workflow/set-workflow-type is the legacy entrypoint (#2527): it loads this
+// file in-process, so messages and the advance origin keep that binary's name.
+
+const path = require("path");
+const { setDeliverableType, VALID_STEPS } =
+  require(path.join(__dirname, "../../hooks/workflow-state"));
+const { runAdvance } = require(path.join(__dirname, "lib", "next-step", "advance-shared"));
+const {
+  ADVANCE_STATUSES, matchStatusFlag, formatStatusFlagList,
+  formatStatusRejection, warnDeprecatedStatusValue,
+} = require(path.join(__dirname, "lib", "next-step", "advance-args"));
+const { DELIVERABLE_TYPES } = require(path.join(__dirname, "../../hooks/workflow-state/step-table"));
+
+const LEGACY_BINARY = "set-workflow-type";
+const BINARY = path.basename(process.argv[1] || "") === LEGACY_BINARY ? LEGACY_BINARY : "set-deliverable-type";
+const RESULT_KEY = BINARY === LEGACY_BINARY ? "WORKFLOW_TYPE" : "DELIVERABLE_TYPE";
+const VALID_TYPES = new Set(DELIVERABLE_TYPES);
+
+function die(msg) {
+  process.stderr.write(BINARY + ": " + msg + "\n");
+  process.exit(1);
+}
+
+function parseArgs(argv) {
+  const out = {
+    session: null, type: null, advance: false, next: false,
+    step: null, status: null, statusFlag: null, positional: [],
+  };
+  const value = (i, flag) => {
+    if (i + 1 >= argv.length) die(flag + " requires an argument");
+    return argv[i + 1];
+  };
+  // Symmetric with bin/workflow/lib/next-step/cli.js: legacy `--status a --status b`
+  // keeps its last-wins exit 0; any supply pair involving a value-less flag (#1947)
+  // has no priority rule between its two sources and fails closed.
+  const setStatus = (statusValue, sourceToken) => {
+    const newFormInvolved =
+      matchStatusFlag(sourceToken) !== null || matchStatusFlag(out.statusFlag) !== null;
+    if (out.status !== null && newFormInvolved) {
+      die("advance status given more than once (" + out.statusFlag + " and " +
+        sourceToken + ") — pass exactly one");
+    }
+    out.status = statusValue;
+    out.statusFlag = sourceToken;
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--session") { out.session = value(i, "--session"); i++; }
+    else if (a === "--type") { out.type = value(i, "--type"); i++; }
+    else if (a === "--step") { out.step = value(i, "--step"); i++; }
+    else if (a === "--status") {
+      const v = value(i, "--status");
+      setStatus(v, "--status");
+      warnDeprecatedStatusValue(BINARY, v);
+      i++;
+    }
+    else if (a === "--advance") { out.advance = true; }
+    else if (a === "--next") { out.next = true; }
+    // BEFORE the unknown-argument catch-all, which is a startsWith("--") test here.
+    else if (matchStatusFlag(a) !== null) { setStatus(matchStatusFlag(a), a); }
+    else if (a.startsWith("--")) { die("unknown argument: " + a); }
+    else { out.positional.push(a); }
+  }
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+
+// Any flag at all counts as the flag form: the positional form is frozen at its
+// exact two-argument shape, so `sdt <sid> <type> --advance ...` has no defined
+// reading and must not half-apply.
+const usedFlagForm =
+  args.session !== null || args.type !== null || args.advance ||
+  args.next || args.step !== null || args.status !== null;
+if (usedFlagForm && args.positional.length > 0) {
+  die("do not mix the positional form with --session/--type");
+}
+
+let sessionId;
+let type;
+if (usedFlagForm) {
+  sessionId = args.session;
+  type = args.type;
+} else {
+  [sessionId, type] = args.positional;
+}
+
+if (!sessionId || !type) {
+  process.stderr.write("Usage: " + BINARY + " <session-id> <type>\n");
+  process.exit(1);
+}
+
+if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+  process.stderr.write(`${BINARY}: invalid session-id "${sessionId}" — must match [A-Za-z0-9_-]+\n`);
+  process.exit(1);
+}
+
+if (!VALID_TYPES.has(type)) {
+  process.stderr.write(`${BINARY}: invalid type "${type}" — must be one of: ${[...VALID_TYPES].join(", ")}\n`);
+  process.exit(1);
+}
+
+if (args.next && !args.advance) die("--next is only meaningful with --advance");
+if (args.advance) {
+  if (!args.step) die("--advance requires --step <step>");
+  if (VALID_STEPS.indexOf(args.step) === -1) die("invalid step for --advance: " + args.step);
+  if (!args.status) {
+    die("--advance requires a status: " + formatStatusFlagList() + " (deprecated: --status <status>)");
+  }
+  if (ADVANCE_STATUSES.indexOf(args.status) === -1) die(formatStatusRejection(args.status));
+} else if (args.step || args.status) {
+  const named = [args.step ? "--step" : null, args.status ? args.statusFlag : null]
+    .filter((x) => x !== null).join("/");
+  die(named + " is only meaningful with --advance");
+}
+
+// deliverable_type is a persisted top-level setting, not a derived value; the
+// writer (session-fields.js) is a narrow locked read-modify-write that creates
+// the state file when the session has none yet (#1733).
+//
+// It is written BEFORE the step verdict and in a SEPARATE transaction: the
+// step table's table-skip reads deliverable_type through the session profile,
+// so a step settled before the type is on record would be judged wrongly.
+try {
+  setDeliverableType(sessionId, type);
+} catch (e) {
+  process.stderr.write(BINARY + ": failed to write deliverable_type — " + e.message + "\n");
+  process.exit(args.advance ? 2 : 1);
+}
+
+if (!args.advance) process.exit(0);
+
+runAdvance({
+  session: sessionId,
+  binary: BINARY,
+  step: args.step,
+  status: args.status,
+  next: args.next,
+  prefix: RESULT_KEY + "=" + type + "\n",
+});

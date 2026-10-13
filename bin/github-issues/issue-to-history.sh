@@ -1,7 +1,7 @@
 #!/bin/bash
 # STANDALONE TOOL — no skill or workflow routes here; run it by hand for
 # /issue-reconcile backfill or out-of-band history repair. Close-path
-# docs/history.md writes belong to /worktree-end Step WE-21 (#690).
+# docs/history.md writes belong to /worktree-end Step WE-17 (#690).
 
 # Convert a (typically closed) GitHub issue into a docs/history.md entry.
 # Usage: issue-to-history.sh <issue-number> [--commit <hash>]

@@ -20,7 +20,7 @@ chain() {
 # grandparent would resurrect steps the intervening session already superseded.
 R12="l12root-$$"; M12="l12mid-$$"; H12="l12heir-$$"
 write_state_v1 "$R12" "$CWD_A" "$BRANCH_A" "$STEPS_INHERITABLE"
-write_state_v1 "$M12" "$CWD_A" "$BRANCH_A" "$STEPS_USER_VERIFIED"
+write_state_v1 "$M12" "$CWD_A" "$BRANCH_A" "$STEPS_DELIVERED"
 chain "$H12" "$M12" "$R12"
 O="$(resolve_donor "$H12" resume "$TDIR_A/$H12.jsonl" "$CWD_A" "$BRANCH_A")"
 assert_prefix "L-12a. a non-resumable nearest ancestor ends the search" "$O" decision not-resumable

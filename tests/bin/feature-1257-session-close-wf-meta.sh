@@ -323,22 +323,14 @@ test_S1_wf_meta_detection_before_confirm_off() {
         skip "S1_wf_meta_detection_before_confirm_off (SKILL.md missing)"
         return
     fi
-    # WF-META detection line must appear before the ENFORCE_WORKTREE confirm-off call
-    local wf_meta_line confirm_off_line
-    wf_meta_line="$(grep -n "wf.meta\|WF.META\|WF_META\|wf_meta" "$SKILL_MD" 2>/dev/null | head -1 | cut -d: -f1)"
-    confirm_off_line="$(grep -n "confirm-off.*ENFORCE_WORKTREE\|ENFORCE_WORKTREE.*confirm-off" "$SKILL_MD" 2>/dev/null | head -1 | cut -d: -f1)"
-    if [ -z "$wf_meta_line" ]; then
-        fail "S1_wf_meta_detection_before_confirm_off: no WF-META detection found in SKILL.md"
-        return
-    fi
-    if [ -z "$confirm_off_line" ]; then
-        fail "S1_wf_meta_detection_before_confirm_off: no confirm-off ENFORCE_WORKTREE line found in SKILL.md"
-        return
-    fi
-    if [ "$wf_meta_line" -lt "$confirm_off_line" ]; then
-        pass "S1_wf_meta_detection_before_confirm_off: WF-META detection (line $wf_meta_line) before confirm-off (line $confirm_off_line)"
+    # #2527: one route CLI (recorded delivery path) decides wf-meta / pull_request / direct;
+    # the live confirm-off ENFORCE_WORKTREE probe must no longer pick the route.
+    if ! grep -qF "session-close-detect-route.js --session" "$SKILL_MD"; then
+        fail "S1_wf_meta_detection_before_confirm_off: SKILL.md lacks 'session-close-detect-route.js --session'"
+    elif grep -q "confirm-off.*ENFORCE_WORKTREE\|ENFORCE_WORKTREE.*confirm-off" "$SKILL_MD"; then
+        fail "S1_wf_meta_detection_before_confirm_off: SKILL.md still routes on live confirm-off ENFORCE_WORKTREE"
     else
-        fail "S1_wf_meta_detection_before_confirm_off: WF-META detection (line $wf_meta_line) must come before confirm-off (line $confirm_off_line)"
+        pass "S1_wf_meta_detection_before_confirm_off: route comes from session-close-detect-route.js, no live confirm-off"
     fi
 }
 

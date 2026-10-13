@@ -21,25 +21,10 @@ const {
   assertStreamIntegrity,
 } = require("./projection");
 
-const VALID_STEPS = [
-  "workflow_init",
-  "clarify_intent",
-  "research",
-  "outline",
-  "detail",
-  "branching_complete",
-  "write_tests",
-  "review_tests",
-  "write_code",
-  "run_tests",
-  "review_security",
-  "docs",
-  "review_docs",
-  "user_verification",
-  "cleanup",
-  "pre_final_report_gate",
-  "final_report",
-];
+const { stepNames } = require("../step-table");
+
+// Derived from the step table (#2527, SSOT): the order and membership live there.
+const VALID_STEPS = stepNames();
 // SSOT for "the session is over". Anything appended after a terminal step is
 // out-of-band bookkeeping and closes no interval (see intervals.js).
 const TERMINAL_STEPS = ["final_report"];
@@ -86,10 +71,8 @@ function getStatePath(sessionId) {
 // (e.g. `{ version: 2 }` in migrations/v1-to-v2.js) is a DIFFERENT fact — that
 // stage's own output form — and must stay a literal there.
 //
-// v3 (#1665) is what a file uses to DECLARE that the code which wrote it knew
-// about the `write_code` step; see migrations/v2-to-v3.js. v4 (#2340) declares
-// the same for the `review_docs` step; see migrations/v3-to-v4.js.
-const CURRENT_STATE_VERSION = 4;
+// v3 / v4 / v5 each declare a schema change: see migrations/v{N-1}-to-v{N}.js.
+const CURRENT_STATE_VERSION = 5;
 
 // The highest `version` this release can read and write. A file above it was
 // written by a newer release and is opaque here.
@@ -151,7 +134,7 @@ function readRawState(sessionId) {
 // read — never migrated, never guessed at.
 function normalizeStateVersion(rawState) {
   if (!rawState || typeof rawState !== "object" || Array.isArray(rawState)) return rawState;
-  if (rawState.version === 4) return rawState;
+  if (rawState.version === 5) return rawState;
   if (typeof rawState.version === "number" && rawState.version > MAX_KNOWN_STATE_VERSION) {
     throw new FutureSchemaVersionError(rawState.version);
   }
@@ -159,10 +142,11 @@ function normalizeStateVersion(rawState) {
   // (or a number below the current one) is v1 by content, so dispatch on
   // "is it vN", never on "is it v1". The stages chain — a v1 file runs through
   // every stage in order, a v3 file joins at the stage that raises it.
-  const { migrateV1ToV2, migrateV2ToV3, migrateV3ToV4 } = require("./migrations");
-  if (rawState.version === 3) return migrateV3ToV4(rawState);
-  if (rawState.version === 2) return migrateV3ToV4(migrateV2ToV3(rawState));
-  return migrateV3ToV4(migrateV2ToV3(migrateV1ToV2(rawState)));
+  const { migrateV1ToV2, migrateV2ToV3, migrateV3ToV4, migrateV4ToV5 } = require("./migrations");
+  if (rawState.version === 4) return migrateV4ToV5(rawState);
+  if (rawState.version === 3) return migrateV4ToV5(migrateV3ToV4(rawState));
+  if (rawState.version === 2) return migrateV4ToV5(migrateV3ToV4(migrateV2ToV3(rawState)));
+  return migrateV4ToV5(migrateV3ToV4(migrateV2ToV3(migrateV1ToV2(rawState))));
 }
 
 // --- BEGIN temporary: pre-workflow_init v1 sessions → v2 read defaults migration ---
@@ -372,7 +356,7 @@ function createInitialState(sessionId, ctx) {
       // even when no --transcript arg is threaded. Non-string → null.
       transcript_path: ctx && typeof ctx.transcript_path === "string" ? ctx.transcript_path : null,
     },
-    workflow_type: "wf-code",
+    deliverable_type: "wf-code",
     events: [],
   };
 }

@@ -77,8 +77,8 @@ rtb_exec_one() {
         # shellcheck source=bin/lib/run-all-launch.sh
         . "$launcher" || { : >"$logdir/$i.nolaunch"; exit 2; }
         cd "$wt" || { : >"$logdir/$i.nolaunch"; exit 2; }
-        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE \
-            RUN_ALL_EXEC_STATE RUN_ALL_EXEC_MISSING RUN_ALL_EXEC_LAUNCHED
+        unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
+        unset RUN_ALL_EXEC_STATE RUN_ALL_EXEC_MISSING RUN_ALL_EXEC_LAUNCHED
         export WORKFLOW_STATE_DIR="$iso/workflow" \
             WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts" \
             RUN_ALL_TIMEOUT_SECONDS="$timeout"

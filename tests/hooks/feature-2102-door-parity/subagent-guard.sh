@@ -53,7 +53,7 @@ ADVANCE_CLIS="$(run_with_timeout node -e '
   const m = require(process.env.RSV_MOD);
   process.stdout.write(Object.keys(m.ADVANCE_ORIGINS || {}).join(" "));' 2>/dev/null || echo "")"
 check "M0a: the step name resolved from VALID_STEPS" "research" "$STEP"
-check "M0b: ADVANCE_ORIGINS still names four advance-class CLIs" 4 "$(printf '%s' "$ADVANCE_CLIS" | wc -w | tr -d ' ')"
+check "M0b: ADVANCE_ORIGINS names five advance-class CLIs (set-deliverable-type added, #2527)" 5 "$(printf '%s' "$ADVANCE_CLIS" | wc -w | tr -d ' ')"
 
 # Block-reason strings come from the hook module itself (CPR-SSOT), never retyped:
 # assert_payload proves WHICH door tripped, not merely that some door tripped.
@@ -267,8 +267,8 @@ true|j1-cmd-c|cmd /c "node \$AGENTS_MAIN_ROOT/bin/workflow/next-step --session s
 true|j2-cmd-k-upper|cmd /K "node \$AGENTS_MAIN_ROOT/bin/workflow/next-step --session s1 --advance --step ${STEP} --complete"
 false|j3-cmd-c-readonly|cmd /c "node \$AGENTS_MAIN_ROOT/bin/workflow/read-session-facts --session s1"
 true|k1-pwsh-flag-uppercase|pwsh -COMMAND "node \$AGENTS_MAIN_ROOT/bin/workflow/next-step --session s1 --advance --step ${STEP} --complete"
-true|m1-windows-spaced-program-files-path|C:\Program Files\nodejs\node.exe C:\git\agents\bin\workflow\next-step --session s1 --advance --step ${STEP} --complete
-false|m2-windows-spaced-program-files-path-readonly|C:\Program Files\nodejs\node.exe C:\git\agents\bin\workflow\next-step --session s1
+true|m1-windows-spaced-program-files-path|C:\Program Files\nodejs\node.exe C:\src\agents\bin\workflow\next-step --session s1 --advance --step ${STEP} --complete
+false|m2-windows-spaced-program-files-path-readonly|C:\Program Files\nodejs\node.exe C:\src\agents\bin\workflow\next-step --session s1
 MATRIX
 
 echo ""

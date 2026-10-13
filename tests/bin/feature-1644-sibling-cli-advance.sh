@@ -87,9 +87,9 @@ step_sub()    { probe "$1" "$2" sub "$3"; }
 # substantive halves (status, skip_reason, skip_judgment.conditions, ...) stay in.
 step_entry()  { probe "$1" "$2" entry; }
 action_lines() { printf '%s\n' "$OUT" | grep -c '^ACTION=' || true; }
-# top_field <sid> [field] — a top-level state field (default: workflow_type).
+# top_field <sid> [field] — a top-level state field (default: deliverable_type, #2527).
 top_field() {
-  PROBE_SID="$1" TF="${2:-workflow_type}" run_with_timeout node -e '
+  PROBE_SID="$1" TF="${2:-deliverable_type}" run_with_timeout node -e '
     const wf = require(process.env.WFSTATE_MODULE);
     const s = wf.readState(process.env.PROBE_SID) || {};
     const v = (s.current && s.current[process.env.TF]) !== undefined
@@ -160,13 +160,13 @@ check "S5: no ACTION line on failure" 0 "$(action_lines)"
 
 echo ""
 echo "=== S6: set-workflow-type positional form is unchanged ==="
-# wf-meta, not wf-code: readState() projects workflow_type with a "wf-code"
+# wf-meta, not wf-code: readState() projects deliverable_type with a "wf-code"
 # DEFAULT, so asserting "wf-code" would pass on a session that was never written.
 at_outline s6
 run_cli node "$SWT" s6 wf-meta
 check "S6: exit 0" 0 "$RC"
 check "S6: stdout stays empty" "" "$OUT"
-check "S6: workflow_type is recorded" '"wf-meta"' "$(top_field s6)"
+check "S6: deliverable_type is recorded" '"wf-meta"' "$(top_field s6)"
 
 echo ""
 echo "=== S7: set-workflow-type --advance argument validation ==="
@@ -185,7 +185,7 @@ check "S7c: mixing positional and flag form exits 1" 1 "$RC"
 check "S7c: the mixed form records nothing" '"pending"' "$(step_status s7c workflow_init)"
 # "wf-code" here is the projection DEFAULT, i.e. the absence of a write — the one
 # value that distinguishes "never recorded" from the wf-meta this call asked for.
-check "S7c: the mixed form does not set workflow_type either" '"wf-code"' "$(top_field s7c)"
+check "S7c: the mixed form does not set deliverable_type either" '"wf-code"' "$(top_field s7c)"
 
 echo ""
 echo "=== S8: set-workflow-type --advance records the step and the type together ==="
@@ -195,7 +195,7 @@ check "S8: exit 0" 0 "$RC"
 check_contains "S8: the advance line reports the settled step" "ADVANCED=workflow_init status=complete" "$OUT"
 check_contains "S8: the type line precedes it" "WORKFLOW_TYPE=wf-meta" "$OUT"
 check "S8: workflow_init is complete" '"complete"' "$(step_status s8 workflow_init)"
-check "S8: workflow_type is still recorded" '"wf-meta"' "$(top_field s8)"
+check "S8: deliverable_type is still recorded" '"wf-meta"' "$(top_field s8)"
 
 echo ""
 echo "=== S9: record-complexity-and-skip WITHOUT --advance keeps its bare token ==="
@@ -243,7 +243,7 @@ echo ""
 echo "=== S11: class-completeness guard over bin/workflow/ ==="
 # Three-way partition. A new CLI under bin/workflow/ must be classified here
 # before it can land, which is what makes the advance class enumerable at all.
-ADVANCE_MEMBERS="next-step record-skip-judgment record-complexity-and-skip set-workflow-type"
+ADVANCE_MEMBERS="next-step record-skip-judgment record-complexity-and-skip set-deliverable-type set-workflow-type"
 # record-skip-verdict is subagent-only: the skip-verifier subagent records a
 # verdict about a skip someone else declared, so it never advances the workflow
 # on its own behalf. That is why it is an exception and not a member.
@@ -252,7 +252,7 @@ NAMED_EXCEPTIONS="record-skip-verdict"
 # stateless derivation CLI (detail.md D1/D4) that reads no session and writes no
 # state, so there is no step for it to advance. S11c below is what pins that —
 # it must carry no --advance token at all.
-NON_MEMBERS="adopt-session-state derive-complexity-level read-complexity-evaluation read-merge-base-baseline read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline workflow-init-driver"
+NON_MEMBERS="adopt-session-state check-plan-approval derive-complexity-level handoff-append normalize-judge-signals pr-state read-complexity-evaluation read-merge-base-baseline read-session-facts read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline release-channel render-issue-comments run-tests-baseline-evidence run-tests-unrunnable-note workflow-init-driver"
 
 ACTUAL="$(ls "$SCRIPT_CHECKOUT_ROOT/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
 EXPECTED="$(printf '%s %s %s' "$ADVANCE_MEMBERS" "$NAMED_EXCEPTIONS" "$NON_MEMBERS" \
@@ -405,7 +405,7 @@ check "S15b: the repeat exits 0" 0 "$RC"
 check_contains "S15b: the repeat reports already=true" "already=true" "$OUT"
 check "S15b: workflow_init is still complete after the repeat" '"complete"' "$(step_status s15b workflow_init)"
 check "S15b: the projection is unchanged" "$S15B_ENTRY" "$(step_entry s15b workflow_init)"
-check "S15b: workflow_type survives the repeat" '"wf-meta"' "$(top_field s15b)"
+check "S15b: deliverable_type survives the repeat" '"wf-meta"' "$(top_field s15b)"
 
 make_state s15c "workflow_init clarify_intent research"
 printf '# intent\n' > "$PLANS_DIR/s15c-intent.md"

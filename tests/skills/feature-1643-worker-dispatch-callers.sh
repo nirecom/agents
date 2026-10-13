@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/skills/feature-1643-worker-dispatch-callers.sh
-# Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js, skills/run-tests/SKILL.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/update-docs/SKILL.md, skills/issue-reconcile/SKILL.md, skills/session-close/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-stage/SKILL.md, skills/issue-close-finalize/SKILL.md
+# Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js, skills/run-tests/SKILL.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/update-docs/SKILL.md, skills/issue-reconcile/SKILL.md, skills/session-close/SKILL.md, skills/_shared/commit-push-dispatch.md, skills/issue-close-stage/SKILL.md, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, callers, skill-orchestration, static, regression, TL1, scope:issue-specific
 #
 # Issue #1643/#1673 caller-side contract: every calling skill dispatches its worker per
@@ -43,12 +43,12 @@ trap 'rm -rf "$TMPD"' EXIT
 # in Group B plus the Group C negatives cover the other two.
 CALLER_TABLE='skills/run-tests/SKILL.md|test-runner|RNT-7|RNT-7.|RNT-8.
 skills/worktree-start/SKILL.md|worktree-copy|WS-7|WS-7.|WS-8.
-skills/worktree-end/SKILL.md|worktree-backup|WE-9|### WE-9|### WE-10
+skills/worktree-end/SKILL.md|worktree-backup|WE-5|### WE-5|### WE-6
 skills/update-docs/SKILL.md|doc-append|UD-9a/UD-9b|UD-9a.|UD-9c.
-skills/worktree-end/scripts/cleanup-cascade.md|doc-append|WE-21|## WE-21|## WE-22
+skills/worktree-end/scripts/cleanup-cascade.md|doc-append|WE-17|## WE-17|## WE-18
 skills/issue-reconcile/SKILL.md|issue-reconcile|IRC-2|## IRC-2:|## IRC-3:
 skills/session-close/SKILL.md|session-close-gate|SC-4+SC-5|## SC-4+SC-5|## SC-6
-skills/commit-push/SKILL.md|commit-push|CP-2|CP-2.|CP-3.
+skills/_shared/commit-push-dispatch.md|commit-push|CP-2-dispatch|## Dispatch|## Outcomes
 skills/issue-close-stage/SKILL.md|issue-close-stage|Delegation|## Delegation|## End
 skills/issue-close-finalize/SKILL.md|issue-close-finalize|Delegation-initial|## Delegation — initial pass|## ICF-D..ICF-G loop'
 

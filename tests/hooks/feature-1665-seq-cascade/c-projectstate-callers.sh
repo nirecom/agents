@@ -2,54 +2,10 @@
 # tests/hooks/feature-1665-seq-cascade/c-projectstate-callers.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io.js
 # Tags: workflow-state, updated-seq, call-site-inventory, drift-detection, scope:issue-specific, pwsh-not-required, TL1
-#
-# C — the projectState() call-site inventory is pinned.
-#
-# WHY: `updated_seq` is correct only when the projector receives the WHOLE
-# stream in stream order. A future caller that folds a filtered or re-sliced
-# subsequence would produce positions that no longer address the real stream,
-# and nothing in the type system says so. Pinning the inventory (per-file COUNTS,
-# not line numbers, so commit-3 edits to projection.js do not churn this test)
-# forces any new call site through review.
-#
-# HOW: two independent inventories must agree.
-#   - C1/C2/C3/C4 are the original textual (grep) pins. Cheap, and they are the
-#     assertions that fail loudest when a call site is added or removed.
-#   - C5/C6 add a lexical scanner (projectstate-callsites.js) that strips
-#     comments and string literals, resolves alias bindings, and paren-matches a
-#     call's real argument text. C7 is a table-driven mutation battery proving
-#     the scanner actually kills the three mutations grep is blind to:
-#     aliased calls, multiline calls, and pre-filtered intermediate variables.
-#
-# NOTE ON LAYER: this file is TL1 by construction — it reads source text, it
-# never runs the projector. It is a DRIFT DETECTOR for the call-site inventory,
-# not a proof that any individual call is semantically correct.
-#
-# TL3 gap (what this test does NOT catch):
-# - Runtime-constructed call expressions. The scanner resolves only lexical
-#   alias forms (`const p = mod.projectState`, `const { projectState: p } = ...`,
-#   `p = mod.projectState`). A computed/dynamic call — `mod["project" + "State"](x)`,
-#   `fns[k](x)`, a function passed as a callback and invoked elsewhere, or a call
-#   reached through `Function`/`eval` — is invisible to it. There is no AST here:
-#   the repo vendors no JS parser (no package.json, no node_modules, and Node
-#   exposes no public parse API), so this is an honest lexical heuristic, not an
-#   AST-equivalent analysis.
-# - The actual VALUE passed at call time. Only the literal call-site text is
-#   inspected. A caller that hands over a variable filtered several statements
-#   earlier, filtered inside a helper function, or filtered conditionally on a
-#   branch, still reads as clean here. C7's `prefiltered-var` case shows the
-#   trace-back works only for a same-file `const/let/var` declaration of a bare
-#   identifier argument — one hop, no scope tree, no cross-module resolution.
-# - Real persistence / read round-trips. Nothing in this file appends an event,
-#   writes a state file, or reads one back, so it cannot observe whether
-#   `updated_seq` actually addresses the stream that was persisted.
-# Closest-to-action mitigation: the runtime round-trip is exercised by
-# tests/hooks/feature-1733-state-event-stream/projection-contract.sh (TL2), which
-# drives real markStep/recordSessionModel writes and asserts that the projection
-# readState pastes equals projectState() over the re-read raw state, and by
-# tests/hooks/feature-1665-seq-cascade/a-updated-seq.sh, which asserts updated_seq
-# positions against a real appended event stream. Those two fail when a caller
-# folds the wrong stream; this file fails when a caller merely APPEARS.
+# C — projectState() call-site inventory pin (TL1 drift detector): C1-C4 grep,
+# C5/C6 lexical scanner (projectstate-callsites.js), C7 mutation battery.
+# TL3 gap: dynamic calls, values beyond a one-hop declaration, persistence
+# round-trips; mitigation: feature-1733-state-event-stream/projection-contract.sh.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG=c
@@ -68,6 +24,8 @@ GOT="$(grep -rn "projectState(" hooks bin --include=*.js 2>/dev/null \
 WANT="hooks/workflow-state/state-io/core.js:1
 hooks/workflow-state/state-io/events.js:3
 hooks/workflow-state/state-io/migrations/v2-to-v3.js:1
+hooks/workflow-state/state-io/migrations/v3-to-v4.js:1
+hooks/workflow-state/state-io/migrations/v4-to-v5.js:1
 hooks/workflow-state/state-io/projection.js:1"
 
 # Every .js under hooks/ or bin/ that so much as mentions the symbol -- the
@@ -86,7 +44,7 @@ $GOT"
 fi
 
 TOTAL="$(printf '%s\n' "$GOT" | awk -F: '{s+=$2} END {print s+0}')"
-assert_eq "C2 total non-definition call sites" "6" "$TOTAL"
+assert_eq "C2 total non-definition call sites" "8" "$TOTAL"
 
 REEXPORT="$(grep -c "projectState: projection.projectState" "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io.js")"
 assert_eq "C3 state-io.js re-exports projectState exactly once" "1" "$REEXPORT"
@@ -124,7 +82,7 @@ else
 
     SCAN_TOTAL="$(printf '%s\n' "$SCAN_OUT" | awk -F'\t' '$1=="TOTAL"{print $2}')"
     SCAN_FILT="$(printf '%s\n' "$SCAN_OUT" | awk -F'\t' '$1=="FILTERED"{print $2}')"
-    assert_eq "C6a scanner total non-definition call sites" "6" "$SCAN_TOTAL"
+    assert_eq "C6a scanner total non-definition call sites" "8" "$SCAN_TOTAL"
     assert_eq "C6b scanner sees no folded subsequence at any call site" "0" "$SCAN_FILT"
 fi
 

@@ -12,12 +12,14 @@ const {
 } = require("./migrations/v1-to-v2");
 const { migrateV2ToV3 } = require("./migrations/v2-to-v3");
 const { migrateV3ToV4 } = require("./migrations/v3-to-v4");
+const { migrateV4ToV5 } = require("./migrations/v4-to-v5");
 
 module.exports = {
   applyV1FieldBackfill,
   migrateV1ToV2,
   migrateV2ToV3,
   migrateV3ToV4,
+  migrateV4ToV5,
   orderedAnnotationKeys,
   convertV1AnnotationsToEvents,
 };

@@ -108,7 +108,7 @@ assert_project_rejected "C6b/project percent-encoded NUL rejected" \
 assert_project_rejected "C6c/project single-segment (<2) rejected" \
     "$(call_project 'https://gitlab.com/single-segment')"
 assert_project_rejected "C6d/project shell-metachar segment rejected" \
-    "$(call_project 'https://gitlab.com/a;rm -rf /b/c')"
+    "$(call_project 'https://gitlab.com/a;rm -rf /bb/cc')"
 # A poisoned dot-segment path must not resolve to a gitlab target (would be
 # interpolated into a glab call); it degrades to unknown, never dispatched.
 assert_eq "C6e/resolveForgeTarget dot-segment path -> unknown (no glab dispatch)" "unknown" \
@@ -298,7 +298,7 @@ assert_eq "C4d/isPrivateRepo reads host from .env file (not process.env), glab p
 case_end
 
 # C4e: resolveForgeTarget recognizes GITLAB_SSH_HOSTNAME env var as a GitLab
-# forge host when no gitlabHost option is passed. This proves the 案1 SSH-hostname
+# forge host when no gitlabHost option is passed. This proves the option 1 SSH-hostname
 # path: a repo cloned via SSH from a host different from GITLAB_HOSTNAME is still
 # classified as gitlab when GITLAB_SSH_HOSTNAME is set.
 call_resolve_ssh_env() {
@@ -495,7 +495,8 @@ cp.spawnSync = function (cmd, args, opts) {
   }
   if (LOG) { try { fs.appendFileSync(LOG, "MRQUERY " + joined + " :: branch=" + branch + "\n"); } catch (e) {} }
   if (MR_BRANCHES.indexOf(branch) >= 0) return { status: 0, stdout: "opened\n", stderr: "", error: null };
-  return { status: 1, stdout: "", stderr: "", error: null }; // glab mr view: no MR for this branch
+  // glab mr view: no MR for this branch — glab's own message is what reads as NONE (#2527).
+  return { status: 1, stdout: "", stderr: "no open merge request available for \"" + branch + "\"\n", error: null };
 };
 let gl;
 try { gl = require(process.argv[2]).codehostGitlab; } catch (e) { process.stdout.write("ERR:require"); process.exit(0); }

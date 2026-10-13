@@ -56,7 +56,7 @@ step_at() {
     const wf = require(process.env.WFSTATE_MODULE);
     process.stdout.write(wf.VALID_STEPS[Number(process.env.IDX)] || "");' 2>/dev/null
 }
-IDX_CLARIFY=1; IDX_RESEARCH=2; IDX_WRITE_TESTS=6; IDX_CLEANUP=13
+IDX_CLARIFY=1; IDX_RESEARCH=2; IDX_WRITE_TESTS=6; IDX_CLEANUP=16
 S_CLARIFY="$(step_at $IDX_CLARIFY)"
 S_RESEARCH="$(step_at $IDX_RESEARCH)"
 S_WRITE_TESTS="$(step_at $IDX_WRITE_TESTS)"

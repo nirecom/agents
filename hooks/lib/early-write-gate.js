@@ -25,8 +25,9 @@ const SETTLED = new Set(["complete", "skipped"]);
 function earlyTierStatus(state, sessionId) {
   let snapshot = null;
   try {
+    const { resolveSessionProfile } = require("../workflow-state/session-profile");
     snapshot = reconcileEffectiveState(state, sessionId, {
-      isWfMeta: state && state.workflow_type === "wf-meta",
+      profile: resolveSessionProfile(state, sessionId),
       evidencePolicy: "staged-only",
     });
   } catch (_e) {

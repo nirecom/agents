@@ -15,9 +15,9 @@ while IFS='|' read -r name rel early late why; do
     assert_before "$name" "$(trim "$rel")" "$(trim "$early")" "$(trim "$late")" "$(trim "$why")"
 done <<'W5_TABLE'
 W5-01 | skills/worktree-start/SKILL.md | WS-7a | WS-8. | The index must be built before EnterWorktree, which can raise a confirmation dialog.
-W5-02 | skills/worktree-end/scripts/cleanup-cascade.md | ## WE-14c | ## WE-15 | The daemon holds the index DB open; on Windows that file lock makes the WE-15 worktree removal fail with EPERM.
-W5-03 | skills/worktree-end/SKILL.md | ### WE-15..WE-22 | WE-14c | ST-13 puts the pointer inside the cleanup-cascade block; above that heading it reads as a step of the merge phase and nobody following the cascade sees it.
-W5-04 | skills/worktree-end/SKILL.md | WE-14c | ## Rules | A pointer that lands in ## Rules is discoverable nowhere near the cascade it introduces, and the cascade is issued command-by-command from that block alone.
+W5-02 | skills/worktree-end/scripts/cleanup-cascade.md | ## WE-10c | ## WE-11 | The daemon holds the index DB open; on Windows that file lock makes the WE-11 worktree removal fail with EPERM.
+W5-03 | skills/worktree-end/SKILL.md | ### WE-11..WE-18 | WE-10c | ST-13 puts the pointer inside the cleanup-cascade block; above that heading it reads as a step of the merge phase and nobody following the cascade sees it.
+W5-04 | skills/worktree-end/SKILL.md | WE-10c | ## Rules | A pointer that lands in ## Rules is discoverable nowhere near the cascade it introduces, and the cascade is issued command-by-command from that block alone.
 W5-05 | skills/sweep-worktrees/SKILL.md | ## Rules | CodeGraph index lock | ST-15 records the daemon-release obligation as a rule of this skill; above ## Rules the line is not a rule at all.
 W5-06 | skills/sweep-worktrees/SKILL.md | CodeGraph index lock | ## Migration notes for #503 | The rule must stay inside ## Rules rather than drift into the migration notes, which are historical and not part of the skill contract.
 W5_TABLE

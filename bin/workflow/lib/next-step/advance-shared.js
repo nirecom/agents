@@ -1,6 +1,6 @@
 "use strict";
 // The forward operation (`--advance`), shared by every member of the advance
-// class: bin/workflow/next-step, record-skip-judgment, set-workflow-type and
+// class: bin/workflow/next-step, record-skip-judgment, set-deliverable-type and
 // (by delegation) record-complexity-and-skip (#1644).
 //
 // Why shared rather than per-CLI: the four members differ only in how they
@@ -17,6 +17,7 @@ const {
   resolveSessionId,
 } = require("../../../../hooks/workflow-state");
 const { reconcileEffectiveState } = require("../../../../hooks/workflow-state/effective-state");
+const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
 const {
   recordStepVerdict,
   ADVANCE_ORIGINS,
@@ -43,13 +44,11 @@ function resolveCurrentStep(sessionId, opts) {
     if (!state) return null;
     const excludeDerivedFor = (opts && opts.excludeDerivedFor) || null;
     const rawSteps = state.steps || {};
-    const isWfMeta = state.workflow_type === "wf-meta";
+    const repoDir = (opts && opts.repoDir) || undefined;
     let steps = null;
     try {
-      const snapshot = reconcileEffectiveState(state, sessionId, {
-        repoDir: (opts && opts.repoDir) || undefined,
-        isWfMeta,
-      });
+      const profile = resolveSessionProfile(state, sessionId, { repoDir });
+      const snapshot = reconcileEffectiveState(state, sessionId, { repoDir, profile, deliveryBoundary: "navigate" });
       steps = snapshot && snapshot.steps;
     } catch (_) {
       steps = state.steps || null;

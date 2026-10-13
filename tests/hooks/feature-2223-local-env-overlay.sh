@@ -221,6 +221,7 @@ local-absent-fallback      | CODE_LANG=english                                  
 empty-string-override      | CODE_LANG=english                                  | CODE_LANG=                        | CODE_LANG      | ""
 multiline-local-value      | CODE_LANG=english                                  | PROJECT_NFR="a@NL@b"              | PROJECT_NFR    | "a\nb"
 allow-confirm-detail       | CONFIRM_DETAIL=on                                  | CONFIRM_DETAIL=off                | CONFIRM_DETAIL | "off"
+allow-confirm-tests        | CONFIRM_TESTS=on                                   | CONFIRM_TESTS=off                 | CONFIRM_TESTS  | "off"
 allow-auto-merge-pr        | AUTO_MERGE_PR=on                                   | AUTO_MERGE_PR=off                 | AUTO_MERGE_PR  | "off"
 allow-run-tl3              | RUN_TL3=off                                        | RUN_TL3=on                        | RUN_TL3        | "on"
 allow-run-tl4              | RUN_TL4=off                                        | RUN_TL4=on                        | RUN_TL4        | "on"

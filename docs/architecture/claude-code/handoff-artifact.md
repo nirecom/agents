@@ -14,7 +14,7 @@ The document opens with a title line and `handoff_schema_version: 1`, then one `
 
 - `at` — ISO-8601 timestamp, written by the writer, never by the caller.
 - `origin` — `procedure-point`, `gate-block`, `auto-record`, or `flush`; which producer route wrote the line (see [Writers](#writers)).
-- `step` — a `VALID_STEPS` member, plus `commit_push` (a label for `/commit-push`, which is not a workflow step) and `-` (stepless, session-wide entries).
+- `step` — a `VALID_STEPS` member, plus `commit_push` (the pre-#2527 label for `/commit-push`, now the `push_branch` step; kept so older entries still validate) and `-` (stepless, session-wide entries).
 - `key` — the dedup identity within `(class, step)`; matches `^[A-Za-z0-9_.:-]+$`.
 - `summary` — one line of prose. The key is identity, not reading matter, so a writer whose key also names the event repeats it at the head of the summary.
 - `pointer` — the canonical owner of the full detail, or `-` when none exists.

@@ -26,6 +26,8 @@ const {
 } = require("./completion-approval");
 const { isSkipAllowedForCliPath } = require("./plan-skip-allowance");
 const { validateSkipReason } = require("../workflow-mark/skip-reason");
+const { resolveTrustedRepoDir } = require("./record-step-verdict/trusted-repo-dir");
+const { checkReleaseCompletion } = require("./record-step-verdict/release-steps");
 
 // ---- exported discriminators ----------------------------------------------
 
@@ -41,6 +43,7 @@ const ADVANCE_ORIGINS = {
   "next-step": "next-step-advance",
   "record-skip-judgment": "record-skip-judgment-advance",
   "set-workflow-type": "set-workflow-type-advance",
+  "set-deliverable-type": "set-deliverable-type-advance",
   "record-complexity-and-skip": "record-complexity-and-skip-advance",
 };
 
@@ -126,28 +129,6 @@ function checkSkippableConstraint(sessionId, step) {
   return { ok: true, code: 0 };
 }
 
-// H2 hardening, generalized to every evidence read this module performs on the
-// advance gate (not just the run_tests docs-only proof): resolve the repo root
-// strictly from git's own view of the real process cwd — never from
-// process.env — so a forged CLAUDE_PROJECT_DIR prefix on a model-issued Bash
-// command (`CLAUDE_PROJECT_DIR=<forged-dir> node bin/workflow/next-step
-// --advance ...`) cannot redirect an evidence check to a directory of the
-// model's own choosing. Returns null (fail-closed for the caller) when the
-// process is not inside a git work tree.
-function resolveTrustedRepoDir() {
-  try {
-    const { execFileSync } = require("child_process");
-    const out = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      encoding: "utf8",
-      timeout: 5000,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const dir = out.trim();
-    return dir || null;
-  } catch (_) {
-    return null;
-  }
-}
 
 // Skip-allowance table (#1644) for the CLI forward operation. Applied only on the
 // advance gate: the sentinel door's own approval routes (settings.json ask rules
@@ -397,8 +378,19 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
   if (declaredOutcome) writeOpts.provenance = "declared";
   if (typeof opts.origin === "string") writeOpts.origin = opts.origin;
 
+  // #2527: release steps complete only on evidence; merge_to_main settles via settleMergeToMain.
+  const release = checkReleaseCompletion(sessionId, step, status, gate, opts, resolveTrustedRepoDir);
+  if (release && !release.ok) return fail(release.code, release.message, release.kind, release.detail);
+  if (release) Object.assign(extraFields, release.extraFields);
+
   try {
-    markStep(sessionId, step, status, extraFields, writeOpts);
+    if (release && release.settleKind) {
+      require("./delivery-settle").settleMergeToMain(sessionId, Object.assign({}, writeOpts, {
+        kind: release.settleKind, extraFields,
+      }));
+    } else {
+      markStep(sessionId, step, status, extraFields, writeOpts);
+    }
   } catch (e) {
     if (e instanceof UnapprovedCompletionError) {
       return fail(

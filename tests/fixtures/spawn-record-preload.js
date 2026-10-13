@@ -1,3 +1,5 @@
+// Tests: tests/lib/spawn-record.sh
+// Tags: scope:common, test-infra, spawn-record
 "use strict";
 // tests/fixtures/spawn-record-preload.js — `node -r` preload: records every child_process call
 // (spawn, spawnSync, exec, execSync, execFile, execFileSync, fork), one record per outermost call.

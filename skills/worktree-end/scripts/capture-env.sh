@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# atomicity: This script IS the single Bash call required by SKILL.md WE-12.
+# atomicity: This script IS the single Bash call required by SKILL.md WE-8.
 # Do NOT split into multiple Bash calls from SKILL.md. Atomicity required for Windows env-reset safety.
 # BRANCH_DELETED MUST NOT appear in output JSON (issue #504 fail-safe).
 # Output MUST include four restart categories: cc_restart / vscode_reload / installer_rerun / os_reboot.
@@ -35,7 +35,7 @@ fi
 LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Bootstrap mode (issue #772): when the session was a new-repo first commit,
-# /worktree-end WE-4b pushed branch:main directly. There is no PR to query,
+# /merge-to-main MM-3b pushed branch:main directly. There is no PR to query,
 # so skip the gh pr view / mergeCommit retry block entirely and synthesize
 # the PR_* fields with sentinel values.
 BOOTSTRAP_MODE="${BOOTSTRAP_MODE:-0}"
@@ -149,7 +149,7 @@ PR_STATE="$(printf '%s\n' "$PR_FIELDS" | awk -F= '$1=="state"{sub(/^state=/,"");
 # Merge SHA — resolved from PR's mergeCommit.oid (authoritative; survives
 # main-worktree env reset). Retry once after 2s to absorb GitHub eventual-
 # consistency lag between `gh pr merge` and `gh pr view` reflecting the SHA.
-# Hard-fail if still empty: WE-21 cannot write history.md without it.
+# Hard-fail if still empty: WE-17 cannot write history.md without it.
 MERGE_SHA="$(gh -R "$REPO" pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null || echo "")"
 if [[ -z "$MERGE_SHA" ]]; then
   sleep 2
@@ -242,7 +242,7 @@ fi
 BRANCH="$BRANCH_NAME"
 WORKTREE_PATH="$WORKTREE"
 CREATED_DATE="$(date -u +%Y-%m-%d)"
-# Fallback when BACKUP_DIR is the legacy '(none)' sentinel or points to a non-existent dir (discard branch skips Pass 2 — see SKILL.md WE-9, issue #634).
+# Fallback when BACKUP_DIR is the legacy '(none)' sentinel or points to a non-existent dir (discard branch skips Pass 2 — see SKILL.md WE-5, issue #634).
 BACKUP_DIR_VALID=0
 if [[ "$BACKUP_DIR" != "(none)" && -d "$BACKUP_DIR" ]]; then
   BACKUP_DIR_VALID=1
