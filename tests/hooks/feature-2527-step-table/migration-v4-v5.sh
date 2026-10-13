@@ -33,7 +33,7 @@ out("WT", has("workflow_type") ? "present" : "<absent>");
 out("PMT", has("project_management_type") ? "present" : "<absent>");
 out("DP", has("delivery_path") ? s.delivery_path : "<absent>");
 out("DPO", has("delivery_path_origin") ? s.delivery_path_origin : "<absent>");
-out("PB", st("push_branch")); out("DL", st("deliver")); out("UV", st("user_verification"));
+out("PB", st("push_branch")); out("DL", st("merge_to_main")); out("UV", st("user_verification"));
 out("UVR", (steps.user_verification && steps.user_verification.reset_reason) || "<none>");
 out("BF", s.events.filter((e) => e.provenance === "backfilled").map((e) => [e.kind, e.step, e.status || e.value, e.origin, e.at_estimated === true].join(":")).join(","));
 out("SEQ", s.events.every((e, i) => e.seq === i + 1) ? "contiguous" : "broken");
@@ -120,40 +120,40 @@ case_begin "M6-push-branch-backfill-negatives" "hooks/workflow-state/state-io/mi
 mk_state "{\"sid\":\"m6a\",\"steps\":\"$THRU_RD\",\"entered\":true}"
 o="$(mig m6a)"
 check "M6a nothing settled after review_docs -> push_branch pending" "$(field "$o" PB)" "pending"
-check "M6b ... deliver pending" "$(field "$o" DL)" "pending"
+check "M6b ... merge_to_main pending" "$(field "$o" DL)" "pending"
 check "M6c ... no backfilled events" "$(field "$o" BF)" ""
 mk_state "{\"sid\":\"m6b\",\"steps\":\"$THRU_RD;user_verification=pending\",\"uvReset\":\"manual-reset\",\"entered\":true}"
 check "M6d UV pending with a non-delivery reason -> pending" "$(field "$(mig m6b)" PB)" "pending"
 case_end
 
-case_begin "M7-deliver-backfill-triggers" "hooks/workflow-state/state-io/migrations/v4-to-v5.js"
+case_begin "M7-merge-to-main-backfill-triggers" "hooks/workflow-state/state-io/migrations/v4-to-v5.js"
 mk_state "{\"sid\":\"m7a\",\"steps\":\"$THRU_RD;user_verification=complete;cleanup=complete\",\"entered\":true}"
-check "M7a cleanup settled -> deliver complete" "$(field "$(mig m7a)" DL)" "complete"
+check "M7a cleanup settled -> merge_to_main complete" "$(field "$(mig m7a)" DL)" "complete"
 mk_state "{\"sid\":\"m7b\",\"steps\":\"$THRU_RD;user_verification=complete;pre_final_report_gate=complete\",\"entered\":true}"
-check "M7b pre_final_report_gate settled -> deliver complete" "$(field "$(mig m7b)" DL)" "complete"
+check "M7b pre_final_report_gate settled -> merge_to_main complete" "$(field "$(mig m7b)" DL)" "complete"
 mk_state "{\"sid\":\"m7c\",\"steps\":\"$THRU_RD;user_verification=complete;user_verification=pending\",\"uvReset\":\"post-merge\",\"entered\":true}"
 o="$(mig m7c)"
-check "M7c UV post-merge -> deliver complete" "$(field "$o" DL)" "complete"
+check "M7c UV post-merge -> merge_to_main complete" "$(field "$o" DL)" "complete"
 check "M7d UV stays pending (boundary, not rewritten)" "$(field "$o" UV)" "pending"
 mk_state "{\"sid\":\"m7e\",\"steps\":\"$THRU_RD;user_verification=complete;user_verification=pending\",\"lastPushed\":\"abc1234\"}"
 o="$(mig m7e)"
-check "M7e UV pending + last_pushed_sha (old off push) -> deliver complete" "$(field "$o" DL)" "complete"
+check "M7e UV pending + last_pushed_sha (old off push) -> merge_to_main complete" "$(field "$o" DL)" "complete"
 check "M7f ... post-push reset_reason backfilled on UV" "$(field "$o" UVR)" "post-push"
 check_contains "M7g ... as a backfilled step_annotation" "$(field "$o" BF)" "step_annotation:user_verification:post-push:migration-v4-to-v5"
 case_end
 
-case_begin "M8-deliver-backfill-negatives" "hooks/workflow-state/state-io/migrations/v4-to-v5.js"
+case_begin "M8-merge-to-main-backfill-negatives" "hooks/workflow-state/state-io/migrations/v4-to-v5.js"
 mk_state "{\"sid\":\"m8a\",\"steps\":\"$THRU_RD;user_verification=complete\",\"entered\":true}"
 o="$(mig m8a)"
 check "M8a UV complete only -> push_branch complete" "$(field "$o" PB)" "complete"
-check "M8b UV complete only -> deliver pending" "$(field "$o" DL)" "pending"
+check "M8b UV complete only -> merge_to_main pending" "$(field "$o" DL)" "pending"
 mk_state "{\"sid\":\"m8c\",\"steps\":\"$THRU_RD;user_verification=complete\",\"lastPushed\":\"abc1234\"}"
 o="$(mig m8c)"
-check "M8c UV complete + sha -> deliver still pending" "$(field "$o" DL)" "pending"
+check "M8c UV complete + sha -> merge_to_main still pending" "$(field "$o" DL)" "pending"
 check "M8d ... no post-push annotation" "$(field "$o" UVR)" "<none>"
 mk_state "{\"sid\":\"m8e\",\"steps\":\"$THRU_RD;user_verification=complete;user_verification=pending\"}"
 o="$(mig m8e)"
-check "M8e UV pending, no reason, no sha -> deliver pending" "$(field "$o" DL)" "pending"
+check "M8e UV pending, no reason, no sha -> merge_to_main pending" "$(field "$o" DL)" "pending"
 check "M8f ... push_branch pending" "$(field "$o" PB)" "pending"
 case_end
 
@@ -161,7 +161,7 @@ case_begin "M9-backfill-event-shape" "hooks/workflow-state/state-io/migrations/v
 mk_state "{\"sid\":\"m9\",\"steps\":\"$THRU_RD;user_verification=complete;cleanup=complete\",\"entered\":true}"
 o="$(mig m9)"
 check "M9 backfilled step_status events carry origin + at_estimated" "$(field "$o" BF)" \
-  "step_status:push_branch:complete:migration-v4-to-v5:true,step_status:deliver:complete:migration-v4-to-v5:true"
+  "step_status:push_branch:complete:migration-v4-to-v5:true,step_status:merge_to_main:complete:migration-v4-to-v5:true"
 case_end
 
 case_begin "M10-version-chain-and-guard" "hooks/workflow-state/state-io/core.js"

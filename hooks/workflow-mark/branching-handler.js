@@ -5,8 +5,10 @@
 const fs = require("fs");
 const { validateSkipReason } = require("./skip-reason");
 const {
-  markStep, recordSessionWorktree, readState, recordMergeBaseBaseline, setDeliveryPath,
+  markStep, recordSessionWorktree, readState, recordMergeBaseBaseline, setDeliveryProfile,
 } = require("../workflow-state");
+const { reconcileDeliveryPath } = require("./branching-reconcile");
+const { readAutoMergePr } = require("../lib/auto-merge-config");
 const { isMainWorktree } = require("../workflow-state/resolve-worktree-path");
 const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
 const { recoveryFor } = require("../workflow-state/completion-approval");
@@ -60,19 +62,37 @@ function handle(ctx) {
       );
       return true;
     }
+    const rerun = `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: {decision}>>"`;
+    // #2527 3-13: the declared worktree must fit the delivery path BEFORE anything is
+    // written, so a rejection leaves the state untouched.
+    const rc = reconcileDeliveryPath({ sessionId, decision: v.reason, repoCwd: ctx.repoCwd });
+    if (!rc.ok) {
+      pushMessage(
+        `workflow-mark: BRANCHING_COMPLETE rejected — ${rc.reason}: ${rc.detail}. ` +
+          `branching_complete NOT recorded. Fix the decision, then ${rerun}`
+      );
+      return true;
+    }
+    // #2527: the delivery profile (path + AUTO_MERGE_PR) is pinned here, from the live
+    // config at branching time. The step completes only once the profile is recorded.
+    try {
+      const amp = readAutoMergePr({ repoDir: ctx.repoCwd });
+      setDeliveryProfile(sessionId, {
+        deliveryPath: rc.deliveryPath, autoMergePr: amp.value, source: amp.source, origin: "branching-handler",
+      });
+    } catch (e) {
+      pushMessage(
+        `workflow-mark: failed to write the delivery profile — ${e.message}. ` +
+          `delivery profile NOT recorded; branching_complete NOT recorded. ${rerun}`
+      );
+      return true;
+    }
     try {
       markStep(sessionId, "branching_complete", "complete", { decision: v.reason });
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. branching_complete NOT recorded.`
       );
-    }
-    // #2527: the delivery path is fixed here, from the live config at branching time.
-    try {
-      const { resolveLiveDeliveryPath } = require("../lib/delivery-path");
-      setDeliveryPath(sessionId, resolveLiveDeliveryPath(sessionId, ctx.repoCwd), "branching-handler");
-    } catch (e) {
-      pushMessage(`workflow-mark: warning — failed to record delivery_path: ${e.message}`);
     }
     try {
       const wtMatch = v.reason.match(/\bworktree:\s*([^\s|]+)/);

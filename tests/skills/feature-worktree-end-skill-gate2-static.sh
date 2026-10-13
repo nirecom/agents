@@ -1,17 +1,17 @@
 #!/bin/bash
 # tests/skills/feature-worktree-end-skill-gate2-static.sh
-# Tests: skills/worktree-end/SKILL.md, skills/deliver/SKILL.md, bin/worker-dispatch/workers/commit-push/pr.js
-# Tags: static, skill, worktree-end, gate2, unstaged-tracked, scope:issue-specific, gitlab, glab, forge, deliver
+# Tests: skills/worktree-end/SKILL.md, skills/merge-to-main/SKILL.md, bin/worker-dispatch/workers/commit-push/pr.js
+# Tags: static, skill, worktree-end, gate2, unstaged-tracked, scope:issue-specific, gitlab, glab, forge, deliver, merge-to-main
 #
 # Static contract test for Gate 2 (worktree-end pre-flight).
 # WE-2.5 was renumbered to WE-3 (and WE-3..WE-21 shifted to WE-4..WE-22) in #971.
-# #2527: the merge moved to /deliver and PR/MR creation to the commit-push worker (pr.js).
+# #2527: the merge moved to /merge-to-main and PR/MR creation to the commit-push worker (pr.js).
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SKILL_MD="${SCRIPT_CHECKOUT_ROOT}/skills/worktree-end/SKILL.md"
-DELIVER_MD="${SCRIPT_CHECKOUT_ROOT}/skills/deliver/SKILL.md"
+MERGE_TO_MAIN_MD="${SCRIPT_CHECKOUT_ROOT}/skills/merge-to-main/SKILL.md"
 PR_JS="${SCRIPT_CHECKOUT_ROOT}/bin/worker-dispatch/workers/commit-push/pr.js"
 
 PASS=0
@@ -169,10 +169,10 @@ test_8_gitlab_iid_readback() {
 # Test 9: merge path documents the gitlab squash-merge of the approved MR number
 # with source-branch removal.
 test_9_gitlab_mr_merge() {
-    if grep -qF 'glab mr merge <PR_NUMBER> --squash --remove-source-branch' "$DELIVER_MD"; then
-        pass "9: /deliver documents glab mr merge <PR_NUMBER> --squash --remove-source-branch"
+    if grep -qF 'glab mr merge <PR_NUMBER> --squash --remove-source-branch' "$MERGE_TO_MAIN_MD"; then
+        pass "9: /merge-to-main documents glab mr merge <PR_NUMBER> --squash --remove-source-branch"
     else
-        fail "9: skills/deliver/SKILL.md missing glab mr merge <PR_NUMBER> --squash --remove-source-branch"
+        fail "9: skills/merge-to-main/SKILL.md missing glab mr merge <PR_NUMBER> --squash --remove-source-branch"
     fi
 }
 
@@ -180,7 +180,7 @@ test_9_gitlab_mr_merge() {
 # proving both forges are covered — neither branch was dropped for the other.
 test_10_github_orth_pair() {
     if grep -qF 'gh --version' "$SKILL_MD" \
-        && grep -qF 'gh pr merge <PR_NUMBER> --squash --delete-branch' "$DELIVER_MD"; then
+        && grep -qF 'gh pr merge <PR_NUMBER> --squash --delete-branch' "$MERGE_TO_MAIN_MD"; then
         pass "10: github PR counterparts (gh --version, gh pr merge) still documented"
     else
         fail "10: github ORTH counterparts missing"

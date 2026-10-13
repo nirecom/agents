@@ -10,6 +10,7 @@ source "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/cli-stub.sh"
 
 s27_setup
 trap s27_teardown EXIT
+export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
 
 BR="feature/2527-fixture"
 PRE="workflow_init=complete;clarify_intent=complete;research=complete;outline=complete;detail=complete"
@@ -35,9 +36,13 @@ export NODE_OPTIONS="--require \"$(np "$_s27_here/fake-gh.js")\""
 export FAKE_GH_LOG="$(np "$S27_TMP/gh.log")"
 export FAKE_GH_STATE=NONE
 
-# fx <sid> <steps> [extra spec json fragment] — v4 fixture rooted at the repo.
+# fx <sid> <steps> [extra spec json fragment] — v4 fixture rooted at the repo. #2277: the
+# complete plan steps carry an approval record, or next-step reads them as pending.
 fx() {
   mk_state "{\"sid\":\"$1\",\"steps\":\"$2\",\"cwd\":\"$S27_REPO_M\",\"branch\":\"$BR\"${3:+,$3}}"
+  node "$S27_SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" inject-complete \
+    "$WORKFLOW_STATE_DIR/$1.json" clarify_intent outline detail >/dev/null 2>&1 \
+    || fail "fixture" "plan-approval-fixture.js inject-complete $1 failed"
 }
 
 # after <sid> — facts read back through readState after next-step ran.
@@ -46,7 +51,7 @@ const c = req("hooks/workflow-state/state-io/core.js"); const s = c.readState(pr
 if (!s) { out("RS", "null"); process.exit(0); }
 const st = (k) => (s.current.steps[k] ? s.current.steps[k].status : "<none>");
 out("DP", s.delivery_path || "<absent>"); out("DT", s.deliverable_type || "<absent>");
-out("PB", st("push_branch")); out("DL", st("deliver"));
+out("PB", st("push_branch")); out("DL", st("merge_to_main"));
 JS
 after() {
   S27_SID="$1" s27_node "$AFTER_JS"
@@ -60,7 +65,7 @@ check_not_contains "R-a no DELIVERY_PATH_MISMATCH when live agrees" "$o" "DELIVE
 a="$(after ra)"
 check "R-a delivery_path=pull_request recorded" "$(field "$a" DP)" "pull_request"
 check "R-a push_branch pending" "$(field "$a" PB)" "pending"
-check "R-a deliver pending" "$(field "$a" DL)" "pending"
+check "R-a merge_to_main pending" "$(field "$a" DL)" "pending"
 case_end
 
 case_begin "R-a2-recorded-path-vs-live-off" "bin/workflow/lib/next-step/delivery-path-note.js"
@@ -87,7 +92,7 @@ fx rc "$THRU_RD;user_verification=complete;cleanup=pending"
 : > "$S27_REPO/dirty.txt"
 o="$(ENFORCE_WORKTREE=off run_next_step rc)"
 rm -f "$S27_REPO/dirty.txt"
-check_skill "R-c NEXT_SKILL=deliver" "$o" "deliver"
+check_skill "R-c NEXT_SKILL=merge-to-main" "$o" "merge-to-main"
 a="$(after rc)"
 check "R-c delivery_path=direct recorded" "$(field "$a" DP)" "direct"
 check "R-c push_branch backfilled" "$(field "$a" PB)" "complete"
@@ -97,7 +102,7 @@ case_begin "R-c2-off-after-bash-push" "bin/workflow/next-step"
 fx rc2 "$THRU_RD;user_verification=complete;user_verification=pending" "\"lastPushed\":\"$HEAD_SHA\""
 o="$(ENFORCE_WORKTREE=off run_next_step rc2)"
 check_skill "R-c' NEXT_SKILL=session-close" "$o" "session-close"
-check "R-c' deliver backfilled" "$(field "$(after rc2)" DL)" "complete"
+check "R-c' merge_to_main backfilled" "$(field "$(after rc2)" DL)" "complete"
 case_end
 
 case_begin "R-d-after-cleanup" "bin/workflow/next-step"
@@ -121,7 +126,7 @@ o="$(run_next_step rf)"
 check_skill "R-f NEXT_SKILL=worktree-end" "$o" "worktree-end"
 a="$(after rf)"
 check "R-f push_branch backfilled" "$(field "$a" PB)" "complete"
-check "R-f deliver backfilled" "$(field "$a" DL)" "complete"
+check "R-f merge_to_main backfilled" "$(field "$a" DL)" "complete"
 case_end
 
 echo "Results: $PASS passed, $FAIL failed"

@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # filename: tests/skills/feature-772-bootstrap-e2e.sh
-# Tests: skills/deliver/scripts/bootstrap-complete.sh
-# Tags: bootstrap, worktree-end, e2e, new-repo, scope:issue-specific, deliver, user-verification, security
+# Tests: skills/merge-to-main/scripts/bootstrap-complete.sh
+# Tags: bootstrap, worktree-end, e2e, new-repo, scope:issue-specific, deliver, user-verification, security, merge-to-main
 #
-# Tests the bootstrap-complete script for issue #772 (moved to /deliver by #2527).
-# This script runs in /deliver (DL-3b) when the remote was empty at
+# Tests the bootstrap-complete script for issue #772 (moved to /merge-to-main by #2527).
+# This script runs in /merge-to-main (MM-3b) when the remote was empty at
 # session start — it pushes the initial commit, then sets the default branch
 # on the remote via `gh repo edit`.
 
 set -u
-# TL3 gap (not caught here): /deliver DL-3b passing the live session id to the script, and a real
+# TL3 gap (not caught here): /merge-to-main MM-3b passing the live session id to the script, and a real
 # empty GitHub remote. Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BOOTSTRAP_COMPLETE="$SCRIPT_CHECKOUT_ROOT/skills/deliver/scripts/bootstrap-complete.sh"
+BOOTSTRAP_COMPLETE="$SCRIPT_CHECKOUT_ROOT/skills/merge-to-main/scripts/bootstrap-complete.sh"
 
 PASS=0
 FAIL=0
@@ -33,7 +33,7 @@ run_with_timeout() {
 
 # --- Existence gate ---------------------------------------------------------
 if [ ! -f "$BOOTSTRAP_COMPLETE" ]; then
-    echo "FAIL: precondition missing — skills/deliver/scripts/bootstrap-complete.sh (TDD: write source next)"
+    echo "FAIL: precondition missing — skills/merge-to-main/scripts/bootstrap-complete.sh (TDD: write source next)"
     echo ""
     echo "Results: 0 passed, 1 failed (expected RED — source not yet implemented)"
     exit 1

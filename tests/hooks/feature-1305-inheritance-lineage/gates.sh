@@ -73,16 +73,16 @@ O="$(resolve_donor "$H5" resume "$TDIR_B/$H5.jsonl" "$CWD_B" "$BRANCH_B")"
 assert_kv "L-5a. lineage does not override a branch mismatch" "$O" decision context-mismatch
 assert_kv "L-5b. context mismatch yields no donor" "$O" donor NONE
 
-# --- L-6: S1 survives the rewrite. A session whose deliver step is complete
+# --- L-6: S1 survives the rewrite. A session whose merge_to_main step is complete
 # is finished; its steps must not be resurrected.
 D6="l6donor-$$"; H6="l6heir-$$"
 write_state_v1 "$D6" "$CWD_A" "$BRANCH_A" "$STEPS_DELIVERED"
 write_forked_transcript "$TDIR_A/$H6.jsonl" "$H6" "$D6"
 O="$(resolve_donor "$H6" resume "$TDIR_A/$H6.jsonl" "$CWD_A" "$BRANCH_A")"
-assert_prefix "L-6a. a delivered (deliver complete) session is not resumable (S1)" "$O" decision not-resumable
+assert_prefix "L-6a. a delivered (merge_to_main complete) session is not resumable (S1)" "$O" decision not-resumable
 assert_kv "L-6b. S1 yields no donor" "$O" donor NONE
 
-# L-6c/d: approval alone does not finish a session — deliver is the step after it.
+# L-6c/d: approval alone does not finish a session — merge_to_main is the step after it.
 D6C="l6cdonor-$$"; H6C="l6cheir-$$"
 write_state_v1 "$D6C" "$CWD_A" "$BRANCH_A" "$STEPS_APPROVED_NOT_DELIVERED"
 write_forked_transcript "$TDIR_A/$H6C.jsonl" "$H6C" "$D6C"

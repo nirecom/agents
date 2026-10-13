@@ -32,9 +32,9 @@ mk_state '{"sid":"pr-uv","path":"pull_request","entered":true,"upto":"user_verif
 expect_skill "pr user_verification" pr-uv get-release-approval user_verification
 case_end
 
-case_begin "pull_request deliver -> deliver" "bin/workflow/lib/next-step/steps.js"
-mk_state '{"sid":"pr-deliver","path":"pull_request","entered":true,"upto":"deliver","steps":"deliver=pending"}'
-expect_skill "pr deliver" pr-deliver deliver deliver
+case_begin "pull_request merge_to_main -> merge-to-main" "bin/workflow/lib/next-step/steps.js"
+mk_state '{"sid":"pr-mtm","path":"pull_request","entered":true,"upto":"merge_to_main","steps":"merge_to_main=pending"}'
+expect_skill "pr merge_to_main" pr-mtm merge-to-main merge_to_main
 case_end
 
 case_begin "pull_request cleanup -> worktree-end" "bin/workflow/lib/next-step/steps.js"
@@ -47,7 +47,7 @@ mk_state '{"sid":"pr-close","path":"pull_request","entered":true,"upto":"pre_fin
 expect_skill "pr pre_final" pr-close session-close pre_final_report_gate
 case_end
 
-# direct: live env matches the recorded path; an untracked file keeps the deliver evidence false.
+# direct: live env matches the recorded path; an untracked file keeps the merge_to_main evidence false.
 export ENFORCE_WORKTREE=off
 printf 'dirty\n' > "$RP_REPO/dirty.txt"
 
@@ -56,9 +56,9 @@ mk_state '{"sid":"d-uv","path":"direct","upto":"user_verification","steps":"user
 expect_skill "direct user_verification" d-uv get-release-approval user_verification
 case_end
 
-case_begin "direct deliver -> deliver" "bin/workflow/lib/next-step/verdict.js"
-mk_state '{"sid":"d-deliver","path":"direct","upto":"deliver","steps":"deliver=pending"}'
-expect_skill "direct deliver" d-deliver deliver deliver
+case_begin "direct merge_to_main -> merge-to-main" "bin/workflow/lib/next-step/verdict.js"
+mk_state '{"sid":"d-mtm","path":"direct","upto":"merge_to_main","steps":"merge_to_main=pending"}'
+expect_skill "direct merge_to_main" d-mtm merge-to-main merge_to_main
 case_end
 
 case_begin "direct pre_final_report_gate -> session-close (cleanup table-skipped)" "bin/workflow/lib/next-step/verdict.js"

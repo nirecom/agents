@@ -3,7 +3,7 @@
 # Tests: skills/commit-push/SKILL.md, skills/_shared/commit-push-dispatch.md, hooks/lib/handoff-artifact.js
 # Tags: commit-push, handoff, choke-point, class-d, class-e, static-check, table-driven, regression-2218, scope:issue-specific, pwsh-not-required, TL1
 
-# Issue #2218 Step 12 — the worker outcomes are the last thing a session learns before it stops, and seven of them stop it. Since #2527 the outcome lines live in skills/_shared/commit-push-dispatch.md "## Outcomes" (shared by /commit-push and /deliver): every outcome keeps a line, every line names its class (record blocked / record landed), the class-to-key mapping line names commit-push:blocked / commit-push:pushed, and SKILL.md does not grow.
+# Issue #2218 Step 12 — the worker outcomes are the last thing a session learns before it stops, and seven of them stop it. Since #2527 the outcome lines live in skills/_shared/commit-push-dispatch.md "## Outcomes" (shared by /commit-push and /merge-to-main): every outcome keeps a line, every line names its class (record blocked / record landed), the class-to-key mapping line names commit-push:blocked / commit-push:pushed, and SKILL.md does not grow.
 
 # TL3 gap: CP-2 is prompt text, so nothing here proves a model actually emits the recording call at runtime — only that the instruction covers all ten outcomes and that the step's size invariant holds. Full behavioral verification requires running /commit-push end to end against a real worker dispatch (all seven blocked outcomes and all three success outcomes), which no automated layer in this repo drives. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: workflow-state.
 

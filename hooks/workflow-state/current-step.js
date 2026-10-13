@@ -23,7 +23,7 @@ function resolveCurrentStep(state, opts) {
     const raw = (entry && entry.status) || "pending";
     const eff = effectiveStatus(step, raw, profile);
     // #2527: a navigation caller — a delivery-boundary reset reads as settled.
-    if (!isSettledStatus(navigateBoundaryStatus(step, eff, state) || eff)) return step;
+    if (!isSettledStatus(navigateBoundaryStatus(step, eff, state, profile) || eff)) return step;
     if (isUnapprovedGatedComplete(step, raw, state, opts && opts.sessionId)) return step;
   }
   return null;

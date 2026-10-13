@@ -7,7 +7,7 @@
 # #772 regression: an inheriting session must not copy `cleanup` verbatim; it marks
 # cleanup=skipped with skip_reason="inherited-from-prior-session".
 # #2527: a donor with cleanup=complete is a delivered session (the v4-to-v5 migration
-# backfills deliver=complete), so it is not inherited at all (C1); the #772 invariant
+# backfills merge_to_main=complete), so it is not inherited at all (C1); the #772 invariant
 # still holds: cleanup never inherits as complete.
 
 set -u
@@ -198,7 +198,7 @@ setup_prior_and_new() {
 # Normal cases — TDD: will fail until session-start.js is modified
 # ============================================================================
 
-# C1: Prior cleanup=complete is a delivered session (migration backfills deliver) →
+# C1: Prior cleanup=complete is a delivered session (migration backfills merge_to_main) →
 # not inherited: new cleanup stays pending (never complete, #772) and
 # research/outline/detail are not inherited either.
 setup_prior_and_new "c1" "complete"

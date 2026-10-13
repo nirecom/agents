@@ -378,14 +378,14 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
   if (declaredOutcome) writeOpts.provenance = "declared";
   if (typeof opts.origin === "string") writeOpts.origin = opts.origin;
 
-  // #2527: release steps complete only on evidence; deliver settles via settleDeliver.
+  // #2527: release steps complete only on evidence; merge_to_main settles via settleMergeToMain.
   const release = checkReleaseCompletion(sessionId, step, status, gate, opts, resolveTrustedRepoDir);
   if (release && !release.ok) return fail(release.code, release.message, release.kind, release.detail);
   if (release) Object.assign(extraFields, release.extraFields);
 
   try {
     if (release && release.settleKind) {
-      require("./delivery-settle").settleDeliver(sessionId, Object.assign({}, writeOpts, {
+      require("./delivery-settle").settleMergeToMain(sessionId, Object.assign({}, writeOpts, {
         kind: release.settleKind, extraFields,
       }));
     } else {

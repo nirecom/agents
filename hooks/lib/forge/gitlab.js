@@ -117,11 +117,12 @@ const codehostGitlab = {
       "--jq", ".[]|[.visibility,.path_with_namespace]|@tsv"]);
   },
   // MR state mapped onto the shared PR vocabulary (./pr-state.js).
-  prStateForBranch(repoDir) {
+  // opts.timeoutMs (default 8000) bounds the glab call.
+  prStateForBranch(repoDir, opts) {
     const { spawnSync } = require("child_process");
     try {
       const r = spawnSync("glab", ["mr", "view", "--json", "state", "--jq", ".state"],
-        { cwd: repoDir, encoding: "utf8", timeout: 8000 });
+        { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
       if (r.error) return "UNKNOWN"; // glab not found
       if (r.status === 0) {
         const state = (r.stdout || "").trim().toLowerCase();
@@ -130,8 +131,7 @@ const codehostGitlab = {
       }
       // glab exits 1 both for "no MR" and for an API failure, so only the no-MR
       // message reads as NONE; any other failure is UNKNOWN (fail-closed).
-      return /no open merge request|merge request not found|no merge requests? found/i
-        .test(String(r.stderr || "")) ? "NONE" : "UNKNOWN";
+      return isNoMrStderr(r.stderr) ? "NONE" : "UNKNOWN";
     } catch (e) {
       return "UNKNOWN";
     }
@@ -140,19 +140,64 @@ const codehostGitlab = {
     return isPrPresentOrUnknown(codehostGitlab.prStateForBranch(repoDir));
   },
   // { state, number } of the current branch's MR (bin/workflow/pr-state); number is the MR iid.
-  prForBranch(repoDir) {
-    const state = codehostGitlab.prStateForBranch(repoDir);
+  prForBranch(repoDir, opts) {
+    const state = codehostGitlab.prStateForBranch(repoDir, opts);
     if (state === "NONE" || state === "UNKNOWN") return { state, number: "" };
     const { spawnSync } = require("child_process");
     try {
       const r = spawnSync("glab", ["mr", "view", "--json", "iid", "--jq", ".iid"],
-        { cwd: repoDir, encoding: "utf8", timeout: 8000 });
+        { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
       const n = r.status === 0 ? String(r.stdout || "").trim() : "";
       return { state, number: /^\d+$/.test(n) ? n : "" };
     } catch (e) {
       return { state, number: "" };
     }
   },
+  // { state, number, mergeState, url, error } from one glab MR JSON read; the
+  // detailed_merge_status mapping lives in ./merge-state.js (SSOT).
+  mergeStateForBranch(repoDir, opts) {
+    const ms = require("./merge-state");
+    const { spawnSync } = require("child_process");
+    const timeoutMs = (opts && opts.timeoutMs) || ms.FORGE_QUERY_TIMEOUT_MS;
+    let r;
+    try {
+      r = spawnSync("glab", ["mr", "view", "--output", "json"],
+        { cwd: repoDir, encoding: "utf8", timeout: timeoutMs, windowsHide: true });
+    } catch (e) {
+      return ms.unknownMergeState("glab failed to start: " + (e && e.message));
+    }
+    const failure = ms.spawnFailure(r, "glab", timeoutMs);
+    if (failure) return ms.unknownMergeState(failure);
+    if (r.status !== 0) {
+      if (isNoMrStderr(r.stderr)) return { state: "NONE", number: "", mergeState: "", url: "", error: "" };
+      return ms.unknownMergeState(String(r.stderr || "").trim() || `glab exited ${r.status}`);
+    }
+    try {
+      const mr = JSON.parse(String(r.stdout || "").trim());
+      const state = GLAB_MR_STATES[String((mr && mr.state) || "").toLowerCase()];
+      if (!state) return ms.unknownMergeState("glab answered an unreadable MR state");
+      const iid = mr.iid !== undefined && mr.iid !== null ? String(mr.iid) : "";
+      return {
+        state,
+        number: /^\d+$/.test(iid) ? iid : "",
+        mergeState: ms.gitlabMergeState(mr),
+        url: typeof mr.web_url === "string" ? mr.web_url : "",
+        error: "",
+      };
+    } catch (e) {
+      return ms.unknownMergeState("glab answered malformed JSON");
+    }
+  },
 };
+
+// glab exits 1 both for "no MR" and for an API failure, so only the no-MR message reads as NONE.
+function isNoMrStderr(stderr) {
+  return /no open merge request|merge request not found|no merge requests? found/i.test(String(stderr || ""));
+}
+
+function timeoutOf(opts) {
+  const t = opts && Number(opts.timeoutMs);
+  return Number.isFinite(t) && t > 0 ? t : 8000;
+}
 
 module.exports = { trackerGitlab, codehostGitlab, encodePath, glabHostArg, GLAB_SCAN_TARGET_REGEX, GLAB_API_WRITE_REGEX };

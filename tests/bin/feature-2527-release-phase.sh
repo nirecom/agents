@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/bin/feature-2527-release-phase.sh
-# Tests: bin/workflow/lib/next-step/steps.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/delivery-path-note.js, hooks/workflow-state/effective-state/delivery-boundary.js, hooks/workflow-state/delivery-settle.js, hooks/workflow-state/evidence-resolver/release-evidence.js, hooks/workflow-gate/commit-gate-steps.js, hooks/workflow-gate/gh-detect.js, hooks/lib/merge-detect.js, hooks/workflow-mark/mark-step-handler.js, bin/session-close-detect-route.js, skills/deliver/SKILL.md, bin/workflow/pr-state, skills/get-release-approval/scripts/preflight.sh
+# Tests: bin/workflow/lib/next-step/steps.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/delivery-path-note.js, hooks/workflow-state/effective-state/delivery-boundary.js, hooks/workflow-state/delivery-settle.js, hooks/workflow-state/evidence-resolver/release-evidence.js, hooks/workflow-gate/commit-gate-steps.js, hooks/workflow-gate/gh-detect.js, hooks/lib/merge-detect.js, hooks/workflow-mark/mark-step-handler.js, bin/session-close-detect-route.js, skills/merge-to-main/SKILL.md, bin/workflow/pr-state, skills/get-release-approval/scripts/preflight.sh
 # Tags: scope:issue-specific, workflow, release-phase
 # Issue #2527 stage 3 (release phase). Dispatcher (file-split rule): one sub-file per plan
 # item under 3-12 in the sibling feature-2527-release-phase/ folder; each case runs one sub-file.
@@ -42,7 +42,7 @@ case_begin "delivery-boundary reset predicate" "hooks/workflow-state/effective-s
 run_sub "$SUB/delivery-boundary.sh"
 case_end
 
-case_begin "settleDeliver single-append settlement" "hooks/workflow-state/delivery-settle.js"
+case_begin "settleMergeToMain single-append settlement" "hooks/workflow-state/delivery-settle.js"
 run_sub "$SUB/delivery-settle.sh"
 case_end
 
@@ -78,7 +78,7 @@ case_begin "session-close build-env argv + PR head matching" "bin/session-close-
 run_sub "$SUB/session-close-build-env-argv.sh"
 case_end
 
-case_begin "skill responsibility moves (static)" "skills/deliver/SKILL.md"
+case_begin "skill responsibility moves (static)" "skills/merge-to-main/SKILL.md"
 run_sub "$SUB/skill-static.sh"
 case_end
 
@@ -88,6 +88,18 @@ case_end
 
 case_begin "get-release-approval preflight execution" "skills/get-release-approval/scripts/preflight.sh"
 run_sub "$SUB/preflight-exec.sh"
+case_end
+
+case_begin "web-merge channel: next-step wait + evidence" "bin/workflow/lib/next-step/release-wait.js"
+run_sub "$SUB/web-merge-channel.sh"
+case_end
+
+case_begin "web-merge poller (wait-web-merge.sh)" "skills/get-release-approval/scripts/wait-web-merge.sh"
+run_sub "$SUB/web-merge-poller.sh"
+case_end
+
+case_begin "step rename deliver -> merge_to_main" "hooks/workflow-state/step-table.js"
+run_sub "$SUB/step-rename.sh"
 case_end
 
 echo ""

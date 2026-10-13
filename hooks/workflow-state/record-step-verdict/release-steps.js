@@ -1,19 +1,19 @@
 "use strict";
-// Declared completion of the release steps push_branch / deliver (#2527 3-2b, 3-3).
+// Declared completion of the release steps push_branch / merge_to_main (#2527 3-2b, 3-3).
 // A declaration (MARK_STEP, --advance, --mark) completes them only on the same
 // evidence navigation reads, so a freely emittable sentinel cannot claim a push
 // or a delivery that did not happen. A forge or git failure is no evidence.
 // checkReleaseCompletion → null (not a release completion) | { ok:false, ... }
-//   | { ok:true, settleKind, extraFields } — settleKind set only for deliver.
+//   | { ok:true, settleKind, extraFields } — settleKind set only for merge_to_main.
 
-const RELEASE_STEPS = ["push_branch", "deliver"];
+const RELEASE_STEPS = ["push_branch", "merge_to_main"];
 const RELEASE_GATES = ["sentinel", "advance", "mark"];
 
 function refuse(step, why) {
   return {
     ok: false, code: 2, kind: "no-release-evidence", detail: why,
     message: `record-step-verdict: ${step} NOT recorded — ${why}. Run the step's skill ` +
-      `(${step === "push_branch" ? "/commit-push" : "/deliver"}) instead of declaring it complete.`,
+      `(${step === "push_branch" ? "/commit-push" : "/merge-to-main"}) instead of declaring it complete.`,
   };
 }
 
@@ -58,14 +58,14 @@ function checkReleaseCompletion(sessionId, step, status, gate, opts, resolveTrus
   if (!evidence && !(bootstrap && isBootstrapDelivered(repoDir))) {
     return refuse(step, "the delivery is not observable (PR not MERGED, or the default branch is not pushed clean)");
   }
-  const { isDeliveryBoundaryReset } = require("../effective-state/delivery-boundary");
-  const uv = steps.user_verification;
-  if (!((uv && uv.status === "complete") || isDeliveryBoundaryReset(uv))) {
+  const { resolveSessionProfile } = require("../session-profile");
+  const profile = resolveSessionProfile(state, sessionId, { repoDir });
+  const { isReleaseApprovalSatisfied } = require("../release-approval");
+  if (!isReleaseApprovalSatisfied(state, sessionId, { repoDir, profile })) {
     return refuse(step, "user_verification (release approval) is not recorded for this session");
   }
-  const { resolveSessionProfile } = require("../session-profile");
   const { deliveryKindFor } = require("../delivery-settle");
-  const path = resolveSessionProfile(state, sessionId, { repoDir }).deliveryPath;
+  const path = profile.deliveryPath;
   return { ok: true, extraFields: {}, settleKind: bootstrap ? "post-push" : deliveryKindFor(path) };
 }
 

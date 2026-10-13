@@ -251,12 +251,12 @@ fi
 case_end
 
 case_begin "ev9-persisted-keys-set-equality" "hooks/workflow-state/state-io/projection.js"
-echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the fifteen documented keys (v5, #2527) =="
+echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the eighteen documented keys (v5, #2527) =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
-const want = ["closes_issues", "created_at", "current", "deliverable_type", "delivery_path",
+const want = ["auto_merge_pr", "auto_merge_pr_origin", "auto_merge_pr_source", "closes_issues", "created_at", "current", "deliverable_type", "delivery_path",
   "delivery_path_origin", "events", "last_pushed_sha", "merge_base_baseline",
   "project_management_type", "session_id", "session_start_context", "session_worktree",
   "verbose_prompt", "version"].sort();
@@ -265,7 +265,7 @@ console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GO
 JS
 )
     nodejs "$SID" "$PRE$_ev_script"
-    assert_eq "EV9/persisted-keys-set-equality" "15 MATCH" "$NODE_OUT"
+    assert_eq "EV9/persisted-keys-set-equality" "18 MATCH" "$NODE_OUT"
 fi
 case_end
 

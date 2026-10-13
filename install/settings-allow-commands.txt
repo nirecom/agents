@@ -19,6 +19,7 @@ bin/workflow/set-workflow-type
 bin/workflow/set-deliverable-type
 bin/workflow/pr-state
 skills/get-release-approval/scripts/preflight.sh
+skills/get-release-approval/scripts/wait-web-merge.sh
 bin/workflow/record-complexity-and-skip
 skills/worktree-start/scripts/derive-worktree-name.sh
 bin/workflow/read-complexity-evaluation
@@ -38,3 +39,4 @@ bin/test-lanes-status.sh
 skills/run-tests/scripts/probe-calibration.sh
 skills/run-tests/scripts/mark-calibration-asked.sh
 bin/workflow/handoff-append
+bin/workflow/release-channel

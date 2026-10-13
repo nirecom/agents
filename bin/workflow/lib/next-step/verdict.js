@@ -1,6 +1,6 @@
 "use strict";
-// Verdict computation for bin/workflow/next-step: emit() plus the whole
-// computeVerdict block (including its nested persistResolutions and
+// Verdict computation for bin/workflow/next-step: the whole computeVerdict block
+// (output writer: ./emit.js) (including its nested persistResolutions and
 // applyRecordedVerdictSkip, which self-recurses into computeVerdict).
 //
 // SIZE NOTE: knowingly over the 300-line WARN threshold; the 500-line HARD
@@ -44,33 +44,15 @@ const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
 const { resolveGateLine } = require("./gate-line");
 const { deliveryPathNoteLine } = require("./delivery-path-note");
-const { settleDeliver, deliveryKindFor } = require("../../../../hooks/workflow-state/delivery-settle");
+const { settleMergeToMain, deliveryKindFor } = require("../../../../hooks/workflow-state/delivery-settle");
 
-function emit(action, skill, hint, reason, skipHint, gateLine) {
-  let out =
-    "ACTION=" + action + "\n" +
-    "NEXT_SKILL=" + (skill || "") + "\n" +
-    "NEXT_HINT='" + (hint || "") + "'\n" +
-    "REASON='" + (reason || "") + "'\n";
-  // #485: optional advisory SKIP_HINT line — appended ONLY when non-empty, so the
-  // 4-line contract is byte-identical on every other step. Value is a fixed
-  // sentinel literal (no quotes/whitespace) → unquoted SKIP_HINT=<value> form.
-  if (skipHint) {
-    out += "SKIP_HINT=" + skipHint + "\n";
-  }
-  if (gateLine) out += gateLine + "\n";
-  if (noteLine) out += noteLine + "\n";
-  process.stdout.write(out);
-  process.exit(0);
-}
+const { emit, setNoteLine } = require("./emit");
+const { createForgeMemo } = require("../../../../hooks/lib/forge/merge-state");
 
 // ---- Verdict computation --------------------------------------------------
 
-// #2527: the DELIVERY_PATH_MISMATCH advisory line, set once the profile is known.
-let noteLine = "";
-
 function computeVerdict(rawSid, _didAutoRepair) {
-  noteLine = "";
+  setNoteLine("");
   const sid = resolveSessionId({ sessionIdFromInput: rawSid });
   if (!sid) {
     emit("blocked", "", "", "session-id-unresolved");
@@ -121,7 +103,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
 
   const repoDir = resolveRepoDir();
   const profile = resolveSessionProfile(state, sid, { repoDir });
-  noteLine = deliveryPathNoteLine(profile, sid, repoDir);
+  setNoteLine(deliveryPathNoteLine(profile, sid, repoDir));
 
   // repoDir belongs to THIS process, not to `sid`. A presence check on
   // `--session` would mislabel hooks/session-start.js, which passes
@@ -169,8 +151,10 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // Gated steps (outline/detail) resolve here only when the approval invariant
   // is already satisfied (#1133) — the same predicate writeState enforces.
   // #2527: navigation settles delivery-boundary resets; the evaluated release step may query the forge.
+  // forgeMemo: one PR read per run, shared by the evidence predicates and release-wait.js.
+  const forgeMemo = createForgeMemo();
   const snapshot = reconcileEffectiveState(state, sid, {
-    repoDir, profile, deliveryBoundary: "navigate", evidencePolicy: { network: true },
+    repoDir, profile, deliveryBoundary: "navigate", evidencePolicy: { network: true }, forgeMemo,
   });
   const snapStatus = (step) => (snapshot.steps[step] || {}).status;
 
@@ -209,9 +193,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
   function persistResolutions() {
     for (const r of snapshot.resolutions) {
       try {
-        if (r.step === "deliver") {
-          // #2527 3-2b: deliver complete and the uv boundary reset are one write.
-          settleDeliver(sid, { kind: deliveryKindFor(profile.deliveryPath), origin: "next-step-evidence-resolution" });
+        if (r.step === "merge_to_main") {
+          // #2527 3-2b: merge_to_main complete and the uv boundary reset are one write.
+          settleMergeToMain(sid, { kind: deliveryKindFor(profile.deliveryPath), origin: "next-step-evidence-resolution" });
           continue;
         }
         markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
@@ -418,6 +402,15 @@ function computeVerdict(rawSid, _didAutoRepair) {
       "detail-input-missing"
     );
     return;
+  }
+
+  // #2527 4-4: web-merge channel — the human merges the PR on the web (./release-wait.js).
+  if (currentStep === "user_verification") {
+    const w = require("./release-wait").releaseWaitVerdict({ state, sid, repoDir, profile, forgeMemo });
+    if (w) {
+      emit(w.action, w.skill, w.hint, w.reason, "", "", w.wait);
+      return;
+    }
   }
 
   const skill = STEP_TO_SKILL[currentStep];

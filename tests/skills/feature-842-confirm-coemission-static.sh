@@ -152,15 +152,15 @@ fi
 
 # ---------------------------------------------------------------------------
 # Case B: commit-push/SKILL.md hands off through next-step, not a CONFIRM sentinel
-#         (#2527 release split: the merge and worktree teardown belong to /deliver)
+#         (#2527 release split: the merge and worktree teardown belong to /merge-to-main)
 # ---------------------------------------------------------------------------
-echo "=== Case B: commit-push/SKILL.md hands off via next-step ACTION and defers merge to /deliver ==="
+echo "=== Case B: commit-push/SKILL.md hands off via next-step ACTION and defers merge to /merge-to-main ==="
 if require_file "$COMMIT_PUSH_SKILL"; then
     if has_fixed "next-step\" --advance --step push_branch --complete --next" "$COMMIT_PUSH_SKILL" \
-        && has_fixed "the merge belongs to \`/deliver\`" "$COMMIT_PUSH_SKILL"; then
-        pass "commit-push/SKILL.md completes push_branch via next-step and defers the merge to /deliver"
+        && has_fixed "the merge belongs to \`/merge-to-main\`" "$COMMIT_PUSH_SKILL"; then
+        pass "commit-push/SKILL.md completes push_branch via next-step and defers the merge to /merge-to-main"
     else
-        fail "commit-push/SKILL.md missing the next-step push_branch hand-off or the /deliver merge deferral"
+        fail "commit-push/SKILL.md missing the next-step push_branch hand-off or the /merge-to-main merge deferral"
     fi
 fi
 

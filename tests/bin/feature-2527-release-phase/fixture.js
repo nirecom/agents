@@ -3,7 +3,9 @@
 // Writes <WORKFLOW_STATE_DIR>/<sid>.json as an event-stream state file. Spec keys:
 //   sid, version (5), dtype (wf-code), path (pull_request|direct|null), upto (step: every
 //   earlier step complete), steps ("a=status;b=status" appended), uvReset, annotate
-//   ("step.key=value;..." step_annotation events), entered, lastPushed, cwd, branch. version 4 writes workflow_type and never names push_branch / deliver.
+//   ("step.key=value;..." step_annotation events), entered, lastPushed, cwd, branch,
+//   autoMerge ("on"|"off": the AUTO_MERGE_PR value fixed at branching_complete). version 4 writes
+//   workflow_type and never names push_branch / merge_to_main.
 
 const fs = require("fs");
 const path = require("path");
@@ -17,10 +19,10 @@ const version = spec.version === undefined ? 5 : spec.version;
 const ORDER_V5 = [
   "workflow_init", "clarify_intent", "research", "outline", "detail", "branching_complete",
   "write_tests", "review_tests", "write_code", "run_tests", "review_security", "docs",
-  "review_docs", "push_branch", "user_verification", "deliver", "cleanup",
+  "review_docs", "push_branch", "user_verification", "merge_to_main", "cleanup",
   "pre_final_report_gate", "final_report",
 ];
-const V5_ONLY = ["push_branch", "deliver"];
+const V5_ONLY = ["push_branch", "merge_to_main"];
 const order = version >= 5 ? ORDER_V5 : ORDER_V5.filter((s) => !V5_ONLY.includes(s));
 // On the direct path the table skips push_branch and cleanup, so nothing records them.
 const tableSkipped = spec.path === "direct" ? ["push_branch", "cleanup"] : [];
@@ -70,6 +72,11 @@ if (version >= 5) {
     out.delivery_path = spec.path;
     out.delivery_path_origin = "branching-handler";
   }
+  if (spec.autoMerge) {
+    out.auto_merge_pr = spec.autoMerge;
+    out.auto_merge_pr_origin = "branching-handler";
+    out.auto_merge_pr_source = "config";
+  }
 } else {
   out.workflow_type = spec.dtype || "wf-code";
 }
@@ -77,4 +84,7 @@ out.closes_issues = [2527];
 out.last_pushed_sha = spec.lastPushed || null;
 out.events = events;
 
-fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, spec.sid + ".json"), JSON.stringify(out, null, 2));
+const file = path.join(process.env.WORKFLOW_STATE_DIR, spec.sid + ".json");
+fs.writeFileSync(file, JSON.stringify(out, null, 2));
+// #2277: a gated complete counts only with a plan-approval record; approve the complete ones.
+require("../../lib/plan-approval-fixture.js").injectFile(file, ["clarify_intent", "outline", "detail"], true);

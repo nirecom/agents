@@ -24,7 +24,7 @@ const ROWS = Object.freeze([
   ["review_docs", { "wf-code": REQ, "wf-meta": SKIP }, [], "required"],
   ["push_branch", { "wf-code": REQ, "wf-meta": SKIP }, ["direct"], "exempt"],
   ["user_verification", { "wf-code": REQ, "wf-meta": SKIP }, [], "deferred-in-worktree"],
-  ["deliver", { "wf-code": REQ, "wf-meta": SKIP }, [], "exempt"],
+  ["merge_to_main", { "wf-code": REQ, "wf-meta": SKIP }, [], "exempt"],
   ["cleanup", { "wf-code": REQ, "wf-meta": SKIP }, ["direct"], "deferred-in-worktree"],
   ["pre_final_report_gate", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt"],
   ["final_report", { "wf-code": REQ, "wf-meta": REQ }, [], "exempt"],
@@ -56,4 +56,13 @@ function commitGateOf(step) {
   return row ? row.commitGate : null;
 }
 
-module.exports = { stepNames, isStepRequired, commitGateOf, DELIVERABLE_TYPES, DEFAULT_DELIVERABLE_TYPE };
+// Events written before a step rename keep the old name; readers fold them onto the current one.
+const LEGACY_STEP_NAMES = Object.freeze({ deliver: "merge_to_main" });
+
+function canonicalStepName(name) {
+  return Object.prototype.hasOwnProperty.call(LEGACY_STEP_NAMES, name) ? LEGACY_STEP_NAMES[name] : name;
+}
+
+module.exports = {
+  stepNames, isStepRequired, commitGateOf, canonicalStepName, DELIVERABLE_TYPES, DEFAULT_DELIVERABLE_TYPE,
+};

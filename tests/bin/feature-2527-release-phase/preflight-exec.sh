@@ -67,7 +67,7 @@ while IFS='|' read -r name tl4 st merge want num reason; do
   check "$name: PREFLIGHT" "$(field "$out" PREFLIGHT)" "$want"
   check "$name: PR_NUMBER" "$(field "$out" PR_NUMBER)" "$num"
   check_contains "$name: reason" "$(field "$out" PREFLIGHT_REASON)" "$reason"
-  check_contains "$name: gh queried in --repo" "$(cat "$RP_TMP/forge.log")" "$RP_REPO_M|gh pr view --json number,state,mergeStateStatus"
+  check_contains "$name: gh queried in --repo" "$(cat "$RP_TMP/forge.log")" "$RP_REPO_M|gh pr view"
 done <<'TABLE'
 gh-clean-tl4-on       | on  | OPEN   | CLEAN    | ok            | 42 | PR #42 is open and mergeable (CLEAN)
 gh-clean-tl4-off      | off | OPEN   | CLEAN    | ok            | 42 | PR #42 is open and mergeable (CLEAN)
@@ -105,7 +105,7 @@ while IFS='|' read -r name tl4 st merge draft want num reason; do
   check "$name: PREFLIGHT" "$(field "$out" PREFLIGHT)" "$want"
   check "$name: PR_NUMBER" "$(field "$out" PR_NUMBER)" "$num"
   check_contains "$name: reason" "$(field "$out" PREFLIGHT_REASON)" "$reason"
-  check_contains "$name: glab queried in --repo" "$(cat "$RP_TMP/forge.log")" "$RP_REPO_M|glab mr view --output json"
+  check_contains "$name: glab queried in --repo" "$(cat "$RP_TMP/forge.log")" "$RP_REPO_M|glab mr view"
   check_not_contains "$name: gh never called on gitlab" "$(cat "$RP_TMP/forge.log")" "|gh "
 done <<'TABLE'
 gl-mergeable-tl4-on   | on  | OPEN   | mergeable     | 0 | ok            | 42 | PR #42 is open and mergeable (CLEAN)
@@ -261,6 +261,59 @@ plain-push-open-pr     | pf-pb-plain | github | OPEN | ok      | 42 | PR #42 is 
 other-decision-no-pr   | pf-pb-other | github | NONE | blocked |    | no pull request for the current branch | yes
 other-decision-open-pr | pf-pb-other | github | OPEN | ok      | 42 | PR #42 is open and mergeable (CLEAN)   | yes
 TABLE
+case_end
+
+# 4-5 web-merge channel: pull_request + AUTO_MERGE_PR=off fixed at branching, push_branch complete.
+mk_state '{"sid":"pf-wm","path":"pull_request","autoMerge":"off","steps":"push_branch=complete"}'
+mk_state '{"sid":"pf-dlg","path":"pull_request","autoMerge":"on","steps":"push_branch=complete"}'
+# Rows: <name> | <origin> | <state> | <gh merge / glab status> | <glab draft> | <PREFLIGHT> | <reason fragment>
+case_begin "preflight: web-merge channel verdicts (github and gitlab)" "skills/get-release-approval/scripts/preflight.sh"
+while IFS='|' read -r name origin st merge draft want reason; do
+  [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+  name="${name//[[:space:]]/}"; origin="${origin//[[:space:]]/}"; st="${st//[[:space:]]/}"
+  merge="${merge//[[:space:]]/}"; draft="${draft//[[:space:]]/}"; want="${want//[[:space:]]/}"
+  reason="${reason#"${reason%%[![:space:]]*}"}"; reason="${reason%"${reason##*[![:space:]]}"}"
+  if [[ "$origin" == "gitlab" ]]; then use_origin "$GL_URL"; else use_origin "$GH_URL"; fi
+  out="$(RUN_TL4=off FAKE_FORGE_STATE="$st" FAKE_FORGE_MERGE="$merge" FAKE_GLAB_MERGE="$merge" FAKE_GLAB_DRAFT="$draft" pf --session pf-wm --repo "$RP_REPO")"
+  check "$name: exit 0" "$(field "$out" RC)" "0"
+  check "$name: PREFLIGHT" "$(field "$out" PREFLIGHT)" "$want"
+  check "$name: RUN_TL4 still the first line" "$(printf '%s\n' "$out" | sed -n 1p | cut -d= -f1)" "RUN_TL4"
+  [ -n "$reason" ] && check_contains "$name: reason" "$(field "$out" PREFLIGHT_REASON)" "$reason"
+  if [[ "$want" == "web_merge_pending" ]]; then
+    if [[ "$origin" == "gitlab" ]]; then want_url="https://gitlab.com/example/repo/-/merge_requests/42"
+    else want_url="https://github.com/example/repo/pull/42"; fi
+    check "$name: PR_URL line" "$(field "$out" PR_URL)" "$want_url"
+  fi
+done <<'TABLE'
+wm-gh-clean     | github | OPEN   | CLEAN    | 0 | web_merge_pending |
+wm-gh-behind    | github | OPEN   | BEHIND   | 0 | blocked           | BEHIND the base branch
+wm-gh-dirty     | github | OPEN   | DIRTY    | 0 | blocked           | merge conflicts (DIRTY)
+wm-gh-blocked   | github | OPEN   | BLOCKED  | 0 | blocked           | is BLOCKED — wait for required checks
+wm-gh-unstable  | github | OPEN   | UNSTABLE | 0 | blocked           | is UNSTABLE — wait for required checks
+wm-gh-draft     | github | OPEN   | DRAFT    | 0 | blocked           | is a draft
+wm-gh-merged    | github | MERGED | UNKNOWN  | 0 | web_merge_done    |
+wm-gh-closed    | github | CLOSED | CLEAN    | 0 | web_merge_closed  |
+wm-gl-clean     | gitlab | OPEN   | mergeable        | 0 | web_merge_pending |
+wm-gl-conflict  | gitlab | OPEN   | conflict         | 0 | blocked | merge conflicts (DIRTY)
+wm-gl-rebase    | gitlab | OPEN   | need_rebase      | 0 | blocked | BEHIND the base branch
+wm-gl-ci        | gitlab | OPEN   | ci_still_running | 0 | blocked | is BLOCKED — wait for required checks
+wm-gl-draft     | gitlab | OPEN   | mergeable        | 1 | blocked | is a draft
+wm-gl-checking  | gitlab | OPEN   | checking         | 0 | blocked | mergeability is CHECKING — wait for the forge
+wm-gl-merged    | gitlab | MERGED | mergeable        | 0 | web_merge_done   |
+wm-gl-closed    | gitlab | CLOSED | mergeable        | 0 | web_merge_closed |
+TABLE
+use_origin "$GH_URL"
+case_end
+
+case_begin "preflight: AUTO_MERGE_PR=on keeps the dialog verdicts (regression)" "skills/get-release-approval/scripts/preflight.sh"
+use_origin "$GH_URL"
+out="$(RUN_TL4=off FAKE_FORGE_STATE=OPEN FAKE_FORGE_MERGE=CLEAN pf --session pf-dlg --repo "$RP_REPO")"
+check "dialog CLEAN: PREFLIGHT ok" "$(field "$out" PREFLIGHT)" "ok"
+check_contains "dialog CLEAN: reason" "$(field "$out" PREFLIGHT_REASON)" "PR #42 is open and mergeable (CLEAN)"
+out="$(RUN_TL4=off FAKE_FORGE_STATE=MERGED pf --session pf-dlg --repo "$RP_REPO")"
+check "dialog MERGED: merged_on_web" "$(field "$out" PREFLIGHT)" "merged_on_web"
+out="$(RUN_TL4=off FAKE_FORGE_STATE=CLOSED pf --session pf-dlg --repo "$RP_REPO")"
+check "dialog CLOSED: blocked" "$(field "$out" PREFLIGHT)" "blocked"
 case_end
 
 echo ""

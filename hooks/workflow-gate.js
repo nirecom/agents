@@ -46,9 +46,20 @@ const {
   isAgentsSessionRepo,
 } = require("./workflow-gate/repo-resolution");
 
-function approve() {
-  console.log(JSON.stringify({ decision: "approve" }));
+// Notices (stderr + the final output's systemMessage) for checks that degraded without blocking.
+const _gateNotices = [];
+function addNotice(text) {
+  _gateNotices.push(text);
+  process.stderr.write(`[workflow-gate] ${text}\n`);
+}
+function emitDecision(out) {
+  if (_gateNotices.length > 0) out.systemMessage = _gateNotices.join("\n");
+  console.log(JSON.stringify(out));
   process.exit(0);
+}
+
+function approve() {
+  emitDecision({ decision: "approve" });
 }
 
 function block(reason, extras = undefined) {
@@ -76,8 +87,7 @@ function block(reason, extras = undefined) {
     const { recordGateBlock } = require("./workflow-gate/handoff-record");
     recordGateBlock(_gateReportCtx.sessionId, reason, { command: _gateReportCtx.command });
   } catch (_) { /* fail-open: a lost breadcrumb must never change the verdict */ }
-  console.log(JSON.stringify({ decision: "block", reason }));
-  process.exit(0);
+  emitDecision({ decision: "block", reason });
 }
 
 // Populated at hook-input parse time so block() can self-report.
@@ -92,8 +102,7 @@ function blockWithoutError(reason) {
     const { recordGateBlock } = require("./workflow-gate/handoff-record");
     recordGateBlock(_gateReportCtx.sessionId, reason, { command: _gateReportCtx.command });
   } catch (_) { /* fail-open: a lost breadcrumb must never change the verdict */ }
-  console.log(JSON.stringify({ decision: "block", reason }));
-  process.exit(0);
+  emitDecision({ decision: "block", reason });
 }
 
 // Supervisor pre-merge gate (warning-flush / audit-verdict / scope-drift):
@@ -105,6 +114,11 @@ const {
 } = require("./workflow-gate/supervisor-check");
 const { checkUserVerifiedAudit } = require("./workflow-gate/user-verified-audit");
 const { runEarlyGate } = require("./workflow-gate/early-gate");
+// Called through the module object so a test preload can replace judgeRelease.
+const releaseJudge = require("./workflow-gate/release-channel-judge");
+const { releasePrUrl } = require("./workflow-gate/release-pr-url");
+// Cheap prefilter: only a hit pays for repo resolution, the state read and the judge.
+const RELEASE_PREFILTER_RE = /merge|push|graphql|mergeRequestAccept/i;
 
 if (require.main === module) {
   const r = readHookInput();
@@ -124,6 +138,29 @@ if (require.main === module) {
     cwd: typeof toolInput.cwd === "string" ? toolInput.cwd : undefined,
     repoResolved: undefined,
   };
+
+  // RELEASE REFUSAL (#2527 4-3, J-1): AUTO_MERGE_PR=off + pull_request refuses Claude's own
+  // merge to a protected branch. It MUST stay above the WORKFLOW_OFF approve below so no
+  // session marker lifts it. A judge failure never blocks: it degrades to a notice.
+  if (isCommandTool(toolName)) {
+    const elements = commandListOf(toolName, toolInput);
+    if (elements.some((c) => RELEASE_PREFILTER_RE.test(c))) {
+      try {
+        const repoDir = resolveRepoDir(elements.join("\n"), input);
+        const releaseState = (sessionId && readState(sessionId)) || {};
+        const verdict = releaseJudge.judgeRelease({ commands: elements, state: releaseState, repoDir });
+        if (verdict.notice) addNotice(verdict.notice);
+        if (verdict.refuse) {
+          block(
+            "workflow-gate: AUTO_MERGE_PR=off — the human merges this pull request on the web (" +
+            releasePrUrl(verdict.kind, repoDir) + "); do not merge — the workflow resumes automatically once it is merged."
+          );
+        }
+      } catch (e) {
+        addNotice(`AUTO_MERGE_PR release check failed (${(e && e.message) || e}); not enforced for this call.`);
+      }
+    }
+  }
 
   // WORKFLOW_OFF: bypass all workflow-gate checks (superset of WORKTREE_OFF per workflow-off.md).
   const { isWorkflowOff, isWorktreeOff } = require("./lib/session-markers");

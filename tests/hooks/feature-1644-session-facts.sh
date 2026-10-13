@@ -206,7 +206,7 @@ echo "=== G8: stage 4 introduces no new persisted top-level state key ==="
 # session_start_context -- none of which are new -- so this list must be
 # byte-for-byte unchanged after the implementation lands. #2527 (schema v5) later
 # renamed workflow_type and added the session-profile keys; the baseline tracks that.
-BASELINE='["closes_issues","created_at","current","deliverable_type","delivery_path","delivery_path_origin","events","last_pushed_sha","merge_base_baseline","project_management_type","session_id","session_start_context","session_worktree","verbose_prompt","version"]'
+BASELINE='["auto_merge_pr","auto_merge_pr_origin","auto_merge_pr_source","closes_issues","created_at","current","deliverable_type","delivery_path","delivery_path_origin","events","last_pushed_sha","merge_base_baseline","project_management_type","session_id","session_start_context","session_worktree","verbose_prompt","version"]'
 ACTUAL="$(WFM="$WFSTATE_MODULE_N" run_with_timeout node "$TOPKEYS_PROBE" 2>/dev/null || echo "")"
 check "G8: PERSISTED_TOP_LEVEL_KEYS is unchanged from the pre-stage-4 baseline" "$BASELINE" "$ACTUAL"
 

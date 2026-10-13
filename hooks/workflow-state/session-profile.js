@@ -40,6 +40,18 @@ function resolveDeliveryPath(state, sid, repoDir) {
   return { value: resolveLiveDeliveryPath(sid, repoDir), source: "provisional" };
 }
 
+// AUTO_MERGE_PR (4-2) has its own source vocabulary: "recorded" | "recorded-fallback"
+// (pinned while the config was unreadable) | "provisional" (live, readable) |
+// "unreadable" (live, unreadable — reads as "on").
+function resolveAutoMergePr(state, repoDir) {
+  const v = state.auto_merge_pr;
+  if (v === "on" || v === "off") {
+    return { value: v, source: state.auto_merge_pr_source === "fallback" ? "recorded-fallback" : "recorded" };
+  }
+  const live = require("../lib/auto-merge-config").readAutoMergePr({ repoDir });
+  return { value: live.value, source: live.readable ? "provisional" : "unreadable" };
+}
+
 // resolveSessionProfile(state, sid, { repoDir }) -> profile. Never throws: a
 // missing state reads as "nothing recorded yet".
 function resolveSessionProfile(state, sid, opts) {
@@ -48,12 +60,29 @@ function resolveSessionProfile(state, sid, opts) {
   const d = resolveDeliverableType(s);
   const pm = resolvePmType(s, sid);
   const path = resolveDeliveryPath(s, sid, repoDir);
+  const amp = resolveAutoMergePr(s, repoDir);
   return {
     deliverableType: d.value,
     pmType: pm.value,
     deliveryPath: path.value,
-    sources: { deliverableType: d.source, pmType: pm.source, deliveryPath: path.source },
+    autoMergePr: amp.value,
+    sources: {
+      deliverableType: d.source, pmType: pm.source, deliveryPath: path.source, autoMergePr: amp.source,
+    },
   };
 }
 
-module.exports = { resolveSessionProfile, SUPPORTED_PM_TYPES, DEFAULT_PM_TYPE };
+// The release-approval channel: the user merges on the web only for a PR delivery with
+// AUTO_MERGE_PR off that is not a bootstrap push (a bootstrap push has no PR to merge).
+// Every other combination is the user-verified dialog.
+function releaseApprovalChannelOf(state, profile) {
+  const s = state && typeof state === "object" ? state : {};
+  const push = s.steps && s.steps.push_branch;
+  const bootstrap = !!(push && push.decision === "bootstrap");
+  if (profile && profile.deliveryPath === "pull_request" && profile.autoMergePr === "off" && !bootstrap) {
+    return "web-merge";
+  }
+  return "user-verified-dialog";
+}
+
+module.exports = { resolveSessionProfile, releaseApprovalChannelOf, SUPPORTED_PM_TYPES, DEFAULT_PM_TYPE };

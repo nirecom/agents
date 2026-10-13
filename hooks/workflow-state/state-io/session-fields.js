@@ -167,15 +167,40 @@ function setProjectManagementType(sessionId, pmType) {
   return written;
 }
 
-function setDeliveryPath(sessionId, deliveryPath, origin) {
+// The delivery profile (#2527): delivery_path and auto_merge_pr, pinned together at
+// branching in ONE updateTopLevel call, write-once per field (an old state holding only
+// delivery_path gains auto_merge_pr alone). Write errors propagate to the caller.
+// core.updateTopLevel is read at call time so a test preload can patch it.
+function setDeliveryProfile(sessionId, profile) {
+  const p = profile && typeof profile === "object" ? profile : {};
+  const origin = typeof p.origin === "string" && p.origin ? p.origin : null;
   let written = false;
-  updateTopLevel(sessionId, (record) => {
-    if (record.delivery_path != null) return;
-    record.delivery_path = deliveryPath;
-    record.delivery_path_origin = typeof origin === "string" && origin ? origin : null;
-    written = true;
+  require("./core").updateTopLevel(sessionId, (record) => {
+    if (record.delivery_path == null && typeof p.deliveryPath === "string" && p.deliveryPath) {
+      record.delivery_path = p.deliveryPath;
+      record.delivery_path_origin = origin;
+      written = true;
+    }
+    if (record.auto_merge_pr == null && typeof p.autoMergePr === "string" && p.autoMergePr) {
+      record.auto_merge_pr = p.autoMergePr;
+      record.auto_merge_pr_origin = origin;
+      record.auto_merge_pr_source = typeof p.source === "string" && p.source ? p.source : null;
+      written = true;
+    }
   });
   return written;
+}
+
+// Judgment D: an explicit reset to branching_complete or earlier un-pins the profile so
+// the re-completion records it again from the live config.
+function clearDeliveryProfile(sessionId) {
+  if (!readState(sessionId)) return false;
+  require("./core").updateTopLevel(sessionId, (record) => {
+    for (const k of ["delivery_path", "delivery_path_origin", "auto_merge_pr", "auto_merge_pr_origin", "auto_merge_pr_source"]) {
+      delete record[k];
+    }
+  });
+  return true;
 }
 
 // Returns the effective skippable steps for the given session.
@@ -200,6 +225,7 @@ module.exports = {
   recordSessionWorktree,
   setDeliverableType,
   setProjectManagementType,
-  setDeliveryPath,
+  setDeliveryProfile,
+  clearDeliveryProfile,
   getSkippableSteps,
 };

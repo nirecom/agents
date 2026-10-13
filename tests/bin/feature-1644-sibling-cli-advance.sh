@@ -252,7 +252,7 @@ NAMED_EXCEPTIONS="record-skip-verdict"
 # stateless derivation CLI (detail.md D1/D4) that reads no session and writes no
 # state, so there is no step for it to advance. S11c below is what pins that —
 # it must carry no --advance token at all.
-NON_MEMBERS="adopt-session-state derive-complexity-level handoff-append normalize-judge-signals pr-state read-complexity-evaluation read-merge-base-baseline read-session-facts read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline render-issue-comments run-tests-baseline-evidence workflow-init-driver"
+NON_MEMBERS="adopt-session-state check-plan-approval derive-complexity-level handoff-append normalize-judge-signals pr-state read-complexity-evaluation read-merge-base-baseline read-session-facts read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline release-channel render-issue-comments run-tests-baseline-evidence run-tests-unrunnable-note workflow-init-driver"
 
 ACTUAL="$(ls "$SCRIPT_CHECKOUT_ROOT/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
 EXPECTED="$(printf '%s %s %s' "$ADVANCE_MEMBERS" "$NAMED_EXCEPTIONS" "$NON_MEMBERS" \

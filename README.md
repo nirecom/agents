@@ -87,7 +87,7 @@ flowchart TD
     S7d --> PB["14 · commit-push<br/>push_branch"]
     PB --> Gate["pre-merge audit"]
     Gate --> UV["15 · get-release-approval<br/>user verify"]
-    UV --> Push["16 · deliver<br/>merge PR / direct push"]
+    UV --> Push["16 · merge-to-main<br/>merge PR / direct push"]
 
     Push --> Clean{worktree or main?}
     Clean -- worktree --> WE["17 · worktree-end"]

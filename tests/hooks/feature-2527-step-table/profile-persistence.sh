@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark/clarify-intent-complete-handler.js, hooks/workflow-mark/branching-handler.js, hooks/workflow-state/session-profile.js, hooks/workflow-state/state-io/session-fields.js
-# Tags: scope:issue-specific, workflow-state, session-profile, delivery-path, pm-type, issue-2527, TL2
+# Tags: scope:issue-specific, workflow-state, session-profile, delivery-path, pm-type, issue-2527, TL2, delivery-reconcile
 # TL2: records PM type and delivery path through the real writers (workflow-mark.js fed the
 # CLARIFY_INTENT_COMPLETE / BRANCHING_COMPLETE Bash payloads), then flips the live config and
 # asserts the raw state file and resolveSessionProfile keep the recorded values.
@@ -11,6 +11,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 s27_setup
 trap s27_teardown EXIT
+export WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" WORKFLOW_PLANS_DIR="$WORKFLOW_PLANS_DIR"
 export ENFORCE_WORKTREE=on ENFORCE_WORKTREE_EXCLUDE=""
 
 MARK_JS="$S27_SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
@@ -29,6 +30,16 @@ mark() {
 write_intent() {
   printf '# Intent\n\n**Title:** profile persistence fixture\n%s\n**Closes:** #2527\n' "$2" > "$WORKFLOW_PLANS_DIR/$1-intent.md"
 }
+
+# approve_plan <sid> <step...> — #2277 approval records through the real writer.
+# approve_intent <sid>: clarify_intent completes only with an approval of the intent file as
+# written, so call it after the intent file and before each mark. BRANCHING_COMPLETE likewise
+# records nothing until the detail plan is approved.
+approve_plan() {
+  node "$S27_SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" approve "$@" >/dev/null 2>&1 \
+    || fail "fixture" "plan-approval-fixture.js approve $* failed"
+}
+approve_intent() { approve_plan "$1" clarify_intent; }
 
 # last_status <sid> <step> — last step_status of <step> in the raw stream.
 last_status() {
@@ -55,16 +66,25 @@ JS
 recorded() { S27_SID="$1" s27_node "$REC_JS"; }
 
 case_begin "pull-request-profile-fixed-after-config-flip" "hooks/workflow-mark/branching-handler.js"
+# #2527 3-13: a pull_request BRANCHING_COMPLETE must name a real linked worktree of the repo
+# cwd (CLAUDE_PROJECT_DIR = S27_REPO_M), or the reconcile rejects it before recording.
+git -C "$S27_REPO" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m seed
+S27_WT="$S27_TMP/repo-wt"
+git -C "$S27_REPO" worktree add -q -b feature/2527-profile "$S27_WT" >/dev/null 2>&1
+PR_BRANCH_SENTINEL="echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: feature/2527-profile worktree: $(np "$S27_WT")>>\""
 mk_state "{\"sid\":\"pp-pr\",\"steps\":\"$PRE_INTENT\"}"
 write_intent pp-pr '**PM type:** waterfall'
+approve_intent pp-pr
 mark pp-pr "$INTENT_SENTINEL" >/dev/null
-mark pp-pr "$BRANCH_SENTINEL" >/dev/null
+approve_plan pp-pr detail
+mark pp-pr "$PR_BRANCH_SENTINEL" >/dev/null
 check "sanity: clarify_intent recorded complete" "$(field "$(last_status pp-pr clarify_intent)" ST)" "complete"
 check "sanity: branching_complete recorded complete" "$(field "$(last_status pp-pr branching_complete)" ST)" "complete"
 check "recorded at the fixed points (live on)" "$(field "$(recorded pp-pr)" RAW)" "waterfall|pull_request|branching-handler"
 export ENFORCE_WORKTREE=off ENFORCE_WORKTREE_EXCLUDE="$S27_REPO_M"
 : > "$WORKFLOW_STATE_DIR/pp-pr.worktree-off"
 write_intent pp-pr '**PM type:** agile'
+approve_intent pp-pr
 mark pp-pr "$INTENT_SENTINEL" >/dev/null
 run_next_step pp-pr >/dev/null
 o="$(recorded pp-pr)"
@@ -77,7 +97,9 @@ case_begin "direct-profile-fixed-after-config-flip" "hooks/workflow-mark/branchi
 export ENFORCE_WORKTREE=off
 mk_state "{\"sid\":\"pp-d\",\"steps\":\"$PRE_INTENT\"}"
 write_intent pp-d '**PM type:** waterfall'
+approve_intent pp-d
 mark pp-d "$INTENT_SENTINEL" >/dev/null
+approve_plan pp-d detail
 mark pp-d "$BRANCH_SENTINEL" >/dev/null
 check "sanity: branching_complete recorded complete" "$(field "$(last_status pp-d branching_complete)" ST)" "complete"
 check "recorded at the fixed points (live off)" "$(field "$(recorded pp-d)" RAW)" "waterfall|direct|branching-handler"
@@ -91,6 +113,7 @@ case_end
 case_begin "intent-without-pm-type-records-waterfall" "hooks/workflow-mark/clarify-intent-complete-handler.js"
 mk_state "{\"sid\":\"pp-legacy\",\"steps\":\"$PRE_INTENT\"}"
 write_intent pp-legacy ''
+approve_intent pp-legacy
 mark pp-legacy "$INTENT_SENTINEL" >/dev/null
 check "sanity: clarify_intent recorded complete" "$(field "$(last_status pp-legacy clarify_intent)" ST)" "complete"
 o="$(recorded pp-legacy)"
@@ -101,6 +124,7 @@ case_end
 case_begin "intent-with-unsupported-pm-type-records-nothing" "hooks/workflow-mark/clarify-intent-complete-handler.js"
 mk_state "{\"sid\":\"pp-agile\",\"steps\":\"$PRE_INTENT\"}"
 write_intent pp-agile '**PM type:** agile'
+approve_intent pp-agile
 mk_out="$(mark pp-agile "$INTENT_SENTINEL")"
 check "sanity: clarify_intent recorded complete" "$(field "$(last_status pp-agile clarify_intent)" ST)" "complete"
 check_contains "warning names the unsupported value" "$mk_out" "agile"
@@ -128,6 +152,7 @@ while IFS='|' read -r name body want warn; do
   n=$((n + 1)); sid="pp-parse-$n"
   mk_state "{\"sid\":\"$sid\",\"steps\":\"$PRE_INTENT\"}"
   printf '# Intent\n\n**Title:** parser fixture\n%b' "$body" > "$WORKFLOW_PLANS_DIR/$sid-intent.md"
+  approve_intent "$sid"
   mk_out="$(mark "$sid" "$INTENT_SENTINEL")"
   check "$name: clarify_intent complete" "$(field "$(last_status "$sid" clarify_intent)" ST)" "complete"
   check "$name: recorded pm" "$(field "$(recorded "$sid")" RAW | cut -d'|' -f1)" "$want"
@@ -172,20 +197,32 @@ out("W", calls.map(([fn, ...a]) => String(io[fn](sid, ...a))).join(","));
 const s = JSON.parse(fs.readFileSync(process.env.WORKFLOW_STATE_DIR + "/" + sid + ".json", "utf8"));
 const g = (k) => (Object.prototype.hasOwnProperty.call(s, k) ? String(s[k]) : "<absent>");
 out("DP", g("delivery_path") + "|" + g("delivery_path_origin"));
+out("AMP", g("auto_merge_pr") + "|" + g("auto_merge_pr_origin") + "|" + g("auto_merge_pr_source"));
 out("PMT", g("project_management_type"));
 out("DT", g("deliverable_type"));
 JS
 setters() { S27_SID="$1" S27_CALLS="$2" s27_node "$SETTER_JS"; }
 
-case_begin "setter-write-once-delivery-path" "hooks/workflow-state/state-io/session-fields.js"
+# Plan 4-2: setDeliveryProfile(sid, {deliveryPath, autoMergePr, source, origin}) writes both
+# fields in one updateTopLevel, write-once per field; setDeliveryPath is gone (no alias).
+P1='{"deliveryPath":"direct","autoMergePr":"off","source":"config","origin":"first-origin"}'
+P2='{"deliveryPath":"pull_request","autoMergePr":"on","source":"default","origin":"second-origin"}'
+case_begin "setter-write-once-delivery-profile" "hooks/workflow-state/state-io/session-fields.js"
 mk_state "{\"sid\":\"wo-dp\",\"steps\":\"$PRE_INTENT\"}"
-o="$(setters wo-dp '[["setDeliveryPath","direct","first-origin"],["setDeliveryPath","pull_request","second-origin"]]')"
-check "first write true, second write false" "$(field "$o" W)" "true,false"
-check "first value and origin kept" "$(field "$o" DP)" "direct|first-origin"
-mk_state "{\"sid\":\"wo-dp-null\",\"steps\":\"$PRE_INTENT\",\"extra\":{\"delivery_path\":null,\"delivery_path_origin\":null}}"
-o="$(setters wo-dp-null '[["setDeliveryPath","pull_request","branching-handler"]]')"
-check "explicit null field -> written, true" "$(field "$o" W)" "true"
-check "null field replaced" "$(field "$o" DP)" "pull_request|branching-handler"
+o="$(setters wo-dp "[[\"setDeliveryProfile\",$P1],[\"setDeliveryProfile\",$P2]]")"
+check "first delivery_path and origin kept" "$(field "$o" DP)" "direct|first-origin"
+check "first auto_merge_pr / origin / source kept" "$(field "$o" AMP)" "off|first-origin|config"
+mk_state "{\"sid\":\"wo-dp-null\",\"steps\":\"$PRE_INTENT\",\"extra\":{\"delivery_path\":null,\"delivery_path_origin\":null,\"auto_merge_pr\":null}}"
+o="$(setters wo-dp-null "[[\"setDeliveryProfile\",$P2]]")"
+check "null delivery_path replaced" "$(field "$o" DP)" "pull_request|second-origin"
+check "null auto_merge_pr replaced" "$(field "$o" AMP)" "on|second-origin|default"
+# Per-field write-once: an old state holding only delivery_path gains auto_merge_pr alone.
+mk_state "{\"sid\":\"wo-dp-half\",\"steps\":\"$PRE_INTENT\",\"extra\":{\"delivery_path\":\"direct\",\"delivery_path_origin\":\"old\"}}"
+o="$(setters wo-dp-half "[[\"setDeliveryProfile\",$P2]]")"
+check "recorded delivery_path untouched" "$(field "$o" DP)" "direct|old"
+check "missing auto_merge_pr filled" "$(field "$o" AMP)" "on|second-origin|default"
+o="$(S27_SID=wo-dp-half s27_node 'const io = req("hooks/workflow-state/state-io.js"); out("OLD", typeof io.setDeliveryPath);')"
+check "setDeliveryPath alias removed" "$(field "$o" OLD)" "undefined"
 case_end
 
 case_begin "setter-write-once-pm-type" "hooks/workflow-state/state-io/session-fields.js"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pr-state-cli.sh — #2527: bin/workflow/pr-state answers PR_STATE / PR_NUMBER for /deliver.
+# pr-state-cli.sh — #2527: bin/workflow/pr-state answers PR_STATE / PR_NUMBER for /merge-to-main.
 # Tests: bin/workflow/pr-state, hooks/workflow-gate/gh-detect.js, hooks/lib/forge/github.js, hooks/lib/forge/gitlab.js, hooks/lib/forge/stub.js
 # Tags: scope:issue-specific, workflow, release-phase, pr-state, forge, gh-stub, glab-stub
 # TL2: spawns the real pr-state CLI against a fixture repo whose origin selects the forge
@@ -176,6 +176,61 @@ check_contains "unknown flag: diagnostic" "$(cat "$RP_TMP/prs.err")" "unknown ar
 out="$(FAKE_FORGE_STATE=OPEN prs --repo "$RP_REPO_M" extra)"
 check "stray positional: exit 1" "$(field "$out" RC)" "1"
 check_contains "stray positional: diagnostic" "$(cat "$RP_TMP/prs.err")" "unknown argument: extra"
+case_end
+
+# 4-5: --merge-state adds PR_MERGE_STATE (gh vocabulary; GitLab mapped) and PR_URL; the default
+# output stays the two lines /merge-to-main and the poller parse.
+case_begin "pr-state --merge-state: github adds PR_MERGE_STATE and PR_URL" "bin/workflow/pr-state"
+use_origin "$GH_URL"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_FORGE_MERGE=BEHIND prs --repo "$RP_REPO_M" --merge-state)"
+check "exit 0" "$(field "$out" RC)" "0"
+check "PR_STATE" "$(field "$out" PR_STATE)" "OPEN"
+check "PR_NUMBER" "$(field "$out" PR_NUMBER)" "42"
+check "PR_MERGE_STATE" "$(field "$out" PR_MERGE_STATE)" "BEHIND"
+check "PR_URL" "$(field "$out" PR_URL)" "https://github.com/example/repo/pull/42"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_FORGE_MERGE=CLEAN prs --merge-state --repo "$RP_REPO_M")"
+check "flag order free: PR_MERGE_STATE CLEAN" "$(field "$out" PR_MERGE_STATE)" "CLEAN"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_FORGE_MERGE=CLEAN prs --repo "$RP_REPO_M")"
+check "default output: exactly two lines" "$(printf '%s\n' "$out" | grep -vc '^RC=')" "2"
+check_not_contains "default output: no PR_MERGE_STATE" "$out" "PR_MERGE_STATE="
+check_not_contains "default output: no PR_URL" "$out" "PR_URL="
+case_end
+
+case_begin "pr-state --merge-state: gitlab maps detailed_merge_status and web_url" "hooks/lib/forge/gitlab.js"
+use_origin "$GL_URL"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_GLAB_MERGE=mergeable prs --repo "$RP_REPO_M" --merge-state)"
+check "mergeable -> CLEAN" "$(field "$out" PR_MERGE_STATE)" "CLEAN"
+check "PR_URL is the MR web_url" "$(field "$out" PR_URL)" "https://gitlab.com/example/repo/-/merge_requests/42"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_GLAB_MERGE=need_rebase prs --repo "$RP_REPO_M" --merge-state)"
+check "need_rebase -> BEHIND" "$(field "$out" PR_MERGE_STATE)" "BEHIND"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_GLAB_MERGE=conflict prs --repo "$RP_REPO_M" --merge-state)"
+check "conflict -> DIRTY" "$(field "$out" PR_MERGE_STATE)" "DIRTY"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_GLAB_MERGE=mergeable FAKE_GLAB_DRAFT=1 prs --repo "$RP_REPO_M" --merge-state)"
+check "draft -> DRAFT" "$(field "$out" PR_MERGE_STATE)" "DRAFT"
+out="$(FAKE_FORGE_STATE=OPEN FAKE_GLAB_MERGE=mergeable prs --repo "$RP_REPO_M")"
+check "gitlab default output: exactly two lines" "$(printf '%s\n' "$out" | grep -vc '^RC=')" "2"
+use_origin "$GH_URL"
+case_end
+
+# A web merge usually deletes the remote branch; the lookup keys on the local checkout branch.
+case_begin "pr-state: MERGED is still read after the remote branch is deleted (github / gitlab)" "bin/workflow/pr-state"
+BARE="$RP_TMP/remote.git"
+git init -q --bare "$BARE"
+git -C "$BARE" config core.hooksPath /dev/null
+git -C "$RP_REPO" remote set-url --push origin "$(np "$BARE")"
+git -C "$RP_REPO" push -q -u origin feature/2527-rp 2>/dev/null
+git -C "$RP_REPO" push -q origin --delete feature/2527-rp 2>/dev/null
+check "sanity: the remote branch is gone" "$(git -C "$BARE" branch --list feature/2527-rp)" ""
+check "sanity: still on the feature branch" "$(git -C "$RP_REPO" rev-parse --abbrev-ref HEAD)" "feature/2527-rp"
+for origin in "$GH_URL" "$GL_URL"; do
+  git -C "$RP_REPO" remote set-url origin "$origin"
+  git -C "$RP_REPO" remote set-url --push origin "$(np "$BARE")"
+  out="$(FAKE_FORGE_STATE=MERGED prs --repo "$RP_REPO_M")"
+  check "$origin: MERGED" "$(field "$out" PR_STATE)" "MERGED"
+  out="$(FAKE_FORGE_STATE=MERGED prs --repo "$RP_REPO_M" --merge-state)"
+  check "$origin --merge-state: MERGED" "$(field "$out" PR_STATE)" "MERGED"
+done
+use_origin "$GH_URL"
 case_end
 
 echo ""

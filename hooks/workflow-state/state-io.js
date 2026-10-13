@@ -77,5 +77,6 @@ module.exports = {
   recordSessionWorktree: sessionFields.recordSessionWorktree,
   setDeliverableType: sessionFields.setDeliverableType,
   setProjectManagementType: sessionFields.setProjectManagementType,
-  setDeliveryPath: sessionFields.setDeliveryPath,
+  setDeliveryProfile: sessionFields.setDeliveryProfile,
+  clearDeliveryProfile: sessionFields.clearDeliveryProfile,
 };

@@ -1,6 +1,7 @@
 // hooks/lib/merge-detect.js — classifier for "merge to protected branch" commands.
 // Consumed by workflow-gate.js (PreToolUse hard gate) and workflow-mark.js (post-push reset).
-// Returns { hit, kind }: "gh-pr-merge" | "glab-mr-merge" | "git-push-protected" | null.
+// Returns { hit, kind }: "gh-pr-merge" | "glab-mr-merge" | "git-push-protected" | null
+// (GraphQL merge mutations reuse the forge kinds: merge-detect/graphql.js).
 // Only canonical flag forms are parsed, and only Claude Code Bash calls reach it — the
 // gate is a workflow assistant, not OS-level access control.
 // Segmentation owner: hooks/lib/command-ir/ (canary-1 consumer of parse()).
@@ -12,6 +13,8 @@ const { parseGitGlobalOptions } = require("./parse-git-args");
 const { parse, analysisOf } = require("./command-ir");
 const { resolveEffectiveCommand, resolveEffectiveArgv, scanWrappedVerb, commandBasename } = require("./bash-write-patterns/segment-utils");
 const { quoteIfNeeded } = require("./commit-detect");
+const { hasSubcommandPath } = require("./merge-detect/subcommand-path");
+const { checkGraphqlMerge } = require("./merge-detect/graphql");
 
 const RECONSTRUCTED_HEADS = new Set(["gh", "glab", "git"]);
 
@@ -70,28 +73,6 @@ function getProtectedBranches() {
   return env.length ? env : ["main", "master"];
 }
 
-// True when `segment` runs `<head> <words...>` with flags allowed between the words
-// (`glab mr -R owner/repo merge`). A non-flag token right after a flag is taken as that
-// flag's value, so an unknown value-taking flag errs toward a hit (fail-closed).
-function hasSubcommandPath(segment, head, words) {
-  const tokens = segment.trim().match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-  if (tokens[0] !== head) return false;
-  let i = 1;
-  for (const word of words) {
-    let afterFlag = false;
-    for (; i < tokens.length; i++) {
-      const t = tokens[i];
-      if (t === word) break;
-      if (t.startsWith("-")) { afterFlag = !t.includes("="); continue; }
-      if (!afterFlag) return false;
-      afterFlag = false;
-    }
-    if (i >= tokens.length) return false;
-    i++;
-  }
-  return true;
-}
-
 const GH_API_MERGE_RE = /(^|\/)pulls\/[^/\s]+\/merge\/?$/;
 const GLAB_API_MERGE_RE = /merge_requests\/[^/\s]+\/merge\/?$/;
 
@@ -124,6 +105,8 @@ function checkText(segment) {
   if (hasSubcommandPath(segment, "glab", ["mr", "merge"]) || isApiMergePut(segment, "glab", GLAB_API_MERGE_RE)) {
     return { hit: true, kind: "glab-mr-merge" };
   }
+  const graphql = checkGraphqlMerge(segment);
+  if (graphql.hit) return graphql;
 
   // Must start with "git" to be a git push
   if (!/^\s*git\b/.test(segment)) {

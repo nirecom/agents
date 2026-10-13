@@ -232,7 +232,7 @@ else
     fail "D1. missing '$D_NEEDLE' in $SKILL_MD"
 fi
 
-# D2: the main-worktree cd lives only inside WE-9 (merge-path repeats moved to /deliver, #2527).
+# D2: the main-worktree cd lives only inside WE-9 (merge-path repeats moved to /merge-to-main, #2527).
 d2_cd_lines="$(grep -nF 'cd "<main-worktree-root>"' "$SKILL_MD" | cut -d: -f1)"
 d2_we9="$(grep -n '^### WE-9 ' "$SKILL_MD" | head -1 | cut -d: -f1)"
 d2_next="$(awk -v a="${d2_we9:-0}" 'NR>a && /^### /{print NR; exit}' "$SKILL_MD")"

@@ -16,6 +16,7 @@ const steps = { workflow_init: done, clarify_intent: done, research: done, outli
 const state = { version: 1, session_id: process.env.SID, created_at: at, workflow_type: 'wf-code', steps };
 fs.writeFileSync(path.join(process.env.WF_DIR, process.env.SID + '.json'), JSON.stringify(state));
 " >/dev/null 2>&1
+    seed_plan_approvals "$tmp" "$sid"
 }
 
 # run_guard_in_repo <tmp> <sid> — runs the hook from a git-init'ed cwd; prints stdout.

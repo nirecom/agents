@@ -49,7 +49,7 @@ Read `rules/coding.md` before CP-2 — on-demand-only, never auto-injected; its 
 CP-1. **Stage changes** per `skills/_shared/commit-push-dispatch.md` "Stage".
 
 CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_shared/commit-push-dispatch.md` "Dispatch" and "Outcomes", with handoff step `push_branch`.
-   On `bootstrap_pending`: surface "Remote has no default branch yet (new repo) — `/deliver` pushes the first commit as `main`." and go to CP-2c; the advance gate records the bootstrap decision itself.
+   On `bootstrap_pending`: surface "Remote has no default branch yet (new repo) — `/merge-to-main` pushes the first commit as `main`." and go to CP-2c; the advance gate records the bootstrap decision itself.
    On `up_to_date`, `pushed`, `pr_created`, or `pr_reused`: continue to CP-2a.
    On any other outcome: stop without completing `push_branch`.
 
@@ -60,7 +60,7 @@ CP-2b. **Open the PR URL:** run `node "$AGENTS_MAIN_ROOT/bin/open-pr-url.js" "<p
    Fail-open: a non-zero exit or missing browser never blocks the flow.
 
 CP-2c. **Complete the step:** `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step push_branch --complete --next`, then follow its `ACTION`.
-   Never merge here — the merge belongs to `/deliver` after `/get-release-approval`.
+   Never merge here — the merge belongs to `/merge-to-main` after `/get-release-approval`.
 
 ## WIP mode (`--wip`)
 
@@ -84,8 +84,9 @@ See `docs/architecture/claude-code/workflow.md` for the signal contract.
 
 - Follow all existing commit and push rules.
 - If push fails, report the error — do not force-push.
-- Never merge and never emit `<<WORKFLOW_USER_VERIFIED>>` — `/get-release-approval` and `/deliver` own both.
+- Never merge and never emit `<<WORKFLOW_USER_VERIFIED>>` — `/get-release-approval` and `/merge-to-main` own both.
+- AUTO_MERGE_PR=off (pull_request only): the human merges on the web; /merge-to-main never merges.
 - Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
-- `bootstrap_pending` completes `push_branch` with no PR; `/deliver` DL-3b performs the bootstrap push.
+- `bootstrap_pending` completes `push_branch` with no PR; `/merge-to-main` MM-3b performs the bootstrap push.
 - On fallback or step degradation (push retry, PR reuse): run `node "$AGENTS_MAIN_ROOT/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter commit-push` (session-id auto-resolves).
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

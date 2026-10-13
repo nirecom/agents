@@ -81,7 +81,8 @@ const codehostGithub = {
   },
   // PR state of the current branch: OPEN | MERGED | CLOSED | NONE (no PR) |
   // UNKNOWN (gh unavailable or failed). Callers choose their own fail direction.
-  prStateForBranch(repoDir) {
+  // opts.timeoutMs (default 8000) bounds the gh call.
+  prStateForBranch(repoDir, opts) {
     // Lazy require breaks the cycle: gh-detect requires forge-router at top level,
     // forge-router requires this module at top level.
     const { findGhInPath, toMsys2Path } = require("../../workflow-gate/gh-detect");
@@ -93,7 +94,7 @@ const codehostGithub = {
       r = spawnSync("bash", ["-c", '"$1" pr view --json state -q .state', "--", ghArg], {
         cwd: repoDir,
         encoding: "utf8",
-        timeout: 8000,
+        timeout: timeoutOf(opts),
       });
     } catch (e) {
       return "UNKNOWN";
@@ -109,14 +110,14 @@ const codehostGithub = {
     return isPrPresentOrUnknown(codehostGithub.prStateForBranch(repoDir));
   },
   // { state, number } of the current branch's PR (bin/workflow/pr-state); number "" when none.
-  prForBranch(repoDir) {
+  prForBranch(repoDir, opts) {
     const { findGhInPath, toMsys2Path } = require("../../workflow-gate/gh-detect");
     const { spawnSync } = require("child_process");
     const ghPath = findGhInPath();
     let r;
     try {
       r = spawnSync("bash", ["-c", '"$1" pr view --json state,number', "--", ghPath ? toMsys2Path(ghPath) : "gh"], {
-        cwd: repoDir, encoding: "utf8", timeout: 8000,
+        cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts),
       });
     } catch (e) {
       return { state: "UNKNOWN", number: "" };
@@ -131,7 +132,44 @@ const codehostGithub = {
       return { state: "UNKNOWN", number: "" };
     }
   },
+  // { state, number, mergeState, url, error } in one gh call (./merge-state.js). gh is
+  // spawned directly (no bash wrapper) so the timeout kills the gh process itself.
+  mergeStateForBranch(repoDir, opts) {
+    const ms = require("./merge-state");
+    const { spawnSync } = require("child_process");
+    const timeoutMs = (opts && opts.timeoutMs) || ms.FORGE_QUERY_TIMEOUT_MS;
+    let r;
+    try {
+      r = spawnSync("gh", ["pr", "view", "--json", "state,number,mergeStateStatus,url"],
+        { cwd: repoDir, encoding: "utf8", timeout: timeoutMs, windowsHide: true });
+    } catch (e) {
+      return ms.unknownMergeState("gh failed to start: " + (e && e.message));
+    }
+    const failure = ms.spawnFailure(r, "gh", timeoutMs);
+    if (failure) return ms.unknownMergeState(failure);
+    if (isNoPrResult(r)) return { state: "NONE", number: "", mergeState: "", url: "", error: "" };
+    if (r.status !== 0) return ms.unknownMergeState(String(r.stderr || "").trim() || `gh exited ${r.status}`);
+    try {
+      const pr = JSON.parse(String(r.stdout || "").trim());
+      const state = String(pr.state || "").toUpperCase();
+      if (!PR_STATES.has(state)) return ms.unknownMergeState("gh answered an unreadable PR state");
+      return {
+        state,
+        number: Number.isInteger(pr.number) ? String(pr.number) : "",
+        mergeState: String(pr.mergeStateStatus || "").toUpperCase(),
+        url: typeof pr.url === "string" ? pr.url : "",
+        error: "",
+      };
+    } catch (e) {
+      return ms.unknownMergeState("gh answered malformed JSON");
+    }
+  },
 };
+
+function timeoutOf(opts) {
+  const t = opts && Number(opts.timeoutMs);
+  return Number.isFinite(t) && t > 0 ? t : 8000;
+}
 
 const trackerGithub = {
   isForgeScanTarget(command) {

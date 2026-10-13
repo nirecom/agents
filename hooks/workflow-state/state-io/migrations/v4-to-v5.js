@@ -4,7 +4,7 @@
 // stream. Three changes, all pure functions of the input (no env, no markers,
 // no clock): workflow_type is renamed to deliverable_type; a wf-code session
 // past branching records the delivery path its stream proves; and the new
-// push_branch / deliver steps are backfilled when the stream proves the old
+// push_branch / merge_to_main steps are backfilled when the stream proves the old
 // flow already did that work. `v4State` is never mutated.
 
 const ORIGIN = "migration-v4-to-v5";
@@ -79,7 +79,7 @@ function migrateV4ToV5(v4State) {
   };
 
   if (pushDone) backfill("push_branch");
-  if (deliverDone) backfill("deliver");
+  if (deliverDone) backfill("merge_to_main");
   // An old direct-path push before approval: the reset that follows it is the
   // v5 "post-push" boundary, so record it as such for the release phase.
   if (deliverDone && pushedBeforeApproval && !DELIVER_EVIDENCE_STEPS.some(settled)) {

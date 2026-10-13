@@ -156,7 +156,7 @@ run_transitions_tests() {
   # ---- Case 14: post-merge reset (#1161) -----------------------------------
   # user_verification is pending but is treated as complete because reset_reason=post-merge.
   # next-step determines cleanup is the current step and returns ACTION=invoke.
-  # #2527: cleanup maps to /worktree-end (deliver is backfilled complete by the v4->v5
+  # #2527: cleanup maps to /worktree-end (merge_to_main is backfilled complete by the v4->v5
   # migration from the post-merge reason), so NEXT_SKILL names it directly.
   ACTION=""; NEXT_SKILL=""; NEXT_HINT=""; REASON=""
   write_state "case14" "$JSON_UV_POST_MERGE"

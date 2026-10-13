@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 "use strict";
-// Usage: pr-state [--repo <dir>]
-// Read-only (#2527): prints the current branch's PR state and number for /deliver
+// Usage: pr-state [--repo <dir>] [--merge-state]
+// Read-only (#2527): prints the current branch's PR state and number for /merge-to-main
 // and its preflight. Never merges. Output, always exit 0 on a parsed command line:
 //   PR_STATE=OPEN|MERGED|CLOSED|NONE|UNKNOWN
 //   PR_NUMBER=<n>   (empty when there is no PR or it is unknown)
+// --merge-state (4-5) reads the PR in one forge call and adds two lines:
+//   PR_MERGE_STATE=<gh mergeStateStatus vocabulary; GitLab mapped by hooks/lib/forge/merge-state.js>
+//   PR_URL=<web URL of the PR / MR>
+// An UNKNOWN answer in that mode writes the forge's reason to stderr (auth vs rate limit).
 
 const path = require("path");
+
+// The CLI is not inside the Stop guard's budget, so it allows the forge more time than next-step.
+const CLI_FORGE_TIMEOUT_MS = 8000;
 
 function die(msg) {
   process.stderr.write("pr-state: " + msg + "\n");
@@ -14,21 +21,42 @@ function die(msg) {
 }
 
 let repoDir = process.cwd();
+let withMergeState = false;
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--repo") {
     if (i + 1 >= argv.length) die("--repo requires an argument");
     repoDir = argv[++i];
+  } else if (argv[i] === "--merge-state") {
+    withMergeState = true;
   } else {
     die("unknown argument: " + argv[i]);
   }
 }
 
+function toRepoPath(dir) {
+  const { toWindowsPath } = require(path.join(__dirname, "../../hooks/lib/branch-diff"));
+  return toWindowsPath(dir);
+}
+
+if (withMergeState) {
+  let pr = { state: "UNKNOWN", number: "", mergeState: "", url: "", error: "lookup failed" };
+  try {
+    const { mergeStateForBranch } = require(path.join(__dirname, "../../hooks/lib/forge/merge-state"));
+    pr = mergeStateForBranch(toRepoPath(repoDir), { timeoutMs: CLI_FORGE_TIMEOUT_MS }) || pr;
+  } catch (e) {
+    pr.error = "lookup failed — " + (e && e.message ? e.message : "unknown");
+  }
+  if (pr.state === "UNKNOWN" && pr.error) process.stderr.write("pr-state: " + pr.error + "\n");
+  process.stdout.write("PR_STATE=" + pr.state + "\nPR_NUMBER=" + (pr.number || "") +
+    "\nPR_MERGE_STATE=" + (pr.mergeState || "") + "\nPR_URL=" + (pr.url || "") + "\n");
+  process.exit(0);
+}
+
 let pr = { state: "UNKNOWN", number: "" };
 try {
-  const { toWindowsPath } = require(path.join(__dirname, "../../hooks/lib/branch-diff"));
   const { prForBranch } = require(path.join(__dirname, "../../hooks/workflow-gate/gh-detect"));
-  pr = prForBranch(toWindowsPath(repoDir)) || pr;
+  pr = prForBranch(toRepoPath(repoDir)) || pr;
 } catch (e) {
   process.stderr.write("pr-state: lookup failed — " + (e && e.message ? e.message : "unknown") + "\n");
 }

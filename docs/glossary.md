@@ -116,9 +116,9 @@ definition, and related links.
 
 - **Full name**: Delivery operation
 - **Definition**: The hard-to-undo act of landing the change on the default branch: a PR merge
-  (`pull_request`) or a commit and push (`direct`). `/deliver` performs it; the user confirms once,
+  (`pull_request`) or a commit and push (`direct`). `/merge-to-main` performs it; the user confirms once,
   immediately before it, through the USER_VERIFIED dialog.
-- **Related**: [skills/deliver/SKILL.md](../skills/deliver/SKILL.md)
+- **Related**: [skills/merge-to-main/SKILL.md](../skills/merge-to-main/SKILL.md)
 
 ### step table
 
@@ -133,7 +133,7 @@ definition, and related links.
 - **Full name**: Release phase
 - **Definition**: The workflow steps after `review_docs`, one skill each: `push_branch`
   (`/commit-push`: commit, push the branch, open the PR), `user_verification` (`/get-release-approval`:
-  preflight, then the sole USER_VERIFIED sentinel), `deliver` (`/deliver`: the delivery operation),
+  preflight, then the sole USER_VERIFIED sentinel), `merge_to_main` (`/merge-to-main`: the delivery operation),
   `cleanup` (`/worktree-end`: remove the worktree), and `pre_final_report_gate` (`/session-close`).
   Every step has a skill, so `next-step` never returns an empty `NEXT_SKILL` here.
 - **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md), #2527
@@ -142,7 +142,7 @@ definition, and related links.
 
 - **Full name**: Delivery boundary (`reset_reason` `post-merge` / `post-push`)
 - **Definition**: The reset a delivery operation applies to `user_verification` (back to `pending`). For
-  navigation it counts as settled, so `next-step` moves on to `deliver`; gates ignore it, so the next
+  navigation it counts as settled, so `next-step` moves on to `merge_to_main`; gates ignore it, so the next
   commit or merge needs a fresh approval.
 - **Related**: [hooks/workflow-state/effective-state/delivery-boundary.js](../hooks/workflow-state/effective-state/delivery-boundary.js)
 
@@ -150,7 +150,7 @@ definition, and related links.
 
 - **Full name**: `bin/workflow/pr-state`
 - **Definition**: Read-only CLI printing `PR_STATE=OPEN|MERGED|CLOSED|NONE|UNKNOWN` and `PR_NUMBER=` for
-  the current branch on any forge. `/deliver` and `/worktree-end` branch on it (`NONE` means a bootstrap
+  the current branch on any forge. `/merge-to-main` and `/worktree-end` branch on it (`NONE` means a bootstrap
   delivery, `UNKNOWN` stops); it never merges.
 - **Related**: [bin/workflow/pr-state](../bin/workflow/pr-state)
 

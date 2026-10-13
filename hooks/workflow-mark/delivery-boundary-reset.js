@@ -2,7 +2,7 @@
 // Delivery-boundary reset of user_verification after a successful merge-class
 // Bash operation (#2527 3-2). A protected push resets post-push; a gh / glab
 // merge resets post-merge. One appendEvents builder judges the projected state
-// inside the lock, so a repeat of the same event (or a reset settleDeliver
+// inside the lock, so a repeat of the same event (or a reset settleMergeToMain
 // already wrote) appends nothing.
 
 const { isDeliveryBoundaryReset } = require("../workflow-state/effective-state/delivery-boundary");

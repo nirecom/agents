@@ -23,7 +23,7 @@ const STEP_TO_SKILL = Object.freeze({
   review_docs: "review-docs",
   push_branch: "commit-push",
   user_verification: "get-release-approval",
-  deliver: "deliver",
+  merge_to_main: "merge-to-main",
   cleanup: "worktree-end",
   pre_final_report_gate: "session-close",
   // Terminal step: recorded, never advised. See isTerminalStep below.
@@ -46,7 +46,7 @@ const STEP_DESC = Object.freeze({
   review_docs: "Review doc line limits and README section order",
   push_branch: "Model commits, pushes the branch, and opens the PR",
   user_verification: "Model runs /get-release-approval to obtain the user release approval",
-  deliver: "Model performs the delivery operation (PR merge or direct push)",
+  merge_to_main: "Model performs the delivery operation (PR merge or direct push)",
   cleanup: "Model removes the worktree and the merged branch",
   pre_final_report_gate: "Final report and session close",
   final_report: "Final report delivered (terminal)",

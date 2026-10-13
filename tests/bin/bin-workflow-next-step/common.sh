@@ -173,5 +173,5 @@ JSON_WF_PLAN_LEGACY='{"workflow_type":"wf-plan","steps":{"workflow_init":{"statu
 # #1161: user_verification reset to pending after gh pr merge (reset_reason=post-merge).
 # next-step must skip it and advance to cleanup. #2527: review_docs complete (absent would make
 # review_docs current) and worktree_entered_at present, so the v4->v5 migration records
-# delivery_path=pull_request and backfills push_branch/deliver from the post-merge reason.
+# delivery_path=pull_request and backfills push_branch/merge_to_main from the post-merge reason.
 JSON_UV_POST_MERGE='{"worktree_entered_at":"2026-01-01T00:00:00.000Z","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"review_docs":{"status":"complete"},"user_verification":{"status":"pending","reset_reason":"post-merge"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1161]}'

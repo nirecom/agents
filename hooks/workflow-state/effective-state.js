@@ -15,7 +15,7 @@ const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver"
 const { readSkipVerdict } = require("./skip-verdict");
 const { applyWriteCodeResume } = require("./effective-state/write-code-resume");
 const { navigateBoundaryStatus } = require("./effective-state/delivery-boundary");
-const { isStepRequired } = require("./step-table");
+const { isStepRequired, canonicalStepName } = require("./step-table");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const {
   APPROVAL_GATED_STEPS,
@@ -30,7 +30,8 @@ const EVIDENCE_STEPS = Object.freeze([
 ]);
 // Release steps whose evidence is a forge / remote-ref query (#2527 3-3). Kept
 // apart from EVIDENCE_STEPS, which reconcile-state walks offline.
-const NETWORK_EVIDENCE_STEPS = Object.freeze(["push_branch", "deliver"]);
+// user_verification (#2527 4-4) answers only on the web-merge channel (an observed web merge).
+const NETWORK_EVIDENCE_STEPS = Object.freeze(["push_branch", "user_verification", "merge_to_main"]);
 
 // Table-skip (#2527): a pending step the session profile does not owe reads as
 // skipped. Which steps are owed is the step table (SSOT: ./step-table.js); the
@@ -119,7 +120,7 @@ function hasGenuineRecordedComplete(state, step) {
     let latest = null;
     for (const e of events) {
       if (!e || typeof e !== "object") continue;
-      if (e.kind !== "step_status" || e.step !== step) continue;
+      if (e.kind !== "step_status" || canonicalStepName(e.step) !== step) continue;
       latest = e;
     }
     if (!latest) return false;
@@ -154,8 +155,8 @@ function evaluateResumability(state) {
     if (!hasRecordedProgress(state)) return { eligible: false, reason: "all-pending" };
 
     // S1: the session's change was delivered (#2527: approval alone no longer
-    // finishes a session — deliver is the step after it).
-    if (steps.deliver && steps.deliver.status === "complete") {
+    // finishes a session — merge_to_main is the step after it).
+    if (steps.merge_to_main && steps.merge_to_main.status === "complete") {
       return { eligible: false, reason: "delivered" };
     }
 
@@ -247,7 +248,7 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
 
     // 3b. delivery boundary — navigation callers only (./effective-state/delivery-boundary.js).
     if (!derived && navigate) {
-      const settledTo = navigateBoundaryStatus(step, status, state);
+      const settledTo = navigateBoundaryStatus(step, status, state, profile);
       if (settledTo) {
         status = settledTo;
         resolvedFrom = "delivery-boundary";
@@ -265,7 +266,11 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
       try {
         resolvable = canResolveFromEvidence(step, state, sessionId, opts);
       } catch (_) { resolvable = false; /* fail-open: stays pending */ }
-      if (resolvable) {
+      if (resolvable && step === "user_verification") {
+        // A web merge is observed, never recorded: settleMergeToMain owns the uv record.
+        status = "complete";
+        resolvedFrom = "web-merge-evidence";
+      } else if (resolvable) {
         status = "complete";
         resolvedFrom = "evidence";
         resolutions.push({ step, source: "evidence" });

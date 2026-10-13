@@ -166,16 +166,16 @@ Neither sibling currently has branch protection, so the direct push succeeds tod
 
 ### Who merges, and the one confirmation
 
-The release phase is `push_branch` → `user_verification` → `deliver` → `cleanup`, one skill each
+The release phase is `push_branch` → `user_verification` → `merge_to_main` → `cleanup`, one skill each
 (step list: [workflow.md](architecture/claude-code/workflow.md)). `/commit-push` stops at the PR;
-`/get-release-approval` issues the single USER_VERIFIED dialog; `/deliver` performs the squash-merge
+`/get-release-approval` issues the single USER_VERIFIED dialog; `/merge-to-main` performs the squash-merge
 of that PR by number (`gh pr merge <PR number> --squash --delete-branch`, or `glab mr merge` on
 GitLab); `/worktree-end` only cleans up and never merges.
 
-`/deliver` reads the PR state with `bin/workflow/pr-state` first. A PR already `MERGED` completes the
-step without a second merge, so pressing the GitHub UI merge button before `/deliver` is safe:
-`/get-release-approval` records the approval with a "merged via web UI" reason and `/deliver` skips
-the merge. If the PR number at merge time differs from the approved one, `/deliver` stops and
+`/merge-to-main` reads the PR state with `bin/workflow/pr-state` first. A PR already `MERGED` completes the
+step without a second merge, so pressing the GitHub UI merge button before `/merge-to-main` is safe:
+`/get-release-approval` records the approval with a "merged via web UI" reason and `/merge-to-main` skips
+the merge. If the PR number at merge time differs from the approved one, `/merge-to-main` stops and
 `/get-release-approval` is re-run. The merge gate still blocks any merge or protected-branch push
 until `user_verification` is complete.
 

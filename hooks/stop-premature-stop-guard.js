@@ -42,6 +42,9 @@ const C4_EXEMPTIONS = [
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
   { id: "awaiting-plan-approval", phase: "next-step-output",
     test: (c, _d) => typeof c.reason === "string" && c.reason.startsWith("awaiting-plan-approval:") },
+  // #2527 4-4: the human merges the PR on the web; the background poller resumes the session.
+  { id: "human-web-merge-wait", phase: "next-step-output",
+    test: (c, _d) => c.wait === "human-web-merge" },
 ];
 
 // Per-finding exemptions that apply to the mechanism-failure lane only. The
@@ -217,7 +220,10 @@ if (require.main === module) {
     // Delegate reasons owned by a dedicated Stop hook (REASON is single-quoted).
     const reasonLine = lines.find((l) => l.startsWith("REASON="));
     const reasonValue = reasonLine ? reasonLine.slice("REASON=".length).replace(/^'|'$/g, "") : "";
-    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue }, deps, degraded)) {
+    // #2527 4-4: WAIT names a wait on a human outside Claude (the web merge); unquoted value.
+    const waitLine = lines.find((l) => l.startsWith("WAIT="));
+    const waitValue = waitLine ? waitLine.slice("WAIT=".length).trim() : "";
+    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue, wait: waitValue }, deps, degraded)) {
       process.exit(0);
     }
 

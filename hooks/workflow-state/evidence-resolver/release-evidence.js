@@ -1,12 +1,14 @@
 "use strict";
-// Completion evidence for the release steps push_branch / deliver (#2527 3-3).
+// Completion evidence for the release steps push_branch / merge_to_main (#2527 3-3).
 // Every predicate fails to false: an UNKNOWN forge answer, a timeout, or a git
 // error leaves the step pending, and the idempotent skill re-checks the real
 // state. No predicate fetches; the remote-tracking refs are taken as recorded.
 
 const { spawnSync } = require("child_process");
 
-const RELEASE_EVIDENCE_STEPS = Object.freeze(["push_branch", "deliver"]);
+// user_verification (#2527 4-4): on the web-merge channel the human's merge on the web IS the
+// release approval; the dialog channel has no evidence (the USER_VERIFIED dialog records it).
+const RELEASE_EVIDENCE_STEPS = Object.freeze(["push_branch", "user_verification", "merge_to_main"]);
 
 function git(repoDir, args) {
   const r = spawnSync("git", ["-C", repoDir].concat(args), { encoding: "utf8", timeout: 5000 });
@@ -38,18 +40,33 @@ function isDirectDelivered(repoDir) {
   return !!head && head === remote;
 }
 
-function hasReleaseEvidence(step, sessionId, opts) {
-  const repoDir = opts && opts.repoDir;
-  if (!repoDir) return false;
-  const deliveryPath = deliveryPathOf(sessionId, opts || {});
+// prStateOf(repoDir, opts) — this run's memoized forge answer when one exists (opts.forgeMemo,
+// filled by mergeStateForBranch), else a fresh PR-state read bounded by the next-step budget.
+function prStateOf(repoDir, opts) {
+  const ms = require("../../lib/forge/merge-state");
+  const cached = ms.cachedMergeState(repoDir, opts && opts.forgeMemo);
+  if (cached) return cached.state;
   const { prStateForBranch } = require("../../workflow-gate/gh-detect");
+  return prStateForBranch(repoDir, { timeoutMs: ms.FORGE_QUERY_TIMEOUT_MS });
+}
+
+function hasReleaseEvidence(step, sessionId, opts) {
+  const o = opts || {};
+  const repoDir = o.repoDir;
+  if (!repoDir) return false;
+  if (step === "user_verification") {
+    const { readState } = require("../state-io");
+    const state = o.state || (sessionId ? readState(sessionId) : null);
+    return require("../release-approval").isWebMergeObserved(state, sessionId, o);
+  }
+  const deliveryPath = deliveryPathOf(sessionId, o);
   if (step === "push_branch") {
     if (deliveryPath !== "pull_request") return false;
-    const state = prStateForBranch(repoDir);
+    const state = prStateOf(repoDir, o);
     return state === "OPEN" || state === "MERGED";
   }
-  if (step === "deliver") {
-    if (deliveryPath === "pull_request") return prStateForBranch(repoDir) === "MERGED";
+  if (step === "merge_to_main") {
+    if (deliveryPath === "pull_request") return prStateOf(repoDir, o) === "MERGED";
     if (deliveryPath === "direct") return isDirectDelivered(repoDir);
   }
   return false;
@@ -63,7 +80,15 @@ function describeReleaseEvidence(step) {
       "queried only for the evaluated step of next-step's verdict (evidencePolicy.network)",
     ];
   }
-  if (step === "deliver") {
+  if (step === "user_verification") {
+    return [
+      "web-merge channel (pull_request + AUTO_MERGE_PR=off fixed at branching): the current branch's "
+        + "PR state (mergeStateForBranch) is MERGED — the human's web merge is the release approval",
+      "user-verified-dialog channel: no evidence (no forge query); the USER_VERIFIED dialog records it",
+      "queried only for the evaluated step of next-step's verdict (evidencePolicy.network)",
+    ];
+  }
+  if (step === "merge_to_main") {
     return [
       "pull_request path: the current branch's PR state (prStateForBranch) is MERGED",
       "direct path: the default branch is checked out, `git status --porcelain` is empty (untracked "

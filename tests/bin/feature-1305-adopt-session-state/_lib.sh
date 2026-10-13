@@ -205,8 +205,8 @@ assert_list_row() {
 
 STEPS_INHERITABLE='{"workflow_init":"complete","research":"complete","outline":"complete","detail":"complete"}'
 STEPS_ALL_PENDING='{}'
-STEPS_DELIVERED='{"research":"complete","user_verification":"complete","deliver":"complete"}'
-STEPS_DELIVERED_ONLY='{"research":"complete","deliver":"complete"}'
+STEPS_DELIVERED='{"research":"complete","user_verification":"complete","merge_to_main":"complete"}'
+STEPS_DELIVERED_ONLY='{"research":"complete","merge_to_main":"complete"}'
 STEPS_APPROVED_NOT_DELIVERED='{"research":"complete","user_verification":"complete"}'
 STEPS_INTENT_DONE='{"workflow_init":"complete","clarify_intent":"complete","research":"complete"}'
 

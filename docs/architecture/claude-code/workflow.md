@@ -20,14 +20,14 @@ time by a PreToolUse hook. In order, they are the standard **WF-CODE** plan that
 13  review_docs         Review doc line limits and README section order
 14  push_branch         Model commits, pushes the branch, and opens the PR
 15  user_verification   Model runs /get-release-approval to obtain the user release approval
-16  deliver             Model performs the delivery operation (PR merge or direct push)
+16  merge_to_main       Model performs the delivery operation (PR merge or direct push)
 17  cleanup             Model removes the worktree and the merged branch
 18  pre_final_report_gate  Final report and session close
 19  final_report        Final report delivered (terminal)
 ```
 
 Steps 14–18 are the **release phase**: one step, one skill, each skill completes only its own step
-(`push_branch` → `/commit-push`, `user_verification` → `/get-release-approval`, `deliver` → `/deliver`,
+(`push_branch` → `/commit-push`, `user_verification` → `/get-release-approval`, `merge_to_main` → `/merge-to-main`,
 `cleanup` → `/worktree-end`, `pre_final_report_gate` → `/session-close`). Which steps a session owes
 is read from the [step table](#the-step-table-deliverable-type-x-pm-type), not from per-consumer checks;
 the per-type rendering is under [Deliverable types](#deliverable-types-in-next-step---list) below.
@@ -154,15 +154,15 @@ untouched — so the `next-step` abort branch still fires for a genuine inconsis
 `migrateV4ToV5` (`state-io/migrations/v4-to-v5.js`) is likewise a pure function of the stream. It
 renames `workflow_type` to `deliverable_type`; records `delivery_path` for a `wf-code` session that is
 past branching (`pull_request` when the stream or `session_worktree` proves a worktree, else `direct`);
-and backfills the two new release steps, `push_branch` and `deliver`, as `complete` with
+and backfills the two new release steps, `push_branch` and `merge_to_main`, as `complete` with
 `provenance: "backfilled"` only when the old flow's later steps prove that work happened. A session that
 had not reached that point keeps them `pending`. Reads stay in-memory, so a v4 session still running an
 older release is never rewritten by a reader.
 
 A **delivery operation** (merge or protected-branch push) resets `user_verification` to `pending` with a
 `reset_reason` of `post-merge` or `post-push`. Navigation (`next-step`, via
-`effective-state/delivery-boundary.js`) reads that pending as settled and moves on to `deliver`; gates
-never do, so the next commit or merge needs a fresh approval. `push_branch` and `deliver` can also
+`effective-state/delivery-boundary.js`) reads that pending as settled and moves on to `merge_to_main`; gates
+never do, so the next commit or merge needs a fresh approval. `push_branch` and `merge_to_main` can also
 resolve from forge or remote-ref evidence (PR exists, PR merged, or a clean pushed HEAD) in the one
 step `next-step` evaluates.
 
@@ -405,8 +405,8 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `review_docs` | `/review-docs` skill (emits `WORKFLOW_MARK_STEP_review_docs_complete`) **or** skipped via `echo "<<WORKFLOW_MARK_STEP_review_docs_skipped>>"` (no approval-gated NOT_NEEDED sentinel — the gates are objective). Evidence-bound: `workflow-gate.js` re-runs `bin/review-doc-gates --staged` on the staged doc blobs every commit and blocks on a HARD failure, even in a docs-only commit |
 | `push_branch` | `/commit-push` skill — commits, pushes the worktree branch, opens the PR; stops there (no merge). Skipped on the `direct` delivery path. Idempotent; also resolves from an existing PR |
 | `user_verification` | `/get-release-approval` skill — runs the preflight (verification gate; PR mergeable state on the `pull_request` path, #2362), then is the single issuer of `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory. The one user confirmation before the delivery operation (#1000) |
-| `deliver` | `/deliver` skill — the approved delivery operation: PR merge (`pull_request`), bootstrap push (empty remote), or commit and push to the default branch (`direct`). Idempotent; never emits the sentinel |
-| `cleanup` | `/worktree-end` skill (inventory + worktree removal after `deliver` settled; never merges or pushes). Skipped on the `direct` delivery path |
+| `merge_to_main` | `/merge-to-main` skill — the approved delivery operation: PR merge (`pull_request`), bootstrap push (empty remote), or commit and push to the default branch (`direct`). Idempotent; never emits the sentinel |
+| `cleanup` | `/worktree-end` skill (inventory + worktree removal after `merge_to_main` settled; never merges or pushes). Skipped on the `direct` delivery path |
 | `pre_final_report_gate` | `/session-close` skill (emits `WORKFLOW_MARK_STEP_pre_final_report_gate_complete`) |
 | `final_report` | `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"` after the Final Report is rendered — the sole `TERMINAL_STEPS` member, and the only step the commit gate never enforces |
 

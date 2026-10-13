@@ -68,7 +68,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     fi
 }
 
-# L2 — table-driven classification of all 19 steps (push_branch/deliver added by #2527) against detail.md Step 3.
+# L2 — table-driven classification of all 19 steps (push_branch/merge_to_main added by #2527) against detail.md Step 3.
 # The expected table is restated here on purpose: it is the reviewed decision,
 # not a mirror of whatever the implementation happens to say.
 run_L2() {
@@ -92,7 +92,7 @@ const EXPECTED = {
   review_docs: 'worktree-dependent',
   push_branch: 'worktree-dependent',
   user_verification: 'worktree-dependent',
-  deliver: 'worktree-dependent',
+  merge_to_main: 'worktree-dependent',
   cleanup: 'worktree-dependent',
   pre_final_report_gate: 'worktree-dependent',
   final_report: 'worktree-dependent',

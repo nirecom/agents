@@ -35,7 +35,7 @@ fi
 LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Bootstrap mode (issue #772): when the session was a new-repo first commit,
-# /deliver DL-3b pushed branch:main directly. There is no PR to query,
+# /merge-to-main MM-3b pushed branch:main directly. There is no PR to query,
 # so skip the gh pr view / mergeCommit retry block entirely and synthesize
 # the PR_* fields with sentinel values.
 BOOTSTRAP_MODE="${BOOTSTRAP_MODE:-0}"

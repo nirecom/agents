@@ -10,8 +10,9 @@ const REQUIRED_KEYS = ["ACTION", "NEXT_SKILL", "NEXT_HINT", "REASON"];
 // advisory plan-skip hint at the outline/detail steps; absent on every other
 // step. Kept out of REQUIRED_KEYS so the legacy 4-line next-step output still parses.
 // DELIVERY_PATH_MISMATCH (#2527): recorded vs live delivery path disagree.
+// WAIT (#2527 4-4): the session waits on a human outside Claude (human-web-merge).
 // An absent optional key parses to "".
-const OPTIONAL_KEYS = ["SKIP_HINT", "DELIVERY_PATH_MISMATCH"];
+const OPTIONAL_KEYS = ["SKIP_HINT", "DELIVERY_PATH_MISMATCH", "WAIT"];
 
 function withOptionalKeys(base, result) {
   for (const k of OPTIONAL_KEYS) base[k] = result[k] !== undefined ? result[k] : "";

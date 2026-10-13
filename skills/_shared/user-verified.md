@@ -6,7 +6,7 @@ asked "is this ready to ship?".
 
 ## Who emits
 
-`/get-release-approval` is the only emitter. It runs as the `user_verification` step, after `/commit-push` opened the PR (pull_request path) and before `/deliver`.
+`/get-release-approval` is the only emitter. It runs as the `user_verification` step, after `/commit-push` opened the PR (pull_request path) and before `/merge-to-main`.
 Never emit it from any other skill or step — on the pull_request path the user approves the merge of a specific PR, so the PR must exist first.
 
 ## Preflight — risk-category gate (#833)
@@ -64,7 +64,7 @@ the hook is the single source of truth for the dialog's surrounding text.
 
 **User answers the dialog**
 
-- **Allow** → proceed to the next step (`/deliver`).
+- **Allow** → proceed to the next step (`/merge-to-main`).
 - **Deny** → stop. Do not retry.
 
 ## Notes

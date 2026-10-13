@@ -77,17 +77,18 @@ function originUrl(repoDir) {
 // prStateForBranch: OPEN | MERGED | CLOSED | NONE | UNKNOWN for the current branch
 // (vocabulary: lib/forge/pr-state.js). #2307: routes through the forge codehost
 // descriptor for the repo's origin; an unreadable origin answers UNKNOWN.
-function prStateForBranch(repoDir) {
+// opts.timeoutMs (optional) bounds the forge call.
+function prStateForBranch(repoDir, opts) {
   const url = originUrl(repoDir);
   if (!url) return "UNKNOWN";
-  return resolveCodehostDescriptor(url).prStateForBranch(repoDir);
+  return resolveCodehostDescriptor(url).prStateForBranch(repoDir, opts);
 }
 
 // prForBranch: { state, number } for the current branch (bin/workflow/pr-state).
-function prForBranch(repoDir) {
+function prForBranch(repoDir, opts) {
   const url = originUrl(repoDir);
   if (!url) return { state: "UNKNOWN", number: "" };
-  return resolveCodehostDescriptor(url).prForBranch(repoDir);
+  return resolveCodehostDescriptor(url).prForBranch(repoDir, opts);
 }
 
 // hasOpenPrForBranch: true iff the current branch has an OPEN or MERGED PR; an
@@ -125,5 +126,5 @@ function isRemoteDefaultBranchAbsent(repoDir) {
 }
 
 module.exports = {
-  findGhInPath, toMsys2Path, prStateForBranch, prForBranch, hasOpenPrForBranch, isBranchDirectlyMerged, isRemoteDefaultBranchAbsent,
+  findGhInPath, toMsys2Path, originUrl, prStateForBranch, prForBranch, hasOpenPrForBranch, isBranchDirectlyMerged, isRemoteDefaultBranchAbsent,
 };

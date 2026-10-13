@@ -15,7 +15,7 @@ reflects every terminal action.
 - `AGENTS_MAIN_ROOT` must be set.
 - Caller context (pull_request path): `/worktree-end` WE-1..WE-18a have
   already completed (PR merged, worktree removed; `<CONTROL_DIR>/final-report-env.json` exists).
-- Caller context (direct: deliver is complete): `/deliver` pushed to the default branch. No worktree-end
+- Caller context (direct: merge_to_main is complete): `/merge-to-main` pushed to the default branch. No worktree-end
   ran; the env file does not yet exist.
 
 ## SC-0 — Resolve PLANS_DIR and session id

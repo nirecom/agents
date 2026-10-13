@@ -1,6 +1,6 @@
 "use strict";
-// settleDeliver — the single writer of a deliver completion (#2527 3-2b).
-// deliver complete and the user_verification boundary reset go out in ONE
+// settleMergeToMain — the single writer of a merge_to_main completion (#2527 3-2b).
+// merge_to_main complete and the user_verification boundary reset go out in ONE
 // appendEvents builder, so no reader can see a delivered session whose approval
 // still looks live (and a fresh approval is demanded before the next delivery).
 // The builder judges the projected state inside the lock, so a repeat call, or a
@@ -14,10 +14,10 @@ function deliveryKindFor(deliveryPath) {
   return deliveryPath === "pull_request" ? "post-merge" : "post-push";
 }
 
-function settleDeliver(sessionId, opts) {
+function settleMergeToMain(sessionId, opts) {
   const o = opts || {};
   if (DELIVERY_BOUNDARY_REASONS.indexOf(o.kind) === -1) {
-    throw new Error(`settleDeliver: kind must be one of ${DELIVERY_BOUNDARY_REASONS.join("/")} (got ${o.kind})`);
+    throw new Error(`settleMergeToMain: kind must be one of ${DELIVERY_BOUNDARY_REASONS.join("/")} (got ${o.kind})`);
   }
   const provenance = typeof o.provenance === "string" ? o.provenance : "observed";
   const origin = typeof o.origin === "string" ? o.origin : "delivery-settle";
@@ -27,9 +27,9 @@ function settleDeliver(sessionId, opts) {
   appendEvents(sessionId, (_events, projected) => {
     const steps = (projected && projected.steps) || {};
     const out = [];
-    const deliverPending = !steps.deliver || steps.deliver.status !== "complete";
-    if (deliverPending) {
-      out.push({ kind: "step_status", step: "deliver", status: "complete", provenance, origin });
+    const mergePending = !steps.merge_to_main || steps.merge_to_main.status !== "complete";
+    if (mergePending) {
+      out.push({ kind: "step_status", step: "merge_to_main", status: "complete", provenance, origin });
     }
     if (!isDeliveryBoundaryReset(steps.user_verification)) {
       out.push({ kind: "step_status", step: "user_verification", status: "pending", provenance, origin });
@@ -37,11 +37,11 @@ function settleDeliver(sessionId, opts) {
         kind: "step_annotation", step: "user_verification", key: "reset_reason", value: o.kind, provenance, origin,
       });
     }
-    // deliver annotations trail the three settle events so they stay contiguous.
-    for (const key of deliverPending ? Object.keys(extraFields) : []) {
+    // merge_to_main annotations trail the three settle events so they stay contiguous.
+    for (const key of mergePending ? Object.keys(extraFields) : []) {
       if (RESERVED_ANNOTATION_KEYS.includes(key)) continue;
       const value = extraFields[key] === undefined ? null : extraFields[key];
-      out.push({ kind: "step_annotation", step: "deliver", key, value, provenance, origin });
+      out.push({ kind: "step_annotation", step: "merge_to_main", key, value, provenance, origin });
     }
     written = out.length;
     return out;
@@ -49,4 +49,4 @@ function settleDeliver(sessionId, opts) {
   return { written };
 }
 
-module.exports = { settleDeliver, deliveryKindFor };
+module.exports = { settleMergeToMain, deliveryKindFor };

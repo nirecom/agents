@@ -31,26 +31,26 @@ commit_in() {
 # first_line <out> — the incomplete-steps line of a block message.
 first_line() { printf '%s\n' "$1" | grep -o "$LIST_HEAD[^\\\"]*" | head -n 1; }
 
-case_begin "push_branch / deliver are exempt (pull_request, both pending)" "hooks/workflow-gate/commit-gate-steps.js"
-mk_state '{"sid":"cg-ex","path":"pull_request","upto":"review_security","steps":"review_security=pending;push_branch=pending;user_verification=pending;deliver=pending"}'
+case_begin "push_branch / merge_to_main are exempt (pull_request, both pending)" "hooks/workflow-gate/commit-gate-steps.js"
+mk_state '{"sid":"cg-ex","path":"pull_request","upto":"review_security","steps":"review_security=pending;push_branch=pending;user_verification=pending;merge_to_main=pending"}'
 out="$(commit_in cg-ex "$RP_REPO_M")"
 line="$(first_line "$out")"
 check_contains "gate blocks with the incomplete list" "$line" "review_security"
 check_not_contains "push_branch not required at commit" "$line" "push_branch"
-check_not_contains "deliver not required at commit" "$line" "deliver"
+check_not_contains "merge_to_main not required at commit" "$line" "merge_to_main"
 case_end
 
-case_begin "direct: commit before deliver requires user_verification" "hooks/workflow-gate/commit-gate-steps.js"
+case_begin "direct: commit before merge_to_main requires user_verification" "hooks/workflow-gate/commit-gate-steps.js"
 export ENFORCE_WORKTREE=off
-mk_state '{"sid":"cg-d","path":"direct","upto":"review_security","steps":"review_security=pending;user_verification=pending;deliver=pending"}'
+mk_state '{"sid":"cg-d","path":"direct","upto":"review_security","steps":"review_security=pending;user_verification=pending;merge_to_main=pending"}'
 out="$(commit_in cg-d "$RP_REPO_M")"
 line="$(first_line "$out")"
 check_contains "canary present" "$line" "review_security"
 check_contains "user_verification required outside a worktree" "$line" "user_verification"
-check_not_contains "deliver still exempt" "$line" "deliver"
+check_not_contains "merge_to_main still exempt" "$line" "merge_to_main"
 case_end
 
-case_begin "direct: after deliver, uv post-push pending blocks the next commit (C4)" "hooks/workflow-gate/commit-gate-steps.js"
+case_begin "direct: after merge_to_main, uv post-push pending blocks the next commit (C4)" "hooks/workflow-gate/commit-gate-steps.js"
 mk_state '{"sid":"cg-c4","path":"direct","upto":"pre_final_report_gate","steps":"user_verification=pending;review_security=pending","uvReset":"post-push"}'
 out="$(commit_in cg-c4 "$RP_REPO_M")"
 line="$(first_line "$out")"
@@ -66,7 +66,7 @@ case_end
 case_begin "worktree: user_verification / cleanup deferred-in-worktree" "hooks/workflow-gate/commit-gate-steps.js"
 export ENFORCE_WORKTREE=on
 rp_worktree
-mk_state "{\"sid\":\"cg-wt\",\"path\":\"pull_request\",\"entered\":true,\"cwd\":\"$RP_WT_M\",\"upto\":\"review_security\",\"steps\":\"review_security=pending;push_branch=pending;user_verification=pending;deliver=pending;cleanup=pending\"}"
+mk_state "{\"sid\":\"cg-wt\",\"path\":\"pull_request\",\"entered\":true,\"cwd\":\"$RP_WT_M\",\"upto\":\"review_security\",\"steps\":\"review_security=pending;push_branch=pending;user_verification=pending;merge_to_main=pending;cleanup=pending\"}"
 out="$(commit_in cg-wt "$RP_WT_M")"
 line="$(first_line "$out")"
 check_contains "canary present" "$line" "review_security"
@@ -75,17 +75,17 @@ check_not_contains "cleanup deferred in a worktree" "$line" "cleanup"
 case_end
 
 case_begin "worktree pull_request: every prerequisite settled -> commit approved" "hooks/workflow-gate/commit-gate-steps.js"
-mk_state "{\"sid\":\"cg-wt-ok\",\"path\":\"pull_request\",\"entered\":true,\"cwd\":\"$RP_WT_M\",\"upto\":\"push_branch\",\"steps\":\"push_branch=pending;user_verification=pending;deliver=pending;cleanup=pending\"}"
+mk_state "{\"sid\":\"cg-wt-ok\",\"path\":\"pull_request\",\"entered\":true,\"cwd\":\"$RP_WT_M\",\"upto\":\"push_branch\",\"steps\":\"push_branch=pending;user_verification=pending;merge_to_main=pending;cleanup=pending\"}"
 out="$(commit_in cg-wt-ok "$RP_WT_M")"
 check "gate decision is approve" "$(hook_decision "$out")" "approve"
 check_not_contains "no incomplete-steps list" "$out" "$LIST_HEAD"
 case_end
 
-case_begin "direct on main: user_verification complete, deliver pending -> commit approved" "hooks/workflow-gate/commit-gate-steps.js"
+case_begin "direct on main: user_verification complete, merge_to_main pending -> commit approved" "hooks/workflow-gate/commit-gate-steps.js"
 export ENFORCE_WORKTREE=off
 git -C "$RP_REPO" reset -q
 git -C "$RP_REPO" checkout -q main
-mk_state '{"sid":"cg-main-ok","path":"direct","branch":"main","upto":"deliver","steps":"deliver=pending"}'
+mk_state '{"sid":"cg-main-ok","path":"direct","branch":"main","upto":"merge_to_main","steps":"merge_to_main=pending"}'
 out="$(commit_in cg-main-ok "$RP_REPO_M")"
 check "commit runs on main" "$(git -C "$RP_REPO" rev-parse --abbrev-ref HEAD)" "main"
 check "gate decision is approve" "$(hook_decision "$out")" "approve"

@@ -4,7 +4,7 @@ description: Inventory gitignored state and clean up a git worktree after the de
 user-invocable: false
 ---
 
-Inventory gitignored state, then remove the worktree safely once `/deliver` has delivered the change.
+Inventory gitignored state, then remove the worktree safely once `/merge-to-main` has delivered the change.
 
 ## Procedure
 
@@ -15,7 +15,7 @@ Read `rules/mid-workflow-findings.md` before WE-6 — on-demand-only, never auto
 Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its Public GitHub Rules govern the issue comments and history entries written from here on.
 
 ### Precondition — delivery settled
-Run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"`. `REASON=` other than `cleanup` (deliver not settled) → stop and follow its `ACTION`; never merge or push from this skill.
+Run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"`. `REASON=` other than `cleanup` (merge_to_main not settled) → stop and follow its `ACTION`; never merge or push from this skill.
 
 ### WE-1 — Resolve <PLANS_DIR>
 Run `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` once as one bare command and reuse its printed path — never assign it to a shell variable, which does not survive to the next Bash call. Canonical: `skills/_shared/resolve-plans-dir.md`.
@@ -29,7 +29,7 @@ Run `bash "$AGENTS_MAIN_ROOT/bin/check-unstaged-tracked.sh" "$WORKTREE_PATH"`. r
 
 ### WE-4 — PR number resolution
 Run `node "$AGENTS_MAIN_ROOT/bin/workflow/pr-state"` (read-only, any forge); read `PR_STATE=` and `<PR_NUMBER>` from `PR_NUMBER=`.
-`PR_STATE=NONE` → bootstrap delivery (`/deliver` DL-3b pushed the branch as the default branch): set `BOOTSTRAP_MODE=1` and `BOOTSTRAP_COMMIT_SHA` from `git rev-parse HEAD` for WE-8.
+`PR_STATE=NONE` → bootstrap delivery (`/merge-to-main` MM-3b pushed the branch as the default branch): set `BOOTSTRAP_MODE=1` and `BOOTSTRAP_COMMIT_SHA` from `git rev-parse HEAD` for WE-8.
 `PR_STATE=UNKNOWN` (lookup failed) → stop and surface its stderr; never treat it as bootstrap.
 Never push or create a PR here.
 
@@ -78,8 +78,9 @@ supervisor OFF-block adaptive message fires only during WE-11..WE-18 — see cle
 WE-10c releases the CodeGraph index lock immediately before WE-11 — see cleanup-cascade.md.
 
 ## Rules
-- Cleanup runs only after `deliver` is settled (Precondition). No destructive steps on wait/abort/error paths.
-- Never merge, push, or emit the release-approval sentinel here — `/get-release-approval` and `/deliver` own them.
+- Cleanup runs only after `merge_to_main` is settled (Precondition). No destructive steps on wait/abort/error paths.
+- Never merge, push, or emit the release-approval sentinel here — `/get-release-approval` and `/merge-to-main` own them.
+- AUTO_MERGE_PR=off (pull_request only): the human merges on the web; /merge-to-main never merges.
 - `git worktree remove --force` is prohibited; blocked at the `settings.json` deny layer, not by prose in `rules/ops.md`.
 - The worktree/workflow escape-hatch sentinels must NOT be emitted to unblock WE-11; /sweep-worktrees reclaims — proceed to WE-16 (WE-12 fallback).
 - `ExitWorktree` is called only at WE-9a — never before the WE-9 `cd`.

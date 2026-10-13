@@ -33,6 +33,9 @@ const PERSISTED_TOP_LEVEL_KEYS = [
   "project_management_type",
   "delivery_path",
   "delivery_path_origin",
+  "auto_merge_pr",
+  "auto_merge_pr_origin",
+  "auto_merge_pr_source",
   "closes_issues",
   "last_pushed_sha",
   "session_worktree",
@@ -139,6 +142,7 @@ function projectState(state) {
   const ctx = (state && state.session_start_context) || {};
 
   const { VALID_STEPS } = require("./core");
+  const { canonicalStepName } = require("../step-table");
   const steps = {};
   for (const step of VALID_STEPS) steps[step] = emptyStepEntry();
 
@@ -155,28 +159,31 @@ function projectState(state) {
     if (!e || typeof e !== "object") continue;
     switch (e.kind) {
       case "step_status": {
-        if (!steps[e.step]) steps[e.step] = emptyStepEntry();
-        steps[e.step].status = e.status;
-        steps[e.step].updated_at = e.at !== undefined ? e.at : null;
+        const step = canonicalStepName(e.step);
+        if (!steps[step]) steps[step] = emptyStepEntry();
+        steps[step].status = e.status;
+        steps[step].updated_at = e.at !== undefined ? e.at : null;
         // Position, NOT e.seq — see the INVARIANT note on projectState.
-        steps[e.step].updated_seq = i + 1;
+        steps[step].updated_seq = i + 1;
         break;
       }
       case "step_annotation": {
-        if (!steps[e.step]) steps[e.step] = emptyStepEntry();
+        const step = canonicalStepName(e.step);
+        if (!steps[step]) steps[step] = emptyStepEntry();
         // A null-valued annotation is a tombstone: the key disappears from the
         // projection while the event itself stays in the stream.
-        if (e.value === null) delete steps[e.step][e.key];
-        else steps[e.step][e.key] = e.value;
+        if (e.value === null) delete steps[step][e.key];
+        else steps[step][e.key] = e.value;
         break;
       }
       case "step_annotations_cleared": {
         // Rebuild carrying STRUCTURE only. `updated_seq` is structure, not an
         // annotation: dropping it here would wipe the causal axis on every
         // annotation clear (RESET_FROM included).
-        const entry = steps[e.step];
+        const step = canonicalStepName(e.step);
+        const entry = steps[step];
         if (entry) {
-          steps[e.step] = {
+          steps[step] = {
             status: entry.status,
             updated_at: entry.updated_at,
             updated_seq: entry.updated_seq,

@@ -50,7 +50,7 @@ function resumeFromEmptyStage(payload, ctx, gateEnv, log, deps) {
   const counted = countUnpushed(ctx, payload, gateEnv, log);
   if (!counted.ok && counted.missingBase) {
     if (deps.probeBootstrap()) {
-      return deps.finish("bootstrap_pending", "nothing staged; remote has no default branch — /deliver completes the bootstrap push");
+      return deps.finish("bootstrap_pending", "nothing staged; remote has no default branch — /merge-to-main completes the bootstrap push");
     }
     return deps.finish("staging_check_failed", "nothing staged and no origin/<default> ref to count unpushed commits against — refusing to push");
   }

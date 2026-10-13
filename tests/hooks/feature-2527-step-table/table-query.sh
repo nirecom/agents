@@ -13,7 +13,7 @@ trap s27_teardown EXIT
 TABLE=hooks/workflow-state/step-table.js
 PROFILE=hooks/workflow-state/session-profile.js
 DPATH=hooks/lib/delivery-path.js
-ALL19="workflow_init,clarify_intent,research,outline,detail,branching_complete,write_tests,review_tests,write_code,run_tests,review_security,docs,review_docs,push_branch,user_verification,deliver,cleanup,pre_final_report_gate,final_report"
+ALL19="workflow_init,clarify_intent,research,outline,detail,branching_complete,write_tests,review_tests,write_code,run_tests,review_security,docs,review_docs,push_branch,user_verification,merge_to_main,cleanup,pre_final_report_gate,final_report"
 
 # required_list <profile-json> — comma list of steps isStepRequired accepts.
 required_list() {
@@ -42,7 +42,7 @@ case_end
 case_begin "T3-required-wf-code-direct" "hooks/workflow-state/step-table.js"
 o="$(required_list '{ deliverableType: "wf-code", pmType: "waterfall", deliveryPath: "direct" }')"
 check "T3 wf-code x direct skips push_branch and cleanup" "$(field "$o" REQ)" \
-  "workflow_init,clarify_intent,research,outline,detail,branching_complete,write_tests,review_tests,write_code,run_tests,review_security,docs,review_docs,user_verification,deliver,pre_final_report_gate,final_report"
+  "workflow_init,clarify_intent,research,outline,detail,branching_complete,write_tests,review_tests,write_code,run_tests,review_security,docs,review_docs,user_verification,merge_to_main,pre_final_report_gate,final_report"
 case_end
 
 case_begin "T4-required-wf-meta" "hooks/workflow-state/step-table.js"
@@ -57,20 +57,20 @@ case_begin "T5-commit-gate-attribute" "hooks/workflow-state/step-table.js"
 o="$(s27_node "const t = req(\"$TABLE\");
 out(\"GATES\", t.stepNames().map((s) => s + \":\" + t.commitGateOf(s)).join(\",\"));")"
 check "T5 commitGateOf for all 19 rows" "$(field "$o" GATES)" \
-  "workflow_init:required,clarify_intent:required,research:exempt,outline:required,detail:required,branching_complete:required,write_tests:required,review_tests:required,write_code:required,run_tests:required,review_security:required,docs:required,review_docs:required,push_branch:exempt,user_verification:deferred-in-worktree,deliver:exempt,cleanup:deferred-in-worktree,pre_final_report_gate:exempt,final_report:exempt"
+  "workflow_init:required,clarify_intent:required,research:exempt,outline:required,detail:required,branching_complete:required,write_tests:required,review_tests:required,write_code:required,run_tests:required,review_security:required,docs:required,review_docs:required,push_branch:exempt,user_verification:deferred-in-worktree,merge_to_main:exempt,cleanup:deferred-in-worktree,pre_final_report_gate:exempt,final_report:exempt"
 case_end
 
 case_begin "T6-provisional-without-record" "hooks/workflow-state/session-profile.js"
 o="$(profile_of s27-t6 '{ events: [] }')"
 check "T6 no record -> wf-code/waterfall/pull_request, all provisional" "$(field "$o" PROFILE)" \
-  '{"d":"wf-code","pm":"waterfall","path":"pull_request","src":{"deliverableType":"provisional","pmType":"provisional","deliveryPath":"provisional"}}'
+  '{"d":"wf-code","pm":"waterfall","path":"pull_request","src":{"deliverableType":"provisional","pmType":"provisional","deliveryPath":"provisional","autoMergePr":"provisional"}}'
 case_end
 
 case_begin "T7-workflow-off-marker-forces-pm-off" "hooks/workflow-state/session-profile.js"
 : > "$WORKFLOW_STATE_DIR/s27-t7.workflow-off"
 o="$(profile_of s27-t7 '{ events: [] }')"
 check "T7 WORKFLOW_OFF -> pmType off (marker), live path direct" "$(field "$o" PROFILE)" \
-  '{"d":"wf-code","pm":"off","path":"direct","src":{"deliverableType":"provisional","pmType":"marker","deliveryPath":"provisional"}}'
+  '{"d":"wf-code","pm":"off","path":"direct","src":{"deliverableType":"provisional","pmType":"marker","deliveryPath":"provisional","autoMergePr":"provisional"}}'
 o="$(profile_of s27-t7 '{ project_management_type: "waterfall", events: [] }')"
 check "T7b recorded waterfall is overridden by the marker" \
   "$(field "$o" PROFILE | sed -n 's/.*"pm":"\([a-z]*\)".*"pmType":"\([a-z]*\)".*/\1|\2/p')" "off|marker"
@@ -80,7 +80,7 @@ case_begin "T8-worktree-off-marker-direct" "hooks/workflow-state/session-profile
 : > "$WORKFLOW_STATE_DIR/s27-t8.worktree-off"
 o="$(profile_of s27-t8 '{ events: [] }')"
 check "T8 WORKTREE_OFF -> direct, pm stays waterfall" "$(field "$o" PROFILE)" \
-  '{"d":"wf-code","pm":"waterfall","path":"direct","src":{"deliverableType":"provisional","pmType":"provisional","deliveryPath":"provisional"}}'
+  '{"d":"wf-code","pm":"waterfall","path":"direct","src":{"deliverableType":"provisional","pmType":"provisional","deliveryPath":"provisional","autoMergePr":"provisional"}}'
 case_end
 
 case_begin "T9-enforce-worktree-env" "hooks/workflow-state/session-profile.js"

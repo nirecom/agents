@@ -151,11 +151,11 @@ function pushTail(payload, ctx, gateEnv, log, finish, resumePrefix) {
   const what = resumePrefix ? "unpushed commit(s) found" : "commit created";
 
   // Step 5 — an empty remote has no default branch to push against; that
-  // bootstrap push belongs to /deliver, not here.
+  // bootstrap push belongs to /merge-to-main, not here.
   if (isEmptyRemote(ctx, payload, log)) {
     return done(
       "bootstrap_pending",
-      `${resumePrefix ? "unpushed commit(s)" : "committed"}; remote has no default branch — /deliver completes the bootstrap push`,
+      `${resumePrefix ? "unpushed commit(s)" : "committed"}; remote has no default branch — /merge-to-main completes the bootstrap push`,
     );
   }
 

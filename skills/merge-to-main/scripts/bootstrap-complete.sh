@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deliver DL-3b: bootstrap a brand-new GitHub repo whose remote has no default branch yet —
+# merge-to-main MM-3b: bootstrap a brand-new GitHub repo whose remote has no default branch yet —
 # push the current feature branch as `main`, then best-effort set the default branch on GitHub.
 # Usage: positional (SKILL.md callers): bash bootstrap-complete.sh <WORKTREE_PATH> <BRANCH> <OWNER_REPO> <SESSION_ID>
 #   flag style (tests): bash bootstrap-complete.sh --repo <PATH> --remote <NAME> --session <SID> \
@@ -121,6 +121,6 @@ fi
 # Phase 4: Record the bootstrap commit SHA.
 BOOTSTRAP_COMMIT_SHA="$(git -C "$WORKTREE_PATH" rev-parse HEAD)"
 
-# Phase 5: Emit JSON for the caller (deliver SKILL.md DL-3b).
+# Phase 5: Emit JSON for the caller (merge-to-main SKILL.md MM-3b).
 printf '{"bootstrap_commit_sha":"%s","default_branch_set":%s,"pushed_ref":"refs/heads/%s"}\n' \
     "$BOOTSTRAP_COMMIT_SHA" "$DEFAULT_BRANCH_SET" "$DEFAULT_BRANCH"

@@ -2,8 +2,10 @@
 # get-release-approval GA-2: release preflight before the USER_VERIFIED sentinel (#2527).
 # Usage: bash preflight.sh --session <sid> [--repo <dir>]
 # Stdout, in order: RUN_TL4=ON|OFF|ERROR, GATE_RC=<rc>, the check-verification-gate.sh
-#   CATEGORY lines, PR_NUMBER=<n>, then PREFLIGHT=ok|blocked|merged_on_web and PREFLIGHT_REASON=<text>.
+#   CATEGORY lines, [PR_URL=<url>,] PR_NUMBER=<n>, then PREFLIGHT=<verdict> and PREFLIGHT_REASON=<text>.
 # PR mergeability (pull_request path only): CLEAN -> ok, MERGED -> merged_on_web, anything else -> blocked.
+# Web-merge channel (AUTO_MERGE_PR=off): MERGED -> web_merge_done, CLOSED -> web_merge_closed,
+#   OPEN + CLEAN -> web_merge_pending (with PR_URL); OPEN otherwise -> the same blocked texts.
 # A pull_request session whose push_branch recorded decision=bootstrap (empty remote) is ok with no PR check.
 # Exit: 0 whenever a PREFLIGHT line was printed; 1 usage error.
 set -euo pipefail
@@ -45,23 +47,42 @@ case "$ROUTE_LINE" in
   *) finish blocked "delivery path could not be resolved (route CLI printed '${ROUTE_LINE}')" ;;
 esac
 
-# Empty-remote bootstrap: no PR can exist; /deliver pushes after USER_VERIFIED. A read failure falls through.
+# Empty-remote bootstrap: no PR can exist; /merge-to-main pushes after USER_VERIFIED. A read failure falls through.
 PUSH_DECISION="$(node -e 'try{const s=require(process.argv[1]).readState(process.argv[2]);process.stdout.write(String((s&&s.steps&&s.steps.push_branch&&s.steps.push_branch.decision)||""))}catch(_){}' "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/state-io" "$SID" 2>/dev/null || true)"
 [[ "$PUSH_DECISION" != "bootstrap" ]] || finish ok "push_branch recorded a bootstrap push to an empty remote — no pull request to check"
 
-FORGE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type" --repo-dir "$TARGET_CHECKOUT_ROOT" --field type 2>/dev/null || true)"
-PR_NUMBER=""
-STATE=""
-MERGE=""
-if [[ "$FORGE" == "gitlab" ]]; then
-  JSON="$(cd "$TARGET_CHECKOUT_ROOT" && glab mr view --output json 2>/dev/null || true)"
-  [[ -n "$JSON" ]] || finish blocked "no merge request for the current branch — run /commit-push first"
-  PARSED="$(printf '%s' "$JSON" | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{try{const j=JSON.parse(s);const st=String(j.state||"").toLowerCase();const m=String(j.detailed_merge_status||j.merge_status||"");const draft=j.draft===true||j.work_in_progress===true;const map={mergeable:"CLEAN",can_be_merged:"CLEAN",conflict:"DIRTY",cannot_be_merged:"DIRTY",need_rebase:"BEHIND",draft_status:"DRAFT",ci_must_pass:"BLOCKED",ci_still_running:"BLOCKED",not_approved:"BLOCKED",discussions_not_resolved:"BLOCKED",blocked_status:"BLOCKED",external_status_checks:"BLOCKED",jira_association_missing:"BLOCKED",requested_changes:"BLOCKED"};process.stdout.write([j.iid||"",st==="merged"?"MERGED":st==="opened"?"OPEN":st.toUpperCase(),draft?"DRAFT":(map[m]||m.toUpperCase())].join(" "))}catch(_){process.stdout.write("")}})')"
-else
-  PARSED="$(cd "$TARGET_CHECKOUT_ROOT" && gh pr view --json number,state,mergeStateStatus --jq '"\(.number) \(.state) \(.mergeStateStatus)"' 2>/dev/null || true)"
+# Release channel (4-5): AUTO_MERGE_PR=off on pull_request means the human merges on the web.
+# A read failure is the dialog channel, which never moves the release decision to the web.
+CHANNEL_OUT="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/release-channel" --session "$SID" 2>/dev/null || true)"
+CHANNEL="user-verified-dialog"
+[[ "$CHANNEL_OUT" != *"CHANNEL=web-merge"* ]] || CHANNEL="web-merge"
+
+# One forge read; the GitLab -> gh-vocabulary mapping lives in hooks/lib/forge/merge-state.js.
+PR_OUT="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/pr-state" --repo "$TARGET_CHECKOUT_ROOT" --merge-state 2>/dev/null || true)"
+pr_field() { printf '%s\n' "$PR_OUT" | sed -n "s/^$1=//p" | head -n 1; }
+STATE="$(pr_field PR_STATE)"
+PR_NUMBER="$(pr_field PR_NUMBER)"
+MERGE="$(pr_field PR_MERGE_STATE)"
+PR_URL="$(pr_field PR_URL)"
+if [[ "$STATE" == "NONE" ]]; then
+  FORGE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type" --repo-dir "$TARGET_CHECKOUT_ROOT" --field type 2>/dev/null || true)"
+  [[ "$FORGE" != "gitlab" ]] || finish blocked "no merge request for the current branch — run /commit-push first"
 fi
-[[ -n "$PARSED" ]] || finish blocked "no pull request for the current branch — run /commit-push first"
-read -r PR_NUMBER STATE MERGE <<<"$PARSED"
+case "$STATE" in
+  OPEN|MERGED|CLOSED) ;;
+  *) PR_NUMBER=""; finish blocked "no pull request for the current branch — run /commit-push first" ;;
+esac
+
+if [[ "$CHANNEL" == "web-merge" ]]; then
+  case "$STATE" in
+    MERGED) finish web_merge_done "PR #$PR_NUMBER was merged on the web — run next-step to record merge_to_main" ;;
+    CLOSED) finish web_merge_closed "PR #$PR_NUMBER was closed without merge — reopen it or re-run /commit-push" ;;
+  esac
+  if [[ "$MERGE" == "CLEAN" ]]; then
+    printf 'PR_URL=%s\n' "$PR_URL"
+    finish web_merge_pending "PR #$PR_NUMBER is open and mergeable (CLEAN) — the human merges it on the web"
+  fi
+fi
 
 case "$STATE" in
   MERGED) finish merged_on_web "PR #$PR_NUMBER was already merged outside this session" ;;
