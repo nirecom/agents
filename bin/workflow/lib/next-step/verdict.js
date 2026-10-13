@@ -175,7 +175,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
     // recursive call the pending verdict is already on disk, so this gate would fire and
     // return blocked instead of advancing. Discriminate by skip_reason: only speculative
     // skips (written by make-outline-plan/make-detail-plan) block here; recorded-verdict
-    // skips have an already-trusted skip judgment and should pass through.
+    // skips have an already-trusted skip judgment and should pass through. The same holds
+    // for a judged skip settled by record-skip-judgment --advance, and for a *_NOT_NEEDED
+    // sentinel whose reason carries the prefix (declared only while the judgment stands).
     const rawEntry = (state.steps && state.steps[gatedStep]) || {};
     if (
       rawEntry.status === "skipped" &&

@@ -117,12 +117,20 @@ function writeOwned(sid, stage, mergedLine, signalsCsv, owner, files, opts) {
 }
 
 // The verdict under the lock: {settle: ok|superseded|write, detail, owner}.
-function decide(files, owner) {
+function decide(files, owner, signalsCsv) {
   const m = readMarker(files.marker);
   const st = statOrNull(files.signals);
-  const fSha = st ? sha256(fs.readFileSync(files.signals)) : null;
+  const bytes = st ? fs.readFileSync(files.signals) : null;
+  const fSha = bytes ? sha256(bytes) : null;
   if (m && m.owner_id === owner.id) {
-    if (m.state === "writing") return { settle: "write" };
+    if (m.state === "writing") {
+      // An interrupted write left F untouched (older than M) or holding our value; an F
+      // written after M with another value is an unowned write and stands.
+      if (st && st.mtimeMs >= m.ts_ms && bytes.toString("utf8").trim() !== signalsCsv) {
+        return { settle: "superseded", detail: "unowned-write", owner: null };
+      }
+      return { settle: "write" };
+    }
     if (m.state === "written" && fSha !== null && fSha === m.signals_sha256) return { settle: "ok", detail: null, owner: null };
     return { settle: "superseded", detail: "unowned-write", owner: null };
   }
@@ -144,7 +152,7 @@ function settleComplexity(sid, stage, mergedLine, signalsCsv, ownerArg, opts = {
   const lock = controlPath(sid, `${stage}-signals-owner.lock`, { forWrite: true });
   if (!acquireLock(lock)) throw new Error("signals owner lock not acquired");
   try {
-    const v = decide(files, owner);
+    const v = decide(files, owner, signalsCsv);
     if (v.settle !== "write") return v;
     writeOwned(sid, stage, mergedLine, signalsCsv, owner, files, opts);
     return { settle: "ok", detail: null, owner: null };

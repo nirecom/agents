@@ -422,6 +422,9 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
     // A-4 (#1681): a manual sentinel skip of an approval-gated step stays pending
     // for audit until record-skip-verdict resolves it. Dropping this co-write is the single regression
     // that would make such a skip final without review.
+    // A judged skip (skip_reason RECORDED_VERDICT_PREFIX: record-skip-judgment --advance and
+    // next-step's recorded-verdict skip) gets the same annotation and is not held by it:
+    // next-step's A-4 gate passes that prefix (bin/workflow/lib/next-step/verdict.js).
     try {
       const source = typeof opts.skipVerdictSource === "string" && opts.skipVerdictSource !== ""
         ? opts.skipVerdictSource
