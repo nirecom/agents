@@ -419,6 +419,26 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: A field in the `run_tests` state entry that records the stem, payload SHA-256 (`payload_sha256`), and outcome SHA-256 (`outcome_sha256`) of the worker outcome file from which the state was last written. `bin/workflow/lib/run-tests-baseline-evidence.js` reads it to verify that the recorded outcome bytes have not been replaced before accepting a failing baseline as pre-existing.
 - **Related**: [hooks/workflow-run-tests/dispatch-outcome.js](../hooks/workflow-run-tests/dispatch-outcome.js), [bin/workflow/lib/run-tests-baseline-evidence.js](../bin/workflow/lib/run-tests-baseline-evidence.js), #2544
 
+## Test harness
+
+### run root
+
+- **Full name**: Test run root
+- **Definition**: The per-run isolation directory that every test in a run writes inside. Set via `TEST_RUN_ROOT`; created under `<TEST_HOST_TMPDIR>/agents-test-runs-<user>/run-<pid>-<rand>` when not already set. `TMPDIR`, `TMP` and `TEMP` are pinned to its `tmp/` subdirectory so that `mktemp` and temp-file helpers land inside it. Build caches (root decoy, command-guard binaries) sit under `<TEST_HOST_TMPDIR>/agents-test-cache-<user>`, owned by `tests/lib/test-cache-base.js`.
+- **Related**: [architecture/claude-code/test-command-guard.md](architecture/claude-code/test-command-guard.md), `tests/lib/test-run-root.sh`
+
+### command guard
+
+- **Full name**: Command guard
+- **Definition**: The layer that puts stub binaries for `git`, `gh`, `glab` and `codex` first on `PATH` during a test run. Each stub reads its policy from `../guard.conf` and either runs the real tool, delegates to `tests/lib/command-guard/main.js`, or exits 97 (refused) and writes a hit file. On POSIX the stubs are bash scripts; on Windows a single compiled C# launcher (`launcher.cs`) serves all four tools. A refused call is a test failure, reported by `run_all_hit_report`.
+- **Related**: [architecture/claude-code/test-command-guard.md](architecture/claude-code/test-command-guard.md), `tests/lib/command-guard.sh`
+
+### spawn record
+
+- **Full name**: Spawn record
+- **Definition**: A Node.js `--require` preload (`tests/fixtures/spawn-record-preload.js`) that patches `child_process` to record every `spawn`/`execFile` call. A test that needs to assert on what commands a script invokes loads it via `NODE_OPTIONS=--require <preload>`, then reads the hit files after the run. The preload stores hits in the command guard's `hits/` directory so they are co-located with guard hits and cleaned up together.
+- **Related**: `tests/fixtures/spawn-record-preload.js`, `tests/lib/spawn-record.sh`
+
 ## Test retirement
 
 ### case marker

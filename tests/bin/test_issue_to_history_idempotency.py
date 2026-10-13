@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -72,7 +73,12 @@ def _run_script(target_checkout_root: Path, issue_num: str) -> subprocess.Comple
     `"Already in history" in result.stdout` (not on returncode for non-detect
     cases — gh failure produces a non-zero exit that's expected).
     """
-    env = {"PATH": os.environ.get("PATH", "")}
+    # A fake gh first on PATH: the script must never reach the real gh (#2590 command guard).
+    stub_dir = Path(tempfile.mkdtemp(prefix="gh-stub-"))
+    stub = stub_dir / "gh"
+    stub.write_text("#!/bin/bash\nexit 1\n", encoding="utf-8", newline="\n")
+    stub.chmod(0o755)
+    env = {"PATH": str(stub_dir) + os.pathsep + os.environ.get("PATH", "")}
     # Inherit SYSTEMROOT/USERPROFILE/etc. on Windows for bash to function
     for key in ("SYSTEMROOT", "USERPROFILE", "HOME", "TMP", "TEMP", "LANG", "LC_ALL"):
         if key in os.environ:

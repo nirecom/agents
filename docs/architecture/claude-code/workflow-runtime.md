@@ -76,11 +76,24 @@ Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToo
 git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
   reads session_id from hook stdin JSON
   WORKFLOW_OFF → approve (early-return; all checks bypassed for this session)
-  cross-repo bypass (#1138): resolves the target repo from `git -C <path>` in the command;
-    compares git common-dir of the target repo against the agents session repo
-    (identified via AGENTS_MAIN_ROOT env or __dirname/../..); if they differ,
-    the commit is to a foreign repo — approve without checking agents workflow state.
-    Fail-closed: any git error or missing path → treat as same repo → enforce.
+  commit detection is per runCommands element and per logical line
+    (hooks/lib/commit-targets.js), so a commit in a later element or line is gated too.
+  commit scope (#1138, #1633; hooks/workflow-gate/commit-scope.js): a commit is gated only
+    when this session's WF has begun AND the commit lands in the WF target repo set.
+    - begun (hooks/lib/workflow-begun.js): workflow_init is no longer pending. Not begun →
+      approve; unreadable state → gated (fail-closed).
+    - target repo set (hooks/lib/wf-target-repos.js): the repo at session_start_context.cwd
+      plus the intent's `## worktrees` entries, matched by git common dir. An heir session
+      reads the donor's intent named by its plan approvals.
+    - each commit is placed separately (its own `-C`, a preceding `cd`, else a payload
+      default named by the payload cwd or project dir); an unplaceable commit is ambiguous.
+    - no in-set commit and no ambiguous commit → approve; commits in ≥ 2 in-set repos →
+      block with per-repo split guidance; an ambiguous commit against a ≥ 2-member set →
+      block with `git -C` guidance; otherwise the gates below run at the one in-set repo
+      (or, when only ambiguous, the payload repo if in the set, else the main repo).
+    An unknown set (session start cwd missing or not a repo) treats every resolvable
+    commit as in the set. Any exception → gated.
+  WIP (`git -c workflow.wip=1 commit`) applies only when every commit in the call is WIP.
   Gate 1 (unstaged-tracked, #269): blocks when tracked files have unstaged working-tree
     modifications. Skipped on `git -c workflow.wip=1` or WORKTREE_OFF marker.
     Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
@@ -156,6 +169,7 @@ value (`sid !== resolveSessionId({})`), not by whether a `--session` flag was pr
 distinction gates the guard's INDETERMINATE verdict at the worktree-end → session-close boundary:
 when the worktree directory has been deleted, only a self-call fails open so session-close can
 proceed; an explicit cross-session override fails fast instead of silently fail-open (#2316).
+The repo-identity verdicts it builds on live in `hooks/lib/repo-identity.js`, shared with the commit gate.
 
 Identifier-family boundaries, why filesystem inference was removed from the chain, the bridge
 rc contract, and the static guard against bypassing the resolver:
@@ -394,6 +408,14 @@ Boundary properties, and where each is enforced:
   trying to read. `tests/hooks/TL3-hook-skill-dispatch-payload.sh` owns verifying
   that the host's real `tool_input.skill` payload shape still matches what
   `skillNameOf` expects.
+- **wf-init begun mark (#1633).** A `Skill` dispatch of `workflow-init` /
+  `wf-init` (`isWfInitDispatch`) records `workflow_init` `in_progress` instead
+  of a lookahead mark, so the commit scope reads the WF as begun from the
+  moment /workflow-init starts. A typed `/workflow-init` expands to prompt
+  text, not a Skill call, so `hooks/user-prompt-submit-wf-init-mark.js`
+  (UserPromptSubmit, `promptInvokesWfInit`) records the same fact. Both
+  recorders share `hooks/lib/wf-init-begun-mark.js`, which writes only while
+  `workflow_init` is pending and never touches corrupt state.
 - **Subagents are excluded.** A dispatch made *from inside* a subagent carries
   `agent_id`; the hook no-ops, so a nested dispatch cannot re-mark the step.
 - **Idempotent.** Re-marking an already `in_progress` step appends no event.

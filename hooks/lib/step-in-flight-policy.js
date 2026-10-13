@@ -37,6 +37,10 @@ const LOOKAHEAD_PREINIT_STEP = "research";
 // is what disqualifies it from the adoption it was invoked to perform (#2279).
 const META_OP_SKILLS = Object.freeze(["resume-session"]);
 
+// Skills that start the workflow (#1633). wf-init is the alias install/linux/dotfileslink.sh
+// links to skills/workflow-init. The prompt regexes below derive from this one list.
+const WF_INIT_SKILLS = Object.freeze(["workflow-init", "wf-init"]);
+
 function isStepInFlightCandidate(step) {
   return typeof step === "string" && STEP_IN_FLIGHT_ALLOWLIST.indexOf(step) !== -1;
 }
@@ -63,6 +67,27 @@ function isMetaOpDispatch(toolName, skillOrToolInput) {
   if (!name) return false;
   const lowered = name.toLowerCase();
   return META_OP_SKILLS.some((s) => s.toLowerCase() === lowered);
+}
+
+// Fail-CLOSED: an unidentifiable skill name is not wf-init, so nothing is marked begun.
+function isWfInitDispatch(toolName, skillOrToolInput) {
+  if (toolName !== "Skill") return false;
+  const name = skillNameOf(skillOrToolInput);
+  if (!name) return false;
+  const lowered = name.toLowerCase();
+  return WF_INIT_SKILLS.some((s) => s.toLowerCase() === lowered);
+}
+
+const WF_INIT_NAME_ALT = WF_INIT_SKILLS.join("|");
+const WF_INIT_WRAPPED_RE = new RegExp("<command-name>/(?:[\\w-]+:)?(?:" + WF_INIT_NAME_ALT + ")(?![\\w-])");
+const WF_INIT_BARE_RE = new RegExp("^/(?:[\\w-]+:)?(?:" + WF_INIT_NAME_ALT + ")(?![\\w-])");
+
+// A typed slash command reaches UserPromptSubmit either wrapped in <command-name> or
+// bare on the prompt's first line; a mention elsewhere in the text is not an invocation.
+function promptInvokesWfInit(prompt) {
+  if (typeof prompt !== "string") return false;
+  if (WF_INIT_WRAPPED_RE.test(prompt)) return true;
+  return WF_INIT_BARE_RE.test(prompt.split(/\r?\n/)[0]);
 }
 
 function isLookaheadDispatchTool(toolName) {
@@ -92,10 +117,13 @@ module.exports = {
   LOOKAHEAD_DISPATCH_TOOLS,
   LOOKAHEAD_PREINIT_STEP,
   META_OP_SKILLS,
+  WF_INIT_SKILLS,
   isStepInFlightCandidate,
   isDispatchTool,
   isLookaheadDispatchTool,
   skillNameOf,
   isMetaOpDispatch,
+  isWfInitDispatch,
+  promptInvokesWfInit,
   isFreshInFlightEntry,
 };

@@ -19,6 +19,9 @@ set -u
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh.
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# TL3 legitimately uses the real gh: take the command guard (#2590) off PATH.
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard.sh"
+command_guard_use_real
 
 # Stage 1 (buildEnv unit cases) runs ungated and shows the gap on any host.
 # Stage 2 adds a real gh: a deliberately invalid GH_TOKEN in the parent is the

@@ -425,6 +425,11 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   last check (the trigger table and its state files live in
   [handoff-artifact.md — Omission-check nudge](../handoff-artifact.md#omission-check-nudge)).
   Fail-open: any error yields `{}`.
+- `user-prompt-submit-wf-init-mark.js` (UserPromptSubmit) — when the user's prompt invokes `/workflow-init`
+  (detected via `promptInvokesWfInit` in `hooks/lib/step-in-flight-policy.js`), records `workflow_init`
+  as `in_progress` via `hooks/lib/wf-init-begun-mark.js` (#1633). A slash command expands to prompt text
+  rather than a Skill tool call, so `postuse-step-in-flight-mark.js` cannot see it; this hook closes that
+  gap. Fail-open throughout: a missed mark only delays the "begun" read in the workflow gate.
 - `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
   escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
   from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes

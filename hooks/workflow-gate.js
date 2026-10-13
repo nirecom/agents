@@ -22,7 +22,6 @@ const { analyzeSentinelCommand } = require("./lib/sentinel-command");
 const { isBaselineEvidenceRecordCommand } = require("./lib/workflow-driver-commands");
 
 // Which steps the commit gate checks: workflow-gate/commit-gate-steps.js (SSOT: step-table.js).
-const { parseGitConfigValues } = require("./lib/parse-git-args");
 const { resolveInputCwd } = require("./lib/resolve-cwd");
 
 const { normalizeForWindows } = require("./workflow-gate/path-normalize");
@@ -40,11 +39,9 @@ const {
   isLinkedWorktree,
   hasWorktreeNotesDocEvidence,
 } = require("./workflow-gate/worktree-context");
-const {
-  findAdditionalDirectories,
-  resolveRepoDir,
-  isAgentsSessionRepo,
-} = require("./workflow-gate/repo-resolution");
+const { findAdditionalDirectories, resolveRepoDir } = require("./workflow-gate/repo-resolution");
+const { enumerateCommitTargets, isWipCommitText, allCommitsAreWip } = require("./lib/commit-targets");
+const { decideCommitScope, describeUnreadableState } = require("./workflow-gate/commit-scope");
 
 // Notices (stderr + the final output's systemMessage) for checks that degraded without blocking.
 const _gateNotices = [];
@@ -297,7 +294,8 @@ if (require.main === module) {
         'Run: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" first (reason: >=3 non-space chars, no \'>\', not a placeholder).'
       );
     }
-    const uv = mergeState.steps && mergeState.steps.user_verification;
+    // Read the projection; top-level `steps` is only the v1-compatible spread of it.
+    const uv = mergeState.current && mergeState.current.steps && mergeState.current.steps.user_verification;
     const uvStatus = uv ? uv.status : "missing";
     if (uvStatus !== "complete") {
       blockWithoutError(
@@ -312,22 +310,24 @@ if (require.main === module) {
 
   // #2393: IR + shared wrapper model, so `rtk git commit` / chained commits reach the gate.
   const commandIr = parse(command);
-  if (!isCommitCommand(commandIr)) approve();
+  // #1633: per element / logical line, so later-element and later-line commits are gated too.
+  const commitTargets = enumerateCommitTargets(scannableCommandListOf(toolName, toolInput));
+  if (!isCommitCommand(commandIr) && commitTargets.length === 0) approve();
 
-  const repoDir = resolveRepoDir(command, input);
+  // #1633: only commits of a begun WF that land in its target repo set are checked.
+  const scope = decideCommitScope({ sessionId, commitTargets, commitDetected: isCommitCommand(commandIr), command, input });
+  if (scope.action === "approve") approve();
+  if (scope.action === "block") block(scope.reason);
+  const repoDir = scope.repoDir;
   // Axis A (#885): record git_root_resolved for late-block extras.
   _gateReportCtx.repoResolved = !!repoDir;
 
-  // Cross-repo bypass (#1138): skip agents workflow-state enforcement when the
-  // commit targets a repo that is NOT the agents session repo. Fail-closed:
-  // isAgentsSessionRepo() returns true on error, keeping enforcement in place.
-  if (!isAgentsSessionRepo(repoDir)) approve();
-
   const docsOnly = isDocsOnlyStaged(repoDir);
-  // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification.
-  // run_tests, review_security, docs still fire. See docs/architecture/claude-code/workflow.md.
-  const wipValues = parseGitConfigValues(extractCommitSegmentText(commandIr), "workflow.wip");
-  const isWip = wipValues.some((v) => v === "1" || v.toLowerCase() === "true");
+  // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification, and only
+  // when EVERY commit in the call is WIP. See docs/architecture/claude-code/workflow.md.
+  const isWip = commitTargets.length > 0
+    ? allCommitsAreWip(commitTargets)
+    : isWipCommitText(extractCommitSegmentText(commandIr));
 
   // Gate 1 (issue #269): hard-block commits when tracked files have unstaged
   // working-tree changes. Docs-only short-circuit does NOT skip this — docs-only
@@ -393,11 +393,7 @@ if (require.main === module) {
   const state = readState(sessionId);
 
   if (!state) {
-    block(
-      `workflow-gate: no workflow state found for session ${sessionId}.\n` +
-        "Commit blocked (fail-safe). To initialize workflow state, run:\n" +
-        '  echo "<<WORKFLOW_RESET_FROM_research: {reason}>>"'
-    );
+    block(describeUnreadableState(sessionId));
   }
 
   // Derived view for the commit gate (#1681). resolveAll:true — every gated step
