@@ -13,7 +13,7 @@
 const path = require("path");
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..");
 const { SIGNAL_IDS, UNDECIDABLE_SIGNAL } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "complexity-routing.js"));
-const { csvToSet, compare } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "jev", "decision-record.js"));
+const { csvToSet } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "jev", "decision-record.js"));
 const { sanitizeEnum, sanitizeAnswerIds } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "jev", "sanitize.js"));
 const { isValidId } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "jev", "state-paths.js"));
 const { isObj, ratio, isNum, fmt, bump } = require("./util");
@@ -59,10 +59,23 @@ function informativeness(r) {
 }
 
 // A Jev-only orphan plus the late post's LLM-only record are one judgment: the Jev-run
-// record with the LLM-run record's llm block, compared by the record builder's rule.
+// record with the LLM-run record's llm block. Compared here as a plain set comparison, so
+// a later change to the v2 agreement rule never rewrites a v1 figure.
 function mergeSides(jevRec, llmRec) {
-  const cmp = compare(jevOf(jevRec), llmOf(llmRec));
-  return Object.assign({}, jevRec, { llm: llmRec.llm, agreement: cmp.agreement, agreement_by_signal: cmp.agreement_by_signal });
+  const j = jevOf(jevRec);
+  const l = llmOf(llmRec);
+  let agreement = null;
+  let bySignal = null;
+  if (j.status === "ok" && l.status === "ok") {
+    const a = csvToSet(j.answer);
+    const b = csvToSet(l.answer);
+    if (!a.has(UNDECIDABLE_SIGNAL) && !b.has(UNDECIDABLE_SIGNAL)) {
+      bySignal = {};
+      for (const id of SIGNAL_IDS) bySignal[id] = a.has(id) === b.has(id);
+      agreement = a.size === b.size && [...a].every((x) => b.has(x));
+    }
+  }
+  return Object.assign({}, jevRec, { llm: llmRec.llm, agreement, agreement_by_signal: bySignal });
 }
 
 // One record per (session_id, tool_use_id): a late or duplicate post logs a second,

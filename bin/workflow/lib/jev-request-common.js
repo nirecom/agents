@@ -55,17 +55,25 @@ function rubricSection(rubric, id) {
   return body.length ? body.join(" ") : null;
 }
 
-// The body of a "## <heading>" section (up to the next "## "), trimmed; null when absent.
-function mdSection(text, heading) {
+// The body of a "## <heading>" section, trimmed; null when absent. It ends at the next "## "
+// line, or, when `until` is given, only at the "## <until>" line (else at the end of the text).
+function mdSection(text, heading, until) {
   const lines = String(text).replace(/\r\n/g, "\n").split("\n");
   const start = lines.indexOf("## " + heading);
   if (start < 0) return null;
+  const ends = until === undefined ? (l) => l.startsWith("## ") : (l) => l === "## " + until;
   const body = [];
   for (const l of lines.slice(start + 1)) {
-    if (l.startsWith("## ")) break;
+    if (ends(l)) break;
     body.push(l);
   }
   return body.join("\n").trim();
+}
+
+// The Issue body of a context.md text; null when the section is absent.
+function issueBodyOf(text) {
+  const { ISSUE_BODY_SECTION } = require(path.join(__dirname, "workflow-init", "phases", "write-context.js"));
+  return mdSection(text, ISSUE_BODY_SECTION.heading, ISSUE_BODY_SECTION.next);
 }
 
 // The rubric's "## Judgment rules" section, read at runtime (the rubric stays the SSOT).
@@ -139,7 +147,7 @@ function artifactPathsFor(sid, stage) {
 function readIssueBody(sid) {
   if (!validSid(sid)) return null;
   try {
-    return mdSection(readCapped(path.join(plansDir(), `${sid}-context.md`), MAX_ARTIFACT_READ_BYTES), "Issue body");
+    return issueBodyOf(readCapped(path.join(plansDir(), `${sid}-context.md`), MAX_ARTIFACT_READ_BYTES));
   } catch (_e) {
     return null;
   }
@@ -182,7 +190,7 @@ function requiredSectionsStatus(sid, required, sections, sourcesFailed) {
   return { met: missing.length === 0, missing, exempt };
 }
 
-// Comparable form of a path: /c/... normalized, resolved, no trailing separator, "/"
+// Comparable form of a path: POSIX drive-letter form normalized, resolved, no trailing separator, "/"
 // separators, lower-cased on win32 only. Null for a non-string or empty value.
 function pathKey(p, toWindowsPath) {
   if (typeof p !== "string" || !p) return null;
@@ -262,6 +270,7 @@ module.exports = {
   rubricSection,
   rubricRules,
   mdSection,
+  issueBodyOf,
   artifactPathsFor,
   readIssueBody,
   requiredSectionsStatus,

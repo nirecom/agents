@@ -13,6 +13,7 @@ const { compareOwner, acquireLock } = require("./settle-complexity");
 
 const SKIP_OWNER_VERSION = 1;
 const RSJ = path.join(__dirname, "..", "..", "..", "..", "bin", "workflow", "record-skip-judgment");
+const WS = path.join(__dirname, "..", "..", "..", "workflow-state");
 
 const files = (sid, target) => ({
   marker: controlPath(sid, `${target}-skip-owner.json`, { forWrite: true }),
@@ -45,12 +46,14 @@ function underLock(sid, target, fn) {
   }
 }
 
-// Query time: owner becomes MS unless MS already names a newer owner. Throws on failure.
+// Query time: owner becomes MS unless MS already names a newer owner, and a standing all-true
+// judgment of an older owner is revoked (revokeStandingSkip). Throws on failure.
 function takeSkipOwnerAtQuery(sid, target, ownerArg) {
   const owner = norm(ownerArg);
   underLock(sid, target, (m, f) => {
     if (m && compareOwner(m, owner) > 0) return;
     writeOwner(f.marker, owner);
+    revokeStandingSkip(sid, target);
   });
 }
 
@@ -77,12 +80,31 @@ function settleSkip(sid, target, conditions, source, ownerArg, tid) {
   });
 }
 
-// The skip fail-safe: owner takes MS unless a newer owner holds it. No judgment is written.
+// record-skip-judgment writes its judgment before it advances the step, so a failed advance
+// leaves an all-true judgment that next-step would still honour. While the step is pending,
+// that judgment is overwritten with every condition false. Throws when the overwrite is not read back.
+function revokeStandingSkip(sid, target) {
+  const { readSkipJudgment, recordSkipJudgment, readState } = require(WS);
+  const sj = readSkipJudgment(sid, target);
+  if (!sj || sj.all_conditions_met !== true) return;
+  const state = readState(sid);
+  const status = (state && state.steps && state.steps[target] && state.steps[target].status) || "pending";
+  if (status !== "pending") return;
+  const conditions = {};
+  for (const k of Object.keys(sj.conditions || {})) conditions[k] = false;
+  recordSkipJudgment(sid, target, conditions, sj.judgment_source);
+  const after = readSkipJudgment(sid, target);
+  if (!after || after.all_conditions_met !== false) throw new Error("standing skip judgment not revoked");
+}
+
+// The skip fail-safe: owner takes MS unless a newer owner holds it. No new judgment is
+// written; a standing all-true one is revoked (revokeStandingSkip).
 function failsafeSkip(sid, target, ownerArg) {
   const owner = norm(ownerArg);
   return underLock(sid, target, (m, f) => {
     if (m && compareOwner(m, owner) > 0) return { settle: "superseded", detail: "newer-owner", owner: m.owner_id };
     writeOwner(f.marker, owner);
+    revokeStandingSkip(sid, target);
     return { settle: "ok", detail: null, owner: null };
   });
 }

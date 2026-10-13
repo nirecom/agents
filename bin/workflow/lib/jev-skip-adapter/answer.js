@@ -28,15 +28,15 @@ const stripBlank = (s) => s.replace(/^[ \t]+|[ \t]+$/g, "");
 
 // parseSubagent(raw|null, target) -> {status: ok|parse-fallback|missing, values, answered}.
 // values holds every key (false unless answered true); answered only the keys with a literal
-// true/false. Zero or several SKIP_CONDITIONS: lines, an unknown or repeated key reject the
-// whole answer; a non-literal value rejects that key alone.
+// true/false. Anything but exactly one nonblank line, a SKIP_CONDITIONS: line, or an unknown
+// or repeated key rejects the whole answer; a non-literal value rejects that key alone.
 function parseSubagent(raw, target) {
   const reject = (status) => ({ status, values: fillConditions(target, {}), answered: {} });
   if (raw === null || raw === undefined) return reject("parse-fallback");
   const text = String(raw);
   if (text.trim() === "" || text.trim() === NO_ANSWER) return reject("missing");
-  const lines = text.split("\n").map((l) => l.replace(/\r$/, "")).filter((l) => l.trim().startsWith(LINE_PREFIX));
-  if (lines.length !== 1) return reject("parse-fallback");
+  const lines = text.split("\n").map((l) => l.replace(/\r$/, "")).filter((l) => l.trim() !== "");
+  if (lines.length !== 1 || !lines[0].trim().startsWith(LINE_PREFIX)) return reject("parse-fallback");
   const schema = CONDITION_SCHEMAS[target] || [];
   const answered = {};
   const seen = new Set();

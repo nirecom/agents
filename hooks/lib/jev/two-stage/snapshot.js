@@ -13,7 +13,7 @@ const { StringDecoder } = require("string_decoder");
 const { sha256, sourcesDir } = require("./paths");
 const {
   SCRIPT_CHECKOUT_ROOT, MAX_STATE_CHARS, MAX_ARTIFACT_READ_BYTES, STAGE_SOURCE_SECTIONS,
-  SECTION_ORDER, artifactPathsFor, readCappedBytes, mdSection, sliceUnits, redactOutbound,
+  SECTION_ORDER, artifactPathsFor, readCappedBytes, issueBodyOf, sliceUnits, redactOutbound,
 } = require(path.join(__dirname, "..", "..", "..", "..", "bin", "workflow", "lib", "jev-request-common.js"));
 
 const DET_PATH = path.join(__dirname, "..", "..", "..", "workflow-state", "complexity-routing", "deterministic-signals.js");
@@ -46,7 +46,7 @@ function sectionText(section, read, repoRoot) {
   if (section === "write-code files") return redactOutbound(writeCodeListText(read, repoRoot));
   const raw = read.over_cap ? new StringDecoder("utf8").write(read.bytes) : read.bytes.toString("utf8");
   const text = raw.replace(/\r\n/g, "\n");
-  const body = section === "issue body" ? mdSection(text, "Issue body") : text;
+  const body = section === "issue body" ? issueBodyOf(text) : text;
   if (body === null || body.trim() === "") return null;
   return redactOutbound(body);
 }
