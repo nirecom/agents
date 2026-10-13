@@ -429,20 +429,27 @@ function computeVerdict(rawSid, _didAutoRepair) {
       const irvFn = wfState.isRecordedVerdictValid;
       if (typeof hvsj !== "function" || typeof rsjFn !== "function") return null;
       if (!hvsj(sid, stepName)) return null;   // local UNCOUNTED gate read
-      const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
-      if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
       // The status write and the A-4 speculative verdict are one declaration, so
       // the single writer performs both — the verdict can no longer be dropped
       // by a caller that forgot the second call.
       try {
-        const res = recordStepVerdict(sid, stepName, "skipped", {
-          gate: "recorded-verdict",
-          skipReason,
-          skipJudgment: sj,
-          skipVerdictSource: "next-step-recorded-verdict",
-          origin: "next-step-recorded-verdict-skip",
+        // A Jev query or fail-safe revokes a standing judgment under the skip owner lock
+        // (#2460), so the judgment is re-read and the status written under that same lock:
+        // a revoke lands wholly before or wholly after this skip, never between its halves.
+        const { underSkipOwnerLock } = require("../../../../hooks/lib/jev/two-stage/settle-skip");
+        const res = underSkipOwnerLock(sid, stepName, () => {
+          if (!hvsj(sid, stepName)) return null;
+          const sj = rsjFn(sid, stepName);        // EXPORTED COUNTED read (+1) — exactly once
+          if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
+          return recordStepVerdict(sid, stepName, "skipped", {
+            gate: "recorded-verdict",
+            skipReason,
+            skipJudgment: sj,
+            skipVerdictSource: "next-step-recorded-verdict",
+            origin: "next-step-recorded-verdict-skip",
+          });
         });
-        if (!res.ok) return null;
+        if (!res || !res.ok) return null;
         return computeVerdict(rawSid, true);
       } catch (_) {
         return null;   // write/verdict failed — fall through, NO recursion

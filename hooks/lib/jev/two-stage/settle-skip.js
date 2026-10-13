@@ -109,6 +109,12 @@ function failsafeSkip(sid, target, ownerArg) {
   });
 }
 
+// fn() under the target's lock, for a caller outside this module that acts on the standing
+// judgment (next-step's recorded-verdict skip). Throws when the lock is not taken.
+function underSkipOwnerLock(sid, target, fn) {
+  return underLock(sid, target, () => fn());
+}
+
 function readSkipOwner(sid, target) {
   try {
     return readVersioned(controlPath(sid, `${target}-skip-owner.json`), SKIP_OWNER_VERSION);
@@ -117,4 +123,6 @@ function readSkipOwner(sid, target) {
   }
 }
 
-module.exports = { SKIP_OWNER_VERSION, takeSkipOwnerAtQuery, settleSkip, failsafeSkip, readSkipOwner };
+module.exports = {
+  SKIP_OWNER_VERSION, takeSkipOwnerAtQuery, settleSkip, failsafeSkip, readSkipOwner, underSkipOwnerLock,
+};

@@ -14,7 +14,7 @@ const {
 // The Issue body of a session with no issue; the Jev snapshot treats it as an exempt section.
 const NO_ISSUE_BODY = "(none — no issue)";
 // The Issue body section and the section written right after it. The body is third-party
-// markdown with headings of its own, so a reader ends it at `next`, never at the first "## ".
+// markdown with headings of its own, so a reader ends it at the last `next` line, never at the first "## ".
 const ISSUE_BODY_SECTION = Object.freeze({ heading: "Issue body", next: "Issue metadata" });
 
 /**

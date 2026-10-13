@@ -56,18 +56,18 @@ function rubricSection(rubric, id) {
 }
 
 // The body of a "## <heading>" section, trimmed; null when absent. It ends at the next "## "
-// line, or, when `until` is given, only at the "## <until>" line (else at the end of the text).
+// line, or, when `until` is given, only at the LAST "## <until>" line (else at the end of the
+// text): a section of third-party text may carry that line itself, and only the last one is the
+// writer's.
 function mdSection(text, heading, until) {
   const lines = String(text).replace(/\r\n/g, "\n").split("\n");
   const start = lines.indexOf("## " + heading);
   if (start < 0) return null;
-  const ends = until === undefined ? (l) => l.startsWith("## ") : (l) => l === "## " + until;
-  const body = [];
-  for (const l of lines.slice(start + 1)) {
-    if (ends(l)) break;
-    body.push(l);
-  }
-  return body.join("\n").trim();
+  let end = until === undefined
+    ? lines.findIndex((l, i) => i > start && l.startsWith("## "))
+    : lines.lastIndexOf("## " + until);
+  if (end <= start) end = lines.length;
+  return lines.slice(start + 1, end).join("\n").trim();
 }
 
 // The Issue body of a context.md text; null when the section is absent.
