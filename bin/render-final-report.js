@@ -69,9 +69,7 @@ if (inv.sessionForm || inv.outcomeArg) {
   }
 }
 
-// #1644 stage 4: route through the write-once session cache instead of
-// re-parsing intent.md on every render — a session that already recorded
-// closes_issues returns it as-is.
+// #1644 stage 4: getClosesIssues parses intent.md on each call.
 let closesIssues = [];
 let intentPlansDir = inv.sessionForm ? inv.plansDir : null;
 if (inv.intentArg) {

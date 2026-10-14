@@ -130,7 +130,7 @@ if (args[0] === "--fallback") {
   }
   let issues = [];
   try {
-    // #1644 stage 4: route through the write-once session cache. sessionId is
+    // #1644 stage 4: getClosesIssues parses intent.md on each call. sessionId is
     // derived from the <sid>-intent.md filename convention (no --session-id
     // is passed to --fallback mode).
     const { getClosesIssues } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks/workflow-state/session-facts.js"));
@@ -193,7 +193,7 @@ if (args[0] === "--session-id") {
   // an entry, marked "subsumed". A session may cover multiple issues; without
   // this, only the primary N gets written and siblings go missing.
   try {
-    // #1644 stage 4: route through the write-once session cache.
+    // #1644 stage 4: getClosesIssues parses intent.md on each call.
     const { getClosesIssues } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks/workflow-state/session-facts.js"));
     const siblings = getClosesIssues(sessionId, { plansDir: plansDirOrEmpty() }) || [];
     for (const entry of siblings) {

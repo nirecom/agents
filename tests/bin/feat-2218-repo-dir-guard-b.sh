@@ -184,6 +184,8 @@ st.closes_issues = [2218];
 writeState('$sid', st);
 markStep('$sid', 'workflow_init', 'complete');
 " >/dev/null 2>&1
+    # The closes_issues gate reads <plans>/<sid>-intent.md (#2654); plans dir == $tmp/wf here.
+    printf '## Issues\n- #2218\n' > "$tmp/wf/$sid-intent.md"
     # /worktree-end has removed the linked worktree from disk.
     rm -rf "$wt" 2>/dev/null || true
     out=$(env CLAUDE_CODE_SESSION_ID="$sid" \

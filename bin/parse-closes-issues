@@ -3,12 +3,10 @@
 const path = require('path');
 
 // Two invocation forms:
-//   parse-closes-issues <intent-md-path>          (legacy, unchanged — direct
-//                                                    one-shot parse, no cache)
+//   parse-closes-issues <intent-md-path>          (direct one-shot parse)
 //   parse-closes-issues --session <sid> [--plans-dir <dir>]
-//                                                  (#1644 stage 4 — routes
-//                                                    through the write-once
-//                                                    session cache)
+//                                                  (resolves <plans-dir>/<sid>-intent.md
+//                                                    and parses it on each call)
 const args = process.argv.slice(2);
 const sessionIdx = args.indexOf('--session');
 

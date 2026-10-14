@@ -74,6 +74,12 @@ write_state() {
   printf '%s' "$json" > "$TMPDIR_WT/${sid}.json"
 }
 
+# write_intent_issues <sid> <n>...: the clarify_intent gate reads intent.md `## Issues` (#2654).
+write_intent_issues() {
+  local sid="$1" t; shift
+  { echo "## Issues"; for t in "$@"; do echo "- #$t"; done; } > "$WORKFLOW_PLANS_DIR/${sid}-intent.md"
+}
+
 # Since #2277/#2513 a gated `complete` (clarify_intent / outline / detail) counts only with a
 # plan-approval record whose digest matches the plan artifact. A fixture records one complete
 # without it, so the approval is attached at run time, against the WORKFLOW_PLANS_DIR the run
@@ -95,7 +101,7 @@ run_next_step() {
   run_with_timeout node "$NEXT_STEP_AGENTS_DIR/bin/workflow/next-step" "$@"
 }
 
-# All-pending fixture (closes_issues populated so clarify_intent isn't blocked).
+# All-pending fixture. A case current at clarify_intent also needs write_intent_issues (#2654).
 JSON_ALL_PENDING='{"steps":{"workflow_init":{"status":"pending"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 
 JSON_WFINIT_COMPLETE='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
@@ -112,7 +118,7 @@ JSON_ALL_COMPLETE='{"steps":{"workflow_init":{"status":"complete"},"clarify_inte
 
 JSON_MIXED_TERMINAL='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"skipped"},"outline":{"status":"skipped"},"detail":{"status":"skipped"},"branching_complete":{"status":"complete"},"write_tests":{"status":"skipped"},"review_tests":{"status":"skipped"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"skipped"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"skipped"},"pre_final_report_gate":{"status":"complete"}},"closes_issues":[1053]}'
 
-# closes_issues blocked: clarify_intent is next step but closes_issues is empty.
+# closes_issues blocked: clarify_intent is next step and no intent.md names an issue.
 JSON_BLOCKED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[]}'
 
 # closes_issues absent, but we've already passed clarify_intent — should NOT be blocked.

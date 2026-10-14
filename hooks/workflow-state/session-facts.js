@@ -1,54 +1,25 @@
 "use strict";
-// lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 
-// Stage 4 (#1644) — 型2: セッション内キャッシュの一度きり解決.
+// Stage 4 (#1644) — session-scoped facts (closes_issues, repo context).
 //
-// Resolves session-scoped facts (closes_issues, repo context) at most once
-// per session and caches the result in the EXISTING top-level state keys
-// (see hooks/workflow-state/state-io/projection.js PERSISTED_TOP_LEVEL_KEYS —
-// this module never introduces a new one). Consumers that used to call
-// parseClosesIssues() directly on every invocation should call
-// getClosesIssues() instead so a session settles on one answer.
+// closes_issues is parsed from <plansDir>/<sid>-intent.md on every call (#2654);
+// this module never reads or writes state.closes_issues. Repo context is a
+// read-only view over the EXISTING session_start_context state key.
 
 const path = require("path");
-const { readState, updateTopLevel, assertValidSessionId } = require("./state-io");
+const { readState, assertValidSessionId } = require("./state-io");
 const { parseClosesIssues } = require("../lib/parse-closes-issues");
 
 // getClosesIssues(sessionId, { plansDir }) -> Array<{number, repo?}>
 //
-// Write-once cache over the EXISTING `closes_issues` top-level key:
-//   - state.closes_issues already non-empty -> return it as-is, no re-parse.
-//   - otherwise -> parse <plansDir>/<sessionId>-intent.md via parseClosesIssues()
-//     (the format-parsing SSOT, untouched by this module), record the result
-//     into state.closes_issues via updateTopLevel, then return it.
-//
-// The write is skipped when no state file exists yet for sessionId — this
-// keeps read-mostly consumers (report renderers, outcome writers) from
-// fabricating a workflow state record as a side effect; they simply get the
-// freshly-parsed value back, same as calling parseClosesIssues() directly.
+// Parses <plansDir>/<sessionId>-intent.md `## Issues` via parseClosesIssues()
+// (the format-parsing SSOT) on each call. A missing or unreadable intent.md
+// yields [] — no fallback to any recorded value.
 function getClosesIssues(sessionId, opts) {
-  // M4: sessionId flows unvalidated into a path join below. It was only
-  // accidentally safe because readState() (called next) happens to run
-  // assertValidSessionId first and throws on a traversal-shaped id — a
-  // guarantee that must not depend on call ordering. Assert explicitly here.
+  // sessionId flows into a path join below; reject traversal-shaped ids.
   assertValidSessionId(sessionId);
   const plansDir = (opts && opts.plansDir) || "";
-  const state = readState(sessionId);
-
-  if (state && Array.isArray(state.closes_issues) && state.closes_issues.length > 0) {
-    return state.closes_issues;
-  }
-
-  const intentPath = path.join(plansDir, `${sessionId}-intent.md`);
-  const parsed = parseClosesIssues(intentPath);
-
-  if (state) {
-    updateTopLevel(sessionId, (record) => {
-      record.closes_issues = parsed;
-    });
-  }
-
-  return parsed;
+  return parseClosesIssues(path.join(plansDir, `${sessionId}-intent.md`));
 }
 
 // getSessionRepoContext(sessionId) -> { cwd, git_branch }

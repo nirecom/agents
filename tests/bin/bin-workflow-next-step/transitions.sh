@@ -26,6 +26,7 @@ run_transitions_tests() {
   # ---- Case 3: workflow_init-complete --------------------------------------
   ACTION=""; NEXT_SKILL=""
   write_state "case3" "$JSON_WFINIT_COMPLETE"
+  write_intent_issues "case3" 1053
   OUT="$(run_next_step --session "case3" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
   check "3: workflow_init-complete ACTION=invoke" "invoke" "${ACTION:-}"
@@ -136,6 +137,9 @@ run_transitions_tests() {
   # next-step must abort with a non-empty NEXT_HINT (recovery hint).
   ACTION=""; REASON=""; NEXT_HINT=""
   write_state "case13b" "$JSON_CROSS_TASK_CONTAM"
+  # The gate reads intent.md (#2654); an approved one keeps the run on the inconsistency scan.
+  write_intent_issues "case13b" 1053
+  node "$NEXT_STEP_AGENTS_DIR/tests/lib/plan-approval-fixture.js" approve case13b clarify_intent >/dev/null 2>&1
   OUT="$(run_next_step --session "case13b" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
   check "13b: cross-task-contam ACTION=abort" "abort" "${ACTION:-}"

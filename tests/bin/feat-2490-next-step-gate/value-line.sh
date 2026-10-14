@@ -22,6 +22,8 @@ for step in $GATE_STEPS; do
   sid="vl-$step"
   write_state "$sid" "$(json_at "$step")"
   [ "$step" = "detail" ] && put_plan "$sid" intent "$INTENT_FULL"
+  # #2654: the clarify_intent gate reads intent.md `## Issues`, not state.closes_issues.
+  [ "$step" = "clarify_intent" ] && put_plan "$sid" intent "$(printf '## Issues\n- #2490')"
   ns --session "$sid"
   check "$step: ACTION=invoke" "invoke" "$(val ACTION)"
   check "$step: NEXT_SKILL is the step skill" "$(skill_of "$step")" "$(val NEXT_SKILL)"

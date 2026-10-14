@@ -1,26 +1,12 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1644-review-gap-c8-session-facts-cache.sh
 # Tests: hooks/workflow-state/session-facts.js, hooks/lib/parse-closes-issues.js, hooks/workflow-state/state-io/core.js
-# Tags: tl2, workflow, session-facts, closes-issues, caching, security, path-traversal, idempotency, scope:issue-specific, pwsh-not-required
-#
-# #1644 review gap C8 (HIGH) — getClosesIssues() cache semantics and its
-# path-traversal guard. tests/hooks/feature-1644-session-facts.sh (G1-G8) covers the
-# happy-path write-once contract; this file covers the four cases it does not:
-#   1. an explicitly EMPTY cached closes_issues (the "resolved-vs-unresolved"
-#      boundary of the `length > 0` condition),
-#   2. idempotency proven on the raw on-disk bytes across repeated calls,
-#   3. a MISSING state file must not be auto-created,
-#   4. assertValidSessionId() rejecting traversal-shaped ids BEFORE any path
-#      join, with no file touched outside the pinned workflow dir.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the real hook/skill call sites pass the session id they think they
-#   pass (a caller that hands getClosesIssues a *path* instead of a session id
-#   would be rejected here, but only a real session proves the wiring).
-# - Concurrent sessions racing on the same state file through the real
-#   withStateLock file lock under a live Claude Code process.
-# Closest-to-action mitigation: the traversal guard is a pure-input classifier;
-# TL2 exercises the whole input domain that reaches it.
+# Tags: tl2, workflow, session-facts, closes-issues, security, path-traversal, idempotency, scope:issue-specific, pwsh-not-required
+# #1644 C8 -- getClosesIssues() reads intent.md only; the state.closes_issues cache removed in
+# #2654 must not return. C8-1 state value ignored, C8-3 edits followed + state bytes fixed,
+# C8-4 no state file fabricated, C8-5 traversal ids rejected, C8-6 same-process re-read.
+# TL3 gap: real call sites passing a session id (not a path); withStateLock races under a
+# live Claude Code process. Mitigation: the guard is a pure-input classifier covered here.
 
 set -uo pipefail
 
@@ -108,75 +94,73 @@ gci() {
     run_with_timeout node "$GCI_PROBE" 2>/dev/null
 }
 
-RAWCLOSES_PROBE="$TMPDIR_BASE/rawcloses-probe.js"
-cat > "$RAWCLOSES_PROBE" <<'EOF'
-const wf = require(process.env.WFM);
-const st = wf.readState(process.env.SF_SID);
-const v = st && st.closes_issues !== undefined ? st.closes_issues : null;
-process.stdout.write(JSON.stringify(v));
-EOF
-raw_closes() { WFM="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state" SF_SID="$1" run_with_timeout node "$RAWCLOSES_PROBE" 2>/dev/null || echo ""; }
-
 # Snapshot every file under the temp base (relative paths, sorted) so a probe
 # that escaped the pinned dirs is visible as a tree delta.
 tree_snapshot() { (cd "$TMPDIR_BASE" && find . -type f | LC_ALL=C sort); }
 
-echo "=== C8-1: cached NON-EMPTY closes_issues is returned without re-parsing ==="
+echo "=== C8-1: a recorded closes_issues in state is ignored -- intent.md answers ==="
 fixture_state c1 '[{"number":1644},{"number":1655}]'
 write_intent c1 "#9999"
 OUT="$(gci c1)"
-check "C8-1a: a non-empty cache wins over a contradicting intent.md" \
-  '[{"number":1644},{"number":1655}]' "$OUT"
+check "C8-1a: intent.md wins over a contradicting recorded value in state" \
+  '[{"number":9999}]' "$OUT"
 rm_intent c1
-check "C8-1b: the cache still answers after intent.md is deleted" \
-  '[{"number":1644},{"number":1655}]' "$(gci c1)"
+check "C8-1b: with intent.md deleted the answer is [] (no fallback to state)" \
+  '[]' "$(gci c1)"
+
 
 echo ""
-echo "=== C8-2: an EXPLICITLY EMPTY cached closes_issues is NOT a resolved answer ==="
-# FINDING (pinned CURRENT behavior): session-facts.js treats only a NON-EMPTY
-# array as "already resolved" (`Array.isArray(...) && length > 0`). An explicit
-# `"closes_issues": []` in state is therefore indistinguishable from "never
-# recorded" and triggers a re-parse of intent.md. Consequence: a session that
-# legitimately closes ZERO issues never settles -- every call re-reads
-# intent.md and re-writes state -- so a late edit to intent.md can still change
-# the session's answer. Whether "[] means zero issues" should be honored as a
-# resolved answer is a source-design question; this test pins what ships today.
-fixture_state c2 '[]'
-write_intent c2 "#1644"
-OUT="$(gci c2)"
-check "C8-2a: an empty cache does NOT suppress the parse -- intent.md wins" \
-  '[{"number":1644}]' "$OUT"
-check "C8-2b: the re-parsed value is written back over the empty cache" \
-  '[{"number":1644}]' "$(raw_closes c2)"
-
-# Second half of the finding: with intent.md ALSO yielding zero issues, the
-# empty cache is rewritten as empty on every call and never becomes sticky.
-fixture_state c2b '[]'
-write_intent c2b   # "## Issues" heading with no entries -> parses to []
-check "C8-2c: empty cache + empty intent.md returns []" '[]' "$(gci c2b)"
-# Proof that the previous call did NOT serve a cached answer: change intent.md
-# and the very next call reports the new issue set.
-write_intent c2b "#7"
-check "C8-2d: a later intent.md edit still changes the answer (re-parse, not cache)" \
-  '[{"number":7}]' "$(gci c2b)"
+echo "=== C8-7: unreadable or empty intent.md with stale state -> [] (no fallback to state) ==="
+fixture_state c7dir '[{"number":1644},{"number":1655}]'
+rm_intent c7dir; mkdir -p "$PLANS_DIR/c7dir-intent.md"
+check "C8-7a: intent.md path is a directory -> []" '[]' "$(gci c7dir)"
+fixture_state c7zero '[{"number":1644},{"number":1655}]'
+: > "$PLANS_DIR/c7zero-intent.md"
+check "C8-7b: intent.md is 0 bytes -> []" '[]' "$(gci c7zero)"
 
 echo ""
-echo "=== C8-3: idempotency -- neither the answer nor the on-disk bytes move ==="
+echo "=== C8-3: every call re-reads intent.md and the on-disk state bytes never move ==="
 fixture_state c3
+BYTES0="$(raw_file_bytes c3)"
 write_intent c3 "#1644" "owner/repo#1655"
 FIRST="$(gci c3)"
 check "C8-3a: first call parses intent.md" \
   '[{"number":1644},{"number":1655,"repo":"owner/repo"}]' "$FIRST"
 BYTES1="$(raw_file_bytes c3)"
-write_intent c3 "#9999"   # mutate the source of truth under the cache
+write_intent c3 "#9999"   # rewrite the source of truth between calls
 SECOND="$(gci c3)"
-check "C8-3b: second call returns the cached set, ignoring the mutation" "$FIRST" "$SECOND"
+check "C8-3b: second call returns the rewritten intent.md set" '[{"number":9999}]' "$SECOND"
 BYTES2="$(raw_file_bytes c3)"
 THIRD="$(gci c3)"
 check "C8-3c: third call is identical to the second" "$SECOND" "$THIRD"
 BYTES3="$(raw_file_bytes c3)"
-check "C8-3d: raw state bytes unchanged between call 1 and call 2" "$BYTES1" "$BYTES2"
-check "C8-3e: raw state bytes unchanged between call 2 and call 3" "$BYTES2" "$BYTES3"
+check "C8-3d: raw state bytes unchanged by call 1" "$BYTES0" "$BYTES1"
+check "C8-3e: raw state bytes unchanged by call 2" "$BYTES1" "$BYTES2"
+check "C8-3f: raw state bytes unchanged by call 3" "$BYTES2" "$BYTES3"
+
+echo ""
+echo "=== C8-6: one process, two calls -- an in-process 4 -> 2 narrowing is followed ==="
+# Cross-process probes cannot see a module-level memo; this one shares a require() cache.
+INPROC_PROBE="$TMPDIR_BASE/gci-inproc-probe.js"
+cat > "$INPROC_PROBE" <<'EOF'
+const fs = require("fs"), path = require("path");
+const m = require(process.env.SF_MODULE);
+const sid = process.env.SF_SID, dir = process.env.SF_PLANS_DIR;
+const put = (toks) => fs.writeFileSync(path.join(dir, sid + "-intent.md"),
+  "## Issues\n" + toks.map((t) => "- " + t + "\n").join(""));
+put(["#1644", "#1655", "#1700", "#1701"]);
+const a = m.getClosesIssues(sid, { plansDir: dir });
+put(["#1644", "#1655"]);
+const b = m.getClosesIssues(sid, { plansDir: dir });
+process.stdout.write(JSON.stringify(a) + "\n" + JSON.stringify(b));
+EOF
+fixture_state c6
+INPROC_OUT="$(SF_MODULE="$SF_MODULE_N" SF_SID=c6 SF_PLANS_DIR="$PLANS_DIR_N" \
+  run_with_timeout node "$INPROC_PROBE" 2>&1)"
+check "C8-6a: first in-process call sees all 4 issues" \
+  '[{"number":1644},{"number":1655},{"number":1700},{"number":1701}]' "$(printf '%s\n' "$INPROC_OUT" | sed -n 1p)"
+check "C8-6b: second in-process call sees the narrowed 2" \
+  '[{"number":1644},{"number":1655}]' "$(printf '%s\n' "$INPROC_OUT" | sed -n 2p)"
 
 echo ""
 echo "=== C8-4: a MISSING state file is not auto-created ==="
@@ -191,7 +175,7 @@ else
 fi
 # A second call must behave the same (still no state, still parses).
 write_intent c4 "#4242"
-check "C8-4c: with no state to cache into, the next call re-parses" '[{"number":4242}]' "$(gci c4)"
+check "C8-4c: with no state file, the next call still re-parses" '[{"number":4242}]' "$(gci c4)"
 if [ -e "$WORKFLOW_DIR/c4.json" ]; then
   fail "C8-4d: state file appeared on the second stateless call"
 else

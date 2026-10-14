@@ -83,7 +83,7 @@ init_repo() {
 
 # R1 — lexical normalization (algorithm step 2). The drive-letter forms are the
 # hole `inheritance/context-match.js` samePath() has today: a session that
-# recorded `/c/git/agents` must still match a repoDir of `C:\git\agents`.
+# recorded `/c/work/repo` must still match a repoDir of `C:\work\repo`.
 run_R1() {
     require_module "$TARGET" || return 0
     case "${OSTYPE:-unknown}" in
@@ -265,7 +265,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 # leaves the presence-check bug invisible.
 run_R5_cli() {
     require_module "$TARGET" || return 0
-    local tmp own other repo main rc out result other_state other_before
+    local tmp own other repo main rc out result other_state other_before s
     tmp="$(make_tmp)"
     # repo (== the linked worktree) is what CLAUDE_PROJECT_DIR points at for
     # every probe below — i.e. what next-step resolves as its OWN repoDir.
@@ -306,6 +306,10 @@ ownmain.closes_issues = [2218];
 writeState('$ownmain', ownmain);
 markStep('$ownmain', 'workflow_init', 'complete');
 " >/dev/null 2>&1
+    # The closes_issues gate reads <plans>/<sid>-intent.md (#2654); plans dir == $tmp/wf here.
+    for s in "$own" "$other" "$ownmain"; do
+        printf '## Issues\n- #2218\n' > "$tmp/wf/$s-intent.md"
+    done
     # "fail-fast observed" := non-zero exit, or an abort/blocked ACTION line.
     probe() {
         local env_sid="$1" args_sid="$2" o r
