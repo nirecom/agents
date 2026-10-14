@@ -1,0 +1,16 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/run-tests-completion-note --session <sid>
+//   Prints the accept line for the PR body (UNRUNNABLE accept #2501, baseline accept grant
+//   #2517), or nothing when run_tests was not completed by a user accept. Exit 0; 2 on usage error.
+
+const path = require("path");
+const { readCompletionNote } = require(path.join(__dirname, "..", "..", "hooks", "lib", "run-tests-completion-note"));
+
+const argv = process.argv.slice(2);
+if (argv.length !== 2 || argv[0] !== "--session" || !/^[A-Za-z0-9_-]+$/.test(argv[1])) {
+  process.stderr.write("usage: run-tests-completion-note --session <sid>\n");
+  process.exit(2);
+}
+const note = readCompletionNote(argv[1]);
+if (note !== null) process.stdout.write(`${note}\n`);
