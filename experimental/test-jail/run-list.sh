@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# run-list.sh <list-file> <run-dir> [tree] [desired-jobs=15] [pin=full] [timeout-secs=300]
+# run-list.sh <list-file> <run-dir> [tree] [desired-jobs=15] [pin=full] [timeout-secs=300] [weaker-pin=deny]
 # EXPERIMENTAL (#2585). Runs every test named in <list-file> (one tree-relative path per
 # line) through run-jailed.sh, leasing up to min(desired, H-1) host-wide test lanes
 # (bin/lib/test-host-lanes.sh). Tests carrying a "# Serial:" header run one at a time after
 # the parallel ones. A breach ("SAFE-RUN:" line) does not stop the run: the logs holding one
-# are listed at the end.
+# are listed at the end. [weaker-pin] is deny or allow: allow lets a tree that cannot give
+# [pin] run under the strongest pin it has (recorded in the 4th results.tsv column).
+# <run-dir> is replaced only when empty or made by an earlier run (jail-marker.sh).
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -16,11 +18,17 @@ export JAIL_TREE="${3:-$SCRIPT_CHECKOUT_ROOT}"
 DESIRED="${4:-15}"
 export JAIL_PIN="${5:-full}"
 export JAIL_SECS="${6:-300}"
+WEAKER_PIN="${7:-deny}"
+# The argument is the only switch: a value inherited from the caller's environment is dropped.
+unset JAIL_ALLOW_WEAKER_PIN
+case "$WEAKER_PIN" in
+    deny) ;;
+    allow) export JAIL_ALLOW_WEAKER_PIN=1 ;;
+    *) echo "run-list: [weaker-pin] must be deny or allow: $WEAKER_PIN" >&2; exit 2 ;;
+esac
 
-# Only an earlier run dir (or nothing) is replaced.
-if [[ -e "$JAIL_RUN_DIR" && ! -f "$JAIL_RUN_DIR/results.tsv" ]]; then
-    echo "ABORT: $JAIL_RUN_DIR exists and is not a run dir"; exit 2
-fi
+. "$JAIL_DIR/jail-marker.sh"
+jail_marker_precheck "$JAIL_RUN_DIR" run || exit 2
 
 bash "$JAIL_DIR/run-jailed.sh" --probe || { echo "ABORT: isolation probe failed"; exit 96; }
 
@@ -31,8 +39,9 @@ thl_run_all_lease "$DESIRED" 0 || { echo "ABORT: no test lane freed (rc=$?)"; ex
 JOBS="$THL_GRANTED"
 echo "lanes: $THL_NOTE"
 
-rm -rf "$JAIL_RUN_DIR"
+jail_marker_prepare "$JAIL_RUN_DIR" run run-list.sh || exit 2
 mkdir -p "$JAIL_RUN_DIR/logs"
+cp "$LIST" "$JAIL_RUN_DIR/requested.txt" || { echo "ABORT: cannot copy the list to requested.txt"; exit 2; }
 : > "$JAIL_RUN_DIR/results.tsv"
 : > "$JAIL_RUN_DIR/par.txt"
 : > "$JAIL_RUN_DIR/ser.txt"
