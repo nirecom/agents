@@ -24,6 +24,8 @@ fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 . "$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-stop-confirm-plan-guard/helpers.sh"
 # shellcheck source=tests/hooks/TL3-hook-stop-confirm-plan-guard/main.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-stop-confirm-plan-guard/main.sh"
+# shellcheck source=tests/hooks/TL3-hook-stop-confirm-plan-guard/continuation.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/TL3-hook-stop-confirm-plan-guard/continuation.sh"
 
 echo ""
 echo "=== Results ==="
