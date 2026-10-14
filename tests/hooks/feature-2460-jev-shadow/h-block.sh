@@ -198,7 +198,7 @@ run_hook pre "$FX/io/pre-old.json"
 [ -d "$JEVDIR/$OLD_SID" ] && hq age "$(np "$JEVDIR/$OLD_SID")" $((8 * 86400000)) --recursive
 check "fixture: three orphan pendings (two past the TTL here, one in an 8-day-old session), no log yet" "3|nolog" \
   "$(pending_count)|$([ -e "$LOG" ] && echo log || echo nolog)"
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_h_trigger
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_h_trigger
 check "post exits 0 and writes nothing to stdout" "0|empty" "$HOOK_RC|$(stdout_state)"
 check "the trigger's record is the first log line; the session and retention orphans follow as llm missing" \
   "4|toolu_h_trigger:ok|toolu_h_old:missing,toolu_h_orph1:missing,toolu_h_orph2:missing" \

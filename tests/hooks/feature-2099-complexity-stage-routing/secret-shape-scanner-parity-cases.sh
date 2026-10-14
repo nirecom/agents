@@ -126,6 +126,10 @@ ssp_variant() {
     mkdir -p "$root/bin" "$mod"
     cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/complexity-routing/secret-shape.js" "$mod/secret-shape.js"
     [[ "$2" == missing ]] && return 0
+    # A copy outside any git repository reads the lists of its own tree: give it empty ones,
+    # so exit 4 below can only come from the pattern block, never from a missing blocklist.
+    : > "$root/.private-info-allowlist"
+    : > "$root/.private-info-blocklist"
     awk -v mode="$2" '
         { sub(/\r$/, "") }
         /^# BEGIN hard-secret-patterns$/ { inb = 1; if (mode == "markers") next; print; next }

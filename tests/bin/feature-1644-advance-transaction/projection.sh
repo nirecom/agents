@@ -95,7 +95,7 @@ run_projection_cases() {
 
   echo ""
   echo "=== A14: advance skip of an approval-gated step co-writes the A-4 verdict ==="
-  # Without the co-write, skip-verifier never gets a chance to veto and the skip
+  # Without the co-write, the A-4 gate never gets a chance to veto and the skip
   # becomes final — the exact regression #1681 fixed on the sentinel path.
   at_outline a14
   run_ns --session a14 --advance --step outline --status skipped \

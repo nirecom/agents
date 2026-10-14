@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/skills/feature-1465-scriptify-clarify-intent/_lib.sh
 # Shared helpers for the feature-1465 test suite.
-# Sourced by run-completion.sh and check-complexity-skip.sh; guarded against double-sourcing.
+# Sourced by run-completion.sh; guarded against double-sourcing.
 
 if [ -n "${_F1465_LIB_SOURCED:-}" ]; then
     return 0

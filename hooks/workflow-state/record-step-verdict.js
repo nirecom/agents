@@ -24,8 +24,9 @@ const {
   UnapprovedCompletionError,
   confirmSentinelFor,
 } = require("./completion-approval");
-const { isSkipAllowedForCliPath } = require("./plan-skip-allowance");
+const { isSkipAllowedForCliPath, hasRecordedSkipJudgment } = require("./plan-skip-allowance");
 const { validateSkipReason } = require("../workflow-mark/skip-reason");
+const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas");
 const { resolveTrustedRepoDir } = require("./record-step-verdict/trusted-repo-dir");
 const { checkReleaseCompletion } = require("./record-step-verdict/release-steps");
 
@@ -44,17 +45,15 @@ const ADVANCE_ORIGINS = {
   "record-skip-judgment": "record-skip-judgment-advance",
   "set-workflow-type": "set-workflow-type-advance",
   "set-deliverable-type": "set-deliverable-type-advance",
-  "record-complexity-and-skip": "record-complexity-and-skip-advance",
 };
 
 // The A-4 pass discriminator (#1286): a skip_reason carrying this prefix was
 // authorized by a recorded orchestrator judgment, not by model-authored text.
 // verdict.js imports it instead of re-spelling the literal.
 const RECORDED_VERDICT_PREFIX = "recorded-verdict:";
-const RECORDED_VERDICT_REASONS = {
-  outline: RECORDED_VERDICT_PREFIX + " so_c1+so_c2 met",
-  detail: RECORDED_VERDICT_PREFIX + " sd_c1+sd_c2+sd_c3 met",
-};
+const reasonsFrom = (schemas) => Object.freeze(Object.fromEntries(
+  Object.entries(schemas).map(([t, keys]) => [t, `${RECORDED_VERDICT_PREFIX} ${keys.join("+")} met`])));
+const RECORDED_VERDICT_REASONS = reasonsFrom(CONDITION_SCHEMAS);
 
 // Steps a declaring caller may never complete. Each is guarded elsewhere by an
 // ask-gated or evidence-carrying route; a declaration must not route around it.
@@ -141,16 +140,20 @@ function checkSkipAllowance(sessionId, step, opts) {
     case "research":
     case "cleanup":
       return { ok: true, code: 0 };
-    // Approval-gated pair, deliberately left unconditional on THIS gate.
-    // KNOWN GAP (follow-up): the A-4 verdict co-written below is an audit
-    // annotation, not enforcement — recordSkipVerdict() writes
-    // skip_verdict.verdict="pending", but no gate reads hasSpeculativeSkipPending()
-    // to block on it. Making this gate call isSkipAllowedForCliPath() (like
-    // write_tests) was tried and reverted: the parity contract the #1644 suites
-    // pin exercises this unconditional path as their baseline, so tightening it is
-    // a coordinated CLI-vs-sentinel redesign, not a local fix. File a follow-up.
+    // Approval-gated pair, left unconditional on THIS gate: the #1644 parity suites pin
+    // that baseline, so calling isSkipAllowedForCliPath() here is a coordinated redesign.
+    // The recorded-verdict reason is the exception: next-step lets a skip carrying it past
+    // the pending-verdict gate, so it is admitted only while a recorded skip judgment
+    // stands. The owner lock is the caller's: runAdvance holds it across this check and the write.
     case "outline":
     case "detail":
+      if (String(opts.skipReason || "").startsWith(RECORDED_VERDICT_PREFIX) && !hasRecordedSkipJudgment(sessionId, step)) {
+        return fail(
+          3,
+          `record-step-verdict: ${step} skip refused — a "${RECORDED_VERDICT_PREFIX}" reason needs a ` +
+            "recorded skip judgment with every condition met, and none stands."
+        );
+      }
       return { ok: true, code: 0 };
     case "write_tests":
       if (!isSkipAllowedForCliPath(sessionId, "write_tests")) {
@@ -284,7 +287,7 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
 
   // Idempotent repeat — ADVANCE GATE ONLY. Returning before the write is what
   // keeps a re-issued --advance from re-firing the workflow_init downstream reset
-  // or overwriting an A-4 verdict that skip-verifier has since resolved.
+  // or overwriting an A-4 verdict that record-skip-verdict has since resolved.
   // The sentinel/mark/reset/recorded-verdict gates deliberately keep their
   // pre-#1644 re-write behaviour: re-emitting a NOT_NEEDED sentinel with a new
   // reason must still replace the recorded skip_reason (migration note 5).
@@ -347,7 +350,7 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
         return fail(1, "record-step-verdict: " + v.msg);
       }
       skipReason = v.reason;
-      const allowance = checkSkipAllowance(sessionId, step, { repoDir: opts.repoDir });
+      const allowance = checkSkipAllowance(sessionId, step, { repoDir: opts.repoDir, skipReason });
       if (!allowance.ok) return allowance;
     }
   }
@@ -412,9 +415,12 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
 
   // --- co-written facts owned by the same writer --------------------------
   if (status === "skipped" && APPROVAL_GATED_STEPS.indexOf(step) !== -1) {
-    // A-4 (#1681): a skip of an approval-gated step is speculative until
-    // skip-verifier resolves it. Dropping this co-write is the single regression
+    // A-4 (#1681): a manual sentinel skip of an approval-gated step stays pending
+    // for audit until record-skip-verdict resolves it. Dropping this co-write is the single regression
     // that would make such a skip final without review.
+    // A judged skip (skip_reason RECORDED_VERDICT_PREFIX: record-skip-judgment --advance and
+    // next-step's recorded-verdict skip) gets the same annotation and is not held by it:
+    // next-step's A-4 gate passes that prefix (bin/workflow/lib/next-step/verdict.js).
     try {
       const source = typeof opts.skipVerdictSource === "string" && opts.skipVerdictSource !== ""
         ? opts.skipVerdictSource

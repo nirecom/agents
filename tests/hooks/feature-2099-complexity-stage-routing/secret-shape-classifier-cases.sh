@@ -199,7 +199,7 @@ const flagged = ids.filter(isSecretShaped);
 console.log("signal_ids=" + ids.length + " flagged=" + (flagged.length ? flagged.join(",") : "0"));
 ')
     assert_eq "SS-4 no real signal id (nor the undecidable token) is classified secret-shaped" \
-        "signal_ids=8 flagged=0" "$got"
+        "signal_ids=6 flagged=0" "$got"
 
     got=$(run_node '
 const { isSecretShaped } = require(process.env.SS_MOD_N);

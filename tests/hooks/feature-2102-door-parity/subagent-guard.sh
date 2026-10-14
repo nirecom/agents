@@ -53,7 +53,7 @@ ADVANCE_CLIS="$(run_with_timeout node -e '
   const m = require(process.env.RSV_MOD);
   process.stdout.write(Object.keys(m.ADVANCE_ORIGINS || {}).join(" "));' 2>/dev/null || echo "")"
 check "M0a: the step name resolved from VALID_STEPS" "research" "$STEP"
-check "M0b: ADVANCE_ORIGINS names five advance-class CLIs (set-deliverable-type added, #2527)" 5 "$(printf '%s' "$ADVANCE_CLIS" | wc -w | tr -d ' ')"
+check "M0b: ADVANCE_ORIGINS names four advance-class CLIs (#2527 added set-deliverable-type, #2460 removed record-complexity-and-skip)" 4 "$(printf '%s' "$ADVANCE_CLIS" | wc -w | tr -d ' ')"
 
 # Block-reason strings come from the hook module itself (CPR-SSOT), never retyped:
 # assert_payload proves WHICH door tripped, not merely that some door tripped.
@@ -203,7 +203,9 @@ driver_says() {
     } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED"
 }
 check "G6a: the migrated next-step advance call is a driver command" true "$(driver_says "$ADVANCE_CMD")"
-check "G6b: a record-complexity-and-skip advance call is a driver command" true \
+check "G6b: a record-skip-judgment advance call is a driver command" true \
+  "$(driver_says "node \"\$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment\" --session s1 --target outline --advance")"
+check "G6b2: the CLI #2460 retired is no longer a driver command" false \
   "$(driver_says "bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" --session s1 --signals \"\" --target outline --advance")"
 check "G6c: next-step without --advance is not" false "$(driver_says "$PLAIN_CMD")"
 check "G6d: read-session-facts is not" false "$(driver_says "$FACTS_CMD")"

@@ -36,7 +36,7 @@ function stubNormalizer(repoDir, mode) {
   }
   const mod = require(file);
   const real = mod.normalize;
-  const returns = { nonstring: 42, null: null, undefined: undefined, object: { csv: "S1-multi-file" } };
+  const returns = { nonstring: 42, null: null, undefined: undefined, object: { csv: "S2-architecture" } };
   mod.normalize = function (raw) {
     counter.calls++;
     if (mode === "throw") throw new Error("normalizer stub");
@@ -108,7 +108,7 @@ async function main() {
     out(r === null ? "null" : [r.jev.status, r.jev.answer, typeof r.jev.latency_ms === "number", stub.calls].join("|"));
   } else if (cmd === "query-seq") {
     // query-seq <sid> <n> <parser-fail|real>: n queryShadow calls (parser-fail: the normalizer throws); prints
-    // "<jev statuses>|<consecutive_failures>|<last_failure_status>|<open now>".
+    // "<jev statuses>|<consecutive_failures>|<last_failure_status>|<open now>" of the point's mapping scope.
     const overrides = lib("hooks/lib/jev/test-overrides.js").captureTestOverrides(process.env);
     if (args[2] === "parser-fail") stubNormalizer(repo, "throw");
     const broker = lib("hooks/lib/jev/broker.js");
@@ -119,12 +119,12 @@ async function main() {
         toolInput: { subagent_type: "complexity-judge", prompt: "probe" }, step: "outline", overrides });
       statuses.push(r === null ? "null" : r.jev.status);
     }
-    const s = breaker.readBreaker(args[0]);
-    out([statuses.join(","), s.consecutive_failures, s.last_failure_status, breaker.isOpen(args[0])].join("|"));
+    const s = breaker.readBreaker(args[0], "complexity-judge");
+    out([statuses.join(","), s.consecutive_failures, s.last_failure_status, breaker.isOpen(args[0], "complexity-judge")].join("|"));
   } else if (cmd === "record") {
     const broker = lib("hooks/lib/jev/broker.js");
     const r = broker.recordShadow({ point: "complexity-judge", sessionId: args[0], toolUseId: args[1],
-      llmText: "SIGNALS: S1-multi-file", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
+      llmText: "SIGNALS: S2-architecture", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
     out(r === null ? "null" : typeof r === "object" && !Array.isArray(r) ? "record" : typeof r);
   } else if (cmd === "record-ret") {
     // record-ret <sid> <tid> [point-json]: recordShadow's return value as JSON ("null" for null,
@@ -132,7 +132,7 @@ async function main() {
     const broker = lib("hooks/lib/jev/broker.js");
     const point = args[2] === undefined ? "complexity-judge" : args[2] === "undefined" ? undefined : JSON.parse(args[2]);
     const r = broker.recordShadow({ point, sessionId: args[0], toolUseId: args[1],
-      llmText: "SIGNALS: S1-multi-file", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
+      llmText: "SIGNALS: S2-architecture", toolInput: { subagent_type: "complexity-judge" }, step: "outline" });
     out(r === null ? "null" : typeof r === "object" && !Array.isArray(r) ? JSON.stringify(r) : "TYPE:" + typeof r);
   } else {
     out("UNKNOWN-CMD:" + cmd);

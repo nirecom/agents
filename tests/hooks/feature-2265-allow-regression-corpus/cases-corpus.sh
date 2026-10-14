@@ -6,8 +6,12 @@
 # its pinned verdict from the classifier, judged against the fixture main checkout.
 
 CORPUS_FILE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2265-allow-regression-corpus/corpus.jsonl"
-CORPUS_OUT="$(fx_run --corpus "$CORPUS_FILE")"
-printf '%s\n' "$CORPUS_OUT" | grep -E '^(ROW|FAMILY|SOURCE|RESULT)' | head -n 120
+# Entries retired from the SSOT after the freeze (#2460 removed the CLI below). Their rows stay
+# in the corpus and must fall through instead: a retired name that still got allow is a leak.
+CORPUS_RETIRED_ENTRY="bin/workflow/record-complexity-and-skip"
+CORPUS_RETIRED_ROWS=100
+CORPUS_OUT="$(fx_run --corpus "$CORPUS_FILE" --retired "$CORPUS_RETIRED_ENTRY")"
+printf '%s\n' "$CORPUS_OUT" | grep -E '^(ROW|FAMILY|SOURCE|RESULT|RETIRED)' | head -n 120
 
 # corpus_family_clean <family...>: every row of each family matched its pinned verdict.
 corpus_family_clean() {
@@ -48,6 +52,17 @@ for kv in $CORPUS_PIN_FAMILIES; do
 done
 fx_check "corpus: no family outside the pinned manifest" "$(wc -w <<< "$CORPUS_PIN_FAMILIES" | tr -d ' ')" \
   "$(grep -c '^FAMILY ' <<< "$CORPUS_OUT")"
+case_end
+
+case_begin "corpus-retired-entry-falls-through" "install/settings-allow-commands.txt"
+fx_check "corpus: the retired entry is absent from the SSOT list" "0" \
+  "$(grep -cxF "$CORPUS_RETIRED_ENTRY" "$SCRIPT_CHECKOUT_ROOT/install/settings-allow-commands.txt")"
+fx_check "corpus: the retired entry has no file left in the checkout" "no" \
+  "$([[ -e "$SCRIPT_CHECKOUT_ROOT/$CORPUS_RETIRED_ENTRY" ]] && echo yes || echo no)"
+fx_check "corpus: the retired entry owns the pinned $CORPUS_RETIRED_ROWS rows" "$CORPUS_RETIRED_ROWS" \
+  "$(fx_field "$CORPUS_OUT" "RETIRED $CORPUS_RETIRED_ENTRY " rows)"
+fx_check "corpus: every retired-entry row falls through (passThrough|BG-NO-HIT)" "0" \
+  "$(fx_field "$CORPUS_OUT" "RETIRED $CORPUS_RETIRED_ENTRY " fail)"
 case_end
 
 case_begin "corpus-interpreter-spellings" "hooks/lib/allow-command-list.js"

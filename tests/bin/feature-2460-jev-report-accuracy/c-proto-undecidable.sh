@@ -56,7 +56,8 @@ T="$FX/io/proto.txt"
 report "$T" --log "$(np "$PROTO_LOG")" --no-sweep
 check "text mode exits 0 with nothing on stderr" "0|" "$REP_RC|$(cat "$FX/io/report.err")"
 check "headings: charset-clean names verbatim, the mixed-case one as -" \
-  "== __proto__ ==|== complexity-judge ==|== constructor ==|== - ==" "$(tx 'lines.filter((l) => l.startsWith("== ")).join("|")')"
+  "== __proto__ ==|== complexity-judge ==|== constructor ==|== - ==|0" \
+  "$(tx 'lines.filter((l) => /^== (__proto__|complexity-judge|constructor|-) ==$/.test(l)).join("|") + "|" + lines.filter((l) => l.startsWith("== ") && l.includes("toString")).length')"
 check "by stage and fallback lines of complexity-judge: sanitised keys with their counts" \
   "records: 3  by stage: __proto__=1 outline=1 -=1|fallback: 0.667  constructor=1 -=1" \
   "$(tx '((i) => lines[i + 1] + "|" + lines.slice(i).find((l) => l.startsWith("fallback: ")))(lines.indexOf("== complexity-judge =="))')"

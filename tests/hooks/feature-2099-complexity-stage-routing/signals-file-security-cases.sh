@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/signals-file-security-cases.sh
-# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip, hooks/workflow-state/complexity-routing.js
+# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/derive-complexity-level,hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, cli, security, signals-file, path-traversal, secret-leakage, adversarial, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER traversal-attack-cases.sh (d2099t_snapshot comes from there).
 # --signals-file is the only #2099 arg handed to fs.readFileSync, so it is the only
@@ -33,9 +33,8 @@ d2099sf_unreadable_probe() {
     chmod 644 "$f" 2>/dev/null || true
 }
 
-# One --signals-file invocation of one CLI, with that CLI's OWN interpreter
-# (record-complexity-and-skip is bash; through `node` it dies on a syntax error
-# before its validation runs) and that CLI's own required arguments. Sets
+# One --signals-file invocation of one CLI, with that CLI's OWN interpreter (read
+# from its shebang) and that CLI's own required arguments. Sets
 # D2099SF_RC / D2099SF_TEXT rather than printing, so stdout+stderr stay whole.
 D2099SF_RC=0
 D2099SF_TEXT=""
@@ -46,9 +45,6 @@ d2099sf_invoke() {
     case "$bin" in
         "$BIN_DERIVE")
             D2099SF_TEXT=$(run_with_timeout "$runner" "$bin" --stage detail --session "$sid" --signals-file "$p" 2>&1) || D2099SF_RC=$? ;;
-        "$BIN_RECORD_SKIP")
-            D2099SF_TEXT=$(run_with_timeout "$runner" "$bin" --session "$sid" \
-                --signals-file "$p" --target outline 2>&1) || D2099SF_RC=$? ;;
         *)
             D2099SF_TEXT=$(run_with_timeout "$runner" "$bin" --session "$sid" --signals-file "$p" 2>&1) || D2099SF_RC=$? ;;
     esac
@@ -154,7 +150,7 @@ d2099sf_unreadable() {
     f="$TMPDIR_BASE/sf-locked-signals.txt"
     printf '%s\n' "$D2099SF_SECRET" > "$f"
     chmod 000 "$f" 2>/dev/null || true
-    for bin in "$BIN_RECORD" "$BIN_DERIVE" "$BIN_RECORD_SKIP"; do
+    for bin in "$BIN_RECORD" "$BIN_DERIVE"; do
         tag=$(basename "$bin")
         sid=$(new_session sflock)
         before=$(d2099_side_effects "$sid")
@@ -194,6 +190,8 @@ d2099sf_sanctioned_paths() {
     assert_eq "SF-13 ... having appended exactly one evaluation" "ce=1 skip=0" "$(d2099_side_effects "$sid")"
     lvl=$(run_with_timeout node "$BIN_READ" --session "$sid" --stage detail 2>/dev/null | head -1)
     assert_eq "SF-14 ... which reads back at the level that signal implies" "level=high" "$lvl"
+    assert_eq "SF-14b ... and the record skipped no step" \
+        "outline=pending detail=pending skip=0" "$(d2099_no_skip_view "$sid")"
 
     # #2434: derive's --signals-file is pinned to the legacy plans-dir name, so the
     # awkward path cannot reach it; the same content goes through that path instead.
@@ -203,18 +201,11 @@ d2099sf_sanctioned_paths() {
     out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --session "$sid" --signals-file "$(d2099sf_derive_file "$sid")" 2>&1) || rc=$?
     assert_eq "SF-15 derive-complexity-level answers for the same content via its legacy-legal path (exit 0)" "0" "$rc"
     assert_eq "SF-16 ... in the documented level= protocol" "level=high" "$(printf '%s\n' "$out" | head -1)"
-
-    sid=$(new_session sfokw)
-    rc=0
-    out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid" \
-        --signals-file "$f" --target outline 2>/dev/null) || rc=$?
-    assert_eq "SF-17 record-complexity-and-skip resolves that path too, on a clean exit" "0" "$rc"
-    assert_eq "SF-18 ... answering with the skip mode and nothing else on stdout" "judgment" "$out"
 }
 
 # --- SF-19: a filename that LOOKS like a command ------------------------------
-# The path is the vector here, not the content: an unquoted expansion of
-# "$SIGNALS_FILE" anywhere in the bash wrapper would run these substitutions.
+# The path is the vector here, not the content: an unquoted expansion or a shell
+# hand-off of the path anywhere in the writer would run these substitutions.
 # `"` `\` `*` `?` `<` `>` `|` `:` are omitted — Windows rejects them in a filename.
 d2099sf_metacharacter_filename() {
     local dir f sid rc out pwned
@@ -222,7 +213,7 @@ d2099sf_metacharacter_filename() {
     mkdir -p "$dir" 2>/dev/null || true
     # The canary targets are BARE names, never absolute: a `/` inside a filename
     # is not a filename at all, and staging would fail for a reason unrelated to
-    # the CLIs. Executed, they land in whatever directory the wrapper ran from —
+    # the CLIs. Executed, they land in whatever directory the writer ran from —
     # so the sweep below covers the fixture root and that directory both.
     f="$dir/sig \$(touch sf-pwned-a) \`touch sf-pwned-b\` ;touch sf-pwned-c& 日本語 (v2) '"'"'q'"'"' #1.txt"
     if ! printf 'S2-architecture' > "$f" 2>/dev/null; then
@@ -236,9 +227,9 @@ d2099sf_metacharacter_filename() {
     # MSYS argument mangling declines to translate a POSIX path carrying `;`/`&`/
     # backticks, and the untranslated form dies with ENOENT before the CLI's own
     # handling is reached — a failure about the shell bridge, not about the CLI.
-    out=$(cd "$dir" && run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid" \
-        --signals-file "$(to_node_path "$f")" --target outline 2>&1) || rc=$?
-    assert_eq "SF-19 the wrapper reads a signals file whose NAME carries shell metacharacters (exit 0)" "0" "$rc"
+    out=$(cd "$dir" && run_with_timeout node "$BIN_RECORD" --session "$sid" \
+        --signals-file "$(to_node_path "$f")" 2>&1) || rc=$?
+    assert_eq "SF-19 record-complexity-evaluation reads a signals file whose NAME carries shell metacharacters (exit 0)" "0" "$rc"
     assert_contains "SF-20 ... treating the name as a path and the file's content as the signal list" \
         "RECORDED_COMPLEXITY level=high signals=S2-architecture" "$out"
     pwned=$(find "$TMPDIR_BASE" "$dir" -name 'sf-pwned-*' 2>/dev/null | head -5)
@@ -316,17 +307,6 @@ d2099sf_secret_containment() {
     out=$(run_with_timeout node "$BIN_DERIVE" --stage detail --session "$sid" --signals-file "$(d2099sf_derive_file "$sid")" 2>&1) || rc=$?
     assert_not_contains "SF-28 ... and none either when the same token arrives by --signals-file (rc=$rc)" \
         "$D2099SF_SECRET" "$out"
-
-    # The wrapper's stdout is the channel callers capture into SKIP_MODE. The
-    # delegate's receipt is redirected to stderr precisely so it cannot
-    # contaminate that capture; this pins the separation for a secret-shaped token.
-    sid=$(new_session sfsecret)
-    rc=0
-    out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid" \
-        --signals-file "$f" --target outline 2>/dev/null) || rc=$?
-    assert_eq "SF-29 the wrapper's stdout channel carries only the skip mode" "judgment" "$out"
-    assert_not_contains "SF-30 ... so a secret-shaped token in the signals file never reaches the SKIP_MODE capture" \
-        "$D2099SF_SECRET" "$out"
 }
 
 # --- SF-31: the disclosure gaps this suite must NOT pin as correct -----------
@@ -348,13 +328,38 @@ d2099sf_disclosure_gap() {
     skip "SF-32 --signals-file accepts any absolute path and follows symlinks out of PLANS_DIR: the record CLI reads a single-line out-of-tree file and both echoes and persists its content as a signal. No allowlist, prefix check or realpath containment guards that argument, so the absolute-path and symlink cases are omitted from the SF-1 corpus."
 }
 
+case_begin "sf-reject-corpus-record" "bin/workflow/record-complexity-evaluation"
 d2099sf_reject_corpus "$BIN_RECORD"
+case_end
+
+case_begin "sf-reject-corpus-derive" "bin/workflow/derive-complexity-level"
 d2099sf_reject_corpus "$BIN_DERIVE"
-d2099sf_reject_corpus "$BIN_RECORD_SKIP"
+case_end
+
+case_begin "sf-unreadable" "bin/workflow/record-complexity-evaluation"
 d2099sf_unreadable
+case_end
+
+case_begin "sf-sanctioned-paths" "bin/workflow/record-complexity-evaluation"
 d2099sf_sanctioned_paths
+case_end
+
+case_begin "sf-metacharacter-filename" "bin/workflow/record-complexity-evaluation"
 d2099sf_metacharacter_filename
+case_end
+
+case_begin "sf-empty-file" "bin/workflow/record-complexity-evaluation"
 d2099sf_empty_file
+case_end
+
+case_begin "sf-reject-idempotency" "bin/workflow/record-complexity-evaluation"
 d2099sf_reject_idempotency
+case_end
+
+case_begin "sf-secret-containment" "bin/workflow/derive-complexity-level"
 d2099sf_secret_containment
+case_end
+
+case_begin "sf-disclosure-gap" "bin/workflow/record-complexity-evaluation"
 d2099sf_disclosure_gap
+case_end

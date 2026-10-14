@@ -13,12 +13,13 @@ d2099_exports() {
 const m = require(process.env.CR_MOD_N);
 const EXPECTED = [
   ["ROUTING_STAGES", "object"], ["SIGNAL_IDS", "object"],
+  ["JUDGED_SIGNAL_IDS", "object"], ["DETERMINISTIC_SIGNAL_IDS", "object"],
   ["UNDECIDABLE_SIGNAL", "string"], ["STAGE_ROUTING", "object"],
   ["ROUTING_TABLE_VALID", "boolean"], ["ROUTING_TABLE_ERRORS", "object"],
   ["RoutingTableUnavailableError", "function"], ["validateRoutingTable", "function"],
   ["deriveStageLevel", "function"], ["deriveStageLevels", "function"],
   ["deriveAggregateLevel", "function"], ["deriveLegacyStageLevels", "function"],
-  ["isZeroSignalLow", "function"], ["describeStageRouting", "function"],
+  ["canonicalizeSignalsForPersistence", "function"], ["describeStageRouting", "function"],
   ["renderStageRoutingMarkdown", "function"], ["renderSignalIdsMarkdown", "function"],
 ];
 const missing = EXPECTED.filter(function (e) { return typeof m[e[0]] !== e[1]; })
@@ -27,12 +28,13 @@ console.log(missing.length ? missing.join(",") : "ALL_PRESENT");
 ')
     assert_eq "D-1 complexity-routing exports the full D1 surface" "ALL_PRESENT" "$got"
 
+    # S1-multi-file / S6-long-plan were retired (#2460): they are unknown tokens now.
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
 console.log([m.ROUTING_STAGES.join("|"), m.UNDECIDABLE_SIGNAL, m.SIGNAL_IDS.join("|")].join(" "));
 ')
     assert_eq "D-2 stage keys, undecidable token and signal ids are the SSOT values" \
-        "outline|detail|write_tests|write_code S0-undecidable S1-multi-file|S1b-wide-change|S2-architecture|S3-security|S4-installer|S5-breaking|S6-long-plan" \
+        "outline|detail|write_tests|write_code S0-undecidable S1b-wide-change|S2-architecture|S3-security|S4-installer|S5-breaking" \
         "$got"
 
     got=$(run_node '
@@ -42,7 +44,9 @@ console.log(String(m.ROUTING_TABLE_VALID) + " " + m.ROUTING_TABLE_ERRORS.length)
     assert_eq "D-3 the shipped STAGE_ROUTING self-validates clean at load time" "true 0" "$got"
 }
 
-# D-4: full deriveStageLevel matrix (3 stages x 13 signal sets).
+# D-4: full deriveStageLevel matrix (4 stages x every signal set below).
+# S1-multi-file / S6-long-plan are retired tokens: alone they route to the
+# stage undecidable_level (high) like any other unknown token.
 d2099_matrix() {
     local got
     got=$(run_node '
@@ -56,6 +60,7 @@ const CASES = [
   ["S4-installer", ["S4-installer"]],
   ["S5-breaking", ["S5-breaking"]],
   ["S6-long-plan", ["S6-long-plan"]],
+  ["S1b+S4", ["S1b-wide-change", "S4-installer"]],
   ["S1b+S6", ["S1b-wide-change", "S6-long-plan"]],
   ["S1+S6", ["S1-multi-file", "S6-long-plan"]],
   ["UNDECIDABLE", ["S0-undecidable"]],
@@ -72,7 +77,7 @@ const CASES = [
   ["OBJ-ELEMENT", [{}]],
   ["MIXED-ELEMENTS", ["S3-security", 1, null]],
 ];
-for (const stage of ["detail", "write_tests", "write_code"]) {
+for (const stage of ["outline", "detail", "write_tests", "write_code"]) {
   for (const c of CASES) {
     let out;
     try { out = m.deriveStageLevel(stage, c[1]); }
@@ -82,16 +87,35 @@ for (const stage of ["detail", "write_tests", "write_code"]) {
 }
 ')
     assert_block "D-4 deriveStageLevel matrix matches the D2 routing table" "$got" <<'EOF'
+outline EMPTY low
+outline S1-multi-file high
+outline S1b-wide-change low
+outline S2-architecture high
+outline S3-security low
+outline S4-installer low
+outline S5-breaking high
+outline S6-long-plan high
+outline S1b+S4 low
+outline S1b+S6 high
+outline S1+S6 high
+outline UNDECIDABLE high
+outline BOGUS high
+outline NOT-ARRAY high
+outline NUM-ELEMENT high
+outline NULL-ELEMENT high
+outline OBJ-ELEMENT high
+outline MIXED-ELEMENTS high
 detail EMPTY low
-detail S1-multi-file low
+detail S1-multi-file high
 detail S1b-wide-change low
 detail S2-architecture high
 detail S3-security low
 detail S4-installer low
 detail S5-breaking high
-detail S6-long-plan low
+detail S6-long-plan high
+detail S1b+S4 low
 detail S1b+S6 high
-detail S1+S6 low
+detail S1+S6 high
 detail UNDECIDABLE high
 detail BOGUS high
 detail NOT-ARRAY high
@@ -100,15 +124,16 @@ detail NULL-ELEMENT high
 detail OBJ-ELEMENT high
 detail MIXED-ELEMENTS high
 write_tests EMPTY low
-write_tests S1-multi-file low
-write_tests S1b-wide-change high
+write_tests S1-multi-file high
+write_tests S1b-wide-change low
 write_tests S2-architecture high
 write_tests S3-security high
 write_tests S4-installer high
 write_tests S5-breaking high
-write_tests S6-long-plan low
+write_tests S6-long-plan high
+write_tests S1b+S4 high
 write_tests S1b+S6 high
-write_tests S1+S6 low
+write_tests S1+S6 high
 write_tests UNDECIDABLE high
 write_tests BOGUS high
 write_tests NOT-ARRAY high
@@ -124,6 +149,7 @@ write_code S3-security high
 write_code S4-installer high
 write_code S5-breaking high
 write_code S6-long-plan high
+write_code S1b+S4 high
 write_code S1b+S6 high
 write_code S1+S6 high
 write_code UNDECIDABLE high
@@ -137,7 +163,7 @@ EOF
 }
 
 # D-5: write_code must stay bit-equivalent to the legacy aggregate rule across
-# the whole SIGNAL_IDS powerset (128 subsets). This is the regression that
+# the whole SIGNAL_IDS powerset (32 subsets). This is the regression that
 # guards "write_code reduction = zero" from detail.md D2.
 d2099_equivalence() {
     local got
@@ -156,18 +182,20 @@ for (let mask = 0; mask < (1 << ids.length); mask++) {
 console.log("subsets=" + (1 << ids.length) + " aggHigh=" + aggHigh + " mismatches=" + mismatches.length);
 ')
     assert_eq "D-5 deriveStageLevel(write_code) === deriveAggregateLevel over the signal powerset" \
-        "subsets=128 aggHigh=127 mismatches=0" "$got"
+        "subsets=32 aggHigh=31 mismatches=0" "$got"
 
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
 console.log([
   m.deriveAggregateLevel([]),
-  m.deriveAggregateLevel(["S1-multi-file"]),
+  m.deriveAggregateLevel(["S1b-wide-change"]),
   m.deriveAggregateLevel(null),
+  m.deriveAggregateLevel(["S1-multi-file"]),
+  m.deriveAggregateLevel(["S6-long-plan"]),
 ].join(" "));
 ')
-    assert_eq "D-6 deriveAggregateLevel keeps the legacy 0-signal/1+-signal/undecidable rule" \
-        "low high high" "$got"
+    assert_eq "D-6 deriveAggregateLevel keeps the 0-signal/1+-signal/undecidable rule; retired ids are unknown (high)" \
+        "low high high high high" "$got"
 
     # The aggregate `level` must be derived independently of the write_code
     # column so a future write_code narrowing cannot silently move CI-C1c.
@@ -186,7 +214,7 @@ d2099_bulk_and_purity() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const sig = ["S2-architecture", "S6-long-plan"];
+const sig = ["S2-architecture", "S1b-wide-change"];
 const before = JSON.stringify(sig);
 const a = m.deriveStageLevels(sig);
 const b = m.deriveStageLevels(sig);
@@ -225,43 +253,28 @@ console.log([
     assert_eq "D-10 tokens are trimmed and empty tokens dropped before matching" "high low" "$got"
 }
 
-# D-11: isZeroSignalLow owns the truth table that resolveSkipConditionsFromComplexity
-# used to inline — semantics must be unchanged (level=low AND signals=[]).
-d2099_zero_signal_low() {
+# D-11: zero-signal auto-skip is retired (#2460), so its truth-table owner
+# isZeroSignalLow must be gone from the module surface.
+d2099_zero_signal_low_retired() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const CASES = [
-  ["low+empty", { level: "low", signals: [] }],
-  ["low+one", { level: "low", signals: ["S1-multi-file"] }],
-  ["high+empty", { level: "high", signals: [] }],
-  ["high+one", { level: "high", signals: ["S3-security"] }],
-  ["low+nonarray", { level: "low", signals: "none" }],
-  ["low+missing", { level: "low" }],
-  ["null", null],
-  ["undefined", undefined],
-  ["notobject", "low"],
-];
-console.log(CASES.map(function (c) {
-  let v;
-  try { v = String(m.isZeroSignalLow(c[1])); } catch (e) { v = "THREW"; }
-  return c[0] + "=" + v;
-}).join(" "));
+console.log(Object.prototype.hasOwnProperty.call(m, "isZeroSignalLow") ? "EXPORTED:" + typeof m.isZeroSignalLow : "ABSENT");
 ')
-    assert_block "D-11 isZeroSignalLow truth table" "$got" <<'EOF'
-low+empty=true low+one=false high+empty=false high+one=false low+nonarray=false low+missing=false null=false undefined=false notobject=false
-EOF
+    assert_eq "D-11 isZeroSignalLow is no longer exported" "ABSENT" "$got"
 }
 
 # D-12: deriveLegacyStageLevels covers the L1/L2 rows of the Legacy table.
+# A legacy record that persisted a retired id (S1/S6) re-derives as undecidable.
 d2099_legacy_derivation() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
 function fmt(l) { return l ? l.detail + "," + l.write_tests + "," + l.write_code : String(l); }
 const CASES = [
-  ["L1-high-signals", "high", ["S1-multi-file"]],
-  ["L1-low-signals", "low", ["S6-long-plan"]],
+  ["L1-high-signals", "high", ["S1b-wide-change"]],
+  ["L1-low-signals", "low", ["S3-security"]],
+  ["L1-retired-signal", "low", ["S6-long-plan"]],
   ["L2-high-empty", "high", []],
   ["L2-low-empty", "low", []],
 ];
@@ -270,8 +283,27 @@ console.log(CASES.map(function (c) {
 }).join(" "));
 ')
     assert_block "D-12 deriveLegacyStageLevels applies L1 per-signal derivation and L2 high round-up" "$got" <<'EOF'
-L1-high-signals=low,low,high L1-low-signals=low,low,high L2-high-empty=high,high,high L2-low-empty=low,low,low
+L1-high-signals=low,low,high L1-low-signals=low,high,high L1-retired-signal=high,high,high L2-high-empty=high,high,high L2-low-empty=low,low,low
 EOF
+}
+
+# D-13: write_code keeps S3-security structurally solo and the legacy 1-signal
+# rule as exactly one one-element row per remaining non-S3 signal.
+d2099_write_code_shape() {
+    local got
+    got=$(run_node '
+const m = require(process.env.CR_MOD_N);
+const r = m.STAGE_ROUTING.write_code;
+const rows = r.legacy_equivalent_escalation;
+console.log([
+  "solo=" + JSON.stringify(r.solo_escalation),
+  "legacy=" + rows.map(function (g) { return g.join("+"); }).join(","),
+  "oneElementRows=" + rows.every(function (g) { return Array.isArray(g) && g.length === 1; }),
+  "combination=" + r.combination_escalation.length,
+].join(" "));
+')
+    assert_eq "D-13 write_code solo is exactly S3-security and every legacy_equivalent row has one element" \
+        'solo=["S3-security"] legacy=S1b-wide-change,S2-architecture,S4-installer,S5-breaking oneElementRows=true combination=0' "$got"
 }
 
 case_begin "exports-surface-and-ssot-values" "hooks/workflow-state/complexity-routing.js"
@@ -286,9 +318,12 @@ case_end
 case_begin "derive-stage-levels-bulk-and-purity" "hooks/workflow-state/complexity-routing.js"
 d2099_bulk_and_purity
 case_end
-case_begin "is-zero-signal-low-truth-table" "hooks/workflow-state/complexity-routing.js"
-d2099_zero_signal_low
+case_begin "is-zero-signal-low-not-exported" "hooks/workflow-state/complexity-routing.js"
+d2099_zero_signal_low_retired
 case_end
 case_begin "derive-legacy-stage-levels" "hooks/workflow-state/complexity-routing.js"
 d2099_legacy_derivation
+case_end
+case_begin "write-code-solo-and-legacy-row-shape" "hooks/workflow-state/complexity-routing.js"
+d2099_write_code_shape
 case_end

@@ -358,8 +358,14 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 ### Jev
 
 - **Full name**: Jev (TypeSafe AI typed classifier)
-- **Definition**: Third-party classifier that returns one typed answer per yes/no question. Queried alongside the `complexity-judge` subagent when `JEV=on`; off by default.
+- **Definition**: Third-party classifier that returns one probability per yes/no question. When `JEV=on` it is the first judge at the `complexity-judge`, `outline-skip` and `detail-skip` judgment points; a subagent answers the keys Jev is not confident about. Off by default.
 - **Related**: [docs/architecture/jev.md](architecture/jev.md), [bin/jev-report](../bin/jev-report)
+
+### Jev shadow mode
+
+- **Full name**: Jev shadow mode (registry `mode: "shadow"`)
+- **Definition**: Per-judgment-point mode in which the subagent judges every key and Jev's answer is only logged for comparison. The opposite of `production`, where a confident Jev answer is adopted.
+- **Related**: [docs/architecture/jev.md](architecture/jev.md)
 
 ### test lane
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/fail-open-cases.sh
-# Tests: hooks/workflow-state.js, hooks/workflow-state/complexity-routing.js, hooks/workflow-state/skip-signal-resolver.js, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-evaluation, bin/workflow/record-complexity-and-skip
+# Tests: hooks/workflow-state.js, hooks/workflow-state/complexity-routing.js, hooks/workflow-state/skip-signal-resolver.js, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-evaluation
 # Tags: complexity, routing, fail-open, isolation-fixture, exit-codes, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
 # The corruption is applied to an ISOLATED copy of hooks/ + bin/ so the barrel's
@@ -63,20 +63,6 @@ console.log(out.join(" "));
     assert_eq "FO-2 a corrupt table loads clean and only throws when a derivation is called" \
         "REQUIRE_OK valid=false errors=true derive=RoutingTableUnavailableError aggregate=RoutingTableUnavailableError unrelated=OK" \
         "$got"
-
-    # The resolver's existing try/catch must swallow it into the no-auto-skip
-    # direction, matching the current fail-open direction.
-    local sid
-    sid=$(new_session foresolve)
-    run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "" >/dev/null 2>&1
-    got=$(ISO_RESOLVER="$(to_node_path "$D2099_ISO/hooks/workflow-state/skip-signal-resolver.js")" SID="$sid" run_with_timeout node -e '
-const r = require(process.env.ISO_RESOLVER);
-let v;
-try { v = r.resolveSkipConditionsFromComplexity(process.env.SID, "outline"); }
-catch (e) { v = "THREW:" + (e && e.name); }
-console.log(v === null ? "NULL" : JSON.stringify(v));
-' 2>&1)
-    assert_eq "FO-3 resolveSkipConditionsFromComplexity fails open to no-auto-skip on a broken table" "NULL" "$got"
 }
 
 # Seed a LEGACY-shaped record (level/signals but no `levels` map) via a raw
@@ -172,34 +158,16 @@ d2099_backcompat_mode_fail_open() {
     assert_contains "FO-23 control: the unbroken tree emits levels= for the same session" "levels=" "$out"
 }
 
-# The bash wrapper normalizes every --advance-path failure to exit 3, and owns
-# its own --signals presence detection (detail.md R3-C4).
-d2099_wrapper_contract() {
-    local sid rc out
-    sid=$(new_session wrapper)
-
-    rc=0; out=$(AGENTS_MAIN_ROOT="$D2099_ISO" run_with_timeout bash "$D2099_ISO/bin/workflow/record-complexity-and-skip" \
-        --session "$sid" --signals "S3-security" --target outline --advance 2>&1) || rc=$?
-    assert_eq "FO-13 the --advance path normalizes a broken-table failure to exit 3" "3" "$rc"
-
-    local sid2
-    sid2=$(new_session wrapper2)
-    rc=0; out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid2" --target outline 2>&1) || rc=$?
-    assert_eq "FO-14 omitting --signals is a wrapper usage error (exit 2)" "2" "$rc"
-
-    rc=0; out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid2" --verdict high --signals "" --target outline 2>&1) || rc=$?
-    assert_eq "FO-15 --verdict is rejected by the wrapper too (exit 2)" "2" "$rc"
-
-    # `--signals ""` is a legitimate value and must reach the delegate as one,
-    # producing the auto-skip branch (0-signal low).
-    rc=0; out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid2" --signals "" --target outline 2>/dev/null) || rc=$?
-    assert_eq "FO-16 --signals \"\" forwards as zero signals and resolves the auto branch" "auto" "$out"
-    assert_eq "FO-17 ... on a clean exit" "0" "$rc"
-
-    local sid3
-    sid3=$(new_session wrapper3)
-    rc=0; out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid3" --signals "S2-architecture" --target outline 2>/dev/null) || rc=$?
-    assert_eq "FO-18 a signal-bearing evaluation still needs human judgment" "judgment" "$out"
+# FO-16..: `--signals ""` is a legitimate zero-signal evaluation for the record
+# CLI. #2460 retired the zero-signal auto-skip, so recording it skips no step.
+d2099_zero_signal_record() {
+    local sid rc
+    sid=$(new_session zerosig)
+    rc=0; run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "" >/dev/null 2>&1 || rc=$?
+    assert_eq "FO-16 --signals \"\" records a zero-signal evaluation on a clean exit" "0" "$rc"
+    assert_eq "FO-17 ... having recorded the evaluation and skipped no step" \
+        "ce=1 outline=pending detail=pending skip=0" \
+        "$(d2099_side_effects "$sid" | cut -d' ' -f1) $(d2099_no_skip_view "$sid")"
 }
 
 case_begin "isolation-barrel-load-and-derive-fail-open" "hooks/workflow-state.js"
@@ -211,6 +179,6 @@ case_end
 case_begin "backcompat-mode-fail-open" "bin/workflow/read-complexity-evaluation"
 d2099_backcompat_mode_fail_open
 case_end
-case_begin "wrapper-contract-signals-and-exit-codes" "bin/workflow/record-complexity-and-skip"
-d2099_wrapper_contract
+case_begin "zero-signal-record-skips-no-step" "bin/workflow/record-complexity-evaluation"
+d2099_zero_signal_record
 case_end

@@ -11,6 +11,8 @@ JEV_REPORT_LIB_LOADED=1
 REPORT="$REPO_N/bin/jev-report"
 
 fx_new report
+# The seven ids a v1 record was written under; the legacy section reads them from the records.
+V1_SIGNAL_CSV="S1-multi-file,S1b-wide-change,S2-architecture,S3-security,S4-installer,S5-breaking,S6-long-plan"
 FIX_LOG="$FX/fixture/jev-decisions.log"
 mkdir -p "$FX/fixture"
 # Six complexity-judge records (R1,R2 in .1; R3-R6 + other-point + a broken line in the base).
@@ -43,7 +45,7 @@ run_with_timeout 30 node -e '
   const other = rec(7, { stage: "outline", jl: 1, ll: 1, cost: 0.5, agr: true, abs: bySig({}), top: { point: "other-point" } });
   fs.writeFileSync(process.argv[1] + ".1", R.slice(0, 2).join("\n") + "\n");
   fs.writeFileSync(process.argv[1], R.slice(2).join("\n") + "\n{not json at all\n" + other + "\n");
-' "$(np "$FIX_LOG")" "$SIGNAL_CSV" 2>/dev/null
+' "$(np "$FIX_LOG")" "$V1_SIGNAL_CSV" 2>/dev/null
 
 # report <out-file> [args...]: run jev-report; sets REP_RC, stderr in $FX/io/report.err.
 report() {
@@ -63,3 +65,18 @@ tx() {
     process.stdout.write(String(eval(process.argv[2])));
   ' "$(np "$T")" "$1" 2>/dev/null
 }
+
+# v1 / v2 fixtures (stage 6): report-fx.js holds the builders (D, S, V1) and documents the
+# pinned --json contract the stage-6 fragments read.
+RFX="$(np "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2460-jev-report-accuracy/report-fx.js")"
+# fx_log <name> <js-expr>: write $FX/fixture/<name>.log; FXL is its path, FXL_N the line count.
+fx_log() {
+  FXL="$(np "$FX/fixture/$1.log")"
+  FXL_N="$(run_with_timeout 30 node "$RFX" build "$FXL" "$2" 2>> "$FX/io/fx.err")"
+}
+# rep_json <name> / rep_text <name>: report over $FXL with --no-sweep; RJ / T is the output.
+rep_json() { RJ="$FX/io/$1.json"; report "$RJ" --log "$FXL" --json --no-sweep; }
+rep_text() { T="$FX/io/$1.txt"; report "$T" --log "$FXL" --no-sweep; }
+# rjq <expr>: evaluate <expr> over $RJ with A(pt) AO() R(pt) C(pt,t) K(pt,t,key) L(pt) f4(x).
+# (Not rq: the jev-shadow _lib's rq <tool_use_id> <expr> is used by the older fragments.)
+rjq() { run_with_timeout 30 node "$RFX" q "$(np "$RJ")" "$1" 2>/dev/null; }

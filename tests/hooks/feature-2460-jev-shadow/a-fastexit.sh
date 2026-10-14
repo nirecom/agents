@@ -90,6 +90,14 @@ run_hook pre "$FX/io/pre.json" JEV=__unset__
 check "control: JEV=on in the global .env (not exported) reaches Jev" "1" "$(mock_count systemone)"
 case_end
 
+echo "=== the registry as shipped: complexity-judge is production, so the hook pair observes nothing ==="
+# Every row above runs on the registry rolled back to shadow; this one runs the shipped data.
+case_begin "a-shipped-registry-hook-pair-is-noop" "hooks/jev-shadow-pre.js"
+check "the shipped registry has no shadow point (non-vacuity for the no-op below)" "production|0" \
+  "$(run_with_timeout 30 node -e 'const R = require(process.argv[1]); process.stdout.write(R.registryEntry("complexity-judge").mode + "|" + Object.values(R.REGISTRY).filter((e) => e.mode === "shadow").length);' "$REGISTRY_JS" 2>&1)"
+HOOK_REGISTRY=shipped fast_exit_case shipped-registry hooks/jev-shadow-pre.js -- JEV=on
+case_end
+
 skip_effect() { if [[ "$1" == pre ]]; then echo "shadow query skipped"; else echo "decision record not written"; fi; }
 stderr_lines() { wc -l < "$ERR" | tr -d ' '; }
 side_effects() { echo "$(mock_total)|$(pending_count)|$([[ -e "$LOG" ]] && echo log || echo nolog)"; }

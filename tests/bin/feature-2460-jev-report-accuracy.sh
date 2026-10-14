@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/lib/jev-report-aggregate.js, bin/jev-report
-# Tags: TL2, bin, jev, report, aggregation, json-output, latency-percentiles, low-confidence-rate, unreadable-generations, scope:issue-specific, pwsh-not-required, low-confidence-rate-n, null-ratio, fallback-rate, terminal-sanitisation, undecidable, low-confidence-reference, timestamp-sanitiser, dedupe, merge-sides, agreement, s1b-without-s1, prototype-pollution, mock-server, cli-args, usage-error
+# Tags: TL2, bin, jev, report, aggregation, json-output, latency-percentiles, low-confidence-rate, unreadable-generations, scope:issue-specific, pwsh-not-required, low-confidence-rate-n, null-ratio, fallback-rate, terminal-sanitisation, undecidable, low-confidence-reference, timestamp-sanitiser, dedupe, merge-sides, agreement, s1b-without-s1, prototype-pollution, mock-server, cli-args, usage-error, adoption, retune, legacy, version-routing, dedupe-ticket, superseded
 
 # The report's figures must describe only what they claim: latency over completed calls
 # (Jev ok / low-confidence / unmappable, LLM ok / parse-fallback), the low-confidence rate
@@ -39,11 +39,23 @@ case_end
 case_begin "report-f-dedupe-merge" "bin/lib/jev-report-aggregate.js"
 . "$SUITE_DIR/f-dedupe-merge.sh"
 case_end
-case_begin "report-g-s1b-without-s1" "bin/lib/jev-report-aggregate.js"
-. "$SUITE_DIR/g-s1b-without-s1.sh"
-case_end
 case_begin "report-h-arg-errors" "bin/jev-report"
 . "$SUITE_DIR/h-arg-errors.sh"
+case_end
+case_begin "report-i-adoption" "bin/lib/jev-report-aggregate.js"
+. "$SUITE_DIR/i-adoption.sh"
+case_end
+case_begin "report-j-retune" "bin/lib/jev-report-aggregate.js"
+. "$SUITE_DIR/j-retune.sh"
+case_end
+case_begin "report-k-legacy" "bin/lib/jev-report-aggregate.js"
+. "$SUITE_DIR/k-legacy.sh"
+case_end
+case_begin "report-l-dedupe" "bin/lib/jev-report-aggregate.js"
+. "$SUITE_DIR/l-dedupe.sh"
+case_end
+case_begin "report-m-superseded" "bin/lib/jev-report-aggregate.js"
+. "$SUITE_DIR/m-superseded.sh"
 case_end
 
 finish

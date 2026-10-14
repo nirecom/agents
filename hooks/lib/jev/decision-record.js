@@ -1,17 +1,19 @@
 "use strict";
-// hooks/lib/jev/decision-record.js — the v1 decision record and the agreement rule.
+// hooks/lib/jev/decision-record.js — the v2 decision record and the agreement rule.
 // A record holds only normalised values: parser CSVs, enums, numbers, the sanitised
 // model name, and the size/hash of the request (never the prompt or plan artifacts).
 // Agreement is compared only when both sides are ok and neither answered S0-undecidable
-// (not a usable answer), after closeImplications on both; a side listing S1b without S1
-// is a rubric violation and scores as disagreement (agreeSets owns the rule).
+// (not a usable answer), as a plain set comparison (agreeSets owns the rule).
 
+const fs = require("fs");
 const path = require("path");
 const { SIGNAL_IDS, UNDECIDABLE_SIGNAL } = require("../../workflow-state/complexity-routing");
-const { appendJsonlRotating, resolveLogDir } = require("../jsonl-rotating-log");
+const { appendJsonlRotating, resolveLogDir, withLock, DEFAULT_MAX_ROTATED } = require("../jsonl-rotating-log");
 const { MODEL_RE, OUTAGE_STATUSES } = require("./provider-core");
 
-const RECORD_VERSION = 1;
+const DECISION_RECORD_VERSION = 2;
+// decision: one judgment; settle: a later CLI-path outcome (superseded) of the same ticket.
+const RECORD_TYPES = Object.freeze(["decision", "settle"]);
 const LOG_NAME = "jev-decisions.log";
 const EXECUTOR = "complexity-judge";
 
@@ -19,36 +21,16 @@ function decisionLogPath(opts = {}) {
   return opts.logPath || path.join(resolveLogDir({}), LOG_NAME);
 }
 
-const S1_SIGNAL = "S1-multi-file";
-const S1B_SIGNAL = "S1b-wide-change";
-
-// The rubric's S1b => S1 implication, applied to both sides for comparison only.
-function closeImplications(set) {
-  const out = new Set(set);
-  if (out.has(S1B_SIGNAL)) out.add(S1_SIGNAL);
-  return out;
-}
-
-// A raw (pre-closure) answer listing S1b without S1 breaks the rubric's S1b => S1 rule.
-function violatesS1Implication(set) {
-  return set.has(S1B_SIGNAL) && !set.has(S1_SIGNAL);
-}
-
 function csvToSet(csv) {
   if (typeof csv !== "string" || csv.trim() === "") return new Set();
   return new Set(csv.split(",").map((s) => s.trim()).filter(Boolean));
 }
 
-// The agreement rule over two raw signal sets (S0-undecidable is the caller's concern):
-// closure on both, except that a side violating S1b => S1 never agrees on S1 or overall.
-function agreeSets(rawA, rawB) {
-  const a = closeImplications(rawA);
-  const b = closeImplications(rawB);
-  const violated = violatesS1Implication(rawA) || violatesS1Implication(rawB);
+// The agreement rule over two signal sets (S0-undecidable is the caller's concern).
+function agreeSets(a, b) {
   const bySignal = {};
   for (const id of SIGNAL_IDS) bySignal[id] = a.has(id) === b.has(id);
-  if (violated) bySignal[S1_SIGNAL] = false;
-  const same = !violated && a.size === b.size && [...a].every((x) => b.has(x));
+  const same = a.size === b.size && [...a].every((x) => b.has(x));
   return { agreement: same, agreement_by_signal: bySignal };
 }
 
@@ -178,10 +160,37 @@ function observedPending(hand, stageForStep) {
   };
 }
 
-// pending: the pre hook's hand-off (null when the post arrived without one).
-// llm: {status, answer, executor_model, latency_ms}.
-function buildRecord({ point, sessionId, toolUseId, pending, step, stage, llm, now }) {
+// The entry the record copies threshold / short_circuit_answer from: the caller's (frozen at
+// judgment time), else the registry's current entry for the point.
+function entryFor(point, entry) {
+  if (isObj(entry)) return entry;
+  try {
+    return require("./registry").registryEntry(point);
+  } catch (_e) {
+    return null;
+  }
+}
+
+// The hook-path input (size, hash, sources) widened to the v2 input; section bookkeeping
+// that only the CLI path fills (required, missing, exempt, sources_failed*) is empty here.
+function v2Input(input) {
+  const base = isObj(input) ? input : emptyInput();
+  return Object.assign({}, base, {
+    sections: Array.isArray(base.sections) ? base.sections : (Array.isArray(base.sources) ? base.sources.slice() : []),
+    required: Array.isArray(base.required) ? base.required : [],
+    missing: Array.isArray(base.missing) ? base.missing : [],
+    exempt: Array.isArray(base.exempt) ? base.exempt : [],
+    sources_failed: Array.isArray(base.sources_failed) ? base.sources_failed : [],
+    sources_failed_reasons: isObj(base.sources_failed_reasons) ? base.sources_failed_reasons : {},
+  });
+}
+
+// The hook-path decision record. pending: the pre hook's hand-off (null when the post
+// arrived without one). llm: {status, answer, executor_model, latency_ms}. mode / adopted:
+// the values frozen at judgment time (the hand's), never re-read from the registry.
+function buildRecord({ point, sessionId, toolUseId, pending, step, stage, llm, now, mode, adopted, entry, llmAnswerReceived, ticket }) {
   const p = pending || {};
+  const e = entryFor(point, entry);
   const jev = p.jev && typeof p.jev === "object" ? p.jev : notRunJev();
   const llmSide = {
     status: llm.status,
@@ -191,19 +200,30 @@ function buildRecord({ point, sessionId, toolUseId, pending, step, stage, llm, n
     latency_ms: llm.latency_ms === undefined ? null : llm.latency_ms,
   };
   const cmp = compare(jev, llmSide);
+  const t = e && isObj(e.confidence_threshold_by_answer) ? e.confidence_threshold_by_answer : null;
   return {
-    v: RECORD_VERSION,
+    version: DECISION_RECORD_VERSION,
+    record_type: "decision",
     ts: new Date(now || Date.now()).toISOString(),
     point,
-    mode: "shadow",
-    adopted: "llm",
+    mode: typeof mode === "string" ? mode : (e && e.mode) || null,
+    adopted: adopted === undefined ? null : adopted,
+    threshold: t ? { true: t.true, false: t.false } : null,
+    short_circuit_answer: e && Object.prototype.hasOwnProperty.call(e, "short_circuit_answer") ? e.short_circuit_answer : null,
+    short_circuited: false,
+    unjudged_keys: [],
     session_id: sessionId,
     step: p.jev ? (p.step === undefined ? null : p.step) : (step === undefined ? null : step),
     stage: p.jev ? p.stage || "unknown" : stage || "unknown",
-    tool_use_id: toolUseId,
-    input: p.input && typeof p.input === "object" ? p.input : emptyInput(),
+    ticket: typeof ticket === "string" ? ticket : null,
+    tool_use_id: toolUseId === undefined ? null : toolUseId,
+    input: v2Input(p.input),
+    deterministic: null,
     jev,
+    llm_needed: true,
+    llm_answer_received: typeof llmAnswerReceived === "boolean" ? llmAnswerReceived : llmSide.status !== "missing",
     llm: llmSide,
+    final: null,
     agreement: cmp.agreement,
     agreement_by_signal: cmp.agreement_by_signal,
     fallback_reason: jev.status === "ok" ? null : jev.status,
@@ -215,8 +235,44 @@ function appendDecision(record, opts = {}) {
   return appendJsonlRotating(decisionLogPath(opts), record);
 }
 
+// True when the log (or a rotated generation) already holds a parsed v2 line of this
+// (ticket, record_type). Lines are parsed, never substring-matched.
+function hasRecord(logPath, ticket, recordType) {
+  const files = [logPath];
+  for (let i = 1; i <= DEFAULT_MAX_ROTATED; i++) files.push(`${logPath}.${i}`);
+  for (const f of files) {
+    let text;
+    try { text = fs.readFileSync(f, "utf8"); } catch (_e) { continue; }
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue;
+      let o;
+      try { o = JSON.parse(line); } catch (_e) { continue; }
+      if (isObj(o) && o.version === DECISION_RECORD_VERSION && o.ticket === ticket && o.record_type === recordType) return true;
+    }
+  }
+  return false;
+}
+
+// appendDecisionOnce(record, opts) -> {ok, deduped, error}: at most one line per
+// (ticket, record_type); a record without a string ticket is always appended. The check and
+// the append run under one lock so two finalizers of the same ticket cannot both append.
+function appendDecisionOnce(record, opts = {}) {
+  const logPath = decisionLogPath(opts);
+  const ticket = isObj(record) ? record.ticket : null;
+  if (typeof ticket !== "string") return Object.assign({ deduped: false }, appendDecision(record, opts));
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    return withLock(logPath + ".once.lock", {}, () => {
+      if (hasRecord(logPath, ticket, record.record_type)) return { ok: true, deduped: true, error: null };
+      return Object.assign({ deduped: false }, appendDecision(record, opts));
+    });
+  } catch (e) {
+    return { ok: false, deduped: false, error: (e && e.code) || "error" };
+  }
+}
+
 module.exports = {
-  RECORD_VERSION, LOG_NAME, EXECUTOR,
-  decisionLogPath, closeImplications, violatesS1Implication, agreeSets, csvToSet, compare, boundedLatency,
-  observedLlm, observedJev, observedInput, observedPending, buildRecord, appendDecision,
+  DECISION_RECORD_VERSION, RECORD_TYPES, LOG_NAME, EXECUTOR,
+  decisionLogPath, agreeSets, csvToSet, compare, boundedLatency,
+  observedLlm, observedJev, observedInput, observedPending, buildRecord, appendDecision, appendDecisionOnce,
 };

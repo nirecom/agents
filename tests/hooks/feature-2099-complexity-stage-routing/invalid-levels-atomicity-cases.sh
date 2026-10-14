@@ -30,7 +30,7 @@ d2099il_seed_raw() {
     local sid shape
     sid=$(new_session "il-$1")
     shape=$(d2099il_bad_levels_json "$1")
-    d2099_inject_raw_event "$sid" "{\"level\":\"high\",\"signals\":[\"S1-multi-file\"],\"levels\":$shape}" >/dev/null
+    d2099_inject_raw_event "$sid" "{\"level\":\"high\",\"signals\":[\"S1b-wide-change\"],\"levels\":$shape}" >/dev/null
     echo "$sid"
 }
 
@@ -79,7 +79,7 @@ d2099il_stage_read_is_rederived() {
         out="$out"$'\n'
     done
     # Every malformed row must equal the `good` row, which is what the recorded
-    # signal set (S1-multi-file) derives on its own.
+    # signal set (S1b-wide-change) derives on its own.
     assert_block "IL-2 a malformed levels map is re-derived in full from the recorded signals" \
         "$(printf '%s' "$out")" <<'EOF'
 bad-value -> detail=level=low write_tests=level=low write_code=level=high
@@ -92,7 +92,7 @@ EOF
     # Teeth for IL-2: the re-derivation is the SAME answer the stateless CLI
     # gives for those signals — not a constant the reader happens to emit.
     assert_eq "IL-3 ... and that re-derivation matches the stateless derive CLI for the same signals" \
-        "$(run_with_timeout node "$BIN_DERIVE" --stage write_code --signals "S1-multi-file" 2>/dev/null | head -1)" \
+        "$(run_with_timeout node "$BIN_DERIVE" --stage write_code --signals "S1b-wide-change" 2>/dev/null | head -1)" \
         "$(run_with_timeout node "$BIN_READ" --session "$(d2099il_seed_raw bad-value)" --stage write_code 2>/dev/null | head -1)"
 
     # And the `partial` row above only has teeth because its stored detail value
@@ -109,7 +109,7 @@ d2099il_aggregate_read_completes_levels() {
     sid=$(d2099il_seed_raw bad-value)
     got=$(run_with_timeout node "$BIN_READ" --session "$sid" 2>/dev/null | tr '\n' ';')
     assert_eq "IL-5 back-compat mode emits the re-derived levels= map" \
-        "level=high;signals=S1-multi-file;levels={\"outline\":\"low\",\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" "$got"
+        "level=high;signals=S1b-wide-change;levels={\"outline\":\"low\",\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" "$got"
     assert_not_contains "IL-6 ... and no out-of-vocabulary value leaks onto stdout" "medium" "$got"
     assert_eq "IL-6a ... and the completed read is still exit 0" \
         "0" "$(run_with_timeout node "$BIN_READ" --session "$sid" >/dev/null 2>&1; echo $?)"
@@ -185,9 +185,9 @@ d2099il_migration_emits_only_wellformed_levels() {
     for label in opus sonnet unknown low; do
         case "$label" in
             opus) ce='{"verdict":"opus","signals":[],"recorded_at":"2026-01-01T00:00:00.000Z"}' ;;
-            sonnet) ce='{"verdict":"sonnet","signals":["S1-multi-file"],"recorded_at":"2026-01-01T00:00:00.000Z"}' ;;
+            sonnet) ce='{"verdict":"sonnet","signals":["S1b-wide-change"],"recorded_at":"2026-01-01T00:00:00.000Z"}' ;;
             unknown) ce='{"verdict":"haiku","signals":[],"recorded_at":"2026-01-01T00:00:00.000Z"}' ;;
-            low) ce='{"level":"low","signals":["S1-multi-file"],"recorded_at":"2026-01-01T00:00:00.000Z"}' ;;
+            low) ce='{"level":"low","signals":["S1b-wide-change"],"recorded_at":"2026-01-01T00:00:00.000Z"}' ;;
         esac
         sid=$(d2099il_write_v1 "$label" "$ce")
         out="$out$label -> $(d2099il_migrated_shape "$sid")"$'\n'

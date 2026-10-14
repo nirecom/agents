@@ -31,8 +31,14 @@ LOADENV_JS="$REPO_N/hooks/lib/load-env.js"
 PARSER="$REPO_N/bin/workflow/normalize-judge-signals"
 SENTINEL_KEY="jev-test-sentinel-key-2460"
 ERRBODY_SENTINEL="JEV-ERRBODY-SENTINEL-2460"
-SIGNAL_CSV="S1-multi-file,S1b-wide-change,S2-architecture,S3-security,S4-installer,S5-breaking,S6-long-plan"
+SIGNAL_CSV="S2-architecture,S3-security,S5-breaking"
 LOCAL_ENV_NAME=".env"".local"
+# The shipped registry is production for every point, so the hook pair observes nothing.
+# ROLLBACK_NODE_OPT loads it with complexity-judge rolled back to shadow (the data-only
+# rollback); run_hook applies it unless HOOK_REGISTRY=shipped, use_rollback_registry
+# applies it to every node child of the calling fragment.
+ROLLBACK_NODE_OPT="--require=$(np "$LIBDIR/rollback-registry-preload.js")"
+use_rollback_registry() { export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }$ROLLBACK_NODE_OPT"; }
 
 TMPROOT="$(make_tmp)"
 MOCK_PID=""
@@ -101,7 +107,8 @@ sink_total() { hq mock-q "$(np "$MOCK_SINK_REQ")" "reqs.length"; }
 mkpayload() { local f="$1"; shift; run_with_timeout 30 node "$HELPERS" payload "$(np "$f")" "$@"; }
 
 # run_hook <pre|post> <payload> [VAR=value ...]: VAR=__unset__ drops a default.
-# Defaults: JEV=on, the sentinel key, JEV_BASE_URL=$MOCK_URL. Sets HOOK_RC, $OUT, $ERR.
+# Defaults: JEV=on, the sentinel key, JEV_BASE_URL=$MOCK_URL, the rolled-back registry
+# (HOOK_REGISTRY=shipped runs the hook on the registry as shipped). Sets HOOK_RC, $OUT, $ERR.
 # HOOK_STDIN=wronly opens fd 0 write-only on <payload>, so the hook's stdin read fails.
 run_hook() {
   local kind="$1" payload="$2" script kv name dropped=" "
@@ -109,12 +116,20 @@ run_hook() {
   if [ "$kind" = pre ]; then script="$PRE_HOOK"; else script="$POST_HOOK"; fi
   # Later assignments win in env(1); __unset__ names are filtered out entirely.
   local -a all=("JEV=on" "TYPESAFE_API_KEY=$SENTINEL_KEY" "JEV_BASE_URL=${MOCK_URL:-http://127.0.0.1:1}" "$@") sets=()
+  local node_opts="${NODE_OPTIONS:-}"
   for kv in "$@"; do [ "${kv#*=}" = "__unset__" ] && dropped="$dropped${kv%%=*} "; done
   for kv in "${all[@]}"; do
     name="${kv%%=*}"
     case "$dropped" in *" $name "*) continue ;; esac
+    if [ "$name" = NODE_OPTIONS ]; then node_opts="${kv#*=}"; continue; fi
     sets+=("$kv")
   done
+  if [ "${HOOK_REGISTRY:-rollback}" = shipped ]; then
+    node_opts="${node_opts//$ROLLBACK_NODE_OPT/}"
+  else
+    case " $node_opts " in *" $ROLLBACK_NODE_OPT "*) ;; *) node_opts="${node_opts:+$node_opts }$ROLLBACK_NODE_OPT" ;; esac
+  fi
+  sets+=("NODE_OPTIONS=$node_opts")
   (
     cd "$FX/cwd" || exit 97
     if [[ "${HOOK_STDIN:-}" == wronly ]]; then exec 0> "$payload"; else exec 0< "$payload"; fi

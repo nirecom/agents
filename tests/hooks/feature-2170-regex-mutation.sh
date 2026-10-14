@@ -30,7 +30,7 @@ assert_eq() {
 }
 
 # A real allow-SSOT entry, so remedy.js reaches its matched (argument-rendering) branch.
-ENTRY='bash "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip"'
+ENTRY='node "$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment"'
 
 judge() { # <module> <fragment> <predicate> <input>
     env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$MUT" "$1" "$2" "$3" "$4"
