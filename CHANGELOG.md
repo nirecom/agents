@@ -751,3 +751,7 @@ Changes: tests: add run-root isolation, command guard, spawn-record preload, and
 ### FEATURE: PR #2625 (2026-10-13)
 Background: feat(#2527): split deliverable type x PM type and make the release ph...
 Changes: Workflow release is now explicit steps (push branch, user verification, merge to main, cleanup, final report gate); `next-step` no longer stalls before `/worktree-end` when worktrees are enforced.;Merge approval is a single prompt, and it is only offered after the PR is confirmed open and mergeable (GitHub and GitLab).;`set-deliverable-type` replaces `set-workflow-type` for choosing planning-only (wf-meta) vs implementation (wf-code) sessions; existing session state migrates automatically.
+
+### FEATURE: PR #2653 (2026-10-14)
+Background: feat(#2460): make Jev the first judge for complexity and the outline/detail skip
+Changes: Task complexity and the outline/detail skip decision are judged by Jev first, with a subagent consulted only for the parts Jev is not confident about. Planning stages are no longer skipped automatically on zero signals; every skip is a judged decision.
