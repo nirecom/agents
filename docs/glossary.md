@@ -403,12 +403,6 @@ Terms for the assembled Codex review input (`docs/architecture/claude-code/super
 - **Definition**: The state of a test file that could not run because its runtime is missing from PATH or older than the registry's minimum version (exit 79 with a validated `unrunnable` marker), or because an explicitly named test path resolves to no regular file (`missing: test file`). It counts as neither pass, fail nor skip, and it keeps the `run_tests` step from completing until the runtime is installed or the user accepts the gap with the `RUN_TESTS_UNRUNNABLE_ACCEPTED` sentinel.
 - **Related**: [architecture/claude-code/test-result-contract.md](architecture/claude-code/test-result-contract.md)
 
-### baseline accept grant
-
-- **Full name**: Baseline accept grant (`baseline_accept`)
-- **Definition**: The user's run-bound permission, given with the `RUN_TESTS_BASELINE_ACCEPTED` sentinel, to complete a failing `run_tests` whose failures the baseline could not prove pre-existing (`undetermined`, or no recorded failing list). The grant itself completes nothing: `bin/run-tests-baseline` re-checks it against the run and records `completion_basis=baseline-user-accepted`, and the Final Report and PR body disclose it as unverified tests.
-- **Related**: [architecture/claude-code/test-result-contract.md](architecture/claude-code/test-result-contract.md)
-
 ### case-level result line
 
 - **Full name**: Case-level result line
