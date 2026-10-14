@@ -12,6 +12,8 @@ const {
   reconcileEffectiveState,
 } = require("../../../../hooks/workflow-state/effective-state");
 const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
+const { getClosesIssues } = require("../../../../hooks/workflow-state/session-facts");
+const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
 const { STEP_DESC, isTerminalStep } = require("./steps");
 const { resolveRepoDir } = require("./repo-dir");
 
@@ -67,8 +69,12 @@ function renderListWithState(sid) {
     if (!isSettledStatus(s)) { currentIdx = i; break; }
   }
 
-  const issues = state.closes_issues;
-  const issuesEmpty = !issues || !Array.isArray(issues) || issues.length === 0;
+  let issuesEmpty;
+  try {
+    issuesEmpty = getClosesIssues(sid, { plansDir: getWorkflowPlansDir() }).length === 0;
+  } catch (_) {
+    return renderListPlain();
+  }
 
   const lines = [];
   for (let i = 0; i < VALID_STEPS.length; i++) {

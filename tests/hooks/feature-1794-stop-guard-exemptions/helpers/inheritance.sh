@@ -78,7 +78,7 @@ seed_donor_and_inherit() {
     printf '{"type":"attachment","attachment":{"hookEvent":"SessionStart","exitCode":0,"stdout":"Current workflow session_id: %s"}}\n' \
         "$donor" > "$tmp/tr/$enc/$donor.jsonl"
     if [ "$mode" = "complete" ]; then printf '# fixture intent\n' > "$tmp/wf/$donor-intent.md"
-    else printf '# fixture intent\n' > "$tmp/wf/$heir-intent.md"; fi
+    else printf '# fixture intent\n\n## Issues\n- #1794\n' > "$tmp/wf/$heir-intent.md"; fi
     inh_node "$tmp" "
 const S = require('$STATEIO_NODE');
 const sid = '$donor';
@@ -93,16 +93,13 @@ if ('$mode' === 'complete') {
     inh_node "$tmp" --hook "$heir"
     [ "$mode" = "complete" ] && return 0
 
-    # closes_issues is a FACT ABOUT THE DONOR SESSION and is deliberately not
-    # inherited (hooks/session-start.js), while next-step refuses to advance past
-    # clarify_intent with an empty closes_issues — so the first SessionStart's
-    # next-step child stops at REASON=closes_issues-empty and persistResolutions
-    # never runs. Stamping the top-level field settles no step and appends no
-    # step_status event; the SECOND SessionStart below then reaches the evidence
-    # resolution for real. session-start skips state CREATION when the file
-    # already exists but ALWAYS calls buildWorkflowStatus, which spawns the real
-    # bin/workflow/next-step — so this is still the hook's own automatic run,
-    # with zero user action settling a step.
+    # closes_issues is not inherited, and next-step blocks clarify_intent on an empty
+    # set (REASON=closes_issues-empty), so the heir's intent.md above names #1794 —
+    # the source the gate reads since #2654. The state stamp below serves only the
+    # pre-#2654 reader (state.closes_issues); it settles no step and appends no
+    # step_status event, and is dead once the gate reads intent.md. The SECOND
+    # SessionStart (state exists, buildWorkflowStatus still spawns the real
+    # next-step) then reaches the evidence resolution with zero user action.
     inh_node "$tmp" "
 require('$STATEIO_NODE').updateTopLevel('$heir', (r) => { r.closes_issues = [1794]; });" || return 1
     inh_node "$tmp" --hook "$heir"

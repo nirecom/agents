@@ -28,7 +28,8 @@ check "G08a3. no plan_approvals fabricated for non-gated step" "no" "$(has_appro
 # no approval; G08c: once the intent is approved the same evidence auto-completes it.
 SID="g08b-$$"
 write_state "$SID" "$(gen_state '{"workflow_init":"complete"}')"
-touch "$PLANS_DIR/${SID}-intent.md"
+# #2654: the clarify_intent gate reads intent.md `## Issues`, so an empty file would block first.
+printf '## Issues\n- #1133\n' > "$PLANS_DIR/${SID}-intent.md"
 run_next_step --session "$SID" >/dev/null
 check_ne "G08b. unapproved intent.md evidence does not complete clarify_intent" "complete" "$(read_state_status "$SID" clarify_intent)"
 check "G08b2. no plan_approvals for clarify_intent" "no" "$(has_approval "$SID" clarify_intent)"

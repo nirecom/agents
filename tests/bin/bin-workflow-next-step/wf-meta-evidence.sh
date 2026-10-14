@@ -28,6 +28,7 @@ run_wf_meta_evidence_tests() {
   # ---- Case 26: WF-META mid-planning — clarify_intent pending ------------------
   ACTION=""; NEXT_SKILL=""
   write_state "case26" "$JSON_WF_META_MID"
+  write_intent_issues "case26" 721
   OUT="$(run_next_step --session "case26" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
   check "26: wf-meta mid ACTION=invoke" "invoke" "${ACTION:-}"
@@ -69,6 +70,8 @@ run_wf_meta_evidence_tests() {
     # Create intent.md so evidence-resolver returns true for clarify_intent
     # Since #2277/#2513 the artifact alone no longer completes clarify_intent: the auto-repair also
     # needs the user's approval record, so seed both (the fixture writes intent.md into the pinned plans dir).
+    # intent.md names an issue first: the closes_issues gate reads it (#2654) and the fixture keeps an existing file.
+    WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" write_intent_issues "case30" 1053
     WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" node "$NEXT_STEP_AGENTS_DIR/tests/lib/plan-approval-fixture.js" approve case30 clarify_intent >/dev/null 2>&1
     OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" run_next_step --session "case30" 2>/dev/null || true)"
     eval "$OUT" 2>/dev/null || true
@@ -86,17 +89,18 @@ run_wf_meta_evidence_tests() {
     PASS=$((PASS + 1))
   fi
 
-  # ---- Case 31: clarify_intent evidence — intent.md absent → next-step returns blocked/invoke clarify-intent ----
+  # ---- Case 31: clarify_intent evidence — intent.md absent → next-step blocks on closes_issues-empty ----
   if [ -f "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
     local PLANS_DIR_WT2
     PLANS_DIR_WT2="$(mktemp -d)"
-    ACTION=""; NEXT_SKILL=""
+    ACTION=""; NEXT_SKILL=""; REASON=""
     write_state "case31" "$JSON_WFINIT_COMPLETE"
-    # Do NOT create intent.md
+    # Do NOT create intent.md: the gate reads intent.md (#2654), so the state's recorded
+    # closes_issues no longer unblocks clarify_intent.
     OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_WT2" run_next_step --session "case31" 2>/dev/null || true)"
     eval "$OUT" 2>/dev/null || true
-    check "31: clarify_intent evidence absent → ACTION=invoke" "invoke" "${ACTION:-}"
-    check "31b: clarify_intent evidence absent → NEXT_SKILL=clarify-intent" "clarify-intent" "${NEXT_SKILL:-}"
+    check "31: clarify_intent evidence absent → ACTION=blocked" "blocked" "${ACTION:-}"
+    check_contains "31b: clarify_intent evidence absent → REASON closes_issues-empty" "closes_issues-empty" "${REASON:-}"
     rm -rf "$PLANS_DIR_WT2"
   else
     echo "SKIP: 31: clarify_intent evidence absent check (evidence-resolver.js not yet implemented)"

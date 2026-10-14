@@ -113,6 +113,7 @@ run_list_render_tests() {
 
   # ---- Case 19: idempotency -------------------------------------------------
   write_state "case19" "$JSON_WFINIT_COMPLETE"
+  write_intent_issues "case19" 1053
   local OUT1 OUT2
   OUT1="$(run_next_step --session "case19" 2>/dev/null || true)"
   OUT2="$(run_next_step --session "case19" 2>/dev/null || true)"

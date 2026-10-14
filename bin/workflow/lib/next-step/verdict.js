@@ -126,9 +126,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
-  // Precondition preserved ahead of the snapshot: clarify_intent requires
-  // closes_issues. Resolved against the RAW walk so evidence-based resolution of
-  // clarify_intent cannot skip past the check (pre-#1148 precedence).
+  // Precondition preserved ahead of the snapshot: clarify_intent requires a
+  // non-empty intent.md `## Issues`. Resolved against the RAW walk so evidence-based
+  // resolution of clarify_intent cannot skip past the check (pre-#1148 precedence).
   {
     let rawCurrent = null;
     for (const step of VALID_STEPS) {
@@ -138,9 +138,10 @@ function computeVerdict(rawSid, _didAutoRepair) {
       if (!isSettledStatus(status)) { rawCurrent = step; break; }
     }
     if (rawCurrent === "clarify_intent") {
-      const issues = state.closes_issues;
-      if (!issues || !Array.isArray(issues) || issues.length === 0) {
-        emit("blocked", "", "closes_issues is empty -- run /workflow-init to populate it.", "closes_issues-empty");
+      const { getClosesIssues } = require("../../../../hooks/workflow-state/session-facts");
+      const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
+      if (getClosesIssues(sid, { plansDir: getWorkflowPlansDir() }).length === 0) {
+        emit("blocked", "", "closes_issues is empty -- add issues to intent.md `## Issues`.", "closes_issues-empty");
         return;
       }
     }
