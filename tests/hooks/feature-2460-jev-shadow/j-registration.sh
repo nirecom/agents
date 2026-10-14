@@ -60,12 +60,15 @@ REG_OUT="$(run_with_timeout 30 node -e '
     if (!e) { process.stdout.write("NO-ENTRY"); process.exit(0); }
     const repo = process.argv[2];
     const exists = (p) => typeof p === "string" && fs.existsSync(path.isAbsolute(p) ? p : path.join(repo, p));
-    process.stdout.write([exists(e.adapter), exists(e.normalizer), e.confidence_threshold, e.mode,
-      e.sampling_rate, e.fallback, e.subagent_type].join("|"));
+    // #2460 stage 2: per-direction thresholds replace the single value; sampling_rate is retired.
+    // mode is shadow through stage 5 and production from stage 6, so only its enum is pinned here.
+    process.stdout.write([exists(e.adapter), exists(e.normalizer), JSON.stringify(e.confidence_threshold_by_answer),
+      ["production", "shadow"].includes(e.mode), e.fallback, e.subagent_type,
+      "confidence_threshold" in e, "sampling_rate" in e].join("|"));
   } catch (err) { process.stdout.write("THREW:" + (err.code || err.message)); }
 ' "$REGISTRY_JS" "$REPO_N" 2>/dev/null)"
-check "adapter/normalizer resolve to files; threshold, mode, sampling, fallback, subagent" \
-  "true|true|0.75|shadow|1|S0-undecidable|complexity-judge" "$REG_OUT"
+check "adapter/normalizer resolve to files; per-direction threshold, mode enum, fallback, subagent; retired keys gone" \
+  'true|true|{"true":0.7,"false":0.7}|true|S0-undecidable|complexity-judge|false|false' "$REG_OUT"
 case_end
 
 finish

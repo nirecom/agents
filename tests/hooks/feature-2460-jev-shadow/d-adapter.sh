@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/lib/jev-complexity-adapter.js, skills/_shared/judge-task-complexity.md
-# Tags: TL2, jev, adapter, complexity-judge, vocabulary-drift, stage-mapping, scope:issue-specific, pwsh-not-required, artifact-read-cap, multibyte-split, artifact-session-fallback, notes-session-id-priority, notes-session-binding, latest-entered-binding, parser-selected-line, output-sanitize, credential-redaction
+# Tags: TL2, jev, adapter, complexity-judge, vocabulary-drift, stage-mapping, scope:issue-specific, pwsh-not-required, artifact-read-cap, multibyte-split, artifact-session-fallback, notes-session-id-priority, notes-session-binding, latest-entered-binding, parser-selected-line, output-sanitize, credential-redaction, read-capped-bytes, over-cap
 
 # The adapter is the only place Jev's untrusted probabilities become a SIGNALS: line, and
 # that line always goes through the unmodified parser. Rows pin the probability mapping,
@@ -25,33 +25,45 @@ case_end
 
 echo "=== probabilities -> SIGNALS: line (status|parser output|shape) ==="
 case_begin "d-map-answers" "bin/workflow/lib/jev-complexity-adapter.js"
-check "p >= 0.5 ids are selected" "ok|S1-multi-file,S2-architecture|line" "$(row map-two-selected)"
-check "S1b alone stays S1b alone (no implication added)" "ok|S1b-wide-change|line" "$(row map-s1b-only-no-implication)"
+check "p >= 0.5 ids are selected" "ok|S2-architecture,S3-security|line" "$(row map-two-selected)"
+check "deterministic ids (S1b, S4) answered 0.95 are never read (status|parser output|probability ids|item keys)" \
+  "ok||$SIGNAL_CSV|s2_architecture,s3_security,s5_breaking" "$(row map-deterministic-ids-ignored)"
 check "all negative parses to empty" "ok||line" "$(row map-all-negative)"
 check "all negative is the literal SIGNALS: none line" "SIGNALS: none" "$(row map-all-negative-rawline)"
-check "confidence exactly at the threshold is ok" "ok|S1-multi-file|line" "$(row map-confidence-at-threshold)"
-check "p = 0.5 is selected when the threshold admits it" "ok|S1-multi-file|line" "$(row map-p-half-selected)"
-check "p = 0 and p = 1 are accepted as-is (status|parser output|p(S1)|p(S2)|minConfidence)" "ok|S1-multi-file|1|0|1" \
+check "p = 0.49 (just below 0.5) is not selected" "ok||line" "$(row map-p-just-below-half)"
+check "p = 0.5 is selected" "ok|S2-architecture|line" "$(row map-p-half-selected)"
+check "p = 0 and p = 1 are accepted as-is (status|parser output|p(S2)|p(S3))" "ok|S2-architecture|1|0" \
   "$(row map-p-endpoints)"
 case_end
+# The confidence gate is the two-stage broker's (per answer direction), never the adapter's:
+# mapAnswers reports ok / unmappable only and carries no threshold of its own.
+case_begin "d-map-no-confidence-verdict" "bin/workflow/lib/jev-complexity-adapter.js"
+check "p = 0.6 is mapped as-is: status ok, the id selected" "ok|S2-architecture|line" "$(row map-p-06-mapped-as-is)"
+check "p = 0.6 keeps probabilities and the per-key p; the result is exactly items, probabilities, status" \
+  "0.6|0.02|0.6|items,probabilities,status" "$(row map-p-06-keeps-probs)"
+case_end
+echo "=== an unusable answer leaves its key without a p (status|keys with p null|no line) ==="
 case_begin "d-map-fallbacks" "bin/workflow/lib/jev-complexity-adapter.js"
-check "one signal below the threshold is low-confidence -> S0" "low-confidence|S0-undecidable|line" "$(row map-low-confidence)"
-check "low-confidence keeps probabilities and min confidence" "0.6|0.02|0.6" "$(row map-low-confidence-keeps-probs)"
-check "a missing answer is unmappable -> S0" "unmappable|S0-undecidable|line" "$(row map-missing-answer)"
-check "a string probability is unmappable -> S0" "unmappable|S0-undecidable|line" "$(row map-non-numeric)"
-check "p > 1 is unmappable -> S0" "unmappable|S0-undecidable|line" "$(row map-out-of-range)"
-check "p < 0 is unmappable -> S0" "unmappable|S0-undecidable|line" "$(row map-negative)"
-check "p = -0.000001 (just below 0) is unmappable -> S0" "unmappable|S0-undecidable|line" "$(row map-just-below-zero)"
-check "p = 1.000001 (just above 1) is unmappable -> S0" "unmappable|S0-undecidable|line" "$(row map-just-above-one)"
+check "a missing answer is unmappable; only that key is held" "unmappable|s3_security|noline" "$(row map-missing-answer)"
+check "a string probability is unmappable" "unmappable|s2_architecture|noline" "$(row map-non-numeric)"
+check "p > 1 is unmappable" "unmappable|s2_architecture|noline" "$(row map-out-of-range)"
+check "p < 0 is unmappable" "unmappable|s2_architecture|noline" "$(row map-negative)"
+check "p = -0.000001 (just below 0) is unmappable" "unmappable|s2_architecture|noline" "$(row map-just-below-zero)"
+check "p = 1.000001 (just above 1) is unmappable" "unmappable|s2_architecture|noline" "$(row map-just-above-one)"
 case_end
 case_begin "d-map-injection" "bin/workflow/lib/jev-complexity-adapter.js"
-check "hostile extra answer keys: parser output in vocabulary, no hostile text, one line" "true|false|1" "$(row map-injection)"
+check "hostile extra answer keys: parser output in vocabulary, no hostile text in the line or the result, one line, only the asked keys" \
+  "true|false|1|true" "$(row map-injection)"
+check "toContractLine: SIGNAL_IDS order, none when empty, an id outside the vocabulary or a non-array gives none" \
+  "SIGNALS: S2-architecture, S5-breaking|SIGNALS: none|SIGNALS: none|SIGNALS: none" "$(row contract-line)"
 case_end
 
 echo "=== vocabulary drift guard ==="
 case_begin "d-questions-match-signal-ids" "bin/workflow/lib/jev-complexity-adapter.js"
-check "question keys are exactly SIGNAL_IDS lowercased with - -> _" \
-  "s1_multi_file,s1b_wide_change,s2_architecture,s3_security,s4_installer,s5_breaking,s6_long_plan" "$(row questions-keys)"
+check "question keys are exactly JUDGED_SIGNAL_IDS lowercased with - -> _" \
+  "s2_architecture,s3_security,s5_breaking" "$(row questions-keys)"
+check "keys() is JUDGED_SIGNAL_IDS in order, buildQuestions asks exactly keys(), no deterministic id is asked" \
+  "true|true|false" "$(row questions-keys-are-judged-only)"
 check "every question is a noul question with non-trivial instructions" "true" "$(row questions-shape)"
 check "instructions come from the rubric's ### <id> section" "true" "$(row questions-from-rubric)"
 case_end
@@ -283,7 +295,7 @@ case_end
 echo "=== LLM text extraction and status ==="
 case_begin "d-extract-llm-text" "bin/workflow/lib/jev-complexity-adapter.js"
 check "string tool_response is used as-is" "SIGNALS: S2-architecture" "$(row extract-string)"
-check "content[] keeps only text blocks" "SIGNALS: S1-multi-file" "$(row extract-content-text-only)"
+check "content[] keeps only text blocks" "SIGNALS: S3-security" "$(row extract-content-text-only)"
 check "multiple text blocks are joined; non-text dropped" "true|true|false" "$(row extract-content-multi-text)"
 check "tool_output is the first fallback" "OUT-A" "$(row extract-tool-output)"
 check "tool_output_text is the second fallback" "OUT-B" "$(row extract-tool-output-text)"
@@ -313,8 +325,45 @@ case_begin "d-real-payload-fixture" "bin/workflow/lib/jev-complexity-adapter.js"
 if [ ! -f "$LIBDIR/fixtures/agent-post-payload.json" ]; then
   skip "real Agent payload fixture absent (captured by TL3-hook-agent-jev-shadow.sh, detail plan S13)"
 else
-  check "the captured Agent PostToolUse payload extracts to S1-multi-file" "S1-multi-file" "$(row real-payload)"
+  check "the captured Agent PostToolUse payload extracts to S2-architecture" "S2-architecture" "$(row real-payload)"
 fi
+case_end
+
+echo "=== readCappedBytes reports the read cap boundary (jev-request-common) ==="
+case_begin "d-read-capped-bytes-boundaries" "bin/workflow/lib/jev-complexity-adapter.js"
+RCB_JS="$TMPROOT/read-capped-bytes.js"
+cat > "$RCB_JS" <<'JS'
+// Files of 15/16/17 bytes against a 16-byte cap; then readCapped's unchanged string contract.
+const fs = require("fs");
+const path = require("path");
+const [repo, dir] = process.argv.slice(2);
+const rel = "bin/workflow/lib/jev-request-common.js";
+let common;
+try { common = require(path.join(repo, rel)); } catch (_e) { process.stdout.write("MODULE_MISSING: " + rel); process.exit(0); }
+if (typeof common.readCappedBytes !== "function") { process.stdout.write("EXPORT_MISSING: readCappedBytes"); process.exit(0); }
+const full = Buffer.from("0123456789abcdefXYZ");
+const rows = [15, 16, 17].map((n) => {
+  const f = path.join(dir, "f" + n);
+  fs.writeFileSync(f, full.subarray(0, n));
+  const r = common.readCappedBytes(f, 16);
+  const prefix = Buffer.isBuffer(r.bytes) && r.bytes.equals(full.subarray(0, Math.min(n, 16)));
+  return [String(r.over_cap), Buffer.isBuffer(r.bytes) ? r.bytes.length : "not-buffer", r.size, prefix].join(":");
+});
+// readCapped: a UTF-8 character split by the cap is dropped; an under-cap file comes back whole.
+const split = path.join(dir, "split");
+fs.writeFileSync(split, Buffer.concat([Buffer.from("abcdefghijklmno"), Buffer.from("é", "utf8")]));
+const rc = typeof common.readCapped === "function"
+  ? [common.readCapped(split, 16), common.readCapped(path.join(dir, "f15"), 16)].join(",") : "no-readCapped";
+const adapter = require(path.join(repo, "bin/workflow/lib/jev-complexity-adapter.js"));
+process.stdout.write(["rows:" + rows.join(","), rc, common.MAX_ARTIFACT_READ_BYTES, adapter.MAX_ARTIFACT_READ_BYTES].join("|"));
+JS
+mkdir -p "$TMPROOT/rcb"
+RCB_OUT="$(run_with_timeout 30 node "$(np "$RCB_JS")" "$REPO_N" "$(np "$TMPROOT/rcb")" 2>/dev/null)"
+case "$RCB_OUT" in
+  MODULE_MISSING*|EXPORT_MISSING*) fail "readCappedBytes boundaries" "$RCB_OUT" ;;
+  *) check "at/under the cap: whole file, over_cap false; cap+1: cap bytes, full size, over_cap true; readCapped unchanged; cap 1 MiB in both modules" \
+       "rows:false:15:15:true,false:16:16:true,true:16:17:true|abcdefghijklmno,0123456789abcde|1048576|1048576" "$RCB_OUT" ;;
+esac
 case_end
 
 finish

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Tests: hooks/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/scripts/check-outline-skip.sh, skills/make-outline-plan/scripts/check-detail-skip.sh, settings.json, bin/workflow/lib/next-step/
+# Tests: hooks/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, settings.json, bin/workflow/lib/next-step/
 # Tags: L1, L2, workflow, speculative-skip, scope:issue-specific
-# #1392/#1352/#544/#1353 speculative-skip engine: pending outline/detail skip verdicts, skip-verifier confirm/veto, next-step write_tests gate.
+# #1392/#1352/#544/#1353 speculative-skip engine: pending outline/detail skip verdicts, confirm/veto via record-skip-verdict, next-step write_tests gate.
 # Dispatcher (static cases here, behavioral suites in feature-speculative-skip-complete/, SKIP when impl absent); state via io.readState() (#1733 contract: tests/hooks/feature-1733-state-event-stream/annotation-fold.sh).
 # L3 gap (what this test does NOT catch):
 # - Real orchestrator skip path (real claude -p session speculative-skipping outline/detail)
-# - skip-verifier agent actually launching in parallel and writing verdict to disk
+# - a real confirm/veto resolution of a pending verdict reaching disk mid-session
 # - write_tests gate blocking and unblocking across real workflow sessions
 # Closest-to-action mitigation: wiring gap checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
@@ -31,7 +31,6 @@ RECORD_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-skip-verdict"
 
 CI_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/clarify-intent/SKILL.md"
 MOP_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/SKILL.md"
-SKIP_VERIFIER="$SCRIPT_CHECKOUT_ROOT/agents/skip-verifier.md"
 SETTINGS="$SCRIPT_CHECKOUT_ROOT/settings.json"
 SETTINGS_N="$(cygpath -m "$SETTINGS" 2>/dev/null || echo "$SETTINGS")"
 
@@ -171,12 +170,12 @@ assert_eq "S-API. barrel exports recordSkipVerdict+readSkipVerdict+hasSpeculativ
 echo ""
 echo "=== STATIC cases (non-skippable) ==="
 
-# S1: clarify-intent CI-C1b calls record-complexity-and-skip; CI-C1c branches on SKIP_MODE (auto/judgment not manual)
-# Updated for #1413 refactor: inline node replaced by shared script; vocabulary (auto/judgment) preserved via SKIP_MODE.
-if [ -f "$CI_SKILL" ] && grep -qF "record-complexity-and-skip" "$CI_SKILL" && grep -qE "SKIP_MODE.*(auto|judgment)" "$CI_SKILL"; then
-  pass "S1. clarify-intent CI-C1b calls record-complexity-and-skip; CI-C1c branches on SKIP_MODE (auto/judgment)"
+# S1 (#2460): jev-judge finalize is the only skip writer, so clarify-intent no longer
+# calls record-complexity-and-skip (the A-4 pending verdict is co-written by the skip itself).
+if [ -f "$CI_SKILL" ] && ! grep -qF "record-complexity-and-skip" "$CI_SKILL"; then
+  pass "S1. clarify-intent no longer calls record-complexity-and-skip"
 else
-  fail "S1. clarify-intent CI-C1b missing record-complexity-and-skip or CI-C1c missing SKIP_MODE branching"
+  fail "S1. clarify-intent is missing or still calls record-complexity-and-skip"
 fi
 
 # S1b: clarify-intent CI-C1c must NOT contain old 'manual' form (C1 gap)
@@ -186,16 +185,14 @@ else
   pass "S1b. clarify-intent CI-C1c has no stale 'auto':'manual'"
 fi
 
-# S2: check-outline-skip.sh and check-detail-skip.sh each contain 'judgment' (≥1 each, C2 gap)
+# S2 (#2460): the check-outline-skip.sh / check-detail-skip.sh stubs are deleted with their
+# MOP-1d / MOP-C1 callers.
 MOP_OUTLINE_SKIP_S2="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-outline-skip.sh"
 MOP_DETAIL_SKIP_S2="$SCRIPT_CHECKOUT_ROOT/skills/make-outline-plan/scripts/check-detail-skip.sh"
-S2_OUTLINE_COUNT="$(grep -cF 'process.stdout.write(v ? "auto" : "judgment")' "$MOP_OUTLINE_SKIP_S2" 2>/dev/null || echo 0)"
-S2_DETAIL_COUNT="$(grep -cF 'process.stdout.write(v ? "auto" : "judgment")' "$MOP_DETAIL_SKIP_S2" 2>/dev/null || echo 0)"
-if [ -f "$MOP_OUTLINE_SKIP_S2" ] && [ -f "$MOP_DETAIL_SKIP_S2" ] \
-   && [ "$S2_OUTLINE_COUNT" -ge 1 ] && [ "$S2_DETAIL_COUNT" -ge 1 ]; then
-  pass "S2. check-outline-skip.sh and check-detail-skip.sh each contain 'auto':'judgment' (MOP-1d + MOP-C1)"
+if [ ! -e "$MOP_OUTLINE_SKIP_S2" ] && [ ! -e "$MOP_DETAIL_SKIP_S2" ]; then
+  pass "S2. check-outline-skip.sh and check-detail-skip.sh are deleted"
 else
-  fail "S2. scripts missing 'auto':'judgment': outline_count=${S2_OUTLINE_COUNT} detail_count=${S2_DETAIL_COUNT}"
+  fail "S2. a retired check-*-skip.sh stub still exists"
 fi
 
 # S3: make-outline-plan must NOT contain the old 'manual' form anywhere.
@@ -205,18 +202,20 @@ else
   pass "S3. make-outline-plan has no stale 'auto':'manual'"
 fi
 
-# S4: skip-verifier subagent exists
-if [ -f "$SKIP_VERIFIER" ]; then
-  pass "S4. agents/skip-verifier.md exists"
+# S4 (#2460): the post-hoc skip-verifier agent is retired; the A-4 pending verdict stays and
+# record-skip-verdict (S7) remains as its manual resolver.
+if [ ! -e "$SCRIPT_CHECKOUT_ROOT/agents/skip-verifier.md" ]; then
+  pass "S4. agents/skip-verifier.md is retired"
 else
-  fail "S4. agents/skip-verifier.md does NOT exist"
+  fail "S4. agents/skip-verifier.md still exists"
 fi
 
-# S4b: skip-verifier.md references record-skip-verdict CLI (C4 gap)
-if [ -f "$SKIP_VERIFIER" ] && grep -qF "record-skip-verdict" "$SKIP_VERIFIER"; then
-  pass "S4b. skip-verifier.md references record-skip-verdict"
+# S4b: its successor plan-skip-judge is a synchronous judge, never a verdict writer.
+PLAN_SKIP_JUDGE="$SCRIPT_CHECKOUT_ROOT/agents/plan-skip-judge.md"
+if [ -f "$PLAN_SKIP_JUDGE" ] && ! grep -qF "record-skip-verdict" "$PLAN_SKIP_JUDGE"; then
+  pass "S4b. plan-skip-judge exists and does not write skip verdicts"
 else
-  fail "S4b. skip-verifier.md does NOT reference record-skip-verdict (pre-impl: expected FAIL)"
+  fail "S4b. plan-skip-judge is missing or references record-skip-verdict"
 fi
 
 # S5: settings.json allow contains WORKFLOW_OUTLINE_NOT_NEEDED
@@ -258,18 +257,16 @@ else
   fail "S7. bin/workflow/record-skip-verdict does NOT exist"
 fi
 
-# S8: CI-C1c (clarify-intent) instructs parallel skip-verifier launch (C3 gap)
-if [ -f "$CI_SKILL" ] && grep -qF "skip-verifier" "$CI_SKILL"; then
-  pass "S8. clarify-intent CI-C1c wires skip-verifier parallel launch"
+# S8/S9 (#2460): no skill launches the retired skip-verifier any more.
+if [ -f "$CI_SKILL" ] && ! grep -qF "skip-verifier" "$CI_SKILL"; then
+  pass "S8. clarify-intent no longer launches skip-verifier"
 else
-  fail "S8. clarify-intent CI-C1c does NOT wire skip-verifier (pre-impl: expected FAIL)"
+  fail "S8. clarify-intent is missing or still names skip-verifier"
 fi
-
-# S9: MOP-C1 (make-outline-plan) instructs parallel skip-verifier launch (C3 gap)
-if [ -f "$MOP_SKILL" ] && grep -qF "skip-verifier" "$MOP_SKILL"; then
-  pass "S9. make-outline-plan MOP-C1 wires skip-verifier parallel launch"
+if [ -f "$MOP_SKILL" ] && ! grep -qF "skip-verifier" "$MOP_SKILL"; then
+  pass "S9. make-outline-plan no longer launches skip-verifier"
 else
-  fail "S9. make-outline-plan MOP-C1 does NOT wire skip-verifier (pre-impl: expected FAIL)"
+  fail "S9. make-outline-plan is missing or still names skip-verifier"
 fi
 
 # S10: A-5 detect-scope-change.sh exists (C5 gap)

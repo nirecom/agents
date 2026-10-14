@@ -22,6 +22,17 @@ check() {
   fi
 }
 
+check_absent() {
+  local desc="$1" pattern="$2" file="$3"
+  if [ ! -f "$file" ]; then
+    fail "$desc — file missing: $file"
+  elif grep -qF "$pattern" "$file"; then
+    fail "$desc — pattern still present: $pattern"
+  else
+    pass "$desc"
+  fi
+}
+
 check_re() {
   local desc="$1" pattern="$2" file="$3"
   if grep -qE "$pattern" "$file" 2>/dev/null; then
@@ -38,13 +49,14 @@ check_re() {
 JUDGE="$SCRIPT_CHECKOUT_ROOT/skills/_shared/judge-task-complexity.md"
 
 check "judge: file exists" "Shared rubric" "$JUDGE"
-check "judge: signal S1-multi-file" "S1-multi-file" "$JUDGE"
 check "judge: signal S1b-wide-change" "S1b-wide-change" "$JUDGE"
 check "judge: signal S2-architecture" "S2-architecture" "$JUDGE"
 check "judge: signal S3-security" "S3-security" "$JUDGE"
 check "judge: signal S4-installer" "S4-installer" "$JUDGE"
 check "judge: signal S5-breaking" "S5-breaking" "$JUDGE"
-check "judge: signal S6-long-plan" "S6-long-plan" "$JUDGE"
+# #2460 retired S1-multi-file and S6-long-plan from the rubric vocabulary.
+check_absent "judge: retired signal S1-multi-file is gone" "S1-multi-file" "$JUDGE"
+check_absent "judge: retired signal S6-long-plan is gone" "S6-long-plan" "$JUDGE"
 check "judge: output format is signals-only" "SIGNALS:" "$JUDGE"
 check "judge: the zero-signal answer is spelled none" "SIGNALS: none" "$JUDGE"
 check "judge: the undecidable signal is defined" "S0-undecidable" "$JUDGE"
@@ -58,9 +70,18 @@ MDP="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
 # Skip-condition prose lives in the script SKILL.md's "Skip Conditions" section delegates to.
 MDP_SKIP="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/scripts/skip-conditions.sh"
 
-check "make-detail-plan: judge-task-complexity invocation" "judge-task-complexity" "$MDP"
+# #2460 moved the judge dispatch into the shared procedure: each skill names its
+# own point/stage, the procedure dispatches, and the dispatched agent reads the rubric.
+JJ_PROC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/jev-two-stage-judge.md"
+JUDGE_AGENT="$SCRIPT_CHECKOUT_ROOT/agents/complexity-judge.md"
+
+check "shared procedure: dispatches the judge subagent" 'Dispatch `subagent_type: <SUBAGENT>`' "$JJ_PROC"
+check_re "complexity-judge agent: is the dispatched agent" '^name: complexity-judge$' "$JUDGE_AGENT"
+check "complexity-judge agent: reads the judge-task-complexity rubric" 'skills/_shared/judge-task-complexity.md' "$JUDGE_AGENT"
+
+check "make-detail-plan: judge-task-complexity invocation" 'follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`detail`' "$MDP"
 check "make-detail-plan: Model selected output" "Model selected:" "$MDP"
-check "make-detail-plan: model: param in Agent step" "model: <from MDP-3>" "$MDP"
+check "make-detail-plan: model: param in Agent step" "model: <model= from MDP-3>" "$MDP"
 check "make-detail-plan: skip judge in skip conditions" "skip judge-task-complexity" "$MDP_SKIP"
 
 # Steps MDP-1..MDP-6 present with no gap
@@ -83,7 +104,7 @@ check "make-detail-plan: Completion preserved" "## Completion" "$MDP"
 
 WT="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
 
-check "write-tests: judge-task-complexity invocation" "judge-task-complexity" "$WT"
+check "write-tests: judge-task-complexity invocation" 'follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`write-tests`' "$WT"
 check "write-tests: Model selected output" "Model selected:" "$WT"
 
 for label in "WT-6" "WT-7" "WT-8"; do

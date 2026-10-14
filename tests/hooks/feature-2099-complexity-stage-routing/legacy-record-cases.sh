@@ -58,23 +58,28 @@ const AT = "2026-06-20T09:02:00.000Z";
 // [tag, record, seeder]
 const ROWS = [
   ["L1-arch", { level: "high", signals: ["S2-architecture"], recorded_at: AT }, seedEvent],
-  ["L1-multifile", { level: "high", signals: ["S1-multi-file"], recorded_at: AT }, seedEvent],
+  ["L1-widechange", { level: "high", signals: ["S1b-wide-change"], recorded_at: AT }, seedEvent],
+  // Records persisted before #2460 may carry the retired S1-multi-file /
+  // S6-long-plan. Re-derivation treats them as unknown tokens (undecidable =>
+  // high at every stage); the persisted aggregate `level` passes through as-is.
+  ["L1-retired-multifile", { level: "high", signals: ["S1-multi-file"], recorded_at: AT }, seedEvent],
+  ["L1-retired-longplan", { level: "low", signals: ["S6-long-plan"], recorded_at: AT }, seedEvent],
   ["L2-high-empty", { level: "high", signals: [], recorded_at: AT }, seedEvent],
   ["L2-low-empty", { level: "low", signals: [], recorded_at: AT }, seedEvent],
-  ["L3-opus", { verdict: "opus", signals: ["S1-multi-file"], recorded_at: AT }, seedV1],
+  ["L3-opus", { verdict: "opus", signals: ["S1b-wide-change"], recorded_at: AT }, seedV1],
   ["L3-sonnet", { verdict: "sonnet", signals: [], recorded_at: AT }, seedV1],
   ["L3-unknown", { verdict: "gpt", signals: [], recorded_at: AT }, seedV1],
   // L-8: a v1 blob whose complexity_evaluation ALREADY carries a well-formed
   // per-stage `levels` map -- exercises the migrations/v1-to-v2.js `wellFormed`
   // branch specifically (L3-* above never set `levels` at all, so migration
   // always fell through to re-derivation for them). The derived value for this
-  // level+signals pair is low/low/high (see L1-multifile); storing the mirror
+  // level+signals pair is low/low/high (see L1-widechange); storing the mirror
   // opposite (high/low/low) proves the migration preserves the RECORDED map
   // verbatim instead of silently re-deriving and overwriting the routing
   // decision a session already made.
-  ["L8-wellformed", { level: "high", signals: ["S1-multi-file"], levels: { outline: "low", detail: "high", write_tests: "low", write_code: "low" }, recorded_at: AT }, seedV1],
-  ["BAD-partial", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low" }, recorded_at: AT }, seedEvent],
-  ["BAD-value", { level: "high", signals: ["S1-multi-file"], levels: { detail: "low", write_tests: "yes", write_code: "high" }, recorded_at: AT }, seedEvent],
+  ["L8-wellformed", { level: "high", signals: ["S1b-wide-change"], levels: { outline: "low", detail: "high", write_tests: "low", write_code: "low" }, recorded_at: AT }, seedV1],
+  ["BAD-partial", { level: "high", signals: ["S1b-wide-change"], levels: { detail: "low" }, recorded_at: AT }, seedEvent],
+  ["BAD-value", { level: "high", signals: ["S1b-wide-change"], levels: { detail: "low", write_tests: "yes", write_code: "high" }, recorded_at: AT }, seedEvent],
   ["STORED-wins", { level: "low", signals: [], levels: { outline: "high", detail: "high", write_tests: "high", write_code: "high" }, recorded_at: AT }, seedEvent],
   // A persisted record whose signals array holds NON-STRING elements. The read
   // contract accepts any array, so this must not throw: every non-string
@@ -99,9 +104,11 @@ console.log(out.join("\n"));
 JS
 )
     assert_block "L-1 every legacy complexity_evaluation shape resolves per the compatibility table" "$got" <<'EOF'
-projected=12/13
+projected=14/15
 L1-arch=high:high/high/high
-L1-multifile=high:low/low/high
+L1-widechange=high:low/low/high
+L1-retired-multifile=high:high/high/high
+L1-retired-longplan=low:high/high/high
 L2-high-empty=high:high/high/high
 L2-low-empty=low:low/low/low
 L3-opus=high:low/low/high
@@ -130,7 +137,7 @@ const sid = "s2099-lgstage-" + process.pid;
 const s = b.createInitialState(sid);
 s.events = (s.events || []).concat([{
   kind: "complexity_evaluation", provenance: "observed", origin: "test-legacy",
-  level: "high", signals: ["S1-multi-file"], recorded_at: "2026-06-20T09:02:00.000Z",
+  level: "high", signals: ["S1b-wide-change"], recorded_at: "2026-06-20T09:02:00.000Z",
 }]);
 s.events.forEach(function (e, i) { e.seq = i + 1; });
 const p = b.getStatePath(sid);
@@ -173,7 +180,7 @@ fs.writeFileSync(p, JSON.stringify({
   steps: { workflow_init: { status: "complete", updated_at: "2026-06-20T09:01:00.000Z" } },
   complexity_evaluation: {
     level: "high",
-    signals: ["S1-multi-file", "S2-architecture"],
+    signals: ["S1b-wide-change", "S2-architecture"],
     recorded_at: "2026-06-20T09:02:00.000Z",
   },
 }, null, 2));
@@ -234,7 +241,7 @@ fs.writeFileSync(p, JSON.stringify({
   steps: { workflow_init: { status: "complete", updated_at: "2026-06-20T09:01:00.000Z" } },
   complexity_evaluation: {
     level: "high",
-    signals: ["S1-multi-file", "S2-architecture"],
+    signals: ["S1b-wide-change", "S2-architecture"],
     recorded_at: "2026-06-20T09:02:00.000Z",
   },
 }, null, 2));
@@ -271,7 +278,7 @@ console.log([
 JS
 )
     assert_eq "L-7 an underivable v1 record still migrates, keeps level/signals, and omits levels rather than inventing them" \
-        "migrated=yes level=high signals=[\"S1-multi-file\",\"S2-architecture\"] ce_levels=null mem_events=1 mem_has_levels=false raw_before=0 persisted=true raw_events=1 raw_has_levels=false" \
+        "migrated=yes level=high signals=[\"S1b-wide-change\",\"S2-architecture\"] ce_levels=null mem_events=1 mem_has_levels=false raw_before=0 persisted=true raw_events=1 raw_has_levels=false" \
         "$got"
 }
 

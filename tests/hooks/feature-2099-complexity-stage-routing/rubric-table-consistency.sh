@@ -9,7 +9,7 @@
 
 # Extract a named generated block's inner body from a markdown file.
 d2099_extract_block() {
-    DOC="$1" BLOCK="$2" run_with_timeout node -e '
+    DOC="$1" BLOCK="$2" run_with_timeout node - 2>&1 <<'JS'
 const fs = require("fs");
 const name = process.env.BLOCK;
 const src = fs.readFileSync(process.env.DOC, "utf8");
@@ -19,13 +19,13 @@ const i = src.indexOf(begin);
 const j = src.indexOf(end);
 if (i === -1 || j === -1 || j < i) { process.stdout.write("BLOCK_NOT_FOUND"); process.exit(0); }
 process.stdout.write(src.slice(i + begin.length, j).replace(/^\n+/, "").replace(/\n+$/, ""));
-' 2>&1
+JS
 }
 
 # Collect the signal ids used as hand-written definition headings, ignoring
 # anything inside a generated block.
 d2099_rubric_heading_ids() {
-    DOC="$1" run_with_timeout node -e '
+    DOC="$1" run_with_timeout node - 2>&1 <<'JS'
 const fs = require("fs");
 const src = fs.readFileSync(process.env.DOC, "utf8");
 const stripped = src.replace(/<!-- BEGIN GENERATED:[\s\S]*?<!-- END GENERATED: [a-z-]+ -->/g, "");
@@ -35,7 +35,7 @@ for (const line of stripped.split(/\r?\n/)) {
   if (m) ids.push(m[1]);
 }
 process.stdout.write(ids.sort().join(","));
-' 2>&1
+JS
 }
 
 d2099_rubric_layer1() {
@@ -76,33 +76,28 @@ console.log([
         "SIGNALS:" "$rubric_text"
     assert_contains "RB-7 the rubric points at complexity-routing.js as the routing authority" \
         "complexity-routing.js" "$rubric_text"
-    # RB-8: the NORMATIVE WORDING, not the id token. RB-9 already guarantees the
-    # bare `S1b-wide-change` string exists as a definition heading, so asserting
-    # the token here would pass even if the threshold sentence and the inverted
-    # guidance were both deleted. Each probe below is a separate regex over the
-    # rubric prose; the alternations only tolerate phrasing/locale, never the
-    # absence of the rule.
+    # RB-8: the NORMATIVE WORDING, not the id token. S1b-wide-change is computed
+    # deterministically (#2460), so the rubric keeps its 8-file threshold but no
+    # longer carries judge guidance about falling back to (retired) S1-multi-file
+    # or leaning toward S1b when uncertain. The alternations only tolerate
+    # phrasing/locale, never the absence of the rule.
     local guidance
     guidance=$(RUBRIC_PATH="$RUBRIC" run_with_timeout node -e '
 const src = require("fs").readFileSync(process.env.RUBRIC_PATH, "utf8");
 // detail.md D2: the S1b trigger is "8 files or more".
 const THRESHOLD = /(8\s*(\+|or more)?\s*files? or more|8\s*or more files|at least 8 files|8\+\s*files|8\s*files or more|8ファイル以上)/i;
-// detail.md D2 (reversed guidance): assign S1b ONLY when certain.
-const ONLY_WHEN_CERTAIN = /(only (when|if)[^.\n]{0,80}(certain|confident|sure|known)|(certain|confident|sure)[^.\n]{0,80}only|確実に[^。\n]{0,60}場合のみ)/i;
-// ... and the uncertain case falls back to S1-multi-file alone.
+// Retired judge guidance: the uncertain case falling back to S1-multi-file.
 const UNCERTAIN_FALLBACK = /(uncertain|not certain|unsure|cannot be (precisely )?determined|不確実)[^.\n]{0,120}S1-multi-file/i;
-// The OLD guidance (uncertain => lean toward S1b) must be gone: it would undo
-// the whole write_tests threshold raise.
+// Older guidance (uncertain => lean toward S1b) must stay gone.
 const OLD_LEANS_TO_S1B = /(uncertain|unsure|cannot be (precisely )?determined|不確実)[^.\n]{0,120}S1b-wide-change/i;
 console.log([
   "threshold=" + (THRESHOLD.test(src) ? "yes" : "no"),
-  "only_when_certain=" + (ONLY_WHEN_CERTAIN.test(src) ? "yes" : "no"),
   "uncertain_falls_back_to_S1=" + (UNCERTAIN_FALLBACK.test(src) ? "yes" : "no"),
   "old_leans_to_S1b=" + (OLD_LEANS_TO_S1B.test(src) ? "yes" : "no"),
 ].join(" "));
 ' 2>&1)
-    assert_eq "RB-8 the rubric states the 8-file threshold AND the inverted (only-when-certain) S1b guidance" \
-        "threshold=yes only_when_certain=yes uncertain_falls_back_to_S1=yes old_leans_to_S1b=no" \
+    assert_eq "RB-8 the rubric keeps the 8-file S1b threshold and drops the judge-side S1 fallback guidance" \
+        "threshold=yes uncertain_falls_back_to_S1=no old_leans_to_S1b=no" \
         "$guidance"
 
     # Teeth probe for RB-8: deleting the threshold sentence must break it. Without
@@ -163,5 +158,57 @@ process.stdout.write(m.SIGNAL_IDS.concat([m.UNDECIDABLE_SIGNAL]).sort().join(","
     fi
 }
 
+# L3 (#2460): the rubric's end-state structure. S1/S6 sections are gone, the
+# rules are split by audience, and S1b/S4 are described as code-computed.
+d2099_rubric_layer3() {
+    local doc_ids
+    doc_ids=",$(d2099_rubric_heading_ids "$RUBRIC"),"
+    assert_not_contains "RB-13 the rubric has no S1-multi-file definition section" \
+        ",S1-multi-file," "$doc_ids"
+    assert_not_contains "RB-14 the rubric has no S6-long-plan definition section" \
+        ",S6-long-plan," "$doc_ids"
+
+    local headings
+    headings=$(RUBRIC_PATH="$RUBRIC" run_with_timeout node - 2>&1 <<'JS'
+const lines = require("fs").readFileSync(process.env.RUBRIC_PATH, "utf8").split(/\r?\n/);
+function has(h) { return lines.some(function (l) { return l.trim() === h; }) ? "yes" : "no"; }
+console.log(["judgment_rules=" + has("## Judgment rules"), "output_rules=" + has("## Output rules"), "plain_rules=" + has("## Rules")].join(" "));
+JS
+)
+    assert_eq "RB-15 the rubric splits its rules into Judgment rules and Output rules headings" \
+        "judgment_rules=yes output_rules=yes plain_rules=no" "$headings"
+
+    # S1b/S4 are deterministic: the word must appear in the id's own definition
+    # section or on a line naming the id.
+    local det
+    det=$(RUBRIC_PATH="$RUBRIC" run_with_timeout node - 2>&1 <<'JS'
+const src = require("fs").readFileSync(process.env.RUBRIC_PATH, "utf8")
+  .replace(/<!-- BEGIN GENERATED:[\s\S]*?<!-- END GENERATED: [a-z-]+ -->/g, "");
+const lines = src.split(/\r?\n/);
+function described(id) {
+  const start = lines.findIndex(function (l) { return /^#{2,4}\s/.test(l) && l.indexOf(id) !== -1; });
+  if (start !== -1) {
+    let end = lines.length;
+    for (let i = start + 1; i < lines.length; i++) { if (/^#{2,4}\s/.test(lines[i])) { end = i; break; } }
+    if (/deterministic/i.test(lines.slice(start, end).join("\n"))) { return "yes"; }
+  }
+  return lines.some(function (l) { return l.indexOf(id) !== -1 && /deterministic/i.test(l); }) ? "yes" : "no";
+}
+console.log("S1b=" + described("S1b-wide-change") + " S4=" + described("S4-installer"));
+JS
+)
+    assert_eq "RB-16 the rubric describes S1b-wide-change and S4-installer as deterministic" \
+        "S1b=yes S4=yes" "$det"
+}
+
+case_begin "rubric-generated-blocks-and-wording" "skills/_shared/judge-task-complexity.md"
 d2099_rubric_layer1
+case_end
+
+case_begin "rubric-headings-match-signal-ids" "hooks/workflow-state/complexity-routing.js"
 d2099_rubric_layer2
+case_end
+
+case_begin "rubric-end-state-structure" "skills/_shared/judge-task-complexity.md"
+d2099_rubric_layer3
+case_end

@@ -93,12 +93,12 @@ VFIX_OUT="$(run_with_timeout node -e '
     catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
   const at = "2026-09-04T00:00:00.000Z";
   put("cx1", { level: "high", levels: { outline: "high", detail: "high", write_tests: "high", write_code: "low" },
-    signals: ["S1-multi-file", "S5-breaking"], recorded_at: at });
+    signals: ["S1b-wide-change", "S5-breaking"], recorded_at: at });
   put("cx2", { level: "low", levels: { outline: "low", detail: "low", write_tests: "low", write_code: "low" },
     signals: [], recorded_at: at });
-  put("cx4", { level: "high", signals: ["S1-multi-file"], recorded_at: at });
+  put("cx4", { level: "high", signals: ["S1b-wide-change"], recorded_at: at });
   const gmix = { level: "high", levels: { outline: "low", detail: "high", write_tests: "high", write_code: "low" },
-    signals: ["S1-multi-file"], recorded_at: at };
+    signals: ["S1b-wide-change"], recorded_at: at };
   put("gmod", gmix);
   put("ghaiku", gmix);
   let gdef = "MODULE_LOAD_FAILED";
@@ -141,11 +141,12 @@ check_round_trips() {
     "$(count_lit "$f" "read-complexity-evaluation")"
   check "(f) $n issues no confirm-off call -- the post-action probe moved to next-step --gate" 0 \
     "$(count_lit "$f" "$CONFIRM_CALL")"
-  # Non-vacuity: an unrelated CLI the migration must NOT touch is still invoked, so a
+  # Non-vacuity: a reference the migration must NOT touch is still present, so a
   # `grep` that silently matched nothing cannot make the three zeros above green.
-  if [ "$(count_lit "$f" "derive-complexity-level")" -ge 1 ]; then
-    pass "(f) $n control -- the low-signal fallback still calls derive-complexity-level"
-  else fail "(f) $n control -- derive-complexity-level literal not found"; fi
+  # #2460: the fallback's derive-complexity-level call moved into the shared procedure.
+  if [ "$(count_lit "$f" "jev-two-stage-judge")" -ge 1 ]; then
+    pass "(f) $n control -- the complexity fallback still points at jev-two-stage-judge"
+  else fail "(f) $n control -- jev-two-stage-judge literal not found"; fi
   # Ordering: the bundled read is the up-front call, the surviving probe comes after it.
   FACTS_LN="$(grep -nF -- "bin/workflow/read-session-facts" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
   PROBE_LN="$(grep -nF -- "$GATE_TRIGGER" "$f" 2>/dev/null | head -n 1 | cut -d: -f1)"
@@ -290,7 +291,7 @@ echo "=== (c) persisted complexity, read per stage without cross-talk ==="
 run_facts "$CFG" cx1
 check "(c) i: write_tests level" "high" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 check "(c) i: write_code level is NOT the write_tests level" "low" "$(val_of COMPLEXITY_LEVEL_write_code)"
-check "(c) i: signals are the recorded csv" "S1-multi-file,S5-breaking" "$(val_of COMPLEXITY_SIGNALS)"
+check "(c) i: signals are the recorded csv" "S1b-wide-change,S5-breaking" "$(val_of COMPLEXITY_SIGNALS)"
 DIRECT_WT="$(run_with_timeout node "$RCE" --session cx1 --stage write_tests 2>/dev/null | sed -n 's/^level=//p')"
 check "(c) i: agrees with read-complexity-evaluation --stage write_tests" "$DIRECT_WT" "$(val_of COMPLEXITY_LEVEL_write_tests)"
 run_facts "$CFG" cx2

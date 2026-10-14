@@ -123,8 +123,10 @@ async function timedRequest(url, init, timeoutMs, readBody) {
   }
 }
 
+// connection: close — a pooled keep-alive socket still closing at a caller's process.exit
+// trips the same Windows libuv assertion (exit 127); a one-shot caller gains nothing from the pool.
 function authHeaders(ctx) {
-  return { authorization: "Bearer " + ctx.apiKey, accept: "application/json" };
+  return { authorization: "Bearer " + ctx.apiKey, accept: "application/json", connection: "close" };
 }
 
 // A failed request keeps its own outage status (http-error with its code, timeout, ...) so a

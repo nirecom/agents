@@ -8,15 +8,16 @@
 # The second line, `signals=`, is asserted nowhere behaviorally — consumers-static
 # greps prose, which passes just as well when the step discards the list.
 
-D2099SF_CSV="S1-multi-file,S3-security,S6-long-plan"
-# Chosen so the three stages DISAGREE on level while sharing ONE signal list:
-# S3-security escalates write_tests and write_code but not detail (detail.md D2).
+D2099SF_CSV="S1b-wide-change,S3-security,S4-installer"
+# Chosen so the stages DISAGREE on level while sharing ONE signal list: S3/S4
+# escalate write_tests but not detail, and S1b is low on both (#2460 end-state).
 # A consumer that reconstructed `signals` from its own level cannot produce this.
+# #2460: write-code no longer reads a stored evaluation (WCD-3 always runs the
+# shared judge procedure), so only the two stored-read consumers are rows.
 
 # consumer | expected `level=` for D2099SF_CSV
 D2099SF_ROWS="make-detail-plan|low
-write-tests|high
-write-code|high"
+write-tests|high"
 
 d2099sf_read() {
     # What the skill's OWN read command answers, normalized to the two values the
@@ -40,7 +41,7 @@ d2099sf_read() {
 
 d2099sf_multi_signal_reaches_each_consumer() {
     # CSF-1..CSF-3: one stored record, read back through each consumer's own
-    # command. The list must arrive verbatim at all three even though the level
+    # command. The list must arrive verbatim at each one even though the level
     # differs — which rules out "the signals were derived from the level".
     local sid sid_zero sid_one name want
     sid=$(new_session sfmulti)
@@ -61,10 +62,9 @@ d2099sf_multi_signal_reaches_each_consumer() {
             "level=low signals=none" \
             "$(d2099sf_read "$(d2099_skill_file "$name")" "$sid_zero")"
         # Without this row a reader echoing one constant list would satisfy CSF-1.
-        # S3-security alone routes low/high/high (detail.md D2) — the same triple
-        # D2099SF_ROWS carries, because S3 is the only escalating signal in
-        # D2099SF_CSV. So `$want` is the per-stage level here too, and asserting a
-        # flat `high` would contradict the detail row.
+        # S3-security alone routes detail low / write_tests high — the same pair
+        # D2099SF_ROWS carries, so `$want` is the per-stage level here too, and
+        # asserting a flat `high` would contradict the detail row.
         assert_eq "CSF-3 $name reads back level=$want and the one-signal list for a one-signal record" \
             "level=$want signals=S3-security" \
             "$(d2099sf_read "$(d2099_skill_file "$name")" "$sid_one")"
@@ -77,7 +77,7 @@ d2099sf_order_is_preserved() {
     # CSF-4: detail.md D3 stores the judge's list as given and D4 returns it as a
     # csv; nothing sorts it (PO-4 pins the same order in the raw event). A reader
     # that sorted would silently rewrite the reason shown to the user.
-    local sid name want reordered="S6-long-plan,S1-multi-file,S3-security"
+    local sid name want reordered="S4-installer,S1b-wide-change,S3-security"
     sid=$(new_session sforder)
     run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "$reordered" >/dev/null 2>&1
     while IFS='|' read -r name want; do
@@ -91,12 +91,11 @@ EOF
 }
 
 D2099SF_SINKS='make-detail-plan|MDP-3|signals: *\[|signals|
-write-tests|WT-7|task_complexity_signals|task_complexity_signals|WT-6
-write-code|WCD-3|signals: *\[|signals|'
+write-tests|WT-7|task_complexity_signals|task_complexity_signals|WT-6'
 # skill | section holding the sink | sink line regex | field label | step the sink
 # must name (empty when the sink sits in the read step itself). write-tests hands
-# the list to its subagent as a structured field (WT-7); the other two emit it as
-# the selection reason inside the read step itself.
+# the list to its subagent as a structured field (WT-7); make-detail-plan emits
+# it as the selection reason inside the read step itself.
 
 d2099sf_sink_lines() {
     d2099_skill_section "$1" "$2" | grep -E -- "$3"
@@ -155,8 +154,8 @@ EOF
 # values, ruling out a sink that hardcodes $D2099SF_CSV instead of reading it.
 d2099sf_sink_is_content_driven() {
     local sid_a sid_b name step re label bind f csv_a csv_b got_a got_b
-    csv_a="S1-multi-file,S3-security"
-    csv_b="S6-long-plan"
+    csv_a="S1b-wide-change,S3-security"
+    csv_b="S4-installer"
     sid_a=$(new_session sfmuta)
     sid_b=$(new_session sfmutb)
     run_with_timeout node "$BIN_RECORD" --session "$sid_a" --signals "$csv_a" >/dev/null 2>&1
@@ -211,8 +210,13 @@ $D2099SF_SINKS
 EOF
 }
 
+case_begin "signal-forwarding-readback" "bin/workflow/read-complexity-evaluation"
 d2099sf_multi_signal_reaches_each_consumer
 d2099sf_order_is_preserved
+case_end
+
+case_begin "signal-forwarding-sinks" "skills/make-detail-plan/SKILL.md"
 d2099sf_sink_cases
 d2099sf_sink_is_content_driven
 d2099sf_adversarial_content_is_inert
+case_end

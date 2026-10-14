@@ -115,8 +115,8 @@ FIX_OUT="$(UUID_SID_LIT="$UUID_SID" run_with_timeout node -e '
     signals, recorded_at: "2026-09-04T00:00:00.000Z" });
   const put = (sid, body) => { try { fs.writeFileSync(path.join(wf, sid + ".json"), JSON.stringify(body)); }
     catch (e) { process.stderr.write("fixture " + sid + ": " + e.message + "\n"); } };
-  put("c2", { steps: {}, complexity_evaluation: cx(["S1-multi-file", "S2-architecture"]) });
-  put(process.env.UUID_SID_LIT, { steps: {}, complexity_evaluation: cx(["S1-multi-file"]) });
+  put("c2", { steps: {}, complexity_evaluation: cx(["S1b-wide-change", "S2-architecture"]) });
+  put(process.env.UUID_SID_LIT, { steps: {}, complexity_evaluation: cx(["S1b-wide-change"]) });
   put("c3nocx", { steps: {} });
   process.stdout.write("KEYS=" + keys + "\n");' || echo "")"
 KEYS_JS="$(printf '%s\n' "$FIX_OUT" | sed -n 's/^KEYS=//p')"

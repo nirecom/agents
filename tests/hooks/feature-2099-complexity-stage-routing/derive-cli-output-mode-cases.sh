@@ -35,7 +35,11 @@ d2099dm_single_modes() {
     assert_contains "DM-1 --print-markdown-table renders the per-stage routing table" \
         '| `write_code` |' "$table"
     assert_contains "DM-2 --print-signal-ids renders the signal id list" \
-        '- `S1-multi-file`' "$ids"
+        '- `S1b-wide-change`' "$ids"
+    assert_not_contains "DM-2b --print-signal-ids no longer lists the retired S1-multi-file" \
+        'S1-multi-file' "$ids"
+    assert_not_contains "DM-2c --print-signal-ids no longer lists the retired S6-long-plan" \
+        'S6-long-plan' "$ids"
     # The two modes must be DISTINGUISHABLE or no precedence case below has teeth.
     if [ "$table" = "$ids" ]; then
         fail "DM-3 both print modes emit identical output — no case below could tell which branch ran"
@@ -75,14 +79,14 @@ d2099dm_print_beats_derivation() {
     table=$(d2099dm_stdout --print-markdown-table)
     ids=$(d2099dm_stdout --print-signal-ids)
     f="$WORKFLOW_PLANS_DIR/dm-signals.txt"
-    printf 'S1-multi-file' > "$f"
+    printf 'S1b-wide-change' > "$f"
 
     assert_eq "DM-10 --print-markdown-table beside a full derivation call prints the table, not a level" \
-        "$table" "$(d2099dm_stdout --stage detail --signals "S1-multi-file" --print-markdown-table)"
+        "$table" "$(d2099dm_stdout --stage detail --signals "S1b-wide-change" --print-markdown-table)"
     assert_eq "DM-11 --print-signal-ids beside a full derivation call prints the id list, not a level" \
         "$ids" "$(d2099dm_stdout --print-signal-ids --stage write_code --signals "")"
 
-    got=$(d2099dm_stdout --print-markdown-table --stage detail --signals "S1-multi-file")
+    got=$(d2099dm_stdout --print-markdown-table --stage detail --signals "S1b-wide-change")
     assert_not_contains "DM-12 ... and no level= line leaks into the printed table" "level=" "$got"
 
     # Each of these WOULD be a usage error on the derivation path; the print
@@ -92,7 +96,7 @@ d2099dm_print_beats_derivation() {
     assert_eq "DM-14 a missing --signals beside --print-signal-ids is never reached (exit 0)" \
         "0" "$(d2099dm_rc --print-signal-ids --stage detail)"
     assert_eq "DM-15 the --signals/--signals-file exclusion is never reached either (exit 0)" \
-        "0" "$(d2099dm_rc --print-markdown-table --stage detail --signals "S1-multi-file" --signals-file "$f")"
+        "0" "$(d2099dm_rc --print-markdown-table --stage detail --signals "S1b-wide-change" --signals-file "$f")"
     assert_contains "DM-15b ... and the unreadable path in DM-15 was genuinely never opened" \
         '| `write_code` |' "$(d2099dm_stdout --print-markdown-table --stage detail --signals-file "$WORKFLOW_PLANS_DIR/dm-absent.txt")"
 }
@@ -102,20 +106,20 @@ d2099dm_print_beats_derivation() {
 d2099dm_derivation_path_still_validates() {
     local f got
     f="$WORKFLOW_PLANS_DIR/dm-signals.txt"
-    printf 'S1-multi-file' > "$f"
+    printf 'S1b-wide-change' > "$f"
 
     assert_eq "DM-16 without a print flag, an invalid --stage is a usage error (exit 1)" \
         "1" "$(d2099dm_rc --stage nonsense --signals "")"
     assert_eq "DM-17 without a print flag, a missing --signals is a usage error (exit 1)" \
         "1" "$(d2099dm_rc --stage detail)"
     assert_eq "DM-18 without a print flag, both signal sources together is a usage error (exit 1)" \
-        "1" "$(d2099dm_rc --stage detail --signals "S1-multi-file" --signals-file "$f")"
+        "1" "$(d2099dm_rc --stage detail --signals "S1b-wide-change" --signals-file "$f")"
     assert_eq "DM-19 without a print flag, no arguments at all is a usage error (exit 1)" \
         "1" "$(d2099dm_rc)"
 
     # And the derivation path itself still answers, so DM-16..DM-19 are not
     # measuring a CLI that has started rejecting everything.
-    got=$(d2099dm_run --stage write_code --signals "S1-multi-file")
+    got=$(d2099dm_run --stage write_code --signals "S1b-wide-change")
     assert_eq "DM-20 the plain derivation invocation still answers its own stage's level" \
         "0 level=high" "$got"
 }
@@ -146,9 +150,26 @@ d2099dm_print_is_deterministic() {
     assert_eq "DM-25 --print-signal-ids renders identically on a repeat run" "$a" "$b"
 }
 
+case_begin "print-modes-alone" "bin/workflow/derive-complexity-level"
 d2099dm_single_modes
+case_end
+
+case_begin "both-print-flags-precedence" "bin/workflow/derive-complexity-level"
 d2099dm_both_print_flags
+case_end
+
+case_begin "print-beats-derivation" "bin/workflow/derive-complexity-level"
 d2099dm_print_beats_derivation
+case_end
+
+case_begin "derivation-path-still-validates" "bin/workflow/derive-complexity-level"
 d2099dm_derivation_path_still_validates
+case_end
+
+case_begin "unknown-argument-rejected" "bin/workflow/derive-complexity-level"
 d2099dm_unknown_argument
+case_end
+
+case_begin "print-modes-deterministic" "hooks/workflow-state/complexity-routing.js"
 d2099dm_print_is_deterministic
+case_end

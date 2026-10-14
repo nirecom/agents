@@ -4,11 +4,51 @@
 // tombstone does) between the tmp write and the final rename, <fails> times in a row.
 // Usage: node pending-probe.js <pending.js> <pending|unlogged> <sid> <tid> <fails>
 // Prints "<result>|<final entries in the live pending dir>|<.tmp left there>|<injections>".
+// Takeover probe for m-pending-v2.sh: node pending-probe.js <pending.js> takeover <sid> <tid> <dead|live|stale>
+// seeds <tid>.claimed-<owner pid> and calls takeOverClaim. Prints
+// "<returned marker or null>|<entries, own pid shown as SELF, seeded owner pid as OWNER>".
 const fs = require("fs");
 const path = require("path");
+const cp = require("child_process");
 
 const [pendPath, kind, sid, tid, fails] = process.argv.slice(2);
 const pending = require(pendPath);
+
+if (kind === "takeover") {
+  if (typeof pending.takeOverClaim !== "function") {
+    process.stdout.write("EXPORT_MISSING: takeOverClaim");
+    process.exit(0);
+  }
+  let child = null;
+  let owner;
+  if (fails === "dead") {
+    owner = Number(cp.spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"]).stdout);
+  } else {
+    child = cp.spawn(process.execPath, ["-e", "setTimeout(() => {}, 120000)"], { stdio: "ignore" });
+    owner = child.pid;
+  }
+  const dir = pending.pendingDir(sid);
+  fs.mkdirSync(dir, { recursive: true });
+  const claim = path.join(dir, tid + ".claimed-" + owner);
+  fs.writeFileSync(claim, JSON.stringify({ version: 2, point: "complexity-judge", marker: "M" }));
+  if (fails === "stale") { const t = new Date(Date.now() - 11 * 60 * 1000); fs.utimesSync(claim, t, t); }
+  let out;
+  try {
+    const ret = pending.takeOverClaim(sid, tid, {});
+    let obj = ret;
+    if (typeof ret === "string") { try { obj = JSON.parse(ret); } catch (_e) { obj = { marker: "raw:" + ret }; } }
+    out = obj === null || obj === undefined ? "null" : String(obj.marker);
+  } catch (e) {
+    out = "threw:" + (e && (e.code || e.message));
+  }
+  let names = [];
+  try { names = fs.readdirSync(dir).sort(); } catch (_e) { names = []; }
+  const shown = names.map((n) => n.replace(".claimed-" + process.pid, ".claimed-SELF").replace(".claimed-" + owner, ".claimed-OWNER"));
+  if (child) child.kill();
+  process.stdout.write([out, shown.join(",")].join("|"));
+  process.exit(0);
+}
+
 const sessDir = path.dirname(pending.pendingDir(sid));
 const realRename = fs.renameSync;
 let injected = 0;

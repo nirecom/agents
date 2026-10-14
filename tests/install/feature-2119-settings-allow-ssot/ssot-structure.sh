@@ -152,8 +152,8 @@ case_end
 # The three that PR #2158's security review removed (get-config-var, request-off-clearance,
 # worker-dispatch.js) stay out. #2201 admitted two; #2102 admitted read-session-facts (it was
 # never pinned here, so the count row is what caught it); #2075 admitted find-tests-for-source.sh;
-# #2265 handoff-append; #2455 test-lanes-status.sh; #2079 the run-tests calibration probe and
-# session mark; #2527 set-deliverable-type, pr-state, release-channel, get-release-approval scripts.
+# #2265 handoff-append; #2455 test-lanes-status.sh; #2079 calibration probe and session mark; #2527
+# deliverable-type, pr-state, release-channel, release-approval scripts; #2460 jev-judge swap.
 case_begin "t3b-snapshot" "install/settings-allow-commands.txt"
 t3b_snapshot() {
     local entry n
@@ -172,11 +172,11 @@ bin/review-code-codex
 bin/confirm-off
 bin/parse-closes-issues
 bin/workflow/set-workflow-type
+bin/workflow/jev-judge
 bin/workflow/set-deliverable-type
 bin/workflow/pr-state
 skills/get-release-approval/scripts/preflight.sh
 skills/get-release-approval/scripts/wait-web-merge.sh
-bin/workflow/record-complexity-and-skip
 skills/worktree-start/scripts/derive-worktree-name.sh
 bin/workflow/read-complexity-evaluation
 bin/workflow/derive-complexity-level

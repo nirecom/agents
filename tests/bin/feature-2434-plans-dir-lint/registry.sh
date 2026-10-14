@@ -70,6 +70,7 @@ complexity-judge-raw.txt                            | artifact
 detail-judge-raw.txt                                | artifact
 write-tests-judge-raw.txt                           | artifact
 write-code-judge-raw.txt                            | artifact
+write-code-files.txt                                | artifact
 worker-commit-push.draft.json                       | artifact
 worker-x-1.draft.json                               | artifact
 issue-create-dispatch.txt                           | artifact

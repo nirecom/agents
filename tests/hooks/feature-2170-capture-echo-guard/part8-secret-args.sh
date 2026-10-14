@@ -53,7 +53,7 @@ mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 
 # A REAL row of the allow SSOT, so the matched (argument-reproducing) branch is
 # genuinely reachable; bail loudly rather than silently if the row ever moves.
-ENTRY='bin/workflow/record-complexity-and-skip'
+ENTRY='bin/workflow/record-skip-judgment'
 if ! grep -Fxq "$ENTRY" "$SCRIPT_CHECKOUT_ROOT/install/settings-allow-commands.txt"; then
     assert_eq "F-0-entry-is-on-the-real-ssot-list" "listed" "NOT_LISTED"
     finish
@@ -62,7 +62,7 @@ fi
 VERDICT=""
 run_case() { # <arg-string>
     node "$HERE/mk-event.js" Bash \
-        "X=\$(bash \"\$AGENTS_MAIN_ROOT/$ENTRY\" $1); echo \"\$X\"" >"$EV"
+        "X=\$(node \"\$AGENTS_MAIN_ROOT/$ENTRY\" $1); echo \"\$X\"" >"$EV"
     env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$ERR"
     VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 }

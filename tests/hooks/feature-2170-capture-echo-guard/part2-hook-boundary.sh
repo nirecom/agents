@@ -159,7 +159,7 @@ assert_no_secret "B-16-secret-absent-in-degraded-remedy" "$OUT" "$TMPDIR_B/err.t
 # verdict must stay "block" — a leak concern must not soften it.
 CFGTOK='--token=supersecret123unique'
 node "$HERE/mk-event.js" Bash \
-    "X=\$(bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" $CFGTOK); echo \"\$X\"" >"$EV"
+    "X=\$(node \"\$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment\" $CFGTOK); echo \"\$X\"" >"$EV"
 env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err.txt"
 VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 assert_eq "B-17-matched-secret-arg-still-blocked" "block" "$VERDICT"
@@ -171,7 +171,7 @@ assert_eq "B-18-matched-secret-arg-not-reproduced" "no" "$TOK_IN_OUT"
 # arguments altogether — or if the entry simply stopped matching.
 CFGARG='--target outline'
 node "$HERE/mk-event.js" Bash \
-    "X=\$(bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" $CFGARG); echo \"\$X\"" >"$EV"
+    "X=\$(node \"\$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment\" $CFGARG); echo \"\$X\"" >"$EV"
 env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$HOOK" <"$EV" >"$OUT" 2>"$TMPDIR_B/err2.txt"
 VERDICT="$(node "$HERE/hook-out.js" "$OUT")"
 assert_eq "B-18b-matched-plain-arg-still-blocked" "block" "$VERDICT"

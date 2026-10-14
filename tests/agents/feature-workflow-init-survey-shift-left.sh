@@ -105,15 +105,22 @@ assert_file_contains "A4" "WI handles sentinel stripping"                   "$WI
 # SSOT procedure skills/_shared/complexity-and-outline-skip.md. The contract
 # protected here is unchanged: WI must point at that shared file, and the shared
 # file must still carry the Agent subagent dispatch.
+# #2460: that dispatch moved one hop further, into skills/_shared/jev-two-stage-judge.md
+# (JJ-2), so the chain is WI -> complexity-and-outline-skip.md -> jev-two-stage-judge.md.
 SHARED_SKIP="$REPO_ROOT/skills/_shared/complexity-and-outline-skip.md"
+SHARED_JUDGE="$REPO_ROOT/skills/_shared/jev-two-stage-judge.md"
 if [ ! -f "$WI_SKILL" ]; then
     fail "A5a. WI launches Agent subagent (via shared procedure) — file missing: $WI_SKILL"
 elif [ ! -f "$SHARED_SKIP" ]; then
     fail "A5a. WI launches Agent subagent (via shared procedure) — file missing: $SHARED_SKIP"
+elif [ ! -f "$SHARED_JUDGE" ]; then
+    fail "A5a. WI launches Agent subagent (via shared procedure) — file missing: $SHARED_JUDGE"
 elif ! run_with_timeout grep -qF -- "skills/_shared/complexity-and-outline-skip.md" "$WI_SKILL"; then
     fail "A5a. WI launches Agent subagent (via shared procedure) — WI does not reference 'skills/_shared/complexity-and-outline-skip.md'"
-elif ! run_with_timeout grep -qF -- "Agent" "$SHARED_SKIP"; then
-    fail "A5a. WI launches Agent subagent (via shared procedure) — shared procedure does not mention 'Agent'"
+elif ! run_with_timeout grep -qF -- "skills/_shared/jev-two-stage-judge.md" "$SHARED_SKIP"; then
+    fail "A5a. WI launches Agent subagent (via shared procedure) — shared procedure does not reference 'skills/_shared/jev-two-stage-judge.md'"
+elif ! run_with_timeout grep -qF -- "subagent_type:" "$SHARED_JUDGE"; then
+    fail "A5a. WI launches Agent subagent (via shared procedure) — two-stage judge does not carry a 'subagent_type:' dispatch"
 else
     pass "A5a. WI launches Agent subagent (via shared procedure)"
 fi

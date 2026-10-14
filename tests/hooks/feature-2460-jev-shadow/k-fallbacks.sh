@@ -12,6 +12,7 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 harness_isolate "$TMPROOT/iso"   # the guard reads a fragment's own top-level pin, not _lib's
+use_rollback_registry
 mock_start
 
 HPROBE="$(np "$LIBDIR/hardening-probe.js")"
@@ -26,11 +27,17 @@ kp() {
   )
 }
 pend_n() { find "$JEVDIR/$1/pending" -name "$2" 2>/dev/null | wc -l | tr -d ' '; }
-SAFE='r && [r.llm.status, String(r.llm.answer), String(r.llm.latency_ms), r.llm.executor_model, r.jev.status, r.fallback_reason, String(r.step), r.stage, JSON.stringify(r.input)].join("|")'
-SAFE_EXP='missing|null|null|unknown|not-run|not-run|null|unknown|{"bytes":0,"sha256":null,"truncated":false,"sources":[]}'
+MISSING='r && [r.llm.status, String(r.llm.answer), r.jev.status].join("|")'
+# An open or counted mapping scope of complexity-judge (bad-response lands there, not in breaker.json).
+MAP_BREAKER="breaker-complexity-judge.json"
+seed_map_breaker() {
+  mkdir -p "$JEVDIR/$1"
+  printf '%s' '{"version":2,"consecutive_failures":2,"open_until_ms":0,"trial_at_ms":0,"last_failure_status":"bad-response"}' > "$JEVDIR/$1/$MAP_BREAKER"
+}
+map_breaker() { hq json-expr "$(np "$JEVDIR/$1/$MAP_BREAKER")" 'o && [o.consecutive_failures, o.last_failure_status].join("|")'; }
 
-echo "=== an unparseable TTL-expired entry is still recorded as llm missing ==="
-case_begin "k-corrupt-pending-orphan-recorded" "hooks/lib/jev/pending.js"
+echo "=== an unparseable TTL-expired entry names no point: it is discarded, never recorded ==="
+case_begin "k-corrupt-pending-orphan-discarded" "hooks/lib/jev/pending.js"
 fx_new k-corrupt
 SID="jev2460-k-corrupt"
 mkdir -p "$JEVDIR/$SID/pending"
@@ -40,36 +47,38 @@ printf '\x00\xff garbage' > "$JEVDIR/$SID/pending/toolu_k_badclaim.claimed-123"
 printf '[1,2' > "$JEVDIR/$SID/pending/toolu_k_badul.unlogged-123-456"
 hq age "$(np "$JEVDIR/$SID/pending")" 3900000 --recursive
 mock_mode '{}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_k_trigger
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_k_trigger
 check "the triggering post exits 0 with no stderr" "0|" "$HOOK_RC|$(cat "$ERR")"
 for _t in toolu_k_bad toolu_k_empty toolu_k_badclaim toolu_k_badul; do
-  check "$_t: exactly one orphan record, llm missing with safe defaults" "1|$SAFE_EXP" \
-    "$(rq "$_t" 'recs.length')|$(rq "$_t" "$SAFE")"
+  check "$_t: no record (an unreadable hand is not attributed to a default point)" "0" "$(rq "$_t" 'recs.length')"
 done
-check "every corrupt entry was removed after its record was appended; the trigger paired" "0|1|ok" \
-  "$(pending_count)|$(rq toolu_k_trigger 'recs.length')|$(rq toolu_k_trigger 'r && r.jev.status')"
+check "every corrupt entry was removed; the trigger paired; the log holds its record only" "0|1|ok|1" \
+  "$(pending_count)|$(rq toolu_k_trigger 'recs.length')|$(rq toolu_k_trigger 'r && r.jev.status')|$(hq qa "$(np "$LOG")" 'recs.length')"
 check "no unparseable line was written to the log" "0" "$(hq broken "$(np "$LOG")")"
 case_end
 
-case_begin "k-corrupt-pending-kept-when-append-fails" "hooks/lib/jev/pending.js"
-fx_new k-corrupt-keep
+case_begin "k-orphan-pending-kept-when-append-fails" "hooks/lib/jev/pending.js"
+fx_new k-orphan-keep
 SID="jev2460-k-keep"
-mkdir -p "$JEVDIR/$SID/pending"
-printf '{not json' > "$JEVDIR/$SID/pending/toolu_k_keep.json"
-hq age "$(np "$JEVDIR/$SID/pending")" 3900000 --recursive
 mock_mode '{}'
+mkpayload "$FX/io/pre-toolu_k_keep.json" pre "$SID" toolu_k_keep
+run_hook pre "$FX/io/pre-toolu_k_keep.json"
+K_HAND="$(cat "$JEVDIR/$SID/pending/toolu_k_keep.json" 2>/dev/null)"
+check "fixture: the pre hook left one hand for the dispatch that never returns" "1|true" \
+  "$(pend_n "$SID" 'toolu_k_keep.json')|$([ -n "$K_HAND" ] && echo true || echo false)"
+hq age "$(np "$JEVDIR/$SID/pending")" 3900000 --recursive
 mkdir -p "$LOG"
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_k_keep_t1
-check "log unwritable: the corrupt entry is taken but kept as a -sweep claim for retry" "0|1|0" \
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_k_keep_t1
+check "log unwritable: the orphan is taken but kept as a -sweep claim for retry" "0|1|0" \
   "$HOOK_RC|$(pend_n "$SID" 'toolu_k_keep.claimed-*-sweep')|$(pend_n "$SID" 'toolu_k_keep.json')"
-check "the kept file still holds the original bytes" "{not json" \
+check "the kept file still holds the original bytes" "$K_HAND" \
   "$(cat "$(find "$JEVDIR/$SID/pending" -name 'toolu_k_keep.claimed-*-sweep' | head -n 1)")"
 rmdir "$LOG"
 hq age "$(np "$JEVDIR/$SID/pending")" 3900000 --recursive
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_k_keep_t2
-check "log writable again: the retry records it once with safe defaults and removes it" "1|$SAFE_EXP|0" \
-  "$(rq toolu_k_keep 'recs.length')|$(rq toolu_k_keep "$SAFE")|$(pend_n "$SID" 'toolu_k_keep*')"
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_k_keep_t3
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_k_keep_t2
+check "log writable again: the retry records it once as llm missing with the observed jev side and removes it" "1|missing|null|ok|0" \
+  "$(rq toolu_k_keep 'recs.length')|$(rq toolu_k_keep "$MISSING")|$(pend_n "$SID" 'toolu_k_keep.*')"
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_k_keep_t3
 check "a further post records it no more" "1" "$(rq toolu_k_keep 'recs.length')"
 case_end
 
@@ -79,7 +88,7 @@ SID="jev2460-k-fresh"
 mkdir -p "$JEVDIR/$SID/pending"
 printf '{not json' > "$JEVDIR/$SID/pending/toolu_k_fresh.json"
 mock_mode '{}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair "$SID" toolu_k_fresh_t
+LLM_TEXT="SIGNALS: S2-architecture" pair "$SID" toolu_k_fresh_t
 check "a corrupt entry inside its TTL is neither recorded nor removed" "0|1" \
   "$(rq toolu_k_fresh 'recs.length')|$(pend_n "$SID" 'toolu_k_fresh.json')"
 case_end
@@ -88,16 +97,15 @@ echo "=== a parser failure on Jev's answer is unmappable with the fallback answe
 case_begin "k-parser-failure-is-unmappable" "hooks/lib/jev/broker.js"
 fx_new k-parser
 SID="jev2460-k-parser"
-mkdir -p "$JEVDIR/$SID"
-printf '%s' '{"consecutive_failures":2,"open_until_ms":0,"last_failure_status":"timeout"}' > "$JEVDIR/$SID/breaker.json"
+seed_map_breaker "$SID"
 mock_mode '{}'
 K_PF="$(kp query-parser-fail "$SID" toolu_k_parse)"
 check "queryShadow: status unmappable, registry fallback answer, latency a finite number (the POST completed), probabilities kept, parser called once" \
   "unmappable|S0-undecidable|finite|true|1" \
   "$(IFS='|' read -r a b c d e <<< "$K_PF"; [[ "$c" =~ ^[0-9]+$ ]] && c=finite; echo "$a|$b|$c|$d|$e")"
 check "the query was answered by the mock" "1" "$(mock_count systemone)"
-check "a parser failure counts as a breaker failure: 2 -> 3, last status bad-response" "3|bad-response" \
-  "$(hq json-expr "$(np "$JEVDIR/$SID/breaker.json")" 'o && [o.consecutive_failures, o.last_failure_status].join("|")')"
+check "a parser failure counts in the point's mapping scope: 2 -> 3, last status bad-response; the transport scope is untouched" \
+  "3|bad-response|absent" "$(map_breaker "$SID")|$([ -e "$JEVDIR/$SID/breaker.json" ] && echo present || echo absent)"
 K_FIN='(x) => (Number.isFinite(x) && x >= 0 ? "finite" : String(x))'
 check "the pending hand-off carries the same jev side" "unmappable|S0-undecidable|finite" \
   "$(hq json-expr "$(np "$JEVDIR/$SID/pending/toolu_k_parse.json")" 'o && [o.jev.status, o.jev.answer, ('"$K_FIN"')(o.jev.latency_ms)].join("|")')"
@@ -125,11 +133,10 @@ case_end
 case_begin "k-normal-success-resets-breaker" "hooks/lib/jev/broker.js"
 fx_new k-parser-ok
 SID="jev2460-k-pok"
-mkdir -p "$JEVDIR/$SID"
-printf '%s' '{"consecutive_failures":2,"open_until_ms":0,"last_failure_status":"timeout"}' > "$JEVDIR/$SID/breaker.json"
+seed_map_breaker "$SID"
 mock_mode '{}'
 check "a parsed, mapped answer is a success: the count resets to 0, the breaker stays closed" \
-  "ok|0|timeout|false" "$(kp query-seq "$SID" 1 real)"
+  "ok|0|bad-response|false" "$(kp query-seq "$SID" 1 real)"
 case_end
 
 echo "=== a session dir renamed away mid-write is recreated once ==="
@@ -165,7 +172,7 @@ const dir = pending.pendingDir(sid);
 const marker = (o) => (o && typeof o.marker === "string" ? o.marker : "?");
 if (cmd === "seed") {
   pending.writePending(sid, tid, { point: "complexity-judge", marker: "A" });
-  fs.writeFileSync(path.join(dir, `${tid}.unlogged-1-2`), JSON.stringify({ point: "complexity-judge", marker: "B" }));
+  fs.writeFileSync(path.join(dir, `${tid}.unlogged-1-2`), JSON.stringify({ point: "complexity-judge", marker: "B", version: pending.PENDING_VERSION }));
   process.stdout.write(fs.readdirSync(dir).sort().join(","));
 } else {
   const tids = [];
@@ -208,14 +215,13 @@ case_end
 
 echo "=== a normalizer that throws, returns a non-string or cannot load is a failure ==="
 # Jev's answer goes through the same in-process normalize() as the LLM side; any failure there is unmappable.
-K_CSV="S1-multi-file"
+K_CSV="S2-architecture"
 # k_norm_case <mode> <sid> <tid>: seed breaker 2 failures, run query-normalizer, then pair the record.
 k_norm_case() {
-  mkdir -p "$JEVDIR/$2"
-  printf '%s' '{"consecutive_failures":2,"open_until_ms":0,"last_failure_status":"timeout"}' > "$JEVDIR/$2/breaker.json"
+  seed_map_breaker "$2"
   mock_mode '{}'
   K_OUT="$(kp query-normalizer "$2" "$3" "$1")"
-  K_BRK="$(hq json-expr "$(np "$JEVDIR/$2/breaker.json")" 'o && [o.consecutive_failures, o.last_failure_status].join("|")')"
+  K_BRK="$(map_breaker "$2")"
   K_REC="$(kp record "$2" "$3")|$(rq "$3" 'recs.length + "|" + (r && [r.jev.status, r.fallback_reason, r.jev.answer, r.llm.status, r.llm.answer].join("|"))')"
 }
 # k_norm_fail_checks <mode>: fixture + run + the three unmappable assertions for one normalizer failure.
@@ -226,7 +232,7 @@ k_norm_fail_checks() {
     "unmappable|S0-undecidable|true|1" "$K_OUT"
   check "$1: counts as a breaker failure: 2 -> 3, last status bad-response" "3|bad-response" "$K_BRK"
   check "$1: the record logs jev unmappable with the fallback; the LLM answer is adopted" \
-    "record|1|unmappable|unmappable|S0-undecidable|ok|S1-multi-file" "$K_REC"
+    "record|1|unmappable|unmappable|S0-undecidable|ok|S2-architecture" "$K_REC"
 }
 case_begin "k-normalizer-throw-is-unmappable" "hooks/lib/jev/broker.js"
 k_norm_fail_checks throw
@@ -243,7 +249,7 @@ fx_new k-pnorm-real
 k_norm_case real jev2460-k-pnorm-real toolu_k_pnorm_real
 check "real normalizer: the mapped answer is recorded as ok (status|answer|latency number|calls)" \
   "ok|$K_CSV|true|1" "$K_OUT"
-check "real normalizer: a success resets the breaker count" "0|timeout" "$K_BRK"
+check "real normalizer: a success resets the breaker count" "0|bad-response" "$K_BRK"
 check "real normalizer: the record compares both ok sides" "record|1|ok||$K_CSV|ok|$K_CSV" "$K_REC"
 case_end
 
@@ -259,11 +265,11 @@ printf '%s\n' 'const p = require.resolve(process.env.JEV2460_SECRET_SHAPE);' \
   '  exports: { isSecretShaped: boom, redactSecretShaped: boom, REDACTED_PLACEHOLDER: "[REDACTED]" } };' > "$SS_STUB"
 SS_ENV=("JEV2460_SECRET_SHAPE=$REPO_N/hooks/workflow-state/complexity-routing/secret-shape.js" "NODE_OPTIONS=--require=$(np "$SS_STUB")")
 mock_mode '{}'
-LLM_TEXT="SIGNALS: S1-multi-file" pair jev2460-k-ss-fail toolu_k_ss_fail "${SS_ENV[@]}"
+LLM_TEXT="SIGNALS: S2-architecture" pair jev2460-k-ss-fail toolu_k_ss_fail "${SS_ENV[@]}"
 check "both hooks exit 0 and Jev received no query" "0|0|0" "$PRE_RC|$HOOK_RC|$(mock_count systemone)"
-check "the record keeps the LLM answer and logs jev not-run" "1|not-run|ok|S1-multi-file" \
+check "the record keeps the LLM answer and logs jev not-run" "1|not-run|ok|S2-architecture" \
   "$(rq toolu_k_ss_fail 'recs.length + "|" + (r && [r.jev.status, r.llm.status, r.llm.answer].join("|"))')"
-LLM_TEXT="SIGNALS: S1-multi-file" pair jev2460-k-ss-fail toolu_k_ss_ok
+LLM_TEXT="SIGNALS: S2-architecture" pair jev2460-k-ss-fail toolu_k_ss_ok
 check "control: the same dispatch without the stub reaches Jev once" "1|ok" \
   "$(mock_count systemone)|$(rq toolu_k_ss_ok 'r && r.jev.status')"
 case_end

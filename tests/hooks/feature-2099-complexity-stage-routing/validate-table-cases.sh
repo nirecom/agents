@@ -37,22 +37,26 @@ const CASES = [
   ["solo-not-array", mutate(function (t) { t.detail.solo_escalation = "S2-architecture"; }), false],
   ["solo-empty-ok", mutate(function (t) { t.detail.solo_escalation = []; }), true],
   ["solo-unknown-id", mutate(function (t) { t.detail.solo_escalation = ["S9-nope"]; }), false],
-  ["legacy-not-array", mutate(function (t) { t.write_code.legacy_equivalent_escalation = "S1-multi-file"; }), false],
+  // Retired ids (#2460) are unknown tokens now, so a table naming them is malformed.
+  ["solo-retired-s1-id", mutate(function (t) { t.detail.solo_escalation = ["S1-multi-file"]; }), false],
+  ["legacy-retired-s6-id", mutate(function (t) { t.write_code.legacy_equivalent_escalation.push(["S6-long-plan"]); }), false],
+  ["legacy-not-array", mutate(function (t) { t.write_code.legacy_equivalent_escalation = "S1b-wide-change"; }), false],
   ["legacy-empty-inner", mutate(function (t) { t.write_code.legacy_equivalent_escalation.push([]); }), false],
-  ["legacy-nonarray-inner", mutate(function (t) { t.write_code.legacy_equivalent_escalation.push("S1-multi-file"); }), false],
+  ["legacy-nonarray-inner", mutate(function (t) { t.write_code.legacy_equivalent_escalation.push("S1b-wide-change"); }), false],
   ["legacy-unknown-id", mutate(function (t) { t.write_code.legacy_equivalent_escalation.push(["S9-nope"]); }), false],
+  ["combo-valid-pair-ok", mutate(function (t) { t.detail.combination_escalation.push(["S1b-wide-change", "S4-installer"]); }), true],
   ["combo-empty-inner", mutate(function (t) { t.detail.combination_escalation.push([]); }), false],
   ["combo-singleton", mutate(function (t) { t.detail.combination_escalation.push(["S2-architecture"]); }), false],
   ["combo-not-array", mutate(function (t) { t.detail.combination_escalation = ["S2-architecture"]; }), false],
-  ["combo-unknown-id", mutate(function (t) { t.detail.combination_escalation.push(["S9-nope", "S6-long-plan"]); }), false],
+  ["combo-unknown-id", mutate(function (t) { t.detail.combination_escalation.push(["S9-nope", "S4-installer"]); }), false],
   // Malformed NESTED element types. A number is not an unknown signal id — it is
   // the wrong type — and the D1 shape table requires every escalation element
   // (nested ones included) to be a member of SIGNAL_IDS, which no number is.
   ["solo-number-element", mutate(function (t) { t.detail.solo_escalation.push(7); }), false],
   ["solo-null-element", mutate(function (t) { t.detail.solo_escalation.push(null); }), false],
   ["legacy-number-element", mutate(function (t) { t.write_code.legacy_equivalent_escalation.push([7]); }), false],
-  ["combo-number-element", mutate(function (t) { t.detail.combination_escalation.push([7, "S6-long-plan"]); }), false],
-  ["combo-object-element", mutate(function (t) { t.detail.combination_escalation.push([{}, "S6-long-plan"]); }), false],
+  ["combo-number-element", mutate(function (t) { t.detail.combination_escalation.push([7, "S4-installer"]); }), false],
+  ["combo-object-element", mutate(function (t) { t.detail.combination_escalation.push([{}, "S4-installer"]); }), false],
   // Overlap between escalation fields is VALID: D1s shape table enumerates every
   // rejected condition and cross-field uniqueness is not among them, while the
   // D1 derivation order (solo before legacy_equivalent) makes a duplicate
@@ -60,9 +64,10 @@ const CASES = [
   // future implementation cannot quietly add a uniqueness rule that would reject
   // a table the design permits.
   ["duplicate-across-solo-and-legacy", mutate(function (t) {
-    t.write_code.solo_escalation = ["S3-security", "S1-multi-file"];
+    t.write_code.solo_escalation = ["S3-security", "S1b-wide-change"];
   }), true],
   ["duplicate-across-solo-and-combination", mutate(function (t) {
+    t.detail.combination_escalation = [["S1b-wide-change", "S4-installer"]];
     t.detail.solo_escalation = t.detail.solo_escalation.concat(["S1b-wide-change"]);
   }), true],
 ];
@@ -103,10 +108,13 @@ nonstring-default-level OK
 solo-not-array OK
 solo-empty-ok OK
 solo-unknown-id OK
+solo-retired-s1-id OK
+legacy-retired-s6-id OK
 legacy-not-array OK
 legacy-empty-inner OK
 legacy-nonarray-inner OK
 legacy-unknown-id OK
+combo-valid-pair-ok OK
 combo-empty-inner OK
 combo-singleton OK
 combo-not-array OK
@@ -137,13 +145,13 @@ console.log([
   t.write_tests.solo_escalation.join(","),
   t.write_code.solo_escalation.join(","),
   (t.write_code.legacy_equivalent_escalation || []).map(function (c) { return c.join("+"); }).join(","),
-  (t.detail.combination_escalation || []).map(function (c) { return c.join("+"); }).join(","),
+  "combination_rows=" + m.ROUTING_STAGES.map(function (s) { return (t[s].combination_escalation || []).length; }).join(","),
   soloSingletonLeak ? "SINGLETON_LEAK" : "NO_SINGLETON_LEAK",
   Object.isFrozen(t) && Object.isFrozen(t.detail.solo_escalation) ? "DEEP_FROZEN" : "NOT_DEEP_FROZEN",
 ].join(" | "));
 ')
     assert_eq "V-2 STAGE_ROUTING carries the D2 field split verbatim and its root/solo array are frozen" \
-        "S2-architecture,S5-breaking | S1b-wide-change,S2-architecture,S3-security,S4-installer,S5-breaking | S3-security | S1-multi-file,S1b-wide-change,S2-architecture,S4-installer,S5-breaking,S6-long-plan | S1b-wide-change+S6-long-plan | NO_SINGLETON_LEAK | DEEP_FROZEN" \
+        "S2-architecture,S5-breaking | S2-architecture,S3-security,S4-installer,S5-breaking | S3-security | S1b-wide-change,S2-architecture,S4-installer,S5-breaking | combination_rows=0,0,0,0 | NO_SINGLETON_LEAK | DEEP_FROZEN" \
         "$got"
 
     got=$(run_node '
@@ -184,6 +192,8 @@ function walk(v, path) {
 walk(m.STAGE_ROUTING, "STAGE_ROUTING");
 walk(m.ROUTING_STAGES, "ROUTING_STAGES");
 walk(m.SIGNAL_IDS, "SIGNAL_IDS");
+walk(m.JUDGED_SIGNAL_IDS, "JUDGED_SIGNAL_IDS");
+walk(m.DETERMINISTIC_SIGNAL_IDS, "DETERMINISTIC_SIGNAL_IDS");
 walk(m.ROUTING_TABLE_ERRORS, "ROUTING_TABLE_ERRORS");
 console.log(unfrozen.length ? unfrozen.sort().join(",") : "ALL_FROZEN");
 ')
@@ -210,9 +220,8 @@ const ATTEMPTS = [
   ["solo-element-assign", function () { t.detail.solo_escalation[0] = "S9-injected"; }],
   ["solo-length-truncate", function () { t.write_tests.solo_escalation.length = 0; }],
   ["combo-push", function () { t.detail.combination_escalation.push(["S3-security", "S4-installer"]); }],
-  ["combo-inner-push", function () { t.detail.combination_escalation[0].push("S9-injected"); }],
-  ["combo-inner-element-assign", function () { t.detail.combination_escalation[0][0] = "S9-injected"; }],
   ["legacy-push", function () { t.write_code.legacy_equivalent_escalation.push(["S9-injected"]); }],
+  ["legacy-inner-push", function () { t.write_code.legacy_equivalent_escalation[0].push("S9-injected"); }],
   ["legacy-inner-element-assign", function () { t.write_code.legacy_equivalent_escalation[0][0] = "S9-injected"; }],
   ["stages-push", function () { m.ROUTING_STAGES.push("docs"); }],
   ["signal-ids-push", function () { m.SIGNAL_IDS.push("S9-injected"); }],
@@ -239,14 +248,56 @@ let mutated = 0;
 try { t.detail.some_field = "x"; if (t.detail.some_field === "x") { mutated++; } } catch (e) {}
 try { t.detail.solo_escalation.push("S9-injected");
       if (t.detail.solo_escalation.indexOf("S9-injected") !== -1) { mutated++; } } catch (e) {}
-try { t.detail.combination_escalation[0].push("S9-injected");
-      if (t.detail.combination_escalation[0].indexOf("S9-injected") !== -1) { mutated++; } } catch (e) {}
+try { t.write_code.legacy_equivalent_escalation[0].push("S9-injected");
+      if (t.write_code.legacy_equivalent_escalation[0].indexOf("S9-injected") !== -1) { mutated++; } } catch (e) {}
 console.log("thawed_mutations=" + mutated);
 ')
     assert_eq "V-6 teeth: the same mutation attempts DO take effect on a thawed clone, so V-5 is measuring the freeze" \
         "thawed_mutations=3" "$got"
 }
 
+# V-7: the signal vocabulary is partitioned into judge-emitted and
+# deterministically-computed ids (#2460). The partition is a property of the
+# module constants, so validateRoutingTable must still reject a table argument
+# only through that table's own field checks.
+d2099_signal_partition() {
+    local got
+    got=$(run_node '
+const m = require(process.env.CR_MOD_N);
+const J = Array.isArray(m.JUDGED_SIGNAL_IDS) ? m.JUDGED_SIGNAL_IDS.slice() : [];
+const D = Array.isArray(m.DETERMINISTIC_SIGNAL_IDS) ? m.DETERMINISTIC_SIGNAL_IDS.slice() : [];
+const overlap = J.filter(function (id) { return D.indexOf(id) !== -1; });
+const union = J.concat(D).slice().sort().join(",");
+const all = m.SIGNAL_IDS.slice().sort().join(",");
+console.log([
+  "judged=" + J.join(","),
+  "deterministic=" + D.join(","),
+  "overlap=" + overlap.length,
+  union === all ? "UNION_EQUALS_SIGNAL_IDS" : "UNION_MISMATCH",
+].join(" "));
+')
+    assert_eq "V-7 JUDGED and DETERMINISTIC signal ids partition SIGNAL_IDS with no overlap" \
+        "judged=S2-architecture,S3-security,S5-breaking deterministic=S1b-wide-change,S4-installer overlap=0 UNION_EQUALS_SIGNAL_IDS" \
+        "$got"
+
+    got=$(run_node '
+const m = require(process.env.CR_MOD_N);
+const ok = m.validateRoutingTable(JSON.parse(JSON.stringify(m.STAGE_ROUTING)));
+const bad = JSON.parse(JSON.stringify(m.STAGE_ROUTING));
+bad.detail.default_level = "medium";
+const r = m.validateRoutingTable(bad);
+const foreign = r.errors.filter(function (e) { return e.indexOf("detail.") !== 0; });
+console.log([
+  "pristine=" + ok.valid + "/" + ok.errors.length,
+  "bad=" + r.valid + "/" + r.errors.length,
+  "foreign_errors=" + foreign.length,
+].join(" "));
+')
+    assert_eq "V-8 a pristine table validates clean and a broken table fails only on its own field" \
+        "pristine=true/0 bad=false/1 foreign_errors=0" "$got"
+}
+
 d2099_validate_table
 d2099_table_structure
 d2099_table_deep_freeze
+d2099_signal_partition

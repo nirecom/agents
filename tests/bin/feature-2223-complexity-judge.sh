@@ -118,17 +118,28 @@ assert_has "T2223CJ-6-judge-refs-rubric" "$JUDGE_DOC" "judge-task-complexity.md"
 assert_has "T2223CJ-7-judge-output-single-signals-line" "$JUDGE_DOC" "SIGNALS:"
 
 # ---------------------------------------------------------------------------
-# Part B — dispatch wiring (static). All four self-judgment sites must spawn the
-# judge AND normalize its output within the same block (C4).
+# Part B — dispatch wiring (static). #2460: every self-judgment site is a short
+# reference to the shared Jev procedure at point=complexity-judge (C4 window), and
+# no site calls normalize-judge-signals directly any more (jev-judge owns the write).
 # ---------------------------------------------------------------------------
 SKIP_DOC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/complexity-and-outline-skip.md"
 MDP_DOC="$SCRIPT_CHECKOUT_ROOT/skills/make-detail-plan/SKILL.md"
 WCODE_DOC="$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md"
 WTESTS_DOC="$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md"
-assert_cooccur "T2223CJ-8-skip-doc-judge-and-normalize"   "$SKIP_DOC"   "complexity-judge" "normalize-judge-signals" 40
-assert_cooccur "T2223CJ-9-mdp-judge-and-normalize"        "$MDP_DOC"    "complexity-judge" "normalize-judge-signals" 40
-assert_cooccur "T2223CJ-10-write-code-judge-and-normalize" "$WCODE_DOC"  "complexity-judge" "normalize-judge-signals" 40
-assert_cooccur "T2223CJ-11-write-tests-judge-and-normalize" "$WTESTS_DOC" "complexity-judge" "normalize-judge-signals" 40
+assert_lacks() {
+    local name="$1" file="$2" needle="$3"
+    if [[ ! -f "$file" ]]; then fail "$name — $(basename "$file") missing"; return; fi
+    if grep -qF -- "$needle" "$file"; then fail "$name — '$needle' still present in $(basename "$file")"
+    else pass "$name"; fi
+}
+assert_cooccur "T2223CJ-8-skip-doc-refs-shared-procedure"    "$SKIP_DOC"   "jev-two-stage-judge.md" "complexity-judge" 3
+assert_cooccur "T2223CJ-9-mdp-refs-shared-procedure"         "$MDP_DOC"    "jev-two-stage-judge.md" "complexity-judge" 3
+assert_cooccur "T2223CJ-10-write-code-refs-shared-procedure" "$WCODE_DOC"  "jev-two-stage-judge.md" "complexity-judge" 3
+assert_cooccur "T2223CJ-11-write-tests-refs-shared-procedure" "$WTESTS_DOC" "jev-two-stage-judge.md" "complexity-judge" 3
+assert_lacks "T2223CJ-8b-skip-doc-no-direct-normalize"    "$SKIP_DOC"   "normalize-judge-signals"
+assert_lacks "T2223CJ-9b-mdp-no-direct-normalize"         "$MDP_DOC"    "normalize-judge-signals"
+assert_lacks "T2223CJ-10b-write-code-no-direct-normalize" "$WCODE_DOC"  "normalize-judge-signals"
+assert_lacks "T2223CJ-11b-write-tests-no-direct-normalize" "$WTESTS_DOC" "normalize-judge-signals"
 
 # ---------------------------------------------------------------------------
 # Part C — normalize-judge-signals strict contract (table-driven).
@@ -150,11 +161,11 @@ assert_normalize() {
 }
 
 # VALID cases.
-printf 'SIGNALS: S1-multi-file, S3-security\n' > "$TMP_ROOT/raw-N01.txt"
-assert_normalize "T2223CJ-N01-valid-multi" "$TMP_ROOT/raw-N01.txt" "S1-multi-file,S3-security"
+printf 'SIGNALS: S1b-wide-change, S3-security\n' > "$TMP_ROOT/raw-N01.txt"
+assert_normalize "T2223CJ-N01-valid-multi" "$TMP_ROOT/raw-N01.txt" "S1b-wide-change,S3-security"
 
-printf 'SIGNALS: S1-multi-file\n' > "$TMP_ROOT/raw-N02.txt"
-assert_normalize "T2223CJ-N02-valid-single" "$TMP_ROOT/raw-N02.txt" "S1-multi-file"
+printf 'SIGNALS: S3-security\n' > "$TMP_ROOT/raw-N02.txt"
+assert_normalize "T2223CJ-N02-valid-single" "$TMP_ROOT/raw-N02.txt" "S3-security"
 
 printf 'SIGNALS: none\n' > "$TMP_ROOT/raw-N03.txt"
 assert_normalize "T2223CJ-N03-valid-none-empty" "$TMP_ROOT/raw-N03.txt" ""
@@ -172,26 +183,33 @@ assert_normalize "T2223CJ-N16-valid-s4-installer" "$TMP_ROOT/raw-N16.txt" "S4-in
 printf 'SIGNALS: S5-breaking\n' > "$TMP_ROOT/raw-N17.txt"
 assert_normalize "T2223CJ-N17-valid-s5-breaking" "$TMP_ROOT/raw-N17.txt" "S5-breaking"
 
-printf 'SIGNALS: S6-long-plan\n' > "$TMP_ROOT/raw-N18.txt"
-assert_normalize "T2223CJ-N18-valid-s6-long-plan" "$TMP_ROOT/raw-N18.txt" "S6-long-plan"
+printf 'SIGNALS: S1b-wide-change, S2-architecture, S3-security, S4-installer, S5-breaking\n' > "$TMP_ROOT/raw-N19.txt"
+assert_normalize "T2223CJ-N19-valid-all-signals" "$TMP_ROOT/raw-N19.txt" "S1b-wide-change,S2-architecture,S3-security,S4-installer,S5-breaking"
 
-printf 'SIGNALS: S1-multi-file, S1b-wide-change, S2-architecture, S3-security, S4-installer, S5-breaking, S6-long-plan\n' > "$TMP_ROOT/raw-N19.txt"
-assert_normalize "T2223CJ-N19-valid-all-signals" "$TMP_ROOT/raw-N19.txt" "S1-multi-file,S1b-wide-change,S2-architecture,S3-security,S4-installer,S5-breaking,S6-long-plan"
+# #2460: the retired ids are unknown tokens now, alone or beside a valid id.
+printf 'SIGNALS: S1-multi-file\n' > "$TMP_ROOT/raw-N24.txt"
+assert_normalize "T2223CJ-N24-retired-s1-multi-file-undecidable" "$TMP_ROOT/raw-N24.txt" "S0-undecidable"
+
+printf 'SIGNALS: S6-long-plan\n' > "$TMP_ROOT/raw-N18.txt"
+assert_normalize "T2223CJ-N18-retired-s6-long-plan-undecidable" "$TMP_ROOT/raw-N18.txt" "S0-undecidable"
+
+printf 'SIGNALS: S2-architecture, S6-long-plan\n' > "$TMP_ROOT/raw-N25.txt"
+assert_normalize "T2223CJ-N25-retired-beside-valid-undecidable" "$TMP_ROOT/raw-N25.txt" "S0-undecidable"
 
 # INVALID cases -> S0-undecidable.
-printf '%s\n%s\n' 'SIGNALS: S1-multi-file' 'SIGNALS: S3-security' > "$TMP_ROOT/raw-N05.txt"
+printf '%s\n%s\n' 'SIGNALS: S1b-wide-change' 'SIGNALS: S3-security' > "$TMP_ROOT/raw-N05.txt"
 assert_normalize "T2223CJ-N05-invalid-multiple-signals-lines" "$TMP_ROOT/raw-N05.txt" "S0-undecidable"
 
-printf '%s\n%s\n' 'SIGNALS: S1-multi-file' 'S2-architecture' > "$TMP_ROOT/raw-N06.txt"
+printf '%s\n%s\n' 'SIGNALS: S1b-wide-change' 'S2-architecture' > "$TMP_ROOT/raw-N06.txt"
 assert_normalize "T2223CJ-N06-invalid-mixed-signal-line" "$TMP_ROOT/raw-N06.txt" "S0-undecidable"
 
-printf 'SIGNALS: ,S1-multi-file\n' > "$TMP_ROOT/raw-N07.txt"
+printf 'SIGNALS: ,S1b-wide-change\n' > "$TMP_ROOT/raw-N07.txt"
 assert_normalize "T2223CJ-N07-invalid-leading-comma" "$TMP_ROOT/raw-N07.txt" "S0-undecidable"
 
-printf 'SIGNALS: S1-multi-file,,S3-security\n' > "$TMP_ROOT/raw-N08.txt"
+printf 'SIGNALS: S1b-wide-change,,S3-security\n' > "$TMP_ROOT/raw-N08.txt"
 assert_normalize "T2223CJ-N08-invalid-double-comma" "$TMP_ROOT/raw-N08.txt" "S0-undecidable"
 
-printf 'SIGNALS: S1-multi-file,\n' > "$TMP_ROOT/raw-N09.txt"
+printf 'SIGNALS: S1b-wide-change,\n' > "$TMP_ROOT/raw-N09.txt"
 assert_normalize "T2223CJ-N09-invalid-trailing-comma" "$TMP_ROOT/raw-N09.txt" "S0-undecidable"
 
 printf 'SIGNALS: ,\n' > "$TMP_ROOT/raw-N10.txt"
@@ -206,7 +224,7 @@ assert_normalize "T2223CJ-N12-invalid-reserved-value-input" "$TMP_ROOT/raw-N12.t
 printf '%s\n%s\n' 'Just some free-form reasoning with no verdict line.' 'Nothing structured here.' > "$TMP_ROOT/raw-N13.txt"
 assert_normalize "T2223CJ-N13-invalid-no-signals-line" "$TMP_ROOT/raw-N13.txt" "S0-undecidable"
 
-printf 'SIGNALS: S1-multi-file;rm -rf /\n' > "$TMP_ROOT/raw-N14.txt"
+printf 'SIGNALS: S1b-wide-change;rm -rf /\n' > "$TMP_ROOT/raw-N14.txt"
 assert_normalize "T2223CJ-N14-invalid-shell-metachar" "$TMP_ROOT/raw-N14.txt" "S0-undecidable"
 
 # ---------------------------------------------------------------------------
@@ -221,7 +239,7 @@ assert_normalize "T2223CJ-N20-missing-input-file" "$TMP_ROOT/does-not-exist.txt"
 # and the stderr must name the write failure so the exit is attributable to the
 # write, not to argument rejection. Gated on the CLI existing (RED on absence).
 if [[ -f "$NORMALIZE_CLI" ]]; then
-    printf 'SIGNALS: S1-multi-file\n' > "$TMP_ROOT/raw-N21.txt"
+    printf 'SIGNALS: S1b-wide-change\n' > "$TMP_ROOT/raw-N21.txt"
     mkdir -p "$(signals_path cj-N21)"
     n21_rc=0
     run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N21.txt" --session cj-N21 --stage "$NORMALIZE_STAGE" >/dev/null 2>"$TMP_ROOT/n21.err" || n21_rc=$?
@@ -238,7 +256,7 @@ fi
 
 # C8(c): re-running with identical input into the same derived path must
 # reproduce byte-identical valid output (run 1 is moved aside before run 2).
-printf 'SIGNALS: S1-multi-file, S3-security\n' > "$TMP_ROOT/raw-N22.txt"
+printf 'SIGNALS: S1b-wide-change, S3-security\n' > "$TMP_ROOT/raw-N22.txt"
 idem_out="$(signals_path cj-N22)"
 idem1="$TMP_ROOT/idem-1.txt"; idem2="$TMP_ROOT/idem-2.txt"
 rm -f "$idem1" "$idem2" "$idem_out"
@@ -247,7 +265,7 @@ run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N22.txt" --s
 run_with_timeout 30 node "$NORMALIZE_CLI" --raw-file "$TMP_ROOT/raw-N22.txt" --session cj-N22 --stage "$NORMALIZE_STAGE" >/dev/null 2>&1 || true
 [[ -f "$idem_out" ]] && cp "$idem_out" "$idem2"
 if [[ -f "$idem1" && -f "$idem2" ]] \
-    && [[ "$(trim_tail "$(cat "$idem1")")" == "S1-multi-file,S3-security" ]] \
+    && [[ "$(trim_tail "$(cat "$idem1")")" == "S1b-wide-change,S3-security" ]] \
     && cmp -s "$idem1" "$idem2"; then
     pass "T2223CJ-N23-idempotent-rerun"
 else
@@ -269,14 +287,14 @@ fi
 
 r1_ids="$(run_with_timeout 30 node -e '
 const cr = require(process.argv[1]);
-const ok = Array.isArray(cr.SIGNAL_IDS) && cr.SIGNAL_IDS.length === 7
-  && ["S1-multi-file","S1b-wide-change","S2-architecture","S3-security","S4-installer","S5-breaking","S6-long-plan"].every(s => cr.SIGNAL_IDS.includes(s));
+const ok = Array.isArray(cr.SIGNAL_IDS) && cr.SIGNAL_IDS.length === 5
+  && ["S1b-wide-change","S2-architecture","S3-security","S4-installer","S5-breaking"].every(s => cr.SIGNAL_IDS.includes(s));
 process.stdout.write(ok ? "ok" : "bad:" + JSON.stringify(cr.SIGNAL_IDS));
 ' "$SCRIPT_CHECKOUT_ROOT/$ROUTING_JS" 2>&1 || true)"
 if [[ "$r1_ids" == "ok" ]]; then
     pass "T2223CJ-R1b-routing-signal-vocabulary-intact"
 else
-    fail "T2223CJ-R1b-routing-signal-vocabulary-intact — SIGNAL_IDS not the 7-member SSOT set (got: $r1_ids)"
+    fail "T2223CJ-R1b-routing-signal-vocabulary-intact — SIGNAL_IDS not the 5-member #2460 SSOT set (got: $r1_ids)"
 fi
 
 echo ""

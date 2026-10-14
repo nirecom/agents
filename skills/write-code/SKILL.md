@@ -10,22 +10,19 @@ Edit source code for the current task.
 ## Procedure
 
 WCD-0. Read the session facts once, before the pre-launch steps that consume them: `node "$AGENTS_MAIN_ROOT/bin/workflow/read-session-facts" --session "$SESSION_ID"`
-   - `PLANS_DIR=` (substitute for every `<PLANS_DIR>` below), `GATE_CONFIRM_CODE=` (the WCD-2 gate: `ON`/`OFF`/`ERROR`), `COMPLEXITY_LEVEL_write_code=`, `COMPLEXITY_MODEL_write_code=` and `COMPLEXITY_SIGNALS=` (the WCD-3 level, model and signals).
+   - `PLANS_DIR=` (substitute for every `<PLANS_DIR>` below) and `GATE_CONFIRM_CODE=` (the WCD-2 gate: `ON`/`OFF`/`ERROR`).
    - If the command exits non-zero, or `PLANS_DIR=NONE`, stop — do not proceed with any step that uses `<PLANS_DIR>`; report via /supervisor-report; never construct a path like `NONE/<session-id>-...`.
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 Read `rules/ops.md` before any destructive or system-state-changing command (including inside WCD-4 self-repair) — on-demand-only, never auto-injected; it owns the recovery-options-first decision path.
 
 WCD-1. Read `rules/core-principles.md`, `rules/coding.md` (on-demand-only: not auto-injected, so this Read is the only way it arrives), and the target files identified from the plan.
 
-WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then branch on `GATE_CONFIRM_CODE` from WCD-0:
-   - `OFF`: proceed to WCD-3.
-   - `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
+WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent).
+   - Write every file you plan to edit, one path per line (repo-relative, nothing else on the line), to `<PLANS_DIR>/<session-id>-write-code-files.txt` with the Write tool.
+   - Keep that list complete: it is the sole input of the S1b and S4 signals judged in WCD-3.
+   - Then branch on `GATE_CONFIRM_CODE` from WCD-0 — `OFF`: proceed to WCD-3; `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
-WCD-3. If `COMPLEXITY_LEVEL_write_code` from WCD-0 is not `NONE`, use `COMPLEXITY_MODEL_write_code` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
-   - If `NONE` (fail-open):
-     - Dispatch `subagent_type: complexity-judge` (pass intent/outline/detail + WCD-2 file list; rubric: `skills/_shared/judge-task-complexity.md`); write raw output to `<PLANS_DIR>/<session-id>-write-code-judge-raw.txt` (Write tool — untrusted text via file only).
-     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-code-judge-raw.txt" --session "<session-id>" --stage write-code`.
-     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage write_code --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
+WCD-3. Always follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`write-code` (S1b and S4 come only from the WCD-2 list, so no stored evaluation is reused); use its `model=` and `SIGNALS_CSV` — never judge the level inline.
    Emit in Claude text output (NOT Bash echo): `> Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])`
 WCD-3a. Emit `echo "<<WORKFLOW_MARK_STEP_write_code_in_progress>>"` via Bash immediately before the WCD-4 subagent launch.
 

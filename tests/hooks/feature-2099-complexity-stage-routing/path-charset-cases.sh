@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/path-charset-cases.sh
-# Tests: bin/workflow/record-complexity-and-skip, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, hooks/workflow-state.js
+# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, hooks/workflow-state.js
 # Tags: complexity, routing, cli, quoting, unicode, paths, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER
 # traversal-attack-cases.sh — d2099t_snapshot and the canary tree come from there.
@@ -65,16 +65,23 @@ d2099pc_valid_path_roundtrip() {
     before_out=$(d2099t_snapshot "$D2099T_OUTSIDE")
     sid=$(d2099pc_new_session "$wf" "$pl")
 
-    # The wrapper first: it is the bash member of the family, so it is where an
-    # unquoted expansion is most likely, and its answer is a whole-pipeline one.
+    # The writer first: it is what persists under the path.
     rc=0
-    out=$(d2099pc_run "$wf" "$pl" "$(d2099_cli_runner "$BIN_RECORD_SKIP")" "$BIN_RECORD_SKIP" \
-        --session "$sid" --signals "S2-architecture" --target outline 2>/dev/null) || rc=$?
-    assert_eq "PC-2 record-complexity-and-skip resolves normally with a space/Unicode/metacharacter state dir" "judgment" "$out"
-    assert_eq "PC-3 ... on a clean exit" "0" "$rc"
+    out=$(d2099pc_run "$wf" "$pl" node "$BIN_RECORD" \
+        --session "$sid" --signals "S2-architecture" 2>/dev/null) || rc=$?
+    assert_eq "PC-3 record-complexity-evaluation exits cleanly with a space/Unicode/metacharacter state dir" "0" "$rc"
+    assert_contains "PC-3a ... and prints its success receipt" "RECORDED_COMPLEXITY" "$out"
 
-    # Read back through the OTHER entry point: written by the wrapper's delegate,
-    # read by the reader, both resolving the same awkward path independently.
+    out=$(
+        export WORKFLOW_STATE_DIR="$(to_node_path "$wf")"
+        export WORKFLOW_PLANS_DIR="$(to_node_path "$pl")"
+        printf '%s %s' "$(d2099_side_effects "$sid" | cut -d' ' -f1)" "$(d2099_no_skip_view "$sid")"
+    )
+    assert_eq "PC-3b ... having recorded under that path and skipped no step" \
+        "ce=1 outline=pending detail=pending skip=0" "$out"
+
+    # Read back through the OTHER entry point: written by the writer, read by
+    # the reader, both resolving the same awkward path independently.
     out=$(d2099pc_run "$wf" "$pl" node "$BIN_READ" --session "$sid" --stage detail 2>/dev/null)
     assert_eq "PC-4 read-complexity-evaluation --stage returns the level that was persisted under that path" \
         "level=high" "$(printf '%s\n' "$out" | head -1)"
@@ -100,4 +107,6 @@ d2099pc_valid_path_roundtrip() {
     assert_eq "PC-10 the out-of-tree canary is byte-identical after the round trip" "$before_out" "$after_out"
 }
 
+case_begin "pc-valid-path-roundtrip" "bin/workflow/record-complexity-evaluation"
 d2099pc_valid_path_roundtrip
+case_end

@@ -3,24 +3,12 @@
 # Tests: hooks/workflow-state/skip-signal-resolver.js, bin/workflow/record-skip-judgment, hooks/gate-plan-skip-sentinel.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, skip-signal, scope:issue-specific
 #
-# Pre-implementation tests for #1286 (recorded-verdict skip judgment).
-# Expected to go green after write-code implements:
-#   - recordSkipJudgment / readSkipJudgment / hasValidSkipJudgment in skip-signal-resolver.js
-#   - skip_judgment stored at state.steps[targetStep].skip_judgment
-#   - bin/workflow/record-skip-judgment CLI
-#   - gate-plan-skip-sentinel.js reads hasValidSkipJudgment
-#   - next-step marks step skipped on valid recorded judgment
-#
-# Dispatcher: shared helpers/fixtures live in feature-1286-recorded-verdict-skip/helpers.sh;
-# case groups live in module-api.sh, cli.sh, gate.sh, next-step.sh.
+# Recorded-verdict skip judgment (#1286), at the #2460 end state. Dispatcher only:
+# helpers/fixtures in feature-1286-recorded-verdict-skip/helpers.sh, case groups in its siblings.
 #
 # # L3 gap
-# L2 tests call hooks via direct node invocations and write state fixtures directly.
-# A real Claude Code session (L3) would additionally verify:
-#   (a) the hook fires on actual PreToolUse events and reads the live session-id;
-#   (b) record-skip-judgment is invoked by the orchestrator inside a real CC session;
-#   (c) next-step is called by the workflow driver after the sentinel echo.
-# Closest-to-action mitigation: bin/check-verification-gate.sh category: skill-orchestration
+# A real session would also prove the hook fires on live PreToolUse events and that
+# jev-judge finalize invokes record-skip-judgment; mitigation: bin/check-verification-gate.sh skill-orchestration.
 
 set -uo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -49,6 +37,8 @@ TESTS_SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1286-recorde
 . "$TESTS_SUBDIR/gate.sh"
 # shellcheck source=./feature-1286-recorded-verdict-skip/next-step.sh
 . "$TESTS_SUBDIR/next-step.sh"
+# shellcheck source=./feature-1286-recorded-verdict-skip/next-step-retired-shapes.sh
+. "$TESTS_SUBDIR/next-step-retired-shapes.sh"
 # shellcheck source=./feature-1286-recorded-verdict-skip/stale-guard.sh
 . "$TESTS_SUBDIR/stale-guard.sh"
 

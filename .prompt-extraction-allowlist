@@ -14,7 +14,6 @@ code-fence agents/outline-reviewer.md 2
 code-fence agents/refactor-prompts-judge.md 1
 code-fence agents/security-scanner.md 1
 inline-procedure agents/security-scanner.md 1
-inline-procedure agents/skip-verifier.md 1
 inline-procedure agents/supervisor.md 2
 code-fence agents/survey-code.md 1
 code-fence agents/survey-history.md 1

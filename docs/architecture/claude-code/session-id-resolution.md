@@ -152,17 +152,15 @@ waiver excuses a match: the names are retired, so no legitimate use exists to wa
 ## Known limitations and follow-up candidates
 
 - **No bash bridge for the workflow-session-id family.** `resolveSessionId()` has
-  `bin/resolve-session-id`; `resolveWorkflowSessionId()` has no equivalent. Six skill scripts
+  `bin/resolve-session-id`; `resolveWorkflowSessionId()` has no equivalent. Four skill scripts
   therefore still require the caller to export `SESSION_ID`:
   `skills/review-tests/scripts/run-codex-review-loop.sh`,
   `skills/review-plan-security/scripts/run-codex-review-loop.sh`,
   `skills/make-detail-plan/scripts/run-codex-review-loop.sh`,
-  `skills/make-outline-plan/scripts/run-codex-review-loop.sh`,
-  `skills/make-outline-plan/scripts/check-detail-skip.sh`,
-  `skills/make-outline-plan/scripts/check-outline-skip.sh`.
+  `skills/make-outline-plan/scripts/run-codex-review-loop.sh`.
   They fail loudly (`${SESSION_ID:?}`) rather than skipping silently, so the gap is visible
   rather than dangerous. Adding the bridge means a new PATH-exposed entrypoint with its own
-  output contract and tests, applied to all six sites at once.
+  output contract and tests, applied to all four sites at once.
 - **Bridge-caller migration is partial (CPR-ORTH gap).** `bin/resolve-session-id`'s rc=3
   fail-closed fault contract landed with this diff, but not every caller that shells out to a
   bridge-shaped script was migrated to distinguish rc=3 (fault) from rc=2 (no session) — e.g.

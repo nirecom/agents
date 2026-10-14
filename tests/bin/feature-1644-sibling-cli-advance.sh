@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/record-complexity-and-skip, bin/workflow/next-step, hooks/workflow-state/record-step-verdict.js
+# Tests: bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/next-step, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, sibling-cli, class-completeness, scope:issue-specific, pwsh-not-required
 
 # #1644 stage 1 — the `--advance` forward operation on the SIBLING workflow CLIs, plus
@@ -19,7 +19,6 @@ nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
 SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
-RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
 WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
@@ -30,7 +29,11 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned so a planted claim never lands in a real home.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
+# shellcheck source=../lib/skip-judgment.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -98,9 +101,29 @@ top_field() {
   ' 2>/dev/null || echo PROBE_FAIL
 }
 
+# #2460 stage 4: the --cond/--source/--ticket form. Each session uses its own ticket.
+RSJ_OK=(--cond so_c1=true --cond so_c2=true --source subagent --ticket 0123456789abcdef)
+RSJ_C2F=(--cond so_c1=true --cond so_c2=false --source subagent --ticket 0123456789abcdef)
+RSJ_TID=0123456789abcdef
+CONDS_OK='{"so_c1":true,"so_c2":true}'
+CONDS_C2F='{"so_c1":true,"so_c2":false}'
+# ticketed <sid> [conds-json] [field=json ...] — the finalized claim the CLI verifies against.
+ticketed() {
+  local sid="$1" conds="${2:-$CONDS_OK}"
+  shift
+  [ "$#" -gt 0 ] && shift
+  plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$sid" outline "$RSJ_TID" "$conds" subagent "$@"
+}
+judgment() {
+  PROBE_SID="$1" run_with_timeout node -e '
+    const wf = require(process.env.WFSTATE_MODULE);
+    process.stdout.write(JSON.stringify(wf.readSkipJudgment(process.env.PROBE_SID, "outline") || null));
+  ' 2>/dev/null || echo PROBE_FAIL
+}
+
 echo "=== S1: record-skip-judgment WITHOUT --advance keeps its exact stdout ==="
-at_outline s1
-run_cli node "$RSJ" --session s1 --target outline --c1 true --c2 true
+at_outline s1; ticketed s1
+run_cli node "$RSJ" --session s1 --target outline "${RSJ_OK[@]}"
 check "S1: exit 0" 0 "$RC"
 check "S1: stdout is byte-identical to the pre-#1644 form" \
   "RECORDED=outline all_conditions_met=true" "$OUT"
@@ -108,8 +131,8 @@ check "S1: the step itself is NOT settled without --advance" '"pending"' "$(step
 
 echo ""
 echo "=== S2: record-skip-judgment --advance settles the target step ==="
-at_outline s2
-run_cli node "$RSJ" --session s2 --target outline --c1 true --c2 true --advance
+at_outline s2; ticketed s2
+run_cli node "$RSJ" --session s2 --target outline "${RSJ_OK[@]}" --advance
 check "S2: exit 0" 0 "$RC"
 check_contains "S2: the legacy judgment line survives" "RECORDED=outline all_conditions_met=true" "$OUT"
 check_contains "S2: the advance line reports the settled step" "ADVANCED=outline status=skipped" "$OUT"
@@ -129,8 +152,8 @@ check "S2: skip_verdict.verdict is pending" '"pending"' "$(step_sub s2 outline s
 
 echo ""
 echo "=== S3: record-skip-judgment --advance does NOT settle when a condition fails ==="
-at_outline s3
-run_cli node "$RSJ" --session s3 --target outline --c1 true --c2 false --advance
+at_outline s3; ticketed s3 "$CONDS_C2F"
+run_cli node "$RSJ" --session s3 --target outline "${RSJ_C2F[@]}" --advance
 check "S3: exit 0 (a false judgment is a valid recording, not an error)" 0 "$RC"
 check_contains "S3: the judgment is still recorded" "all_conditions_met=false" "$OUT"
 check "S3: outline stays pending" '"pending"' "$(step_status s3 outline)"
@@ -142,8 +165,8 @@ check_not_contains "S3: no step-status line is emitted" "status=skipped" "$OUT"
 
 echo ""
 echo "=== S4: record-skip-judgment --advance --next advances the current step ==="
-at_outline s4
-run_cli node "$RSJ" --session s4 --target outline --c1 true --c2 true --advance --next
+at_outline s4; ticketed s4
+run_cli node "$RSJ" --session s4 --target outline "${RSJ_OK[@]}" --advance --next
 check "S4: exit 0" 0 "$RC"
 check_contains "S4: ADVANCED=outline" "ADVANCED=outline" "$OUT"
 check "S4: exactly one ACTION line" 1 "$(action_lines)"
@@ -151,11 +174,12 @@ check "S4: exactly one ACTION line" 1 "$(action_lines)"
 echo ""
 echo "=== S5: a failed record emits no ACTION line and exits 2 ==="
 BLOCK="$TMPDIR_BASE/blockfile"; : > "$BLOCK"
-at_outline s5
-RC=0
-OUT="$(WORKFLOW_STATE_DIR="$(nrm "$BLOCK")" run_with_timeout node "$RSJ" \
-  --session s5 --target outline --c1 true --c2 true --advance --next 2>/dev/null)" || RC=$?
+at_outline s5; ticketed s5
+run_cli env WORKFLOW_STATE_DIR="$(nrm "$BLOCK")" node "$RSJ" \
+  --session s5 --target outline "${RSJ_OK[@]}" --advance --next
 check "S5: unwritable state exits 2" 2 "$RC"
+# The ticket check also exits 2, so the code alone would not show the write was reached.
+check_contains "S5: the failure is the write, not the ticket check" "write verification failed" "$ERR"
 check "S5: no ACTION line on failure" 0 "$(action_lines)"
 
 echo ""
@@ -198,61 +222,21 @@ check "S8: workflow_init is complete" '"complete"' "$(step_status s8 workflow_in
 check "S8: deliverable_type is still recorded" '"wf-meta"' "$(top_field s8)"
 
 echo ""
-echo "=== S9: record-complexity-and-skip WITHOUT --advance keeps its bare token ==="
-# This script resolves its siblings from its own location, so the real repo's copy
-# is the only meaningful one for the pass-through cases. No CONFIRM_* branch is
-# reachable from this path, so the repo .env cannot influence the result.
-make_state s9a ""
-run_cli env bash "$RCAS" --session s9a --signals "" --target outline
-check "S9a: exit 0" 0 "$RC"
-check "S9a: stdout is exactly the bare token" "auto" "$OUT"
-check "S9a: no step is settled without --advance" '"pending"' "$(step_status s9a outline)"
-
-make_state s9b ""
-run_cli env bash "$RCAS" --session s9b --signals "S2-architecture" --target outline
-check "S9b: high verdict yields the judgment token" "judgment" "$OUT"
-
-echo ""
-echo "=== S10: record-complexity-and-skip --advance normalizes child failures to exit 3 ==="
-# Fixture checkout: step 1 is a no-op, the resolver forces the auto branch, and
-# record-skip-judgment fails with exit 2. SKIP_MODE is therefore already known
-# when the failure happens, which is the unambiguous half of the contract. The
-# script finds those siblings from its own location, so a copy of it runs from there.
-FAKE="$TMPDIR_BASE/fake-checkout"
-mkdir -p "$FAKE/bin/workflow" "$FAKE/hooks/workflow-state"
-FAKE_RCAS="$FAKE/bin/workflow/record-complexity-and-skip"
-cp "$RCAS" "$FAKE_RCAS"
-printf '#!/usr/bin/env node\nprocess.exit(0);\n' > "$FAKE/bin/workflow/record-complexity-evaluation"
-printf 'module.exports={resolveSkipConditionsFromComplexity:()=>({so_c1:true,so_c2:true})};\n' \
-  > "$FAKE/hooks/workflow-state/skip-signal-resolver.js"
-printf '#!/usr/bin/env node\nprocess.stderr.write("stub: forced failure\\n");\nprocess.exit(2);\n' \
-  > "$FAKE/bin/workflow/record-skip-judgment"
-
-make_state s10a ""
-run_cli env bash "$FAKE_RCAS" --session s10a --signals "" --target outline --advance
-check "S10a: the child's exit 2 is NOT propagated" 3 "$RC"
-check "S10a: no ACTION line is emitted on the failure path" 0 "$(action_lines)"
-check_contains "S10a: stdout still carries the resolved skip mode" "auto" "$OUT"
-
-# Symmetric control: without --advance the current exit-2 propagation is untouched.
-make_state s10b ""
-run_cli env bash "$FAKE_RCAS" --session s10b --signals "" --target outline
-check "S10b: without --advance the child exit code still propagates" 2 "$RC"
-
-echo ""
 echo "=== S11: class-completeness guard over bin/workflow/ ==="
 # Three-way partition. A new CLI under bin/workflow/ must be classified here
 # before it can land, which is what makes the advance class enumerable at all.
-ADVANCE_MEMBERS="next-step record-skip-judgment record-complexity-and-skip set-deliverable-type set-workflow-type"
-# record-skip-verdict is subagent-only: the skip-verifier subagent records a
-# verdict about a skip someone else declared, so it never advances the workflow
-# on its own behalf. That is why it is an exception and not a member.
+ADVANCE_MEMBERS="next-step record-skip-judgment set-deliverable-type set-workflow-type"
+# record-skip-verdict is a manual resolver: it records a verdict about a skip
+# someone else declared, so it never advances the workflow on its own behalf.
+# That is why it is an exception and not a member.
 NAMED_EXCEPTIONS="record-skip-verdict"
 # derive-complexity-level (#2099) is a NON-member by construction: it is a
 # stateless derivation CLI (detail.md D1/D4) that reads no session and writes no
 # state, so there is no step for it to advance. S11c below is what pins that —
 # it must carry no --advance token at all.
-NON_MEMBERS="adopt-session-state check-plan-approval derive-complexity-level handoff-append normalize-judge-signals pr-state read-complexity-evaluation read-merge-base-baseline read-session-facts read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline release-channel render-issue-comments run-tests-baseline-evidence run-tests-unrunnable-note workflow-init-driver"
+# #2460: jev-judge takes no --advance of its own; its finalize hands --advance to
+# a record-skip-judgment child from its library, never from the CLI file.
+NON_MEMBERS="adopt-session-state check-plan-approval derive-complexity-level handoff-append jev-judge normalize-judge-signals pr-state read-complexity-evaluation read-merge-base-baseline read-session-facts read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline release-channel render-issue-comments run-tests-baseline-evidence run-tests-unrunnable-note workflow-init-driver"
 
 ACTUAL="$(ls "$SCRIPT_CHECKOUT_ROOT/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
 EXPECTED="$(printf '%s %s %s' "$ADVANCE_MEMBERS" "$NAMED_EXCEPTIONS" "$NON_MEMBERS" \
@@ -295,79 +279,28 @@ for m in $NON_MEMBERS; do
 done
 
 echo ""
-echo "=== S12: record-complexity-and-skip --advance settles the target step ==="
-# The RCAS analogue of S2. S9/S10 only cover pass-through and the forced-failure
-# normalization, so without this case the whole delegation chain
-# (RCAS --advance -> record-skip-judgment --advance -> recordStepVerdict) could be
-# missing and every existing RCAS case would still pass.
-#
-# The real checkout's RCAS is required: it resolves its siblings from its own
-# location and a stub tree would defeat the purpose of a happy path. The repo's
-# own .env cannot decide this case either way — the CLI door's only config-file
-# branch is CONFIRM_TESTS for write_tests (plan line 183), and the target here is
-# outline, which the plan admits unconditionally (line 182).
-make_state s12 "workflow_init clarify_intent research"
-printf '# intent\n' > "$PLANS_DIR/s12-intent.md"
-run_cli env bash "$RCAS" \
-  --session s12 --signals "" --target outline --advance
-check "S12a: exit 0" 0 "$RC"
-check "S12a: outline is settled as skipped" '"skipped"' "$(step_status s12 outline)"
-check_contains "S12a: the advance form leads with a newline-terminated SKIP_MODE line" \
-  "SKIP_MODE=auto" "$OUT"
-# The delegated writer, not RCAS, owns the reason literal and the A-4 co-write.
-check_contains "S12a: skip_reason carries the recorded-verdict: prefix" \
-  "recorded-verdict:" "$(step_sub s12 outline skip_reason)"
-check "S12a: skip_verdict.verdict is pending" '"pending"' "$(step_sub s12 outline skip_verdict.verdict)"
-# The dispatch line is part of the --advance contract (plan line 307). Its VALUE is
-# left unpinned: the plan does not say which token RCAS reports once it has already
-# advanced the step itself, so only its presence is asserted here.
-check "S12a: exactly one SKIP_DISPATCH line" 1 "$(printf '%s\n' "$OUT" | grep -c '^SKIP_DISPATCH=' || true)"
-
-# Symmetric control: the judgment branch must NOT settle the step, so S12a cannot
-# be passing because --advance settles unconditionally.
-make_state s12b "workflow_init clarify_intent research"
-run_cli env bash "$RCAS" \
-  --session s12b --signals "S2-architecture" --target outline --advance
-check "S12b: the judgment branch still exits 0" 0 "$RC"
-check "S12b: the judgment branch leaves outline pending" '"pending"' "$(step_status s12b outline)"
-check_contains "S12b: SKIP_MODE reports judgment" "SKIP_MODE=judgment" "$OUT"
-
-echo ""
-echo "=== S13: --advance argument validation on the two remaining siblings ==="
+echo "=== S13: --advance argument validation on record-skip-judgment ==="
 # next-step has A12 and set-workflow-type has S7a/b/c; without these the class's
 # exit-1 contract (plan line 254) is unproven for half its members.
 make_state s13a "workflow_init clarify_intent research"
-run_cli node "$RSJ" --session s13a --c1 true --c2 true --advance
+run_cli node "$RSJ" --session s13a "${RSJ_OK[@]}" --advance
 check "S13a: record-skip-judgment --advance without --target exits 1" 1 "$RC"
+check_not_contains "S13a: the --cond form itself is accepted" "unknown argument: --cond" "$ERR"
 check "S13a: nothing is settled" '"pending"' "$(step_status s13a outline)"
 check "S13a: no ACTION line" 0 "$(action_lines)"
 
 # --next is defined as meaningful only alongside --advance (plan line 148), so the
 # lone form is an argument error rather than a silently ignored flag.
 make_state s13b "workflow_init clarify_intent research"
-run_cli node "$RSJ" --session s13b --target outline --c1 true --c2 true --next
+run_cli node "$RSJ" --session s13b --target outline "${RSJ_OK[@]}" --next
 check "S13b: record-skip-judgment --next without --advance exits 1" 1 "$RC"
+check_contains "S13b: the diagnostic is the --next rule" "--next is only meaningful with --advance" "$ERR"
 check "S13b: the judgment is not recorded either" '"pending"' "$(step_status s13b outline)"
-
-# RCAS keeps two distinct failure codes: 1 for a missing required argument and 2
-# for an unknown flag. --target is NOT tested for absence here: it defaults to
-# outline in the current CLI and the plan does not make it mandatory under
-# --advance, so requiring it would be inventing a contract.
-make_state s13c "workflow_init clarify_intent research"
-run_cli env bash "$RCAS" \
-  --session s13c --target outline --advance
-check "S13c: record-complexity-and-skip --advance without --signals exits 2" 2 "$RC"
-check "S13c: nothing is settled" '"pending"' "$(step_status s13c outline)"
-
-make_state s13d "workflow_init clarify_intent research"
-run_cli env bash "$RCAS" \
-  --session s13d --signals "" --target outline --advance --bogus
-check "S13d: an unknown flag still exits 2, not the advance-path 3" 2 "$RC"
 
 echo ""
 echo "=== S14: set-workflow-type --advance write failure exits 2 with no ACTION ==="
 # The exit-2 half of the class contract (A2 for next-step, S5 for
-# record-skip-judgment, S10a for record-complexity-and-skip). A regular file at
+# record-skip-judgment). A regular file at
 # the workflow-dir path makes every write fail with ENOTDIR.
 make_state s14 ""
 RC=0
@@ -384,14 +317,16 @@ echo ""
 echo "=== S15: repeating --advance is a no-op on every sibling ==="
 # A5 proves this for next-step only. A sibling that re-fires the write would
 # re-run the workflow_init downstream reset or overwrite an A-4 verdict that
-# skip-verifier has since resolved.
-at_outline s15a
-run_cli node "$RSJ" --session s15a --target outline --c1 true --c2 true --advance
+# record-skip-verdict has since resolved. #2460: a same-ticket repeat on a
+# skipped step does nothing and reports REPLAYED=1 (idempotency table).
+at_outline s15a; ticketed s15a
+run_cli node "$RSJ" --session s15a --target outline "${RSJ_OK[@]}" --advance
 check "S15a: the first record-skip-judgment --advance exits 0" 0 "$RC"
 S15A_ENTRY="$(step_entry s15a outline)"
-run_cli node "$RSJ" --session s15a --target outline --c1 true --c2 true --advance
+run_cli node "$RSJ" --session s15a --target outline "${RSJ_OK[@]}" --advance
 check "S15a: the repeat exits 0" 0 "$RC"
-check_contains "S15a: the repeat reports already=true" "already=true" "$OUT"
+check_contains "S15a: the repeat reports REPLAYED=1" "REPLAYED=1" "$OUT"
+check_contains "S15a: the repeat keeps the RECORDED= line" "RECORDED=outline" "$OUT"
 # Asserted before the equality check so "unchanged" cannot mean "never settled".
 check "S15a: outline is still skipped after the repeat" '"skipped"' "$(step_status s15a outline)"
 check "S15a: the projection is unchanged" "$S15A_ENTRY" "$(step_entry s15a outline)"
@@ -407,20 +342,86 @@ check "S15b: workflow_init is still complete after the repeat" '"complete"' "$(s
 check "S15b: the projection is unchanged" "$S15B_ENTRY" "$(step_entry s15b workflow_init)"
 check "S15b: deliverable_type survives the repeat" '"wf-meta"' "$(top_field s15b)"
 
-make_state s15c "workflow_init clarify_intent research"
-printf '# intent\n' > "$PLANS_DIR/s15c-intent.md"
-run_cli env bash "$RCAS" \
-  --session s15c --signals "" --target outline --advance
-check "S15c: the first record-complexity-and-skip --advance exits 0" 0 "$RC"
-S15C_ENTRY="$(step_entry s15c outline)"
-run_cli env bash "$RCAS" \
-  --session s15c --signals "" --target outline --advance
-check "S15c: the repeat exits 0" 0 "$RC"
-check "S15c: outline is still skipped after the repeat" '"skipped"' "$(step_status s15c outline)"
-check "S15c: the projection is unchanged" "$S15C_ENTRY" "$(step_entry s15c outline)"
-# RCAS redirects its delegate's stdout to stderr today and the plan does not say
-# whether --advance changes that, so the already-marker is accepted on either stream.
-check_contains "S15c: the delegated record reports already=true" "already=true" "$OUT$ERR"
+echo ""
+echo "=== S16: --ticket must be a finalized ticket of this session, target and answer ==="
+# #2460: the command line is not evidence of a judgment. S1/S2 are the accepting control.
+# refused <label> <sid> <diagnostic> [argv override...] — exit 2, nothing written or settled.
+refused() {
+  local label="$1" sid="$2" want="$3"
+  shift 3
+  [ "$#" -gt 0 ] || set -- "${RSJ_OK[@]}"
+  run_cli node "$RSJ" --session "$sid" --target outline "$@" --advance
+  check "S16 [$label]: exits 2" 2 "$RC"
+  check_contains "S16 [$label]: the diagnostic" "$want" "$ERR"
+  check "S16 [$label]: stdout stays empty" "" "$OUT"
+  check "S16 [$label]: no judgment is written" "null" "$(judgment "$sid")"
+  check "S16 [$label]: outline stays pending" '"pending"' "$(step_status "$sid" outline)"
+}
+NOT_FINALIZED="--ticket is not a finalized ticket of this session and target"
+at_outline s16a
+refused "no ticket in the store" s16a "$NOT_FINALIZED"
+at_outline s16b
+plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" s16b outline fedcba9876543210 "$CONDS_OK" subagent
+refused "a ticket id the store does not hold" s16b "$NOT_FINALIZED"
+at_outline s16c; at_outline s16other; ticketed s16other
+refused "a ticket of another session's store" s16c "$NOT_FINALIZED"
+at_outline s16d; ticketed s16d "$CONDS_OK" 'session_id="s16other"'
+refused "a claim naming another session" s16d "$NOT_FINALIZED"
+at_outline s16e; ticketed s16e "$CONDS_OK" 'target="detail"'
+refused "a ticket of the other target" s16e "$NOT_FINALIZED"
+at_outline s16f; ticketed s16f "$CONDS_OK" 'finalized=false'
+refused "a claim that is not finalized yet" s16f "$NOT_FINALIZED"
+at_outline s16g; ticketed s16g "$CONDS_OK" 'result=null'
+refused "a finalized claim with no answer" s16g "$NOT_FINALIZED"
+at_outline s16h
+plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" s16h outline "$RSJ_TID" "$CONDS_OK" jev
+refused "a --source the ticket did not finalize" s16h "$NOT_FINALIZED"
+at_outline s16i; ticketed s16i "$CONDS_C2F"
+refused "conditions the ticket did not finalize" s16i "--cond differs from the ticket's finalized answer"
+at_outline s16j; ticketed s16j
+refused "a true answer downgraded on the command line" s16j \
+  "--cond differs from the ticket's finalized answer" "${RSJ_C2F[@]}"
+at_outline s16k; ticketed s16k "$CONDS_OK" 'version=1'
+refused "a claim of a retired store version" s16k "$NOT_FINALIZED"
+
+echo ""
+echo "=== S17: a skip is refused once the ticket's sources changed ==="
+# #2460: the judgment is about the sources as queried. The claim fingerprints them at plant time.
+INTENT_OF() { printf '%s' "$PLANS_DIR/$1-intent.md"; }
+at_outline s17a; printf 'intent v1\n' > "$(INTENT_OF s17a)"; ticketed s17a
+run_cli node "$RSJ" --session s17a --target outline "${RSJ_OK[@]}" --advance
+check "S17a: unchanged sources still record and settle: exit 0" 0 "$RC"
+check "S17a: outline is skipped" '"skipped"' "$(step_status s17a outline)"
+# stale <label> <sid> — the all-true answer is refused and leaves nothing behind.
+stale() {
+  run_cli node "$RSJ" --session "$2" --target outline "${RSJ_OK[@]}" --advance
+  check "S17 [$1]: exits 2" 2 "$RC"
+  check_contains "S17 [$1]: the diagnostic" "the ticket's sources changed since its query" "$ERR"
+  check "S17 [$1]: no judgment is written" "null" "$(judgment "$2")"
+  check "S17 [$1]: outline stays pending" '"pending"' "$(step_status "$2" outline)"
+}
+at_outline s17b; printf 'intent v1\n' > "$(INTENT_OF s17b)"; ticketed s17b
+printf 'intent v2\n' > "$(INTENT_OF s17b)"
+stale "an edited source" s17b
+at_outline s17c; ticketed s17c; printf 'intent v1\n' > "$(INTENT_OF s17c)"
+stale "a source that appeared" s17c
+at_outline s17d; printf 'intent v1\n' > "$(INTENT_OF s17d)"; ticketed s17d; rm -f "$(INTENT_OF s17d)"
+stale "a source that vanished" s17d
+at_outline s17e; ticketed s17e "$CONDS_OK" 'artifacts_sha256=null'
+stale "a ticket with no source fingerprint" s17e
+# A false answer skips nothing, so it is recorded whatever happened to the sources.
+at_outline s17f; printf 'intent v1\n' > "$(INTENT_OF s17f)"; ticketed s17f "$CONDS_C2F"
+printf 'intent v2\n' > "$(INTENT_OF s17f)"
+run_cli node "$RSJ" --session s17f --target outline "${RSJ_C2F[@]}" --advance
+check "S17f: a false answer on changed sources exits 0" 0 "$RC"
+check_contains "S17f: and is recorded" "RECORDED=outline all_conditions_met=false" "$OUT"
+check "S17f: outline stays pending" '"pending"' "$(step_status s17f outline)"
+# A repeat of an already settled skip is a replay: it writes nothing, so it is not re-checked.
+printf 'intent v2\n' > "$(INTENT_OF s17a)"
+run_cli node "$RSJ" --session s17a --target outline "${RSJ_OK[@]}" --advance
+check "S17g: the repeat after an edit exits 0" 0 "$RC"
+check_contains "S17g: the repeat reports REPLAYED=1" "REPLAYED=1" "$OUT"
+check "S17g: outline is still skipped" '"skipped"' "$(step_status s17a outline)"
 
 echo ""
 echo "=== Results ==="

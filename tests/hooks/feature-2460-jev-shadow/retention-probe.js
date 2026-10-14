@@ -7,6 +7,7 @@
 //   tombs: leftover .tomb-* dirs of several ages and contents, one default due sweep;
 //     prints "<removed>|<.tomb-* left>|<bbb pending>|<ddd pending>".
 //   tomb-restore <sid> | tomb-merge <sid> | tomb-invalid: leftover tombs holding entries (see each function).
+//   ticket-files <sid>: stage-2 versioned and ticket files in a stale and a fresh session (see ticketFiles).
 const fs = require("fs");
 const path = require("path");
 
@@ -125,8 +126,47 @@ function tombInvalid() {
     names.map((n) => list(path.join(root, n, "pending"))).join(",")].join("|"));
 }
 
+// A stale session holding every stage-2 file kind (versioned pending ticket hand, breaker and
+// liveness, ticket snapshot/answer/merged files, a done marker, jev-sources/<ticket>/) beside a
+// fresh session holding the same kinds. Prints
+// "<removed>|<stale dir>|<onOrphan calls>|<fresh dir>|<fresh files>".
+function ticketFiles(sid) {
+  const T = "tkt-2460-i";
+  const seed = (s) => {
+    const d = path.join(root, s);
+    put(path.join(d, "pending"), T + ".json",
+      JSON.stringify({ version: 2, kind: "cli-ticket", point: "complexity-judge", stage: "outline", mode: "shadow" }));
+    put(d, "breaker.json", JSON.stringify({ version: 2, count: 0, open_until: 0 }));
+    put(d, "breaker-complexity-judge.json", JSON.stringify({ version: 2, count: 0, open_until: 0 }));
+    put(d, "liveness.json", JSON.stringify({ version: 1, ok_ms: 0 }));
+    put(path.join(d, "tickets"), T + ".snapshot.md", "# snapshot\n");
+    put(path.join(d, "tickets"), T + ".answer.json", "{}");
+    put(path.join(d, "tickets"), T + ".merged.json", "{}");
+    put(path.join(d, "tickets-done"), T + ".json",
+      JSON.stringify({ version: 1, point: "complexity-judge", stage: "outline", created_ms: 1, exit: 0, stdout_lines: [] }));
+    put(path.join(d, "jev-sources", T), "intent.md", "# intent\n");
+    return d;
+  };
+  const stale = seed(sid);
+  ageAll(stale, 10 * DAY);
+  const fresh = seed(sid + "-fresh");
+  const calls = [];
+  const removed = retention.sweepStateDirs({ onOrphan: (s, tid) => { calls.push(s + ":" + tid); return { ok: true }; } });
+  const walk = (d, pre) => {
+    let out = [];
+    for (const e of fs.readdirSync(d).sort()) {
+      const c = path.join(d, e);
+      out = fs.statSync(c).isDirectory() ? out.concat(walk(c, pre + e + "/")) : out.concat(pre + e);
+    }
+    return out;
+  };
+  process.stdout.write([removed.join(","), fs.existsSync(stale) ? "present" : "absent", calls.join(","),
+    fs.existsSync(fresh) ? "present" : "absent", fs.existsSync(fresh) ? walk(fresh, "").length : 0].join("|"));
+}
+
 try {
-  if (cmd === "race") race(a[0], a[1]);
+  if (cmd === "ticket-files") ticketFiles(a[0]);
+  else if (cmd === "race") race(a[0], a[1]);
   else if (cmd === "tombs") leftovers();
   else if (cmd === "tomb-restore") tombRestore(a[0]);
   else if (cmd === "tomb-merge") tombMerge(a[0]);

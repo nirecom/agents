@@ -34,11 +34,7 @@ WT-5. Decide the destination of each planned case — append to an existing test
    - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations and wait for user confirmation before WT-6.
 WT-6. **Determine the subagent's model**:
    - If `COMPLEXITY_LEVEL_write_tests` from WT-0 is not `NONE`, use `COMPLEXITY_MODEL_write_tests` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
-   - If `NONE` (fail-open for sessions without persisted evaluation):
-     - Dispatch `subagent_type: complexity-judge` with: `intent.md` + `outline.md` + source files from WT-2–WT-3 + planned test cases from WT-4 (+ `detail.md` if present), so S1/S1b and stage-specific signals can be judged (rubric: `skills/_shared/judge-task-complexity.md`).
-     - Write the raw subagent output to `<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt` (Write tool — untrusted text via file only).
-     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/normalize-judge-signals" --raw-file "<PLANS_DIR>/<session-id>-write-tests-judge-raw.txt" --session "<session-id>" --stage write-tests`.
-     - Run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage write_tests --session "<session-id>"` and use its `model=<alias>` line — never judge the level inline.
+   - If `NONE` (fail-open for sessions without persisted evaluation): follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`write-tests`; use its `model=` and `SIGNALS_CSV` — never judge the level inline.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])
 

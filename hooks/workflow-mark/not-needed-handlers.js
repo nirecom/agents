@@ -7,7 +7,8 @@ const { validateSkipReason } = require("./skip-reason");
 // #1644: the declared-class single writer. It owns the state write, the A-4
 // speculative-skip verdict, the D1 BUGFIX defense and the #833 symmetric
 // propagation; this module keeps only the sentinel-specific wording.
-const { recordStepVerdict } = require("../workflow-state/record-step-verdict");
+const { recordStepVerdict, RECORDED_VERDICT_PREFIX } = require("../workflow-state/record-step-verdict");
+const { hasRecordedSkipJudgment } = require("../workflow-state/plan-skip-allowance");
 // #1644: the docs-only predicate has exactly one owner. RUN_TESTS_NOT_NEEDED is
 // settings.json `allow` rather than `ask` *because* this machine-verifiable fact
 // stands in for the human approval — so the check must be fail-closed here.
@@ -20,6 +21,23 @@ const DECLARED = { gate: "sentinel", provenance: "declared", origin: "mark-step"
 
 function declareSkip(sessionId, step, reason) {
   return recordStepVerdict(sessionId, step, "skipped", Object.assign({ skipReason: reason }, DECLARED));
+}
+
+// outline / detail: a reason carrying RECORDED_VERDICT_PREFIX claims a standing skip judgment,
+// and next-step lets such a skip past the A-4 pending gate. gate-plan-skip-sentinel.js read that
+// judgment before the command ran, and a Jev query or fail-safe may have revoked it since
+// (#2460), so it is re-read and the skip written under the skip owner lock. Any other reason
+// is a speculative skip, which next-step holds until record-skip-verdict resolves it.
+function declarePlanSkip(sessionId, step, reason) {
+  if (!reason.startsWith(RECORDED_VERDICT_PREFIX)) return declareSkip(sessionId, step, reason);
+  try {
+    const { underSkipOwnerLock } = require("../lib/jev/two-stage/settle-skip");
+    return underSkipOwnerLock(sessionId, step, () => (hasRecordedSkipJudgment(sessionId, step)
+      ? declareSkip(sessionId, step, reason)
+      : { ok: false, detail: "the recorded skip judgment no longer stands" }));
+  } catch (e) {
+    return { ok: false, detail: e.message };
+  }
 }
 const {
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
@@ -107,7 +125,7 @@ function handle(ctx) {
       return true;
     }
     // The A-4 speculative skip verdict is co-written by recordStepVerdict.
-    const res = declareSkip(sessionId, "outline", v.reason);
+    const res = declarePlanSkip(sessionId, "outline", v.reason);
     if (!res.ok) {
       pushMessage(`workflow-mark: failed to write state — ${res.detail || res.message}. outline NOT recorded.`);
     }
@@ -138,7 +156,7 @@ function handle(ctx) {
       return true;
     }
     // The A-4 speculative skip verdict is co-written by recordStepVerdict.
-    const res = declareSkip(sessionId, "detail", v.reason);
+    const res = declarePlanSkip(sessionId, "detail", v.reason);
     if (!res.ok) {
       pushMessage(`workflow-mark: failed to write state — ${res.detail || res.message}. detail NOT recorded.`);
     }

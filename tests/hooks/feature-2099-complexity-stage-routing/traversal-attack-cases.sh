@@ -54,20 +54,15 @@ meta-nul|evil%00.json'
 
 # One invocation of one CLI under one session id, with the interpreter that CLI's
 # own shebang names (d2099_cli_runner) and the argument shape that CLI actually
-# requires. `record-complexity-and-skip` is bash and needs --target; running it
-# through `node` died on a syntax error before its validation ever ran, which made
-# every "hostile input rejected" verdict below a measurement of Node's parser.
+# requires: the reader takes --stage, the writer takes --signals.
 d2099t_invoke() {
     local bin="$1" sid="$2" runner
     runner=$(d2099_cli_runner "$bin")
     case "$bin" in
         "$BIN_READ")
             run_with_timeout "$runner" "$bin" --session "$sid" --stage detail 2>&1 ;;
-        "$BIN_RECORD_SKIP")
-            run_with_timeout "$runner" "$bin" --session "$sid" \
-                --signals "S1-multi-file" --target outline 2>&1 ;;
         *)
-            run_with_timeout "$runner" "$bin" --session "$sid" --signals "S1-multi-file" 2>&1 ;;
+            run_with_timeout "$runner" "$bin" --session "$sid" --signals "S1b-wide-change" 2>&1 ;;
     esac
 }
 
@@ -85,7 +80,7 @@ d2099t_attack() {
 # uses a SAFE, ordinary session id through the exact same call path, so a green
 # corpus below means validation, not a usage error or a dead interpreter. Every
 # per-payload verdict is conditioned on it, and its output is asserted too: a
-# non-empty run proves the wrapper itself was reached and did its work.
+# non-empty run proves the CLI itself was reached and did its work.
 d2099t_control_accepts_legit() {
     local bin="$1" sid rc=0 out
     sid=$(new_session tactl)
@@ -137,7 +132,17 @@ EOF
 d2099t_session_traversal() {
     d2099t_run_corpus "$BIN_RECORD"
     d2099t_run_corpus "$BIN_READ"
-    d2099t_run_corpus "$BIN_RECORD_SKIP"
+}
+
+# TA-NS: the writer's legitimate-session control, on the zero-signal input that
+# used to auto-skip (#2460 retired it): it records the evaluation, skips nothing.
+d2099t_record_control_no_skip() {
+    local sid rc=0
+    sid=$(new_session tactlns)
+    run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "" >/dev/null 2>&1 || rc=$?
+    assert_eq "TA-NS the writer accepts a legitimate session id, records once and skips nothing" \
+        "rc=0 ce=1 outline=pending detail=pending skip=0" \
+        "rc=$rc $(d2099_side_effects "$sid" | cut -d' ' -f1) $(d2099_no_skip_view "$sid")"
 }
 
 # One --stage invocation, routed to whichever CLI takes that flag: the reader
@@ -147,7 +152,7 @@ d2099t_stage_invoke() {
     local bin="$1" sid="$2" stage="$3"
     case "$bin" in
         "$BIN_DERIVE")
-            run_with_timeout node "$bin" --stage "$stage" --signals "S1-multi-file" 2>&1 ;;
+            run_with_timeout node "$bin" --stage "$stage" --signals "S1b-wide-change" 2>&1 ;;
         *)
             run_with_timeout node "$bin" --session "$sid" --stage "$stage" 2>&1 ;;
     esac
@@ -294,7 +299,22 @@ $D2099T_SANCTIONED
 EOF
 }
 
+case_begin "ta-session-traversal" "bin/workflow/record-complexity-evaluation"
 d2099t_session_traversal
+case_end
+
+case_begin "ta-record-control-no-skip" "bin/workflow/record-complexity-evaluation"
+d2099t_record_control_no_skip
+case_end
+
+case_begin "ta-stage-traversal" "bin/workflow/derive-complexity-level"
 d2099t_stage_traversal
+case_end
+
+case_begin "ta-stage-sanctioned" "bin/workflow/derive-complexity-level"
 d2099t_stage_sanctioned
+case_end
+
+case_begin "ta-sanctioned-session-ids" "bin/workflow/record-complexity-evaluation"
 d2099t_sanctioned_session_ids
+case_end

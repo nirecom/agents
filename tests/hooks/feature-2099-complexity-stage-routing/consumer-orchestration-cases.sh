@@ -3,23 +3,25 @@
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, integration, model-selection, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
-# MDP-3 / WT-6 / WCD-3 are the three mandatory consumer points (detail.md). The
-# sibling static and dispatch suites grep them or replay a hand-written command;
-# neither runs what the skill itself specifies. Here the command is EXTRACTED
-# FROM THE SKILL FILE, run verbatim, and mapped to a model by the mapping that
-# same file states — the decision procedure is never re-encoded test-side.
+# Runs each consumer's OWN extracted stored-evaluation read command and maps it to
+# a model; the NONE branch (skills/_shared/jev-two-stage-judge.md, #2460) is pinned
+# statically in consumers-static.sh, not executed here.
 
-# The three consumer rows: skill dir | stage key | read step | Agent-launch step.
+# Every consumer row: skill dir | stage key | level step | Agent-launch step.
+# live-e2e-cases.sh walks this table too.
 D2099_CONSUMERS="make-detail-plan|detail|MDP-3|MDP-4
 write-tests|write_tests|WT-6|WT-7
 write-code|write_code|WCD-3|WCD-4"
 
-# d2099_skill_file and the fallback-chain extraction (normalize -> derive): consumer-normalize-chain.sh.
+# The consumers that still READ a stored evaluation (#2460: WCD-3 judges every
+# time, so write-code has no stored-read path left to execute).
+D2099_STORED_CONSUMERS="make-detail-plan|detail|MDP-3|MDP-4
+write-tests|write_tests|WT-6|WT-7"
 
-# Which CLI each consumer reads its stored evaluation through, how to extract that
-# command, and how to normalize its answer: consumer-read-cli.sh (sourced first).
+# d2099_skill_file, the read-CLI choice, extraction and answer normalization:
+# consumer-read-cli.sh (sourced first).
 
-# The launch step each read step feeds (detail.md D4 consumer rows).
+# The launch step each level step feeds (detail.md D4 consumer rows).
 d2099_launch_step() {
     case "$1" in
         MDP-3) echo "MDP-4" ;;
@@ -38,8 +40,8 @@ d2099_orch_model_for() {
         | grep '^model=' | head -1 | sed 's/^model=//'
 }
 
-# d2099_orch_model — drives the skill's command, parses the model= line directly.
-# FALLBACK when the CLI answered NONE; after #2100 model= comes from the read output.
+# d2099_orch_model — drives the skill's read command, parses the model= line.
+# FALLBACK when the reader answered NONE (the shared-procedure branch).
 d2099_orch_model() {
     local f="$1" sid="$2" out first model
     out=$(d2099_consumer_read "$f" "$sid")
@@ -54,21 +56,17 @@ d2099_orch_model() {
     esac
 }
 
-# CO-1/CO-2: the extraction must have teeth. If a skill carried no runnable
+# CO-0/CO-1: the extraction must have teeth. If a skill carried no runnable read
 # command every assertion below would measure an empty string instead of the
 # consumer, so the command line is pinned first.
 d2099_orch_commands_are_real() {
-    local name stage step cmd f rcli rstep
-    while IFS='|' read -r name stage step _; do
+    local name stage cmd f rcli rstep
+    while IFS='|' read -r name stage _; do
         [ -n "$name" ] || continue
         f=$(d2099_skill_file "$name")
         rcli=$(d2099_read_cli "$name")
         rstep=$(d2099_read_step "$name")
-        # CO-0: the bound itself. Every assertion below extracts from INSIDE the
-        # owning section; if that section is missing, empty of the CLI, or carries
-        # duplicates, say which rather than measuring an arbitrary line.
         d2099_assert_section_cli_unique "CO-0" "$rstep" "$f" "$rcli"
-        d2099_assert_section_cli_unique "CO-0a" "$step" "$f" "derive-complexity-level"
         cmd=$(d2099_extract_read_cmd "$f")
         if [ "$rcli" = "read-session-facts" ]; then
             # The bundled record carries no --stage flag: the stage is spelled in
@@ -81,36 +79,27 @@ d2099_orch_commands_are_real() {
         fi
         assert_contains "CO-1b $rstep's command passes the session through" \
             '--session "$SESSION_ID"' "$cmd"
-        cmd=$(d2099n_extract_node_cmd "$f" "derive-complexity-level")
-        assert_contains "CO-2 $step's NONE fallback carries a runnable derive command for its stage" \
-            "--stage $stage" "$cmd"
-        # The judged csv reaches derive via normalize's control-dir file (CN-2*), never a splice slot.
-        assert_contains "CO-2a $step's fallback derive reads the normalized csv through the session (#2434)" \
-            '--session "<session-id>"' "$cmd"
-        assert_not_contains "CO-2b $step's fallback carries no --signals <csv> splice slot" \
-            "--signals" "$cmd"
     done <<EOF
-$D2099_CONSUMERS
+$D2099_STORED_CONSUMERS
 EOF
 }
 
-# CO-3..CO-5: a recorded evaluation must reach the Agent tool as the model that
-# stage's routing row implies. S1-multi-file is the #2099 case itself: one
-# record, sonnet for detail and write_tests, opus for write_code.
+# CO-3..CO-5b: a recorded evaluation must reach the Agent tool as the model that
+# stage's routing row implies. Per-stage levels come from the end-state table:
+# S1b low/low (detail/write_tests), S2 high/high, S3 low/high, none low/low.
 d2099_orch_recorded_selects_model() {
-    local sid sid_zero sid_sec name stage step want
-    sid=$(new_session orchlow)
-    run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "S1-multi-file" >/dev/null 2>&1
+    local sid sid_zero sid_arch sid_sec name stage step want
+    sid=$(new_session orchwide)
+    run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "S1b-wide-change" >/dev/null 2>&1
     while IFS='|' read -r name stage step _; do
         [ -n "$name" ] || continue
-        case "$stage" in write_code) want="opus" ;; *) want="sonnet" ;; esac
-        assert_eq "CO-3 $step hands the Agent tool '$want' for a recorded S1-multi-file evaluation" \
-            "$want" "$(d2099_orch_model "$(d2099_skill_file "$name")" "$sid")"
+        # S1b left write_tests' solo set in #2460, so it is low on both readers.
+        assert_eq "CO-3 $step hands the Agent tool 'sonnet' for a recorded S1b-wide-change evaluation" \
+            "sonnet" "$(d2099_orch_model "$(d2099_skill_file "$name")" "$sid")"
     done <<EOF
-$D2099_CONSUMERS
+$D2099_STORED_CONSUMERS
 EOF
 
-    # A zero-signal record is the only input that routes low on all three.
     sid_zero=$(new_session orchzero)
     run_with_timeout node "$BIN_RECORD" --session "$sid_zero" --signals "" >/dev/null 2>&1
     while IFS='|' read -r name stage step _; do
@@ -118,13 +107,10 @@ EOF
         assert_eq "CO-4 $step hands the Agent tool 'sonnet' for a recorded zero-signal evaluation" \
             "sonnet" "$(d2099_orch_model "$(d2099_skill_file "$name")" "$sid_zero")"
     done <<EOF
-$D2099_CONSUMERS
+$D2099_STORED_CONSUMERS
 EOF
 
-    # ...and S2-architecture is solo_escalation for detail and write_tests and a
-    # legacy_equivalent single for write_code (detail.md D2), so it is the
-    # genuinely uniform-high control: the same procedure must flip on all three.
-    local sid_arch
+    # S2-architecture is high on every stage: the uniform-high control.
     sid_arch=$(new_session orcharch)
     run_with_timeout node "$BIN_RECORD" --session "$sid_arch" --signals "S2-architecture" >/dev/null 2>&1
     while IFS='|' read -r name stage step _; do
@@ -132,13 +118,11 @@ EOF
         assert_eq "CO-5 $step hands the Agent tool 'opus' for a recorded S2-architecture evaluation (high on every stage)" \
             "opus" "$(d2099_orch_model "$(d2099_skill_file "$name")" "$sid_arch")"
     done <<EOF
-$D2099_CONSUMERS
+$D2099_STORED_CONSUMERS
 EOF
 
-    # S3-security is the OTHER divergent row: detail's escalation sets do not
-    # contain it, so detail stays sonnet while write_tests and write_code flip to
-    # opus. It splits the three stages the opposite way from CO-3's S1-multi-file
-    # (low/low/high vs low/high/high), which no uniform row can distinguish.
+    # S3-security splits the two readers: detail low, write_tests high — so a
+    # reader keyed to the wrong stage column is caught.
     sid_sec=$(new_session orchsec)
     run_with_timeout node "$BIN_RECORD" --session "$sid_sec" --signals "S3-security" >/dev/null 2>&1
     while IFS='|' read -r name stage step _; do
@@ -147,42 +131,30 @@ EOF
         assert_eq "CO-5b $step hands the Agent tool '$want' for a recorded S3-security evaluation" \
             "$want" "$(d2099_orch_model "$(d2099_skill_file "$name")" "$sid_sec")"
     done <<EOF
-$D2099_CONSUMERS
+$D2099_STORED_CONSUMERS
 EOF
 }
 
-# CO-6..CO-8: the NONE fallback, driven the same way. An unrecorded session must
-# land in the inline branch, and THAT branch's own command must still produce a
-# level — otherwise the fallback dispatches with no model at all.
+# CO-6: an unrecorded session must land in the NONE branch (the shared judge
+# procedure), never on a model.
 d2099_orch_none_fallback() {
-    local sid name stage step f out want want_level
+    local sid name step
     sid=$(new_session orchnone)   # created, never recorded into
-    while IFS='|' read -r name stage step _; do
+    while IFS='|' read -r name _ step _; do
         [ -n "$name" ] || continue
-        f=$(d2099_skill_file "$name")
         assert_eq "CO-6 $step: an unrecorded session lands in the fallback, not on a model" \
-            "FALLBACK" "$(d2099_orch_model "$f" "$sid")"
-
-        case "$stage" in
-            write_code) want="opus"; want_level="high" ;;
-            *) want="sonnet"; want_level="low" ;;
-        esac
-        out=$(d2099n_run_chain_csv "$f" "$sid" "S1-multi-file" | head -1)
-        case "$out" in level=*) ;; *) out="UNPARSEABLE:$out" ;; esac
-        assert_eq "CO-7 $step: the fallback's own command answers with a level for its stage" \
-            "level=$want_level" "$out"
-        assert_eq "CO-8 $step: ... which the file's mapping turns into the Agent model '$want'" \
-            "$want" "$(d2099_orch_model_for "$f" "${out#level=}")"
+            "FALLBACK" "$(d2099_orch_model "$(d2099_skill_file "$name")" "$sid")"
     done <<EOF
-$D2099_CONSUMERS
+$D2099_STORED_CONSUMERS
 EOF
 }
 
 # CO-9/CO-10: the last link. Without this a skill could compute the right model
-# and then dispatch a hardcoded one.
+# and then dispatch a hardcoded one. All three consumers, write-code included:
+# WCD-4 still takes its model from WCD-3.
 d2099_orch_agent_handoff() {
-    local name stage step launch f
-    while IFS='|' read -r name stage step launch; do
+    local name step launch f
+    while IFS='|' read -r name _ step launch; do
         [ -n "$name" ] || continue
         f=$(d2099_skill_file "$name")
         assert_eq "CO-9 $launch passes the model computed in $step to the Agent tool" "yes" \
@@ -194,17 +166,13 @@ $D2099_CONSUMERS
 EOF
 }
 
-# --- CO-11..CO-14: the `model:` value the launch step actually dispatches -----
-# CO-9/CO-10 read the launch step's PROSE: the slot is bound to the read step and
-# is not a literal — never what comes OUT of that binding. The Agent call itself
-# is unobservable from bash (Skipped-Because below); the SUBSTITUTION is not. So
-# these cases fill the launch line's own `model:` slot from the read step's own
-# command plus the file's own level→model mapping, and assert the literal
-# argument that leaves — stored HIGH, stored LOW, and the NONE/fallback path.
+# --- CO-11..CO-15: the `model:` value the launch step actually dispatches -----
+# CO-9/CO-10 read the launch step's PROSE. These fill the launch line's own
+# `model:` slot from the read step's own command plus the model mapping, and
+# assert the literal argument that leaves — stored HIGH, stored LOW, NONE.
 
-# The launch step's `model:` slot, e.g. `<from MDP-3>`. Matched by the READ step
-# id it must name, so a slot bound to nothing (or to a literal) yields "" — and
-# read only inside the LAUNCH step's own section (round-10 C1).
+# The launch step's `model:` slot, e.g. `<from MDP-3>`, read only inside the
+# LAUNCH step's own section (round-10 C1).
 d2099_orch_model_slot() {
     local f="$1" read_step="$2" launch
     launch=$(d2099_launch_step "$read_step")
@@ -214,15 +182,14 @@ d2099_orch_model_slot() {
 }
 
 # Resolve one consumer's launch-step slot into the literal argument the Agent
-# tool would receive. `$3` is the signal csv the skill's inline judgment would
-# carry; consulted ONLY when the read command answers NONE (the documented
-# fallback branch).
+# tool would receive. When the read answers NONE the skill runs the shared judge
+# procedure, which no bash harness can drive (it dispatches a subagent), so the
+# answer is the named token FALLBACK_SHARED_PROCEDURE. `$3` (the judged csv) is
+# kept for callers' arity and is no longer consulted.
 d2099_orch_dispatched_model() {
-    local f="$1" sid="$2" fb_signals="$3" read_step="$4" slot out first lvl model
+    local f="$1" sid="$2" read_step="$4" slot out first lvl model
     slot=$(d2099_orch_model_slot "$f" "$read_step")
     if [ -z "$slot" ]; then
-        # Two different defects, two different tokens, so the failure message
-        # says which one happened rather than just "not a model".
         if [ "$(d2099_has_re "$f" 'model: *"?(opus|sonnet)"?[ ,)]')" = "yes" ]; then
             echo "HARDCODED_MODEL_IN_LAUNCH"
         else
@@ -233,39 +200,25 @@ d2099_orch_dispatched_model() {
     out=$(d2099_consumer_read "$f" "$sid")
     first=$(printf '%s\n' "$out" | head -1)
     [ "$first" = "__NO_COMMAND__" ] && { echo "NO_READ_COMMAND_IN_SKILL"; return; }
-    if [ "$first" = "NONE" ]; then
-        out=$(d2099n_run_chain_csv "$f" "$sid" "$fb_signals")
-        first=$(printf '%s\n' "$out" | head -1)
-        [ "$first" = "__NO_COMMAND__" ] && { echo "NO_DERIVE_COMMAND_IN_SKILL"; return; }
-    fi
+    [ "$first" = "NONE" ] && { echo "FALLBACK_SHARED_PROCEDURE"; return; }
     case "$first" in
         level=*) lvl="${first#level=}" ;;
         *) echo "UNPARSEABLE:$first"; return ;;
     esac
     model=$(d2099_orch_model_for "$f" "$lvl")
     [ -n "$model" ] || { echo "NO_DOCUMENTED_MAPPING_FOR:$lvl"; return; }
-    # The filled slot: what the Agent tool is handed, not what the level was.
     printf 'model: "%s"' "$model"
 }
 
 d2099_orch_dispatched_model_cases() {
-    local name stage step f sid_hi sid_lo sid_none sid_s1 sid_sec want
-    # (a) stored HIGH — S2-architecture is the signal that escalates all three
-    # (solo for detail and write_tests, legacy_equivalent single for write_code,
-    # detail.md D2). S3-security does NOT: detail has no S3 row, so it is the
-    # divergent (e) case below, not this uniform control.
+    local name stage step f sid_hi sid_lo sid_none sid_wide sid_sec want
     sid_hi=$(new_session dispatchhigh)
     run_with_timeout node "$BIN_RECORD" --session "$sid_hi" --signals "S2-architecture" >/dev/null 2>&1
-    # (b) stored LOW — a zero-signal record is the only input low on all three.
     sid_lo=$(new_session dispatchlow)
     run_with_timeout node "$BIN_RECORD" --session "$sid_lo" --signals "" >/dev/null 2>&1
-    # (c) NONE — created, never recorded into, so the fallback branch runs.
     sid_none=$(new_session dispatchnone)
-    # (d) the #2099 case itself: one stored record, two different models.
-    sid_s1=$(new_session dispatchs1)
-    run_with_timeout node "$BIN_RECORD" --session "$sid_s1" --signals "S1-multi-file" >/dev/null 2>&1
-    # (e) the OTHER divergent row: S3-security splits detail from the other two,
-    # where S1-multi-file splits write_code from the other two.
+    sid_wide=$(new_session dispatchwide)
+    run_with_timeout node "$BIN_RECORD" --session "$sid_wide" --signals "S1b-wide-change" >/dev/null 2>&1
     sid_sec=$(new_session dispatchsec)
     run_with_timeout node "$BIN_RECORD" --session "$sid_sec" --signals "S3-security" >/dev/null 2>&1
 
@@ -276,33 +229,26 @@ d2099_orch_dispatched_model_cases() {
             'model: "opus"' "$(d2099_orch_dispatched_model "$f" "$sid_hi" "" "$step")"
         assert_eq "CO-12 $step's launch slot resolves to model: \"sonnet\" for a STORED low evaluation" \
             'model: "sonnet"' "$(d2099_orch_dispatched_model "$f" "$sid_lo" "" "$step")"
-        case "$stage" in write_code) want='model: "opus"' ;; *) want='model: "sonnet"' ;; esac
-        assert_eq "CO-13 $step's launch slot resolves to $want on the NONE fallback path (nothing persisted; judged S1-multi-file)" \
-            "$want" "$(d2099_orch_dispatched_model "$f" "$sid_none" "S1-multi-file" "$step")"
-        # Without this row a resolver that ignored the level entirely — always
-        # answering one model — would satisfy CO-11..CO-13 in isolation.
-        assert_eq "CO-14 $step's launch slot resolves to $want for the STORED S1-multi-file record" \
-            "$want" "$(d2099_orch_dispatched_model "$f" "$sid_s1" "" "$step")"
-        # And the mirror split, so a resolver keyed to the write_code column alone
-        # — which CO-11..CO-14 cannot separate from a correct one — is caught: here
-        # detail is the odd stage out, not write_code.
+        assert_eq "CO-13 $step: nothing persisted, so the slot is filled by the shared judge procedure, not a stored model" \
+            "FALLBACK_SHARED_PROCEDURE" "$(d2099_orch_dispatched_model "$f" "$sid_none" "" "$step")"
+        # S1b-wide-change was escalating at write_tests before #2460; a reader
+        # still carrying the old solo row answers opus here.
+        assert_eq "CO-14 $step's launch slot resolves to model: \"sonnet\" for the STORED S1b-wide-change record" \
+            'model: "sonnet"' "$(d2099_orch_dispatched_model "$f" "$sid_wide" "" "$step")"
         case "$stage" in detail) want='model: "sonnet"' ;; *) want='model: "opus"' ;; esac
         assert_eq "CO-15 $step's launch slot resolves to $want for the STORED S3-security record" \
             "$want" "$(d2099_orch_dispatched_model "$f" "$sid_sec" "" "$step")"
     done <<EOF
-$D2099_CONSUMERS
+$D2099_STORED_CONSUMERS
 EOF
 }
 
-# SKIPPED: observing the REAL Agent tool call at MDP-4 / WT-7 / WCD-4 and asserting
-#   the `model:` the subagent is actually launched with.
-# Because: `Agent(...)` exists only inside a live Claude Code session and the three
-#   skills express the launch as PROSE ("Launch subagent (Agent tool, ..., model:
-#   <from MDP-3>)"). No process, argv, env or file carries that value for a bash
-#   harness to observe; `claude -p` would re-run the orchestration
-#   nondeterministically and still never expose the subagent's model.
+# SKIPPED: the REAL Agent tool call at MDP-4 / WT-7 / WCD-4 and its `model:`.
+# Because: `Agent(...)` exists only inside a live Claude Code session and the
+#   launch is PROSE; no process, argv, env or file carries that value for bash.
 # L3 gap: an orchestrator that resolves the slot right and hands Agent something
-#   else. Closest substitute: CO-9..CO-14. Only a TL3 transcript review closes it.
+#   else, and the shared-procedure branch end to end. Closest substitute:
+#   CO-9..CO-15 plus live-e2e-cases.sh (RUN_TL3).
 
 case_begin "orchestration-commands-are-real" "skills/make-detail-plan/SKILL.md"
 d2099_orch_commands_are_real
@@ -312,7 +258,7 @@ case_begin "orchestration-recorded-selects-model" "bin/workflow/read-complexity-
 d2099_orch_recorded_selects_model
 case_end
 
-case_begin "orchestration-none-fallback" "bin/workflow/derive-complexity-level"
+case_begin "orchestration-none-fallback" "bin/workflow/read-complexity-evaluation"
 d2099_orch_none_fallback
 case_end
 
@@ -323,14 +269,3 @@ case_end
 case_begin "orchestration-dispatched-model-cases" "bin/workflow/read-complexity-evaluation"
 d2099_orch_dispatched_model_cases
 case_end
-
-# Why CO-11..CO-14 IS the closest feasible approximation, not a convenient one.
-# The chain is judge -> write point -> stored record -> read step -> `model:` slot
-# -> Agent. CO-11..CO-14 own the last two links using each skill's OWN extracted
-# read command, and E2E-1/E2E-2 (live-e2e-cases.sh, RUN_TL3) run every link before
-# them against a real judge and the real write points. So exactly ONE link is
-# unobserved anywhere: the argument crossing into Agent.
-# Attempts considered and rejected: a stub `claude` on PATH (asserts the stub, not
-# the skill); parsing a session transcript (Agent input is not written to one);
-# a fake Agent tool (Claude Code has no tool-substitution seam). Faking any of
-# these would report coverage of the one link nothing can see.

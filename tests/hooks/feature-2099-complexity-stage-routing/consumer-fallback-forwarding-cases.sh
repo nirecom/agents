@@ -7,20 +7,20 @@
 
 # Why: consumer-signal-forwarding-cases.sh forwards signals on the STORED path,
 # where the reader hands back a `signals=` line. On the NONE fallback the list
-# never enters a reader at all: the orchestrator Writes it to a per-stage file
-# and derive-complexity-level reads it back. That leg was pinned only by its
-# level, so a csv reaching the wrong stage's file was invisible.
+# never enters a reader: finalize (shared two-stage procedure, #2460) fixes the
+# judged csv in a per-stage file and hands it to derive-complexity-level. That leg
+# was pinned only by its level, so a csv reaching the wrong stage's file was invisible.
 
 D2099FF_CONSUMERS="make-detail-plan|detail
 write-tests|write_tests
 write-code|write_code"
 
-# The judged csv, run through ONE consumer's own documented fallback command.
+# The judged csv, run through ONE consumer's own documented fallback procedure.
 # Answers "<level=v>" or a named token — never a bare empty string, which would
-# read as a passing comparison against another empty string.
+# read as a passing comparison against another empty string. $4: WCD-2 list size.
 d2099ff_derive() {
     local f="$1" sid="$2" csv="$3" out first
-    out=$(d2099n_run_chain_csv "$f" "$sid" "$csv")
+    out=$(d2099n_run_chain_csv "$f" "$sid" "$csv" "${4:-1}")
     first=$(printf '%s\n' "$out" | sed -n 1p)
     case "$first" in
         level=*) printf '%s' "$first" ;;
@@ -29,13 +29,13 @@ d2099ff_derive() {
     esac
 }
 
-# The control-dir FILE that normalize writes and derive reads, with the stage taken
-# out of the skill's own normalize command (CPR-SSOT), so a renamed stage moves it.
+# The control-dir FILE finalize fixes the csv in, with the stage taken out of the
+# skill's own shared-procedure reference (CPR-SSOT), so a renamed stage moves it.
 d2099ff_path() {
-    local f="$1" sid="$2" ncmd
-    ncmd=$(d2099n_extract_node_cmd "$f" "normalize-judge-signals")
-    [ "$ncmd" = "$D2099N_NONE" ] && { printf 'NO_NORMALIZE_COMMAND_IN_SKILL'; return; }
-    d2099n_control_path "$sid" "$(d2099n_stage_of "$ncmd")"
+    local f="$1" sid="$2" ref
+    ref=$(d2099n_ref "$f" "$(d2099n_step_of "$f")")
+    [ -n "$ref" ] || { printf 'NO_PROCEDURE_REFERENCE_IN_SKILL'; return; }
+    d2099n_control_path "$sid" "${ref#*|}"
 }
 
 # CFF-1/CFF-2: the fallback is only reachable when the reader says NONE, and the
@@ -66,6 +66,7 @@ d2099ff_paths_are_stage_distinct() {
         [ -n "$name" ] || continue
         f=$(d2099_skill_file "$name")
         p=$(d2099ff_path "$f" "$sid")
+        d2099ff_derive "$f" "$sid" "S3-security" >/dev/null
         out="$out$name -> $(basename "$p")"$'\n'
     done <<EOF
 $D2099FF_CONSUMERS
@@ -76,19 +77,20 @@ make-detail-plan -> detail-signals.txt
 write-tests -> write-tests-signals.txt
 write-code -> write-code-signals.txt
 EOF
-    seen=$(printf '%s' "$out" | grep -c 'signals.txt')
-    assert_eq "CFF-4 ... and all three resolved to a real filename rather than an unfilled slot" "3" "$seen"
+    seen=$(find "$WORKFLOW_STATE_DIR/$sid.control" -maxdepth 1 -name '*-signals.txt' 2>/dev/null | sed 's#.*/##' | sort | tr '\n' ' ')
+    assert_eq "CFF-4 ... and running the three fallbacks left exactly those three files, one per stage" \
+        "detail-signals.txt write-code-signals.txt write-tests-signals.txt " "$seen"
 }
 
 # CFF-5..CFF-9: the payload scenarios. One table per csv shape, all three stages
 # in each, so a forwarder that dropped the list (or forwarded a constant) shows
 # up as the wrong stage flipping rather than as a uniform failure.
 d2099ff_payload_table() {
-    local label="$1" csv="$2" sid name stage out=""
+    local label="$1" csv="$2" files="${3:-1}" sid name stage out=""
     sid=$(new_session "ff$label")
     while IFS='|' read -r name stage; do
         [ -n "$name" ] || continue
-        out="$out$name -> $(d2099ff_derive "$(d2099_skill_file "$name")" "$sid" "$csv")"$'\n'
+        out="$out$name -> $(d2099ff_derive "$(d2099_skill_file "$name")" "$sid" "$csv" "$files")"$'\n'
     done <<EOF
 $D2099FF_CONSUMERS
 EOF
@@ -105,10 +107,23 @@ EOF
 }
 
 d2099ff_one_signal() {
-    # S1-multi-file is the #2099 case itself: low for detail and write_tests,
-    # high for write_code off ONE forwarded id.
-    assert_block "CFF-6 a one-signal judgment splits write_code off from the other two" \
-        "$(d2099ff_payload_table one "S1-multi-file")" <<'EOF'
+    # The #2099 case itself: S1b-wide-change is low for detail and write_tests, high
+    # for write_code. Since #2460 it is never the judge's to raise: it comes from the
+    # WCD-2 list alone (9 files, over the threshold), which only write_code has.
+    assert_block "CFF-6 a wide WCD-2 list splits write_code off from the other two on a zero-signal answer" \
+        "$(d2099ff_payload_table one "" 9)" <<'EOF'
+make-detail-plan -> level=low
+write-tests -> level=low
+write-code -> level=high
+EOF
+    assert_block "CFF-6a ... and a judge answering S1b-wide-change over a one-file list escalates no stage" \
+        "$(d2099ff_payload_table onejudged "S1b-wide-change")" <<'EOF'
+make-detail-plan -> level=low
+write-tests -> level=low
+write-code -> level=low
+EOF
+    assert_block "CFF-6b ... while a missing WCD-2 list is undecidable for write_code alone" \
+        "$(d2099ff_payload_table nolist "" 0)" <<'EOF'
 make-detail-plan -> level=low
 write-tests -> level=low
 write-code -> level=high
@@ -124,11 +139,11 @@ EOF
 }
 
 d2099ff_multi_signal() {
-    # Three ids in one file. Only S3-security escalates, and it must still be
-    # seen beside two non-escalating neighbours — a forwarder that read only the
-    # first token would answer low/low/high here.
+    # Two ids in one answer, S3-security second. Only it escalates write_tests, so
+    # a parser that read only the first token would answer low/low/low here.
+    # (#2460 retired S6-long-plan, the old third, non-escalating neighbour.)
     assert_block "CFF-8 a multi-signal judgment is parsed past its first token" \
-        "$(d2099ff_payload_table multi "S1-multi-file,S3-security,S6-long-plan")" <<'EOF'
+        "$(d2099ff_payload_table multi "S1b-wide-change,S3-security")" <<'EOF'
 make-detail-plan -> level=low
 write-tests -> level=high
 write-code -> level=high
@@ -172,14 +187,20 @@ EOF
 
 # CFF-12: SOURCE GAP, deliberately not asserted as a contract.
 d2099ff_wt6_signals_line_gap() {
-    skip "CFF-12 SOURCE GAP: skills/write-tests/SKILL.md WT-7 requires \`task_complexity_signals\`: the \`signals=\` line from WT-6 verbatim, but WT-6's fallback branch runs derive-complexity-level, which emits level= only (CFF-2). On the NONE path the field has no documented producer"
+    skip "CFF-12 SOURCE GAP: skills/write-tests/SKILL.md WT-7 requires \`task_complexity_signals\`: the \`signals=\` line from WT-6 verbatim, but WT-6's fallback branch follows the shared procedure, which hands back SIGNALS_CSV and a derive-complexity-level answer with no signals= line (CFF-2). On the NONE path the field has no \`signals=\` producer"
 }
 
+case_begin "cff-fallback-entry-and-paths" "skills/write-tests/SKILL.md"
 d2099ff_fallback_entry_gate
 d2099ff_paths_are_stage_distinct
+case_end
+case_begin "cff-signal-forwarding-levels" "bin/workflow/derive-complexity-level"
 d2099ff_zero_signals
 d2099ff_one_signal
 d2099ff_multi_signal
 d2099ff_undecidable
+case_end
+case_begin "cff-file-content-decides" "bin/workflow/derive-complexity-level"
 d2099ff_file_content_is_what_decides
 d2099ff_wt6_signals_line_gap
+case_end

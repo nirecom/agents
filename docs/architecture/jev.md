@@ -1,26 +1,30 @@
-# Jev Integration (shadow mode)
+# Jev Integration
 
 Jev is TypeSafe AI's typed classifier: it answers a fixed list of yes/no
-questions about a text and returns one typed answer per question. This
-repository calls it as a second opinion on task complexity. It is never a
-required dependency, and nothing it returns changes what the workflow does.
+questions about a text and returns one probability per question. This
+repository uses it as the first judge at three judgment points — task
+complexity, whether the outline plan can be skipped, and whether the detail
+plan can be skipped. It is never a required dependency: with Jev off, down or
+unsure, a subagent judges instead.
 
 ## Why it exists
 
-Task complexity is judged by the `complexity-judge` subagent, an LLM call that
-costs seconds and tokens on every workflow stage. A typed classifier could
-answer the same rubric faster and cheaper — but only if its answers agree with
-the judge's. Shadow mode collects that evidence before any decision depends on
-it: both judges see the same dispatch, the LLM result is always the one adopted,
-and the pair is written to a log for later comparison (#2460, under #2457).
+Each of those judgments used to be an LLM subagent call costing seconds and
+tokens on every workflow stage. A typed classifier answers the same rubric
+faster and cheaper, and it reports how sure it is. So Jev answers the keys it
+is confident about, and the subagent is dispatched only for the rest — often
+for none. A shadow period (#2460, under #2457) collected the agreement data
+that justified adopting Jev's answers; shadow mode remains as a per-point
+fallback.
 
 ## Enabling
 
 Set `JEV=on` and `TYPESAFE_API_KEY=<key>` in the agents config directory's
-`.env` (see `.env.example`); a non-empty value exported into the hook's process
-environment takes precedence. The
-default is `JEV=off`, and anything other than a case-insensitive `on` reads as
-off, including a config that fails to load.
+`.env` (see `.env.example`); a non-empty value exported into the process
+environment takes precedence. The default is `JEV=off`, and anything other than
+a case-insensitive `on` reads as off, including a config that fails to load.
+With `JEV=off` the same procedure runs, every key is delegated to the subagent,
+and nothing is logged.
 
 Neither key can be set from a project's `.env.local`: `JEV`,
 `TYPESAFE_API_KEY`, and the `JEV_` prefix are on the local-env blocklist, so a
@@ -31,18 +35,25 @@ TLS or reroute it. See
 
 ## How the call is triggered
 
-Two hooks registered on the `Agent|Task` matcher make the call deterministic —
-no skill prose has to remember to invoke Jev.
+Every caller of a judgment point follows one shared procedure
+(`skills/_shared/jev-two-stage-judge.md`) around the `bin/workflow/jev-judge`
+CLI:
 
-| Hook | Event | What it does |
-|---|---|---|
-| `hooks/jev-shadow-pre.js` | PreToolUse | Queries Jev for the dispatch and leaves the answer in a pending hand-off file |
-| `hooks/jev-shadow-post.js` | PostToolUse | Claims the hand-off, pairs it with the judge's output, and appends the decision record; writes nothing to stdout |
+| Command | What it does |
+|---|---|
+| `jev-judge query` | Snapshots the stage's sources, asks Jev, gates the answers, and says whether a subagent is needed |
+| `jev-judge finalize` | Merges Jev's and the subagent's answers, appends the decision record, and settles the result |
+| `jev-judge failsafe` | Settles the point's safe-side result when the two above could not |
 
-Both act only on a main-conversation dispatch whose `subagent_type` is a
-registered consumer — today that is `complexity-judge` alone
-(`hooks/lib/jev/registry.js`). Every other dispatch, and every dispatch while
-`JEV` is off, exits before any state write or network access.
+The subagent dispatch sits between `query` and `finalize` because only the main
+conversation can dispatch one. The protocol — tickets, the gate, write-ahead,
+owner markers — is in [jev/two-stage-broker.md](jev/two-stage-broker.md).
+
+Two hooks on the `Agent|Task` matcher (`hooks/jev-shadow-pre.js`,
+`hooks/jev-shadow-post.js`) remain for shadow mode: they observe a dispatch
+whose `subagent_type` belongs to a point in shadow mode and record the pair.
+For any other dispatch, and whenever `JEV` is off, they exit before any state
+write or network access.
 
 The query goes to `POST https://api.typesafe.ai/v1/systemone` with
 `Authorization: Bearer <TYPESAFE_API_KEY>`. Reachability is probed with
@@ -50,174 +61,201 @@ The query goes to `POST https://api.typesafe.ai/v1/systemone` with
 failed probe is recorded with its own status — an HTTP error with its code, a
 timeout, or unreachable — so a rejected key reads apart from an outage.
 
-## Shadow-mode contract
+## Rollout modes
 
-- **Adopted result**: always the LLM judge's. Every decision record carries
-  `adopted: "llm"` and `mode: "shadow"`.
-- **Log only**: shadow mode injects nothing into the parent conversation — the
-  post hook emits no `additionalContext`. Jev's answer reaches only the decision
-  log and `bin/jev-report`, so it cannot steer the model or a downstream parser.
-- **One judgment, one record**: counted after `bin/jev-report`'s dedupe by
-  (`session_id`, `tool_use_id`). The raw log may hold duplicate rows (a late or
-  repeated post); the report folds them into one judgment.
-- **Fail-open**: both hooks always exit 0. A missing key, an outage, an open
-  breaker, or an unreadable hook payload costs only the shadow record — the
-  dispatch proceeds exactly as it would with `JEV=off`.
-- **Comparison**: a record is marked as agreeing or disagreeing only when both
-  sides produced a usable answer, after the rubric's implications are closed on
-  both (`S1b` implies `S1`). A raw answer listing `S1b` without `S1` violates
-  that rubric, so when either side (or both) does, `S1` and the record as a
-  whole score as disagreement. An `S0-undecidable` answer from either judge is
-  not a usable answer, so such a record is left uncompared. A record whose Jev
-  side is not ok carries a `fallback_reason`.
+Each point in `hooks/lib/jev/registry.js` carries its own policy. The registry
+owns these values; the table shows the values the switch to production shipped
+with, and every decision record carries the ones actually applied.
+
+| Point | Mode | Backup subagent | Threshold: yes / no | Short-circuit |
+|---|---|---|---|---|
+| `complexity-judge` | production | `complexity-judge` | 0.7 signal fires / 0.7 does not | none |
+| `outline-skip` | production | `plan-skip-judge` | 0.9 skip allowed / 0.7 run | on "run" |
+| `detail-skip` | production | `plan-skip-judge` | 0.9 skip allowed / 0.7 run | on "run" |
+
+- **`production`**: Jev's answer is adopted for every key whose confidence
+  reaches the threshold for that answer's direction; the other keys go to the
+  backup subagent. The CLI writes the decision record.
+- **`shadow`**: every key goes to the subagent and Jev's answer is logged only.
+  The hook pair records a point it can match by `subagent_type`; the CLI
+  records every other point.
+- **Per-direction thresholds**: a skip point demands more confidence to skip a
+  planning stage than to run it, because a wrong skip loses a review while a
+  wrong run only costs time.
+- **Short-circuit**: for a skip point, one criterion adopted as "does not hold"
+  decides "run" without asking about the rest. Complexity never short-circuits:
+  every signal routes a stage on its own.
+- **Required sections**: per stage, the sections that must reach Jev whole.
+  The intent and the issue body are required at every stage. A section is
+  exempt only when its producing step was skipped or the session has no issue.
+  When a required section is missing, Jev is not asked.
+- **Policy freeze**: a ticket keeps the policy it was queried under, so a
+  registry change takes effect from the next ticket queried.
+- **Fail-safe direction**: any failure resolves to the costlier-but-safe side —
+  `S0-undecidable` (highest routing level) for complexity, "run the stage" for
+  a skip. Jev can remove a subagent call; it cannot remove a planning stage on
+  a failure.
+
+### What can be rolled back, and how
+
+- **By data**: Jev's adoption. Setting a point's `mode` to `"shadow"`, raising
+  a threshold, or setting `JEV=off` returns the judgment to the subagent, with
+  no other change.
+- **By `git revert` only**: what shipped alongside the switch and is code or
+  rubric — the retired complexity signals, the end of the zero-signal automatic
+  skip, the retired skip verifier and its scripts, and the replaced detail-skip
+  criteria. Changing `mode` does not bring those back.
 
 ## Module map
 
 | Module | Responsibility |
 |---|---|
-| `hooks/lib/jev/dispatch-gate.js` | Reads hook stdin; decides whether a dispatch is in scope |
-| `hooks/lib/jev/registry.js` | Consumer table: threshold, mode, sampling, fallback signal |
-| `hooks/lib/jev/broker.js` | Orchestrates one call: key check → breaker → liveness → query; pairs pre and post |
+| `bin/workflow/jev-judge` | CLI entry: argument check, then `query` / `finalize` / `failsafe` |
+| `hooks/lib/jev/two-stage/` | The CLI path: query, gate, snapshot, merge, write-ahead replay, owner markers, fail-safe, orphan handling |
+| `hooks/lib/jev/registry.js` | Point table and its schema check; who records a judgment |
+| `hooks/lib/jev/broker.js` | Orchestrates one Jev call: key check → breaker → liveness → query; pairs the shadow hooks |
+| `hooks/lib/jev/dispatch-gate.js` | Reads hook stdin; decides whether a dispatch is a shadow point's |
 | `hooks/lib/jev/provider-core.js` | The HTTP client: endpoint, timeouts, response cap, status vocabulary |
-| `hooks/lib/jev/breaker.js` | Per-session circuit breaker |
+| `hooks/lib/jev/breaker.js` | Per-session circuit breaker, split by cause |
 | `hooks/lib/jev/liveness.js` | Cached reachability probe |
-| `hooks/lib/jev/pending.js` | Pre → post hand-off files, atomic claim, orphan sweep |
-| `hooks/lib/jev/decision-record.js` | Builds and appends the decision record |
+| `hooks/lib/jev/pending.js` | Hand-off files and tickets, atomic claim and takeover, orphan sweep |
+| `hooks/lib/jev/decision-record.js` | Builds the decision record; appends once per ticket and record type |
 | `hooks/lib/jev/retention.js` | Removes idle session state |
-| `hooks/lib/jev/state-paths.js` | State directory layout and id validation |
-| `hooks/lib/jev/sanitize.js` | Terminal-safe renderers for the report's enum and signal-id values |
+| `hooks/lib/jev/state-paths.js` | State directory layout, id validation, versioned reads |
+| `hooks/lib/jev/sanitize.js` | Terminal-safe renderers for the report's values |
 | `hooks/lib/jev/test-overrides.js` | Captures the test-only overrides |
-| `bin/workflow/lib/jev-complexity-adapter.js` | Complexity-specific half: rubric → questions, answers → signals |
+| `bin/workflow/lib/jev-request-common.js` | Shared request pieces: capped reads, session binding, redaction, per-stage sections |
+| `bin/workflow/lib/jev-complexity-adapter.js` | Complexity half: rubric → questions, answers → signals |
+| `bin/workflow/lib/jev-skip-adapter.js` | Skip half: one question per skip criterion, the subagent's answer file |
 | `hooks/lib/jsonl-rotating-log.js` | Locked, rotating JSONL append shared with the RTK guard audit |
-| `bin/jev-report` | Local agreement report over the decision log |
+| `bin/jev-report`, `bin/lib/jev-report-aggregate/` | Local report over the decision log |
 
-The split between `hooks/lib/jev/` and the adapter is deliberate: the first is
-consumer-agnostic plumbing, the second is everything that knows what
-"complexity" means. A second consumer adds a registry row and an adapter, not a
-second broker.
+`hooks/lib/jev/` is point-agnostic plumbing; an adapter holds everything that
+knows what its point means. A new point adds a registry row and an adapter, not
+a second broker.
 
 ## Failure handling
 
-- **Circuit breaker**: three consecutive outage-class failures (unreachable,
-  timeout, HTTP error, `bad-response`) open the breaker for ten minutes for
-  that session. After expiry exactly one call is let through: it re-opens the
-  breaker for a 30 s trial window (`TRIAL_MS`, longer than a probe plus a query)
-  under the state lock, so concurrent dispatches cannot all retry a sick Jev.
-  The trial's success resets the count; its failure re-opens for ten minutes.
-  A success clears the breaker only if it was not opened after that call's
-  admission (its own trial excepted), so a slow late success cannot close a
-  breaker that newer failures opened.
-  `bad-response` is an HTTP 200 whose body exceeds the 64 KiB cap, is not
-  parseable JSON, or has no `answers` object — an outage, not a completed call.
-  A parsed response whose answers cannot be mapped, or whose mapped answer the
-  signal parser fails to normalize, also counts as `bad-response` for the
-  breaker, while its record keeps `unmappable`; only a parsed, mapped answer
-  counts as a success.
-- **Parser failure**: when normalizing Jev's answer through the signal parser
-  fails, the Jev side is recorded as `unmappable` with the fallback answer, so
-  the report's fallback reasons never count it as a usable Jev answer.
+- **Circuit breaker, by cause**: transport failures (unreachable, timeout, HTTP
+  error) count in one scope shared by every point, because a sick Jev is sick
+  for all of them. A `bad-response` — an answer set the adapter cannot map —
+  counts in a scope of its own per point, so one point's bad answers never
+  block another. Three consecutive failures open a scope for ten minutes.
+  After expiry exactly one call is let through: it re-opens the scope for a
+  30 s trial window (`TRIAL_MS`, longer than a probe plus a query) under the
+  state lock, so concurrent calls cannot all retry a sick Jev. A success
+  clears a scope only if it was not opened after that call's admission (its
+  own trial excepted), so a slow late success cannot close a breaker that
+  newer failures opened.
 - **Timeouts**: 2 s for the probe, 6 s for the query. The worst-case chain is
-  8 s, inside the 15 s the hook itself is registered with — a hook killed at its
-  timeout skips its own cleanup, so the budget is kept below it on purpose.
-- **In-process normalization**: both judges' answers go through the signal
-  parser's exported `normalize()` (`bin/workflow/normalize-judge-signals`),
-  called in the hook process — no child process and no file. The raw judge text
-  is never written to disk, and Jev never writes the production
-  `<stage>-signals.txt` that the parser's CLI derives.
-- **Orphans**: a pending hand-off the post hook never claimed (the dispatch was
-  interrupted), or claimed but never logged (the hook was killed before its
-  record was written), becomes an `llm-missing` record after one hour, so an
-  abandoned dispatch is counted rather than lost. A post with no hand-off whose
-  log append failed leaves its LLM-only record behind for the same sweep to retry.
-  An unparseable hand-off still becomes a record, built from empty values.
-  The sweep claims each entry under its own name, so two leftovers of one
-  dispatch whose append failed are both kept for the retry, never one overwriting the other.
-  Every hand-off is file content: each field is re-validated (status enums,
-  signal IDs, model charset, bounded numbers) before it reaches a record.
-- **Unreadable stdin**: with `JEV=on`, the hook writes one stderr diagnostic
-  line and skips; with `JEV=off` it stays silent. See
+  8 s, inside the 15 s the shadow hook is registered with — a hook killed at
+  its timeout skips its own cleanup, so the budget is kept below it on purpose.
+- **Jev failure on the CLI path**: any status other than `ok` delegates every
+  key, with the status as the record's `fallback_reason`. The judgment then
+  costs one subagent call, as it did before Jev.
+- **Incomplete input**: a required section that is truncated, absent, over the
+  read cap, or whose copy failed means Jev is not asked
+  (`input-insufficient`).
+- **`RESULT=error` and the caller's fail-safe**: when `finalize` cannot
+  complete, the caller re-runs it once and then runs `jev-judge failsafe`,
+  which settles the safe-side result.
+- **Stopped mid-finalize**: the merged result is written ahead of every side
+  effect, and each later step is idempotent, so a re-run or the orphan sweep
+  finishes a stopped ticket with the outcome an uninterrupted run would have
+  had.
+- **Superseded**: when a judgment queried later owns the stage, the older
+  ticket settles nothing. A superseded complexity caller writes nothing and
+  stops; a superseded skip reads as "run".
+- **In-process normalization**: complexity answers go through the signal
+  parser's exported `normalize()` (`bin/workflow/normalize-judge-signals`) in
+  process. The raw judge text is never written to the decision log.
+- **Orphans**: a ticket or hand-off nobody completed becomes a record after one
+  hour, so an abandoned judgment is counted rather than lost. Every hand-off is
+  file content: each field is re-validated before it reaches a record.
+- **Unreadable hook stdin**: with `JEV=on`, the hook writes one stderr
+  diagnostic line and skips; with `JEV=off` it stays silent. See
   [hook-stdin-input.md](claude-code/hook-stdin-input.md).
 
 ## State and log
 
 State lives under `$AGENTS_STATE_DIR/jev` (default `~/.agents/jev`), one
-directory per session: breaker state, the liveness cache, and pending
-hand-offs. A sweep runs at most once a day and removes
+directory per session: breaker scopes, the liveness cache, pending hand-offs
+and tickets, and done markers. Each state file carries a version constant owned
+by the module that writes it; a file of another version reads as absent, so a
+format change needs no migration. A sweep runs at most once a day and removes
 session directories idle for more than seven days, after emitting their
-orphans; one whose orphan could not be logged is kept for the next sweep.
-Removal first renames the directory to a `.tomb-<session>-<digits>` tombstone
-and re-checks it there: a hook that wrote at the old path meanwhile loses
-nothing, because a tombstone that gained entries is restored (or merged into
-the recreated directory without overwriting) and is not counted as removed.
-A hand-off write that finds its directory renamed away mid-write recreates it
-and retries once. A tombstone left by a killed sweep is restored or merged back
-the same way when it holds pending entries (a conflicting name keeps the
-tombstone), so the next due sweep handles them; one free of entries is cleaned
-once stale.
+orphans. Removal goes through a `.tomb-<session>-<digits>` tombstone that is
+restored or merged back if a writer raced it, so no pending entry is lost.
 
-Decisions are appended to `jev-decisions.log` as JSONL (record version 1) and
-rotated by size. This is analysis data, not production state: deleting it loses
-only the evidence collected so far.
+Two markers live in the session control directory beside the files they guard:
+the owner marker of the fixed `<stage>-signals.txt` and the owner marker of a
+skip judgment. The judgment queried later owns the marker. A caller's
+downstream therefore uses the `SIGNALS_CSV` its own `finalize` printed, never
+the fixed file.
 
-`bin/jev-report` aggregates that log — agreement rate overall and per signal,
-the count of comparisons excluded because either judge answered S0-undecidable, record counts per stage, fallback reasons, latency percentiles for both judges,
-and estimated cost. A judgment logged twice (a duplicate or late post) is counted
-once, and the number dropped is reported. When a post arrives after its pending
-was swept, the Jev-only orphan and the LLM-only record are merged into one
-judgment and compared again. Any other direct consumer of the log must likewise
-dedupe by (`session_id`, `tool_use_id`), since that case leaves two records.
-`s1b_without_s1` counts, per judge, the `ok` answers that list `S1b` without
-`S1` — the raw rubric gap that the comparison scores as disagreement (see
-**Comparison** above); the low-confidence reference applies the same rule.
-Latency is taken from every side whose call completed — Jev `ok`,
-`low-confidence` or `unmappable`, LLM `ok` or `parse-fallback` — so a parsed
-answer that could not be mapped still counts the time it cost. Outages
-(including `bad-response`), unrun sides and an `unmappable` recorded before any
-query (its questions could not be built) count no latency. For
-Jev it is the query POST's duration, probe excluded; for the LLM, from the end of
-the Jev round trip to the post hook's start. The per-signal low-confidence rate
-is taken over Jev records that answered (`ok` or `low-confidence`) and reports
-that count as its n; this rate, like every other rate in the report, is null
-(`n/a` in text) when its denominator is zero. A rotated log
-generation that exists but cannot be read is listed as unreadable (and warned
-about on stderr) rather than silently skipped. It reads local files only and
-never contacts Jev. Usage is in `bin/jev-report --help`.
+Decisions are appended to `jev-decisions.log` as JSONL and rotated by size.
+This is analysis data, not production state: deleting it loses only evidence.
+
+Record version 2 (`version: 2`):
+
+| Field | Meaning |
+|---|---|
+| `record_type` | `decision`, or `settle` for a superseded ticket's outcome |
+| `ticket` | The CLI ticket; null on a hook record. (`ticket`, `record_type`) is appended at most once |
+| `mode`, `threshold`, `short_circuit_answer` | The policy frozen at query time; `threshold` holds both directions |
+| `adopted` | Whose answers made the result: `jev`, `llm`, `mixed`, or null |
+| `short_circuited`, `unjudged_keys` | Whether the gate short-circuited, and the keys nobody judged because of it |
+| `llm_needed` | `query` asked for a subagent dispatch |
+| `llm_answer_received` | The ticket's answer file existed at `finalize` |
+| `input.required` / `missing` / `exempt` | The stage's required sections and what became of them |
+| `input.sources_failed`, `sources_failed_reasons` | Sections with no whole copy, and why (`copy-failed`, `over-cap`) |
+| `deterministic` | Computed signals: status, values, overrides, and the sha256 of the list they were computed from |
+| `agreement_by_signal` | Per key, whether Jev and the subagent agreed — only where both answered |
+| `fallback_reason` | Why Jev's answer was not used, when it was not |
+
+The CLI cannot observe an Agent dispatch, only the answer file it leaves — hence
+`llm_answer_received`, not a claim that the subagent was called. The report's
+**LLM call rate** is the share of decisions with `llm_needed`: how often the CLI
+asked for a dispatch. A short-circuited ticket counts in its denominator only.
+An orphan recorded as `finalize-absent` counts both as a missing answer and as
+an absent finalize.
+
+Version 1 records (`v: 1`) are the shadow period's hook records. The report
+keeps them in a separate legacy section with their original metrics and never
+mixes them into adoption or retune figures. A record with neither version key
+is counted as unknown.
+
+`bin/jev-report` reads local files only and never contacts Jev. It drops a
+repeated (`ticket`, `record_type`) and reports the count, excludes superseded
+tickets from every rate while counting them, and lists a rotated log
+generation it could not read rather than skipping it silently. Reading the
+report and acting on it: [ops.md](../ops.md#jev).
 
 ## Security properties
 
-- **Redaction before truncation**: every text that leaves the machine — the
-  dispatch prompt and each plan artifact — passes through two redactors before
-  the 16 000-character cap is applied, so truncation cannot leave a credential's
-  prefix in the request, and the request's recorded size and hash describe the
-  redacted string actually sent. The first
-  (`hooks/workflow-state/complexity-routing/secret-shape.js`) redacts provider key
-  shapes; the second (`redactSecrets` in `hooks/lib/output-sanitize.js`) adds
-  `github_pat_` tokens, URL userinfo credentials, `Authorization` scheme values,
-  `token=` / `password:`-style assignments, and private-key blocks of any PEM kind.
+- **Redaction before truncation**: every text that leaves the machine passes
+  through two redactors before the 16 000-character cap is applied, so
+  truncation cannot leave a credential's prefix in the request, and the
+  recorded size and hash describe the redacted string actually sent. The first
+  (`hooks/workflow-state/complexity-routing/secret-shape.js`) redacts provider
+  key shapes; the second (`redactSecrets` in `hooks/lib/output-sanitize.js`)
+  adds `github_pat_` tokens, URL userinfo credentials, `Authorization` scheme
+  values, `token=` / `password:`-style assignments, and private-key blocks.
 - **One pattern source with the pre-commit scanner**: the first redactor loads
   its shapes from the `# BEGIN hard-secret-patterns` / `# END hard-secret-patterns`
   block in `bin/scan-outbound.sh`, so a shape the scanner learns is redacted
-  from Jev requests too, with no copy to drift. Every match is redacted
-  wherever it occurs, whatever precedes it — a glued key cannot slip through
-  as prose.
+  from Jev requests too. Every match is redacted wherever it occurs.
 - **Fail closed on missing patterns**: if that block cannot be loaded, the
-  redactor throws rather than pass text through unredacted; the request is then
-  never built, no query is sent, and the Jev side is recorded as `not-run`.
-- **Bounded artifact reads**: each plan artifact is read only up to 1 MiB,
-  far above the state cap, so an oversized file cannot stall the hook or
-  exhaust memory; the request header's line count covers that portion only.
-- **Same plan as the LLM judge**: plan artifacts are read from the `Session-ID`
-  in the dispatching worktree's `WORKTREE_NOTES.md` (that one file, never a
-  sibling or the process cwd) when it has any, else from the hook session id,
-  because the workflow session id can differ from the Claude Code one and the
-  comparison is fair only if Jev sees the plan the LLM sees. The notes id is
-  adopted only when its workflow state's `session_worktree`, or the latest
-  worktree-entered event's own `cwd` (not a fallback-process-cwd), equals the hook cwd (normalized; case-insensitive on
-  Windows only); a `cwd` that falls back to the session-start context never binds,
-  because every main-checkout session shares that start cwd. So a stale or copied
-  notes file never lends another session's plan. The recorded workflow step is
-  the hook session's, falling back to that bound notes session's — the same
-  check — when the hook session has no workflow state.
+  redactor throws rather than pass text through; no query is sent.
+- **Bounded reads**: each source and the answer file are read only up to 1 MiB.
+- **The answer never rides a command line**: the subagent's answer reaches
+  `finalize` only through the ticket's own answer file, whose path `finalize`
+  derives itself.
+- **Same plan as the subagent**: plan artifacts are read from the `Session-ID`
+  in the dispatching worktree's `WORKTREE_NOTES.md` when it has one, else from
+  the session id given. The notes id is adopted only when that session's
+  recorded worktree equals the current one, so a stale or copied notes file
+  never lends another session's plan.
 - **No redirect, bounded response**: the client refuses HTTP redirects — a
   redirect would forward the bearer token to another host — and stops reading a
   response at 64 KiB.
@@ -226,38 +264,36 @@ never contacts Jev. Usage is in `bin/jev-report --help`.
 - **Test override is loopback-only**: `JEV_BASE_URL` is honoured only for
   `127.0.0.1` / `localhost` without credentials, and is captured from the
   process environment before `.env` is loaded, so no config file can supply it.
-  `JEV_HTTP_TIMEOUT_MS` takes effect only together with that loopback override,
-  so it can never stretch a production query past the hook's budget.
-- **Path safety**: session and tool-use ids are validated against a strict
-  character set before they are used in a state path.
-- **Untrusted output**: everything rendered into the text report is sanitized; Jev's response is treated as data, never as
-  instructions.
+  `JEV_HTTP_TIMEOUT_MS` takes effect only together with that override.
+- **Path safety**: session, ticket and tool-use ids are validated against a
+  strict character set before they are used in a path.
+- **Untrusted output**: everything rendered into the text report is sanitized;
+  Jev's response is treated as data, never as instructions.
 - **State root**: `AGENTS_STATE_DIR` is on the local-env blocklist, so a
   reviewed repository cannot relocate where state and logs are written.
-- **Untrusted names**: a point name read from a hand-off file or a log row is
-  matched against the registry's own keys only, and the report groups rows in
-  prototype-less maps, so a name such as `constructor` is an ordinary unknown
-  point rather than an inherited property.
+- **Untrusted names**: a point name read from a file or a log row is matched
+  against the registry's own keys only, and the report groups rows in
+  prototype-less maps, so `constructor` is an ordinary unknown point.
 
 ## Known limits
 
-None changes the shadow-mode contract.
-
 - Because every `sk-` match is redacted, ordinary words that contain it
   (`task-complexity-signals-file`) reach Jev with that span redacted while the
-  LLM judge sees them intact — an A/B input difference on the Jev side only,
+  subagent sees them intact — an input difference on the Jev side only,
   accepted so that no glued key leaves the machine.
+- Run-direction agreement is not measured in production: a ticket Jev decides
+  alone has no subagent answer to compare with. Measuring it means putting the
+  point back in shadow mode for a while.
+- A registry change cannot be forced onto tickets already queried; they finish
+  under their frozen policy within the one-hour ticket lifetime.
 - Process-runtime variables other than Node's own remain settable from a
   project `.env.local` — the general limit described in
   [local-env-overrides.md](claude-code/local-env-overrides.md).
 
 ## Rollout
 
-Shadow mode is opt-in per machine, not per checkout. The hooks run from the
-agents config directory (`$AGENTS_MAIN_ROOT`), and `JEV` is read from a
-non-empty value already in the hook's process environment, else from that
-config directory's `.env`; a project's `.env.local` is never consulted for it.
-The flag ships off, so merging the feature changes nothing for any session
-until that environment or config `.env` turns it on. Promotion past
-shadow mode — letting Jev's answer be adopted — is a separate decision that the
-agreement data from `bin/jev-report` is meant to inform.
+Jev is opt-in per machine, not per checkout: `JEV` is read from the process
+environment, else from the agents config directory's `.env`, and never from a
+project's `.env.local`. The flag ships off, so merging changes no judgment
+until that environment turns it on. Lowering a skip threshold is a separate,
+human decision that the report's retune section is meant to inform.

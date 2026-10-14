@@ -65,7 +65,7 @@ rule_has_unless() {
 }
 
 ROWS=0
-ROWS_EXPECTED=56  # inventory 21 + detection coverage 26 + contract-precedence CP2 9.
+ROWS_EXPECTED=52  # inventory 21 + detection coverage 21 + contract-precedence CP2 10 (#2460).
 
 PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-2263-subagent-dispatch-prompts"
 . "$PART_DIR/inventory.sh"

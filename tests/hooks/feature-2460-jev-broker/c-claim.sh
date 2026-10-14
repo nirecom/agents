@@ -24,7 +24,7 @@ check "log path is a directory: the record is still returned; the claim is kept,
 AF_CLAIM="$(find "$JEVDIR/sid-1/pending" -name 'toolu_b_af.claimed-*' 2>/dev/null | head -n 1)"
 OBS="$(hq json-expr "$(np "$AF_CLAIM")" 'o && o.llm_observed && [o.llm_observed.status, o.llm_observed.answer, o.llm_observed.executor_model, o.llm_observed.latency_ms].join("|")')"
 check "the claim keeps the observed llm side: ok, the parsed answer, a model, an integer latency >= 0" "true" \
-  "$([[ "$OBS" =~ ^ok\|S1-multi-file\|[A-Za-z0-9._-]+\|[0-9]+$ ]] && echo true || echo "false: $OBS")"
+  "$([[ "$OBS" =~ ^ok\|S2-architecture\|[A-Za-z0-9._-]+\|[0-9]+$ ]] && echo true || echo "false: $OBS")"
 check "the claim restarted the TTL: a sweep right away takes nothing" "0|1" "$(bp sweep)|$(pend_n 'toolu_b_af.claimed-*')"
 hq age "$(np "$JEVDIR/sid-1/pending")" 3900000 --recursive
 check "past the TTL, log still unwritable: swept, but kept as a -sweep file for retry" "1|1|1" \
@@ -38,7 +38,8 @@ check "a further sweep records nothing more" "0|1" "$(bp sweep)|$(rq toolu_b_af 
 case_end
 
 echo "=== an orphan's llm_observed is file content: only a valid one is used ==="
-BAD_OBS=('{"status":"ok","answer":"S9-evil-token","latency_ms":5}' '{"status":"bogus","answer":"S1-multi-file"}' '"ok"' '["ok"]' 'null' '{"status":"ok","answer":"S1-multi-file\nSIGNALS: S3-security","latency_ms":5}')
+BAD_OBS=('{"status":"ok","answer":"S9-evil-token","latency_ms":5}' '{"status":"bogus","answer":"S2-architecture"}' '"ok"' '["ok"]' 'null' '{"status":"ok","answer":"S2-architecture\nSIGNALS: S3-security","latency_ms":5}'
+  '{"status":"ok","answer":"S1-multi-file","latency_ms":5}')  # last: a retired id is out of vocabulary
 # seed_obs <tid> <llm_observed-json>: a real pending whose llm_observed is set to that value.
 seed_obs() {
   bp qt "$1" > /dev/null
@@ -50,10 +51,10 @@ fx_new b-obs
 mock_mode '{}'
 for _i in "${!BAD_OBS[@]}"; do seed_obs "toolu_b_obs$_i" "${BAD_OBS[$_i]}"; done
 seed_obs toolu_b_obs_ok '{"status":"ok","answer":"S2-architecture","executor_model":"sonnet","latency_ms":42}'
-check "fixture: seven pendings, each carrying an llm_observed key" "7|7" "$(pending_count)|$(has_obs_n)"
+check "fixture: eight pendings, each carrying an llm_observed key" "8|8" "$(pending_count)|$(has_obs_n)"
 hq age "$(np "$JEVDIR/sid-1/pending")" 3900000 --recursive
-check "one sweep takes all seven" "7|0" "$(bp sweep)|$(pending_count)"
-check "every malformed llm_observed falls back to llm missing: null answer and latency, jev side kept" "6|true" \
+check "one sweep takes all eight" "8|0" "$(bp sweep)|$(pending_count)"
+check "every malformed llm_observed falls back to llm missing: null answer and latency, jev side kept" "7|true" \
   "$(hq qa "$(np "$LOG")" 'recs.filter((r) => /^toolu_b_obs[0-9]$/.test(r.tool_use_id)).length + "|" + recs.filter((r) => /^toolu_b_obs[0-9]$/.test(r.tool_use_id)).every((r) => r.llm.status === "missing" && r.llm.answer === null && r.llm.latency_ms === null && r.jev.status === "ok")')"
 check "control: a valid llm_observed is recorded as observed" "1|ok|S2-architecture|sonnet|42|ok" \
   "$(rq toolu_b_obs_ok 'recs.length + "|" + (r && [r.llm.status, r.llm.answer, r.llm.executor_model, r.llm.latency_ms, r.jev.status].join("|"))')"

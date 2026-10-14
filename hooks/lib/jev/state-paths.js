@@ -32,6 +32,13 @@ function readJson(p) {
   }
 }
 
+// A versioned state file: a file of another version (or none) reads as absent, so a
+// format change never makes a reader act on a shape it was not written for.
+function readVersioned(p, expectedVersion) {
+  const obj = readJson(p);
+  return obj && typeof obj === "object" && obj.version === expectedVersion ? obj : null;
+}
+
 // Write to a pid-suffixed sibling, then rename: readers never see a partial file.
 function writeJsonAtomic(p, obj) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -40,4 +47,4 @@ function writeJsonAtomic(p, obj) {
   fs.renameSync(tmp, p);
 }
 
-module.exports = { ID_RE, isValidId, jevStateDir, sessionDir, readJson, writeJsonAtomic };
+module.exports = { ID_RE, isValidId, jevStateDir, sessionDir, readJson, readVersioned, writeJsonAtomic };

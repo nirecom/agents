@@ -22,7 +22,7 @@ if [ "$API_READY" = "true" ]; then
   SID="u2-$$"
   U2_OUT="$(node_call "
     const io=require('$BARREL_N');
-    io.recordSkipVerdict('$SID','outline','confirm','skip-verifier');
+    io.recordSkipVerdict('$SID','outline','confirm','record-skip-verdict-cli:test');
     const s=io.readState('$SID');
     console.log(s.steps.outline.skip_verdict.verdict);
   ")"
@@ -32,7 +32,7 @@ if [ "$API_READY" = "true" ]; then
   SID="u3-$$"
   U3_OUT="$(node_call "
     const io=require('$BARREL_N');
-    io.recordSkipVerdict('$SID','detail','veto','skip-verifier');
+    io.recordSkipVerdict('$SID','detail','veto','record-skip-verdict-cli:test');
     const s=io.readState('$SID');
     console.log(s.steps.detail.skip_verdict.verdict);
   ")"

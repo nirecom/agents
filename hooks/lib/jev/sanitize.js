@@ -7,9 +7,10 @@ const { SIGNAL_IDS, UNDECIDABLE_SIGNAL } = require("../../workflow-state/complex
 const VOCAB = new Set([...SIGNAL_IDS, UNDECIDABLE_SIGNAL || "S0-undecidable"]);
 const ENUM_RE = /^[a-z0-9_-]{1,32}$/;
 
-function sanitizeAnswerIds(csv) {
+// alsoKnown: ids the caller has already validated (the per-signal columns of a legacy report).
+function sanitizeAnswerIds(csv, alsoKnown = []) {
   if (csv === null || csv === undefined) return "-";
-  const kept = String(csv).split(",").map((s) => s.trim()).filter((s) => VOCAB.has(s));
+  const kept = String(csv).split(",").map((s) => s.trim()).filter((s) => VOCAB.has(s) || alsoKnown.includes(s));
   return kept.length ? kept.join(",") : "(none)";
 }
 

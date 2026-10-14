@@ -4,7 +4,7 @@
 // One node process judges every row: a spawn per row would make 2,600 rows far too slow.
 //
 // Usage: node run-corpus.js (--corpus <jsonl> | --table <file>) --main <dir> --wt <dir>
-//          [--foreign <dir>] [--plain <dir>] [--fakewt <dir>] --session <id>
+//          [--foreign <dir>] [--plain <dir>] [--fakewt <dir>] --session <id> [--retired <entries>]
 // --table lines are `id ~ cmd ~ cwd ~ expect` (`-` = no cwd), judged in file order.
 // Placeholders: @ROOT@ / @WIN@ (the row's root, posix / backslash), @MAIN@ @WT@ @FOREIGN@
 // @PLAIN@ @FAKEWT@. A cwd of MAIN/WT/... names that directory; otherwise it is substituted.
@@ -66,6 +66,19 @@ const loadRows = () => {
   return { meta: null, rows, table: true };
 };
 
+// --retired <entry[,entry]>: SSOT entries removed since the corpus was frozen. Their rows stay in
+// the corpus and must now fall through, because only the list decides the verdict.
+const RETIRED_VERDICT = "passThrough|BG-NO-HIT";
+const retired = (argOf("--retired") || "").split(",").filter(Boolean)
+  .map((entry) => ({ entry, rows: 0, fail: 0 }));
+const retiredOf = (row) => {
+  const rule = String(row.rule || "").split("\\").join("/");
+  return retired.find((r) => {
+    const at = rule.indexOf(r.entry);
+    return at >= 0 && !/[\w.-]/.test(rule.charAt(at + r.entry.length));
+  });
+};
+
 const { meta, rows, table } = loadRows();
 const fam = new Map();
 const bySrc = new Map();
@@ -80,7 +93,13 @@ for (const row of rows) {
   }
   const cmd = subst(row.cmd, rootDir);
   const got = judge(cmd, cwdOf(row.cwd, rootDir));
-  const ok = got === row.expect;
+  const gone = retiredOf(row);
+  const want = gone ? RETIRED_VERDICT : row.expect;
+  const ok = got === want;
+  if (gone) {
+    gone.rows += 1;
+    if (!ok) gone.fail += 1;
+  }
   const f = fam.get(row.family) || { total: 0, pass: 0, fail: 0 };
   f.total += 1;
   if (ok) {
@@ -98,11 +117,13 @@ for (const row of rows) {
     bySrc.set(src, s);
   }
   if (table) {
-    process.stdout.write(`ROW ${row.id} ${ok ? "PASS" : "FAIL"} want=${row.expect} got=${got}\n`);
+    process.stdout.write(`ROW ${row.id} ${ok ? "PASS" : "FAIL"} want=${want} got=${got}\n`);
   } else if (!ok && (verbose || f.fail <= FAIL_CAP)) {
-    process.stdout.write(`ROW ${row.id} FAIL want=${row.expect} got=${got} rule=${row.rule} cmd=${row.cmd}\n`);
+    process.stdout.write(`ROW ${row.id} FAIL want=${want} got=${got} rule=${row.rule} cmd=${row.cmd}\n`);
   }
 }
+
+for (const r of retired) process.stdout.write(`RETIRED ${r.entry} rows=${r.rows} fail=${r.fail}\n`);
 
 for (const [name, f] of fam) process.stdout.write(`FAMILY ${name} total=${f.total} pass=${f.pass} fail=${f.fail}\n`);
 for (const [name, s] of bySrc) process.stdout.write(`SOURCE ${name} total=${s.total} pass=${s.pass} fail=${s.fail}\n`);

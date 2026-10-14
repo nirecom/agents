@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/record-complexity-and-skip, hooks/workflow-state/record-step-verdict.js
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/cli.js, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, forward-cli, argument-validation, error-cases, edge-cases, scope:issue-specific, pwsh-not-required
 
-# #1644 review gap C10 (MEDIUM) — argument handling on all four advance-class CLIs:
+# #1644 review gap C10 (MEDIUM) — argument handling on all three advance-class CLIs:
 # malformed flags, boundary values, hostile session ids. Every rejected call asserts
 # BOTH the exact exit code and a byte-identical workflow dir afterwards — a CLI that
 # validates late can exit nonzero and still have written.
@@ -21,7 +21,6 @@ SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
 RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
 SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
-RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
 WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
@@ -32,6 +31,8 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned (and left empty) so no real home is consulted.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
@@ -49,6 +50,9 @@ fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 check() { if [ "$3" = "$2" ]; then pass "$1"; else fail "$1 -- expected [$2] got [$3]"; fi; }
 check_contains() {
   if printf '%s' "$3" | grep -qF -- "$2"; then pass "$1"; else fail "$1 -- expected [$2] in: $3"; fi
+}
+check_not_contains() {
+  if printf '%s' "$3" | grep -qF -- "$2"; then fail "$1 -- did NOT expect [$2] in: $3"; else pass "$1"; fi
 }
 run_with_timeout() {
   if command -v timeout >/dev/null 2>&1; then timeout 120 "$@"
@@ -102,7 +106,12 @@ expect_reject() {
   before="$(wf_snapshot)"
   run_cli "$@"
   after="$(wf_snapshot)"
-  check "$desc: exit $want" "$want" "$RC"
+  # "nonzero" is for a rejection whose exact code the #2460 plan leaves open.
+  if [ "$want" = "nonzero" ]; then
+    if [ "$RC" -ne 0 ]; then pass "$desc: exits nonzero"; else fail "$desc: exits nonzero -- got 0"; fi
+  else
+    check "$desc: exit $want" "$want" "$RC"
+  fi
   check "$desc: the workflow dir is untouched" "$before" "$after"
 }
 
@@ -145,7 +154,7 @@ expect_reject "C10-2d: --next without --advance" 1 -- \
 check_contains "C10-2d: the diagnostic names the dependency" \
   "--next is only meaningful with --advance" "$ERR"
 # --target belongs to record-skip-judgment, not to next-step. Sending it here is
-# the most likely real-world slip once four CLIs share a flag vocabulary.
+# the most likely real-world slip once three CLIs share a flag vocabulary.
 expect_reject "C10-2e: a sibling's flag is an unknown option here" 1 -- \
   node "$NS" --session guard --target outline
 expect_reject "C10-2f: --advance --status skipped with an empty reason" 1 -- \
@@ -155,32 +164,45 @@ expect_reject "C10-2g: --advance --status skipped with no --skip-reason at all" 
 
 echo ""
 echo "=== C10-3: record-skip-judgment argument handling ==="
-expect_reject "C10-3a: invalid boolean for --c1" 1 -- \
-  node "$RSJ" --session guard --target outline --c1 maybe --c2 true
-check_contains "C10-3a: the diagnostic names the offending flag and value" \
-  "invalid boolean for --c1: maybe" "$ERR"
+# #2460 form: --cond k=v (exact schema key set) + --source + --ticket.
+RSJ_OK=(--cond so_c1=true --cond so_c2=true --source subagent --ticket 0123456789abcdef)
+expect_reject "C10-3a: invalid boolean in --cond" nonzero -- \
+  node "$RSJ" --session guard --target outline --cond so_c1=maybe --cond so_c2=true \
+  --source subagent --ticket 0123456789abcdef
+check_contains "C10-3a: the diagnostic names the offending value" "maybe" "$ERR"
 expect_reject "C10-3b: --session with no value" 1 -- \
-  node "$RSJ" --target outline --c1 true --c2 true --session
+  node "$RSJ" --target outline "${RSJ_OK[@]}" --session
+# Exit 1 alone is not enough: an unparsed --cond also exits 1 before stage 4.
+check_not_contains "C10-3b: the --cond form itself is accepted" "unknown argument: --cond" "$ERR"
 expect_reject "C10-3c: empty --session" 1 -- \
-  node "$RSJ" --session "" --target outline --c1 true --c2 true
-expect_reject "C10-3d: unknown --target" 1 -- \
-  node "$RSJ" --session guard --target roadmap --c1 true --c2 true
+  node "$RSJ" --session "" --target outline "${RSJ_OK[@]}"
+check_not_contains "C10-3c: the --cond form itself is accepted" "unknown argument: --cond" "$ERR"
+expect_reject "C10-3d: unknown --target" nonzero -- \
+  node "$RSJ" --session guard --target roadmap "${RSJ_OK[@]}"
 expect_reject "C10-3e: --next without --advance" 1 -- \
-  node "$RSJ" --session guard --target outline --c1 true --c2 true --next
-expect_reject "C10-3f: a flag this CLI does not own" 1 -- \
-  node "$RSJ" --session guard --target outline --c1 true --c2 true --step research
-# CURRENT BEHAVIOR, deliberately pinned as-is: unlike next-step and
-# set-workflow-type, record-skip-judgment does NOT validate the session-id
-# charset up front. A traversal-shaped id is only stopped later, by the
-# write-back verification — so the code is the record-failure code for the path
-# taken (1 without --advance, 2 with it), not the argument error its two sibling
-# CLIs return. Reported as a CPR-ORTH gap; pinned so a fix updates it knowingly.
-expect_reject "C10-3g: path-traversal --session is stopped by write-back verification" 1 -- \
-  node "$RSJ" --session "../evil" --target outline --c1 true --c2 true
-check_contains "C10-3g: the diagnostic is the verification failure, not a charset error" \
-  "write verification failed" "$ERR"
-expect_reject "C10-3h: the same id on the --advance path carries the record-failure code" 2 -- \
-  node "$RSJ" --session "../evil" --target outline --c1 true --c2 true --advance
+  node "$RSJ" --session guard --target outline "${RSJ_OK[@]}" --next
+check_contains "C10-3e: the diagnostic is the --next rule" "--next is only meaningful with --advance" "$ERR"
+expect_reject "C10-3f: a flag this CLI does not own" nonzero -- \
+  node "$RSJ" --session guard --target outline "${RSJ_OK[@]}" --step research
+# record-skip-judgment does NOT validate the session-id charset up front: a
+# traversal-shaped id is stopped by the ticket check (#2460) — no store holds a finalized
+# ticket for it — so the code is 2 with or without --advance. CPR-ORTH gap, pinned.
+expect_reject "C10-3g: path-traversal --session is stopped by the ticket check" 2 -- \
+  node "$RSJ" --session "../evil" --target outline "${RSJ_OK[@]}"
+check_contains "C10-3g: the diagnostic is the ticket check, not a charset error" \
+  "--ticket is not a finalized ticket of this session and target" "$ERR"
+expect_reject "C10-3h: the same id on the --advance path carries the same code" 2 -- \
+  node "$RSJ" --session "../evil" --target outline "${RSJ_OK[@]}" --advance
+check_contains "C10-3h: and the same diagnostic" \
+  "--ticket is not a finalized ticket of this session and target" "$ERR"
+# The ticket check itself writes nothing either, for a well-formed id with no ticket.
+expect_reject "C10-3j: a well-formed session with no finalized ticket" 2 -- \
+  node "$RSJ" --session guard --target outline "${RSJ_OK[@]}" --advance
+check_contains "C10-3j: the diagnostic is the ticket check" \
+  "--ticket is not a finalized ticket of this session and target" "$ERR"
+# The retired --c1/--c2 form is an unknown argument at the #2460 end state.
+expect_reject "C10-3i: the retired --c1/--c2 form" 2 -- \
+  node "$RSJ" --session guard --target outline --c1 true --c2 true
 
 echo ""
 echo "=== C10-4: set-workflow-type argument handling ==="
@@ -208,29 +230,6 @@ expect_reject "C10-4j: unknown flag" 1 -- \
   node "$SWT" --session guard --type wf-code --bogus
 expect_reject "C10-4k: unknown step for --advance" 1 -- \
   node "$SWT" --session guard --type wf-code --advance --step no_such_step --status complete
-
-echo ""
-echo "=== C10-5: record-complexity-and-skip argument handling ==="
-# This CLI keeps TWO distinct failure codes: 1 for a missing required value and
-# 2 for an unknown flag. Its `--session` uses require_value, which checks
-# whether the next token itself looks like a flag (`--*`) before consuming it —
-# so a value-less --session immediately followed by another flag is rejected
-# as a missing value (exit 2), not treated as swallowing that flag's token.
-expect_reject "C10-5a: --session immediately followed by another flag is a missing value" 2 -- \
-  env bash "$RCAS" --session --target outline --signals ""
-check_contains "C10-5a: the diagnostic names the missing value" "--session requires a value" "$ERR"
-expect_reject "C10-5b: empty --session" 1 -- \
-  env bash "$RCAS" --session "" --signals "" --target outline
-expect_reject "C10-5c: missing --session entirely" 1 -- \
-  env bash "$RCAS" --signals "" --target outline
-expect_reject "C10-5d: missing --signals is a usage error, not a default" 2 -- \
-  env bash "$RCAS" --session guard --target outline
-expect_reject "C10-5d2: the retired --verdict flag is rejected the same way" 2 -- \
-  env bash "$RCAS" --session guard --verdict low --signals "" --target outline
-expect_reject "C10-5e: unknown flag on the advance path still exits 2, not 3" 2 -- \
-  env bash "$RCAS" --session guard --signals "" --target outline --advance --bogus
-expect_reject "C10-5f: path-traversal --session" 1 -- \
-  env bash "$RCAS" --session "../evil" --signals "" --target outline
 
 echo ""
 echo "=== C10-6: boundary values that are REJECTED ==="

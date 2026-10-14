@@ -42,7 +42,7 @@ for _pt in '"constructor"' '"__proto__"' '"toString"' '"no-such-point"' 'undefin
 done
 check "no request, no log, no state dir entry" "0|absent|" \
   "$(mock_total)|$([ -e "$LOG" ] && echo present || echo absent)|$(names "$FX/state")"
-check "control: the registered point returns the record object and logs one record" "record|1|complexity-judge|S1-multi-file" \
+check "control: the registered point returns the record object and logs one record" "record|1|complexity-judge|S2-architecture" \
   "$(bp record "$POINT")|$(rq toolu_b_record 'recs.length + "|" + (r && r.point) + "|" + (r && r.llm.answer)')"
 check "the control left no norm dir, signals file or control dir" "0" "$(stray_files)"
 case_end
@@ -85,6 +85,6 @@ for _mode in throw nonstring missing; do
 done
 fx_new b-pnorm-real
 mock_mode '{}'
-check "control: the real normalizer yields an ok, compared LLM answer, no child process" "ok|finite|1|ok|S1-multi-file|true|ok|0" \
+check "control: the real normalizer yields an ok, compared LLM answer, no child process" "ok|finite|1|ok|S2-architecture|true|ok|0" \
   "$(bp qt toolu_b_pnorm)|$(pending_count)|$(bp rt-normalizer toolu_b_pnorm real)"
 case_end

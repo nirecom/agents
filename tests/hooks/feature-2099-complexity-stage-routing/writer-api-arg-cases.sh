@@ -119,6 +119,14 @@ d2099w_recovery_after_refusal() {
     done
 }
 
+case_begin "wa-controls" "hooks/workflow-state/state-io/session-fields.js"
 d2099w_controls
+case_end
+
+case_begin "wa-malformed" "hooks/workflow-state/state-io/session-fields.js"
 d2099w_malformed
+case_end
+
+case_begin "wa-recovery-after-refusal" "hooks/workflow-state/state-io/session-fields.js"
 d2099w_recovery_after_refusal
+case_end

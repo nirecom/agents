@@ -2,12 +2,12 @@
 # Tests: skills/clarify-intent/SKILL.md, skills/_shared/complexity-and-outline-skip.md
 # Tags: skill, static, complexity-evaluation, scope:issue-specific
 #
-# Issue #1350/#1427 — clarify-intent's CI-C1b must invoke the record-complexity-and-skip
-# wrapper before the branching logic, and the WORKFLOW_OUTLINE_NOT_NEEDED sentinel plus
-# the skip-verifier subagent launch must stay in agent (prompt) context, never delegated
-# into the wrapper script. CI-C1b may own that procedure inline or delegate it to
-# skills/_shared/complexity-and-outline-skip.md; CI-COMP-0 resolves which file owns it and
-# the remaining checks follow that reference. Assertions do not abort the script.
+# Issue #1350/#1427, rewritten for #2460 — clarify-intent's CI-C1b is a one-line reference
+# to skills/_shared/complexity-and-outline-skip.md, and that file (COS) runs the shared
+# jev-two-stage-judge procedure twice: COS-1 point=complexity-judge, COS-2 point=outline-skip,
+# both at stage complexity; COS-3 proceeds on SKIP=true (outline already settled by
+# jev-judge finalize) and runs outline otherwise. The record-complexity-and-skip wrapper, the
+# background skip-verifier and check-complexity-skip.sh are gone. Assertions never abort.
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -18,108 +18,82 @@ pass() { echo "PASS: $1"; }
 
 has_fixed() { grep -F -- "$1" "$2" >/dev/null 2>&1; }
 has_re() { grep -E -- "$1" "$2" >/dev/null 2>&1; }
-
-require_file() {
-  if [ ! -f "$1" ]; then
-    fail "missing required file: $1"
-    return 1
-  fi
-  return 0
+# label_line <file> <label> — first line number whose line starts with the step label.
+label_line() { grep -nE -- "^[-*#[:space:]]*$2[^0-9]" "$1" 2>/dev/null | head -1 | cut -d: -f1; }
+# label_block <file> <label> — the step's text: its label line up to the next COS-<n> label.
+label_block() {
+  awk -v re="^[-*#[:space:]]*$2[^0-9]" '
+    on && /^[-*#[:space:]]*COS-[0-9]/ { exit }
+    !on && $0 ~ re { on = 1 }
+    on { print }' "$1" 2>/dev/null
 }
 
 CI_SKILL="$REPO_ROOT/skills/clarify-intent/SKILL.md"
-CI_SHARED_REL="skills/_shared/complexity-and-outline-skip.md"
-CI_SHARED="$REPO_ROOT/$CI_SHARED_REL"
+COS_REL="skills/_shared/complexity-and-outline-skip.md"
+COS="$REPO_ROOT/$COS_REL"
+JJ_REL="skills/_shared/jev-two-stage-judge.md"
 
-# CI-COMP-0: resolve which file owns the CI-C1b procedure. When CI-C1b delegates to the
-# shared file, CI-COMP-1/3/4/5 follow that reference; otherwise they stay on SKILL.md.
-# Losing the reference line without re-inlining the procedure therefore still fails.
-CI_PROC=""
-CI_PROC_LABEL=""
-echo "=== CI-COMP-0: locate the owner of the CI-C1b complexity/outline-skip procedure ==="
-if require_file "$CI_SKILL"; then
-  if has_re "CI-C1b.*$CI_SHARED_REL" "$CI_SKILL"; then
-    if require_file "$CI_SHARED"; then
-      CI_PROC="$CI_SHARED"
-      CI_PROC_LABEL="$CI_SHARED_REL"
-      pass "CI-COMP-0. CI-C1b delegates to $CI_SHARED_REL; checks follow the reference"
-    fi
-  else
-    CI_PROC="$CI_SKILL"
-    CI_PROC_LABEL="clarify-intent/SKILL.md"
-    pass "CI-COMP-0. CI-C1b owns the procedure inline; checks target SKILL.md"
-  fi
+echo "=== CI-COMP-0: CI-C1b delegates to the shared COS procedure ==="
+if [ ! -f "$CI_SKILL" ] || [ ! -f "$COS" ]; then
+  fail "CI-COMP-0. clarify-intent/SKILL.md or $COS_REL is missing"
+elif has_re "CI-C1b.*$COS_REL" "$CI_SKILL"; then
+  pass "CI-COMP-0. CI-C1b references $COS_REL"
+else
+  fail "CI-COMP-0. CI-C1b does not reference $COS_REL"
 fi
 
-# CI-COMP-1: record-complexity-and-skip appears in the procedure owner in executable
-# command context — the wrapper (not record-complexity-evaluation directly) is invoked
-# via a bash/bin path.
-echo "=== CI-COMP-1: procedure owner invokes record-complexity-and-skip (command context) ==="
-if [ -n "$CI_PROC" ]; then
-  if ! has_fixed "record-complexity-and-skip" "$CI_PROC"; then
-    fail "CI-COMP-1. $CI_PROC_LABEL missing 'record-complexity-and-skip'"
-  elif has_re '(bash|bin/workflow/)[^`]*record-complexity-and-skip' "$CI_PROC"; then
-    pass "CI-COMP-1. record-complexity-and-skip appears in an executable command context in $CI_PROC_LABEL"
-  else
-    fail "CI-COMP-1. record-complexity-and-skip present in $CI_PROC_LABEL but not in bash/bin invocation context"
-  fi
+echo "=== CI-COMP-1: COS-1 / COS-2 run the shared procedure at the right point and stage ==="
+if has_fixed "$JJ_REL" "$COS"; then pass "CI-COMP-1a. $COS_REL references $JJ_REL"
+else fail "CI-COMP-1a. $COS_REL does not reference $JJ_REL"; fi
+STAGE_RE='stage[ =:`"]*complexity([^-_a-z]|$)'
+cos1="$(label_block "$COS" COS-1)"
+if printf '%s\n' "$cos1" | grep -qF 'complexity-judge' && printf '%s\n' "$cos1" | grep -qE "$STAGE_RE"; then
+  pass "CI-COMP-1b. COS-1 runs point complexity-judge at stage complexity"
+else
+  fail "CI-COMP-1b. COS-1 lacks point complexity-judge / stage complexity: [$(printf '%s' "$cos1" | head -1)]"
+fi
+cos2="$(label_block "$COS" COS-2)"
+if printf '%s\n' "$cos2" | grep -qF 'outline-skip' && printf '%s\n' "$cos2" | grep -qE "$STAGE_RE"; then
+  pass "CI-COMP-1c. COS-2 runs point outline-skip at stage complexity"
+else
+  fail "CI-COMP-1c. COS-2 lacks point outline-skip / stage complexity: [$(printf '%s' "$cos2" | head -1)]"
 fi
 
-# CI-COMP-2: CI-C1b label present AND anchored to record-complexity-and-skip call.
-echo "=== CI-COMP-2: CI-C1b label present and owns the record-complexity-and-skip call ==="
-if require_file "$CI_SKILL"; then
-  if ! has_fixed "CI-C1b" "$CI_SKILL"; then
-    fail "CI-COMP-2. clarify-intent/SKILL.md missing 'CI-C1b'"
-  else
-    line_c1b=$(grep -n "CI-C1b" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-    line_rcs=$(grep -n "record-complexity-and-skip" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-    if [ -z "$line_rcs" ]; then
-      fail "CI-COMP-2. CI-C1b present but no record-complexity-and-skip to anchor it"
-    elif [ "$line_c1b" -le "$line_rcs" ]; then
-      pass "CI-COMP-2. CI-C1b (L$line_c1b) heads the record-complexity-and-skip call (L$line_rcs)"
-    else
-      fail "CI-COMP-2. CI-C1b (L$line_c1b) appears after record-complexity-and-skip (L$line_rcs)"
-    fi
-  fi
+echo "=== CI-COMP-2: COS-3 branches on SKIP after COS-1 and COS-2 ==="
+l1="$(label_line "$COS" COS-1)"; l2="$(label_line "$COS" COS-2)"; l3="$(label_line "$COS" COS-3)"
+if [ -n "$l1" ] && [ -n "$l2" ] && [ -n "$l3" ] && [ "$l1" -lt "$l2" ] && [ "$l2" -lt "$l3" ]; then
+  pass "CI-COMP-2a. COS-1 (L$l1) < COS-2 (L$l2) < COS-3 (L$l3)"
+else
+  fail "CI-COMP-2a. COS-1/2/3 labels missing or out of order (L${l1:-?}/L${l2:-?}/L${l3:-?})"
 fi
-
-# CI-COMP-3: record-complexity-and-skip runs before the CI-C1c-equivalent branching, so the
-# persisted verdict exists for every downstream reader. The branch is anchored by its own
-# label at line start (CI-C1c) or, in the shared procedure, by the skip-verifier dispatch it
-# performs — never by a header cross-reference that merely names those labels.
-echo "=== CI-COMP-3: record-complexity-and-skip precedes the branching logic ==="
-if [ -n "$CI_PROC" ]; then
-  line_rcs=$(grep -n "record-complexity-and-skip" "$CI_PROC" 2>/dev/null | head -1 | cut -d: -f1)
-  line_branch=$(grep -nE '^\**CI-C1c|subagent_type=`?skip-verifier' "$CI_PROC" 2>/dev/null | head -1 | cut -d: -f1)
-  if [ -z "$line_rcs" ] || [ -z "$line_branch" ]; then
-    fail "CI-COMP-3. could not find both anchors in $CI_PROC_LABEL (record-complexity-and-skip=$line_rcs, branch=$line_branch)"
-  elif [ "$line_rcs" -lt "$line_branch" ]; then
-    pass "CI-COMP-3. record-complexity-and-skip (L$line_rcs) precedes the branching logic (L$line_branch) in $CI_PROC_LABEL"
-  else
-    fail "CI-COMP-3. ordering wrong in $CI_PROC_LABEL: record-complexity-and-skip=L$line_rcs, branch=L$line_branch"
-  fi
+cos3_block="$(label_block "$COS" COS-3)"
+if printf '%s\n' "$cos3_block" | grep -qF 'SKIP=true' && printf '%s\n' "$cos3_block" | grep -qiE 'false'; then
+  pass "CI-COMP-2b. COS-3 handles SKIP=true and the false branch"
+else
+  fail "CI-COMP-2b. COS-3 does not branch on SKIP=true / false"
 fi
+if [ -z "$(label_line "$COS" COS-4)" ]; then pass "CI-COMP-2c. the old COS-4 step is gone"
+else fail "CI-COMP-2c. $COS_REL still has a COS-4 step"; fi
 
-# CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED sentinel remains in the procedure prompt.
-# Regression guard: the sentinel must fire from agent context, NOT be delegated to a script.
-echo "=== CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED remains in the procedure prompt ==="
-if [ -n "$CI_PROC" ]; then
-  if has_fixed "WORKFLOW_OUTLINE_NOT_NEEDED" "$CI_PROC"; then
-    pass "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED sentinel present in $CI_PROC_LABEL"
-  else
-    fail "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED missing from $CI_PROC_LABEL (sentinel must stay in agent context)"
-  fi
+echo "=== CI-COMP-3: retired parts are no longer referenced ==="
+for f in "$COS" "$CI_SKILL"; do
+  label="${f#"$REPO_ROOT"/}"
+  for t in record-complexity-and-skip skip-verifier check-complexity-skip.sh normalize-judge-signals record-skip-judgment; do
+    if has_fixed "$t" "$f"; then fail "CI-COMP-3. $label still references $t"
+    else pass "CI-COMP-3. $label does not reference $t"; fi
+  done
+done
+
+echo "=== CI-COMP-4: the skip is settled by jev-judge finalize, not by a sentinel here ==="
+if has_fixed "WORKFLOW_OUTLINE_NOT_NEEDED" "$COS"; then
+  fail "CI-COMP-4. $COS_REL still emits WORKFLOW_OUTLINE_NOT_NEEDED (outline is settled by finalize)"
+else
+  pass "CI-COMP-4. $COS_REL emits no WORKFLOW_OUTLINE_NOT_NEEDED sentinel"
 fi
-
-# CI-COMP-5: skip-verifier subagent reference remains in the procedure prompt.
-# Regression guard: the skip-verifier Agent launch must stay in agent context.
-echo "=== CI-COMP-5: skip-verifier reference remains in the procedure prompt ==="
-if [ -n "$CI_PROC" ]; then
-  if has_fixed "skip-verifier" "$CI_PROC"; then
-    pass "CI-COMP-5. skip-verifier reference present in $CI_PROC_LABEL"
-  else
-    fail "CI-COMP-5. skip-verifier missing from $CI_PROC_LABEL (must stay in agent context)"
-  fi
+if has_fixed "SKIP_DISPATCH" "$CI_SKILL"; then
+  fail "CI-COMP-4b. CI-C1b still restates the SKIP_DISPATCH procedure inline"
+else
+  pass "CI-COMP-4b. CI-C1b carries no inline SKIP_DISPATCH procedure"
 fi
 
 echo

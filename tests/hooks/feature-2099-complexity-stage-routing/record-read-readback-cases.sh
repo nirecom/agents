@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/record-read-readback-cases.sh
-# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/record-complexity-and-skip, hooks/workflow-state/state-io/session-fields.js
+# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation,hooks/workflow-state/state-io/session-fields.js
 # Tags: complexity, routing, cli, read-back, injection, security, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh —
 # the state probes (d2099_raw_ce_count / d2099_projected_ce) live there.
@@ -52,11 +52,11 @@ d2099_cli_read_back_invariant() {
     shimmed=$(d2099_build_readback_tree)
     assert_eq "R-24a the read-back fixture actually carries the mismatching shim" "SHIMMED" "$shimmed"
 
-    # S1-multi-file derives low/low/high; the shim reports high/high/high.
+    # S1b-wide-change derives low/low/low/high; the shim reports high everywhere.
     sid=$(new_session rbcli)
     rc=0
     out=$(run_with_timeout node "$D2099_ISO_RB/bin/workflow/record-complexity-evaluation" \
-        --session "$sid" --signals "S1-multi-file" 2>&1) || rc=$?
+        --session "$sid" --signals "S1b-wide-change" 2>&1) || rc=$?
     assert_eq "R-24 the CLI's own read-back catches raw levels that disagree with the signals (exit 1)" \
         "1" "$rc"
     assert_not_contains "R-25 ... and prints no success receipt" "RECORDED_COMPLEXITY" "$out"
@@ -71,54 +71,11 @@ d2099_cli_read_back_invariant() {
     local sid2
     sid2=$(new_session rbctl)
     rc=0
-    out=$(run_with_timeout node "$BIN_RECORD" --session "$sid2" --signals "S1-multi-file" 2>&1) || rc=$?
+    out=$(run_with_timeout node "$BIN_RECORD" --session "$sid2" --signals "S1b-wide-change" 2>&1) || rc=$?
     assert_eq "R-27 control: the identical call through the unshimmed tree exits 0" "0" "$rc"
     assert_contains "R-28 ... with the receipt" "RECORDED_COMPLEXITY" "$out"
 }
 
-# R-29: input injection THROUGH THE BASH WRAPPER. R-21 covers the Node CLI, but
-# bin/workflow/record-complexity-and-skip is the file #2099 changes and the only
-# layer where an unquoted expansion could execute a payload. A canary file makes
-# execution observable: command substitution, backticks, a semicolon command and
-# embedded spaces all try to create it.
-d2099_wrapper_injection() {
-    local sid rc out canary payload
-    canary="$TMPDIR_BASE/d2099-wrapper-canary.txt"
-    rm -f "$canary"
-    payload="S1-multi-file; touch $canary \$(touch $canary) \`touch $canary\` & touch $canary"
-
-    sid=$(new_session wrapinj)
-    rc=0
-    out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid" --signals "$payload" --target outline 2>&1) || rc=$?
-
-    if [ -e "$canary" ]; then
-        fail "R-29 the wrapper EXECUTED an embedded payload (canary $canary was created)"
-        rm -f "$canary"
-    else
-        pass "R-29 no part of the --signals payload executes in the wrapper"
-    fi
-
-    # Inert-as-data, end to end: whatever survives must come back as signal
-    # TOKENS, and an unrecognized token routes undecidable-high — never silently
-    # low, and never as an executed side effect.
-    out=$(run_with_timeout node "$BIN_READ" --session "$sid" --stage write_code 2>/dev/null | head -1)
-    assert_eq "R-30 the payload is stored as data and routes undecidable-high" "level=high" "$out"
-
-    out=$(d2099_projected_ce "$sid")
-    assert_not_contains "R-31 the raw persisted record does NOT store the payload text verbatim (allowlist collapses it)" "touch" "$out"
-    assert_contains "R-31b UNRECOGNIZED(1) marker appears in the record instead" "UNRECOGNIZED(1)" "$out"
-
-    if [ -e "$canary" ]; then
-        fail "R-32 the read path executed the stored payload (canary appeared after read-back)"
-        rm -f "$canary"
-    else
-        pass "R-32 reading the record back does not execute the stored payload either"
-    fi
-}
-
 case_begin "r24-cli-read-back-invariant" "bin/workflow/record-complexity-evaluation"
 d2099_cli_read_back_invariant
-case_end
-case_begin "r29-wrapper-injection" "bin/workflow/record-complexity-and-skip"
-d2099_wrapper_injection
 case_end

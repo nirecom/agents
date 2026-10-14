@@ -59,6 +59,9 @@ d2099g_harness() {
         # Everything else the sourced file touches before its gate, neutralized.
         printf 'assert_eq() { :; }\nassert_contains() { :; }\nassert_not_contains() { :; }\n'
         printf 'run_with_timeout() { :; }\nto_node_path() { echo "$1"; }\nnew_session() { echo gate; }\n'
+        # The sourced files wrap their rows in the runner's per-case helpers; no-op
+        # them here (names assembled so this generator line is not read as one).
+        printf '%s_begin() { :; }\n%s_end() { :; }\n' case case
         printf 'SCRIPT_CHECKOUT_ROOT="%s"\nRUBRIC="/dev/null"\nTMPDIR_BASE="%s"\n' "$fake" "$TMPDIR_BASE"
         printf 'BIN_RECORD="/dev/null"\nBIN_READ="/dev/null"\nBIN_DERIVE="/dev/null"\nCR_MOD_N="/dev/null"\n'
         printf '. "%s"\n' "$case_file"
@@ -77,16 +80,16 @@ d2099g_gate_branches() {
 
     # (a) ordinary run, gate closed: a SKIP, and never a silent pass.
     out=$(d2099g_harness "$CASE_DIR/judge-threshold-live-cases.sh" 0)
-    assert_contains "GATE-6 JT-1 reports SKIP when its gate is closed on an ordinary run" "SKIP: JT-1" "$out"
-    assert_not_contains "GATE-6b ... and does not report a PASS it never earned" "PASS: JT-1 " "$out"
+    assert_contains "GATE-6 JT-6 reports SKIP when its gate is closed on an ordinary run" "SKIP: JT-6" "$out"
+    assert_not_contains "GATE-6b ... and does not report a PASS it never earned" "PASS: JT-6 " "$out"
     out=$(d2099g_harness "$CASE_DIR/prompt-injection-cases.sh" 0)
     assert_contains "GATE-7 PI-5 reports SKIP when its gate is closed on an ordinary run" "SKIP: PI-5" "$out"
     assert_not_contains "GATE-7b ... and does not report a PASS it never earned" "PASS: PI-5 " "$out"
 
     # (b) the required-live lane: the same closed gate must FAIL, not skip.
     out=$(d2099g_harness "$CASE_DIR/judge-threshold-live-cases.sh" 1)
-    assert_contains "GATE-8 JT-1 FAILS instead of skipping when the required-live lane finds its gate closed" "FAIL: JT-1" "$out"
-    assert_not_contains "GATE-8b ... so the lane can never report a silent skip" "SKIP: JT-1" "$out"
+    assert_contains "GATE-8 JT-6 FAILS instead of skipping when the required-live lane finds its gate closed" "FAIL: JT-6" "$out"
+    assert_not_contains "GATE-8b ... so the lane can never report a silent skip" "SKIP: JT-6" "$out"
     out=$(d2099g_harness "$CASE_DIR/prompt-injection-cases.sh" 1)
     assert_contains "GATE-9 PI-5 FAILS instead of skipping when the required-live lane finds its gate closed" "FAIL: PI-5" "$out"
     assert_not_contains "GATE-9b ... so the lane can never report a silent skip" "SKIP: PI-5" "$out"

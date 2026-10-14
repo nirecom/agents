@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/lib/jev-report-aggregate.js, bin/jev-report
-# Tags: TL2, bin, jev, report, terminal-sanitisation, json-output, scope:issue-specific, pwsh-not-required
+# Tags: TL2, bin, jev, report, terminal-sanitisation, json-output, s1b-removed, scope:issue-specific, pwsh-not-required
 # Fragment of tests/bin/feature-2460-jev-report-accuracy.sh, sourced by it after _lib.sh (not
 # standalone): the text report is terminal-safe over a hostile log; --json keeps raw values.
 
@@ -23,7 +23,8 @@ run_with_timeout 30 node -e '
     session_id: "sid-x", stage: "outline", agreement: null, fallback_reason: null }, top,
     { jev: Object.assign({ status: "ok" }, jev), llm: Object.assign({ status: "ok" }, llm) }));
   const L = [
-    rec({ ts: "2026-10-01T00:00:02.123Z", session_id: "3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c", stage: "write_code", agreement: false },
+    rec({ ts: "2026-10-01T00:00:02.123Z", session_id: "3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c", stage: "write_code", agreement: false,
+      agreement_by_signal: { "S1-multi-file": true, "S2-architecture": false } },
       { answer: "S1-multi-file" }, { answer: "S1-multi-file,S2-architecture" }),
     rec({ ts: 1790000000000, session_id: "sid-ok_2", stage: "cos1", agreement: false }, {}, { answer: null }),
     rec({ ts: "2026-10-01T09:00:03+09:00", session_id: "sid-r3", stage: "write_tests", agreement: false },
@@ -58,20 +59,22 @@ check "a second run prints the same bytes" "same" "$(cmp -s "$T" "$FX/io/hostile
 case_end
 
 case_begin "r-text-structure-not-forgeable" "bin/lib/jev-report-aggregate.js"
-check "headings: the clean point by name, the hostile point as -" "== complexity-judge ==|== - ==" \
-  "$(tx 'lines.filter((l) => l.startsWith("== ")).join("|")')"
-check "33 lines: one records, undecidable, S1b, duplicates-dropped, mismatches line per point and one broken-lines line (none forged)" "33|2|2|2|2|2|1" \
-  "$(tx '[lines.length].concat(["records: ", "undecidable: ", "S1b without S1: ", "duplicates dropped: ", "mismatches: ", "broken lines: "].map((p) => lines.filter((l) => l.startsWith(p)).length)).join("|")')"
-check "every line is one of the report's own line shapes" "0" \
-  "$(tx 'lines.filter((l) => !/^(== [a-z0-9_-]+ ==|records: \d+  by stage: .*|agreement: .*|undecidable: \d+ \(jev=\d+ llm=\d+\)|S1b without S1: jev=\d+ llm=\d+|agreement by signal: .*|low-confidence (rate|reference) by signal: .*|latency ms: .*|fallback: .*|est cost usd total: .*|duplicates dropped: \d+|mismatches: \d+|  \S+ \S+ \S+ jev=\S+ llm=\S+|broken lines: \d+)$/.test(l)).length')"
+check "headings: the clean point by name, the hostile point as -, no heading built from log text" "1|1|0" \
+  "$(tx '[lines.filter((l) => l === "== complexity-judge ==").length, lines.filter((l) => l === "== - ==").length, lines.filter((l) => l.startsWith("== ") && /evil|forged|\[31m/.test(l)).length].join("|")')"
+# Stage 6 adds v2 sections to the text report and removes the S1b-without-S1 line, so the
+# legacy lines are counted by prefix rather than by the report's total line count.
+check "one records, undecidable, duplicates-dropped, mismatches line per point, one broken-lines line, no S1b line" "2|2|2|2|1|0" \
+  "$(tx '["records: ", "undecidable: ", "duplicates dropped: ", "mismatches: ", "broken lines: ", "S1b without S1: "].map((p) => lines.filter((l) => l.startsWith(p)).length).join("|")')"
+check "every legacy-prefixed line has the legacy line's own shape" "0" \
+  "$(tx 'lines.filter((l) => /^(records: |agreement: |undecidable: |agreement by signal: |low-confidence (rate|reference) by signal: |latency ms: |fallback: |est cost usd total: |duplicates dropped: |mismatches: |broken lines: |  .* jev=)/.test(l)).filter((l) => !/^(records: \d+  by stage: .*|agreement: .*|undecidable: \d+ \(jev=\d+ llm=\d+\)|agreement by signal: .*|low-confidence (rate|reference) by signal: .*|latency ms: .*|fallback: .*|est cost usd total: .*|duplicates dropped: \d+|mismatches: \d+|  \S+ \S+ \S+ jev=\S+ llm=\S+|broken lines: \d+)$/.test(l)).length')"
 case_end
 
 case_begin "r-text-enum-fields-sanitised" "bin/lib/jev-report-aggregate.js"
 check "by stage: clean stages by name, each out-of-charset stage key as -=N, a non-string stage as unknown" \
-  "records: 8  by stage: write_code=1 cos1=1 write_tests=1 outline=1 detail=1 -=1 -=1 unknown=1" "$(tx 'lines[1]')"
+  "records: 8  by stage: write_code=1 cos1=1 write_tests=1 outline=1 detail=1 -=1 -=1 unknown=1" "$(tx 'lines.find((l) => l.startsWith("records: 8  "))')"
 check "fallback reasons: the clean reason by name, the free-text reason as -=N" "fallback: 0.25  low-confidence=1 -=1" \
   "$(tx 'lines.find((l) => l.startsWith("fallback: "))')"
-check "the raw broken line and the non-string point are only counted" "broken lines: 2" "$(tx 'lines[lines.length - 1]')"
+check "the raw broken line and the non-string point are only counted" "broken lines: 2" "$(tx 'lines.find((l) => l.startsWith("broken lines: "))')"
 case_end
 
 case_begin "r-text-mismatch-rows" "bin/lib/jev-report-aggregate.js"

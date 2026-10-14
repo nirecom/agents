@@ -18,7 +18,7 @@ if [ "$GATE_READY" = "true" ]; then
   # write_tests is already complete here: the fail-open terminal branch must NOT
   # re-invoke /write-tests when write_tests is settled (#1756).
   SID="g1-$$"
-  write_gate_state "$SID" "outline" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"confirm","source":"skip-verifier","recorded_at":"2026-04-11T10:00:00.000Z"}}'
+  write_gate_state "$SID" "outline" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"confirm","source":"record-skip-verdict-cli:test","recorded_at":"2026-04-11T10:00:00.000Z"}}'
   G1_OUT="$(run_next_step "$SID")"
   if printf '%s' "$G1_OUT" | grep -q "ACTION=done"; then
     pass "G1. confirm verdict → all steps settled, done (does not block)"
@@ -31,7 +31,7 @@ if [ "$GATE_READY" = "true" ]; then
   # The old "blocked/abort + RESET" path is superseded by the read-time
   # derivation that turns the veto back into effective-pending automatically.
   SID="g2-$$"
-  write_gate_state "$SID" "outline" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-04-11T10:00:00.000Z"}}'
+  write_gate_state "$SID" "outline" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"veto","source":"record-skip-verdict-cli:test","recorded_at":"2026-04-11T10:00:00.000Z"}}'
   G2_OUT="$(run_next_step "$SID")"
   if printf '%s' "$G2_OUT" | grep -q "ACTION=invoke" && printf '%s' "$G2_OUT" | grep -qi "outline"; then
     pass "G2. veto verdict → invoke make-outline-plan (veto de-skip #1681)"
@@ -68,7 +68,7 @@ if [ "$GATE_READY" = "true" ]; then
   SID="g5-$$"
   G5_PLANS_DIR="$(mktemp -d)"
   printf '## outline\n' > "$G5_PLANS_DIR/${SID}-outline.md"
-  write_gate_state "$SID" "detail" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-04-11T10:00:00.000Z"}}'
+  write_gate_state "$SID" "detail" '{"status":"skipped","updated_at":"2026-04-11T10:00:00.000Z","skip_reason":"r","skip_verdict":{"verdict":"veto","source":"record-skip-verdict-cli:test","recorded_at":"2026-04-11T10:00:00.000Z"}}'
   G5_OUT="$(WORKFLOW_PLANS_DIR="$G5_PLANS_DIR" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" run_with_timeout node "$NEXT_STEP" --session "$SID" 2>&1)"
   if printf '%s' "$G5_OUT" | grep -q "ACTION=invoke" && printf '%s' "$G5_OUT" | grep -qi "detail"; then
     pass "G5. detail veto verdict → invoke make-detail-plan (veto de-skip #1681)"
@@ -84,7 +84,7 @@ if [ "$GATE_READY" = "true" ]; then
   SID="g6-$$"
   G6_PLANS_DIR="$(mktemp -d)"
   printf '## Issues\n- #9999: g6 test issue\n' > "$G6_PLANS_DIR/${SID}-intent.md"
-  write_gate_state "$SID" "outline" '{"status":"pending","updated_at":"2026-04-11T10:00:00.000Z","skip_judgment":{"judgment_source":"orchestrator","all_conditions_met":true,"conditions":{"so_c1":true,"so_c2":true},"recorded_at":"2099-01-01T00:00:00.000Z"}}'
+  write_gate_state "$SID" "outline" '{"status":"pending","updated_at":"2026-04-11T10:00:00.000Z","skip_judgment":{"judgment_source":"subagent","all_conditions_met":true,"conditions":{"so_c1":true,"so_c2":true},"recorded_at":"2099-01-01T00:00:00.000Z"}}'
   WORKFLOW_PLANS_DIR="$G6_PLANS_DIR" WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" CLAUDE_PROJECT_DIR="$TMPDIR_BASE" \
     run_with_timeout node "$NEXT_STEP" --session "$SID" >/dev/null 2>&1 || true
   G6_SV="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "

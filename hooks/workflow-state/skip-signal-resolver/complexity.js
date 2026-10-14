@@ -7,8 +7,6 @@
 // readLastRawComplexityEvent (state-io/session-fields.js), which never folds or
 // completes anything.
 
-const { CONDITION_SCHEMAS } = require("./condition-schemas");
-
 // Legacy shim: pre-#1382 records stored a model name in `verdict`.
 const LEGACY_VERDICT_TO_LEVEL = Object.freeze({ opus: "high", sonnet: "low" });
 
@@ -105,30 +103,9 @@ function readStageComplexityLevel(sessionId, stage) {
   }
 }
 
-// resolveSkipConditionsFromComplexity(sessionId, targetStep):
-// Fully-populated conditions object (all keys true) when the session is provably
-// 0-signal-low — planning overhead cannot be justified. null otherwise
-// (fail-open: do not auto-skip when uncertain).
-function resolveSkipConditionsFromComplexity(sessionId, targetStep) {
-  try {
-    if (targetStep !== "outline" && targetStep !== "detail") return null;
-    const { isZeroSignalLow } = require("../complexity-routing");
-    const ce = readComplexityEvaluation(sessionId);
-    if (!ce) return null;
-    if (!isZeroSignalLow(ce)) return null;
-    const keys = CONDITION_SCHEMAS[targetStep];
-    const result = {};
-    for (const k of keys) result[k] = true;
-    return result;
-  } catch (_) {
-    return null;
-  }
-}
-
 module.exports = {
   resolveStageLevels,
   readComplexityEvaluation,
   hasComplexityEvaluation,
   readStageComplexityLevel,
-  resolveSkipConditionsFromComplexity,
 };

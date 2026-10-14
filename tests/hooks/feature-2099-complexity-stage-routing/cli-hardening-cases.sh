@@ -57,7 +57,7 @@ d2099h_read_back_per_field() {
     # every call), so the per-field cases below must go RED rather than green.
     sid2=$(new_session rbctl2)
     rc=0
-    out=$(run_with_timeout node "$BIN_RECORD" --session "$sid2" --signals "S1-multi-file" 2>&1) || rc=$?
+    out=$(run_with_timeout node "$BIN_RECORD" --session "$sid2" --signals "S1b-wide-change" 2>&1) || rc=$?
     assert_eq "H-RB-ctl control: an honest record through the unshimmed tree exits 0" "0" "$rc"
     assert_contains "H-RB-ctl-b ... with the receipt" "RECORDED_COMPLEXITY" "$out"
     case "$rc$out" in 0*RECORDED_COMPLEXITY*) ctl=yes ;; *) ctl=no ;; esac
@@ -66,12 +66,12 @@ d2099h_read_back_per_field() {
         shimmed=$(d2099h_build_rb_tree "$kind")
         assert_eq "H-RB-$kind-a the fixture carries the $kind-mutating shim" "SHIMMED" "$shimmed"
 
-        # S1-multi-file: levels low/low/high, aggregate level high (signals
-        # non-empty), signals ["S1-multi-file"] — each shim contradicts one.
+        # S1b-wide-change: levels low/low/low/high, aggregate level high (signals
+        # non-empty), signals ["S1b-wide-change"] — each shim contradicts one.
         sid=$(new_session rb$kind)
         rc=0
         out=$(run_with_timeout node "$TMPDIR_BASE/iso-rb-$kind/bin/workflow/record-complexity-evaluation" \
-            --session "$sid" --signals "S1-multi-file" 2>&1) || rc=$?
+            --session "$sid" --signals "S1b-wide-change" 2>&1) || rc=$?
         if [ "$rc" -eq 0 ]; then
             fail "H-RB-$kind a raw read-back disagreeing in '$kind' alone was ACCEPTED (exit 0) — that field is unchecked"
         elif [ "$ctl" != "yes" ]; then
@@ -99,7 +99,7 @@ d2099h_unusable_workflow_dir() {
 
     rc=0
     out=$(WORKFLOW_STATE_DIR="$bad" \
-        run_with_timeout node "$BIN_RECORD" --session "h-env-1" --signals "S1-multi-file" 2>&1) || rc=$?
+        run_with_timeout node "$BIN_RECORD" --session "h-env-1" --signals "S1b-wide-change" 2>&1) || rc=$?
     if [ "$rc" -ne 0 ]; then
         pass "H-ENV-1 record against an uncreatable workflow dir exits non-zero ($rc)"
     else
@@ -140,7 +140,7 @@ d2099h_corrupt_state_file() {
         before=$(cksum < "$p")
 
         rc=0
-        out=$(run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "S1-multi-file" 2>&1) || rc=$?
+        out=$(run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "S1b-wide-change" 2>&1) || rc=$?
         if [ "$rc" -ne 0 ]; then
             pass "H-COR-$kind record onto a $kind state file exits non-zero ($rc)"
         else
@@ -243,20 +243,20 @@ d2099h_assert_sig_invalid() {
 
 d2099h_signals_normalization() {
     local canonical zero variant twice
-    canonical=$(d2099h_sig_outcome "S1-multi-file,S2-architecture")
+    canonical=$(d2099h_sig_outcome "S1b-wide-change,S2-architecture")
     assert_contains "H-SIG-0 the canonical payload records and reads back (baseline for the variants)" \
         "ACCEPTED:level=" "$canonical"
 
     # (a) untidy renderings of the SAME valid signal set — must be accepted and
     # canonicalized onto the canonical outcome.
     for variant in \
-        "S1-multi-file,S1-multi-file,S2-architecture" \
-        "S1-multi-file,,S2-architecture" \
-        ",S1-multi-file,S2-architecture" \
-        "S1-multi-file,S2-architecture," \
-        "S1-multi-file, ,S2-architecture" \
-        "  S1-multi-file , S2-architecture  " \
-        "S1-multi-file,,S1-multi-file, ,S2-architecture,"
+        "S1b-wide-change,S1b-wide-change,S2-architecture" \
+        "S1b-wide-change,,S2-architecture" \
+        ",S1b-wide-change,S2-architecture" \
+        "S1b-wide-change,S2-architecture," \
+        "S1b-wide-change, ,S2-architecture" \
+        "  S1b-wide-change , S2-architecture  " \
+        "S1b-wide-change,,S1b-wide-change, ,S2-architecture,"
     do
         d2099h_assert_sig_same "H-SIG [$variant] is accepted and canonicalized to the canonical outcome" \
             "$canonical" "$(d2099h_sig_outcome "$variant")"
@@ -284,15 +284,15 @@ d2099h_signals_normalization() {
         d2099h_assert_sig_invalid "H-SIG-INV [$variant] keeps its unrecognized token and routes undecidable-high" \
             "$want" "$variant"
     done <<'INV'
-S1-multi-file,NOT-A-SIGNAL,S2-architecture|UNRECOGNIZED(1)
-S1-multi-file,S99-invented,S2-architecture|UNRECOGNIZED(1)
-S1-multi-file,LEVEL: low,S2-architecture|UNRECOGNIZED(1)
-S1-multi-file,S2-architecture; rm -rf /|UNRECOGNIZED(1)
+S1b-wide-change,NOT-A-SIGNAL,S2-architecture|UNRECOGNIZED(1)
+S1b-wide-change,S99-invented,S2-architecture|UNRECOGNIZED(1)
+S1b-wide-change,LEVEL: low,S2-architecture|UNRECOGNIZED(1)
+S1b-wide-change,S2-architecture; rm -rf /|UNRECOGNIZED(1)
 INV
 
     # Determinism: the same untidy payload twice must not drift.
-    variant=$(d2099h_sig_outcome "S1-multi-file,,S1-multi-file, ,S2-architecture")
-    twice=$(d2099h_sig_outcome "S1-multi-file,,S1-multi-file, ,S2-architecture")
+    variant=$(d2099h_sig_outcome "S1b-wide-change,,S1b-wide-change, ,S2-architecture")
+    twice=$(d2099h_sig_outcome "S1b-wide-change,,S1b-wide-change, ,S2-architecture")
     assert_eq "H-SIG-DET the same untidy payload yields the same outcome on a second run" \
         "$variant" "$twice"
 }

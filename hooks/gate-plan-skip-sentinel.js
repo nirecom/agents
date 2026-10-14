@@ -74,6 +74,8 @@ try {
 } catch (_) { resolvedSessionId = null; }
 
 // #1286: allow when a valid recorded verdict exists OR legacy CONFIRM_*=off.
+// This read only lifts the ask prompt and takes no lock; the judgment is re-read under the
+// skip owner lock when the skip is recorded (workflow-mark/not-needed-handlers.js).
 if (anyElement(OUTLINE_NOT_NEEDED_RE_DQ)) {
   if (hasRecord(resolvedSessionId, "outline"))
     allow("recorded-verdict: outline skip_judgment orchestrator+all_conditions_met — outline skip auto-approved.");

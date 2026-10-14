@@ -7,10 +7,12 @@
 # or covered by the canonical line's "unless your own output contract fixes..." clause.
 
 FIXED_CONTRACT_ERE='Respond with exactly|No other output|exactly one (output )?line|exactly one of these two|end your reply with exactly'
+# #2460: plan-skip-judge is complexity-judge's sibling (one SKIP_CONDITIONS: line, tools: Read).
 FIXED_CONTRACT_AGENTS=(
   complexity-judge detail-planner detail-reviewer issue-create-survey-worker outline-planner
-  plan-security-reviewer security-scanner test-reviewer web-researcher
+  plan-security-reviewer plan-skip-judge security-scanner test-reviewer web-researcher
 )
+WRITELESS_JUDGES=" complexity-judge plan-skip-judge "
 JSON_INPUT_AGENTS=(issue-create-survey-worker security-scanner web-researcher)
 
 # contract_class <root> <agent> -> exempt | unless | unclassified
@@ -31,14 +33,15 @@ echo "=== contract precedence: fixed-contract agents vs the canonical line ==="
 case_begin "CP1-fixed-contract-set" "agents/web-researcher.md"
 CP_FOUND="$(grep -lE -- "$FIXED_CONTRACT_ERE" "$SCRIPT_CHECKOUT_ROOT"/agents/*.md 2>/dev/null | sed 's#.*/##; s#\.md$##' | sort | tr '\n' ' ')"
 CP_WANT="$(printf '%s\n' "${FIXED_CONTRACT_AGENTS[@]}" | sort | tr '\n' ' ')"
-ck "CP1: the 9-agent fixed-contract list matches the agents whose prompt fixes the reply shape" "$CP_WANT" "$CP_FOUND"
-ck "CP1: fixed-contract agent count" "9" "${#FIXED_CONTRACT_AGENTS[@]}"
+ck "CP1: the 10-agent fixed-contract list matches the agents whose prompt fixes the reply shape" "$CP_WANT" "$CP_FOUND"
+ck "CP1: fixed-contract agent count" "10" "${#FIXED_CONTRACT_AGENTS[@]}"
 case_end
 
 case_begin "CP2-classification" "rules/shell-commands.md"
 for a in "${FIXED_CONTRACT_AGENTS[@]}"; do
   ROWS=$((ROWS + 1))
-  want="unless"; [ "$a" = "complexity-judge" ] && want="exempt"
+  want="unless"
+  [[ "$WRITELESS_JUDGES" == *" $a "* ]] && want="exempt"
   ck "CP2: $a is classified (exempt by tools, or covered by the canonical line's unless clause)" \
     "$want" "$(contract_class "$SCRIPT_CHECKOUT_ROOT" "$a")"
 done

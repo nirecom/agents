@@ -74,14 +74,14 @@ run_with_timeout 30 node -e '
     rec(5, probs({ "S2-architecture": 0.9 }), { status: "parse-fallback", answer: "S0-undecidable" }),
     rec(6, probs({ "S2-architecture": 0.9 }), { status: "missing", answer: null }),
   ].join("\n") + "\n");
-' "$(np "$LC_LOG")" "$SIGNAL_CSV" 2>/dev/null
+' "$(np "$LC_LOG")" "$V1_SIGNAL_CSV" 2>/dev/null
 
 case_begin "r-low-confidence-reference-skips-llm-s0" "bin/lib/jev-report-aggregate.js"
 report "$J" --log "$(np "$LC_LOG")" --point complexity-judge --json --no-sweep
 check "--json: exit 0, count 6, low_confidence_reference_n 2, low_confidence_reference_llm_undecidable 1" "0|6|2|1" \
   "$REP_RC|$(jx "($P) && [$P.count, $P.low_confidence_reference_n, $P.low_confidence_reference_llm_undecidable].join('|')")"
 check "--json: reference ratios over L1/L2 only (S2 0.5, every other signal 1)" "1|1|0.5|1|1|1|1" \
-  "$(jx "($P) && '$SIGNAL_CSV'.split(',').map((k) => $P.low_confidence_reference_by_signal[k]).join('|')")"
+  "$(jx "($P) && '$V1_SIGNAL_CSV'.split(',').map((k) => $P.low_confidence_reference_by_signal[k]).join('|')")"
 T="$FX/io/low-conf-ref.txt"
 report "$T" --log "$(np "$LC_LOG")" --point complexity-judge --no-sweep
 check "text: the reference line carries the same ratios and ends with the n / llm-undecidable suffix" \

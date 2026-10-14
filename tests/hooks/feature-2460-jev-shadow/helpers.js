@@ -47,7 +47,7 @@ function ageTree(p, ms, recursive) {
 // payload <out> <pre|post> <sid> <tid> [--tool --subagent --agent-id --prompt --model --response --cwd]
 function buildPayload() {
   const [out, kind, sid, tid] = args;
-  const text = process.env.LLM_TEXT === undefined ? "SIGNALS: S1-multi-file" : process.env.LLM_TEXT;
+  const text = process.env.LLM_TEXT === undefined ? "SIGNALS: S2-architecture" : process.env.LLM_TEXT;
   const toolInput = {
     subagent_type: flag("--subagent", "complexity-judge"),
     description: "judge complexity",

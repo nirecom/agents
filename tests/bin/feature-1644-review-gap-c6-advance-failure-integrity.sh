@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/advance.js, bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, bin/workflow/record-complexity-and-skip, hooks/workflow-state/record-step-verdict.js
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/advance-shared.js, bin/workflow/lib/next-step/advance.js, bin/workflow/record-skip-judgment, bin/workflow/set-workflow-type, hooks/workflow-state/record-step-verdict.js
 # Tags: tl2, workflow, advance, failure-injection, transaction-integrity, fail-closed, scope:issue-specific, pwsh-not-required
 
 # #1644 review gap C6 (HIGH) — the forward operation under an INJECTED record
-# failure: all four advance-class CLIs must return no next action AND leave no
+# failure: all three advance-class CLIs must return no next action AND leave no
 # half-applied state. Two structural, platform-independent injections (chmod is a
 # no-op on Git-Bash), each proven to fail by a control call (C6-0):
 #   I1  WORKFLOW_STATE_DIR is a REGULAR FILE (or a deep path under it) -> ENOTDIR.
@@ -22,7 +22,6 @@ SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
 RSJ="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment"
 SWT="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/set-workflow-type"
-RCAS="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
 WFSTATE_MODULE="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"; export WFSTATE_MODULE
 PROBE="$SCRIPT_CHECKOUT_ROOT_N/tests/bin/feature-1644-advance-transaction/state-probe.js"
 
@@ -33,7 +32,11 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned so a planted claim never lands in a real home.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
+# shellcheck source=../lib/skip-judgment.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
 export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
@@ -111,7 +114,7 @@ check "C6-0c: injection I2 (corrupt state JSON) does fail" 2 "$RC"
 check_contains "C6-0c: the diagnostic names the invalid JSON" "not valid JSON" "$ERR"
 
 echo ""
-echo "=== C6-1: I1 — no ACTION, no ADVANCED, no half-applied state (all 4 CLIs) ==="
+echo "=== C6-1: I1 — no ACTION, no ADVANCED, no half-applied state (all 3 CLIs) ==="
 # next-step. --next is passed everywhere: the whole point is that a failed record
 # withholds the ACTION block the caller asked for.
 DIR_BEFORE="$(dir_listing)"
@@ -124,14 +127,23 @@ check_not_contains "C6-1a: no NEXT_SKILL line" "NEXT_SKILL=" "$OUT"
 
 # record-skip-judgment normalizes its write-verification failure to 2 on the
 # --advance path (it is 1 without --advance — asserted below as the control).
+RSJ_O=(--cond so_c1=true --cond so_c2=true --source subagent --ticket 0123456789abcdef)
+# A finalized ticket (#2460) for each session, so the call reaches the write under test; the
+# ticket check exits 2 as well, hence the diagnostic assertions next to the exit codes.
+for sid in c61rsj c63rsj; do
+  plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$sid" outline 0123456789abcdef '{"so_c1":true,"so_c2":true}'
+done
 run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
-  --target outline --c1 true --c2 true --advance --next
+  --target outline "${RSJ_O[@]}" --advance --next
 check "C6-1b: record-skip-judgment exits 2" 2 "$RC"
+check_contains "C6-1b: the failure is the write" "write verification failed" "$ERR"
 check "C6-1b: zero ACTION lines" 0 "$(action_lines)"
 check "C6-1b: zero ADVANCED lines" 0 "$(advanced_lines)"
 run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
-  --target outline --c1 true --c2 true
+  --target outline "${RSJ_O[@]}"
 check "C6-1b: WITHOUT --advance the same failure keeps the frozen exit 1" 1 "$RC"
+check_not_contains "C6-1b: the exit 1 is the write failure, not an unparsed --cond" \
+  "unknown argument: --cond" "$ERR"
 
 # set-workflow-type fails in its own workflow_type transaction, BEFORE runAdvance.
 run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$SWT" --session c61swt \
@@ -142,13 +154,6 @@ check "C6-1c: zero ADVANCED lines" 0 "$(advanced_lines)"
 check_not_contains "C6-1c: not even the WORKFLOW_TYPE prefix line is emitted" "WORKFLOW_TYPE=" "$OUT"
 run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$SWT" --session c61swt --type wf-meta
 check "C6-1c: WITHOUT --advance the same failure keeps the frozen exit 1" 1 "$RC"
-
-# record-complexity-and-skip normalizes EVERY advance-path child failure to 3.
-run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" \
-  bash "$RCAS" --session c61rcas --signals "" --target outline --advance
-check "C6-1d: record-complexity-and-skip exits 3" 3 "$RC"
-check "C6-1d: zero ACTION lines" 0 "$(action_lines)"
-check "C6-1d: zero ADVANCED lines" 0 "$(advanced_lines)"
 
 # Nothing created: not in the workflow dir, not by clobbering the blocking file.
 check "C6-1e: the workflow dir listing is unchanged" "$DIR_BEFORE" "$(dir_listing)"
@@ -169,17 +174,13 @@ run_cli env WORKFLOW_STATE_DIR="$DEEP_N" node "$SWT" --session c62swt \
   --type wf-meta --advance --step workflow_init --status complete --next
 check "C6-2b: set-workflow-type exits 2" 2 "$RC"
 check "C6-2b: zero ADVANCED lines" 0 "$(advanced_lines)"
-run_cli env WORKFLOW_STATE_DIR="$DEEP_N" \
-  bash "$RCAS" --session c62rcas --signals "" --target outline --advance
-check "C6-2c: record-complexity-and-skip exits 3" 3 "$RC"
-check "C6-2c: zero ADVANCED lines" 0 "$(advanced_lines)"
-check "C6-2d: the blocking regular file is still byte-for-byte unchanged" \
+check "C6-2c: the blocking regular file is still byte-for-byte unchanged" \
   "$BLOCK_BEFORE" "$(file_snapshot "$BLOCK")"
 
 echo ""
 echo "=== C6-3: I2 — a corrupt state file is never partially rewritten ==="
 CORRUPT_BYTES='{ "steps": { "outline": broken'
-for sid in c63ns c63rsj c63swt c63rcas; do
+for sid in c63ns c63rsj c63swt; do
   printf '%s' "$CORRUPT_BYTES" > "$WORKFLOW_DIR/${sid}.json"
 done
 C63_BEFORE="$(file_snapshot "$WORKFLOW_DIR/c63ns.json")"
@@ -191,8 +192,9 @@ check "C6-3a: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-3a: the corrupt file is byte-for-byte unchanged" \
   "$C63_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c63ns.json")"
 
-run_cli node "$RSJ" --session c63rsj --target outline --c1 true --c2 true --advance --next
+run_cli node "$RSJ" --session c63rsj --target outline "${RSJ_O[@]}" --advance --next
 check "C6-3b: record-skip-judgment exits 2" 2 "$RC"
+check_not_contains "C6-3b: the failure is not the ticket check" "--ticket is not a finalized ticket" "$ERR"
 check "C6-3b: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-3b: the corrupt file is byte-for-byte unchanged" \
   "$C63_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c63rsj.json")"
@@ -202,78 +204,6 @@ check "C6-3c: set-workflow-type exits 2" 2 "$RC"
 check "C6-3c: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-3c: the corrupt file is byte-for-byte unchanged" \
   "$C63_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c63swt.json")"
-
-run_cli env bash "$RCAS" \
-  --session c63rcas --signals "" --target outline --advance
-check "C6-3d: record-complexity-and-skip exits 3" 3 "$RC"
-check "C6-3d: zero ADVANCED lines" 0 "$(advanced_lines)"
-check "C6-3d: the corrupt file is byte-for-byte unchanged" \
-  "$C63_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c63rcas.json")"
-
-echo ""
-echo "=== C6-4: record-complexity-and-skip normalizes a failure in EACH delegated step ==="
-# Three delegated steps, three injection points: without per-step coverage the
-# exit-3 normalization could be implemented on one branch only. The script finds
-# its delegates from its own location, so each stub tree runs its own copy of it.
-NOOP='#!/usr/bin/env node
-process.exit(0);
-'
-fake_rcas() {  # <fake-tree> — copies the script under test beside the tree's stubs
-  cp "$RCAS" "$1/bin/workflow/record-complexity-and-skip"
-  printf '%s' "$1/bin/workflow/record-complexity-and-skip"
-}
-# Step 1 fails: the complexity evaluation itself refuses.
-mkdir -p "$TMPDIR_BASE/fake1/bin/workflow" "$TMPDIR_BASE/fake1/hooks/workflow-state"
-printf '#!/usr/bin/env node\nprocess.stderr.write("stub: step1 refused\\n");\nprocess.exit(7);\n' \
-  > "$TMPDIR_BASE/fake1/bin/workflow/record-complexity-evaluation"
-printf 'module.exports={resolveSkipConditionsFromComplexity:()=>true};\n' \
-  > "$TMPDIR_BASE/fake1/hooks/workflow-state/skip-signal-resolver.js"
-printf '%s' "$NOOP" > "$TMPDIR_BASE/fake1/bin/workflow/record-skip-judgment"
-at_outline c64a
-run_cli env bash "$(fake_rcas "$TMPDIR_BASE/fake1")" \
-  --session c64a --signals "" --target outline --advance
-check "C6-4a: a step-1 failure is normalized to 3 (not the child's 7)" 3 "$RC"
-check "C6-4a: zero ADVANCED lines" 0 "$(advanced_lines)"
-check_not_contains "C6-4a: no SKIP_MODE line — step 1 failed before it" "SKIP_MODE=" "$OUT"
-check "C6-4a: outline is untouched" '"pending"' \
-  "$(PROBE_SID=c64a PROBE_STEP=outline PROBE_FIELD=status run_with_timeout node "$PROBE" field 2>/dev/null)"
-
-# Step 2 fails: the skip-signal resolver throws.
-mkdir -p "$TMPDIR_BASE/fake2/bin/workflow" "$TMPDIR_BASE/fake2/hooks/workflow-state"
-printf '%s' "$NOOP" > "$TMPDIR_BASE/fake2/bin/workflow/record-complexity-evaluation"
-printf 'throw new Error("stub: resolver unavailable");\n' \
-  > "$TMPDIR_BASE/fake2/hooks/workflow-state/skip-signal-resolver.js"
-printf '%s' "$NOOP" > "$TMPDIR_BASE/fake2/bin/workflow/record-skip-judgment"
-at_outline c64b
-run_cli env bash "$(fake_rcas "$TMPDIR_BASE/fake2")" \
-  --session c64b --signals "" --target outline --advance
-check "C6-4b: a step-2 failure is normalized to 3" 3 "$RC"
-check "C6-4b: zero ADVANCED lines" 0 "$(advanced_lines)"
-check_not_contains "C6-4b: no SKIP_MODE line — the mode never resolved" "SKIP_MODE=" "$OUT"
-check "C6-4b: outline is untouched" '"pending"' \
-  "$(PROBE_SID=c64b PROBE_STEP=outline PROBE_FIELD=status run_with_timeout node "$PROBE" field 2>/dev/null)"
-
-# Step 3 fails: the REAL record-skip-judgment, for a real reason (I2). A shim
-# re-exports the production CLI, so the delegate under test is not a stub that
-# merely returns a chosen exit code.
-mkdir -p "$TMPDIR_BASE/fake3/bin/workflow" "$TMPDIR_BASE/fake3/hooks/workflow-state"
-printf '%s' "$NOOP" > "$TMPDIR_BASE/fake3/bin/workflow/record-complexity-evaluation"
-printf 'module.exports={resolveSkipConditionsFromComplexity:()=>true};\n' \
-  > "$TMPDIR_BASE/fake3/hooks/workflow-state/skip-signal-resolver.js"
-printf '#!/usr/bin/env node\nrequire(%s);\n' "\"$RSJ\"" \
-  > "$TMPDIR_BASE/fake3/bin/workflow/record-skip-judgment"
-printf '%s' "$CORRUPT_BYTES" > "$WORKFLOW_DIR/c64c.json"
-C64C_BEFORE="$(file_snapshot "$WORKFLOW_DIR/c64c.json")"
-run_cli env bash "$(fake_rcas "$TMPDIR_BASE/fake3")" \
-  --session c64c --signals "" --target outline --advance
-check "C6-4c: a step-3 failure is normalized to 3 (the delegate's own 2 is swallowed)" 3 "$RC"
-check "C6-4c: zero ADVANCED lines" 0 "$(advanced_lines)"
-check "C6-4c: zero ACTION lines" 0 "$(action_lines)"
-# The resolved mode IS still reported: step 2 succeeded, so the caller learns it.
-check_contains "C6-4c: the resolved SKIP_MODE is still reported" "SKIP_MODE=auto" "$OUT"
-check_not_contains "C6-4c: no SKIP_DISPATCH line is minted after the failure" "SKIP_DISPATCH=" "$OUT"
-check "C6-4c: the corrupt file is byte-for-byte unchanged" \
-  "$C64C_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c64c.json")"
 
 echo ""
 echo "=== C6-5: no lock directory or lock file survives any failure path ==="

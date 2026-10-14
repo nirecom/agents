@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/jev/retention.js
-# Tags: TL2, hooks, jev, retention, orphan-sweep, time-travel-by-mtime, scope:issue-specific, pwsh-not-required, onorphan-failure, min-claim-age, recheck-before-remove, newest-mtime-files-only, tombstone-rename, leftover-tomb-restore
+# Tags: TL2, hooks, jev, retention, orphan-sweep, time-travel-by-mtime, scope:issue-specific, pwsh-not-required, onorphan-failure, min-claim-age, recheck-before-remove, newest-mtime-files-only, tombstone-rename, leftover-tomb-restore, versioned-state, ticket-files
 
 # Per-session Jev state must not pile up forever: once a day, a post hook removes session
 # dirs untouched for 7 days, and any orphan pending inside is first written out as
@@ -36,7 +36,7 @@ seed_old jev2460-i-old toolu_i_old $((8 * DAY))
 seed_old jev2460-i-recent toolu_i_recent $((6 * DAY))
 check "fixture: both seeded dirs hold one pending each" "2" "$(pending_count)"
 sweep_marker $((25 * 3600000))
-LLM_TEXT="SIGNALS: S1-multi-file" pair jev2460-i-new toolu_i_trigger
+LLM_TEXT="SIGNALS: S2-architecture" pair jev2460-i-new toolu_i_trigger
 check "post exits 0" "0" "$HOOK_RC"
 check "the 8-day-old session dir is removed" "absent" "$(exists "$JEVDIR/jev2460-i-old")"
 check "its orphan pending was written out once as llm missing" "1|missing" \
@@ -53,7 +53,7 @@ fx_new i-notdue
 mock_mode '{}'
 seed_old jev2460-i-old2 toolu_i_old2 $((8 * DAY))
 sweep_marker 3600000
-LLM_TEXT="SIGNALS: S1-multi-file" pair jev2460-i-new2 toolu_i_trigger2
+LLM_TEXT="SIGNALS: S2-architecture" pair jev2460-i-new2 toolu_i_trigger2
 check "post exits 0" "0" "$HOOK_RC"
 check "marker 1 hour old: the 8-day-old dir survives with its pending" "present|1" \
   "$(exists "$JEVDIR/jev2460-i-old2")|$(find "$JEVDIR/jev2460-i-old2" -path '*/pending/*' -type f 2>/dev/null | wc -l | tr -d ' ')"
@@ -221,7 +221,7 @@ check "dir mtimes count by default; filesOnly sees only the 10-day-old file; emp
   "true|true|0|0" "$(ret2 newest)"
 case_end
 
-# rp race <sid> <mode> | rp tombs: tests/hooks/feature-2460-jev-shadow/retention-probe.js.
+# rp race <sid> <mode> | rp tombs | rp ticket-files <sid>: tests/hooks/feature-2460-jev-shadow/retention-probe.js.
 rp() { run_with_timeout 30 node "$(np "$LIBDIR/retention-probe.js")" "$REPO_N/hooks/lib/jev/retention.js" "$REPO_N/hooks/lib/jev/pending.js" "$@" 2>/dev/null; }
 
 echo "=== removal goes through a tombstone, so a concurrent writer loses nothing ==="
@@ -273,6 +273,13 @@ case_begin "i-leftover-tomb-invalid-sid-untouched" "hooks/lib/jev/retention.js"
 fx_new i-tomb-invalid
 check "tombs whose sid part is invalid (a..b, empty) or that lack a -<digits> suffix: left untouched with their entries" \
   ".tomb--456,.tomb-a..b-123,.tomb-nodigits||toolu_v.json,toolu_v.json,toolu_v.json" "$(rp tomb-invalid)"
+case_end
+
+echo "=== versioned state and ticket files leave with their stale session ==="
+case_begin "i-ticket-and-versioned-files-swept" "hooks/lib/jev/retention.js"
+fx_new i-ticket-files
+check "the stale session (v2 ticket hand, versioned breaker/liveness, ticket snapshot/answer/merged, done marker, jev-sources/<ticket>/) is removed after its ticket hand is handed over once; the fresh session keeps all 9 files" \
+  "jev2460-i-tf|absent|jev2460-i-tf:tkt-2460-i|present|9" "$(rp ticket-files jev2460-i-tf)"
 case_end
 
 finish

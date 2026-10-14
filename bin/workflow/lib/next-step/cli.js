@@ -112,7 +112,7 @@ function parseArgs(argv) {
         process.exit(1);
       }
       out.mark = stepName;
-      // One-token lookahead (same shape as record-skip-judgment's parseFlagBool):
+      // One-token lookahead:
       // step names never start with `--`, and the only legacy status token --mark
       // ever accepted is the literal `complete`, so the reading is unambiguous.
       const statusToken = argv[i + 2];

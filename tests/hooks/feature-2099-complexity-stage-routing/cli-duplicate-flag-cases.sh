@@ -1,14 +1,14 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/cli-duplicate-flag-cases.sh
-# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip
+# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, cli, argument-parsing, security, edge-cases, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh.
 # Siblings pass each flag once; a flag repeated with a different value (e.g. an
 # orchestrator appending a default --signals) is untested elsewhere.
-D2099DF_A="S1-multi-file"
+D2099DF_A="S1b-wide-change"
 
-# S1/S2 route detail differently (low vs high, detail.md D2), so first/last/merge
-# are distinguishable. S3-security doesn't work here — detail routes it low too.
+# S1b/S2 route detail differently (low vs high), so first/last/merge are
+# distinguishable. S3-security doesn't work here — detail routes it low too.
 D2099DF_B="S2-architecture"
 
 # detail.md sets no duplicate-flag rule, so both principled answers pass:
@@ -112,7 +112,7 @@ d2099df_record_signals() {
         "${dup%|*}" "${dup2%|*}" "$last" "$zero" "${dup##*|}"
 }
 
-# --- DF-2/DF-8: a duplicated --session on each write CLI ----------------------
+# --- DF-2: a duplicated --session on the write CLI ----------------------------
 # The wrong half of the pair must stay untouched — a record landing in BOTH
 # sessions is what neither behaviour permits.
 d2099df_two_session_write() {
@@ -147,7 +147,7 @@ d2099df_two_session_write() {
 }
 
 # --- DF-3/DF-4: read-complexity-evaluation -----------------------------------
-# --stage detail vs write_code splits S1-multi-file low/high (detail.md D2).
+# --stage detail vs write_code splits S1b-wide-change low/high.
 # A reader has no state to mutate, so `clean` is structural here.
 d2099df_read_flags() {
     local sid sid_none first last dup dup2
@@ -194,28 +194,37 @@ d2099df_derive_flags() {
     d2099df_assert "$id derive-complexity-level $flag twice" "$dup" "$dup2" "$first" "$last" "clean"
 }
 
-# --- DF-7: record-complexity-and-skip ----------------------------------------
-# The bash wrapper does its own presence detection (detail.md item 11) — a
-# second parser that can diverge from the node CLI it delegates to.
-d2099df_wrapper_signals() {
-    local first last dup dup2
-    : > "$D2099DF_WHY"
-    first=$(d2099df_baseline dfwrap-a "$BIN_RECORD_SKIP" --signals "$D2099DF_A" --target outline)
-    last=$(d2099df_baseline dfwrap-b "$BIN_RECORD_SKIP" --signals "$D2099DF_B" --target outline)
-    if [ "$first" = "$last" ]; then
-        fail "DF-7 unattributable: the wrapper's two baseline signal sets read back identically ($first) — $(d2099df_why)"
-        return
-    fi
-    dup=$(d2099df_dup_write dfwrap-dup "$BIN_RECORD_SKIP" --signals "$D2099DF_A" --signals "$D2099DF_B" --target outline)
-    dup2=$(d2099df_dup_write dfwrap-dup2 "$BIN_RECORD_SKIP" --signals "$D2099DF_A" --signals "$D2099DF_B" --target outline)
-    d2099df_assert "DF-7 record-complexity-and-skip --signals twice" \
-        "${dup%|*}" "${dup2%|*}" "$first" "$last" "${dup##*|}"
+# DF-7n: a duplicate whose LAST value is the zero-signal input that used to
+# auto-skip. Whichever duplicate rule the record CLI follows, it skips nothing.
+d2099df_record_no_skip() {
+    local sid
+    sid=$(new_session dfrec-ns)
+    run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "$D2099DF_A" --signals "" \
+        >/dev/null 2>&1 || true
+    assert_eq "DF-7n a duplicated --signals ending in zero signals skips no step" \
+        "outline=pending detail=pending skip=0" "$(d2099_no_skip_view "$sid")"
 }
 
+case_begin "df1-record-signals-twice" "bin/workflow/record-complexity-evaluation"
 d2099df_record_signals
+case_end
+
+case_begin "df2-record-session-twice" "bin/workflow/record-complexity-evaluation"
 d2099df_two_session_write "DF-2 record-complexity-evaluation" "$BIN_RECORD" --signals "$D2099DF_B"
+case_end
+
+case_begin "df3-read-flags-twice" "bin/workflow/read-complexity-evaluation"
 d2099df_read_flags
+case_end
+
+case_begin "df5-derive-stage-twice" "bin/workflow/derive-complexity-level"
 d2099df_derive_flags "DF-5" --stage detail write_code --signals "$D2099DF_A"
+case_end
+
+case_begin "df6-derive-signals-twice" "bin/workflow/derive-complexity-level"
 d2099df_derive_flags "DF-6" --signals "S2-architecture" "" --stage detail
-d2099df_wrapper_signals
-d2099df_two_session_write "DF-8 record-complexity-and-skip" "$BIN_RECORD_SKIP" --signals "$D2099DF_B" --target outline
+case_end
+
+case_begin "df7n-record-signals-twice-no-skip" "bin/workflow/record-complexity-evaluation"
+d2099df_record_no_skip
+case_end
