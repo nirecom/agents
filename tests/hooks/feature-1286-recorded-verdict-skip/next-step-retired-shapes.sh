@@ -57,6 +57,7 @@ while IFS='|' read -r a_sid a_target a_conds a_reason a_next; do
   else
     write_state "$a_sid" "$JSON_AT_DETAIL"; : > "$PLANS_GLOBAL_DIR/${a_sid}-outline.md"
   fi
+  ticketed "$a_sid" "$a_target" "$T_RS" "$(conds_json "$a_conds")" jev
   # shellcheck disable=SC2086 # a_conds is a deliberate word-split --cond list
   A_RC=0
   A_OUT="$(run_with_timeout node "$RECORD_CLI_N" --session "$a_sid" --target "$a_target" \
@@ -77,6 +78,7 @@ ADVANCE
 echo ""
 echo "=== RV-53: new-form --advance with a false condition leaves the step pending ==="
 write_state "rv53" "$JSON_AT_DETAIL"; : > "$PLANS_GLOBAL_DIR/rv53-outline.md"
+ticketed rv53 detail "$T_RS" '{"sd_single_approach":true,"sd_no_open_decision":false}' subagent
 A_RC=0
 A_OUT="$(run_with_timeout node "$RECORD_CLI_N" --session rv53 --target detail \
   --cond sd_single_approach=true --cond sd_no_open_decision=false --source subagent --ticket "$T_RS" --advance 2>&1)" || A_RC=$?

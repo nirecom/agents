@@ -29,7 +29,11 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned so a planted claim never lands in a real home.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
+# shellcheck source=../lib/skip-judgment.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 FIXTURE_REPO="$TMPDIR_BASE/repo"; mkdir -p "$FIXTURE_REPO"
 git init -q "$FIXTURE_REPO" >/dev/null 2>&1
@@ -100,9 +104,25 @@ top_field() {
 # #2460 stage 4: the --cond/--source/--ticket form. Each session uses its own ticket.
 RSJ_OK=(--cond so_c1=true --cond so_c2=true --source subagent --ticket 0123456789abcdef)
 RSJ_C2F=(--cond so_c1=true --cond so_c2=false --source subagent --ticket 0123456789abcdef)
+RSJ_TID=0123456789abcdef
+CONDS_OK='{"so_c1":true,"so_c2":true}'
+CONDS_C2F='{"so_c1":true,"so_c2":false}'
+# ticketed <sid> [conds-json] [field=json ...] — the finalized claim the CLI verifies against.
+ticketed() {
+  local sid="$1" conds="${2:-$CONDS_OK}"
+  shift
+  [ "$#" -gt 0 ] && shift
+  plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$sid" outline "$RSJ_TID" "$conds" subagent "$@"
+}
+judgment() {
+  PROBE_SID="$1" run_with_timeout node -e '
+    const wf = require(process.env.WFSTATE_MODULE);
+    process.stdout.write(JSON.stringify(wf.readSkipJudgment(process.env.PROBE_SID, "outline") || null));
+  ' 2>/dev/null || echo PROBE_FAIL
+}
 
 echo "=== S1: record-skip-judgment WITHOUT --advance keeps its exact stdout ==="
-at_outline s1
+at_outline s1; ticketed s1
 run_cli node "$RSJ" --session s1 --target outline "${RSJ_OK[@]}"
 check "S1: exit 0" 0 "$RC"
 check "S1: stdout is byte-identical to the pre-#1644 form" \
@@ -111,7 +131,7 @@ check "S1: the step itself is NOT settled without --advance" '"pending"' "$(step
 
 echo ""
 echo "=== S2: record-skip-judgment --advance settles the target step ==="
-at_outline s2
+at_outline s2; ticketed s2
 run_cli node "$RSJ" --session s2 --target outline "${RSJ_OK[@]}" --advance
 check "S2: exit 0" 0 "$RC"
 check_contains "S2: the legacy judgment line survives" "RECORDED=outline all_conditions_met=true" "$OUT"
@@ -132,7 +152,7 @@ check "S2: skip_verdict.verdict is pending" '"pending"' "$(step_sub s2 outline s
 
 echo ""
 echo "=== S3: record-skip-judgment --advance does NOT settle when a condition fails ==="
-at_outline s3
+at_outline s3; ticketed s3 "$CONDS_C2F"
 run_cli node "$RSJ" --session s3 --target outline "${RSJ_C2F[@]}" --advance
 check "S3: exit 0 (a false judgment is a valid recording, not an error)" 0 "$RC"
 check_contains "S3: the judgment is still recorded" "all_conditions_met=false" "$OUT"
@@ -145,7 +165,7 @@ check_not_contains "S3: no step-status line is emitted" "status=skipped" "$OUT"
 
 echo ""
 echo "=== S4: record-skip-judgment --advance --next advances the current step ==="
-at_outline s4
+at_outline s4; ticketed s4
 run_cli node "$RSJ" --session s4 --target outline "${RSJ_OK[@]}" --advance --next
 check "S4: exit 0" 0 "$RC"
 check_contains "S4: ADVANCED=outline" "ADVANCED=outline" "$OUT"
@@ -154,11 +174,12 @@ check "S4: exactly one ACTION line" 1 "$(action_lines)"
 echo ""
 echo "=== S5: a failed record emits no ACTION line and exits 2 ==="
 BLOCK="$TMPDIR_BASE/blockfile"; : > "$BLOCK"
-at_outline s5
-RC=0
-OUT="$(WORKFLOW_STATE_DIR="$(nrm "$BLOCK")" run_with_timeout node "$RSJ" \
-  --session s5 --target outline "${RSJ_OK[@]}" --advance --next 2>/dev/null)" || RC=$?
+at_outline s5; ticketed s5
+run_cli env WORKFLOW_STATE_DIR="$(nrm "$BLOCK")" node "$RSJ" \
+  --session s5 --target outline "${RSJ_OK[@]}" --advance --next
 check "S5: unwritable state exits 2" 2 "$RC"
+# The ticket check also exits 2, so the code alone would not show the write was reached.
+check_contains "S5: the failure is the write, not the ticket check" "write verification failed" "$ERR"
 check "S5: no ACTION line on failure" 0 "$(action_lines)"
 
 echo ""
@@ -298,7 +319,7 @@ echo "=== S15: repeating --advance is a no-op on every sibling ==="
 # re-run the workflow_init downstream reset or overwrite an A-4 verdict that
 # record-skip-verdict has since resolved. #2460: a same-ticket repeat on a
 # skipped step does nothing and reports REPLAYED=1 (idempotency table).
-at_outline s15a
+at_outline s15a; ticketed s15a
 run_cli node "$RSJ" --session s15a --target outline "${RSJ_OK[@]}" --advance
 check "S15a: the first record-skip-judgment --advance exits 0" 0 "$RC"
 S15A_ENTRY="$(step_entry s15a outline)"
@@ -320,6 +341,87 @@ check_contains "S15b: the repeat reports already=true" "already=true" "$OUT"
 check "S15b: workflow_init is still complete after the repeat" '"complete"' "$(step_status s15b workflow_init)"
 check "S15b: the projection is unchanged" "$S15B_ENTRY" "$(step_entry s15b workflow_init)"
 check "S15b: deliverable_type survives the repeat" '"wf-meta"' "$(top_field s15b)"
+
+echo ""
+echo "=== S16: --ticket must be a finalized ticket of this session, target and answer ==="
+# #2460: the command line is not evidence of a judgment. S1/S2 are the accepting control.
+# refused <label> <sid> <diagnostic> [argv override...] — exit 2, nothing written or settled.
+refused() {
+  local label="$1" sid="$2" want="$3"
+  shift 3
+  [ "$#" -gt 0 ] || set -- "${RSJ_OK[@]}"
+  run_cli node "$RSJ" --session "$sid" --target outline "$@" --advance
+  check "S16 [$label]: exits 2" 2 "$RC"
+  check_contains "S16 [$label]: the diagnostic" "$want" "$ERR"
+  check "S16 [$label]: stdout stays empty" "" "$OUT"
+  check "S16 [$label]: no judgment is written" "null" "$(judgment "$sid")"
+  check "S16 [$label]: outline stays pending" '"pending"' "$(step_status "$sid" outline)"
+}
+NOT_FINALIZED="--ticket is not a finalized ticket of this session and target"
+at_outline s16a
+refused "no ticket in the store" s16a "$NOT_FINALIZED"
+at_outline s16b
+plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" s16b outline fedcba9876543210 "$CONDS_OK" subagent
+refused "a ticket id the store does not hold" s16b "$NOT_FINALIZED"
+at_outline s16c; at_outline s16other; ticketed s16other
+refused "a ticket of another session's store" s16c "$NOT_FINALIZED"
+at_outline s16d; ticketed s16d "$CONDS_OK" 'session_id="s16other"'
+refused "a claim naming another session" s16d "$NOT_FINALIZED"
+at_outline s16e; ticketed s16e "$CONDS_OK" 'target="detail"'
+refused "a ticket of the other target" s16e "$NOT_FINALIZED"
+at_outline s16f; ticketed s16f "$CONDS_OK" 'finalized=false'
+refused "a claim that is not finalized yet" s16f "$NOT_FINALIZED"
+at_outline s16g; ticketed s16g "$CONDS_OK" 'result=null'
+refused "a finalized claim with no answer" s16g "$NOT_FINALIZED"
+at_outline s16h
+plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" s16h outline "$RSJ_TID" "$CONDS_OK" jev
+refused "a --source the ticket did not finalize" s16h "$NOT_FINALIZED"
+at_outline s16i; ticketed s16i "$CONDS_C2F"
+refused "conditions the ticket did not finalize" s16i "--cond differs from the ticket's finalized answer"
+at_outline s16j; ticketed s16j
+refused "a true answer downgraded on the command line" s16j \
+  "--cond differs from the ticket's finalized answer" "${RSJ_C2F[@]}"
+at_outline s16k; ticketed s16k "$CONDS_OK" 'version=1'
+refused "a claim of a retired store version" s16k "$NOT_FINALIZED"
+
+echo ""
+echo "=== S17: a skip is refused once the ticket's sources changed ==="
+# #2460: the judgment is about the sources as queried. The claim fingerprints them at plant time.
+INTENT_OF() { printf '%s' "$PLANS_DIR/$1-intent.md"; }
+at_outline s17a; printf 'intent v1\n' > "$(INTENT_OF s17a)"; ticketed s17a
+run_cli node "$RSJ" --session s17a --target outline "${RSJ_OK[@]}" --advance
+check "S17a: unchanged sources still record and settle: exit 0" 0 "$RC"
+check "S17a: outline is skipped" '"skipped"' "$(step_status s17a outline)"
+# stale <label> <sid> — the all-true answer is refused and leaves nothing behind.
+stale() {
+  run_cli node "$RSJ" --session "$2" --target outline "${RSJ_OK[@]}" --advance
+  check "S17 [$1]: exits 2" 2 "$RC"
+  check_contains "S17 [$1]: the diagnostic" "the ticket's sources changed since its query" "$ERR"
+  check "S17 [$1]: no judgment is written" "null" "$(judgment "$2")"
+  check "S17 [$1]: outline stays pending" '"pending"' "$(step_status "$2" outline)"
+}
+at_outline s17b; printf 'intent v1\n' > "$(INTENT_OF s17b)"; ticketed s17b
+printf 'intent v2\n' > "$(INTENT_OF s17b)"
+stale "an edited source" s17b
+at_outline s17c; ticketed s17c; printf 'intent v1\n' > "$(INTENT_OF s17c)"
+stale "a source that appeared" s17c
+at_outline s17d; printf 'intent v1\n' > "$(INTENT_OF s17d)"; ticketed s17d; rm -f "$(INTENT_OF s17d)"
+stale "a source that vanished" s17d
+at_outline s17e; ticketed s17e "$CONDS_OK" 'artifacts_sha256=null'
+stale "a ticket with no source fingerprint" s17e
+# A false answer skips nothing, so it is recorded whatever happened to the sources.
+at_outline s17f; printf 'intent v1\n' > "$(INTENT_OF s17f)"; ticketed s17f "$CONDS_C2F"
+printf 'intent v2\n' > "$(INTENT_OF s17f)"
+run_cli node "$RSJ" --session s17f --target outline "${RSJ_C2F[@]}" --advance
+check "S17f: a false answer on changed sources exits 0" 0 "$RC"
+check_contains "S17f: and is recorded" "RECORDED=outline all_conditions_met=false" "$OUT"
+check "S17f: outline stays pending" '"pending"' "$(step_status s17f outline)"
+# A repeat of an already settled skip is a replay: it writes nothing, so it is not re-checked.
+printf 'intent v2\n' > "$(INTENT_OF s17a)"
+run_cli node "$RSJ" --session s17a --target outline "${RSJ_OK[@]}" --advance
+check "S17g: the repeat after an edit exits 0" 0 "$RC"
+check_contains "S17g: the repeat reports REPLAYED=1" "REPLAYED=1" "$OUT"
+check "S17g: outline is still skipped" '"skipped"' "$(step_status s17a outline)"
 
 echo ""
 echo "=== Results ==="

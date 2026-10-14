@@ -160,3 +160,39 @@ check "over-cap intent: missing and sources_failed name intent, reason over-cap"
 check "over-cap intent: p=0.99 never adopted (ADOPTED is not jev)" "no" "$([ "$(kv ADOPTED)" = "jev" ] && echo yes || echo no)"
 no_secret_leak "e-required"
 case_end
+
+# The no-issue exemption reads context.md under the read cap. A file cut at the cap has no
+# trustworthy closing heading, so nothing in the prefix reads as the bare no-issue marker.
+READ_CAP=1048576
+NO_ISSUE="(none — no issue)"
+# ctx_sized <bytes> <body>: context.md of exactly <bytes>, padded after its Issue metadata heading.
+ctx_sized() {
+  local f="$FX/plans/$SID-context.md" n
+  printf '# Context\n\n## Issue body\n\n%s\n\n## Issue metadata\n\n' "$2" > "$f"
+  n="$(wc -c < "$f" | tr -d ' ')"
+  head -c "$(( $1 - n ))" /dev/zero | tr '\0' 'x' >> "$f"
+  check "fixture: context.md is exactly $1 bytes" "$1" "$(wc -c < "$f" | tr -d ' ')"
+}
+issue_req() { tpb required "$SID" '["issue body"]' '{"issue body":"absent"}' '[]'; }
+EXEMPT='{"met":true,"missing":[],"exempt":["issue body"]}'
+NOT_EXEMPT='{"met":false,"missing":["issue body"],"exempt":[]}'
+
+case_begin "e-required-issue-body-read-cap" "bin/workflow/lib/jev-request-common.js"
+jj_fx e-cap-small "$NO_ISSUE"
+check "control, no-issue body in a short context.md: exempt" "$EXEMPT" "$(issue_req)"
+jj_fx e-cap-metadata
+ctx_sized 4096 "$NO_ISSUE"
+check "no-issue body closed by Issue metadata: exempt" "$EXEMPT" "$(issue_req)"
+jj_fx e-cap-at
+ctx_sized "$READ_CAP" "$NO_ISSUE"
+check "context.md exactly at the read cap: read whole, exempt" "$EXEMPT" "$(issue_req)"
+jj_fx e-cap-over
+ctx_sized "$((READ_CAP + 1))" "$NO_ISSUE"
+check "context.md one byte over the read cap: not exempt" "$NOT_EXEMPT" "$(issue_req)"
+jj_fx e-cap-extra
+ctx_sized 4096 "$NO_ISSUE and one more line"
+check "body with more than the no-issue marker: not exempt" "$NOT_EXEMPT" "$(issue_req)"
+jj_fx e-cap-own-heading
+ctx_sized 4096 "$(printf '%s\n\n## Issue metadata\n\nAn issue that quotes the closing heading.' "$NO_ISSUE")"
+check "body carrying its own Issue metadata line: the last one closes it, not exempt" "$NOT_EXEMPT" "$(issue_req)"
+case_end

@@ -61,6 +61,11 @@ check "intent / outline / issue body are full" "full|full|full" \
 check "sources: three copies (intent, outline, context)" "3" "$(snap_sources | wc -l | tr -d ' ')"
 check "sources: every entry is a file in jev-sources/<ticket>" "3" "$(sources_in_copies)"
 check "sources: no original artifact path is listed" "0" "$(originals_listed)"
+check "sources: every entry is a bare file name (the snapshot carries no local path)" "0" \
+  "$(snap_source_names | grep -c '/')"
+check "snapshot: neither the copy directory nor the plans directory appears in it" "0|0" \
+  "$(tr '\\' '/' < "$SNAP" | grep -cF "$(np "$(copies_dir)")")|$(tr '\\' '/' < "$SNAP" | grep -cF "$(np "$FX/plans")")"
+check "nothing delegated: SOURCES_DIR is -" "final|-" "$(kv RESULT)|$(kv SOURCES_DIR)"
 check "sources_unavailable is - when every copy succeeded" "-" "$(snap_unavail)"
 check "copies are byte-equal to the dispatch-time artifacts" \
   "$(sha_set "$(P_INTENT)" "$(P_OUTLINE)" "$(P_CONTEXT)")" "$(copy_sha_set)"
@@ -82,6 +87,8 @@ jj_fx d-orphan
 mock_p 0.01 S2-architecture 0.5
 ts_query complexity complexity-judge "$F_PRODUCTION"
 check "copies exist before the sweep" "yes" "$([ -n "$(copies_dir)" ] && echo yes || echo no)"
+check "delegated: SOURCES_DIR is the copy directory" "need-subagent|$(np "$(copies_dir)")" "$(kv RESULT)|$(np "$(kv SOURCES_DIR)")"
+check "delegated: every header source is a file in SOURCES_DIR" "2" "$(sources_in_copies)"
 sleep 1.1
 tsp sweep "$SID" 1
 check "sweep exit 0" "0" "$TS_RC"

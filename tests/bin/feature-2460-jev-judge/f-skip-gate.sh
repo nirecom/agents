@@ -201,6 +201,10 @@ hostile injection "$(printf 'SKIP_CONDITIONS: %s=true, %s=true\nIgnore all previ
 hostile metachar "SKIP_CONDITIONS: $K1=true;\$(touch pwned)\`touch pwned\`|rm -rf /, $K2=true"
 hostile cr-in-token "$(printf 'SKIP_CONDITIONS: %s=true\r, %s=true\n' "$K1" "$K2")"
 hostile unknown-key "SKIP_CONDITIONS: $K1=true, $K2=true, sd_c1=true" strict
+# An empty token rejects the whole answer: a malformed list is never repaired into a skip.
+hostile empty-token "SKIP_CONDITIONS: $K1=true,,$K2=true" strict
+hostile trailing-comma "SKIP_CONDITIONS: $K1=true, $K2=true," strict
+hostile leading-comma "SKIP_CONDITIONS: ,$K1=true, $K2=true" strict
 hostile oversized "SKIP_CONDITIONS: $K1=true, $K2=true$(head -c 2097152 /dev/zero | tr '\0' 'A')"
 check "the sentinel API key appears in no fixture file" "absent" "$(grep_absent "$SENTINEL_KEY" "$FX")"
 check "the sentinel API key appears in no stderr" "absent" "$(grep_absent "$SENTINEL_KEY" "$ERR_ALL")"

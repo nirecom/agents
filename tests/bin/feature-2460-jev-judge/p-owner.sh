@@ -46,11 +46,15 @@ case_end
 case_begin "p-owner-older-finalized-first" "hooks/lib/jev/two-stage/settle-complexity.js"
 jj_fx p-a-first
 two_tickets
+check "after both queries: the marker is B's, state queried, no fixed file yet" "\"$TB\"|\"queried\"|<absent>" \
+  "$(owner owner_id)|$(owner state)|$(fixed_csv complexity)"
 jj finalize --session "$SID" --ticket "$TA"
-check "A first: SETTLE=ok, owner A" "ok|\"$TA\"" "$(kv SETTLE)|$(owner owner_id)"
+check "A first: B took the stage at its query, so A is superseded and writes nothing" \
+  "0|superseded|-|\"$TB\"|\"queried\"|<absent>" \
+  "$JJ_RC|$(kv SETTLE)|$(kv SIGNALS_CSV)|$(owner owner_id)|$(owner state)|$(fixed_csv complexity)"
 jj finalize --session "$SID" --ticket "$TB"
 check "B after A: SETTLE=ok, owner B, written" "ok|\"$TB\"|\"written\"" "$(kv SETTLE)|$(owner owner_id)|$(owner state)"
-check "neither ticket has a settle record" "|" "$(settles "$TA")|$(settles "$TB")"
+check "A has a newer-owner settle record naming B, B has none" "superseded|newer-owner|$TB|" "$(settles "$TA")|$(settles "$TB")"
 check "owner_created_ms is B's query time" "$TB_CREATED" "$(owner owner_created_ms)"
 case_end
 
@@ -69,13 +73,15 @@ mock_p 0.01 S2-architecture 0.95
 ts_query complexity complexity-judge "$F_PRODUCTION"
 sleep 1.1
 put_fixed "S2-architecture"
-F_SHA="$(fsha "$F_NAME")"; F_MT="$(mtime "$F_NAME")"
+F_SHA="$(fsha "$F_NAME")"; F_MT="$(mtime "$F_NAME")"; M_SHA="$(fsha "$M_NAME")"
+check "query-time marker: this ticket, state queried, no file hash recorded" "\"$TICKET\"|\"queried\"|null" \
+  "$(owner owner_id)|$(owner state)|$(owner signals_sha256)"
 jj finalize --session "$SID" --ticket "$TICKET"
-check "no marker, file written after the query with A's own content: superseded" "superseded|-" \
+check "file written after the query with A's own content: superseded" "superseded|-" \
   "$(kv SETTLE)|$(kv SIGNALS_CSV)"
 check "unowned-write settle record, owner null" "superseded|unowned-write|" "$(settles "$TICKET")"
-check "unowned write: file untouched, no marker created" "$F_SHA|$F_MT|<absent>" \
-  "$(fsha "$F_NAME")|$(mtime "$F_NAME")|$(fsha "$M_NAME")"
+check "unowned write: file untouched, marker left at its query state" "$F_SHA|$F_MT|$M_SHA|\"queried\"" \
+  "$(fsha "$F_NAME")|$(mtime "$F_NAME")|$(fsha "$M_NAME")|$(owner state)"
 case_end
 
 case_begin "p-owner-concurrent-settle" "hooks/lib/jev/two-stage/settle-complexity.js"
@@ -148,4 +154,52 @@ check "after the lock is gone: the re-run replays to SETTLE=ok" "0|ok|S2-archite
 check "held lock re-run: still one decision record" "1" \
   "$(lq "$TICKET" 'recs.filter(x=>x.record_type==="decision").length')"
 no_secret_leak "p-owner"
+case_end
+
+# The write is a compare-and-write: a settle stopped with the marker at "writing" finishes
+# only over the bytes its verdict saw (or its own value); another writer's file is kept.
+aside_left() { [ -e "$(fpath "$F_NAME").aside" ] && echo present || echo absent; }
+# stopped_writing <fixture> [old-fixed-value]: query, then finalize stopped at state writing.
+stopped_writing() {
+  jj_fx "$1"
+  mock_p 0.01 S2-architecture 0.95
+  if [ -n "${2:-}" ]; then put_fixed "$2"; touch -d '2000-01-01 00:00:00' "$(fpath "$F_NAME")"; fi
+  ts_query complexity complexity-judge "$F_PRODUCTION"
+  ts_fin '{"crashAt":"after-owner-writing"}'
+  check "$1: stopped with the marker at writing" "99|\"$TICKET\"|\"writing\"" "$TS_RC|$(owner owner_id)|$(owner state)"
+}
+kept_unowned() {
+  check "$1: SETTLE=superseded, SIGNALS_CSV=-" "0|superseded|-" "$JJ_RC|$(kv SETTLE)|$(kv SIGNALS_CSV)"
+  check "$1: the other writer's file is kept byte for byte, nothing set aside" "$F_SHA|absent" "$(fsha "$F_NAME")|$(aside_left)"
+  check "$1: settle record unowned-write (owner null), marker left at writing" "superseded|unowned-write||\"writing\"" \
+    "$(settles "$TICKET")|$(owner state)"
+}
+wrote_own() {
+  check "$1: SETTLE=ok, the judged value written, marker written" "0|ok|S2-architecture|S2-architecture|\"written\"" \
+    "$JJ_RC|$(kv SETTLE)|$(kv SIGNALS_CSV)|$(fixed_csv complexity)|$(owner state)"
+  check "$1: no settle record, nothing set aside" "|absent" "$(settles "$TICKET")|$(aside_left)"
+}
+
+case_begin "p-owner-compare-and-write" "hooks/lib/jev/two-stage/settle-complexity.js"
+stopped_writing p-cw-none
+check "no fixed file at the verdict: the marker records no file hash" "null|<absent>" "$(owner signals_sha256)|$(fixed_csv complexity)"
+jj finalize --session "$SID" --ticket "$TICKET"
+wrote_own "interrupted write, file still absent"
+stopped_writing p-cw-unowned
+sleep 1.1
+put_fixed "S3-security"; F_SHA="$(fsha "$F_NAME")"
+jj finalize --session "$SID" --ticket "$TICKET"
+kept_unowned "another writer created the file meanwhile"
+stopped_writing p-cw-own-value
+printf 'S2-architecture' > "$(fpath "$F_NAME")"
+jj finalize --session "$SID" --ticket "$TICKET"
+wrote_own "file already holds this ticket's value"
+stopped_writing p-cw-old-untouched "S5-breaking"
+check "an older file at the verdict: the marker records its hash" "\"$(fsha "$F_NAME")\"" "$(owner signals_sha256)"
+jj finalize --session "$SID" --ticket "$TICKET"
+wrote_own "interrupted write, older file untouched"
+stopped_writing p-cw-old-replaced "S5-breaking"
+put_fixed "S3-security"; F_SHA="$(fsha "$F_NAME")"
+jj finalize --session "$SID" --ticket "$TICKET"
+kept_unowned "another writer replaced the older file meanwhile"
 case_end

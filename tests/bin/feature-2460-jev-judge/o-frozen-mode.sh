@@ -100,6 +100,52 @@ ts_fin '{"entryPatch":{"complexity-judge":null}}'
 check "point no longer registered: exit 4, ticket-invalid" "4|ticket-invalid" "$TS_RC|$(kv REASON)"
 case_end
 
+# The adapter is frozen too: a ticket is finalized only by the adapter it was queried with.
+# A planted module at the ticket's adapter path must never be loaded, by finalize or the sweep.
+case_begin "o-frozen-adapter" "hooks/lib/jev/two-stage/finalize.js"
+adapter_invalid() {
+  check "$1: exit 4, ticket-invalid, two lines" "4|error|ticket-invalid|2" "$2|$(kv RESULT)|$(kv REASON)|$(out_lines)"
+  check "$1: no decision record, no fixed file" "0|<absent>" "$(log_count)|$(fixed_csv complexity)"
+}
+jj_fx o-adapter-frozen
+mock_p 0.01
+ts_query complexity complexity-judge "$Q_PROD"
+ADAPTER="$(tk adapter | tr -d '"')"
+check "ticket freezes the adapter as a module path that exists" "yes" "$([ -n "$ADAPTER" ] && [ -f "$ADAPTER" ] && echo yes || echo no)"
+ts_fin '{"entryPatch":{"complexity-judge":{"adapter":"/elsewhere/other-adapter.js"}}}'
+adapter_invalid "registry names another adapter at finalize" "$TS_RC"
+jj_fx o-adapter-missing
+mock_p 0.01
+ts_query complexity complexity-judge "$Q_PROD"
+pb json-set "$(np "$(ticket_file "$TICKET")")" adapter __delete__ > /dev/null
+jj finalize --session "$SID" --ticket "$TICKET"
+adapter_invalid "ticket without an adapter" "$JJ_RC"
+jj_fx o-adapter-nonstring
+mock_p 0.01
+ts_query complexity complexity-judge "$Q_PROD"
+pb json-set "$(np "$(ticket_file "$TICKET")")" adapter '{"path":"x"}' > /dev/null
+jj finalize --session "$SID" --ticket "$TICKET"
+adapter_invalid "ticket whose adapter is not a string" "$JJ_RC"
+for how in finalize sweep; do
+  jj_fx "o-adapter-planted-$how"
+  mock_p 0.01 S2-architecture 0.5
+  ts_query complexity complexity-judge "$Q_PROD"
+  PLANTED="$(np "$FX/cwd")/planted-adapter.js"
+  printf 'require("fs").writeFileSync(%s, "x");\nmodule.exports = {};\n' "\"$(np "$FX/cwd")/adapter-loaded\"" > "$PLANTED"
+  pb json-set "$(np "$(ticket_file "$TICKET")")" adapter "\"$PLANTED\"" > /dev/null
+  if [ "$how" = "finalize" ]; then
+    jj finalize --session "$SID" --ticket "$TICKET"
+    adapter_invalid "ticket pointing at a planted module (finalize)" "$JJ_RC"
+  else
+    sleep 1.1
+    tsp sweep "$SID" 1
+    check "ticket pointing at a planted module (sweep): no record, no fixed file" "0|<absent>" \
+      "$(log_count)|$(fixed_csv complexity)"
+  fi
+  check "planted module ($how): never loaded" "absent" "$([ -e "$FX/cwd/adapter-loaded" ] && echo present || echo absent)"
+done
+case_end
+
 # Shadow on the CLI path (no subagent_type: the CLI owns the record). Jev is asked so its
 # probabilities are recorded, but no key is adopted from it, even at p=0.99 / 0.01.
 case_begin "o-shadow-cli-path" "hooks/lib/jev/two-stage/finalize.js"

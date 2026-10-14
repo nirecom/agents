@@ -207,3 +207,105 @@ unmoved "A re-run after B"
 TICKET="$TB"; sk_fin
 check "B re-run: recorded stdout SETTLE=ok, SKIP=true" "ok|true" "$(kv SETTLE)|$(kv SKIP)"
 case_end
+
+# A skip is authorized only while the stage sources are still the bytes fingerprinted at query
+# time: a source edited, removed or added before finalize settles as source-changed, no skip.
+# source_changed_out <label> <target>
+source_changed_out() {
+  superseded_out "$1"
+  check "$1: one settle record source-changed (owner null), $2 pending" "superseded|source-changed||pending" \
+    "$(sk_settle "$TICKET")|$(sk_status "$2")"
+}
+all_met() { sjq "$1" 'sj ? String(sj.all_conditions_met) : "no-judgment"'; }
+
+case_begin "jj-skip-source-changed" "bin/workflow/jev-judge"
+sk_fx sc-edit detail
+mock_p 0.95; sk_query detail
+printf '# Outline\n\nTwo approaches are open now.\n' > "$FX/plans/$SID-outline.md"
+sk_fin
+source_changed_out "outline edited after the query" detail
+check "outline edited: no skip_judgment written" "0" "$(sk_events detail)"
+sk_fin
+check "outline edited, re-run: same outcome from the done marker, settle record not duplicated" "superseded|false|1" \
+  "$(kv SETTLE)|$(kv SKIP)|$(sk_n_rec "$TICKET" settle)"
+sk_fx sc-vanish detail
+mock_p 0.95; sk_query detail
+rm -f "$FX/plans/$SID-context.md"
+sk_fin
+source_changed_out "context.md removed after the query" detail
+sk_fx sc-appear outline
+mock_p 0.95; sk_query outline
+printf '# Outline\n\nWritten while the judge was out.\n' > "$FX/plans/$SID-outline.md"
+sk_fin
+source_changed_out "outline.md created after the query" outline
+sk_fx sc-same-bytes detail
+mock_p 0.95; sk_query detail
+cp "$FX/plans/$SID-outline.md" "$FX/outline.keep"
+sleep 1.1
+cp "$FX/outline.keep" "$FX/plans/$SID-outline.md"
+sk_fin
+check "control, outline rewritten with the same bytes (newer mtime): SETTLE=ok, SKIP=true, skipped" "ok|true|skipped" \
+  "$(kv SETTLE)|$(kv SKIP)|$(sk_status detail)"
+sk_fx sc-no-skip detail
+mock_p 0.95 "$K1" 0.05; sk_query detail
+printf '# Outline\n\nTwo approaches are open now.\n' > "$FX/plans/$SID-outline.md"
+sk_fin
+check "a judgment that authorizes no skip is recorded whatever the sources: SETTLE=ok, SKIP=false" "ok|false|false|pending" \
+  "$(kv SETTLE)|$(kv SKIP)|$(all_met detail)|$(sk_status detail)"
+case_end
+
+case_begin "jj-skip-source-changed-standing-judgment" "bin/workflow/jev-judge"
+sk_fx sc-standing detail
+mock_p 0.95; sk_query detail
+sq record "$SID" detail "$(sk_conds true true)" jev "$TICKET" > /dev/null
+check "premise: this ticket's all-true judgment stands, detail pending" "true|pending" "$(all_met detail)|$(sk_status detail)"
+printf '# Outline\n\nTwo approaches are open now.\n' > "$FX/plans/$SID-outline.md"
+sk_fin
+source_changed_out "standing judgment, outline edited" detail
+check "standing judgment, outline edited: the judgment is revoked (every condition false)" "false|$(sk_conds false false)" \
+  "$(all_met detail)|$(sk_sj_conds detail)"
+sk_fx sc-own-skip detail
+mock_p 0.95; sk_query detail
+sq record "$SID" detail "$(sk_conds true true)" jev "$TICKET" > /dev/null
+sq mark "$SID" detail skipped > /dev/null
+EV0="$(sk_events detail)"
+printf '# Outline\n\nTwo approaches are open now.\n' > "$FX/plans/$SID-outline.md"
+sk_fin
+check "this ticket already skipped the step: the re-run replays it, sources not re-checked" "0|ok|true|1" \
+  "$JJ_RC|$(kv SETTLE)|$(kv SKIP)|$(grep -c '^REPLAYED=1' "$OUT")"
+check "own skip replayed: judgment not rewritten, detail stays skipped, no settle record" "$EV0|true|skipped|0" \
+  "$(sk_events detail)|$(all_met detail)|$(sk_status detail)|$(sk_n_rec "$TICKET" settle)"
+case_end
+
+# The query-time claim of MS also revokes an older owner's standing all-true judgment while
+# the step is still pending, and does neither when MS already names a newer owner.
+case_begin "jj-skip-owner-query-revokes-standing" "bin/workflow/jev-judge"
+sk_fx qr-pending detail
+mock_p 0.95; sk_query detail; TA="$TICKET"; TA_CREATED="$(sk_created "$TA")"
+sq record "$SID" detail "$(sk_conds true true)" jev "$TA" > /dev/null
+check "premise: A's all-true judgment stands, detail pending" "true|pending" "$(all_met detail)|$(sk_status detail)"
+sleep 0.05
+sk_query detail; TB="$TICKET"
+newer_premise "query revokes"
+check "query B: A's standing judgment revoked, detail pending, MS owner B" "false|pending|\"$TB\"" \
+  "$(all_met detail)|$(sk_status detail)|$(ms_get detail owner_id)"
+sk_fx qr-skipped detail
+mock_p 0.95; sk_query detail; TA="$TICKET"; TA_CREATED="$(sk_created "$TA")"
+sk_fin
+check "premise: A finalized, detail skipped" "true|skipped" "$(kv SKIP)|$(sk_status detail)"
+A_SJ="$(sjq detail 'sj && JSON.stringify(sj)')"
+sleep 0.05
+sk_query detail; TB="$TICKET"
+check "query B after the step was skipped: A's judgment and the skip stand" "$A_SJ|skipped" \
+  "$(sjq detail 'sj && JSON.stringify(sj)')|$(sk_status detail)"
+sk_fx qr-older detail
+mock_p 0.95; sk_query detail; TB="$TICKET"; TB_CREATED="$(sk_created "$TB")"
+sq record "$SID" detail "$(sk_conds true true)" jev "$TB" > /dev/null
+snap
+check "an owner queried earlier than MS: take-owner returns" "TOOK=1" "$(sq take-owner "$SID" detail 0123456789abcdef "$((TB_CREATED - 1))")"
+unmoved "older owner at query time"
+check "older owner at query time: the standing judgment is not revoked" "true" "$(all_met detail)"
+check "an owner queried later than MS: take-owner returns" "TOOK=1" "$(sq take-owner "$SID" detail 0123456789abcdef "$((TB_CREATED + 1))")"
+check "newer owner at query time: MS is its, the standing judgment revoked" "\"0123456789abcdef\"|$((TB_CREATED + 1))|false" \
+  "$(ms_get detail owner_id)|$(ms_get detail owner_created_ms)|$(all_met detail)"
+case_end

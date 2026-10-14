@@ -100,6 +100,13 @@ const CMDS = {
     recordSkipJudgment(args[0], args[1], JSON.parse(args[2]), args[3], { ticket: args[4] });
     out("WROTE=1");
   },
+  // take-owner <sid> <target> <owner-id> <created-ms>: the query-time claim of MS alone, for an
+  // owner whose query time the test chooses (the CLI only ever issues "now").
+  "take-owner"() {
+    const { takeSkipOwnerAtQuery } = load("hooks/lib/jev/two-stage/settle-skip.js");
+    takeSkipOwnerAtQuery(args[0], args[1], { id: args[2], created_ms: Number(args[3]) });
+    out("TOOK=1");
+  },
   // mark <sid> <step> <status>: move a step as the caller would.
   mark() {
     const { markStep } = load(STATE_IO);

@@ -33,7 +33,11 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned so a planted claim never lands in a real home.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
+# shellcheck source=../lib/skip-judgment.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 # Empty fixture settings root: no CONFIRM_* is inherited from the repo's own .env,
 # so every approval-gated branch under test is armed rather than accidentally off.
@@ -99,6 +103,14 @@ action_lines() { printf '%s\n' "$OUT" | grep -c '^ACTION=' || true; }
 # #2460 record-skip-judgment form; a repeat reuses the same ticket (idempotent replay).
 RSJ_O=(--cond so_c1=true --cond so_c2=true --source subagent --ticket 0123456789abcdef)
 RSJ_D=(--cond sd_single_approach=true --cond sd_no_open_decision=true --source jev --ticket fedcba9876543210)
+# The finalized tickets those two forms name (#2460), one per session that uses them.
+ticketed_o() {
+  plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$1" outline 0123456789abcdef '{"so_c1":true,"so_c2":true}'
+}
+ticketed_d() {
+  plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$1" detail fedcba9876543210 \
+    '{"sd_single_approach":true,"sd_no_open_decision":true}' jev
+}
 
 echo "=== C3-1: next-step --advance status matrix through a real subprocess ==="
 # complete
@@ -144,14 +156,14 @@ echo "=== C3-2: ADVANCE_SCOPE on the SIBLING CLIs, --next present and absent ===
 # A15 pins both verdicts for next-step only. The scope line is emitted by the
 # SHARED runAdvance, so a sibling that forgets to forward `next` would still
 # pass every next-step case.
-at_outline c32a
+at_outline c32a; ticketed_o c32a
 run_cli node "$RSJ" --session c32a --target outline "${RSJ_O[@]}" --advance --next
 check "C3-2a: record-skip-judgment --advance --next exits 0" 0 "$RC"
 check_contains "C3-2a: scope is current-step" "ADVANCE_SCOPE=current-step" "$OUT"
 check "C3-2a: exactly one ACTION line" 1 "$(action_lines)"
 
 # Same call WITHOUT --next: no scope line and no ACTION block at all.
-at_outline c32b
+at_outline c32b; ticketed_o c32b
 run_cli node "$RSJ" --session c32b --target outline "${RSJ_O[@]}" --advance
 check "C3-2b: without --next exits 0" 0 "$RC"
 check_not_contains "C3-2b: no ADVANCE_SCOPE line without --next" "ADVANCE_SCOPE=" "$OUT"
@@ -159,7 +171,9 @@ check "C3-2b: no ACTION line without --next" 0 "$(action_lines)"
 
 # not-current-step arm: the session is at outline, so settling `detail` is out of
 # scope and the ACTION block must be withheld even though --next was asked for.
-make_state c32c ""
+# The outline artifact comes first: a detail skip judgment only stands next to one (#2460's
+# advance door refuses a "recorded-verdict:" skip with no standing judgment).
+make_state c32c ""; : > "$PLANS_DIR/c32c-outline.md"; ticketed_d c32c
 run_cli node "$RSJ" --session c32c --target detail "${RSJ_D[@]}" --advance --next
 check "C3-2c: out-of-scope sibling advance still exits 0" 0 "$RC"
 check_contains "C3-2c: the record is still reported" "ADVANCED=detail status=skipped" "$OUT"
@@ -197,7 +211,7 @@ check_contains "C3-3a: the repeat reports already=true" "already=true" "$OUT"
 check "C3-3a: the repeat appended NO second step_status event" "$C33A_N" "$(ev_count c33a outline step_status)"
 
 # record-skip-judgment arm — same statement on a sibling.
-at_outline c33b
+at_outline c33b; ticketed_o c33b
 run_cli node "$RSJ" --session c33b --target outline "${RSJ_O[@]}" --advance
 C33B_N="$(ev_count c33b outline step_status)"
 check "C3-3b: exactly one step_status event after the first call" 1 "$C33B_N"
@@ -249,7 +263,7 @@ check "C3-5: the resolved verdict SURVIVES the repeat" '"confirm"' "$(step_sub c
 
 # Symmetric arm on a sibling: record-skip-judgment reaches the same writer, so
 # the same protection must hold there or the guarantee is next-step-only.
-at_outline c35b
+at_outline c35b; ticketed_o c35b
 run_cli node "$RSJ" --session c35b --target outline "${RSJ_O[@]}" --advance
 run_cli node "$RSV" --session c35b --target outline --verdict confirm --reason "verified against the intent artifact"
 check "C3-5b: the verdict is confirm before the repeat" '"confirm"' "$(step_sub c35b outline skip_verdict.verdict)"

@@ -21,6 +21,7 @@ const { resolveSessionProfile } = require("../../../../hooks/workflow-state/sess
 const {
   recordStepVerdict,
   ADVANCE_ORIGINS,
+  RECORDED_VERDICT_PREFIX,
 } = require("../../../../hooks/workflow-state/record-step-verdict");
 const { formatReviewTestsReopenNotice } = require("../../../../hooks/workflow-state/review-tests-reopen");
 const { isTerminalStep } = require("./steps");
@@ -64,6 +65,21 @@ function resolveCurrentStep(sessionId, opts) {
   return null;
 }
 
+// A skip carrying the recorded-verdict reason rests on the standing skip judgment, so the
+// gate's check of that judgment and the status write share the skip owner lock: a newer
+// query cannot revoke the judgment between the two. Fail-closed when the lock is not taken.
+function recordUnderSkipOwnerLock(sid, opts, record) {
+  const judged = opts.status === "skipped" && (opts.step === "outline" || opts.step === "detail") &&
+    String(opts.skipReason || "").trim().startsWith(RECORDED_VERDICT_PREFIX);
+  if (!judged) return record();
+  try {
+    const { underSkipOwnerLockOrParentHold } = require("../../../../hooks/lib/jev/two-stage/settle-skip");
+    return underSkipOwnerLockOrParentHold(sid, opts.step, record);
+  } catch (e) {
+    return { ok: false, code: 3, message: opts.binary + ": " + opts.step + " skip not recorded — " + e.message };
+  }
+}
+
 // Emits the advance result and, when asked, the next action. Never returns —
 // every path exits the process.
 //
@@ -96,7 +112,7 @@ function runAdvance(opts) {
   if (opts.skipJudgment !== undefined) verdictOpts.skipJudgment = opts.skipJudgment;
   if (opts.skipVerdictSource !== undefined) verdictOpts.skipVerdictSource = opts.skipVerdictSource;
 
-  const res = recordStepVerdict(sid, opts.step, opts.status, verdictOpts);
+  const res = recordUnderSkipOwnerLock(sid, opts, () => recordStepVerdict(sid, opts.step, opts.status, verdictOpts));
   if (!res.ok) {
     // fail-CLOSED on the record side: a failed record never returns a next
     // action, so a caller cannot mistake "not recorded" for "recorded, proceed".

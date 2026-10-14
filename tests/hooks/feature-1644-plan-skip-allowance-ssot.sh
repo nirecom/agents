@@ -37,7 +37,14 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # supervisor-emit append to the developer's real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned so a planted claim never lands in a real home.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
+# shellcheck source=../lib/skip-judgment.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
+# record-skip-judgment only records the answer of a finalized ticket (#2460).
+DETAIL_TID=0123456789abcdef
+DETAIL_CONDS='{"sd_single_approach":true,"sd_no_open_decision":true}'
 
 # Empty agents main root: no CONFIRM_* is inherited from the repo's own .env.
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
@@ -172,9 +179,10 @@ make_state p4b "workflow_init clarify_intent research outline"
 # than the recording (a stale verdict must not authorize a skip), so the artifact
 # has to be in place BEFORE the judgment is written.
 printf '# outline\n' > "$PLANS_DIR/p4b-outline.md"
+plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" p4b detail "$DETAIL_TID" "$DETAIL_CONDS" jev
 run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment" \
   --session p4b --target detail --cond sd_single_approach=true --cond sd_no_open_decision=true \
-  --source jev --ticket 0123456789abcdef >/dev/null 2>&1
+  --source jev --ticket "$DETAIL_TID" >/dev/null 2>&1
 H="$(hook_verdict p4b 'echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: recorded verdict satisfied>>\"')"
 M="$(module_verdict p4b detail)"
 check "P4b: detail with a recorded verdict -- hook says allow" "allow" "$H"
@@ -206,9 +214,10 @@ cli_verdict() {
 # Case 1 — detail WITH a recorded jev verdict.
 make_state p5a "workflow_init clarify_intent research outline"
 printf '# outline\n' > "$PLANS_DIR/p5a-outline.md"
+plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" p5a detail "$DETAIL_TID" "$DETAIL_CONDS" jev
 run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/record-skip-judgment" \
   --session p5a --target detail --cond sd_single_approach=true --cond sd_no_open_decision=true \
-  --source jev --ticket 0123456789abcdef >/dev/null 2>&1
+  --source jev --ticket "$DETAIL_TID" >/dev/null 2>&1
 C="$(cli_verdict p5a detail)"
 check "P5a: detail with a recorded verdict -- the CLI door allows the skip" "true" "$C"
 # ...and the two doors reach the same answer from the same recorded fact.

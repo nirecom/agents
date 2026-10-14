@@ -22,3 +22,15 @@ plant_valid_skip() {
     r.recordSkipJudgment('$sid', '$target', $cond, '$source');
   " 2>/dev/null || true
 }
+
+# plant_finalized_ticket <repo_root> <sid> <target> <ticket> <conds-json> [source] [field=json ...]
+# Plants the finalized cli-ticket claim record-skip-judgment verifies its --ticket/--cond/
+# --source against (#2460). The caller must have exported AGENTS_STATE_DIR to a temp dir and
+# must plant AFTER the session's plan artifacts exist (the claim fingerprints them as they are).
+# field=json overrides one claim field, to plant a claim the CLI must refuse.
+plant_finalized_ticket() {
+  local root="$1" sid="$2" target="$3" ticket="$4" conds="$5" source="${6:-subagent}"
+  shift 5
+  [ "$#" -gt 0 ] && shift
+  node "$root/tests/lib/finalized-ticket.js" "$root" "$sid" "$target" "$ticket" "$conds" "$source" "$@" >/dev/null
+}

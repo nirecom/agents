@@ -29,6 +29,8 @@ expect_rejected() {
 
 echo ""
 echo "=== RV-6 / RV-18: record-skip-judgment new-form CLI ==="
+SD_OK='{"sd_single_approach":true,"sd_no_open_decision":true}'
+ticketed rv6a outline "$T1" '{"so_c1":true,"so_c2":true}' subagent
 rsj --session rv6a --target outline --cond so_c1=true --cond so_c2=true --source subagent --ticket "$T1"
 check "RV-6a: valid outline → exit 0" "0" "$RSJ_RC"
 check_contains "RV-6a: valid outline → RECORDED=outline all_conditions_met=true" \
@@ -49,6 +51,8 @@ expect_rejected "RV-6e: outline with an excess key" 2 rv6e outline -- \
 expect_rejected "RV-6f: detail given the retired sd_c1..sd_c3 keys" 2 rv6f detail -- \
   --session rv6f --target detail --cond sd_c1=true --cond sd_c2=true --cond sd_c3=true --source jev --ticket "$T1"
 
+ticketed rv18 detail "$T1" "$SD_OK" jev
+ticketed rv18f detail "$T1" '{"sd_single_approach":false,"sd_no_open_decision":true}' mixed
 rsj --session rv18 --target detail --cond sd_single_approach=true --cond sd_no_open_decision=true --source jev --ticket "$T1"
 check "RV-18a: valid detail → exit 0" "0" "$RSJ_RC"
 check_contains "RV-18b: valid detail → RECORDED=detail all_conditions_met=true" \
@@ -130,6 +134,7 @@ RV33_BLOCK="$TMPDIR_BASE/wfblock"
 touch "$RV33_BLOCK"
 RV33_BLOCK_N="$(cygpath -m "$RV33_BLOCK" 2>/dev/null || echo "$RV33_BLOCK")"
 RV33_RC=0
+ticketed rv33cli outline "$T1" '{"so_c1":true,"so_c2":true}' jev
 RV33_OUT="$(WORKFLOW_STATE_DIR="$RV33_BLOCK_N" run_with_timeout node "$RECORD_CLI_N" \
   --session rv33cli --target outline --cond so_c1=true --cond so_c2=true --source jev --ticket "$T1" 2>&1)" || RV33_RC=$?
 if [ "$RV33_RC" -ne 0 ]; then pass "RV-33a: write failure → exit non-zero"
@@ -142,6 +147,8 @@ check_contains "RV-33b: stderr contains 'write verification failed'" "write veri
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-34: stale record must not be reported as success ==="
+ticketed rv34cli outline "$T1" '{"so_c1":true,"so_c2":true}' jev
+ticketed rv34cli outline fedcba9876543210 '{"so_c1":true,"so_c2":false}' subagent
 run_with_timeout node "$RECORD_CLI_N" --session rv34cli --target outline \
   --cond so_c1=true --cond so_c2=true --source jev --ticket "$T1" >/dev/null 2>&1 || true
 check_contains "RV-34 setup: the older record exists" '"judgment_source":"jev"' "$(read_skip_judgment_raw rv34cli outline)"
@@ -151,3 +158,4 @@ RV34_OUT="$(WORKFLOW_STATE_DIR="$RV33_BLOCK_N" run_with_timeout node "$RECORD_CL
 if [ "$RV34_RC" -ne 0 ]; then pass "RV-34a: stale record → exit non-zero (no false success)"
 else fail "RV-34a: expected exit non-zero for stale record, got exit 0"; fi
 check_not_contains "RV-34b: stale record → no RECORDED=outline in stdout" "RECORDED=outline" "$RV34_OUT"
+check_contains "RV-34c: the refusal is the write check, not the ticket check" "write verification failed" "$RV34_OUT"

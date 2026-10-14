@@ -144,7 +144,7 @@ function checkSkipAllowance(sessionId, step, opts) {
     // that baseline, so calling isSkipAllowedForCliPath() here is a coordinated redesign.
     // The recorded-verdict reason is the exception: next-step lets a skip carrying it past
     // the pending-verdict gate, so it is admitted only while a recorded skip judgment
-    // stands. No owner lock here — the settle that reaches this gate already holds it.
+    // stands. The owner lock is the caller's: runAdvance holds it across this check and the write.
     case "outline":
     case "detail":
       if (String(opts.skipReason || "").startsWith(RECORDED_VERDICT_PREFIX) && !hasRecordedSkipJudgment(sessionId, step)) {

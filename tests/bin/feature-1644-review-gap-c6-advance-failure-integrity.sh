@@ -32,7 +32,11 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned so a planted claim never lands in a real home.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
+# shellcheck source=../lib/skip-judgment.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
 export AGENTS_MAIN_ROOT="$(nrm "$CONFIG_EMPTY")"
@@ -124,9 +128,15 @@ check_not_contains "C6-1a: no NEXT_SKILL line" "NEXT_SKILL=" "$OUT"
 # record-skip-judgment normalizes its write-verification failure to 2 on the
 # --advance path (it is 1 without --advance — asserted below as the control).
 RSJ_O=(--cond so_c1=true --cond so_c2=true --source subagent --ticket 0123456789abcdef)
+# A finalized ticket (#2460) for each session, so the call reaches the write under test; the
+# ticket check exits 2 as well, hence the diagnostic assertions next to the exit codes.
+for sid in c61rsj c63rsj; do
+  plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$sid" outline 0123456789abcdef '{"so_c1":true,"so_c2":true}'
+done
 run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
   --target outline "${RSJ_O[@]}" --advance --next
 check "C6-1b: record-skip-judgment exits 2" 2 "$RC"
+check_contains "C6-1b: the failure is the write" "write verification failed" "$ERR"
 check "C6-1b: zero ACTION lines" 0 "$(action_lines)"
 check "C6-1b: zero ADVANCED lines" 0 "$(advanced_lines)"
 run_cli env WORKFLOW_STATE_DIR="$BLOCK_N" node "$RSJ" --session c61rsj \
@@ -184,6 +194,7 @@ check "C6-3a: the corrupt file is byte-for-byte unchanged" \
 
 run_cli node "$RSJ" --session c63rsj --target outline "${RSJ_O[@]}" --advance --next
 check "C6-3b: record-skip-judgment exits 2" 2 "$RC"
+check_not_contains "C6-3b: the failure is not the ticket check" "--ticket is not a finalized ticket" "$ERR"
 check "C6-3b: zero ADVANCED lines" 0 "$(advanced_lines)"
 check "C6-3b: the corrupt file is byte-for-byte unchanged" \
   "$C63_BEFORE" "$(file_snapshot "$WORKFLOW_DIR/c63rsj.json")"

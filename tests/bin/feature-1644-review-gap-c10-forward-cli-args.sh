@@ -31,6 +31,8 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR"
 # Pinned as a PAIR (#1799) so supervisor-emit never appends to the real ~/.workflow-plans.
 export WORKFLOW_STATE_DIR="$(nrm "$WORKFLOW_DIR")"
 export WORKFLOW_PLANS_DIR="$(nrm "$PLANS_DIR")"
+# The broker's ticket store (#2460): pinned (and left empty) so no real home is consulted.
+export AGENTS_STATE_DIR="$(nrm "$TMPDIR_BASE/agents-state")"
 unset CLAUDE_CODE_SESSION_ID
 
 CONFIG_EMPTY="$TMPDIR_BASE/cfg-empty"; mkdir -p "$CONFIG_EMPTY"; : > "$CONFIG_EMPTY/.env"
@@ -183,14 +185,21 @@ check_contains "C10-3e: the diagnostic is the --next rule" "--next is only meani
 expect_reject "C10-3f: a flag this CLI does not own" nonzero -- \
   node "$RSJ" --session guard --target outline "${RSJ_OK[@]}" --step research
 # record-skip-judgment does NOT validate the session-id charset up front: a
-# traversal-shaped id is stopped by the write-back verification, so the code is
-# the record-failure code (1 without --advance, 2 with it). CPR-ORTH gap, pinned.
-expect_reject "C10-3g: path-traversal --session is stopped by write-back verification" 1 -- \
+# traversal-shaped id is stopped by the ticket check (#2460) — no store holds a finalized
+# ticket for it — so the code is 2 with or without --advance. CPR-ORTH gap, pinned.
+expect_reject "C10-3g: path-traversal --session is stopped by the ticket check" 2 -- \
   node "$RSJ" --session "../evil" --target outline "${RSJ_OK[@]}"
-check_contains "C10-3g: the diagnostic is the verification failure, not a charset error" \
-  "write verification failed" "$ERR"
-expect_reject "C10-3h: the same id on the --advance path carries the record-failure code" 2 -- \
+check_contains "C10-3g: the diagnostic is the ticket check, not a charset error" \
+  "--ticket is not a finalized ticket of this session and target" "$ERR"
+expect_reject "C10-3h: the same id on the --advance path carries the same code" 2 -- \
   node "$RSJ" --session "../evil" --target outline "${RSJ_OK[@]}" --advance
+check_contains "C10-3h: and the same diagnostic" \
+  "--ticket is not a finalized ticket of this session and target" "$ERR"
+# The ticket check itself writes nothing either, for a well-formed id with no ticket.
+expect_reject "C10-3j: a well-formed session with no finalized ticket" 2 -- \
+  node "$RSJ" --session guard --target outline "${RSJ_OK[@]}" --advance
+check_contains "C10-3j: the diagnostic is the ticket check" \
+  "--ticket is not a finalized ticket of this session and target" "$ERR"
 # The retired --c1/--c2 form is an unknown argument at the #2460 end state.
 expect_reject "C10-3i: the retired --c1/--c2 form" 2 -- \
   node "$RSJ" --session guard --target outline --c1 true --c2 true

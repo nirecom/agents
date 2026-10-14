@@ -126,7 +126,8 @@ TF="$(ticket_file "$TICKET")"
 mv "$TF" "$(dirname "$TF")/$TICKET.claimed-999999"
 sweep_now
 check "claim without write-ahead, sweep: one finalize-absent record" "1|1" "$(n_rec decision)|$(n_absent)"
-check "claim without write-ahead, sweep: downstream untouched" "<absent>|<no-marker>" "$(fixed_csv complexity)|$(owner_view)"
+check "claim without write-ahead, sweep: downstream untouched (marker still at its query state)" \
+  "<absent>|\"$TICKET\"|\"queried\"" "$(fixed_csv complexity)|$(owner_view)"
 jj finalize --session "$SID" --ticket "$TICKET"
 check "after the orphan record: finalize is ticket-missing" "4|ticket-missing" "$JJ_RC|$(kv REASON)"
 case_end
@@ -143,4 +144,75 @@ jj finalize --session "$SID" --ticket "$TICKET"
 check "re-run then sweep then re-run: log does not grow" "$LC1" "$(log_count)"
 verify "double replay" a
 no_secret_leak "l-crash"
+case_end
+
+# The settled value is the merged result only while the stage sources are still the bytes
+# fingerprinted at query time; otherwise it is the fail-safe level. It is decided once.
+stale_out() {
+  check "$1: exit 0, RESULT=ok, SIGNALS_CSV=S0-undecidable, SETTLE=ok" "0|ok|S0-undecidable|ok" \
+    "$JJ_RC|$(kv RESULT)|$(kv SIGNALS_CSV)|$(kv SETTLE)"
+  check "$1: fixed file holds the fail-safe level, marker written" "S0-undecidable|\"$TICKET\"|\"written\"" \
+    "$(fixed_csv complexity)|$(owner_view)"
+  check "$1: one decision, one settle record ok / source-changed" "1|ok|source-changed|" \
+    "$(n_rec decision)|$(lq "$TICKET" 'recs.filter(x=>x.record_type==="settle").map(x=>[x.settle,x.detail,x.owner].join("|")).join(";")')"
+}
+edit_intent() { printf '# Intent\n\nRewrite the report pipeline and its storage format.\n' > "$FX/plans/$SID-intent.md"; }
+
+case_begin "l-source-changed-settles-failsafe" "hooks/lib/jev/two-stage/replay.js"
+jj_fx l-src-edit
+scen_setup jev
+edit_intent
+jj finalize --session "$SID" --ticket "$TICKET"
+stale_out "intent edited after the query"
+check "intent edited: the decision record still holds the judged result" "jev" "$(kv ADOPTED)"
+STALE_OUT="$(norm_out)"
+jj finalize --session "$SID" --ticket "$TICKET"
+check "intent edited, re-run: same stdout from the done marker, log does not grow" "$STALE_OUT|1" \
+  "$(norm_out)|$(n_rec settle)"
+jj_fx l-src-appear
+scen_setup jev
+printf '# Outline\n\nWritten while the judge was out.\n' > "$FX/plans/$SID-outline.md"
+jj finalize --session "$SID" --ticket "$TICKET"
+stale_out "outline.md created after the query"
+jj_fx l-src-vanish
+scen_setup jev
+rm -f "$FX/plans/$SID-context.md"
+jj finalize --session "$SID" --ticket "$TICKET"
+stale_out "context.md removed after the query"
+jj_fx l-src-same
+scen_setup jev
+cp "$FX/plans/$SID-intent.md" "$FX/intent.keep"
+sleep 1.1
+cp "$FX/intent.keep" "$FX/plans/$SID-intent.md"
+jj finalize --session "$SID" --ticket "$TICKET"
+check "control, intent rewritten with the same bytes: the judged result settles, no settle record" \
+  "S2-architecture|ok|S2-architecture|0" "$(kv SIGNALS_CSV)|$(kv SETTLE)|$(fixed_csv complexity)|$(n_rec settle)"
+case_end
+
+case_begin "l-source-changed-decided-once" "hooks/lib/jev/two-stage/replay.js"
+jj_fx l-src-late-edit
+scen_setup jev
+ts_fin '{"crashAt":"after-owner-writing"}'
+check "fresh sources: stopped inside the settle" "99" "$TS_RC"
+edit_intent
+jj finalize --session "$SID" --ticket "$TICKET"
+check "sources edited after the value was decided: the re-run still settles the judged result" \
+  "0|S2-architecture|ok|S2-architecture|0" "$JJ_RC|$(kv SIGNALS_CSV)|$(kv SETTLE)|$(fixed_csv complexity)|$(n_rec settle)"
+jj_fx l-src-late-restore
+scen_setup jev
+cp "$FX/plans/$SID-intent.md" "$FX/intent.keep"
+edit_intent
+ts_fin '{"crashAt":"after-owner-writing"}'
+check "edited sources: stopped inside the settle" "99" "$TS_RC"
+cp "$FX/intent.keep" "$FX/plans/$SID-intent.md"
+jj finalize --session "$SID" --ticket "$TICKET"
+stale_out "sources restored after the fail-safe was decided"
+jj_fx l-src-sweep
+scen_setup jev
+edit_intent
+ts_fin '{"crashAt":"after-append"}'
+sweep_now
+check "edited sources, sweep replay: fail-safe level, one settle record source-changed" \
+  "S0-undecidable|ok|source-changed|" \
+  "$(fixed_csv complexity)|$(lq "$TICKET" 'recs.filter(x=>x.record_type==="settle").map(x=>[x.settle,x.detail,x.owner].join("|")).join(";")')"
 case_end

@@ -136,6 +136,17 @@ function underSkipOwnerLock(sid, target, fn) {
   return underLock(sid, target, () => fn());
 }
 
+// underSkipOwnerLock for a caller that settleSkip may itself have spawned: when this
+// process's parent holds the lock (and waits for this process), fn() runs under that hold.
+function underSkipOwnerLockOrParentHold(sid, target, fn) {
+  let holder = null;
+  try {
+    holder = fs.readFileSync(files(sid, target).lock, "utf8").trim();
+  } catch (_e) { /* no lock held */ }
+  if (holder !== null && holder === String(process.ppid)) return fn();
+  return underLock(sid, target, () => fn());
+}
+
 function readSkipOwner(sid, target) {
   try {
     return readVersioned(controlPath(sid, `${target}-skip-owner.json`), SKIP_OWNER_VERSION);
@@ -146,4 +157,5 @@ function readSkipOwner(sid, target) {
 
 module.exports = {
   SKIP_OWNER_VERSION, takeSkipOwnerAtQuery, settleSkip, failsafeSkip, readSkipOwner, underSkipOwnerLock,
+  underSkipOwnerLockOrParentHold,
 };

@@ -14,8 +14,13 @@ T_X="fedcba9876543210"
 # line_of <prefix>: the 1-based line number of the first $OUT line starting with <prefix> (0 if none).
 line_of() { local n; n="$(tr -d '\r' < "$OUT" | grep -n "^$1" | head -1 | cut -d: -f1)"; echo "${n:-0}"; }
 # rsj_new <ticket> <K1val> <K2val> [extra...]: the new-form call with --advance for detail.
+# The CLI only records what a finalized ticket of this session answered, so the claim for
+# <ticket> carrying these values is planted first (once per fixture).
 rsj_new() {
   local t="$1" a="$2" b="$3"; shift 3
+  if [ -z "$(find "$JEVDIR" -name "$t.claimed-*" -type f 2>/dev/null | head -1)" ]; then
+    node "$REPO_N/tests/lib/finalized-ticket.js" "$REPO_N" "$SID" detail "$t" "$(sk_conds "$a" "$b")" jev > /dev/null
+  fi
   rsj --session "$SID" --target detail --cond "$K1=$a" --cond "$K2=$b" --source jev --ticket "$t" --advance "$@"
 }
 # seed <fixture> <K1val> <K2val> <ticket>: a judgment written without advance (probe record).

@@ -50,6 +50,22 @@ mkdir -p "$PLANS_GLOBAL_DIR"
 PLANS_GLOBAL_DIR_N="$(cygpath -m "$PLANS_GLOBAL_DIR" 2>/dev/null || echo "$PLANS_GLOBAL_DIR")"
 export WORKFLOW_PLANS_DIR="$PLANS_GLOBAL_DIR_N"
 
+# The broker's ticket store (#2460): record-skip-judgment only accepts a ticket finalized
+# there. Pinned so a planted claim never lands in a real home.
+AGENTS_STATE_DIR="$(cygpath -m "$TMPDIR_BASE/agents-state" 2>/dev/null || echo "$TMPDIR_BASE/agents-state")"
+export AGENTS_STATE_DIR
+# ticketed <sid> <target> <ticket> <conds-json> <source> — plant after the plan artifacts exist.
+ticketed() { plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$@"; }
+# conds_json "--cond a=true --cond b=false" → {"a":true,"b":false}
+conds_json() {
+  local out="" w
+  for w in $1; do
+    [ "$w" = "--cond" ] && continue
+    out="$out${out:+,}\"${w%%=*}\":${w#*=}"
+  done
+  printf '{%s}' "$out"
+}
+
 # Empty agents main root so the gate hook's load-env.js finds no .env — CONFIRM_* env
 # vars then reflect only what the test explicitly sets (load-env.js treats the
 # parent repo's .env CONFIRM_DETAIL=off as authoritative otherwise). Mirrors the

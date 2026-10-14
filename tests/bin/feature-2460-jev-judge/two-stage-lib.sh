@@ -85,9 +85,22 @@ snap_state() {
   v="$(snap_header | grep -oE "(^|[^a-z])$1[\"']? *[:=] *(full|truncated|absent)" | head -1 | grep -oE '(full|truncated|absent)$')"
   printf '%s' "${v:-<none>}"
 }
-# snap_sources: the copy paths listed under the header's sources, '/'-separated, sorted.
+# snap_source_names: the entries listed under the header's "sources:" line, as written, sorted.
+snap_source_names() {
+  snap_header | tr '\\' '/' | sed -n '/^sources:[[:space:]]*$/,/^sources_unavailable/p' | sed '1d;$d' | sed '/^[[:space:]]*$/d' | sort
+}
+# snap_sources: those entries as paths, '/'-separated, sorted. The header names a copy by its
+# file name only, so a bare name is resolved against jev-sources/<ticket>; an entry that
+# already carries a directory is printed as written.
 snap_sources() {
-  snap_header | tr '\\' '/' | grep -oE '([A-Za-z]:)?/[^[:space:]"]*jev-sources/[^[:space:]"]*' | sort
+  local d n; d="$(copies_dir)"
+  [ -n "$d" ] && d="$(np "$d")"
+  snap_source_names | while IFS= read -r n; do
+    case "$n" in
+      */*) printf '%s\n' "$n" ;;
+      *) if [ -n "$d" ]; then printf '%s/%s\n' "$d" "$n"; else printf '%s\n' "$n"; fi ;;
+    esac
+  done | sort
 }
 # snap_any_path_to <dir>: count of header lines naming a path inside <dir>.
 snap_any_path_to() { snap_header | tr '\\' '/' | grep -cF "$1"; }
