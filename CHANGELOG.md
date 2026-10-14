@@ -755,3 +755,7 @@ Changes: Workflow release is now explicit steps (push branch, user verification,
 ### FEATURE: PR #2653 (2026-10-14)
 Background: feat(#2460): make Jev the first judge for complexity and the outline/detail skip
 Changes: Task complexity and the outline/detail skip decision are judged by Jev first, with a subagent consulted only for the parts Jev is not confident about. Planning stages are no longer skipped automatically on zero signals; every skip is a judged decision.
+
+### FEATURE: PR #2665 (2026-10-14)
+Background: fix(#2654): read closes_issues from intent.md on every call instead of a write-once session cache
+Changes: Narrowing a session's `## Issues` in intent.md now takes effect immediately: the session's closing-issue list is read from intent.md on every use instead of a cached copy, so issues removed from intent.md no longer linger in the workflow step list, the empty-issues gate, or the final report.
