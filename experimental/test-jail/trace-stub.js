@@ -5,9 +5,8 @@ const fs = require("fs");
 const out = process.env.TRACE_STUB_OUT;
 // The four current root names (docs/architecture/claude-code/root-names.md); run-jailed.sh hands
 // the retired ones in TRACE_STUB_NAMES. Exact names only: a pattern would record unrelated
-// settings. Built from stems because the names are only reported here, never read as roots, and
-// bin/check-root-names allows this directory to spell just two of them.
-const ROOT_NAMES = ["AGENTS_MAIN", "SCRIPT_CHECKOUT", "TARGET_MAIN", "TARGET_CHECKOUT"].map((stem) => stem + "_ROOT");
+// settings. The names are only reported here, never read as roots.
+const ROOT_NAMES = ["AGENTS_MAIN_ROOT", "SCRIPT_CHECKOUT_ROOT", "TARGET_MAIN_ROOT", "TARGET_CHECKOUT_ROOT"];
 const traced = new Set([...ROOT_NAMES, ...(process.env.TRACE_STUB_NAMES || "").split(/\s+/).filter(Boolean)]);
 const lines = [
   "=== decoy stub reached: " + __filename,

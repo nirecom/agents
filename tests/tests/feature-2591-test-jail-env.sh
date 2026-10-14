@@ -79,8 +79,7 @@ case_end
 
 case_begin "trace-stub-filters-by-exact-name" "experimental/test-jail/trace-stub.js"
 # The four root names are given to the child only so the stub can be seen to keep them.
-ROOT4=()
-for stem in AGENTS_MAIN SCRIPT_CHECKOUT TARGET_MAIN TARGET_CHECKOUT; do ROOT4+=("${stem}_ROOT"); done
+ROOT4=(AGENTS_MAIN_ROOT SCRIPT_CHECKOUT_ROOT TARGET_MAIN_ROOT TARGET_CHECKOUT_ROOT)
 STUB="$(np "$JT_DIR/trace-stub.js")"
 TRACE="$TMP_ROOT/trace.txt"
 # trace_run <names-value> — one stub run, called directly (never inside $(...), which would lose
