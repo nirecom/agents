@@ -213,7 +213,7 @@ function stopReason(missing) {
   return "[confirm-plan] plan-link: this turn wrote the " + missing.join(", ") +
     " plan but its last text block does not carry the plan-link line (the URL when one exists, otherwise the" +
     " local path) — run " + PLAN_LINK_COMMAND + ", end the final body text of the turn with its output as-is" +
-    " and close the turn; the CONFIRM echo comes in the turn after the user's reply. (Hook: stop-confirm-plan-guard.js)";
+    " and close the turn on that line; the next step is prompted after it. (Hook: stop-confirm-plan-guard.js)";
 }
 
 // checkPlanUrlInTurn({ stages, turnText, resolve, reasonFor }) -> { block, reason? }.

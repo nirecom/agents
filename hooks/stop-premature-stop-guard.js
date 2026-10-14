@@ -40,6 +40,7 @@ const C4_EXEMPTIONS = [
   { id: "step-in-flight",    phase: "session", test: (c, d) => !!d.anyStepInFlight(c.sid) },
   { id: "delegated-reason",  phase: "next-step-output",
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
+  // #2277/#2650: a presentation turn with no CONFIRM echo from its continuation, or after a Deny, waits for approval.
   { id: "awaiting-plan-approval", phase: "next-step-output",
     test: (c, _d) => typeof c.reason === "string" && c.reason.startsWith("awaiting-plan-approval:") },
   // #2527 4-4: the human merges the PR on the web; the background poller resumes the session.

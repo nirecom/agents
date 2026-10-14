@@ -73,7 +73,7 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 ### presentation turn
 
 - **Definition**: The turn in which the model presents a plan (intent, outline, or detail) and ends with its plan-link line.
-  The `CONFIRM_<STAGE>` echo belongs to a later turn, after the user replies.
+  The `CONFIRM_<STAGE>` echo follows in the same turn when the Stop hook prompts for it, or else after the user replies.
 - **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md)
 
 ### RTK
