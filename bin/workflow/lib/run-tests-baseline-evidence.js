@@ -2,8 +2,9 @@
 // run-tests-baseline-evidence.js — the state side of bin/run-tests-baseline (#2431).
 // `failing` hands the hook-recorded failing list to the CLI; `record` completes
 // run_tests only when every failing path was classified as pre-existing at the
-// merge base. The check and the write share ONE appendEvents builder so no other
-// run or reset can slip in between (observed evidence, Class O; not markStep).
+// merge base; `accept` completes it on the user's grant (#2517). Each check and its
+// write share ONE appendEvents builder so no other run or reset can slip in between
+// (observed evidence, Class O; not markStep).
 
 const fs = require("fs");
 const path = require("path");
@@ -14,13 +15,29 @@ const ORIGIN = "run-tests-baseline-evidence";
 const FAILING_OUTCOMES = ["fail", "timeout", "runner-error"];
 const PREEXISTING_CLASSES = ["preexisting", "preexisting-inherited"];
 const VALID_CLASSES = PREEXISTING_CLASSES.concat(["broken", "undetermined"]);
+const NO_LIST = "failing_tests is not a non-empty list";
 
 // Exit codes: 0 completed / listed, 1 classification does not authorize
-// completion, 2 usage error, 3 state is not in the expected shape (or moved).
-const EXIT = { OK: 0, UNMET: 1, USAGE: 2, STATE: 3 };
+// completion, 2 usage error, 3 state is not in the expected shape (or moved),
+// 6 `accept` found no user grant (baseline_accept) to act on.
+const EXIT = { OK: 0, UNMET: 1, USAGE: 2, STATE: 3, ABSENT: 6 };
 
 function stateIo() {
   return require(STATE_IO);
+}
+
+function acceptForm() {
+  return require(path.join(__dirname, "..", "..", "..", "hooks", "workflow-run-tests", "demotion"))
+    .BASELINE_ACCEPT_SENTINEL_FORM;
+}
+
+function acceptBasis() {
+  return require(path.join(__dirname, "..", "..", "..", "hooks", "lib", "run-tests-completion-note"))
+    .BASELINE_ACCEPT_BASIS;
+}
+
+function hasPositiveUnrunnable(entry) {
+  return Number.isInteger(entry.unrunnable_count) && entry.unrunnable_count > 0;
 }
 
 function runTestsEntry(steps) {
@@ -33,9 +50,22 @@ function failingPrecondition(entry) {
   if (entry.status !== "pending") return `run_tests status is ${entry.status}, not pending`;
   if (!FAILING_OUTCOMES.includes(entry.run_outcome)) return "run_outcome is not a failing value";
   const ft = entry.failing_tests;
-  if (!Array.isArray(ft) || ft.length === 0) return "failing_tests is not a non-empty list";
+  if (!Array.isArray(ft) || ft.length === 0) return NO_LIST;
   if (!ft.every((p) => typeof p === "string" && p !== "")) return "failing_tests holds a non-path entry";
   return null;
+}
+
+// A list-less failing run is grantable (kind failing-list-unrecorded): `failing` names the sentinel.
+function isListless(entry) {
+  const ft = entry.failing_tests;
+  return ft === null || ft === undefined || (Array.isArray(ft) && ft.length === 0);
+}
+
+function listlessHint(sessionId, entry, pre) {
+  if (pre !== NO_LIST || hasPositiveUnrunnable(entry) || !isListless(entry)) return "";
+  if (dispatchPrecondition(sessionId, entry) !== null) return "";
+  return `\nOnly if the user confirmed these failures are pre-existing, accept with ${acceptForm()}; ` +
+    "with no failing list a broken test may be among them.";
 }
 
 function settlement() {
@@ -62,8 +92,9 @@ function failing(sessionId) {
   } catch (e) {
     return { code: EXIT.STATE, stderr: `cannot read state: ${e.message}` };
   }
-  const why = failingPrecondition(entry) || dispatchPrecondition(sessionId, entry);
-  if (why !== null) return { code: EXIT.STATE, stderr: why };
+  const pre = failingPrecondition(entry);
+  const why = pre || dispatchPrecondition(sessionId, entry);
+  if (why !== null) return { code: EXIT.STATE, stderr: why + listlessHint(sessionId, entry, pre) };
   const seq = entry.updated_seq;
   if (!Number.isInteger(seq)) return { code: EXIT.STATE, stderr: "run_tests has no updated_seq" };
   return { code: EXIT.OK, stdout: [`SEQ=${seq}`].concat(entry.failing_tests).join("\n") + "\n" };
@@ -118,6 +149,10 @@ function record(sessionId, seq, entries, base) {
     if (notPre.length > 0) {
       verdict.code = EXIT.UNMET;
       verdict.reason = `${notPre.length} failing test(s) are not pre-existing at the merge base`;
+      if (notPre.every((e) => e.class === "undetermined") && entry.unrunnable_count === 0) {
+        verdict.reason += `\nOnly if the user confirmed the undetermined tests are pre-existing, accept with ${acceptForm()} ` +
+          "and re-run bin/run-tests-baseline.";
+      }
       return [classification];
     }
     // A selected test that never ran (UNRUNNABLE) proves nothing about itself, so the step stays
@@ -137,6 +172,74 @@ function record(sessionId, seq, entries, base) {
       classification,
       annotation("run_outcome", "pass"),
       annotation("completion_basis", "baseline-preexisting"),
+      { kind: "step_status", step: "run_tests", status: "complete", provenance: "observed", origin: ORIGIN },
+    ];
+  });
+  return verdict;
+}
+
+// The grant kind the entry supports now, or null. Mirrors the handler's kinds; this one decides.
+function grantKind(entry) {
+  if (isListless(entry)) return "failing-list-unrecorded";
+  if (failingPrecondition(entry) !== null || entry.unrunnable_count !== 0) return null;
+  const cls = entry.baseline_classification;
+  if (!cls || !Array.isArray(cls.entries)) return null;
+  if (!coverStatus(entry.failing_tests, cls.entries).covered) return null;
+  const notPre = cls.entries.filter((e) => !PREEXISTING_CLASSES.includes(e.class));
+  if (notPre.length === 0 || !notPre.every((e) => e.class === "undetermined")) return null;
+  return "undetermined";
+}
+
+function sameSource(a, b) {
+  const none = (s) => s === null || s === undefined;
+  if (none(a) || none(b)) return none(a) && none(b);
+  return a.stem === b.stem && a.outcome_sha256 === b.outcome_sha256;
+}
+
+// Why the grant cannot complete `entry`: { code, reason }, or null when it can (#2517 Steps 4).
+function acceptRefusal(sessionId, entry, grant) {
+  const unmet = (reason) => ({ code: EXIT.UNMET, reason });
+  if (grant.run_seq !== entry.updated_seq) return unmet("run_tests changed after the grant; accept again");
+  if (!sameSource(grant.outcome_source, entry.outcome_source)) {
+    return unmet("the outcome behind the run changed after the grant; accept again");
+  }
+  if (entry.status !== "pending" || !FAILING_OUTCOMES.includes(entry.run_outcome)) {
+    return { code: EXIT.STATE, reason: `run_tests is ${entry.status} with run_outcome=${entry.run_outcome}, not a pending failing run` };
+  }
+  if (entry.run_outcome !== grant.accepted_run_outcome) return unmet("run_outcome changed after the grant; accept again");
+  const dispatchWhy = dispatchPrecondition(sessionId, entry);
+  if (dispatchWhy !== null) return { code: EXIT.STATE, reason: dispatchWhy };
+  if (hasPositiveUnrunnable(entry)) {
+    return unmet(`${entry.unrunnable_count} selected test(s) were UNRUNNABLE; use the UNRUNNABLE_ACCEPTED path instead`);
+  }
+  const kind = grantKind(entry);
+  if (kind === null || kind !== grant.kind) {
+    return unmet(`the run no longer supports the grant (state kind=${kind || "none"}, grant kind=${grant.kind})`);
+  }
+  return null;
+}
+
+// Completes run_tests on the user's grant. The grant is never rewritten: it keeps the kind,
+// the reason and the accepted run_outcome for the disclosure (CPR-SSOT).
+function accept(sessionId) {
+  const verdict = { code: EXIT.STATE, reason: "state was not examined", kind: null };
+  stateIo().appendEvents(sessionId, (_events, current) => {
+    const entry = runTestsEntry(current && current.steps);
+    const grant = entry && entry.baseline_accept;
+    if (!grant || typeof grant !== "object") {
+      verdict.code = EXIT.ABSENT;
+      verdict.reason = null;
+      return [];
+    }
+    const refusal = acceptRefusal(sessionId, entry, grant);
+    if (refusal !== null) {
+      Object.assign(verdict, refusal);
+      return [];
+    }
+    Object.assign(verdict, { code: EXIT.OK, reason: null, kind: grant.kind });
+    return [
+      annotation("run_outcome", "pass"),
+      annotation("completion_basis", acceptBasis()),
       { kind: "step_status", step: "run_tests", status: "complete", provenance: "observed", origin: ORIGIN },
     ];
   });
@@ -165,4 +268,5 @@ module.exports = {
   coverStatus,
   record,
   recordFromFile,
+  accept,
 };

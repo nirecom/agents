@@ -9,12 +9,14 @@ const { isContractTrusted, resolveRunOutcome } = require("./outcome");
 const { demotionReason, demotionMessage } = require("./demotion");
 const { stampTestFailureRisk } = require("./test-failure-risk");
 
-// Evidence that belongs to ONE observed run: baseline (#2431) and an UNRUNNABLE accept
-// (#2501 D5-7). Any new run clears it, so a later state never inherits an older verdict.
+// Evidence that belongs to ONE observed run: baseline (#2431), an UNRUNNABLE accept
+// (#2501 D5-7) and a baseline accept grant (#2517). Any new run clears it, so a later state
+// never inherits an older verdict.
 const RUN_TOMBSTONES = {
   baseline_classification: null,
   completion_basis: null,
   unrunnable_accept_reason: null,
+  baseline_accept: null,
 };
 
 // outcome_source names the outcome file a record came from (null on stdout);

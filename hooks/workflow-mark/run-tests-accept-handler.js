@@ -11,7 +11,7 @@ const { RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ, RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKS
   require("../lib/sentinel-patterns");
 const { appendEvents } = require("../workflow-state/state-io");
 const { sanitizeLine } = require("../lib/output-sanitize");
-const { ACCEPT_BASIS } = require("../lib/run-tests-unrunnable-note");
+const { UNRUNNABLE_ACCEPT_BASIS } = require("../lib/run-tests-completion-note");
 
 const LABEL = "RUN_TESTS_UNRUNNABLE_ACCEPTED";
 const ORIGIN = "workflow-mark-run-tests-accept";
@@ -48,7 +48,7 @@ function accept(sessionId, reason) {
     verdict.entry = entry;
     if (verdict.why !== null) return [];
     return [
-      annotation("completion_basis", ACCEPT_BASIS),
+      annotation("completion_basis", UNRUNNABLE_ACCEPT_BASIS),
       annotation("unrunnable_accept_reason", reason),
       { kind: "step_status", step: "run_tests", status: "complete", provenance: "declared", origin: ORIGIN },
     ];
