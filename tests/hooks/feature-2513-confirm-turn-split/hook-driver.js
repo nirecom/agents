@@ -86,6 +86,9 @@ function expectDeny(label, r, s, stage) {
   ok(label + " — reason names the stage and bin/plan-link", reason.includes(stage) && reason.includes("bin/plan-link"), reason);
   ok(label + " — reason carries no URL and no plan path",
     !/https?:\/\//.test(reason) && !reason.includes(s.fwd) && !reason.includes(s.plan) && !reason.includes(s.sid), reason);
+  // #2650: the deny ends the turn; it never invites a same-turn retry.
+  ok(label + " — reason says not to echo again in this turn", reason.includes("Do not echo it again in this turn"), reason);
+  ok(label + " — reason never invites a same-turn retry", !/retry|try again/i.test(reason), reason);
 }
 // A passing output is empty stdout or parseable JSON with no top-level decision:block and no deny.
 function expectNoBlock(label, r) {

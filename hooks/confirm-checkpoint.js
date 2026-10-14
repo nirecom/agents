@@ -6,7 +6,8 @@
 // plan-link line for the model (hooks/lib/plan-link.js); always exit 0, never "allow".
 // #2513: the echo is denied (at most twice in a row per stage) when the previous turn did not
 // end on the stage's plan-link line, no user prompt came in between, or this turn rewrote the
-// plan. Anything unreadable fails open to the plain dialog.
+// plan. #2650: the Stop hook's continuation mark also admits the echo of the same turn.
+// Anything unreadable fails open to the plain dialog.
 "use strict";
 
 const fs = require("fs");
@@ -16,7 +17,7 @@ const path = require("path");
 // The CONFIRM patterns are unanchored, so the joined command text finds the sentinel in any element.
 const { isCommandTool, commandTextOf } = require("./lib/tool-command-text");
 const { parseSentinel } = require("./lib/confirm-sentinel");
-const { peekTurnMarkers } = require("./lib/turn-marker");
+const { peekTurnMarkers, takeContinuationMark } = require("./lib/turn-marker");
 const { resolveSessionId } = require("./workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { loadDefaultEnv } = require("./lib/load-env");
@@ -71,28 +72,33 @@ function planLinkOutput(stage, absPath, plansDir) {
   return { link, url: link.url || null, additionalContext: PL.renderModelContext([entry], { when: "confirm" }) };
 }
 
-// isDenyCandidate(absPath, link, transcriptPath) -> true / false, or null to fail open.
-function isDenyCandidate(absPath, link, transcriptPath) {
+// #2650 same-turn path: the Stop hook's mark is anchored in this turn, only this echo followed
+// it, and the mark still binds the approval target (path, link shown, sha) the dialog shows.
+function sameTurnAccepted(turns, absPath, link, ctx) {
+  const { sid, stage, toolUseId, taken } = ctx;
+  if (!taken || !taken.ok) return false;
+  const CC = require("./lib/confirm-continuation");
+  if (!CC.sameTurnContinuation(turns.currentTurnEntries, taken.mark, toolUseId)) return false;
+  if (!CC.samePath(absPath, CC.approvalArtifactPath(sid, stage))) return false;
+  const { computeArtifactSha } = require("./workflow-state/completion-approval");
+  const { stepForSuffix } = require("./workflow-state/plan-stage-table");
+  return CC.markBindsArtifact(taken.mark, { absPath, link, sha: computeArtifactSha(sid, stepForSuffix(stage)) });
+}
+
+// isDenyCandidate(absPath, link, transcriptPath, ctx) -> true / false, or null to fail open.
+function isDenyCandidate(absPath, link, transcriptPath, ctx) {
   const TC = require("./lib/plan-link-turn-check");
   if (TC.shown(link, "") === null) return null;
   const turns = require("./lib/transcript-reader").readPreviousTurn({ transcriptPath });
   if (!turns.readable) return null;
+  if (sameTurnAccepted(turns, absPath, link, ctx)) return false;
   if (!turns.hasPriorPrompt) return true;
   if (TC.shown(link, TC.lastTextBlockOf(turns.prevTurnEntries) || "") === false) return true;
   return TC.currentTurnWritesStage(turns.currentTurnEntries, absPath);
 }
 
-// The reason names only the stage and the plan-link command — never a URL, a path or the sid.
-function denyReason(stage) {
-  const cmd = require("./lib/plan-link").PLAN_LINK_COMMAND.replace("<stage>", stage);
-  return `[confirm-checkpoint] CONFIRM_${stage.toUpperCase()} denied: the ${stage} plan was not presented ` +
-    `with its plan-link line in the previous turn. Run ${cmd}, end the last text block of a turn with its ` +
-    "output as-is and close the turn, then echo the CONFIRM in the turn after the user's reply " +
-    "(without rewriting the plan in that turn).";
-}
-
 function emitDeny(stage) {
-  const reason = denyReason(stage);
+  const reason = require("./lib/confirm-continuation").sameTurnDenyReason(stage);
   process.stdout.write(JSON.stringify({
     decision: "block",
     reason,
@@ -113,10 +119,12 @@ function recordCapFinding(sid, stage) {
 }
 
 // judge(...) -> "deny" | "cap" | "pass". Counter state decides between deny and the capped pass.
-function judge(sid, stage, absPath, link, transcriptPath) {
+function judge(sid, stage, absPath, link, transcriptPath, ctx) {
   const counter = require("./lib/confirm-deny-counter");
   let candidate = null;
-  try { candidate = isDenyCandidate(absPath, link, transcriptPath); } catch (_) { candidate = null; }
+  try {
+    candidate = isDenyCandidate(absPath, link, transcriptPath, Object.assign({ sid, stage }, ctx));
+  } catch (_) { candidate = null; }
   if (candidate === null) return "pass";
   if (!candidate) {
     counter.reset(sid, stage);
@@ -128,24 +136,6 @@ function judge(sid, stage, absPath, link, transcriptPath) {
   recordCapFinding(sid, stage);
   counter.reset(sid, stage);
   return "cap";
-}
-
-function confirmOffFor(stage) {
-  const flagName = `CONFIRM_${stage.toUpperCase()}`;
-  const rawFlag = process.env[flagName];
-  return { flagName, off: rawFlag != null && rawFlag.toLowerCase().trim() === "off" };
-}
-
-// offWaivable from the stage table: intent has no off waiver (#2277).
-function offWaivable(stage) {
-  try {
-    const { rowFor, stepForSuffix } = require("./workflow-state/plan-stage-table");
-    const row = rowFor(stepForSuffix(stage));
-    return !row || row.offWaivable;
-  } catch (_) {
-    // An unloadable table must not open an off waiver for intent (#2277); fail closed there.
-    return stage !== "intent";
-  }
 }
 
 function main() {
@@ -170,17 +160,23 @@ function main() {
 
   const absPath = resolveArtifact(stage, sid, plansDir);
 
-  // CONFIRM_<STAGE>=off read directly from env — works even when absPath is null.
-  const { flagName, off } = confirmOffFor(stage);
-  if (off && offWaivable(stage)) {
-    process.stdout.write(JSON.stringify({ systemMessage: `[confirm-skipped: ${flagName}=off]` }));
+  // The continuation mark is one-shot: consumed here, before any early exit, whatever follows.
+  let taken = { ok: false, reason: "absent" };
+  try { if (sid) taken = takeContinuationMark(sid, stage); } catch (_) { /* fail-open */ }
+
+  // The shared plan gate (#2650): ERROR shows the dialog, like ON; intent has no off waiver.
+  let gate = "ERROR";
+  try { gate = require("./lib/confirm-gate/plan-gate").planGateState(stage); } catch (_) { /* dialog */ }
+  if (gate === "OFF") {
+    process.stdout.write(JSON.stringify({ systemMessage: `[confirm-skipped: CONFIRM_${stage.toUpperCase()}=off]` }));
     process.exit(0);
   }
 
   let link = null;
   try { link = planLinkOutput(stage, absPath, plansDir); } catch (_) { /* fail-open: the local path is shown */ }
 
-  const verdict = sid && link ? judge(sid, stage, absPath, link.link, input.transcript_path) : "pass";
+  const ctx = { toolUseId: input.tool_use_id, taken };
+  const verdict = sid && link ? judge(sid, stage, absPath, link.link, input.transcript_path, ctx) : "pass";
   if (verdict === "deny") emitDeny(stage);
 
   const capNote = verdict === "cap"

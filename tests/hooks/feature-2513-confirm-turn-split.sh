@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-confirm-turn-split.sh
 # Tests: hooks/confirm-checkpoint.js, hooks/lib/confirm-sentinel.js, hooks/lib/confirm-deny-counter.js
-# Tags: confirm-checkpoint, confirm-sentinel, turn-split, plan-link, deny-cap, fail-open, pretooluse, TL2, scope:issue-specific
+# Tags: confirm-checkpoint, confirm-sentinel, turn-split, plan-link, deny-cap, fail-open, pretooluse, TL2, scope:issue-specific, same-turn-continuation
 # #2513: a CONFIRM_<STAGE> echo is denied unless the previous turn ended its last text block on
 # the stage's plan-link line, a real user prompt lies in between, and this turn did not rewrite
 # the plan. Two denies in a row, then the third passes with a supervisor finding; fail-open on
@@ -125,6 +125,56 @@ case_end
 
 case_begin "confirm-off-per-stage" "hooks/confirm-checkpoint.js"
 cts_run env
+case_end
+
+# #2650 C1-C13: the same-turn continuation path (a Stop-hook continuation mark lets the echo
+# pass in the plan's own turn exactly once). Driver: samturn-driver.js.
+SAMTURN="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-confirm-turn-split/samturn-driver.js"
+cts_samturn() {
+  cts_report "$(run_with_timeout 120 node "$SAMTURN" "$1" 2>&1 || printf 'FAIL|samturn %s|exit=%s\n' "$1" "$?")"
+}
+
+case_begin "same-turn-continuation-intent" "hooks/confirm-checkpoint.js"
+cts_samturn intent
+case_end
+
+case_begin "same-turn-continuation-outline" "hooks/confirm-checkpoint.js"
+cts_samturn outline
+case_end
+
+case_begin "same-turn-continuation-detail" "hooks/confirm-checkpoint.js"
+cts_samturn detail
+case_end
+
+# #2650 one-run fallback: Stop blocks + mark -> continuation without the echo -> active Stop passes
+# -> the user replies -> the echo is judged by the two-turn path. Driver: fallback-sequence-driver.js.
+FALLBACK="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-confirm-turn-split/fallback-sequence-driver.js"
+cts_fallback() {
+  cts_report "$(run_with_timeout 120 node "$FALLBACK" "$1" "$2" 2>&1 || printf 'FAIL|fallback %s %s|exit=%s\n' "$1" "$2" "$?")"
+}
+
+case_begin "continuation-without-echo-falls-back-intent" "hooks/confirm-checkpoint.js"
+cts_fallback intent ends-on-link
+case_end
+
+case_begin "continuation-without-echo-falls-back-outline" "hooks/confirm-checkpoint.js"
+cts_fallback outline ends-on-link
+case_end
+
+case_begin "continuation-without-echo-falls-back-detail" "hooks/confirm-checkpoint.js"
+cts_fallback detail ends-on-link
+case_end
+
+case_begin "continuation-without-echo-off-link-denies-intent" "hooks/confirm-checkpoint.js"
+cts_fallback intent ends-elsewhere
+case_end
+
+case_begin "continuation-without-echo-off-link-denies-outline" "hooks/confirm-checkpoint.js"
+cts_fallback outline ends-elsewhere
+case_end
+
+case_begin "continuation-without-echo-off-link-denies-detail" "hooks/confirm-checkpoint.js"
+cts_fallback detail ends-elsewhere
 case_end
 
 echo ""

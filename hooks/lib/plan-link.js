@@ -137,8 +137,8 @@ function renderModelContext(entries, opts) {
     lines.push(hasUrl ? line : `${line} — ${REASON_TEXT[reason]}`);
   }
   lines.push(confirm
-    ? "End the final body text of the presentation turn with each line above as-is and close the turn; the CONFIRM echo comes in a later turn, after the user's reply, and never carries the line."
-    : "End the final body text of this turn with each line above as-is and close the turn so the user can open the plan; the CONFIRM echo comes after the user's reply.");
+    ? "In the presentation turn, end the turn's last text block with each line above as-is; the CONFIRM echo follows when prompted, or after the user's reply, and never carries the line."
+    : "End the turn's last text block with each line above as-is so the user can open the plan; the CONFIRM echo follows when prompted, or after the user's reply.");
   lines.push(`When asked later where a plan is, run ${PLAN_LINK_COMMAND} and write its output as-is; never send the plan with SendUserFile.`);
   return lines.join("\n");
 }

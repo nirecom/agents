@@ -89,7 +89,7 @@ Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) w
 - `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3) that carries the plan-link line (protocol CPA-2).
 - `GATE_ACTION=present-and-stop`: present the scope change line from `GATE_HINT` and the relevant detail plan section, then end the turn.
 - After `present-and-stop`, on approval run the standalone `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION` (normally `proceed`); on a change request, loop to MDP-5.
-- `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"` alone in the next turn; after Allow, run Completion and co-emit either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation.
+- `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, run Completion and co-emit either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation.
 
 ## Research Escalation
 
