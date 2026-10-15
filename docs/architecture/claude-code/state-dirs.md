@@ -2,8 +2,9 @@
 
 Two directories hold per-session workflow files. Which one a file belongs in is
 a policy, not a convention: the placement guard, the RC-4 lint and the one-time
-migration all enforce it from the same registry,
-`hooks/lib/plans-artifact-registry.js` (SSOT for every kind name below).
+migration all enforce it from the same registry. Every kind name below is
+declared in the data file `hooks/lib/plans-artifact-registry.json` (SSOT), which
+`hooks/lib/plans-artifact-registry.js` reads.
 
 | Directory | Holds | Who may write |
 |---|---|---|
@@ -280,8 +281,12 @@ pre-commit gate.
 - `--source` scans `skills agents bin hooks rules docs` for a PLANS-dir token
   joined with a sid token and a literal remainder. Control, ambiguous and
   unregistered remainders are errors; only artifacts pass. Exceptions live in
-  the registry's `SOURCE_LINT_EXCEPTIONS`, each with a mandatory reason; an
+  the data file's `sourceLintExceptions`, each with a mandatory reason; an
   unused exception is an error.
+- Kinds and exceptions come from the data file in the tree being judged, so a
+  PR can register a name and use it in the same commit. Only a tree without the
+  data file falls back to the checker's own table; a data file that is present
+  but unreadable or malformed exits 2.
 - `--dir <path>` classifies a real directory for investigation: control and
   ambiguous entries are errors, unregistered ones warnings. CI never runs it.
 

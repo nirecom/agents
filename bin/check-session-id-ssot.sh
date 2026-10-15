@@ -6,20 +6,11 @@
 # (2) Retired-relay tombstone (#1091): the retired relay names may not appear anywhere in the
 # tracked tree outside append-only records, the test archive and TOMBSTONE_EXEMPT; no waivers.
 # Test isolation lines that only clear them pass (tombstone_isolation_line, #2590).
+# Path tables: bin/check-session-id-ssot/path-tables.txt of the cwd tree, else the one beside this script.
 # Usage: check-session-id-ssot.sh [--staged] [file ...]   Exit: 0 clean | 1 violations | 2 usage.
 # Contract and rationale: docs/architecture/claude-code/session-id-resolution.md
 
 set -uo pipefail
-
-# Whole-file exemptions: the canonical resolvers. Every direct read in them IS the
-# implementation the rest of the tree must delegate to. Everything else needing a direct
-# read carries a per-line inline waiver instead, so the exemption stays where it is earned.
-ALLOWLIST=(
-  "hooks/workflow-state/session-id.js"
-  "hooks/lib/resolve-workflow-session-id.js"
-  "hooks/workflow-state/resolve-worktree-path.js"
-  "bin/resolve-worktree-path"
-)
 
 NAMES="SESSION_ID|CLAUDE_CODE_SESSION_ID"
 READ_RE="process\\.env\\.($NAMES)([^A-Za-z0-9_]|\$)|process\\.env\\[[[:space:]]*[\"']($NAMES)[\"'][[:space:]]*\\]"
@@ -27,21 +18,11 @@ READ_RE="process\\.env\\.($NAMES)([^A-Za-z0-9_]|\$)|process\\.env\\[[[:space:]]*
 # rubber stamp this gate exists to prevent.
 WAIVER_RE="session-id-ssot: waived \\([^)]*\\)[[:space:]]*—[[:space:]]*[^[:space:]]"
 
-# Tombstone: the names are retired, so no use is legitimate and no waiver applies. The exempt
-# files must still spell them: this guard, its test, the one-shot purge migration and its test,
-# and the doc that records the retirement.
+# Tombstone: the names are retired, so no use is legitimate and no waiver applies.
 TOMBSTONE_RE='(^|[^A-Za-z0-9_])(CLAUDE_SESSION_ID|CLAUDE_ENV_FILE)([^A-Za-z0-9_]|$)'
-TOMBSTONE_EXEMPT=(
-  "bin/check-session-id-ssot.sh"
-  "tests/bin/bin-check-session-id-ssot.sh"
-  "hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js"
-  "tests/hooks/legacy-session-id-relay-purge.sh"
-  "docs/architecture/claude-code/session-id-resolution.md"
-)
 # Test isolation must still clear the names, so a leftover CLAUDE_ENV_FILE cannot reach the
-# purge and rewrite a real env file. In tests/<dir>/**/*.sh and these shared points, a line passes
-# when every retired name on it is an operand of a whole-line `unset` or of `-u <name>`.
-TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS=("bin/lib/run-tests-baseline-exec.sh")
+# purge and rewrite a real env file. In tests/<dir>/**/*.sh and the shared points the table lists,
+# a line passes when every retired name on it is an operand of a whole-line `unset` or of `-u <name>`.
 TOMBSTONE_UNSET_LINE_RE='^[[:space:]]*unset([[:space:]]+[A-Za-z_][A-Za-z0-9_]*)+([[:space:]]+2>[[:space:]]*/dev/null)?([[:space:]]*\|\|[[:space:]]*true)?[[:space:]]*$'
 TOMBSTONE_DASH_U_RE='(^|[[:space:]])-u[[:space:]]+(CLAUDE_SESSION_ID|CLAUDE_ENV_FILE)([^A-Za-z0-9_]|$)'
 
@@ -61,6 +42,48 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# The tables of the tree under judgment (cwd) decide, so a path and the change relying on it
+# can land in one commit; only a tree without the file is judged with this script's own copy.
+TABLE_REL="bin/check-session-id-ssot/path-tables.txt"
+TABLE_FILE="$TABLE_REL"
+if [[ ! -e "$TABLE_FILE" && ! -L "$TABLE_FILE" ]]; then
+    TABLE_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-session-id-ssot/path-tables.txt"
+    echo "check-session-id-ssot: no $TABLE_REL under the current directory; judging with the guard's own tables" >&2
+fi
+table_error() {
+    echo "check-session-id-ssot: $TABLE_FILE: $1" >&2
+    exit 2
+}
+[[ -f "$TABLE_FILE" && ! -L "$TABLE_FILE" ]] || table_error "not a regular file"
+[[ -r "$TABLE_FILE" ]] || table_error "not readable"
+
+ALLOWLIST=()
+TOMBSTONE_EXEMPT=()
+TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS=()
+TABLE_SECTION=""
+TABLE_SEEN=""
+while IFS= read -r TABLE_LINE || [[ -n "$TABLE_LINE" ]]; do
+    TABLE_LINE="${TABLE_LINE#"${TABLE_LINE%%[![:space:]]*}"}"
+    TABLE_LINE="${TABLE_LINE%"${TABLE_LINE##*[![:space:]]}"}"
+    case "$TABLE_LINE" in
+        ""|"#"*) continue ;;
+        "[ALLOWLIST]"|"[TOMBSTONE_EXEMPT]"|"[TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS]")
+            TABLE_SECTION="$TABLE_LINE"
+            TABLE_SEEN="$TABLE_SEEN$TABLE_LINE"
+            continue ;;
+        "["*"]") table_error "unknown section $TABLE_LINE" ;;
+    esac
+    case "$TABLE_SECTION" in
+        "[ALLOWLIST]") ALLOWLIST+=("$TABLE_LINE") ;;
+        "[TOMBSTONE_EXEMPT]") TOMBSTONE_EXEMPT+=("$TABLE_LINE") ;;
+        "[TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS]") TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS+=("$TABLE_LINE") ;;
+        *) table_error "entry before any section: $TABLE_LINE" ;;
+    esac
+done < "$TABLE_FILE"
+for TABLE_SECTION in "[ALLOWLIST]" "[TOMBSTONE_EXEMPT]" "[TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS]"; do
+    [[ "$TABLE_SEEN" == *"$TABLE_SECTION"* ]] || table_error "section $TABLE_SECTION missing"
+done
+
 # No explicit files: the whole tracked tree. "No new direct read anywhere" is a property of
 # the tree, not of one commit's diff, so --staged narrows nothing on its own.
 if [ "${#FILES[@]}" -eq 0 ]; then
@@ -75,7 +98,7 @@ in_scope() {
         tests/*|docs/*|changelog/*|.git/*|*.md) return 1 ;;
     esac
     [ -f "$1" ] || return 1
-    for a in "${ALLOWLIST[@]}"; do
+    for a in ${ALLOWLIST[@]+"${ALLOWLIST[@]}"}; do
         [ "$1" = "$a" ] && return 1
     done
     return 0
@@ -89,7 +112,7 @@ tombstone_in_scope() {
         docs/history/*|docs/history.md|changelog/*|CHANGELOG.md|tests/_archive/*|.git/*) return 1 ;;
     esac
     [ -f "$1" ] || return 1
-    for e in "${TOMBSTONE_EXEMPT[@]}"; do
+    for e in ${TOMBSTONE_EXEMPT[@]+"${TOMBSTONE_EXEMPT[@]}"}; do
         [ "$1" = "$e" ] && return 1
     done
     return 0
@@ -117,7 +140,7 @@ scan_grep() {
 tombstone_isolation_file() {
     local s
     case "$1" in tests/*/*.sh) return 0 ;; esac
-    for s in "${TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS[@]}"; do
+    for s in ${TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS[@]+"${TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS[@]}"}; do
         [ "$1" = "$s" ] && return 0
     done
     return 1

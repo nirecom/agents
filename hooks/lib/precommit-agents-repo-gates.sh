@@ -60,6 +60,7 @@ _precommit_agents_repo_gates() {
     # ---------- session-id SSOT gate (issue #2270) ----------
     # rc 2 is a caller contract breach (bad flag, rotted allowlist), not an outage,
     # so a rename cannot silently disarm the gate.
+    # The path tables are read from the cwd tree (bin/check-session-id-ssot/path-tables.txt).
     _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-session-id-ssot.sh" bash \
         "session-id env reads bypassing the SSOT resolver" docs/architecture/claude-code/session-id-resolution.md \
         --staged
@@ -83,6 +84,7 @@ _precommit_agents_repo_gates() {
 
     # ---------- plans-dir artifact-name gate (issue #2434) ----------
     # Whole-tree scan: a name assembled under the plans dir must be a registered artifact.
+    # The kind and exception tables are read from the cwd tree (hooks/lib/plans-artifact-registry.json).
     _precommit_run_agents_gate "$_od_repo_top" "$_od_cfg_dir/bin/check-plans-artifacts" node \
         "plans-dir names that are not registered artifacts" docs/architecture/claude-code/state-dirs.md \
         --source
