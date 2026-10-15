@@ -41,7 +41,7 @@ for q in "bash launch.unit" "pester launch.requires" "pytest launch.requires" "p
   printf "[%s]" "$(tlr_field $q)"
 done
 for n in a.sh x.Tests.ps1 test_a.py a.test.js a_test.py README.md; do printf "<%s>" "$(tlr_stem "$n")"; done')"
-assert_eq "$got" "[file][pwsh][uv][.py][bin/lib/test-retire-predicate/case-parser.sh][has_table_driven_js][]<a><x><test_a><a.test><a_test.py><README.md>"
+assert_eq "$got" "[file][pwsh][uv][.py][bin/lib/test-retire-predicate/case-parser.sh][has_table_driven_js][bin/lib/test-language-parts/pester.sh]<a><x><test_a><a.test><a_test.py><README.md>"
 case_end
 
 case_begin "loader-conditions" "bin/lib/test-language-registry.sh"

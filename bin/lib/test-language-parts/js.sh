@@ -2,8 +2,24 @@
 # bin/lib/test-language-parts/js.sh — the js entry's parts in the test-language registry.
 # Source only; bin/lib/test-language-registry.sh (tlr_call_part) loads it on first use.
 
+declare -F crb_run >/dev/null 2>&1 || . "${BASH_SOURCE[0]%/*}/../case-reader-bridge.sh"
+
+# The reader child reads lines and never runs the file; rc 79 = node is not installed.
+js_case_markers() {
+    crb_native_path "${BASH_SOURCE[0]%/*}/js-case-reader.js"
+    crb_run "$1" node "$CRB_PATH"
+}
+
 # Check whether a test file (.js) has the JS table-driven pattern
 has_table_driven_js() {
     local file="$1"
     grep -qE "cases\.forEach\(|for \(const " "$file" 2>/dev/null
+}
+
+# js_env_clear_line <names-ERE> <line> — rc 0 when the line is one `delete process.env.NAME;` of a
+# named var and nothing else. Prints nothing.
+js_env_clear_line() {
+    local re="^[[:space:]]*delete[[:space:]]+process\\.env\\.($1)[[:space:]]*;?[[:space:]]*\$"
+    [[ "${2%$'\r'}" =~ $re ]] && return 0
+    return 1
 }
