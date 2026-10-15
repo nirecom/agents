@@ -759,3 +759,7 @@ Changes: Task complexity and the outline/detail skip decision are judged by Jev 
 ### FEATURE: PR #2665 (2026-10-14)
 Background: fix(#2654): read closes_issues from intent.md on every call instead of a write-once session cache
 Changes: Narrowing a session's `## Issues` in intent.md now takes effect immediately: the session's closing-issue list is read from intent.md on every use instead of a cached copy, so issues removed from intent.md no longer linger in the workflow step list, the empty-issues gate, or the final report.
+
+### FEATURE: PR #2656 (2026-10-15)
+Background: fix(#2591): close the remaining holes in experimental/test-jail
+Changes: experimental/test-jail: a jailed run now stops (exit 94) when the requested isolation pin is unavailable instead of silently running weaker; pass --allow-weaker-pin to accept the strongest available pin. compare-runs.sh ends with an explicit verdict (NEW-RED / INCOMPLETE / NO-NEW-RED) and lists the comparisons it could not trust.
