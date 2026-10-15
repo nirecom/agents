@@ -53,7 +53,7 @@ try {
 }
 
 // --- BEGIN temporary: legacy session-id relay lines -> purged migration added 2026-10-03 ---
-// deletion-condition: remove after 2027-01-01 together with hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js, tests/hooks/legacy-session-id-relay-purge.sh and their two entries in bin/check-session-id-ssot.sh TOMBSTONE_EXEMPT
+// deletion-condition: remove after 2027-01-01 together with hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js, tests/hooks/legacy-session-id-relay-purge.sh and their two entries under [TOMBSTONE_EXEMPT] in bin/check-session-id-ssot/path-tables.txt
 try {
   require("./lib/temporary-migrations/legacy-session-id-relay-purge").purgeLegacyRelayLines();
 } catch (e) { /* fail-open */ }

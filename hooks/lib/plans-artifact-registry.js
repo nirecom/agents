@@ -4,56 +4,24 @@
 // belongs in <WORKFLOW_STATE_DIR>/<sid>.control/ (control files). Shared by the
 // placement guard, bin/check-plans-artifacts and the control-dir migration.
 // Each kind carries its retention class (plan / user-requested / non-plan); sweep-plans deletes by it.
+// The kind and lint-exception tables are data: plans-artifact-registry.json next to this
+// module, read through plans-artifact-table.js (a missing or broken file throws on load).
 // Policy: docs/architecture/claude-code/state-dirs.md.
 const fs = require("fs");
 const path = require("path");
 const { SESSION_ID_VALID_RE, getStatePath } = require("../workflow-state/state-io/core");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
+const { PLANS_ARTIFACT_TABLE_REL, loadPlansArtifactTable } = require("./plans-artifact-table");
 
-const FORMAT_TOKENS = Object.freeze([
-  "outline-plan", "detail-plan", "test-review", "security-code", "security-plan", "review-security-shared",
-]);
-const F = `(?:${FORMAT_TOKENS.join("|")})`;
-const STAGE = "(?:outline|detail|security-plan|security-code|test-review)";
-const WORKER = "worker-[a-z0-9]+(?:-[a-z0-9]+)*";
+const {
+  formatTokens: FORMAT_TOKENS,
+  controlKinds: CONTROL_KINDS,
+  artifactKinds: ARTIFACT_KINDS,
+  sourceLintExceptions: SOURCE_LINT_EXCEPTIONS,
+} = loadPlansArtifactTable(path.join(__dirname, path.basename(PLANS_ARTIFACT_TABLE_REL)));
 
-const k = (kind, source, retention) => Object.freeze({ kind, re: new RegExp(`^${source}$`), retention });
 // Retention classes a kind may carry; "unknown" is a classification result, never a kind's class.
 const RETENTION_CLASSES = Object.freeze(["plan", "user-requested", "non-plan"]);
-const N = "non-plan";
-
-const CONTROL_KINDS = Object.freeze([
-  k("review-round-state", `${F}-(?:round-number|last-round|terminal)\\.txt`, N),
-  k("unresolved-concerns", `${F}-unresolved-concerns\\.json`, N),
-  k("concern-ledger", `${F}-concern-ledger(?:-cycle[0-9]+|-cap-snapshot)?\\.txt`, N),
-  k("concern-carrier", `${F}-concern-carrier\\.md`, N),
-  k("round-delta", `${F}-round-[0-9]+-delta-[a-z0-9]+(?:-[a-z0-9]+)*\\.txt`, N),
-  k("exit6-accepted", "(?:security-code|review-plan-security|review-tests)-exit6-accepted\\.txt", N),
-  k("risk-signal", "(?:outline|detail)-risk-signal\\.txt", N),
-  k("worker-payload", `${WORKER}\\.json`, N),
-  k("worker-dispatched", `${WORKER}\\.dispatched`, N),
-  k("worker-outcome", `${WORKER}\\.outcome\\.json`, N),
-  k("worker-ingested", `${WORKER}\\.ingested`, N),
-  k("codex-context", "codex-context\\.md", N),
-  k("codex-context-built", `codex-context\\.${F}\\.built`, N),
-  k("plan-log", "plan\\.jsonl", N),
-  k("changed-files", "changed-files\\.txt", N),
-  k("judge-signals", "(?:complexity|outline|detail|write-tests|write-code)-signals\\.txt", N),
-  k("finalize-state", "finalize-state-[0-9]+\\.json", N),
-  k("finalize-binding", "finalize-binding-[0-9]+\\.json", N),
-  k("issue-close-outcome", "issue-close-outcome\\.json", N),
-  k("session-close-gate", "session-close-gate\\.json", N),
-  k("final-report-env", "final-report-env\\.json", N),
-  k("supervisor-state", "supervisor-state\\.json", N),
-  k("wi-checkpoint", "wi-checkpoint\\.json", N),
-  k("handoff", "handoff\\.md", N),
-  k("handoff-sidecar", "handoff-(?:risk|pressure|flush-mark)\\.json", N),
-  k("wt-cleanup-active", "wt-cleanup-active", N),
-  k("workflow-init-aborted", "workflow-init-aborted-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\\.md", N),
-  k("companion-precheck", "companion-precheck\\.json", N),
-  k("intent-scan-block", "intent-scan-block\\.txt", N),
-  k("guard-attempt", "guard-attempt\\.tmp", N),
-]);
 
 const SHORT_LIVED = new Set(["guard-attempt"]);
 // Born in the control dir only (#2544): a PLANS_DIR copy is planted, never migrated into trust.
@@ -61,44 +29,6 @@ const NEVER_IN_PLANS_DIR = new Set(["worker-outcome", "worker-ingested"]);
 const MIGRATABLE_KINDS = Object.freeze(
   CONTROL_KINDS.filter((c) => !SHORT_LIVED.has(c.kind) && !NEVER_IN_PLANS_DIR.has(c.kind)),
 );
-
-const ARTIFACT_KINDS = Object.freeze([
-  k("plan-artifact", "(?:intent|outline|detail|context)\\.md", "plan"),
-  k("survey", "survey-[a-z0-9]+(?:-[a-z0-9]+)*\\.md", N),
-  k("issue-prefill", "issue-prefill\\.md", N),
-  k("test-review", "test-review\\.md", N),
-  k("test-review-fallback-raw", "test-review-fallback-raw\\.md", N),
-  k("concerns-log", `(?:${STAGE}-)?concerns-log\\.md`, N),
-  k("codex-round-raw", `(?:${STAGE}-)?codex-round-[0-9]+-raw\\.md`, N),
-  k("debug-log", `${STAGE}-debug\\.log`, N),
-  k("judge-raw", "(?:complexity|outline|detail|write-tests|write-code)-judge-raw\\.txt", N),
-  k("write-code-files", "write-code-files\\.txt", N),
-  k("finalize-diagnostic", `${F}-finalize-diagnostic\\.txt`, N),
-  k("worker-draft", `${WORKER}\\.draft\\.json`, N),
-  k("notes-backup", "notes-backup", N),
-  k("issue-create-dispatch", "issue-create-dispatch\\.txt", N),
-  k("issue-create-survey", "issue-create-survey\\.json", N),
-  k("sweep-issues", "sweep-issues-(?:survivors|decisions)\\.tsv", N),
-  k("refactor-prompts-scan", "refactor-prompts-scan\\.json", N),
-  k("note", "note-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)", N),
-  // Usage rule (only when the user explicitly asks for a separate file): docs/architecture/claude-code/state-dirs.md, Artifacts table.
-  k("user-requested", "user-requested-[a-z0-9]+(?:-[a-z0-9]+)*\\.(?:md|txt|json|tsv)", "user-requested"),
-  k("sweep-plans-approved-sessions", "sweep-plans-approved-sessions\\.txt", N),
-]);
-
-// Unregistered names are never allowed a silent pass; each exception needs a reason.
-const SOURCE_LINT_EXCEPTIONS = Object.freeze([
-  Object.freeze({
-    file: "bin/review-plan-codex",
-    pattern: /\{EFF_SESSION_ID\}-plan\.jsonl$/,
-    reason: "caller-supplied --log-dir outside the session control dir (standalone runs); the control-dir branch uses plan.jsonl",
-  }),
-  Object.freeze({
-    file: "hooks/lib/supervisor-codex-input/assemble.js",
-    pattern: /\$\{wsid\}-\$\{k\}\.md$/,
-    reason: "${k} iterates the registered plan artifacts intent/outline/detail only; the template is statically unresolvable",
-  }),
-]);
 
 const reOf = (entry) => (entry instanceof RegExp ? entry : entry.re);
 const kindOf = (entry) => (entry instanceof RegExp ? String(entry) : entry.kind);

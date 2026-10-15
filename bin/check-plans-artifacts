@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-// bin/check-plans-artifacts --source [<root>] | --dir <path>
-// Lint for what may live in WORKFLOW_PLANS_DIR (#2434). The registry
-// (hooks/lib/plans-artifact-registry.js) decides; policy: docs/architecture/claude-code/state-dirs.md.
-//   --source: scans skills agents bin hooks rules docs under <root> (default: cwd) for a
-//     PLANS-dir token + sid token + name assembly. Only an artifact name passes; control,
-//     ambiguous, unregistered and statically undecidable names are errors (exit 1), unless
-//     listed in SOURCE_LINT_EXCEPTIONS with a reason. An empty reason, or an exception whose
-//     file is scanned but no longer matches, is itself an error.
-//     A registry kind without a valid retention class is an error too.
+// bin/check-plans-artifacts --source [<root>] | --dir <path>   Exit: 0 clean; 1 violations; 2 usage or scan error.
+// Lint for what may live in WORKFLOW_PLANS_DIR (#2434); policy: docs/architecture/claude-code/state-dirs.md.
+//   --source: scans skills agents bin hooks rules docs under <root> (default: cwd) for a PLANS-dir
+//     token + sid token + name assembly. Only an artifact name passes; any other name is an error
+//     (exit 1) unless a sourceLintExceptions entry with a reason covers it. An empty reason, an
+//     exception whose scanned file no longer matches, and a kind without a valid retention class
+//     are errors too. Tables: <root>/hooks/lib/plans-artifact-registry.json, replacing this
+//     checkout's own; absent -> this checkout's (stderr notice); present but unusable -> exit 2.
 //   --dir: classifies the direct entries of a real plans dir (investigation mode, not CI).
 //     control / ambiguous -> error (exit 1); unregistered -> warning (exit 0, counted).
-// Exit: 0 clean; 1 violations; 2 usage or scan error.
 "use strict";
 const fs = require("fs");
 const path = require("path");
 
-const REG = require(path.join(__dirname, "..", "hooks", "lib", "plans-artifact-registry.js"));
+const LIB = path.join(__dirname, "..", "hooks", "lib");
+const REG = require(path.join(LIB, "plans-artifact-registry.js"));
+const { PLANS_ARTIFACT_TABLE_REL, loadPlansArtifactTable } = require(path.join(LIB, "plans-artifact-table.js"));
 
 const SCAN_ROOTS = ["skills", "agents", "bin", "hooks", "rules", "docs"];
 const SKIP_DIRS = new Set([".git", "node_modules"]);
@@ -64,19 +64,33 @@ function concreteNames(rem) {
   return outs.map((o) => o.replace(/\.+$/, "")).map((o) => (o.length > 0 ? o : null));
 }
 
-function classifyName(name) {
+function classifyName(name, table) {
   if (name === null) return "unregistered";
   const test = (list) => list.some((e) => (e instanceof RegExp ? e : e.re).test(name));
-  const control = test(REG.CONTROL_KINDS);
-  const artifact = test(REG.ARTIFACT_KINDS);
+  const control = test(table.controlKinds);
+  const artifact = test(table.artifactKinds);
   if (control && artifact) return "ambiguous";
   if (control) return "control";
   return artifact ? "artifact" : "unregistered";
 }
 
-function classifyRemainder(rem) {
-  const verdicts = concreteNames(rem).map(classifyName);
+function classifyRemainder(rem, table) {
+  const verdicts = concreteNames(rem).map((name) => classifyName(name, table));
   return verdicts.find((v) => v !== "artifact") || "artifact";
+}
+
+// The table of the tree under judgment replaces this checkout's own (never merged), so a kind
+// can be registered and used in one commit; nothing from that tree is required or executed.
+function judgedTable(root) {
+  const file = path.join(root, ...PLANS_ARTIFACT_TABLE_REL.split("/"));
+  let st;
+  try { st = fs.lstatSync(file); } catch (e) {
+    if (e.code !== "ENOENT" && e.code !== "ENOTDIR") throw e;
+    process.stderr.write(`check-plans-artifacts: no ${PLANS_ARTIFACT_TABLE_REL} under ${root}; fallback to the checker-side tables\n`);
+    return { controlKinds: REG.CONTROL_KINDS, artifactKinds: REG.ARTIFACT_KINDS, sourceLintExceptions: REG.SOURCE_LINT_EXCEPTIONS };
+  }
+  if (!st.isFile()) throw new Error(`${file}: not a regular file`);
+  return loadPlansArtifactTable(file);
 }
 
 function isExcluded(rel) {
@@ -103,7 +117,8 @@ function exceptionMatches(exc, rel, text) {
   return exc.pattern instanceof RegExp ? exc.pattern.test(text) : text.includes(String(exc.pattern));
 }
 
-function scanSource(root, exceptions) {
+function scanSource(root, table) {
+  const exceptions = table.sourceLintExceptions;
   const files = [];
   for (const top of SCAN_ROOTS) walk(root, top, files);
   const findings = [];
@@ -119,7 +134,7 @@ function scanSource(root, exceptions) {
       ASSEMBLY_RE.lastIndex = 0;
       let m;
       while ((m = ASSEMBLY_RE.exec(line)) !== null) {
-        const verdict = classifyRemainder(m[1]);
+        const verdict = classifyRemainder(m[1], table);
         if (verdict === "artifact") continue;
         const idx = exceptions.findIndex((x) => exceptionMatches(x, rel, m[0]));
         if (idx >= 0) { used.add(idx); continue; }
@@ -153,9 +168,10 @@ function main(argv) {
   const mode = argv[0];
   if (mode === "--source" && argv.length <= 2) {
     const root = path.resolve(argv[1] || process.cwd());
+    const table = judgedTable(root);
     const findings = [
-      ...scanSource(root, [...REG.SOURCE_LINT_EXCEPTIONS]),
-      ...REG.retentionCoverageErrors().map((e) => `hooks/lib/plans-artifact-registry.js: retention class missing or invalid: ${e}`),
+      ...scanSource(root, table),
+      ...REG.retentionCoverageErrors(table).map((e) => `${PLANS_ARTIFACT_TABLE_REL}: retention class missing or invalid: ${e}`),
     ];
     for (const f of findings) process.stdout.write(`${f}\n`);
     if (findings.length > 0) {

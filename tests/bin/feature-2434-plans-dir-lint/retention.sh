@@ -2,7 +2,7 @@
 # Tests: hooks/lib/plans-artifact-registry.js, bin/check-plans-artifacts
 # Tags: scope:common, TL1, TL2, registry, retention, sweep-plans, plans-dir, plans-dir-lint, table-driven, pwsh-not-required
 # Part file of tests/bin/feature-2434-plans-dir-lint.sh (sourced; uses its T, LINT,
-# REG_JS, check and trim_f). Retention class per registry kind (plan / user-requested
+# REG_JS, TABLE_REL, edit_table, check and trim_f). Retention class per registry kind (plan / user-requested
 # / non-plan; unknown is a classification result only): coverage, the fixed
 # assignment, retentionClassOf and the lint red path.
 # TL3 gap: none — the registry and the lint are pure node, exercised here for real.
@@ -168,9 +168,8 @@ check "RT5 the unmodified registry copy passes --source (exit 0)" "0" "$L_RC"
 
 BAD="$T/lint-bad"
 make_lint_tree "$BAD"
-sed -i '/"plan-artifact"/s/"plan"/"bogus"/g' "$BAD/hooks/lib/plans-artifact-registry.js"
-if ! grep -q '"plan-artifact".*"bogus"' "$BAD/hooks/lib/plans-artifact-registry.js"; then
-  fail "RT5 fixture: the plan-artifact entry carries a quoted \"plan\" retention on its own line" "rewrite did not apply (k(\"plan-artifact\", <source>, \"plan\") not on one line)"
+if ! edit_table "$BAD" set-retention plan-artifact bogus 2>/dev/null; then
+  fail "RT5 fixture: the copied tree carries the data file with a plan-artifact entry" "rewrite did not apply ($BAD/$TABLE_REL missing or without that kind)"
 else
   run_lint_tree "$BAD"
   check "RT5 an invalid retention class fails --source (exit 1)" "1" "$L_RC"
