@@ -10,7 +10,7 @@ source "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 
 rs_np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
 
-# rs_checkout <name> <js> — registry checkout + guard copy; <js> edits table t (E(id) = entry). Sets RS_CO.
+# rs_checkout <name> <js> — registry checkout + guard copy (+ its path tables); <js> edits table t (E(id) = entry). Sets RS_CO.
 RS_CO=""
 rs_checkout() {
   RS_CO="$TMPDIR_BASE/co-$1"
@@ -18,6 +18,9 @@ rs_checkout() {
     fail "RS/$1: registry checkout installed"; RS_CO=""; return 1
   fi
   cp "$GUARD" "$RS_CO/bin/check-session-id-ssot.sh" || { fail "RS/$1: guard copied"; RS_CO=""; return 1; }
+  mkdir -p "$RS_CO/bin/check-session-id-ssot" \
+    && cp "$SCRIPT_CHECKOUT_ROOT/bin/check-session-id-ssot/path-tables.txt" "$RS_CO/bin/check-session-id-ssot/path-tables.txt" \
+    || { fail "RS/$1: path tables copied"; RS_CO=""; return 1; }
   if ! node -e '
     const fs = require("fs");
     const p = process.argv[1];

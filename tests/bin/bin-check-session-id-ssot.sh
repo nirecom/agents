@@ -14,6 +14,9 @@ set -uo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GUARD="$SCRIPT_CHECKOUT_ROOT/bin/check-session-id-ssot.sh"
 RUN_TIMEOUT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
+# The guard's path tables (#2638) live in a data file; table_section <NAME> prints one section's entries.
+TABLES="$SCRIPT_CHECKOUT_ROOT/bin/check-session-id-ssot/path-tables.txt"
+table_section() { awk -v s="[$1]" '{ sub(/\r$/, ""); gsub(/^[ \t]+|[ \t]+$/, "") } /^\[/ { on = ($0 == s); next } on && NF && $0 !~ /^#/' "$TABLES" 2>/dev/null; }
 
 # Whole-file exemption is for RESOLVERS only — the canonical implementations of
 # the two id families plus the worktree resolver that feeds them, where every
@@ -247,17 +250,18 @@ expect_rc "G16 (waiver with empty reason still flagged)" 1
 # widens the exemption to whatever later takes that path.
 # ---------------------------------------------------------------------------
 g17_bad=""
+g17_section="$(table_section ALLOWLIST)"
 for p in "${ALLOWLIST_PATHS[@]}"; do
   [[ -e "$SCRIPT_CHECKOUT_ROOT/$p" ]] || g17_bad="$g17_bad $p(missing-in-repo)"
-  if [[ -f "$GUARD" ]] && ! grep -qF "$p" "$GUARD"; then
-    g17_bad="$g17_bad $p(absent-from-guard)"
+  if ! printf '%s\n' "$g17_section" | grep -qxF -- "$p"; then
+    g17_bad="$g17_bad $p(absent-from-table)"
   fi
 done
 [[ -f "$GUARD" ]] || g17_bad="$g17_bad (guard script itself missing)"
 if [[ -z "$g17_bad" ]]; then
-  pass "G17 (allowlist matches real files and the guard source)"
+  pass "G17 (allowlist matches real files and the guard's [ALLOWLIST] table)"
 else
-  fail "G17 (allowlist matches real files and the guard source):$g17_bad"
+  fail "G17 (allowlist matches real files and the guard's [ALLOWLIST] table):$g17_bad"
 fi
 
 # ---------------------------------------------------------------------------
@@ -402,13 +406,14 @@ fi
 # T11: the exempt list above is the guard's list — a stale entry here would let
 # T7 pass while the guard flags the real file.
 t11_bad=""
+t11_section="$(table_section TOMBSTONE_EXEMPT)"
 for p in "${TOMBSTONE_EXEMPT[@]}"; do
-  [[ -f "$GUARD" ]] && ! grep -qF "\"$p\"" "$GUARD" && t11_bad="$t11_bad $p"
+  printf '%s\n' "$t11_section" | grep -qxF -- "$p" || t11_bad="$t11_bad $p"
 done
 if [[ -z "$t11_bad" ]]; then
-  pass "T11 (TOMBSTONE_EXEMPT mirrors the guard source)"
+  pass "T11 (TOMBSTONE_EXEMPT mirrors the guard's [TOMBSTONE_EXEMPT] table)"
 else
-  fail "T11 (TOMBSTONE_EXEMPT mirrors the guard source): missing in guard:$t11_bad"
+  fail "T11 (TOMBSTONE_EXEMPT mirrors the guard's [TOMBSTONE_EXEMPT] table): missing in table:$t11_bad"
 fi
 
 # L1-L6 (#2590): the seven isolation files leave the whole-file exemption; only whole
@@ -465,9 +470,14 @@ expect_hits "L5 (the seven files are no longer whole-file exempt)" "[a-z]*/[^:]*
 run_guard "$SCRIPT_CHECKOUT_ROOT" "${L_SEVEN[@]}"
 expect_rc "L6 (the real seven files are clean under the line rule)" 0
 l6_left=0
-l6_block="$(sed -n '/^TOMBSTONE_EXEMPT=(/,/^)/p' "$GUARD" 2>/dev/null)"
-for p in "${L_SEVEN[@]}"; do case "$l6_block" in *"\"$p\""*) l6_left=$((l6_left + 1)) ;; esac; done
-if [[ "$l6_left" -eq 0 ]]; then pass "L6b (none of the seven is in the guard's TOMBSTONE_EXEMPT)"; else fail "L6b: $l6_left of the seven still exempt"; fi
+l6_block="$(table_section TOMBSTONE_EXEMPT)"
+for p in "${L_SEVEN[@]}"; do printf '%s\n' "$l6_block" | grep -qxF -- "$p" && l6_left=$((l6_left + 1)); done
+if [[ -z "$l6_block" ]]; then fail "L6b: the guard's [TOMBSTONE_EXEMPT] table is empty or unreadable ($TABLES)"
+elif [[ "$l6_left" -eq 0 ]]; then pass "L6b (none of the seven is in the guard's TOMBSTONE_EXEMPT)"; else fail "L6b: $l6_left of the seven still exempt"; fi
+
+# #2638: the judged tree's own path tables — cases live in the sourced part file.
+# shellcheck source=tests/bin/bin-check-session-id-ssot/tables.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-check-session-id-ssot/tables.sh"
 
 # LX: JS / PowerShell / Python clear lines. The sibling is not exempt, so this file hands it the names.
 L_RETIRED_SID=CLAUDE_SESSION_ID L_RETIRED_ENV=CLAUDE_ENV_FILE

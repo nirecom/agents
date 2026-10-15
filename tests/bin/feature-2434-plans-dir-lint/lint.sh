@@ -2,8 +2,9 @@
 # Tests: bin/check-plans-artifacts, hooks/lib/plans-artifact-registry.js, .github/workflows/migration-blocks-audit.yml, hooks/lib/precommit-agents-repo-gates.sh
 # Tags: scope:issue-specific, TL2, plans-dir-lint, feature-2434, plans-dir, table-driven, pwsh-not-required
 # Part file of tests/bin/feature-2434-plans-dir-lint.sh (sourced; uses its T, LINT,
-# make_tree, run_source, run_dir, check and pass/fail helpers). The lint's --source
-# and --dir modes, the registry exception reasons, and the static consumer wiring.
+# make_tree, table_tree, edit_table, run_source, run_source_gate, run_dir, check and
+# pass/fail helpers). The lint's --source and --dir modes, the judged tree's table,
+# the registry exception reasons, and the static consumer wiring.
 
 case_begin "source-scan-matrix" "bin/check-plans-artifacts"
 # C11: table-driven matrix over artifact/control/unregistered/token-spelling/malformed-path.
@@ -33,6 +34,40 @@ token-log-dir|$LOG_DIR/$SID-detail-plan-round-number.txt|1|sh
 token-placeholder-md|<PLANS_DIR>/<session-id>-detail-plan-terminal.txt|1|md
 malformed-path-traversal|$PLANS_DIR/$SID-../../etc/passwd|1|sh
 MATRIX
+case_end
+
+# #2638: the pre-commit gate runs the checkout's lint with cwd = the commit worktree, so the
+# verdict follows the table of the tree being judged, not the table next to the lint.
+NEW_KIND_REF='Write the result to $PLANS_DIR/$SID-new-state.json before the next step.'
+
+case_begin "judged-tree-new-kind-registered-same-tree" "bin/check-plans-artifacts"
+FX="$T/judged-new-kind"
+if table_tree "judged-new-kind: fixture tree with the data file" "$FX"; then
+  mkdir -p "$FX/skills/x"
+  printf '%s\n' "$NEW_KIND_REF" > "$FX/skills/x/SKILL.md"
+  run_source_gate "$FX"
+  check "judged-new-kind: control — the reference is unregistered under the copied table (exit 1)" "1" "$L_RC"
+  if edit_table "$FX" add-kind artifactKinds new-state 'new-state\.json' non-plan 2>/dev/null; then
+    run_source_gate "$FX"
+    check "judged-new-kind: a kind registered and referenced in the same tree passes (exit 0)" "0" "$L_RC"
+    check "judged-new-kind: no fallback notice while the judged tree carries its table" \
+      "no" "$(printf '%s\n' "$L_ERR" | grep -qi -- "$FALLBACK_WORD" && printf yes || printf no)"
+  else
+    fail "judged-new-kind: fixture edit" "add-kind did not apply"
+  fi
+fi
+case_end
+
+case_begin "judged-tree-without-table-falls-back" "bin/check-plans-artifacts"
+FX="$T/judged-no-table"; make_tree "$FX"
+mkdir -p "$FX/skills/x"
+printf '%s\n' "$NEW_KIND_REF" > "$FX/skills/x/SKILL.md"
+run_source_gate "$FX"
+check "judged-no-table: the same reference fails under the checker-side table (exit 1)" "1" "$L_RC"
+check "judged-no-table: stderr names the data file the judged tree lacks" \
+  "yes" "$(printf '%s\n' "$L_ERR" | grep -qF -- "$TABLE_REL" && printf yes || printf no)"
+check "judged-no-table: the fallback notice is exactly one stderr line" \
+  "1" "$(printf '%s\n' "$L_ERR" | grep -ci -- "$FALLBACK_WORD" || true)"
 case_end
 
 case_begin "static-registry-exceptions-have-reason" "hooks/lib/plans-artifact-registry.js"
