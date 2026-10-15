@@ -104,6 +104,42 @@ got="$(printf '%s\n' "$NHP_OUT" | sed -n -E 's#^[A-Z-]+: .*[/\\]tests[/\\]hooks[
 assert_eq "listed=$got" "listed=h1.sh m1.slt "
 case_end
 
+case_begin "python-rewrites-bash-tests-only" "bin/normalize-harness-position.py"
+# #2411: every supported language has a helper library; the normalizer still lists and
+# rewrites bash tests only. h1.sh is the control that the rewrite ran at all.
+FX_ALL="$TMPBASE/co-python-all-helpers"
+fx_checkout "$FX_ALL"
+ALL_HELPERS_JS='const b = t.entries.find((e) => e.id === "bash");'
+ALL_HELPERS_JS+=' for (const [id, ext] of [["pester", "ps1"], ["pytest", "py"], ["js", "js"]]) {'
+ALL_HELPERS_JS+=' const e = t.entries.find((x) => x.id === id);'
+ALL_HELPERS_JS+=' e.helperLibrary = e.helperLibrary || Object.assign({}, b.helperLibrary, { path: "tests/lib/harness." + ext });'
+ALL_HELPERS_JS+=' e.caseMarkerReader = e.caseMarkerReader || b.caseMarkerReader; }'
+fx_table_edit "$TABLE" "$FX_ALL/hooks/lib/test-language-registry.json" "$ALL_HELPERS_JS"
+mkdir -p "$FX_ALL/tests/hooks"
+for ext in ps1 py js; do
+  [ -f "$FX_ALL/tests/lib/harness.$ext" ] || printf '\n' >"$FX_ALL/tests/lib/harness.$ext"
+done
+printf '%s\n' '#!/usr/bin/env bash' '# Tests: hooks/lib/x.js, bin/y.sh' 'REPO_ROOT="x"' >"$FX_ALL/tests/hooks/h1.sh"
+printf '%s\n' '# Tests: hooks/lib/x.js, bin/y.sh' 'REPO_ROOT="x"' >"$FX_ALL/tests/hooks/n1.Tests.ps1"
+printf '%s\n' '# Tests: hooks/lib/x.js, bin/y.sh' 'REPO_ROOT="x"' >"$FX_ALL/tests/hooks/test_n2.py"
+printf '%s\n' '// Tests: hooks/lib/x.js, bin/y.sh' 'REPO_ROOT="x"' >"$FX_ALL/tests/hooks/n3.js"
+others=(n1.Tests.ps1 test_n2.py n3.js)
+before="$(cd "$FX_ALL/tests/hooks" && cksum "${others[@]}")"
+nhp "$FX_ALL"
+assert_eq "all-helpers fixture rc=$NHP_RC" "all-helpers fixture rc=0"
+got="$(printf '%s\n' "$NHP_OUT" | sed -n -E 's#^[A-Z-]+: .*[/\\]tests[/\\]hooks[/\\]##p' | sort | tr '\n' ' ')"
+assert_eq "listed=$got" "listed=h1.sh "
+NHP_RC=0
+NHP_OUT="$(run_with_timeout 180 uv run --no-project python "$(np "$FX_ALL/bin/normalize-harness-position.py")" --all-multi-path --add-harness 2>&1)" || NHP_RC=$?
+assert_eq "rewrite rc=$NHP_RC" "rewrite rc=0"
+if grep -q 'tests/lib/harness\.sh' "$FX_ALL/tests/hooks/h1.sh"; then
+  pass "rewrite: the bash test now loads the helper library"
+else
+  fail "rewrite: the bash test now loads the helper library" "$NHP_OUT"
+fi
+assert_eq "other languages after=$(cd "$FX_ALL/tests/hooks" && cksum "${others[@]}")" "other languages after=$before"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" -gt 0 ]; then

@@ -141,16 +141,20 @@ parity_placement() {
   esac
 }
 
-# rel|today's verdict — the six category roots, flat tests/<name>, and names the
-# registry places in a language without a case-marker reader (or in none at all).
+# rel|today's verdict — the six category roots, flat tests/<name>, one name per
+# language that has a case-marker reader (#2411), the same names off an entrypoint
+# placement, and names the registry places in an entry without a reader (or in none).
 PARITY_ROWS=(
   "tests/hooks/a.sh|1" "tests/bin/a.sh|1" "tests/skills/a.sh|1"
   "tests/agents/a.sh|1" "tests/install/a.sh|1" "tests/tests/a.sh|1"
   "tests/flat.sh|1" "tests/hooks/suite/sub.sh|0" "tests/run-all.sh|0"
   "tests/_archive/x.sh|0" "tests/lib/harness.sh|0" "tests/unknowncat/a.sh|0"
-  "tests/hooks/x.Tests.ps1|0" "bin/a.sh|0"
-  "tests/hooks/test_a.py|0" "tests/hooks/a.js|0" "tests/hooks/a.test.js|0"
-  "tests/hooks/.sh|0" "tests/flat.Tests.ps1|0" "tests/hooks/test_a.sh|1"
+  "tests/hooks/x.Tests.ps1|1" "bin/a.sh|0"
+  "tests/hooks/test_a.py|1" "tests/hooks/a.js|1" "tests/hooks/a.test.js|1"
+  "tests/hooks/.sh|0" "tests/flat.Tests.ps1|1" "tests/hooks/test_a.sh|1"
+  "tests/hooks/suite/x.Tests.ps1|0" "tests/lib/test_a.py|0" "tests/hooks/suite/a.js|0"
+  "tests/_archive/a.js|0" "tests/hooks/a.test.ts|0" "tests/hooks/a_test.go|0"
+  "tests/hooks/notes.txt|0"
 )
 
 # parity_run <hook|registry> <list-file> — the Node side's "<rel>|<0|1>" lines.

@@ -35,11 +35,25 @@ none|none.sh|none|||0
 conforming|conforming.sh|conforming|||2
 malformed|malformed.sh|malformed|3|grammar|0
 uncertain|uncertain.sh|uncertain|5|depth|0
-js-without-reader|x.test.js|unsupported|||0
-supported-without-reader|x.Tests.ps1|unsupported|||0
+js-no-markers|x.test.js|none|||0
+pester-no-markers|x.Tests.ps1|none|||0
+recognized-only-name|x_test.go|unsupported|||0
 unmatched-name|notes.txt|unsupported|||0
 heredoc-pseudo-markers|heredoc-pseudo.sh|none|||0
 ROWS
+case_end
+
+case_begin "supported-without-reader-is-unsupported" "bin/lib/case-record-reader.sh"
+# java-junit of the fixture table is supported and has no caseMarkerReader; the bash
+# row is the control that the same checkout still reads a language that has one.
+CO_JT="$TMPBASE/co-java-terraform"
+fx_checkout "$CO_JT" "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/fixtures/java-terraform.json"
+got="$(tlr_bash "$CO_JT" 'tlr_load || exit 96; tlr_match XTest.java; printf "%s/%s" "$TLR_ID" "$TLR_STATUS"')"
+assert_eq "XTest.java is $got" "XTest.java is java-junit/supported"
+crr "$CO_JT" "$FXD/XTest.java"
+assert_eq "rc=$CRR_RC out=$CRR_OUT" "rc=0 out=FILE${T}unsupported${T}${T}"
+crr "$CO_JT" "$FXD/conforming.sh"
+assert_eq "bash control: rc=$CRR_RC FILE=$(file_line "$CRR_OUT")" "bash control: rc=0 FILE=conforming||"
 case_end
 
 case_begin "state-matches-marker-conformance" "bin/lib/case-record-reader.sh"
@@ -108,4 +122,73 @@ case_begin "case-globals-left-for-same-shell" "bin/lib/case-record-reader.sh"
 # The caseEmbedRules ops read the parser globals crr_read leaves behind.
 got="$(run_with_timeout 120 bash -c '. "$1/bin/lib/case-record-reader.sh" || exit 97; crr_read "$2" >/dev/null; printf "%s|%s|%s" "${TRP_CASE_BEGIN_LINES[*]}" "${TRP_CASE_END_LINES[*]}" "${TRP_CASE_NAMES[*]}"' _ "$SCRIPT_CHECKOUT_ROOT" "$FXD/conforming.sh" 2>/dev/null)"
 assert_eq "$got" "7 11|10 13|alpha beta"
+case_end
+
+# Fixture checkout (#2411): the pester entry names a stub reader part that fills the parser
+# globals with one stale case and returns $CRR_STUB_RC.
+CO_STUB="$TMPBASE/co-stub-reader"
+fx_table_edit "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json" "$TMPBASE/stub-reader.json" \
+  't.entries.find((e) => e.id === "pester").caseMarkerReader = { file: "bin/lib/test-language-parts/stub-reader.sh", function: "stub_case_markers" };'
+fx_checkout "$CO_STUB" "$TMPBASE/stub-reader.json"
+cat >"$CO_STUB/bin/lib/test-language-parts/stub-reader.sh" <<'STUB'
+stub_case_markers() {
+  TRP_CASE_BEGIN_LINES=(3); TRP_CASE_END_LINES=(9); TRP_CASE_NAMES=(stale); TRP_CASE_TARGETS=(bin/stale.sh)
+  TRP_CASE_COUNT=1; TRP_HAS_MARKERS=1; _TRP_MARKER_MALFORMED=0; _TRP_MARKER_UNCERTAIN=0
+  return "${CRR_STUB_RC:-0}"
+}
+STUB
+STUB_REQUIRES="$(tlr_bash "$CO_STUB" 'tlr_load || exit 96; tlr_field pester launch.requires')"
+
+case_begin "stub-reader-part-is-called" "bin/lib/case-record-reader.sh"
+# Guards the cases below: the stub part is reached, so a non-zero return is what they observe.
+export CRR_STUB_RC=0
+crr "$CO_STUB" "$FXD/x.Tests.ps1"
+assert_eq "rc=$CRR_RC out=$CRR_OUT" "rc=0 out=FILE${T}conforming${T}${T}
+CASE${T}0${T}stale${T}bin/stale.sh${T}3${T}9${T}?${T}"
+assert_eq "requires=$STUB_REQUIRES" "requires=pwsh"
+unset CRR_STUB_RC
+case_end
+
+case_begin "reader-rc-79-is-unavailable" "bin/lib/case-record-reader.sh"
+# 79 is "the runtime is not there": its own state, the fourth field naming the entry's command.
+export CRR_STUB_RC=79
+crr "$CO_STUB" "$FXD/x.Tests.ps1"
+assert_eq "rc=$CRR_RC out=$CRR_OUT" "rc=0 out=FILE${T}unavailable${T}${T}$STUB_REQUIRES"
+unset CRR_STUB_RC
+case_end
+
+case_begin "reader-rc-other-than-79-is-malformed-reader" "bin/lib/case-record-reader.sh"
+for stub_rc in 70 1 3 78 80 124; do
+  export CRR_STUB_RC="$stub_rc"
+  crr "$CO_STUB" "$FXD/x.Tests.ps1"
+  assert_eq "stub rc=$stub_rc: rc=$CRR_RC out=$CRR_OUT" "stub rc=$stub_rc: rc=0 out=FILE${T}malformed${T}${T}reader"
+done
+unset CRR_STUB_RC
+case_end
+
+case_begin "reader-failure-resets-case-globals" "bin/lib/case-record-reader.sh"
+# No stale case may survive a reader that did not finish, whichever way it failed.
+for stub_rc in 79 70 3; do
+  export CRR_STUB_RC="$stub_rc"
+  got="$(run_with_timeout 120 bash -c '. "$1/bin/lib/case-record-reader.sh" || exit 97; crr_read "$2" >/dev/null; printf "%s|%s|%s|%s|%s" "${#TRP_CASE_BEGIN_LINES[@]}" "${#TRP_CASE_END_LINES[@]}" "${#TRP_CASE_NAMES[@]}" "${#TRP_CASE_TARGETS[@]}" "$TRP_CASE_COUNT"' _ "$CO_STUB" "$FXD/x.Tests.ps1" 2>/dev/null)"
+  assert_eq "stub rc=$stub_rc: $got" "stub rc=$stub_rc: 0|0|0|0|0"
+done
+unset CRR_STUB_RC
+case_end
+
+case_begin "bash-output-bytes-unchanged" "bin/lib/case-record-reader.sh"
+# The bash path must not move when other languages gain a reader: every byte, the final newline included.
+while IFS='|' read -r cfile cwant; do
+  [ -n "$cfile" ] || continue
+  run_with_timeout 120 bash -c '. "$1/bin/lib/case-record-reader.sh" || exit 97; crr_read "$2"' _ "$SCRIPT_CHECKOUT_ROOT" "$FXD/$cfile" >"$TMPBASE/bytes.got" 2>"$TMPBASE/bytes.err"
+  printf '%b' "$cwant" >"$TMPBASE/bytes.want"
+  same_text "$cfile stdout bytes" "$TMPBASE/bytes.got" "$TMPBASE/bytes.want"
+  assert_eq "$cfile stderr bytes=$(wc -c <"$TMPBASE/bytes.err" | tr -d ' ')" "$cfile stderr bytes=0"
+done <<'ROWS'
+none.sh|FILE\tnone\t\t\n
+conforming.sh|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t7\t10\thelper_a,helper_b\t\nCASE\t1\tbeta\tbin/b.sh\t11\t13\t\t\n
+malformed.sh|FILE\tmalformed\t3\tgrammar\n
+uncertain.sh|FILE\tuncertain\t5\tdepth\n
+heredoc-pseudo.sh|FILE\tnone\t\t\n
+ROWS
 case_end

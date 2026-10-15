@@ -21,7 +21,7 @@ hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js
 tests/hooks/legacy-session-id-relay-purge.sh
 docs/architecture/claude-code/session-id-resolution.md
 
-# Shared isolation points outside tests/<dir>/**/*.sh where the clearing-line rule also applies:
-# a line passes when every retired name on it is an operand of a whole-line unset or of -u <name>.
+# Shared isolation points outside tests/<dir>/ where the clearing-line rule also applies:
+# a line passes when the matching test-language registry entry's envClearLine part accepts it.
 [TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS]
 bin/lib/run-tests-baseline-exec.sh

@@ -52,6 +52,7 @@ command -v git >/dev/null 2>&1 || { echo "git not found — check skipped"; exit
 TMPDIR_BASE="$(mktemp -d 2>/dev/null || mktemp -d -t ssotguard)"
 cleanup() { rm -rf "$TMPDIR_BASE" 2>/dev/null || true; }
 trap cleanup EXIT
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state" WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
 
 # Fresh throwaway repo per case; core.hooksPath disabled so the installed
 # pre-commit hook cannot fire inside the fixture.
@@ -477,6 +478,13 @@ elif [[ "$l6_left" -eq 0 ]]; then pass "L6b (none of the seven is in the guard's
 # #2638: the judged tree's own path tables — cases live in the sourced part file.
 # shellcheck source=tests/bin/bin-check-session-id-ssot/tables.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-check-session-id-ssot/tables.sh"
+
+# LX: JS / PowerShell / Python clear lines. The sibling is not exempt, so this file hands it the names.
+L_RETIRED_SID=CLAUDE_SESSION_ID L_RETIRED_ENV=CLAUDE_ENV_FILE
+# shellcheck source=bin-check-session-id-ssot/lang-clear-lines.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-check-session-id-ssot/lang-clear-lines.sh"
+# shellcheck source=bin-check-session-id-ssot/registry-scope.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-check-session-id-ssot/registry-scope.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

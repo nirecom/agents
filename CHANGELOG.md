@@ -763,3 +763,7 @@ Changes: Narrowing a session's `## Issues` in intent.md now takes effect immedia
 ### FEATURE: PR #2656 (2026-10-15)
 Background: fix(#2591): close the remaining holes in experimental/test-jail
 Changes: experimental/test-jail: a jailed run now stops (exit 94) when the requested isolation pin is unavailable instead of silently running weaker; pass --allow-weaker-pin to accept the strongest available pin. compare-runs.sh ends with an explicit verdict (NEW-RED / INCOMPLETE / NO-NEW-RED) and lists the comparisons it could not trust.
+
+### FEATURE: PR #2675 (2026-10-15)
+Background: feat(#2411): write tests in the same language as the code (Pester, py...
+Changes: Tests can now be written in the same language as the code they cover — Pester, pytest or JavaScript as well as bash. Each language has its own case-marker notation, helper library and new-file name shape, and `/write-tests` picks the language from the code the test enters through.
