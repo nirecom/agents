@@ -57,6 +57,8 @@ SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-2431-run-tests-bas
 . "$SUBDIR/exec-state.sh"
 # shellcheck source=./feature-2431-run-tests-baseline/cli-state.sh
 . "$SUBDIR/cli-state.sh"
+# shellcheck source=./feature-2431-run-tests-baseline/cli-accept.sh
+. "$SUBDIR/cli-accept.sh"
 
 case_begin "baseline-ledger" "bin/lib/run-tests-baseline-ledger.sh"
 run_ledger_cases
@@ -196,6 +198,10 @@ case_end
 
 case_begin "baseline-cli-timeout-derive" "bin/run-tests-baseline"
 run_timeout_cli_cases
+case_end
+
+case_begin "baseline-cli-accept" "bin/run-tests-baseline"
+run_cli_accept_cases
 case_end
 
 echo ""

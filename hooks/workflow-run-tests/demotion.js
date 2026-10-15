@@ -4,7 +4,9 @@
 // The message is the same on both routes, so the reader's next action never depends on which
 // emitter ran the suite. Contract shapes: hooks/lib/run-contract.js.
 
-const ACCEPT_SENTINEL_FORM = "echo \"<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: {reason}>>\"";
+const UNRUNNABLE_ACCEPT_SENTINEL_FORM = "echo \"<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: {reason}>>\"";
+// Not used in demotion messages: a failing run never demotes; the baseline evidence CLI guides it.
+const BASELINE_ACCEPT_SENTINEL_FORM = "echo \"<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: {reason}>>\"";
 
 // The run's only defect is a missing runtime: a current-shape contract with no failure, and
 // either no veto or the worker's own `unrunnable` word (the pass-only allowlist vetoes it too).
@@ -38,7 +40,7 @@ function demotionMessage(reason, contract) {
   if (reason === "contract-unrunnable") {
     return head + `Selected tests marked UNRUNNABLE: ${contract.unrunnable}. ` +
       "Install the runtimes listed on the `Missing runtimes:` output line and run again. " +
-      `If a runtime cannot be installed, accept this run only with ${ACCEPT_SENTINEL_FORM}.`;
+      `If a runtime cannot be installed, accept this run only with ${UNRUNNABLE_ACCEPT_SENTINEL_FORM}.`;
   }
   if (reason === "contract-legacy-shape") {
     return head + "RUN_CONTRACT has the legacy 4-field form: the worktree's tests/run-all.sh predates this change, " +
@@ -48,4 +50,7 @@ function demotionMessage(reason, contract) {
     "and exactly one valid RUN_CONTRACT line in its output.";
 }
 
-module.exports = { demotionReason, demotionMessage, isUnrunnableOnly };
+module.exports = {
+  demotionReason, demotionMessage, isUnrunnableOnly,
+  UNRUNNABLE_ACCEPT_SENTINEL_FORM, BASELINE_ACCEPT_SENTINEL_FORM,
+};

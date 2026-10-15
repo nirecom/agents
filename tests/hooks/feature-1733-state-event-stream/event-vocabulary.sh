@@ -226,7 +226,7 @@ if run_case "EV8/annotation-keys"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const bad = [];
-const want = ["baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests",
+const want = ["baseline_accept", "baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests",
   "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
   "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();

@@ -317,6 +317,15 @@ else
     assert_eq "$(step_field "$_sid_a3" run_tests completion_basis)"        "(absent)" "A3/complete-tombstones-completion-basis"
 fi
 
+# A3b (#2517): a new run tombstones the user's baseline grant, so an old grant never covers a new failure.
+_sid_a3b="f2431-fl-a3b-$$"
+seed_step "$_sid_a3b" write_tests complete
+seed_step "$_sid_a3b" run_tests pending baseline_accept 'grant-from-an-older-run'
+assert_eq "$(step_field "$_sid_a3b" run_tests baseline_accept)" '"grant-from-an-older-run"' "A3b/precondition-seed-baseline-accept"
+drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 0 "$_sid_a3b" "$_so_a3" "$TRUSTED_WIN"
+assert_eq "$(step_field "$_sid_a3b" run_tests status)"          '"complete"' "A3b/control-green-run-completes"
+assert_eq "$(step_field "$_sid_a3b" run_tests baseline_accept)" "(absent)"   "A3b/complete-tombstones-baseline-accept"
+
 # A4: demotion branch tombstones baseline evidence.
 _sid_a4="f2431-fl-a4-$$"
 seed_step "$_sid_a4" write_tests complete
@@ -324,6 +333,14 @@ seed_step "$_sid_a4" run_tests complete baseline_classification preexisting
 drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 1 "$_sid_a4" "no contract" "$TRUSTED_WIN"
 assert_eq "$(step_field "$_sid_a4" run_tests baseline_classification)" "(absent)" "A4/demotion-tombstones-baseline-classification"
 assert_eq "$(step_field "$_sid_a4" run_tests completion_basis)"        "(absent)" "A4/demotion-tombstones-completion-basis"
+
+# A4b (#2517): the demotion branch tombstones the baseline grant too.
+_sid_a4b="f2431-fl-a4b-$$"
+seed_step "$_sid_a4b" write_tests complete
+seed_step "$_sid_a4b" run_tests complete baseline_accept 'grant-from-an-older-run'
+assert_eq "$(step_field "$_sid_a4b" run_tests baseline_accept)" '"grant-from-an-older-run"' "A4b/precondition-seed-baseline-accept"
+drive_hook "bash $TRUSTED_WIN/tests/run-all.sh" 1 "$_sid_a4b" "no contract" "$TRUSTED_WIN"
+assert_eq "$(step_field "$_sid_a4b" run_tests baseline_accept)" "(absent)" "A4b/demotion-tombstones-baseline-accept"
 
 # A6: the unrunnable count travels with the failing list, so bin/run-tests-baseline can refuse a
 # run that left selected tests unrun. No list -> no count; a later green run clears it.

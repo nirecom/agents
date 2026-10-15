@@ -331,6 +331,16 @@ else
   fail "S2431-j: SKILL.md is $SKILL_LINES lines — stage-8 must keep it under 100"
 fi
 
+# ---- #2517: the user grant for failures the baseline cannot prove pre-existing ----
+expect_match "S2517-a" "RNT-9 names the baseline accept sentinel" \
+  'WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED' "$RNT9"
+expect_no_match "S2517-b" "RNT-9 no longer gates the baseline entry on a listed failing_tests" \
+  'lists `failing_tests`' "$RNT9"
+# The pending-sentinel bullet already lists `fail | timeout | runner-error`, and the entry line
+# already says "Bash timeout", so pin both outcomes to the line that launches the baseline CLI.
+expect_match "S2517-c" "RNT-9's baseline entry covers timeout and runner-error runs" \
+  'timeout[^`]*runner-error.*bin/run-tests-baseline' "$RNT9"
+
 # S2431-a/b scope the retired prose to RNT-9; a copy moved into another step or
 # the Rules block would still coerce self-reported recovery, so pin it file-wide.
 case_begin "retired-recovery-prose-absent-file-wide" "skills/run-tests/SKILL.md"

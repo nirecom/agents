@@ -200,16 +200,17 @@ function isWorkflowStateDriverCommand(command) {
   return matchesSafely(command, (tokens) => invokesCli(tokens, ADVANCE_CLI_NAMES) && tokens.some(isMutatingFlag));
 }
 
-// `record` trusts its caller-built classification file and completes run_tests as
-// observed evidence, so bin/run-tests-baseline (a subprocess no hook sees) is its
-// only legitimate caller; a tool-issued `record` would forge that evidence (#2431).
+// `record` trusts its caller-built classification file and `accept` completes on the
+// user's grant (#2517); both complete run_tests as observed evidence, so
+// bin/run-tests-baseline (a subprocess no hook sees) is their only legitimate caller.
+// A tool-issued call would forge that evidence (#2431).
 const BASELINE_EVIDENCE_CLI = ["run-tests-baseline-evidence"];
-const BASELINE_RECORD_SUBCOMMAND = "record";
+const BASELINE_INTERNAL_SUBCOMMANDS = ["record", "accept"];
 
-function isBaselineEvidenceRecordCommand(command) {
+function isBaselineEvidenceInternalCommand(command) {
   return matchesSafely(command, (tokens) =>
     invokesCli(tokens, BASELINE_EVIDENCE_CLI) &&
-    tokens.some((t) => String(t).replace(/\\/g, "") === BASELINE_RECORD_SUBCOMMAND));
+    tokens.some((t) => BASELINE_INTERNAL_SUBCOMMANDS.includes(String(t).replace(/\\/g, ""))));
 }
 
-module.exports = { isWorkflowStateDriverCommand, isBaselineEvidenceRecordCommand };
+module.exports = { isWorkflowStateDriverCommand, isBaselineEvidenceInternalCommand };

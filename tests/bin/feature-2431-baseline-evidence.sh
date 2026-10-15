@@ -450,6 +450,10 @@ bos_ck "fixture: outcome removed" "ok" "$(bos_tool ctlrm "$SID" "worker-test-run
 bos_refused "missing-outcome" "$SID"
 case_end
 
+# #2517 — `accept` completes a failing run only on the user's grant bound to that run.
+# shellcheck source=tests/bin/feature-2431-baseline-evidence/accept.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2431-baseline-evidence/accept.sh"
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
