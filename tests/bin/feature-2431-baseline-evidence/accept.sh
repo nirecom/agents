@@ -201,6 +201,27 @@ bos_ck "fixture: newer dispatch placed" "worker-test-runner-2" "$(dispatch_outco
 acc_refused "unsettled newer dispatch" "$SID" 3
 case_end
 
+case_begin "accept-outcome-source-identity-needs-stem-and-both-sides" "bin/workflow/lib/run-tests-baseline-evidence.js"
+# sameSource: a matching outcome digest under another stem refuses, and so does a grant whose
+# outcome_source is null while the run's is set, or set while the run's is null.
+SID="$(bos_sid acc-stem)"; bos_seed_ingested "$SID" 0
+acc_ann "$SID" baseline_classification "$(acc_cls tests/bin/alpha.sh:undetermined:budget-exhausted)"
+OSHA="$(bos_tool path "$SID" run_tests outcome_source outcome_sha256)"
+PSHA="$(bos_tool path "$SID" run_tests outcome_source payload_sha256)"
+bos_ck "fixture: ingested run carries an outcome digest" "yes" "$([[ -n "$OSHA" && "$OSHA" != "(absent)" ]] && echo yes || echo no)"
+acc_grant "$SID" undetermined fail "{\"stem\":\"worker-test-runner-9\",\"payload_sha256\":\"$PSHA\",\"outcome_sha256\":\"$OSHA\"}"
+acc_refused "same digest, other stem" "$SID" 1
+SID="$(bos_sid acc-src-null)"; bos_seed_ingested "$SID" 0
+acc_ann "$SID" baseline_classification "$(acc_cls tests/bin/alpha.sh:undetermined:budget-exhausted)"
+acc_grant "$SID" undetermined fail
+acc_refused "grant source null, run source set" "$SID" 1
+SID="$(bos_sid acc-run-null)"
+acc_seed "$SID" fail "$ACC_PAIR" 0 "$(acc_cls tests/a.sh:undetermined:home-claude-ref tests/b.sh:preexisting:)"
+bos_ck "fixture: plain run has no outcome_source" "(absent)" "$(bos_tool field "$SID" run_tests outcome_source)"
+acc_grant "$SID" undetermined fail '{"stem":"worker-test-runner-1","payload_sha256":"00","outcome_sha256":"00"}'
+acc_refused "grant source set, run source null" "$SID" 1
+case_end
+
 case_begin "failing-and-record-point-at-the-sentinel" "bin/workflow/lib/run-tests-baseline-evidence.js"
 # failing(): exit 3 on a list-less failing run names the sentinel, except when UNRUNNABLE>0.
 SID="$(bos_sid acc-hint-nl)"; acc_seed "$SID" fail null 0
@@ -219,5 +240,32 @@ for row in u:yes b:no; do
   got=no; [[ "$REC_E" == *"$ACC_FORM"* ]] && got=yes
   bos_ck "record UNMET ($f) names the sentinel: $want" "$want" "$got"
   bos_ck "record UNMET ($f) stays pending" "pending" "$(bos_tool field "$SID" run_tests status)"
+done
+case_end
+
+case_begin "accept-failing-list-unrecorded-needs-an-exact-zero-unrunnable" "bin/workflow/lib/run-tests-baseline-evidence.js"
+# The list-less kind is held to unrunnable_count === 0 like the undetermined kind: an unknown count
+# (null, or the legacy unrecorded field) refuses. The exact-0 control is accept-failing-list-unrecorded.
+for row in null:null absent:-; do
+  SID="$(bos_sid "acc-nlunr-${row%%:*}")"
+  acc_seed "$SID" fail null "${row##*:}"
+  acc_grant "$SID" failing-list-unrecorded fail
+  acc_refused "no-list unrunnable_count ${row%%:*}" "$SID" 1
+done
+case_end
+
+case_begin "failing-listless-hint-needs-an-exact-zero-unrunnable" "bin/workflow/lib/run-tests-baseline-evidence.js"
+# failing(): the list-less exit 3 names the sentinel only on an exact 0 (control: acc-hint-nl above).
+for row in null:null absent:-; do
+  SID="$(bos_sid "acc-hint-${row%%:*}")"; acc_seed "$SID" fail null "${row##*:}"
+  HINT_RC=0
+  (cd "$TMPROOT" && run_with_timeout 30 "$EVIDENCE_CLI" failing --session "$SID" >/dev/null 2>&1) || HINT_RC=$?
+  bos_ck "unrunnable_count ${row%%:*}: failing exits 3" "3" "$HINT_RC"
+  FAIL_ERR="$(acc_cli_err failing --session "$SID")"
+  if [[ "$FAIL_ERR" == *"$ACC_FORM"* ]]; then
+    fail "unrunnable_count ${row%%:*}: no baseline hint" "stderr: $FAIL_ERR"
+  else
+    pass "unrunnable_count ${row%%:*}: no baseline hint"
+  fi
 done
 case_end

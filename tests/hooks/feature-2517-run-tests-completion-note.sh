@@ -165,11 +165,15 @@ ck "the grant line follows the State line" "$WANT" "$NEXT"
 case_end
 
 case_begin "pr-body-disclosure" "skills/_shared/commit-push-dispatch.md"
-# The PR body appends the non-empty stdout of the CLI that commit-push-dispatch.md names.
+# The commit-push worker's prBody appends the note itself, so the dispatch doc must not tell the
+# LLM to append the CLI's stdout to pr_body_template (an instruction that can silently vanish).
 DISPATCH_MD="$SCRIPT_CHECKOUT_ROOT/skills/_shared/commit-push-dispatch.md"
-grep -qE 'pr_body_template.*bin/workflow/run-tests-completion-note" --session' "$DISPATCH_MD" \
-  && pass "commit-push-dispatch pr_body_template names bin/workflow/run-tests-completion-note" \
-  || fail "commit-push-dispatch pr_body_template names bin/workflow/run-tests-completion-note" "no single line with pr_body_template and the CLI in $DISPATCH_MD"
+grep -q 'pr_body_template' "$DISPATCH_MD" \
+  && pass "control: commit-push-dispatch still names pr_body_template" \
+  || fail "control: commit-push-dispatch still names pr_body_template" "no pr_body_template line in $DISPATCH_MD"
+grep -E 'pr_body_template' "$DISPATCH_MD" | grep -q 'run-tests-completion-note' \
+  && fail "commit-push-dispatch pr_body_template line has no LLM append instruction" "a pr_body_template line still names run-tests-completion-note" \
+  || pass "commit-push-dispatch pr_body_template line has no LLM append instruction"
 grep -q 'run-tests-unrunnable-note' "$DISPATCH_MD" \
   && fail "commit-push-dispatch drops the old CLI name" "run-tests-unrunnable-note still named" \
   || pass "commit-push-dispatch drops the old CLI name"

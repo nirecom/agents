@@ -11,6 +11,7 @@ const { RUN_TESTS_BASELINE_ACCEPTED_RE_DQ, RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE
   require("../lib/sentinel-patterns");
 const { appendEvents } = require("../workflow-state/state-io");
 const { sanitizeLine } = require("../lib/output-sanitize");
+const { grantKind } = require("../../bin/workflow/lib/run-tests-baseline-evidence");
 
 const LABEL = "RUN_TESTS_BASELINE_ACCEPTED";
 const ORIGIN = "workflow-mark-run-tests-baseline-accept";
@@ -18,8 +19,8 @@ const FORM = "echo \"<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: {reason}>>\"";
 const UA_FORM = "echo \"<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: {reason}>>\"";
 const FAILING_OUTCOMES = ["fail", "timeout", "runner-error"];
 
-// The grant's kind, or { why } when the run cannot be granted. Order: settled, failing,
-// unrunnable, failing list, classification, broken (an early UX refusal; accept() decides).
+// The grant's kind, or { why } when the run cannot be granted. The early checks only word the
+// refusal; grantKind (the CLI accept's own verdict) decides, so the two cannot disagree (CPR-SSOT).
 function judge(entry) {
   if (!entry) return { why: "no /run-tests run is recorded — nothing pending to accept" };
   if (entry.status !== "pending") return { why: `run_tests is already ${entry.status} — nothing pending to accept` };
@@ -32,10 +33,11 @@ function judge(entry) {
   if (Number.isInteger(entry.unrunnable_count) && entry.unrunnable_count > 0) {
     return { why: `${entry.unrunnable_count} selected test(s) are UNRUNNABLE — install the runtimes or use ${UA_FORM}` };
   }
-  const list = entry.failing_tests;
-  if (list === null || list === undefined || (Array.isArray(list) && list.length === 0)) {
-    return { kind: "failing-list-unrecorded" };
+  if (entry.unrunnable_count !== 0) {
+    return { why: "the failing run recorded no exact unrunnable_count of 0 — re-run /run-tests" };
   }
+  const kind = grantKind(entry);
+  if (kind !== null) return { kind };
   const cls = entry.baseline_classification;
   if (!cls || !Array.isArray(cls.entries)) {
     return { why: "no baseline classification is recorded — run bin/run-tests-baseline first" };
@@ -43,7 +45,10 @@ function judge(entry) {
   if (cls.entries.some((e) => e && e.class === "broken")) {
     return { why: "the baseline classified a test as broken — a broken test cannot be accepted" };
   }
-  return { kind: "undetermined" };
+  return {
+    why: "the baseline classification does not support a grant — it must cover every failing path exactly " +
+      "and leave only undetermined tests not pre-existing",
+  };
 }
 
 function rejection(entry) {

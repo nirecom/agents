@@ -62,7 +62,7 @@ function isListless(entry) {
 }
 
 function listlessHint(sessionId, entry, pre) {
-  if (pre !== NO_LIST || hasPositiveUnrunnable(entry) || !isListless(entry)) return "";
+  if (pre !== NO_LIST || entry.unrunnable_count !== 0 || !isListless(entry)) return "";
   if (dispatchPrecondition(sessionId, entry) !== null) return "";
   return `\nOnly if the user confirmed these failures are pre-existing, accept with ${acceptForm()}; ` +
     "with no failing list a broken test may be among them.";
@@ -178,10 +178,13 @@ function record(sessionId, seq, entries, base) {
   return verdict;
 }
 
-// The grant kind the entry supports now, or null. Mirrors the handler's kinds; this one decides.
+// The grant kind the entry supports now, or null. The sentinel handler judges with this same function.
+// Only the hook's own exact 0 unrunnable count is grantable: null, absent or malformed proves nothing.
 function grantKind(entry) {
-  if (isListless(entry)) return "failing-list-unrecorded";
-  if (failingPrecondition(entry) !== null || entry.unrunnable_count !== 0) return null;
+  if (!entry || entry.unrunnable_count !== 0) return null;
+  const pre = failingPrecondition(entry);
+  if (pre === NO_LIST && isListless(entry)) return "failing-list-unrecorded";
+  if (pre !== null) return null;
   const cls = entry.baseline_classification;
   if (!cls || !Array.isArray(cls.entries)) return null;
   if (!coverStatus(entry.failing_tests, cls.entries).covered) return null;
@@ -212,6 +215,7 @@ function acceptRefusal(sessionId, entry, grant) {
   if (hasPositiveUnrunnable(entry)) {
     return unmet(`${entry.unrunnable_count} selected test(s) were UNRUNNABLE; use the UNRUNNABLE_ACCEPTED path instead`);
   }
+  if (entry.unrunnable_count !== 0) return unmet("the failing run recorded no exact unrunnable_count of 0; re-run /run-tests");
   const kind = grantKind(entry);
   if (kind === null || kind !== grant.kind) {
     return unmet(`the run no longer supports the grant (state kind=${kind || "none"}, grant kind=${grant.kind})`);
@@ -269,4 +273,5 @@ module.exports = {
   record,
   recordFromFile,
   accept,
+  grantKind,
 };

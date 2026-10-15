@@ -42,6 +42,8 @@ case_end
 . "$BA_CASES/grant.sh"
 # shellcheck source=feature-2517-run-tests-baseline-accept/reject.sh
 . "$BA_CASES/reject.sh"
+# shellcheck source=feature-2517-run-tests-baseline-accept/strict.sh
+. "$BA_CASES/strict.sh"
 
 echo ""
 echo "Results: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

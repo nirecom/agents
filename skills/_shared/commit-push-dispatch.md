@@ -16,7 +16,7 @@ Exclude the `settings.json` `model` and `effort` fields from the commit — the 
 
 Dispatch to the `commit-push` worker per `skills/_shared/worker-dispatch.md`.
 Sibling pre-check (non-blocking): `bash "$AGENTS_MAIN_ROOT/bin/check-sibling-uncommitted.sh"` — it warns when a sibling worktree in `## SiblingWorktrees` has uncommitted or unpushed work.
-Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template` (append the non-empty stdout of `node "$AGENTS_MAIN_ROOT/bin/workflow/run-tests-completion-note" --session <session-id>` — one line naming tests the user accepted unverified), `wip_mode`, `enforce_worktree`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
+Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template` (the worker appends the run_tests completion note itself), `wip_mode`, `enforce_worktree`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
 Pass `closes_issues` as the `hooks/lib/parse-closes-issues.js` records verbatim (`{number, repo?}` objects) — never flatten them to bare numbers.
 Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before dispatching.
 The worker skips staging verification only when `wip_mode: true` — `--wip`, or a WORKFLOW_OFF / WORKTREE_OFF session marker.

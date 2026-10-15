@@ -80,6 +80,36 @@ msg_has() {
 
 CLS_UNDET='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermined","detail":"home-claude-ref"},{"path":"tests/b.sh","class":"preexisting","detail":""}]}'
 CLS_BROKEN='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermined","detail":"timeout-at-base"},{"path":"tests/b.sh","class":"broken","detail":""}]}'
+CLS_MISSING='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermined","detail":""}]}'
+CLS_FOREIGN='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermined","detail":""},{"path":"tests/b.sh","class":"preexisting","detail":""},{"path":"tests/c.sh","class":"preexisting","detail":""}]}'
+CLS_ALLPRE='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"preexisting","detail":""},{"path":"tests/b.sh","class":"preexisting-inherited","detail":""}]}'
+CLS_ALLUNDET='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermined","detail":""},{"path":"tests/b.sh","class":"undetermined","detail":""}]}'
+CLS_DUP='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermined","detail":""},{"path":"tests/a.sh","class":"undetermined","detail":""}]}'
+CLS_INHERIT='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermined","detail":""},{"path":"tests/b.sh","class":"preexisting-inherited","detail":""}]}'
+
+# strict_rows — <id>|<setup kind>|<verdict>|<grant kind>: the grant contract shared by the handler
+# (judge) and the CLI (grantKind). One table, so both sides are held to the same rows (#2517).
+strict_rows() {
+  cat <<'ROWS'
+H1|nolist-unrnull|rejected|failing-list-unrecorded
+H2|nolist-unrabsent|rejected|failing-list-unrecorded
+H3|nolist|granted|failing-list-unrecorded
+H4|cls-missing|rejected|undetermined
+H5|cls-foreign|rejected|undetermined
+H6|cls-allpre|rejected|undetermined
+H7|undet-unrnull|rejected|undetermined
+H8|undet|granted|undetermined
+H9|cls-dup|rejected|undetermined
+H10|nolist-unrneg|rejected|failing-list-unrecorded
+H11|nolist-unrstr|rejected|failing-list-unrecorded
+H12|undet-unrneg|rejected|undetermined
+H13|undet-unrstr|rejected|undetermined
+H14|emptylist-timeout|granted|failing-list-unrecorded
+H15|emptylist-runner-error|granted|failing-list-unrecorded
+H16|undet-unrabsent|rejected|undetermined
+H17|inherited-undet|granted|undetermined
+ROWS
+}
 
 # setup_state <sid> <kind> — write_tests settled, then run_tests in the named shape.
 #   undet:     fail run, two failing paths, an undetermined-only classification
@@ -89,6 +119,7 @@ CLS_BROKEN='{"base":"abc123","entries":[{"path":"tests/a.sh","class":"undetermin
 #   noclass:   fail run, failing paths, no classification
 #   broken:    fail run, classification with a broken entry
 #   complete / pass / unrun / unrcount: the states the grant must refuse
+#   nolist-unr* / emptylist-* / cls-* / undet-unr* / inherited-undet: strict_rows shapes (see CLS_*)
 setup_state() {
   local sid="$1"
   st seed "$sid" write_tests complete >/dev/null
@@ -107,5 +138,37 @@ setup_state() {
     unrun) st seed "$sid" run_tests pending run_outcome unrunnable unrunnable_count 2 >/dev/null ;;
     unrcount) st seed "$sid" run_tests pending run_outcome fail unrunnable_count 1 \
                 failing_tests '["tests/a.sh"]' >/dev/null ;;
+    nolist-unrnull) st seed "$sid" run_tests pending run_outcome fail unrunnable_count null \
+                      failing_tests null >/dev/null ;;
+    nolist-unrneg) st seed "$sid" run_tests pending run_outcome fail unrunnable_count -1 \
+                     failing_tests null >/dev/null ;;
+    nolist-unrstr) st seed "$sid" run_tests pending run_outcome fail unrunnable_count '"0"' \
+                     failing_tests null >/dev/null ;;
+    nolist-unrabsent) st seed "$sid" run_tests pending run_outcome fail failing_tests null >/dev/null ;;
+    emptylist-timeout|emptylist-runner-error)
+      st seed "$sid" run_tests pending run_outcome "${2#emptylist-}" unrunnable_count 0 \
+        failing_tests '[]' >/dev/null ;;
+    inherited-undet) st seed "$sid" run_tests pending run_outcome fail unrunnable_count 0 \
+                       failing_tests '["tests/a.sh","tests/b.sh"]' baseline_classification "$CLS_INHERIT" >/dev/null ;;
+    cls-missing|cls-foreign|cls-allpre|cls-dup)
+      local cls
+      case "$2" in
+        cls-missing) cls="$CLS_MISSING" ;;
+        cls-foreign) cls="$CLS_FOREIGN" ;;
+        cls-allpre) cls="$CLS_ALLPRE" ;;
+        cls-dup) cls="$CLS_DUP" ;;
+      esac
+      st seed "$sid" run_tests pending run_outcome fail unrunnable_count 0 \
+        failing_tests '["tests/a.sh","tests/b.sh"]' baseline_classification "$cls" >/dev/null ;;
+    undet-unrnull|undet-unrneg|undet-unrstr|undet-unrabsent)
+      local cnt=()
+      case "$2" in
+        undet-unrnull) cnt=(unrunnable_count null) ;;
+        undet-unrneg) cnt=(unrunnable_count -1) ;;
+        undet-unrstr) cnt=(unrunnable_count '"0"') ;;
+      esac
+      st seed "$sid" run_tests pending run_outcome fail "${cnt[@]}" \
+        failing_tests '["tests/a.sh","tests/b.sh"]' baseline_classification "$CLS_ALLUNDET" >/dev/null ;;
+    *) fail "fixture: setup_state" "unknown kind $2" ;;
   esac
 }
