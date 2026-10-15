@@ -110,15 +110,15 @@ add_broken_test_file() {
         no_tests_header)
             printf '# Tags: scope:common\necho fixture\n' >> "$f" ;;
         duplicate_header)
-            printf '# Tests: src/x.js\n' >> "$f"
-            printf '# Tests: src/y.js\n' >> "$f"
+            printf '# Tests: src/x.sh\n' >> "$f"
+            printf '# Tests: src/y.sh\n' >> "$f"
             printf '# Tags: scope:common\n' >> "$f" ;;
         late_header)
             for ((i = 2; i <= 11; i++)); do printf '# filler %s\n' "$i" >> "$f"; done
-            printf '# Tests: src/x.js\n' >> "$f"
+            printf '# Tests: src/x.sh\n' >> "$f"
             printf '# Tags: scope:common\n' >> "$f" ;;
         malformed_header)
-            printf '# Tests: src/x.js,,src/y.js\n' >> "$f"
+            printf '# Tests: src/x.sh,,src/y.sh\n' >> "$f"
             printf '# Tags: scope:common\n' >> "$f" ;;
         *)
             fail "add_broken_test_file: unknown kind $kind" ;;

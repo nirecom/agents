@@ -4,7 +4,7 @@
 
 ## The rule
 
-- **Default is append.** When an existing categorized `tests/<category>/<name>.sh` already names the planned case's source set S in its `# Tests:` header, the case goes there; a new file is created only when no such candidate exists.
+- **Default is append.** When an existing categorized `tests/<category>/<file>` already names the planned case's source set S in its `# Tests:` header, the case goes there; a new file is created only when no such candidate exists.
 - **Same-set rule.** A candidate qualifies only when `S ⊆ T`, T being that candidate's own `# Tests:` set — appending to a file that overlaps S partially is prohibited.
 - **Appending never widens T**, so the orphan premise of `bin/lib/test-retire-predicate.sh` survives the append untouched.
 - **HARD limit.** A new file is created, tagged `dup-group-keep:size-hard-limit` in `# Tags:`, when: (a) every candidate already exceeds the HARD limit, or (b) appending the planned cases would push the best candidate past the HARD limit (`rules/coding/file-split.md`).
@@ -26,3 +26,14 @@
 - Pass every query of one step to a single invocation, repeating `--test-file` or `--sources`.
 - Cap one invocation at 50 queries; beyond that, split into independent commands of up to 50 each.
 - Do not decide by eye and do not grep headers here: the helper owns the corpus scan, the ranking and the limit comparison.
+
+## Reading the language columns
+
+- Pass `--with-language`: the row gains a `languages` column (registry ids, or `unsupported`) and a `shapes` column (each language's new-file name shape, same order, or `-`).
+- Language is decided before destination: an `append` target is always a file in one of the listed languages.
+- One language listed: write the test in it, with that registry entry's `helperLibrary` and `notationDoc`.
+- Two or more listed: pick the language of the code the test enters through, by the `rules/test.md` "Test Language" table.
+- `unsupported` and the target is executable code: do not write the test; tell the user that no registered test language covers it.
+- `unsupported` and the target is not code (a document, a prompt file, data): follow the verdict as usual.
+- Reason `runtime-unavailable` (verdict `new`): do not create the file; tell the user that the language's runtime is not installed here.
+- Name a new file by the `shapes` entry of the chosen language.

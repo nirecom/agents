@@ -49,6 +49,7 @@ command -v git >/dev/null 2>&1 || { echo "git not found — check skipped"; exit
 TMPDIR_BASE="$(mktemp -d 2>/dev/null || mktemp -d -t ssotguard)"
 cleanup() { rm -rf "$TMPDIR_BASE" 2>/dev/null || true; }
 trap cleanup EXIT
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow-state" WORKFLOW_PLANS_DIR="$TMPDIR_BASE/workflow-plans"
 
 # Fresh throwaway repo per case; core.hooksPath disabled so the installed
 # pre-commit hook cannot fire inside the fixture.
@@ -467,6 +468,13 @@ l6_left=0
 l6_block="$(sed -n '/^TOMBSTONE_EXEMPT=(/,/^)/p' "$GUARD" 2>/dev/null)"
 for p in "${L_SEVEN[@]}"; do case "$l6_block" in *"\"$p\""*) l6_left=$((l6_left + 1)) ;; esac; done
 if [[ "$l6_left" -eq 0 ]]; then pass "L6b (none of the seven is in the guard's TOMBSTONE_EXEMPT)"; else fail "L6b: $l6_left of the seven still exempt"; fi
+
+# LX: JS / PowerShell / Python clear lines. The sibling is not exempt, so this file hands it the names.
+L_RETIRED_SID=CLAUDE_SESSION_ID L_RETIRED_ENV=CLAUDE_ENV_FILE
+# shellcheck source=bin-check-session-id-ssot/lang-clear-lines.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-check-session-id-ssot/lang-clear-lines.sh"
+# shellcheck source=bin-check-session-id-ssot/registry-scope.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/bin/bin-check-session-id-ssot/registry-scope.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

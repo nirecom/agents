@@ -321,7 +321,9 @@ CM_ROWS=(
     "tests/agents/x.sh|0" "tests/install/x.sh|0" "tests/tests/x.sh|0"
     "tests/flat.sh|0" "tests/run-all.sh|1" "tests/_archive/x.sh|1"
     "tests/lib/harness.sh|1" "tests/hooks/suite/x.sh|1" "tests/unknown/x.sh|1"
-    "tests/hooks/x.Tests.ps1|1" "tests/hooks/test_x.py|1" "tests/hooks/.sh|1"
+    "tests/hooks/x.Tests.ps1|0" "tests/hooks/test_x.py|0" "tests/hooks/x.js|0"
+    "tests/hooks/suite/x.Tests.ps1|1" "tests/lib/test_x.py|1" "tests/hooks/suite/x.js|1"
+    "tests/hooks/x.test.ts|1" "tests/hooks/.sh|1"
 )
 cm_fn_ok=0
 declare -F _precommit_is_case_marker_target >/dev/null 2>&1 && cm_fn_ok=1
