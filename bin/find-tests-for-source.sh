@@ -2,9 +2,9 @@
 # bin/find-tests-for-source.sh — read-only. Answers "does this source set already
 # have a test file to append to?" for write-tests (WT-5) and review-tests (RT-1a).
 # Usage: find-tests-for-source.sh --sources <path>[,<path>...] [--sources ...] | --test-file <path>
-#                                 [--root <repo-root>] [--hard-max <n>]
-# One TSV row per query, no header:
-#   query verdict reason target target_lines candidates viable excluded
+#                                 [--root <repo-root>] [--hard-max <n>] [--with-language]
+# One TSV row per query, no header (--with-language adds the last two columns):
+#   query verdict reason target target_lines candidates viable excluded [languages shapes]
 # Exit 0 = a decision was made (`new` / `skipped` are decisions, not failures),
 # 2 = usage error, 3 = environment error, 4 = no host test lane freed within the
 # wait cap (see docs/architecture/claude-code/test-host-lanes.md). The criteria
@@ -24,7 +24,7 @@ source "$_FTS_DIR/lib/test-host-lanes.sh"
 
 usage_error() {
   printf 'ERROR: %s\n' "$1" >&2
-  printf 'Usage: find-tests-for-source.sh --sources <csv> [--sources ...] | --test-file <path> [--root <dir>] [--hard-max <n>]\n' >&2
+  printf 'Usage: find-tests-for-source.sh --sources <csv> [--sources ...] | --test-file <path> [--root <dir>] [--hard-max <n>] [--with-language]\n' >&2
   exit 2
 }
 
@@ -37,6 +37,7 @@ declare -a SOURCES=() TESTFILES=() SPLIT_OUT=()
 declare -a QKEYS=() QCOLS=()
 ROOT_OPT=""
 HARD_MAX="$TRD_HARD_MAX_DEFAULT"
+WITH_LANGUAGE=0
 
 # split_csv <csv> — splits on every `,`, KEEPING empty elements so `a,,b`, `,a`
 # and `a,` stay usage errors instead of silently shrinking the query set.
@@ -73,6 +74,9 @@ while [[ "$#" -gt 0 ]]; do
       [[ "$#" -ge 2 ]] || usage_error "--hard-max requires a value"
       HARD_MAX="$2"
       shift 2 ;;
+    --with-language)
+      WITH_LANGUAGE=1
+      shift ;;
     *)
       usage_error "unknown option: $1" ;;
   esac
@@ -128,13 +132,28 @@ cd "$ROOT" || env_error "could not enter $ROOT"
 
 tcc_load_corpus_cached "$ROOT"
 
+# lang_columns <languages> <shapes> — the two --with-language columns; nothing without the flag.
+lang_columns() {
+  [[ "$WITH_LANGUAGE" -eq 1 ]] && printf '\t%s\t%s' "${1:-unsupported}" "${2:--}"
+  printf '\n'
+}
+
 emit_flat() {
-  printf '%s\t%s\t%s\t-\t-\t-\t-\t-\n' "$1" "$2" "$3"
+  printf '%s\t%s\t%s\t-\t-\t-\t-\t-' "$1" "$2" "$3"
+  lang_columns "" ""
+}
+
+# emit_row <escaped-query> — the row of the last trd_decide.
+emit_row() {
+  local line
+  line="$(trd_row "$1")"
+  printf '%s' "$line"
+  lang_columns "$TRL_LANGS" "$TRL_SHAPES"
 }
 
 for _i in "${!QKEYS[@]}"; do
   trd_decide "${QKEYS[$_i]}" "" "$HARD_MAX"
-  trd_row "${QCOLS[$_i]}"
+  emit_row "${QCOLS[$_i]}"
 done
 
 # Pass 1 collects the in-corpus test files so ONE _tdg_batch_matches (one awk)
@@ -173,7 +192,7 @@ for _i in "${!TESTFILES[@]}"; do
     if [[ -z "$_TK" ]]; then _TK="$_t"; else _TK="$_TK"$'\n'"$_t"; fi
   done
   trd_decide "$_TK" "$_tf" "$HARD_MAX"
-  trd_row "$_ESC"
+  emit_row "$_ESC"
 done
 
 exit 0

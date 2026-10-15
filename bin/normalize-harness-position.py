@@ -42,7 +42,9 @@ REMOVE_PATTERNS = [
     re.compile(r'^SKIP=0\s*$'),
 ]
 
-HARNESS_RE = re.compile(r'^\.\s+"[^"]*tests/lib/harness\.sh"')
+# The one helper library whose load line this script knows how to place.
+HARNESS_PATH = 'tests/lib/harness.sh'
+HARNESS_RE = re.compile(r'^\.\s+"[^"]*' + re.escape(HARNESS_PATH) + '"')
 ROOT_VAR_RE = re.compile(r'^(SCRIPT_CHECKOUT_ROOT|REPO_ROOT)=')
 
 
@@ -50,8 +52,8 @@ def _make_harness_line(lines: list[str]) -> str:
     """Determine the correct harness source line based on root variable used."""
     uses_repo_root = any(ROOT_VAR_RE.match(ln.rstrip()) and 'REPO_ROOT' in ln for ln in lines)
     if uses_repo_root:
-        return '. "$REPO_ROOT/tests/lib/harness.sh"\n'
-    return '. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"\n'
+        return f'. "$REPO_ROOT/{HARNESS_PATH}"\n'
+    return f'. "$SCRIPT_CHECKOUT_ROOT/{HARNESS_PATH}"\n'
 
 
 def normalize(path: Path, dry_run: bool, add_harness: bool = False) -> str:
@@ -179,11 +181,11 @@ def find_multi_path_files(repo_root: Path, registry: dict) -> list[Path]:
     results = []
     tests_dir = repo_root / 'tests'
     header_max = int(registry['headerMaxLines'])
-    # Only languages that source the harness helper library are candidates; the first
+    # Only entries whose helper library is HARNESS_PATH are candidates; the first
     # entry (table order) whose glob takes a file owns its header marker.
     marker_of: dict[Path, str] = {}
     for e in registry['entries']:
-        if e.get('status') != 'supported' or not e.get('helperLibrary'):
+        if e.get('status') != 'supported' or (e.get('helperLibrary') or {}).get('path') != HARNESS_PATH:
             continue
         marker = tests_marker(registry, e)
         for g in e['globs']:

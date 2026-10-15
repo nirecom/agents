@@ -277,6 +277,7 @@
     {"file":"tests/hooks/feature-2326-hook-mechanism.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-2326-rtk-rewrite.js","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-2388-block-case-markers/registration.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
+    {"file":"tests/hooks/feature-2411-gate-integration/edit.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
     {"file":"tests/hooks/feature-2403-readonly-judge.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-2460-jev-shadow/j-registration.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
     {"file":"tests/hooks/feature-assemble-cmd-parse.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},

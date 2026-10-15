@@ -109,9 +109,9 @@ _precommit_check_tests_frontmatter() {
 # its entry's helperLibrary. Checker infra errors fail open with a stderr diagnostic.
 # rc 0 = ok / not applicable; rc 1 = block the commit.
 _precommit_check_tests_case_markers() {
-    local repo_top rel tmp="" n=0 tmpfile out rc line
-    local -a rels=() high=()
-    local missing=0 malformed=0 tried=0
+    local repo_top rel tmp="" n=0 tmpfile out rc line id hint lf=$'\n'
+    local -a rels=() ids=() high=()
+    local missing="" malformed="" tried=0
 
     repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$repo_top" ] || return 0
@@ -132,7 +132,7 @@ _precommit_check_tests_case_markers() {
         # Staged view, like the blobs judged below: an unstaged add/delete must not flip applicability.
         _tlr_get "$TLR_ID" helperLibrary.path && git cat-file -e ":$_TLR_V" 2>/dev/null || continue
         git cat-file -e "HEAD:$rel" 2>/dev/null && continue
-        rels+=("$rel")
+        rels+=("$rel"); ids+=("$TLR_ID")
     done < <(git diff --cached --name-only -z --diff-filter=ACMR -- 'tests/' 2>/dev/null || true)
     [ "${#rels[@]}" -eq 0 ] && return 0
 
@@ -142,6 +142,7 @@ _precommit_check_tests_case_markers() {
     fi
 
     for rel in "${rels[@]}"; do
+        id="${ids[$n]}"
         n=$((n + 1))
         mkdir -p "$tmp/$n"
         tmpfile="$tmp/$n/${rel##*/}"
@@ -154,9 +155,18 @@ _precommit_check_tests_case_markers() {
         out="${out//"$tmpfile"/$rel}"
         if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -qE '^HIGH: .* code='; then
             while IFS= read -r line; do
+                hint=""
                 case "$line" in
-                    HIGH:*code=MISSING_CASE_MARKERS*) high+=("$line"); missing=1 ;;
-                    HIGH:*code=MALFORMED_CASE_MARKER*) high+=("$line"); malformed=1 ;;
+                    HIGH:*code=MISSING_CASE_MARKERS*)
+                        high+=("$line")
+                        _tlr_get "$id" diagnostics.markerMissingHint || _tlr_get "$id" diagnostics.markerWrapHint || continue
+                        hint="$_TLR_V."
+                        case "$lf$missing$lf" in *"$lf$hint$lf"*) ;; *) missing="${missing:+$missing$lf}$hint" ;; esac ;;
+                    HIGH:*code=MALFORMED_CASE_MARKER*)
+                        high+=("$line")
+                        _tlr_get "$id" diagnostics.markerDoc || _tlr_get "$id" notationDoc || continue
+                        hint="Fix marker placement — see $_TLR_V."
+                        case "$lf$malformed$lf" in *"$lf$hint$lf"*) ;; *) malformed="${malformed:+$malformed$lf}$hint" ;; esac ;;
                     HIGH:*) high+=("$line") ;;
                     *) ;;
                 esac
@@ -174,7 +184,7 @@ _precommit_check_tests_case_markers() {
     printf '%s\n' "${high[@]}"
     echo ""
     echo "Commit blocked: new test file(s) fail the case-marker gate."
-    [ "$missing" -eq 1 ] && echo "Wrap each case in case_begin/case_end (tests/lib/harness.sh)."
-    [ "$malformed" -eq 1 ] && echo "Fix marker placement — see skills/_shared/test-design/case-markers.md."
+    [ -n "$missing" ] && printf '%s\n' "$missing"
+    [ -n "$malformed" ] && printf '%s\n' "$malformed"
     return 1
 }

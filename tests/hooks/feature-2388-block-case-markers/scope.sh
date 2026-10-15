@@ -23,12 +23,25 @@ assert_decision "env-file-off-still-blocks" block
 case_end
 
 case_begin "non-entrypoint-path-approves" "hooks/block-case-markers.js"
-for rel in tests/hooks/suite/sub.sh tests/lib/extra.sh tests/run-all.sh tests/_archive/old.sh tests/hooks/x.Tests.ps1 bin/tool.sh \
-    tests/hooks/test_x.py tests/hooks/a.js tests/hooks/.sh; do
+# Placement or name alone rules these out; the three non-bash names sit off a
+# category root because a category-root one is an entrypoint since #2411.
+for rel in tests/hooks/suite/sub.sh tests/lib/extra.sh tests/run-all.sh tests/_archive/old.sh tests/hooks/suite/x.Tests.ps1 bin/tool.sh \
+    tests/lib/test_x.py tests/hooks/suite/a.js tests/hooks/.sh tests/hooks/a.test.ts; do
   mkpayload Write "$REPO_M" "$REPO_M/$rel" "content=@$BODIES/missing.sh"
   hk_run
   assert_decision "non-entrypoint-path-approves $rel" approve
 done
+# Same paths with every language's helper library present in the repo, so a
+# missing helper library is not what approves them.
+for lib in harness.ps1 harness.py harness.js; do
+  printf 'stub\n' > "$REPO/tests/lib/$lib"
+done
+for rel in tests/hooks/suite/x.Tests.ps1 tests/lib/test_x.py tests/hooks/suite/a.js; do
+  mkpayload Write "$REPO_M" "$REPO_M/$rel" "content=@$BODIES/missing.sh"
+  hk_run
+  assert_decision "non-entrypoint-path-approves with helper libraries $rel" approve
+done
+rm -f "$REPO/tests/lib/harness.ps1" "$REPO/tests/lib/harness.py" "$REPO/tests/lib/harness.js"
 case_end
 
 case_begin "no-harness-repo-approves" "hooks/block-case-markers.js"

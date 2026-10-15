@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // PreToolUse hook: refuse a Write/Edit/MultiEdit that leaves a NEW case-marker test
 // entrypoint (absent from HEAD, in a repo carrying its helperLibrary) with
-// missing or malformed case_begin/case_end markers (#2388). The verdict is
+// missing or malformed case markers (#2388). The verdict is
 // bin/check-case-markers.sh run on a temp copy of the rebuilt post-edit content;
 // the target file is never touched. pre-commit is the backstop for what this
 // cannot rebuild (editFiles, NotebookEdit). Fails open on any error.
@@ -17,7 +17,6 @@ const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 const EDIT_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
 const CHECKER = path.resolve(__dirname, "..", "bin", "check-case-markers.sh");
-const RULE_DOC = "skills/_shared/test-design/case-markers.md";
 const CHECK_TIMEOUT_MS = 8000;
 
 // caseMarkerEntry — the registry entry of a placed case-marker entrypoint (repo-relative
@@ -41,13 +40,18 @@ function registry() {
   return require("./lib/test-language-registry");
 }
 
+// One hint per language among the violations, worded by its registry entry's diagnostics.
 function buildReason(violations) {
   const lines = ["[block-case-markers] New test file(s) fail the case-marker gate:"];
+  const hints = [];
   for (const v of violations) {
     for (const h of v.high) lines.push(`  ${v.rel}: ${h}`);
+    const d = (v.entry && v.entry.diagnostics) || {};
+    const doc = d.markerDoc || (v.entry && v.entry.notationDoc);
+    const hint = d.markerWrapHint && `${d.markerWrapHint}${doc ? ` — see ${doc}` : ""}.`;
+    if (hint && !hints.includes(hint)) hints.push(hint);
   }
-  lines.push(`Wrap each case in column-0 case_begin/case_end at depth 0 — see ${RULE_DOC}.`);
-  return lines.join("\n");
+  return lines.concat(hints).join("\n");
 }
 
 function approve() {
@@ -152,7 +156,7 @@ function collectCandidates(input, toolName, toolInput) {
     if (isInHead(loc.top, loc.rel)) continue;
     const post = postContentOf(group, absPath);
     if (typeof post !== "string") continue;
-    out.push({ rel: loc.rel, post });
+    out.push({ rel: loc.rel, post, entry });
   }
   return out;
 }
@@ -185,7 +189,7 @@ function main() {
       const tmpFile = path.join(sub, path.posix.basename(c.rel));
       fs.writeFileSync(tmpFile, c.post);
       const high = checkOne(tmpFile, c.rel, dir);
-      if (high) violations.push({ rel: c.rel, high });
+      if (high) violations.push({ rel: c.rel, high, entry: c.entry });
     });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

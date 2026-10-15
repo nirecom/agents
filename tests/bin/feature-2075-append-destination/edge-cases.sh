@@ -34,8 +34,8 @@ case_begin "edge-series" "bin/find-tests-for-source.sh"
 
 # ── B1 one line under the limit still appends ──────────────────────────────
 R="$(make_repo)"
-add_test_file "$R" "bin/edge.sh" "src/x.js" "scope:common" 499
-run_helper --root "$R" --hard-max 500 --sources "src/x.js"
+add_test_file "$R" "bin/edge.sh" "src/x.sh" "scope:common" 499
+run_helper --root "$R" --hard-max 500 --sources "src/x.sh"
 ROW="$(row_n "$OUT" 1)"
 case_ran B1
 assert_eq "B1 exit code" "0" "$RC"
@@ -48,8 +48,8 @@ assert_eq "B1 nothing was excluded at 499" "-" "$(list_files "$(col "$ROW" 8)")"
 # 500 is still compliant and must remain viable — only a candidate that
 # EXCEEDS the limit (see H12 at 501) is excluded.
 R="$(make_repo)"
-add_test_file "$R" "bin/edge.sh" "src/x.js" "scope:common" 500
-run_helper --root "$R" --hard-max 500 --sources "src/x.js"
+add_test_file "$R" "bin/edge.sh" "src/x.sh" "scope:common" 500
+run_helper --root "$R" --hard-max 500 --sources "src/x.sh"
 ROW="$(row_n "$OUT" 1)"
 case_ran B2
 assert_eq "B2 exit code" "0" "$RC"
@@ -60,8 +60,8 @@ assert_eq "B2 nothing was excluded at exactly 500" "-" "$(list_files "$(col "$RO
 # ── B3 the same pair against the BUILT-IN default, with no --hard-max ──────
 # H12 pins 501 (over); this pins 499 (under). Only both together prove 500.
 R="$(make_repo)"
-add_test_file "$R" "bin/edge.sh" "src/x.js" "scope:common" 499
-run_helper --root "$R" --sources "src/x.js"
+add_test_file "$R" "bin/edge.sh" "src/x.sh" "scope:common" 499
+run_helper --root "$R" --sources "src/x.sh"
 ROW="$(row_n "$OUT" 1)"
 case_ran B3
 assert_row "B3" "$ROW" "append" "exact" "tests/bin/edge.sh" "tests/bin/edge.sh"
@@ -69,14 +69,14 @@ assert_eq "B3 the helper never invents a split verdict for a near-limit target" 
     "append" "$(col "$ROW" 2)"
 
 # ── B4 a broken corpus file alongside a valid candidate ────────────────────
-# Every shape below names src/x.js in its (broken) header, so a helper reading
+# Every shape below names src/x.sh in its (broken) header, so a helper reading
 # headers with grep instead of tdg_classify would rank it as a rival candidate.
 case_ran B4
 for _bkind in duplicate_header late_header malformed_header; do
     R="$(make_repo)"
-    add_test_file "$R" "bin/good.sh" "src/x.js" "scope:common" 20
+    add_test_file "$R" "bin/good.sh" "src/x.sh" "scope:common" 20
     add_broken_test_file "$R" "broken.sh" "$_bkind"
-    run_helper --root "$R" --sources "src/x.js"
+    run_helper --root "$R" --sources "src/x.sh"
     ROW="$(row_n "$OUT" 1)"
     assert_eq "B4[$_bkind] exit code" "0" "$RC"
     assert_row "B4[$_bkind]" "$ROW" "append" "exact" "tests/bin/good.sh" "tests/bin/good.sh"
@@ -91,7 +91,7 @@ case_ran B5
 for _bkind in duplicate_header late_header malformed_header; do
     R="$(make_repo)"
     add_broken_test_file "$R" "broken.sh" "$_bkind"
-    run_helper --root "$R" --sources "src/x.js"
+    run_helper --root "$R" --sources "src/x.sh"
     ROW="$(row_n "$OUT" 1)"
     assert_eq "B5[$_bkind] exit code" "0" "$RC"
     assert_row "B5[$_bkind]" "$ROW" "new" "no-candidate" "-" "-"
@@ -102,8 +102,8 @@ done
 
 # ── B6 --hard-max INT_MAX: a valid candidate is still reachable ────────────
 R="$(make_repo)"
-add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
-run_helper --root "$R" --hard-max 2147483647 --sources "src/x.js"
+add_test_file "$R" "bin/a.sh" "src/x.sh" "scope:common" 20
+run_helper --root "$R" --hard-max 2147483647 --sources "src/x.sh"
 ROW="$(row_n "$OUT" 1)"
 case_ran B6
 assert_eq "B6 exit code" "0" "$RC"
@@ -111,10 +111,10 @@ assert_row "B6" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.sh"
 
 # ── B7 very long source token does not crash the helper ────────────────────
 R="$(make_repo)"
-add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/a.sh" "src/x.sh" "scope:common" 20
 _b7_src="src/"
 for _b7i in {1..241}; do _b7_src="${_b7_src}x"; done
-_b7_src="${_b7_src}.js"
+_b7_src="${_b7_src}.sh"
 run_helper --root "$R" --sources "$_b7_src"
 case_ran B7
 if [[ "$RC" -eq 0 || "$RC" -eq 2 ]]; then
@@ -125,15 +125,15 @@ fi
 
 # ── G1 source mode resolves the repo root from the CWD ─────────────────────
 R="$(make_repo)"
-add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
-run_helper_at "$R" --sources "src/x.js"
+add_test_file "$R" "bin/a.sh" "src/x.sh" "scope:common" 20
+run_helper_at "$R" --sources "src/x.sh"
 ROW="$(row_n "$OUT" 1)"
 case_ran G1
 assert_eq "G1 exit code with --root omitted" "0" "$RC"
 assert_row "G1" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.sh"
 
 # ── G2 test-file mode, from a SUBDIRECTORY (git root, not the CWD) ─────────
-add_test_file "$R" "bin/self.sh" "src/x.js" "scope:common" 30
+add_test_file "$R" "bin/self.sh" "src/x.sh" "scope:common" 30
 run_helper_at "$R/tests" --test-file "tests/bin/self.sh"
 ROW="$(row_n "$OUT" 1)"
 case_ran G2
@@ -144,9 +144,9 @@ assert_eq "G2 the path is still reported relative to the git root" "tests/bin/a.
 
 # ── V1 embedded traversal is rejected, not normalized away ─────────────────
 R="$(make_repo)"
-add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/a.sh" "src/x.sh" "scope:common" 20
 case_ran V1
-for _v1 in "src/../x.js" "./../x.js" "src/../../etc/passwd"; do
+for _v1 in "src/../x.sh" "./../x.sh" "src/../../etc/passwd"; do
     run_helper --root "$R" --sources "$_v1"
     assert_eq "V1 [$_v1] exits 2" "2" "$RC"
     assert_eq "V1 [$_v1] prints no row" "" "$OUT"
@@ -158,7 +158,7 @@ done
 # behind even if the row itself looked harmless, so the marker is the assertion.
 case_ran V2
 V2_MARKER="$R/INJECTED"
-for _v2 in 'src/x.js; touch INJECTED' 'src/x.js$(touch INJECTED)' 'src/x.js`touch INJECTED`' '$(touch INJECTED)'; do
+for _v2 in 'src/x.sh; touch INJECTED' 'src/x.sh$(touch INJECTED)' 'src/x.sh`touch INJECTED`' '$(touch INJECTED)'; do
     run_helper --root "$R" --sources "$_v2"
     assert_eq "V2 [$_v2] exits 2" "2" "$RC"
     assert_eq "V2 [$_v2] prints no row" "" "$OUT"
@@ -171,8 +171,8 @@ fi
 
 # ── E1 repeated --test-file: one row each, in order, each self-excluding ───
 R="$(make_repo)"
-add_test_file "$R" "bin/self.sh" "src/x.js" "scope:common" 20
-add_test_file "$R" "bin/other.sh" "src/x.js" "scope:common" 30
+add_test_file "$R" "bin/self.sh" "src/x.sh" "scope:common" 20
+add_test_file "$R" "bin/other.sh" "src/x.sh" "scope:common" 30
 run_helper --root "$R" --test-file "tests/bin/self.sh" --test-file "tests/bin/other.sh"
 case_ran E1
 assert_eq "E1 one row per --test-file" "2" "$(nrows "$OUT")"
@@ -206,7 +206,7 @@ assert_no_append "E2 an unreadable query never yields append" "$OUT"
 # ignored; E3 auto-skips there and the unreadable-input path is a known gap.
 case_ran E3
 E3F="$R/tests/bin/locked.sh"
-add_test_file "$R" "bin/locked.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/locked.sh" "src/x.sh" "scope:common" 20
 chmod 000 "$E3F" 2>/dev/null || true
 if [[ -r "$E3F" ]]; then
     skip "E3 this filesystem ignores chmod 000 — unreadable-input path not exercised"
@@ -223,7 +223,7 @@ chmod u+rw "$E3F" 2>/dev/null || true
 
 # ── E4 empty CSV elements in --sources ─────────────────────────────────────
 case_ran E4
-for _e4 in "src/x.js,,src/y.js" ",src/x.js" "src/x.js," "," "   "; do
+for _e4 in "src/x.sh,,src/y.sh" ",src/x.sh" "src/x.sh," "," "   "; do
     run_helper --root "$R" --sources "$_e4"
     assert_eq "E4 [$_e4] exits 2" "2" "$RC"
     assert_eq "E4 [$_e4] prints no row" "" "$OUT"
@@ -231,18 +231,18 @@ done
 
 # ── E5 --hard-max at zero, negative and far above every candidate ──────────
 R="$(make_repo)"
-add_test_file "$R" "bin/a.sh" "src/x.js" "scope:common" 20
+add_test_file "$R" "bin/a.sh" "src/x.sh" "scope:common" 20
 case_ran E5
-run_helper --root "$R" --hard-max 0 --sources "src/x.js"
+run_helper --root "$R" --hard-max 0 --sources "src/x.sh"
 ROW="$(row_n "$OUT" 1)"
 assert_eq "E5 --hard-max 0 exit code" "0" "$RC"
 assert_row "E5 zero" "$ROW" "new" "size-hard-limit" "-" "-"
 assert_eq "E5 --hard-max 0 excludes every candidate" "tests/bin/a.sh" \
     "$(list_files "$(col "$ROW" 8)")"
-run_helper --root "$R" --hard-max "-1" --sources "src/x.js"
+run_helper --root "$R" --hard-max "-1" --sources "src/x.sh"
 assert_eq "E5 a negative --hard-max is a usage error" "2" "$RC"
 assert_eq "E5 a negative --hard-max prints no row" "" "$OUT"
-run_helper --root "$R" --hard-max 999999 --sources "src/x.js"
+run_helper --root "$R" --hard-max 999999 --sources "src/x.sh"
 ROW="$(row_n "$OUT" 1)"
 assert_eq "E5 an oversized --hard-max exit code" "0" "$RC"
 assert_row "E5 oversized" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.sh"
@@ -250,7 +250,7 @@ assert_row "E5 oversized" "$ROW" "append" "exact" "tests/bin/a.sh" "tests/bin/a.
 # ── E6 exit-3 when the tests/ directory is absent (C5/#2290) ───────────────
 R="$(make_repo)"
 rm -rf "$R/tests"
-run_helper --root "$R" --sources "src/x.js"
+run_helper --root "$R" --sources "src/x.sh"
 case_ran E6
 assert_eq "E6 missing tests/ dir exits 3" "3" "$RC"
 assert_eq "E6 missing tests/ dir prints no row" "" "$OUT"
@@ -262,13 +262,13 @@ fi
 
 # ── I1 idempotency: identical query, unchanged corpus, identical bytes ─────
 R="$(make_repo)"
-add_test_file "$R" "bin/a.sh" "src/x.js,src/y.js" "scope:common" 20
-add_test_file "$R" "bin/b.sh" "src/x.js" "scope:common" 30
-add_test_file "$R" "bin/we,ird.sh" "src/x.js" "scope:common" 40
-run_helper --root "$R" --sources "src/x.js" --sources "src/q.js"
+add_test_file "$R" "bin/a.sh" "src/x.sh,src/y.sh" "scope:common" 20
+add_test_file "$R" "bin/b.sh" "src/x.sh" "scope:common" 30
+add_test_file "$R" "bin/we,ird.sh" "src/x.sh" "scope:common" 40
+run_helper --root "$R" --sources "src/x.sh" --sources "src/q.sh"
 I1_FIRST="$OUT"
 I1_RC="$RC"
-run_helper --root "$R" --sources "src/x.js" --sources "src/q.js"
+run_helper --root "$R" --sources "src/x.sh" --sources "src/q.sh"
 case_ran I1
 assert_eq "I1 the rerun repeats the exit code" "$I1_RC" "$RC"
 assert_eq "I1 the rerun is byte-identical" "$I1_FIRST" "$OUT"
@@ -297,20 +297,20 @@ e78_check() {
     assert_eq "$id the batch equals the concatenated single calls" "$concat" "$batch"
 }
 R="$(make_repo)"
-add_test_file "$R" "bin/a.sh" "src/x.js,src/y.js" "scope:common" 20
-add_test_file "$R" "bin/b.sh" "src/x.js" "scope:common" 30
-add_test_file "$R" "hooks/we,ird.sh" "src/z.js" "scope:common" 40
+add_test_file "$R" "bin/a.sh" "src/x.sh,src/y.sh" "scope:common" 20
+add_test_file "$R" "bin/b.sh" "src/x.sh" "scope:common" 30
+add_test_file "$R" "hooks/we,ird.sh" "src/z.sh" "scope:common" 40
 add_broken_test_file "$R" "bin/dup.sh" duplicate_header
 add_broken_test_file "$R" "bin/late.sh" late_header
 add_broken_test_file "$R" "bin/malformed.sh" malformed_header
 add_broken_test_file "$R" "bin/nohdr.sh" no_tests_header
-add_test_file "$R" "_archive/old.sh" "src/x.js" "scope:common" 10
+add_test_file "$R" "_archive/old.sh" "src/x.sh" "scope:common" 10
 case_ran E7
 e78_check E7 --test-file "tests/bin/a.sh" "tests/_archive/old.sh" "tests/bin/dup.sh" \
     "tests/bin/late.sh" "tests/bin/malformed.sh" "tests/bin/nohdr.sh" \
     "tests/bin/missing.sh" "tests/hooks/we,ird.sh" "tests/bin/b.sh"
 case_ran E8
-e78_check E8 --sources "src/x.js" "src/q.js" "src/x.js,src/y.js" "src/z.js" "./src/x.js"
+e78_check E8 --sources "src/x.sh" "src/q.sh" "src/x.sh,src/y.sh" "src/z.sh" "./src/x.sh"
 
 case_end
 

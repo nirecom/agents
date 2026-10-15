@@ -4,13 +4,14 @@
 echo ""
 echo "=== static mode, checks 1 / 3 / 5 ==="
 
-# Fixture checkouts: no caseEmbedRules on bash, and no helperLibrary on bash.
+# Fixture checkouts: no caseEmbedRules on bash, and no helperLibrary on bash. The registry
+# takes caseMarkerReader and helperLibrary only as a pair (#2411), so the second drops both.
 fx_table_edit "$REAL_TABLE" "$TMPBASE/noembed.json" \
   't.entries.find((e) => e.id === "bash").caseEmbedRules = null;'
 VCO_NOEMBED="$TMPBASE/co-noembed"
 vce_checkout "$VCO_NOEMBED" "$TMPBASE/noembed.json"
 fx_table_edit "$REAL_TABLE" "$TMPBASE/nohelper.json" \
-  't.entries.find((e) => e.id === "bash").helperLibrary = null;'
+  'const b = t.entries.find((e) => e.id === "bash"); b.helperLibrary = null; b.caseMarkerReader = null;'
 VCO_NOHELPER="$TMPBASE/co-nohelper"
 vce_checkout "$VCO_NOHELPER" "$TMPBASE/nohelper.json"
 
@@ -74,10 +75,13 @@ expect_check "no harness" 5 FAIL
 assert_eq "no harness rc=$V_RC" "no harness rc=1"
 vce_static "$VCO" "$WD/unguarded.sh"
 expect_check "unguarded counter" 5 FAIL
-# helperLibrary null: SKIP with detail no-helper-library.
+# helperLibrary null: SKIP with detail no-helper-library. Such an entry has no reader
+# either, so check 1 reports the file as unsupported in the same run.
 vce_static "$VCO_NOHELPER" "$WD/good.sh"
 expect_check "no helper library" 5 SKIP
 detail_has "no helper library" 5 "no-helper-library"
+expect_check "no helper library" 1 FAIL
+detail_has "no helper library" 1 "state=unsupported"
 # No self-impl op: the sourceRegex match alone decides.
 vce_static "$VCO_NOEMBED" "$WD/unguarded.sh"
 expect_check "no self-impl op" 5 PASS
