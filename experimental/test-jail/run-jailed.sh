@@ -8,6 +8,7 @@ JAIL_TREE="$SCRIPT_CHECKOUT_ROOT"
 pin_mode=full
 secs=180
 probe=0
+allow_weaker=0
 trace_rel=""
 trace_out=""
 test_rel=""
@@ -18,6 +19,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) secs="${2:?--timeout needs seconds}"; shift 2 ;;
         --trace)   trace_rel="${2:?--trace needs a decoy path}"; trace_out="${3:?--trace needs an output file}"; shift 3 ;;
         --probe)   probe=1; shift ;;
+        --allow-weaker-pin) allow_weaker=1; shift ;;
         -*)        echo "run-jailed: unknown option: $1" >&2; exit 2 ;;
         *)         test_rel="$1"; shift ;;
     esac
@@ -66,6 +68,26 @@ for d in "${entries[@]}"; do
 done
 export PATH="$iso/deny-bin:$new_path"
 
+# Retired root names are unset so no test reads a stale one. The list comes from this tool's
+# own checkout, never from --tree: an old export may not carry the builder.
+retired_fail() { echo "SAFE-RUN: cannot read the retired env names: $1" >&2; exit 96; }
+builder="$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js"
+[[ -f "$builder" ]] || retired_fail "no $builder"
+if command -v cygpath >/dev/null 2>&1; then builder="$(cygpath -m "$builder")"; fi
+retired_list="$(node "$builder" --print-retired-env-names 2>/dev/null)" || retired_fail "the builder failed"
+retired_names=""
+retired_count=0
+valid_name='^[A-Za-z_][A-Za-z0-9_]*$'
+while IFS= read -r retired; do
+    retired="${retired%$'\r'}"
+    [[ -z "$retired" ]] && continue
+    [[ "$retired" =~ $valid_name ]] || retired_fail "not a variable name: $retired"
+    unset "$retired"
+    retired_names="${retired_names:+$retired_names }$retired"
+    retired_count=$((retired_count + 1))
+done <<< "$retired_list"
+[[ "$retired_count" -gt 0 ]] || retired_fail "the builder printed no name"
+
 if command -v cygpath >/dev/null 2>&1; then
     home_native="$(cygpath -m "$iso/home")"
 else
@@ -102,6 +124,7 @@ if [[ "$probe" -eq 1 ]]; then
     echo "gh=$(command -v gh) glab=$(command -v glab)"
     echo "HOME=$HOME USERPROFILE=$USERPROFILE"
     echo "bash=$(command -v bash) node=$(command -v node) git=$(command -v git)"
+    echo "retired-env-unset: $retired_count"
     exit 0
 fi
 
@@ -127,27 +150,43 @@ esac
 cd "$JAIL_TREE" || exit 2
 
 # Build caches land under the host temp area (tests/lib/test-cache-base.js), never HOME. A tree
-# whose launcher lacks a pin function gets the strongest pin it does have.
-if [[ "$pin_mode" == none ]]; then
-    echo "PINNED: none"
-else
+# whose launcher lacks the pin function asked for stops here (rc 94); only --allow-weaker-pin
+# lets it run under the strongest pin it does have.
+pin_unmet() {
+    echo "SAFE-RUN: pin unmet: requested=$pin_mode, the tree's launcher has no $1 (pass --allow-weaker-pin to run under a weaker pin)" >&2
+    exit 94
+}
+obtained="$pin_mode"
+detail=""
+if [[ "$pin_mode" != none ]]; then
     export FEATURE_644_PHASE="${FEATURE_644_PHASE:-0}"
     # shellcheck disable=SC1091
     . bin/lib/run-all-launch.sh
-    if [[ "$pin_mode" == full ]] && declare -F run_all_pin_test_env >/dev/null 2>&1; then
-        run_all_pin_test_env "$iso/pin" || { echo "PINNED: cannot pin the per-run test environment" >&2; exit 94; }
-        echo "PINNED: decoy+state AGENTS_MAIN_ROOT=$AGENTS_MAIN_ROOT"
-    elif declare -F run_all_pin_state_dirs >/dev/null 2>&1; then
-        run_all_pin_state_dirs "$iso/pin" || { echo "PINNED: cannot pin the per-run state directories" >&2; exit 94; }
-        echo "PINNED: state only"
-    else
-        echo "PINNED: none (launcher has no pin function)"
+    if [[ "$obtained" == full ]] && ! declare -F run_all_pin_test_env >/dev/null 2>&1; then
+        [[ "$allow_weaker" -eq 1 ]] || pin_unmet run_all_pin_test_env
+        obtained=state
     fi
+    if [[ "$obtained" == state ]] && ! declare -F run_all_pin_state_dirs >/dev/null 2>&1; then
+        [[ "$allow_weaker" -eq 1 ]] || pin_unmet run_all_pin_state_dirs
+        obtained=none
+    fi
+    case "$obtained" in
+        full)
+            run_all_pin_test_env "$iso/pin" || { echo "SAFE-RUN: cannot pin the per-run test environment" >&2; exit 94; }
+            detail="decoy+state AGENTS_MAIN_ROOT=$AGENTS_MAIN_ROOT" ;;
+        state)
+            run_all_pin_state_dirs "$iso/pin" || { echo "SAFE-RUN: cannot pin the per-run state directories" >&2; exit 94; }
+            detail="state only" ;;
+        none)
+            detail="launcher has no pin function" ;;
+    esac
 fi
+echo "PINNED: obtained=$obtained requested=$pin_mode${detail:+ $detail}"
 
 if [[ -n "$trace_rel" ]]; then
     [[ -n "${ROOT_DECOY_DIR:-}" ]] || { echo "run-jailed: --trace needs the root decoy (--pin full)" >&2; exit 93; }
     cp "$SCRIPT_CHECKOUT_ROOT/experimental/test-jail/trace-stub.js" "$ROOT_DECOY_DIR/$trace_rel" || exit 93
+    export TRACE_STUB_NAMES="$retired_names"
     export TRACE_STUB_OUT="$trace_out"
     : > "$TRACE_STUB_OUT"
 fi
