@@ -236,7 +236,7 @@ NAMED_EXCEPTIONS="record-skip-verdict"
 # it must carry no --advance token at all.
 # #2460: jev-judge takes no --advance of its own; its finalize hands --advance to
 # a record-skip-judgment child from its library, never from the CLI file.
-NON_MEMBERS="adopt-session-state check-plan-approval derive-complexity-level handoff-append jev-judge normalize-judge-signals pr-state read-complexity-evaluation read-merge-base-baseline read-session-facts read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline release-channel render-issue-comments run-tests-baseline-evidence run-tests-completion-note workflow-init-driver"
+NON_MEMBERS="adopt-session-state check-plan-approval derive-complexity-level handoff-append jev-judge normalize-judge-signals pr-state read-complexity-evaluation read-merge-base-baseline read-session-facts read-step-status reconcile-state record-complexity-evaluation record-merge-base-baseline release-channel render-issue-comments run-tests-baseline-evidence workflow-init-driver"
 
 ACTUAL="$(ls "$SCRIPT_CHECKOUT_ROOT/bin/workflow" | grep -v '^lib$' | sort | tr '\n' ' ')"
 EXPECTED="$(printf '%s %s %s' "$ADVANCE_MEMBERS" "$NAMED_EXCEPTIONS" "$NON_MEMBERS" \

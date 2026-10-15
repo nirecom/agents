@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2517-run-tests-completion-note.sh
-# Tests: hooks/lib/run-tests-completion-note.js, bin/workflow/run-tests-completion-note, bin/render-final-report.js, skills/_shared/commit-push-dispatch.md
+# Tests: hooks/lib/run-tests-completion-note.js, bin/render-final-report.js, skills/_shared/commit-push-dispatch.md
 # Tags: TL1, TL2, run-tests, final-report, baseline, unrunnable, disclosure, table-driven, scope:issue-specific
 # A run_tests completed by a user grant instead of a proof must say so in the Final Report and the
 # PR body (#2517). The note module (renamed from run-tests-unrunnable-note, #2501) returns one line
@@ -26,7 +26,6 @@ export CLAUDE_TRANSCRIPT_BASE_DIR="$T/transcripts"
 
 ROOT="$(np "$SCRIPT_CHECKOUT_ROOT")"
 NOTE_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/run-tests-completion-note.js"
-NOTE_CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-completion-note"
 OLD_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/run-tests-unrunnable-note.js"
 PRE='- Unverified tests:'
 
@@ -79,21 +78,13 @@ for (const [k, f] of Object.entries(C)) {
 }
 EOF
 
-# seed.js <root> <sid> [pre] — a session whose run_tests was completed by an undetermined grant;
-# with `pre`, one completed as baseline-preexisting (proof, no grant).
+# seed.js <root> <sid> — a session whose run_tests was completed by an undetermined grant.
 cat >"$T/seed.js" <<'EOF'
 "use strict";
-const [root, sid, shape] = process.argv.slice(2);
+const [root, sid] = process.argv.slice(2);
 const ev = (o) => Object.assign({ step: "run_tests", provenance: "observed", origin: "run-tests-baseline-evidence" }, o);
 const a = (key, value) => ev({ kind: "step_annotation", key, value });
 const { appendEvents } = require(root + "/hooks/workflow-state/state-io/events");
-if (shape === "pre") {
-  appendEvents(sid, [ev({ kind: "step_status", status: "pending" }),
-    a("baseline_classification", { base: "abc", entries: [{ path: "t/a.sh", class: "preexisting", detail: "" }] }),
-    a("run_outcome", "pass"), a("completion_basis", "baseline-preexisting"), ev({ kind: "step_status", status: "complete" })]);
-  process.stdout.write("ok");
-  process.exit(0);
-}
 appendEvents(sid, [
   ev({ kind: "step_status", status: "pending" }),
   a("baseline_classification", { base: "abc", entries: [{ path: "t/a.sh", class: "undetermined", detail: "budget-exhausted" }] }),
@@ -108,8 +99,10 @@ EOF
 case_begin "module-renamed" "hooks/lib/run-tests-completion-note.js"
 [ -f "$NOTE_JS" ] && pass "present: hooks/lib/run-tests-completion-note.js" \
   || fail "present: hooks/lib/run-tests-completion-note.js" "missing"
-[ -f "$NOTE_CLI" ] && pass "present: bin/workflow/run-tests-completion-note" \
-  || fail "present: bin/workflow/run-tests-completion-note" "missing"
+# The CLI had no production caller (render-final-report and prBody require the module directly).
+[ -e "$SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-completion-note" ] \
+  && fail "dead CLI absent: bin/workflow/run-tests-completion-note" "present (no production caller)" \
+  || pass "dead CLI absent: bin/workflow/run-tests-completion-note"
 [ -f "$OLD_JS" ] && fail "old name removed: hooks/lib/run-tests-unrunnable-note.js" "still present (no shim, CPR-NRS)" \
   || pass "old name removed: hooks/lib/run-tests-unrunnable-note.js"
 case_end
@@ -141,20 +134,11 @@ read-fail-open|null
 TABLE
 case_end
 
-case_begin "completion-note-cli" "bin/workflow/run-tests-completion-note"
+case_begin "final-report-carries-the-line" "bin/render-final-report.js"
 SID="cn2517-$$"
 ck "fixture: completed-by-grant session seeded" "ok" \
   "$(run_with_timeout 20 node "$(np "$T/seed.js")" "$ROOT" "$SID" 2>/dev/null)"
 WANT="$PRE 1 failing test(s) accepted by the user as pre-existing without baseline proof (undetermined: budget-exhausted; reason: seen red on main)"
-CLI_OUT="$(run_with_timeout 20 node "$(np "$NOTE_CLI")" --session "$SID" 2>/dev/null)"
-ck "CLI prints the grant line" "$WANT" "$CLI_OUT"
-CLI_OUT="$(run_with_timeout 20 node "$(np "$NOTE_CLI")" --session "cn2517-none-$$" 2>/dev/null)"; rc=$?
-ck "CLI prints nothing for an unknown session (exit 0)" "0:" "$rc:$CLI_OUT"
-run_with_timeout 20 node "$(np "$NOTE_CLI")" >/dev/null 2>&1; rc=$?
-ck "CLI usage error exits 2" "2" "$rc"
-case_end
-
-case_begin "final-report-carries-the-line" "bin/render-final-report.js"
 mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
 printf '{}' >"$WORKFLOW_STATE_DIR/$SID.control/final-report-env.json"
 REPORT="$(run_with_timeout 30 node "$(np "$SCRIPT_CHECKOUT_ROOT/bin/render-final-report.js")" --session "$SID" 2>&1)"
@@ -166,7 +150,8 @@ case_end
 
 case_begin "pr-body-disclosure" "skills/_shared/commit-push-dispatch.md"
 # The commit-push worker's prBody appends the note itself, so the dispatch doc must not tell the
-# LLM to append the CLI's stdout to pr_body_template (an instruction that can silently vanish).
+# LLM to append a note to pr_body_template (an instruction that can silently vanish). prBody's
+# own behavior: tests/bin/feature-2517-pr-body-completion-note.sh.
 DISPATCH_MD="$SCRIPT_CHECKOUT_ROOT/skills/_shared/commit-push-dispatch.md"
 grep -q 'pr_body_template' "$DISPATCH_MD" \
   && pass "control: commit-push-dispatch still names pr_body_template" \
@@ -177,15 +162,6 @@ grep -E 'pr_body_template' "$DISPATCH_MD" | grep -q 'run-tests-completion-note' 
 grep -q 'run-tests-unrunnable-note' "$DISPATCH_MD" \
   && fail "commit-push-dispatch drops the old CLI name" "run-tests-unrunnable-note still named" \
   || pass "commit-push-dispatch drops the old CLI name"
-PR_OUT="$(run_with_timeout 20 node "$(np "$NOTE_CLI")" --session "$SID" 2>/dev/null)"; rc=$?
-ck "PR-body stdout for baseline-user-accepted is the grant line (exit 0)" "0:$WANT" "$rc:$PR_OUT"
-PRE_SID="cn2517-pre-$$"
-ck "fixture: baseline-preexisting session seeded" "ok" \
-  "$(run_with_timeout 20 node "$(np "$T/seed.js")" "$ROOT" "$PRE_SID" pre 2>/dev/null)"
-ck "fixture: baseline-preexisting session is complete" "complete" \
-  "$(run_with_timeout 20 node -e 'process.stdout.write(String(require(process.argv[1] + "/hooks/workflow-state").readState(process.argv[2]).steps.run_tests.status))' "$ROOT" "$PRE_SID" 2>/dev/null)"
-PR_OUT="$(run_with_timeout 20 node "$(np "$NOTE_CLI")" --session "$PRE_SID" 2>/dev/null)"; rc=$?
-ck "PR-body stdout for baseline-preexisting is empty (exit 0)" "0:" "$rc:$PR_OUT"
 case_end
 
 echo ""
