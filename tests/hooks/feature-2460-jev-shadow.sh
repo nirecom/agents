@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/jev-shadow-pre.js, hooks/jev-shadow-post.js, hooks/lib/jev/test-overrides.js, hooks/lib/jev/provider-core.js, bin/workflow/lib/jev-complexity-adapter.js, hooks/lib/jev/pending.js, hooks/lib/jev/breaker.js, hooks/lib/jev/decision-record.js, hooks/lib/jev/retention.js, settings.json
-# Tags: TL2, hooks, jev, shadow-mode, complexity-judge, mock-server, dispatcher, scope:issue-specific, pwsh-not-required
+# Tags: TL2, hooks, jev, shadow-mode, complexity-judge, mock-server, dispatcher, pending-v2, scope:issue-specific, pwsh-not-required
 # Dispatcher for the #2460 Jev shadow-mode suite; fragments live under
 # tests/hooks/feature-2460-jev-shadow/ (rules/coding/file-split.md Pattern A). Each
 # fragment is self-contained (own fixtures, own mock Jev on 127.0.0.1:0), so one
@@ -64,6 +64,9 @@ run_suite k-fallbacks.sh
 case_end
 case_begin "jev-l-no-inject" "hooks/jev-shadow-post.js"
 run_suite l-no-inject.sh
+case_end
+case_begin "jev-m-pending-v2" "hooks/lib/jev/pending.js"
+run_suite m-pending-v2.sh
 case_end
 
 echo ""

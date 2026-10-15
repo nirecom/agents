@@ -220,7 +220,18 @@ d2099li_secret_leakage() {
     fi
 }
 
+case_begin "li-controls" "bin/workflow/record-complexity-evaluation"
 d2099li_controls
+case_end
+
+case_begin "li-corpus" "bin/workflow/record-complexity-evaluation"
 d2099li_corpus
+case_end
+
+case_begin "li-downstream-parse" "bin/workflow/read-complexity-evaluation"
 d2099li_downstream_parse
+case_end
+
+case_begin "li-secret-leakage" "bin/workflow/derive-complexity-level"
 d2099li_secret_leakage
+case_end

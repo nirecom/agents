@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 "use strict";
-// bin/jev-report — aggregate the Jev shadow decision log (#2460).
+// bin/jev-report — aggregate the Jev decision log (#2460): the legacy (v1, shadow period)
+// comparison, the v2 adoption figures, and the skip points' retune conditions.
 // Usage: jev-report [--log <path>] [--point <name>] [--json] [--no-sweep]
 // By default it first turns stale pending hand-offs of every session into llm-missing
 // records and runs the 7-day state retention, so the figures include abandoned dispatches;
@@ -32,9 +33,10 @@ function parseArgs(argv) {
   return opts;
 }
 
+// The low-confidence cut of the legacy summary: the point's per-direction thresholds.
 function thresholdFor(point) {
   const e = registryEntry(point);
-  return e && typeof e.confidence_threshold === "number" ? e.confidence_threshold : DEFAULT_THRESHOLD;
+  return e ? e.confidence_threshold_by_answer : DEFAULT_THRESHOLD;
 }
 
 function main(argv) {

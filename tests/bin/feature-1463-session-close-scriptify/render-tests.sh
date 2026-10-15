@@ -20,9 +20,9 @@ test_T1_render_exists() {
 
 test_T2_detect_exists() {
     if [ -f "$DETECT_JS" ]; then
-        pass "T2_detect_exists: bin/session-close-detect-wf-meta.js present"
+        pass "T2_detect_exists: bin/session-close-detect-route.js present"
     else
-        fail "T2_detect_exists: bin/session-close-detect-wf-meta.js missing (pending write-code)"
+        fail "T2_detect_exists: bin/session-close-detect-route.js missing (pending write-code)"
     fi
 }
 

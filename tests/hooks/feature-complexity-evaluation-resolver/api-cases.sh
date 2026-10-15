@@ -12,9 +12,9 @@
 echo ""
 echo "=== CE-1: round-trip record+read (escalating signals) ==="
 SID="ce1-$$"
-node_record "$SID" '["S1-multi-file","S2-architecture"]' >/dev/null
+node_record "$SID" '["S1b-wide-change","S2-architecture"]' >/dev/null
 assert_eq "CE-1a. level read-back = high" 'high' "$(node_read_field "$SID" level | tr -d '\"')"
-assert_eq "CE-1b. signals read-back preserved" '["S1-multi-file","S2-architecture"]' "$(node_read_field "$SID" signals)"
+assert_eq "CE-1b. signals read-back preserved" '["S1b-wide-change","S2-architecture"]' "$(node_read_field "$SID" signals)"
 
 # ==========================================================================
 # CE-2: round-trip record+read (zero signals)
@@ -32,7 +32,7 @@ assert_eq "CE-2b. empty signals read-back = []" '[]' "$(node_read_field "$SID" s
 echo ""
 echo "=== CE-3: hasComplexityEvaluation → true after record ==="
 SID="ce3-$$"
-node_record "$SID" '["S1-multi-file"]' >/dev/null
+node_record "$SID" '["S1b-wide-change"]' >/dev/null
 assert_eq "CE-3. hasComplexityEvaluation true after record" 'true' "$(node_has "$SID")"
 
 # ===========
@@ -103,7 +103,7 @@ assert_eq "CE-7. partial complexity record reads null" 'null' "$(node_read_json 
 echo ""
 echo "=== CE-8: non-array signals is normalized by the projection ==="
 SID="ce8-$$"
-inject_ce_event "$SID" "{ level: 'high', signals: 'S1-multi-file' }"
+inject_ce_event "$SID" "{ level: 'high', signals: 'S1b-wide-change' }"
 assert_eq "CE-8a. the projection normalizes a string signals value to []" \
   '{"level":"high","levels":null,"signals":[]}' "$(ce_projected "$SID" | sed 's/,"recorded_at":"[^"]*"//')"
 assert_eq "CE-8b. the bogus token is not smuggled through as a signal" \
@@ -117,7 +117,7 @@ assert_eq "CE-8. the read returns the normalized record, not null" \
 echo ""
 echo "=== CE-9: double record → last-write-wins ==="
 SID="ce9-$$"
-node_record "$SID" '["S1-multi-file"]' >/dev/null
+node_record "$SID" '["S1b-wide-change"]' >/dev/null
 node_record "$SID" '[]' >/dev/null
 assert_eq "CE-9a. level = last write (low)" 'low' "$(node_read_field "$SID" level | tr -d '\"')"
 assert_eq "CE-9b. signals = last write ([])" '[]' "$(node_read_field "$SID" signals)"
@@ -130,28 +130,34 @@ assert_eq "CE-9b. signals = last write ([])" '[]' "$(node_read_field "$SID" sign
 # record. Asserting "the count does not grow" here would pin the opposite of
 # the real contract and would break the moment the audit history is used.
 SID="ce9idem-$$"
-node_record "$SID" '["S1-multi-file"]' >/dev/null
-node_record "$SID" '["S1-multi-file"]' >/dev/null
-node_record "$SID" '["S1-multi-file"]' >/dev/null
+node_record "$SID" '["S1b-wide-change"]' >/dev/null
+node_record "$SID" '["S1b-wide-change"]' >/dev/null
+node_record "$SID" '["S1b-wide-change"]' >/dev/null
 assert_eq "CE-9c. three identical records append three raw events (append-only audit history)" \
   '3' "$(ce_event_count "$SID")"
 assert_eq "CE-9d. ...while the projection still folds to a single record" \
-  '["S1-multi-file"]' "$(node_read_field "$SID" signals)"
+  '["S1b-wide-change"]' "$(node_read_field "$SID" signals)"
 
 # ==========================================================================
-# C7 — schema edge cases (all S1-S6 present, duplicates, unknown, long, ISO)
+# C7 — schema edge cases (all five SIGNAL_IDs, retired ids, duplicates, unknown, long, ISO)
 # ==========================================================================
 echo ""
-echo "=== CE-SCHEMA-1: all six valid SIGNAL_IDs round-trip ==="
+echo "=== CE-SCHEMA-1: all five valid SIGNAL_IDs round-trip ==="
 SID="ceall-$$"
-node_record "$SID" '["S1-multi-file","S2-architecture","S3-security","S4-installer","S5-breaking","S6-long-plan"]' >/dev/null
-assert_eq "CE-SCHEMA-1. all six valid SIGNAL_IDs preserved verbatim" '["S1-multi-file","S2-architecture","S3-security","S4-installer","S5-breaking","S6-long-plan"]' "$(node_read_field "$SID" signals)"
+node_record "$SID" '["S1b-wide-change","S2-architecture","S3-security","S4-installer","S5-breaking"]' >/dev/null
+assert_eq "CE-SCHEMA-1. all five valid SIGNAL_IDs preserved verbatim" '["S1b-wide-change","S2-architecture","S3-security","S4-installer","S5-breaking"]' "$(node_read_field "$SID" signals)"
+
+echo ""
+echo "=== CE-SCHEMA-1b: the #2460-retired S1/S6 ids are unknown tokens ==="
+SID="ceretired-$$"
+node_record "$SID" '["S1-multi-file","S2-architecture","S6-long-plan"]' >/dev/null
+assert_eq "CE-SCHEMA-1b. retired S1-multi-file/S6-long-plan collapse the record to UNRECOGNIZED(2)" '["UNRECOGNIZED(2)"]' "$(node_read_field "$SID" signals)"
 
 echo ""
 echo "=== CE-SCHEMA-2: duplicate valid signal ids are deduplicated ==="
 SID="cedup-$$"
-node_record "$SID" '["S1-multi-file","S1-multi-file","S2-architecture"]' >/dev/null
-assert_eq "CE-SCHEMA-2. valid duplicates are deduplicated" '["S1-multi-file","S2-architecture"]' "$(node_read_field "$SID" signals)"
+node_record "$SID" '["S1b-wide-change","S1b-wide-change","S2-architecture"]' >/dev/null
+assert_eq "CE-SCHEMA-2. valid duplicates are deduplicated" '["S1b-wide-change","S2-architecture"]' "$(node_read_field "$SID" signals)"
 
 echo ""
 echo "=== CE-SCHEMA-3: unknown signal name collapses to UNRECOGNIZED(1) (allowlist enforcement) ==="

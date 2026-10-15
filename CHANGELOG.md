@@ -747,3 +747,19 @@ Changes: Test runs now cover every registered language and report tests that cou
 ### FEATURE: PR #2641 (2026-10-13)
 Background: test(#2590): add test harness layers — run root, command guard, spawn record, worktree change detection
 Changes: tests: add run-root isolation, command guard, spawn-record preload, and worktree change detection to the test harness; fix slot-file overhead in run-all change detection
+
+### FEATURE: PR #2625 (2026-10-13)
+Background: feat(#2527): split deliverable type x PM type and make the release ph...
+Changes: Workflow release is now explicit steps (push branch, user verification, merge to main, cleanup, final report gate); `next-step` no longer stalls before `/worktree-end` when worktrees are enforced.;Merge approval is a single prompt, and it is only offered after the PR is confirmed open and mergeable (GitHub and GitLab).;`set-deliverable-type` replaces `set-workflow-type` for choosing planning-only (wf-meta) vs implementation (wf-code) sessions; existing session state migrates automatically.
+
+### FEATURE: PR #2653 (2026-10-14)
+Background: feat(#2460): make Jev the first judge for complexity and the outline/detail skip
+Changes: Task complexity and the outline/detail skip decision are judged by Jev first, with a subagent consulted only for the parts Jev is not confident about. Planning stages are no longer skipped automatically on zero signals; every skip is a judged decision.
+
+### FEATURE: PR #2665 (2026-10-14)
+Background: fix(#2654): read closes_issues from intent.md on every call instead of a write-once session cache
+Changes: Narrowing a session's `## Issues` in intent.md now takes effect immediately: the session's closing-issue list is read from intent.md on every use instead of a cached copy, so issues removed from intent.md no longer linger in the workflow step list, the empty-issues gate, or the final report.
+
+### FEATURE: PR #2656 (2026-10-15)
+Background: fix(#2591): close the remaining holes in experimental/test-jail
+Changes: experimental/test-jail: a jailed run now stops (exit 94) when the requested isolation pin is unavailable instead of silently running weaker; pass --allow-weaker-pin to accept the strongest available pin. compare-runs.sh ends with an explicit verdict (NEW-RED / INCOMPLETE / NO-NEW-RED) and lists the comparisons it could not trust.

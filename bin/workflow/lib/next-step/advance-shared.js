@@ -1,9 +1,9 @@
 "use strict";
 // The forward operation (`--advance`), shared by every member of the advance
 // class: bin/workflow/next-step, record-skip-judgment, set-workflow-type and
-// (by delegation) record-complexity-and-skip (#1644).
+// set-deliverable-type (#1644).
 //
-// Why shared rather than per-CLI: the four members differ only in how they
+// Why shared rather than per-CLI: the members differ only in how they
 // derive the target step. The transaction shape — read the pre-write current
 // step, record, then optionally ask for the next action — must be identical, or
 // a caller could advance without the gates another caller applies.
@@ -17,9 +17,11 @@ const {
   resolveSessionId,
 } = require("../../../../hooks/workflow-state");
 const { reconcileEffectiveState } = require("../../../../hooks/workflow-state/effective-state");
+const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
 const {
   recordStepVerdict,
   ADVANCE_ORIGINS,
+  RECORDED_VERDICT_PREFIX,
 } = require("../../../../hooks/workflow-state/record-step-verdict");
 const { formatReviewTestsReopenNotice } = require("../../../../hooks/workflow-state/review-tests-reopen");
 const { isTerminalStep } = require("./steps");
@@ -43,13 +45,11 @@ function resolveCurrentStep(sessionId, opts) {
     if (!state) return null;
     const excludeDerivedFor = (opts && opts.excludeDerivedFor) || null;
     const rawSteps = state.steps || {};
-    const isWfMeta = state.workflow_type === "wf-meta";
+    const repoDir = (opts && opts.repoDir) || undefined;
     let steps = null;
     try {
-      const snapshot = reconcileEffectiveState(state, sessionId, {
-        repoDir: (opts && opts.repoDir) || undefined,
-        isWfMeta,
-      });
+      const profile = resolveSessionProfile(state, sessionId, { repoDir });
+      const snapshot = reconcileEffectiveState(state, sessionId, { repoDir, profile, deliveryBoundary: "navigate" });
       steps = snapshot && snapshot.steps;
     } catch (_) {
       steps = state.steps || null;
@@ -65,13 +65,29 @@ function resolveCurrentStep(sessionId, opts) {
   return null;
 }
 
+// A skip carrying the recorded-verdict reason rests on the standing skip judgment, so the
+// gate's check of that judgment and the status write share the skip owner lock: a newer
+// query cannot revoke the judgment between the two. Fail-closed when the lock is not taken.
+function recordUnderSkipOwnerLock(sid, opts, record) {
+  const judged = opts.status === "skipped" && (opts.step === "outline" || opts.step === "detail") &&
+    String(opts.skipReason || "").trim().startsWith(RECORDED_VERDICT_PREFIX);
+  if (!judged) return record();
+  try {
+    const { underSkipOwnerLockOrParentHold } = require("../../../../hooks/lib/jev/two-stage/settle-skip");
+    return underSkipOwnerLockOrParentHold(sid, opts.step, record);
+  } catch (e) {
+    return { ok: false, code: 3, message: opts.binary + ": " + opts.step + " skip not recorded — " + e.message };
+  }
+}
+
 // Emits the advance result and, when asked, the next action. Never returns —
 // every path exits the process.
 //
 // opts: { session, binary, step, status, skipReason, skipJudgment,
-//         skipVerdictSource, repoDir, next, prefix }
+//         skipVerdictSource, repoDir, next, prefix, suffix }
 // `prefix` is the CLI's own leading stdout (already newline-terminated); it is
 // written only after the session id resolves, so a usage error prints nothing.
+// `suffix` follows the ADVANCED= line, only once the record succeeded.
 function runAdvance(opts) {
   const rawSession = opts.session;
   const sid = resolveSessionId({ sessionIdFromInput: rawSession });
@@ -96,7 +112,7 @@ function runAdvance(opts) {
   if (opts.skipJudgment !== undefined) verdictOpts.skipJudgment = opts.skipJudgment;
   if (opts.skipVerdictSource !== undefined) verdictOpts.skipVerdictSource = opts.skipVerdictSource;
 
-  const res = recordStepVerdict(sid, opts.step, opts.status, verdictOpts);
+  const res = recordUnderSkipOwnerLock(sid, opts, () => recordStepVerdict(sid, opts.step, opts.status, verdictOpts));
   if (!res.ok) {
     // fail-CLOSED on the record side: a failed record never returns a next
     // action, so a caller cannot mistake "not recorded" for "recorded, proceed".
@@ -109,6 +125,7 @@ function runAdvance(opts) {
   process.stdout.write(
     "ADVANCED=" + opts.step + " status=" + opts.status + (res.already ? " already=true" : "") + "\n"
   );
+  if (opts.suffix) process.stdout.write(opts.suffix);
   // #2327: the review_tests reopen notice is emitted regardless of --next.
   const reopenNotice = formatReviewTestsReopenNotice(res);
   if (reopenNotice) process.stderr.write(opts.binary + ": " + reopenNotice + "\n");

@@ -14,11 +14,11 @@ const fs = require("fs");
 const { execSync } = require("child_process");
 const {
   resolveSessionId,
-  markStep,
   setLastPushedSha,
   readState,
 } = require("./workflow-state");
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
+const { resetUserVerificationForDelivery } = require("./workflow-mark/delivery-boundary-reset");
 const { resolveRepoCwd } = require("./lib/path-normalize");
 // #2256 S5-a1: command-tool normalization + sentinel decomposition shared with
 // workflow-gate.js (SSOT: hooks/lib/tool-command-text.js, sentinel-command.js).
@@ -34,6 +34,7 @@ const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const runTestsAcceptHandler = require("./workflow-mark/run-tests-accept-handler");
+const runTestsBaselineAcceptHandler = require("./workflow-mark/run-tests-baseline-accept-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const resetHandler = require("./workflow-mark/reset-handler");
 
@@ -75,8 +76,8 @@ const sessionId = resolveSessionId({
 });
 
 // Reset user_verification only after a successful merge-class operation
-// (push to a protected branch / gh pr merge). Feature-branch pushes leave
-// verification state alone so the upcoming gh pr merge gate can pass.
+// (push to a protected branch / gh pr merge / glab mr merge). Feature-branch
+// pushes leave verification state alone so the upcoming merge gate can pass.
 // Scan every command-tool element: a protected push/merge in any runCommands
 // element must reset user_verification (SSOT: tool-command-text.js).
 const mergeResult =
@@ -86,10 +87,9 @@ const mergeResult =
 if (mergeResult.hit) {
   let msg;
   if (exitCode === 0 && sessionId) {
+    // #2527: idempotent boundary reset (post-push / post-merge) — workflow-mark/delivery-boundary-reset.js.
+    msg = resetUserVerificationForDelivery(sessionId, mergeResult.kind);
     if (mergeResult.kind === "git-push-protected") {
-      msg = "workflow-mark: protected push detected — user_verification reset to pending.";
-      try { markStep(sessionId, "user_verification", "pending"); }
-      catch (e) { msg = `workflow-mark: protected push detected — user_verification reset FAILED: ${e.message}`; }
       // Record last_pushed_sha for post-push-workflow-reset hook.
       try {
         const state = readState(sessionId);
@@ -103,13 +103,8 @@ if (mergeResult.hit) {
           setLastPushedSha(sessionId, sha);
         }
       } catch (e) { /* Fail-open */ }
-    } else {
-      // gh pr merge: reset verification but do not record a sha
-      // (no local push happened in this command).
-      msg = "workflow-mark: gh pr merge detected — user_verification reset to pending.";
-      try { markStep(sessionId, "user_verification", "pending", { reset_reason: "post-merge" }); }
-      catch (e) { msg = `workflow-mark: gh pr merge detected — user_verification reset FAILED: ${e.message}`; }
     }
+    // gh / glab merge records no sha: no local push happened in this command.
     done(msg);
   }
   done();
@@ -166,6 +161,7 @@ for (const cmd of sentinelParts) {
   // (mark-step-handler would otherwise process a manual MARK_STEP form here).
   if (reviewTestsHandler.handle({ ...ctx, cmd })) continue;
   if (runTestsAcceptHandler.handle({ ...ctx, cmd })) continue;
+  if (runTestsBaselineAcceptHandler.handle({ ...ctx, cmd })) continue;
   if (markStepHandler.handle({ ...ctx, cmd })) continue;
   if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;
   if (resetHandler.handle({ ...ctx, cmd })) continue;

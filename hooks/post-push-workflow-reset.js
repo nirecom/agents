@@ -62,7 +62,8 @@ try {
       head = null;
     }
     if (head && head === state.last_pushed_sha) {
-      try { markStep(sessionId, "branching_complete", "pending"); } catch (e) {}
+      // #2527: post-push lets navigation keep a delivered session past branching_complete.
+      try { markStep(sessionId, "branching_complete", "pending", { reset_reason: "post-push" }); } catch (e) {}
       try { clearLastPushedSha(sessionId); } catch (e) {}
       additionalContext =
         "Push boundary detected: HEAD matches last pushed SHA.\n" +

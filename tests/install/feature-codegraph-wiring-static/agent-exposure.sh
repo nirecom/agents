@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: agents/survey-code.md, agents/detail-planner.md, agents/outline-planner.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/security-scanner.md, agents/test-reviewer.md, agents/skip-verifier.md, agents/plan-security-reviewer.md, agents/lib/codegraph-usage.md
+# Tests: agents/survey-code.md, agents/detail-planner.md, agents/outline-planner.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/security-scanner.md, agents/test-reviewer.md, agents/plan-skip-judge.md, agents/plan-security-reviewer.md, agents/lib/codegraph-usage.md
 # Tags: codegraph, wiring, static, agent-frontmatter, mcp, table-driven, TL2, pwsh-not-required, scope:issue-specific
 # W7 — agent exposure. Claude Code has no shared base tool list for agent definitions,
 # so the nine allowlists are nine independent places to forget. A grep for the tool
@@ -8,7 +8,7 @@
 # nine files are parsed as real frontmatter and the tools: value is compared as a
 # list of discrete entries.
 
-echo "=== W7: the nine adopting agents (frontmatter parsed, entries counted) ==="
+echo "=== W7: the adopting agents (frontmatter parsed, entries counted) ==="
 
 AGENT_FM_JS='
 const fs = require("fs");
@@ -68,7 +68,6 @@ W7-04 | agents/detail-reviewer.md       | Read Glob Grep Bash mcp__codegraph__co
 W7-05 | agents/outline-reviewer.md      | Read Glob Grep Bash mcp__codegraph__codegraph_explore
 W7-06 | agents/security-scanner.md      | Read Glob Grep Bash mcp__codegraph__codegraph_explore
 W7-07 | agents/test-reviewer.md         | Read Glob Grep Bash mcp__codegraph__codegraph_explore
-W7-08 | agents/skip-verifier.md         | Read Glob Grep Bash mcp__codegraph__codegraph_explore
 W7-09 | agents/plan-security-reviewer.md| Read Glob Grep Bash mcp__codegraph__codegraph_explore
 W7_TABLE
 
@@ -106,6 +105,16 @@ for row in "${W7_ROWS[@]}"; do
     assert_eq "$name-d: $rel keeps its whole pre-existing tools: list and appends only the CodeGraph tool" \
         "$want_tools" "${entries:-<none>}"
 done
+
+# W7-08 (#2460): skip-verifier is retired; its successor plan-skip-judge is a
+# Read-only judge (tools: Read) and does not adopt the CodeGraph tool.
+if [ -e "$SCRIPT_CHECKOUT_ROOT/agents/skip-verifier.md" ]; then
+    fail "W7-08: agents/skip-verifier.md is retired" "the file still exists"
+else
+    pass "W7-08: agents/skip-verifier.md is retired"
+fi
+PSJ_TOOLS="$(sed -n '2,/^---/{/^tools:/p}' "$SCRIPT_CHECKOUT_ROOT/agents/plan-skip-judge.md" 2>/dev/null | head -1)"
+assert_eq "W7-08b: agents/plan-skip-judge.md exposes Read only (no CodeGraph tool)" "tools: Read" "${PSJ_TOOLS:-<absent>}"
 
 # W10 — the shared policy the nine pointers resolve to. W7-c only proves the pointer
 # is spelled; a pointer at a file that does not exist, or at an empty stub, hands nine

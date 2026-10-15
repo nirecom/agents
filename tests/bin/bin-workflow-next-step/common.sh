@@ -74,6 +74,12 @@ write_state() {
   printf '%s' "$json" > "$TMPDIR_WT/${sid}.json"
 }
 
+# write_intent_issues <sid> <n>...: the clarify_intent gate reads intent.md `## Issues` (#2654).
+write_intent_issues() {
+  local sid="$1" t; shift
+  { echo "## Issues"; for t in "$@"; do echo "- #$t"; done; } > "$WORKFLOW_PLANS_DIR/${sid}-intent.md"
+}
+
 # Since #2277/#2513 a gated `complete` (clarify_intent / outline / detail) counts only with a
 # plan-approval record whose digest matches the plan artifact. A fixture records one complete
 # without it, so the approval is attached at run time, against the WORKFLOW_PLANS_DIR the run
@@ -95,7 +101,7 @@ run_next_step() {
   run_with_timeout node "$NEXT_STEP_AGENTS_DIR/bin/workflow/next-step" "$@"
 }
 
-# All-pending fixture (closes_issues populated so clarify_intent isn't blocked).
+# All-pending fixture. A case current at clarify_intent also needs write_intent_issues (#2654).
 JSON_ALL_PENDING='{"steps":{"workflow_init":{"status":"pending"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 
 JSON_WFINIT_COMPLETE='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
@@ -112,14 +118,14 @@ JSON_ALL_COMPLETE='{"steps":{"workflow_init":{"status":"complete"},"clarify_inte
 
 JSON_MIXED_TERMINAL='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"skipped"},"outline":{"status":"skipped"},"detail":{"status":"skipped"},"branching_complete":{"status":"complete"},"write_tests":{"status":"skipped"},"review_tests":{"status":"skipped"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"skipped"},"docs":{"status":"complete"},"user_verification":{"status":"complete"},"cleanup":{"status":"skipped"},"pre_final_report_gate":{"status":"complete"}},"closes_issues":[1053]}'
 
-# closes_issues blocked: clarify_intent is next step but closes_issues is empty.
+# closes_issues blocked: clarify_intent is next step and no intent.md names an issue.
 JSON_BLOCKED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[]}'
 
 # closes_issues absent, but we've already passed clarify_intent — should NOT be blocked.
 JSON_NOT_BLOCKED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}}}'
 
 # #1681: outline recorded as skipped, but its skip_verdict was vetoed.
-JSON_OUTLINE_VETOED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-07-01T00:00:00.000Z"}},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1681]}'
+JSON_OUTLINE_VETOED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"veto","source":"record-skip-verdict-cli:test-veto","recorded_at":"2026-07-01T00:00:00.000Z"}},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1681]}'
 
 JSON_CORRUPT='{invalid json'
 
@@ -147,9 +153,13 @@ JSON_MISSING_STEP='{"steps":{"workflow_init":{"status":"complete"},"clarify_inte
 # clarify_intent (idx 0-1) stay absent/pending.
 JSON_EMPTY_STEPS='{"steps":{"research":{"status":"complete"}},"closes_issues":[1053]}'
 
-# Non-skill step fixtures: branching_complete and user_verification should emit NEXT_SKILL="" + NEXT_HINT non-empty.
+# Step-skill fixtures: branching_complete is the only step left without a skill (NEXT_SKILL="" +
+# NEXT_HINT non-empty); user_verification maps to /get-release-approval (#2527).
+# JSON_USER_VERIFICATION_NEXT carries review_docs complete (absent would make review_docs current)
+# and no worktree_entered_at, so the v4->v5 migration records delivery_path=direct and
+# push_branch is table-skipped — user_verification is the current step without a gh query.
 JSON_BRANCHING_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
-JSON_USER_VERIFICATION_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
+JSON_USER_VERIFICATION_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"review_docs":{"status":"complete"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 
 # WF-META: detail complete, non-applicable steps pending, pre_final_report_gate pending
 JSON_WF_META_AT_PREFINAL='{"workflow_type":"wf-meta","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
@@ -167,5 +177,7 @@ JSON_WF_CODE_EXPLICIT='{"workflow_type":"wf-code","steps":{"workflow_init":{"sta
 JSON_WF_PLAN_LEGACY='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"write_code":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
 
 # #1161: user_verification reset to pending after gh pr merge (reset_reason=post-merge).
-# next-step must skip it and advance to cleanup.
-JSON_UV_POST_MERGE='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"pending","reset_reason":"post-merge"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1161]}'
+# next-step must skip it and advance to cleanup. #2527: review_docs complete (absent would make
+# review_docs current) and worktree_entered_at present, so the v4->v5 migration records
+# delivery_path=pull_request and backfills push_branch/merge_to_main from the post-merge reason.
+JSON_UV_POST_MERGE='{"worktree_entered_at":"2026-01-01T00:00:00.000Z","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"write_code":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"review_docs":{"status":"complete"},"user_verification":{"status":"pending","reset_reason":"post-merge"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1161]}'

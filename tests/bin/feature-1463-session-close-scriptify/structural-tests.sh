@@ -50,10 +50,16 @@ test_S4_skill_refs_detect() {
         skip "S4_skill_refs_detect (skills/session-close/SKILL.md missing)"
         return
     fi
-    if grep -qF "bin/session-close-detect-wf-meta.js" "$SKILL_MD"; then
-        pass "S4_skill_refs_detect: SKILL.md references bin/session-close-detect-wf-meta.js"
+    if grep -qF "bin/session-close-detect-route.js" "$SKILL_MD"; then
+        pass "S4_skill_refs_detect: SKILL.md references bin/session-close-detect-route.js"
     else
-        fail "S4_skill_refs_detect: SKILL.md does not reference bin/session-close-detect-wf-meta.js"
+        fail "S4_skill_refs_detect: SKILL.md does not reference bin/session-close-detect-route.js"
+    fi
+    # #2527: the deleted wf-meta detector must not linger as a dangling reference.
+    if grep -qF "session-close-detect-wf-meta.js" "$SKILL_MD"; then
+        fail "S4_skill_refs_detect: SKILL.md still references the removed session-close-detect-wf-meta.js"
+    else
+        pass "S4_skill_refs_detect: SKILL.md has no reference to the removed session-close-detect-wf-meta.js"
     fi
 }
 

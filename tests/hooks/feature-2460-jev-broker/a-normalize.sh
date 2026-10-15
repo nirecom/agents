@@ -28,10 +28,10 @@ case_end
 echo "=== the normalizer runs in-process ==="
 case_begin "b-normalize-in-process" "hooks/lib/jev/broker.js"
 fx_new b-norm-inproc
-check "valid raw text: the parsed CSV, no child process" '"S1-multi-file"|0' "$(bp norm "$POINT" "$RAW")"
-check "several signals with spacing: the trimmed CSV, no child process" '"S1-multi-file,S3-security"|0' \
-  "$(bp norm "$POINT" '"SIGNALS: S1-multi-file , S3-security"')"
-check "a retired third (session id) argument changes nothing" '"S1-multi-file"|0' "$(bp norm "$POINT" "$RAW" '"sid-1"')"
+check "valid raw text: the parsed CSV, no child process" '"S2-architecture"|0' "$(bp norm "$POINT" "$RAW")"
+check "several signals with spacing: the trimmed CSV, no child process" '"S2-architecture,S3-security"|0' \
+  "$(bp norm "$POINT" '"SIGNALS: S2-architecture , S3-security"')"
+check "a retired third (session id) argument changes nothing" '"S2-architecture"|0' "$(bp norm "$POINT" "$RAW" '"sid-1"')"
 case_end
 
 echo "=== normalizing writes no file anywhere ==="
@@ -40,9 +40,9 @@ fx_new b-norm-files
 mkdir -p "$FX/ostmp"
 OSTMP_N="$(np "$FX/ostmp")"
 FX_BEFORE="$(fx_tree)"
-check "valid raw text with os.tmpdir() at the fixture: parsed, no child process" '"S1-multi-file"|0' \
+check "valid raw text with os.tmpdir() at the fixture: parsed, no child process" '"S2-architecture"|0' \
   "$(bp norm-ostmp "$OSTMP_N" "$POINT" "$RAW")"
-check "a retired session id argument: parsed, no child process" '"S1-multi-file"|0' \
+check "a retired session id argument: parsed, no child process" '"S2-architecture"|0' \
   "$(bp norm-ostmp "$OSTMP_N" "$POINT" "$RAW" '"sid-1"')"
 check "'SIGNALS: none' and garbage: parsed, no child process" '""|0#"S0-undecidable"|0' \
   "$(bp norm-ostmp "$OSTMP_N" "$POINT" '"SIGNALS: none"')#$(bp norm-ostmp "$OSTMP_N" "$POINT" '"garbage"')"
@@ -71,8 +71,8 @@ done
 check "raw text 'SIGNALS: none' is the empty CSV, not a failure" '""|0' "$(bp norm "$POINT" '"SIGNALS: none"')"
 check "a non-string raw value is normalized in its string form: 5 is S0-undecidable" '"S0-undecidable"|0' \
   "$(bp norm "$POINT" '5')"
-check "a non-string raw value is normalized in its string form: [\"SIGNALS: S1-multi-file\"] parses" '"S1-multi-file"|0' \
-  "$(bp norm "$POINT" '["SIGNALS: S1-multi-file"]')"
+check "a non-string raw value is normalized in its string form: [\"SIGNALS: S2-architecture\"] parses" '"S2-architecture"|0' \
+  "$(bp norm "$POINT" '["SIGNALS: S2-architecture"]')"
 check "no stray file left" "0" "$(stray_files)"
 case_end
 
@@ -83,7 +83,7 @@ for _mode in throw missing nonstring null undefined object; do
   check "normalizer $_mode: null, no child process, the normalizer was reached" "null|0|true" \
     "$(bp norm-stub "$_mode" "$POINT" "$RAW")"
 done
-check "control: the real normalizer through the same stub path parses" '"S1-multi-file"|0|true' \
+check "control: the real normalizer through the same stub path parses" '"S2-architecture"|0|true' \
   "$(bp norm-stub real "$POINT" "$RAW")"
 check "no stray file left" "0" "$(stray_files)"
 case_end
@@ -91,7 +91,7 @@ case_end
 case_begin "b-normalize-unusable-state-dir" "hooks/lib/jev/broker.js"
 fx_new b-norm-blocked
 printf 'not-a-dir' > "$JEVDIR"
-check "<state>/jev is a regular file: the normalizer does not need it and still parses" '"S1-multi-file"|0' \
+check "<state>/jev is a regular file: the normalizer does not need it and still parses" '"S2-architecture"|0' \
   "$(bp norm "$POINT" "$RAW")"
 check "the file is untouched" "not-a-dir" "$(cat "$JEVDIR")"
 case_end

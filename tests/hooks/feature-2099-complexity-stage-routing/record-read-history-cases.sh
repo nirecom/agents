@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/record-read-history-cases.sh
-# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/record-complexity-and-skip, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js
+# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation,hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js
 # Tags: complexity, routing, idempotency, history, projection, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh —
 # d2099_raw_ce_count lives there. Split per rules/coding/file-split.md Pattern A.
@@ -22,20 +22,20 @@ d2099h_compat_view() {
 
 d2099h_model_for() { case "$1" in high) echo "opus";; *) echo "sonnet";; esac; }
 
-# R-33: idempotency at the RAW EVENT layer, through both entry points. The
-# projection is last-write-wins, but appendEvents() does no dedup, coalescing or
-# rewriting of history, so repeating an identical evaluation deliberately
-# APPENDS another event — the audit trail must record that the judgement was
-# made N times. Pinning "the count does not grow" would encode the opposite.
+# R-33: idempotency at the RAW EVENT layer. The projection is last-write-wins,
+# but appendEvents() does no dedup, coalescing or rewriting of history, so
+# repeating an identical evaluation deliberately APPENDS another event — the
+# audit trail must record that the judgement was made N times. Pinning "the
+# count does not grow" would encode the opposite.
 d2099_raw_event_idempotency() {
     local sid got
     sid=$(new_session idemapi)
     D2099_SID="$sid" BARREL="$BARREL_N" run_with_timeout node -e '
 const b = require(process.env.BARREL);
 const sid = process.env.D2099_SID;
-b.recordComplexityEvaluation(sid, ["S1-multi-file"]);
-b.recordComplexityEvaluation(sid, ["S1-multi-file"]);
-b.recordComplexityEvaluation(sid, ["S1-multi-file"]);
+b.recordComplexityEvaluation(sid, ["S1b-wide-change"]);
+b.recordComplexityEvaluation(sid, ["S1b-wide-change"]);
+b.recordComplexityEvaluation(sid, ["S1b-wide-change"]);
 ' >/dev/null 2>&1 || true
     got=$(D2099_SID="$sid" BARREL="$BARREL_N" run_with_timeout node -e '
 const b = require(process.env.BARREL);
@@ -45,22 +45,28 @@ const ce = b.readComplexityEvaluation(process.env.D2099_SID);
 console.log("events=" + ev.length + " folded=" + (ce ? ce.signals.join(",") : "NONE"));
 ' 2>/dev/null)
     assert_eq "R-33 three identical API records append three raw events, folding to one record" \
-        "events=3 folded=S1-multi-file" "$got"
+        "events=3 folded=S1b-wide-change" "$got"
+}
 
-    # Same property through the bash wrapper — the layer a consumer actually uses.
-    local sid2
+# R-34: the same property through the record CLI. Zero signals is the input that
+# used to auto-skip (#2460 retired it): each call must still append its
+# evaluation, and neither call may skip a step.
+d2099_cli_event_idempotency() {
+    local sid2 got
     sid2=$(new_session idemcli)
-    run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid2" --signals "S1-multi-file" --target outline >/dev/null 2>&1
-    run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid2" --signals "S1-multi-file" --target outline >/dev/null 2>&1
+    run_with_timeout node "$BIN_RECORD" --session "$sid2" --signals "" >/dev/null 2>&1
+    run_with_timeout node "$BIN_RECORD" --session "$sid2" --signals "" >/dev/null 2>&1
     got=$(D2099_SID="$sid2" BARREL="$BARREL_N" run_with_timeout node -e '
 const b = require(process.env.BARREL);
 const s = b.readState(process.env.D2099_SID);
 const ev = ((s && s.events) || []).filter(function (e) { return e && e.kind === "complexity_evaluation"; });
 const ce = b.readComplexityEvaluation(process.env.D2099_SID);
-console.log("events=" + ev.length + " folded=" + (ce ? ce.signals.join(",") : "NONE"));
+console.log("events=" + ev.length + " folded=" + (ce ? (ce.signals.join(",") || "none") : "NONE"));
 ' 2>/dev/null)
-    assert_eq "R-34 two identical wrapper invocations likewise append two raw events, folding to one" \
-        "events=2 folded=S1-multi-file" "$got"
+    assert_eq "R-34 two identical CLI invocations likewise append two raw events, folding to one" \
+        "events=2 folded=none" "$got"
+    assert_eq "R-34b ... and neither invocation skips a step" \
+        "outline=pending detail=pending skip=0" "$(d2099_no_skip_view "$sid2")"
 }
 
 # R-45..R-47: two DIFFERENT evaluations in one session. R-33/R-34 repeat the same
@@ -75,7 +81,7 @@ console.log("events=" + ev.length + " folded=" + (ce ? ce.signals.join(",") : "N
 # Rows: label | first signals | second signals | stage matrix after | compat view after
 D2099_REEVAL='low-to-high||S2-architecture,S5-breaking|high|high|high|high|high|S2-architecture,S5-breaking
 high-to-low|S3-security||low|low|low|low|low|none
-map-replacement|S2-architecture|S1-multi-file|low|low|low|high|high|S1-multi-file'
+map-replacement|S2-architecture|S1b-wide-change|low|low|low|high|high|S1b-wide-change'
 
 d2099_reevaluation_replaces_projection() {
     local label first second ol d wt wc agg sig sid want
@@ -108,8 +114,11 @@ $D2099_REEVAL
 EOF
 }
 
-case_begin "r33-raw-event-idempotency" "bin/workflow/record-complexity-evaluation"
+case_begin "r33-raw-event-idempotency" "hooks/workflow-state/state-io/events.js"
 d2099_raw_event_idempotency
+case_end
+case_begin "r34-cli-event-idempotency-no-skip" "bin/workflow/record-complexity-evaluation"
+d2099_cli_event_idempotency
 case_end
 case_begin "r45-reevaluation-replaces-projection" "hooks/workflow-state/state-io/projection.js"
 d2099_reevaluation_replaces_projection

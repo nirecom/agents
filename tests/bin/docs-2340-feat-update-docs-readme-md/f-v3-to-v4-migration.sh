@@ -86,15 +86,18 @@ console.log("version=" + m.version + " count=" + rdEvents(m).length);
   assert_eq "F3: nothing settled after review_docs → NOT backfilled" \
     "version=4 count=0" "$out"
 
-  # F4: a v4 file is already current → normalizeStateVersion is a no-op.
-  mk_state f4 4 "$UPTO_DOCS;user_verification=complete" >/dev/null
+  # F4: a file already at the current schema version → normalizeStateVersion is a no-op.
+  mk_state f4 1 "$UPTO_DOCS;user_verification=complete" >/dev/null
   out="$(f_probe f4 '
+const st = rd();
+st.version = CORE.CURRENT_STATE_VERSION;
+fs.writeFileSync(sp, JSON.stringify(st, null, 2));
 const before = JSON.stringify(rd());
 const n = norm();
-console.log("version=" + n.version + " unchanged=" + (JSON.stringify(n) === before));
+console.log("current=" + (n.version === CORE.CURRENT_STATE_VERSION) + " unchanged=" + (JSON.stringify(n) === before));
 ')"
-  assert_eq "F4: v4 state → normalizeStateVersion no-op" \
-    "version=4 unchanged=true" "$out"
+  assert_eq "F4: current-version state → normalizeStateVersion no-op" \
+    "current=true unchanged=true" "$out"
 
   # F5: a v2 file chains v2->v3->v4 — write_code (v2->v3) AND review_docs (v3->v4)
   # are both backfilled when a step downstream of each is settled.
@@ -102,8 +105,8 @@ console.log("version=" + n.version + " unchanged=" + (JSON.stringify(n) === befo
   out="$(f_probe f5 '
 const n = norm();
 const has = (step) => n.events.some((e) => e.kind === "step_status" && e.step === step && e.provenance === "backfilled");
-console.log("version=" + n.version + " write_code=" + has("write_code") + " review_docs=" + has("review_docs"));
+console.log("current=" + (n.version === CORE.CURRENT_STATE_VERSION) + " write_code=" + has("write_code") + " review_docs=" + has("review_docs"));
 ')"
-  assert_eq "F5: v2 chains v2->v3->v4, both write_code and review_docs backfilled" \
-    "version=4 write_code=true review_docs=true" "$out"
+  assert_eq "F5: v2 chains through v3->v4 to current, both write_code and review_docs backfilled" \
+    "current=true write_code=true review_docs=true" "$out"
 }

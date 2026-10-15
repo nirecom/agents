@@ -78,12 +78,12 @@ for(const s of VALID_STEPS) steps[s]={status:s==="user_verification"?uv:"complet
 fs.writeFileSync(process.env.WORKFLOW_STATE_DIR+"/"+sid+".json",JSON.stringify({version:1,session_id:sid,created_at:"2026-06-27T10:00:00.000Z",steps}));
 ' "$AGENTS_NODE" "$1" "$2"
     if [ "$3" = stream ]; then
-        # Seeding an event upgrades the file to the event-stream (v4) shape.
+        # Seeding an event upgrades the file to the event-stream (v5) shape.
         run_with_timeout 30 node "$AGENTS_NODE/tests/lib/workflow-state-tool.js" "$AGENTS_NODE" seed "$1" \
             '[{"kind":"worktree","transition":"entered","cwd":"C:/nonexistent-1787","worktree_path":"C:/nonexistent-1787","git_branch":"fixture","path_source":"tool_input"}]'
         local ver
         ver="$(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).version))' "$WORKFLOW_STATE_DIR/$1.json")"
-        assert_eq "fixture-$1-is-event-stream" "4" "$ver"
+        assert_eq "fixture-$1-is-event-stream" "5" "$ver"
     fi
 }
 

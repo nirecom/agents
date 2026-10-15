@@ -84,12 +84,13 @@ flowchart TD
 
     S6a & S6b & SR --> S7["12 · docs"]
     S7 --> S7d["13 · review-docs<br/>skippable"]
-    S7d --> Gate["pre-merge audit"]
-    Gate --> UV["14 · user verify"]
-    UV --> Push["commit & push"]
+    S7d --> PB["14 · commit-push<br/>push_branch"]
+    PB --> Gate["pre-merge audit"]
+    Gate --> UV["15 · get-release-approval<br/>user verify"]
+    UV --> Push["16 · merge-to-main<br/>merge PR / direct push"]
 
     Push --> Clean{worktree or main?}
-    Clean -- worktree --> WE["worktree-end"]
+    Clean -- worktree --> WE["17 · worktree-end"]
     Clean -- main     --> IC["issue-close"]
     WE --> IC
     IC --> Done([Done])
@@ -106,7 +107,7 @@ flowchart TD
     class Gate,SR audit
     class S1,P2a,S4 skippable
     class S0_SC,S0_SH,P2b_R,P2c_R,S6a,S6b parallel
-    class S0_R,P2b_L,P2c_L,S5,S7,UV,Push,WE,IC required
+    class S0_R,P2b_L,P2c_L,S5,S7,PB,UV,Push,WE,IC required
 ```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
@@ -267,7 +268,7 @@ See [docs/architecture/gitlab-support.md](docs/architecture/gitlab-support.md) f
 
 ### Cross-machine session continuity
 
-Normalizes Claude Code project paths to drive-root form (`C:\git\`, `/git/`) and syncs
+Normalizes Claude Code project paths to drive-root form (`C:\<dir>\`, `/<dir>/`) and syncs
 `~/.claude/projects/` through a private GitHub repo — conversations started on Windows can
 be resumed on macOS/Linux, and vice versa.
 
@@ -353,7 +354,7 @@ The installer brings in everything marked **✓** automatically; the rest must a
 | [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` | — |
 | [CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) | Third-party code-intelligence: a pre-built symbol graph agents query instead of a Read/Grep sweep | ✓ wired in, but off by default — set `CODEGRAPH=on` in `.env` and re-run the installer ([docs](docs/codegraph.md)) |
 | [RTK (Rust Token Killer)](https://github.com/rtk-ai/rtk) | Compresses Bash command output before it reaches the model to reduce LLM token usage; set `RTK=on` in `.env` to enable | ✓ installed and configured when `RTK=on`; off by default |
-| Jev (TypeSafe AI typed classifier) | PoC: logs a second opinion on task complexity next to the LLM judge's; the LLM result is always used. Set `JEV=on` and `TYPESAFE_API_KEY` in `.env` to enable ([docs](docs/architecture/jev.md)) | — hosted API, nothing to install; off by default |
+| Jev (TypeSafe AI typed classifier) | First judge for task complexity and for skipping the outline / detail plan; a subagent answers whatever it is not confident about. Set `JEV=on` and `TYPESAFE_API_KEY` in `.env` to enable ([docs](docs/architecture/jev.md)) | — hosted API, nothing to install; off by default |
 
 ## Configuration
 

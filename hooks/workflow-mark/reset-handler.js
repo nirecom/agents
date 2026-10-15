@@ -5,12 +5,12 @@
 // Since #1733 the rollback is an APPEND, not a rewrite: the reset is recorded as
 // a `reset` anchor followed by the declared statuses it implies. Nothing before
 // the anchor is touched, so the pre-reset history stays readable — and the
-// top-level session settings (closes_issues, workflow_type, session_model,
+// top-level session settings (closes_issues, deliverable_type, session_model,
 // last_pushed_sha) can no longer be dropped, because they are never rebuilt.
 
 const { validateSkipReason } = require("./skip-reason");
 const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, readState, appendEvents } = require("../workflow-state");
+const { VALID_STEPS, readState, appendEvents, clearDeliveryProfile } = require("../workflow-state");
 const { APPROVAL_GATED_STEPS } = require("../workflow-state/completion-approval");
 const { appendAutoRecord } = require("../lib/handoff-auto-record");
 const { isWorkflowActivePeriod } = require("../lib/workflow-active-period");
@@ -135,6 +135,16 @@ function handle(ctx) {
         sanctioned: ORIGIN,
         reason: rawReason,
       });
+      // #2527 judgment D: re-opening branching_complete re-opens the delivery decision,
+      // so the pinned profile is cleared for the re-completion to record afresh. A
+      // reset from a later step keeps it.
+      if (VALID_STEPS.indexOf(fromStep) <= VALID_STEPS.indexOf("branching_complete")) {
+        try {
+          clearDeliveryProfile(sessionId);
+        } catch (e) {
+          pushMessage(`workflow-mark: warning — reset applied but the delivery profile was NOT cleared: ${e.message}`);
+        }
+      }
       try {
         appendAutoRecord(sessionId, {
           cls: "E",

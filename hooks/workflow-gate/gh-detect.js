@@ -18,7 +18,7 @@ function findGhInPath() {
   for (const dir of dirs) {
     const candidates = [dir];
     if (/^\/[a-zA-Z]\//.test(dir)) {
-      // MSYS2 drive path /c/foo → C:\foo
+      // MSYS2 drive path /<drive>/foo → <DRIVE>:\foo
       candidates.push(dir[1].toUpperCase() + ":\\" + dir.slice(3).replace(/\//g, "\\"));
     } else if (/^[a-zA-Z]:\//.test(dir)) {
       // Windows forward-slash C:/foo → C:\foo
@@ -43,7 +43,7 @@ function findGhInPath() {
 }
 
 // toMsys2Path: convert a Windows absolute path (C:\foo or C:/foo) to MSYS2
-// format (/c/foo) so bash on Windows (Git Bash / MSYS2) can locate the file.
+// format (/<drive>/foo) so bash on Windows (Git Bash / MSYS2) can locate the file.
 function toMsys2Path(p) {
   if (/^[a-zA-Z]:[/\\]/.test(p)) {
     return "/" + p[0].toLowerCase() + "/" + p.slice(3).replace(/\\/g, "/");
@@ -68,16 +68,63 @@ function isBranchDirectlyMerged(repoDir) {
   return false;
 }
 
-// hasOpenPrForBranch: returns true iff the current branch has an OPEN or MERGED PR.
-// #2307: routes through the forge codehost descriptor for the repo's origin, so a
-// GitHub repo runs the gh check while a non-GitHub repo hits the no-op stub. A
-// remote that cannot be read fails open (true) so the premature guard stays active.
-function hasOpenPrForBranch(repoDir) {
+function originUrl(repoDir) {
   const remote = spawnSync("git", ["-C", repoDir, "remote", "get-url", "origin"], { encoding: "utf8", timeout: 5000 });
-  if (!remote || remote.error || remote.status !== 0) return true;
-  const url = (remote.stdout || "").trim();
+  if (!remote || remote.error || remote.status !== 0) return null;
+  return (remote.stdout || "").trim() || null;
+}
+
+// prStateForBranch: OPEN | MERGED | CLOSED | NONE | UNKNOWN for the current branch
+// (vocabulary: lib/forge/pr-state.js). #2307: routes through the forge codehost
+// descriptor for the repo's origin; an unreadable origin answers UNKNOWN.
+// opts.timeoutMs (optional) bounds the forge call.
+function prStateForBranch(repoDir, opts) {
+  const url = originUrl(repoDir);
+  if (!url) return "UNKNOWN";
+  return resolveCodehostDescriptor(url).prStateForBranch(repoDir, opts);
+}
+
+// prForBranch: { state, number } for the current branch (bin/workflow/pr-state).
+function prForBranch(repoDir, opts) {
+  const url = originUrl(repoDir);
+  if (!url) return { state: "UNKNOWN", number: "" };
+  return resolveCodehostDescriptor(url).prForBranch(repoDir, opts);
+}
+
+// hasOpenPrForBranch: true iff the current branch has an OPEN or MERGED PR; an
+// unknown answer fails open (true) so the premature guard stays active.
+function hasOpenPrForBranch(repoDir) {
+  const url = originUrl(repoDir);
   if (!url) return true;
   return resolveCodehostDescriptor(url).hasOpenPrForBranch(repoDir);
 }
 
-module.exports = { findGhInPath, toMsys2Path, hasOpenPrForBranch, isBranchDirectlyMerged };
+// isRemoteDefaultBranchAbsent: true only when origin is reachable and has no
+// branch at all (the bootstrap repo, where no PR can exist). A local
+// origin/<default> ref, any git error, or an unreachable remote answers false so
+// the premature guard stays active (fail-closed).
+function isRemoteDefaultBranchAbsent(repoDir) {
+  try {
+    const { getProtectedBranches } = require("../lib/merge-detect");
+    for (const b of getProtectedBranches()) {
+      const ref = spawnSync("git", ["-C", repoDir, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + b],
+        { encoding: "utf8", timeout: 5000 });
+      if (!ref || ref.error) return false;
+      if (ref.status === 0) return false;
+    }
+    // BatchMode: an SSH passphrase / host-key prompt must fail fast, not hang to the timeout.
+    const inheritedSsh = process.env.GIT_SSH_COMMAND;
+    const sshCommand = !inheritedSsh ? "ssh -o BatchMode=yes"
+      : /batchmode/i.test(inheritedSsh) ? inheritedSsh : inheritedSsh + " -o BatchMode=yes";
+    const env = Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: "0", GIT_SSH_COMMAND: sshCommand });
+    const ls = spawnSync("git", ["-C", repoDir, "ls-remote", "--heads", "origin"], { encoding: "utf8", timeout: 8000, env });
+    if (!ls || ls.error || ls.status !== 0) return false;
+    return (ls.stdout || "").trim() === "";
+  } catch (e) {
+    return false;
+  }
+}
+
+module.exports = {
+  findGhInPath, toMsys2Path, originUrl, prStateForBranch, prForBranch, hasOpenPrForBranch, isBranchDirectlyMerged, isRemoteDefaultBranchAbsent,
+};

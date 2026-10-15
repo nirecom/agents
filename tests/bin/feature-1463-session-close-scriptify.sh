@@ -1,11 +1,11 @@
 #!/bin/bash
 # tests/bin/feature-1463-session-close-scriptify.sh
-# Tests: bin/render-final-report.js, bin/session-close-detect-wf-meta.js, bin/session-close-render-sc7.js, hooks/lib/final-report-schema.js, hooks/stop-final-report-guard.js, skills/session-close/SKILL.md
+# Tests: bin/render-final-report.js, bin/session-close-detect-route.js, bin/session-close-render-sc7.js, hooks/lib/final-report-schema.js, hooks/stop-final-report-guard.js, skills/session-close/SKILL.md
 # Tags: scope:issue-specific
 #
 # Issue #1463 — the SC-6 Final Report emit moves out of session-close/SKILL.md into three bin/
 # scripts. Dispatcher (file-split rule) for feature-1463-session-close-scriptify/: render-tests.sh
-# (T1-T9/T7b/T7c/T19-T21), detect-sc7-tests.sh (T10-T18), structural-tests.sh (S1-S7).
+# (T1-T9/T7b/T7c/T19-T21), detect-sc7-tests.sh (route detector + sc7, T10-T27), structural-tests.sh (S1-S7).
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

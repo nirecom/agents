@@ -251,14 +251,48 @@ t_unrunnable_accept_ask() {
 }
 t_unrunnable_accept_ask
 
+# #2517: the baseline accept sentinel grants the completion of a failing run_tests, so it is
+# the same class as UA above -- ask always, never allow, never deny (the user must be able to run it).
+BA_RULE='Bash(echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: *>>")'
+BA_CMD='echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: fails on main too>>"'
+t_baseline_accept_ask() {
+    local ba=() tmp_np
+    dp_node_path "$TMPROOT"; tmp_np="$DP_NODE_PATH/ba"
+    mkdir -p "$TMPROOT/ba"
+    dp_node_path "$SETTINGS"
+    mapfile -d '' -t ba < <(node -e "$UA_SPLIT_JS" "$DP_NODE_PATH" "$tmp_np" "$BA_RULE")
+    if (( ${#ba[@]} != 1 )) || [[ "${ba[0]}" == ERROR:* ]]; then
+        echo "FAIL: harness -- baseline-accept split returned [${ba[*]}]"; exit 1
+    fi
+    ROWS=$((ROWS + 1))
+    assert_eq "BA1: permissions.ask carries the exact BASELINE_ACCEPTED sentinel rule" "true" "${ba[0]}"
+    dp_req ba-allow "$tmp_np/ua-allow-as-deny.json" "$BA_CMD"
+    dp_req ba-ask "$tmp_np/ua-ask-as-deny.json" "$BA_CMD"
+    dp_req ba-deny "$SETTINGS" "$BA_CMD"
+    dp_run "baseline-accept"
+    ROWS=$((ROWS + 1))
+    dp_get ba-allow
+    assert_eq "BA2: no permissions.allow Bash rule auto-approves the baseline accept sentinel (hits: ${DENY_HITS:-none})" \
+        "NO-MATCH" "$DENY_VERDICT"
+    ROWS=$((ROWS + 1))
+    dp_get ba-ask
+    assert_eq "BA3: the permissions.ask rule matches the baseline accept sentinel command" "MATCHED" "$DENY_VERDICT"
+    ROWS=$((ROWS + 1))
+    dp_get ba-deny
+    assert_eq "BA4: no permissions.deny rule blocks the baseline accept sentinel (hits: ${DENY_HITS:-none})" \
+        "NO-MATCH" "$DENY_VERDICT"
+}
+t_baseline_accept_ask
+
 # EXECUTED-ROW BUDGET. Every table increments ROWS; a drifted delimiter or an early return
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
 # crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
 # N6-N13 MUST-trigger narration rows + L6-L15 sanctioned-command counterweights + P37
 # refspec compound tail) + launch-form completeness 48 (12 triggers x 4 launch forms -- round-4
 # C8 added +refspec/positional-force/git-clean triggers, PEND under ANCHORED=0) +
-# bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501).
-ROWS_EXPECTED=169
+# bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501) +
+# baseline-accept ask 4 (#2517).
+ROWS_EXPECTED=173
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

@@ -2,26 +2,10 @@
 # tests/hooks/feature-1733-state-event-stream/concurrency.sh
 # Tests: hooks/workflow-state/state-io/state-lock.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, concurrency, locking, cas, atomicity, scope:issue-specific, pwsh-not-required, TL2
-#
-# The append-only guarantee is a MECHANISM, not a convention: several real OS
-# processes (PostToolUse recorder / PreToolUse gate / bash sentinel hook) write the
-# same state file. These cases spawn genuinely parallel `node` processes against a
-# real filesystem, which is why they are TL2 rather than TL1 — a mocked fs cannot
-# lose an event to a lost update or collide on a rename.
-#
-# Sub-cases: (a) parallel append integrity, (b) same-step race, (c) dead-pid lock
-# reclaim, (d) live-pid timeout with a zero-byte-change guarantee, (e) fixed-tmp-name
-# collision regression.
-#
-# TL3 gap (what this test does NOT catch):
-# - hook registration: the racing writers are node processes calling the module, not
-#   Claude Code firing PreToolUse and PostToolUse for the same tool call.
-# - a network filesystem (~/.claude on NFS/SMB) where O_EXCL is not atomic; only the
-#   CAS layer would defend there and this test runs on a local FS.
-# - lock contention against a process owned by a different OS user (EPERM branch of
-#   the liveness probe).
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# Append-only under real parallel `node` writers (TL2): append integrity, same-step
+# race, dead-pid reclaim, live-pid timeout, fixed-tmp-name collision.
+# TL3 gap: real hook firing, network FS O_EXCL, cross-user EPERM; mitigation:
+# bin/check-verification-gate.sh category: hook-registration.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="conc"
@@ -216,7 +200,7 @@ const sid = process.env.SID, role = process.env.ROLE;
 const doIt = () => {
   if (role === "sha") S.setLastPushedSha(sid, "sha-0123456789abcdef");
   else if (role === "worktree") S.recordSessionWorktree(sid, "/w/1733");
-  else if (role === "type") S.updateTopLevel(sid, (st) => { st.workflow_type = "wf-code"; });
+  else if (role === "type") S.updateTopLevel(sid, (st) => { st.deliverable_type = "wf-code"; });
   else if (role === "issues") S.updateTopLevel(sid, (st) => { st.closes_issues = [1733]; });
   else for (let i = 0; i < 5; i++) S.markStep(sid, "run_tests", i % 2 ? "complete" : "in_progress");
 };
@@ -245,7 +229,7 @@ const marks = st.events.filter((e) => e.kind === "step_status" && e.step === "ru
 console.log([
   "sha=" + st.last_pushed_sha,
   "worktree=" + st.session_worktree,
-  "type=" + st.workflow_type,
+  "type=" + st.deliverable_type,
   "issues=" + JSON.stringify(st.closes_issues),
   "marks=" + marks,
   "contiguous=" + seqs.every((s, i) => s === i + 1),

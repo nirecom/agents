@@ -18,11 +18,12 @@ function computeIntervals(state) {
 
   const createdAt = state && typeof state.created_at === "string" ? state.created_at : null;
   const terminals = terminalSteps();
+  const { canonicalStepName } = require("../step-table");
 
   let end = events.length;
   for (let i = 0; i < events.length; i++) {
     const e = events[i];
-    if (e && e.kind === "step_status" && terminals.includes(e.step)) {
+    if (e && e.kind === "step_status" && terminals.includes(canonicalStepName(e.step))) {
       end = i + 1;
       break;
     }

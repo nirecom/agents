@@ -2,17 +2,7 @@
 # tests/hooks/main-merge-detect.sh
 # Tests: hooks/lib/merge-detect.js, hooks/lib/parse-git-args.js
 # Tags: hook, bin, git, pr, github, scope:common
-#
-# Unit tests for hooks/lib/merge-detect.js
-#
-# This source module is NOT yet implemented. Tests will FAIL with a
-# "merge-detect.js not implemented" message until the source is written.
-# That is expected.
-#
-# Targets:
-#   hooks/lib/merge-detect.js — exports isMergeToProtectedCommand(command, repoDir)
-#                               returning { hit: bool, kind: "gh-pr-merge"|"git-push-protected"|null }
-#   hooks/lib/parse-git-args.js — must export parseGitGlobalOptions used by merge-detect.
+# Unit tests for isMergeToProtectedCommand(command, repoDir) -> { hit, kind } in hooks/lib/merge-detect.js.
 
 set -u
 
@@ -217,6 +207,38 @@ test_e23_push_HEAD_no_refspec
 test_s24_echo_git_push_main
 test_s25_empty_command
 test_s26_quoted_main_with_payload
+
+# ============ API merge PUT (#2527, table-driven) ============
+# Rows: "<expect>|<kind>|<command>" — expect hit/miss; kind is ignored for miss rows.
+API_MERGE_ROWS=(
+    "hit|gh-pr-merge|gh api -X PUT repos/o/r/pulls/5/merge"
+    "hit|gh-pr-merge|gh api -XPUT repos/o/r/pulls/5/merge"
+    "hit|gh-pr-merge|gh api --method PUT repos/o/r/pulls/5/merge"
+    "hit|gh-pr-merge|gh api --method=PUT repos/o/r/pulls/5/merge"
+    "hit|gh-pr-merge|gh api -X PUT repos/o/r/pulls/5/merge/"
+    "hit|gh-pr-merge|gh -R o/r api -X PUT repos/o/r/pulls/5/merge"
+    "hit|gh-pr-merge|rtk gh api -X PUT repos/o/r/pulls/5/merge"
+    "hit|glab-mr-merge|glab api -X PUT projects/1/merge_requests/3/merge"
+    "miss||gh api repos/o/r/pulls/5/merge"
+    "miss||gh api -X GET repos/o/r/pulls/5/merge"
+    "miss||gh api -X PUT repos/o/r/pulls/5/merge/x"
+    "miss||gh api -X PUT repos/o/r/pulls/5"
+    "miss||echo gh api -X PUT repos/o/r/pulls/5/merge"
+    "miss||glab api projects/1/merge_requests/3/merge"
+)
+test_a27_api_merge_put_table() {
+    local row expect kind cmd
+    for row in "${API_MERGE_ROWS[@]}"; do
+        expect="${row%%|*}"; row="${row#*|}"
+        kind="${row%%|*}"; cmd="${row#*|}"
+        if [ "$expect" = "hit" ]; then
+            assert_hit "A27 api merge: $cmd" "$cmd" "$kind"
+        else
+            assert_miss "A27 api merge: $cmd" "$cmd"
+        fi
+    done
+}
+test_a27_api_merge_put_table
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

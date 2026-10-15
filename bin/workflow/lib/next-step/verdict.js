@@ -1,6 +1,6 @@
 "use strict";
-// Verdict computation for bin/workflow/next-step: emit() plus the whole
-// computeVerdict block (including its nested persistResolutions and
+// Verdict computation for bin/workflow/next-step: the whole computeVerdict block
+// (output writer: ./emit.js) (including its nested persistResolutions and
 // applyRecordedVerdictSkip, which self-recurses into computeVerdict).
 //
 // SIZE NOTE: knowingly over the 300-line WARN threshold; the 500-line HARD
@@ -25,6 +25,7 @@ const {
   effectiveStatus,
   reconcileEffectiveState,
 } = require("../../../../hooks/workflow-state/effective-state");
+const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
 const {
   APPROVAL_GATED_STEPS,
   isApprovalGatedStep,
@@ -42,27 +43,16 @@ const { REVIEW_TESTS_REOPEN_REASONS } = require("../../../../hooks/workflow-stat
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
 const { resolveGateLine } = require("./gate-line");
+const { deliveryPathNoteLine } = require("./delivery-path-note");
+const { settleMergeToMain, deliveryKindFor } = require("../../../../hooks/workflow-state/delivery-settle");
 
-function emit(action, skill, hint, reason, skipHint, gateLine) {
-  let out =
-    "ACTION=" + action + "\n" +
-    "NEXT_SKILL=" + (skill || "") + "\n" +
-    "NEXT_HINT='" + (hint || "") + "'\n" +
-    "REASON='" + (reason || "") + "'\n";
-  // #485: optional advisory SKIP_HINT line — appended ONLY when non-empty, so the
-  // 4-line contract is byte-identical on every other step. Value is a fixed
-  // sentinel literal (no quotes/whitespace) → unquoted SKIP_HINT=<value> form.
-  if (skipHint) {
-    out += "SKIP_HINT=" + skipHint + "\n";
-  }
-  if (gateLine) out += gateLine + "\n";
-  process.stdout.write(out);
-  process.exit(0);
-}
+const { emit, setNoteLine } = require("./emit");
+const { createForgeMemo } = require("../../../../hooks/lib/forge/merge-state");
 
 // ---- Verdict computation --------------------------------------------------
 
 function computeVerdict(rawSid, _didAutoRepair) {
+  setNoteLine("");
   const sid = resolveSessionId({ sessionIdFromInput: rawSid });
   if (!sid) {
     emit("blocked", "", "", "session-id-unresolved");
@@ -111,8 +101,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
-  const isWfMeta = (state.workflow_type === "wf-meta");
   const repoDir = resolveRepoDir();
+  const profile = resolveSessionProfile(state, sid, { repoDir });
+  setNoteLine(deliveryPathNoteLine(profile, sid, repoDir));
 
   // repoDir belongs to THIS process, not to `sid`. A presence check on
   // `--session` would mislabel hooks/session-start.js, which passes
@@ -135,21 +126,22 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
-  // Precondition preserved ahead of the snapshot: clarify_intent requires
-  // closes_issues. Resolved against the RAW walk so evidence-based resolution of
-  // clarify_intent cannot skip past the check (pre-#1148 precedence).
+  // Precondition preserved ahead of the snapshot: clarify_intent requires a
+  // non-empty intent.md `## Issues`. Resolved against the RAW walk so evidence-based
+  // resolution of clarify_intent cannot skip past the check (pre-#1148 precedence).
   {
     let rawCurrent = null;
     for (const step of VALID_STEPS) {
       if (isTerminalStep(step)) continue;
       const raw = (state.steps[step] || {}).status || "pending";
-      const status = effectiveStatus(step, raw, isWfMeta);
+      const status = effectiveStatus(step, raw, profile);
       if (!isSettledStatus(status)) { rawCurrent = step; break; }
     }
     if (rawCurrent === "clarify_intent") {
-      const issues = state.closes_issues;
-      if (!issues || !Array.isArray(issues) || issues.length === 0) {
-        emit("blocked", "", "closes_issues is empty -- run /workflow-init to populate it.", "closes_issues-empty");
+      const { getClosesIssues } = require("../../../../hooks/workflow-state/session-facts");
+      const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
+      if (getClosesIssues(sid, { plansDir: getWorkflowPlansDir() }).length === 0) {
+        emit("blocked", "", "closes_issues is empty -- add issues to intent.md `## Issues`.", "closes_issues-empty");
         return;
       }
     }
@@ -159,7 +151,12 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // so a step that on-disk evidence already resolves cannot false-abort the scan.
   // Gated steps (outline/detail) resolve here only when the approval invariant
   // is already satisfied (#1133) — the same predicate writeState enforces.
-  const snapshot = reconcileEffectiveState(state, sid, { repoDir, isWfMeta });
+  // #2527: navigation settles delivery-boundary resets; the evaluated release step may query the forge.
+  // forgeMemo: one PR read per run, shared by the evidence predicates and release-wait.js.
+  const forgeMemo = createForgeMemo();
+  const snapshot = reconcileEffectiveState(state, sid, {
+    repoDir, profile, deliveryBoundary: "navigate", evidencePolicy: { network: true }, forgeMemo,
+  });
   const snapStatus = (step) => (snapshot.steps[step] || {}).status;
 
   // A-4 speculative-skip gate (#1681): an unresolved verdict blocks the whole
@@ -175,7 +172,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
     // recursive call the pending verdict is already on disk, so this gate would fire and
     // return blocked instead of advancing. Discriminate by skip_reason: only speculative
     // skips (written by make-outline-plan/make-detail-plan) block here; recorded-verdict
-    // skips have an already-trusted skip judgment and should pass through.
+    // skips have an already-trusted skip judgment and should pass through. The same holds
+    // for a judged skip settled by record-skip-judgment --advance, and for a *_NOT_NEEDED
+    // sentinel whose reason carries the prefix (declared only while the judgment stands).
     const rawEntry = (state.steps && state.steps[gatedStep]) || {};
     if (
       rawEntry.status === "skipped" &&
@@ -186,7 +185,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
     emit(
       "blocked", "",
-      gatedStep + " speculative skip is pending verification by skip-verifier. Re-run next-step after verifier completes.",
+      gatedStep + " speculative skip is pending verification; resolve it with record-skip-verdict, then re-run next-step.",
       "speculative-skip-pending"
     );
     return;
@@ -197,6 +196,11 @@ function computeVerdict(rawSid, _didAutoRepair) {
   function persistResolutions() {
     for (const r of snapshot.resolutions) {
       try {
+        if (r.step === "merge_to_main") {
+          // #2527 3-2b: merge_to_main complete and the uv boundary reset are one write.
+          settleMergeToMain(sid, { kind: deliveryKindFor(profile.deliveryPath), origin: "next-step-evidence-resolution" });
+          continue;
+        }
         markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
       } catch (e) {
         if (e instanceof UnapprovedCompletionError) {
@@ -217,15 +221,6 @@ function computeVerdict(rawSid, _didAutoRepair) {
     if (isTerminalStep(step)) continue;
     const status = snapStatus(step);
     if (!isSettledStatus(status)) {
-      // post-merge guard: treat user_verification reset by gh pr merge as complete.
-      // Mirrors post-compact.js lines 66-70 (same reset_reason predicate).
-      if (
-        step === "user_verification" &&
-        status === "pending" &&
-        (state.steps["user_verification"] || {}).reset_reason === "post-merge"
-      ) {
-        continue;
-      }
       currentIdx = i;
       currentStep = step;
       break;
@@ -412,6 +407,15 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
+  // #2527 4-4: web-merge channel — the human merges the PR on the web (./release-wait.js).
+  if (currentStep === "user_verification") {
+    const w = require("./release-wait").releaseWaitVerdict({ state, sid, repoDir, profile, forgeMemo });
+    if (w) {
+      emit(w.action, w.skill, w.hint, w.reason, "", "", w.wait);
+      return;
+    }
+  }
+
   const skill = STEP_TO_SKILL[currentStep];
   const hint = rtReopened ? REVIEW_TESTS_REOPEN_HINT : skill
     ? ("Run /" + skill + " via the Skill tool.")
@@ -429,20 +433,27 @@ function computeVerdict(rawSid, _didAutoRepair) {
       const irvFn = wfState.isRecordedVerdictValid;
       if (typeof hvsj !== "function" || typeof rsjFn !== "function") return null;
       if (!hvsj(sid, stepName)) return null;   // local UNCOUNTED gate read
-      const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
-      if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
       // The status write and the A-4 speculative verdict are one declaration, so
       // the single writer performs both — the verdict can no longer be dropped
       // by a caller that forgot the second call.
       try {
-        const res = recordStepVerdict(sid, stepName, "skipped", {
-          gate: "recorded-verdict",
-          skipReason,
-          skipJudgment: sj,
-          skipVerdictSource: "next-step-recorded-verdict",
-          origin: "next-step-recorded-verdict-skip",
+        // A Jev query or fail-safe revokes a standing judgment under the skip owner lock
+        // (#2460), so the judgment is re-read and the status written under that same lock:
+        // a revoke lands wholly before or wholly after this skip, never between its halves.
+        const { underSkipOwnerLock } = require("../../../../hooks/lib/jev/two-stage/settle-skip");
+        const res = underSkipOwnerLock(sid, stepName, () => {
+          if (!hvsj(sid, stepName)) return null;
+          const sj = rsjFn(sid, stepName);        // EXPORTED COUNTED read (+1) — exactly once
+          if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
+          return recordStepVerdict(sid, stepName, "skipped", {
+            gate: "recorded-verdict",
+            skipReason,
+            skipJudgment: sj,
+            skipVerdictSource: "next-step-recorded-verdict",
+            origin: "next-step-recorded-verdict-skip",
+          });
         });
-        if (!res.ok) return null;
+        if (!res || !res.ok) return null;
         return computeVerdict(rawSid, true);
       } catch (_) {
         return null;   // write/verdict failed — fall through, NO recursion

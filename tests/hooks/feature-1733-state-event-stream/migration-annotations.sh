@@ -34,13 +34,13 @@ console.log("known_keys=" + KEYS.length + " missing_as_event=" + (missing.join("
     assert_eq "K0/nine-known-keys" "known_keys=9 missing_as_event=0" "$NODE_OUT"
 fi
 
-echo "== K0b: STEP_ANNOTATION_KEYS is the documented 17-key table =="
+echo "== K0b: STEP_ANNOTATION_KEYS is the documented 20-key table (#2517 adds baseline_accept) =="
 if run_case "K0b/annotation-key-table"; then
     next_sid
     nodejs "$SID" '
 const E = require("./hooks/workflow-state/state-io/events");
-const WANT = ["baseline_classification", "completion_basis", "failing_tests", "reopen_reason",
-              "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
+const WANT = ["baseline_accept", "baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests",
+              "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
               "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const got = [...E.STEP_ANNOTATION_KEYS].sort();
 console.log(JSON.stringify(got) === JSON.stringify(WANT) ? "MATCH" : "DIFFER got=" + JSON.stringify(got));

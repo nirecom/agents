@@ -1,38 +1,32 @@
 # User Verification — Shared Protocol
 
 `<<WORKFLOW_USER_VERIFIED: reason>>` is the **final** approval from the user before
-releasing the work (commit/merge). Emit it exactly once, at the moment the user is
+releasing the work (merge or direct push). Emit it exactly once, at the moment the user is
 asked "is this ready to ship?".
 
-## When to emit
+## Who emits
 
-**`ENFORCE_WORKTREE=off`** — emit immediately before `/commit-push`.
-
-**`ENFORCE_WORKTREE=on`** — emit in `/worktree-end` WE-4b, WE-7, and WE-8 (after the PR is open,
-immediately before merge). Never emit earlier in the workflow — the PR must exist first,
-because the user is approving the merge of a specific PR, not an abstract diff.
+`/get-release-approval` is the only emitter. It runs as the `user_verification` step, after `/commit-push` opened the PR (pull_request path) and before `/merge-to-main`.
+Never emit it from any other skill or step — on the pull_request path the user approves the merge of a specific PR, so the PR must exist first.
 
 ## Preflight — risk-category gate (#833)
 
+Run `bash "$AGENTS_MAIN_ROOT/skills/get-release-approval/scripts/preflight.sh" --session "<session-id>"` once as one standalone call.
+It first resolves TL4 readiness with the sanctioned reader `confirm-off RUN_TL4 off` and prints the verdict as `RUN_TL4=`.
+It then runs `bin/check-verification-gate.sh` and prints its exit as `GATE_RC=` followed by the classifier's `CATEGORY:` lines (`CATEGORY: <token>\tQUESTION: <text>`).
+It ends with `PREFLIGHT=` and `PREFLIGHT_REASON=` for the PR mergeability check.
+
 ### RUN_TL4 gate (precedes all modes)
 
-Resolve TL4 verification readiness first with the sanctioned reader `confirm-off RUN_TL4 off` issued as one standalone call: `bash "$AGENTS_MAIN_ROOT/bin/confirm-off" RUN_TL4 off`. Read the verdict from its stdout; treat a non-zero exit as `ERROR`.
-
-- `OFF` (RUN_TL4 off — the default; unset counts as off) → TL4 verification is not enabled; do not raise any `AskUserQuestion`; run `check-verification-gate.sh` once as a classifier only and log each matched category to `WORKTREE_NOTES.md ## Unverified Categories` with the distinct annotation `skipped: RUN_TL4=off (TL4 verification not enabled)`; then proceed to Protocol, skipping the Interactive / Non-interactive / Failure branches below.
-- In this off path, if the classifier exits 2 or 3 (classifier failed): still raise no `AskUserQuestion`; emit one stderr warning and skip the category trace (skipping the log entry); then proceed to Protocol. This keeps the off path total across every classifier exit — no ask can ever occur when RUN_TL4=off.
-- `ON` (RUN_TL4 on) → TL4 verification is enabled; run the preflight below unchanged.
-- `ERROR` (config read failed) → fail-safe to the on path; run the preflight below unchanged; never silence the gate on an ambiguous read.
-
-Before emitting the sentinel, run:
-
-    bash "$AGENTS_MAIN_ROOT/bin/check-verification-gate.sh"
-
-Parse its structured stdout (each line: `CATEGORY: <token>\tQUESTION: <text>`).
+- `OFF` (RUN_TL4 off — the default; unset counts as off) → TL4 verification is not enabled; do not raise any `AskUserQuestion`; log each `CATEGORY:` line to `WORKTREE_NOTES.md ## Unverified Categories` with the annotation `skipped: RUN_TL4=off (TL4 verification not enabled)`; then proceed to Protocol, skipping the Interactive / Non-interactive / Failure branches below.
+- In this off path, if `GATE_RC` is 2 or 3 (classifier failed): still raise no `AskUserQuestion`; emit one stderr warning and skip the category trace; then proceed to Protocol. No ask can ever occur when RUN_TL4=off.
+- `ON` (RUN_TL4 on) → run the preflight branches below unchanged.
+- `ERROR` (config read failed) → fail-safe to the on path; run the preflight branches below unchanged; never silence the gate on an ambiguous read.
 
 ### Interactive mode (default)
 
 Count matched categories:
-- **Zero matches** (empty stdout) → no risk category. Skip the gate; proceed to Protocol.
+- **Zero matches** → no risk category. Skip the gate; proceed to Protocol.
 - **One match** → single-choice AskUserQuestion using the `QUESTION:` text. Options: `Yes — verified` / `No — skip verification this time`. `Yes`: proceed. `No`: proceed but log the unverified category to `WORKTREE_NOTES.md ## Unverified Categories`.
 - **Multiple matches** → single multi-select AskUserQuestion with one option per category (label = `QUESTION:` text), plus `Skip all — proceed without verification`. Selected categories are verified. Unselected categories are logged to `WORKTREE_NOTES.md ## Unverified Categories`. Emission proceeds regardless.
 
@@ -44,11 +38,16 @@ When `$CI` or `$CLAUDE_NON_INTERACTIVE` is set:
 - Log each matched category to `WORKTREE_NOTES.md ## Unverified Categories`.
 - Proceed with sentinel emission.
 
+### Web-merge channel
+
+`PREFLIGHT=web_merge_*` (pull_request + `AUTO_MERGE_PR=off`) → raise no `AskUserQuestion` in any mode and never emit the sentinel; log matched categories as in Non-interactive mode.
+The human's merge on the web is the only approval; `/get-release-approval` owns the wait.
+
 ### Failure mode
 
-Exit 3 from the tool → fail-safe. In interactive mode ask "Verification gate could not run — proceed anyway?" (Yes/No). In non-interactive mode: log warning, proceed.
+`GATE_RC=3` → fail-safe. In interactive mode ask "Verification gate could not run — proceed anyway?" (Yes/No). In non-interactive mode: log warning, proceed.
 
-Compatibility with PR #818: this gate runs after `check-unstaged-tracked.sh` (WE-3) and before the `WORKFLOW_USER_VERIFIED` sentinel. The two guards are orthogonal.
+This gate runs after `check-unstaged-tracked.sh` and before the `WORKFLOW_USER_VERIFIED` sentinel. The two guards are orthogonal.
 
 ## Protocol
 
@@ -70,15 +69,12 @@ the hook is the single source of truth for the dialog's surrounding text.
 
 **User answers the dialog**
 
-- **Allow** → proceed to the next step (`/commit-push`, `gh pr merge`, etc.)
+- **Allow** → proceed to the next step (`/merge-to-main`).
 - **Deny** → stop. Do not retry.
 
 ## Notes
 
-- `AUTO_MERGE_PR=on` skips the merge-strategy `AskUserQuestion` in `/worktree-end` WE-5;
-  the sentinel emit in WE-8 still requires user approval via the permission dialog.
 - Detection is on `tool_input.command` matching the sentinel form. Sentinel strings in
   stdout (cat/grep output) do not trigger the hook.
-- Preflight runs once per emission path. /worktree-end WE-4b, WE-7, and WE-8 all inherit it via this shared protocol — no per-skill duplication.
 - Unverified categories are persisted to WORKTREE_NOTES.md ## Unverified Categories so /worktree-end can show them in the final summary.
 - When `RUN_TL4=off` the preflight raises no ask and matched categories are logged with the `skipped: RUN_TL4=off` annotation; on classifier error the log is skipped and only a stderr warning is emitted.

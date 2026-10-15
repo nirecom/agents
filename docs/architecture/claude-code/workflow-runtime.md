@@ -30,8 +30,8 @@ Session start → session-start.js (SessionStart hook)
       Gate F (evaluateResumability): all-pending donor → not resumable
         (a session whose every step is pending was abandoned before doing any
          real work — inheriting it would overwrite a genuine in-progress
-         session's state); user_verification=complete → not resumable (task
-         done, start fresh)
+         session's state); merge_to_main=complete → not resumable (change
+         delivered, start fresh; approval alone no longer ends a session)
     ancestor passes all gates → copies its steps (state inheritance)
     no ancestor / gate failure: session starts fresh; a same-cwd+branch candidate
       that failed only on lineage (no provable descent) is offered via the
@@ -118,9 +118,11 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     surfaced to scripts by bin/is-docs-only. Not restated here.
   for write_tests: also checks staged tests/ files (evidence override)
   for docs: also checks staged docs/*.md / *.md files (evidence override)
-  cleanup step (#1112): skipped in linked-worktree context (isWorktreeContext → true);
-    cleanup is deferred to /worktree-end boundary, not enforced on intermediate commits.
-    In main-worktree context (ENFORCE_WORKTREE=off sessions), cleanup blocks until marked.
+  steps with the step-table commit-gate attribute "deferred-in-worktree" (user_verification,
+    cleanup; #1112, #2527): skipped in linked-worktree context (isWorktreeContext → true);
+    they are judged at the merge / /worktree-end boundary, not on intermediate commits.
+    push_branch, merge_to_main, and the other "exempt" steps are never checked at commit time.
+    In main-worktree context (ENFORCE_WORKTREE=off sessions), the deferred steps block until marked.
   approves if all steps complete/skipped; blocks with remediation message otherwise
 ```
 
@@ -128,7 +130,7 @@ State inheritance is keyed on provable transcript descent (lineage), not on cwd+
 (#1305) — cwd+branch (`contextMatches`) is a necessary condition checked after lineage, never
 the primary key. The practical inheritance window is 7 days (zombie cleanup limit). Non-git
 directories and detached HEAD both use `git_branch: null` — they match each other but not
-named branches. Completed workflows (`user_verification: complete`) are never inherited — the
+named branches. Delivered workflows (`merge_to_main: complete`) are never inherited — the
 ancestor is treated as not-resumable so the new session starts fresh.
 
 A session that loses its own id outright (a true process crash, with no `forkedFrom` /
@@ -207,9 +209,9 @@ Step ordering is owned by `bin/workflow/next-step`. That file is a dispatcher on
 node bin/workflow/next-step --session $CLAUDE_CODE_SESSION_ID
 ```
 
-Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
+Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; the only non-skill steps (`branching_complete`, sentinel-only, and the terminal `final_report`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead. Every release-phase step has a skill (`push_branch` → `commit-push`, `user_verification` → `get-release-approval`, `merge_to_main` → `merge-to-main`, `cleanup` → `worktree-end`, `pre_final_report_gate` → `session-close`), so the session never stops in front of `/worktree-end`.
 
-At the `outline` and `detail` steps only, next-step first checks for an authoritative recorded-verdict skip (#1286): when the orchestrator has recorded a valid `skip_judgment` for the step (`judgment_source` = `orchestrator`, all conditions met), next-step marks the step `skipped` directly and advances — no advisory line, no user-emitted sentinel. The record is written by `bin/workflow/record-skip-judgment` and validated by `hooks/workflow-state/skip-signal-resolver.js` (`hasValidSkipJudgment`). If `markStep` fails to persist the skip, next-step falls through to normal step handling instead of re-entering the skip branch — this guards against unbounded recursion when the mark cannot be written.
+At the `outline` and `detail` steps only, next-step first checks for an authoritative recorded-verdict skip (#1286): when a valid `skip_judgment` is recorded for the step (`judgment_source` one of `jev`, `subagent`, `mixed`; all conditions met), next-step marks the step `skipped` directly and advances — no advisory line, no user-emitted sentinel. The record is written by `bin/workflow/record-skip-judgment`, which `bin/workflow/jev-judge finalize` calls for the judgment that owns the step ([jev.md](../jev.md)), and validated by `hooks/workflow-state/skip-signal-resolver.js` (`hasValidSkipJudgment`). If `markStep` fails to persist the skip, next-step falls through to normal step handling instead of re-entering the skip branch — this guards against unbounded recursion when the mark cannot be written.
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 

@@ -6,15 +6,15 @@
 # coverage row: an inventory item (inv:<id>), a write-less exempt agent (exempt:<agent>), or a
 # named exclusion (excl:<reason>). A new dispatch site without a row fails here.
 
+# #2460: the per-skill complexity-judge and skip-verifier dispatch lines are gone; the
+# only judge dispatch is JJ-2 of skills/_shared/jev-two-stage-judge.md (inv:5).
 DET_ERE='subagent_type|mode: *"default"|Agent tool|Task tool|(launch|dispatch|invoke|delegate|spawn).{0,60}subagent'
 
 # Row: file|line-ere|disposition   (the ere is matched against the hit line's text)
 DET_ROWS=(
   'skills/deep-research/SKILL.md|subagent_type: "web-researcher"|inv:13'
   'skills/issue-create/SKILL.md|^2b\. Invoke the .issue-create-survey-worker.|inv:12'
-  'skills/make-detail-plan/SKILL.md|dispatch .subagent_type: complexity-judge.|exempt:complexity-judge'
   'skills/make-detail-plan/SKILL.md|Delegate to \*\*planner\*\*|inv:4'
-  'skills/make-outline-plan/SKILL.md|dispatch .subagent_type: complexity-judge.|exempt:complexity-judge'
   'skills/make-outline-plan/SKILL.md|Delegate to \*\*outline-planner\*\*|inv:3a'
   'skills/make-outline-plan/SKILL.md|^MOP-C1\. |inv:3b'
   'skills/resume-session/SKILL.md|launch a subagent per .skills/resume-session/scripts/summarize-transcript-tail\.md|inv:15'
@@ -26,13 +26,10 @@ DET_ROWS=(
   'skills/survey-history/SKILL.md|When invoked as a parallel Agent subagent|excl:invoked-side'
   'skills/survey-history/SKILL.md|When invoked as a subagent, do NOT emit|excl:invoked-side'
   'skills/sweep-tests/SKILL.md|^STE-4\. |inv:17'
-  'skills/write-code/SKILL.md|Dispatch .subagent_type: complexity-judge.|exempt:complexity-judge'
   'skills/write-code/SKILL.md|^WCD-4\. |inv:1'
-  'skills/write-tests/SKILL.md|Dispatch .subagent_type: complexity-judge.|exempt:complexity-judge'
   'skills/write-tests/SKILL.md|^WT-7\. |inv:2'
   'skills/_shared/codex-review-loop/exit-codes.md|silently launch .REVIEWER_AGENT. subagent|inv:7'
-  'skills/_shared/complexity-and-outline-skip.md|^Dispatch .subagent_type: complexity-judge.|exempt:complexity-judge'
-  'skills/_shared/complexity-and-outline-skip.md|subagent_type=skip-verifier|inv:5'
+  'skills/_shared/jev-two-stage-judge.md|subagent_type.{0,4}<SUBAGENT>|inv:5'
   'skills/_shared/judge-task-complexity.md|before launching a subagent\. Not invoked via the Skill tool|excl:rubric-not-launch'
   'skills/_shared/worker-dispatch.md|LLM subagent \(Task tool|excl:naming-convention'
   'agents/survey-history.md|When invoked as a parallel Agent subagent|excl:invoked-side'

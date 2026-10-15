@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing.sh
-# Tests: hooks/workflow-state/complexity-routing.js, hooks/workflow-state/complexity-routing/secret-shape.js, hooks/workflow-state.js, hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-and-skip, skills/_shared/judge-task-complexity.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
+# Tests: hooks/workflow-state/complexity-routing.js, hooks/workflow-state/complexity-routing/secret-shape.js, hooks/workflow-state.js, hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level, skills/_shared/judge-task-complexity.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md
 # Tags: complexity, routing, stage, workflow-state, cli, fail-open, scope:issue-specific
 # Serial: writes complexity_evaluation events into a pinned WORKFLOW_STATE_DIR
 # Issue #2099 — per-stage complexity routing. Dispatcher: fixtures + helpers,
@@ -65,6 +65,9 @@ export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
 export WORKFLOW_PLANS_DIR
+# jev-judge keeps its tickets and records under this root: never the developer's own.
+export AGENTS_STATE_DIR="$TMPDIR_BASE/agents-state"
+mkdir -p "$AGENTS_STATE_DIR"
 # The skills' documented commands spell their CLI through this root: pin it to the checkout under test.
 export AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT"
 
@@ -87,7 +90,6 @@ export CR_MOD_N BARREL_N RESOLVER_N SESSION_FIELDS_N
 BIN_RECORD="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-evaluation"
 BIN_READ="$SCRIPT_CHECKOUT_ROOT/bin/workflow/read-complexity-evaluation"
 BIN_DERIVE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/derive-complexity-level"
-BIN_RECORD_SKIP="$SCRIPT_CHECKOUT_ROOT/bin/workflow/record-complexity-and-skip"
 RUBRIC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/judge-task-complexity.md"
 
 # --- assertion helpers ------------------------------------------------------
@@ -145,11 +147,10 @@ node_rc() {
 }
 
 # Which interpreter a bin/workflow entry point needs, read from its OWN shebang
-# rather than assumed. `record-complexity-and-skip` is a bash script while its
-# siblings are node ones, and dispatching it through `node` dies on a syntax
-# error BEFORE the script's own validation runs — every "it rejected the hostile
-# input" / "it refused the unwritable file" assertion downstream would then be
-# measuring Node's parser instead of the wrapper (round-7 C4/C6).
+# rather than assumed. Dispatching a bash entry point through `node` dies on a
+# syntax error BEFORE the script's own validation runs — every "it rejected the
+# hostile input" assertion downstream would then measure Node's parser instead
+# of the CLI (round-7 C4/C6).
 d2099_cli_runner() {
     case "$(head -1 "$1" 2>/dev/null)" in
         *node*) echo node ;;
@@ -212,53 +213,16 @@ d2099_section_step() {
         write-code:read-session-facts) echo "WCD-0" ;;
         write-tests:derive-complexity-level) echo "WT-6" ;;
         write-code:derive-complexity-level) echo "WCD-3" ;;
-        # #2434: the NONE fallback is a normalize-judge-signals -> derive chain in the same step.
-        make-detail-plan:normalize-judge-signals) echo "MDP-3" ;;
-        write-tests:normalize-judge-signals) echo "WT-6" ;;
-        write-code:normalize-judge-signals) echo "WCD-3" ;;
-        clarify-intent:record-complexity-and-skip) echo "CI-C1b" ;;
-        workflow-init:record-complexity-and-skip) echo "A3a" ;;
         *) echo "" ;;
     esac
 }
 
-# `<start regex>|<regex that ENDS the section>` per step id, read off the real
-# structure of each SKILL.md: make-detail-plan uses `### MDP-n —` headings,
-# write-tests/write-code bare `WT-n.` / `WCD-n.` labels at column 0 (their
-# sub-steps are indented, so they do not terminate the section), clarify-intent
-# `CI-Cn.` labels and workflow-init `- An.` bullets.
-d2099_step_anchors() {
-    case "$1" in
-        MDP-3)  echo '^### MDP-3 |^### ' ;;
-        MDP-4)  echo '^### MDP-4 |^### ' ;;
-        MOP-2)  echo '^MOP-2\.|^MOP-[0-9]' ;;
-        WT-0)   echo '^WT-0\.|^WT-[0-9]' ;;
-        WT-6)   echo '^WT-6\.|^WT-[0-9]' ;;
-        WT-7)   echo '^WT-7\.|^WT-[0-9]' ;;
-        WCD-0)  echo '^WCD-0\.|^WCD-[0-9]' ;;
-        WCD-3)  echo '^WCD-3\.|^WCD-[0-9]' ;;
-        WCD-4)  echo '^WCD-4\.|^WCD-[0-9]' ;;
-        CI-C1b) echo '^CI-C1b\.|^CI-C[0-9]' ;;
-        A3a)    echo '^- A3a\.|^- A[0-9]' ;;
-        *) echo "" ;;
-    esac
-}
+# d2099_step_anchors, d2099_skill_section and the other SKILL.md section readers
+# are shared with feature-2460-jev-call-sites-static.sh.
+# shellcheck source=./feature-2099-complexity-stage-routing/skill-section-helpers.sh
+. "$(dirname "$0")/feature-2099-complexity-stage-routing/skill-section-helpers.sh"
 
 d2099_skill_dir_name() { basename "$(dirname "$1")"; }
-
-# One step's section: its own label line through to (not including) the next
-# sibling label. Prints nothing when the anchor matches nothing at all.
-d2099_skill_section() {
-    local f="$1" step="$2" spec start end
-    spec=$(d2099_step_anchors "$step")
-    [ -n "$spec" ] || return 0
-    start="${spec%%|*}"; end="${spec#*|}"
-    awk -v s="$start" -v e="$end" '
-        !inside && $0 ~ s { inside = 1; print; next }
-        inside && $0 ~ e { exit }
-        inside { print }
-    ' "$f" 2>/dev/null
-}
 
 d2099_section_for_cli() {
     local step
@@ -360,16 +324,14 @@ case_begin "dispatch-case-files" "hooks/workflow-state/complexity-routing.js"
 # The third member of that axis: a flag passed TWICE, which those two never do.
 # shellcheck source=./feature-2099-complexity-stage-routing/cli-duplicate-flag-cases.sh
 . "$CASE_DIR/cli-duplicate-flag-cases.sh"
+# #2460 retired the zero-signal auto-skip: the two skip-* groups below pin that
+# no complexity record ever skips outline/detail any more.
 # shellcheck source=./feature-2099-complexity-stage-routing/skip-aggregate-cases.sh
 . "$CASE_DIR/skip-aggregate-cases.sh"
-# Sourced after it: the same resolver from the SSOT side — that its decision is
-# DELEGATED to isZeroSignalLow, not re-implemented beside it. Reuses d2099s_resolve.
+# Sourced after it: the retired predicate, seen through the real record CLI.
+# Reuses d2099s_resolve and d2099s_step.
 # shellcheck source=./feature-2099-complexity-stage-routing/skip-delegation-cases.sh
 . "$CASE_DIR/skip-delegation-cases.sh"
-# Sourced after both: the same skip decision seen from the WRAPPER's argv — the
-# --so-c1/--so-c2 override that outranks whatever those two resolve.
-# shellcheck source=./feature-2099-complexity-stage-routing/skip-boolean-guard-cases.sh
-. "$CASE_DIR/skip-boolean-guard-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/traversal-attack-cases.sh
 . "$CASE_DIR/traversal-attack-cases.sh"
 # Sourced after it: the same paths-as-input axis from the other side — valid
@@ -398,7 +360,7 @@ case_begin "dispatch-case-files" "hooks/workflow-state/complexity-routing.js"
 # normalize its answer to the one level=/signals= shape the cases parse.
 # shellcheck source=./feature-2099-complexity-stage-routing/consumer-read-cli.sh
 . "$CASE_DIR/consumer-read-cli.sh"
-# Helper-only: the normalize -> derive fallback chain extracted from the skills (#2434).
+# The fallback chain: the shared two-stage procedure each skill names, run verbatim (#2460).
 # shellcheck source=./feature-2099-complexity-stage-routing/consumer-normalize-chain.sh
 . "$CASE_DIR/consumer-normalize-chain.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/consumer-orchestration-cases.sh
@@ -416,8 +378,6 @@ case_begin "dispatch-case-files" "hooks/workflow-state/complexity-routing.js"
 . "$CASE_DIR/consumer-fallback-forwarding-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/producer-orchestration-cases.sh
 . "$CASE_DIR/producer-orchestration-cases.sh"
-# shellcheck source=./feature-2099-complexity-stage-routing/producer-shared-procedure-cases.sh
-. "$CASE_DIR/producer-shared-procedure-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/legacy-record-cases.sh
 . "$CASE_DIR/legacy-record-cases.sh"
 # shellcheck source=./feature-2099-complexity-stage-routing/prompt-injection-cases.sh

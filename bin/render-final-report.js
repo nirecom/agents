@@ -69,9 +69,7 @@ if (inv.sessionForm || inv.outcomeArg) {
   }
 }
 
-// #1644 stage 4: route through the write-once session cache instead of
-// re-parsing intent.md on every render — a session that already recorded
-// closes_issues returns it as-is.
+// #1644 stage 4: getClosesIssues parses intent.md on each call.
 let closesIssues = [];
 let intentPlansDir = inv.sessionForm ? inv.plansDir : null;
 if (inv.intentArg) {
@@ -106,9 +104,9 @@ if (inv.sessionForm || inv.supervisorArg) {
   if (fs.existsSync(supervisorPath)) supervisorState = readJson(supervisorPath);
 }
 
-// #2501 D5-7: a run_tests completed by the UNRUNNABLE accept must say so. Fail-open: null.
-const { readUnrunnableAcceptNote } = require(path.resolve(__dirname, "../hooks/lib/run-tests-unrunnable-note"));
-const runTestsNote = readUnrunnableAcceptNote(sessionId);
+// #2501 / #2517: a run_tests completed by a user accept must say so. Fail-open: null.
+const { readCompletionNote } = require(path.resolve(__dirname, "../hooks/lib/run-tests-completion-note"));
+const runTestsNote = readCompletionNote(sessionId);
 
 try {
   const { renderFinalReport } = require(path.resolve(__dirname, "../hooks/lib/final-report-schema"));

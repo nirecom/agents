@@ -34,6 +34,22 @@ function isMainWorktree(dir) {
   }
 }
 
+// The absolute git common dir of `dir` (shared by a repo and all its linked worktrees,
+// so equal values mean "same repository"), or null when git cannot answer.
+function gitCommonDirOf(dir) {
+  try {
+    const out = execFileSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const v = out.trim();
+    return v ? v : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
 // Resolve the session-bound linked worktree path, or null when unresolvable.
 // Fail-safe: the entire body is wrapped so any exception collapses to null.
 function resolveSessionWorktreePath(sessionId) {
@@ -67,6 +83,7 @@ function resolveSessionWorktreePath(sessionId) {
 }
 
 module.exports = {
+  gitCommonDirOf,
   isMainWorktree,
   resolveSessionWorktreePath,
 };

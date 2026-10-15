@@ -1,25 +1,9 @@
 #!/usr/bin/env bash
-# lang-check: ignore — pre-existing origin/main content, unmodified by this session's merge.
 # Tests: hooks/workflow-state/session-facts.js, hooks/lib/parse-closes-issues.js, bin/workflow/next-step, bin/workflow/lib/next-step/verdict.js, hooks/workflow-state/state-io/projection.js
-# Tags: tl2, workflow, session-facts, closes-issues, caching, scope:issue-specific
-#
-# #1644 stage 4 — 型2: セッション内キャッシュの一度きり解決.
-#
-# session-facts.js wraps parseClosesIssues() with a write-once cache stored in
-# the EXISTING `closes_issues` top-level state key: once state.closes_issues is
-# non-empty, getClosesIssues() must return it as-is and never touch intent.md
-# again. getSessionRepoContext() is a read-only synthesis over the existing
-# `session_start_context` key -- it never writes.
-# Written BEFORE the implementation: RED until hooks/workflow-state/session-facts.js lands.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether workflow-init-driver (Path A/B/META) and skills/clarify-intent (Path
-#   C's CI-4) actually call getClosesIssues at the call sites the plan names,
-#   rather than continuing to call parseClosesIssues directly.
-# - Whether the migrated consumers (session-title.js, render-final-report.js,
-#   issue-close-write-outcome.js) were actually switched over.
-# Closest-to-action mitigation: covered by the stage-4 implementation's own
-# call-site tests, not this contract-level file.
+# Tags: tl2, workflow, session-facts, closes-issues, scope:issue-specific
+# getClosesIssues() parses <plans>/<sid>-intent.md on every call and never reads or
+# writes state.closes_issues (#2654); getSessionRepoContext() is read-only (#1644).
+# TL3 gap: real call sites / migrated consumers; covered by stage-4 call-site tests.
 
 set -uo pipefail
 
@@ -78,7 +62,7 @@ STEPS_ALL="workflow_init clarify_intent research outline detail branching_comple
 # v1-shaped raw fixture (no "version"/"events") -- normalizeStateVersion
 # migrates it to v2 on every read, always synthesizing session_start_context
 # from cwd/git_branch. closes_issues is OMITTED entirely (not just []) unless
-# the 5th arg is given, matching the "not yet recorded" precondition.
+# the 5th arg is given, so a write by getClosesIssues would be visible.
 fixture_state() {
   local sid="$1" complete="$2" cwd="$3" branch="$4" issues="${5:-}"
   local json='{"steps":{' first=1 s st
@@ -148,39 +132,35 @@ else
 fi
 
 echo ""
-echo "=== G2: Path A/B/META -- once issues are finalized, closes_issues is recorded into state ==="
+echo "=== G2: getClosesIssues returns the intent.md set and does not write it into state ==="
 fixture_state g2 "workflow_init clarify_intent" "$FIXTURE_REPO" "feature/roundtrip-reduction"
 write_intent g2 "#1644" "#1655"
 OUT="$(gci g2)"
 check "G2a: getClosesIssues returns the parsed issue set" \
   '[{"number":1644},{"number":1655}]' "$OUT"
-check "G2b: the result is now recorded into state.closes_issues" \
-  '[{"number":1644},{"number":1655}]' "$(raw_closes g2)"
+check "G2b: state.closes_issues is still absent after the call (no write)" \
+  'null' "$(raw_closes g2)"
 
 echo ""
-echo "=== G3: after recording, deleting intent.md does not change the result (cache, not re-parse) ==="
+echo "=== G3: deleting intent.md empties the result (no fallback to a recorded value) ==="
 rm_intent g2
 OUT2="$(gci g2)"
-check "G3: getClosesIssues after intent.md is removed still returns the recorded set" \
-  '[{"number":1644},{"number":1655}]' "$OUT2"
+check "G3: getClosesIssues after intent.md is removed returns []" '[]' "$OUT2"
 
 echo ""
-echo "=== G4: an unrecorded session parses intent.md exactly once ==="
+echo "=== G4: #2654 regression -- narrowing intent.md from 4 issues to 2 narrows the result ==="
 fixture_state g4 "workflow_init clarify_intent" "$FIXTURE_REPO" "feature/roundtrip-reduction"
-write_intent g4 "#1644"
-FIRST="$(gci g4)"
-check "G4a: first call records the issue parsed from intent.md" '[{"number":1644}]' "$FIRST"
 BEFORE="$(raw_file_bytes g4)"
-# Mutate intent.md to a DIFFERENT issue set. A caller that re-parses on every
-# call would now return #9999; a caller honoring the write-once cache must
-# keep returning the value it already recorded.
-write_intent g4 "#9999"
+write_intent g4 "#1644" "#1655" "#1700" "#1701"
+FIRST="$(gci g4)"
+check "G4a: first call returns all 4 issues of intent.md" \
+  '[{"number":1644},{"number":1655},{"number":1700},{"number":1701}]' "$FIRST"
+write_intent g4 "#1644" "#1655"
 SECOND="$(gci g4)"
-check "G4b: a second call ignores the mutated intent.md and returns the cached set" \
-  '[{"number":1644}]' "$SECOND"
-AFTER="$(raw_file_bytes g4)"
-check "G4c: the on-disk state file was not rewritten between the two calls" \
-  "$BEFORE" "$AFTER"
+check "G4b: after intent.md is rewritten to 2 issues, the next call returns those 2" \
+  '[{"number":1644},{"number":1655}]' "$SECOND"
+check "G4c: the on-disk state file bytes did not change across both calls" \
+  "$BEFORE" "$(raw_file_bytes g4)"
 
 echo ""
 echo "=== G5: the recorded content matches parseClosesIssues() itself for the same intent.md ==="
@@ -192,17 +172,19 @@ check "G5: getClosesIssues agrees with parseClosesIssues on the same intent.md" 
 
 echo ""
 echo "=== G6: Path C regression -- the pre-existing closes_issues-empty gate is unchanged ==="
-fixture_state g6 "workflow_init" "$FIXTURE_REPO" "feature/roundtrip-reduction"
+# The Node-form cwd must match next-step's own repoDir, or the #2218 repo-dir guard aborts first.
+fixture_state g6 "workflow_init" "$CLAUDE_PROJECT_DIR" "feature/roundtrip-reduction"
 run_ns --session g6
-check_contains "G6a: before intent.md exists, next-step is blocked on closes_issues-empty (CURRENT behavior, unchanged by stage 4)" \
+check_not_contains "G6-pre: the run reaches the closes_issues gate (no repo-dir-mismatch abort)" \
+  "repo-dir-mismatch" "$NS_OUT"
+check_contains "G6a: before intent.md exists, next-step is blocked on closes_issues-empty" \
   "REASON='closes_issues-empty'" "$NS_OUT"
-# CI-4-equivalent recording point: intent.md now exists, and clarify-intent
-# would call getClosesIssues right after writing it.
+# No getClosesIssues call in between: writing intent.md alone must clear the gate.
 write_intent g6 "#1644"
-gci g6 >/dev/null
 run_ns --session g6
-check_not_contains "G6b: after the CI-4-equivalent recording point, the blocked state clears" \
+check_not_contains "G6b: once intent.md names an issue, the blocked state clears without any recording call" \
   "REASON='closes_issues-empty'" "$NS_OUT"
+check_contains "G6c: ... and next-step routes to clarify-intent" "NEXT_SKILL=clarify-intent" "$NS_OUT"
 
 echo ""
 echo "=== G7: getSessionRepoContext is read-only over session_start_context ==="
@@ -219,8 +201,9 @@ echo "=== G8: stage 4 introduces no new persisted top-level state key ==="
 # PERSISTED_TOP_LEVEL_KEYS as of the start of stage 4 (#1644). The storage
 # mapping decided for this stage reuses closes_issues / session_worktree /
 # session_start_context -- none of which are new -- so this list must be
-# byte-for-byte unchanged after the implementation lands.
-BASELINE='["closes_issues","created_at","current","events","last_pushed_sha","merge_base_baseline","session_id","session_start_context","session_worktree","verbose_prompt","version","workflow_type"]'
+# byte-for-byte unchanged after the implementation lands. #2527 (schema v5) later
+# renamed workflow_type and added the session-profile keys; the baseline tracks that.
+BASELINE='["auto_merge_pr","auto_merge_pr_origin","auto_merge_pr_source","closes_issues","created_at","current","deliverable_type","delivery_path","delivery_path_origin","events","last_pushed_sha","merge_base_baseline","project_management_type","session_id","session_start_context","session_worktree","verbose_prompt","version"]'
 ACTUAL="$(WFM="$WFSTATE_MODULE_N" run_with_timeout node "$TOPKEYS_PROBE" 2>/dev/null || echo "")"
 check "G8: PERSISTED_TOP_LEVEL_KEYS is unchanged from the pre-stage-4 baseline" "$BASELINE" "$ACTUAL"
 

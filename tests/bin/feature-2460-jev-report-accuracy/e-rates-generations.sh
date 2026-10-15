@@ -10,7 +10,7 @@ LCR_LOG="$FX/fixture/lc-rate.log"
 # lat-status: completed jev {10 ok, 20 unmappable}, outages/not-run 9000x; completed llm {1000 ok,
 # 2000 parse-fallback}, missing/not-run single digits. lc-rate: ok (S2 0.6) and low-confidence
 # (S5 0.6) are the denominator; three unmappable records (partial / null probabilities) are not.
-run_with_timeout 30 node - "$(np "$LAT2_LOG")" "$(np "$LCR_LOG")" "$SIGNAL_CSV" 2>/dev/null <<'JS'
+run_with_timeout 30 node - "$(np "$LAT2_LOG")" "$(np "$LCR_LOG")" "$V1_SIGNAL_CSV" 2>/dev/null <<'JS'
 const fs = require("fs");
 const ids = process.argv[4].split(",");
 const probs = (over) => Object.fromEntries(ids.map((k) => [k, over[k] !== undefined ? over[k] : 0.02]));
@@ -39,7 +39,7 @@ case_begin "r-low-confidence-rate-answered-only" "bin/lib/jev-report-aggregate.j
 report "$J" --log "$(np "$LCR_LOG")" --point complexity-judge --json --no-sweep
 # Counting unmappable with probabilities would give S2 0.75 (numerator too) or 0.25 (denominator only), and S3 > 0.
 check "rate per signal over ok + low-confidence only (S2 0.5, S5 0.5, every other 0)" "0|5|0|0|0.5|0|0|0.5|0" \
-  "$REP_RC|$(jx "($P) && [$P.count].concat('$SIGNAL_CSV'.split(',').map((k) => $P.low_confidence_rate_by_signal[k])).join('|')")"
+  "$REP_RC|$(jx "($P) && [$P.count].concat('$V1_SIGNAL_CSV'.split(',').map((k) => $P.low_confidence_rate_by_signal[k])).join('|')")"
 check "low_confidence_rate_n is the answered Jev count (ok + low-confidence = 2 of 5 records)" "2" "$(jx "$P.low_confidence_rate_n")"
 T="$FX/io/lc-rate.txt"
 report "$T" --log "$(np "$LCR_LOG")" --point complexity-judge --no-sweep
@@ -49,7 +49,7 @@ case_end
 
 LC0_LOG="$FX/fixture/lc-none.log"
 # lc-none: no answered Jev record — a timeout, an unmappable with probabilities, a not-run.
-run_with_timeout 30 node - "$(np "$LC0_LOG")" "$SIGNAL_CSV" 2>/dev/null <<'JS'
+run_with_timeout 30 node - "$(np "$LC0_LOG")" "$V1_SIGNAL_CSV" 2>/dev/null <<'JS'
 const fs = require("fs");
 const probs = Object.fromEntries(process.argv[3].split(",").map((k) => [k, 0.6]));
 const rec = (jev) => JSON.stringify({ v: 1, point: "complexity-judge", ts: "2026-10-01T00:00:01Z", session_id: "sid-z",
@@ -61,7 +61,7 @@ JS
 case_begin "r-low-confidence-rate-null-without-answered" "bin/lib/jev-report-aggregate.js"
 report "$J" --log "$(np "$LC0_LOG")" --point complexity-judge --json --no-sweep
 check "--json: no answered Jev record gives low_confidence_rate_n 0 and a null rate for every signal (never 0)" "0|3|0|7|true" \
-  "$REP_RC|$(jx "($P) && [$P.count, $P.low_confidence_rate_n, Object.keys($P.low_confidence_rate_by_signal).length, '$SIGNAL_CSV'.split(',').every((k) => $P.low_confidence_rate_by_signal[k] === null)].join('|')")"
+  "$REP_RC|$(jx "($P) && [$P.count, $P.low_confidence_rate_n, Object.keys($P.low_confidence_rate_by_signal).length, '$V1_SIGNAL_CSV'.split(',').every((k) => $P.low_confidence_rate_by_signal[k] === null)].join('|')")"
 T="$FX/io/lc-none.txt"
 report "$T" --log "$(np "$LC0_LOG")" --point complexity-judge --no-sweep
 check "text: every signal renders n/a and the line ends with (n=0)" "0|7|7|true" \
@@ -106,6 +106,6 @@ check "--json: .1/.2/.3 absent (ENOENT) gives unreadable_generations [], the bas
   "$REP_RC|$(jx "o && JSON.stringify(o.unreadable_generations) + '|' + ($P).count")|$(cat "$FX/io/report.err")"
 T="$FX/io/absent.txt"
 report "$T" --log "$(np "$ABS_LOG")" --point complexity-judge --no-sweep
-check "text: no unreadable line; broken lines is the last line" "0|0|broken lines: 1" \
-  "$REP_RC|$(tx 'lines.filter((l) => l.startsWith("unreadable")).length + "|" + lines[lines.length - 1]')"
+check "text: no unreadable line; the broken-lines line is still printed" "0|0|broken lines: 1" \
+  "$REP_RC|$(tx 'lines.filter((l) => l.startsWith("unreadable")).length + "|" + lines.find((l) => l.startsWith("broken lines: "))')"
 case_end

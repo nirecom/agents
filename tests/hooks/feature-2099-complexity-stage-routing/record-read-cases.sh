@@ -68,6 +68,21 @@ console.log("ce=" + ce + " skip=" + skip);
 JS
 }
 
+# No-skip probe (#2460 retired the zero-signal auto-skip): a recorded evaluation
+# may leave neither skippable step anything but `pending`, and no skip
+# annotation may appear.
+d2099_no_skip_view() {
+    BARREL="$BARREL_N" SID="$1" run_with_timeout node - <<'JS' 2>/dev/null
+const b = require(process.env.BARREL);
+const s = b.readState(process.env.SID);
+const st = function (n) { const x = s && s.steps && s.steps[n]; return x && x.status ? x.status : "NO_STEP"; };
+const skip = ((s && s.events) || []).filter(function (e) {
+  return e && e.kind === "step_annotation" && /^skip_/.test(String(e.key));
+}).length;
+console.log("outline=" + st("outline") + " detail=" + st("detail") + " skip=" + skip);
+JS
+}
+
 # Pre-assertion companion for d2099_inject_raw_event: prints the folded record
 # so a case can prove the injection survived before asserting on it.
 d2099_projected_ce() {
@@ -85,7 +100,9 @@ d2099_round_trip() {
     local sid out rc
     sid=$(new_session rt)
 
-    out=$(run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "S1-multi-file" 2>&1); rc=$?
+    # S1b-wide-change is the one signal whose profile splits write_code from
+    # every other stage (low/low/low/high, #2460 end state).
+    out=$(run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "S1b-wide-change" 2>&1); rc=$?
     assert_eq "R-1 record-complexity-evaluation accepts signals-only and exits 0" "0" "$rc"
     assert_contains "R-2 record prints the RECORDED_COMPLEXITY receipt" "RECORDED_COMPLEXITY" "$out"
     assert_not_contains "R-3 the receipt no longer speaks of a verdict" "verdict=" "$out"
@@ -95,16 +112,38 @@ d2099_round_trip() {
     for st in detail write_tests write_code; do
         matrix="$matrix$st:$(run_with_timeout node "$BIN_READ" --session "$sid" --stage "$st" 2>/dev/null | tr '\n' ';') "
     done
-    assert_eq "R-4 one signal set routes differently per stage (S1-multi-file: low/low/high)" \
-        "detail:level=low;signals=S1-multi-file;model=sonnet; write_tests:level=low;signals=S1-multi-file;model=sonnet; write_code:level=high;signals=S1-multi-file;model=opus; " \
+    assert_eq "R-4 one signal set routes differently per stage (S1b-wide-change: low/low/high)" \
+        "detail:level=low;signals=S1b-wide-change;model=sonnet; write_tests:level=low;signals=S1b-wide-change;model=sonnet; write_code:level=high;signals=S1b-wide-change;model=opus; " \
         "$matrix"
 
     # Aggregate `level` stays on the legacy rule and is NOT the write_code column
     # by construction (detail.md D3) — here they happen to agree.
     out=$(run_with_timeout node "$BIN_READ" --session "$sid" 2>/dev/null | tr '\n' ';')
     assert_eq "R-5 back-compat mode (no --stage) adds a levels= JSON line" \
-        "level=high;signals=S1-multi-file;levels={\"outline\":\"low\",\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" \
+        "level=high;signals=S1b-wide-change;levels={\"outline\":\"low\",\"detail\":\"low\",\"write_tests\":\"low\",\"write_code\":\"high\"};" \
         "$out"
+}
+
+# R-48: S1-multi-file and S6-long-plan are retired ids (#2460). Recording one
+# is not an error, but the id is now outside SIGNAL_IDS: it persists as the
+# UNRECOGNIZED(n) marker and routes undecidable-high on every stage, never the
+# old low/low/low/high profile it used to have.
+d2099_retired_signal_ids() {
+    local retired sid rc out st acc
+    for retired in S1-multi-file S6-long-plan; do
+        sid=$(new_session "retired")
+        rc=0; out=$(run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "$retired" 2>&1) || rc=$?
+        assert_eq "R-48 [$retired] a retired signal id still records (exit 0)" "0" "$rc"
+        assert_eq "R-48a [$retired] ... persisted as an unrecognized token, routing high on every stage" \
+            "level=high;signals=UNRECOGNIZED(1);levels={\"outline\":\"high\",\"detail\":\"high\",\"write_tests\":\"high\",\"write_code\":\"high\"};" \
+            "$(run_with_timeout node "$BIN_READ" --session "$sid" 2>/dev/null | tr '\n' ';')"
+        acc=""
+        for st in outline detail write_tests write_code; do
+            acc="$acc${acc:+/}$(run_with_timeout node "$BIN_DERIVE" --stage "$st" --signals "$retired" 2>/dev/null | head -1)"
+        done
+        assert_eq "R-48b [$retired] ... and derive-complexity-level answers high on every stage too" \
+            "level=high/level=high/level=high/level=high" "$acc"
+    done
 }
 
 # R-6: the zero-signal path. `--signals ""` is a VALID input meaning "no
@@ -132,7 +171,7 @@ d2099_zero_signal_and_presence() {
     assert_eq "R-11 --verdict is rejected outright" "1" "$rc"
     assert_contains "R-12 the rejection names --verdict" "verdict" "$out"
 
-    rc=0; out=$(run_with_timeout node "$BIN_DERIVE" --stage write_tests --signals "S1-multi-file" 2>&1) || rc=$?
+    rc=0; out=$(run_with_timeout node "$BIN_DERIVE" --stage write_tests --signals "S1b-wide-change" 2>&1) || rc=$?
     assert_eq "R-13 derive-complexity-level is stateless and exits 0" "0" "$rc"
     assert_eq "R-14 derive-complexity-level applies the write_tests column" $'level=low\nmodel=sonnet' "$out"
 
@@ -144,8 +183,8 @@ d2099_zero_signal_and_presence() {
 # these cover a flag present with NO value after it — `--signals` as the last
 # token. A parser that reads argv[i+1] blindly gets `undefined` (indistinguish-
 # able from absent) or, worse, swallows the next flag as the value. Both must be
-# usage errors (detail.md D1 items 8/9/10: exit 1 for the two node CLIs, exit 2
-# for the bash wrapper) and neither may leave a record behind.
+# usage errors (detail.md D1 items 8/9/10: exit 1 for the node CLIs) and neither
+# may leave a record behind.
 d2099_trailing_flag_usage() {
     local sid rc out
 
@@ -184,15 +223,6 @@ d2099_trailing_flag_usage() {
     # The session DOES hold a record, so a level line here would mean the empty
     # --stage silently degraded into the back-compat mode instead of erroring.
     assert_not_contains "R-42 ... and does not fall through to a level line" "level=" "$out"
-
-    # The bash wrapper owns its own presence detection, with its own exit code.
-    local sid4
-    sid4=$(new_session trailwrap)
-    rc=0; out=$(run_with_timeout bash "$BIN_RECORD_SKIP" --session "$sid4" --target outline --signals 2>&1) || rc=$?
-    assert_eq "R-43 record-complexity-and-skip: a trailing --signals is a wrapper usage error (exit 2)" "2" "$rc"
-    assert_contains "R-43a ... from the wrapper's own presence check, naming --signals" "--signals" "$out"
-    assert_eq "R-44 ... and neither a complexity record nor a skip annotation was written" \
-        "ce=0 skip=0" "$(d2099_side_effects "$sid4")"
 }
 
 # R-16: the API arity change. The 3-arg legacy call must throw loudly rather
@@ -205,7 +235,7 @@ const sid = "s2099-arity-" + process.pid;
 // Materialized, not merely constructed — createInitialState writes no file.
 b.writeState(sid, b.createInitialState(sid));
 let legacy = "NO_THROW";
-try { b.recordComplexityEvaluation(sid, "high", ["S1-multi-file"]); }
+try { b.recordComplexityEvaluation(sid, "high", ["S1b-wide-change"]); }
 catch (e) { legacy = /recordComplexityEvaluation/.test(String(e && e.message)) ? "THREW_NAMED" : "THREW_VAGUE"; }
 let modern = "NO_THROW";
 try { b.recordComplexityEvaluation(sid, ["S3-security"]); modern = "OK"; }
@@ -224,7 +254,7 @@ console.log([
 JS
     got=$(run_node "$_script")
     # S3-security is a DIVERGENT row (detail.md D2): solo_escalation for write_tests
-    # and legacy_equivalent for write_code, but absent from detail's escalation
+    # and write_code, but absent from detail's escalation
     # sets — so the levels map is low/high/high and readStageComplexityLevel("detail")
     # answers low while the aggregate `level` stays high (deriveAggregateLevel:
     # one signal is enough). A uniform high,high,high here would be a table the
@@ -260,7 +290,9 @@ JS
 
     local sid2
     sid2=$(new_session rawbad)
-    d2099_inject_raw_event "$sid2" '{"level":"low","signals":["S6-long-plan"],"levels":{"detail":"maybe"}}' >/dev/null
+    # S1b-wide-change: a valid id whose derived detail/write_tests/write_code
+    # columns (low/low/high) are what the compat read must backfill.
+    d2099_inject_raw_event "$sid2" '{"level":"low","signals":["S1b-wide-change"],"levels":{"detail":"maybe"}}' >/dev/null
     got=$(BARREL="$BARREL_N" SID="$sid2" run_with_timeout node - <<'JS' 2>&1
 const b = require(process.env.BARREL);
 const sid = process.env.SID;
@@ -351,7 +383,7 @@ d2099_security() {
     rc=0; out=$(run_with_timeout node "$BIN_RECORD" --session 'bad;id' --signals "" 2>&1) || rc=$?
     assert_eq "R-20 a session id with shell metacharacters is rejected" "1" "$rc"
 
-    rc=0; out=$(run_with_timeout node "$BIN_RECORD" --session "$sid" --signals 'S1-multi-file; rm -rf /' 2>&1) || rc=$?
+    rc=0; out=$(run_with_timeout node "$BIN_RECORD" --session "$sid" --signals 'S1b-wide-change; rm -rf /' 2>&1) || rc=$?
     assert_eq "R-21 signal tokens are data: a metacharacter payload never executes" "0" "$rc"
 
     out=$(run_with_timeout node "$BIN_READ" --session "$sid" --stage write_code 2>/dev/null | head -1)
@@ -363,6 +395,9 @@ d2099_security() {
 
 case_begin "r1-round-trip-record-read" "bin/workflow/record-complexity-evaluation"
 d2099_round_trip
+case_end
+case_begin "r48-retired-signal-ids-unrecognized" "bin/workflow/record-complexity-evaluation"
+d2099_retired_signal_ids
 case_end
 case_begin "r6-zero-signal-and-presence" "bin/workflow/record-complexity-evaluation"
 d2099_zero_signal_and_presence

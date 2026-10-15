@@ -3,80 +3,82 @@
 # Tests: hooks/workflow-state/complexity-routing.js, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, combination-escalation, set-membership, table-driven, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
-# detail.md D1 step 8 escalates when ALL combination elements are CONTAINED in the
-# signal set. D-4 feeds only the exact ordered pair, which a list-EQUALITY or an
-# order-sensitive implementation passes too; these rows separate the two readings.
+# #2460 retired outline/detail's only combination row (S1b-wide-change + S6-long-plan):
+# S6-long-plan is no longer a signal, so combination_escalation is empty at every stage.
+# These rows pin that NO multi-signal set of individually-low signals escalates, and
+# that a retired id escalates only through the undecidable route — in any order,
+# with duplicates, at the module and at the CLI boundary.
 
-# CE-1: order, supersets, duplicates and near-miss controls for detail's only
-# combination row (D2) — neither member escalates that stage alone.
+# CE-1: outline and detail verdicts for sets that used to hinge on the pair.
 d2099c_combination_membership() {
     local got
     got=$(run_with_timeout node - 2>&1 <<'JS'
 const m = require(process.env.CR_MOD_N);
-// [label, signals, expected]. Expectations come from the D2 detail row:
-// solo = {S2-architecture, S5-breaking}; combination = [S1b-wide-change, S6-long-plan].
-// Neither S1b nor S6 is a detail solo signal, so ONLY the full pair reaches high.
+// [label, signals, expected]. outline/detail: solo = {S2-architecture, S5-breaking},
+// combination = [], undecidable = high. S1b/S3/S4 are individually low there.
 const CASES = [
-  // --- the pair, in every arrangement ---------------------------------------
-  ["pair-ordered",            ["S1b-wide-change", "S6-long-plan"], "high"],
-  ["pair-reversed",           ["S6-long-plan", "S1b-wide-change"], "high"],
-  // --- supersets. Extra signals that escalate detail on their OWN are excluded
-  // on purpose, so a high verdict can only have come from the combination.
-  ["superset-leading",        ["S1-multi-file", "S1b-wide-change", "S6-long-plan"], "high"],
-  ["superset-trailing",       ["S1b-wide-change", "S6-long-plan", "S4-installer"], "high"],
-  ["superset-interleaved",    ["S1b-wide-change", "S4-installer", "S6-long-plan"], "high"],
-  ["superset-reversed",       ["S4-installer", "S6-long-plan", "S1-multi-file", "S1b-wide-change"], "high"],
-  ["superset-all-non-detail", ["S1-multi-file", "S3-security", "S4-installer", "S1b-wide-change", "S6-long-plan"], "high"],
-  // --- duplicates inside the list ------------------------------------------
-  ["dup-first-member",        ["S1b-wide-change", "S1b-wide-change", "S6-long-plan"], "high"],
-  ["dup-second-member",       ["S1b-wide-change", "S6-long-plan", "S6-long-plan"], "high"],
-  ["dup-both-members",        ["S6-long-plan", "S1b-wide-change", "S6-long-plan", "S1b-wide-change"], "high"],
-  ["dup-with-blanks",         ["  S1b-wide-change ", "", "S1b-wide-change", " ", "S6-long-plan"], "high"],
-  // --- non-matching controls: one member only, duplicated members, other pairs
-  ["only-first",              ["S1b-wide-change"], "low"],
-  ["only-second",             ["S6-long-plan"], "low"],
-  ["only-first-duplicated",   ["S1b-wide-change", "S1b-wide-change", "S1b-wide-change"], "low"],
-  ["only-second-duplicated",  ["S6-long-plan", "S6-long-plan"], "low"],
-  ["half-pair-plus-noise",    ["S1b-wide-change", "S1-multi-file", "S4-installer"], "low"],
-  ["other-half-plus-noise",   ["S6-long-plan", "S1-multi-file", "S4-installer"], "low"],
-  ["different-pair",          ["S1-multi-file", "S4-installer"], "low"],
-  ["near-miss-S1-for-S1b",    ["S1-multi-file", "S6-long-plan"], "low"],
-  ["no-members-at-all",       ["S1-multi-file", "S3-security", "S4-installer"], "low"],
+  // --- individually-low signals, alone and together: no combination escalates
+  ["s1b-alone",               ["S1b-wide-change"], "low"],
+  ["s1b-duplicated",          ["S1b-wide-change", "S1b-wide-change", "S1b-wide-change"], "low"],
+  ["s1b-with-s4",             ["S1b-wide-change", "S4-installer"], "low"],
+  ["s4-with-s1b",             ["S4-installer", "S1b-wide-change"], "low"],
+  ["all-low-signals",         ["S1b-wide-change", "S3-security", "S4-installer"], "low"],
+  ["all-low-with-blanks",     ["  S1b-wide-change ", "", "S4-installer", " ", "S3-security"], "low"],
+  // --- a solo signal escalates regardless of companions ----------------------
+  ["s1b-with-s2",             ["S1b-wide-change", "S2-architecture"], "high"],
+  ["s5-with-low-noise",       ["S4-installer", "S5-breaking", "S1b-wide-change"], "high"],
+  // --- the retired former pair member: undecidable, never a combination -----
+  ["former-pair-ordered",     ["S1b-wide-change", "S6-long-plan"], "high"],
+  ["former-pair-reversed",    ["S6-long-plan", "S1b-wide-change"], "high"],
+  ["retired-s6-alone",        ["S6-long-plan"], "high"],
+  ["retired-s1-alone",        ["S1-multi-file"], "high"],
+  ["retired-s1-with-low",     ["S1-multi-file", "S4-installer"], "high"],
+  ["retired-s6-duplicated",   ["S6-long-plan", "S6-long-plan"], "high"],
 ];
-for (const c of CASES) {
-  let out;
-  try { out = m.deriveStageLevel("detail", c[1]); }
-  catch (e) { out = "THREW:" + (e && e.name); }
-  console.log(c[0] + " " + out + (out === c[2] ? "" : " WANT=" + c[2]));
+for (const stage of ["outline", "detail"]) {
+  for (const c of CASES) {
+    let out;
+    try { out = m.deriveStageLevel(stage, c[1]); }
+    catch (e) { out = "THREW:" + (e && e.name); }
+    console.log(stage + " " + c[0] + " " + out + (out === c[2] ? "" : " WANT=" + c[2]));
+  }
 }
 JS
 )
-    assert_block "CE-1 detail's combination row escalates on SET MEMBERSHIP — any order, any superset, duplicates included — and on nothing less" "$got" <<'EOF'
-pair-ordered high
-pair-reversed high
-superset-leading high
-superset-trailing high
-superset-interleaved high
-superset-reversed high
-superset-all-non-detail high
-dup-first-member high
-dup-second-member high
-dup-both-members high
-dup-with-blanks high
-only-first low
-only-second low
-only-first-duplicated low
-only-second-duplicated low
-half-pair-plus-noise low
-other-half-plus-noise low
-different-pair low
-near-miss-S1-for-S1b low
-no-members-at-all low
+    assert_block "CE-1 outline/detail: no set of individually-low signals escalates; retired ids escalate only as undecidable" "$got" <<'EOF'
+outline s1b-alone low
+outline s1b-duplicated low
+outline s1b-with-s4 low
+outline s4-with-s1b low
+outline all-low-signals low
+outline all-low-with-blanks low
+outline s1b-with-s2 high
+outline s5-with-low-noise high
+outline former-pair-ordered high
+outline former-pair-reversed high
+outline retired-s6-alone high
+outline retired-s1-alone high
+outline retired-s1-with-low high
+outline retired-s6-duplicated high
+detail s1b-alone low
+detail s1b-duplicated low
+detail s1b-with-s4 low
+detail s4-with-s1b low
+detail all-low-signals low
+detail all-low-with-blanks low
+detail s1b-with-s2 high
+detail s5-with-low-noise high
+detail former-pair-ordered high
+detail former-pair-reversed high
+detail retired-s6-alone high
+detail retired-s1-alone high
+detail retired-s1-with-low high
+detail retired-s6-duplicated high
 EOF
 }
 
-# CE-2: exhaustive permutation sweep. An implementation comparing `signals.join()`
-# to a canonical string passes CE-1's ordered row and fails 5 of 6 permutations here.
+# CE-2: exhaustive permutation sweep. Order must never decide the verdict, for a
+# low set, a solo-escalating set and a set carrying a retired (undecidable) id.
 d2099c_permutation_invariance() {
     local got
     got=$(run_with_timeout node - 2>&1 <<'JS'
@@ -91,66 +93,75 @@ function permutations(a) {
   return out;
 }
 const SETS = [
-  ["pair", ["S1b-wide-change", "S6-long-plan"], "high"],
-  ["pair+noise", ["S1b-wide-change", "S6-long-plan", "S1-multi-file"], "high"],
-  ["pair+2noise", ["S1b-wide-change", "S6-long-plan", "S1-multi-file", "S4-installer"], "high"],
-  ["half+noise", ["S1b-wide-change", "S1-multi-file", "S4-installer"], "low"],
+  ["all-low", ["S1b-wide-change", "S3-security", "S4-installer"], "low"],
+  ["low+solo", ["S1b-wide-change", "S4-installer", "S2-architecture"], "high"],
+  // The retired sets never pair S1b with S6 (the former combination row), so
+  // "high" here is attributable to the undecidable route alone.
+  ["low+retired", ["S3-security", "S4-installer", "S6-long-plan"], "high"],
+  ["low+2retired", ["S3-security", "S4-installer", "S1-multi-file", "S6-long-plan"], "high"],
 ];
-for (const s of SETS) {
-  const perms = permutations(s[1]);
-  const levels = perms.map(function (p) { return m.deriveStageLevel("detail", p); });
-  const disagreeing = levels.filter(function (l) { return l !== s[2]; }).length;
-  console.log(s[0] + " perms=" + perms.length + " want=" + s[2] + " disagreeing=" + disagreeing);
+for (const stage of ["outline", "detail"]) {
+  for (const s of SETS) {
+    const perms = permutations(s[1]);
+    const levels = perms.map(function (p) { return m.deriveStageLevel(stage, p); });
+    const disagreeing = levels.filter(function (l) { return l !== s[2]; }).length;
+    console.log(stage + " " + s[0] + " perms=" + perms.length + " want=" + s[2] + " disagreeing=" + disagreeing);
+  }
 }
 JS
 )
-    assert_block "CE-2 the combination verdict is invariant under every permutation of the same signal set" "$got" <<'EOF'
-pair perms=2 want=high disagreeing=0
-pair+noise perms=6 want=high disagreeing=0
-pair+2noise perms=24 want=high disagreeing=0
-half+noise perms=6 want=low disagreeing=0
+    assert_block "CE-2 the outline/detail verdict is invariant under every permutation of the same signal set" "$got" <<'EOF'
+outline all-low perms=6 want=low disagreeing=0
+outline low+solo perms=6 want=high disagreeing=0
+outline low+retired perms=6 want=high disagreeing=0
+outline low+2retired perms=24 want=high disagreeing=0
+detail all-low perms=6 want=low disagreeing=0
+detail low+solo perms=6 want=high disagreeing=0
+detail low+retired perms=6 want=high disagreeing=0
+detail low+2retired perms=24 want=high disagreeing=0
 EOF
 }
 
 # CE-3: the same question at the CLI boundary — the consumers' fallback path goes
 # through a CSV parse, where an ordering or dedup bug would not reach the module.
 d2099c_cli_membership() {
-    local row label csv want got
+    local row label stage csv want got rest
     for row in \
-        "cli-pair-ordered|S1b-wide-change,S6-long-plan|high" \
-        "cli-pair-reversed|S6-long-plan,S1b-wide-change|high" \
-        "cli-superset|S4-installer,S6-long-plan,S1-multi-file,S1b-wide-change|high" \
-        "cli-duplicated|S6-long-plan,S1b-wide-change,S6-long-plan|high" \
-        "cli-only-first|S1b-wide-change|low" \
-        "cli-only-second-duplicated|S6-long-plan,S6-long-plan|low" \
-        "cli-different-pair|S1-multi-file,S4-installer|low"; do
+        "cli-s1b-s4|detail|S1b-wide-change,S4-installer|low" \
+        "cli-s4-s1b-duplicated|detail|S4-installer,S1b-wide-change,S1b-wide-change|low" \
+        "cli-outline-all-low|outline|S3-security,S1b-wide-change,S4-installer|low" \
+        "cli-former-pair|detail|S1b-wide-change,S6-long-plan|high" \
+        "cli-former-pair-reversed|outline|S6-long-plan,S1b-wide-change|high" \
+        "cli-retired-s1-with-low|detail|S1-multi-file,S4-installer|high" \
+        "cli-solo-with-low|detail|S4-installer,S5-breaking|high"; do
         label="${row%%|*}"
-        csv="${row#*|}"; csv="${csv%|*}"
+        rest="${row#*|}"
+        stage="${rest%%|*}"
+        rest="${rest#*|}"
+        csv="${rest%|*}"
         want="${row##*|}"
-        got=$(run_with_timeout node "$BIN_DERIVE" --stage detail --signals "$csv" 2>/dev/null | head -1)
-        assert_eq "CE-3 $label: derive-complexity-level --stage detail --signals '$csv'" \
+        got=$(run_with_timeout node "$BIN_DERIVE" --stage "$stage" --signals "$csv" 2>/dev/null | head -1)
+        assert_eq "CE-3 $label: derive-complexity-level --stage $stage --signals '$csv'" \
             "level=$want" "$got"
     done
 }
 
-# CE-4: combination_escalation stays structurally reserved for real combinations,
-# so V-1's singleton rejection (validate-table-cases.sh) stays reachable.
-d2099c_combination_is_multi_member_only() {
+# CE-4: no stage carries a combination row any more; V-1's singleton rejection
+# (validate-table-cases.sh) stays reachable through a mutated clone only.
+d2099c_no_combination_rows() {
     local got
     got=$(run_with_timeout node - 2>&1 <<'JS'
 const m = require(process.env.CR_MOD_N);
 const rows = [];
 for (const s of m.ROUTING_STAGES) {
-  const combos = m.STAGE_ROUTING[s].combination_escalation || [];
-  rows.push(s + "=" + (combos.length
-    ? combos.map(function (c) { return c.length; }).join("/")
-    : "none"));
+  const combos = m.STAGE_ROUTING[s].combination_escalation;
+  rows.push(s + "=" + (!Array.isArray(combos) ? "NOT_ARRAY" : combos.length ? combos.length + "_rows" : "none"));
 }
 console.log(rows.join(" "));
 JS
 )
-    assert_eq "CE-4 only outline and detail carry combination rows, and every combination has 2+ members" \
-        "outline=2 detail=2 write_tests=none write_code=none" "$got"
+    assert_eq "CE-4 combination_escalation is an empty array at every stage" \
+        "outline=none detail=none write_tests=none write_code=none" "$got"
 }
 
 case_begin "combination-membership-set-semantics" "hooks/workflow-state/complexity-routing.js"
@@ -165,6 +176,6 @@ case_begin "combination-cli-membership" "bin/workflow/derive-complexity-level"
 d2099c_cli_membership
 case_end
 
-case_begin "combination-multi-member-only" "hooks/workflow-state/complexity-routing.js"
-d2099c_combination_is_multi_member_only
+case_begin "combination-rows-absent-at-every-stage" "hooks/workflow-state/complexity-routing.js"
+d2099c_no_combination_rows
 case_end

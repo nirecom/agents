@@ -10,9 +10,9 @@ INV_ROWS=(
   '1|skills/write-code/SKILL.md|^WCD-4\. |0|12|plain'
   '2|skills/write-tests/SKILL.md|^WT-7\. |0|25|plain'
   '3a|skills/make-outline-plan/SKILL.md|Delegate to \*\*outline-planner\*\*|0|3|plain'
-  '3b|skills/make-outline-plan/SKILL.md|^MOP-C1\. |0|3|plain'
+  '3b|skills/make-outline-plan/SKILL.md|^MOP-C1\. |0|0|delegated:5'
   '4|skills/make-detail-plan/SKILL.md|Delegate to \*\*planner\*\*|0|3|plain'
-  '5|skills/_shared/complexity-and-outline-skip.md|subagent_type=skip-verifier|-1|4|plain'
+  '5|skills/_shared/jev-two-stage-judge.md|^[-*#[:space:]]*JJ-2[^0-9]|0|10|plain'
   '6|skills/_shared/codex-review-loop.md|^Every REVIEWER_AGENT .*launch passes|0|2|json'
   '7|skills/_shared/codex-review-loop/exit-codes.md|silently launch .REVIEWER_AGENT. subagent|0|0|delegated:6'
   '8|skills/review-plan-codex/SKILL.md|before\*\* launching reviewer subagent|0|4|plain'
@@ -52,6 +52,20 @@ for row in "${INV_ROWS[@]}"; do
   ck "INV#$id: $file still has its anchor and is covered by INV#$to" "anchor-present|yes" \
     "$(grep -qE -- "$anchor" "$SCRIPT_CHECKOUT_ROOT/$file" 2>/dev/null && echo anchor-present || echo anchor-missing)|${INV_RESULT[$to]:-unknown}"
 done
+case_end
+
+# #2460 JJ-2 is the one judge dispatch: inside its own block (up to the JJ-3 label) it must
+# reference the section and hand the subagent the SNAPSHOT_FILE path.
+case_begin "INV-jj2-block" "skills/write-code/SKILL.md"
+JJ_DOC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/jev-two-stage-judge.md"
+JJ2_BLOCK="$(awk '/^[-*#[:space:]]*JJ-2[^0-9]/ { on = 1 } on && /^[-*#[:space:]]*JJ-3[^0-9]/ { exit } on { print }' "$JJ_DOC" 2>/dev/null)"
+ck "INV#5: JJ-2 block exists in skills/_shared/jev-two-stage-judge.md" "yes" "$([ -n "$JJ2_BLOCK" ] && echo yes || echo no)"
+ck "INV#5: JJ-2 block references the ${SECTION_NAME} section" "yes" \
+  "$(printf '%s\n' "$JJ2_BLOCK" | grep -qF -- "$SECTION_NAME" && echo yes || echo no)"
+ck "INV#5: JJ-2 block passes SNAPSHOT_FILE to the subagent" "yes" \
+  "$(printf '%s\n' "$JJ2_BLOCK" | grep -qF -- 'SNAPSHOT_FILE' && echo yes || echo no)"
+ck "INV#5: JJ-2 dispatches only on RESULT=need-subagent" "yes" \
+  "$(printf '%s\n' "$JJ2_BLOCK" | grep -qF -- 'RESULT=need-subagent' && echo yes || echo no)"
 case_end
 
 # The canonical line is owned by the rule; a dispatch site references it and never copies it.

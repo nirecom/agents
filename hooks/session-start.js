@@ -187,10 +187,12 @@ function buildWorkflowStatus(sessionId) {
     // falls back to the raw record.
     let snapshot = null;
     try {
+      const repoDir = process.env.CLAUDE_PROJECT_DIR;
+      const { resolveSessionProfile } = require("./workflow-state/session-profile");
       snapshot = reconcileEffectiveState(state, sessionId, {
         resolveAll: true,
-        repoDir: process.env.CLAUDE_PROJECT_DIR,
-        isWfMeta: state.workflow_type === "wf-meta",
+        repoDir,
+        profile: resolveSessionProfile(state, sessionId, { repoDir }),
       });
     } catch (e) { snapshot = null; }
     for (const step of VALID_STEPS) {

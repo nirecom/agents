@@ -53,7 +53,7 @@ ADVANCE_CLIS="$(run_with_timeout node -e '
   const m = require(process.env.RSV_MOD);
   process.stdout.write(Object.keys(m.ADVANCE_ORIGINS || {}).join(" "));' 2>/dev/null || echo "")"
 check "M0a: the step name resolved from VALID_STEPS" "research" "$STEP"
-check "M0b: ADVANCE_ORIGINS still names four advance-class CLIs" 4 "$(printf '%s' "$ADVANCE_CLIS" | wc -w | tr -d ' ')"
+check "M0b: ADVANCE_ORIGINS names four advance-class CLIs (#2527 added set-deliverable-type, #2460 removed record-complexity-and-skip)" 4 "$(printf '%s' "$ADVANCE_CLIS" | wc -w | tr -d ' ')"
 
 # Block-reason strings come from the hook module itself (CPR-SSOT), never retyped:
 # assert_payload proves WHICH door tripped, not merely that some door tripped.
@@ -203,7 +203,9 @@ driver_says() {
     } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED"
 }
 check "G6a: the migrated next-step advance call is a driver command" true "$(driver_says "$ADVANCE_CMD")"
-check "G6b: a record-complexity-and-skip advance call is a driver command" true \
+check "G6b: a record-skip-judgment advance call is a driver command" true \
+  "$(driver_says "node \"\$AGENTS_MAIN_ROOT/bin/workflow/record-skip-judgment\" --session s1 --target outline --advance")"
+check "G6b2: the CLI #2460 retired is no longer a driver command" false \
   "$(driver_says "bash \"\$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-and-skip\" --session s1 --signals \"\" --target outline --advance")"
 check "G6c: next-step without --advance is not" false "$(driver_says "$PLAIN_CMD")"
 check "G6d: read-session-facts is not" false "$(driver_says "$FACTS_CMD")"
@@ -267,19 +269,20 @@ true|j1-cmd-c|cmd /c "node \$AGENTS_MAIN_ROOT/bin/workflow/next-step --session s
 true|j2-cmd-k-upper|cmd /K "node \$AGENTS_MAIN_ROOT/bin/workflow/next-step --session s1 --advance --step ${STEP} --complete"
 false|j3-cmd-c-readonly|cmd /c "node \$AGENTS_MAIN_ROOT/bin/workflow/read-session-facts --session s1"
 true|k1-pwsh-flag-uppercase|pwsh -COMMAND "node \$AGENTS_MAIN_ROOT/bin/workflow/next-step --session s1 --advance --step ${STEP} --complete"
-true|m1-windows-spaced-program-files-path|C:\Program Files\nodejs\node.exe C:\git\agents\bin\workflow\next-step --session s1 --advance --step ${STEP} --complete
-false|m2-windows-spaced-program-files-path-readonly|C:\Program Files\nodejs\node.exe C:\git\agents\bin\workflow\next-step --session s1
+true|m1-windows-spaced-program-files-path|C:\Program Files\nodejs\node.exe C:\src\agents\bin\workflow\next-step --session s1 --advance --step ${STEP} --complete
+false|m2-windows-spaced-program-files-path-readonly|C:\Program Files\nodejs\node.exe C:\src\agents\bin\workflow\next-step --session s1
 MATRIX
 
 echo ""
-echo "=== G8: isBaselineEvidenceRecordCommand -- the #2431 internal-only record door ==="
+echo "=== G8: isBaselineEvidenceInternalCommand -- the #2431/#2517 internal-only record/accept doors ==="
 # Every invocation shape must be caught; a mere mention (data, not a run) must not.
-case_begin "baseline-evidence-record-detector" "hooks/lib/workflow-driver-commands.js"
+# #2517: `accept` completes run_tests too, so it shares the internal-only door with `record`.
+case_begin "baseline-evidence-internal-detector" "hooks/lib/workflow-driver-commands.js"
 baseline_record_says() {
   CMD="$1" run_with_timeout node -e '
     try {
-      const { isBaselineEvidenceRecordCommand } = require(process.env.DRIVER_MOD);
-      process.stdout.write(String(isBaselineEvidenceRecordCommand(process.env.CMD) === true));
+      const { isBaselineEvidenceInternalCommand } = require(process.env.DRIVER_MOD);
+      process.stdout.write(String(isBaselineEvidenceInternalCommand(process.env.CMD) === true));
     } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED"
 }
 while IFS='|' read -r rwant rid rcmd; do
@@ -296,6 +299,13 @@ false|n2-baseline-runner|bash bin/run-tests-baseline --session s1
 false|n3-cat-mention|cat "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" record
 false|n4-grep-mention|grep record "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence"
 false|n5-echo-mention|echo "run-tests-baseline-evidence record"
+true|a1-node-accept|node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1
+true|a2-direct-path-accept|"\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1
+true|a3-bash-c-accept|bash -c 'node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1'
+true|a4-chained-accept|git status; node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1
+true|a5-quoted-accept|node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" "accept" --session s1
+false|an1-cat-mention-accept|cat "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept
+false|an2-echo-mention-accept|echo "run-tests-baseline-evidence accept"
 MATRIX
 case_end
 

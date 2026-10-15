@@ -45,10 +45,12 @@ function matchDispatch({ toolName, subagentType, agentId, sessionId, toolUseId }
   return { point, sessionId, toolUseId };
 }
 
+// Only a shadow point with a subagent_type is observed by the hook pair (recordingOwner
+// "hook"); a production point, or one without subagent_type, is recorded by its CLI.
 function findPointBySubagentType(type) {
-  if (typeof type !== "string") return null;
+  if (typeof type !== "string" || type === "") return null;
   for (const [point, entry] of Object.entries(REGISTRY)) {
-    if (entry.subagent_type === type) return point;
+    if (entry.mode === "shadow" && typeof entry.subagent_type === "string" && entry.subagent_type === type) return point;
   }
   return null;
 }

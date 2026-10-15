@@ -146,7 +146,7 @@ if (_read.kind === "read-error") {
 
 // Defence-in-depth: if process.cwd() is unresolvable (e.g. after
 // git worktree remove from inside the removed worktree), fail-open.
-// Root cause fix: skills/worktree-end/SKILL.md Step WE-13 (cd <main> before remove).
+// Root cause fix: skills/worktree-end/SKILL.md Step WE-9 (cd <main> before remove).
 // See issue #268. Fail-open ONLY for ENOENT / missing-dir — not all errors.
 let _cwd;
 try {

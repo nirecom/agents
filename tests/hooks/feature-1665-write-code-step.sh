@@ -88,6 +88,8 @@ SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-1665-write-code-step"
 . "$SCRIPT_DIR/e-commit-gate.sh"
 # shellcheck source=./feature-1665-write-code-step/f-v2-to-v3.sh
 . "$SCRIPT_DIR/f-v2-to-v3.sh"
+# shellcheck source=./feature-1665-write-code-step/g-release-skills.sh
+. "$SCRIPT_DIR/g-release-skills.sh"
 
 case_begin() { echo "--- group: $1 ---"; }
 case_end()   { :; }
@@ -125,6 +127,12 @@ case_end
 case_begin "v2-to-v3-migration" "hooks/workflow-state/state-io/migrations/v2-to-v3.js"
 echo "=== F: v2 -> v3 state migration (TL2) ==="
 run_v2_to_v3_tests
+echo ""
+case_end
+
+case_begin "release-skills" "bin/workflow/lib/next-step/steps.js"
+echo "=== G: release-phase skill routing (TL1, #2527) ==="
+run_release_skill_tests
 case_end
 
 echo ""

@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/jev-judge — the two-stage Jev broker CLI (#2460).
+// Usage: jev-judge query    --session <sid> --point <point> --stage <stage>
+//        jev-judge finalize --session <sid> --ticket <id>
+//        jev-judge failsafe --session <sid> --point <point> --stage <stage> --ticket <id>|-
+// Prints KEY=VALUE lines. Exit 0 result, 2 bad arguments, 3 internal write failure,
+// 4 RESULT=error (finalize). The contract lives in the module headers under hooks/lib/jev/two-stage/.
+
+// Snapshot the JEV_* test overrides before anything can load .env into process.env.
+const { captureTestOverrides } = require("../../hooks/lib/jev/test-overrides");
+const OVERRIDES = captureTestOverrides(process.env);
+
+const ALLOWED = {
+  query: ["session", "point", "stage"],
+  finalize: ["session", "ticket"],
+  failsafe: ["session", "point", "stage", "ticket"],
+};
+
+// {cmd, args} or null on any unknown, repeated, missing or valueless flag.
+function parseArgs(argv) {
+  const cmd = argv[0];
+  if (!Object.prototype.hasOwnProperty.call(ALLOWED, cmd)) return null;
+  const args = {};
+  for (let i = 1; i < argv.length; i += 2) {
+    const flag = argv[i];
+    const name = typeof flag === "string" && flag.startsWith("--") ? flag.slice(2) : null;
+    if (!name || !ALLOWED[cmd].includes(name) || Object.prototype.hasOwnProperty.call(args, name)) return null;
+    if (i + 1 >= argv.length) return null;
+    args[name] = argv[i + 1];
+  }
+  if (!ALLOWED[cmd].every((k) => typeof args[k] === "string" && args[k] !== "")) return null;
+  return { cmd, args };
+}
+
+// The orchestrator's worktree (jev-judge runs there); null outside a repo.
+function repoRoot() {
+  const { toWindowsPath } = require("../../hooks/lib/branch-diff");
+  const { resolveRepoRoot } = require("../../hooks/enforce-worktree/git-repo-detection");
+  return resolveRepoRoot(toWindowsPath(process.cwd()));
+}
+
+async function main(argv) {
+  const p = parseArgs(argv);
+  if (!p) return { exit: 2, stdout_lines: [] };
+  try { require("../../hooks/lib/load-env").loadDefaultEnv(); } catch (_e) { /* defaults apply */ }
+  const a = Object.assign({ sid: p.args.session }, p.args);
+  const opts = { overrides: OVERRIDES };
+  if (p.cmd === "query") {
+    a.repoRoot = repoRoot();
+    return require("../../hooks/lib/jev/two-stage/query").query(a, opts);
+  }
+  if (p.cmd === "finalize") return require("../../hooks/lib/jev/two-stage/finalize").finalize(a, opts);
+  return require("../../hooks/lib/jev/two-stage/failsafe").failsafe(a, opts);
+}
+
+main(process.argv.slice(2)).then((r) => {
+  if (r.stdout_lines.length) process.stdout.write(r.stdout_lines.join("\n") + "\n");
+  process.exitCode = r.exit;
+}, (e) => {
+  process.stderr.write(`jev-judge: ${e && e.message}\n`);
+  process.exitCode = 3;
+});

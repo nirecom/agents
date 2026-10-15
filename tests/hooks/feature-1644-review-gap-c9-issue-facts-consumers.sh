@@ -3,7 +3,7 @@
 # Tests: hooks/workflow-state/session-facts.js, bin/parse-closes-issues, bin/render-final-report.js, bin/issue-close-write-outcome.js, hooks/lib/final-report-schema.js
 # Tags: tl2, workflow, session-facts, closes-issues, cross-module, final-report, issue-close, scope:issue-specific, pwsh-not-required, feature-2434, control-dir
 # #1644 C9: parse-closes-issues, render-final-report and issue-close-write-outcome
-# must report the same issue numbers for one seeded cache (object + legacy shapes).
+# report the same intent.md issue numbers; a stale state.closes_issues never leaks (#2654).
 # #2434 C9-6: render-final-report derives its control files from --session under
 # $WORKFLOW_STATE_DIR/<sid>.control/; legacy positionals only via the shim.
 # TL3 gap: the real ~/.workflow-plans layout and a merged PR's outcome JSON.
@@ -110,63 +110,82 @@ consumer_render_numbers() {  # <sid>
   printf '%s' "$out" | grep -oE '^- #[^ ]+$' | sed 's/^- #//' | tr '\n' ',' | sed 's/,$//'
 }
 
+# outcome_numbers <rc> <outfile>: issue numbers in the bag, or ERR:<why> when the writer
+# failed, wrote nothing, or wrote a bag without an `issues` array (never a silent empty set).
+outcome_numbers() {
+  [ "$1" -eq 0 ] || { printf 'ERR:rc=%s' "$1"; return; }
+  [ -f "$2" ] || { printf 'ERR:no-outcome-file'; return; }
+  local out nrc=0
+  out="$(node -e '
+    let bag; try { bag = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); }
+    catch (_) { process.stdout.write("ERR:unparsable"); process.exit(0); }
+    if (!bag || !Array.isArray(bag.issues)) { process.stdout.write("ERR:issues-not-array"); process.exit(0); }
+    const bad = bag.issues.findIndex((e) => !e || typeof e !== "object" || Array.isArray(e)
+      || typeof e.issueNumber !== "number" || !Number.isFinite(e.issueNumber));
+    if (bad !== -1) { process.stdout.write("ERR:bad-entry-" + bad); process.exit(0); }
+    process.stdout.write(bag.issues.map((e) => String(e.issueNumber)).join(","));
+  ' "$(nrm "$2")" 2>/dev/null)" || nrc=$?
+  if [ "$nrc" -ne 0 ]; then printf 'ERR:node-exit-%s' "$nrc"; else printf '%s' "$out"; fi
+}
+
 # Numbers written into the outcome bag by --fallback.
 consumer_outcome_numbers() {  # <sid>
-  local sid="$1"
+  local sid="$1" rc=0
   local outfile="$TMPDIR_BASE/${sid}-issue-close-outcome.json"
   rm -f "$outfile"
   run_with_timeout node "$OUTCOME_CLI_N" --fallback "$PLANS_DIR_N/${sid}-intent.md" \
-    "$(nrm "$outfile")" >/dev/null 2>&1 || true
-  node -e '
-    const fs=require("fs");
-    let bag={issues:[]};
-    try{bag=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));}catch(_){}
-    process.stdout.write((bag.issues||[]).map(e=>String(e.issueNumber)).join(","));
-  ' "$(nrm "$outfile")" 2>/dev/null
+    "$(nrm "$outfile")" >/dev/null 2>&1 || rc=$?
+  outcome_numbers "$rc" "$outfile"
 }
 
-echo "=== C9-1: OBJECT-shaped cache — all three consumers agree ==="
+# Numbers written by --session-id <sid> for primary <n>, siblings from getClosesIssues.
+consumer_session_outcome_numbers() {  # <sid> <n>
+  local sid="$1" rc=0
+  local outfile="$TMPDIR_BASE/${sid}-session-outcome.json"
+  rm -f "$outfile"
+  run_with_timeout node "$OUTCOME_CLI_N" --session-id "$sid" --out-file "$(nrm "$outfile")" \
+    "$2" closed done closed posted cleared >/dev/null 2>&1 || rc=$?
+  outcome_numbers "$rc" "$outfile"
+}
+
+echo "=== C9-1: stale state.closes_issues — all three consumers follow intent.md ==="
 SID_OBJ="c9obj"
 seed_state "$SID_OBJ" '[{"number":1644},{"number":1655,"repo":"owner/repo"}]'
-# intent.md deliberately names a DIFFERENT set: any consumer that bypassed the
-# cache and re-parsed would show 9999 here.
+# intent.md deliberately names a DIFFERENT set: a consumer that still read the
+# recorded state value would show 1644/1655 here.
 write_intent "$SID_OBJ" "#9999"
 P_OUT="$(consumer_parse "$SID_OBJ")"
 R_OUT="$(consumer_render_numbers "$SID_OBJ")"
 O_OUT="$(consumer_outcome_numbers "$SID_OBJ")"
-check "C9-1a: parse-closes-issues --session returns the cached object entries" \
-  '[{"number":1644},{"number":1655,"repo":"owner/repo"}]' "$P_OUT"
-check "C9-1b: render-final-report lists the same numbers" "1644,1655" "$R_OUT"
-check "C9-1c: issue-close-write-outcome --fallback records the same numbers" "1644,1655" "$O_OUT"
-check_not_contains "C9-1d: no consumer leaked the contradicting intent.md issue (#9999)" \
-  "9999" "$P_OUT$R_OUT$O_OUT"
+check "C9-1a: parse-closes-issues --session returns the intent.md entries" \
+  '[{"number":9999}]' "$P_OUT"
+check "C9-1b: render-final-report lists the same numbers" "9999" "$R_OUT"
+check "C9-1c: issue-close-write-outcome --fallback records the same numbers" "9999" "$O_OUT"
+check_not_contains "C9-1d: no consumer leaked the stale state issue #1644" \
+  "1644" "$P_OUT$R_OUT$O_OUT"
+check_not_contains "C9-1e: no consumer leaked the stale state issue #1655" \
+  "1655" "$P_OUT$R_OUT$O_OUT"
 
 echo ""
-echo "=== C9-2: LEGACY numeric-only cache — consumer-by-consumer behavior ==="
-# FINDING (pinned CURRENT behavior): getClosesIssues() returns a legacy bare
-# number array verbatim. parse-closes-issues passes numbers through and
-# issue-close-write-outcome handles `typeof entry === "number"`, but
-# render-final-report maps `e.number` with no numeric branch and renders
-# "- #undefined" -- the C9 asymmetry, asserted as-is (source untouched).
-SID_LEG="c9leg"
-seed_state "$SID_LEG" '[1644,1655]'
-write_intent "$SID_LEG" "#9999"
-P_OUT="$(consumer_parse "$SID_LEG")"
-R_OUT="$(consumer_render_numbers "$SID_LEG")"
-O_OUT="$(consumer_outcome_numbers "$SID_LEG")"
-check "C9-2a: parse-closes-issues passes the legacy numeric entries through" \
-  '[1644,1655]' "$P_OUT"
-check "C9-2b: issue-close-write-outcome --fallback resolves legacy numbers correctly" \
-  "1644,1655" "$O_OUT"
-check "C9-2c: render-final-report drops the numbers on the legacy shape (BUG, pinned)" \
-  "undefined,undefined" "$R_OUT"
-# No consumer crashes and none silently drops an ENTRY (count is preserved even
-# where the number itself is lost).
-check "C9-2d: render still emits one line per issue (arity preserved)" \
-  "2" "$(printf '%s' "$R_OUT" | awk -F, '{print NF}')"
+echo "=== C9-2: --session-id sibling expansion follows a narrowed intent.md (4 -> 2) ==="
+SID_SS="c9sessid"
+seed_state "$SID_SS" '[{"number":1644},{"number":1655},{"number":1700},{"number":1701}]'
+write_intent "$SID_SS" "#1644" "#1655"
+S_OUT="$(consumer_session_outcome_numbers "$SID_SS" 1644)"
+check "C9-2a: --session-id records the primary plus only the intent.md sibling" "1644,1655" "$S_OUT"
+check_not_contains "C9-2b: dropped issue #1700 is not recorded as subsumed" "1700" "$S_OUT"
+check_not_contains "C9-2c: dropped issue #1701 is not recorded as subsumed" "1701" "$S_OUT"
+# The outcome entry field is `state`: the primary keeps the passed state, siblings are "subsumed".
+S_STATES="$(node -e '
+  try { const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(b.issues.map((e) => e.issueNumber + "=" + e.state).join(","));
+  } catch (e) { process.stdout.write("ERR:" + e.message); }
+' "$(nrm "$TMPDIR_BASE/${SID_SS}-session-outcome.json")" 2>/dev/null)"
+check "C9-2d: primary #1644 is closed and kept sibling #1655 is subsumed" \
+  "1644=closed,1655=subsumed" "$S_STATES"
 
 echo ""
-echo "=== C9-3: NO cache — all three fall back to intent.md and still agree ==="
+echo "=== C9-3: no state file — all three parse intent.md and still agree ==="
 SID_NC="c9nocache"
 rm -f "$WORKFLOW_DIR/${SID_NC}.json"
 write_intent "$SID_NC" "#1644" "owner/repo#1655"
@@ -199,25 +218,6 @@ check_not_contains "C9-4d: render-final-report does not emit '#undefined' on an 
   "#undefined" "$RENDER_FULL"
 
 echo ""
-echo "=== C9-5: cross-shape agreement matrix on the SAME numbers ==="
-# Same two issue numbers expressed in each shape: every consumer that resolves
-# numbers at all must report the identical number list across both shapes.
-seed_state c9m_obj '[{"number":1644},{"number":1655}]'
-seed_state c9m_num '[1644,1655]'
-write_intent c9m_obj "#9999"
-write_intent c9m_num "#9999"
-check "C9-5a: outcome writer agrees across object and numeric shapes" \
-  "$(consumer_outcome_numbers c9m_obj)" "$(consumer_outcome_numbers c9m_num)"
-# Documented DISAGREEMENT (the C9-2c bug, restated as a matrix cell):
-OBJ_R="$(consumer_render_numbers c9m_obj)"
-NUM_R="$(consumer_render_numbers c9m_num)"
-if [ "$OBJ_R" = "$NUM_R" ]; then
-  fail "C9-5b: render agreed across shapes -- source may have been fixed; update this test's finding"
-else
-  pass "C9-5b: render DISAGREES across shapes (obj=[$OBJ_R] num=[$NUM_R]) -- the pinned C9 bug"
-fi
-
-echo ""
 echo "=== C9-6: #2434 render-final-report derives control files from --session ==="
 R6_ENV='{"PR_NUMBER":"2434","PR_TITLE":"Derived title","BRANCH":"feature/x"}'
 R6_RC=0; R6_OUT=""
@@ -232,6 +232,28 @@ render6 --session "$S6A"
 check "C9-6a: --session exits 0" "0" "$R6_RC"
 check_contains "C9-6a: --session renders the derived env PR line" "- PR #2434: Derived title" "$R6_OUT"
 check_contains "C9-6a: --session renders the PLANS intent issue" "- #1644" "$R6_OUT"
+
+# #2654 original symptom: state held 4 issues, intent.md narrowed to 2, the report showed 4.
+S6S="c96stale"; seed_state "$S6S" '[{"number":1644},{"number":1655},{"number":1700},{"number":1701}]'
+seed_control "$S6S" "$R6_ENV"; write_intent "$S6S" "#1644" "#1655"
+render6 --session "$S6S"
+check "C9-6i: --session with stale state exits 0" "0" "$R6_RC"
+S6S_NUMS="$(printf '%s' "$R6_OUT" | grep -oE '^- #[^ ]+$' | sed 's/^- #//' | tr '\n' ',' | sed 's/,$//')"
+check "C9-6i: --session report lists only the intent.md issues" "1644,1655" "$S6S_NUMS"
+check_not_contains "C9-6i: dropped #1700 is not in the report" "#1700" "$R6_OUT"
+check_not_contains "C9-6i: dropped #1701 is not in the report" "#1701" "$R6_OUT"
+
+# intent.md absent, stale state only: neither consumer falls back to state.closes_issues.
+S6N="c96nointent"; seed_state "$S6N" '[{"number":1644},{"number":1655},{"number":1700}]'
+seed_control "$S6N" "$R6_ENV"; rm -f "$PLANS_DIR/${S6N}-intent.md"
+render6 --session "$S6N"
+check "C9-6j: --session with no intent.md exits 0" "0" "$R6_RC"
+check_contains "C9-6j: --session with no intent.md renders the (none) placeholder" "- (none)" "$R6_OUT"
+for n in 1644 1655 1700; do
+  check_not_contains "C9-6j: stale #$n is not in the report" "#$n" "$R6_OUT"
+done
+N_OUT="$(consumer_session_outcome_numbers "$S6N" 4242)"
+check "C9-6k: --session-id with no intent.md records only the primary" "4242" "$N_OUT"
 
 # Only the legacy <plans>/<sid>-final-report-env.json exists: migrated, then read.
 S6B="c96mig"; write_intent "$S6B" "#1655"

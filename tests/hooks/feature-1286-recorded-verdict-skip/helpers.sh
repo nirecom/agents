@@ -32,7 +32,11 @@ SKIP_JUDGMENT_RESOLVER_N="$RESOLVER_N"
 . "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/skip-judgment.sh"
 
 TMPDIR_BASE="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# Also removes the runner's isolation root, whose own trap this one replaces.
+trap 'rm -rf "$TMPDIR_BASE" ${_ISOLATION_TMP_ROOT:+"$_ISOLATION_TMP_ROOT"}' EXIT
+unset CLAUDE_CODE_SESSION_ID
+# Neutral cwd: hooks that call git rev-parse must not resolve the real worktree.
+cd "$TMPDIR_BASE" || exit 1
 
 WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
 mkdir -p "$WORKFLOW_DIR"
@@ -45,6 +49,22 @@ PLANS_GLOBAL_DIR="$TMPDIR_BASE/plans-global"
 mkdir -p "$PLANS_GLOBAL_DIR"
 PLANS_GLOBAL_DIR_N="$(cygpath -m "$PLANS_GLOBAL_DIR" 2>/dev/null || echo "$PLANS_GLOBAL_DIR")"
 export WORKFLOW_PLANS_DIR="$PLANS_GLOBAL_DIR_N"
+
+# The broker's ticket store (#2460): record-skip-judgment only accepts a ticket finalized
+# there. Pinned so a planted claim never lands in a real home.
+AGENTS_STATE_DIR="$(cygpath -m "$TMPDIR_BASE/agents-state" 2>/dev/null || echo "$TMPDIR_BASE/agents-state")"
+export AGENTS_STATE_DIR
+# ticketed <sid> <target> <ticket> <conds-json> <source> — plant after the plan artifacts exist.
+ticketed() { plant_finalized_ticket "$SCRIPT_CHECKOUT_ROOT_N" "$@"; }
+# conds_json "--cond a=true --cond b=false" → {"a":true,"b":false}
+conds_json() {
+  local out="" w
+  for w in $1; do
+    [ "$w" = "--cond" ] && continue
+    out="$out${out:+,}\"${w%%=*}\":${w#*=}"
+  done
+  printf '{%s}' "$out"
+}
 
 # Empty agents main root so the gate hook's load-env.js finds no .env — CONFIRM_* env
 # vars then reflect only what the test explicitly sets (load-env.js treats the

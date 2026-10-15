@@ -268,7 +268,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
  * True when cmd is the canonical compose-doc-append-entry dispatch shape:
  *   bash "<script checkout root>/bin/compose-doc-append-entry" [--flag value]...
  * Rejects anything but one invocation, redirects, wrong interpreter/script
- * path, unresolvable checkout root. Consumer: the WE-21 manual recovery path in
+ * path, unresolvable checkout root. Consumer: the WE-17 manual recovery path in
  * skills/worktree-end/scripts/cleanup-cascade.md — if that command's shape
  * changes, update this matcher.
  */

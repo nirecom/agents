@@ -147,12 +147,12 @@ if run_case "V7/settings-preserved"; then
     nodejs "$SID" "$PRE"'
 S.readState(sid); S.persistMigratedState(sid);
 const onDisk = rd();
-console.log("workflow_type=" + onDisk.workflow_type +
+console.log("deliverable_type=" + onDisk.deliverable_type +
             " closes_issues=" + JSON.stringify(onDisk.closes_issues) +
             " created_at=" + onDisk.created_at);
 '
     assert_eq "V7/settings-preserved" \
-        "workflow_type=wf-code closes_issues=[1733] created_at=2026-06-20T09:00:00.000Z" "$NODE_OUT"
+        "deliverable_type=wf-code closes_issues=[1733] created_at=2026-06-20T09:00:00.000Z" "$NODE_OUT"
 fi
 
 echo "== V8: one readState persists the current version; the second read is byte-identical =="
@@ -206,11 +206,11 @@ fs.writeFileSync(p, JSON.stringify({
 const S = require("./hooks/workflow-state/state-io");
 const st = S.readState(process.env.SID);
 const steps = st.events.filter((e) => e.kind === "step_status").map((e) => e.step).sort().join(",");
-console.log("version=" + st.version + " steps=" + steps + " workflow_type=" + st.workflow_type +
+console.log("version=" + st.version + " steps=" + steps + " deliverable_type=" + st.deliverable_type +
             " retired_present=" + /"step":"(verify|branching_decision)"/.test(JSON.stringify(st.events)));
 '
     assert_eq "V10/field-backfill-then-v2" \
-        "version=$EXPECT_STATE_VERSION steps=branching_complete,run_tests,write_code workflow_type=wf-meta retired_present=false" "$NODE_OUT"
+        "version=$EXPECT_STATE_VERSION steps=branching_complete,run_tests,write_code deliverable_type=wf-meta retired_present=false" "$NODE_OUT"
 fi
 
 echo "== V11: an already-current file is not re-migrated (no event churn) =="

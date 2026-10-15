@@ -40,7 +40,7 @@ CI-3a. **Decomposition impact** — computed non-interactively by `precheck-comp
    - The precheck snapshot records `VERDICT: wf-meta | <signal IDs>` or `VERDICT: wf-code | none` per trial, with `(companion-driven)` annotations.
    - **wf-code**: proceed silently to CI-4 (no user prompt).
    - **wf-meta** (≥2 signals): the sub-deliverable list is displayed in the MAIN CONVERSATION per `reference/companion-batch-presentation.md` (#1096 — never inside AskUserQuestion). Ask at most ONE wf-meta confirmation AskUserQuestion (pre-announced): "Proceed in WF-META mode (planning only, no implementation this session)?" — options "Yes, WF-META (planning only)" / "No, WF-CODE (implement this session)".
-     - **WF-META**: use `$CLAUDE_CODE_SESSION_ID` as `SESSION_ID`; run `node "$AGENTS_MAIN_ROOT/bin/workflow/set-workflow-type" "$SESSION_ID" "wf-meta"` (separate Bash call); proceed to CI-4. After CI-5, route to `make-outline-plan`; next-step auto-skips the non-applicable WF-CODE steps.
+     - **WF-META**: use `$CLAUDE_CODE_SESSION_ID` as `SESSION_ID`; run `node "$AGENTS_MAIN_ROOT/bin/workflow/set-deliverable-type" "$SESSION_ID" "wf-meta"` (separate Bash call); proceed to CI-4. After CI-5, route to `make-outline-plan`; next-step auto-skips the non-applicable WF-CODE steps.
      - **WF-CODE**: proceed silently to CI-4. Never auto-switch to wf-meta without this confirmation.
 
 CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
@@ -65,12 +65,10 @@ CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
 
 CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Use `$CLAUDE_CODE_SESSION_ID` as `<session-id>`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
 
-CI-4a. **Record `closes_issues` into session state** (the only point where Path C's `closes_issues` gets populated): `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session "$SESSION_ID"` (separate Bash call; routes through the write-once cache in `hooks/workflow-state/session-facts.js`).
-
 CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
 Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"` alone in the next turn; after Allow, run Completion and co-emit the `make-outline-plan` Skill invocation. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
 
-CI-5a. When `closes_issues` is non-empty and a Revise loop substantively changed intent.md, run per issue N: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `closes_issues` is empty (Path C).
+CI-5a. When a Revise loop substantively changed intent.md, run per issue N in the revised intent.md `## Issues`: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `## Issues` is empty (Path C).
 
 CI-6. This in-skill step exits exclusively via the Completion section below, where CI-C2 applies the `skills/_shared/survey-artifact-valid.md` validity check — the skill terminates only after CI-C1 emits the completion sentinel.
 
@@ -92,9 +90,8 @@ CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on it
 - `UNAPPROVED` → stop Completion; restart from the CI-5 presentation turn.
 - `APPROVAL_UNKNOWN` → stop Completion; tell the user the intent approval could not be confirmed, then end the turn.
 - `CREATED:<N>` (Path C) → backfill `## Issues` from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>`, where `<title>` is the `**Title:**` line's content (matches the created issue's actual title) (Read + Edit). Re-run **guard-loop only**: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"` → branch on its token below.
-- `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from closes_issues and continue" (when `len(closes_issues) >= 2` only) / "Abort session" → re-run run-completion.sh.
-  - Remove-and-continue branch: after removing the issue from closes_issues, also remove the corresponding `- #N: title` line from the `## Issues` section of the in-progress `intent.md` (and from `outline.md` if it already exists).
-  - This keeps plan artifacts in sync with closes_issues — stale `- #N:` entries cause confusion in downstream steps.
+- `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from `## Issues` and continue" (when intent.md `## Issues` has ≥ 2 entries only) / "Abort session" → re-run run-completion.sh.
+  - Remove-and-continue branch: delete the `- #N: title` line from intent.md `## Issues` (and from `outline.md` if it exists); `closes_issues` follows it.
 - `SCAN_BLOCKED` (Path C) → read the path printed by `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session "<session-id>" --file intent-scan-block.txt`; `AskUserQuestion` "Outbound scan blocked the tracking-issue body. How to proceed?" — "Fix intent.md and retry" (then re-run `run-completion.sh`) / "Abort session".
 - `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session". A rc=2 caused by session-id resolution failure is recoverable by re-running with `--session-id "$CLAUDE_CODE_SESSION_ID"`.
 - `NEED_ISSUE` → invoke `/issue-create` → backfill `## Issues` → re-run guard-loop only.
@@ -105,7 +102,7 @@ Note (CPR-ORTH Orthogonality): no new workflow sentinel is introduced. Interacti
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_MAIN_ROOT/bin/cc-session-title" set-issue "<PLANS_DIR>"` (the CLI defaults `<cwd>` to its own working directory; mirrors workflow-init Path A A1b; call after intent.md is written).
-CI-C1b. **Complexity evaluation + outline-skip dispatch**: follow `skills/_shared/complexity-and-outline-skip.md` end to end (judge → Write the signals CSV → one `record-complexity-and-skip --dispatch-only` call → branch on the printed `SKIP_DISPATCH` value). Its COS-4 branch outcome resumes here at CI-C2.
+CI-C1b. **Complexity evaluation + outline-skip judgment**: follow `skills/_shared/complexity-and-outline-skip.md` end to end; its COS-3 outcome resumes here at CI-C2.
 CI-C2. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
    - Both valid → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.

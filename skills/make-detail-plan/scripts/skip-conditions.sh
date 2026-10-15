@@ -11,8 +11,8 @@ Then skip judge-task-complexity and draft the plan directly.
 
 ## Skipping This Stage (no detail plan)
 
-PRIMARY signal: when a skip_judgment record (all 3 conditions true) was recorded
-at make-outline-plan MOP-C1 or clarify-intent CI-C1b, gate-plan-skip-sentinel.js
+PRIMARY signal: when a skip_judgment record (all conditions true) was recorded
+by jev-judge finalize, gate-plan-skip-sentinel.js
 auto-approves the DETAIL_NOT_NEEDED sentinel and next-step marks detail as skipped,
 so this stage does not launch.
 

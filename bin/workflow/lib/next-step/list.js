@@ -11,6 +11,9 @@ const {
 const {
   reconcileEffectiveState,
 } = require("../../../../hooks/workflow-state/effective-state");
+const { resolveSessionProfile } = require("../../../../hooks/workflow-state/session-profile");
+const { getClosesIssues } = require("../../../../hooks/workflow-state/session-facts");
+const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
 const { STEP_DESC, isTerminalStep } = require("./steps");
 const { resolveRepoDir } = require("./repo-dir");
 
@@ -42,16 +45,15 @@ function renderListWithState(sid) {
     return renderListPlain();
   }
 
-  const isWfMeta = (state.workflow_type === "wf-meta");
-
   // Unified derivation (#1681): --list must show exactly what the gates see,
   // including veto de-skip and post-veto reset. resolveAll:true because a list
   // has no "current step" cutoff — every row is rendered.
   let listSnapshot;
   try {
-    listSnapshot = reconcileEffectiveState(state, sid, {
-      repoDir: resolveRepoDir(), isWfMeta, resolveAll: true,
-    });
+    const repoDir = resolveRepoDir();
+    const profile = resolveSessionProfile(state, sid, { repoDir });
+    // #2527: navigate boundary resets like the verdict, but never query the network.
+    listSnapshot = reconcileEffectiveState(state, sid, { repoDir, profile, resolveAll: true, deliveryBoundary: "navigate" });
     if (!listSnapshot || !listSnapshot.steps) return renderListPlain();
   } catch (_) {
     return renderListPlain();
@@ -67,8 +69,12 @@ function renderListWithState(sid) {
     if (!isSettledStatus(s)) { currentIdx = i; break; }
   }
 
-  const issues = state.closes_issues;
-  const issuesEmpty = !issues || !Array.isArray(issues) || issues.length === 0;
+  let issuesEmpty;
+  try {
+    issuesEmpty = getClosesIssues(sid, { plansDir: getWorkflowPlansDir() }).length === 0;
+  } catch (_) {
+    return renderListPlain();
+  }
 
   const lines = [];
   for (let i = 0; i < VALID_STEPS.length; i++) {

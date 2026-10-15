@@ -49,8 +49,8 @@ try {
     // wall-clock timestamp and `skip_verdict` carries recorded_at + a per-path
     // `source` token, so both are compared separately by the caller.
     // `skip_judgment.recorded_at` is the same kind of wall-clock stamp:
-    // recordSkipJudgment rewrites it unconditionally on every call, so it is
-    // dropped by name. The rest of skip_judgment (conditions, all_conditions_met,
+    // recordSkipJudgment stamps it on every write (a same-ticket replay since
+    // #2460 does not write at all), so it is dropped by name. The rest of skip_judgment (conditions, all_conditions_met,
     // judgment_source) stays IN the comparison — that is the part a repeat must
     // not disturb.
     const m = stepsOf(wf.readState(sid));

@@ -235,7 +235,7 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     // Stage 2 — diff-based re-audit for a missing/non-BLOCK terminal run.
     if (!tr5Run) return arm(ALL_SUB_CHECK_IDS.slice(), false);
     if (!currentFk) {
-      // Primary fix for #2323: a null freshness_key would otherwise re-arm the WE-8
+      // Primary fix for #2323: a null freshness_key would otherwise re-arm the USER_VERIFIED
       // sentinel on every emission, looping forever. When the shared null-freshness
       // predicate certifies the last TR5 run (selfRecovering), approve instead.
       if (selfRecovering) { approveFn(); return { authoritative: true }; }

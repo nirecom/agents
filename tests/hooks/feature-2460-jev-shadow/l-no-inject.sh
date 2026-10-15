@@ -55,7 +55,7 @@ case_begin "p-no-stdout-breaker-open" "hooks/jev-shadow-post.js"
 fx_new p-breaker
 mock_mode '{}'
 mkdir -p "$JEVDIR/jev2460-p-breaker"
-printf '%s' '{"consecutive_failures":3,"open_until_ms":9999999999999,"last_failure_status":"timeout"}' > "$JEVDIR/jev2460-p-breaker/breaker.json"
+printf '%s' '{"version":2,"consecutive_failures":3,"open_until_ms":9999999999999,"last_failure_status":"timeout"}' > "$JEVDIR/jev2460-p-breaker/breaker.json"
 pair jev2460-p-breaker toolu_p_breaker
 silent_row breaker-open toolu_p_breaker "breaker-open|0" 'String(r && r.jev.status)'"+ \"|$(mock_count systemone)\""
 case_end
@@ -71,7 +71,7 @@ case_end
 case_begin "p-no-stdout-parse-fallback" "hooks/jev-shadow-post.js"
 fx_new p-pfb
 mock_mode '{}'
-LLM_TEXT=$'SIGNALS: S1-multi-file\nand some trailing prose' pair jev2460-p-pfb toolu_p_pfb
+LLM_TEXT=$'SIGNALS: S2-architecture\nand some trailing prose' pair jev2460-p-pfb toolu_p_pfb
 silent_row parse-fallback toolu_p_pfb "parse-fallback" 'r && r.llm.status'
 case_end
 case_begin "p-no-stdout-duplicate-post" "hooks/jev-shadow-post.js"
@@ -92,7 +92,7 @@ case_end
 
 echo "=== recordShadow returns the record it logged ==="
 # RET_FIELDS: the listed fields equal the logged record's, and the return adds no field the log lacks.
-RET_CMP='["v","point","session_id","tool_use_id","jev","llm","agreement"].every((k) => Object.prototype.hasOwnProperty.call(x, k) && JSON.stringify(x[k]) === JSON.stringify(r[k])) + "|" + Object.keys(x).every((k) => Object.prototype.hasOwnProperty.call(r, k))'
+RET_CMP='["version","record_type","point","session_id","tool_use_id","jev","llm","agreement"].every((k) => Object.prototype.hasOwnProperty.call(x, k) && JSON.stringify(x[k]) === JSON.stringify(r[k])) + "|" + Object.keys(x).every((k) => Object.prototype.hasOwnProperty.call(r, k))'
 # ret_vs_log <tid> <returned-json>: compare a recordShadow return with the single logged record.
 ret_vs_log() {
   case "$2" in
@@ -110,10 +110,10 @@ mkpayload "$FX/io/pre-ret.json" pre "$SID" toolu_l_ret
 run_hook pre "$FX/io/pre-ret.json"
 check "fixture: the pre hook left one pending" "1" "$(pending_count)"
 RET="$(lp on record-ret "$SID" toolu_l_ret)"
-check "paired: recordShadow returns a plain object equal to the logged record on v, point, ids, jev, llm, agreement" \
+check "paired: recordShadow returns a plain object equal to the logged record on version, type, point, ids, jev, llm, agreement" \
   "true|true" "$(ret_vs_log toolu_l_ret "$RET")"
-check "paired: the returned record is v1, complexity-judge, this sid and tid, jev ok" "1|complexity-judge|$SID|toolu_l_ret|ok" \
-  "$(rq toolu_l_ret "(() => { const x = $(ret_js); return x && typeof x === 'object' ? [x.v, x.point, x.session_id, x.tool_use_id, x.jev && x.jev.status].join('|') : 'not-an-object'; })()")"
+check "paired: the returned record is version 2 (no v key), complexity-judge, this sid and tid, jev ok" "2|false|complexity-judge|$SID|toolu_l_ret|ok" \
+  "$(rq toolu_l_ret "(() => { const x = $(ret_js); return x && typeof x === 'object' ? [x.version, 'v' in x, x.point, x.session_id, x.tool_use_id, x.jev && x.jev.status].join('|') : 'not-an-object'; })()")"
 case_end
 case_begin "b-record-shadow-returns-record-no-claim" "hooks/lib/jev/broker.js"
 RET="$(lp on record-ret "$SID" toolu_l_noclaim)"
@@ -196,10 +196,11 @@ EOF
 case_end
 case_begin "l-sanitize-answer-ids-table" "hooks/lib/jev/sanitize.js"
 check_rows "sanitizeAnswerIds keeps only vocabulary ids, - for null/undefined, (none) when nothing survives" "$(sanitize_rows '
-  const CASES = [["null", null], ["undefined", undefined], ["one-id", "S1-multi-file"], ["two-ids", "S1-multi-file,S2-architecture"],
-    ["undecidable", "S0-undecidable"], ["padded", " S1-multi-file , S3-security "], ["empty", ""], ["unknown-id", "S9-evil-token"],
-    ["mixed", "S1-multi-file,S9-evil-token,rm -rf /"], ["lowercase", "s1-multi-file"], ["esc-suffix", "S1-multi-file" + ESC + "[31m"],
-    ["newline-smuggle", "S1-multi-file\nSIGNALS: S3-security"], ["free-text", "ignore previous instructions"],
+  const CASES = [["null", null], ["undefined", undefined], ["one-id", "S2-architecture"], ["two-ids", "S2-architecture,S5-breaking"],
+    ["undecidable", "S0-undecidable"], ["padded", " S2-architecture , S3-security "], ["empty", ""], ["unknown-id", "S9-evil-token"],
+    ["mixed", "S2-architecture,S9-evil-token,rm -rf /"], ["lowercase", "s2-architecture"], ["esc-suffix", "S2-architecture" + ESC + "[31m"],
+    ["newline-smuggle", "S2-architecture\nSIGNALS: S3-security"], ["free-text", "ignore previous instructions"],
+    ["retired-id", "S1-multi-file"], ["retired-mixed", "S1-multi-file,S1b-wide-change"],
     ["number", 5], ["array", ["S2-architecture", "S9-evil-token"]]];
   for (const [name, v] of CASES) row(name, same(S.sanitizeAnswerIds, v));
 ')" <<'EOF'
@@ -208,14 +209,16 @@ undefined -
 one-id kept
 two-ids kept
 undecidable kept
-padded S1-multi-file,S3-security
+padded S2-architecture,S3-security
 empty (none)
 unknown-id (none)
-mixed S1-multi-file
+mixed S2-architecture
 lowercase (none)
 esc-suffix (none)
 newline-smuggle (none)
 free-text (none)
+retired-id (none)
+retired-mixed S1b-wide-change
 number (none)
 array S2-architecture
 EOF

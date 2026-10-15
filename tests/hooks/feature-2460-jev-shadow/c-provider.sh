@@ -11,6 +11,7 @@
 # latency; the live verification in the detail plan (S14) covers one real call.
 
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+use_rollback_registry
 mock_start
 SID="jev2460-c-sid"
 # A loopback URL whose port was just bound and released, so a connect is really refused
@@ -40,7 +41,7 @@ run_mode() {
 echo "=== ok response ==="
 case_begin "c-ok-answer-usage-auth" "hooks/lib/jev/provider-core.js"
 run_mode ok '{}'
-check "ok: status, answer, model, input_tokens" "ok|S1-multi-file|jev-1.13.0|296" \
+check "ok: status, answer, model, input_tokens" "ok|S2-architecture|jev-1.13.0|296" \
   "$(rq "$TID" 'r && [r.jev.status, r.jev.answer, r.jev.model, r.jev.input_tokens].join("|")')"
 check "ok: est_cost_usd = input_tokens x 0.042 / 1e6" "true" \
   "$(rq "$TID" 'r && Math.abs(r.jev.est_cost_usd - 296 * 0.042 / 1e6) < 1e-12')"
@@ -106,7 +107,12 @@ run_split() {
   PRE_RC=$HOOK_RC; PRE_OUT="$(cat "$OUT")"
   run_hook post "$FX/io/post-$TID.json" "$@"
 }
-breaker_state() { echo "$(hq json-get "$(np "$JEVDIR/$SID/breaker.json")" consecutive_failures)|$(hq json-get "$(np "$JEVDIR/$SID/breaker.json")" last_failure_status)"; }
+# breaker_state [file]: count|last status of the transport scope, or of the named scope file.
+breaker_state() {
+  local f; f="$(np "$JEVDIR/$SID/${1:-breaker.json}")"
+  echo "$(hq json-get "$f" consecutive_failures)|$(hq json-get "$f" last_failure_status)"
+}
+MAP_BREAKER="breaker-complexity-judge.json"
 # core_call <probe|run>: the provider's own return value, then the calling process's exit code.
 core_call() {
   run_with_timeout 30 node -e '
@@ -172,13 +178,13 @@ while read -r mode want; do
   mock_mode "{\"systemone\":\"$mode\"}"
   check "jevCoreRun on $mode: $want, process exits 0" "$want|rc=0" "$(core_call run)"
 done <<'ROWS'
-sized:1024 ok|null|7
-sized:65535 ok|null|7
-sized:65536 ok|null|7
+sized:1024 ok|null|3
+sized:65535 ok|null|3
+sized:65536 ok|null|3
 sized:65537 bad-response|null|none
 sized:1048576 bad-response|null|none
-chunked:65535 ok|null|7
-chunked:65536 ok|null|7
+chunked:65535 ok|null|3
+chunked:65536 ok|null|3
 chunked:65537 bad-response|null|none
 chunked:1048576 bad-response|null|none
 ROWS
@@ -189,12 +195,13 @@ check "1 MiB chunked body: recorded bad-response, http_status null, fallback_rea
   "$(rq "$TID" 'r && [r.jev.status, String(r.jev.http_status), r.fallback_reason].join("|")')"
 check "1 MiB chunked body: both hooks exit 0 (no crash on the cancelled stream), the pre hook prints nothing" "0|0|" \
   "$PRE_RC|$HOOK_RC|$PRE_OUT"
-check "1 MiB chunked body: the breaker counts one bad-response outage" "1|\"bad-response\"" "$(breaker_state)"
+check "1 MiB chunked body: the point's mapping scope counts one bad-response outage; the transport scope has none" \
+  "1|\"bad-response\"|absent" "$(breaker_state "$MAP_BREAKER")|$([ -e "$JEVDIR/$SID/breaker.json" ] && echo present || echo absent)"
 run_split capsized '{"systemone":"sized:65537"}'
 check "content-length 65537: recorded bad-response, both hooks exit 0, the pre hook prints nothing, one outage" \
-  "bad-response|0|0||1|\"bad-response\"" "$(rq "$TID" 'r && r.jev.status')|$PRE_RC|$HOOK_RC|$PRE_OUT|$(breaker_state)"
+  "bad-response|0|0||1|\"bad-response\"" "$(rq "$TID" 'r && r.jev.status')|$PRE_RC|$HOOK_RC|$PRE_OUT|$(breaker_state "$MAP_BREAKER")"
 run_split capok '{"systemone":"chunked:65536"}'
-check "exactly 65536 bytes: recorded ok with the answer, no outage counted" "ok|S1-multi-file|0" \
+check "exactly 65536 bytes: recorded ok with the answer, no outage counted" "ok|S2-architecture|0" \
   "$(rq "$TID" 'r && [r.jev.status, r.jev.answer].join("|")')|$(hq json-get "$(np "$JEVDIR/$SID/breaker.json")" consecutive_failures)"
 case_end
 
@@ -338,7 +345,7 @@ check "jevCoreRun with a dummy key and one question: status ok" "ok" "$(run_with
     const { captureTestOverrides } = require(process.argv[2]);
     const ctx = p.jevCoreInit({ sessionId: "s", overrides: captureTestOverrides({ JEV_BASE_URL: process.argv[3] }) });
     ctx.apiKey = process.argv[4];
-    const questions = { s1_multi_file: { type: "noul", question: "Does the change touch many files?" } };
+    const questions = { s2_architecture: { type: "noul", question: "Does the change touch many files?" } };
     p.jevCoreRun(ctx, { state: "STATE-2460", questions }).then((r) => process.stdout.write(r.status));
   ' "$PROVIDER_JS" "$OVERRIDES_JS" "$MOCK_URL" "$SENTINEL_KEY" 2>/dev/null < /dev/null)"
 REQ_Q="$(np "$MOCK_REQ")"
@@ -352,13 +359,13 @@ check "body parses as JSON with exactly the keys model, questions, state" "true|
   "$(hq mock-q "$REQ_Q" "(() => { $SYS let b; try { b = JSON.parse(q.body_text); } catch (_e) { return 'unparsable'; } return [b !== null && typeof b === 'object' && !Array.isArray(b), Object.keys(b).sort().join(',')].join('|'); })()")"
 check "body values: model jev-latest, state passed through, questions passed through unchanged" \
   "jev-latest|STATE-2460|true" \
-  "$(hq mock-q "$REQ_Q" "(() => { $SYS const b = JSON.parse(q.body_text); return [b.model, b.state, JSON.stringify(b.questions) === JSON.stringify({ s1_multi_file: { type: 'noul', question: 'Does the change touch many files?' } })].join('|'); })()")"
+  "$(hq mock-q "$REQ_Q" "(() => { $SYS const b = JSON.parse(q.body_text); return [b.model, b.state, JSON.stringify(b.questions) === JSON.stringify({ s2_architecture: { type: 'noul', question: 'Does the change touch many files?' } })].join('|'); })()")"
 check "the dummy key appears in no body byte and in no header other than authorization" "false|0" \
   "$(hq mock-q "$REQ_Q" "(() => { $SYS return [q.body_text.includes('$SENTINEL_KEY'), Object.keys(h).filter(k => k !== 'authorization' && String(h[k]).includes('$SENTINEL_KEY')).length].join('|'); })()")"
 case_end
 
 echo "=== model and usage sanitiser boundaries ==="
-OKANS='"answers":{"s1_multi_file":{"type":"noul","noul":0.9}}'
+OKANS='"answers":{"s2_architecture":{"type":"noul","noul":0.9}}'
 M64="$(printf 'm%.0s' $(seq 1 64))"
 M65="${M64}m"
 case_begin "c-sanitize-model-table" "hooks/lib/jev/provider-core.js"

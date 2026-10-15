@@ -3,27 +3,13 @@
 # tests/hooks/feature-1286-recorded-verdict-skip/stale-guard.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js
 # Tags: L2, workflow, skip-signal, stale-guard, scope:issue-specific
-#
+# #1310 stale-guard cases (artifact mtime vs recorded_at); sourced by the dispatcher.
 # # L3 gap
-# L2 tests inject WORKFLOW_PLANS_DIR to isolate plan artifacts. A real CC session
-# (L3) would additionally verify that the guard fires on a live session where
-# intent.md / outline.md are actually written by clarify-intent / make-outline-plan.
-# Closest-to-action mitigation: bin/check-verification-gate.sh category: skill-orchestration
-#
-# L3 gap: fs.statSync permission error (EACCES)
-# Requires OS-level file permission manipulation that is not reliably cross-platform.
-# Expected behavior per spec: fail-closed → false (same as ENOENT). Verified manually.
-# Cannot monkeypatch fs.statSync without a mocking framework (Jest/sinon) — not present here.
-#
-# L3 gap: sids with single-quote, backtick, newline, or embedded whitespace/Unicode
-# eval_hvsj interpolates sid/target directly into the node -e string, making these chars
-# untestable via this helper. Production code does not validate sid format (SESSION_ID_VALID_RE
-# is only used by isTrivial). Coverage is indirect via SG-8/SG-8b (no state file → false).
-#
-# #1310 stale-guard cases (SG-1..SG-4). Some are RED pre-implementation:
-#   SG-2, SG-2b, SG-4 expected to FAIL until hasValidSkipJudgment gains the
-#   mtime(artifact) > recorded_at guard and readSkipJudgment checks "recorded_at" in sj.
-# Sourced-then-run via the dispatcher; relies on helpers.sh being sourced.
+# Live skill-written artifacts, EACCES on statSync and quote-bearing sids are not
+# exercised; mitigation: bin/check-verification-gate.sh category: skill-orchestration.
+
+SG_SOURCE="subagent"
+SG_DETAIL_COND='{"sd_single_approach":true,"sd_no_open_decision":true}'
 
 # Isolated plans dir so artifact mtime vs recorded_at is fully controlled.
 PLANS_TEST_DIR="$TMPDIR_BASE/plans-test"
@@ -48,7 +34,7 @@ write_sg_state() {
   local base cond
   if [ "$target" = "detail" ]; then
     base="$JSON_AT_DETAIL"
-    cond='{"sd_c1":true,"sd_c2":true,"sd_c3":true}'
+    cond="$SG_DETAIL_COND"
   else
     base="$JSON_AT_OUTLINE"
     cond='{"so_c1":true,"so_c2":true}'
@@ -59,7 +45,7 @@ write_sg_state() {
       const s=JSON.parse(data);
       s.steps['$target'].skip_judgment={
         recorded_at:'$recorded_at',
-        judgment_source:'orchestrator',
+        judgment_source:'$SG_SOURCE',
         conditions:$cond,
         all_conditions_met:true
       };
@@ -74,7 +60,7 @@ write_sg_state_no_recorded_at() {
   local base cond
   if [ "$target" = "detail" ]; then
     base="$JSON_AT_DETAIL"
-    cond='{"sd_c1":true,"sd_c2":true,"sd_c3":true}'
+    cond="$SG_DETAIL_COND"
   else
     base="$JSON_AT_OUTLINE"
     cond='{"so_c1":true,"so_c2":true}'
@@ -84,7 +70,7 @@ write_sg_state_no_recorded_at() {
     process.stdin.on('end',()=>{
       const s=JSON.parse(data);
       s.steps['$target'].skip_judgment={
-        judgment_source:'orchestrator',
+        judgment_source:'$SG_SOURCE',
         conditions:$cond,
         all_conditions_met:true
       };
@@ -122,7 +108,7 @@ write_sg_state "sg2b" "detail" "2020-01-01T00:00:00.000Z"
 OUT="$(eval_hvsj "sg2b" "detail")"
 check "SG-2b: detail artifact edited after recorded_at (stale) → false" "false" "$OUT"
 
-# SG-3: outline, artifact ABSENT → stale (per intent spec: artifact 欠損 → stale 扱い → false). [RED pre-impl]
+# SG-3: outline, artifact ABSENT → stale (per intent spec: a missing artifact counts as stale → false). [RED pre-impl]
 # Note: the implementation uses ENOENT→false; existing RV-* tests that omit WORKFLOW_PLANS_DIR
 # will need artifact files added when write-code implements the guard.
 rm -f "$PLANS_TEST_DIR/sg3-intent.md"
@@ -157,7 +143,7 @@ write_sg_state_raw_ra() {
   local base cond
   if [ "$target" = "detail" ]; then
     base="$JSON_AT_DETAIL"
-    cond='{"sd_c1":true,"sd_c2":true,"sd_c3":true}'
+    cond="$SG_DETAIL_COND"
   else
     base="$JSON_AT_OUTLINE"
     cond='{"so_c1":true,"so_c2":true}'
@@ -168,7 +154,7 @@ write_sg_state_raw_ra() {
       const s=JSON.parse(data);
       s.steps['$target'].skip_judgment={
         recorded_at:$ra_js,
-        judgment_source:'orchestrator',
+        judgment_source:'$SG_SOURCE',
         conditions:$cond,
         all_conditions_met:true
       };

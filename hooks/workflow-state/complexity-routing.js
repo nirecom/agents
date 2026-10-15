@@ -13,18 +13,18 @@
 
 const ROUTING_STAGES = Object.freeze(["outline", "detail", "write_tests", "write_code"]);
 
-// Signal vocabulary. S1-S6 keep the rubric's spellings since #1350;
-// S1b-wide-change is new in #2099 (>=8 files; implies S1 — a rubric-side rule,
-// deliberately not enforced here).
+// Signal vocabulary (#1350 spellings). #2460 partitions it: the judges answer
+// JUDGED_SIGNAL_IDS at every stage; DETERMINISTIC_SIGNAL_IDS are computed only at
+// write_code from the WCD-2 file list and never emitted before it.
 const SIGNAL_IDS = Object.freeze([
-  "S1-multi-file",
   "S1b-wide-change",
   "S2-architecture",
   "S3-security",
   "S4-installer",
   "S5-breaking",
-  "S6-long-plan",
 ]);
+const JUDGED_SIGNAL_IDS = Object.freeze(["S2-architecture", "S3-security", "S5-breaking"]);
+const DETERMINISTIC_SIGNAL_IDS = Object.freeze(["S1b-wide-change", "S4-installer"]);
 
 // Reserved token meaning "the judge could not decide". Never a member of
 // SIGNAL_IDS: its presence routes to the stage's undecidable_level rather than
@@ -47,20 +47,19 @@ const STAGE_ROUTING = Object.freeze({
     default_level: "low",
     solo_escalation: Object.freeze(["S2-architecture", "S5-breaking"]),
     legacy_equivalent_escalation: Object.freeze([]),
-    combination_escalation: Object.freeze([Object.freeze(["S1b-wide-change", "S6-long-plan"])]),
+    combination_escalation: Object.freeze([]),
     undecidable_level: "high",
   }),
   detail: Object.freeze({
     default_level: "low",
     solo_escalation: Object.freeze(["S2-architecture", "S5-breaking"]),
     legacy_equivalent_escalation: Object.freeze([]),
-    combination_escalation: Object.freeze([Object.freeze(["S1b-wide-change", "S6-long-plan"])]),
+    combination_escalation: Object.freeze([]),
     undecidable_level: "high",
   }),
   write_tests: Object.freeze({
     default_level: "low",
     solo_escalation: Object.freeze([
-      "S1b-wide-change",
       "S2-architecture",
       "S3-security",
       "S4-installer",
@@ -78,12 +77,10 @@ const STAGE_ROUTING = Object.freeze({
     default_level: "low",
     solo_escalation: Object.freeze(["S3-security"]),
     legacy_equivalent_escalation: Object.freeze([
-      Object.freeze(["S1-multi-file"]),
       Object.freeze(["S1b-wide-change"]),
       Object.freeze(["S2-architecture"]),
       Object.freeze(["S4-installer"]),
       Object.freeze(["S5-breaking"]),
-      Object.freeze(["S6-long-plan"]),
     ]),
     combination_escalation: Object.freeze([]),
     undecidable_level: "high",
@@ -107,6 +104,10 @@ function validateRoutingTable(table = STAGE_ROUTING) {
   try {
     if (!isPlainObject(table)) {
       return { valid: false, errors: ["table must be a plain object (non-null, non-array)"] };
+    }
+    const partition = JUDGED_SIGNAL_IDS.concat(DETERMINISTIC_SIGNAL_IDS);
+    if (partition.length !== SIGNAL_IDS.length || !SIGNAL_IDS.every((id) => partition.includes(id))) {
+      errors.push("JUDGED_SIGNAL_IDS and DETERMINISTIC_SIGNAL_IDS must partition SIGNAL_IDS");
     }
     const keys = Object.keys(table);
     const missing = ROUTING_STAGES.filter((s) => !keys.includes(s));
@@ -245,9 +246,8 @@ function deriveStageLevels(signals) {
 }
 
 // deriveAggregateLevel(signals) -> the LEGACY common rule: any signal -> high.
-// SSOT for the CI-C1c auto-skip invariant. Deliberately NOT derived from
-// levels.write_code: a future write_code narrowing must not silently move the
-// auto-skip boundary.
+// Deliberately NOT derived from levels.write_code: a future write_code
+// narrowing must not silently move the persisted aggregate level.
 function deriveAggregateLevel(signals) {
   assertTableUsable();
   if (!Array.isArray(signals)) return "high";
@@ -270,16 +270,6 @@ function deriveLegacyStageLevels(level, signals) {
     return Object.freeze(out);
   }
   return deriveStageLevels(list);
-}
-
-// isZeroSignalLow(ce): single-sourced truth table for the "provably trivial"
-// condition CI-C1c / MOP-C1 auto-skip on.
-function isZeroSignalLow(ce) {
-  assertTableUsable();
-  if (!ce || typeof ce !== "object" || Array.isArray(ce)) return false;
-  if (ce.level !== "low") return false;
-  if (!Array.isArray(ce.signals)) return false;
-  return ce.signals.length === 0;
 }
 
 // describeStageRouting(stage): human-readable diagnostic string (mirrors the
@@ -339,6 +329,8 @@ function renderSignalIdsMarkdown() {
 module.exports = {
   ROUTING_STAGES,
   SIGNAL_IDS,
+  JUDGED_SIGNAL_IDS,
+  DETERMINISTIC_SIGNAL_IDS,
   UNDECIDABLE_SIGNAL,
   STAGE_ROUTING,
   ROUTING_TABLE_VALID,
@@ -350,7 +342,6 @@ module.exports = {
   deriveAggregateLevel,
   canonicalizeSignalsForPersistence,
   deriveLegacyStageLevels,
-  isZeroSignalLow,
   describeStageRouting,
   renderStageRoutingMarkdown,
   renderSignalIdsMarkdown,

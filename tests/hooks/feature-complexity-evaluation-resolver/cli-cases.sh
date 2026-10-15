@@ -12,7 +12,7 @@ echo "=== CE-10..CE-12: record/read CLIs ==="
 SID="ce10-$$"
 CE10_RC=0
 CE10_REC="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-  --session "$SID" --signals "S1-multi-file,S2-architecture" 2>/dev/null)" || CE10_RC=$?
+  --session "$SID" --signals "S1b-wide-change,S2-architecture" 2>/dev/null)" || CE10_RC=$?
 assert_eq "CE-10a. record CLI exit 0" '0' "$CE10_RC"
 check_contains "CE-10b. record CLI stdout carries the RECORDED_COMPLEXITY receipt" "RECORDED_COMPLEXITY" "$CE10_REC"
 check_not_contains "CE-10b2. receipt no longer echoes a caller verdict" "verdict=" "$CE10_REC"
@@ -26,7 +26,7 @@ CE10R_RC=0
 CE10_OUT="$(WORKFLOW_STATE_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$READ_CLI_N" --session "$SID" 2>/dev/null)" || CE10R_RC=$?
 assert_eq "CE-10d. read CLI exit 0" '0' "$CE10R_RC"
 check_contains "CE-10e. CLI read reports level high" "level=high" "$CE10_OUT"
-check_contains "CE-10f. CLI read reports signal S1-multi-file" "S1-multi-file" "$CE10_OUT"
+check_contains "CE-10f. CLI read reports signal S1b-wide-change" "S1b-wide-change" "$CE10_OUT"
 
 # CE-11: CLI read with no state → NONE (exit 0, not a crash).
 SID="ce11-missing-$$"

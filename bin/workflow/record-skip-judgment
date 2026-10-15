@@ -1,175 +1,170 @@
 #!/usr/bin/env node
 "use strict";
-// bin/workflow/record-skip-judgment
-// CLI wrapper for recordSkipJudgment(). Used by SKILL.md Bash calls.
-//
-// Usage:
-//   record-skip-judgment --session <sid> --target <outline|detail>
-//                        --c1 [true|false] --c2 [true|false]
-//                        [--c3 [true|false]]
-//
-// --c1/--c2/--c3 accept an optional value:
-//   bare flag (--c1)         → true
-//   --c1 true / --c1 false   → boolean
-//   --c1 <next-flag>         → true (next-flag consumed separately)
-//
-// --c3 is required when --target=detail; ignored for outline.
-// Prints to stdout: RECORDED=<target> all_conditions_met=<true|false>
-// Exits 0 on success, 1 on bad args.
-//
-// --advance (#1644) additionally settles the target step as skipped, but ONLY
-// when all_conditions_met is true — the recorded judgment is the authority, so a
-// false judgment records the judgment and stops. --next adds the ACTION block.
-// The RECORDED= line above keeps its exact bytes in every mode.
+// CLI wrapper for recordSkipJudgment(), called by jev-judge finalize (#2460).
+// record-skip-judgment --session <sid> --target <outline|detail> --cond <key>=<true|false> ...
+//   --source <jev|subagent|mixed> --ticket <16 hex> [--advance [--next]]
+// --cond names exactly CONDITION_SCHEMAS[target]; anything off-schema or unknown is exit 2.
+// The ticket must be a finalized one in the broker's own store with this very answer (verifyTicket),
+// and makes the call an idempotent resume (resumeAction: RECORDED=superseded / REPLAYED=1).
+// Prints RECORDED=<target> all_conditions_met=<true|false> with unchanged bytes in every mode;
+// --advance (#1644) settles the step as skipped when every condition is true, --next adds ACTION.
 
 const path = require("path");
-const { recordSkipJudgment, readSkipJudgment } = require(
-  path.join(__dirname, "..", "..", "hooks", "workflow-state")
-);
-const { runAdvance } = require(
-  path.join(__dirname, "lib", "next-step", "advance-shared")
-);
-const { RECORDED_VERDICT_REASONS } = require(
-  path.join(__dirname, "..", "..", "hooks", "workflow-state", "record-step-verdict")
-);
+const WS = path.join(__dirname, "..", "..", "hooks", "workflow-state");
+const { recordSkipJudgment, readSkipJudgment, readState } = require(WS);
+const { runAdvance } = require(path.join(__dirname, "lib", "next-step", "advance-shared"));
+const { RECORDED_VERDICT_REASONS } = require(path.join(WS, "record-step-verdict"));
+const { CONDITION_SCHEMAS, JUDGMENT_SOURCES } = require(path.join(WS, "skip-signal-resolver", "condition-schemas"));
+const TWO_STAGE = path.join(__dirname, "..", "..", "hooks", "lib", "jev", "two-stage");
+const { readClaims } = require(path.join(TWO_STAGE, "paths"));
+const { sourcesChanged } = require(path.join(TWO_STAGE, "source-fresh"));
 
-function verifyWrite(sj, conditions, allMet) {
+const TICKET_RE = /^[0-9a-f]{16}$/;
+const COND_RE = /^([a-z][a-z0-9_]*)=(true|false)$/;
+
+function fail(code, msg) {
+  process.stderr.write("record-skip-judgment: " + msg + "\n");
+  process.exit(code);
+}
+
+function verifyWrite(sj, conditions, allMet, source, ticket) {
   if (!sj || typeof sj !== "object" || Array.isArray(sj)) return false;
-  if (sj.judgment_source !== "orchestrator") return false;
+  if (sj.judgment_source !== source) return false;
+  if (sj.ticket !== ticket) return false;
   if (sj.all_conditions_met !== allMet) return false;
   const rc = sj.conditions;
   if (!rc || typeof rc !== "object" || Array.isArray(rc)) return false;
   const expectedKeys = Object.keys(conditions);
-  const actualKeys = Object.keys(rc);
-  if (actualKeys.length !== expectedKeys.length) return false;
+  if (Object.keys(rc).length !== expectedKeys.length) return false;
   for (const k of expectedKeys) {
     if (rc[k] !== conditions[k]) return false;
   }
   return true;
 }
 
-// Parse a boolean-flag value. Returns { value: bool, consumed: 0|1 }.
-// consumed=1 means the next token was consumed as the value.
-function parseFlagBool(argv, i, flagName) {
-  const next = argv[i + 1];
-  if (next !== undefined && next !== null && !next.startsWith("--")) {
-    const v = next.trim().toLowerCase();
-    if (v === "true") return { value: true, consumed: 1 };
-    if (v === "false") return { value: false, consumed: 1 };
-    process.stderr.write("record-skip-judgment: invalid boolean for " + flagName + ": " + next + "\n");
-    process.exit(1);
-  }
-  // bare flag → true
-  return { value: true, consumed: 0 };
-}
-
 function parseArgs(argv) {
-  const out = { session: null, target: null, c1: null, c2: null, c3: null, advance: false, next: false };
+  const out = { session: null, target: null, conds: null, source: null, ticket: null, advance: false, next: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--session") {
       out.session = argv[++i] || null;
     } else if (a === "--target") {
       out.target = argv[++i] || null;
-    } else if (a === "--c1") {
-      const r = parseFlagBool(argv, i, "--c1");
-      out.c1 = r.value;
-      i += r.consumed;
-    } else if (a === "--c2") {
-      const r = parseFlagBool(argv, i, "--c2");
-      out.c2 = r.value;
-      i += r.consumed;
-    } else if (a === "--c3") {
-      const r = parseFlagBool(argv, i, "--c3");
-      out.c3 = r.value;
-      i += r.consumed;
+    } else if (a === "--cond") {
+      const raw = argv[++i] || "";
+      const m = COND_RE.exec(raw);
+      if (!m) fail(2, "--cond takes <key>=<true|false>, got " + JSON.stringify(raw.slice(0, 80)));
+      out.conds = out.conds || new Map();
+      if (out.conds.has(m[1])) fail(2, "--cond repeats " + m[1]);
+      out.conds.set(m[1], m[2] === "true");
+    } else if (a === "--source" || a === "--ticket") {
+      const v = argv[++i];
+      if (typeof v !== "string" || out[a.slice(2)] !== null) fail(2, a + " needs one value");
+      out[a.slice(2)] = v;
     } else if (a === "--advance") {
       out.advance = true;
     } else if (a === "--next") {
       out.next = true;
     } else {
-      process.stderr.write("record-skip-judgment: unknown argument: " + a + "\n");
-      process.exit(1);
+      fail(2, "unknown argument: " + a);
     }
   }
-  // --next asks for the action AFTER the forward operation, so on its own it has
-  // nothing to follow. Rejected here — before any write — so a malformed call
-  // never leaves a half-applied judgment behind.
-  if (out.next && !out.advance) {
-    process.stderr.write("record-skip-judgment: --next is only meaningful with --advance\n");
-    process.exit(1);
-  }
+  // --next asks for the action AFTER the forward operation; rejected before any write.
+  if (out.next && !out.advance) fail(1, "--next is only meaningful with --advance");
   return out;
+}
+
+// The command line is not evidence of a judgment: the ticket must be one the broker finalized
+// for this session and target, and its written-ahead answer must be exactly the one supplied.
+// Returns the ticket's claim; exit 2 otherwise.
+function verifyTicket(sid, target, form) {
+  const claim = readClaims(sid, form.ticket).find((h) => h.kind === "cli-ticket" && h.finalized === true
+    && h.session_id === sid && h.ticket === form.ticket && h.target === target);
+  const r = claim && claim.result;
+  if (!r || r.target !== target || r.source !== form.source) fail(2, "--ticket is not a finalized ticket of this session and target");
+  const rc = r.conditions && typeof r.conditions === "object" ? r.conditions : {};
+  const keys = Object.keys(form.conditions);
+  if (Object.keys(rc).length !== keys.length || !keys.every((k) => rc[k] === form.conditions[k])) {
+    fail(2, "--cond differs from the ticket's finalized answer");
+  }
+  return claim;
+}
+
+// {conditions, source, ticket, reason}; exit 2 on anything off-schema.
+function judgmentForm(args) {
+  if (!args.conds) fail(2, "--cond is required");
+  if (!JUDGMENT_SOURCES.includes(args.source)) fail(2, "--source must be one of " + JUDGMENT_SOURCES.join("|"));
+  if (args.ticket === null || !TICKET_RE.test(args.ticket)) fail(2, "--ticket must be 16 lowercase hex");
+  const keys = CONDITION_SCHEMAS[args.target];
+  if (args.conds.size !== keys.length || !keys.every((k) => args.conds.has(k))) {
+    fail(2, "--cond must name exactly " + keys.join(", "));
+  }
+  const conditions = {};
+  for (const k of keys) conditions[k] = args.conds.get(k);
+  return { conditions, source: args.source, ticket: args.ticket, reason: RECORDED_VERDICT_REASONS[args.target] };
+}
+
+// The step's recorded status; a missing state or step reads as pending (nothing settled it).
+function stepStatus(sid, target) {
+  try {
+    const s = readState(sid);
+    return (s && s.steps && s.steps[target] && s.steps[target].status) || "pending";
+  } catch (_e) {
+    return "pending";
+  }
+}
+
+// The --ticket resume table: "write" (normal), "superseded", "replay" (nothing to do),
+// or "advance" (the judgment of this ticket is written, the advance is not).
+function resumeAction(sj, ticket, allMet, status) {
+  if (sj && sj.ticket === ticket) {
+    if (!allMet) return "replay";
+    if (status === "pending") return "advance";
+    return status === "skipped" ? "replay" : "superseded";
+  }
+  return status === "pending" ? "write" : "superseded";
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-
-  if (!args.session || !args.session.trim()) {
-    process.stderr.write("record-skip-judgment: --session is required\n");
-    process.exit(1);
-  }
-  if (args.target !== "outline" && args.target !== "detail") {
-    process.stderr.write("record-skip-judgment: --target must be outline or detail\n");
-    process.exit(1);
-  }
-  if (args.c1 === null || args.c1 === undefined) {
-    process.stderr.write("record-skip-judgment: --c1 is required\n");
-    process.exit(1);
-  }
-  if (args.c2 === null || args.c2 === undefined) {
-    process.stderr.write("record-skip-judgment: --c2 is required\n");
-    process.exit(1);
-  }
-
-  let conditions;
-  let allMet;
-
-  if (args.target === "outline") {
-    conditions = { so_c1: args.c1, so_c2: args.c2 };
-    allMet = args.c1 === true && args.c2 === true;
-  } else {
-    // detail: --c3 required
-    if (args.c3 === null || args.c3 === undefined) {
-      process.stderr.write("record-skip-judgment: --c3 is required when --target=detail\n");
-      process.exit(1);
-    }
-    conditions = { sd_c1: args.c1, sd_c2: args.c2, sd_c3: args.c3 };
-    allMet = args.c1 === true && args.c2 === true && args.c3 === true;
-  }
-
-  recordSkipJudgment(args.session.trim(), args.target, conditions, "orchestrator");
-
-  // Hardening #1 (#1300): recordSkipJudgment is fail-open/silent. Read the record
-  // back and confirm it matches EXACTLY what this invocation wrote — a failed write
-  // or a stale prior record must not be reported as success.
-  const __readBack = readSkipJudgment(args.session.trim(), args.target);
-  if (!verifyWrite(__readBack, conditions, allMet)) {
-    process.stderr.write("record-skip-judgment: write verification failed for target " + args.target + "\n");
-    // Without --advance this is the frozen exit 1. With --advance the judgment
-    // write is the first half of the forward transaction, so its failure is a
-    // record failure and carries the class's exit 2.
-    process.exit(args.advance ? 2 : 1);
-  }
-
+  if (!args.session || !args.session.trim()) fail(1, "--session is required");
+  if (args.target !== "outline" && args.target !== "detail") fail(1, "--target must be outline or detail");
+  const form = judgmentForm(args);
+  const sid = args.session.trim();
+  const claim = verifyTicket(sid, args.target, form);
+  const allMet = Object.values(form.conditions).every((v) => v === true);
   const recordedLine = "RECORDED=" + args.target + " all_conditions_met=" + allMet + "\n";
-  if (!args.advance || allMet !== true) {
-    // A false judgment is a valid recording, not an error: the step stays
-    // unsettled and the caller decides what to do next.
-    process.stdout.write(recordedLine);
+  // The judgment is already its own annotation; copying it onto the status write
+  // would emit a second skip_judgment event for the same ticket.
+  const advance = (suffix) => runAdvance({
+    session: sid, binary: "record-skip-judgment", step: args.target, status: "skipped",
+    skipReason: form.reason, next: args.next, prefix: recordedLine, suffix,
+  });
+
+  const action = resumeAction(readSkipJudgment(sid, args.target), form.ticket, allMet, stepStatus(sid, args.target));
+  if (action === "superseded") {
+    process.stdout.write("RECORDED=superseded\n");
     process.exit(0);
   }
-
-  runAdvance({
-    session: args.session.trim(),
-    binary: "record-skip-judgment",
-    step: args.target,
-    status: "skipped",
-    skipReason: RECORDED_VERDICT_REASONS[args.target],
-    skipJudgment: __readBack,
-    next: args.next,
-    prefix: recordedLine,
-  });
+  // A skip that is still to be written or advanced must describe the sources as they are now.
+  if (allMet && action !== "replay" && sourcesChanged(sid, claim.stage, claim.artifacts_sha256)) {
+    fail(2, "the ticket's sources changed since its query");
+  }
+  if (action === "advance" && args.advance) advance("REPLAYED=1\n");
+  const replayed = action !== "write";
+  if (!replayed) {
+    recordSkipJudgment(sid, args.target, form.conditions, form.source, { ticket: form.ticket });
+    // Hardening #1 (#1300): recordSkipJudgment is fail-open/silent, so read the record
+    // back; a failed write or a stale prior record is never reported as success.
+    const readBack = readSkipJudgment(sid, args.target);
+    if (!verifyWrite(readBack, form.conditions, allMet, form.source, form.ticket)) {
+      // With --advance the write is the first half of the forward transaction: exit 2.
+      fail(args.advance ? 2 : 1, "write verification failed for target " + args.target);
+    }
+    if (args.advance && allMet) advance("");
+  }
+  process.stdout.write(recordedLine + (replayed ? "REPLAYED=1\n" : ""));
+  process.exit(0);
 }
 
 main();

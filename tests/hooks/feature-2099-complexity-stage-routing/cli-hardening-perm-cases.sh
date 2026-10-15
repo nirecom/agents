@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/cli-hardening-perm-cases.sh
-# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/record-complexity-and-skip
+# Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation
 # Tags: complexity, routing, cli, permissions, hardening, scope:issue-specific
 # Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
 # The H-PERM family, split out of cli-hardening-cases.sh at the 500-line HARD
@@ -17,24 +17,15 @@ d2099h_perm_probe() {
     chmod 644 "$f" 2>/dev/null || true
 }
 
-# One write through whichever writer CLI is under test, with that CLI's own
-# interpreter and required arguments. `record-complexity-and-skip` is a bash
-# script: run through `node` it dies on a syntax error before touching the disk,
-# and "non-zero exit, nothing written" would then be true of every permission
-# case for the wrong reason — Node's parser, not the wrapper's error handling.
+# One write through the writer CLI under test, with that CLI's own interpreter
+# (read from its shebang, so a parser error is never mistaken for a refusal).
 d2099h_write_invoke() {
     local bin="$1" sid="$2" signals="$3" runner
     runner=$(d2099_cli_runner "$bin")
-    case "$bin" in
-        "$BIN_RECORD_SKIP")
-            run_with_timeout "$runner" "$bin" --session "$sid" \
-                --signals "$signals" --target outline 2>&1 ;;
-        *)
-            run_with_timeout "$runner" "$bin" --session "$sid" --signals "$signals" 2>&1 ;;
-    esac
+    run_with_timeout "$runner" "$bin" --session "$sid" --signals "$signals" 2>&1
 }
 
-# H-PERM: both writer CLIs must fail loudly on an unwritable EXISTING state file,
+# H-PERM: the writer CLI must fail loudly on an unwritable EXISTING state file,
 # leave its bytes intact and print no receipt; the reader stays fail-open.
 d2099h_readonly_state_file() {
     local bin sid p before rc out enforced
@@ -50,13 +41,13 @@ d2099h_readonly_state_file() {
         return
     fi
 
-    for bin in "$BIN_RECORD" "$BIN_RECORD_SKIP"; do
+    for bin in "$BIN_RECORD"; do
         sid=$(new_session perm)
         # S2-architecture, because H-PERM-6 below reads `--stage detail` and
-        # wants the pre-existing record to come back HIGH. S2 is detail's
-        # solo_escalation; S1-multi-file escalates write_code only, so detail
-        # would read back low (detail.md D2) and the assertion would fail for a
-        # routing reason rather than a permission one.
+        # wants the pre-existing record to come back HIGH. S2 routes detail
+        # high; S1b-wide-change escalates write_code only, so detail would read
+        # back low and the assertion would fail for a routing reason rather
+        # than a permission one.
         run_with_timeout node "$BIN_RECORD" --session "$sid" --signals "S2-architecture" >/dev/null 2>&1
         p="$WORKFLOW_DIR/$sid.json"
         if [ ! -f "$p" ]; then
@@ -96,50 +87,65 @@ d2099h_readonly_state_file() {
     done
 }
 
-# --- H-PERM-CREATE: the first-ever write, denied at the FILE ------------------
-# The creation path is the one H-PERM cannot reach: there, a record already
-# exists. A read-only directory would express it, but this platform ignores
-# directory mode (block below), while it does enforce the file bit — so the
-# target path is pre-created empty and read-only. The wrapper's first write for
-# that session is then a create-shaped write onto a path it cannot touch.
+# --- H-PERM-CREATE: the first-ever evaluation, denied at the FILE ------------
+# The path H-PERM cannot reach: there, an evaluation already exists. A
+# read-only directory would express a true file CREATE, but this platform
+# ignores directory mode (block below), and a pre-created EMPTY file is refused
+# by the writer as corrupt JSON regardless of its mode — so the target is a
+# freshly seeded session (valid state, no evaluation yet) made read-only. The
+# writer's first evaluation for that session then lands on a path it cannot touch.
+# A zero-signal control is the input that used to auto-skip (#2460), so that
+# control must also show the record skipped no step.
 d2099h_creation_denied_file() {
-    local sid p rc out before enforced ctl_sid ctl_rc=0
+    local bin="$1" ctl_signals="$2" tag sid p rc out before enforced ctl_sid ctl_rc=0
+    tag=$(basename "$bin")
     enforced=$(d2099h_perm_probe)
     if [ "$enforced" != "enforced" ]; then
-        skip "H-PERM-CREATE unwritable creation target — this platform does not enforce chmod 444 on files ($enforced)"
+        skip "H-PERM-CREATE [$tag] unwritable creation target — this platform does not enforce chmod 444 on files ($enforced)"
         return
     fi
 
-    # Sanctioned half first: the same call on a writable path must SUCCEED, or
-    # the denial below proves nothing about permissions.
+    # Sanctioned half first: the same call onto the same shape — a freshly
+    # seeded session — that is writable must SUCCEED, or the denial below
+    # proves nothing about permissions.
     ctl_sid=$(new_session permcreatectl)
-    out=$(d2099h_write_invoke "$BIN_RECORD_SKIP" "$ctl_sid" "S1-multi-file") || ctl_rc=$?
+    out=$(d2099h_write_invoke "$bin" "$ctl_sid" "$ctl_signals") || ctl_rc=$?
     if [ "$ctl_rc" -ne 0 ]; then
-        fail "H-PERM-CREATE-0 unattributable: record-complexity-and-skip fails on a WRITABLE state path too (exit $ctl_rc), so a denial below would prove nothing about permissions. Output: [$out]"
+        fail "H-PERM-CREATE-0 [$tag] unattributable: it fails on a WRITABLE freshly seeded session too (exit $ctl_rc), so a denial below would prove nothing about permissions. Output: [$out]"
         return
     fi
-    pass "H-PERM-CREATE-0 record-complexity-and-skip succeeds on a writable state path (control)"
+    pass "H-PERM-CREATE-0 [$tag] succeeds on a writable freshly seeded session (control)"
+    if [ -z "$ctl_signals" ]; then
+        assert_eq "H-PERM-CREATE-0n [$tag] ... recording the evaluation and skipping no step" \
+            "ce=1 outline=pending detail=pending skip=0" \
+            "$(d2099_side_effects "$ctl_sid" | cut -d' ' -f1) $(d2099_no_skip_view "$ctl_sid")"
+    fi
 
-    sid="s2099-permcreate-$$-$RANDOM"
+    sid=$(new_session permcreate)
     p="$WORKFLOW_DIR/$sid.json"
-    : > "$p"
+    if [ ! -f "$p" ]; then
+        fail "H-PERM-CREATE [$tag] unattributable: no seeded state file at $p to make read-only"
+        return
+    fi
+    assert_eq "H-PERM-CREATE-0b [$tag] the seeded session holds no evaluation yet, so the denied write is the first one" \
+        "ce=0 skip=0" "$(d2099_side_effects "$sid")"
     before=$(cksum < "$p")
     chmod 444 "$p" 2>/dev/null || true
     rc=0
-    out=$(d2099h_write_invoke "$BIN_RECORD_SKIP" "$sid" "S3-security") || rc=$?
+    out=$(d2099h_write_invoke "$bin" "$sid" "S3-security") || rc=$?
     chmod 644 "$p" 2>/dev/null || true
 
     if [ "$rc" -ne 0 ]; then
-        pass "H-PERM-CREATE-1 record-complexity-and-skip exits non-zero when its target state file cannot be written ($rc)"
+        pass "H-PERM-CREATE-1 [$tag] exits non-zero when its target state file cannot be written ($rc)"
     else
-        fail "H-PERM-CREATE-1 record-complexity-and-skip exited 0 onto an unwritable target — a skip judgment reported as recorded but never stored"
+        fail "H-PERM-CREATE-1 [$tag] exited 0 onto an unwritable target — an evaluation reported as recorded but never stored"
     fi
-    assert_not_contains "H-PERM-CREATE-2 ... and prints no success receipt" "RECORDED_COMPLEXITY" "$out"
-    assert_eq "H-PERM-CREATE-3 ... leaving the unwritable target byte-identical" "$before" "$(cksum < "$p")"
+    assert_not_contains "H-PERM-CREATE-2 [$tag] ... and prints no success receipt" "RECORDED_COMPLEXITY" "$out"
+    assert_eq "H-PERM-CREATE-3 [$tag] ... leaving the unwritable target byte-identical" "$before" "$(cksum < "$p")"
     if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
-        pass "H-PERM-CREATE-4 ... and says something diagnostic"
+        pass "H-PERM-CREATE-4 [$tag] ... and says something diagnostic"
     else
-        fail "H-PERM-CREATE-4 ... but produced NO diagnostic output at all"
+        fail "H-PERM-CREATE-4 [$tag] ... but produced NO diagnostic output at all"
     fi
 }
 
@@ -161,7 +167,9 @@ d2099h_unreadable_probe() {
 }
 
 d2099h_unreadable_state_file() {
-    local sid p before after rc out err enforced canary="S6-long-plan"
+    # S5-breaking: a signal id that persists verbatim. A retired id (S6) would
+    # be stored as UNRECOGNIZED(n), making the leak assertions vacuous.
+    local sid p before after rc out err enforced canary="S5-breaking"
     enforced=$(d2099h_unreadable_probe)
     if [ "$enforced" != "enforced" ]; then
         skip "H-PERM-READ unreadable state file — this platform does not enforce chmod 000 on files ($enforced)"
@@ -214,7 +222,22 @@ d2099h_readonly_state_dir_gap() {
     skip "H-PERM-DIR record into a creation-denying state directory — see the Skipped-Because block above"
 }
 
+case_begin "perm-readonly-state-file" "bin/workflow/record-complexity-evaluation"
 d2099h_readonly_state_file
+case_end
+
+case_begin "perm-unreadable-state-file" "bin/workflow/read-complexity-evaluation"
 d2099h_unreadable_state_file
-d2099h_creation_denied_file
+case_end
+
+case_begin "perm-creation-denied-file" "bin/workflow/record-complexity-evaluation"
+d2099h_creation_denied_file "$BIN_RECORD" "S1b-wide-change"
+case_end
+
+case_begin "perm-creation-denied-file-zero-signal" "bin/workflow/record-complexity-evaluation"
+d2099h_creation_denied_file "$BIN_RECORD" ""
+case_end
+
+case_begin "perm-readonly-state-dir-gap" "bin/workflow/record-complexity-evaluation"
 d2099h_readonly_state_dir_gap
+case_end

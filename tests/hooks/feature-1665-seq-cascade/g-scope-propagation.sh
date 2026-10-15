@@ -9,12 +9,9 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
-# G — R5 propagation scope: the cascade lives INSIDE reconcileEffectiveState, so next-step,
-# --list and the gate must agree (else the gate could pass unreviewed code). All three run as
-# real subprocesses, each paired (CPR-ORTH) with a run_outcome=pass control.
-
-# TL3 gap: whether workflow-gate.js is registered as a PreToolUse hook in the deployed
-# settings.json is not checked here — see WORKFLOW_USER_VERIFIED preflight (hook-registration).
+# G — R5: the cascade lives in reconcileEffectiveState, so next-step, list and the
+# gate (real subprocesses) must agree; each paired with a run_outcome=pass control.
+# TL3 gap: PreToolUse registration of workflow-gate.js is not checked (hook-registration).
 
 CASE_TAG=g
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/helpers.sh"
@@ -41,7 +38,6 @@ seed() {
     js_g '
 const S = require(process.env.M_SIO);
 const sid = process.env.SEED_SID;
-require(process.env.M_FIX).approveLive(sid, "clarify_intent"); // #2277 gated complete
 for (const [s, st] of [
   ["workflow_init", "complete"], ["clarify_intent", "complete"],
   ["research", "skipped"], ["outline", "skipped"], ["detail", "skipped"],
@@ -75,7 +71,7 @@ LS_PASS="$("$RWT" 120 node "$NEXT_STEP" --list --session "$SID_PASS" 2>&1)"
 # list.js pads the ordinal to width 2 with a LEADING SPACE (pad2), so rows 1-9
 # render as "[x]  9  step" — the row regex must accept " N" as well as "NN".
 ROWS="$(printf '%s\n' "$LS_FAIL" | grep -cE '^\[.\] [ 0-9][0-9]  ')"
-assert_eq "G3 --list renders one row per VALID_STEPS entry" "16" "$ROWS"
+assert_eq "G3 --list renders one row per VALID_STEPS entry" "19" "$ROWS"
 
 WC_ROW_FAIL="$(printf '%s\n' "$LS_FAIL" | grep -E '^\[.\] [ 0-9][0-9]  write_code ' || true)"
 WC_ROW_PASS="$(printf '%s\n' "$LS_PASS" | grep -E '^\[.\] [ 0-9][0-9]  write_code ' || true)"
