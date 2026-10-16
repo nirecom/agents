@@ -1,9 +1,11 @@
 // The command-line surface: argument parsing, validation, and the two passes.
 //
 // `--prune-stub-sessions` is ADDITIVE, not a mode selector — a run that asked for a
-// prune still patches the extension, and the exit code is the union of both passes.
-// Both validations run before either pass, so a caller error never leaves the tree
-// half-processed.
+// prune still patches the extension first. The prune is GATED on that patch: if any
+// directory ended `refused`/`failed`, worktree sessions are still hidden, so the prune
+// is skipped (with a report line saying why) and the exit code is 1. Otherwise the exit
+// code is the union of both passes. Both validations run before either pass, so a
+// caller error never leaves the tree half-processed.
 'use strict';
 
 const fs = require('fs');
@@ -24,10 +26,14 @@ const USAGE = [
   '  --prune-stub-sessions    Additionally displace title-only stub session files whose',
   '                           content is already carried by a surviving real copy.',
   '                           Each one is renamed to <uuid>.jsonl.bak, never deleted.',
+  '                           Skipped when the extension patch refused or failed.',
   '  --claude-projects-dir <path>',
   '                           Session-store root to scan (absolute, repeatable).',
   '                           Requires --prune-stub-sessions. When given, the default',
   '                           ~/.claude/projects root is not scanned.',
+  '  --legacy-single-literal  Fallback: patch the single includeWorktrees:!1 literal in',
+  '                           the bundle instead of the one inside sessionListOptions().',
+  '                           No guarantee it targets the right site on newer bundles.',
   '  --dry-run                Classify and report only; write nothing.',
   '  --help                   Show this help and exit.',
   '',
@@ -165,6 +171,7 @@ function main() {
         'extensions-dir': { type: 'string', multiple: true },
         'prune-stub-sessions': { type: 'boolean' },
         'claude-projects-dir': { type: 'string', multiple: true },
+        'legacy-single-literal': { type: 'boolean' },
         'dry-run': { type: 'boolean' },
         help: { type: 'boolean' },
       },
@@ -205,10 +212,20 @@ function main() {
   const dryRun = parsed.values['dry-run'] === true;
   const home = os.homedir();
 
-  const patched = runPatch({ home, overrides, dryRun });
+  const method = parsed.values['legacy-single-literal'] === true ? 'legacy' : 'anchor';
+
+  const patched = runPatch({ home, overrides, dryRun, method });
+  if (patched.failed) {
+    if (prune) {
+      process.stdout.write(
+        'prune-skipped: the extension patch refused or failed — stub sessions left in place\n'
+      );
+    }
+    return 1;
+  }
   const pruned = prune ? runPrune({ home, overrides: pruneDirs, dryRun }) : { failed: false };
 
-  return patched.failed || pruned.failed ? 1 : 0;
+  return pruned.failed ? 1 : 0;
 }
 
 module.exports = { USAGE, rejectBadOverrides, rejectBadPruneDirs, runPrune, main };
