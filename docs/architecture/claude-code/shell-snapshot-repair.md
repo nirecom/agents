@@ -9,7 +9,7 @@ On Windows (Git Bash) a snapshot is occasionally captured while `PATH` is still 
 (`C:\...;C:\...`, `;`-separated). Sourced into bash, that value makes `/usr/bin` unreachable, so
 every command in the session exits 127 (command not found) until the snapshot is replaced.
 
-A snapshot in this state is called a **Windows-form snapshot** (glossary: [Windows-form snapshot](../../glossary.md#windows-form-snapshot)).
+A snapshot in this state is called a **Windows-form snapshot**.
 
 ## Repair
 

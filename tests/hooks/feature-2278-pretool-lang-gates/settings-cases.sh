@@ -159,7 +159,7 @@ else
 fi
 run_registered PreToolUse gate-plan-lang.js "$(mk_payload Write "$INTENT_TS" content "$EN_PROSE")" "$NEUTRAL_CWD" PLAN_LANG=japanese
 assert_block_prefix "SET-T4b: command spawned from settings.json, English Write to a plan artifact under PLAN_LANG=japanese → block" "$PLG_PREFIX_JA"
-run_registered PreToolUse gate-plan-lang.js "$(mk_payload Write "$INTENT_TS" content "$JA_PROSE")" "$NEUTRAL_CWD" PLAN_LANG=japanese
+run_registered PreToolUse gate-plan-lang.js "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$JA_PROSE")" "$NEUTRAL_CWD" PLAN_LANG=japanese
 assert_approve "SET-T4c: same registered command, compliant Japanese Write → approve (the registration line is not a blanket blocker)"
 
 # SET-T5: gate-worktree-notes-lang.js through its own registration line.

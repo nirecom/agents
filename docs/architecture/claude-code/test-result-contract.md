@@ -132,6 +132,9 @@ Workflow effect of `unrunnable`:
 - `/run-tests` (RNT-9) shows the `Missing runtimes:` line, asks the user to install the runtime, and never runs the baseline. Recovery is a rerun with `UNRUNNABLE=0`, or the accept below.
 - It is not a code defect: `unrunnable` is not a failing outcome for `write_code` resume or for the baseline evidence, so it triggers no fix cascade.
 
+**Dispatch settlement** is the check, run on every Bash call, of whether the session's latest test-runner dispatch has had its outcome ingested: `settled` (ingested, or no dispatch) or `unsettled` (a `.dispatched` marker without its `.ingested` marker); while unsettled, a stale `run_tests` result is demoted to `pending` on non-test calls.
+**`outcome_source`** is the `run_tests` state field holding the stem, `payload_sha256` and `outcome_sha256` of the worker outcome file the state was last written from; the baseline evidence checks it before accepting a failing baseline as pre-existing.
+
 ## Accepting UNRUNNABLE
 
 When the runtime cannot be installed on this host, `echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: {reason}>>"` completes `run_tests` without a green run. It exists so a missing runtime cannot block a session forever; it is never silent:

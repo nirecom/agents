@@ -74,6 +74,7 @@ C2: unresolved — <reason>
 ## Rules
 
 - Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
+- Apply `skills/_shared/combined-glossary.md` (reviewer directives) as a review criterion.
 - Be decisive. Do not withhold approval because of minor stylistic preferences.
 - Only use `MISSING_ALTERNATIVE` when a genuinely distinct high-level alternative is absent.
 - Never request `NEEDS_RESEARCH` — if you lack context, approve and note the gap in your justification.

@@ -52,7 +52,7 @@ Apply decision criteria to the transcript and state-file history only.
 
 ## Decision criteria
 
-Work through the checklist below; any single failure justifies WARN, repeated or compounding failures justify BLOCK:
+Work through the audit checklist below (a checklist, not mutually exclusive dimensions); any single failure justifies WARN, repeated or compounding failures justify BLOCK:
 
 1. **Cross-stage coherence** — does the work at the current stage faithfully descend from the prior stage? Outline matches intent? Detail matches outline? Code matches detail? Named pattern — Issues→Class-members gap: in intent.md (the Class members SSOT, #2228), `## Issues` entries N > `## Class members` entries M is a cross-stage coherence failure. Flag when N > 0 and M < N.
 2. **Recurrence patterns** — has the same failure mode recurred across multiple alert mode reviews? Is the session looping on a problem rather than resolving it?
@@ -96,7 +96,7 @@ If you cannot complete the review (e.g. plan artifacts missing, API error during
 
 ## Lifecycle summary
 
-The audit cycle is two-phase, arm then surface:
+The audit lifecycle is arm / surface / clear: two phases, arm then surface, and the clear re-opens the next boundary:
 
 1. **Arm** — Stop hook detects trigger, writes `audit_phase=pending`, `audit_armed_at`, `audit_cause`, then blocks with a message directing the model to invoke this agent.
 2. **Surface** — this agent runs, writes `audit_phase=done` and `audit_verdict`. On the next Stop event, `supervisor-guard.js` reads the verdict, surfaces it through `arbitrate()` (combined with any alert mode candidate), then clears `audit_phase` back to `null` so the next arm trigger can re-arm.

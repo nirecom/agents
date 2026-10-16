@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Aggregate documentation gate. Usage: review-doc-gates [--staged | --all]
 #
-# OR-folds the two doc sub-gates — review-doc-size and review-doc-heading-order —
-# resolved from this tool's own directory. --staged exits 1 when EITHER sub-gate
-# blocks, 0 only when both pass. --all is advisory (always exits 0). No mode is a
+# OR-folds the three doc sub-gates — review-doc-size, review-doc-heading-order and
+# review-doc-glossary — resolved from this tool's own directory. --staged exits 1
+# when ANY sub-gate blocks, 0 only when all pass. --all is advisory (always exits 0). No mode is a
 # SKIP (exit 0). Sub-gate output is passed through for diagnostics.
 
 set -uo pipefail
@@ -30,6 +30,7 @@ rc=0
 
 "$SCRIPT_DIR/review-doc-size" "$MODE" || rc=1
 "$SCRIPT_DIR/review-doc-heading-order" "$MODE" || rc=1
+"$SCRIPT_DIR/review-doc-glossary" "$MODE" || rc=1
 
 # --all is advisory: sub-gates already exit 0 in --all mode, but pin it here so
 # the aggregate can never block on an audit scan.

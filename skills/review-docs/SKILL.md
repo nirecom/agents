@@ -15,6 +15,8 @@ Use after `/update-docs`, once doc/changelog edits are staged, before commit.
 - The commit gate re-runs `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --staged` on every commit (TOCTOU-safe); a passing review now does not exempt a later staged edit.
 - Line limits: SSOT is `rules/coding/file-split.md` Pattern C (WARN 300, HARD 500). History/archive/CHANGELOG files are exempt.
 - README section order: SSOT is the parseable block in `rules/docs/readme.md`.
+- Glossary entry files: the glossary gate (`bin/review-doc-glossary`) enforces entry form, order and file ranges per `rules/docs/glossary.md`.
+- Judge each changed glossary entry's category fit against `rules/docs/glossary.md`, and apply `skills/_shared/combined-glossary.md` (reviewer directives) to the changed docs.
 - Fix every HARD (blocking) failure before emitting the completion sentinel; WARN findings are advisory.
 
 ## Procedure
@@ -32,4 +34,4 @@ If a doc review genuinely does not apply (no staged doc changes and none intende
 ## Relationship to Other Tools
 
 - `/update-docs` — writes the docs and changelog this step reviews (run first).
-- `bin/review-doc-gates` — the size + heading-order aggregate this step and the commit gate both call (CPR-SSOT).
+- `bin/review-doc-gates` — the size + heading-order + glossary aggregate this step and the commit gate both call (CPR-SSOT).

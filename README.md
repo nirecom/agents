@@ -206,7 +206,7 @@ workflow state transitions — step completions, skip declarations, mode switche
 `ask` permission dialog is intentional: it ensures the model cannot mark a step done
 or override a gate without explicit user confirmation.
 
-See [docs/glossary.md](docs/glossary.md) and [docs/architecture/claude-code/workflow-runtime.md](docs/architecture/claude-code/workflow-runtime.md) for details.
+See the [glossary index](docs/glossary.md) for terms and [docs/architecture/claude-code/workflow-runtime.md](docs/architecture/claude-code/workflow-runtime.md) for details.
 
 ## Features
 

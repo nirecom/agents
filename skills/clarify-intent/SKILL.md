@@ -63,6 +63,9 @@ CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
 
    After all probes: CI-4 writes a `## worktrees` section with the collected results.
 
+CI-3c. Decide the terms this session newly introduces; check each against the combined glossary per `skills/_shared/combined-glossary.md` and reuse the existing term when it is a rewording.
+Pick each term's category per `rules/docs/glossary.md`; CI-4 records the new terms in `## Glossary`.
+
 CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Use `$CLAUDE_CODE_SESSION_ID` as `<session-id>`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
 
 CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
