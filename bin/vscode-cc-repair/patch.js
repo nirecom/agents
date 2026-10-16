@@ -17,13 +17,16 @@ const { OLD_SITE, NEW_SITE, BUNDLE, patchDir } = require('./patch/apply');
 const { countPrefix, summaryLine } = require('./patch/report');
 
 // Runs the patch pass over every resolved root and writes its own report to stdout.
-// Returns { failed } — true when any directory ended `refused` or `failed`, which the
-// CLI folds into the process-wide exit code. The prune pass runs independently, so this
-// deliberately reports a boolean rather than exiting.
+// Returns { failed } — true when any directory ended `refused` or `failed`, or a root
+// could not be scanned at all (counted as `failed`: nothing was learned about its bundle),
+// which the CLI folds into the process-wide exit code and also uses to gate the prune pass
+// off, so this deliberately reports a boolean rather than exiting. `method` picks the
+// classifier counting method for the whole run (default `anchor`).
 function runPatch(options) {
   const opts = options || {};
   const overrides = Array.isArray(opts.overrides) ? opts.overrides : [];
   const dryRun = opts.dryRun === true;
+  const method = opts.method || 'anchor';
 
   const roots = resolveRoots({ home: opts.home, overrides });
   const tally = { patched: 0, already: 0, absent: 0, 'would-patch': 0, refused: 0, failed: 0 };
@@ -40,10 +43,16 @@ function runPatch(options) {
     // basename-only, so stdout is safe to paste verbatim. The stderr diagnostics deliberately
     // differ: absolute directory plus Node's error.message (also absolute), for local debugging.
     process.stdout.write('root: ' + root + '\n');
-    for (const dir of listExtensionDirs(root)) {
+    // No countPrefix here: no bundle was read, and the line is not a directory, so `dirs` stays.
+    const onError = (error) => {
+      process.stdout.write('failed  ' + path.basename(root) + '  reason=root-unreadable\n');
+      warn('failed: ' + root + ' (root-unreadable: ' + error.message + ')');
+      tally.failed += 1;
+    };
+    for (const dir of listExtensionDirs(root, { onError })) {
       let result;
       try {
-        result = patchDir(dir, { dryRun });
+        result = patchDir(dir, { dryRun, method });
       } catch (error) {
         result = { state: 'failed', counts: zeroCounts(), reasons: ['exception'] };
         warn(path.basename(dir) + ': ' + error.message);

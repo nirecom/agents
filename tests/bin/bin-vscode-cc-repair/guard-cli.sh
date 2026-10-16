@@ -1,4 +1,6 @@
 # Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Tests: bin/vscode-cc-repair
+# Tags: bin, vscode, extension-patch, scope:common, pwsh-not-required, TL2
 # T3 — classifier/guard table driven through the real CLI, so the report and exit
 # wiring is covered as well as the verdict. Every refused/absent row asserts the
 # protected resource is untouched (Pattern 1): byte-identical content, unchanged
@@ -60,7 +62,7 @@ run_c10_empty_file() {
   check_contains "C10-g05: summary counts 1 absent" "absent=1" "$CLI_OUT"
   check_contains "C10-g06: summary counts 0 refused" "refused=0" "$CLI_OUT"
   check_contains "C10-g07: all-zero count prefix on absent" \
-    "literal=0 falsy=0 truthy=0 dynamic=0 unsupported=0 unknown=0 key=0" "$CLI_OUT"
+    "literal=0 falsy=0 truthy=0 dynamic=0 unsupported=0 unknown=0 key=0 anchor=0 anchor-value=-" "$CLI_OUT"
   check "C10-g08: extension.js still zero bytes" "0" "$(bytes "$f")"
   check "C10-g09: directory still holds exactly one file" "1" "$(count_files "$dir")"
   check_no_file "C10-g10: no .bak written" "$f.bak"
@@ -90,7 +92,8 @@ run_t3g() {
 
 # C1 sanctioned-input direction, end to end: a single literal whose delimiter is
 # `)` or `;` (not `,` / `}`) must still be recognised and patched. Guards against
-# a delimiter rule tightened into an over-rejection.
+# a delimiter rule tightened into an over-rejection. A depth-1 anchor key can never be
+# followed by `)`/`;`, so this is proven under --legacy-single-literal (#2683).
 run_c1_cli_delimiters() {
   local name bodyvar body root f before patched
   while IFS='|' read -r name bodyvar; do
@@ -101,7 +104,7 @@ run_c1_cli_delimiters() {
     root="$(mktemp -d "$TMPROOT/c1d.XXXXXX")"
     make_ext_dir "$root" "$DIR_A" "$body"
     f="$root/$DIR_A/extension.js"; before="$(bytes "$f")"
-    run_cli --extensions-dir "$(native_path "$root")"
+    run_cli --extensions-dir "$(native_path "$root")" --legacy-single-literal
     check "$name: exit 0" "0" "$CLI_RC"
     check_token "$name: reported patched" "patched" "$CLI_OUT"
     check_contains "$name: summary counts 1 patched" "patched=1" "$CLI_OUT"
@@ -113,7 +116,31 @@ run_c1_cli_delimiters() {
     check "$name: no leftover tmp" "0" "$(count_tmp "$root")"
   done <<'TABLE'
 C1-d01-paren | BODY_PAREN_FALSY
-C1-d02-semi  | BODY_SEMI_FALSY
+C1-d02-semi  | BODY_SEMI_ANCHORED
+TABLE
+}
+
+# The default method on the same bodies: the key sits inside `(...)`, so it is nested,
+# not a direct property of the anchor literal -> refused, bundle untouched.
+run_c1_cli_paren_refused() {
+  local name bodyvar body root f
+  while IFS='|' read -r name bodyvar; do
+    name="${name//[[:space:]]/}"
+    case "$name" in ''|'#'*) continue ;; esac
+    bodyvar="${bodyvar//[[:space:]]/}"
+    body="${!bodyvar}"
+    root="$(mktemp -d "$TMPROOT/c1p.XXXXXX")"
+    make_ext_dir "$root" "$DIR_A" "$body"
+    f="$root/$DIR_A/extension.js"
+    run_cli --extensions-dir "$(native_path "$root")"
+    check "$name: exit 1" "1" "$CLI_RC"
+    check_token "$name: reported refused" "refused" "$CLI_OUT"
+    check_contains "$name: reason=ambiguous-anchor" "reason=ambiguous-anchor" "$(first_dir_line "$CLI_OUT")"
+    check "$name: extension.js unchanged" "$body" "$(cat "$f")"
+    check_no_file "$name: no .bak written" "$f.bak"
+  done <<'TABLE'
+C1-d03-paren-default | BODY_PAREN_FALSY
+C1-d04-semi-default  | BODY_SEMI_ANCHORED
 TABLE
 }
 
@@ -121,3 +148,4 @@ run_t3
 run_c10_empty_file
 run_t3g
 run_c1_cli_delimiters
+run_c1_cli_paren_refused

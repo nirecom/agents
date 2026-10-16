@@ -311,9 +311,8 @@ See [docs/architecture/claude-code/rules-injection.md](docs/architecture/claude-
 
 ### VS Code worktree session visibility
 
-A patch tool (`bin/vscode-cc-repair/index.js`) fixes the Claude Code extension's hardcoded
-`includeWorktrees:!1`, which hides worktree sessions from the session list and is
-overwritten on every extension auto-upgrade. See [docs/vscode-worktree-repair.md](docs/vscode-worktree-repair.md).
+Sessions that entered a worktree show up again in the VS Code Claude Code session list.
+See [docs/vscode-worktree-repair.md](docs/vscode-worktree-repair.md).
 
 ## Directory Structure
 

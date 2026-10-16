@@ -358,10 +358,21 @@ prune_line() { # <state> <cli-output>
 prune_roots_lines() { grep -E '^prune-root: ' <<< "$1" || true; }
 
 EXT_DIR_A="anthropic.claude-code-1.0.0"
-# Exactly one patchable literal — the patch path reports `patched`.
-BODY_FALSY='function f({includeWorktrees:i}){return i}var o={includeWorktrees:!1};module.exports={f,o};'
-# Two literals — the patch path refuses, contributing 1 to the exit code.
+# Exactly one patchable literal inside the sessionListOptions anchor — `patched`.
+BODY_FALSY='function f({includeWorktrees:i}){return i}var o={sessionListOptions(){return{includeWorktrees:!1}}};module.exports={f,o};'
+# Already patched — `already`.
+BODY_TRUTHY='function f({includeWorktrees:i}){return i}var o={sessionListOptions(){return{includeWorktrees:!0}}};module.exports={f,o};'
+# No key at all — `absent`.
+BODY_ABSENT='var a={somethingElse:!1};module.exports={a};'
+# Two literals — the patch path refuses, contributing 1 to the exit code (#2683: and
+# gating the prune pass off).
 BODY_TWO_FALSY='var a={includeWorktrees:!1},b={includeWorktrees:!1};module.exports={a,b};'
+# The anchor holds no key; the only literal sits outside it -> refused (#2683).
+BODY_ANCHOR_KEYLESS='var c={sessionListOptions(){return{cwd:1}},resolveSession(Y){return listSdkSessions({limit:1,dir:Y.folder,includeWorktrees:!1})}};function listSdkSessions(o){return o}module.exports={c};'
+# The anchor's only key sits in a nested object, not at depth 1 -> refused ambiguous-anchor.
+BODY_ANCHOR_NESTED_ONLY='var a={sessionListOptions(){return{opts:{includeWorktrees:!1},cwd:this.cwd}}};module.exports={a};'
+# The lone anchor sits inside a string literal -> refused ambiguous-anchor (boundary rule).
+BODY_ANCHOR_IN_DQ='var s="sessionListOptions(){return{includeWorktrees:!1}";module.exports={s};'
 
 make_ext_dir() { # <root> <dir-name> <js-body>
   mkdir -p "$1/$2"
@@ -399,6 +410,9 @@ STDERR_PREFIX='[vscode-cc-repair] '
 . "$PARTS_DIR/plan-title-keys.sh"
 # shellcheck source=./bin-vscode-cc-repair-prune/cli-exit-codes.sh
 . "$PARTS_DIR/cli-exit-codes.sh"
+# prune-gate.sh reuses exf_pruned from cli-exit-codes.sh, so it must follow it.
+# shellcheck source=./bin-vscode-cc-repair-prune/prune-gate.sh
+. "$PARTS_DIR/prune-gate.sh"
 # shellcheck source=./bin-vscode-cc-repair-prune/packaging-structural.sh
 . "$PARTS_DIR/packaging-structural.sh"
 
