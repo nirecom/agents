@@ -104,14 +104,20 @@ function scanLiteral(body, open) {
 function inspectAnchor(body, sites) {
   const anchors = anchorOffsets(body);
   if (anchors.length !== 1) return { anchors, value: '-' };
-  // Without a lexer the anchor text may sit inside a string or comment; a method definition
-  // follows `{` `}` `,` `;` (or opens the file), so any other preceding char is refused.
+  // Without a lexer the anchor text may sit inside a string or comment. A method definition
+  // is bounded by code punctuation on both sides: before it `{` `}` `,` `;` (or the file
+  // start); after the literal the method body's `}`, then `}` `,` `;`, the next member's
+  // identifier start, or the file end. Any other neighbour is refused.
   if (anchors[0] > 0 && !ANCHOR_BOUNDARY.includes(body[anchors[0] - 1])) {
     return { anchors, value: 'ambiguous' };
   }
   const open = anchors[0] + ANCHOR.length - 1;
   const range = scanLiteral(body, open);
   if (!range) return { anchors, value: 'ambiguous' };
+  const after = body.slice(range.close + 1, range.close + 3);
+  if (after[0] !== '}' || !(after.length === 1 || /^[},;A-Za-z_$]$/.test(after[1]))) {
+    return { anchors, value: 'ambiguous' };
+  }
   const inside = sites.filter((s) => s.at > open && s.at < range.close);
   if (inside.length === 0) return { anchors, value: 'none' };
   const single = inside.length === 1 && range.top.length === 1 && range.top[0] === inside[0].at;

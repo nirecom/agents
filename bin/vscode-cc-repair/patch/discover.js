@@ -5,7 +5,17 @@
 const fs = require('fs');
 const path = require('path');
 
-const { normalizeInputPath, pathKey, realPathKey, isDirectory } = require('../primitives');
+const { normalizeInputPath, pathKey, realPathKey } = require('../primitives');
+
+// Only ENOENT/ENOTDIR mean absent. Any other stat error keeps the candidate so the
+// downstream readdir/patch step fails closed and the prune gate closes (#2683).
+function shouldKeep(target) {
+  try {
+    return fs.statSync(target).isDirectory();
+  } catch (error) {
+    return !(error && (error.code === 'ENOENT' || error.code === 'ENOTDIR'));
+  }
+}
 
 // Home-relative, no platform branch: the same four spellings are probed everywhere and
 // simply do not exist on hosts that never install that flavour.
@@ -36,8 +46,9 @@ function resolveRoots(options) {
     for (const relative of CANDIDATE_ROOTS) {
       const root = path.join(home, relative);
       // A default candidate that is absent, or exists as a regular file, is skipped
-      // silently — unlike an explicit override, which main() rejects with exit 2.
-      if (isDirectory(root)) candidates.push(root);
+      // silently — unlike an explicit override, which main() rejects with exit 2. One
+      // that cannot be stat'ed is kept, so runPatch reports it root-unreadable.
+      if (shouldKeep(root)) candidates.push(root);
     }
   }
 
@@ -56,7 +67,8 @@ function resolveRoots(options) {
   return roots;
 }
 
-// Matching directories inside one root, name-ascending, deduped by realpath.
+// Matching directories inside one root, name-ascending, deduped by realpath. An entry
+// that cannot be stat'ed is kept, so patchDir refuses it rather than it vanishing.
 // An unreadable root still yields []; `options.onError(error)` lets a caller tell that
 // apart from an empty root, so it can fail closed instead of reading [] as "nothing here".
 function listExtensionDirs(root, options) {
@@ -74,7 +86,7 @@ function listExtensionDirs(root, options) {
   for (const name of names) {
     if (!EXTENSION_DIR_PATTERN.test(name)) continue;
     const full = path.join(root, name);
-    if (!isDirectory(full)) continue;
+    if (!shouldKeep(full)) continue;
     const key = realPathKey(full);
     if (seen.has(key)) continue;
     seen.add(key);

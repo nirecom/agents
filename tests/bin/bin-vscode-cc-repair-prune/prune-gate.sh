@@ -198,7 +198,49 @@ run_f_prune_gate_legacy() {
   check_no_file "F4-g14b-no-legacy: no .jsonl.bak displacement" "$stub.bak"
 }
 
+# F4-g15 — an extension dir whose stat throws EACCES (#2683) leaves the patch outcome
+# unknown, so the prune pass must stay gated off, in both run and --dry-run modes. The
+# preload faults statSync/lstatSync/readdirSync for CCR_FAULT_PATH and everything under it.
+run_f_prune_gate_dir_unstatable() {
+  local preload preload_n mode home ext proj stub
+  preload="$TMPROOT/stat-fault-prune.js"
+  printf '%s\n' 'const fs=require("fs"),p=require("path");' \
+    'const key=(s)=>process.platform==="win32"?p.resolve(s).toLowerCase():p.resolve(s);' \
+    'const deny=key(process.env.CCR_FAULT_PATH);' \
+    'const hit=(d)=>typeof d==="string"&&(key(d)===deny||key(d).startsWith(deny+p.sep));' \
+    'const fault=()=>{const e=new Error("EACCES: stub fault");e.code="EACCES";return e;};' \
+    'for(const n of ["statSync","lstatSync"]){const o=fs[n];fs[n]=function(d,...r){if(hit(d))throw fault();return o.call(fs,d,...r);};}' \
+    'const rd=fs.readdirSync;fs.readdirSync=function(d,...r){if(hit(d))throw fault();return rd.call(fs,d,...r);};' \
+    > "$preload"
+  preload_n="$(native_file "$preload")"
+  for mode in run dry-run; do
+    home="$(new_home)"; ext="$(new_ext_root)"; proj="$(new_proj_root)"
+    make_ext_dir "$ext" "$EXT_DIR_A" "$BODY_FALSY"
+    exf_pruned "$proj"
+    stub="$(session_path "$proj/stub" "$SID_A")"
+    if [ "$mode" = "dry-run" ]; then
+      NODE_OPTIONS="--require \"$preload_n\"" CCR_FAULT_PATH="$(native_path "$ext")/$EXT_DIR_A" \
+        run_cli_prune "$home" "$ext" "$proj" --dry-run
+    else
+      NODE_OPTIONS="--require \"$preload_n\"" CCR_FAULT_PATH="$(native_path "$ext")/$EXT_DIR_A" \
+        run_cli_prune "$home" "$ext" "$proj"
+    fi
+    check "F4-g15-$mode: exit 1" "1" "$CLI_RC"
+    check "F4-g15-$mode: the dir is reported refused or failed" "1" \
+      "$(grep -cE "^(refused|failed)[[:space:]]+$EXT_DIR_A([[:space:]]|\$)" <<< "$CLI_OUT" || true)"
+    check_contains "F4-g15-$mode: the prune-skipped line states why" \
+      "prune-skipped: the extension patch refused or failed — stub sessions left in place" "$CLI_OUT"
+    check_absent "F4-g15-$mode: no prune-root line" "prune-root:" "$CLI_OUT"
+    check_no_token "F4-g15-$mode: no pruned line" "pruned" "$CLI_OUT"
+    check_no_token "F4-g15-$mode: no would-prune line" "would-prune" "$CLI_OUT"
+    check_file "F4-g15-$mode: the prunable stub is still in place" "$stub"
+    check_no_file "F4-g15-$mode: no .jsonl.bak displacement" "$stub.bak"
+    check "F4-g15-$mode: the bundle is untouched" "$BODY_FALSY" "$(cat "$ext/$EXT_DIR_A/extension.js")"
+  done
+}
+
 run_f_prune_gate_blocked
 run_f_prune_gate_open
 run_f_prune_gate_root_unreadable
 run_f_prune_gate_legacy
+run_f_prune_gate_dir_unstatable

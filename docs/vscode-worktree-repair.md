@@ -29,7 +29,7 @@ sites, such as the `includeWorktrees:!1` in `resolveSession` (2.1.300), are left
 | No anchor and no literal | `absent` |
 | More than one anchor | refused, `reason=multiple-anchors` |
 | Anchor without the key | refused `reason=no-anchor-key` (`absent` when no literal exists) |
-| Anchor not preceded by `{ } , ;`, literal unscannable, or key not unique at depth 1 | refused, `reason=ambiguous-anchor` |
+| Anchor not preceded by `{ } , ;` (or file start), method body not closed by `}` followed by `} , ;`, an identifier start, or file end, literal unscannable, or key not unique at depth 1 | refused, `reason=ambiguous-anchor` |
 
 `--legacy-single-literal` opts into the pre-#2683 rule (exactly one boolean literal anywhere
 in the bundle). It is an unsupported fallback, not the default, and applies consistently to the
@@ -37,7 +37,9 @@ initial classification, the race re-check, and the post-write verify.
 
 Each per-directory report line carries ` anchor=<n> anchor-value=<v>` after `key=`, where
 `<v>` is one of `falsy`, `truthy`, `dynamic`, `unsupported`, `unknown`, `none`, `ambiguous`,
-or `-`. An unreadable extension root is reported as `failed  <root>  reason=root-unreadable`.
+or `-`. An unreadable extension root is reported as `failed  <root>  reason=root-unreadable`;
+a candidate root counts as absent only on `ENOENT`/`ENOTDIR`, so any other stat error keeps it
+and ends `failed` or refused instead of being skipped silently.
 
 Patching the on-disk bundle does not touch the running extension host. After a successful
 patch, run VS Code's **Developer: Reload Window** before worktree sessions become visible.
