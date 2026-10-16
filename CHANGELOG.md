@@ -767,3 +767,7 @@ Changes: experimental/test-jail: a jailed run now stops (exit 94) when the reque
 ### FEATURE: PR #2675 (2026-10-15)
 Background: feat(#2411): write tests in the same language as the code (Pester, py...
 Changes: Tests can now be written in the same language as the code they cover — Pester, pytest or JavaScript as well as bash. Each language has its own case-marker notation, helper library and new-file name shape, and `/write-tests` picks the language from the code the test enters through.
+
+### FEATURE: PR #2684 (2026-10-16)
+Background: fix(#2683): anchor the vscode-cc-repair patch on sessionListOptions a...
+Changes: vscode-cc-repair now patches only the session-list setting found via the `sessionListOptions` anchor, so extension 2.1.300 is repaired instead of refused; `--legacy-single-literal` restores the old matching rule.;`--prune-stub-sessions` no longer moves stub sessions aside when the extension patch was refused or failed, so sessions stay visible in the VS Code list.
