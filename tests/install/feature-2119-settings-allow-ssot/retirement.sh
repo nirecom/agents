@@ -4,6 +4,8 @@
 # T33: the reviewer and its commit-time gate are DELETED, not merely unused. Sourced by
 # tests/install/feature-2119-settings-allow-ssot.sh, which owns PASS/FAIL/ROWS and assert_eq.
 
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/precommit-gate-stub.sh"
+
 RETIRED_REVIEWER_REL="bin/review-settings-allow"
 RETIRED_REVIEWER="$SCRIPT_CHECKOUT_ROOT/$RETIRED_REVIEWER_REL"
 PRECOMMIT_REL="hooks/pre-commit"
@@ -58,6 +60,7 @@ t33_retirement_table
 T39_ABSENT=""
 T39_FINDING=""
 T39_ARMED=""
+T39_STUBS=""
 
 # T39 -- THE GATE IS RUN, NOT GREPPED. T33 proves the text is gone from the file; it cannot prove
 # the hook still WORKS, and a deletion that leaves the reviewer wired in through some other name,
@@ -81,6 +84,14 @@ t39_sandbox() { # <dir> <absent|finding>
     # Every lib the hook sources at load time, or it dies before any gate runs.
     cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh" \
        "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh" "$d/hooks/lib/"
+    # The sandbox IS the hook copy's own repo, so the agents-repo gates arm and fail closed on a
+    # missing checker before the .env control is reached; plant a passing stub for each (#2649).
+    local stubs
+    if stubs="$(precommit_gate_stub_plant "$d/hooks/lib/precommit-agents-repo-gates.sh" "$d" 2>&1)"; then
+        printf 'planted:%s' "$stubs" > "$TMPROOT/t39-$2.stubs"
+    else
+        printf 'DRIFT:%s' "$stubs" > "$TMPROOT/t39-$2.stubs"
+    fi
     printf '%s\n' '# fixture SSOT' 'bin/fx-tool' > "$d/install/settings-allow-commands.txt"
     printf '%s\n' '{}' > "$d/settings.json"
     git -C "$d" add -A
@@ -134,6 +145,14 @@ t39_setup() {
     T39_ABSENT="$(t39_probe absent)"
     T39_FINDING="$(t39_probe finding)"
     T39_ARMED="$(t39_arming "$TMPROOT/t39-absent")"
+    local s
+    s="$(cat "$TMPROOT/t39-absent.stubs" 2>/dev/null || printf 'NOT-RUN')"
+    case "$s" in
+        planted:0|planted:) T39_STUBS="EMPTY:$s" ;;
+        planted:*[!0-9]*)   T39_STUBS="NOT-A-COUNT:$s" ;;
+        planted:*)          T39_STUBS="planted" ;;
+        *)                  T39_STUBS="$s" ;;
+    esac
 }
 
 t39_behaviour_table() {
@@ -142,6 +161,7 @@ t39_behaviour_table() {
         [ -n "$id" ] || continue
         case "$id" in
             arming)  got="$T39_ARMED" ;;
+            stubs)   got="$T39_STUBS" ;;
             absent)  got="$T39_ABSENT" ;;
             finding) got="$T39_FINDING" ;;
         esac
@@ -149,6 +169,7 @@ t39_behaviour_table() {
         assert_eq "T39[$id]: $label" "$want" "$got"
     done <<'T39_CASES'
 arming|armed|PRECONDITION: the sandbox meets every condition the deleted gate armed on, so a silent run below is evidence of retirement rather than of a fixture that never triggered it
+stubs|planted|PRECONDITION: one passing stub per agents-repo gate call line in hooks/lib/precommit-agents-repo-gates.sh was derived and planted (count > 0 and equal to the call lines) -- without it those gates fail closed above the .env control and the rows below read MISSED for a reason unrelated to the retirement
 absent|silent/fired|with no bin/review-settings-allow anywhere, a commit in that repo is NOT blocked -- and the .env gate further down the same hook still blocks it, so the run really did execute past where the gate used to be
 finding|silent/fired|CPR-ORTH: the gate's OTHER fail-closed branch is gone too -- an executable reviewer that reports a finding no longer blocks either, which a deletion that left the invocation behind would fail
 T39_CASES

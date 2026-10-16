@@ -10,7 +10,7 @@ const { parse } = require("../lib/command-ir");
 const { resolveGitArgvForSegment, isGitWriteArgv } = require("../lib/bash-write-patterns/git-write-ir");
 
 // Normalize a path to Windows form when possible. Handles Git Bash style
-// `/c/path` → `C:\path` and `c:/path` → `c:\path` on win32.
+// `/<drive>/path` → `<DRIVE>:\path` and `<drive>:/path` → `<drive>:\path` on win32.
 function toWindowsPath(raw) {
   if (!raw) return raw;
   const driveMatch = raw.match(/^\/([a-zA-Z])(\/.*)?$/);
@@ -31,7 +31,7 @@ function toWindowsPath(raw) {
 //           "checked but unresolved" — by convention block-side under
 //           enforce-worktree (see #885 plan).
 function isMainCheckout(repoCwd) {
-  // Normalize POSIX-form paths (e.g. /c/git/agents from Git Bash) so
+  // Normalize POSIX-form paths (e.g. /<drive>/git/agents from Git Bash) so
   // spawnSync cwd resolves correctly on Windows. Symmetric with
   // findRepoRootForBash lines 201-203; toWindowsPath is a no-op on POSIX.
   if (typeof repoCwd === "string" && /^\/[a-zA-Z]\//.test(repoCwd)) {
@@ -296,4 +296,6 @@ module.exports = {
   normalizeForCompare,
   resolveRepoRoot,
   findRepoRoot,
+  resolveScopeValue,
+  AMBIGUOUS_SCOPE,
 };

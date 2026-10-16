@@ -1,7 +1,7 @@
 # tests/install/prompt-bash-node-calling-convention/exec-position-sweep.sh
 # Tests: install/settings-allow-commands.txt, hooks/lib/allow-command-list.js
 # Tags: prompt, permissions, calling-convention, ssot, scope:common, pwsh-not-required, TL2
-# T50-T57: the execution-position sweep. Sourced AFTER exec-position-fixtures.sh, which owns
+# T50-T57, T61: the execution-position sweep (T61 = its --off-list mode). Sourced AFTER exec-position-fixtures.sh, which owns
 # the fixture trees, the runner and the reducer.
 
 # T50 -- THE REAL REPO, AT ZERO. Every entry in install/settings-allow-commands.txt, in every
@@ -70,6 +70,7 @@ T52[exclusion-total]|main|set-count|rules/fx-exclusion-prose.md,rules/fx-exclusi
 T52[exclusion-statuses]|main|set-statuses|rules/fx-exclusion-prose.md,rules/fx-exclusion-argument.md,rules/fx-exclusion-allow-rule.md|ok|and not one of those three files produces a deviant verdict of any kind
 T52[exclusion-doc-label]|doc|file-summary|rules/fx-doc-label-mention.md|1:ok@5|EXCLUSION CLASS, BY CONVENTION: a documentary citation naming where a file lives is written repo-relative (no $AGENTS_MAIN_ROOT/ prefix), so it never matches an SSOT entry path and drops out of the occurrence list entirely -- only the line 5 sentinel is reported
 T52[boundary-doc-run]|doc|file-summary|rules/fx-doc-run-instruction.md|2:no-interpreter@3,ok@5|BOUNDARY, UNCHANGED: a span that still carries the $AGENTS_MAIN_ROOT/ prefix stays deviant even after a label and a colon introduce it, so the row above is the prefix-based spelling distinction and not "any bare-path span is excluded" -- Run: ends in a colon too
+T52[braced-onlist]|doc|file-summary|rules/fx-braced.md|3:no-interpreter@3,ok@4,wrong-interpreter@5|BRACED ROOT: ${AGENTS_MAIN_ROOT}/ is the same path as $AGENTS_MAIN_ROOT/ to the shell, so an SSOT entry spelled braced is still reached -- bare reads no-interpreter, bash reads ok, node on a bash tool reads wrong-interpreter
 T53[overlap-nonok-files]|main|nonok-files|-|rules/fx-deviant-no-interpreter.md,rules/fx-deviant-unexpected-prefix.md,rules/fx-deviant-wrong-interpreter.md|ZERO OVERLAP: the files reported with a deviant verdict are exactly the three deviant fixtures, named rather than counted
 T53[overlap-exclusion-clean]|main|nonok-among|rules/fx-exclusion-prose.md,rules/fx-exclusion-argument.md,rules/fx-exclusion-allow-rule.md|none|no exclusion fixture appears in the deviant set, so the carve-out is not over-narrow
 T53[overlap-deviants-all-reported]|main|nonok-covers|rules/fx-deviant-no-interpreter.md,rules/fx-deviant-unexpected-prefix.md,rules/fx-deviant-wrong-interpreter.md|3/3|and every deviant fixture is still reported, so the carve-out is not over-wide either -- the two rows together are what stops it swallowing a real defect
@@ -84,6 +85,15 @@ T57[ssot-drop-entry-kept]|drop|entry-count|bin/fx-node-tool.js|2|and the entry s
 T57[ssot-drop-total]|drop|total|-|2|the whole drop tree therefore yields exactly the two occurrences of the one surviving entry
 T57[ssot-drop-statuses]|drop|statuses|-|ok|and they are ok, so removing an entry narrows the scope without turning the survivors deviant
 T57[ssot-control-main]|main|entry-count|bin/fx-bash-tool|11|CONTROL: the SAME markdown in the tree whose SSOT does list the entry reports all eleven of its occurrences
+T61[off-bare]|off|file-summary|rules/fx-off-bare.md|2:no-interpreter@3,no-interpreter@4|OFF-LIST MODE: a bare call of a bash tool and of a node tool the SSOT does not list are both reported no-interpreter -- the agents/supervisor.md shape #2649 found unswept
+T61[off-ok]|off|file-summary|rules/fx-off-ok.md|2:ok@3,ok@4|POSITIVE CONTROL: the same two off-list tools behind the interpreter their shebang names read ok, so the row above is a verdict and not a mode that flags everything
+T61[off-wrong]|off|file-summary|rules/fx-off-wrong.md|2:unresolvable-entry@4,wrong-interpreter@3|CPR-ORTH: the expected interpreter is read from the off-list tool's own shebang, so node on a bash tool is wrong-interpreter and a call of a tool that does not exist fails closed as unresolvable-entry
+T61[off-exclusion]|off|file-summary|rules/fx-off-exclusion.md|1:ok@8|EXCLUSION CLASSES CARRY OVER: prose, argument position, an allow-rule string, a repo-relative citation and a <tool> placeholder yield nothing, and only the line 8 sentinel is reported
+T61[off-onlist-skipped]|off|file-summary|rules/fx-off-onlist.md|0:<NONE>|SCOPE SPLIT: an SSOT-listed entry is left to the default mode, so no call is judged twice by the two modes
+T61[off-braced]|off|file-summary|rules/fx-off-braced.md|3:no-interpreter@3,ok@4,wrong-interpreter@5|BRACED ROOT IN OFF-LIST MODE: the braced spelling of the agents-root variable before an off-list tool is matched like the unbraced form -- bare reads no-interpreter, bash reads ok, node on a bash tool reads wrong-interpreter
+T61[off-nonok-files]|off|nonok-files|-|rules/fx-off-bare.md,rules/fx-off-braced.md,rules/fx-off-wrong.md|ZERO OVERLAP: the files reported deviant in off-list mode are exactly the three deviant fixtures, named rather than counted
+T61[blindspot-default]|off-default|nonok-files|-|rules/fx-off-onlist.md|THE BLIND SPOT, REPRODUCED: the default mode over the SAME tree reports only the listed entry and never sees the off-list bare calls, which is why the off-list mode exists
+T61[real-off-nonok]|real-off|nonok|-|none|every bin/ tool call outside the SSOT in the real repo carries a literal interpreter in execution position and the one its shebang resolves to
 T5X_JSON_CASES
 }
 
@@ -98,6 +108,7 @@ t5x_min_table() {
     done <<'T5X_MIN_CASES'
 T50[real-scanned]|real|total|10|the real-repo sweep found occurrences at all -- without this the zero-offender row above would also be satisfied by a sweep that scanned nothing
 T50[real-multi-file]|real|distinct-files|2|and they come from more than one file, so the corpus is not one asset the walker happened to reach
+T61[real-off-scanned]|real-off|total|80|the off-list sweep of the real repo inspected calls at all -- without this the zero-offender row would also be satisfied by a mode that matched nothing
 T5X_MIN_CASES
 }
 
@@ -113,6 +124,8 @@ t5x_misc_probe() { # <id> -> verdict
         rerun-exit)       fx_rc rerun ;;
         tree-unchanged)   fx_tree_probe unchanged ;;
         tree-detector)    fx_tree_probe detector ;;
+        real-off-exit)    fx_rc real-off ;;
+        bad-mode)         fx_usage bad-mode ;;
         *)                printf 'UNKNOWN-PROBE' ;;
     esac
 }
@@ -136,6 +149,8 @@ rerun-identical|T56[hygiene-rerun-identical]|identical|IDEMPOTENCY: a second swe
 rerun-exit|T56[hygiene-rerun-exit]|0|and the second run exits 0 as well, so the identity above is not two identical crashes
 tree-unchanged|T56[hygiene-tree-readonly]|unchanged|the scanned tree is byte-identical after two sweeps -- the sweep reads prompt assets and writes nothing into them
 tree-detector|T56[hygiene-tree-detector]|detected|CANARY: the manifest really notices a write into that tree, so the row above is evidence and not a no-op comparison
+real-off-exit|T61[real-off-exit]|0|the off-list sweep of the real repo exits 0, so its offender list is a finished scan rather than a crash
+bad-mode|T61[failclosed-bad-mode]|2/usage|FAIL-CLOSED: an unknown mode flag exits 2 with a usage line instead of silently running the default mode
 T5X_LABELLED_CASES
 }
 
@@ -146,6 +161,7 @@ T5X_LABELLED_CASES
 # from the same map in one pass -- so a row skipped by the table's own guard cannot go unseen.
 t60_fix_map_table() {
     local file entries want label agg="" total=0
+    # Hand-pinned exact counts so a lost call reads red; when a file legitimately gains a converted call, update its row and the total.
     while IFS='|' read -r file entries want label; do
         [ -n "$file" ] || continue
         ROWS=$((ROWS + 1))
@@ -156,14 +172,14 @@ t60_fix_map_table() {
 skills/_shared/non-github-remote-gate.md|bin/detect-non-github.sh|1|the shared gate's one-line call is swept as ok, so the wrapper every consumer copies from carries the converted spelling
 skills/commit-push/SKILL.md|bin/detect-non-github.sh|1|the commit-push pre-flight call is swept as ok in ITS OWN file, not merely somewhere in the repo
 skills/issue-close-stage/SKILL.md|bin/detect-non-github.sh|1|and so is the third caller of the same entry, so all three sites of the one entry are attributed rather than counted together
-skills/make-detail-plan/SKILL.md|bin/concern-ledger,skills/_shared/assemble-mandatory.sh,bin/check-issues-class-coverage|3|the three converted calls in the densest file are all ok -- three different entries in one file, the case a per-entry count cannot separate (#2490 moved the scope-change call into next-step --gate)
-skills/make-outline-plan/SKILL.md|skills/_shared/assemble-mandatory.sh,bin/concern-ledger|3|three converted calls across two entries, one of which appears twice in this file alone
-skills/review-plan-security/SKILL.md|bin/concern-ledger|1|the security-plan skill's ledger call is ok
-skills/review-tests/SKILL.md|bin/resolve-worktree-path,skills/review-tests/scripts/select-staged-files.sh,bin/concern-ledger|3|and the three converted calls in review-tests, the file whose RT-0 prose #2262 also hardened
+skills/make-detail-plan/SKILL.md|bin/concern-ledger,skills/_shared/assemble-mandatory.sh,bin/check-issues-class-coverage|4|the four converted calls in the densest file are all ok -- three different entries in one file, the case a per-entry count cannot separate (#2490 moved the scope-change call into next-step --gate; #2649 converted the exit-6 check-finalized)
+skills/make-outline-plan/SKILL.md|skills/_shared/assemble-mandatory.sh,bin/concern-ledger|4|four converted calls across two entries, each of which appears twice in this file alone (#2649 converted the exit-6 check-finalized)
+skills/review-plan-security/SKILL.md|bin/concern-ledger|2|the security-plan skill's two ledger calls (check-finalized, reject) are ok
+skills/review-tests/SKILL.md|bin/resolve-worktree-path,skills/review-tests/scripts/select-staged-files.sh,bin/concern-ledger|5|and the five converted calls in review-tests (worktree path, two staged-file selections, two ledger calls), the file whose RT-0 prose #2262 also hardened
 T60_CASES
     ROWS=$((ROWS + 1))
-    assert_eq "T60[fix-map-total]: the seven files contribute exactly the thirteen occurrences #2262 converted and #2490 left in prompts -- a file that lost one turns its own row AND this one red, and a row dropped from the table above changes the left side" \
-        "13/13" "$total/$(fx_q real pin-ok "$agg")"
+    assert_eq "T60[fix-map-total]: the seven files contribute exactly the eighteen occurrences #2262 converted and later prompts kept -- a file that lost one turns its own row AND this one red, and a row dropped from the table above changes the left side" \
+        "18/18" "$total/$(fx_q real pin-ok "$agg")"
 }
 
 t5x_json_table
