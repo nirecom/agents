@@ -6,7 +6,8 @@ The `anthropic.claude-code` VS Code extension hardcodes `includeWorktrees:!1` in
 session-list call, so sessions whose cwd is inside a linked git worktree never appear in
 the extension's session list — and every extension auto-upgrade overwrites a manual fix.
 
-Run `bin/vscode-cc-repair/index.js` to re-apply the patch:
+Launching VS Code with `codes` re-applies the patch automatically (`--prune-stub-sessions`,
+best-effort; see `bin/codes-launch.sh` / `bin/codes-launch.ps1`). To run it by hand, use `bin/vscode-cc-repair/index.js`:
 
 ```sh
 node bin/vscode-cc-repair/index.js           # apply for real (writes to disk)
