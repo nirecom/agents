@@ -101,9 +101,9 @@ MOP-6. **Cap outcome dispatch.**
 
    **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
-   **exit 2 (ESCALATE):** Run `"$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
+   **exit 2 (ESCALATE):** Run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
 
-   **exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, then re-run `/clarify-intent`.
+   **exit 6 (HIGH_UNRESOLVED):** run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan`; stop loop, then re-run `/clarify-intent`.
 
    `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/outline-plan-last-round.txt`. Exit 8: AskUserQuestion per exit-codes.md "Escalation by format".
 

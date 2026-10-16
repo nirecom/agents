@@ -54,8 +54,8 @@ ROWS=0
 
 # EXECUTED-ROW BUDGET. Every table-driven loop in the part files increments ROWS; the final
 # assertion pins the exact total, so an empty table or an early return cannot report green.
-ROWS_EXPECTED=105 # T48 37 + T50 4 + T51 6 + T52 7 + T53 3 + T54 5 + T55 6
-                  # + T56 4 + T57 5 + T58 9 + T59 8 + T60 8 + T22 3
+ROWS_EXPECTED=120 # T48 39 +T50 4 + T51 6 + T52 8 + T53 3 + T54 5 + T55 6
+                  # + T56 4 + T57 5 + T58 9 + T59 8 + T60 8 + T61 12 + T22 3
                   # (T26 retired with install/lib/settings-allow-rules.js in #2264)
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/pbn-cc.XXXXXX")" || { echo "FAIL: harness -- mktemp -d failed"; exit 1; }

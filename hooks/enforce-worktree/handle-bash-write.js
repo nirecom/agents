@@ -21,6 +21,7 @@ const { isAllowedWorktreeCommand } = require("./main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllWriteSegmentsUnderWorkflowDir, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllBashTargetsUnderWorkflowDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand, bashTargetsHitProtectedMarker, targetsHitOtherSessionWorkflowState, OTHER_SESSION_STATE_REASON } = require("./bash-write-scope");
 const { isGitWriteIR } = require("../lib/bash-write-patterns/patterns");
 const { checkUniversalTargetAllow } = require("./universal-target-allow");
+const { classifyGitCWrite, decideGitCWrite } = require("./git-c-write-scope");
 const { buildExtras } = require("./report-extras");
 const { scannableCommandListOf } = require("../lib/scannable-command-list");
 const { hasGhIssueCreate, resolveCrossRepoIssueCreateRoot } = require("./gh-repo-target");
@@ -219,6 +220,12 @@ function handleBashWrite(ctx) {
 
   const sessionRoots = getSessionRepoRoots();
 
+  // #2649: a command made only of `git -C <path>` writes is judged by git common dir
+  // against the narrowed roots (git-c-write-scope.js) and bypasses the three
+  // legacy session-scope allows below, whose root set already holds the -C path.
+  const _gitC = _markerHit ? null : classifyGitCWrite(ir, _toolCwd);
+  if (_gitC) decideGitCWrite(_gitC, repoRoot, done);
+
   // A parse failure is treated as a marker hit for the allow paths' purposes:
   // when targets can't be extracted at all, nothing can be vouched for, so the
   // fast-paths must stay disabled rather than re-enabled (downstream branches
@@ -227,7 +234,7 @@ function handleBashWrite(ctx) {
   // Universal target-aware allow: allow if all extracted write targets are
   // outside the session scope, before shape-based predicate checks. Sequenced
   // commands and parse failures abstain (fail-closed).
-  if (!_markerHit) {
+  if (!_markerHit && !_gitC) {
     const _ur = checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, ir);
     if (_ur.verdict === "allow") done();
   }
@@ -260,7 +267,7 @@ function handleBashWrite(ctx) {
         // sessionRoots can't protect non-session git repos from cross-repo writes.
         // Heredoc commands skip this broader gate and fall through to the
         // narrower #2121 block below.
-        if (!hasHeredoc(cmd) &&
+        if (!_gitC && !hasHeredoc(cmd) &&
             areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
             (repoRoot !== null ||
              areAllBashTargetsUnderPlansDir(targets) ||
@@ -299,7 +306,7 @@ function handleBashWrite(ctx) {
     // bash -c, heredocs, sed -i, ...) would fall into this branch and get
     // evaluated against `isInSessionScope`, which never contains the main
     // worktree by design — silently ALLOWing every one of them from main.
-    if (!targets && !parseFailure && repoRoot && isGitWriteIR(ir)) {
+    if (!_gitC && !targets && !parseFailure && repoRoot && isGitWriteIR(ir)) {
       if (!isInSessionScope(repoRoot, sessionRoots)) done();
     }
     // parseFailure → fail-closed: fall through to main-checkout block below.

@@ -23,7 +23,7 @@ You do NOT re-adjudicate technical correctness — that is codex's role. Read co
 
 You are reading-only against the codebase except for the state-file write that records your verdict.
 
-Run every `bin/` tool as `$AGENTS_MAIN_ROOT/bin/<tool>`, never worktree-relative `bin/` — in-development code would migrate the live state dirs.
+Run every `bin/` tool with the interpreter its shebang names — `bash "$AGENTS_MAIN_ROOT/bin/<tool>"` or `node "$AGENTS_MAIN_ROOT/bin/<tool>"` — never a bare path and never worktree-relative `bin/` (in-development code would migrate the live state dirs).
 
 ## Inputs
 
@@ -47,7 +47,7 @@ Read these inputs before deciding:
 ### UNAVAILABLE fallback
 
 When `wsid` is `UNAVAILABLE`, skip all plan-artifact reads (`<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md`).
-Record a finding via `$AGENTS_MAIN_ROOT/bin/supervisor-report` with `category=env, severity=notice`.
+Record a finding via `node "$AGENTS_MAIN_ROOT/bin/supervisor-report"` with `category=env, severity=notice`.
 Apply decision criteria to the transcript and state-file history only.
 
 ## Decision criteria
@@ -68,9 +68,9 @@ Choose exactly one:
 
 ## Codex generation
 
-Codex-primary single pass via the shared engine `$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex`: it emits a STATUS line first, and on `STATUS: SUCCESS` prints `VERDICT: <CONTINUE|WARN|BLOCK>` plus `OUTFILE: <path>` (validated finding JSONL in os.tmpdir).
+Codex-primary single pass via the shared engine `bash "$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex"`: it emits a STATUS line first, and on `STATUS: SUCCESS` prints `VERDICT: <CONTINUE|WARN|BLOCK>` plus `OUTFILE: <path>` (validated finding JSONL in os.tmpdir).
 
-1. Run `$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex --mode audit --sid <effective-state-sid> --wsid <wsid> --transcript <transcript-path> --artifact <plans-dir>/<wsid>-detail.md --subcheck <id>[ --subcheck <id>...] --state-snapshot <state-file-path>` — pass one `--subcheck` per armed sub-check ID, and `--state-snapshot` pointing at the supervisor state file.
+1. Run `bash "$AGENTS_MAIN_ROOT/bin/supervisor-findings-codex" --mode audit --sid <effective-state-sid> --wsid <wsid> --transcript <transcript-path> --artifact <plans-dir>/<wsid>-detail.md --subcheck <id>[ --subcheck <id>...] --state-snapshot <state-file-path>` — pass one `--subcheck` per armed sub-check ID, and `--state-snapshot` pointing at the supervisor state file.
 2. Line 1 `STATUS: SKIPPED` (Codex unavailable) or `STATUS: FAILED` → **fallback path**: work the Decision criteria manually, decide the verdict yourself, and skip the `--findings-jsonl` handoff below.
 3. Line 1 `STATUS: SUCCESS` → take the verdict from the `VERDICT:` line and the finding file from the `OUTFILE:` line; pass the file to the verdict write via `--findings-jsonl <OUTFILE>`.
 
@@ -86,7 +86,7 @@ The second value is the **verdict summary, not the arm cause** — `audit_cause`
 
 Always pass `--session-id <effective-state-sid>`: the auto-resolve path targets the wsid store which differs from the armed state store, causing identity-mismatch rejections on the compare-and-set (#2256 C21). When wsid is `UNAVAILABLE`, this is still `<effective-state-sid>`.
 
-When the verdict is WARN or BLOCK on the fallback path, also append a finding describing what you observed. Use `$AGENTS_MAIN_ROOT/bin/supervisor-report` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Omit `--session-id` to let the CLI auto-resolve and mirror; supply `--session-id <effective-state-sid>` only to pin to a single store.
+When the verdict is WARN or BLOCK on the fallback path, also append a finding describing what you observed. Use `node "$AGENTS_MAIN_ROOT/bin/supervisor-report"` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Omit `--session-id` to let the CLI auto-resolve and mirror; supply `--session-id <effective-state-sid>` only to pin to a single store.
 
 ## Anti-thrash
 

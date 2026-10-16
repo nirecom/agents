@@ -38,6 +38,23 @@ function getSessionRepoRoots() {
     const r = resolveRepoRoot(p);
     if (r) roots.add(r);
   }
+  addAdditionalRepoRoots(roots);
+  return roots;
+}
+
+// #2649 policy (A): the roots a `git -C <path>` write verdict is judged against —
+// the cwd repo plus ENFORCE_WORKTREE_ADDITIONAL_REPOS, WITHOUT the payload-derived
+// paths. Judging an explicit -C path against a set that already contains it makes
+// every external -C target look like a session repo.
+function getNarrowedSessionRoots() {
+  const roots = new Set();
+  const cwdRoot = resolveRepoRoot(process.cwd());
+  if (cwdRoot) roots.add(cwdRoot);
+  addAdditionalRepoRoots(roots);
+  return roots;
+}
+
+function addAdditionalRepoRoots(roots) {
   const extra = (process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS || "")
     .split(";").map((s) => s.trim()).filter(Boolean);
   for (const dir of extra) {
@@ -58,7 +75,6 @@ function getSessionRepoRoots() {
       } catch (e) { /* skip non-readable dirs */ }
     }
   }
-  return roots;
 }
 
-module.exports = { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots };
+module.exports = { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots, getNarrowedSessionRoots };
