@@ -61,7 +61,8 @@ else
     _t50_plans_dir="$(cygpath -m "$_t50_plans_tmp" 2>/dev/null || echo "$_t50_plans_tmp")"
     _t50_agents_dir="$(cygpath -m "$_t50_agents_tmp" 2>/dev/null || echo "$_t50_agents_tmp")"
     _t50_file="$_t50_plans_dir/20260526-223459-intent.md"
-    _t50_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t50_file\",\"content\":\"日本語\"},\"tool_response\":{}}"
+    # #2529: the intent skeleton (`## Issues` + empty `## Glossary`, prose under `## Goal`) keeps the structure check quiet.
+    _t50_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t50_file\",\"content\":\"## Issues\n\n## Glossary\n\n## Goal\n\n日本語\"},\"tool_response\":{}}"
     _t50_out="$(export WORKFLOW_PLANS_DIR="$_t50_plans_dir"; export AGENTS_MAIN_ROOT="$_t50_agents_dir"; echo "$_t50_json" | run_with_timeout 10 node "$CHECK_PLAN_HOOK" 2>/dev/null)"
     _t50_ok=1
     echo "$_t50_out" | grep -q '"approve"' || _t50_ok=0

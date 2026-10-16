@@ -318,6 +318,15 @@ if [[ -n "$PROJECT_ROOT_ARG" ]]; then
   fi
 fi
 
+# Combined glossary (#2529) for the detail-plan / outline-plan / test-review prompts;
+# security-plan omits it. Root: --project-root, else the git top level of the cwd.
+GLOSSARY_BLOCK=""
+GLOSSARY_ROOT="${PROJECT_ROOT_ARG:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
+GLOSSARY_TEXT="$(codex_core_combined_glossary_block "$GLOSSARY_ROOT")"
+if [[ -n "$GLOSSARY_TEXT" ]]; then
+  GLOSSARY_BLOCK="${GLOSSARY_TEXT}"$'\n\n'
+fi
+
 # approval_policy/sandbox_mode config overrides (#746: codex-cli 0.153.4 removed
 # --full-auto/--ask-for-approval as CLI flags; -c is used for --sandbox too so both
 # knobs are set by one mechanism. Unconditional -- this is the general codex-invocation
@@ -367,7 +376,7 @@ ${CONTEXT_CONTENT}
     if [[ "$ROUND" -ge 2 ]]; then
       CODEX_PROMPT="${PREAMBLE}
 
-${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
+${NFR_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -397,7 +406,7 @@ ${PLAN_CONTENT}
     else
       CODEX_PROMPT="${PREAMBLE}
 
-${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan. Output STRICTLY one of these two formats — no prose before or after:
+${NFR_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED
@@ -517,7 +526,7 @@ ${CONTEXT_CONTENT}
     if [[ "$ROUND" -ge 2 ]]; then
       CODEX_PROMPT="${PREAMBLE}
 
-${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${TEST_REVIEW_INPUT_CONTRACT}Round ${ROUND} review (input contract: test-review-input-contract above). The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised tests resolve it.
+${NFR_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${TEST_REVIEW_INPUT_CONTRACT}Round ${ROUND} review (input contract: test-review-input-contract above). The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised tests resolve it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -547,7 +556,7 @@ ${PLAN_CONTENT}
     else
       CODEX_PROMPT="${PREAMBLE}
 
-${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${TEST_REVIEW_INPUT_CONTRACT}Review the following test file(s) and source file(s) for COVERAGE completeness (input contract: test-review-input-contract above). Output STRICTLY one of these two formats — no prose before or after:
+${NFR_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}${TEST_REVIEW_INPUT_CONTRACT}Review the following test file(s) and source file(s) for COVERAGE completeness (input contract: test-review-input-contract above). Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED
@@ -591,7 +600,7 @@ ${CONTEXT_CONTENT}
     if [[ "$ROUND" -ge 2 ]]; then
       CODEX_PROMPT="${PREAMBLE}
 
-${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised proposal resolves it.
+${NFR_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised proposal resolves it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -620,7 +629,7 @@ ${PLAN_CONTENT}
     else
       CODEX_PROMPT="${PREAMBLE}
 
-${NFR_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following outline plan proposal. Output STRICTLY one of these two formats — no prose before or after:
+${NFR_BLOCK}${GLOSSARY_BLOCK}${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following outline plan proposal. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED <one-line justification>

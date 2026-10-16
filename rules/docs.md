@@ -68,3 +68,4 @@ Loaded automatically when editing the relevant file type; also readable on deman
 - [docs/architecture.md](docs/architecture.md) — architecture.md What/Why scope and 300-line split rule
 - [docs/readme.md](docs/readme.md) — README.md entry point rules
 - [docs/env-example.md](docs/env-example.md) — .env.example variable comment format
+- [docs/glossary.md](docs/glossary.md) — glossary entry criteria, category, and entry form

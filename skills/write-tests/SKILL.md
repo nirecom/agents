@@ -93,4 +93,5 @@ When WT-6 took the `NONE` fallback, record it as `--class D --step write_tests -
 
 ## Rules
 
+- Follow `skills/_shared/combined-glossary.md` (writer directives); put this same line in the test-writing subagent's prompt.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

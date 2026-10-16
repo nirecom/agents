@@ -49,6 +49,7 @@ See agents/outline-planner/output-format.md for the Output Format, SINGLE_APPROA
 ## Rules
 
 - Read intent.md before proposing. Do not invent requirements.
+- Follow `skills/_shared/combined-glossary.md` (writer directives).
 - Propose at least 2 approaches. Proposing only 1 (without SINGLE_APPROACH_JUSTIFIED) is a protocol violation. Exception: emit `SINGLE_APPROACH_JUSTIFIED` when a topology-only collapse or intent-lock collapse applies (see collapse rules below, and Procedure step 2a).
 - Each approach must have a one-line tradeoff vs the other(s).
 - Every approach must include a `Delivery plan:` field. The `SINGLE_APPROACH_JUSTIFIED` reply must include a `DELIVERY_PLAN:` line on the next line. Omitting either is a protocol violation.

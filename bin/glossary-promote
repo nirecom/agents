@@ -1,0 +1,85 @@
+#!/usr/bin/env node
+"use strict";
+// bin/glossary-promote <intent.md> <repo-root> — glossary promotion (#2529): copy the
+// intent glossary's user / internal rows into <repo-root>/docs/glossary-<category>*.md
+// as `### <Term>` + Definition + `Related: TODO` (update-docs fills Related; the gate
+// blocks a leftover TODO). One-way and idempotent: session rows, and terms already in
+// any glossary file (case-insensitive, either category), are skipped. Never creates a
+// glossary file. Everything is validated before the first write.
+// Exit: 0 ok, 1 invalid intent table or invalid glossary file set, 2 usage / unreadable.
+
+const fs = require("fs");
+const path = require("path");
+const { checkIntentGlossary, parseIntentGlossary } = require(path.join(__dirname, "..", "hooks", "lib", "intent-glossary"));
+const fmt = require(path.join(__dirname, "lib", "glossary-format"));
+
+function fail(code, msg) {
+  process.stderr.write("glossary-promote: " + msg + "\n");
+  process.exit(code);
+}
+
+function listGlossaryFiles(repoRoot) {
+  let names;
+  try { names = fs.readdirSync(path.join(repoRoot, "docs")); } catch { return []; }
+  return names.filter((n) => fmt.isGlossaryCandidate(n)).sort().map((n) => "docs/" + n);
+}
+
+function main(argv) {
+  if (argv.length !== 2) fail(2, "usage: glossary-promote <intent.md> <repo-root>");
+  const [intentPath, repoRoot] = argv;
+  let intentText;
+  try { intentText = fs.readFileSync(intentPath, "utf8"); } catch (e) { fail(2, "cannot read " + intentPath + ": " + e.code); }
+
+  const violations = checkIntentGlossary(intentText);
+  if (violations.length > 0) {
+    for (const v of violations) process.stderr.write("line " + v.lineNumber + ": " + v.reason + "\n");
+    fail(1, "intent glossary table is invalid; nothing promoted");
+  }
+
+  const files = listGlossaryFiles(repoRoot);
+  const setErrors = fmt.checkFileSet(files);
+  if (setErrors.length > 0) {
+    for (const e of setErrors) process.stderr.write(e + "\n");
+    fail(1, "glossary file set is invalid; nothing promoted");
+  }
+
+  const texts = new Map();
+  const existing = new Map(); // lowercased term -> file
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(repoRoot, f), "utf8");
+    texts.set(f, text);
+    for (const e of fmt.parseGlossaryFile(text).entries) existing.set(e.term.toLowerCase(), f);
+  }
+
+  const counts = { added: 0, existing: 0, session: 0 };
+  const changed = new Set();
+  for (const row of parseIntentGlossary(intentText).rows) {
+    if (row.category === "session") { counts.session += 1; continue; }
+    const key = row.term.toLowerCase();
+    if (existing.has(key)) {
+      counts.existing += 1;
+      const where = existing.get(key);
+      const parsed = fmt.parseGlossaryPath(where);
+      if (parsed && parsed.category !== row.category) {
+        process.stderr.write("WARN: '" + row.term + "' (" + row.category + ") already defined in " + where + "; left as is\n");
+      }
+      continue;
+    }
+    const target = fmt.fileForTerm(files, row.category, row.term);
+    if (target === null) {
+      process.stderr.write("WARN: no " + row.category + " glossary file in " + repoRoot + "; '" + row.term + "' not promoted\n");
+      continue;
+    }
+    const block = "### " + row.term + "\n- **Definition**: " + row.definition + "\n- **Related**: TODO\n";
+    texts.set(target, fmt.insertEntry(texts.get(target), row.term, block));
+    existing.set(key, target);
+    changed.add(target);
+    counts.added += 1;
+  }
+
+  for (const f of changed) fs.writeFileSync(path.join(repoRoot, f), texts.get(f));
+  process.stdout.write("ADDED=" + counts.added + " SKIPPED_EXISTING=" + counts.existing + " SKIPPED_SESSION=" + counts.session + "\n");
+  return 0;
+}
+
+process.exit(main(process.argv.slice(2)));

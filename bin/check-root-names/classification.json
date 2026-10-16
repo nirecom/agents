@@ -187,7 +187,7 @@
     {"file":"bin/worktree-write-notes.js","allow":["TARGET_MAIN_ROOT"],"forms":[],"reason":"handles the main worktree of the repository it works on"},
     {"file":"docs/architecture/claude-code/root-names.md","allow":["SCRIPT_CHECKOUT_ROOT","TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"the writing rules for the four root names, which spell each of them"},
     {"file":"docs/architecture/claude-code/settings/hooks.md","allow":["TARGET_MAIN_ROOT"],"forms":[],"reason":"handles the main worktree of the repository it works on"},
-    {"file":"docs/glossary.md","allow":["SCRIPT_CHECKOUT_ROOT","TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"defines the four root names"},
+    {"file":"docs/glossary-internal.md","allow":["SCRIPT_CHECKOUT_ROOT","TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"defines three of the four root names"},
     {"file":"docs/ops/migration-from-todo.md","allow":["TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"works on a checkout the caller names, which need not be its own"},
     {"file":"hooks/bash-guard/allow.js","allow":["AGENTS_MAIN_ROOT"],"forms":[],"reason":"matches the variable name inside command text"},
     {"file":"hooks/block-capture-echo/remedy.js","allow":["AGENTS_MAIN_ROOT"],"forms":[],"reason":"prints the variable name in the command it suggests"},

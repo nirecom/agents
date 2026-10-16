@@ -500,9 +500,16 @@ if [[ -n "$PROJECT_ROOT_ARG" ]]; then
   fi
 fi
 
+# Combined glossary (#2529); PROJECT_ROOT_ARG already falls back to the git top level.
+GLOSSARY_BLOCK=""
+GLOSSARY_TEXT="$(codex_core_combined_glossary_block "$PROJECT_ROOT_ARG")"
+if [[ -n "$GLOSSARY_TEXT" ]]; then
+  GLOSSARY_BLOCK="${GLOSSARY_TEXT}"$'\n\n'
+fi
+
 CODEX_PROMPT="${SCOPE_WARNING}${PREAMBLE}
 
-${NFR_BLOCK}${PRIOR_INSTRUCTIONS}## Concern Delta output format
+${NFR_BLOCK}${GLOSSARY_BLOCK}${PRIOR_INSTRUCTIONS}## Concern Delta output format
 
 After your review bullets, emit a section headed exactly '## Concern Delta'.
 List one line per concern, in this form:

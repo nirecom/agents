@@ -22,7 +22,8 @@ that nobody knows are three.
 
 ## Lineage 1 — `hooks/lib/command-ir/` (owner)
 
-The only parser that produces the IR. `parse(cmd, opts)` returns
+The only parser that produces the **IR**: the structured representation of a Bash
+command string that hooks judge commands through instead of regular expressions. `parse(cmd, opts)` returns
 `{ segments, separators, cmd0, argv, redirects, kind, rawText, parseFailure }` plus a
 **non-enumerable** frozen `analysis` side-channel read through `analysisOf(ir)`.
 

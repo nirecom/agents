@@ -130,6 +130,42 @@ else
     fail "A10: CLI --order outline did not print expected canonical order (got: $_a10)"
 fi
 
+# A11-A13: CLI error paths. stdout / stderr / exit code are captured separately into
+# files under this test's own temp dir.
+CLI_TMP_ROOT="$(mktemp -d)"
+readonly CLI_TMP_ROOT
+trap 'rm -rf "$CLI_TMP_ROOT"' EXIT
+cli_run() {
+    node "$PLAN_SCHEMA_NODE" "$@" >"$CLI_TMP_ROOT/out" 2>"$CLI_TMP_ROOT/err"
+    CLI_RC=$?
+    CLI_OUT="$(cat "$CLI_TMP_ROOT/out")"
+    CLI_ERR="$(cat "$CLI_TMP_ROOT/err")"
+}
+
+# A11: --order with an unknown type exits 1 and prints nothing on stdout.
+cli_run --order bogus
+if [[ "$CLI_RC" -eq 1 && -z "$CLI_OUT" ]]; then
+    pass "A11: CLI --order bogus -> exit 1, empty stdout"
+else
+    fail "A11: CLI --order bogus expected exit 1 + empty stdout, got rc=$CLI_RC stdout='$CLI_OUT'"
+fi
+
+# A12: --first-body-section with an unknown type exits 1 and prints nothing on stdout.
+cli_run --first-body-section bogus
+if [[ "$CLI_RC" -eq 1 && -z "$CLI_OUT" ]]; then
+    pass "A12: CLI --first-body-section bogus -> exit 1, empty stdout"
+else
+    fail "A12: CLI --first-body-section bogus expected exit 1 + empty stdout, got rc=$CLI_RC stdout='$CLI_OUT'"
+fi
+
+# A13: an unknown flag exits 2 with a usage line on stderr.
+cli_run --nope
+if [[ "$CLI_RC" -eq 2 && "$CLI_ERR" == *"usage:"* ]]; then
+    pass "A13: CLI --nope -> exit 2, stderr contains 'usage:'"
+else
+    fail "A13: CLI --nope expected exit 2 + 'usage:' on stderr, got rc=$CLI_RC stderr='$CLI_ERR'"
+fi
+
 # C2: EVERY LOCALIZED_TO_CANONICAL entry round-trips through canonicalizeHeading.
 # The whole map is walked inside node so no CJK key crosses bash; a single failing
 # entry names itself. Also asserts the map is non-empty (no vacuous pass).
@@ -266,14 +302,80 @@ _c3b7="$(c3b_has 'Interview Log')"
 if [[ $? -eq 0 ]]; then pass "C3b-7: CANONICAL_SECTIONS.intent contains 'Interview Log'"; else fail "C3b-7: $_c3b7"; fi
 _c3b8="$(c3b_has 'worktrees')"
 if [[ $? -eq 0 ]]; then pass "C3b-8: CANONICAL_SECTIONS.intent contains 'worktrees'"; else fail "C3b-8: $_c3b8"; fi
+# #2529: intent gains a mandatory `## Glossary` section (may be empty).
+_c3b9="$(c3b_has 'Glossary')"
+if [[ $? -eq 0 ]]; then pass "C3b-9: CANONICAL_SECTIONS.intent contains 'Glossary'"; else fail "C3b-9: $_c3b9"; fi
 
-# C3c: CANONICAL_SECTIONS.intent has exactly 8 members (no more, no less).
+# C3b-10 (#2529): Glossary sits directly after Issues in the canonical intent order.
+_c3b10="$(node -e "
+const s = require('$PLAN_SCHEMA_NODE');
+const got = (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.intent) || [];
+const i = got.indexOf('Issues');
+if (i === -1 || got[i + 1] !== 'Glossary') { process.stderr.write('expected Glossary right after Issues, got ' + JSON.stringify(got) + '\n'); process.exit(1); }
+" 2>&1)"
+if [[ $? -eq 0 ]]; then pass "C3b-10: CANONICAL_SECTIONS.intent places 'Glossary' directly after 'Issues'"; else fail "C3b-10: $_c3b10"; fi
+
+# C3b-10b (#2529): the full canonical intent order is pinned index by index, so any
+# reordering, insertion or removal fails (e.g. Background/Motivation must follow Glossary).
+_c3b10b="$(node -e "
+const s = require('$PLAN_SCHEMA_NODE');
+const expected = ['Issues','Glossary','Background/Motivation','Scope','Constraints','Interview Log','Class members','Accepted Tradeoffs','worktrees'];
+const got = (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.intent) || [];
+const bad = [];
+if (got.length !== expected.length) bad.push('length ' + got.length + ' != ' + expected.length);
+expected.forEach(function (name, i) { if (got[i] !== name) bad.push('index ' + i + ': want ' + JSON.stringify(name) + ' got ' + JSON.stringify(got[i])); });
+if (bad.length !== 0) { process.stderr.write('intent order mismatch: ' + bad.join('; ') + ' (got=' + JSON.stringify(got) + ')\n'); process.exit(1); }
+" 2>&1)"
+if [[ $? -eq 0 ]]; then pass "C3b-10b: CANONICAL_SECTIONS.intent equals the exact canonical order"; else fail "C3b-10b: $_c3b10b"; fi
+
+# C3b-11 (#2529): both Japanese aliases canonicalize to Glossary.
+# CJK is confined to the node process as \u escapes (no CJK through bash vars).
+# lang-check: ignore — Japanese heading aliases below are functional test data.
+_c3b11="$(node -e "
+const s = require('$PLAN_SCHEMA_NODE');
+const aliases = ['用語集', '用語'];
+const bad = [];
+aliases.forEach(function (a) {
+  const map = (s.LOCALIZED_TO_CANONICAL || {})[a];
+  const got = s.canonicalizeHeading('## ' + a);
+  if (map !== 'Glossary' || got !== 'Glossary') { bad.push(JSON.stringify(a) + ': map=' + JSON.stringify(map) + ' canonicalizeHeading=' + JSON.stringify(got)); }
+});
+if (bad.length !== 0) { process.stderr.write('aliases not canonicalized to Glossary: ' + bad.join('; ') + '\n'); process.exit(1); }
+" 2>&1)"
+if [[ $? -eq 0 ]]; then pass "C3b-11: aliases (yogoshu / yogo) canonicalize to 'Glossary'"; else fail "C3b-11: $_c3b11"; fi
+
+# C3b-12 (#2529): table-driven heading forms around the Glossary aliases — spacing and
+# hash-count variants resolve, near-miss headings (prefix / suffix / partial) do not.
+_c3b12="$(node -e "
+const s = require('$PLAN_SCHEMA_NODE');
+const cases = [
+  { name: 'en-canonical',        input: '## Glossary',        want: 'Glossary' },
+  { name: 'ja-yogoshu',          input: '## 用語集',          want: 'Glossary' },
+  { name: 'ja-yogo',             input: '## 用語',            want: 'Glossary' },
+  { name: 'ja-yogoshu-padded',   input: '##   用語集  ',      want: 'Glossary' },
+  { name: 'ja-yogo-no-space',    input: '##用語',             want: 'Glossary' },
+  { name: 'ja-yogoshu-h3',       input: '### 用語集',         want: 'Glossary' },
+  { name: 'ja-yogoshu-suffixed', input: '## 用語集メモ',      want: null },
+  { name: 'ja-yogo-phrase',      input: '## 用語の説明',      want: null },
+  { name: 'ja-partial-shu',      input: '## 集',              want: null },
+  { name: 'en-lowercase',        input: '## glossary',        want: null },
+];
+const bad = [];
+for (const { name, input, want } of cases) {
+  const got = s.canonicalizeHeading(input);
+  if (got !== want) bad.push(name + ': want=' + JSON.stringify(want) + ' got=' + JSON.stringify(got));
+}
+if (bad.length !== 0) { process.stderr.write(bad.join('; ') + '\n'); process.exit(1); }
+" 2>&1)"
+if [[ $? -eq 0 ]]; then pass "C3b-12: Glossary alias heading forms (table-driven)"; else fail "C3b-12: $_c3b12"; fi
+
+# C3c: CANONICAL_SECTIONS.intent has exactly 9 members (no more, no less; #2529 added Glossary).
 _c3c="$(node -e "
 const s = require('$PLAN_SCHEMA_NODE');
 const got = (s.CANONICAL_SECTIONS && s.CANONICAL_SECTIONS.intent) || [];
-if (got.length !== 8) { process.stderr.write('intent array has ' + got.length + ' members, expected 8: ' + JSON.stringify(got) + '\n'); process.exit(1); }
+if (got.length !== 9) { process.stderr.write('intent array has ' + got.length + ' members, expected 9: ' + JSON.stringify(got) + '\n'); process.exit(1); }
 " 2>&1)"
-if [[ $? -eq 0 ]]; then pass "C3c: CANONICAL_SECTIONS.intent has exactly 8 members"; else fail "C3c: $_c3c"; fi
+if [[ $? -eq 0 ]]; then pass "C3c: CANONICAL_SECTIONS.intent has exactly 9 members"; else fail "C3c: $_c3c"; fi
 
 # C3a-self: every canonical detail heading canonicalizes to itself.
 _c3a_self="$(node -e "

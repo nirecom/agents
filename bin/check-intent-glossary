@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+"use strict";
+// bin/check-intent-glossary <intent.md> — structure check of the intent `## Glossary`
+// section (#2529). Exit 0 ok, 1 violations (`line <n>: <reason>` on stderr),
+// 2 usage error or unreadable file. Logic lives in hooks/lib/intent-glossary.js.
+
+const fs = require("fs");
+const path = require("path");
+const { checkIntentGlossary } = require(path.join(__dirname, "..", "hooks", "lib", "intent-glossary"));
+
+const file = process.argv[2];
+if (!file || process.argv.length > 3) {
+  process.stderr.write("usage: check-intent-glossary <intent.md>\n");
+  process.exit(2);
+}
+let text;
+try {
+  text = fs.readFileSync(file, "utf8");
+} catch (e) {
+  process.stderr.write("check-intent-glossary: cannot read " + file + ": " + e.code + "\n");
+  process.exit(2);
+}
+const violations = checkIntentGlossary(text);
+for (const v of violations) process.stderr.write("line " + v.lineNumber + ": " + v.reason + "\n");
+process.exit(violations.length === 0 ? 0 : 1);
