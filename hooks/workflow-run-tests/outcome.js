@@ -61,7 +61,8 @@ function isNothingRanButUnrunnable(i) {
     && c !== null && c !== undefined
     && c.executed === 0
     && c.fail === 0
-    && c.unrunnable > 0;
+    && c.unrunnable > 0
+    && !(c.hits > 0);
 }
 
 // -> one of RUN_OUTCOME_VALUES, or null (a tombstone: no trustworthy observation).
@@ -77,6 +78,10 @@ function resolveRunOutcome(input) {
     && WORKER_FAILURE_STATUSES.indexOf(i.workerStatus) !== -1
   ) {
     return i.workerStatus;
+  }
+  // A run that left unattributed hits (#2669) failed, whatever its counts say.
+  if (i.ambiguous !== true && i.attributed === true && i.vetoed !== true && i.contract && i.contract.hits > 0) {
+    return "fail";
   }
   if (isContractTrusted(i)) {
     if (i.contract.fail > 0) return "fail";

@@ -17,6 +17,7 @@ const { demotionReason } = require("./workflow-run-tests/demotion");
 const { extractFailingTests, emitterRoot } = require("./workflow-run-tests/failing-list");
 const { applyDispatchOutcome } = require("./workflow-run-tests/dispatch-outcome");
 const { recordRun } = require("./workflow-run-tests/record-run");
+const { runAllHits, workerHits } = require("./workflow-run-tests/hit-summary");
 const { CONTRACT_PREFIX_RE, findSingleContract, runtimeLabels } = require("./lib/run-contract");
 const { sanitizeLine, collapseControl, redactSecrets } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
@@ -160,6 +161,17 @@ function stdoutFailingTests(t, toolResponse) {
   }
 }
 
+// The run's hit lines, read only from trusted, attributed emitter bytes (#2669); bounded by recordRun.
+function stdoutHits(t, toolResponse) {
+  try {
+    if (!t.hasProvenance || t.ambiguous || !t.attributed) return [];
+    const header = responseHeader(toolResponse, t.emitter);
+    return t.emitter === "worker-dispatch" ? workerHits(header) : runAllHits(header);
+  } catch (e) {
+    return [];
+  }
+}
+
 let input;
 const hookInput = readHookInput();
 if (hookInput.kind !== "ok") {
@@ -213,6 +225,7 @@ try {
       workerStatus: t.workerStatus,
     },
     failingTests: stdoutFailingTests(t, toolResponse),
+    hitSummary: stdoutHits(t, toolResponse),
     unrunnableRuntimes: reason === "contract-unrunnable" ? missingRuntimes(toolResponse, t.emitter) : null,
     contractAbsent: !t.hasProvenance || t.contract === null,
     reason,

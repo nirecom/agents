@@ -479,9 +479,9 @@ if [ "$DEADLINE_HIT" -eq 1 ]; then
   exit 3
 fi
 
-if declare -F run_all_hit_report >/dev/null 2>&1; then run_all_hit_report || RAR_FAIL=$((RAR_FAIL + 1)); fi # counted before the counts print
+if declare -F run_all_hit_collect >/dev/null 2>&1; then run_all_hit_collect; rar_hits; fi # applied before the counts print
 rar_missing ${MISSING[@]+"${MISSING[@]}"}
 rar_tail ${UNSUP[@]+"${UNSUP[@]}"}
 cleanup_all
 # A run that passed nothing is no pass, exactly as a single file's 77 (test-result-contract.md).
-if [ "$RAR_FAIL" -gt 0 ]; then exit 1; elif [ "$RAR_PASS" -eq 0 ]; then exit 77; else exit 0; fi
+if [ "$RAR_FAIL" -gt 0 ] || [ "${RAR_HITS:-0}" -gt 0 ]; then exit 1; elif [ "$RAR_PASS" -eq 0 ]; then exit 77; else exit 0; fi

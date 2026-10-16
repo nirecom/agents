@@ -104,11 +104,13 @@ The tail (`rar_tail`):
 ```
 UNSUPPORTED: <file> (language: <id>; not run)
 Missing runtimes: Pester>=5.0 (2 files), pwsh (1 file)
-Results: PASS=p  FAIL=f  SKIP=s  UNRUNNABLE=u  TIMEOUT=t
-RUN_CONTRACT: PASS=p FAIL=f SKIP=s EXECUTED=p+f+s UNRUNNABLE=u TIMEOUT=t
+HIT: <detail>
+Results: PASS=p  FAIL=f  SKIP=s  UNRUNNABLE=u  TIMEOUT=t  HITS=h
+RUN_CONTRACT: PASS=p FAIL=f SKIP=s EXECUTED=p+f+s UNRUNNABLE=u TIMEOUT=t HITS=h
 ```
 
-`Missing runtimes:` appears only when `UNRUNNABLE > 0`. `TIMEOUT` is a subset of `FAIL`; `UNRUNNABLE` is outside `EXECUTED`. `tests/run-all.sh` exits 1 when `FAIL > 0`; an UNRUNNABLE-only run exits 0, and the readers below are what keep it from counting as green.
+`Missing runtimes:` appears only when `UNRUNNABLE > 0`; a unit a late hit turned into a FAIL leaves it.
+`HIT:` lines and ` HITS=h` appear only when `h > 0`: guard, decoy or worktree-change hits no test could be named for ([test-command-guard.md](test-command-guard.md) "Install points and the hit report"). Absent `HITS=` and `HITS=0` mean the same. A run with `HITS > 0` exits 1 and never completes `run_tests`; `bin/run-tests-baseline` refuses to classify it (exit 6, `BASELINE_HITS: count=N` then the `HIT:` lines). `TIMEOUT` is a subset of `FAIL`; `UNRUNNABLE` is outside `EXECUTED`. `tests/run-all.sh` exits 1 when `FAIL > 0`; an UNRUNNABLE-only run exits 0, and the readers below are what keep it from counting as green.
 
 ## Neutralization of child output
 

@@ -11,7 +11,7 @@ const { RUN_TESTS_BASELINE_ACCEPTED_RE_DQ, RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE
   require("../lib/sentinel-patterns");
 const { appendEvents } = require("../workflow-state/state-io");
 const { sanitizeLine } = require("../lib/output-sanitize");
-const { grantKind } = require("../../bin/workflow/lib/run-tests-baseline-evidence");
+const { grantKind, hitCount } = require("../../bin/workflow/lib/run-tests-baseline-evidence");
 
 const LABEL = "RUN_TESTS_BASELINE_ACCEPTED";
 const ORIGIN = "workflow-mark-run-tests-baseline-accept";
@@ -36,6 +36,8 @@ function judge(entry) {
   if (entry.unrunnable_count !== 0) {
     return { why: "the failing run recorded no exact unrunnable_count of 0 — re-run /run-tests" };
   }
+  const hits = hitCount(entry);
+  if (hits > 0) return { why: `${hits} unattributed hit(s) — a run with HITS>0 cannot be accepted` };
   const kind = grantKind(entry);
   if (kind !== null) return { kind };
   const cls = entry.baseline_classification;

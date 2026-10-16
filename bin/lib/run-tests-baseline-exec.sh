@@ -8,7 +8,7 @@
 # <logdir>/<i>.{state,timedout,unrunnable,unsupported,decoyhit} markers, never from the exit
 # code alone: RTB_EXEC_STATE ("" from a launcher that predates #2501), RTB_EXEC_TIMEDOUT,
 # RTB_EXEC_UNRUNNABLE, RTB_EXEC_UNSUPPORTED (not launched, so a test exiting 78 is not it),
-# RTB_EXEC_DECOY (decoy, command guard or worktree change hit: the exit code says nothing about the base).
+# RTB_EXEC_DECOY (any hit, reported or claimed (RUN_ALL_EXEC_HITS): the exit code says nothing about the base).
 
 case "${BASH_SOURCE[0]}" in
   */*) RTB_EXEC_LIB_DIR="${BASH_SOURCE[0]%/*}" ;;
@@ -78,7 +78,7 @@ rtb_exec_one() {
         . "$launcher" || { : >"$logdir/$i.nolaunch"; exit 2; }
         cd "$wt" || { : >"$logdir/$i.nolaunch"; exit 2; }
         unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE
-        unset RUN_ALL_EXEC_STATE RUN_ALL_EXEC_MISSING RUN_ALL_EXEC_LAUNCHED
+        unset RUN_ALL_EXEC_STATE RUN_ALL_EXEC_MISSING RUN_ALL_EXEC_LAUNCHED RUN_ALL_EXEC_HITS
         export WORKFLOW_STATE_DIR="$iso/workflow" \
             WORKFLOW_PLANS_DIR="$iso/plans" CLAUDE_TRANSCRIPT_BASE_DIR="$iso/transcripts" \
             RUN_ALL_TIMEOUT_SECONDS="$timeout"
@@ -115,6 +115,11 @@ rtb_exec_one() {
         fi
         if [ -n "$report" ]; then
             "$report" 2>>"$logdir/$i.err" || { : >"$logdir/$i.decoyhit"; [ "$rc" = 0 ] && rc=1; }
+        fi
+        # A hit the launcher already claimed for this test consumed its record, so the report above cannot see it.
+        if [ "${RUN_ALL_EXEC_HITS:-0}" -gt 0 ] 2>/dev/null; then
+            : >"$logdir/$i.decoyhit"
+            [ "$rc" = 0 ] && rc=1
         fi
         exit "$rc"
     )</dev/null >/dev/null 2>&1 &
