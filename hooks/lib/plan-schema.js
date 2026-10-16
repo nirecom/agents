@@ -13,6 +13,7 @@
 const CANONICAL_SECTIONS = Object.freeze({
   intent: Object.freeze([
     "Issues",
+    "Glossary",
     "Background/Motivation",
     "Scope",
     "Constraints",
@@ -45,6 +46,7 @@ const CANONICAL_SECTIONS = Object.freeze({
 // suffice. Best-effort backstop (per plan Step 1): detects known variants only;
 // prose directives and the sweep tool are the primary defense.
 const LOCALIZED_TO_CANONICAL = Object.freeze({
+  // lang-check: ignore — the keys below are Japanese heading variants (functional data).
   "課題": "Issues",
   "イシュー": "Issues",
   "対象Issue": "Issues",

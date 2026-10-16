@@ -86,16 +86,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
 - `confirm-checkpoint.js` (PreToolUse, CONFIRM sentinel) — denies the echo when it can judge that the previous turn did not end its last text block on the stage's plan-link line, no user prompt came in between, or this turn rewrote the plan (#2513); otherwise emits the user-facing `systemMessage` plus `additionalContext` (`[plan-link]`). Two denies in a row per (session, stage) are the cap: the third echo passes with a cap note and a supervisor finding, and the counter resets. Unreadable transcript, counter or link fail open to the plain dialog; it never emits allow. `CONFIRM_INTENT=off` does not waive intent.
 - `gate-plan-skill-advance.js` (PreToolUse, matcher: `Skill`) — denies `make-outline-plan` / `make-detail-plan` / `write-tests` while the preceding plan stage's approval is `unapproved` (#2277); every other state, including unreadable ones, passes silently. A deterrent only — the side-effect owners (`run-completion.sh`, the completion sentinels) fail closed.
 - `block-send-user-file.js` (PreToolUse, matcher: `SendUserFile`) — denies the tool so a plan is shown by its plan-link line in the response text, never sent as a file. Any other tool or unreadable stdin passes with no output.
-- `gate-plan-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a write
-  to a final plan artifact under the plans directory whose submitted text violates a strict
-  `PLAN_LANG` (`english` / `japanese`) BEFORE the file changes (#2278). The unit of analysis is
-  the per-edit fragment: each `edits[]` element carries its own path (inheriting the top-level
-  one when absent) and is linted on its own, so an unclosed code fence in one fragment cannot
-  hide prose in the next. The gate never reads the target file and never writes; the block
-  reason is prefixed `[gate-plan-lang] PLAN_LANG=<policy>` and echoes only the violating lines,
-  numbered relative to the fragment. Hint-tier policies and every error path approve silently.
-  Why a PreToolUse gate when `check-plan-lang.js` already exists: a PostToolUse block lands
-  after the bytes are on disk, so a non-compliant model could still confirm the stage.
+- `gate-plan-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a write to a final plan artifact under the plans directory whose submitted text violates a strict `PLAN_LANG` (`english` / `japanese`) BEFORE the file changes (#2278). The unit of analysis is the per-edit fragment: each `edits[]` element carries its own path (inheriting the top-level one when absent) and is linted on its own, so an unclosed code fence in one fragment cannot hide prose in the next. The gate never reads the target file and never writes; the block reason is prefixed `[gate-plan-lang] PLAN_LANG=<policy>` and echoes only the violating lines, numbered relative to the fragment. Hint-tier policies and every error path approve silently. Why a PreToolUse gate when `check-plan-lang.js` already exists: a PostToolUse block lands after the bytes are on disk, so a non-compliant model could still confirm the stage. A `Write` to an intent artifact carries the whole document, so it also gets the intent `## Glossary` structure check (#2529), reported under `[gate-plan-lang] intent structure`; Edit fragments skip it because a headingless fragment is normal.
 - `gate-worktree-notes-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — the
   same pre-write treatment for `WORKTREE_NOTES.md` `## History Notes` / `## Changelog Notes`
   bullets against `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE`, routed by the hook's own
@@ -112,11 +103,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   and checked by `bin/check-case-markers.sh` on a temp copy. editFiles and every error path approve;
   `hooks/pre-commit` is the backstop. Block prefix: `[block-case-markers]`. See
   [case-marker-gate.md](../case-marker-gate.md).
-- `check-plan-lang.js` (PostToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — post-write
-  backstop for the plan-artifact language policy: strict tier blocks with the
-  `[check-plan-lang] PLAN_LANG=<policy>` header, hint tier emits `additionalContext` only.
-  Shares plan-artifact path resolution and violation formatting with the PreToolUse gate through
-  `hooks/lib/plan-artifact-lang.js`, so the two surfaces cannot drift (#2278).
+- `check-plan-lang.js` (PostToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — post-write backstop for the plan-artifact language policy: strict tier blocks with the `[check-plan-lang] PLAN_LANG=<policy>` header, hint tier emits `additionalContext` only. Shares plan-artifact path resolution and violation formatting with the PreToolUse gate through `hooks/lib/plan-artifact-lang.js`, so the two surfaces cannot drift (#2278). It also runs the intent `## Glossary` structure check on the whole written document (#2529) and lists any such violation under `[check-plan-lang] intent structure` in the same block message.
 - `check-worktree-notes-lang.js` (PostToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) —
   post-write backstop for `WORKTREE_NOTES.md`; reads the file as written and lints the two
   target sections with the same routing (`safeIsPrivateRepo` from `hooks/lib/is-private-repo.js`)

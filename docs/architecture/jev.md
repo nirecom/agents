@@ -14,8 +14,8 @@ tokens on every workflow stage. A typed classifier answers the same rubric
 faster and cheaper, and it reports how sure it is. So Jev answers the keys it
 is confident about, and the subagent is dispatched only for the rest — often
 for none. A shadow period (#2460, under #2457) collected the agreement data
-that justified adopting Jev's answers; shadow mode remains as a per-point
-fallback.
+that justified adopting Jev's answers; Jev shadow mode (Jev answers, only the
+log keeps it, the subagent decides) remains as a per-point fallback.
 
 ## Enabling
 

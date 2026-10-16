@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Glossary entry-file review. Usage: review-doc-glossary [--staged | --all]
+#
+# Targets docs/glossary-user*.md and docs/glossary-internal*.md only; the
+# docs/glossary.md index page and any other glossary-*.md name are out of scope.
+# --staged: SKIP unless a target path is staged (deletions count). Otherwise every
+# target file in the index is checked from its staged blob, so a split or a deletion
+# that opens a range gap is judged on what will be committed. Exits 1 on any BLOCK.
+# --all: check the working-tree target files; advisory only, always exits 0.
+# Entry form, order, range membership, duplicates and the file-set rule are checked
+# by bin/lib/glossary-format.js; the rules themselves live in rules/docs/glossary.md.
+
+set -uo pipefail
+
+HDR="## Doc-glossary Review"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FORMAT_JS="$SCRIPT_DIR/lib/glossary-format.js"
+TARGET_RE='^docs/glossary-(user|internal)(-[^/]*)?\.md$'
+
+emit_skip() {
+  printf '%s\n' "$HDR: SKIPPED — $1"
+  exit 0
+}
+
+ALL_SCAN=0
+STAGED_ONLY=0
+BAD_ARG=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --staged) STAGED_ONLY=1; shift ;;
+    *) BAD_ARG=1; shift ;;
+  esac
+done
+
+[[ "$BAD_ARG" -eq 1 ]] && emit_skip "unrecognized argument"
+if [[ "$ALL_SCAN" -eq 1 && "$STAGED_ONLY" -eq 1 ]]; then
+  emit_skip "--staged and --all are mutually exclusive"
+fi
+if [[ "$ALL_SCAN" -eq 0 && "$STAGED_ONLY" -eq 0 ]]; then
+  emit_skip "no mode selected (use --staged or --all)"
+fi
+
+is_target() {
+  [[ "$1" =~ $TARGET_RE ]]
+}
+
+# run_checks <label> <file> [...] — print findings, return the checker's exit code.
+run_checks() {
+  local rc=0
+  node "$FORMAT_JS" check-files "$@" || rc=$?
+  if [[ "$rc" -eq 2 ]]; then
+    echo "  BLOCK: glossary checker failed to run (see stderr above)"
+    rc=1
+  fi
+  return "$rc"
+}
+
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  echo "$HDR: PERFORMED (all-scan mode)"
+  echo ""
+  ARGS=()
+  for file in docs/glossary-*.md; do
+    [[ -f "$file" ]] || continue
+    is_target "$file" || continue
+    ARGS+=("$file" "$file")
+  done
+  if [[ "${#ARGS[@]}" -eq 0 ]]; then
+    echo "  (no glossary entry files in the working tree)"
+  elif run_checks "${ARGS[@]}"; then
+    echo "  OK: $(( ${#ARGS[@]} / 2 )) file(s), no findings"
+  fi
+  echo ""
+  echo "  Findings are advisory in all-scan mode."
+  exit 0
+fi
+
+# --- staged mode ---
+TRIGGER=0
+while IFS= read -r -d '' file; do
+  is_target "$file" && TRIGGER=1
+done < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRTD 2>/dev/null || true)
+[[ "$TRIGGER" -eq 1 ]] || emit_skip "no glossary entry file staged"
+
+echo "$HDR: PERFORMED (staged mode)"
+echo ""
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+ARGS=()
+SEQ=0
+while IFS= read -r -d '' file; do
+  is_target "$file" || continue
+  SEQ=$((SEQ + 1))
+  git show ":./$file" > "$WORK_DIR/$SEQ.md" 2>/dev/null || continue
+  ARGS+=("$file" "$WORK_DIR/$SEQ.md")
+done < <(git -c core.quotePath=false ls-files -z -- 'docs/glossary-*.md' 2>/dev/null || true)
+
+RC=0
+if [[ "${#ARGS[@]}" -eq 0 ]]; then
+  echo "  (no glossary entry file left in the index)"
+else
+  run_checks "${ARGS[@]}" || RC=1
+fi
+echo ""
+echo "  Any finding blocks the commit (exit 1)."
+exit "$RC"

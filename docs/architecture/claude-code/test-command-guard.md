@@ -41,6 +41,8 @@ The binary then asks the real git, with the same pairs (as `main.js` passes its 
 
 A refusal exits 97, prints `command guard: refused …` to stderr, and leaves one hit file under `<guard dir>/hits/` naming the tool, the test (`ROOT_DECOY_TEST_ID`), the target and the arguments. The decision lives in `tests/lib/command-guard/` (`classify.js` for the verb, `resolve-target.js` for the targets, `main.js` for the verdict).
 
+The **spawn record** is a Node.js `--require` preload (`tests/fixtures/spawn-record-preload.js`, loaded through `NODE_OPTIONS`) that records every `spawn` / `execFile` call into the same `hits/` directory, so a test can assert which commands a script invoked.
+
 ### Sentinel and git write guard on POSIX
 
 On Linux and macOS each binary is a small bash script written by `tests/lib/command-guard-build.js`. A git read, or a write that passes the fast write path, is classified in bash and `exec`s the real git without starting node; everything else runs `main.js`. Without node the script still records a hit and exits 97, so a broken guard fails closed.
