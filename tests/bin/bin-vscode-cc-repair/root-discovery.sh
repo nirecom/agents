@@ -227,6 +227,83 @@ run_t5d() {
   fi
 }
 
+# C12 — an unreadable root (#2683). chmod is advisory on Windows, so the readdir failure
+# is induced by stubbing fs.readdirSync for one path: in-process for the unit rows, via a
+# NODE_OPTIONS --require preload for the CLI rows. A nonexistent root is the real ENOENT.
+DENY_PRELOAD="$TMPROOT/deny-readdir.js"
+printf '%s\n' 'const fs=require("fs"),p=require("path");' \
+  'const key=(s)=>process.platform==="win32"?p.resolve(s).toLowerCase():p.resolve(s);' \
+  'const deny=key(process.env.CCR_DENY_ROOT);const orig=fs.readdirSync;' \
+  'fs.readdirSync=function(d,...r){if(typeof d==="string"&&key(d)===deny){const e=new Error("EACCES: stub scandir");e.code="EACCES";throw e;}return orig.call(fs,d,...r);};' \
+  > "$DENY_PRELOAD"
+DENY_PRELOAD_N="$(native_path "$TMPROOT")/deny-readdir.js"
+export DENY_PRELOAD_N
+
+c12_field() { grep -E "^$1=" <<< "$NODE_OUT" | head -1 || true; }
+
+run_c12_unit() {
+  local deny ok healthy dn
+  deny="$(mktemp -d "$TMPROOT/c12deny.XXXXXX")"; ok="$(mktemp -d "$TMPROOT/c12ok.XXXXXX")"
+  healthy="$(mktemp -d "$TMPROOT/c12h.XXXXXX")"
+  make_ext_dir "$deny" "$DIR_A" "$BODY_FALSY"
+  make_ext_dir "$healthy" "$DIR_A" "$BODY_FALSY"
+  dn="$(basename "$deny")"
+  CCR_DENY_ROOT="$(native_path "$deny")" FIX_OK="$(native_path "$ok")" \
+  FIX_H="$(native_path "$healthy")" FIX_MISSING="$(native_path "$ok")/no-such-root" \
+  node_m 'require(process.env.DENY_PRELOAD_N);
+const m=require("./bin/vscode-cc-repair/patch");const E=process.env;
+const codes=(root)=>{const c=[];const n=m.listExtensionDirs(root,{onError:(e)=>c.push(e.code)}).length;return n+":"+c.join(",");};
+console.log("U1="+codes(E.CCR_DENY_ROOT));
+console.log("U2="+m.listExtensionDirs(E.CCR_DENY_ROOT).length);
+console.log("U3="+codes(E.FIX_OK));
+console.log("U4="+codes(E.FIX_MISSING));
+const cap=(o)=>{let out="",err="";const ow=process.stdout.write,ew=process.stderr.write;
+process.stdout.write=(s)=>{out+=s;return true;};process.stderr.write=(s)=>{err+=s;return true;};
+let r;try{r=m.runPatch(o);}finally{process.stdout.write=ow;process.stderr.write=ew;}return {r,out,err};};
+const a=cap({overrides:[E.CCR_DENY_ROOT,E.FIX_H],dryRun:true});
+console.log("R1="+JSON.stringify(a.r));console.log("O1="+JSON.stringify(a.out));console.log("E1="+JSON.stringify(a.err));
+const b=cap({overrides:[E.FIX_OK],dryRun:true});
+console.log("R2="+JSON.stringify(b.r));console.log("O2="+JSON.stringify(b.out));'
+  check "C12-u01: harness exit 0" "0" "$NODE_RC"
+  check "C12-u02: unreadable root yields [] and calls onError once with the error" "U1=0:EACCES" "$(c12_field U1)"
+  check "C12-u03: one-arg call on an unreadable root still returns []" "U2=0" "$(c12_field U2)"
+  check "C12-u04: a readable empty root never calls onError" "U3=0:" "$(c12_field U3)"
+  check "C12-u05: a nonexistent root reports its real ENOENT" "U4=0:ENOENT" "$(c12_field U4)"
+  check "C12-u06: runPatch returns failed:true" 'R1={"failed":true}' "$(c12_field R1)"
+  check_contains "C12-u07: stdout names the root, basename-only" \
+    "failed  $dn  reason=root-unreadable" "$(c12_field O1)"
+  check_contains "C12-u08: unreadable root counted failed, not as a dir" \
+    "summary: roots=2 dirs=1 patched=0 already=0 absent=0 would-patch=1 refused=0 failed=1" "$(c12_field O1)"
+  check_contains "C12-u09: the healthy sibling root is still scanned" "would-patch  $DIR_A" "$(c12_field O1)"
+  check_contains "C12-u10: stderr carries the prefixed failed warning" \
+    "${STDERR_PREFIX}failed: " "$(c12_field E1)"
+  check_contains "C12-u11: stderr warning names root-unreadable" "root-unreadable" "$(c12_field E1)"
+  check_absent "C12-u12: stdout carries no diagnostic prefix" "$STDERR_PREFIX" "$(c12_field O1)"
+  check "C12-u13: a readable empty root is not a failure" 'R2={"failed":false}' "$(c12_field R2)"
+  check_contains "C12-u14: empty root summary has failed=0" "failed=0" "$(c12_field O2)"
+  check_absent "C12-u15: empty root emits no root-unreadable line" "root-unreadable" "$(c12_field O2)"
+  check "C12-u16: the stubbed root's bundle is untouched" "$BODY_FALSY" "$(cat "$deny/$DIR_A/extension.js")"
+}
+
+run_c12_cli() {
+  local deny healthy dn
+  deny="$(mktemp -d "$TMPROOT/c12cd.XXXXXX")"; healthy="$(mktemp -d "$TMPROOT/c12ch.XXXXXX")"
+  make_ext_dir "$deny" "$DIR_A" "$BODY_FALSY"
+  make_ext_dir "$healthy" "$DIR_A" "$BODY_FALSY"
+  dn="$(basename "$deny")"
+  NODE_OPTIONS="--require \"$DENY_PRELOAD_N\"" CCR_DENY_ROOT="$(native_path "$deny")" \
+    run_cli_split --extensions-dir "$(native_path "$deny")" --extensions-dir "$(native_path "$healthy")"
+  check "C12-c01: an unreadable root makes the CLI exit 1" "1" "$CLI_RC"
+  check_contains "C12-c02: stdout reports the root as failed" \
+    "failed  $dn  reason=root-unreadable" "$CLI_STDOUT"
+  check_contains "C12-c03: summary counts failed=1 and only the healthy dir" \
+    "summary: roots=2 dirs=1 patched=1 already=0 absent=0 would-patch=0 refused=0 failed=1" "$CLI_STDOUT"
+  check_contains "C12-c04: stderr carries the root-unreadable warning" "root-unreadable" "$CLI_STDERR"
+  check_contains "C12-c05: the healthy root was still patched" 'includeWorktrees:!0' \
+    "$(cat "$healthy/$DIR_A/extension.js")"
+  check "C12-c06: the unreadable root's bundle is untouched" "$BODY_FALSY" "$(cat "$deny/$DIR_A/extension.js")"
+}
+
 run_c4a
 run_c4b
 run_c4c
@@ -237,3 +314,5 @@ run_t5a
 run_t5b
 run_t5c
 run_t5d
+run_c12_unit
+run_c12_cli

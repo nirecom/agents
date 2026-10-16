@@ -57,11 +57,15 @@ function resolveRoots(options) {
 }
 
 // Matching directories inside one root, name-ascending, deduped by realpath.
-function listExtensionDirs(root) {
+// An unreadable root still yields []; `options.onError(error)` lets a caller tell that
+// apart from an empty root, so it can fail closed instead of reading [] as "nothing here".
+function listExtensionDirs(root, options) {
+  const opts = options || {};
   let names;
   try {
     names = fs.readdirSync(root);
-  } catch {
+  } catch (error) {
+    if (typeof opts.onError === 'function') opts.onError(error);
     return [];
   }
   names.sort();

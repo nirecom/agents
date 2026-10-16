@@ -217,7 +217,8 @@ Use `ENFORCE_WORKTREE=off` temporarily, or restructure the command to avoid the 
 The `anthropic.claude-code` extension asks for sessions with `includeWorktrees` disabled, so a
 session started from a linked worktree is never listed — and every extension auto-upgrade
 restores that state. Run `bin/vscode-cc-repair/index.js` (see README.md), then
-`Developer: Reload Window`.
+`Developer: Reload Window`. If the tool reports `refused` or `failed`, the stub-session prune
+is skipped and the exit code is 1; see [vscode-worktree-repair.md](vscode-worktree-repair.md).
 
 **`gh pr create` fails — PR already exists:**
 `/commit-push` is idempotent: it calls `gh pr view` first and reuses an open PR.

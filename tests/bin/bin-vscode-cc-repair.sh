@@ -157,9 +157,74 @@ DIR_B="anthropic.claude-code-2.0.0"
 STDERR_PREFIX='[vscode-cc-repair] '
 
 # Real-bundle shape: the key appears twice — once as a destructuring site whose value
-# is an identifier, once as the patch target literal. Literal sites: 1.
-BODY_FALSY='function f({includeWorktrees:i}){return i}var o={includeWorktrees:!1};module.exports={f,o};'
-BODY_TRUTHY='function f({includeWorktrees:i}){return i}var o={includeWorktrees:!0};module.exports={f,o};'
+# is an identifier, once as the patch target literal inside the `sessionListOptions(){return{`
+# anchor literal (#2683: the default classifier only patches inside that anchor). Literal sites: 1.
+BODY_FALSY='function f({includeWorktrees:i}){return i}var o={sessionListOptions(){return{includeWorktrees:!1}}};module.exports={f,o};'
+BODY_TRUTHY='function f({includeWorktrees:i}){return i}var o={sessionListOptions(){return{includeWorktrees:!0}}};module.exports={f,o};'
+# The pre-#2683 synthetic shape: one literal and NO anchor. Default method -> refused;
+# only --legacy-single-literal still patches it.
+BODY_NOANCHOR_FALSY='function f({includeWorktrees:i}){return i}var o={includeWorktrees:!1};module.exports={f,o};'
+BODY_NOANCHOR_TRUTHY='function f({includeWorktrees:i}){return i}var o={includeWorktrees:!0};module.exports={f,o};'
+# Extension 2.1.300 shape: the anchor literal plus a resolveSession() call holding its own
+# `includeWorktrees:!1`, which must survive the patch. _REV puts the outside site FIRST, so a
+# "first falsy wins" offset would splice the wrong one.
+BODY_V2130='var c={sessionListOptions(){return{cwd:this.cwd,includeWorktrees:!1}},resolveSession(Y){return listSdkSessions({limit:1,dir:Y.folder,includeWorktrees:!1})}};function listSdkSessions(o){return o}module.exports={c};'
+BODY_V2130_PATCHED='var c={sessionListOptions(){return{cwd:this.cwd,includeWorktrees:!0}},resolveSession(Y){return listSdkSessions({limit:1,dir:Y.folder,includeWorktrees:!1})}};function listSdkSessions(o){return o}module.exports={c};'
+BODY_V2130_REV='var c={resolveSession(Y){return listSdkSessions({limit:1,dir:Y.folder,includeWorktrees:!1})},sessionListOptions(){return{cwd:this.cwd,includeWorktrees:!1}}};function listSdkSessions(o){return o}module.exports={c};'
+# Anchor-method refusal shapes. _KEYLESS: the anchor exists but holds no key; the only
+# literal sits outside it (resolveSession), so there is nothing patchable -> refused.
+BODY_ANCHOR_KEYLESS='var c={sessionListOptions(){return{cwd:1}},resolveSession(Y){return listSdkSessions({limit:1,dir:Y.folder,includeWorktrees:!1})}};function listSdkSessions(o){return o}module.exports={c};'
+# Anchor present, no `includeWorktrees:` anywhere -> absent.
+BODY_ANCHOR_NOKEY='var a={sessionListOptions(){return{cwd:1}}};module.exports={a};'
+# Nested objects inside the anchor literal. A nested `includeWorktrees:` counts toward the
+# in-literal key count (spec: exactly one inside the literal), so both are refused.
+BODY_ANCHOR_NESTED_BEFORE='var a={sessionListOptions(){return{opts:{includeWorktrees:!1},dir:this.cwd,includeWorktrees:!1}}};module.exports={a};'
+BODY_ANCHOR_NESTED_AFTER='var a={sessionListOptions(){return{dir:this.cwd,includeWorktrees:!1,opts:{includeWorktrees:!1}}}};module.exports={a};'
+# A key-free nested object before the target key: the literal's end is found past it.
+BODY_ANCHOR_NESTED_NOKEY='var a={sessionListOptions(){return{opts:{dir:1,list:[1,2]},includeWorktrees:!1}}};module.exports={a};'
+BODY_ANCHOR_NESTED_NOKEY_PATCHED='var a={sessionListOptions(){return{opts:{dir:1,list:[1,2]},includeWorktrees:!0}}};module.exports={a};'
+# Depth-1 rule: a key only in a nested object/array is not the target -> refused, whatever its value.
+BODY_ANCHOR_NESTED_ONLY='var a={sessionListOptions(){return{opts:{includeWorktrees:!1},cwd:this.cwd}}};module.exports={a};'
+BODY_ANCHOR_NESTED_ONLY_TRUTHY='var a={sessionListOptions(){return{opts:{includeWorktrees:!0},cwd:this.cwd}}};module.exports={a};'
+BODY_ANCHOR_ARRAY_NESTED='var a={sessionListOptions(){return{list:[{includeWorktrees:!1}],cwd:this.cwd}}};module.exports={a};'
+# String-aware brace scan. _STR_SIBLING: a naive scan counting the `{{` inside the string would
+# run past the literal's real end into resolveSession and adopt its key; the string-aware scan
+# closes the literal before it, so the anchor holds no key -> refused (no-anchor-key).
+BODY_ANCHOR_STR_SIBLING='var a={sessionListOptions(){return{cwd:"{{",x:1}},resolveSession(){return{includeWorktrees:!1}}};module.exports={a};'
+# A `}` inside a string (plain, or behind an escaped quote) must not close the literal early.
+BODY_ANCHOR_STR_CLOSE='var a={sessionListOptions(){return{cwd:"}",includeWorktrees:!1}}};module.exports={a};'
+BODY_ANCHOR_STR_CLOSE_PATCHED='var a={sessionListOptions(){return{cwd:"}",includeWorktrees:!0}}};module.exports={a};'
+BODY_ANCHOR_ESC_DQ='var a={sessionListOptions(){return{cwd:"a\"}",includeWorktrees:!1}}};module.exports={a};'
+BODY_ANCHOR_ESC_DQ_PATCHED='var a={sessionListOptions(){return{cwd:"a\"}",includeWorktrees:!0}}};module.exports={a};'
+BODY_ANCHOR_ESC_SQ="var a={sessionListOptions(){return{cwd:'a\\'}',includeWorktrees:!1}}};module.exports={a};"
+BODY_ANCHOR_ESC_SQ_PATCHED="var a={sessionListOptions(){return{cwd:'a\\'}',includeWorktrees:!0}}};module.exports={a};"
+# The key text inside a string is still a key site in the literal that is not depth-1 code.
+BODY_ANCHOR_KEY_IN_STR='var a={sessionListOptions(){return{s:"includeWorktrees:!1",includeWorktrees:!1}}};module.exports={a};'
+# A backtick or `/` before the literal closes is unlexable without a parser -> ambiguous.
+BODY_ANCHOR_TEMPLATE='var a={sessionListOptions(){return{cwd:`x`,includeWorktrees:!1}}};module.exports={a};'
+BODY_ANCHOR_REGEX='var a={sessionListOptions(){return{r:/}/,includeWorktrees:!1}}};module.exports={a};'
+BODY_ANCHOR_UNCLOSED='var a={sessionListOptions(){return{includeWorktrees:!1'
+BODY_TWO_ANCHORS='var a={sessionListOptions(){return{includeWorktrees:!1}}},b={sessionListOptions(){return{includeWorktrees:!1}}};module.exports={a,b};'
+BODY_ANCHOR_TWO_KEYS='var a={sessionListOptions(){return{includeWorktrees:!1,includeWorktrees:!1}}};module.exports={a};'
+BODY_ANCHOR_DYNAMIC='var w=!1,a={sessionListOptions(){return{includeWorktrees:w}}};module.exports={a};'
+BODY_ANCHOR_UNKNOWN='var a={sessionListOptions(){return{includeWorktrees:!10}}};module.exports={a};'
+BODY_ANCHOR_TRUE='var a={sessionListOptions(){return{includeWorktrees:true}}};module.exports={a};'
+BODY_ANCHOR_FALSE='var a={sessionListOptions(){return{includeWorktrees: false}}};module.exports={a};'
+# Anchor boundary rule: the lone anchor must follow `{` `}` `,` `;` or open the file. Text
+# inside a string or comment follows something else -> refused ambiguous-anchor.
+BODY_ANCHOR_IN_DQ='var s="sessionListOptions(){return{includeWorktrees:!1}";module.exports={s};'
+BODY_ANCHOR_IN_DQ_TRUTHY='var s="sessionListOptions(){return{includeWorktrees:!0}";module.exports={s};'
+BODY_ANCHOR_IN_SQ="var s='sessionListOptions(){return{includeWorktrees:!1}';module.exports={s};"
+BODY_ANCHOR_IN_COMMENT='/* sessionListOptions(){return{includeWorktrees:!1}} */module.exports={};'
+# Accepted boundaries. _AFTER_RBRACE is the 2.1.300 class-body shape `...}}sessionListOptions`.
+BODY_ANCHOR_AFTER_RBRACE='class C{m(){if(this.x){}}sessionListOptions(){return{dir:this.cwd,includeWorktrees:!1}}}module.exports={C};'
+BODY_ANCHOR_AFTER_COMMA='var o={a:1,sessionListOptions(){return{includeWorktrees:!1}}};module.exports={o};'
+BODY_ANCHOR_AFTER_SEMI='class C{x=1;sessionListOptions(){return{includeWorktrees:!1}}}module.exports={C};'
+BODY_ANCHOR_AFTER_LBRACE='class C{sessionListOptions(){return{includeWorktrees:!1}}}module.exports={C};'
+BODY_ANCHOR_AT_OFFSET0='sessionListOptions(){return{includeWorktrees:!1}}'
+BODY_OUTSIDE_UNKNOWN='var a={sessionListOptions(){return{includeWorktrees:!1}}},b={includeWorktrees:!10};module.exports={a,b};'
+BODY_OUTSIDE_TRUE='var a={sessionListOptions(){return{includeWorktrees:!1}}},b={includeWorktrees:true};module.exports={a,b};'
+BODY_OUTSIDE_FALSE='var a={sessionListOptions(){return{includeWorktrees:!1}}},b={includeWorktrees: false};module.exports={a,b};'
 BODY_TWO_FALSY='var a={includeWorktrees:!1},b={includeWorktrees:!1};module.exports={a,b};'
 BODY_MIXED='var a={includeWorktrees:!1},b={includeWorktrees:!0};module.exports={a,b};'
 BODY_TWO_TRUTHY='var a={includeWorktrees:!0},b={includeWorktrees:!0};module.exports={a,b};'
@@ -173,12 +238,15 @@ BODY_UNKNOWN='var a={includeWorktrees:!10};module.exports={a};'
 # Bare `true` (no leading space) — the space in BODY_UNSUPPORTED is optional.
 BODY_UNSUPPORTED_TRUE='var a={includeWorktrees:true};module.exports={a};'
 # Valid single literal delimited by `)` and by `;` — punctuation other than `,`/`}`
-# must not be over-rejected by the delimiter rule.
-BODY_PAREN_FALSY='var includeWorktrees=1,z=(0?includeWorktrees:!1);module.exports={z};'
+# must not be over-rejected by the delimiter rule. Inside the anchor both keys sit within
+# `(...)`, which counts as nesting, so the default method refuses them; --legacy-single-literal patches.
+BODY_PAREN_FALSY='var includeWorktrees=1,o={sessionListOptions(){return{z:(0?includeWorktrees:!1)}}};module.exports={o};'
 BODY_SEMI_FALSY='var includeWorktrees=1,z=0?includeWorktrees:!1;module.exports={z};'
+# `;` delimiter inside an arrow-function body within the anchor literal (nested -> refused by default).
+BODY_SEMI_ANCHORED='var includeWorktrees=1,o={sessionListOptions(){return{z:(()=>{var y=0?includeWorktrees:!1;return y})()}}};module.exports={o};'
 # Exactly one literal site plus a genuine syntax error (unclosed function body):
 # classifies `unpatched`, so only the baseline `node --check` can refuse it.
-BODY_BAD_SYNTAX='var a={includeWorktrees:!1};function g(){module.exports={a};'
+BODY_BAD_SYNTAX='var a={sessionListOptions(){return{includeWorktrees:!1}}};function g(){module.exports={a};'
 
 # Mixed-site bodies: exactly ONE valid literal (so neither the nLiteral===0 nor the
 # nLiteral>=2 test fires) plus one unrecognised site. The `nUnsupported + nUnknown > 0`
