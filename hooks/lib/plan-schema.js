@@ -51,8 +51,6 @@ const LOCALIZED_TO_CANONICAL = Object.freeze({
   "イシュー": "Issues",
   "対象Issue": "Issues",
   "対象イシュー": "Issues",
-  "用語集": "Glossary",
-  "用語": "Glossary",
   "採用アプローチ": "Adopted approach",
   "採用したアプローチ": "Adopted approach",
   "採択アプローチ": "Adopted approach",

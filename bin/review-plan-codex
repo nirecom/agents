@@ -124,6 +124,8 @@ done
 # Source shared library
 # shellcheck source=lib/codex-core.sh
 source "$(dirname "$(realpath "$0")")/lib/codex-core.sh"
+# shellcheck source=lib/codex-glossary.sh
+source "$(dirname "$(realpath "$0")")/lib/codex-glossary.sh"
 
 codex_core_init "$CODEX_LABEL"
 
@@ -322,7 +324,7 @@ fi
 # security-plan omits it. Root: --project-root, else the git top level of the cwd.
 GLOSSARY_BLOCK=""
 GLOSSARY_ROOT="${PROJECT_ROOT_ARG:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
-GLOSSARY_TEXT="$(codex_core_combined_glossary_block "$GLOSSARY_ROOT")"
+GLOSSARY_TEXT="$(codex_glossary_block "$GLOSSARY_ROOT")"
 if [[ -n "$GLOSSARY_TEXT" ]]; then
   GLOSSARY_BLOCK="${GLOSSARY_TEXT}"$'\n\n'
 fi

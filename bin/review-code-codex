@@ -25,6 +25,8 @@ SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 # Source shared library
 # shellcheck source=lib/codex-core.sh
 source "$SCRIPT_DIR/lib/codex-core.sh"
+# shellcheck source=lib/codex-glossary.sh
+source "$SCRIPT_DIR/lib/codex-glossary.sh"
 
 # Status-header label SSOT: defined before the arg-parse loop so the early
 # "--x requires an argument" error paths emit a named header, not "## : FAILED".
@@ -502,7 +504,7 @@ fi
 
 # Combined glossary (#2529); PROJECT_ROOT_ARG already falls back to the git top level.
 GLOSSARY_BLOCK=""
-GLOSSARY_TEXT="$(codex_core_combined_glossary_block "$PROJECT_ROOT_ARG")"
+GLOSSARY_TEXT="$(codex_glossary_block "$PROJECT_ROOT_ARG")"
 if [[ -n "$GLOSSARY_TEXT" ]]; then
   GLOSSARY_BLOCK="${GLOSSARY_TEXT}"$'\n\n'
 fi

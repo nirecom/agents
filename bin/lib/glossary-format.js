@@ -2,9 +2,10 @@
 "use strict";
 // bin/lib/glossary-format.js — parser and checks for the glossary entry files
 // docs/glossary-user*.md / docs/glossary-internal*.md (#2529). Shared by the
-// bin/review-doc-glossary gate and bin/glossary-promote so the order, range and
-// routing decisions are made by one set of functions. Entry form and the range
-// split rule are owned by rules/docs/glossary.md.
+// bin/review-doc-glossary gate, bin/glossary-promote and the codex prompt data
+// (bin/lib/codex-glossary.sh via `prompt-data`) so the order, range and routing
+// decisions are made by one set of functions. Entry form and the range split rule
+// are owned by rules/docs/glossary.md.
 
 const fs = require("fs");
 const path = require("path");
@@ -214,8 +215,93 @@ function checkFiles(pairs) {
   return blocks;
 }
 
+// Neutralizes bracketed prompt delimiters ([X START] / [X END]) and HTML comment fences.
+function neutralize(s) {
+  return s
+    .replace(/\[([A-Z][A-Z ]*) (START|END)\]/g, "($1 $2)")
+    .replace(/<!--/g, "(!--")
+    .replace(/-->/g, "--)");
+}
+
+// The `### term` line plus the Definition bullet as written (continuation lines kept).
+function promptEntryLines(lines, e) {
+  const out = [neutralize(lines[e.lineNumber - 1])];
+  const def = e.bullets.find((b) => b.key === "Definition");
+  if (def) {
+    for (let k = 0; k < def.lines; k++) out.push(neutralize(lines[def.lineNumber - 1 + k]));
+  }
+  return out;
+}
+
+// prompt-data: whole entries under each file's label until a cap would be crossed;
+// every entry left out is counted in the trailing [TRUNCATED: <n> entries omitted] line.
+function promptData(pairs, maxLines, maxBytes) {
+  let out = "";
+  let usedLines = 0;
+  let usedBytes = 0;
+  let omitted = 0;
+  for (const { label, file } of pairs) {
+    let text;
+    try { text = fs.readFileSync(file, "utf8"); } catch (e) {
+      if (e.code === "ENOENT") continue;
+      throw e;
+    }
+    const lines = text.split(/\r?\n/);
+    let head = neutralize(label) + "\n";
+    for (const e of parseGlossaryFile(text).entries) {
+      const chunk = head + promptEntryLines(lines, e).join("\n") + "\n";
+      const n = chunk.split("\n").length - 1;
+      const b = Buffer.byteLength(chunk, "utf8");
+      if (omitted > 0 || usedLines + n > maxLines || usedBytes + b > maxBytes) {
+        omitted++;
+        continue;
+      }
+      out += chunk;
+      usedLines += n;
+      usedBytes += b;
+      head = "";
+    }
+  }
+  if (omitted > 0) out += "[TRUNCATED: " + omitted + " entries omitted]\n";
+  return out;
+}
+
+const LIMIT_FLAGS = { "--max-lines": "maxLines", "--max-bytes": "maxBytes" };
+
+function parsePromptDataArgs(rest) {
+  const limits = { maxLines: Infinity, maxBytes: Infinity };
+  let i = 0;
+  while (i < rest.length && Object.prototype.hasOwnProperty.call(LIMIT_FLAGS, rest[i])) {
+    const value = rest[i + 1];
+    if (value === undefined || !/^[1-9][0-9]*$/.test(value)) return null;
+    limits[LIMIT_FLAGS[rest[i]]] = Number(value);
+    i += 2;
+  }
+  const tail = rest.slice(i);
+  if (tail.length === 0 || tail.length % 2 !== 0) return null;
+  const pairs = [];
+  for (let k = 0; k < tail.length; k += 2) pairs.push({ label: tail[k], file: tail[k + 1] });
+  return { limits, pairs };
+}
+
+function mainPromptData(rest) {
+  const parsed = parsePromptDataArgs(rest);
+  if (!parsed) {
+    process.stderr.write("usage: glossary-format.js prompt-data [--max-lines N] [--max-bytes N] <label> <path> [<label> <path> ...]\n");
+    return 2;
+  }
+  try {
+    process.stdout.write(promptData(parsed.pairs, parsed.limits.maxLines, parsed.limits.maxBytes));
+  } catch (e) {
+    process.stderr.write("glossary-format.js: " + e.message + "\n");
+    return 2;
+  }
+  return 0;
+}
+
 function main(argv) {
   const [cmd, ...rest] = argv;
+  if (cmd === "prompt-data") return mainPromptData(rest);
   if (cmd !== "check-files" || rest.length === 0 || rest.length % 2 !== 0) {
     process.stderr.write("usage: glossary-format.js check-files <label> <path> [<label> <path> ...]\n");
     return 2;
@@ -231,7 +317,8 @@ function main(argv) {
   return blocks.length === 0 ? 0 : 1;
 }
 
-if (require.main === module) process.exit(main(process.argv.slice(2)));
+// exitCode, not exit(): a forced exit can cut off stdout still draining into a pipe.
+if (require.main === module) process.exitCode = main(process.argv.slice(2));
 
 module.exports = {
   compareTerms,

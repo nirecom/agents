@@ -123,21 +123,23 @@ make_cfg() {
 
 CFG_PROBE="$(make_cfg probe "CODE_LANG=english")"
 
-# gloss_block <lib-root> <project-root> <out> [<KEY=VALUE>] — runs the block function from
-# <lib-root>'s codex-core.sh. Returns 4 when the function is absent, 3 when sourcing fails.
+# gloss_block <lib-root> <project-root> <out> [<KEY=VALUE>] — sources <lib-root>'s codex-core.sh
+# then codex-glossary.sh (the review scripts' order) and runs codex_glossary_block.
+# Returns 4 when the function is absent, 3 when sourcing fails.
 gloss_block() {
     local lib_root="$1" root="$2" out="$3"
     run_with_timeout 30 env AGENTS_MAIN_ROOT="$CFG_PROBE" ${4:+"$4"} bash -c '
       source "$1/bin/lib/codex-core.sh" >/dev/null 2>&1 || exit 3
-      declare -F codex_core_combined_glossary_block >/dev/null || exit 4
-      codex_core_combined_glossary_block "$2"
+      source "$1/bin/lib/codex-glossary.sh" >/dev/null 2>&1 || exit 3
+      declare -F codex_glossary_block >/dev/null || exit 4
+      codex_glossary_block "$2"
     ' _ "$lib_root" "$root" > "$out" 2>/dev/null
 }
 
 # probe_ran <name> <rc> — the probe itself must have run; rc 4 means the function is missing.
 probe_ran() {
     if [ "$2" -eq 0 ]; then pass "$1"
-    else fail "$1" "probe exit $2 (4 = codex_core_combined_glossary_block absent)"; fi
+    else fail "$1" "probe exit $2 (3 = codex-glossary.sh not sourceable, 4 = codex_glossary_block absent)"; fi
 }
 
 # check_entries_whole <data-file> <prefix> <name> — every emitted entry carries its
@@ -171,6 +173,8 @@ check_truncated_count() {
         fail "$4: TRUNCATED line names the omitted count" "line-count=${n:-none} total=$2 emitted=$3"
     fi
 }
+
+# The library boundary and the prompt-data contract live in feat-2529-codex-glossary-lib.sh.
 
 # --- fixtures for the block function ---------------------------------------
 

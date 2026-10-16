@@ -328,37 +328,26 @@ if (bad.length !== 0) { process.stderr.write('intent order mismatch: ' + bad.joi
 " 2>&1)"
 if [[ $? -eq 0 ]]; then pass "C3b-10b: CANONICAL_SECTIONS.intent equals the exact canonical order"; else fail "C3b-10b: $_c3b10b"; fi
 
-# C3b-11 (#2529): both Japanese aliases canonicalize to Glossary.
-# CJK is confined to the node process as \u escapes (no CJK through bash vars).
-# lang-check: ignore — Japanese heading aliases below are functional test data.
+# C3b-11 (#2529): Glossary has no localized alias — `## Glossary` is the only accepted
+# spelling, so no LOCALIZED_TO_CANONICAL value may be 'Glossary' (map required non-empty).
 _c3b11="$(node -e "
 const s = require('$PLAN_SCHEMA_NODE');
-const aliases = ['用語集', '用語'];
-const bad = [];
-aliases.forEach(function (a) {
-  const map = (s.LOCALIZED_TO_CANONICAL || {})[a];
-  const got = s.canonicalizeHeading('## ' + a);
-  if (map !== 'Glossary' || got !== 'Glossary') { bad.push(JSON.stringify(a) + ': map=' + JSON.stringify(map) + ' canonicalizeHeading=' + JSON.stringify(got)); }
-});
-if (bad.length !== 0) { process.stderr.write('aliases not canonicalized to Glossary: ' + bad.join('; ') + '\n'); process.exit(1); }
+const map = s.LOCALIZED_TO_CANONICAL || {};
+const keys = Object.keys(map);
+if (keys.length === 0) { process.stderr.write('LOCALIZED_TO_CANONICAL is empty\n'); process.exit(1); }
+const aliases = keys.filter(function (k) { return map[k] === 'Glossary'; });
+if (aliases.length !== 0) { process.stderr.write(aliases.length + ' localized alias(es) map to Glossary\n'); process.exit(1); }
 " 2>&1)"
-if [[ $? -eq 0 ]]; then pass "C3b-11: aliases (yogoshu / yogo) canonicalize to 'Glossary'"; else fail "C3b-11: $_c3b11"; fi
+if [[ $? -eq 0 ]]; then pass "C3b-11: no LOCALIZED_TO_CANONICAL value equals 'Glossary'"; else fail "C3b-11: $_c3b11"; fi
 
-# C3b-12 (#2529): table-driven heading forms around the Glossary aliases — spacing and
-# hash-count variants resolve, near-miss headings (prefix / suffix / partial) do not.
+# C3b-12 (#2529): table-driven English heading forms — the canonical spelling resolves,
+# case and suffix near-misses do not.
 _c3b12="$(node -e "
 const s = require('$PLAN_SCHEMA_NODE');
 const cases = [
   { name: 'en-canonical',        input: '## Glossary',        want: 'Glossary' },
-  { name: 'ja-yogoshu',          input: '## 用語集',          want: 'Glossary' },
-  { name: 'ja-yogo',             input: '## 用語',            want: 'Glossary' },
-  { name: 'ja-yogoshu-padded',   input: '##   用語集  ',      want: 'Glossary' },
-  { name: 'ja-yogo-no-space',    input: '##用語',             want: 'Glossary' },
-  { name: 'ja-yogoshu-h3',       input: '### 用語集',         want: 'Glossary' },
-  { name: 'ja-yogoshu-suffixed', input: '## 用語集メモ',      want: null },
-  { name: 'ja-yogo-phrase',      input: '## 用語の説明',      want: null },
-  { name: 'ja-partial-shu',      input: '## 集',              want: null },
   { name: 'en-lowercase',        input: '## glossary',        want: null },
+  { name: 'en-suffixed',         input: '## Glossary terms',  want: null },
 ];
 const bad = [];
 for (const { name, input, want } of cases) {
@@ -367,7 +356,7 @@ for (const { name, input, want } of cases) {
 }
 if (bad.length !== 0) { process.stderr.write(bad.join('; ') + '\n'); process.exit(1); }
 " 2>&1)"
-if [[ $? -eq 0 ]]; then pass "C3b-12: Glossary alias heading forms (table-driven)"; else fail "C3b-12: $_c3b12"; fi
+if [[ $? -eq 0 ]]; then pass "C3b-12: Glossary English heading forms (table-driven)"; else fail "C3b-12: $_c3b12"; fi
 
 # C3c: CANONICAL_SECTIONS.intent has exactly 9 members (no more, no less; #2529 added Glossary).
 _c3c="$(node -e "

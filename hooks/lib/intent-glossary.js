@@ -5,13 +5,13 @@
 // Shared by the plan-artifact hooks, bin/check-intent-glossary and bin/glossary-promote.
 // Category values and their criteria are owned by rules/docs/glossary.md.
 
-const { canonicalizeHeading } = require("./plan-schema");
-
 const CATEGORIES = Object.freeze(["user", "internal", "session"]);
 const HEADER = ["Term", "Category", "Definition"];
 const FENCE_RE = /^\s*(```|~~~)/;
 const H2_RE = /^##(?!#)/;
 const H1_OR_H2_RE = /^#{1,2}(?!#)/;
+// Exact literals only: no localized alias, case variant, suffix or missing space.
+const SECTION_RE = /^## (Issues|Glossary)\s*$/;
 
 function splitRow(line) {
   const inner = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
@@ -52,7 +52,8 @@ function parseIntentGlossary(text) {
     if (inFence) continue;
     if (start !== null && end === lines.length && H1_OR_H2_RE.test(lines[i])) end = i;
     if (!H2_RE.test(lines[i])) continue;
-    const name = canonicalizeHeading(lines[i]);
+    const m = SECTION_RE.exec(lines[i]);
+    const name = m ? m[1] : null;
     result.h2.push({ text: lines[i].trim(), lineNumber: i + 1 });
     if (name === "Issues" && result.issuesLine === null) result.issuesLine = i + 1;
     if (name === "Glossary") {

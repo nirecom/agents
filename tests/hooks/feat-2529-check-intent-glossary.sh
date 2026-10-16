@@ -2,7 +2,6 @@
 # tests/hooks/feat-2529-check-intent-glossary.sh
 # Tests: bin/check-intent-glossary, hooks/lib/intent-glossary.js
 # Tags: glossary, intent, plan-schema, cli, scope:issue-specific, TL1, regression-2529
-# lang-check: ignore -- the 用語集 alias fixture is intentionally CJK
 # #2529: intent.md must carry `## Glossary` right after `## Issues`; CLI exits 0 ok / 1 violations / 2 usage.
 # TL3 gap: no live clarify-intent / workflow-init write; fixtures are hand-written. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 # TDD RED until both sources exist; a missing CLI reports rc 99 and exit 1 also needs a `line <n>:` stderr line.
@@ -40,7 +39,11 @@ fixture() {
     prose-no-table)  printf '%s' "$HEAD"$'## Glossary\n\nA widget is a thing the user sees.\n'"$TAIL" ;;
     before-issues)   printf '%s' $'# Agreed Requirements — fixture\n\n## Glossary\n\n## Issues\n\n- #1: sample issue\n'"$TAIL" ;;
     two-headings)    printf '%s' "$HEAD"$'## Glossary\n\n## Glossary\n'"$TAIL" ;;
-    ja-heading)      printf '%s' "$HEAD"$'## 用語集\n\n'"$TABLE_HDR"$'| widget | user | A thing |\n'"$TAIL" ;;
+    lowercase-heading) printf '%s' "$HEAD"$'## glossary\n\n'"$TABLE_HDR"$'| widget | user | A thing |\n'"$TAIL" ;;
+    suffixed-heading) printf '%s' "$HEAD"$'## Glossary terms\n\n'"$TABLE_HDR"$'| widget | user | A thing |\n'"$TAIL" ;;
+    nospace-glossary) printf '%s' "$HEAD"$'##Glossary\n\n'"$TABLE_HDR"$'| widget | user | A thing |\n'"$TAIL" ;;
+    # `## Background` closes the Glossary body, so only an accepted `##Issues` (Issues after Glossary) can fail it.
+    nospace-issues)  printf '%s' $'# Agreed Requirements — fixture\n\n## Glossary\n\n## Background / Motivation\n\nWhy this matters.\n\n##Issues\n\n- #1: sample issue\n' ;;
     fenced-heading)  printf '%s' "$HEAD"$'```\n## Glossary\n```\n'"$TAIL" ;;
     after-background) printf '%s' "$HEAD"$'## Background / Motivation\n\nWhy this matters.\n\n## Glossary\n\n'"$TABLE_HDR"$'| widget | user | A thing |\n' ;;
     trailing-prose)  printf '%s' "$HEAD"$'## Glossary\n\n'"$TABLE_HDR"$'| widget | user | A thing |\n\nStray prose after the table.\n'"$TAIL" ;;
@@ -102,7 +105,12 @@ dup-term        | 1    |
 prose-no-table  | 1    |
 before-issues   | 1    |
 two-headings    | 1    |
-ja-heading      | 0    |
+# Only the exact literal `## Glossary` is the section; case or suffix variants count as missing.
+lowercase-heading | 1  | Issues
+suffixed-heading | 1   | Issues
+nospace-glossary | 1   | Issues
+# `##Issues` is not the Issues section, so a Glossary above it is not out of order.
+nospace-issues  | 0    |
 fenced-heading  | 1    | Glossary
 # Glossary must be the H2 directly after Issues; the table must be the whole body and well-formed.
 after-background | 1   |
@@ -201,7 +209,9 @@ done <<'TABLE'
 # fixture       | want
 valid-table     | relint:internal,sid:session,widget:user
 tight-spacing   | widget:user
-ja-heading      | widget:user
+lowercase-heading | -
+suffixed-heading | -
+nospace-glossary | -
 heading-only    | -
 comment-only    | -
 no-heading      | -
