@@ -771,3 +771,7 @@ Changes: Tests can now be written in the same language as the code they cover â€
 ### FEATURE: PR #2684 (2026-10-16)
 Background: fix(#2683): anchor the vscode-cc-repair patch on sessionListOptions a...
 Changes: vscode-cc-repair now patches only the session-list setting found via the `sessionListOptions` anchor, so extension 2.1.300 is repaired instead of refused; `--legacy-single-literal` restores the old matching rule.;`--prune-stub-sessions` no longer moves stub sessions aside when the extension patch was refused or failed, so sessions stay visible in the VS Code list.
+
+### FEATURE: PR #2674 (2026-10-16)
+Background: fix(#2638): judge commits with the committed tree's checker tables
+Changes: A commit that adds a new plans-artifact name or session-id SSOT exemption and uses it in the same commit is no longer blocked by the pre-commit gates: the gates now read their tables from the commit being judged, and a broken table file stops the commit instead of being ignored.
