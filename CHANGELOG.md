@@ -775,3 +775,7 @@ Changes: vscode-cc-repair now patches only the session-list setting found via th
 ### FEATURE: PR #2674 (2026-10-16)
 Background: fix(#2638): judge commits with the committed tree's checker tables
 Changes: A commit that adds a new plans-artifact name or session-id SSOT exemption and uses it in the same commit is no longer blocked by the pre-commit gates: the gates now read their tables from the commit being judged, and a broken table file stops the commit instead of being ignored.
+
+### FEATURE: PR #2694 (2026-10-17)
+Background: fix(#2649): make the four main-red tests green and close the git -C t...
+Changes: The four tests that failed on main now pass, so test runs no longer stop on an undetermined baseline; a `git -C ~/...` write to the main checkout from a linked worktree is now blocked.
