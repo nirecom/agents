@@ -5,11 +5,9 @@
 # L3 gap (what this test does NOT catch):
 # - None: these are static SKILL.md content assertions; no real claude -p session needed.
 # Closest-to-action mitigation: N/A (content assertion; no risk category applies).
-#
-# Contract tests for clarify-intent skill (Stage 1: interactive user interview).
-# Moved verbatim from tests/agents/feature-clarify-intent.sh when the file crossed the
-# 500-line HARD cap (rules/coding/file-split.md).
-# Exit 0 always — this is a contract test, not a CI gate yet.
+# clarify-intent Stage-1 contracts, split out of tests/agents/feature-clarify-intent.sh
+# (rules/coding/file-split.md). Exit status: non-zero when any assertion fails.
+# lang-check: ignore -- assertions match Japanese wording in the SKILL.md under test.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -293,4 +291,4 @@ assert_contains "$LOCAL_SKILL_MD" "auto-skipped" \
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 
-exit 0
+[ "$FAIL" -eq 0 ]

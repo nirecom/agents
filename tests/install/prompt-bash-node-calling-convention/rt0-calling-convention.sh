@@ -34,7 +34,7 @@ rt0_region() { # <skill-md> <out-file>
 # SAME line -- a prohibition split across two sentences is not what a reader obeys.
 rt0_eres() { # <clause> -> ~-delimited ERE list
     case "$1" in
-        one-command)   printf '%s' 'single standalone|standalone command|one standalone|a single command' ;;
+        one-command)   printf '%s' 'two (separate )?standalone|two separate (bash )?commands' ;;
         no-arguments)  printf '%s' '\bno\b|without|never|\bnot\b~argument|parameter|operand' ;;
         no-env-prefix) printf '%s' '\bno\b|without|never|\bnot\b~prefix~env|variable|=' ;;
         no-chaining)   printf '%s' '\bno\b|without|never|\bnot\b~chain|&&' ;;
@@ -97,7 +97,7 @@ rt0_probe() { # <text-file> <clause> -> satisfied|NOT-SATISFIED|sentinel
 # drops or contradicts exactly one and the others keep answering `satisfied`.
 rt0_fixture() { # <case> <out-file>
     local cmd bashpos args envp chain exitc
-    cmd='RT-0. Run `"$AGENTS_MAIN_ROOT/bin/resolve-worktree-path"` as a single standalone command.'
+    cmd='RT-0. Resolve the path in two separate standalone Bash commands — never combined with variable-capture syntax on the command line.'
     # The hardened wording states the obligation WITHOUT a negation: the clause's own veto reads
     # `never invoke` / `do not pass` as a polarity reversal, so a control fixture that reached for
     # "never invoke it directly" would disqualify itself and make the probe look unsatisfiable.
@@ -109,6 +109,7 @@ rt0_fixture() { # <case> <out-file>
     case "$1" in
         hardened)              : ;;
         omit-one-command)      cmd='RT-0. Run `"$AGENTS_MAIN_ROOT/bin/resolve-worktree-path"`.' ;;
+        singular-one-command)  cmd='RT-0. Resolve the path in a single standalone command.' ;;
         omit-bash-arg-position) bashpos='' ;;
         contradict-bash-arg-position) bashpos='  Invoke the script path directly; do not pass it to `bash` as an argument.' ;;
         omit-arguments)        args='' ;;
@@ -121,6 +122,7 @@ rt0_fixture() { # <case> <out-file>
         contradict-exit)       exitc='  Inspect its exit code on the same command line as the run itself.' ;;
         invert-one-command)     cmd='RT-0. Do not run it as a single standalone command.' ;;
         invert-one-command-need) cmd='RT-0. Running it as a single standalone command is no longer required.' ;;
+        invert-one-command-current) cmd='RT-0. Do not run it as two separate standalone Bash commands.' ;;
         invert-bash-arg-position)      bashpos='  Do not pass the script path to `bash` as an argument.' ;;
         invert-bash-arg-position-need) bashpos='  Passing the script path to `bash` as an argument is not required.' ;;
         invert-arguments)       args='  Do not forbid a positional argument on that command line.' ;;
@@ -176,7 +178,7 @@ t48_skill_table() {
         assert_eq "T48[skill-$id]: RT-0 in $RT0_SKILL_REL $label" \
             "satisfied" "$(rt0_probe "$RT0_REGION" "$id")"
     done <<'T48_SKILL_CASES'
-one-command|says the tool is run as ONE standalone command, the shape the generated rules are written for
+one-command|says the path is resolved in TWO separate standalone commands, the shape the generated rules are written for
 no-arguments|says it takes no arguments: a trailing argument is admitted only by the ` *` half of the pair, and the argument-less rule is the one this repo pins for it
 no-env-prefix|says no environment-variable prefix precedes it -- a `FOO=1 cmd` line begins with a token no generated rule starts with, so the whole rule set misses it
 no-chaining|says the command is not chained -- the permission engine matches the WHOLE command string, so `cmd && echo` is a different string from `cmd` and matches nothing
@@ -215,6 +217,7 @@ t48_negative_table() {
             "NOT-SATISFIED" "$(rt0_probe "$out" "$clause")"
     done <<'T48_NEGATIVE_CASES'
 omit-one-command|one-command|a text that never says "standalone command" fails the standalone clause -- the probe is reading the clause, not the step label
+singular-one-command|one-command|"a single standalone command" fails too: RT-0 resolves the path in TWO commands, so singular wording is not the clause
 omit-arguments|no-arguments|dropping the no-arguments sentence is detected, so the row above cannot be passing on the other four clauses
 contradict-arguments|no-arguments|and text that INSTRUCTS a positional argument fails too: the probe requires a prohibition, not merely the word "argument"
 omit-env-prefix|no-env-prefix|dropping the env-prefix sentence is detected
@@ -245,6 +248,7 @@ t48_inverse_table() {
     done <<'T48_INVERSE_CASES'
 invert-one-command|one-command|"Do not run it as a single standalone command" keeps every word the standalone probe matches and reverses it, so keyword presence alone cannot settle the clause
 invert-one-command-need|one-command|and neither can a sentence that keeps the clause but cancels the obligation ("is no longer required")
+invert-one-command-current|one-command|the current RT-0 wording ("two separate standalone Bash commands") reversed is caught too, so the widened probe still reads polarity
 invert-arguments|no-arguments|"Do not forbid a positional argument" is a double negation carrying both the negation word and the noun the no-arguments probe reads
 invert-arguments-need|no-arguments|"Passing it no positional arguments is not required" states the clause and then withdraws it in the same breath
 invert-env-prefix|no-env-prefix|"It is not forbidden to set an environment-variable prefix" LICENSES the `FOO=1 cmd` shape while matching every env-prefix keyword

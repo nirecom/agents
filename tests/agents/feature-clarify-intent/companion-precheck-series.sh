@@ -2,21 +2,26 @@
 # tests/agents/feature-clarify-intent/companion-precheck-series.sh
 # Tests: skills/clarify-intent/SKILL.md, skills/_shared/judge-decomposition.md, skills/clarify-intent/scripts/precheck-companions.sh
 # Tags: workflow, clarify-intent, companion-issues, precheck, decomposition, scope:issue-specific
-# L3 gap (what this test does NOT catch):
-# - Whether clarify-intent invokes precheck-companions.sh at runtime in a live
-#   session, or whether the batch multiSelect AskUserQuestion renders correctly.
+# L3 gap (what this test does NOT catch): a live clarify-intent run invoking the script, and
+#   the batch multiSelect AskUserQuestion rendering.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Companion precheck and CI-2b rework contracts (#1048).
-#   CI-PC-*: static content assertions against the worktree SKILL.md
-#   CI-JD-*: provenance annotations in skills/_shared/judge-decomposition.md
-#   PC-SH-*: behavioral tests for precheck-companions.sh
-# Pre-implementation RED: all cases FAIL until the rework lands via /write-code.
-# Exit 0 always — this is a contract test, not a CI gate yet.
+#   bin/check-verification-gate.sh category: skill-orchestration.
+# Companion precheck + CI-2b rework contracts (#1048): CI-PC-* SKILL.md, CI-JD-* provenance,
+#   PC-SH-* precheck-companions.sh behaviour. Exit status: non-zero when any assertion fails.
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+# shellcheck source=../../lib/harness.sh
+. "$LOCAL_REPO_ROOT/tests/lib/harness.sh"
+# shellcheck source=../../lib/script-checkout-fixture.sh
+. "$LOCAL_REPO_ROOT/tests/lib/script-checkout-fixture.sh"
+
+# Fixture isolation (rules/test/fixture-isolation.md): both dirs pinned before the first
+# precheck run, inherited session id dropped, cleanup trap on a readonly root.
+_PC_ISOLATION_ROOT="$(make_tmp)"; readonly _PC_ISOLATION_ROOT
+harness_isolate "$_PC_ISOLATION_ROOT"
+trap 'rm -rf "$_PC_ISOLATION_ROOT"' EXIT
+unset CLAUDE_CODE_SESSION_ID
 
 JUDGE_DECOMP="$LOCAL_REPO_ROOT/skills/_shared/judge-decomposition.md"
 PRECHECK="$LOCAL_REPO_ROOT/skills/clarify-intent/scripts/precheck-companions.sh"
@@ -103,14 +108,10 @@ assert_contains "$JUDGE_DECOMP" '\(companion-driven\)' \
     "CI-JD-3: judge-decomposition.md contains (companion-driven) text (pre-implementation until rework)"
 
 # ---------------------------------------------------------------------------
-# PC-SH-*: behavioral tests for precheck-companions.sh.
-# Pre-implementation RED: each case FAILs while the script is missing.
-#
-# Mock strategy: a fake AGENTS_MAIN_ROOT tree carries a companion-search.sh
-# mock at skills/clarify-intent/scripts/, the precheck script itself is COPIED
-# into that tree and invoked from there (so both $AGENTS_MAIN_ROOT-based and
-# dirname-$0 sibling resolution hit the mock), and the mock dir is also
-# prepended to PATH. A permissive gh mock absorbs any candidate-metadata calls.
+# PC-SH-*: behavioral tests for precheck-companions.sh. Mock strategy: the script is COPIED into
+# a fake AGENTS_MAIN_ROOT tree next to a companion-search.sh mock (also on PATH, with a permissive
+# gh mock), so both $AGENTS_MAIN_ROOT-based and dirname-$0 sibling resolution hit the mock.
+# PC-SH-4/5 need bin/ + hooks/ too, so they run from a tracked-file checkout copy instead.
 # The whole file already runs under a 120s alarm (re-exec guard in _lib.sh).
 # ---------------------------------------------------------------------------
 if [ -f "$PRECHECK" ]; then
@@ -170,21 +171,60 @@ if [ -f "$PRECHECK" ]; then
         fail "PC-SH-3: expected exit=1 when no candidates; got rc=$RC3"
     fi
 
-    # PC-SH-4: --output-file → JSON snapshot with baseline verdict/signals +
-    # per-candidate entries
-    write_companion_search_mock one
-    OUT_FILE="$PC_TMP/output.json"
-    bash "$PC_RUN" --seed 100 --exclude 100 --output-file "$OUT_FILE" >/dev/null 2>&1
-    RC4=$?
-    JSON_OK=0
-    if [ -f "$OUT_FILE" ] && node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$OUT_FILE" 2>/dev/null; then
-        JSON_OK=1
-    fi
-    if [ "$RC4" -eq 0 ] && [ "$JSON_OK" -eq 1 ] \
-        && grep -q "201" "$OUT_FILE" 2>/dev/null; then
-        pass "PC-SH-4: --output-file → parseable JSON snapshot containing candidate entry"
+    # PC-SH-4: --session <sid> → <WORKFLOW_STATE_DIR>/<sid>.control/companion-precheck.json with
+    # the baseline verdict/signals + per-candidate entries. The path is resolved through
+    # bin/workflow-control-dir from the script's own checkout, so the script runs from a copy;
+    # the stub is placed AFTER the copy (the copy never overwrites, the stub does).
+    PC4_ROOT="$PC_TMP/checkout"
+    PC4_SID="pc-sh-4-session"
+    PC4_SNAPSHOT="$WORKFLOW_STATE_DIR/$PC4_SID.control/companion-precheck.json"
+    if script_checkout_fixture_copy "$PC4_ROOT" bin hooks skills/clarify-intent; then
+        PC4_RUN="$PC4_ROOT/skills/clarify-intent/scripts/precheck-companions.sh"
+        printf '#!/usr/bin/env bash\nprintf "201\\tSome title\\tident:worktree-end\\tOPEN\\n"\nexit 0\n' \
+            > "$PC4_ROOT/skills/clarify-intent/scripts/companion-search.sh"
+        chmod +x "$PC4_ROOT/skills/clarify-intent/scripts/companion-search.sh"
+        bash "$PC4_RUN" --seed 100 --exclude 100 --session "$PC4_SID" >/dev/null 2>&1
+        RC4=$?
+        PC4_SHAPE="$(jq -r '[(.seed|tostring), .baseline_verdict, (.baseline_signals|type),
+            (.candidates|length|tostring), (.candidates[0].number|tostring),
+            .candidates[0].purity] | join("|")' "$PC4_SNAPSHOT" 2>/dev/null || printf 'UNREADABLE')"
+        if [ "$RC4" -eq 0 ] && [ "$PC4_SHAPE" = "100|wf-code|array|1|201|low-purity" ]; then
+            pass "PC-SH-4: --session writes <sid>.control/companion-precheck.json with seed, baseline_verdict, baseline_signals and candidates"
+        else
+            fail "PC-SH-4: expected exit=0 + snapshot shape 100|wf-code|array|1|201|low-purity at $PC4_SNAPSHOT; got rc=$RC4 shape=$PC4_SHAPE"
+        fi
+
+        # PC-SH-5: SECURITY -- --output-file is accepted only as the legacy session-prefixed
+        # plans-dir path; an arbitrary path is refused (exit 2) and nothing is written there,
+        # so the flag cannot drop a file anywhere the caller names.
+        PC5_TARGET="$PC_TMP/arbitrary/elsewhere.json"
+        mkdir -p "$PC_TMP/arbitrary"
+        bash "$PC4_RUN" --seed 100 --exclude 100 --output-file "$PC5_TARGET" >/dev/null 2>&1
+        RC5=$?
+        if [ "$RC5" -eq 2 ] && [ ! -e "$PC5_TARGET" ]; then
+            pass "PC-SH-5: an arbitrary --output-file path is rejected with exit 2 and no file is written"
+        else
+            fail "PC-SH-5: expected exit=2 and no file at the arbitrary path; got rc=$RC5 exists=$([ -e "$PC5_TARGET" ] && echo yes || echo no)"
+        fi
+
+        # PC-SH-5b: CONTROL for PC-SH-5 -- the one accepted legacy shape (the session-prefixed
+        # companion-precheck.json path in the plans dir) is mapped onto the control dir: the
+        # snapshot lands in <sid>.control/, never at the legacy plans-dir path itself.
+        PC5B_SID="pc-sh-5b-session"
+        PC5B_LEGACY="$WORKFLOW_PLANS_DIR/$PC5B_SID-companion-precheck.json"
+        PC5B_SNAPSHOT="$WORKFLOW_STATE_DIR/$PC5B_SID.control/companion-precheck.json"
+        bash "$PC4_RUN" --seed 100 --exclude 100 --session "$PC5B_SID" --output-file "$PC5B_LEGACY" >/dev/null 2>&1
+        RC5B=$?
+        PC5B_SEED="$(jq -r '.seed|tostring' "$PC5B_SNAPSHOT" 2>/dev/null || printf 'UNREADABLE')"
+        if [ "$RC5B" -eq 0 ] && [ "$PC5B_SEED" = "100" ] && [ ! -e "$PC5B_LEGACY" ]; then
+            pass "PC-SH-5b: the legacy session-prefixed plans-dir --output-file is accepted and writes the snapshot into <sid>.control/"
+        else
+            fail "PC-SH-5b: expected exit=0, seed 100 at $PC5B_SNAPSHOT and nothing at the legacy path; got rc=$RC5B seed=$PC5B_SEED legacy_exists=$([ -e "$PC5B_LEGACY" ] && echo yes || echo no)"
+        fi
     else
-        fail "PC-SH-4: expected exit=0 + parseable JSON with candidate #201; got rc=$RC4 json_ok=$JSON_OK"
+        fail "PC-SH-4: script_checkout_fixture_copy failed -- the --session route was not exercised"
+        fail "PC-SH-5: script_checkout_fixture_copy failed -- the --output-file rejection was not exercised"
+        fail "PC-SH-5b: script_checkout_fixture_copy failed -- the legacy --output-file route was not exercised"
     fi
 
     export PATH="$ORIG_PATH"
@@ -195,9 +235,11 @@ else
     fail "PC-SH-2: precheck-companions.sh not yet present (expected RED before /write-code)"
     fail "PC-SH-3: precheck-companions.sh not yet present (expected RED before /write-code)"
     fail "PC-SH-4: precheck-companions.sh not yet present (expected RED before /write-code)"
+    fail "PC-SH-5: precheck-companions.sh not yet present (expected RED before /write-code)"
+    fail "PC-SH-5b: precheck-companions.sh not yet present (expected RED before /write-code)"
 fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 
-exit 0
+[ "$FAIL" -eq 0 ]
