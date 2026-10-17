@@ -12,7 +12,7 @@ const BASELINE_ACCEPT_SENTINEL_FORM = "echo \"<<WORKFLOW_RUN_TESTS_BASELINE_ACCE
 // either no veto or the worker's own `unrunnable` word (the pass-only allowlist vetoes it too).
 function isUnrunnableOnly(contract, vetoed, workerStatus) {
   return contract !== null && contract.shape === "current" && contract.fail === 0
-    && contract.unrunnable > 0 && (!vetoed || workerStatus === "unrunnable");
+    && contract.unrunnable > 0 && !(contract.hits > 0) && (!vetoed || workerStatus === "unrunnable");
 }
 
 // A 4-field contract with no failure cannot prove UNRUNNABLE=0 (#2501 C3); the worker's

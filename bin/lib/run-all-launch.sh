@@ -7,7 +7,7 @@
 # Each test is wrapped in worktree change detection.
 # run_all_pin_test_env <root> — the per-run pins: carried settings, root decoy, run root, command
 # guard, state dirs, change detection; each is described at its function.
-# run_all_hit_report — the end-of-run report.
+# Hits (claim after each test, the end-of-run collect and report): bin/lib/run-all-hits.sh.
 # Contract: docs/architecture/claude-code/test-runner-parallelism.md, test-command-guard.md.
 
 case "${BASH_SOURCE[0]}" in
@@ -21,6 +21,8 @@ esac
 [ -f "$RUN_ALL_LAUNCH_DIR/../../tests/lib/command-guard.sh" ] && . "$RUN_ALL_LAUNCH_DIR/../../tests/lib/command-guard.sh"
 # shellcheck source=bin/lib/run-all-worktree-change-detect.sh
 [ -f "$RUN_ALL_LAUNCH_DIR/run-all-worktree-change-detect.sh" ] && . "$RUN_ALL_LAUNCH_DIR/run-all-worktree-change-detect.sh"
+# shellcheck source=bin/lib/run-all-hits.sh
+[ -f "$RUN_ALL_LAUNCH_DIR/run-all-hits.sh" ] && . "$RUN_ALL_LAUNCH_DIR/run-all-hits.sh"
 
 # run_all_pin_state_dirs <root> — exports WORKFLOW_STATE_DIR / WORKFLOW_PLANS_DIR as fresh
 # subdirectories of <root>; non-zero when they cannot be created.
@@ -38,7 +40,6 @@ run_all_pin_state_dirs() {
 _RUN_ALL_DECOY_LIB="$RUN_ALL_LAUNCH_DIR/../../tests/lib/root-decoy.sh"
 _RUN_ALL_DECOY_RUN=""
 _RUN_ALL_DECOY_SINCE=""
-_RUN_ALL_DECOY_REPORTED=0
 _RUN_ALL_CARRIED_KEYS="RUN_TL3 RUN_TL4"
 
 # run_all_pin_root_decoy — points AGENTS_MAIN_ROOT and the retired root names at the stub trees
@@ -80,8 +81,6 @@ _run_all_real_setting() {
 }
 
 _RUN_ALL_GUARD_DIR=""
-_RUN_ALL_GUARD_REPORTED=0
-_RUN_ALL_HITS_REPORTED=0
 
 # run_all_pin_command_guard — a fresh guard instance in $TEST_RUN_ROOT/command-guard, first on
 # PATH (tests/lib/command-guard.sh); an inherited COMMAND_GUARD_DIR is never reused here.
@@ -138,81 +137,13 @@ run_all_pin_test_env() {
   # covers the exits that never get there (deadline, signal), and the report runs only once.
   if declare -F cleanup_all >/dev/null 2>&1 && ! declare -F _run_all_cleanup_all_inner >/dev/null 2>&1; then
     eval "_run_all_cleanup_all_inner ()"$'\n'"$(declare -f cleanup_all | tail -n +2)"
-    # shellcheck disable=SC2034,SC2317  # RAR_FAIL belongs to tests/run-all.sh.
+    # shellcheck disable=SC2317
     cleanup_all() {
-      run_all_hit_report || RAR_FAIL=$((${RAR_FAIL:-0} + 1))
+      if declare -F run_all_hit_report >/dev/null 2>&1; then run_all_hit_report || true; fi
       _run_all_cleanup_all_inner
     }
   fi
   return 0
-}
-
-# run_all_command_guard_report — one stderr line per call the guard refused during this run
-# ("<tool><TAB><test id><TAB><target>"); non-zero when there was one. Runs once.
-run_all_command_guard_report() {
-  local stub id target n=0
-  [ "$_RUN_ALL_GUARD_REPORTED" -eq 0 ] || return 0
-  _RUN_ALL_GUARD_REPORTED=1
-  [ -n "$_RUN_ALL_GUARD_DIR" ] && declare -F command_guard_hits >/dev/null 2>&1 || return 0
-  while IFS=$'\t' read -r stub id target; do
-    [ -n "$stub" ] || continue
-    [ -n "$_RUN_ALL_DECOY_RUN" ] && id="${id#"$_RUN_ALL_DECOY_RUN":}"
-    n=$((n + 1))
-    printf '[run-all] command guard hit: %s\t%s\t%s\n' "$stub" "${id:-(no test id)}" "$target" >&2
-  done < <(command_guard_hits "$_RUN_ALL_GUARD_DIR")
-  [ "$n" -eq 0 ] && return 0
-  printf '[run-all] %s command guard hit(s): a test ran a command the guard refused; the run fails\n' "$n" >&2
-  return 1
-}
-
-# run_all_hit_report — the root decoy, command guard and worktree change reports, once per run;
-# non-zero when any of them is.
-run_all_hit_report() {
-  local rc=0
-  [ "$_RUN_ALL_HITS_REPORTED" -eq 0 ] || return 0
-  _RUN_ALL_HITS_REPORTED=1
-  run_all_root_decoy_report || rc=1
-  run_all_command_guard_report || rc=1
-  if declare -F run_all_worktree_change_report >/dev/null 2>&1; then
-    run_all_worktree_change_report || rc=1
-  fi
-  return "$rc"
-}
-
-# run_all_root_decoy_report — one stderr line per stub this run reached ("<stub><TAB><test id>"),
-# then removes those records. Non-zero when there was a hit. A record without a test id counts
-# when it is newer than this run's pin: a child with a stripped environment cannot say whose it is.
-run_all_root_decoy_report() {
-  local tree f line stub id n=0 mine
-  [ "$_RUN_ALL_DECOY_REPORTED" -eq 0 ] || return 0
-  _RUN_ALL_DECOY_REPORTED=1
-  [ -n "$_RUN_ALL_DECOY_RUN" ] && [ -n "${ROOT_DECOY_DIR:-}" ] || return 0
-  for tree in main old; do
-    for f in "$ROOT_DECOY_DIR/$tree"/hits/*.hit; do
-      [ -f "$f" ] || continue
-      stub=""; mine=0
-      while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%$'\r'}"
-        case "$line" in
-          stub=*) stub="${line#stub=}" ;;
-          test_id=*)
-            id="${line#test_id=}"
-            case "$id" in
-              "$_RUN_ALL_DECOY_RUN":*) mine=1 ;;
-              "") [ -n "$_RUN_ALL_DECOY_SINCE" ] && [ "$f" -nt "$_RUN_ALL_DECOY_SINCE" ] || continue
-                  id="(no test id)" ;;
-              *) continue ;;
-            esac
-            n=$((n + 1))
-            printf '[run-all] root decoy hit: %s/%s\t%s\n' "$tree" "$stub" "$id" >&2 ;;
-        esac
-      done <"$f"
-      [ "$mine" -eq 1 ] && rm -f "$f"
-    done
-  done
-  [ "$n" -eq 0 ] && return 0
-  printf '[run-all] %s root decoy hit(s): a test reached a root it must not use; the run fails\n' "$n" >&2
-  return 1
 }
 
 # The loader keys its cache by its own CLI path, so sourcing this checkout's loader makes
@@ -309,6 +240,8 @@ run_all_exec() {
   declare -F run_all_worktree_change_begin >/dev/null 2>&1 && run_all_worktree_change_begin
   _run_all_exec_inner "$@" || rc=$?
   declare -F run_all_worktree_change_check >/dev/null 2>&1 && run_all_worktree_change_check "$1"
+  # Last, so a record from a process that outlived the test is caught here rather than late.
+  if declare -F _run_all_claim_hits >/dev/null 2>&1; then _run_all_claim_hits "$1" "$3"; fi
   return "$rc"
 }
 

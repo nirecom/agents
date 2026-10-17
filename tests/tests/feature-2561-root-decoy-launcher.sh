@@ -217,10 +217,10 @@ HIT_RC=$?
 ID_HIT="$(printf '%s\n' "$HIT_OUT" | sed -n 's/^ID-HIT=<\(.*\)>$/\1/p')"
 
 case_begin "run-all-fails-the-run-when-a-stub-was-reached" "bin/lib/run-all-launch.sh"
-expect_has "the fixture test itself passed" "$HIT_OUT" "PASS: $FIX/swallowed-hit.sh"
+expect_has "the test that exited 0 but reached the stub is its own failure (#2669)" "$HIT_OUT" "FAIL: $FIX/swallowed-hit.sh (exit 0)"
 expect_ne "a swallowed stub hit fails the whole run" "$HIT_RC" "0"
-expect_has "the printed result counts the hit as one failure" "$HIT_OUT" "Results: PASS=1  FAIL=1  SKIP=0"
-expect_has "the run contract counts the hit as one failure" "$HIT_OUT" "RUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 "
+expect_has "the printed result counts the hit as the test's one failure" "$HIT_OUT" "Results: PASS=0  FAIL=1  SKIP=0"
+expect_has "the run contract counts the hit as the test's one failure" "$HIT_OUT" "RUN_CONTRACT: PASS=0 FAIL=1 SKIP=0 "
 expect_has "the report names the stub that was reached" "$HIT_OUT" "hooks/lib/load-env.js"
 expect_ne "the test that reached the stub has a test id" "$ID_HIT" ""
 expect_eq "the report names the test id next to the stub" "$(printf '%s\n' "$HIT_OUT" | grep -v '^ID-HIT=' | grep -F -- "hooks/lib/load-env.js" | grep -c -F -- "${ID_HIT:-<no test id>}" || true)" "1"
@@ -232,10 +232,10 @@ OLD_RC=$?
 ID_OLD="$(printf '%s\n' "$OLD_OUT" | sed -n 's/^ID-OLD=<\(.*\)>$/\1/p')"
 
 case_begin "run-all-fails-the-run-when-an-old-tree-stub-was-reached" "bin/lib/run-all-launch.sh"
-expect_has "the fixture test itself passed" "$OLD_OUT" "PASS: $FIX/swallowed-old-hit.sh"
+expect_has "the test that exited 0 but reached the old stub is its own failure (#2669)" "$OLD_OUT" "FAIL: $FIX/swallowed-old-hit.sh (exit 0)"
 expect_has "the retired name reached the test" "$OLD_OUT" "OLD-ROOT-SET=<yes>"
 expect_ne "a swallowed hit in the old tree fails the whole run" "$OLD_RC" "0"
-expect_has "the run contract counts the old-tree hit as one failure" "$OLD_OUT" "RUN_CONTRACT: PASS=1 FAIL=1 SKIP=0 "
+expect_has "the run contract counts the old-tree hit as the test's one failure" "$OLD_OUT" "RUN_CONTRACT: PASS=0 FAIL=1 SKIP=0 "
 expect_ne "the test that reached the old stub has a test id" "$ID_OLD" ""
 expect_has "the report names the old tree, the stub and the test id" "$OLD_OUT" "root decoy hit: old/hooks/lib/load-env.js$TAB${ID_OLD:-<no test id>}"
 case_end

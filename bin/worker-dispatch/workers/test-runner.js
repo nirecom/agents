@@ -27,7 +27,11 @@ const EXIT_NOTHING_EXECUTED = 77;
 const PASSING_CASE_LINE_RE = /^(PASS|SKIP|XFAIL) .*::/;
 // Line-anchored: a nested suite's copy arrives neutralized (prefixed), never at column 0.
 const MISSING_RUNTIMES_LINE_RE = /^Missing runtimes: /;
+// run-all's unattributed hit lines (#2669); column 0 only, as a child's copy arrives prefixed.
+const HIT_LINE_RE = /^HIT: (.+)$/;
 const TAIL_LINES = 40;
+// At most this many FAIL/HIT lines take tail slots ahead of the newest output.
+const TAIL_PRIORITY_LINES = 30;
 
 function splitLines(text) {
   return String(text || "")
@@ -41,6 +45,37 @@ function parseFailingTests(lines) {
     const m = FAIL_LINE_RE.exec(line);
     if (m !== null) out.push(m[1]);
   }
+  return out;
+}
+
+function parseHits(lines) {
+  const out = [];
+  for (const line of lines) {
+    const m = HIT_LINE_RE.exec(line);
+    if (m !== null) out.push(m[1]);
+  }
+  return out;
+}
+
+const isPriorityLine = (l) => FAIL_LINE_RE.test(l) || HIT_LINE_RE.test(l);
+
+// tailWithPriority(lines, max, cap) — at most `max` lines in input order: the FAIL/HIT lines first
+// claim up to `cap` slots (the newest cap-1 plus one omission note when there are more), and the
+// newest other lines fill the rest, so a failure is never pushed out by the noise after it.
+function tailWithPriority(lines, max, cap) {
+  if (lines.length <= max) return lines.slice();
+  const prio = [];
+  lines.forEach((l, i) => { if (isPriorityLine(l)) prio.push(i); });
+  const keep = new Set(prio.length > cap ? prio.slice(prio.length - (cap - 1)) : prio);
+  const omitted = prio.length - keep.size;
+  let room = max - keep.size - (omitted > 0 ? 1 : 0);
+  for (let i = lines.length - 1; i >= 0 && room > 0; i -= 1) {
+    if (isPriorityLine(lines[i])) continue;
+    keep.add(i);
+    room -= 1;
+  }
+  const out = lines.filter((_, i) => keep.has(i));
+  if (omitted > 0) out.unshift(`… (+${omitted} earlier FAIL/HIT lines omitted — full list in failing_tests / hits)`);
   return out;
 }
 
@@ -141,10 +176,10 @@ function run(payload, ctx) {
   const lines = splitLines(res.stdout).concat(splitLines(res.stderr));
   const nonEmpty = lines.filter((l) => l.trim() !== "");
   const runContract = parseRunContract(nonEmpty);
-  const logTail = stripContractLines(nonEmpty)
-    .filter((l) => !PASSING_CASE_LINE_RE.test(l))
-    .slice(-TAIL_LINES);
+  const logTail = tailWithPriority(
+    stripContractLines(nonEmpty).filter((l) => !PASSING_CASE_LINE_RE.test(l)), TAIL_LINES, TAIL_PRIORITY_LINES);
   const failingTests = parseFailingTests(nonEmpty);
+  const hits = parseHits(nonEmpty);
   const results = parseResults(nonEmpty);
 
   if (res.timedOut) {
@@ -156,6 +191,7 @@ function run(payload, ctx) {
       failingTests,
       logTail,
       runContract: null,
+      hits,
     };
   }
   if (res.spawnError !== null) {
@@ -178,10 +214,14 @@ function run(payload, ctx) {
   const missing = lastMissingRuntimesLine(nonEmpty);
   // First, because the renderer cuts a long summary at its end and the runtimes are the remedy.
   if (missing !== null) summary = `${missing}; ${summary}`;
+  const hitCount = runContract !== null && runContract.hits > 0 ? runContract.hits : hits.length;
+  if (hitCount > 0) summary = `${summary}; HITS=${hitCount} (unattributed hits)`;
 
   // Never report an empty failing list for a failing suite without saying why —
   // a silent [] reads as "nothing failed", which is the opposite of the truth.
-  if (status === "fail" && failingTests.length === 0) {
+  // A run failed by its hits alone (FAIL=0) has its reason in the HITS note instead.
+  const failCounted = runContract !== null && runContract.fail > 0;
+  if (status === "fail" && failingTests.length === 0 && (failCounted || hitCount === 0)) {
     summary = `${summary}; parse-degraded (no 'FAIL: <script> (exit N)' lines matched)`;
   }
 
@@ -193,7 +233,8 @@ function run(payload, ctx) {
     failingTests: status === "pass" ? [] : failingTests,
     logTail,
     runContract,
+    hits,
   };
 }
 
-module.exports = { run, parseFailingTests, parseResults, parseRunContract };
+module.exports = { run, parseFailingTests, parseResults, parseRunContract, tailWithPriority };

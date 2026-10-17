@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Worktree change detection for tests/run-all.sh (#2590); sourced by bin/lib/run-all-launch.sh.
 # Each test runs between two fingerprints of the protected trees (the main worktree and the
-# checkout the launcher was loaded from); a difference is logged as "<tree>\t<test id>\t<kind>",
+# checkout the launcher was loaded from); a difference is logged as "<tree>\t<test id>\t<kind>[\t<paths>]",
 # kind one of tracked | content | head | index | config. Untracked files are not watched (-uno).
 # Design: docs/architecture/claude-code/test-command-guard.md
 
@@ -156,10 +156,13 @@ run_all_worktree_change_begin() {
   done
 }
 
-# _run_all_wcd_kinds — reads "<before>\n@@AFTER@@\n<after>", prints one changed kind per line,
+# _run_all_wcd_kinds — reads "<before>\n@@AFTER@@\n<after>", prints one changed kind per line
+# ("<kind>\t<paths>" for tracked / content / index: up to 5 paths joined by " | ", then "+N more"),
 # and "skipped" when either side skipped the content comparison.
 _run_all_wcd_kinds() {
   awk -F '\t' '
+    function add(k, p) { n[k]++; if (n[k] <= 5) l[k] = l[k] (n[k] > 1 ? " | " : "") p }
+    function out(k) { if (n[k]) print k "\t" l[k] (n[k] > 5 ? " | +" (n[k] - 5) " more" : "") }
     BEGIN { side = 0 }
     $0 == "@@AFTER@@" { side = 1; next }
     { tag = substr($0, 1, 1); $0 = substr($0, 3) }
@@ -170,23 +173,23 @@ _run_all_wcd_kinds() {
     tag == "W" { w[side, $1] = $2 }
     END {
       for (p in seen) {
-        if (!has[0, p] || !has[1, p] || xy[0, p] != xy[1, p]) tracked = 1
-        else if (ln[0, p] != ln[1, p]) index_ = 1
-        else if (!skip && ((0, p) in w) && ((1, p) in w) && w[0, p] != w[1, p]) content = 1
+        if (!has[0, p] || !has[1, p] || xy[0, p] != xy[1, p]) add("tracked", p)
+        else if (ln[0, p] != ln[1, p]) add("index", p)
+        else if (!skip && ((0, p) in w) && ((1, p) in w) && w[0, p] != w[1, p]) add("content", p)
       }
-      if (tracked) print "tracked"
-      if (content) print "content"
+      out("tracked")
+      out("content")
       if (h[0] != h[1]) print "head"
-      if (index_) print "index"
+      out("index")
       if (c[0] != c[1]) print "config"
       if (skip) print "skipped"
     }'
 }
 
 # run_all_worktree_change_check <test id> — compares against the before fingerprints and appends
-# one "<tree>\t<test id>\t<kind>" line per changed kind to the log.
+# one "<tree>\t<test id>\t<kind>[\t<paths>]" line per changed kind to the log.
 run_all_worktree_change_check() {
-  local id="$1" i after kind
+  local id="$1" i after kind paths
   local -a afters=()
   [ -n "$_RUN_ALL_WCD_LOG" ] && [ "${#_RUN_ALL_WCD_BEFORE[@]}" -gt 0 ] || return 0
   for i in "${!_RUN_ALL_WCD_TREES[@]}"; do
@@ -195,11 +198,11 @@ run_all_worktree_change_check() {
     # An unchanged fingerprint that skipped the content comparison proves nothing about content.
     case $'\n'"$after" in *$'\nX '*) printf '%s\n' "${_RUN_ALL_WCD_TREES[$i]}" >>"$_RUN_ALL_WCD_LOG.skipped" ;; esac
     [ "$after" = "${_RUN_ALL_WCD_BEFORE[$i]}" ] && continue
-    while IFS= read -r kind; do
+    while IFS=$'\t' read -r kind paths; do
       case "$kind" in
         '') ;;
         skipped) printf '%s\n' "${_RUN_ALL_WCD_TREES[$i]}" >>"$_RUN_ALL_WCD_LOG.skipped" ;;
-        *) printf '%s\t%s\t%s\n' "${_RUN_ALL_WCD_TREES[$i]}" "$id" "$kind" >>"$_RUN_ALL_WCD_LOG" ;;
+        *) printf '%s\t%s\t%s%s\n' "${_RUN_ALL_WCD_TREES[$i]}" "$id" "$kind" "${paths:+$'\t'$paths}" >>"$_RUN_ALL_WCD_LOG" ;;
       esac
     done <<<"$(printf '%s\n@@AFTER@@\n%s\n' "${_RUN_ALL_WCD_BEFORE[$i]}" "$after" | _run_all_wcd_kinds)"
   done

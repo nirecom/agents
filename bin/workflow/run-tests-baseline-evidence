@@ -2,7 +2,8 @@
 "use strict";
 // bin/workflow/run-tests-baseline-evidence — state hand-off for bin/run-tests-baseline (#2431).
 //   failing --session <sid>
-//     exit 0: `SEQ=<n>` then one failing test path per line; exit 3: not classifiable.
+//     exit 0: `SEQ=<n>` then one failing test path per line; exit 3: not classifiable;
+//     exit 7: `HIT_COUNT=<n>` then the recorded hit lines (unattributed hits, #2669).
 //   record --session <sid> --seq <n> --classification <file> [--base <sha>]
 //     exit 0 completed, 1 classification unmet, 2 usage, 3 state moved or not pending.
 //   accept --session <sid>

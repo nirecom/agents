@@ -33,7 +33,7 @@ te_root() {
     root="$(fx_new_root)" || return 1
     install_test_language_registry "$root" "$FX_REPO_ROOT" >/dev/null || return 1
     cp "$FX_REPO_ROOT/bin/run-with-timeout.sh" "$root/bin/run-with-timeout.sh" || return 1
-    for lib in run-all-launch.sh timed-exec.sh run-all-classify.sh run-all-report.sh test-language-registry-plain.sh; do
+    for lib in run-all-launch.sh timed-exec.sh run-all-classify.sh run-all-report.sh run-all-hits.sh test-language-registry-plain.sh; do
         [ -f "$FX_REPO_ROOT/bin/lib/$lib" ] && cp "$FX_REPO_ROOT/bin/lib/$lib" "$root/bin/lib/$lib"
     done
     [ -d "$FX_REPO_ROOT/bin/lib/test-wrappers" ] && cp -R "$FX_REPO_ROOT/bin/lib/test-wrappers" "$root/bin/lib/"
