@@ -8,8 +8,8 @@ const { CONFIRM_GATE_DEFAULTS } = require("../../../../hooks/lib/confirm-gate/st
 // Adding, removing, renaming, or reordering a key here is a breaking change —
 // bump FACTS_VERSION and update docs/architecture/claude-code/workflow.md and
 // every consuming SKILL.md in the same diff. Note also: adding a GATE_-derived
-// key means adding another confirm-off child process (see gate-facts.js and the
-// measured process-cost tradeoff in its header).
+// key means one more gate resolution (in-process, so no extra child process;
+// see gate-facts.js).
 // Static literals on purpose: never derive these names from VALID_STEPS or
 // ROUTING_STAGES, or a new workflow stage would silently grow the contract.
 const FACTS_KEYS = [

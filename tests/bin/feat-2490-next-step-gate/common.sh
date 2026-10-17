@@ -21,6 +21,9 @@ PLANS="$GT_BASE/plans"
 mkdir -p "$GT_BASE/transcripts" "$GT_BASE/cwd"
 CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$GT_BASE/transcripts")"; export CLAUDE_TRANSCRIPT_BASE_DIR
 unset CLAUDE_PROJECT_DIR CLAUDE_CODE_SESSION_ID
+# Pinned: unset means on, which makes the live delivery path pull_request while the fixture
+# state records direct; next-step then appends a DELIVERY_PATH_MISMATCH note after the value line.
+export ENFORCE_WORKTREE=off
 
 # Reuse the bin-workflow-next-step helpers (write_state / run_next_step / check).
 # Sourced AFTER the harness: it re-zeroes PASS/FAIL (nothing counted yet) and
