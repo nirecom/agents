@@ -791,3 +791,7 @@ Changes: Test runs now report a command guard or root decoy hit as a failure of 
 ### FEATURE: PR #2700 (2026-10-17)
 Background: fix(#2677): let jev answers through the placement guard and route complexity by decisive signals
 Changes: Jev complexity judgments now reach the backup subagent's answer (it was blocked by the placement guard) and print a `FALLBACK=` reason whenever a judgment falls back to the safe side.
+
+### FEATURE: PR #2706 (2026-10-17)
+Background: feat(#2687): auto-tune max jobs per host with fair share and CPU load...
+Changes: Test parallelism tunes itself: the per-machine maximum is measured and capped at the logical CPU count, concurrent test runs split the machine's lanes evenly, and the share shrinks while a heavy external program (such as a 3D game) loads the CPU. Set `AUTO_CONFIG_TEST_MAX_JOBS=off` for fully manual values. This replaces the "never ask again" calibration option.;The calibration offer in `/run-tests` now shows an estimated duration and tells you to wait while it measures.
