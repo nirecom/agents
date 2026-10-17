@@ -779,3 +779,7 @@ Changes: A commit that adds a new plans-artifact name or session-id SSOT exempti
 ### FEATURE: PR #2694 (2026-10-17)
 Background: fix(#2649): make the four main-red tests green and close the git -C t...
 Changes: The four tests that failed on main now pass, so test runs no longer stop on an undetermined baseline; a `git -C ~/...` write to the main checkout from a linked worktree is now blocked.
+
+### FEATURE: PR #2689 (2026-10-17)
+Background: feat(#2529): glossary entry criteria, gate, intent glossary and promo...
+Changes: Glossary entries now follow written entry criteria; the glossary is split into user-facing and internal files with a format gate, and each intent.md carries a `## Glossary` table whose terms reach codex reviews and can be promoted into the shared glossary.
