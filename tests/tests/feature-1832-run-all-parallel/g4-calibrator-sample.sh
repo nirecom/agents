@@ -13,6 +13,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 . "$(dirname "${BASH_SOURCE[0]}")/_cal-fixture.sh"
 cf_init
+# #2687: the default ladder derives from the logical CPU count; 16 derives "4 6 8 12 16".
+CF_PATH_PREFIX="$(cf_cpu_shim 16)"
 
 if [ ! -f "$CF_CAL" ]; then
     fail "g4/implementation-present" "missing: bin/calibrate-test-parallelism.sh"
@@ -138,16 +140,25 @@ CF_NO_OPTIN=1 cf_run "$S8" "$R8" "$ST8" --dry-run --jobs-list "1 2"
 ck "g4/dry-run/exit-0" "0" "$CF_RC"
 ck "g4/dry-run/no-seam-call" "0" "$(cf_calls "$ST8")"
 DR="$(printf '%s\n%s\n' "$CF_OUT" "$CF_ERR")"
-for pat in 'candidates?[^0-9]*5' 'short(fall)?[^0-9]*3' 'probe' 'time[ _-]?limit[^0-9]*90'; do
+for pat in 'candidates?[^0-9]*5' 'short(fall)?[^0-9]*3' 'probe' 'time[ _-]?limit[^0-9]*90' '^plan: estimate_total_s=[0-9]+$'; do
     if printf '%s\n' "$DR" | grep -qiE "$pat"; then pass "g4/dry-run/reports/$pat"
     else fail "g4/dry-run/reports/$pat" "dry-run output lacks /$pat/"; fi
 done
 conf_absent "$R8" "g4/dry-run/no-record"
-CF_NO_OPTIN=1 cf_run "$S8" "$R8" "$ST8" --dry-run
+# 60 ledger candidates fill width 16 (required 60), so no #2687 auto-narrowing hides the ladder.
+S9="$(cf_new_suite)"; R9="$(cf_new_real)"
+cf_populate "$S9" "$R9" bin/a 30 6
+cf_populate "$S9" "$R9" hooks/b 30 6
+CF_NO_OPTIN=1 cf_run "$S9" "$R9" "$ST8" --dry-run
 ck "g4/default-ladder/exit-0" "0" "$CF_RC"
 if printf '%s\n%s\n' "$CF_OUT" "$CF_ERR" | grep -q '4 6 8 12 16'; then pass "g4/default-ladder/shown"
 else fail "g4/default-ladder/shown" "dry-run without --jobs-list does not show 4 6 8 12 16"; fi
 ck "g4/default-ladder/no-seam-call" "0" "$(cf_calls "$ST8")"
+# An unknown logical CPU count keeps the historical ladder (#2687 CPU4, unknown row).
+CF_PATH_PREFIX="$(cf_cpu_shim unknown)" CF_NO_OPTIN=1 cf_run "$S9" "$R9" "$ST8" --dry-run
+ck "g4/default-ladder/unknown-cpu-exit-0" "0" "$CF_RC"
+if printf '%s\n%s\n' "$CF_OUT" "$CF_ERR" | grep -qE '(^|[^0-9])4 6 8 12 16([^0-9 ]|$)'; then pass "g4/default-ladder/unknown-cpu-shown"
+else fail "g4/default-ladder/unknown-cpu-shown" "unknown CPU count: dry-run does not show exactly 4 6 8 12 16"; fi
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

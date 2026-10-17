@@ -1,36 +1,29 @@
 #!/usr/bin/env bash
 # tests/skills/feature-2079-run-tests-calibration-offer/probe-cases.sh — P1, P6, P7, P8, A1 (probe).
-# The probe reads only line 1 of <cwd>/bin/test-lanes-status.sh, the never-ask record, and
-# the session marker; it prints six kv lines and writes nothing.
+# The probe reads only line 1 of <cwd>/bin/test-lanes-status.sh and the session marker (a
+# stale never-ask record is ignored since #2687); it prints seven kv lines and writes nothing.
 
 DEFAULT_LINE="max_jobs_per_host=4 source=default record=missing"
 C_DEF="$TMPROOT/cwd-default"
 mk_cwd "$C_DEF" "$DEFAULT_LINE"
 [ -n "$HID" ] && pass "P precondition: run_all_host_id yields a host id" || fail "P precondition: run_all_host_id is empty"
 
-case_begin "never-ask-record-decides" "skills/run-tests/scripts/probe-calibration.sh"
+case_begin "stale-never-ask-record-is-ignored" "skills/run-tests/scripts/probe-calibration.sh"
 
-# ── P1 never-ask: only a valid record for this host turns ask into none ─────
+# ── P1 (#2687 AC4) a never-ask record on disk no longer silences the offer ──
 P1C="$TMPROOT/p1"
 na_rec "$P1C/match" "$HID"
+_na_before="$(content_sig "$P1C/match")"
 probe "$C_DEF" sid-p1-a "$P1C/match"
-ck "P1 record for this host: exit 0" "0" "$RC"
-ck "P1 record for this host: decision=none" "none" "$(kv decision)"
-ck "P1 record for this host: reason=never-ask" "never-ask" "$(kv reason)"
-ck "P1 record for this host: notice is empty" "" "$(kv notice)"
+ck "P1 stale record for this host: exit 0" "0" "$RC"
+ck "P1 stale record for this host: decision=ask reason=missing" "ask/missing" "$(kv decision)/$(kv reason)"
+case "$(kv notice)" in *"$NOTICE_TAIL") pass "P1 stale record for this host: the notice is still offered" ;; *) fail "P1 stale record: notice" "notice=$(printf '%q' "$(kv notice)")" ;; esac
+ck "P1 the stale record is neither deleted nor rewritten" "$_na_before" "$(content_sig "$P1C/match")"
 na_rec "$P1C/other" "Other|x86_64|not-this-host"
 probe "$C_DEF" sid-p1-a "$P1C/other"
-ck "P1 record for another host: decision=ask" "ask" "$(kv decision)"
-mkdir -p "$P1C/many"; { printf 'host_id=%s\n' "$HID"; for _i in 1 2 3 4 5 6 7 8; do printf 'pad%s=1\n' "$_i"; done; } > "$P1C/many/calibration-never-ask.conf"
-probe "$C_DEF" sid-p1-a "$P1C/many"
-ck "P1 record over 8 lines is invalid: decision=ask" "ask" "$(kv decision)"
-mkdir -p "$P1C/dup"; printf 'host_id=%s\nhost_id=%s\n' "$HID" "$HID" > "$P1C/dup/calibration-never-ask.conf"
-probe "$C_DEF" sid-p1-a "$P1C/dup"
-ck "P1 duplicate host_id is invalid: decision=ask" "ask" "$(kv decision)"
-mkdir -p "$P1C/empty"; printf 'schema=1\nhost_id=\nrecorded_at=x\n' > "$P1C/empty/calibration-never-ask.conf"
-probe "$C_DEF" sid-p1-a "$P1C/empty"
-ck "P1 empty host_id is invalid: decision=ask" "ask" "$(kv decision)"
+ck "P1 stale record for another host: decision=ask" "ask" "$(kv decision)"
 case_ran P1
+case_ran AC4
 
 case_end
 
@@ -45,10 +38,14 @@ ck "P6 no status tool: reason=no-lanes-status" "no-lanes-status" "$(kv reason)"
 ck "P6 no status tool: source=unknown" "unknown" "$(kv source)"
 ck "P6 no status tool: max_jobs empty" "" "$(kv max_jobs)"
 ck "P6 no status tool: os_match=na" "na" "$(kv os_match)"
-ck "P6 the six keys, each once (decision reason notice source max_jobs os_match)" \
-    "decision max_jobs notice os_match reason source" \
+ck "P6 the seven keys, each once (decision reason notice source max_jobs os_match estimate)" \
+    "decision estimate max_jobs notice os_match reason source" \
     "$(printf '%s\n' "$OUT" | sed -n 's/^\([a-z_]*\)=.*/\1/p' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-ck "P6 output has six lines" "6" "$(printf '%s\n' "$OUT" | grep -c .)"
+ck "P6 output has seven lines" "7" "$(printf '%s\n' "$OUT" | grep -c .)"
+ck "P6 no status tool: estimate empty" "" "$(kv estimate)"
+_def_ask_out=""; probe "$C_DEF" sid-p6-keys; _def_ask_out="$(kv decision)"
+ck "P6 ask path also prints the seven keys, each once" "ask|decision estimate max_jobs notice os_match reason source" \
+    "$_def_ask_out|$(printf '%s\n' "$OUT" | sed -n 's/^\([a-z_]*\)=.*/\1/p' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
 C_MEAS="$TMPROOT/cwd-measured"; mk_cwd "$C_MEAS" "max_jobs_per_host=5 source=measured"
 probe "$C_MEAS" sid-p6
 ck "P6 measured, same os: decision=none" "none" "$(kv decision)"
@@ -111,7 +108,7 @@ printf 'host_id=b\n' > "$P7S/f"; _s2="$(content_sig "$P7S")"
 ck "P7 self-test: content_sig ignores mtime, sees a same-path rewrite" "same/differs" \
     "$([ "$_s0" = "$_s1" ] && echo same || echo differs)/$([ "$_s1" = "$_s2" ] && echo same || echo differs)"
 # Pre-seeded files a rewrite-in-place would alter: a run-all record, another session's marker,
-# the cwd's status file (inside C_DEF), and the never-ask record of each path.
+# the cwd's status file (inside C_DEF), and a stale never-ask record (#2687 never reads it).
 printf 'max_jobs_per_host=5\nsource=measured\n' > "$P7C/parallelism.conf"
 mkdir -p "$WORKFLOW_STATE_DIR/sid-p7-prior.control"
 printf 'asked_at=2026-01-01T00:00:00Z\nanswer=defer\n' > "$WORKFLOW_STATE_DIR/sid-p7-prior.control/calibration-asked.txt"
@@ -123,7 +120,7 @@ ck "P7 ask path: cache, workflow dir and cwd bytes unchanged" "$_before|ask" "$(
 na_rec "$P7C" "$HID"
 _before="$(content_sig "$P7C" "$WORKFLOW_STATE_DIR" "$C_DEF")"
 probe "$C_DEF" sid-p7 "$P7C"
-ck "P7 never-ask path: cache, workflow dir and cwd bytes unchanged" "$_before|none" "$(content_sig "$P7C" "$WORKFLOW_STATE_DIR" "$C_DEF")|$(kv decision)"
+ck "P7 stale never-ask record for this host: bytes unchanged, still ask (dry-run included)" "$_before|ask" "$(content_sig "$P7C" "$WORKFLOW_STATE_DIR" "$C_DEF")|$(kv decision)"
 na_rec "$P7C" "Other|x86_64|not-this-host"
 probe "$C_DEF" sid-p7 "$P7C"
 ck "P7 no control dir for the session, no HOME write" "ask/absent/absent" \

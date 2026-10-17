@@ -5,7 +5,7 @@
 # Serial: timing-sensitive parallelism measurements must not compete with other tests
 # WHY (CPR-WPH): the calibrator is the sole record writer — unreachable from a normal run,
 # free on inquiry sub-modes, opt-in via RUN_CALIBRATION=1. The knee is SELECTED by a fixed
-# rule and the record is the reader's v2 key set (#2079 S11). Measurements go through the
+# rule and the record is the reader's v3 key set (#2079 S11, #2687). Measurements go through the
 # _cal-fixture.sh seam stub over a 2-level ledger corpus (#2079 S5); nothing times a real run.
 # TL3 gap: whether the knee heuristic picks a genuinely good value on real hardware is not covered.
 
@@ -17,6 +17,9 @@ REAL_RUN_ALL="${HOME:-/nonexistent}/.claude/run-all"
 REAL_PRE=0; [ -e "$REAL_RUN_ALL" ] && REAL_PRE=1
 cf_init
 harness_isolate "$CF_T/iso"   # top-level pin: cf_init pins inside a function, which the guard does not read
+# #2687: the logical CPU count bounds the width list; pin it so "--jobs-list 1 2 4 8" is in range.
+CPU16="$(cf_cpu_shim 16)"
+CF_PATH_PREFIX="$CPU16"
 
 RUNNER="$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh"
 EXEC_MODEL="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-run-tests/exec-model.js"
@@ -148,8 +151,8 @@ case_protocol() {
     fi
 }
 
-# 6. record_*: the published record is the reader's v2 key set (#2079 S11)
-V2_KEYS="host_id max_jobs_per_host measured_at os repeat sample_size schema "
+# 6. record_*: the published record is the reader's v3 key set (#2079 S11, #2687 schema 3)
+V3_KEYS="host_id logical_cpu_count max_jobs_per_host max_width_measured measured_at os repeat sample_size schema width_limit "
 lib_eval() { env "TESTS_DIR=$SK" bash -c '. "$1" >/dev/null 2>&1 || exit 9; shift; "$@"' _ "$CF_LIB_PAR" "$@" 2>/dev/null; }
 record_published() {
     local st v schema_want os_want before after
@@ -161,11 +164,14 @@ record_published() {
     ck "g-cal/record/no-contract-shape" "0" "$(contract_count "$CF_OUT$CF_ERR")"
     if [ ! -e "$RK/parallelism.conf" ]; then fail "g-cal/record/written" "no record in the pinned RUN_ALL_CACHE_DIR"; return; fi
     pass "g-cal/record/written"
-    ck "g-cal/record/v2-seven-keys" "$V2_KEYS" "$(conf_keys "$RK")"
+    ck "g-cal/record/v3-ten-keys" "$V3_KEYS" "$(conf_keys "$RK")"
     schema_want="$(bash -c '. "$1" >/dev/null 2>&1; printf "%s" "${RUN_ALL_CACHE_SCHEMA:-}"' _ "$CF_LIB_PAR" 2>/dev/null)"
     ck "g-cal/record/schema-is-lib-ssot" "$schema_want" "$(conf_value "$RK" schema)"
-    ck "g-cal/record/schema-is-2" "2" "$(conf_value "$RK" schema)"
+    ck "g-cal/record/schema-is-3" "3" "$(conf_value "$RK" schema)"
     ck "g-cal/record/max-jobs-per-host-is-knee" "4" "$(conf_value "$RK" max_jobs_per_host)"
+    ck "g-cal/record/logical-cpu-count-is-pinned-16" "16" "$(conf_value "$RK" logical_cpu_count)"
+    ck "g-cal/record/max-width-measured-is-8" "8" "$(conf_value "$RK" max_width_measured)"
+    ck "g-cal/record/width-limit-is-jobs-list" "jobs-list" "$(conf_value "$RK" width_limit)"
     ck "g-cal/record/agrees-with-final-line" "$(cf_selected)" "$(conf_value "$RK" max_jobs_per_host)"
     os_want="$(lib_eval run_all_os_attr)"
     if [ -n "$os_want" ]; then ck "g-cal/record/os-is-current-attr" "$os_want" "$(conf_value "$RK" os)"
@@ -191,6 +197,72 @@ record_published() {
     ck "g-cal/record/print-leaves-record-byte-identical" "$before" "$after"
 }
 
+# 6b. #2687 CPU6: the knee is the record verbatim (no extra find-tests lane added on top).
+# 60 candidates cover REQUIRED 60 for width 16, so the ladder never probes.
+S12="$(cf_new_suite)"; R12="$(cf_new_real)"
+cf_populate "$S12" "$R12" bin/c 30 6
+cf_populate "$S12" "$R12" hooks/d 30 6
+case_knee_recorded_verbatim() {
+    local st
+    cal_missing "g-cal/cpu6/exit-zero" && return
+    st="$(cf_stub "4:12000 8:6000 12:4000 16:3950")"; : > "$st/noseg"
+    cf_run "$S12" "$R12" "$st" --jobs-list "4 8 12 16" --repeat 3 --warmup 0
+    ck "g-cal/cpu6/exit-zero" "0" "$CF_RC"
+    ck "g-cal/cpu6/selected-12" "12" "$(cf_selected)"
+    ck "g-cal/cpu6/max-jobs-per-host-is-knee-12" "12" "$(conf_value "$R12" max_jobs_per_host)"
+    ck "g-cal/cpu6/max-width-measured-16" "16" "$(conf_value "$R12" max_width_measured)"
+    ck "g-cal/cpu6/width-limit-jobs-list" "jobs-list" "$(conf_value "$R12" width_limit)"
+    case "$CF_ERR$CF_OUT" in
+        *"wider --jobs-list"*) fail "g-cal/cpu6/knee-below-top-no-wider-hint" "knee 12 < 16 still advised a wider --jobs-list" ;;
+        *) pass "g-cal/cpu6/knee-below-top-no-wider-hint" ;;
+    esac
+}
+
+# 6c. #2687: knee = the widest width, and the warning follows width_limit.
+case_knee_top_warning() {
+    local st
+    cal_missing "g-cal/knee-top/cpu-ceiling/exit-zero" && return
+    # Derived widths at logical CPU count 6 are "4 6"; the knee lands on 6 = the CPU ceiling.
+    rm -f "$RK/parallelism.conf"
+    st="$(cf_stub "4:3000 6:2000")"; : > "$st/noseg"
+    CF_PATH_PREFIX="$(cf_cpu_shim 6)" cf_run "$SK" "$RK" "$st" --repeat 3 --warmup 0
+    ck "g-cal/knee-top/cpu-ceiling/exit-zero" "0" "$CF_RC"
+    ck "g-cal/knee-top/cpu-ceiling/derived-widths" "4 6 " "$(awk '$2 == "measure" { print $3 }' "$st/calls.log" 2>/dev/null | LC_ALL=C sort -n -u | tr '\n' ' ')"
+    ck "g-cal/knee-top/cpu-ceiling/selected-6" "6" "$(conf_value "$RK" max_jobs_per_host)"
+    ck "g-cal/knee-top/cpu-ceiling/record" "6/6/logical-cpu-count" \
+        "$(conf_value "$RK" logical_cpu_count)/$(conf_value "$RK" max_width_measured)/$(conf_value "$RK" width_limit)"
+    case "$CF_ERR$CF_OUT" in
+        *"reached the logical CPU count"*) pass "g-cal/knee-top/cpu-ceiling/says-ceiling" ;;
+        *) fail "g-cal/knee-top/cpu-ceiling/says-ceiling" "stderr lacks 'reached the logical CPU count'" ;;
+    esac
+    case "$CF_ERR$CF_OUT" in
+        *"wider --jobs-list"*) fail "g-cal/knee-top/cpu-ceiling/no-wider-hint" "the CPU ceiling must not advise a wider --jobs-list" ;;
+        *) pass "g-cal/knee-top/cpu-ceiling/no-wider-hint" ;;
+    esac
+    # An explicit --jobs-list that stops below the CPU count keeps the original advice.
+    rm -f "$RK/parallelism.conf"
+    st="$(cf_stub "1:2000 2:1000")"; : > "$st/noseg"
+    cf_run "$SK" "$RK" "$st" --jobs-list "1 2" --repeat 3 --warmup 0
+    ck "g-cal/knee-top/jobs-list/width-limit" "jobs-list" "$(conf_value "$RK" width_limit)"
+    case "$CF_ERR$CF_OUT" in
+        *"wider --jobs-list"*) pass "g-cal/knee-top/jobs-list/keeps-wider-hint" ;;
+        *) fail "g-cal/knee-top/jobs-list/keeps-wider-hint" "a user-truncated ladder must still advise a wider --jobs-list" ;;
+    esac
+}
+
+# 6d. #2687: --dry-run ends its plan with one machine-readable total estimate.
+case_dry_run_estimate() {
+    local n
+    cal_missing "g-cal/dry-run/estimate-total-line" && return
+    CF_NO_OPTIN=1 cf_run "$SK" "$RK" - --dry-run --jobs-list "1 2 4 8"
+    ck "g-cal/dry-run/exit-zero" "0" "$CF_RC"
+    n="$(printf '%s\n' "$CF_OUT" | grep -cE '^plan: estimate_total_s=[0-9]+$' || true)"
+    ck "g-cal/dry-run/estimate-total-line" "1" "$n"
+    if printf '%s\n' "$CF_OUT" | grep -q '^plan: nothing was measured and nothing was written$'; then
+        pass "g-cal/dry-run/prose-lines-kept"
+    else fail "g-cal/dry-run/prose-lines-kept" "the existing plan prose disappeared"; fi
+}
+
 # 7. The developer's real cache dir was never touched
 case_real_home_untouched() {
     local now=0; [ -e "$REAL_RUN_ALL" ] && now=1
@@ -203,6 +275,9 @@ case_opt_in
 case_knee_curves
 case_protocol
 record_published
+case_knee_recorded_verbatim
+case_knee_top_warning
+case_dry_run_estimate
 case_real_home_untouched
 
 echo ""

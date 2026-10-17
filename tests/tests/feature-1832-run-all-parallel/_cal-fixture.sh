@@ -16,7 +16,8 @@ fi
 # cf_run <suite> <real> <stub|-> <args...> (sets CF_RC CF_OUT CF_ERR); cf_calls <stub> [phase];
 # cf_call_field <stub> <n> <col> (1 n, 2 phase, 3 width, 4 deadline, 5 cache dir, 6 count);
 # cf_call_nums <stub> <phase>; cf_keys <stub> <n>; cf_key_of <suite> <cat/name>;
-# cf_inconclusive <token>; cf_selected; cf_lane_holder <real> alive|stale; cf_tree_sig <dir>.
+# cf_inconclusive <token>; cf_selected; cf_lane_holder <real> alive|stale; cf_tree_sig <dir>;
+# cf_cpu_shim <n|unknown> (pair with CF_PATH_PREFIX).
 CF_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CF_CAL="$CF_REPO/bin/calibrate-test-parallelism.sh"
 CF_LIB_PAR="$CF_REPO/bin/lib/run-all-parallelism.sh"
@@ -44,7 +45,7 @@ cf_init() {
     unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
     unset TEST_LANES TEST_LANES_HELD TEST_LANES_BUDGET TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN \
           RUN_ALL_JOBS RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_LANES_LIB RUN_ALL_DURATIONS_LIB \
-          RUN_ALL_CALIBRATION_MEASURE_CMD RUN_CALIBRATION TESTS_DIR 2>/dev/null || true
+          RUN_ALL_CALIBRATION_MEASURE_CMD RUN_CALIBRATION TESTS_DIR AUTO_CONFIG_TEST_MAX_JOBS 2>/dev/null || true
     export RUN_ALL_CONFIG_VAR_CMD="$CF_T/no-such-config-resolver"
     export RUN_ALL_CACHE_DIR="$CF_T/home-cache"
     trap cf_cleanup EXIT
@@ -203,14 +204,31 @@ STUB
     printf '%s' "$d"
 }
 
-# cf_run <suite> <real> <stub|-> <args...> — RUN_CALIBRATION=1 unless CF_NO_OPTIN=1.
+# cf_cpu_shim <n|unknown> — a dir whose nproc / getconf / sysctl report <n> (unknown: all exit 1), printed.
+# #2687: the logical CPU count bounds the width list, so a case pins it via CF_PATH_PREFIX.
+cf_cpu_shim() {
+    local d t
+    d="$(mktemp -d "$CF_T/cpu.XXXXXX")" || return 1
+    for t in nproc getconf sysctl; do
+        if [ "$1" = "unknown" ]; then printf '#!/usr/bin/env bash\nexit 1\n' > "$d/$t"
+        else printf '#!/usr/bin/env bash\necho %s\n' "$1" > "$d/$t"; fi
+        chmod +x "$d/$t" 2>/dev/null || true
+    done
+    printf '%s' "$d"
+}
+
+# cf_run <suite> <real> <stub|-> <args...> — RUN_CALIBRATION=1 unless CF_NO_OPTIN=1;
+# CF_PATH_PREFIX (optional, e.g. a cf_cpu_shim dir) is prepended to the child's PATH.
 cf_run() {
     local suite="$1" real="$2" stub="$3"; shift 3
     local -a e=("RUN_ALL_CACHE_DIR=$real" "TESTS_DIR=$suite" "RUN_ALL_CONFIG_VAR_CMD=$CF_T/no-such-config-resolver")
+    [ -n "${CF_PATH_PREFIX:-}" ] && e+=("PATH=$CF_PATH_PREFIX:$PATH")
+    # A shim dir pins the whole lookup chain: NUMBER_OF_PROCESSORS is the last fallback.
+    [ -n "${CF_PATH_PREFIX:-}" ] && e+=("NUMBER_OF_PROCESSORS=")
     [ "${CF_NO_OPTIN:-0}" = "1" ] || e+=("RUN_CALIBRATION=1")
     [ "$stub" = "-" ] || e+=("RUN_ALL_CALIBRATION_MEASURE_CMD=$stub/measure.sh")
     CF_RC=0
-    CF_OUT="$(bash "$CF_REPO/bin/run-with-timeout.sh" "${CF_TIMEOUT:-120}" env "${e[@]}" \
+    CF_OUT="$(bash "$CF_REPO/bin/run-with-timeout.sh" "${CF_TIMEOUT:-300}" env "${e[@]}" \
         bash "$CF_CAL" "$@" 2>"$CF_T/cal.err")" || CF_RC=$?
     CF_ERR="$(cat "$CF_T/cal.err" 2>/dev/null)"
 }
