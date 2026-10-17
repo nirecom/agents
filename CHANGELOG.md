@@ -783,3 +783,7 @@ Changes: The four tests that failed on main now pass, so test runs no longer sto
 ### FEATURE: PR #2689 (2026-10-17)
 Background: feat(#2529): glossary entry criteria, gate, intent glossary and promo...
 Changes: Glossary entries now follow written entry criteria; the glossary is split into user-facing and internal files with a format gate, and each intent.md carries a `## Glossary` table whose terms reach codex reviews and can be promoted into the shared glossary.
+
+### FEATURE: PR #2695 (2026-10-17)
+Background: feat(#2669): attribute run-all guard and decoy hits to the test that ...
+Changes: Test runs now report a command guard or root decoy hit as a failure of the test that caused it; hits that cannot be traced to one test appear as HIT: lines and HITS=N, and the baseline check stops with exit 6 instead of guessing.
