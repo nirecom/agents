@@ -16,8 +16,6 @@ const { recordGuardReject } = require("./lib/rtk-guard-audit");
 const { isUnderNativeIsolation } = require("./lib/native-isolation");
 const { readHookInput } = require("./lib/read-stdin");
 
-const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
-
 const DELEGATE_TIMEOUT_MS = 3000;
 
 const GIT_GLOBAL_OPTS_WITH_VALUE = new Set([
@@ -77,25 +75,21 @@ function peelEnvTokens(tokens) {
   return i < tokens.length ? tokens.slice(i) : null;
 }
 
-// RTK on/off resolves through bin/get-config-var (exit 1 = explicit ON).
-function loadDefaultEnv() {
-  const script = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "get-config-var");
+// RTK on/off resolves in-process through hooks/lib/config-flag.js: only an explicit on is ON.
+function isFlagExplicitlyOn(name) {
   try {
-    execFileSync("bash", [script, "--is-off", "RTK", "off"], { stdio: "ignore" });
-    return false; // exit 0 => OFF
-  } catch (e) {
-    return e && e.status === 1; // exit 1 => explicit ON
+    return require("./lib/config-flag").classifyConfigFlag(name, "off").kind === "on";
+  } catch (_e) {
+    return false;
   }
 }
 
-function loadAuditEnabled() {
-  const script = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "get-config-var");
-  try {
-    execFileSync("bash", [script, "--is-off", "RTK_AUDIT", "off"], { stdio: "ignore" });
-    return false; // exit 0 => OFF
-  } catch (e) {
-    return e && e.status === 1; // exit 1 => explicit ON
-  }
+function isRtkEnabled() {
+  return isFlagExplicitlyOn("RTK");
+}
+
+function isRtkAuditEnabled() {
+  return isFlagExplicitlyOn("RTK_AUDIT");
 }
 
 function whichRtkOnPath() {
@@ -370,7 +364,7 @@ function decide(input, opts = {}) {
     if (!input || input.tool_name !== "Bash") return passthrough();
     const cmd = input.tool_input && input.tool_input.command;
     if (typeof cmd !== "string" || !cmd.trim()) return passthrough();
-    const rtkOn = opts.rtkOn !== undefined ? opts.rtkOn : loadDefaultEnv();
+    const rtkOn = opts.rtkOn !== undefined ? opts.rtkOn : isRtkEnabled();
     if (!rtkOn) return passthrough();
     const rtkBin = opts.rtkBin !== undefined
       ? opts.rtkBin
@@ -379,7 +373,7 @@ function decide(input, opts = {}) {
     // The EnterWorktree isolation layer refuses the rewritten `rtk git ...` form (#2447).
     const readStateFn = opts.readStateFn || loadReadState();
     if (readStateFn && isUnderNativeIsolation(input.session_id, readStateFn)) return passthrough();
-    const auditOn = opts.auditOn !== undefined ? opts.auditOn : loadAuditEnabled();
+    const auditOn = opts.auditOn !== undefined ? opts.auditOn : isRtkAuditEnabled();
     const guardName = firstRejectingGuard(cmd);
     if (guardName) {
       if (auditOn) {
@@ -409,8 +403,8 @@ module.exports = {
   quoteBin,
   substituteRtkHead,
   passthrough,
-  loadDefaultEnv,
-  loadAuditEnabled,
+  isRtkEnabled,
+  isRtkAuditEnabled,
   isAgentsEmit,
   isMachineReadable,
   isComposite,

@@ -13,14 +13,16 @@ process.exitCode = 70;
 AGENTS_NODE_GUARD
 # Usage:
 #   confirm-off <KEY> [<default>]
-#       Resolves <KEY> via this checkout's bin/get-config-var --is-off
-#       and prints exactly one of:
+#       Resolves <KEY> through hooks/lib/config-flag.js beside this script (a sibling
+#       wrapper of bin/get-config-var over the same module) and prints exactly one of:
 #         OFF   — KEY is explicitly off
 #         ON    — KEY is explicitly on, unset (no default), or holds an
-#                 unrecognized value (fail-safe)
-#         ERROR — internal failure (e.g. load-env.js could not be loaded);
-#                 stderr carries a diagnostic line
+#                 unrecognized value (fail-safe ON)
+#         ERROR — internal failure (e.g. node cannot start, or config-flag.js /
+#                 load-env.js could not be loaded); stderr carries the cause
 #       Exit: 0 (OFF) | 1 (ON) | 2 (ERROR) | 64 (usage).
+#       Fail-safe OFF instead: run `get-config-var --is-off <KEY> off` and treat
+#       ONLY exit 1 as ON.
 #
 #   Canonical caller idiom (absolute path — resolves #677 WSL/PATH issue):
 #     OUT=$(bash "<agents-root>/bin/confirm-off" CONFIRM_X on) || true
@@ -33,39 +35,55 @@ AGENTS_NODE_GUARD
 
 set -u
 
-SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CF_MODE="verdict"
+CF_REPO_ROOT=""
+CF_NAME="${1:-}"
+CF_DEFAULT="${2:-}"
 
-CO_KEY="${1:-}"
-CO_DEFAULT="${2:-}"
-
-if [ -z "$CO_KEY" ]; then
+if [ -z "$CF_NAME" ]; then
   printf 'usage: confirm-off <KEY> [<default>]\n' >&2
   exit 64
 fi
 
-GETCV="$SCRIPT_CHECKOUT_ROOT/bin/get-config-var"
-if [ ! -f "$GETCV" ]; then
-  printf 'ERROR\n'
-  printf 'confirm-off: get-config-var not found at %s\n' "$GETCV" >&2
-  exit 2
-fi
+# config-flag bootstrap: begin
+CF_OUT="$(CONFIG_FLAG_MODE="$CF_MODE" CONFIG_FLAG_NAME="$CF_NAME" CONFIG_FLAG_DEFAULT="$CF_DEFAULT" CONFIG_FLAG_REPO_ROOT="$CF_REPO_ROOT" node -e '
+  const fs = require("fs"); const path = require("path"); const e = process.env;
+  const a = { mode: e.CONFIG_FLAG_MODE || "value", name: e.CONFIG_FLAG_NAME || "", defaultValue: e.CONFIG_FLAG_DEFAULT || "", repoRoot: e.CONFIG_FLAG_REPO_ROOT || "" };
+  for (const k of ["CONFIG_FLAG_MODE", "CONFIG_FLAG_NAME", "CONFIG_FLAG_DEFAULT", "CONFIG_FLAG_REPO_ROOT"]) delete e[k];
+  function toNative(p) {
+    if (process.platform !== "win32" || p.charAt(0) !== "/") return p;
+    const m = /^\/([A-Za-z])\//.exec(p);
+    if (m) return m[1] + ":/" + p.slice(3);
+    // MSYS_NO_PATHCONV=1 left an MSYS mount path: map the prefix env PWD shares with the native cwd.
+    let px = String(e.PWD || ""); let wd = process.cwd();
+    while (px.length > 1 && path.basename(px) === path.basename(wd) && path.dirname(wd) !== wd) { px = path.posix.dirname(px); wd = path.dirname(wd); }
+    if (px.charAt(0) !== "/") return p;
+    if (px === "/") return path.join(wd, p);
+    return p === px || p.startsWith(px + "/") ? path.join(wd, p.slice(px.length)) : p;
+  }
+  let lib = null;
+  try {
+    const self = fs.realpathSync(toNative(String(process.argv[1] || "")));
+    lib = require(path.join(path.dirname(self), "..", "hooks", "lib", "config-flag.js"));
+  } catch (_e) { lib = null; }
+  if (lib) lib.runCli(a);
+  else if (a.mode === "kind") process.stdout.write("failed lib-missing");
+  else if (a.mode === "verdict") process.stdout.write("ERROR lib-missing");
+  else { const x = e[a.name]; process.stdout.write(x && x.length ? x : a.defaultValue); }
+' "${BASH_SOURCE[0]}")"
+# config-flag bootstrap: end
 
-bash "$GETCV" --is-off "$CO_KEY" "$CO_DEFAULT"
-rc=$?
-case "$rc" in
-  0) printf 'OFF\n'; exit 0 ;;
-  1) printf 'ON\n';  exit 1 ;;
-  2) printf 'ON\n';  exit 1 ;;   # unset (no default) → fail-safe ON
-  3) printf 'ON\n';  exit 1 ;;   # unrecognized → fail-safe ON
-  4) printf 'ERROR\n'
-     printf 'confirm-off: get-config-var internal failure (load-env)\n' >&2
-     exit 2 ;;
-  64) printf 'ERROR\n'
-      printf 'confirm-off: get-config-var usage error\n' >&2
-      exit 2 ;;
-  *)  printf 'ERROR\n'
-      printf 'confirm-off: get-config-var unexpected exit %s\n' "$rc" >&2
-      exit 2 ;;
+case "$CF_OUT" in
+  OFF) printf 'OFF\n'; exit 0 ;;
+  ON) printf 'ON\n'; exit 1 ;;
+  ERROR*)
+    printf 'ERROR\n'
+    printf 'confirm-off: config resolution failed (%s)\n' "${CF_OUT#ERROR }" >&2
+    exit 2 ;;
+  *)
+    printf 'ERROR\n'
+    printf 'confirm-off: config resolution failed (no answer from node)\n' >&2
+    exit 2 ;;
 esac
 # End of the #1532 node-misinvocation guard envelope -- docs/agents-repo-dev.md
 # */
