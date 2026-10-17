@@ -6,18 +6,17 @@ paths:
 
 # Glossary Entry Criteria
 
+## What's a glossary
+
+The glossary defines terms used across multiple subsystems, so every artifact uses one wording per concept.
+Never list a term used in only one subsystem.
+Add an entry only by glossary promotion of an intent glossary row of the same category.
+
 ## Category
 
-Give every term exactly one category: `user`, `internal`, or `session`.
-`user`: a term the user sees directly — a skill name, a `.env` setting, a sentinel, a workflow step, a confirmation dialog.
-`internal`: a term the user never sees but many components reference as a design concept.
-`session`: a term used only inside one session's plans; record it in the intent glossary and never in a glossary file.
-In code, keep the key and the value apart (`category: 'user'`); never coin an abbreviation for a category.
-
-## What to list
-
-List a term only when it meets the `user` or `internal` criterion.
-Define a term used by a single subsystem once, in its owning document, and keep it out of the glossary (CPR-SSOT).
+`user`: a keyword the user sees — a skill name, a `.env` key, a workflow step.
+`internal`: a key design concept the user never sees.
+`session`: unifies wording within one session only; never promoted.
 
 ## Files
 

@@ -31,7 +31,7 @@ UD-3. **Identify gaps**: Compare git log against each document's content. Look f
    - Progress updates
    - `README.md`: Update when a user-visible feature is added or changed, install/usage steps shift, or an existing bullet no longer accurately reflects real behavior.
    - Glossary promotion: list the user / internal rows of `<PLANS_DIR>/<session-id>-intent.md` `## Glossary` (`<PLANS_DIR>` per `skills/_shared/resolve-plans-dir.md`) as promotion candidates in the UD-4 proposal; do not write yet.
-   - Glossary entries: add or align an entry only for a term that meets the criteria in `rules/docs/glossary.md`, in the file of its category.
+   - Glossary entries: never add one outside glossary promotion.
 UD-4. **Propose updates**: For each file that needs updating, present:
    - Before drafting History/Changelog bullets: apply the language configured by `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE`, routed by repo visibility — one policy covers both history and changelog
    - Which sections need changes and why
