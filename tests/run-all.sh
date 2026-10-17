@@ -308,12 +308,15 @@ ledger_record() {
 }
 
 # --- width -----------------------------------------------------------------
-RUN_JOBS=4
+RUN_JOBS=4; RUN_UNLIMITED=""
+# An empty max jobs per run is unlimited: the test count, bounded later by the run-all lane pool.
 resolve_jobs() {
   if [ "$JOBS_MODE" = "fixed" ]; then RUN_JOBS="$MAX_JOBS_PER_RUN_FIXED"; return 0; fi
   if [ "$PARALLELISM_LIB_OK" -eq 1 ]; then
     run_all_resolve_max_jobs_per_run || usage_error "$RUN_ALL_RESOLVE_NOTE"
-    RUN_JOBS="$RUN_ALL_MAX_JOBS_PER_RUN"; say "$RUN_ALL_RESOLVE_NOTE"; return 0
+    RUN_JOBS="$RUN_ALL_MAX_JOBS_PER_RUN"; say "$RUN_ALL_RESOLVE_NOTE"
+    if [ -n "$RUN_JOBS" ]; then :; elif [ "$LANES_LIB_OK" -eq 1 ]; then RUN_JOBS="$TOTAL"; RUN_UNLIMITED=unlimited; else RUN_JOBS=4; fi
+    return 0
   fi
   say "parallelism library unavailable; max jobs per run $RUN_JOBS (built-in default)"
 }
@@ -322,7 +325,7 @@ resolve_jobs
 [ "$RUN_JOBS" -lt 1 ] && RUN_JOBS=1
 
 if [ "$PRINT_PLAN" -eq 1 ]; then
-  [ "$LANES_LIB_OK" -eq 1 ] && { thl_plan "$RUN_JOBS"; RUN_JOBS="$THL_PLAN_JOBS"; say "plan: $THL_NOTE"; }
+  [ "$LANES_LIB_OK" -eq 1 ] && { thl_plan "$RUN_JOBS" "$RUN_UNLIMITED"; RUN_JOBS="$THL_PLAN_JOBS"; say "plan: $THL_NOTE"; }
   printf 'tests_dir=%s\njobs=%s\nserial_count=%s\n' "$TESTS_DIR" "$RUN_JOBS" "$SERIAL_COUNT"
   for ((idx = 0; idx < TOTAL; idx++)); do
     printf 'plan\t%s\t%s\t%s\t%s\n' "$idx" "${LANE[$idx]}" "${WORK[$idx]}" "${TIER[$idx]:-$UNMEASURED}"
@@ -354,9 +357,9 @@ NEXT=0; REPORTED=0; HARVESTED=0
 SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0; START_TS=$SECONDS
 # Host-wide lanes (#2455): the lease can only narrow RUN_JOBS, never widen it.
 if [ "$LANES_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; then
-  thl_init_dir; thl_run_all_lease "$RUN_JOBS" "$DEADLINE" || { cleanup_all
+  thl_init_dir; thl_run_all_lease "$RUN_JOBS" "$DEADLINE" "$RUN_UNLIMITED" || { cleanup_all
     echo "[run-all] no test lane freed within ${THL_WAIT_CAP_USED}s; inspect holders with: bash bin/test-lanes-status.sh" >&2; exit 4; }
-  RUN_JOBS="$THL_GRANTED"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
+  RUN_JOBS="$THL_WIDTH"; [ -n "$THL_NOTE" ] && say "lanes: $THL_NOTE"
 fi
 
 LAUNCH_LIB="${RUN_ALL_LAUNCH_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/run-all-launch.sh}"
@@ -450,6 +453,7 @@ reap_wait() {
 }
 
 while [ "$REPORTED" -lt "$TOTAL" ]; do
+  [ "$LANES_LIB_OK" -eq 1 ] && [ "$RUN_JOBS" -lt 1 ] && [ "${#INFLIGHT[@]}" -eq 0 ] && [ "$NEXT" -lt "$TOTAL" ] && { thl_dispatch_wait "$DEADLINE" "$START_TS" || { DEADLINE_HIT=1; break; }; RUN_JOBS="$THL_WIDTH"; }
   while [ "$NEXT" -lt "$TOTAL" ] && [ "$SERIAL_INFLIGHT" -eq 0 ]; do
     if [ "${LANE[$NEXT]}" = serial ]; then
       if [ "${#INFLIGHT[@]}" -gt 0 ]; then
@@ -471,6 +475,7 @@ while [ "$REPORTED" -lt "$TOTAL" ]; do
   if [ "${#INFLIGHT[@]}" -eq 0 ]; then flush; break; fi
   reap_wait || break
   flush
+  [ "$HARVESTED" -gt 0 ] && [ "$LANES_LIB_OK" -eq 1 ] && { thl_rebalance "${#INFLIGHT[@]}"; RUN_JOBS="$THL_WIDTH"; }
 done
 
 if [ "$DEADLINE_HIT" -eq 1 ]; then

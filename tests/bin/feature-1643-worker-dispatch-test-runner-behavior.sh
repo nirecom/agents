@@ -55,10 +55,10 @@ run_with_timeout() {
 # always splatted FIRST for exactly that reason; senv() is the same rule for
 # call sites that do not already build an `env` invocation of their own.
 AMBIENT_ENV_FLAGS=(-u TEST_MAX_JOBS_PER_RUN -u TEST_MAX_JOBS_PER_HOST -u RUN_ALL_DEADLINE
-                   -u RUN_ALL_PROGRESS -u RUN_ALL_REAP -u FEATURE_644_PHASE)
-AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE"
+                   -u RUN_ALL_PROGRESS -u RUN_ALL_REAP -u FEATURE_644_PHASE -u AUTO_CONFIG_TEST_MAX_JOBS)
+AMBIENT_VARS="TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE AUTO_CONFIG_TEST_MAX_JOBS"
 senv() { env "${AMBIENT_ENV_FLAGS[@]}" "$@"; }
-unset TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+unset TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE AUTO_CONFIG_TEST_MAX_JOBS
 
 if [ ! -f "$DISPATCH_JS" ] || [ ! -f "$PRELOAD" ]; then
     fail "0: fixture prerequisites missing" "dispatcher=$DISPATCH_JS stub=$PRELOAD"
@@ -383,13 +383,14 @@ RUN_ALL_DEADLINE=[<unset>]
 RUN_ALL_PROGRESS=[<unset>]
 RUN_ALL_REAP=[<unset>]
 FEATURE_644_PHASE=[<unset>]
+AUTO_CONFIG_TEST_MAX_JOBS=[<unset>]
 WORKFLOW_PLANS_DIR=[$PLANS]"
     # Same funnel dispatch_tr uses, probe substituted for node: every `-u` flag
     # precedes every NAME=VALUE, because GNU env stops parsing options at the
     # first assignment and would otherwise treat `-u TEST_MAX_JOBS_PER_RUN` as a command.
     out="$(
         export TEST_MAX_JOBS_PER_RUN=99 TEST_MAX_JOBS_PER_HOST=99 RUN_ALL_DEADLINE=1 RUN_ALL_PROGRESS=verbose \
-               RUN_ALL_REAP=off FEATURE_644_PHASE=6
+               RUN_ALL_REAP=off FEATURE_644_PHASE=6 AUTO_CONFIG_TEST_MAX_JOBS=off
         run_with_timeout 30 env "${AMBIENT_ENV_FLAGS[@]}" "WORKFLOW_PLANS_DIR=$PLANS" \
             bash "$probe" 2>&1
     )"
@@ -397,12 +398,13 @@ WORKFLOW_PLANS_DIR=[$PLANS]"
 
     # And the verdict itself is indifferent to them.
     export TEST_MAX_JOBS_PER_RUN=99 TEST_MAX_JOBS_PER_HOST=99 RUN_ALL_DEADLINE=1 \
-           RUN_ALL_PROGRESS=verbose RUN_ALL_REAP=off FEATURE_644_PHASE=6
+           RUN_ALL_PROGRESS=verbose RUN_ALL_REAP=off FEATURE_644_PHASE=6 AUTO_CONFIG_TEST_MAX_JOBS=off
     set_run 0 "Results: PASS=3  FAIL=0  SKIP=1"
     dispatch_tr "$MAIN" "$PAYLOAD"
     assert_eq "ambient/verdict-unchanged-under-hostile-ambient" \
         "pass|PASS=3 FAIL=0 SKIP=1" "$(field_of status)|$(field_of summary)"
-    unset TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE
+    unset TEST_MAX_JOBS_PER_RUN TEST_MAX_JOBS_PER_HOST RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP FEATURE_644_PHASE \
+          AUTO_CONFIG_TEST_MAX_JOBS
 }
 
 # ===========================================================================
