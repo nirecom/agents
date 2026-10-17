@@ -13,6 +13,14 @@ const path = require("node:path");
 const PINNED = { WORKFLOW_STATE_DIR: "workflow-state", WORKFLOW_PLANS_DIR: "plans" };
 const REMOVED = ["CLAUDE_CODE_SESSION_ID"];
 
+// The retired relay names are only cleared; leaving an isolation never puts them back.
+function clearRetired() {
+  delete process.env.CLAUDE_SESSION_ID;
+  delete process.env.CLAUDE_ENV_FILE;
+}
+
+clearRetired();
+
 let openCase = null;
 
 process.on("exit", () => {
@@ -53,6 +61,7 @@ function caseEnd() {
 // isolate() — re-points the workflow dirs into a fresh temp directory and removes the session
 // variables; returns the function that puts every value back (calling it again does nothing).
 function isolate() {
+  clearRetired();
   const names = Object.keys(PINNED).concat(REMOVED);
   let saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "harness-"));

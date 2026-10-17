@@ -71,7 +71,7 @@ BeforeAll {
         '    }'
         '}'
     )
-    $script:TwoCasesRows = @('CASE|0|alpha|bin/a.sh|5|7||', 'CASE|1|beta|bin/lib/b.ps1|9|13||')
+    $script:TwoCasesRows = @('CASE|alpha|bin/a.sh|5|7||', 'CASE|beta|bin/lib/b.ps1|9|13||')
 }
 
 Describe 'pester-case-reader' -Tag 'target:bin/lib/test-language-parts/pester-case-reader.ps1' {
@@ -99,7 +99,7 @@ Describe 'pester-case-reader' -Tag 'target:bin/lib/test-language-parts/pester-ca
 
     It 'conforming: double-quoted strings without expansion are constants' {
         $path = New-Sample -Name 'dq.Tests.ps1' -Line @('Describe "alpha" -Tag "target:bin/a.sh" {', '}')
-        Assert-Record -Label 'conforming: double-quoted strings' -Path $path -State 'conforming' -Case @('CASE|0|alpha|bin/a.sh|1|2||')
+        Assert-Record -Label 'conforming: double-quoted strings' -Path $path -State 'conforming' -Case @('CASE|alpha|bin/a.sh|1|2||')
     }
 
     It 'constant: <Label>' -ForEach @(
@@ -157,7 +157,7 @@ Describe 'pester-case-reader' -Tag 'target:bin/lib/test-language-parts/pester-ca
 
     It 'conforming: a single -Tags parameter holds exactly one target' {
         $path = New-Sample -Name 'tags.Tests.ps1' -Line @("Describe 'alpha' -Tags 'target:bin/a.sh' {", '}')
-        Assert-Record -Label 'conforming: single -Tags' -Path $path -State 'conforming' -Case @('CASE|0|alpha|bin/a.sh|1|2||')
+        Assert-Record -Label 'conforming: single -Tags' -Path $path -State 'conforming' -Case @('CASE|alpha|bin/a.sh|1|2||')
     }
 
     It 'nested-target: a tagged Describe inside <Label>' -ForEach @(
@@ -201,7 +201,7 @@ Describe 'pester-case-reader' -Tag 'target:bin/lib/test-language-parts/pester-ca
             '    }'
             '}'
         )
-        Assert-Record -Label 'conforming: untargeted Contexts' -Path (New-Sample -Name 'context-plain.Tests.ps1' -Line $line) -State 'conforming' -Case @('CASE|0|alpha|bin/a.sh|1|6||')
+        Assert-Record -Label 'conforming: untargeted Contexts' -Path (New-Sample -Name 'context-plain.Tests.ps1' -Line $line) -State 'conforming' -Case @('CASE|alpha|bin/a.sh|1|6||')
     }
 
     It 'nested-target: a tagged top-level Context (<Label>)' -ForEach @(
@@ -214,7 +214,7 @@ Describe 'pester-case-reader' -Tag 'target:bin/lib/test-language-parts/pester-ca
 
     It 'conforming: a top-level Context without a target tag beside a tagged Describe' {
         $line = @("Describe 'alpha' -Tag 'target:bin/a.sh' {", '}', "Context 'x' -Tag 'slow' {", '}')
-        Assert-Record -Label 'conforming: untargeted top-level Context' -Path (New-Sample -Name 'top-context-plain.Tests.ps1' -Line $line) -State 'conforming' -Case @('CASE|0|alpha|bin/a.sh|1|2||')
+        Assert-Record -Label 'conforming: untargeted top-level Context' -Path (New-Sample -Name 'top-context-plain.Tests.ps1' -Line $line) -State 'conforming' -Case @('CASE|alpha|bin/a.sh|1|2||')
     }
 
     It 'grammar: a file that does not parse (<Label>)' -ForEach @(
@@ -232,10 +232,18 @@ Describe 'pester-case-reader' -Tag 'target:bin/lib/test-language-parts/pester-ca
         Assert-Malformed -Label "grammar: $Label" -Path (New-Sample -Name 'empty-name.Tests.ps1' -Line @($Head, '}')) -Reason 'grammar' -Line 1
     }
 
+    # The reader reports both; rejecting the repeated name is the shared state rule's job (#2673).
+    It 'duplicate names pass through the reader (the shared state rule rejects them)' {
+        $one = { param($Target) "Describe 'alpha' -Tag 'target:$Target' {"; '}' }
+        $line = @(& $one 'bin/a.sh') + @(& $one 'bin/b.sh')
+        $path = New-Sample -Name 'dup-name.Tests.ps1' -Line $line
+        Assert-Record -Label 'duplicate names' -Path $path -State 'conforming' -Case @('CASE|alpha|bin/a.sh|1|2||', 'CASE|alpha|bin/b.sh|3|4||')
+    }
+
     It 'never executes the file under read' {
         $sentinel = Join-Path $TestDrive 'executed.flag'
         $line = @("Set-Content -LiteralPath '$sentinel' -Value 'ran'", "Describe 'alpha' -Tag 'target:bin/a.sh' {", '}')
-        Assert-Record -Label 'never executes' -Path (New-Sample -Name 'side-effect.Tests.ps1' -Line $line) -State 'conforming' -Case @('CASE|0|alpha|bin/a.sh|2|3||')
+        Assert-Record -Label 'never executes' -Path (New-Sample -Name 'side-effect.Tests.ps1' -Line $line) -State 'conforming' -Case @('CASE|alpha|bin/a.sh|2|3||')
         $sentinel | Should -Not -Exist -Because '[never executes] the sentinel must not be written'
     }
 

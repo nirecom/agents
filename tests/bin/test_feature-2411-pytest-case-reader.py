@@ -37,8 +37,8 @@ TWO_CASES = [
     "        assert True",
 ]
 TWO_CASES_ROWS = [
-    ["CASE", "0", "test_alpha", "bin/a.sh", "4", "6", "", ""],
-    ["CASE", "1", "TestBeta", "bin/lib/b.py", "9", "16", "", ""],
+    ["CASE", "test_alpha", "bin/a.sh", "4", "6", "", ""],
+    ["CASE", "TestBeta", "bin/lib/b.py", "9", "16", "", ""],
 ]
 
 
@@ -121,13 +121,13 @@ def test_encoding_and_path_variants_give_the_same_records(case, tmp_path,name, e
 
 def test_trailing_blank_lines_and_comments_stay_outside_the_range(case, tmp_path):
     lines = [*marked('"bin/a.sh"'), "", "", "# trailing note", ""]
-    rows = [["CASE", "0", "test_alpha", "bin/a.sh", "4", "6", "", ""]]
+    rows = [["CASE", "test_alpha", "bin/a.sh", "4", "6", "", ""]]
     assert_records(case, write_sample(tmp_path / "test_trailing.py", lines), "conforming", rows)
 
 
 def test_unmarked_non_test_definitions_are_not_cases(case, tmp_path):
     lines = [*marked('"bin/a.sh"'), "", "", "def helper():", "    return 1", "", "", "class Fixture:", "    pass"]
-    rows = [["CASE", "0", "test_alpha", "bin/a.sh", "4", "6", "", ""]]
+    rows = [["CASE", "test_alpha", "bin/a.sh", "4", "6", "", ""]]
     assert_records(case, write_sample(tmp_path / "test_helpers.py", lines), "conforming", rows)
 
 
@@ -227,6 +227,13 @@ def test_syntax_error_is_malformed_grammar(case, tmp_path,lines):
     assert_malformed(case, write_sample(tmp_path / "test_broken.py", lines), "grammar")
 
 
+def test_duplicate_names_pass_through_the_reader_the_shared_state_rule_rejects_them(case, tmp_path):
+    """The reader reports both; rejecting the repeated name is the shared state rule's job (#2673)."""
+    lines = [*marked('"bin/a.sh"'), "", "", *marked('"bin/b.sh"')[3:]]
+    rows = [["CASE", "test_alpha", "bin/a.sh", "4", "6", "", ""], ["CASE", "test_alpha", "bin/b.sh", "9", "11", "", ""]]
+    assert_records(case, write_sample(tmp_path / "test_dup_name.py", lines), "conforming", rows)
+
+
 def test_file_under_read_is_never_executed(case, tmp_path):
     sentinel = tmp_path / "executed.flag"
     lines = [
@@ -235,7 +242,7 @@ def test_file_under_read_is_never_executed(case, tmp_path):
         f"Path({json.dumps(str(sentinel))}).write_text('ran')",
         *marked('"bin/a.sh"'),
     ]
-    rows = [["CASE", "0", "test_alpha", "bin/a.sh", "7", "9", "", ""]]
+    rows = [["CASE", "test_alpha", "bin/a.sh", "7", "9", "", ""]]
     assert_records(case, write_sample(tmp_path / "test_side_effect.py", lines), "conforming", rows)
     assert not sentinel.exists(), f"{case}: sentinel must not be written"
 
