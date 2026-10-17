@@ -76,12 +76,6 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
   The `CONFIRM_<STAGE>` echo belongs to a later turn, after the user replies.
 - **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md)
 
-### release phase
-
-- **Definition**: The workflow steps after `review_docs`, one skill each: `push_branch`, `user_verification`, `merge_to_main`, `cleanup`, and `pre_final_report_gate`.
-  The sole USER_VERIFIED sentinel is issued in `user_verification`.
-- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md)
-
 ### RTK
 
 - **Definition**: Rust Token Killer, a third-party CLI that compresses Bash command output to cut LLM input tokens; enabled with `RTK=on`.
