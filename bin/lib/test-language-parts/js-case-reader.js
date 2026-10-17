@@ -3,9 +3,10 @@
 // A line reader, not a parser: it reports the column-0 `caseBegin("<name>", "<target>");` ...
 // `caseEnd();` pairs of tests/lib/harness.js and never runs or parses the file. Prints
 //   FILE\t<state>\t<line>\t<reason>   and, when conforming, one
-//   CASE\t<idx>\t<name>\t<target>\t<begin>\t<end>\t\t   per pair.
-// A call-looking line inside a block comment or a multi-line template string cannot be
-// settled by reading lines, so the file is reported as `uncertain`. Exit 1: unreadable file.
+//   CASE\t<name>\t<target>\t<begin>\t<end>\t\t   per pair, in file order.
+// Block comment and template state is tracked across lines, through nested `${}`; a call-looking
+// line inside a block comment, a template or a `${}` cannot be settled by reading lines, so the
+// file is reported as `uncertain`. Exit 1: unreadable file.
 
 const fs = require("fs");
 
@@ -21,8 +22,8 @@ const TARGET_OK = /^[A-Za-z0-9._/-]+$/;
 class Verdict {
   constructor(state, line, reason, cases) {
     this.rows = [["FILE", state, line, reason].join("\t")];
-    for (const [i, c] of (cases || []).entries()) {
-      this.rows.push(["CASE", i, c.name, c.target, c.begin, c.end, "", ""].join("\t"));
+    for (const c of cases || []) {
+      this.rows.push(["CASE", c.name, c.target, c.begin, c.end, "", ""].join("\t"));
     }
   }
 }
@@ -44,13 +45,54 @@ function targetIsValid(target) {
   return parts[0] !== "." && !parts.includes("..");
 }
 
-// The line with its one-line string literals and its trailing line comment removed.
-function withoutLiterals(text) {
-  return text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""').replace(/\/\/.*$/, "");
-}
-
-function oddBackticks(text) {
-  return (text.replace(/\\./g, "").match(/`/g) || []).length % 2 === 1;
+// Walks one line and returns the region stack after it. Entries: { kind: "comment" },
+// { kind: "template" }, { kind: "expr", depth } (inside `${`, depth = open inner `{`); empty = code.
+function scanCode(raw, stack) {
+  const s = stack.map((e) => ({ ...e }));
+  let i = 0;
+  while (i < raw.length) {
+    const top = s[s.length - 1];
+    const ch = raw[i];
+    const two = raw.slice(i, i + 2);
+    if (top && top.kind === "comment") {
+      if (two === "*/") {
+        s.pop();
+        i += 2;
+      } else i += 1;
+      continue;
+    }
+    if (top && top.kind === "template") {
+      if (ch === "\\") i += 2;
+      else if (ch === "`") {
+        s.pop();
+        i += 1;
+      } else if (two === "${") {
+        s.push({ kind: "expr", depth: 0 });
+        i += 2;
+      } else i += 1;
+      continue;
+    }
+    if (two === "//") break;
+    if (two === "/*") {
+      s.push({ kind: "comment" });
+      i += 2;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      i += 1;
+      while (i < raw.length && raw[i] !== ch) i += raw[i] === "\\" ? 2 : 1;
+      i += 1;
+      continue;
+    }
+    if (ch === "`") s.push({ kind: "template" });
+    else if (top && ch === "{") top.depth += 1;
+    else if (top && ch === "}") {
+      if (top.depth === 0) s.pop();
+      else top.depth -= 1;
+    }
+    i += 1;
+  }
+  return s;
 }
 
 function readBegin(text, lineNo) {
@@ -69,12 +111,12 @@ function main(file) {
   const lines = body.split(/\r?\n/);
   const cases = [];
   let open = null;
-  let region = "";
+  let stack = [];
   for (const [i, raw] of lines.entries()) {
     const lineNo = i + 1;
-    if (region) {
+    if (stack.length) {
       if (CALL_LOOKING.test(raw)) finish("uncertain", lineNo, "grammar");
-      if (region === "comment" ? raw.includes("*/") : oddBackticks(raw)) region = "";
+      stack = scanCode(raw, stack);
       continue;
     }
     if (raw.startsWith("caseBegin(")) {
@@ -95,10 +137,7 @@ function main(file) {
     if (/^\s+caseBegin\(/.test(raw) && readBegin(raw.trimStart(), lineNo).length > 1) {
       finish("malformed", lineNo, "nested-target");
     }
-    const bare = withoutLiterals(raw);
-    const opened = bare.lastIndexOf("/*");
-    if (opened !== -1 && !bare.slice(opened + 2).includes("*/")) region = "comment";
-    else if (oddBackticks(bare)) region = "template";
+    stack = scanCode(raw, stack);
   }
   if (open) finish("malformed", open.begin, "balance");
   finish(cases.length ? "conforming" : "none", "", "", cases);

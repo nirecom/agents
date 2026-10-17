@@ -19,6 +19,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "f2411-js-reader-"));
 const BACKTICK = String.fromCharCode(96);
 const COMMENT_OPEN = "/" + "*";
 const COMMENT_CLOSE = "*" + "/";
+const DOLLAR_BRACE = "$" + "{";
 const BEGIN = "caseBegin";
 const END = "caseEnd();";
 
@@ -83,11 +84,17 @@ const TWO_CASES = [
   "check(3);",
   END,
 ];
+// CASE rows carry 7 columns: CASE, name, target, begin, end, deps, reason (#2673 dropped idx).
 const TWO_CASES_ROWS = [
-  ["CASE", "0", "alpha", "bin/a.sh", "3", "5", "", ""],
-  ["CASE", "1", "beta", "bin/lib/b.js", "7", "10", "", ""],
+  ["CASE", "alpha", "bin/a.sh", "3", "5", "", ""],
+  ["CASE", "beta", "bin/lib/b.js", "7", "10", "", ""],
 ];
-const ALPHA = (from, to) => [["CASE", "0", "alpha", "bin/a.sh", String(from), String(to), "", ""]];
+const ALPHA = (from, to) => [["CASE", "alpha", "bin/a.sh", String(from), String(to), "", ""]];
+// Template and comment samples are joined from constants so this file never holds them itself.
+const MARKER = [begin("alpha", "bin/a.sh"), END];
+const tpl = (body) => BACKTICK + body + BACKTICK;
+// One case built twice with the same name: the reader passes both through (#2673).
+const DUP_NAME = [begin("alpha", "bin/a.sh"), END, begin("alpha", "bin/b.sh"), END];
 
 caseBegin("js-case-reader", "bin/lib/test-language-parts/js-case-reader.js");
 
@@ -103,6 +110,20 @@ const recordCases = [
   { name: "an indented end call does not close the open case", file: "indented-end.js", lines: [begin("alpha", "bin/a.sh"), "if (ready) {", `  ${END}`, "}", END], state: "conforming", rows: ALPHA(1, 5) },
   { name: "calls reached through another name are not delimiters", file: "via-variable.js", lines: ['const h = require("../lib/harness");', 'h.caseBegin("alpha", "bin/a.sh");', "h.caseEnd();"], state: "none", rows: [] },
   { name: "JavaScript syntax is not checked", file: "broken-syntax.js", lines: ["function (((", begin("alpha", "bin/a.sh"), "}}}", END], state: "conforming", rows: ALPHA(2, 4) },
+  { name: "a comment opener inside a template does not open a comment", file: "tpl-comment.js", lines: ["const s = " + tpl(COMMENT_OPEN) + ";", ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "a line-comment opener inside a template does not end the line", file: "tpl-slashes.js", lines: ["const u = " + tpl("http:" + "//x") + ";", ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "a template nested inside an interpolation closes with its host", file: "tpl-nested.js", lines: ["const t = " + tpl("a${f(" + tpl(COMMENT_OPEN) + ")}b") + ";", ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "braces inside an interpolation do not close it early", file: "tpl-braces.js", lines: ["const o = " + tpl("${ {a: 1}.a }") + ";", ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "a marker after a closed multi-line template holding a comment opener counts", file: "tpl-multiline.js", lines: ["const m = " + BACKTICK, "x " + COMMENT_OPEN + " y", BACKTICK + ";", ...MARKER], state: "conforming", rows: ALPHA(4, 5) },
+  { name: "duplicate names pass through the reader (the shared state rule rejects them)", file: "dup-name.js", lines: DUP_NAME, state: "conforming", rows: [["CASE", "alpha", "bin/a.sh", "1", "2", "", ""], ["CASE", "alpha", "bin/b.sh", "3", "4", "", ""]] },
+  // Ordinary code lines that only look like region openers leave the scan in code (#2673 scanCode).
+  { name: "a comment opener inside a double-quoted string does not open a comment", file: "str-comment.js", lines: ['const s = "' + COMMENT_OPEN + '";', ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "a backtick inside a single-quoted string does not open a template", file: "str-backtick.js", lines: ["const q = '" + BACKTICK + "';", ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "an interpolation opener inside a double-quoted string opens nothing", file: "str-interp.js", lines: ['const d = "' + DOLLAR_BRACE + '";', ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "an escaped quote does not end a string before a comment opener", file: "str-escaped-quote.js", lines: ['const e = "a\\"' + COMMENT_OPEN + '";', ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "a line comment holding a comment opener and a backtick opens nothing", file: "line-comment.js", lines: ["// note " + COMMENT_OPEN + " and " + BACKTICK, ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "a block comment closed on its own line leaves the code after it as code", file: "block-one-line.js", lines: [COMMENT_OPEN + " x " + COMMENT_CLOSE + " check();", ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
+  { name: "an escaped backtick inside a template neither closes it nor lets a comment opener count", file: "tpl-escaped-backtick.js", lines: ["const g = " + tpl("a\\" + BACKTICK + " " + COMMENT_OPEN) + ";", ...MARKER], state: "conforming", rows: ALPHA(2, 3) },
 ];
 for (const { name, file, lines, opts, state, rows } of recordCases) {
   check(name, (n) => assertRecords(n, sample(file, lines, opts), state, rows));
@@ -153,6 +174,8 @@ for (const { name, file, lines, reason, line } of malformedCases) {
 const uncertainCases = [
   { name: "a call-looking line inside a block comment is uncertain", open: COMMENT_OPEN, close: COMMENT_CLOSE },
   { name: "a call-looking line inside a multi-line template string is uncertain", open: `const text = ${BACKTICK}`, close: `${BACKTICK};` },
+  { name: "a comment opened after a template closes on the same line still makes a call-looking line uncertain", open: "const s = " + tpl("x") + "; " + COMMENT_OPEN, close: COMMENT_CLOSE },
+  { name: "a call-looking line while an interpolation stays open across lines is uncertain", open: "const t = " + BACKTICK + "a${f(", close: ")}b" + BACKTICK + ";" },
 ];
 for (const { name, open, close } of uncertainCases) {
   check(name, (n) => {

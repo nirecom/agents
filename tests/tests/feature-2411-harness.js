@@ -17,6 +17,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { after, before, describe, test } = require("node:test");
+const { retiredNames, leftSet } = require("./feature-2411-harness/retired");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const HELPER = path.join(SCRIPT_CHECKOUT_ROOT, "tests", "lib", "harness.js");
@@ -24,12 +25,15 @@ const WRAPPER_REL = "bin/lib/test-wrappers/node.js";
 const REGISTRY_FILE = path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "test-language-registry.json");
 const PIN_NAMES = ["WORKFLOW_STATE_DIR", "WORKFLOW_PLANS_DIR"];
 const REMOVED_NAMES = ["CLAUDE_CODE_SESSION_ID"];
-const ISO_NAMES = PIN_NAMES.concat(REMOVED_NAMES);
+// Cleared on load and on isolate, never put back: kept apart from the names a restore returns.
+const RETIRED_NAMES = retiredNames(SCRIPT_CHECKOUT_ROOT);
+const RESTORE_NAMES = PIN_NAMES.concat(REMOVED_NAMES);
+const ISO_NAMES = RESTORE_NAMES.concat(RETIRED_NAMES);
 const SENTINEL = Object.fromEntries(ISO_NAMES.map((n) => [n, `h2411-secret-${crypto.randomUUID()}`]));
 const PRESETS = {
   "all set": Object.fromEntries(ISO_NAMES.map((n) => [n, `h2411-${n.toLowerCase()}`])),
   "all unset": {},
-  mixed: { WORKFLOW_PLANS_DIR: "h2411-plans", CLAUDE_CODE_SESSION_ID: "h2411-ccsid" },
+  mixed: { WORKFLOW_PLANS_DIR: "h2411-plans", CLAUDE_CODE_SESSION_ID: "h2411-ccsid", [RETIRED_NAMES[0]]: "h2411-retired" },
 };
 const LOAD_LINE = 'const { caseBegin, caseEnd, isolate, xfail, tl3Enabled } = require("../lib/harness");';
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "h2411-"));
@@ -91,7 +95,7 @@ describe("isolation", () => {
   for (const [label, preset] of Object.entries(PRESETS)) {
     test(`ISO-enter-restore (${label}): pins both dirs into temp, removes the session variables, restores exactly`, () => {
       withEnv(ISO_NAMES, preset, () => {
-        const beforeEnv = snapshot(ISO_NAMES);
+        const beforeEnv = snapshot(RESTORE_NAMES);
         const restore = isolate();
         try {
           for (const n of PIN_NAMES) {
@@ -100,10 +104,12 @@ describe("isolation", () => {
             assert.ok(isInside(process.env[n], os.tmpdir()), `${n} sits under the temp area`);
           }
           for (const n of REMOVED_NAMES) assert.strictEqual(process.env[n], undefined, `${n} is removed`);
+          assert.deepStrictEqual(leftSet(RETIRED_NAMES), [], "the retired names are cleared inside");
         } finally {
           restore();
         }
-        assert.deepStrictEqual(snapshot(ISO_NAMES), beforeEnv);
+        assert.deepStrictEqual(snapshot(RESTORE_NAMES), beforeEnv);
+        assert.deepStrictEqual(leftSet(RETIRED_NAMES), [], "the retired names stay cleared after the restore");
       });
     });
   }
@@ -124,7 +130,7 @@ describe("isolation", () => {
 
   test("ISO-exception: a restore in finally restores after the body threw", () => {
     withEnv(ISO_NAMES, PRESETS.mixed, () => {
-      const beforeEnv = snapshot(ISO_NAMES);
+      const beforeEnv = snapshot(RESTORE_NAMES);
       assert.throws(() => {
         const restore = isolate();
         try {
@@ -133,17 +139,42 @@ describe("isolation", () => {
           restore();
         }
       }, /body failed/);
-      assert.deepStrictEqual(snapshot(ISO_NAMES), beforeEnv);
+      assert.deepStrictEqual(snapshot(RESTORE_NAMES), beforeEnv);
+      assert.deepStrictEqual(leftSet(RETIRED_NAMES), [], "the retired names stay cleared");
     });
   });
 
   test("ISO-restore-twice: a second restore neither throws nor disturbs the restored values", () => {
     withEnv(ISO_NAMES, PRESETS.mixed, () => {
-      const beforeEnv = snapshot(ISO_NAMES);
+      const beforeEnv = snapshot(RESTORE_NAMES);
       const restore = isolate();
       restore();
       assert.doesNotThrow(() => restore());
-      assert.deepStrictEqual(snapshot(ISO_NAMES), beforeEnv);
+      assert.deepStrictEqual(snapshot(RESTORE_NAMES), beforeEnv);
+      assert.deepStrictEqual(leftSet(RETIRED_NAMES), [], "the retired names stay cleared");
+    });
+  });
+
+  test("harness clears the retired relay names at load and on isolate", () => {
+    const setAll = () => Object.fromEntries(RETIRED_NAMES.map((n) => [n, "h2411-retired"]));
+    withEnv(RETIRED_NAMES, setAll(), () => {
+      const helperPath = require.resolve("../lib/harness");
+      const loaded = require.cache[helperPath];
+      delete require.cache[helperPath];
+      try {
+        require(helperPath);
+      } finally {
+        require.cache[helperPath] = loaded;
+      }
+      assert.deepStrictEqual(leftSet(RETIRED_NAMES), [], "cleared at load");
+      Object.assign(process.env, setAll());
+      const restore = isolate();
+      try {
+        assert.deepStrictEqual(leftSet(RETIRED_NAMES), [], "cleared on isolate");
+      } finally {
+        restore();
+      }
+      assert.deepStrictEqual(leftSet(RETIRED_NAMES), [], "not put back by the restore");
     });
   });
 });
@@ -360,11 +391,16 @@ describe("loading through the real wrapper", () => {
     'const fs = require("node:fs");',
     'const path = require("node:path");',
     'const { test } = require("node:test");',
+    'const retired = String(process.env.H2411_RETIRED || "").split(",").filter(Boolean);',
+    "const leftAtLoad = retired.filter((n) => process.env[n] !== undefined);",
     'test("calls-helper", () => {',
+    '  assert.ok(retired.length >= 2, "the parent passes two or more retired names");',
+    "  assert.deepStrictEqual(leftAtLoad, []);",
     "  const restore = isolate();",
     "  try {",
     "    assert.ok(process.env.WORKFLOW_STATE_DIR);",
     "    assert.strictEqual(process.env.CLAUDE_CODE_SESSION_ID, undefined);",
+    "    assert.deepStrictEqual(retired.filter((n) => process.env[n] !== undefined), []);",
     "  } finally {",
     "    restore();",
     "  }",
@@ -382,7 +418,8 @@ describe("loading through the real wrapper", () => {
   ]) {
     test(`LOAD (${category}, cwd ${cwdKind}, RUN_TL3 ${tl3}): recorded as a node:test run; the gated case is ${gated}`, () => {
       const { root, file } = writeChild(category, "load.js", LOAD_BODY);
-      const r = runWrapper(file, cwdKind === "inside" ? root : freshDir("outside"), Object.assign({ RUN_TL3: tl3 }, SENTINEL));
+      const extra = Object.assign({ RUN_TL3: tl3, H2411_RETIRED: RETIRED_NAMES.join(",") }, SENTINEL);
+      const r = runWrapper(file, cwdKind === "inside" ? root : freshDir("outside"), extra);
       assert.strictEqual(r.status, 0, r.output);
       // cases.tsv exists only for a run the wrapper settled as node:test.
       assert.notStrictEqual(r.cases, null, "the wrapper wrote node:test case records");
