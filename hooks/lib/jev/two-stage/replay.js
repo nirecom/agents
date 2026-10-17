@@ -3,6 +3,7 @@
 // decision record once, settle the fixed file through the owner marker, write the done
 // marker, then drop the claim and the copies. Every step is idempotent, so a finalize re-run
 // and the orphan sweep both finish a stopped ticket with exactly the uncrashed outcome.
+// FALLBACK=<reason> follows SETTLE= only when the merge demoted the output (#2677).
 
 const pending = require("../pending");
 const { appendDecisionOnce } = require("../decision-record");
@@ -23,6 +24,9 @@ function appendOrThrow(rec) {
   const r = appendDecisionOnce(rec);
   if (!r || !r.ok) throw new Error("decision log append failed");
 }
+
+// A claim written ahead before #2677 has no result.fallback and prints no line.
+const fallbackLines = (r) => (typeof r.fallback === "string" && r.fallback ? [`FALLBACK=${r.fallback}`] : []);
 
 function cleanup(sid, tid) {
   pending.releaseClaim(sid, tid);
@@ -47,7 +51,7 @@ function replaySkip(sid, tid, hand, opts) {
     `ADOPTED=${r.adopted}`,
     `MODE=${hand.mode}`,
     `SETTLE=${v.settle}`,
-  ].concat(v.detail === "newer-owner" ? [] : v.rsj_lines || []);
+  ].concat(fallbackLines(r), v.detail === "newer-owner" ? [] : v.rsj_lines || []);
   writeDone(sid, tid, { created_ms: hand.created_ms, point: hand.point, stage: r.stage, target: r.target, stdout_lines: lines, exit: 0 });
   crash(opts, "after-done");
   cleanup(sid, tid);
@@ -91,7 +95,7 @@ function replayFinalized(sid, tid, hand, opts = {}) {
     `ADOPTED=${r.adopted}`,
     `MODE=${hand.mode}`,
     `SETTLE=${v.settle}`,
-  ];
+  ].concat(fallbackLines(r));
   writeDone(sid, tid, { created_ms: hand.created_ms, point: hand.point, stage: r.stage, stdout_lines: lines, exit: 0 });
   crash(opts, "after-done");
   cleanup(sid, tid);
