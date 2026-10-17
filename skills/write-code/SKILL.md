@@ -83,6 +83,7 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 
 - Mode-orthogonal: behavior is identical regardless of worktree mode. Do not show diffs in the conversation.
 - Never edit test files — `/write-tests` owns them.
+- Follow `skills/_shared/combined-glossary.md` (writer directives); put this same line in the implementing subagent's prompt.
 - Subagent self-repair cap: 3 iterations.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 

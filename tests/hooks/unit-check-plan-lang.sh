@@ -122,13 +122,15 @@ else
   fail "T1: Read tool → expected 'approve', got '$result'"
 fi
 
+# #2529: intent-stage contents carry `## Issues` + an empty `## Glossary` (prose sits
+# under `## Goal`) so the structure check passes and each case pins only the language path.
 # ── T2: Write tool, UUID intent.md inside plans dir, PLAN_LANG unset → approve ─
 result=$(invoke_hook_json "" "$(node -e "
 process.stdout.write(JSON.stringify({
   tool_name: 'Write',
   tool_input: {
     file_path: '${PLANS_DIR}/${FAKE_UUID}-intent.md',
-    content: 'English content only'
+    content: '## Issues\n\n## Glossary\n\n## Goal\n\nEnglish content only'
   }
 }))
 " 2>/dev/null)")
@@ -144,7 +146,7 @@ process.stdout.write(JSON.stringify({
   tool_name: 'MultiEdit',
   tool_input: {
     file_path: '${PLANS_DIR}/${FAKE_UUID}-intent.md',
-    content: 'English content only'
+    content: '## Issues\n\n## Glossary\n\n## Goal\n\nEnglish content only'
   }
 }))
 " 2>/dev/null)")
@@ -160,7 +162,7 @@ process.stdout.write(JSON.stringify({
   tool_name: 'editFiles',
   tool_input: {
     file_path: '${PLANS_DIR}/${FAKE_UUID}-intent.md',
-    content: 'English content only'
+    content: '## Issues\n\n## Glossary\n\n## Goal\n\nEnglish content only'
   }
 }))
 " 2>/dev/null)")
@@ -226,7 +228,7 @@ process.stdout.write(JSON.stringify({
   tool_name: 'Edit',
   tool_input: {
     file_path: '${PLANS_DIR}/${FAKE_UUID}-intent.md',
-    content: 'This is a valid English planning artifact with no Japanese characters.'
+    content: '## Issues\n\n## Glossary\n\n## Goal\n\nThis is a valid English planning artifact with no Japanese characters.'
   }
 }))
 " 2>/dev/null)")
@@ -288,7 +290,7 @@ process.stdout.write(JSON.stringify({
   tool_name: 'Write',
   tool_input: {
     file_path: '${PLANS_DIR}/20260625-120000-intent.md',
-    content: 'Timestamp format content.'
+    content: '## Issues\n\n## Glossary\n\n## Goal\n\nTimestamp format content.'
   }
 }))
 " 2>/dev/null)")

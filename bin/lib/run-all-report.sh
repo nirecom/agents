@@ -4,14 +4,20 @@
 # rar_unit <script> <resultdir> <rc> [<state> <missing> <timeout>]
 #                                   one unit's file-level line, then its case-level lines; sets RAR_STATE.
 # rar_missing [<arg>...]            one UNRUNNABLE line per explicit argument that named no test file.
+# rar_hits                          the collected hits: late test ids as named FAILs, the rest as HIT lines.
 # rar_tail [<unsupported-file>...]  UNSUPPORTED list, Missing runtimes, Results and RUN_CONTRACT.
 # Contract: docs/architecture/claude-code/test-runner-parallelism.md.
 
-RAR_PASS=0 RAR_FAIL=0 RAR_SKIP=0 RAR_UNRUNNABLE=0 RAR_TIMEOUT=0 RAR_UNSUPPORTED=0 RAR_STATE=""
+RAR_PASS=0 RAR_FAIL=0 RAR_SKIP=0 RAR_UNRUNNABLE=0 RAR_TIMEOUT=0 RAR_UNSUPPORTED=0 RAR_HITS=0 RAR_STATE=""
 _RAR_LABELS=()
 _RAR_LABEL_N=()
+# Every unit as rar_unit saw it (raw name, state, rc, runtime label), for rar_hits; indexed, as bash 3 has no maps.
+_RAR_UNIT_RAW=()
+_RAR_UNIT_ST=()
+_RAR_UNIT_RC=()
+_RAR_UNIT_MISS=()
 # The FAIL: alternative mirrors test-runner.js FAIL_LINE_RE, so a plain harness "FAIL: msg" passes through.
-_RAR_REPORT_RE='^[[:blank:]]*(RUN_CONTRACT:|UNRUNNABLE:|TIMEOUT:|Missing runtimes:|Results:|FAIL:[[:space:]]+.*[[:space:]][(]exit[[:space:]]+-?[0-9]+[)][[:space:]]*$|(PASS|FAIL|SKIP|XFAIL|XPASS) .*::)'
+_RAR_REPORT_RE='^[[:blank:]]*(RUN_CONTRACT:|UNRUNNABLE:|TIMEOUT:|HIT:|Missing runtimes:|Results:|FAIL:[[:space:]]+.*[[:space:]][(]exit[[:space:]]+-?[0-9]+[)][[:space:]]*$|(PASS|FAIL|SKIP|XFAIL|XPASS) .*::)'
 
 # Shell builtins only — a fork per line would outcost the run on MSYS. A lone CR splits a line for a
 # CR-splitting reader, so each CR segment is tested too; a hit prints its CRs as spaces (trailing CR kept).
@@ -69,6 +75,17 @@ _rar_label() {
   _RAR_LABEL_N+=(1)
 }
 
+# A unit rar_hits turned into a FAIL no longer needs its runtime: 'Missing runtimes:' drops a label at 0.
+_rar_unlabel() {
+  local i
+  for ((i = 0; i < ${#_RAR_LABELS[@]}; i++)); do
+    if [ "${_RAR_LABELS[i]}" = "$1" ]; then
+      _RAR_LABEL_N[i]=$((_RAR_LABEL_N[i] - 1))
+      return 0
+    fi
+  done
+}
+
 # _rar_cases <script> <unit-state PASS|FAIL|SKIP> <cases.tsv> — one line per seq, its last record
 # (the rule _rac_resolved classifies by), so interleaved records never print a case twice.
 _rar_cases() {
@@ -116,6 +133,11 @@ rar_unit() {
   _rar_disp missing "${5:--}"
   _rar_state "$rc" "${4:--}"
   case "$rc" in U | '' | *[!0-9]*) rc=1 ;; esac
+  _RAR_UNIT_RAW+=("$1")
+  _RAR_UNIT_ST+=("$RAR_STATE")
+  _RAR_UNIT_RC+=("$rc")
+  [ "$missing" != - ] || missing=unknown
+  _RAR_UNIT_MISS+=("$missing")
   case "$RAR_STATE" in
     PASS) echo "PASS: $s"; RAR_PASS=$((RAR_PASS + 1)) ;;
     SKIP) echo "SKIP: $s"; RAR_SKIP=$((RAR_SKIP + 1)) ;;
@@ -126,7 +148,6 @@ rar_unit() {
       RAR_FAIL=$((RAR_FAIL + 1)) RAR_TIMEOUT=$((RAR_TIMEOUT + 1))
       ;;
     UNRUNNABLE)
-      [ "$missing" != - ] || missing=unknown
       echo "UNRUNNABLE: $s (missing: $missing)"
       RAR_UNRUNNABLE=$((RAR_UNRUNNABLE + 1))
       _rar_label "$missing"
@@ -160,12 +181,58 @@ rar_tail() {
   echo ""
   if [ "${#_RAR_LABELS[@]}" -gt 0 ]; then
     for ((i = 0; i < ${#_RAR_LABELS[@]}; i++)); do
+      [ "${_RAR_LABEL_N[i]}" -gt 0 ] || continue
       f="files"
       [ "${_RAR_LABEL_N[i]}" -eq 1 ] && f="file"
       line="$line${line:+, }${_RAR_LABELS[i]} (${_RAR_LABEL_N[i]} $f)"
     done
-    echo "Missing runtimes: $line"
+    [ -z "$line" ] || echo "Missing runtimes: $line"
   fi
-  echo "Results: PASS=$RAR_PASS  FAIL=$RAR_FAIL  SKIP=$RAR_SKIP  UNRUNNABLE=$RAR_UNRUNNABLE  TIMEOUT=$RAR_TIMEOUT"
-  echo "RUN_CONTRACT: PASS=$RAR_PASS FAIL=$RAR_FAIL SKIP=$RAR_SKIP EXECUTED=$((RAR_PASS + RAR_FAIL + RAR_SKIP)) UNRUNNABLE=$RAR_UNRUNNABLE TIMEOUT=$RAR_TIMEOUT"
+  # HITS is written only when there is one, so a run without hits prints what it always printed.
+  d=""
+  [ "${RAR_HITS:-0}" -gt 0 ] && d="$RAR_HITS"
+  echo "Results: PASS=$RAR_PASS  FAIL=$RAR_FAIL  SKIP=$RAR_SKIP  UNRUNNABLE=$RAR_UNRUNNABLE  TIMEOUT=$RAR_TIMEOUT${d:+  HITS=$d}"
+  echo "RUN_CONTRACT: PASS=$RAR_PASS FAIL=$RAR_FAIL SKIP=$RAR_SKIP EXECUTED=$((RAR_PASS + RAR_FAIL + RAR_SKIP)) UNRUNNABLE=$RAR_UNRUNNABLE TIMEOUT=$RAR_TIMEOUT${d:+ HITS=$d}"
+}
+
+# rar_hits — applies what run_all_hit_collect (bin/lib/run-all-hits.sh) left: each late test id
+# makes its unit one named FAIL (once; a FAIL or TIMEOUT already is one), and every other hit,
+# with a late id that names no unit, is counted into RAR_HITS and printed as a column-0 HIT line.
+rar_hits() {
+  local k i s d st max=20 shown=0 nf=0
+  local -a lines=(${RUN_ALL_HIT_LINES[@]+"${RUN_ALL_HIT_LINES[@]}"})
+  for ((k = 0; k < ${#RUN_ALL_LATE_IDS[@]}; k++)); do
+    s="${RUN_ALL_LATE_IDS[k]}"
+    for ((i = 0; i < ${#_RAR_UNIT_RAW[@]}; i++)); do
+      [ "${_RAR_UNIT_RAW[i]}" = "$s" ] && break
+    done
+    if [ "$i" -ge "${#_RAR_UNIT_RAW[@]}" ]; then
+      lines+=("${RUN_ALL_LATE_LINES[k]:-$s}")
+      nf=$((nf + 1))
+      continue
+    fi
+    st="${_RAR_UNIT_ST[i]}"
+    case "$st" in
+      FAIL | TIMEOUT) continue ;;
+      PASS) RAR_PASS=$((RAR_PASS - 1)) ;;
+      SKIP) RAR_SKIP=$((RAR_SKIP - 1)) ;;
+      UNRUNNABLE) RAR_UNRUNNABLE=$((RAR_UNRUNNABLE - 1)); _rar_unlabel "${_RAR_UNIT_MISS[i]}" ;;
+      *) RAR_UNSUPPORTED=$((RAR_UNSUPPORTED - 1)) ;;
+    esac
+    _RAR_UNIT_ST[i]=FAIL
+    RAR_FAIL=$((RAR_FAIL + 1))
+    _rar_disp d "$s"
+    echo "FAIL: $d (exit ${_RAR_UNIT_RC[i]})"
+  done
+  RAR_HITS=$((${RAR_HITS:-0} + ${RUN_ALL_HITS:-0} + nf))
+  for ((k = 0; k < ${#lines[@]}; k++)); do
+    if [ "$shown" -ge "$max" ]; then
+      echo "HIT: (+$((${#lines[@]} - shown)) more)"
+      break
+    fi
+    _rar_disp d "${lines[k]}"
+    echo "HIT: $d"
+    shown=$((shown + 1))
+  done
+  return 0
 }

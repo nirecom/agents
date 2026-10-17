@@ -4,7 +4,7 @@
 # Tags: TL2, scope:issue-specific, pwsh-not-required, session-id
 # Issue #1091: session-start.js no longer relays CLAUDE_SESSION_ID into CLAUDE_ENV_FILE;
 # the temporary migration purges relay lines that earlier versions left behind.
-# This file is TOMBSTONE_EXEMPT in bin/check-session-id-ssot.sh, so it may name the
+# This file is under [TOMBSTONE_EXEMPT] in bin/check-session-id-ssot/path-tables.txt, so it may name the
 # retired variables. RED until the purge module exists and the relay write is removed.
 # TL3 gap: a real CC-owned env file across a live SessionStart; see
 # tests/hooks/TL3-hook-session-id-entrypoint-coverage.sh.

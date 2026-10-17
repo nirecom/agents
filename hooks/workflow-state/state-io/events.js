@@ -56,11 +56,14 @@ const STEP_ANNOTATION_KEYS = [
   "failing_tests",
   "unrunnable_count",
   "unrunnable_runtimes",
+  "hit_count",
+  "hit_summary",
   "unrunnable_accept_reason",
   "baseline_classification",
   "completion_basis",
   "outcome_source",
   "dispatch_unsettled",
+  "baseline_accept",
 ];
 
 // Step-entry fields that are STRUCTURE, never annotation. An annotation named

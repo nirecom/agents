@@ -16,6 +16,7 @@ const { run: spawnRun } = require("../../spawn");
 // reads .env (readEffectiveEnvFile), a side-effect-free call.
 const { resolveForgeTarget } = require("../../../../hooks/lib/parse-remote-url");
 const { readGitlabHostConfig } = require("../../../../hooks/lib/forge-router");
+const { readCompletionNote } = require("../../../../hooks/lib/run-tests-completion-note");
 
 const GH_TIMEOUT_MS = 120000;
 
@@ -140,6 +141,9 @@ function prBody(payload) {
     if (supplied.indexOf(marker) === -1) missing.push(marker);
   }
   if (missing.length > 0) parts.push("", ...missing);
+
+  const note = typeof payload.session_id === "string" ? readCompletionNote(payload.session_id) : null;
+  if (note !== null && supplied.indexOf(note) === -1) parts.push("", note);
 
   return `${parts.join("\n")}\n`;
 }

@@ -34,7 +34,7 @@ the per-type rendering is under [Deliverable types](#deliverable-types-in-next-s
 
 ## The step table (deliverable type x PM type)
 
-Terms: [glossary.md](../../glossary.md#deliverable-type). A session is described by three facts
+Terms: [glossary-user.md](../../glossary-user.md#deliverable-type). A session is described by three facts
 (its **session profile**, `hooks/workflow-state/session-profile.js`):
 
 | Fact | Question | Values | State field |

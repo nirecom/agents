@@ -22,7 +22,7 @@ UD-2. **Read current docs**: Read all target docs files.
      - Goal: make the reader think "I want to use this" — crisp features, "what it does for you"
      - Initial install/setup instructions go here, not in `ops.md`
    - `CHANGELOG.md` (repo root) for public repos. Create if missing (no manual seed needed — first run starts from here).
-   - `docs/glossary.md` is a mandatory target when it exists: read it so terminology gaps surface in UD-3.
+   - When `docs/glossary-user*.md` or `docs/glossary-internal*.md` exists, Read `rules/docs/glossary.md` (on-demand-only) so its entry criteria drive the UD-3 glossary check.
 UD-3. **Identify gaps**: Compare git log against each document's content. Look for:
    - Unrecorded commits or phases
    - Architecture/design changes not yet documented
@@ -30,7 +30,8 @@ UD-3. **Identify gaps**: Compare git log against each document's content. Look f
    - Infrastructure or operational changes
    - Progress updates
    - `README.md`: Update when a user-visible feature is added or changed, install/usage steps shift, or an existing bullet no longer accurately reflects real behavior.
-   - `docs/glossary.md`: every term this PR / session introduced or renamed must have an entry — add or align it (mandatory gap check).
+   - Glossary promotion: list the user / internal rows of `<PLANS_DIR>/<session-id>-intent.md` `## Glossary` (`<PLANS_DIR>` per `skills/_shared/resolve-plans-dir.md`) as promotion candidates in the UD-4 proposal; do not write yet.
+   - Glossary entries: add or align an entry only for a term that meets the criteria in `rules/docs/glossary.md`, in the file of its category.
 UD-4. **Propose updates**: For each file that needs updating, present:
    - Before drafting History/Changelog bullets: apply the language configured by `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE`, routed by repo visibility — one policy covers both history and changelog
    - Which sections need changes and why
@@ -39,6 +40,7 @@ UD-5. **CONFIRM_DOCS gate**:
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
    - `GATE_ACTION=ask`: present the UD-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
    - `GATE_ACTION=proceed`: apply the edits and continue to UD-6 without waiting.
+   - When applying, run `node "$AGENTS_MAIN_ROOT/bin/glossary-promote" "<PLANS_DIR>/<session-id>-intent.md" "<project-root>"` first, then replace each promoted entry's `Related: TODO` with a link to the doc that owns the term.
 UD-6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
    - Skip `infrastructure.md` — delegate to `/update-infrastructure` instead.
 UD-7. **Commit separately**: If docs are in a separate repo, commit each repo independently
@@ -46,6 +48,7 @@ UD-7. **Commit separately**: If docs are in a separate repo, commit each repo in
 ## Rules
 
 - Follow the structure and content rules defined in `rules/docs.md`
+- Follow `skills/_shared/combined-glossary.md` (writer directives).
 - Follow `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE` settings in `.env` for History/Changelog entry language
 - Follow the gather → propose → confirm → apply cycle; the confirmation step is gated by `CONFIRM_DOCS` via the UD-5 gate check — on `GATE_ACTION=proceed`, the proposal is shown but no AskUserQuestion is raised
 - Compare git log against current docs to identify gaps

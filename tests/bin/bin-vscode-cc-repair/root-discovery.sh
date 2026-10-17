@@ -227,6 +227,197 @@ run_t5d() {
   fi
 }
 
+# C12 — an unreadable root (#2683). chmod is advisory on Windows, so the readdir failure
+# is induced by stubbing fs.readdirSync for one path: in-process for the unit rows, via a
+# NODE_OPTIONS --require preload for the CLI rows. A nonexistent root is the real ENOENT.
+DENY_PRELOAD="$TMPROOT/deny-readdir.js"
+printf '%s\n' 'const fs=require("fs"),p=require("path");' \
+  'const key=(s)=>process.platform==="win32"?p.resolve(s).toLowerCase():p.resolve(s);' \
+  'const deny=key(process.env.CCR_DENY_ROOT);const orig=fs.readdirSync;' \
+  'fs.readdirSync=function(d,...r){if(typeof d==="string"&&key(d)===deny){const e=new Error("EACCES: stub scandir");e.code="EACCES";throw e;}return orig.call(fs,d,...r);};' \
+  > "$DENY_PRELOAD"
+DENY_PRELOAD_N="$(native_path "$TMPROOT")/deny-readdir.js"
+export DENY_PRELOAD_N
+
+c12_field() { grep -E "^$1=" <<< "$NODE_OUT" | head -1 || true; }
+
+run_c12_unit() {
+  local deny ok healthy dn
+  deny="$(mktemp -d "$TMPROOT/c12deny.XXXXXX")"; ok="$(mktemp -d "$TMPROOT/c12ok.XXXXXX")"
+  healthy="$(mktemp -d "$TMPROOT/c12h.XXXXXX")"
+  make_ext_dir "$deny" "$DIR_A" "$BODY_FALSY"
+  make_ext_dir "$healthy" "$DIR_A" "$BODY_FALSY"
+  dn="$(basename "$deny")"
+  CCR_DENY_ROOT="$(native_path "$deny")" FIX_OK="$(native_path "$ok")" \
+  FIX_H="$(native_path "$healthy")" FIX_MISSING="$(native_path "$ok")/no-such-root" \
+  node_m 'require(process.env.DENY_PRELOAD_N);
+const m=require("./bin/vscode-cc-repair/patch");const E=process.env;
+const codes=(root)=>{const c=[];const n=m.listExtensionDirs(root,{onError:(e)=>c.push(e.code)}).length;return n+":"+c.join(",");};
+console.log("U1="+codes(E.CCR_DENY_ROOT));
+console.log("U2="+m.listExtensionDirs(E.CCR_DENY_ROOT).length);
+console.log("U3="+codes(E.FIX_OK));
+console.log("U4="+codes(E.FIX_MISSING));
+const cap=(o)=>{let out="",err="";const ow=process.stdout.write,ew=process.stderr.write;
+process.stdout.write=(s)=>{out+=s;return true;};process.stderr.write=(s)=>{err+=s;return true;};
+let r;try{r=m.runPatch(o);}finally{process.stdout.write=ow;process.stderr.write=ew;}return {r,out,err};};
+const a=cap({overrides:[E.CCR_DENY_ROOT,E.FIX_H],dryRun:true});
+console.log("R1="+JSON.stringify(a.r));console.log("O1="+JSON.stringify(a.out));console.log("E1="+JSON.stringify(a.err));
+const b=cap({overrides:[E.FIX_OK],dryRun:true});
+console.log("R2="+JSON.stringify(b.r));console.log("O2="+JSON.stringify(b.out));'
+  check "C12-u01: harness exit 0" "0" "$NODE_RC"
+  check "C12-u02: unreadable root yields [] and calls onError once with the error" "U1=0:EACCES" "$(c12_field U1)"
+  check "C12-u03: one-arg call on an unreadable root still returns []" "U2=0" "$(c12_field U2)"
+  check "C12-u04: a readable empty root never calls onError" "U3=0:" "$(c12_field U3)"
+  check "C12-u05: a nonexistent root reports its real ENOENT" "U4=0:ENOENT" "$(c12_field U4)"
+  check "C12-u06: runPatch returns failed:true" 'R1={"failed":true}' "$(c12_field R1)"
+  check_contains "C12-u07: stdout names the root, basename-only" \
+    "failed  $dn  reason=root-unreadable" "$(c12_field O1)"
+  check_contains "C12-u08: unreadable root counted failed, not as a dir" \
+    "summary: roots=2 dirs=1 patched=0 already=0 absent=0 would-patch=1 refused=0 failed=1" "$(c12_field O1)"
+  check_contains "C12-u09: the healthy sibling root is still scanned" "would-patch  $DIR_A" "$(c12_field O1)"
+  check_contains "C12-u10: stderr carries the prefixed failed warning" \
+    "${STDERR_PREFIX}failed: " "$(c12_field E1)"
+  check_contains "C12-u11: stderr warning names root-unreadable" "root-unreadable" "$(c12_field E1)"
+  check_absent "C12-u12: stdout carries no diagnostic prefix" "$STDERR_PREFIX" "$(c12_field O1)"
+  check "C12-u13: a readable empty root is not a failure" 'R2={"failed":false}' "$(c12_field R2)"
+  check_contains "C12-u14: empty root summary has failed=0" "failed=0" "$(c12_field O2)"
+  check_absent "C12-u15: empty root emits no root-unreadable line" "root-unreadable" "$(c12_field O2)"
+  check "C12-u16: the stubbed root's bundle is untouched" "$BODY_FALSY" "$(cat "$deny/$DIR_A/extension.js")"
+}
+
+run_c12_cli() {
+  local deny healthy dn
+  deny="$(mktemp -d "$TMPROOT/c12cd.XXXXXX")"; healthy="$(mktemp -d "$TMPROOT/c12ch.XXXXXX")"
+  make_ext_dir "$deny" "$DIR_A" "$BODY_FALSY"
+  make_ext_dir "$healthy" "$DIR_A" "$BODY_FALSY"
+  dn="$(basename "$deny")"
+  NODE_OPTIONS="--require \"$DENY_PRELOAD_N\"" CCR_DENY_ROOT="$(native_path "$deny")" \
+    run_cli_split --extensions-dir "$(native_path "$deny")" --extensions-dir "$(native_path "$healthy")"
+  check "C12-c01: an unreadable root makes the CLI exit 1" "1" "$CLI_RC"
+  check_contains "C12-c02: stdout reports the root as failed" \
+    "failed  $dn  reason=root-unreadable" "$CLI_STDOUT"
+  check_contains "C12-c03: summary counts failed=1 and only the healthy dir" \
+    "summary: roots=2 dirs=1 patched=1 already=0 absent=0 would-patch=0 refused=0 failed=1" "$CLI_STDOUT"
+  check_contains "C12-c04: stderr carries the root-unreadable warning" "root-unreadable" "$CLI_STDERR"
+  check_contains "C12-c05: the healthy root was still patched" 'includeWorktrees:!0' \
+    "$(cat "$healthy/$DIR_A/extension.js")"
+  check "C12-c06: the unreadable root's bundle is untouched" "$BODY_FALSY" "$(cat "$deny/$DIR_A/extension.js")"
+}
+
+# C13 — a stat error other than ENOENT/ENOTDIR on a candidate (#2683). Only a missing
+# entry is "absent"; EACCES keeps the candidate so the run fails closed downstream. The
+# preload faults statSync/lstatSync/readdirSync for CCR_FAULT_PATH and everything under it.
+FAULT_PRELOAD="$TMPROOT/stat-fault.js"
+printf '%s\n' 'const fs=require("fs"),p=require("path");' \
+  'const key=(s)=>process.platform==="win32"?p.resolve(s).toLowerCase():p.resolve(s);' \
+  'const deny=key(process.env.CCR_FAULT_PATH);const code=process.env.CCR_FAULT_CODE||"EACCES";' \
+  'const hit=(d)=>typeof d==="string"&&(key(d)===deny||key(d).startsWith(deny+p.sep));' \
+  'const fault=()=>{const e=new Error(code+": stub fault");e.code=code;return e;};' \
+  'for(const n of ["statSync","lstatSync"]){const o=fs[n];fs[n]=function(d,opt,...r){if(hit(d)){if(code==="ENOENT"&&opt&&opt.throwIfNoEntry===false)return undefined;throw fault();}return o.call(fs,d,opt,...r);};}' \
+  'const rd=fs.readdirSync;fs.readdirSync=function(d,...r){if(hit(d))throw fault();return rd.call(fs,d,...r);};' \
+  > "$FAULT_PRELOAD"
+FAULT_PRELOAD_N="$(native_path "$TMPROOT")/stat-fault.js"
+export FAULT_PRELOAD_N
+
+run_cli_fault() { # <fault-path> <code> <cli-runner> [args...]
+  local fp="$1" fc="$2" runner="$3"; shift 3
+  NODE_OPTIONS="--require \"$FAULT_PRELOAD_N\"" CCR_FAULT_PATH="$fp" CCR_FAULT_CODE="$fc" "$runner" "$@"
+}
+
+run_c13_unit() {
+  local home root
+  home="$(mktemp -d "$TMPROOT/c13u.XXXXXX")"
+  mkdir -p "$home/.vscode/extensions"
+  CCR_FAULT_PATH="$(native_path "$home")/.vscode/extensions" FIXHOME="$(native_path "$home")" \
+  node_m 'require(process.env.FAULT_PRELOAD_N);const m=require("'"$REQUIRE_PATH"'");
+console.log("N="+m.resolveRoots({home:process.env.FIXHOME}).length);'
+  check "C13-u01: node exit 0" "0" "$NODE_RC"
+  check_contains "C13-u02: resolveRoots keeps a default root whose stat throws EACCES" "N=1" "$NODE_OUT"
+
+  root="$(mktemp -d "$TMPROOT/c13ur.XXXXXX")"
+  mkdir -p "$root/$DIR_A" "$root/$DIR_B"
+  printf 'x' > "$root/anthropic.claude-code-9.9.9"
+  CCR_FAULT_PATH="$(native_path "$root")/$DIR_B" FIXROOT="$(native_path "$root")" \
+  node_m 'require(process.env.FAULT_PRELOAD_N);const m=require("'"$REQUIRE_PATH"'");const p=require("path");
+console.log("D="+m.listExtensionDirs(process.env.FIXROOT).map(y=>p.basename(String(y))).join(","));'
+  check "C13-u03: node exit 0" "0" "$NODE_RC"
+  check "C13-u04: listExtensionDirs keeps a dir whose stat throws EACCES; a file stays out" \
+    "D=$DIR_A,$DIR_B" "$NODE_OUT"
+
+  CCR_FAULT_CODE=ENOENT CCR_FAULT_PATH="$(native_path "$root")/$DIR_B" FIXROOT="$(native_path "$root")" \
+  node_m 'require(process.env.FAULT_PRELOAD_N);const m=require("'"$REQUIRE_PATH"'");const p=require("path");
+console.log("D="+m.listExtensionDirs(process.env.FIXROOT).map(y=>p.basename(String(y))).join(","));'
+  check "C13-u05: listExtensionDirs drops a dir whose stat throws ENOENT" "D=$DIR_A" "$NODE_OUT"
+}
+
+# Case 1: default root stat EACCES -> listed and failed, not silently skipped.
+run_c13_root_eacces() {
+  local home denied healthy hn
+  home="$(mktemp -d "$TMPROOT/c13r.XXXXXX")"; hn="$(native_path "$home")"
+  denied="$home/.vscode/extensions"; healthy="$home/.vscode-server/extensions"
+  mkdir -p "$denied" "$healthy"
+  make_ext_dir "$denied" "$DIR_A" "$BODY_FALSY"
+  make_ext_dir "$healthy" "$DIR_A" "$BODY_FALSY"
+  run_cli_fault "$hn/.vscode/extensions" EACCES run_cli_home "$home"
+  check "C13-r01: an unstat-able default root makes the CLI exit 1" "1" "$CLI_RC"
+  check "C13-r02: both roots are listed" "2" "$(grep -c '^root: ' <<< "$CLI_OUT" || true)"
+  check_contains "C13-r03: the faulted root is listed by path" ".vscode" \
+    "$(grep -E '^root: ' <<< "$CLI_OUT" | grep -v 'vscode-server' || true)"
+  check_contains "C13-r04: the faulted root is reported failed" \
+    "failed  extensions  reason=root-unreadable" "$CLI_OUT"
+  check_contains "C13-r05: summary counts it failed" \
+    "summary: roots=2 dirs=1 patched=1 already=0 absent=0 would-patch=0 refused=0 failed=1" "$CLI_OUT"
+  check "C13-r06: the faulted root's bundle is untouched" "$BODY_FALSY" "$(cat "$denied/$DIR_A/extension.js")"
+  check_contains "C13-r07: the healthy root is still patched" 'includeWorktrees:!0' \
+    "$(cat "$healthy/$DIR_A/extension.js")"
+}
+
+# Case 2: default root stat ENOENT -> still absent, skipped silently.
+run_c13_root_enoent() {
+  local home
+  home="$(mktemp -d "$TMPROOT/c13n.XXXXXX")"
+  make_ext_dir "$home/.vscode/extensions" "$DIR_A" "$BODY_FALSY"
+  run_cli_fault "$(native_path "$home")/.vscode/extensions" ENOENT run_cli_home "$home"
+  check "C13-n01: an ENOENT default root exits 0" "0" "$CLI_RC"
+  check_contains "C13-n02: reports the nothing-to-do message" "no VS Code extension root found" "$CLI_OUT"
+  check_absent "C13-n03: no root line" "root: " "$CLI_OUT"
+  check_absent "C13-n04: no diagnostic" "$STDERR_PREFIX" "$CLI_OUT"
+  check "C13-n05: the bundle is untouched" "$BODY_FALSY" "$(cat "$home/.vscode/extensions/$DIR_A/extension.js")"
+}
+
+# Cases 3+5: dir stat EACCES -> a non-clean line; a matching regular file stays skipped.
+run_c13_dir_eacces() {
+  local root
+  root="$(mktemp -d "$TMPROOT/c13d.XXXXXX")"
+  make_ext_dir "$root" "$DIR_A" "$BODY_FALSY"
+  make_ext_dir "$root" "$DIR_B" "$BODY_FALSY"
+  printf 'x' > "$root/anthropic.claude-code-9.9.9"
+  run_cli_fault "$(native_path "$root")/$DIR_B" EACCES run_cli --extensions-dir "$(native_path "$root")"
+  check "C13-d01: an unstat-able extension dir makes the CLI exit 1" "1" "$CLI_RC"
+  check "C13-d02: the dir is reported refused or failed, not omitted" "1" \
+    "$(grep -cE "^(refused|failed)[[:space:]]+$DIR_B([[:space:]]|\$)" <<< "$CLI_OUT" || true)"
+  check_contains "C13-d03: both matching dirs are counted" "dirs=2" "$CLI_OUT"
+  check_absent "C13-d04: the summary is not clean" "refused=0 failed=0" "$CLI_OUT"
+  check_absent "C13-d05: a matching regular file is still skipped" "9.9.9" "$CLI_OUT"
+  check "C13-d06: the faulted dir's bundle is untouched" "$BODY_FALSY" "$(cat "$root/$DIR_B/extension.js")"
+  check_contains "C13-d07: the healthy sibling is still patched" 'includeWorktrees:!0' \
+    "$(cat "$root/$DIR_A/extension.js")"
+}
+
+# Case 4: dir vanishes between readdir and stat (ENOENT) -> skipped silently.
+run_c13_dir_enoent() {
+  local root
+  root="$(mktemp -d "$TMPROOT/c13v.XXXXXX")"
+  make_ext_dir "$root" "$DIR_A" "$BODY_FALSY"
+  make_ext_dir "$root" "$DIR_B" "$BODY_FALSY"
+  run_cli_fault "$(native_path "$root")/$DIR_B" ENOENT run_cli --extensions-dir "$(native_path "$root")"
+  check "C13-v01: a vanished extension dir exits 0" "0" "$CLI_RC"
+  check_absent "C13-v02: the vanished dir has no report line" "$DIR_B" "$CLI_OUT"
+  check_contains "C13-v03: only the surviving dir is counted" \
+    "summary: roots=1 dirs=1 patched=1 already=0 absent=0 would-patch=0 refused=0 failed=0" "$CLI_OUT"
+  check_absent "C13-v04: no diagnostic" "$STDERR_PREFIX" "$CLI_OUT"
+}
+
 run_c4a
 run_c4b
 run_c4c
@@ -237,3 +428,10 @@ run_t5a
 run_t5b
 run_t5c
 run_t5d
+run_c12_unit
+run_c12_cli
+run_c13_unit
+run_c13_root_eacces
+run_c13_root_enoent
+run_c13_dir_eacces
+run_c13_dir_enoent

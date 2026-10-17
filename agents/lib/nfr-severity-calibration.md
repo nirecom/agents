@@ -1,6 +1,6 @@
 # NFR Severity Calibration — How to Read the PROJECT NFR Block
 
-Retrieve and apply the project's NFR block before reviewing or planning.
+Retrieve and apply the project's NFR block before reviewing or planning; this shared directive (`nfr-severity-calibration`) is referenced by every reviewer and planner agent that weighs project NFR.
 
 ## Steps
 

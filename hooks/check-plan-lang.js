@@ -3,7 +3,13 @@ const fs = require("fs");
 const path = require("path");
 const { loadLangConfig, classifyPolicy } = require("./lib/lang-config");
 const { lintPlanLang } = require("./lib/lint-plan-lang");
-const { isPlanArtifactPath, stageOf, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
+const {
+  isPlanArtifactPath,
+  stageOf,
+  lintPlanArtifactStructure,
+  formatPlanLangViolations,
+  formatStructureViolations,
+} = require("./lib/plan-artifact-lang");
 const { TARGET_TOOLS } = require("./lib/pretool-lang-gate");
 
 // Read stdin, parse JSON, dispatch
@@ -34,9 +40,12 @@ process.stdin.on("end", () => {
   // Canonical-heading checks run regardless of policy (#2338); body-language
   // checks still require a strict policy (enforced inside lintPlanLang). So even
   // under noop/hint, a localized schema heading is a violation and blocks.
+  // The intent `## Glossary` structure check (#2529) needs the whole document,
+  // which is what this hook sees; both kinds of violation share one message.
   const stage = stageOf(resolved);
   const violations = lintPlanLang(rawContent, policy, stage);
-  if (violations.length > 0) { block(violations, policy); return; }
+  const structure = lintPlanArtifactStructure(rawContent, stage);
+  if (violations.length > 0 || structure.length > 0) { block(violations, structure, policy); return; }
 
   if (tier === "hint") { hint(policy); return; }
 
@@ -64,12 +73,17 @@ function hint(policy) {
   }));
 }
 
-function block(violations, policy) {
-  const lines = formatPlanLangViolations(violations).map(s => `  ${s}`);
-  const msg = [
-    `[check-plan-lang] PLAN_LANG=${policy} — ${violations.length} violation(s):`,
-    ...lines,
-  ].join("\n");
+function block(violations, structure, policy) {
+  const parts = [];
+  if (violations.length > 0) {
+    parts.push(`[check-plan-lang] PLAN_LANG=${policy} — ${violations.length} violation(s):`);
+    parts.push(...formatPlanLangViolations(violations).map(s => `  ${s}`));
+  }
+  if (structure.length > 0) {
+    parts.push(`[check-plan-lang] intent structure — ${structure.length} violation(s):`);
+    parts.push(...formatStructureViolations(structure).map(s => `  ${s}`));
+  }
+  const msg = parts.join("\n");
   process.stdout.write(JSON.stringify({ decision: "block", reason: msg }) + "\n");
   process.exit(0);
 }

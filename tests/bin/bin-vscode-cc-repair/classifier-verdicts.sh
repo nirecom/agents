@@ -1,9 +1,8 @@
 # Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
-# C1 — classifier verdict matrix and the delimiter boundary rule, driven through the
-# exported classifyValue/classify for precision. Every verdict is covered, including
-# `unknown`, and both directions of the delimiter rule are exercised: `!1`/`!0` must
-# NOT count as a literal patch site when the next char is alnum / `_` / `$`, and MUST
-# still count when the delimiter is punctuation other than `,` / `}`.
+# Tests: bin/vscode-cc-repair
+# Tags: bin, vscode, extension-patch, scope:common, pwsh-not-required, TL2
+# C1 — every classifier verdict (incl. `unknown`) via exported classifyValue/classify, and
+# the delimiter rule: `!1`/`!0` before alnum/`_`/`$` is no literal; before other punctuation it is.
 
 # classifyValue receives the text immediately following `includeWorktrees:`.
 # <SP> in the table stands for a literal leading space (whitespace is stripped from
@@ -74,9 +73,51 @@ C1-s07-unsupported-bare| BODY_UNSUPPORTED_TRUE | refused
 C1-s08-unknown         | BODY_UNKNOWN          | refused
 C1-s09-absent          | BODY_ABSENT           | absent
 C1-s10-dynamic-only    | BODY_DYNAMIC          | absent
-C1-s11-paren-delimiter | BODY_PAREN_FALSY      | unpatched
-C1-s12-semi-delimiter  | BODY_SEMI_FALSY       | unpatched
+C1-s11-paren-in-anchor | BODY_PAREN_FALSY      | refused
+C1-s12-semi-no-anchor  | BODY_SEMI_FALSY       | refused
 C1-s13-bad-syntax      | BODY_BAD_SYNTAX       | unpatched
+C1-a01-v2130           | BODY_V2130            | unpatched
+C1-a02-v2130-rev       | BODY_V2130_REV        | unpatched
+C1-a03-v2130-patched   | BODY_V2130_PATCHED    | already
+C1-a04-noanchor-falsy  | BODY_NOANCHOR_FALSY   | refused
+C1-a05-noanchor-truthy | BODY_NOANCHOR_TRUTHY  | refused
+C1-a06-two-anchors     | BODY_TWO_ANCHORS      | refused
+C1-a07-anchor-two-keys | BODY_ANCHOR_TWO_KEYS  | refused
+C1-a08-anchor-dynamic  | BODY_ANCHOR_DYNAMIC   | refused
+C1-a09-anchor-unknown  | BODY_ANCHOR_UNKNOWN   | refused
+C1-a10-anchor-true     | BODY_ANCHOR_TRUE      | refused
+C1-a11-anchor-false    | BODY_ANCHOR_FALSE     | refused
+C1-a12-outside-unknown | BODY_OUTSIDE_UNKNOWN  | refused
+C1-a13-outside-true    | BODY_OUTSIDE_TRUE     | refused
+C1-a14-outside-false   | BODY_OUTSIDE_FALSE    | refused
+C1-a15-anchor-keyless  | BODY_ANCHOR_KEYLESS   | refused
+C1-a16-anchor-nokey    | BODY_ANCHOR_NOKEY     | absent
+C1-a17-nested-before   | BODY_ANCHOR_NESTED_BEFORE | refused
+C1-a18-nested-after    | BODY_ANCHOR_NESTED_AFTER  | refused
+C1-a19-nested-nokey    | BODY_ANCHOR_NESTED_NOKEY  | unpatched
+C1-a20-nested-patched  | BODY_ANCHOR_NESTED_NOKEY_PATCHED | already
+C1-a21-nested-only        | BODY_ANCHOR_NESTED_ONLY        | refused
+C1-a22-nested-only-truthy | BODY_ANCHOR_NESTED_ONLY_TRUTHY | refused
+C1-a23-array-nested       | BODY_ANCHOR_ARRAY_NESTED       | refused
+C1-a24-str-sibling        | BODY_ANCHOR_STR_SIBLING        | refused
+C1-a25-str-close          | BODY_ANCHOR_STR_CLOSE          | unpatched
+C1-a26-str-close-patched  | BODY_ANCHOR_STR_CLOSE_PATCHED  | already
+C1-a27-esc-dq             | BODY_ANCHOR_ESC_DQ             | unpatched
+C1-a28-esc-sq             | BODY_ANCHOR_ESC_SQ             | unpatched
+C1-a29-key-in-str         | BODY_ANCHOR_KEY_IN_STR         | refused
+C1-a30-template           | BODY_ANCHOR_TEMPLATE           | refused
+C1-a31-regex              | BODY_ANCHOR_REGEX              | refused
+C1-a32-unclosed           | BODY_ANCHOR_UNCLOSED           | refused
+C1-a33-semi-in-anchor     | BODY_SEMI_ANCHORED             | refused
+C1-a34-anchor-in-dq        | BODY_ANCHOR_IN_DQ              | refused
+C1-a35-anchor-in-dq-truthy | BODY_ANCHOR_IN_DQ_TRUTHY       | refused
+C1-a36-anchor-in-sq        | BODY_ANCHOR_IN_SQ              | refused
+C1-a37-anchor-in-comment   | BODY_ANCHOR_IN_COMMENT         | refused
+C1-a38-after-rbrace        | BODY_ANCHOR_AFTER_RBRACE       | unpatched
+C1-a39-after-comma         | BODY_ANCHOR_AFTER_COMMA        | unpatched
+C1-a40-after-semi          | BODY_ANCHOR_AFTER_SEMI         | unpatched
+C1-a41-after-lbrace        | BODY_ANCHOR_AFTER_LBRACE       | unpatched
+C1-a42-at-offset0          | BODY_ANCHOR_AT_OFFSET0         | unpatched
 C1-m01-falsy-unknown      | BODY_FALSY_UNKNOWN       | refused
 C1-m02-falsy-unsupported  | BODY_FALSY_UNSUPPORTED   | refused
 C1-m03-truthy-unknown     | BODY_TRUTHY_UNKNOWN      | refused
@@ -157,26 +198,76 @@ console.log("K="+r.counts.nKey+" L="+r.counts.nLiteral+" F="+r.counts.nFalsy+" D
 }
 
 # siteOffset must address the start of the KEY, not the start of the literal —
-# the splice length depends on it.
+# the splice length depends on it. A parenthesised (ternary) key is nested under the
+# default method since #2683, so its splice offset is proven under the legacy method.
 run_c1_offset() {
+  local name bodyvar method
+  while IFS='|' read -r name bodyvar method; do
+    name="${name//[[:space:]]/}"
+    case "$name" in ''|'#'*) continue ;; esac
+    bodyvar="${bodyvar//[[:space:]]/}"; method="${method//[[:space:]]/}"
+    BODY="${!bodyvar}" METHOD="$method" node_m 'const m=require("'"$REQUIRE_PATH"'");
+const r=m.classify(process.env.BODY,{method:process.env.METHOD});const s=process.env.BODY.slice(r.siteOffset);
+console.log("OFF="+(s.indexOf("includeWorktrees:!1")===0?"key":(s.indexOf("!1")===0?"literal-only":"other:"+r.siteOffset)));'
+    check "$name: siteOffset starts the includeWorktrees:!1 site" "OFF=key" "$NODE_OUT"
+  done <<'TABLE'
+C1-o01-object   | BODY_FALSY       | anchor
+C1-o02-ternary  | BODY_PAREN_FALSY | legacy
+TABLE
+}
+
+# #2683 — with a second `includeWorktrees:!1` outside the anchor, siteOffset must land on
+# the anchor-internal key whichever comes first in the file.
+run_c1_anchor_offset() {
   local name bodyvar
   while IFS='|' read -r name bodyvar; do
     name="${name//[[:space:]]/}"
     case "$name" in ''|'#'*) continue ;; esac
     bodyvar="${bodyvar//[[:space:]]/}"
     BODY="${!bodyvar}" node_m 'const m=require("'"$REQUIRE_PATH"'");
-const r=m.classify(process.env.BODY);const s=process.env.BODY.slice(r.siteOffset);
-console.log("OFF="+(s.indexOf("includeWorktrees:!1")===0?"key":(s.indexOf("!1")===0?"literal-only":"other:"+r.siteOffset)));'
-    check "$name: siteOffset starts the includeWorktrees:!1 site" "OFF=key" "$NODE_OUT"
+const b=process.env.BODY;const r=m.classify(b);
+const a=b.indexOf("sessionListOptions(){return{");const want=b.indexOf("includeWorktrees:!1",a);
+console.log("OFF="+(r.siteOffset===want?"anchor":"other:"+r.siteOffset+"/"+want));'
+    check "$name: siteOffset is the anchor-internal site" "OFF=anchor" "$NODE_OUT"
   done <<'TABLE'
-C1-o01-object   | BODY_FALSY
-C1-o02-ternary  | BODY_PAREN_FALSY
+C1-o03-v2130-anchor-first   | BODY_V2130
+C1-o04-v2130-outside-first  | BODY_V2130_REV
+C1-o05-str-close            | BODY_ANCHOR_STR_CLOSE
+C1-o06-esc-dq               | BODY_ANCHOR_ESC_DQ
+C1-o07-esc-sq               | BODY_ANCHOR_ESC_SQ
+TABLE
+}
+
+# #2683 — anchor boundary rule: a lone anchor preceded by anything but `{` `}` `,` `;`
+# refuses as ambiguous-anchor; the legacy method keeps its verdict but reports the same value.
+run_c1_anchor_boundary() {
+  local name bodyvar method want
+  while IFS='|' read -r name bodyvar method want; do
+    name="${name//[[:space:]]/}"
+    case "$name" in ''|'#'*) continue ;; esac
+    bodyvar="${bodyvar//[[:space:]]/}"; method="${method//[[:space:]]/}"
+    want="$(printf '%s' "$want" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    BODY="${!bodyvar}" METHOD="$method" node_m 'const m=require("'"$REQUIRE_PATH"'");
+const r=m.classify(process.env.BODY,{method:process.env.METHOD});
+console.log("S="+r.state+" R="+(r.reason||"-")+" A="+r.counts.nAnchor+" V="+r.counts.anchorValue);'
+    check "$name: boundary verdict" "$want" "$NODE_OUT"
+  done <<'TABLE'
+C1-b01-in-dq             | BODY_ANCHOR_IN_DQ        | anchor | S=refused R=ambiguous-anchor A=1 V=ambiguous
+C1-b02-in-dq-truthy      | BODY_ANCHOR_IN_DQ_TRUTHY | anchor | S=refused R=ambiguous-anchor A=1 V=ambiguous
+C1-b03-in-sq             | BODY_ANCHOR_IN_SQ        | anchor | S=refused R=ambiguous-anchor A=1 V=ambiguous
+C1-b04-in-comment        | BODY_ANCHOR_IN_COMMENT   | anchor | S=refused R=ambiguous-anchor A=1 V=ambiguous
+C1-b05-after-rbrace      | BODY_ANCHOR_AFTER_RBRACE | anchor | S=unpatched R=- A=1 V=falsy
+C1-b06-at-offset0        | BODY_ANCHOR_AT_OFFSET0   | anchor | S=unpatched R=- A=1 V=falsy
+C1-b07-legacy-in-dq      | BODY_ANCHOR_IN_DQ        | legacy | S=unpatched R=- A=1 V=ambiguous
+C1-b08-legacy-in-dq-tru  | BODY_ANCHOR_IN_DQ_TRUTHY | legacy | S=already R=- A=1 V=ambiguous
 TABLE
 }
 
 run_c1_values
 run_c1_states
+run_c1_anchor_boundary
 run_c1_mixed_counts
 run_c10_classifier
 run_c1_counts
 run_c1_offset
+run_c1_anchor_offset

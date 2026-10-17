@@ -274,14 +274,15 @@ false|m2-windows-spaced-program-files-path-readonly|C:\Program Files\nodejs\node
 MATRIX
 
 echo ""
-echo "=== G8: isBaselineEvidenceRecordCommand -- the #2431 internal-only record door ==="
+echo "=== G8: isBaselineEvidenceInternalCommand -- the #2431/#2517 internal-only record/accept doors ==="
 # Every invocation shape must be caught; a mere mention (data, not a run) must not.
-case_begin "baseline-evidence-record-detector" "hooks/lib/workflow-driver-commands.js"
+# #2517: `accept` completes run_tests too, so it shares the internal-only door with `record`.
+case_begin "baseline-evidence-internal-detector" "hooks/lib/workflow-driver-commands.js"
 baseline_record_says() {
   CMD="$1" run_with_timeout node -e '
     try {
-      const { isBaselineEvidenceRecordCommand } = require(process.env.DRIVER_MOD);
-      process.stdout.write(String(isBaselineEvidenceRecordCommand(process.env.CMD) === true));
+      const { isBaselineEvidenceInternalCommand } = require(process.env.DRIVER_MOD);
+      process.stdout.write(String(isBaselineEvidenceInternalCommand(process.env.CMD) === true));
     } catch (e) { process.stdout.write("MODULE_LOAD_FAILED"); }' 2>/dev/null || echo "MODULE_LOAD_FAILED"
 }
 while IFS='|' read -r rwant rid rcmd; do
@@ -298,6 +299,13 @@ false|n2-baseline-runner|bash bin/run-tests-baseline --session s1
 false|n3-cat-mention|cat "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" record
 false|n4-grep-mention|grep record "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence"
 false|n5-echo-mention|echo "run-tests-baseline-evidence record"
+true|a1-node-accept|node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1
+true|a2-direct-path-accept|"\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1
+true|a3-bash-c-accept|bash -c 'node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1'
+true|a4-chained-accept|git status; node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1
+true|a5-quoted-accept|node "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" "accept" --session s1
+false|an1-cat-mention-accept|cat "\$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept
+false|an2-echo-mention-accept|echo "run-tests-baseline-evidence accept"
 MATRIX
 case_end
 

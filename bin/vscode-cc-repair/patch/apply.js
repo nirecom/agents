@@ -58,9 +58,13 @@ function patchDir(dir, options) {
   const baseBuf = fs.readFileSync(target);
   const text = baseBuf.toString('latin1');
 
-  const verdict = classify(text);
+  // One method for the whole run: the race re-check and the post-rename verify must judge
+  // the bundle by the same rule that selected the splice site.
+  const classifyOpts = { method: options.method };
+  const verdict = classify(text, classifyOpts);
   if (verdict.state !== 'unpatched') {
-    return { state: verdict.state, counts: verdict.counts, reasons: [] };
+    const reasons = verdict.reason ? ['reason=' + verdict.reason] : [];
+    return { state: verdict.state, counts: verdict.counts, reasons };
   }
   if (options.dryRun) {
     return { state: 'would-patch', counts: verdict.counts, reasons: [] };
@@ -143,7 +147,7 @@ function patchDir(dir, options) {
   }
   if (Buffer.compare(reread, baseBuf) !== 0) {
     unlinkQuiet(tmp);
-    const rereadVerdict = classify(reread.toString('latin1'));
+    const rereadVerdict = classify(reread.toString('latin1'), classifyOpts);
     if (rereadVerdict.state === 'already') {
       // Another writer landed the same fix: the goal is met, so this is not a failure.
       return { state: 'already', counts: rereadVerdict.counts, reasons: [backupReason, 'raced'] };
@@ -166,7 +170,7 @@ function patchDir(dir, options) {
   // unverified, which is the existing post-verify failure — not an unhandled exception.
   let after = null;
   try {
-    after = classify(fs.readFileSync(target).toString('latin1'));
+    after = classify(fs.readFileSync(target).toString('latin1'), classifyOpts);
   } catch { /* fall through to post-verify-failed */ }
   if (after === null || after.state !== 'already') {
     const counts = after === null ? verdict.counts : after.counts;

@@ -137,7 +137,10 @@ The guard stops new direct reads from landing. It does not prove the tree has no
 through the `env` command and the two undecidable forms above are outside what a static scan can
 see, and no completeness is claimed.
 
-**Exemptions.** The guard alone owns the exemption lists; they are not duplicated here. Two
+**Exemptions.** The guard's data file `bin/check-session-id-ssot/path-tables.txt` alone owns
+the exemption lists; they are not duplicated here. The guard reads that file from the tree being
+judged, with the same fallback and fail-closed rule as the
+[RC-4 lint](state-dirs.md#rc-4-lint), so a PR can add an exemption and rely on it in one commit. Two
 kinds exist: whole-file allowlist entries, reserved for the canonical resolvers themselves, and
 per-line inline waivers spelled `session-id-ssot: waived (<role>) — <reason>` on the read's own
 line or the line above. A waiver with an empty reason is treated as a violation, since a marker
@@ -146,7 +149,7 @@ with nothing behind it is the rubber stamp the guard exists to prevent.
 **Retired-relay tombstone (#1091).** A second check forbids the two retired relay names
 anywhere in the tracked tree — code, tests, skills, rules, and Markdown alike — matched on word
 boundaries. Append-only records (history, changelog) and the test archive are out of scope, and
-the guard's own exempt list names the few files that must still spell the names. No inline
+the data file's `[TOMBSTONE_EXEMPT]` section names the few files that must still spell the names. No inline
 waiver excuses a match: the names are retired, so no legitimate use exists to waive.
 
 ## Known limitations and follow-up candidates

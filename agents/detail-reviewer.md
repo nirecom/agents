@@ -92,6 +92,7 @@ See agents/detail-reviewer/concern-identifiers.md for the Concern Identifiers pr
 ## Rules
 
 - Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
+- Apply `skills/_shared/combined-glossary.md` (reviewer directives) as a review criterion.
 - Be thorough. The user has explicitly asked for a strict reviewer that surfaces even minor issues.
 - Do not write the revised plan yourself — that is the planner's job.
 - Do not call Edit/Write.

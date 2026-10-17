@@ -1,0 +1,27 @@
+# Path tables of bin/check-session-id-ssot.sh. One repository-relative path per line;
+# blank lines and lines starting with # are ignored. All three sections are required.
+# The guard reads this file from the tree it scans (cwd), so a path and the change that
+# relies on it can land in one commit.
+
+# Whole-file exemptions from the direct-read gate: the canonical resolvers. Every direct read
+# in them IS the implementation the rest of the tree must delegate to. Everything else needing
+# a direct read carries a per-line inline waiver instead, so the exemption stays where it is earned.
+[ALLOWLIST]
+hooks/workflow-state/session-id.js
+hooks/lib/resolve-workflow-session-id.js
+hooks/workflow-state/resolve-worktree-path.js
+bin/resolve-worktree-path
+
+# Files that must still spell the retired relay names: the guard, its test, the one-shot
+# purge migration and its test, and the doc that records the retirement.
+[TOMBSTONE_EXEMPT]
+bin/check-session-id-ssot.sh
+tests/bin/bin-check-session-id-ssot.sh
+hooks/lib/temporary-migrations/legacy-session-id-relay-purge.js
+tests/hooks/legacy-session-id-relay-purge.sh
+docs/architecture/claude-code/session-id-resolution.md
+
+# Shared isolation points outside tests/<dir>/ where the clearing-line rule also applies:
+# a line passes when the matching test-language registry entry's envClearLine part accepts it.
+[TOMBSTONE_ISOLATION_FILES_OUTSIDE_TESTS]
+bin/lib/run-tests-baseline-exec.sh

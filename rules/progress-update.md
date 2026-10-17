@@ -2,7 +2,7 @@
 
 `<rootSid>-session-progress.md` is the main conversation's own record of where the work stands; it survives compaction and session hand-over, so a fresh session can resume from it.
 
-A step here means a workflow step (one unit of `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list`); `docs/glossary.md` owns the term.
+A step here means a workflow step (one unit of `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list`); `docs/glossary-user.md` owns the term.
 
 ## Where the file is
 

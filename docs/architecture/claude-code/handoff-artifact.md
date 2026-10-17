@@ -97,7 +97,7 @@ An unknown `handoff_schema_version` is not an error either: the render falls bac
 
 ## Omission-check nudge
 
-Replaced by the progress request (#2594): the triggers, the baseline, the risk signals and the measured values now live in [progress-file.md](progress-file.md#omission-check-nudge). `handoff-pressure.json` and `handoff-flush-mark.json` are no longer read or written.
+Replaced by the progress request (#2594): the triggers, the pressure baseline, the risk signals and the measured values now live in [progress-file.md](progress-file.md#omission-check-nudge). `handoff-pressure.json` and `handoff-flush-mark.json` are no longer read or written, and no flush nudge exists.
 
 ## Caps
 

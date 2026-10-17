@@ -29,7 +29,7 @@ WT-3. **Enumerate call paths**: For each source file from WT-2, trace all integr
 WT-4. List all planned test cases by category (include call-path error cases from WT-3).
 WT-5. Decide the destination of each planned case — append to an existing test file, or create a new one.
    - For each planned case, state its complete source set S (the `# Tests:` tokens the case protects).
-   - Run `bash "$AGENTS_MAIN_ROOT/bin/find-tests-for-source.sh" --sources <comma-joined S>` with every distinct S in one call, repeating `--sources` (Bash, standalone command with timeout 600000; split rule in `skills/_shared/test-design/append-vs-new.md`; rows come back in query order; read-only, so `hooks/block-tests-direct.js` does not apply). On exit 4 or a tool timeout, HALT and surface the stderr.
+   - Run `bash "$AGENTS_MAIN_ROOT/bin/find-tests-for-source.sh" --with-language --sources <comma-joined S>` with every distinct S in one call, repeating `--sources` (Bash, standalone command with timeout 600000; split rule and language columns in `skills/_shared/test-design/append-vs-new.md`; rows come back in query order; read-only, so `hooks/block-tests-direct.js` does not apply). On exit 4 or a tool timeout, HALT and surface the stderr.
    - Record each row's verdict/reason/target as the case group's destination. `append` is mandatory; the sole permitted new file when a target exists is the `size-hard-limit` case, per `skills/_shared/test-design/append-vs-new.md` — do not decide by eye.
    - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations and wait for user confirmation before WT-6.
 WT-6. **Determine the subagent's model**:
@@ -52,8 +52,8 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model alias
      Each source set's `new` verdict generates its own independent new file — one new file per source set.
      A `new` test file's path MUST be `tests/<category>/<file>` (category = first path segment of the source it protects; valid categories: hooks bin skills agents install tests) — never a flat `tests/<file>`; the commit gate rejects a newly-added flat test (#1834, #2392).
      Name a `new` file by a `supported` entry's `patterns` in `hooks/lib/test-language-registry.json`.
-     A new test file MUST source its language's registry `helperLibrary` when one is named (bash: `tests/lib/harness.sh`) — `bin/check-test-frontmatter.sh` rejects new files without it.
-     If `# Tests:` lists 2 or more paths, every case MUST be wrapped in `case_begin`/`case_end` markers (see `tests/lib/harness.sh`); `bin/check-case-markers.sh` flags multi-path files without markers as HIGH.
+     Follow the language column of the WT-5 output: a new test file MUST load that registry entry's `helperLibrary` — `bin/check-test-frontmatter.sh` rejects new files without it.
+     If the `Tests:` header lists 2 or more paths, every case MUST carry a case marker written per that entry's `notationDoc`; `bin/check-case-markers.sh` flags multi-path files without markers as HIGH.
      On `append`: never rewrite the target's `# Tests:` line; `# Tags:` may only be added to.
      `append` is mandatory when the verdict is `append`; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
@@ -93,4 +93,5 @@ When WT-6 took the `NONE` fallback, record it as `--class D --step write_tests -
 
 ## Rules
 
+- Follow `skills/_shared/combined-glossary.md` (writer directives); put this same line in the test-writing subagent's prompt.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

@@ -210,6 +210,24 @@ cat > "$STUB/docker" <<'DKSTUB'
 exit 0
 DKSTUB
 chmod +x "$STUB/gh" "$STUB/uv" "$STUB/docker"
+# Failing domain CLIs for Group 2. Without them the call reaches the run's command guard: the
+# worker env drops the test id, so run-all reports a hit charged to no test (#2669).
+FAILSTUB="$TMPD/failstub"; mkdir -p "$FAILSTUB"
+for _cli in gh uv docker; do
+    printf '#!/usr/bin/env bash\necho "stub %s: failing on purpose" >&2\nexit 1\n' "$_cli" > "$FAILSTUB/$_cli"
+    chmod +x "$FAILSTUB/$_cli"
+done
+# Windows: Node's shell-less spawn finds only gh.exe/gh.com, never the extensionless stub, and the
+# worker env drops NODE_OPTIONS, so the cli-stub.sh preload cannot reach it either. A node copy
+# named gh.exe exits 1 on `gh issue list ...` (node cannot load a module named `issue`): issue-
+# reconcile reports failed in both groups instead of reaching the guard. The stubs exist first,
+# so a link here never redirects a write to the node binary.
+if [ "$(node -p process.platform)" = "win32" ]; then
+    _node_bin="$(node -p 'process.execPath')"
+    for _d in "$STUB" "$FAILSTUB"; do
+        ln "$_node_bin" "$_d/gh.exe" 2>/dev/null || cp "$_node_bin" "$_d/gh.exe"
+    done
+fi
 
 # `tests/run-all.sh` stub for the test-runner row.
 #
@@ -365,14 +383,14 @@ group_test_runner_yaml() {
 # ===========================================================================
 group_failure() {
     local name worker json p out st art
-    # Domain CLI absent/failing: PATH is emptied of the stubs.
+    # Domain CLI failing: the failing stubs replace the ones Group 1 used.
     while IFS='|' read -r name worker json; do
         [ -z "${name// /}" ] && continue
         name="$(echo "$name" | xargs)"; worker="$(echo "$worker" | xargs)"
         impl_missing "failure/$name" "$DISPATCH_JS" "bin/worker-dispatch.js" && continue
         p="$(write_payload "bad-$name" "$json")"
         out="$TMPD/fail-$name.txt"
-        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
+        run_with_timeout 90 env -u CLAUDE_CODE_SESSION_ID "PATH=$FAILSTUB:$PATH" "WORKFLOW_PLANS_DIR=$PLANS" "WORKFLOW_STATE_DIR=$WF_PIN" \
             node "$(nodepath "$DISPATCH_JS")" "$worker" "$MAIN" "$p" > "$out" 2>/dev/null
         st="$(sed -n '1s/^status: //p' "$out")"
         assert_eq "failure/$name/status" "failed" "$st"
@@ -392,6 +410,14 @@ bad-type           | worktree-backup    | {"mode":123}
 unknown-key        | doc-append         | {"mode":"history","evil":"x"}
 cli-nonzero        | issue-reconcile    | {"owner_repo":"example-owner/example-repo","limit":10,"session_id":"s1"}
 TABLE
+    # The failure must come from the failing stub, not from an earlier fault (#2669): the stub exits 1 and names itself.
+    local stub_rc=0 stub_err
+    stub_err="$("$FAILSTUB/gh" issue list --repo o/r 2>&1 >/dev/null)" || stub_rc=$?
+    assert_eq "failure/stub/exit-status" "1" "$stub_rc"
+    case "$stub_err" in
+        *"stub gh: failing on purpose"*) pass "failure/stub/marker" ;;
+        *) fail "failure/stub/marker — got=$stub_err" ;;
+    esac
 }
 
 # ===========================================================================

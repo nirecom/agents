@@ -282,6 +282,13 @@ if [[ "$OUT" == *-outline.md ]]; then
       verify_fail "Issues→Class-members coverage gate failed (see stderr above)"
     fi
   fi
+  # intent `## Glossary` structure (#2529): the outline must not be built on a malformed intent.
+  GLOSSARY_GATE="$SCRIPT_CHECKOUT_ROOT/bin/check-intent-glossary"
+  if [[ -x "$GLOSSARY_GATE" ]]; then
+    if ! "$GLOSSARY_GATE" "$SOURCE"; then
+      verify_fail "intent glossary check failed (see stderr above)"
+    fi
+  fi
 fi
 
 # --- Finalize: every check passed — move the verified temp to the destination ---

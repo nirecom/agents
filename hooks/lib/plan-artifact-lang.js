@@ -10,6 +10,7 @@ const { getWorkflowPlansDir } = require("./workflow-plans-dir");
 const { isPlanArtifact } = require("./is-plan-artifact");
 const { loadLangConfig, classifyPolicy } = require("./lang-config");
 const { lintPlanLang } = require("./lint-plan-lang");
+const { checkIntentGlossary } = require("./intent-glossary");
 
 const STAGES = new Set(["intent", "outline", "detail"]);
 
@@ -55,6 +56,13 @@ function lintPlanArtifactText(text, policy, stage) {
   return lintPlanLang(text, policy, stage);
 }
 
+// Whole-document structure check, kept apart from the per-fragment language lint:
+// a heading-less Edit fragment is normal, so only full text may be passed here.
+function lintPlanArtifactStructure(text, stage) {
+  if (typeof text !== "string" || stage !== "intent") return [];
+  return checkIntentGlossary(text);
+}
+
 // Re-lint the confirmed artifact. Body language checks still require a strict
 // policy, but canonical-heading checks run regardless of policy (#2338): when
 // the stage resolves, heading violations are returned even under a non-strict
@@ -87,12 +95,19 @@ function formatPlanLangViolations(violations, max) {
   return lines;
 }
 
+function formatStructureViolations(violations) {
+  const list = Array.isArray(violations) ? violations : [];
+  return list.map((v) => "line " + v.lineNumber + ": " + v.reason);
+}
+
 module.exports = {
   isPlanArtifactPath,
   resolvePlanArtifactPath,
   stageOf,
   loadPlanPolicy,
   lintPlanArtifactText,
+  lintPlanArtifactStructure,
   relintPlanArtifact,
   formatPlanLangViolations,
+  formatStructureViolations,
 };

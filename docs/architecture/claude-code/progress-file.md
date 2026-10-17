@@ -101,7 +101,7 @@ The halved column is `limit / RISK_DIVISOR` (2). The growth condition on `elapse
 
 ### Baseline
 
-- `{baseline_bytes, baseline_at, transcript_path}` — initialized silently on the first evaluation.
+- The **pressure baseline** (`progress-pressure.json`) `{baseline_bytes, baseline_at, transcript_path}` — the point transcript growth and elapsed time are measured from; initialized silently on the first evaluation.
 - Any request moves it to the current size and time.
 - A session-progress.md mtime newer than `baseline_at` and different from the last seen one (`MTIME_TOLERANCE_MS` = 2ms) means the model updated the file: the baseline moves, `last_update_at` is set and `progress_updates` counts it. The first sighting and the hook's own creation only record the mtime.
 - A transcript that shrank re-bases `baseline_bytes` only, without firing.

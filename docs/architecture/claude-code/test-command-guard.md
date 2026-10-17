@@ -41,6 +41,8 @@ The binary then asks the real git, with the same pairs (as `main.js` passes its 
 
 A refusal exits 97, prints `command guard: refused …` to stderr, and leaves one hit file under `<guard dir>/hits/` naming the tool, the test (`ROOT_DECOY_TEST_ID`), the target and the arguments. The decision lives in `tests/lib/command-guard/` (`classify.js` for the verb, `resolve-target.js` for the targets, `main.js` for the verdict).
 
+The **spawn record** is a Node.js `--require` preload (`tests/fixtures/spawn-record-preload.js`, loaded through `NODE_OPTIONS`) that records every `spawn` / `execFile` call into the same `hits/` directory, so a test can assert which commands a script invoked.
+
 ### Sentinel and git write guard on POSIX
 
 On Linux and macOS each binary is a small bash script written by `tests/lib/command-guard-build.js`. A git read, or a write that passes the fast write path, is classified in bash and `exec`s the real git without starting node; everything else runs `main.js`. Without node the script still records a hit and exits 97, so a broken guard fails closed.
@@ -87,7 +89,7 @@ With more than 500 modified tracked paths the content comparison is skipped and 
 | `bin/lib/run-all-launch.sh` `run_all_pin_test_env <work dir>` | the work dir as the run root, the decoy, the guard (`run_all_pin_command_guard`), worktree change detection |
 | `bin/lib/run-tests-baseline-exec.sh` | the same per base test, with the run root in the test's isolation dir |
 
-`run_all_hit_report` runs once per run and prints three kinds of lines to stderr, each counting as a failure of the run:
+Hits are reported in three kinds of lines:
 
 ```
 [run-all] root decoy hit: <tree>/<stub><TAB><test id>
@@ -95,7 +97,13 @@ With more than 500 modified tracked paths the content comparison is skipped and 
 [run-all] worktree change: <tree><TAB><test id><TAB><kind>
 ```
 
-`tests/run-all.sh`, `bin/lib/run-tests-baseline-exec.sh` and `experimental/test-jail/run-jailed.sh` call it.
+`tests/run-all.sh` attributes each guard or decoy hit to the test that made it (`bin/lib/run-all-hits.sh`):
+
+- Right after a test ends, its hit records are claimed: the test becomes a named `FAIL` with its own exit code, and the detail line is appended to that test's stderr. This holds under `-j N` too, since every record carries the test id.
+- A record that arrives after its test was reported turns that test into a `FAIL` then; a TIMEOUT test stays the one FAIL it already was.
+- A record with no test id, or with an id that names no test of the run, and every worktree change, cannot be pinned on one test. Each becomes a `HIT: <detail>` line and is counted as ` HITS=N` on `Results:` and `RUN_CONTRACT:` ([test-result-contract.md](test-result-contract.md)).
+
+`run_all_hit_report` prints the remaining lines to stderr. `bin/lib/run-tests-baseline-exec.sh` and `experimental/test-jail/run-jailed.sh` call it as well; there every hit still counts as a failure of the run.
 
 ## Limits
 

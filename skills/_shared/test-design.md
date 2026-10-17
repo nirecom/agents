@@ -49,12 +49,12 @@ tests/<category>/<branch-type>-<branch-name>.<ext>
 ```
 
 - `<category>` is the top-level tree the primary subject-under-test lives in — one of the six canonical dirs: `hooks/`, `bin/`, `skills/`, `agents/`, `install/`, `tests/` (derived from the first path segment of the file the test exercises, matching its `# Tests:` frontmatter).
-- `feature/claude-rules` exercising a hook → `tests/hooks/feature-claude-rules.sh`
-- `fix/ssh-keys` exercising an install script → `tests/install/fix-ssh-keys.sh`
-- main direct work: `tests/<category>/main-<name>.sh`
-- Multiple files per feature: add a suffix (e.g., `feature-claude-rules-global.sh`)
+- `feature/claude-rules` exercising a bash hook → `tests/hooks/feature-claude-rules.sh`
+- `fix/ssh-keys` exercising a PowerShell install script → `tests/install/fix-ssh-keys.Tests.ps1`
+- main direct work: `tests/<category>/main-<name>.<ext>`
+- Multiple files per feature: add a suffix (e.g., `feature-claude-rules-global`)
 - `tests/lib/`, `tests/fixtures/`, `tests/_archive/` and `tests/run-all.sh` are top-level shared test infrastructure — not categories, not subject to the `tests/<category>/` placement rule. `tests/lib/` follows the same adjacent-`lib/` naming as `hooks/lib/` and `bin/lib/`; `tests/run-all.sh` is the test runner entry point whose path is a provenance-identity contract.
-
+- Language: the language of the code under test (`rules/test.md` "Test Language").
 - File name per language: match a `supported` entry's `patterns` in `hooks/lib/test-language-registry.json` (`docs/architecture/claude-code/test-language-registry.md`).
 
 ## Test Layer Selection
@@ -116,11 +116,11 @@ the event, would my unit tests still pass?"* If yes, a unit test is not enough.
 
 ## Required Frontmatter
 
-Every `tests/<category>/<name>.sh` file (excluding `tests/_archive/`) must carry exactly two single-line
-headers within the first 10 lines, right after the shebang and filename comment:
+Every test file under `tests/<category>/` (excluding `tests/_archive/`) must carry exactly two single-line
+headers within the first 10 lines, right after the shebang and filename comment (shown with `#`; write the language's registry `commentPrefix`):
 
-- `# Tests: <path1>, <path2>` — comma-separated repo-relative source paths (forward slash). Used by `bin/audit-tests.sh` for staleness checks and by Tier 2 semantic selection. Each token must match `^[A-Za-z0-9._/-]+$` (no spaces, parentheses, CLI flags, or globs). `bin/check-test-frontmatter.sh` enforces this as a HARD pre-commit check; path non-existence is WARN only. `# Tests:` is the retirement filter for files without `case_begin`/`case_end` markers (target survival: file retires when every `# Tests:` target is gone). For marker-bearing files, retirement is per-case (case retires when its `case_begin` target is gone); `# Tests:` is not a survival signal for those files.
-  - Case marker writing rules (hard-gated for new multi-path .sh tests): `skills/_shared/test-design/case-markers.md`.
+- `# Tests: <path1>, <path2>` — comma-separated repo-relative source paths (forward slash). Used by `bin/audit-tests.sh` for staleness checks and by Tier 2 semantic selection. Each token must match `^[A-Za-z0-9._/-]+$` (no spaces, parentheses, CLI flags, or globs). `bin/check-test-frontmatter.sh` enforces this as a HARD pre-commit check; path non-existence is WARN only. `# Tests:` is the retirement filter for files without case markers (target survival: file retires when every `# Tests:` target is gone). For marker-bearing files in a language whose registry entry names `caseEmbedRules` (bash today), retirement is per-case (case retires when its marker's target is gone) and `# Tests:` is not a survival signal; other languages retire whole files by `# Tests:` until #2502.
+  - Case marker writing rules (hard-gated for new multi-path tests, in every language with a reader): `skills/_shared/test-design/case-markers.md`.
 - `# Tags: <kw1>, <kw2>` — comma-separated kebab-case keywords. Used by the LLM Tier 2 matcher in `skills/run-tests/SKILL.md`.
 
 Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` continuation. Long lines are acceptable; parsers rely on single-line format.
@@ -143,13 +143,13 @@ Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` cont
 ## Size Limits
 
 - Same limits as code files: WARN at >300 lines, HARD at >500 lines.
-- Split mechanism: same as code — `tests/<name>/` sibling folder with a dispatcher `.sh`. See `rules/coding/file-split.md`.
+- Split mechanism: same as code — `tests/<name>/` sibling folder with a dispatcher file in the same language. See `rules/coding/file-split.md`.
 - Canonical split example: `tests/hooks/main-workflow-skip-sentinels/` (PR #867).
 - `tests/_archive/` is excluded from size checks.
 
 ## Test Naming Convention (new tests only)
 
-New test files follow `<area>-<issue-or-feature>-<topic>.sh` where `<area>` is one of `feature`, `fix`, `refactor`, `unit`, `main`.
+New test files take `<area>-<issue-or-feature>-<topic>` as the `<name>` of their language's registry `newFileNameShape`, where `<area>` is one of `feature`, `fix`, `refactor`, `unit`, `main`.
 
 Existing files are NOT renamed — `git blame` continuity is preserved. Frontmatter handles semantic grouping via `# Tags:`.
 

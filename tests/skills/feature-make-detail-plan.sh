@@ -2,9 +2,8 @@
 # Tests: skills/make-detail-plan/SKILL.md
 # Tags: worktree, detail, planning, sentinel, workflow, scope:issue-specific
 # Contract tests for make-detail-plan skill (issue #462 class enumeration carry-forward)
-# Target files (expected to FAIL until implementation is complete):
-#   skills/make-detail-plan/SKILL.md (worktree-local)
-# Exit 0 always — this is a contract test, not a CI gate yet.
+# Target: skills/make-detail-plan/SKILL.md (worktree-local).
+# Exit status: non-zero when any assertion fails (a red row must reach the runner).
 
 # Timeout guard: if running without the sentinel, re-exec under timeout
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
@@ -95,4 +94,4 @@ echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 
-exit 0
+[ "$FAIL" -eq 0 ]

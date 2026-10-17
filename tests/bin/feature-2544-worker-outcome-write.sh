@@ -105,6 +105,8 @@ case_end
 
 # Writer-to-reader cases bracket themselves: this fragment names two sources.
 . "$CASE_DIR/roundtrip.sh"
+# #2486: the WD-BG launch event arrives before the outcome; reuses roundtrip.sh's helpers.
+. "$CASE_DIR/background-baseline.sh"
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
