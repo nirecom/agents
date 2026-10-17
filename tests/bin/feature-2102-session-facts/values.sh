@@ -51,6 +51,8 @@ mk_cfg() {
   mkdir -p "$d/bin" "$d/hooks/lib"
   cp "$REPO_ROOT/bin/get-config-var" "$d/bin/"
   cp "$REPO_ROOT/bin/confirm-off" "$d/bin/"
+  # #2681: guarded only while the module is not yet written; once it exists the copy is unconditional in effect.
+  if [ -f "$REPO_ROOT/hooks/lib/config-flag.js" ]; then cp "$REPO_ROOT/hooks/lib/config-flag.js" "$d/hooks/lib/"; fi
   cp "$REPO_ROOT/hooks/lib/load-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$d/hooks/lib/"
@@ -60,12 +62,12 @@ mk_cfg() {
 }
 CFG="$TMPDIR_BASE/cfg"; mk_cfg "$CFG"; : > "$CFG/.env"
 CFG_PD="$TMPDIR_BASE/cfg-pd"; mk_cfg "$CFG_PD"
-# The reader finds confirm-off and get-config-var beside itself, so a case that needs one
-# of them missing or stubbed runs a copy of the reader from a tree it can break.
+# The reader resolves the gates in-process through hooks/lib/config-flag.js beside itself (#2681),
+# so a case that needs it missing or stubbed runs a copy of the reader from a tree it can break.
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 mk_reader_tree() { script_checkout_fixture_copy "$1" bin/workflow hooks bin/confirm-off bin/get-config-var; }
 reader_of() { printf '%s' "$(nrm "$1")/bin/workflow/read-session-facts"; }
-CFG_BARE="$TMPDIR_BASE/cfg-bare"; mk_reader_tree "$CFG_BARE"; rm -f "$CFG_BARE/bin/get-config-var"
+CFG_BARE="$TMPDIR_BASE/cfg-bare"; mk_reader_tree "$CFG_BARE"; rm -f "$CFG_BARE/hooks/lib/config-flag.js"
 
 OUTF="$TMPDIR_BASE/out.txt"; ERRF="$TMPDIR_BASE/err.txt"
 OUT=""; ERR=""; RC=0
@@ -198,8 +200,8 @@ run_facts "$CFG" "gi"
 check "(a) independence: TESTS=off and CODE=on are not swapped -- TESTS" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) independence: TESTS=off and CODE=on are not swapped -- CODE" "ON" "$(val_of GATE_CONFIRM_CODE)"
 run_facts "$CFG_BARE" "ge" "$(reader_of "$CFG_BARE")"
-check "(a) ERROR: no get-config-var -- TESTS" "ERROR" "$(val_of GATE_CONFIRM_TESTS)"
-check "(a) ERROR: no get-config-var -- CODE" "ERROR" "$(val_of GATE_CONFIRM_CODE)"
+check "(a) ERROR: no config-flag.js -- TESTS" "ERROR" "$(val_of GATE_CONFIRM_TESTS)"
+check "(a) ERROR: no config-flag.js -- CODE" "ERROR" "$(val_of GATE_CONFIRM_CODE)"
 check "(a) ERROR is expressed as a value, exit stays 0" 0 "$RC"
 case_end
 
@@ -208,14 +210,15 @@ case_end
 case_begin "a-one-sided-gate-failure" "bin/workflow/lib/session-facts/gate-facts.js"
 CFG_HALF="$TMPDIR_BASE/cfg-half"; mk_reader_tree "$CFG_HALF"
 printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=off\n' > "$CFG_HALF/.env"
-mv "$CFG_HALF/bin/get-config-var" "$CFG_HALF/bin/get-config-var-real"
+# #2681: a load-env stub that throws for CONFIRM_CODE only (the original stays as load-env-real.js).
+mv "$CFG_HALF/hooks/lib/load-env.js" "$CFG_HALF/hooks/lib/load-env-real.js"
 printf '%s\n' \
-  '#!/usr/bin/env bash' \
-  'set -u' \
-  'if [ "${1:-}" = "--is-off" ]; then shift; fi' \
-  'if [ "${1:-}" = "CONFIRM_CODE" ]; then exit 4; fi' \
-  'exec bash "$(dirname "$0")/get-config-var-real" --is-off "$@"' > "$CFG_HALF/bin/get-config-var"
-chmod +x "$CFG_HALF/bin/get-config-var" 2>/dev/null || true
+  '"use strict";' \
+  'const real = require("./load-env-real");' \
+  'module.exports = Object.assign({}, real, { resolveConfigVar: function (n, d, o) {' \
+  '  if (n === "CONFIRM_CODE") throw new Error("stub: CONFIRM_CODE throws");' \
+  '  return real.resolveConfigVar(n, d, o);' \
+  '} });' > "$CFG_HALF/hooks/lib/load-env.js"
 run_facts "$CFG_HALF" "gh" "$(reader_of "$CFG_HALF")"
 check "(a) one-sided failure: the healthy gate keeps its value" "OFF" "$(val_of GATE_CONFIRM_TESTS)"
 check "(a) one-sided failure: only the broken gate is ERROR" "ERROR" "$(val_of GATE_CONFIRM_CODE)"

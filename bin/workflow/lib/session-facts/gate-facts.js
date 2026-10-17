@@ -1,12 +1,10 @@
 "use strict";
-// Answers the CONFIRM_TESTS / CONFIRM_CODE gates by invoking bin/confirm-off
-// once per gate, both children IN PARALLEL.
-// Parallelism is a necessary condition for #2102's goal, not an optimisation.
-// Measured on Windows: sequential 2,579 ms vs parallel 1,695 ms, against the
-// 2,533-3,862 ms call sequence this reader replaces — a sequential build is
-// therefore no faster than the status quo and inverts the point of the issue.
-// So: the async probe only — the synchronous spawn helpers serialise the
-// children and are prohibited here (contract.sh C6b/C6c).
+// Answers the CONFIRM_TESTS / CONFIRM_CODE gates by in-process resolution through
+// the confirm-gate probe (hooks/lib/config-flag.js); no child process is started.
+// A synchronous resolution that starts no child process is allowed. Starting a
+// child process to resolve a gate — synchronous or asynchronous — must not come
+// back: the spawn era serialised the gates (sequential 2,579 ms vs parallel 1,695 ms
+// on Windows, #2102). The C6b/C6c string pins in contract.sh guard that line.
 // Promise.allSettled, never Promise.all — one broken gate must not discard the
 // verdict the other gate did produce.
 

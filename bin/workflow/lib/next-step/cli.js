@@ -20,6 +20,8 @@ function printUsage() {
     "NEXT_HINT, REASON), plus an optional advisory SKIP_HINT line at the\n" +
     "outline/detail steps, and an optional display-only GATE_CONFIRM_<X>=<ON|OFF|ERROR>\n" +
     "line (last) when the invoked step has a CONFIRM_* gate. Never branch on it; use --gate.\n" +
+    "Only when the gate probe cause is not ok, a display-only\n" +
+    "GATE_PROBE_CAUSE=<load-failed|exception|over-budget> line sits right before it.\n" +
     "Always exits 0 in next-step mode; --reset exits nonzero on invalid input.\n" +
     "\n" +
     "Options:\n" +
@@ -38,7 +40,8 @@ function printUsage() {
     "                    the settled step was the session's current step.\n" +
     "  --gate            Read-only confirm-gate check for the recorded current step.\n" +
     "                    Prints GATE_ACTION=<proceed|ask|present-and-stop|none>, the\n" +
-    "                    GATE_CONFIRM_<X> value line (not for none), GATE_HINT and REASON.\n" +
+    "                    GATE_CONFIRM_<X> value line (not for none), GATE_HINT and REASON;\n" +
+    "                    REASON carries probe-<cause> when the probe cause is not ok.\n" +
     "                    Exclusive with --list / --reset / --mark / --advance (exit 64).\n" +
     "  --scope-change-approved\n" +
     "                    With --gate only (else exit 64): the user approved the detail\n" +

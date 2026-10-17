@@ -110,19 +110,13 @@ tc_isoff "T5" oFf    with-node off  0 "case-insensitivity is symmetric for off"
 tc_isoff "T6" maybe  with-node off  3 "unrecognized value is reported, not silently treated as off"
 tc_isoff "T7" ""     with-node off  0 "empty value falls back to the default, same as unset"
 tc_isoff "T8" UNSET  with-node NONE 2 "unset with no default is distinguishable from an explicit off"
-# T9/T10 pin the degraded path. With no usable node the resolver cannot read
-# any config at all, so the value it was given is irrelevant — both an explicit
-# off and an unrecognized value land on the same exit 2. Callers must therefore
-# treat exit 2 as "could not determine", not as "off".
-tc_isoff "T9"  maybe no-node   off  2 "node absent: config unreadable, resolver cannot report off"
-tc_isoff "T10" off   no-node   off  2 "node absent: even an explicit off is unreadable"
+# T9/T10 pin the degraded path (#2681). Without node the config cannot be read at all, so
+# whatever value was given, the answer is the internal-failure exit 4. Exit 2 is kept for a
+# genuine unset (T8), so a caller can tell "unset" from "could not read".
+tc_isoff "T9"  maybe no-node   off  4 "node absent: internal failure (exit 4), not unset"
+tc_isoff "T10" off   no-node   off  4 "node absent: internal failure (exit 4), not unset, even for an explicit off"
 
-# Note on cross-platform asymmetry: bin/get-config-var.ps1 exits 4 (internal
-# failure) for the same node-absent condition, because it inspects a temp file
-# it created itself, whereas the bash side sees an empty value first and exits
-# 2. Both are non-zero, so both fail safe in the `&& off || on` idiom, but the
-# codes differ. Unifying them is deliberately out of scope for this session —
-# this note exists so the asymmetry is a recorded, not an accidental, gap.
+# Note: bash and ps1 now agree — bin/get-config-var.ps1 also exits 4 when node is absent.
 
 # T11 — the unrecognized-value path must be observable, not silent.
 tc_isoff_warns() {
