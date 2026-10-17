@@ -795,3 +795,7 @@ Changes: Jev complexity judgments now reach the backup subagent's answer (it was
 ### FEATURE: PR #2706 (2026-10-17)
 Background: feat(#2687): auto-tune max jobs per host with fair share and CPU load...
 Changes: Test parallelism tunes itself: the per-machine maximum is measured and capped at the logical CPU count, concurrent test runs split the machine's lanes evenly, and the share shrinks while a heavy external program (such as a 3D game) loads the CPU. Set `AUTO_CONFIG_TEST_MAX_JOBS=off` for fully manual values. This replaces the "never ask again" calibration option.;The calibration offer in `/run-tests` now shows an estimated duration and tells you to wait while it measures.
+
+### FEATURE: PR #2710 (2026-10-17)
+Background: fix(#2673): restore harness clear lines and harden the non-bash case readers
+Changes: Pester, pytest and JS test harnesses again clear inherited CLAUDE_SESSION_ID / CLAUDE_ENV_FILE, so a parent session's env file can no longer leak into tests (#2673).;Case-marker checks: two cases sharing a name in one test file are now rejected in every supported language (`duplicate-name`), and the JS reader no longer hides markers after a `/*` or `//` inside a template literal (#2673).
