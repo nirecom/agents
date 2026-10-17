@@ -33,12 +33,28 @@ REGISTRY = json.loads((REPO_ROOT / "hooks" / "lib" / "test-language-registry.jso
 LOAD_LINES = 'import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))\n'
 PIN_NAMES = ("WORKFLOW_STATE_DIR", "WORKFLOW_PLANS_DIR")
 REMOVED_NAMES = ("CLAUDE_CODE_SESSION_ID",)
-ISO_NAMES = PIN_NAMES + REMOVED_NAMES
+
+
+def read_retired_names() -> tuple[str, ...]:
+    """Retired relay names, read from the tombstone checker because test text may not name them;
+    a name added there later fails these cases until every harness clears it as well."""
+    text = (REPO_ROOT / "bin" / "check-session-id-ssot.sh").read_text(encoding="utf-8")
+    found = re.search(r"^TOMBSTONE_NAMES='([^']+)'\r?$", text, re.M)
+    assert found, "bin/check-session-id-ssot.sh has a TOMBSTONE_NAMES line"
+    names = tuple(found.group(1).split("|"))
+    assert len(names) >= 2 and all(names), found.group(1)
+    return names
+
+
+# Cleared on import and on isolate, never put back: kept apart from the names a restore returns.
+RETIRED_NAMES = read_retired_names()
+RESTORE_NAMES = PIN_NAMES + REMOVED_NAMES
+ISO_NAMES = RESTORE_NAMES + RETIRED_NAMES
 SENTINEL = {name: f"h2411-secret-{uuid.uuid4().hex}" for name in ISO_NAMES}
 PRESETS = {
     "all-set": {name: f"h2411-{name.lower()}" for name in ISO_NAMES},
     "all-unset": {},
-    "mixed": {"WORKFLOW_PLANS_DIR": "h2411-plans", "CLAUDE_CODE_SESSION_ID": "h2411-ccsid"},
+    "mixed": {"WORKFLOW_PLANS_DIR": "h2411-plans", "CLAUDE_CODE_SESSION_ID": "h2411-ccsid", RETIRED_NAMES[0]: "h2411-retired"},
 }
 
 
@@ -48,11 +64,15 @@ def apply_preset(monkeypatch, preset: dict[str, str]) -> dict[str, str | None]:
             monkeypatch.setenv(name, preset[name])
         else:
             monkeypatch.delenv(name, raising=False)
-    return {name: preset.get(name) for name in ISO_NAMES}
+    return {name: preset.get(name) for name in RESTORE_NAMES}
 
 
 def snapshot() -> dict[str, str | None]:
-    return {name: os.environ.get(name) for name in ISO_NAMES}
+    return {name: os.environ.get(name) for name in RESTORE_NAMES}
+
+
+def retired_left() -> list[str]:
+    return [name for name in RETIRED_NAMES if name in os.environ]
 
 
 def make_tree(tmp_path: Path, category: str) -> Path:
@@ -99,7 +119,9 @@ def test_isolate_pins_removes_and_restores(monkeypatch, label):
             assert temp_root in Path(value).resolve().parents
         for name in REMOVED_NAMES:
             assert name not in os.environ, name
-    assert snapshot() == {name: before[name] for name in ISO_NAMES}
+        assert retired_left() == [], "the retired names are cleared inside"
+    assert snapshot() == before
+    assert retired_left() == [], "the retired names stay cleared after the exit"
 
 
 def test_isolate_gives_each_entry_its_own_directory(monkeypatch):
@@ -117,6 +139,7 @@ def test_isolate_restores_after_exception(monkeypatch):
             assert os.environ.get("WORKFLOW_PLANS_DIR") != "h2411-plans"
             raise RuntimeError("body failed")
     assert snapshot() == before
+    assert retired_left() == [], "the retired names stay cleared"
 
 
 def test_isolate_second_exit_is_harmless(monkeypatch):
@@ -126,6 +149,29 @@ def test_isolate_second_exit_is_harmless(monkeypatch):
     context.__exit__(None, None, None)
     context.__exit__(None, None, None)
     assert snapshot() == before
+    assert retired_left() == [], "the retired names stay cleared"
+
+
+def test_harness_clears_the_retired_relay_names_at_load_and_on_isolate(monkeypatch):
+    """harness clears the retired relay names at load and on isolate. Import runs in a child
+    interpreter, so this process keeps its own module; isolate runs here."""
+    env = dict(os.environ, H2411_RETIRED=",".join(RETIRED_NAMES), **dict.fromkeys(RETIRED_NAMES, "h2411-retired"))
+    code = (
+        "import os, sys\n"
+        "sys.path.insert(0, sys.argv[1])\n"
+        "import harness\n"
+        "print(','.join(n for n in os.environ['H2411_RETIRED'].split(',') if n in os.environ))\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", code, str(HELPER.parent)], env=env, capture_output=True, text=True, timeout=60, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "", "cleared at load"
+    for name in RETIRED_NAMES:
+        monkeypatch.setenv(name, "h2411-retired")
+    with harness.isolate():
+        assert retired_left() == [], "cleared on isolate"
+    assert retired_left() == [], "not put back by the exit"
 
 
 # --- fixture git repo ---
@@ -270,12 +316,18 @@ LOAD_BODY = LOAD_LINES + '''import harness
 import os
 import pytest
 
+RETIRED = [n for n in os.environ.get("H2411_RETIRED", "").split(",") if n]
+LEFT_AT_LOAD = [n for n in RETIRED if n in os.environ]
+
 
 @pytest.mark.target("tests/lib/harness.py")
 def test_calls_helper():
+    assert len(RETIRED) >= 2
+    assert LEFT_AT_LOAD == []
     with harness.isolate():
         assert os.environ.get("WORKFLOW_STATE_DIR")
         assert "CLAUDE_CODE_SESSION_ID" not in os.environ
+        assert [n for n in RETIRED if n in os.environ] == []
     Path(__file__).with_name("helper.marker").write_text("ok", encoding="utf-8")
 
 
@@ -301,7 +353,7 @@ def test_load_by_canonical_line(tmp_path, category, cwd_kind, tl3, gated):
     if cwd_kind == "outside":
         cwd = tmp_path / "outside"
         cwd.mkdir()
-    rc, output, cases = run_wrapper(test_file, cwd, tmp_path, dict(SENTINEL, RUN_TL3=tl3))
+    rc, output, cases = run_wrapper(test_file, cwd, tmp_path, dict(SENTINEL, RUN_TL3=tl3, H2411_RETIRED=",".join(RETIRED_NAMES)))
     assert rc == 0, output
     assert has_case(cases, "PASS", "test_calls_helper") and has_case(cases, "PASS", "test_marker_registered")
     assert has_case(cases, gated, "test_tl3_gated")

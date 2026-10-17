@@ -6,17 +6,25 @@ echo "=== crr_read ==="
 
 printf 'not a test\n' >"$FXD/notes.txt"
 
+# dup-name.sh (#2673): one case built twice under the same name, so no begin line is written
+# literally twice here. Lines: 1 shebang, 2-4 first case, 5-7 second case.
+CRR_DUP_BEGIN="case""_begin"  # split so this line is not read as a marker
+crr_dup_case() { printf '%s "%s" "%s"\necho %s\ncase_end\n' "$CRR_DUP_BEGIN" "$1" "$2" "$1"; }
+printf '#!/usr/bin/env bash\n' >"$FXD/dup-name.sh"
+crr_dup_case live bin/a.sh >>"$FXD/dup-name.sh"
+crr_dup_case live bin/b.sh >>"$FXD/dup-name.sh"
+
 case_begin "record-format-conforming" "bin/lib/case-record-reader.sh"
-# Exact output: FILE line first, then one CASE line per case in file order, idx 0-based.
+# Exact output: FILE line first, then one CASE line per case in file order (no idx column, #2673).
 crr "$SCRIPT_CHECKOUT_ROOT" "$FXD/conforming.sh"
 assert_eq "rc=$CRR_RC" "rc=0"
 want="FILE${T}conforming${T}${T}
-CASE${T}0${T}alpha${T}bin/a.sh${T}7${T}10${T}helper_a,helper_b${T}
-CASE${T}1${T}beta${T}bin/b.sh${T}11${T}13${T}${T}"
+CASE${T}alpha${T}bin/a.sh${T}7${T}10${T}helper_a,helper_b${T}
+CASE${T}beta${T}bin/b.sh${T}11${T}13${T}${T}"
 assert_eq "$CRR_OUT" "$want"
-# Every CASE line has exactly 8 tab-separated fields (empty ones included).
+# Every CASE line has exactly 7 tab-separated fields (empty ones included).
 nf="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" { print NF }' | sort -u | tr '\n' ' ')"
-assert_eq "CASE field counts: $nf" "CASE field counts: 8 "
+assert_eq "CASE field counts: $nf" "CASE field counts: 7 "
 case_end
 
 case_begin "state-per-file" "bin/lib/case-record-reader.sh"
@@ -58,7 +66,7 @@ case_end
 
 case_begin "state-matches-marker-conformance" "bin/lib/case-record-reader.sh"
 # The registry-routed path and the direct parser path decide the state by one rule.
-for cf in none.sh conforming.sh malformed.sh uncertain.sh heredoc-pseudo.sh; do
+for cf in none.sh conforming.sh malformed.sh uncertain.sh heredoc-pseudo.sh dup-name.sh; do
   direct="$(bash -c '. "$1/bin/lib/test-retire-predicate.sh" || exit 95; trp_marker_conformance "$2"; printf "%s|%s|%s" "$TRP_MARKER_STATE" "$TRP_MARKER_LINE" "$TRP_MARKER_REASON"' _ "$SCRIPT_CHECKOUT_ROOT" "$FXD/$cf" 2>/dev/null)"
   crr "$SCRIPT_CHECKOUT_ROOT" "$FXD/$cf"
   if [ -z "$direct" ]; then
@@ -70,14 +78,14 @@ done
 case_end
 
 case_begin "deps-csv-and-empty" "bin/lib/case-record-reader.sh"
-# Column 7: a csv of top-level functions the case calls; empty when it calls none.
+# Column 6: a csv of top-level functions the case calls; empty when it calls none.
 # A name that is only a prefix of a called function, and a variable, are not deps.
 crr "$SCRIPT_CHECKOUT_ROOT" "$FXD/deps-boundary.sh"
-deps="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" { print $2 "=" $7 }' | tr '\n' ' ')"
-assert_eq "$deps" "0=mk_more 1=fn_kw "
+deps="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" { print $2 "=" $6 }' | tr '\n' ' ')"
+assert_eq "$deps" "word-boundary=mk_more function-keyword=fn_kw "
 crr "$SCRIPT_CHECKOUT_ROOT" "$FXD/deps-heredoc.sh"
-deps="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" { print $2 "=" $7 }' | tr '\n' ' ')"
-assert_eq "heredoc body is not a reference: $deps" "heredoc body is not a reference: 0=real_fn "
+deps="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" { print $2 "=" $6 }' | tr '\n' ' ')"
+assert_eq "heredoc body is not a reference: $deps" "heredoc body is not a reference: a=real_fn "
 case_end
 
 # Fixture checkouts: the bash entry with no caseEmbedRules, and with an unreachable reader.
@@ -94,8 +102,8 @@ case_begin "deps-unknown-without-embed-rules" "bin/lib/case-record-reader.sh"
 # A language with no caseEmbedRules cannot compute deps: `?`, never a silent empty.
 crr "$CO_NOEMBED" "$FXD/conforming.sh"
 assert_eq "rc=$CRR_RC FILE=$(file_line "$CRR_OUT")" "rc=0 FILE=conforming||"
-deps="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" { print $2 "=" $7 }' | tr '\n' ' ')"
-assert_eq "$deps" "0=? 1=? "
+deps="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" { print $2 "=" $6 }' | tr '\n' ' ')"
+assert_eq "$deps" "alpha=? beta=? "
 case_end
 
 case_begin "reader-unreachable-is-malformed" "bin/lib/case-record-reader.sh"
@@ -112,10 +120,10 @@ case_begin "tab-in-value-is-grammar" "bin/lib/case-record-reader.sh"
 # A tab inside a name would split the TSV; it must surface as grammar, and no record
 # may carry an extra field.
 crr "$SCRIPT_CHECKOUT_ROOT" "$FXD/tab-in-name.sh"
-hit="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '($1 == "FILE" && $4 == "grammar") || ($1 == "CASE" && NF == 8 && $8 == "grammar") { print "hit"; exit }')"
+hit="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '($1 == "FILE" && $4 == "grammar") || ($1 == "CASE" && NF == 7 && $7 == "grammar") { print "hit"; exit }')"
 assert_eq "grammar reported: ${hit:-no}" "grammar reported: hit"
-bad="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" && NF != 8 { print NR }' | tr '\n' ' ')"
-assert_eq "CASE lines with a field count other than 8: [$bad]" "CASE lines with a field count other than 8: []"
+bad="$(printf '%s\n' "$CRR_OUT" | awk -F'\t' '$1 == "CASE" && NF != 7 { print NR }' | tr '\n' ' ')"
+assert_eq "CASE lines with a field count other than 7: [$bad]" "CASE lines with a field count other than 7: []"
 case_end
 
 case_begin "case-globals-left-for-same-shell" "bin/lib/case-record-reader.sh"
@@ -144,7 +152,7 @@ case_begin "stub-reader-part-is-called" "bin/lib/case-record-reader.sh"
 export CRR_STUB_RC=0
 crr "$CO_STUB" "$FXD/x.Tests.ps1"
 assert_eq "rc=$CRR_RC out=$CRR_OUT" "rc=0 out=FILE${T}conforming${T}${T}
-CASE${T}0${T}stale${T}bin/stale.sh${T}3${T}9${T}?${T}"
+CASE${T}stale${T}bin/stale.sh${T}3${T}9${T}?${T}"
 assert_eq "requires=$STUB_REQUIRES" "requires=pwsh"
 unset CRR_STUB_RC
 case_end
@@ -186,9 +194,16 @@ while IFS='|' read -r cfile cwant; do
   assert_eq "$cfile stderr bytes=$(wc -c <"$TMPBASE/bytes.err" | tr -d ' ')" "$cfile stderr bytes=0"
 done <<'ROWS'
 none.sh|FILE\tnone\t\t\n
-conforming.sh|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t7\t10\thelper_a,helper_b\t\nCASE\t1\tbeta\tbin/b.sh\t11\t13\t\t\n
+conforming.sh|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t7\t10\thelper_a,helper_b\t\nCASE\tbeta\tbin/b.sh\t11\t13\t\t\n
 malformed.sh|FILE\tmalformed\t3\tgrammar\n
 uncertain.sh|FILE\tuncertain\t5\tdepth\n
 heredoc-pseudo.sh|FILE\tnone\t\t\n
+dup-name.sh|FILE\tmalformed\t5\tduplicate-name\n
 ROWS
+case_end
+
+case_begin "duplicate-name-is-malformed" "bin/lib/case-record-reader.sh"
+# The shared state rule rejects a repeated case name at its second begin line, with no CASE line.
+crr "$SCRIPT_CHECKOUT_ROOT" "$FXD/dup-name.sh"
+assert_eq "rc=$CRR_RC out=$CRR_OUT" "rc=0 out=FILE${T}malformed${T}5${T}duplicate-name"
 case_end
