@@ -8,15 +8,23 @@
 // Contract: argv[1] is the agents root; stdout is {"occurrences":[{file,line,entry,prevToken,
 // expected,status}]}; a malformed SSOT throws (fail-closed, non-zero exit) rather than reporting
 // an empty sweep.
+// --off-list (#2649): the same walk and verdicts for `$AGENTS_MAIN_ROOT/bin/<tool>` calls whose
+// entry is NOT in the SSOT -- the blind spot that left agents/supervisor.md's bare calls unseen.
 
 const fs = require('fs');
 const path = require('path');
 
 const agentsRoot = process.argv[2];
-if (!agentsRoot) {
-    process.stderr.write('usage: exec-position-sweep.js <agentsRoot>\n');
+const modeFlag = process.argv[3];
+if (!agentsRoot || (modeFlag !== undefined && modeFlag !== '--off-list')) {
+    process.stderr.write('usage: exec-position-sweep.js <agentsRoot> [--off-list]\n');
     process.exit(2);
 }
+const offList = modeFlag === '--off-list';
+const OFF_LIST_RE = /^\$AGENTS_MAIN_ROOT\/(bin\/[A-Za-z0-9._/-]+)$/;
+// `${AGENTS_MAIN_ROOT}/...` is the same path as `$AGENTS_MAIN_ROOT/...` to the shell, so both
+// modes match the braced spelling through one canonical form (#2649 review C2).
+const canonRoot = (token) => token.replace(/^\$\{AGENTS_MAIN_ROOT\}\//, '$AGENTS_MAIN_ROOT/');
 
 const allowList = require(path.join(agentsRoot, 'hooks', 'lib', 'allow-command-list.js'));
 
@@ -143,7 +151,16 @@ const main = () => {
 
     // Longest-entry-first so "bin/foo/bar" is not shadowed by a coincidental "bin/foo" prefix match.
     const entriesByLength = [...entries].sort((a, b) => b.length - a.length);
-    const matchEntry = (bare) => entriesByLength.find((e) => bare === `$AGENTS_MAIN_ROOT/${e}`) || null;
+    const listed = new Set(entries);
+    const matchListed = (bare) => entriesByLength.find((e) => bare === `$AGENTS_MAIN_ROOT/${e}`) || null;
+    const matchOffList = (bare) => {
+        const m = OFF_LIST_RE.exec(bare);
+        return m && !listed.has(m[1]) ? m[1] : null;
+    };
+    const matchEntry = offList ? matchOffList : matchListed;
+    // Off-list entries have no SSOT row, so the shebang is read per entry (interpreterOf rejects `..`).
+    const expectedOf = (entry) => (offList
+        ? allowList.interpreterOf(agentsRoot, entry) : expectedInterpreter.get(entry));
 
     const files = listPromptFiles();
     const occurrences = [];
@@ -157,13 +174,13 @@ const main = () => {
             for (const segment of segments) {
                 const tokens = tokenize(segment.trim());
                 for (let i = 0; i < tokens.length; i += 1) {
-                    const entry = matchEntry(stripQuotes(tokens[i]));
+                    const entry = matchEntry(canonRoot(stripQuotes(tokens[i])));
                     if (!entry) continue;
                     let j = i - 1;
                     while (j >= 0 && isEnvAssignment(tokens[j])) j -= 1;
                     const prevToken = j >= 0 ? stripQuotes(tokens[j]) : null;
                     if (prevToken !== null && !LAUNCHERS.has(prevToken)) continue;
-                    const expected = expectedInterpreter.get(entry);
+                    const expected = expectedOf(entry);
                     let status;
                     if (prevToken === null) status = 'no-interpreter';
                     else if (prevToken !== 'bash' && prevToken !== 'node') status = 'unexpected-prefix';

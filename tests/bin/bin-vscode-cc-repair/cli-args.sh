@@ -1,4 +1,6 @@
 # Part of tests/bin/bin-vscode-cc-repair.sh (sourced, not standalone).
+# Tests: bin/vscode-cc-repair
+# Tags: bin, vscode, extension-patch, scope:common, pwsh-not-required, TL2
 # T4 + C6 — argument surface boundaries through the real subprocess. Every rejection
 # path is paired with a guard root that holds an unpatched fixture, so "exit 2" is
 # never accepted on its own: the fixture must still be unpatched afterwards.
@@ -32,6 +34,11 @@ run_c6_help() {
   check_contains "C6a: usage documents --extensions-dir" "--extensions-dir" "$CLI_STDOUT"
   check_contains "C6a: usage documents --dry-run" "--dry-run" "$CLI_STDOUT"
   check "C6a: nothing on stderr" "" "$CLI_STDERR"
+  # #2683 — the opt-in legacy counting method is documented, with its no-guarantee caveat.
+  check_contains "C6a-l01: usage documents --legacy-single-literal" \
+    "--legacy-single-literal" "$CLI_STDOUT"
+  check_contains "C6a-l02: usage carries the no-guarantee note" "guarantee" \
+    "$(printf '%s' "$CLI_STDOUT" | tr '[:upper:]' '[:lower:]')"
 }
 
 # Each row is run as: <valid guard override> <bad-arg...>  -> must exit 2 and leave
@@ -56,6 +63,9 @@ run_c6_argerrors() {
   f="$guard/$DIR_A/extension.js"; before="$(bytes "$f")"
 
   run_c6_case "C6b-unknown-option" --no-such-flag
+  # The new flag is boolean: a value glued onto it is still an argument error.
+  run_c6_case "C6b-l01-legacy-flag-with-value" --legacy-single-literal=yes
+  run_c6_case "C6b-l02-unknown-option-beside-legacy" --legacy-single-literal --no-such-flag
   run_c6_case "C6c-positional" stray-positional
   run_c6_case "C6d-missing-value" --extensions-dir
   name="C6e-override-is-a-file"

@@ -1,25 +1,12 @@
 # Part of tests/bin/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
 # Tests: bin/vscode-cc-repair, bin/vscode-cc-repair/cli.js
 # Tags: bin, vscode, prune, cli, exit-codes, scope:common, pwsh-not-required, TL2
-#
-# F — the command-line surface: flag dependency, argument rejection, report shape,
-# and the exit-code contract.
-#
-# The exit code is the only part of this tool a caller (a shell script, a CI step, the
-# user's own eye) actually reads. Its rule is a split, not a severity ladder:
-#   DECISION REACHED   (none / kept / pruned / would-prune / changed) -> exit 0
-#   OBSERVATION FAILED (unclassified / unreadable / scan-error / failed) -> exit 1
-#   CALLER ERROR       (bad or missing arguments) -> exit 2
-# `changed` sitting on the exit-0 side is the counter-intuitive one and is asserted
-# explicitly below: a race that was correctly detected and refused is a success, not a
-# fault — nothing was lost and a re-run will settle it.
-
+# F — CLI surface: flag dependency, argument rejection, report shape, exit-code contract.
+# Exit split: decision reached (none/kept/pruned/would-prune/changed) -> 0; observation
+# failed (unclassified/unreadable/scan-error/failed) -> 1; caller error -> 2 (F07: `changed`).
 # ---- F1: flag dependency and argument rejection ----------------------------
-
-# F01 — the prune path is strictly opt-in. Without the flag the tool must behave
-# exactly as it did before this feature existed: no prune output at all, and — the
-# assertion that matters — nothing deleted, even from a tree that would obviously
-# qualify.
+# F01 — the prune path is strictly opt-in: without the flag, no prune output and nothing
+# deleted, even from a tree that would obviously qualify.
 run_f_opt_in() {
   local home ext stub
   home="$(new_home)"; ext="$(new_ext_root)"
@@ -184,7 +171,6 @@ run_f_privacy() {
 # Fixture builders for the exit-code table. Each returns non-zero when this host cannot
 # construct the situation (POSIX permission semantics), so the row degrades to a
 # documented SKIP rather than a false PASS.
-#
 # SKIPPED (when deny_read / deny_unlink cannot prove the denial): the X5, X6, X7 and X8
 #          rows — unreadable file, unreadable directory, unlink failure, and the
 #          mixed success+failure run.

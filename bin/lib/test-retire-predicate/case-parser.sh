@@ -247,6 +247,8 @@ trp_enumerate_cases() {
   # every other file stays file-level (TRP_HAS_MARKERS=0) by structure, not luck.
   tlr_load || { _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader; return 0; }
   tlr_match "$file" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 0
+  # Per-case removal is checked by the entry's caseEmbedRules; an entry without them stays file-level.
+  _tlr_get "$TLR_ID" caseEmbedRules.file || return 0
 
   local abs="$file"
   [[ "$abs" != /* ]] && abs="$repo_root/$file" || true

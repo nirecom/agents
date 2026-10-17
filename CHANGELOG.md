@@ -763,3 +763,23 @@ Changes: Narrowing a session's `## Issues` in intent.md now takes effect immedia
 ### FEATURE: PR #2656 (2026-10-15)
 Background: fix(#2591): close the remaining holes in experimental/test-jail
 Changes: experimental/test-jail: a jailed run now stops (exit 94) when the requested isolation pin is unavailable instead of silently running weaker; pass --allow-weaker-pin to accept the strongest available pin. compare-runs.sh ends with an explicit verdict (NEW-RED / INCOMPLETE / NO-NEW-RED) and lists the comparisons it could not trust.
+
+### FEATURE: PR #2675 (2026-10-15)
+Background: feat(#2411): write tests in the same language as the code (Pester, py...
+Changes: Tests can now be written in the same language as the code they cover — Pester, pytest or JavaScript as well as bash. Each language has its own case-marker notation, helper library and new-file name shape, and `/write-tests` picks the language from the code the test enters through.
+
+### FEATURE: PR #2684 (2026-10-16)
+Background: fix(#2683): anchor the vscode-cc-repair patch on sessionListOptions a...
+Changes: vscode-cc-repair now patches only the session-list setting found via the `sessionListOptions` anchor, so extension 2.1.300 is repaired instead of refused; `--legacy-single-literal` restores the old matching rule.;`--prune-stub-sessions` no longer moves stub sessions aside when the extension patch was refused or failed, so sessions stay visible in the VS Code list.
+
+### FEATURE: PR #2674 (2026-10-16)
+Background: fix(#2638): judge commits with the committed tree's checker tables
+Changes: A commit that adds a new plans-artifact name or session-id SSOT exemption and uses it in the same commit is no longer blocked by the pre-commit gates: the gates now read their tables from the commit being judged, and a broken table file stops the commit instead of being ignored.
+
+### FEATURE: PR #2694 (2026-10-17)
+Background: fix(#2649): make the four main-red tests green and close the git -C t...
+Changes: The four tests that failed on main now pass, so test runs no longer stop on an undetermined baseline; a `git -C ~/...` write to the main checkout from a linked worktree is now blocked.
+
+### FEATURE: PR #2689 (2026-10-17)
+Background: feat(#2529): glossary entry criteria, gate, intent glossary and promo...
+Changes: Glossary entries now follow written entry criteria; the glossary is split into user-facing and internal files with a format gate, and each intent.md carries a `## Glossary` table whose terms reach codex reviews and can be promoted into the shared glossary.

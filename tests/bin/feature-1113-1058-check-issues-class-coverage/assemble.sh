@@ -38,12 +38,16 @@ run_with_timeout() {
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-# Minimal valid source fixture: 1 issue, 1 class member
+# Minimal valid source fixture: 1 issue, 1 class member.
+# `## Glossary` (empty) right after `## Issues` is mandatory in intent since #2529;
+# without it the outline branch's check-intent-glossary gate would verify_fail.
 A_SOURCE="$TMPDIR_BASE/a-source.md"
 cat > "$A_SOURCE" << 'EOF'
 ## Issues
 
 - #300: test issue
+
+## Glossary
 
 ## Class members
 
@@ -74,6 +78,8 @@ cat > "$A_SOURCE_2ISSUES" << 'EOF'
 
 - #300: issue one
 - #301: issue two
+
+## Glossary
 
 ## Class members
 
@@ -341,6 +347,8 @@ cat > "$C_SOURCE_NO_CM" << 'EOF'
 
 - #400: issue requiring class members
 
+## Glossary
+
 ## Accepted Tradeoffs
 
 - tradeoff B
@@ -366,6 +374,87 @@ if [[ $EXIT_CODE -eq 0 ]] && [[ -f "$C_OUT_C11" ]] \
     pass "TC-C11: --source-kind intent output has Issues + Accepted Tradeoffs, no Class members (3→2 parity with TC-C2)"
 else
     fail "TC-C11: --source-kind intent output structure wrong (exit $EXIT_CODE, output: $OUT)"
+fi
+
+# ============================================================================
+# TC-G: #2529 intent `## Glossary` gate — the outline branch runs
+# bin/check-intent-glossary on SOURCE right after the coverage gate and
+# verify_fails (exit 4) when the intent lacks the heading. Catches in-flight
+# intents written before the plan-artifact hooks enforced the heading.
+# RED until bin/check-intent-glossary exists and assemble-mandatory.sh calls it.
+# ============================================================================
+
+# Valid coverage (1 issue / 1 member) but no `## Glossary` heading.
+G_SOURCE_NO_GLOSSARY="$TMPDIR_BASE/g-source-no-glossary.md"
+cat > "$G_SOURCE_NO_GLOSSARY" << 'EOF'
+## Issues
+
+- #500: issue without glossary
+
+## Class members
+
+- member-G
+
+## Accepted Tradeoffs
+
+- tradeoff G
+EOF
+
+# TC-G1: intent without `## Glossary` → outline assembly verify_fails (exit 4),
+# and the failure names the Glossary gate (not the coverage gate).
+G_OUT_G1="$TMPDIR_BASE/test-g1-outline.md"
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent \
+    "$G_SOURCE_NO_GLOSSARY" "$C_PLANNER_GOOD" "$G_OUT_G1" 2>&1) || EXIT_CODE=$?
+if [[ $EXIT_CODE -eq 4 ]] && echo "$OUT" | grep -q "Glossary"; then
+    pass "TC-G1: intent without '## Glossary' → outline assembly verify_fail (exit 4, Glossary named)"
+else
+    fail "TC-G1: expected exit 4 naming Glossary, got $EXIT_CODE (output: $OUT)"
+fi
+if [[ ! -f "$G_OUT_G1" ]]; then
+    pass "TC-G1b: failed Glossary gate leaves no outline.md behind"
+else
+    fail "TC-G1b: outline.md was written although the Glossary gate must fail first"
+fi
+
+# TC-G2: same coverage plus `## Glossary` right after `## Issues` → assembly succeeds.
+G_SOURCE_WITH_GLOSSARY="$TMPDIR_BASE/g-source-with-glossary.md"
+cat > "$G_SOURCE_WITH_GLOSSARY" << 'EOF'
+## Issues
+
+- #500: issue with glossary
+
+## Glossary
+
+| Term | Category | Definition |
+|---|---|---|
+| widget | user | A thing the user sees |
+
+## Class members
+
+- member-G
+
+## Accepted Tradeoffs
+
+- tradeoff G
+EOF
+G_OUT_G2="$TMPDIR_BASE/test-g2-outline.md"
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind intent \
+    "$G_SOURCE_WITH_GLOSSARY" "$C_PLANNER_GOOD" "$G_OUT_G2" 2>&1) || EXIT_CODE=$?
+if [[ $EXIT_CODE -eq 0 ]] && [[ -f "$G_OUT_G2" ]]; then
+    pass "TC-G2: intent with '## Glossary' (valid table) → outline assembly succeeds"
+else
+    fail "TC-G2: expected exit 0 with outline written, got $EXIT_CODE (output: $OUT)"
+fi
+
+# TC-G3: the Glossary gate is outline-only — a detail output whose source lacks
+# the heading still assembles (detail's source is outline.md, never intent.md).
+G_OUT_G3="$TMPDIR_BASE/test-g3-detail.md"
+EXIT_CODE=0; OUT=$(run_with_timeout bash "$ASSEMBLE" --source-kind outline \
+    "$G_SOURCE_NO_GLOSSARY" "$A_DETAIL_PLANNER" "$G_OUT_G3" 2>&1) || EXIT_CODE=$?
+if [[ $EXIT_CODE -eq 0 ]]; then
+    pass "TC-G3: detail output → Glossary gate NOT applied (assemble succeeds without '## Glossary')"
+else
+    fail "TC-G3: detail output failed though the Glossary gate must not fire (exit $EXIT_CODE, output: $OUT)"
 fi
 
 TOTAL=$((PASS + FAIL))

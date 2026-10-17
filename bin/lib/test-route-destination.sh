@@ -11,6 +11,8 @@
 _TRD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-dup-group.sh
 source "$_TRD_DIR/test-dup-group.sh" || return 1
+# shellcheck source=test-route-destination/language.sh
+source "$_TRD_DIR/test-route-destination/language.sh" || return 1
 
 TRD_HARD_MAX_DEFAULT=500
 
@@ -333,6 +335,7 @@ trd_decide() {
   TRD_VIABLE=()
   TRD_EXCLUDED=()
   trd_candidates TRD_CANDIDATES "$qkey" "$self"
+  trl_filter_candidates TRD_CANDIDATES "$qkey"
   trd_rank TRD_CANDIDATES
   trd_viable_candidates TRD_VIABLE TRD_CANDIDATES "$hardmax"
   local e lines head extra
@@ -357,6 +360,7 @@ trd_decide() {
   else
     TRD_VERDICT="new"
     TRD_REASON="no-candidate"
+    [[ "$TRL_RUNTIME_GAP" -eq 1 ]] && TRD_REASON="runtime-unavailable"
   fi
   return 0
 }

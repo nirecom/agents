@@ -238,6 +238,11 @@ check_contains "WGE-4b. block reason names the internal-only door" "internal to 
 GATE_OUT=$(cd "$TMPDIR_BASE" && run_gate "$(bash_gate_json "$FAILING_CMD" "$SID")")
 check_contains "WGE-4c. Bash failing call -> approve" '"decision":"approve"' "$GATE_OUT"
 check_not_contains "WGE-4d. failing call does not trip the record door" "internal to bin/run-tests-baseline" "$GATE_OUT"
+# #2517: `accept` completes run_tests from the user's grant, so it shares the internal-only door.
+ACCEPT_CMD='node "$AGENTS_MAIN_ROOT/bin/workflow/run-tests-baseline-evidence" accept --session s1'
+GATE_OUT=$(cd "$TMPDIR_BASE" && run_gate "$(bash_gate_json "$ACCEPT_CMD" "$SID")")
+check_contains "WGE-4e. Bash accept call -> block" '"decision":"block"' "$GATE_OUT"
+check_contains "WGE-4f. accept block reason names the internal-only door" "internal to bin/run-tests-baseline" "$GATE_OUT"
 
 echo ""
 echo "=== Results ==="

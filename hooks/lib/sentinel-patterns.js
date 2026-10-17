@@ -126,6 +126,10 @@ const REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_TE
 // because selected tests could not run. Same reason charset as WARNINGS_ACCEPTED.
 const RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: ([^>()\x60;|&]+)>>"$/;
 const RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED([: ].*)?>>"\s*$/;
+// run_tests baseline accept grant (#2517): the user accepts failures the baseline could not
+// prove pre-existing; bin/run-tests-baseline consumes the grant. Same reason charset.
+const RUN_TESTS_BASELINE_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: ([^>()\x60;|&]+)>>"$/;
+const RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED([: ].*)?>>"\s*$/;
 
 // ISSUE_CLOSE_VERIFIED ON/OFF: session-scoped bypass for gh issue close only.
 // ON (opens bypass window): <<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>
@@ -199,6 +203,8 @@ function isSentinel(cmd) {
     REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
     RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ.test(cmd) ||
     RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
+    RUN_TESTS_BASELINE_ACCEPTED_RE_DQ.test(cmd) ||
+    RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
@@ -241,6 +247,7 @@ function isStrictSentinel(cmd) {
     REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd) ||
     REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ.test(cmd) ||
     RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ.test(cmd) ||
+    RUN_TESTS_BASELINE_ACCEPTED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd)
   );
@@ -301,6 +308,8 @@ module.exports = {
   REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE,
   RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ,
   RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKSLIKE_RE,
+  RUN_TESTS_BASELINE_ACCEPTED_RE_DQ,
+  RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_RE_DQ,
   ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_END_RE_DQ,

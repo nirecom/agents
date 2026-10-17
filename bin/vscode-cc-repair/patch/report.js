@@ -13,6 +13,8 @@ function countPrefix(counts) {
     'unsupported=' + counts.nUnsupported,
     'unknown=' + counts.nUnknown,
     'key=' + counts.nKey,
+    'anchor=' + counts.nAnchor,
+    'anchor-value=' + counts.anchorValue,
   ].join(' ');
 }
 

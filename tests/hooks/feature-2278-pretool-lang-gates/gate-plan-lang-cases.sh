@@ -27,14 +27,20 @@ CFG_PLAN_NONE="$(make_env "" "" "")"
 CFG_PLAN_ANY="$(make_env any "" "")"
 CFG_PLAN_FR="$(make_env french "" "")"
 
+# #2529: a full intent Write must carry `## Glossary` right after `## Issues`, or the
+# gate blocks it on structure. Every full-content intent Write below is prefixed with
+# this skeleton (empty Glossary; prose lands under `## Goal`) so each case keeps
+# exercising only the language policy. settings-cases.sh reuses it.
+INTENT_SKEL=$'## Issues\n\n## Glossary\n\n## Goal\n\n'
+
 # PLG-T1/T2: Write English prose to a plan artifact (TIMESTAMP + UUID basenames) → block
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$EN_PROSE")" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$EN_PROSE")" "$CFG_PLAN_JA"
 assert_block_prefix "PLG-T1: Write English to ${FAKE_TS}-intent.md under PLAN_LANG=japanese → block with [gate-plan-lang] prefix" "$PLG_PREFIX_JA"
 run_gate "$PLAN_GATE" "$(mk_payload Write "$OUTLINE_UUID" content "$EN_PROSE")" "$CFG_PLAN_JA"
 assert_block_prefix "PLG-T2: Write English to <uuid>-outline.md under PLAN_LANG=japanese → block" "$PLG_PREFIX_JA"
 
 # PLG-T3: Write Japanese → approve
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$JA_PROSE")" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$JA_PROSE")" "$CFG_PLAN_JA"
 assert_approve "PLG-T3: Write Japanese to plan artifact under PLAN_LANG=japanese → approve"
 
 # PLG-T4: Edit new_string English → block; old_string ignored, disk not read (file absent)
@@ -58,15 +64,15 @@ run_gate "$PLAN_GATE" "$(mk_payload editFiles "$INTENT_TS" content "$EN_PROSE")"
 assert_block_prefix "PLG-T6: editFiles content English → block" "$PLG_PREFIX_JA"
 
 # PLG-T7: PLAN_LANG=english, Write Japanese → block (both directions of the classifier)
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$JA_PROSE")" "$CFG_PLAN_EN"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$JA_PROSE")" "$CFG_PLAN_EN"
 assert_block_prefix "PLG-T7: Write Japanese under PLAN_LANG=english → block" "$PLG_PREFIX_EN"
 
 # PLG-T8: English only in a heading line, Japanese body → approve
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content $'# This Heading Is Written In English\n'"$JA_PROSE")" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content $'# This Heading Is Written In English\n'"$INTENT_SKEL$JA_PROSE")" "$CFG_PLAN_JA"
 assert_approve "PLG-T8: English heading + Japanese body → approve (heading exclusion inherited)"
 
 # PLG-T9: English inside a fence closed within the same fragment → approve
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$JA_PROSE"$'\n```\nEnglish words inside a closed code fence here\n```\n'"$JA_PROSE")" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$JA_PROSE"$'\n```\nEnglish words inside a closed code fence here\n```\n'"$JA_PROSE")" "$CFG_PLAN_JA"
 assert_approve "PLG-T9: English inside a closed code fence → approve"
 
 # PLG-T10: non-artifact basename in plans dir → approve
@@ -78,13 +84,13 @@ run_gate "$PLAN_GATE" "$(mk_payload Write "$OUTSIDE_INTENT" content "$EN_PROSE")
 assert_approve "PLG-T11: intent.md outside WORKFLOW_PLANS_DIR → approve"
 
 # PLG-T12: PLAN_LANG unset / any → approve (noop tier), no additionalContext
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$EN_PROSE")" "$CFG_PLAN_NONE"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$EN_PROSE")" "$CFG_PLAN_NONE"
 assert_approve "PLG-T12a: PLAN_LANG unset → approve without additionalContext"
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$EN_PROSE")" "$CFG_PLAN_ANY"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$EN_PROSE")" "$CFG_PLAN_ANY"
 assert_approve "PLG-T12b: PLAN_LANG=any → approve without additionalContext"
 
 # PLG-T13: hint tier (french) → silent approve
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$EN_PROSE")" "$CFG_PLAN_FR"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "$INTENT_SKEL$EN_PROSE")" "$CFG_PLAN_FR"
 assert_approve "PLG-T13: PLAN_LANG=french (hint tier) → silent approve, no additionalContext"
 
 # PLG-T14: non-JSON stdin → approve, rc 0 (fail-open)
@@ -138,7 +144,7 @@ assert_approve "PLG-T22: <plans>/sub/../../<uuid>-intent.md English → approve 
 
 # PLG-T23 (C7 inverse): `..` that resolves back INSIDE the plans dir is still gated
 TRAVERSAL_IN="$PLANS_DIR/sub/../$FAKE_UUID-intent.md"
-run_gate "$PLAN_GATE" "$(mk_payload Write "$TRAVERSAL_IN" content "$EN_PROSE")" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$TRAVERSAL_IN" content "$INTENT_SKEL$EN_PROSE")" "$CFG_PLAN_JA"
 assert_block_prefix "PLG-T23: <plans>/sub/../<uuid>-intent.md English → block (resolves inside plans dir)" "$PLG_PREFIX_JA"
 
 # PLG-T24 (C3): strict-English allow path — PLAN_LANG=english, English prose → approve
@@ -175,7 +181,7 @@ rm -f "$DETAIL_UUID"
 
 # PLG-T27 (C3): violating Write whose payload also carries a synthetic secret on a
 # compliant line → block, and the secret must not surface in stdout/stderr/reason.
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_UUID" content "$JA_PROSE $SYNTHETIC_SECRET"$'\n'"$EN_PROSE")" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_UUID" content "$INTENT_SKEL$JA_PROSE $SYNTHETIC_SECRET"$'\n'"$EN_PROSE")" "$CFG_PLAN_JA"
 assert_block_prefix "PLG-T27a: Write with Japanese+secret line and English line → block" "$PLG_PREFIX_JA"
 assert_not_leaked "PLG-T27b: synthetic secret from the compliant line is not echoed in stdout/stderr/reason" "$SYNTHETIC_SECRET"
 
@@ -234,10 +240,12 @@ fi
 rm -f "$OUTLINE_UUID"
 
 # PLG-T32 (C8): degenerate compliant fragments — empty, single character, ~200KB Japanese → approve
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "")" "$CFG_PLAN_JA"
+# Targets detail.md: a full intent Write is also structure-checked (#2529), and a
+# degenerate payload cannot carry the required `## Glossary` heading.
+run_gate "$PLAN_GATE" "$(mk_payload Write "$DETAIL_TS" content "")" "$CFG_PLAN_JA"
 assert_approve "PLG-T32a: Write with empty content → approve"
-run_gate "$PLAN_GATE" "$(mk_payload Write "$INTENT_TS" content "あ")" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload Write "$DETAIL_TS" content "あ")" "$CFG_PLAN_JA"
 assert_approve "PLG-T32b: Write with single character 'あ' → approve"
 # JA_PROSE + newline is ~60 bytes; 3500 repeats ≈ 200KB, built inside node (no argv transit).
-run_gate "$PLAN_GATE" "$(mk_payload_big Write "$INTENT_TS" "$JA_PROSE"$'\n' 3500)" "$CFG_PLAN_JA"
+run_gate "$PLAN_GATE" "$(mk_payload_big Write "$DETAIL_TS" "$JA_PROSE"$'\n' 3500)" "$CFG_PLAN_JA"
 assert_approve "PLG-T32c: Write with ~200KB Japanese-only content → approve (rc 0, no error)"

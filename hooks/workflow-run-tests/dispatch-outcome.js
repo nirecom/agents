@@ -21,6 +21,7 @@ const { parseContractLine, formatContract, runtimeLabels } = require("../lib/run
 const { workerVerdictVetoes } = require("./outcome");
 const { validateFailingNames } = require("./failing-list");
 const { recordRun, recordUnsettled } = require("./record-run");
+const { boundHits } = require("./hit-summary");
 
 const WORKER = "test-runner";
 
@@ -117,6 +118,7 @@ function buildIngest(stem, trusted) {
       workerStatus: o.status,
     },
     failingTests: trustedFailingList(o, contract),
+    hitSummary: boundHits(o.worker_result.hits || []),
     unrunnableRuntimes: summaryRuntimes(o.worker_result.summary),
   };
 }
@@ -180,6 +182,7 @@ function recordIngest(sessionId, ingest) {
       triggerCommand: `worker-dispatch outcome ${ingest.stem}`,
       outcomeInput: ingest.outcomeInput,
       failingTests: ingest.failingTests,
+      hitSummary: ingest.hitSummary,
       unrunnableRuntimes: ingest.unrunnableRuntimes,
       source: { stem: ingest.stem, payload_sha256: ingest.payloadSha, outcome_sha256: ingest.outcomeSha },
     });

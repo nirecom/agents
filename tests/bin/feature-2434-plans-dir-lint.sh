@@ -3,9 +3,9 @@
 # Tests: bin/check-plans-artifacts, hooks/lib/plans-artifact-registry.js, .github/workflows/migration-blocks-audit.yml, hooks/lib/precommit-agents-repo-gates.sh
 # Tags: scope:issue-specific, TL2, plans-dir-lint, feature-2434, plans-dir, control-dir, registry, classification, table-driven, pwsh-not-required, retention, sweep-plans
 # Entry: setup + shared helpers; cases live in sourced part files under
-# tests/bin/feature-2434-plans-dir-lint/ (lint, registry, consumers, retention).
-# TL3 gap: real registry cross-module wiring; SOURCE_LINT_EXCEPTIONS has no injection
-# seam (no env var / CLI flag in the plan), so "unused exception -> exit 1" is untested.
+# tests/bin/feature-2434-plans-dir-lint/ (lint, judged-table, registry, consumers, retention, commit-gate).
+# TL3 gap: real registry cross-module wiring. TL gap: "a symlinked data file -> exit 2" is untested
+# (symlink fixtures are unreliable on Windows); judged-table.sh's directory row guards that branch.
 # Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
 
 set -uo pipefail
@@ -37,6 +37,73 @@ run_dir() {
   if [ ! -f "$LINT" ]; then L_OUT="implementation absent"; L_RC=127; return; fi
   L_OUT="$(run_with_timeout 30 node "$(np "$LINT")" --dir "$(np "$1")" 2>&1)" || L_RC=$?
 }
+
+# run_source_gate <tree> — the pre-commit form: cwd = the judged tree, no root argument.
+# stdout lands in L_OUT, stderr (backslashes folded to /) in L_ERR.
+run_source_gate() {
+  L_RC=0; L_ERR=""
+  if [ ! -f "$LINT" ]; then L_OUT="implementation absent"; L_RC=127; return; fi
+  L_OUT="$(cd "$1" && run_with_timeout 30 node "$(np "$LINT")" --source 2>"$T/gate-stderr.txt")" || L_RC=$?
+  L_ERR="$(tr '\\' '/' < "$T/gate-stderr.txt")"
+}
+
+# The judged tree's own table (#2638): the data file a --source run reads from <root>.
+TABLE_REL="hooks/lib/plans-artifact-registry.json"
+# The word the "no table in the judged tree" notice carries; a broken table must not print it.
+FALLBACK_WORD="fallback"
+
+# make_table_tree <dir> — make_tree plus a copy of the real data file. Returns 1 and says
+# so while that file does not exist, so a dependent case fails instead of judging nothing.
+make_table_tree() {
+  make_tree "$1"
+  mkdir -p "$1/hooks/lib"
+  if ! cp "$SCRIPT_CHECKOUT_ROOT/$TABLE_REL" "$1/$TABLE_REL" 2>/dev/null; then
+    echo "make_table_tree: data file missing in the checkout: $TABLE_REL" >&2
+    return 1
+  fi
+}
+
+# table_tree <label> <dir> — make_table_tree, recording a FAIL under <label> when it cannot.
+table_tree() {
+  make_table_tree "$2" && return 0
+  fail "$1" "fixture: the checkout has no $TABLE_REL to copy"
+  return 1
+}
+
+# edit_table <tree> <op> [args...] — one edit of <tree>'s table; non-zero when it did not apply.
+edit_table() { node "$(np "$T/edit-table.js")" "$(np "$1/$TABLE_REL")" "${@:2}"; }
+
+cat > "$T/edit-table.js" <<'EDITTABLE'
+// edit-table.js <file> <op> [args...] — read the JSON table, apply one edit, write it back.
+"use strict";
+const fs = require("fs");
+const [file, op, ...a] = process.argv.slice(2);
+const table = JSON.parse(fs.readFileSync(file, "utf8"));
+const entryOf = (kind) => {
+  const e = [...(table.controlKinds || []), ...(table.artifactKinds || [])].find((x) => x.kind === kind);
+  if (!e) throw new Error(`no such kind in the table: ${kind}`);
+  return e;
+};
+const ops = {
+  "add-kind": ([list, kind, source, retention]) => table[list].push({ kind, source, retention }),
+  "remove-kind": ([kind]) => {
+    entryOf(kind);
+    for (const list of ["controlKinds", "artifactKinds"]) table[list] = table[list].filter((x) => x.kind !== kind);
+  },
+  "set-retention": ([kind, value]) => { entryOf(kind).retention = value; },
+  "set-source": ([kind, value]) => { entryOf(kind).source = value; },
+  "drop-source": ([kind]) => { delete entryOf(kind).source; },
+  "delete-key": ([key]) => {
+    if (!(key in table)) throw new Error(`no such key in the table: ${key}`);
+    delete table[key];
+  },
+  "add-format-token": ([token]) => table.formatTokens.push(token),
+  "add-exception": ([f, pattern, reason]) => table.sourceLintExceptions.push({ file: f, pattern, reason: reason || "" }),
+};
+if (!ops[op]) throw new Error(`unknown op: ${op}`);
+ops[op](a);
+fs.writeFileSync(file, `${JSON.stringify(table, null, 2)}\n`);
+EDITTABLE
 
 # Write helper JS once before cases to avoid multi-line strings inside case blocks
 # (multi-line "..." with if/{ would confuse the case-marker depth counter)
@@ -172,12 +239,16 @@ SID_TEST="20260509-bundle-a"
 # ── cases (part files; each uses the helpers above at source time) ───────────
 # shellcheck source=tests/bin/feature-2434-plans-dir-lint/lint.sh
 . "$PART_DIR/lint.sh"
+# shellcheck source=tests/bin/feature-2434-plans-dir-lint/judged-table.sh
+. "$PART_DIR/judged-table.sh"
 # shellcheck source=tests/bin/feature-2434-plans-dir-lint/registry.sh
 . "$PART_DIR/registry.sh"
 # shellcheck source=tests/bin/feature-2434-plans-dir-lint/consumers.sh
 . "$PART_DIR/consumers.sh"
 # shellcheck source=tests/bin/feature-2434-plans-dir-lint/retention.sh
 . "$PART_DIR/retention.sh"
+# shellcheck source=tests/bin/feature-2434-plans-dir-lint/commit-gate.sh
+. "$PART_DIR/commit-gate.sh"
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

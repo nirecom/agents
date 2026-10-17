@@ -62,9 +62,9 @@ Apply only when the per-stage wrapper script (MDP-5) returns a non-zero non-one 
 
 **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MDP-5 (no user confirmation). This is the budget-available path — `bin/review-loop-verdict` already verified budget > 0. `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
 
-**exit 2 (ESCALATE):** Run `"$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/detail-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Stop the loop. This is the risk-signal-present ceiling path — a blocking concern requires human attention.
+**exit 2 (ESCALATE):** Run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/detail-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Stop the loop. This is the risk-signal-present ceiling path — a blocking concern requires human attention.
 
-**exit 6 (HIGH_UNRESOLVED):** run `review-loop-summarize-concerns --budget-remaining 0 --ledger <CONTROL_DIR>/detail-plan-concern-ledger.txt --raw <RAW_FILE> --label detail-plan`; confirm artifact via `concern-ledger check-finalized`; stop loop, do not proceed to MDP-7.
+**exit 6 (HIGH_UNRESOLVED):** run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/detail-plan-concern-ledger.txt --raw <RAW_FILE> --label detail-plan`; confirm artifact via `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan`; stop loop, do not proceed to MDP-7.
 
 `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/detail-plan-last-round.txt`. Exit 8: AskUserQuestion per exit-codes.md "Escalation by format".
 

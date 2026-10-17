@@ -11,6 +11,7 @@ FX_MAIN=""
 FX_ORPHAN=""
 FX_DROP=""
 FX_DOC=""
+FX_OFF=""
 FX_JSON=""
 
 have_sweep() { [ -f "$SWEEP_JS" ]; }
@@ -119,6 +120,47 @@ fx_doc_assets() { # <fixture-root>
         'Run: `$AGENTS_MAIN_ROOT/bin/fx-bash-tool`' \
         '' 'Sentinel: `bash "$AGENTS_MAIN_ROOT/bin/fx-bash-tool"`.' \
         > "$1/rules/fx-doc-run-instruction.md"
+    # Braced root spelling of an SSOT entry (#2649 review C2): bare, right and wrong interpreter.
+    printf '%s\n' '# fx braced root' '' \
+        'Run `"${AGENTS_MAIN_ROOT}/bin/fx-bash-tool"` bare.' \
+        'Run `bash "${AGENTS_MAIN_ROOT}/bin/fx-bash-tool"`.' \
+        'Run `node "${AGENTS_MAIN_ROOT}/bin/fx-bash-tool"`.' \
+        > "$1/rules/fx-braced.md"
+}
+
+# THE OFF-LIST TREE (#2649, T61): bin/ tools absent from the SSOT, in their own tree so FX_MAIN's
+# roster stays put. One file per verdict shape; fx-off-onlist.md is the default-mode blind-spot control.
+fx_off_assets() { # <fixture-root>
+    printf '%s\n' '#!/usr/bin/env bash' 'echo fx-off-bash' > "$1/bin/fx-off-bash"
+    printf '%s\n' '#!/usr/bin/env node' 'console.log("fx-off-node");' > "$1/bin/fx-off-node"
+    chmod +x "$1/bin/fx-off-bash" "$1/bin/fx-off-node"
+    printf '%s\n' '# fx off-list bare' '' \
+        'Run `"$AGENTS_MAIN_ROOT/bin/fx-off-bash" --flag` and read what it prints.' \
+        'Then run `$AGENTS_MAIN_ROOT/bin/fx-off-node --session-id x`.' \
+        > "$1/rules/fx-off-bare.md"
+    printf '%s\n' '# fx off-list ok' '' \
+        'Run `bash "$AGENTS_MAIN_ROOT/bin/fx-off-bash" --flag`.' \
+        'Run `node "$AGENTS_MAIN_ROOT/bin/fx-off-node" --session-id x`.' \
+        > "$1/rules/fx-off-ok.md"
+    printf '%s\n' '# fx off-list wrong and missing' '' \
+        'Run `node "$AGENTS_MAIN_ROOT/bin/fx-off-bash"`.' \
+        'Run `bash "$AGENTS_MAIN_ROOT/bin/fx-off-missing"`.' \
+        > "$1/rules/fx-off-wrong.md"
+    printf '%s\n' '# fx off-list exclusions' '' \
+        'The tool lives at $AGENTS_MAIN_ROOT/bin/fx-off-bash, prose only.' \
+        'Read it with `cat "$AGENTS_MAIN_ROOT/bin/fx-off-bash"`.' \
+        'The rule is `Bash(bash "$AGENTS_MAIN_ROOT/bin/fx-off-bash")`; the citation is `bin/fx-off-node`.' \
+        'Placeholder: `$AGENTS_MAIN_ROOT/bin/<tool>`.' \
+        '' 'Sentinel: `bash "$AGENTS_MAIN_ROOT/bin/fx-off-bash"`.' \
+        > "$1/rules/fx-off-exclusion.md"
+    printf '%s\n' '# fx off-list braced root' '' \
+        'Run `"${AGENTS_MAIN_ROOT}/bin/fx-off-bash" --flag` bare.' \
+        'Run `bash "${AGENTS_MAIN_ROOT}/bin/fx-off-bash" --flag`.' \
+        'Run `node "${AGENTS_MAIN_ROOT}/bin/fx-off-bash"`.' \
+        > "$1/rules/fx-off-braced.md"
+    printf '%s\n' '# fx on-list bare' '' \
+        'Run `"$AGENTS_MAIN_ROOT/bin/fx-bash-tool"` bare.' \
+        > "$1/rules/fx-off-onlist.md"
 }
 
 # One file per scan root the sweep claims to walk, so a root dropped from listPromptFiles turns
@@ -151,12 +193,14 @@ fx_manifest() { # <dir> -> per-file checksum manifest
       done )
 }
 
-fx_run() { # <tag> <fixture-root|NOARG>
+fx_run() { # <tag> <fixture-root|NOARG> [mode-flag]
     local rc=0
+    local -a flag=()
+    [ -n "${3:-}" ] && flag=("$3")
     if [ "$2" = NOARG ]; then
         run_with_timeout 60 node "$SWEEP_JS" > "$FX_JSON/$1.json" 2> "$FX_JSON/$1.err" || rc=$?
     else
-        run_with_timeout 60 node "$SWEEP_JS" "$(node_path "$2")" \
+        run_with_timeout 60 node "$SWEEP_JS" "$(node_path "$2")" ${flag[@]+"${flag[@]}"} \
             > "$FX_JSON/$1.json" 2> "$FX_JSON/$1.err" || rc=$?
     fi
     printf '%s' "$rc" > "$FX_JSON/$1.rc"
@@ -174,10 +218,11 @@ fx_failclosed() { # <tag> -> fail-closed | diagnosis
     printf 'fail-closed'
 }
 
-fx_usage() { # -> "<rc>/usage" | "<rc>/NO-USAGE"
+fx_usage() { # [tag] -> "<rc>/usage" | "<rc>/NO-USAGE"
     have_sweep || { missing_sweep; return; }
-    if grep -q 'usage:' "$FX_JSON/noargv.err" 2>/dev/null; then printf '%s/usage' "$(fx_rc noargv)"
-    else printf '%s/NO-USAGE' "$(fx_rc noargv)"; fi
+    local tag="${1:-noargv}"
+    if grep -q 'usage:' "$FX_JSON/$tag.err" 2>/dev/null; then printf '%s/usage' "$(fx_rc "$tag")"
+    else printf '%s/NO-USAGE' "$(fx_rc "$tag")"; fi
 }
 
 # The reducer: one node process, several modes, so every row below reads the SAME sweep output
@@ -245,6 +290,7 @@ fx_setup() {
     FX_ORPHAN="$FX_ROOT/orphan"
     FX_DROP="$FX_ROOT/drop"
     FX_DOC="$FX_ROOT/doc"
+    FX_OFF="$FX_ROOT/off"
     FX_JSON="$FX_ROOT/json"
     mkdir -p "$FX_JSON"
 
@@ -267,6 +313,10 @@ fx_setup() {
     fx_ssot "$FX_DOC" 'bin/fx-bash-tool'
     fx_doc_assets "$FX_DOC"
 
+    fx_scaffold "$FX_OFF" real
+    fx_ssot "$FX_OFF" 'bin/fx-bash-tool'
+    fx_off_assets "$FX_OFF"
+
     # SSOT-DRIVEN, not hardcoded: identical prompt text, one entry removed from the SSOT.
     cp -r "$FX_MAIN" "$FX_DROP"
     fx_ssot "$FX_DROP" 'bin/fx-node-tool.js'
@@ -280,6 +330,10 @@ fx_setup() {
     fx_run doc "$FX_DOC"
     fx_run real "$SCRIPT_CHECKOUT_ROOT"
     fx_run noargv NOARG
+    fx_run off "$FX_OFF" --off-list
+    fx_run off-default "$FX_OFF"
+    fx_run real-off "$SCRIPT_CHECKOUT_ROOT" --off-list
+    fx_run bad-mode "$FX_OFF" --bogus-mode
 
     fx_failclosed_setup
 }

@@ -29,7 +29,7 @@
       "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
       "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
       "tableDrivenDetector": null,
-      "helperLibrary": null,
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "tests/lib/harness\\.sh" },
       "diagnostics": { "nameLabel": ".slt" },
       "note": "fixture-only language whose header comment prefix is // (a # line is a decoy for it); bash runs the file, so a // line is just a failing command"
     }

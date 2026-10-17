@@ -28,7 +28,7 @@ Each mode keeps its own cursor (`alert.transcript_cursor`, `audit.transcript_cur
 - The cursor advances only when the engine reports `STATUS: SUCCESS`. A failed or skipped run leaves it in place, so the next run re-reviews the same range — duplication is preferred over a blind spot. The engine prints `CURSOR: advanced|not-advanced` so a failed write is visible.
 - Only complete (newline-terminated) lines count; a line still being written is left for the next run.
 - The cursor resets to the start of the transcript when the path changed, the file is shorter than the cursor, or the uuid at the cursor no longer matches. A reset over-reads rather than skipping actions.
-- Paths are normalized (`toWindowsPath`, then `path.resolve`, case-insensitive on win32) before comparison. Without this, an MSYS-style drive path versus its `C:\...` form would reset the cursor every run, widen the range to the whole session, and push the input back over the size limit.
+- Paths are normalized (`toWindowsPath`, then `path.resolve`, case-insensitive on win32) before comparison. Without this, an MSYS-style drive path (`/<drive>/...`) versus `C:\...` would reset the cursor every run, widen the range to the whole session, and push the input back over the size limit.
 
 Alert and audit keep separate cursors because they review at different cadences; sharing one would let an alert run hide actions from the next audit.
 
@@ -45,6 +45,8 @@ The session ids that name these files (`--sid`, `--wsid`) must be bare tokens (`
 A very long session can exceed the limit even after assembly. The engine then reports an explicit `STATUS: FAILED` with `reason: input too large: ...` rather than truncating: a truncated input would look like a complete review. The cursor does not advance, and the agent's existing manual fallback (the agent reads the transcript itself) runs instead. Repeated audit failures stop through the existing audit retry freeze; no new stop mechanism is added.
 
 ## The input guard
+
+The **codex input guard** is the pre-launch size check every codex launch path runs on the exact file it hands to codex, against `CODEX_INPUT_CHAR_LIMIT`; an over-limit input fails the launch explicitly instead of being truncated.
 
 The size limit is not specific to the supervisor: any codex launch that receives an over-limit input fails inside codex with an error that does not name the cause. So the check lives in one shared library, `bin/lib/cli-exec-guard.sh`, which owns the limit constant, and every codex launch path calls it on the final file it hands to codex — `codex_core_run` (code review and supervisor findings), `bin/review-plan-codex`, `bin/request-off-clearance` and `bin/github-issues/review-survey-verdict-codex.sh`.
 

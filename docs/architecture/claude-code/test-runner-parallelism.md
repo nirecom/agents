@@ -365,12 +365,12 @@ and append-only — never rewritten in place — so concurrent `run-all` invocat
 (nested suites, parallel sessions) cannot corrupt each other's history.
 
 **Retention.** Each writer start runs one consolidation round. Its inputs are closed
-segments (renamed `.closed.log` by `cleanup_all` on exit), abandoned ones (no mark and
-untouched for 6 hours, longer than any observed run), and the existing base segments.
+segments (renamed `.closed.log` by `cleanup_all` on exit), **abandoned segments** (no mark
+and untouched for 6 hours, `RUN_ALL_DUR_ABANDON_MIN`, longer than any observed run), and the existing base segments.
 They fold into one base segment per OS attribute, keeping the record with the newest
 provenance per (repo, key), so a long run that closes late cannot overwrite newer
 results. A record not measured in 30 days (`RUN_ALL_DUR_RETENTION_DAYS`, counted from
-its provenance stamp, carried on `#run` lines; schema stays 2) expires. A `mkdir` lock
+its provenance stamp, carried on `#run` lines; schema stays 2) is an **expired record**: consolidation does not write it. A `mkdir` lock
 `.ledger.lock` (stale after 10 minutes; a round takes seconds) admits one round, and a
 loser does nothing. A round publishes new bases before deleting any input and deletes
 only inputs still byte-identical to what it read, so an interrupted round converges on

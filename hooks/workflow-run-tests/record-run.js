@@ -8,19 +8,28 @@ const { markStep, readState } = require("../workflow-state");
 const { isContractTrusted, resolveRunOutcome } = require("./outcome");
 const { demotionReason, demotionMessage } = require("./demotion");
 const { stampTestFailureRisk } = require("./test-failure-risk");
+const { boundHits } = require("./hit-summary");
 
-// Evidence that belongs to ONE observed run: baseline (#2431) and an UNRUNNABLE accept
-// (#2501 D5-7). Any new run clears it, so a later state never inherits an older verdict.
+// Evidence that belongs to ONE observed run: baseline (#2431), an UNRUNNABLE accept
+// (#2501 D5-7) and a baseline accept grant (#2517). Any new run clears it, so a later state
+// never inherits an older verdict.
 const RUN_TOMBSTONES = {
   baseline_classification: null,
   completion_basis: null,
   unrunnable_accept_reason: null,
+  baseline_accept: null,
 };
 
 // outcome_source names the outcome file a record came from (null on stdout);
 // dispatch_unsettled names a dispatch whose outcome has not arrived yet.
 function sourceFields(source, unsettledStem) {
   return { outcome_source: source || null, dispatch_unsettled: unsettledStem || null };
+}
+
+// hit_count is the contract's HITS (null when the contract is unreadable); hit_summary the bounded
+// lines (#2669). The baseline CLI and the accept handler read both.
+function hitFields(r) {
+  return { hit_count: r.hitCount, hit_summary: r.hitCount === null ? null : r.hitSummary };
 }
 
 function recordFailedExit(r) {
@@ -32,6 +41,7 @@ function recordFailedExit(r) {
     failing_tests: r.failingTests,
     unrunnable_count: r.unrunnableCount,
     unrunnable_runtimes: null,
+    ...hitFields(r),
     ...RUN_TOMBSTONES,
     ...sourceFields(r.source, r.unsettledStem),
   });
@@ -52,6 +62,7 @@ function recordDemotion(r) {
     failing_tests: r.failingTests,
     unrunnable_count: r.unrunnableCount,
     unrunnable_runtimes: r.reason === "contract-unrunnable" ? r.unrunnableRuntimes : null,
+    ...hitFields(r),
     ...RUN_TOMBSTONES,
     ...sourceFields(r.source, r.unsettledStem),
   });
@@ -73,6 +84,8 @@ function recordPass(r) {
     failing_tests: null,
     unrunnable_count: null,
     unrunnable_runtimes: null,
+    hit_count: null,
+    hit_summary: null,
     ...RUN_TOMBSTONES,
     ...sourceFields(r.source, null),
   }, { origin: "workflow-run-tests-auto-detect" });
@@ -91,6 +104,8 @@ function recordUnsettled({ sessionId, stem, triggerCommand }) {
     failingTests: null,
     unrunnableCount: null,
     unrunnableRuntimes: null,
+    hitCount: null,
+    hitSummary: null,
     source: null,
     unsettledStem: stem,
     reason: "dispatch-unsettled",
@@ -104,10 +119,16 @@ function unrunnableCountOf(input, contract) {
   return readable && contract.shape === "current" ? contract.unrunnable : null;
 }
 
-// Green needs a trusted current-shape contract with no failure and no unrunnable test.
+function hitCountOf(input, contract) {
+  const readable = input.ambiguous !== true && input.attributed === true && contract !== null;
+  if (!readable) return null;
+  return Number.isInteger(contract.hits) ? contract.hits : 0;
+}
+
+// Green needs a trusted current-shape contract with no failure, no unrunnable test and no hit.
 function isGreen(input, contract) {
   return isContractTrusted(input) && contract.shape === "current"
-    && contract.fail === 0 && contract.unrunnable === 0;
+    && contract.fail === 0 && contract.unrunnable === 0 && !(contract.hits > 0);
 }
 
 // -> the systemMessage to surface, or null. `unsettledStem` blocks completion:
@@ -127,6 +148,8 @@ function recordRun(r) {
     failingTests: settled && r.failingTests !== undefined ? r.failingTests : null,
     unrunnableCount: settled ? unrunnableCountOf(input, contract) : null,
     unrunnableRuntimes: r.unrunnableRuntimes === undefined ? null : r.unrunnableRuntimes,
+    hitCount: settled ? hitCountOf(input, contract) : null,
+    hitSummary: boundHits(r.hitSummary),
     source: r.source || null,
     unsettledStem,
     stampRisk: r.stampRisk === true,

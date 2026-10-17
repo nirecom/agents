@@ -28,8 +28,9 @@
       "header": { "commentPrefix": "#" },
       "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
       "caseMarkerReader": { "file": "bin/lib/test-language-parts/fake-part.sh", "function": "fake_read_markers" },
+      "caseEmbedRules": { "file": "bin/lib/test-language-parts/bash-case-embed.sh", "function": "bash_case_embed" },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/fake-part.sh", "function": "fake_is_table_driven" },
-      "helperLibrary": null,
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "tests/lib/harness\\.sh" },
       "diagnostics": { "nameLabel": ".fakepart" },
       "note": "fixture-only language whose parts are the stubs in fixtures/fake-part.sh"
     }

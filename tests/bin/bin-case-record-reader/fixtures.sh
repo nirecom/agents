@@ -51,9 +51,13 @@ case_end
 fi
 FX
 
-# unsupported — supported languages with no case reader (js since #2501, Pester).
+# js and Pester files without a case marker: both languages have a reader since #2411.
 printf '%s\n' '// Tests: bin/a.sh' 'test("x", () => {});' >"$FXD/x.test.js"
 printf '%s\n' '# Tests: bin/a.sh' 'Describe "x" { }' >"$FXD/x.Tests.ps1"
+# unsupported — a name only the recognized-only entry matches, and a supported
+# reader-less language of the java-terraform fixture table.
+printf '%s\n' 'package x' 'func TestX(t *testing.T) {}' >"$FXD/x_test.go"
+printf '%s\n' '// Tests: bin/a.sh' 'class XTest {}' >"$FXD/XTest.java"
 
 # heredoc-pseudo — markers and a helper call only inside a heredoc body.
 cat >"$FXD/heredoc-pseudo.sh" <<'FX'

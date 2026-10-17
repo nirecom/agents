@@ -187,7 +187,7 @@
     {"file":"bin/worktree-write-notes.js","allow":["TARGET_MAIN_ROOT"],"forms":[],"reason":"handles the main worktree of the repository it works on"},
     {"file":"docs/architecture/claude-code/root-names.md","allow":["SCRIPT_CHECKOUT_ROOT","TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"the writing rules for the four root names, which spell each of them"},
     {"file":"docs/architecture/claude-code/settings/hooks.md","allow":["TARGET_MAIN_ROOT"],"forms":[],"reason":"handles the main worktree of the repository it works on"},
-    {"file":"docs/glossary.md","allow":["SCRIPT_CHECKOUT_ROOT","TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"defines the four root names"},
+    {"file":"docs/glossary-internal.md","allow":["SCRIPT_CHECKOUT_ROOT","TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"defines three of the four root names"},
     {"file":"docs/ops/migration-from-todo.md","allow":["TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"works on a checkout the caller names, which need not be its own"},
     {"file":"experimental/test-jail/trace-stub.js","allow":["TARGET_MAIN_ROOT","TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"lists all four names to report which of them a traced process carried; reads none of them as a root"},
     {"file":"hooks/bash-guard/allow.js","allow":["AGENTS_MAIN_ROOT"],"forms":[],"reason":"matches the variable name inside command text"},
@@ -277,6 +277,7 @@
     {"file":"tests/hooks/feature-2326-hook-mechanism.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-2326-rtk-rewrite.js","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-2388-block-case-markers/registration.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
+    {"file":"tests/hooks/feature-2411-gate-integration/edit.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
     {"file":"tests/hooks/feature-2403-readonly-judge.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-2460-jev-shadow/j-registration.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
     {"file":"tests/hooks/feature-assemble-cmd-parse.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
@@ -297,6 +298,9 @@
     {"file":"tests/tests/feature-1832-run-all-parallel/g7-calibrator-exit77.sh","allow":[],"forms":["own-script-root-form"],"reason":"sources the calibrator's modules directly, so it supplies the root their entry point would have assigned"},
     {"file":"tests/tests/feature-2561-root-decoy-build.sh","allow":[],"forms":["leave-decoy"],"reason":"tests the decoy itself, so it has to step out of it"},
     {"file":"tests/tests/feature-2561-root-decoy-launcher.sh","allow":[],"forms":["leave-decoy","agents-root-subpath"],"reason":"tests the decoy itself, so it has to step out of it; its fixture runs a hook from the agents main worktree on purpose, to prove the launcher reports the stub hit"},
+    {"file":"tests/bin/feature-2669-runner-hook-wiring/hit-kinds.js","allow":[],"forms":["agents-root-subpath"],"reason":"its fixture runs a hook from the agents main worktree on purpose, to prove the hit reaches the hook and the baseline"},
+    {"file":"tests/tests/feature-2669-run-all-hit-attribution/parallel-cases.sh","allow":[],"forms":["agents-root-subpath"],"reason":"its fixture runs a hook from the agents main worktree on purpose, to prove the hit is claimed for its test"},
+    {"file":"tests/tests/feature-2669-run-all-hit-attribution/setup.sh","allow":[],"forms":["agents-root-subpath"],"reason":"its fixture runs a hook from the agents main worktree on purpose, to prove the hit is claimed for its test"},
     {"file":"bin/github-issues/sync-labels.sh","allow":["AGENTS_MAIN_ROOT"],"forms":["agents-root-subpath"],"reason":"copied from the agents repository: reaches the forge detector of the agents main worktree","repo":"dotfiles"}
   ]
 }

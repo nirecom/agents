@@ -19,8 +19,12 @@ const SHELL_FIELDS = [
   "caseMarkerReader.file", "caseMarkerReader.function",
   "caseEmbedRules.file", "caseEmbedRules.function",
   "tableDrivenDetector.file", "tableDrivenDetector.function",
+  "envClearLine.file", "envClearLine.function",
   "helperLibrary.path", "helperLibrary.sourceRegex",
   "diagnostics.nameLabel", "diagnostics.flatRejectCode",
+  "diagnostics.markerName", "diagnostics.markerWrapHint", "diagnostics.markerMissingHint",
+  "diagnostics.markerUncertainHint", "diagnostics.markerDoc",
+  "codeLanguage.sourcePatterns", "codeLanguage.shebangInterpreters", "newFileNameShape", "notationDoc",
 ];
 
 const cache = new Map();
@@ -41,7 +45,10 @@ function loadRegistry(file) {
   } catch (e) {
     fail(abs, `cannot read the table (${String(e.message).split("\n")[0]})`);
   }
-  validate(t, REPO_ROOT);
+  // helperLibrary.path, notationDoc and the parts are not opened by this reader, so a checkout
+  // without the test tree or the skills still loads, as does a fixture table without the fields a
+  // supported entry needs; validate() without the options checks both.
+  validate(t, REPO_ROOT, { repoFiles: false, complete: false });
   cache.set(abs, t);
   return t;
 }
@@ -115,6 +122,7 @@ function fieldValue(entry, name) {
   // One label for display and the unrunnable marker; the launcher takes the version after ">=".
   if (name === "launch.minVersion") return v ? `${v.runtime}>=${v.version}` : undefined;
   if (typeof v === "boolean") return v ? "1" : "0";
+  if (Array.isArray(v)) return v.length ? v.join(",") : undefined;
   return v === null || v === undefined || v === "" ? undefined : String(v);
 }
 

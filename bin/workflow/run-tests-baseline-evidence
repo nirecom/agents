@@ -2,9 +2,12 @@
 "use strict";
 // bin/workflow/run-tests-baseline-evidence — state hand-off for bin/run-tests-baseline (#2431).
 //   failing --session <sid>
-//     exit 0: `SEQ=<n>` then one failing test path per line; exit 3: not classifiable.
+//     exit 0: `SEQ=<n>` then one failing test path per line; exit 3: not classifiable;
+//     exit 7: `HIT_COUNT=<n>` then the recorded hit lines (unattributed hits, #2669).
 //   record --session <sid> --seq <n> --classification <file> [--base <sha>]
 //     exit 0 completed, 1 classification unmet, 2 usage, 3 state moved or not pending.
+//   accept --session <sid>
+//     exit 0 completed on the user's grant, 1 grant does not fit the run, 3 state, 6 no grant.
 
 const path = require("path");
 const lib = require(path.join(__dirname, "lib", "run-tests-baseline-evidence"));
@@ -13,7 +16,8 @@ const { normalizeCwd } = require(path.join(__dirname, "..", "..", "hooks", "lib"
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 const USAGE =
   "usage: run-tests-baseline-evidence failing --session <sid>\n" +
-  "       run-tests-baseline-evidence record --session <sid> --seq <n> --classification <file> [--base <sha>]";
+  "       run-tests-baseline-evidence record --session <sid> --seq <n> --classification <file> [--base <sha>]\n" +
+  "       run-tests-baseline-evidence accept --session <sid>";
 
 function finish(code, stdout, stderr) {
   if (stdout) process.stdout.write(stdout);
@@ -25,9 +29,11 @@ function usage(msg) {
   finish(lib.EXIT.USAGE, null, `${msg}\n${USAGE}`);
 }
 
-function parseArgs(argv) {
+function parseArgs(sub, argv) {
   const opts = {};
-  const known = { "--session": "session", "--seq": "seq", "--classification": "classification", "--base": "base" };
+  const known = sub === "accept"
+    ? { "--session": "session" }
+    : { "--session": "session", "--seq": "seq", "--classification": "classification", "--base": "base" };
   for (let i = 0; i < argv.length; i++) {
     const key = known[argv[i]];
     if (key === undefined || i + 1 >= argv.length) usage(`bad argument: ${argv[i]}`);
@@ -38,7 +44,7 @@ function parseArgs(argv) {
 
 function main() {
   const [sub, ...rest] = process.argv.slice(2);
-  const opts = parseArgs(rest);
+  const opts = parseArgs(sub, rest);
   if (!opts.session || !SESSION_ID_RE.test(opts.session)) usage("--session is required");
 
   if (sub === "failing") {
@@ -51,6 +57,16 @@ function main() {
     const file = normalizeCwd(opts.classification) || opts.classification;
     const r = lib.recordFromFile(opts.session, Number(opts.seq), file, opts.base);
     finish(r.code, r.code === lib.EXIT.OK ? "RECORDED completion_basis=baseline-preexisting\n" : null, r.reason);
+  }
+  if (sub === "accept") {
+    let r;
+    try {
+      r = lib.accept(opts.session);
+    } catch (e) {
+      finish(lib.EXIT.STATE, null, `state write failed: ${e.message}`);
+    }
+    if (r.code === lib.EXIT.OK) finish(r.code, `RECORDED completion_basis=baseline-user-accepted kind=${r.kind}\n`, null);
+    finish(r.code, null, r.code === lib.EXIT.ABSENT ? null : r.reason);
   }
   usage(`unknown subcommand: ${sub === undefined ? "(none)" : sub}`);
 }

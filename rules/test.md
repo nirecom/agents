@@ -10,6 +10,18 @@ paths:
 
 Do not write or edit test files directly in the main conversation.
 
+## Test Language
+
+Write a test in the same language as the code it tests.
+The supported languages and their file names: `docs/architecture/claude-code/test-language-registry.md`.
+
+| Case | Treatment |
+|---|---|
+| The test inspects the code as text only and never executes it | Exception — any language |
+| The test checks symmetry across languages | Exception — any language |
+| The target is not code (documentation, configuration) | Outside the principle |
+| One end-to-end run crosses processes | Write it in the entry point's language |
+
 ## Test Fixture Isolation
 
 See [test/fixture-isolation.md](test/fixture-isolation.md) for keeping a test's side effects inside its own temp directory.

@@ -15,9 +15,21 @@
       "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/bash-case-embed.sh", "function": "bash_case_embed" },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "envClearLine": { "file": "bin/lib/test-language-parts/bash.sh", "function": "bash_env_clear_line" },
       "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "^[[:space:]]*(source|\\.)[[:space:]]+([^#]*/)?tests/lib/harness\\.sh" },
-      "diagnostics": { "nameLabel": ".sh", "flatRejectCode": "FLAT_TEST_SH_REJECTED" },
-      "note": "Only entry with a case-marker reader and a helper library, so the case-marker gate, dup groups and the harness check stay bash-only. A same-name sibling directory holds a split test's sub-files and retires with it. bash's own exit 77 is a test result, so the launcher runs it unwrapped."
+      "codeLanguage": { "sourcePatterns": ["*.sh"], "shebangInterpreters": ["bash", "sh"] },
+      "newFileNameShape": "<name>.sh",
+      "notationDoc": "skills/_shared/test-design/case-markers/bash.md",
+      "diagnostics": {
+        "nameLabel": ".sh",
+        "flatRejectCode": "FLAT_TEST_SH_REJECTED",
+        "markerName": "case_begin/case_end",
+        "markerWrapHint": "Wrap each case in column-0 case_begin/case_end at depth 0",
+        "markerMissingHint": "Wrap each case in case_begin/case_end (tests/lib/harness.sh)",
+        "markerUncertainHint": "multi-line quoted string before the marker; use a heredoc so retire can split cases",
+        "markerDoc": "skills/_shared/test-design/case-markers.md"
+      },
+      "note": "Only entry with caseEmbedRules, so per-case retire and case embedding stay bash-only. A same-name sibling directory holds a split test's sub-files and retires with it. bash's own exit 77 is a test result, so the launcher runs it unwrapped. diagnostics.markerDoc is the document the gate messages name; an entry without it names its notationDoc."
     },
     {
       "id": "pester",
@@ -37,12 +49,20 @@
         "timeoutSeconds": 180,
         "suiteRootMarker": null
       },
-      "caseMarkerReader": null,
+      "caseMarkerReader": { "file": "bin/lib/test-language-parts/pester.sh", "function": "pester_case_markers" },
       "caseEmbedRules": null,
       "tableDrivenDetector": null,
-      "helperLibrary": null,
-      "diagnostics": { "nameLabel": ".Tests.ps1" },
-      "note": "The wrapper takes the path as a -File argument, so nothing in the name is evaluated; it writes testResults.xml into the result directory, never the working directory. -ExecutionPolicy Bypass applies to this process only."
+      "envClearLine": { "file": "bin/lib/test-language-parts/pester.sh", "function": "pester_env_clear_line" },
+      "helperLibrary": { "path": "tests/lib/harness.ps1", "sourceRegex": "^[[:space:]]*\\.[[:space:]]+[^#]*lib['\"]?[[:space:]/\\\\]+['\"]?harness\\.ps1" },
+      "codeLanguage": { "sourcePatterns": ["*.ps1", "*.psm1"], "shebangInterpreters": ["pwsh"] },
+      "newFileNameShape": "<name>.Tests.ps1",
+      "notationDoc": "skills/_shared/test-design/case-markers/pester.md",
+      "diagnostics": {
+        "nameLabel": ".Tests.ps1",
+        "markerName": "Describe -Tag 'target:<path>'",
+        "markerWrapHint": "Give every top-level Describe a -Tag 'target:<path>' naming the file it tests"
+      },
+      "note": "caseEmbedRules and tableDrivenDetector come with #2502; until then a file retires as a whole. The wrapper takes the path as a -File argument, so nothing in the name is evaluated; it writes testResults.xml into the result directory, never the working directory. -ExecutionPolicy Bypass applies to this process only."
     },
     {
       "id": "pytest",
@@ -62,12 +82,20 @@
         "timeoutSeconds": 180,
         "suiteRootMarker": null
       },
-      "caseMarkerReader": null,
+      "caseMarkerReader": { "file": "bin/lib/test-language-parts/pytest.sh", "function": "pytest_case_markers" },
       "caseEmbedRules": null,
       "tableDrivenDetector": null,
-      "helperLibrary": null,
-      "diagnostics": { "nameLabel": "test_*.py" },
-      "note": "uv supplies pytest per run, so no project environment is needed. The agents installer pre-fetches pytest into uv's cache, so a uv that cannot supply it fails the run as FAIL."
+      "envClearLine": { "file": "bin/lib/test-language-parts/pytest.sh", "function": "pytest_env_clear_line" },
+      "helperLibrary": { "path": "tests/lib/harness.py", "sourceRegex": "^(import harness([[:space:]]|$)|from harness import[[:space:]])" },
+      "codeLanguage": { "sourcePatterns": ["*.py"], "shebangInterpreters": ["python3", "python"] },
+      "newFileNameShape": "test_<name>.py",
+      "notationDoc": "skills/_shared/test-design/case-markers/pytest.md",
+      "diagnostics": {
+        "nameLabel": "test_*.py",
+        "markerName": "@pytest.mark.target",
+        "markerWrapHint": "Decorate every top-level test with @pytest.mark.target(\"<path>\") naming the file it tests"
+      },
+      "note": "caseEmbedRules and tableDrivenDetector come with #2502; until then a file retires as a whole. uv supplies pytest per run, so no project environment is needed. The agents installer pre-fetches pytest into uv's cache, so a uv that cannot supply it fails the run as FAIL."
     },
     {
       "id": "js",
@@ -87,12 +115,21 @@
         "timeoutSeconds": 180,
         "suiteRootMarker": null
       },
-      "caseMarkerReader": null,
+      "caseMarkerReader": { "file": "bin/lib/test-language-parts/js.sh", "function": "js_case_markers" },
       "caseEmbedRules": null,
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/js.sh", "function": "has_table_driven_js" },
-      "helperLibrary": null,
-      "diagnostics": { "nameLabel": ".js" },
-      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs a node:test file under node --test with a case reporter, and any other file as a plain node script."
+      "envClearLine": { "file": "bin/lib/test-language-parts/js.sh", "function": "js_env_clear_line" },
+      "helperLibrary": { "path": "tests/lib/harness.js", "sourceRegex": "^[^/]*require\\([\"']\\.\\./lib/harness(\\.js)?[\"']\\)" },
+      "codeLanguage": { "sourcePatterns": ["*.js", "*.cjs", "*.mjs"], "shebangInterpreters": ["node"] },
+      "newFileNameShape": "<name>.js",
+      "notationDoc": "skills/_shared/test-design/case-markers/js.md",
+      "diagnostics": {
+        "nameLabel": ".js",
+        "markerName": "caseBegin/caseEnd",
+        "markerWrapHint": "Wrap each case in column-0 caseBegin(\"<name>\", \"<target>\") and caseEnd() calls",
+        "markerUncertainHint": "a caseBegin/caseEnd-looking line sits inside a block comment or a multi-line template string; move it out so the cases can be read line by line"
+      },
+      "note": "caseEmbedRules comes with #2502; until then a file retires as a whole. Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs a node:test file under node --test with a case reporter, and any other file as a plain node script."
     },
     {
       "id": "test-naming-convention",
@@ -106,6 +143,7 @@
       "caseMarkerReader": null,
       "caseEmbedRules": null,
       "tableDrivenDetector": null,
+      "envClearLine": null,
       "helperLibrary": null,
       "diagnostics": {},
       "note": "Naming conventions that mark a file as a test by name alone in any language. Never launched."

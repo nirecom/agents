@@ -10,7 +10,7 @@
 # shellcheck source=../../lib/test-language-registry-fixture.sh
 . "$FX_REPO_ROOT/tests/lib/test-language-registry-fixture.sh"
 
-RR_LIBS="run-all-launch.sh run-all-report.sh run-all-classify.sh timed-exec.sh test-language-registry-plain.sh"
+RR_LIBS="run-all-launch.sh run-all-report.sh run-all-classify.sh run-all-hits.sh timed-exec.sh test-language-registry-plain.sh"
 
 # rr_require_report — the report lib is the unit under test; its absence is a FAIL, not a skip.
 rr_require_report() {

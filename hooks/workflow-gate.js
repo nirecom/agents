@@ -19,7 +19,7 @@ const { parse } = require("./lib/command-ir");
 const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
 const { scannableCommandListOf } = require("./lib/scannable-command-list");
 const { analyzeSentinelCommand } = require("./lib/sentinel-command");
-const { isBaselineEvidenceRecordCommand } = require("./lib/workflow-driver-commands");
+const { isBaselineEvidenceInternalCommand } = require("./lib/workflow-driver-commands");
 
 // Which steps the commit gate checks: workflow-gate/commit-gate-steps.js (SSOT: step-table.js).
 const { resolveInputCwd } = require("./lib/resolve-cwd");
@@ -175,9 +175,9 @@ if (require.main === module) {
   const command = scannableCommandListOf(toolName, toolInput).join("\n");
   if (!command) approve();
 
-  // Internal-only door (#2431): owner and rationale in lib/workflow-driver-commands.js.
-  if (commandListOf(toolName, toolInput).some(isBaselineEvidenceRecordCommand)) {
-    block("workflow-gate: `run-tests-baseline-evidence record` is internal to bin/run-tests-baseline — run bin/run-tests-baseline instead.");
+  // Internal-only doors (#2431, #2517): owner and rationale in lib/workflow-driver-commands.js.
+  if (commandListOf(toolName, toolInput).some(isBaselineEvidenceInternalCommand)) {
+    block("workflow-gate: `run-tests-baseline-evidence record` / `accept` are internal to bin/run-tests-baseline — run bin/run-tests-baseline instead.");
   }
 
   // SENTINEL GUARD (#382): block exactly what workflow-mark.js (PostToolUse) would

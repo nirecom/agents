@@ -8,13 +8,14 @@ Referenced by CI-4. Format rules for `<PLANS_DIR>/<session-id>-intent.md`.
 2. `**Title:** <human-readable one-line title>` — data contract read by Path C for `gh issue create --title`.
 3. `**PM type:** waterfall` — the project-management type recorded when clarify_intent completes; only `waterfall` is accepted (`agile` is reserved for #2565).
 4. `## Issues` (mandatory — see rules below)
-5. Background/Motivation
-6. Scope
-7. Constraints
-8. Interview Log (optional)
-9. `## Class members` (mandatory — see schema below)
-10. `## Accepted Tradeoffs` (`### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`) — captures design decisions already settled, used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
-11. `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths)
+5. `## Glossary` (mandatory heading, body may be empty — see schema below)
+6. Background/Motivation
+7. Scope
+8. Constraints
+9. Interview Log (optional)
+10. `## Class members` (mandatory — see schema below)
+11. `## Accepted Tradeoffs` (`### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`) — captures design decisions already settled, used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+12. `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths)
 
 Language: write body text in `PLAN_LANG` (`$AGENTS_MAIN_ROOT/.env`) when it is a concrete non-English language; schema H2 heading lines always use their canonical English names regardless of `PLAN_LANG`. `PLAN_LANG` unset/`any`/`english` → write body text in English.
 
@@ -31,6 +32,16 @@ Immediately after the `**PM type:**` line, before Background/Motivation. Single 
   ```
   Completion backfills `- #<N>: <title>` after `gh issue create`. Placeholder satisfies `assemble-mandatory.sh`'s "heading must be present" invariant.
 - `context.md` missing or title line absent → `- #<N>: (title unavailable)`.
+
+## `## Glossary` schema (mandatory heading)
+
+Immediately after `## Issues`. The intent glossary lists only the terms this session newly introduces.
+
+- Write the heading always; leave the body empty when no term is new — no fixed placeholder such as `(none)`.
+- Non-empty body: one table with the header `| Term | Category | Definition |`, a separator row, then one row per term.
+- Category values and how to pick one: `rules/docs/glossary.md`.
+- Term must be unique (case-insensitive) within the table.
+- The plan artifact hooks (`hooks/gate-plan-lang.js`, `hooks/check-plan-lang.js`) check this section on every write.
 
 ## `## Class members` schema (mandatory)
 

@@ -5,7 +5,7 @@
 # L3 gap: live MOP-8 sentinel auto-selection and VS Code prose-summary rendering are
 #   verifiable only in a live session; checked at WORKFLOW_USER_VERIFIED preflight
 #   via bin/check-verification-gate.sh category: skill-orchestration.
-# Exit 0 always — this is a contract test, not a CI gate yet.
+# Exit status: non-zero when any assertion fails (a red row must reach the runner).
 
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
     export _TIMEOUT_WRAPPED=1
@@ -102,4 +102,4 @@ case_end
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 
-exit 0
+[ "$FAIL" -eq 0 ]

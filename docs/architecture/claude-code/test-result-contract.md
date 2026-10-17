@@ -104,11 +104,13 @@ The tail (`rar_tail`):
 ```
 UNSUPPORTED: <file> (language: <id>; not run)
 Missing runtimes: Pester>=5.0 (2 files), pwsh (1 file)
-Results: PASS=p  FAIL=f  SKIP=s  UNRUNNABLE=u  TIMEOUT=t
-RUN_CONTRACT: PASS=p FAIL=f SKIP=s EXECUTED=p+f+s UNRUNNABLE=u TIMEOUT=t
+HIT: <detail>
+Results: PASS=p  FAIL=f  SKIP=s  UNRUNNABLE=u  TIMEOUT=t  HITS=h
+RUN_CONTRACT: PASS=p FAIL=f SKIP=s EXECUTED=p+f+s UNRUNNABLE=u TIMEOUT=t HITS=h
 ```
 
-`Missing runtimes:` appears only when `UNRUNNABLE > 0`. `TIMEOUT` is a subset of `FAIL`; `UNRUNNABLE` is outside `EXECUTED`. `tests/run-all.sh` exits 1 when `FAIL > 0`; an UNRUNNABLE-only run exits 0, and the readers below are what keep it from counting as green.
+`Missing runtimes:` appears only when `UNRUNNABLE > 0`; a unit a late hit turned into a FAIL leaves it.
+`HIT:` lines and ` HITS=h` appear only when `h > 0`: guard, decoy or worktree-change hits no test could be named for ([test-command-guard.md](test-command-guard.md) "Install points and the hit report"). Absent `HITS=` and `HITS=0` mean the same. A run with `HITS > 0` exits 1 and never completes `run_tests`; `bin/run-tests-baseline` refuses to classify it (exit 6, `BASELINE_HITS: count=N` then the `HIT:` lines). `TIMEOUT` is a subset of `FAIL`; `UNRUNNABLE` is outside `EXECUTED`. `tests/run-all.sh` exits 1 when `FAIL > 0`; an UNRUNNABLE-only run exits 0, and the readers below are what keep it from counting as green.
 
 ## Neutralization of child output
 
@@ -132,6 +134,9 @@ Workflow effect of `unrunnable`:
 - `/run-tests` (RNT-9) shows the `Missing runtimes:` line, asks the user to install the runtime, and never runs the baseline. Recovery is a rerun with `UNRUNNABLE=0`, or the accept below.
 - It is not a code defect: `unrunnable` is not a failing outcome for `write_code` resume or for the baseline evidence, so it triggers no fix cascade.
 
+**Dispatch settlement** is the check, run on every Bash call, of whether the session's latest test-runner dispatch has had its outcome ingested: `settled` (ingested, or no dispatch) or `unsettled` (a `.dispatched` marker without its `.ingested` marker); while unsettled, a stale `run_tests` result is demoted to `pending` on non-test calls.
+**`outcome_source`** is the `run_tests` state field holding the stem, `payload_sha256` and `outcome_sha256` of the worker outcome file the state was last written from; the baseline evidence checks it before accepting a failing baseline as pre-existing.
+
 ## Accepting UNRUNNABLE
 
 When the runtime cannot be installed on this host, `echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: {reason}>>"` completes `run_tests` without a green run. It exists so a missing runtime cannot block a session forever; it is never silent:
@@ -139,8 +144,20 @@ When the runtime cannot be installed on this host, `echo "<<WORKFLOW_RUN_TESTS_U
 - `settings.json` lists it under `permissions.ask` (never `allow`), so the user confirms every use.
 - `hooks/workflow-mark/run-tests-accept-handler.js` accepts only a `run_tests` that is pending with `run_outcome=unrunnable`, `unrunnable_count>0` and no failed run — that is, a current-shape contract with `FAIL=0`. It reads the hook's annotations, never stdout. A completed step, `FAIL>0`, no contract, a legacy 4-field contract, or a reason under 3 non-blank characters is rejected with the state unchanged; a reason holding `( ) ; | & >` or a backtick is a malformed sentinel (advisory only).
 - An accept records `completion_basis=unrunnable-accepted` and `unrunnable_accept_reason`, and keeps `unrunnable_count`, `unrunnable_runtimes` and `run_outcome=unrunnable`.
-- The Final Report (`bin/render-final-report.js`, under Merged PR) and the PR body (`/commit-push` appends `bin/workflow/run-tests-unrunnable-note`) each carry one line with the count, the missing runtimes and the reason, from `hooks/lib/run-tests-unrunnable-note.js`.
+- The Final Report (`bin/render-final-report.js`, under Merged PR) and the PR body (the `commit-push` worker's `prBody` appends it unless the template already holds it) each carry one line with the count, the missing runtimes and the reason, from `hooks/lib/run-tests-completion-note.js`.
 - The next run of the hook clears `completion_basis` and `unrunnable_accept_reason`, so an accept never outlives the run it accepted.
+
+## Accepting unproven baseline failures
+
+`bin/run-tests-baseline` completes a failing `run_tests` only when every failure is proven pre-existing at the merge base. Two cases cannot be proven: a test classified `undetermined` (home reference, budget exhausted, timeout or ambiguous exit at base, …), and a failing run that recorded no failing list (the CLI's exit 3). For these the user may grant the completion; the grant is never silent and never completes by itself:
+
+- `echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: {reason}>>"` is under `permissions.ask`, so the user confirms every use. The two accept sentinels never cross: each refuses the other's run shape.
+- `hooks/workflow-mark/run-tests-baseline-accept-handler.js` writes one `baseline_accept` annotation `{reason, kind, run_seq, outcome_source, accepted_run_outcome}` bound to the current run, and leaves the step pending. It refuses a non-pending step, a non-failing `run_outcome`, and any `unrunnable_count` other than an exact `0` (a positive count is the UNRUNNABLE path; a missing one proves nothing). The verdict itself is `grantKind` from `bin/workflow/lib/run-tests-baseline-evidence.js`, the same function `accept` re-checks with, so the handler never records a grant the CLI would refuse.
+- Kinds: `failing-list-unrecorded` (failing list null or empty) and `undetermined` (the classification covers exactly the failing paths, and every non-pre-existing entry — at least one — is `undetermined`; any `broken` entry refuses).
+- `run-tests-baseline-evidence accept` — run only by `bin/run-tests-baseline` step 0, and blocked by `workflow-gate` as a direct tool call, like `record` — re-checks the grant against the run (seq, outcome source, run outcome, unsettled dispatch, unrunnable count, recomputed kind). It then writes `run_outcome=pass`, `completion_basis=baseline-user-accepted` and `complete`. Without a grant it exits 6 and the classification proceeds as before.
+- With no failing list a `broken` test cannot be told apart; the handler message, the evidence stderr and the disclosure line each say so.
+- The Final Report and the PR body carry one `Unverified tests:` line from `hooks/lib/run-tests-completion-note.js`, read from the grant (it survives completion; the step's `run_outcome` is already `pass`).
+- The next run of the hook clears `baseline_accept`, so a grant never outlives the run it named.
 
 ## Hardening
 

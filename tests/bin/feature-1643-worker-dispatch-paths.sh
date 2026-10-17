@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1643-worker-dispatch-paths.sh
-# Tests: bin/worker-dispatch-paths, bin/worker-dispatch/anchor.js
+# Tests: bin/worker-dispatch-paths, bin/worker-dispatch/anchor.js, hooks/workflow-run-tests/exec-model.js
 # Tags: worker-dispatch, paths-resolver, worktree, anchor, target-main-root, TL2, scope:issue-specific, root-names, slash-form, security
 
 # Issue #1643 — `bin/worker-dispatch-paths` is the read-only resolver every calling skill runs as WD-1. It exists because the enforce-worktree overlay sanctions ONLY the bare form
@@ -449,6 +449,9 @@ group_dispatcher_absent
 # shellcheck source=feature-1643-worker-dispatch-paths/slash-output.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1643-worker-dispatch-paths/slash-output.sh"
 group_slash_output
+
+# shellcheck source=feature-1643-worker-dispatch-paths/hook-recognition.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-1643-worker-dispatch-paths/hook-recognition.sh"
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

@@ -17,8 +17,13 @@ A tool decides with two inputs: placement (its own) × language (the table).
 | `bin/test-language-registry` | CLI over the reader (`--format shell` / `--format json`, `--file <table>`). Needs the executable bit |
 | `bin/lib/test-language-registry.sh` | Bash loader (source only). Calls the CLI once per process and answers from arrays |
 | `bin/lib/test-language-registry-plain.sh` | `tlr_exec_plain`, the fallback launcher when `run-all-launch.sh` is absent |
-| `bin/lib/test-language-parts/<lang>.sh` | A language's parts (e.g. `has_table_driven_sh`, `has_table_driven_js`) |
+| `bin/lib/test-language-parts/<lang>.sh` | A language's parts (e.g. `has_table_driven_sh`, `pester_case_markers`) |
+| `bin/lib/test-language-parts/<lang>-case-reader.<ext>` | A language's child reader, run in that language's own runtime (`pester-case-reader.ps1`, `pytest-case-reader.py`, `js-case-reader.js`) |
+| `bin/lib/case-reader-bridge.sh` | `crb_run`: runs a child reader and loads what it prints |
+| `bin/lib/case-record-reader.sh` | `crr_read`, the one entry to case records |
+| `bin/lib/test-route-destination/language.sh` | Which languages a source set may be tested in (`find-tests-for-source.sh --with-language`) |
 | `bin/lib/test-wrappers/` | Language wrappers named by `launch.wrapper` (`pester.ps1`, `pytest.py`, `node.js` + `node-reporter.mjs` + `node-guard.cjs`) |
+| `tests/lib/harness.<ext>` | Each language's helper library, named by `helperLibrary.path` |
 
 The table is replaced only by an argument (`loadRegistry(file)`, CLI `--file`, `tlr_load <file>`).
 There is no environment-variable override, so a test using a fixture table can never leak it to a child, and hooks always read the default table.
@@ -37,12 +42,19 @@ Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# T
 | `siblingSuiteDir` | A same-named directory next to the test holds its sub-files; retire deletes both |
 | `header` | `{commentPrefix}` or null. Header readers match `<commentPrefix> Tests:` / `Tags:` / `Serial:` as a fixed string (bash: `tlr_comment_prefix`, which also sets `TLR_COMMENT_PREFIX`); null takes `tableDrivenFallbackEntry`'s |
 | `launch` | How to run it (below); null for `recognized-only` |
-| `caseMarkerReader` | Part reference that reads `case_begin` / `case_end`, or null. Tools read it through `crr_read` (`bin/lib/case-record-reader.sh`), never directly |
+| `caseMarkerReader` | Part reference that reads the language's case markers, or null. Tools read it through `crr_read` (`bin/lib/case-record-reader.sh`), never directly |
 | `caseEmbedRules` | Part reference answering the `sweep-tests --embed-cases` questions (below), or null: the language's files are then skipped as `no-embed-rules` |
 | `tableDrivenDetector` | Part reference that detects the table-driven shape, or null |
-| `helperLibrary` | `{path, sourceRegex}`: the harness and the grep -E proof a test sources it, or null |
-| `diagnostics` | `{nameLabel, flatRejectCode}` used in checker messages. `flatRejectCode` defaults to `FLAT_TEST_REJECTED` |
+| `envClearLine` | Part reference that tells whether one line only clears named env vars, in the language's own idiom (`unset`, `Remove-Item Env:`, `os.environ.pop`, `delete process.env`), or null. `bin/check-session-id-ssot.sh` uses it to pass tombstone-clearing lines; a line in a language without it fails closed. Required for a supported entry |
+| `helperLibrary` | `{path, sourceRegex}`: the helper library and the grep -E proof a test loads it, or null. Comes as a pair with `caseMarkerReader`: both or neither |
+| `codeLanguage` | `{sourcePatterns, shebangInterpreters}`: the code this language's tests are written for — basename patterns, and interpreter names read from the first line of a file without an extension. Required for a supported entry; a pattern belongs to one entry only |
+| `newFileNameShape` | What a new test file is called, with `<name>` as the free part (`<name>.Tests.ps1`, `test_<name>.py`). Required for a supported entry |
+| `notationDoc` | Repo-relative document that teaches the language's case-marker notation. Required for a supported entry; must exist |
+| `diagnostics` | `{nameLabel, flatRejectCode}` used in checker messages (`flatRejectCode` defaults to `FLAT_TEST_REJECTED`), plus the case-marker gate's wording: `markerName`, `markerWrapHint`, `markerMissingHint` (falls back to `markerWrapHint`), `markerUncertainHint`, `markerDoc` (falls back to `notationDoc`) |
 | `note` | Why the entry is shaped this way (JSON has no comments) |
+
+`validate.js` demands the four supported-entry fields and the existence of their files only when the full table is checked (tests and the CLI).
+The runtime loader (`hooks/lib/test-language-registry.js`) calls it with `{ repoFiles: false, complete: false }`: a checkout that carries the tools without the test tree or the skills, or a fixture table, must still load, so a missing field there degrades the one feature that needs it instead of failing every tool.
 
 Current entries, in order:
 
@@ -54,8 +66,9 @@ Current entries, in order:
 | `js` | supported | `*.js` | file, requires `node`, `node {wrapper} {nativePath} {minVersion}`, node wrapper `node.js`, `node` 20.0, 180 s |
 | `test-naming-convention` | recognized-only | `*.test.*`, `*.spec.*`, `*_test.*`, `test_*` | none |
 
-Only `bash` has a case-marker reader and a helper library, so only bash tests are case-marker targets and harness-checked today.
-That difference is named in the table, not hidden in code: filling the field for another language changes no shared code (#2481 / #2411).
+All four supported entries have a case-marker reader and a helper library (#2411), so a test can be written in the language of the code it tests (`rules/test.md` "Test Language").
+Only `bash` has `caseEmbedRules`; the other three wait for #2502.
+Such differences are named in the table, not hidden in code: filling a field for another language changes no shared code (#2481).
 
 ## Matching
 
@@ -89,6 +102,8 @@ Shared code separates **capability** (is the field non-null) from **ownership** 
 | `caseEmbedRules` | `<op> <absolute test path> [args]` | one op per call (below); an unknown op returns 2 |
 
 `crr_read <abs>` is the one entry to case records: a `FILE\t<state>\t<line>\t<reason>` line, then one `CASE\t<idx>\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>` line per case of a conforming file. `deps` is `?` when the language has no `caseEmbedRules`.
+States: `none`, `conforming`, `malformed`, `uncertain`, `unsupported` (no reader for the file) and `unavailable` (the reader's runtime is not installed; the last column names the entry's `launch.requires`).
+A reader that fails any other way reads as `malformed` with reason `reader`.
 
 **Same-shell contract.** `crr_read` leaves the `TRP_CASE_*` globals of the file it read, and the `deps` / `leftover-defs` ops read them in that shell instead of re-parsing case ranges, so call them right after `crr_read` on the same file, never in a subshell of their own.
 
@@ -100,6 +115,55 @@ Shared code separates **capability** (is the field non-null) from **ownership** 
 | `self-impl` | `<line>\t<kind>\t<detail>` per hand-rolled harness piece (bash: `counter-init`, `harness-redef`) |
 | `skip-reason` | one reason word when the file must not be embedded (bash: `narrow-harness`, a sourced `tests/lib/*harness*.sh` that is not the entry's `helperLibrary`) |
 | `result-summary <rc> <stdout-file>` | `<pass\|fail\|skip>\t<passed>\t<failed>`; counts empty when the output has none |
+
+## Case-marker readers
+
+The bash reader is a bash parser in process. The other three are thin bash parts that hand the file to a child reader in the language's own runtime, because only that runtime reads its syntax reliably: the PowerShell and Python readers use the language's parser, the JavaScript reader reads lines. No reader runs the test file.
+
+Child-reader contract (`crb_run <file> <command> [args…]` in `bin/lib/case-reader-bridge.sh`):
+
+- The child gets the test path as its last argument, in a form a non-shell process can open, and prints one `FILE\t<state>\t<line>\t<reason>` line (`none`, `conforming`, `malformed`, `uncertain`), then one `CASE` line per case in the `crr_read` shape — for a conforming file only.
+- `crb_run` sets the globals the bash reader sets, so every caller downstream reads one shape.
+- rc 79: the command is not on PATH. The part must start the child with the command the entry's `launch.requires` names, because `crr_read` reports that field as the missing runtime.
+- rc 1: the child failed or broke the format. Never read as "no markers".
+
+What a case is, per language:
+
+| id | Case | Target |
+|---|---|---|
+| `bash` | `case_begin "<name>" "<target>"` … `case_end` at column 0, depth 0 | second argument |
+| `pester` | a top-level `Describe` | its one `-Tag 'target:<path>'` |
+| `pytest` | a module-level `test_*` function or `Test*` class | `@pytest.mark.target("<path>")` |
+| `js` | `caseBegin("<name>", "<target>");` … `caseEnd();` at column 0 | second argument |
+
+A target is a repo-relative path of `A-Z a-z 0-9 . _ / -` with no leading `/` or `./` and no `..` segment, in every language.
+
+Malformed reasons (the word in the gate's `MALFORMED_CASE_MARKER` message):
+
+| Reason | Languages | Meaning |
+|---|---|---|
+| `grammar` | all | A marker that cannot be read: bash, an unreadable marker line or a local marker definition; `pester` / `pytest`, a file that does not parse; `js`, an empty case name |
+| `target` | all | A target that breaks the path rule |
+| `depth` | `bash`, `js` | bash: a marker inside a block, function or group; `js`: a case opened while another is open |
+| `balance` | `bash`, `js` | Unpaired markers |
+| `constant` | `pester`, `pytest`, `js` | A name or target that is not a string constant |
+| `missing-target` | `pester`, `pytest`, `js` | A case without a target in a file that has targets (`js`: a one-argument `caseBegin`) |
+| `duplicate-target` | `pester`, `pytest`, `js` | More than one target on a case (`js`: more than two arguments) |
+| `nested-target` | `pester`, `pytest`, `js` | A target below the top level |
+| `reader` | all | The reader itself failed (set by `crr_read`, not by a reader) |
+
+`uncertain` is a state, not a reason: bash reports it for a depth fault after a multi-line quoted string, `js` for a marker-looking line inside a block comment or a multi-line template string.
+The writing rules a test author follows live in each entry's `notationDoc`, not here.
+
+## Helper libraries
+
+Each supported entry's `helperLibrary.path` is `tests/lib/harness.<ext>`: fixture isolation, a hook-free fixture repo, the known-failure form and the TL3 switch, in that language's own idiom. `bin/check-test-frontmatter.sh` rejects a new test whose text does not match the entry's `sourceRegex`.
+
+- **Load rule.** A test loads the library from its own location, one level up into `lib/` (`tests/<category>/<file>` → `../lib/harness.<ext>`); `sourceRegex` matches that spelling. bash is the exception: its expression wants a path ending in `tests/lib/harness.sh`, reached through the test's own checkout root.
+- **Line-based proof.** `sourceRegex` is a grep over lines, so the load must sit on a line of its own — the Pester expression wants the dot at the start of the line, so a one-line `BeforeAll { . … }` does not count.
+- **Python mark registration.** `harness.py` registers the `target` mark through `pytest.mark._config`, a private attribute of pytest. If a later release drops it, the mark stays unregistered and pytest only warns; the reader, which never runs pytest, is unaffected.
+- **`RUN_TL3`.** The PowerShell, Python and JavaScript libraries resolve the switch the same way: a non-empty `RUN_TL3` in the process environment wins; otherwise they ask `bash <library directory>/../../bin/get-config-var RUN_TL3 off` and take its trimmed output. The test is enabled only when the value, lower-cased, is `on`. Any failure of the lookup (no bash, non-zero exit, timeout) reads as off and never throws, so a real-environment test is skipped rather than run by accident.
+- The libraries hold no language id and no test-file pattern, so the residue check below applies to them unchanged.
 
 ## Launch
 
@@ -182,8 +246,12 @@ Tools that select, run or audit tests fail closed (an exit code of their own or 
 ## Adding a language
 
 1. Add one entry to the table: patterns, `status`, `nameStrip`, `header`, `launch`, `diagnostics.nameLabel`, and a `note`.
-2. Optionally write parts in `bin/lib/test-language-parts/<lang>.sh` and reference them (`caseMarkerReader`, `tableDrivenDetector`), or name a `helperLibrary`.
-3. No shared code changes. The residue check fails if shared code starts matching the new extension itself.
+2. Optionally write parts in `bin/lib/test-language-parts/<lang>.sh` and reference them (`tableDrivenDetector`, `caseEmbedRules`).
+3. To make its multi-path tests case-marker targets, add the reader and the helper library together — the validator rejects one without the other: a `caseMarkerReader` part (with a child reader when bash cannot read the syntax, following the contract above), `tests/lib/harness.<ext>` with its `sourceRegex`, a `notationDoc`, and the `diagnostics` marker wording.
+4. For a `supported` entry, fill `codeLanguage` and `newFileNameShape` so `find-tests-for-source.sh --with-language` routes that language's code to it, and `envClearLine` so its test isolation lines pass the session-id tombstone check.
+5. No shared code changes. The residue check fails if shared code starts matching the new extension itself.
+
+Gate scope follows from the table too: a new test of that language is judged from then on, and a renamed test file counts as new ([case-marker-gate.md](case-marker-gate.md)).
 
 Worked on paper only (fixture `tests/bin/test-language-registry/fixtures/java-terraform.json`, never the real table):
 

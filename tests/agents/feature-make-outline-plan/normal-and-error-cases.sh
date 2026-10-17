@@ -2,6 +2,7 @@
 # Tags: outline, planning, skill, scope:common
 # Normal cases (SKILL_MD, PLANNER_MD, REVIEWER_MD), Error cases, Edge cases.
 # Sourced by tests/agents/feature-make-outline-plan.sh.
+# lang-check: ignore -- assertions match Japanese wording in the prompts under test.
 
 # ---------------------------------------------------------------------------
 # Normal cases — SKILL_MD
@@ -24,9 +25,24 @@ assert_contains "$SKILL_MD" "outline-reviewer" \
 assert_contains "$SKILL_MD" "revision_rounds|2.*round|round.*2" \
     "N4: 2-round max mentioned in SKILL_MD"
 
-# N5: <session-id>-approach.md output mentioned
-assert_contains "$SKILL_MD" "approach\.md" \
-    "N5: approach.md output filename mentioned in SKILL_MD"
+# N5: the MOP-8 write instruction targets <session-id>-outline.md (the Stage-2 artifact was
+# renamed from approach.md to outline.md). Anchored to the MOP-8 line so the description and
+# Output Schema heading cannot satisfy it. Checks the repo copy (LOCAL_SKILL_MD), never $HOME.
+_N5_PATTERN='^MOP-8\. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline\.md`'
+_n5_check() { [ -f "$1" ] && grep -qE "$_N5_PATTERN" "$1"; }
+if _n5_check "$LOCAL_SKILL_MD"; then
+    pass "N5: <session-id>-outline.md output filename mentioned in LOCAL_SKILL_MD"
+else
+    fail "N5" "pattern $_N5_PATTERN not found in $LOCAL_SKILL_MD"
+fi
+# N5-neg: the same check must reject a copy with the output instruction removed.
+_n5_mutant="$_ISOLATION_TMP_ROOT/n5-mutant-SKILL.md"
+grep -vE "$_N5_PATTERN" "$LOCAL_SKILL_MD" > "$_n5_mutant" || true
+if [ -s "$_n5_mutant" ] && ! _n5_check "$_n5_mutant"; then
+    pass "N5-neg: the N5 check rejects a skill copy without the outline output instruction"
+else
+    fail "N5-neg" "the N5 check still matches a skill copy with the outline output instruction removed"
+fi
 
 # N6: reads intent.md as input
 assert_contains "$SKILL_MD" "intent\.md" \

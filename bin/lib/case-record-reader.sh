@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # bin/lib/case-record-reader.sh — crr_read <file>: a test file's case records as TSV. Source only.
-#   FILE\t<state>\t<malformed_line>\t<malformed_reason>      state: none|conforming|malformed|uncertain|unsupported
+#   FILE\t<state>\t<malformed_line>\t<malformed_reason>      state: none|conforming|malformed|uncertain|unsupported|unavailable
+#   unavailable: the reader part returned 79 (its runtime is not installed); the last column names the command.
 #   CASE\t<idx>\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<malformed_reason>   (one per case, idx 0-based)
 # deps: a csv of the functions the case calls, empty for none, `?` when the language has no
 # caseEmbedRules part. The TRP_CASE_* globals stay set afterwards, so the caseEmbedRules ops can
@@ -14,15 +15,21 @@ declare -F trp_marker_state_from_globals >/dev/null 2>&1 || . "$_crr_dir/test-re
 _crr_file_line() { printf 'FILE\t%s\t%s\t%s\n' "$1" "$2" "$3"; }
 
 crr_read() {
-  local abs="${1:?crr_read: file required}" i n deps_out="" deps line tab=$'\t' lf=$'\n'
+  local abs="${1:?crr_read: file required}" i n rc deps_out="" deps line tab=$'\t' lf=$'\n'
   local -a deps_by_idx=()
   if ! tlr_load; then _crr_file_line malformed "" reader; return 0; fi
   if ! tlr_match "$abs" || [[ "$TLR_STATUS" != supported ]] || ! _tlr_get "$TLR_ID" caseMarkerReader.file; then
     _crr_file_line unsupported "" ""; return 0
   fi
   # An already-defined reader function would hide a missing reader file from tlr_call_part.
-  if [[ ! -f "$TLR_REPO_ROOT/$_TLR_V" ]] || ! tlr_call_part "$TLR_ID" caseMarkerReader "$abs"; then
-    TRP_CASE_BEGIN_LINES=(); TRP_CASE_END_LINES=(); TRP_CASE_NAMES=(); TRP_CASE_TARGETS=(); TRP_CASE_COUNT=0
+  if [[ ! -f "$TLR_REPO_ROOT/$_TLR_V" ]]; then rc=70; else tlr_call_part "$TLR_ID" caseMarkerReader "$abs"; rc=$?; fi
+  if [[ "$rc" -ne 0 ]]; then
+    # shellcheck disable=SC2034  # TRP_CASE_COUNT is read by the sourcing callers
+    TRP_CASE_COUNT=0; TRP_CASE_BEGIN_LINES=(); TRP_CASE_END_LINES=(); TRP_CASE_NAMES=(); TRP_CASE_TARGETS=()
+    if [[ "$rc" -eq 79 ]]; then
+      _tlr_get "$TLR_ID" launch.requires || _TLR_V=""
+      _crr_file_line unavailable "" "$_TLR_V"; return 0
+    fi
     _crr_file_line malformed "" reader; return 0
   fi
   trp_marker_state_from_globals
