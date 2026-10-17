@@ -803,3 +803,7 @@ Changes: Pester, pytest and JS test harnesses again clear inherited CLAUDE_SESSI
 ### FEATURE: PR #2713 (2026-10-18)
 Background: fix(#2681): read config flags in-process so the confirm-gate probe stops timing out
 Changes: Confirm gates read config flags without starting a subprocess, so `CONFIRM_*=off` no longer times out into an ask on Windows; `get-config-var` and `confirm-off` start one node process per lookup (#2681).;`next-step` prints `GATE_PROBE_CAUSE=<cause>` before the gate value line when the gate read was not clean (#2681).;When node cannot start, `get-config-var --is-off` exits 4 instead of 2 and `confirm-off` returns ERROR instead of ON (#2681).;`confirm-off` warns with a `confirm-off:` prefix on an unrecognized value; `.env` unterminated-quote warnings now reach `next-step` stderr; with `CLAUDE_PROJECT_DIR` unset the gates read the caller project's `.env.local` (#2681).;`get-config-var` and `confirm-off` help text documents arguments and exit codes (#1187).
+
+### FEATURE: PR #2707 (2026-10-18)
+Background: fix(#2698): stop supervisor alert false fires on dialog turns and bun...
+Changes: Supervisor no longer interrupts you with an alert while it is waiting for your answer, and alert and audit no longer double-intervene back to back.;The premature-stop guard leaves read-only answers to your questions, and AskUserQuestion prompts, alone.;A paused supervisor alert stays paused.;Supervisor interventions follow your configured conversation language, and a failed codex review now says why.
