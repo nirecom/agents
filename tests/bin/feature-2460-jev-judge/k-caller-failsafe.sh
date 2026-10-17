@@ -100,6 +100,8 @@ TA="$TICKET"
 mock_p 0.01
 ts_query complexity complexity-judge "$F_PRODUCTION"
 TB="$TICKET"
+# All p=0.01 is never adopted (false: null): B's "none" comes from the subagent.
+answer_with "SIGNALS: none"
 jj finalize --session "$SID" --ticket "$TB"
 check "B finalize: SETTLE=ok, SIGNALS_CSV empty (none)" "0|ok|" "$JJ_RC|$(kv SETTLE)|$(kv SIGNALS_CSV)"
 B_CSV="$(kv SIGNALS_CSV)"

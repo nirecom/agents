@@ -68,8 +68,8 @@ case_end
 case_begin "e-jev-below-threshold-recorded-with-threshold" "hooks/lib/jev/decision-record.js"
 agree_row toolu_e_lowc '{"answers":{"S2-architecture":0.6}}' "SIGNALS: S2-architecture" "true|ok|ok"
 check "p = 0.6 under the 0.7 threshold: answer, p, min_confidence and both thresholds recorded, no fallback reason" \
-  "S2-architecture|0.6|0.6|0.7|0.7|null" \
-  "$(rq toolu_e_lowc 'r && [r.jev.answer, r.jev.probabilities["S2-architecture"], r.jev.min_confidence, r.threshold.true, r.threshold.false, String(r.fallback_reason)].join("|")')"
+  "S2-architecture|0.6|0.6|0.7|null|null" \
+  "$(rq toolu_e_lowc 'r && [r.jev.answer, r.jev.probabilities["S2-architecture"], r.jev.min_confidence, r.threshold.true, String(r.threshold.false), String(r.fallback_reason)].join("|")')"
 case_end
 case_begin "e-llm-undecidable-vs-jev-none-not-compared" "hooks/lib/jev/decision-record.js"
 NONE_MODE='{"answers":{"S2-architecture":0.02}}'

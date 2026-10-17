@@ -40,8 +40,8 @@ V2_KEYS="version,record_type,ts,point,mode,adopted,threshold,short_circuit_answe
 check "every v2 top-level key is present (missing list)" "missing:" \
   "$(rq toolu_g_raw "r && \"missing:\" + \"$V2_KEYS\".split(\",\").filter(k => !(k in r)).join(\",\")")"
 check "hook path: mode,adopted,threshold true/false,threshold keys,short_circuit_answer,short_circuited,unjudged,llm_needed,llm_answer_received,ticket" \
-  "shadow|llm|0.7|0.7|false,true|null|false|0|true|true|null" \
-  "$(rq toolu_g_raw 'r && [r.mode, r.adopted, r.threshold && r.threshold.true, r.threshold && r.threshold.false, r.threshold && Object.keys(r.threshold).sort().join(","), JSON.stringify(r.short_circuit_answer), r.short_circuited, Array.isArray(r.unjudged_keys) ? r.unjudged_keys.length : "x", r.llm_needed, r.llm_answer_received, JSON.stringify(r.ticket)].join("|")')"
+  "shadow|llm|0.7|null|false,true|true|false|0|true|true|null" \
+  "$(rq toolu_g_raw 'r && [r.mode, r.adopted, r.threshold && r.threshold.true, r.threshold && String(r.threshold.false),r.threshold && Object.keys(r.threshold).sort().join(","), JSON.stringify(r.short_circuit_answer), r.short_circuited, Array.isArray(r.unjudged_keys) ? r.unjudged_keys.length : "x", r.llm_needed, r.llm_answer_received, JSON.stringify(r.ticket)].join("|")')"
 check "input v2 keys present; sources_failed empty and sources_failed_reasons empty on the hook path" \
   "missing:|0|0" \
   "$(rq toolu_g_raw 'r && ["missing:" + ["sections","required","missing","exempt","sources_failed","sources_failed_reasons"].filter(k => !(k in r.input)).join(","), Array.isArray(r.input.sources_failed) ? r.input.sources_failed.length : "x", r.input.sources_failed_reasons && typeof r.input.sources_failed_reasons === "object" ? Object.keys(r.input.sources_failed_reasons).length : "x"].join("|")')"

@@ -4,7 +4,7 @@
 // Paths resolve from __dirname, so a worktree's hooks load that worktree's adapter.
 // normalizer: a module whose normalize(raw) the broker requires and calls in-process.
 // confidence_threshold_by_answer: per answer direction ("true" = the adapter's yes side),
-// the lowest confidence max(p, 1-p) at which a Jev answer is adopted.
+// the lowest confidence max(p, 1-p) at which a Jev answer is adopted (null = never adopted).
 // short_circuit_answer: the key value that, once adopted from Jev, decides the point on
 // its own (null = never short-circuits); explicit, so a missing key is invalid.
 // required_sections_by_stage: per stage, the snapshot sections that must be present in
@@ -34,8 +34,8 @@ const REGISTRY = freezeDeep({
     adapter: path.join(LIB_DIR, "jev-complexity-adapter.js"),
     normalizer: path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "normalize-judge-signals"),
     mode: "production",
-    confidence_threshold_by_answer: { true: 0.7, false: 0.7 },
-    short_circuit_answer: null,
+    confidence_threshold_by_answer: { true: 0.7, false: null },
+    short_circuit_answer: true,
     backup_subagent: "complexity-judge",
     subagent_type: "complexity-judge",
     fallback: "S0-undecidable",
@@ -95,9 +95,12 @@ function thresholdErrors(t) {
   if (keys.length !== 2 || keys[0] !== "false" || keys[1] !== "true") {
     return ['confidence_threshold_by_answer keys must be exactly "true" and "false"'];
   }
+  // A point that can adopt nothing is a misconfiguration: mode "shadow" is how to never adopt.
+  if (keys.every((k) => t[k] === null)) return ["confidence_threshold_by_answer must not be null in both directions"];
   return keys
-    .filter((k) => typeof t[k] !== "number" || !Number.isFinite(t[k]) || t[k] < THRESHOLD_MIN || t[k] > THRESHOLD_MAX)
-    .map((k) => `confidence_threshold_by_answer.${k} must be a number in ${THRESHOLD_MIN}..${THRESHOLD_MAX}`);
+    .filter((k) => t[k] !== null
+      && (typeof t[k] !== "number" || !Number.isFinite(t[k]) || t[k] < THRESHOLD_MIN || t[k] > THRESHOLD_MAX))
+    .map((k) => `confidence_threshold_by_answer.${k} must be a number in ${THRESHOLD_MIN}..${THRESHOLD_MAX} or null`);
 }
 
 function sectionErrors(entry, sections) {

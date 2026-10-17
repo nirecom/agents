@@ -19,7 +19,7 @@ const { TICKET_RE, readDone, errorResult, crash, removeSources, validHand } = re
 
 const NORMALIZER = path.join(__dirname, "..", "..", "..", "..", "bin", "workflow", "normalize-judge-signals");
 
-const SKIP_HEADER = ["RESULT=", "SKIP=", "ADOPTED=", "MODE=", "SETTLE="];
+const SKIP_HEADER = ["RESULT=", "SKIP=", "ADOPTED=", "MODE=", "SETTLE=", "FALLBACK="];
 
 // A skip done marker whose MS now names a newer owner: the header only, as superseded.
 function reoutputSkip(sid, tid, done, lines) {

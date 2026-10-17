@@ -4,15 +4,15 @@
 // key without a value filled false, and the decision record. The raw answer is never stored:
 // the record keeps only the canonical SKIP_CONDITIONS: line rebuilt from the parsed values.
 
-const { readAnswer, ticketRecord, adoptedOf } = require("./merge");
+const { readAnswer, ticketRecord, adoptedOf, answerFallbackOf } = require("./merge");
 
 const arr = (v) => (Array.isArray(v) ? v : []);
 const obj = (v) => (v && typeof v === "object" ? v : {});
 
-// A missing input is the root cause even when the subagent's answer is also absent.
-function fallbackOf(hand, needed, received) {
+// A missing input is the root cause even when the subagent's answer is also unusable.
+function fallbackOf(hand, answerReason) {
   if (hand.input_insufficient === true) return "input-insufficient";
-  if (needed && !received) return "answer-file-absent";
+  if (answerReason) return answerReason;
   return hand.jev && hand.jev.status !== "ok" ? hand.jev.status : null;
 }
 
@@ -48,9 +48,10 @@ function judgeSkip(sid, tid, hand, adapter) {
     answer: needed && ans.received && parsed.status !== "missing" ? adapter.toContractLine(trueKeys, hand) : null,
     executor_model: adapter.resolveExecutorModel(undefined), latency_ms: null,
   };
+  const answerReason = answerFallbackOf(needed, ans.received, parsed.status);
   const record = ticketRecord(sid, tid, hand, {
     llm, adopted, received: needed && ans.received, deterministic: null,
-    final: { conditions, skip }, fallback: fallbackOf(hand, needed, ans.received),
+    final: { conditions, skip }, fallback: fallbackOf(hand, answerReason),
   });
   if (!needed) {
     Object.assign(record, { llm: null, agreement_by_signal: {}, agreement: null });
@@ -63,7 +64,8 @@ function judgeSkip(sid, tid, hand, adapter) {
     });
   }
   const source = adapter.ADOPTED_TO_SOURCE[adopted];
-  return { result: { target, stage: hand.stage, conditions, source, skip, adopted }, record };
+  const fallback = answerReason ? record.fallback_reason : null;
+  return { result: { target, stage: hand.stage, conditions, source, skip, adopted, fallback }, record };
 }
 
 module.exports = { judgeSkip };
