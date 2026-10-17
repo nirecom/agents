@@ -29,6 +29,10 @@ hooks/stop-l2-findings-display.js
 hooks/supervisor-guard.js
 hooks/workflow-gate/user-verified-audit.js"
 
+# Sample-fixture files match SPAWN_ERE only through sample argument strings for reason
+# rendering, never a spawn instruction, so M4-1 drops them from the spawn hit set.
+SAMPLE_FIXTURE_HITS="hooks/lib/supervisor-reason-registry.js"
+
 # unfollowed_spawn_lines <file> <ERE> — line numbers of each <ERE> line whose NEXT
 # line lacks a formatAgentModelLine( call. Empty output = compliant.
 unfollowed_spawn_lines() {
@@ -60,9 +64,29 @@ check_spawn_file() {
 
 # --- M4-1: the set of files naming a supervisor agent is exactly the classified one
 case_begin "M4-1 supervisor path hit set" "hooks/supervisor-guard.js"
-got_hits="$(cd "$SCRIPT_CHECKOUT_ROOT" || exit 1; grep -rlE --exclude-dir=node_modules "$SPAWN_ERE|$ASSEMBLY_ERE" hooks bin | tr '\\' '/' | LC_ALL=C sort)"
+raw_hits="$(cd "$SCRIPT_CHECKOUT_ROOT" || exit 1; grep -rlE --exclude-dir=node_modules "$SPAWN_ERE|$ASSEMBLY_ERE" hooks bin | tr '\\' '/' | LC_ALL=C sort)"
+got_hits="$(printf '%s\n' "$raw_hits" | grep -vxF -f <(printf '%s\n' "$SAMPLE_FIXTURE_HITS"))"
 want_hits="$(printf '%s\n' "$EXPECTED_HITS" | LC_ALL=C sort)"
-if [ -z "$got_hits" ]; then
+stale_fixtures=""
+unkeyed_fixtures=""
+while IFS= read -r sf; do
+    [ -n "$sf" ] || continue
+    sf_path="$SCRIPT_CHECKOUT_ROOT/$sf"
+    if [ ! -f "$sf_path" ] || ! grep -qE "$SPAWN_ERE" "$sf_path"; then
+        stale_fixtures="$stale_fixtures$sf "
+        continue
+    fi
+    unkeyed="$(grep -nE "$SPAWN_ERE" "$sf_path" | grep -vE '(auditAgentPath|supervisorPath):' | cut -d: -f1 | tr '\n' ' ')"
+    [ -z "$unkeyed" ] || unkeyed_fixtures="$unkeyed_fixtures$sf:${unkeyed}"
+done < <(printf '%s\n' "$SAMPLE_FIXTURE_HITS")
+if [ -n "$stale_fixtures" ]; then
+    fail "M4-1 sample-fixture list" "[${stale_fixtures}] missing or no longer matching /$SPAWN_ERE/ — drop it from SAMPLE_FIXTURE_HITS"
+elif [ -n "$unkeyed_fixtures" ]; then
+    fail "M4-1 sample-fixture list" "[${unkeyed_fixtures}] has /$SPAWN_ERE/ line(s) off an auditAgentPath:/supervisorPath: sample key — classify the file as a spawn file instead"
+else
+    pass "M4-1 sample-fixture list still matches /$SPAWN_ERE/"
+fi
+if [ -z "$raw_hits" ]; then
     fail "M4-1 hit set" "grep found no file at all — vacuous scan"
 elif [ "$got_hits" = "$want_hits" ]; then
     pass "M4-1 hit set equals the 6 classified files"
