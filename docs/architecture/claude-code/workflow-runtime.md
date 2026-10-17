@@ -456,6 +456,19 @@ Boundary properties, and where each is enforced:
   session with one genuinely-stalled step and one lookahead-only step is
   blocked for the former without being silenced for the latter.
 
+### User-dialog turn (`user-dialog-turn`, #2698)
+
+A turn that ends in dialog with the user (`hooks/lib/user-dialog-turn.js` owns the
+classification, by turn structure alone — never the wording, in any language) rightly
+stops: the last tool call is `AskUserQuestion`, or a human prompt opened the turn and it
+used only read-only tools and ended in text. A plain-text question is not exempt, so
+awaiting an answer requires `AskUserQuestion`. The `user-dialog-turn` row of
+`EXEMPTION_MATRIX` silences both C4 and C2 for it; `nextStep` stays unexempted, so the `next-step`
+recommendation survives to the next Stop. In C4 the row sits in `C4_EXEMPTIONS`
+at phase `next-step-output`: it is evaluated only after the stall check and the
+`ACTION=invoke` check, so the mechanism-failure lane is unchanged and the
+transcript is read only when a block is already a candidate.
+
 ### Final Report
 
 `/session-close` SC-6 emits the Final Report directly into assistant text

@@ -29,6 +29,7 @@ const {
   describeUnreadableArtifacts,
 } = require("../lib/null-freshness");
 const { formatAgentModelLine } = require("../lib/role-model");
+const { withConvLang } = require("../lib/conv-lang");
 
 const TR_RANK = { TR1: 1, TR2: 2, TR3: 3, TR4: 4, TR5: 5, TR6: 6 };
 
@@ -96,24 +97,38 @@ function coveredSetSettled(audit, tr5Run, freshness, planSessionId, plansDir) {
 }
 
 function holdReason() {
-  return [
+  return withConvLang([
     "[EM Supervisor] user_verification (TR5) audit hold: the last verdict is BLOCK and is unresolved.",
     "The recorded BLOCK stands while the code and plan artifacts are unchanged.",
     "Resolve by addressing the audit findings and re-running the user_verification audit,",
     "or record a reviewed override:",
     "  bin/supervisor-record-block-override <run-id> <reason> --session-id <sid>",
-  ].join("\n");
+  ].join("\n"));
 }
 
 function armReason(armResult) {
   const runId = (armResult && (armResult.run_id || armResult.audit_run_id)) || "<none>";
   const subChecks = armResult && Array.isArray(armResult.sub_checks) ? armResult.sub_checks.join(", ") : "";
-  return [
+  const lines = [
     "[EM Supervisor] user_verification (TR5) audit required before the sentinel is accepted.",
     `An audit run has been armed (${runId}${subChecks ? `: ${subChecks}` : ""}).`,
+  ];
+  if (armResult && armResult.superseded_run_id) {
+    lines.push(`It inherits the sub-checks of the deferred run ${armResult.superseded_run_id}, which is superseded.`);
+  }
+  lines.push(
     "Run agents/supervisor-audit.md as a subagent, then re-issue the sentinel.",
     formatAgentModelLine("reviewer"),
-  ].join("\n");
+  );
+  return withConvLang(lines.join("\n"));
+}
+
+function unreadableArtifactsReason(description) {
+  return withConvLang(`[EM Supervisor] user_verification (TR5) audit gate: ${description}`);
+}
+
+function gateFailedReason() {
+  return withConvLang("[EM Supervisor] user_verification (TR5) audit gate failed to evaluate — blocked (fail-closed).");
 }
 
 // TR5 user_verification audit gate. Returns { authoritative: false } when no
@@ -178,6 +193,8 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
         plan_session_id: planSessionId,
         sub_checks: subCheckIds,
         declared_files_narrowed: narrowed === true,
+        // #2698: the deny reason is itself the launch, so an unshown run is superseded here.
+        launch_shown: true,
       });
       blockFn(armReason(result));
       return { authoritative: true };
@@ -197,7 +214,7 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     // re-arm on every sentinel, so hold without arming until the file is readable.
     const unreadable = unreadableArtifacts(freshness);
     if (unreadable.length > 0) {
-      blockFn(`[EM Supervisor] user_verification (TR5) audit gate: ${describeUnreadableArtifacts(unreadable)}`);
+      blockFn(unreadableArtifactsReason(describeUnreadableArtifacts(unreadable)));
       return { authoritative: true };
     }
 
@@ -255,9 +272,7 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     // Fail-closed once supervisor state is known to exist: an unexpected error
     // must never wave an unaudited user_verification through.
     try {
-      blockFn(
-        "[EM Supervisor] user_verification (TR5) audit gate failed to evaluate — blocked (fail-closed)."
-      );
+      blockFn(gateFailedReason());
     } catch (_) { /* stdout already emitted */ }
     return { authoritative: true };
   }
@@ -269,4 +284,8 @@ module.exports = {
   snapshotStale,
   armJudgmentSet,
   coveredSetSettled,
+  holdReason,
+  armReason,
+  unreadableArtifactsReason,
+  gateFailedReason,
 };

@@ -126,13 +126,16 @@ run_g23() {
     fi
 }
 
-# G24 — same transcript but no AskUserQuestion -> block emitted (regression guard)
+# G24 — no AskUserQuestion, and the turn did work (Bash) before its final text -> block emitted
+#       (regression guard; a text-only answer is a dialog turn, see G24b)
 run_g24() {
     require_source "$HOOK" "G24: no AskUserQuestion in transcript -> block emitted" || return
     local tmp out rc tp
     tmp="$(mktemp -d)"
     make_fixture "$tmp/t.jsonl" \
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"q"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"ls"}}]}}' \
+        '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
     seed_state "$tmp" "g24-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
@@ -144,6 +147,27 @@ run_g24() {
         pass "G24: no AskUserQuestion in transcript -> block emitted"
     else
         fail "G24: no AskUserQuestion in transcript -> block emitted (rc=$rc, out=$out)"
+    fi
+}
+
+# G24b — a human prompt answered with text only (no tool_use) is a dialog turn -> no block, exit 0
+run_g24b() {
+    require_source "$HOOK" "G24b: human prompt + text-only answer -> no block, exit 0" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"q"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_state "$tmp" "g24b-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
+    out=$(printf '{"stop_hook_active":false,"session_id":"g24b-sid","transcript_path":"%s"}' "$tp" \
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi "\"decision\":\"block\"" ); then
+        pass "G24b: human prompt + text-only answer -> no block, exit 0"
+    else
+        fail "G24b: human prompt + text-only answer -> no block, exit 0 (rc=$rc, out=$out)"
     fi
 }
 

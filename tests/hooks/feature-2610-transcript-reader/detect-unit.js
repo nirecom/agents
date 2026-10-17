@@ -28,6 +28,13 @@ try { d = require(process.env.DETECT_LIB); } catch (e) {
   process.exit(0);
 }
 const call = (f, p) => { try { return d[f](p); } catch (e) { return { threw: e.message }; } };
+// #2698: the AskUserQuestion turn judgment moved out of detect.js into the shared predicate
+// hooks/lib/user-dialog-turn.js (kind "ask-user-question-tool"), which takes the Stop input.
+const UDT_LIB = path.join(path.dirname(process.env.DETECT_LIB), "..", "lib", "user-dialog-turn.js");
+const askTurn = (p) => {
+  try { return require(UDT_LIB).isUserDialogTurn({ transcript_path: p, last_assistant_message: "" }); }
+  catch (e) { return { threw: e.message }; }
+};
 
 try {
   const hang = write([U("go"), BAD, A(T("Marking."), B('echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"')), BAD]);
@@ -38,9 +45,9 @@ try {
   ok("detectSentinelHang — final_report is exempt -> false", call("detectSentinelHang", exempt) === false, show(call("detectSentinelHang", exempt)));
 
   const ask = write([U("go"), BAD, A(T("Question."), ASK)]);
-  ok("detectAskUserQuestionTurn — AskUserQuestion last, malformed line -> true", call("detectAskUserQuestionTurn", ask) === true, show(call("detectAskUserQuestionTurn", ask)));
+  ok("isUserDialogTurn — AskUserQuestion last, malformed line -> true", askTurn(ask) === true, show(askTurn(ask)));
   const noAsk = write([U("go"), A(ASK, B("ls"))]);
-  ok("detectAskUserQuestionTurn — another tool_use last -> false", call("detectAskUserQuestionTurn", noAsk) === false, show(call("detectAskUserQuestionTurn", noAsk)));
+  ok("isUserDialogTurn — another tool_use last -> false", askTurn(noAsk) === false, show(askTurn(noAsk)));
 
   const audit = write([U("go"), A(T("one")), BAD, A(T("two"))]);
   const parsed = call("parseTranscriptForAudit", audit);
@@ -58,7 +65,7 @@ try {
   for (const p of [missing, empty]) {
     const tag = p === missing ? "missing" : "empty";
     ok("detectSentinelHang — " + tag + " transcript -> false", call("detectSentinelHang", p) === false, show(call("detectSentinelHang", p)));
-    ok("detectAskUserQuestionTurn — " + tag + " transcript -> false", call("detectAskUserQuestionTurn", p) === false, show(call("detectAskUserQuestionTurn", p)));
+    ok("isUserDialogTurn — " + tag + " transcript -> false", askTurn(p) === false, show(askTurn(p)));
     const a = call("parseTranscriptForAudit", p);
     ok("parseTranscriptForAudit — " + tag + " transcript -> []", Array.isArray(a) && a.length === 0, show(a));
     const o = call("detectOffProposal", p);

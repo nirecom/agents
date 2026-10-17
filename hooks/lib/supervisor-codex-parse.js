@@ -3,9 +3,10 @@
 // Parse EM Supervisor codex-engine output (#929): content between the
 // `<!-- begin-codex-output -->` / `<!-- end-codex-output -->` markers is JSON
 // Lines — alert = FINDING objects only; audit = exactly one VERDICT object plus
-// FINDING objects. parseSupervisorFindings(input, mode) → {ok, verdict, findings}.
-// CLI (stdin, --mode): on ok writes FINDING-only JSONL to os.tmpdir and prints
-// `OUTFILE:`; audit also prints `VERDICT:`. Contract SSOT: detail.md Step 8.
+// FINDING objects. parseSupervisorFindings(input, mode) → {ok, verdict, findings,
+// reason (on failure)}. CLI (stdin, --mode): on ok writes FINDING-only JSONL to
+// os.tmpdir and prints `OUTFILE:`; audit also prints `VERDICT:`; on failure prints
+// `REASON:` and exits 1. Contract SSOT: detail.md Step 8.
 
 const os = require("os");
 const fs = require("fs");
@@ -19,6 +20,9 @@ const CATEGORIES = new Set([
 ]);
 const AUDIT_VERDICTS = new Set(["CONTINUE", "WARN", "BLOCK"]);
 
+// Control characters plus the Unicode line/paragraph separators (Zl, Zp).
+const UNSAFE_REASON_CHARS_RE = /[\p{Cc}\p{Zl}\p{Zp}]+/gu;
+
 function extractContent(input) {
   if (typeof input !== "string") return null;
   const begin = input.match(/<!--\s*begin-codex-output[^>]*-->/);
@@ -27,51 +31,66 @@ function extractContent(input) {
   return input.slice(begin.index + begin[0].length, end.index);
 }
 
-function isValidFinding(o) {
-  if (!o || typeof o !== "object" || Array.isArray(o)) return false;
-  if (!Array.isArray(o.categories) || o.categories.length === 0) return false;
-  for (const c of o.categories) if (!CATEGORIES.has(c)) return false;
-  if (!SEVERITY_VALUES.has(o.severity)) return false;
-  if (typeof o.detail !== "string") return false;
-  return true;
+// Codex-supplied values reach an LLM-read `reason:` line: echo only a short [A-Za-z0-9_.-] string
+// (anything else becomes "?"), and only its type name for a non-string, so no instruction text or
+// throwing toString() gets through.
+function echoValue(v) {
+  if (typeof v !== "string") return typeof v;
+  return v.slice(0, 40).replace(/[^A-Za-z0-9_.-]/g, "?");
+}
+
+// null when valid; otherwise a short token naming the first failing field.
+function validateFinding(o) {
+  if (!Array.isArray(o.categories) || o.categories.length === 0) return "categories-missing";
+  for (const c of o.categories) if (!CATEGORIES.has(c)) return `unknown-category:${echoValue(c)}`;
+  if (!SEVERITY_VALUES.has(o.severity)) return `invalid-severity:${echoValue(o.severity)}`;
+  if (typeof o.detail !== "string") return "detail-not-string";
+  return null;
+}
+
+// Every {ok:false} names its branch in `reason` (#2699) so the CLI can report why.
+// The reason can embed codex-controlled text: strip control characters (a newline would let it
+// forge an `OUTFILE:` line in the CLI's stdout) and cap the length.
+function fail(reason) {
+  const safe = String(reason).replace(UNSAFE_REASON_CHARS_RE, " ").slice(0, 200);
+  return { ok: false, verdict: null, findings: [], reason: safe };
 }
 
 function parseSupervisorFindings(input, mode) {
   const content = extractContent(input);
-  if (content === null) return { ok: false, verdict: null, findings: [] };
+  if (content === null) return fail("missing-markers");
 
-  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  const lines = content.split(/\r?\n/).map((l) => l.trim());
   const findings = [];
   let verdict = null;
   let verdictCount = 0;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.length === 0) continue;
     let obj;
     try {
       obj = JSON.parse(line);
     } catch (e) {
-      return { ok: false, verdict: null, findings: [] };
+      return fail(`non-json-line:${i + 1}`);
     }
-    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-      return { ok: false, verdict: null, findings: [] };
-    }
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return fail("non-object-line");
     if (Object.prototype.hasOwnProperty.call(obj, "verdict")) {
       // A verdict object only belongs in audit output.
-      if (mode !== "audit") return { ok: false, verdict: null, findings: [] };
-      if (typeof obj.verdict !== "string" || !AUDIT_VERDICTS.has(obj.verdict)) {
-        return { ok: false, verdict: null, findings: [] };
-      }
+      if (mode !== "audit") return fail("verdict-in-alert-mode");
+      if (typeof obj.verdict !== "string" || !AUDIT_VERDICTS.has(obj.verdict)) return fail("invalid-verdict");
       verdictCount += 1;
       verdict = obj.verdict;
     } else {
-      if (!isValidFinding(obj)) return { ok: false, verdict: null, findings: [] };
+      const why = validateFinding(obj);
+      if (why) return fail(`invalid-finding:${why}`);
       findings.push(obj);
     }
   }
 
   if (mode === "audit") {
     // Exactly one verdict is required; zero or two+ is a protocol violation.
-    if (verdictCount !== 1) return { ok: false, verdict: null, findings: [] };
+    if (verdictCount !== 1) return fail(`audit-verdict-count:${verdictCount}`);
     return { ok: true, verdict, findings };
   }
   return { ok: true, verdict: null, findings };
@@ -93,8 +112,10 @@ if (require.main === module) {
     const r = parseSupervisorFindings(input, mode);
     if (!r.ok) {
       // {ok:false}: never write an OUTFILE — the caller reads a missing OUTFILE
-      // line as "not SUCCESS".
-      process.exit(1);
+      // line as "not SUCCESS"; the REASON line names the failing branch.
+      // exitCode, not exit(): Windows pipes write asynchronously.
+      process.stdout.write(`REASON: ${r.reason}\n`);
+      process.exitCode = 1;
       return;
     }
     const outfile = path.join(

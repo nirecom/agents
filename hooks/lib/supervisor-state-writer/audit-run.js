@@ -127,7 +127,10 @@ function armCore(sessionId, opts) {
   // than minting a duplicate. Two concurrent Stop hooks that both evaluated the
   // pre-write snapshot call armAuditRun independently; the file lock serializes entry
   // into armCore, so the second Stop finds phase=pending and exits here (#2256 S2-c).
-  if (audit.audit_phase === "pending" || audit.audit_phase === "in_progress") {
+  // #2698 exception: a shown arm replaces an unshown run — no agent ever ran it, so the
+  // finalize CAS cannot collide; its judgment set is carried into the new run.
+  const prior = opts.launch_shown === true ? ledger.unshownRun(audit) : null;
+  if (!prior && (audit.audit_phase === "pending" || audit.audit_phase === "in_progress")) {
     return {
       ok: true,
       audit_run_id: audit.audit_run_id,
@@ -146,7 +149,12 @@ function armCore(sessionId, opts) {
   const plansDir = opts.plans_dir || getWorkflowPlansDir();
   const planSessionId = opts.plan_session_id || sessionId;
   const trIds = Array.isArray(opts.tr_ids) ? opts.tr_ids.slice() : [];
-  const subChecks = opts.sub_checks || triggers.subChecksForTriggers(trIds);
+  const subChecks = (opts.sub_checks || triggers.subChecksForTriggers(trIds)).slice();
+  if (prior) {
+    for (const t of prior.tr_ids) if (!trIds.includes(t)) trIds.push(t);
+    for (const s of prior.sub_checks) if (!subChecks.includes(s)) subChecks.push(s);
+    ledger.markLedgerEntrySuperseded(audit, prior.run_id, nowIso);
+  }
 
   const freshness = opts.cwd
     ? computeFreshnessKey(opts.cwd, plansDir, planSessionId)
@@ -167,7 +175,7 @@ function armCore(sessionId, opts) {
   const entry = {
     id: runId,
     tr_ids: trIds,
-    cause: opts.cause || null,
+    cause: opts.cause || (prior && prior.cause) || null,
     transitions: Array.isArray(opts.transitions) ? opts.transitions.slice() : [],
     input_version: freshness.input_version,
     input_base: inputBase,
@@ -197,12 +205,13 @@ function armCore(sessionId, opts) {
   audit.audit_retry_count = 0;
   audit.audit_verdict = null;
   audit.audit_verdict_summary = null;
-  audit.audit_dispatched_at = null;
+  // #2698: audit_dispatched_at = when the launch instruction was shown to the main conversation.
+  audit.audit_dispatched_at = opts.launch_shown === true ? nowIso : null;
   ledger.appendLedgerEntry(audit, entry);
   ledger.extendConsumedTransitions(audit, entry.transitions);
 
   const ok = commit(sessionId, state);
-  return {
+  const result = {
     ok,
     audit_run_id: runId,
     run_id: runId,
@@ -211,6 +220,23 @@ function armCore(sessionId, opts) {
     sub_checks: subChecks,
     scope_drift: scopeDrift,
   };
+  if (prior) result.superseded_run_id = prior.run_id;
+  return result;
+}
+
+// #2698: records that runId's launch instruction was shown. Matches on run-id as well as the
+// unshown state, so a newer run armed meanwhile is never marked by mistake.
+function markAuditLaunchShown(sessionId, runId) {
+  if (!sessionId || !SESSION_ID_RE.test(sessionId) || typeof runId !== "string") return false;
+  const result = withSessionStateLock(sessionId, () => {
+    const state = readStateOrInit(sessionId);
+    const audit = auditOf(state);
+    const run = ledger.unshownRun(audit);
+    if (!run || run.run_id !== runId) return false;
+    audit.audit_dispatched_at = new Date().toISOString();
+    return commit(sessionId, state);
+  });
+  return result === true;
 }
 
 // Mints the next run identity inside the same read-modify-write that arms the
@@ -344,4 +370,4 @@ function recordBlockOverride(sessionId, opts = {}) {
   return result === true;
 }
 
-module.exports = { armAuditRun, consumeTransitions, finalizeAuditRun, recordBlockOverride, auditOf, AUDIT_DEFAULTS, inputKeyForSubCheck };
+module.exports = { armAuditRun, markAuditLaunchShown, consumeTransitions, finalizeAuditRun, recordBlockOverride, auditOf, AUDIT_DEFAULTS, inputKeyForSubCheck };

@@ -102,6 +102,10 @@ function writeAlertStateCore(sessionId, patch) {
   if (effectivePhase === "done" && !("alert_retry_count" in patch)) {
     alert.alert_retry_count = 0;
   }
+  // #2698: the explicit paused -> pending resume starts a fresh retry cycle, else the first block re-freezes.
+  if (currentPhase === "paused" && effectivePhase === "pending" && !("alert_retry_count" in patch)) {
+    alert.alert_retry_count = 0;
+  }
 
   // Append findings. Draft-status entries get auto-assigned idx for later --confirm/--drop.
   if ("findings" in patch) {

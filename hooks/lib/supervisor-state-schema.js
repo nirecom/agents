@@ -68,7 +68,8 @@ function createEmptyState(sessionId) {
       // audit_run_id and audit_dispatched_at are deliberately absent (not null):
       // "never armed/dispatched" and "armed/dispatched then cleared" are
       // different facts, and the gate/backstop tests read an unset field as
-      // "none". armAuditRun mints the id; the TR4 dispatch sets dispatched_at.
+      // "none". armAuditRun mints the id. audit_dispatched_at (#2698) is the time the run's
+      // launch instruction was shown to the main conversation; null on a pending run = unshown.
       run_seq: 0, audit_verdict_summary: null,
       ledger: [], consumed_transitions: [], last_terminal_run_id: null,
       declared_files: null, uv_attempt_seq: 0, block_overrides: [],
