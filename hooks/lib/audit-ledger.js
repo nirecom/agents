@@ -93,6 +93,35 @@ function appendLedgerEntry(audit, entry) {
   return entry;
 }
 
+// #2698: the "unshown run" — armed (pending) but its launch instruction never shown to the main
+// conversation (audit_dispatched_at null). The one predicate for the Stop guard, the writer and
+// the final report. Returns {run_id, sub_checks, tr_ids, cause, scope_drift} or null.
+function unshownRun(audit) {
+  if (!audit || typeof audit !== "object") return null;
+  if (audit.audit_phase !== "pending" || audit.audit_dispatched_at != null) return null;
+  const runId = audit.audit_run_id;
+  if (typeof runId !== "string" || runId === "") return null;
+  const entries = ledgerOf(audit).filter((e) => e && e.id === runId);
+  const entry = entries.length > 0 ? entries[entries.length - 1] : null;
+  const pending = Array.isArray(audit.pending_sub_checks) ? audit.pending_sub_checks : null;
+  return {
+    run_id: runId,
+    sub_checks: (pending || (entry && Array.isArray(entry.sub_checks) ? entry.sub_checks : [])).slice(),
+    tr_ids: entry && Array.isArray(entry.tr_ids) ? entry.tr_ids.slice() : [],
+    cause: (entry && entry.cause) || audit.audit_cause || null,
+    scope_drift: (entry && entry.scope_drift) || null,
+  };
+}
+
+// #2698: an unshown run replaced by a newer arm before any agent ran it. Returns the entry or null.
+function markLedgerEntrySuperseded(audit, runId, nowIso) {
+  const entry = ledgerOf(audit).find((e) => e && e.id === runId && e.outcome === "armed") || null;
+  if (!entry) return null;
+  entry.outcome = "superseded";
+  entry.terminal_at = nowIso;
+  return entry;
+}
+
 function extendConsumedTransitions(audit, transitions) {
   if (!Array.isArray(audit.consumed_transitions)) audit.consumed_transitions = [];
   for (const t of Array.isArray(transitions) ? transitions : []) {
@@ -138,6 +167,8 @@ module.exports = {
   isRunFresh,
   pruneLedger,
   appendLedgerEntry,
+  markLedgerEntrySuperseded,
+  unshownRun,
   extendConsumedTransitions,
   appendBlockOverride,
   capDeclaredFiles,

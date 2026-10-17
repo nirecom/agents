@@ -4,8 +4,7 @@
 # Tags: supervisor, em-supervisor, findings-render, conv-lang, scope:issue-specific, pwsh-not-required
 # L3 gap (what this test does NOT catch):
 # - formatLayer2Findings rendered inside a real Claude Code Final Report block
-# - CONV_LANG env var propagation across real claude -p hook subprocess boundary
-#   (Anthropic bug #27987)
+# - CONV_LANG env var propagation across real claude -p hook subprocess boundary (Anthropic bug #27987)
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 
@@ -299,8 +298,9 @@ process.stdout.write(result === null ? 'NULL' : String(result));
 
     # T7d: 2 warning/error findings → every non-empty output line starts with [EM Supervisor]
     # RED-EXPECTED: actionableOnly not yet implemented; current code produces multi-line verbose output
+    # CONV_LANG pinned: the #2699 injection line would otherwise lack the [EM Supervisor] prefix.
     local out_prefix
-    out_prefix=$(run_with_timeout 10 node -e "
+    out_prefix=$(CONV_LANG=english run_with_timeout 10 node -e "
 const r = require('$RENDER_NODE');
 const findings = [
     { categories: ['code'], severity: 'error',   detail: 'detail-epsilon', reporter: 'test', timestamp: new Date().toISOString() },

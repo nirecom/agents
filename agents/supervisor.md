@@ -87,9 +87,9 @@ Codex-primary single pass via the shared engine `bash "$AGENTS_MAIN_ROOT/bin/sup
 
 ### Reporting back
 
-Return a fixed one-line ack as your entire response — nothing before it, nothing after it:
+Return a one-line ack as your entire response — nothing before it, nothing after it.
 
-`[EM Supervisor] Alert review complete — findings recorded to state; actionable summary surfaced by the Stop hook.`
+Start it with `[EM Supervisor]`, write it in the CONV_LANG language (the line-7 directive; default language when absent), and state only that the review is recorded and the Stop hook surfaces the summary.
 
 The actionable summary is derived deterministically from the state file by `stop-l2-findings-display.js` (Stop hook) — not from your prose. Do NOT add finding details, first-aid guidance, or `/issue-create` recommendations to your return text. Use `bash "$AGENTS_MAIN_ROOT/bin/supervisor-render-alert" --session-id <effective-state-sid>` only for manual debugging, not as your response.
 
@@ -108,6 +108,6 @@ When the user has acknowledged and resolved a blocking error (cumSev=error), the
 - Do not modify source files.
 - State file writes are the only side effect.
 - Layer 1 findings are advisory inputs, not verdicts.
-- You are invoked interactively from the main agent context; the main agent relays only your fixed one-line ack; the actionable summary is surfaced deterministically by the Stop hook, not by your prose.
-- After finalizing state, return the fixed one-line ack and nothing else.
+- You are invoked interactively from the main agent context; the main agent relays only your one-line ack; the actionable summary is surfaced deterministically by the Stop hook, not by your prose.
+- After finalizing state, return the one-line ack and nothing else.
 - Do NOT propose or invoke `/workflow-init` — the session continues after diagnosis.

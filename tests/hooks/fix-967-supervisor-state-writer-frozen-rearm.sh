@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, layer2, writer, fix-967, paused, scope:issue-specific
-# #967/#1166: ensureAlertScheduled re-arms from "paused" (pending, fresh armed_at, retry 0);
-# only done/closed short-circuit. The control-dir final-report-env.json marker is ignored
-# while paused. validateAlertPhaseTransition: paused->pending ok; paused->done, done->pending no.
+# #967/#1166, flipped by #2698: a new finding never re-arms a "paused" alert (phase stays paused,
+# armed_at stays null, retry unchanged) but the finding is still recorded; only an explicit
+# writeAlertState resume leaves paused. done/closed short-circuit; the final-report-env.json
+# marker still suppresses a null-phase arm. validateAlertPhaseTransition: paused->pending ok;
+# paused->done, done->pending no.
 # L3 gap: hook registration and the live supervisor-report call chain
 # (mitigated by bin/check-verification-gate.sh hook-registration).
 
@@ -88,9 +90,9 @@ require('fs').writeFileSync(cd.controlPath('$sid', 'final-report-env.json', { fo
 " >/dev/null 2>&1
 }
 
-# R1: paused phase + appendFinding -> ensureAlertScheduled re-arms (alert_phase becomes "pending")
+# R1 (#2698): paused phase + appendFinding -> alert_phase stays "paused", finding still recorded
 run_r1() {
-    require_writer "R1: paused + appendFinding -> alert_phase becomes pending" || return
+    require_writer "R1: paused + appendFinding -> alert_phase stays paused, finding recorded" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r1-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
@@ -99,21 +101,22 @@ const w = require('$WRITER_NODE');
 const r = w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'new finding after pause', reporter: 'test' });
 if (r !== true) { console.error('appendFinding returned: '+r); process.exit(2); }
 const st = w.readState('$sid');
-if (!st || st.alert.alert_phase !== 'pending') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+if (!st || st.alert.alert_phase !== 'paused') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+if (!st.layer1.findings.some((f) => f.detail === 'new finding after pause')) { console.error('finding not recorded'); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R1: paused + appendFinding -> alert_phase becomes pending"
+        pass "R1: paused + appendFinding -> alert_phase stays paused, finding recorded"
     else
-        fail "R1: paused + appendFinding -> alert_phase becomes pending (rc=$rc, out=$out)"
+        fail "R1: paused + appendFinding -> alert_phase stays paused, finding recorded (rc=$rc, out=$out)"
     fi
 }
 
-# R2: paused + appendFinding -> alert_armed_at is set to non-null
+# R2 (#2698): paused + appendFinding -> alert_armed_at stays null
 run_r2() {
-    require_writer "R2: paused + appendFinding -> alert_armed_at non-null" || return
+    require_writer "R2: paused + appendFinding -> alert_armed_at stays null" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r2-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
@@ -121,21 +124,22 @@ run_r2() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.alert.alert_armed_at == null) { console.error('alert_armed_at='+JSON.stringify(st && st.alert.alert_armed_at)); process.exit(3); }
+if (!st || st.alert.alert_armed_at !== null) { console.error('alert_armed_at='+JSON.stringify(st && st.alert.alert_armed_at)); process.exit(3); }
+if (!st.layer1.findings.some((f) => f.detail === 'd')) { console.error('finding not recorded'); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R2: paused + appendFinding -> alert_armed_at non-null"
+        pass "R2: paused + appendFinding -> alert_armed_at stays null"
     else
-        fail "R2: paused + appendFinding -> alert_armed_at non-null (rc=$rc, out=$out)"
+        fail "R2: paused + appendFinding -> alert_armed_at stays null (rc=$rc, out=$out)"
     fi
 }
 
-# R3: paused + appendFinding -> alert_retry_count reset to 0
+# R3 (#2698): paused + appendFinding -> alert_retry_count unchanged (no reset)
 run_r3() {
-    require_writer "R3: paused + appendFinding -> alert_retry_count reset to 0" || return
+    require_writer "R3: paused + appendFinding -> alert_retry_count unchanged" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r3-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
@@ -143,15 +147,15 @@ run_r3() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.alert.alert_retry_count !== 0) { console.error('alert_retry_count='+JSON.stringify(st && st.alert.alert_retry_count)); process.exit(3); }
+if (!st || st.alert.alert_retry_count !== 2) { console.error('alert_retry_count='+JSON.stringify(st && st.alert.alert_retry_count)); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R3: paused + appendFinding -> alert_retry_count reset to 0"
+        pass "R3: paused + appendFinding -> alert_retry_count unchanged"
     else
-        fail "R3: paused + appendFinding -> alert_retry_count reset to 0 (rc=$rc, out=$out)"
+        fail "R3: paused + appendFinding -> alert_retry_count unchanged (rc=$rc, out=$out)"
     fi
 }
 
@@ -178,9 +182,9 @@ console.log('OK');
     fi
 }
 
-# R5: paused phase + final-report-env.json marker present -> marker IGNORED, paused still re-arms
+# R5 (#2698): paused phase + final-report-env.json marker present -> stays paused, finding recorded
 run_r5() {
-    require_writer "R5: paused + final-report-env.json marker -> marker ignored, still re-arms" || return
+    require_writer "R5: paused + final-report-env.json marker -> stays paused, finding recorded" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
@@ -189,16 +193,17 @@ run_r5() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.alert.alert_phase !== 'pending') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
-if (st.alert.alert_armed_at == null) { console.error('alert_armed_at not set'); process.exit(4); }
+if (!st || st.alert.alert_phase !== 'paused') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+if (st.alert.alert_armed_at !== null) { console.error('alert_armed_at unexpectedly set: '+JSON.stringify(st.alert.alert_armed_at)); process.exit(4); }
+if (!st.layer1.findings.some((f) => f.detail === 'd')) { console.error('finding not recorded'); process.exit(5); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R5: paused + final-report-env.json marker -> marker ignored, still re-arms"
+        pass "R5: paused + final-report-env.json marker -> stays paused, finding recorded"
     else
-        fail "R5: paused + final-report-env.json marker -> marker ignored, still re-arms (rc=$rc, out=$out)"
+        fail "R5: paused + final-report-env.json marker -> stays paused, finding recorded (rc=$rc, out=$out)"
     fi
 }
 
@@ -227,39 +232,42 @@ console.log('OK');
     fi
 }
 
-# R5c: re-paused cycle — paused->re-arm->pending->incrementRetry×threshold->paused->re-arm
-# Validates that re-arm resets retry_count=0 so the pause cycle can repeat correctly.
+# R5c (#2698): pause cycle — a finding keeps paused; only an explicit writeAlertState resume
+# (pending, fresh armed_at, retry 0) leaves it; retries re-freeze; the next finding keeps paused.
 run_r5c() {
-    require_writer "R5c: re-paused cycle (paused->rearm->re-paused->rearm)" || return
+    require_writer "R5c: pause cycle (finding keeps paused -> explicit resume -> re-paused -> finding keeps paused)" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5c-sid"
     seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     out=$(WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const w = require('$WRITER_NODE');
-// Re-arm from paused
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 let st = w.readState('$sid');
-if (!st || st.alert.alert_phase !== 'pending') { console.error('post-rearm alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
-if (st.alert.alert_retry_count !== 0) { console.error('retry_count not reset: '+st.alert.alert_retry_count); process.exit(4); }
+if (!st || st.alert.alert_phase !== 'paused') { console.error('post-finding alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+// Explicit resume
+const ok = w.writeAlertState('$sid', { alert_phase: 'pending', alert_armed_at: new Date().toISOString(), alert_retry_count: 0 });
+st = w.readState('$sid');
+if (ok !== true || st.alert.alert_phase !== 'pending') { console.error('resume failed: '+JSON.stringify(st && st.alert)); process.exit(4); }
 // Exhaust retries to re-pause (ALERT_RETRY_THRESHOLD=2)
 const threshold = s.ALERT_RETRY_THRESHOLD;
 for (let i = 0; i < threshold; i++) { w.incrementAlertRetryCount('$sid'); }
 st = w.readState('$sid');
 if (!st || st.alert.alert_phase !== 'paused') { console.error('post-exhaust alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(5); }
-// Re-arm again from re-paused
-w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 're-arm-2', reporter: 't' });
+const retryBefore = st.alert.alert_retry_count;
+w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'after-re-pause', reporter: 't' });
 st = w.readState('$sid');
-if (!st || st.alert.alert_phase !== 'pending') { console.error('second rearm alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(6); }
-if (st.alert.alert_retry_count !== 0) { console.error('second cycle retry_count: '+st.alert.alert_retry_count); process.exit(7); }
+if (!st || st.alert.alert_phase !== 'paused') { console.error('second finding alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(6); }
+if (st.alert.alert_retry_count !== retryBefore) { console.error('retry_count changed: '+st.alert.alert_retry_count); process.exit(7); }
+if (!st.layer1.findings.some((f) => f.detail === 'after-re-pause')) { console.error('finding not recorded'); process.exit(8); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R5c: re-paused cycle (paused->rearm->re-paused->rearm)"
+        pass "R5c: pause cycle (finding keeps paused -> explicit resume -> re-paused -> finding keeps paused)"
     else
-        fail "R5c: re-paused cycle (paused->rearm->re-paused->rearm) (rc=$rc, out=$out)"
+        fail "R5c: pause cycle (finding keeps paused -> explicit resume -> re-paused -> finding keeps paused) (rc=$rc, out=$out)"
     fi
 }
 

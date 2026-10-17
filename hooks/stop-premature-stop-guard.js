@@ -45,6 +45,9 @@ const C4_EXEMPTIONS = [
   // #2527 4-4: the human merges the PR on the web; the background poller resumes the session.
   { id: "human-web-merge-wait", phase: "next-step-output",
     test: (c, _d) => c.wait === "human-web-merge" },
+  // #2698: next-step-output (not session) so the mechanism-failure lane above stays unchanged.
+  { id: "user-dialog-turn", phase: "next-step-output",
+    test: (c, d) => d.isUserDialogTurn(c.input) },
 ];
 
 // Per-finding exemptions that apply to the mechanism-failure lane only. The
@@ -83,9 +86,10 @@ function buildExemptionDeps() {
     require("./lib/session-markers");
   const { isWorkflowStarted, anyStepInFlight, isLookaheadOnlyInFlight } =
     require("./workflow-state");
+  const { isUserDialogTurn } = require("./lib/user-dialog-turn");
   return {
     isWorkflowOff, isNextStepPaused, isWorkflowStarted,
-    anyStepInFlight, isLookaheadOnlyInFlight,
+    anyStepInFlight, isLookaheadOnlyInFlight, isUserDialogTurn,
   };
 }
 
@@ -122,6 +126,20 @@ function mechanismStalls(sid) {
   }
 }
 
+function formatMechanismFailureReason(listed) {
+  const { withConvLang } = require("./lib/conv-lang");
+  return withConvLang(
+    `[C4 mechanism-failure] The workflow mechanism is stalled: ${listed}. ` +
+    "The step is recorded in_progress but its record is stale or unusable, so " +
+    "next-step guidance cannot be trusted. Inspect the workflow state and settle " +
+    "the step before continuing. (Hook: stop-premature-stop-guard.js)");
+}
+
+function formatPrematureStopReason({ pendingNote, degradedNote = "" } = {}) {
+  const { withConvLang } = require("./lib/conv-lang");
+  return withConvLang(`[C4 premature-stop] ${pendingNote} If this turn is waiting on a user decision, ask it with the AskUserQuestion tool instead of plain text. (Hook: stop-premature-stop-guard.js)${degradedNote}`);
+}
+
 // Reports each finding at most once per session (the ledger owns idempotency),
 // then emits the decision:block payload naming the mechanism and the steps.
 function emitMechanismBlock(sid, stalls) {
@@ -130,11 +148,7 @@ function emitMechanismBlock(sid, stalls) {
     for (const f of stalls) reportMechanismFailureOnce(sid, f);
   } catch (_e) {}
   const listed = stalls.map((f) => `${f.step} (${f.kind})`).join(", ");
-  const reason =
-    `[C4 mechanism-failure] The workflow mechanism is stalled: ${listed}. ` +
-    "The step is recorded in_progress but its record is stale or unusable, so " +
-    "next-step guidance cannot be trusted. Inspect the workflow state and settle " +
-    "the step before continuing. (Hook: stop-premature-stop-guard.js)";
+  const reason = formatMechanismFailureReason(listed);
   try {
     process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
   } catch (_e) {}
@@ -223,7 +237,7 @@ if (require.main === module) {
     // #2527 4-4: WAIT names a wait on a human outside Claude (the web merge); unquoted value.
     const waitLine = lines.find((l) => l.startsWith("WAIT="));
     const waitValue = waitLine ? waitLine.slice("WAIT=".length).trim() : "";
-    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue, wait: waitValue }, deps, degraded)) {
+    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue, wait: waitValue, input }, deps, degraded)) {
       process.exit(0);
     }
 
@@ -251,7 +265,7 @@ if (require.main === module) {
     const degradedNote = degraded.length
       ? ` [warning: exemption predicate(s) failed: ${degraded.join(",")}]`
       : "";
-    const reason = `[C4 premature-stop] ${pendingNote} (Hook: stop-premature-stop-guard.js)${degradedNote}`;
+    const reason = formatPrematureStopReason({ pendingNote, degradedNote });
     if (degraded.length) {
       try {
         process.stderr.write(`stop-premature-stop-guard: exemption predicate(s) failed: ${degraded.join(",")}\n`);
@@ -268,4 +282,5 @@ if (require.main === module) {
 module.exports = {
   C4_EXEMPTIONS, C4_MECHANISM_EXEMPTIONS,
   buildExemptionDeps, firstExemption, isFindingExemptFromC4,
+  formatPrematureStopReason, formatMechanismFailureReason,
 };
