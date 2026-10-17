@@ -17,7 +17,9 @@ export RUN_ALL_CONFIG_VAR_CMD="$NO_CONFIG_VAR_CMD"
 # fx_init would export this too: the copied runner reads the live tree's registry through it.
 export RUN_ALL_REGISTRY_LIB="$FX_REPO_ROOT/bin/lib/test-language-registry.sh"
 mkdir -p "$FX_CACHE_DIR"
-R_LANE_VARS="TEST_LANES TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP"
+# The copied runner sees the fixture's 1024 logical CPUs, so the CPU ceiling never fires by accident.
+FX_PATH_PREFIX="$CPU_SHIM_DIR"
+R_LANE_VARS="TEST_LANES TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP AUTO_CONFIG_TEST_MAX_JOBS"
 # r_lanes_line — the runner's `lanes:` progress line, prefix stripped (empty if none).
 r_lanes_line() { sed -n 's/^\[run-all\] lanes: //p' "$R_ERR" | head -n 1; }
 
@@ -52,7 +54,7 @@ R1="$(r_root 6 --peak --sleep 1)"
 fx_exec "$R1" 120 "$R_OUT" "$R_ERR" -j 8 --all; _rc=$?
 assert_eq "R1 run exits 0" "0" "$_rc"
 r_has_lanes_line && pass "R1 stderr carries a '[run-all] lanes:' line" || fail "R1 no lanes: line on stderr"
-[[ "$(r_lanes_line)" =~ ^jobs\ 2\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 3,\ source\ env\;\ lanes\ 1\ 2\)$ ]] \
+[[ "$(r_lanes_line)" =~ ^jobs\ 2\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 3,\ source\ env\;\ lanes\ 1\ 2\) ]] \
     && pass "R1 lanes: line is 'jobs <granted> of requested <n> (max jobs per host <H>, source <s>; lanes <i...>)'" \
     || fail "R1 lanes: line format — got $(printf '%q' "$(r_lanes_line)")"
 assert_eq "R1 N=3, -j 8: peak concurrency is N-1 = 2" "2" "$(fx_peak_of "$(fx_peak_log "$R1")")"
@@ -66,15 +68,20 @@ assert_eq "R2 --print-plan exits 0" "0" "$_rc"
 assert_eq "R2 --print-plan creates no lane" "" "$(lane_names "$FX_CACHE_DIR")"
 # Eight tests and -j 8 make the requested width 8 whether or not it is clamped to the test count.
 R2W="$(r_root 8)"
-r2_plan() {  # r2_plan <label> <want-jobs> <want-plan-note>
+r2_plan() {  # r2_plan <label> <want-jobs> <want-plan-note-prefix> [want-substring]
     fx_exec "$R2W" 60 "$R_OUT" "$R_ERR" --print-plan -j 8 --all; _rc=$?
     assert_eq "R2 $1: --print-plan exits 0" "0" "$_rc"
     assert_eq "R2 $1: jobs= is $2" "jobs=$2" "$(grep '^jobs=' "$R_OUT")"
     grep -qF -- "plan: $3" "$R_ERR" && pass "R2 $1: stderr carries 'plan: $3'" || fail "R2 $1: stderr lacks 'plan: $3' — err=$(printf '%q' "$(cat "$R_ERR")")"
+    if [ -n "${4:-}" ]; then
+        grep -F -- "plan: $3" "$R_ERR" | grep -qF -- "$4" && pass "R2 $1: the plan line says '$4'" || fail "R2 $1: the plan line lacks '$4' — err=$(printf '%q' "$(cat "$R_ERR")")"
+    fi
     assert_eq "R2 $1: --print-plan creates no lane" "" "$(lane_names "$FX_CACHE_DIR")"
 }
 r_reset; TEST_MAX_JOBS_PER_HOST=3
-r2_plan "H=3 -j 8" 2 "jobs 2 of requested 8 (max jobs per host 3, source env; a live lease may grant fewer)"
+# #2687 ③: the plan note says the width is re-evaluated (a fair share), not a fixed lease.
+r2_plan "H=3 -j 8" 2 "jobs 2 of requested 8 (max jobs per host 3, source env" \
+    "the width is re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its fair share until they finish"
 r_reset; TEST_MAX_JOBS_PER_HOST=3; TEST_LANES=off
 r2_plan "TEST_LANES=off" 8 "not applied (TEST_LANES=off); jobs 8 as requested"
 r_reset; TEST_MAX_JOBS_PER_HOST=3; TEST_LANES_HELD=123
@@ -191,7 +198,7 @@ R10B="$(r_root 1)"
 fx_exec "$R10B" 60 "$R_OUT" "$R_ERR" --all; _rc=$?
 assert_eq "R10 N=1: run-all runs on lane.1 (rc 0)" "0" "$_rc"
 r_has_lanes_line && pass "R10 N=1: the run was leased (lanes: line)" || fail "R10 N=1: no lanes: line — lane.1 not leased"
-[[ "$(r_lanes_line)" =~ ^jobs\ 1\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 1,\ source\ env\;\ lanes\ 1\)$ ]] \
+[[ "$(r_lanes_line)" =~ ^jobs\ 1\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 1,\ source\ env\;\ lanes\ 1\) ]] \
     && pass "R10 N=1: lanes: line reports lane 1 of max jobs per host 1" \
     || fail "R10 N=1: lanes: line format — got $(printf '%q' "$(r_lanes_line)")"
 case_ran R10
@@ -213,13 +220,14 @@ done
 case_ran R11
 
 # ── R12 partial grant: lane.1 busy, N=4 -j 8 runs on the two free lanes ─────
-r_reset; TEST_MAX_JOBS_PER_HOST=4; TEST_LANES_WAIT_CAP=3; TEST_LANES_WAIT_INTERVAL=1
+# Mode off pins the env layer as the source: under on, a pin equal to the default 4 reports `default`.
+r_reset; TEST_MAX_JOBS_PER_HOST=4; AUTO_CONFIG_TEST_MAX_JOBS=off; TEST_LANES_WAIT_CAP=3; TEST_LANES_WAIT_INTERVAL=1
 mk_slot "$FX_CACHE_DIR" 1 "$$"
 R12="$(r_root 6 --peak --sleep 1)"
 fx_exec "$R12" 120 "$R_OUT" "$R_ERR" -j 8 --all; _rc=$?
 assert_eq "R12 run starts on a partial grant and exits 0" "0" "$_rc"
 r_has_lanes_line && pass "R12 stderr carries a lanes: line" || fail "R12 no lanes: line — the run was not leased"
-[[ "$(r_lanes_line)" =~ ^jobs\ 2\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 4,\ source\ env\;\ lanes\ 2\ 3\)$ ]] \
+[[ "$(r_lanes_line)" =~ ^jobs\ 2\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 4,\ source\ env\;\ lanes\ 2\ 3\) ]] \
     && pass "R12 lanes: line reports the partial grant on lanes 2 3" \
     || fail "R12 lanes: line format — got $(printf '%q' "$(r_lanes_line)")"
 assert_eq "R12 N=4 with lane.1 busy: peak concurrency is the 2 granted lanes" "2" "$(fx_peak_of "$(fx_peak_log "$R12")")"
@@ -231,7 +239,8 @@ r_reset
 R13_HID="$(bash -c '. "$1"; run_all_host_id' _ "$PAR_LIB")"
 R13_NOW="$(bash -c '. "$1"; command -v run_all_os_attr >/dev/null 2>&1 && run_all_os_attr' _ "$PAR_LIB")"
 R13_OLD="${R13_NOW%%/*}"; R13_OLD="${R13_OLD:-Unknown}/0.0.0-r13"
-printf 'schema=2\nhost_id=%s\nos=%s\nmax_jobs_per_host=3\nmeasured_at=2026-01-01T00:00:00Z\nsample_size=3\nrepeat=1\n' \
+# Schema 3 at the fixture's 1024 CPUs, so the OS version is the only recalibrate reason.
+printf 'schema=3\nhost_id=%s\nos=%s\nmax_jobs_per_host=3\nmeasured_at=2026-01-01T00:00:00Z\nsample_size=3\nrepeat=1\nlogical_cpu_count=1024\nmax_width_measured=1024\nwidth_limit=logical-cpu-count\n' \
     "$R13_HID" "$R13_OLD" > "$FX_CACHE_DIR/parallelism.conf"
 R13="$(r_root 1)"
 fx_exec "$R13" 60 "$R_OUT" "$R_ERR" -j 2 --all; _rc=$?

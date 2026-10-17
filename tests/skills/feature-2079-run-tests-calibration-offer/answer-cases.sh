@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# tests/skills/feature-2079-run-tests-calibration-offer/answer-cases.sh — P2-P5, P12-P14.
-# mark records "asked" for one session; answer records the verb, then never-ask writes the
-# per-host record and calibrate runs <cwd>/bin/calibrate-test-parallelism.sh with the gate open.
+# tests/skills/feature-2079-run-tests-calibration-offer/answer-cases.sh — P2, P3, P5, P12-P14, I1, AC5.
+# mark records "asked" for one session; answer records the verb, and calibrate runs
+# <cwd>/bin/calibrate-test-parallelism.sh with the gate open. #2687 removed the never-ask verb:
+# it is now an unknown verb (exit 2) that writes nothing.
 # Relies on probe-cases.sh (sourced earlier) for DEFAULT_LINE.
 
 case_begin "asked-once-per-session" "skills/run-tests/scripts/mark-calibration-asked.sh"
@@ -69,46 +70,34 @@ answer calibrate "$C3" sid-p3-cal "$P3C"
 ck "P3 calibrate exits 5: passed through" "5" "$RC"
 probe "$C3" sid-p3-cal "$P3C"
 ck "P3 failed calibrate in this session: decision=notice" "notice" "$(kv decision)"
-P3N="$TMPROOT/p3-never-cache"; mkdir -p "$P3N"
-answer never-ask "$C3" sid-p3-never "$P3N"
-ck "P3 never-ask without mark: exit 0" "0" "$RC"
-probe "$C3" sid-p3-never "$P3N"
-ck "P3 never-ask: decision=none reason=never-ask" "none/never-ask" "$(kv decision)/$(kv reason)"
-rm -f "$P3N/calibration-never-ask.conf"
-probe "$C3" sid-p3-never "$P3N"
-ck "P3 never-ask record removed: the session marker still gives notice" "notice" "$(kv decision)"
 case_ran P3
 
 case_end
 
-case_begin "never-ask-writes-host-record" "skills/run-tests/scripts/answer-calibration.sh"
+case_begin "never-ask-verb-is-unknown" "skills/run-tests/scripts/answer-calibration.sh"
 
-# ── P4 never-ask writes a 3-line record atomically; the next session is silent ─
-C4="$TMPROOT/cwd-p4"; mk_cwd "$C4" "$DEFAULT_LINE"
-P4C="$TMPROOT/p4-cache"
-mark sid-p4 "$P4C"
-answer never-ask "$C4" sid-p4 "$P4C"
-ck "P4 never-ask: exit 0" "0" "$RC"
-_r="$P4C/calibration-never-ask.conf"
-ck "P4 record has three lines" "3" "$(grep -c . "$_r" 2>/dev/null || echo 0)"
-ck "P4 line 1 is schema=1" "schema=1" "$(sed -n 1p "$_r" 2>/dev/null)"
-ck "P4 line 2 is this host" "host_id=$HID" "$(sed -n 2p "$_r" 2>/dev/null)"
-grep -Eq '^recorded_at=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z?$' "$_r" 2>/dev/null \
-    && pass "P4 recorded_at is an ISO-8601 timestamp" || fail "P4 recorded_at missing or not ISO-8601" "line3=$(sed -n 3p "$_r" 2>/dev/null)"
-ck "P4 no temp file left behind" "" "$( (cd "$P4C" 2>/dev/null && ls -1 | grep '\.tmp$') | tr '\n' ' ')"
-probe "$C4" sid-p4-next "$P4C"
-ck "P4 next session: decision=none reason=never-ask" "none/never-ask" "$(kv decision)/$(kv reason)"
-[ ! -e "$C4/cal.log" ] && pass "P4 never-ask never launches the calibrator" || fail "P4 never-ask launched the calibrator"
-P4F="$TMPROOT/p4-cache-is-a-file"; printf 'x\n' > "$P4F"
-answer never-ask "$C4" sid-p4-fail "$P4F"
-ck "P4 record cannot be written: exit 1" "1" "$RC"
-case_ran P4
+# ── AC5 never-ask is an unknown verb: exit 2, nothing written, nothing launched ─
+C4="$TMPROOT/cwd-ac5"; mk_cwd "$C4" "$DEFAULT_LINE"
+AC5C="$TMPROOT/ac5-cache"; mkdir -p "$AC5C"
+answer never-ask "$C4" sid-ac5 "$AC5C"
+ck "AC5 never-ask without mark: exit 2" "2" "$RC"
+ck "AC5 never-ask without mark: no session control dir" "absent" "$([ -e "$WORKFLOW_STATE_DIR/sid-ac5.control" ] && echo present || echo absent)"
+mark sid-ac5-marked "$AC5C"
+_before="$(content_sig "$AC5C" "$WORKFLOW_STATE_DIR/sid-ac5-marked.control")"
+answer never-ask "$C4" sid-ac5-marked "$AC5C"
+ck "AC5 never-ask after mark: exit 2" "2" "$RC"
+ck "AC5 never-ask after mark: cache and marker bytes unchanged" "$_before" "$(content_sig "$AC5C" "$WORKFLOW_STATE_DIR/sid-ac5-marked.control")"
+ck "AC5 never-ask writes no never-ask record" "absent" "$([ -e "$AC5C/calibration-never-ask.conf" ] && echo present || echo absent)"
+[ ! -e "$C4/cal.log" ] && pass "AC5 never-ask never launches the calibrator" || fail "AC5 never-ask launched the calibrator"
+probe "$C4" sid-ac5-next "$AC5C"
+ck "AC5 next session is still asked" "ask" "$(kv decision)"
+case_ran AC5
 
 case_end
 
 case_begin "repeat-runs-are-idempotent" "skills/run-tests/scripts/answer-calibration.sh"
 
-# ── I1 mark twice, never-ask twice: one file each, whole lines only, no temp files ─
+# ── I1 mark twice, defer twice: one marker, whole lines only, no temp files ─
 CI1="$TMPROOT/cwd-i1"; mk_cwd "$CI1" "$DEFAULT_LINE"
 I1C="$TMPROOT/i1-cache"; mkdir -p "$I1C"
 _iso='[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z?'
@@ -121,18 +110,20 @@ ck "I1 mark twice: the control dir holds the one marker, no temp file" "./calibr
     "$( (cd "$WORKFLOW_STATE_DIR/sid-i1.control" 2>/dev/null && find . -type f) | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
 ck "I1 mark twice: two whole asked_at lines, nothing else, newline-terminated" "2/2/yes" \
     "$(grep -c . "$_m" 2>/dev/null)/$(grep -Ecx "asked_at=$_iso" "$_m" 2>/dev/null)/$(ends_nl "$_m")"
+answer defer "$CI1" sid-i1 "$I1C"; _rc1="$RC"
+answer defer "$CI1" sid-i1 "$I1C"
+ck "I1 defer twice: both exit 0" "0/0" "$_rc1/$RC"
+ck "I1 defer twice: the cache stays empty, no *.tmp" "" \
+    "$( (cd "$I1C" 2>/dev/null && find . -type f) | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+ck "I1 defer twice: marker gained one whole answer line per run" "4/2/yes" \
+    "$(grep -c . "$_m" 2>/dev/null)/$(grep -cx 'answer=defer' "$_m" 2>/dev/null)/$(ends_nl "$_m")"
 answer never-ask "$CI1" sid-i1 "$I1C"; _rc1="$RC"
 answer never-ask "$CI1" sid-i1 "$I1C"
-ck "I1 never-ask twice: both exit 0" "0/0" "$_rc1/$RC"
-_r="$I1C/calibration-never-ask.conf"
-ck "I1 never-ask twice: still exactly schema/host_id/recorded_at" "3/schema=1/host_id=$HID/yes/yes" \
-    "$(grep -c . "$_r" 2>/dev/null)/$(sed -n 1p "$_r" 2>/dev/null)/$(sed -n 2p "$_r" 2>/dev/null)/$(grep -Eqx "recorded_at=$_iso" "$_r" 2>/dev/null && echo yes || echo no)/$(ends_nl "$_r")"
-ck "I1 never-ask twice: the cache holds the record only, no *.tmp" "./calibration-never-ask.conf" \
-    "$( (cd "$I1C" 2>/dev/null && find . -type f) | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-ck "I1 never-ask twice: marker gained one whole answer line per run" "4/2/yes" \
-    "$(grep -c . "$_m" 2>/dev/null)/$(grep -cx 'answer=never-ask' "$_m" 2>/dev/null)/$(ends_nl "$_m")"
+ck "I1 never-ask twice (#2687 unknown verb): both exit 2, marker untouched" "2/2/4" "$_rc1/$RC/$(grep -c . "$_m" 2>/dev/null)"
+probe "$CI1" sid-i1 "$I1C"
+ck "I1 after the repeats: same session decision=notice" "notice" "$(kv decision)"
 probe "$CI1" sid-i1-next "$I1C"
-ck "I1 after the repeats: next session decision=none reason=never-ask" "none/never-ask" "$(kv decision)/$(kv reason)"
+ck "I1 after the repeats: next session decision=ask" "ask" "$(kv decision)"
 case_ran I1
 
 case_end
@@ -157,7 +148,7 @@ ck "P5 calibrator missing: exit 3" "3" "$RC"
 C5D="$TMPROOT/cwd-p5-other-verbs"; mk_cwd "$C5D" "$DEFAULT_LINE"
 answer defer "$C5D" sid-p5d "$TMPROOT/p5-cache-d"
 answer never-ask "$C5D" sid-p5d "$TMPROOT/p5-cache-n"
-[ ! -e "$C5D/cal.log" ] && pass "P5 defer and never-ask never launch the calibrator" || fail "P5 a non-calibrate verb launched the calibrator"
+[ ! -e "$C5D/cal.log" ] && pass "P5 defer and the removed never-ask verb never launch the calibrator" || fail "P5 a non-calibrate verb launched the calibrator"
 case_ran P5
 
 case_end

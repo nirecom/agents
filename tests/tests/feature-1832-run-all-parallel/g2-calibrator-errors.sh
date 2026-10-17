@@ -16,6 +16,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REAL_RUN_ALL="${HOME:-/nonexistent}/.claude/run-all"
 REAL_PRE=0; [ -e "$REAL_RUN_ALL" ] && REAL_PRE=1
 cf_init
+# #2687: pin the logical CPU count (it bounds --jobs-list); case_cpu_bound re-pins per row.
+CF_PATH_PREFIX="$(cf_cpu_shim 16)"
 
 CAL_TGT="bin/calibrate-test-parallelism.sh"
 SENTINEL="$CF_T/INJECTED"
@@ -32,8 +34,9 @@ FAIL_STUB="$CF_T/measure-fail"; mkdir -p "$FAIL_STUB"
 printf '#!/usr/bin/env bash\necho "sample failed" >&2\nexit 3\n' > "$FAIL_STUB/measure.sh"
 
 write_golden() {
-    printf '%s\n' schema=2 host_id=fixture-host os=Linux/6.8.0 max_jobs_per_host=7 \
-        measured_at=2024-01-01T00:00:00Z sample_size=4 repeat=3 > "$RX/parallelism.conf"
+    printf '%s\n' schema=3 host_id=fixture-host os=Linux/6.8.0 max_jobs_per_host=7 \
+        measured_at=2024-01-01T00:00:00Z sample_size=4 repeat=3 logical_cpu_count=16 \
+        max_width_measured=8 width_limit=jobs-list > "$RX/parallelism.conf"
     cp "$RX/parallelism.conf" "$GOLDEN"
 }
 contract_count() {
@@ -155,21 +158,61 @@ case_recalibration() {
     ck "g2-cal/recalibrate/rerun-no-temp-file-left-behind" "0:durations parallelism.conf " "$CF_RC:$(ls -A "$RX" 2>/dev/null | tr '\n' ' ')"
 }
 
-# 3. record_*: v2 key set; a v1 record is replaced by v2 (#2079 S11)
-V2_KEYS="host_id max_jobs_per_host measured_at os repeat sample_size schema "
-record_v2_replaces_v1() {
+# 3. record_*: v3 key set; v1 and legacy v2 records are replaced by v3 (#2079 S11, #2687)
+V3_KEYS="host_id logical_cpu_count max_jobs_per_host max_width_measured measured_at os repeat sample_size schema width_limit "
+record_v3_replaces_older() {
     cal_missing "g2-cal/record/v1-replaced-exit-zero" && return
     printf '%s\n' schema=1 host_id=fixture-host count_bucket=2 jobs=7 \
         measured_at=2024-01-01T00:00:00Z sample_size=4 repeat=3 > "$RX/parallelism.conf"
     run_ok
     ck "g2-cal/record/v1-replaced-exit-zero" "0" "$CF_RC"
-    ck "g2-cal/record/v1-replaced-by-v2-keys" "$V2_KEYS" "$(conf_keys)"
-    ck "g2-cal/record/v1-replaced-schema-2" "2" "$(conf_value schema)"
+    ck "g2-cal/record/v1-replaced-by-v3-keys" "$V3_KEYS" "$(conf_keys)"
+    ck "g2-cal/record/v1-replaced-schema-3" "3" "$(conf_value schema)"
     ck "g2-cal/record/v1-replaced-max-jobs-per-host" "2" "$(conf_value max_jobs_per_host)"
+    printf '%s\n' schema=2 host_id=fixture-host os=Linux/6.8.0 max_jobs_per_host=7 \
+        measured_at=2024-01-01T00:00:00Z sample_size=4 repeat=3 > "$RX/parallelism.conf"
+    run_ok
+    ck "g2-cal/record/legacy-v2-replaced-by-v3-keys" "$V3_KEYS" "$(conf_keys)"
+    ck "g2-cal/record/legacy-v2-replaced-schema-3" "3" "$(conf_value schema)"
     write_golden
     run_ok
-    ck "g2-cal/record/v2-rerun-keeps-the-key-set" "$V2_KEYS" "$(conf_keys)"
-    ck "g2-cal/record/v2-rerun-same-value" "2" "$(conf_value max_jobs_per_host)"
+    ck "g2-cal/record/v3-rerun-keeps-the-key-set" "$V3_KEYS" "$(conf_keys)"
+    ck "g2-cal/record/v3-rerun-same-value" "2" "$(conf_value max_jobs_per_host)"
+}
+
+# 3b. #2687 CPU4: an explicit --jobs-list wider than the logical CPU count is a usage error
+# (exit 2) before any measurement; an unknown CPU count never rejects on that ground.
+case_cpu_bound() {
+    local name cpu jobs want st
+    cal_missing "g2-cal/cpu-bound/over-count/exit" && return
+    while IFS='|' read -r name cpu jobs want; do
+        name="$(trim "$name")"
+        [ -z "$name" ] && continue
+        case "$name" in \#*) continue ;; esac
+        cpu="$(trim "$cpu")"; jobs="$(trim "$jobs")"; want="$(trim "$want")"
+        write_golden
+        st="$(cf_stub "1:1000 2:500 4:400 8:300")"; : > "$st/noseg"
+        # --sample = the widest width, so the only usage error left to fire is the CPU bound.
+        CF_PATH_PREFIX="$(cf_cpu_shim "$cpu")" CF_TIMEOUT=60 cf_run "$SX" "$RX" "$st" \
+            --sample "${jobs##* }" --jobs-list "$jobs" --repeat 3 --warmup 0
+        case "$want" in
+            2)
+                ck "g2-cal/cpu-bound/$name/exit" "2" "$CF_RC"
+                ck "g2-cal/cpu-bound/$name/no-seam-call" "0" "$(cf_calls "$st")"
+                if cmp -s "$GOLDEN" "$RX/parallelism.conf"; then pass "g2-cal/cpu-bound/$name/prior-record-preserved"
+                else fail "g2-cal/cpu-bound/$name/prior-record-preserved" "a rejected run mutated the record"; fi ;;
+            not2)
+                if [ "$CF_RC" != "2" ]; then pass "g2-cal/cpu-bound/$name/exit"
+                else fail "g2-cal/cpu-bound/$name/exit" "rejected with exit 2: $(printf '%s' "$CF_ERR" | head -n 1)"; fi ;;
+        esac
+    done <<'TABLE'
+# name               | logical CPU count | --jobs-list | want
+over-count           | 4                 | 1 8         | 2
+over-count-by-one    | 4                 | 1 5         | 2
+equal-to-count       | 4                 | 1 4         | not2
+plan-cpu4-example    | 20                | 4 32        | 2
+unknown-count        | unknown           | 1 8         | not2
+TABLE
 }
 
 # 4. The developer's real cache dir was never touched
@@ -180,7 +223,8 @@ case_real_home_untouched() {
 
 case_rejections
 case_recalibration
-record_v2_replaces_v1
+record_v3_replaces_older
+case_cpu_bound
 case_real_home_untouched
 
 echo ""

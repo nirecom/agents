@@ -25,10 +25,10 @@ for _frag in \
     '`none` -> go to RNT-7.' \
     'when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> show `notice=` verbatim, write no record, go to RNT-7.' \
     'skills/run-tests/scripts/mark-calibration-asked.sh" --session <sid>`; if it fails or prints `first=no`, treat as `notice`.' \
-    'calibrate now (long-running) / not now / never ask again on this host.' \
+    'calibrate now (long-running) / not now' \
     'skills/run-tests/scripts/answer-calibration.sh" defer --cwd <cwd> --session <sid>`, then go to RNT-7.' \
-    'skills/run-tests/scripts/answer-calibration.sh" never-ask --cwd <cwd> --session <sid>`; if it fails, show its stderr and say the choice was not saved; then go to RNT-7.' \
     'echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=run_tests] run-tests calibration>>"' \
+    'Calibrating max jobs per host' \
     'skills/run-tests/scripts/answer-calibration.sh" calibrate --cwd <cwd> --session <sid>` with Bash `run_in_background`' \
     'echo "<<WORKFLOW_NEXT_STEP_RESUME: run-tests calibration done>>"' \
     're-run the probe and read `source=`, `max_jobs=`, `os_match=`; the exit code alone never proves the new value applies.' \
@@ -40,7 +40,7 @@ for _frag in \
 done
 ck "P10 RNT-6a instructions present and in order" "" "$_order_bad"
 ck "P10 mark runs before the question (mark line < ask line)" "yes" \
-    "$( [ "$(line_of 'mark-calibration-asked.sh')" -gt 0 ] && [ "$(line_of 'mark-calibration-asked.sh')" -le "$(line_of 'never ask again on this host')" ] && echo yes || echo no)"
+    "$( [ "$(line_of 'mark-calibration-asked.sh')" -gt 0 ] && [ "$(line_of 'mark-calibration-asked.sh')" -le "$(line_of 'calibrate now (long-running) / not now')" ] && echo yes || echo no)"
 grep -qxF -- '- Launch calibration only from RNT-6a after an explicit "calibrate now" answer; tests/run-all.sh never starts it.' "$SKILL_MD" \
     && pass "P10 Rules line names the only launch path" || fail "P10 Rules line missing"
 _rules="$(grep -n '^## Rules' "$SKILL_MD" | head -n 1 | cut -d: -f1)"
@@ -50,6 +50,29 @@ ck "P10 no code fences in SKILL.md" "0" "$(grep -c '^[[:space:]]*```' "$SKILL_MD
 _lines="$(wc -l < "$SKILL_MD" | tr -d ' ')"
 [ "$_lines" -le 100 ] && pass "P10 SKILL.md is at most 100 lines ($_lines)" || fail "P10 SKILL.md exceeds 100 lines" "lines=$_lines"
 case_ran P10
+
+# ── AC5 (#2687) the never-ask choice is gone from the skill ─────────────────
+ck "AC5 SKILL.md has no 'never ask again'" "0" "$(grep -ci 'never ask again' "$SKILL_MD" || true)"
+ck "AC5 SKILL.md never runs the never-ask verb" "0" "$(grep -c 'answer-calibration.sh" never-ask' "$SKILL_MD" || true)"
+_q="$(line_of 'calibrate now (long-running) / not now')"
+ck "AC5 the question line offers no third 'never' choice" "present/0" \
+    "$([ "${_q:-0}" -gt 0 ] && echo present || echo absent)/$(sed -n "${_q:-0}p" "$SKILL_MD" 2>/dev/null | grep -ci 'never' || true)"
+case_ran AC5
+
+# ── ES2 (#2687) the wait message names the estimate and is shown before the launch ─
+_w="$(line_of 'Calibrating max jobs per host')"
+_wl="$(sed -n "${_w:-0}p" "$SKILL_MD" 2>/dev/null)"
+case "$_wl" in
+    *'in the conversation language'*'(about <estimate> min)'*'please wait'*'omit the parenthesized estimate'*) pass "ES2 wait message carries the estimate placeholder and the waiting text" ;;
+    *) fail "ES2 wait message wording" "line=$(printf '%q' "$_wl")" ;;
+esac
+ck "ES2 RNT-6a names the probe's estimate= (empty -> the estimate part is omitted)" "yes" \
+    "$( [ -n "$_l6a" ] && [ -n "$_l7" ] && sed -n "${_l6a},${_l7}p" "$SKILL_MD" | grep -qF '`estimate=`' && echo yes || echo no)"
+_pause="$(line_of 'echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=run_tests] run-tests calibration>>"')"
+_cal="$(line_of 'answer-calibration.sh" calibrate')"
+ck "ES2 wait message sits after PAUSE and before the calibrate launch" "yes" \
+    "$( [ "${_w:-0}" -gt "${_pause:-0}" ] && [ "${_pause:-0}" -gt 0 ] && [ "${_w:-0}" -lt "${_cal:-0}" ] && echo yes || echo no)"
+case_ran ES2
 
 case_end
 

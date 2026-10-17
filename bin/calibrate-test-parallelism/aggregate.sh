@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bin/calibrate-test-parallelism/aggregate.sh — median, stability gate, knee, atomic
-# publish (SOURCE ONLY). Logic moved unchanged from the pre-#2079 entry point; record v2.
+# publish (SOURCE ONLY). Logic moved from the pre-#2079 entry point; record schema 3 (#2687).
 
 declare -A SAMPLES=()
 declare -A MEDIAN=()
@@ -89,6 +89,9 @@ cal_publish() {
         printf 'measured_at=%s\n' "$measured_at"
         printf 'sample_size=%s\n' "$SAMPLE_N"
         printf 'repeat=%s\n' "$REPEAT"
+        printf 'logical_cpu_count=%s\n' "${RUN_ALL_LOGICAL_CPU_COUNT:-0}"
+        printf 'max_width_measured=%s\n' "$MAX_W"
+        printf 'width_limit=%s\n' "$CAL_WIDTH_LIMIT"
     } > "$TMP_FILE" 2>/dev/null || die "could not stage the cache in ${TMP_FILE%/*}"
 
     # Verify through the reader first, so an unreadable cache is never published even once.
@@ -102,7 +105,14 @@ cal_publish() {
 
     printf 'calibrate: selected max jobs per host %s (sample %s tests; widths %s)\n' "$KNEE" "$SAMPLE_N" "${WIDTHS[*]}"
     if [ "$KNEE" = "$MAX_W" ]; then
-        printf 'calibrate: the knee is the widest width measured; the true limit may be higher - rerun with a wider --jobs-list\n'
+        case "$CAL_WIDTH_LIMIT" in
+            logical-cpu-count)
+                printf 'calibrate: the knee reached the logical CPU count, the ceiling for this host\n' ;;
+            candidates|sample|time-limit)
+                printf 'calibrate: the corpus supported widths up to %s; the knee may be higher once more tests have ledger durations\n' "$MAX_W" ;;
+            *)
+                printf 'calibrate: the knee is the widest width measured; the true limit may be higher - rerun with a wider --jobs-list\n' ;;
+        esac
     fi
     if [ "$NO_WRITE" -eq 1 ]; then
         printf 'calibrate: --no-write: nothing was published to %s\n' "$cache_file"

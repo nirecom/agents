@@ -214,6 +214,17 @@ no_shell_error() {
     ! printf '%s' "$1" | grep -qiE 'syntax error|integer expression|invalid arithmetic|bad substitution|unbound variable|command not found'
 }
 
+# cpu_shim <dir> <n> — a PATH dir whose nproc prints <n> (the first logical-CPU source).
+# lanes_drv and run_status put CPU_SHIM_DIR (1024, the cap's upper bound) ahead of PATH so
+# the logical-CPU ceiling never fires by accident; a case's own PATH= argument overrides it.
+cpu_shim() {
+    mkdir -p "$1"
+    printf '#!%s\nprintf "%%s\\n" %q\n' "$(type -P bash)" "$2" > "$1/nproc"
+    chmod +x "$1/nproc"
+}
+CPU_SHIM_DIR="$TMPDIR_BASE/cpu-shim-1024"
+cpu_shim "$CPU_SHIM_DIR" 1024
+
 # The driver sources both libs (parallelism first — the lanes lib's precondition)
 # and evaluates one snippet, so a case can call the lib API directly.
 LANES_DRV="$TMPDIR_BASE/lanes-drv.sh"
@@ -234,7 +245,7 @@ lanes_drv() {
         cd "$NEUTRAL_DIR" || exit 2
         bash "$RUN_TIMEOUT" 60 env "DRV_PAR_LIB=$PAR_LIB" "DRV_LANES_LIB=$LANES_LIB" \
             "RUN_ALL_CACHE_DIR=$cache" TEST_LANES_WAIT_INTERVAL=1 TEST_LANES_WAIT_CAP=3 \
-            ${envs[@]+"${envs[@]}"} bash "$LANES_DRV" "$1"
+            "PATH=$CPU_SHIM_DIR:$PATH" ${envs[@]+"${envs[@]}"} bash "$LANES_DRV" "$1"
     ) >"$outf" 2>"$errf"
     RC=$?
     OUT="$(cat "$outf")"
@@ -243,6 +254,25 @@ lanes_drv() {
 
 # kv_of <text> <key> — value of the first `key=value` line in <text>.
 kv_of() { printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -n 1; }
+
+# first_line <text> — the first line of <text>.
+first_line() { printf '%s\n' "$1" | head -n 1; }
+
+# assert_tokens <label> <want-tokens> <line> [absent-key...] — <line> starts with the first
+# token of <want-tokens>, carries every one of them as a whole word, and has no word that
+# starts with `<absent-key>=`. Token order past the first stays free (status line 1 grows).
+assert_tokens() {
+    local label="$1" want="$2" line="$3" t bad=""
+    shift 3
+    case "$line" in "${want%% *}"|"${want%% *} "*) ;; *) bad="$bad first-token" ;; esac
+    for t in $want; do
+        case " $line " in *" $t "*) ;; *) bad="$bad missing:$t" ;; esac
+    done
+    for t in "$@"; do
+        case " $line" in *" $t="*) bad="$bad unexpected:$t" ;; esac
+    done
+    if [ -z "$bad" ]; then pass "$label"; else fail "$label —$bad line=$(printf '%q' "$line")"; fi
+}
 
 # run_status <cache-root> [NAME=VAL ...] [-- args] — bin/test-lanes-status.sh; sets OUT/ERR/RC.
 run_status() {
@@ -253,7 +283,7 @@ run_status() {
     local outf="$TMPDIR_BASE/st.out" errf="$TMPDIR_BASE/st.err"
     (
         cd "$NEUTRAL_DIR" || exit 2
-        bash "$RUN_TIMEOUT" 60 env "RUN_ALL_CACHE_DIR=$cache" ${envs[@]+"${envs[@]}"} \
+        bash "$RUN_TIMEOUT" 60 env "RUN_ALL_CACHE_DIR=$cache" "PATH=$CPU_SHIM_DIR:$PATH" ${envs[@]+"${envs[@]}"} \
             bash "$STATUS_CLI" "$@"
     ) >"$outf" 2>"$errf"
     RC=$?

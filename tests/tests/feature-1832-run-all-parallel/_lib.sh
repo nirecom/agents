@@ -92,7 +92,7 @@ fx_cleanup() {
 # fx_init snapshots and drops ambient control vars (e.g. inherited TEST_MAX_JOBS_PER_RUN) so a case's
 # own intent isn't silently overridden; anything set AFTER fx_init is caller intent and reaches the child untouched.
 
-FX_CONTROL_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_CONFIG_VAR_CMD RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE RUN_ALL_DURATIONS_LIB TEST_LANES TEST_MAX_JOBS_PER_HOST TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP RUN_ALL_LANES_LIB FIND_TESTS_CORPUS_CACHE"
+FX_CONTROL_VARS="TEST_MAX_JOBS_PER_RUN RUN_ALL_CONFIG_VAR_CMD RUN_ALL_DEADLINE RUN_ALL_PROGRESS RUN_ALL_REAP RUN_ALL_WAITN_PROBE FEATURE_644_PHASE RUN_ALL_DURATIONS_LIB TEST_LANES TEST_MAX_JOBS_PER_HOST TEST_LANES_HELD TEST_LANES_TTL TEST_LANES_HEARTBEAT TEST_LANES_WAIT_INTERVAL TEST_LANES_WAIT_CAP RUN_ALL_LANES_LIB FIND_TESTS_CORPUS_CACHE AUTO_CONFIG_TEST_MAX_JOBS"
 FX_DROPPED_CONTROLS=""
 
 # Ledger tuning and output variables. These are NOT pinnable intent: the ledger cases source
@@ -225,6 +225,11 @@ fx_new_root() {
     # Lanes are opt-in (#2455) so every pre-existing fixture keeps its unleased -j.
     if [ "${FX_WITH_LANES:-0}" = "1" ]; then
         cp "$FX_REPO_ROOT/bin/lib/test-host-lanes.sh" "$root/bin/lib/test-host-lanes.sh" 2>/dev/null || true
+        # #2687: the lanes lib sources these siblings from its own directory.
+        local sib
+        for sib in test-host-lanes-share.sh test-host-load.sh test-host-load-probe.sh; do
+            cp "$FX_REPO_ROOT/bin/lib/$sib" "$root/bin/lib/$sib" 2>/dev/null || true
+        done
     fi
     echo "$root"
 }
@@ -342,12 +347,13 @@ fx_doctor_runner() {
 
 # fx_exec <root> <timeout> <out> <err> [runner-args...]
 # The unquoted fx_control_args expansion is deliberate: it must word-split into
-# `-u NAME` / `NAME=value` argv items for env.
+# `-u NAME` / `NAME=value` argv items for env. FX_PATH_PREFIX (optional) goes ahead of
+# the child's PATH, e.g. an nproc shim dir that pins the logical CPU count (#2687).
 fx_exec() {
     local root="$1" to="$2" out="$3" err="$4"; shift 4
     local rc=0
     [ "${FX_LEDGER_KEEP:-0}" -eq 1 ] || fx_ledger_clear
-    run_with_timeout "$to" env $(fx_control_args) \
+    run_with_timeout "$to" env $(fx_control_args) "PATH=${FX_PATH_PREFIX:+$FX_PATH_PREFIX:}$PATH" \
         "TESTS_DIR=$(fx_tests_dir "$root")" "RUN_ALL_CACHE_DIR=$FX_CACHE_DIR" \
         bash "$(fx_runner "$root")" "$@" >"$out" 2>"$err" || rc=$?
     return "$rc"
@@ -358,7 +364,7 @@ fx_exec_bg() {
     local root="$1" out="$2" err="$3"; shift 3
     [ "${FX_LEDGER_KEEP:-0}" -eq 1 ] || fx_ledger_clear
     set -m
-    env $(fx_control_args) \
+    env $(fx_control_args) "PATH=${FX_PATH_PREFIX:+$FX_PATH_PREFIX:}$PATH" \
         "TESTS_DIR=$(fx_tests_dir "$root")" "RUN_ALL_CACHE_DIR=$FX_CACHE_DIR" \
         bash "$(fx_runner "$root")" "$@" >"$out" 2>"$err" &
     FX_BG_PID=$!
