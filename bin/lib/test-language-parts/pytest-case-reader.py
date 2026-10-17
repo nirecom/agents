@@ -3,7 +3,7 @@
 Parses the file with `ast` (never imports or runs it) and reports each module-level `test_*`
 function or `Test*` class carrying `@pytest.mark.target("<path>")`. Prints
   FILE\\t<state>\\t<line>\\t<reason>   and, when conforming, one
-  CASE\\t<idx>\\t<name>\\t<target>\\t<begin>\\t<end>\\t\\t   per case
+  CASE\\t<name>\\t<target>\\t<begin>\\t<end>\\t\\t   per case, in file order
 (begin = the first decorator line, end = the last body line). Exit 1: unreadable file.
 Keeps to Python 3.8, like the pytest wrapper: `uv run` picks the interpreter.
 """
@@ -99,7 +99,7 @@ def main(path: str) -> int:
         rows = [["FILE", "malformed", line, reason]]
     else:
         rows = [["FILE", "conforming" if cases else "none", "", ""]]
-        rows += [["CASE", i, *case, "", ""] for i, case in enumerate(cases)]
+        rows += [["CASE", *case, "", ""] for case in cases]
     text = "".join("\t".join(str(col) for col in row) + "\n" for row in rows)
     sys.stdout.buffer.write(text.encode("utf-8"))
     return 0

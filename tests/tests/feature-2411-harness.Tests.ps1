@@ -16,9 +16,22 @@ BeforeAll {
     $script:pwshExe = (Get-Process -Id $PID).Path
     $script:registry = Get-Content -LiteralPath (Join-Path $script:repoRoot 'hooks' 'lib' 'test-language-registry.json') -Raw | ConvertFrom-Json
     $script:wrapperRel = 'bin/lib/test-wrappers/pester.ps1'
-    $script:isoNames = @('WORKFLOW_STATE_DIR', 'WORKFLOW_PLANS_DIR', 'CLAUDE_CODE_SESSION_ID')
+    # Retired relay names come from the tombstone checker, because test text may not name them; a
+    # name added there later fails these cases until every harness clears it as well. They are
+    # cleared on load and on enter and never put back, so they stay apart from the restored names.
+    $tombstone = @(Get-Content -LiteralPath (Join-Path $script:repoRoot 'bin' 'check-session-id-ssot.sh') | Where-Object { $_ -match "^TOMBSTONE_NAMES='[^']+'$" })
+    $tombstone.Count | Should -Be 1
+    $script:retiredNames = @(($tombstone[0] -replace "^TOMBSTONE_NAMES='([^']+)'$", '$1') -split '\|')
+    $script:retiredNames.Count | Should -BeGreaterOrEqual 2
+    foreach ($n in $script:retiredNames) { $n | Should -Not -BeNullOrEmpty }
+    $script:restoreNames = @('WORKFLOW_STATE_DIR', 'WORKFLOW_PLANS_DIR', 'CLAUDE_CODE_SESSION_ID')
+    $script:isoNames = $script:restoreNames + $script:retiredNames
     $script:sentinel = @{}
     foreach ($n in $script:isoNames) { $script:sentinel[$n] = 'h2411-secret-' + [guid]::NewGuid().ToString('N') }
+
+    function Get-RetiredLeft {
+        @($script:retiredNames | Where-Object { -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($_)) })
+    }
 
     # A temp tree shaped like the repo's tests/: tests/<category>/ and tests/lib/ with the real helper.
     function New-HarnessTree {
@@ -105,11 +118,14 @@ Describe 'harness-isolation' {
     }
 
     It 'ISO-enter-exit (<Label>): pins both dirs into temp, removes the session variables, restores exactly' -ForEach @(
-        @{ Label = 'all set'; Preset = @{ WORKFLOW_STATE_DIR = 'h2411-state'; WORKFLOW_PLANS_DIR = 'h2411-plans'; CLAUDE_CODE_SESSION_ID = 'h2411-ccsid' } }
-        @{ Label = 'all unset'; Preset = @{} }
-        @{ Label = 'mixed'; Preset = @{ WORKFLOW_PLANS_DIR = 'h2411-plans'; CLAUDE_CODE_SESSION_ID = 'h2411-ccsid' } }
+        @{ Label = 'all set'; Retired = 'all'; Preset = @{ WORKFLOW_STATE_DIR = 'h2411-state'; WORKFLOW_PLANS_DIR = 'h2411-plans'; CLAUDE_CODE_SESSION_ID = 'h2411-ccsid' } }
+        @{ Label = 'all unset'; Retired = 'none'; Preset = @{} }
+        @{ Label = 'mixed'; Retired = 'first'; Preset = @{ WORKFLOW_PLANS_DIR = 'h2411-plans'; CLAUDE_CODE_SESSION_ID = 'h2411-ccsid' } }
     ) {
-        foreach ($n in $script:isoNames) { [Environment]::SetEnvironmentVariable($n, $Preset[$n]) }
+        $values = @{} + $Preset
+        $retiredSet = switch ($Retired) { 'all' { $script:retiredNames } 'first' { @($script:retiredNames[0]) } default { @() } }
+        foreach ($n in $retiredSet) { $values[$n] = 'h2411-retired' }
+        foreach ($n in $script:isoNames) { [Environment]::SetEnvironmentVariable($n, $values[$n]) }
         $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
         Enter-HarnessIsolation | Out-Null
         try {
@@ -121,13 +137,29 @@ Describe 'harness-isolation' {
                 [System.IO.Path]::GetFullPath($dir).StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase) | Should -BeTrue
             }
             [Environment]::GetEnvironmentVariable('CLAUDE_CODE_SESSION_ID') | Should -BeNullOrEmpty -Because 'CLAUDE_CODE_SESSION_ID is removed'
+            @(Get-RetiredLeft).Count | Should -Be 0 -Because 'the retired names are cleared inside'
         } finally {
             Exit-HarnessIsolation | Out-Null
         }
-        foreach ($n in $script:isoNames) {
+        foreach ($n in $script:restoreNames) {
             $actual = [Environment]::GetEnvironmentVariable($n)
             if ($null -eq $Preset[$n]) { $actual | Should -BeNullOrEmpty } else { $actual | Should -BeExactly $Preset[$n] }
         }
+        @(Get-RetiredLeft).Count | Should -Be 0 -Because 'the retired names stay cleared after the exit'
+    }
+
+    It 'harness clears the retired relay names at load and on isolate' {
+        foreach ($n in $script:retiredNames) { [Environment]::SetEnvironmentVariable($n, 'h2411-retired') }
+        . $script:helperPath
+        @(Get-RetiredLeft).Count | Should -Be 0 -Because 'cleared at load'
+        foreach ($n in $script:retiredNames) { [Environment]::SetEnvironmentVariable($n, 'h2411-retired') }
+        Enter-HarnessIsolation | Out-Null
+        try {
+            @(Get-RetiredLeft).Count | Should -Be 0 -Because 'cleared on enter'
+        } finally {
+            Exit-HarnessIsolation | Out-Null
+        }
+        @(Get-RetiredLeft).Count | Should -Be 0 -Because 'not put back by the exit'
     }
 
     It 'ISO-fresh: every enter gets a directory of its own' {
@@ -141,6 +173,7 @@ Describe 'harness-isolation' {
     It 'ISO-exception: an exit in finally restores after the body threw' {
         $env:WORKFLOW_STATE_DIR = 'h2411-state'
         $env:CLAUDE_CODE_SESSION_ID = 'h2411-ccsid'
+        [Environment]::SetEnvironmentVariable($script:retiredNames[0], 'h2411-retired')
         Remove-Item -Path Env:WORKFLOW_PLANS_DIR -ErrorAction SilentlyContinue
         $thrown = $false
         try {
@@ -153,16 +186,19 @@ Describe 'harness-isolation' {
         $env:WORKFLOW_STATE_DIR | Should -BeExactly 'h2411-state'
         $env:CLAUDE_CODE_SESSION_ID | Should -BeExactly 'h2411-ccsid'
         $env:WORKFLOW_PLANS_DIR | Should -BeNullOrEmpty
+        @(Get-RetiredLeft).Count | Should -Be 0 -Because 'the retired names stay cleared'
     }
 
     It 'ISO-exit-twice: a second exit neither throws nor disturbs the restored values' {
         $env:WORKFLOW_STATE_DIR = 'h2411-state'
         Remove-Item -Path Env:CLAUDE_CODE_SESSION_ID -ErrorAction SilentlyContinue
+        [Environment]::SetEnvironmentVariable($script:retiredNames[0], 'h2411-retired')
         Enter-HarnessIsolation | Out-Null
         Exit-HarnessIsolation | Out-Null
         { Exit-HarnessIsolation | Out-Null } | Should -Not -Throw
         $env:WORKFLOW_STATE_DIR | Should -BeExactly 'h2411-state'
         $env:CLAUDE_CODE_SESSION_ID | Should -BeNullOrEmpty
+        @(Get-RetiredLeft).Count | Should -Be 0 -Because 'the retired names stay cleared'
     }
 }
 
@@ -257,13 +293,18 @@ Describe 'harness-load-and-tl3-gate' {
         Set-Content -LiteralPath $file -Value @(
             'BeforeAll {'
             "    . (Join-Path `$PSScriptRoot '..' 'lib' 'harness.ps1')"
+            '    $script:retired = @($env:H2411_RETIRED -split "," | Where-Object { $_ })'
+            '    $script:leftAtLoad = @($script:retired | Where-Object { [Environment]::GetEnvironmentVariable($_) })'
             '}'
             "Describe 'load' {"
             "    It 'calls-helper' {"
+            '        $script:retired.Count | Should -BeGreaterOrEqual 2'
+            '        $script:leftAtLoad.Count | Should -Be 0'
             '        Enter-HarnessIsolation | Out-Null'
             '        try {'
             '            $env:WORKFLOW_STATE_DIR | Should -Not -BeNullOrEmpty'
             '            $env:CLAUDE_CODE_SESSION_ID | Should -BeNullOrEmpty'
+            '            @($script:retired | Where-Object { [Environment]::GetEnvironmentVariable($_) }).Count | Should -Be 0'
             '        } finally { Exit-HarnessIsolation | Out-Null }'
             "        Set-Content -LiteralPath (Join-Path `$PSScriptRoot 'helper.marker') -Value 'ok'"
             '    }'
@@ -278,7 +319,7 @@ Describe 'harness-load-and-tl3-gate' {
             $cwd = Join-Path $TestDrive ('outside-' + [guid]::NewGuid().ToString('N'))
             New-Item -ItemType Directory -Path $cwd -Force | Out-Null
         }
-        $r = Invoke-HarnessWrapper -TestFile $file -WorkingDirectory $cwd -Environment ($script:sentinel + @{ RUN_TL3 = $Tl3 })
+        $r = Invoke-HarnessWrapper -TestFile $file -WorkingDirectory $cwd -Environment ($script:sentinel + @{ RUN_TL3 = $Tl3; H2411_RETIRED = ($script:retiredNames -join ',') })
         $r.ExitCode | Should -Be 0
         $r.Cases | Should -Match '\tPASS\t[^\t\n]*calls-helper\t'
         $r.Cases | Should -Match "\t$Gated\t[^\t\n]*tl3-gated\t"

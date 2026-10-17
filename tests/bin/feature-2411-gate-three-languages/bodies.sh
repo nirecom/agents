@@ -285,3 +285,25 @@ caseEnd();
 caseBegin("b", "bin/b.js");
 caseEnd();
 EOF
+
+# <lang>-dupname (#2673): two Tests: paths and case "a" twice. Each body calls a one-case
+# function twice, so no begin line is written literally twice in this file. Second begin
+# line: sh 7, pester 9, pytest 16, js 7.
+DUP_SH_BEGIN="case""_begin"  # split so this line is not read as a marker
+dup_sh() { printf '%s "a" "%s"\necho a\ncase_end\n' "$DUP_SH_BEGIN" "$1"; }
+dup_pester() { printf '%s\n' "Describe 'a' -Tag 'target:$1' {" "    It 'runs' { 1 | Should -Be 1 }" '}'; }
+dup_pytest() { printf '%s\n' '' '' "@pytest.mark.target(\"$1\")" 'def test_a():' '    assert harness is not None'; }
+dup_js() { printf 'caseBegin("a", "%s");\ncaseEnd();\n' "$1"; }
+printf '%s\n' '#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/b.sh' '# Tags: scope:common' > "$BODIES/sh-dupname"
+dup_sh bin/a.sh >> "$BODIES/sh-dupname"
+dup_sh bin/b.sh >> "$BODIES/sh-dupname"
+printf '%s\n' '# Tests: bin/a.ps1, bin/b.ps1' '# Tags: scope:common' 'BeforeAll {' "    . (Join-Path \$PSScriptRoot '..' 'lib' 'harness.ps1')" '}' > "$BODIES/pester-dupname"
+dup_pester bin/a.ps1 >> "$BODIES/pester-dupname"
+dup_pester bin/b.ps1 >> "$BODIES/pester-dupname"
+printf '%s\n' '# Tests: bin/a.py, bin/b.py' '# Tags: scope:common' 'import sys' 'from pathlib import Path' '' \
+  'sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))' 'import harness' 'import pytest' > "$BODIES/pytest-dupname"
+dup_pytest bin/a.py >> "$BODIES/pytest-dupname"
+dup_pytest bin/b.py >> "$BODIES/pytest-dupname"
+printf '%s\n' '// Tests: bin/a.js, bin/b.js' '// Tags: scope:common' 'const { caseBegin, caseEnd } = require("../lib/harness");' '' > "$BODIES/js-dupname"
+dup_js bin/a.js >> "$BODIES/js-dupname"
+dup_js bin/b.js >> "$BODIES/js-dupname"

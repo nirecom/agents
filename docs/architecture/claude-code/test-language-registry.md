@@ -101,7 +101,8 @@ Shared code separates **capability** (is the field non-null) from **ownership** 
 | `tableDrivenDetector` | test path | rc 0 when table-driven |
 | `caseEmbedRules` | `<op> <absolute test path> [args]` | one op per call (below); an unknown op returns 2 |
 
-`crr_read <abs>` is the one entry to case records: a `FILE\t<state>\t<line>\t<reason>` line, then one `CASE\t<idx>\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>` line per case of a conforming file. `deps` is `?` when the language has no `caseEmbedRules`.
+`crr_read <abs>` is the one entry to case records: a `FILE\t<state>\t<line>\t<reason>` line, then one `CASE\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>` line per case of a conforming file. `deps` is `?` when the language has no `caseEmbedRules`.
+The CASE lines come in file order; a case's order is its line position, with no index column.
 States: `none`, `conforming`, `malformed`, `uncertain`, `unsupported` (no reader for the file) and `unavailable` (the reader's runtime is not installed; the last column names the entry's `launch.requires`).
 A reader that fails any other way reads as `malformed` with reason `reader`.
 
@@ -110,7 +111,7 @@ A reader that fails any other way reads as `malformed` with reason `reader`.
 | `caseEmbedRules` op | Output (empty = nothing found) |
 |---|---|
 | `rules-doc` | repo-relative path of the language's embed rules (bash: `skills/sweep-tests/embed-rules/bash.md`) |
-| `deps` | `<case idx>\t<csv of top-level functions the case calls>` per case |
+| `deps` | `<case idx>\t<csv of top-level functions the case calls>` per case; `<case idx>` is a line-position key used only inside `crr_read` |
 | `leftover-defs` | `<line>\t<name>` per top-level function no code line calls |
 | `self-impl` | `<line>\t<kind>\t<detail>` per hand-rolled harness piece (bash: `counter-init`, `harness-redef`) |
 | `skip-reason` | one reason word when the file must not be embedded (bash: `narrow-harness`, a sourced `tests/lib/*harness*.sh` that is not the entry's `helperLibrary`) |
@@ -150,9 +151,10 @@ Malformed reasons (the word in the gate's `MALFORMED_CASE_MARKER` message):
 | `missing-target` | `pester`, `pytest`, `js` | A case without a target in a file that has targets (`js`: a one-argument `caseBegin`) |
 | `duplicate-target` | `pester`, `pytest`, `js` | More than one target on a case (`js`: more than two arguments) |
 | `nested-target` | `pester`, `pytest`, `js` | A target below the top level |
+| `duplicate-name` | all | Two cases of one file share a name; reported on the later case's first line by the shared state rule (`trp_marker_state_from_globals`), not by a reader |
 | `reader` | all | The reader itself failed (set by `crr_read`, not by a reader) |
 
-`uncertain` is a state, not a reason: bash reports it for a depth fault after a multi-line quoted string, `js` for a marker-looking line inside a block comment or a multi-line template string.
+`uncertain` is a state, not a reason: bash reports it for a depth fault after a multi-line quoted string, `js` for a marker-looking line inside a block comment, a multi-line template string or an open `${}`.
 The writing rules a test author follows live in each entry's `notationDoc`, not here.
 
 ## Helper libraries
