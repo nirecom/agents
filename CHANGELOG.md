@@ -787,3 +787,7 @@ Changes: Glossary entries now follow written entry criteria; the glossary is spl
 ### FEATURE: PR #2695 (2026-10-17)
 Background: feat(#2669): attribute run-all guard and decoy hits to the test that ...
 Changes: Test runs now report a command guard or root decoy hit as a failure of the test that caused it; hits that cannot be traced to one test appear as HIT: lines and HITS=N, and the baseline check stops with exit 6 instead of guessing.
+
+### FEATURE: PR #2700 (2026-10-17)
+Background: fix(#2677): let jev answers through the placement guard and route complexity by decisive signals
+Changes: Jev complexity judgments now reach the backup subagent's answer (it was blocked by the placement guard) and print a `FALLBACK=` reason whenever a judgment falls back to the safe side.
