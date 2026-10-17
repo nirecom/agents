@@ -129,6 +129,35 @@ done
 case_end
 
 # ============================================================================
+case_begin "rule-states-what-a-glossary-is-before-categories" "rules/docs/glossary.md"
+# ============================================================================
+# The entry criteria come first: what a glossary holds, what it never holds, and the
+# only way in. Without them every term a writer touches drifts into the glossary.
+FIRST_H2="$(grep -m1 -E '^## ' "$RULE" 2>/dev/null | tr -d '\r')"
+if [ "$FIRST_H2" = "## What's a glossary" ]; then pass "D2a/first-section-is-what-a-glossary-is"
+else fail "D2a/first-section-is-what-a-glossary-is" "first H2 is '$FIRST_H2'"; fi
+WHAT_LN="$(grep -n -m1 -E "^## What's a glossary" "$RULE" 2>/dev/null | cut -d: -f1)"
+CAT_LN="$(grep -n -m1 -E '^## Category' "$RULE" 2>/dev/null | cut -d: -f1)"
+if [ -n "$WHAT_LN" ] && [ -n "$CAT_LN" ] && [ "$WHAT_LN" -lt "$CAT_LN" ]; then pass "D2a/what-precedes-category"
+else fail "D2a/what-precedes-category" "What's a glossary line '$WHAT_LN', Category line '$CAT_LN'"; fi
+has "D2a/defines-cross-subsystem-terms" "$RULE" '^The glossary defines terms used across multiple subsystems'
+has "D2a/excludes-single-subsystem-terms" "$RULE" '^Never list a term used in only one subsystem\.'
+has "D2a/promotion-is-the-only-way-in" "$RULE" '^Add an entry only by glossary promotion of an intent glossary row of the same category\.'
+has "D2a/user-is-keywords-only" "$RULE" '^`user`: a keyword the user sees'
+has "D2a/session-never-promoted" "$RULE" '^`session`: .*never promoted\.'
+lacks "D2a/no-key-value-coding-line" "$RULE" 'keep the key and the value apart'
+lacks "D2a/no-misapplied-ssot-label" "$RULE" 'CPR-SSOT'
+lacks "D2a/no-what-to-list-section" "$RULE" '^## What to list'
+case_end
+
+# ============================================================================
+case_begin "update-docs-adds-glossary-entries-only-by-promotion" "skills/update-docs/SKILL.md"
+# ============================================================================
+has "D2b/update-docs-promotion-only" "$R/skills/update-docs/SKILL.md" 'Glossary entries: never add one outside glossary promotion\.'
+lacks "D2b/update-docs-no-criteria-judged-adds" "$R/skills/update-docs/SKILL.md" 'add or align an entry only for a term that meets the criteria'
+case_end
+
+# ============================================================================
 case_begin "docs-rule-index-points-to-glossary-rule" "rules/docs.md"
 # ============================================================================
 has "D3/sub-rules-lists-glossary" "$R/rules/docs.md" '^- \[docs/glossary\.md\]\(docs/glossary\.md\)'
@@ -298,7 +327,9 @@ removed_in_owner docs/architecture/claude-code/test-command-guard.md "run root" 
 case_end
 
 case_begin "removed-terms-in-case-marker-gate" "docs/architecture/claude-code/case-marker-gate.md"
-removed_in_owner docs/architecture/claude-code/case-marker-gate.md "case marker" "marker conformance"
+# "marker conformance" is not listed: since #2411 the gate judges by the crr_read file state,
+# and no document uses the term any more.
+removed_in_owner docs/architecture/claude-code/case-marker-gate.md "case marker"
 case_end
 
 case_begin "removed-terms-in-complexity-judge" "agents/complexity-judge.md"
