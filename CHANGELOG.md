@@ -799,3 +799,7 @@ Changes: Test parallelism tunes itself: the per-machine maximum is measured and 
 ### FEATURE: PR #2710 (2026-10-17)
 Background: fix(#2673): restore harness clear lines and harden the non-bash case readers
 Changes: Pester, pytest and JS test harnesses again clear inherited CLAUDE_SESSION_ID / CLAUDE_ENV_FILE, so a parent session's env file can no longer leak into tests (#2673).;Case-marker checks: two cases sharing a name in one test file are now rejected in every supported language (`duplicate-name`), and the JS reader no longer hides markers after a `/*` or `//` inside a template literal (#2673).
+
+### FEATURE: PR #2713 (2026-10-18)
+Background: fix(#2681): read config flags in-process so the confirm-gate probe stops timing out
+Changes: Confirm gates read config flags without starting a subprocess, so `CONFIRM_*=off` no longer times out into an ask on Windows; `get-config-var` and `confirm-off` start one node process per lookup (#2681).;`next-step` prints `GATE_PROBE_CAUSE=<cause>` before the gate value line when the gate read was not clean (#2681).;When node cannot start, `get-config-var --is-off` exits 4 instead of 2 and `confirm-off` returns ERROR instead of ON (#2681).;`confirm-off` warns with a `confirm-off:` prefix on an unrecognized value; `.env` unterminated-quote warnings now reach `next-step` stderr; with `CLAUDE_PROJECT_DIR` unset the gates read the caller project's `.env.local` (#2681).;`get-config-var` and `confirm-off` help text documents arguments and exit codes (#1187).
