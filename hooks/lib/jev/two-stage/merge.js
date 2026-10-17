@@ -52,8 +52,18 @@ function deterministicRecord(det, override) {
   return override.length ? { status: "not-applicable", values: null, source_sha256: null, override: override.slice() } : null;
 }
 
-function fallbackOf(hand, needed, received, detFail) {
-  if (needed && !received) return "answer-file-absent";
+// The reason a delegated answer could not be used (null when none was needed or it parsed ok).
+// Vocabulary SSOT: docs/architecture/jev/two-stage-broker.md "Missing answer".
+function answerFallbackOf(needed, received, parsedStatus) {
+  if (!needed || parsedStatus === "ok") return null;
+  if (!received) return "answer-file-absent";
+  if (parsedStatus === "missing") return "answer-empty";
+  if (parsedStatus === "parse-fallback") return "answer-unparseable";
+  return null;
+}
+
+function fallbackOf(hand, answerReason, detFail) {
+  if (answerReason) return answerReason;
   if (detFail) return `write-code-list-${hand.deterministic.status}`;
   if (hand.input_insufficient === true) return "input-insufficient";
   return hand.jev && hand.jev.status !== "ok" ? hand.jev.status : null;
@@ -90,6 +100,8 @@ function judgeComplexity(sid, tid, hand, adapter, normalize) {
   const signalsCsv = normalize(mergedLine);
   if (typeof signalsCsv !== "string") throw new Error("normalize failed on the merged line");
   const adopted = adoptedOf(Object.keys(adoptedJev), delegated);
+  const answerReason = answerFallbackOf(needed, ans.received, parsed.status);
+  const unjudgedSignals = arr(hand.unjudged).map((k) => keyId[k]).filter(Boolean);
   const record = ticketRecord(sid, tid, hand, {
     llm: {
       status: needed && ans.received ? parsed.status : "missing",
@@ -98,10 +110,14 @@ function judgeComplexity(sid, tid, hand, adapter, normalize) {
     },
     adopted, received: needed && ans.received,
     deterministic: deterministicRecord(det, arr(parsed.override)),
-    final: { signals, undecidable, undecidable_scope: scope, contract_line: mergedLine, signals_csv: signalsCsv },
-    fallback: fallbackOf(hand, needed, ans.received, detFail),
+    final: {
+      signals, undecidable, undecidable_scope: scope, unjudged_signals: unjudgedSignals,
+      contract_line: mergedLine, signals_csv: signalsCsv,
+    },
+    fallback: fallbackOf(hand, answerReason, detFail),
   });
-  return { result: { stage: hand.stage, merged_line: mergedLine, signals_csv: signalsCsv, adopted }, record };
+  const fallback = answerReason || detFail ? record.fallback_reason : null;
+  return { result: { stage: hand.stage, merged_line: mergedLine, signals_csv: signalsCsv, adopted, fallback }, record };
 }
 
 // The record of a ticket nobody finalized: observation only, no result.
@@ -116,4 +132,4 @@ function absentRecord(sid, tid, hand, adapter) {
   return rec;
 }
 
-module.exports = { MAX_ANSWER_BYTES, readAnswer, ticketRecord, adoptedOf, judgeComplexity, absentRecord };
+module.exports = { MAX_ANSWER_BYTES, readAnswer, ticketRecord, adoptedOf, answerFallbackOf, judgeComplexity, absentRecord };

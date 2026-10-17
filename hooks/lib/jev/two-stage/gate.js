@@ -1,13 +1,29 @@
 "use strict";
 // hooks/lib/jev/two-stage/gate.js — the per-direction confidence gate shared by every
 // judgment point (#2460). Pure: the outcome depends only on the policy's
-// confidence_threshold_by_answer and short_circuit_answer; there is no built-in threshold.
+// confidence_threshold_by_answer and short_circuit_answer, plus the point's optional
+// decisiveness hook (#2677); there is no built-in threshold. A direction whose threshold is
+// null (not a number) holds every answer in that direction for the backup subagent.
 
 // Keeps float error (1 - 0.3) from moving a boundary value across the threshold.
 const CONFIDENCE_EPSILON = 1e-9;
 
-// applyGate({key: {p}}, policy) -> {adopted, delegated, unjudged, short_circuited, result}.
-function applyGate(items, policy) {
+// The short circuit fires on the adopted keys whose value is short_circuit_answer: by value
+// alone, or, when the point hands hooks.decides(keys), only when that returns true.
+function shortCircuitOf(adopted, sc, hooks) {
+  if (sc === null || sc === undefined) return false;
+  const hits = Object.keys(adopted).filter((k) => adopted[k] === sc);
+  if (hits.length === 0) return false;
+  if (!hooks || typeof hooks.decides !== "function") return true;
+  try {
+    return hooks.decides(hits) === true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+// applyGate({key: {p}}, policy, hooks?) -> {adopted, delegated, unjudged, short_circuited, result}.
+function applyGate(items, policy, hooks) {
   const byAnswer = (policy && policy.confidence_threshold_by_answer) || {};
   const sc = policy && Object.prototype.hasOwnProperty.call(policy, "short_circuit_answer")
     ? policy.short_circuit_answer : null;
@@ -25,8 +41,7 @@ function applyGate(items, policy) {
     if (conf >= th - CONFIDENCE_EPSILON) adopted[key] = answer;
     else held.push(key);
   }
-  const shortCircuited = sc !== null && sc !== undefined && Object.values(adopted).some((v) => v === sc);
-  if (shortCircuited) {
+  if (shortCircuitOf(adopted, sc, hooks)) {
     return { adopted, delegated: [], unjudged: held, short_circuited: true, result: "final" };
   }
   return {

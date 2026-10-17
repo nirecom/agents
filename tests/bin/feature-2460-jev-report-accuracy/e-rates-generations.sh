@@ -10,10 +10,11 @@ LCR_LOG="$FX/fixture/lc-rate.log"
 # lat-status: completed jev {10 ok, 20 unmappable}, outages/not-run 9000x; completed llm {1000 ok,
 # 2000 parse-fallback}, missing/not-run single digits. lc-rate: ok (S2 0.6) and low-confidence
 # (S5 0.6) are the denominator; three unmappable records (partial / null probabilities) are not.
+# Other lc-rate keys are 0.98: complexity-judge's false bar is null, so a false-side value always counts.
 run_with_timeout 30 node - "$(np "$LAT2_LOG")" "$(np "$LCR_LOG")" "$V1_SIGNAL_CSV" 2>/dev/null <<'JS'
 const fs = require("fs");
 const ids = process.argv[4].split(",");
-const probs = (over) => Object.fromEntries(ids.map((k) => [k, over[k] !== undefined ? over[k] : 0.02]));
+const probs = (over) => Object.fromEntries(ids.map((k) => [k, over[k] !== undefined ? over[k] : 0.98]));
 const rec = (stage, jev, llm) => JSON.stringify({ v: 1, point: "complexity-judge", ts: "2026-10-01T00:00:01Z", session_id: "sid-s",
   stage, agreement: null, fallback_reason: null, jev, llm });
 const S = [["ok", 10, "ok", 1000], ["unmappable", 20, "parse-fallback", 2000], ["timeout", 90001, "missing", 3],

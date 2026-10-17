@@ -66,7 +66,8 @@ case_end
 case_begin "btr-superseded-complexity" "bin/lib/jev-report-aggregate.js"
 if need_mod bin/workflow/jev-judge && need_mod bin/lib/jev-report-aggregate/adoption.js; then
   jj_fx btr-super
-  mock_p 0.01
+  # complexity-judge adopts Jev only on the true side (false bar null): 0.99 lets Jev decide.
+  mock_p 0.99
   jj_query complexity
   TA="$TICKET"
   jj_query complexity

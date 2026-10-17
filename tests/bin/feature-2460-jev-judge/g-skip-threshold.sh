@@ -106,14 +106,16 @@ case_end
 
 case_begin "jj-complexity-defaults-contrast" "hooks/lib/jev/two-stage/gate.js"
 cq g-cx "" 0.5 S2-architecture 0.25 S3-security 0.75 S5-breaking 0.65
-check "complexity p=0.25 none / 0.75 adopted, 0.65 held: only S5 delegated" "s5_breaking" "$(keyset "$(kv DELEGATED)")"
-check "complexity: RESULT=need-subagent" "need-subagent" "$(kv RESULT)"
+check "complexity p=0.25 held (the no-fire side is never adopted) / S3 0.75 adopted, 0.65 held: S2 and S5 delegated" "s2_architecture,s5_breaking" "$(keyset "$(kv DELEGATED)")"
+check "complexity: RESULT=need-subagent (S3 alone is not decisive at complexity)" "need-subagent" "$(kv RESULT)"
 jj finalize --session "$SID" --ticket "$TICKET"
-check "complexity: short_circuited false (short_circuit_answer null)" "false" "$(lq "$TICKET" 'r && String(r.short_circuited)')"
-check "complexity: threshold 0.7/0.7, short_circuit_answer null" '{"true":0.7,"false":0.7}|null' "$(thr)"
+check "complexity: short_circuited false (S3-only adoption does not short-circuit)" "false" "$(lq "$TICKET" 'r && String(r.short_circuited)')"
+check "complexity: threshold 0.7/null, short_circuit_answer true" '{"true":0.7,"false":null}|true' "$(thr)"
 cq g-cx2 "" 0.5 S2-architecture 0.25
-check "complexity S2 p=0.25 adopted none, others p=0.5: still need-subagent" "need-subagent" "$(kv RESULT)"
-check "complexity S2 p=0.25: S3 and S5 delegated" "s3_security,s5_breaking" "$(keyset "$(kv DELEGATED)")"
+check "complexity S2 p=0.25 held, others p=0.5: still need-subagent" "need-subagent" "$(kv RESULT)"
+check "complexity S2 p=0.25: S2, S3 and S5 delegated" "s2_architecture,s3_security,s5_breaking" "$(keyset "$(kv DELEGATED)")"
+cq g-cx3 "" 0.5 S2-architecture 0.01
+check "complexity S2 p=0.01 (conf 0.99), shipped registry: S2 still delegated" "s2_architecture,s3_security,s5_breaking" "$(keyset "$(kv DELEGATED)")"
 case_end
 
 case_begin "jj-registry-data-only-flips" "hooks/lib/jev/two-stage/gate.js"
@@ -130,8 +132,9 @@ check "swapped thresholds recorded from the ticket" '{"true":0.7,"false":0.9}' \
 gq g-sca detail 0.2 0.5 '"short_circuit_answer":null'
 check "detail short_circuit_answer null, K1 p=0.2: no short circuit" "need-subagent" "$(kv RESULT)"
 check "detail short_circuit_answer null: only K2 delegated" "$(keyset "$K2")" "$(keyset "$(kv DELEGATED)")"
-cq g-cxsc '"short_circuit_answer":false' 0.5 S2-architecture 0.25
-check "complexity short_circuit_answer false, S2 p=0.25: short circuit" "final" "$(kv RESULT)"
+# The shipped complexity false side is null (never adopted), so this case pins a numeric one.
+cq g-cxsc '"short_circuit_answer":false,"confidence_threshold_by_answer":{"true":0.7,"false":0.9}' 0.5 S2-architecture 0.05
+check "complexity short_circuit_answer false, S2 p=0.05 (conf 0.95 >= 0.9): short circuit" "final" "$(kv RESULT)"
 jj finalize --session "$SID" --ticket "$TICKET"
 check "complexity short circuit: S3 and S5 unjudged" "s3_security,s5_breaking" \
   "$(keyset "$(lq "$TICKET" 'r && (r.unjudged_keys||[]).join(",")')")"

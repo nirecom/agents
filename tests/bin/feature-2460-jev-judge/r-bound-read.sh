@@ -15,10 +15,12 @@ derive_sig() { bash "$RWT" 30 node "$DERIVE" --stage "$ST" --signals "$1" 2>/dev
 derive_sess() { bash "$RWT" 30 node "$DERIVE" --stage "$ST" --session "$SID" 2>/dev/null | tr -d '\r' | paste -sd'|' -; }
 record_ce() { bash "$RWT" 30 node "$RECORD_CE" --session "$SID" --signals "$1" 2>/dev/null | tr -d '\r'; }
 level_of() { printf '%s' "$1" | tr '|' '\n' | grep -m1 '^level=' | sed 's/^level=//'; }
-# overwrite_with_b: ticket B (all signals confidently absent) is queried and finalized.
+# overwrite_with_b: ticket B (all signals absent) is queried and finalized. Jev never adopts
+# an absence (false: null), so B's "none" comes from the subagent answer.
 overwrite_with_b() {
   mock_p 0.01
   ts_query "$ST" complexity-judge "$F_PRODUCTION"; TB="$TICKET"
+  answer_with "SIGNALS: none"
   jj finalize --session "$SID" --ticket "$TB"
   check "B finalize overwrites: SETTLE=ok, SIGNALS_CSV empty" "ok|" "$(kv SETTLE)|$(kv SIGNALS_CSV)"
   check "fixed file now holds B (empty)" "" "$(fixed_csv "$ST")"

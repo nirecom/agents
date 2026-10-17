@@ -62,6 +62,7 @@ guard refuse every model write there without touching the artifact workflow.
 | `[<stage>-]concerns-log.md`, `[<stage>-]codex-round-<N>-raw.md`, `<stage>-debug.log` | Orchestrator, wrapper | Planner, human |
 | `{complexity,outline,detail,write-tests,write-code}-judge-raw.txt` | Model | `normalize-judge-signals` (the normalized signals drive the gate) |
 | `write-code-files.txt` | Model (write-code WCD-2) | `jev-judge query` (the only input of the deterministic S1b / S4 signals) |
+| `jev-<ticket>-answer.txt` | Model (JJ-2: the main conversation Writes the backup subagent's answer) | `jev-judge finalize` |
 | `<fmt>-finalize-diagnostic.txt` | `concern-ledger finalize` (on failure) | Human |
 | `worker-<name>[-<seq>].draft.json` | Model (WD-2) | `bin/worker-dispatch-payload` only; deleted on publish |
 | `notes-backup/` | `capture-env.sh` | worktree-end |

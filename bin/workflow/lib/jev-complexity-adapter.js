@@ -8,6 +8,7 @@ const { MAX_STATE_CHARS, MAX_ARTIFACT_READ_BYTES, notesSessionId } = require("./
 const questions = require("./jev-complexity-adapter/questions.js");
 const llm = require("./jev-complexity-adapter/llm.js");
 const { buildRequest } = require("./jev-complexity-adapter/request.js");
+const { decidesAtStage } = require("./jev-complexity-adapter/decisive.js");
 
 const STEP_TO_STAGE = Object.freeze({
   workflow_init: "cos1",
@@ -38,6 +39,7 @@ module.exports = {
   keys: questions.keys,
   // The only stage whose S1b / S4 are computed from the write-code list, never judged.
   deterministicStage: "write-code",
+  decidesAtStage,
   parseSubagent: llm.parseSubagent,
   extractLlmText: llm.extractLlmText,
   parserSelectedLine: llm.parserSelectedLine,

@@ -85,9 +85,13 @@ async function judge(ctx) {
     jev = broker.jevResult("bad-response");
   }
   if (jev.status !== "ok" || frozen.mode === "shadow") return { jev, gate: allDelegated(keys) };
+  // decidesAtStage reads the hits as signals that hold, so it only judges a true short circuit;
+  // any other short-circuit answer stays value-based (the registry data alone decides).
+  const hooks = typeof adapter.decidesAtStage === "function" && frozen.short_circuit_answer === true
+    ? { decides: (ks) => adapter.decidesAtStage(ctx.stage, ks) } : undefined;
   const gate = applyGate(itemsFrom(jev, adapter, keys), {
     confidence_threshold_by_answer: frozen.threshold, short_circuit_answer: frozen.short_circuit_answer,
-  });
+  }, hooks);
   return { jev, gate };
 }
 
@@ -150,7 +154,7 @@ async function query(args, optsArg = {}) {
     deterministic = deterministicFor(snap, a.stage, adapter, a.repoRoot);
     req = requiredSectionsStatus(sid, required, snap.sections, snap.sources_failed);
     judged = await judge({
-      point: a.point, entry, sid, snap, frozen, keys, adapter, req,
+      point: a.point, stage: a.stage, entry, sid, snap, frozen, keys, adapter, req,
       overrides: opts.overrides || ENTRY_OVERRIDES,
     });
   } catch (_e) {

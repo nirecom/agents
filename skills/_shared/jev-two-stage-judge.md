@@ -31,6 +31,7 @@ Keep the caller's own `Model selected:` line unchanged.
 
 ## JJ-4 Downstream (`RESULT=ok`)
 
+- When finalize prints `FALLBACK=<reason>`, show the reason to the user and run /supervisor-report with REASON=<reason>; handle the result as below, unchanged.
 - Pass the `SIGNALS_CSV` printed by finalize, never the fixed signals file; when it is empty, pass `--signals ""`.
 - complexity, `SETTLE=ok`, stage `complexity`: run `node "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-evaluation" --session "<SESSION_ID>" --signals "<SIGNALS_CSV>"`.
 - complexity, `SETTLE=ok`, any other stage: run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage <S with _ for -> --signals "<SIGNALS_CSV>"` and use its `model=`.
