@@ -44,17 +44,20 @@ function copyRunContract(value) {
   if (RUN_CONTRACT_CURRENT_KEYS.some((key) => value[key] !== undefined)) {
     for (const key of RUN_CONTRACT_CURRENT_KEYS) out[key] = value[key];
   }
+  if (value.hits !== undefined) out.hits = value.hits;
   return out;
 }
 
 function copyWorkerResult(value) {
   if (!isPlainObject(value)) return orNull(value);
-  return {
+  const out = {
     run_contract: copyRunContract(value.run_contract),
     failing_tests: Array.isArray(value.failing_tests) ? value.failing_tests.slice() : orNull(value.failing_tests),
     log_tail: Array.isArray(value.log_tail) ? value.log_tail.slice() : orNull(value.log_tail),
     summary: orNull(value.summary),
   };
+  if (value.hits !== undefined) out.hits = Array.isArray(value.hits) ? value.hits.slice() : value.hits;
+  return out;
 }
 
 // Shapes the record and fixes its key order. It does not judge the values:
@@ -81,17 +84,23 @@ function runContractProblem(value) {
   for (const key of RUN_CONTRACT_KEYS) {
     if (!isCount(value[key])) return `worker_result.run_contract.${key} must be a non-negative integer`;
   }
-  if (!RUN_CONTRACT_CURRENT_KEYS.some((key) => value[key] !== undefined)) return null;
-  for (const key of RUN_CONTRACT_CURRENT_KEYS) {
-    if (!isCount(value[key])) return `worker_result.run_contract.${key} must be a non-negative integer`;
+  const current = RUN_CONTRACT_CURRENT_KEYS.some((key) => value[key] !== undefined);
+  if (current) {
+    for (const key of RUN_CONTRACT_CURRENT_KEYS) {
+      if (!isCount(value[key])) return `worker_result.run_contract.${key} must be a non-negative integer`;
+    }
   }
-  return null;
+  // hits (#2669): optional, and only beside the current shape's keys.
+  if (value.hits === undefined) return null;
+  if (!current) return "worker_result.run_contract.hits needs the current-shape contract";
+  return isCount(value.hits) ? null : "worker_result.run_contract.hits must be a non-negative integer";
 }
 
 function workerResultProblem(value) {
   if (!isPlainObject(value)) return "worker_result must be an object";
   if (!isStringList(value.failing_tests)) return "worker_result.failing_tests must be a list of strings";
   if (!isStringList(value.log_tail)) return "worker_result.log_tail must be a list of strings";
+  if (value.hits !== undefined && !isStringList(value.hits)) return "worker_result.hits must be a list of strings";
   if (typeof value.summary !== "string") return "worker_result.summary must be a string";
   if (value.summary.length > MAX_OUTCOME_SUMMARY) {
     return `worker_result.summary must be at most ${MAX_OUTCOME_SUMMARY} characters`;

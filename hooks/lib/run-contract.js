@@ -9,7 +9,7 @@
 // Loose: what counts as a contract line at all (counting, stripping, neutralizing).
 const CONTRACT_PREFIX_RE = /^[ \t]*RUN_CONTRACT:/;
 const CONTRACT_LINE_RE =
-  /^[ \t]*RUN_CONTRACT: PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)(?: UNRUNNABLE=(\d+) TIMEOUT=(\d+))?[ \t]*\r?$/;
+  /^[ \t]*RUN_CONTRACT: PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)(?: UNRUNNABLE=(\d+) TIMEOUT=(\d+)(?: HITS=(\d+))?)?[ \t]*\r?$/;
 
 // parseContractLine(line) — the contract, or null for anything not exactly one well-formed,
 // self-consistent line (EXECUTED = PASS+FAIL+SKIP; TIMEOUT <= FAIL in the current shape).
@@ -19,14 +19,16 @@ function parseContractLine(line) {
   if (m === null) return null;
   const nums = m.slice(1, 5).map((v) => Number(v));
   const current = m[5] !== undefined;
-  const extra = current ? [Number(m[5]), Number(m[6])] : [];
+  const extra = current ? [Number(m[5]), Number(m[6]), m[7] === undefined ? 0 : Number(m[7])] : [];
   if ([...nums, ...extra].some((n) => !Number.isSafeInteger(n))) return null;
   const [pass, fail, skip, executed] = nums;
   if (executed !== pass + fail + skip) return null;
   const unrunnable = current ? extra[0] : null;
   const timeout = current ? extra[1] : null;
   if (current && timeout > fail) return null;
-  return { shape: current ? "current" : "legacy", pass, fail, skip, executed, unrunnable, timeout };
+  // hits: unattributed guard/decoy/worktree hits (#2669); an absent HITS= and HITS=0 are one value.
+  const hits = current ? extra[2] : 0;
+  return { shape: current ? "current" : "legacy", pass, fail, skip, executed, unrunnable, timeout, hits };
 }
 
 // findSingleContract(lines) — the contract when exactly one line matches the loose prefix and
@@ -43,7 +45,9 @@ function findSingleContract(lines) {
 // formatContract(contract) — the line for a parsed contract, in its own shape.
 function formatContract(c) {
   const head = `RUN_CONTRACT: PASS=${c.pass} FAIL=${c.fail} SKIP=${c.skip} EXECUTED=${c.executed}`;
-  return c.shape === "legacy" ? head : `${head} UNRUNNABLE=${c.unrunnable} TIMEOUT=${c.timeout}`;
+  if (c.shape === "legacy") return head;
+  const hits = Number.isSafeInteger(c.hits) && c.hits > 0 ? ` HITS=${c.hits}` : "";
+  return `${head} UNRUNNABLE=${c.unrunnable} TIMEOUT=${c.timeout}${hits}`;
 }
 
 // runtimeLabels(list) — the labels of a `Missing runtimes: <label> (<n> files), ...` list, in

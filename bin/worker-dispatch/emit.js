@@ -55,6 +55,12 @@ function toInt(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : fallback;
 }
 
+// The hit lines as the YAML shows them: sanitized, trimmed, blank ones dropped.
+function hitList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((h) => sanitizeLine(h, MAX_LINE).trim()).filter((h) => h !== "");
+}
+
 // --- renderers -------------------------------------------------------------
 
 function renderStatusTriple(result, quoted) {
@@ -87,6 +93,7 @@ function formatRunContract(value) {
     : value.unrunnable !== undefined || value.timeout !== undefined;
   const fields = ["pass", "fail", "skip", "executed"].concat(current ? ["unrunnable", "timeout"] : []);
   if (!fields.every((k) => Number.isSafeInteger(value[k]) && value[k] >= 0)) return null;
+  if (value.hits !== undefined && !(Number.isSafeInteger(value.hits) && value.hits >= 0)) return null;
   const line = formatContract(Object.assign({}, value, { shape: current ? "current" : "legacy" }));
   return parseContractLine(line) === null ? null : line;
 }
@@ -120,6 +127,12 @@ function renderTestRunnerYaml(result) {
   } else {
     lines.push("failing_tests:");
     for (const name of failing) lines.push(`  - ${yamlSingleQuoted(name, MAX_LINE, "(unnamed)")}`);
+  }
+  // Unattributed hits (#2669): written only when there is one, so a run without hits renders as before.
+  const hits = hitList(result.hits);
+  if (hits.length > 0) {
+    lines.push("hits:");
+    for (const h of hits) lines.push(`  - ${yamlSingleQuoted(h, MAX_LINE, "(unnamed)")}`);
   }
 
   lines.push("log_tail: |");
@@ -203,6 +216,7 @@ function contractObject(line) {
   if (c === null) return null;
   const out = { pass: c.pass, fail: c.fail, skip: c.skip, executed: c.executed };
   if (c.shape === "current") Object.assign(out, { unrunnable: c.unrunnable, timeout: c.timeout });
+  if (c.hits > 0) out.hits = c.hits;
   return out;
 }
 
@@ -213,7 +227,8 @@ function renderedFields(result) {
   const tailSource = Array.isArray(result.logTail) ? result.logTail : [];
   const d = result.durationSeconds;
   const seconds = typeof d === "number" && Number.isFinite(d) ? d : 0;
-  return {
+  const hits = hitList(result.hits);
+  const fields = {
     status: plainValue(result.status, 64, "runner-error"),
     exit_code: toInt(result.exitCode, -1),
     duration_ms: Math.max(0, Math.round(seconds * 1000)),
@@ -231,6 +246,8 @@ function renderedFields(result) {
       summary: summary === "" ? "no summary" : summary,
     },
   };
+  if (hits.length > 0) fields.worker_result.hits = hits;
+  return fields;
 }
 
 // Verdict fields of a test-runner result: status, exit_code, duration_ms, worker_result.
@@ -250,7 +267,7 @@ function outcomeFields(entry, result) {
 // The renderer's input rebuilt from an outcome record (or from outcomeFields).
 function resultFromOutcome(outcome) {
   const wr = outcome && outcome.worker_result ? outcome.worker_result : {};
-  return {
+  const result = {
     status: outcome.status,
     exitCode: outcome.exit_code,
     durationSeconds: typeof outcome.duration_ms === "number" ? outcome.duration_ms / 1000 : 0,
@@ -259,6 +276,8 @@ function resultFromOutcome(outcome) {
     logTail: Array.isArray(wr.log_tail) ? wr.log_tail : [],
     runContract: wr.run_contract === undefined ? null : wr.run_contract,
   };
+  if (Array.isArray(wr.hits)) result.hits = wr.hits;
+  return result;
 }
 
 // A validation / dispatch failure, rendered through the worker's own renderer so

@@ -48,7 +48,7 @@ probe() { OUT="$(run_with_timeout 180 bash "$LK/$PROBE" --targets "$TSV" "$@" 2>
 tree_state() { git -C "$LK" status --porcelain; }
 leftovers() { find "$TMP_ROOT/mtmp" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' '; }
 
-script_checkout_fixture_copy "$FXM" bin/lib/run-all-launch.sh bin/lib/test-language-registry.sh bin/lib/run-all-parallelism.sh bin/run-with-timeout.sh bin/test-language-registry hooks/lib/test-language-registry.js hooks/lib/test-language-registry.json
+script_checkout_fixture_copy "$FXM" bin/lib/run-all-launch.sh bin/lib/run-all-hits.sh bin/lib/run-all-classify.sh bin/lib/timed-exec.sh bin/lib/test-language-registry.sh bin/lib/run-all-parallelism.sh bin/lib/test-wrappers bin/run-with-timeout.sh bin/test-language-registry hooks/lib/test-language-registry.js hooks/lib/test-language-registry.json hooks/lib/test-language-registry
 mkdir -p "$FXM/tests/mutation" "$FXM/tests/lib" "$FXM/tests/bin" "$FXM/tests/unit"
 cp "$SCRIPT_CHECKOUT_ROOT/$PROBE" "$FXM/tests/mutation/"
 cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy-build.js" "$SCRIPT_CHECKOUT_ROOT/tests/lib/root-decoy.sh" "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-cache-base.js" "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-run-root.sh" "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard.sh" "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard-build.js" "$FXM/tests/lib/"

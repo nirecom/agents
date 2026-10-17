@@ -19,8 +19,10 @@ const NO_LIST = "failing_tests is not a non-empty list";
 
 // Exit codes: 0 completed / listed, 1 classification does not authorize
 // completion, 2 usage error, 3 state is not in the expected shape (or moved),
-// 6 `accept` found no user grant (baseline_accept) to act on.
-const EXIT = { OK: 0, UNMET: 1, USAGE: 2, STATE: 3, ABSENT: 6 };
+// 6 `accept` found no user grant (baseline_accept) to act on, 7 `failing` found a run with
+// unattributed hits (#2669; the CLI reports it as its own exit 6).
+const EXIT = { OK: 0, UNMET: 1, USAGE: 2, STATE: 3, ABSENT: 6, HITS: 7 };
+const HITS_WHY = "the run left unattributed hits (HITS>0); no failure in it can be classified";
 
 function stateIo() {
   return require(STATE_IO);
@@ -44,10 +46,17 @@ function runTestsEntry(steps) {
   return steps && typeof steps === "object" ? steps.run_tests || null : null;
 }
 
+// The recorded hit_count when it is a positive integer, else 0.
+function hitCount(entry) {
+  const n = entry ? entry.hit_count : undefined;
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
 // Why the entry cannot be baseline-classified, or null when it can.
 function failingPrecondition(entry) {
   if (!entry) return "run_tests has no state entry";
   if (entry.status !== "pending") return `run_tests status is ${entry.status}, not pending`;
+  if (hitCount(entry) > 0) return HITS_WHY;
   if (!FAILING_OUTCOMES.includes(entry.run_outcome)) return "run_outcome is not a failing value";
   const ft = entry.failing_tests;
   if (!Array.isArray(ft) || ft.length === 0) return NO_LIST;
@@ -93,6 +102,10 @@ function failing(sessionId) {
     return { code: EXIT.STATE, stderr: `cannot read state: ${e.message}` };
   }
   const pre = failingPrecondition(entry);
+  if (pre === HITS_WHY) {
+    const summary = Array.isArray(entry.hit_summary) ? entry.hit_summary.filter((h) => typeof h === "string") : [];
+    return { code: EXIT.HITS, stdout: [`HIT_COUNT=${hitCount(entry)}`].concat(summary).join("\n") + "\n" };
+  }
   const why = pre || dispatchPrecondition(sessionId, entry);
   if (why !== null) return { code: EXIT.STATE, stderr: why + listlessHint(sessionId, entry, pre) };
   const seq = entry.updated_seq;
@@ -181,7 +194,7 @@ function record(sessionId, seq, entries, base) {
 // The grant kind the entry supports now, or null. The sentinel handler judges with this same function.
 // Only the hook's own exact 0 unrunnable count is grantable: null, absent or malformed proves nothing.
 function grantKind(entry) {
-  if (!entry || entry.unrunnable_count !== 0) return null;
+  if (!entry || entry.unrunnable_count !== 0 || hitCount(entry) > 0) return null;
   const pre = failingPrecondition(entry);
   if (pre === NO_LIST && isListless(entry)) return "failing-list-unrecorded";
   if (pre !== null) return null;
@@ -274,4 +287,5 @@ module.exports = {
   recordFromFile,
   accept,
   grantKind,
+  hitCount,
 };

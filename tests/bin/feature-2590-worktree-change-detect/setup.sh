@@ -14,13 +14,14 @@ field() { printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -n 1; }
 nlow() { [[ -n "$1" ]] || return 0; np "$1" | tr 'A-Z\\' 'a-z/'; }
 
 # changes <report> <tree basename> <fixture test> <kind> — how many report lines name that
-# tree, that test and that kind ("[run-all] worktree change: <tree>\t<test id>\t<kind>").
+# tree, that test and that kind ("[run-all] worktree change: <tree>\t<test id>\t<kind>", with or
+# without a trailing "\t<paths>" field, #2669).
 changes() {
   local line n=0
   while IFS= read -r line; do
     line="${line%$'\r'}"
     case "$line" in
-      "[run-all] worktree change: "*"/$2$TAB"*"$3"*"$TAB$4") n=$((n + 1)) ;;
+      "[run-all] worktree change: "*"/$2$TAB"*"$3"*"$TAB$4"|"[run-all] worktree change: "*"/$2$TAB"*"$3"*"$TAB$4$TAB"*) n=$((n + 1)) ;;
     esac
   done <<<"$1"
   printf '%s' "$n"
@@ -100,7 +101,8 @@ if [[ "$mode" == overlap ]]; then
   run_all_exec "$2" "$2.out" "$2.err" & second=$!
   wait "$first"; wait "$second"
 else
-  for t in "$@"; do run_all_exec "$t" "$t.out" "$t.err"; echo "EXEC:${t##*/}=$?"; done
+  # full mode replays each test's stderr: a hit the launcher claimed for the test is named there (#2669).
+  for t in "$@"; do run_all_exec "$t" "$t.out" "$t.err"; echo "EXEC:${t##*/}=$?"; [[ "$mode" == full ]] && cat "$t.err" >&2; done
 fi
 if [[ "$mode" == full ]]; then run_all_hit_report; else run_all_worktree_change_report; fi
 echo "REPORT_RC=$?"

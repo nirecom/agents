@@ -3,6 +3,7 @@
 # stops gh / glab / codex (exit 97 + a hit) and lets git write only inside the run root
 # (tests/lib/test-run-root.sh). Design: docs/architecture/claude-code/test-command-guard.md
 #   command_guard_ensure          reuse COMMAND_GUARD_DIR or $TEST_RUN_ROOT/command-guard, else build it; prepend its bin
+#   command_guard_hit_fields <f>  set _CG_HIT_STUB / _CG_HIT_ID / _CG_HIT_TARGET from one hit record (no subshell)
 #   command_guard_hits <dir>      one "<stub><TAB><test id><TAB><target>" line per recorded hit
 #   command_guard_hit_count <dir> number of recorded hits
 #   command_guard_use_real        take every guard bin off PATH (TL3 / TL4 tests only)
@@ -82,21 +83,27 @@ command_guard_use_real() {
   return 0
 }
 
+command_guard_hit_fields() {
+  local line
+  _CG_HIT_STUB="" _CG_HIT_ID="" _CG_HIT_TARGET=""
+  [[ -f "${1:-}" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      stub=*) _CG_HIT_STUB="${line#stub=}" ;;
+      test_id=*) _CG_HIT_ID="${line#test_id=}" ;;
+      target=*) _CG_HIT_TARGET="${line#target=}" ;;
+    esac
+  done <"$1"
+}
+
 command_guard_hits() {
-  local dir="${1:-}" f line stub="" id="" target=""
+  local dir="${1:-}" f
   [[ -n "$dir" ]] || { echo "command_guard_hits: guard directory required" >&2; return 2; }
   for f in "$dir"/hits/*.hit; do
     [[ -f "$f" ]] || continue
-    stub="" id="" target=""
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      line="${line%$'\r'}"
-      case "$line" in
-        stub=*) stub="${line#stub=}" ;;
-        test_id=*) id="${line#test_id=}" ;;
-        target=*) target="${line#target=}" ;;
-      esac
-    done <"$f"
-    printf '%s\t%s\t%s\n' "$stub" "$id" "$target"
+    command_guard_hit_fields "$f"
+    printf '%s\t%s\t%s\n' "$_CG_HIT_STUB" "$_CG_HIT_ID" "$_CG_HIT_TARGET"
   done
 }
 

@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # tests/bin/feature-2431-run-tests-baseline/root-names.sh
 # Tests: bin/run-tests-baseline
-# Tags: run-tests, baseline, cli, exec, root-names, security, scope:issue-specific, pwsh-not-required, TL2
+# Tags: run-tests, baseline, cli, exec, root-names, security, hit-attribution, scope:issue-specific, pwsh-not-required, TL2
 # Sourced by the dispatcher; never run standalone.
 # #2561: a merge-base older than the root rename gives no baseline (exit 5, nothing launched);
 # rtb_exec_one runs the base test under the launcher's decoy pin and adds no root name itself.
@@ -361,4 +361,62 @@ run_root_names_exec_hit_cases() {
   r="$(_rn_exec_probe "$wt" tests/bin/test-preexisting.sh "$d/logs-fail")"
   [ "$r" = "RC=1 DECOY=0" ] && pass "RN-exec-hit: a base test that fails without a hit is RC=1 with RTB_EXEC_DECOY=0" \
     || fail "RN-exec-hit: expected 'RC=1 DECOY=0' for the plain failing base test, got: ${r:-none}"
+
+  _rn_exec_claimed_hit_cases "$d"
+}
+
+# _rn_claiming_launcher <file> — a base checkout's own launcher whose run_all_exec claims the
+# hits of the test it ran (RUN_ALL_EXEC_HITS, #2669), so the end-of-run report finds none left.
+_rn_claiming_launcher() {
+  mkdir -p "${1%/*}"
+  cat >"$1" <<'LAUNCH'
+run_all_exec() {
+  bash "$1" >"$2" 2>"$3"
+  local rc=$?
+  RUN_ALL_EXEC_LAUNCHED=1
+  case "${1##*/}" in
+    *claimed*) RUN_ALL_EXEC_HITS=1; printf 'HIT: command-guard %s gh --version\n' "${1##*/}" >>"$3" ;;
+    *) RUN_ALL_EXEC_HITS=0 ;;
+  esac
+  return "$rc"
+}
+run_all_hit_report() { return 0; }
+LAUNCH
+}
+
+# #2669 T11: a hit the launcher claimed for the test in the same run is still a base hit — the
+# exec layer flags it (.decoyhit, rc 0 -> 1) and the CLI keeps it undetermined root-decoy-hit-at-base.
+_rn_exec_claimed_hit_cases() {
+  local d="$1/claimed" wt r repo sid="claimed-$$" cache t="tests/bin/test-claimed-exit0.sh"
+  mkdir -p "$d"
+  wt="$d/repo"
+  mk_fixture_repo "$wt" >/dev/null
+  _rn_claiming_launcher "$wt/bin/lib/run-all-launch.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$wt/$t"
+
+  r="$(_rn_exec_probe "$wt" "$t" "$d/logs-claimed")"
+  [ "$r" = "RC=1 DECOY=1" ] && [ -e "$d/logs-claimed/1.decoyhit" ] \
+    && pass "RN-exec-claimed-hit: a hit claimed in the same run turns exit 0 into RC=1 with a .decoyhit marker" \
+    || fail "RN-exec-claimed-hit: expected 'RC=1 DECOY=1' and 1.decoyhit, got: ${r:-none} (logs: $(ls "$d/logs-claimed" 2>/dev/null | tr '\n' '|'))"
+  r="$(_rn_exec_probe "$wt" tests/bin/test-broken.sh "$d/logs-unclaimed")"
+  [ "$r" = "RC=0 DECOY=0" ] && [ ! -e "$d/logs-unclaimed/1.decoyhit" ] \
+    && pass "RN-exec-claimed-hit: control — a run with no claimed hit stays RC=0 DECOY=0" \
+    || fail "RN-exec-claimed-hit: expected 'RC=0 DECOY=0' for the clean base test, got: ${r:-none}"
+
+  repo="$d/repo-cli"
+  mk_fixture_repo "$repo" >/dev/null
+  git -C "$repo" checkout -q main
+  _rn_claiming_launcher "$repo/bin/lib/run-all-launch.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$repo/$t"
+  chmod +x "$repo/$t"
+  git -C "$repo" add bin tests
+  git -C "$repo" commit -q -m "base launcher that claims hits"
+  git -C "$repo" checkout -q feature
+  git -C "$repo" merge -q --no-edit main
+  cache="$(cli_case_cache claimed)"
+  seed_failing "$sid" "$t"
+  rtb_cli_run "$cache" "$repo" "$sid"
+  printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t[[:space:]]+root-decoy-hit-at-base\$" \
+    && pass "RN-exec-claimed-hit: the CLI classifies the claimed base hit undetermined root-decoy-hit-at-base" \
+    || fail "RN-exec-claimed-hit: expected undetermined root-decoy-hit-at-base for $t; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
 }
