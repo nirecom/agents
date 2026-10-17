@@ -136,6 +136,27 @@ check "and a name with a single parse is not" \
     "not-ambiguous" "$(reg parse-injected "a-q-y.txt")"
 case_end
 
+case_begin "session-progress-name-boundaries" "hooks/lib/plans-artifact-registry.js"
+# #2594: the progress artifact is <sid>-session-progress.md. Its old name <sid>-progress.md
+# collided with user-requested topics ending in "progress" (ambiguous under two sid splits).
+PG_SID="9d66b47d-8d7d-4798-a4ce-83a78b939281"
+while IFS='|' read -r name want; do
+    [ -z "$name" ] && continue
+    case "$name" in \#*) continue ;; esac
+    name="$(trim_f "$name")"; want="$(trim_f "$want")"
+    name="${name//__SID__/$PG_SID}"; want="${want//__SID__/$PG_SID}"
+    check "session-progress: $name parses as $want" "$want" "$(reg parse-kind "$name")"
+done <<'TABLE'
+__SID__-session-progress.md                     | artifact:progress:__SID__
+__SID__-user-requested-project-progress.md      | artifact:user-requested:__SID__
+# the old name matches no kind at any split once the regex is session-progress\.md
+__SID__-progress.md                             | null
+# Documented residual (tracked separately: sid-boundary guessing): a user-requested topic
+# ending in "session" also reads as progress at a longer sid; a parser change must surface here.
+__SID__-user-requested-x-session-progress.md    | ambiguous
+TABLE
+case_end
+
 case_begin "format-tokens-and-kind-sets" "hooks/lib/plans-artifact-registry.js"
 check "FORMAT_TOKENS lists exactly the six review formats" \
     "detail-plan,outline-plan,review-security-shared,security-code,security-plan,test-review" \

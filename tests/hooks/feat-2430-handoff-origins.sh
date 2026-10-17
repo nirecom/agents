@@ -111,6 +111,25 @@ case_begin "read-document-file-is-exported" "hooks/lib/handoff-artifact.js"
 expect "O4: readDocumentFile is exported, reads an existing handoff, returns null for a missing one" "$(nj readdoc.js)" "OK"
 case_end
 
+# #2594: session-progress.md's mtime is the nudge baseline now, so a flush no longer
+# writes handoff-flush-mark.json (the --origin flush path itself stays until #2652).
+cat > "$TMP/seed-active.js" <<'JS'
+const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
+const sid = process.argv[2];
+S.writeState(sid, S.createInitialState(sid, { cwd: '/x', git_branch: 'feature/x' }));
+S.markStep(sid, 'workflow_init', 'complete');
+process.stdout.write('seeded');
+JS
+
+case_begin "flush-writes-no-flush-mark" "bin/workflow/handoff-append"
+expect "O5: active session seeded" "$(nj seed-active.js flush-sid)" "seeded"
+O5_OUT="$(run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" --session flush-sid --class D --step - --key o5-flush --summary s --pointer - --origin flush 2>&1)"
+O5_RC=$?
+expect "O5: --origin flush still exits 0" "$O5_RC" "0"
+expect "O5: --origin flush still writes the entry" "$(printf '%s' "$O5_OUT" | grep -c 'WRITTEN=1')" "1"
+expect "O5: no handoff-flush-mark.json is written" "$([ -e "$TMP/wf/flush-sid.control/handoff-flush-mark.json" ] && echo written || echo none)" "none"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -gt 0 ] && exit 1

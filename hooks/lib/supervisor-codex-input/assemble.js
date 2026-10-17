@@ -1,14 +1,15 @@
 "use strict";
 
-// #2475 supervisor codex input: transcript + handoff + plan artifacts + state
-// rendered as six delimited blocks. Every block body is defanged so embedded
+// #2475 supervisor codex input: transcript + handoff + session-progress.md + plan artifacts + state
+// rendered as seven delimited blocks. Every block body is defanged so embedded
 // text can never forge a delimiter or open an HTML comment.
 
 const fs = require("fs");
 const path = require("path");
 const { classify } = require("./rules");
 const cursorLib = require("./cursor");
-const { getHandoffPath, readDocumentFile } = require("../handoff-artifact");
+const { getHandoffPath, readDocumentFile, MAX_BYTES } = require("../handoff-artifact");
+const { progressPathFor, isRegularFile } = require("../progress-file");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { getStatePath } = require("../supervisor-state-writer");
 const { diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
@@ -82,6 +83,21 @@ function handoffLines(transcriptPath, wsid) {
   return out;
 }
 
+// session-progress.md of the first generation (#2594), cut at the HANDOFF cap. The model writes it,
+// so the block heads it as the model's own record — never as evidence.
+function progressLines(transcriptPath, wsid) {
+  const sid = wsid && wsid !== "UNAVAILABLE" ? wsid : path.basename(transcriptPath).replace(/\.jsonl$/i, "");
+  const p = progressPathFor(sid);
+  if (!p || !isRegularFile(p)) return [];
+  let buf;
+  try { buf = fs.readFileSync(p); } catch (_) { return []; }
+  const cut = buf.length > MAX_BYTES;
+  const text = buf.subarray(0, MAX_BYTES).toString("utf8").replace(/\n$/, "");
+  const out = [`--- ${path.basename(p)} (written by the model, not evidence) ---`, text];
+  if (cut) out.push(`(truncated at ${MAX_BYTES} bytes)`);
+  return out;
+}
+
 function planLines(wsid, planScope, artifact) {
   if (!wsid || wsid === "UNAVAILABLE") return [];
   const kinds = planScope === "intent" ? ["intent"] : ["intent", "outline", "detail"];
@@ -137,6 +153,7 @@ function assemble(opts) {
   const text = [
     ["[SUPERVISOR INPUT HEADER]", ...header.map(defang)].join("\n"),
     block("HANDOFF", handoffLines(opts.transcript, opts.wsid)),
+    block("PROGRESS", progressLines(opts.transcript, opts.wsid)),
     block("USER UTTERANCES", c.utterances),
     block(`ACTIONS SINCE PREVIOUS ${opts.mode.toUpperCase()} RUN`, c.actions),
     block("PLAN ARTIFACTS", planLines(opts.wsid, opts.planScope, opts.artifact)),
