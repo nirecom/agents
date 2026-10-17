@@ -47,6 +47,12 @@ cp "$REPO_ROOT/hooks/lib/load-env.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot 
 cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy script-checkout-root.js"; exit 1; }
 cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy path-normalize.js"; exit 1; }
 cp "$REPO_ROOT/hooks/lib/local-env.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy local-env.js"; exit 1; }
+# #2681: get-config-var and confirm-off resolve through hooks/lib/config-flag.js. Copied only when
+# present so this file still runs before that module lands; once it lands, a missing copy turns
+# T01/T02 red (every answer becomes ERROR), so the guard cannot hide a broken fixture.
+if [ -f "$REPO_ROOT/hooks/lib/config-flag.js" ]; then
+    cp "$REPO_ROOT/hooks/lib/config-flag.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy config-flag.js"; exit 1; }
+fi
 
 chmod +x "$FIX/bin/get-config-var" "$FIX/bin/confirm-off" 2>/dev/null || true
 
@@ -178,10 +184,10 @@ assert_rc  "T06 AGENTS_MAIN_ROOT unset → exit 2" "2"
 assert_stderr_nonempty "T06 AGENTS_MAIN_ROOT unset → stderr diagnostic"
 
 # ════════════════════════════════════════════════════════════════════════════
-# T6b — get-config-var missing beside confirm-off (AGENTS_MAIN_ROOT set) → ERROR, exit 2
+# T6b — AGENTS_MAIN_ROOT set, but no hooks/lib beside confirm-off → ERROR, exit 2
 # ════════════════════════════════════════════════════════════════════════════
-# Create a fresh temp dir with no bin/ subdirectory inside (no get-config-var).
-# confirm-off must detect the missing binary and output ERROR + exit 2.
+# confirm-off sits alone in a fresh bin/ (no hooks/lib/config-flag.js beside it), while
+# AGENTS_MAIN_ROOT points at an existing directory. confirm-off must report ERROR + exit 2.
 T6B_DIR="$(mktemp -d)"
 # No bin/ created — directory exists but get-config-var is absent.
 T6B_ISO="$(mktemp -d)"
@@ -193,8 +199,8 @@ AGENTS_MAIN_ROOT="$T6B_DIR" run_with_timeout bash "$T6B_ISO/bin/confirm-off" CON
 T6B_RC=$?
 CO_OUT="$(cat "$T6B_OUT")"; CO_ERR="$(cat "$T6B_ERR")"; CO_RC=$T6B_RC
 rm -f "$T6B_OUT" "$T6B_ERR"; rm -rf "$T6B_DIR" "$T6B_ISO"
-assert_out "T6b AGENTS_MAIN_ROOT exists, get-config-var missing → ERROR" "ERROR"
-assert_rc  "T6b AGENTS_MAIN_ROOT exists, get-config-var missing → exit 2" "2"
+assert_out "T6b AGENTS_MAIN_ROOT exists, no hooks/lib beside confirm-off → ERROR" "ERROR"
+assert_rc  "T6b AGENTS_MAIN_ROOT exists, no hooks/lib beside confirm-off → exit 2" "2"
 
 # ════════════════════════════════════════════════════════════════════════════
 # T07 — AGENTS_MAIN_ROOT set to nonexistent path → stdout 'ERROR', exit 2

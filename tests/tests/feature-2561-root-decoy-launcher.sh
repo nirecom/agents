@@ -185,6 +185,8 @@ mkdir -p "$BARE/bin/lib" "$BARE/tests/lib" "$BARE/hooks/lib"
 cp "$ROOT_N"/bin/lib/*.sh "$BARE/bin/lib/"
 cp "$ROOT_N/bin/run-with-timeout.sh" "$ROOT_N/bin/test-language-registry" "$ROOT_N/bin/get-config-var" "$BARE/bin/"
 cp "$ROOT_N"/hooks/lib/test-language-registry.* "$ROOT_N/hooks/lib/load-env.js" "$BARE/hooks/lib/"
+# #2681: bin/get-config-var resolves through hooks/lib/config-flag.js (guarded until the module exists).
+if [ -f "$ROOT_N/hooks/lib/config-flag.js" ]; then cp "$ROOT_N/hooks/lib/config-flag.js" "$BARE/hooks/lib/"; fi
 cp "$ROOT_N/tests/lib/root-decoy-build.js" "$ROOT_N/tests/lib/root-decoy.sh" "$BARE/tests/lib/"
 # A tracked tree, so the builder could list its files: only the retired-name list is missing.
 git init -q "$BARE"
