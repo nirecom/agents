@@ -46,7 +46,8 @@ jj finalize --session "$SID" --ticket "$TA"
 check "A's first finalize: SETTLE=ok with its CSV" "ok|S2-architecture" "$(kv SETTLE)|$(kv SIGNALS_CSV)"
 SIG_A="$(ticket_files_sig "$TA" | paste -sd'|' -)"
 check "A leaves at least one broker file named after it (done marker)" "1" "$([ "${SIG_A%%|*}" -ge 1 ] 2>/dev/null && echo 1 || echo 0)"
-mock_p 0.01 S3-security 0.99
+# S5 (not S3) so B settles from Jev alone: S3 is not decisive at complexity.
+mock_p 0.01 S5-breaking 0.99
 jj_query complexity
 TB="$TICKET"
 jj finalize --session "$SID" --ticket "$TB"
@@ -62,7 +63,7 @@ check "A re-run: fixed file and owner marker unchanged (B stays)" "$FIX_B" \
   "$(pb sha "$(ctl complexity-signals.txt)")|$(pb sha "$(ctl complexity-signals-owner.json)")"
 check "A re-run: owner stays B" "\"$TB\"" "$(pb json-get "$(ctl complexity-signals-owner.json)" owner_id)"
 check "A re-run: decision log unchanged in size" "$N_B" "$(log_count)"
-check "B's fixed file content is B's result" "S3-security" "$(fixed_csv complexity)"
+check "B's fixed file content is B's result" "S5-breaking" "$(fixed_csv complexity)"
 case_end
 
 case_begin "jj-failsafe-first-run-replayed" "bin/workflow/jev-judge"

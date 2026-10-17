@@ -33,10 +33,15 @@ for v in 0.5 0.9 1; do
   check "threshold true=$v accepted" "accept" "$(rp v complexity-judge confidence_threshold_by_answer.true "$v")"
   check "threshold false=$v accepted" "accept" "$(rp v complexity-judge confidence_threshold_by_answer.false "$v")"
 done
-for v in 0.4 1.5 __inf__ __nan__ '"0.7"' null true; do
+for v in 0.4 1.5 __inf__ __nan__ '"0.7"' true; do
   check "threshold true=$v rejected" "reject" "$(rp v complexity-judge confidence_threshold_by_answer.true "$v")"
   check "threshold false=$v rejected" "reject" "$(rp v outline-skip confidence_threshold_by_answer.false "$v")"
 done
+# #2677: null means "never adopted" in one direction; null in both directions is rejected.
+check "threshold false=null (true numeric) accepted" "accept" "$(rp v outline-skip confidence_threshold_by_answer.false null)"
+check "threshold true=null (false numeric) accepted" "accept" "$(rp v outline-skip confidence_threshold_by_answer.true null)"
+check "threshold true=null beside the shipped complexity false=null rejected" "reject" \
+  "$(rp v complexity-judge confidence_threshold_by_answer.true null)"
 case_end
 
 case_begin "e-registry-threshold-shape" "hooks/lib/jev/registry.js"
@@ -97,7 +102,7 @@ case_end
 case_begin "e-registry-defaults-complexity" "hooks/lib/jev/registry.js"
 D="$(rp defaults complexity-judge)"
 check "complexity-judge defaults" \
-  '{"adapter":"jev-complexity-adapter.js","adapter_exists":true,"target":"<absent>","normalizer":"normalize-judge-signals","threshold":{"true":0.7,"false":0.7},"short_circuit_answer":null,"backup_subagent":"complexity-judge","subagent_type":"complexity-judge","fallback":"S0-undecidable","stages":["complexity","outline","detail","write-tests","write-code"],"required":{"complexity":["intent","issue body"],"outline":["intent","issue body"],"detail":["intent","outline","issue body"],"write-tests":["intent","outline","detail","issue body"],"write-code":["intent","outline","detail","issue body"]},"retired":[]}' \
+  '{"adapter":"jev-complexity-adapter.js","adapter_exists":true,"target":"<absent>","normalizer":"normalize-judge-signals","threshold":{"true":0.7,"false":null},"short_circuit_answer":true,"backup_subagent":"complexity-judge","subagent_type":"complexity-judge","fallback":"S0-undecidable","stages":["complexity","outline","detail","write-tests","write-code"],"required":{"complexity":["intent","issue body"],"outline":["intent","issue body"],"detail":["intent","outline","issue body"],"write-tests":["intent","outline","detail","issue body"],"write-code":["intent","outline","detail","issue body"]},"retired":[]}' \
   "$D"
 case_end
 

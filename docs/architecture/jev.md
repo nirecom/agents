@@ -69,7 +69,7 @@ with, and every decision record carries the ones actually applied.
 
 | Point | Mode | Backup subagent | Threshold: yes / no | Short-circuit |
 |---|---|---|---|---|
-| `complexity-judge` | production | `complexity-judge` | 0.7 signal fires / 0.7 does not | none |
+| `complexity-judge` | production | `complexity-judge` | 0.7 signal fires / never adopted (does not fire goes to the subagent) | when the adopted signals already decide high at every stage the judgment feeds |
 | `outline-skip` | production | `plan-skip-judge` | 0.9 skip allowed / 0.7 run | on "run" |
 | `detail-skip` | production | `plan-skip-judge` | 0.9 skip allowed / 0.7 run | on "run" |
 
@@ -81,10 +81,16 @@ with, and every decision record carries the ones actually applied.
   records every other point.
 - **Per-direction thresholds**: a skip point demands more confidence to skip a
   planning stage than to run it, because a wrong skip loses a review while a
-  wrong run only costs time.
+  wrong run only costs time. Complexity never adopts Jev's "absent" until data
+  sets a threshold: a wrong low loses quality, a wrong high costs a model tier.
 - **Short-circuit**: for a skip point, one criterion adopted as "does not hold"
-  decides "run" without asking about the rest. Complexity never short-circuits:
-  every signal routes a stage on its own.
+  decides "run" without asking about the rest. Complexity short-circuits on
+  adopted signals only when they are decisive: the adapter reads the routing
+  table and confirms they route every stage the judgment feeds to high (all
+  stages for stage `complexity`, its own stage otherwise). S3 alone is not
+  decisive at outline or detail, so it still delegates there. The routing
+  table is read at query time; a later table change only matters if the
+  persisted levels are lost and re-derived from the signals.
 - **Required sections**: per stage, the sections that must reach Jev whole.
   The intent and the issue body are required at every stage. A section is
   exempt only when its producing step was skipped or the session has no issue.
@@ -211,7 +217,8 @@ Record version 2 (`version: 2`):
 | `input.sources_failed`, `sources_failed_reasons` | Sections with no whole copy, and why (`copy-failed`, `over-cap`) |
 | `deterministic` | Computed signals: status, values, overrides, and the sha256 of the list they were computed from |
 | `agreement_by_signal` | Per key, whether Jev and the subagent agreed — only where both answered |
-| `fallback_reason` | Why Jev's answer was not used, when it was not |
+| `final.unjudged_signals` | Complexity: the signal ids left unjudged by a short circuit — never folded into `final.signals` as absent |
+| `fallback_reason` | Why Jev's answer was not used, when it was not; on the CLI finalize path, an unusable answer gives `answer-file-absent` / `answer-empty` / `answer-unparseable` (vocabulary: [two-stage-broker.md](jev/two-stage-broker.md#failure-paths), Missing answer) |
 
 The CLI cannot observe an Agent dispatch, only the answer file it leaves — hence
 `llm_answer_received`, not a claim that the subagent was called. The report's

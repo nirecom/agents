@@ -115,7 +115,11 @@ direction is yes when `p >= 0.5`, its confidence is `max(p, 1 - p)`, and it is
 adopted when that confidence reaches the threshold for its direction
 (`confidence_threshold_by_answer`). The thresholds are per direction because
 the two mistakes do not cost the same: wrongly running a planning stage costs
-time, wrongly skipping one loses a review.
+time, wrongly skipping one loses a review. A direction's threshold may be
+`null`: Jev answers in that direction are never adopted and always go to the
+subagent. `complexity-judge` uses this on the "does not fire" side, so every
+such key collects a labeled record (Jev `p` plus the subagent's answer) before a
+threshold for that side is set.
 
 A point may name a short-circuit answer. Once Jev's adopted answer for any key
 equals it, the point is decided: for a skip point, one criterion adopted as
@@ -123,6 +127,16 @@ equals it, the point is decided: for a skip point, one criterion adopted as
 keys Jev did not answer confidently are then left unjudged — recorded in
 `unjudged_keys` and filled with the run-side value — instead of costing a
 subagent call that could not change the outcome.
+
+A point may also hand the gate a decisiveness hook, so that an adopted
+short-circuit answer decides the point only when the hook confirms it. The
+complexity adapter's hook returns true only when the adopted signals route
+every stage the judgment feeds to high; the gate itself never reads the
+routing table. The hook reads the adopted keys as signals that hold, so it is
+handed over only when the short-circuit answer is true; with any other answer
+the short circuit stays value-based. A complexity short circuit leaves the unjudged signals out of
+the fired set, and the record lists them apart in `final.unjudged_signals`, so
+an unjudged signal is never read as absent.
 
 `query` prints `RESULT=final` when no key is delegated, else
 `RESULT=need-subagent` with the subagent to dispatch and the delegated keys.
@@ -224,9 +238,19 @@ the first run settled.
   marker, as an owner dated at the caller's ticket's query time — it beats that
   ticket and loses to any newer query. The fallback is `S0-undecidable` (the
   highest routing level) for complexity and "run the stage" for a skip.
-- **Missing answer**: a delegated ticket whose answer file is absent is
-  finalized with those keys on the safe side and
-  `fallback_reason: "answer-file-absent"`.
+- **Missing answer**: a delegated ticket whose answer cannot be used is
+  finalized with those keys on the safe side, and the reason becomes the
+  record's `fallback_reason` (this list is the vocabulary's SSOT):
+  - `answer-file-absent`: no answer file at `finalize`.
+  - `answer-empty`: the file is empty or `NO_ANSWER`.
+  - `answer-unparseable`: the file cannot be parsed — malformed, over the
+    1 MiB cap, or a skip answer that leaves a key unanswered.
+
+  When the output was demoted this way (or, for complexity, by a failed
+  write-code list), `finalize` prints `FALLBACK=<reason>` after `SETTLE=`, and
+  the caller shows it to the user. A skip ticket whose input was insufficient
+  prints `input-insufficient` instead: the missing input is the root cause. A
+  subagent's own `SIGNALS: S0-undecidable` is its answer, not a demotion.
 - **Orphans**: a ticket nobody finalized within an hour is handled by the
   sweep. One with a written-ahead result is replayed exactly as `finalize`
   would. One without is recorded once as `finalize-absent` and never settled —

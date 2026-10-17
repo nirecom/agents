@@ -31,8 +31,10 @@ check "missing and parse_fallback counted separately" "1|1" "$(jx "($P) && $P.mi
 case_end
 
 case_begin "r-low-confidence-columns" "bin/jev-report"
-check "low-confidence rate: S2 above zero, every other signal zero" "true|true" \
-  "$(jx "($P) && [$P.low_confidence_rate_by_signal['S2-architecture'] > 0, Object.entries($P.low_confidence_rate_by_signal).filter(([k]) => k !== 'S2-architecture').every(([, v]) => v === 0)].join('|')")"
+# complexity-judge bars are {true 0.7, false null}: S1 (0.97) clears the true bar; every 0.02 value
+# sits on the never-adopted false side and S2's 0.6 (R3) is under the true bar, so all count as low.
+check "low-confidence rate: S1 (above the true bar) zero; S2 and every false-side signal one" "0|1|true" \
+  "$(jx "($P) && [$P.low_confidence_rate_by_signal['S1-multi-file'], $P.low_confidence_rate_by_signal['S2-architecture'], Object.entries($P.low_confidence_rate_by_signal).filter(([k]) => k !== 'S1-multi-file').every(([, v]) => v === 1)].join('|')")"
 # R3 reference: p>=0.5 -> {S1,S2}; llm {S1}: S1 agrees (1), S2 disagrees (0).
 check "low-confidence reference column: S1 1, S2 0" "1|0" \
   "$(jx "($P) && ['S1-multi-file','S2-architecture'].map(k => $P.low_confidence_reference_by_signal[k]).join('|')")"
