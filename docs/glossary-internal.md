@@ -4,18 +4,6 @@
 Terms the user never sees but many components reference as design concepts.
 Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 
-### canonical dispatch line
-
-- **Definition**: The one sentence in `rules/shell-commands.md` that tells a subagent to read the shell-issuance rule and report command-form deviations.
-  Dispatch prompts carry it, and the `Agent|Task` PreToolUse hook appends it when a prompt lacks it.
-- **Related**: [architecture/claude-code/prompt-command-forms.md](architecture/claude-code/prompt-command-forms.md)
-
-### delivery boundary
-
-- **Definition**: The reset a delivery operation applies to `user_verification` (`reset_reason` `post-merge` / `post-push`).
-  Navigation counts it as settled, but gates ignore it, so the next commit or merge needs a fresh approval.
-- **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md)
-
 ### delivery operation
 
 - **Definition**: The hard-to-undo act of landing the change on the default branch — a PR merge or a direct commit and push — performed by `/merge-to-main` right after the USER_VERIFIED confirmation.
@@ -37,11 +25,6 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 - **Definition**: The intermediate representation that `hooks/lib/command-ir/` builds by parsing a Bash command string.
   Hooks judge a command through this structure instead of matching the raw text with regular expressions.
 - **Related**: [architecture/claude-code/shell-command-parsing.md](architecture/claude-code/shell-command-parsing.md)
-
-### native worktree isolation
-
-- **Definition**: The session state Claude Code's `EnterWorktree` tool creates, active until `ExitWorktree`; while it holds, hooks that would conflict with Claude Code's own isolation checks skip their rewrites.
-- **Related**: [hooks/lib/native-isolation.js](../hooks/lib/native-isolation.js)
 
 ### review round
 
@@ -73,9 +56,3 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 
 - **Definition**: One user utterance and the one response to it; hooks that fire per turn (`UserPromptSubmit`, `Stop`) count in turns, not in workflow steps.
 - **Related**: [architecture/claude-code/settings/hooks.md](architecture/claude-code/settings/hooks.md)
-
-### workflow state dir
-
-- **Definition**: The root holding per-session machine state, pinned by `WORKFLOW_STATE_DIR`; distinct from the plans dir (`WORKFLOW_PLANS_DIR`), which holds model-readable artifacts.
-  Tests never write it; they isolate it with `harness_isolate`.
-- **Related**: [architecture/claude-code/state-dirs.md](architecture/claude-code/state-dirs.md)
