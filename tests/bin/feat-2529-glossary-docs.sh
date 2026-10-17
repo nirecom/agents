@@ -200,11 +200,10 @@ case_begin "kept-terms-follow-category-table" "docs/glossary-user.md"
 # The curated kept terms must each appear exactly once in their category file. The check
 # asserts presence, not a total: a later PR adding a qualifying entry must not break it.
 USER_TERMS=(AGENTS_MAIN_ROOT "confirm gate" "deliverable type" "delivery path" detail "handoff artifact"
-            intent Jev meta outline plan-sync "PM type" "presentation turn" "release phase" RTK sentinel
+            intent Jev meta outline plan-sync "PM type" "presentation turn" RTK sentinel
             WF-CODE WF-META workflow "workflow step")
-INTERNAL_TERMS=("canonical dispatch line" "delivery boundary" "delivery operation" GATE_ACTION "in-skill step" IR
-                "native worktree isolation" "review round" SCRIPT_CHECKOUT_ROOT "step table" TARGET_CHECKOUT_ROOT
-                TARGET_MAIN_ROOT turn "workflow state dir")
+INTERNAL_TERMS=("delivery operation" GATE_ACTION "in-skill step" IR "review round" SCRIPT_CHECKOUT_ROOT
+                "step table" TARGET_CHECKOUT_ROOT TARGET_MAIN_ROOT turn)
 # kept_terms_missing <user-file> <internal-file> — one line per curated term not present exactly once.
 kept_terms_missing() {
     local t n
@@ -358,6 +357,22 @@ case_end
 
 case_begin "removed-terms-in-shell-snapshot-repair" "docs/architecture/claude-code/shell-snapshot-repair.md"
 removed_in_owner docs/architecture/claude-code/shell-snapshot-repair.md "Windows-form snapshot"
+case_end
+
+# Pruned against the "used across multiple subsystems" criterion: each was used in one subsystem only.
+case_begin "single-subsystem-terms-pruned" "docs/glossary-internal.md"
+removed_in_owner docs/architecture/claude-code/workflow.md "release phase"
+removed_in_owner docs/architecture/claude-code/state-dirs.md "workflow state dir"
+removed_in_owner hooks/workflow-state/effective-state.js "delivery boundary"
+case_end
+
+# Pruned because no artifact uses the term at all, so no owner defines it.
+case_begin "unused-terms-pruned" "docs/glossary-internal.md"
+for t in "canonical dispatch line" "native worktree isolation"; do
+    if [ ! -s "$GL_USER" ] || [ ! -s "$GL_INTERNAL" ]; then fail "D10/$t-not-in-glossary" "glossary files missing; absence not provable"
+    elif grep -qixF "### $t" "$GL_USER" "$GL_INTERNAL"; then fail "D10/$t-not-in-glossary" "a glossary heading still names it"
+    else pass "D10/$t-not-in-glossary"; fi
+done
 case_end
 
 # ============================================================================
