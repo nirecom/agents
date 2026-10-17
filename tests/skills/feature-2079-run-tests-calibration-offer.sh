@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tests/skills/feature-2079-run-tests-calibration-offer.sh
 # Tests: skills/run-tests/scripts/probe-calibration.sh, skills/run-tests/scripts/mark-calibration-asked.sh, skills/run-tests/scripts/answer-calibration.sh, skills/run-tests/scripts/lib/calibration-offer.sh, skills/run-tests/SKILL.md, install/settings-allow-commands.txt, bin/lib/run-all-parallelism.sh
-# Tags: run-tests, calibration, never-ask, session-marker, allowlist, security, TL2, scope:issue-specific
-# Dispatcher for #2079 R1-R3: /run-tests offers calibration once per session (probe / mark /
-# answer), the never-ask record silences it per host, and the printed hint opens the gate.
+# Tags: run-tests, calibration, never-ask, session-marker, allowlist, security, TL2, scope:issue-specific, auto-config, estimate
+# Dispatcher for #2079 R1-R3 (+#2687): /run-tests offers calibration once per session (probe /
+# mark / answer) with a dry-run estimate, auto-config off silences it, and the hint opens the gate.
 # TL3 gap (what this test does NOT catch):
 # - the live AskUserQuestion dialog and the Bash run_in_background completion notice in RNT-6a
 # - a real 90-minute calibration on a multi-core host (P9 replaces the measurement by the seam)
@@ -37,7 +37,7 @@ export RUN_ALL_CACHE_DIR="$TMPROOT/cache-default"
 # A nonexistent resolver skips the .env layer, so the developer's .env never decides a value.
 export RUN_ALL_CONFIG_VAR_CMD="$TMPROOT/no-such-config-var-cmd"
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR" "$HOME" "$TMPDIR" "$RUN_ALL_CACHE_DIR"
-unset RUN_CALIBRATION RUN_ALL_CALIBRATION_MEASURE_CMD TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN \
+unset RUN_CALIBRATION RUN_ALL_CALIBRATION_MEASURE_CMD TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN AUTO_CONFIG_TEST_MAX_JOBS \
     TEST_LANES TEST_LANES_HELD TESTS_DIR CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL \
     RUN_TL3 GIT_DIR GIT_WORK_TREE 2>/dev/null || true
 CACHE="$RUN_ALL_CACHE_DIR"
@@ -74,6 +74,8 @@ case_end
 . "$GROUP_DIR/_fixture.sh"
 # shellcheck source=feature-2079-run-tests-calibration-offer/probe-cases.sh
 . "$GROUP_DIR/probe-cases.sh"
+# shellcheck source=feature-2079-run-tests-calibration-offer/mode-and-estimate-cases.sh
+. "$GROUP_DIR/mode-and-estimate-cases.sh"
 # shellcheck source=feature-2079-run-tests-calibration-offer/answer-cases.sh
 . "$GROUP_DIR/answer-cases.sh"
 # shellcheck source=feature-2079-run-tests-calibration-offer/security-cases.sh
@@ -90,7 +92,7 @@ GRP_FINISHED="$(printf '%s' "$GRP_DONE" | grep -v '^$' | LC_ALL=C sort | tr '\n'
 ck "GRP1 every case file is sourced and every sourced case file exists" "$GRP_PRESENT" "$GRP_SOURCED"
 ck "GRP2 every sourced case file ran to its completion marker" "$GRP_SOURCED" "$GRP_FINISHED"
 CASE_MISSING=""
-for _c in P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 P11 P12 P13 P14 S1 S2 S3 S4 S5 A1 I1; do
+for _c in P1 P2 P3 P5 P6 P7 P8 P9 P10 P11 P12 P13 P14 S1 S2 S3 S4 S5 A1 I1 AC4 AC5 ES1 ES2 ES3; do
     case " $CASE_RAN " in *" $_c "*) ;; *) CASE_MISSING="${CASE_MISSING:+$CASE_MISSING }$_c" ;; esac
 done
 ck "CASE1 every planned case id ran" "" "$CASE_MISSING"
