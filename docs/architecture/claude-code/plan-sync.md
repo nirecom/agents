@@ -4,6 +4,11 @@ Publishes each final session plan (`<sid>-intent.md`, `-outline.md`, `-detail.md
 private git remote so the plan can be read from the iOS/Android Claude apps or any
 browser, not only from the machine that wrote it (#2513).
 
+`<rootSid>-session-progress.md` ([progress-file.md](progress-file.md)) is synced the same way, but
+silently: `hooks/show-plan-link.js` records its project host and pushes it on every
+Edit/Write inside the same sync budget, with no plan link and no turn marker (#2594). The
+remote's git history keeps every earlier version, which is the recovery path for a bad write.
+
 ## Why
 
 The plan confirmation steps (`CONFIRM_INTENT` / `CONFIRM_OUTLINE` / `CONFIRM_DETAIL`)
@@ -121,8 +126,11 @@ the rendered allowlist. Anything else yields a `not-provisioned` result naming t
 reason, with a hint to run `bin/plan-sync-init`.
 
 - **Allowlist.** The `.gitignore` ignores everything except `*-intent.md`,
-  `*-outline.md`, `*-detail.md`. Surveys, review logs and other artifacts never leave the
-  machine, and the publish step re-filters by file name independently of the ignore file.
+  `*-outline.md`, `*-detail.md` and `*-session-progress.md`. Surveys, review logs and
+  other artifacts never leave the machine, and the publish step re-filters by file name
+  independently of the ignore file. A plans repo provisioned before `*-session-progress.md`
+  joined the allowlist reports `not-provisioned: gitignore-drift` until `bin/plan-sync-init`
+  is re-run once; the re-run is idempotent.
 - **Commit and push.** Commits are built with git plumbing, not the working index: the
   plan blob is overlaid on the remote tip (`origin/main`) together with allowlisted
   local-only entries, `refs/heads/main` is advanced with a compare-and-swap, and the

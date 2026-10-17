@@ -359,19 +359,11 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   operations — there is no second, worker-specific overlay, by design (CPR-ORTH).
   test-runner also holds a control-outcome scope: per file, not per root, it lets only the
   dispatcher create that dispatch's own `<stem>.outcome.json` once (#2544).
-  **Retired: `finalize-worker-overlay.js` (#1600 → #1673)** — the finalize scripts
-  (`run-initial.sh`, `run-loop-step.js`, `run-finalize-terminal.sh`) used to be invoked as a
-  Bash-tool `eval` from the main worktree, and that one shape needed an overlay of its own to
-  HARD-validate its env VALUES and argument positions. #1673 moved those scripts behind
-  `bin/worker-dispatch.js`, where they run as child processes: the `eval` shape no longer
-  exists, so the overlay guarding it was deleted rather than left as dead surface. Its shared
-  value helpers moved unchanged to `arg-value-guard.js` (above); its `G5_DECISION_VALUES` enum
-  became the `g5_decision` payload enum in the registry. Three `SANCTIONED` entries in
-  `worker-script.js` retired with it (`bin/issue-close-gate.sh`,
-  `bin/github-issues/issue-close-stage-triage.sh`, `bin/github-issues/parent-body-update.sh`):
-  all three are reachable only as children of `run-stage-chain.sh` / `run-initial.sh`, and a
-  PreToolUse hook that inspects the command head only never sees a child process, so the
-  listing granted nothing.
+  **Retired: `finalize-worker-overlay.js` (#1600 → #1673)** — the finalize scripts now run as
+  child processes of `bin/worker-dispatch.js`, so the main-worktree `eval` shape and the overlay
+  guarding it are gone. Its value helpers moved to `arg-value-guard.js`, its `G5_DECISION_VALUES`
+  enum became the registry's `g5_decision` payload enum, and the `worker-script.js` `SANCTIONED`
+  entries reachable only as its children retired with it (a PreToolUse hook never sees a child).
   **Heredoc gate widening + self-reinforcing-loop fix (#2120/#2121)** —
   `stripHeredocBody` (`hooks/lib/strip-quoted-args.js`) widened past #371's `cat`-only,
   `\w+`-delimiter baseline: the sink set is now `cat|tee|sponge` (data sinks, not
@@ -420,10 +412,10 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   scope gate that refuses the home directory and any filesystem root — upstream's own exclusion,
   ported. Fail-open at every step: a missing flag, a failed spawn, a non-zero exit, empty output, or
   any throw all yield `{}` and exit 0, so a prompt is never blocked or delayed past the 5s timeout.
-- `handoff-pressure-nudge.js` (UserPromptSubmit) — inside the workflow active period only, injects a
-  `[handoff check]` omission-check nudge when the transcript has grown or time has passed since the
-  last check (the trigger table and its state files live in
-  [handoff-artifact.md — Omission-check nudge](../handoff-artifact.md#omission-check-nudge)).
+- `progress-nudge.js` (UserPromptSubmit, PostToolUse matcher `""`, Stop) — in the active period and
+  main conversation only, injects a `[progress check]` request to update `session-progress.md`; PostToolUse
+  leaves after a stat-only pre-check unless something could fire. Kinds, cap, Stop handling, state:
+  [progress-file.md — Progress request](../progress-file.md#progress-request).
   Fail-open: any error yields `{}`.
 - `user-prompt-submit-wf-init-mark.js` (UserPromptSubmit) — when the user's prompt invokes `/workflow-init`
   (detected via `promptInvokesWfInit` in `hooks/lib/step-in-flight-policy.js`), records `workflow_init`

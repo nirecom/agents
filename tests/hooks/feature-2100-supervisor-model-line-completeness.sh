@@ -175,7 +175,7 @@ case_end
 case_begin "AM-4 surrounding audit-arm lines unchanged" "hooks/supervisor-guard/audit-arm.js"
 am_render 'REVIEWER_MODEL=haiku\n'
 stripped="$(printf '%s\n' "$AM_OUT" | grep -v 'Subagent model:')"
-want_block="$(printf 'Run the audit mode strategic review agent with this run-id (run-am):\n  Agent file: /tmp/am-audit.md\n\nsupervisor-audit を該当 run-id (run-am) 付きで起動する。')"
+want_block="$(printf 'Run the audit mode strategic review agent with this run-id (run-am):\n  Agent file: /tmp/am-audit.md\n\nUpdate session-progress.md first, then launch the audit agent.\nGet the session-progress.md path from bin/progress-file path --session sid-am (rules: rules/progress-update.md).\nLaunch supervisor-audit with this run-id (run-am).')"
 case "$stripped" in
     *"$want_block"*) pass "AM-4 surrounding audit-arm lines unchanged" ;;
     *) fail "AM-4 surrounding lines" "block not found in: $stripped" ;;

@@ -1,7 +1,7 @@
 "use strict";
-// Risk signal for the omission-check nudge (#2430): an event after which
+// Risk signal for the progress request (#2430, #2594): an event after which
 // unrecorded working knowledge is most likely to be lost. A stamp newer than the
-// nudge baseline restarts its timer and halves its limits (hooks/lib/handoff-pressure.js).
+// request baseline restarts its timer and halves its limits (hooks/lib/progress-pressure.js).
 //
 // <WORKFLOW_STATE_DIR>/<sid>.control/handoff-risk.json = { last_risk_at, source }. Concurrent
 // producers are last-writer-wins: only "a risk happened recently" matters.

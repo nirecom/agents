@@ -77,7 +77,8 @@ check "RT1b an injected table reports the classless and the invalid kind, not th
 case_end
 
 case_begin "RT2-retention-assignment-fixed" "hooks/lib/plans-artifact-registry.js"
-check "RT2 the plan class is exactly {plan-artifact}" "plan-artifact" "$(rreg kinds-with plan)"
+# #2594: the session-progress artifact (kind "progress") is retained like a plan.
+check "RT2 the plan class is exactly {plan-artifact, progress}" "plan-artifact,progress" "$(rreg kinds-with plan)"
 check "RT2 the user-requested class is exactly {user-requested}" "user-requested" "$(rreg kinds-with user-requested)"
 case_end
 

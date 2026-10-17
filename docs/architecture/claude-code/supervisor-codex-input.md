@@ -9,11 +9,12 @@ The EM Supervisor's Codex engine (`bin/supervisor-findings-codex`, alert and aud
 
 ## What the input contains
 
-Six delimited blocks, in order: a header, `HANDOFF`, `USER UTTERANCES`, `ACTIONS SINCE PREVIOUS <MODE> RUN`, `PLAN ARTIFACTS`, `SUPERVISOR STATE`. An empty block renders as `(none)` so a reviewer can tell "nothing happened" from "the block was omitted".
+Seven delimited blocks, in order: a header, `HANDOFF`, `PROGRESS`, `USER UTTERANCES`, `ACTIONS SINCE PREVIOUS <MODE> RUN`, `PLAN ARTIFACTS`, `SUPERVISOR STATE`. An empty block renders as `(none)` so a reviewer can tell "nothing happened" from "the block was omitted".
 
 - User utterances are collected over the whole transcript. The user's intent does not expire: a request made at the start of the session still binds what happens at the end.
 - Actions (commands, edits, skill/agent invocations, sentinels, hook blocks) are collected only from the transcript cursor onward. Earlier actions were already reviewed by the previous run of the same mode.
 - The handoff artifact is read (never written) because it holds the decisions and deviations the transcript alone does not surface — see [handoff-artifact.md](handoff-artifact.md).
+- `session-progress.md` (the session's root file, [progress-file.md](progress-file.md)) is read the same way and capped at the handoff size cap (64KiB, with a truncation note). Its heading line says the model wrote it and it is not evidence: the reviewer checks it against the actions, never the other way round.
 - Plan artifacts and the supervisor state give the reviewer the plan to check the actions against.
 
 The header carries counts per record kind and the number of unparsable lines. When the transcript has user entries but no utterance matched, it adds a `schema drift?` warning: the rules depend on the Claude Code transcript schema, and a silent schema change would otherwise shrink the input without anyone noticing.
@@ -27,7 +28,7 @@ Each mode keeps its own cursor (`alert.transcript_cursor`, `audit.transcript_cur
 - The cursor advances only when the engine reports `STATUS: SUCCESS`. A failed or skipped run leaves it in place, so the next run re-reviews the same range — duplication is preferred over a blind spot. The engine prints `CURSOR: advanced|not-advanced` so a failed write is visible.
 - Only complete (newline-terminated) lines count; a line still being written is left for the next run.
 - The cursor resets to the start of the transcript when the path changed, the file is shorter than the cursor, or the uuid at the cursor no longer matches. A reset over-reads rather than skipping actions.
-- Paths are normalized (`toWindowsPath`, then `path.resolve`, case-insensitive on win32) before comparison. Without this, `/c/...` versus `C:\...` would reset the cursor every run, widen the range to the whole session, and push the input back over the size limit.
+- Paths are normalized (`toWindowsPath`, then `path.resolve`, case-insensitive on win32) before comparison. Without this, an MSYS-style drive path versus its `C:\...` form would reset the cursor every run, widen the range to the whole session, and push the input back over the size limit.
 
 Alert and audit keep separate cursors because they review at different cadences; sharing one would let an alert run hide actions from the next audit.
 

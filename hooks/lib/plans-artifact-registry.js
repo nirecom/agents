@@ -47,7 +47,9 @@ const CONTROL_KINDS = Object.freeze([
   k("supervisor-state", "supervisor-state\\.json", N),
   k("wi-checkpoint", "wi-checkpoint\\.json", N),
   k("handoff", "handoff\\.md", N),
+  // pressure / flush-mark stay registered so a leftover file never reads as unregistered (#2594; removed by #2652).
   k("handoff-sidecar", "handoff-(?:risk|pressure|flush-mark)\\.json", N),
+  k("progress-pressure", "progress-pressure\\.json", N),
   k("wt-cleanup-active", "wt-cleanup-active", N),
   k("workflow-init-aborted", "workflow-init-aborted-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\\.md", N),
   k("companion-precheck", "companion-precheck\\.json", N),
@@ -64,6 +66,9 @@ const MIGRATABLE_KINDS = Object.freeze(
 
 const ARTIFACT_KINDS = Object.freeze([
   k("plan-artifact", "(?:intent|outline|detail|context)\\.md", "plan"),
+  // Named by the first generation's sid and written across every handed-off generation (#2594).
+  // "session-" keeps it apart from topic names ending in -progress.md (user-requested-x-progress.md).
+  k("progress", "session-progress\\.md", "plan"),
   k("survey", "survey-[a-z0-9]+(?:-[a-z0-9]+)*\\.md", N),
   k("issue-prefill", "issue-prefill\\.md", N),
   k("test-review", "test-review\\.md", N),
@@ -172,6 +177,7 @@ const ARTIFACT_NAMES = Object.freeze({
   outline: () => "outline.md",
   detail: () => "detail.md",
   context: () => "context.md",
+  progress: () => "session-progress.md",
   "issue-prefill": () => "issue-prefill.md",
   "test-review": () => "test-review.md",
   "concerns-log": (p) => (p && p.stage ? `${p.stage}-concerns-log.md` : "concerns-log.md"),
@@ -228,9 +234,29 @@ function planArtifactNames() {
   return SYNCED_PLAN_ARTIFACT_KINDS.map((kind) => ARTIFACT_NAMES[kind]());
 }
 
+// Everything plan-sync publishes and keeps a project-host record for: the synced plan
+// artifacts plus session-progress.md (#2594). The allowlist and project-host read only this list.
+const SYNCED_ARTIFACT_KINDS = Object.freeze([...SYNCED_PLAN_ARTIFACT_KINDS, "progress"]);
+
+function syncedArtifactNames() {
+  return SYNCED_ARTIFACT_KINDS.map((kind) => ARTIFACT_NAMES[kind]());
+}
+
+// syncedArtifactStage(basename) -> "intent" | "outline" | "detail" | "session-progress" | null.
+function syncedArtifactStage(basename) {
+  const parsed = parsePlansEntry(basename);
+  if (!parsed || parsed.verdict !== "artifact") return null;
+  if (parsed.kind !== "plan-artifact" && parsed.kind !== "progress") return null;
+  if (!syncedArtifactNames().includes(parsed.name)) return null;
+  return parsed.name.replace(/\.md$/, "");
+}
+
 module.exports = {
   SYNCED_PLAN_ARTIFACT_KINDS,
+  SYNCED_ARTIFACT_KINDS,
   planArtifactNames,
+  syncedArtifactNames,
+  syncedArtifactStage,
   FORMAT_TOKENS,
   CONTROL_KINDS,
   MIGRATABLE_KINDS,
