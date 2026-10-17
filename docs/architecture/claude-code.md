@@ -89,7 +89,7 @@ The file is directly inspectable for debugging.
 
 | Field | Type | Description |
 |---|---|---|
-| `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings with severity >= warning re-arm alert mode from this state; `paused→pending` re-arm resets `alert_retry_count`), closed=permanent session-close terminal (re-arm forbidden) |
+| `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings are recorded but never re-arm alert mode; only an explicit `--set-alert-phase pending` resumes, and that `paused→pending` transition resets `alert_retry_count`), closed=permanent session-close terminal (re-arm forbidden) |
 | `alert_armed_at` | ISO string or null | Timestamp when alert was armed; null when phase is done/paused/closed |
 | `alert_cause` | string or null | Trigger label (non-numeric slug): `"sentinel-hang"`, `"scheduled-review"`, `"worktree-off proposal"`, or `"workflow-off proposal"`; co-cleared when `alert_armed_at` is nulled |
 | `last_run_at` | ISO string or null | Timestamp of last alert execution |
@@ -103,7 +103,7 @@ The file is directly inspectable for debugging.
 
 | Field | Type | Description |
 |---|---|---|
-| `audit_phase` | `null`/`"pending"`/`"in_progress"`/`"done"`/`"frozen"` | Lifecycle SSOT |
+| `audit_phase` | `null`/`"pending"`/`"in_progress"`/`"done"`/`"frozen"` | Lifecycle SSOT; an unshown pending run (`audit_dispatched_at` null) never blocks a later arm — see [supervisor-audit-ledger.md](claude-code/supervisor-audit-ledger.md) |
 | `audit_verdict` | string or null | `"CONTINUE"` / `"WARN"` / `"BLOCK"` |
 | `audit_armed_at` | ISO string or null | Timestamp when audit was armed |
 | `audit_cause` | string or null | Trigger: `step-complete:<step>` or `severity-threshold:<level>` (coalesced causes are joined) |

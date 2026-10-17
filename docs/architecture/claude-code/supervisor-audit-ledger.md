@@ -74,6 +74,25 @@ discarded (exit 3) and recorded as `discarded-stale`, never clobbering the
 current run. This removes two race classes mechanically: a pending phase erased
 by an unrelated later write, and an old verdict finalizing a freshly-armed run.
 
+## Unshown runs and the launch-directive suppression window
+
+`audit_dispatched_at` records when the launch instruction for the pending run was
+shown. A run that is pending, has an identity, and has no `audit_dispatched_at` is
+an **unshown run** (`unshownRun()` in `hooks/lib/audit-ledger.js` is the single
+predicate). An unshown run never blocks a later arm: an arm that shows its launch
+replaces it, and the replaced entry is closed with the `superseded` outcome.
+
+The launch-directive suppression window (`inPostAlertSuppression`) starts when an alert review
+completes. A Stop with at most one human prompt since then (`countHumanPromptsSince`) is inside it; when
+the count cannot be determined, the Stop is treated as outside. Inside it the
+system only arms the audit run and shows no standalone launch instruction. The
+pending launch is released at one of three points: bundled into the next alert
+block, the first Stop outside the suppression window, or the TR5 gate.
+
+Why: right after an alert finding, a second launch request would read to the user
+as consecutive, back-to-back interruptions. Result display keeps its existing two
+paths; only the timing of the launch instruction changes.
+
 ## Ledger entry and query API
 
 The ledger is an append-only array in the `audit` block of the supervisor state

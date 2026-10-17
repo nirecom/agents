@@ -166,12 +166,17 @@ case_end
 
 # ===== #2400 run-0003: a newer audit run without a verdict blocks null-key certification =====
 # seed_unsettled <phase> <tiv|__NONE__> — seed_continue plus an armed TR6 run-0012 in the slot.
+# audit_dispatched_at is set: the run's launch was already shown, so a pending run is a
+# shown pending run that the TR5 gate holds idempotently. The unshown-run replacement
+# (#2698 plan 3-5 C3) is covered by tests/hooks/feature-2698-*.
 seed_unsettled() {
     BASE="$(seed_continue "$2")" PH="$1" node <<'JS'
 const o = JSON.parse(process.env.BASE);
+const now = new Date().toISOString();
 o.ledger.push({ id: 'run-0012', outcome: 'armed', tr_ids: ['TR6'], cause: 'severity-threshold:error', verdict: null,
-  freshness_key: null, sub_checks: ['scope-drift'], input_key: { 'scope-drift': null }, armed_at: new Date().toISOString() });
-Object.assign(o, { audit_run_id: 'run-0012', audit_phase: process.env.PH, run_seq: 12, pending_sub_checks: ['scope-drift'] });
+  freshness_key: null, sub_checks: ['scope-drift'], input_key: { 'scope-drift': null }, armed_at: now });
+Object.assign(o, { audit_run_id: 'run-0012', audit_phase: process.env.PH, run_seq: 12, pending_sub_checks: ['scope-drift'],
+  audit_dispatched_at: now });
 process.stdout.write(JSON.stringify(o));
 JS
 }

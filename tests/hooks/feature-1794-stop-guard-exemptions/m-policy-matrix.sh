@@ -14,7 +14,7 @@ const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const { C4_EXEMPTIONS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js');
 const matrix = Object.keys(EXEMPTION_MATRIX);
 const table = C4_EXEMPTIONS.map((e) => e.id);
-const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','delegated-reason','awaiting-plan-approval'];
+const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','delegated-reason','awaiting-plan-approval','human-web-merge-wait','user-dialog-turn'];
 const problems = [];
 if (matrix.join(',') !== table.join(',')) {
   problems.push('drift matrix=' + matrix.join(',') + ' table=' + table.join(','));
@@ -24,7 +24,7 @@ if (matrix.join(',') !== expected.join(',')) {
 }
 process.stdout.write(problems.length ? 'BAD ' + problems.join(' | ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids == the 6 expected rows (#2277 S14 adds awaiting-plan-approval) (same set, same order)"
+        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids == the 8 expected rows (#2277 awaiting-plan-approval, #2527 human-web-merge-wait, #2698 user-dialog-turn) (same set, same order)"
     else
         fail "M1-a: matrix/table drift; got '${out:-<err>}'"
     fi
@@ -153,6 +153,10 @@ for (const id of sessionRows) {
 if (!byId['delegated-reason'] || byId['delegated-reason'].phase !== 'next-step-output') {
   problems.push('delegated-reason:phase');
 }
+// #2698: user-dialog-turn sits after the mechanism-failure lane (phase=next-step-output).
+if (!byId['user-dialog-turn'] || byId['user-dialog-turn'].phase !== 'next-step-output') {
+  problems.push('user-dialog-turn:phase');
+}
 const deps = g.buildExemptionDeps();
 if (g.firstExemption('next-step-output', { sid: 'x', reason: 'pre_final_report_gate' }, deps) !== 'delegated-reason') {
   problems.push('delegated-reason:not-matched');
@@ -162,7 +166,7 @@ if (g.firstExemption('next-step-output', { sid: 'x', reason: 'research' }, deps)
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1-d: pre-workflow-init is phase=session; delegated-reason is phase=next-step-output and matches only pre_final_report_gate"
+        pass "M1-d: pre-workflow-init is phase=session; delegated-reason (matches only pre_final_report_gate) and user-dialog-turn are phase=next-step-output"
     else
         fail "M1-d: phase wiring wrong; got '${out:-<err>}'"
     fi
@@ -320,20 +324,20 @@ run_M3b() {
 }
 
 # ---------------------------------------------------------------------------
-# M3-c: pre-workflow-init is the only c2:true row. Its behaviour is already
-#       proven by the X5/X6 pair (X5 suppressed pre-init, X6 blocks once
-#       workflow_init is complete), so this case only pins the column value —
-#       it deliberately does not duplicate the hook runs.
+# M3-c: the c2:true rows are exactly {pre-workflow-init, user-dialog-turn}.
+#       pre-workflow-init's behaviour is proven by the X5/X6 pair; user-dialog-turn's
+#       by tests/hooks/feature-2698-c4-user-dialog-exemption.js (real C2 hook runs),
+#       so this case only pins the column values.
 # ---------------------------------------------------------------------------
 run_M3c() {
     local out
     out=$("$RWT" 15 node -e "
 const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const c2true = Object.entries(EXEMPTION_MATRIX).filter(([, r]) => r.c2).map(([id]) => id);
-process.stdout.write(c2true.join(',') === 'pre-workflow-init' ? 'OK' : 'BAD:' + c2true.join(','));" 2>/dev/null)
+process.stdout.write(c2true.join(',') === 'pre-workflow-init,user-dialog-turn' ? 'OK' : 'BAD:' + c2true.join(','));" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M3-c: pre-workflow-init is the only c2:true row (behaviour proven by the X5/X6 pair)"
+        pass "M3-c: the c2:true rows are exactly pre-workflow-init and user-dialog-turn"
     else
-        fail "M3-c: expected pre-workflow-init as the sole c2:true row; got '${out:-<err>}'"
+        fail "M3-c: expected pre-workflow-init,user-dialog-turn as the c2:true rows; got '${out:-<err>}'"
     fi
 }

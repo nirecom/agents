@@ -28,6 +28,10 @@ const EXEMPTION_MATRIX = Object.freeze({
   // #2527 4-4: next-step's WAIT=human-web-merge — the human merges on the web while a
   // background poller waits, so the turn rightly ends.
   "human-web-merge-wait": { c4: true, c2: false, nextStep: false, promptNotify: false },
+  // #2698: a turn of dialog with the user (hooks/lib/user-dialog-turn.js) rightly ends.
+  // c4/c2: neither Stop guard blocks it. nextStep:false — the recommendation is unchanged, only
+  // the forced Stop nudge is silenced. promptNotify:false — the notifier has no turn-end view.
+  "user-dialog-turn": { c4: true, c2: true, nextStep: false, promptNotify: false },
 });
 
 module.exports = { EXEMPTION_MATRIX };
