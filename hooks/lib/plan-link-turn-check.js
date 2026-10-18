@@ -9,7 +9,7 @@ const path = require("path");
 const { isCommandTool, commandTextOf } = require("./tool-command-text");
 const { parseSentinel } = require("./confirm-sentinel");
 const { isRealUserPrompt, parseLines, splitTurns } = require("./transcript-reader");
-const { STAGES, PLAN_LINK_COMMAND } = require("./plan-link");
+const { STAGES, REASONS, REASON_TEXT, PLAN_LINK_COMMAND, entryLine } = require("./plan-link");
 
 // A link ends where path characters stop; one trailing "." or ")" is prose, not the link.
 const CONTINUES_RE = /^\.?[A-Za-z0-9_~%/\\-]/;
@@ -209,6 +209,45 @@ function shown(link, text) {
   return localPathForms(link.path).some((form) => containsLink(prose, form));
 }
 
+// The entryLine shapes: a URL line (optionally with its inline-code path), and a no-URL line that
+// renderModelContext may follow with " — " plus the text of the reason that same line names.
+const STAGE_ALT = STAGES.join("|");
+const URL_LINE_RE = new RegExp(`^(?:${STAGE_ALT}): https?://\\S+(?: \\(\`[^\`]+\`\\))?$`);
+const NO_URL_LINE_RE = new RegExp(`^((?:${STAGE_ALT}): (?:\`[^\`]+\` \\(no URL|\\(unavailable): ` +
+  `(${Object.values(REASONS).join("|")})\\))(?: — (.*))?$`);
+
+// planLinkLineBare(line) -> the entryLine part of a plan-link output line, or null for anything else.
+function planLinkLineBare(line) {
+  if (URL_LINE_RE.test(line)) return line;
+  const m = line.match(NO_URL_LINE_RE);
+  if (!m || (m[3] !== undefined && m[3] !== REASON_TEXT[m[2]])) return null;
+  return m[1];
+}
+
+// endsWithLinkLine(stage, link, text) -> whether the text's prose, outside code fences, closes on
+// plan-link output carrying the stage's line (any spelling of its local path) on a line of its
+// own: only other plan-link lines and whitespace may follow it.
+function endsWithLinkLine(stage, link, text) {
+  if (!link || typeof link !== "object" || typeof link.path !== "string" || !link.path) return false;
+  const raw = trimmedLines(typeof text === "string" ? text : "");
+  const block = new Set();
+  let last = raw.length - 1;
+  for (; last >= 0; last--) {
+    const bare = planLinkLineBare(raw[last]);
+    if (bare === null) break;
+    block.add(bare);
+  }
+  const tail = raw.slice(last + 1).join("\n");
+  // A tail inside a code fence is not prose, so it does not close the turn.
+  const prose = trimmedLines(stripFencedCode(raw.join("\n"))).join("\n");
+  if (!tail || !(prose === tail || prose.endsWith("\n" + tail))) return false;
+  return localPathForms(link.path).some((form) => block.has(entryLine({ stage, url: link.url, path: form, reason: link.reason })));
+}
+
+function trimmedLines(text) {
+  return text.trimEnd().split("\n").map((l) => l.trimEnd());
+}
+
 function stopReason(missing) {
   return "[confirm-plan] plan-link: this turn wrote the " + missing.join(", ") +
     " plan but its last text block does not carry the plan-link line (the URL when one exists, otherwise the" +
@@ -241,4 +280,5 @@ module.exports = {
   previousTurnEntriesFromLines,
   currentTurnWritesStage,
   shown,
+  endsWithLinkLine,
 };

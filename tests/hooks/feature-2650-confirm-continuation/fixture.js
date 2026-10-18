@@ -12,7 +12,8 @@ const F = require("../feature-2277-plan-approval-gate/fixture");
 const ROOT = F.ROOT;
 const STEP = { intent: "clarify_intent", outline: "outline", detail: "detail" };
 const STAGES = ["intent", "outline", "detail"];
-const SPAWN_PRELOAD = path.join(__dirname, "spawn-count-preload.js");
+const PROBE_COUNT_PRELOAD = path.join(__dirname, "probe-count-preload.js");
+const PROBE_FAULT_PRELOAD = path.join(__dirname, "probe-fault-preload.js");
 const PUBLISH_STUB = path.join(ROOT, "tests", "hooks", "feature-2513-confirm-turn-split", "publish-stub.js");
 const BLOB = "https://example.invalid/test-owner/test-repo/blob/main/";
 // Inside the pinned state dir, so the calling test's cleanup removes it.
@@ -107,33 +108,34 @@ function gateEnv(over) {
   return Object.assign({ CONFIRM_INTENT: "on", CONFIRM_OUTLINE: "on", CONFIRM_DETAIL: "on", PLAN_LANG: "english", PLAN_SYNC_REMOTE_URL: "" }, over || {});
 }
 
-// noBashEnv(env) -> env with every PATH spelling pointed at an empty dir, so spawning "bash"
-// (the gate probe) fails with ENOENT. The hook itself is spawned by absolute node path.
-function noBashEnv(env) {
-  for (const k of Object.keys(env)) if (/^path$/i.test(k)) delete env[k];
-  const empty = path.join(TDIR, "empty-path");
-  fs.mkdirSync(empty, { recursive: true });
-  env.PATH = empty;
+// Forward slashes: NODE_OPTIONS treats a backslash inside double quotes as an escape.
+const nodeOptions = (preloads) => preloads.map((p) => `--require "${p.replace(/\\/g, "/")}"`).join(" ");
+
+// probeFaultEnv(env, mode) -> env whose node children fail the CONFIRM probe in-process
+// (mode: "exception" | "load-failed", see probe-fault-preload.js). Replaces any NODE_OPTIONS.
+function probeFaultEnv(env, mode) {
+  env.CC_PROBE_FAULT = mode || "exception";
+  env.NODE_OPTIONS = nodeOptions([PROBE_FAULT_PRELOAD]);
   return env;
 }
 
-// runStop(sid, tpath, opts) -> {rc, out, json, reason, ms, spawns}. opts.emptyPath breaks the probe. opts.env overrides gateEnv();
-// opts.input merges into the hook input; opts.publish loads the publish stub; opts.count logs probes.
+// runStop(sid, tpath, opts) -> {rc, out, json, reason, ms, probes}. opts.probeFault (a mode) breaks the
+// probe. opts.env overrides gateEnv(); opts.input merges into the hook input; opts.publish loads the
+// publish stub; opts.count counts CONFIRM probes (probes is null without it).
 function runStop(sid, tpath, opts) {
   const o = opts || {};
   const env = Object.assign({}, process.env, gateEnv(o.env));
   delete env.CLAUDE_CODE_SESSION_ID;
-  if (o.emptyPath) noBashEnv(env);
   const pre = (o.preloads || []).slice();
   let log = null;
+  if (o.probeFault) { env.CC_PROBE_FAULT = o.probeFault; pre.push(PROBE_FAULT_PRELOAD); }
   if (o.publish) { pre.push(PUBLISH_STUB); env.PLAN_SYNC_REMOTE_URL = "https://example.invalid/test-owner/test-repo.git"; }
   if (o.count) {
-    log = path.join(TDIR, `spawns-${sid}-${++seq}.log`);
-    env.CC_SPAWN_LOG = log;
-    pre.push(SPAWN_PRELOAD);
+    log = path.join(TDIR, `probes-${sid}-${++seq}.log`);
+    env.CC_PROBE_LOG = log;
+    pre.push(PROBE_COUNT_PRELOAD);
   }
-  // Forward slashes: NODE_OPTIONS treats a backslash inside double quotes as an escape.
-  if (pre.length) env.NODE_OPTIONS = pre.map((p) => `--require "${p.replace(/\\/g, "/")}"`).join(" ");
+  if (pre.length) env.NODE_OPTIONS = nodeOptions(pre);
   const input = Object.assign({ session_id: sid, transcript_path: tpath, hook_event_name: "Stop", stop_hook_active: false }, o.input || {});
   const t0 = Date.now();
   const r = spawnSync(process.execPath, [path.join(ROOT, "hooks/stop-confirm-plan-guard.js")], {
@@ -143,16 +145,20 @@ function runStop(sid, tpath, opts) {
   const out = r.stdout || "";
   let json = {};
   try { json = out ? JSON.parse(out) : {}; } catch (_) { json = { unparsed: out }; }
-  let spawns = null;
-  if (log) { try { spawns = fs.readFileSync(log, "utf8").split("\n").filter(Boolean).length; } catch (_) { spawns = 0; } }
-  return { rc: r.status, out, err: r.stderr || "", json, reason: typeof json.reason === "string" ? json.reason : "", ms, spawns };
+  const probes = log ? countLog(log) : null;
+  return { rc: r.status, out, err: r.stderr || "", json, reason: typeof json.reason === "string" ? json.reason : "", ms, probes };
+}
+
+// countLog(file) -> the number of non-empty lines (0 when the file was never written).
+function countLog(file) {
+  try { return fs.readFileSync(file, "utf8").split("\n").filter(Boolean).length; } catch (_) { return 0; }
 }
 
 const show = (x) => { try { return JSON.stringify(x); } catch (_) { return String(x); } };
 
 module.exports = {
-  F, ROOT, STEP, STAGES, BLOB, TDIR, SPAWN_PRELOAD, PUBLISH_STUB,
+  F, ROOT, STEP, STAGES, BLOB, TDIR, PROBE_COUNT_PRELOAD, PROBE_FAULT_PRELOAD, PUBLISH_STUB,
   uuidSid, U, UMETA, STOPFB, A, T, W, BASH, TR, ECHO, echoOf,
   sessionAt, linesFor, turnMarker, stateDirOf, markPath, readMark, turnMarkersLeft,
-  writeTranscript, tryRequire, gateEnv, noBashEnv, runStop, show, check: F.check,
+  writeTranscript, tryRequire, gateEnv, nodeOptions, probeFaultEnv, countLog, runStop, show, check: F.check,
 };
