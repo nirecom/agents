@@ -807,3 +807,7 @@ Changes: Confirm gates read config flags without starting a subprocess, so `CONF
 ### FEATURE: PR #2707 (2026-10-18)
 Background: fix(#2698): stop supervisor alert false fires on dialog turns and bun...
 Changes: Supervisor no longer interrupts you with an alert while it is waiting for your answer, and alert and audit no longer double-intervene back to back.;The premature-stop guard leaves read-only answers to your questions, and AskUserQuestion prompts, alone.;A paused supervisor alert stays paused.;Supervisor interventions follow your configured conversation language, and a failed codex review now says why.
+
+### FEATURE: PR #2719 (2026-10-18)
+Background: fix(#2701): give the Jev input its own budget so write-code is judged...
+Changes: Jev now judges task complexity at the write-code stage instead of always falling back to the LLM judge, because its input has a larger, dedicated size budget.;A Jev answer demoted because its source files changed now reports FALLBACK=source-changed, the same as the other demotion reasons.
