@@ -2,7 +2,7 @@
 # Tests: bin/workflow/jev-judge
 # Tags: TL2, bin, jev, two-stage, shared-lib, module-api, scope:issue-specific, pwsh-not-required
 # Shared helpers for the complexity-side two-stage fragments (d, e, k, l, o, p, r), sourced
-# after _lib.sh: the module-API probe runner, snapshot header readers and fixture builders.
+# after _lib.sh: the module-API probe runner, Jev input header readers and fixture builders.
 # Holds no cases of its own.
 
 if [ -n "${_FEAT2460_TS_LIB_SOURCED:-}" ]; then
@@ -40,6 +40,9 @@ tsp() {
 }
 # tpb <cmd> [args...]: the probe's stdout only (fixture seeding, constants).
 tpb() { run_with_timeout 30 node "$TS_PROBE" "$REPO_N" "$@" 2>/dev/null; }
+# jev_budget: MAX_JEV_INPUT_CHARS as the module exports it (MODULE_MISSING:... before it exists).
+# Over-budget fixtures are sized from it so a budget change cannot turn them into in-budget ones.
+jev_budget() { tpb jev-input-budget; }
 
 # F_PRODUCTION: the fixture override that runs complexity-judge in mode=production (the CLI
 # owns the record and the gate applies). The shipped registry mode changes per stage, so a
@@ -52,14 +55,14 @@ F_SHADOW_CLI='{"entryPatch":{"complexity-judge":{"mode":"shadow","subagent_type"
 # F_SHADOW_HOOK: mode=shadow with a subagent_type, so the recording owner is the hook.
 F_SHADOW_HOOK='{"entryPatch":{"complexity-judge":{"mode":"shadow","subagent_type":"complexity-judge"}}}'
 
-# ts_query <stage> [point] [opts-json] [-- VAR=value ...]: module-API query; sets TICKET, SNAP.
+# ts_query <stage> [point] [opts-json] [-- VAR=value ...]: module-API query; sets TICKET, JEV_INPUT.
 # With no opts the shipped registry entry is used as-is.
 ts_query() {
   local stage="$1" point="${2:-complexity-judge}" opts="${3:-}"
   [ -n "$opts" ] || opts='{}'
   shift; [ "$#" -gt 0 ] && shift; [ "$#" -gt 0 ] && shift
   tsp query "$SID" "$point" "$stage" "$opts" "$@"
-  TICKET="$(kv TICKET)"; SNAP="$(kv SNAPSHOT_FILE)"
+  TICKET="$(kv TICKET)"; JEV_INPUT="$(kv JEV_INPUT_FILE)"
 }
 # ts_fin <opts-json> [-- VAR=value ...]: module-API finalize of $TICKET.
 ts_fin() { local o="$1"; shift; tsp finalize "$SID" "$TICKET" "$o" "$@"; }
@@ -77,37 +80,37 @@ tk() {
   pb json-get "$(np "$f")" "$1"
 }
 
-# snap_header: the snapshot lines before the first "## " section (the state header).
-snap_header() { [ -f "$SNAP" ] && tr -d '\r' < "$SNAP" | sed '/^## /,$d'; }
-# snap_state <section>: full|truncated|absent as the header reports it ("<none>" if unreported).
-snap_state() {
+# jev_input_header: the Jev input lines before the first "## " section (the state header).
+jev_input_header() { [ -f "$JEV_INPUT" ] && tr -d '\r' < "$JEV_INPUT" | sed '/^## /,$d'; }
+# jev_input_state <section>: full|truncated|absent as the header reports it ("<none>" if unreported).
+jev_input_state() {
   local v
-  v="$(snap_header | grep -oE "(^|[^a-z])$1[\"']? *[:=] *(full|truncated|absent)" | head -1 | grep -oE '(full|truncated|absent)$')"
+  v="$(jev_input_header | grep -oE "(^|[^a-z])$1[\"']? *[:=] *(full|truncated|absent)" | head -1 | grep -oE '(full|truncated|absent)$')"
   printf '%s' "${v:-<none>}"
 }
-# snap_source_names: the entries listed under the header's "sources:" line, as written, sorted.
-snap_source_names() {
-  snap_header | tr '\\' '/' | sed -n '/^sources:[[:space:]]*$/,/^sources_unavailable/p' | sed '1d;$d' | sed '/^[[:space:]]*$/d' | sort
+# jev_input_source_names: the entries listed under the header's "sources:" line, as written, sorted.
+jev_input_source_names() {
+  jev_input_header | tr '\\' '/' | sed -n '/^sources:[[:space:]]*$/,/^sources_unavailable/p' | sed '1d;$d' | sed '/^[[:space:]]*$/d' | sort
 }
-# snap_sources: those entries as paths, '/'-separated, sorted. The header names a copy by its
-# file name only, so a bare name is resolved against jev-sources/<ticket>; an entry that
+# jev_input_sources: those entries as paths, '/'-separated, sorted. The header names a copy by
+# its file name only, so a bare name is resolved against jev-sources/<ticket>; an entry that
 # already carries a directory is printed as written.
-snap_sources() {
+jev_input_sources() {
   local d n; d="$(copies_dir)"
   [ -n "$d" ] && d="$(np "$d")"
-  snap_source_names | while IFS= read -r n; do
+  jev_input_source_names | while IFS= read -r n; do
     case "$n" in
       */*) printf '%s\n' "$n" ;;
       *) if [ -n "$d" ]; then printf '%s/%s\n' "$d" "$n"; else printf '%s\n' "$n"; fi ;;
     esac
   done | sort
 }
-# snap_any_path_to <dir>: count of header lines naming a path inside <dir>.
-snap_any_path_to() { snap_header | tr '\\' '/' | grep -cF "$1"; }
-# snap_unavail: the header's sources_unavailable value ("<none>" if the field is missing).
-snap_unavail() {
+# jev_input_any_path_to <dir>: count of header lines naming a path inside <dir>.
+jev_input_any_path_to() { jev_input_header | tr '\\' '/' | grep -cF "$1"; }
+# jev_input_unavail: the header's sources_unavailable value ("<none>" if the field is missing).
+jev_input_unavail() {
   local v
-  v="$(snap_header | grep -m1 -E "^[-* ]*sources_unavailable[\"']? *[:=]" | sed -E 's/^[^:=]*[:=] *//')"
+  v="$(jev_input_header | grep -m1 -E "^[-* ]*sources_unavailable[\"']? *[:=]" | sed -E 's/^[^:=]*[:=] *//')"
   printf '%s' "${v:-<none>}"
 }
 # copies_dir: the jev-sources/<ticket> directory of $TICKET ("" when absent).

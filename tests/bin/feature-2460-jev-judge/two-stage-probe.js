@@ -148,6 +148,10 @@ const CMDS = {
     out({ stage_sources: stageSources, order: c.SECTION_ORDER,
       cap: c.MAX_ARTIFACT_READ_BYTES, no_issue_body: w.NO_ISSUE_BODY });
   },
+  // jev-input-budget: the Jev input body budget, so fixtures are sized from it, not a literal.
+  "jev-input-budget"() {
+    out(String(load("hooks/lib/jev/two-stage/jev-input.js").MAX_JEV_INPUT_CHARS));
+  },
   // state-steps <sid> <{step: status}>: seed a fresh workflow state through the event API.
   "state-steps"() {
     const io = load(STATE_IO);
@@ -176,7 +180,7 @@ const CMDS = {
       try {
         const rec = JSON.parse(l);
         if (typeof rec.body_text === "string") walk(JSON.parse(rec.body_text));
-      } catch (_e) { /* a non-JSON body holds no snapshot field */ }
+      } catch (_e) { /* a non-JSON body holds no Jev input field */ }
     }
     if (strs.some((s) => s === want)) return out("equal");
     return out(strs.some((s) => s.includes(want)) ? "contains" : "none");

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/jev/two-stage/query.js, bin/workflow/lib/jev-request-common.js
-# Tags: TL2, bin, jev, two-stage, required-sections, section-exemptions, read-cap, copy-failure, input-insufficient, mock-server, scope:issue-specific, pwsh-not-required
+# Tags: TL2, bin, jev, two-stage, required-sections, section-exemptions, read-cap, copy-failure, input-insufficient, plan-sections, mock-server, scope:issue-specific, pwsh-not-required
 # Fragment of tests/bin/feature-2460-jev-judge.sh, sourced after _lib.sh (not standalone):
 # Jev is asked only when every required section of the point x stage is full in the
-# snapshot and was copied whole; otherwise every key goes to the subagent and the record
+# Jev input and was copied whole; otherwise every key goes to the subagent and the record
 # names what was missing, exempt (a named exemption) or failed to copy.
 
 echo "=== jev-judge: required sections per stage ==="
@@ -17,6 +17,12 @@ P_INTENT() { printf '%s' "$FX/plans/$SID-intent.md"; }
 big() { head -c "$1" /dev/zero | tr '\0' "$2"; }
 add_outline() { printf '# Outline\n\n%s\n' "${1:-Touch only the report CLI.}" > "$FX/plans/$SID-outline.md"; }
 add_detail() { printf '# Detail\n\n%s\n' "${1:-Edit bin/report and its test.}" > "$FX/plans/$SID-detail.md"; }
+# B: the module's Jev input budget; oversized fixtures are sized from it, never a literal.
+# B_RAW keeps what the module answered, so budget_ok judges it and not the B=0 stand-in.
+B_RAW="$(jev_budget)"
+budget_ok() { check "fixture: the Jev input budget is a number" "yes" "$([[ "$B_RAW" =~ ^[0-9]+$ ]] && echo yes || echo no)"; }
+B="$B_RAW"
+[[ "$B" =~ ^[0-9]+$ ]] || B=0
 
 # req_run <stage> <opts-json>: query with Jev ready to adopt every key (p=0.99), then
 # answer "none" and finalize. Q_* hold the query view; the decision log holds the input.
@@ -68,13 +74,15 @@ jj_fx e-empty-intent
 req_run complexity "$F_PRODUCTION"
 not_asked "intent.md empty" '["intent"]'
 jj_fx e-big-intent
-printf '# Intent\n\n%s\n' "$(big 20000 i)" > "$(P_INTENT)"
+budget_ok
+printf '# Intent\n\n%s\n' "$(big "$B" i)" > "$(P_INTENT)"
 req_run complexity "$F_PRODUCTION"
 not_asked "intent over the budget (truncated; issue body pushed out)" '["intent","issue body"]'
 case_end
 
 case_begin "e-required-issue-body" "hooks/lib/jev/two-stage/query.js"
-jj_fx e-big-body "$(big 20000 b)"
+budget_ok
+jj_fx e-big-body "$(big "$B" b)"
 req_run complexity "$F_PRODUCTION"
 not_asked "issue body over the budget" '["issue body"]'
 jj_fx e-no-issue "(none — no issue)"
@@ -91,8 +99,8 @@ rm -f "$FX/plans/$SID-context.md"
 req_run complexity "$F_PRODUCTION"
 not_asked "context.md absent is not exempt" '["issue body"]'
 jj_fx e-detail-pushed
-printf '# Intent\n\n%s\n' "$(big 7500 i)" > "$(P_INTENT)"
-add_outline "$(big 9000 o)"
+printf '# Intent\n\n%s\n' "$(big "$((B / 2))" i)" > "$(P_INTENT)"
+add_outline "$(big "$((B / 2))" o)"
 req_run detail "$F_PRODUCTION"
 not_asked "detail stage, intent + outline use the budget"
 check "detail stage: issue body is among the missing" "1" "$(inp missing | grep -c '"issue body"')"
@@ -116,30 +124,107 @@ req_run detail "$F_PRODUCTION"
 not_asked "unreadable workflow state: outline is not exempt" '["outline"]'
 case_end
 
+# #2701: write-tests / write-code require only the issue body; detail, outline and intent are
+# plan sections, and one of them full or truncated is enough (write-tests and write-code alike).
 case_begin "e-required-detail-stages" "hooks/lib/jev/two-stage/query.js"
-jj_fx e-big-detail
-add_outline
-add_detail "$(big 20000 d)"
-req_run write-tests "$F_PRODUCTION"
-not_asked "write-tests, detail over the budget"
-check "write-tests: detail is among the missing" "1" "$(inp missing | grep -c '"detail"')"
-jj_fx e-detail-skipped
-add_outline
-seed_steps '{"detail":"skipped"}'
-req_run write-tests "$F_PRODUCTION"
-asked "write-tests, detail.md absent, detail step skipped"
-check "write-tests: detail is exempt" "1" "$(inp exempt | grep -c '"detail"')"
-jj_fx e-wc-full
-add_outline; add_detail
-printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
-req_run write-code "$F_PRODUCTION"
-asked "write-code, intent / outline / detail / issue body full"
+for st in write-tests write-code; do
+  jj_fx "e-big-detail-$st"
+  add_outline
+  budget_ok
+  add_detail "$(big "$B" d)"
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$F_PRODUCTION"
+  asked "$st, detail over the budget (truncated plan section counts)"
+  check "$st, detail over the budget: input.missing empty" "[]" "$(inp missing)"
+  check "$st, detail over the budget: detail truncated, outline and issue body full" "truncated|full|full" \
+    "$(jev_input_state detail)|$(jev_input_state outline)|$(jev_input_state 'issue body')"
+  jj_fx "e-no-detail-$st"
+  add_outline
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$F_PRODUCTION"
+  asked "$st, detail.md absent, outline and intent stand in"
+  check "$st, detail.md absent: input.missing empty" "[]" "$(inp missing)"
+  jj_fx "e-full-$st"
+  add_outline; add_detail
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$F_PRODUCTION"
+  asked "$st, intent / outline / detail / issue body full"
+done
 case_end
+
+case_begin "e-required-plan-sections-absent" "hooks/lib/jev/two-stage/query.js"
+for st in write-tests write-code; do
+  jj_fx "e-no-plan-$st"
+  rm -f "$(P_INTENT)"
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$F_PRODUCTION"
+  not_asked "$st, intent / outline / detail all absent" '["detail","intent","outline"]'
+  jj_fx "e-only-intent-$st"
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$F_PRODUCTION"
+  asked "$st, only intent present"
+  check "$st, only intent present: input.missing empty" "[]" "$(inp missing)"
+  jj_fx "e-plan-no-context-$st"
+  add_outline; add_detail
+  rm -f "$FX/plans/$SID-context.md"
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$F_PRODUCTION"
+  not_asked "$st, plan sections full but context.md absent" '["issue body"]'
+done
+case_end
+
+# #2701: sizes modeled on a real write-code session (intent 3700 / outline 4600 / detail 17000 /
+# issue body 2500); together they exceed the old 16000 cap, so this fails on a shared budget.
+# The detail fits whole, so every plan section is full.
+case_begin "e-required-write-code-realistic" "hooks/lib/jev/two-stage/query.js"
+jj_fx e-wc-real "$(big 2500 b)"
+printf '# Intent\n\n%s\n' "$(big 3700 i)" > "$(P_INTENT)"
+add_outline "$(big 4600 o)"
+add_detail "$(big 17000 d)"
+printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+mock_mode '{"echo":true,"defaultP":0.99,"capture":true}'
+ts_query write-code complexity-judge "$F_PRODUCTION"
+check "realistic write-code: Jev asked exactly once" "1" "$(mock_count systemone)"
+check "realistic write-code: the Jev request carries the JEV_INPUT_FILE bytes exactly" "equal" \
+  "$(tpb body-match "$(np "$MOCK_REQ")" "$(np "$JEV_INPUT")")"
+check "realistic write-code: the Jev input is larger than the old 16000 cap" "yes" \
+  "$([ -f "$JEV_INPUT" ] && [ "$(wc -c < "$JEV_INPUT" | tr -d ' ')" -gt 16000 ] && echo yes || echo no)"
+check "realistic write-code: ticket input.missing is empty" "[]" "$(tk input.missing)"
+check "realistic write-code: issue body / detail / outline / intent all full" "full|full|full|full" \
+  "$(jev_input_state 'issue body')|$(jev_input_state detail)|$(jev_input_state outline)|$(jev_input_state intent)"
+check "realistic write-code: ticket required is the issue body only" '["issue body"]' "$(tk required)"
+# Finalize: the Jev answer stands, so the decision record carries no fallback reason.
+answer_with "SIGNALS: none"
+jj finalize --session "$SID" --ticket "$TICKET"
+check "realistic write-code: finalize records no fallback_reason (Jev ran, input sufficient)" "null" "$(fb)"
+check "realistic write-code: decision record input.missing is empty" "[]" "$(inp missing)"
+check "realistic write-code: decision record jev.status is ok" "ok" "$(lq "$TICKET" 'r && r.jev ? String(r.jev.status) : "no-record"')"
+case_end
+
+# #2701 plan-section copy failures: one failed plan copy leaves the others usable; every plan
+# copy failing is insufficient. A failed copy never counts as a present plan section.
+for st in write-tests write-code; do
+  case_begin "e-required-plan-copy-failure-$st" "hooks/lib/jev/two-stage/query.js"
+  jj_fx "e-plancopy-one-$st"
+  add_outline
+  add_detail
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$(f_production_with '"failCopyFor":["detail"]')"
+  asked "$st, detail copy failed but outline and intent usable"
+  check "$st, detail copy failed: input.missing empty, sources_failed detail" '[]|["detail"]' "$(inp missing)|$(inp sources_failed)"
+  jj_fx "e-plancopy-all-$st"
+  add_outline
+  add_detail
+  printf 'bin/report\n' > "$FX/plans/$SID-write-code-files.txt"
+  req_run "$st" "$(f_production_with '"failCopyFor":["detail","outline","intent"]')"
+  not_asked "$st, every plan copy failed" '["detail","intent","outline"]'
+  case_end
+done
 
 case_begin "e-required-copy-failure" "hooks/lib/jev/two-stage/query.js"
 jj_fx e-copyfail-intent
 req_run complexity "$(f_production_with '"failCopyFor":["intent"]')"
-not_asked "failCopyFor intent (full in the snapshot)" '["intent"]'
+not_asked "failCopyFor intent (full in the Jev input)" '["intent"]'
 check "failCopyFor intent: sources_failed and reason" '["intent"]|{"intent":"copy-failed"}' \
   "$(inp sources_failed)|$(inp sources_failed_reasons)"
 jj_fx e-copyfail-outline
