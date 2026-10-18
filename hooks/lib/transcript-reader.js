@@ -54,20 +54,21 @@ function textItemsOf(entry) {
   return c.filter((it) => it && it.type === "text" && typeof it.text === "string").map((it) => it.text);
 }
 
-// tailOf(entries) -> {lastAssistantEntry, lastTextBlock}: the last assistant entry, and the last
-// text item of the current turn (null when the turn has none).
+// tailOf(entries) -> {lastAssistantEntry, lastTextBlock, lastTextEntry}: the last assistant entry,
+// the last text item of the current turn and the entry holding it (null when the turn has none).
 function tailOf(entries) {
   let lastAssistantEntry = null;
   let lastTextBlock = null;
+  let lastTextEntry = null;
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
     if (isRealUserPrompt(e)) break;
     if (e.type !== "assistant") continue;
     if (!lastAssistantEntry) lastAssistantEntry = e;
     const texts = textItemsOf(e);
-    if (texts.length > 0) { lastTextBlock = texts[texts.length - 1]; break; }
+    if (texts.length > 0) { lastTextBlock = texts[texts.length - 1]; lastTextEntry = e; break; }
   }
-  return { lastAssistantEntry, lastTextBlock };
+  return { lastAssistantEntry, lastTextBlock, lastTextEntry };
 }
 
 function flushed(lastTextBlock, message) {

@@ -309,6 +309,10 @@ rm -f "$ISOLATED_CFG_DIR/.env"
 # shellcheck source=feature-confirm-checkpoint/plan-sync.sh
 . "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/plan-sync.sh"
 
+# ── #2650: continuation marks (writeContinuationMark / takeContinuationMark / clearContinuationMarks) ──
+# shellcheck source=feature-confirm-checkpoint/continuation-mark.sh
+. "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/continuation-mark.sh"
+
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
