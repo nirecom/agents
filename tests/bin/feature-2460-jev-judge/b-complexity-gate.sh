@@ -69,14 +69,14 @@ jj_query complexity
 check "one uncertain: RESULT=need-subagent" "need-subagent" "$(kv RESULT)"
 check "one uncertain: DELEGATED is exactly S2 and S5" "s2_architecture,s5_breaking" "$(keyset "$(kv DELEGATED)")"
 check "one uncertain: SUBAGENT names the backup" "complexity-judge" "$(kv SUBAGENT)"
-SNAP="$(kv SNAPSHOT_FILE)"
-check "SNAPSHOT_FILE exists" "yes" "$([ -f "$SNAP" ] && echo yes || echo no)"
+JEV_INPUT="$(kv JEV_INPUT_FILE)"
+check "JEV_INPUT_FILE exists" "yes" "$([ -f "$JEV_INPUT" ] && echo yes || echo no)"
 SRC_DIR="$(kv SOURCES_DIR)"
 check "one uncertain: SOURCES_DIR is the ticket's jev-sources directory" "yes" \
   "$([ -d "$SRC_DIR" ] && [ "$(basename "$SRC_DIR")" = "$TICKET" ] && [ "$(basename "$(dirname "$SRC_DIR")")" = "jev-sources" ] && echo yes || echo no)"
-check "one uncertain: every source the snapshot names is a file in SOURCES_DIR" "2|0" \
-  "$(tr -d '\r' < "$SNAP" | sed -n '/^sources:$/,/^sources_unavailable/p' | sed '1d;$d' | while IFS= read -r n; do [ -f "$SRC_DIR/$n" ] && echo ok || echo missing; done | sort | uniq -c | awk '{printf "%s%s", (NR>1?"+":""), $1":"$2}' | sed 's/^2:ok$/2|0/')"
-check "one uncertain: the snapshot does not carry SOURCES_DIR" "0" "$(tr '\\' '/' < "$SNAP" | grep -cF "$SRC_DIR")"
+check "one uncertain: every source the Jev input names is a file in SOURCES_DIR" "2|0" \
+  "$(tr -d '\r' < "$JEV_INPUT" | sed -n '/^sources:$/,/^sources_unavailable/p' | sed '1d;$d' | while IFS= read -r n; do [ -f "$SRC_DIR/$n" ] && echo ok || echo missing; done | sort | uniq -c | awk '{printf "%s%s", (NR>1?"+":""), $1":"$2}' | sed 's/^2:ok$/2|0/')"
+check "one uncertain: the Jev input does not carry SOURCES_DIR" "0" "$(tr '\\' '/' < "$JEV_INPUT" | grep -cF "$SRC_DIR")"
 answer "SIGNALS: S2-architecture"
 fin
 check "one uncertain + LLM S2: ADOPTED=mixed" "mixed" "$(kv ADOPTED)"
