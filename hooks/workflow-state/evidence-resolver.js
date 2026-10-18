@@ -10,7 +10,6 @@
 
 const path = require("path");
 const { execSync, execFileSync } = require("child_process");
-const { getPlansArtifactPath } = require("../lib/plans-artifact-registry");
 const { controlPath, diagnoseControlMigration } = require("./state-io/control-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
 const { hasStagedDocChanges, hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
@@ -79,8 +78,9 @@ function hasPlanArtifact(step, sessionId) {
   if (!suffix) return false;
   if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
   try {
-    const fs = require("fs");
-    return fs.existsSync(getPlansArtifactPath(sessionId, suffix));
+    // Owner-resolved: a downstream session's artifact is its upstream's file (#2633).
+    const { resolvePlanArtifactOwner } = require("./plan-artifact-owner");
+    return resolvePlanArtifactOwner(sessionId, suffix).exists;
   } catch (e) {
     return false;
   }

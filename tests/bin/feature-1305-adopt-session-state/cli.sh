@@ -1,10 +1,10 @@
 # shellcheck shell=bash
-# AD-1 .. AD-5 — the CLI: the single execution point for adoption.
+# AD-1 .. AD-6 — the CLI: the single execution point for adoption.
 # Tests: tests/bin/feature-1305-adopt-session-state.sh
-# Tags: scope:issue-specific
+# Tags: scope:issue-specific, feature-2297, feature-2304, granularity-flags-removed
 
 echo ""
-echo "=== #1305 AD-1..AD-5: bin/workflow/adopt-session-state ==="
+echo "=== #1305 AD-1..AD-6: bin/workflow/adopt-session-state ==="
 
 # --- AD-1: --list is the discovery surface that replaces automatic inheritance.
 # A recent same-cwd+branch session that is still resumable must be offered.
@@ -52,19 +52,22 @@ assert_eq_desc "AD-2e-rc. --list exits 0" "0" "$ADOPT_RC"
 assert_not_contains_guarded cli_ran "AD-2e. merge_to_main complete without approval is not offered (merge_to_main alone decides S1)" "$AD2E_DO" "$ADOPT_OUT"
 
 # --- AD-3: --from performs the adoption through the SAME applyInheritance the
-# hook uses, so the appended events must carry the append-only provenance
-# markers (#1733) rather than masquerading as steps this session performed.
+# hook uses. Since #2304 the upstream events are copied verbatim and only the
+# inheritance's OWN events (the #772 cleanup triple) carry origin
+# session-inherit / provenance backfilled. research is checked rather than
+# outline: the fixture's unapproved outline is reverted by the #2633 approval check.
 AD3_D="ad3donor-$$"; AD3_H="ad3heir-$$"
 write_state_v2 "$AD3_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
 write_state_v2 "$AD3_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 announce_donor "$AD3_D" "$CWD"
 adopt "$AD3_H" "$REPO" --from "$AD3_D"
 assert_eq_desc "AD-3a. --from exits 0 on a valid donor" "0" "$ADOPT_RC"
-assert_eq_desc "AD-3b. the heir now has the donor's outline completion" "complete" "$(step_status "$AD3_H" outline)"
+assert_eq_desc "AD-3b. the heir now has the donor's research completion" "complete" "$(step_status "$AD3_H" research)"
 SIG3="$(event_signature "$AD3_H")"
-assert_contains "AD-3c. adopted events are marked provenance=backfilled" ":backfilled:" "$SIG3"
-assert_contains "AD-3d. adopted events are marked origin=session-inherit" ":session-inherit:" "$SIG3"
-assert_eq_desc "AD-3e. adopted events record inherited_from=<donor>" "$AD3_D" "$(inherited_from_of "$AD3_H")"
+assert_contains "AD-3c. the inheritance's own events are marked provenance=backfilled" ":backfilled:" "$SIG3"
+assert_contains "AD-3d. the inheritance's own events are marked origin=session-inherit" ":backfilled:session-inherit" "$SIG3"
+assert_contains "AD-3c2. the copied upstream events keep their original origin" ":observed:test-fixture" "$SIG3"
+assert_eq_desc "AD-3e. the heir records upstream_session_id=<donor> and no per-event inherited_from" "$AD3_D" "$(upstream_link_of "$AD3_H")"
 
 # --- AD-4: the misfire guard. The CLI is user-invokable, so a stray --from must
 # not be able to bulldoze a session that has already done real work.
@@ -78,21 +81,25 @@ assert_rc_nonzero "AD-4a. adopting into a non-all-pending heir is refused" "$ADO
 assert_eq_guarded cli_ran "AD-4b. the refused heir's state file is byte-identical" "$BEFORE4" "$(state_cksum "$AD4_H")"
 
 # --- AD-5: --from re-validates; being named on the command line is not enough.
-# Otherwise the CLI would be a way to launder exactly the mis-inheritance #1305
-# is about.
+# Since #2297 a donor from another repo is no longer refused — #1305 is kept by
+# adopting it degraded: plan-stage steps travel, worktree-dependent ones are
+# reverted to pending. Resumability still refuses outright.
 REPO2="$(setup_repo other)"
 CWD2="$(resolve_path "$REPO2")"
-AD5_MIS="ad5mismatch-$$"; AD5_S1="ad5s1-$$"; AD5_H="ad5heir-$$"
-write_state_v2 "$AD5_MIS" "$CWD2" "other-branch" "$STEPS_INHERITABLE"
+AD5_MIS="ad5mismatch-$$"; AD5_S1="ad5s1-$$"; AD5_H="ad5heir-$$"; AD5C_H="ad5cheir-$$"
+write_state_v2 "$AD5_MIS" "$CWD2" "other-branch" '{"workflow_init":"complete","research":"complete","write_tests":"complete"}'
 write_state_v2 "$AD5_S1" "$CWD" "$BRANCH" "$STEPS_DELIVERED"
 write_state_v2 "$AD5_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
+write_state_v2 "$AD5C_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 announce_donor "$AD5_MIS" "$CWD2"; announce_donor "$AD5_S1" "$CWD"
 adopt "$AD5_H" "$REPO" --from "$AD5_MIS"
-assert_rc_nonzero "AD-5a. a context-mismatched donor is refused" "$ADOPT_RC" "$ADOPT_OUT"
-assert_eq_guarded cli_ran "AD-5b. the heir stays untouched after the mismatch refusal" "pending" "$(step_status "$AD5_H" outline)"
-adopt "$AD5_H" "$REPO" --from "$AD5_S1"
+assert_eq_desc "AD-5a. a donor from another repo is adopted (degraded), not refused" "0" "$ADOPT_RC"
+assert_eq_guarded cli_ran "AD-5b. the plan-stage research completion travels" "complete" "$(step_status "$AD5_H" research)"
+assert_eq_guarded cli_ran "AD-5b2. the worktree-dependent write_tests is reverted to pending" "pending" "$(step_status "$AD5_H" write_tests)"
+assert_eq_guarded cli_ran "AD-5b3. the heir names the other-repo donor as its upstream" "$AD5_MIS" "$(upstream_link_of "$AD5_H")"
+adopt "$AD5C_H" "$REPO" --from "$AD5_S1"
 assert_rc_nonzero "AD-5c. a non-resumable delivered (S1) donor is refused" "$ADOPT_RC" "$ADOPT_OUT"
-assert_eq_guarded cli_ran "AD-5d. the heir stays untouched after the resumability refusal" "pending" "$(step_status "$AD5_H" outline)"
+assert_eq_guarded cli_ran "AD-5d. the heir stays untouched after the resumability refusal" "pending" "$(step_status "$AD5C_H" research)"
 
 # AD-5e: an approved-but-undelivered donor is adoptable, and the heir can then
 # continue to merge_to_main (approval carried over, merge_to_main not already complete).
@@ -104,3 +111,20 @@ adopt "$AD5E_H" "$REPO" --from "$AD5E_D"
 assert_eq_desc "AD-5e-rc. adopting an approved-but-undelivered donor exits 0" "0" "$ADOPT_RC"
 assert_eq_guarded cli_ran "AD-5e-uv. the heir carries the donor's user_verification completion" "complete" "$(step_status "$AD5E_H" user_verification)"
 assert_eq_guarded cli_ran "AD-5e-dl. the heir's merge_to_main step is still pending (it can still merge)" "pending" "$(step_status "$AD5E_H" merge_to_main)"
+
+# --- AD-6 (#2297): granularity is decided from where the session runs, so the
+# caller-side switches are gone. Each removed flag exits 2 with the removal
+# notice and adopts nothing.
+AD6_D="ad6donor-$$"
+write_state_v2 "$AD6_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
+announce_donor "$AD6_D" "$CWD"
+for AD6_FLAG in "--verified-equivalent" "--granularity full"; do
+    AD6_H="ad6heir-${AD6_FLAG//[^a-z]/}-$$"
+    write_state_v2 "$AD6_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
+    BEFORE6="$(state_cksum "$AD6_H")"
+    # shellcheck disable=SC2086 # the flag and its value are split on purpose
+    adopt "$AD6_H" "$REPO" --from "$AD6_D" $AD6_FLAG
+    assert_eq_desc "AD-6a. $AD6_FLAG exits 2" "2" "$ADOPT_RC"
+    assert_contains "AD-6b. $AD6_FLAG prints the removal notice" "removed: granularity is decided from where this session runs" "$ADOPT_OUT"
+    assert_eq_guarded cli_ran "AD-6c. $AD6_FLAG leaves the heir byte-identical" "$BEFORE6" "$(state_cksum "$AD6_H")"
+done

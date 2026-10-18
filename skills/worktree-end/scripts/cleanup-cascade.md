@@ -41,7 +41,7 @@ Note: `isAllowedMainWorktreeCleanup` accepts `WORKTREE_END_SKILL=1 git -C <main>
 
 ## WE-17 — Compose doc-append
 Main worktree; only when NOTES_BACKUP_PATH is non-empty. Single canonical writer of both docs/history.md and CHANGELOG.md from WORKTREE_NOTES.md ## History Notes / ## Changelog Notes bullets (Approach C, #690). Phase 2 of issue-close no longer writes history.md.
-Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md` → `CLOSES_ISSUES_COUNT` (0 when empty/missing). When non-empty, one bullet per closed issue expected in ## History Notes; CLI fail-fasts when bullets absent.
+Read `closes_issues` from `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session <session-id>` → `CLOSES_ISSUES_COUNT` (0 when empty/missing). When non-empty, one bullet per closed issue expected in ## History Notes; CLI fail-fasts when bullets absent.
 MERGE_SHA from env JSON written by WE-6..WE-8 (gh pr view --json mergeCommit — survives main-worktree env reset).
 Dispatch the `doc-append` worker per `skills/_shared/worker-dispatch.md`. Payload: `mode: "compose"`, `notes_path: NOTES_BACKUP_PATH`, `branch`, `pr_number`, `merge_commit: MERGE_SHA`, `pr_title`, `closes_issues_count: CLOSES_ISSUES_COUNT`, `cwd: TARGET_MAIN_ROOT`, `artifact_dir: PLANS_DIR`.
 On `failed` status: surface `summary` + `artifact_path`; WE-18 still runs. Recovery: `bash "$AGENTS_MAIN_ROOT/bin/compose-doc-append-entry" --notes <path> --branch <b> --pr <N> --closes-issues-count <K> ...` — CLI writes via GitHub Contents/Git Data API (#672), no local git push required. CLI idempotency (per-PR markers in ~/.workflow-plans/markers/) prevents duplicates on retry.

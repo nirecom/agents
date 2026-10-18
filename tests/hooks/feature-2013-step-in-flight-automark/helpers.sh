@@ -25,15 +25,13 @@ node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else 
 #
 # outline/detail ->complete transitions are approval-gated (#1133): markStep
 # would throw UnapprovedCompletionError and silently no-op behind the
-# redirected stderr below. Record a sanctioned "reset-sentinel" approval first
-# (same pattern as APPROVE_GATED_JS in tests/hooks/feature-1733-state-event-stream)
-# so seeding succeeds regardless of the host's CONFIRM_OUTLINE/CONFIRM_DETAIL
-# setting.
+# redirected stderr below. Record a real plan approval first (tests/lib/plan-approval-fixture.js)
+# so seeding succeeds regardless of the host's CONFIRM_OUTLINE/CONFIRM_DETAIL setting.
 seed_step() {
     WORKFLOW_STATE_DIR="$1" WORKFLOW_PLANS_DIR="$1" ST="$3" STATUS="$4" SID="$2" "$RWT" 15 node -e "
 const CA = require('$COMPLETION_APPROVAL_NODE');
 if (process.env.STATUS === 'complete' && CA.isApprovalGatedStep(process.env.ST)) {
-  CA.recordPlanApproval(process.env.SID, process.env.ST, { source: 'reset-sentinel', reason: '2013 fixture' });
+  require('$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js').approveLive(process.env.SID, process.env.ST);
 }
 require('$STATEIO_NODE').markStep(process.env.SID, process.env.ST, process.env.STATUS);" >/dev/null 2>&1
 }

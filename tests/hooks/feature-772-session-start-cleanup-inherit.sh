@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # filename: tests/hooks/feature-772-session-start-cleanup-inherit.sh
 # Tests: hooks/session-start.js
-# Tags: session-start, cleanup, inheritance, regression, scope:issue-specific
+# Tags: session-start, cleanup, inheritance, regression, scope:issue-specific, regression-2304
 # TL3 gap: live-host SessionStart firing and CONV_LANG/settings-drift injection are not
 # asserted here; C6 is the TL2 runner (live firing: docs/architecture/claude-code/e2e-testing.md).
 # #772 regression: an inheriting session must not copy `cleanup` verbatim; it marks
@@ -247,6 +247,20 @@ if [ "$RESEARCH" = "complete" ] && [ "$OUTLINE" = "complete" ] && [ "$DETAIL" = 
     pass "C4: other steps (research+outline+detail) inherited unchanged as complete"
 else
     fail "C4: expected research=outline=detail=complete, got research=$RESEARCH outline=$OUTLINE detail=$DETAIL"
+fi
+
+# C7 (#2304): the C4 heir names its upstream and bounds the copied stream; the cleanup
+# reset sits after the boundary, so the copy itself still holds the donor's cleanup record.
+C7_OUT=$(node -e "
+const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+const b = s.upstream_copy_seq;
+const post = (s.events || []).filter((e) => e.seq > b && e.step === 'cleanup').map((e) => e.kind).join('+');
+console.log('upstream=' + (s.upstream_session_id === process.argv[2]) + ' boundary=' + (typeof b === 'number' && b > 0) + ' post_cleanup=' + post);
+" "$(to_node_path "$WORKFLOW_DIR/${NEW_SID}.json")" "$PRIOR_SID" 2>&1)
+if [ "$C7_OUT" = "upstream=true boundary=true post_cleanup=step_annotations_cleared+step_status+step_annotation" ]; then
+    pass "C7: heir records upstream_session_id and upstream_copy_seq; the #772 cleanup triple follows the boundary"
+else
+    fail "C7: expected 'upstream=true boundary=true post_cleanup=step_annotations_cleared+step_status+step_annotation', got '$C7_OUT'"
 fi
 
 # ============================================================================

@@ -7,7 +7,7 @@ user-invocable: false
 Triage routes to the correct subset of in-skill steps; each is idempotent and resumable. Read `rules/github-issues.md` first — on-demand-only, never auto-injected; its "Session model" defines per-session N. Usage: `/issue-close-finalize <N>` or `/issue-close-finalize --from-session`.
 Read `rules/coding.md` before the first close comment or parent-body update — on-demand-only, never auto-injected; its Public GitHub Rules govern that outbound text.
 
-`--from-session` resolves `<N>` from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` `## Issues` (canonical parser: `hooks/lib/parse-closes-issues.js`). Zero → skip; one → continue; multiple → run sequentially; missing intent → one-line warn + skip. The merge commit is resolved from the PR in ICF-B, not from a flag.
+`--from-session` resolves `<N>` from `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session <session-id>` (the session's owner-resolved intent `## Issues`). Zero → skip; one → continue; multiple → run sequentially; missing intent → one-line warn + skip. The merge commit is resolved from the PR in ICF-B, not from a flag.
 
 ### `--from-session` per-N dispatch obligations
 
