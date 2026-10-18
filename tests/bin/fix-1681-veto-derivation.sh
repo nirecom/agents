@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # filename: tests/bin/fix-1681-veto-derivation.sh
-# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, bin/workflow/lib/next-step/
+# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, skip-verdict, veto, derivation, next-step, workflow-gate, session-start, TL2, scope:common
 # #1681: a vetoed outline skip must read back effective-pending, every later step too,
 #   via read-time derivation only (#1352 reset contract; state.json never rewritten).

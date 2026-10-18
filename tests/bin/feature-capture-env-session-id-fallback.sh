@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/bin/feature-capture-env-session-id-fallback.sh
-# Tests: bin/gh, bin/git, skills/worktree-end/scripts/capture-env.sh
+# Tests: skills/worktree-end/scripts/capture-env.sh
 # Tags: worktree, end, cleanup, skill, bin, scope:issue-specific
 #
 # Unit tests for the session-id fallback logic in:

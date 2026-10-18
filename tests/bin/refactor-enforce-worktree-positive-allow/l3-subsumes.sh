@@ -3,15 +3,60 @@
 # L3 E2E — Subsumes scenarios (cases 31–35)
 # ============================================================================
 
+# Returns 0 when any file under $1 pairs ISSUE_CLOSE_SKILL=1 with a git add/commit/push.
+# Catches the same-line form and `export ISSUE_CLOSE_SKILL=1` plus a git write on a later line.
+l3_31_detect() {
+    local dir="$1" f
+    if grep -rE '^[^#]*ISSUE_CLOSE_SKILL=1[[:space:]]+git[[:space:]]+(add|commit|push)' "$dir" >/dev/null; then
+        return 0
+    fi
+    while IFS= read -r f; do
+        if awk '/^[^#]*ISSUE_CLOSE_SKILL=1/ {s=1} s && /^[^#]*(^|[^[:alnum:]_-])git([[:space:]]+-C[[:space:]]+("[^"]*"|\047[^\047]*\047|[^[:space:]]+))?[[:space:]]+(add|commit|push)([[:space:]]|$)/ {f=1} END {exit !f}' "$f"; then
+            return 0
+        fi
+    done < <(find "$dir" -type f)
+    return 1
+}
+
+# Runs in a subshell (own EXIT trap) so the file-wide TMPDIR_BASE trap is left intact.
+# Prints "<fixture>=<hit|miss>" lines.
+l3_31_fixture_verdicts() (
+    readonly L3_31_ROOT="$(mktemp -d)"
+    trap 'rm -rf "$L3_31_ROOT"' EXIT
+    local name
+    for name in a b c d e; do mkdir -p "$L3_31_ROOT/$name"; done
+    printf '%s\n' '#!/bin/bash' 'export ISSUE_CLOSE_SKILL=1' 'echo prep' 'git -C "path with spaces" add .' > "$L3_31_ROOT/a/s.sh"
+    printf '%s\n' '#!/bin/bash' 'ISSUE_CLOSE_SKILL=1 git commit -m x' > "$L3_31_ROOT/b/s.sh"
+    printf '%s\n' '#!/bin/bash' 'export ISSUE_CLOSE_SKILL=1' 'echo prep' 'git push' > "$L3_31_ROOT/c/s.sh"
+    printf '%s\n' '#!/bin/bash' 'git status' 'git log --oneline -3' > "$L3_31_ROOT/d/s.sh"
+    printf '%s\n' '#!/bin/bash' 'git add .' > "$L3_31_ROOT/e/s.sh"
+    for name in a b c d e; do
+        if l3_31_detect "$L3_31_ROOT/$name"; then echo "$name=hit"; else echo "$name=miss"; fi
+    done
+)
+
 test_l3_31_issue_672_step_e_no_local_git_writes() {
-    # #672: step-e.sh under the positive-allow refactor must NOT issue
-    # `ISSUE_CLOSE_SKILL=1 git add/commit/push`. Instead it should call the
-    # Contents-API helper.
-    require_file "$STEP_E_SH" "test_l3_31_issue_672_step_e_no_local_git_writes" || return
-    if grep -E '^[^#]*ISSUE_CLOSE_SKILL=1[[:space:]]+git[[:space:]]+(add|commit|push)' "$STEP_E_SH" >/dev/null; then
-        fail "L3.31 #672: step-e.sh still issues 'ISSUE_CLOSE_SKILL=1 git add/commit/push' (refactor moves to Contents API)"
+    # #672: no issue-close-finalize script (step-e.sh was split into scripts/) may issue
+    # `ISSUE_CLOSE_SKILL=1 git add/commit/push`; it should call the Contents-API helper.
+    require_file "$FINALIZE_SCRIPTS_DIR/run-finalize-terminal.sh" "test_l3_31_issue_672_step_e_no_local_git_writes" || return
+    local l3_31_verdicts l3_31_pair l3_31_want
+    l3_31_verdicts="$(l3_31_fixture_verdicts)"
+    for l3_31_pair in a=hit b=hit c=hit d=miss e=miss; do
+        l3_31_want="${l3_31_pair#*=}"
+        if printf '%s\n' "$l3_31_verdicts" | grep -qx "$l3_31_pair"; then
+            pass "L3.31 #672 detector fixture ${l3_31_pair%%=*}: $l3_31_want"
+        else
+            fail "L3.31 #672 detector fixture ${l3_31_pair%%=*}: expected $l3_31_want (verdicts: $(printf '%s' "$l3_31_verdicts" | tr '\n' ' '))"
+        fi
+    done
+    local l3_31_hit=0
+    if l3_31_detect "$FINALIZE_SCRIPTS_DIR"; then
+        l3_31_hit=1
+    fi
+    if [ "$l3_31_hit" -eq 1 ]; then
+        fail "L3.31 #672: issue-close-finalize scripts still issue 'ISSUE_CLOSE_SKILL=1 git add/commit/push' (refactor moves to Contents API)"
     else
-        pass "L3.31 #672: step-e.sh no longer issues local ISSUE_CLOSE_SKILL git writes"
+        pass "L3.31 #672: issue-close-finalize scripts no longer issue local ISSUE_CLOSE_SKILL git writes"
     fi
 }
 

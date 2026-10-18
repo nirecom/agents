@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: agents/.env, bin/github-issues, bin/github-issues/migration/commit-migration-artifacts.sh, bin/github-issues/migration/orchestrate.sh, bin/github-issues/sync-labels.sh
+# Tests: bin/github-issues/migration/commit-migration-artifacts.sh, bin/github-issues/migration/orchestrate.sh, bin/github-issues/sync-labels.sh
 # Tags: migration, repo, github, issues, labels, scope:issue-specific
 # Tests for feat/migrate-repo-commit-446 — commit + push migration artifacts.
 # Tests commit-migration-artifacts.sh and orchestrator Step 6.
@@ -325,29 +325,15 @@ else
     fail "C12: rc=$RC state_present=$state_present"
 fi
 
-# ----------------------------------------------------------------------------
-# C13 (#1231): regression guard — docs/ is a symlink into a SEPARATE git repo.
-#
-# Per docs convention, docs/ may be a symlink managed by another repo. When
-# commit-migration-artifacts.sh runs `git -C <repo> add -- docs/todo.md`, git
-# rejects the pathspec ("beyond a symbolic link") and Step 6 aborts (exit 128).
-#
-# The #1231 fix must detect the docs/ symlink, resolve the destination repo, and
-# commit docs/todo.md into THAT repo at its show-prefix path (subdir case):
-#   primary_repo/docs -> docs_repo/projects/engineering/mynewrepo
-# so the file lands at docs_repo:projects/engineering/mynewrepo/todo.md.
-#
-# EXPECTED-FAIL until the source fix lands: this test describes the desired
-# post-fix 2-repo commit behavior. It is RED against the current source.
-#
-# Uses its own fixture (two repos + symlink) — NOT make_fixture/teardown_fixture.
+# C13 (#1231): regression guard — docs/ is a symlink into a SEPARATE git repo; git rejects
+# `git add -- docs/todo.md` ("beyond a symbolic link") and Step 6 aborts (exit 128). The fix must
+# resolve the destination repo and commit docs/todo.md there at its show-prefix path
+# (primary_repo/docs -> docs_repo/projects/engineering/mynewrepo). EXPECTED-FAIL until the source
+# fix lands. Uses its own fixture (two repos + symlink), NOT make_fixture/teardown_fixture.
 
-# c13_symln — create a REAL symlink to an existing directory, cross-platform.
-# On Git-for-Windows MSYS, a bare `ln -s` to a cross-tree target silently copies
-# the directory instead of linking; MSYS=winsymlinks:nativestrict forces a true
-# symlink (requires developer mode / elevated shell). The `test -L` in the guard
-# below confirms a real link was produced, so a directory-copy fallback SKIPs
-# rather than passing a test that never crosses a symlink boundary.
+# c13_symln — create a REAL symlink cross-platform: a bare `ln -s` on Git-for-Windows MSYS copies the
+# directory; MSYS=winsymlinks:nativestrict forces a true link (needs developer mode). The `test -L`
+# guard below SKIPs on a directory-copy fallback rather than pass without crossing a symlink boundary.
 c13_symln() {
     local target="$1" link="$2"
     MSYS="winsymlinks:nativestrict" ln -sfn "$target" "$link" 2>/dev/null \
