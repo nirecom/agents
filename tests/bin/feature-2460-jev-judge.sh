@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/jev-judge, hooks/lib/jev/two-stage/gate.js, hooks/workflow-state/complexity-routing/deterministic-signals.js, bin/workflow/normalize-judge-signals, hooks/lib/jev/two-stage/snapshot.js, hooks/lib/jev/two-stage/query.js, hooks/lib/jev/two-stage/replay.js, hooks/lib/jev/two-stage/finalize.js, hooks/lib/jev/two-stage/settle-complexity.js, bin/workflow/lib/jev-skip-adapter.js
-# Tags: TL2, bin, jev, two-stage, skip-gate, skip-threshold, skip-record, skip-owner, sources-snapshot, required-sections, crash-consistency, frozen-mode, bound-read, superseded, cli-args, usage-error, complexity-gate, gate, threshold-by-answer, short-circuit, deterministic-signals, owner-marker, idempotent, failsafe, normalize, untrusted-input, secret-leak, mock-server, scope:issue-specific, pwsh-not-required
+# Tests: bin/workflow/jev-judge, hooks/lib/jev/two-stage/gate.js, hooks/workflow-state/complexity-routing/deterministic-signals.js, bin/workflow/normalize-judge-signals, hooks/lib/jev/two-stage/jev-input.js, hooks/lib/jev/two-stage/query.js, hooks/lib/jev/two-stage/replay.js, hooks/lib/jev/two-stage/finalize.js, hooks/lib/jev/two-stage/settle-complexity.js, bin/workflow/lib/jev-skip-adapter.js
+# Tags: TL2, bin, jev, two-stage, skip-gate, skip-threshold, skip-record, skip-owner, jev-input-sources, required-sections, crash-consistency, frozen-mode, bound-read, superseded, cli-args, usage-error, complexity-gate, gate, threshold-by-answer, short-circuit, deterministic-signals, owner-marker, idempotent, failsafe, normalize, untrusted-input, secret-leak, mock-server, scope:issue-specific, pwsh-not-required
 
 # The two-stage Jev broker (#2460): `jev-judge query` asks Jev once and adopts only answers
 # that clear the per-direction threshold, `finalize` merges the subagent's answer for the rest,
@@ -43,7 +43,7 @@ case_end
 case_begin "jj-q-failsafe" "bin/workflow/jev-judge"
 . "$SUITE_DIR/q-failsafe.sh"
 case_end
-case_begin "jj-d-sources" "hooks/lib/jev/two-stage/snapshot.js"
+case_begin "jj-d-sources" "hooks/lib/jev/two-stage/jev-input.js"
 . "$SUITE_DIR/d-sources.sh"
 case_end
 case_begin "jj-e-required-sections" "hooks/lib/jev/two-stage/query.js"

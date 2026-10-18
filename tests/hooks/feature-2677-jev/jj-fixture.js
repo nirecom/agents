@@ -105,12 +105,17 @@ function jj(fx, mock, args, extra) {
 const cxQuery = (fx, mock, stage, extra) => jj(fx, mock, ["query", "--session", SID, "--point", "complexity-judge", "--stage", stage], extra);
 const finalize = (fx, mock, ticket, extra) => jj(fx, mock, ["finalize", "--session", SID, "--ticket", ticket], extra);
 
+// probe(fx, mock, args): one skip-probe command (module API: query, finalize with crashAt, sweep).
+function probe(fx, mock, args, extra) {
+  return outcome(spawnSync(process.execPath, [SKIP_PROBE, REPO, ...args], {
+    cwd: fx.cwd, env: childEnv(fx, mock, extra), encoding: "utf8", timeout: CHILD_TIMEOUT_MS, input: "",
+  }));
+}
+
 // skipQuery(fx, mock, target): <target>-skip at stage outline through the module API (skip-probe).
 function skipQuery(fx, mock, target, extra) {
   const o = { sid: SID, point: `${target}-skip`, stage: "outline", entry: { mode: "production" } };
-  return outcome(spawnSync(process.execPath, [SKIP_PROBE, REPO, "query", JSON.stringify(o)], {
-    cwd: fx.cwd, env: childEnv(fx, mock, extra), encoding: "utf8", timeout: CHILD_TIMEOUT_MS, input: "",
-  }));
+  return probe(fx, mock, ["query", JSON.stringify(o)], extra);
 }
 
 // decision(fx, ticket): the ticket's decision record (null when none); records(fx, ticket): all.
@@ -145,5 +150,5 @@ const STATE_AT_DETAIL = JSON.stringify({ steps: Object.fromEntries([
 
 module.exports = {
   REPO, SID, SENTINEL_KEY, STATE_AT_DETAIL, sleepMs, startMock, newFx, jj, cxQuery, finalize, skipQuery,
-  records, decision, keyset, withPins,
+  probe, records, decision, keyset, withPins,
 };

@@ -26,6 +26,12 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
   Hooks judge a command through this structure instead of matching the raw text with regular expressions.
 - **Related**: [architecture/claude-code/shell-command-parsing.md](architecture/claude-code/shell-command-parsing.md)
 
+### Jev input
+
+- **Definition**: The text sent to Jev as its state for one judgment: a stage's sections, packed within a budget, and the names of the source copies.
+  The two-stage judge's query builds it, and the backup subagent reads it first.
+- **Related**: [architecture/jev/two-stage-broker.md](architecture/jev/two-stage-broker.md)
+
 ### review round
 
 - **Definition**: One reviewer run of the shared codex review loop; CAP is the normal ceiling on rounds, and MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain.
