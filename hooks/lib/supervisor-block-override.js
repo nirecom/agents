@@ -1,6 +1,6 @@
 "use strict";
 // #2256 S5-d / #2709 — record a reviewed human override of a standing TR5 BLOCK hold.
-// The only caller is the ask-gated WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE sentinel handler,
+// The only caller is the ask-gated WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED sentinel handler,
 // so every override passes the user's permission dialog. The hold is released only while
 // the override names the run it was taken against AND the freshness_key it pins still holds.
 

@@ -171,7 +171,7 @@ sentinel is allowed.
 
 | Last terminal verdict | `freshness_key` | Action |
 |---|---|---|
-| BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via the ask-gated `WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE` sentinel (see below). |
+| BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via the ask-gated `WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED` sentinel (see below). |
 | BLOCK | mismatch | arm a run against the new key (deny + dispatch). Non-BLOCK → stage 2; BLOCK again → hold again. |
 | key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the shared null-freshness predicate (`hooks/lib/null-freshness.js`) certifies the last TR5 terminal run: verdict in the CONTINUE-only allow-list, no later BLOCK, no newer audit run unsettled (`audit_phase` pending / in_progress / frozen), and every per-artifact hash (`artifact_keys`, absence compared as a value) unchanged since that run; arm a full re-audit otherwise. A run without a per-artifact breakdown is fail-closed. `recurrence-patterns` is excluded from the arm set (infinite-arm guard, #2323). |
 | key uncomputable — artifact-side null (`input_version` non-null, plan artifact missing) | — | Same predicate, plus `trigger_input_keys.TR5` of that run must equal the current `input_version` (absent / null / non-string stored key is fail-closed, #2360). Hashing the artifacts closes the hole where a post-TR5 intent/detail edit passed on a code-only match (#2400). |
@@ -198,7 +198,7 @@ extra arms. `uv_attempt_seq` is recorded only for tracing.
 ### BLOCK rejection record
 
 The only write path is the sentinel
-`echo "<<WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE: <run-id> <reason>>>"`. A
+`echo "<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: <run-id> <reason>>>"`. A
 `permissions.ask` rule in `settings.json` puts every emission through the user's
 approval dialog (ask outranks allow), so the model cannot record an override on its
 own (#2709). The workflow-mark handler

@@ -2,7 +2,7 @@
 // Tests: hooks/lib/sentinel-patterns.js, hooks/lib/supervisor-block-override.js, hooks/workflow-mark/supervisor-block-override-handler.js, hooks/workflow-mark.js, hooks/workflow-mark/reset-handler.js, hooks/workflow-state/completion-approval.js, hooks/workflow-gate/user-verified-audit.js, settings.json
 // Tags: supervisor, block-override, reset-from, plan-approval, sentinel, permissions, scope:issue-specific, TL2
 // #2709 — two routes that recorded an approval without the user: the un-gated override CLI
-// (now the ask-gated WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE sentinel) and RESET_FROM's
+// (now the ask-gated WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED sentinel) and RESET_FROM's
 // synthesised plan approvals (now refused unless each prior gated step is really approved).
 // TL3 gap: the real permissions.ask dialog is not exercised; settings.json is checked
 // statically and the sentinel is fed to the PostToolUse hook as if the user had allowed it.
@@ -223,8 +223,8 @@ caseEnd();
 caseBegin("A11 sentinel patterns recognise the override form", "hooks/lib/sentinel-patterns.js");
 run("A11 sentinel patterns recognise the override form", () => {
   const sp = mod("hooks/lib/sentinel-patterns.js");
-  ok(sp.SUPERVISOR_BLOCK_OVERRIDE_RE_DQ instanceof RegExp, "SUPERVISOR_BLOCK_OVERRIDE_RE_DQ exported");
-  ok(sp.SUPERVISOR_BLOCK_OVERRIDE_LOOKSLIKE_RE instanceof RegExp, "SUPERVISOR_BLOCK_OVERRIDE_LOOKSLIKE_RE exported");
+  ok(sp.SUPERVISOR_BLOCK_ACCEPTED_RE_DQ instanceof RegExp, "SUPERVISOR_BLOCK_ACCEPTED_RE_DQ exported");
+  ok(sp.SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE instanceof RegExp, "SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE exported");
 });
 caseEnd();
 
