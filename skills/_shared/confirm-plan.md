@@ -7,17 +7,18 @@ The gate check of CPA-3 alone is also used by `write-tests` (CONFIRM_TESTS), `wr
 
 ## Steps
 
-CPA-1 through CPA-3 always run. `CONFIRM_<STEP>` (default `on`) gates CPA-3's prompt only;
-CPA-1's write and CPA-2's plan-link line are unconditional.
+CPA-1 through CPA-3 always run. `CONFIRM_<STEP>` (default `on`) gates CPA-3's prompt only.
+CPA-2's plan-link line belongs to the turn that wrote the plan; write it in no later turn.
 
 **CPA-1 — Write the artifact.** Use the Write tool. No diff is shown in chat; CPA-2's breadcrumb is the only plan surface.
 
 **CPA-2 — Plan link.** After the Write returns, `show-plan-link.js` syncs the artifact through plan-sync and hands you its plan-link line as additional context: the blob URL plus the local path when the plan was published, otherwise the local path plus a reason.
-End the final body text of the turn with that line as-is, then close the turn.
+End the last text block of the turn that wrote the plan with that line as-is; CPA-3 decides whether the turn then closes.
 To look the line up later, run `node "$AGENTS_MAIN_ROOT/bin/plan-link" --stage <stage>` and write its output as-is.
 Never hand the plan over with `SendUserFile`.
 Never copy the blob URL into a PR body, `history.md`, `CHANGELOG.md`, or a public issue — the plan repo is private; leak guard: `docs/architecture/claude-code/plan-sync.md`.
-Enforcement (Stop): `stop-confirm-plan-guard.js` blocks a turn that wrote a plan stage when its last text block lacks the blob URL (when one exists) or else the local path, regardless of `CONFIRM_<STEP>`.
+Enforcement (Stop): `stop-confirm-plan-guard.js` checks only a turn that wrote a plan stage, and blocks it when its last text block lacks the blob URL (when one exists) or else the local path.
+The guard does not read `CONFIRM_<STEP>` yet, so the OFF path carries the same duty.
 Enforcement (PreToolUse): `confirm-checkpoint.js` accepts a CONFIRM echo on two paths: right after the Stop hook's continuation prompt in the same turn, or in the turn after the user's reply to a presentation that ended on the stage's plan-link line.
 It denies any other echo, including one after this turn rewrote the plan; after two denies in a row the third echo passes and is reported to the supervisor.
 
@@ -25,7 +26,7 @@ It denies any other echo, including one after this turn rewrote the plan; after 
 Run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
 Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different value.
 `--gate` judges the RECORDED current step, which can lag the step the calling skill is on: when the step named at the start of `REASON` (`<step>: CONFIRM_X=...`) is not your own step, treat the result as `none`.
-- `proceed`: take the caller's OFF branch (plan stages: print a one-paragraph prose summary with the CPA-2 plan-link line, then proceed). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.
+- `proceed`: take the caller's OFF branch (plan stages: print a one-paragraph prose summary, then proceed; the turn's last text block ends with the CPA-2 plan-link line, once). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.
 - `ask`: when `GATE_HINT` names a scope change or carries a warning, show it to the user first; then take the caller's ON branch (plan stages: the sentinel procedure below; write-tests / write-code / update-docs / worktree-start: the skill's own ON branch — a pre-action gate asks via `AskUserQuestion`, a post-action gate presents the result and continues).
   - Plan stages run three steps with no `AskUserQuestion` call; `<STAGE>` = `INTENT` / `OUTLINE` / `DETAIL` per the caller.
   - Presentation: end the final body text with "The approval dialog follows this message; if it does not appear, reply once you have reviewed the plan." and then the CPA-2 plan-link line as the last line, then close the turn.
