@@ -5,7 +5,7 @@
 # #2650: the shared predicates of the same-turn CONFIRM continuation. T1-T5 drive
 # pickContinuationStage with an injected probe and clock (deadline-driver.js); the unit driver
 # covers approvalArtifactPath, linkKey, sameTurnContinuation, markBindsArtifact and the wording;
-# plan-gate.sh covers planGateState (G1-G5).
+# plan-gate.sh covers planGateState (G1-G5); A1-A5 / B1-B4 cover the strict turn end.
 # The Stop-hook end-to-end cases (N1-N20, T6) live in feature-stop-guard-layer2/continuation.sh.
 set -euo pipefail
 
@@ -49,6 +49,20 @@ case_end
 
 case_begin "continuation-predicates-and-wording" "hooks/lib/confirm-continuation.js"
 ccn_run unit-driver.js
+case_end
+
+# A1-A5 / B1-B4: the presentation turn closes on the plan-link line — no text after it in the
+# anchor, no assistant text between the anchor and the echo.
+case_begin "a1-a5-strict-turn-end-predicates" "hooks/lib/confirm-continuation.js"
+ccn_run unit-driver.js strict
+case_end
+
+case_begin "b1-stop-no-continuation-after-trailing-text" "hooks/lib/confirm-continuation.js"
+ccn_run strict-end-hook-driver.js stop
+case_end
+
+case_begin "b2-b4-checkpoint-same-turn-strict-end" "hooks/lib/confirm-continuation.js"
+ccn_run strict-end-hook-driver.js checkpoint
 case_end
 
 # shellcheck source=feature-2650-confirm-continuation/plan-gate.sh

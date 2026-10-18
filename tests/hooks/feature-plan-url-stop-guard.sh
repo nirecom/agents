@@ -117,6 +117,7 @@ case_end
 
 case_begin "unit-turn-split" "hooks/lib/plan-link-turn-check.js"
 . "$SUB_DIR/unit-turn-split.sh"
+. "$SUB_DIR/unit-ends-with-link-line.sh"
 case_end
 
 # ══ Hook: hooks/stop-confirm-plan-guard.js ══════════════════════════════════

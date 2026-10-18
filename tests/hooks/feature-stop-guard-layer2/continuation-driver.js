@@ -56,17 +56,21 @@ function expectQuiet(label, r, s, stage) {
   const { spawnSync } = require("child_process");
   const s = X.sessionAt("outline");
   const log = path.join(X.TDIR, `pre-${s.sid}.log`);
-  const env = Object.assign({}, process.env, { CC_SPAWN_LOG: log, CC_UNREADABLE: s.plan,
-    NODE_OPTIONS: [X.SPAWN_PRELOAD, UNREADABLE].map((p) => `--require "${p.replace(/\\/g, "/")}"`).join(" ") });
+  const env = Object.assign({}, process.env, { CC_PROBE_LOG: log, CC_UNREADABLE: s.plan, CONFIRM_OUTLINE: "off",
+    NODE_OPTIONS: X.nodeOptions([X.PROBE_COUNT_PRELOAD, UNREADABLE]) });
   const code = `const p=require(${JSON.stringify(path.join(X.ROOT, "hooks/lib/confirm-gate/probe.js"))});` +
-    `p.probeConfirmGateSync("CONFIRM_OUTLINE",5000);` +
+    `const v=p.probeConfirmGateSync("CONFIRM_OUTLINE",5000);` +
     `const c=require(${JSON.stringify(path.join(X.ROOT, "hooks/workflow-state/completion-approval.js"))});` +
-    `process.stdout.write(String(c.computeArtifactSha(${JSON.stringify(s.sid)},"outline")));`;
+    `process.stdout.write(v+" "+String(c.computeArtifactSha(${JSON.stringify(s.sid)},"outline")));`;
   const r = spawnSync(process.execPath, ["-e", code], { env, encoding: "utf8", timeout: 30000 });
-  let n = 0;
-  try { n = fs.readFileSync(log, "utf8").split("\n").filter(Boolean).length; } catch (_) { n = 0; }
-  check("precondition — the spawn-count preload logs one confirm-off probe", n === 1, `n=${n} err=${r.stderr}`);
-  check("precondition — the unreadable preload makes computeArtifactSha null", r.stdout === "null" && !!X.F.implSha(s.sid, "outline"), show([r.stdout, r.stderr]));
+  const n = X.countLog(log);
+  const [probeValue, sha] = String(r.stdout).split(" ");
+  check("precondition — the probe-count preload logs one in-process CONFIRM probe, which reads OFF", n === 1 && probeValue === "OFF", `n=${n} out=${r.stdout} err=${r.stderr}`);
+  check("precondition — the unreadable preload makes computeArtifactSha null", sha === "null" && !!X.F.implSha(s.sid, "outline"), show([r.stdout, r.stderr]));
+  // The counter sees the Stop hook's own probe: a continuing scene takes exactly one.
+  const t = X.sessionAt("outline");
+  const rc = X.runStop(t.sid, present(t), { count: true });
+  check("precondition — a continuing Stop hook run logs one probe", continues(rc, t) && rc.probes === 1, show({ rc: rc.rc, out: rc.out, probes: rc.probes }));
 }
 
 const reasons = [];
@@ -187,8 +191,8 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
   X.turnMarker(s.sid, "outline", o.plan);
   const r = X.runStop(s.sid, present(s, { text: s.line + "\n" + o.line }), { count: true });
   const ok = twin("intent", "N11 two stages");
-  check("N11 two stages qualify — exit 0, no output, no mark for either stage, 0 probe spawns",
-    ok && quiet(r, s) && !fs.existsSync(X.markPath(s.sid, "outline")) && r.spawns === 0, show({ rc: r.rc, out: r.out, spawns: r.spawns }));
+  check("N11 two stages qualify — exit 0, no output, no mark for either stage, 0 probes",
+    ok && quiet(r, s) && !fs.existsSync(X.markPath(s.sid, "outline")) && r.probes === 0, show({ rc: r.rc, out: r.out, probes: r.probes }));
 }
 
 // N12: a stale mark from an earlier turn is swept by a Stop that does not continue.
@@ -243,7 +247,7 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
   const s = X.sessionAt("outline");
   const r = X.runStop(s.sid, present(s), { count: true, env: { STOP_CONFIRM_CONTINUE_T0_OFFSET_MS: "3900" } });
   const ok = twin("outline", "T6 deadline");
-  check("T6 deadline near — exit 0, no output, no mark, 0 probe spawns", ok && quiet(r, s) && r.spawns === 0, show({ rc: r.rc, out: r.out, spawns: r.spawns }));
+  check("T6 deadline near — exit 0, no output, no mark, 0 probes", ok && quiet(r, s) && r.probes === 0, show({ rc: r.rc, out: r.out, probes: r.probes }));
   check("T6 deadline near — the hook ends well under 5 s", ok && r.ms < 3000, `ms=${r.ms}`);
 }
 

@@ -5,16 +5,10 @@
 const path = require("path");
 const cp = require("child_process");
 
-// Count the gate probes (bin/confirm-off) this process spawns. Patched before plan-gate.js
-// loads, because probe.js destructures child_process at require time.
-let probes = 0;
-for (const fn of ["spawnSync", "execFile", "execFileSync", "spawn"]) {
-  const orig = cp[fn];
-  cp[fn] = function patched(...a) {
-    if (/confirm-off/.test(JSON.stringify(a[1] || []))) probes += 1;
-    return orig.apply(this, a);
-  };
-}
+// The in-process probes this process takes (config-flag classifyConfigFlag calls on CONFIRM_*),
+// and the fault that makes them fail for real (probe-fault-preload.js).
+const PC = require("./probe-count-preload");
+const PF = require("./probe-fault-preload");
 
 const X = require("./fixture");
 const { A, T, U, W, TR, show, check } = X;
@@ -37,25 +31,28 @@ function withEnv(over, fn) {
 // A session at the stage. detail gets the outline's text, so the scope-change check finds no change.
 const session = (stage) => X.sessionAt(stage, stage === "detail" ? { body: X.F.PLAN_BODY.outline } : {});
 
-function childEnv(over, emptyPath) {
+// childEnv(over, fault) -> the child env; fault (a probe-fault-preload mode) breaks its probe.
+function childEnv(over, fault) {
   const env = Object.assign({}, process.env, X.gateEnv());
   delete env.CLAUDE_CODE_SESSION_ID;
   for (const k of Object.keys(over || {})) { if (over[k] === null) delete env[k]; else env[k] = over[k]; }
-  return emptyPath ? X.noBashEnv(env) : env;
+  return fault ? X.probeFaultEnv(env, fault) : env;
 }
-// cli(sid, over) -> {action, value, out}: next-step --gate for the recorded step.
-function cli(sid, key, over, emptyPath) {
+// cli(sid, key, over, fault) -> {action, value, cause, out}: next-step --gate for the recorded step;
+// cause is the REASON's probe-<cause> suffix, null when the probe succeeded.
+function cli(sid, key, over, fault) {
   const r = cp.spawnSync(process.execPath, [path.join(X.ROOT, "bin/workflow/next-step"), "--gate", "--session", sid], {
-    env: childEnv(over, emptyPath), encoding: "utf8", timeout: 60000, cwd: X.TDIR,
+    env: childEnv(over, fault), encoding: "utf8", timeout: 60000, cwd: X.TDIR,
   });
   const val = (k) => { const m = new RegExp("^" + k + "=(.*)$", "m").exec(r.stdout || ""); return m ? m[1].trim() : null; };
-  return { action: val("GATE_ACTION"), value: val("GATE_" + key), out: (r.stdout || "") + (r.stderr || "") };
+  const cause = /probe-([a-z-]+)/.exec(val("REASON") || "");
+  return { action: val("GATE_ACTION"), value: val("GATE_" + key), cause: cause ? cause[1] : null, out: (r.stdout || "") + (r.stderr || "") };
 }
-// checkpoint(sid, stage, over, emptyPath) -> parsed confirm-checkpoint output for the stage's echo.
-function checkpoint(sid, stage, over, emptyPath) {
+// checkpoint(sid, stage, over, fault) -> parsed confirm-checkpoint output for the stage's echo.
+function checkpoint(sid, stage, over, fault) {
   const input = { tool_name: "Bash", tool_input: { command: X.echoOf(stage) }, session_id: sid, hook_event_name: "PreToolUse" };
   const r = cp.spawnSync(process.execPath, [path.join(X.ROOT, "hooks/confirm-checkpoint.js")], {
-    input: JSON.stringify(input), env: childEnv(over, emptyPath), encoding: "utf8", timeout: 60000, cwd: X.TDIR,
+    input: JSON.stringify(input), env: childEnv(over, fault), encoding: "utf8", timeout: 60000, cwd: X.TDIR,
   });
   let json = {};
   try { json = r.stdout ? JSON.parse(r.stdout) : {}; } catch (_) { json = { unparsed: r.stdout }; }
@@ -86,39 +83,49 @@ if (mode === "G1") {
     }
   }
 } else if (mode === "G2") {
-  const before = probes;
+  const before = PC.count();
   const got = withEnv({ CONFIRM_INTENT: "off" }, () => state("intent"));
   check("G2 intent off: planGateState is ON", got === "ON", show(got));
-  check("G2 intent off: no probe is spawned", got === "ON" && probes === before, show({ got, probes: probes - before }));
+  check("G2 intent off: no probe runs", got === "ON" && PC.count() === before, show({ got, probes: PC.count() - before }));
 } else if (mode === "G3") {
-  // The probe cannot start: bash is not on PATH.
-  const pathKeys = Object.keys(process.env).filter((k) => /^path$/i.test(k));
-  const over = { CONFIRM_OUTLINE: "off" };
-  for (const k of pathKeys) over[k] = null;
-  over.PATH = X.noBashEnv({}).PATH;
-  const got = withEnv(over, () => state("outline"));
-  check("G3 probe failure: planGateState is ERROR", got === "ERROR", show(got));
+  // The in-process probe fails for real (load-env throws / reports loadFailed for CONFIRM_*),
+  // with CONFIRM_OUTLINE=off pinned so a fail-open would read OFF. Every failure has a working twin.
+  const OFF = { CONFIRM_OUTLINE: "off" };
+  const presented = () => {
+    const t = session("outline");
+    X.turnMarker(t.sid, "outline", t.plan);
+    return [t, X.writeTranscript(t.sid, [U("write the plan", "u-prompt"), A("a-write", W(t.plan)), TR("w1", "u-tr"), A("a-anchor", T("Here is the plan.\n\n" + t.line))])];
+  };
+  const healthy = withEnv(OFF, () => state("outline"));
+  check("G3 control: CONFIRM_OUTLINE=off with a working probe reads OFF", healthy === "OFF", show(healthy));
   const s = session("outline");
-  const c = cli(s.sid, "CONFIRM_OUTLINE", { CONFIRM_OUTLINE: "off" }, true);
-  check("G3 probe failure: the CLI asks", c.action === "ask" && c.value === "ERROR", show([c.value, c.action, c.out]));
-  // confirm-checkpoint: with the probe broken, CONFIRM_OUTLINE=off waives nothing; the dialog shows.
-  const ctl = checkpoint(s.sid, "outline", { CONFIRM_OUTLINE: "off" }, false);
+  const cc = cli(s.sid, "CONFIRM_OUTLINE", OFF);
+  check("G3 control: the CLI proceeds with a working probe", cc.action === "proceed" && cc.value === "OFF" && cc.cause === null, show([cc.value, cc.action, cc.out]));
+  const ctl = checkpoint(s.sid, "outline", OFF);
   check("G3 control: CONFIRM_OUTLINE=off with a working probe is skipped", skipped(ctl), show(ctl.json));
-  const k = checkpoint(s.sid, "outline", { CONFIRM_OUTLINE: "off" }, true);
-  check("G3 probe failure: confirm-checkpoint shows the dialog, not [confirm-skipped]", skipped(ctl) && dialog(k), show(k.json));
-  // Stop hook: the presented-plan turn continues with a working probe, not with a broken one.
-  const t = session("outline");
-  X.turnMarker(t.sid, "outline", t.plan);
-  const tp = X.writeTranscript(t.sid, [U("write the plan", "u-prompt"), A("a-write", W(t.plan)), TR("w1", "u-tr"), A("a-anchor", T("Here is the plan.\n\n" + t.line))]);
+  const [t, tp] = presented();
   const on = X.runStop(t.sid, tp);
   const continued = on.rc === 2 && on.json.decision === "block" && on.reason.startsWith("[confirm-plan] continue:");
   check("G3 control: the Stop hook continues with a working probe", continued, show({ rc: on.rc, out: on.out, err: on.err.slice(0, 200) }));
-  const u = session("outline");
-  X.turnMarker(u.sid, "outline", u.plan);
-  const up = X.writeTranscript(u.sid, [U("write the plan", "u-prompt"), A("a-write", W(u.plan)), TR("w1", "u-tr"), A("a-anchor", T("Here is the plan.\n\n" + u.line))]);
-  const off = X.runStop(u.sid, up, { emptyPath: true });
-  check("G3 probe failure: the Stop hook does not continue (exit 0, no output, no mark)",
-    continued && off.rc === 0 && off.out.trim() === "" && X.readMark(u.sid, "outline") === null, show({ rc: off.rc, out: off.out }));
+  for (const fault of PF.MODES) {
+    const before = PC.count();
+    const disarm = PF.arm(fault);
+    let got;
+    try { got = withEnv(OFF, () => state("outline")); } finally { disarm(); }
+    check(`G3 probe failure (${fault}): planGateState is ERROR`, healthy === "OFF" && got === "ERROR", show(got));
+    check(`G3 probe failure (${fault}): the failing probe was taken once`, PC.count() - before === 1, show({ probes: PC.count() - before }));
+    const c = cli(s.sid, "CONFIRM_OUTLINE", OFF, fault);
+    check(`G3 probe failure (${fault}): the CLI asks and names the cause`,
+      cc.action === "proceed" && c.action === "ask" && c.value === "ERROR" && c.cause === fault, show([c.value, c.action, c.cause, c.out]));
+    // confirm-checkpoint: with the probe broken, CONFIRM_OUTLINE=off waives nothing; the dialog shows.
+    const k = checkpoint(s.sid, "outline", OFF, fault);
+    check(`G3 probe failure (${fault}): confirm-checkpoint shows the dialog, not [confirm-skipped]`, skipped(ctl) && dialog(k), show(k.json));
+    // Stop hook: the presented-plan turn continues with a working probe, not with a broken one.
+    const [u, up] = presented();
+    const off = X.runStop(u.sid, up, { probeFault: fault });
+    check(`G3 probe failure (${fault}): the Stop hook does not continue (exit 0, no output, no mark)`,
+      continued && off.rc === 0 && off.out.trim() === "" && X.readMark(u.sid, "outline") === null, show({ rc: off.rc, out: off.out }));
+  }
 } else if (mode === "G4") {
   // "off " (trailing blank) is not the off literal: ON everywhere.
   const got = withEnv({ CONFIRM_OUTLINE: "off " }, () => state("outline"));
@@ -130,14 +137,17 @@ if (mode === "G1") {
   check("G4 'off ': confirm-checkpoint shows the dialog, not [confirm-skipped]", dialog(k), show(k.json));
 } else if (mode === "G5") {
   for (const ms of [0, -1]) {
-    const before = probes;
+    const before = PC.count();
     const got = withEnv({ CONFIRM_OUTLINE: "off" }, () => state("outline", { timeoutMs: ms }));
     check(`G5 timeoutMs ${ms}: ERROR`, got === "ERROR", show(got));
-    check(`G5 timeoutMs ${ms}: no probe is spawned`, got === "ERROR" && probes === before, show({ got, probes: probes - before }));
+    check(`G5 timeoutMs ${ms}: no probe runs`, got === "ERROR" && PC.count() === before, show({ got, probes: PC.count() - before }));
   }
-  const before = probes;
-  const got = withEnv({ CONFIRM_OUTLINE: "off" }, () => state("outline", { timeoutMs: 5000 }));
-  check("G5 control: a positive timeout probes once and reads OFF", got === "OFF" && probes - before === 1, show({ got, probes: probes - before }));
+  for (const [v, want] of [["off", "OFF"], ["on", "ON"]]) {
+    const before = PC.count();
+    const got = withEnv({ CONFIRM_OUTLINE: v }, () => state("outline", { timeoutMs: 5000 }));
+    check(`G5 control: a positive timeout probes once and reads ${want} (CONFIRM_OUTLINE=${v})`,
+      got === want && PC.count() - before === 1, show({ got, probes: PC.count() - before }));
+  }
 } else {
   check("gate-driver mode", false, "unknown mode: " + mode);
 }

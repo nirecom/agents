@@ -1,6 +1,6 @@
 "use strict";
 // Unit cases of hooks/lib/confirm-continuation.js: approvalArtifactPath, linkKey,
-// sameTurnContinuation, markBindsArtifact and the two reasons' wording.
+// sameTurnContinuation, markBindsArtifact and the two reasons' wording; mode "strict" runs A1-A5.
 // Prints PASS|name / FAIL|name|detail lines.
 const path = require("path");
 const X = require("./fixture");
@@ -17,6 +17,61 @@ const call = (fn, ...args) => {
 };
 const { PLAN_LINK_COMMAND } = require(path.join(X.ROOT, "hooks/lib/plan-link"));
 const sid = X.uuidSid(2);
+
+// Mode "strict" (A1-A5): the presentation turn closes on the plan-link line. No assistant text
+// may follow the anchor, and the anchor text may carry only whitespace after the line.
+if (process.argv[2] === "strict") {
+  const mark = { stage: "outline", anchorUuid: "a-anchor" };
+  const base = [A("a-write", W("/plans/x.md")), A("a-anchor", T("plan line")), STOPFB("[confirm-plan] continue: ...", "u-fb")];
+  const st = (entries, self) => call("sameTurnContinuation", entries, mark, self);
+  const textBetween = [...base, A("a-more", T("Anything else before I confirm?")), A("a-e", ECHO("outline", "e1"))];
+  check("A1 sameTurnContinuation — an assistant text entry between the anchor and the echo (self id)", st(textBetween, "e1") === false, show(st(textBetween, "e1")));
+  check("A2 sameTurnContinuation — an assistant text entry between the anchor and the echo (no self id)", st(textBetween, undefined) === false, show(st(textBetween, undefined)));
+  const textOnEcho = [...base, A("a-e", T("Confirming the outline now."), ECHO("outline", "e1"))];
+  check("A3 sameTurnContinuation — the echo entry itself carries a text item", st(textOnEcho, "e1") === false, show(st(textOnEcho, "e1")));
+  const thinking = [...base, A("a-th", { type: "thinking", thinking: "the stop hook asks for the echo", signature: "sig" }), A("a-e", ECHO("outline", "e1"))];
+  check("A4 sameTurnContinuation — only the echo after the anchor stays accepted", st([...base, A("a-e", ECHO("outline", "e1"))], "e1") === true, "expected true");
+  check("A4 sameTurnContinuation — a thinking item between is not text and stays accepted", st(thinking, "e1") === true, show(st(thinking, "e1")));
+
+  // A5: pickContinuationStage on one unapproved intent plan, gate ON (injected probe).
+  // pick(tail, lineKey) -> the pick for "Here is the plan.\n\n<line><tail>"; lineKey "urlLine"
+  // shows the published form.
+  const pick = (tail, lineKey) => {
+    const psid = X.uuidSid(5);
+    X.F.writeState(psid, { workflow_init: "complete", clarify_intent: "pending" }, []);
+    X.F.writePlan(psid, "intent");
+    const lastText = "Here is the plan.\n\n" + X.linesFor(psid, "intent")[lineKey || "line"] + tail;
+    try {
+      return CC.pickContinuationStage({ sid: psid, lastText, plansDir: X.F.PLANS_DIR, markers: [],
+        entries: [X.U("write the plan", "u-prompt"), A("a-anchor", T(lastText))], probe: () => "ON", timeoutMsFor: () => 1200 });
+    } catch (e) { return { threw: e.message }; }
+  };
+  for (const [label, tail] of [["nothing", ""], ["trailing newlines", "\n\n"], ["trailing blanks", "  \n"]]) {
+    const g = pick(tail);
+    check(`A5 pickContinuationStage — ${label} after the plan-link line continues`, !!g && g.stage === "intent" && !!g.sha, show(g));
+  }
+  for (const [label, tail] of [["prose", "\n\nLet me know if you want changes."], ["a trailing period", "."], ["a trailing parenthesis", ")"]]) {
+    const g = pick(tail);
+    check(`A5 pickContinuationStage — ${label} after the plan-link line does not continue`, g === null, show(g));
+  }
+
+  // A5 URL: plan-sync on (publish stub), so the link is the blob URL and the URL line is shown.
+  require(X.PUBLISH_STUB);
+  {
+    const g = pick("\n\n", "urlLine");
+    check("A5 URL pickContinuationStage — only whitespace after the URL plan-link line continues on the URL",
+      !!g && g.stage === "intent" && !!g.link && typeof g.link.url === "string" && g.link.url.startsWith(X.BLOB), show(g));
+    const p = pick("\n\nLet me know if you want changes.", "urlLine");
+    check("A5 URL pickContinuationStage — prose after the URL plan-link line does not continue", p === null, show(p));
+  }
+  {
+    const urlMark = { stage: "intent", anchorUuid: "a-anchor" };
+    const urlBase = [A("a-anchor", T("Here is the plan.\n\nintent: " + X.BLOB + "x.md (`/plans/x.md`)")), STOPFB("[confirm-plan] continue: ...", "u-fb")];
+    const got = call("sameTurnContinuation", [...urlBase, A("a-more", T("Confirming now.")), A("a-e", ECHO("intent", "e1"))], urlMark, "e1");
+    check("A5 URL sameTurnContinuation — assistant text before the echo after a URL anchor", got === false, show(got));
+  }
+  process.exit(0);
+}
 
 // approvalArtifactPath
 {
@@ -72,8 +127,10 @@ for (const stage of X.STAGES) {
   const d = call("sameTurnDenyReason", stage);
   check(`sameTurnDenyReason(${stage}) — exact wording`,
     d === `[confirm-checkpoint] CONFIRM_${S} denied: the ${stage} plan was not shown, as the message that closed the turn, right before this echo. ` +
-      `Do not echo it again in this turn. Run ${PLAN_LINK_COMMAND}, end this turn with its output as-is, wait for the user's reply, ` +
+      `Do not echo it again in this turn. Run ${PLAN_LINK_COMMAND.replace("<stage>", stage)}, end this turn with its output as-is, wait for the user's reply, ` +
       "then echo the CONFIRM alone in the next turn without rewriting the plan.", show(d));
+  check(`sameTurnDenyReason(${stage}) — the plan-link command names the stage, no <stage> placeholder`,
+    typeof d === "string" && !d.includes("<stage>") && d.includes(`--stage ${stage}`), show(d));
   check(`sameTurnDenyReason(${stage}) — no URL, no sid, no retry/try again`,
     typeof d === "string" && !/https?:\/\//.test(d) && !d.includes(sid) && !/retry|try again/i.test(d), show(d));
 }

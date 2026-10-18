@@ -79,6 +79,7 @@ function sameTurnAccepted(turns, absPath, link, ctx) {
   if (!taken || !taken.ok) return false;
   const CC = require("./lib/confirm-continuation");
   if (!CC.sameTurnContinuation(turns.currentTurnEntries, taken.mark, toolUseId)) return false;
+  if (!CC.anchorClosesOnLink(turns.currentTurnEntries, taken.mark, stage, link)) return false;
   if (!CC.samePath(absPath, CC.approvalArtifactPath(sid, stage))) return false;
   const { computeArtifactSha } = require("./workflow-state/completion-approval");
   const { stepForSuffix } = require("./workflow-state/plan-stage-table");
