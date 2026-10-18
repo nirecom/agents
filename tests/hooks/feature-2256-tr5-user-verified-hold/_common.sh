@@ -18,7 +18,7 @@ HOOKS_NODE="$AGENTS_NODE/hooks"
 FP_NODE="$HOOKS_NODE/lib/diff-fingerprint.js"
 WRITER_NODE="$HOOKS_NODE/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$HOOKS_NODE/lib/supervisor-state-schema.js"
-OVERRIDE_BIN="$__COMMON_SCRIPT_CHECKOUT_ROOT/bin/supervisor-record-block-override"
+OVERRIDE_HANDLER_NODE="$HOOKS_NODE/workflow-mark/supervisor-block-override-handler.js"
 RWT="$__COMMON_SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
 PASS=0
@@ -157,6 +157,22 @@ process.stdout.write(o ? String(o.reason || '') : 'parse-error');
 "
 }
 
+# override_via_handler <run-id> <reason> — emit the override sentinel straight into its
+# workflow-mark handler (#2709: the ask-gated sentinel is the only write path). Prints the
+# pushed messages; HANDLER-MISSING:<why> when the module cannot load, NOT-HANDLED when it
+# declines the command.
+override_via_handler() {
+    H="$OVERRIDE_HANDLER_NODE" SESS="$SID" RID="$1" RSN="$2" bash "$RWT" 60 node -e "
+let h;
+try { h = require(process.env.H); } catch (e) { process.stdout.write('HANDLER-MISSING:' + String(e.message).split('\n')[0]); process.exit(0); }
+const msgs = [];
+const cmd = 'echo \"<<WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE: ' + process.env.RID + ' ' + process.env.RSN + '>>\"';
+const handled = h.handle({ cmd, sessionId: process.env.SESS, pushMessage: (m) => msgs.push(String(m)),
+  signalFatal: (m) => msgs.push(String(m)), repoCwd: process.cwd() });
+process.stdout.write((handled ? '' : 'NOT-HANDLED ') + msgs.join('\n'));
+" 2>&1
+}
+
 # terminal_run <verdict> <freshness-key> — the ledger fragment for one settled TR5 run.
 terminal_run() {
     VERD="$1" FKEY="$2" node -e "
@@ -177,7 +193,7 @@ process.stdout.write(JSON.stringify({
 # freshness_key. Exercises the hasLaterTerminalBlock / laterBlockExists guard
 # (a TR6 BLOCK that postdates a non-BLOCK TR5, or one an old TR5 override cannot
 # speak to). The optional 4th arg seeds audit.block_overrides verbatim — pass the
-# JSON that `state_field audit.block_overrides` prints after a real CLI record.
+# JSON that `state_field audit.block_overrides` prints after a real handler record.
 two_terminal_runs() {
     V5="$1" FK5="$2" V6="$3" OV="${4:-[]}" node -e "
 const overrides = JSON.parse(process.env.OV || '[]');

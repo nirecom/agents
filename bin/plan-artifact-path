@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+// bin/plan-artifact-path --stage <intent|outline|detail> [--session <sid>] [--plans-dir <dir>]
+// Prints the absolute path of the plan artifact the session reads, one line, after resolving its
+// owner (hooks/workflow-state/plan-artifact-owner.js): a session adopted via resume-session --from
+// reads the artifact its upstream wrote. When no candidate exists the session's own path is
+// printed with exit 0, so the reader decides "absent" itself. The session defaults to the current
+// session (hooks/workflow-state resolveSessionId). Read-only.
+// Exit: 0 path printed; 1 no usable session id; 2 usage error.
+"use strict";
+const path = require("path");
+
+const ROOT = path.join(__dirname, "..");
+const STAGES = ["intent", "outline", "detail"];
+
+function die(code, msg) {
+  process.stderr.write(`plan-artifact-path: ${msg}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = {};
+  const keys = { "--stage": "stage", "--session": "session", "--plans-dir": "plansDir" };
+  for (let i = 0; i < argv.length; i++) {
+    const key = keys[argv[i]];
+    if (!key) die(2, `unknown argument: ${argv[i]}`);
+    if (i + 1 >= argv.length || argv[i + 1].startsWith("--")) die(2, `${argv[i]} needs a value`);
+    out[key] = argv[++i];
+  }
+  if (!STAGES.includes(out.stage)) die(2, `--stage must be one of ${STAGES.join(", ")}`);
+  if (out.plansDir !== undefined && !path.isAbsolute(out.plansDir)) die(2, "--plans-dir must be an absolute path");
+  // Git Bash callers hand over a POSIX drive-letter path; Node needs the Windows form (no-op on POSIX).
+  if (out.plansDir !== undefined) out.plansDir = require(path.join(ROOT, "hooks", "lib", "branch-diff.js")).toWindowsPath(out.plansDir);
+  return out;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const WS = require(path.join(ROOT, "hooks", "workflow-state"));
+const sid = args.session !== undefined ? args.session : WS.resolveSessionId() || "";
+if (!sid) die(1, "no session (pass --session <id>, or run inside a session with CLAUDE_CODE_SESSION_ID set)");
+if (!WS.SESSION_ID_VALID_RE.test(sid)) die(1, "not a session id");
+
+let owner;
+try {
+  const { resolvePlanArtifactOwner } = require(path.join(ROOT, "hooks", "workflow-state", "plan-artifact-owner.js"));
+  owner = resolvePlanArtifactOwner(sid, args.stage, undefined, args.plansDir ? { plansDir: args.plansDir } : undefined);
+} catch (e) {
+  die(1, e.message);
+}
+process.stdout.write(path.resolve(owner.path) + "\n");

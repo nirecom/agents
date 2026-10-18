@@ -360,7 +360,7 @@ function recordBlockOverride(sessionId, opts = {}) {
     state.layer1.findings.push({
       severity: "warning",
       categories: ["workflow"],
-      reporter: "supervisor-record-block-override",
+      reporter: typeof opts.reporter === "string" && opts.reporter.length > 0 ? opts.reporter : "supervisor-block-override",
       detail: `block-override recorded for ${opts.audit_run_id || "<none>"} by ${opts.actor || "<unknown>"}: ${opts.reason || ""}`,
       reason: opts.reason === undefined ? null : opts.reason,
       timestamp: nowIso,
