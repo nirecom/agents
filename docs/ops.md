@@ -321,6 +321,8 @@ then goes to the subagent. Jev never blocks a judgment: an outage, missing key,
 or bad response delegates to the subagent, and a failure of the procedure itself
 resolves to the safe side (highest complexity level, or run the planning stage).
 
+A `FALLBACK=<reason>` line from `jev-judge finalize` names why the output was demoted, `source-changed` included; the reasons are listed under Missing answer in [two-stage-broker.md](architecture/jev/two-stage-broker.md#failure-paths).
+
 ### Reading the report
 
 ```
@@ -336,7 +338,7 @@ Flags: `--log <path>` (default decision log), `--point <name>` (one judgment poi
 | Adoption | **LLM call rate**: how often a subagent dispatch was requested — the cost Jev is meant to remove. `adopted` and `by_mode` show whose answers decided. |
 | Adoption | Short-circuit rate (skip points): how often one confident "run" answer decided the point. Watch its trend; it is the everyday view of the run direction. |
 | Adoption | `answer_missing`, `finalize_absent`: dispatches whose answer never arrived, and tickets nobody finalized. Persistent non-zero values mean a caller is not completing the procedure. |
-| Adoption | `input_insufficient`: tickets where Jev was not asked because a required section was not whole. Read its breakdown (issue body, detail, `copy-failed`, `over-cap`). An issue-body shortfall comes from a long issue combined with a long plan and is a designed cost, not a fault. |
+| Adoption | `input_insufficient`: tickets where Jev was not asked because a required section was not whole. At `write-tests` / `write-code` the required section is the issue body, plus at least one plan section (detail, outline or intent) that is whole or truncated with its copy intact. Read its breakdown (issue body, detail, `copy-failed`, `over-cap`). It happens when the required sections do not fit the Jev input budget (`MAX_JEV_INPUT_CHARS`), or when every plan section is absent or its copy failed. |
 | Adoption | `superseded_count`: non-zero means two callers advanced the same step in parallel. The newer judgment is the valid one; the older caller stopped without writing. |
 | Retune | Per-key agreement and, per candidate threshold, whether lowering is supported (below). |
 | Legacy | Version 1 records from the shadow period, with their original metrics. Never mixed into the sections above. |

@@ -70,6 +70,7 @@ if (cmd === "exports") {
     fallback: e.fallback,
     stages: e.stages,
     required: e.required_sections_by_stage,
+    plan_sections: e.plan_sections_by_stage === undefined ? "<absent>" : e.plan_sections_by_stage,
     retired: ["confidence_threshold", "required_sections", "sampling_rate"].filter((k) => k in e),
   });
 } else if (cmd === "mode") {

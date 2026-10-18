@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-2460-jev-call-sites-static/shared-procedure-static.sh
-# Tests: skills/_shared/jev-two-stage-judge.md, skills/write-code/SKILL.md
+# Tests: skills/_shared/jev-two-stage-judge.md, skills/write-code/SKILL.md, agents/complexity-judge.md, agents/plan-skip-judge.md
 # Tags: complexity, prompt-static, jev, shared-procedure, stage-5, scope:issue-specific
 # Sourced by ../feature-2460-jev-call-sites-static.sh — helpers come from there.
 # Moved with their CS ids kept from feature-2099-complexity-stage-routing/
@@ -12,8 +12,8 @@ d2460jj_static() {
     local f="$D2099_JJ_FILE" s2 s3 s4 s5 items sup bad
     assert_eq "CS-40 skills/_shared/jev-two-stage-judge.md exists" "present" "$([ -f "$f" ] && echo present || echo absent)"
     s2=$(d2099_raw_section "$f" JJ-2)
-    assert_contains "CS-41 JJ-2 hands the subagent the SNAPSHOT_FILE path" "SNAPSHOT_FILE" "$s2"
-    assert_eq "CS-42 JJ-2 says when to read the full sources (snapshot truncated / absent)" "yes yes" \
+    assert_contains "CS-41 JJ-2 hands the subagent the JEV_INPUT_FILE path" "JEV_INPUT_FILE" "$s2"
+    assert_eq "CS-42 JJ-2 says when to read the full sources (Jev input truncated / absent)" "yes yes" \
         "$(printf '%s\n' "$s2" | grep -qE '(^|[^_a-z])sources([^_a-z]|$)' && echo yes || echo no) $(printf '%s\n' "$s2" | grep -qiE 'truncated|absent' && echo yes || echo no)"
     assert_contains "CS-43 JJ-2 states how to treat sources_unavailable" "sources_unavailable" "$s2"
     assert_contains "CS-44 JJ-2 has the orchestrator write the answer to ANSWER_FILE" "ANSWER_FILE" "$s2"
@@ -56,6 +56,41 @@ d2460jj_wcd2_file_list() {
         "file=yes every=yes perline=yes write=yes" \
         "file=$(printf '%s\n' "$s" | grep -qF 'write-code-files.txt' && echo yes || echo no) every=$(printf '%s\n' "$s" | grep -qiE '(every|all) (file|files|edited|planned)' && echo yes || echo no) perline=$(printf '%s\n' "$s" | grep -qiE '(one|1) path per line' && echo yes || echo no) write=$(printf '%s\n' "$s" | grep -qF 'Write tool' && echo yes || echo no)"
 }
+
+# CS-61..62 (#2701): the snapshot -> Jev input rename leaves no old name behind. Every token is
+# Jev-specific: the SNAPSHOT_FILE key, buildSnapshot, the snapshot_file / snapshot_sha256 ticket
+# fields, the -snapshot.md suffix, the snapshot module, and the Jev-input phrasings the plan
+# renames in bin/workflow and jev.md. Unrelated snapshots (shell snapshot, cap-snapshot, the
+# reconciled state snapshot, the test-overrides entry snapshot) do not match.
+D2460_SNAP_TOKENS='SNAPSHOT_FILE|buildSnapshot|snapshot_file|snapshot_sha256|-snapshot\.md|snapshot\.js|require\("\./snapshot"\)|Jev snapshot|snapshot (may )?carr|Snapshot section order|Snapshots the stage|gate, snapshot,'
+d2460jj_jev_input_rename() {
+    local r="$SCRIPT_CHECKOUT_ROOT" hits d
+    local -a paths=()
+    for d in agents skills hooks/lib/jev docs/architecture/jev docs/architecture/jev.md bin/workflow; do paths+=("$r/$d"); done
+    hits=$(grep -rnE "$D2460_SNAP_TOKENS" "${paths[@]}" 2>/dev/null | sed "s#^$r/##" | head -5)
+    assert_eq "CS-61 no snapshot-era Jev name in agents/ skills/ hooks/lib/jev/ docs/architecture/jev(.md) bin/workflow/" "none" "${hits:-none}"
+    assert_eq "CS-62 hooks/lib/jev/two-stage/snapshot.js is gone" "absent" \
+        "$([ -e "$r/hooks/lib/jev/two-stage/snapshot.js" ] && echo present || echo absent)"
+}
+
+# CS-63: both backup subagents take the Jev input file and say so in their ## Input section.
+d2460jj_judge_agents_input() {
+    local a f input
+    for a in complexity-judge plan-skip-judge; do
+        f="$SCRIPT_CHECKOUT_ROOT/agents/$a.md"
+        input=$(sed -n '/^## Input[[:space:]]*$/,/^## /p' "$f" 2>/dev/null)
+        assert_eq "CS-63 agents/$a.md: JEV_INPUT_FILE named, ## Input says Jev input" "file=yes input=yes" \
+            "file=$(grep -qF 'JEV_INPUT_FILE' "$f" && echo yes || echo no) input=$(printf '%s\n' "$input" | grep -qF 'Jev input' && echo yes || echo no)"
+    done
+}
+
+case_begin "jev-input-rename-sweep" "agents/complexity-judge.md"
+d2460jj_jev_input_rename
+case_end
+
+case_begin "judge-agents-jev-input" "agents/complexity-judge.md"
+d2460jj_judge_agents_input
+case_end
 
 case_begin "jev-two-stage-judge-static" "skills/_shared/jev-two-stage-judge.md"
 d2460jj_static
