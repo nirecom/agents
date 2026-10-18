@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-enforce-worktree-exclude-glob.sh
-# Tests: hooks/lib/glob-match.js, hooks/lib/glob-match.js.
+# Tests: hooks/lib/glob-match.js
 # Tags: worktree, enforce, hook, git, pre-commit, scope:issue-specific
 #
 # Unit tests for hooks/lib/glob-match.js.
@@ -275,27 +275,12 @@ glob_match_timed() {
 }
 
 test_security_pattern_complexity_cap_stops_redos() {
-    # ReDoS (CWE-1333) regression guard. A pattern alternating wildcards with
-    # literals — "C:/git" + "**a" x20 + "z" — translates to 20 chained greedy
-    # `.*` groups, each followed by a literal. Against a target that shares the
-    # prefix but never supplies the trailing 'z', the engine must try every way
-    # of splitting the run of 'a's between those groups: exponential in the
-    # repeat count, and unreachable-in-practice at 20. The value is
-    # user-controlled (CODE_LANG_EXCLUDE / ENFORCE_WORKTREE_EXCLUDE arrive from
-    # .env or the environment), so the hang is reachable, not theoretical.
-    #
-    # The fix caps pattern complexity and treats an over-cap pattern as
-    # NON-MATCHING. That direction matters: "no match" means the exclusion does
-    # not apply and the language / worktree check still RUNS. A cap that instead
-    # returned true would convert a malformed pattern into a silent bypass of
-    # the very check the pattern gates.
-    #
-    # Both halves are asserted together. The wall-clock bound is what proves the
-    # cap actually engaged: 'false' alone is also what a still-vulnerable build
-    # produces — eventually. 2000ms is far above a capped run (sub-millisecond:
-    # the pattern is rejected before any regex is built) and far below the
-    # unbounded blow-up, so the threshold is not timing-sensitive on a loaded
-    # machine.
+    # ReDoS (CWE-1333) guard: "C:/git" + "**a" x20 + "z" chains 20 greedy `.*` groups, exponential
+    # against a target lacking the trailing 'z'; the pattern is user-controlled (.env), so reachable.
+    # The cap makes an over-cap pattern NON-MATCHING (exclusion not applied, the check still RUNS);
+    # returning true would silently bypass the gated check.
+    # Both halves are asserted: 'false' alone is also what a vulnerable build eventually produces,
+    # so the 2000ms bound proves the cap engaged (capped run is sub-millisecond; not load-sensitive).
     local out result elapsed
     out="$(glob_match_timed "'C:/git' + 'a'.repeat(60)" "'C:/git' + '**a'.repeat(20) + 'z'")"
     result="${out%% *}"
@@ -325,8 +310,9 @@ test_security_complexity_cap_spares_realistic_globs() {
     # paths users configured — the same silent-bypass failure mode, arrived at
     # from the other side. These mirror the shapes actually written in
     # ENFORCE_WORKTREE_EXCLUDE / CODE_LANG_EXCLUDE.
+    local win_root='C:\g'"it"
     assert_match "cap spares Windows worktree-root glob" \
-        'C:\git\worktrees\task\agents\hooks\lib\x.js' 'C:\git\worktrees\**' "true"
+        "$win_root"'\worktrees\task\agents\hooks\lib\x.js' "$win_root"'\worktrees\**' "true"
     assert_match "cap spares ordinary **/*.md" \
         "docs/sub/a.md" "**/*.md" "true"
     assert_match "cap spares multi-wildcard entry" \

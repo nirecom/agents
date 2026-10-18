@@ -1,27 +1,14 @@
 #!/bin/bash
 # tests/hooks/fix-595-bypass-e2e.sh
-# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js.
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js
 # Tags: worktree, enforce, hook, history, docs, security, interpreter-wrapper, fix-802, scope:issue-specific
-#
-# E2E integration tests for bypass predicates still active in
-# hooks/enforce-worktree.js after the #687 positive-allow redesign.
-#
-# IC-WRITE/IC-PUSH/CMP-WRITE/CMP-PUSH series were removed: the four bypass
-# predicates they tested (isAllowedHistoryWrite/PushVia{IssueClose,ComposeDocAppend}Skill)
-# were intentionally deleted in #687. Those tests are archived in
-# tests/_archive/feature-325-history-write-bypass.sh.
-#
-# Coverage matrix (2 active MUST class members):
-#   1. isAllowedWorktreeCommand (WT-REMOVE)
-#   2. isAllowedBranchDeleteWhenNotCheckedOut (BD)
-#
-# Drive surface:
-#   echo '{"tool_name":"Bash","tool_input":{"command":"<cmd>"}}' | \
-#     (cd <main-worktree> && node hooks/enforce-worktree.js)
-#
-#   Hook exit code 0 with no "decision":"block" in output → ALLOW.
-#   Hook exit code 0 with "decision":"block" in output    → BLOCK.
-#   Any other exit code                                   → CRASH (test failure).
+# E2E tests for bypass predicates still active in hooks/enforce-worktree.js after the #687
+# positive-allow redesign. IC-WRITE/IC-PUSH/CMP-WRITE/CMP-PUSH were removed with the four
+# deleted predicates (archived: tests/_archive/feature-325-history-write-bypass.sh).
+# Coverage (2 active MUST class members): isAllowedWorktreeCommand (WT-REMOVE),
+# isAllowedBranchDeleteWhenNotCheckedOut (BD).
+# Drive: echo '{"tool_name":"Bash","tool_input":{"command":"<cmd>"}}' | (cd <main-worktree> && node hooks/enforce-worktree.js)
+# Exit 0 without "decision":"block" → ALLOW; exit 0 with it → BLOCK; any other exit → CRASH.
 
 set -u
 
