@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-session-markers-isworktreeoff.sh
-# Tests: hooks/lib/session-markers, hooks/lib/session-markers.js
+# Tests: hooks/lib/session-markers.js
 # Tags: worktree, hook, bin, tests, scope:common
 #
 # Unit test for hooks/lib/session-markers.js — isWorktreeOff() and

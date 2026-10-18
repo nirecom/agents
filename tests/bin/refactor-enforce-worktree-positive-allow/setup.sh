@@ -9,7 +9,7 @@ GUARD_JS="${_SETUP_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/enforce-worktree.js"
 VALIDATE_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/lib/github-contents-validate.sh"
 CONTENTS_WRITE_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/lib/github-contents-write.sh"
 GIT_DATA_WRITE_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/lib/github-git-data-write.sh"
-STEP_E_SH="${_SETUP_SCRIPT_CHECKOUT_ROOT}/skills/issue-close-finalize/scripts/step-e.sh"
+FINALIZE_SCRIPTS_DIR="${_SETUP_SCRIPT_CHECKOUT_ROOT}/skills/issue-close-finalize/scripts"
 COMPOSE_DOC_APPEND_BIN="${_SETUP_SCRIPT_CHECKOUT_ROOT}/bin/compose-doc-append-entry"
 ISSUE_CREATE_SKILL="${_SETUP_SCRIPT_CHECKOUT_ROOT}/skills/issue-create/SKILL.md"
 

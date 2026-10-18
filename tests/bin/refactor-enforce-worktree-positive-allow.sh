@@ -1,29 +1,12 @@
 #!/bin/bash
 # tests/bin/refactor-enforce-worktree-positive-allow.sh
-# Tests: bin/compose-doc-append-entry, bin/lib/, bin/lib/github-contents-validate.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh, hooks/enforce-worktree.js, hooks/lib/bash-write-targets.js, hooks/lib/strip-quoted-args.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/standard.js, skills/issue-close-finalize/scripts/step-e.sh, skills/issue-create/SKILL.md
+# Tests: bin/compose-doc-append-entry, bin/lib/, bin/lib/github-contents-validate.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh, hooks/enforce-worktree.js, hooks/lib/bash-write-targets.js, hooks/lib/strip-quoted-args.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/standard.js, skills/issue-close-finalize/scripts/run-finalize-terminal.sh, skills/issue-create/SKILL.md
 # Tags: worktree, enforce, hook, issue-close, finalize, scope:issue-specific
-#
-# Tests for refactor/enforce-worktree-positive-allow.
-#
-# The refactor:
-#   1. Removes 4 bypass functions from hooks/enforce-worktree.js:
-#      - isAllowedHistoryWriteViaIssueCloseSkill
-#      - isAllowedHistoryPushViaIssueCloseSkill
-#      - isAllowedHistoryWriteViaComposeDocAppendSkill
-#      - isAllowedHistoryPushViaComposeDocAppendSkill
-#   2. Replaces ISSUE_CLOSE_SKILL=1 / COMPOSE_DOC_APPEND_SKILL=1 bypass paths
-#      with positive-allow: writes from main worktree go through GitHub Contents
-#      API + Git Data API helpers, not local git commands.
-#   3. Introduces three new helpers under bin/lib/:
-#      - github-contents-validate.sh
-#      - github-contents-write.sh
-#      - github-git-data-write.sh
-#   4. Tightens enforce-worktree.js: when Bash CWD is non-git and the command
-#      is write-classified, BLOCK instead of fail-open. (Edit/Write to a
-#      non-git path remains fail-open.)
-#
-# The tests deliberately fail meaningfully against the current source. They
-# express the post-refactor contract.
+# Tests for refactor/enforce-worktree-positive-allow (post-refactor contract):
+#   1. Removes the 4 isAllowedHistory{Write,Push}Via{IssueCloseSkill,ComposeDocAppendSkill} bypasses.
+#   2. ISSUE_CLOSE_SKILL=1 / COMPOSE_DOC_APPEND_SKILL=1 paths become positive-allow: main-worktree
+#      writes use GitHub Contents/Git Data API helpers (bin/lib/github-*.sh), not local git.
+#   3. Non-git Bash CWD + write-classified command BLOCKs (Edit/Write to a non-git path stays fail-open).
 
 set -u
 

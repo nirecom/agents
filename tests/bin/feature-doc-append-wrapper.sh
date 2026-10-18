@@ -1,12 +1,12 @@
 #!/bin/bash
-# Tests: bin/doc-append, bin/doc-append.py
+# Tests: bin/doc-append.py, bin/compose-doc-append-entry
 # Tags: docs, append, history, bin, install, scope:issue-specific
 # Broad integration tests for bin/doc-append bash wrapper
 # Tests run AFTER implementation; skip gracefully if wrapper not yet installed.
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "$0")/../.." && pwd)"
-ERRORS=0
+ERRORS="${DOC_APPEND_WRAPPER_FORCE_ERRORS:-0}"
 
 run_with_timeout() {
     if command -v timeout >/dev/null 2>&1; then
@@ -19,10 +19,57 @@ run_with_timeout() {
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 
-# Skip if doc-append not in PATH (not yet installed)
+# B4 calls the repo script directly, so it runs without the PATH wrapper.
+echo "=== B4: compose-doc-append-entry accepts --category BUGFIX ==="
+# --category BUGFIX is parsed; the run then stops on the missing --notes.
+B4_RC=0
+B4_OUT="$("$DOTFILES/bin/compose-doc-append-entry" --category BUGFIX 2>&1)" || B4_RC=$?
+if [ "$B4_RC" -eq 1 ] && echo "$B4_OUT" | grep -q "compose-doc-append-entry: --notes is required"; then
+    pass "B4: compose-doc-append-entry accepts --category BUGFIX (exit 1, '--notes is required')"
+else
+    fail "B4: expected exit 1 with '--notes is required', got rc=$B4_RC out=$B4_OUT"
+fi
+
+# B4 already asserted, so a missing wrapper is exit 0 (pass) or 1 (B4 failed), never 77.
+wrapper_skip_exit_code() { if [ "$1" -eq 0 ]; then echo 0; else echo 1; fi; }
+
+# DOC_APPEND_WRAPPER_SKIP_PROBE=1 marks the S1 child: it skips S1 (no recursion).
+# DOC_APPEND_WRAPPER_FORCE_ERRORS seeds ERRORS in the child to force the exit-1 branch.
+if [ -z "${DOC_APPEND_WRAPPER_SKIP_PROBE:-}" ]; then
+    echo "=== S1: real skip branch with doc-append hidden from PATH ==="
+    # Drop every PATH entry that holds doc-append; keep the rest so bash/grep/dirname still resolve.
+    S1_BASH="$(command -v bash)"
+    S1_SCRIPT="$DOTFILES/tests/bin/$(basename "$0")"
+    S1_PATH=""
+    S1_OLD_IFS="$IFS"
+    IFS=':'
+    for S1_DIR in $PATH; do
+        if [ -n "$S1_DIR" ] && [ ! -e "$S1_DIR/doc-append" ] && [ ! -e "$S1_DIR/doc-append.exe" ]; then
+            S1_PATH="${S1_PATH:+$S1_PATH:}$S1_DIR"
+        fi
+    done
+    IFS="$S1_OLD_IFS"
+
+    S1_OK_RC=0
+    S1_OK_OUT="$(DOC_APPEND_WRAPPER_SKIP_PROBE=1 PATH="$S1_PATH" "$S1_BASH" "$S1_SCRIPT" 2>&1)" || S1_OK_RC=$?
+    if [ "$S1_OK_RC" -eq 0 ] && echo "$S1_OK_OUT" | grep -q "^SKIP: doc-append not found in PATH"; then
+        pass "S1: hidden doc-append -> SKIP line and exit 0 when B4 passed"
+    else
+        fail "S1: expected SKIP line and exit 0, got rc=$S1_OK_RC out=$S1_OK_OUT"
+    fi
+
+    S1_BAD_RC=0
+    S1_BAD_OUT="$(DOC_APPEND_WRAPPER_SKIP_PROBE=1 DOC_APPEND_WRAPPER_FORCE_ERRORS=1 PATH="$S1_PATH" "$S1_BASH" "$S1_SCRIPT" 2>&1)" || S1_BAD_RC=$?
+    if [ "$S1_BAD_RC" -eq 1 ] && echo "$S1_BAD_OUT" | grep -q "^SKIP: doc-append not found in PATH"; then
+        pass "S1: hidden doc-append -> SKIP line and exit 1 when B4 failed"
+    else
+        fail "S1: expected SKIP line and exit 1, got rc=$S1_BAD_RC out=$S1_BAD_OUT"
+    fi
+fi
+
 if ! command -v doc-append >/dev/null 2>&1; then
-    echo "SKIP: doc-append not found in PATH (not yet installed)"
-    exit 0
+    echo "SKIP: doc-append not found in PATH; wrapper cases not run"
+    exit "$(wrapper_skip_exit_code "$ERRORS")"
 fi
 
 # Temporary workspace
@@ -133,20 +180,6 @@ if run_with_timeout uv run "$DOTFILES/bin/doc-append.py" "$TMP/CHANGELOG.md" \
     pass "B3: BUGFIX without --test-gap on CHANGELOG.md: exit zero (changelog exempt)"
 else
     fail "B3: BUGFIX without --test-gap on CHANGELOG.md: expected exit zero (changelog target should be exempt)"
-fi
-
-echo "=== B4: compose-doc-append-entry --test-gap propagation ==="
-# B4: compose-doc-append-entry does not call doc-append.py directly in a way
-# we can intercept without real git/gh operations. Instead we verify that
-# compose-doc-append-entry accepts --category BUGFIX (not an unknown arg)
-# by checking that it exits due to missing --notes (not an argument error).
-# The argument-error path exits immediately with "unknown argument"; the missing-notes
-# path exits with "--notes is required". Either means the arg is at least parsed.
-B4_OUT="$(bin/compose-doc-append-entry --category BUGFIX 2>&1 || true)"
-if echo "$B4_OUT" | grep -q "unknown argument"; then
-    fail "B4: compose-doc-append-entry does not accept --category BUGFIX (unknown argument)"
-else
-    pass "B4: compose-doc-append-entry accepts --category BUGFIX (exits for missing --notes, not for unknown argument)"
 fi
 
 # --- Normal: --commits omitted (CHANGELOG.md use case) ---
