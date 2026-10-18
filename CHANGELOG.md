@@ -811,3 +811,7 @@ Changes: Supervisor no longer interrupts you with an alert while it is waiting f
 ### FEATURE: PR #2719 (2026-10-18)
 Background: fix(#2701): give the Jev input its own budget so write-code is judged...
 Changes: Jev now judges task complexity at the write-code stage instead of always falling back to the LLM judge, because its input has a larger, dedicated size budget.;A Jev answer demoted because its source files changed now reports FALLBACK=source-changed, the same as the other demotion reasons.
+
+### FEATURE: PR #2721 (2026-10-18)
+Background: test(#2717): remove PARTIAL_ORPHAN cases and fix malformed Tests: hea...
+Changes: Test-suite hygiene: the audit now reports no orphaned test cases, missing `Tests:` headers or malformed header entries. No behavior change for users.
