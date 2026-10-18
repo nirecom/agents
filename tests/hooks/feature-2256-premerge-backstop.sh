@@ -277,7 +277,7 @@ seed_state BLOCK "$FK_OV" >/dev/null
 H="$HOOKS_NODE/workflow-mark/supervisor-block-override-handler.js" SESS="$SID" bash "$RWT" 60 node -e "
 const h = require(process.env.H);
 h.handle({
-  cmd: 'echo \"<<WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE: run-0011 verified manually with the reviewer; the BLOCK is a false positive here>>\"',
+  cmd: 'echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: run-0011 verified manually with the reviewer; the BLOCK is a false positive here>>\"',
   sessionId: process.env.SESS, pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
 });
 " >/dev/null 2>&1

@@ -207,7 +207,7 @@ silently disabling the gate:
 `reset-sentinel` and `session-inherit` are legacy read-only (`HASH_EXEMPT_SOURCES`): old records still
 approve, nothing writes them (#2709, #2633). `RESET_FROM` refuses when a gated step before the reset
 point is unapproved; a supervisor BLOCK is overridden only by the ask-gated
-`<<WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE: ...>>` ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)).
+`<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: ...>>` ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)).
 
 Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rejection,
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its

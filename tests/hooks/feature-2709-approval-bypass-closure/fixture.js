@@ -13,7 +13,7 @@ const ROOT = path.resolve(__dirname, "..", "..", "..");
 const mod = (rel) => require(path.join(ROOT, rel));
 
 const FK = "fk-2709";
-const SENT = "WORKFLOW_SUPERVISOR_BLOCK_OVERRIDE";
+const SENT = "WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED";
 
 function make({ TMP, CFG, eq, ok, show }) {
   const S = mod("hooks/workflow-state/state-io");
