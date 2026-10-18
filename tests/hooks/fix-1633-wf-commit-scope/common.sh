@@ -23,7 +23,10 @@ if (mode === "state") {
   const pending = a[1] === "-" ? [] : a[1].split(",");
   const steps = {};
   for (const s of VALID_STEPS) {
-    steps[s] = { status: pending.includes(s) ? "pending" : "complete", updated_at: "2026-06-27T10:00:00.000Z" };
+    // Approval-gated plan steps read pending when recorded complete without an approval record
+    // (#2277); a settled fixture step is "skipped" so the commit gate treats it as not owed.
+    const settled = ["clarify_intent", "outline", "detail"].includes(s) ? "skipped" : "complete";
+    steps[s] = { status: pending.includes(s) ? "pending" : settled, updated_at: "2026-06-27T10:00:00.000Z" };
   }
   const extra = a[2] ? JSON.parse(a[2]) : {};
   const override = extra.__steps || {};

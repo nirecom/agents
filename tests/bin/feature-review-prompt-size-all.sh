@@ -1,16 +1,13 @@
 #!/bin/bash
-# Tests: bin/review-prompt-size, skills/_archived/., skills/_archived/old, skills/_archived/old/SKILL.md, skills/big, skills/big/SKILL.md, skills/small, skills/small/SKILL.md, rules/coding/test, agents/foo, skills/_shared/bar, rules/test
+# Tests: bin/review-prompt-size, skills/_archived/., rules/test
 # Tags: skill, bin, tests, prompt, scope:issue-specific
 # Tests for bin/review-prompt-size --all mode.
-#
 # TC1: --all scans ALL existing skills/*/SKILL.md (not the diff); a 150-line
 #      pre-existing SKILL.md is reported.
 # TC2: bare invocation (no --all) unchanged — empty diff → SKIPPED.
 # TC3: --base AND --all → SKIPPED with mutually-exclusive reason.
 # TC4: --all excludes skills/_archived/.
-# TC5: --all scans rules/*.md.
-# TC6: --all scans agents/*.md.
-# TC7: --all scans skills/_shared/*.md.
+# TC5-7: --all scans rules/*.md, agents/*.md, skills/_shared/*.md.
 # TC8: --all with 201-line rules/*.md still exits 0 (audit-only contract).
 
 set -u

@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
-# Tests: agents/., skills/_shared/confirm-plan.md, skills/_shared/resolve-plans-dir.md, skills/agents
+# Tests: skills/_shared/confirm-plan.md, skills/_shared/resolve-plans-dir.md
 # Tags: workflow, plans, skill, agent, bin, scope:issue-specific
-# Drift guard: ensures SKILL.md and agent prompt files do not hardcode
-# ~/.workflow-plans or use ${WORKFLOW_PLANS_DIR:-...} outside Bash code blocks.
-#
-# Rationale: LLMs do NOT pipe Read/Write tool arguments through bash, so any
-# ~/.workflow-plans or ${WORKFLOW_PLANS_DIR:-...} expression appearing as
-# prose in a SKILL.md is taken literally — the tilde is never expanded, and
-# the bash parameter expansion never runs. Both forms must be replaced with
-# the <PLANS_DIR> placeholder (resolved by Step 0 preamble).
-#
-# Inside fenced bash code blocks both patterns are CORRECT (bash expands
-# them), so this test strips fenced code block content before grepping.
-#
-# Expected behavior: FAILS before source code changes (SKILL.md files still
-# hold banned patterns); PASSES after the Step 0 inlining migration completes.
+# Drift guard: SKILL.md and agent prompt files must not hardcode ~/.workflow-plans or
+# ${WORKFLOW_PLANS_DIR:-...} outside Bash code blocks. Read/Write tool arguments never pass through
+# bash, so such prose is taken literally; use the <PLANS_DIR> placeholder (Step 0 preamble) instead.
+# Inside fenced bash blocks both forms are correct, so fenced content is stripped before grepping.
+# Expected: FAILS before the Step 0 inlining migration, PASSES after.
 set -u
 
 # Timeout guard — portable across macOS (no `timeout`) and Linux.
