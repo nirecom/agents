@@ -34,7 +34,7 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 
 ### handoff artifact
 
-- **Definition**: The append-only per-session breadcrumb file of facts a fresh session cannot recover from plan files — user decisions, workarounds, rejected approaches, open questions.
+- **Definition**: The append-only per-session breadcrumb file that hooks and skill procedures write — context events, gate blocks, deviations, outcomes; the main conversation's own facts go to session-progress.md.
   `/resume-session` reads it back, and the supervisor codex engine reads it read-only.
 - **Related**: [architecture/claude-code/handoff-artifact.md](architecture/claude-code/handoff-artifact.md)
 
@@ -72,8 +72,8 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 
 ### presentation turn
 
-- **Definition**: The turn in which the model presents a plan (intent, outline, or detail) and ends with its plan-link line.
-  The `CONFIRM_<STAGE>` echo belongs to a later turn, after the user replies.
+- **Definition**: The turn in which the model presents a plan (intent, outline, or detail) in a text block that ends with its plan-link line.
+  The `CONFIRM_<STAGE>` echo follows that text block in the same turn when the Stop hook prompts for it, or else after the user replies.
 - **Related**: [architecture/claude-code/workflow.md](architecture/claude-code/workflow.md)
 
 ### RTK

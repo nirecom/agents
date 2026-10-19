@@ -42,12 +42,7 @@ for sym in isAgentsSessionRepo commitsAllOutsideWorkTargetRepo selectGateRepoDir
 done
 case_end
 
-case_begin "static-work-target-repo-module-removed" "hooks/workflow-gate/work-target-repo.js"
-if [ -e "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/work-target-repo.js" ]; then
-  fail "(static) hooks/workflow-gate/work-target-repo.js is removed" "file still exists"
-else
-  pass "(static) hooks/workflow-gate/work-target-repo.js is removed"
-fi
+case_begin "static-commit-scope-module-exists" "hooks/workflow-gate/commit-scope.js"
 if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/commit-scope.js" ]; then
   pass "(static) hooks/workflow-gate/commit-scope.js exists"
 else

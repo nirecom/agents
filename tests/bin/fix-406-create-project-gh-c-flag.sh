@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/gh, bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
+# Tests: bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
 # Tags: github, issues, bin, git, tests, scope:issue-specific
 # Tests for fix #406 — create-project.sh must NOT use `gh -C` (git flag, not gh flag).
 # Fixed form: (cd "$TARGET_CHECKOUT_ROOT" && gh repo view ...), never gh -C <dir> repo view ...

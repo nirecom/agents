@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: skills/survey-code/SKILL.md, skills/survey-code/SKILL.md.
+# Tests: skills/survey-code/SKILL.md
 # Tags: survey, research, skill, bin, macos, scope:issue-specific
 # Test suite for survey-code claim-verification feature (Issue #262).
 # Static doc checks against skills/survey-code/SKILL.md.

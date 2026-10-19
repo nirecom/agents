@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/gh, bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
+# Tests: bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
 # Tags: github, issues, bin, shell, env, scope:issue-specific
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

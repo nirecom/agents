@@ -1,24 +1,12 @@
 #!/bin/bash
-# Tests: agents/.env, bin/scan-outbound.sh, hooks/pre-commit
+# Tests: bin/scan-outbound.sh, hooks/pre-commit
 # Tags: scan, filter, outbound, hook, git, scope:common
-# Test suite for hooks/pre-commit — dotenv-vs-private-repo order fix.
-#
-# Currently the dotenv-add check runs BEFORE the private-repo check, so even
-# private repos block adding `.env`. The fix swaps them so private-repo check
-# runs first and exits 0 before the dotenv check runs.
-#
-# Expected post-fix behavior:
-#   - private repo + new .env -> rc=0 (skipped)
-#   - public repo + new .env -> rc=1 (blocked)
-#   - no remote + new .env -> rc=1 (blocked: unknown visibility, treat as public)
-#   - non-github host + new .env -> rc=0 (skipped: scan only runs for github)
-#   - modify existing .env on public -> rc=1 (blocked: Modified filter now active)
-#
-# L3 gap (what this test does NOT catch):
-# - real git installation with actual hooks path wired (test uses -c core.hooksPath= bypass)
-# - real `gh` CLI auth behavior vs stub (test injects a fake `gh` binary)
-# - network-isolated environments where gh api timeout differs from test stub
-# Closest-to-action mitigation: hook-registration category checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
+# Test suite for hooks/pre-commit — dotenv-vs-private-repo order fix (private-repo check runs first and exits 0).
+# Expected rc: private+new .env 0; public+new .env 1; no remote+new .env 1 (unknown, treated public);
+# non-github host+new .env 0; modify existing .env on public 1.
+# L3 gap: real git hooks path wiring (test bypasses via -c core.hooksPath=), real gh auth vs fake gh stub,
+# network-isolated gh api timeouts. Mitigation: hook-registration category at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"

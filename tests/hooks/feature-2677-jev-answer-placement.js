@@ -2,7 +2,7 @@
 // Tests: hooks/block-clearance-token-write/placement-guard.js, hooks/lib/plans-artifact-registry.json
 // Tags: TL2, hooks, jev, placement-guard, plans-unregistered, registry, classifier, scope:issue-specific
 // #2677: the Jev two-stage answer file (<sid>-jev-<16hex>-answer.txt) the backup subagent writes
-// is a registered plans artifact, so the placement guard lets the Write through; the snapshot and
+// is a registered plans artifact, so the placement guard lets the Write through; the Jev input and
 // a non-ticket-shaped name stay unregistered (the kind regex is no wider than the ticket shape).
 // TL3 gap (what this test does NOT catch):
 // - a real subagent Write going through the PreToolUse hook on a live session
@@ -43,8 +43,8 @@ test("control: a non-16-hex ticket in the answer name stays plans-unregistered",
 test("control: a 15-hex ticket stays plans-unregistered", () => {
   assert.strictEqual(verdict(`${SID}-jev-${TID.slice(1)}-answer.txt`), "plans-unregistered");
 });
-test("control: the ticket snapshot stays plans-unregistered", () => {
-  assert.strictEqual(verdict(`${SID}-jev-${TID}-snapshot.md`), "plans-unregistered");
+test("control: the ticket Jev input stays plans-unregistered", () => {
+  assert.strictEqual(verdict(`${SID}-jev-${TID}-input.md`), "plans-unregistered");
 });
 test("control: the answer name with an extra suffix stays plans-unregistered", () => {
   assert.strictEqual(verdict(`${SID}-jev-${TID}-answer.txt.bak`), "plans-unregistered");
@@ -59,7 +59,7 @@ test("artifactKinds has kind jev-answer, retention non-plan, and no control kind
   assert.strictEqual(hits[0].retention, "non-plan");
   const re = new RegExp(`^(?:${hits[0].source})$`);
   assert.strictEqual(re.test(`jev-${TID}-answer.txt`), true, "source matches the ticket answer name");
-  assert.strictEqual(re.test(`jev-${TID}-snapshot.md`), false, "source does not match the snapshot");
+  assert.strictEqual(re.test(`jev-${TID}-input.md`), false, "source does not match the Jev input file name");
   assert.strictEqual((reg.controlKinds || []).some((k) => k.kind === "jev-answer"), false);
 });
 caseEnd();

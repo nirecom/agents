@@ -338,6 +338,10 @@ else
 fi
 clear_markers
 
+# ── #2650 continuation branch (N1-N20, T6) ──────────────────────────────────
+# shellcheck source=feature-stop-guard-layer2/continuation.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-stop-guard-layer2/continuation.sh"
+
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

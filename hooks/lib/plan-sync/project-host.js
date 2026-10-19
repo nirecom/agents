@@ -8,7 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { parsePlansEntry, getPlansArtifactPath } = require("../plans-artifact-registry");
+const { parsePlansEntry, getPlansArtifactPath, syncedArtifactStage } = require("../plans-artifact-registry");
 const { toWindowsPath } = require("../branch-diff");
 const { isSyncTargetName } = require("./allowlist");
 const remoteUrl = require("./remote-url");
@@ -18,13 +18,14 @@ const G = require("./git");
 const RECORD_VERSION = 1;
 const ORIGIN_TIMEOUT_MS = 5000;
 
-// recordPathFor(planAbs) -> path | null — <sid>-<stage>.md -> <sid>-note-project-host-<stage>.json.
+// recordPathFor(planAbs) -> path | null — <sid>-<stage>.md -> <sid>-note-project-host-<stage>.json,
+// for every synced artifact of the registry (intent / outline / detail / session-progress).
 function recordPathFor(planAbs) {
   if (typeof planAbs !== "string" || !planAbs) return null;
   const abs = path.resolve(toWindowsPath(planAbs));
+  const stage = syncedArtifactStage(path.basename(abs));
+  if (!stage) return null;
   const parsed = parsePlansEntry(path.basename(abs));
-  if (!parsed || parsed.verdict !== "artifact" || parsed.kind !== "plan-artifact") return null;
-  const stage = parsed.name.replace(/\.md$/, "");
   try {
     return getPlansArtifactPath(parsed.sid, "note", { topic: `project-host-${stage}`, ext: "json", plansDir: path.dirname(abs) });
   } catch (_) {

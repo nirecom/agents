@@ -1,7 +1,7 @@
 "use strict";
 // bin/workflow/lib/jev-request-common.js — the request-building pieces every Jev adapter
 // shares: capped artifact reads, the WORKTREE_NOTES session binding, outbound redaction,
-// rubric lookup, and the sections a snapshot may carry per stage.
+// rubric lookup, and the sections a Jev input may carry per stage.
 // Point-specific knowledge (questions, answer mapping, contract lines) stays in the adapters.
 
 const fs = require("fs");
@@ -17,7 +17,7 @@ const MAX_ARTIFACT_READ_BYTES = 1048576;
 const ARTIFACTS = Object.freeze(["intent", "outline", "detail"]);
 const SID_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
-// Per stage, the sections a snapshot carries (the full artifacts a backup subagent reads as
+// Per stage, the sections a Jev input carries (the full artifacts a backup subagent reads as
 // sources). A point's required sections for a stage must be a subset (validateRegistry).
 const STAGE_SOURCE_SECTIONS = Object.freeze({
   complexity: Object.freeze(["intent", "outline", "issue body"]),
@@ -27,7 +27,7 @@ const STAGE_SOURCE_SECTIONS = Object.freeze({
   "write-code": Object.freeze(["intent", "outline", "write-code files", "detail", "issue body"]),
 });
 
-// Snapshot section order (a stage's required sections come first, each group in this order).
+// Jev input section order (a stage's required sections come first, each group in this order).
 const SECTION_ORDER = Object.freeze(["intent", "outline", "write-code files", "detail", "issue body"]);
 // The plans-dir artifact behind each section and the name of its ticket copy.
 const SECTION_FILES = Object.freeze({
@@ -177,9 +177,11 @@ function exemptionFor(sid, section) {
   return null;
 }
 
-// requiredSectionsStatus(sid, required, {section: full|truncated|absent}, sourcesFailed)
-// -> {met, missing, exempt}: a required section that is not exempt must be full and copied whole.
-function requiredSectionsStatus(sid, required, sections, sourcesFailed) {
+// requiredSectionsStatus(sid, required, {section: full|truncated|absent}, sourcesFailed, planSections)
+// -> {met, missing, exempt}: a required section that is not exempt must be full and copied whole;
+// of a non-empty planSections at least one must be full or truncated and copied whole, else all
+// of them are missing.
+function requiredSectionsStatus(sid, required, sections, sourcesFailed, planSections) {
   const failed = Array.isArray(sourcesFailed) ? sourcesFailed : [];
   const states = sections && typeof sections === "object" ? sections : {};
   const missing = [];
@@ -191,6 +193,9 @@ function requiredSectionsStatus(sid, required, sections, sourcesFailed) {
       missing.push(sec);
     }
   }
+  const plan = Array.isArray(planSections) ? planSections : [];
+  const planMet = plan.some((sec) => ["full", "truncated"].includes(states[sec]) && !failed.includes(sec));
+  if (plan.length && !planMet) missing.push(...plan);
   return { met: missing.length === 0, missing, exempt };
 }
 

@@ -87,10 +87,10 @@ function recoveryFor(step) {
     ? " (or set " + row.confirmFlag + "=off to waive the gate)"
     : " (this gate has no off waiver)";
   return (
-    "Approval for " + step + " is not on record. Re-present the plan and end that turn with " +
-    "the plan-link line (bin/plan-link); after the user replies with approval, emit echo \"<<" +
-    confirmSentinelFor(step) + ": {summary}>>\" on its own to record it" +
-    waiver + ". Do NOT use --mark."
+    "Approval for " + step + " is not on record. End the presentation turn with " +
+    "the plan-link line (bin/plan-link); when the turn-end prompt asks for it, emit echo \"<<" +
+    confirmSentinelFor(step) + ": {summary}>>\" alone to record it" + waiver +
+    ". Otherwise emit it after the user replies with approval. Do NOT use --mark."
   );
 }
 
