@@ -318,6 +318,11 @@
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-exit-worktree-warn.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -377,7 +382,7 @@
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/handoff-pressure-nudge.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
             "timeout": 5
           },
           {
@@ -745,6 +750,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [

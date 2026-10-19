@@ -166,6 +166,11 @@ try {
       console.log(`sid=${r.sid} kind=${r.kind ? "set" : "unset"}`);
       break;
     }
+    case "parse-kind": {
+      const r = reg.parsePlansEntry(args[0]);
+      console.log(r == null ? "null" : r.verdict === "ambiguous" ? "ambiguous" : `${r.verdict}:${r.kind}:${r.sid}`);
+      break;
+    }
     case "parse-injected": {
       const table = { controlKinds: [/^x-y\.txt$/, /^y\.txt$/], artifactKinds: [] };
       const r = reg.parsePlansEntry(args[0], table);

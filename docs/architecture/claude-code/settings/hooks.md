@@ -243,10 +243,10 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   scope gate that refuses the home directory and any filesystem root — upstream's own exclusion,
   ported. Fail-open at every step: a missing flag, a failed spawn, a non-zero exit, empty output, or
   any throw all yield `{}` and exit 0, so a prompt is never blocked or delayed past the 5s timeout.
-- `handoff-pressure-nudge.js` (UserPromptSubmit) — inside the workflow active period only, injects a
-  `[handoff check]` omission-check nudge when the transcript has grown or time has passed since the
-  last check (the trigger table and its state files live in
-  [handoff-artifact.md — Omission-check nudge](../handoff-artifact.md#omission-check-nudge)).
+- `progress-nudge.js` (UserPromptSubmit, PostToolUse matcher `""`, Stop) — in the active period and
+  main conversation only, injects a `[progress check]` request to update `session-progress.md`; PostToolUse
+  leaves after a stat-only pre-check unless something could fire. Kinds, cap, Stop handling, state:
+  [progress-file.md — Progress request](../progress-file.md#progress-request).
   Fail-open: any error yields `{}`.
 - `user-prompt-submit-wf-init-mark.js` (UserPromptSubmit) — when the user's prompt invokes `/workflow-init`
   (detected via `promptInvokesWfInit` in `hooks/lib/step-in-flight-policy.js`), records `workflow_init`

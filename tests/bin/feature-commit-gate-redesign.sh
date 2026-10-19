@@ -614,8 +614,8 @@ MOCK_EOF
         fail "E23. expected SKIPPED+empty; got: $OUT_23"
     fi
 
-    # 24. Branch has commits past base + also has staged → PERFORMED based on committed diff;
-    #     staged sentinel NOT in prompt
+    # 24. Branch has commits past base + also has staged → PERFORMED over the working tree vs
+    #     merge-base: committed AND staged-only sentinels both in the prompt, no EXCLUDED line
     REPO_24="$TMPDIR_BASE/codex-repo-24"
     mkdir -p "$REPO_24"
     git -C "$REPO_24" init -q -b main
@@ -634,15 +634,16 @@ MOCK_EOF
     git -C "$REPO_24" add staged-only.txt
     write_codex_capture_mock
     rm -f "$CAPTURE"
-    OUT_24="$(cd "$REPO_24" && PATH="$MOCK_BIN_PATH:$PATH" HOME="$TMPDIR_BASE" \
+    OUT_24="$(cd "$REPO_24" && PATH="$MOCK_BIN_PATH:$PATH" HOME="$TMPDIR_BASE" CODEX_REVIEW_MAX_DIFF_LINES=5000 \
         run_with_timeout 60 bash "$CODEX_BIN" --base main --no-log 2>&1 || true)"
     if echo "$OUT_24" | grep -q "## Codex Review: PERFORMED" \
        && [ -f "$CAPTURE" ] \
        && grep -q "$SENTINEL_COMMIT" "$CAPTURE" \
-       && ! grep -q "$SENTINEL_STAGED" "$CAPTURE"; then
-        pass "E24. branch w/ commits + staged → PERFORMED on committed only (no staged sentinel)"
+       && grep -q "$SENTINEL_STAGED" "$CAPTURE" \
+       && ! echo "$OUT_24" | grep -q "^## Codex Review Scope: EXCLUDED"; then
+        pass "E24. branch w/ commits + staged → PERFORMED with committed and staged sentinels, no EXCLUDED line"
     else
-        fail "E24. expected PERFORMED+commit-sentinel only; capture-exists=$([ -f "$CAPTURE" ] && echo y || echo n) out: $OUT_24"
+        fail "E24. expected PERFORMED+commit-sentinel+staged-sentinel and no EXCLUDED line; capture-exists=$([ -f "$CAPTURE" ] && echo y || echo n) out: $OUT_24"
     fi
 fi
 

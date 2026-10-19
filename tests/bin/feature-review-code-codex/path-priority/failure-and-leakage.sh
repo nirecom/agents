@@ -1,8 +1,8 @@
 # Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/lib/codex-core.sh
 # Tags: codex, review, disclosure, excluded, error-handling, failure-injection, secret-leakage, logging, scope:issue-specific, pwsh-not-required, TL2
-# F1: disclosure on a mixed repo (committed range under review, plus staged/unstaged/untracked changes the range can't cover) — those files are what the author most likely believes was reviewed. F2: the rewrite's new failure modes (multiple `git diff` shell-outs vs the old in-memory `head -n`) can silently return fewer files than actually changed — PERFORMED with a quietly shorter list, not a crash. F3: withheld content must not leak via JSONL log, stderr, or temp files.
-# Wording note: assertions target `## Codex Review Scope: EXCLUDED` (the approved single-source line for "changed, not reviewed"), not the older `Not in the review target` phrasing — the contract tested is unchanged.
+# F1: coverage on a mixed repo (committed range plus staged/unstaged/untracked changes) — the working tree vs merge-base is the review target, so every kind of change reaches the prompt. F2: the rewrite's new failure modes (multiple `git diff` shell-outs vs the old in-memory `head -n`) can silently return fewer files than actually changed — PERFORMED with a quietly shorter list, not a crash. F3: withheld content must not leak via JSONL log, stderr, or temp files.
+# Contract note (E24 redefinition, origin #1702 coverage gap): `## Codex Review Scope: EXCLUDED` is never printed; rows below assert its absence and assert content presence instead.
 # TL3 gap: F2's git failures are PATH-shim injected, not real corruption/permission errors; F3 redirects HOME at a fixture, so an absolute-path logger could leak elsewhere unseen. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # ---------------------------------------------------------------------------
@@ -23,37 +23,44 @@ git -C "$F_MIX" add staged.txt
 echo "pp-f-unstaged-marker" >> "$F_MIX/unstaged.txt"
 pp_gen "$F_MIX/untracked.txt" 10 "pp-f-untracked-marker"
 
-PP_ENV=()
+PP_ENV=(CODEX_REVIEW_MAX_DIFF_LINES=5000)
 PP_OUT="$(pp_run "$F_MIX" --base main --base-state RECORDED --no-log)"
+PP_ENV=()
 
-f_excl="$(printf '%s\n' "$PP_OUT" | grep -E "^## Codex Review Scope: EXCLUDED" -A 20 || true)"
-if [ -z "$f_excl" ]; then
-    fail "F1: three kinds of session change sit outside the reviewed range and no EXCLUDED disclosure was printed. Output: $PP_OUT"
+if pp_has "$PP_OUT" "^Note: BASE...HEAD empty"; then
+    fail "F1-no-fallback-note: the empty-committed fallback note was printed although a committed diff exists. Output: $PP_OUT"
 else
-    f_named=1
-    for f_p in staged.txt unstaged.txt untracked.txt; do
-        if ! pp_has_fixed "$f_excl" "$f_p"; then
-            f_named=0
-            fail "F1-disclose: $f_p is changed but outside the reviewed range, and the EXCLUDED disclosure does not name it"
-        fi
-    done
-    [ "$f_named" = "1" ] && pass "F1-disclose: the EXCLUDED disclosure names the staged, unstaged and untracked paths"
+    pass "F1-no-fallback-note: no empty-committed fallback note when a committed diff exists"
+fi
+
+if [ ! -s "$PP_CAPTURE" ]; then
+    fail "F1-no-caveat: no prompt was captured, so the absence of an exclusion caveat proves nothing"
+elif grep -qF -e "were excluded from this review" -e "EXCLUDED SCOPE" "$PP_CAPTURE"; then
+    fail "F1-no-caveat: the prompt still carries an exclusion SCOPE CAVEAT although nothing is excluded"
+else
+    pass "F1-no-caveat: the prompt carries no exclusion SCOPE CAVEAT"
+fi
+
+if pp_has "$PP_OUT" "^## Codex Review Scope: EXCLUDED"; then
+    fail "F1-no-excluded: an EXCLUDED line was printed although the working tree is the review target. Output: $PP_OUT"
+else
+    pass "F1-no-excluded: no EXCLUDED line is printed for a mixed repo"
 fi
 
 if [ -f "$PP_CAPTURE" ] && pp_diff_body "$PP_CAPTURE" | grep -q "pp-f-committed-marker"; then
     pass "F1-target: the committed change under review did reach the model"
 else
-    fail "F1-target: the committed change never reached the prompt, so F1's exclusions prove nothing. Output: $PP_OUT"
+    fail "F1-target: the committed change never reached the prompt. Output: $PP_OUT"
 fi
 
-f_leaked=""
+f_missing=""
 for f_m in pp-f-staged-marker pp-f-unstaged-marker pp-f-untracked-marker; do
-    if [ -f "$PP_CAPTURE" ] && grep -q "$f_m" "$PP_CAPTURE"; then f_leaked="$f_leaked $f_m"; fi
+    if [ ! -f "$PP_CAPTURE" ] || ! pp_diff_body "$PP_CAPTURE" | grep -q "$f_m"; then f_missing="$f_missing $f_m"; fi
 done
-if [ -z "$f_leaked" ]; then
-    pass "F1-content: none of the excluded paths' content was sent — they are disclosed by name only, as the report says"
+if [ -z "$f_missing" ]; then
+    pass "F1-content: the staged, unstaged and untracked changes all reached the reviewed body"
 else
-    fail "F1-content: content of excluded path(s) reached the prompt anyway:$f_leaked"
+    fail "F1-content: change(s) missing from the reviewed body:$f_missing. Output: $PP_OUT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -133,20 +140,21 @@ rm -f "$F_SHIM/git"
 
 # (d) untracked-file discovery fails — parallel to (a), but on the enumeration `git ls-files
 #     --others` runs instead of `git diff --name-only`. A silent PERFORMED here means an
-#     untracked file (here holding a would-be-disclosed secret) dropped out of the EXCLUDED
-#     disclosure without anyone being told discovery itself failed. Same FAILED-only bar as F2b:
+#     untracked file dropped out of the review target without anyone being told discovery
+#     itself failed. Same FAILED-only bar as F2b:
 #     collect-step git failures never legitimately produce SKIPPED (see the comment above F2b).
 f_write_git_shim "--others"
 F_UNTRACKED="$(pp_new_repo pp-f-untracked-fail)"
 pp_gen "$F_UNTRACKED/tracked.txt" 20 "pp-f-untracked-fail-marker"
 git -C "$F_UNTRACKED" add tracked.txt
 git -C "$F_UNTRACKED" commit -q -m "one tracked file"
-pp_gen "$F_UNTRACKED/secret-untracked.txt" 10 "pp-f-untracked-fail-secret"
+pp_gen "$F_UNTRACKED/plain-untracked.txt" 10 "pp-f-untracked-fail-secret"
 PP_ENV=(PATH="$F_SHIM:$MOCK_BIN:$PATH")
 rm -f "$PP_CAPTURE"
-pp_exec "$F_UNTRACKED" --base main --no-log
+# RESOLVED: enumeration only runs under a trusted state (an omitted state withholds untracked, H1).
+pp_exec "$F_UNTRACKED" --base main --base-state RESOLVED --no-log
 if pp_has "$PP_OUT_TEXT" "^## Codex Review: FAILED"; then
-    pass "F2d: a failing 'git ls-files --others' produces an exact FAILED verdict rather than silently dropping the untracked file from disclosure"
+    pass "F2d: a failing 'git ls-files --others' produces an exact FAILED verdict rather than silently dropping the untracked file from the review target"
 else
     fail "F2d: a failing 'git ls-files --others' did not produce an exact FAILED verdict (rc=$PP_RC). Output: $PP_OUT_TEXT stderr: $PP_ERR_TEXT"
 fi
@@ -156,7 +164,7 @@ else
     fail "F2d-single-verdict: expected exactly one verdict line, got: $PP_OUT_TEXT"
 fi
 if pp_has "$PP_OUT_TEXT" "^## Codex Review: PERFORMED"; then
-    fail "F2d-no-silent-drop: the run reported PERFORMED even though untracked-file discovery failed — the untracked file was silently omitted from the EXCLUDED disclosure. Output: $PP_OUT_TEXT"
+    fail "F2d-no-silent-drop: the run reported PERFORMED even though untracked-file discovery failed — the untracked file was silently omitted from the review target. Output: $PP_OUT_TEXT"
 else
     pass "F2d-no-silent-drop: the run did not paper over a failed untracked-file enumeration with a clean PERFORMED verdict"
 fi
@@ -310,34 +318,31 @@ else
     fail "F4: .gitignore-excluded secret content leaked into:$f4_channels"
 fi
 
-# The row above is only meaningful if the run took the intentional, disclosed committed-diff
-# exclusion path (E24, #1702), not some other failure/suppression that hides everything without
-# naming it. This fixture's .gitignore commit makes BASE...HEAD non-empty, so per E24 the
-# ordinary untracked file is excluded from the prompt but still named on the EXCLUDED line; the
-# secret is absent from that line too but for a different reason — `git ls-files --others
-# --exclude-standard` never surfaces a .gitignore'd path, so it never enters unc[]/unt[].
-# First confirm the review actually ran (PERFORMED/rc=0/prompt captured) — a silent failure
-# before the review body was assembled would also print no EXCLUDED line, and this guard would
-# otherwise mistake "never ran" for "ran and correctly excluded".
+# The row above is only meaningful if untracked files were really reviewed here. This fixture's
+# .gitignore commit makes BASE...HEAD non-empty, so under the redefined E24 (working tree vs
+# merge-base) the ordinary untracked canary must reach the prompt; the secret stays out only
+# because `git ls-files --others --exclude-standard` never surfaces a .gitignore'd path. A run
+# that suppressed every untracked file would make F4's silence about the secret prove nothing.
 if ! pp_has "$PP_OUT_TEXT" "^## Codex Review: PERFORMED"; then
     fail "F4-guard: review was not PERFORMED (rc=$PP_RC), so F4's clean result proves nothing. Output: $PP_OUT_TEXT"
 elif [ "$PP_RC" -ne 0 ]; then
     fail "F4-guard: review reported PERFORMED but the run exited non-zero (rc=$PP_RC)"
 elif [ ! -s "$PP_CAPTURE" ]; then
     fail "F4-guard: no prompt was captured by the mock reviewer, so PERFORMED does not prove the review body was assembled. File exists: $([ -f "$PP_CAPTURE" ] && echo yes || echo no)"
-elif echo "$PP_OUT_TEXT" | grep -E "^## Codex Review Scope: EXCLUDED" | grep -q "ordinary-untracked.txt"; then
-    pass "F4-guard: the review really ran (PERFORMED, rc=0, prompt captured) and the ordinary untracked file is named on the EXCLUDED line, so F4's silence about the secret reflects the intentional E24 disclosure path"
+elif echo "$PP_OUT_TEXT" | grep -q "^## Codex Review Scope: EXCLUDED"; then
+    fail "F4-guard: an EXCLUDED line was printed although the working tree is the review target. Output: $PP_OUT_TEXT"
+elif grep -qF "PP-F-ORDINARY-MARKER" "$PP_CAPTURE"; then
+    pass "F4-guard: the review really ran (PERFORMED, rc=0, prompt captured) and the ordinary untracked file reached the prompt alongside a committed diff, so F4's silence about the secret is gitignore-specific"
 else
-    fail "F4-guard: the review ran but the EXCLUDED line does not name the ordinary untracked file, so F4's clean result does not prove the E24 exclusion path was taken. Output: $PP_OUT_TEXT"
+    fail "F4-guard: the ordinary untracked file's content is missing from the prompt, so F4's clean result may be blanket untracked suppression rather than gitignore handling. Output: $PP_OUT_TEXT"
 fi
 
 # ---------------------------------------------------------------------------
-# F4b — F4 always has a committed diff (the .gitignore rule's own commit), so E24 blanket-
-#      excludes the whole untracked set and F4 cannot tell "gitignore-specific exclusion" from
-#      "everything untracked was excluded anyway". Here the .gitignore rule is folded into the
-#      SAME commit the branch starts from, so BASE...HEAD is empty and E24 does not trigger —
-#      an ordinary untracked canary must reach the prompt while the gitignored secret must not,
-#      proving the exclusion is gitignore-specific.
+# F4b — the empty-committed counterpart of F4. F4 always has a committed diff (the .gitignore
+#      rule's own commit); here the rule is folded into the SAME commit the branch starts from,
+#      so BASE...HEAD is empty and the uncommitted fallback path runs instead. The ordinary
+#      untracked canary must reach the prompt while the gitignored secret must not, on this
+#      path too — gitignore handling must hold whichever path builds the review target.
 # ---------------------------------------------------------------------------
 F4B_GI="$(pp_new_base_repo pp-f4b-gitignore)"
 printf 'ignored-secret.txt\n' > "$F4B_GI/.gitignore"
@@ -358,15 +363,17 @@ pp_exec "$F4B_GI" --base main --base-state RECORDED
 if ! pp_has "$PP_OUT_TEXT" "^## Codex Review: PERFORMED"; then
     fail "F4b-guard: review was not PERFORMED (rc=$PP_RC), so F4b proves nothing. Output: $PP_OUT_TEXT"
 elif echo "$PP_OUT_TEXT" | grep -qE "^## Codex Review Scope: EXCLUDED"; then
-    fail "F4b-guard: an EXCLUDED line appeared even though main...HEAD is empty — the fixture failed to avoid E24's blanket exclusion, so F4b cannot isolate gitignore-specific behavior. Output: $PP_OUT_TEXT"
+    fail "F4b-guard: an EXCLUDED line appeared, which the contract never prints. Output: $PP_OUT_TEXT"
+elif ! pp_has "$PP_OUT_TEXT" "^Note: BASE...HEAD empty"; then
+    fail "F4b-guard: the empty-committed fallback note is missing, so the fixture did not reach the fallback path F4b exists to cover. Output: $PP_OUT_TEXT"
 elif [ ! -s "$PP_CAPTURE" ]; then
     fail "F4b-guard: no prompt was captured by the mock reviewer, so PERFORMED does not prove the review body was assembled."
 elif ! grep -qF "PP-F4B-ORDINARY-MARKER" "$PP_CAPTURE"; then
-    fail "F4b: the ordinary untracked file's content is missing from the prompt, so this fixture does not prove blanket E24 exclusion is inactive here. Captured: $(cat "$PP_CAPTURE")"
+    fail "F4b: the ordinary untracked file's content is missing from the prompt, so the untracked set was suppressed wholesale. Captured: $(cat "$PP_CAPTURE")"
 elif grep -qF "PP-F4B-GITIGNORE-SECRET" "$PP_CAPTURE"; then
-    fail "F4b: the .gitignore-excluded secret's content leaked into the prompt even though an ordinary untracked file (not blanket-excluded) reached it — gitignore-specific exclusion is broken"
+    fail "F4b: the .gitignore-excluded secret's content leaked into the prompt even though an ordinary untracked file reached it — gitignore-specific exclusion is broken"
 else
-    pass "F4b: with no committed diff (E24 inactive), the ordinary untracked file reaches the prompt while the gitignored secret does not — proving gitignore-specific exclusion, not blanket exclusion"
+    pass "F4b: on the empty-committed fallback path, the ordinary untracked file reaches the prompt while the gitignored secret does not"
 fi
 
 # F4b's own leak-check above only inspects the captured prompt. Mirror F4's f4_channels sweep
