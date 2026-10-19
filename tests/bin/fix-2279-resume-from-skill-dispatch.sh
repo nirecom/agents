@@ -225,16 +225,15 @@ cleanup
 # resume-session spellings must be the only ones that do not.
 # ---------------------------------------------------------------------------
 
-# seed_mid_workflow <sid> — settle every step up to write_tests. outline/detail
-# ->complete is approval-gated (#1133), so record the sanctioned approval first.
+# seed_mid_workflow <sid> — settle every step up to write_tests; gated steps get a real
+# confirm-sentinel approval first (#1133; reset-sentinel is no longer sanctioned, #2709).
 seed_mid_workflow() {
     in_repo "$1" "
 const io = require('$SIO');
 const CA = require('$N/hooks/workflow-state/completion-approval.js');
+const PAF = require('$N/tests/lib/plan-approval-fixture.js');
 for (const s of ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests']) {
-  if (CA.isApprovalGatedStep(s)) {
-    CA.recordPlanApproval(process.env.SID, s, { source: 'reset-sentinel', reason: '2279 S9 fixture' });
-  }
+  if (CA.isApprovalGatedStep(s)) PAF.approveLive(process.env.SID, s);
   io.markStep(process.env.SID, s, 'complete');
 }" >/dev/null
 }
@@ -376,9 +375,11 @@ cleanup
 
 # ---------------------------------------------------------------------------
 # S12 — idempotency. /resume-session is re-invocable, and a user who does not see
-# the first run land types it again. The second `--from` must be a refusal, not a
-# second adoption: the heir is no longer untouched once its own adoption
-# succeeded, and re-adopting would append the donor's event stream twice.
+# the first run land types it again. #2297: while the heir has recorded nothing of
+# its own since the adoption, the second `--from` of the SAME upstream is allowed
+# and replaces the heir with the same copy — it never appends the donor's event
+# stream twice (S12b/S12c). Once the heir records its own work, the same re-run is
+# refused so that work is not overwritten (S12d).
 # ---------------------------------------------------------------------------
 build_fixture
 
@@ -397,40 +398,55 @@ else
     fail "S12a: the first --from adoption failed (rc=$FROM_RC, error='$(from_field 'r.error')') — S12b/S12c would prove nothing"
 fi
 
-S12_BYTES_BEFORE="$(state_bytes "$HEIR")"
 S12_EVENTS_BEFORE="$(event_count "$HEIR")"
 S12_STEPS_BEFORE="$(steps_of "$HEIR")"
 
 run_from "$DONOR"
-S12_ERROR="$(from_field 'r.error')"
 S12_PROBLEMS=""
 [ "$(from_field 'r.attempted')" = "true" ] ||
     S12_PROBLEMS="$S12_PROBLEMS [the re-run never reached the adoption gate: attempted=$(from_field 'r.attempted')]"
-[ "$(from_field 'r.ok')" = "false" ] ||
-    S12_PROBLEMS="$S12_PROBLEMS [the re-run adopted a SECOND time: ok=$(from_field 'r.ok')]"
-case "$S12_ERROR" in
-    *"has already recorded workflow steps"*) ;;
-    *) S12_PROBLEMS="$S12_PROBLEMS [refusal message is '$S12_ERROR', not the documented already-touched refusal from adopt.js]" ;;
-esac
+[ "$(from_field 'r.ok')" = "true" ] ||
+    S12_PROBLEMS="$S12_PROBLEMS [the idempotent re-run was refused: ok=$(from_field 'r.ok') error='$(from_field 'r.error')']"
 if [ -z "$S12_PROBLEMS" ]; then
-    pass "S12b: re-running the same --from against an heir that already adopted returns the documented already-recorded-steps refusal"
+    pass "S12b: re-running the same --from against an heir that recorded nothing since its adoption is allowed (idempotent re-adopt, #2297)"
 else
-    fail "S12b: the --from re-run is not the documented refusal;$S12_PROBLEMS"
+    fail "S12b: the idempotent --from re-run did not adopt;$S12_PROBLEMS"
 fi
 
 S12_STATE_PROBLEMS=""
-[ "$(state_bytes "$HEIR")" = "$S12_BYTES_BEFORE" ] ||
-    S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [the heir's state file changed under a refused re-run]"
 [ "$(event_count "$HEIR")" = "$S12_EVENTS_BEFORE" ] ||
     S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [event count moved $S12_EVENTS_BEFORE -> $(event_count "$HEIR"): the inheritance was appended twice]"
 [ "$(steps_of "$HEIR")" = "$S12_STEPS_BEFORE" ] ||
     S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [steps moved '$S12_STEPS_BEFORE' -> '$(steps_of "$HEIR")']"
 [ "$FROM_RC" -eq 0 ] ||
-    S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [the re-run exited $FROM_RC; a refused adoption on a KNOWN donor is not the exit-3 unknown-session verdict]"
+    S12_STATE_PROBLEMS="$S12_STATE_PROBLEMS [the re-run exited $FROM_RC]"
 if [ -z "$S12_STATE_PROBLEMS" ]; then
-    pass "S12c: the refused re-run leaves the heir byte-identical — no duplicate inheritance events, no re-stamped steps"
+    pass "S12c: the idempotent re-run replaces the heir with the same copy — no duplicate inheritance events, no re-stamped steps"
 else
-    fail "S12c: the refused re-run still mutated the heir;$S12_STATE_PROBLEMS"
+    fail "S12c: the idempotent re-run did not reproduce the same heir;$S12_STATE_PROBLEMS"
+fi
+
+# S12d — the heir now records its own work (research complete); the same re-run is
+# refused naming that record, and the heir stays byte-identical.
+in_repo "$HEIR" "require('$SIO').markStep(process.env.SID, 'research', 'complete');" >/dev/null
+S12D_BYTES_BEFORE="$(state_bytes "$HEIR")"
+run_from "$DONOR"
+S12D_ERROR="$(from_field 'r.error')"
+S12D_PROBLEMS=""
+[ "$(from_field 'r.ok')" = "false" ] ||
+    S12D_PROBLEMS="$S12D_PROBLEMS [the re-run overwrote the heir's own work: ok=$(from_field 'r.ok')]"
+case "$S12D_ERROR" in
+    *"recorded its own work"*step_status*) ;;
+    *) S12D_PROBLEMS="$S12D_PROBLEMS [refusal message is '$S12D_ERROR', not the retained-record refusal from adopt.js]" ;;
+esac
+[ "$(state_bytes "$HEIR")" = "$S12D_BYTES_BEFORE" ] ||
+    S12D_PROBLEMS="$S12D_PROBLEMS [the heir's state file changed under a refused re-run]"
+[ "$FROM_RC" -eq 0 ] ||
+    S12D_PROBLEMS="$S12D_PROBLEMS [the re-run exited $FROM_RC; a refused adoption on a KNOWN donor is not the exit-3 unknown-session verdict]"
+if [ -z "$S12D_PROBLEMS" ]; then
+    pass "S12d: once the heir records its own work, the same --from re-run is refused and the heir stays byte-identical"
+else
+    fail "S12d: the re-run over the heir's own work is not the documented refusal;$S12D_PROBLEMS"
 fi
 cleanup
 

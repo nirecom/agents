@@ -92,7 +92,12 @@ function copyInclude(ctx, worktreePath) {
 // design (missing file prints `[]`), so only a spawn-level failure is reported.
 function siblingWorktrees(ctx, sessionId) {
   if (sessionId === "") return "[]";
-  const intentPath = path.join(ctx.anchors.plansDir, `${sessionId}-intent.md`);
+  let intentPath = path.join(ctx.anchors.plansDir, `${sessionId}-intent.md`);
+  try {
+    // A resumed session reads the intent its session upstream wrote (#2633).
+    const { resolvePlanArtifactOwner } = require("../../../hooks/workflow-state/plan-artifact-owner");
+    intentPath = resolvePlanArtifactOwner(sessionId, "intent", undefined, { plansDir: ctx.anchors.plansDir }).path;
+  } catch (_e) { /* fail-open: keep the own path */ }
   try {
     const res = spawnRun(ctx.entry, {
       anchors: ctx.anchors,

@@ -45,12 +45,16 @@ function isAdoptionEvent(event) {
 // at least one adoption-worthy event (see isAdoptionEvent). Total function —
 // never throws. Fail-CLOSED: any malformed/missing input reads as false, same
 // direction as the old isWorkflowStarted contract.
+// Events at or below `upstream_copy_seq` were copied verbatim from the session
+// upstream (#2304), so they are that session's actions, never this one's.
 function hasSelfRecordedStepSettlement(state) {
   try {
     if (!state || typeof state !== "object") return false;
     const events = state.events;
     if (!Array.isArray(events) || events.length === 0) return false;
+    const copySeq = Number.isInteger(state.upstream_copy_seq) ? state.upstream_copy_seq : 0;
     for (const event of events) {
+      if (event && typeof event.seq === "number" && event.seq <= copySeq) continue;
       if (isAdoptionEvent(event)) return true;
     }
     return false;

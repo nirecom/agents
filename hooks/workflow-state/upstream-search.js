@@ -180,8 +180,8 @@ function contextRecord(candidate, searchRec) {
   };
 }
 
-// Fills in each record's adoptable_granularity from the SAME decideGranularity
-// the `--from` path runs (CPR-SSOT). Called only on the page being returned, so
+// Fills in each record's adoptability from the SAME overwrite and granularity
+// judgements the `--from` path runs (CPR-SSOT). Called only on the page being returned, so
 // the readState/git cost is bounded by displayed records, not by candidates.
 // The require is lazy: upstream-view.js reaches back into this tree, and a
 // top-level require would close the cycle.
@@ -201,6 +201,10 @@ function enrichAdoptability(records, input) {
       } catch (e) {
         preview = null;
       }
+    }
+    if (preview && rec.adoptable === true && preview.adoptable !== true) {
+      rec.adoptable = false;
+      rec.adoptable_reason = preview.adoptable_reason;
     }
     rec.adoptable_granularity = preview ? preview.adoptable_granularity : null;
   }
