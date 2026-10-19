@@ -819,3 +819,7 @@ Changes: Test-suite hygiene: the audit now reports no orphaned test cases, missi
 ### FEATURE: PR #2667 (2026-10-19)
 Background: feat(#2650): approve a plan with one action instead of a reply plus a...
 Changes: Approving an intent, outline or detail plan now takes one action: the approval dialog appears right after the plan link, with no reply needed first. If the dialog does not appear, replying still works as before.
+
+### FEATURE: PR #2697 (2026-10-19)
+Background: feat(#2594): make session-progress.md the standard session-handover r...
+Changes: Sessions now keep a session-progress.md handover file that the model updates at step boundaries, after transcript growth and after compaction; resume and post-compact point at it.;Codex reviews withhold credential-shaped and symlinked inputs and defang fences in plan and context text.
