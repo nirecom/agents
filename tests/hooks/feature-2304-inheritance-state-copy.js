@@ -164,6 +164,27 @@ caseBegin("supervisor-state-copied-or-absent", "hooks/lib/supervisor-state-write
     eq(JSON.parse(fs.readFileSync(F.supervisorPath("down-supgone"), "utf8")), Object.assign({}, sup, { session_id: "down-supgone" }), "earlier downstream copy");
     eq(F.raw("down-supgone").upstream_copy_seq, F.raw("up-supgone").events.length, "upstream_copy_seq");
   });
+  const withAudit = (sid, phase, extra) => {
+    F.seedSupervisor(sid);
+    const st = JSON.parse(fs.readFileSync(F.supervisorPath(sid), "utf8"));
+    Object.assign(st.audit, { audit_phase: phase, audit_run_id: "run-0004", run_seq: 4, ledger: [{ id: "run-0004", outcome: phase === "done" ? "terminal" : "armed", tr_ids: ["TR5"] }] }, extra);
+    fs.writeFileSync(F.supervisorPath(sid), JSON.stringify(st, null, 2));
+    return st;
+  };
+  for (const phase of ["pending", "in_progress", "frozen"]) {
+    check(`C3: an upstream audit left ${phase} is settled so the downstream can arm its own run`, () => {
+      withAudit("up-" + phase, phase, { pending_sub_checks: ["scope-drift"], audit_dispatched_at: "2026-01-01T00:00:00.000Z" });
+      eq(F.mod("hooks/lib/supervisor-state-writer/copy").copySupervisorState("up-" + phase, "down-" + phase), "copied", "copied");
+      const audit = JSON.parse(fs.readFileSync(F.supervisorPath("down-" + phase), "utf8")).audit;
+      eq([audit.audit_phase, audit.pending_sub_checks, audit.audit_dispatched_at], [null, undefined, undefined], "phase and in-flight fields");
+      eq([audit.ledger[0].outcome, audit.run_seq], ["superseded", 4], "armed entry superseded, run_seq kept");
+    });
+  }
+  check("C3: a settled upstream audit (done) is carried verbatim", () => {
+    const sup = withAudit("up-done", "done", {});
+    F.mod("hooks/lib/supervisor-state-writer/copy").copySupervisorState("up-done", "down-done");
+    eq(JSON.parse(fs.readFileSync(F.supervisorPath("down-done"), "utf8")), Object.assign({}, sup, { session_id: "down-done" }), "downstream supervisor state");
+  });
 }
 caseEnd();
 
