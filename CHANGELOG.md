@@ -815,3 +815,7 @@ Changes: Jev now judges task complexity at the write-code stage instead of alway
 ### FEATURE: PR #2721 (2026-10-18)
 Background: test(#2717): remove PARTIAL_ORPHAN cases and fix malformed Tests: hea...
 Changes: Test-suite hygiene: the audit now reports no orphaned test cases, missing `Tests:` headers or malformed header entries. No behavior change for users.
+
+### FEATURE: PR #2667 (2026-10-19)
+Background: feat(#2650): approve a plan with one action instead of a reply plus a...
+Changes: Approving an intent, outline or detail plan now takes one action: the approval dialog appears right after the plan link, with no reply needed first. If the dialog does not appear, replying still works as before.
