@@ -29,7 +29,8 @@
     { "kind": "supervisor-state", "source": "supervisor-state\\.json", "retention": "non-plan" },
     { "kind": "wi-checkpoint", "source": "wi-checkpoint\\.json", "retention": "non-plan" },
     { "kind": "handoff", "source": "handoff\\.md", "retention": "non-plan" },
-    { "kind": "handoff-sidecar", "source": "handoff-(?:risk|pressure|flush-mark)\\.json", "retention": "non-plan" },
+    { "kind": "handoff-sidecar", "source": "handoff-(?:risk|pressure|flush-mark)\\.json", "retention": "non-plan", "note": "pressure / flush-mark stay registered so a leftover file never reads as unregistered (#2594; removed by #2652)." },
+    { "kind": "progress-pressure", "source": "progress-pressure\\.json", "retention": "non-plan" },
     { "kind": "wt-cleanup-active", "source": "wt-cleanup-active", "retention": "non-plan" },
     { "kind": "workflow-init-aborted", "source": "workflow-init-aborted-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\\.md", "retention": "non-plan" },
     { "kind": "companion-precheck", "source": "companion-precheck\\.json", "retention": "non-plan" },
@@ -38,6 +39,7 @@
   ],
   "artifactKinds": [
     { "kind": "plan-artifact", "source": "(?:intent|outline|detail|context)\\.md", "retention": "plan" },
+    { "kind": "progress", "source": "session-progress\\.md", "retention": "plan", "note": "Named by the first generation's sid and written across every handed-off generation (#2594). \"session-\" keeps it apart from topic names ending in -progress.md (user-requested-x-progress.md)." },
     { "kind": "survey", "source": "survey-[a-z0-9]+(?:-[a-z0-9]+)*\\.md", "retention": "non-plan" },
     { "kind": "issue-prefill", "source": "issue-prefill\\.md", "retention": "non-plan" },
     { "kind": "test-review", "source": "test-review\\.md", "retention": "non-plan" },

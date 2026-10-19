@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-2430-handoff-gate-uniform.sh
 # Tests: bin/workflow/handoff-append, bin/supervisor-report, hooks/lib/handoff-gated-append.js, hooks/lib/handoff-auto-record.js, hooks/workflow-gate/handoff-record.js
-# Tags: handoff, active-period, gate, flush-mark, workflow-off, supervisor, regression-2430, scope:issue-specific, pwsh-not-required, TL2
+# Tags: handoff, active-period, gate, flush-mark, workflow-off, supervisor, regression-2430, regression-2594, progress-nudge, scope:issue-specific, pwsh-not-required, TL2
 
-# Issue #2430 — the handoff's only reader is /resume-session, and outside the workflow active period (no state, WORKFLOW_OFF, final_report complete) there is no workflow to resume. So every handoff write — flush, procedure-point, auto-record — goes through one gate and records nothing there, while the primary job of each producer (the supervisor finding, the CLI exit code) is untouched. recordGateBlock is the single named exception and keeps writing; this file pins that so a later diff cannot change it silently. A successful flush also leaves a flush mark sized from the session's own transcript, which the omission-check nudge measures from.
+# Issue #2430 — the handoff's only reader is /resume-session, and outside the workflow active period (no state, WORKFLOW_OFF, final_report complete) there is no workflow to resume. So every handoff write — flush, procedure-point, auto-record — goes through one gate and records nothing there, while the primary job of each producer (the supervisor finding, the CLI exit code) is untouched. recordGateBlock is the single named exception and keeps writing; this file pins that so a later diff cannot change it silently. #2594 retired the flush mark: a successful flush leaves none, and the progress nudge (hooks/progress-nudge.js) moves its baseline from session-progress.md instead.
 
 # TL3 gap: the model-side flush (a real session deciding to run handoff-append) and the transcript Claude Code itself writes are not driven; the CLI is invoked with the argv the flush rule prescribes and the transcript is a planted fixture file. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hooks.
 
@@ -152,37 +152,40 @@ expect "G5: appendHandoffEntryIfActive writes when active, reports inactive othe
     '{"written":true,"reason":"ok"} {"written":false,"reason":"inactive"} {"written":false,"reason":"inactive"}'
 case_end
 
-case_begin "flush-mark-follows-a-successful-flush" "bin/workflow/handoff-append"
+# #2594 retired the flush mark (detail plan stage 2 "retiring the baseline mark"): the flush still
+# writes its entry, but no path writes handoff-flush-mark.json any more.
+case_begin "flush-writes-no-flush-mark" "bin/workflow/handoff-append"
 sid="gu-mark"
 seed "$sid" active
-SIZE="$(transcript "$sid")"; T="$(now_ms)"
-append "$sid" flush mark-probe >/dev/null
-expect "G6: a successful flush writes a mark sized from the session transcript" "$(nj mark.js "$sid" "$SIZE" "$T")" "OK"
+transcript "$sid" >/dev/null
+expect "G6: a successful flush still writes its entry" "$(append "$sid" flush mark-probe)" "WRITTEN=1 REASON=ok|rc=0"
+expect "G6: a successful flush leaves no flush mark" "$(nj mark.js "$sid" 0 0)" "NONE"
 sid="gu-mark-pp"
 seed "$sid" active; transcript "$sid" >/dev/null
 append "$sid" procedure-point mark-probe >/dev/null
 expect "G6: a procedure-point write leaves no flush mark" "$(nj mark.js "$sid" 0 0)" "NONE"
 sid="gu-mark-notranscript"
-seed "$sid" active; T="$(now_ms)"
+seed "$sid" active
 OUT="$(append "$sid" flush mark-probe)"
 expect "G6: a flush without a transcript still writes" "$OUT" "WRITTEN=1 REASON=ok|rc=0"
-expect "G6: a flush without a transcript marks bytes null" "$(nj mark.js "$sid" null "$T")" "OK"
+expect "G6: a flush without a transcript leaves no flush mark" "$(nj mark.js "$sid" 0 0)" "NONE"
 sid="gu-mark-rejected"
 seed "$sid" active; transcript "$sid" >/dev/null
 run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" --session "$sid" --class Z --step - --key rej --summary s --pointer - --origin flush >/dev/null 2>&1; RC=$?
 expect "G6: a flush with an invalid class is rejected (exit 2)" "$RC" "2"
 expect "G6: a rejected flush leaves no flush mark" "$(nj mark.js "$sid" 0 0)" "NONE"
-cat > "$TMP/badmark.js" <<'JS'
+cat > "$TMP/nomark.js" <<'JS'
+// The progress-pressure lib owns no flush-mark writer, and the old lib is gone.
 const fs = require('fs');
-const P = require(process.env.AGENTS + '/hooks/lib/handoff-pressure.js');
+const A = process.env.AGENTS;
 const bad = [];
-if (typeof P.recordFlushMark !== 'function') bad.push('recordFlushMark-not-exported');
-else for (const sid of ['../escape', '', null]) { try { P.recordFlushMark(sid, null, new Date().toISOString()); } catch (e) { bad.push('threw:' + e.message); } }
-const W = process.env.WORKFLOW_STATE_DIR;
-if ([W, W + '/..'].some((d) => fs.readdirSync(d).some((f) => f.indexOf('escape') !== -1 || f === '-handoff-flush-mark.json' || f === '.control'))) bad.push('invalid-sid-written');
+let P = null;
+try { P = require(A + '/hooks/lib/progress-pressure.js'); } catch (e) { bad.push('progress-pressure-missing'); }
+if (P && typeof P.recordFlushMark !== 'undefined') bad.push('recordFlushMark-still-exported');
+if (fs.existsSync(A + '/hooks/lib/handoff-pressure.js')) bad.push('handoff-pressure.js-still-present');
 process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
 JS
-expect "G6: recordFlushMark with an invalid sid writes nothing and never throws" "$(nj badmark.js)" "OK"
+expect "G6: no flush-mark writer is left (progress-pressure.js exports none, handoff-pressure.js is gone)" "$(nj nomark.js)" "OK"
 case_end
 
 cat > "$TMP/pausecheck.js" <<'JS'
@@ -199,16 +202,18 @@ cat > "$TMP/stale.js" <<'JS'
 // node stale.js <sid> — a baseline two hours old at 0 bytes, so any transcript fires "elapsed".
 const ctlDir = process.env.WORKFLOW_STATE_DIR + '/' + process.argv[2] + '.control';
 require('fs').mkdirSync(ctlDir, { recursive: true });
-require('fs').writeFileSync(ctlDir + '/handoff-pressure.json',
+require('fs').writeFileSync(ctlDir + '/progress-pressure.json',
   JSON.stringify({ baseline_bytes: 0, baseline_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString() }));
 JS
-# nudge <sid> — the UserPromptSubmit payload Claude Code sends; prints the hook's stdout.
+# nudge <sid> — the UserPromptSubmit payload Claude Code sends to the #2594 progress nudge.
 nudge() {
     local tp
     tp="$(np "$TMP/transcripts/c--fixture-project/$1.jsonl")"
     printf '{"session_id":"%s","transcript_path":"%s","cwd":"%s","hook_event_name":"UserPromptSubmit","prompt":"go"}' "$1" "$tp" "$(np "$TMP")" \
-        | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/handoff-pressure-nudge.js" 2>/dev/null
+        | run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/progress-nudge.js" 2>/dev/null
 }
+# quiet_or <stdout> — "quiet" when the hook printed nothing or {}.
+quiet_or() { case "$(printf '%s' "$1" | tr -d ' \r\n')" in ''|'{}') echo quiet ;; *) echo "other:${1:0:120}" ;; esac; }
 
 case_begin "paused-mode-is-a-live-step-scoped-pause" "hooks/lib/handoff-gated-append.js"
 # Non-vacuity for the paused mode: the marker is scoped to the current step (not
@@ -224,12 +229,12 @@ case_end
 case_begin "inactive-nudge-stays-silent" "hooks/lib/handoff-gated-append.js"
 seed gu-nudge-ctl active; transcript gu-nudge-ctl >/dev/null; nj stale.js gu-nudge-ctl >/dev/null
 OUT="$(nudge gu-nudge-ctl)"
-expect "G8[control]: an active session with a stale baseline gets the omission-check nudge" \
-    "$(case "$OUT" in *'[handoff check]'*) echo fired ;; *) echo "other:${OUT:0:120}" ;; esac)" "fired"
+expect "G8[control]: an active session with a stale baseline gets the progress request" \
+    "$(case "$OUT" in *'[progress check]'*) echo fired ;; *) echo "other:${OUT:0:120}" ;; esac)" "fired"
 for mode in $MODES; do
     sid="gu-$mode"
     nj stale.js "$sid" >/dev/null
-    expect "G8[$mode]: the nudge hook prints {} outside the active period" "$(nudge "$sid")" "{}"
+    expect "G8[$mode]: the progress nudge prints nothing or {} outside the active period" "$(quiet_or "$(nudge "$sid")")" "quiet"
 done
 case_end
 

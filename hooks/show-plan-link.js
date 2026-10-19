@@ -4,6 +4,7 @@
 // it (from the hook input's cwd only), then publish it through plan-sync. A failed record
 // write sends nothing. Triggers on the whole write-tool class (hooks/lib/write-tools.js) and
 // on command tools running skills/_shared/assemble-mandatory.sh (final-plan assembly).
+// A written <sid>-session-progress.md is recorded and synced the same way, silently (#2594).
 // Output: PostToolUse additionalContext always carries one plan-link line per plan
 // (hooks/lib/plan-link.js); the systemMessage breadcrumb is added only when the user should
 // see a problem (no URL for a reason other than the project-host verdict).
@@ -98,6 +99,43 @@ function finalPlanPaths(input) {
   return out;
 }
 
+// progressPaths(input) -> deduplicated <sid>-session-progress.md files (direct children of the plans dir)
+// the tool call wrote. session-progress.md is not a plan to confirm (#2594): it is recorded and synced
+// only — no turn marker, no plan link, nothing shown to the user or the model.
+function progressPaths(input) {
+  if (!isEditWriteTool(input.tool_name)) return [];
+  const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+  const { parsePlansEntry } = require("./lib/plans-artifact-registry");
+  const { isSyncTarget } = require("./lib/plan-sync/allowlist");
+  const plansDir = getWorkflowPlansDir();
+  const seen = new Set();
+  const out = [];
+  for (const p of collectEditWritePaths(input.tool_input)) {
+    const parsed = parsePlansEntry(path.basename(p));
+    if (!parsed || parsed.kind !== "progress" || !isSyncTarget(plansDir, p)) continue;
+    const key = toAbsPath(p);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
+}
+
+// syncProgressQuietly(absPaths, input, budgetMs) -> remaining budget. A failed record write
+// sends nothing; every failure is swallowed (fail-open).
+function syncProgressQuietly(absPaths, input, { sync = defaultSync, now = Date.now, budgetMs = SHARED_SYNC_BUDGET_MS } = {}) {
+  const deadline = now() + budgetMs;
+  for (const absPath of absPaths) {
+    try {
+      if (!fs.lstatSync(absPath).isFile() || !recordHost(absPath, input || {}).ok) continue;
+      const remaining = deadline - now();
+      if (remaining <= 0) break;
+      sync(absPath, { budgetMs: remaining });
+    } catch (_) { /* fail-open */ }
+  }
+  return Math.max(0, deadline - now());
+}
+
 // Drop the turn marker (always — required by #563 so the Stop guard sees it regardless
 // of CONFIRM_<STEP>).
 function markTurn(filePath, absPath, input) {
@@ -176,8 +214,16 @@ function entryFor(run) {
   return { stage, path: run.absPath, reason: fromSync.reason };
 }
 
-function emitForArtifacts(filePaths, input) {
-  const runs = runArtifacts(filePaths, input);
+// opts.afterSync(remainingMs) (optional) runs once the plans are synced, before the exit.
+function emitForArtifacts(filePaths, input, opts) {
+  const o = opts || {};
+  const clock = o.now || Date.now;
+  const start = clock();
+  const budgetMs = o.budgetMs === undefined ? SHARED_SYNC_BUDGET_MS : o.budgetMs;
+  const runs = runArtifacts(filePaths, input, opts);
+  if (typeof o.afterSync === "function") {
+    try { o.afterSync(Math.max(0, budgetMs - (clock() - start))); } catch (_) { /* fail-open */ }
+  }
   const out = {};
   try {
     const { renderModelContext } = require("./lib/plan-link");
@@ -207,8 +253,18 @@ if (require.main === module) {
 
   let plans = [];
   try { plans = finalPlanPaths(input); } catch (_) { /* fail-open */ }
-  if (plans.length === 0) noopExit();
-  emitForArtifacts(plans, input);
+  let progress = [];
+  try { progress = progressPaths(input); } catch (_) { /* fail-open */ }
+  // The plans of this call and its session-progress.md share the one sync budget; the plans
+  // go first, so session-progress.md gets only what they leave.
+  const syncProgress = (budgetMs) => {
+    if (progress.length > 0) syncProgressQuietly(progress, input, { budgetMs });
+  };
+  if (plans.length === 0) {
+    try { syncProgress(SHARED_SYNC_BUDGET_MS); } catch (_) { /* fail-open */ }
+    noopExit();
+  }
+  emitForArtifacts(plans, input, { budgetMs: SHARED_SYNC_BUDGET_MS, afterSync: syncProgress });
 }
 
 module.exports = {
@@ -219,4 +275,5 @@ module.exports = {
   breadcrumbsForArtifacts,
   formatBreadcrumb,
   finalPlanPaths,
+  progressPaths,
 };

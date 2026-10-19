@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/bin-check-on-demand-rules.sh
 # Tests: bin/check-on-demand-rules.sh, hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js
-# Tags: rules-injection, on-demand-rules, static-check, frontmatter, table-driven, parse-dont-evaluate, TL2, scope:common
+# Tags: rules-injection, on-demand-rules, static-check, frontmatter, table-driven, parse-dont-evaluate, TL2, scope:common, progress-update
 set -u
 
 # TL2 table-driven coverage of the C1-C5 checks in bin/check-on-demand-rules.sh (detail plan "1-3")
@@ -89,8 +89,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-check-on-demand-ru
 . "$SCRIPT_DIR/cases-containment.sh"
 # shellcheck source=./bin-check-on-demand-rules/cases-marker.sh
 . "$SCRIPT_DIR/cases-marker.sh"
-# shellcheck source=./bin-check-on-demand-rules/cases-handoff-flush.sh
-. "$SCRIPT_DIR/cases-handoff-flush.sh"
+# shellcheck source=./bin-check-on-demand-rules/cases-progress-update.sh
+. "$SCRIPT_DIR/cases-progress-update.sh"
 # Injection cases run LAST: they deliberately hand the checker hostile paths and an
 # out-of-root file, and they create a canary directory whose emptiness is the assertion.
 # shellcheck source=./bin-check-on-demand-rules/cases-injection.sh

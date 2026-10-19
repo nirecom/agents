@@ -1,18 +1,18 @@
 # shellcheck shell=bash
-# Tests: hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js, rules/handoff-emergency-flush.md
-# Tags: rules-injection, policy, unconditional, handoff, regression-2218, table-driven, TL2, scope:issue-specific
+# Tests: hooks/lib/rules-injection-policy.js, hooks/lib/rules-policy-reader.js, rules/progress-update.md
+# Tags: rules-injection, policy, unconditional, progress-update, regression-2218, regression-2594, table-driven, TL2, scope:issue-specific
 #
-# Issue #2218 Step 10/13 — the emergency-flush rule is an escape hatch of the same shape as
-# rules/stop-guard-exemptions.md: a session about to lose its context must not have to earn the
-# rule by matching a path glob, so it is registered UNCONDITIONAL (the 8th entry).
+# Issue #2218 Step 10/13, renamed by #2594 (was rules/handoff-emergency-flush.md) — an escape
+# hatch shaped like rules/stop-guard-exemptions.md, so it is registered UNCONDITIONAL.
 # Why by name and not by P5's set comparison: while the rule file does not exist, P5 compares two
 # sets that agree vacuously about it, so nothing records that the registration was intended.
 # Assumes SCRIPT_CHECKOUT_ROOT, READER, POLICY, pass(), fail(), node_path() come from the dispatcher.
 
 echo ""
-echo "=== issue #2218: the emergency-flush rule is registered unconditional ==="
+echo "=== issue #2218 / #2594: the progress-update rule is registered unconditional ==="
 
-FLUSH_RULE="rules/handoff-emergency-flush.md"
+FLUSH_RULE="rules/progress-update.md"
+OLD_FLUSH_RULE="rules/handoff-emergency-flush.md"
 
 # Parse, don't evaluate (CPR-ORTH with P11/P12): the constant is recovered through the
 # agents-owned reader, never by require()-ing the contributor-editable policy file.
@@ -30,15 +30,31 @@ FLUSH_REG="$(node "$(node_path "$BASE/flush-registration.js")" "$(node_path "$RE
     "$(node_path "$POLICY")" "$FLUSH_RULE" 2>&1)"
 case "$FLUSH_REG" in
     yes*) pass "UF1: $FLUSH_RULE is registered in EXPECTED_UNCONDITIONAL ($FLUSH_REG)" ;;
-    no*)  fail "UF1: $FLUSH_RULE is absent from EXPECTED_UNCONDITIONAL ($FLUSH_REG) — issue #2218 Step 10 adds it as the 8th unconditional rule; write_code has not run" ;;
+    no*)  fail "UF1: $FLUSH_RULE is absent from EXPECTED_UNCONDITIONAL ($FLUSH_REG) — issue #2594 renames the #2218 entry; write_code has not run" ;;
     *)    fail "UF1: EXPECTED_UNCONDITIONAL could not be recovered from $POLICY — reader said '$FLUSH_REG'" ;;
 esac
+
+# UF4 (#2594) — a rename, not an addition: the old name leaves EXPECTED_UNCONDITIONAL and the
+# old file is gone, so no session is injected two rules that disagree about where facts go.
+OLD_REG="$(node "$(node_path "$BASE/flush-registration.js")" "$(node_path "$READER")" \
+    "$(node_path "$POLICY")" "$OLD_FLUSH_RULE" 2>&1)"
+case "$OLD_REG" in
+    no*)  pass "UF4: $OLD_FLUSH_RULE is no longer in EXPECTED_UNCONDITIONAL ($OLD_REG)" ;;
+    yes*) fail "UF4: $OLD_FLUSH_RULE is still in EXPECTED_UNCONDITIONAL ($OLD_REG) — #2594 renames it to $FLUSH_RULE" ;;
+    *)    fail "UF4: EXPECTED_UNCONDITIONAL could not be recovered from $POLICY — reader said '$OLD_REG'" ;;
+esac
+if [ -e "$SCRIPT_CHECKOUT_ROOT/$OLD_FLUSH_RULE" ]; then
+    fail "UF4: $OLD_FLUSH_RULE still exists — #2594 renames it to $FLUSH_RULE"
+else
+    pass "UF4: $OLD_FLUSH_RULE is gone (renamed to $FLUSH_RULE)"
+fi
+unset OLD_REG OLD_FLUSH_RULE
 
 # The other half of the same registration. Split from F1 so a listed-but-absent entry and an
 # entry that disables its own auto-injection are distinguishable; P5 would only say "the sets
 # differ". `head -1` is the whole test: a frontmatter block can only open the file.
 if [ ! -f "$SCRIPT_CHECKOUT_ROOT/$FLUSH_RULE" ]; then
-    fail "UF2: $FLUSH_RULE does not exist — issue #2218 Step 14 authors it; write_code has not run"
+    fail "UF2: $FLUSH_RULE does not exist — issue #2594 renames the #2218 rule to it; write_code has not run"
 elif head -1 "$SCRIPT_CHECKOUT_ROOT/$FLUSH_RULE" | grep -q '^---'; then
     fail "UF2: $FLUSH_RULE opens with a frontmatter block — an unconditional escape-hatch rule carries no paths: key at all"
 else

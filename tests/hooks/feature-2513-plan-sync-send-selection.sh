@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-plan-sync-send-selection.sh
 # Tests: hooks/lib/plan-sync.js, hooks/show-plan-link.js
-# Tags: plan-sync, plans, git, lib, hook, TL2, scope:issue-specific, project-host, send-selection, provision
+# Tags: plan-sync, plans, git, lib, hook, TL2, scope:issue-specific, project-host, send-selection, provision, progress-file
 # #2513: which plans leave the machine. A plan is sent only when the host of the project it
 # was written for (recorded by the hook) is the host of the plan destination.
 set -uo pipefail
@@ -42,6 +42,10 @@ psf_drop_cli_from_path glab
 SEL_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-plan-sync-send-selection"
 case_begin "project-host-record" "hooks/show-plan-link.js"
 . "$SEL_DIR/project-host-record.sh"
+case_end
+# #2594: session-progress.md is synced like a plan but never marked or announced as one.
+case_begin "progress-file-sync" "hooks/show-plan-link.js"
+. "$SEL_DIR/progress-sync.sh"
 case_end
 
 # shellcheck source=../lib/plan-sync-flow.sh
