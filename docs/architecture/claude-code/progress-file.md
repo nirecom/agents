@@ -82,7 +82,7 @@ On `Stop` the request continues the conversation, and Claude Code caps such cont
 
 ### Cheap path
 
-`PostToolUse` runs on every tool call, so `hooks/progress-nudge/light.js` decides first, from a few `stat` calls and one small JSON read, whether anything could fire. Bash, Agent and Stop always take the full path. The light check passes on a missing state file, a pending flag, growth ≥ half the byte limit, a shrunken transcript, half the elapsed limit, or a session-progress.md mtime that moved.
+`PostToolUse` runs on every tool call, so `hooks/progress-nudge/light.js` decides first, from a few `stat` calls and one small JSON read, whether anything could fire. Bash, Agent/Task and Stop always take the full path. The light check passes on a missing state file, a pending flag, growth ≥ half the byte limit, a shrunken transcript, half the elapsed limit with any growth (the elapsed trigger needs growth to fire), or a session-progress.md mtime that moved.
 
 ## Omission-check nudge
 

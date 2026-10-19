@@ -17,7 +17,9 @@ const { buildMessage } = require("./message");
 
 const CAP_WINDOW_MS = 60 * 60 * 1000;
 const CAP_MAX = 2;
-// Kept well below the 5 s hook timeout (settings.json) after phase (a) commits the cursor.
+// Lock waits stay inside the 5 s hook timeout (settings.json), node startup included:
+// phase (a) waits at most CURSOR_LOCK_WAIT_MS, everything after its commit POST_COMMIT_BUDGET_MS.
+const CURSOR_LOCK_WAIT_MS = 1000;
 const POST_COMMIT_BUDGET_MS = 1500;
 
 function statOrNull(p) {
@@ -70,7 +72,9 @@ function evaluate(o) {
   const { sid, event, tool, transcriptPath, now } = o;
   const rootSid = PF.resolveRootSid(sid);
   const ensured = PF.ensureProgressFile(sid);
-  const progressPath = ensured.path || PF.progressPathFor(sid);
+  // No usable progress file: consume nothing, so the completes are requested once it can be created.
+  if (!ensured.path) return null;
+  const progressPath = ensured.path;
   const stepCandidate = event === "Stop" || (event === "PostToolUse" && (isCommandTool(tool) || tool === "Agent" || tool === "Task"));
   const steps = PF.updatePressure(sid, (cur) => {
     const pre = { root_sid: rootSid, progress_path: progressPath };
@@ -80,9 +84,10 @@ function evaluate(o) {
     const r = newCompletes(sid, cursor);
     if (r.maxSeq !== cursor) pre.event_cursor = r.maxSeq;
     return { patch: pre, result: r.steps };
-  });
-  // Fail open. Phase (a) failed: nothing was consumed, so return null. Phase (b) failed: the
-  // cursor already moved past the steps, so deliver them; the rest stays pending for next run.
+  }, { lockWaitMs: CURSOR_LOCK_WAIT_MS });
+  // Fail open. Phase (a) failed or its lock wait timed out: nothing was consumed, so return null
+  // and the next run delivers the completes. Phase (b) failed: the cursor already moved past the
+  // steps, so deliver them; the rest stays pending for next run.
   if (steps === null) return null;
 
   // The cursor is committed: every later lock wait is bounded so the hook timeout cannot kill

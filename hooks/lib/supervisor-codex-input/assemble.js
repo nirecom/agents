@@ -14,12 +14,23 @@ const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { getStatePath } = require("../supervisor-state-writer");
 const { diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
 
-// JS twin of bin/review-plan-codex neutralize_delimiters plus the embed_file comment rewrite.
+// A bracketed word run that reads as a fence once case, spacing, underscores and full-width forms
+// are ignored: any "... START|BEGIN|END", plus the suffix-less fence this input itself uses.
+const FENCE_VARIANT_RE = /[[\uFF3B]([^[\]\uFF3B\uFF3D\n]{1,120})[\]\uFF3D]/g;
+const FENCE_WORDS_RE = /^(?:[A-Z]+ )*(?:START|BEGIN|END)$|^SUPERVISOR INPUT HEADER$/;
+
+function fenceWords(inner) {
+  return inner.normalize("NFKC").toUpperCase().replace(/[\s_]+/g, " ").trim();
+}
+
+// JS twin of bin/review-plan-codex neutralize_delimiters plus the embed_file comment rewrite,
+// then the variant pass (the counterpart of bin/lib/concern-ledger/defang-fences.sh).
 function defang(text) {
   return String(text)
     .replace(/<!--/g, "(!--")
     .replace(/-->/g, "--)")
-    .replace(/\[([^\][]*(?:START|BEGIN|END)[^\][]*)\]/g, "($1)");
+    .replace(/\[([^\][]*(?:START|BEGIN|END)[^\][]*)\]/g, "($1)")
+    .replace(FENCE_VARIANT_RE, (m, inner) => (FENCE_WORDS_RE.test(fenceWords(inner)) ? `(${inner})` : m));
 }
 
 function readOptional(p) {
@@ -83,16 +94,42 @@ function handoffLines(transcriptPath, wsid) {
   return out;
 }
 
+// readHead(file, cap) -> {buf, size} | null: at most cap bytes, never the whole file. Never throws.
+// Null unless the opened fd is the single-link regular file lstat saw: a hard link or a swap
+// between lstat and open would make the file an alias of content outside the plans dir.
+function readHead(file, cap) {
+  let fd = null;
+  try {
+    const before = fs.lstatSync(file);
+    if (!before.isFile()) return null;
+    fd = fs.openSync(file, "r");
+    const st = fs.fstatSync(fd);
+    if (!st.isFile() || st.nlink !== 1 || st.dev !== before.dev || st.ino !== before.ino) return null;
+    const buf = Buffer.alloc(Math.min(cap, st.size));
+    let got = 0;
+    while (got < buf.length) {
+      const n = fs.readSync(fd, buf, got, buf.length - got, got);
+      if (n <= 0) break;
+      got += n;
+    }
+    return { buf: buf.subarray(0, got), size: st.size };
+  } catch (_) {
+    return null;
+  } finally {
+    if (fd !== null) try { fs.closeSync(fd); } catch (_) { /* already closed */ }
+  }
+}
+
 // session-progress.md of the first generation (#2594), cut at the HANDOFF cap. The model writes it,
-// so the block heads it as the model's own record — never as evidence.
+// so the block heads it as the model's own record -- never as evidence.
 function progressLines(transcriptPath, wsid) {
   const sid = wsid && wsid !== "UNAVAILABLE" ? wsid : path.basename(transcriptPath).replace(/\.jsonl$/i, "");
   const p = progressPathFor(sid);
   if (!p || !isRegularFile(p)) return [];
-  let buf;
-  try { buf = fs.readFileSync(p); } catch (_) { return []; }
-  const cut = buf.length > MAX_BYTES;
-  const text = buf.subarray(0, MAX_BYTES).toString("utf8").replace(/\n$/, "");
+  const head = readHead(p, MAX_BYTES);
+  if (!head) return [];
+  const cut = head.size > MAX_BYTES;
+  const text = head.buf.toString("utf8").replace(/\n$/, "");
   const out = [`--- ${path.basename(p)} (written by the model, not evidence) ---`, text];
   if (cut) out.push(`(truncated at ${MAX_BYTES} bytes)`);
   return out;
@@ -149,7 +186,7 @@ function assemble(opts) {
     `counts: utterances=${c.utterances.length} commands=${c.counts.commands} edits=${c.counts.edits} ` +
       `invocations=${c.counts.invocations} sentinels=${c.counts.sentinels} hook_blocks=${c.counts.hook_blocks} skipped_unparsable=${unparsable}`,
   ];
-  if (c.userLines > 0 && c.utterances.length === 0) header.push("warning: no human utterances matched — transcript schema drift?");
+  if (c.userLines > 0 && c.utterances.length === 0) header.push("warning: no human utterances matched \u2014 transcript schema drift?");
   const text = [
     ["[SUPERVISOR INPUT HEADER]", ...header.map(defang)].join("\n"),
     block("HANDOFF", handoffLines(opts.transcript, opts.wsid)),

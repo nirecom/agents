@@ -188,7 +188,7 @@ for _f in "$LOOP_BIN" "$FMT_PARAMS" "$REF_KIND" "$CL_CLI" "$CL_LIB" "$CODEX_BIN"
 done
 
 case_begin "feature-2276-review-code-security-codex-suite" "bin/run-codex-review-loop"
-for _sec in static-contracts.sh ref-input-chain.sh prestaged-fallback.sh; do
+for _sec in static-contracts.sh ref-input-chain.sh prestaged-fallback.sh base-state-fallback.sh; do
     if [ -f "$SECTION_DIR/$_sec" ]; then
         # shellcheck source=/dev/null
         . "$SECTION_DIR/$_sec"

@@ -390,6 +390,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 25. codex_core_run pins the codex sandbox to read-only explicitly (security
+#     scan finding 6): the reviewer must not inherit a writable default.
+#     A stub codex records its argv one element per line.
+# ---------------------------------------------------------------------------
+SB_BIN="$TMPDIR_BASE/sandbox-bin"
+SB_ARGV="$TMPDIR_BASE/sandbox-argv.txt"
+mkdir -p "$SB_BIN"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$@" > "$SB_ARGV_FILE"' 'cat >/dev/null' 'echo "No issues found"' 'exit 0' > "$SB_BIN/codex"
+chmod +x "$SB_BIN/codex"
+OUT=$(PATH="$SB_BIN:$PATH" HOME="$TMPDIR_BASE" SB_ARGV_FILE="$SB_ARGV" bash -c "
+  set -uo pipefail
+  source '$CORE_LIB' >/dev/null 2>&1 || true
+  CODEX_LABEL='Sandbox Probe'; NO_LOG=true; INPUT_LINES=1
+  codex_core_run 'probe prompt'
+" 2>&1)
+if [[ -s "$SB_ARGV" ]] && grep -qx -- "exec" "$SB_ARGV"; then
+    pass "codex_core_run sandbox: the stub codex was invoked with 'exec'"
+else
+    fail "codex_core_run sandbox: the stub codex was not invoked (no argv recorded). Output: $OUT"
+fi
+SB_PAIR=$(awk 'prev == "--sandbox" && $0 == "read-only" { found = 1 } $0 == "--sandbox=read-only" { found = 1 } { prev = $0 } END { print (found ? "yes" : "no") }' "$SB_ARGV" 2>/dev/null || echo "no")
+if [[ "$SB_PAIR" == "yes" ]]; then
+    pass "codex_core_run sandbox: codex exec receives --sandbox read-only"
+else
+    fail "codex_core_run sandbox: codex exec argv lacks '--sandbox read-only'. argv: $(tr '\n' ' ' < "$SB_ARGV" 2>/dev/null)"
+fi
+if echo "$OUT" | grep -q "## Sandbox Probe: PERFORMED"; then
+    pass "codex_core_run sandbox: the run still reports PERFORMED"
+else
+    fail "codex_core_run sandbox: expected PERFORMED. Output: $OUT"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

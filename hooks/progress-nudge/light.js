@@ -33,7 +33,8 @@ function needsFullPath(sid, transcriptPath, now) {
     const baseBytes = typeof p.baseline_bytes === "number" ? p.baseline_bytes : null;
     if (baseBytes === null || size - baseBytes >= LIGHT_BYTES || size < baseBytes) return true;
     const baseAt = toMillis(p.baseline_at);
-    if (baseAt === null || now - baseAt >= LIGHT_MS) return true;
+    // The elapsed trigger fires only with growth (lib/progress-pressure TRIGGERS).
+    if (baseAt === null || (now - baseAt >= LIGHT_MS && size > baseBytes)) return true;
     if (typeof p.progress_path === "string") {
       const m = mtimeOf(p.progress_path);
       const seen = typeof p.progress_seen_mtime === "number" ? p.progress_seen_mtime : null;

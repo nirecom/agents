@@ -14,6 +14,8 @@ Run `node "$AGENTS_MAIN_ROOT"/bin/progress-file ensure --session $CLAUDE_CODE_SE
 
 Exit 2 means the session id is missing or invalid: report that one line to the user and stop.
 
+Exit 1 means session-progress.md could not be created: report that one line to the user and stop.
+
 ### UP-2 — Update
 
 Read the file, then rewrite the `Current state` section per `rules/progress-update.md`.
