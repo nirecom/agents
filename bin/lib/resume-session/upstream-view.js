@@ -18,6 +18,9 @@ const { judgeInheritanceGranularity } = require("../../../hooks/workflow-state/i
 const repoIdentity = () => require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
 const { readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
+const { progressPathFor, isRegularFile } = require("../../../hooks/lib/progress-file");
+
+const PROGRESS_FIRST_SECTION = "Current state";
 
 const AVAILABILITY = Object.freeze({
   STATE_AND_ARTIFACTS: "state-and-artifacts",
@@ -187,6 +190,18 @@ function renderedHandoffFor(upstreamSid, artifacts) {
   return typeof rendered === "string" && rendered.length ? rendered : null;
 }
 
+// session-progress.md of the upstream's first generation (#2594): the path and the section a resumed
+// session reads first. Absent file → no field, so a caller never points at nothing.
+function progressFileFor(upstreamSid) {
+  try {
+    const p = progressPathFor(upstreamSid);
+    if (!p || !isRegularFile(p)) return {};
+    return { progress_file: { path: p, section: PROGRESS_FIRST_SECTION } };
+  } catch (e) {
+    return {};
+  }
+}
+
 // buildUpstreamView({ heirSid, upstreamSid }) → view | { availability: "none" }
 function buildUpstreamView(input) {
   const opts = input || {};
@@ -209,6 +224,7 @@ function buildUpstreamView(input) {
       availability,
       reason: "unknown-session",
       handoff_rendered: null,
+      ...progressFileFor(upstreamSid),
       transcript_tail: captureTranscriptTail({ upstreamSid, cwd: cwdOf(upstreamState) }),
     };
   }
@@ -234,6 +250,7 @@ function buildUpstreamView(input) {
     artifacts,
     inherit_result: inherit,
     handoff_rendered: renderedHandoffFor(upstreamSid, artifacts),
+    ...progressFileFor(upstreamSid),
     transcript_tail: captureTranscriptTail({ upstreamSid, cwd: cwdOf(upstreamState) }),
   };
 }

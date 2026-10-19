@@ -53,6 +53,7 @@ for mode in a b; do
     sk_fin
     check "snp a: RECORDED=superseded relayed" "superseded" "$(kv RECORDED)"
     check "snp a: SKIP=false, SETTLE=superseded" "false|superseded" "$(kv SKIP)|$(kv SETTLE)"
+    check "snp a: step-not-pending is no source change, no FALLBACK line" "" "$(fallback_lines)"
   else
     sk_sweep
   fi
@@ -91,6 +92,7 @@ check "A then B queried: MS owner B before anyone finalizes" "\"$TB\"" "$(ms_get
 snap
 sk_fin
 superseded_out "A finalize (B unfinalized)"
+check "A finalize (B unfinalized): newer-owner is no source change, no FALLBACK line" "" "$(fallback_lines)"
 check "A finalize: settle newer-owner owned by B" "superseded|newer-owner|$TB" "$(sk_settle "$TA")"
 unmoved "A finalize (B unfinalized)"
 check "A finalize: detail stays pending" "pending" "$(sk_status detail)"
@@ -121,7 +123,12 @@ for mode in a b; do
   TICKET="$TA"; sk_crash after-append
   check "nf $mode: A stopped after the decision append" "99" "$SP_RC"
   snap
-  if [ "$mode" = "a" ]; then sk_fin; superseded_out "nf a: A re-run"; else sk_sweep; fi
+  if [ "$mode" = "a" ]; then
+    sk_fin; superseded_out "nf a: A re-run"
+    check "nf a: A re-run: newer-owner is no source change, no FALLBACK line" "" "$(fallback_lines)"
+  else
+    sk_sweep
+  fi
   check "nf $mode: settle newer-owner owned by B (one record)" "superseded|newer-owner|$TB" "$(sk_settle "$TA")"
   unmoved "nf $mode"
   check "nf $mode: skip_judgment is still B's" "$B_SJ" "$(sjq detail 'sj && JSON.stringify(sj)')"
@@ -215,6 +222,7 @@ source_changed_out() {
   superseded_out "$1"
   check "$1: one settle record source-changed (owner null), $2 pending" "superseded|source-changed||pending" \
     "$(sk_settle "$TICKET")|$(sk_status "$2")"
+  check "$1: stdout names the demotion in exactly one FALLBACK line" "FALLBACK=source-changed" "$(fallback_lines)"
 }
 all_met() { sjq "$1" 'sj ? String(sj.all_conditions_met) : "no-judgment"'; }
 
@@ -228,6 +236,7 @@ check "outline edited: no skip_judgment written" "0" "$(sk_events detail)"
 sk_fin
 check "outline edited, re-run: same outcome from the done marker, settle record not duplicated" "superseded|false|1" \
   "$(kv SETTLE)|$(kv SKIP)|$(sk_n_rec "$TICKET" settle)"
+check "outline edited, re-run: the done marker keeps one FALLBACK=source-changed" "FALLBACK=source-changed" "$(fallback_lines)"
 sk_fx sc-vanish detail
 mock_p 0.95; sk_query detail
 rm -f "$FX/plans/$SID-context.md"
@@ -246,12 +255,14 @@ cp "$FX/outline.keep" "$FX/plans/$SID-outline.md"
 sk_fin
 check "control, outline rewritten with the same bytes (newer mtime): SETTLE=ok, SKIP=true, skipped" "ok|true|skipped" \
   "$(kv SETTLE)|$(kv SKIP)|$(sk_status detail)"
+check "control, same bytes: no FALLBACK line" "" "$(fallback_lines)"
 sk_fx sc-no-skip detail
 mock_p 0.95 "$K1" 0.05; sk_query detail
 printf '# Outline\n\nTwo approaches are open now.\n' > "$FX/plans/$SID-outline.md"
 sk_fin
 check "a judgment that authorizes no skip is recorded whatever the sources: SETTLE=ok, SKIP=false" "ok|false|false|pending" \
   "$(kv SETTLE)|$(kv SKIP)|$(all_met detail)|$(sk_status detail)"
+check "a judgment that authorizes no skip: no FALLBACK line" "" "$(fallback_lines)"
 case_end
 
 case_begin "jj-skip-source-changed-standing-judgment" "bin/workflow/jev-judge"
@@ -273,6 +284,7 @@ printf '# Outline\n\nTwo approaches are open now.\n' > "$FX/plans/$SID-outline.m
 sk_fin
 check "this ticket already skipped the step: the re-run replays it, sources not re-checked" "0|ok|true|1" \
   "$JJ_RC|$(kv SETTLE)|$(kv SKIP)|$(grep -c '^REPLAYED=1' "$OUT")"
+check "own skip replayed: no FALLBACK line" "" "$(fallback_lines)"
 check "own skip replayed: judgment not rewritten, detail stays skipped, no settle record" "$EV0|true|skipped|0" \
   "$(sk_events detail)|$(all_met detail)|$(sk_status detail)|$(sk_n_rec "$TICKET" settle)"
 case_end

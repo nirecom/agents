@@ -155,6 +155,7 @@ stale_out() {
     "$(fixed_csv complexity)|$(owner_view)"
   check "$1: one decision, one settle record ok / source-changed" "1|ok|source-changed|" \
     "$(n_rec decision)|$(lq "$TICKET" 'recs.filter(x=>x.record_type==="settle").map(x=>[x.settle,x.detail,x.owner].join("|")).join(";")')"
+  check "$1: stdout names the demotion in exactly one FALLBACK line" "FALLBACK=source-changed" "$(fallback_lines)"
 }
 edit_intent() { printf '# Intent\n\nRewrite the report pipeline and its storage format.\n' > "$FX/plans/$SID-intent.md"; }
 
@@ -187,6 +188,7 @@ cp "$FX/intent.keep" "$FX/plans/$SID-intent.md"
 jj finalize --session "$SID" --ticket "$TICKET"
 check "control, intent rewritten with the same bytes: the judged result settles, no settle record" \
   "S2-architecture|ok|S2-architecture|0" "$(kv SIGNALS_CSV)|$(kv SETTLE)|$(fixed_csv complexity)|$(n_rec settle)"
+check "control, same bytes: no FALLBACK line" "" "$(fallback_lines)"
 case_end
 
 case_begin "l-source-changed-decided-once" "hooks/lib/jev/two-stage/replay.js"
@@ -198,6 +200,7 @@ edit_intent
 jj finalize --session "$SID" --ticket "$TICKET"
 check "sources edited after the value was decided: the re-run still settles the judged result" \
   "0|S2-architecture|ok|S2-architecture|0" "$JJ_RC|$(kv SIGNALS_CSV)|$(kv SETTLE)|$(fixed_csv complexity)|$(n_rec settle)"
+check "sources edited after the value was decided: no FALLBACK line" "" "$(fallback_lines)"
 jj_fx l-src-late-restore
 scen_setup jev
 cp "$FX/plans/$SID-intent.md" "$FX/intent.keep"
@@ -215,4 +218,7 @@ sweep_now
 check "edited sources, sweep replay: fail-safe level, one settle record source-changed" \
   "S0-undecidable|ok|source-changed|" \
   "$(fixed_csv complexity)|$(lq "$TICKET" 'recs.filter(x=>x.record_type==="settle").map(x=>[x.settle,x.detail,x.owner].join("|")).join(";")')"
+jj finalize --session "$SID" --ticket "$TICKET"
+check "edited sources, finalize after the sweep replay: the done stdout keeps one FALLBACK=source-changed" \
+  "0|FALLBACK=source-changed" "$JJ_RC|$(fallback_lines)"
 case_end

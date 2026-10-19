@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: agents/issues/42, bin/gh, bin/github-issues/ensure-board-card.sh, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
+# Tests: bin/github-issues/ensure-board-card.sh, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
 # Tags: github, issues, agent, bin, tests, scope:issue-specific
 # Tests for bin/github-issues/ensure-board-card.sh — Issue #548: ensures a GitHub issue is on
 # the Projects v2 board with Content Date set. Inline gh-mock pattern from tests/agents/feature-wip-state.sh.

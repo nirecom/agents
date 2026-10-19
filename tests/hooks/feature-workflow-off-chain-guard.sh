@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/hooks/feature-workflow-off-chain-guard.sh
-# Tests: hooks/lib/sentinel-patterns.js., hooks/workflow-gate.js
+# Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
 # Tags: workflow, gate, hook, sentinel, bin, scope:issue-specific
 
 # Chain-guard tests for the new WORKFLOW_ENFORCE_WORKFLOW_OFF / _ON sentinels.

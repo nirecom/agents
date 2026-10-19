@@ -116,13 +116,13 @@ else
     fail "U2: could not create the directory fixture $REPO/rules/a-directory.md — the EISDIR shape is UNVERIFIED"
 fi
 
-# --- UF3 (issue #2218 Step 10/13): the emergency-flush rule against the REAL policy and the REAL
+# --- UF3 (issue #2218 Step 10/13; #2594 renamed the rule to rules/progress-update.md): the rule against the REAL policy and the REAL
 # rules tree. Every case above grades a fixture tree, which can only prove the classifier works;
 # this one is the registration itself — a rule the session must receive without earning it by glob
 # is `ok` only while the policy that ships names it. Swapping the policy pin (and restoring it) is
 # the whole setup: the hook reads it from the environment. ---
 UF3_SID="uf3flush"
-UF3_FP="$(node_path "$SCRIPT_CHECKOUT_ROOT/rules/handoff-emergency-flush.md")"
+UF3_FP="$(node_path "$SCRIPT_CHECKOUT_ROOT/rules/progress-update.md")"
 UF3_SAVED_POLICY="$RULES_INJECTION_POLICY"
 UF3_SAVED_PROJECT="$CLAUDE_PROJECT_DIR"
 RULES_INJECTION_POLICY="$(node_path "$SCRIPT_CHECKOUT_ROOT/hooks/lib/rules-injection-policy.js")"
@@ -135,9 +135,9 @@ uf3="$(read_field "$UF3_SID" "$UF3_FP" verdict)"
 RULES_INJECTION_POLICY="$UF3_SAVED_POLICY"
 CLAUDE_PROJECT_DIR="$UF3_SAVED_PROJECT"
 if [ "$uf3" = "ok" ]; then
-    pass "UF3: rules/handoff-emergency-flush.md classifies ok against the shipped policy — registered unconditional, no paths: needed"
+    pass "UF3: rules/progress-update.md classifies ok against the shipped policy — registered unconditional, no paths: needed"
 else
-    fail "UF3: want ok for rules/handoff-emergency-flush.md against the shipped policy, got '$uf3' — issue #2218 Step 10 registers it in EXPECTED_UNCONDITIONAL and Step 14 authors the file; write_code has not run"
+    fail "UF3: want ok for rules/progress-update.md against the shipped policy, got '$uf3' — issue #2594 renames the #2218 EXPECTED_UNCONDITIONAL entry and the file; write_code has not run"
 fi
 
 # --- UF4 (positive control for UF3): `ok` is ALSO E3's verdict for "not a rules file", so

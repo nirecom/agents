@@ -1,14 +1,12 @@
 #!/bin/bash
-# Tests: bin/gh, bin/github-issues/parent-all-closed-check.sh, skills/issue-close-finalize/SKILL.md
+# Tests: bin/github-issues/parent-all-closed-check.sh, skills/issue-close-finalize/SKILL.md
 # Tags: issue-close, finalize, workflow, sub-issue, github, scope:issue-specific
 # Tests for bin/github-issues/parent-all-closed-check.sh
-#
 # I/F: parent-all-closed-check.sh <owner/repo> <N>
 #   exit 0: all sub-issues closed
 #   exit 1: at least one sub-issue open
 #   exit 2: zero sub-issues
 #   exit 3: validation error / API failure
-#
 # RED: this suite fails clean while parent-all-closed-check.sh is missing.
 
 set -u

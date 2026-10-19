@@ -1,20 +1,12 @@
 #!/bin/bash
-# Tests: agents/issues/, agents/issues/100/sub_issues, agents/issues/201, agents/issues/201/sub_issues, agents/issues/42, agents/issues/9999, bin/gh, bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, skills/issue-create/scripts/run-bulk-dispatch.sh, skills/issue-create/scripts/run-phase5-record.sh, skills/workflow-init/SKILL.md
+# Tests: bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, skills/issue-create/scripts/run-bulk-dispatch.sh, skills/issue-create/scripts/run-phase5-record.sh, skills/workflow-init/SKILL.md
 # Tags: issue-create, github, sub-issue, frontmatter, tests, scope:issue-specific
-#
-# L3 gap (what this test does NOT catch):
-# - Real GitHub API: actual sub_issues POST acceptance, GraphQL databaseId availability
-# - MSYS_NO_PATHCONV interaction on live Windows Git Bash sessions
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration
-#
-# Tests for the new /issue-create skill:
-#   bin/github-issues/issue-create.sh  — bash wrapper around gh issue create
-#   skills/issue-create/SKILL.md       — YAML frontmatter skill definition
-#   rules/github-issues.md             — ## Issue creation section
-#   CLAUDE.md                          — /issue-create mention
-#
-# RED: this suite fails clean while bin/github-issues/issue-create.sh is missing.
+# L3 gap: real GitHub sub_issues POST acceptance, GraphQL databaseId availability, MSYS_NO_PATHCONV on
+# live Windows Git Bash. Mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh
+# category skill-orchestration.
+# Tests the /issue-create skill: bin/github-issues/issue-create.sh (gh issue create wrapper),
+# skills/issue-create/SKILL.md frontmatter, rules/github-issues.md "Issue creation", CLAUDE.md mention.
+# RED: fails clean while bin/github-issues/issue-create.sh is missing.
 
 set -u
 

@@ -33,9 +33,11 @@ RMB_EOF
   # wins over the auto-resolved merge-base state (#2276 S8): the reviewer then
   # emits "## Codex Review Scope: BASE-<state>" and the exec label derives to
   # PARTIAL. The resolved $base still travels so the reviewer has a diff anchor.
+  # No state at all fails closed to UNRESOLVED, which withholds untracked content.
   [[ -n "$BASE_STATE_ARG" ]] && state="$BASE_STATE_ARG"
+  [[ -z "$state" ]] && state="UNRESOLVED"
   [[ -n "$base" ]]  && ARGS+=(--base "$base")
-  [[ -n "$state" ]] && ARGS+=(--base-state "$state")
+  ARGS+=(--base-state "$state")
 
   # The reviewer may only speak about IDs the ledger already holds, so it is
   # handed the rendered prior — the same text cl_render_prior produces for the
