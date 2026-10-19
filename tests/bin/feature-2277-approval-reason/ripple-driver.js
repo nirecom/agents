@@ -16,15 +16,32 @@ function markHook(sid, command) {
 const events = (sid, pred) => (F.rawEvents(sid) || []).filter(pred);
 
 function modeReset() {
-  // RESET_FROM_outline force-completes clarify_intent: it must carry a reset-sentinel audit record.
+  // #2709: RESET_FROM_outline completes clarify_intent only on its own verified approval; the
+  // reset never synthesises one, and with clarify_intent unapproved the reset is refused whole.
   let sid = F.newSid("rs-ol");
   F.writePlan(sid, "intent"); F.writePlan(sid, "outline");
   F.writeState(sid, { workflow_init: "complete", clarify_intent: "complete", research: "complete", outline: "complete" },
     [{ step: "clarify_intent" }, { step: "outline" }], TOP);
   markHook(sid, 'echo "<<WORKFLOW_RESET_FROM_outline: fixture rollback reason>>"');
   F.check("reset from outline: outline back to pending", F.readStep(sid, "outline") === "pending", F.readStep(sid, "outline"));
-  const audit = events(sid, (e) => e.kind === "plan_approval" && e.step === "clarify_intent" && e.source === "reset-sentinel");
-  F.check("reset from outline: clarify_intent gets a reset-sentinel approval", audit.length === 1, JSON.stringify(audit));
+  const audit = events(sid, (e) => e.kind === "plan_approval" && e.source === "reset-sentinel");
+  F.check("reset from outline: no reset-sentinel approval is written", audit.length === 0, JSON.stringify(audit));
+  const kept = events(sid, (e) => e.kind === "plan_approval" && e.step === "clarify_intent");
+  F.check("reset from outline: clarify_intent keeps only its confirm approval",
+    kept.length === 1 && kept[0].source === "confirm-sentinel", JSON.stringify(kept));
+  // Same reset over an unapproved clarify_intent: refused, nothing written.
+  sid = F.newSid("rs-ol-unapproved");
+  F.writePlan(sid, "intent"); F.writePlan(sid, "outline");
+  F.writeState(sid, { workflow_init: "complete", clarify_intent: "complete", research: "complete", outline: "complete" },
+    [{ step: "outline" }], TOP);
+  const before = (F.rawEvents(sid) || []).length;
+  const refused = markHook(sid, 'echo "<<WORKFLOW_RESET_FROM_outline: fixture rollback reason>>"');
+  F.check("reset from outline over unapproved clarify_intent: refused naming clarify_intent",
+    /RESET_FROM_outline refused/i.test(refused.out) && refused.out.includes("clarify_intent"), refused.out + refused.err);
+  F.check("reset from outline over unapproved clarify_intent: no events written",
+    (F.rawEvents(sid) || []).length === before, `${before} -> ${(F.rawEvents(sid) || []).length}`);
+  F.check("reset from outline over unapproved clarify_intent: outline stays complete",
+    F.readStep(sid, "outline") === "complete", F.readStep(sid, "outline"));
   // RESET_FROM_clarify_intent takes clarify_intent out of complete: its approval is revoked.
   sid = F.newSid("rs-ci");
   F.writePlan(sid, "intent");
@@ -78,9 +95,14 @@ function modeInherit() {
   const heir = F.newSid("inh-heir");
   F.writeState(heir, {}, [], TOP);
   let threw = null;
-  try { applyInheritance(heir, new Date().toISOString(), WS.readState(donor), {}); } catch (e) { threw = e.message; }
+  // #2633-1: the upstream sid is passed; an unapproved clarify_intent is reverted, not refused.
+  try { applyInheritance(heir, new Date().toISOString(), donor, {}); } catch (e) { threw = e.message; }
   F.check("inheritance: donor with no clarify_intent record is inheritable", threw === null, String(threw));
-  F.check("inheritance: heir clarify_intent complete", F.readStep(heir, "clarify_intent") === "complete", F.readStep(heir, "clarify_intent"));
+  F.check("inheritance: heir clarify_intent reverted to pending",
+    F.readStep(heir, "clarify_intent") === "pending", F.readStep(heir, "clarify_intent"));
+  const why = events(heir, (e) => e.kind === "step_annotation" && e.step === "clarify_intent" && e.key === "inherit_revert_reason").pop();
+  F.check("inheritance: clarify_intent revert reason is approval:no-approval-record",
+    !!why && why.value === "approval:no-approval-record", JSON.stringify(why || null));
   const audit = events(heir, (e) => e.kind === "plan_approval" && e.step === "clarify_intent" && e.source === "session-inherit");
   F.check("inheritance: clarify_intent gets no session-inherit audit approval", audit.length === 0, JSON.stringify(audit));
   const { evaluateCompletionApproval } = require(path.join(F.ROOT, "hooks/workflow-state/completion-approval"));

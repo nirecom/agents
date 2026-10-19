@@ -15,7 +15,7 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 
 ### MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
-Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Read `<PLANS_DIR>/<session-id>-intent.md` and `<PLANS_DIR>/<session-id>-outline.md` if present; otherwise proceed with task context alone.
+Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Set `<INTENT_MD>` / `<OUTLINE_MD>` to the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` / `--stage outline` (a resumed session reads its upstream's files); substitute them for every `$INTENT_MD` / `$OUTLINE_MD` below. Read both if present; otherwise proceed with task context alone.
 
 ### MDP-2 — Surface delivery plan
 
@@ -74,7 +74,7 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_MAIN_ROOT/skills/mak
 
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source. `## Class members` is NOT carried into detail.md — its SSOT is intent.md (#2228).
 
-Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
+Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind outline "$OUTLINE_MD" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
 
 After assemble-mandatory.sh succeeds, run `bash "$AGENTS_MAIN_ROOT/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the gate check — blocks even on the `proceed` (auto-approval) path.
 

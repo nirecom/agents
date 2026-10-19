@@ -78,6 +78,11 @@ JS
 
 nj() { run_with_timeout 60 node "$(np "$TMP/$1")" "${@:2}" 2>&1; }
 seed() { nj seed.js "$1" "$2" >/dev/null; }
+# approve_gates <sid> — real confirm-sentinel approvals for every gated step: since #2709 a
+# RESET_FROM past a gated step is refused unless that step already holds a verified approval.
+approve_gates() {
+    run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" approve "$1" clarify_intent outline detail >/dev/null
+}
 entry() { nj entry.js "$@"; }
 verdict_cli() { run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit-verdict" "$@" 2>/dev/null; }
 audit_cli() { run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-write-audit" "$@" 2>/dev/null; }
@@ -170,6 +175,7 @@ case_end
 
 case_begin "reset-from-mid-step-records" "hooks/workflow-mark/reset-handler.js"
 seed rs-mid active
+approve_gates rs-mid
 CMD='echo "<<WORKFLOW_RESET_FROM_run_tests: rerun the suite>>"'
 OUT="$(nj reset.js rs-mid "$CMD")"
 expect "R4: RESET_FROM_run_tests is applied" "$OUT" ""
@@ -188,7 +194,8 @@ case_end
 
 case_begin "reset-from-workflow-off-records-nothing" "hooks/workflow-mark/reset-handler.js"
 seed rs-off active
-: > "$TMP/wf/rs-off.workflow-off"
+approve_gates rs-off
+: >"$TMP/wf/rs-off.workflow-off"
 CMD='echo "<<WORKFLOW_RESET_FROM_run_tests: rerun the suite>>"'
 OUT="$(nj reset.js rs-off "$CMD")"
 expect "R6: a reset under WORKFLOW_OFF is still applied" "$OUT" ""
@@ -198,6 +205,7 @@ case_end
 
 case_begin "reset-from-revives-finished-session-records" "hooks/workflow-mark/reset-handler.js"
 seed rs-revive final
+approve_gates rs-revive
 CMD='echo "<<WORKFLOW_RESET_FROM_run_tests: reopen after the final report>>"'
 OUT="$(nj reset.js rs-revive "$CMD")"
 expect "R7: a reset after final_report is applied" "$OUT" ""

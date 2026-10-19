@@ -1,31 +1,34 @@
 # i-inherited-adoption.sh
 # Tests: hooks/workflow-state/lifecycle.js, hooks/session-start.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, bin/workflow/lib/next-step/verdict.js
 # Tags: stop-hook, supervisor-guard, session-inherit, provenance, regression-1794, scope:issue-specific, pwsh-not-required, TL1, TL2
-# I1-I9 (#1794): isWorkflowStarted() judges ADOPTION, not the projected view — a session-inherit heir (all steps backfilled) must not fire C4/C2.
+# I1-I9 (#1794): isWorkflowStarted() judges ADOPTION, not the projected view — a session-inherit heir (nothing settled after upstream_copy_seq) must not fire C4/C2.
 # Drivers: helpers/inheritance.sh; TL1 truth tables: i-adoption-predicate.sh. Sourced by ../feature-1794-stop-guard-exemptions.sh.
 
 # ---------------------------------------------------------------------------
-# I1: an inherited-only heir projects workflow_init=complete while EVERY
-#     step_status event is backfilled — the positive anchor is asserted first so
-#     a fixture that never inherited cannot hand the case a vacuous "false".
+# I1: an inherited-only heir projects workflow_init=complete from the donor's
+#     settlements copied verbatim (observed/mark-step) up to upstream_copy_seq,
+#     with only backfilled events after it (#2304) — and is still not started.
 # ---------------------------------------------------------------------------
 run_I1() {
     local tmp out
     tmp="$(make_tmp)"
     seed_donor_and_inherit "$tmp" "i1-donor" "i1-heir" "complete"
     out=$(inh_probe "$tmp" "i1-heir" "
+const b = st.upstream_copy_seq;
 const ss = st.events.filter((e) => e.kind === 'step_status');
-const nonBackfilled = ss.filter((e) => e.provenance !== 'backfilled')
+const copied = ss.filter((e) => e.seq <= b && e.provenance === 'observed' && e.origin === 'mark-step');
+const postBad = ss.filter((e) => !(e.seq <= b) && e.provenance !== 'backfilled')
   .map((e) => e.step + ':' + e.provenance + '/' + e.origin);
 console.log('projected=' + ((st.current.steps.workflow_init || {}).status) +
   ' step_status_events=' + ss.length +
-  ' non_backfilled=' + (nonBackfilled.join(',') || '0') +
+  ' copied_observed=' + copied.length +
+  ' post_non_backfilled=' + (postBad.join(',') || '0') +
   ' started=' + started());")
     rm -rf "$tmp" 2>/dev/null || true
-    if [ "$out" = "projected=complete step_status_events=3 non_backfilled=0 started=false" ]; then
+    if [ "$out" = "projected=complete step_status_events=3 copied_observed=2 post_non_backfilled=0 started=false" ]; then
         pass "I1: inherited-only heir projects complete but isWorkflowStarted is false"
     else
-        fail "I1: want 'projected=complete step_status_events=3 non_backfilled=0 started=false'; got '${out:-<err>}'"
+        fail "I1: want 'projected=complete step_status_events=3 copied_observed=2 post_non_backfilled=0 started=false'; got '${out:-<err>}'"
     fi
 }
 

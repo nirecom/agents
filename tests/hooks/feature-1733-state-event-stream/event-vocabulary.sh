@@ -227,7 +227,7 @@ if run_case "EV8/annotation-keys"; then
     _ev_script=$(cat <<'JS'
 const bad = [];
 const want = ["baseline_accept", "baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests", "hit_count", "hit_summary",
-  "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
+  "inherit_revert_reason", "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
   "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
 if (exported.join(",") !== want.join(",")) bad.push("STEP_ANNOTATION_KEYS=" + exported.join(","));
@@ -251,7 +251,7 @@ fi
 case_end
 
 case_begin "ev9-persisted-keys-set-equality" "hooks/workflow-state/state-io/projection.js"
-echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the eighteen documented keys (v5, #2527) =="
+echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twenty documented keys (v5, #2527; #2304 adds upstream_session_id/upstream_copy_seq) =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
@@ -259,13 +259,13 @@ const P = require("./hooks/workflow-state/state-io/projection");
 const want = ["auto_merge_pr", "auto_merge_pr_origin", "auto_merge_pr_source", "closes_issues", "created_at", "current", "deliverable_type", "delivery_path",
   "delivery_path_origin", "events", "last_pushed_sha", "merge_base_baseline",
   "project_management_type", "session_id", "session_start_context", "session_worktree",
-  "verbose_prompt", "version"].sort();
+  "upstream_copy_seq", "upstream_session_id", "verbose_prompt", "version"].sort();
 const got = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []).slice().sort();
 console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GOT:" + got.join(",")));
 JS
 )
     nodejs "$SID" "$PRE$_ev_script"
-    assert_eq "EV9/persisted-keys-set-equality" "18 MATCH" "$NODE_OUT"
+    assert_eq "EV9/persisted-keys-set-equality" "20 MATCH" "$NODE_OUT"
 fi
 case_end
 

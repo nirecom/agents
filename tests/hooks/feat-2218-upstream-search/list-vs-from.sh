@@ -1,7 +1,7 @@
 # list-vs-from.sh — U14: one fixture, both paths. Sourced by
 # tests/hooks/feat-2218-upstream-search.sh.
 # Tests: hooks/workflow-state/upstream-search.js, bin/lib/resume-session/upstream-view.js
-# Tags: session-upstream, upstream-search, resume-session, adoptability, granularity, cross-check, prompt-injection, regression-2279, scope:issue-specific, pwsh-not-required, TL2
+# Tags: session-upstream, upstream-search, resume-session, adoptability, granularity, cross-check, prompt-injection, regression-2279, scope:issue-specific, pwsh-not-required, TL2, regression-2297
 
 _u14_run() {
     env -u CLAUDE_CODE_SESSION_ID \

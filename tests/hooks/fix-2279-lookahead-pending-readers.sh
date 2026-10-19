@@ -288,6 +288,7 @@ run_L7
 run_L8
 run_L9
 run_L10
+run_L11
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

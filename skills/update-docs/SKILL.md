@@ -30,7 +30,7 @@ UD-3. **Identify gaps**: Compare git log against each document's content. Look f
    - Infrastructure or operational changes
    - Progress updates
    - `README.md`: Update when a user-visible feature is added or changed, install/usage steps shift, or an existing bullet no longer accurately reflects real behavior.
-   - Glossary promotion: list the user / internal rows of `<PLANS_DIR>/<session-id>-intent.md` `## Glossary` (`<PLANS_DIR>` per `skills/_shared/resolve-plans-dir.md`) as promotion candidates in the UD-4 proposal; do not write yet.
+   - Glossary promotion: list the user / internal rows of `<INTENT_MD>` `## Glossary` (`<INTENT_MD>` = the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent`) as promotion candidates in the UD-4 proposal; do not write yet.
    - Glossary entries: never add one outside glossary promotion.
 UD-4. **Propose updates**: For each file that needs updating, present:
    - Before drafting History/Changelog bullets: apply the language configured by `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE`, routed by repo visibility — one policy covers both history and changelog
@@ -40,7 +40,7 @@ UD-5. **CONFIRM_DOCS gate**:
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
    - `GATE_ACTION=ask`: present the UD-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
    - `GATE_ACTION=proceed`: apply the edits and continue to UD-6 without waiting.
-   - When applying, run `node "$AGENTS_MAIN_ROOT/bin/glossary-promote" "<PLANS_DIR>/<session-id>-intent.md" "<project-root>"` first, then replace each promoted entry's `Related: TODO` with a link to the doc that owns the term.
+   - When applying, run `node "$AGENTS_MAIN_ROOT/bin/glossary-promote" "<INTENT_MD>" "<project-root>"` first, then replace each promoted entry's `Related: TODO` with a link to the doc that owns the term.
 UD-6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
    - Skip `infrastructure.md` — delegate to `/update-infrastructure` instead.
 UD-7. **Commit separately**: If docs are in a separate repo, commit each repo independently
