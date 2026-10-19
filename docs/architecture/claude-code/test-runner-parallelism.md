@@ -131,18 +131,20 @@ When in doubt, the call goes to the serial side.
 | `-j` | `-j <N>`, `-j auto`, `--jobs <N>`, `--jobs=<N>` | Max jobs per run. `-j 1` is the retreat to the previous sequential behaviour; `-j auto` defers to the next layer. |
 | `TEST_MAX_JOBS_PER_RUN` | Integer 1-1024 or `auto`, in the environment or `.env` | Same limit without a flag. |
 | `TEST_MAX_JOBS_PER_HOST` | Integer 1-1024, in the environment or `.env` | Limit shared by every run on the host (`test-host-lanes.md`). |
+| `AUTO_CONFIG_TEST_MAX_JOBS` | `on` (default) or `off`, in the environment or `.env` | Automatic max jobs per host and load scale-in, or fully manual. |
 | `--deadline` | `--deadline <secs>`, `--deadline=<secs>`, `RUN_ALL_DEADLINE` | Whole-run wall-clock ceiling. |
 | `RUN_ALL_PROGRESS` | `off` | Suppresses the stderr progress lines. |
 | `RUN_ALL_REAP` | `auto` (default), `waitn`, `fifo` | Selects the slot-reaping mechanism. |
 | `--print-plan` | — | Prints the plan and exits 0 without running anything. |
 
 **Two limits bound the width.** The **max jobs per run** is what one invocation asks
-for: `-j` > environment > `.env` > default 4. `-j auto` or the value `auto` passes to
-the next layer, and an empty environment value counts as unset. The **max jobs per
-host** caps all runs on the machine together through the host lane lease:
-environment > `.env` > measured record (Section 5) > default 4. A run gets
-`min(max jobs per run, max jobs per host − 1)`; that rule, the lease, and the
-`TEST_LANES*` knobs are in `test-host-lanes.md`.
+for: `-j` > environment > `.env`. `-j auto` or the value `auto` passes to the next
+layer, an empty environment value counts as unset, and an empty or `auto` result means
+no per-run cap in both modes: the **fair share** of the run-all lane pool is then the
+effective limit. The **max jobs per host** caps all runs on the machine together
+through the host lane lease; its resolution order, the fair share, the lease and the
+`TEST_LANES*` knobs are owned by `test-host-lanes.md` ("Resolution order of max jobs
+per host").
 
 **Why both limits have a persistent `.env` layer.** The right width is a property of
 the machine — its disk, its scanner, how many sessions it hosts — so it belongs in a
@@ -187,20 +189,23 @@ demotes `run_tests` to `pending` on a missing contract, and the worker renders i
 exists so the fallback path can be exercised from any host — a portability fallback
 that only runs on machines nobody develops on is a fallback nobody has tested.
 
-## 5. Calibration, and why not core count
+## 5. Calibration, and the logical CPU count ceiling
 
-Parallelism is **not** derived from the CPU core count. Core count answers "how many
-things can compute at once", but this corpus is I/O-bound: throughput is governed by
-filesystem latency, antivirus scanning, and process-spawn cost, and on a Windows host
-with real-time scanning enabled the knee of the throughput curve sits nowhere near
-`nproc`. A core-count heuristic would be a confident number derived from the wrong
-variable.
+The **calibration knee** is **measured**, never derived from the CPU core count. Core
+count answers "how many things can compute at once", but this corpus is I/O-bound:
+throughput is governed by filesystem latency, antivirus scanning, and process-spawn
+cost, and on a Windows host with real-time scanning enabled the knee sits nowhere near
+`nproc`. The **logical CPU count** is used for two things only: it is the ceiling of
+max jobs per host (a measurement above it would only add contention), and it bounds the
+calibration widths (below). A fixed ladder topping out at 16 once capped a 20-core
+host; deriving the ladder from the count removed that artificial ceiling without
+guessing the knee.
 
-Instead the knee is **measured once, deliberately, by a separate tool** —
+The knee is **measured once, deliberately, by a separate tool** —
 `bin/calibrate-test-parallelism.sh` — and recorded as the `measured` layer of the
-max jobs per host (Section 4). Only the host limit reads the record; the per-run
-width never does, so a stale or missing record can change how many lanes the host
-offers, never what a run asks for.
+max jobs per host (Section 4). Only the host limit reads the record, and only in mode
+`on`; the per-run width never does, so a stale or missing record can change how many
+lanes the host offers, never what a run asks for.
 
 The hard rule is that a **normal run never falls through into measurement**
 (invariant 4). The runner holds the calibrator's name only as a hint string in a
@@ -210,7 +215,11 @@ slightly suboptimal `-j`.
 
 Two paths surface calibration: the runner's hint (the whole command) and the /run-tests
 consent dialog (`skills/run-tests` RNT-6a). Only an explicit "calibrate now" starts it, and
-`run-all.sh` still has no path to the calibrator, so invariant 4 holds.
+`run-all.sh` still has no path to the calibrator, so invariant 4 holds. The load sample
+taken during a run (`test-host-lanes.md`) is not a calibration and writes no record.
+There is no "never ask again" choice: `AUTO_CONFIG_TEST_MAX_JOBS=off` is the way to stop
+the offer, and a leftover `calibration-never-ask.conf` is never read.
+Choosing "calibrate now" prints the calibrator's `--dry-run` estimate before measuring.
 
 **The sample.** The calibrator measures only with `RUN_CALIBRATION=1` (exit 77
 otherwise) and sets `TEST_LANES=off` so its own runs are not narrowed. The population
@@ -225,7 +234,15 @@ enough land in the band; probe results are never saved. A sample is accepted onl
 its total is at least `longest × widest width` — otherwise the widest width could
 not be filled and would measure the longest test, not throughput (`infeasible-sample`).
 
-**The ladder.** Widths default to `4 6 8 12 16` (`--jobs-list`). Each width's wall time is predicted
+**The ladder.** Widths default to a series derived from the logical CPU count: the base
+series `4 6 8 12 16 24 32 …` below the count, then the count itself (20 gives
+`4 6 8 12 16 20`), dropping a width within a quarter of the count and using every width
+up to a count below 4; an unknown count falls back to `4 6 8 12 16`. An explicit
+`--jobs-list` is kept as given but refused (exit 2) above the count. When the sample
+cannot fill the widest derived width — too few candidates, an infeasible sample, or an
+estimate over `--time-limit` — the widest width is dropped one at a time and the sample
+size recomputed, with one `widths narrowed from X to Y` line; an explicit list is never
+narrowed. Each width's wall time is predicted
 as `P(W) = max(ceil(sum/W), longest)`, and every child run gets the deadline
 `D = 2·P(narrowest) + 30` seconds. A discarded warmup pass (so filesystem and scanner
 warm-up lands outside the measured region) precedes three repeats in crossing order —
@@ -257,22 +274,30 @@ nothing written; the tokens are `plan-unavailable`, `too-few-candidates`,
 `infeasible-sample`, `lanes-busy`, `width-not-honoured`, `run-failed`,
 `reserve-exhausted`, `revisions-exhausted`, `time-limit`. The record is staged,
 verified through the reader, and only then moved into place; `--no-write` stops
-after the verification. A knee at the widest width adds a hint to widen the ladder.
+after the verification. A knee at the widest width is explained by `width_limit`: at the
+logical CPU count it is the ceiling and nothing is suggested; a corpus-narrowed ladder
+says the knee may be higher once more tests have ledger durations; only an explicit
+`--jobs-list` suggests a wider list.
 `--print` shows `max_jobs_per_host`, `os` and `measured_at`, plus the OS advice below.
 
 **The record is untrusted input.** It is the one parallelism input read from outside
 the repository, so `bin/lib/run-all-parallelism.sh` parses it without `source`,
 without `eval`, and without `.` — a `read -r` loop plus `case` glob matching that
-never expands a value and never does arithmetic on an unvalidated token. Exactly
-seven keys are allowed (`schema`, `host_id`, `os`, `max_jobs_per_host`,
-`measured_at`, `sample_size`, `repeat`); an unknown key, a duplicate key, a missing
-key, or an out-of-class value invalidates the whole file. Injection payloads are
-rejected as data.
+never expands a value and never does arithmetic on an unvalidated token. Schema 3
+allows exactly ten keys (`schema`, `host_id`, `os`, `max_jobs_per_host`, `measured_at`,
+`sample_size`, `repeat`, `logical_cpu_count`, `max_width_measured`, `width_limit`);
+an unknown key, a duplicate key, a missing key, or an out-of-class value invalidates
+the whole file. `width_limit` says what set the widest measured width: `logical-cpu-count`,
+`candidates`, `sample`, `time-limit`, `jobs-list` or `unknown-cpu-count`. A schema 2
+record (the first seven keys) is still accepted, read as legacy, and advises a new
+calibration; this carry-over is temporary and marked in the code. Injection payloads
+are rejected as data.
 
 Failure is reported as exactly one **fixed enum token** (`missing`, `unreadable`,
 `malformed`, `unknown-key`, `duplicate-key`, `schema-mismatch`, `host-mismatch`,
 `bad-os`, `bad-max-jobs-per-host`) and the host limit falls to the default 4. A
-record from before schema 2 is `schema-mismatch`. Fixed tokens matter for two
+record from before schema 2 is `schema-mismatch`. The calibration knee is stored as is
+in `max_jobs_per_host`; the one lane kept for find-tests is not added. Fixed tokens matter for two
 reasons: they keep untrusted file content out of the runner's own output, and they
 keep that output structurally incapable of resembling a contract line.
 
@@ -289,9 +314,9 @@ know what other sessions hold.
 Windows the version and build from `uname -s`; elsewhere `uname -r`). When it
 differs from the current host the value is still used, and the lanes line, the plan
 note and the status line add `measured on X, now Y; re-run
-RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh` (omitted on a host with the
-never-ask record). An update rarely moves the knee far; falling to
-the default would be a larger error than a slightly stale measurement. `os` is the
+RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh`. An update rarely moves the
+knee far; falling to the default would be a larger error than a slightly stale
+measurement. `os` is the
 only record value ever displayed, and only after its shape check.
 
 **Host identity.** `host_id` is `<family>|<arch>|<digest-of-hostname>` and is
@@ -449,7 +474,7 @@ every report line: [test-result-contract.md](test-result-contract.md).
 | `bin/lib/run-all-classify.sh`, `bin/lib/run-all-report.sh`, `bin/lib/timed-exec.sh` | Unit state, report lines and `neutralize_stream`, per-file timeout ([test-result-contract.md](test-result-contract.md)); sourced, never executed |
 | `bin/lib/run-all-ledger-migrate.sh` | Time-limited carry-over of pre-#2079 duration and baseline segments; sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool (modules in `bin/calibrate-test-parallelism/`); unreachable from a normal run |
-| `bin/lib/test-host-lanes.sh` | Max jobs per host, the host width rule, and the lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed |
+| `bin/lib/test-host-lanes.sh` | Max jobs per host, the host width rule, and the lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed. Its siblings `test-host-lanes-share.sh`, `test-host-load.sh` and `test-host-load-probe.sh` hold the fair share and load scale-in (`test-host-lanes.md`) |
 | `bin/test-lanes-status.sh` | Read-only listing of who holds which lane |
 | `bin/worker-dispatch/workers/test-runner.js` | Prepends `--deadline` and `-j` when building the runner argv |
 | `tests/tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |

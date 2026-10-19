@@ -11,6 +11,9 @@ fi
 
 DETECT_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/supervisor-guard/detect.js"
 DETECT_PATH="${SCRIPT_CHECKOUT_ROOT}/hooks/supervisor-guard/detect.js"
+# #2698: the AskUserQuestion turn judgment moved from detect.js into the shared predicate
+# (kind "ask-user-question-tool" of classifyUserDialogTurn).
+UDT_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/user-dialog-turn.js"
 
 if ! command -v node >/dev/null 2>&1; then
     echo "SKIP: node not on PATH"
@@ -55,23 +58,17 @@ else
     else fail "detectSentinelHang negative: MARK_STEP + subsequent tool_use → false" "$out"; fi
 fi
 
-# 27. detectAskUserQuestionTurn — positive: last tool_use is AskUserQuestion → true
-if [ ! -f "$DETECT_PATH" ]; then skip "detectAskUserQuestionTurn positive (detect.js missing)"
-else
-    _f=$(mktemp); printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"AskUserQuestion","input":{}}]}}' > "$_f"
-    out=$(run_with_timeout 10 node -e "const m=require('${DETECT_JS}');const r=m.detectAskUserQuestionTurn('$(to_node_path "$_f")');if(r!==true){console.log('FAIL: expected true, got '+r);process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
-    if [ "$out" = "OK" ]; then pass "detectAskUserQuestionTurn positive: last tool_use is AskUserQuestion → true"
-    else fail "detectAskUserQuestionTurn positive: last tool_use is AskUserQuestion → true" "$out"; fi
-fi
+# 27. ask-user-question-tool (moved from detectAskUserQuestionTurn) — positive: last tool_use is AskUserQuestion
+_f=$(mktemp); printf '%s\n' '{"type":"user","message":{"role":"user","content":"go"}}' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"AskUserQuestion","input":{}}]}}' > "$_f"
+out=$(run_with_timeout 10 node -e "const m=require('${UDT_JS}');const r=m.classifyUserDialogTurn({transcript_path:'$(to_node_path "$_f")',last_assistant_message:''});if(!r||r.kind!=='ask-user-question-tool'){console.log('FAIL: expected kind ask-user-question-tool, got '+JSON.stringify(r));process.exit(1);}if(m.isUserDialogTurn({transcript_path:'$(to_node_path "$_f")',last_assistant_message:''})!==true){console.log('FAIL: isUserDialogTurn not true');process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
+if [ "$out" = "OK" ]; then pass "ask-user-question-tool positive: last tool_use is AskUserQuestion → dialog turn"
+else fail "ask-user-question-tool positive: last tool_use is AskUserQuestion → dialog turn" "$out"; fi
 
-# 28. detectAskUserQuestionTurn — negative: last tool_use is NOT AskUserQuestion → false
-if [ ! -f "$DETECT_PATH" ]; then skip "detectAskUserQuestionTurn negative (detect.js missing)"
-else
-    _f=$(mktemp); printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}' > "$_f"
-    out=$(run_with_timeout 10 node -e "const m=require('${DETECT_JS}');const r=m.detectAskUserQuestionTurn('$(to_node_path "$_f")');if(r!==false){console.log('FAIL: expected false, got '+r);process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
-    if [ "$out" = "OK" ]; then pass "detectAskUserQuestionTurn negative: last tool_use not AskUserQuestion → false"
-    else fail "detectAskUserQuestionTurn negative: last tool_use not AskUserQuestion → false" "$out"; fi
-fi
+# 28. ask-user-question-tool — negative: last tool_use is NOT AskUserQuestion → not a dialog turn
+_f=$(mktemp); printf '%s\n' '{"type":"user","message":{"role":"user","content":"go"}}' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}' > "$_f"
+out=$(run_with_timeout 10 node -e "const m=require('${UDT_JS}');const r=m.isUserDialogTurn({transcript_path:'$(to_node_path "$_f")',last_assistant_message:''});if(r!==false){console.log('FAIL: expected false, got '+r);process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
+if [ "$out" = "OK" ]; then pass "ask-user-question-tool negative: last tool_use not AskUserQuestion → false"
+else fail "ask-user-question-tool negative: last tool_use not AskUserQuestion → false" "$out"; fi
 
 # 29. detectOffProposal — positive worktree-off → {detected:true, kind:'worktree-off'}
 if [ ! -f "$DETECT_PATH" ]; then skip "detectOffProposal positive worktree-off (detect.js missing)"
@@ -173,22 +170,19 @@ else
     else fail "parseTranscriptForAudit excludes user-type lines: user+assistant JSONL → array of length 1" "$out"; fi
 fi
 
-# 38. detectAskUserQuestionTurn — AskUserQuestion NOT last: [AskUserQuestion, Bash] → false
-if [ ! -f "$DETECT_PATH" ]; then skip "detectAskUserQuestionTurn: AskUserQuestion not last tool_use → false (detect.js missing)"
-else
-    _f=$(mktemp); _fn="$(to_node_path "$_f")"
-    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"AskUserQuestion","input":{}},{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}' > "$_f"
-    out=$(run_with_timeout 10 node -e "const m=require('${DETECT_JS}');const r=m.detectAskUserQuestionTurn('${_fn}');if(r!==false){console.log('FAIL: expected false (AskUserQuestion not last), got '+r);process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
-    if [ "$out" = "OK" ]; then pass "detectAskUserQuestionTurn: [AskUserQuestion, Bash] → false (last tool_use is Bash)"
-    else fail "detectAskUserQuestionTurn: [AskUserQuestion, Bash] → false (last tool_use is Bash)" "$out"; fi
-fi
+# 38. ask-user-question-tool — AskUserQuestion NOT last: [AskUserQuestion, Bash] → not a dialog turn
+_f=$(mktemp); _fn="$(to_node_path "$_f")"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"go"}}' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"AskUserQuestion","input":{}},{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}' > "$_f"
+out=$(run_with_timeout 10 node -e "const m=require('${UDT_JS}');const r=m.isUserDialogTurn({transcript_path:'${_fn}',last_assistant_message:''});if(r!==false){console.log('FAIL: expected false (AskUserQuestion not last), got '+r);process.exit(1);}console.log('OK');" 2>&1); rm -f "$_f"
+if [ "$out" = "OK" ]; then pass "ask-user-question-tool: [AskUserQuestion, Bash] → false (last tool_use is Bash)"
+else fail "ask-user-question-tool: [AskUserQuestion, Bash] → false (last tool_use is Bash)" "$out"; fi
 
-# 39. detect.js module.exports has exactly 4 keys
-if [ ! -f "$DETECT_PATH" ]; then skip "detect.js module.exports has exactly 4 keys (detect.js missing)"
+# 39. detect.js module.exports has exactly 3 keys (#2698 removed detectAskUserQuestionTurn)
+if [ ! -f "$DETECT_PATH" ]; then skip "detect.js module.exports has exactly 3 keys (detect.js missing)"
 else
-    out=$(run_with_timeout 10 node -e "const m=require('${DETECT_JS}');if(Object.keys(m).length!==4){console.log('FAIL: expected 4 keys, got '+Object.keys(m).length+': '+Object.keys(m).join(', '));process.exit(1);}console.log('OK');" 2>&1)
-    if [ "$out" = "OK" ]; then pass "detect.js module.exports has exactly 4 keys"
-    else fail "detect.js module.exports has exactly 4 keys" "$out"; fi
+    out=$(run_with_timeout 10 node -e "const m=require('${DETECT_JS}');const k=Object.keys(m).sort().join(',');if(k!=='detectOffProposal,detectSentinelHang,parseTranscriptForAudit'){console.log('FAIL: expected detectOffProposal,detectSentinelHang,parseTranscriptForAudit, got '+k);process.exit(1);}console.log('OK');" 2>&1)
+    if [ "$out" = "OK" ]; then pass "detect.js module.exports has exactly 3 keys"
+    else fail "detect.js module.exports has exactly 3 keys" "$out"; fi
 fi
 
 # ─── SUMMARY ─────────────────────────────────────────────────────────────────

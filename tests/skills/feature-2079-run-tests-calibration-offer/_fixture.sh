@@ -17,7 +17,9 @@ NOTICE_TAIL="measure once with: $NOTICE_HINT (up to 90 min; --dry-run shows the 
 # mk_cwd <dir> <status-line-1> [status-rc] — a fake worktree. The status stub prints
 # <dir>/status.line verbatim and exits <dir>/status.rc; the calibrator stub logs what it
 # received to <dir>/cal.log, copies <dir>/cal.line over status.line (a "new record"), and
-# exits <dir>/cal.rc.
+# exits <dir>/cal.rc. Called with --dry-run it instead appends one line to <dir>.dry.log (a
+# sibling, so the cwd's bytes stay as they were), prints <dir>/dry.out (default: a plan of
+# 600 s, i.e. 10 minutes), and exits <dir>/dry.rc.
 mk_cwd() {
     mkdir -p "$1/bin"
     printf '%s\n' "$2" > "$1/status.line"
@@ -26,6 +28,11 @@ mk_cwd() {
         'cat "$d/status.line"' 'exit "$(cat "$d/status.rc" 2>/dev/null || echo 0)"' \
         > "$1/bin/test-lanes-status.sh"
     printf '%s\n' '#!/usr/bin/env bash' 'd="$(cd "$(dirname "$0")/.." && pwd)"' \
+        'if [ "${1-}" = "--dry-run" ]; then' \
+        '    printf "pwd=%s args=%s\n" "$(pwd -P)" "$*" >> "$d.dry.log"' \
+        '    if [ -f "$d/dry.out" ]; then cat "$d/dry.out"; else printf "calibrate: dry run (stub)\nplan: estimate_total_s=600\n"; fi' \
+        '    exit "$(cat "$d/dry.rc" 2>/dev/null || echo 0)"' \
+        'fi' \
         'printf "RUN_CALIBRATION=%s\n" "${RUN_CALIBRATION-unset}" >> "$d/cal.log"' \
         'printf "pwd=%s\n" "$(pwd -P)" >> "$d/cal.log"' \
         'printf "args=%s\n" "$#" >> "$d/cal.log"' \
@@ -35,7 +42,11 @@ mk_cwd() {
     chmod +x "$1/bin/test-lanes-status.sh" "$1/bin/calibrate-test-parallelism.sh" 2>/dev/null || true
 }
 
-# na_rec <cache> <host_id> — a well-formed never-ask record.
+# dry_calls <cwd> — how many times the calibrator stub there ran with --dry-run.
+dry_calls() { if [ -f "$1.dry.log" ]; then grep -c . "$1.dry.log"; else echo 0; fi; }
+
+# na_rec <cache> <host_id> — a stale never-ask record in the #2079 format. #2687 removed
+# never-ask: the file may still sit on disk, and nothing may read or delete it.
 na_rec() {
     mkdir -p "$1"
     printf 'schema=1\nhost_id=%s\nrecorded_at=2026-01-01T00:00:00Z\n' "$2" > "$1/calibration-never-ask.conf"

@@ -36,7 +36,10 @@ SPACED="$TMPBASE/dir with space/two cases.Tests.ps1"
 mkdir -p "$SHIM" "$TMPBASE/dir with space" "$TMPBASE/cwd"
 printf 'placeholder\n' | tee "$SAMPLE" >"$SPACED"
 touch "$TMPBASE/cwd/f1" "$TMPBASE/cwd/f2"
-CONFORMING="FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\t\nCASE\t1\tbeta\tbin/lib/b.ps1\t9\t13\t\t\n"
+# CASE rows carry 7 columns: CASE, name, target, begin, end, deps, reason (#2673 dropped idx).
+CONFORMING="FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\t7\t\t\nCASE\tbeta\tbin/lib/b.ps1\t9\t13\t\t\n"
+# Two well-formed rows under one name: the reader passes them, the shared state rule rejects them.
+DUP_NAME="FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\t7\t\t\nCASE\talpha\tbin/lib/b.ps1\t9\t13\t\t\n"
 
 # The stub child: records its arguments, replays <stub>.out, exits with <stub>.rc.
 cat >"$STUB" <<'CHILD'
@@ -145,6 +148,63 @@ uncertain|FILE\tuncertain\t5\tdepth\n|uncertain|5|depth
 ROWS
 case_end
 
+case_begin "duplicate-name-is-malformed-by-the-state-rule" "bin/lib/case-reader-bridge.sh"
+# #2673: crb_run fills both cases; trp_marker_state_from_globals rejects the repeated name at
+# its second begin line and empties the cases. dump_globals applies the rule a second time.
+cat >"$TMPBASE/run-dup.sh" <<'RUN'
+root="$1"; file="$2"; shift 2
+. "$root/bin/lib/test-retire-predicate.sh" || exit 97
+. "$root/bin/lib/case-reader-bridge.sh" || exit 97
+. "${BASH_SOURCE[0]%/*}/dump.sh" || exit 97
+stale_globals
+crb_run "$file" "$@"
+rc=$?
+trp_marker_state_from_globals
+printf 'first=%s|%s|%s|%s\n' "$TRP_MARKER_STATE" "$TRP_MARKER_LINE" "$TRP_MARKER_REASON" "$TRP_CASE_COUNT"
+dump_globals "$rc"
+RUN
+printf '%b' "$DUP_NAME" >"$STUB.out"
+printf '0\n' >"$STUB.rc"
+BR_OUT="$(cd "$TMPBASE/cwd" && run_with_timeout 120 bash "$TMPBASE/run-dup.sh" "$SCRIPT_CHECKOUT_ROOT" "$SAMPLE" bash "$STUB" 2>"$TMPBASE/bridge.err")"
+assert_eq "rc=$(br rc) first=$(br first)" "rc=0 first=malformed|9|duplicate-name|0"
+assert_eq "again: state=$(br state) count=$(br count)" "again: state=malformed|9|duplicate-name count=0|0|0|0|0"
+case_end
+
+# dup_run <label> <want first=> <name> <target> [<name> <target>...] — the stub prints one
+# conforming FILE row and a CASE row per pair; case i spans lines 5+4i..7+4i. Runs run-dup.sh.
+dup_run() {
+  local label="$1" want="$2" out="FILE\tconforming\t\t\n" b=5
+  shift 2
+  while [ "$#" -ge 2 ]; do
+    out+="CASE\t$1\t$2\t$b\t$((b + 2))\t\t\n"
+    b=$((b + 4))
+    shift 2
+  done
+  printf '%b' "$out" >"$STUB.out"
+  printf '0\n' >"$STUB.rc"
+  BR_OUT="$(cd "$TMPBASE/cwd" && run_with_timeout 120 bash "$TMPBASE/run-dup.sh" "$SCRIPT_CHECKOUT_ROOT" "$SAMPLE" bash "$STUB" 2>"$TMPBASE/bridge.err")"
+  assert_eq "$label: rc=$(br rc) first=$(br first)" "$label: rc=0 first=$want"
+}
+
+case_begin "duplicate-name-variants-by-the-state-rule" "bin/lib/case-reader-bridge.sh"
+# #2673: the repeated name is reported at its first repeat, wherever it sits.
+dup_run "non-adjacent alpha,beta,alpha" "malformed|13|duplicate-name|0" alpha bin/a.sh beta bin/b.sh alpha bin/c.sh
+dup_run "three times alpha" "malformed|9|duplicate-name|0" alpha bin/a.sh alpha bin/b.sh alpha bin/c.sh
+dup_run "same name and same target" "malformed|9|duplicate-name|0" alpha bin/a.sh alpha bin/a.sh
+# Names are data to the duplicate check: a glob or a command substitution is compared as text.
+dup_run "glob name twice" "malformed|9|duplicate-name|0" "*" bin/a.sh "*" bin/b.sh
+dup_run "command-substitution name twice" "malformed|9|duplicate-name|0" '$(x)' bin/a.sh '$(x)' bin/b.sh
+case_end
+
+case_begin "distinct-names-are-not-duplicates" "bin/lib/case-reader-bridge.sh"
+# #2673 false-positive guard: names are compared whole and case-sensitively, never by prefix,
+# word or delimiter. A space and a pipe are legal in a name (crb_run rejects only empty names
+# and tab-split column counts), so `alpha beta` and `a|b` stay as written.
+dup_run "prefix, word and delimiter look-alikes" "conforming|||5" \
+  alph bin/a.sh alpha bin/b.sh "alpha beta" bin/c.sh "a|b" bin/d.sh b bin/e.sh
+dup_run "alpha and Alpha" "conforming|||2" alpha bin/a.sh Alpha bin/b.sh
+case_end
+
 case_begin "absent-command-is-79" "bin/lib/case-reader-bridge.sh"
 rm -f "$STUB.ran"
 BR_OUT="$(run_with_timeout 120 bash "$RUNNER" "$SCRIPT_CHECKOUT_ROOT" "$SAMPLE" "$ABSENT" "$STUB" 2>"$TMPBASE/bridge.err")"
@@ -162,24 +222,26 @@ while IFS='|' read -r rname rrc rout; do
   esac
   assert_eq "$rname: child ran=$(cat "$STUB.ran" 2>/dev/null)" "$rname: child ran=ran"
 done <<'ROWS'
-child-exit-1|1|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\t\n
-child-exit-79|79|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\t\n
+child-exit-1|1|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\t7\t\t\n
+child-exit-79|79|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\t7\t\t\n
 child-exit-2-no-output|2|
 empty-output|0|
-no-file-line|0|CASE\t0\talpha\tbin/a.sh\t5\t7\t\t\n
+no-file-line|0|CASE\talpha\tbin/a.sh\t5\t7\t\t\n
 file-3-columns|0|FILE\tnone\t\n
 file-5-columns|0|FILE\tnone\t\t\t\n
-case-7-columns|0|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\n
-case-9-columns|0|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\t\t\n
+case-6-columns|0|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\t7\t\n
+case-8-columns-old-idx-shape|0|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\t\n
 state-unknown|0|FILE\tweird\t\t\n
 state-unsupported|0|FILE\tunsupported\t\t\n
 state-unavailable|0|FILE\tunavailable\t\tpwsh\n
 state-uppercase|0|FILE\tNONE\t\t\n
 duplicate-file-line|0|FILE\tnone\t\t\nFILE\tnone\t\t\n
-duplicate-file-line-around-cases|0|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\t\nFILE\tconforming\t\t\n
+duplicate-file-line-around-cases|0|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\t7\t\t\nFILE\tconforming\t\t\n
 conforming-zero-cases|0|FILE\tconforming\t\t\n
-case-empty-name|0|FILE\tconforming\t\t\nCASE\t0\t\tbin/a.sh\t5\t7\t\t\n
-case-empty-target|0|FILE\tconforming\t\t\nCASE\t0\talpha\t\t5\t7\t\t\n
+case-empty-name|0|FILE\tconforming\t\t\nCASE\t\tbin/a.sh\t5\t7\t\t\n
+case-empty-target|0|FILE\tconforming\t\t\nCASE\talpha\t\t5\t7\t\t\n
+case-begin-not-numeric|0|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\tx\t7\t\t\n
+case-end-not-numeric|0|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\tx\t\t\n
 ROWS
 case_end
 
@@ -194,7 +256,7 @@ ODD_NAMES=('$(touch pwned-1)' '`touch pwned-2`' 'a; touch pwned-3' '*' 'two  spa
 ODD_TARGETS=('bin/$(touch pwned-4).sh' '*' 'bin/a b.sh' 'bin/`touch pwned-5`' 'bin/a;touch pwned-6' 'bin/"q".sh' '-e' 'bin/%s' 'bin\a.sh' '~/x' 'f?' 'bin/&&x')
 printf 'FILE\tconforming\t\t\n' >"$TMPBASE/odd.out"
 for i in "${!ODD_NAMES[@]}"; do
-  printf '%s\n' "CASE$T$i$T${ODD_NAMES[$i]}$T${ODD_TARGETS[$i]}$T$((i + 1))$T$((i + 2))$T$T" >>"$TMPBASE/odd.out"
+  printf '%s\n' "CASE$T${ODD_NAMES[$i]}$T${ODD_TARGETS[$i]}$T$((i + 1))$T$((i + 2))$T$T" >>"$TMPBASE/odd.out"
 done
 cp "$TMPBASE/odd.out" "$STUB.out"
 printf '0\n' >"$STUB.rc"
@@ -275,11 +337,18 @@ crr() {
 case_begin "record-reader-reports-a-bridged-reader" "bin/lib/case-record-reader.sh"
 crr "$CONFORMING" 0 bash
 assert_eq "$CRR_OUT" "FILE${T}conforming${T}${T}
-CASE${T}0${T}alpha${T}bin/a.sh${T}5${T}7${T}?${T}
-CASE${T}1${T}beta${T}bin/lib/b.ps1${T}9${T}13${T}?${T}
+CASE${T}alpha${T}bin/a.sh${T}5${T}7${T}?${T}
+CASE${T}beta${T}bin/lib/b.ps1${T}9${T}13${T}?${T}
 rc=0 cases=2"
 crr 'FILE\tmalformed\t4\tmissing-target\n' 0 bash
 assert_eq "$CRR_OUT" "FILE${T}malformed${T}4${T}missing-target
+rc=0 cases=0"
+case_end
+
+case_begin "record-reader-duplicate-name-is-malformed" "bin/lib/case-record-reader.sh"
+# #2673: a bridged reader's repeated name is rejected by the shared rule, with no CASE line.
+crr "$DUP_NAME" 0 bash
+assert_eq "$CRR_OUT" "FILE${T}malformed${T}9${T}duplicate-name
 rc=0 cases=0"
 case_end
 
@@ -297,13 +366,13 @@ while IFS='|' read -r rname rrc rout; do
   assert_eq "$rname: $CRR_OUT" "$rname: FILE${T}malformed${T}${T}reader
 rc=0 cases=0"
 done <<'ROWS'
-child-exit-1|1|FILE\tconforming\t\t\nCASE\t0\talpha\tbin/a.sh\t5\t7\t\t\n
+child-exit-1|1|FILE\tconforming\t\t\nCASE\talpha\tbin/a.sh\t5\t7\t\t\n
 child-exit-79|79|FILE\tnone\t\t\n
-no-file-line|0|CASE\t0\talpha\tbin/a.sh\t5\t7\t\t\n
+no-file-line|0|CASE\talpha\tbin/a.sh\t5\t7\t\t\n
 state-unknown|0|FILE\tweird\t\t\n
 conforming-zero-cases|0|FILE\tconforming\t\t\n
-case-empty-name|0|FILE\tconforming\t\t\nCASE\t0\t\tbin/a.sh\t5\t7\t\t\n
-case-empty-target|0|FILE\tconforming\t\t\nCASE\t0\talpha\t\t5\t7\t\t\n
+case-empty-name|0|FILE\tconforming\t\t\nCASE\t\tbin/a.sh\t5\t7\t\t\n
+case-empty-target|0|FILE\tconforming\t\t\nCASE\talpha\t\t5\t7\t\t\n
 ROWS
 case_end
 
@@ -327,8 +396,8 @@ while IFS='|' read -r rname rout; do
   esac
 done <<'ROWS'
 conforming-zero-cases|FILE\tconforming\t\t\n
-case-empty-name|FILE\tconforming\t\t\nCASE\t0\t\tbin/a.sh\t5\t7\t\t\n
-case-empty-target|FILE\tconforming\t\t\nCASE\t0\talpha\t\t5\t7\t\t\n
+case-empty-name|FILE\tconforming\t\t\nCASE\t\tbin/a.sh\t5\t7\t\t\n
+case-empty-target|FILE\tconforming\t\t\nCASE\talpha\t\t5\t7\t\t\n
 ROWS
 printf '%b' "$CONFORMING" >"$STUB.out"
 CK_OUT="$(run_with_timeout 120 bash "$CO/bin/check-case-markers.sh" "$TWO_PATHS" 2>"$TMPBASE/ck.err")"

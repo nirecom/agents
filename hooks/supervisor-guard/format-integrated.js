@@ -10,6 +10,8 @@
 // first (strategic context) followed by alert (operational detail), separated by
 // a horizontal rule.
 
+const { getConvLangInjection, withConvLang } = require("../lib/conv-lang");
+
 function formatIntegratedReason(arbitration, formattedL2Reason, formattedL3Reason) {
   if (!arbitration || arbitration.decision === "allow") return "";
   const parts = [];
@@ -25,7 +27,10 @@ function formatIntegratedReason(arbitration, formattedL2Reason, formattedL3Reaso
   } else {
     parts.push(arbitration.reason);
   }
-  return parts.filter(Boolean).join("\n---\n");
+  const body = parts.filter(Boolean).join("\n---\n");
+  // #2699: exactly one CONV_LANG injection — the l2 reason may already carry it.
+  const inj = getConvLangInjection();
+  return inj && body.includes(inj) ? body : withConvLang(body);
 }
 
 module.exports = { formatIntegratedReason };

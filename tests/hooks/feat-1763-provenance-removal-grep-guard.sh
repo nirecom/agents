@@ -1,23 +1,14 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-1763-provenance-removal-grep-guard.sh
-# Tests: hooks/lib/issue-provenance-keys.js, bin/github-issues/issue-provenance, skills/issue-create/SKILL.md, settings.json, .env.example
+# Tests: skills/issue-create/SKILL.md, settings.json, .env.example
 # Tags: issue-create, provenance-removal, dead-code-guard, repo-wide-scan, scope:issue-specific, pwsh-not-required, TL1
 # TL3 gap (what this test does NOT catch):
 # - A residue that is spelled differently from the three tokens scanned here (e.g. a
 #   renamed marker file). Only the documented spellings are greppable offline.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
-#
-# The provenance token mechanism is deleted wholesale in this PR: the mint hook, its
-# libraries, the CLI, the confirm-gate input, the settings.json registration and the
-# .env.example switch all go at once. Partial removal is the dangerous outcome — a
-# surviving registration in settings.json would keep firing a deleted hook on every
-# UserPromptSubmit, and a surviving `ISSUE_PROVENANCE` read would branch on a value
-# nothing writes. Neither shows up in a behavioural test of the code that REMAINS, so
-# the only way to observe the residue is to scan for it.
-#
-# docs/ and tests/ are deliberately out of scope: history.md, CHANGELOG.md and this
-# file itself must be able to name the thing that was removed.
+# The provenance mechanism is deleted wholesale; a surviving settings.json registration or
+# ISSUE_PROVENANCE read shows in no behavioural test, so this scan observes it (docs/, tests/ excluded).
 
 set -u
 

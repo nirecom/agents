@@ -2,7 +2,7 @@
 # Parses the file with the PowerShell parser (never runs it) and reports each top-level
 # Describe '<name>' -Tag 'target:<path>'. Prints
 #   FILE<TAB><state><TAB><line><TAB><reason>   and, when conforming, one
-#   CASE<TAB><idx><TAB><name><TAB><target><TAB><begin><TAB><end><TAB><TAB>   per Describe
+#   CASE<TAB><name><TAB><target><TAB><begin><TAB><end><TAB><TAB>   per Describe, in file order
 # (begin = the Describe line, end = its closing brace line). Exit 1: unreadable file.
 param([Parameter(Mandatory)][string]$Path)
 
@@ -95,5 +95,5 @@ if ($fault.Count -gt 0) {
 }
 $row = [System.Collections.Generic.List[object]]::new()
 $row.Add(@('FILE', $(if ($case.Count -gt 0) { 'conforming' } else { 'none' }), '', ''))
-for ($i = 0; $i -lt $case.Count; $i++) { $row.Add(@('CASE', $i) + $case[$i] + @('', '')) }
+foreach ($c in $case) { $row.Add(@('CASE') + $c + @('', '')) }
 Write-Record -Row $row.ToArray()

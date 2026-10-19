@@ -97,8 +97,9 @@ check "its one-line definition (the CLI requested a subagent dispatch) sits next
   "$(tx '((i) => i >= 0 && lines.slice(Math.max(0, i - 1), i + 3).some((l) => /dispatch/.test(l)))(lines.findIndex((l) => l.includes("LLM call rate")))')"
 check "the answer-received rate and answer_missing are in the same row block" "true" \
   "$(tx '((i) => i >= 0 && lines.slice(i, i + 3).some((l) => l.includes("answer-received rate")) && lines.slice(i, i + 3).some((l) => l.includes("answer_missing")))(lines.findIndex((l) => l.includes("LLM call rate")))')"
-check "the short-circuit rate is labelled; complexity-judge alone reads no short-circuit" "true|1|complexity-judge" \
-  "$(tx '[lines.some((l) => l.includes("short-circuit rate")), lines.filter((l) => l.includes("no short-circuit")).length, ((i) => (lines.slice(0, i + 1).reverse().find((l) => /complexity-judge|detail-skip|outline-skip/.test(l)) || "").match(/complexity-judge|detail-skip|outline-skip/)?.[0])(lines.findIndex((l) => l.includes("no short-circuit")))].join("|")')"
+# Every registered point now short-circuits (complexity-judge on true), so none reads "no short-circuit".
+check "the short-circuit rate is labelled; complexity-judge shows its rate (0) and no point reads no short-circuit" "true|0|true" \
+  "$(tx '[lines.some((l) => l.includes("short-circuit rate")), lines.filter((l) => l.includes("no short-circuit")).length, lines.some((l) => l.startsWith("complexity-judge: decisions=") && l.endsWith("short-circuit rate=0 (0)"))].join("|")')"
 case_end
 
 echo "=== a hostile v2 log neither crashes the report nor leaks a secret ==="

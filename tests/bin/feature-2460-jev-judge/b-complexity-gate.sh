@@ -26,31 +26,33 @@ csv_shape_ok() {
   fi
 }
 
-case_begin "jj-all-confident-final" "bin/workflow/jev-judge"
+# The no-fire side is never adopted (false: null), so Jev alone settles a ticket only through a
+# decisive adopted signal: S2 p=0.99 short-circuits and leaves S3 / S5 unjudged.
+case_begin "jj-decisive-signal-final" "bin/workflow/jev-judge"
 jj_fx confident
-mock_p 0.01
+mock_p 0.5 S2-architecture 0.99
 jj_query complexity
-check "all confident: query exit 0" "0" "$JJ_RC"
-check "all confident: RESULT=final" "final" "$(kv RESULT)"
-check "all confident: TICKET is 16 hex" "1" "$(kv TICKET | grep -Ecx '[0-9a-f]{16}')"
-check "all confident: SUBAGENT=-" "-" "$(kv SUBAGENT)"
-check "all confident: ANSWER_FILE=-" "-" "$(kv ANSWER_FILE)"
-check "all confident: SOURCES_DIR=- (no subagent reads the copies)" "-" "$(kv SOURCES_DIR)"
-check "all confident: query stdout is exactly seven lines" "7" "$(out_lines)"
-check "all confident: Jev asked exactly once" "1" "$(mock_count systemone)"
+check "decisive S2: query exit 0" "0" "$JJ_RC"
+check "decisive S2: RESULT=final" "final" "$(kv RESULT)"
+check "decisive S2: TICKET is 16 hex" "1" "$(kv TICKET | grep -Ecx '[0-9a-f]{16}')"
+check "decisive S2: SUBAGENT=-" "-" "$(kv SUBAGENT)"
+check "decisive S2: ANSWER_FILE=-" "-" "$(kv ANSWER_FILE)"
+check "decisive S2: SOURCES_DIR=- (no subagent reads the copies)" "-" "$(kv SOURCES_DIR)"
+check "decisive S2: query stdout is exactly seven lines" "7" "$(out_lines)"
+check "decisive S2: Jev asked exactly once" "1" "$(mock_count systemone)"
 fin
-check "all confident: finalize exit 0" "0" "$JJ_RC"
-check "all confident: RESULT=ok" "ok" "$(kv RESULT)"
-check "all confident: ADOPTED=jev" "jev" "$(kv ADOPTED)"
-check "all confident: SETTLE=ok" "ok" "$(kv SETTLE)"
-check "all confident (all p=0.01): SIGNALS_CSV empty" "" "$(kv SIGNALS_CSV)"
+check "decisive S2: finalize exit 0" "0" "$JJ_RC"
+check "decisive S2: RESULT=ok" "ok" "$(kv RESULT)"
+check "decisive S2: ADOPTED=jev" "jev" "$(kv ADOPTED)"
+check "decisive S2: SETTLE=ok" "ok" "$(kv SETTLE)"
+check "decisive S2: SIGNALS_CSV=S2-architecture" "S2-architecture" "$(kv SIGNALS_CSV)"
 check "no SIGNALS_FILE line in finalize stdout" "<none>" "$(kv SIGNALS_FILE)"
-check "fixed complexity-signals.txt equals SIGNALS_CSV" "" "$(fixed_csv complexity)"
+check "fixed complexity-signals.txt equals SIGNALS_CSV" "S2-architecture" "$(fixed_csv complexity)"
 check "decision log: one decision record for the ticket" "1" "$(lq "$TICKET" 'recs.filter(x=>x.record_type==="decision").length')"
-check "decision log: version 2, llm_needed false, short_circuited false" "2|false|false" \
+check "decision log: version 2, llm_needed false, short_circuited true" "2|false|true" \
   "$(lq "$TICKET" 'r && [r.version, r.llm_needed, r.short_circuited].join("|")')"
-check "decision log: final.signals_csv equals stdout" "" "$(lq "$TICKET" 'r && r.final && r.final.signals_csv')"
-check "decision log: threshold object 0.7 / 0.7, short_circuit_answer null" '{"true":0.7,"false":0.7}|null' \
+check "decision log: final.signals_csv equals stdout" "S2-architecture" "$(lq "$TICKET" 'r && r.final && r.final.signals_csv')"
+check "decision log: threshold object 0.7 / null, short_circuit_answer true" '{"true":0.7,"false":null}|true' \
   "$(lq "$TICKET" 'r && JSON.stringify(r.threshold)+"|"+String(r.short_circuit_answer)')"
 OWNER="$(ctl complexity-signals-owner.json)"
 check "owner marker: owner_id is the ticket" "\"$TICKET\"" "$(pb json-get "$OWNER" owner_id)"
@@ -59,26 +61,27 @@ check "owner marker: signals_sha256 matches the fixed file" "\"$(pb sha "$(ctl c
   "$(pb json-get "$OWNER" signals_sha256)"
 case_end
 
+# S3 p=0.95 is adopted true but not decisive at complexity, so S2 / S5 go to the subagent.
 case_begin "jj-one-uncertain-mixed" "bin/workflow/jev-judge"
 jj_fx mixed
-mock_p 0.01 S2-architecture 0.5
+mock_p 0.5 S3-security 0.95
 jj_query complexity
 check "one uncertain: RESULT=need-subagent" "need-subagent" "$(kv RESULT)"
-check "one uncertain: DELEGATED is exactly S2" "s2_architecture" "$(keyset "$(kv DELEGATED)")"
+check "one uncertain: DELEGATED is exactly S2 and S5" "s2_architecture,s5_breaking" "$(keyset "$(kv DELEGATED)")"
 check "one uncertain: SUBAGENT names the backup" "complexity-judge" "$(kv SUBAGENT)"
-SNAP="$(kv SNAPSHOT_FILE)"
-check "SNAPSHOT_FILE exists" "yes" "$([ -f "$SNAP" ] && echo yes || echo no)"
+JEV_INPUT="$(kv JEV_INPUT_FILE)"
+check "JEV_INPUT_FILE exists" "yes" "$([ -f "$JEV_INPUT" ] && echo yes || echo no)"
 SRC_DIR="$(kv SOURCES_DIR)"
 check "one uncertain: SOURCES_DIR is the ticket's jev-sources directory" "yes" \
   "$([ -d "$SRC_DIR" ] && [ "$(basename "$SRC_DIR")" = "$TICKET" ] && [ "$(basename "$(dirname "$SRC_DIR")")" = "jev-sources" ] && echo yes || echo no)"
-check "one uncertain: every source the snapshot names is a file in SOURCES_DIR" "2|0" \
-  "$(tr -d '\r' < "$SNAP" | sed -n '/^sources:$/,/^sources_unavailable/p' | sed '1d;$d' | while IFS= read -r n; do [ -f "$SRC_DIR/$n" ] && echo ok || echo missing; done | sort | uniq -c | awk '{printf "%s%s", (NR>1?"+":""), $1":"$2}' | sed 's/^2:ok$/2|0/')"
-check "one uncertain: the snapshot does not carry SOURCES_DIR" "0" "$(tr '\\' '/' < "$SNAP" | grep -cF "$SRC_DIR")"
+check "one uncertain: every source the Jev input names is a file in SOURCES_DIR" "2|0" \
+  "$(tr -d '\r' < "$JEV_INPUT" | sed -n '/^sources:$/,/^sources_unavailable/p' | sed '1d;$d' | while IFS= read -r n; do [ -f "$SRC_DIR/$n" ] && echo ok || echo missing; done | sort | uniq -c | awk '{printf "%s%s", (NR>1?"+":""), $1":"$2}' | sed 's/^2:ok$/2|0/')"
+check "one uncertain: the Jev input does not carry SOURCES_DIR" "0" "$(tr '\\' '/' < "$JEV_INPUT" | grep -cF "$SRC_DIR")"
 answer "SIGNALS: S2-architecture"
 fin
 check "one uncertain + LLM S2: ADOPTED=mixed" "mixed" "$(kv ADOPTED)"
-check "one uncertain + LLM S2: SIGNALS_CSV=S2-architecture" "S2-architecture" "$(kv SIGNALS_CSV)"
-check "fixed file equals SIGNALS_CSV" "S2-architecture" "$(fixed_csv complexity)"
+check "one uncertain + LLM S2: SIGNALS_CSV is Jev's S3 plus the LLM's S2" "S2-architecture,S3-security" "$(kv SIGNALS_CSV)"
+check "fixed file equals SIGNALS_CSV" "S2-architecture,S3-security" "$(fixed_csv complexity)"
 check "derive --signals SIGNALS_CSV for outline: high" "level=high" \
   "$(bash "$RWT" 30 node "$DERIVE" --stage outline --signals "$(kv SIGNALS_CSV)" 2>/dev/null | head -1 | tr -d '\r')"
 case_end
@@ -116,6 +119,8 @@ fin
 check "NO_ANSWER: SIGNALS_CSV=S0-undecidable" "S0-undecidable" "$(kv SIGNALS_CSV)"
 check "NO_ANSWER: llm_answer_received true, llm.status missing" "true|missing" \
   "$(lq "$TICKET" 'r && r.llm_answer_received+"|"+(r.llm&&r.llm.status)')"
+check "NO_ANSWER: FALLBACK=answer-empty" "answer-empty" "$(kv FALLBACK)"
+check "NO_ANSWER: fallback_reason answer-empty" "answer-empty" "$(lq "$TICKET" 'r && r.fallback_reason')"
 case_end
 
 case_begin "jj-deterministic-token-stripped" "bin/workflow/jev-judge"

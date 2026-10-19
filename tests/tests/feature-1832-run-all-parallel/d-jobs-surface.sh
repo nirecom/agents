@@ -253,7 +253,7 @@ else
     fx_fail "D6e. want the explicit 'on' spelling to equal the default, got EXECUTED=$ON_EXEC progress=$ON_ERR_N vs default $P_ERR_N"
 fi
 
-# --- D7 (#2079): layer precedence -j > env > .env > default 4 ----------------
+# --- D7 (#2079): layer precedence -j > env > .env (no layer: AC6 below) -------
 # Observed through the progress line's `(j=<n>`, which caps at the test count, so
 # the fixture holds 6 tests: every width under test (2..5) stays visible.
 WIDE="$(fx_new_root)"
@@ -281,8 +281,6 @@ env-beats-dotenv    | TEST_MAX_JOBS_PER_RUN=3 RUN_ALL_CONFIG_VAR_CMD=$DOT_2  | -
 cli-auto-to-env     | TEST_MAX_JOBS_PER_RUN=3 RUN_ALL_CONFIG_VAR_CMD=$DOT_2  | -j auto --all | 3
 env-auto-to-dotenv  | TEST_MAX_JOBS_PER_RUN=auto RUN_ALL_CONFIG_VAR_CMD=$DOT_2 | --all       | 2
 env-empty-to-dotenv | TEST_MAX_JOBS_PER_RUN= RUN_ALL_CONFIG_VAR_CMD=$DOT_2   | --all         | 2
-dotenv-auto-default | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO                       | --all         | 4
-no-layer-default    |                                                        | --all         | 4
 TABLE
 
 # The adopted layer is named on stderr; a refused .env value names nothing it did not adopt.
@@ -291,10 +289,48 @@ if grep -qF 'max jobs per run: 2 (.env)' "$FX_TMP_ROOT/prec-dotenv-sets-width.er
 else
     fx_fail "D7-notice-dotenv. want stderr 'max jobs per run: 2 (.env)'"
 fi
-if grep -qF 'max jobs per run: 4 (default)' "$FX_TMP_ROOT/prec-dotenv-auto-default.err"; then
-    fx_pass "D7-notice-default. .env=auto falls through to the default 4 and stderr says so"
-else
-    fx_fail "D7-notice-default. want stderr 'max jobs per run: 4 (default)' when .env says auto"
-fi
+
+# --- AC6 (#2687): no per-run layer (or .env=auto) = unlimited, in both modes --------
+# The default 4 is gone: the width is the test count bounded by the run-all lane pool
+# (max jobs per host - 1). Max jobs per host is made mode-independent on purpose — pin 8 plus
+# a measured 8 gives 8 under on (min) and under off (pin only) — so one expectation covers
+# both modes. nproc answers 1024 so the logical-CPU ceiling never trims the pin.
+AC6_CPU="$FX_TMP_ROOT/ac6-cpu"; mkdir -p "$AC6_CPU"
+printf '#!/bin/sh\nprintf "%%s\\n" 1024\n' > "$AC6_CPU/nproc"; chmod +x "$AC6_CPU/nproc"
+AC6_ROOT="$(FX_WITH_LANES=1 fx_new_root)"
+for i in 1 2 3 4 5 6; do fx_add_dummy "$AC6_ROOT" "u$i" --lines 1; done
+AC6_LIB="$FX_REPO_ROOT/bin/lib/run-all-parallelism.sh"
+ac6_lib() { env "PATH=$AC6_CPU:$PATH" bash -c '. "$1" >/dev/null 2>&1 || exit 0; "$2"' _ "$AC6_LIB" "$1" 2>/dev/null; }
+AC6_HID="$(ac6_lib run_all_host_id)"; AC6_OS="$(ac6_lib run_all_os_attr)"
+printf 'schema=3\nhost_id=%s\nos=%s\nmax_jobs_per_host=8\nmeasured_at=2026-01-01T00:00:00Z\nsample_size=24\nrepeat=3\nlogical_cpu_count=1024\nmax_width_measured=16\nwidth_limit=candidates\n' \
+    "$AC6_HID" "$AC6_OS" > "$FX_CACHE_DIR/parallelism.conf"
+
+# ac6_row <name> <mode> <host-pin> <envspec> <want-j>
+ac6_row() {
+    local name="$1" mode="$2" pin="$3" envspec="$4" want="$5" rc=0 j ex
+    local out="$FX_TMP_ROOT/ac6-$name.out" err="$FX_TMP_ROOT/ac6-$name.err"
+    eval "AUTO_CONFIG_TEST_MAX_JOBS=$mode TEST_MAX_JOBS_PER_HOST=$pin FX_PATH_PREFIX=\$AC6_CPU $envspec fx_exec \"\$AC6_ROOT\" 60 \"\$out\" \"\$err\" --all" || rc=$?
+    j="$(grep -oE '\(j=[0-9]+' "$err" | head -n 1 | tr -dc '0-9')"
+    ex="$(fx_contract_field "$out" EXECUTED)"
+    assert_eq "AC6/$name" "EXECUTED=6 j=$want" "EXECUTED=$ex j=${j:-none}"
+    if grep -qF 'max jobs per run: unlimited (default)' "$err"; then
+        fx_pass "AC6/$name/notice. stderr says 'max jobs per run: unlimited (default)'"
+    else
+        fx_fail "AC6/$name/notice. want stderr 'max jobs per run: unlimited (default)'"
+    fi
+}
+while IFS='|' read -r name mode pin envspec want; do
+    case "$name" in ''|\#*) continue ;; esac
+    ac6_row "$(trim "$name")" "$(trim "$mode")" "$(trim "$pin")" "$(trim "$envspec")" "$(trim "$want")"
+done <<'TABLE'
+# name               | mode | host pin | envspec                          | want j
+no-layer-on          | on   | 8        |                                  | 6
+no-layer-off         | off  | 8        |                                  | 6
+dotenv-auto-on       | on   | 8        | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO | 6
+dotenv-auto-off      | off  | 8        | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO | 6
+lane-pool-bound-on   | on   | 4        |                                  | 3
+lane-pool-bound-off  | off  | 4        |                                  | 3
+TABLE
+rm -f "$FX_CACHE_DIR/parallelism.conf"
 
 fx_finish

@@ -49,6 +49,7 @@
     { "kind": "debug-log", "source": "%STAGE%-debug\\.log", "retention": "non-plan" },
     { "kind": "judge-raw", "source": "(?:complexity|outline|detail|write-tests|write-code)-judge-raw\\.txt", "retention": "non-plan" },
     { "kind": "write-code-files", "source": "write-code-files\\.txt", "retention": "non-plan" },
+    { "kind": "jev-answer", "source": "jev-[0-9a-f]{16}-answer\\.txt", "retention": "non-plan" },
     { "kind": "finalize-diagnostic", "source": "%FORMAT%-finalize-diagnostic\\.txt", "retention": "non-plan" },
     { "kind": "worker-draft", "source": "%WORKER%\\.draft\\.json", "retention": "non-plan" },
     { "kind": "notes-backup", "source": "notes-backup", "retention": "non-plan" },

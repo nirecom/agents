@@ -13,10 +13,14 @@ process.exitCode = 70;
 AGENTS_NODE_GUARD
 # Usage:
 #   get-config-var <NAME> [<default>]
-#       Prints resolved value to stdout. Exits 0.
+#       Prints the raw resolved value to stdout (or nothing). Exits 0.
+#       Value mode never interprets the value: for an on/off flag use
+#       `get-config-var --is-off <NAME> <default>` or bin/confirm-off instead.
+#       <default> applies only when NAME has no export and no .env value.
 #   get-config-var --is-off <NAME> [<default>]
 #       Exit 0 (OFF) | 1 (explicit ON) | 2 (unset, no default given) |
-#       3 (unrecognized value, stderr warning) | 4 (internal failure).
+#       3 (unrecognized value, stderr warning) | 4 (internal failure, including
+#       node cannot start or hooks/lib/config-flag.js cannot be loaded).
 #       The '&& echo OFF || echo ON' shell idiom is one possible caller convention —
 #       fail-safe-ON, mapping exit 0 → OFF and 1/2/3/4 → ON. Callers wanting
 #       fail-safe-OFF instead should check $? explicitly and treat ONLY exit code 1
@@ -24,92 +28,76 @@ AGENTS_NODE_GUARD
 #       fail-safe-OFF pattern deliberately.
 #   Usage error (missing NAME arg): exit 64.
 #
-# hooks/lib/load-env.js is always the one beside this script (symlinks followed).
-# Process env wins over .env (parity with load-env.js). This is the opposite of
-# bin/env-effective-kv, which never reads process.env — callers resolving a
-# prompt-bound value (e.g. PROJECT_NFR) that must not be forgeable by an inline
-# `VAR=x` shell prefix should use env-effective-kv instead of this script.
+# The resolution and the on/off classification are owned by hooks/lib/config-flag.js,
+# always the one beside this script (symlinks followed); bin/confirm-off is a sibling
+# wrapper over the same module. Process env wins over .env (parity with load-env.js).
+# This is the opposite of bin/env-effective-kv, which never reads process.env — callers
+# resolving a prompt-bound value (e.g. PROJECT_NFR) that must not be forgeable by an
+# inline `VAR=x` shell prefix should use env-effective-kv instead of this script.
 
 set -u
 
-MODE="value"
-GETCV_REPO_ROOT=""
+CF_MODE="value"
+CF_REPO_ROOT=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --is-off) MODE="is-off"; shift ;;
+    --is-off) CF_MODE="kind"; shift ;;
     --repo-root)
       if [ $# -lt 2 ]; then
         printf 'usage: get-config-var [--is-off] [--repo-root <path>] <NAME> [<default>]\n' >&2
         exit 64
       fi
-      GETCV_REPO_ROOT="$2"; shift 2 ;;
+      CF_REPO_ROOT="$2"; shift 2 ;;
     *) break ;;
   esac
 done
 
-GETCV_NAME="${1:-}"
-GETCV_DEFAULT="${2:-}"
+CF_NAME="${1:-}"
+CF_DEFAULT="${2:-}"
 
-if [ -z "$GETCV_NAME" ]; then
+if [ -z "$CF_NAME" ]; then
   printf 'usage: get-config-var [--is-off] <NAME> [<default>]\n' >&2
   exit 64
 fi
 
-_SCRIPT="${BASH_SOURCE[0]}"
-_target="$(readlink "$_SCRIPT" 2>/dev/null)"
-while [ -n "$_target" ]; do
-  case "$_target" in
-    /*) _SCRIPT="$_target" ;;
-    *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
-  esac
-  _target="$(readlink "$_SCRIPT" 2>/dev/null)"
-done
-SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
-GETCV_LOADENV="$SCRIPT_DIR/../hooks/lib/load-env.js"
-
-GETCV_KIND_FILE=""
-trap 'rm -f "$GETCV_KIND_FILE"' EXIT
-GETCV_KIND_FILE="$(mktemp)"
-export GETCV_KIND_FILE
-
-VAL="$(GETCV_NAME="$GETCV_NAME" GETCV_DEFAULT="$GETCV_DEFAULT" GETCV_LOADENV="$GETCV_LOADENV" GETCV_REPO_ROOT="$GETCV_REPO_ROOT" node -e '
-  const fs = require("fs");
-  const name = process.env.GETCV_NAME;
-  const dflt = process.env.GETCV_DEFAULT || "";
-  const exported = process.env[name];
-  let r;
-  try {
-    r = require(process.env.GETCV_LOADENV).resolveConfigVar(name, dflt, { repoRoot: process.env.GETCV_REPO_ROOT || "" });
-    fs.writeFileSync(process.env.GETCV_KIND_FILE, r.loadFailed ? "unloaded" : "loaded");
-  } catch (e) {
-    r = { value: exported && exported.length ? exported : dflt }; // module-missing fallback
-    fs.writeFileSync(process.env.GETCV_KIND_FILE, "unloaded");
+# config-flag bootstrap: begin
+CF_OUT="$(CONFIG_FLAG_MODE="$CF_MODE" CONFIG_FLAG_NAME="$CF_NAME" CONFIG_FLAG_DEFAULT="$CF_DEFAULT" CONFIG_FLAG_REPO_ROOT="$CF_REPO_ROOT" node -e '
+  const fs = require("fs"); const path = require("path"); const e = process.env;
+  const a = { mode: e.CONFIG_FLAG_MODE || "value", name: e.CONFIG_FLAG_NAME || "", defaultValue: e.CONFIG_FLAG_DEFAULT || "", repoRoot: e.CONFIG_FLAG_REPO_ROOT || "" };
+  for (const k of ["CONFIG_FLAG_MODE", "CONFIG_FLAG_NAME", "CONFIG_FLAG_DEFAULT", "CONFIG_FLAG_REPO_ROOT"]) delete e[k];
+  function toNative(p) {
+    if (process.platform !== "win32" || p.charAt(0) !== "/") return p;
+    const m = /^\/([A-Za-z])\//.exec(p);
+    if (m) return m[1] + ":/" + p.slice(3);
+    // MSYS_NO_PATHCONV=1 left an MSYS mount path: map the prefix env PWD shares with the native cwd.
+    let px = String(e.PWD || ""); let wd = process.cwd();
+    while (px.length > 1 && path.basename(px) === path.basename(wd) && path.dirname(wd) !== wd) { px = path.posix.dirname(px); wd = path.dirname(wd); }
+    if (px.charAt(0) !== "/") return p;
+    if (px === "/") return path.join(wd, p);
+    return p === px || p.startsWith(px + "/") ? path.join(wd, p.slice(px.length)) : p;
   }
-  process.stdout.write(r.value);
-')"
+  let lib = null;
+  try {
+    const self = fs.realpathSync(toNative(String(process.argv[1] || "")));
+    lib = require(path.join(path.dirname(self), "..", "hooks", "lib", "config-flag.js"));
+  } catch (_e) { lib = null; }
+  if (lib) lib.runCli(a);
+  else if (a.mode === "kind") process.stdout.write("failed lib-missing");
+  else if (a.mode === "verdict") process.stdout.write("ERROR lib-missing");
+  else { const x = e[a.name]; process.stdout.write(x && x.length ? x : a.defaultValue); }
+' "${BASH_SOURCE[0]}")"
+# config-flag bootstrap: end
 
-if [ "$MODE" = "is-off" ]; then
-  KIND="$(cat "$GETCV_KIND_FILE" 2>/dev/null || echo 'unloaded')"
-  if [ "$KIND" = "unloaded" ]; then
-    exit 4
-  fi
-  if [ -z "$VAL" ]; then
-    exit 2
-  fi
-  v_lower="$(printf '%s' "$VAL" | tr '[:upper:]' '[:lower:]')"
-  case "$v_lower" in
+if [ "$CF_MODE" = "kind" ]; then
+  case "$CF_OUT" in
     off) exit 0 ;;
-    on)  exit 1 ;;
-    *)
-      # The value itself is withheld: with --repo-root it can come from a
-      # reviewed project's local override file, so echoing it would put a
-      # secret-shaped config value into whatever transcript reads stderr.
-      printf 'get-config-var: unrecognized value for %s (value withheld; caller-dependent: exit 3 — see usage header for ON vs OFF handling)\n' \
-        "$GETCV_NAME" >&2
-      exit 3 ;;
+    on) exit 1 ;;
+    unset) exit 2 ;;
+    unrecognized) exit 3 ;;
+    *) exit 4 ;;
   esac
 fi
 
-printf '%s' "$VAL"
+printf '%s' "$CF_OUT"
 # End of the #1532 node-misinvocation guard envelope -- docs/agents-repo-dev.md
 # */

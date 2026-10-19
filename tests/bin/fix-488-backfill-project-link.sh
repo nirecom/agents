@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/gh, bin/github-issues/migration/backfill-project-link.sh
+# Tests: bin/github-issues/migration/backfill-project-link.sh
 # Tags: github, issues, bin, env, config, scope:issue-specific
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,10 +33,6 @@ teardown_fixture() {
 ok() { PASS=$((PASS+1)); echo "PASS: $1"; }
 ng() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
 assert() { local n="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$n"; else ng "$n"; fi; }
-
-case_begin "gh-exists" "bin/gh"
-[ -f "$REPO_ROOT/bin/gh" ] && ok "bin/gh exists" || ok "bin/gh absent (mock-only dependency)"
-case_end
 
 case_begin "backfill-project-link" "bin/github-issues/migration/backfill-project-link.sh"
 # B1: happy path — link called, rc=0, NO state file in CWD

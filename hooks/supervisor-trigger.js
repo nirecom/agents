@@ -79,8 +79,16 @@ if (require.main === module) {
 
   let advisory = null;
   if (cumSev === "error") {
-    advisory = `[EM Supervisor] Alert mode has flagged a blocking concern (${findingCount} finding(s)). Review the next Stop turn — supervisor-guard.js will block.`;
+    try { advisory = formatAlertAdvisory(findingCount); } catch (_) { advisory = null; }
   }
 
   done(advisory);
 }
+
+// The cumSev=error advisory, in the conversation language (#2699).
+function formatAlertAdvisory(findingCount) {
+  const { withConvLang } = require("./lib/conv-lang");
+  return withConvLang(`[EM Supervisor] Alert mode has flagged a blocking concern (${findingCount} finding(s)). Review the next Stop turn — supervisor-guard.js will block.`);
+}
+
+module.exports = { formatAlertAdvisory };

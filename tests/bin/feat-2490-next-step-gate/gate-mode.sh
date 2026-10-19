@@ -37,7 +37,12 @@ CFG_APOS="$GT_BASE/cfg-apos"; mk_tree "$CFG_APOS"
 printf "#!/usr/bin/env bash\necho \"approach changed: don't reuse A\"\nexit 0\n" > "$CFG_APOS/bin/detect-scope-change.sh"
 CFG_S2="$GT_BASE/cfg-s2"; mk_tree "$CFG_S2"
 printf '#!/usr/bin/env bash\nexit 2\n' > "$CFG_S2/bin/detect-scope-change.sh"
-CFG_E4="$GT_BASE/cfg-e4"; mk_tree "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
+# #2681: the gate resolves in-process, so an unreadable gate is a tree without hooks/lib/config-flag.js.
+CFG_NOLIB="$GT_BASE/cfg-nolib"; mk_tree "$CFG_NOLIB"; rm -f "$CFG_NOLIB/hooks/lib/config-flag.js"
+# A load-env whose CONFIRM_* lookups take 1700 ms (> the 1500 ms budget) but still answer.
+CFG_SLOW="$GT_BASE/cfg-slow"; mk_tree "$CFG_SLOW"
+mv "$CFG_SLOW/hooks/lib/load-env.js" "$CFG_SLOW/hooks/lib/load-env-real.js"
+printf '"use strict";\nconst real = require("./load-env-real");\nmodule.exports = Object.assign({}, real, { resolveConfigVar: function (n, d, o) { if (/^CONFIRM_/.test(n)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1700); return real.resolveConfigVar(n, d, o); } });\n' > "$CFG_SLOW/hooks/lib/load-env.js"
 
 case_begin "relocated-detector-exists" "bin/detect-scope-change.sh"
 check "bin/detect-scope-change.sh exists" "yes" "$([ -f "$SCRIPT_CHECKOUT_ROOT/bin/detect-scope-change.sh" ] && echo yes || echo no)"
@@ -72,10 +77,21 @@ gate --session gm-sc --scope-change-approved
 check "ON + change + flag: still ask" "ask" "$(val GATE_ACTION)"
 gate --session gm-same
 check "ON, no change: ask" "ask" "$(val GATE_ACTION)"
-OUT="$(run_next_step_in "$CFG_E4" --gate --session gm-same 2>/dev/null || true)"
+OUT="$(run_next_step_in "$CFG_NOLIB" --gate --session gm-same 2>/dev/null || true)"
 ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
 check "ERROR: ask" "ask" "$(val GATE_ACTION)"
 check "ERROR: value line" "ERROR" "$(val GATE_CONFIRM_DETAIL)"
+check "ERROR: REASON names probe-exception" yes "$(has probe-exception "$(reason)")"
+case_end
+
+case_begin "scope-change-approved-carries-probe-cause" "bin/workflow/lib/next-step/gate-mode.js"
+export CONFIRM_DETAIL=off
+OUT="$(run_next_step_in "$CFG_SLOW" --gate --session gm-sc --scope-change-approved 2>/dev/null || true)"
+ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
+check "slow OFF + change + flag: proceed" "proceed" "$(val GATE_ACTION)"
+check "slow OFF + change + flag: value line stays OFF" "OFF" "$(val GATE_CONFIRM_DETAIL)"
+check "slow OFF + change + flag: REASON" "scope-change-approved, probe-over-budget" "$(reason)"
+export CONFIRM_DETAIL=on
 case_end
 
 case_begin "detail-off-no-change-proceed" "bin/workflow/lib/next-step/gate-mode.js"

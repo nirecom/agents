@@ -2,7 +2,7 @@
 # bin/lib/case-record-reader.sh — crr_read <file>: a test file's case records as TSV. Source only.
 #   FILE\t<state>\t<malformed_line>\t<malformed_reason>      state: none|conforming|malformed|uncertain|unsupported|unavailable
 #   unavailable: the reader part returned 79 (its runtime is not installed); the last column names the command.
-#   CASE\t<idx>\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<malformed_reason>   (one per case, idx 0-based)
+#   CASE\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<malformed_reason>   (one per case, in file order)
 # deps: a csv of the functions the case calls, empty for none, `?` when the language has no
 # caseEmbedRules part. The TRP_CASE_* globals stay set afterwards, so the caseEmbedRules ops can
 # run in the same shell (the same-shell contract in docs/architecture/claude-code/test-language-registry.md).
@@ -51,7 +51,7 @@ crr_read() {
   fi
   _crr_file_line conforming "" ""
   for ((i = 0; i < n; i++)); do
-    line="CASE$tab$i$tab${TRP_CASE_NAMES[$i]}$tab${TRP_CASE_TARGETS[$i]}$tab${TRP_CASE_BEGIN_LINES[$i]}"
+    line="CASE$tab${TRP_CASE_NAMES[$i]}$tab${TRP_CASE_TARGETS[$i]}$tab${TRP_CASE_BEGIN_LINES[$i]}"
     printf '%s\t%s\t%s\t\n' "$line" "${TRP_CASE_END_LINES[$i]}" "${deps_by_idx[$i]}"
   done
   return 0

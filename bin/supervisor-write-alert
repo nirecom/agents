@@ -240,6 +240,11 @@ if (hasAllFindings) {
 //   4. writeAlertState with only alert_phase (committed last)
 const phasePatch = ("alert_phase" in patch) ? { alert_phase: patch.alert_phase } : null;
 if (phasePatch) delete patch.alert_phase;
+// #2698: a resume (paused -> pending) must carry armed_at in the same write — paused refuses armed_at alone.
+if (phasePatch && phasePatch.alert_phase === "pending" && "alert_armed_at" in patch) {
+  phasePatch.alert_armed_at = patch.alert_armed_at;
+  delete patch.alert_armed_at;
+}
 
 const hasAnyPrePhase =
   Object.keys(patch).length > 0;

@@ -145,12 +145,15 @@ reason, with a hint to run `bin/plan-sync-init`.
   as `additionalContext`: `<stage>: <blob URL> (<local path>)` when published, otherwise
   `<stage>: <local path> (no URL: <reason>)`, with the local path written as inline code. The
   URL exists only when `origin/main` holds byte-identical content to the local file.
-- **Three-turn order.** The model ends the final body text of the presentation turn with the
-  line as-is and closes the turn; the `CONFIRM_<STAGE>` echo comes alone in a later turn,
-  after the user's reply; after Allow the next skill follows in that same turn
-  (`skills/_shared/confirm-plan.md` CPA-2/CPA-3). The URL belongs only in that last text
-  block, never in the echo. The Stop guard checks the presentation turn and
-  `confirm-checkpoint.js` denies an echo that skipped it ([settings/hooks.md](settings/hooks.md)).
+- **Presentation, then one approval.** The model ends the final body text of the presentation
+  with the line as-is as its last line and closes the turn. The Stop hook continues that turn
+  once, and the `CONFIRM_<STAGE>` echo comes alone right after, so the user approves in the
+  dialog alone, with no reply first (#2650). When no continuation comes or the echo is denied,
+  the earlier order applies: the echo comes alone in the turn after the user's reply. After
+  Allow the next skill follows in that same turn (`skills/_shared/confirm-plan.md` CPA-2/CPA-3).
+  The URL belongs only in that last text block, never in the echo. The Stop guard checks the
+  presentation and `confirm-checkpoint.js` denies an echo that skipped it
+  ([settings/hooks.md](settings/hooks.md)).
 - **Breadcrumb `systemMessage`.** `show-plan-link.js` shows the user `Plan file:` plus a
   `[plan-sync]` status line only when something needs attention: no URL for a reason other
   than the project-host verdict. A published plan or a held-back plan shows nothing extra.

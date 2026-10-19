@@ -59,7 +59,7 @@ case_end
 
 case_begin "hostile-never-ask-record" "skills/run-tests/scripts/probe-calibration.sh"
 
-# ── S3 a hostile host_id in the record is compared, never run ───────────────
+# ── S3 a hostile stale never-ask record is never read, never run ────────────
 S3_PWN="$TMPROOT/s3-pwned"
 S3C="$TMPROOT/s3-cache"; mkdir -p "$S3C"
 printf 'schema=1\nhost_id=$(touch %s)`touch %s`\nrecorded_at=x\n' "$S3_PWN" "$S3_PWN" > "$S3C/calibration-never-ask.conf"
@@ -98,13 +98,14 @@ if [ -z "$HID_DIGEST" ]; then
     fail "S5 precondition: no host id digest to search for"
 else
     S5C="$TMPROOT/s5-cache"
+    S5W="$TMPROOT/cwd-s5"; mk_cwd "$S5W" "$DEFAULT_LINE"
     _leak=""; _seen=""
-    probe "$C_DEF" sid-s5 "$S5C"; _seen="$_seen$(kv decision)/"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak probe-ask" ;; esac
+    probe "$S5W" sid-s5 "$S5C"; _seen="$_seen$(kv decision)/"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak probe-ask" ;; esac
     mark sid-s5 "$S5C"; _seen="$_seen$RC/"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak mark" ;; esac
-    answer never-ask "$C_DEF" sid-s5 "$S5C"; _seen="$_seen$RC/"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak answer-never-ask" ;; esac
-    probe "$C_DEF" sid-s5 "$S5C"; _seen="$_seen$(kv decision)/"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak probe-never-ask" ;; esac
-    answer defer "$C_DEF" sid-s5 "$S5C"; _seen="$_seen$RC"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak answer-defer" ;; esac
-    ck "S5 the scanned runs really ran (probe ask, mark 0, never-ask 0, probe none, defer 0)" "ask/0/0/none/0" "$_seen"
+    answer defer "$S5W" sid-s5 "$S5C"; _seen="$_seen$RC/"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak answer-defer" ;; esac
+    probe "$S5W" sid-s5 "$S5C"; _seen="$_seen$(kv decision)/"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak probe-notice" ;; esac
+    answer calibrate "$S5W" sid-s5 "$S5C"; _seen="$_seen$RC"; case "$OUT$ERR" in *"$HID_DIGEST"*) _leak="$_leak answer-calibrate" ;; esac
+    ck "S5 the scanned runs really ran (probe ask, mark 0, defer 0, probe notice, calibrate 0)" "ask/0/0/notice/0" "$_seen"
     ck "S5 no output carries the host id digest" "" "$_leak"
     grep -q "$HID_DIGEST" "$(marker_of sid-s5)" 2>/dev/null && fail "S5 the session marker carries the host id" || pass "S5 the session marker carries no host id"
 fi

@@ -23,8 +23,9 @@ function deny(reason) {
 function denyReason(step, row) {
   return "[plan-approval] The " + row.suffix + " stage (" + step + ") has no approval on record, so " +
     row.nextSkill + " cannot start. End the final body text of a presentation turn with the plan-link line " +
-    "and close the turn; after the user replies, emit " + row.sentinel + " (the CONFIRM_" +
-    row.suffix.toUpperCase() + " echo) on its own. (Hook: gate-plan-skill-advance.js)";
+    "and close the turn; when the turn-end prompt asks for it, emit " + row.sentinel + " (the CONFIRM_" +
+    row.suffix.toUpperCase() + " echo) on its own, otherwise emit it after the user replies. " +
+    "(Hook: gate-plan-skill-advance.js)";
 }
 
 function main() {

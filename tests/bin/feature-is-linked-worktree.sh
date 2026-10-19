@@ -1,16 +1,11 @@
 #!/bin/bash
-# Tests: bin/is-linked-worktree.sh, bin/is-linked-worktree.sh.
+# Tests: bin/is-linked-worktree.sh
 # Tags: worktree, bin, git, tests, scope:issue-specific
 # Tests for issue #602 PR1 — bin/is-linked-worktree.sh.
-#
-# Parses `git worktree list --porcelain` and prints one of:
-#   main | linked | unknown
-# Always exits 0.
-#
+# Parses `git worktree list --porcelain` and prints main | linked | unknown; always exits 0.
 #   TC1: main worktree → "main"
 #   TC2: linked worktree → "linked"
 #   TC3: non-git directory → "unknown"
-#
 # Precondition gate: skips cleanly when bin/is-linked-worktree.sh is absent.
 
 set -u

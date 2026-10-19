@@ -3,29 +3,32 @@
 # bin/calibrate-test-parallelism.sh; defines constants/functions only.
 # Cache values are compared as strings only — never expanded, never used in arithmetic.
 # Sibling bin/lib/run-all-durations.sh (the duration ledger) reuses the helpers below, so it requires this file to be sourced first.
-# The never-ask record (calibration-never-ask.conf) format is owned here; run_all_never_ask_write is its only writer.
 # shellcheck disable=SC2034  # constants and reader outputs are consumed by the sourcing scripts
 
-RUN_ALL_CACHE_SCHEMA=2
-RUN_ALL_DEFAULT_MAX_JOBS_PER_RUN=4
+RUN_ALL_CACHE_SCHEMA=3
 RUN_ALL_DEFAULT_MAX_JOBS_PER_HOST=4
 RUN_ALL_CALIBRATOR_HINT="RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh"
 
 RUN_ALL_CACHE_BASENAME="parallelism.conf"
 RUN_ALL_CALIBRATION_TIME_LIMIT_MIN=90
-RUN_ALL_NEVER_ASK_BASENAME="calibration-never-ask.conf"
-RUN_ALL_NEVER_ASK_MAX_LINES=8
 RUN_ALL_CACHE_MAX_LINES=64
 RUN_ALL_CACHE_MAX_LINE_BYTES=512
 RUN_ALL_CACHE_MIN_JOBS=1
 RUN_ALL_CACHE_MAX_JOBS=1024
-RUN_ALL_CACHE_ALLOWED_KEYS="schema host_id os max_jobs_per_host measured_at sample_size repeat"
+RUN_ALL_CACHE_ALLOWED_KEYS="schema host_id os max_jobs_per_host measured_at sample_size repeat logical_cpu_count max_width_measured width_limit"
+# The calibration width series: alternating x1.5 and x4/3 steps from 4.
+RUN_ALL_CALIBRATION_BASE_WIDTHS="4 6 8 12 16 24 32 48 64 96 128 192 256 384 512 768"
+RUN_ALL_CALIBRATION_UNKNOWN_WIDTHS="4 6 8 12 16"
 
 # Outputs of run_all_cache_read; declared so a `set -u` caller may read them
 # unconditionally after a failed call.
 RUN_ALL_CACHE_MAX_JOBS_PER_HOST=""
 RUN_ALL_CACHE_OS=""
 RUN_ALL_CACHE_MEASURED_AT=""
+RUN_ALL_CACHE_LOGICAL_CPU_COUNT=""
+RUN_ALL_CACHE_MAX_WIDTH_MEASURED=""
+RUN_ALL_CACHE_WIDTH_LIMIT=""
+RUN_ALL_CACHE_IS_LEGACY=0
 RUN_ALL_CACHE_REASON=""
 _RUN_ALL_RAW_OS=""
 _RUN_ALL_ARCH=""
@@ -42,43 +45,59 @@ run_all_cache_file() {
     printf '%s\n' "$(run_all_cache_dir)/$RUN_ALL_CACHE_BASENAME"
 }
 
-run_all_never_ask_file() {
-    printf '%s/%s\n' "$(run_all_cache_dir)" "$RUN_ALL_NEVER_ASK_BASENAME"
+# --- logical CPU count ------------------------------------------------------
+
+# run_all_logical_cpu_count — RUN_ALL_LOGICAL_CPU_COUNT = this host's logical CPU count,
+# empty when unknown; looked up once per process, always returns 0. Each answer must be a
+# plain integer 1..1024 (never evaluated); an invalid one falls through to the next source.
+# Source order: nproc, getconf _NPROCESSORS_ONLN, sysctl -n hw.logicalcpu, $NUMBER_OF_PROCESSORS.
+RUN_ALL_LOGICAL_CPU_COUNT=""
+_RUN_ALL_CPU_LOOKED_UP=0
+_run_all_cpu_take() {
+    run_all_valid_max_jobs "${1:-}" || return 1
+    RUN_ALL_LOGICAL_CPU_COUNT="$((10#$1))"
+}
+run_all_logical_cpu_count() {
+    local v
+    [ "$_RUN_ALL_CPU_LOOKED_UP" -eq 1 ] && return 0
+    _RUN_ALL_CPU_LOOKED_UP=1; RUN_ALL_LOGICAL_CPU_COUNT=""
+    if command -v nproc >/dev/null 2>&1; then
+        v="$(nproc 2>/dev/null)" || v=""; _run_all_cpu_take "$v" && return 0
+    fi
+    if command -v getconf >/dev/null 2>&1; then
+        v="$(getconf _NPROCESSORS_ONLN 2>/dev/null)" || v=""; _run_all_cpu_take "$v" && return 0
+    fi
+    if command -v sysctl >/dev/null 2>&1; then
+        v="$(sysctl -n hw.logicalcpu 2>/dev/null)" || v=""; _run_all_cpu_take "$v" && return 0
+    fi
+    _run_all_cpu_take "${NUMBER_OF_PROCESSORS:-}"
+    return 0
 }
 
-# run_all_never_ask_active — 0 when the never-ask record holds exactly one non-empty
-# host_id (<= 200 chars) equal to this host's; schema=, recorded_at= and unknown keys are ignored.
-run_all_never_ask_active() {
-    local file line nlines=0 hits=0 hid=""
-    local LC_ALL=C LC_CTYPE=C
-    file="$(run_all_never_ask_file)"
-    [ -f "$file" ] && [ -r "$file" ] || return 1
-    while IFS= read -r line || [ -n "$line" ]; do
-        nlines=$((nlines + 1))
-        [ "$nlines" -le "$RUN_ALL_NEVER_ASK_MAX_LINES" ] || return 1
-        line="${line%$'\r'}"
-        [ "${#line}" -le "$RUN_ALL_CACHE_MAX_LINE_BYTES" ] || return 1
-        case "$line" in
-            host_id=*) hits=$((hits + 1)); hid="${line#host_id=}" ;;
-        esac
-    done < "$file"
-    [ "$hits" -eq 1 ] && [ -n "$hid" ] && [ "${#hid}" -le 200 ] || return 1
-    [ "$hid" = "$(run_all_host_id)" ]
-}
-
-# run_all_never_ask_write — publish the never-ask record for this host (tmp + mv).
-run_all_never_ask_write() {
-    local dir file tmp
-    dir="$(run_all_cache_dir)"
-    file="$(run_all_never_ask_file)"
-    tmp="$file.$$.tmp"
-    mkdir -p "$dir" 2>/dev/null || return 1
-    if { printf 'schema=1\nhost_id=%s\nrecorded_at=%s\n' "$(run_all_host_id)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$tmp"; } 2>/dev/null &&
-        mv -f "$tmp" "$file" 2>/dev/null; then
+# run_all_calibration_widths <logical-cpu-count> — RUN_ALL_CALIBRATION_WIDTHS: the base widths
+# below the count plus the count itself, dropping a width within a quarter of the count
+# (4 * (count - width) < width); every width up to a count below 4. An unknown count falls
+# back to the fixed widths with one stderr note.
+RUN_ALL_CALIBRATION_WIDTHS=""
+run_all_calibration_widths() {
+    local n="${1:-}" w out=""
+    if ! run_all_valid_max_jobs "$n"; then
+        RUN_ALL_CALIBRATION_WIDTHS="$RUN_ALL_CALIBRATION_UNKNOWN_WIDTHS"
+        printf 'calibrate: logical CPU count unknown; widths %s\n' "$RUN_ALL_CALIBRATION_WIDTHS" >&2
         return 0
     fi
-    rm -f "$tmp" 2>/dev/null
-    return 1
+    n=$((10#$n))
+    if [ "$n" -lt 4 ]; then
+        for ((w = 1; w <= n; w++)); do out="$out $w"; done
+    else
+        for w in $RUN_ALL_CALIBRATION_BASE_WIDTHS; do
+            [ "$w" -lt "$n" ] || break
+            [ $((4 * (n - w))) -lt "$w" ] || out="$out $w"
+        done
+        out="$out $n"
+    fi
+    RUN_ALL_CALIBRATION_WIDTHS="${out# }"
+    return 0
 }
 
 # --- host identity ----------------------------------------------------------
@@ -158,19 +177,24 @@ RUN_ALL_OS_ATTR_CLASS='^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'
 
 # --- the non-evaluating reader ----------------------------------------------
 
-# run_all_cache_read <file> — success sets RUN_ALL_CACHE_MAX_JOBS_PER_HOST/OS/
-# MEASURED_AT, returns 0; failure sets RUN_ALL_CACHE_REASON to one enum token, returns 1.
+# run_all_cache_read <file> — success sets RUN_ALL_CACHE_MAX_JOBS_PER_HOST/OS/MEASURED_AT/
+# LOGICAL_CPU_COUNT/MAX_WIDTH_MEASURED/WIDTH_LIMIT/IS_LEGACY, returns 0; failure sets
+# RUN_ALL_CACHE_REASON to one enum token, returns 1.
 run_all_cache_read() {
     local file="${1:-}"
-    local line key val nlines seen k unknown=0
+    local line key val nlines seen k unknown=0 legacy=0 keys="$RUN_ALL_CACHE_ALLOWED_KEYS"
     local v_schema="" v_host_id="" v_os="" v_max=""
-    local v_measured_at="" v_sample_size="" v_repeat=""
+    local v_measured_at="" v_sample_size="" v_repeat="" v_cpus="" v_width="" v_limit=""
     # Byte-exact ${#...} regardless of the caller's locale; restored on return.
     local LC_ALL=C LC_CTYPE=C
 
     RUN_ALL_CACHE_MAX_JOBS_PER_HOST=""
     RUN_ALL_CACHE_OS=""
     RUN_ALL_CACHE_MEASURED_AT=""
+    RUN_ALL_CACHE_LOGICAL_CPU_COUNT=""
+    RUN_ALL_CACHE_MAX_WIDTH_MEASURED=""
+    RUN_ALL_CACHE_WIDTH_LIMIT=""
+    RUN_ALL_CACHE_IS_LEGACY=0
     RUN_ALL_CACHE_REASON=""
 
     if [ -z "$file" ] || [ ! -e "$file" ]; then
@@ -205,6 +229,7 @@ run_all_cache_read() {
         val="${line#*=}"
         case "$key" in
             schema|host_id|os|max_jobs_per_host|measured_at|sample_size|repeat) ;;
+            logical_cpu_count|max_width_measured|width_limit) ;;
             *) unknown=1; continue ;;
         esac
         case "$seen" in
@@ -219,19 +244,31 @@ run_all_cache_read() {
             measured_at)       v_measured_at="$val" ;;
             sample_size)       v_sample_size="$val" ;;
             repeat)            v_repeat="$val" ;;
+            logical_cpu_count) v_cpus="$val" ;;
+            max_width_measured) v_width="$val" ;;
+            width_limit)       v_limit="$val" ;;
         esac
     done < "$file"
+
+    # --- BEGIN temporary: parallelism record schema 2 → schema 3 migration added 2026-10-17 ---
+    # deletion-condition: every host using this repository has recalibrated under schema 3
+    # A schema-2 record (the first seven keys) is read as legacy; the schema-3 keys are unknown to it.
+    if [ "$v_schema" = 2 ]; then
+        legacy=1; keys="schema host_id os max_jobs_per_host measured_at sample_size repeat"
+        case "$seen" in *" logical_cpu_count "*|*" max_width_measured "*|*" width_limit "*) unknown=1 ;; esac
+    fi
+    # --- END temporary: parallelism record schema 2 → schema 3 migration ---
 
     # An older schema is named as such even though its keys are unknown to this one.
     case "$v_schema" in
         ''|*[!0-9]*) ;;
-        *) [ "$v_schema" = "$RUN_ALL_CACHE_SCHEMA" ] || { RUN_ALL_CACHE_REASON="schema-mismatch"; return 1; } ;;
+        *) [ "$v_schema" = "$RUN_ALL_CACHE_SCHEMA" ] || [ "$legacy" -eq 1 ] || { RUN_ALL_CACHE_REASON="schema-mismatch"; return 1; } ;;
     esac
     if [ "$unknown" -eq 1 ]; then
         RUN_ALL_CACHE_REASON="unknown-key"; return 1
     fi
     # `os` is left to its own check below, so an absent one reports `bad-os`.
-    for k in $RUN_ALL_CACHE_ALLOWED_KEYS; do
+    for k in $keys; do
         [ "$k" = os ] && continue
         case "$seen" in
             *" $k "*) ;;
@@ -252,8 +289,20 @@ run_all_cache_read() {
     if [ "${#v_host_id}" -gt 200 ]; then
         RUN_ALL_CACHE_REASON="malformed"; return 1
     fi
+    # Schema-3 keys: logical_cpu_count 0..1024 (0 = unknown when measured), the widest
+    # measured width 1..1024, and what stopped the ladder there.
+    if [ "$legacy" -eq 0 ]; then
+        if [[ ! $v_cpus =~ ^[0-9]{1,4}$ ]] || [ "$((10#$v_cpus))" -gt "$RUN_ALL_CACHE_MAX_JOBS" ] ||
+            ! run_all_valid_max_jobs "$v_width"; then
+            RUN_ALL_CACHE_REASON="malformed"; return 1
+        fi
+        case "$v_limit" in
+            logical-cpu-count|candidates|sample|time-limit|jobs-list|unknown-cpu-count) ;;
+            *) RUN_ALL_CACHE_REASON="malformed"; return 1 ;;
+        esac
+    fi
 
-    if [ "$v_schema" != "$RUN_ALL_CACHE_SCHEMA" ]; then
+    if [ "$v_schema" != "$RUN_ALL_CACHE_SCHEMA" ] && [ "$legacy" -eq 0 ]; then
         RUN_ALL_CACHE_REASON="schema-mismatch"; return 1
     fi
     # String equality only — host_id is never split on '|' and never displayed.
@@ -271,6 +320,12 @@ run_all_cache_read() {
     RUN_ALL_CACHE_MAX_JOBS_PER_HOST="$((10#$v_max))"
     RUN_ALL_CACHE_OS="$v_os"
     RUN_ALL_CACHE_MEASURED_AT="$v_measured_at"
+    RUN_ALL_CACHE_IS_LEGACY="$legacy"
+    if [ "$legacy" -eq 0 ]; then
+        RUN_ALL_CACHE_LOGICAL_CPU_COUNT="$((10#$v_cpus))"
+        RUN_ALL_CACHE_MAX_WIDTH_MEASURED="$((10#$v_width))"
+        RUN_ALL_CACHE_WIDTH_LIMIT="$v_limit"
+    fi
     return 0
 }
 
@@ -296,20 +351,39 @@ run_all_dotenv_value() {
     return 0
 }
 
+# --- AUTO_CONFIG_TEST_MAX_JOBS ----------------------------------------------
+
+# run_all_auto_config — RUN_ALL_AUTO_CONFIG = on|off from AUTO_CONFIG_TEST_MAX_JOBS (env,
+# else .env, else on; case-insensitive). A valid env value launches no .env resolver; an
+# invalid value is treated as on with one stderr note that never echoes it.
+RUN_ALL_AUTO_CONFIG="on"
+run_all_auto_config() {
+    local v="${AUTO_CONFIG_TEST_MAX_JOBS:-}"
+    if [ -z "$v" ]; then run_all_dotenv_value AUTO_CONFIG_TEST_MAX_JOBS; v="$RUN_ALL_DOTENV_VALUE"; fi
+    RUN_ALL_AUTO_CONFIG="on"
+    case "$v" in
+        ''|[Oo][Nn]) ;;
+        [Oo][Ff][Ff]) RUN_ALL_AUTO_CONFIG="off" ;;
+        *) printf '[lanes] AUTO_CONFIG_TEST_MAX_JOBS is not on or off; treated as on\n' >&2 ;;
+    esac
+    return 0
+}
+
 # --- max jobs per run -------------------------------------------------------
 
 # run_all_resolve_max_jobs_per_run — the .env TEST_MAX_JOBS_PER_RUN layer behind
 # an unset / `auto` command line and env. Read-only. Sets RUN_ALL_MAX_JOBS_PER_RUN
-# and the RUN_ALL_RESOLVE_NOTE progress line; returns 1 on an invalid .env value,
-# whose note never echoes that value.
+# (empty = unlimited: the runner bounds the width by the run-all lane pool) and the
+# RUN_ALL_RESOLVE_NOTE progress line; returns 1 on an invalid .env value, whose note
+# never echoes that value.
 RUN_ALL_MAX_JOBS_PER_RUN=""
 RUN_ALL_RESOLVE_NOTE=""
 run_all_resolve_max_jobs_per_run() {
     run_all_dotenv_value TEST_MAX_JOBS_PER_RUN
-    RUN_ALL_MAX_JOBS_PER_RUN="$RUN_ALL_DEFAULT_MAX_JOBS_PER_RUN"
+    RUN_ALL_MAX_JOBS_PER_RUN=""
     case "$RUN_ALL_DOTENV_VALUE" in
         ''|auto)
-            RUN_ALL_RESOLVE_NOTE="max jobs per run: $RUN_ALL_MAX_JOBS_PER_RUN (default)"; return 0 ;;
+            RUN_ALL_RESOLVE_NOTE="max jobs per run: unlimited (default)"; return 0 ;;
     esac
     if run_all_valid_max_jobs "$RUN_ALL_DOTENV_VALUE"; then
         RUN_ALL_MAX_JOBS_PER_RUN="$((10#$RUN_ALL_DOTENV_VALUE))"

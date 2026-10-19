@@ -217,8 +217,10 @@ trp_marker_conformance() {
 }
 
 # trp_marker_state_from_globals — the state rule over the globals the preceding
-# caseMarkerReader call left (_TRP_MARKER_*, TRP_HAS_MARKERS). Always returns 0.
+# caseMarkerReader call left (_TRP_MARKER_*, TRP_HAS_MARKERS); two cases of one name are made
+# malformed here (duplicate-name) for every language. Always returns 0.
 trp_marker_state_from_globals() {
+  _trp_reject_duplicate_names
   TRP_MARKER_LINE="$_TRP_MARKER_MALFORMED_LINE"
   TRP_MARKER_REASON="$_TRP_MARKER_MALFORMED_REASON"
   if [[ "$_TRP_MARKER_MALFORMED" -eq 1 ]]; then

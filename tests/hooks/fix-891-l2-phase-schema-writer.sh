@@ -183,23 +183,24 @@ process.stdout.write(state.alert.alert_armed_at === null ? 'null' : String(state
     fi
 }
 
+# #2698 change 2: paused is a terminal alert phase for the writer too; a new finding never re-arms it.
 run_g25() {
-    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)" || return
+    require_source "$SCRIPT_CHECKOUT_ROOT/hooks/lib/supervisor-state-writer.js" "G25: alert_phase=paused -> ensureAlertScheduled keeps paused (alert_armed_at null, retry unchanged)" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
-const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused', alert_cause: null, alert_retry_count: 0 } };
+const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused', alert_cause: null, alert_retry_count: 2 } };
 if (typeof writerMod.ensureAlertScheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
 writerMod.ensureAlertScheduled(state);
-const armedOk = typeof state.alert.alert_armed_at === 'string' && state.alert.alert_armed_at.length > 0;
-const phaseOk = state.alert.alert_phase === 'pending';
-const retryOk = state.alert.alert_retry_count === 0;
+const armedOk = state.alert.alert_armed_at === null;
+const phaseOk = state.alert.alert_phase === 'paused';
+const retryOk = state.alert.alert_retry_count === 2;
 process.stdout.write((armedOk && phaseOk && retryOk) ? 'ok' : ('armed=' + state.alert.alert_armed_at + ',phase=' + state.alert.alert_phase + ',retry=' + state.alert.alert_retry_count));
 " 2>/dev/null)
     if [ "$out" = "ok" ]; then
-        pass "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)"
+        pass "G25: alert_phase=paused -> ensureAlertScheduled keeps paused (alert_armed_at null, retry unchanged)"
     else
-        fail "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending) (got: $out)"
+        fail "G25: alert_phase=paused -> ensureAlertScheduled keeps paused (alert_armed_at null, retry unchanged) (got: $out)"
     fi
 }
 

@@ -1,22 +1,12 @@
 #!/bin/bash
 # tests/agents/feature-parallel-sessions-worktree-bash-patterns.sh
-# Tests: agents/bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create-dispatch.sh, hooks/lib/bash-write-patterns.js, hooks/pre-commit, hooks/pre-commit.
+# Tests: bin/github-issues/issue-create-dispatch.sh, hooks/lib/bash-write-patterns.js, hooks/pre-commit
 # Tags: git, pre-commit, hook, issue-create, github, scope:issue-specific
-#
-# Dispatch-only — sources helper + thematic parts from sibling folder, then
-# runs each test function. Parts live under
-# tests/agents/feature-parallel-sessions-worktree-bash-patterns/.
-
-# ─────────────────────────────────────────────────────────────────────────────
-# L3 gap: this dispatcher sources thematic parts that exercise the bash
-# write/read classifier and pre-commit helpers as units (L2 — real node, real
-# fixtures, no live session). It does NOT drive the full pre-commit hook or the
-# enforce-worktree PreToolUse pipeline end-to-end. An L3 test would issue real
-# write/read Bash tool calls (and a real `git commit`) inside a Claude Code
-# session and observe whether the hooks block or pass them through — only a real
-# host can confirm event registration, settings loading, and the shell's own
-# tokenization of the command before the hook ever sees it.
-# ─────────────────────────────────────────────────────────────────────────────
+# Dispatch-only: sources helper + thematic parts from tests/agents/feature-parallel-sessions-worktree-bash-patterns/
+# and runs each test function.
+# L3 gap: parts exercise the bash write/read classifier and pre-commit helpers as L2 units (real node,
+# fixtures, no live session). Not driven end-to-end: the full pre-commit hook or the enforce-worktree
+# PreToolUse pipeline; only a real host confirms event registration, settings loading and shell tokenization.
 
 set -u
 

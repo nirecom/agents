@@ -1,8 +1,8 @@
 "use strict";
 // hooks/lib/jev/two-stage/query.js — `jev-judge query` (#2460): freeze the point's policy,
-// take the stage's owner marker, snapshot and copy the stage sources (the snapshot names the
-// copies only; SOURCES_DIR says where they are), ask Jev only when the CLI owns the record and every
-// required section is whole, gate the answers, and leave the cli-ticket for finalize.
+// take the stage's owner marker, build the Jev input and copy the stage sources (the Jev input
+// names the copies only; SOURCES_DIR says where they are), ask Jev only when the CLI owns the
+// record and the required sections are whole, gate the answers, and leave the cli-ticket for finalize.
 // The test overrides are captured before anything below can load .env into process.env.
 const { captureTestOverrides } = require("../test-overrides");
 const ENTRY_OVERRIDES = captureTestOverrides(process.env);
@@ -18,7 +18,7 @@ const { isValidId } = require("../state-paths");
 const { applyGate } = require("./gate");
 const { takeSignalsOwnerAtQuery } = require("./settle-complexity");
 const { takeSkipOwnerAtQuery } = require("./settle-skip");
-const { buildSnapshot, answerPath } = require("./snapshot");
+const { buildJevInput, answerPath } = require("./jev-input");
 const { TICKET_RE, sha256, newTicketId, removeSources, pointStageEntry, slashed } = require("./paths");
 const { requiredSectionsStatus } = require(path.join(__dirname, "..", "..", "..", "..", "bin", "workflow", "lib", "jev-request-common.js"));
 
@@ -44,11 +44,11 @@ function takeOwnerAtQuery(sid, stage, entry, owner) {
 }
 
 // S1b / S4 from the verified write-code list copy only (null outside the deterministic stage).
-function deterministicFor(snap, stage, adapter, repoRoot) {
+function deterministicFor(jevInput, stage, adapter, repoRoot) {
   if (!adapter.deterministicStage || stage !== adapter.deterministicStage) return null;
   const det = (status, extra) => Object.assign({ status, values: null, source_sha256: null, override: [] }, extra);
-  if (snap.sources_failed.includes(WRITE_CODE_LIST)) return det("copy-failed");
-  const copy = snap.copies[WRITE_CODE_LIST];
+  if (jevInput.sources_failed.includes(WRITE_CODE_LIST)) return det("copy-failed");
+  const copy = jevInput.copies[WRITE_CODE_LIST];
   if (!copy) return det("missing");
   let bytes;
   try { bytes = fs.readFileSync(copy.path); } catch (_e) { return det("copy-failed"); }
@@ -76,42 +76,46 @@ function allDelegated(keys) {
 // Jev is asked only when the CLI records and the required sections are whole; any other path
 // (or a Jev failure) delegates every key. A CLI-owned shadow point keeps Jev for the record only.
 async function judge(ctx) {
-  const { point, entry, sid, snap, frozen, keys, adapter, req, overrides } = ctx;
+  const { point, entry, sid, jevInput, frozen, keys, adapter, req, overrides } = ctx;
   if (!frozen.record_decision || !req.met) return { jev: broker.jevResult("not-run"), gate: allDelegated(keys) };
   let jev;
   try {
     const pctx = provider.jevCoreInit({ sessionId: sid, overrides });
-    jev = await broker.runJev(point, pctx, sid, { state: snap.text }, entry);  } catch (_e) {
+    jev = await broker.runJev(point, pctx, sid, { state: jevInput.text }, entry);  } catch (_e) {
     jev = broker.jevResult("bad-response");
   }
   if (jev.status !== "ok" || frozen.mode === "shadow") return { jev, gate: allDelegated(keys) };
+  // decidesAtStage reads the hits as signals that hold, so it only judges a true short circuit;
+  // any other short-circuit answer stays value-based (the registry data alone decides).
+  const hooks = typeof adapter.decidesAtStage === "function" && frozen.short_circuit_answer === true
+    ? { decides: (ks) => adapter.decidesAtStage(ctx.stage, ks) } : undefined;
   const gate = applyGate(itemsFrom(jev, adapter, keys), {
     confidence_threshold_by_answer: frozen.threshold, short_circuit_answer: frozen.short_circuit_answer,
-  });
+  }, hooks);
   return { jev, gate };
 }
 
-// SOURCES_DIR is where the copies named in the snapshot header are: the snapshot itself is
+// SOURCES_DIR is where the copies named in the Jev input header are: the Jev input itself is
 // sent to Jev, so it never carries a local path.
-function stdoutFor(frozen, tid, gate, snap, answerFile) {
+function stdoutFor(frozen, tid, gate, jevInput, answerFile) {
   const need = gate.delegated.length > 0;
   return [
     `RESULT=${need ? "need-subagent" : "final"}`,
     `TICKET=${tid}`,
     `SUBAGENT=${need ? frozen.backup_subagent : "-"}`,
     `DELEGATED=${need ? gate.delegated.join(",") : "-"}`,
-    `SNAPSHOT_FILE=${slashed(snap.file)}`,
+    `JEV_INPUT_FILE=${slashed(jevInput.file)}`,
     `ANSWER_FILE=${need ? slashed(answerFile) : "-"}`,
-    `SOURCES_DIR=${need ? slashed(snap.sources_dir) : "-"}`,
+    `SOURCES_DIR=${need ? slashed(jevInput.sources_dir) : "-"}`,
   ];
 }
 
-function inputOf(snap, req, required) {
+function inputOf(jevInput, req, required) {
   return {
-    bytes: Buffer.byteLength(snap.text), sha256: snap.sha256, truncated: snap.truncated,
-    sources: snap.included.slice(), sections: snap.included.slice(), required: required.slice(),
-    missing: req.missing.slice(), exempt: req.exempt.slice(), sources_failed: snap.sources_failed.slice(),
-    sources_failed_reasons: Object.assign({}, snap.sources_failed_reasons),
+    bytes: Buffer.byteLength(jevInput.text), sha256: jevInput.sha256, truncated: jevInput.truncated,
+    sources: jevInput.included.slice(), sections: jevInput.included.slice(), required: required.slice(),
+    missing: req.missing.slice(), exempt: req.exempt.slice(), sources_failed: jevInput.sources_failed.slice(),
+    sources_failed_reasons: Object.assign({}, jevInput.sources_failed_reasons),
   };
 }
 
@@ -129,11 +133,13 @@ async function query(args, optsArg = {}) {
   const createdMs = Date.now();
   const frozen = freezePolicy(entry);
   const required = (entry.required_sections_by_stage && entry.required_sections_by_stage[a.stage]) || [];
-  let snap;
+  const planSections = (entry.plan_sections_by_stage && entry.plan_sections_by_stage[a.stage]) || [];
+  let jevInput;
   try {
     takeOwnerAtQuery(sid, a.stage, entry, { id: tid, created_ms: createdMs });
-    snap = buildSnapshot(sid, a.stage, tid, required, {
+    jevInput = buildJevInput(sid, a.stage, tid, required, {
       maxArtifactBytes: opts.maxArtifactBytes, failCopyFor: opts.failCopyFor, afterCopy: opts.afterCopy, repoRoot: a.repoRoot,
+      planSections,
     });
   } catch (_e) {
     removeSources(sid, tid);
@@ -142,15 +148,15 @@ async function query(args, optsArg = {}) {
   let adapter = null;
   let keys = [];
   let deterministic = null;
-  let req = { met: false, missing: required.slice(), exempt: [] };
+  let req = { met: false, missing: required.concat(planSections), exempt: [] };
   let judged;
   try {
     adapter = require(entry.adapter);
     keys = adapter.keys(entry);
-    deterministic = deterministicFor(snap, a.stage, adapter, a.repoRoot);
-    req = requiredSectionsStatus(sid, required, snap.sections, snap.sources_failed);
+    deterministic = deterministicFor(jevInput, a.stage, adapter, a.repoRoot);
+    req = requiredSectionsStatus(sid, required, jevInput.sections, jevInput.sources_failed, planSections);
     judged = await judge({
-      point: a.point, entry, sid, snap, frozen, keys, adapter, req,
+      point: a.point, stage: a.stage, entry, sid, jevInput, frozen, keys, adapter, req,
       overrides: opts.overrides || ENTRY_OVERRIDES,
     });
   } catch (_e) {
@@ -166,11 +172,11 @@ async function query(args, optsArg = {}) {
     kind: "cli-ticket", point: a.point, stage: a.stage, session_id: sid, ticket: tid, created_ms: createdMs,
   }, entry.target ? { target: entry.target } : {}, frozen, {
     short_circuited: gate.short_circuited, unjudged: gate.unjudged, required, missing: req.missing, exempt: req.exempt,
-    sources_failed: snap.sources_failed, sources_failed_reasons: snap.sources_failed_reasons,
+    sources_failed: jevInput.sources_failed, sources_failed_reasons: jevInput.sources_failed_reasons,
     deterministic, jev: judged.jev, adopted_jev: gate.adopted, delegated: gate.delegated,
     llm_needed: gate.delegated.length > 0, input_insufficient: !req.met,
-    snapshot_file: snap.file, snapshot_sha256: snap.sha256, sources: snap.sources, sources_sha256: snap.sources_sha256,
-    artifacts_sha256: snap.artifacts_sha256, answer_file: answerFile, repo_root: a.repoRoot || null, input: inputOf(snap, req, required),
+    jev_input_file: jevInput.file, jev_input_sha256: jevInput.sha256, sources: jevInput.sources, sources_sha256: jevInput.sources_sha256,
+    artifacts_sha256: jevInput.artifacts_sha256, answer_file: answerFile, repo_root: a.repoRoot || null, input: inputOf(jevInput, req, required),
   });
   try {
     pending.writePending(sid, tid, ticket);
@@ -178,7 +184,7 @@ async function query(args, optsArg = {}) {
     removeSources(sid, tid);
     return { exit: 3, stdout_lines: [] };
   }
-  return { exit: 0, stdout_lines: stdoutFor(frozen, tid, gate, snap, answerFile) };
+  return { exit: 0, stdout_lines: stdoutFor(frozen, tid, gate, jevInput, answerFile) };
 }
 
 module.exports = { query, runQuery: query, freezePolicy, deterministicFor };

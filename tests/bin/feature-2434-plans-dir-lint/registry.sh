@@ -82,6 +82,7 @@ note-topic.md                                       | artifact
 note-topic.json                                     | artifact
 user-requested-topic.md                             | artifact
 sweep-plans-approved-sessions.txt                   | artifact
+jev-0123456789abcdef-answer.txt                     | artifact
 TABLE
 case_end
 

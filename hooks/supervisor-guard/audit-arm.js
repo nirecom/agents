@@ -12,10 +12,13 @@ const { collectAuditCandidates } = require("./collect-audit-triggers");
 const { computeFreshnessKey } = require("../lib/diff-fingerprint");
 const {
   armAuditRun,
+  markAuditLaunchShown,
   consumeTransitions,
   inputKeyForSubCheck,
 } = require("../lib/supervisor-state-writer/audit-run");
-const { isSubCheckSettled } = require("../lib/audit-ledger");
+const { isSubCheckSettled, unshownRun } = require("../lib/audit-ledger");
+const { inPostAlertSuppression } = require("./audit-bundle");
+const { withConvLang } = require("../lib/conv-lang");
 const { SUB_CHECKS, ALL_SUB_CHECK_IDS } = require("../lib/audit-triggers");
 const { filterNullKeySubChecks } = require("../lib/null-freshness");
 const { UNSETTLED_AUDIT_PHASES } = require("../lib/supervisor-state-schema");
@@ -114,6 +117,7 @@ function armFromCandidates(sessionId, candidates, ctx) {
     cwd: ctx.cwd,
     plans_dir: plansDir,
     plan_session_id: planSessionId,
+    launch_shown: ctx.launchShown === true,
   });
 
   return {
@@ -122,22 +126,27 @@ function armFromCandidates(sessionId, candidates, ctx) {
     run_id: (result && (result.run_id || result.audit_run_id)) || null,
     sub_checks: (result && result.sub_checks) || judgmentSet,
     scope_drift: (result && result.scope_drift) || null,
+    superseded_run_id: (result && result.superseded_run_id) || null,
     tr_ids: coalesced.trIds,
     cause,
   };
 }
 
-// The S4-d block message: names the armed run-id and states supervisor-audit may
-// be dispatched in the same turn as /run-tests, without waiting for
-// review_security. Scope drift, when present, is listed for the agent.
-function formatAuditArmReason(armInfo, meta) {
+// The launch section of the S4-d message (Run ID to the end): names the armed run-id and states
+// supervisor-audit may be dispatched in the same turn as /run-tests, without waiting for
+// review_security. Scope drift, when present, is listed for the agent. Bundled into an alert
+// block as-is (#2698 3-A), so it carries no CONV_LANG injection of its own.
+function formatAuditLaunchSection(armInfo, meta) {
+  const m = meta || {};
   const runId = (armInfo && armInfo.run_id) || "<none>";
   const subChecks = armInfo && Array.isArray(armInfo.sub_checks) ? armInfo.sub_checks.join(", ") : "";
   const lines = [
-    "[EM Supervisor] Audit mode strategic review triggered (pre-merge shift-left arm).",
     `Run ID: ${runId}`,
     `Trigger: ${(armInfo && armInfo.cause) || "<none>"}`,
   ];
+  if (armInfo && armInfo.superseded_run_id) {
+    lines.push(`Inherited: the sub-checks of the deferred run ${armInfo.superseded_run_id}, now superseded.`);
+  }
   if (subChecks) lines.push(`Sub-checks: ${subChecks}`);
   const drift = armInfo && armInfo.scope_drift;
   if (Array.isArray(drift) && drift.length > 0) {
@@ -145,19 +154,18 @@ function formatAuditArmReason(armInfo, meta) {
   }
   lines.push(
     "",
-    `Session ID: ${meta.sessionId}`,
-    `Effective state session ID: ${meta.effectiveSid}`,
-    `State file: ${meta.stateFilePath}`,
+    `Session ID: ${m.sessionId}`,
+    `Effective state session ID: ${m.effectiveSid}`,
+    `State file: ${m.stateFilePath}`,
     "",
     `Run the audit mode strategic review agent with this run-id (${runId}):`,
-    `  Agent file: ${meta.auditAgentPath}`,
+    `  Agent file: ${m.auditAgentPath}`,
     formatAgentModelLine("reviewer"),
     "",
     "Update session-progress.md first, then launch the audit agent.",
-    `Get the session-progress.md path from bin/progress-file path --session ${meta.sessionId} (rules: rules/progress-update.md).`,
+    `Get the session-progress.md path from bin/progress-file path --session ${m.sessionId} (rules: rules/progress-update.md).`,
     `Launch supervisor-audit with this run-id (${runId}).`,
-    "This launch may be issued in parallel, in the same turn as the /run-tests dispatch",
-    "(it needs no review result as input, so do not wait for review_security to complete).",
+    "This launch may be issued in the same turn as, and in parallel with, any other pending dispatch (for example /run-tests); the audit needs no review result as input, so do not wait for a review step to complete.",
     "The agent records in_progress on start and writes its verdict against this run-id;",
     "if another trigger re-arms first, the compare-and-set discards the stale verdict.",
     "After it completes, continue the workflow — the next Stop event surfaces the result.",
@@ -165,21 +173,45 @@ function formatAuditArmReason(armInfo, meta) {
   return lines.join("\n");
 }
 
+// The standalone S4-d block message: header + launch section, in the conversation language.
+function formatAuditArmReason(armInfo, meta) {
+  return withConvLang([
+    "[EM Supervisor] Audit mode strategic review triggered (pre-merge shift-left arm).",
+    formatAuditLaunchSection(armInfo, meta),
+  ].join("\n"));
+}
+
+// Shows the unshown run as-is (#2698 3-C / bundling): marks it shown, then returns its launch.
+function showUnshownRun(sessionId, unshown, meta) {
+  if (!markAuditLaunchShown(sessionId, unshown.run_id)) return null;
+  const armInfo = { action: "arm", ok: true, ...unshown };
+  return { reason: formatAuditArmReason(armInfo, meta), armInfo };
+}
+
 // The whole Stop-hook Phase A step, folded into one call so the entrypoint stays a
 // dispatcher (file-split Pattern A). Collects candidates from the workflow
-// projection, coalesces/arms, and returns the S4-d block reason string when a run
-// was armed, or null to fall through (no candidates, phase-guarded, or pure
-// no-op consume). Fail-open: any internal throw yields null.
+// projection, coalesces/arms, and returns { reason, armInfo } when a launch is to be
+// shown (a new run, or the unshown run), or null to fall through (no candidates,
+// phase-guarded, suppressed, or pure no-op consume). ctx.mode "bundled" (3-A) skips the
+// post-alert suppression window; ctx.input feeds it. Fail-open: the caller catches throws.
 function evaluatePhaseA(sessionId, state, ctx) {
   // State being absent (fresh session) is not a reason to skip Phase A: TR1–TR5
   // edge triggers come from ctx.workflowProjection, not supervisor state. Removing
   // the !state short-circuit lets a first-time arm reach armAuditRun, which creates
   // the state file as a side effect. Phase checks below read from ctx (derived by
   // the caller from state), so they handle state=null correctly (#2256 C1).
-  if (ctx && ctx.askUserQuestionTurn) return null;
+  if (ctx && ctx.userDialogTurn) return null;
   const auditPhase = (ctx && ctx.auditPhase) || null;
-  if (UNSETTLED_AUDIT_PHASES.includes(auditPhase)) return null;
+  // An unshown run (#2698) passes the in-flight guard: no agent runs it, so it is shown or
+  // superseded here instead of blocking every later arm.
+  const unshown = unshownRun(state && state.audit);
+  if (UNSETTLED_AUDIT_PHASES.includes(auditPhase) && !unshown) return null;
   if (ctx && ctx.alertPhase === "closed") return null;
+  const meta = (ctx && ctx.meta) || {};
+  // Standalone mode inside the post-alert suppression window shows no launch (3-B); bundled
+  // mode is part of the alert intervention itself, so it always shows (3-A).
+  const suppressed = !(ctx && ctx.mode === "bundled") && inPostAlertSuppression(state, ctx && ctx.input);
+  if (suppressed && unshown) return null;
 
   // Always drive the projection (array) form: candidatesFromProjection appends the
   // TR6 level candidate from state.alert.cumulative_severity, so a standing
@@ -198,7 +230,9 @@ function evaluatePhaseA(sessionId, state, ctx) {
     || { steps: (state && state.steps) || {} };
   let candidates = [];
   try { candidates = collectAuditCandidates(projection, state) || []; } catch (_) { candidates = []; }
-  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return unshown && !suppressed ? showUnshownRun(sessionId, unshown, meta) : null;
+  }
 
   let plansDir;
   try { plansDir = getWorkflowPlansDir ? getWorkflowPlansDir() : undefined; } catch (_) { plansDir = undefined; }
@@ -228,11 +262,18 @@ function evaluatePhaseA(sessionId, state, ctx) {
       cwd: (ctx && ctx.cwd) || process.cwd(),
       plansDir,
       planSessionId,
+      launchShown: !suppressed,
     });
   } catch (_) { armInfo = { action: "none" }; }
 
-  if (!armInfo || armInfo.action !== "arm") return null;
-  return formatAuditArmReason(armInfo, (ctx && ctx.meta) || {});
+  if (!armInfo || armInfo.action !== "arm") {
+    return unshown && !suppressed ? showUnshownRun(sessionId, unshown, meta) : null;
+  }
+  // Inside the window the run stays armed but unshown; 3-C shows it later.
+  if (suppressed) return null;
+  return { reason: formatAuditArmReason(armInfo, meta), armInfo };
 }
 
-module.exports = { armFromCandidates, formatAuditArmReason, coalesce, buildJudgmentSet, evaluatePhaseA };
+module.exports = {
+  armFromCandidates, formatAuditLaunchSection, formatAuditArmReason, coalesce, buildJudgmentSet, evaluatePhaseA,
+};

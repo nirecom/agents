@@ -12,7 +12,7 @@
    - [Prompt Command Forms](claude-code/prompt-command-forms.md) — why prompt command examples use the standalone absolute form, with three old → current few-shot pairs and their regression guards
 8. [Test Runner Parallelism](claude-code/test-runner-parallelism.md) — `tests/run-all.sh` slot scheduler, the `# Serial:` lane, `-j` / `TEST_MAX_JOBS_PER_*` / `--deadline` / `RUN_ALL_*` surfaces, the calibrator and its measured max-jobs-per-host record, the duration ledger, contract-line neutralization
 9. [Project-Local Env Overrides](claude-code/local-env-overrides.md) — the global `.env` / project `.env.local` two-layer resolver, its trust model, why the local layer is gated by a blocklist alone, and `bin/show-local-env-overrides`
-10. [Test Host Lanes and the Corpus Cache](claude-code/test-host-lanes.md) — host-wide lanes bounded by the max jobs per host and shared by find-tests and run-all (`min(per-run, host−1)` for a run), exit 4 on the wait cap, `bin/test-lanes-status.sh`, the git-keyed corpus parse cache
+10. [Test Host Lanes and the Corpus Cache](claude-code/test-host-lanes.md) — host-wide lanes bounded by the max jobs per host and shared by find-tests and run-all (a run gets its fair share of the run-all lane pool, re-evaluated at each entry-script end, with load scale-in under external load), exit 4 on the wait cap, `bin/test-lanes-status.sh`, the git-keyed corpus parse cache
 11. [Test Language Registry](claude-code/test-language-registry.md) — the one table of test file names per language, its readers, per-language parts, the `UNSUPPORTED:` display, and the residue check
 12. [Test Result Contract](claude-code/test-result-contract.md) — language-independent exit codes and unit states (PASS / FAIL / SKIP / UNRUNNABLE / TIMEOUT), `cases.tsv` and case-level result lines, `RUN_CONTRACT:` / `Missing runtimes:`, neutralization, `run_outcome=unrunnable`, the UNRUNNABLE acceptance sentinel
 13. [Plan Sync](claude-code/plan-sync.md) — final plan files pushed to a private GitHub or GitLab remote on the project's own host so the model can write a URL readable from mobile apps or a browser; provisioning, interactive setup, send rule, plan link, visibility policy, risks
@@ -89,7 +89,7 @@ The file is directly inspectable for debugging.
 
 | Field | Type | Description |
 |---|---|---|
-| `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings with severity >= warning re-arm alert mode from this state; `paused→pending` re-arm resets `alert_retry_count`), closed=permanent session-close terminal (re-arm forbidden) |
+| `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings are recorded but never re-arm alert mode; only an explicit `--set-alert-phase pending` resumes, and that `paused→pending` transition resets `alert_retry_count`), closed=permanent session-close terminal (re-arm forbidden) |
 | `alert_armed_at` | ISO string or null | Timestamp when alert was armed; null when phase is done/paused/closed |
 | `alert_cause` | string or null | Trigger label (non-numeric slug): `"sentinel-hang"`, `"scheduled-review"`, `"worktree-off proposal"`, or `"workflow-off proposal"`; co-cleared when `alert_armed_at` is nulled |
 | `last_run_at` | ISO string or null | Timestamp of last alert execution |
@@ -103,7 +103,7 @@ The file is directly inspectable for debugging.
 
 | Field | Type | Description |
 |---|---|---|
-| `audit_phase` | `null`/`"pending"`/`"in_progress"`/`"done"`/`"frozen"` | Lifecycle SSOT |
+| `audit_phase` | `null`/`"pending"`/`"in_progress"`/`"done"`/`"frozen"` | Lifecycle SSOT; an unshown pending run (`audit_dispatched_at` null) never blocks a later arm — see [supervisor-audit-ledger.md](claude-code/supervisor-audit-ledger.md) |
 | `audit_verdict` | string or null | `"CONTINUE"` / `"WARN"` / `"BLOCK"` |
 | `audit_armed_at` | ISO string or null | Timestamp when audit was armed |
 | `audit_cause` | string or null | Trigger: `step-complete:<step>` or `severity-threshold:<level>` (coalesced causes are joined) |

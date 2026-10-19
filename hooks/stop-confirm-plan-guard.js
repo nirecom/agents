@@ -6,6 +6,7 @@
 // tool_result is an error (denied) needs no follow-up: closing the turn is right.
 // Plan-link check (after Layer 2): a turn that wrote a plan (show-plan-link.js turn marker)
 // must end its last text block with that stage's plan-link output. Blocks once.
+// Continuation (last, #2650): an unapproved presentation turn is continued once for the CONFIRM echo.
 // The transcript is read through hooks/lib/transcript-reader.js (#2610): an undecidable
 // flush passes. Reason prefixes and the marker contract: docs/architecture/claude-code/settings.md.
 "use strict";
@@ -14,6 +15,9 @@ const fs = require("fs");
 const path = require("path");
 const SP = require("./lib/sentinel-patterns");
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+
+const STOP_BUDGET_MS = 4000;
+const PROBE_RESERVE_MS = 500;
 
 // The table's next skill for a plan suffix; detail may also branch straight to BRANCHING_COMPLETE.
 function nextSkillFor(stage) {
@@ -40,6 +44,18 @@ function block(reason) {
   process.exit(2);
 }
 
+// Blocks when the stage's plan violates PLAN_LANG (#2278): Layer 2 and the continuation share it.
+function blockOnPlanLang(sid, stage) {
+  const { relintPlanArtifact, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
+  const relint = relintPlanArtifact(sid, stage);
+  if (relint.skipped === null && relint.violations.length > 0) {
+    block("[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
+      " violates plan-artifact language/heading rules (PLAN_LANG=" + relint.policy + ", " +
+      relint.violations.length + " line(s)) — fix body language and use canonical English schema headings before CONFIRM_" +
+      stage.toUpperCase() + ":\n" + formatPlanLangViolations(relint.violations).join("\n"));
+  }
+}
+
 function layer2(sid, content, entries) {
   let confirmIdx = -1;
   let stage = null;
@@ -56,14 +72,7 @@ function layer2(sid, content, entries) {
   if (resultIsError(entries, content[confirmIdx].id)) return;
   // Re-lint the confirmed artifact against PLAN_LANG before the follow-up
   // check: a non-compliant plan must be rewritten, not merely continued (#2278).
-  const { relintPlanArtifact, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
-  const relint = relintPlanArtifact(sid, stage);
-  if (relint.skipped === null && relint.violations.length > 0) {
-    block("[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
-      " violates plan-artifact language/heading rules (PLAN_LANG=" + relint.policy + ", " +
-      relint.violations.length + " line(s)) — fix body language and use canonical English schema headings before CONFIRM_" +
-      stage.toUpperCase() + ":\n" + formatPlanLangViolations(relint.violations).join("\n"));
-  }
+  blockOnPlanLang(sid, stage);
   const nextSkill = nextSkillFor(stage);
   for (let i = confirmIdx + 1; i < content.length; i++) {
     const item = content[i];
@@ -106,7 +115,31 @@ function planLink(sid, markers, lastTextBlock) {
   }
 }
 
+// #2650: a presentation turn that closed on its plan-link line, unapproved with the gate ON, is
+// continued once so the CONFIRM echo comes in the same turn. Any doubt ends the turn as before.
+function continuation(sid, markers, tail, deadline) {
+  const anchor = tail.lastTextEntry;
+  if (!anchor || typeof anchor.uuid !== "string" || !anchor.uuid || anchor !== tail.lastAssistantEntry) return;
+  const CC = require("./lib/confirm-continuation");
+  if (CC.anchorHasToolUse(anchor)) return;
+  const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+  const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../bin/workflow/lib/next-step/gate-line");
+  const pick = CC.pickContinuationStage({
+    sid, lastText: tail.lastTextBlock, plansDir: getWorkflowPlansDir(), markers, entries: tail.entries,
+    timeoutMsFor: () => Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, deadline - Date.now() - PROBE_RESERVE_MS),
+  });
+  if (!pick) return;
+  blockOnPlanLang(sid, pick.stage);
+  const { writeContinuationMark } = require("./lib/turn-marker");
+  const written = writeContinuationMark(sid, pick.stage, {
+    anchorUuid: anchor.uuid, absPath: pick.absPath, link: CC.linkKey(pick.link), artifactSha: pick.sha,
+  });
+  if (written) block(CC.continueReason(pick.stage));
+}
+
 if (require.main === module) {
+  // The 5 s Stop timeout less node start-up and output; a test may move the origin back.
+  const deadline = Date.now() - (Number(process.env.STOP_CONFIRM_CONTINUE_T0_OFFSET_MS) || 0) + STOP_BUDGET_MS;
   const r = readHookInput();
   if (r.kind !== "ok") {
     try {
@@ -125,7 +158,8 @@ if (require.main === module) {
   });
   if (!sid) process.exit(0);
 
-  const { readAndDeleteTurnMarkers } = require("./lib/turn-marker");
+  const { readAndDeleteTurnMarkers, clearContinuationMarks } = require("./lib/turn-marker");
+  clearContinuationMarks(sid);
   // Markers feed only the plan-link check; Layer 2 must run on every Stop (#2278).
   const markers = readAndDeleteTurnMarkers(sid);
 
@@ -150,6 +184,12 @@ if (require.main === module) {
 
   try {
     planLink(sid, markers, tail.lastTextBlock);
+  } catch (_) {
+    process.exit(0);
+  }
+
+  try {
+    continuation(sid, markers, tail, deadline);
   } catch (_) {
     process.exit(0);
   }

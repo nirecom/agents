@@ -279,8 +279,11 @@ precaution list and acceptance criteria.
 
 ## Test parallelism calibration
 
-An uncalibrated host runs tests at the default max jobs per host (4). Measure the real
-knee once per host, from the repo root:
+With `AUTO_CONFIG_TEST_MAX_JOBS=on` (the default) an uncalibrated host runs tests at the
+default max jobs per host (4), and the measured record, the calibration offer and load
+scale-in apply. With `off` the host is fully manual: only `TEST_MAX_JOBS_PER_HOST` (4
+when empty) and `TEST_MAX_JOBS_PER_RUN` count. Measure the real knee once per host, from
+the repo root:
 
 - bash: `RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh`
 - PowerShell: `$env:RUN_CALIBRATION = "1"; bash bin/calibrate-test-parallelism.sh`
@@ -288,14 +291,18 @@ knee once per host, from the repo root:
 It takes up to 90 minutes; `--time-limit <min>` changes the cap. Add `--dry-run` to see
 the plan and its cost without measuring, and `--print` to show the current record.
 
-/run-tests asks once per session on an uncalibrated host: calibrate now, not now, or
-never ask again on this host. To undo "never ask again", delete
-`~/.claude/run-all/calibration-never-ask.conf` (or the same file under
-`RUN_ALL_CACHE_DIR` when that is set).
+/run-tests asks once per session on an uncalibrated host: calibrate now, or not now.
+Choosing "calibrate now" first prints the estimated minutes. To stop the question for
+good, set `AUTO_CONFIG_TEST_MAX_JOBS=off` in `.env`. A leftover
+`calibration-never-ask.conf` under `~/.claude/run-all` (or `RUN_ALL_CACHE_DIR`) is no
+longer read and may be deleted.
 
-To pin a value instead, set `TEST_MAX_JOBS_PER_HOST` in `.env`. A pin outranks the
-measured record, so calibrating then leaves the effective value unchanged, and /run-tests
-reports `source=dotenv` (or `env`) after the run.
+To pin a value, set `TEST_MAX_JOBS_PER_HOST` in `.env`. In mode `on` a pin is a ceiling
+on the measured record, so calibrating leaves the effective value unchanged when the pin
+is lower, and /run-tests reports `source=dotenv` (or `env`) after the run. The order in
+which the layers resolve is owned by
+[test-host-lanes.md](architecture/claude-code/test-host-lanes.md) ("Resolution order of
+max jobs per host").
 
 Design rationale: [test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md) Section 5.
 
@@ -314,6 +321,8 @@ then goes to the subagent. Jev never blocks a judgment: an outage, missing key,
 or bad response delegates to the subagent, and a failure of the procedure itself
 resolves to the safe side (highest complexity level, or run the planning stage).
 
+A `FALLBACK=<reason>` line from `jev-judge finalize` names why the output was demoted, `source-changed` included; the reasons are listed under Missing answer in [two-stage-broker.md](architecture/jev/two-stage-broker.md#failure-paths).
+
 ### Reading the report
 
 ```
@@ -329,7 +338,7 @@ Flags: `--log <path>` (default decision log), `--point <name>` (one judgment poi
 | Adoption | **LLM call rate**: how often a subagent dispatch was requested — the cost Jev is meant to remove. `adopted` and `by_mode` show whose answers decided. |
 | Adoption | Short-circuit rate (skip points): how often one confident "run" answer decided the point. Watch its trend; it is the everyday view of the run direction. |
 | Adoption | `answer_missing`, `finalize_absent`: dispatches whose answer never arrived, and tickets nobody finalized. Persistent non-zero values mean a caller is not completing the procedure. |
-| Adoption | `input_insufficient`: tickets where Jev was not asked because a required section was not whole. Read its breakdown (issue body, detail, `copy-failed`, `over-cap`). An issue-body shortfall comes from a long issue combined with a long plan and is a designed cost, not a fault. |
+| Adoption | `input_insufficient`: tickets where Jev was not asked because a required section was not whole. At `write-tests` / `write-code` the required section is the issue body, plus at least one plan section (detail, outline or intent) that is whole or truncated with its copy intact. Read its breakdown (issue body, detail, `copy-failed`, `over-cap`). It happens when the required sections do not fit the Jev input budget (`MAX_JEV_INPUT_CHARS`), or when every plan section is absent or its copy failed. |
 | Adoption | `superseded_count`: non-zero means two callers advanced the same step in parallel. The newer judgment is the valid one; the older caller stopped without writing. |
 | Retune | Per-key agreement and, per candidate threshold, whether lowering is supported (below). |
 | Legacy | Version 1 records from the shadow period, with their original metrics. Never mixed into the sections above. |

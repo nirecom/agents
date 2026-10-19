@@ -50,7 +50,7 @@ MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optiona
    - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/<session-id>-outline.md`. Do NOT write `## Issues` / `## Accepted Tradeoffs` — the helper carries them forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
      Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
-   - Apply the full `skills/_shared/confirm-plan.md` protocol (CPA-1+CPA-2+CPA-3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — the three CPA-3 steps (presentation turn, CONFIRM turn, next response) cover that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
+   - Apply the full `skills/_shared/confirm-plan.md` protocol (CPA-1+CPA-2+CPA-3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — the CPA-3 steps (presentation, CONFIRM echo on the turn-end block or else in the next turn, next response) cover that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
    - Proceed to the **Completion** sequence below.
 
 MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
@@ -119,7 +119,7 @@ MOP-7. On `APPROVED`:
 MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + plan-link line).
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
    - **`GATE_ACTION=proceed`:** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **`GATE_ACTION=ask`:** follow the three confirm-plan CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"` alone in the next turn; after Allow, co-emit the `make-detail-plan` Skill invocation. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
+   - **`GATE_ACTION=ask`:** follow the three confirm-plan CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, co-emit the `make-detail-plan` Skill invocation. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
 

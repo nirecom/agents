@@ -109,10 +109,11 @@ const orNull = (x) => (x === undefined ? null : x);
 const latencies = (recs, sideOf, completed) => recs.filter((r) => completed.has(sideOf(r).status)).map((r) => sideOf(r).latency_ms);
 const span = (lat) => ({ p50: percentile(lat, 50), p95: percentile(lat, 95) });
 
-// threshold: one number, or the registry's per-direction {true, false} pair.
+// threshold: one number, or the registry's per-direction {true, false} pair. A null bar
+// (direction never adopted) counts as below: `x < null` would read it as 0.
 function belowBar(p, threshold) {
   const bar = isObj(threshold) ? threshold[String(p >= 0.5)] : threshold;
-  return Math.max(p, 1 - p) < bar;
+  return !isNum(bar) || Math.max(p, 1 - p) < bar;
 }
 
 // One point's summary over its v1 records. threshold: the low-confidence cut.

@@ -246,6 +246,18 @@ case_begin "live" "bin/p-live.sh"
 case_end
 fi
 EOF
+# p-dupname.sh (#2673): case "live" twice, the second on a missing target. Built by calling a
+# one-case function twice, so no begin line is written literally twice. Second begin: line 6.
+P_DUP_BEGIN="case""_begin"  # split so this line is not read as a marker
+p_dup_case() { printf '%s "%s" "%s"\necho %s\ncase_end\n' "$P_DUP_BEGIN" "$1" "$2" "$1"; }
+printf '#!/usr/bin/env bash\n# Tests: bin/p-live.sh, bin/p-dead.sh\n' | add_raw "$P1_REPO" "p-dupname.sh"
+p_dup_case live bin/p-live.sh >> "$P1_REPO/tests/p-dupname.sh"
+p_dup_case live bin/p-dead.sh >> "$P1_REPO/tests/p-dupname.sh"
+# p-dupname-gap.sh: live, other, live — the repeat is not adjacent; the last is the orphan.
+printf '#!/usr/bin/env bash\n# Tests: bin/p-live.sh, bin/p-dead.sh\n' | add_raw "$P1_REPO" "p-dupname-gap.sh"
+p_dup_case live bin/p-live.sh >> "$P1_REPO/tests/p-dupname-gap.sh"
+p_dup_case other bin/p-live.sh >> "$P1_REPO/tests/p-dupname-gap.sh"
+p_dup_case live bin/p-dead.sh >> "$P1_REPO/tests/p-dupname-gap.sh"
 commit_repo "$P1_REPO" "group-p enumerate fixtures"
 
 case_begin "enumerate-conforming-unchanged" "bin/lib/test-retire-predicate/case-parser.sh"
@@ -275,6 +287,37 @@ case_begin "enumerate-non-sh-guard-kept" "bin/lib/test-retire-predicate/case-par
 cp "$P1_REPO/tests/p-plain.sh" "$P1_REPO/tests/p-plain.txt"
 run_enum "$P1_REPO" "tests/p-plain.txt"
 assert_eq "P1d non-.sh file keeps file-level fallback" "0" "$TRP_HAS_MARKERS"
+case_end
+
+case_begin "enumerate-duplicate-name-falls-back-to-file" "bin/lib/test-retire-predicate/case-parser.sh"
+# #2673: the retire path goes through the shared state rule, so a repeated name is malformed
+# and the file is judged as one unit; no case range is ever cut out of it.
+run_enum "$P1_REPO" "tests/p-dupname.sh"
+assert_eq "P1e duplicate name is malformed via enumerate" "1" "$_TRP_MARKER_MALFORMED"
+assert_eq "P1e duplicate name reason" "duplicate-name" "${_TRP_MARKER_MALFORMED_REASON:-}"
+assert_eq "P1e duplicate name yields no cases" "0" "$TRP_CASE_COUNT"
+run_verdict "$P1_REPO" "tests/p-dupname.sh"
+assert_eq "P1e duplicate name unit mode" "file" "${TRP_UNIT_MODE:-}"
+P1E_BEFORE="$(cat "$P1_REPO/tests/p-dupname.sh")"
+P1E_RC=0
+trp_remove_orphan_cases "$P1_REPO" "tests/p-dupname.sh" 2>/dev/null || P1E_RC=$?
+assert_eq "P1e remove orphan cases refuses" "1" "$P1E_RC"
+assert_eq "P1e file unchanged" "$P1E_BEFORE" "$(cat "$P1_REPO/tests/p-dupname.sh")"
+unset P1E_BEFORE P1E_RC
+# Non-adjacent repeat: the retire path still refuses, and the bytes stay as they were.
+cp "$P1_REPO/tests/p-dupname-gap.sh" "$P1_REPO/p-dupname-gap.before"
+run_enum "$P1_REPO" "tests/p-dupname-gap.sh"
+assert_eq "P1e non-adjacent repeat reason" "duplicate-name" "${_TRP_MARKER_MALFORMED_REASON:-}"
+P1E_RC=0
+trp_remove_orphan_cases "$P1_REPO" "tests/p-dupname-gap.sh" 2>/dev/null || P1E_RC=$?
+assert_eq "P1e non-adjacent remove orphan cases refuses" "1" "$P1E_RC"
+if cmp -s "$P1_REPO/p-dupname-gap.before" "$P1_REPO/tests/p-dupname-gap.sh"; then
+  pass "P1e non-adjacent file bytes unchanged"
+else
+  fail "P1e non-adjacent file bytes unchanged" "$(cat "$P1_REPO/tests/p-dupname-gap.sh")"
+fi
+rm -f "$P1_REPO/p-dupname-gap.before"
+unset P1E_RC
 case_end
 
 require_fn trp_parse_case_markers "P0 parse split" || return 0
@@ -355,6 +398,29 @@ p_state "P7 conforming" "conforming.sh" conforming "" ""
 p_state "P7 malformed" "grammar.sh" malformed 3 grammar
 p_state "P7 uncertain" "q-odd-double.sh" uncertain 6 depth
 p_state "P7 conforming after uncertain resets" "conforming.sh" conforming "" ""
+case_end
+
+# ── P8: a duplicate name never overrides an earlier parse verdict (#2673) ──
+# Built with p_dup_case (one case per call), so no begin line is written twice here.
+printf '#!/usr/bin/env bash\n# Tests: bin/a.sh, bin/b.sh\n' | p_fx dup-then-grammar.sh
+p_dup_case a bin/a.sh >>"$P_DIR/dup-then-grammar.sh"
+p_dup_case a bin/b.sh >>"$P_DIR/dup-then-grammar.sh"
+printf '  %s "z" "bin/a.sh"\n' "$P_DUP_BEGIN" >>"$P_DIR/dup-then-grammar.sh"
+printf '#!/usr/bin/env bash\n# Tests: bin/a.sh, bin/b.sh\n' | p_fx dup-then-balance.sh
+p_dup_case a bin/a.sh >>"$P_DIR/dup-then-balance.sh"
+p_dup_case a bin/b.sh >>"$P_DIR/dup-then-balance.sh"
+printf '%s "z" "bin/a.sh"\necho tail\n' "$P_DUP_BEGIN" >>"$P_DIR/dup-then-balance.sh"
+printf '#!/usr/bin/env bash\n# Tests: bin/a.sh, bin/b.sh\nMSG="first line\nsecond line"\n' | p_fx dup-quote-risk-depth.sh
+p_dup_case a bin/a.sh >>"$P_DIR/dup-quote-risk-depth.sh"
+p_dup_case a bin/b.sh >>"$P_DIR/dup-quote-risk-depth.sh"
+printf 'if true; then\n%s "z" "bin/a.sh"\n' "$P_DUP_BEGIN" >>"$P_DIR/dup-quote-risk-depth.sh"
+
+case_begin "duplicate-name-keeps-earlier-verdict" "bin/lib/test-retire-predicate/case-parser.sh"
+# Lines: 1-2 header, 3-5 and 6-8 the two cases named a, 9 on the later violation.
+p_state "P8 duplicate name then grammar keeps grammar" "dup-then-grammar.sh" malformed 9 grammar
+p_state "P8 duplicate name then balance keeps balance (last line)" "dup-then-balance.sh" malformed 10 balance
+# Lines: 3-4 an open double quote, 5-7 and 8-10 the two cases named a, 12 the begin inside if.
+p_state "P8 duplicate name with quote-risk depth stays uncertain" "dup-quote-risk-depth.sh" uncertain 12 depth
 case_end
 
 unset P1_REPO P2_ROWS P4_ROWS P5_ROWS _row _l _f _m _n _r _u

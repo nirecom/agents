@@ -12,10 +12,11 @@ const { resolveCurrentEffectiveStep } = require("../../../../hooks/workflow-stat
 const { getWorkflowPlansDir } = require("../../../../hooks/lib/workflow-plans-dir");
 const { confirmGateForStep } = require("../../../../hooks/lib/confirm-gate/step-gate-map");
 const {
-  probeConfirmGateSync, posixJoin,
+  probeConfirmGateWithCause, posixJoin,
 } = require("../../../../hooks/lib/confirm-gate/probe");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("./gate-line");
 const { rowFor } = require("../../../../hooks/workflow-state/plan-stage-table");
+const { planGateFromValue } = require("../../../../hooks/lib/confirm-gate/plan-gate");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
 
@@ -76,14 +77,17 @@ function runGate(rawSession, opts) {
   const key = step ? confirmGateForStep(step) : null;
   if (!key) return print("none", "", HINTS.none, "no-confirm-gate-for-step:" + step);
 
-  const value = probeConfirmGateSync(key, NEXT_STEP_GATE_PROBE_TIMEOUT_MS);
+  const probe = probeConfirmGateWithCause(key, NEXT_STEP_GATE_PROBE_TIMEOUT_MS);
+  const value = probe.value;
+  const causeReason = probe.cause === "ok" ? "" : "probe-" + probe.cause;
   const gateLine = "GATE_" + key + "=" + value;
   const reasons = [step + ": " + key + "=" + value];
-  // #2277: a stage whose approval has no off waiver (intent) always asks.
+  if (causeReason) reasons.push(causeReason);
+  // #2277/#2650: a plan stage takes the shared gate predicate; the value line stays the raw flag.
   const row = rowFor(step);
-  const waivable = !row || row.offWaivable;
-  if (value === "OFF" && !waivable) reasons.push("no-off-waiver");
-  let action = value === "OFF" && waivable ? "proceed" : "ask";
+  if (value === "OFF" && row && !row.offWaivable) reasons.push("no-off-waiver");
+  const off = row ? planGateFromValue(row.suffix, value) === "OFF" : value === "OFF";
+  let action = off ? "proceed" : "ask";
   let hint = HINTS[action];
 
   if (step === "detail") {
@@ -93,7 +97,8 @@ function runGate(rawSession, opts) {
       hint += " The scope-change check failed: warn the user that it could not run.";
     }
     if (sc.changed && action === "proceed" && approved) {
-      return print("proceed", gateLine, HINTS.proceed, "scope-change-approved");
+      return print("proceed", gateLine, HINTS.proceed,
+        "scope-change-approved" + (causeReason ? ", " + causeReason : ""));
     }
     if (sc.changed) {
       reasons.push("scope-change-detected");

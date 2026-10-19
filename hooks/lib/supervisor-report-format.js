@@ -193,6 +193,8 @@ function formatFreshnessBackstopReason(cause, detailLine, sessionId, workflowSes
 
 function formatL3StageBoundaryReason(stage, verdict, sessionId, stateFilePath) {
   const lines = [];
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
   lines.push(`[EM Supervisor] Audit mode review at CONFIRM_${stage}: ${verdict}.`);
   lines.push("Trigger: stage-boundary sentinel detected in assistant transcript.");
   lines.push(`Action: invoke agents/supervisor-audit.md as a subagent.`);
@@ -204,6 +206,8 @@ function formatL3StageBoundaryReason(stage, verdict, sessionId, stateFilePath) {
 
 function formatL3SeverityThresholdReason(cumSev, verdict, sessionId, stateFilePath) {
   const lines = [];
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
   lines.push(`[EM Supervisor] Audit mode review (cumulative_severity=${cumSev}): ${verdict}.`);
   lines.push("Trigger: cumulative severity reached audit threshold.");
   lines.push(`Action: invoke agents/supervisor-audit.md as a subagent.`);

@@ -17,9 +17,13 @@ harness_isolate
 # shellcheck source=feat-2490-next-step-gate/common.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2490-next-step-gate/common.sh"
 
-# ERROR fixtures, same two shapes value-line.sh uses: get-config-var exits 4, no confirm-off.
-CFG_E4="$GT_BASE/cfg-e4"; mk_tree "$CFG_E4"; printf '#!/usr/bin/env bash\nexit 4\n' > "$CFG_E4/bin/get-config-var"
-CFG_NOCO="$GT_BASE/cfg-noco"; mk_tree "$CFG_NOCO"; rm -f "$CFG_NOCO/bin/confirm-off" "$CFG_NOCO/bin/get-config-var"
+# ERROR fixtures, the same two shapes value-line.sh uses (#2681: the gate resolves in-process,
+# so bin/ stubs are never read): no hooks/lib/config-flag.js, and a load-env whose CONFIRM_*
+# lookups throw (the original stays as load-env-real.js so the rest of next-step still loads).
+CFG_NOLIB="$GT_BASE/cfg-nolib"; mk_tree "$CFG_NOLIB"; rm -f "$CFG_NOLIB/hooks/lib/config-flag.js"
+CFG_THROW="$GT_BASE/cfg-throw"; mk_tree "$CFG_THROW"
+mv "$CFG_THROW/hooks/lib/load-env.js" "$CFG_THROW/hooks/lib/load-env-real.js"
+printf '"use strict";\nconst real = require("./load-env-real");\nmodule.exports = Object.assign({}, real, { resolveConfigVar: function (n, d, o) { if (/^CONFIRM_/.test(n)) throw new Error("stub: resolveConfigVar throws"); return real.resolveConfigVar(n, d, o); } });\n' > "$CFG_THROW/hooks/lib/load-env.js"
 line_n() { printf '%s\n' "$OUT" | sed -n "$1p"; }
 
 echo "=== (C1) seven gates x ON / OFF / ERROR ==="
@@ -27,7 +31,12 @@ case_begin "seven-gates-on-off-error-matrix" "bin/workflow/lib/next-step/gate-li
 for step in $GATE_STEPS; do
   key="$(gate_key_of "$step")"; sid="mx-$step"
   write_state "$sid" "$(json_at "$step")"
-  [ "$step" = "detail" ] && put_plan "$sid" intent "$INTENT_FULL"
+  # detail reads the intent for scope-change; clarify_intent is blocked (closes_issues-empty)
+  # before any value line unless the intent names an issue.
+  case "$step" in
+    detail) put_plan "$sid" intent "$INTENT_FULL" ;;
+    clarify_intent) put_plan "$sid" intent "$(printf '%s\n\n## Issues\n\n- #2490\n' "$INTENT_FULL")" ;;
+  esac
   for row in off:OFF on:ON; do
     export "$key=${row%%:*}"
     ns --session "$sid"
@@ -36,7 +45,7 @@ for step in $GATE_STEPS; do
     check "$step $key=${row%%:*}: value line is last" "GATE_$key=${row#*:}" "$(last_line "$OUT")"
   done
   export "$key=on"
-  for cfg in "$CFG_E4" "$CFG_NOCO"; do
+  for cfg in "$CFG_NOLIB" "$CFG_THROW"; do
     OUT="$(run_next_step_in "$cfg" --session "$sid" 2>/dev/null || true)"
     check "$step ${cfg##*/}: value line ERROR" "GATE_$key=ERROR" "$(last_line "$OUT")"
     check "$step ${cfg##*/}: ACTION still invoke" "invoke" "$(val ACTION)"
