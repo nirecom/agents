@@ -3,7 +3,8 @@
 // session-progress.md (#2594): the one file the main conversation's model writes across every
 // generation of a handed-off session. Its name carries the first generation's sid (the root
 // sid), so each generation copies the root sid its donor saved; walking the inherited_from
-// chain is only the fallback. ensureProgressFile never overwrites what the model wrote.
+// chain is only the fallback. ensureProgressFile never overwrites a non-empty file: only a
+// 0-byte one (the trace of an interrupted first write) is restored to the template.
 // Design: docs/architecture/claude-code/progress-file.md.
 
 const fs = require("fs");
@@ -14,7 +15,6 @@ const { getPlansArtifactPath } = require("./plans-artifact-registry");
 
 const PRESSURE_SUFFIX = "progress-pressure.json";
 const TEMPLATE_PATH = path.join(__dirname, "..", "..", "templates", "progress.md");
-const MAX_CHAIN_DEPTH = 8;
 
 function stateIo() {
   return require("../workflow-state/state-io");
@@ -52,6 +52,7 @@ function mergePressure(sid, patch, opts) {
 
 // updatePressure(sid, fn, opts) -> result | null — fn(cur) -> {patch, result} | null runs under the
 // lock, so a read-decide-write cannot race another hook. Null on no-op, lock or write failure.
+// A patch whose every value is JSON-equal to the current record skips the write.
 // The lock is not reentrant: fn must never call mergePressure or updatePressure. Never throws.
 // opts.lockWaitMs bounds the lock wait; a timeout returns null and fn is not run.
 function updatePressure(sid, fn, opts) {
@@ -63,7 +64,8 @@ function updatePressure(sid, fn, opts) {
       const out = fn(cur);
       if (!out) return null;
       const patch = out.patch || {};
-      if (Object.keys(patch).length > 0 && !writeSidecar(sid, PRESSURE_SUFFIX, Object.assign({}, cur, patch))) return null;
+      const changed = Object.keys(patch).some((k) => JSON.stringify(patch[k]) !== JSON.stringify(cur[k]));
+      if (changed && !writeSidecar(sid, PRESSURE_SUFFIX, Object.assign({}, cur, patch))) return null;
       return out.result === undefined ? null : out.result;
     });
   } catch (_) {
@@ -88,23 +90,37 @@ function donorOf(sid) {
   return null;
 }
 
+const MAX_CHAIN_DEPTH = 64;
+
+// pinCapRoot(chain, root) -> root — saves root in every walked generation that has none yet, so
+// the newest sid, any older sid of this walk, and every later descendant (which stops at the
+// first saved root) share one progress file. Compare-and-set: an already saved root wins.
+function pinCapRoot(chain, root) {
+  for (const s of chain) mergePressure(s, { root_sid: root }, { onlyIf: (cur) => !isValidSid(cur.root_sid) });
+  return root;
+}
+
 // resolveRootSid(sid) -> the root sid; the own sid when nothing better is known. Never throws.
+// A walk past MAX_CHAIN_DEPTH hops roots the lineage at the oldest sid it reached (pinCapRoot).
 function resolveRootSid(sid) {
   try {
     if (!isValidSid(sid)) return sid;
     const own = savedRootSid(sid);
     if (own) return own;
-    let cur = sid;
-    const seen = new Set([sid]);
-    for (let depth = 0; depth < MAX_CHAIN_DEPTH; depth++) {
-      const donor = donorOf(cur);
-      if (!donor || seen.has(donor)) return cur;
+    const chain = [sid];
+    const seen = new Set(chain);
+    for (;;) {
+      if (chain.length > MAX_CHAIN_DEPTH) return pinCapRoot(chain, chain[chain.length - 1]);
+      const donor = donorOf(chain[chain.length - 1]);
+      if (!donor) return chain[chain.length - 1];
+      // A cycle has no first generation, so every member and every tail into it agrees on
+      // the cycle's smallest sid: one progress file whichever member asks.
+      if (seen.has(donor)) return chain.slice(chain.indexOf(donor)).sort()[0];
       const saved = savedRootSid(donor);
       if (saved) return saved;
       seen.add(donor);
-      cur = donor;
+      chain.push(donor);
     }
-    return cur;
   } catch (_) {
     return sid;
   }
@@ -126,8 +142,41 @@ function isRegularFile(file) {
   try { return fs.lstatSync(file).isFile(); } catch (_) { return false; }
 }
 
+// isEmptyRegularFile(file) -> true for a 0-byte regular file only. A non-empty file — even a
+// strict byte-prefix of the template — may be the model's edit (trailing sections deleted).
+function isEmptyRegularFile(file) {
+  try {
+    const st = fs.lstatSync(file);
+    return st.isFile() && st.size === 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+// writeTemplate(file, tpl, replace) -> bool — the template reaches file complete or not at all:
+// it is written to a temp file, then hard-linked into place (fails on an existing file) or,
+// when replacing a 0-byte file, renamed over it. A file system without hard links falls back to a
+// plain exclusive write. Throws (EEXIST when another writer created file first).
+function writeTemplate(file, tpl, replace) {
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, tpl, { flag: "wx" });
+  try {
+    // Re-checked right before the rename: a write that landed since the first check is kept.
+    if (replace && !isEmptyRegularFile(file)) return false;
+    if (replace) fs.renameSync(tmp, file);
+    else fs.linkSync(tmp, file);
+  } catch (e) {
+    if (replace || (e && e.code === "EEXIST")) throw e;
+    fs.writeFileSync(file, tpl, { flag: "wx" });
+  } finally {
+    try { fs.unlinkSync(tmp); } catch (_) { /* renamed away */ }
+  }
+  return true;
+}
+
 // ensureProgressFile(sid) -> {path, created} | {path:null, created:false}. Creates the file
-// from the template only when absent (flag "wx"); never overwrites. A path is returned only
+// from the template only when absent, and restores it only over a 0-byte regular file (the
+// trace of an interrupted first write); any non-empty file is never touched. A path is returned only
 // when the target is (or becomes) a regular file; a directory, symlink, or failed write
 // yields {path:null}. Never throws.
 function ensureProgressFile(sid) {
@@ -135,12 +184,17 @@ function ensureProgressFile(sid) {
     if (!isValidSid(sid)) return { path: null, created: false };
     const rootSid = resolveRootSid(sid);
     const file = getPlansArtifactPath(rootSid, "progress");
+    const tpl = Buffer.from(renderTemplate(rootSid), "utf8");
     let present = true;
     try { fs.lstatSync(file); } catch (_) { present = false; }
-    if (present) return isRegularFile(file) ? { path: file, created: false } : { path: null, created: false };
+    if (present) {
+      if (!isRegularFile(file)) return { path: null, created: false };
+      if (!isEmptyRegularFile(file)) return { path: file, created: false };
+      return { path: file, created: writeTemplate(file, tpl, true) };
+    }
     fs.mkdirSync(path.dirname(file), { recursive: true });
     try {
-      fs.writeFileSync(file, renderTemplate(rootSid), { encoding: "utf8", flag: "wx" });
+      writeTemplate(file, tpl, false);
     } catch (e) {
       if (e && e.code === "EEXIST" && isRegularFile(file)) return { path: file, created: false };
       return { path: null, created: false };

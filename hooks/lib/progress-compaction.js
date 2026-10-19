@@ -15,6 +15,8 @@ const { updatePressure } = require("./progress-file");
 const BURST_WINDOW_MS = 30 * 60 * 1000;
 const BURST_THRESHOLD = 7;
 const KEEP_COMPACTIONS = 20;
+// Bounded well under the 5 s PostCompact hook timeout; on timeout the record is dropped fail-open.
+const COMPACTION_LOCK_WAIT_MS = 1000;
 
 // decide(cur, now) -> {patch, result} — the read-decide half, run under the pressure lock.
 function decide(cur, now) {
@@ -46,7 +48,7 @@ function decide(cur, now) {
 function recordCompaction(sid, nowMs) {
   try {
     const now = typeof nowMs === "number" ? nowMs : Date.now();
-    const r = updatePressure(sid, (cur) => decide(cur, now));
+    const r = updatePressure(sid, (cur) => decide(cur, now), { lockWaitMs: COMPACTION_LOCK_WAIT_MS });
     if (r === null) return null;
     if (r.burst) {
       try {
