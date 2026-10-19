@@ -15,6 +15,7 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 . "$(dirname "${BASH_SOURCE[0]}")/_cal-fixture.sh"
 cf_init
+CF_PATH_PREFIX="$(cf_cpu_shim 16)"   # #2687: the logical CPU count bounds --jobs-list; pin it
 
 MEASURE_MOD="$CF_REPO/bin/calibrate-test-parallelism/measure.sh"
 if [ ! -f "$CF_CAL" ]; then
@@ -115,32 +116,32 @@ parse() {
 P="$CF_T/parse"; mkdir -p "$P"
 {
     printf '[run-all] reap: waitn\n'
-    printf '[run-all] 1/3 start /x/bin/a.sh (j=2 inflight=1)\n'
-    printf '[run-all] 2/3 start /x/bin/b.sh (j=2 inflight=2)\n'
-    printf '[run-all] 1/3 PASS /x/bin/a.sh 3s\n'
-    printf '[run-all] 3/3 start /x/bin/c.sh (j=2 inflight=2)\n'
-    printf '[run-all] 2/3 PASS /x/bin/b.sh 4s\n'
-    printf '[run-all] 3/3 PASS /x/bin/c.sh 5s\n'
+    printf '[run-all] 1/3 start /xroot/bin/a.sh (j=2 inflight=1)\n'
+    printf '[run-all] 2/3 start /xroot/bin/b.sh (j=2 inflight=2)\n'
+    printf '[run-all] 1/3 PASS /xroot/bin/a.sh 3s\n'
+    printf '[run-all] 3/3 start /xroot/bin/c.sh (j=2 inflight=2)\n'
+    printf '[run-all] 2/3 PASS /xroot/bin/b.sh 4s\n'
+    printf '[run-all] 3/3 PASS /xroot/bin/c.sh 5s\n'
 } > "$P/normal.err"
 sed 's/ [0-9]s$/ 41s/' "$P/normal.err" > "$P/normal-secs.err"
 {
-    printf '[run-all] 1/4 start /x/bin/sleeper.sh (j=4 inflight=1)\n'
-    printf '[run-all] 2/4 start /x/bin/q1.sh (j=4 inflight=2)\n'
-    printf '[run-all] 3/4 start /x/bin/q2.sh (j=4 inflight=3)\n'
-    printf '[run-all] 4/4 start /x/bin/q3.sh (j=4 inflight=4)\n'
+    printf '[run-all] 1/4 start /xroot/bin/sleeper.sh (j=4 inflight=1)\n'
+    printf '[run-all] 2/4 start /xroot/bin/q1.sh (j=4 inflight=2)\n'
+    printf '[run-all] 3/4 start /xroot/bin/q2.sh (j=4 inflight=3)\n'
+    printf '[run-all] 4/4 start /xroot/bin/q3.sh (j=4 inflight=4)\n'
     printf '[run-all] deadline of 3s exceeded\n'
 } > "$P/deadline.err"
 if [ ! -f "$MEASURE_MOD" ]; then
     fail "g5/parser/module-present" "missing: bin/calibrate-test-parallelism/measure.sh"
 else
     O1="$(parse "$P/normal.err")"; O2="$(parse "$P/normal-secs.err")"; O3="$(parse "$P/deadline.err")"
-    ck "g5/parser/normal-submitted" "/x/bin/a.sh /x/bin/b.sh /x/bin/c.sh " \
+    ck "g5/parser/normal-submitted" "/xroot/bin/a.sh /xroot/bin/b.sh /xroot/bin/c.sh " \
         "$(printf '%s\n' "$O1" | sed -n 's/^submitted=//p' | tr '\n' ' ')"
     ck "g5/parser/normal-j" "j=2" "$(printf '%s\n' "$O1" | grep '^j=' | LC_ALL=C sort -u | tr -d '\n')"
     ck "g5/parser/normal-inflight-max" "inflight_max=2" "$(printf '%s\n' "$O1" | grep '^inflight_max=')"
     if [ -n "$O1" ] && [ "$O1" = "$O2" ]; then pass "g5/parser/verdict-secs-ignored"
     else fail "g5/parser/verdict-secs-ignored" "output changed with verdict seconds"; fi
-    ck "g5/parser/deadline-submitted" "/x/bin/sleeper.sh /x/bin/q1.sh /x/bin/q2.sh /x/bin/q3.sh " \
+    ck "g5/parser/deadline-submitted" "/xroot/bin/sleeper.sh /xroot/bin/q1.sh /xroot/bin/q2.sh /xroot/bin/q3.sh " \
         "$(printf '%s\n' "$O3" | sed -n 's/^submitted=//p' | tr '\n' ' ')"
     ck "g5/parser/deadline-inflight-max" "inflight_max=4" "$(printf '%s\n' "$O3" | grep '^inflight_max=')"
 fi
@@ -165,6 +166,8 @@ cf_run "$S" "$R" "$ST" --jobs-list "1 2" --repeat 1 --warmup 0
 ck "g5/knee-top/selected-2" "2" "$(cf_selected)"
 if printf '%s\n%s\n' "$CF_OUT" "$CF_ERR" | grep -q -- '--jobs-list'; then pass "g5/knee-top/advice"
 else fail "g5/knee-top/advice" "no --jobs-list advice for a knee at the top width"; fi
+# #2687: the user-truncated ladder is recorded as width_limit=jobs-list (the advice above stays).
+ck "g5/knee-top/width-limit-jobs-list" "jobs-list" "$(sed -n 's/^width_limit=//p' "$R/parallelism.conf" 2>/dev/null | head -n 1)"
 ST="$(cf_stub "1:2000 2:2000")"; : > "$ST/noseg"
 cf_run "$S" "$R" "$ST" --jobs-list "1 2" --repeat 1 --warmup 0
 ck "g5/knee-inside/selected-1" "1" "$(cf_selected)"

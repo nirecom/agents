@@ -76,6 +76,22 @@ for _lang in "${LANGS[@]}"; do
 done
 case_end
 
+case_begin "gate-checker-duplicate-name-four-languages" "bin/check-case-markers.sh"
+# #2673: a case name used twice is malformed at its second begin line, in every language.
+while IFS='|' read -r _lang _file _line; do
+  [ -n "$_lang" ] || continue
+  put "$REPO_GATE" "tests/bin/$_file" "$_lang-dupname"
+  ck "$GATE_T/$_file"
+  assert_eq "$_lang dupname: rc=$CK_RC out=$CK_OUT" \
+    "$_lang dupname: rc=1 out=HIGH: $GATE_T/$_file line $_line: malformed case marker (duplicate-name) code=MALFORMED_CASE_MARKER"
+done <<'ROWS'
+sh|dupname.sh|7
+pester|dupname.Tests.ps1|9
+pytest|test_dupname.py|16
+js|dupname.js|7
+ROWS
+case_end
+
 case_begin "gate-checker-js-uncertain-warns-only" "bin/check-case-markers.sh"
 ck "$GATE_T/uncertain.js"
 assert_eq "rc=$CK_RC" "rc=0"

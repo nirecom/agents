@@ -10,7 +10,7 @@ const {
   writeAtomic,
 } = require("./shared");
 const { capDeclaredFiles } = require("../audit-ledger");
-const { armAuditRun, finalizeAuditRun, recordBlockOverride } = require("./audit-run");
+const { armAuditRun, markAuditLaunchShown, finalizeAuditRun, recordBlockOverride } = require("./audit-run");
 
 // #720: Audit writer. Symmetric to writeAlertState — accepts a small patch
 // object, validates each field's type/enum, then merges into state.audit.
@@ -136,6 +136,7 @@ module.exports = {
   writeAuditStateCas,
   incrementAuditRetryCount,
   armAuditRun,
+  markAuditLaunchShown,
   finalizeAuditRun,
   recordBlockOverride,
 };

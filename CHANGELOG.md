@@ -787,3 +787,35 @@ Changes: Glossary entries now follow written entry criteria; the glossary is spl
 ### FEATURE: PR #2695 (2026-10-17)
 Background: feat(#2669): attribute run-all guard and decoy hits to the test that ...
 Changes: Test runs now report a command guard or root decoy hit as a failure of the test that caused it; hits that cannot be traced to one test appear as HIT: lines and HITS=N, and the baseline check stops with exit 6 instead of guessing.
+
+### FEATURE: PR #2700 (2026-10-17)
+Background: fix(#2677): let jev answers through the placement guard and route complexity by decisive signals
+Changes: Jev complexity judgments now reach the backup subagent's answer (it was blocked by the placement guard) and print a `FALLBACK=` reason whenever a judgment falls back to the safe side.
+
+### FEATURE: PR #2706 (2026-10-17)
+Background: feat(#2687): auto-tune max jobs per host with fair share and CPU load...
+Changes: Test parallelism tunes itself: the per-machine maximum is measured and capped at the logical CPU count, concurrent test runs split the machine's lanes evenly, and the share shrinks while a heavy external program (such as a 3D game) loads the CPU. Set `AUTO_CONFIG_TEST_MAX_JOBS=off` for fully manual values. This replaces the "never ask again" calibration option.;The calibration offer in `/run-tests` now shows an estimated duration and tells you to wait while it measures.
+
+### FEATURE: PR #2710 (2026-10-17)
+Background: fix(#2673): restore harness clear lines and harden the non-bash case readers
+Changes: Pester, pytest and JS test harnesses again clear inherited CLAUDE_SESSION_ID / CLAUDE_ENV_FILE, so a parent session's env file can no longer leak into tests (#2673).;Case-marker checks: two cases sharing a name in one test file are now rejected in every supported language (`duplicate-name`), and the JS reader no longer hides markers after a `/*` or `//` inside a template literal (#2673).
+
+### FEATURE: PR #2713 (2026-10-18)
+Background: fix(#2681): read config flags in-process so the confirm-gate probe stops timing out
+Changes: Confirm gates read config flags without starting a subprocess, so `CONFIRM_*=off` no longer times out into an ask on Windows; `get-config-var` and `confirm-off` start one node process per lookup (#2681).;`next-step` prints `GATE_PROBE_CAUSE=<cause>` before the gate value line when the gate read was not clean (#2681).;When node cannot start, `get-config-var --is-off` exits 4 instead of 2 and `confirm-off` returns ERROR instead of ON (#2681).;`confirm-off` warns with a `confirm-off:` prefix on an unrecognized value; `.env` unterminated-quote warnings now reach `next-step` stderr; with `CLAUDE_PROJECT_DIR` unset the gates read the caller project's `.env.local` (#2681).;`get-config-var` and `confirm-off` help text documents arguments and exit codes (#1187).
+
+### FEATURE: PR #2707 (2026-10-18)
+Background: fix(#2698): stop supervisor alert false fires on dialog turns and bun...
+Changes: Supervisor no longer interrupts you with an alert while it is waiting for your answer, and alert and audit no longer double-intervene back to back.;The premature-stop guard leaves read-only answers to your questions, and AskUserQuestion prompts, alone.;A paused supervisor alert stays paused.;Supervisor interventions follow your configured conversation language, and a failed codex review now says why.
+
+### FEATURE: PR #2719 (2026-10-18)
+Background: fix(#2701): give the Jev input its own budget so write-code is judged...
+Changes: Jev now judges task complexity at the write-code stage instead of always falling back to the LLM judge, because its input has a larger, dedicated size budget.;A Jev answer demoted because its source files changed now reports FALLBACK=source-changed, the same as the other demotion reasons.
+
+### FEATURE: PR #2721 (2026-10-18)
+Background: test(#2717): remove PARTIAL_ORPHAN cases and fix malformed Tests: hea...
+Changes: Test-suite hygiene: the audit now reports no orphaned test cases, missing `Tests:` headers or malformed header entries. No behavior change for users.
+
+### FEATURE: PR #2667 (2026-10-19)
+Background: feat(#2650): approve a plan with one action instead of a reply plus a...
+Changes: Approving an intent, outline or detail plan now takes one action: the approval dialog appears right after the plan link, with no reply needed first. If the dialog does not appear, replying still works as before.

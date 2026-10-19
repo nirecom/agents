@@ -152,9 +152,11 @@ L12_HID="$(bash -c '. "$1"; run_all_host_id' _ "$PAR_LIB")"
 # The current OS attribute, from the real lib (empty while run_all_os_attr is absent).
 L_OS_NOW="$(bash -c '. "$1"; command -v run_all_os_attr >/dev/null 2>&1 && run_all_os_attr' _ "$PAR_LIB")"
 L12_SNIP='thl_max_jobs_per_host; echo "b=${THL_MAX_JOBS_PER_HOST-}/${THL_MAX_JOBS_PER_HOST_SOURCE-}"'
-l12_conf() {  # l12_conf <cache> <max> [os] — a v2 measured record for this host
+# l12_conf <cache> <max> [os] — a schema-3 measured record for this host, measured at the
+# fixture's 1024 logical CPUs (CPU_SHIM_DIR) up to that ceiling: it raises no recalibrate advice.
+l12_conf() {
     mkdir -p "$1"
-    printf 'schema=2\nhost_id=%s\nos=%s\nmax_jobs_per_host=%s\nmeasured_at=2026-01-01T00:00:00Z\nsample_size=3\nrepeat=1\n' \
+    printf 'schema=3\nhost_id=%s\nos=%s\nmax_jobs_per_host=%s\nmeasured_at=2026-01-01T00:00:00Z\nsample_size=3\nrepeat=1\nlogical_cpu_count=1024\nmax_width_measured=1024\nwidth_limit=logical-cpu-count\n' \
         "$L12_HID" "${3:-$L_OS_NOW}" "$2" > "$1/parallelism.conf"
 }
 # dotenv_stub <name> <value> — sets DOTENV_STUB to a resolver that prints <value>
@@ -177,17 +179,20 @@ l12_case() {  # l12_case <label> <cache> <want-N> <want-source> [NAME=VAL...]
     assert_eq "L12 $label: find-tests side (no TESTS_DIR)" "$wn/$ws" "$a"
     assert_eq "L12 $label: run-all side (TESTS_DIR exported)" "$wn/$ws" "$b"
 }
+# Pin-over-record ordering is the AUTO_CONFIG_TEST_MAX_JOBS=off contract (pins only, the
+# record unread); the on-mode min(pin, base) rows live in auto-config-cases.sh (AC3).
+L12_OFF=AUTO_CONFIG_TEST_MAX_JOBS=off
 l12_conf "$TMPDIR_BASE/l12-b" 5
 dotenv_stub TEST_MAX_JOBS_PER_HOST 6; L12_STUB_FIRST="$DOTENV_STUB"
-l12_case "env 7 beats .env 6 and record 5" "$TMPDIR_BASE/l12-b" 7 env TEST_MAX_JOBS_PER_HOST=7 "RUN_ALL_CONFIG_VAR_CMD=$L12_STUB_FIRST"
-[ ! -e "$L12_STUB_FIRST.called" ] && pass "L12 a valid env value launches no .env resolver" || fail "L12 the .env resolver was launched although the env value is valid"
-l12_case "env" "$TMPDIR_BASE/l12-a" 7 env TEST_MAX_JOBS_PER_HOST=7
+l12_case "off: env 7 beats .env 6 and record 5" "$TMPDIR_BASE/l12-b" 7 env "$L12_OFF" TEST_MAX_JOBS_PER_HOST=7 "RUN_ALL_CONFIG_VAR_CMD=$L12_STUB_FIRST"
+[ ! -e "$L12_STUB_FIRST.called" ] && pass "L12 valid env values launch no .env resolver" || fail "L12 the .env resolver was launched although the env values are valid"
+l12_case "off: env" "$TMPDIR_BASE/l12-a" 7 env "$L12_OFF" TEST_MAX_JOBS_PER_HOST=7
 dotenv_stub TEST_MAX_JOBS_PER_HOST 6
-l12_case ".env stub" "$TMPDIR_BASE/l12-e" 6 dotenv "RUN_ALL_CONFIG_VAR_CMD=$DOTENV_STUB"
+l12_case "off: .env stub" "$TMPDIR_BASE/l12-e" 6 dotenv "$L12_OFF" "RUN_ALL_CONFIG_VAR_CMD=$DOTENV_STUB"
 [ -e "$DOTENV_STUB.called" ] && pass "L12 the .env resolver stub was launched (positive control)" || fail "L12 RUN_ALL_CONFIG_VAR_CMD stub never launched"
-l12_case ".env 6 beats record 5" "$TMPDIR_BASE/l12-b" 6 dotenv "RUN_ALL_CONFIG_VAR_CMD=$DOTENV_STUB"
-l12_case "v2 measured record" "$TMPDIR_BASE/l12-b" 5 measured
-l12_case "no record" "$TMPDIR_BASE/l12-d" 4 default
+l12_case "off: .env 6 beats record 5" "$TMPDIR_BASE/l12-b" 6 dotenv "$L12_OFF" "RUN_ALL_CONFIG_VAR_CMD=$DOTENV_STUB"
+l12_case "on (default): schema-3 measured record" "$TMPDIR_BASE/l12-b" 5 measured
+l12_case "on (default): no record" "$TMPDIR_BASE/l12-d" 4 default
 case_ran L12
 
 # ── L13 the find-tests CLI releases its lane on every exit path ─────────────
@@ -263,15 +268,17 @@ l14_notice() {
         pass "L14 $1: $3 fixed notice line(s) on stderr"
     fi
 }
-while IFS='|' read -r _var _val _cache _want _nl; do
+# Column 6 pins AUTO_CONFIG_TEST_MAX_JOBS for the row (empty: unset, the on default).
+while IFS='|' read -r _var _val _cache _want _nl _am; do
     [ -n "$_var" ] || continue
+    _m=(); [ -z "$_am" ] || _m=("AUTO_CONFIG_TEST_MAX_JOBS=$_am")
     if [ "$_var" = "TEST_MAX_JOBS_PER_HOST" ]; then
-        lanes_drv "$_cache" "$_var=$_val" -- "$L12_SNIP" </dev/null
+        lanes_drv "$_cache" ${_m[@]+"${_m[@]}"} "$_var=$_val" -- "$L12_SNIP" </dev/null
         assert_eq "L14 $_var=$_val: resolves to $_want" "$_want" "$(kv_of "$OUT" b)"
         l14_notice "$_var=$_val" "$_val" "$_nl"
     elif [ "$_var" = "DOTENV" ]; then
         dotenv_stub TEST_MAX_JOBS_PER_HOST "$_val"
-        lanes_drv "$_cache" "RUN_ALL_CONFIG_VAR_CMD=$DOTENV_STUB" -- "$L12_SNIP" </dev/null
+        lanes_drv "$_cache" ${_m[@]+"${_m[@]}"} "RUN_ALL_CONFIG_VAR_CMD=$DOTENV_STUB" -- "$L12_SNIP" </dev/null
         assert_eq "L14 .env TEST_MAX_JOBS_PER_HOST=$(printf '%q' "$_val"): resolves to $_want" "$_want" "$(kv_of "$OUT" b)"
         l14_notice ".env value $(printf '%q' "$_val")" "$_val" "$_nl"
     else
@@ -292,12 +299,13 @@ TEST_MAX_JOBS_PER_HOST|abc|$L14K|5/measured|1
 TEST_MAX_JOBS_PER_HOST|-1|$L14K|5/measured|1
 TEST_MAX_JOBS_PER_HOST|1025|$L14K|5/measured|1
 TEST_MAX_JOBS_PER_HOST|1|$L14K|1/env|0
-TEST_MAX_JOBS_PER_HOST|1024|$L14N|1024/env|0
+TEST_MAX_JOBS_PER_HOST|1024|$L14N|1024/env|0|off
+TEST_MAX_JOBS_PER_HOST|1024|$L14N|4/default|0|on
 DOTENV|abc|$L14K|5/measured|1
 DOTENV|0|$L14K|5/measured|1
 DOTENV|1025|$L14N|4/default|1
 DOTENV|\$(touch $L14M)|$L14K|5/measured|1
-DOTENV|1024|$L14N|1024/dotenv|0
+DOTENV|1024|$L14N|1024/dotenv|0|off
 TEST_LANES_WAIT_CAP|abc|$L14N|-|-
 TEST_LANES_WAIT_INTERVAL|abc|$L14N|-|-
 TEST_LANES_TTL|abc|$L14N|-|-
@@ -386,14 +394,14 @@ if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'no test lanes held'; then
 else
     fail "LS1 empty status — rc=$RC out=$(printf '%q' "$OUT")"
 fi
-first_line() { printf '%s\n' "$1" | head -n 1; }
-assert_eq "LS1 env source: first line" "max_jobs_per_host=2 source=env" "$(first_line "$OUT")"
+# On mode (the default): a pin below the default 4 wins as the min, so its layer is the source.
+assert_tokens "LS1 env source: first line" "max_jobs_per_host=2 source=env mode=on" "$(first_line "$OUT")" record capped logical_cpus
 run_status "$TMPDIR_BASE/ls1-default"
-assert_eq "LS1 no record: first line names the default and the record's reason" \
-    "max_jobs_per_host=4 source=default record=missing" "$(first_line "$OUT")"
+assert_tokens "LS1 no record: first line names the default and the record's reason" \
+    "max_jobs_per_host=4 source=default record=missing mode=on" "$(first_line "$OUT")" capped logical_cpus
 dotenv_stub TEST_MAX_JOBS_PER_HOST 3
 run_status "$TMPDIR_BASE/ls1-dotenv" "RUN_ALL_CONFIG_VAR_CMD=$DOTENV_STUB"
-assert_eq "LS1 .env source: first line" "max_jobs_per_host=3 source=dotenv" "$(first_line "$OUT")"
+assert_tokens "LS1 .env source: first line" "max_jobs_per_host=3 source=dotenv mode=on" "$(first_line "$OUT")" record capped
 case_ran LS1
 
 # ── LS2 every state, read-only ──────────────────────────────────────────────
@@ -403,9 +411,9 @@ mk_slot "$LS2C" 2 "$(dead_pid)"
 mk_slot "$LS2C" 3 "$LIVE_PID" "$OSTYPE" run-all "$(( $(now_epoch) - 700 ))"
 mk_slot "$LS2C" 4 "$(dead_pid)" other-env
 mk_slot "$LS2C" 5 ""
-run_status "$LS2C" TEST_MAX_JOBS_PER_HOST=5
+run_status "$LS2C" TEST_MAX_JOBS_PER_HOST=5 AUTO_CONFIG_TEST_MAX_JOBS=off
 assert_eq "LS2 status exits 0" "0" "$RC"
-assert_eq "LS2 first line is max_jobs_per_host=<N> source=<...>" "max_jobs_per_host=5 source=env" "$(first_line "$OUT")"
+assert_tokens "LS2 first line is max_jobs_per_host=<N> source=<...>" "max_jobs_per_host=5 source=env mode=off" "$(first_line "$OUT")"
 _i=0
 for _st in alive stale-dead-pid stale-ttl foreign ownerless; do
     _i=$((_i + 1))
@@ -451,8 +459,8 @@ LS5_LEASE='thl_init_dir; thl_run_all_lease 2 0; echo "rc=$?"; echo "b=${THL_MAX_
 LS5D="$TMPDIR_BASE/ls5-diff"
 l12_conf "$LS5D" 5 "$LS5_OLD"
 run_status "$LS5D"
-assert_eq "LS5 os differs: status first line keeps the record and names both versions" \
-    "max_jobs_per_host=5 source=measured measured_on=$LS5_OLD now=$L_OS_NOW" "$(first_line "$OUT")"
+assert_tokens "LS5 os differs: status first line keeps the record and names both versions" \
+    "max_jobs_per_host=5 source=measured measured_on=$LS5_OLD now=$L_OS_NOW mode=on" "$(first_line "$OUT")" recalibrate
 lanes_drv "$LS5D" -- "$LS5_LEASE"
 assert_eq "LS5 os differs: the lease succeeds" "0" "$(kv_of "$OUT" rc)"
 assert_eq "LS5 os differs: the limit is the record's value, not invalidated" "5/measured" "$(kv_of "$OUT" b)"
@@ -465,13 +473,13 @@ esac
 LS5S="$TMPDIR_BASE/ls5-same"
 l12_conf "$LS5S" 5
 run_status "$LS5S"
-assert_eq "LS5 same os: status first line carries no measured_on/now" "max_jobs_per_host=5 source=measured" "$(first_line "$OUT")"
+assert_tokens "LS5 same os: status first line carries no measured_on/now" "max_jobs_per_host=5 source=measured mode=on" "$(first_line "$OUT")" measured_on now recalibrate capped
 lanes_drv "$LS5S" -- "$LS5_LEASE"
 assert_eq "LS5 same os: the limit is the record's value" "5/measured" "$(kv_of "$OUT" b)"
 _note="$(kv_of "$OUT" note)"
 case "$_note" in
-    *"measured on"*|"") fail "LS5 same os: note missing or carries an advice — note=$(printf '%q' "$_note")" ;;
-    "jobs 2 of requested 2 (max jobs per host 5, source measured; lanes 1 2)") pass "LS5 same os: the lanes: note has no advice" ;;
+    *"measured on"*|*re-run*|*calibrate*|"") fail "LS5 same os: note missing or carries an advice — note=$(printf '%q' "$_note")" ;;
+    "jobs 2 of requested 2 (max jobs per host 5, source measured; lanes 1 2)"*) pass "LS5 same os: the lanes: note has no advice" ;;
     *) fail "LS5 same os: unexpected note format — note=$(printf '%q' "$_note")" ;;
 esac
 lanes_drv "$TMPDIR_BASE/ls5-none" -- "$LS5_LEASE"

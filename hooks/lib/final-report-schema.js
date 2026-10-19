@@ -226,7 +226,11 @@ function supervisorAlertSummary(supervisorState) {
 function supervisorAuditSummary(supervisorState) {
   if (!supervisorState) return "(not run)";
   const audit = supervisorState.audit || {};
-  return `phase: ${audit.audit_phase || "none"}, verdict: ${audit.audit_verdict || "none"}, cause: ${audit.audit_cause || "none"}`;
+  const line = `phase: ${audit.audit_phase || "none"}, verdict: ${audit.audit_verdict || "none"}, cause: ${audit.audit_cause || "none"}`;
+  // #2698 3-7: a run deferred by the post-alert window and never shown before the session ended.
+  const { unshownRun } = require("./audit-ledger");
+  const unshown = unshownRun(audit);
+  return unshown ? `${line}, unlaunched audit: ${unshown.run_id}` : line;
 }
 
 function supervisorFindingsDetail(sessionId, supervisorState) {

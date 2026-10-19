@@ -9,9 +9,9 @@ FC_R30="$(mk_repo)"; synth_corpus "$FC_R30" 30
 FC_R120="$(mk_repo)"; synth_corpus "$FC_R120" 120
 FC_C30="$TMPDIR_BASE/fc-cache-30"
 FC_C120="$TMPDIR_BASE/fc-cache-120"
-# Host limit pinned in the environment: the env layer wins before the .env resolver
-# or the measured record is consulted, so neither adds host-dependent launches.
-FC_ENV=(TEST_MAX_JOBS_PER_HOST=4)
+# Host limit and AUTO_CONFIG_TEST_MAX_JOBS pinned in the environment: a valid env value
+# skips its .env resolver, so no host-dependent launch is added to the tally.
+FC_ENV=(TEST_MAX_JOBS_PER_HOST=4 AUTO_CONFIG_TEST_MAX_JOBS=on)
 
 # fc_measure <repo> <cache> <mode:off|miss|hit> <args...> — echo-free; sets FC_TALLY.
 fc_measure() {
@@ -110,7 +110,9 @@ fc4_scan() {
         infn && /^}/ { if (!hasfmt && body != "") printf "%s", body; infn = 0 }
     ' "$1"
 }
-for _f in "$CORPUS_LIB" "$LANES_LIB"; do
+# The #2687 siblings the lanes lib sources share its hot path (CPR-ORTH).
+for _f in "$CORPUS_LIB" "$LANES_LIB" "$AGENTS_ROOT/bin/lib/test-host-lanes-share.sh" \
+    "$AGENTS_ROOT/bin/lib/test-host-load.sh" "$AGENTS_ROOT/bin/lib/test-host-load-probe.sh"; do
     _rel="${_f#"$AGENTS_ROOT"/}"
     if [ ! -f "$_f" ]; then
         fail "FC4 $_rel missing (not implemented) — dirname/date scan impossible"

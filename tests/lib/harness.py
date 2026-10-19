@@ -18,6 +18,15 @@ import pytest
 _PINNED = {"WORKFLOW_STATE_DIR": "workflow-state", "WORKFLOW_PLANS_DIR": "plans"}
 _REMOVED = ("CLAUDE_CODE_SESSION_ID",)
 
+
+# The retired relay names are only cleared; leaving an isolation never puts them back.
+def _clear_retired() -> None:
+    os.environ.pop("CLAUDE_SESSION_ID", None)
+    os.environ.pop("CLAUDE_ENV_FILE", None)
+
+
+_clear_retired()
+
 # `_config` is private: without it (no run in progress, or a later release) the mark stays
 # unregistered and only the warning comes back.
 _config = getattr(pytest.mark, "_config", None)
@@ -31,6 +40,7 @@ class _Isolation:
         self._root: Path | None = None
 
     def __enter__(self) -> _Isolation:
+        _clear_retired()
         self._saved = {name: os.environ.get(name) for name in (*_PINNED, *_REMOVED)}
         self._root = Path(tempfile.mkdtemp(prefix="harness-"))
         for name, leaf in _PINNED.items():

@@ -21,6 +21,7 @@ Design and fail-open behavior: `docs/architecture/claude-code/case-marker-gate.m
 - Write name and target as literal strings (the reader takes them from the source text and never runs the file).
 - Place markers at the top level of the file only; cases never nest or overlap.
 - Read a case's range as the lines from its opening marker to its closing line, both included.
+- Give each case a name unique within its file (a repeated name is `MALFORMED_CASE_MARKER`, reason `duplicate-name`).
 - Name each case descriptively (`missing-header-blocks`), not by a serial id like `T1` or `P1` (the name is what a retire report shows).
 
 ## What the hard gate checks

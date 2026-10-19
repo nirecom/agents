@@ -68,7 +68,7 @@ REG_OUT="$(run_with_timeout 30 node -e '
   } catch (err) { process.stdout.write("THREW:" + (err.code || err.message)); }
 ' "$REGISTRY_JS" "$REPO_N" 2>/dev/null)"
 check "adapter/normalizer resolve to files; per-direction threshold, mode enum, fallback, subagent; retired keys gone" \
-  'true|true|{"true":0.7,"false":0.7}|true|S0-undecidable|complexity-judge|false|false' "$REG_OUT"
+  'true|true|{"true":0.7,"false":null}|true|S0-undecidable|complexity-judge|false|false' "$REG_OUT"
 case_end
 
 finish

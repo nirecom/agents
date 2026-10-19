@@ -120,13 +120,13 @@ _vce_check5() {
 }
 
 vce_static_checks() {
-  local rel="$1" report="${2:-}" rec tag idx name target rest
+  local rel="$1" report="${2:-}" rec tag name target rest
   VCE_EXEMPT="" VCE_NAMES=() VCE_TARGETS=() VCE_ID=""
   crr_read "$VCE_ROOT/$rel" >"$VCE_BK/.crr"
   rec="$(cat "$VCE_BK/.crr")"
   rm -f "$VCE_BK/.crr"
   VCE_STATE="$(printf '%s\n' "$rec" | awk -F'\t' '$1 == "FILE" { print $2; exit }')"
-  while IFS=$'\t' read -r tag _ name target rest; do
+  while IFS=$'\t' read -r tag name target rest; do
     [[ "$tag" == CASE ]] || continue
     VCE_NAMES+=("$name"); VCE_TARGETS+=("$target")
   done <<<"$rec"

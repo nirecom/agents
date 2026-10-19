@@ -41,7 +41,7 @@ CLI:
 
 | Command | What it does |
 |---|---|
-| `jev-judge query` | Snapshots the stage's sources, asks Jev, gates the answers, and says whether a subagent is needed |
+| `jev-judge query` | Builds the Jev input from the stage's sources, asks Jev, gates the answers, and says whether a subagent is needed |
 | `jev-judge finalize` | Merges Jev's and the subagent's answers, appends the decision record, and settles the result |
 | `jev-judge failsafe` | Settles the point's safe-side result when the two above could not |
 
@@ -69,7 +69,7 @@ with, and every decision record carries the ones actually applied.
 
 | Point | Mode | Backup subagent | Threshold: yes / no | Short-circuit |
 |---|---|---|---|---|
-| `complexity-judge` | production | `complexity-judge` | 0.7 signal fires / 0.7 does not | none |
+| `complexity-judge` | production | `complexity-judge` | 0.7 signal fires / never adopted (does not fire goes to the subagent) | when the adopted signals already decide high at every stage the judgment feeds |
 | `outline-skip` | production | `plan-skip-judge` | 0.9 skip allowed / 0.7 run | on "run" |
 | `detail-skip` | production | `plan-skip-judge` | 0.9 skip allowed / 0.7 run | on "run" |
 
@@ -81,12 +81,18 @@ with, and every decision record carries the ones actually applied.
   records every other point.
 - **Per-direction thresholds**: a skip point demands more confidence to skip a
   planning stage than to run it, because a wrong skip loses a review while a
-  wrong run only costs time.
+  wrong run only costs time. Complexity never adopts Jev's "absent" until data
+  sets a threshold: a wrong low loses quality, a wrong high costs a model tier.
 - **Short-circuit**: for a skip point, one criterion adopted as "does not hold"
-  decides "run" without asking about the rest. Complexity never short-circuits:
-  every signal routes a stage on its own.
+  decides "run" without asking about the rest. Complexity short-circuits on
+  adopted signals only when they are decisive: the adapter reads the routing
+  table and confirms they route every stage the judgment feeds to high (all
+  stages for stage `complexity`, its own stage otherwise). S3 alone is not
+  decisive at outline or detail, so it still delegates there. The routing
+  table is read at query time; a later table change only matters if the
+  persisted levels are lost and re-derived from the signals.
 - **Required sections**: per stage, the sections that must reach Jev whole.
-  The intent and the issue body are required at every stage. A section is
+  The issue body is required at every stage, the intent where no plan sections are named. A section is
   exempt only when its producing step was skipped or the session has no issue.
   When a required section is missing, Jev is not asked.
 - **Policy freeze**: a ticket keeps the policy it was queried under, so a
@@ -111,7 +117,7 @@ with, and every decision record carries the ones actually applied.
 | Module | Responsibility |
 |---|---|
 | `bin/workflow/jev-judge` | CLI entry: argument check, then `query` / `finalize` / `failsafe` |
-| `hooks/lib/jev/two-stage/` | The CLI path: query, gate, snapshot, merge, write-ahead replay, owner markers, fail-safe, orphan handling |
+| `hooks/lib/jev/two-stage/` | The CLI path: query, gate, Jev input, merge, write-ahead replay, owner markers, fail-safe, orphan handling |
 | `hooks/lib/jev/registry.js` | Point table and its schema check; who records a judgment |
 | `hooks/lib/jev/broker.js` | Orchestrates one Jev call: key check → breaker → liveness → query; pairs the shadow hooks |
 | `hooks/lib/jev/dispatch-gate.js` | Reads hook stdin; decides whether a dispatch is a shadow point's |
@@ -211,7 +217,8 @@ Record version 2 (`version: 2`):
 | `input.sources_failed`, `sources_failed_reasons` | Sections with no whole copy, and why (`copy-failed`, `over-cap`) |
 | `deterministic` | Computed signals: status, values, overrides, and the sha256 of the list they were computed from |
 | `agreement_by_signal` | Per key, whether Jev and the subagent agreed — only where both answered |
-| `fallback_reason` | Why Jev's answer was not used, when it was not |
+| `final.unjudged_signals` | Complexity: the signal ids left unjudged by a short circuit — never folded into `final.signals` as absent |
+| `fallback_reason` | Why Jev's answer was not used, when it was not; on the CLI finalize path, an unusable answer gives `answer-file-absent` / `answer-empty` / `answer-unparseable`; a source change at settle prints `FALLBACK=source-changed` but records no `fallback_reason` (vocabulary: [two-stage-broker.md](jev/two-stage-broker.md#failure-paths), Missing answer) |
 
 The CLI cannot observe an Agent dispatch, only the answer file it leaves — hence
 `llm_answer_received`, not a claim that the subagent was called. The report's
@@ -234,10 +241,10 @@ report and acting on it: [ops.md](../ops.md#jev).
 ## Security properties
 
 - **Redaction before truncation**: every text that leaves the machine passes
-  through two redactors before the 16 000-character cap is applied, so
-  truncation cannot leave a credential's prefix in the request, and the
-  recorded size and hash describe the redacted string actually sent. The first
-  (`hooks/workflow-state/complexity-routing/secret-shape.js`) redacts provider
+  through two redactors before the character cap is applied (`MAX_STATE_CHARS` for the
+  shadow adapter's state, `MAX_JEV_INPUT_CHARS` for the CLI's Jev input), so truncation
+  cannot leave a credential's prefix in the request, and the recorded size and hash
+  describe the redacted string actually sent. The first (`hooks/workflow-state/complexity-routing/secret-shape.js`) redacts provider
   key shapes; the second (`redactSecrets` in `hooks/lib/output-sanitize.js`)
   adds `github_pat_` tokens, URL userinfo credentials, `Authorization` scheme
   values, `token=` / `password:`-style assignments, and private-key blocks.

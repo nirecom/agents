@@ -215,7 +215,7 @@ At the `outline` and `detail` steps only, next-step first checks for an authorit
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 
-When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confirm-gate/step-gate-map.js`), next-step appends one more optional line last, after `SKIP_HINT`: `GATE_CONFIRM_<X>=<ON|OFF|ERROR>`. It probes `bin/confirm-off` with a 1500 ms budget; `ERROR` means the probe timed out or could not run. The line is emitted only on the final `ACTION=invoke` path and is display-only — never branch on it.
+When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confirm-gate/step-gate-map.js`), next-step appends one more optional line last, after `SKIP_HINT`: `GATE_CONFIRM_<X>=<ON|OFF|ERROR>`. It resolves the gate in-process through `hooks/lib/config-flag.js` (no child process, #2681); `ERROR` means the config could not be loaded or the resolution threw. When the probe cause is not `ok` (`load-failed`, `exception`, or `over-budget` — the 1500 ms budget is diagnostic only and never changes the value), a display-only `GATE_PROBE_CAUSE=<cause>` line sits right before the value line. The line is emitted only on the final `ACTION=invoke` path and is display-only — never branch on it.
 
 `--list` mode renders the full step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
@@ -225,7 +225,7 @@ When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confir
 
 `next-step --gate` is the single branching source for the seven confirm gates (`skills/_shared/confirm-plan.md` CPA-3). It is read-only and prints `GATE_ACTION`, the `GATE_CONFIRM_<X>` value line (omitted for `none`), `GATE_HINT`, and `REASON`.
 
-- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate).
+- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate). When the probe cause is not `ok`, `REASON` carries `probe-<cause>`.
 - At `detail` it also runs `bin/detect-scope-change.sh` on outline.md vs detail.md: a detected scope change turns `proceed` into `present-and-stop` (the scope change is shown even when `CONFIRM_DETAIL=off`); a failed check adds `scope-change-check-failed` to `REASON`, appends a warn-the-user sentence to `GATE_HINT`, and is otherwise treated as no change.
 - `--scope-change-approved` (only with `--gate`, else exit 64) is a stateless flag the skill passes once after the user approves the scope change, so an OFF detail gate resolves to `proceed`. Combining `--gate` with `--list` / `--reset` / `--mark` / `--advance` exits 64.
 
@@ -455,6 +455,19 @@ Boundary properties, and where each is enforced:
   same per-finding granularity to C4's own premature-stop evaluation, so a
   session with one genuinely-stalled step and one lookahead-only step is
   blocked for the former without being silenced for the latter.
+
+### User-dialog turn (`user-dialog-turn`, #2698)
+
+A turn that ends in dialog with the user (`hooks/lib/user-dialog-turn.js` owns the
+classification, by turn structure alone — never the wording, in any language) rightly
+stops: the last tool call is `AskUserQuestion`, or a human prompt opened the turn and it
+used only read-only tools and ended in text. A plain-text question is not exempt, so
+awaiting an answer requires `AskUserQuestion`. The `user-dialog-turn` row of
+`EXEMPTION_MATRIX` silences both C4 and C2 for it; `nextStep` stays unexempted, so the `next-step`
+recommendation survives to the next Stop. In C4 the row sits in `C4_EXEMPTIONS`
+at phase `next-step-output`: it is evaluated only after the stall check and the
+`ACTION=invoke` check, so the mechanism-failure lane is unchanged and the
+transcript is read only when a block is already a candidate.
 
 ### Final Report
 

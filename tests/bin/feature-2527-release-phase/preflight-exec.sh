@@ -168,12 +168,12 @@ out="$(pf --session pf-direct --repo "$RP_REPO")"
 check "unset RUN_TL4 defaults to OFF" "$(field "$out" RUN_TL4)" "OFF"
 out="$(RUN_TL4=maybe pf --session pf-direct --repo "$RP_REPO")"
 check "unrecognized RUN_TL4 fails safe to ON" "$(field "$out" RUN_TL4)" "ON"
-# preflight.sh finds bin/confirm-off -> bin/get-config-var from its own path, so the unreadable
-# case runs a checkout copy with get-config-var removed.
+# preflight.sh finds bin/confirm-off and hooks/lib/config-flag.js from its own path, so the
+# unreadable case runs a checkout copy with config-flag.js removed.
 # shellcheck source=../../lib/script-checkout-fixture.sh
 source "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 script_checkout_fixture_copy "$RP_TMP/co" bin hooks skills/get-release-approval || fail "fixture" "checkout copy failed"
-rm -f "$RP_TMP/co/bin/get-config-var"
+rm -f "$RP_TMP/co/hooks/lib/config-flag.js"
 out="$(PREFLIGHT_SH="$RP_TMP/co/skills/get-release-approval/scripts/preflight.sh" RUN_TL4=off pf --session pf-direct --repo "$RP_REPO")"
 check "unreadable config: RUN_TL4=ERROR" "$(field "$out" RUN_TL4)" "ERROR"
 check "unreadable config: still exit 0" "$(field "$out" RC)" "0"

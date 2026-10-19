@@ -6,7 +6,7 @@
 # WHY (CPR-WPH): g-calibrator.sh only greps the calibrator's literal filename, which passes for
 # any indirect invocation; four layered sentinels (L1 measure-cmd seam, L2 BASH_ENV script-path
 # log, L3 PATH shim, L4 cache byte-diff) prove it behaviourally instead, over absent/corrupt/
-# host-stale/v1/os-version-stale records and forced RUN_CALIBRATION=1. Temp fixtures isolate the cache
+# host/v1/os-version-stale, v3, legacy-v2, never-ask-file, mode-off and RUN_CALIBRATION=1. Temp fixtures isolate the cache
 # dir and TESTS_DIR; the closing case re-checks the real ~/.claude/run-all. TL3 gap: a real CI
 # wrapper outside tests/run-all.sh, mitigated by bin/check-verification-gate.sh.
 
@@ -88,17 +88,22 @@ printf '%s\n' "\${0:-}" >> "$SCRIPT_LOG" 2>/dev/null
 true
 PROBE_EOF
 
-chmod +x "$SENT_MEASURE" "$SENT_SHIM" 2>/dev/null || true
+# #2687: the logical CPU count caps max jobs per host; pin it on the same PATH dir (16 > 6).
+printf '#!/usr/bin/env bash\necho 16\n' > "$SHIM_DIR/nproc"
+printf '#!/usr/bin/env bash\necho 16\n' > "$SHIM_DIR/getconf"
+
+chmod +x "$SENT_MEASURE" "$SENT_SHIM" "$SHIM_DIR/nproc" "$SHIM_DIR/getconf" 2>/dev/null || true
 
 # --- drivers ----------------------------------------------------------------
 R_OUT=""; R_ERR=""; R_RC=0
-# run_runner <cal-env-mode> — a normal `-j auto` run with all sentinels armed.
+# run_runner <cal-env-mode> [auto-config on|off] — a normal `-j auto` run with all sentinels
+# armed; AUTO_CONFIG_TEST_MAX_JOBS is always pinned (default on) so no host .env decides it.
 run_runner() {
-    local mode="$1"
+    local mode="$1" auto="${2:-on}"
     local envs
     envs=("RUN_ALL_CACHE_DIR=$CACHE_DIR" "TESTS_DIR=$FX"
           "RUN_ALL_CALIBRATION_MEASURE_CMD=$SENT_MEASURE"
-          "BASH_ENV=$PROBE" "PATH=$SHIM_DIR:$PATH")
+          "BASH_ENV=$PROBE" "PATH=$SHIM_DIR:$PATH" "AUTO_CONFIG_TEST_MAX_JOBS=$auto")
     [ "$mode" = "forced" ] && envs+=("RUN_CALIBRATION=1")
     R_RC=0
     : > "$TMPD/stderr.txt"
@@ -135,8 +140,15 @@ calibrator_traces() {
 
 arm_sentinels() { : > "$CAL_LOG"; : > "$SCRIPT_LOG"; }
 
-# gen_cache <host_id> <os> — a v2 record (#2079) with max_jobs_per_host=6.
+# gen_cache <host_id> <os> — a v3 record (#2687) with max_jobs_per_host=6, measured at the
+# pinned logical CPU count 16 below a user-set ladder top (no recalibrate advice applies).
 gen_cache() {
+    printf 'schema=3\nhost_id=%s\nos=%s\nmax_jobs_per_host=6\nmeasured_at=%s\nsample_size=24\nrepeat=3\n' \
+        "$1" "$2" "$MEASURED_AT"
+    printf 'logical_cpu_count=16\nmax_width_measured=8\nwidth_limit=jobs-list\n'
+}
+# gen_cache_v2 <host_id> <os> — the legacy 7-key record, still accepted (#2687).
+gen_cache_v2() {
     printf 'schema=2\nhost_id=%s\nos=%s\nmax_jobs_per_host=6\nmeasured_at=%s\nsample_size=24\nrepeat=3\n' \
         "$1" "$2" "$MEASURED_AT"
 }
@@ -175,22 +187,23 @@ case_static_augment() {
 # ===========================================================================
 # 2. Behavioural matrix — no cache state makes a normal run calibrate
 # ===========================================================================
+NEVER_ASK_FILE="$CACHE_DIR/calibration-never-ask.conf"
 case_no_auto_calibration() {
-    local name state want mode row had inv
-    while IFS='|' read -r name state want; do
+    local name state want auto mode row had inv na_sig
+    while IFS='|' read -r name state want auto; do
         name="$(trim "$name")"
         [ -z "$name" ] && continue
         case "$name" in \#*) continue ;; esac
-        state="$(trim "$state")"; want="$(trim "$want")"
+        state="$(trim "$state")"; want="$(trim "$want")"; auto="$(trim "$auto")"
 
         for mode in neutral forced; do
             row="g3-cal/no-auto/$name/$mode"
-            rm -f "$CACHE_FILE"
+            rm -f "$CACHE_FILE" "$NEVER_ASK_FILE"
             case "$state" in
                 absent)  : ;;
                 corrupt) printf 'this is not a key value file\nstill not one\n' > "$CACHE_FILE" ;;
                 host)    gen_cache "$BOGUS_HOST" "Windows/10.0.26300" > "$CACHE_FILE" ;;
-                v1|osdiff)
+                v1|osdiff|v3|legacy|neverask)
                     if ! resolve_host; then
                         for inv in sentinel-never-fired reason source run-exit-zero \
                                    one-contract cache-not-self-healed; do
@@ -198,18 +211,50 @@ case_no_auto_calibration() {
                         done
                         continue
                     fi
-                    if [ "$state" = v1 ]; then gen_cache_v1 "$REAL_HOST" > "$CACHE_FILE"
-                    else gen_cache "$REAL_HOST" "$OTHER_OS" > "$CACHE_FILE"; fi ;;
+                    case "$state" in
+                        v1)       gen_cache_v1 "$REAL_HOST" > "$CACHE_FILE" ;;
+                        osdiff)   gen_cache "$REAL_HOST" "$OTHER_OS" > "$CACHE_FILE" ;;
+                        v3)       gen_cache "$REAL_HOST" "$REAL_OS" > "$CACHE_FILE" ;;
+                        legacy)   gen_cache_v2 "$REAL_HOST" "$REAL_OS" > "$CACHE_FILE" ;;
+                        # #2687: a never-ask record left on disk is neither read nor deleted.
+                        neverask) printf 'schema=1\nhost_id=%s\nrecorded_at=%s\n' "$REAL_HOST" "$MEASURED_AT" > "$NEVER_ASK_FILE" ;;
+                    esac ;;
                 *) fail "$row/sentinel-never-fired" "unknown fixture state: $state"; continue ;;
             esac
             had=0
             if [ -e "$CACHE_FILE" ]; then cp "$CACHE_FILE" "$GOLDEN"; had=1; fi
+            na_sig="absent"; [ -e "$NEVER_ASK_FILE" ] && na_sig="$(cksum < "$NEVER_ASK_FILE")"
 
             arm_sentinels
-            run_runner "$mode"
+            run_runner "$mode" "$auto"
 
             assert_eq "$row/sentinel-never-fired" "0" "$(calibrator_traces)"
-            if [ "$want" = "advice" ]; then
+            if [ "$want" = "measured" ]; then
+                assert_eq "$row/reason" "(no-notice)" "$(reason_token)"
+                case "$(lanes_line)" in
+                    *"max jobs per host 6, source measured"*) pass "$row/source" ;;
+                    *) fail "$row/source" "want 'max jobs per host 6, source measured', got [$(lanes_line)]" ;;
+                esac
+            elif [ "$want" = "off" ]; then
+                # AUTO_CONFIG_TEST_MAX_JOBS=off: the record is not read, and no calibration hint.
+                case "$(lanes_line)" in
+                    *"RUN_CALIBRATION=1"*) fail "$row/reason" "mode off must not hint calibration: [$(lanes_line)]" ;;
+                    *) pass "$row/reason" ;;
+                esac
+                case "$(lanes_line)" in
+                    *"max jobs per host 4, source default"*) pass "$row/source" ;;
+                    *) fail "$row/source" "want 'max jobs per host 4, source default' under mode off, got [$(lanes_line)]" ;;
+                esac
+            elif [ "$want" = "missing-hint" ]; then
+                assert_eq "$row/reason" "missing" "$(reason_token)"
+                case "$(lanes_line)" in
+                    *"calibrate with RUN_CALIBRATION=1"*) pass "$row/source" ;;
+                    *) fail "$row/source" "a stale never-ask file must not suppress the hint: [$(lanes_line)]" ;;
+                esac
+                if [ "$na_sig" = "$( [ -e "$NEVER_ASK_FILE" ] && cksum < "$NEVER_ASK_FILE" || echo absent)" ]; then
+                    pass "$row/never-ask-file-untouched"
+                else fail "$row/never-ask-file-untouched" "the run rewrote or deleted calibration-never-ask.conf"; fi
+            elif [ "$want" = "advice" ]; then
                 # A same-family record from another OS version is still used, and only advises.
                 case "$(lanes_line)" in
                     *"measured on $OTHER_OS, now $REAL_OS; re-run RUN_CALIBRATION=1 bash $CAL_REL"*) pass "$row/reason" ;;
@@ -237,12 +282,17 @@ case_no_auto_calibration() {
             else pass "$row/cache-not-self-healed"; fi
         done
     done <<'TABLE'
-# name       | cache state              | want reason token
-no-cache     | absent                   | missing
-corrupt-cache| corrupt                  | malformed
-stale-host   | host                     | host-mismatch
-v1-schema    | v1                       | schema-mismatch
-os-version   | osdiff                   | advice
+# name             | cache state | want reason token / outcome | AUTO_CONFIG_TEST_MAX_JOBS
+no-cache           | absent      | missing                     | on
+corrupt-cache      | corrupt     | malformed                   | on
+stale-host         | host        | host-mismatch               | on
+v1-schema          | v1          | schema-mismatch             | on
+os-version         | osdiff      | advice                      | on
+v3-record          | v3          | measured                    | on
+legacy-v2-record   | legacy      | measured                    | on
+auto-config-off    | v3          | off                         | off
+auto-config-off-nc | absent      | off                         | off
+never-ask-ignored  | neverask    | missing-hint                | on
 TABLE
 }
 

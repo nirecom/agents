@@ -7,10 +7,19 @@ $script:HarnessIsolation = $null
 $script:HarnessPinned = [ordered]@{ WORKFLOW_STATE_DIR = 'workflow-state'; WORKFLOW_PLANS_DIR = 'plans' }
 $script:HarnessRemoved = @('CLAUDE_CODE_SESSION_ID')
 
+# The retired relay names are only cleared; leaving an isolation never puts them back.
+function Clear-HarnessRetired {
+    Remove-Item Env:CLAUDE_SESSION_ID -ErrorAction SilentlyContinue
+    Remove-Item Env:CLAUDE_ENV_FILE -ErrorAction SilentlyContinue
+}
+
+Clear-HarnessRetired
+
 # Re-points the workflow dirs into a fresh temp directory and removes the session variables.
 # Pair it with Exit-HarnessIsolation in a finally block; a second exit does nothing.
 function Enter-HarnessIsolation {
     Exit-HarnessIsolation
+    Clear-HarnessRetired
     $saved = @{}
     foreach ($name in @($script:HarnessPinned.Keys) + $script:HarnessRemoved) {
         $saved[$name] = [Environment]::GetEnvironmentVariable($name)

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/bin/fix-windows-permission-glob.sh
-# Tests: bin/node, hooks/lib/path-match.js
+# Tests: hooks/lib/path-match.js
 # Tags: settings, config, hook, bin, windows, scope:issue-specific
 #
 # Tests for:
@@ -158,7 +158,7 @@ test_segments_posix_count() {
 
 test_segments_last_element() {
     local r
-    r="$(TEST_INPUT="/a/b/c" run_with_timeout node -e "const m=require('$PM_MODULE'); const s=m.getPathSegments(process.env.TEST_INPUT); process.stdout.write(s[s.length-1] || '')")"
+    r="$(TEST_INPUT="/usr/lib/c" run_with_timeout node -e "const m=require('$PM_MODULE'); const s=m.getPathSegments(process.env.TEST_INPUT); process.stdout.write(s[s.length-1] || '')")"
     if [ "$r" = "c" ]; then
         pass "getPathSegments: last element"
     else

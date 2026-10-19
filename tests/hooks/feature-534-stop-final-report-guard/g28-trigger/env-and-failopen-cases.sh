@@ -117,8 +117,9 @@ test_G45_premature_guard_delegates_gate_reason() {
     mkdir -p "$plans_dir" "$wf_dir"
     b_mk_state "$wf_dir" "$plans_dir" "$sid" pre_final_report_gate
 
+    # Non-dialog turn: exit 0 can come only from the delegated-reason row, not user-dialog-turn.
     local transcript="$TMPDIR_BASE/g45-transcript.jsonl"
-    write_transcript_with_assistant "$transcript" "Stopping before session-close."
+    write_non_dialog_transcript "$transcript" "Stopping before session-close."
 
     b_run "$PREMATURE_HOOK_JS" "$(b_stdin "$sid" "$transcript")" \
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
@@ -143,16 +144,18 @@ test_G46_premature_guard_other_invoke_still_blocks() {
     mkdir -p "$plans_dir" "$wf_dir"
     b_mk_state "$wf_dir" "$plans_dir" "$sid" docs user_verification cleanup pre_final_report_gate
 
+    # Human-opened turn that ran Bash (not read-only), so the user-dialog-turn exemption does not hold.
     local transcript="$TMPDIR_BASE/g46-transcript.jsonl"
-    write_transcript_with_assistant "$transcript" "Stopping while docs is still pending."
+    write_non_dialog_transcript "$transcript" "Stopping while docs is still pending."
 
     b_run "$PREMATURE_HOOK_JS" "$(b_stdin "$sid" "$transcript")" \
         "$(node_path "$plans_dir")" "$(node_path "$wf_dir")"
 
-    if [ "$B_CODE" = "2" ] && b_is_block; then
+    if [ "$B_CODE" = "2" ] && b_is_block && b_reason_has "[C4 premature-stop]" \
+        && b_reason_has "NEXT_SKILL=update-docs"; then
         pass "G46: premature-stop guard still blocks non-delegated ACTION=invoke (docs)"
     else
-        fail "G46: expected exit 2 + block, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 220)"
+        fail "G46: expected exit 2 + C4 premature-stop block naming the docs skill, got code=$B_CODE out=$(printf '%s' "$B_OUT" | head -c 400)"
     fi
 }
 

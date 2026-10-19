@@ -156,6 +156,11 @@ case_begin "codex-parse" "hooks/lib/supervisor-codex-parse.js"
 . "$SCRIPT_DIR/codex-parse.sh"
 case_end
 
+case_begin "codex-parse-reason" "hooks/lib/supervisor-codex-parse.js"
+# shellcheck source=./feature-929-agents/codex-parse-reason.sh
+. "$SCRIPT_DIR/codex-parse-reason.sh"
+case_end
+
 case_begin "audit-atomic-write" "hooks/lib/supervisor-state-writer/audit-run.js"
 # shellcheck source=./feature-929-agents/audit-atomic-write.sh
 . "$SCRIPT_DIR/audit-atomic-write.sh"

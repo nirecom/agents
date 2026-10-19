@@ -44,8 +44,9 @@ build_root() {
     echo "$root"
 }
 
-# write_record <max-jobs-per-host> — a v2 record the reader would call valid for this host.
-# Returns 1 when the library cannot name this host, so the caller can fence the row.
+# write_record <max-jobs-per-host> — a v3 record (#2687) the reader would call valid for this
+# host (logical_cpu_count=0: unknown at measure time). Returns 1 when the library cannot name
+# this host, so the caller can fence the row.
 write_record() {
     local cap="$1" host os
     [ -f "$LIB" ] || return 1
@@ -53,7 +54,8 @@ write_record() {
     os="$(lib_eval 'run_all_os_attr')"
     [ -n "$host" ] || return 1
     {
-        printf 'schema=2\n'
+        printf 'schema=3\n'
+        printf 'logical_cpu_count=0\nmax_width_measured=%s\nwidth_limit=jobs-list\n' "$cap"
         printf 'host_id=%s\n' "$host"
         printf 'os=%s\n' "$os"
         printf 'max_jobs_per_host=%s\n' "$cap"
@@ -80,7 +82,7 @@ peak_case() {
 
     # `record2`: a valid measured record of 2 that the automatic width must NOT adopt.
     if [ "$setup" = "record2" ] && ! write_record 2; then
-        fx_fail "M-$name. cannot build a valid v2 record: run_all_host_id unavailable from $LIB_REL"
+        fx_fail "M-$name. cannot build a valid v3 record: run_all_host_id unavailable from $LIB_REL"
         fx_fail "M-$name-bound. upper bound unverifiable for the same reason"
         return 0
     fi

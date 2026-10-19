@@ -10,6 +10,8 @@ echo "=== jev-judge: skip gate ==="
 need_mod bin/workflow/jev-judge || return 0
 need_mod bin/workflow/lib/jev-skip-adapter.js || return 0
 . "$JJ_DIR/_skip-lib.sh"
+# For jev_budget only: the oversized fixtures below are sized from the module's budget.
+. "$JJ_DIR/two-stage-lib.sh"
 
 # fq <fixture> <target> <defaultP> [K1p K2p]: fixture + mock + query (registry defaults, production).
 fq() {
@@ -69,7 +71,7 @@ case_begin "jj-skip-one-delegated-mixed" "bin/workflow/jev-judge"
 fq f-mx-t detail 0.5 0.85 0.95
 check "K1 p=0.85, K2 p=0.95: only K1 delegated" "$(keyset "$K1")" "$(keyset "$(kv DELEGATED)")"
 check "K1 delegated: SUBAGENT=plan-skip-judge" "plan-skip-judge" "$(kv SUBAGENT)"
-check "SNAPSHOT_FILE exists" "yes" "$([ -f "$(kv SNAPSHOT_FILE)" ] && echo yes || echo no)"
+check "JEV_INPUT_FILE exists" "yes" "$([ -f "$(kv JEV_INPUT_FILE)" ] && echo yes || echo no)"
 sk_answer "$(sk_line true true)"
 sk_fin
 check "subagent true: SKIP=true ADOPTED=mixed" "true|mixed" "$(kv SKIP)|$(kv ADOPTED)"
@@ -121,8 +123,12 @@ check "no outline.md: fallback_reason input-insufficient" "input-insufficient" "
 case_end
 
 case_begin "jj-skip-issue-body-required" "bin/workflow/jev-judge"
-LONG_BODY="$(head -c 20000 /dev/zero | tr '\0' 'b')"
-LONG_OUTLINE="$(head -c 14000 /dev/zero | tr '\0' 'o')"
+B="$(jev_budget)"
+check "fixture: the Jev input budget is a number" "yes" "$([[ "$B" =~ ^[0-9]+$ ]] && echo yes || echo no)"
+[[ "$B" =~ ^[0-9]+$ ]] || B=3000
+LONG_BODY="$(head -c "$B" /dev/zero | tr '\0' 'b')"
+# Outline plus the 5000-char issue body below overflow the budget, while the outline alone fits.
+LONG_OUTLINE="$(head -c "$((B - 3000))" /dev/zero | tr '\0' 'o')"
 for tg in outline detail; do
   sk_fx "f-ib-tr-$tg" "$tg" "$LONG_BODY"
   mock_p 0.99; sk_query "$tg"

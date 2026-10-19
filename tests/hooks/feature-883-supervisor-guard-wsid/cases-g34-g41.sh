@@ -26,6 +26,8 @@ run_g35() {
     sid="g35-sid"
     # alert_phase=done causes branch (3) condition l2Phase !== "done" to short-circuit.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'done', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794: branch (3) fires only when isWorkflowStarted; seed it so rc=0 is attributable to the phase.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -44,6 +46,8 @@ run_g36() {
     sid="g36-sid"
     # G33 reaches paused-on-threshold via retry count; G36 sets alert_phase=paused directly.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'paused', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # #1794 + #2698: with the workflow started, only the paused phase keeps branch (3) quiet.
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -62,6 +66,7 @@ run_g36b() {
     sid="g36b-sid"
     # #1166: closed is a permanent terminal alert phase; branch (3) must not fire even when armed.
     seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'closed', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_workflow_started "$tmp" "$sid"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -70,6 +75,25 @@ run_g36b() {
         pass "G36b: alert_phase=closed suppresses branch (3) despite alert_armed_at"
     else
         fail "G36b: alert_phase=closed suppresses branch (3) despite alert_armed_at (rc=$rc, out=$out)"
+    fi
+}
+
+run_g36c() {
+    require_source "$HOOK" "G36c: control — alert_phase=pending with workflow started fires branch (3)" || return
+    local tmp out rc sid
+    tmp="$(mktemp -d)"
+    sid="g36c-sid"
+    # Same seed as G35/G36/G36b; only the phase differs, so their rc=0 is attributable to the phase.
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'pending', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_workflow_started "$tmp" "$sid"
+    out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
+        | WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 2 ]; then
+        pass "G36c: control — alert_phase=pending with workflow started fires branch (3)"
+    else
+        fail "G36c: control — alert_phase=pending with workflow started fires branch (3) (rc=$rc, out=$out)"
     fi
 }
 
@@ -148,8 +172,9 @@ run_g39() {
     fi
     transcript_path_native="$tmp_node/transcript.jsonl"
     # Single assistant turn: first tool_use is WORKTREE_OFF Bash, last is AskUserQuestion.
-    # detectWorktreeOffProposal -> true; detectAskUserQuestionTurn -> true.
-    # Branch (C3) guarded by !askUserQuestionTurn -> suppressed.
+    # detectWorktreeOffProposal -> true; isUserDialogTurn (kind ask-user-question-tool,
+    # hooks/lib/user-dialog-turn.js since #2698) -> true.
+    # Branch (C3) guarded by !userDialogTurn -> suppressed.
     node -e '
 const off = "echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>\"";
 const obj = {type:"assistant",message:{content:[

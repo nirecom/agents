@@ -4,11 +4,11 @@
 // Paths resolve from __dirname, so a worktree's hooks load that worktree's adapter.
 // normalizer: a module whose normalize(raw) the broker requires and calls in-process.
 // confidence_threshold_by_answer: per answer direction ("true" = the adapter's yes side),
-// the lowest confidence max(p, 1-p) at which a Jev answer is adopted.
+// the lowest confidence max(p, 1-p) at which a Jev answer is adopted (null = never adopted).
 // short_circuit_answer: the key value that, once adopted from Jev, decides the point on
 // its own (null = never short-circuits); explicit, so a missing key is invalid.
-// required_sections_by_stage: per stage, the snapshot sections that must be present in
-// full before a Jev answer is adopted.
+// required_sections_by_stage: per stage, the Jev input sections an adopted answer needs in full;
+// plan_sections_by_stage (optional): per stage, plan sections by priority, one needed full or cut.
 
 const path = require("path");
 
@@ -19,8 +19,10 @@ const MODES = Object.freeze(["production", "shadow"]);
 const THRESHOLD_MIN = 0.5;
 const THRESHOLD_MAX = 1;
 // Sections every stage of every point requires (CPR-ORTH: the judge never decides
-// without the intent and the issue it was written from).
+// without the intent and the issue it was written from). A stage with plan sections
+// requires the issue body only: its intent is one of the plan sections instead.
 const ALWAYS_REQUIRED_SECTIONS = Object.freeze(["intent", "issue body"]);
+const PLAN_STAGE_REQUIRED_SECTIONS = Object.freeze(["issue body"]);
 
 const freezeDeep = (o) => {
   for (const v of Object.values(o)) if (v && typeof v === "object") freezeDeep(v);
@@ -34,8 +36,8 @@ const REGISTRY = freezeDeep({
     adapter: path.join(LIB_DIR, "jev-complexity-adapter.js"),
     normalizer: path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "normalize-judge-signals"),
     mode: "production",
-    confidence_threshold_by_answer: { true: 0.7, false: 0.7 },
-    short_circuit_answer: null,
+    confidence_threshold_by_answer: { true: 0.7, false: null },
+    short_circuit_answer: true,
     backup_subagent: "complexity-judge",
     subagent_type: "complexity-judge",
     fallback: "S0-undecidable",
@@ -44,8 +46,12 @@ const REGISTRY = freezeDeep({
       complexity: ["intent", "issue body"],
       outline: ["intent", "issue body"],
       detail: ["intent", "outline", "issue body"],
-      "write-tests": ["intent", "outline", "detail", "issue body"],
-      "write-code": ["intent", "outline", "detail", "issue body"],
+      "write-tests": ["issue body"],
+      "write-code": ["issue body"],
+    },
+    plan_sections_by_stage: {
+      "write-tests": ["detail", "outline", "intent"],
+      "write-code": ["detail", "outline", "intent"],
     },
   },
   "outline-skip": {
@@ -81,7 +87,7 @@ const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const isObj = (v) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
 const isNonEmptyStr = (v) => typeof v === "string" && v !== "";
 
-// STAGE_SOURCE_SECTIONS lives with the request builder (the sections a snapshot carries);
+// STAGE_SOURCE_SECTIONS lives with the request builder (the sections a Jev input carries);
 // loaded lazily so loading the registry never pulls the request module in.
 let stageSourceSections = null;
 function sourceSections() {
@@ -95,9 +101,38 @@ function thresholdErrors(t) {
   if (keys.length !== 2 || keys[0] !== "false" || keys[1] !== "true") {
     return ['confidence_threshold_by_answer keys must be exactly "true" and "false"'];
   }
+  // A point that can adopt nothing is a misconfiguration: mode "shadow" is how to never adopt.
+  if (keys.every((k) => t[k] === null)) return ["confidence_threshold_by_answer must not be null in both directions"];
   return keys
-    .filter((k) => typeof t[k] !== "number" || !Number.isFinite(t[k]) || t[k] < THRESHOLD_MIN || t[k] > THRESHOLD_MAX)
-    .map((k) => `confidence_threshold_by_answer.${k} must be a number in ${THRESHOLD_MIN}..${THRESHOLD_MAX}`);
+    .filter((k) => t[k] !== null
+      && (typeof t[k] !== "number" || !Number.isFinite(t[k]) || t[k] < THRESHOLD_MIN || t[k] > THRESHOLD_MAX))
+    .map((k) => `confidence_threshold_by_answer.${k} must be a number in ${THRESHOLD_MIN}..${THRESHOLD_MAX} or null`);
+}
+
+// plan_sections_by_stage: optional; per listed stage a non-empty list of distinct stage source
+// sections, none of them also required.
+function planSectionErrors(entry, sections) {
+  if (!own(entry, "plan_sections_by_stage")) return [];
+  const plan = entry.plan_sections_by_stage;
+  if (!isObj(plan)) return ["plan_sections_by_stage must be an object"];
+  const stages = Array.isArray(entry.stages) ? entry.stages : [];
+  const req = isObj(entry.required_sections_by_stage) ? entry.required_sections_by_stage : {};
+  const errors = [];
+  for (const stage of Object.keys(plan)) {
+    const list = plan[stage];
+    const allowed = own(sections, stage) ? sections[stage] : [];
+    const required = Array.isArray(req[stage]) ? req[stage] : [];
+    if (!stages.includes(stage)) {
+      errors.push(`plan_sections_by_stage.${stage} is not a stage of the point`);
+    } else if (!Array.isArray(list) || list.length === 0 || new Set(list).size !== list.length) {
+      errors.push(`plan_sections_by_stage.${stage} must be a non-empty array of distinct sections`);
+    } else if (!list.every((s) => allowed.includes(s))) {
+      errors.push(`plan_sections_by_stage.${stage} holds a section outside STAGE_SOURCE_SECTIONS`);
+    } else if (list.some((s) => required.includes(s))) {
+      errors.push(`plan_sections_by_stage.${stage} overlaps required_sections_by_stage.${stage}`);
+    }
+  }
+  return errors;
 }
 
 function sectionErrors(entry, sections) {
@@ -109,18 +144,20 @@ function sectionErrors(entry, sections) {
   if (keys.length !== entry.stages.length || !entry.stages.every((s) => own(req, s))) {
     errors.push("required_sections_by_stage keys must equal stages");
   }
+  const plan = isObj(entry.plan_sections_by_stage) ? entry.plan_sections_by_stage : {};
   for (const stage of keys) {
     const list = req[stage];
     const allowed = own(sections, stage) ? sections[stage] : [];
+    const always = own(plan, stage) ? PLAN_STAGE_REQUIRED_SECTIONS : ALWAYS_REQUIRED_SECTIONS;
     if (!Array.isArray(list) || list.length === 0) {
       errors.push(`required_sections_by_stage.${stage} must be a non-empty array`);
     } else if (!list.every((s) => allowed.includes(s))) {
       errors.push(`required_sections_by_stage.${stage} holds a section outside STAGE_SOURCE_SECTIONS`);
-    } else if (!ALWAYS_REQUIRED_SECTIONS.every((s) => list.includes(s))) {
-      errors.push(`required_sections_by_stage.${stage} must include ${ALWAYS_REQUIRED_SECTIONS.join(" and ")}`);
+    } else if (!always.every((s) => list.includes(s))) {
+      errors.push(`required_sections_by_stage.${stage} must include ${always.join(" and ")}`);
     }
   }
-  return errors;
+  return errors.concat(planSectionErrors(entry, sections));
 }
 
 // The list of schema violations of one entry ([] = valid).

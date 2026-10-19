@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/cat, hooks/block-dotenv.js
+# Tests: hooks/block-dotenv.js
 # Tags: dotenv, secrets, hook, bin, env, scope:common
 # Test suite for block-dotenv.js PreToolUse hook
 #

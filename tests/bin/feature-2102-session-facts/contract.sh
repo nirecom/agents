@@ -44,13 +44,15 @@ run_with_timeout() {
 }
 
 # A settings root that mirrors the real layout, so bin/confirm-off can actually resolve
-# get-config-var and load-env.js. Without the lib siblings every gate would read ERROR
-# and the value assertions below would be measuring the fixture, not the CLI.
+# hooks/lib/config-flag.js and load-env.js. Without the lib siblings every gate would read
+# ERROR and the value assertions below would be measuring the fixture, not the CLI.
 mk_cfg() {
   local d="$1"
   mkdir -p "$d/bin" "$d/hooks/lib"
   cp "$REPO_ROOT/bin/get-config-var" "$d/bin/"
   cp "$REPO_ROOT/bin/confirm-off" "$d/bin/"
+  # #2681: guarded only while the module is not yet written; once it exists the copy is unconditional in effect.
+  if [ -f "$REPO_ROOT/hooks/lib/config-flag.js" ]; then cp "$REPO_ROOT/hooks/lib/config-flag.js" "$d/hooks/lib/"; fi
   cp "$REPO_ROOT/hooks/lib/load-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$d/hooks/lib/"
@@ -64,7 +66,8 @@ printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=on\n' > "$CFG_FULL/.env"
 # of them missing or instrumented runs a copy of the reader from a tree it can change.
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 mk_reader_tree() { script_checkout_fixture_copy "$1" bin/workflow hooks bin/confirm-off bin/get-config-var; }
-CFG_BARE="$TMPDIR_BASE/cfg-bare"; mk_reader_tree "$CFG_BARE"; rm -f "$CFG_BARE/bin/get-config-var"
+# #2681: the gates resolve in-process, so the degraded tree lacks hooks/lib/config-flag.js.
+CFG_BARE="$TMPDIR_BASE/cfg-bare"; mk_reader_tree "$CFG_BARE"; rm -f "$CFG_BARE/hooks/lib/config-flag.js"
 
 OUTF="$TMPDIR_BASE/out.txt"; ERRF="$TMPDIR_BASE/err.txt"
 OUT=""; ERR=""; RC=0
@@ -177,7 +180,7 @@ check_shape "C3a3: no state file" "$OUTF"
 READER="$(nrm "$CFG_BARE")/bin/workflow/read-session-facts"
 run_facts "$CFG_BARE" --session c3noenv
 READER="$RSF"
-check "C3b: no .env and no get-config-var -- exits 0" 0 "$RC"
+check "C3b: no .env and no config-flag.js -- exits 0" 0 "$RC"
 check "C3b2: no .env -- all eleven keys present, in order" "$EXPECTED_KEYS" "$(keys_of "$OUT")"
 check_shape "C3b3: no .env" "$OUTF"
 run_facts "$CFG_FULL" --session c3nocx
@@ -231,12 +234,10 @@ case_end
 
 echo ""
 case_begin "C6-structural-parallel-pin" "bin/workflow/lib/session-facts/gate-facts.js"
-echo "=== C6: the two gate children are launched in parallel (structural pin) ==="
-# Wall-clock is too environment-dependent to assert, so the pin is on the shape:
-# a synchronous spawn per gate serialises them. Measured on Windows for the eight-key
-# contract: sequential 2,579 ms vs parallel 1,695 ms -- and the three calls this CLI
-# replaces cost 2,533 ms. A sequential implementation is therefore SLOWER than the
-# status quo it replaces, which inverts the whole point of the issue.
+echo "=== C6: no synchronous spawn helper in gate-facts.js (structural pin) ==="
+# #2681: the gates now resolve in-process (no child process at all). These two string pins
+# stay as the guard against a return to a synchronous spawn helper, which would serialise
+# the gates again (the spawn-era measurement: sequential 2,579 ms vs parallel 1,695 ms).
 if [ -f "$GATE_FACTS_SRC" ]; then
   pass "C6a: gate-facts.js exists"
   check "C6b: no execFileSync in gate-facts.js" 0 "$(grep -cF -- "execFileSync" "$GATE_FACTS_SRC" || true)"
@@ -247,91 +248,33 @@ fi
 case_end
 
 echo ""
-case_begin "C6-behavioral-concurrency" "bin/workflow/lib/session-facts/gate-facts.js"
-echo "=== C6 (behavioral): the two gate children actually run concurrently ==="
-# C6a-c pin the STRUCTURE (no sync spawn literal); this proves the BEHAVIOR that
-# structural pin exists to protect. Both CONFIRM_TESTS and CONFIRM_CODE are answered by
-# invoking bin/confirm-off once per gate (values.sh (a) differentially checks the
-# bundled reader's GATE_* output against exactly that direct call) -- so an instrumented
-# confirm-off that timestamps its own start and completion turns "launched in parallel"
-# into a barrier-file fact: true concurrency means both starts land before either
-# finishes; a sequential (even if async) rewrite would show one gate's completion before
-# the other's start. Wall-clock DURATION is still not asserted (C6's own comment already
-# explains why that is environment-unstable) -- only the before/after ORDER is.
-run_timed() { # <marker-dir> <gate-name> -- writes Date.now() (ms) start/done markers
-  local mdir="$1" gate="$2"
-  run_with_timeout node -e 'require("fs").writeFileSync(process.argv[1], String(Date.now()))' \
-    "$mdir/${gate}.start"
-  sleep 0.3
-  run_with_timeout node -e 'require("fs").writeFileSync(process.argv[1], String(Date.now()))' \
-    "$mdir/${gate}.done"
-}
-is_concurrent() { # <marker-dir> -- true iff the later start precedes the earlier finish
-  local mdir="$1" t_s c_s t_d c_d last_start first_done
-  t_s="$(cat "$mdir/CONFIRM_TESTS.start" 2>/dev/null || echo 0)"
-  c_s="$(cat "$mdir/CONFIRM_CODE.start" 2>/dev/null || echo 0)"
-  t_d="$(cat "$mdir/CONFIRM_TESTS.done" 2>/dev/null || echo 0)"
-  c_d="$(cat "$mdir/CONFIRM_CODE.done" 2>/dev/null || echo 0)"
-  last_start=$t_s; [ "$c_s" -gt "$last_start" ] && last_start=$c_s
-  first_done=$t_d; [ "$c_d" -lt "$first_done" ] && first_done=$c_d
-  [ "$last_start" -gt 0 ] && [ "$first_done" -gt 0 ] && [ "$last_start" -lt "$first_done" ]
-}
-
-# Control (non-vacuity): before trusting is_concurrent's verdict on gate-facts.js, prove
-# the detector itself tells the two cases apart -- two genuinely sequential calls must
-# read as NOT concurrent, and two genuinely backgrounded calls must read as concurrent.
-MARKERS_SEQ="$TMPDIR_BASE/markers-seq"; mkdir -p "$MARKERS_SEQ"
-run_timed "$MARKERS_SEQ" CONFIRM_TESTS
-run_timed "$MARKERS_SEQ" CONFIRM_CODE
-if is_concurrent "$MARKERS_SEQ"; then
-  fail "C6-ctrl-a: two sequential calls were wrongly read as concurrent"
-else
-  pass "C6-ctrl-a: two sequential calls are correctly read as NOT concurrent"
-fi
-MARKERS_PAR="$TMPDIR_BASE/markers-par"; mkdir -p "$MARKERS_PAR"
-run_timed "$MARKERS_PAR" CONFIRM_TESTS &
-run_timed "$MARKERS_PAR" CONFIRM_CODE &
-wait
-if is_concurrent "$MARKERS_PAR"; then
-  pass "C6-ctrl-b: two backgrounded calls are correctly read as concurrent"
-else
-  fail "C6-ctrl-b: two backgrounded calls were wrongly read as NOT concurrent"
-fi
-
-# The actual pin: run the real bundled reader (bin/workflow/read-session-facts) against
-# an instrumented confirm-off, and judge gate-facts.js's own launch pattern by the same
-# detector just proven sound above. Neither read-session-facts nor gate-facts.js exists
-# yet, so this is expected to fail honestly -- the wrapper's markers are simply never
-# written -- rather than pass vacuously; matches C6a's own not-found failure mode.
-CFG_TIMED="$TMPDIR_BASE/cfg-timed"; mk_reader_tree "$CFG_TIMED"
-printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=on\n' > "$CFG_TIMED/.env"
-MARKERS_LIVE="$TMPDIR_BASE/markers-live"; mkdir -p "$MARKERS_LIVE"
-MARKERS_LIVE_N="$(nrm "$MARKERS_LIVE")"
-mv "$CFG_TIMED/bin/confirm-off" "$CFG_TIMED/bin/confirm-off-real"
-printf '%s\n' \
-  '#!/usr/bin/env bash' \
-  'set -u' \
-  'gate="${1:-unknown}"' \
-  "node -e 'require(\"fs\").writeFileSync(process.argv[1], String(Date.now()))' \"$MARKERS_LIVE_N/\${gate}.start\"" \
-  'sleep 0.3' \
-  "node -e 'require(\"fs\").writeFileSync(process.argv[1], String(Date.now()))' \"$MARKERS_LIVE_N/\${gate}.done\"" \
-  'exec bash "$(dirname "$0")/confirm-off-real" "$@"' > "$CFG_TIMED/bin/confirm-off"
-chmod +x "$CFG_TIMED/bin/confirm-off" 2>/dev/null || true
+case_begin "C6-behavioral-no-spawn" "bin/workflow/lib/session-facts/gate-facts.js"
+echo "=== C6 (behavioral): both gates resolve in-process -- no confirm-off / get-config-var child runs ==="
+# #2681: C6b/C6c pin the STRUCTURE; this proves the BEHAVIOR. The reader tree's
+# bin/confirm-off and bin/get-config-var are replaced by spies that drop a marker file and
+# then run the real script, so any child-process route to a gate leaves the marker behind.
+CFG_SPY="$TMPDIR_BASE/cfg-spy"; mk_reader_tree "$CFG_SPY"
+printf 'CONFIRM_TESTS=off\nCONFIRM_CODE=on\n' > "$CFG_SPY/.env"
+SPY_MARK="$TMPDIR_BASE/spy-ran"
+for tool in confirm-off get-config-var; do
+  mv "$CFG_SPY/bin/$tool" "$CFG_SPY/bin/$tool-real"
+  printf '%s\n' '#!/usr/bin/env bash' "echo \"$tool\" >> \"$SPY_MARK\"" \
+    "exec bash \"\$(dirname \"\$0\")/$tool-real\" \"\$@\"" > "$CFG_SPY/bin/$tool"
+  chmod +x "$CFG_SPY/bin/$tool" 2>/dev/null || true
+done
+# Control (non-vacuity): a direct call to the spy must leave the marker, or its absence below proves nothing.
+AGENTS_MAIN_ROOT="$(nrm "$CFG_SPY")" run_with_timeout bash "$CFG_SPY/bin/confirm-off" CONFIRM_TESTS on >/dev/null 2>&1 || true
+check "C6-ctrl: the spy confirm-off leaves its marker when it runs" yes "$([ -f "$SPY_MARK" ] && echo yes || echo no)"
+rm -f "$SPY_MARK"
 RC=0
-AGENTS_MAIN_ROOT="$(nrm "$CFG_TIMED")" run_with_timeout \
-  node "$(nrm "$CFG_TIMED")/bin/workflow/read-session-facts" --session c6behav \
+AGENTS_MAIN_ROOT="$(nrm "$CFG_SPY")" run_with_timeout \
+  node "$(nrm "$CFG_SPY")/bin/workflow/read-session-facts" --session c6behav \
   >"$OUTF" 2>"$ERRF" || RC=$?
-ERR="$(cat "$ERRF" 2>/dev/null || echo "")"
-if [ -f "$MARKERS_LIVE/CONFIRM_TESTS.start" ] && [ -f "$MARKERS_LIVE/CONFIRM_CODE.start" ] \
-   && [ -f "$MARKERS_LIVE/CONFIRM_TESTS.done" ] && [ -f "$MARKERS_LIVE/CONFIRM_CODE.done" ]; then
-  if is_concurrent "$MARKERS_LIVE"; then
-    pass "C6d: gate-facts.js launches both gate children concurrently"
-  else
-    fail "C6d: gate-facts.js's two gate children did not overlap -- sequential execution"
-  fi
-else
-  fail "C6d: gate-facts.js not yet implemented -- the instrumented confirm-off children never ran (no barrier files under $MARKERS_LIVE); stderr: $ERR"
-fi
+OUT="$(cat "$OUTF" 2>/dev/null || echo "")"
+check "C6d: the reader started no confirm-off / get-config-var child" "none" \
+  "$(if [ -f "$SPY_MARK" ]; then tr '\n' ' ' < "$SPY_MARK"; else echo none; fi)"
+check "C6e: GATE_CONFIRM_TESTS answered in-process" "GATE_CONFIRM_TESTS=OFF" "$(printf '%s\n' "$OUT" | grep '^GATE_CONFIRM_TESTS=' || true)"
+check "C6f: GATE_CONFIRM_CODE answered in-process" "GATE_CONFIRM_CODE=ON" "$(printf '%s\n' "$OUT" | grep '^GATE_CONFIRM_CODE=' || true)"
 case_end
 
 echo ""

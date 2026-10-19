@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/migrate-plans-dir.js, bin/migrate-plans-dir.js., hooks/lib, hooks/lib/load-env.js, hooks/lib/workflow-plans-dir, hooks/lib/workflow-plans-dir.js
+# Tests: bin/migrate-plans-dir.js, hooks/lib, hooks/lib/load-env.js, hooks/lib/workflow-plans-dir.js
 # Tags: workflow, plans, hook, bin, env, scope:issue-specific
 # Contract tests for bin/migrate-plans-dir.js.
 #

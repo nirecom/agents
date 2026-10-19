@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 "use strict";
+// Tests: hooks/lib/rtk-guard-audit.js
+// Tags: scope:issue-specific, rtk, guard-audit, hook, rotation
 // tests/hooks/feature-2326-rtk-guard-audit.js
 // No-framework Node tests for the NEW hooks/lib/rtk-guard-audit.js writer +
 // file-lock rotation. TEST-FIRST: the module does not exist yet, so require()

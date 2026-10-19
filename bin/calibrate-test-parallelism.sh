@@ -42,7 +42,9 @@ done
 . "$MOD_DIR/aggregate.sh"
 
 SAMPLE=""
-JOBS_LIST="4 6 8 12 16"
+JOBS_LIST=""
+# derived = widths from the logical CPU count, narrowed to the corpus; jobs-list = explicit.
+WIDTH_SOURCE="derived"
 REPEAT=3
 WARMUP=1
 BAND="5:10"
@@ -59,7 +61,8 @@ Measures a ledger-chosen test sample at several parallel widths and records the
 knee in the host-local parallelism cache. Requires RUN_CALIBRATION=1 to measure.
 
   --sample N        tests per measurement (default 3 x the widest width)
-  --jobs-list "..." widths to measure (default "4 6 8 12 16")
+  --jobs-list "..." widths to measure (default: derived from the logical CPU count,
+                    narrowed automatically when the corpus cannot fill the widest width)
   --repeat N        measured passes per width (default 3)
   --warmup N        discarded passes per width (default 1)
   --band LO:HI      seconds a test must take to be sampled (default 5:10)
@@ -88,8 +91,8 @@ while [ "$#" -gt 0 ]; do
         --no-write) NO_WRITE=1; shift ;;
         --sample)      need_value "$#" "$1"; SAMPLE="$2"; shift 2 ;;
         --sample=*)    SAMPLE="${1#*=}"; shift ;;
-        --jobs-list)   need_value "$#" "$1"; JOBS_LIST="$2"; shift 2 ;;
-        --jobs-list=*) JOBS_LIST="${1#*=}"; shift ;;
+        --jobs-list)   need_value "$#" "$1"; JOBS_LIST="$2"; WIDTH_SOURCE="jobs-list"; shift 2 ;;
+        --jobs-list=*) JOBS_LIST="${1#*=}"; WIDTH_SOURCE="jobs-list"; shift ;;
         --repeat)      need_value "$#" "$1"; REPEAT="$2"; shift 2 ;;
         --repeat=*)    REPEAT="${1#*=}"; shift ;;
         --warmup)      need_value "$#" "$1"; WARMUP="$2"; shift 2 ;;
@@ -117,6 +120,16 @@ BAND_LO="${BAND%%:*}"; BAND_HI="${BAND#*:}"
 [ "$BAND_LO" -ge 1 ] && [ "$BAND_LO" -le "$BAND_HI" ] && [ "$BAND_HI" -le 9999 ] ||
     die "--band needs 1 <= LO <= HI <= 9999, got: $BAND"
 
+run_all_logical_cpu_count
+if [ "$WIDTH_SOURCE" = "derived" ]; then
+    # --print measures nothing, so it keeps its stderr free of the unknown-count note.
+    if [ "$MODE" = "print" ]; then
+        run_all_calibration_widths "$RUN_ALL_LOGICAL_CPU_COUNT" 2>/dev/null
+    else
+        run_all_calibration_widths "$RUN_ALL_LOGICAL_CPU_COUNT"
+    fi
+    JOBS_LIST="$RUN_ALL_CALIBRATION_WIDTHS"
+fi
 case "$JOBS_LIST" in
     *[!0-9\ ]*) die "--jobs-list accepts space-separated positive integers only" ;;
 esac
@@ -134,15 +147,16 @@ set +f
 # Ascending and de-duplicated: the knee rule adopts the SMALLEST width in the band.
 mapfile -t WIDTHS < <(printf '%s\n' "${WIDTHS[@]}" | sort -n -u)
 MIN_W="${WIDTHS[0]}"; MAX_W="${WIDTHS[$((${#WIDTHS[@]} - 1))]}"
+# A width above a known logical CPU count measures oversubscription, not this host's knee.
+if [ "$WIDTH_SOURCE" = "jobs-list" ] && [ -n "$RUN_ALL_LOGICAL_CPU_COUNT" ] && [ "$MAX_W" -gt "$RUN_ALL_LOGICAL_CPU_COUNT" ]; then
+    die "--jobs-list width $MAX_W exceeds the logical CPU count $RUN_ALL_LOGICAL_CPU_COUNT"
+fi
 
-if [ -z "$SAMPLE" ]; then
-    SAMPLE_N=$((3 * MAX_W))
-else
+if [ -n "$SAMPLE" ]; then
     is_uint "$SAMPLE" || die "--sample must be a positive integer, got: $SAMPLE"
     [ "$SAMPLE" -ge "$MAX_W" ] || die "--sample must be >= the widest width ($MAX_W), got: $SAMPLE"
-    SAMPLE_N="$SAMPLE"
 fi
-REQUIRED=$((SAMPLE_N + (SAMPLE_N + 3) / 4))
+cal_size_sample
 
 # --- 3. inquiry: --print needs no plan ----------------------------------------
 CACHE_DIR="$(run_all_cache_dir)"
@@ -215,15 +229,26 @@ fi
 
 # --- 8. probe, sample, feasibility ------------------------------------------
 cal_probe
+cal_fit_widths run
 if [ "${#CAND_PATH[@]}" -lt "$SAMPLE_N" ]; then
     printf 'calibrate: inconclusive: too-few-candidates\n' >&2
-    printf 'calibrate: need %s candidates (%s with reserve); ledger gave %s, probing %s tests gave %s more\n' \
-        "$SAMPLE_N" "$REQUIRED" "$LEDGER_CANDS" "$PROBED" "$(( ${#CAND_PATH[@]} - LEDGER_CANDS ))" >&2
+    printf 'calibrate: need %s candidates (%s with reserve); ledger gave %s, probing %s tests gave %s more%s\n' \
+        "$SAMPLE_N" "$REQUIRED" "$LEDGER_CANDS" "$PROBED" "$(( ${#CAND_PATH[@]} - LEDGER_CANDS ))" \
+        "${CAL_NARROWED:+; widths $CAL_NARROWED}" >&2
     printf 'calibrate: widen --band (now %s) or narrow --jobs-list (now %s)\n' "$BAND" "${WIDTHS[*]}" >&2
     exit 5
 fi
 cal_select
 cal_feasible
+if [ "$CAL_FIT_REASON" = "time-limit" ]; then
+    cal_inconclusive time-limit "estimated ${CAL_TOTAL_S}s exceeds --time-limit ${TIME_LIMIT} min even at widths ${WIDTHS[*]}${CAL_NARROWED:+ ($CAL_NARROWED)}"
+fi
+# The record's width_limit: the narrowing rule, else why the widths end where they do.
+if [ -n "$CAL_NARROWED" ]; then :
+elif [ "$WIDTH_SOURCE" = "jobs-list" ]; then CAL_WIDTH_LIMIT="jobs-list"
+elif [ -z "$RUN_ALL_LOGICAL_CPU_COUNT" ]; then CAL_WIDTH_LIMIT="unknown-cpu-count"
+else CAL_WIDTH_LIMIT="logical-cpu-count"
+fi
 
 # --- 9. warmup and measurement, restarted on every sample revision -----------
 SAMPLE_LIST="$CAL_WORK/sample.list"

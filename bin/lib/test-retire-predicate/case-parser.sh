@@ -228,6 +228,29 @@ trp_parse_case_markers() {
   return 0
 }
 
+# _trp_reject_duplicate_names — when a marked, not yet malformed file has two cases of one name,
+# makes it malformed (duplicate-name) on the later case's begin line and empties the case arrays.
+_trp_reject_duplicate_names() {
+  [[ "${_TRP_MARKER_MALFORMED:-0}" -eq 0 && "${TRP_HAS_MARKERS:-0}" -eq 1 ]] || return 0
+  local -A seen=()
+  local -a names=(${TRP_CASE_NAMES[@]+"${TRP_CASE_NAMES[@]}"})
+  local -a begins=(${TRP_CASE_BEGIN_LINES[@]+"${TRP_CASE_BEGIN_LINES[@]}"})
+  local i key
+  for i in "${!names[@]}"; do
+    key="k${names[$i]}"
+    if [[ -n "${seen[$key]+x}" ]]; then
+      _TRP_MARKER_MALFORMED=1
+      _TRP_MARKER_MALFORMED_LINE="${begins[$i]:-}"
+      _TRP_MARKER_MALFORMED_REASON=duplicate-name
+      TRP_CASE_BEGIN_LINES=(); TRP_CASE_END_LINES=(); TRP_CASE_NAMES=(); TRP_CASE_TARGETS=()
+      TRP_CASE_COUNT=0
+      return 0
+    fi
+    seen[$key]=1
+  done
+  return 0
+}
+
 # trp_enumerate_cases <repo-root> <file> — parse the markers, then resolve each
 # case target's survival. Sets the trp_parse_case_markers globals plus
 # TRP_CASE_ALIVE[], TRP_ORPHAN_CASE_IDX[] and TRP_REFCOUNT.
@@ -258,7 +281,8 @@ trp_enumerate_cases() {
   if ! tlr_call_part "$TLR_ID" caseMarkerReader "$abs"; then
     _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader; return 0
   fi
-  [[ "$_TRP_MARKER_MALFORMED" -eq 0 && "$TRP_HAS_MARKERS" -eq 1 ]] || return 0
+  trp_marker_state_from_globals
+  [[ "$TRP_MARKER_STATE" == conforming ]] || return 0
 
   # Survival: resolve each target against the repo root (rename-tracked, ORTH).
   local saved_pwd="$PWD"

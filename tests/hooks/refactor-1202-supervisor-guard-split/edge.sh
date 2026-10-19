@@ -11,6 +11,8 @@ fi
 
 DETECT_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/supervisor-guard/detect.js"
 DETECT_PATH="${SCRIPT_CHECKOUT_ROOT}/hooks/supervisor-guard/detect.js"
+# #2698: the AskUserQuestion turn judgment moved from detect.js into the shared predicate.
+UDT_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/user-dialog-turn.js"
 
 if ! command -v node >/dev/null 2>&1; then
     echo "SKIP: node not on PATH"
@@ -59,19 +61,15 @@ console.log('OK');
     else fail "detectOffProposal(\"\") → {detected:false} (falsy early-return)" "$out"; fi
 fi
 
-# 18. detectAskUserQuestionTurn: empty string "" → false (falsy transcriptPath early-return)
-if [ ! -f "$DETECT_PATH" ]; then
-    skip "detectAskUserQuestionTurn(\"\") early-return (detect.js missing)"
-else
-    out=$(run_with_timeout 10 node -e "
-const m = require('${DETECT_JS}');
-const r = m.detectAskUserQuestionTurn('');
+# 18. isUserDialogTurn: transcript_path "" → false (falsy transcriptPath early-return)
+out=$(run_with_timeout 10 node -e "
+const m = require('${UDT_JS}');
+const r = m.isUserDialogTurn({ transcript_path: '', last_assistant_message: '' });
 if (r !== false) { console.log('FAIL: empty string returned ' + r); process.exit(1); }
 console.log('OK');
 " 2>&1)
-    if [ "$out" = "OK" ]; then pass "detectAskUserQuestionTurn(\"\") → false (falsy early-return)"
-    else fail "detectAskUserQuestionTurn(\"\") → false (falsy early-return)" "$out"; fi
-fi
+if [ "$out" = "OK" ]; then pass "isUserDialogTurn({transcript_path:\"\"}) → false (falsy early-return)"
+else fail "isUserDialogTurn({transcript_path:\"\"}) → false (falsy early-return)" "$out"; fi
 
 # 19. parseTranscriptForAudit: empty string "" → [] (falsy transcriptPath early-return)
 if [ ! -f "$DETECT_PATH" ]; then
@@ -101,19 +99,17 @@ console.log('OK');
     else fail "detectSentinelHang(null) → false" "$out"; fi
 fi
 
-# 21. detectAskUserQuestionTurn(null) → false
-if [ ! -f "$DETECT_PATH" ]; then
-    skip "detectAskUserQuestionTurn(null) → false (detect.js missing)"
-else
-    out=$(run_with_timeout 10 node -e "
-const m = require('${DETECT_JS}');
-const r = m.detectAskUserQuestionTurn(null);
+# 21. isUserDialogTurn(null) and a null transcript_path → false
+out=$(run_with_timeout 10 node -e "
+const m = require('${UDT_JS}');
+const r = m.isUserDialogTurn(null);
 if (r !== false) { console.log('FAIL: null returned ' + r); process.exit(1); }
+const r2 = m.isUserDialogTurn({ transcript_path: null });
+if (r2 !== false) { console.log('FAIL: null transcript_path returned ' + r2); process.exit(1); }
 console.log('OK');
 " 2>&1)
-    if [ "$out" = "OK" ]; then pass "detectAskUserQuestionTurn(null) → false"
-    else fail "detectAskUserQuestionTurn(null) → false" "$out"; fi
-fi
+if [ "$out" = "OK" ]; then pass "isUserDialogTurn(null) / {transcript_path:null} → false"
+else fail "isUserDialogTurn(null) / {transcript_path:null} → false" "$out"; fi
 
 # 22. parseTranscriptForAudit(null) → []
 if [ ! -f "$DETECT_PATH" ]; then
@@ -143,7 +139,7 @@ console.log('OK');
     else fail "detectOffProposal(null) → {detected:false,kind:null}" "$out"; fi
 fi
 
-# 24. all 4 functions on file with unparseable JSONL → fail-open values
+# 24. the 3 detect.js functions + isUserDialogTurn on file with unparseable JSONL → fail-open values
 if [ ! -f "$DETECT_PATH" ]; then
     skip "malformed JSONL → fail-open (detect.js missing)"
 else
@@ -158,8 +154,10 @@ const m = require('${DETECT_JS}');
 const p = '${_tmp_bad_node}';
 const r1 = m.detectSentinelHang(p);
 if (r1 !== false) { console.log('FAIL: detectSentinelHang returned ' + r1); process.exit(1); }
-const r2 = m.detectAskUserQuestionTurn(p);
-if (r2 !== false) { console.log('FAIL: detectAskUserQuestionTurn returned ' + r2); process.exit(1); }
+let r2;
+try { r2 = require('${UDT_JS}').isUserDialogTurn({ transcript_path: p, last_assistant_message: '' }); }
+catch (e) { console.log('FAIL: user-dialog-turn.js does not load: ' + e.message); process.exit(1); }
+if (r2 !== false) { console.log('FAIL: isUserDialogTurn returned ' + r2); process.exit(1); }
 const r3 = m.parseTranscriptForAudit(p);
 if (!Array.isArray(r3) || r3.length !== 0) { console.log('FAIL: parseTranscriptForAudit returned ' + JSON.stringify(r3)); process.exit(1); }
 const r4 = m.detectOffProposal(p);
@@ -167,8 +165,8 @@ if (!r4 || r4.detected !== false) { console.log('FAIL: detectOffProposal returne
 console.log('OK');
 " 2>&1)
     rm -f "$_tmp_bad"
-    if [ "$out" = "OK" ]; then pass "malformed JSONL → all 4 functions return fail-open values"
-    else fail "malformed JSONL → all 4 functions return fail-open values" "$out"; fi
+    if [ "$out" = "OK" ]; then pass "malformed JSONL → detect.js functions and isUserDialogTurn return fail-open values"
+    else fail "malformed JSONL → detect.js functions and isUserDialogTurn return fail-open values" "$out"; fi
 fi
 
 # 40. undefined transcriptPath for detectSentinelHang and detectOffProposal → fail-open

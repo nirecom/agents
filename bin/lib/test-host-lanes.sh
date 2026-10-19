@@ -25,7 +25,9 @@ THL_RECORD_REASON=""
 THL_RECORD_OS=""
 THL_OS_NOW=""
 THL_RECORD_ADVICE=""
-THL_NEVER_ASK=0
+THL_RECALIBRATE=""
+THL_CAP_NOTE=""
+THL_AUTO_CONFIG="on"
 THL_PLAN_JOBS=0
 THL_STATE=""
 THL_AGE="-"
@@ -59,38 +61,79 @@ thl_init_dir() {
     return 0
 }
 
-# thl_max_jobs_per_host — THL_MAX_JOBS_PER_HOST / _SOURCE (env|dotenv|measured|default),
-# first valid layer wins. An invalid value skips its layer with one fixed notice
-# that never echoes it. A valid env value launches no .env resolver.
-thl_max_jobs_per_host() {
-    THL_RECORD_REASON=""; THL_RECORD_OS=""; THL_OS_NOW=""; THL_RECORD_ADVICE=""; THL_NEVER_ASK=0
+# _thl_pin — _THL_PIN / _THL_PIN_SRC: the first valid pin (env, then .env), empty when none.
+# An invalid value skips its layer with one fixed notice that never echoes it; a valid env
+# value launches no .env resolver.
+_thl_pin() {
+    _THL_PIN=""; _THL_PIN_SRC=""
     if [ -n "${TEST_MAX_JOBS_PER_HOST:-}" ]; then
         if run_all_valid_max_jobs "$TEST_MAX_JOBS_PER_HOST"; then
-            THL_MAX_JOBS_PER_HOST="$((10#$TEST_MAX_JOBS_PER_HOST))"; THL_MAX_JOBS_PER_HOST_SOURCE="env"; return 0
+            _THL_PIN="$((10#$TEST_MAX_JOBS_PER_HOST))"; _THL_PIN_SRC="env"; return 0
         fi
         printf '[lanes] TEST_MAX_JOBS_PER_HOST is not an integer between 1 and 1024; ignored\n' >&2
     fi
     run_all_dotenv_value TEST_MAX_JOBS_PER_HOST
-    if [ -n "$RUN_ALL_DOTENV_VALUE" ]; then
-        if run_all_valid_max_jobs "$RUN_ALL_DOTENV_VALUE"; then
-            THL_MAX_JOBS_PER_HOST="$((10#$RUN_ALL_DOTENV_VALUE))"; THL_MAX_JOBS_PER_HOST_SOURCE=dotenv; return 0
-        fi
-        printf '[lanes] TEST_MAX_JOBS_PER_HOST in .env is not an integer between 1 and 1024; ignored\n' >&2
+    [ -n "$RUN_ALL_DOTENV_VALUE" ] || return 0
+    if run_all_valid_max_jobs "$RUN_ALL_DOTENV_VALUE"; then
+        _THL_PIN="$((10#$RUN_ALL_DOTENV_VALUE))"; _THL_PIN_SRC="dotenv"; return 0
     fi
-    if run_all_cache_read "$(run_all_cache_file)" 2>/dev/null; then
-        THL_MAX_JOBS_PER_HOST="$RUN_ALL_CACHE_MAX_JOBS_PER_HOST"; THL_MAX_JOBS_PER_HOST_SOURCE=measured
-        THL_RECORD_OS="$RUN_ALL_CACHE_OS"
-        THL_OS_NOW="$(run_all_os_attr)"
-        if [ "$THL_RECORD_OS" != "$THL_OS_NOW" ]; then
-            run_all_never_ask_active && THL_NEVER_ASK=1
-            THL_RECORD_ADVICE="measured on $THL_RECORD_OS, now $THL_OS_NOW"
-            [ "$THL_NEVER_ASK" -eq 1 ] || THL_RECORD_ADVICE="$THL_RECORD_ADVICE; re-run $RUN_ALL_CALIBRATOR_HINT"
-        fi
-        return 0
+    printf '[lanes] TEST_MAX_JOBS_PER_HOST in .env is not an integer between 1 and 1024; ignored\n' >&2
+}
+
+# _thl_record_advice — after a successful record read: THL_RECALIBRATE (legacy-record |
+# cpu-count-changed | ladder-truncated, empty when the record still fits this host) and the
+# THL_RECORD_ADVICE text. A knee at a corpus-narrowed widest width is noted, never asked.
+_thl_record_advice() {
+    local knee="$RUN_ALL_CACHE_MAX_JOBS_PER_HOST" rec="$RUN_ALL_CACHE_LOGICAL_CPU_COUNT"
+    local widest="$RUN_ALL_CACHE_MAX_WIDTH_MEASURED" now="$RUN_ALL_LOGICAL_CPU_COUNT" text=""
+    THL_RECORD_OS="$RUN_ALL_CACHE_OS"
+    THL_OS_NOW="$(run_all_os_attr)"
+    [ "$THL_RECORD_OS" != "$THL_OS_NOW" ] && text="measured on $THL_RECORD_OS, now $THL_OS_NOW"
+    if [ "$RUN_ALL_CACHE_IS_LEGACY" = 1 ]; then
+        THL_RECALIBRATE=legacy-record; text="${text:+$text; }the record predates schema 3"
+    elif [ "$rec" != 0 ] && [ -n "$now" ] && [ "$rec" != "$now" ]; then
+        THL_RECALIBRATE=cpu-count-changed; text="${text:+$text; }measured at $rec logical CPUs, now $now"
+    elif [ "$knee" = "$widest" ] && [ "$widest" -lt "$rec" ] && [ "$RUN_ALL_CACHE_WIDTH_LIMIT" = jobs-list ]; then
+        THL_RECALIBRATE=ladder-truncated; text="${text:+$text; }the knee is the widest measured width $widest"
     fi
+    if [ -n "$text" ]; then
+        THL_RECORD_ADVICE="$text; re-run $RUN_ALL_CALIBRATOR_HINT"
+    elif [ "$knee" = "$widest" ] && [ "$widest" -lt "${now:-$rec}" ]; then
+        case "$RUN_ALL_CACHE_WIDTH_LIMIT" in candidates|sample|time-limit) THL_RECORD_ADVICE="measured up to $widest" ;; esac
+    fi
+    return 0
+}
+
+# thl_max_jobs_per_host — THL_MAX_JOBS_PER_HOST / _SOURCE (env|dotenv|measured|default) under
+# THL_AUTO_CONFIG. Off: the pin, else the default; the record is never read. On: min(pin,
+# base), base = the record, else the default; a tie reports the base, and the record's advice
+# survives only while it is the source. Either way capped at the logical CPU count (THL_CAP_NOTE).
+thl_max_jobs_per_host() {
+    THL_RECORD_REASON=""; THL_RECORD_OS=""; THL_OS_NOW=""; THL_RECORD_ADVICE=""; THL_RECALIBRATE=""; THL_CAP_NOTE=""
+    run_all_auto_config; THL_AUTO_CONFIG="$RUN_ALL_AUTO_CONFIG"
+    run_all_logical_cpu_count
+    _thl_pin
     THL_MAX_JOBS_PER_HOST="$RUN_ALL_DEFAULT_MAX_JOBS_PER_HOST"; THL_MAX_JOBS_PER_HOST_SOURCE=default
-    THL_RECORD_REASON="${RUN_ALL_CACHE_REASON:-missing}"
-    run_all_never_ask_active && THL_NEVER_ASK=1
+    if [ "$THL_AUTO_CONFIG" = off ]; then
+        [ -n "$_THL_PIN" ] && { THL_MAX_JOBS_PER_HOST="$_THL_PIN"; THL_MAX_JOBS_PER_HOST_SOURCE="$_THL_PIN_SRC"; }
+    else
+        if run_all_cache_read "$(run_all_cache_file)" 2>/dev/null; then
+            THL_MAX_JOBS_PER_HOST="$RUN_ALL_CACHE_MAX_JOBS_PER_HOST"; THL_MAX_JOBS_PER_HOST_SOURCE=measured
+            _thl_record_advice
+        else
+            THL_RECORD_REASON="${RUN_ALL_CACHE_REASON:-missing}"
+        fi
+        if [ -n "$_THL_PIN" ] && [ "$_THL_PIN" -lt "$THL_MAX_JOBS_PER_HOST" ]; then
+            THL_MAX_JOBS_PER_HOST="$_THL_PIN"; THL_MAX_JOBS_PER_HOST_SOURCE="$_THL_PIN_SRC"
+            THL_RECORD_REASON=""; THL_RECORD_OS=""; THL_OS_NOW=""; THL_RECORD_ADVICE=""; THL_RECALIBRATE=""
+        fi
+    fi
+    if [ -z "$RUN_ALL_LOGICAL_CPU_COUNT" ]; then
+        THL_CAP_NOTE="logical CPU count unknown; not capped"
+    elif [ "$THL_MAX_JOBS_PER_HOST" -gt "$RUN_ALL_LOGICAL_CPU_COUNT" ]; then
+        THL_MAX_JOBS_PER_HOST="$RUN_ALL_LOGICAL_CPU_COUNT"
+        THL_CAP_NOTE="capped at logical CPU count $RUN_ALL_LOGICAL_CPU_COUNT"
+    fi
     return 0
 }
 
@@ -106,20 +149,28 @@ _thl_lanes_for() {
     return 0
 }
 
-# _thl_source_text — `max jobs per host <H>, source <s>[, record <reason>[; calibrate with <hint>]]` (hint omitted under never-ask).
+# _thl_source_text — `max jobs per host <n>, source <s>[, <cap note>][, record <reason>;
+# calibrate with <hint>]`; the record part appears only when on mode fell back to the default.
 _thl_source_text() {
-    _THL_SRC="max jobs per host $THL_MAX_JOBS_PER_HOST, source $THL_MAX_JOBS_PER_HOST_SOURCE"
-    if [ "$THL_MAX_JOBS_PER_HOST_SOURCE" = default ]; then
-        _THL_SRC="$_THL_SRC, record $THL_RECORD_REASON"
-        [ "$THL_NEVER_ASK" -eq 1 ] || _THL_SRC="$_THL_SRC; calibrate with $RUN_ALL_CALIBRATOR_HINT"
+    _THL_SRC="max jobs per host $THL_MAX_JOBS_PER_HOST, source $THL_MAX_JOBS_PER_HOST_SOURCE${THL_CAP_NOTE:+, $THL_CAP_NOTE}"
+    if [ "$THL_MAX_JOBS_PER_HOST_SOURCE" = default ] && [ -n "$THL_RECORD_REASON" ]; then
+        _THL_SRC="$_THL_SRC, record $THL_RECORD_REASON; calibrate with $RUN_ALL_CALIBRATOR_HINT"
     fi
     return 0
 }
 
-# _thl_not_applied_note <requested> — THL_NOTE for a disabled lease (TEST_LANES=off named first).
+# _thl_not_applied_note <requested> [unlimited] — THL_NOTE and _THL_NA_JOBS for a disabled
+# lease (TEST_LANES=off named first). An explicit request is kept as is; an unlimited max
+# jobs per run is still bounded by the run-all lane pool.
 _thl_not_applied_note() {
     local why="nested under a lane holder"
     [ "${TEST_LANES:-}" = off ] && why="TEST_LANES=off"
+    _THL_NA_JOBS="$1"
+    if [ "${2:-}" = unlimited ]; then
+        thl_max_jobs_per_host; _thl_lanes_for "$1"; _THL_NA_JOBS="$_THL_WANT"
+        THL_NOTE="not applied ($why); jobs $_THL_NA_JOBS (max jobs per run unlimited, bounded by the run-all lane pool)"
+        return 0
+    fi
     THL_NOTE="not applied ($why); jobs $1 as requested"
 }
 
@@ -128,6 +179,7 @@ _thl_not_applied_note() {
 _thl_read_owner() {
     local d="$1" line k v
     _THL_O_PID=""; _THL_O_ENV=""; _THL_O_KIND=""; _THL_O_START=""; _THL_O_TOKEN=""; _THL_O_HB=""
+    _THL_O_MJPR=""; _THL_O_MJPH=""
     [ -f "$d/owner" ] || return 1
     while IFS= read -r line || [ -n "$line" ]; do
         k="${line%%=*}"; v="${line#*=}"
@@ -137,6 +189,8 @@ _thl_read_owner() {
             kind) _THL_O_KIND="$v" ;;
             start) [[ $v =~ ^[0-9]{1,12}$ ]] && _THL_O_START="$v" ;;
             token) [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && _THL_O_TOKEN="$v" ;;
+            max_jobs_per_run) [[ $v =~ ^[1-9][0-9]{0,6}$ ]] && _THL_O_MJPR="$v" ;;
+            max_jobs_per_host) [[ $v =~ ^[1-9][0-9]{0,6}$ ]] && _THL_O_MJPH="$v" ;;
         esac
     done 2>/dev/null < "$d/owner"
     if [ -f "$d/hb" ]; then
@@ -196,10 +250,25 @@ _thl_claim_pass() {
     return 0
 }
 
-# _thl_reclaim_sweep <slots> <lo> <hi> — reclaim stale lanes in range; 0 when any
-# was reclaimed. Token re-check, then an atomic mv to a grave, then rm.
+# _thl_reclaim_one <dir> <token> [ownerless] — re-read the owner; when its token is still
+# <token> (or it is still ownerless), an atomic mv to a sibling grave, then rm. 0 when reclaimed.
+_thl_reclaim_one() {
+    local d="$1" g
+    if [ "${3:-}" = ownerless ]; then
+        _thl_read_owner "$d" && return 1
+    else
+        _thl_read_owner "$d"
+        [ "$_THL_O_TOKEN" = "$2" ] || return 1
+    fi
+    g="${d%/*}/.grave.${d##*/}.$$.$RANDOM"
+    mv "$d" "$g" 2>/dev/null || return 1
+    rm -rf "$g" 2>/dev/null
+    return 0
+}
+
+# _thl_reclaim_sweep <slots> <lo> <hi> — reclaim stale lanes in range; 0 when any was reclaimed.
 _thl_reclaim_sweep() {
-    local s="$1" lo="$2" hi="$3" i d tok g any=1
+    local s="$1" lo="$2" hi="$3" i d tok how any=1
     for ((i = lo; i <= hi; i++)); do
         d="$s/lane.$i"
         [ -d "$d" ] || { unset '_THL_SEEN[i]'; continue; }
@@ -208,17 +277,11 @@ _thl_reclaim_sweep() {
             ownerless)
                 if [ -z "${_THL_SEEN[i]:-}" ]; then _THL_SEEN[i]="$SECONDS"; continue; fi
                 [ $((SECONDS - _THL_SEEN[i])) -ge "$THL_OWNERLESS_GRACE" ] || continue
-                _thl_read_owner "$d" && continue ;;
-            stale-*)
-                unset '_THL_SEEN[i]'
-                tok="$_THL_O_TOKEN"
-                _thl_read_owner "$d"
-                [ "$_THL_O_TOKEN" = "$tok" ] || continue ;;
+                tok=""; how=ownerless ;;
+            stale-*) unset '_THL_SEEN[i]'; tok="$_THL_O_TOKEN"; how="" ;;
             *) unset '_THL_SEEN[i]'; continue ;;
         esac
-        g="$s/.grave.$i.$$.$RANDOM"
-        mv "$d" "$g" 2>/dev/null || continue
-        rm -rf "$g" 2>/dev/null
+        _thl_reclaim_one "$d" "$tok" "$how" || continue
         unset '_THL_SEEN[i]'
         any=0
     done
@@ -236,13 +299,13 @@ thl_acquire() {
     # shellcheck disable=SC2034  # read by the find-tests / run-all exit-4 message
     THL_WAIT_CAP_USED="$cap"
     _thl_now
-    THL_TOKEN="$$.$THL_NOW.$RANDOM"
+    [ -n "$THL_TOKEN" ] || THL_TOKEN="$$.$THL_NOW.$RANDOM"
     _THL_SEEN=()
     s="$THL_CACHE_ROOT/slots"
     [ -d "$s" ] || mkdir -p "$s" 2>/dev/null
     if [ ! -d "$s" ]; then
         printf '[lanes] cannot create %s; running without a lane\n' "$s" >&2
-        THL_GRANTED="$want"; return 0
+        THL_GRANTED="$want"; THL_LANES_DEGRADED=1; return 0
     fi
     start=$SECONDS
     while :; do
@@ -262,12 +325,13 @@ thl_acquire() {
     done
 }
 
-# _thl_hb_refresh — rewrite hb only on lanes whose owner token is still ours.
+# _thl_hb_refresh — rewrite hb on every lane and presence record whose owner token is
+# ours (scanned, so lanes taken after the heartbeat started are covered too).
 _thl_hb_refresh() {
-    local i d
+    local d
+    [ -n "$THL_TOKEN" ] || return 0
     _thl_now
-    for i in $THL_SLOTS; do
-        d="$THL_CACHE_ROOT/slots/lane.$i"
+    for d in "$THL_CACHE_ROOT"/slots/lane.* "$THL_CACHE_ROOT/runs/run.$THL_TOKEN"; do
         _thl_read_owner "$d" || continue
         [ "$_THL_O_TOKEN" = "$THL_TOKEN" ] || continue
         { printf '%s\n' "$THL_NOW" > "$d/hb"; } 2>/dev/null
@@ -280,13 +344,19 @@ _thl_heartbeat_start() {
     _thl_int "${TEST_LANES_HEARTBEAT:-}" "$THL_HEARTBEAT_DEFAULT"
     local hb="$_THL_INT"
     (
-        _s=""
-        trap 'kill "$_s" 2>/dev/null; exit 0' TERM INT
+        _s=""; _l=""
+        trap 'kill "$_s" "$_l" 2>/dev/null; exit 0' TERM INT
         while kill -0 "$$" 2>/dev/null; do
+            _thl_hb_refresh
+            # The load tick runs beside the heartbeat (one at a time), so a slow probe
+            # never delays a refresh past the stale limit.
+            if _thl_load_on && ! { [ -n "$_l" ] && kill -0 "$_l" 2>/dev/null; }; then
+                thl_load_tick &
+                _l=$!
+            fi
             sleep "$hb" &
             _s=$!
             wait "$_s"
-            _thl_hb_refresh
         done
     ) </dev/null >/dev/null 2>&1 &
     THL_HB_PID=$!
@@ -310,9 +380,13 @@ thl_release_all() {
             d="$THL_CACHE_ROOT/slots/lane.$i"
             _thl_read_owner "$d" && [ "$_THL_O_TOKEN" = "$THL_TOKEN" ] && gone+=("$d")
         done
-        [ "${#gone[@]}" -gt 0 ] && rm -rf "${gone[@]}" 2>/dev/null
     fi
-    THL_SLOTS=""
+    if [ -n "${THL_TOKEN:-}" ] && [ -n "${THL_CACHE_ROOT:-}" ]; then
+        d="$THL_CACHE_ROOT/runs/run.$THL_TOKEN"
+        _thl_read_owner "$d" && [ "$_THL_O_TOKEN" = "$THL_TOKEN" ] && gone+=("$d")
+    fi
+    [ "${#gone[@]}" -gt 0 ] && rm -rf "${gone[@]}" 2>/dev/null
+    THL_SLOTS=""; THL_TOKEN=""; THL_PRESENCE_START=""; THL_LANES_DEGRADED=0
     [ "${TEST_LANES_HELD:-}" = "$$" ] && unset TEST_LANES_HELD
     return 0
 }
@@ -333,52 +407,47 @@ thl_find_tests_lease() {
     TEST_LANES_HELD="$$"; export TEST_LANES_HELD
 }
 
-# thl_run_all_lease <desired-j> <remaining-deadline|0> — at least 1, at most
-# min(desired, N-1) lanes from 1..N-1 (1..1 when N=1). Sets THL_GRANTED/THL_NOTE.
-thl_run_all_lease() {
-    local desired="${1:-1}" deadline="${2:-0}" cap
-    [[ $desired =~ ^[1-9][0-9]{0,4}$ ]] || desired=1
-    THL_GRANTED="$desired"; THL_NOTE=""
-    if _thl_disabled; then _thl_not_applied_note "$desired"; return 0; fi
-    [ -n "$THL_CACHE_ROOT" ] || thl_init_dir
-    thl_max_jobs_per_host
-    _thl_lanes_for "$desired"
-    _thl_int "${TEST_LANES_WAIT_CAP:-}" "$THL_RUN_ALL_CAP"
-    cap="$_THL_INT"
-    if [[ $deadline =~ ^[1-9][0-9]{0,8}$ ]] && [ "$deadline" -lt "$cap" ]; then cap="$deadline"; fi
-    thl_acquire run-all "$_THL_WANT" 1 "$_THL_TOP" asc "$cap" || return $?
-    [ -n "$THL_SLOTS" ] && _thl_heartbeat_start
-    TEST_LANES_HELD="$$"; export TEST_LANES_HELD
-    _thl_source_text
-    THL_NOTE="jobs $THL_GRANTED of requested $desired ($_THL_SRC; lanes ${THL_SLOTS:-none})${THL_RECORD_ADVICE:+; $THL_RECORD_ADVICE}"
-    return 0
-}
-
-# thl_plan <requested> — the width a lease would ask for, without taking one
+# thl_plan <requested> [unlimited] — the width a lease would ask for, without taking one
 # (--print-plan). Sets THL_PLAN_JOBS and THL_NOTE.
 thl_plan() {
     local req="${1:-1}"
     [[ $req =~ ^[1-9][0-9]{0,4}$ ]] || req=1
     THL_PLAN_JOBS="$req"
-    if _thl_disabled; then _thl_not_applied_note "$req"; return 0; fi
+    if _thl_disabled; then _thl_not_applied_note "$req" "${2:-}"; THL_PLAN_JOBS="$_THL_NA_JOBS"; return 0; fi
     thl_max_jobs_per_host
     _thl_lanes_for "$req"
     THL_PLAN_JOBS="$_THL_WANT"
     _thl_source_text
     # shellcheck disable=SC2034  # read by tests/run-all.sh's `plan:` / `lanes:` progress lines
-    THL_NOTE="jobs $THL_PLAN_JOBS of requested $req ($_THL_SRC; a live lease may grant fewer)${THL_RECORD_ADVICE:+; $THL_RECORD_ADVICE}"
+    THL_NOTE="jobs $THL_PLAN_JOBS of requested $req ($_THL_SRC; the width is re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its fair share until they finish)${THL_RECORD_ADVICE:+; $THL_RECORD_ADVICE}"
     return 0
 }
 
 # thl_status — read-only listing for bin/test-lanes-status.sh; never reclaims.
 # Line 1 never shows host_id or measured_at; `os` is shown only after its shape check.
 thl_status() {
-    local d i n=0 line
+    local d i n=0 k=0 runs=0 line rows=""
     thl_max_jobs_per_host
+    for d in "$THL_CACHE_ROOT"/runs/run.*; do
+        [ -d "$d" ] || continue
+        k=$((k + 1))
+        _thl_lane_state "$d"
+        case "$THL_STATE" in alive|foreign) runs=$((runs + 1)) ;; esac
+        if [ "$THL_STATE" = ownerless ]; then
+            rows="${rows}run.$k"$'\t-\t-\t-\t-\townerless\n'
+            continue
+        fi
+        rows="${rows}run.$k"$'\t'"${_THL_O_KIND//[!A-Za-z0-9._-]/?}"$'\t'"$_THL_O_PID"$'\t'"${_THL_O_ENV//[!A-Za-z0-9._-]/?}"$'\t'"$THL_AGE"$'\t'"$THL_STATE"$'\n'
+    done
     line="max_jobs_per_host=$THL_MAX_JOBS_PER_HOST source=$THL_MAX_JOBS_PER_HOST_SOURCE"
-    [ "$THL_MAX_JOBS_PER_HOST_SOURCE" = default ] && line="$line record=$THL_RECORD_REASON"
-    [ -n "$THL_RECORD_ADVICE" ] && line="$line measured_on=$THL_RECORD_OS now=$THL_OS_NOW"
-    printf '%s\n' "$line"
+    [ -n "$THL_RECORD_REASON" ] && line="$line record=$THL_RECORD_REASON"
+    [ -n "$THL_RECORD_OS" ] && [ "$THL_RECORD_OS" != "$THL_OS_NOW" ] && line="$line measured_on=$THL_RECORD_OS now=$THL_OS_NOW"
+    [ -n "$THL_RECALIBRATE" ] && line="$line recalibrate=$THL_RECALIBRATE"
+    case "$THL_CAP_NOTE" in
+        capped*) line="$line capped=logical-cpu-count" ;;
+        ?*) line="$line logical_cpus=unknown" ;;
+    esac
+    printf '%s mode=%s runs=%s\n' "$line" "$THL_AUTO_CONFIG" "$runs"
     for d in "$THL_CACHE_ROOT"/slots/lane.*; do
         [ -d "$d" ] || continue
         i="${d##*/lane.}"
@@ -393,5 +462,16 @@ thl_status() {
             "$_THL_O_PID" "${_THL_O_ENV//[!A-Za-z0-9._-]/?}" "$THL_AGE" "$THL_STATE"
     done
     [ "$n" -gt 0 ] || printf 'no test lanes held\n'
+    printf '%s' "$rows"
     return 0
 }
+
+# The fair-share, load and probe libraries (#2687), found next to this file.
+_THL_LIB_DIR="${BASH_SOURCE[0]%/*}"
+[ "$_THL_LIB_DIR" = "${BASH_SOURCE[0]}" ] && _THL_LIB_DIR="."
+# shellcheck source=bin/lib/test-host-load-probe.sh
+. "$_THL_LIB_DIR/test-host-load-probe.sh"
+# shellcheck source=bin/lib/test-host-load.sh
+. "$_THL_LIB_DIR/test-host-load.sh"
+# shellcheck source=bin/lib/test-host-lanes-share.sh
+. "$_THL_LIB_DIR/test-host-lanes-share.sh"

@@ -7,16 +7,16 @@ Keep the caller's own `Model selected:` line unchanged.
 ## JJ-1 Query
 
 - Run, with the working worktree as cwd: `node "$AGENTS_MAIN_ROOT/bin/workflow/jev-judge" query --session "<SESSION_ID>" --point <P> --stage <S>`.
-- Read `RESULT`, `TICKET`, `SUBAGENT`, `SNAPSHOT_FILE`, `ANSWER_FILE` and `SOURCES_DIR` from its KEY=VALUE output.
+- Read `RESULT`, `TICKET`, `SUBAGENT`, `JEV_INPUT_FILE`, `ANSWER_FILE` and `SOURCES_DIR` from its KEY=VALUE output.
 - `RESULT=final`: go to JJ-3.
 - Exit 2 or 3: apply the JJ-5 fail-safe with TICKET `-`.
 
 ## JJ-2 Subagent (only on `RESULT=need-subagent`)
 
 - Dispatch `subagent_type: <SUBAGENT>`; build its prompt per the Subagent Dispatch Prompts section of `rules/shell-commands.md`.
-- Pass the `SNAPSHOT_FILE` path and tell the subagent to read it first.
-- Pass the `SOURCES_DIR` path: the header's `sources` lists file names only, because the snapshot is what Jev is sent.
-- Tell it to read the full copies listed under the header's `sources`, inside `SOURCES_DIR`, only when the snapshot marks a section truncated or absent, or the snapshot alone cannot decide; it reads no other file.
+- Pass the `JEV_INPUT_FILE` path and tell the subagent to read it first.
+- Pass the `SOURCES_DIR` path: the header's `sources` lists file names only, because the Jev input is what Jev is sent.
+- Tell it to read the full copies listed under the header's `sources`, inside `SOURCES_DIR`, only when the Jev input marks a section truncated or absent, or the Jev input alone cannot decide; it reads no other file.
 - Tell it to answer undecidable when a section listed under `sources_unavailable` is truncated or absent and needed.
 - Tell it to return the answer on its last line.
 - Write that answer to `ANSWER_FILE` with the Write tool; write `NO_ANSWER` when it is empty.
@@ -31,6 +31,7 @@ Keep the caller's own `Model selected:` line unchanged.
 
 ## JJ-4 Downstream (`RESULT=ok`)
 
+- When finalize prints `FALLBACK=<reason>`, show the reason to the user and run /supervisor-report with REASON=<reason>; handle the result as below, unchanged.
 - Pass the `SIGNALS_CSV` printed by finalize, never the fixed signals file; when it is empty, pass `--signals ""`.
 - complexity, `SETTLE=ok`, stage `complexity`: run `node "$AGENTS_MAIN_ROOT/bin/workflow/record-complexity-evaluation" --session "<SESSION_ID>" --signals "<SIGNALS_CSV>"`.
 - complexity, `SETTLE=ok`, any other stage: run `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --stage <S with _ for -> --signals "<SIGNALS_CSV>"` and use its `model=`.

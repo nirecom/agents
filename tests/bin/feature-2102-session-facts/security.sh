@@ -45,6 +45,8 @@ mk_cfg() {
   mkdir -p "$d/bin" "$d/hooks/lib"
   cp "$REPO_ROOT/bin/get-config-var" "$d/bin/"
   cp "$REPO_ROOT/bin/confirm-off" "$d/bin/"
+  # #2681: guarded only while the module is not yet written; once it exists the copy is unconditional in effect.
+  if [ -f "$REPO_ROOT/hooks/lib/config-flag.js" ]; then cp "$REPO_ROOT/hooks/lib/config-flag.js" "$d/hooks/lib/"; fi
   cp "$REPO_ROOT/hooks/lib/load-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/local-env.js" "$d/hooks/lib/"
   cp "$REPO_ROOT/hooks/lib/script-checkout-root.js" "$d/hooks/lib/"
