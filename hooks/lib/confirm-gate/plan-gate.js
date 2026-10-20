@@ -1,8 +1,10 @@
 "use strict";
-// hooks/lib/confirm-gate/plan-gate.js — the one gate predicate of the three plan stages (#2650),
-// shared by next-step --gate, confirm-checkpoint and the Stop hook's continuation branch.
+// hooks/lib/confirm-gate/plan-gate.js — the SSOT of the gate classification of the three plan
+// stages (#2650); whether a stage is approved or waived is checkPlanApproval's
+// (hooks/workflow-state/plan-approval-check.js), which builds on this.
 // planGateState(stage) -> "ON" | "OFF" | "ERROR": the CONFIRM_* probe combined with the stage's
-// off waiver. A stage the flag cannot waive (intent) is "ON" without a probe.
+// off waiver. A stage the flag cannot waive (intent) is "ON" without a probe. The probe reads the
+// plan-stage keys from the global config file only (#2729, hooks/lib/config-flag.js).
 
 const { confirmGateForStep } = require("./step-gate-map");
 const { probeConfirmGateSync } = require("./probe");

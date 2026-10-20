@@ -1,20 +1,10 @@
 #!/bin/bash
 # Tests: hooks/gate-plan-skip-sentinel.js
 # Tags: workflow, outline, planning, sentinel, hook, scope:common
-# Tests for hooks/gate-plan-skip-sentinel.js (PreToolUse hook).
-#
-# Behavior contract:
-#   When CONFIRM_OUTLINE=off, echo of <<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>
-#   is auto-approved via permissionDecision=allow. Same for CONFIRM_DETAIL/
-#   DETAIL_NOT_NEEDED and CONFIRM_TESTS/WRITE_TESTS_NOT_NEEDED.
-#   All other inputs pass through (empty JSON output → no decision).
-#
-# L3 gap: these tests invoke the hook via direct `node <hook>` calls (L2).
-#   A live claude -p session would additionally verify:
-#   (a) the hook is registered in settings.json and fires on real PreToolUse events;
-#   (b) the sentinel echo in a real Bash tool invocation is actually allowed without
-#       a prompt interrupt in the live Claude Code UI.
-#
+# Contract: with CONFIRM_OUTLINE=off an echo of <<WORKFLOW_OUTLINE_NOT_NEEDED: …>> is auto-allowed
+# (likewise CONFIRM_DETAIL/DETAIL_NOT_NEEDED, CONFIRM_TESTS/WRITE_TESTS_NOT_NEEDED); all else passes through.
+# L3 gap: direct `node <hook>` calls; a live claude -p would also prove settings.json registration
+# and that the real Bash echo is allowed without a prompt interrupt.
 set -uo pipefail
 
 # isolation (#2512): pin state and plans dirs once for this file
@@ -26,6 +16,12 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/gate-plan-skip-sentinel.js"
 ERRORS=0
+# #2726/#2729: CONFIRM_OUTLINE/DETAIL come from $AGENTS_MAIN_ROOT/.env only, so each case
+# rewrites this file-level .env (confirm_env_set) instead of exporting the flag.
+# shellcheck source=../lib/confirm-env-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/confirm-env-fixture.sh"
+GATE_CFG="$_ISOLATION_TMP_ROOT/cfg"
+confirm_env_root "$GATE_CFG"
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
@@ -83,64 +79,91 @@ assert_passthrough() {
 
 echo "=== T1: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=off → allow ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: single approach>>"')
-CONFIRM_OUTLINE=off CONFIRM_DETAIL=on assert_allow \
+confirm_env_set "$GATE_CFG" CONFIRM_OUTLINE=off CONFIRM_DETAIL=on
+assert_allow \
     "T1. OUTLINE_NOT_NEEDED + CONFIRM_OUTLINE=off → allow" "$INPUT"
 
 echo "=== T2: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=0 → pass-through (vocabulary narrowed: 0 no longer recognized) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
-CONFIRM_OUTLINE=0 assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_OUTLINE=0
+assert_passthrough \
     "T2. CONFIRM_OUTLINE=0 → pass-through (vocabulary narrowed)" "$INPUT"
 
 echo "=== T3: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=on → pass-through (ask permissions) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
-CONFIRM_OUTLINE=on assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_OUTLINE=on
+assert_passthrough \
     "T3. CONFIRM_OUTLINE=on → pass-through" "$INPUT"
 
 echo "=== T4: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE unset → pass-through ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
-unset CONFIRM_OUTLINE 2>/dev/null || true
+confirm_env_set "$GATE_CFG"
 assert_passthrough \
     "T4. CONFIRM_OUTLINE unset → pass-through" "$INPUT"
 
 echo "=== T4b: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=\"\" (empty string) → pass-through (fail-safe to ON) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
-CONFIRM_OUTLINE="" assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_OUTLINE=
+assert_passthrough \
     "T4b. CONFIRM_OUTLINE=\"\" (empty) → pass-through (fail-safe to ON)" "$INPUT"
 
 echo "=== T5: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=off → allow ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')
-CONFIRM_DETAIL=off assert_allow \
+confirm_env_set "$GATE_CFG" CONFIRM_DETAIL=off
+assert_allow \
     "T5. DETAIL_NOT_NEEDED + CONFIRM_DETAIL=off → allow" "$INPUT"
 
 echo "=== T6: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=false → pass-through (vocabulary narrowed: false no longer recognized) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')
-CONFIRM_DETAIL=false assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_DETAIL=false
+assert_passthrough \
     "T6. CONFIRM_DETAIL=false → pass-through (vocabulary narrowed)" "$INPUT"
 
 echo "=== T7: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=on → pass-through ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')
-CONFIRM_DETAIL=on assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_DETAIL=on
+assert_passthrough \
     "T7. CONFIRM_DETAIL=on → pass-through" "$INPUT"
 
 echo "=== T8: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=on → pass-through ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')
-CONFIRM_DETAIL=on assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_DETAIL=on
+assert_passthrough \
     "T8. CONFIRM_DETAIL=on (not off) → pass-through" "$INPUT"
 
 echo "=== T9: Non-sentinel Bash command → pass-through even with CONFIRM_OUTLINE=off ==="
 INPUT=$(build_bash_input 'ls -la')
-CONFIRM_OUTLINE=off CONFIRM_DETAIL=off assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_OUTLINE=off CONFIRM_DETAIL=off
+assert_passthrough \
     "T9. unrelated Bash command → pass-through" "$INPUT"
 
 echo "=== T10: Non-Bash tool → pass-through ==="
 INPUT='{"tool_name":"Read","tool_input":{"file_path":"/tmp/foo.txt"}}'
-CONFIRM_OUTLINE=off assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_OUTLINE=off
+assert_passthrough \
     "T10. non-Bash tool → pass-through" "$INPUT"
 
 echo "=== T11: OUTLINE sentinel chained with && → pass-through (must not auto-allow chains) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: x>>" && rm /tmp/x')
-CONFIRM_OUTLINE=off assert_passthrough \
+confirm_env_set "$GATE_CFG" CONFIRM_OUTLINE=off
+assert_passthrough \
     "T11. chained command must NOT be auto-allowed" "$INPUT"
+
+# #2726/#2729: an exported plan-stage flag is ignored; only the .env file decides.
+echo "=== T11b: exported CONFIRM_OUTLINE=off, .env silent → pass-through (export ignored) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
+confirm_env_set "$GATE_CFG"
+CONFIRM_OUTLINE=off assert_passthrough \
+    "T11b. exported CONFIRM_OUTLINE=off with no .env value → pass-through (export ignored)" "$INPUT"
+
+echo "=== T11c: .env CONFIRM_DETAIL=off, exported CONFIRM_DETAIL=on → allow (file wins) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')
+confirm_env_set "$GATE_CFG" CONFIRM_DETAIL=off
+CONFIRM_DETAIL=on assert_allow \
+    "T11c. .env CONFIRM_DETAIL=off beats exported CONFIRM_DETAIL=on → allow" "$INPUT"
+
+# CONFIRM_TESTS is not a plan-stage key: T12-T15 keep exporting it over an empty .env.
+confirm_env_set "$GATE_CFG"
 
 echo "=== T12: WRITE_TESTS_NOT_NEEDED with CONFIRM_TESTS=off → allow ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: docs-only change>>"')

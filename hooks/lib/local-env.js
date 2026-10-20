@@ -62,6 +62,12 @@ const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
   "NODE_OPTIONS",
   "NODE_EXTRA_CA_CERTS",
   "NODE_USE_ENV_PROXY",
+  // The plan-stage CONFIRM keys are read from the global .env only (#2729): a project
+  // value would let a repo waive the user's plan approval. Exact entries, not a CONFIRM_
+  // prefix: CONFIRM_TESTS / CODE / DOCS / WORKTREE keep their local override.
+  "CONFIRM_INTENT",
+  "CONFIRM_OUTLINE",
+  "CONFIRM_DETAIL",
 ]);
 
 // SESSION_ also covers the harness-supplied SESSION_ID; PROPAGATE_ covers the

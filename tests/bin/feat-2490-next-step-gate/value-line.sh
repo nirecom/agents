@@ -37,15 +37,14 @@ case_end
 # snapshot resolve outline; the value line must follow NEXT_SKILL (detail), not the record.
 case_begin "snapshot-advanced-key-follows-next-skill" "bin/workflow/lib/next-step/verdict.js"
 sid="vl-adv"
-printf 'CONFIRM_OUTLINE=off\n' > "$CFG/.env"
-export CONFIRM_OUTLINE=off
+set_gate CONFIRM_OUTLINE off
 write_state "$sid" "$(json_at outline)"
 put_plan "$sid" intent "$INTENT_FULL"; put_plan "$sid" outline "## Adopted approach"
 ns --session "$sid"
 check "advanced: NEXT_SKILL=make-detail-plan" "make-detail-plan" "$(val NEXT_SKILL)"
 check "advanced: value line names the detail gate" "GATE_CONFIRM_DETAIL=ON" "$(last_line "$OUT")"
 check "advanced: no outline value line" 0 "$(count_re "$OUT" '^GATE_CONFIRM_OUTLINE=')"
-: > "$CFG/.env"; export CONFIRM_OUTLINE=on
+set_gate CONFIRM_OUTLINE on
 case_end
 
 case_begin "non-gate-steps-keep-four-line-contract" "bin/workflow/lib/next-step/verdict.js"
@@ -114,13 +113,13 @@ check "unset everywhere -> ON" "GATE_CONFIRM_TESTS=ON" "$(last_line "$OUT")"
 case_end
 
 case_begin "dotenv-off-and-env-precedence" "bin/workflow/lib/next-step/gate-line.js"
-printf 'CONFIRM_TESTS=off\n' > "$CFG/.env"
+cfg_env CONFIRM_TESTS=off
 ns --session vl-val
 check ".env off -> OFF" "GATE_CONFIRM_TESTS=OFF" "$(last_line "$OUT")"
 check ".env off, cause ok -> no GATE_PROBE_CAUSE line" 0 "$(count_re "$OUT" '^GATE_PROBE_CAUSE=')"
 export CONFIRM_TESTS=on; ns --session vl-val
 check "env on beats .env off -> ON" "GATE_CONFIRM_TESTS=ON" "$(last_line "$OUT")"
-: > "$CFG/.env"
+cfg_env
 case_end
 
 # #2681: the probe resolves in-process through the tree's hooks/lib/config-flag.js, so a broken

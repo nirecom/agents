@@ -45,9 +45,14 @@ function hasRecordedSkipJudgment(sessionId, step) {
 
 // Sentinel-door CONFIRM_* read. Exported so gate-plan-skip-sentinel.js can keep
 // its two distinct allow wordings while both branches still come from here.
+// Plan stages (outline, detail) read the config FILE only (#2726/#2729: an exported
+// CONFIRM_<PLAN STAGE> is ignored); the non-plan stage (tests) still reads process.env.
+const PLAN_STAGES = new Set(["outline", "detail"]);
+
 function isConfirmOffForStepSentinel(step) {
   const stage = STAGE_FOR_STEP[step];
   if (!stage) return false;
+  if (PLAN_STAGES.has(stage)) return isConfirmOffForStageFromFile(stage) === true;
   const flagName = getConfirmFlagName(stage);
   if (!flagName) return false;
   const raw = process.env[flagName];
@@ -63,15 +68,9 @@ function isConfirmOffForStepCli(step) {
 
 function isSkipAllowedForSentinelPath(sessionId, step) {
   if (hasRecordedSkipJudgment(sessionId, step)) return true;
-  // The env read is spelled out here (rather than only in the helper) so the
-  // trust boundary is visible at the door itself: process.env is admissible on
-  // the sentinel path and inadmissible on the CLI path below.
-  const stage = STAGE_FOR_STEP[step];
-  if (!stage) return false;
-  const flagName = getConfirmFlagName(stage);
-  if (!flagName) return false;
-  const raw = process.env[flagName];
-  return raw != null && OFF_LITERALS.has(String(raw).trim().toLowerCase());
+  // process.env is admissible on the sentinel path for non-plan stages only; plan
+  // stages read the config file on both doors.
+  return isConfirmOffForStepSentinel(step) === true;
 }
 
 function isSkipAllowedForCliPath(sessionId, step) {

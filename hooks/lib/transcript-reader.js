@@ -9,7 +9,6 @@ const fs = require("fs");
 
 const FLUSH_STEP_MS = 50;
 const FLUSH_STEPS = 10;
-const BOUNDARY_RETRY_MS = 100;
 const waitCell = new Int32Array(new SharedArrayBuffer(4));
 
 function sleep(ms) {
@@ -104,18 +103,4 @@ function splitTurns(entries) {
   return { prevTurnEntries: entries.slice(prompts[prompts.length - 2] + 1, last), currentTurnEntries, hasPriorPrompt: true };
 }
 
-// readPreviousTurn({transcriptPath}) -> splitTurns(...) plus `readable`. PreToolUse judges the
-// previous turn, which is long flushed, so the only wait is one retry when no turn boundary shows.
-function readPreviousTurn({ transcriptPath } = {}) {
-  let lines = readTranscriptLines(transcriptPath);
-  let entries = parseLines(lines);
-  if (lines.length > 0 && !entries.some(isRealUserPrompt)) {
-    sleep(BOUNDARY_RETRY_MS);
-    lines = readTranscriptLines(transcriptPath);
-    entries = parseLines(lines);
-  }
-  // Readable means at least one line parsed: an all-malformed transcript is undecidable.
-  return { ...splitTurns(entries), readable: entries.length > 0 };
-}
-
-module.exports = { readTranscriptLines, readTurnTail, readPreviousTurn, parseLines, isRealUserPrompt, splitTurns, tailOf };
+module.exports = { readTranscriptLines, readTurnTail, parseLines, isRealUserPrompt, splitTurns, tailOf };

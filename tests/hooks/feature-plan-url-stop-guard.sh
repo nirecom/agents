@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-plan-url-stop-guard.sh
 # Tests: hooks/stop-confirm-plan-guard.js, hooks/lib/plan-link-turn-check.js
-# Tags: plan, hook, stop, confirm-plan, plan-url, plan-link, plan-sync, blob-url, fail-open, TL2, scope:common, path-leak
+# Tags: plan, hook, stop, confirm-plan, plan-url, plan-link, plan-sync, blob-url, fail-open, TL2, scope:common, path-leak, gate-duty, trailing-link-run
 # Turn-end plan-link check of the confirm-plan Stop guard: a turn that wrote a plan artifact
 # (turn marker) or CONFIRMed a plan stage must carry that stage's plan-link output in its
 # assistant text — the blob URL when one exists, otherwise the plan's local path. Runs after
@@ -117,7 +117,7 @@ case_end
 
 case_begin "unit-turn-split" "hooks/lib/plan-link-turn-check.js"
 . "$SUB_DIR/unit-turn-split.sh"
-. "$SUB_DIR/unit-ends-with-link-line.sh"
+. "$SUB_DIR/unit-trailing-link-run.sh"
 case_end
 
 # ══ Hook: hooks/stop-confirm-plan-guard.js ══════════════════════════════════
@@ -293,6 +293,10 @@ UPG_PLANS="$PLANS_SG" UPG_REMOTE="$UPG_ORIGIN_SSH_GH" upg_case "S2 ssh.github.co
   "$SID_SG" intent '[U("go"), A(T("Plan: " + nat("intent")))]' block "$PL_PREFIX"
 UPG_PLANS="$PLANS_SG" UPG_REMOTE="$UPG_ORIGIN_SSH_GH" upg_case "S3 ssh.github.com destination, a URL on the ssh host name — plan-link block" \
   "$SID_SG" intent '[U("go"), A(T("Plan: " + url("intent").replace("github.com", "ssh.github.com")))]' block "$PL_PREFIX"
+case_end
+
+case_begin "hook-gate-duty" "hooks/stop-confirm-plan-guard.js"
+. "$SUB_DIR/hook-gate-duty.sh"
 case_end
 
 echo ""

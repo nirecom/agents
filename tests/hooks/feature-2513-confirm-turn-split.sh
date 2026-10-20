@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-confirm-turn-split.sh
 # Tests: hooks/confirm-checkpoint.js, hooks/lib/confirm-sentinel.js, hooks/lib/confirm-deny-counter.js
-# Tags: confirm-checkpoint, confirm-sentinel, turn-split, plan-link, deny-cap, fail-open, pretooluse, TL2, scope:issue-specific, same-turn-continuation
-# #2513: a CONFIRM_<STAGE> echo is denied unless the previous turn ended its last text block on
-# the stage's plan-link line, a real user prompt lies in between, and this turn did not rewrite
-# the plan. Two denies in a row, then the third passes with a supervisor finding; fail-open on
-# anything unreadable. The backtick-URL rule of shown() is unit-tested in
-# feature-plan-url-stop-guard/unit-turn-split.sh.
+# Tags: confirm-checkpoint, confirm-sentinel, turn-split, plan-link, deny-cap, fail-open, pretooluse, TL2, scope:issue-specific, same-turn-continuation, presentation-receipt, fail-closed
+# #2513/#2729: a CONFIRM_<STAGE> echo reaches the dialog only through the presentation receipt
+# the Stop hook wrote (seeded here), and the pass consumes it. The transcript shape decides
+# nothing, every deny records a supervisor finding with no cap, and anything unreadable denies.
+# Receipt judge causes: feature-2729-presentation-receipt.sh. The backtick-URL rule of shown()
+# is unit-tested in feature-plan-url-stop-guard/unit-turn-split.sh.
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,7 +18,7 @@ readonly CTS_TMP
 trap 'rm -rf "$CTS_TMP"' EXIT
 export WORKFLOW_STATE_DIR="$CTS_TMP/workflow-state" WORKFLOW_PLANS_DIR="$CTS_TMP/plans"
 mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR" "$CTS_TMP/no-transcripts" "$CTS_TMP/cases"
-unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR PLAN_LANG 2>/dev/null || true
+unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR PLAN_LANG CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 export CLAUDE_TRANSCRIPT_BASE_DIR="$CTS_TMP/no-transcripts" PLAN_SYNC_REMOTE_URL=""
 printf 'PLAN_LANG=english\nPLAN_SYNC_REMOTE_URL=\n' > "$AGENTS_MAIN_ROOT/.env"
 cd "$CTS_TMP" || exit 1
@@ -93,7 +93,7 @@ case_begin "artifact-write-detail" "hooks/lib/plan-link-turn-check.js"
 cts_run write detail
 case_end
 
-case_begin "deny-cap-and-reset" "hooks/lib/confirm-deny-counter.js"
+case_begin "deny-no-cap-and-reset" "hooks/confirm-checkpoint.js"
 cts_run cap intent
 cts_run cap outline
 cts_run cap detail
@@ -105,7 +105,7 @@ cts_run span outline
 cts_run span detail
 case_end
 
-case_begin "deny-cap-per-session-stage" "hooks/lib/confirm-deny-counter.js"
+case_begin "deny-no-cap-per-session-stage" "hooks/confirm-checkpoint.js"
 cts_run multi intent
 cts_run multi outline
 cts_run multi detail
@@ -127,8 +127,8 @@ case_begin "confirm-off-per-stage" "hooks/confirm-checkpoint.js"
 cts_run env
 case_end
 
-# #2650 C1-C13: the same-turn continuation path (a Stop-hook continuation mark lets the echo
-# pass in the plan's own turn exactly once). Driver: samturn-driver.js.
+# #2650/#2729 C1-C13: the same-turn continuation path (the presentation receipt lets the echo
+# pass exactly once, wherever it sits). Driver: samturn-driver.js.
 SAMTURN="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-confirm-turn-split/samturn-driver.js"
 cts_samturn() {
   cts_report "$(run_with_timeout 120 node "$SAMTURN" "$1" 2>&1 || printf 'FAIL|samturn %s|exit=%s\n' "$1" "$?")"
@@ -146,8 +146,8 @@ case_begin "same-turn-continuation-detail" "hooks/confirm-checkpoint.js"
 cts_samturn detail
 case_end
 
-# #2650 one-run fallback: Stop blocks + mark -> continuation without the echo -> active Stop passes
-# -> the user replies -> the echo is judged by the two-turn path. Driver: fallback-sequence-driver.js.
+# #2650/#2729 one-run fallback: Stop writes the receipt and blocks -> continuation without the echo
+# -> active Stop passes -> the user replies -> the receipt alone decides. Driver: fallback-sequence-driver.js.
 FALLBACK="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-confirm-turn-split/fallback-sequence-driver.js"
 cts_fallback() {
   cts_report "$(run_with_timeout 120 node "$FALLBACK" "$1" "$2" 2>&1 || printf 'FAIL|fallback %s %s|exit=%s\n' "$1" "$2" "$?")"
