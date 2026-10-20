@@ -76,6 +76,10 @@ case_end
 . "$CRR_CASES/fixtures.sh"
 # shellcheck source=bin-case-record-reader/reader.sh
 . "$CRR_CASES/reader.sh"
+# shellcheck source=bin-case-record-reader/record-delimiters.sh
+. "$CRR_CASES/record-delimiters.sh"
+# shellcheck source=bin-case-record-reader/deps-rows.sh
+. "$CRR_CASES/deps-rows.sh"
 # shellcheck source=bin-case-record-reader/ops.sh
 . "$CRR_CASES/ops.sh"
 

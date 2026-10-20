@@ -86,6 +86,10 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 - **Definition**: A marker string of the form `<<WORKFLOW_...>>` that hooks detect to drive workflow state — step-complete marks, skip declarations, OFF switches, and the like.
 - **Related**: [skills/enforce-workflow-off/SKILL.md](../skills/enforce-workflow-off/SKILL.md)
 
+### test-lang-exception
+- **Definition**: A value in a test file's `# Tags:` line (`text-only`, `symmetry`, or `e2e`) that lets the whole file be written in a language other than the code it tests.
+- **Related**: [rules/test.md](../rules/test.md)
+
 ### WF-CODE
 
 - **Definition**: The `WF-CODE-N` step prefix of the standard implementation flow, which works in a linked worktree.

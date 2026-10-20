@@ -1,0 +1,6 @@
+HIGH: tests/bin/crr/malformed.sh line 3: malformed case marker (grammar) code=MALFORMED_CASE_MARKER
+HIGH: tests/bin/vce/before.sh (2 paths in # Tests: header, no case_begin/case_end markers) code=MISSING_CASE_MARKERS
+HIGH: tests/bin/vce/malformed.sh line 5: malformed case marker (grammar) code=MALFORMED_CASE_MARKER
+WARN: tests/bin/vce/uncertain2.sh line 8: case marker nesting uncertain (multi-line quoted string before the marker; use a heredoc so retire can split cases) code=UNCERTAIN_CASE_MARKER
+HIGH: tests/bin/ec/plain.sh (2 paths in # Tests: header, no case_begin/case_end markers) code=MISSING_CASE_MARKERS
+rc=1

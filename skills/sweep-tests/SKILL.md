@@ -26,9 +26,9 @@ STE-4. Only when case-marker embedding is requested: run `bash "$AGENTS_MAIN_ROO
 - On a `<<<EMBED-RETRY-STE4` block, dispatch once more for those rows only, then rerun `--embed-apply` on the same workdir; no second retry block follows.
 - Copy `CAPPED`, `TOOL_FAILED`, `CODEX_UNAVAILABLE`, `MERGED_TARGET` and `EXEMPT` lines into the PR body's verification report; a `TOOL_FAILED` file is picked again by the next run.
 - The embed protocol (worklist, gate rows, states, retry record) is owned by `docs/architecture/claude-code/sweep-tests-embed-cases.md`.
-- For marker-bearing files (`case_begin`/`case_end`), candidacy is per case: a case qualifies when its target is gone (`partial-orphan`); all cases gone → whole-file orphan. For files without markers, a file qualifies once every `# Tests:` path is gone.
+- For marker-bearing files (the marker notation follows the per-language doc under `embed-rules/`), candidacy is per case: a case qualifies when its target is gone (`partial-orphan`); all cases gone → whole-file orphan. For files without markers, a file qualifies once every `# Tests:` path is gone.
 - Issue state never selects a candidate — it gates deletion only.
-- Held deletions are reported as `SKIP_DELETE_ISSUE_ACTIVE`, `SKIP_DELETE_METADATA_UNAVAILABLE`, or `SKIP_DELETE_AMBIGUOUS_REF`; the file stays listed and on disk.
+- Held deletions are reported as `SKIP_DELETE_ISSUE_ACTIVE`, `SKIP_DELETE_METADATA_UNAVAILABLE`, `SKIP_DELETE_AMBIGUOUS_REF`, or `SKIP_DELETE_READER_UNAVAILABLE`; the file stays listed and on disk.
 - 0 `CANDIDATE:`/`ORPHAN:` lines while `MALFORMED_HEADER:`/`NO_TESTS_HEADER:` lines are present means the survival axis is clear and repair still remains on the header axis.
 - A dispatcher and its sibling `tests/<stem>/` folder are retired as one unit.
 - `--dry-run` suppresses every write: no deletion, no header rewrite.

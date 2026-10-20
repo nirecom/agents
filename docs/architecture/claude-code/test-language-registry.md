@@ -30,7 +30,9 @@ There is no environment-variable override, so a test using a fixture table can n
 
 ## Table shape
 
-Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# Tests:` / `# Tags:` / `# Serial:`), `tableDrivenFallbackEntry` (the entry whose table-driven detector applies to files no entry matches; `bash`), and `entries` (ordered).
+Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# Tests:` / `# Tags:` / `# Serial:`), `tableDrivenFallbackEntry` (the entry whose table-driven detector applies to files no entry matches; `bash`), `testLanguageExceptions` (the allowed `test-lang-exception:<value>` values; see below), and `entries` (ordered).
+
+`testLanguageExceptions` (`text-only`, `symmetry`, `e2e`; each `[a-z0-9-]+`) is the single list of values a test may declare in `Tags:` to be exempt from the test-language match. Each value is one exception row of the `rules/test.md` "Test Language" table: `text-only` — inspects the code as text only; `symmetry` — checks symmetry across languages; `e2e` — one end-to-end run crosses processes. The non-code row has no value, because a non-code target is never judged. bash reads the list as `TLR_LANG_EXCEPTIONS` (space-separated) after `tlr_load`; `bin/check-test-language-match.sh` validates declarations against it ([case-marker-gate.md](case-marker-gate.md)).
 
 | Field | Meaning |
 |---|---|
@@ -39,6 +41,7 @@ Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# T
 | `patterns` | File-name patterns (basename only) |
 | `selfIdentifying` | The name alone marks a test, wherever it lives |
 | `nameStrip` | `{prefix, suffix}` removed to get the test name (name normalization only) |
+| `issueNamePrefix` | String dropped once from the `nameStrip` result before an issue reference is read (`tlr_issue_stem`): pytest `test_`, so `test_feature-<N>-*.py` is issue-specific; every other entry `""`. Kept apart from `nameStrip` because the test name keeps the prefix |
 | `siblingSuiteDir` | A same-named directory next to the test holds its sub-files; retire deletes both |
 | `header` | `{commentPrefix}` or null. Header readers match `<commentPrefix> Tests:` / `Tags:` / `Serial:` as a fixed string (bash: `tlr_comment_prefix`, which also sets `TLR_COMMENT_PREFIX`); null takes `tableDrivenFallbackEntry`'s |
 | `launch` | How to run it (below); null for `recognized-only` |
@@ -67,7 +70,7 @@ Current entries, in order:
 | `test-naming-convention` | recognized-only | `*.test.*`, `*.spec.*`, `*_test.*`, `test_*` | none |
 
 All four supported entries have a case-marker reader and a helper library (#2411), so a test can be written in the language of the code it tests (`rules/test.md` "Test Language").
-Only `bash` has `caseEmbedRules`; the other three wait for #2502.
+All four supported entries have `caseEmbedRules` (#2502); the pester, pytest and js parts hand each op to an analyzer child process ([test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)).
 Such differences are named in the table, not hidden in code: filling a field for another language changes no shared code (#2481).
 
 ## Matching
@@ -101,12 +104,13 @@ Shared code separates **capability** (is the field non-null) from **ownership** 
 | `tableDrivenDetector` | test path | rc 0 when table-driven |
 | `caseEmbedRules` | `<op> <absolute test path> [args]` | one op per call (below); an unknown op returns 2 |
 
-`crr_read <abs>` is the one entry to case records: a `FILE\t<state>\t<line>\t<reason>` line, then one `CASE\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>` line per case of a conforming file. `deps` is `?` when the language has no `caseEmbedRules`.
+`crr_read <abs>` is the one entry to case records: a `FILE\t<state>\t<line>\t<reason>` line, then one `CASE\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>` line per case of a conforming file. `deps` is `?` when the language has no `caseEmbedRules`. A `deps` op that fails (an analyzer whose case order disagrees with the reader's included) or whose rows break the row contract ([test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)) makes the file `uncertain` with reason `case-embed` and no CASE lines; a `deps` op with no runtime (69) makes it `unavailable`.
 The CASE lines come in file order; a case's order is its line position, with no index column.
 States: `none`, `conforming`, `malformed`, `uncertain`, `unsupported` (no reader for the file) and `unavailable` (the reader's runtime is not installed; the last column names the entry's `launch.requires`).
 A reader that fails any other way reads as `malformed` with reason `reader`.
 
 **Same-shell contract.** `crr_read` leaves the `TRP_CASE_*` globals of the file it read, and the `deps` / `leftover-defs` ops read them in that shell instead of re-parsing case ranges, so call them right after `crr_read` on the same file, never in a subshell of their own.
+An analyzer-backed `deps` op checks the analyzer's case order against those globals; with none set, it runs the file's test case reader into locals first.
 
 | `caseEmbedRules` op | Output (empty = nothing found) |
 |---|---|
@@ -114,8 +118,10 @@ A reader that fails any other way reads as `malformed` with reason `reader`.
 | `deps` | `<case idx>\t<csv of top-level functions the case calls>` per case; `<case idx>` is a line-position key used only inside `crr_read` |
 | `leftover-defs` | `<line>\t<name>` per top-level function no code line calls |
 | `self-impl` | `<line>\t<kind>\t<detail>` per hand-rolled harness piece (bash: `counter-init`, `harness-redef`) |
-| `skip-reason` | one reason word when the file must not be embedded (bash: `narrow-harness`, a sourced `tests/lib/*harness*.sh` that is not the entry's `helperLibrary`) |
+| `skip-reason` | one reason word when the file must not be embedded (bash: `narrow-harness`, a sourced `tests/lib/*harness*.sh` that is not the entry's `helperLibrary`); the words are listed in each `embed-rules/<lang>.md` |
 | `result-summary <rc> <stdout-file>` | `<pass\|fail\|skip>\t<passed>\t<failed>`; counts empty when the output has none |
+| `syntax-check` | nothing; rc 0 when the file parses, 1 with the reason on stderr otherwise. Retire's per-case cut runs it on the rewrite, which keeps the original's extension |
+| `case-count` | the number of top-level case units; rc 1 when there is none (see [test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)) |
 
 ## Case-marker readers
 
@@ -137,13 +143,17 @@ What a case is, per language:
 | `pytest` | a module-level `test_*` function or `Test*` class | `@pytest.mark.target("<path>")` |
 | `js` | `caseBegin("<name>", "<target>");` … `caseEnd();` at column 0 | second argument |
 
+### Case target path rule
+
 A target is a repo-relative path of `A-Z a-z 0-9 . _ / -` with no leading `/` or `./` and no `..` segment, in every language.
+The bash side owns it as `ctp_target_path_valid` (`bin/lib/case-target-path-rule.sh`), which the bash reader and `crb_run` both call; the three child readers restate it in their own runtimes and point here.
+`tests/bin/feature-2712-target-path-parity.sh` runs one input table through all four.
 
 Malformed reasons (the word in the gate's `MALFORMED_CASE_MARKER` message):
 
 | Reason | Languages | Meaning |
 |---|---|---|
-| `grammar` | all | A marker that cannot be read: bash, an unreadable marker line or a local marker definition; `pester` / `pytest`, a file that does not parse; `js`, an empty case name |
+| `grammar` | all | A marker that cannot be read: bash, an unreadable marker line or a local marker definition; `pester` / `pytest`, a file that does not parse; `js`, an empty case name. Also, in every language, a case name or target holding a TAB, CR or LF, judged by the shared state rule (`_trp_reject_record_delimiters`) |
 | `target` | all | A target that breaks the path rule |
 | `depth` | `bash`, `js` | bash: a marker inside a block, function or group; `js`: a case opened while another is open |
 | `balance` | `bash`, `js` | Unpaired markers |
@@ -154,7 +164,8 @@ Malformed reasons (the word in the gate's `MALFORMED_CASE_MARKER` message):
 | `duplicate-name` | all | Two cases of one file share a name; reported on the later case's first line by the shared state rule (`trp_marker_state_from_globals`), not by a reader |
 | `reader` | all | The reader itself failed (set by `crr_read`, not by a reader) |
 
-`uncertain` is a state, not a reason: bash reports it for a depth fault after a multi-line quoted string, `js` for a marker-looking line inside a block comment, a multi-line template string or an open `${}`.
+`uncertain` is a state, not a reason: bash reports it for a depth fault after a multi-line quoted string, `js` for a marker-looking line inside a block comment, a multi-line template string or an open `${}`. `crr_read` itself reports `uncertain` with reason `case-embed` when the `deps` op fails or its rows break the row contract.
+Retire's per-case cut does not use `deps`: it removes the line ranges of the orphan cases and leaves definitions outside those ranges in place.
 The writing rules a test author follows live in each entry's `notationDoc`, not here.
 
 ## Helper libraries
@@ -216,7 +227,7 @@ Always call `node <path-to>/bin/test-language-registry …`; never rely on the s
 | PowerShell | `node <CLI> --format json \| ConvertFrom-Json` |
 | Python | `json.loads(subprocess.run(["node", CLI, "--format", "json"], …).stdout)` |
 
-`--format shell` is tab-separated, one record per line, never `eval`ed: `entry`, `pattern`, `glob`, `field`, `arg` records. CLI exit codes: 0 ok, 1 invalid table, 2 bad arguments.
+`--format shell` is tab-separated, one record per line, never `eval`ed: `entry`, `pattern`, `glob`, `field`, `arg` records, plus one `testLanguageExceptions\t<space-separated values>` line. CLI exit codes: 0 ok, 1 invalid table, 2 bad arguments.
 
 ## Unsupported files
 

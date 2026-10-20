@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1834-precommit-lib-split.sh
 # Tests: hooks/pre-commit, hooks/lib/precommit-tests-frontmatter.sh, hooks/lib/precommit-agents-repo-gates.sh, bin/check-test-frontmatter.sh
-# Tags: pre-commit, tests-frontmatter, cause-messages, refactor, file-split, TL2, scope:issue-specific, agents-repo-gates, session-id-ssot, migration-blocks, security, word-splitting, error-path, fail-open, case-markers, fail-closed
+# Tags: pre-commit, tests-frontmatter, cause-messages, refactor, file-split, TL2, scope:issue-specific, agents-repo-gates, session-id-ssot, migration-blocks, security, word-splitting, error-path, fail-open, case-markers, fail-closed, test-language-match
 set -u
 
 # Protects the #1834 file split of hooks/pre-commit (two gate blocks moved to hooks/lib/).
@@ -261,6 +261,8 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-1834-precommit-lib-split"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 # shellcheck source=./feature-1834-precommit-lib-split/part-e-commit-wiring.sh
 . "$SCRIPT_DIR/part-e-commit-wiring.sh"
+# shellcheck source=./feature-1834-precommit-lib-split/part-f-language-match.sh
+. "$SCRIPT_DIR/part-f-language-match.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

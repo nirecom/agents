@@ -13,7 +13,7 @@ const DEFAULT_FILE = path.join(__dirname, "test-language-registry.json");
 const REPO_ROOT = path.join(__dirname, "..", "..");
 const DEFAULT_FLAT_REJECT_CODE = "FLAT_TEST_REJECTED";
 const SHELL_FIELDS = [
-  "nameStrip.prefix", "nameStrip.suffix", "siblingSuiteDir", "header.commentPrefix",
+  "nameStrip.prefix", "nameStrip.suffix", "issueNamePrefix", "siblingSuiteDir", "header.commentPrefix",
   "launch.unit", "launch.requires", "launch.timeoutSeconds", "launch.suiteRootMarker",
   "launch.wrapper", "launch.minVersion",
   "caseMarkerReader.file", "caseMarkerReader.function",
@@ -132,6 +132,7 @@ function toShellDump(reg = loadRegistry()) {
     `schema\t${reg.schema}`,
     `headerMaxLines\t${reg.headerMaxLines}`,
     `tableDrivenFallbackEntry\t${reg.tableDrivenFallbackEntry || ""}`,
+    `testLanguageExceptions\t${(reg.testLanguageExceptions || []).join(" ")}`,
   ];
   for (const e of reg.entries) {
     out.push(`entry\t${e.id}\t${e.status}\t${e.selfIdentifying ? 1 : 0}`);

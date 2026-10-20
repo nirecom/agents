@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tests/bin/fix-2081-case-unit-refcount.sh
 # Tests: bin/lib/test-retire-predicate.sh, bin/lib/test-retire-predicate/case-parser.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
-# Tags: TL2, audit-tests, retire, scope:issue-specific
-# TL2 contract for #2081 (case-unit refcount GC) + #1864 (.ps1/.py scan). A
-# case_begin/case_end pair is one case; refcount = surviving cases; refcount==0
+# Tags: TL2, audit-tests, retire, case-markers, test-language-registry, pytest, scope:issue-specific
+# TL2 contract for #2081 (case-unit refcount GC) + #1864 (.ps1/.py scan). One
+# begin/end case-marker pair is one case; refcount = surviving cases; refcount==0
 # → whole-unit GC, refcount>0+orphan → case-block removal, marker-less → the
 # current file-level trp_survival_verdict fallback. Fail-before-fix: parser and
 # new fns absent, so direct-call groups short-circuit (require_fn) and audit
@@ -108,7 +108,7 @@ add_src() {
 }
 
 # add_raw <root> <name> — file body read from stdin verbatim, so a fixture can
-# carry arbitrary case_begin/case_end markers (valid or malformed).
+# carry arbitrary begin/end case markers (valid or malformed).
 add_raw() {
     local root="$1" name="$2"
     mkdir -p "$(dirname "$root/tests/$name")"
@@ -204,7 +204,7 @@ if [[ ! -f "$AUDIT" ]]; then fail "precondition: bin/audit-tests.sh missing at $
 if [[ ! -f "$AUDIT_COMMON" ]]; then fail "precondition: bin/audit-tests-common.sh missing at $AUDIT_COMMON"; fi
 
 # ── Group dispatch ──────────────────────────────────────────────────────────
-for _g in a b c d e f g h i j k l m n o p; do
+for _g in a b c d e f g h i j k l m n o p q; do
     _gf="$GROUP_DIR/group-$_g.sh"
     if [[ -f "$_gf" ]]; then
         # shellcheck source=/dev/null

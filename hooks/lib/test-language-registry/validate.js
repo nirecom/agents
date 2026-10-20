@@ -172,6 +172,8 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
     if (e.nameStrip && !nullOr(e.nameStrip[k], isStr)) fail(`${where}.nameStrip.${k}`, "must be a string");
     if (e.nameStrip && isStr(e.nameStrip[k])) plain(e.nameStrip[k], `${where}.nameStrip.${k}`);
   }
+  if (!nullOr(e.issueNamePrefix, isStr)) fail(`${where}.issueNamePrefix`, "must be a string");
+  if (isStr(e.issueNamePrefix)) plain(e.issueNamePrefix, `${where}.issueNamePrefix`);
   if (!nullOr(e.header, (v) => isObj(v) && plain(v.commentPrefix, `${where}.header.commentPrefix`) !== "")) {
     fail(`${where}.header`, "must be {commentPrefix} or null");
   }
@@ -213,6 +215,11 @@ function validate(t, repoRoot, opts = {}) {
   if (t.schema !== 1) fail("schema", "must be 1");
   if (!Number.isInteger(t.headerMaxLines) || t.headerMaxLines < 1) fail("headerMaxLines", "must be a positive integer");
   if (!Array.isArray(t.entries) || t.entries.length === 0) fail("entries", "must be a non-empty array");
+  // The shell dump joins the values with spaces, so each must be one plain word.
+  const lx = t.testLanguageExceptions;
+  if (lx !== undefined && !(Array.isArray(lx) && lx.every((v) => typeof v === "string" && /^[a-z0-9-]+$/.test(v)))) {
+    fail("testLanguageExceptions", "must be an array of lowercase words");
+  }
   const seen = new Set();
   const seenSources = [];
   t.entries.forEach((e, i) => checkEntry(e, i, seen, repoRoot, seenSources, opts));

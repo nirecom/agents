@@ -17,6 +17,9 @@ source "$_TRP_DIR/test-frontmatter-constants.sh" || return 1
 source "$_TRP_DIR/test-frontmatter-fix.sh" || return 1
 # shellcheck source=test-retire-predicate/case-parser.sh
 source "$_TRP_DIR/test-retire-predicate/case-parser.sh"
+# trp_remove_orphan_cases (the --apply case cut) lives in its own file.
+# shellcheck source=test-retire-predicate/orphan-removal.sh
+source "$_TRP_DIR/test-retire-predicate/orphan-removal.sh"
 
 # Configuration globals (callers may override before use).
 TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
@@ -41,9 +44,14 @@ TRP_UNIT_PATHS=()
 TRP_HAS_MARKERS=0
 TRP_CASE_COUNT=0
 TRP_CASE_TARGETS=()
+# The four below are read by test-retire-predicate/orphan-removal.sh.
+# shellcheck disable=SC2034
 TRP_CASE_BEGIN_LINES=()
+# shellcheck disable=SC2034
 TRP_CASE_END_LINES=()
+# shellcheck disable=SC2034
 TRP_CASE_ALIVE=()
+# shellcheck disable=SC2034
 TRP_CASE_NAMES=()
 TRP_REFCOUNT=0
 TRP_ORPHAN_CASE_IDX=()
@@ -69,16 +77,10 @@ trp_require_repo_root() {
 
 # ── filename axes ───────────────────────────────────────────────────────────
 
-# trp_scope_of <filename> — issue-specific | common. Pure filename shape;
-# independent of whether the name carries an issue reference at all.
-trp_scope_of() {
-  local name="${1##*/}"
-  if [[ "$name" =~ ^feature-[0-9]+- ]]; then
-    printf 'issue-specific\n'
-  else
-    printf 'common\n'
-  fi
-}
+# trp_scope_of <filename> — issue-specific | common. Pure filename shape (the name
+# without its entry's issueNamePrefix, tlr_issue_stem); independent of whether the
+# name carries an issue reference at all.
+trp_scope_of() { trp_name_axes "$1"; printf '%s\n' "$TRP_SCOPE"; }
 
 # trp_issue_ref <filename> — explicit | ambiguous | none.
 # explicit  : `<feature|fix|feat>-<N>-` prefix — a real issue number.
@@ -89,27 +91,24 @@ trp_scope_of() {
 # The boundary is DELIMITATION, not digit count: a length threshold would make
 # `feat-foo-7` (a real reference) indistinguishable from `feat-foo-bar` (none)
 # and delete it without ever checking issue state.
-trp_issue_ref() {
-  local name="${1##*/}"
-  local stem; stem="$(tlr_stem "$name")"
-  if [[ "$stem" =~ ^(feature|fix|feat)-([0-9]+)- ]]; then
-    printf 'explicit\n'
-    return 0
-  fi
-  if [[ "$stem" =~ (^|-)[0-9]+(-|$) ]]; then
-    printf 'ambiguous\n'
-    return 0
-  fi
-  printf 'none\n'
-}
+trp_issue_ref() { trp_name_axes "$1"; printf '%s\n' "$TRP_ISSUE_REF"; }
 
 # trp_issue_number <filename> — the explicit issue number, or empty.
-trp_issue_number() {
-  local name="${1##*/}"
-  local stem; stem="$(tlr_stem "$name")"
+trp_issue_number() { trp_name_axes "$1"; printf '%s' "$TRP_ISSUE_NUMBER"; }
+
+# trp_name_axes <filename> — sets TRP_SCOPE, TRP_ISSUE_REF and TRP_ISSUE_NUMBER (the three
+# helpers above) from one stem, printing nothing, so a per-file loop forks no subshell.
+trp_name_axes() {
+  local stem
+  _tlr_issue_stem_set "${1##*/}"; stem="$TLR_ISSUE_STEM"
+  TRP_SCOPE=common; TRP_ISSUE_REF=none; TRP_ISSUE_NUMBER=""
+  [[ "$stem" =~ ^feature-[0-9]+- ]] && TRP_SCOPE=issue-specific
   if [[ "$stem" =~ ^(feature|fix|feat)-([0-9]+)- ]]; then
-    printf '%s' "${BASH_REMATCH[2]}"
+    TRP_ISSUE_REF=explicit; TRP_ISSUE_NUMBER="${BASH_REMATCH[2]}"
+  elif [[ "$stem" =~ (^|-)[0-9]+(-|$) ]]; then
+    TRP_ISSUE_REF=ambiguous
   fi
+  return 0
 }
 
 # ── survival predicate ──────────────────────────────────────────────────────
@@ -186,11 +185,16 @@ trp_survival_verdict() {
 # trp_case_refcount_verdict <repo-root> <file> — top-level entry the scan loops
 # call. Sets $TRP_VERDICT, $TRP_REFCOUNT and $TRP_UNIT_MODE. Case-conforming
 # files decide per case; malformed and marker-less files fall back to
-# trp_survival_verdict (C8 — never to undeterminable/SKIP).
+# trp_survival_verdict (C8). A file whose reader could not run (TRP_READER_FAILED)
+# is undeterminable: its cases are unknown, so the header must not decide.
 trp_case_refcount_verdict() {
   local repo_root="${1:?trp_case_refcount_verdict: repo root required}"
   local file="${2:?trp_case_refcount_verdict: test file required}"
   trp_enumerate_cases "$repo_root" "$file"
+  if [[ -n "$TRP_READER_FAILED" ]]; then
+    TRP_VERDICT=undeterminable; TRP_UNIT_MODE="file"; TRP_REFCOUNT=1
+    printf '%s\n' "$TRP_VERDICT"; return 0
+  fi
   if [[ "$_TRP_MARKER_MALFORMED" -eq 1 || "$TRP_HAS_MARKERS" -eq 0 ]]; then
     TRP_UNIT_MODE="file"
     trp_survival_verdict "$repo_root" "$file" >/dev/null
@@ -217,9 +221,11 @@ trp_marker_conformance() {
 }
 
 # trp_marker_state_from_globals — the state rule over the globals the preceding
-# caseMarkerReader call left (_TRP_MARKER_*, TRP_HAS_MARKERS); two cases of one name are made
-# malformed here (duplicate-name) for every language. Always returns 0.
+# caseMarkerReader call left (_TRP_MARKER_*, TRP_HAS_MARKERS); a TAB/CR/LF in a name or target
+# (grammar) and two cases of one name (duplicate-name) are made malformed here for every
+# language, delimiters first so a split record never reads as a repeated name. Always returns 0.
 trp_marker_state_from_globals() {
+  _trp_reject_record_delimiters
   _trp_reject_duplicate_names
   TRP_MARKER_LINE="$_TRP_MARKER_MALFORMED_LINE"
   TRP_MARKER_REASON="$_TRP_MARKER_MALFORMED_REASON"
@@ -231,65 +237,6 @@ trp_marker_state_from_globals() {
     TRP_MARKER_STATE=none
   fi
   return 0
-}
-
-# trp_remove_orphan_cases <repo-root> <file> — physically excise every orphan
-# case's [begin,end] line range (--apply helper). Depends on the TRP_CASE_*
-# state left by the immediately preceding trp_case_refcount_verdict; no
-# TRP_CASE_*-mutating call may intervene (caller contract). Fail-closed.
-trp_remove_orphan_cases() {
-  local repo_root="${1:?trp_remove_orphan_cases: repo root required}"
-  local file="${2:?trp_remove_orphan_cases: test file required}"
-  if [[ "$_TRP_MARKER_MALFORMED" -eq 1 ]]; then return 1; fi
-  if [[ ! "$TRP_CASE_COUNT" =~ ^[0-9]+$ || "$TRP_CASE_COUNT" -le 0 || "${#TRP_ORPHAN_CASE_IDX[@]}" -eq 0 ]]; then
-    echo "WARNING: trp_remove_orphan_cases: no orphan case state — skipping ${file}" >&2
-    return 1
-  fi
-  local abs="$file"
-  [[ "$abs" != /* ]] && abs="$repo_root/$file" || true
-
-  # Mark every line inside an orphan [begin,end] range for skipping (original
-  # line numbers, resolved before any rewrite, so ranges cannot shift).
-  local -A skip=()
-  local idx b e ln
-  local -a removed_names=()
-  for idx in "${TRP_ORPHAN_CASE_IDX[@]}"; do
-    b="${TRP_CASE_BEGIN_LINES[$idx]}"
-    e="${TRP_CASE_END_LINES[$idx]}"
-    removed_names+=("${TRP_CASE_NAMES[$idx]}")
-    for ((ln = b; ln <= e; ln++)); do skip["$ln"]=1; done
-  done
-
-  local tmp; tmp="$(mktemp)"
-  local lineno=0 line
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    lineno=$((lineno + 1))
-    if [[ -n "${skip[$lineno]:-}" ]]; then continue; fi
-    printf '%s\n' "$line" >> "$tmp"
-  done < "$abs"
-
-  if ! bash -n "$tmp" 2>/dev/null; then
-    echo "WARNING: trp_remove_orphan_cases: rewrite failed bash -n — skipping ${file}" >&2
-    rm -f "$tmp"
-    return 1
-  fi
-
-  local mode
-  mode="$(stat -c '%a' "$abs" 2>/dev/null || stat -f '%Lp' "$abs" 2>/dev/null || true)"
-  if [[ -n "$mode" ]]; then chmod "$mode" "$tmp" 2>/dev/null || true; fi
-  [[ -x "$abs" ]] && { chmod +x "$tmp" 2>/dev/null || true; }
-
-  if ! mv "$tmp" "$abs"; then
-    echo "WARNING: trp_remove_orphan_cases: mv failed — ${file}" >&2
-    rm -f "$tmp"
-    return 1
-  fi
-  if ! { git -C "$repo_root" add -- "$file" 2>/dev/null || git add -- "$abs" 2>/dev/null; }; then
-    echo "WARNING: trp_remove_orphan_cases: git add failed — ${file}" >&2
-    return 1
-  fi
-  local name
-  for name in "${removed_names[@]}"; do printf '%s\n' "$name"; done
 }
 
 # ── issue metadata ──────────────────────────────────────────────────────────
@@ -450,12 +397,12 @@ trp_compute_cutoff() {
     return 1
   fi
   local days=$(( ${1:-3} * 30 ))
-  if date -d "${days} days ago" +%Y-%m-%d >/dev/null 2>&1; then
-    TRP_CUTOFF_DATE="$(date -d "${days} days ago" +%Y-%m-%d)"
-  elif date -v-"${days}"d +%Y-%m-%d >/dev/null 2>&1; then
-    TRP_CUTOFF_DATE="$(date -v-"${days}"d +%Y-%m-%d)"
+  if date -u -d "${days} days ago" +%Y-%m-%d >/dev/null 2>&1; then
+    TRP_CUTOFF_DATE="$(date -u -d "${days} days ago" +%Y-%m-%d)"
+  elif date -u -v-"${days}"d +%Y-%m-%d >/dev/null 2>&1; then
+    TRP_CUTOFF_DATE="$(date -u -v-"${days}"d +%Y-%m-%d)"
   else
-    TRP_CUTOFF_DATE="$(uv run python -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=${days})).isoformat())")"
+    TRP_CUTOFF_DATE="$(uv run python -c "import datetime; print((datetime.datetime.now(datetime.timezone.utc).date() - datetime.timedelta(days=${days})).isoformat())")"
   fi
   printf '%s\n' "$TRP_CUTOFF_DATE"
 }
