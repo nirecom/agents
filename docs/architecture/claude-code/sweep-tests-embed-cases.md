@@ -1,7 +1,7 @@
 # sweep-tests --embed-cases
 
-`case_begin` / `case_end` markers let retire remove one case instead of a whole file, but only tests written after the marker gate carry them.
-`--embed-cases` migrates the older marker-less bash tests band by band: the tool picks the files, a subagent rewrites a copy, and the tool decides mechanically whether the rewrite may replace the original.
+Case markers (each language's notation: `skills/_shared/test-design/case-markers/<lang>.md`) let retire remove one case instead of a whole file, but only tests written after the marker gate carry them.
+`--embed-cases` migrates the older marker-less tests of every language with a `caseEmbedRules` part (bash, pester, pytest, js) band by band: the tool picks the files, a subagent rewrites a copy, and the tool decides mechanically whether the rewrite may replace the original.
 The rewrite is the only judgment an LLM makes; selection, verification and replacement are deterministic, and a file that fails twice is recorded and left alone.
 
 This document is the single owner of the protocol: worklist columns, item states, gate blocks, `report.txt`, `failure.txt`, `embed-retry.tsv`, and the verifier's arguments and output.
@@ -22,7 +22,17 @@ The skill procedure (`skills/sweep-tests/SKILL.md` STE-4) and the code headers p
 | `bin/verify-case-embed.sh` (+ `bin/verify-case-embed/`) | The five-check verifier |
 | `bin/lib/case-record-reader.sh` | `crr_read`, the case records every check reads |
 | registry `caseEmbedRules` part | Per-language answers; contract in [test-language-registry.md](test-language-registry.md) |
-| `skills/sweep-tests/embed-rules/<lang>.md` | The rewrite rules the subagent follows (the part's `rules-doc`) |
+| `skills/sweep-tests/embed-rules/<lang>.md` | The rewrite rules the subagent follows (the part's `rules-doc`), one per language: `bash`, `pester`, `pytest`, `js` |
+| `bin/lib/test-retire-predicate/orphan-removal.sh` | Retire's per-case cut (`trp_remove_orphan_cases`); the rewritten file must pass the part's `syntax-check` op before it replaces the original |
+
+## Retire when the reader cannot run
+
+Retire (`trp_case_refcount_verdict`) reads case markers before it trusts the `# Tests:` header.
+When a file's test case reader cannot run, its cases are unknown, so the header must not decide either: the verdict is `undeterminable` and both entrypoints print `SKIP_DELETE_READER_UNAVAILABLE: <file> (unavailable|reader)` (JSON diagnostic kind `reader_unavailable`) and keep the file.
+`unavailable` means the reader's runtime is not installed (rc 79); `reader` is any other failure. A reader that ran and found malformed markers still falls back to the header, as before.
+Both entrypoints read the issue reference from the name after the entry's `issueNamePrefix` ([test-language-registry.md](test-language-registry.md)), so `test_feature-<N>-*.py` is issue-specific and belongs to `audit-tests.sh`, not `audit-tests-common.sh`.
+
+The per-case cut works on line ranges in every language and does not use `deps`, so a definition outside the removed ranges stays in the file.
 
 ## Options
 
@@ -46,7 +56,7 @@ Each candidate gets the first matching skip reason, in this order; a file with n
 |---|---|
 | `already-conforming` | `crr_read` state is `conforming` |
 | `no-embed-rules` | the language's `caseEmbedRules` is null |
-| `lang-skip:<word>` | the part's `skip-reason` op answered (bash: `narrow-harness`) |
+| `lang-skip:<word>` | the part's `skip-reason` op answered (bash `narrow-harness`, pester `nested-describe`, pytest `parametrized-case`, js `custom-runner`; each word's meaning is in that language's `embed-rules/<lang>.md`) |
 | `retry-capped` | an `embed-retry.tsv` row matches (below) |
 | `no-tests-header` | no `# Tests:` header, or one with no token |
 | `header-unfixable:multi-paren` / `header-unfixable:has-ac` | the header cannot be auto-fixed (the `_fix_headers_apply` `SKIP_APPLY_*` conditions) |

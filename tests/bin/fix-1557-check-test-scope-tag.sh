@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/check-test-frontmatter.sh
-# Tags: TL2, audit-tests, retire, scope:issue-specific
+# Tags: TL2, audit-tests, retire, test-lang-exception, scope:issue-specific
 #
 # TL2: the `# Tags: scope:...` check of bin/check-test-frontmatter.sh, --staged and --all.
 # TL3 gap: real `git diff --cached` staged-file discovery (file lists are passed
@@ -143,10 +143,11 @@ else
 fi
 
 # TC6: --all over a fixture with one untagged file => exit 1
+# --all scans tests/<category>/ only (the 2-level layout), so the files sit in tests/bin/.
 ALL_BAD="$(mktemp -d)"
-mkdir -p "$ALL_BAD/tests"
-write_test "$ALL_BAD/tests/a.sh" "# Tags: TL2, scope:common"
-write_test "$ALL_BAD/tests/b.sh" "# Tags: TL2, no-scope"
+mkdir -p "$ALL_BAD/tests/bin"
+write_test "$ALL_BAD/tests/bin/a.sh" "# Tags: TL2, scope:common"
+write_test "$ALL_BAD/tests/bin/b.sh" "# Tags: TL2, no-scope"
 run_check_all "$ALL_BAD"
 rc_all_bad=$RC
 if [[ $rc_all_bad -eq 1 ]]; then
@@ -206,6 +207,38 @@ else
   fail "TC10 --all matches // headers for .slt and # for .sh; the other prefix is a decoy" "rc=$RC err=<<$SLASH_ERR>>"
 fi
 rm -rf "$SLASH_DIR"
+
+# TC11 (#2502 S4-6): the header reader lives in one place, bin/lib/test-frontmatter-headers.sh,
+# which check-test-frontmatter.sh and bin/lib/test-language-match.sh both source. TC1-TC10
+# above are the unchanged expectations once it moves there.
+HEADERS_LIB="$REPO_ROOT/bin/lib/test-frontmatter-headers.sh"
+set +e
+TC11_OUT="$(bash -c '. "$1" || exit 97; declare -F extract_headers extract_headers_file' _ "$HEADERS_LIB" 2>&1)"
+RC=$?
+set -e
+if [[ $RC -eq 0 && "$TC11_OUT" == *extract_headers*extract_headers_file* ]]; then
+  pass "TC11 bin/lib/test-frontmatter-headers.sh defines extract_headers and extract_headers_file"
+else
+  fail "TC11 bin/lib/test-frontmatter-headers.sh defines extract_headers and extract_headers_file" "rc=$RC out=<<$TC11_OUT>>"
+fi
+if grep -qE '^[[:space:]]*(function[[:space:]]+)?extract_headers(_file)?[[:space:]]*\(\)' "$SCRIPT"; then
+  fail "TC11 check-test-frontmatter.sh no longer defines the header reader itself" "definition still in $SCRIPT"
+else
+  pass "TC11 check-test-frontmatter.sh no longer defines the header reader itself"
+fi
+
+# TC12 (#2502 S4-6): the test-lang-exception value is validated only by
+# bin/check-test-language-match.sh, so the frontmatter check neither blocks nor reports it.
+STAGE12_DIR="$(mktemp -d)"
+LANG_EXC="$STAGE12_DIR/tests/lang-exception.sh"
+write_test "$LANG_EXC" "# Tags: TL2, scope:common, test-lang-exception:other"
+run_check --staged "$LANG_EXC"
+if [[ $RC -eq 0 && "$OUT$ERR" != *INVALID_TEST_LANG_EXCEPTION* ]]; then
+  pass "TC12 an unlisted test-lang-exception value is not the frontmatter check's verdict"
+else
+  fail "TC12 an unlisted test-lang-exception value is not the frontmatter check's verdict" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
+fi
+rm -rf "$STAGE12_DIR"
 
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"

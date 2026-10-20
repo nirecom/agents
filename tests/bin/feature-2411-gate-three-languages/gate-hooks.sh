@@ -32,8 +32,14 @@ for _lang in "${LANGS[@]}"; do
   assert_eq "$_lang malformed -> $HK_DECISION" "$_lang malformed -> block"
   has "$_lang block text" "$HK_REASON" "($LREASON) code=MALFORMED_CASE_MARKER"
 done
+# Uncertain nesting is only a WARN for the case-marker check, but an uncertain new file with two
+# Tests: tokens is not conforming, so #2502 S4-4b counts its cases (0 -> 2) and blocks on that.
 hook_write "$REPO_EDIT" tests/bin/uncertain.js js-uncertain
-assert_eq "js uncertain -> $HK_DECISION" "js uncertain -> approve"
+assert_eq "js uncertain -> $HK_DECISION" "js uncertain -> block"
+has "js uncertain block text" "$HK_REASON" "(case units 0 -> 2)"
+has "js uncertain block text" "$HK_REASON" "code=CASE_ADDED_WITHOUT_MARKERS"
+lacks "js uncertain block text" "$HK_REASON" "code=MALFORMED_CASE_MARKER"
+lacks "js uncertain block text" "$HK_REASON" "code=MISSING_CASE_MARKERS"
 case_end
 
 case_begin "gate-commit-time-blocks-missing-passes-conforming" "hooks/lib/precommit-tests-frontmatter.sh"

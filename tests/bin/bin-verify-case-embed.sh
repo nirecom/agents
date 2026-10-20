@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/bin-verify-case-embed.sh
 # Tests: bin/verify-case-embed.sh, bin/verify-case-embed/checks.sh, bin/verify-case-embed/run-compare.sh
-# Tags: TL2, bin, case-markers, sweep-tests, verifier, scope:common
+# Tags: TL2, bin, case-markers, sweep-tests, verifier, pester, pytest, js, scope:common
 # The five-check verifier that gates every case-marker embedding rewrite. Each run
 # happens inside a fixture checkout (whole bin/, the registry, the shared harness) so the
 # after-file can stand in at its repo path. Cases: tests/bin/bin-verify-case-embed/*.sh.
@@ -48,8 +48,7 @@ vce_checkout() {
   cp -R "$SCRIPT_CHECKOUT_ROOT/bin" "$d/bin"
   install_test_language_registry "$d" "$SCRIPT_CHECKOUT_ROOT"
   if [ -n "$t" ]; then cp "$t" "$d/hooks/lib/test-language-registry.json"; fi
-  cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
-  fx_root_decoy "$d"
+  fx_harness "$d"
   if [ -d "$SCRIPT_CHECKOUT_ROOT/skills/sweep-tests" ]; then
     mkdir -p "$d/skills"
     cp -R "$SCRIPT_CHECKOUT_ROOT/skills/sweep-tests" "$d/skills/sweep-tests"
@@ -133,6 +132,8 @@ case_end
 . "$VCE_CASES/compare.sh"
 # shellcheck source=bin-verify-case-embed/backup.sh
 . "$VCE_CASES/backup.sh"
+# shellcheck source=bin-verify-case-embed/three-languages.sh
+. "$VCE_CASES/three-languages.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

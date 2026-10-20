@@ -87,6 +87,9 @@ tec_main() {
 
   TEC_TMP="$(mktemp -d "${TMPDIR:-/tmp}/tec.XXXXXX")"
   trap 'rm -rf "$TEC_TMP"' EXIT
+  # The pester caseEmbedRules part answers every op from one analyzer run kept here.
+  export CASE_EMBED_CACHE_DIR="$TEC_TMP/case-embed-cache"
+  mkdir -p "$CASE_EMBED_CACHE_DIR"
   # Called bare (no `||`) so errexit stays armed inside the stages.
   if [[ -n "$apply_dir" ]]; then
     tec_stage_apply "$apply_dir"

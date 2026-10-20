@@ -14,6 +14,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/test-frontmatter-constants.sh
 source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
+# shellcheck source=lib/test-frontmatter-headers.sh
+source "$SCRIPT_DIR/lib/test-frontmatter-headers.sh" || { echo "ERROR: lib/test-frontmatter-headers.sh not readable" >&2; exit 2; }
 
 # _trim <var-name> — trims leading/trailing whitespace in place (no subprocess).
 _trim() {
@@ -105,24 +107,6 @@ check_content() {
   return "$rc"
 }
 
-# extract_headers <content> <path> — sets EXT_TESTS / EXT_TAGS from a content
-# string; <path> picks the registry header.commentPrefix, matched as a fixed string.
-extract_headers() {
-  local content="$1"
-  tlr_comment_prefix "$2" >/dev/null
-  EXT_TESTS="$(printf '%s\n' "$content" | awk -v p="$TLR_COMMENT_PREFIX Tests:" 'index($0, p) == 1 { print; exit }' || true)"
-  EXT_TAGS="$(printf '%s\n' "$content" | awk -v p="$TLR_COMMENT_PREFIX Tags:" 'index($0, p) == 1 { print; exit }' || true)"
-}
-
-# extract_headers_file <file> — sets EXT_TESTS / EXT_TAGS by reading a file
-# directly (fewer subprocesses than cat|awk — matters for the --all repo scan).
-extract_headers_file() {
-  local file="$1"
-  tlr_comment_prefix "$file" >/dev/null
-  EXT_TESTS="$(awk -v p="$TLR_COMMENT_PREFIX Tests:" 'index($0, p) == 1 { print; exit }' "$file" 2>/dev/null || true)"
-  EXT_TAGS="$(awk -v p="$TLR_COMMENT_PREFIX Tags:" 'index($0, p) == 1 { print; exit }' "$file" 2>/dev/null || true)"
-}
-
 # staged_content <file> — prints the content to validate in --staged mode.
 # Reads the staged blob via `git show :<rel>` when the path is repo-relative and
 # staged; otherwise falls back to the working-tree file (keeps non-git and
@@ -172,6 +156,9 @@ mode="$1"; shift
 case "$mode" in
   --staged)
     FAIL=0
+    # The self-impl sibling is staged-mode only, so --all never needs it on disk.
+    # shellcheck source=check-test-frontmatter/self-impl.sh
+    source "$SCRIPT_DIR/check-test-frontmatter/self-impl.sh" || { echo "ERROR: check-test-frontmatter/self-impl.sh not readable" >&2; exit 2; }
     for f in "$@"; do
       # Accept both relative (tests/foo.sh) and absolute paths.
       # _archive/ files are excluded regardless of path form.
@@ -208,6 +195,10 @@ case "$mode" in
         if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
           check_harness_source "$f" "$content" "$HL_RE" || FAIL=1
         fi
+      fi
+      # Self-implemented harness check (#2502): new files only, every language.
+      if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+        ctf_self_impl "$rel" "$content" || FAIL=1
       fi
     done
     [[ "$FAIL" -eq 1 ]] && exit 1

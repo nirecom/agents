@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // PreToolUse hook: refuse a Write/Edit/MultiEdit that leaves a NEW case-marker test
-// entrypoint (absent from HEAD, in a repo carrying its helperLibrary) with
-// missing or malformed case markers (#2388). The verdict is
-// bin/check-case-markers.sh run on a temp copy of the rebuilt post-edit content;
-// the target file is never touched. pre-commit is the backstop for what this
-// cannot rebuild (editFiles, NotebookEdit). Fails open on any error.
-// Design: docs/architecture/claude-code/case-marker-gate.md.
+// entrypoint (absent from HEAD, in a repo carrying its helperLibrary) with missing or
+// malformed case markers (#2388) or a self-implemented harness (#2502), or any tests/ file
+// with a test-language mismatch HEAD did not have or an invalid test-lang-exception (#2502).
+// The verdicts are the bin/ CLIs run on temp copies of the rebuilt post-edit content (and the
+// HEAD blob); their WARN lines go out as additionalContext. The target file is never touched.
+// pre-commit is the backstop for what this cannot rebuild (editFiles, NotebookEdit).
+// Fails open on any error. Design: docs/architecture/claude-code/case-marker-gate.md.
 "use strict";
 
 const fs = require("fs");
@@ -14,10 +15,14 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { readPre, applyEdits, resolveTargetPath, groupEditTargets } = require("./lib/post-edit-content");
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { runChecker } = require("./lib/block-case-markers/run-checker");
+const { collectLanguageMatchCandidates } = require("./lib/block-case-markers/language-match-candidates");
 
 const EDIT_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
-const CHECKER = path.resolve(__dirname, "..", "bin", "check-case-markers.sh");
-const CHECK_TIMEOUT_MS = 8000;
+// A missing CLI file skips that CLI only.
+const binOf = (n) => path.resolve(__dirname, "..", "bin", n);
+const CHECKERS = ["check-case-markers.sh", "check-self-impl.sh"].map(binOf);
+const LANGUAGE_MATCH_CHECKER = binOf("check-test-language-match.sh");
 
 // caseMarkerEntry — the registry entry of a placed case-marker entrypoint (repo-relative
 // `/` path: a category root or flat tests/<name>, supported with a caseMarkerReader), or
@@ -40,32 +45,38 @@ function registry() {
   return require("./lib/test-language-registry");
 }
 
-// One hint per language among the violations, worded by its registry entry's diagnostics.
-function buildReason(violations) {
+// One hint per language among the case-marker violations, worded by its registry entry's
+// diagnostics. warns: WARN lines added below the HIGH lines.
+function buildReason(violations, warns = []) {
   const lines = ["[block-case-markers] New test file(s) fail the case-marker gate:"];
   const hints = [];
   for (const v of violations) {
     for (const h of v.high) lines.push(`  ${v.rel}: ${h}`);
+    if (!v.high.some((h) => /code=(MISSING|MALFORMED)_CASE_MARKERS?\b/.test(h))) continue;
     const d = (v.entry && v.entry.diagnostics) || {};
     const doc = d.markerDoc || (v.entry && v.entry.notationDoc);
     const hint = d.markerWrapHint && `${d.markerWrapHint}${doc ? ` — see ${doc}` : ""}.`;
     if (hint && !hints.includes(hint)) hints.push(hint);
   }
-  return lines.concat(hints).join("\n");
+  return lines.concat(hints, warns.length > 0 ? ["Not checked:"] : [], warns.map((w) => `  ${w}`)).join("\n");
 }
 
-function approve() {
-  process.stdout.write(JSON.stringify({ decision: "approve" }) + "\n");
+function warnContext(warns) {
+  return ["[block-case-markers] Not checked (the edit is allowed):"].concat(warns.map((w) => `  ${w}`)).join("\n");
+}
+
+function approve(warns) {
+  const out = { decision: "approve" };
+  if (warns && warns.length > 0) {
+    out.hookSpecificOutput = { hookEventName: "PreToolUse", additionalContext: warnContext(warns) };
+  }
+  process.stdout.write(JSON.stringify(out) + "\n");
   process.exit(0);
 }
 
 function block(reason) {
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
   process.exit(0);
-}
-
-function shellPath(p) {
-  return p.split(path.sep).join("/");
 }
 
 function realDir(p) {
@@ -116,22 +127,6 @@ function postContentOf(group, absPath) {
   return applyEdits(pre, group.edits);
 }
 
-// checkOne — HIGH lines (temp path rewritten to rel) or null when not a violation.
-// Anything but rc 1 with a HIGH line (WARN-only rc 0, rc 2, timeout) fails open.
-function checkOne(tmpFile, rel, cwd) {
-  const r = spawnSync("bash", [shellPath(CHECKER), shellPath(tmpFile)], {
-    cwd,
-    encoding: "utf8",
-    timeout: CHECK_TIMEOUT_MS,
-  });
-  if (r.error || r.status !== 1 || typeof r.stdout !== "string") return null;
-  const high = r.stdout
-    .split(/\r?\n/)
-    .filter((l) => /^HIGH: .* code=/.test(l))
-    .map((l) => l.split(shellPath(tmpFile)).join(rel).split(tmpFile).join(rel));
-  return high.length > 0 ? high : null;
-}
-
 // collectCandidates — the new case-marker entrypoints this call writes, or null when the
 // registry is unreadable (the caller then fails open).
 function collectCandidates(input, toolName, toolInput) {
@@ -156,7 +151,7 @@ function collectCandidates(input, toolName, toolInput) {
     if (isInHead(loc.top, loc.rel)) continue;
     const post = postContentOf(group, absPath);
     if (typeof post !== "string") continue;
-    out.push({ rel: loc.rel, post, entry });
+    out.push({ rel: loc.rel, top: loc.top, post, entry });
   }
   return out;
 }
@@ -175,27 +170,57 @@ function main() {
   const toolInput = input.tool_input;
   if (!toolInput || typeof toolInput !== "object") approve();
 
-  if (!fs.existsSync(CHECKER)) approve();
+  const clis = CHECKERS.filter((c) => fs.existsSync(c));
+  const lmCli = fs.existsSync(LANGUAGE_MATCH_CHECKER) ? LANGUAGE_MATCH_CHECKER : null;
+  if (clis.length === 0 && !lmCli) approve();
 
-  const candidates = collectCandidates(input, toolName, toolInput);
-  if (!candidates || candidates.length === 0) approve();
+  // Two candidate sets: new case-marker entrypoints for the case-marker and self-impl CLIs,
+  // and every tests/ file (new or existing) for the language-match CLI.
+  const runs = [];
+  for (const c of (clis.length > 0 && collectCandidates(input, toolName, toolInput)) || []) {
+    runs.push({ ...c, head: null, clis });
+  }
+  if (lmCli) {
+    const helpers = { repoRelOf, isInHead, postContentOf };
+    for (const c of collectLanguageMatchCandidates(input, toolName, toolInput, helpers)) {
+      runs.push({ ...c, entry: null, clis: [lmCli] });
+    }
+  }
+  if (runs.length === 0) approve();
 
-  const violations = [];
+  const byRel = new Map();
+  const warns = [];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "case-markers-"));
   try {
-    candidates.forEach((c, i) => {
+    runs.forEach((c, i) => {
       const sub = path.join(dir, String(i + 1));
       fs.mkdirSync(sub);
-      const tmpFile = path.join(sub, path.posix.basename(c.rel));
+      const base = path.posix.basename(c.rel);
+      const tmpFile = path.join(sub, base);
       fs.writeFileSync(tmpFile, c.post);
-      const high = checkOne(tmpFile, c.rel, dir);
-      if (high) violations.push({ rel: c.rel, high, entry: c.entry });
+      let headCopy = null;
+      if (c.head) {
+        fs.mkdirSync(path.join(sub, "head"));
+        headCopy = path.join(sub, "head", base);
+        fs.writeFileSync(headCopy, c.head);
+      }
+      for (const cli of c.clis) {
+        const r = runChecker({ cli, rel: c.rel, tmpFile, headCopy, top: c.top });
+        if (r.high.length > 0) {
+          if (!byRel.has(c.rel)) byRel.set(c.rel, { rel: c.rel, high: [], entry: c.entry });
+          const v = byRel.get(c.rel);
+          v.high.push(...r.high);
+          v.entry = v.entry || c.entry;
+        }
+        warns.push(...r.warn);
+      }
     });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-  if (violations.length === 0) approve();
-  block(buildReason(violations));
+  const violations = [...byRel.values()];
+  if (violations.length === 0) approve(warns);
+  block(buildReason(violations, warns));
 }
 
 if (require.main === module) {

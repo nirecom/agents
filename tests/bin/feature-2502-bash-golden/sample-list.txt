@@ -1,0 +1,46 @@
+# The golden's input set, in record order: source|name|verify|blob|role
+#   source  crr = tests/bin/bin-case-record-reader/fixtures.sh, vce = tests/bin/bin-verify-case-embed/fixtures.sh,
+#           ec = the tests/bin/bin-audit-tests-embed-cases/fixture-helpers.sh builders (record.sh names the calls),
+#           repo = a repository bash test, read from git by its blob (a later edit of the file does not move it)
+#   name    the fixture name, or the repo-relative path of the repository test
+#   verify  y = bin/verify-case-embed.sh also judges it (static mode; about 4s each, so one per verdict path)
+#   blob    repo rows only: the pinned content
+#   role    repo rows only: markers | no-markers | table-driven
+crr|none|n||
+crr|conforming|n||
+crr|malformed|n||
+crr|uncertain|n||
+crr|heredoc-pseudo|n||
+crr|deps-heredoc|n||
+crr|deps-boundary|n||
+crr|leftover|n||
+crr|self-impl|n||
+crr|self-impl-clean|n||
+crr|skip-narrow-dot-agents|n||
+crr|skip-narrow-source-repo-root|n||
+crr|skip-narrow-unquoted|n||
+crr|skip-shared-harness|n||
+crr|skip-section-runner|n||
+crr|skip-narrow-in-heredoc|n||
+crr|tab-in-name|n||
+vce|before|n||
+vce|good|y||
+vce|good-three|n||
+vce|malformed|y||
+vce|uncertain2|n||
+vce|uncertain1|n||
+vce|leftover|y||
+vce|deleted-not-target|n||
+vce|deleted-is-target|n||
+vce|target-not-in-header|y||
+vce|merged-abc|n||
+vce|merged-missing|n||
+vce|no-harness|n||
+vce|unguarded|y||
+ec|plain|n||
+ec|single|n||
+ec|embedded|n||
+ec|embedded-orphan|n||
+repo|tests/bin/fix-gh-native-path.sh|y|9be07eca20b0087d07543ab55768d1db18871d05|markers
+repo|tests/bin/feature-2434-control-migration.sh|n|ce96297c380c9eb378fdffb6c5b2ada7342b696a|no-markers
+repo|tests/bin/get-config-var-checkout-only.sh|n|cb0129d25a133ffffa3dbd6c2b259cc9d1570c30|table-driven

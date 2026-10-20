@@ -8,6 +8,10 @@ echo "=== pin: block wording for bash tests ==="
 PIN_MISSING_LINE="(2 paths in # Tests: header, no case_begin/case_end markers) code=MISSING_CASE_MARKERS"
 PIN_GRAMMAR_LINE="line 4: malformed case marker (grammar) code=MALFORMED_CASE_MARKER"
 PIN_DOC="skills/_shared/test-design/case-markers.md"
+# pin_added_line <code-lines> — the S4-4b text for a bash new file whose cases cannot be counted.
+pin_added_line() {
+  printf '%s' "case added to a test file without valid case markers (case count unavailable: no case unit; code lines 0 -> $1); add case_begin/case_end to every case first, then each case's target is checked code=CASE_ADDED_WITHOUT_MARKERS"
+}
 
 REPO_MSG="$TMPBASE/repo-msg"
 mkrepo "$REPO_MSG"
@@ -24,13 +28,17 @@ pin_text() {
 case_begin "pin-edit-time-block-text" "hooks/block-case-markers.js"
 hook_write "$REPO_MSG" tests/hooks/new-missing.sh sh-missing
 assert_eq "$HK_DECISION" "block"
+# Both bodies are new files with two Tests: tokens and no conforming markers, so the edit-time
+# reason also carries the #2502 S4-4b line (the language-match CLI runs only at edit time here).
 pin_text "edit-time text, no markers" "$HK_REASON" "[block-case-markers] New test file(s) fail the case-marker gate:
   tests/hooks/new-missing.sh: HIGH: tests/hooks/new-missing.sh $PIN_MISSING_LINE
+  tests/hooks/new-missing.sh: HIGH: tests/hooks/new-missing.sh: $(pin_added_line 1)
 Wrap each case in column-0 case_begin/case_end at depth 0 — see $PIN_DOC."
 hook_write "$REPO_MSG" tests/hooks/new-grammar.sh sh-grammar
 assert_eq "$HK_DECISION" "block"
 pin_text "edit-time text, malformed marker" "$HK_REASON" "[block-case-markers] New test file(s) fail the case-marker gate:
   tests/hooks/new-grammar.sh: HIGH: tests/hooks/new-grammar.sh $PIN_GRAMMAR_LINE
+  tests/hooks/new-grammar.sh: HIGH: tests/hooks/new-grammar.sh: $(pin_added_line 2)
 Wrap each case in column-0 case_begin/case_end at depth 0 — see $PIN_DOC."
 hook_write "$REPO_MSG" tests/hooks/new-conforming.sh sh-conforming
 assert_eq "$HK_DECISION" "approve"

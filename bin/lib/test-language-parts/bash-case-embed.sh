@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 # bin/lib/test-language-parts/bash-case-embed.sh — the bash entry's caseEmbedRules part. Source only.
 # bash_case_embed <op> <abs-file> [args]: the per-language answers the case-embed verifier asks
-# (rules-doc, deps, leftover-defs, self-impl, skip-reason, result-summary <rc> <stdout-file>).
+# (rules-doc, deps, leftover-defs, self-impl, skip-reason, syntax-check, case-count,
+# result-summary <rc> <stdout-file>).
 # Same-shell contract: deps and leftover-defs read the TRP_CASE_* globals that the bash
 # caseMarkerReader left for this file (crr_read calls it first); they never re-parse case ranges.
 # The static analysis is an approximation: eval, indirect calls and sourced helpers stay unseen.
@@ -15,8 +16,10 @@ _BCE_CODE=()
 _BCE_DEF_NAME=()
 _BCE_DEF_LINE=()
 
-# _bce_in_case <line> — rc 0 when the line lies strictly inside a case range.
+# _bce_in_case <line> — rc 0 when the line lies strictly inside a case range (none when no
+# reader ran in this shell, as for self-impl called through tsi_report).
 _bce_in_case() {
+  [[ -n "${TRP_CASE_BEGIN_LINES+x}" ]] || return 1
   local i=0 n="${#TRP_CASE_BEGIN_LINES[@]}"
   while [[ "$i" -lt "$n" ]]; do
     if [[ "$1" -gt "${TRP_CASE_BEGIN_LINES[$i]}" && "$1" -lt "${TRP_CASE_END_LINES[$i]}" ]]; then return 0; fi
@@ -93,12 +96,10 @@ _bce_leftover_defs() {
   done
 }
 
-# _bce_helper_path <file> — the helperLibrary.path of the file's registry entry (empty when none).
+# _bce_helper_path — this part's entry's helperLibrary.path (empty when none). Keyed by the
+# entry, not the file name, so a temp copy under any name finds the helper.
 _bce_helper_path() {
-  local id="${TLR_ID:-}" st="${TLR_STATUS:-}"
-  _TLR_V=""
-  tlr_match "$1" && { _tlr_get "$TLR_ID" helperLibrary.path || true; }
-  TLR_ID="$id"; TLR_STATUS="$st"
+  _tlr_get bash helperLibrary.path || _TLR_V=""
   _BCE_HELPER="$_TLR_V"
 }
 
@@ -155,6 +156,27 @@ _bce_skip_reason() {
   return 0
 }
 
+# _bce_case_count <file> — the column-0 case_begin lines outside heredoc bodies; rc 1 when none.
+# A malformed begin line still counts: it marks where a case unit starts.
+_bce_case_count() {
+  local line n=0 in_hd=0 term="" strip=0 chk re_unit='^case_begin([[:space:]]|$)'
+  local _TRP_HD_TERM="" _TRP_HD_STRIP=0
+  [[ -f "$1" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    if [[ "$in_hd" -eq 1 ]]; then
+      chk="$line"
+      [[ "$strip" -eq 1 ]] && chk="${chk#"${chk%%[![:blank:]]*}"}"
+      [[ "$chk" == "$term" ]] && in_hd=0
+      continue
+    fi
+    [[ "$line" =~ $re_unit ]] && n=$((n + 1))
+    if _trp_heredoc_term "$line"; then in_hd=1; term="$_TRP_HD_TERM"; strip="$_TRP_HD_STRIP"; fi
+  done <"$1"
+  [[ "$n" -gt 0 ]] || return 1
+  printf '%s\n' "$n"
+}
+
 _bce_result_summary() {
   local rc="$1" out="$2" cls p="" f="" line re='Results:[[:space:]]*([0-9]+)[[:space:]]+passed,[[:space:]]*([0-9]+)[[:space:]]+failed'
   case "$rc" in 77) cls=skip ;; 0) cls=pass ;; *) cls=fail ;; esac
@@ -175,6 +197,9 @@ bash_case_embed() {
     leftover-defs) _bce_leftover_defs "${1:?bash_case_embed leftover-defs: file required}" ;;
     self-impl) _bce_self_impl "${1:?bash_case_embed self-impl: file required}" ;;
     skip-reason) _bce_skip_reason "${1:?bash_case_embed skip-reason: file required}" ;;
+    # bash -n parses without running; its message is the reason on stderr, rc 1 on failure.
+    syntax-check) bash -n "${1:?bash_case_embed syntax-check: file required}" >/dev/null || return 1 ;;
+    case-count) _bce_case_count "${1:?bash_case_embed case-count: file required}" ;;
     result-summary) _bce_result_summary "${1:?bash_case_embed result-summary: rc required}" "${2:?bash_case_embed result-summary: stdout file required}" ;;
     *) printf '[bash-case-embed] unknown op: %s\n' "$op" >&2; return 2 ;;
   esac

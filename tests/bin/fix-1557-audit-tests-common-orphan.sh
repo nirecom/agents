@@ -89,7 +89,7 @@ run_common() {
   local outf errf
   outf="$(mktemp)"; errf="$(mktemp)"
   set +e
-  ( cd "$root" && bash "$SCRIPT" --dry-run "$@" ) >"$outf" 2>"$errf"
+  ( cd "$root" && bash "$SCRIPT" --dry-run --offline "$@" ) >"$outf" 2>"$errf"
   RC=$?
   set -e
   OUT="$(cat "$outf")"

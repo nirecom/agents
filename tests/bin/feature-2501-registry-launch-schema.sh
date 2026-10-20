@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2501-registry-launch-schema.sh
 # Tests: hooks/lib/test-language-registry.js, bin/lib/test-language-registry.sh, hooks/lib/test-language-registry.json
-# Tags: TL2, bin, hooks, test-language-registry, launch, wrapper, scope:issue-specific, pwsh-not-required
+# Tags: TL2, bin, hooks, test-language-registry, launch, wrapper, test-lang-exception, scope:issue-specific, pwsh-not-required
 # #2501 launch schema: launch.wrapper (repo-relative, no "..", must exist under the loader's
 # repo root), launch.minVersion {runtime, version}, the {wrapper}/{minVersion} placeholders
 # (only with their field), and timeoutSeconds as a positive integer or null (bash ships null).
@@ -233,6 +233,44 @@ assert_eq "bash timeoutSeconds rows=$bash_to_rows" "bash timeoutSeconds rows=0"
 # The loader in the fixture checkout (real table + copied wrappers) exposes the same values.
 got="$(tlr_bash "$CO" 'tlr_load || exit 96; printf "[%s][%s]" "$(tlr_field pester launch.wrapper)" "$(tlr_field pester launch.minVersion)"')"
 assert_eq "tlr_field pester wrapper/minVersion=$got" "tlr_field pester wrapper/minVersion=[bin/lib/test-wrappers/pester.ps1][Pester>=5.0]"
+case_end
+
+case_begin "tlr-lang-exceptions" "bin/lib/test-language-registry.sh"
+# #2502 S4-6: the allowed test-lang-exception values are one top-level key of the table, a
+# shell row of the CLI, and TLR_LANG_EXCEPTIONS in the loader — exactly these three, in order.
+got="$(node -e '
+const t = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+process.stdout.write(JSON.stringify(t.testLanguageExceptions === undefined ? null : t.testLanguageExceptions));
+' "$(np "$TABLE")" 2>&1)"
+assert_eq "table testLanguageExceptions=$got" 'table testLanguageExceptions=["text-only","symmetry","e2e"]'
+cli --format shell
+has_line "shell row testLanguageExceptions" "$CLI_OUT" "testLanguageExceptions${T}text-only symmetry e2e"
+got="$(tlr_bash "$CO" 'tlr_load || exit 96; printf "[%s]" "${TLR_LANG_EXCEPTIONS-unset}"')"
+assert_eq "TLR_LANG_EXCEPTIONS=$got" "TLR_LANG_EXCEPTIONS=[text-only symmetry e2e]"
+case_end
+
+case_begin "issue-name-prefix-field" "hooks/lib/test-language-registry.js"
+# #2502 S5-4c: an entry's issueNamePrefix is a string (checked like nameStrip); anything else fails.
+rows accept <<'ROWS'
+issue-name-prefix-string|t.entries[0].issueNamePrefix = "test_";
+issue-name-prefix-empty|t.entries[0].issueNamePrefix = "";
+ROWS
+rows reject <<'ROWS'
+issue-name-prefix-number|t.entries[0].issueNamePrefix = 5;
+issue-name-prefix-array|t.entries[0].issueNamePrefix = ["test_"];
+issue-name-prefix-object|t.entries[0].issueNamePrefix = { prefix: "test_" };
+ROWS
+# The real table: pytest carries "test_", every other entry "".
+got="$(node -e '
+const t = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+process.stdout.write(t.entries.map((e) => e.id + "=" + JSON.stringify(e.issueNamePrefix)).join(" "));
+' "$(np "$TABLE")" 2>&1)"
+for want in 'pytest="test_"' 'bash=""' 'pester=""' 'js=""'; do
+  case " $got " in
+    *" $want "*) pass "real table issueNamePrefix $want" ;;
+    *) fail "real table issueNamePrefix $want" "got [$got]" ;;
+  esac
+done
 case_end
 
 echo ""
