@@ -95,7 +95,10 @@ function resolvePlanLink(sid, stage, opts) {
   try {
     const o = opts || {};
     plansDir = toWindowsPath(o.plansDir || require("./workflow-plans-dir").getWorkflowPlansDir());
-    return linkForFile(o.absPath || path.join(plansDir, `${sid}-${stage}.md`), { plansDir });
+    // Owner-resolved: a downstream session's plan is its upstream's file (#2633).
+    const abs = o.absPath ||
+      require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir }).path;
+    return linkForFile(abs, { plansDir });
   } catch (_) {
     return { reason: REASONS.NO_ARTIFACT };
   }

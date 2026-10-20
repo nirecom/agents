@@ -11,6 +11,10 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-rev
 # so a containment refusal is never read as ESCALATE or as codex-unavailable.
 ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
 rwc_resolve detail-plan make-detail-plan
+# Owner-resolved intent (#2633): a resumed session reads its upstream's file.
+INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+INTENT_FILE="$PLANS_DIR/${INTENT_FILE##*[/\\]}"
+[[ "$INTENT_FILE" == *-intent.md ]] || INTENT_FILE="$PLANS_DIR/$SESSION_ID-intent.md"
 DRAFT_FILE="$PLANS_DIR/$SESSION_ID-detail.md"
 CUR_FP="$(git hash-object -- "$DRAFT_FILE" 2>/dev/null || true)"
 TG_RC=0
@@ -24,7 +28,7 @@ args=(
   --draft-file "$DRAFT_FILE"
   --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
-  --class-members "$PLANS_DIR/$SESSION_ID-intent.md"
+  --class-members "$INTENT_FILE"
 )
 REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi

@@ -48,11 +48,14 @@ function print(action, gateLine, hint, reason) {
 }
 
 // { changed, line, failed }: exit 0 = change (stdout line), 1 = none, anything else = check failed.
+// Both plans are owner-resolved: a downstream session compares its upstream's files (#2633).
 function detectScopeChange(sid) {
   try {
-    const plans = getWorkflowPlansDir();
-    const outline = posixJoin(plans, sid + "-outline.md");
-    const detail = posixJoin(plans, sid + "-detail.md");
+    const { resolvePlanArtifactOwner } = require("../../../../hooks/workflow-state/plan-artifact-owner");
+    const plansDir = getWorkflowPlansDir();
+    const ownedPath = (kind) => posixJoin(resolvePlanArtifactOwner(sid, kind, undefined, { plansDir }).path);
+    const outline = ownedPath("outline");
+    const detail = ownedPath("detail");
     const r = spawnSync("bash", [posixJoin(SCRIPT_CHECKOUT_ROOT, "bin", "detect-scope-change.sh"), outline, detail], {
       cwd: SCRIPT_CHECKOUT_ROOT,
       encoding: "utf8",
@@ -112,4 +115,4 @@ function runGate(rawSession, opts) {
   return print(action, gateLine, hint, reasons.join(", "));
 }
 
-module.exports = { runGate };
+module.exports = { runGate, detectScopeChange };

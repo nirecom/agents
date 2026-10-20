@@ -53,7 +53,7 @@ function seedPrefix(sid) {
   const wf = mod("hooks/workflow-state");
   const approval = mod("hooks/workflow-state/completion-approval.js");
   for (const s of ["workflow_init", "clarify_intent", "research", "outline", "detail", "branching_complete", "write_tests", "review_tests", "write_code"]) {
-    if (approval.isApprovalGatedStep(s)) approval.recordPlanApproval(sid, s, { source: "reset-sentinel", reason: "2669 fixture" });
+    if (approval.isApprovalGatedStep(s)) mod("tests/lib/plan-approval-fixture.js").approveLive(sid, s);
     wf.markStep(sid, s, "complete");
   }
 }

@@ -64,6 +64,7 @@ const STEP_ANNOTATION_KEYS = [
   "outcome_source",
   "dispatch_unsettled",
   "baseline_accept",
+  "inherit_revert_reason",
 ];
 
 // Step-entry fields that are STRUCTURE, never annotation. An annotation named
@@ -182,12 +183,73 @@ function validateEvent(event) {
   return event;
 }
 
+// composeAppendedState(sessionId, baseState, eventsOrBuilder, opts) -> { state, appended }.
+//
+// The I/O-free core of appendEvents: `baseState` is never mutated and nothing is
+// read or written. `eventsOrBuilder` may be an event object, an array of them, or
+// a function `(events, current) => event|events` evaluated against `baseState`.
+// An empty batch returns `baseState`'s stream unchanged with `appended: []`.
+function composeAppendedState(sessionId, baseState, eventsOrBuilder, opts = {}) {
+  const base = Object.assign({}, baseState);
+  base.events = Array.isArray(base.events) ? base.events : [];
+  // Refuse to build on a stream that could not have come from appendEvents
+  // alone (out-of-band seq gap/dup/reorder or a hand-edited event record) —
+  // THROWS here, before anything is written, so the broken evidence stays
+  // on disk untouched (X5 in tests/hooks/feature-1733-state-event-stream/robustness.sh).
+  assertStreamIntegrity(base.events);
+
+  let produced = eventsOrBuilder;
+  if (typeof eventsOrBuilder === "function") {
+    produced = eventsOrBuilder(base.events.slice(), projectState(base));
+  }
+  if (produced === null || produced === undefined) produced = [];
+  if (!Array.isArray(produced)) produced = [produced];
+  if (produced.length === 0) return { state: base, appended: [] };
+
+  const now = typeof opts.now === "string" && opts.now ? opts.now : new Date().toISOString();
+  const built = produced.map((partial) => {
+    const event = Object.assign({}, partial);
+    if (typeof event.at !== "string" || event.at.length === 0) event.at = now;
+    validateEvent(event);
+    return event;
+  });
+
+  // Completion-boundary invariant (#1133) — evaluated HERE because every write
+  // path composes through this function: a gated step reaching `complete` without a
+  // recorded approval must be refused before any byte is written. The verdict is
+  // taken on the fold BEFORE the batch vs the fold WITH it, so a batch that both
+  // approves and completes in one shot is judged as a whole.
+  // Lazy require avoids a circular dependency: completion-approval → state-io.
+  const withBatch = Object.assign({}, base, { events: base.events.concat(built) });
+  const boundaryEvents = require("../completion-approval").completionBoundaryEventsForBatch(
+    sessionId,
+    projectState(base),
+    // The evaluator resolves an ownerless approval's artifact through upstream_session_id and the
+    // approval history, which a bare projection lacks.
+    Object.assign({}, withBatch, projectState(withBatch)),
+    opts
+  );
+  for (const partial of boundaryEvents) {
+    const event = Object.assign({}, partial);
+    if (typeof event.at !== "string" || event.at.length === 0) event.at = now;
+    validateEvent(event);
+    built.push(event);
+  }
+
+  // seq is assigned here and nowhere else: 1-based and contiguous over the
+  // whole stream, so a gap or a duplicate is detectable as corruption.
+  const merged = base.events.concat(built);
+  for (let i = 0; i < merged.length; i++) {
+    if (merged[i] && typeof merged[i] === "object") merged[i].seq = i + 1;
+  }
+  return { state: Object.assign({}, base, { events: merged }), appended: built };
+}
+
 // appendEvents(sessionId, eventsOrBuilder, opts) -> the full events array.
 //
-// `eventsOrBuilder` may be an event object, an array of them, or a function
-// `(events, current) => event|events`. The builder form is evaluated INSIDE the
-// lock, after the state file has been re-read, so a decision that depends on
-// the current stream cannot be made against a stale snapshot.
+// lock → read → composeAppendedState → write. The builder form is evaluated
+// INSIDE the lock, after the state file has been re-read, so a decision that
+// depends on the current stream cannot be made against a stale snapshot.
 function appendEvents(sessionId, eventsOrBuilder, opts = {}) {
   const core = require("./core");
   return withStateLock(
@@ -198,58 +260,10 @@ function appendEvents(sessionId, eventsOrBuilder, opts = {}) {
       if (!state || typeof state !== "object") {
         state = core.createInitialState(sessionId, core.getCurrentContext());
       }
-      if (!Array.isArray(state.events)) state.events = [];
-      // Refuse to build on a stream that could not have come from appendEvents
-      // alone (out-of-band seq gap/dup/reorder or a hand-edited event record) —
-      // THROWS here, before anything is written, so the broken evidence stays
-      // on disk untouched (X5 in tests/hooks/feature-1733-state-event-stream/robustness.sh).
-      assertStreamIntegrity(state.events);
-
-      let produced = eventsOrBuilder;
-      if (typeof eventsOrBuilder === "function") {
-        produced = eventsOrBuilder(state.events.slice(), projectState(state));
-      }
-      if (produced === null || produced === undefined) produced = [];
-      if (!Array.isArray(produced)) produced = [produced];
-      if (produced.length === 0) return state.events;
-
-      const now = typeof opts.now === "string" && opts.now ? opts.now : new Date().toISOString();
-      const built = produced.map((partial) => {
-        const event = Object.assign({}, partial);
-        if (typeof event.at !== "string" || event.at.length === 0) event.at = now;
-        validateEvent(event);
-        return event;
-      });
-
-      // Completion-boundary invariant (#1133) — evaluated HERE because appendEvents
-      // is the only remaining write path: a gated step reaching `complete` without a
-      // recorded approval must be refused before any byte is written. The verdict is
-      // taken on the fold BEFORE the batch vs the fold WITH it, so a batch that both
-      // approves and completes in one shot is judged as a whole.
-      // Lazy require avoids a circular dependency: completion-approval → state-io.
-      const withBatch = Object.assign({}, state, { events: state.events.concat(built) });
-      const boundaryEvents = require("../completion-approval").completionBoundaryEventsForBatch(
-        sessionId,
-        projectState(state),
-        projectState(withBatch),
-        opts
-      );
-      for (const partial of boundaryEvents) {
-        const event = Object.assign({}, partial);
-        if (typeof event.at !== "string" || event.at.length === 0) event.at = now;
-        validateEvent(event);
-        built.push(event);
-      }
-
-      // seq is assigned here and nowhere else: 1-based and contiguous over the
-      // whole stream, so a gap or a duplicate is detectable as corruption.
-      const merged = state.events.concat(built);
-      for (let i = 0; i < merged.length; i++) {
-        if (merged[i] && typeof merged[i] === "object") merged[i].seq = i + 1;
-      }
-      state.events = merged;
-      core.writeStateLocked(sessionId, state);
-      return state.events;
+      const { state: next, appended } = composeAppendedState(sessionId, state, eventsOrBuilder, opts);
+      if (appended.length === 0) return next.events;
+      core.writeStateLocked(sessionId, next);
+      return next.events;
     },
     opts
   );
@@ -267,5 +281,6 @@ module.exports = {
   REQUIRED_FIELDS,
   InvalidEventError,
   validateEvent,
+  composeAppendedState,
   appendEvents,
 };

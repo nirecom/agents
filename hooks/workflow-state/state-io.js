@@ -42,6 +42,7 @@ module.exports = {
   resolveWorktreeContext: core.resolveWorktreeContext,
   markStep: core.markStep,
   appendEvents: events.appendEvents,
+  composeAppendedState: events.composeAppendedState,
   validateEvent: events.validateEvent,
   EVENT_KINDS: events.EVENT_KINDS,
   PROVENANCE_VALUES: events.PROVENANCE_VALUES,
