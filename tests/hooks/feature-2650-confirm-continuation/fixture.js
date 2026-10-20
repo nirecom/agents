@@ -8,6 +8,8 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const F = require("../feature-2277-plan-approval-gate/fixture");
+const CE = require("../../lib/confirm-env-fixture");
+const RS = require("../../lib/presentation-receipt-seed");
 
 const ROOT = F.ROOT;
 const STEP = { intent: "clarify_intent", outline: "outline", detail: "detail" };
@@ -19,6 +21,7 @@ const BLOB = "https://example.invalid/test-owner/test-repo/blob/main/";
 // Inside the pinned state dir, so the calling test's cleanup removes it.
 const TDIR = path.join(F.STATE_DIR, "cc-transcripts");
 fs.mkdirSync(TDIR, { recursive: true });
+const CFG_BASE = path.join(F.STATE_DIR, "cc-cfg");
 
 let seq = 0;
 const hex = (n, w) => String(n).padStart(w, "0");
@@ -103,16 +106,24 @@ function tryRequire(rel) {
   try { return require(path.join(ROOT, rel)); } catch (e) { return { __missing: (e && (e.code || e.message)) || "load failed" }; }
 }
 
-// gateEnv(on) -> every CONFIRM_* pinned; `over` overrides single keys.
+// gateEnv(over) -> a child-env overlay. #2726/#2729: the plan-stage CONFIRM_* flags are read from
+// $AGENTS_MAIN_ROOT/.env only, so they go into a per-call .env (CE root) and are unset in the env
+// (undefined values are dropped by spawn). `over` overrides single keys; other keys pass through.
 function gateEnv(over) {
-  return Object.assign({ CONFIRM_INTENT: "on", CONFIRM_OUTLINE: "on", CONFIRM_DETAIL: "on", PLAN_LANG: "english", PLAN_SYNC_REMOTE_URL: "" }, over || {});
+  const o = over || {};
+  const flags = { CONFIRM_INTENT: "on", CONFIRM_OUTLINE: "on", CONFIRM_DETAIL: "on" };
+  const rest = { PLAN_LANG: "english", PLAN_SYNC_REMOTE_URL: "" };
+  for (const [k, v] of Object.entries(o)) (CE.PLAN_KEYS.includes(k) ? flags : rest)[k] = v;
+  const root = CE.confirmEnvRoot(CFG_BASE, Object.assign({}, flags, { PLAN_LANG: rest.PLAN_LANG }));
+  const unset = Object.fromEntries(CE.PLAN_KEYS.map((k) => [k, undefined]));
+  return Object.assign(unset, rest, { AGENTS_MAIN_ROOT: root });
 }
 
 // Forward slashes: NODE_OPTIONS treats a backslash inside double quotes as an escape.
 const nodeOptions = (preloads) => preloads.map((p) => `--require "${p.replace(/\\/g, "/")}"`).join(" ");
 
 // probeFaultEnv(env, mode) -> env whose node children fail the CONFIRM probe in-process
-// (mode: "exception" | "load-failed", see probe-fault-preload.js). Replaces any NODE_OPTIONS.
+// (mode: "exception" | "unreadable", see probe-fault-preload.js). Replaces any NODE_OPTIONS.
 function probeFaultEnv(env, mode) {
   env.CC_PROBE_FAULT = mode || "exception";
   env.NODE_OPTIONS = nodeOptions([PROBE_FAULT_PRELOAD]);
@@ -161,4 +172,5 @@ module.exports = {
   uuidSid, U, UMETA, STOPFB, A, T, W, BASH, TR, ECHO, echoOf,
   sessionAt, linesFor, turnMarker, stateDirOf, markPath, readMark, turnMarkersLeft,
   writeTranscript, tryRequire, gateEnv, nodeOptions, probeFaultEnv, countLog, runStop, show, check: F.check,
+  CE, seedReceipt: RS.seedReceipt, receiptPath: RS.receiptPath, receiptExists: RS.receiptExists,
 };

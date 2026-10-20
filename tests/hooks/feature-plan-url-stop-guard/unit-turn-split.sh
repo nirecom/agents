@@ -1,12 +1,13 @@
 # shellcheck shell=bash
-# #2513 turn-split helpers of hooks/lib/plan-link-turn-check.js: the last text block, the previous
-# turn, a plan rewrite in this turn, CONFIRM-free stage selection, caller-supplied reasons and the
-# inline-code rule. Sourced by ../feature-plan-url-stop-guard.sh inside its unit-turn-split case.
+# #2513 turn-split helpers of hooks/lib/plan-link-turn-check.js: the last text block, CONFIRM-free
+# stage selection, caller-supplied reasons and the inline-code rule. #2729 retired the
+# previous-turn and plan-rewrite helpers (the CONFIRM path no longer reads the transcript).
+# Sourced by ../feature-plan-url-stop-guard.sh inside its unit-turn-split case.
 
 IFS= read -r -d '' UNIT_SPLIT_JS <<'JS' || true
 const eq = (n, got, want) => ok(n, show(got) === show(want), "got=" + show(got) + " want=" + show(want));
-const has = (n, f) => ok(n + " is exported", typeof tc[f] === "function", typeof tc[f]);
-["lastTextBlockOf", "previousTurnEntriesFromLines", "currentTurnWritesStage"].forEach((f) => has(f, f));
+ok("lastTextBlockOf is exported", typeof tc.lastTextBlockOf === "function", typeof tc.lastTextBlockOf);
+["previousTurnEntriesFromLines", "currentTurnWritesStage"].forEach((f) => ok(f + " is retired (#2729)", tc[f] === undefined, typeof tc[f]));
 
 const BLOB = "https://example.invalid/test-owner/test-repo/blob/main/";
 const DIR = path.join(require("os").tmpdir(), "turn-split-plans");
@@ -20,25 +21,12 @@ eq("lastTextBlockOf — last text item of the turn, across entries",
   call("lastTextBlockOf", [U("go"), A(T("first"), T("second")), R(), A(T("LAST"), B("ls"))]), "LAST");
 eq("lastTextBlockOf — two blocks in the final entry -> the second", call("lastTextBlockOf", [U("go"), A(T("Plan: " + BLOB), T("Done."))]), "Done.");
 
-const lines = [U("first"), A(T("OLDEST")), U("second"), A(T("PREV-TEXT")), R(), U("third"), A(B("echo x"))].map((e) => JSON.stringify(e));
-const prev = call("previousTurnEntriesFromLines", lines);
-ok("previousTurnEntriesFromLines — holds the previous turn", JSON.stringify(prev).includes("PREV-TEXT"), show(prev));
-ok("previousTurnEntriesFromLines — excludes the turn before it", Array.isArray(prev) && !JSON.stringify(prev).includes("OLDEST"), show(prev));
-ok("previousTurnEntriesFromLines — excludes the current turn", Array.isArray(prev) && !JSON.stringify(prev).includes("echo x"), show(prev));
-const metaLines = [U("first"), A(T("PRESENTED")), UMETA("caveat"), UCOMPACT("summary"), A(B("echo x"))].map((e) => JSON.stringify(e));
-const metaPrev = call("previousTurnEntriesFromLines", metaLines);
-ok("previousTurnEntriesFromLines — isMeta / compact summary open no turn (no previous turn)",
-  (metaPrev == null || Array.isArray(metaPrev)) && !JSON.stringify(metaPrev || []).includes("PRESENTED"), show(metaPrev));
 const turnText = call("collectTurnAssistantText", [U("first"), A(T("BEFORE-META")), UMETA("caveat"), A(T("AFTER-META"))]);
 ok("isRealUserPrompt — an isMeta entry does not cut the turn", String(turnText).includes("BEFORE-META"), show(turnText));
+const compactText = call("collectTurnAssistantText", [U("first"), A(T("BEFORE-COMPACT")), UCOMPACT("summary"), A(T("AFTER"))]);
+ok("isRealUserPrompt — a compact summary does not cut the turn", String(compactText).includes("BEFORE-COMPACT"), show(compactText));
 
 const P = nat("intent");
-for (const name of ["Write", "Edit", "MultiEdit"]) {
-  eq("currentTurnWritesStage — " + name + " on the plan -> true", call("currentTurnWritesStage", [U("ok"), A(W(P, name))], P), true);
-}
-eq("currentTurnWritesStage — Write on another file -> false", call("currentTurnWritesStage", [U("ok"), A(W(nat("outline")))], P), false);
-eq("currentTurnWritesStage — Read of the plan -> false",
-  call("currentTurnWritesStage", [U("ok"), A({ type: "tool_use", id: "t4", name: "Read", input: { file_path: P } })], P), false);
 
 const st = (markers, turnEntries, includeConfirm) => {
   const r = call("stagesToCheck", { markers, turnEntries, includeConfirm });
@@ -90,19 +78,6 @@ for (const stage of ["intent", "outline", "detail"]) {
     { name: "span bare URL with a separate code span after it", text: url + " `code`", want: "allow" },
   ];
   for (const c of spanCases) (c.want === "block" ? blocks : allows)(c.name, c.text);
-
-  const BASH = (command) => ({ type: "tool_use", id: "t5", name: "Bash", input: { command } });
-  const writes = (n, item, want) => eq(stage + " C1 " + n, call("currentTurnWritesStage", [U("ok"), A(item)], SP), want);
-  const base = "s-" + stage + ".md";
-  const other = stage === "intent" ? "outline" : "intent";
-  writes("Bash writing the basename -> true", BASH("printf x > " + DIR + "/" + base), true);
-  writes("mixed-case basename -> true", BASH("printf x > " + DIR + "/" + base.toUpperCase()), true);
-  writes("Windows backslash path -> true", BASH("copy nul " + DIR.replace(/\//g, "\\") + "\\" + base), true);
-  writes("Read on the artifact -> false", { type: "tool_use", id: "t6", name: "Read", input: { file_path: SP } }, false);
-  writes("Grep naming the artifact -> false", { type: "tool_use", id: "t7", name: "Grep", input: { pattern: base } }, false);
-  writes("Bash touching a different stage -> false", BASH("printf x > " + DIR + "/s-" + other + ".md"), false);
-  writes("CONFIRM echo itself -> false", C(stage), false);
-  writes("CONFIRM echo mentioning the basename -> false", BASH('echo "<<WORKFLOW_CONFIRM_' + stage.toUpperCase() + ': approve ' + base + '>>"'), false);
 }
 JS
 tc_report "$(tc_node "$UNIT_SPLIT_JS")"

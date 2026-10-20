@@ -48,6 +48,9 @@ unset TERM_PROGRAM CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 unset CLAUDE_SESSION_ID CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
 # #2513: plan-sync off so show-plan-link.js (T11/T12) never touches git.
 export PLAN_SYNC_REMOTE_URL=""
+# #2726/#2729: plan-stage CONFIRM flags come from $AGENTS_MAIN_ROOT/.env only (confirm_env_root).
+# shellcheck source=../lib/confirm-env-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/confirm-env-fixture.sh"
 
 # Compute the tilde-form and file:/// URI form of PLANS_DIR as the source modules
 # would. These are produced for the test fixtures via node so they match what the
@@ -169,7 +172,7 @@ write_marker "$SID_T3" detail >/dev/null
 TRANSCRIPT_T3="$TRANSCRIPT_DIR/${SID_T3}.jsonl"
 write_transcript "$TRANSCRIPT_T3" "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"see $PLANS_DIR/abc-detail.md for details\"}]}}"
 STOP_STDOUT=$(
-  export CONFIRM_DETAIL=off
+  confirm_env_root "$ISOLATED_CFG_DIR/t3" CONFIRM_DETAIL=off
   echo "{\"session_id\":\"$SID_T3\",\"transcript_path\":\"$TRANSCRIPT_T3\"}" | \
     run_with_timeout node "$STOP_HOOK" 2>/dev/null
 )
@@ -188,7 +191,7 @@ write_marker "$SID_T3B" detail >/dev/null
 TRANSCRIPT_T3B="$TRANSCRIPT_DIR/${SID_T3B}.jsonl"
 write_transcript "$TRANSCRIPT_T3B" '{"type":"assistant","message":{"content":[{"type":"text","text":"all clean, nothing to see"}]}}'
 STOP_STDOUT=$(
-  export CONFIRM_DETAIL=off
+  confirm_env_root "$ISOLATED_CFG_DIR/t3b" CONFIRM_DETAIL=off
   echo "{\"session_id\":\"$SID_T3B\",\"transcript_path\":\"$TRANSCRIPT_T3B\"}" | \
     run_with_timeout node "$STOP_HOOK" 2>/dev/null
 )
@@ -332,7 +335,7 @@ SID_T11="sid-t11-$$"
 # Pre-clean any leftover markers for this sid.
 rm -f "$WORKFLOW_DIR/${SID_T11}".confirm-plan-turn-*.json 2>/dev/null || true
 (
-  export CONFIRM_DETAIL=on
+  confirm_env_root "$ISOLATED_CFG_DIR/t11" CONFIRM_DETAIL=on
   echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true},\"session_id\":\"$SID_T11\"}" \
     | run_with_timeout node "$SHOW_HOOK" >/dev/null 2>&1
 )
@@ -349,7 +352,7 @@ echo "=== T12: marker written on CONFIRM_DETAIL=off (always-on after #563) ==="
 SID_T12="sid-t12-$$"
 rm -f "$WORKFLOW_DIR/${SID_T12}".confirm-plan-turn-*.json 2>/dev/null || true
 (
-  export CONFIRM_DETAIL=off
+  confirm_env_root "$ISOLATED_CFG_DIR/t12" CONFIRM_DETAIL=off
   echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true},\"session_id\":\"$SID_T12\"}" \
     | run_with_timeout node "$SHOW_HOOK" >/dev/null 2>&1
 )

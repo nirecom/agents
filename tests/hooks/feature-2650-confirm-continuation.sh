@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2650-confirm-continuation.sh
 # Tests: hooks/lib/confirm-continuation.js, hooks/lib/confirm-gate/plan-gate.js, bin/workflow/lib/next-step/gate-mode.js
-# Tags: confirm-checkpoint, confirm-plan, stop-guard, continuation, plan-link, deadline, confirm-gate, TL2, scope:issue-specific
-# #2650: the shared predicates of the same-turn CONFIRM continuation. T1-T5 drive
-# pickContinuationStage with an injected probe and clock (deadline-driver.js); the unit driver
-# covers approvalArtifactPath, linkKey, sameTurnContinuation, markBindsArtifact and the wording;
-# plan-gate.sh covers planGateState (G1-G5); A1-A5 / B1-B4 cover the strict turn end.
+# Tags: confirm-checkpoint, confirm-plan, stop-guard, continuation, plan-link, deadline, confirm-gate, TL2, scope:issue-specific, presentation-receipt
+# #2650/#2729: the CONFIRM continuation on top of the presentation receipt. T1-T5 drive
+# continuationStage (deadline-driver.js); the unit driver covers approvalArtifactPath, linkKey,
+# continueReason and presentAgainReason, and (strict) the removal of the transcript predicates;
+# plan-gate.sh covers planGateState (G1-G5); B1-B5 cover the turn end and the receipt judge.
 # The Stop-hook end-to-end cases (N1-N20, T6) live in feature-stop-guard-layer2/continuation.sh.
 set -euo pipefail
 

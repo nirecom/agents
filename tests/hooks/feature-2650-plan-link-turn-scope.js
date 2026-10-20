@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/lib/plan-link.js
-// Tags: TL1, hooks, plan-link, render-model-context, turn-scope, confirm-echo, scope:issue-specific
+// Tags: TL1, hooks, plan-link, render-model-context, turn-scope, confirm-echo, scope:issue-specific, gate-duty, receipt-link
 // #2650: renderModelContext's instruction line closes only the current turn with the plan-link
 // line and forbids repeating it in later turns; the after-write variant names the CONFIRM echo
 // only for a stage that asks for confirmation. The header, entry and lookup lines stay unchanged.
@@ -117,3 +117,81 @@ for (const m of MODES) {
     });
   }
 }
+
+// ── #2729 stage 2: the after-write duty follows each entry's gate (C3) ──────────────
+const END_OF_TURN_RE = /End this turn's last text block/;
+const SUMMARY_ONCE_RE = /summary/i;
+const PUBLISH_CONFIRM_RE = /publish/i;
+const withGate = (e, gate) => Object.assign({}, e, { gate });
+const URL_OUTLINE = { stage: "outline", url: "https://example.com/plans/a-outline.md", path: "C:\\plans\\a-outline.md" };
+const NOT_PUB = { stage: "detail", path: "C:\\plans\\a-detail.md", reason: REASONS.NOT_PUBLISHED };
+const afterLine = (lines, e) => lines[lines.indexOf(entryLine(e)) + 1];
+const publishConfirmLines = (lines) => lines.filter((l) => PUBLISH_CONFIRM_RE.test(l) && /CONFIRM/.test(l));
+
+test("gate 1 [all OFF]: one summary-once duty, no end-of-turn duty", () => {
+  const ctx = renderModelContext([withGate(URL_ENTRY, "OFF"), withGate(URL_OUTLINE, "OFF")], { when: "after-write" });
+  assert.match(ctx, SUMMARY_ONCE_RE, `OFF: the summary-once duty is rendered (got: ${ctx})`);
+  assert.doesNotMatch(ctx, END_OF_TURN_RE, `OFF: no end-of-turn duty (got: ${ctx})`);
+  assert.strictEqual(ctx.split("\n").filter((l) => SUMMARY_ONCE_RE.test(l)).length, 1, `OFF: the duty appears once (got: ${ctx})`);
+});
+
+for (const gate of ["ON", "ERROR", undefined]) {
+  test(`gate 2 [all ${gate || "unset"}]: the current end-of-turn instruction, once, at the end`, () => {
+    const entries = [URL_ENTRY, URL_OUTLINE].map((e) => (gate ? withGate(e, gate) : e));
+    const lines = linesOf(entries, { when: "after-write" });
+    assert.strictEqual(lines.length, 5, `${gate}: header + 2 entries + instruction + lookup (got ${lines.length})`);
+    assert.strictEqual(instructionOf(lines), AFTER_WRITE_INSTR, `${gate}: the ON wording is unchanged`);
+    assert.doesNotMatch(lines.join("\n"), SUMMARY_ONCE_RE, `${gate}: no OFF wording`);
+  });
+}
+
+test("gate 3 [OFF + ON mixed]: each entry line is followed by its own stage's duty", () => {
+  const off = withGate(URL_ENTRY, "OFF");
+  const on = withGate(URL_OUTLINE, "ON");
+  const lines = linesOf([off, on], { when: "after-write" });
+  assert.match(String(afterLine(lines, off)), SUMMARY_ONCE_RE, `OFF entry: summary-once duty right after it (got: ${lines.join(" | ")})`);
+  assert.doesNotMatch(String(afterLine(lines, off)), END_OF_TURN_RE, "OFF entry: not the end-of-turn duty");
+  assert.match(String(afterLine(lines, on)), /last text block/, `ON entry: end-of-turn duty right after it (got: ${lines.join(" | ")})`);
+  assert.strictEqual(lines[lines.length - 1], LOOKUP_LINE);
+});
+
+test("gate 4 [ON + not-published]: a publish-before-CONFIRM sentence is added", () => {
+  const lines = linesOf([withGate(NOT_PUB, "ON")], { when: "after-write" });
+  assert.ok(publishConfirmLines(lines).length >= 1, `not-published ON: publish/CONFIRM sentence present (got: ${lines.join(" | ")})`);
+  assert.ok(lines.some((l) => END_OF_TURN_RE.test(l)), "not-published ON: the end-of-turn duty stays");
+});
+
+for (const reason of [REASONS.PLAN_SYNC_OFF, REASONS.NOT_PROVISIONED, REASONS.HOST_MISMATCH]) {
+  test(`gate 5 [ON + ${reason}]: no publish-before-CONFIRM sentence`, () => {
+    const lines = linesOf([withGate({ stage: "intent", path: "C:\\plans\\a-intent.md", reason }, "ON")], { when: "after-write" });
+    assert.deepStrictEqual(publishConfirmLines(lines), [], `${reason}: no publish/CONFIRM sentence`);
+  });
+}
+
+test("gate 6 [confirm mode]: the confirm wording ignores the gate", () => {
+  for (const gate of ["ON", "ERROR", "OFF"]) {
+    const instr = instructionOf(linesOf([withGate(URL_ENTRY, gate), withGate(NO_URL_ENTRY, gate)], { when: "confirm" }));
+    assert.strictEqual(instr, CONFIRM_INSTR, `confirm/${gate}: unchanged`);
+  }
+});
+
+// ── #2729 stage 2: receiptLinkOf / UNPUBLISHABLE_REASONS (the link kind SSOT) ─────
+const UNPUB = ["plan-sync-off", "not-provisioned", "host-mismatch", "no-project-host", "unknown-forge"];
+const asArray = (v) => (v instanceof Set ? [...v] : Array.isArray(v) ? v : []);
+
+test("receipt 1: UNPUBLISHABLE_REASONS is exactly the five no-URL environments", () => {
+  assert.ok(PL.UNPUBLISHABLE_REASONS, "UNPUBLISHABLE_REASONS is exported");
+  assert.deepStrictEqual(asArray(PL.UNPUBLISHABLE_REASONS).slice().sort(), UNPUB.slice().sort());
+});
+
+test("receipt 2: receiptLinkOf picks url, path or null", () => {
+  assert.strictEqual(typeof PL.receiptLinkOf, "function", "receiptLinkOf is exported");
+  const p = "C:\\plans\\a-intent.md";
+  assert.deepStrictEqual(PL.receiptLinkOf({ url: URL_ENTRY.url, path: p }), { kind: "url", value: URL_ENTRY.url });
+  for (const reason of UNPUB) {
+    assert.deepStrictEqual(PL.receiptLinkOf({ path: p, reason }), { kind: "path", value: p }, reason);
+  }
+  assert.strictEqual(PL.receiptLinkOf({ path: p, reason: REASONS.NOT_PUBLISHED }), null, "not-published -> null");
+  assert.strictEqual(PL.receiptLinkOf({ reason: REASONS.NO_ARTIFACT }), null, "no-artifact -> null");
+  assert.strictEqual(PL.receiptLinkOf(null), null, "null -> null");
+});
