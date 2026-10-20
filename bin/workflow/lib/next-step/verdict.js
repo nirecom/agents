@@ -204,7 +204,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
         markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
       } catch (e) {
         if (e instanceof UnapprovedCompletionError) {
-          emit("blocked", "", recoveryFor(r.step), "unapproved-completion: " + r.step);
+          emit("blocked", "", e.recovery || recoveryFor(r.step), `unapproved-completion: ${r.step} (${e.code})`);
           return;
         }
         /* fail-open on any other write failure */

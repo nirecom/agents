@@ -21,14 +21,23 @@ function isRefusal(decision) {
 }
 
 // buildInheritanceNotice({ sessionId, sessionSource, inheritedFromSessionId,
-//   inheritCandidateSid, inheritDecision, adoptCandidate }) → [line, ...]
+//   inheritanceResult, inheritCandidateSid, inheritDecision, adoptCandidate }) → [line, ...]
 function buildInheritanceNotice(input) {
   const o = input || {};
   if (o.inheritedFromSessionId) {
-    return [
+    const lines = [
       `Inherited workflow steps from session ${o.inheritedFromSessionId} ` +
       `(fork lineage, SessionStart source=${o.sessionSource})`,
     ];
+    // What was held back and why (#2633-1): a reverted stage must be visible here,
+    // or the session resumes not knowing it has to re-approve.
+    if (o.inheritanceResult) {
+      try {
+        const { describeGranularInheritance } = require("../workflow-state/inheritance/apply");
+        lines.push(describeGranularInheritance(o.inheritanceResult));
+      } catch (_) { /* fail-open: the status block below still shows the pending steps */ }
+    }
+    return lines;
   }
   if (o.inheritCandidateSid && isRefusal(o.inheritDecision)) {
     // An ancestor WAS found and deliberately refused. Silence here would read as

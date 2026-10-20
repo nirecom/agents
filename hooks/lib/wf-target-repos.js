@@ -45,11 +45,18 @@ function parseWorktrees(intentPath) {
   return results;
 }
 
-// An heir session has no intent of its own; its plan approval names the donor that wrote one.
+// The intent a session reads is owner-resolved (#2633): own file, its approval record or history,
+// then upstream_session_id. An heir whose intent approval names nobody still reads the donor its
+// outline/detail approval names.
 function resolveIntentPath(sessionId, state) {
-  const own = getPlansArtifactPath(sessionId, "intent");
-  if (fs.existsSync(own)) return own;
-  const approvals = state && state.current && state.current.plan_approvals;
+  try {
+    const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
+    const owner = resolvePlanArtifactOwner(sessionId, "intent", state || null, { plansDir: getWorkflowPlansDir() });
+    if (owner.exists) return owner.path;
+  } catch (_) {
+    return null;
+  }
+  const approvals = (state && state.plan_approvals) || (state && state.current && state.current.plan_approvals);
   const donorSid =
     (approvals && approvals.outline && approvals.outline.artifact_session_id) ||
     (approvals && approvals.detail && approvals.detail.artifact_session_id);

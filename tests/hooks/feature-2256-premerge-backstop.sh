@@ -273,9 +273,14 @@ fi
 # a deny, so the positive path is what this case pins.
 FK_OV="$(fresh_key)"
 seed_state BLOCK "$FK_OV" >/dev/null
-bash "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/supervisor-record-block-override" \
-    run-0011 "verified manually with the reviewer; the BLOCK is a false positive here" \
-    --session-id "$SID" >/dev/null 2>&1
+# #2709: the override is recorded only through the ask-gated sentinel handler (the CLI is gone).
+H="$HOOKS_NODE/workflow-mark/supervisor-block-override-handler.js" SESS="$SID" bash "$RWT" 60 node -e "
+const h = require(process.env.H);
+h.handle({
+  cmd: 'echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: run-0011 verified manually with the reviewer; the BLOCK is a false positive here>>\"',
+  sessionId: process.env.SESS, pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
+});
+" >/dev/null 2>&1
 out="$(gate "$MERGE_CMD")"
 assert_eq "25: a valid recorded override approves the merge at the backstop" \
     "$(decision_of "$out")" "approve"

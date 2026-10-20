@@ -4,15 +4,26 @@
 // --from / --list modes cannot drift into one tangled parser.
 
 const USAGE =
-  "Usage: resume-session-detect [--from <session-id>] [--list [query]] [--limit <n>] [--help] [--version]\n";
+  "Usage: resume-session-detect [--from <session-id>] [--classify-cwd <session-id>] " +
+  "[--list [query]] [--limit <n>] [--help] [--version]\n";
 
 function parseResumeArgs(argv) {
   const args = Array.isArray(argv) ? argv : [];
-  const out = { mode: "detect", from: null, query: "", limit: null, usage: USAGE };
+  const out = { mode: "detect", from: null, classify: null, query: "", limit: null, usage: USAGE };
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
     if (a === "--help" || a === "-h") return Object.assign(out, { mode: "help" });
     if (a === "--version") return Object.assign(out, { mode: "version" });
+    if (a === "--classify-cwd") {
+      const v = args[i + 1];
+      if (typeof v !== "string" || v.length === 0 || v.charAt(0) === "-") {
+        return Object.assign(out, { mode: "error", error: "--classify-cwd requires a session id" });
+      }
+      out.mode = "classify-cwd";
+      out.classify = v;
+      i += 1;
+      continue;
+    }
     if (a === "--from") {
       const v = args[i + 1];
       if (typeof v !== "string" || v.length === 0 || v.charAt(0) === "-") {

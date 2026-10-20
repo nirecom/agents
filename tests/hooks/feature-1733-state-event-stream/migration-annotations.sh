@@ -34,13 +34,13 @@ console.log("known_keys=" + KEYS.length + " missing_as_event=" + (missing.join("
     assert_eq "K0/nine-known-keys" "known_keys=9 missing_as_event=0" "$NODE_OUT"
 fi
 
-echo "== K0b: STEP_ANNOTATION_KEYS is the documented 22-key table (#2517 adds baseline_accept; #2669 adds hit_count/hit_summary) =="
+echo "== K0b: STEP_ANNOTATION_KEYS is the documented 23-key table (#2517 adds baseline_accept; #2669 adds hit_count/hit_summary; #2633 adds inherit_revert_reason) =="
 if run_case "K0b/annotation-key-table"; then
     next_sid
     nodejs "$SID" '
 const E = require("./hooks/workflow-state/state-io/events");
 const WANT = ["baseline_accept", "baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests", "hit_count", "hit_summary",
-              "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
+              "inherit_revert_reason", "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
               "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const got = [...E.STEP_ANNOTATION_KEYS].sort();
 console.log(JSON.stringify(got) === JSON.stringify(WANT) ? "MATCH" : "DIFFER got=" + JSON.stringify(got));

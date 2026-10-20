@@ -102,7 +102,8 @@ function holdReason() {
     "The recorded BLOCK stands while the code and plan artifacts are unchanged.",
     "Resolve by addressing the audit findings and re-running the user_verification audit,",
     "or record a reviewed override:",
-    "  bin/supervisor-record-block-override <run-id> <reason> --session-id <sid>",
+    "  echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: <run-id> <reason>>>\"" +
+      " (the user's approval dialog appears; <reason> is at least 20 characters)",
   ].join("\n"));
 }
 

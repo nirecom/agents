@@ -29,6 +29,11 @@ run_list_reset_tests() {
   # Reset semantics (reset-handler.js): every step BEFORE the target is forced
   # complete, the target and everything after it return to pending.
   build_state b-reset pending
+  # #2709: a reset past a gated step needs that step's own verified approval; build_state
+  # injects approvals only for steps recorded complete, so the all-pending fixture gets them here.
+  run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" approve \
+    b-reset clarify_intent outline detail >/dev/null ||
+    fail "b-reset: could not record the plan approvals"
   mark_out="$(run_mark_hook b-reset 'echo "<<WORKFLOW_RESET_FROM_write_code: verify write_code is a resettable step>>"')"
 
   check_not_contains "B4: reset sentinel is not rejected as an unknown step" \
