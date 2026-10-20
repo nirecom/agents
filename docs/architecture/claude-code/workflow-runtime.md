@@ -225,7 +225,7 @@ When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confir
 
 `next-step --gate` is the single branching source for the seven confirm gates (`skills/_shared/confirm-plan.md` CPA-3). It is read-only and prints `GATE_ACTION`, the `GATE_CONFIRM_<X>` value line (omitted for `none`), `GATE_HINT`, and `REASON`.
 
-- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate). When the probe cause is not `ok`, `REASON` carries `probe-<cause>`.
+- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate). When the probe cause is not `ok`, `REASON` carries `probe-<cause>`. For a plan stage `proceed` needs a waived or approved `checkPlanApproval` verdict, while the `GATE_CONFIRM_<X>` line still shows the raw flag (#2726, #2729).
 - At `detail` it also runs `bin/detect-scope-change.sh` on outline.md vs detail.md: a detected scope change turns `proceed` into `present-and-stop` (the scope change is shown even when `CONFIRM_DETAIL=off`); a failed check adds `scope-change-check-failed` to `REASON`, appends a warn-the-user sentence to `GATE_HINT`, and is otherwise treated as no change.
 - `--scope-change-approved` (only with `--gate`, else exit 64) is a stateless flag the skill passes once after the user approves the scope change, so an OFF detail gate resolves to `proceed`. Combining `--gate` with `--list` / `--reset` / `--mark` / `--advance` exits 64.
 

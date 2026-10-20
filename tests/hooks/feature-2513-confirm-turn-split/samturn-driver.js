@@ -1,8 +1,9 @@
 "use strict";
-// #2650 mode "samturn <stage>" of ../feature-2513-confirm-turn-split.sh: confirm-checkpoint's
-// same-turn continuation path (C1-C13). Marks are written with the Stop hook's own functions
-// (writeContinuationMark, approvalArtifactPath, linkKey, computeArtifactSha), never a hand-built
-// payload. Prints PASS|name / FAIL|name|detail lines.
+// #2650 mode "samturn <stage>" of ../feature-2513-confirm-turn-split.sh, rebased on the #2729
+// presentation receipt: the echo in the plan's own turn (after the Stop continuation) reaches the
+// dialog only through the receipt, which the pass consumes; the transcript shape decides nothing.
+// Receipt-format and judge-cause coverage: tests/hooks/feature-2729-presentation-receipt.sh.
+// Prints PASS|name / FAIL|name|detail lines.
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
@@ -10,23 +11,15 @@ const X = require("../feature-2650-confirm-continuation/fixture");
 
 const { U, A, T, W, BASH, TR, STOPFB, ECHO, show, check: ok } = X;
 const STAGE = process.argv[2];
-const STEP = X.STEP[STAGE];
-const PL = require(path.join(X.ROOT, "hooks/lib/plan-link"));
-const { computeArtifactSha } = require(path.join(X.ROOT, "hooks/workflow-state/completion-approval"));
-const CC = X.tryRequire("hooks/lib/confirm-continuation.js");
-const TM = require(path.join(X.ROOT, "hooks/lib/turn-marker"));
-const ready = !CC.__missing && typeof TM.writeContinuationMark === "function";
 const FB = "[confirm-plan] continue: as your next message, emit only the CONFIRM echo";
-
-// mark(sid, stage, over) -> true when written. Fields come from the implementation's helpers.
-function mark(sid, stage, over) {
-  if (!ready) return false;
-  const absPath = CC.approvalArtifactPath(sid, stage);
-  const link = CC.linkKey(PL.linkForFile(absPath, { plansDir: X.F.PLANS_DIR }));
-  const f = Object.assign({ anchorUuid: "a-anchor", absPath, link, artifactSha: computeArtifactSha(sid, X.STEP[stage]) }, over || {});
-  try { return TM.writeContinuationMark(sid, stage, f) === true; } catch (_) { return false; }
-}
-const hasMark = (sid, stage) => fs.existsSync(X.markPath(sid, stage));
+const seed = (sid, stage, over) => !!X.seedReceipt(sid, stage || STAGE, over ? { link: over } : undefined);
+const has = (sid, stage) => X.receiptExists(sid, stage || STAGE);
+// writeRaw(sid, body) -> a hand-written receipt file (broken or foreign-bound).
+const writeRaw = (sid, body) => {
+  const p = X.receiptPath(sid, STAGE);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, typeof body === "string" ? body : JSON.stringify(body));
+};
 
 // runHook(s, entries, opts) -> {json, rc, deny, msg}. The echo's tool_use_id rides on the input.
 function runHook(s, entries, opts) {
@@ -47,9 +40,8 @@ function expectDeny(label, r, s) {
   ok(label + " — deny", r.deny, show(r.json));
   if (!r.deny) return;
   const reason = String(r.json.hookSpecificOutput.permissionDecisionReason || "") + "\n" + String(r.json.reason || "");
-  ok(label + " — reason names the stage and bin/plan-link", reason.includes(STAGE) && reason.includes("bin/plan-link"), reason);
+  ok(label + " — reason names bin/plan-link --stage " + STAGE, reason.includes("bin/plan-link") && reason.includes("--stage " + STAGE), reason);
   ok(label + " — reason carries no URL, plan path or sid", !/https?:\/\//.test(reason) && !reason.includes(s.fwd) && !reason.includes(s.plan) && !reason.includes(s.sid), reason);
-  ok(label + " — reason says not to echo again in this turn", reason.includes("Do not echo it again in this turn"), reason);
   ok(label + " — reason never invites a same-turn retry", !/retry|try again/i.test(reason), reason);
 }
 
@@ -58,89 +50,91 @@ const sameTurn = (s, extra) => [U("write the plan", "u-prompt"), A("a-write", W(
   A("a-anchor", T("Here is the plan.\n\n" + s.line)), STOPFB(FB, "u-fb"), ...(extra || []), A("a-echo", ECHO(STAGE, "e1"))];
 const fresh = () => X.sessionAt(STAGE);
 
-ok(`${STAGE} precondition — confirm-continuation.js and writeContinuationMark exist`, ready, CC.__missing || "writeContinuationMark missing");
-
-// C1 accept, C7 one-shot.
+// C1 accept, C7 one-shot: the pass consumes the receipt.
 {
   const s = fresh();
-  const w = mark(s.sid, STAGE);
+  const w = seed(s.sid);
   const entries = sameTurn(s);
   const r = runHook(s, entries);
-  ok(`${STAGE} C1 same-turn continuation — passes to the dialog`, w && passes(r), show({ w, json: r.json }));
-  ok(`${STAGE} C1 the mark is consumed`, w && !hasMark(s.sid, STAGE), "mark left");
+  ok(`${STAGE} C1 same-turn continuation with the receipt — passes to the dialog`, w && passes(r), show({ w, json: r.json }));
+  ok(`${STAGE} C1 the receipt is consumed`, w && !has(s.sid), "receipt left");
   const again = runHook(s, entries);
-  ok(`${STAGE} C7 the same echo again — mark gone, two-turn path denies`, w && passes(r) && again.deny, show(again.json));
+  ok(`${STAGE} C7 the same echo again — receipt gone, denied`, w && again.deny, show(again.json));
 }
-// C2 no mark.
-{ const s = fresh(); expectDeny(`${STAGE} C2 plan and echo in one turn without a mark`, runHook(s, sameTurn(s)), s); }
-// C3 a redo after the anchor: Write or Bash.
-for (const [label, redo] of [["Write", (s) => A("a-w2", W(s.plan, "w2"))], ["Bash", () => A("a-b2", BASH("ls", "b2"))]]) {
-  const s = fresh();
-  const w = mark(s.sid, STAGE);
-  expectDeny(`${STAGE} C3 a ${label} tool_use between the anchor and the echo`, runHook(s, sameTurn(s, [redo(s)])), s);
-  ok(`${STAGE} C3 (${label}) the mark is consumed`, w && !hasMark(s.sid, STAGE), show({ w }));
-}
-// C4 no mark, two-turn path: the previous turn ended on the link and the user replied.
+// C2 no receipt.
+{ const s = fresh(); expectDeny(`${STAGE} C2 plan and echo in one turn without a receipt`, runHook(s, sameTurn(s)), s); }
+// C3 entries between the anchor and the echo: only a real change to the plan denies.
 {
   const s = fresh();
-  ok(`${STAGE} C4 two-turn fallback passes`, passes(runHook(s, [U("write the plan"), A(null, T(s.line)), U("looks good, go ahead"), A("a-echo", ECHO(STAGE, "e1"))])), "denied");
+  const w = seed(s.sid);
+  ok(`${STAGE} C3 a Bash tool_use between the anchor and the echo, with the receipt — the shape decides nothing`,
+    w && passes(runHook(s, sameTurn(s, [A("a-b2", BASH("ls", "b2"))]))), "denied");
 }
-// C5 a stale mark: its anchor sits in the previous turn.
-for (const [label, prev, want] of [["previous turn ends on the link", (s) => [A("a-anchor", T(s.line))], "pass"],
-  ["previous turn does not end on the link", (s) => [A("a-anchor", T(s.line)), A("a-more", T("Done."))], "deny"]]) {
+{
   const s = fresh();
-  const w = mark(s.sid, STAGE);
+  seed(s.sid);
+  fs.writeFileSync(s.plan, "# redone plan\n");
+  expectDeny(`${STAGE} C3 a Write between the anchor and the echo changed the plan after the receipt`, runHook(s, sameTurn(s, [A("a-w2", W(s.plan, "w2"))])), s);
+}
+// C4 two turns: the previous turn ended on the link and the user replied.
+{
+  const s = fresh();
+  const twoTurn = [U("write the plan"), A(null, T(s.line)), U("looks good, go ahead"), A("a-echo", ECHO(STAGE, "e1"))];
+  expectDeny(`${STAGE} C4 two-turn shape without a receipt — the shape alone does not pass`, runHook(s, twoTurn), s);
+  ok(`${STAGE} C4 two-turn shape with the receipt — passes`, seed(s.sid) && passes(runHook(s, twoTurn)), "denied");
+}
+// C5 a receipt from the previous turn: the previous turn's shape decides nothing.
+for (const [label, prev] of [["previous turn ends on the link", (s) => [A("a-anchor", T(s.line))]],
+  ["previous turn does not end on the link", (s) => [A("a-anchor", T(s.line)), A("a-more", T("Done."))]]]) {
+  const s = fresh();
+  const w = seed(s.sid);
   const r = runHook(s, [U("write the plan", "u-1"), ...prev(s), U("looks good, go ahead", "u-2"), A("a-echo", ECHO(STAGE, "e1"))]);
-  if (want === "pass") ok(`${STAGE} C5 stale mark, ${label} — passes`, passes(r), show(r.json));
-  else expectDeny(`${STAGE} C5 stale mark, ${label}`, r, s);
-  ok(`${STAGE} C5 stale mark, ${label} — the mark is consumed`, w && !hasMark(s.sid, STAGE), show({ w }));
+  ok(`${STAGE} C5 receipt, ${label} — passes`, w && passes(r), show(r.json));
+  ok(`${STAGE} C5 receipt, ${label} — the receipt is consumed`, w && !has(s.sid), "receipt left");
 }
-// C6 a broken mark: the two-turn path runs; no prior prompt in this turn -> deny; the file is removed.
-for (const [label, body] of [["not JSON", "{not json"], ["anchorUuid missing", JSON.stringify({ absPath: "x", link: "x", artifactSha: "x" })],
-  ["artifactSha missing", JSON.stringify({ anchorUuid: "a-anchor", absPath: "x", link: "x" })]]) {
+// C6 a broken receipt: deny, and the file is removed so a re-presentation can write it again.
+for (const [label, body] of [["not JSON", "{not json"], ["contentSha missing", { absPath: "x", link: { kind: "path", value: "x" }, anchorUuid: "a" }],
+  ["link not url/path", { absPath: "x", link: { kind: "other", value: "x" }, contentSha: "x", anchorUuid: "a" }]]) {
   const s = fresh();
-  fs.mkdirSync(path.dirname(X.markPath(s.sid, STAGE)), { recursive: true });
-  fs.writeFileSync(X.markPath(s.sid, STAGE), body);
-  const r = runHook(s, [U("write the plan", "u-prompt"), A("a-anchor", T(s.line)), STOPFB(FB, "u-fb"), A("a-echo", ECHO(STAGE, "e1"))]);
-  expectDeny(`${STAGE} C6 broken mark (${label})`, r, s);
-  ok(`${STAGE} C6 broken mark (${label}) — the file is removed`, !hasMark(s.sid, STAGE), "mark left");
+  writeRaw(s.sid, body);
+  expectDeny(`${STAGE} C6 broken receipt (${label})`, runHook(s, sameTurn(s)), s);
+  ok(`${STAGE} C6 broken receipt (${label}) — the file is removed`, !has(s.sid), "receipt left");
 }
-// C8 transcript unreadable: fail-open pass, mark removed.
+// C8 transcript unreadable: fail-closed without a receipt; with one, the transcript is not read.
 {
   const s = fresh();
-  const w = mark(s.sid, STAGE);
-  const r = runHook(s, null, { transcriptPath: path.join(X.TDIR, "missing.jsonl") });
-  ok(`${STAGE} C8 transcript unreadable — fail-open pass`, passes(r), show(r.json));
-  ok(`${STAGE} C8 the mark is consumed`, w && !hasMark(s.sid, STAGE), show({ w }));
+  expectDeny(`${STAGE} C8 transcript unreadable, no receipt`, runHook(s, null, { transcriptPath: path.join(X.TDIR, "missing.jsonl") }), s);
+  const w = seed(s.sid);
+  ok(`${STAGE} C8 transcript unreadable, with the receipt — passes`, w && passes(runHook(s, null, { transcriptPath: path.join(X.TDIR, "missing.jsonl") })), "denied");
 }
-// C10 another stage's mark does not open this stage's same-turn path.
+// C10 another stage's receipt does not open this stage.
 {
   const s = fresh();
   const other = STAGE === "intent" ? "outline" : "intent";
   X.F.writePlan(s.sid, other);
-  const w = mark(s.sid, other);
-  expectDeny(`${STAGE} C10 only the ${other} mark exists`, runHook(s, sameTurn(s)), s);
-  ok(`${STAGE} C10 precondition — the ${other} mark was written`, w, "not written");
+  const w = seed(s.sid, other);
+  ok(`${STAGE} C10 precondition — the ${other} receipt was written`, w, "not written");
+  expectDeny(`${STAGE} C10 only the ${other} receipt exists`, runHook(s, sameTurn(s)), s);
 }
-// C11 the mark names another session's file; C12 the plan changed after the Stop; C13 another link.
+// C11 the receipt binds another session's file; C12 the plan changed after the receipt; C13 another link.
 {
   const s = fresh();
   const o = X.sessionAt(STAGE);
-  const oPath = ready ? CC.approvalArtifactPath(o.sid, STAGE) : null;
-  const w = ready && mark(s.sid, STAGE, { absPath: oPath, link: CC.linkKey(PL.linkForFile(oPath, { plansDir: X.F.PLANS_DIR })), artifactSha: computeArtifactSha(o.sid, STEP) });
-  expectDeny(`${STAGE} C11 the mark binds another session's ${STAGE} file`, runHook(s, sameTurn(s)), s);
-  ok(`${STAGE} C11 the mark is consumed`, w && !hasMark(s.sid, STAGE), show({ w }));
+  const w = seed(o.sid);
+  if (w) writeRaw(s.sid, fs.readFileSync(X.receiptPath(o.sid, STAGE), "utf8"));
+  ok(`${STAGE} C11 precondition — the foreign receipt was written`, w && has(s.sid), "not written");
+  expectDeny(`${STAGE} C11 the receipt binds another session's ${STAGE} file`, runHook(s, sameTurn(s)), s);
 }
 {
   const s = fresh();
-  const w = mark(s.sid, STAGE);
+  const w = seed(s.sid);
   fs.appendFileSync(s.plan, "\nChanged after the Stop.\n");
-  expectDeny(`${STAGE} C12 the plan changed after the mark was written`, runHook(s, sameTurn(s)), s);
-  ok(`${STAGE} C12 precondition — mark written`, w, "not written");
+  ok(`${STAGE} C12 precondition — receipt written`, w, "not written");
+  expectDeny(`${STAGE} C12 the plan changed after the receipt was written`, runHook(s, sameTurn(s)), s);
 }
 {
   const s = fresh();
-  const w = mark(s.sid, STAGE, { link: "https://example.invalid/test-owner/test-repo/blob/main/other.md" });
-  expectDeny(`${STAGE} C13 the mark's link differs from today's link`, runHook(s, sameTurn(s)), s);
-  ok(`${STAGE} C13 precondition — mark written`, w, "not written");
+  const w = seed(s.sid, STAGE, { kind: "url", value: "https://example.invalid/test-owner/test-repo/blob/main/other.md" });
+  ok(`${STAGE} C13 precondition — receipt written`, w, "not written");
+  expectDeny(`${STAGE} C13 the receipt's link differs from today's link`, runHook(s, sameTurn(s)), s);
 }

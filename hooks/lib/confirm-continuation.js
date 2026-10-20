@@ -1,145 +1,71 @@
 "use strict";
-// hooks/lib/confirm-continuation.js — the same-turn CONFIRM continuation (#2650), shared by the
-// Stop hook (stop-confirm-plan-guard.js) and the PreToolUse hook (confirm-checkpoint.js).
-// The Stop hook picks the one plan stage to continue and writes a mark bound to the approval
-// target (path, link shown, sha); confirm-checkpoint accepts the echo of the same turn only when
-// the mark's anchor closes that turn and the mark still binds today's file.
+// hooks/lib/confirm-continuation.js — which plan stages a turn presented (#2650, #2729), for the
+// Stop hook (stop-confirm-plan-guard.js), plus the wording it and confirm-checkpoint.js share.
+// A stage is presented when the turn's last assistant entry is text only and its last text block
+// closes on a run of plan-link lines holding the stage's line, while the stage is unapproved and
+// its gate is not OFF. The Stop hook turns a presentation into a receipt
+// (hooks/lib/presentation-receipt.js); confirm-checkpoint never reads the transcript.
 
 const fs = require("fs");
-const path = require("path");
-const { getPlansArtifactPath } = require("./plans-artifact-registry");
-const { normalizeSlashes } = require("./path-match");
-const { parseSentinel } = require("./confirm-sentinel");
-const { isCommandTool, commandTextOf } = require("./tool-command-text");
-const { linkForFile, STAGES, PLAN_LINK_COMMAND } = require("./plan-link");
-const { endsWithLinkLine, stagesToCheck, turnEntriesOf } = require("./plan-link-turn-check");
+const PL = require("./plan-link");
+const { inTrailingLinkRun } = require("./plan-link-turn-check");
+const { approvalArtifactPath } = require("./presentation-receipt");
 const { planGateState } = require("./confirm-gate/plan-gate");
 const { stepForSuffix } = require("../workflow-state/plan-stage-table");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../../bin/workflow/lib/next-step/gate-line");
 
-// Below this, a probe cannot finish within the Stop hook's budget; the turn ends as before.
-const MIN_PROBE_MS = 200;
-
-function approvalArtifactPath(sid, stage) {
-  try { return getPlansArtifactPath(sid, stage); } catch (_) { return null; }
+function textOnlyAnchor(tail) {
+  const t = tail || {};
+  const anchor = t.lastTextEntry;
+  if (!anchor || typeof anchor.uuid !== "string" || !anchor.uuid || anchor !== t.lastAssistantEntry) return null;
+  const c = anchor.message && anchor.message.content;
+  if (!Array.isArray(c) || c.some((it) => it && it.type === "tool_use")) return null;
+  return anchor;
 }
 
-function linkKey(link) {
-  if (!link || typeof link !== "object") return null;
-  if (typeof link.url === "string" && link.url) return link.url;
-  if (typeof link.path === "string" && link.path) return link.path;
-  return null;
-}
-
-function samePath(a, b) {
-  if (typeof a !== "string" || typeof b !== "string" || !a || !b) return false;
-  const norm = (p) => {
-    const r = normalizeSlashes(path.resolve(p));
-    return process.platform === "win32" ? r.toLowerCase() : r;
-  };
-  try { return norm(a) === norm(b); } catch (_) { return false; }
-}
-
-function itemsOf(entry, type) {
-  if (!entry || entry.type !== "assistant") return [];
-  const c = entry.message && entry.message.content;
-  return Array.isArray(c) ? c.filter((it) => it && it.type === type) : [];
-}
-
-function toolUsesOf(entry) {
-  return itemsOf(entry, "tool_use");
-}
-
-function textsOf(entry) {
-  return itemsOf(entry, "text").filter((it) => typeof it.text === "string").map((it) => it.text);
-}
-
-// An anchor that also ran a tool did not close the turn on the plan link alone.
-function anchorHasToolUse(entry) {
-  return toolUsesOf(entry).length > 0;
-}
-
-function isStageEcho(item, stage) {
-  if (!isCommandTool(item.name)) return false;
-  const hit = parseSentinel(commandTextOf(item.name, item.input));
-  return !!hit && hit.stage === stage;
-}
-
-function anchorIndex(entries, mark) {
-  if (!mark || typeof mark.anchorUuid !== "string" || !mark.anchorUuid) return -1;
-  return entries.findIndex((e) => e && e.uuid === mark.anchorUuid);
-}
-
-// anchorClosesOnLink(entries, mark, stage, link) -> whether the anchor's last text item ends with
-// the stage's plan-link line for link, followed only by whitespace.
-function anchorClosesOnLink(currentTurnEntries, mark, stage, link) {
-  const entries = Array.isArray(currentTurnEntries) ? currentTurnEntries : [];
-  const at = anchorIndex(entries, mark);
-  if (at === -1) return false;
-  const texts = textsOf(entries[at]);
-  return texts.length > 0 && endsWithLinkLine(stage, link, texts[texts.length - 1]);
-}
-
-// sameTurnContinuation(entries, mark, selfToolUseId) -> whether the mark's anchor sits in this
-// turn and nothing but this echo (or, without an id, the stage's echo) followed it — no tool, no text.
-function sameTurnContinuation(currentTurnEntries, mark, selfToolUseId) {
-  const entries = Array.isArray(currentTurnEntries) ? currentTurnEntries : [];
-  const at = anchorIndex(entries, mark);
-  if (at === -1 || anchorHasToolUse(entries[at])) return false;
-  for (const entry of entries.slice(at + 1)) {
-    if (textsOf(entry).some((t) => t.trim() !== "")) return false;
-    for (const item of toolUsesOf(entry)) {
-      if (selfToolUseId ? item.id !== selfToolUseId : !isStageEcho(item, mark.stage)) return false;
+// gateForFrom(timeoutMsFor) -> stage -> gate, probing each stage at most once within the budget.
+function gateForFrom(timeoutMsFor) {
+  const memo = {};
+  return (stage) => {
+    if (!(stage in memo)) {
+      const timeoutMs = typeof timeoutMsFor === "function" ? timeoutMsFor() : NEXT_STEP_GATE_PROBE_TIMEOUT_MS;
+      memo[stage] = planGateState(stage, { timeoutMs });
     }
+    return memo[stage];
+  };
+}
+
+// presentedStages({sid, tail, plansDir, timeoutMsFor, gateFor, linkFor}) -> [{stage, absPath, reason,
+// receiptLink, contentSha}]. gateFor (stage -> gate) and linkFor (absPath -> link) let the caller
+// share one probe per stage and one git lookup per file; without gateFor the gate is probed within
+// timeoutMsFor(). receiptLink is null when the plan has no link that may stand for it (not published).
+function presentedStages({ sid, tail, plansDir, timeoutMsFor, gateFor, linkFor } = {}) {
+  if (!textOnlyAnchor(tail)) return [];
+  const lastText = tail.lastTextBlock;
+  const gate = typeof gateFor === "function" ? gateFor : gateForFrom(timeoutMsFor);
+  const linkOf = typeof linkFor === "function" ? linkFor : (p) => PL.linkForFile(p, plansDir ? { plansDir } : {});
+  const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
+  const { computeContentSha } = require("../workflow-state/completion-approval");
+  const out = [];
+  for (const stage of PL.STAGES) {
+    const absPath = approvalArtifactPath(sid, stage);
+    if (!absPath || !fs.existsSync(absPath)) continue;
+    const link = linkOf(absPath);
+    if (!inTrailingLinkRun(lastText, Object.assign({ stage }, link))) continue;
+    const g = gate(stage);
+    if (g === "OFF") continue;
+    if (checkPlanApproval(sid, stepForSuffix(stage), { gate: g }).verdict !== "unapproved") continue;
+    out.push({ stage, absPath, reason: link.reason || null, receiptLink: PL.receiptLinkOf(link), contentSha: computeContentSha(absPath) });
   }
-  return true;
+  return out;
 }
 
-function markBindsArtifact(mark, target) {
-  if (!mark || !target) return false;
-  if (!samePath(mark.absPath, target.absPath)) return false;
-  const key = linkKey(target.link);
-  if (!key || mark.link !== key) return false;
-  return typeof mark.artifactSha === "string" && !!mark.artifactSha && mark.artifactSha === target.sha;
-}
-
-function unapproved(sid, stage) {
-  try {
-    const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
-    return checkPlanApproval(sid, stepForSuffix(stage)).verdict === "unapproved";
-  } catch (_) {
-    return false;
-  }
-}
-
-// One spawn-free check, the same for every stage (S3 steps 1-5).
-function candidateOf(stage, { sid, lastText, plansDir, markers, echoed }) {
-  const absPath = approvalArtifactPath(sid, stage);
-  if (!absPath || !fs.existsSync(absPath)) return null;
-  const others = (markers || []).filter((m) => m && m.suffix === stage && !samePath(m.absPath, absPath));
-  if (others.length > 0) return null;
-  let link = null;
-  try { link = linkForFile(absPath, { plansDir }); } catch (_) { link = null; }
-  if (!endsWithLinkLine(stage, link, lastText)) return null;
-  if (echoed.includes(stage)) return null;
-  if (!unapproved(sid, stage)) return null;
-  return { stage, absPath, link };
-}
-
-// pickContinuationStage(opts) -> {stage, absPath, link, sha} | null. Probes at most once.
-function pickContinuationStage({ sid, lastText, plansDir, markers, entries, probe, timeoutMsFor } = {}) {
-  const echoed = stagesToCheck({ markers: [], turnEntries: turnEntriesOf(entries) });
-  const found = STAGES.map((stage) => candidateOf(stage, { sid, lastText, plansDir, markers, echoed })).filter(Boolean);
-  if (found.length !== 1) return null;
-  const c = found[0];
-  const timeoutMs = typeof timeoutMsFor === "function" ? timeoutMsFor() : NEXT_STEP_GATE_PROBE_TIMEOUT_MS;
-  if (!(timeoutMs >= MIN_PROBE_MS)) return null;
-  const gate = typeof probe === "function" ? probe : planGateState;
-  if (gate(c.stage, { timeoutMs }) !== "ON") return null;
-  const { computeArtifactSha } = require("../workflow-state/completion-approval");
-  const sha = computeArtifactSha(sid, stepForSuffix(c.stage));
-  if (!sha) return null;
-  return { stage: c.stage, absPath: c.absPath, link: c.link, sha };
+// continuationStage(presented, currentStage) -> the stage the Stop hook asks to echo, or null:
+// among the stages that have a receipt link, the current step's stage, else the only one.
+function continuationStage(presented, currentStage) {
+  const linked = (Array.isArray(presented) ? presented : []).filter((p) => p && p.receiptLink);
+  if (linked.some((p) => p.stage === currentStage)) return currentStage;
+  return linked.length === 1 ? linked[0].stage : null;
 }
 
 function continueReason(stage) {
@@ -147,15 +73,27 @@ function continueReason(stage) {
   return `[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the approval dialog follows.`;
 }
 
-function sameTurnDenyReason(stage) {
-  const S = String(stage).toUpperCase();
-  return `[confirm-checkpoint] CONFIRM_${S} denied: the ${stage} plan was not shown, as the message that closed the turn, right before this echo. ` +
-    `Do not echo it again in this turn. Run ${PLAN_LINK_COMMAND.replace("<stage>", stage)}, end this turn with its output as-is, wait for the user's reply, ` +
-    "then echo the CONFIRM alone in the next turn without rewriting the plan.";
+const CAUSE_TEXT = {
+  "not-last": "its plan-link line is followed by other text, so the line did not close the turn",
+  unpublished: "it is not published yet although this environment can publish it — rewrite it through the plan-sync path (the Write or Edit tool on the plan file) and present it only once its URL line is available",
+  "no-receipt": "no presentation of it is on record",
+  "unreadable-receipt": "its presentation record cannot be read",
+  path: "the presented file is not the plan being approved",
+  link: "the link shown then differs from the plan's link now",
+  content: "the plan changed after it was presented",
+  "unverifiable-session": "the session cannot be identified",
+  "unverifiable-artifact": "the plan file being approved cannot be found",
+  "unverifiable-link": "the plan's link cannot be resolved",
+  "unverifiable-content": "the plan file cannot be read",
+  "check-threw": "the presentation check could not complete",
+};
+
+// presentAgainReason(stage, cause) -> the Stop block and the CONFIRM deny reason, shared.
+function presentAgainReason(stage, cause) {
+  const why = CAUSE_TEXT[cause] || CAUSE_TEXT["no-receipt"];
+  return `[confirm-plan] present the ${stage} plan again (${cause}): ${why}. ` +
+    `Run ${PL.PLAN_LINK_COMMAND.replace("<stage>", stage)}, end the last text block of the turn with its output as-is, ` +
+    "with no text after the line, and close the turn; echo the CONFIRM only after the user's reply.";
 }
 
-module.exports = {
-  MIN_PROBE_MS,
-  approvalArtifactPath, linkKey, samePath, anchorHasToolUse, anchorClosesOnLink, sameTurnContinuation, markBindsArtifact,
-  pickContinuationStage, continueReason, sameTurnDenyReason,
-};
+module.exports = { presentedStages, continuationStage, continueReason, presentAgainReason };

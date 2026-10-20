@@ -44,7 +44,7 @@ Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/
 
 Runs after Pre-flight, before Phase 1. Detects mid-workflow context to surface
 adjacent-issue awareness to the user. Informational-only — never aborts the skill.
-Phase 1 runs unconditionally regardless of gate outcome.
+Phase 1 runs regardless of gate outcome.
 
 IC-1. Resolve session intent:
    Resolve `<PLANS_DIR>` with one standalone Bash call —
@@ -64,7 +64,7 @@ IC-3. When `CLOSES` is non-empty, emit a notice:
    - **Interactive:** "This issue is created now and is NOT added to the current session's
      `closes_issues` (#N, ...); only its implementation belongs to a separate session.
      Fallback: write to `<worktree>/WORKTREE_NOTES.md` — see
-     `rules/mid-workflow-findings.md`." Then proceed to Phase 1 unconditionally.
+     `rules/mid-workflow-findings.md`." Then proceed to Phase 1.
    - **Non-interactive:** print the same notice to stderr. Proceed to Phase 1.
 
 ## Procedure
@@ -171,7 +171,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Label policy
 
-- `type:task` is attached unconditionally by the underlying script. (meaning: implementation task ticket — closes as a FEATURE history entry)
+- `type:task` is attached by `bin/github-issues/issue-create.sh` on every call. (meaning: implementation task ticket — closes as a FEATURE history entry)
 - Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be
   passed via `--label`. `type:*` is rejected to avoid confusing
   `/issue-close-finalize` routing.
