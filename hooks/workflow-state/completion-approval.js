@@ -12,7 +12,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 
 const { getPlansArtifactPath } = require("../lib/plans-artifact-registry");
-const { isConfirmOffForStageFromFile } = require("../lib/plan-confirm-flag");
+const { planGateState } = require("../lib/confirm-gate/plan-gate");
 const { SESSION_ID_VALID_RE, readState } = require("./state-io");
 const { PLAN_STAGE_TABLE, rowFor } = require("./plan-stage-table");
 
@@ -61,20 +61,6 @@ class UnapprovedCompletionError extends Error {
   }
 }
 
-let _envLoaded = false;
-// plan-confirm-flag.js deliberately does not load .env (its hook callers do).
-// workflow-mark.js and bin/workflow/next-step do NOT call loadDefaultEnv(), so
-// this module loads it once itself — otherwise CONFIRM_<STAGE>=off users would
-// be incorrectly blocked.
-function ensureEnvLoaded() {
-  if (_envLoaded) return;
-  _envLoaded = true;
-  try {
-    const { loadDefaultEnv } = require("../lib/load-env");
-    loadDefaultEnv();
-  } catch (_) { /* fail-open: env stays as-is */ }
-}
-
 function isApprovalGatedStep(step) {
   return APPROVAL_GATED_STEPS.indexOf(step) !== -1;
 }
@@ -97,15 +83,6 @@ function recoveryFor(step) {
     confirmSentinelFor(step) + ": {summary}>>\" alone to record it" + waiver +
     ". Otherwise emit it after the user replies with approval. Do NOT use --mark."
   );
-}
-
-// isOffWaived(step) -> whether the CONFIRM_* flag in the config FILE waives this gate. Never
-// process.env: bin/workflow/next-step is spawnable by the Bash tool, so an inline
-// `CONFIRM_<STAGE>=off node ...` prefix would otherwise mint a fake user-waiver record.
-function isOffWaived(step) {
-  const row = rowFor(step);
-  if (!row || !row.offWaivable) return false;
-  try { return isConfirmOffForStageFromFile(row.suffix) === true; } catch (_) { return false; }
 }
 
 // Named exception (CPR-UNV): a row's digestExcludes H2 sections are cut from the heading line up
@@ -150,6 +127,16 @@ function computeArtifactSha(sessionId, step) {
     const artifact = getPlansArtifactPath(sessionId, row.suffix);
     const buf = digestBody(fs.readFileSync(artifact), row.digestExcludes);
     return crypto.createHash("sha256").update(buf).digest("hex");
+  } catch (_) {
+    return null;
+  }
+}
+
+// sha256 of the whole file, digestExcludes NOT applied: a presentation receipt must catch an edit
+// to intent's `## Issues` too (#2628). null when the file does not read.
+function computeContentSha(absPath) {
+  try {
+    return crypto.createHash("sha256").update(fs.readFileSync(absPath)).digest("hex");
   } catch (_) {
     return null;
   }
@@ -228,17 +215,20 @@ function buildAuditApprovalEvent(step, source, reason, origin) {
 // source }. Shared by the effective-state snapshot and the write boundary so they never diverge.
 // confirm-sentinel needs a recorded sha equal to the current one (else artifact-hash-mismatch /
 // -unverifiable); HASH_EXEMPT_SOURCES approve without a hash; no record -> no-approval-record.
-function evaluateCompletionApproval(sessionId, step, state) {
+// opts.gate: the stage's gate the caller already holds, so one judgment probes the flag once.
+function evaluateCompletionApproval(sessionId, step, state, opts) {
   if (!isApprovalGatedStep(step)) {
     return { approved: true, code: null, source: null };
   }
 
-  ensureEnvLoaded();
-  const record = readPlanApproval(state, step);
-
-  if ((!record || record.source === "confirm-flag-off") && isOffWaived(step)) {
+  // #2726: an OFF gate waives whatever record is on file (a stale confirm-sentinel hash
+  // included). planGateState answers ON for a stage without an off waiver (intent).
+  const given = opts && opts.gate;
+  const gate = given === "ON" || given === "OFF" || given === "ERROR" ? given : planGateState(rowFor(step).suffix);
+  if (gate === "OFF") {
     return { approved: true, code: null, source: "confirm-flag-off" };
   }
+  const record = readPlanApproval(state, step);
 
   if (!record) {
     return { approved: false, code: "no-approval-record", source: null };
@@ -353,6 +343,7 @@ module.exports = {
   isApprovalGatedStep,
   assertSanctionedSource,
   computeArtifactSha,
+  computeContentSha,
   readPlanApproval,
   recordPlanApproval,
   buildAuditApproval,
@@ -362,5 +353,4 @@ module.exports = {
   completionBoundaryEventsForBatch,
   recoveryFor,
   confirmSentinelFor,
-  isOffWaived,
 };

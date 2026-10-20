@@ -38,7 +38,7 @@ unset PROJECT_NFR
 # Every key the cases below branch on is pinned to a fixture file, so an ambient
 # export of any of them must not answer instead (skills/_shared/test-design.md).
 unset ENFORCE_WORKTREE
-unset CONFIRM_DETAIL
+unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL CONFIRM_CODE
 unset PLAIN_KEY
 
 LOCAL_ENV_BASENAME=".env"".local"
@@ -98,6 +98,7 @@ printf '%s\n' \
     'PROJECT_NFR=global-nfr' \
     'ENFORCE_WORKTREE=on' \
     'CONFIRM_DETAIL=on' \
+    'CONFIRM_CODE=on' \
     'PLAIN_KEY=globalplain' > "$CFG/.env"
 
 PROJ="$TMP_ROOT/proj"
@@ -107,6 +108,7 @@ printf '%s\n' \
     'PROJECT_NFR=local-nfr-no-decl' \
     'ENFORCE_WORKTREE=off' \
     'CONFIRM_DETAIL=off' \
+    'CONFIRM_CODE=off' \
     'PLAIN_KEY=localplain' > "$PROJ/$LOCAL_ENV_BASENAME"
 
 gcv() { AGENTS_MAIN_ROOT="$CFG" run_with_timeout 25 bash "$GCV" "$@" 2>/dev/null; }
@@ -155,6 +157,9 @@ assert_eq "T2223V-gcv-is-off-blocklisted-stays-on" "1" \
     "$(gcv_rc --is-off --repo-root "$PROJ" ENFORCE_WORKTREE)"
 # ...while an ordinary gate now follows the local file with no declaration.
 assert_eq "T2223V-gcv-is-off-undeclared-local-off" "0" \
+    "$(gcv_rc --is-off --repo-root "$PROJ" CONFIRM_CODE)"
+# #2726/#2729: a plan-stage gate is read from the global .env only, so its local off is ignored.
+assert_eq "T2223V-gcv-is-off-plan-key-local-ignored" "1" \
     "$(gcv_rc --is-off --repo-root "$PROJ" CONFIRM_DETAIL)"
 assert_eq "T2223V-gcv-is-off-unset-key" "2" \
     "$(gcv_rc --is-off --repo-root "$PROJ" NO_SUCH_KEY_AT_ALL)"

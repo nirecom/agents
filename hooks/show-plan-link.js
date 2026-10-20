@@ -197,8 +197,24 @@ function showsMessage(result) {
   return !(r.status === "skipped" && QUIET_SKIP_REASONS.has(r.reason));
 }
 
-// entryFor(run) -> {stage, url?, path?, reason?} — the plan-link row of one written plan.
-function entryFor(run) {
+// gateOf(stage, timeoutMs) -> the stage's own gate (#2729); never aggregated across stages, so a
+// mixed write gets one duty per stage. A spent budget or a throw is ERROR, which renders as ON.
+function gateOf(stage, timeoutMs) {
+  try {
+    const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../bin/workflow/lib/next-step/gate-line");
+    const { planGateState } = require("./lib/confirm-gate/plan-gate");
+    return planGateState(stage, { timeoutMs: Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, timeoutMs) });
+  } catch (_) {
+    return "ERROR";
+  }
+}
+
+// entryFor(run, gateTimeoutMs) -> {stage, gate, url?, path?, reason?} — the plan-link row of one written plan.
+function entryFor(run, gateTimeoutMs) {
+  return { ...linkEntryFor(run), gate: gateOf(getSuffix(run.filePath), gateTimeoutMs) };
+}
+
+function linkEntryFor(run) {
   const PL = require("./lib/plan-link");
   const stage = getSuffix(run.filePath);
   const r = run.result || {};
@@ -227,9 +243,11 @@ function emitForArtifacts(filePaths, input, opts) {
   const out = {};
   try {
     const { renderModelContext } = require("./lib/plan-link");
+    const deadline = start + budgetMs;
+    const entries = runs.map((r) => entryFor(r, Math.max(0, deadline - clock())));
     out.hookSpecificOutput = {
       hookEventName: "PostToolUse",
-      additionalContext: renderModelContext(runs.map(entryFor), { when: "after-write" }),
+      additionalContext: renderModelContext(entries, { when: "after-write" }),
     };
   } catch (_) { /* fail-open: the breadcrumb below still reaches the user */ }
   const shown = runs.filter((r) => !out.hookSpecificOutput || showsMessage(r.result));

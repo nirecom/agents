@@ -7,31 +7,34 @@ The gate check of CPA-3 alone is also used by `write-tests` (CONFIRM_TESTS), `wr
 
 ## Steps
 
-CPA-1 through CPA-3 always run. `CONFIRM_<STEP>` (default `on`) gates CPA-3's prompt only.
-CPA-2's plan-link line belongs to the turn that wrote the plan; write it in no later turn.
+CPA-1 through CPA-3 run regardless of the gate; the gate (`CONFIRM_<STEP>`, default `on`) decides how CPA-2 closes and which branch CPA-3 takes.
+CPA-2's plan-link line belongs to the turn that wrote the plan; a later turn writes it only to present the plan again.
 
 **CPA-1 — Write the artifact.** Use the Write tool. No diff is shown in chat; CPA-2's breadcrumb is the only plan surface.
 
 **CPA-2 — Plan link.** After the Write returns, `show-plan-link.js` syncs the artifact through plan-sync and hands you its plan-link line as additional context: the blob URL plus the local path when the plan was published, otherwise the local path plus a reason.
-End the last text block of the turn that wrote the plan with that line as-is; CPA-3 decides whether the turn then closes.
+Each stage's gate sets the duty. OFF: write the line as-is once inside the summary of the turn that wrote the plan.
+ON / ERROR: end the last text block of the presentation turn with the plan-link lines, with no text after them; CPA-3 decides whether the turn then closes.
+When this environment can publish the plan but the line has no URL, publish it first (rewrite it through the Write or Edit tool so plan-sync runs), then present it.
 To look the line up later, run `node "$AGENTS_MAIN_ROOT/bin/plan-link" --stage <stage>` and write its output as-is.
 Never hand the plan over with `SendUserFile`.
 Never copy the blob URL into a PR body, `history.md`, `CHANGELOG.md`, or a public issue — the plan repo is private; leak guard: `docs/architecture/claude-code/plan-sync.md`.
-Enforcement (Stop): `stop-confirm-plan-guard.js` checks only a turn that wrote a plan stage, and blocks it when its last text block lacks the blob URL (when one exists) or else the local path.
-The guard does not read `CONFIRM_<STEP>` yet, so the OFF path carries the same duty.
-Enforcement (PreToolUse): `confirm-checkpoint.js` accepts a CONFIRM echo on two paths: right after the Stop hook's continuation prompt in the same turn, or in the turn after the user's reply to a presentation that ended on the stage's plan-link line.
-It denies any other echo, including one after this turn rewrote the plan; after two denies in a row the third echo passes and is reported to the supervisor.
+Enforcement (Stop): `stop-confirm-plan-guard.js` reads each stage's gate and blocks a turn that wrote a plan without its line, a link line of an unapproved stage followed by other text, or an unpublished plan where a URL can be made.
+`stop-confirm-plan-guard.js` records a presentation receipt only for a turn it lets through that closes on the link lines, and a blocked turn voids every stage's receipt.
+Enforcement (PreToolUse): `confirm-checkpoint.js` passes a CONFIRM echo to the dialog only when the presentation receipt matches the plan's current path, link, and content, and spends the receipt.
+On a mismatch, or when it cannot verify, it denies and asks you to present the plan again; there is no cap.
 
 **CPA-3 — Gate check (`next-step --gate`).**
 Run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
 Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different value.
 `--gate` judges the RECORDED current step, which can lag the step the calling skill is on: when the step named at the start of `REASON` (`<step>: CONFIRM_X=...`) is not your own step, treat the result as `none`.
-- `proceed`: take the caller's OFF branch (plan stages: print a one-paragraph prose summary, then proceed; the turn's last text block ends with the CPA-2 plan-link line, once). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.
+- `proceed`: take the caller's OFF branch (plan stages: print a one-paragraph prose summary, then proceed; the summary carries the CPA-2 plan-link line once). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.
 - `ask`: when `GATE_HINT` names a scope change or carries a warning, show it to the user first; then take the caller's ON branch (plan stages: the sentinel procedure below; write-tests / write-code / update-docs / worktree-start: the skill's own ON branch — a pre-action gate asks via `AskUserQuestion`, a post-action gate presents the result and continues).
   - Plan stages run three steps with no `AskUserQuestion` call; `<STAGE>` = `INTENT` / `OUTLINE` / `DETAIL` per the caller.
   - Presentation: end the final body text with "The approval dialog follows this message; if it does not appear, reply once you have reviewed the plan." and then the CPA-2 plan-link line as the last line, then close the turn.
   - CONFIRM echo (main path): when the turn end is blocked with a `[confirm-plan] continue:` prompt, emit only `echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>"` as your next message.
-  - CONFIRM echo (fallback): when no prompt came or the echo was denied, let the turn close and wait for the user's reply; on a change request, revise and loop back to CPA-1, otherwise emit only that echo in the next turn.
+  - CONFIRM echo (fallback): when no prompt came, let the turn close and wait for the user's reply; on a change request, revise and loop back to CPA-1, otherwise emit only that echo in the next turn.
+  - Denied echo: present the plan again as the deny reason says, close the turn, and echo only after the user's reply.
   - Next response: **Allow** → run the caller's completion, then co-emit the caller's next tool_use (Skill or Bash) in the same turn; **Deny** → the turn stops, so wait for the user's revision instructions.
   - `confirm-checkpoint.js` (PreToolUse) surfaces the dialog; `stop-confirm-plan-guard.js` (Stop, Layer 2) blocks the turn when no stage-valid follow-up comes after the Allowed echo's result in that same turn.
 - `present-and-stop` (detail only): follow `GATE_HINT` — present, then end the turn without the completion sentinel or `--advance`.

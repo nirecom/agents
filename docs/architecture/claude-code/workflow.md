@@ -202,7 +202,7 @@ silently disabling the gate:
 | Source | Recorded by | Hash-bound |
 |---|---|---|
 | `confirm-sentinel` | `<<WORKFLOW_CONFIRM_INTENT\|OUTLINE\|DETAIL: {summary}>>` | yes — a re-edited plan artifact invalidates the approval (intent's `## Issues` section is outside the hash) |
-| `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver; intent has none | no (audit record) |
+| `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver, read from the global `.env` file only (an export or `.env.local` does not count); intent has none. It outranks a stale `confirm-sentinel` record. `checkPlanApproval` is the one entry that `--gate`, `evaluateCompletionApproval` and `confirm-checkpoint` share (#2726, #2729) | no (audit record) |
 | `reset-sentinel` | `<<WORKFLOW_RESET_FROM_*>>` re-seeding steps below the reset point | no (audit record) |
 | `session-inherit` | inheritance of a donor's `complete` gated step when the donor holds no record; never for intent, which stays unapproved until `CONFIRM_INTENT` in the new session | no (audit record) |
 

@@ -86,7 +86,7 @@ T_BASH_6_JSON=$(run_with_timeout node -e "
   }));
 " "$T_BASH_6_CMD")
 (
-  export CONFIRM_OUTLINE=on
+  confirm_env_root "$_ISOLATION_TMP_ROOT/bash6-cfg" CONFIRM_OUTLINE=on
   echo "$T_BASH_6_JSON" | run_with_timeout node "$HOOK" >/dev/null 2>&1
 )
 T_BASH_6_ABS=$(run_with_timeout node -e "
@@ -111,7 +111,7 @@ T_BASH_7_JSON=$(run_with_timeout node -e "
   }));
 " "$T_BASH_7_CMD")
 T_BASH_7_STDOUT=$(
-  export CONFIRM_OUTLINE=off
+  confirm_env_root "$_ISOLATION_TMP_ROOT/bash7-cfg" CONFIRM_OUTLINE=off
   echo "$T_BASH_7_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
 )
 T_BASH_7_MSG=$(echo "$T_BASH_7_STDOUT" | run_with_timeout node -e "

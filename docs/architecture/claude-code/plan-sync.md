@@ -152,7 +152,11 @@ reason, with a hint to run `bin/plan-sync-init`.
   the earlier order applies: the echo comes alone in the turn after the user's reply. After
   Allow the next skill follows in that same turn (`skills/_shared/confirm-plan.md` CPA-2/CPA-3).
   The URL belongs only in that last text block, never in the echo. The Stop guard checks the
-  presentation and `confirm-checkpoint.js` denies an echo that skipped it
+  presentation and records a presentation receipt (link and whole-file content sha); at CONFIRM
+  `confirm-checkpoint.js` passes the echo only when that receipt matches the plan as it is now
+  (#2628, #2729). Where plan-sync can publish, the plan must be published before CONFIRM; where
+  it cannot (plan-sync off, not provisioned, host mismatch, …), the local path is the
+  presentation and the content sha still catches any later edit
   ([settings/hooks.md](settings/hooks.md)).
 - **Breadcrumb `systemMessage`.** `show-plan-link.js` shows the user `Plan file:` plus a
   `[plan-sync]` status line only when something needs attention: no URL for a reason other
