@@ -8,6 +8,7 @@ const { VALID_STEPS } = require("../workflow-state");
 const { commitGateOf } = require("../workflow-state/step-table");
 const { hasStagedTestChanges } = require("./staged-evidence");
 const { isWorktreeContext } = require("./worktree-context");
+const { checkGlossaryRecord, GATED_STEPS: GLOSSARY_GATED_STEPS } = require("./glossary-record-checker");
 
 // write_tests counts as bypassed when staged tests/ evidence resolved it, or when
 // a BUGFIX session skipped it outside the skippable set yet staged tests (#833, #1147).
@@ -36,6 +37,18 @@ function collectIncompleteSteps({ state, commitSnapshot, sessionId, repoDir, doc
     const snap = commitSnapshot && commitSnapshot.steps && commitSnapshot.steps[step];
     const status = snap ? snap.status : (stepState ? stepState.status : "pending");
 
+    // #2529: the glossary_check record is re-judged against the current staged set at every
+    // status, before any step checker, bypass, or status short-circuit can let the step through.
+    // A stage with none of its targets staged passes (evaluateGlossaryCheck, commit mode).
+    if (GLOSSARY_GATED_STEPS.includes(step)) {
+      const g = checkGlossaryRecord(step, { state, sessionId, repoDir });
+      if (g.action === "block") {
+        incompleteReasons[step] = g.reason;
+        incomplete.push(step);
+        continue;
+      }
+    }
+
     if (step === "review_tests") {
       const { checkReviewTests } = require("./review-tests-checker");
       const rt = checkReviewTests(step, stepState, { docsOnly, writeTestsEvidenceBypassed, repoDir, sessionId });
@@ -51,7 +64,7 @@ function collectIncompleteSteps({ state, commitSnapshot, sessionId, repoDir, doc
     // still satisfy it, re-checked against staged blobs every commit (TOCTOU-safe).
     if (step === "review_docs") {
       const { checkReviewDocs } = require("./review-docs-checker");
-      const rd = checkReviewDocs(step, stepState, { repoDir });
+      const rd = checkReviewDocs(step, stepState, { repoDir, sessionId });
       if (rd.action === "skip") continue;
       if (rd.action === "block") {
         if (rd.reason) incompleteReasons[step] = rd.reason;

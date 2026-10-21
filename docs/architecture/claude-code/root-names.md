@@ -2,7 +2,7 @@
 
 How code, tests and documents spell a repository root, and what `bin/check-root-names.sh` enforces about it.
 
-The four names — `AGENTS_MAIN_ROOT`, `SCRIPT_CHECKOUT_ROOT`, `TARGET_MAIN_ROOT`, `TARGET_CHECKOUT_ROOT` — are defined in the glossary: `AGENTS_MAIN_ROOT` in [glossary-user.md](../../glossary-user.md), the other three in [glossary-internal.md](../../glossary-internal.md). This document owns the writing rules only.
+The four names — `AGENTS_MAIN_ROOT`, `SCRIPT_CHECKOUT_ROOT`, `TARGET_MAIN_ROOT`, `TARGET_CHECKOUT_ROOT` — are defined in the glossary: `AGENTS_MAIN_ROOT` in [glossary/user.md](../../glossary/user.md), the other three in [glossary/internal.md](../../glossary/internal.md). This document owns the writing rules only.
 
 ## Why four names
 

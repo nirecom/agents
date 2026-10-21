@@ -22,6 +22,7 @@ Enforcement (PreToolUse): `confirm-checkpoint.js` denies a CONFIRM echo when the
 
 **CPA-3 — Gate check (`next-step --gate`).**
 Run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
+Plan stages: before `--gate`, run `check-glossary-drift --stage <intent|outline|detail> --record` per `skills/_shared/glossary-drift-check.md`, and put that file's approval list in the Presentation turn, the `present-and-stop` presentation, and the `proceed` summary.
 Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different value.
 `--gate` judges the RECORDED current step, which can lag the step the calling skill is on: when the step named at the start of `REASON` (`<step>: CONFIRM_X=...`) is not your own step, treat the result as `none`.
 - `proceed`: take the caller's OFF branch (plan stages: print a one-paragraph prose summary with the CPA-2 plan-link line, then proceed). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.

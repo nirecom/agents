@@ -8,6 +8,9 @@
 # file, so the docs-only short-circuit is out of the way and write_code is the
 # only variable.
 
+# shellcheck source=../../lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+
 # gate_verdict <sid> <write_code-status> — gate stdout for a git commit attempt.
 gate_verdict() {
   local sid="$1" wc_status="$2" s spec=""
@@ -23,6 +26,8 @@ gate_verdict() {
   # (#1665), and the gate would be judging a legacy-gap fixture instead of the
   # status this case names. See stamp_step_at in common.sh.
   stamp_step_at "$sid" write_code >/dev/null
+  # #2529: the staged code file needs a current glossary_check so write_code stays the variable.
+  glossary_check_record "$sid" "$GATE_REPO_N"
   run_gate_commit "$sid" "$GATE_REPO_N"
 }
 

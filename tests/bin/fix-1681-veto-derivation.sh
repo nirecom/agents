@@ -142,7 +142,8 @@ run_next_step() { run_with_timeout 120 node "$NEXT_STEP" "$@" 2>/dev/null || tru
 run_gate() {
     local repo="$1" sid="$2"
     local json="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $repo commit -m test\",\"cwd\":\"$repo\"},\"session_id\":\"$sid\"}"
-    script_checkout_fixture_copy "$repo" hooks bin/review-code-size
+    # bin/lib: the commit gate's glossary-record check reads the glossary through it (#2529).
+    script_checkout_fixture_copy "$repo" hooks bin/review-code-size bin/lib
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" AGENTS_MAIN_ROOT="$repo" \
         run_with_timeout 120 node "$repo/hooks/workflow-gate.js" 2>/dev/null || true
 }

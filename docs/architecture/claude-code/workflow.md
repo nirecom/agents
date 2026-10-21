@@ -34,7 +34,7 @@ the per-type rendering is under [Deliverable types](#deliverable-types-in-next-s
 
 ## The step table (deliverable type x PM type)
 
-Terms: [glossary-user.md](../../glossary-user.md#deliverable-type). A session is described by three facts
+Terms: [glossary/user.md](../../glossary/user.md#deliverable-type). A session is described by three facts
 (its **session profile**, `hooks/workflow-state/session-profile.js`):
 
 | Fact | Question | Values | State field |
@@ -221,6 +221,8 @@ Progress gates: `gate-plan-skill-advance.js` only deters (it denies the next ski
 `unapproved` and passes every unreadable state), while the side-effect owners fail closed —
 the completion sentinels and `--advance` record nothing without approval, and
 `run-completion.sh` stops on anything but `APPROVAL=approved` from `bin/workflow/check-plan-approval`.
+
+Six steps also need a fresh glossary drift-check record to complete: [glossary-check.md](glossary-check.md).
 
 `session_start_context` records where the session began and never changes; `current.cwd` /
 `current.git_branch` track where it is now, folded from `worktree` events. `git_branch` is

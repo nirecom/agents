@@ -24,18 +24,31 @@ stage_readme_c() {
   git -C "$repo" add README.md >/dev/null 2>&1
 }
 
-# stage_glossary_c <repo> <term...> — docs/glossary-user.md with one well-formed
+# stage_as_prose_edit_c <repo> <docs-relpath> — commit the file as written, then stage a
+# one-line intro-prose edit of it. The staged change keeps the line count and the term set,
+# so the glossary provenance check (#2529) sees zero term operations and these size/form
+# cases stay about size and form.
+stage_as_prose_edit_c() {
+  local repo="$1" rel="$2"
+  git -C "$repo" add "docs/$rel" >/dev/null 2>&1
+  git -C "$repo" commit -q -m "fixture glossary $rel" -- "docs/$rel" >/dev/null 2>&1
+  sed 's/^Fixture glossary\.$/Fixture glossary (staged)./' "$repo/docs/$rel" > "$repo/docs/$rel.tmp"
+  mv "$repo/docs/$rel.tmp" "$repo/docs/$rel"
+  git -C "$repo" add "docs/$rel" >/dev/null 2>&1
+}
+
+# stage_glossary_c <repo> <term...> — docs/glossary/user.md with one well-formed
 # entry per term in the given order, staged (order drives the glossary gate, #2529).
 stage_glossary_c() {
   local repo="$1" t; shift
-  mkdir -p "$repo/docs"
+  mkdir -p "$repo/docs/glossary"
   {
     printf '# Glossary\n\nFixture glossary.\n\n'
     for t in "$@"; do
       printf '### %s\n- **Definition**: %s is a fixture term.\n- **Related**: [owner](architecture/owner.md)\n\n' "$t" "$t"
     done
-  } > "$repo/docs/glossary-user.md"
-  git -C "$repo" add docs/glossary-user.md >/dev/null 2>&1
+  } > "$repo/docs/glossary/user.md"
+  stage_as_prose_edit_c "$repo" glossary/user.md
 }
 
 # stage_glossary_lines_c <repo> <docs-relpath> <n-lines> <term-prefix> — a well-formed
@@ -43,7 +56,7 @@ stage_glossary_c() {
 # order, blank-line padding to N), staged. N drives the size gate; the form stays valid.
 stage_glossary_lines_c() {
   local repo="$1" rel="$2" n="$3" prefix="$4" i k=0 t
-  mkdir -p "$repo/docs"
+  mkdir -p "$(dirname "$repo/docs/$rel")"
   {
     printf '# Glossary\n\nFixture glossary.\n\n'
     i=4
@@ -54,7 +67,7 @@ stage_glossary_lines_c() {
     done
     while [ "$i" -lt "$n" ]; do echo; i=$((i + 1)); done
   } > "$repo/docs/$rel"
-  git -C "$repo" add "docs/$rel" >/dev/null 2>&1
+  stage_as_prose_edit_c "$repo" "$rel"
 }
 
 run_group_c() {
@@ -108,22 +121,22 @@ run_group_c() {
   # C7: the 500-line HARD boundary on a staged, otherwise valid glossary file (#2529):
   # the aggregate owns it because size and glossary form are checked together here.
   repo="$(new_doc_repo)"
-  stage_glossary_lines_c "$repo" glossary-user.md 500 alpha
-  assert_eq "C7a: fixture glossary is exactly 500 lines" "500" "$(wc -l < "$repo/docs/glossary-user.md" | tr -d ' ')"
+  stage_glossary_lines_c "$repo" glossary/user.md 500 alpha
+  assert_eq "C7a: fixture glossary is exactly 500 lines" "500" "$(wc -l < "$repo/docs/glossary/user.md" | tr -d ' ')"
   run_tool "$repo" "bin/review-doc-gates" --staged
   assert_eq "C7a: 500-line valid glossary → --staged exits 0" "0" "$TOOL_RC"
 
   repo="$(new_doc_repo)"
-  stage_glossary_lines_c "$repo" glossary-user.md 501 alpha
-  assert_eq "C7b: fixture glossary is exactly 501 lines" "501" "$(wc -l < "$repo/docs/glossary-user.md" | tr -d ' ')"
+  stage_glossary_lines_c "$repo" glossary/user.md 501 alpha
+  assert_eq "C7b: fixture glossary is exactly 501 lines" "501" "$(wc -l < "$repo/docs/glossary/user.md" | tr -d ' ')"
   run_tool "$repo" "bin/review-doc-gates" --staged
   assert_eq "C7b: 501-line valid glossary → --staged exits 1" "1" "$TOOL_RC"
 
   # C7c: the same oversized category split by range (a-m + n-z, no gap, no overlap), each
   # file under the limit → passes (the split is the sanctioned way past 500 lines).
   repo="$(new_doc_repo)"
-  stage_glossary_lines_c "$repo" glossary-user-a-m.md 300 alpha
-  stage_glossary_lines_c "$repo" glossary-user-n-z.md 300 november
+  stage_glossary_lines_c "$repo" glossary/user-a-m.md 300 alpha
+  stage_glossary_lines_c "$repo" glossary/user-n-z.md 300 november
   run_tool "$repo" "bin/review-doc-gates" --staged
   assert_eq "C7c: valid a-m + n-z range split (600 lines total) → --staged exits 0" "0" "$TOOL_RC"
 }

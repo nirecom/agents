@@ -240,6 +240,14 @@ function appendEvents(sessionId, eventsOrBuilder, opts = {}) {
         validateEvent(event);
         built.push(event);
       }
+      // Glossary-check boundary (#2529): a glossary stage step reaching `complete` without a
+      // current, resolved glossary_check record throws here, before any byte is written.
+      // An inherited batch replays donor completions the donor's own boundary already judged,
+      // and the heir has no artifacts under its own id, so it always crosses as session-inherit.
+      const glossaryOpts = opts.origin === "session-inherit" ? Object.assign({}, opts, { sanctioned: "session-inherit" }) : opts;
+      require("../glossary-check/record").glossaryBoundaryForBatch(
+        sessionId, projectState(state), projectState(withBatch), glossaryOpts
+      );
 
       // seq is assigned here and nowhere else: 1-based and contiguous over the
       // whole stream, so a gap or a duplicate is detectable as corruption.

@@ -34,6 +34,7 @@ test_2_ok_300_lines() {
     mkdir -p "$repo/bin"
     make_lines 300 > "$repo/bin/ok.js"
     git -C "$repo" add bin/ok.js
+    ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
     assert_approve "2: staged 300-line .js -> approve"
 }
@@ -50,6 +51,7 @@ test_3_untracked_only_approves() {
     make_lines 501 > "$repo/bin/untracked-big.js"   # never staged
     echo "more docs" >> "$repo/docs/notes.md"
     git -C "$repo" add docs/notes.md
+    ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
     assert_approve "3: untracked 501-line .js + docs staged -> approve"
 }
@@ -129,6 +131,7 @@ test_7_split_passes() {
     mkdir -p "$repo/bin/big"
     make_lines 200 > "$repo/bin/big/part.js"
     git -C "$repo" add bin/big.js bin/big/part.js
+    ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
     assert_approve "7: split into 120 + 200 lines -> approve"
 }

@@ -169,7 +169,11 @@ function modeReason() {
     F.check(`approvalWaitFor ${step} unapproved: hint has no single quote`, typeof r.hint === "string" && !r.hint.includes("'"), String(r.hint));
   }
   const ok = ranAhead("ar-ok", "detail", {});
-  F.check("approvalWaitFor: approved step -> no wait", !call(ok, "detail"), JSON.stringify(call(ok, "detail")));
+  // #2529: an approved gated step also waits on its glossary_check record; seed a current one
+  // (from the fixture repo cwd) so this case keeps isolating the approval-only verdict.
+  const rec = F.runNode("bin/check-glossary-drift", ["--session", ok, "--stage", "detail", "--record"], "");
+  F.check("approvalWaitFor: approved step -> no wait", !call(ok, "detail"),
+    JSON.stringify(call(ok, "detail")) + ` record-exit=${rec.code} err=${rec.err}`);
   F.check("approvalWaitFor: non-gated step -> no wait", !call(ok, "write_tests"), JSON.stringify(call(ok, "write_tests")));
   const noEv = F.newSid("ar-noev");
   F.writeState(noEv, { workflow_init: "complete", clarify_intent: "pending" }, [], TOP);

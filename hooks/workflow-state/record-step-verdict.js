@@ -8,7 +8,7 @@
 // recordStepVerdict(sessionId, step, status, opts) -> { ok, code, message, already }
 //   code 0 recorded (or already — see `already`); 1 arg validation; 2 record
 //   failure (write error / missing approval / forbidden completion); 3 skip refused.
-// Decides from RECORDED FACTS only (state + config files); never reads plan prose.
+// Decides from RECORDED FACTS (state + config); artifacts are only hashed against the record.
 
 const {
   VALID_STEPS,
@@ -19,11 +19,8 @@ const {
   recordSkipVerdict,
   getSkippableSteps,
 } = require("../workflow-state");
-const {
-  APPROVAL_GATED_STEPS,
-  UnapprovedCompletionError,
-  confirmSentinelFor,
-} = require("./completion-approval");
+const { APPROVAL_GATED_STEPS } = require("./completion-approval");
+const { completionRefusalOf, recordedCompleteRefusalOf } = require("./completion-refusal");
 const { isSkipAllowedForCliPath, hasRecordedSkipJudgment } = require("./plan-skip-allowance");
 const { validateSkipReason } = require("../workflow-mark/skip-reason");
 const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas");
@@ -291,9 +288,17 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
   // The sentinel/mark/reset/recorded-verdict gates deliberately keep their
   // pre-#1644 re-write behaviour: re-emitting a NOT_NEEDED sentinel with a new
   // reason must still replace the recorded skip_reason (migration note 5).
+  // #2529: "already complete" is the EFFECTIVE view — a gated step the reconciled view reopens
+  // (approval no longer verifies, glossary check refused) is refused, never reported as already.
+  // The write below cannot catch it: both boundaries judge only a transition INTO complete.
   if (isAdvance) {
     const existing = readStepEntry(sessionId, step);
     if (existing && existing.status === status) {
+      if (status === "complete" && APPROVAL_GATED_STEPS.indexOf(step) !== -1) {
+        let refusal = null;
+        try { refusal = recordedCompleteRefusalOf(sessionId, step, readState(sessionId), {}); } catch (_) { refusal = null; }
+        if (refusal) return fail(2, `record-step-verdict: ${refusal.message}`, refusal.kind, refusal.code);
+      }
       return { ok: true, code: 0, message: "", already: true };
     }
   }
@@ -395,16 +400,8 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
       markStep(sessionId, step, status, extraFields, writeOpts);
     }
   } catch (e) {
-    if (e instanceof UnapprovedCompletionError) {
-      return fail(
-        2,
-        `record-step-verdict: ${step} NOT recorded — no user approval on record (${e.code}). ` +
-          `Ask the user to approve, then emit: echo "<<${confirmSentinelFor(step)}: {summary}>>" ` +
-          `(or verify CONFIRM_${step.toUpperCase()}=off in your config).`,
-        "unapproved",
-        e.code
-      );
-    }
+    const refusal = completionRefusalOf(e, step);
+    if (refusal) return fail(2, `record-step-verdict: ${refusal.message}`, refusal.kind, refusal.code);
     return fail(
       2,
       `record-step-verdict: failed to write state — ${e.message}. ${step} NOT recorded.`,

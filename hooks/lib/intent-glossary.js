@@ -1,13 +1,18 @@
 "use strict";
 // hooks/lib/intent-glossary.js — structure check for the intent.md `## Glossary`
 // section (#2529): the heading must exist once, right after `## Issues`; an empty
-// body passes; a non-empty body must be a `| Term | Category | Definition |` table.
+// body passes; a non-empty body must be a `| Term | Category | Operation | Definition |`
+// table (the legacy `| Term | Category | Definition |` table reads every row as add).
 // Shared by the plan-artifact hooks, bin/check-intent-glossary and bin/glossary-promote.
 // Category values and their criteria are owned by rules/docs/glossary.md.
 
 const CATEGORIES = Object.freeze(["user", "internal", "session"]);
-const HEADER = ["Term", "Category", "Definition"];
-const FENCE_RE = /^\s*(```|~~~)/;
+const OPERATIONS = Object.freeze(["add", "delete", "redefine"]);
+const HEADER_V1 = ["Term", "Category", "Definition"];
+const HEADER_V2 = ["Term", "Category", "Operation", "Definition"];
+const { fenceStep } = require("./markdown-fence");
+const { unsafeTermChars, describeTermChars } = require("./glossary-term");
+
 const H2_RE = /^##(?!#)/;
 const H1_OR_H2_RE = /^#{1,2}(?!#)/;
 // Exact literals only: no localized alias, case variant, suffix or missing space.
@@ -16,6 +21,10 @@ const SECTION_RE = /^## (Issues|Glossary)\s*$/;
 function splitRow(line) {
   const inner = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
   return inner.split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+}
+
+function sameCells(cells, header) {
+  return cells.length === header.length && cells.every((c, i) => c === header[i]);
 }
 
 function stripComments(lines) {
@@ -44,12 +53,14 @@ function stripComments(lines) {
 function parseIntentGlossary(text) {
   const lines = typeof text === "string" ? text.split(/\r?\n/) : [];
   const result = { glossaryLines: [], issuesLine: null, h2: [], rows: [], body: [], table: [], stray: [] };
-  let inFence = false;
+  let fence = null;
   let start = null;
   let end = lines.length;
   for (let i = 0; i < lines.length; i++) {
-    if (FENCE_RE.test(lines[i])) { inFence = !inFence; continue; }
-    if (inFence) continue;
+    const step = fenceStep(lines[i], fence);
+    const inside = fence !== null || step.marker;
+    fence = step.fence;
+    if (inside) continue;
     if (start !== null && end === lines.length && H1_OR_H2_RE.test(lines[i])) end = i;
     if (!H2_RE.test(lines[i])) continue;
     const m = SECTION_RE.exec(lines[i]);
@@ -67,14 +78,18 @@ function parseIntentGlossary(text) {
     if (l.trim() !== "") result.body.push({ lineNumber: start + k + 1, text: l });
   });
   const table = result.body.filter((b) => b.text.trim().startsWith("|"));
+  const v2 = table.length > 0 && sameCells(splitRow(table[0].text), HEADER_V2);
+  result.header = v2 ? HEADER_V2 : HEADER_V1;
   table.slice(2).forEach((b) => {
     const cells = splitRow(b.text);
     result.rows.push({
       term: cells[0] || "",
       category: cells[1] || "",
-      definition: cells.slice(2).join(" | "),
+      operation: v2 ? (cells[2] || "") : "add",
+      definition: cells.slice(v2 ? 3 : 2).join(" | "),
       cellCount: cells.length,
       lineNumber: b.lineNumber,
+      legacy: !v2,
     });
   });
   result.table = table;
@@ -88,18 +103,54 @@ function violation(lineNumber, line, reason) {
   return { lineNumber, line, reason };
 }
 
+function checkRow(r, raw, n) {
+  const out = [];
+  const at = (reason) => out.push(violation(r.lineNumber, raw, reason));
+  if (r.cellCount !== n) { at("Glossary row must have exactly " + n + " cells"); return out; }
+  if (r.term === "") at("Glossary row has an empty Term");
+  const unsafe = unsafeTermChars(r.term);
+  if (unsafe.length > 0) at("Glossary Term has a forbidden character (" + describeTermChars(unsafe) + "); rename the term");
+  if (!OPERATIONS.includes(r.operation)) {
+    at("Operation must be one of " + OPERATIONS.join(" / ") + " (got '" + r.operation + "')");
+  } else if (r.operation !== "delete" && r.definition === "") at("Glossary row has an empty Definition");
+  if (r.category === "") at("Glossary row has an empty Category");
+  else if (!CATEGORIES.includes(r.category)) {
+    at("Category must be one of " + CATEGORIES.join(" / ") + " (got '" + r.category + "')");
+  } else if (r.category === "session" && r.operation !== "add" && OPERATIONS.includes(r.operation)) {
+    at("a session term only takes Operation add (got '" + r.operation + "')");
+  }
+  return out;
+}
+
+// A same-term same-category delete + add cannot be matched to the approved operations
+// (the before/after diff folds it into one redefine), so it must be written as redefine.
+// Terms compare as written: a case-only pair is a heading rename, which diffs as delete + add.
+function useRedefine(p) {
+  const out = [];
+  const key = (r) => r.term + "\u0000" + r.category;
+  const deletes = new Set(p.rows.filter((r) => r.operation === "delete").map(key));
+  const adds = new Set(p.rows.filter((r) => r.operation === "add").map(key));
+  for (const r of p.rows) {
+    if ((r.operation !== "add" && r.operation !== "delete") || !deletes.has(key(r)) || !adds.has(key(r))) continue;
+    const raw = p.body.find((b) => b.lineNumber === r.lineNumber).text;
+    out.push(violation(r.lineNumber, raw, "use-redefine: '" + r.term + "' (" + r.category + ") has both delete and add rows; write one redefine row instead"));
+  }
+  return out;
+}
+
 function checkTable(p) {
   const out = [];
   const [header, sep] = p.table;
   const headerCells = splitRow(header.text);
-  if (headerCells.length !== 3 || headerCells.some((c, i) => c !== HEADER[i])) {
-    out.push(violation(header.lineNumber, header.text, "Glossary table header must be | Term | Category | Definition |"));
+  if (!sameCells(headerCells, HEADER_V2) && !sameCells(headerCells, HEADER_V1)) {
+    out.push(violation(header.lineNumber, header.text, "Glossary table header must be | Term | Category | Operation | Definition | (legacy: | Term | Category | Definition |)"));
   }
+  const n = p.header.length;
   if (!sep || !splitRow(sep.text).every((c) => /^:?-+:?$/.test(c))) {
     const at = sep || header;
-    out.push(violation(at.lineNumber, at.text, "Glossary table needs a |---|---|---| separator row after the header"));
-  } else if (splitRow(sep.text).length !== HEADER.length) {
-    out.push(violation(sep.lineNumber, sep.text, "Glossary table separator row must have exactly 3 cells"));
+    out.push(violation(at.lineNumber, at.text, "Glossary table needs a |---|...| separator row after the header"));
+  } else if (splitRow(sep.text).length !== n) {
+    out.push(violation(sep.lineNumber, sep.text, "Glossary table separator row must have exactly " + n + " cells"));
   }
   for (const s of p.stray) {
     out.push(violation(s.lineNumber, s.text, "Glossary body must hold only the table; remove this line"));
@@ -107,18 +158,14 @@ function checkTable(p) {
   const seen = new Set();
   for (const r of p.rows) {
     const raw = p.body.find((b) => b.lineNumber === r.lineNumber).text;
-    if (r.cellCount !== 3) { out.push(violation(r.lineNumber, raw, "Glossary row must have exactly 3 cells")); continue; }
-    if (r.term === "") out.push(violation(r.lineNumber, raw, "Glossary row has an empty Term"));
-    if (r.definition === "") out.push(violation(r.lineNumber, raw, "Glossary row has an empty Definition"));
-    if (r.category === "") out.push(violation(r.lineNumber, raw, "Glossary row has an empty Category"));
-    else if (!CATEGORIES.includes(r.category)) {
-      out.push(violation(r.lineNumber, raw, "Category must be one of " + CATEGORIES.join(" / ") + " (got '" + r.category + "')"));
-    }
-    const key = r.term.toLowerCase();
-    if (r.term !== "" && seen.has(key)) out.push(violation(r.lineNumber, raw, "duplicate Term '" + r.term + "'"));
+    const rowOut = checkRow(r, raw, n);
+    out.push(...rowOut);
+    if (r.cellCount !== n) continue;
+    const key = r.term.toLowerCase() + "\u0000" + r.operation;
+    if (r.term !== "" && seen.has(key)) out.push(violation(r.lineNumber, raw, "duplicate Term '" + r.term + "' with Operation '" + r.operation + "'"));
     seen.add(key);
   }
-  return out;
+  return out.concat(useRedefine(p));
 }
 
 function checkIntentGlossary(text) {
@@ -146,10 +193,10 @@ function checkIntentGlossary(text) {
   // Prose without a table is rejected: glossary promotion can only parse the table.
   if (p.table.length === 0) {
     const b = p.body[0];
-    out.push(violation(b.lineNumber, b.text, "Glossary body must be empty or a | Term | Category | Definition | table"));
+    out.push(violation(b.lineNumber, b.text, "Glossary body must be empty or a | Term | Category | Operation | Definition | table"));
     return out;
   }
   return out.concat(checkTable(p));
 }
 
-module.exports = { CATEGORIES, parseIntentGlossary, checkIntentGlossary };
+module.exports = { CATEGORIES, OPERATIONS, parseIntentGlossary, checkIntentGlossary };

@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const { markStep, setProjectManagementType, SESSION_ID_VALID_RE } = require("../workflow-state");
 const { CLARIFY_INTENT_COMPLETE_RE_DQ } = require("../lib/sentinel-patterns");
-const { UnapprovedCompletionError } = require("../workflow-state/completion-approval");
+const { completionRefusalOf } = require("../workflow-state/completion-refusal");
 
 // [ \t] (not \s) keeps an empty value from swallowing the next line as its value.
 const PM_TYPE_LINE_RE = /^[ \t]*\*\*PM type:\*\*[ \t]*(.*?)[ \t]*$/im;
@@ -61,8 +61,13 @@ function handle(ctx) {
     try {
       markStep(sessionId, "clarify_intent", "complete");
     } catch (e) {
-      if (e instanceof UnapprovedCompletionError) {
+      const refusal = completionRefusalOf(e, "clarify_intent");
+      if (refusal && refusal.kind === "unapproved") {
         pushMessage(`workflow-mark: clarify_intent NOT completed — no approval is on record. ${e.recovery}`);
+        return true;
+      }
+      if (refusal) {
+        pushMessage(`workflow-mark: ${refusal.message}`);
         return true;
       }
       pushMessage(
