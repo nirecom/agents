@@ -228,7 +228,7 @@ including `cleanup`, returns to `pending` with an `inherit_revert_reason`; the d
 with `CONFIRM_*`. Events up to `upstream_copy_seq` are not the downstream's own work. `buildCopy`
 alone writes `previous_session_ids`, the upstream lineage oldest first (#2311); readers validate each
 element as a session id. Granularity: `full` in the upstream's worktree, else `context-independent-only`
-(`decideInheritanceGranularity`). `checkOverwriteAllowed` permits adoption into an untouched downstream or a same-upstream re-adopt.
+(`decideInheritanceGranularity`). `checkOverwriteAllowed` permits adoption into an untouched downstream, or a same-upstream re-adopt only while the downstream holds no records of its own.
 
 Recovery: a gated step recorded `complete` without a valid approval (no record, or a hash
 mismatch) reads as `pending` in the effective state. `next-step` answers it with

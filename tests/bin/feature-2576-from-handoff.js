@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/handoff-artifact.js, bin/lib/resume-session/upstream-view.js, bin/resume-session-detect
-// Tags: TL2, session, resume, handoff, input-validation, path-traversal, security, regression-2576, regression-2302, scope:issue-specific, pwsh-not-required
+// Tags: TL2, session, resume, handoff, input-validation, path-traversal, security, symlink, regression-2576, regression-2302, scope:issue-specific, pwsh-not-required
 // #2576: `--from` reads the session upstream's handoff from where the writer puts it
 // (<WORKFLOW_STATE_DIR>/<sid>.control/handoff.md, via findHandoffPath), not from a
 // <sid>-handoff.md the writer never produces. #2302: an id failing SESSION_ID_VALID_RE
@@ -31,6 +31,7 @@ const APPEND = path.join(ROOT, "bin", "workflow", "handoff-append");
 
 let passed = 0;
 let failed = 0;
+let skipped = 0;
 function check(name, fn) {
   let why = null;
   try {
@@ -324,5 +325,72 @@ caseBegin("handoff-directory-is-not-a-handoff", "hooks/lib/handoff-artifact.js")
 }
 caseEnd();
 
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
+// A handoff.md symlink would let the control dir disclose any file it points at, so only
+// a regular file (lstat) counts. The regular-file positive control is U4.
+caseBegin("handoff-symlink-is-not-a-handoff", "hooks/lib/handoff-artifact.js");
+{
+  const HA = mod("hooks/lib/handoff-artifact");
+  const view = mod("bin/lib/resume-session/upstream-view");
+  const sid = "f2576-s-handoff-symlink";
+  const marker = "F2576-S-SYMLINK-TARGET-MARKER";
+  const target = path.join(SCRATCH, "outside-control", "secret.md");
+  const link = path.join(STATE_DIR, `${sid}.control`, "handoff.md");
+  // The target is a document the writer itself produced, so following the link WOULD render the marker.
+  const donorSid = "f2576-s-symlink-target-src";
+  HA.appendHandoffEntry(donorSid, {
+    cls: "A", step: "-", key: "s-symlink", summary: marker, pointer: "-", origin: "procedure-point",
+  });
+  const donorControl = path.join(STATE_DIR, `${donorSid}.control`);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, fs.readFileSync(path.join(donorControl, "handoff.md"), "utf8"));
+  fs.rmSync(donorControl, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(link), { recursive: true });
+  let linked = false;
+  try {
+    fs.symlinkSync(target, link, "file");
+    linked = true;
+  } catch (e) {
+    if (!e || (e.code !== "EPERM" && e.code !== "EACCES")) throw e;
+    skipped += 5;
+    const msg = `SKIP: S0-S3 handoff-symlink cases — symlink creation refused (${e.code}); enable Windows developer mode to run them\n`;
+    process.stdout.write(msg);
+    process.stderr.write(msg);
+  }
+  if (linked) {
+    check("S0: fixture anchor — handoff.md is a symlink to a writer-produced handoff outside the control dir carrying the marker", () => {
+      eq(fs.lstatSync(link).isSymbolicLink(), true, "handoff.md is a symlink");
+      eq(fs.existsSync(path.join(STATE_DIR, `${donorSid}.control`)), false, "scratch writer control dir removed");
+      eq(path.resolve(fs.realpathSync(link)), path.resolve(fs.realpathSync(target)), "link resolves to the target");
+      eq(fs.readFileSync(link, "utf8").indexOf(marker) !== -1, true, "marker readable through the link");
+      eq(slash(path.relative(path.dirname(link), target)).startsWith(".."), true, "target is outside the control dir");
+      eq(fs.existsSync(path.join(STATE_DIR, `${sid}.json`)), false, "state file exists");
+    });
+    check("S1: findHandoffPath returns null for a symlinked handoff.md", () => eq(HA.findHandoffPath(sid), null, "findHandoffPath"));
+    check("S2: readHandoff does not follow a symlinked handoff.md", () => eq(HA.readHandoff(sid).exists, false, "readHandoff.exists"));
+    check("S3: buildUpstreamView reports no handoff and discloses nothing of the link target", () => {
+      const v = view.buildUpstreamView({ heirSid: null, upstreamSid: sid });
+      eq(JSON.stringify(v).indexOf(marker) === -1, true, "target marker absent from the view");
+      eq(((v && v.artifacts) || {}).handoff == null, true, "artifacts.handoff is null (" + show(v && v.artifacts) + ")");
+      eq(v.availability, "none", "availability");
+      eq(v.handoff_rendered == null, true, "handoff_rendered is null (" + show(v.handoff_rendered) + ")");
+    });
+    check("S3: --from on the real CLI reports no handoff and discloses neither the marker nor the target path", () => {
+      const run = spawnNode([CLI, "--from", sid]);
+      const d = parseOut(run);
+      const out = (run.stdout || "") + (run.stderr || "");
+      const flat = slash(out).replace(/\/\//g, "/");
+      if (out.indexOf(marker) !== -1) return "target marker disclosed by the CLI";
+      for (const p of [target, fs.realpathSync(target)]) {
+        if (out.indexOf(p) !== -1 || flat.indexOf(slash(p)) !== -1) return "target path disclosed by the CLI: " + p;
+      }
+      eq(((d && d.artifacts) || {}).handoff == null, true, "artifacts.handoff is null (" + show(d && d.artifacts) + ")");
+      eq(d.handoff_rendered == null, true, "handoff_rendered is null (" + show(d.handoff_rendered) + ")");
+      return undefined;
+    });
+  }
+}
+caseEnd();
+
+process.stdout.write(`Total: ${passed} passed, ${failed} failed, ${skipped} skipped\n`);
+if (skipped > 0) process.stderr.write(`WARNING: ${skipped} case(s) skipped — see SKIP lines\n`);
 process.exitCode = failed === 0 ? 0 : 1;

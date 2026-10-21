@@ -46,6 +46,7 @@ function getHandoffPath(sid, opts) {
 
 // The existing handoff's path, or null. NEVER throws: resolving it may migrate a
 // legacy plans-dir file (controlPath), and a failed migration reads as "no handoff".
+// Only a regular file counts: lstat, so a symlinked handoff.md is never followed.
 function findHandoffPath(sid) {
   if (!isValidSid(sid)) return null;
   let handoffPath;
@@ -56,7 +57,7 @@ function findHandoffPath(sid) {
     return null;
   }
   try {
-    return fs.statSync(handoffPath, { throwIfNoEntry: false })?.isFile() ? handoffPath : null;
+    return fs.lstatSync(handoffPath, { throwIfNoEntry: false })?.isFile() ? handoffPath : null;
   } catch (e) {
     return null;
   }
