@@ -55,15 +55,15 @@ done
 case_end
 
 # #2460 JJ-2 is the one judge dispatch: inside its own block (up to the JJ-3 label) it must
-# reference the section and hand the subagent the SNAPSHOT_FILE path.
+# reference the section and hand the subagent the JEV_INPUT_FILE path.
 case_begin "INV-jj2-block" "skills/write-code/SKILL.md"
 JJ_DOC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/jev-two-stage-judge.md"
 JJ2_BLOCK="$(awk '/^[-*#[:space:]]*JJ-2[^0-9]/ { on = 1 } on && /^[-*#[:space:]]*JJ-3[^0-9]/ { exit } on { print }' "$JJ_DOC" 2>/dev/null)"
 ck "INV#5: JJ-2 block exists in skills/_shared/jev-two-stage-judge.md" "yes" "$([ -n "$JJ2_BLOCK" ] && echo yes || echo no)"
 ck "INV#5: JJ-2 block references the ${SECTION_NAME} section" "yes" \
   "$(printf '%s\n' "$JJ2_BLOCK" | grep -qF -- "$SECTION_NAME" && echo yes || echo no)"
-ck "INV#5: JJ-2 block passes SNAPSHOT_FILE to the subagent" "yes" \
-  "$(printf '%s\n' "$JJ2_BLOCK" | grep -qF -- 'SNAPSHOT_FILE' && echo yes || echo no)"
+ck "INV#5: JJ-2 block passes JEV_INPUT_FILE to the subagent" "yes" \
+  "$(printf '%s\n' "$JJ2_BLOCK" | grep -qF -- 'JEV_INPUT_FILE' && echo yes || echo no)"
 ck "INV#5: JJ-2 dispatches only on RESULT=need-subagent" "yes" \
   "$(printf '%s\n' "$JJ2_BLOCK" | grep -qF -- 'RESULT=need-subagent' && echo yes || echo no)"
 case_end

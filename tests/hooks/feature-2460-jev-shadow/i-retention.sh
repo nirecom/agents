@@ -278,7 +278,7 @@ case_end
 echo "=== versioned state and ticket files leave with their stale session ==="
 case_begin "i-ticket-and-versioned-files-swept" "hooks/lib/jev/retention.js"
 fx_new i-ticket-files
-check "the stale session (v2 ticket hand, versioned breaker/liveness, ticket snapshot/answer/merged, done marker, jev-sources/<ticket>/) is removed after its ticket hand is handed over once; the fresh session keeps all 9 files" \
+check "the stale session (v2 ticket hand, versioned breaker/liveness, ticket Jev input/answer/merged, done marker, jev-sources/<ticket>/) is removed after its ticket hand is handed over once; the fresh session keeps all 9 files" \
   "jev2460-i-tf|absent|jev2460-i-tf:tkt-2460-i|present|9" "$(rp ticket-files jev2460-i-tf)"
 case_end
 

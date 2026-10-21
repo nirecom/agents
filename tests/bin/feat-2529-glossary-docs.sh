@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feat-2529-glossary-docs.sh
-# Tests: rules/docs/glossary.md, rules/docs.md, docs/glossary.md, docs/glossary/user.md, docs/glossary/internal.md, docs/architecture/claude-code/shell-command-parsing.md, docs/architecture/claude-code/workflow.md, docs/architecture/claude-code/root-names.md, bin/check-root-names/classification.json, rules/handoff-emergency-flush.md, skills/_shared/combined-glossary.md, skills/update-docs/SKILL.md, skills/clarify-intent/SKILL.md, docs/architecture/claude-code/settings/hooks.md
+# Tests: rules/docs/glossary.md, rules/docs.md, docs/glossary.md, docs/glossary/user.md, docs/glossary/internal.md, docs/architecture/claude-code/shell-command-parsing.md, docs/architecture/claude-code/workflow.md, docs/architecture/claude-code/root-names.md, bin/check-root-names/classification.json, rules/progress-update.md, skills/_shared/combined-glossary.md, skills/update-docs/SKILL.md, skills/clarify-intent/SKILL.md, docs/architecture/claude-code/settings/hooks.md
 # Tags: scope:issue-specific, TL1, static, docs, glossary, terminology, pwsh-not-required
 # Issue #2529 — the glossary entry criteria become a rule (rules/docs/glossary.md), the
 # glossary splits by category into glossary/user.md / glossary/internal.md with one entry
@@ -398,10 +398,11 @@ lacks "D13/no-exception-on-index" "$CJ" '"docs/glossary\.md"'
 case_end
 
 # ============================================================================
-case_begin "flush-rule-names-new-owner" "rules/handoff-emergency-flush.md"
+# #2594 replaced rules/handoff-emergency-flush.md with rules/progress-update.md, which carries the sentence.
+case_begin "progress-rule-names-new-owner" "rules/progress-update.md"
 # ============================================================================
-has "D14/flush-rule-owner-is-user-file" "$R/rules/handoff-emergency-flush.md" '`docs/glossary/user\.md` owns the term'
-lacks "D14/flush-rule-no-old-owner" "$R/rules/handoff-emergency-flush.md" 'docs/glossary\.md'
+has "D14/progress-rule-owner-is-user-file" "$R/rules/progress-update.md" '`docs/glossary/user\.md` owns the term'
+lacks "D14/progress-rule-no-old-owner" "$R/rules/progress-update.md" 'docs/glossary\.md'
 case_end
 
 # ============================================================================

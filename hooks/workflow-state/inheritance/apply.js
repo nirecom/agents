@@ -1,181 +1,278 @@
 "use strict";
-// The ONE execution point for applying a donor's work record to an heir (#1305).
+// The ONE execution point for carrying a session upstream's work record into the
+// session downstream (#1305, #2304). Two entry points use it — the automatic lineage
+// path in the SessionStart hook and the explicit bin/workflow/adopt-session-state CLI
+// — so both produce byte-identical state only because there is one implementation.
 //
-// Moved out of hooks/session-start.js because inheritance now has TWO entry
-// points — the automatic lineage path in the SessionStart hook, and the explicit
-// bin/workflow/adopt-session-state CLI used for crash-resume. Both must append
-// byte-identical streams, which is only guaranteed if there is exactly one
-// implementation (CPR-SSOT).
+// Since #2304 the downstream receives a VERBATIM copy of the upstream state (events
+// keep their seq/at/origin/provenance; only session_id and created_at change), bounded
+// by `upstream_copy_seq`. What must not travel is then reverted by events appended
+// AFTER that boundary, and the whole result is written exactly once.
 
-const { appendEvents, VALID_STEPS } = require("../state-io");
-const { convertV1AnnotationsToEvents } =
-  require("../state-io/migrations/v1-to-v2");
-const { APPROVAL_GATED_STEPS } = require("../completion-approval");
+const core = require("../state-io/core");
+const { withStateLock } = require("../state-io/state-lock");
+const { assertStreamIntegrity, projectState } = require("../state-io/projection");
+const { composeAppendedState } = require("../state-io/events");
 const { isContextIndependentStep } = require("../state-io/step-context-class");
+const CA = require("../completion-approval");
+const { rowFor } = require("../plan-stage-table");
 
 const INHERIT_ORIGIN = "session-inherit";
 
 const GRANULARITY_FULL = "full";
 const GRANULARITY_CONTEXT_INDEPENDENT_ONLY = "context-independent-only";
 
-// Carries a donor's WORK RECORD into an heir as ONE append-only batch (#1733):
-// provenance:"backfilled" keeps an inherited `complete` distinguishable from an
-// observed one, every event is stamped `at = createdAt`, and cleanup (#772) is
-// reset rather than carried. Facts about the donor SESSION (worktree_*, cwd,
-// branch, closes_issues, …) are never inherited. Contract and the granularity
-// table: docs/architecture/claude-code/workflow.md.
-function applyInheritance(sessionId, createdAt, donor, opts) {
-  const donorSid = (donor && donor.session_id) || null;
-  const donorSteps = (donor && donor.steps) || {};
-  const donorApprovals = (donor && donor.plan_approvals) || null;
+class UpstreamStateUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "UpstreamStateUnavailableError";
+  }
+}
 
-  const stamp = (event) =>
-    Object.assign({}, event, {
-      at: createdAt,
-      provenance: "backfilled",
-      origin: INHERIT_ORIGIN,
-      inherited_from: donorSid,
-    });
+const isPlainObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+const statusOf = (projection, step) => {
+  const entry = projection && projection.steps && projection.steps[step];
+  return (entry && entry.status) || "pending";
+};
 
-  const granularity = opts && opts.granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY
+// Read the upstream state for copying. Missing, unparseable or seq-broken input throws:
+// a copy of a stream that could not have come from appendEvents would be a lie.
+function readUpstreamForCopy(upstreamSid) {
+  const raw = core.readRawState(upstreamSid);
+  if (!isPlainObject(raw)) {
+    throw new UpstreamStateUnavailableError(`no state file for session upstream ${upstreamSid}`);
+  }
+  const state = JSON.parse(JSON.stringify(core.normalizeStateVersion(raw)));
+  state.events = Array.isArray(state.events) ? state.events : [];
+  assertStreamIntegrity(state.events);
+  return state;
+}
+
+function lastOfKind(events, kind) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i] && events[i].kind === kind) return events[i];
+  }
+  return null;
+}
+
+const isValidSid = (v) => typeof v === "string" && core.SESSION_ID_VALID_RE.test(v);
+
+// The lineage the upstream already carries, oldest first. A state written before
+// previous_session_ids existed still names its own upstream in upstream_session_id.
+function inheritedChain(upstream) {
+  if (Array.isArray(upstream.previous_session_ids)) return upstream.previous_session_ids.filter(isValidSid);
+  if (isValidSid(upstream.upstream_session_id)) return [upstream.upstream_session_id];
+  return [];
+}
+
+function dedupKeepFirst(ids) {
+  return Array.from(new Set(ids));
+}
+
+// Steps (3)-(6) of the copy: identity, boundary, and the downstream's own location facts.
+function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) {
+  const clone = upstream;
+  // Read before upstream_session_id is overwritten below: clone IS the upstream object.
+  clone.previous_session_ids = dedupKeepFirst([...inheritedChain(upstream), upstreamSid]);
+  clone.session_id = downstreamSid;
+  clone.created_at = createdAt;
+  clone.upstream_session_id = upstreamSid;
+  // Events at or below an earlier adoption's boundary are that upstream's copy, not the downstream's own.
+  const downBoundary = downstream && downstream.upstream_session_id ? Number(downstream.upstream_copy_seq) || 0 : 0;
+  const downEvents = (downstream && Array.isArray(downstream.events) ? downstream.events : [])
+    .filter((e) => e && Number(e.seq) > downBoundary);
+  const downOwn = {};
+  for (const kind of ["worktree", "session_model"]) downOwn[kind] = lastOfKind(downEvents, kind);
+
+  const upEvents = clone.events;
+  clone.upstream_copy_seq = upEvents.length ? upEvents[upEvents.length - 1].seq : 0;
+
+  const downCtx = downstream && downstream.session_start_context;
+  if (isPlainObject(downCtx) && JSON.stringify(downCtx) !== JSON.stringify(clone.session_start_context)) {
+    clone.session_start_context = JSON.parse(JSON.stringify(downCtx));
+  }
+
+  // Where this process runs and on which model are downstream facts; dropping them
+  // in the copy would make state.cwd / session_model describe the upstream.
+  for (const kind of ["worktree", "session_model"]) {
+    const ev = downOwn[kind];
+    if (ev) clone.events.push(JSON.parse(JSON.stringify(ev)));
+  }
+  clone.events.forEach((e, i) => { e.seq = i + 1; });
+  return clone;
+}
+
+// The revert batch, evaluated against the copy inside composeAppendedState.
+// Returns { events, reverted } — `reverted` is the reverted_steps contract.
+function planReverts(downstreamSid, copy, projection, degraded) {
+  const upstreamSid = copy.upstream_session_id;
+  const { VALID_STEPS } = core;
+  const reverted = [];
+  // The copy carries upstream_session_id and events, which a bare projection lacks;
+  // the evaluator needs both to resolve whose plan artifact a record points at.
+  const evalState = Object.assign({}, copy, projection);
+
+  // #2633-1: the first gated step whose approval no longer verifies, plus every later
+  // non-pending step (cleanup included), goes back to pending.
+  for (const step of CA.APPROVAL_GATED_STEPS) {
+    if (statusOf(projection, step) !== "complete") continue;
+    let verdict = CA.evaluateCompletionApproval(downstreamSid, step, evalState);
+    // A record bound to a third session's file is superseded once the session upstream
+    // authored its own file for the stage: the upstream itself already treats it as stale.
+    const rec = CA.readPlanApproval(evalState, step);
+    const boundTo = rec && rec.artifact_session_id;
+    if (verdict.approved && boundTo && boundTo !== upstreamSid && CA.computeArtifactSha(upstreamSid, step)) {
+      verdict = { approved: false, code: "artifact-hash-mismatch", source: verdict.source };
+    }
+    if (verdict.approved) continue;
+    reverted.push({ step, cause: "approval", code: verdict.code, trigger: step });
+    for (const later of VALID_STEPS.slice(VALID_STEPS.indexOf(step) + 1)) {
+      if (statusOf(projection, later) === "pending") continue;
+      reverted.push({ step: later, cause: "approval", code: "follows-reverted-step", trigger: step });
+    }
+    break;
+  }
+  const approvalRevert = reverted.length > 0;
+
+  if (degraded) {
+    const done = new Set(reverted.map((r) => r.step));
+    for (const step of VALID_STEPS) {
+      if (done.has(step) || isContextIndependentStep(step)) continue;
+      if (statusOf(projection, step) === "pending") continue;
+      reverted.push({ step, cause: "context", code: "worktree-dependent", trigger: null });
+    }
+  }
+
+  const stamp = (event) => Object.assign(event, { provenance: "backfilled", origin: INHERIT_ORIGIN });
+  const events = [];
+  for (const r of reverted) {
+    const reason = r.cause === "context"
+      ? "context:worktree-dependent"
+      : r.step === r.trigger ? `approval:${r.code}` : `approval:follows:${r.trigger}`;
+    events.push(stamp({ kind: "step_annotations_cleared", step: r.step }));
+    events.push(stamp({ kind: "step_status", step: r.step, status: "pending" }));
+    events.push(stamp({ kind: "step_annotation", step: r.step, key: "inherit_revert_reason", value: reason }));
+  }
+
+  // #772: cleanup never inherits as already done. Not when degraded (the downstream's
+  // own worktree still needs tearing down) and not after an approval revert (the
+  // downstream redoes the work, then runs its own cleanup).
+  if (!degraded && !approvalRevert) {
+    events.push(stamp({ kind: "step_annotations_cleared", step: "cleanup" }));
+    events.push(stamp({ kind: "step_status", step: "cleanup", status: "skipped" }));
+    events.push(stamp({
+      kind: "step_annotation", step: "cleanup", key: "skip_reason", value: "inherited-from-prior-session",
+    }));
+  }
+  return { events, reverted };
+}
+
+// applyInheritance(downstreamSid, createdAt, upstreamSid, opts) ->
+//   { upstream_session_id, granularity, inherited_steps, reverted_steps, supervisor_state }.
+// opts.granularity: "full" (default) | "context-independent-only".
+// opts.precheck(downstreamState): optional; throwing refuses before anything is read upstream.
+// Throws (writing nothing) when the upstream state is missing or corrupt.
+function applyInheritance(downstreamSid, createdAt, upstreamSid, opts) {
+  const o = opts || {};
+  const granularity = o.granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY
     ? GRANULARITY_CONTEXT_INDEPENDENT_ONLY
     : GRANULARITY_FULL;
   const degraded = granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY;
-  const inheritedSteps = [];
-  const revertedSteps = degraded
-    ? VALID_STEPS.filter((step) => !isContextIndependentStep(step))
-    : [];
+  let reverted = [];
 
-  const build = () => {
-    const events = [];
+  const written = withStateLock(downstreamSid, () => {
+    const downRaw = core.readRawState(downstreamSid);
+    const downstream = isPlainObject(downRaw) ? core.normalizeStateVersion(downRaw) : null;
+    if (typeof o.precheck === "function") o.precheck(downstream);
 
-    for (const step of VALID_STEPS) {
-      // cleanup is handled below — its donor record is discarded wholesale.
-      if (step === "cleanup") continue;
-      // Degraded mode emits NO event of any kind for a worktree-dependent step:
-      // an annotation carried without its status is still a claim about a
-      // working tree this session never had.
-      if (degraded && !isContextIndependentStep(step)) continue;
-      const entry = donorSteps[step];
-      if (!entry || typeof entry !== "object") continue;
-      if (inheritedSteps.indexOf(step) === -1) inheritedSteps.push(step);
+    const upstream = readUpstreamForCopy(upstreamSid);
+    const copy = buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream);
 
-      if (typeof entry.status === "string" && entry.status !== "pending") {
-        events.push(stamp({ kind: "step_status", step, status: entry.status }));
-      }
-      // Annotations travel even on a PENDING step (a reset_reason explains why the
-      // step was rewound and is lost if only non-pending steps are carried).
-      // convertV1AnnotationsToEvents owns which entry fields ARE annotations —
-      // the same conversion the v1->v2 migration performs (CPR-E2C); only the
-      // stamping differs, so the two can never disagree about the field set.
-      for (const converted of convertV1AnnotationsToEvents(step, entry, { createdAt })) {
-        events.push(
-          stamp({ kind: "step_annotation", step, key: converted.key, value: converted.value })
-        );
-      }
-    }
+    const { state: next } = composeAppendedState(downstreamSid, copy, (_events, projection) => {
+      const planned = planReverts(downstreamSid, copy, projection, degraded);
+      reverted = planned.reverted;
+      return planned.events;
+    }, { origin: INHERIT_ORIGIN, provenance: "backfilled", now: createdAt });
 
-    // #772: cleanup must never inherit as already-done. The three events are one
-    // unit: discard the donor's notes, record the reset, state why. Skipped when
-    // degraded — the heir's OWN worktree still needs tearing down, so marking
-    // cleanup skipped there would be a false record.
-    if (!degraded) {
-      events.push(stamp({ kind: "step_annotations_cleared", step: "cleanup" }));
-      events.push(stamp({ kind: "step_status", step: "cleanup", status: "skipped" }));
-      events.push(
-        stamp({
-          kind: "step_annotation",
-          step: "cleanup",
-          key: "skip_reason",
-          value: "inherited-from-prior-session",
-        })
-      );
-    }
-
-    // #1133: an inherited outline/detail `complete` is a pending->complete
-    // transition for the NEW session, so the donor's approval must land in the
-    // SAME batch or the completion-boundary invariant refuses the whole append.
-    // The record stays bound to the artifact it was approved against
-    // (<owner-sid>-<step>.md) via artifact_session_id.
-    if (donorApprovals && typeof donorApprovals === "object") {
-      // Iterate VALID_STEPS, not the donor's keys: the donor is a FOREIGN session's
-      // file from the shared workflow dir, and an out-of-vocabulary key would make
-      // validateEvent throw, aborting inheritance and leaving this session with no
-      // state file at all. Skip what we don't recognize; never let it wedge us.
-      for (const step of VALID_STEPS) {
-        if (degraded && !isContextIndependentStep(step)) continue;
-        const rec = donorApprovals[step];
-        if (!rec || typeof rec !== "object") continue;
-        events.push(
-          stamp({
-            kind: "plan_approval",
-            step,
-            source: rec.source !== undefined ? rec.source : null,
-            reason: rec.reason !== undefined ? rec.reason : null,
-            artifact_sha256: rec.artifact_sha256 !== undefined ? rec.artifact_sha256 : null,
-            artifact_session_id: rec.artifact_session_id || donorSid || null,
-            artifact_hash_status:
-              rec.artifact_hash_status !== undefined ? rec.artifact_hash_status : null,
-          })
-        );
-      }
-    }
-
-    return events;
-  };
-
-  // #1133 × #1305: a donor may predate plan_approvals entirely (or simply never
-  // recorded one) while still holding outline/detail complete. Refusing that
-  // batch would make inheritance impossible for exactly the sessions it exists
-  // to rescue, so the boundary is crossed under the named `session-inherit`
-  // token — which stamps an audit record rather than silently waiving anything.
-  //
-  // The token is offered ONLY when the donor holds NO record for any gated step
-  // it is completing. A donor that HAS one is verified the normal way, so a
-  // tampered or deleted artifact is still refused (#1133 G15f/G15h).
-  const gatedCompleting = APPROVAL_GATED_STEPS.filter(
-    (step) => (!degraded || isContextIndependentStep(step))
-      && donorSteps[step] && donorSteps[step].status === "complete"
-  );
-  const anyDonorRecord = gatedCompleting.some(
-    (step) => donorApprovals && donorApprovals[step] && typeof donorApprovals[step] === "object"
-  );
-  const sanctioned =
-    gatedCompleting.length > 0 && !anyDonorRecord ? "session-inherit" : null;
-
-  // Builder form: the batch is produced INSIDE the lock, and `now` pins every
-  // unstamped event to the heir's created_at.
-  appendEvents(sessionId, build, {
-    origin: INHERIT_ORIGIN,
-    now: createdAt,
-    sanctioned,
-    reason: sanctioned
-      ? `inherited from session ${donorSid || "(unknown)"} which recorded no plan approval`
-      : null,
+    // The single write: the downstream is either untouched or fully copied-and-reverted.
+    core.writeStateLocked(downstreamSid, next);
+    return next;
   });
 
-  return { granularity, inherited_steps: inheritedSteps, reverted_steps: revertedSteps };
+  const projection = projectState(written);
+  const inherited = core.VALID_STEPS.filter((s) => s !== "cleanup" && statusOf(projection, s) !== "pending");
+
+  // A separate file, copied only after the workflow state landed; a failure here is
+  // reported, never fatal — the downstream merely starts without the audit record.
+  let supervisorState = "failed";
+  try {
+    supervisorState = require("../../lib/supervisor-state-writer/copy").copySupervisorState(upstreamSid, downstreamSid);
+  } catch (_) {
+    supervisorState = "failed";
+  }
+
+  return {
+    upstream_session_id: upstreamSid,
+    granularity,
+    inherited_steps: inherited,
+    reverted_steps: reverted,
+    supervisor_state: supervisorState,
+  };
 }
 
-// The ONE renderer both adopt-session-state and /resume-session print from, so
-// the two can never describe the same adoption differently.
+function planPathHint(upstreamSid, step) {
+  const row = rowFor(step);
+  const suffix = row ? row.suffix : step;
+  try {
+    if (upstreamSid) {
+      return require("../../lib/plans-artifact-registry").getPlansArtifactPath(upstreamSid, suffix);
+    }
+  } catch (_) { /* fall through to the generic name */ }
+  return `the ${suffix} plan`;
+}
+
+// The ONE renderer adopt-session-state and /resume-session print from, so the two
+// can never describe the same inheritance differently.
 function describeGranularInheritance(result) {
   const granularity = (result && result.granularity) || GRANULARITY_FULL;
   const inherited = (result && result.inherited_steps) || [];
-  const reverted = (result && result.reverted_steps) || [];
-  const head = `Inherited ${inherited.length} step(s) at granularity ${granularity}: ` +
-    `${inherited.length ? inherited.join(", ") : "(none)"}.`;
-  if (reverted.length === 0) {
-    return `${head} Nothing was held back — the donor's record carried over whole.`;
+  const reverted = ((result && result.reverted_steps) || []).filter(isPlainObject);
+  const upstreamSid = (result && result.upstream_session_id) || null;
+  const parts = [`Inherited ${inherited.length} step(s) at granularity ${granularity}: ` +
+    `${inherited.length ? inherited.join(", ") : "(none)"}.`];
+
+  const approval = reverted.filter((r) => r.cause === "approval");
+  const context = reverted.filter((r) => r.cause === "context");
+  if (approval.length === 0 && context.length === 0) {
+    parts.push("Nothing was held back — the session upstream record carried over whole.");
+    return parts.join(" ");
   }
-  return `${head} Left pending in this worktree because their evidence does not travel: ` +
-    `${reverted.join(", ")}.`;
+
+  const triggers = approval.filter((r) => r.step === r.trigger);
+  for (const t of triggers) {
+    const followers = approval.filter((r) => r.trigger === t.step && r.step !== t.step).map((r) => r.step);
+    let line = "Reverted to pending because the session upstream approval no longer verifies: " +
+      `${t.step} (${t.code})`;
+    if (t.code === "artifact-hash-unverifiable") {
+      line += " (the session upstream plan file is missing or unreadable — it may have aged out of retention)";
+    }
+    if (followers.length) line += `; also reset: ${followers.join(", ")}`;
+    line += `. Re-present ${planPathHint(upstreamSid, t.step)} and re-approve with ` +
+      `<<${CA.confirmSentinelFor(t.step)}: {summary}>>.`;
+    parts.push(line);
+  }
+  if (context.length) {
+    parts.push("Left pending in this worktree because their evidence does not travel: " +
+      `${context.map((r) => r.step).join(", ")}.`);
+  }
+  return parts.join(" ");
 }
 
 module.exports = {
   INHERIT_ORIGIN,
   GRANULARITY_FULL,
   GRANULARITY_CONTEXT_INDEPENDENT_ONLY,
+  UpstreamStateUnavailableError,
   applyInheritance,
   describeGranularInheritance,
 };

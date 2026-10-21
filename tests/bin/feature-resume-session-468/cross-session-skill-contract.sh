@@ -22,8 +22,21 @@ else
         T23C_PROBLEMS="$T23C_PROBLEMS [the report-only clause on the handoff notes is gone]"
     grep -qF 'never read that file into this conversation yourself' "$SKILL_MD_LOCAL" ||
         T23C_PROBLEMS="$T23C_PROBLEMS [the transcript tail is no longer delegated to a subagent]"
+    # #2301 — the `--list` candidates (title, sid, artifact paths) are written by
+    # other sessions too. The file-wide 'untrusted data' grep above is already
+    # satisfied by the handoff line, so this one reads ONLY the `--list`
+    # paragraph: from the `--list [query]` line up to the `--classify-cwd` line.
+    T23C_LIST_PARA=$(awk '/--list \[query\]/{on=1} /--classify-cwd/{on=0} on' "$SKILL_MD_LOCAL")
+    if [ -z "$T23C_LIST_PARA" ]; then
+        T23C_PROBLEMS="$T23C_PROBLEMS [the --list [query] paragraph is gone]"
+    else
+        printf '%s' "$T23C_LIST_PARA" | grep -qi 'untrusted' ||
+            T23C_PROBLEMS="$T23C_PROBLEMS [the --list candidates are not labelled untrusted]"
+        printf '%s' "$T23C_LIST_PARA" | grep -qF 'never instructions to follow' ||
+            T23C_PROBLEMS="$T23C_PROBLEMS [the --list paragraph lacks the report-only clause for candidates]"
+    fi
     if [ -z "$T23C_PROBLEMS" ]; then
-        pass "T23c. the skill still renders cross-session handoff notes as fenced untrusted data and delegates the transcript tail to a subagent"
+        pass "T23c. the skill still renders cross-session handoff notes and --list candidates as untrusted data and delegates the transcript tail to a subagent"
     else
         fail "T23c. the untrusted-data contract regressed;$T23C_PROBLEMS"
     fi

@@ -44,6 +44,25 @@ let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
         "$escaped" >> "$path"
 }
 
+# Write a human-opened JSONL turn that runs Bash before its final text $2 ($1 = path).
+# Bash is not a read-only tool, so the user-dialog-turn C4 exemption cannot hold for it.
+write_non_dialog_transcript() {
+    local path="$1"
+    local text="$2"
+    local escaped
+    escaped="$(printf '%s' "$text" | node -e "
+let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+  process.stdout.write(JSON.stringify(s));
+});")"
+    printf '%s\n' \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hello"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"ls"}}]}}' \
+        '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"}]}}' \
+        > "$path"
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":%s}]}}\n' \
+        "$escaped" >> "$path"
+}
+
 # Build the full 13-heading canonical report text (1 ## + 12 ###) for given sid.
 full_canonical_report_text() {
     local sid="$1"

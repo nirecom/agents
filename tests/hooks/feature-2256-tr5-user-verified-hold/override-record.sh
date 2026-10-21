@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2256-tr5-user-verified-hold/override-record.sh
-# Tests: bin/supervisor-record-block-override, hooks/workflow-gate.js
+# Tests: hooks/lib/supervisor-block-override.js, hooks/workflow-mark/supervisor-block-override-handler.js, hooks/workflow-gate.js
 # Tags: supervisor, tr5, block-override, cli, TL2, scope:issue-specific
 # #2256 S5-d — recording a human BLOCK override, and everything that invalidates it.
 
 # Parent: tests/hooks/feature-2256-tr5-user-verified-hold.sh
 
-# The CLI shape pinned here mirrors its only sibling, bin/supervisor-write-audit-verdict:
-# positional arguments first, then an optional --session-id <sid>. If the implementation
-# lands on a different flag spelling, change this helper — not the assertions around it.
+# #2709: the override is recorded through the ask-gated sentinel handler
+# (override_via_handler in _common.sh); the CLI is gone. A refusal is no longer an exit
+# code — it is "nothing recorded" plus the pushed message.
 
 set -uo pipefail
 
@@ -23,13 +23,16 @@ trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 REASON_OK="verified manually with the reviewer; the BLOCK is a false positive here"
 REASON_SHORT="too short"
 
-# record <run-id> <reason> — prints the exit code; stderr is folded into stdout on demand.
+# record <run-id> <reason> — prints "recorded" when block_overrides grew, else "refused".
 record() {
-    bash "$RWT" 60 node "$OVERRIDE_BIN" "$1" "$2" --session-id "$SID" >/dev/null 2>&1
-    printf '%s' "$?"
+    local before after
+    before="$(state_field audit.block_overrides)"
+    override_via_handler "$1" "$2" >/dev/null
+    after="$(state_field audit.block_overrides)"
+    if [ "$before" != "$after" ]; then printf 'recorded'; else printf 'refused'; fi
 }
 record_err() {
-    bash "$RWT" 60 node "$OVERRIDE_BIN" "$1" "$2" --session-id "$SID" 2>&1
+    override_via_handler "$1" "$2"
 }
 findings_json() {
     WR="$WRITER_NODE" SESS="$SID" node -e "
@@ -40,11 +43,14 @@ process.stdout.write(JSON.stringify(f));
 " 2>&1
 }
 
-# --- 1-2: the CLI must exist at all ---
-if [ -f "$OVERRIDE_BIN" ]; then pass "1: bin/supervisor-record-block-override exists"; else
-    fail "1: bin/supervisor-record-block-override exists" "missing: $OVERRIDE_BIN"; fi
+# --- 1-2: the handler is the write path; the un-gated CLI is gone ---
+if [ -f "$OVERRIDE_HANDLER_NODE" ]; then pass "1: the override sentinel handler exists"; else
+    fail "1: the override sentinel handler exists" "missing: $OVERRIDE_HANDLER_NODE"; fi
+if [ -e "$__COMMON_SCRIPT_CHECKOUT_ROOT/bin/supervisor-record-block-override" ]; then
+    fail "1b: bin/supervisor-record-block-override is removed" "still present"; else
+    pass "1b: bin/supervisor-record-block-override is removed"; fi
 seed_state "$(terminal_run BLOCK "$(fresh_key)")" >/dev/null
-assert_eq "2: a valid override is accepted" "$(record run-0011 "$REASON_OK")" "0"
+assert_eq "2: a valid override is accepted" "$(record run-0011 "$REASON_OK")" "recorded"
 
 # --- 3-5: the accepted record carries run id, freshness key, reason and actor ---
 assert_eq "3: the record names the overridden run" "$(state_field audit.block_overrides.0.run_id)" "run-0011"
@@ -63,20 +69,20 @@ out="$(gate "$SENTINEL_UV")"
 assert_eq "9: the recorded override releases the TR5 hold" "$(decision_of "$out")" "approve"
 assert_eq "10: releasing the hold arms no audit run" "$(state_field audit.audit_phase)" "null"
 
-# --- 11-13: a reason under 20 characters is refused with exit 2 ---
+# --- 11-13: a reason under 20 characters is refused ---
 seed_state "$(terminal_run BLOCK "$(fresh_key)")" >/dev/null
-assert_eq "11: a reason under 20 characters exits 2" "$(record run-0011 "$REASON_SHORT")" "2"
+assert_eq "11: a reason under 20 characters is refused" "$(record run-0011 "$REASON_SHORT")" "refused"
 assert_eq "12: the refused override records nothing" "$(state_field audit.block_overrides)" "[]"
 assert_match "13: the refusal explains the reason-length requirement" \
     "$(record_err run-0011 "$REASON_SHORT")" '20'
 
-# --- 14-15: a run id that is not the last terminal run is refused with exit 2 ---
-assert_eq "14: a mismatching run id exits 2" "$(record run-0099 "$REASON_OK")" "2"
+# --- 14-15: a run id that is not the last terminal run is refused ---
+assert_eq "14: a mismatching run id is refused" "$(record run-0099 "$REASON_OK")" "refused"
 assert_eq "15: the mismatching override records nothing" "$(state_field audit.block_overrides)" "[]"
 
 # --- 16-17: the last terminal run must actually be a BLOCK ---
 seed_state "$(terminal_run CONTINUE "$(fresh_key)")" >/dev/null
-assert_eq "16: overriding a non-BLOCK verdict exits 2" "$(record run-0011 "$REASON_OK")" "2"
+assert_eq "16: overriding a non-BLOCK verdict is refused" "$(record run-0011 "$REASON_OK")" "refused"
 assert_eq "17: overriding a non-BLOCK verdict records nothing" "$(state_field audit.block_overrides)" "[]"
 
 # --- 18-20: a code diff after the override invalidates it ---
@@ -110,7 +116,7 @@ write_plans
 # Case 9 proved a TR5-scoped override releases the hold when the TR5 run is the
 # only terminal entry. A later, independent TR6 BLOCK is a run the TR5 override
 # never speaks to: releasing over it would bypass that BLOCK. Record the override
-# through the real CLI on the single-entry ledger, then seed a two-entry ledger
+# through the real handler on the single-entry ledger, then seed a two-entry ledger
 # that keeps that same override alongside a later TR6 BLOCK. Deleting
 # `!laterBlockExists &&` at line 181 makes case 24 approve.
 FK_OV="$(fresh_key)"

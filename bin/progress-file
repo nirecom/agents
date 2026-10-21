@@ -1,0 +1,58 @@
+#!/usr/bin/env node
+// bin/progress-file — the path of this session's session-progress.md (#2594), and its creation.
+//   progress-file path   --session <sid>                          prints the path; never creates
+//   progress-file ensure --session <sid> [--reason update-progress] creates from the template
+//                                                                  if absent, then prints the path
+// The file is named after the root sid (the first generation of a handed-off session).
+// Exit: 0 ok, 1 internal failure, 2 usage error (unknown subcommand, missing or invalid sid).
+"use strict";
+
+const path = require("path");
+const P = require(path.join(__dirname, "..", "hooks", "lib", "progress-file.js"));
+
+const USAGE = "usage: progress-file path|ensure --session <sid> [--reason update-progress]";
+
+function parseArgs(argv) {
+  const out = { cmd: argv[0], session: null, reason: null };
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--session") out.session = argv[++i];
+    else if (a === "--reason") out.reason = argv[++i];
+    else if (a === "--help" || a === "-h") out.help = true;
+    else out.unknown = a;
+  }
+  return out;
+}
+
+function usageError(msg) {
+  process.stderr.write(`progress-file: ${msg}\n${USAGE}\n`);
+  process.exit(2);
+}
+
+function main() {
+  const a = parseArgs(process.argv.slice(2));
+  if (a.help || a.cmd === "--help" || a.cmd === "-h") {
+    process.stdout.write(`${USAGE}\n`);
+    return 0;
+  }
+  if (a.cmd !== "path" && a.cmd !== "ensure") usageError(`unknown subcommand: ${a.cmd || "(none)"}`);
+  if (a.unknown) usageError(`unknown argument: ${a.unknown}`);
+  if (!P.isValidSid(a.session)) usageError("--session <sid> is missing or not a valid session id");
+  if (a.reason !== null && a.reason !== "update-progress") usageError(`unknown --reason: ${a.reason}`);
+  if (a.cmd === "path") {
+    const p = P.progressPathFor(a.session);
+    if (!p) return 1;
+    process.stdout.write(`${p}\n`);
+    return 0;
+  }
+  const r = P.ensureProgressFile(a.session);
+  if (!r.path) {
+    process.stderr.write("progress-file: could not create session-progress.md\n");
+    return 1;
+  }
+  if (a.reason === "update-progress") P.bumpUpdateProgress(a.session);
+  process.stdout.write(`${r.path}\n`);
+  return 0;
+}
+
+process.exit(main());

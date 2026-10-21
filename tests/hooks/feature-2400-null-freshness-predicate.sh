@@ -292,6 +292,25 @@ file_has "P16e: supervisor-check.js requires the shared lib" "$REQ_LIB_RE" "$SUP
 file_has "P16j: supervisor-check.js passes the unsettled audit run to the predicate" 'unsettledAuditRun\(' "$SUPC"
 case_end
 
+# #2594 4b: the arm reason asks for a session-progress.md update BEFORE the audit launch line.
+cat > "$TMPD/arm-reason.js" << 'JSEOF'
+"use strict";
+const { formatAuditArmReason } = require(process.env.ARM_JS);
+const text = formatAuditArmReason({ run_id: "run-0042", cause: "TR5", sub_checks: ["S1"] },
+  { sessionId: "s1", effectiveSid: "s1", stateFilePath: "/xx/s1.json", auditAgentPath: "/xx/agents/supervisor-audit.md" });
+const lines = text.split("\n");
+const upd = lines.findIndex((l) => l.includes("Update session-progress.md first, then launch the audit agent"));
+const launch = lines.findIndex((l) => l.includes("Launch supervisor-audit with this run-id"));
+const cli = text.includes("bin/progress-file path");
+process.stdout.write("update=" + (upd >= 0) + ";before-launch=" + (upd >= 0 && launch >= 0 && upd < launch) + ";cli=" + cli);
+JSEOF
+
+case_begin "audit-arm-asks-progress-update-first" "hooks/supervisor-guard/audit-arm.js"
+check "P21: the arm reason has the session-progress.md update line before the launch line and names bin/progress-file path" \
+    "update=true;before-launch=true;cli=true" \
+    "$(ARM_JS="$(np "$ARM")" run_with_timeout 30 node "$(np "$TMPD")/arm-reason.js" 2>&1)"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ] || exit 1

@@ -2,21 +2,10 @@
 # tests/hooks/feature-1733-state-event-stream/projection-contract.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/is-bugfix-session.js
 # Tags: workflow-state, event-stream, projection, deep-freeze, single-source-of-truth, scope:issue-specific, pwsh-not-required, TL2
-#
-# ~20 readers keep reading `state.steps` after #1733, so readState still PASTES a
-# projection on top of the raw state. Two contracts must hold or the migration is a
-# silent behaviour change:
-#   (1) the pasted view is exactly projectState(raw) — one fold implementation, no
-#       second derivation living in a reader (CPR-SSOT);
-#   (2) the pasted view is deep-frozen, so a legacy write into it fails LOUDLY at
-#       development time rather than becoming a silent no-op.
-#
-# TL3 gap (what this test does NOT catch):
-# - whether every real reader in hooks/ and bin/ actually survives the deep-freeze:
-#   a dynamic `state.steps[x] = ...` on a path this file does not drive would still
-#   throw only at runtime.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# readState PASTES a projection (#1733): it must equal projectState(raw) (CPR-SSOT) and be
+# deep-frozen so a legacy write fails loudly. TL3 gap: real readers under the deep-freeze
+# are not driven here; mitigation: bin/check-verification-gate.sh category: hook-registration.
+
 
 CASE_TAG="pcon"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -29,7 +18,7 @@ if run_case "P1/projection-agreement"; then
 const PJ = require("./hooks/workflow-state/state-io/projection");
 const CA = require("./hooks/workflow-state/completion-approval");
 S.markStep(sid, "workflow_init", "complete");
-CA.recordPlanApproval(sid, "outline", { source: "reset-sentinel", reason: "ok" });
+require("./tests/lib/plan-approval-fixture").approveLive(sid, "outline");
 S.markStep(sid, "outline", "complete");
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
 S.recordComplexityEvaluation(sid, ["S1-multi-file", "S2-architecture"]);

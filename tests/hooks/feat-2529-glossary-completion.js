@@ -34,7 +34,7 @@ caseBegin("completion boundary refuses missing stale unresolved records and acce
 guarded("boundary matrix", boundary.matrix);
 caseEnd();
 
-caseBegin("reset-sentinel and session-inherit completions are not judged by the glossary boundary", "hooks/workflow-state/glossary-check/record.js");
+caseBegin("session-inherit and RESET_FROM completions are not judged by the glossary boundary", "hooks/workflow-state/glossary-check/record.js");
 guarded("sanctioned tokens", sanctioned.sanctioned);
 caseEnd();
 

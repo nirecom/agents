@@ -9,6 +9,7 @@ const { cleanupZombies, createInitialState, writeState, readState,
         getCurrentContext, resolveInheritanceDonor, listRecentContextCandidates,
         reconcileEffectiveState, getStatePath, VALID_STEPS } = require("./workflow-state");
 const { applyInheritance } = require("./workflow-state/inheritance/apply");
+const { decideInheritanceGranularity } = require("./workflow-state/inheritance/granularity");
 const { SESSION_ID_ANNOUNCE_PREFIX } = require("./lib/session-announce");
 const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
@@ -61,6 +62,7 @@ try {
 
 // Create initial state file if session_id is available (with inheritance logic)
 let inheritedFromSessionId = null;
+let inheritanceResult = null;
 let stateWriteError = null;
 // #1305 reporting surface — see the SD-4 block near the bottom of this file.
 let inheritDecision = null;
@@ -115,14 +117,15 @@ if (sessionId) {
 
       if (inherited && !stateWriteError) {
         try {
-          applyInheritance(sessionId, newState.created_at, inherited);
+          const granularity = decideInheritanceGranularity(ctx.cwd, inherited);
+          inheritanceResult = applyInheritance(sessionId, newState.created_at, inherited.session_id, { granularity });
           inheritedFromSessionId = inherited.session_id;
         } catch (e) {
           stateWriteError = (e && e.message) || String(e);
-          // A refused inheritance (e.g. artifact-hash mismatch on a carried
-          // approval) must leave NO state file: the base file written above
-          // would otherwise survive as an orphan asserting that this session
-          // has a clean, legitimately-created state (#1133/#1148).
+          // A stale approval no longer throws (#2633-1 reverts it in the copy), so a
+          // throw here means the upstream stream is broken or unreadable. Leave NO
+          // state file: the base file written above would otherwise survive as an
+          // orphan asserting a clean, legitimately-created state (#1133/#1148).
           try { fs.unlinkSync(getStatePath(sessionId)); } catch (_) {}
           try {
             process.stderr.write(`session-start: inheritance failed for ${sessionId}: ${stateWriteError}\n`);
@@ -278,7 +281,7 @@ if (sessionId) {
   if (statePath) lines.push(`State file: ${statePath}`);
   const { buildInheritanceNotice } = require("./session-start/inheritance-notice");
   for (const line of buildInheritanceNotice({
-    sessionId, sessionSource, inheritedFromSessionId,
+    sessionId, sessionSource, inheritedFromSessionId, inheritanceResult,
     inheritCandidateSid, inheritDecision, adoptCandidate,
   })) {
     lines.push(line);

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-2218-post-compact-writer.sh
 # Tests: hooks/post-compact.js, hooks/lib/handoff-artifact.js
-# Tags: post-compact, handoff, class-b, writer, fail-open, regression-2218, scope:issue-specific, pwsh-not-required, TL1
+# Tags: post-compact, handoff, class-b, writer, fail-open, regression-2218, progress-pressure, scope:issue-specific, pwsh-not-required, TL1
 
 # Issue #2218 Step 10 — compaction is the one event the artifact exists for, and it is also the one event the compacted transcript can no longer describe. The PostCompact hook is the only code that runs at that instant, so the class B "compaction" entry is written there (one line, through the shared writer) rather than inferred later from a timestamp gap.
 
@@ -236,11 +236,117 @@ run_P5() {
     fi
 }
 
+# --- #2594 session-progress.md (appended here: TL3-hook-post-compact.sh is RUN_TL3-gated) ---
+# PostCompact cannot deliver a request reliably, so the hook only (a) points at
+# session-progress.md and (b) leaves pending state in <sid>.control/progress-pressure.json
+# for hooks/progress-nudge.js. Field names are the implementation's; the probe
+# below matches them by role (a truthy *pending* key, a *compaction* time array).
+pressure_probe() {
+    local tmp="$1" sid="$2"
+    env -u CLAUDE_CODE_SESSION_ID SID="$sid" PP="$tmp/wf/$sid.control/progress-pressure.json" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        "$RWT" 30 node -e "
+const fs = require('fs');
+let j; try { j = JSON.parse(fs.readFileSync(process.env.PP, 'utf8')); } catch (e) { process.stdout.write('no-file'); process.exit(0); }
+const walk = (o, pre, out) => { if (o && typeof o === 'object' && !Array.isArray(o)) for (const k of Object.keys(o)) { out.push([pre + k, o[k]]); walk(o[k], pre + k + '.', out); } return out; };
+const kv = walk(j, '', []);
+const pend4d = kv.some(([k, v]) => /pending/i.test(k) && !/burst|suggest/i.test(k) && !!v);
+const burst = kv.some(([k, v]) => /burst|suggest/i.test(k) && /pending/i.test(k) && !!v);
+const times = kv.filter(([k, v]) => /compaction/i.test(k) && Array.isArray(v)).map(([, v]) => v.length);
+process.stdout.write('pending4d=' + pend4d + ';burst=' + burst + ';times=' + (times.length ? Math.max.apply(null, times) : -1));
+" 2>&1
+}
+
+# burst_records <tmp> <sid> — auto-record entries other than the per-compaction line.
+burst_records() {
+    local tmp="$1" sid="$2"
+    env -u CLAUDE_CODE_SESSION_ID SID="$sid" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        "$RWT" 30 node -e "
+const { readHandoff } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$ARTIFACT');
+const all = [].concat.apply([], Object.values(readHandoff(process.env.SID).entriesByClass || {}));
+process.stdout.write(String(all.filter((x) => x.origin === 'auto-record' && x.key !== 'compaction').length));
+" 2>&1
+}
+
+# P6 — the re-injected context names session-progress.md (rootSid == sid without inheritance)
+# and the section to read first; one compaction sets the 4d pending and one time.
+run_P6() {
+    local tmp out problems probe
+    tmp="$(make_tmp)"; problems=""
+    mkdir -p "$tmp/wf"
+    seed_active "$tmp" "pc-sid-p6"
+    out="$(run_hook "$tmp" "pc-sid-p6")"
+    case "$out" in *'pc-sid-p6-session-progress.md'*) : ;; *) problems="$problems no-progress-path:'${out:0:200}'" ;; esac
+    case "$out" in *'(read \"Current state\" first)'*|*'(read "Current state" first)'*) : ;; *) problems="$problems no-first-section-name" ;; esac
+    probe="$(pressure_probe "$tmp" "pc-sid-p6")"
+    [ "$probe" = "pending4d=true;burst=false;times=1" ] || problems="$problems pressure:'$probe'"
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ -z "$problems" ]; then
+        pass "P6: PostCompact points at <sid>-session-progress.md (read Current state first), sets the 4d pending and records one compaction time"
+    else
+        fail "P6: —$problems"
+    fi
+}
+
+# P7 — below the burst threshold (a burst is 8 or more in 30 min): three compactions
+# record three times, no burst suggestion and no burst auto-record.
+run_P7() {
+    local tmp problems probe n i
+    tmp="$(make_tmp)"; problems=""
+    mkdir -p "$tmp/wf"
+    seed_active "$tmp" "pc-sid-p7"
+    for i in 1 2 3; do run_hook "$tmp" "pc-sid-p7" >/dev/null; done
+    probe="$(pressure_probe "$tmp" "pc-sid-p7")"
+    case "$probe" in *'burst=false;times=3') : ;; *) problems="$problems pressure:'$probe'" ;; esac
+    n="$(burst_records "$tmp" "pc-sid-p7")"
+    [ "$n" = "0" ] || problems="$problems burst-records:$n"
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ -z "$problems" ]; then
+        pass "P7: three compactions in 30 min stay below the burst threshold — no suggestion pending, no burst record"
+    else
+        fail "P7: —$problems"
+    fi
+}
+
+# P8 — the threshold boundary (BURST_THRESHOLD 7): seven compactions in a row stay
+# below it (4d pending, no burst, no record); the eighth crosses it once, so exactly
+# one burst auto-record line is written and the suggestion is pending; the
+# compactions after the crossing do not repeat the record in the same session.
+run_P8() {
+    local tmp problems probe n i
+    tmp="$(make_tmp)"; problems=""
+    mkdir -p "$tmp/wf"
+    seed_active "$tmp" "pc-sid-p8"
+    for i in 1 2 3 4 5 6 7; do run_hook "$tmp" "pc-sid-p8" >/dev/null; done
+    probe="$(pressure_probe "$tmp" "pc-sid-p8")"
+    [ "$probe" = "pending4d=true;burst=false;times=7" ] || problems="$problems after-7-pressure:'$probe'"
+    n="$(burst_records "$tmp" "pc-sid-p8")"
+    [ "$n" = "0" ] || problems="$problems after-7-burst-records:$n"
+    run_hook "$tmp" "pc-sid-p8" >/dev/null
+    probe="$(pressure_probe "$tmp" "pc-sid-p8")"
+    case "$probe" in *'burst=true;times=8') : ;; *) problems="$problems after-8-pressure:'$probe'" ;; esac
+    n="$(burst_records "$tmp" "pc-sid-p8")"
+    [ "$n" = "1" ] || problems="$problems after-8-burst-records:$n"
+    for i in 1 2; do run_hook "$tmp" "pc-sid-p8" >/dev/null; done
+    n="$(burst_records "$tmp" "pc-sid-p8")"
+    [ "$n" = "1" ] || problems="$problems after-10-burst-records:$n"
+    rm -rf "$tmp" 2>/dev/null || true
+    if [ -z "$problems" ]; then
+        pass "P8: seven compactions stay below the burst threshold; the eighth writes one auto-record line and sets the suggestion pending, once per session"
+    else
+        fail "P8: —$problems"
+    fi
+}
+
 run_P1
 run_P2
 run_P3
 run_P4
 run_P5
+run_P6
+run_P7
+run_P8
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

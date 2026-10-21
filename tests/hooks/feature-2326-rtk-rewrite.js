@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 "use strict";
+// Tests: hooks/rtk-rewrite.js, hooks/lib/rtk-guard-audit.js
+// Tags: scope:issue-specific, rtk, rewrite, hook, guard
 // tests/hooks/feature-2326-rtk-rewrite.js
 // No-framework Node tests for the rtk-rewrite decision pipeline + four guards.
 // TEST-FIRST (#2356): delegation, quote-aware head substitution, widened

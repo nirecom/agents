@@ -52,26 +52,6 @@ function detectSentinelHang(transcriptPath, lastAssistantMessage) {
   return true;
 }
 
-// Returns true if the last assistant turn's content array's LAST tool_use is
-// an AskUserQuestion. When true, the user is mid-dialog and alert mode block
-// branches must be suppressed (#903).
-function detectAskUserQuestionTurn(transcriptPath, lastAssistantMessage) {
-  if (!transcriptPath) return false;
-  const lastAssistant = lastAssistantOf(transcriptPath, lastAssistantMessage);
-  if (!lastAssistant) return false;
-  const content =
-    lastAssistant.message &&
-    Array.isArray(lastAssistant.message.content)
-      ? lastAssistant.message.content
-      : [];
-  let lastToolUse = null;
-  for (const item of content) {
-    if (item && item.type === "tool_use") lastToolUse = item;
-  }
-  if (!lastToolUse) return false;
-  return lastToolUse.name === "AskUserQuestion";
-}
-
 // Parses the JSONL transcript into [{role,content}] format for collectAuditCandidates.
 function parseTranscriptForAudit(transcriptPath) {
   if (!transcriptPath) return [];
@@ -162,4 +142,4 @@ function detectOffProposal(transcriptPath) {
   return { detected: false, kind: null };
 }
 
-module.exports = { detectSentinelHang, detectAskUserQuestionTurn, parseTranscriptForAudit, detectOffProposal };
+module.exports = { detectSentinelHang, parseTranscriptForAudit, detectOffProposal };

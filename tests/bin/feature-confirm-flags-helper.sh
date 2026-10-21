@@ -42,6 +42,7 @@ trap 'rm -rf "$TMPDIR_BASE"' EXIT
 # Some tests deliberately export it; reset between cases.
 unset_isolated_env() {
     unset AGENTS_MAIN_ROOT
+    unset CONFIRM_INTENT
     unset CONFIRM_OUTLINE
     unset CONFIRM_DETAIL
     unset CONFIRM_TESTS
@@ -220,15 +221,23 @@ fi
 echo "=== Narrow: process.env precedence over .env ==="
 NDIR2="$TMPDIR_BASE/cfg2"
 mkdir -p "$NDIR2"
-printf 'CONFIRM_OUTLINE=off\n' > "$NDIR2/.env"
+printf 'CONFIRM_OUTLINE=off\nCONFIRM_TESTS=off\n' > "$NDIR2/.env"
 unset_isolated_env
 export AGENTS_MAIN_ROOT="$NDIR2"
-export CONFIRM_OUTLINE="on"
-val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE off 2>/dev/null || true)
+export CONFIRM_TESTS="on"
+val=$(run_with_timeout "$HELPER" CONFIRM_TESTS off 2>/dev/null || true)
 if [ "$val" = "on" ]; then
-    pass "process.env wins over .env"
+    pass "process.env wins over .env (non-plan key CONFIRM_TESTS)"
 else
-    fail "process.env should override .env, got: '$val' (expected 'on')"
+    fail "process.env should override .env for CONFIRM_TESTS, got: '$val' (expected 'on')"
+fi
+# #2726/#2729: a plan-stage key (CONFIRM_INTENT/OUTLINE/DETAIL) is read from .env only.
+export CONFIRM_OUTLINE="on"
+val=$(run_with_timeout "$HELPER" CONFIRM_OUTLINE on 2>/dev/null || true)
+if [ "$val" = "off" ]; then
+    pass "plan key: an exported CONFIRM_OUTLINE=on is ignored, .env off wins"
+else
+    fail "plan key: export must be ignored for CONFIRM_OUTLINE, got: '$val' (expected 'off')"
 fi
 
 # ---------------------------------------------------------------------------

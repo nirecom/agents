@@ -4,7 +4,6 @@
 // project-management type from the intent artifact's `**PM type:**` field (#2527).
 
 const fs = require("fs");
-const path = require("path");
 const { markStep, setProjectManagementType, SESSION_ID_VALID_RE } = require("../workflow-state");
 const { CLARIFY_INTENT_COMPLETE_RE_DQ } = require("../lib/sentinel-patterns");
 const { completionRefusalOf } = require("../workflow-state/completion-refusal");
@@ -16,8 +15,9 @@ const PM_TYPE_LINE_RE = /^[ \t]*\*\*PM type:\*\*[ \t]*(.*?)[ \t]*$/im;
 function readIntentPmType(sessionId) {
   try {
     if (!SESSION_ID_VALID_RE.test(sessionId)) return null;
-    const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
-    const text = fs.readFileSync(path.join(getWorkflowPlansDir(), sessionId + "-intent.md"), "utf8");
+    // Owner-resolved: a downstream session reads its upstream's intent (#2633).
+    const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
+    const text = fs.readFileSync(resolvePlanArtifactOwner(sessionId, "intent").path, "utf8");
     const m = text.match(PM_TYPE_LINE_RE);
     return m ? m[1].toLowerCase() : "";
   } catch (_) {
@@ -63,7 +63,7 @@ function handle(ctx) {
     } catch (e) {
       const refusal = completionRefusalOf(e, "clarify_intent");
       if (refusal && refusal.kind === "unapproved") {
-        pushMessage(`workflow-mark: clarify_intent NOT completed — no approval is on record. ${e.recovery}`);
+        pushMessage(`workflow-mark: clarify_intent NOT completed — the approval does not verify (${e.code}). ${e.recovery}`);
         return true;
       }
       if (refusal) {

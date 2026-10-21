@@ -1,13 +1,13 @@
 # Part of tests/bin/feature-review-code-codex/path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/resolve-merge-base.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/run-quality-gates.sh
-# Tags: codex, review, exclusion, stop-at-first-skip, cross-reference, path-encoding, scope:issue-specific, pwsh-not-required, TL2
+# Tags: codex, review, exclusion, stop-at-first-skip, cross-reference, path-encoding, scope:issue-specific, pwsh-not-required, TL2, working-tree, merge-base, priority
 # lang-check: ignore — P15 fixture uses a non-ASCII filename intentionally, to test that git's octal-escaping of such names doesn't drop them from the priority set.
-# P10-P16 (#1976 / #1750): WHICH paths are judged, not how many lines fit. Split out of path-priority.sh at the 500-line hard limit; fixtures/helpers/shared vars come from path-priority/helpers.sh, path-priority.sh, and the suite entrypoint respectively.
+# P10-P16 (#1976 / #1750): WHICH paths are judged, not how many lines fit. P17-P19 (E24 redefinition, origin #1702): merge-base anchoring, four-kind adoption order, degraded-state untracked withholding with a committed diff. Split out of path-priority.sh at the 500-line hard limit; fixtures/helpers/shared vars come from path-priority/helpers.sh, path-priority.sh, and the suite entrypoint respectively.
 # TL3 gap: real codex CLI arg/stdin handling and live model context limits are untested; P8/P12 stub resolve-merge-base.sh so `warn` is an asserted input; P15's non-ASCII path encoding is only exercised as this runner's own filesystem happens to encode it. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
-# P10 — a path can be in the committed range AND still carry changes it cannot show: the path
-#       IS in the body, and the staged edit on top of it is the part nobody reviewed. Small
-#       enough that nothing truncates, so the EXCLUDED report must stand on its own.
+# P10 — a path can be in the committed range AND still carry a staged edit on top. The review
+#       target is the working tree vs merge-base (E24 redefinition), so the staged edit must be
+#       in the body and no EXCLUDED line is printed. Small enough that nothing truncates.
 PP_R10="$(pp_new_repo pp-p10)"
 pp_gen "$PP_R10/mixed.txt" 10 "pp-p10-committed"
 git -C "$PP_R10" add mixed.txt
@@ -15,13 +15,24 @@ git -C "$PP_R10" commit -q -m "committed change to mixed.txt"
 echo "pp-p10-staged-on-top" >> "$PP_R10/mixed.txt"
 git -C "$PP_R10" add mixed.txt
 
+PP_ENV=(CODEX_REVIEW_MAX_DIFF_LINES=5000)
 PP_OUT="$(pp_run "$PP_R10" --base main --no-log)"
-if pp_has "$PP_OUT" "^## Codex Review Scope: TRUNCATED"; then
-    fail "P10: the fixture truncated, so an EXCLUDED line here would not prove it fires independently. Output: $PP_OUT"
-elif printf '%s\n' "$PP_OUT" | grep -E "^## Codex Review Scope: EXCLUDED" | grep -q "mixed.txt"; then
-    pass "P10: a path that is both in the committed body and separately staged is reported EXCLUDED"
+PP_ENV=()
+if [ ! -s "$PP_CAPTURE" ]; then
+    fail "P10-no-caveat: no prompt was captured, so the absence of an exclusion caveat proves nothing"
+elif grep -qF -e "were excluded from this review" -e "EXCLUDED SCOPE" "$PP_CAPTURE"; then
+    fail "P10-no-caveat: the prompt still carries an exclusion SCOPE CAVEAT although nothing is excluded"
 else
-    fail "P10: no EXCLUDED line naming mixed.txt — exclusion is being judged by absence from the body rather than per-path. Output: $PP_OUT"
+    pass "P10-no-caveat: the prompt carries no exclusion SCOPE CAVEAT"
+fi
+if pp_has "$PP_OUT" "^## Codex Review Scope: TRUNCATED"; then
+    fail "P10: the fixture truncated, so a missing staged edit here could be the budget rather than the target. Output: $PP_OUT"
+elif pp_has "$PP_OUT" "^## Codex Review Scope: EXCLUDED"; then
+    fail "P10: an EXCLUDED line was printed although the working tree is the review target. Output: $PP_OUT"
+elif pp_diff_body "$PP_CAPTURE" | grep -q "pp-p10-staged-on-top"; then
+    pass "P10: the staged edit on top of a committed path is in the reviewed body, and no EXCLUDED line is printed"
+else
+    fail "P10: the staged edit on top of mixed.txt is missing from the reviewed body. Output: $PP_OUT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -71,12 +82,13 @@ else
     fail "P10b-budget: mixed.txt's chunk appears $pp_10b_chunks time(s) in the reviewed body"
 fi
 
-pp_10b_excl_block="$(printf '%s\n' "$PP_OUT" | grep -E "^## Codex Review Scope: EXCLUDED" -A 20 || true)"
-pp_10b_excl="$(printf '%s\n' "$pp_10b_excl_block" | grep -oF "mixed.txt" | wc -l | tr -d '[:space:]' || true)"
-if [ "$pp_10b_excl" = "1" ]; then
-    pass "P10b-excluded: the EXCLUDED disclosure names it once rather than once per set it belongs to"
+pp_10b_staged="$(pp_diff_body "$PP_CAPTURE" | grep -c "pp-p10b-staged-on-top" || true)"
+if pp_has "$PP_OUT" "^## Codex Review Scope: EXCLUDED"; then
+    fail "P10b-no-excluded: an EXCLUDED line was printed although the working tree is the review target. Output: $PP_OUT"
+elif [ "$pp_10b_staged" = "1" ]; then
+    pass "P10b-no-excluded: no EXCLUDED line, and mixed.txt's staged-on-top content appears exactly once in the body"
 else
-    fail "P10b-excluded: mixed.txt is named $pp_10b_excl time(s) in the EXCLUDED disclosure. Output: $PP_OUT"
+    fail "P10b-no-excluded: mixed.txt's staged-on-top content appears $pp_10b_staged time(s) in the body (want exactly 1). Output: $PP_OUT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -98,7 +110,8 @@ PP_BUDGET=200
 PP_LEFTOVER=$((PP_BUDGET - PP_A_LINES))
 
 PP_ENV=(CODEX_REVIEW_MAX_DIFF_LINES="$PP_BUDGET")
-PP_OUT="$(pp_run "$PP_R11" --base main --no-log)"
+# --base-state RESOLVED: the chunks are untracked, and UNKNOWN withholds untracked content (H1).
+PP_OUT="$(pp_run "$PP_R11" --base main --base-state RESOLVED --no-log)"
 
 if [ "$PP_LEFTOVER" -le 0 ] || [ "$PP_C_LINES" -gt "$PP_LEFTOVER" ]; then
     # The premise: without room left for C, "C was not adopted" would be ordinary budgeting
@@ -237,7 +250,7 @@ PP_ENV=()
 PP_R14A="$(pp_new_repo pp-p14a)"
 
 PP_ENV=()
-pp_exec "$PP_R14A" --base main --no-log
+pp_exec "$PP_R14A" --base main --base-state RECORDED --no-log  # trusted state: only then may SKIPPED claim "no untracked files"
 if [ "$PP_RC" -eq 0 ]; then
     pass "P14a: a clean repo with no diff at all still exits 0"
 else
@@ -273,7 +286,8 @@ pp_gen "$PP_R15/zz-huge.txt" 6000 "pp-p15-huge-marker"
 if [ ! -f "$PP_R15/$PP_UNI" ]; then
     fail "P15: the fixture path with a space and non-ASCII characters could not be created on this filesystem"
 else
-    PP_OUT="$(pp_run "$PP_R15" --base main --no-log)"
+    # --base-state RESOLVED: both files are untracked, and UNKNOWN withholds their content (H1).
+    PP_OUT="$(pp_run "$PP_R15" --base main --base-state RESOLVED --no-log)"
     if [ -f "$PP_CAPTURE" ] && grep -q "pp-p15-uni-marker" "$PP_CAPTURE"; then
         pass "P15: the content of a path with a space and non-ASCII characters is extracted into the prompt"
     else
@@ -308,3 +322,140 @@ elif [ "$PP_KV1" = "$PP_KV2" ]; then
 else
     fail "P16: the resolver answered differently on a second call against an unchanged tree. First: $PP_KV1 Second: $PP_KV2"
 fi
+
+# ---------------------------------------------------------------------------
+# P17 — committed paths diff from merge-base(BASE, HEAD) to the working tree, never from BASE's
+#       tip. BASE advances past the branch point with a new file AND a hunk in a file the branch
+#       also edits; diffing from BASE's tip would surface both as reverse changes the session
+#       never made. The branch's committed hunk and a staged edit on top of it must be present.
+# ---------------------------------------------------------------------------
+PP_R17="$(pp_new_base_repo pp-p17)"
+pp_gen "$PP_R17/shared.txt" 30 "pp-p17-shared"
+git -C "$PP_R17" add shared.txt
+git -C "$PP_R17" commit -q -m "seed shared.txt at the branch point"
+git -C "$PP_R17" checkout -q -b feature-pp-p17
+echo "pp-p17-branch-hunk" >> "$PP_R17/shared.txt"
+git -C "$PP_R17" commit -q -am "branch edits the tail of shared.txt"
+git -C "$PP_R17" checkout -q main
+{ echo "pp-p17-base-hunk"; tail -n +2 "$PP_R17/shared.txt"; } > "$PP_R17/shared.tmp"
+mv "$PP_R17/shared.tmp" "$PP_R17/shared.txt"
+pp_gen "$PP_R17/base-only.txt" 5 "pp-p17-base-only"
+git -C "$PP_R17" add shared.txt base-only.txt
+git -C "$PP_R17" commit -q -m "base advances: head hunk in shared.txt plus a base-only file"
+git -C "$PP_R17" checkout -q feature-pp-p17
+echo "pp-p17-staged-on-top" >> "$PP_R17/shared.txt"
+git -C "$PP_R17" add shared.txt
+
+PP_ENV=(CODEX_REVIEW_MAX_DIFF_LINES=5000)
+PP_OUT="$(pp_run "$PP_R17" --base main --base-state RECORDED --no-log)"
+PP_ENV=()
+pp_17_body="$(pp_diff_body "$PP_CAPTURE")"
+if [ -z "$pp_17_body" ]; then
+    fail "P17: no reviewed body was captured, so merge-base anchoring cannot be asserted. Output: $PP_OUT"
+else
+    if pp_has "$pp_17_body" "pp-p17-base-hunk" || pp_has "$pp_17_body" "pp-p17-base-only"; then
+        fail "P17-base-only: a change made only on BASE after the branch point reached the body — committed paths were diffed from BASE's tip, not merge-base"
+    else
+        pass "P17-base-only: neither the base-only file nor the base-only hunk in the shared file reaches the body"
+    fi
+    if pp_has "$pp_17_body" "^+pp-p17-branch-hunk"; then
+        pass "P17-branch: the branch's own committed hunk is in the body"
+    else
+        fail "P17-branch: the branch's committed hunk is missing from the body. Output: $PP_OUT"
+    fi
+    if pp_has "$pp_17_body" "^+pp-p17-staged-on-top"; then
+        pass "P17-staged: the staged edit on top of the committed path is in the body"
+    else
+        fail "P17-staged: the staged edit on top of shared.txt is missing from the body. Output: $PP_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# P18 — adoption order across the four kinds of path: committed paths still being edited, then
+#       uncommitted-only, then untracked-only, then the remaining committed paths. File names
+#       sort in the REVERSE of that order, so git's own ordering cannot satisfy the row.
+# ---------------------------------------------------------------------------
+PP_R18="$(pp_new_base_repo pp-p18)"
+pp_gen "$PP_R18/c-unc.txt" 5 "pp-p18-unc-base"
+git -C "$PP_R18" add c-unc.txt
+git -C "$PP_R18" commit -q -m "seed the file the branch edits without committing"
+git -C "$PP_R18" checkout -q -b feature-pp-p18
+pp_gen "$PP_R18/a-rest.txt" 5 "pp-p18-rest"
+pp_gen "$PP_R18/d-edited.txt" 5 "pp-p18-edited"
+git -C "$PP_R18" add a-rest.txt d-edited.txt
+git -C "$PP_R18" commit -q -m "two committed paths"
+echo "pp-p18-edited-on-top" >> "$PP_R18/d-edited.txt"
+echo "pp-p18-unc-edit" >> "$PP_R18/c-unc.txt"
+pp_gen "$PP_R18/b-untracked.txt" 5 "pp-p18-untracked"
+
+PP_ENV=(CODEX_REVIEW_MAX_DIFF_LINES=5000)
+PP_OUT="$(pp_run "$PP_R18" --base main --base-state RECORDED --no-log)"
+PP_ENV=()
+pp_18_order=""
+for pp_18_p in d-edited.txt c-unc.txt b-untracked.txt a-rest.txt; do
+    pp_18_n="$(pp_diff_body "$PP_CAPTURE" | grep -n -m1 "^diff --git a/$pp_18_p " | cut -d: -f1 || true)"
+    pp_18_order="$pp_18_order ${pp_18_n:-missing}"
+done
+pp_18_prev=0
+pp_18_ok=1
+for pp_18_n in $pp_18_order; do
+    if [ "$pp_18_n" = "missing" ] || [ "$pp_18_n" -le "$pp_18_prev" ]; then pp_18_ok=0; break; fi
+    pp_18_prev="$pp_18_n"
+done
+if [ "$pp_18_ok" = "1" ]; then
+    pass "P18: chunks are adopted committed-still-edited, uncommitted-only, untracked-only, remaining-committed (body lines:$pp_18_order)"
+else
+    fail "P18: chunk order is wrong or a chunk is missing — want d-edited, c-unc, b-untracked, a-rest; body lines:$pp_18_order. Output: $PP_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# P19 — a non-empty committed diff does not lift degraded-state untracked withholding: under
+#       SUSPECT/FALLBACK/UNRESOLVED the untracked file stays out of prompt and report, while the
+#       committed change is still reviewed. RECORDED is the symmetric verdict: the same fixture
+#       sends the untracked content, so the withholding is targeted, not blanket.
+# ---------------------------------------------------------------------------
+PP_R19="$(pp_new_repo pp-p19)"
+pp_gen "$PP_R19/committed.txt" 5 "pp-p19-committed"
+git -C "$PP_R19" add committed.txt
+git -C "$PP_R19" commit -q -m "committed change"
+echo "pp-p19-tracked-unstaged-append" >> "$PP_R19/committed.txt"
+# Named plain-*, not secret-*: a credential-shaped name is withheld under every state (H2), which
+# would make the RECORDED row below fail for a reason unrelated to the base state.
+pp_gen "$PP_R19/plain-untracked.txt" 5 "pp-p19-untracked-secret"
+
+PP_ENV=(CODEX_REVIEW_MAX_DIFF_LINES=5000)
+PP_19_LOG_DIR="$TMPDIR_BASE/.claude/projects/codex-review"
+for pp_state in SUSPECT FALLBACK UNRESOLVED; do
+    # Logging stays on so the withheld marker can be looked for in stderr and the JSONL log too.
+    rm -rf "$PP_19_LOG_DIR"
+    pp_exec "$PP_R19" --base main --base-state "$pp_state"
+    PP_OUT="$PP_OUT_TEXT"
+    if [ ! -d "$PP_19_LOG_DIR" ] || [ -z "$(ls -A "$PP_19_LOG_DIR" 2>/dev/null)" ]; then
+        fail "P19-channels[$pp_state]: no log file was written, so a clean JSONL log proves nothing"
+    elif pp_has_fixed "$PP_ERR_TEXT" "pp-p19-untracked-secret" || grep -rqF "pp-p19-untracked-secret" "$PP_19_LOG_DIR" 2>/dev/null; then
+        fail "P19-channels[$pp_state]: the withheld untracked content leaked into stderr or the JSONL log"
+    else
+        pass "P19-channels[$pp_state]: the withheld untracked content is in neither stderr nor the JSONL log"
+    fi
+    if pp_diff_body "$PP_CAPTURE" | grep -q "^+pp-p19-tracked-unstaged-append"; then
+        pass "P19-tracked[$pp_state]: the tracked unstaged append is reviewed under a degraded base state — only untracked files are withheld"
+    else
+        fail "P19-tracked[$pp_state]: the tracked unstaged append to committed.txt is missing from the body under a degraded base state. Output: $PP_OUT"
+    fi
+    if [ -f "$PP_CAPTURE" ] && grep -q "pp-p19-untracked-secret" "$PP_CAPTURE"; then
+        fail "P19[$pp_state]: untracked raw content was sent to the model under a degraded base state despite a committed diff"
+    elif pp_has "$PP_OUT" "plain-untracked.txt"; then
+        fail "P19[$pp_state]: the untracked path was named in the report while degraded. Output: $PP_OUT"
+    elif ! pp_diff_body "$PP_CAPTURE" | grep -q "pp-p19-committed"; then
+        fail "P19[$pp_state]: the committed change never reached the body, so the withholding proves nothing. Output: $PP_OUT"
+    else
+        pass "P19[$pp_state]: with a committed diff, the untracked file is still withheld from prompt and report while the committed change is reviewed"
+    fi
+done
+PP_OUT="$(pp_run "$PP_R19" --base main --base-state RECORDED --no-log)"
+if [ -f "$PP_CAPTURE" ] && grep -q "pp-p19-untracked-secret" "$PP_CAPTURE"; then
+    pass "P19[RECORDED]: a trustworthy base state reviews the untracked file alongside the committed diff"
+else
+    fail "P19[RECORDED]: the untracked file was withheld although the base state is trustworthy. Output: $PP_OUT"
+fi
+PP_ENV=()

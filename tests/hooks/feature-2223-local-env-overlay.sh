@@ -157,6 +157,10 @@ if (cmd === "effective") {
     globalUnmutated: g.CODE_LANG === "english" && g.KEEP === "g",
     localUnmutated: l.CODE_LANG === "japanese",
   }));
+} else if (cmd === "overlay-key") {
+  const res = localEnvMod().overlay({ [a1]: "on" }, { [a1]: "off" });
+  const ignored = Array.from(res.ignored || []).includes(a1);
+  out((ignored ? "ignored" : "applied") + ":" + res.map[a1]);
 } else {
   process.stderr.write("probe: unknown command " + cmd + "\n");
   process.exit(64);
@@ -220,8 +224,11 @@ nfr-overrides-global       | PROJECT_NFR=global-nfr                             
 local-absent-fallback      | CODE_LANG=english                                  | __NONE__                          | CODE_LANG      | "english"
 empty-string-override      | CODE_LANG=english                                  | CODE_LANG=                        | CODE_LANG      | ""
 multiline-local-value      | CODE_LANG=english                                  | PROJECT_NFR="a@NL@b"              | PROJECT_NFR    | "a\nb"
-allow-confirm-detail       | CONFIRM_DETAIL=on                                  | CONFIRM_DETAIL=off                | CONFIRM_DETAIL | "off"
-allow-confirm-tests        | CONFIRM_TESTS=on                                   | CONFIRM_TESTS=off                 | CONFIRM_TESTS  | "off"
+deny-confirm-intent        | CONFIRM_INTENT=on                                  | CONFIRM_INTENT=off                | CONFIRM_INTENT | "on"
+deny-confirm-outline       | CONFIRM_OUTLINE=on                                 | CONFIRM_OUTLINE=off               | CONFIRM_OUTLINE | "on"
+deny-confirm-detail        | CONFIRM_DETAIL=on                                  | CONFIRM_DETAIL=off                | CONFIRM_DETAIL | "on"
+allow-confirm-code         | CONFIRM_CODE=on                                    | CONFIRM_CODE=off                  | CONFIRM_CODE   | "off"
+allow-confirm-tests       | CONFIRM_TESTS=on                                   | CONFIRM_TESTS=off                 | CONFIRM_TESTS  | "off"
 allow-auto-merge-pr        | AUTO_MERGE_PR=on                                   | AUTO_MERGE_PR=off                 | AUTO_MERGE_PR  | "off"
 allow-run-tl3              | RUN_TL3=off                                        | RUN_TL3=on                        | RUN_TL3        | "on"
 allow-run-tl4              | RUN_TL4=off                                        | RUN_TL4=on                        | RUN_TL4        | "on"
@@ -264,6 +271,15 @@ assert_eq "T2223-door-readDefaultEnvFile" '"english"' "$(probe global CODE_LANG)
 new_case door-confirm 'CONFIRM_DETAIL=on' 'CONFIRM_DETAIL=off'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
 assert_eq "T2223-door-plan-confirm-flag" "false" "$(probe confirm-off detail)"
+
+# T2726-overlay-plan-key — #2726/#2729: overlay() refuses the three plan-stage
+# keys (reported in `ignored`); CONFIRM_CODE / CONFIRM_TESTS still apply.
+for k in CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL; do
+    assert_eq "T2726-overlay-plan-key-ignored ($k)" "ignored:on" "$(probe overlay-key "$k")"
+done
+for k in CONFIRM_CODE CONFIRM_TESTS; do
+    assert_eq "T2726-overlay-non-plan-key-applied ($k)" "applied:off" "$(probe overlay-key "$k")"
+done
 
 # T2223-door-loadEnv-process-env — an ordinary local key does reach process.env.
 new_case door-loadenv 'CODE_LANG=english' 'CODE_LANG=japanese'

@@ -11,13 +11,17 @@
 set -uo pipefail
 # shellcheck source=./_common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
+# shellcheck source=../../lib/confirm-env-fixture.sh
+. "$__COMMON_SCRIPT_CHECKOUT_ROOT/tests/lib/confirm-env-fixture.sh"
+# Plan-stage CONFIRM flags come from $AGENTS_MAIN_ROOT/.env only (#2729): set them in the cfg file.
+unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL
 
 repo="$(mk_repo sib)"
 SID="ctsib"
 
 # --- 1-4: confirm-checkpoint surfaces the CONFIRM_DETAIL checkpoint from every shape ---
 CONFIRM_DETAIL_SENTINEL='echo "<<WORKFLOW_CONFIRM_DETAIL: detail plan ready for review>>"'
-export CONFIRM_DETAIL=off
+confirm_env_set "$WORK/cfg" CONFIRM_DETAIL=off
 for s in $SHAPES; do
     p="$(payload "$s" "$CONFIRM_DETAIL_SENTINEL" "$repo" "$SID")"
     assert_match "1-4 ($s): confirm-checkpoint sees the CONFIRM_DETAIL sentinel" \
@@ -28,11 +32,11 @@ done
 p="$(payload edit "$WORK_NODE/sib/seed.txt" "$repo" "$SID" "" "$CONFIRM_DETAIL_SENTINEL")"
 assert_eq "5: an Edit carrying the CONFIRM sentinel as text produces no checkpoint" \
     "$(run_hook confirm-checkpoint.js "$p")" ""
-unset CONFIRM_DETAIL
+confirm_env_set "$WORK/cfg"
 
 # --- 6-9: gate-plan-skip-sentinel auto-approves the outline skip from every shape ---
 OUTLINE_SKIP='echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: single-file change with no design choice>>"'
-export CONFIRM_OUTLINE=off
+confirm_env_set "$WORK/cfg" CONFIRM_OUTLINE=off
 for s in $SHAPES; do
     p="$(payload "$s" "$OUTLINE_SKIP" "$repo" "$SID")"
     out="$(run_hook gate-plan-skip-sentinel.js "$p")"
@@ -44,7 +48,7 @@ done
 p="$(payload rc1 "git status --short" "$repo" "$SID")"
 assert_nomatch "10: a non-sentinel rc1 call is not auto-approved" \
     "$(jfield "$(run_hook gate-plan-skip-sentinel.js "$p")" hookSpecificOutput.permissionDecision)" '^allow$'
-unset CONFIRM_OUTLINE
+confirm_env_set "$WORK/cfg"
 
 # --- 11-14: show-user-verified-context surfaces the context from every shape ---
 for s in $SHAPES; do
