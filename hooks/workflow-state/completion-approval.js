@@ -146,13 +146,24 @@ function computeArtifactSha(sessionId, step) {
   try {
     if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return null;
     if (!isApprovalGatedStep(step)) return null;
-    const row = rowFor(step);
-    const artifact = getPlansArtifactPath(sessionId, row.suffix);
-    const buf = digestBody(fs.readFileSync(artifact), row.digestExcludes);
-    return crypto.createHash("sha256").update(buf).digest("hex");
+    const artifact = getPlansArtifactPath(sessionId, rowFor(step).suffix);
+    return shaOfArtifactBuffer(fs.readFileSync(artifact), step);
   } catch (_) {
     return null;
   }
+}
+
+// The approval range of an artifact's bytes (digestExcludes cut); null for a non-gated step.
+// The glossary check scans and fingerprints this same range (#2529 I-FP rule R-A).
+function artifactRangeOfBuffer(buf, step) {
+  if (!isApprovalGatedStep(step)) return null;
+  return digestBody(buf, rowFor(step).digestExcludes);
+}
+
+function shaOfArtifactBuffer(buf, step) {
+  const range = artifactRangeOfBuffer(buf, step);
+  if (range === null) return null;
+  return crypto.createHash("sha256").update(range).digest("hex");
 }
 
 // fail-open read: malformed / absent state yields null.
@@ -353,6 +364,8 @@ module.exports = {
   isApprovalGatedStep,
   assertSanctionedSource,
   computeArtifactSha,
+  artifactRangeOfBuffer,
+  shaOfArtifactBuffer,
   readPlanApproval,
   recordPlanApproval,
   buildAuditApproval,

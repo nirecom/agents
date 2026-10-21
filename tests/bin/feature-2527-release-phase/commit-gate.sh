@@ -22,10 +22,14 @@ session_repo_fixture_attach "$RP_TMP/gate-co" "$RP_REPO" || fail "fixture" "gate
 GATE_JS="$(session_repo_fixture_path "$RP_TMP/gate-co" hooks/workflow-gate.js)"
 
 LIST_HEAD="the following workflow steps are not complete"
-# commit_in <sid> <repo-m> — stages a code file and asks the gate about `git -C <repo> commit`.
+# shellcheck source=../../lib/glossary-check-record.sh
+source "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+# commit_in <sid> <repo-m> — stages a code file, records its glossary_check (#2529) and asks the
+# gate about `git -C <repo> commit`.
 commit_in() {
   printf 'code %s\n' "$RANDOM" >> "$2/src.txt"
   git -C "$2" add src.txt
+  glossary_check_record "$1" "$2"
   gate_bash "$1" "$2" "git -C $2 commit -m x"
 }
 # first_line <out> — the incomplete-steps line of a block message.

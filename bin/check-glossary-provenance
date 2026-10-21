@@ -1,0 +1,148 @@
+#!/usr/bin/env node
+"use strict";
+// bin/check-glossary-provenance --staged [--session <sid>] --repo <root> (#2529 S1): every staged
+// glossary operation (add / delete / redefine per category, HEAD vs index) must match a row of
+// the CONFIRM_INTENT-approved intent glossary or carry a GLOSSARY_ACCEPTED grant bound to the
+// current fingerprint. Zero operations exit 0 before any session is resolved. The verdict is
+// recorded as review_docs.glossary_provenance on the resolved session.
+// Exit: 0 pass, 1 blocked (or the record could not be written), 2 usage / git failure.
+
+const path = require("path");
+const { spawnSync } = require("child_process");
+const prov = require(path.join(__dirname, "lib", "glossary-provenance"));
+const { normalizeTerm, unsafeTermChars, describeTermChars } = require(path.join(__dirname, "..", "hooks", "lib", "glossary-term"));
+const { toWindowsPath } = require(path.join(__dirname, "..", "hooks", "lib", "branch-diff"));
+const { appendEvents } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io"));
+const { provenanceFingerprint } = require(path.join(__dirname, "..", "hooks", "workflow-state", "glossary-check", "scope"));
+const { PROVENANCE_KEY, PROVENANCE_STEP, provenanceRecordEvents } = require(path.join(__dirname, "..", "hooks", "workflow-state", "glossary-check", "record"));
+
+const USAGE = "usage: check-glossary-provenance --staged [--session <sid>] --repo <root>";
+const RERUN = "re-run inside the Claude session that made the change, or re-run with --session <sid>";
+const P_TEXT = "intent.md does not match the version approved with CONFIRM_INTENT — take CONFIRM_INTENT again, or clear it with GLOSSARY_ACCEPTED on the user's decision";
+const asArray = (v) => (Array.isArray(v) ? v : []);
+
+function fail(code, msg) {
+  process.stderr.write("check-glossary-provenance: " + msg + "\n");
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const out = { staged: false, session: undefined, repo: undefined };
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i];
+    if (a === "--staged") out.staged = true;
+    else if ((a === "--session" || a === "--repo") && argv[i + 1] !== undefined && out[a.slice(2)] === undefined) out[a.slice(2)] = argv[++i];
+    else fail(2, USAGE);
+  }
+  if (!out.staged || !out.repo) fail(2, USAGE);
+  return out;
+}
+
+function git(repo, args, allowFail) {
+  const r = spawnSync("git", ["-c", "core.quotePath=false"].concat(args), { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.error || r.status !== 0) {
+    if (allowFail) return null;
+    fail(2, "git " + args.join(" ") + " failed: " + (r.stderr || (r.error && r.error.message) || "").trim());
+  }
+  return r.stdout;
+}
+
+// termSets(repo, side) — side "HEAD" or "" (the index), read alike. Only an unborn HEAD
+// is an absent side; a listed path whose blob cannot be read fails closed (exit 2).
+function termSets(repo, side) {
+  const head = side === "HEAD";
+  const unborn = head && git(repo, ["rev-parse", "--verify", "-q", "HEAD^{commit}"], true) === null;
+  const list = unborn ? "" : head ? git(repo, ["ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "docs"])
+    : git(repo, ["ls-files", "-z", "--", "docs"]);
+  const paths = String(list || "").split("\0").filter(Boolean);
+  const read = (p) => {
+    const text = git(repo, ["show", side + ":" + p], true);
+    if (text === null) fail(2, "cannot read the " + (head ? "HEAD" : "staged") + " blob of " + p + " — glossary provenance check not judged");
+    return text;
+  };
+  return prov.readTermSets(read, paths);
+}
+
+// judge(ops, resolved) -> { blocked, approvalSha, lines }: blocked before any grant.
+function judge(ops, resolved) {
+  const all = (reason) => ops.map((o) => ({ term: o.term, category: o.category, operation: o.operation, reason }));
+  if (resolved.source === "env") {
+    return { blocked: all("session-unverified"), approvalSha: null,
+      lines: ["B — no --session given; resolved " + resolved.sid + " from CLAUDE_CODE_SESSION_ID and recorded the pending operations there. " +
+        "Re-run with --session " + resolved.sid + " for the intent-based check."] };
+  }
+  const loaded = prov.loadIntentGlossary(resolved.sid);
+  if (!loaded.ok) {
+    const text = loaded.case === "P" ? P_TEXT : loaded.reason + (loaded.detail ? " (" + [].concat(loaded.detail).join("; ") + ")" : "");
+    return { blocked: all(loaded.reason), approvalSha: null, lines: [loaded.case + " " + loaded.reason + " — " + text] };
+  }
+  return { blocked: prov.matchOperations(ops, loaded.rows, []).unmatched, approvalSha: loaded.approvalSha, lines: [] };
+}
+
+let legacyBlocks = () => [];
+
+function main(argv) {
+  const a = parseArgs(argv);
+  const repo = toWindowsPath(a.repo);
+  const legacy = legacyBlocks(repo);
+  if (legacy.length > 0) {
+    for (const l of legacy) process.stdout.write("  BLOCK: glossary provenance check not judged — " + l + "\n");
+    return 1;
+  }
+  const ops = prov.computeOperations(termSets(repo, "HEAD"), termSets(repo, ""));
+  if (ops.length === 0) {
+    process.stdout.write("glossary provenance check: no glossary operation staged\n");
+    return 0;
+  }
+
+  const resolved = prov.resolveProvenanceSession(a.session);
+  if (resolved.source === "none") {
+    process.stdout.write("  BLOCK: no-session — run outside a Claude session, so the pending operations cannot be recorded. " + RERUN + ".\n");
+    return 1;
+  }
+
+  const verdict = judge(ops, resolved);
+  const fp = provenanceFingerprint({ ops: prov.opsFingerprint(ops), approvalSha: verdict.approvalSha });
+  let pending = verdict.blocked;
+  try {
+    appendEvents(resolved.sid, (_events, current) => {
+      const entry = (current && current.steps && current.steps[PROVENANCE_STEP]) || {};
+      const prev = entry[PROVENANCE_KEY] || null;
+      const grants = asArray(prev && prev.grants).filter((g) => g && g.fingerprint === fp.fingerprint);
+      pending = verdict.blocked.filter((b) => !grants.some((g) =>
+        g.norm === normalizeTerm(b.term) && g.operation === b.operation && g.category === b.category));
+      const blocked = pending.map((b) => ({ term: b.term, norm: normalizeTerm(b.term), operation: b.operation, category: b.category, reason: b.reason }));
+      return provenanceRecordEvents(prev, fp, resolved.source, blocked);
+    });
+  } catch (e) {
+    for (const l of verdict.lines) process.stdout.write("  BLOCK: " + l + "\n");
+    process.stderr.write("check-glossary-provenance: cannot record on session " + resolved.sid + ": " +
+      (e && e.message ? e.message : String(e)) + " — " + RERUN + ".\n");
+    return 1;
+  }
+  if (pending.length === 0) {
+    process.stdout.write("glossary provenance check: " + ops.length + " operation(s) match the approved intent or a grant\n");
+    return 0;
+  }
+  for (const l of verdict.lines) process.stdout.write("  BLOCK: " + l + "\n");
+  for (const b of pending) {
+    const unsafe = unsafeTermChars(b.term);
+    const remedy = unsafe.length > 0
+      ? " — the term has a forbidden character (" + describeTermChars(unsafe) + "), so it cannot be accepted with GLOSSARY_ACCEPTED — fix the heading or record it in the intent glossary"
+      : " — record it in the intent glossary, or on the user's decision: echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: term=" +
+        b.term + " op=" + b.operation + " cat=" + b.category + " — <reason>>>\"";
+    process.stdout.write("  BLOCK: " + b.term + " " + b.operation + " " + b.category + ": " + b.reason + remedy + "\n");
+  }
+  return 1;
+}
+
+// --- BEGIN temporary: docs/glossary-<category>.md -> docs/glossary/<category>.md migration added 2026-10-17 ---
+// deletion-condition: remove once origin/main has no docs/glossary-user.md / docs/glossary-internal.md and no worktree in "git worktree list" still has them, together with the matching blocks listed in bin/lib/glossary-format/files.js and tests/bin/feat-2529-glossary-legacy-read.sh
+// A staged non-deletion old-layout path is refused before the term sets are read (they skip it).
+legacyBlocks = (repo) => {
+  const names = String(git(repo, ["diff", "-z", "--name-only", "--cached", "--diff-filter=ACMRT", "--", "docs"]) || "");
+  return prov.legacyIndexBlocks(names.split("\0").filter(Boolean));
+};
+// --- END temporary: docs/glossary-<category>.md -> docs/glossary/<category>.md migration ---
+
+process.exit(main(process.argv.slice(2)));

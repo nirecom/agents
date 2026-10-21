@@ -15,6 +15,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # isolation (#2512): pin state and plans dirs file-wide to common.sh's fixture dirs; the per-call pins below still override them.
 export WORKFLOW_STATE_DIR="$WF_NATIVE" WORKFLOW_PLANS_DIR="$PLANS_NATIVE"
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 
 echo "== F1: final_report is the last entry of VALID_STEPS =="
 if run_case "F1/valid-steps-tail"; then
@@ -297,6 +299,7 @@ if run_case "F11/gate-live-verdicts"; then
         SID_F11A="$SID"
         nodejs "$SID_F11A" "$PRE$SEED_DONE_JS"
         assert_eq "F11a/seed" "SEEDED pending" "$NODE_OUT"
+        glossary_check_record "$SID_F11A" "$GATE_REPO"  # #2529: staged src/app.js needs a current glossary_check
         gate_payload "$SID_F11A" "$GATE_REPO_JSON" "$GATE_PAYLOAD"
         run_gate "$GATE_PAYLOAD"
         assert_eq "F11a/gate-exit-code" "0" "$GATE_RC"

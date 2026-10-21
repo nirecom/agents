@@ -5,6 +5,9 @@
 # Case group: WORKTREE_NOTES.md docs evidence (issue #484), WS-EV-9..13.
 # Sourced by main-workflow-evidence.sh; relies on helpers from common.sh.
 
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$DOTFILES_DIR/tests/lib/glossary-check-record.sh"
+
 # Set up a main repo + linked worktree on a feature branch. Echoes the worktree path.
 setup_worktree() {
     local main_repo="$TMPDIR_BASE/main-$RANDOM"
@@ -63,6 +66,7 @@ run_worktree_notes_tests() {
     write_notes_file "$WT" "fixed bug in foo handler" ""
     echo "console.log('hi');" > "$WT/app.js"
     git -C "$WT" add app.js
+    glossary_check_record "$SID" "$WT"  # #2529
 
     GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$WT_N" "$SID")
     GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -109,6 +113,7 @@ run_worktree_notes_tests() {
     write_notes_file "$WT" "" "user-visible change to CLI output"
     echo "console.log('hi');" > "$WT/app.js"
     git -C "$WT" add app.js
+    glossary_check_record "$SID" "$WT"  # #2529
 
     GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$WT_N" "$SID")
     GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -150,6 +155,7 @@ run_worktree_notes_tests() {
     write_notes_file "$WT" "subdir test bullet" ""
     echo "console.log('hi');" > "$WT/sub/app.js"
     git -C "$WT/sub" add app.js
+    glossary_check_record "$SID" "$WT"  # #2529
 
     GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$WT_SUB_N" "$SID")
     GATE_OUT=$(run_gate "$GATE_INPUT")

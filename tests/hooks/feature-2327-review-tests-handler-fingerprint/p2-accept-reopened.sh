@@ -37,7 +37,7 @@ check_not_contains() { if printf '%s' "$3" | grep -qF -- "$2"; then fail "$1" "d
 
 rr_repo() {
   harness_git_init "$1"
-  git -C "$1" config user.email t@test.com
+  git -C "$1" config user.email t@example.com
   git -C "$1" config user.name T
   printf 'seed\n' > "$1/README.md"
   git -C "$1" add README.md
@@ -69,7 +69,7 @@ const { spawnSync } = require("child_process");
 const payload = JSON.stringify({ session_id: process.env.SID, tool_name: "Bash", tool_input: { command: process.env.CMD }, cwd: process.env.CWDP });
 const env = Object.assign({}, process.env);
 delete env.CLAUDE_PROJECT_DIR;
-const r = spawnSync("node", [process.env.WFMARK_N], { input: payload, encoding: "utf8", timeout: 30000, env, cwd: process.env.NEUTRAL_N });
+const r = spawnSync("node", [process.env.WFMARK_N], { input: payload, encoding: "utf8", timeout: 30000, env, cwd: process.env.RUNCWD || process.env.NEUTRAL_N });
 process.stdout.write((r.stdout || "") + (r.stderr || ""));
 JS
 
@@ -101,7 +101,14 @@ try {
 JS
 
 seed_state() { run_with_timeout 60 node -e "$SEED_JS" "$1" "$2" "${3:-pending}" "${4:-}"; }
-send_cmd() { SID="$1" CWDP="$2" CMD="$3" run_with_timeout 60 node -e "$SEND_JS"; }
+send_cmd() { SID="$1" CWDP="$2" CMD="$3" RUNCWD="" run_with_timeout 60 node -e "$SEND_JS"; }
+# #2529: an ACCEPTED that restores complete crosses the glossary_check boundary. With no linked
+# session worktree in the state, the boundary resolves the hook's cwd git root, so these sends
+# run the hook inside <repo> after seeding the record: send_cmd_glossary <sid> <repo-n> <cmd>.
+send_cmd_glossary() {
+  glossary_check_record "$1" "$2" tests
+  SID="$1" CWDP="$2" CMD="$3" RUNCWD="$2" run_with_timeout 60 node -e "$SEND_JS"
+}
 sv() { run_with_timeout 60 node -e "$SV_JS" "$1" "$2"; }
 fresh() { run_with_timeout 60 node -e "$FRESH_JS" "$1" "$2"; }
 accept_cmd() { printf 'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: %s>>"' "$1"; }
@@ -132,7 +139,7 @@ reopen_via_sentinel ar1sid "$R1" ',"warnings_summary":"warnings=2"'
 check "AR1-pre: write_code completion reopened review_tests" "pending" "$(sv ar1sid status)"
 check "AR1-pre: reopen_reason is write-code-stale" "write-code-stale" "$(sv ar1sid reopen)"
 check "AR1b-pre: freshness is stale right after the reopen" "false:stale" "$(fresh ar1sid "$R1_N")"
-AR1_OUT="$(send_cmd ar1sid "$R1_N" "$(accept_cmd "$REASON")")"
+AR1_OUT="$(send_cmd_glossary ar1sid "$R1_N" "$(accept_cmd "$REASON")")"
 check "AR1: status restored to complete" "complete" "$(sv ar1sid status)"
 check "AR1: reopen_reason cleared" "none" "$(sv ar1sid reopen)"
 check "AR1: manifest present" "present" "$(sv ar1sid manifest)"
@@ -157,7 +164,7 @@ case_begin "accepted-restores-without-warnings-summary" "hooks/workflow-state/st
 R4="$TMPDIR_BASE/r4"; R4_N="$(np "$R4")"
 reopen_via_sentinel ar4sid "$R4" ''
 check "AR4-pre: reopened without any warnings_summary" "pending:write-code-stale:gone" "$(sv ar4sid status):$(sv ar4sid reopen):$(sv ar4sid summary)"
-send_cmd ar4sid "$R4_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ar4sid "$R4_N" "$(accept_cmd "$REASON")" >/dev/null
 check "AR4: recovers to complete (old early return removed)" "complete" "$(sv ar4sid status)"
 check "AR4: reopen_reason cleared" "none" "$(sv ar4sid reopen)"
 check "AR4: manifest is current" "$IMPL_OID" "$(sv ar4sid impl)"
@@ -172,7 +179,7 @@ R5="$TMPDIR_BASE/r5"; R5_N="$(np "$R5")"
 make_repo "$R5"
 seed_state ar5sid "{\"status\":\"pending\",\"reopen_reason\":\"write-code-stale\",\"warnings_summary\":\"warnings=1\",\"review_scope_manifest\":$(manifest_json "$TESTS_OID")}" complete
 check "AR5-pre: seeded reopened state carries warnings_summary" "pending:present" "$(sv ar5sid status):$(sv ar5sid summary)"
-send_cmd ar5sid "$R5_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ar5sid "$R5_N" "$(accept_cmd "$REASON")" >/dev/null
 check "AR5: recovers to complete" "complete" "$(sv ar5sid status)"
 check "AR5: warnings_summary is gone" "gone" "$(sv ar5sid summary)"
 case_end
@@ -229,7 +236,7 @@ recover_case() {
   [ -n "$3" ] && rt="$rt,\"review_scope_manifest\":$3"
   seed_state "$1" "$rt}" complete
   check "$1-pre: seeded pending with $2" "pending:$2" "$(sv "$1" status):$(sv "$1" reopen)"
-  send_cmd "$1" "$(np "$repo")" "$(accept_cmd "$REASON")" >/dev/null
+  send_cmd_glossary "$1" "$(np "$repo")" "$(accept_cmd "$REASON")" >/dev/null
 }
 
 case_begin "recovers-for-write-code-missing-without-manifest" "hooks/workflow-state/state-io/review-tests.js"
@@ -277,6 +284,8 @@ rr_stage "$L10" hooks/impl.js "impl"
 L10_IMPL="$(rr_oid "$L10" hooks/impl.js)"
 L10_N="$(np "$L10")"
 seed_state ar10sid "{\"status\":\"pending\",\"reopen_reason\":\"write-code-stale\",\"review_scope_manifest\":$OLD_MANIFEST}" complete "$L10_N"
+# The boundary resolves the linked session worktree here, so the hook keeps the neutral cwd.
+glossary_check_record ar10sid "$L10_N" tests
 send_cmd ar10sid "$(np "$R10")" "$(accept_cmd "$REASON")" >/dev/null
 check "AR10: status restored to complete" "complete" "$(sv ar10sid status)"
 check "AR10: manifest holds the linked worktree impl oid" "$L10_IMPL" "$(sv ar10sid impl)"

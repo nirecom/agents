@@ -97,16 +97,21 @@ Writing the resulting file safely is a separate question from naming it safely, 
 
 `FP_SCANNER_REQUIRED` distinguishes formats that carry a scanner from those that do not. For `review-security-shared` it is 1, meaning a round where the security scanner never reported is treated as fail-closed for resolution (an absent scanner is "not examined", not "nothing found"). For the four plan-review formats it is 0, meaning absence of the scanner is intentional and codex-only rounds may resolve concerns normally.
 
+## Why a glossary-drift concern cannot be rejected
+
+A reviewer that finds a term used outside its glossary definition, a coined term, or a variant the deterministic check cannot see raises it as an ordinary concern whose text carries the tag `[glossary-drift term=<term>]`. Triage would otherwise dismiss such a concern with one `reject`, and the drift the glossary exists to prevent would land unnoticed. So the rule lives in the ledger, which all four tagged formats (`outline-plan`, `detail-plan`, `test-review`, `review-security-shared`) already pass through: a tagged `reject` is refused with exit 4 and writes nothing, and the only dismissal is `accept`, which succeeds only when the user granted `WORKFLOW_GLOSSARY_ACCEPTED` for the same term and the same DISCRIM. The grant lives in workflow state, read through `bin/check-glossary-ledger-grant`, so the ledger row keeps its 11 fields and no new STATE is added; an accepted concern is stored as `rejected` with an `accepted(glossary-drift)` reason prefix. Recognition keys on the tag in the text, never on exit codes, because a `reject` after the ledger is deleted returns 1, not 4. Every failure to confirm a grant — no grant, no ledger, a malformed tag, a format with no stage — refuses (fail-closed).
+
 ## Where the code lives
 
 | Path | Role |
 |---|---|
 | `bin/lib/concern-ledger.sh` | Library entrypoint — the two identity decisions (bind, merge), every derived file name, and `_cl_carrier_from_ledger` (carrier path canonical derivation) |
 | `bin/lib/concern-ledger/core.sh` | `cl_reject` (in-place STATE update + carrier upsert), `_cl_list_pattern_files`, `_cl_reject_bad_tokens` |
+| `bin/lib/concern-ledger/drift-tag.sh` | Tagged concerns: the `reject` refusal and the `accept` grant check (`cl_is_drift_tagged`, `cl_drift_term`, `cl_guard_reject`, `cl_accept`) |
 | `bin/lib/concern-ledger/render.sh` | `cl_tally`, `cl_render_prior`, `cl_render_concerns_log` (open+rejected re-derivation), `_cl_merge_concerns_log` (rejected-only carrier preservation) |
 | `bin/lib/concern-ledger/` | The rest of the library: hashing, parsing, reduction, finalize, discovery, token validation |
 | `bin/lib/safe-state-path.sh` | Shared primitive for every write under the session control dir: token validation, atomic publish, symlink/directory-pre-placement defense, containment |
-| `bin/concern-ledger` | CLI front end; the only sanctioned entry point |
+| `bin/concern-ledger` | CLI front end; the only sanctioned entry point (`accept` / `list-drift` and exit 4 for tagged concerns) |
 | `bin/run-codex-review-loop` | Plan / test / security-code review loops; owns the round counter and the exit-7 contract |
 | `bin/review-code-codex` | The security-code primary reviewer (diff-based); invoked by the loop's ref-kind branch |
 | `bin/review-loop-summarize-concerns` | Renders the ledger for the cap-reach dialog |

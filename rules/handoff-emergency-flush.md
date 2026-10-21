@@ -2,7 +2,7 @@
 
 Unconditional escape hatch: a session about to lose its working context must not have to earn this rule by matching a path glob.
 
-A step here means a workflow step (one unit of `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list`); `docs/glossary-user.md` owns the term.
+A step here means a workflow step (one unit of `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list`); `docs/glossary/user.md` owns the term.
 
 ## What to record
 

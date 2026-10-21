@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/fix-2025-safe-state-path.sh
 # Tests: bin/lib/safe-state-path.sh, bin/lib/concern-ledger.sh, bin/concern-ledger
-# Tags: safe-state-path, path-traversal, containment, symlink, atomic-publish, table-driven, security, scope:issue-specific, pwsh-not-required
+# Tags: safe-state-path, path-traversal, containment, symlink, atomic-publish, table-driven, security, scope:issue-specific, pwsh-not-required, issue-2529
 #
 # #2025: every writer under the plans dir spelled its own destination, each
 # owning a separate copy of "is this still inside the directory the caller
@@ -255,6 +255,11 @@ case_end
 case_begin "contained-file-operations" "bin/lib/safe-state-path.sh"
 # shellcheck source=./fix-2025-safe-state-path/contained-ops.sh
 . "$SUITE_DIR/contained-ops.sh"
+case_end
+
+case_begin "ledger-sources-drift-tag-module" "bin/lib/concern-ledger.sh"
+# shellcheck source=./fix-2025-safe-state-path/drift-tag-load.sh
+. "$SUITE_DIR/drift-tag-load.sh"
 case_end
 
 echo ""

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Aggregate documentation gate. Usage: review-doc-gates [--staged | --all]
+# Aggregate documentation gate. Usage: review-doc-gates [--staged | --all] [--session <sid>]
+# --session goes to review-doc-glossary only (the glossary provenance check).
 #
 # OR-folds the three doc sub-gates — review-doc-size, review-doc-heading-order and
 # review-doc-glossary — resolved from this tool's own directory. --staged exits 1
@@ -13,10 +14,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 MODE=""
 BAD_ARG=0
+SESSION_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) MODE="--all"; shift ;;
     --staged) MODE="--staged"; shift ;;
+    --session)
+      if [[ $# -lt 2 ]]; then BAD_ARG=1; shift; continue; fi
+      SESSION_ARGS=(--session "$2"); shift 2 ;;
     *) BAD_ARG=1; shift ;;
   esac
 done
@@ -30,7 +35,7 @@ rc=0
 
 "$SCRIPT_DIR/review-doc-size" "$MODE" || rc=1
 "$SCRIPT_DIR/review-doc-heading-order" "$MODE" || rc=1
-"$SCRIPT_DIR/review-doc-glossary" "$MODE" || rc=1
+"$SCRIPT_DIR/review-doc-glossary" "$MODE" ${SESSION_ARGS[@]+"${SESSION_ARGS[@]}"} || rc=1
 
 # --all is advisory: sub-gates already exit 0 in --all mode, but pin it here so
 # the aggregate can never block on an audit scan.

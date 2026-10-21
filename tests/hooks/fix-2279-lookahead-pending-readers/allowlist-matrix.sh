@@ -38,6 +38,21 @@ review_tests   | skipped     | -                  | false
 EOF
 }
 
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+
+# #2529: a `complete` row on a glossary stage step (detail, review_tests) seeds only with a
+# current glossary_check record. The record and the seeding markStep both resolve the worktree
+# from the cwd git root, so both run inside one fixture repo; the detail record scans the plan.
+_m_seed_glossary() {
+    local tn="$1" repo="$2"
+    git init -q "$repo"
+    git -C "$repo" config core.hooksPath /dev/null
+    : > "$tn/m-detail-complete---detail.md"
+    WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" glossary_check_record "m-detail-complete--" "$repo" detail
+    WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" glossary_check_record "m-review_tests-complete--" "$repo" tests
+}
+
 # One node process for the whole table: every row is a separate sid inside one
 # fixture store, so the 15 rows cost one spawn rather than thirty.
 run_L9() {
@@ -50,8 +65,9 @@ run_L9() {
     done <<EOF
 $(_m_table)
 EOF
+    _m_seed_glossary "$tn" "$tmp/repo"
 
-    problems=$(WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" ROWS="$rows" "$RWT" 60 node -e "
+    problems=$(cd "$tmp/repo" && WORKFLOW_STATE_DIR="$tn" WORKFLOW_PLANS_DIR="$tn" ROWS="$rows" "$RWT" 60 node -e "
 const io = require('$SIO');
 const { isEffectivelyPendingStep } = require('$LIFECYCLE');
 const { isAllPending } = require('$ADOPT');

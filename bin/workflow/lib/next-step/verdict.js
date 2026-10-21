@@ -29,10 +29,10 @@ const { resolveSessionProfile } = require("../../../../hooks/workflow-state/sess
 const {
   APPROVAL_GATED_STEPS,
   isApprovalGatedStep,
-  UnapprovedCompletionError,
   confirmSentinelFor,
   recoveryFor,
 } = require("../../../../hooks/workflow-state/completion-approval");
+const { completionRefusalOf } = require("../../../../hooks/workflow-state/completion-refusal");
 const {
   recordStepVerdict,
   RECORDED_VERDICT_PREFIX,
@@ -203,8 +203,13 @@ function computeVerdict(rawSid, _didAutoRepair) {
         }
         markStep(sid, r.step, "complete", {}, { origin: "next-step-evidence-resolution" });
       } catch (e) {
-        if (e instanceof UnapprovedCompletionError) {
+        const refusal = completionRefusalOf(e, r.step);
+        if (refusal && refusal.kind === "unapproved") {
           emit("blocked", "", recoveryFor(r.step), "unapproved-completion: " + r.step);
+          return;
+        }
+        if (refusal) {
+          emit("blocked", "", refusal.message, refusal.kind + ": " + r.step);
           return;
         }
         /* fail-open on any other write failure */

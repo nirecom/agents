@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2256-docs-glossary.sh
-# Tests: docs/glossary-user.md, docs/glossary-internal.md, skills/update-docs/SKILL.md, agents/supervisor-audit.md, docs/architecture/claude-code/supervisor-audit-ledger.md
+# Tests: docs/glossary/user.md, docs/glossary/internal.md, skills/update-docs/SKILL.md, agents/supervisor-audit.md, docs/architecture/claude-code/supervisor-audit-ledger.md
 # Tags: docs, glossary, terminology, static, TL1, scope:issue-specific
 
 # #2256 delivery items 9 and 10 — the hyphenated `recurrence-patterns` spelling must be
 # gone from the three audit-side sites while the unrelated security-side "three axes"
 # wording stays put. #2529 replaced the "every term gets a glossary entry" duty with the
 # entry criteria in rules/docs/glossary.md: update-docs promotes terms through bin/glossary-promote,
-# the glossary splits into glossary-user.md / glossary-internal.md, and single-subsystem
+# the glossary splits into glossary/user.md / glossary/internal.md, and single-subsystem
 # audit terms are defined once in their owning documents instead.
 
 set -uo pipefail
@@ -16,8 +16,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-GL_USER="$SCRIPT_CHECKOUT_ROOT/docs/glossary-user.md"
-GL_INTERNAL="$SCRIPT_CHECKOUT_ROOT/docs/glossary-internal.md"
+GL_USER="$SCRIPT_CHECKOUT_ROOT/docs/glossary/user.md"
+GL_INTERNAL="$SCRIPT_CHECKOUT_ROOT/docs/glossary/internal.md"
 UPDATE_DOCS="$SCRIPT_CHECKOUT_ROOT/skills/update-docs/SKILL.md"
 SUP_AUDIT="$SCRIPT_CHECKOUT_ROOT/agents/supervisor-audit.md"
 AUDIT_LEDGER="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/supervisor-audit-ledger.md"
@@ -45,7 +45,7 @@ entry() { awk -v h="### $2" '{ sub(/\r$/, "") } $0 == h { on = 1; next } /^##+ /
 # the term; both files must exist for the absence to count.
 assert_no_heading() {
     if [ ! -s "$GL_USER" ] || [ ! -s "$GL_INTERNAL" ]; then
-        fail "$1" "glossary-user.md / glossary-internal.md missing or empty; absence not provable"
+        fail "$1" "glossary/user.md / glossary/internal.md missing or empty; absence not provable"
     elif grep -Eqi "^### .*($2)" "$GL_USER" "$GL_INTERNAL"; then
         fail "$1" "a glossary heading still names /$2/"
     else
@@ -61,9 +61,9 @@ assert_nogrep "3: update-docs no longer demands an entry for every term" "$UPDAT
 case_end
 
 # --- 4: both glossary files exist ---
-case_begin "glossary-split-files-exist" "docs/glossary-internal.md"
-assert_file "$GL_USER" "4a: docs/glossary-user.md exists"
-assert_file "$GL_INTERNAL" "4b: docs/glossary-internal.md exists"
+case_begin "glossary-split-files-exist" "docs/glossary/internal.md"
+assert_file "$GL_USER" "4a: docs/glossary/user.md exists"
+assert_file "$GL_INTERNAL" "4b: docs/glossary/internal.md exists"
 case_end
 
 # --- 5-7, 12: the removed ledger terms live in supervisor-audit-ledger.md ---
@@ -86,11 +86,11 @@ assert_no_heading "13a: the arm / surface / clear lifecycle has no glossary entr
 assert_grep "13b: arm / surface / clear is defined in agents/supervisor-audit.md" "$SUP_AUDIT" 'arm */ *surface */ *clear'
 case_end
 
-# --- 9-10: review round stays, in glossary-internal.md, expanding CAP and MAX_EXTENSIONS ---
-case_begin "review-round-entry-in-internal" "docs/glossary-internal.md"
+# --- 9-10: review round stays, in glossary/internal.md, expanding CAP and MAX_EXTENSIONS ---
+case_begin "review-round-entry-in-internal" "docs/glossary/internal.md"
 RR="$(entry "$GL_INTERNAL" 'review round')"
-if [ -n "$RR" ]; then pass "9: 'review round' has an entry in glossary-internal.md"
-else fail "9: 'review round' has an entry in glossary-internal.md" "no '### review round' entry"; fi
+if [ -n "$RR" ]; then pass "9: 'review round' has an entry in glossary/internal.md"
+else fail "9: 'review round' has an entry in glossary/internal.md" "no '### review round' entry"; fi
 if printf '%s\n' "$RR" | grep -q 'CAP' && printf '%s\n' "$RR" | grep -q 'MAX_EXTENSIONS'; then
     pass "10: the review round entry expands CAP and MAX_EXTENSIONS"
 else
@@ -99,7 +99,7 @@ fi
 case_end
 
 # --- 11: bare "step" is folded into the workflow step definition ---
-case_begin "workflow-step-entry-names-short-form" "docs/glossary-user.md"
+case_begin "workflow-step-entry-names-short-form" "docs/glossary/user.md"
 WS="$(entry "$GL_USER" 'workflow step')"
 WS_BARE="$(printf '%s\n' "$WS" | sed -E 's/(workflow|in-skill) steps?//Ig')"
 if [ -n "$WS" ] && printf '%s\n' "$WS_BARE" | grep -Eqiw 'step'; then

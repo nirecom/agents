@@ -31,7 +31,7 @@ T1="$TMPDIR_BASE/t1"; T1_N="$(np "$T1")"
 make_repo "$T1"
 seed_state ti1sid "$STALE_RT" complete
 write_terminal_marker ti1sid 6 fp1
-TI1_OUT="$(send_cmd ti1sid "$T1_N" "$(accept_cmd "$REASON")")"
+TI1_OUT="$(send_cmd_glossary ti1sid "$T1_N" "$(accept_cmd "$REASON")")"
 check "TI1: status complete" "complete" "$(sv ti1sid status)"
 check "TI1: reopen_reason cleared" "none" "$(sv ti1sid reopen)"
 check "TI1: warnings_summary gone" "gone" "$(sv ti1sid summary)"
@@ -49,7 +49,7 @@ T2="$TMPDIR_BASE/t2"; T2_N="$(np "$T2")"
 make_repo "$T2"
 seed_state ti2sid "$STALE_RT" complete
 write_terminal_marker ti2sid 2 fp2
-send_cmd ti2sid "$T2_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ti2sid "$T2_N" "$(accept_cmd "$REASON")" >/dev/null
 check "TI2: status complete (rc=2 valid terminal)" "complete" "$(sv ti2sid status)"
 case_end
 
@@ -58,7 +58,7 @@ T3="$TMPDIR_BASE/t3"; T3_N="$(np "$T3")"
 make_repo "$T3"
 seed_state ti3sid '{"status":"in_progress"}' complete
 write_terminal_marker ti3sid 6 fp3
-send_cmd ti3sid "$T3_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ti3sid "$T3_N" "$(accept_cmd "$REASON")" >/dev/null
 check "TI3: status complete without reopen_reason" "complete" "$(sv ti3sid status)"
 check "TI3: manifest records current impl oid" "$IMPL_OID" "$(sv ti3sid impl)"
 check "TI3: freshness is fresh after accept" "true:match" "$(fresh ti3sid "$T3_N")"
@@ -115,7 +115,7 @@ T10="$TMPDIR_BASE/t10"; T10_N="$(np "$T10")"
 make_repo "$T10"
 seed_state ti10sid "{\"status\":\"pending\",\"reopen_reason\":\"write-code-stale\",\"review_scope_manifest\":$OLD_MANIFEST}" complete
 write_terminal_marker ti10sid 6 fp10
-send_cmd ti10sid "$T10_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ti10sid "$T10_N" "$(accept_cmd "$REASON")" >/dev/null
 check "TI10: pending recovered to complete" "complete" "$(sv ti10sid status)"
 check "TI10: reopen_reason cleared" "none" "$(sv ti10sid reopen)"
 case_end

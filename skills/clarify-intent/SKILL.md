@@ -68,6 +68,9 @@ Pick each term's category per `rules/docs/glossary.md`; CI-4 records the new ter
 
 CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Use `$CLAUDE_CODE_SESSION_ID` as `<session-id>`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
 
+CI-4a. Self-review the intent.md body with `skills/_shared/combined-glossary.md` (reviewer directives); raise each drift as a tagged concern per `skills/_shared/glossary-drift-check.md`.
+Rerun CI-4a whenever a CI-5 Revise changes intent.md.
+
 CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
 Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"` alone in the next turn; after Allow, run Completion and co-emit the `make-outline-plan` Skill invocation. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.
 
