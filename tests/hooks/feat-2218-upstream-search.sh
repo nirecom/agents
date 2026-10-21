@@ -306,6 +306,7 @@ run_U16
 run_U17
 run_U18
 run_U19
+run_U20
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

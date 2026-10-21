@@ -11,6 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
+const { sanitizeUntrustedField } = require("../lib/output-sanitize");
 const { listRecentContextCandidates, lastActivityOf } = require("./inheritance/candidates");
 
 const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail", "handoff"]);
@@ -83,9 +84,10 @@ function issuesOf(body) {
 
 // Only 108 of 667 real intent.md files carry a `**Title:**` line, so its
 // absence is normal and never removes a session from the search.
+// A donor's title is written by another session: it reaches `--list` sanitized (#2301).
 function titleOf(body) {
   const m = TITLE_RE.exec(body);
-  return m ? m[1] : null;
+  return m ? sanitizeUntrustedField(m[1]) : null;
 }
 
 function normalizeQuery(query) {
