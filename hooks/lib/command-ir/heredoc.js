@@ -9,7 +9,7 @@
 
 // Tag right after `<<` / `<<-`: quoted or a bare word (`.`/`-` admitted so
 // punctuated delimiters like `EOF-1.2` are recognised).
-const TAG_RE = /^(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([A-Za-z0-9_.\-]+))/;
+const TAG_RE = /^(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([A-Za-z0-9_.-]+))/;
 
 // Heredoc openers on ONE physical line, skipping quoted and escaped regions.
 // `<<<` is a here-STRING, not a heredoc, and is deliberately skipped.

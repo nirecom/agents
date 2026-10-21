@@ -30,8 +30,8 @@ function controlForm(abs, stateRoots) {
   let st = null;
   try {
     st = fs.lstatSync(parent);
-  } catch (_e) {
-    throw new Error("payload control directory does not exist");
+  } catch (e) {
+    throw new Error("payload control directory does not exist", { cause: e });
   }
   if (st.isSymbolicLink() || !st.isDirectory()) {
     throw new Error("payload control directory must be a real directory");
@@ -75,8 +75,8 @@ function loadPayload(file) {
   let stat = null;
   try {
     stat = fs.lstatSync(abs);
-  } catch (_e) {
-    throw new Error("payload file does not exist");
+  } catch (e) {
+    throw new Error("payload file does not exist", { cause: e });
   }
   if (!stat.isFile()) throw new Error("payload path is not a regular file");
   if (stat.size > MAX_PAYLOAD_BYTES) throw new Error("payload file is too large");
@@ -84,8 +84,8 @@ function loadPayload(file) {
   const raw = fs.readFileSync(abs, "utf8");
   try {
     return JSON.parse(raw);
-  } catch (_e) {
-    throw new Error("payload file is not valid JSON");
+  } catch (e) {
+    throw new Error("payload file is not valid JSON", { cause: e });
   }
 }
 

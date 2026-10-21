@@ -54,6 +54,7 @@ function normalizeValue(v) {
   if (typeof v !== "string") return "any";
   const trimmed = v.trim().toLowerCase();
   if (trimmed.length === 0) return "any";
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the purpose
   if (/[\x00-\x1f]/.test(trimmed)) return "any";
   return trimmed;
 }
@@ -64,6 +65,7 @@ function normalizeValue(v) {
 // framing (parens, colons, newlines, backticks, $, quotes) or over 40 chars does
 // not. \p{M} keeps decomposed accents and Vietnamese tone marks legal.
 // Applied to the already trimmed+lowercased value.
+// lang-check: ignore -- the non-English examples above are the point of the comment.
 const LANGUAGE_NAME_RE = /^[\p{L}][\p{L}\p{M}' -]{0,39}$/u;
 
 function isPlausibleLanguageName(v) {
