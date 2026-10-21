@@ -35,6 +35,7 @@ const SECRET_PATTERNS = [
 
 // Control characters that can rewrite a reviewer's terminal line. \t, \n and \r
 // are deliberately preserved: they are ordinary text, not an injection vector.
+// eslint-disable-next-line no-control-regex -- matching control characters is the purpose
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 
 // Redact secrets, neutralize sentinel-shaped substrings, and drop control bytes.

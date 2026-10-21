@@ -308,7 +308,7 @@ function guardProjection(value) {
     const child = guardProjection(value[key]);
     Object.defineProperty(guarded, key, {
       get: () => child,
-      set: () => refuseWrite(key),
+      set: () => { refuseWrite(key); },
       enumerable: true,
       configurable: false,
     });

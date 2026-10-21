@@ -56,7 +56,7 @@ function toPosix(relative) {
 // malformed — an opening `---` with no closing one. Such a file is COUNTED (it is loaded
 // regardless of how badly its header is written) but the caller reports why.
 function isAlwaysLoaded(content) {
-  const text = String(content).replace(/^﻿/, '');
+  const text = String(content).replace(/^\uFEFF/, '');
   const lines = text.split(/\r?\n/);
   if (lines[0] !== '---') return { alwaysLoaded: true, warning: null };
   let close = -1;
