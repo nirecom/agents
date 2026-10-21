@@ -1,11 +1,9 @@
-// hooks/lib/path-containment.js
 // SSOT for "is this path really inside that directory?" (CPR-SSOT), shared by
 // enforce-worktree's marker-gate allow fast-path and block-clearance-token-write's
 // glob qualifier — the two used to drift into separate implementations (one
 // resolved symlinks + probed case-sensitivity, one did a lexical resolve()),
 // so a symlink or case-only spelling difference could defeat containment on
 // only one side.
-//
 //   realResolve()      — physical resolution (symlinks, nonexistent tails)
 //   isContainedUnder() — string containment, case-folded only when proven
 //                        case-insensitive by probe
@@ -38,12 +36,12 @@ function realResolve(p, _depth) {
   for (;;) {
     try {
       return tail.length === 0 ? realpath(head) : nodePath.join(realpath(head), ...tail);
-    } catch (_) {
+    } catch (realpathErr) {
       let lst = null;
       try { lst = fs.lstatSync(head); } catch (_e2) { /* head doesn't exist at all */ }
       if (lst && lst.isSymbolicLink()) {
         if (depth >= MAX_SYMLINK_HOPS) {
-          throw new Error(`realResolve: symlink chain exceeds ${MAX_SYMLINK_HOPS} hops at "${head}"`);
+          throw new Error(`realResolve: symlink chain exceeds ${MAX_SYMLINK_HOPS} hops at "${head}"`, { cause: realpathErr });
         }
         const linkTarget = fs.readlinkSync(head);
         const resolvedTarget = nodePath.isAbsolute(linkTarget)

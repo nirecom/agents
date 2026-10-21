@@ -65,7 +65,7 @@ const LONG_FLAG = String.raw`--(?:eval|${ci("command")}|${ci("encoded-command")}
 // Enc, ... EncodedCommand) that pwsh accepts — in any casing, as pwsh does.
 const L = (c, inner) => (inner ? `${ci(c)}(?:${inner})?` : ci(c));
 const PWSH_COMMAND_PREFIX = L("C", L("o", L("m", L("m", L("a", L("n", L("d")))))));
-const PWSH_ENCCMD_PREFIX = L("E", L("n", L("c", L("o", L("d", L("e", L("d", L("C", L("o", L("m", L("m", L("a", L("n", L("d")))))))))))))); // eslint-disable-line
+const PWSH_ENCCMD_PREFIX = L("E", L("n", L("c", L("o", L("d", L("e", L("d", L("C", L("o", L("m", L("m", L("a", L("n", L("d"))))))))))))));
 const FLAG_ALTS = String.raw`${CLUSTER_FLAG}\b|${LONG_FLAG}\b|-{1,2}(?:${PWSH_COMMAND_PREFIX}|${PWSH_ENCCMD_PREFIX})\b`;
 
 // Real per-interpreter flag VOCABULARY (not a generic [A-Za-z] class), python
@@ -131,7 +131,7 @@ const INTERPRETER_RE = new RegExp(
 // `(?:=|$)` accepts the attached long form (`--eval=code`) too.
 const PROOF_CLUSTER_FLAG = String.raw`-[a-z]{0,2}[ce][a-z]{0,2}`;
 const PROOF_LONG_FLAG = String.raw`--eval`;
-const PWSH_ENCCMD_PROOF_PREFIX = `${ci("E")}${ci("n")}(?:${L("c", L("o", L("d", L("e", L("d", L("C", L("o", L("m", L("m", L("a", L("n", L("d"))))))))))))})?`; // eslint-disable-line
+const PWSH_ENCCMD_PROOF_PREFIX = `${ci("E")}${ci("n")}(?:${L("c", L("o", L("d", L("e", L("d", L("C", L("o", L("m", L("m", L("a", L("n", L("d"))))))))))))})?`;
 const PWSH_PROOF_FLAG = String.raw`-{1,2}(?:${PWSH_COMMAND_PREFIX}|${PWSH_ENCCMD_PROOF_PREFIX})`;
 const GENERIC_PROOF_ALTS = String.raw`${PROOF_CLUSTER_FLAG}|${PROOF_LONG_FLAG}`;
 const GENERIC_INLINE_PROGRAM_FLAG_RE = new RegExp(String.raw`^(?:${GENERIC_PROOF_ALTS})(?:=|$)`);

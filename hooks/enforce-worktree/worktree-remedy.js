@@ -20,6 +20,7 @@ const DEFAULT_REMEDY = "Run: /worktree-start\n";
 // itself never reaches the decoded reason, only its textual name does. Ordinary
 // paths (spaces, dots, parens, non-ASCII) contain none of these bytes and pass
 // through unchanged.
+// eslint-disable-next-line no-control-regex -- matching control characters is the purpose
 const CONTROL_CHARS_RE = new RegExp("[\u0000-\u001f\u007f]", "g");
 function escapeControlChar(ch) {
   return "\\u" + ch.codePointAt(0).toString(16).padStart(4, "0");
