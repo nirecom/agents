@@ -8,6 +8,7 @@ function getConvLangInjection() {
   if (typeof raw !== "string") return null;
   const normalized = raw.trim().toLowerCase();
   if (normalized.length === 0 || normalized === "english" || normalized === "any") return null;
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the purpose
   if (/[\x00-\x1f]/.test(normalized)) return null;
   if (!isPlausibleLanguageName(normalized)) return null;
   return `Respond to the user in ${normalized}. This applies to all text you write, including narration between tool calls.`;

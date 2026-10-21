@@ -12,6 +12,7 @@
 // prove the parser cases depend on the regexes.
 const MODEL_ID_RE = /The exact model ID is\s+([^\r\n]*?)\s*\.?\s*$/m;
 const MODEL_NAME_RE = /You are powered by the model(?: named[ \t]+|[ \t]+(?![ \t])(?!named(?:[ \t]|\.?\s*$)))([^\r\n]*?)\s*\.?\s*$/m;
+// eslint-disable-next-line no-control-regex -- matching control characters is the purpose
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 
 // Extract the model identifier from the self-report sentence. Two name forms
