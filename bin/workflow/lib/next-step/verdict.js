@@ -205,7 +205,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
       } catch (e) {
         const refusal = completionRefusalOf(e, r.step);
         if (refusal && refusal.kind === "unapproved") {
-          emit("blocked", "", recoveryFor(r.step), "unapproved-completion: " + r.step);
+          emit("blocked", "", e.recovery || recoveryFor(r.step), `unapproved-completion: ${r.step} (${e.code})`);
           return;
         }
         if (refusal) {

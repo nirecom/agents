@@ -133,6 +133,12 @@ const RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_BA
 // Glossary grant (#2529): term (no `=`), up to 3 op=/cat=/stage= discriminators, reason.
 const GLOSSARY_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=([^>()\x60;|&=]+?)((?: (?:op|cat|stage)=[a-z-]+){0,3}) — ([^>()\x60;|&]+)>>"$/;
 const GLOSSARY_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_GLOSSARY_ACCEPTED([: ].*)?>>"\s*$/;
+// Supervisor BLOCK override (#2709): the user's reviewed rejection of a standing TR5 BLOCK.
+// Human-only via settings.json `ask`; the workflow-mark handler is its only write path.
+const SUPERVISOR_BLOCK_ACCEPTED_RE_DQ =
+  /^echo "<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: (run-[A-Za-z0-9_-]+) ([^>]+)>>"$/;
+const SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED([: ].*)?>>"$/;
 
 // ISSUE_CLOSE_VERIFIED ON/OFF: session-scoped bypass for gh issue close only.
 // ON (opens bypass window): <<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>
@@ -209,6 +215,8 @@ function isSentinel(cmd) {
     RUN_TESTS_BASELINE_ACCEPTED_RE_DQ.test(cmd) ||
     RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
     GLOSSARY_ACCEPTED_RE_DQ.test(cmd) || GLOSSARY_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
+    SUPERVISOR_BLOCK_ACCEPTED_RE_DQ.test(cmd) ||
+    SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
@@ -253,6 +261,7 @@ function isStrictSentinel(cmd) {
     RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ.test(cmd) ||
     RUN_TESTS_BASELINE_ACCEPTED_RE_DQ.test(cmd) ||
     GLOSSARY_ACCEPTED_RE_DQ.test(cmd) ||
+    SUPERVISOR_BLOCK_ACCEPTED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd)
   );
@@ -316,6 +325,8 @@ module.exports = {
   RUN_TESTS_BASELINE_ACCEPTED_RE_DQ,
   RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE,
   GLOSSARY_ACCEPTED_RE_DQ, GLOSSARY_ACCEPTED_LOOKSLIKE_RE,
+  SUPERVISOR_BLOCK_ACCEPTED_RE_DQ,
+  SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_RE_DQ,
   ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_END_RE_DQ,

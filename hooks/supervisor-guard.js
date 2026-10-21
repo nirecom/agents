@@ -6,12 +6,14 @@
 // (audit-A, #2256 S3/S4/S6) Phase A arms from the workflow projection: every
 // unconsumed edge transition + the TR6 level trigger are deduped/coalesced by
 // hooks/supervisor-guard/audit-arm.js into one armAuditRun, then block/exit 2.
-// AskUserQuestion gate (#903) suppresses (2)/(3)/audit-A. Fail-open on any error.
+// User-dialog gate (#903 / #2698, hooks/lib/user-dialog-turn.js) suppresses (2)/(3)/(4)/audit-A.
+// Fail-open on any error.
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
-const { detectSentinelHang, detectAskUserQuestionTurn } = require('./supervisor-guard/detect');
+const { detectSentinelHang } = require('./supervisor-guard/detect');
+const { isUserDialogTurn } = require('./lib/user-dialog-turn');
 const { TERMINAL_ALERT_PHASES } = require('./lib/supervisor-state-schema');
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
@@ -47,8 +49,10 @@ if (require.main === module) {
 
   // Audit Phase A loads separately so a bug in the new files doesn't disable the alert guard.
   let evaluatePhaseA = null;
+  let bundleAuditLaunch = null;
   try {
     ({ evaluatePhaseA } = require("./supervisor-guard/audit-arm"));
+    ({ bundleAuditLaunch } = require("./supervisor-guard/audit-bundle"));
   } catch (_) {}
 
   let sessionId = null;
@@ -109,7 +113,8 @@ if (require.main === module) {
 
   const supervisorPath = path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor.md");
 
-  const askUserQuestionTurn = detectAskUserQuestionTurn(input.transcript_path || "", input.last_assistant_message);
+  let userDialogTurn = false;
+  try { userDialogTurn = isUserDialogTurn(input); } catch (_) { userDialogTurn = false; }
   const hangDetected = detectSentinelHang(input.transcript_path || "", input.last_assistant_message);
 
   let stateFilePath = "";
@@ -125,6 +130,39 @@ if (require.main === module) {
       return res.frozen;
     } catch (_) {
       return false; // fail-open
+    }
+  }
+
+  // The Phase A context shared by the standalone arm and the alert-block bundling (#2698).
+  function phaseACtx() {
+    let workflowProjection = null;
+    try {
+      const { readState: readWorkflowState } = require("./workflow-state");
+      const wf = readWorkflowState(sessionId);
+      workflowProjection = (wf && wf.current) || null;
+    } catch (_) {}
+    return {
+      cwd: input.cwd || process.cwd(),
+      alertPhase,
+      userDialogTurn,
+      workflowProjection,
+      input,
+      meta: {
+        sessionId,
+        effectiveSid: effectiveSupervisorStateSessionId,
+        stateFilePath,
+        auditAgentPath: path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor-audit.md"),
+      },
+    };
+  }
+
+  // 3-A: an alert block carries the audit launch section, so the two read as one intervention.
+  function withAuditLaunch(alertReason) {
+    if (!bundleAuditLaunch) return alertReason;
+    try {
+      return bundleAuditLaunch(alertReason, { readState, sessionId: effectiveSupervisorStateSessionId, ctx: phaseACtx() });
+    } catch (_) {
+      return alertReason;
     }
   }
 
@@ -153,7 +191,7 @@ if (require.main === module) {
     try { writeAlertState(effectiveSupervisorStateSessionId, { alert_armed_at: null }); } catch (_) {}
     // Build alert candidate only when an alert branch would also fire this cycle.
     let alertCandidate = null;
-    const alertWouldFire = !askUserQuestionTurn &&
+    const alertWouldFire = !userDialogTurn &&
       !TERMINAL_ALERT_PHASES.has(alertPhase) &&
       (cumSev === "error" || hangDetected || alertArmedAt);
     if (alertWouldFire) {
@@ -173,9 +211,11 @@ if (require.main === module) {
         if (tryIncrementFrozen()) process.exit(0);
       }
       // audit or both source: never call tryIncrementFrozen (audit has its own freeze).
-      const integratedReason = formatIntegratedReason
+      let integratedReason = formatIntegratedReason
         ? formatIntegratedReason(arbitration, alertCandidate && alertCandidate.reason, auditCandidate.reason)
         : (arbitration.reason || auditCandidate.reason);
+      // Only an alert-only block bundles: an l3/both block already shows an audit result.
+      if (arbitration.source === "l2") integratedReason = withAuditLaunch(integratedReason);
       try {
         process.stdout.write(JSON.stringify({ decision: "block", reason: integratedReason }) + "\n");
       } catch (_) {}
@@ -191,9 +231,9 @@ if (require.main === module) {
   }
 
   // (2)
-  if (!askUserQuestionTurn && cumSev === "error" && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
+  if (!userDialogTurn && cumSev === "error" && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
     if (tryIncrementFrozen()) process.exit(0);
-    const reason = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+    const reason = withAuditLaunch(formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId));
     try {
       process.stdout.write(
         JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n"
@@ -203,10 +243,10 @@ if (require.main === module) {
   }
 
   // (3)
-  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
+  if (!userDialogTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase)) {
     if (tryIncrementFrozen()) process.exit(0);
     const cause = hangDetected ? "sentinel-hang" : "scheduled-review";
-    const reason = formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+    const reason = withAuditLaunch(formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId));
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     } catch (_) {}
@@ -224,7 +264,7 @@ if (require.main === module) {
 
   // (4) advisory for cumSev=warning or cumSev=notice — legacy layer2 backward-compat only.
   // New alert-format state (state.alert) skips this branch; only old layer2 state files trigger it.
-  if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
+  if (!userDialogTurn && (cumSev === "warning" || cumSev === "notice") && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
       isLegacyLayer2State) {
     const additionalContext = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
@@ -233,33 +273,17 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  // (audit) Phase A: shift-left arm (#2256 S3/S4/S6). Delegated whole to
-  // supervisor-guard/audit-arm.js evaluatePhaseA — it collects every unconsumed
-  // edge transition + the TR6 level trigger from the workflow projection,
-  // dedup/coalesces into at most one armAuditRun, and returns the S4-d block
-  // reason (arm) or null (no candidates / phase-guarded / pure no-op consume).
+  // (audit) Phase A: shift-left arm (#2256 S3/S4/S6), delegated whole to
+  // supervisor-guard/audit-arm.js evaluatePhaseA (standalone mode, #2698 suppression window).
   if (evaluatePhaseA) {
     let reason = null;
     try {
-      let workflowProjection = null;
-      try {
-        const { readState: readWorkflowState } = require("./workflow-state");
-        const wf = readWorkflowState(sessionId);
-        workflowProjection = (wf && wf.current) || null;
-      } catch (_) {}
-      reason = evaluatePhaseA(effectiveSupervisorStateSessionId, state, {
-        cwd: input.cwd || process.cwd(),
+      const result = evaluatePhaseA(effectiveSupervisorStateSessionId, state, {
+        ...phaseACtx(),
         auditPhase,
-        alertPhase,
-        askUserQuestionTurn,
-        workflowProjection,
-        meta: {
-          sessionId,
-          effectiveSid: effectiveSupervisorStateSessionId,
-          stateFilePath,
-          auditAgentPath: path.join(SCRIPT_CHECKOUT_ROOT, "agents", "supervisor-audit.md"),
-        },
+        mode: "standalone",
       });
+      reason = result && result.reason ? result.reason : null;
     } catch (_) { reason = null; }
     if (reason) {
       try {

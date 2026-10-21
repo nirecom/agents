@@ -3,7 +3,7 @@
 // (#2529): the approval boundary (UnapprovedCompletionError) and the glossary boundary
 // (GlossaryCheckIncompleteError). The caller prefixes its own name ("record-step-verdict: ").
 
-const { UnapprovedCompletionError, confirmSentinelFor, evaluateCompletionApproval } = require("./completion-approval");
+const { UnapprovedCompletionError, recoveryFor, evaluateCompletionApproval } = require("./completion-approval");
 const { GlossaryCheckIncompleteError, glossaryRefusalErrorOfComplete } = require("./glossary-check/record");
 
 // completionRefusalOf(e, step) -> { kind: "unapproved" | "glossary-incomplete", code, message } | null.
@@ -12,9 +12,7 @@ function completionRefusalOf(e, step) {
   if (e instanceof UnapprovedCompletionError) {
     return {
       kind: "unapproved", code: e.code,
-      message: `${s} NOT recorded — no user approval on record (${e.code}). ` +
-        `Ask the user to approve, then emit: echo "<<${confirmSentinelFor(s)}: {summary}>>" ` +
-        `(or verify CONFIRM_${String(s).toUpperCase()}=off in your config).`,
+      message: `${s} NOT recorded — the approval does not verify (${e.code}). ${e.recovery || recoveryFor(s)}`,
     };
   }
   if (e instanceof GlossaryCheckIncompleteError) {
@@ -37,7 +35,7 @@ function recordedCompleteRefusalOf(sid, step, state, opts) {
   if (!why) return null;
   if (why === "unapproved-complete") {
     const v = evaluateCompletionApproval(sid, step, state);
-    return completionRefusalOf(new UnapprovedCompletionError(step, v.code || "no-approval-record"), step);
+    return completionRefusalOf(new UnapprovedCompletionError(step, v.code || "no-approval-record", recoveryFor(step)), step);
   }
   const err = glossaryRefusalErrorOfComplete(sid, step, state, opts) || new GlossaryCheckIncompleteError(step, why, "");
   return completionRefusalOf(err, step);

@@ -1,6 +1,6 @@
 "use strict";
-// T6-2: the sanctioned tokens reset-sentinel and session-inherit are not judged by the glossary
-// boundary, and a step already recorded complete is not reverted for a missing record.
+// T6-2: an inheritance copy (origin session-inherit) and a RESET_FROM batch are not judged by the
+// glossary boundary, "reset-sentinel" is no longer a caller-passable token (#2709), and a step already recorded complete is not reverted for a missing record.
 // T6-3: the early-gate snapshot (evidencePolicy "staged-only") resolves an approved pending
 // clarify_intent to complete only when its glossary_check record is valid.
 
@@ -8,15 +8,42 @@ const path = require("node:path");
 const F = require("../../lib/glossary-check-fixture");
 
 function sanctioned() {
-  for (const token of ["reset-sentinel", "session-inherit"]) {
-    for (const stage of F.STAGES) {
-      const step = F.STAGE_STEP[stage];
-      const s = F.setupStage(`sanct-${stage}`, stage, F.VARIANT);
-      const res = F.completeInProcess(s.sid, step, s.repo, { sanctioned: token, reason: "fixture sanctioned completion" });
-      F.check(`${token} ${stage}: no glossary refusal without a record`, res.ok === true, JSON.stringify(res));
-      F.check(`${token} ${stage}: ${step} is complete`, F.statusOf(s.sid, step) === "complete", F.statusOf(s.sid, step));
-    }
+  for (const stage of F.STAGES) {
+    const step = F.STAGE_STEP[stage];
+    const s = F.setupStage(`sanct-${stage}`, stage, F.VARIANT);
+    const res = F.completeInProcess(s.sid, step, s.repo, { origin: "session-inherit", provenance: "backfilled" });
+    F.check(`session-inherit ${stage}: no glossary refusal without a record`, res.ok === true, JSON.stringify(res));
+    F.check(`session-inherit ${stage}: ${step} is complete`, F.statusOf(s.sid, step) === "complete", F.statusOf(s.sid, step));
   }
+  // A RESET_FROM batch (its `reset` anchor) re-completes a prior step without a glossary record.
+  const { appendEvents } = require(path.join(F.ROOT, "hooks/workflow-state/state-io/events.js"));
+  for (const stage of F.STAGES) {
+    const step = F.STAGE_STEP[stage];
+    const s = F.setupStage(`sanct-resetbatch-${stage}`, stage, F.VARIANT);
+    const prev = process.cwd();
+    let res;
+    process.chdir(s.repo);
+    try {
+      appendEvents(s.sid, [
+        { kind: "reset", from_step: "workflow_init", reason: "fixture reset", provenance: "declared", origin: "reset-sentinel" },
+        { kind: "step_status", step, status: "complete", provenance: "declared", origin: "reset-sentinel" },
+      ]);
+      res = { ok: true };
+    } catch (e) {
+      res = { ok: false, code: e && e.code, message: String((e && e.message) || e) };
+    } finally {
+      process.chdir(prev);
+    }
+    F.check(`reset batch ${stage}: no glossary refusal without a record`, res.ok === true, JSON.stringify(res));
+    F.check(`reset batch ${stage}: ${step} is complete`, F.statusOf(s.sid, step) === "complete", F.statusOf(s.sid, step));
+  }
+  // #2709: "reset-sentinel" is no longer a caller-passable sanctioned token.
+  const stage = F.STAGES[0];
+  const step = F.STAGE_STEP[stage];
+  const s = F.setupStage(`sanct-reset-${stage}`, stage, F.VARIANT);
+  const res = F.completeInProcess(s.sid, step, s.repo, { sanctioned: "reset-sentinel", reason: "fixture" });
+  F.check(`reset-sentinel ${stage}: the token is refused`, F.refusedWith(res, "unknown-sanctioned-token"), JSON.stringify(res));
+  F.check(`reset-sentinel ${stage}: ${step} stays not complete`, F.statusOf(s.sid, step) !== "complete", F.statusOf(s.sid, step));
 }
 
 // A step recorded complete before the glossary predicate existed keeps reading complete.

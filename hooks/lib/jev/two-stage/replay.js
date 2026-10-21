@@ -3,7 +3,8 @@
 // decision record once, settle the fixed file through the owner marker, write the done
 // marker, then drop the claim and the copies. Every step is idempotent, so a finalize re-run
 // and the orphan sweep both finish a stopped ticket with exactly the uncrashed outcome.
-// FALLBACK=<reason> follows SETTLE= only when the merge demoted the output (#2677).
+// FALLBACK=<reason> follows SETTLE= only when the merge demoted the output (#2677) or the
+// settle demoted it for a changed source (FALLBACK=source-changed, #2701).
 
 const pending = require("../pending");
 const { appendDecisionOnce } = require("../decision-record");
@@ -25,8 +26,12 @@ function appendOrThrow(rec) {
   if (!r || !r.ok) throw new Error("decision log append failed");
 }
 
-// A claim written ahead before #2677 has no result.fallback and prints no line.
-const fallbackLines = (r) => (typeof r.fallback === "string" && r.fallback ? [`FALLBACK=${r.fallback}`] : []);
+// At most one line: the merge's reason first, else a settle demoted for a changed source
+// (settled is the verdict the settle record carries). A pre-#2677 claim has no result.fallback.
+function fallbackLines(r, settled) {
+  if (typeof r.fallback === "string" && r.fallback) return [`FALLBACK=${r.fallback}`];
+  return settled && settled.detail === "source-changed" ? ["FALLBACK=source-changed"] : [];
+}
 
 function cleanup(sid, tid) {
   pending.releaseClaim(sid, tid);
@@ -51,7 +56,7 @@ function replaySkip(sid, tid, hand, opts) {
     `ADOPTED=${r.adopted}`,
     `MODE=${hand.mode}`,
     `SETTLE=${v.settle}`,
-  ].concat(fallbackLines(r), v.detail === "newer-owner" ? [] : v.rsj_lines || []);
+  ].concat(fallbackLines(r, v), v.detail === "newer-owner" ? [] : v.rsj_lines || []);
   writeDone(sid, tid, { created_ms: hand.created_ms, point: hand.point, stage: r.stage, target: r.target, stdout_lines: lines, exit: 0 });
   crash(opts, "after-done");
   cleanup(sid, tid);
@@ -85,9 +90,8 @@ function replayFinalized(sid, tid, hand, opts = {}) {
   const line = csv === r.signals_csv ? r.merged_line : `SIGNALS: ${UNDECIDABLE_SIGNAL}`;
   const v = settleComplexity(sid, r.stage, line, csv, { id: tid, created_ms: hand.created_ms }, opts);
   const stale = csv !== r.signals_csv;
-  if ((v.settle !== "ok" || stale) && hand.record_decision) {
-    appendOrThrow(settleRecord(sid, tid, hand, v.settle === "ok" ? Object.assign({}, v, { detail: "source-changed" }) : v));
-  }
+  const recorded = v.settle === "ok" && stale ? Object.assign({}, v, { detail: "source-changed" }) : v;
+  if ((v.settle !== "ok" || stale) && hand.record_decision) appendOrThrow(settleRecord(sid, tid, hand, recorded));
   crash(opts, "after-settle");
   const lines = [
     "RESULT=ok",
@@ -95,11 +99,11 @@ function replayFinalized(sid, tid, hand, opts = {}) {
     `ADOPTED=${r.adopted}`,
     `MODE=${hand.mode}`,
     `SETTLE=${v.settle}`,
-  ].concat(fallbackLines(r));
+  ].concat(fallbackLines(r, recorded));
   writeDone(sid, tid, { created_ms: hand.created_ms, point: hand.point, stage: r.stage, stdout_lines: lines, exit: 0 });
   crash(opts, "after-done");
   cleanup(sid, tid);
   return { exit: 0, stdout_lines: lines };
 }
 
-module.exports = { replayFinalized, settleRecord };
+module.exports = { replayFinalized, settleRecord, fallbackLines };

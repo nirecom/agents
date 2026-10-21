@@ -1,18 +1,12 @@
 # shellcheck shell=bash
 # Tests: hooks/session-start.js, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js
-# Tags: workflow, approval-gate, session-start, inheritance, artifact-hash, scope:common
+# Tags: workflow, approval-gate, session-start, inheritance, artifact-hash, approval-revert, scope:common
 # (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
-# ===========================================================================
-# G15 (F2): a new session inheriting a prior session's steps must also inherit
-# its plan_approvals, each record bound to the session that OWNS the approved
-# artifact (<owner-sid>-<step>.md) via artifact_session_id.
-# fail-before-fix: session-start copied only `steps`, so writeState re-evaluated
-# outline/detail as pending->complete for the NEW session, threw
-# no-approval-record, and the new session ended up with NO state file at all.
-# Even with approvals copied, hashing against the CURRENT session id would look
-# for a nonexistent <new-sid>-outline.md and fail artifact-hash-unverifiable —
-# hence the artifact_session_id assertions below.
-# The negative controls prove the carry-forward is NOT unconditional trust.
+# G15 (F2, #1133): session-start inherits the prior session's steps together with its plan
+# approvals, verified against the artifact-owning session's file. #2633-1: a stale approval
+# reverts that stage and every later non-pending step to pending (inherit_revert_reason)
+# instead of refusing the inheritance; a record without artifact_session_id is copied as is
+# and resolves to the upstream file (#2633-2).
 # ===========================================================================
 
 echo ""
@@ -96,6 +90,22 @@ read_approval_field() {
   node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const pa=s.plan_approvals||(s.current&&s.current.plan_approvals)||{};const a=pa[process.argv[2]];const v=a?a[process.argv[3]]:null;console.log(v==null?'MISSING':String(v));}catch(e){console.log('ERR');}" "$f" "$2" "$3" 2>/dev/null || echo "ERR"
 }
 
+# read_revert_reason <sid> <step> → the step's last inherit_revert_reason annotation or "MISSING"
+read_revert_reason() {
+  local f="$WORKFLOW_DIR/${1}.json"
+  [ -f "$f" ] || { echo "MISSING"; return; }
+  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const k='inherit_revert_reason';const h=(s.events||[]).filter(e=>e.kind==='step_annotation'&&e.step===process.argv[2]&&e.key===k).pop();const m=s.steps||(s.current&&s.current.steps)||{};const v=h?h.value:((m[process.argv[2]]||{})[k]);console.log(v==null?'MISSING':String(v));}catch(e){console.log('ERR');}" "$f" "$2" 2>/dev/null || echo "ERR"
+}
+
+# probe_approved <sid> <step> → evaluateCompletionApproval(sid, step, readState(sid)).approved
+probe_approved() {
+  node_probe '
+    const ws = require(process.argv[1]);
+    try { console.log(String(ws.evaluateCompletionApproval(process.argv[2], process.argv[3], ws.readState(process.argv[2])).approved)); }
+    catch (e) { console.log("THREW:" + (e.code || e.name)); }
+  ' "$WFSTATE_N" "$1" "$2"
+}
+
 TBASE="$TMPDIR_BASE/transcripts"
 
 # --- G15 positive: outline + detail approved in the prior session, artifacts intact.
@@ -113,8 +123,8 @@ SHA_D="$(sha256_of "$PLANS_DIR/${OLD_SID}-detail.md")"
 BRANCH_OK="$(git -C "$PROJ_OK" rev-parse --abbrev-ref HEAD)"
 CWD_OK="$(resolved_cwd "$PROJ_OK")"
 
-# NB: the records deliberately OMIT artifact_session_id — session-start must
-# backfill it from the prior session id (records written before F2 landed).
+# NB: the records deliberately OMIT artifact_session_id — the copy keeps them as is and
+# evaluation resolves the owner through upstream_session_id (#2633-1a).
 OLD_EXTRA="$(run_with_timeout node -e '
   const [cwd, branch, sid, shaO, shaD] = process.argv.slice(1);
   const rec = (sha) => ({ source: "confirm-sentinel", reason: null, artifact_sha256: sha,
@@ -137,10 +147,14 @@ check "G15a2. new session inherits detail=complete" \
   "complete" "$(read_state_status "$NEW_SID" detail)"
 check "G15b. inherited outline approval carries its confirm-sentinel source" \
   "confirm-sentinel" "$(read_approval_source "$NEW_SID" outline)"
-check "G15c. outline approval stays bound to the artifact-owning session" \
-  "$OLD_SID" "$(read_approval_field "$NEW_SID" outline artifact_session_id)"
-check "G15c2. detail approval stays bound to the artifact-owning session" \
-  "$OLD_SID" "$(read_approval_field "$NEW_SID" detail artifact_session_id)"
+check "G15c. outline record keeps its artifact_session_id as recorded (omitted)" \
+  "MISSING" "$(read_approval_field "$NEW_SID" outline artifact_session_id)"
+check "G15c2. detail record keeps its artifact_session_id as recorded (omitted)" \
+  "MISSING" "$(read_approval_field "$NEW_SID" detail artifact_session_id)"
+check "G15c4. outline evaluation resolves the owner to the prior session" \
+  "true" "$(probe_approved "$NEW_SID" outline)"
+check "G15c5. detail evaluation resolves the owner to the prior session" \
+  "true" "$(probe_approved "$NEW_SID" detail)"
 check "G15c3. inherited outline hash is the prior session's artifact hash" \
   "$SHA_O" "$(read_approval_field "$NEW_SID" outline artifact_sha256)"
 check_contains "G15d. session-start reports the inheritance" \
@@ -177,11 +191,17 @@ printf 'silently rewritten outline body\n' > "$PLANS_DIR/${OLD_BAD}-outline.md"
 
 run_session_start "$NEW_BAD" "$PROJ_BAD" "$TBASE"
 
-check "G15f. tampered artifact: inherited completion is refused (no state file)" \
-  "MISSING" "$(read_state_status "$NEW_BAD" outline)"
-check_contains "G15f2. failure is surfaced, not swallowed" \
+check "G15f. tampered artifact: state is copied and outline reverted to pending" \
+  "pending" "$(read_state_status "$NEW_BAD" outline)"
+check "G15f1. tampered artifact: outline carries the mismatch revert reason" \
+  "approval:artifact-hash-mismatch" "$(read_revert_reason "$NEW_BAD" outline)"
+check "G15f1b. tampered artifact: clarify_intent before it stays complete" \
+  "complete" "$(read_state_status "$NEW_BAD" clarify_intent)"
+check_contains "G15f2. the revert reason is printed" \
+  "Reverted to pending because the session upstream approval no longer verifies" "$SS_OUT"
+check_not_contains "G15f2b. inheritance is not refused" \
   "workflow state file could NOT be created" "$SS_OUT"
-check_contains "G15f3. rejection reason is the artifact hash mismatch" \
+check_contains "G15f3. printed reason names the artifact hash mismatch" \
   "artifact-hash-mismatch" "$SS_OUT"
 
 # --- G15h negative control: artifact DELETED after approval was recorded.
@@ -210,7 +230,11 @@ rm -f "$PLANS_DIR/${OLD_DEL}-outline.md"
 
 run_session_start "$NEW_DEL" "$PROJ_DEL" "$TBASE"
 
-check "G15h. deleted artifact: inherited completion is refused (no state file)" \
-  "MISSING" "$(read_state_status "$NEW_DEL" outline)"
-check_contains "G15h2. rejection reason is the unverifiable artifact hash" \
+check "G15h. deleted artifact: state is copied and outline reverted to pending" \
+  "pending" "$(read_state_status "$NEW_DEL" outline)"
+check "G15h1. deleted artifact: outline carries the unverifiable revert reason" \
+  "approval:artifact-hash-unverifiable" "$(read_revert_reason "$NEW_DEL" outline)"
+check_contains "G15h2. printed reason names the unverifiable artifact hash" \
   "artifact-hash-unverifiable" "$SS_OUT"
+check_contains "G15h3. printed reason names the retention cause" \
+  "aged out of retention" "$SS_OUT"

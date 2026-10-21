@@ -61,7 +61,10 @@ if [[ -z "$PLANS_DIR" ]]; then
   fi
 fi
 
-INTENT_MD="${PLANS_DIR}/${WSID}-intent.md"
+# Owner-resolved (#2633): a downstream session reads its upstream's intent. A resolver failure
+# (bad sid, no node) keeps the session's own path, so a missing intent still means "active".
+INTENT_MD="$(node "${SCRIPT_DIR}/plan-artifact-path" --stage intent --session "$WSID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+[[ -n "$INTENT_MD" ]] || INTENT_MD="${PLANS_DIR}/${WSID}-intent.md"
 
 # If intent.md not found → active session (cannot determine terminated)
 if [[ ! -f "$INTENT_MD" ]]; then
@@ -76,8 +79,8 @@ if [[ "$ISSUES" == "[]" ]]; then
   exit 0
 fi
 
-# Strip brackets and split on comma
-IFS=',' read -ra NUMS <<< "$(echo "$ISSUES" | tr -d '[]')"
+# The parser prints [{"number":N,"repo"?:...}]; gh needs the bare number.
+IFS=',' read -ra NUMS <<< "$(node -e 'try { const a = JSON.parse(process.argv[1]); process.stdout.write(a.map((e) => (e && typeof e === "object" ? e.number : e)).filter((n) => Number.isInteger(Number(n))).join(",")); } catch (_) {}' "$ISSUES")"
 
 # Check each issue state
 for NUM in "${NUMS[@]}"; do

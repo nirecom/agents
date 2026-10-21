@@ -6,15 +6,18 @@
 # the very file this line locates, and ${BASH_SOURCE[0]} is bash's own answer
 # for where this script lives — not caller input (round 10 C2 exception 2).
 _CL_SAFE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/safe-state-path.sh"
-if [ ! -f "$_CL_SAFE_LIB" ]; then
-    printf 'concern-ledger: required library not found at %s — incomplete installation\n' "$_CL_SAFE_LIB" >&2
-    return 1 2>/dev/null || exit 1
-fi
-# shellcheck source=../safe-state-path.sh
-if ! source "$_CL_SAFE_LIB"; then
-    printf 'concern-ledger: failed to load %s\n' "$_CL_SAFE_LIB" >&2
-    return 1 2>/dev/null || exit 1
-fi
+for _cl_dep in "$_CL_SAFE_LIB" "${_CL_SAFE_LIB%/*}/concern-ledger/defang-fences.sh"; do
+    if [ ! -f "$_cl_dep" ]; then
+        printf 'concern-ledger: required library not found at %s — incomplete installation\n' "$_cl_dep" >&2
+        return 1 2>/dev/null || exit 1
+    fi
+    # shellcheck source=/dev/null
+    if ! source "$_cl_dep"; then
+        printf 'concern-ledger: failed to load %s\n' "$_cl_dep" >&2
+        return 1 2>/dev/null || exit 1
+    fi
+done
+unset _cl_dep
 
 # ---------------------------------------------------------------------------
 # String helpers
@@ -416,19 +419,16 @@ _cl_reject_bad_tokens() {
     return 0
 }
 
-# _cl_defang_untrusted — stdin→stdout. Neutralises reviewer-forgeable sentinels
-# once (CPR-SSOT/CPR-E2C; siblings: bin/review-code-codex:459-460,
-# bin/review-loop-summarize-concerns' sanitize()). Loops to a fixed point (t
+# _cl_defang_untrusted — stdin→stdout. Neutralises reviewer-forgeable fences
+# (concern-ledger/defang-fences.sh, shared with bin/review-code-codex) and sentinels
+# (sibling: bin/review-loop-summarize-concerns' sanitize()). Loops to a fixed point (t
 # branch) so nested decoys can't reassemble after one pass, and the reason
 # class is `.*` (not `[^>]*`) to stay a superset of hooks/lib/sentinel-
 # patterns.js's greedy RESET_FROM_LOOKSLIKE_RE (#2025 security-scanner F1).
 _cl_defang_untrusted() {
     sed -E \
-        -e 's/\[PRIOR CONCERNS START\]/(PRIOR CONCERNS START)/g' \
-        -e 's/\[PRIOR CONCERNS END\]/(PRIOR CONCERNS END)/g' \
-        -e 's/\[DIFF START\]/(DIFF START)/g' \
-        -e 's/\[DIFF END\]/(DIFF END)/g' \
         -e ':lp' \
+        -e "$DEFANG_FENCE_SED_EXPR" \
         -e 's/<<(WORKFLOW_[A-Z_]+.*|DETAIL_SKIPPABLE_BY_PLANNER:.*)>>//g' \
         -e 'tlp'
 }

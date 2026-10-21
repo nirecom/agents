@@ -13,4 +13,11 @@ function getConvLangInjection() {
   return `Respond to the user in ${normalized}. This applies to all text you write, including narration between tool calls.`;
 }
 
-module.exports = { getConvLangInjection };
+// withConvLang(text) — the single CONV_LANG wrapper for a block reason: prepends the injection
+// once, or returns text unchanged when none applies (#2699). Callers wrap a reason exactly once.
+function withConvLang(text) {
+  const inj = getConvLangInjection();
+  return inj ? `${inj}\n${text}` : text;
+}
+
+module.exports = { getConvLangInjection, withConvLang };

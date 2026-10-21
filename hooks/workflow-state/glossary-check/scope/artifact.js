@@ -6,7 +6,6 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 const { toWindowsPath } = require("../../../lib/branch-diff");
-const { getPlansArtifactPath } = require("../../../lib/plans-artifact-registry");
 const { artifactRangeOfBuffer } = require("../../completion-approval");
 const { rowFor } = require("../../plan-stage-table");
 const { stagedOids } = require("../../../workflow-gate/staged-evidence");
@@ -37,7 +36,8 @@ function readPlanRange(sid, step) {
   let file;
   let buf;
   try {
-    file = getPlansArtifactPath(sid, rowFor(step).suffix);
+    // Owner-resolved like every plan reader (#2633): an adopted session reads its upstream's file.
+    file = require("../../plan-artifact-owner").resolvePlanArtifactOwner(sid, rowFor(step).suffix).path;
     buf = fs.readFileSync(toWindowsPath(file));
   } catch (e) {
     return { ok: false, error: "artifact-unreadable", detail: e && e.code ? e.code : String(e && e.message) };

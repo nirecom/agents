@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/repo-identity.js, bin/workflow/lib/next-step/repo-dir-guard.js, hooks/workflow-state/inheritance/adopt.js, bin/lib/resume-session/upstream-view.js
-# Tags: workflow, gate, hook, bin, git, repo-identity, scope:issue-specific
+# Tags: workflow, gate, hook, bin, git, repo-identity, scope:issue-specific, progress-file
 # fix-1633 (TL1/TL2): the repo-identity comparator moves from the bin-side
 # repo-dir-guard into hooks/lib so the workflow gate can use it without a
 # hooks -> bin dependency. repo-dir-guard keeps re-exporting the SAME objects,
@@ -176,6 +176,108 @@ case_end
 
 case_begin "consumers-use-owner-at-runtime" "bin/lib/resume-session/upstream-view.js"
 run_group consumers
+case_end
+
+# #2594: the upstream view points at session-progress.md of the FIRST generation, resolved
+# from the upstream's inheritance chain, and names the section to read first.
+PF_HELPER="$TMP_ROOT/progress-view-helper.js"
+cat >"$PF_HELPER" <<'JS'
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const [agents] = process.argv.slice(2);
+const S = require(agents + "/hooks/workflow-state/state-io");
+const plans = process.env.WORKFLOW_PLANS_DIR;
+const rows = [];
+// pf-up inherited from pf-root, whose state is gone: pf-root is the oldest reachable sid.
+S.writeState("pf-up", S.createInitialState("pf-up", { cwd: "/x", git_branch: "feature/x" }));
+S.appendEvents("pf-up", [{ kind: "step_status", step: "workflow_init", status: "complete",
+  provenance: "backfilled", origin: "session-inheritance", inherited_from: "pf-root" }]);
+fs.mkdirSync(plans, { recursive: true });
+fs.writeFileSync(path.join(plans, "pf-up-intent.md"), "# intent\n");
+fs.writeFileSync(path.join(plans, "pf-root-session-progress.md"), "## Current state\nroot-body\n");
+fs.writeFileSync(path.join(plans, "pf-none-intent.md"), "# intent\n");
+const { buildUpstreamView } = require(agents + "/bin/lib/resume-session/upstream-view");
+const v = buildUpstreamView({ upstreamSid: "pf-up", heirSid: null });
+const pf = v && v.progress_file;
+const p = pf && typeof pf === "object" ? String(pf.path || "") : "";
+rows.push((path.basename(p) === "pf-root-session-progress.md" ? "OK " : "NG ") + "progress-file-root-path got=" + JSON.stringify(pf));
+rows.push((pf && pf.section === "Current state" ? "OK " : "NG ") + "progress-file-first-section got=" + JSON.stringify(pf));
+const none = buildUpstreamView({ upstreamSid: "pf-none", heirSid: null });
+const absent = none && none.availability !== "none" && (none.progress_file === undefined || none.progress_file === null);
+rows.push((absent ? "OK " : "NG ") + "progress-file-absent-without-file got=" + JSON.stringify(none && none.progress_file) + " availability=" + (none && none.availability));
+process.stdout.write(rows.join("\n") + "\n");
+JS
+
+case_begin "upstream-view-progress-file" "bin/lib/resume-session/upstream-view.js"
+PF_OUT="$(run_with_timeout 60 node "$(np "$PF_HELPER")" "$AGENTS_NODE" 2>&1)" || true
+[ -n "$PF_OUT" ] || fail "progress-file: helper printed nothing"
+while IFS=' ' read -r verdict name rest; do
+  case "$verdict" in
+    OK) pass "progress-file/$name" ;;
+    NG) fail "progress-file/$name" "$rest" ;;
+    "") : ;;
+    *) fail "progress-file: helper output" "$verdict $name $rest" ;;
+  esac
+done <<<"$PF_OUT"
+case_end
+
+# #2594: the real `bin/resume-session-detect --from` CLI carries progress_file into its JSON, so a
+# CLI that dropped the field fails here even while buildUpstreamView keeps it. Reuses the pf-* fixture.
+# No heir: the parent session's id and the live transcripts must never be resolved.
+unset CLAUDE_CODE_SESSION_ID
+mkdir -p "$TMP_ROOT/transcripts" "$TMP_ROOT/neutral"
+export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP_ROOT/transcripts")"
+DETECT_CHECK="$TMP_ROOT/detect-check.js"
+cat >"$DETECT_CHECK" <<'JS'
+"use strict";
+// argv: <label> <rc> <want rc> <want progress path | "none">; stdin: the CLI's stdout.
+const fs = require("fs");
+const path = require("path");
+const [label, rc, wantRc, wantPath] = process.argv.slice(2);
+const rows = [];
+const raw = fs.readFileSync(0, "utf8");
+rows.push((rc === wantRc ? "OK " : "NG ") + label + "-exit want=" + wantRc + " got=" + rc);
+let v = null;
+try { v = JSON.parse(raw.trim()); } catch (e) { v = null; }
+rows.push((v && v.type === "upstream" ? "OK " : "NG ") + label + "-emits-upstream-json got=" + JSON.stringify(raw.slice(0, 300)));
+const pf = v ? v.progress_file : undefined;
+const norm = (p) => { const r = path.resolve(p); return process.platform === "win32" ? r.toLowerCase() : r; };
+if (wantPath === "none") {
+  rows.push((v && pf === undefined ? "OK " : "NG ") + label + "-no-progress-field got=" + JSON.stringify(pf));
+  rows.push((!/session-progress\.md/.test(raw) ? "OK " : "NG ") + label + "-no-invented-progress-path");
+} else {
+  const p = pf && typeof pf.path === "string" ? pf.path : "";
+  rows.push((p && path.isAbsolute(p) && norm(p) === norm(wantPath) ? "OK " : "NG ") + label + "-root-generation-absolute-path want=" + JSON.stringify(wantPath) + " got=" + JSON.stringify(p));
+  rows.push((p && fs.existsSync(p) ? "OK " : "NG ") + label + "-path-names-the-existing-file");
+  rows.push((pf && pf.section === "Current state" ? "OK " : "NG ") + label + "-first-section-is-Current-state got=" + JSON.stringify(pf && pf.section));
+}
+process.stdout.write(rows.join("\n") + "\n");
+JS
+
+# detect_from <label> <upstream sid> <want rc> <want progress path | none>
+detect_from() {
+  local out rc rows verdict name rest
+  out="$(cd "$TMP_ROOT/neutral" && run_with_timeout 60 node "$AGENTS_NODE/bin/resume-session-detect" --from "$2" 2>/dev/null)" && rc=0 || rc=$?
+  rows="$(printf '%s' "$out" | run_with_timeout 60 node "$(np "$DETECT_CHECK")" "$1" "$rc" "$3" "$4" 2>&1)" || true
+  [ -n "$rows" ] || { fail "$1: checker printed nothing"; return 0; }
+  while IFS=' ' read -r verdict name rest; do
+    case "$verdict" in
+      OK) pass "detect-from/$name" ;;
+      NG) fail "detect-from/$name" "$rest" ;;
+      "") : ;;
+      *) fail "detect-from: checker output" "$verdict $name $rest" ;;
+    esac
+  done <<<"$rows"
+}
+
+case_begin "resume-session-detect-from-progress-file" "bin/lib/resume-session/upstream-view.js"
+detect_from "handed-off" pf-up 0 "$(np "$WORKFLOW_PLANS_DIR")/pf-root-session-progress.md"
+case_end
+
+case_begin "resume-session-detect-from-without-progress-file" "bin/lib/resume-session/upstream-view.js"
+detect_from "no-progress-file" pf-none 0 none
+detect_from "unknown-session" pf-never-existed 3 none
 case_end
 
 echo ""

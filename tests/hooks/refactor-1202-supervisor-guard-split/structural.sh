@@ -13,6 +13,8 @@ GUARD_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/supervisor-guard.js"
 DETECT_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/supervisor-guard/detect.js"
 DETECT_PATH="${SCRIPT_CHECKOUT_ROOT}/hooks/supervisor-guard/detect.js"
 GUARD_PATH="${SCRIPT_CHECKOUT_ROOT}/hooks/supervisor-guard.js"
+# #2698: the AskUserQuestion turn judgment moved from detect.js into the shared predicate.
+UDT_JS="${_SCRIPT_CHECKOUT_ROOT_NODE}/hooks/lib/user-dialog-turn.js"
 
 if ! command -v node >/dev/null 2>&1; then
     echo "SKIP: node not on PATH"
@@ -61,22 +63,28 @@ console.log('OK');
     fi
 fi
 
-# 3. detect.js exports detectAskUserQuestionTurn as a function
+# 3. #2698: detect.js no longer exports detectAskUserQuestionTurn; the shared predicate
+#    hooks/lib/user-dialog-turn.js exports isUserDialogTurn / classifyUserDialogTurn instead.
 if [ ! -f "$DETECT_PATH" ]; then
-    skip "detectAskUserQuestionTurn exported (detect.js missing)"
+    skip "detectAskUserQuestionTurn moved to user-dialog-turn.js (detect.js missing)"
 else
     out=$(run_with_timeout 10 node -e "
 const m = require('${DETECT_JS}');
-if (typeof m.detectAskUserQuestionTurn !== 'function') {
-  console.log('FAIL: detectAskUserQuestionTurn is ' + typeof m.detectAskUserQuestionTurn);
+if ('detectAskUserQuestionTurn' in m) {
+  console.log('FAIL: detect.js still exports detectAskUserQuestionTurn');
   process.exit(1);
+}
+let u;
+try { u = require('${UDT_JS}'); } catch (e) { console.log('FAIL: user-dialog-turn.js does not load: ' + e.message); process.exit(1); }
+for (const k of ['isUserDialogTurn', 'classifyUserDialogTurn']) {
+  if (typeof u[k] !== 'function') { console.log('FAIL: ' + k + ' is ' + typeof u[k]); process.exit(1); }
 }
 console.log('OK');
 " 2>&1)
     if [ "$out" = "OK" ]; then
-        pass "detect.js exports detectAskUserQuestionTurn as a function"
+        pass "detectAskUserQuestionTurn moved: detect.js drops it, user-dialog-turn.js exports isUserDialogTurn/classifyUserDialogTurn"
     else
-        fail "detect.js exports detectAskUserQuestionTurn as a function" "$out"
+        fail "detectAskUserQuestionTurn moved: detect.js drops it, user-dialog-turn.js exports isUserDialogTurn/classifyUserDialogTurn" "$out"
     fi
 fi
 
@@ -178,23 +186,22 @@ else
     fi
 fi
 
-# 10. detectAskUserQuestionTurn: empty transcript → false; non-existent → false (fail-open)
-if [ ! -f "$DETECT_PATH" ]; then
-    skip "detectAskUserQuestionTurn smoke + fail-open (detect.js missing)"
-else
-    _tmp_t3=$(mktemp)
-    out=$(run_with_timeout 10 node -e "
-const m = require('${DETECT_JS}');
-const r1 = m.detectAskUserQuestionTurn('${_tmp_t3}');
+# 10. isUserDialogTurn (the moved AskUserQuestion judgment): empty transcript → false;
+#     non-existent → false (fail-open)
+_tmp_t3=$(mktemp)
+_tmp_t3_node="$_tmp_t3"
+if command -v cygpath >/dev/null 2>&1; then _tmp_t3_node="$(cygpath -m "$_tmp_t3")"; fi
+out=$(run_with_timeout 10 node -e "
+const m = require('${UDT_JS}');
+const r1 = m.isUserDialogTurn({ transcript_path: '${_tmp_t3_node}', last_assistant_message: '' });
 if (r1 !== false) { console.log('FAIL: empty transcript returned ' + r1); process.exit(1); }
-const r2 = m.detectAskUserQuestionTurn('/nonexistent-file-12345');
+const r2 = m.isUserDialogTurn({ transcript_path: '/nonexistent-file-12345', last_assistant_message: '' });
 if (r2 !== false) { console.log('FAIL: nonexistent returned ' + r2); process.exit(1); }
 console.log('OK');
 " 2>&1)
-    rm -f "$_tmp_t3"
-    if [ "$out" = "OK" ]; then pass "detectAskUserQuestionTurn: empty→false, nonexistent→false (fail-open)"
-    else fail "detectAskUserQuestionTurn: empty→false, nonexistent→false" "$out"; fi
-fi
+rm -f "$_tmp_t3"
+if [ "$out" = "OK" ]; then pass "isUserDialogTurn: empty→false, nonexistent→false (fail-open)"
+else fail "isUserDialogTurn: empty→false, nonexistent→false" "$out"; fi
 
 # 11. parseTranscriptForAudit: empty transcript → []; non-existent → [] (fail-open)
 if [ ! -f "$DETECT_PATH" ]; then
@@ -234,8 +241,9 @@ try {
     fi
 fi
 
-# 13-15. hooks/supervisor-guard.js does NOT contain inline definitions of the other 3 functions
-for fn in detectAskUserQuestionTurn parseTranscriptForAudit detectOffProposal; do
+# 13-14. hooks/supervisor-guard.js does NOT contain inline definitions of the other detect.js
+#        functions (#2698 moved detectAskUserQuestionTurn out of detect.js entirely)
+for fn in parseTranscriptForAudit detectOffProposal; do
     if [ ! -f "$GUARD_PATH" ]; then
         skip "structural: no inline $fn (guard file missing)"
     elif grep -q "^function $fn" "$GUARD_PATH"; then

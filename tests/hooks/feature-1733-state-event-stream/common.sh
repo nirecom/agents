@@ -248,10 +248,14 @@ const plan_artifact = (s, present) => {
 
 # Seeds the plan_approvals audit records that #1133 requires before outline/detail
 # may be persisted `complete`. Changes no step status and no timestamp, so it never
-# weakens an assertion in the case that uses it.
+# weakens an assertion in the case that uses it. #2709: reset-sentinel is no longer a
+# writable approval source, so the records are real confirm-sentinel approvals; that
+# writes each gated step's plan artifact into WORKFLOW_PLANS_DIR (a case that needs an
+# artifact ABSENT removes it after the completion it guards).
 APPROVE_GATED_JS='const CA = require("./hooks/workflow-state/completion-approval");
+const PAF = require("./tests/lib/plan-approval-fixture");
 for (const s of CA.APPROVAL_GATED_STEPS) {
-  CA.recordPlanApproval(sid, s, { source: "reset-sentinel", reason: "1733 fixture" });
+  PAF.approveLive(sid, s);
 }
 '
 

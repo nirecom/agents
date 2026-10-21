@@ -108,8 +108,8 @@ and counts as missing.
 `events.js` calls `glossaryBoundaryForBatch` right after `completionBoundaryEventsForBatch`. When one of
 the six steps moves from not-complete to `complete` without a valid record it throws
 `GlossaryCheckIncompleteError`, so every writer — hooks, `next-step`, `reconcile-state` — is gated alike.
-An inherited batch is forced to `sanctioned: "session-inherit"`; the tokens `reset-sentinel` and
-`session-inherit` are not judged. On the read side, `canResolveFromEvidence` (`effective-state.js`) also
+An inherited batch (`origin: "session-inherit"`) and a `RESET_FROM` batch (one carrying a `reset` event)
+are not judged. On the read side, `canResolveFromEvidence` (`effective-state.js`) also
 requires `evaluateGlossaryCheck(...).ok` before it resolves an approval-gated step from pending to
 complete. The boundary requires a record even when the R-S file set is empty.
 A plan stage already recorded complete whose record no longer verifies reads as `pending`:

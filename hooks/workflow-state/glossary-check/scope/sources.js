@@ -5,7 +5,6 @@
 
 const fs = require("fs");
 const { toWindowsPath } = require("../../../lib/branch-diff");
-const { getPlansArtifactPath } = require("../../../lib/plans-artifact-registry");
 const { parseIntentGlossary } = require("../../../lib/intent-glossary");
 const { listMainGlossaryFiles } = require("../../../../bin/lib/glossary-format/files");
 const { parseGlossaryFile } = require("../../../../bin/lib/glossary-format/entries");
@@ -58,7 +57,8 @@ function intentRowsOf(sid, rangeText) {
   if (typeof rangeText === "string") return Object.assign({ ok: true }, rowsOfText(rangeText));
   let text = null;
   try {
-    text = fs.readFileSync(toWindowsPath(getPlansArtifactPath(sid, "intent")), "utf8");
+    const { resolvePlanArtifactOwner } = require("../../plan-artifact-owner");
+    text = fs.readFileSync(toWindowsPath(resolvePlanArtifactOwner(sid, "intent").path), "utf8");
   } catch (e) {
     if (!e || e.code !== "ENOENT") {
       return { ok: false, error: "intent-unreadable", detail: e && e.message ? e.message : String(e) };

@@ -120,7 +120,12 @@ if printf '%s\n' "$CODEX_OUT" | grep -q ': PERFORMED'; then
     exit 0
   fi
   echo "STATUS: FAILED"
-  echo "reason: codex output failed validation"
+  PARSE_REASON="$(printf '%s\n' "$PARSE_OUT" | sed -n 's/^REASON: //p' | head -n 1)"
+  if [[ -n "$PARSE_REASON" ]]; then
+    echo "reason: codex output failed validation (${PARSE_REASON})"
+  else
+    echo "reason: codex output failed validation"
+  fi
   exit 0
 fi
 

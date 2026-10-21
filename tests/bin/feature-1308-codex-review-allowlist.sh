@@ -191,6 +191,11 @@ invoke_real_review_plan_codex() {
   if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$mock_dir/bin/lib/cli-exec-guard.sh"
   fi
+  local lib
+  for lib in codex-glossary.sh main-worktree.sh native-path.sh; do
+    cp "$AGENTS_WORKTREE/bin/lib/$lib" "$mock_dir/bin/lib/$lib"
+  done
+  cp -R "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$AGENTS_WORKTREE/bin/lib/review-plan-codex" "$mock_dir/bin/lib/"
   run_with_timeout "$mock_dir/bin/review-plan-codex" \
     --format "$fmt" \
     --session-id "$sid" \

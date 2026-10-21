@@ -1,19 +1,11 @@
 #!/bin/bash
-# Tests: agents/issues/42, bin/gh, bin/github-issues/wip-state.sh, bin/workflow-plans-dir, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
+# Tests: bin/github-issues/wip-state.sh, bin/workflow-plans-dir, bin/github-issues/lib/board-card.sh, bin/github-issues/lib/origin-repo.sh
 # Tags: issue-create, github, workflow, issues, plans, scope:issue-specific
-# Tests for bin/github-issues/wip-state.sh — Issue #362 WIP signaling helper.
-#
-# Helper has five verbs: set, check, clear, abandon, setup.
-#   - set <N>:     write fingerprint (text field) BEFORE Status=In Progress.
-#   - check <N>:   print same|other|none.
-#   - clear <N>:   Status=Done + fingerprint="" + delete lock file (idempotent).
-#   - abandon <N>: OPEN-only; Status=Todo + fingerprint="" + delete lock (HARD writes).
-#   - setup:       one-shot ID discovery via gh api graphql; append to .env.
-#
-# 30 base cases per detail.md §"tests/agents/feature-wip-state.sh" + 38 abandon cases.
-# Inline-gh-mock pattern from tests/agents/feature-issue-create-skill.sh.
-#
-# RED: this suite fails clean while bin/github-issues/wip-state.sh is missing.
+# Tests for bin/github-issues/wip-state.sh — Issue #362 WIP signaling helper. Verbs: set <N> (fingerprint
+# before Status=In Progress), check <N> (same|other|none), clear <N> (Done, idempotent), abandon <N>
+# (OPEN-only, Status=Todo), setup (ID discovery via gh api graphql, append to .env).
+# 30 base cases + 38 abandon cases; inline-gh-mock pattern from feature-issue-create-skill.sh.
+# RED: fails clean while bin/github-issues/wip-state.sh is missing.
 
 set -u
 
@@ -35,18 +27,12 @@ run_with_timeout() {
     fi
 }
 
-# ---------------------------------------------------------------------------
 # make_origin_fixture <dir> [<origin-url>]
-#   #1899: repository identity is now resolved from the ORIGIN remote via
-#   bin/github-issues/lib/origin-repo.sh, NOT from `gh repo view`. Any fixture
-#   CWD that a wip-state verb runs from must therefore be a git repo carrying a
-#   github.com origin, or resolution fails before the assertion point.
-#
-#   Creates <dir>, git-inits it, disables git hooks (rules/test/fixture-isolation.md),
-#   and adds the origin remote (default https://github.com/nirecom/agents.git).
-#   Deliberately does NOT create WORKTREE_NOTES.md — priority-6 session-id
-#   resolution reads it, and the SID-isolation cases depend on its absence.
-# ---------------------------------------------------------------------------
+#   #1899: repo identity resolves from the ORIGIN remote via bin/github-issues/lib/origin-repo.sh, not
+#   `gh repo view`, so a fixture CWD must be a git repo with a github.com origin.
+#   Creates <dir>, git-inits it, disables git hooks (rules/test/fixture-isolation.md), adds the origin
+#   (default https://github.com/nirecom/agents.git). Deliberately NO WORKTREE_NOTES.md: priority-6
+#   session-id resolution reads it and the SID-isolation cases depend on its absence.
 make_origin_fixture() {
     local dir="$1"
     local url="${2:-https://github.com/nirecom/agents.git}"

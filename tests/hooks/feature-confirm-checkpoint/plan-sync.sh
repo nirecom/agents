@@ -1,9 +1,9 @@
 # #2513 confirmation cases: T13 real publish -> blob URL, T14 push failure -> local path,
 # T15 TERM_PROGRAM=vscode -> no editor launch; T19 every stage, T20 no artifact; T21-T24 one case
-# per record state. T13/T14/T16-T24 also pin the model-facing PreToolUse additionalContext (URL +
-# local path, or local path + reason). Plan files are <SID>-<stage>.md so the session id and the
-# file name agree on the record beside the plan. Sourced by ../feature-confirm-checkpoint.sh
-# (needs run_hook, make_bash_json, extract_system_message, write_marker, clear_markers).
+# per record state. Plan files are <SID>-<stage>.md (the only artifact the judge accepts). #2729:
+# each dialog case seeds the presentation receipt first; T14/T18/T20/T24 are fail-closed denies.
+# Sourced by ../feature-confirm-checkpoint.sh (needs run_hook, make_bash_json,
+# extract_system_message, extract_decision, seed_receipt, write_marker, clear_markers).
 # Publishing goes through bin/plan-sync-init + syncPlanFile (production deps) over the
 # test-only ssh stub into a local bare repo; GitHub-form origin, no network (gh off PATH in T13).
 
@@ -39,6 +39,16 @@ ccp_sync() {
   psf_record "$PUB" "$1" github.com
   psf_node 'Promise.resolve(ps.syncPlanFile(process.argv[1], path.join(process.argv[1], process.argv[2]),
   { budgetMs: 20000 })).then((r) => process.stdout.write(r.status + "|" + (r.reason || "")));' "$PUB" "$1"
+}
+
+# ccp_seed_pub <stage> — seed_receipt inside the publish env, so the receipt binds the same link
+# (blob URL, or the local path for an unpublishable reason) the hook resolves there (#2729).
+ccp_seed_pub() { (ccp_ps_env >/dev/null 2>&1; seed_receipt "$1"); }
+
+# ccp_expect_deny <name> — the last run denied the echo and showed no dialog (#2729 fail-closed).
+ccp_expect_deny() {
+  if [ "$(extract_decision "$CCP_OUT")" = "deny" ] && [[ "$CCP_MSG" != *"Click Allow"* ]]; then pass "$1"
+  else fail "$1 — expected a deny without the dialog, got: $CCP_OUT"; fi
 }
 
 ccp_confirm_msg() {
@@ -119,6 +129,7 @@ else
   fail "T13 bare main missing the published blob — not implemented? got: $T13_REMOTE"
 fi
 write_marker "intent" "$PUB_ABS"
+ccp_seed_pub intent >/dev/null
 ccp_confirm_pub
 if echo "$CCP_MSG" | grep -qF "$CCP_BLOB"; then
   pass "T13 systemMessage shows the GitHub blob URL"
@@ -129,34 +140,25 @@ ccp_expect_msg_path "T13 systemMessage also shows the local path" "$PUB"
 ccp_expect_ctx "T13 PreToolUse additionalContext line carries the same blob URL and the local path" "$CCP_BLOB" "$PUB"
 clear_markers
 
-echo "=== T20: plan-sync on, no artifact for the stage -> additionalContext names no-artifact, no path ==="
-# Assumption: with plan-sync configured and neither a turn marker nor a <sid>-<stage>.md file,
-# the reason is no-artifact (not plan-sync-off); the systemMessage keeps the Click Allow line.
+echo "=== T20 (#2729, inverted): plan-sync on, no artifact for the stage -> deny, no dialog ==="
 clear_markers
 ccp_confirm_pub OUTLINE
-T20_LEAK="$(psf_path_leak "$CCP_CTX" "$PUB")"
-if [ "$CCP_EVT" = PreToolUse ] && [[ "$CCP_CTX" == *no-artifact* ]] && [ -z "$T20_LEAK" ]; then
-  pass "T20 no artifact -> additionalContext names no-artifact, no local path"
-else
-  fail "T20 no artifact -> additionalContext names no-artifact, no local path — leak=$T20_LEAK ctx=$CCP_CTX out=$CCP_OUT"
-fi
-case "$CCP_CTX" in
-  "") fail "T20 no artifact -> additionalContext carries no URL — no additionalContext emitted" ;;
-  *https://*) fail "T20 no artifact -> additionalContext carries no URL — ctx=$CCP_CTX" ;;
-  *) pass "T20 no artifact -> additionalContext carries no URL" ;;
-esac
-if echo "$CCP_MSG" | grep -qF "Click Allow"; then pass "T20 no artifact -> systemMessage still asks for confirmation"
-else fail "T20 no artifact -> systemMessage still asks for confirmation — got: $CCP_MSG"; fi
+ccp_expect_deny "T20 no artifact -> denied (unverifiable-artifact), no Click Allow dialog"
 clear_markers
 
-echo "=== T24: no record, plan never sent -> local path + not-published, no URL ==="
+echo "=== T24 (#2729, inverted): no record, plan never sent (URL-capable env) -> deny as unpublished ==="
 printf 'never sent\n' > "$PUB/$SID-detail.md"
 psf_record_remove "$PUB" "$SID-detail.md"
 write_marker "detail" "$PUB/$SID-detail.md"
+T24_SEED="$(ccp_seed_pub detail)"
+if [ "$T24_SEED" = NONE ]; then pass "T24 precondition: an unpublished plan yields no receipt link (not-published)"
+else fail "T24 precondition: an unpublished plan yields no receipt link — seeded: $T24_SEED"; fi
 ccp_confirm_pub DETAIL
-ccp_expect_ctx "T24 no record, absent: additionalContext line carries not-published and the local path" "not-published" "$PUB"
-ccp_expect_no_url "T24 no record, absent: no URL"
-ccp_expect_msg_path "T24 no record, absent: systemMessage shows the local path" "$PUB"
+ccp_expect_deny "T24 no record, absent: the path-only echo is denied (unpublished), no dialog"
+case "$(psf_sysmsg "$CCP_OUT")$CCP_OUT" in
+  *"--stage detail"*) pass "T24 deny reason points at bin/plan-link --stage detail" ;;
+  *) fail "T24 deny reason points at bin/plan-link --stage detail — got: $CCP_OUT" ;;
+esac
 clear_markers
 
 echo "=== T19: every stage (intent/outline/detail) published -> [stage] systemMessage + additionalContext blob URL ==="
@@ -181,6 +183,7 @@ for T19_STAGE in intent outline detail; do
     *) fail "T19 $T19_STAGE precondition: artifact published — not implemented or failed: $T19_SYNC" ;;
   esac
   write_marker "$T19_STAGE" "$PUB/$T19_REL"
+  ccp_seed_pub "$T19_STAGE" >/dev/null
   ccp_confirm_pub "$T19_UP"
   if [[ "$CCP_MSG" == "[$T19_STAGE]"* && "$CCP_MSG" == *"$T19_BLOB"* ]] && ccp_has_dir "$CCP_MSG" "$PUB"; then
     pass "T19 $T19_STAGE systemMessage is [$T19_STAGE] + blob URL + local path"
@@ -198,6 +201,7 @@ for T21_ROW in "T21|gitlab.com|host-mismatch" "T22|none|no-project-host"; do
   echo "=== $T21_ID: record $T21_HOST, plan at the destination -> local path + $T21_REASON, never a URL ==="
   ccp_record "$SID-outline.md" "$T21_HOST"
   write_marker "outline" "$PUB/$SID-outline.md"
+  ccp_seed_pub outline >/dev/null
   ccp_confirm_pub OUTLINE
   ccp_expect_ctx "$T21_ID additionalContext line carries $T21_REASON and the local path" "$T21_REASON" "$PUB"
   ccp_expect_no_url "$T21_ID no URL although the plan is at the destination"
@@ -208,6 +212,7 @@ done
 echo "=== T23: no record, plan identical at the destination -> URL + local path ==="
 psf_record_remove "$PUB" "$SID-outline.md"
 write_marker "outline" "$PUB/$SID-outline.md"
+ccp_seed_pub outline >/dev/null
 ccp_confirm_pub OUTLINE
 ccp_expect_ctx "T23 no record, identical: additionalContext line carries the URL and the local path" "$CCP_OUTLINE_BLOB" "$PUB"
 if [[ "$CCP_MSG" == *"$CCP_OUTLINE_BLOB"* ]] && ccp_has_dir "$CCP_MSG" "$PUB"; then pass "T23 no record, identical: systemMessage shows the URL and the local path"
@@ -232,20 +237,11 @@ T14_STATE=$(
 if [ "$T14_STATE" = "sync=failed|ahead=yes" ]; then
   pass "T14 unreachable remote -> sync failed, local commit ahead of origin/main"
   write_marker "intent" "$PUB_ABS"
+  # #2729 (inverted): the plan could have a URL but is not published, so a path-only presentation
+  # never passes; the echo is denied (unpublished) instead of showing the local path.
   T14_OUT=$(ccp_ps_env; export GIT_SSH_COMMAND=false; ccp_confirm_run; printf '%s' "$CCP_OUT")
-  T14_MSG="$(psf_sysmsg "$T14_OUT")"
-  if echo "$T14_MSG" | grep -qF "$PUB_ABS" && ! echo "$T14_MSG" | grep -qF "https://"; then
-    pass "T14 unpushed blob -> absPath shown, no URL"
-  else
-    fail "T14 unpushed blob — expected absPath and no URL, got: $T14_MSG"
-  fi
-  CCP_OUT="$T14_OUT"; CCP_CTX="$(psf_hso "$T14_OUT" additionalContext)"; CCP_EVT="$(psf_hso "$T14_OUT" hookEventName)"
-  ccp_expect_ctx "T14 additionalContext line carries not-published and the local path" "not-published" "$PUB"
-  case "$CCP_CTX" in
-    "") fail "T14 additionalContext carries no URL — no additionalContext emitted" ;;
-    *https://*) fail "T14 additionalContext carries no URL — ctx=$CCP_CTX" ;;
-    *) pass "T14 additionalContext carries no URL" ;;
-  esac
+  CCP_OUT="$T14_OUT"; CCP_MSG="$(psf_sysmsg "$T14_OUT")"
+  ccp_expect_deny "T14 unpushed blob -> denied (unpublished), no dialog with the local path"
 else
   fail "T14 push-failure precondition — not implemented or failed: $T14_STATE"
 fi
@@ -253,16 +249,17 @@ clear_markers
 
 echo "=== T15: TERM_PROGRAM=vscode — confirmation never launches the editor ==="
 clear_markers
-T15_ABS="$PLANS_DIR/sess-nocode-intent.md"
+T15_ABS="$PLANS_DIR/$SID-intent.md"
 touch "$T15_ABS"
 write_marker "intent" "$T15_ABS"
+seed_receipt intent >/dev/null
 : > "$CODE_STUB_LOG"
 T15_OUT=$(
   export TERM_PROGRAM=vscode
   unset CLAUDE_CODE_ENTRYPOINT SHOW_PLAN_LINK_NO_AUTO_OPEN SHOW_PLAN_LINK_NO_SPAWN SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
   msg="$(ccp_confirm_msg)"
   sleep 1
-  case "$msg" in *sess-nocode-intent.md*) shown=yes ;; *) shown=no ;; esac
+  case "$msg" in *"$SID-intent.md"*) shown=yes ;; *) shown=no ;; esac
   printf 'count=%s|shown=%s' "$(code_stub_count)" "$shown"
 )
 if [ "$T15_OUT" = "count=0|shown=yes" ]; then
@@ -279,7 +276,7 @@ clear_markers
 T16_ABS="$PLANS_DIR/sess-off-outline.md"
 touch "$T16_ABS"
 write_marker "outline" "$T16_ABS"
-T16_OUT=$(export CONFIRM_OUTLINE=off; run_hook "$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")")
+T16_OUT=$(confirm_env_root "$ISOLATED_CFG_DIR/t16" CONFIRM_OUTLINE=off; run_hook "$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")")
 if [ "$(psf_sysmsg "$T16_OUT")" = "[confirm-skipped: CONFIRM_OUTLINE=off]" ] && ! psf_has_hso "$T16_OUT"; then
   pass "T16 CONFIRM_OUTLINE=off -> skipped message only, no hookSpecificOutput"
 else
@@ -290,18 +287,20 @@ rm -f "$T16_ABS"
 
 echo "=== T17: plan-sync off -> additionalContext names plan-sync-off, systemMessage keeps the local path ==="
 clear_markers
-T17_ABS="$PLANS_DIR/sess-syncoff-intent.md"
+T17_ABS="$PLANS_DIR/$SID-intent.md"
 touch "$T17_ABS"
 write_marker "intent" "$T17_ABS"
+seed_receipt intent >/dev/null
 ccp_confirm_run
 ccp_expect_ctx "T17 sync off -> PreToolUse additionalContext line carries plan-sync-off and the local path" "plan-sync-off" "$PLANS_DIR"
 if echo "$CCP_MSG" | grep -qF "Plan file: $T17_ABS"; then pass "T17 sync off -> systemMessage shows the local path"
 else fail "T17 sync off -> systemMessage shows the local path — got: $CCP_MSG"; fi
 clear_markers
 
-echo "=== T18: plan-link throws -> fail-open, systemMessage only ==="
+echo "=== T18 (#2729, inverted): plan-link throws -> fail-closed deny ==="
 # A preload makes require(".../plan-link") throw and leaves a canary, so the case proves the
-# hook really reached plan-link (non-vacuous) and still emitted the confirmation message.
+# hook really reached plan-link (non-vacuous). A valid receipt is seeded first, so the deny can
+# only come from the plan-link failure (unverifiable-link), never from a missing receipt.
 T18_CANARY="$CCP_PS_ROOT/t18-plan-link-required"
 T18_PRELOAD="$CCP_PS_ROOT/t18-throw-plan-link.js"
 printf '%s\n' 'const M = require("module"); const fs = require("fs"); const orig = M._load;' \
@@ -313,6 +312,7 @@ printf '%s\n' 'const M = require("module"); const fs = require("fs"); const orig
   '};' > "$T18_PRELOAD"
 rm -f "$T18_CANARY"
 write_marker "intent" "$T17_ABS"
+seed_receipt intent >/dev/null
 T18_OUT=$(
   export T18_CANARY NODE_OPTIONS="--require \"$(psf_np "$T18_PRELOAD")\""
   run_hook "$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")"
@@ -320,10 +320,10 @@ T18_OUT=$(
 T18_MSG="$(psf_sysmsg "$T18_OUT")"
 if [ -f "$T18_CANARY" ]; then pass "T18 precondition: the hook required lib/plan-link"
 else fail "T18 precondition: the hook required lib/plan-link — canary absent (plan-link not wired)"; fi
-if [ -f "$T18_CANARY" ] && echo "$T18_MSG" | grep -qF "Click Allow" && ! psf_has_hso "$T18_OUT"; then
-  pass "T18 plan-link exception -> systemMessage only (fail-open)"
+if [ -f "$T18_CANARY" ] && [ "$(extract_decision "$T18_OUT")" = "deny" ] && ! echo "$T18_MSG" | grep -qF "Click Allow"; then
+  pass "T18 plan-link exception -> denied (unverifiable-link), no dialog"
 else
-  fail "T18 plan-link exception -> systemMessage only (fail-open) — got: $T18_OUT"
+  fail "T18 plan-link exception -> denied (unverifiable-link), no dialog — got: $T18_OUT"
 fi
 clear_markers
 rm -f "$T17_ABS"

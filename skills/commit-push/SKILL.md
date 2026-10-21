@@ -23,9 +23,8 @@ When the command exits 0 (GitHub remote, or unknown/fail-open): run the pre-flig
 
 Skip message on non-GitHub remote (emitted by the script to stdout): `[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping Phase 1 pre-flight]`
 
-For each issue N in the session's `closes_issues` list (parsed from
-`${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` —
-the `## Issues` section; canonical parser: `hooks/lib/parse-closes-issues.js` — do not reimplement),
+For each issue N in the session's `closes_issues` list (the JSON array printed by
+`node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session <session-id>` — do not reimplement),
 run from the worktree root:
 
 ```bash

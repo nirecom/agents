@@ -49,7 +49,7 @@ const wf = require('$STATEIO_NODE');
 const CA = require('$COMPLETION_APPROVAL_NODE');
 for (const s of ['workflow_init','clarify_intent','research','outline','detail','branching_complete']) {
   if (CA.isApprovalGatedStep(s)) {
-    CA.recordPlanApproval(process.env.SID, s, { source: 'reset-sentinel', reason: '1979 fixture' });
+    require('$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js').approveLive(process.env.SID, s);
   }
   wf.markStep(process.env.SID, s, 'complete');
 }

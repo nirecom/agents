@@ -3,7 +3,7 @@
 const fs = require("fs");
 const { withSessionStateLock } = require("./lock");
 const { controlPath, diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
-const { validateFinding, validate, SEVERITY_RANK, AUDIT_SEVERITY_THRESHOLD } = require("../supervisor-state-schema");
+const { validateFinding, validate, SEVERITY_RANK, AUDIT_SEVERITY_THRESHOLD, TERMINAL_ALERT_PHASES } = require("../supervisor-state-schema");
 const { recordRiskSignal } = require("../handoff-risk-signal");
 const {
   SESSION_ID_RE,
@@ -22,29 +22,24 @@ function ensureAlertScheduled(state, sessionId, finding = null) {
 
   if (!state.alert || typeof state.alert !== "object" || Array.isArray(state.alert)) return;
   const phase = state.alert.alert_phase;
-  if (phase === "done" || phase === "closed") return;
+  // #2698: paused is terminal here too — only the explicit --set-alert-phase pending resumes it.
+  if (TERMINAL_ALERT_PHASES.has(phase)) return;
 
-  if (phase !== "paused") {
-    const candidates = new Set();
-    if (sessionId && SESSION_ID_RE.test(sessionId)) candidates.add(sessionId);
+  const candidates = new Set();
+  if (sessionId && SESSION_ID_RE.test(sessionId)) candidates.add(sessionId);
 
-    for (const sid of candidates) {
-      try {
-        if (fs.existsSync(controlPath(sid, "final-report-env.json"))) {
-          // Anchor present: skip normal-run arm UNLESS late-phase eligibility is set (#997)
-          if (state.alert.alert_eligible_phase !== "post_final_report_window") return;
-        }
-      } catch (e) { diagnoseControlMigration(e, "supervisor-state-writer"); }
-    }
+  for (const sid of candidates) {
+    try {
+      if (fs.existsSync(controlPath(sid, "final-report-env.json"))) {
+        // Anchor present: skip normal-run arm UNLESS late-phase eligibility is set (#997)
+        if (state.alert.alert_eligible_phase !== "post_final_report_window") return;
+      }
+    } catch (e) { diagnoseControlMigration(e, "supervisor-state-writer"); }
   }
 
   if (state.alert.alert_armed_at == null) {
     state.alert.alert_armed_at = new Date().toISOString();
     if (phase == null) state.alert.alert_phase = "pending";
-    if (phase === "paused") {
-      state.alert.alert_phase = "pending";
-      state.alert.alert_retry_count = 0;
-    }
   }
 }
 

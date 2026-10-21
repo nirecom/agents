@@ -113,3 +113,9 @@ Letter-suffix labels do NOT participate in renumber sweeps when a new integer st
 When a new step lands at integer N, every existing step at integer >= N shifts by +1.
 Update all cross-references (siblings, `Rules` section, scripts under `scripts/`, tests under `tests/`, and `CLAUDE.md` references) in the same diff.
 
+## 5. Absolute claims
+
+Back every absolute claim (`unconditionally`, `always`, `regardless of`) with the gate or hook that guarantees it, or state the condition it holds under.
+Read `regardless of X` as a conditional sentence that names the ignored axis X; it needs nothing more.
+When responsibility moves (from a hook to the model, for example), derive the directive's scope again.
+

@@ -12,34 +12,32 @@ const { adoptState, listAdoptCandidates } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "inheritance", "adopt.js"));
 const { describeGranularInheritance } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "inheritance", "apply.js"));
+const { inheritanceSideLines } =
+  require(path.join(SCRIPT_CHECKOUT_ROOT, "bin", "lib", "resume-session", "render.js"));
 const { resolveSessionId } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "session-id.js"));
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
-const GRANULARITIES = ["full", "context-independent-only"];
+// #2297: kept recognized so an old command line fails loudly instead of as "unrecognized".
+const REMOVED_FLAGS = ["--granularity", "--verified-equivalent"];
 
 function usage() {
   process.stdout.write(
-    "Usage: adopt-session-state [--session <heir-sid>] --list\n" +
-    "       adopt-session-state [--session <heir-sid>] --from <donor-sid>\n" +
-    "                           [--granularity full|context-independent-only]\n" +
-    "                           [--verified-equivalent]\n"
+    "Usage: adopt-session-state [--session <downstream-sid>] --list\n" +
+    "       adopt-session-state [--session <downstream-sid>] --from <upstream-sid>\n"
   );
 }
 
 function parseArgs(argv) {
-  const out = {
-    session: null, from: null, list: false, help: false, error: null,
-    granularity: null, verifiedEquivalent: false,
-  };
+  const out = { session: null, from: null, list: false, help: false, error: null, removed: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--help" || a === "-h") out.help = true;
+    if (REMOVED_FLAGS.indexOf(a) !== -1) {
+      if (out.removed === null) out.removed = a;
+    } else if (a === "--help" || a === "-h") out.help = true;
     else if (a === "--list") out.list = true;
-    else if (a === "--verified-equivalent") out.verifiedEquivalent = true;
     else if (a === "--session" && i + 1 < argv.length) out.session = argv[++i];
     else if (a === "--from" && i + 1 < argv.length) out.from = argv[++i];
-    else if (a === "--granularity" && i + 1 < argv.length) out.granularity = argv[++i];
     else out.error = `unrecognized argument: ${a}`;
   }
   return out;
@@ -52,6 +50,11 @@ function fail(message) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  // Checked before anything else: a removed flag never reaches an adoption.
+  if (args.removed !== null) {
+    process.stderr.write(`adopt-session-state: ${args.removed} removed: granularity is decided from where this session runs\n`);
+    process.exit(2);
+  }
   if (args.help) { usage(); return; }
   if (args.error) { usage(); fail(args.error); }
 
@@ -84,25 +87,19 @@ function main() {
     return;
   }
 
-  if (!args.from) { usage(); fail("nothing to do — pass --list or --from <donor-sid>"); }
+  if (!args.from) { usage(); fail("nothing to do — pass --list or --from <upstream-sid>"); }
 
-  if (args.granularity !== null && GRANULARITIES.indexOf(args.granularity) === -1) {
-    fail(`--granularity must be one of ${GRANULARITIES.join(" | ")}`);
-  }
-
-  const result = adoptState({
-    heirSid,
-    donorSid: args.from,
-    granularity: args.granularity,
-    verifiedEquivalent: args.verifiedEquivalent,
-  });
+  const result = adoptState({ heirSid, donorSid: args.from });
   if (!result.ok) fail(result.error);
   process.stdout.write(
     `Adopted workflow state from session ${result.donorSessionId} into ${heirSid}.\n`
   );
   process.stdout.write(describeGranularInheritance(result.inheritance) + "\n");
+  for (const line of inheritanceSideLines(result.inheritance, result.donorSessionId)) {
+    process.stdout.write(line + "\n");
+  }
   if (result.degraded_reason) {
-    process.stdout.write(`Donor evidence was incomplete (${result.degraded_reason}).\n`);
+    process.stdout.write(`Session upstream evidence was incomplete (${result.degraded_reason}).\n`);
   }
 }
 

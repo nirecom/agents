@@ -25,6 +25,9 @@ d2099rp_mock() {
     cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-core.sh" "$root/bin/lib/codex-core.sh"
     cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-timeout.sh" "$root/bin/lib/codex-timeout.sh"
     if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh" ]; then cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/cli-exec-guard.sh" "$root/bin/lib/cli-exec-guard.sh"; fi
+    local lib
+    for lib in codex-glossary.sh main-worktree.sh native-path.sh; do cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/$lib" "$root/bin/lib/$lib"; done
+    cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib/concern-ledger" "$SCRIPT_CHECKOUT_ROOT/bin/lib/review-plan-codex" "$root/bin/lib/"
     printf '#!/usr/bin/env bash\nc=$(grep -c "PLANLINE-")\necho "PLANLINE-count-is-${c:-0}"\nexit 0\n' > "$root/stub/codex"
     chmod +x "$root/stub/codex"
     # codex-timeout.sh falls back to a get-config-var on PATH when none sits beside it:

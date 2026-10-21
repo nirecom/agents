@@ -240,6 +240,7 @@
       "Bash(echo \"<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: *>>\")",
       "Bash(echo \"<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: *>>\")",
       "Bash(echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: *>>\")",
       "Bash(uv run bin/doc-rotate.py *)",
       "Bash(*aws * create*)",
       "Bash(*aws * put*)",
@@ -319,6 +320,11 @@
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-exit-worktree-warn.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -378,7 +384,7 @@
           },
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/handoff-pressure-nudge.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
             "timeout": 5
           },
           {
@@ -420,7 +426,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/scan-outbound.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -430,7 +436,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-dotenv.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -440,7 +446,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-credentials.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -450,7 +456,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-history-direct.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -460,7 +466,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-shell-config.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -470,7 +476,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-memory-direct.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -480,7 +486,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-clearance-token-write.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -490,7 +496,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/enforce-worktree.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -500,7 +506,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/enforce-issue-close.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -520,7 +526,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/enforce-system-ops.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -530,7 +536,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-subagent-sentinels.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -540,7 +546,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/workflow-gate.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -550,7 +556,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/bash-guard.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -560,7 +566,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/rtk-rewrite.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -570,7 +576,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-plan-skip-sentinel.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -580,7 +586,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-cross-platform.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -590,7 +596,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-capture-echo.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -600,7 +606,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-japanese-in-docs.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -610,7 +616,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-history-direct.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -620,7 +626,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/show-user-verified-context.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       },
@@ -630,7 +636,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/confirm-checkpoint.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       },
@@ -640,7 +646,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-plan-skill-advance.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       },
@@ -650,7 +656,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-send-user-file.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -660,7 +666,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-tests-direct.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -670,7 +676,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-comment-block-size.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -680,7 +686,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-plan-lang.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       },
@@ -690,7 +696,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/gate-worktree-notes-lang.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       },
@@ -700,7 +706,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-case-markers.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       },
@@ -710,7 +716,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/supervisor-off-proposal-shim.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -720,7 +726,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/preuse-auto-approve.js\"",
-            "timeout": 5
+            "timeout": 15
           }
         ]
       },
@@ -740,12 +746,22 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/subagent-dispatch-prompt.js\"",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [

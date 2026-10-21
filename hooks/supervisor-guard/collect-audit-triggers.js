@@ -7,6 +7,7 @@
 
 const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK, UNSETTLED_AUDIT_PHASES } = require("../lib/supervisor-state-schema");
 const triggers = require("../lib/audit-triggers");
+const { unshownRun } = require("../lib/audit-ledger");
 
 const CONFIRM_RE = /<<WORKFLOW_CONFIRM_(INTENT|OUTLINE|DETAIL):/;
 
@@ -34,8 +35,10 @@ function extractAssistantText(transcript) {
   return parts.join("\n");
 }
 
-// In-flight (UNSETTLED_AUDIT_PHASES) and done audit states never (re)arm.
+// In-flight (UNSETTLED_AUDIT_PHASES) and done audit states never (re)arm. An unshown run (#2698)
+// counts as quiescent: no agent runs it, and a newer arm may supersede it.
 function isQuiescent(audit) {
+  if (unshownRun(audit)) return true;
   const phase = audit.audit_phase;
   return !UNSETTLED_AUDIT_PHASES.includes(phase) && phase !== "done";
 }

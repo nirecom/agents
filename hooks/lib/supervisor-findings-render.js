@@ -1,6 +1,7 @@
 "use strict";
 
 const { formatAgentModelLine } = require("./role-model");
+const { withConvLang } = require("./conv-lang");
 
 function escapeTokens(str) {
   return typeof str === "string" ? str.replace(/</g, "‹") : str;
@@ -23,6 +24,8 @@ function aggregateCategories(findings) {
  * @param {Array} findings - alert.findings array from supervisor state
  * @param {Object} opts - { sessionId, workflowSessionId?, supervisorPath, stateFilePath,
  *   summaryOnly? (1-line summary), actionableOnly? (severity>=warning lines only) }
+ * Context-facing output carries the CONV_LANG injection (#2699); the summaryOnly line is
+ * embedded in the final report, so it stays bare.
  */
 function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
@@ -44,7 +47,7 @@ function formatLayer2Findings(findings, opts) {
   if (actionableOnly) {
     const actionable = findings.filter(f => f && (f.severity === "error" || f.severity === "warning"));
     if (actionable.length === 0) {
-      return "[EM Supervisor] Review complete — no actionable findings.";
+      return withConvLang("[EM Supervisor] Review complete — no actionable findings.");
     }
     const ISSUE_CREATE_CATEGORIES = new Set(["workflow", "intent", "outline", "detail", "test", "security"]);
     const lines = [];
@@ -58,7 +61,7 @@ function formatLayer2Findings(findings, opts) {
       if (needsHint) line += " [→ /issue-create recommended]";
       lines.push(line);
     }
-    return lines.join("\n");
+    return withConvLang(lines.join("\n"));
   }
   const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
 
@@ -95,7 +98,7 @@ function formatLayer2Findings(findings, opts) {
   lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
   lines.push(formatAgentModelLine("alert"));
 
-  return lines.join("\n");
+  return withConvLang(lines.join("\n"));
 }
 
 module.exports = { formatLayer2Findings };

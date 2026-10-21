@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/workflow-state/effective-state.js, hooks/workflow-state/current-step.js, bin/workflow/lib/next-step/approval-reason.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/gate-mode.js, hooks/workflow-mark/reset-handler.js, bin/workflow/lib/next-step/state-ops.js, hooks/workflow-state/record-step-verdict.js, hooks/workflow-state/inheritance/apply.js, bin/workflow/reconcile-state
+# Tests: hooks/workflow-state/effective-state.js, hooks/workflow-state/current-step.js, bin/workflow/lib/next-step/approval-reason.js, bin/workflow/lib/next-step/verdict.js, bin/workflow/lib/next-step/gate-mode.js, hooks/workflow-mark/reset-handler.js, bin/workflow/lib/next-step/state-ops.js, hooks/workflow-state/record-step-verdict.js, hooks/workflow-state/inheritance/apply.js, bin/workflow/reconcile-state, hooks/workflow-state/completion-approval.js
 # Tags: plan-approval, completion-approval, effective-state, next-step, recovery, confirm-intent, TL2, scope:issue-specific
 # #2277: an unapproved gated `complete` reads as pending (derived only, nothing rewritten);
 # next-step answers `awaiting-plan-approval: <step>` before the inconsistency scan, and every
@@ -59,6 +59,14 @@ case_end
 
 case_begin "approval-wait-for-helper" "bin/workflow/lib/next-step/approval-reason.js"
 ar_run reason-driver.js reason
+case_end
+
+case_begin "approval-hint-no-url-or-path" "bin/workflow/lib/next-step/approval-reason.js"
+ar_run reason-driver.js hint
+case_end
+
+case_begin "recovery-text-same-turn-no-url-path-sid" "hooks/workflow-state/completion-approval.js"
+ar_run reason-driver.js recovery
 case_end
 
 case_begin "next-step-awaiting-before-inconsistency-scan" "bin/workflow/lib/next-step/verdict.js"

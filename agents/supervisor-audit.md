@@ -88,6 +88,8 @@ Always pass `--session-id <effective-state-sid>`: the auto-resolve path targets 
 
 When the verdict is WARN or BLOCK on the fallback path, also append a finding describing what you observed. Use `node "$AGENTS_MAIN_ROOT/bin/supervisor-report"` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Omit `--session-id` to let the CLI auto-resolve and mirror; supply `--session-id <effective-state-sid>` only to pin to a single store.
 
+Write the `--verdict-summary` text and your final reply in the CONV_LANG language (the line-7 directive; default language when absent).
+
 ## Anti-thrash
 
 If you cannot complete the review (e.g. plan artifacts missing, API error during inspection), do NOT leave `audit_phase=pending`. Either:

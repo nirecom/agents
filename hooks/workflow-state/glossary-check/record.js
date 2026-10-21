@@ -9,6 +9,8 @@ const { STAGE_STEP, RA_STAGES, RS_STAGES, stageOfStep, loadStageInputs, fingerpr
 const RECORD_KEY = "glossary_check";
 const PROVENANCE_KEY = "glossary_provenance";
 const PROVENANCE_STEP = "review_docs";
+// Set only by events.js (an inheritance copy, or a batch carrying a `reset` anchor); since
+// #2709 neither is a SANCTIONED_SOURCES token, so a caller's own opts.sanctioned never reaches here.
 const SKIP_TOKENS = Object.freeze(["reset-sentinel", "session-inherit"]);
 const COMPONENTS = Object.freeze(["artifact", "glossary", "intent_rows", "rules"]);
 

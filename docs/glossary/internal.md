@@ -32,6 +32,12 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   The two-stage judge's query builds it, and the backup subagent reads it first.
 - **Related**: [architecture/jev/two-stage-broker.md](../architecture/jev/two-stage-broker.md)
 
+### presentation receipt
+
+- **Definition**: The per-stage record the Stop hook writes when a turn closes on a plan's link line: the plan path, the link shown (URL, or the local path where none can be made) and the whole-file content hash.
+  The CONFIRM checkpoint lets the echo reach the dialog only when it still matches the plan and spends it; it proves the user was shown the plan, and is not an approval.
+- **Related**: [architecture/claude-code/settings/hooks.md](../architecture/claude-code/settings/hooks.md)
+
 ### review round
 
 - **Definition**: One reviewer run of the shared codex review loop; CAP is the normal ceiling on rounds, and MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain.
