@@ -221,14 +221,14 @@ The hash is computed on the plan artifact's **owner**, which after an inheritanc
 ### Inheritance is a state copy (#2304, #2633)
 
 `/resume-session --from` copies the upstream's event stream verbatim (`inheritance/apply.js`) and sets
-`upstream_session_id` / `upstream_copy_seq`, in one `writeStateLocked` (a crash leaves the state
-untouched or fully inherited); the supervisor state file is copied afterwards. Each approval-gated
+`upstream_session_id` / `upstream_copy_seq`, in one `writeStateLocked` (a crash leaves it untouched
+or fully inherited); the supervisor state file is copied afterwards. Each approval-gated
 stage is re-verified in that write: the first stage that no longer verifies, and every later stage
-including `cleanup`, returns to `pending` with an `inherit_revert_reason`, and the downstream
-re-approves with `CONFIRM_*`. Events up to `upstream_copy_seq` are not the downstream's own work.
-Granularity is reported, not requested: `full` when the downstream runs in the upstream's worktree,
-else `context-independent-only` (`decideInheritanceGranularity`). `checkOverwriteAllowed` permits
-adoption into an untouched downstream, or a same-upstream re-adopt that overwrites no own record.
+including `cleanup`, returns to `pending` with an `inherit_revert_reason`; the downstream re-approves
+with `CONFIRM_*`. Events up to `upstream_copy_seq` are not the downstream's own work. `buildCopy`
+alone writes `previous_session_ids`, the upstream lineage oldest first (#2311); readers validate each
+element as a session id. Granularity: `full` in the upstream's worktree, else `context-independent-only`
+(`decideInheritanceGranularity`). `checkOverwriteAllowed` permits adoption into an untouched downstream or a same-upstream re-adopt.
 
 Recovery: a gated step recorded `complete` without a valid approval (no record, or a hash
 mismatch) reads as `pending` in the effective state. `next-step` answers it with

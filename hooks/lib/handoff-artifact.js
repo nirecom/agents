@@ -14,13 +14,11 @@ const fs = require("fs");
 const path = require("path");
 const { controlPath, diagnoseControlMigration } = require("../workflow-state/state-io/control-dir");
 const { SESSION_ID_VALID_RE, VALID_STEPS } = require("../workflow-state/state-io/core");
-const { collapseControl, redactSecrets, sanitizeLine } = require("./output-sanitize");
+const { sanitizeUntrustedField } = require("./output-sanitize");
 
-// Collapse FIRST: SECRET_OPTION_RE is space-anchored, so a secret split across
-// a literal newline is only reassembled into one matchable line by collapsing.
-// Same composition as hooks/workflow-run-tests.js sanitizeTrigger().
+// One-argument wrapper: `.map(sanitizeField)` must not pass the index as maxLen.
 function sanitizeField(value) {
-  return sanitizeLine(redactSecrets(collapseControl(String(value === undefined || value === null ? "" : value))));
+  return sanitizeUntrustedField(value);
 }
 
 const HANDOFF_SCHEMA_VERSION = "1";
@@ -44,6 +42,24 @@ function isValidSid(sid) {
 function getHandoffPath(sid, opts) {
   if (!isValidSid(sid)) throw new Error(`Invalid sessionId: ${JSON.stringify(sid)}`);
   return controlPath(sid, "handoff.md", opts);
+}
+
+// The existing handoff's path, or null. NEVER throws: resolving it may migrate a
+// legacy plans-dir file (controlPath), and a failed migration reads as "no handoff".
+function findHandoffPath(sid) {
+  if (!isValidSid(sid)) return null;
+  let handoffPath;
+  try {
+    handoffPath = getHandoffPath(sid);
+  } catch (e) {
+    diagnoseControlMigration(e, "handoff-artifact");
+    return null;
+  }
+  try {
+    return fs.statSync(handoffPath, { throwIfNoEntry: false })?.isFile() ? handoffPath : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function esc(value) {
@@ -255,14 +271,8 @@ function appendHandoffEntry(sid, entry) {
 // happens only at render time, so the artifact stays an audit trail.
 function readHandoff(sid) {
   const absent = { exists: false, schemaVersion: null, raw: null, entriesByClass: {}, overflow: false, sid };
-  if (!isValidSid(sid)) return absent;
-  let handoffPath;
-  try {
-    handoffPath = getHandoffPath(sid);
-  } catch (e) {
-    diagnoseControlMigration(e, "handoff-artifact");
-    return absent;
-  }
+  const handoffPath = findHandoffPath(sid);
+  if (handoffPath === null) return absent;
   const raw = readDocumentFile(handoffPath);
   if (raw === null) return absent;
   const doc = parseDocument(raw);
@@ -341,6 +351,7 @@ module.exports = {
   MAX_ENTRY_LINES,
   MAX_BYTES,
   getHandoffPath,
+  findHandoffPath,
   readDocumentFile,
   appendHandoffEntry,
   readHandoff,

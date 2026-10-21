@@ -55,9 +55,25 @@ function lastOfKind(events, kind) {
   return null;
 }
 
+const isValidSid = (v) => typeof v === "string" && core.SESSION_ID_VALID_RE.test(v);
+
+// The lineage the upstream already carries, oldest first. A state written before
+// previous_session_ids existed still names its own upstream in upstream_session_id.
+function inheritedChain(upstream) {
+  if (Array.isArray(upstream.previous_session_ids)) return upstream.previous_session_ids.filter(isValidSid);
+  if (isValidSid(upstream.upstream_session_id)) return [upstream.upstream_session_id];
+  return [];
+}
+
+function dedupKeepFirst(ids) {
+  return Array.from(new Set(ids));
+}
+
 // Steps (3)-(6) of the copy: identity, boundary, and the downstream's own location facts.
 function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) {
   const clone = upstream;
+  // Read before upstream_session_id is overwritten below: clone IS the upstream object.
+  clone.previous_session_ids = dedupKeepFirst([...inheritedChain(upstream), upstreamSid]);
   clone.session_id = downstreamSid;
   clone.created_at = createdAt;
   clone.upstream_session_id = upstreamSid;
