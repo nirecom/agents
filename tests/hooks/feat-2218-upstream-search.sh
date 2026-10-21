@@ -14,9 +14,10 @@ set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
-PASS=0; FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+# pass/fail and the case markers list-injection.sh uses. Loaded before $TMP is
+# assigned: the harness pins TMP/TEMP/TMPDIR into its run root.
+# shellcheck source=tests/lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
@@ -305,7 +306,9 @@ run_U15
 run_U16
 run_U17
 run_U18
-run_U19
+# U19/U20 run as the fragment is sourced: its case markers must wrap the runs, not just the definitions.
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-upstream-search/list-injection.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

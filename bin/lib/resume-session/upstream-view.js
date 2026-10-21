@@ -9,15 +9,14 @@
 // degrades with its own honest reason instead.
 
 const fs = require("fs");
-const path = require("path");
-const { readState, readRawState } = require("../../../hooks/workflow-state/state-io");
-const { getWorkflowPlansDir } = require("../../../hooks/lib/workflow-plans-dir");
+const { readState, readRawState, SESSION_ID_VALID_RE } = require("../../../hooks/workflow-state/state-io");
+const { getPlansArtifactPath } = require("../../../hooks/lib/plans-artifact-registry");
 const { adoptState, checkOverwriteAllowed, heirContextOf: adoptHeirContextOf } =require("../../../hooks/workflow-state/inheritance/adopt");
 const { judgeInheritanceGranularity } = require("../../../hooks/workflow-state/inheritance/granularity");
 // Per call, so a swapped owner cache entry is honored.
 const repoIdentity = () => require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
-const { readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
+const { findHandoffPath, readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
 const { progressPathFor, isRegularFile } = require("../../../hooks/lib/progress-file");
 
 const PROGRESS_FIRST_SECTION = "Current state";
@@ -32,19 +31,32 @@ const AVAILABILITY = Object.freeze({
 const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail", "handoff"]);
 const GRANULARITY_DEGRADED = "context-independent-only";
 
-function artifactsFor(sid) {
-  const dir = getWorkflowPlansDir();
-  const out = {};
-  for (const kind of ARTIFACT_KINDS) {
-    const p = path.join(dir, `${sid}-${kind}.md`);
-    let ok = false;
-    try {
-      ok = fs.existsSync(p);
-    } catch (e) {
-      ok = false;
-    }
-    out[kind] = ok ? p : null;
+function isValidSid(sid) {
+  return typeof sid === "string" && SESSION_ID_VALID_RE.test(sid);
+}
+
+function existingPlansArtifact(sid, kind) {
+  try {
+    const p = getPlansArtifactPath(sid, kind);
+    return fs.existsSync(p) ? p : null;
+  } catch (e) {
+    return null;
   }
+}
+
+// Each kind has exactly one resolver: plan artifacts live in the plans dir, the
+// handoff where its writer puts it (the control dir, #2576).
+const ARTIFACT_RESOLVERS = Object.freeze({
+  intent: (sid) => existingPlansArtifact(sid, "intent"),
+  outline: (sid) => existingPlansArtifact(sid, "outline"),
+  detail: (sid) => existingPlansArtifact(sid, "detail"),
+  handoff: (sid) => findHandoffPath(sid),
+});
+
+function artifactsFor(sid) {
+  const valid = isValidSid(sid);
+  const out = {};
+  for (const kind of ARTIFACT_KINDS) out[kind] = valid ? ARTIFACT_RESOLVERS[kind](sid) : null;
   return out;
 }
 
@@ -207,6 +219,17 @@ function buildUpstreamView(input) {
   const opts = input || {};
   const upstreamSid = opts.upstreamSid;
   const heirSid = opts.heirSid || null;
+  // A malformed id must not reach any path join (#2302, CWE-22): no store is looked up.
+  if (!isValidSid(upstreamSid)) {
+    return {
+      type: "upstream",
+      upstream_session_id: upstreamSid,
+      availability: AVAILABILITY.NONE,
+      reason: "unknown-session",
+      handoff_rendered: null,
+      transcript_tail: captureTranscriptTail({ upstreamSid }),
+    };
+  }
   let upstreamState = null;
   try {
     upstreamState = readState(upstreamSid);

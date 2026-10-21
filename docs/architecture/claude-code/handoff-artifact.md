@@ -90,6 +90,7 @@ That is the point of the rule: a gate that blocks twice for two different reason
 
 ## Reader
 
+- `findHandoffPath(sid)` → the handoff artifact's path, or `null`; never throws. `readHandoff` and `/resume-session --from` (`upstream-view.js`) both resolve through it, so the resume side reads the file where the writer puts it.
 - `readHandoff(sid)` → `{exists, schemaVersion, raw, entriesByClass, overflow, sid}`. `entriesByClass` preserves the full append-only history in file order; an unparsable line is dropped, never guessed at. A missing file is `exists: false` — the normal case, not an error.
 - `renderHandoffForResume(parsed, {maxEntries})` → the resume view. Within each class it keeps only the maximum-`at` entry per `(step, key)`, renders `- <step> | <summary> | <pointer>`, and stops at `maxEntries` (default 40).
 
