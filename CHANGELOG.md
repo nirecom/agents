@@ -827,3 +827,7 @@ Changes: Sessions now keep a session-progress.md handover file that the model up
 ### FEATURE: PR #2722 (2026-10-20)
 Background: fix(resume-session): copy the session upstream's state verbatim and c...
 Changes: Fixed resume-session state inheritance: the resumed session now receives the upstream session's state verbatim, including settling an unsettled audit run (#2633, #2304);Closed approval-bypass paths for ask-protected sentinels and hardened finish-path readers (#2709, #2297)
+
+### FEATURE: PR #2738 (2026-10-21)
+Background: feat(#2724): bind the plan-link duty to CONFIRM and back prompt claims with a gate
+Changes: CONFIRM_INTENT, CONFIRM_OUTLINE and CONFIRM_DETAIL set to off now take effect only from the global `.env` file; an export or `.env.local` no longer turns them off.;A repeated denied CONFIRM no longer lets the approval dialog through: the plan must be presented again each time.;With plan-sync available, a plan that has not been published can no longer be confirmed; environments that cannot publish present the local path instead.
