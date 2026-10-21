@@ -30,6 +30,7 @@ const ON_DEMAND_MARKER_RE = /<!--\s*injection:\s*on-demand-only(?!-?\w)/;
 // and the settings.json deny list session-wide regardless of reads, so its reader list only needs the
 // skills that consult its non-hook-backed content (worktree recovery, key/secret generation).
 const ON_DEMAND_READERS = [
+  "rules/architecture-principles.md|skills/make-outline-plan/SKILL.md,skills/make-detail-plan/SKILL.md,skills/write-code/SKILL.md",
   // commit-push/worktree-end are excluded here: branch.md's How-to-Finish section only points at them, it carries no decision they act on.
   "rules/branch.md|skills/make-detail-plan/SKILL.md,skills/worktree-start/SKILL.md",
   "rules/coding.md|skills/write-code/SKILL.md,skills/issue-create/SKILL.md,skills/commit-push/SKILL.md,skills/update-docs/SKILL.md,skills/worktree-end/SKILL.md,skills/issue-close-stage/SKILL.md,skills/issue-close-finalize/SKILL.md,skills/write-tests/SKILL.md",

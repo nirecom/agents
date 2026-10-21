@@ -25,6 +25,7 @@ After each skill completes, run: `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step
 - `rules/worktree.md` is not auto-injected — Read it before creating, entering, or removing a worktree.
 - `rules/coding.md` is not auto-injected — Read it before writing or editing code.
 - `rules/ops.md` is not auto-injected — Read it before any destructive or system-state-changing operation.
+- `rules/architecture-principles.md` is not auto-injected — Read it before designing or changing a mechanism, guard, gate, or check.
 - For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md` (when it applies) and `/enforce-workflow-off` (how).
 - `rules/mid-workflow-findings.md` is not auto-injected — Read it for bugs, follow-ups, or next-task findings discovered mid-workflow.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
