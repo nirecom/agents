@@ -75,6 +75,44 @@ check_eq "SR8 lang-skip precedes retry-capped and header-unfixable" "lang-skip:n
 check_eq "SR8 retry-capped precedes no-tests-header" "retry-capped" "$(ec_skip_reason tests/bin/o-capped-noheader.sh)"
 case_end
 
+# sr_only_skip <label> <root> <script> <relpath> <reason> [args...] — --only-file on a
+# candidate that is not embeddable: exit 1, one SKIP line, no BAND line, the NOTE, no workdir.
+sr_only_skip() {
+  local label="$1" root="$2" script="$3" rel="$4" reason="$5" wd_root="$WORKFLOW_PLANS_DIR/sweep-tests-embed" wd_before
+  shift 5
+  wd_before="$(ls -1A "$wd_root" 2>/dev/null)"
+  ec_run "$root" "$script" --embed-cases --only-file "$rel" "$@"
+  check_eq "$label exits 1 (err=${ERR:0:200})" "1" "$RC"
+  check_eq "$label prints exactly one SKIP line with the reason" "$(printf 'SKIP\t%s\t%s' "$rel" "$reason")" "$(printf '%s\n' "$OUT" | grep '^SKIP')"
+  check_eq "$label prints no BAND line" "" "$(ec_band_paths)"
+  if [[ "$ERR" == *"NOTE: embed-cases: --only-file $rel is not embeddable ($reason); no workdir written"* ]]; then
+    pass "$label prints the not-embeddable NOTE"
+  else
+    fail "$label prints the not-embeddable NOTE" "err=${ERR:0:300}"
+  fi
+  check_eq "$label prints no EMBED_WORKDIR line" "" "$(printf '%s\n' "$OUT" | grep '^EMBED_WORKDIR:')"
+  check_eq "$label creates nothing under the workdir root" "$wd_before" "$(ls -1A "$wd_root" 2>/dev/null)"
+}
+
+case_begin "only-file-skip-already-conforming" "bin/lib/test-embed-cases/select.sh"
+sr_only_skip "SRO1 (dry run)" "$SR_REPO" "$AUDIT" tests/bin/s-conforming.sh already-conforming --dry-run
+sr_only_skip "SRO1 (apply mode)" "$SR_REPO" "$AUDIT" tests/bin/s-conforming.sh already-conforming
+case_end
+
+case_begin "only-file-skip-lang-narrow-harness" "bin/lib/test-embed-cases/select.sh"
+sr_only_skip "SRO2" "$SR_REPO" "$AUDIT" tests/bin/s-narrow.sh lang-skip:narrow-harness --dry-run
+case_end
+
+case_begin "only-file-skip-retry-capped" "bin/lib/test-embed-cases/retry-record.sh"
+sr_only_skip "SRO3" "$SR_REPO" "$AUDIT" tests/bin/s-capped.sh retry-capped --dry-run
+case_end
+
+case_begin "only-file-skip-header-reasons" "bin/lib/test-embed-cases/select.sh"
+sr_only_skip "SRO4" "$SR_REPO" "$AUDIT" tests/bin/s-noheader.sh no-tests-header --dry-run
+sr_only_skip "SRO4" "$SR_REPO" "$AUDIT" tests/bin/s-multiparen.sh header-unfixable:multi-paren --dry-run
+sr_only_skip "SRO4" "$SR_REPO" "$AUDIT" tests/bin/s-hasac.sh header-unfixable:has-ac --dry-run
+case_end
+
 case_begin "retry-capped-invalidated-by-content-change" "bin/lib/test-embed-cases/retry-record.sh"
 printf '# touched\n' >>"$SR_REPO/tests/bin/s-capped.sh"
 ec_commit "$SR_REPO" "change capped file"
@@ -101,6 +139,10 @@ ec_commit "$NR_REPO" init
 ec_run "$NR_REPO" "$NR_REPO/bin/audit-tests.sh" --embed-cases --dry-run --band-size 50
 check_eq "SR10 with caseEmbedRules null the file is skipped as no-embed-rules (rc=$RC err=${ERR:0:200})" "no-embed-rules" "$(ec_skip_reason tests/bin/n-plain.sh)"
 check_eq "SR10 no band is planned without embed rules" "" "$(ec_band_paths)"
+case_end
+
+case_begin "only-file-skip-no-embed-rules" "bin/lib/test-embed-cases/select.sh"
+sr_only_skip "SRO5" "$NR_REPO" "$NR_REPO/bin/audit-tests.sh" tests/bin/n-plain.sh no-embed-rules --dry-run
 case_end
 
 # Marker states malformed (indented marker) and uncertain (depth violation after an
@@ -148,6 +190,8 @@ ec_add_test "$EX_REPO" tests/bin/suite-x.sh "bin/charlie.sh"
 sed -i 's|^source "\$ROOT/tests/lib/harness.sh"$|&\n. "$ROOT/tests/bin/suite-x/part.sh"|' "$EX_REPO/tests/bin/suite-x.sh"
 printf '%s\n' '# Tests: bin/delta.sh' '# Tags: TL2, scope:common' 'def test_x():' '    assert True' >"$EX_REPO/tests/bin/test_noreader.py"
 printf '%s\n' '# Tests: bin/echo.sh' '# Tags: TL2, scope:common' 'Describe "x" { It "y" { $true | Should -Be $true } }' >"$EX_REPO/tests/bin/noreader.Tests.ps1"
+printf '%s\n' 'not a test' >"$EX_REPO/tests/bin/notes.txt"
+printf '%s\n' '// Tests: bin/echo.sh' 'package x' >"$EX_REPO/tests/bin/noreader_test.go"
 ec_commit "$EX_REPO" init
 EX_EXCLUDED="tests/_archive/old-archived.sh tests/bin/suite-x/part.sh tests/bin/test_noreader.py tests/bin/noreader.Tests.ps1"
 
@@ -169,6 +213,35 @@ case_end
 case_begin "exclusions-absent-audit-tests-common" "bin/audit-tests-common.sh"
 ec_run "$EX_REPO" "$AUDIT_COMMON" --embed-cases --dry-run --band-size 50
 ex_assert_excluded "SR13 (audit-tests-common.sh)"
+case_end
+
+# sr_only_reject <label> <relpath> <message> [fragment...] — --only-file exits 2 with
+# "ERROR: embed-cases: <message>" (plus each fragment) on stderr, not "unknown argument".
+sr_only_reject() {
+  local label="$1" rel="$2" msg="$3" f
+  shift 3
+  ec_run "$EX_REPO" "$AUDIT" --embed-cases --dry-run --only-file "$rel"
+  if [[ "$RC" -eq 2 ]] && ec_not_unknown_arg; then pass "$label exits 2"; else fail "$label exits 2" "rc=$RC err=${ERR:0:200}"; fi
+  for f in "ERROR: embed-cases: $msg" "$@"; do
+    if [[ "$ERR" == *"$f"* ]]; then pass "$label stderr has: $f"; else fail "$label stderr has: $f" "err=${ERR:0:300}"; fi
+  done
+  check_eq "$label plans nothing" "" "$(printf '%s\n' "$OUT" | grep -E '^(BAND|SKIP|EMBED_WORKDIR:)')"
+}
+
+case_begin "only-file-rejects-non-candidates" "bin/lib/test-embed-cases/select.sh"
+for _p in tests/_archive/old-archived.sh tests/bin/suite-x/part.sh tests/lib/harness.sh; do
+  sr_only_reject "SRO6 a3 [$_p]" "$_p" "--only-file $_p is not directly under tests/" "(categories: "
+done
+sr_only_reject "SRO6 a4" tests/bin/notes.txt "--only-file tests/bin/notes.txt: no test language matches this name"
+# The registry's recognized-only entry matches *_test.* but has no test case reader.
+sr_only_reject "SRO6 b1" tests/bin/noreader_test.go "--only-file tests/bin/noreader_test.go: language " "has no test case reader (not an embed candidate)"
+case_end
+
+case_begin "only-file-rejects-bad-paths" "bin/lib/test-embed-cases/select.sh"
+sr_only_reject "SRO7 a2" tests/bin/missing.sh "--only-file tests/bin/missing.sh: no such file"
+for _p in "" ../x /abs Z:/t.sh ./tests/bin/t-plain.sh tests/../tests/bin/t-plain.sh; do
+  sr_only_reject "SRO7 a1 [$_p]" "$_p" "--only-file $_p is not a repo-relative path"
+done
 case_end
 
 grp_done skip-reason-cases.sh

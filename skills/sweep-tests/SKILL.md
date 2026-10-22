@@ -15,7 +15,7 @@ STE-3. Run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --dup-groups` — corpus
 
 ## Case-marker embedding (on request only)
 
-STE-4. Only when case-marker embedding is requested: run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --embed-cases [--band-size N] [--order frequency|priority] [--dry-run]`, dispatch one subagent per `ITEM` row of the `<<<EMBED-GATE-STE4` block, then run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --embed-apply <EMBED_WORKDIR>`.
+STE-4. Only when case-marker embedding is requested: run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --embed-cases [--band-size N | --only-file <relpath>] [--order frequency|priority] [--dry-run]`, dispatch one subagent per `ITEM` row of the `<<<EMBED-GATE-STE4` block, then run `bash "$AGENTS_MAIN_ROOT/bin/audit-tests.sh" --embed-apply <EMBED_WORKDIR>`.
   Each embed prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 
 ## Rules

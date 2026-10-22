@@ -2,7 +2,7 @@
 # audit-tests.sh — Retire checker for issue-specific test files.
 # Usage: bin/audit-tests.sh [--dry-run] [--stale-months N] [--offline]
 #                           [--format text|json] [--fix-headers] [--dup-groups]
-#        bin/audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority]
+#        bin/audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority] [--only-file <relpath>]
 # Exit:  0 = candidates found, 1 = no candidates, 2 = error. Writes by default: a
 # flagless run DELETES candidates (git rm), --fix-headers rewrites headers in place;
 # --dry-run reports only. --dup-groups: read-only TSV (bin/lib/test-dup-group.sh).

@@ -1,7 +1,9 @@
 # bin/lib/test-language-parts/pester-case-scan.ps1 — the pester case enumeration, dot-sourced by
 # pester-case-reader.ps1 and pester-case-analyzer.ps1 so both see one case order.
 # A case is a top-level Describe '<name>' -Tag 'target:<path>' (begin = the Describe line,
-# end = its closing brace line). Defines functions only; runs nothing on load.
+# end = its closing brace line). A case owns its begin and end lines: another top-level
+# statement on either line reads grammar, so cutting the case never cuts that statement.
+# Defines functions only; runs nothing on load.
 
 # The name and tag arguments of one Describe command; Constant is false when a tag is not a string constant.
 function Read-Describe {
@@ -49,6 +51,22 @@ function Get-TopDescribe {
     }
 }
 
+# True when a top-level statement other than the Describe's own touches its line span.
+function Test-SharedLine {
+    param([System.Management.Automation.Language.ScriptBlockAst]$Ast, [System.Management.Automation.Language.CommandAst]$Command)
+    $own = $Command.Parent
+    $begin = $Command.Extent.StartLineNumber; $end = $Command.Extent.EndLineNumber
+    $other = @($Ast.UsingStatements) + @($Ast.ParamBlock)
+    foreach ($block in $Ast.DynamicParamBlock, $Ast.BeginBlock, $Ast.ProcessBlock, $Ast.EndBlock) {
+        if ($null -ne $block) { $other += @($block.Statements) }
+    }
+    foreach ($node in $other) {
+        if ($null -eq $node -or [object]::ReferenceEquals($node, $own)) { continue }
+        if ($node.Extent.StartLineNumber -le $end -and $node.Extent.EndLineNumber -ge $begin) { return $true }
+    }
+    $false
+}
+
 # Every (line, reason) fault and every well-formed case of a parsed file:
 # Fault = @(line, reason) items; Case = @{ Name; Target; Begin; End; Command } items, in file order.
 function Get-CaseScan {
@@ -72,6 +90,7 @@ function Get-CaseScan {
         # A TAB, CR or LF would split the record line, so it reads grammar ahead of the target rule.
         elseif ("$($d.Name)$($d.Target[0])" -match "[`t`r`n]") { $fault.Add(@($d.Begin, 'grammar')) }
         elseif (-not (Test-Target -Target $d.Target[0])) { $fault.Add(@($d.Begin, 'target')) }
+        elseif (Test-SharedLine -Ast $Ast -Command $command) { $fault.Add(@($d.Begin, 'grammar')) }
         else { $case.Add([pscustomobject]@{ Name = $d.Name; Target = $d.Target[0]; Begin = $d.Begin; End = $d.End; Command = $command }) }
     }
     if ($unmarked.Count -lt $top.Count) { foreach ($line in $unmarked) { $fault.Add(@($line, 'missing-target')) } }

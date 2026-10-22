@@ -53,7 +53,7 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 - **Related**: [architecture/claude-code/root-names.md](architecture/claude-code/root-names.md)
 
 ### test case reader
-- **Definition**: The per-language part that reads one test file and returns one record per case (name, target, line range, malformed reason); the sweep, the checks, and the retire judgment read cases only through it.
+- **Definition**: The per-language part that reads one test file and returns one record per case (name, target, line range, malformed reason); the sweep, the checks, and the retire judgment get these records through the common window, which adds each case's deps.
 - **Related**: [architecture/claude-code/test-language-registry.md](architecture/claude-code/test-language-registry.md)
 
 ### turn

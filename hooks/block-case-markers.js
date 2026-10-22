@@ -45,20 +45,32 @@ function registry() {
   return require("./lib/test-language-registry");
 }
 
-// One hint per language among the case-marker violations, worded by its registry entry's
-// diagnostics. warns: WARN lines added below the HIGH lines.
+// Each violation carries `high` (case-marker/self-impl CLIs) and `lmHigh` (language-match CLI);
+// each group gets its own heading. One marker-wrap hint per language among the case-marker
+// group, worded by its registry entry's diagnostics. warns: WARN lines added at the end.
 function buildReason(violations, warns = []) {
-  const lines = ["[block-case-markers] New test file(s) fail the case-marker gate:"];
+  const cm = [];
   const hints = [];
+  const lm = [];
   for (const v of violations) {
-    for (const h of v.high) lines.push(`  ${v.rel}: ${h}`);
-    if (!v.high.some((h) => /code=(MISSING|MALFORMED)_CASE_MARKERS?\b/.test(h))) continue;
+    const high = v.high || [];
+    const markerless = high.some((h) => /code=(MISSING|MALFORMED)_CASE_MARKERS?\b/.test(h));
+    for (const h of high) cm.push(`  ${v.rel}: ${h}`);
+    // CASE_ADDED_WITHOUT_MARKERS on a markerless file has the case-marker cause, so it joins that group.
+    for (const h of v.lmHigh || []) {
+      const toCm = markerless && /code=CASE_ADDED_WITHOUT_MARKERS\b/.test(h);
+      (toCm ? cm : lm).push(`  ${v.rel}: ${h}`);
+    }
+    if (!markerless) continue;
     const d = (v.entry && v.entry.diagnostics) || {};
     const doc = d.markerDoc || (v.entry && v.entry.notationDoc);
     const hint = d.markerWrapHint && `${d.markerWrapHint}${doc ? ` — see ${doc}` : ""}.`;
     if (hint && !hints.includes(hint)) hints.push(hint);
   }
-  return lines.concat(hints, warns.length > 0 ? ["Not checked:"] : [], warns.map((w) => `  ${w}`)).join("\n");
+  const lines = [];
+  if (cm.length > 0) lines.push("[block-case-markers] New test file(s) fail the case-marker gate:", ...cm, ...hints);
+  if (lm.length > 0) lines.push("[block-case-markers] Test file(s) fail the language-match gate:", ...lm);
+  return lines.concat(warns.length > 0 ? ["Not checked:"] : [], warns.map((w) => `  ${w}`)).join("\n");
 }
 
 function warnContext(warns) {
@@ -207,9 +219,9 @@ function main() {
       for (const cli of c.clis) {
         const r = runChecker({ cli, rel: c.rel, tmpFile, headCopy, top: c.top });
         if (r.high.length > 0) {
-          if (!byRel.has(c.rel)) byRel.set(c.rel, { rel: c.rel, high: [], entry: c.entry });
+          if (!byRel.has(c.rel)) byRel.set(c.rel, { rel: c.rel, high: [], lmHigh: [], entry: c.entry });
           const v = byRel.get(c.rel);
-          v.high.push(...r.high);
+          (cli === LANGUAGE_MATCH_CHECKER ? v.lmHigh : v.high).push(...r.high);
           v.entry = v.entry || c.entry;
         }
         warns.push(...r.warn);

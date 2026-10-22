@@ -106,6 +106,29 @@ _trp_heredoc_term() {
   [[ -n "$_TRP_HD_TERM" ]]
 }
 
+# _trp_end_owns_line <line> — rc 0 when only case_end's own words follow it: a case
+# owns its begin and end lines, so cutting the range can never take another command
+# with it. Allowlist, mirroring case_begin's `|| true` (re_begin) plus the #2081 C7
+# suffix `|| rc=$?` (tests/bin/fix-2081-case-unit-refcount/group-a.sh): at most one
+# `||` clause, `true` or `<name>=$?`, plus redirections (`>f`, `N>>f`, `<f`, `N>&M`,
+# `&>f`, ...) whose target is a bare word or a quoted string; anything else
+# (`|| cmd`, `|`, `;`, `&`) is rc 1.
+_trp_end_owns_line() {
+  local _TRP_CODE="" tail or_seen=0
+  local re_tok='^[[:space:]]*(\|\|[[:space:]]*(true|[A-Za-z_][A-Za-z0-9_]*=\$\?)|[0-9]*[<>]&[0-9]+|([0-9]*(>>|>|<)|&>>|&>)[[:space:]]*([^[:space:];&|<>()'\''"$`\]+|"[^"$`\]*"|'\''[^'\'']*'\''))([[:space:]]|$)'
+  _trp_scan_line "$1" || true
+  tail="${_TRP_CODE#case_end}"
+  while [[ "$tail" == *[![:space:]]* ]]; do
+    [[ "$tail" =~ $re_tok ]] || return 1
+    if [[ "${BASH_REMATCH[1]}" == '||'* ]]; then
+      [[ "$or_seen" -eq 0 ]] || return 1
+      or_seen=1
+    fi
+    tail="${tail:${#BASH_REMATCH[0]}}"
+  done
+  return 0
+}
+
 # trp_parse_case_markers <file> — analysis phase only (no repo root, no survival).
 # Sets TRP_HAS_MARKERS, TRP_CASE_COUNT, TRP_CASE_{BEGIN,END}_LINES[],
 # TRP_CASE_NAMES[], TRP_CASE_TARGETS[], _TRP_MARKER_MALFORMED,
@@ -171,7 +194,7 @@ trp_parse_case_markers() {
           _trp_parse_fail "$lineno" target; return 0
         fi
         m_kind+=(begin); m_name+=("$nm"); m_target+=("$tgt"); m_line+=("$lineno")
-      elif [[ "$line" =~ $re_end ]]; then
+      elif [[ "$line" =~ $re_end ]] && _trp_end_owns_line "$line"; then
         if [[ "$depth" -ne 0 ]]; then
           _trp_parse_fail "$lineno" depth; _TRP_MARKER_UNCERTAIN="$quote_risk"; return 0
         fi

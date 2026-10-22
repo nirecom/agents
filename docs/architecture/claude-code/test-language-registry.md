@@ -69,7 +69,7 @@ Current entries, in order:
 | `js` | supported | `*.js` | file, requires `node`, `node {wrapper} {nativePath} {minVersion}`, node wrapper `node.js`, `node` 20.0, 180 s |
 | `test-naming-convention` | recognized-only | `*.test.*`, `*.spec.*`, `*_test.*`, `test_*` | none |
 
-All four supported entries have a case-marker reader and a helper library (#2411), so a test can be written in the language of the code it tests (`rules/test.md` "Test Language").
+All four supported entries have a test case reader and a helper library (#2411), so a test can be written in the language of the code it tests (`rules/test.md` "Test Language").
 All four supported entries have `caseEmbedRules` (#2502); the pester, pytest and js parts hand each op to an analyzer child process ([test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)).
 Such differences are named in the table, not hidden in code: filling a field for another language changes no shared code (#2481).
 
@@ -123,7 +123,7 @@ An analyzer-backed `deps` op checks the analyzer's case order against those glob
 | `syntax-check` | nothing; rc 0 when the file parses, 1 with the reason on stderr otherwise. Retire's per-case cut runs it on the rewrite, which keeps the original's extension |
 | `case-count` | the number of top-level case units; rc 1 when there is none (see [test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)) |
 
-## Case-marker readers
+## test case reader
 
 The bash reader is a bash parser in process. The other three are thin bash parts that hand the file to a child reader in the language's own runtime, because only that runtime reads its syntax reliably: the PowerShell and Python readers use the language's parser, the JavaScript reader reads lines. No reader runs the test file.
 
@@ -143,6 +143,10 @@ What a case is, per language:
 | `pytest` | a module-level `test_*` function or `Test*` class | `@pytest.mark.target("<path>")` |
 | `js` | `caseBegin("<name>", "<target>");` … `caseEnd();` at column 0 | second argument |
 
+A case owns its begin and end lines, because retire's per-case cut removes those whole lines.
+In `bash`, only redirections and at most one `|| true` or `|| <name>=$?` may follow `case_end`; anything else after it (`|| <command>`, a pipe, `;`, `&&`, a lone `&`) reads `grammar`.
+In `pester`, a `Describe` case that shares its first or last line with another top-level statement reads `grammar`.
+
 ### Case target path rule
 
 A target is a repo-relative path of `A-Z a-z 0-9 . _ / -` with no leading `/` or `./` and no `..` segment, in every language.
@@ -153,7 +157,7 @@ Malformed reasons (the word in the gate's `MALFORMED_CASE_MARKER` message):
 
 | Reason | Languages | Meaning |
 |---|---|---|
-| `grammar` | all | A marker that cannot be read: bash, an unreadable marker line or a local marker definition; `pester` / `pytest`, a file that does not parse; `js`, an empty case name. Also, in every language, a case name or target holding a TAB, CR or LF, judged by the shared state rule (`_trp_reject_record_delimiters`) |
+| `grammar` | all | A marker that cannot be read: bash, an unreadable marker line, a `case_end` followed by another command, or a local marker definition; `pester`, a file that does not parse or a case that shares a line with another statement; `pytest`, a file that does not parse; `js`, an empty case name. Also, in every language, a case name or target holding a TAB, CR or LF, judged by the shared state rule (`_trp_reject_record_delimiters`) |
 | `target` | all | A target that breaks the path rule |
 | `depth` | `bash`, `js` | bash: a marker inside a block, function or group; `js`: a case opened while another is open |
 | `balance` | `bash`, `js` | Unpaired markers |

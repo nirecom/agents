@@ -461,3 +461,19 @@ test("without bin/check-self-impl.sh a self-impl body passes and the case-marker
   expectBlock(bad, "code=MISSING_CASE_MARKERS", "tests/bin/two.sh");
 });
 caseEnd();
+
+// Block-reason headings (security review LOW): bodies in feature-2502-language-match-gate/.
+const headings = require("./feature-2502-language-match-gate/reason-headings");
+const H = { mkRepo, bashBody, runHook, MB, ME };
+
+caseBegin("language-match-only-reason-heading", "hooks/block-case-markers.js");
+headings.languageMatchOnlyHeading(H);
+caseEnd();
+
+caseBegin("both-gates-reason-headings", "hooks/block-case-markers.js");
+headings.bothHeadings(H);
+caseEnd();
+
+caseBegin("case-marker-only-reason-unchanged", "hooks/block-case-markers.js");
+headings.caseMarkerOnlyUnchanged(H);
+caseEnd();

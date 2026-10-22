@@ -165,13 +165,14 @@ refuse_syntax_check() {
     "}" >>"$f"
 }
 
-# retire <checkout> <rel> <path|-> — verdict, then (PATH=<path>; "-" keeps it) removal, in
-# ONE shell. Prints VERDICT/MODE/ORPHANS, the removal's stdout, then RC=<n>.
+# retire <checkout> <rel> <path|-> [sed-expr] — verdict, then (sed -i <sed-expr> on <rel>; PATH=<path>,
+# "-" keeps it) removal, in ONE shell. Prints VERDICT/MODE/ORPHANS, the removal's stdout, then RC=<n>.
 retire() {
   run_with_timeout 120 bash -c '. "$1/bin/lib/test-retire-predicate.sh" || exit 97
 cd "$1" || exit 98
 trp_case_refcount_verdict "$1" "$2" >/dev/null
 printf "VERDICT=%s MODE=%s ORPHANS=%s\n" "$TRP_VERDICT" "$TRP_UNIT_MODE" "${TRP_ORPHAN_CASE_IDX[*]:-}"
+[[ -z "${4:-}" ]] || sed -i "$4" "$2" || exit 96
 [ "$3" = - ] || PATH="$3"
 r=0; trp_remove_orphan_cases "$1" "$2" || r=$?
 echo "RC=$r"' _ "$@" 2>"$TMPBASE/retire.err"
@@ -189,6 +190,20 @@ ps_parses() {
   run_with_timeout 120 pwsh -NoProfile -NonInteractive -File "$(np "$PS_PARSE")" "$(np "$1")" >/dev/null 2>&1
 }
 
+# survivors_kept <label> <original> <result> — <result> is <original> with only the lines of each
+# case targeting bin/gone.sh cut: every other byte (surviving cases, non-case remainder) is kept.
+survivors_kept() {
+  local cut
+  case "$2" in
+    *.py) cut='/^@pytest\.mark\.target("bin\/gone\.sh")$/,/^    assert /d' ;;
+    *.Tests.ps1) cut="/^Describe '[a-z]*' -Tag 'target:bin\/gone\.sh' {\$/,/^}\$/d" ;;
+    *.js) cut='/^caseBegin("[a-z]*", "bin\/gone\.sh");$/,/^caseEnd();$/d' ;;
+    *) cut="/^$MB \"[a-z]*\" \"bin\/gone\.sh\"\$/,/^$ME\$/d" ;;
+  esac
+  sed "$cut" "$2" >"$TMPBASE/survivors.want"
+  if cmp -s "$TMPBASE/survivors.want" "$3"; then pass "$1: surviving bytes identical to the original"; else fail "$1: surviving bytes identical to the original" "$(diff "$TMPBASE/survivors.want" "$3" | head -c 300)"; fi
+}
+
 # check_removed <label> <checkout> <rel> <parse-fn> <case-line-regex> <kept-def-regex>
 # <orphan-marker-regex> — the orphan-removal assertions every language shares: verdict, rc 0,
 # the file parses, two cases and the helper stay, the orphan's marker is gone, only <rel> is staged.
@@ -200,6 +215,7 @@ check_removed() {
   if "$parse" "$co/$rel"; then pass "$label: the rewritten file parses"; else fail "$label: the rewritten file parses" "$parse failed / $(head -c 200 "$TMPBASE/retire.err")"; fi
   assert_eq "$label cases left: $(grep -cE "$case_re" "$co/$rel"), helper defs: $(grep -cE "$def_re" "$co/$rel"), gone left: $(grep -cE "$gone_re" "$co/$rel")" \
     "$label cases left: 2, helper defs: 1, gone left: 0"
+  survivors_kept "$label" "$BASE/$rel" "$co/$rel"
   assert_eq "$label staged: $(git -C "$co" diff --cached --name-only)" "$label staged: $rel"
 }
 
@@ -267,6 +283,7 @@ if command -v uv >/dev/null 2>&1; then
   if py_parses "$CO/$PY_REL"; then pass "the rewritten file parses"; else fail "the rewritten file parses" "ast.parse failed"; fi
   got="$(grep -cE '^def (test_alpha|test_beta|helper_alpha)\(' "$CO/$PY_REL")"
   assert_eq "kept defs: $got, test_gone left: $(grep -cE 'def test_gone|target\("bin/gone.sh"\)' "$CO/$PY_REL")" "kept defs: 3, test_gone left: 0"
+  survivors_kept pytest "$BASE/$PY_REL" "$CO/$PY_REL"
   assert_eq "staged: $(git -C "$CO" diff --cached --name-only)" "staged: $PY_REL"
 else
   skip "pytest removal: uv not available"
@@ -308,6 +325,7 @@ has_line "bash removal rc 0" "$OUT" "RC=0"
 if printf '%s\n' "$OUT" | grep -q 'gone'; then pass "removal names gone"; else fail "removal names gone" "$(printf '%s' "$OUT" | tr '\n' ' ') / $(head -c 200 "$TMPBASE/retire.err")"; fi
 if bash -n "$CO/$SH_REL" 2>/dev/null; then pass "the rewritten bash file parses"; else fail "the rewritten bash file parses" "bash -n failed"; fi
 assert_eq "cases left: $(grep -c "^$MB" "$CO/$SH_REL"), gone left: $(grep -c 'bin/gone.sh"' "$CO/$SH_REL")" "cases left: 2, gone left: 0"
+survivors_kept bash "$BASE/$SH_REL" "$CO/$SH_REL"
 assert_eq "staged: $(git -C "$CO" diff --cached --name-only)" "staged: $SH_REL"
 case_end
 
@@ -351,60 +369,16 @@ if command -v uv >/dev/null 2>&1; then check_rerun pytest "$PY_REL" '^def test_'
 if command -v pwsh >/dev/null 2>&1; then check_rerun pester "$PS_REL" "^Describe '"; else skip "pester rerun: pwsh not available"; fi
 case_end
 
-# TWO: BASE with five-case samples alpha, gone, beta, lost, gamma — gone and lost target
-# bin/gone.sh, so the two orphan cases are separated by beta. Each sample keeps BASE's prologue.
-TWO="$TMPBASE/two-base"
-rm -rf "$TWO"
-cp -R "$BASE" "$TWO"
-{
-  printf '%s\n' '#!/usr/bin/env bash' "$FX_TESTS" "$FX_TAGS" 'set -u' 'source "$(dirname "$0")/../lib/harness.sh"'
-  for c in alpha:a gone:gone beta:b lost:gone gamma:a; do sh_case "${c%%:*}" "${c#*:}"; done
-} >"$TWO/$SH_REL"
-{
-  sed -n '1,/^    return 1$/p' "$BASE/$PY_REL"
-  for c in alpha:a gone:gone beta:b lost:gone gamma:a; do
-    printf '\n\n%s("bin/%s.sh")\ndef test_%s():\n    assert helper_alpha() == 1\n' '@pytest.mark.target' "${c#*:}" "${c%%:*}"
-  done
-} >"$TWO/$PY_REL"
-{
-  sed -n '1,/^}$/p' "$BASE/$PS_REL"
-  for c in alpha:a gone:gone beta:b lost:gone gamma:a; do
-    printf "\nDescribe '%s' -Tag 'target:bin/%s.sh' {\n    It 'uses alpha' { Get-Alpha | Should -Be 1 }\n}\n" "${c%%:*}" "${c#*:}"
-  done
-} >"$TWO/$PS_REL"
-{
-  sed -n '1,/^}$/p' "$BASE/$JS_REL"
-  for c in alpha:a gone:gone beta:b lost:gone gamma:a; do
-    printf '\ncaseBegin("%s", "bin/%s.sh");\ntest("%s", () => {\n  assert.strictEqual(helperAlpha(), 1);\n});\ncaseEnd();\n' "${c%%:*}" "${c#*:}" "${c%%:*}"
-  done
-} >"$TWO/$JS_REL"
-git -C "$TWO" add -A >/dev/null
-git -C "$TWO" commit -q -m two-orphans
-
-# check_two_orphans <label> <rel> <parse-fn> <case-line-regex> <name-prefix> — both
-# non-adjacent orphans are cut and named, the three survivors stay, the file parses and is staged.
-check_two_orphans() {
-  local label="$1" rel="$2" parse="$3" case_re="$4" pfx="$5" co out
-  co="$TMPBASE/two-$label"
-  rm -rf "$co"
-  cp -R "$TWO" "$co"
-  out="$(retire "$co" "$rel" -)"
-  has_line "$label: two orphans found in case mode" "$out" "VERDICT=partial-orphan MODE=case ORPHANS=1 3"
-  has_line "$label: removal rc 0" "$out" "RC=0"
-  has_line "$label: removal names ${pfx}gone" "$out" "${pfx}gone"
-  has_line "$label: removal names ${pfx}lost" "$out" "${pfx}lost"
-  if "$parse" "$co/$rel"; then pass "$label: the rewritten file parses"; else fail "$label: the rewritten file parses" "$parse failed / $(head -c 200 "$TMPBASE/retire.err")"; fi
-  assert_eq "$label case lines: $(grep -E "$case_re" "$co/$rel" | grep -oE "(alpha|gone|beta|lost|gamma)" | tr '\n' ' ')" \
-    "$label case lines: alpha beta gamma "
-  assert_eq "$label staged: $(git -C "$co" diff --cached --name-only)" "$label staged: $rel"
-}
-
-case_begin "two-non-adjacent-orphans-removed" "bin/lib/test-retire-predicate/orphan-removal.sh"
-check_two_orphans bash "$SH_REL" bash_parses "^$MB " ""
-check_two_orphans js "$JS_REL" js_parses '^caseBegin\(' ""
-if command -v uv >/dev/null 2>&1; then check_two_orphans pytest "$PY_REL" py_parses '^def test_' test_; else skip "pytest two orphans: uv not available"; fi
-if command -v pwsh >/dev/null 2>&1; then check_two_orphans pester "$PS_REL" ps_parses "^Describe '" ""; else skip "pester two orphans: pwsh not available"; fi
-case_end
+# The remaining cases live in the sibling suite directory (file split at the size limit).
+GROUP_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2502-retire-per-case"
+for g in multi-orphan-and-cut-guards js-esm-module; do
+  if [ -f "$GROUP_DIR/$g.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$GROUP_DIR/$g.sh"
+  else
+    fail "dispatch: group file missing: $g.sh" "$GROUP_DIR"
+  fi
+done
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

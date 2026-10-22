@@ -36,11 +36,15 @@ The per-case cut works on line ranges in every language and does not use `deps`,
 
 ## Options
 
-`--embed-cases [--band-size N] [--order frequency|priority] [--dry-run] [--fix-headers] [--apply] [--format text]`, and the skill-only `--embed-apply <workdir>`.
+`--embed-cases [--band-size N | --only-file <relpath>] [--order frequency|priority] [--dry-run] [--fix-headers] [--apply] [--format text]`, and the skill-only `--embed-apply <workdir>`.
+
+`--only-file <relpath>` narrows stage 1 to one repo-relative file instead of a band; stages 2 and 3 are unchanged.
 
 | Combination | Result |
 |---|---|
 | `--embed-cases` + `--fix-headers` | Accepted; `NOTE: --fix-headers is subsumed by --embed-cases (selected files only)` on stderr |
+| `--only-file` + `--band-size` or `--order` | exit 2 (`has no meaning with --only-file`) |
+| `--only-file` without `--embed-cases`, given twice, or with no value | exit 2 |
 | `--embed-cases` + `--dup-groups`, `--stale-months`, `--offline`, `--format json` | exit 2 |
 | `--band-size` / `--order` without `--embed-cases` | exit 2 |
 | `--order` other than `frequency` / `priority`; an invalid band size (`sweep_band_count`) | exit 2 |
@@ -71,6 +75,16 @@ Order (`--order`, default `frequency`):
 The band is the first N (`--band-size`, default 5, validated by `sweep_band_count`) non-skipped files of that order. Only that one band is processed per run.
 
 Output: `BAND\t<idx>\t<relpath>\t<metric>` per band file (`runs=<n>,churn=<n>` or `priority=<n>`) and `SKIP\t<relpath>\t<reason>` per skipped candidate. `--dry-run` stops there and writes nothing.
+
+With `--only-file <relpath>`, ordering and the band are skipped, and the one file goes through the same skip reasons:
+
+| Case | Exit | Output |
+|---|---|---|
+| Embeddable | 0 | `BAND\t1\t<relpath>\tselected=only-file`, then the workdir as usual |
+| A candidate with a skip reason above | 1 | `SKIP\t<relpath>\t<reason>`, plus a `NOTE: ... no workdir written` line on stderr, also under `--dry-run` |
+| Not repo-relative, missing, not directly in `tests/<cat>/`, no matching language, or a language with no test case reader | 2 | `ERROR: embed-cases: --only-file ...` |
+
+Exit 2 marks a wrong request: it is the same boundary stage 3 uses to refuse a non-candidate worklist row. Exit 1 means the request is valid but the file has nothing to embed now.
 
 ## Workdir
 
