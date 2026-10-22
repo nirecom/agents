@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/derive-cli-output-mode-cases.sh
 # Tests: bin/workflow/derive-complexity-level, hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, cli, output-mode, arg-parsing, table-driven, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 
 # Why: derive-complexity-level has THREE output modes whose selection is decided
 # by the ORDER of the checks in main(), not by any rejection of conflicting

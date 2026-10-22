@@ -182,6 +182,9 @@ case "$ARGS" in
 esac
 MOCK_EOF
     chmod +x "$TMP/mock-bin/gh"
+    # A gitlab.com origin routes to glab; the mock keeps the real glab (and the run-all command guard) out.
+    printf '%s\n' '#!/bin/bash' 'echo "MOCK GLAB: not available" >&2' 'exit 1' > "$TMP/mock-bin/glab"
+    chmod +x "$TMP/mock-bin/glab"
     export PATH="$TMP/mock-bin:$PATH"
     export GH_MOCK_ARGS_LOG="$TMP/gh-args.log"
     : > "$GH_MOCK_ARGS_LOG"

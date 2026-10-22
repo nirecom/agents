@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/expiry-cases.sh
 # Tests: bin/lib/run-all-durations-consolidate.sh
 # Tags: tests, bin, ledger, durations, consolidate, retention, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n20 (1)-(8) (#2079 S7b): the 30-day retention judged on the winning value's provenance,
 # computed from the stamp (calendar arithmetic, not mtime), and the base's `#run` layout.
 

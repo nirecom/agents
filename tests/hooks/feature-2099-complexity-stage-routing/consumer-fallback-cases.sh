@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/consumer-fallback-cases.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, fallback, judgment-parsing, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh AFTER
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints AFTER
 # consumer-orchestration-cases.sh. #2460: the consumer fallback is the shared
 # judge procedure (skills/_shared/jev-two-stage-judge.md), statically pinned by
 # consumers-static.sh; the CLI-level contracts the procedure relies on stay here.

@@ -1,8 +1,8 @@
 #!/bin/bash
 # tests/skills/TL3-complexity-stage-routing-live-judge.sh
-# Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level, tests/hooks/feature-2099-complexity-stage-routing.sh
+# Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level, tests/hooks/feature-2099-complexity-stage-routing/_lib.sh
 # Tags: complexity, routing, judge, live-agent, prompt-injection, threshold, TL3, run-e2e, scope:common
-# Serial: drives the #2099 suite, which writes into its own pinned WORKFLOW_STATE_DIR
+# Serial: spawns real `claude -p` live-agent judges (slow, rate-limited); its state dirs are already mktemp-unique
 # RUN_TL3-ON lane for #2099. The suite's live-agent cases (PI-5, JT-*) carry their
 # own in-function gate and SKIP on an ordinary run; `bin/select-tests.sh` picks this
 # file up for the expensive tier by its `TL3-` prefix, and it forbids those cases to skip.
@@ -21,8 +21,12 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
-SUITE="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2099-complexity-stage-routing.sh"
-[ -f "$SUITE" ] || { echo "FAIL: the #2099 suite is missing at $SUITE"; exit 1; }
+# The #2099 suite is split into group entrypoints (#2723): run every one of them.
+SUITES=()
+for _s in "$SCRIPT_CHECKOUT_ROOT"/tests/hooks/feature-2099-complexity-stage-routing*.sh; do
+    [ -f "$_s" ] && SUITES+=("$_s")
+done
+[ "${#SUITES[@]}" -gt 0 ] || { echo "FAIL: the #2099 suite is missing under $SCRIPT_CHECKOUT_ROOT/tests/hooks"; exit 1; }
 
 ERRORS=0
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -33,12 +37,16 @@ pass() { echo "PASS: $1"; }
 OUT_FILE="$(mktemp)"
 trap 'rm -f "$OUT_FILE"' EXIT
 RC=0
-if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" ]; then
-    D2099_REQUIRE_LIVE=1 bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 3600 \
-        bash "$SUITE" > "$OUT_FILE" 2>&1 || RC=$?
-else
-    D2099_REQUIRE_LIVE=1 bash "$SUITE" > "$OUT_FILE" 2>&1 || RC=$?
-fi
+for SUITE in "${SUITES[@]}"; do
+    SUITE_RC=0
+    if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" ]; then
+        D2099_REQUIRE_LIVE=1 bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 3600 \
+            bash "$SUITE" >> "$OUT_FILE" 2>&1 || SUITE_RC=$?
+    else
+        D2099_REQUIRE_LIVE=1 bash "$SUITE" >> "$OUT_FILE" 2>&1 || SUITE_RC=$?
+    fi
+    [ "$RC" -eq 0 ] && RC=$SUITE_RC
+done
 
 # Live case ids this lane is accountable for — a vanished id must break this lane,
 # not quietly reduce coverage. JT-6..10 are per-signal fixtures; JT-11..14 the

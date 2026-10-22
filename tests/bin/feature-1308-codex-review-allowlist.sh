@@ -15,6 +15,8 @@ ERRORS=0
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=../lib/harness.sh
 . "$AGENTS_WORKTREE/tests/lib/harness.sh"
+# shellcheck source=../lib/fixture-template.sh
+. "$AGENTS_WORKTREE/tests/lib/fixture-template.sh"
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
@@ -30,9 +32,11 @@ run_with_timeout() {
 # ---------------------------------------------------------------------------
 # Per-test setup: creates a mock agents checkout with required binaries
 # ---------------------------------------------------------------------------
-setup_mock_env() {
-  local test_tmp="$1"
-  local agents_dir="$test_tmp/agents"
+#
+# #2723: the tree is built once into MOCK_ENV_TEMPLATE (after the state pins below) and each
+# case copies it; the conditional cp's below are unchanged, only moved into the one-time build.
+build_mock_env_tree() {
+  local agents_dir="$1"
   mkdir -p "$agents_dir/bin" "$agents_dir/rules"
   echo "# core principles stub" > "$agents_dir/rules/core-principles.md"
 
@@ -84,7 +88,13 @@ EOF
   cp "$AGENTS_WORKTREE/bin/lib/codex-review-loop/ledger-verdict.sh" \
      "$agents_dir/bin/lib/codex-review-loop/ledger-verdict.sh"
   cp "$AGENTS_WORKTREE"/bin/lib/codex-review-loop/*.sh "$agents_dir/bin/lib/codex-review-loop/"
+}
 
+# setup_mock_env <test_tmp> — copy the template to <test_tmp>/agents and echo that dir.
+setup_mock_env() {
+  local test_tmp="$1"
+  local agents_dir="$test_tmp/agents"
+  fixture_template_copy "$MOCK_ENV_TEMPLATE" "$agents_dir" || return 1
   echo "$agents_dir"
 }
 
@@ -171,14 +181,9 @@ ${body}
 # Group B helper: invoke the REAL review-plan-codex with a given format
 REAL_REVIEW_PLAN_CODEX="$AGENTS_WORKTREE/bin/review-plan-codex"
 
-invoke_real_review_plan_codex() {
-  local fmt="$1"
-  local sid="$2"
-  local plans_dir="$3"
-  local draft_file="$4"
-  local tmp_wrapper
-  tmp_wrapper=$(mktemp -d)
-  local mock_dir="$tmp_wrapper/mock"
+# REAL_RPC_TEMPLATE: the real review-plan-codex plus its three lib files, built once (#2723).
+build_real_rpc_tree() {
+  local mock_dir="$1"
   mkdir -p "$mock_dir/bin/lib"
   cp "$REAL_REVIEW_PLAN_CODEX" "$mock_dir/bin/review-plan-codex"
   chmod +x "$mock_dir/bin/review-plan-codex"
@@ -191,6 +196,17 @@ invoke_real_review_plan_codex() {
   if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$mock_dir/bin/lib/cli-exec-guard.sh"
   fi
+}
+
+invoke_real_review_plan_codex() {
+  local fmt="$1"
+  local sid="$2"
+  local plans_dir="$3"
+  local draft_file="$4"
+  local tmp_wrapper
+  tmp_wrapper=$(mktemp -d)
+  local mock_dir="$tmp_wrapper/mock"
+  fixture_template_copy "$REAL_RPC_TEMPLATE" "$mock_dir" || return 1
   run_with_timeout "$mock_dir/bin/review-plan-codex" \
     --format "$fmt" \
     --session-id "$sid" \
@@ -236,6 +252,12 @@ export AGENTS_MAIN_ROOT="$STATE_ROOT/agents-main"
 printf '#!/usr/bin/env bash\nexec bash "%s/bin/get-config-var" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$STATE_ROOT/path-bin/get-config-var"
 chmod +x "$STATE_ROOT/path-bin/get-config-var"
 export PATH="$STATE_ROOT/path-bin:$PATH"
+
+# One-time fixture builds (#2723); every case below copies these instead of rebuilding.
+MOCK_ENV_TEMPLATE="$STATE_ROOT/mock-env-template"
+build_mock_env_tree "$MOCK_ENV_TEMPLATE"
+REAL_RPC_TEMPLATE="$STATE_ROOT/real-rpc-template"
+build_real_rpc_tree "$REAL_RPC_TEMPLATE"
 
 case_begin "safe-state-path-preflight" "bin/run-codex-review-loop"
 # The loop sources bin/lib/safe-state-path.sh (#2434 rename of safe-plans-path.sh);
