@@ -63,8 +63,3 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 - **Definition**: The main worktree of the repository a tool operates on, which need not be the agents repository; an ordinary variable, never an environment variable.
 - **Related**: [architecture/claude-code/root-names.md](../architecture/claude-code/root-names.md)
-
-### turn
-
-- **Definition**: One user utterance and the one response to it; hooks that fire per turn (`UserPromptSubmit`, `Stop`) count in turns, not in workflow steps.
-- **Related**: [architecture/claude-code/settings/hooks.md](../architecture/claude-code/settings/hooks.md)
