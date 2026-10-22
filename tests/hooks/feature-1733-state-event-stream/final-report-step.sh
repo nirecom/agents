@@ -3,7 +3,7 @@
 # Tests: hooks/workflow-state/state-io/core.js, hooks/workflow-mark/mark-step-handler.js, hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
 # Tags: workflow-state, event-stream, final-report, valid-steps, terminal-steps, sentinel-parsing, scope:issue-specific, pwsh-not-required, TL2
 
-# final_report is VALID_STEPS' terminal boundary and also the commit gate's list: the step-table commitGate column (#2527) / TERMINAL_STEPS guard it.
+# final_report is VALID_STEPS' terminal boundary and also the commit gate's list: the step table commitGate column (#2527) / TERMINAL_STEPS guard it.
 # The MARK_STEP regex yields final_report only by backtracking and shares a prefix with pre_final_report_gate; both are parsed.
 # TL3 gap: hook registration and a real `git commit` refusal are unverified (F11 spawns the gate directly).
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: hook-registration.
@@ -90,7 +90,7 @@ echo "== F5: final_report is a non-gate step, so it cannot block a commit =="
 if run_case "F5/non-gate-steps-exempt"; then
     next_sid
     # The step table's commitGate column replaced NON_GATE_STEPS (#2527): a step added to
-    # VALID_STEPS without "exempt" turns every commit into a hard block. run_tests is the
+    # VALID_STEPS without "exempt" makes every commit into a hard block. run_tests is the
     # "required" control so an all-exempt table cannot pass.
     nodejs "$SID" '
 const T = require("./hooks/workflow-state/step-table");
@@ -102,8 +102,11 @@ fi
 echo "== F6: final_report closes the stream — nothing is appended for it by default =="
 if run_case "F6/not-auto-completed"; then
     next_sid
-    nodejs "$SID" "$PRE$APPROVE_GATED_JS"'
-for (const s of ["workflow_init", "clarify_intent", "run_tests", "cleanup"]) S.markStep(sid, s, "complete");
+    nodejs "$SID" "$PRE$APPROVE_GATED_JS$GLOSSARY_JS"'
+glossary_record(sid, "clarify_intent");
+in_glossary_repo(() => {
+  for (const s of ["workflow_init", "clarify_intent", "run_tests", "cleanup"]) S.markStep(sid, s, "complete");
+});
 const st = S.readState(sid);
 console.log("projected=" + st.steps.final_report.status +
             " events=" + rd().events.filter((e) => e.step === "final_report").length);
@@ -150,12 +153,14 @@ run_next_step() {
 
 # Drives a session to the state the dispatcher treats as finished: every gate step
 # complete, every skippable step skipped, final_report untouched.
-SEED_DONE_JS='
+# #2529: review_docs is the one glossary-gated step this seed completes, so it records first.
+SEED_DONE_JS="$GLOSSARY_JS"'
 S.updateTopLevel(sid, (st) => { st.deliverable_type = "wf-code"; st.closes_issues = [1733]; });
 ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests",
  "review_security", "cleanup"].forEach((s) => S.markStep(sid, s, "skipped", { skip_reason: "fixture" }));
-["workflow_init", "branching_complete", "write_code", "run_tests", "docs", "review_docs",
- "push_branch", "user_verification", "merge_to_main", "pre_final_report_gate"].forEach((s) => S.markStep(sid, s, "complete"));
+glossary_record(sid, "review_docs");
+in_glossary_repo(() => ["workflow_init", "branching_complete", "write_code", "run_tests", "docs", "review_docs",
+ "push_branch", "user_verification", "merge_to_main", "pre_final_report_gate"].forEach((s) => S.markStep(sid, s, "complete")));
 console.log("SEEDED " + S.readState(sid).steps.final_report.status);
 '
 
@@ -292,12 +297,14 @@ if run_case "F11/gate-live-verdicts"; then
         git -C "$GATE_REPO" add src/app.js >/dev/null 2>&1
         GATE_REPO_JSON="$(json_path "$GATE_REPO")"
         GATE_PAYLOAD="$TMPROOT/gate-payload.json"
+        # #1633: the gate checks only commits in the session-start repo, so the seed creates state there.
+        GATE_SEED_ENV="CLAUDE_PROJECT_DIR=$(native_path "$GATE_REPO")"
 
         # (a) POSITIVE CONTROL — every enforceable step satisfied, final_report still
         #     pending. its "exempt" commitGate lets the gate approve.
         next_sid
         SID_F11A="$SID"
-        nodejs "$SID_F11A" "$PRE$SEED_DONE_JS"
+        nodejs_env "$GATE_SEED_ENV" "$SID_F11A" "$PRE$SEED_DONE_JS"
         assert_eq "F11a/seed" "SEEDED pending" "$NODE_OUT"
         glossary_check_record "$SID_F11A" "$GATE_REPO"  # #2529: staged src/app.js needs a current glossary_check
         gate_payload "$SID_F11A" "$GATE_REPO_JSON" "$GATE_PAYLOAD"
@@ -321,11 +328,12 @@ if run_case "F11/gate-live-verdicts"; then
         #     resolve it behind the test's back. The gate must block and name it.
         next_sid
         SID_F11B="$SID"
-        nodejs "$SID_F11B" "$PRE$SEED_DONE_JS"
+        nodejs_env "$GATE_SEED_ENV" "$SID_F11B" "$PRE$SEED_DONE_JS"
         assert_eq "F11b/seed" "SEEDED pending" "$NODE_OUT"
         nodejs "$SID_F11B" "$PRE"'S.markStep(sid, "run_tests", "pending");
 console.log("DEMOTED " + S.readState(sid).steps.run_tests.status);'
         assert_eq "F11b/demote" "DEMOTED pending" "$NODE_OUT"
+        glossary_check_record "$SID_F11B" "$GATE_REPO"  # #2529: same record as F11a, so only run_tests differs
         gate_payload "$SID_F11B" "$GATE_REPO_JSON" "$GATE_PAYLOAD"
         run_gate "$GATE_PAYLOAD"
         assert_eq "F11b/gate-exit-code" "0" "$GATE_RC"
