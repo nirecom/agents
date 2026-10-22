@@ -117,6 +117,11 @@ HW_STATE_EOF
     hw_state pending
     HW_GATE_BLOCK="$(hw_gate)"
     hw_state complete
+    # #2529: the staged src/a.js needs a current glossary_check for the all-complete control.
+    # shellcheck source=tests/lib/glossary-check-record.sh
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+    ( export WORKFLOW_STATE_DIR="$HW_WF" WORKFLOW_PLANS_DIR="$HW_PLANS"
+      glossary_check_record hwsid2037 "$HW_REPO" )
     HW_GATE_OK="$(hw_gate)"
 
     if printf '%s' "$HW_GATE_BLOCK" | grep -q '"decision":"block"' \

@@ -59,6 +59,15 @@ function confirmViaHook(sid, step) {
   try { out = JSON.parse(String(r.stdout || "").trim().split("\n").pop() || "{}"); } catch (_) { out = {}; }
   return String(out.additionalContext || "") + String(r.stderr || "");
 }
+// complete(sid, step) — #2529: a gated completion also needs a current glossary_check record,
+// seeded first (bound to a throwaway fixture repo) so each case keeps judging the approval alone.
+const { completeWithRecord } = require("../lib/glossary-check-record");
+const GLOSSARY_REPO = path.join(work, "glossary-repo");
+fs.mkdirSync(GLOSSARY_REPO, { recursive: true });
+gitInit(GLOSSARY_REPO);
+function complete(sid, step) {
+  completeWithRecord(sid, step, GLOSSARY_REPO, (...a) => WS().markStep(...a));
+}
 const approvalOf = (sid, step) => ((WS().readState(sid) || {}).plan_approvals || {})[step] || null;
 const statusOf = (sid, step) => (((WS().readState(sid) || {}).steps || {})[step] || {}).status;
 
@@ -149,7 +158,7 @@ F.run("downstream outline re-approval", () => {
   F.check("message names the hashed upstream file", msg.includes(`hashed ${U}-outline.md (owned by session upstream)`), msg);
   const v = CA().evaluateCompletionApproval(D, "outline", WS().readState(D));
   F.check("evaluation approved", v.approved === true, JSON.stringify(v));
-  WS().markStep(D, "outline", "complete");
+  complete(D, "outline");
   F.check("markStep(D, outline, complete) persists", statusOf(D, "outline") === "complete", statusOf(D, "outline"));
 });
 caseEnd();
@@ -161,7 +170,7 @@ F.run("downstream intent/detail re-approval", () => {
     const msg = confirm(D, step);
     const rec = approvalOf(D, step);
     F.check(`${step}: artifact_session_id is U`, rec && rec.artifact_session_id === U, msg);
-    WS().markStep(D, step, "complete");
+    complete(D, step);
     F.check(`${step}: completes in D`, statusOf(D, step) === "complete", statusOf(D, step));
   }
 });
@@ -205,7 +214,7 @@ F.run("stale upstream-bound approval", () => {
   F.check("outline stays not complete", statusOf(D, "outline") !== "complete", statusOf(D, "outline"));
   confirm(D, "outline");
   F.check("re-approval binds to D", (approvalOf(D, "outline") || {}).artifact_session_id === D, JSON.stringify(approvalOf(D, "outline")));
-  WS().markStep(D, "outline", "complete");
+  complete(D, "outline");
   F.check("completes after re-approval", statusOf(D, "outline") === "complete", statusOf(D, "outline"));
 });
 caseEnd();
@@ -274,7 +283,7 @@ F.run("regular session regression", () => {
     const msg = confirm(S, step);
     F.check(`${step}: exact legacy message`, msg === `workflow-mark: ${step} approval recorded (source: confirm-sentinel, hash-status: recorded).`, msg);
     F.check(`${step}: artifact_session_id is S`, (approvalOf(S, step) || {}).artifact_session_id === S, JSON.stringify(approvalOf(S, step)));
-    WS().markStep(S, step, "complete");
+    complete(S, step);
     F.check(`${step}: completes`, statusOf(S, step) === "complete", statusOf(S, step));
   }
 });

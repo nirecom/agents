@@ -1,0 +1,53 @@
+#!/usr/bin/env node
+"use strict";
+// bin/check-glossary-ledger-grant --session <sid> --format <format> --norm <norm> --discrim <D>
+// (#2529) — does the GLOSSARY_ACCEPTED ledger grant {norm, discrim} exist on the glossary_check
+// record of the stage that owns <format>? The concern-ledger `accept` path asks this CLI so the
+// state shape never leaks into shell. Exit 0 granted, 1 not granted (or the format has no
+// stage), 2 usage / invalid session id / state read failure.
+
+const path = require("path");
+const { SESSION_ID_VALID_RE, readRawState, readState } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io"));
+const { normalizeTerm } = require(path.join(__dirname, "..", "hooks", "lib", "glossary-term"));
+const { STAGE_STEP, stageOfLedgerFormat } = require(path.join(__dirname, "..", "hooks", "workflow-state", "glossary-check", "scope"));
+const { RECORD_KEY } = require(path.join(__dirname, "..", "hooks", "workflow-state", "glossary-check", "record"));
+
+const USAGE = "usage: check-glossary-ledger-grant --session <sid> --format <format> --norm <norm> --discrim <D>";
+const fail = (code, msg) => {
+  process.stderr.write("check-glossary-ledger-grant: " + msg + "\n");
+  process.exit(code);
+};
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    const m = /^--(session|format|norm|discrim)$/.exec(argv[i]);
+    if (!m || argv[i + 1] === undefined || out[m[1]] !== undefined) fail(2, USAGE);
+    out[m[1]] = argv[i + 1];
+  }
+  for (const k of ["session", "format", "norm", "discrim"]) if (!out[k]) fail(2, USAGE);
+  return out;
+}
+
+const a = parseArgs(process.argv.slice(2));
+if (!SESSION_ID_VALID_RE.test(a.session)) fail(2, "invalid session id: " + a.session);
+const stage = stageOfLedgerFormat(a.format);
+if (!stage) {
+  process.stdout.write("NOT_GRANTED (format " + a.format + " belongs to no glossary stage)\n");
+  process.exit(1);
+}
+let state;
+try {
+  // readState folds a corrupt file into null; readRawState throws on it, so probe first.
+  readRawState(a.session);
+  state = readState(a.session);
+} catch (e) {
+  fail(2, "cannot read state of " + a.session + ": " + (e && e.message ? e.message : String(e)));
+}
+const entry = state && state.steps && state.steps[STAGE_STEP[stage]];
+const rec = (entry && entry[RECORD_KEY]) || {};
+const grants = Array.isArray(rec.ledger_grants) ? rec.ledger_grants : [];
+const norm = normalizeTerm(a.norm);
+const hit = grants.some((g) => g && g.norm === norm && g.discrim === a.discrim);
+process.stdout.write((hit ? "GRANTED" : "NOT_GRANTED") + "\n");
+process.exit(hit ? 0 : 1);

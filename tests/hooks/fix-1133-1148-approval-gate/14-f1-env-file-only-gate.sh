@@ -2,16 +2,11 @@
 # Tests: hooks/lib/plan-confirm-flag.js, hooks/lib/load-env.js, hooks/workflow-state/completion-approval.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, outline, detail, confirm-flag, security, scope:common
 # (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
-# ===========================================================================
-# G14 (F1): the CONFIRM_<STAGE>=off waiver is resolved from the .env FILE only.
-# bin/workflow/next-step is spawnable by the Bash tool, so an inline
-# `CONFIRM_OUTLINE=off node bin/workflow/next-step ...` prefix is attacker/model
-# controlled. evaluateCompletionApproval must therefore consult
-# isConfirmOffForStageFromFile (parsed .env contents) and NEVER process.env.
-# fail-before-fix: the pre-fix gate called isConfirmOffForStage (process.env), so
-# the inline prefix below waived the gate and minted a confirm-flag-off record.
-# Both gated members (outline AND detail) are exercised — CPR-ORTH.
-# ===========================================================================
+# G14 (F1): the CONFIRM_<STAGE>=off waiver is resolved from the .env FILE only — an inline
+# `CONFIRM_OUTLINE=off node bin/workflow/next-step` prefix is model-controlled, so
+# evaluateCompletionApproval must use isConfirmOffForStageFromFile, NEVER process.env.
+# fail-before-fix: the pre-fix gate read process.env, so the inline prefix minted a
+# confirm-flag-off record. Both gated members (outline AND detail) are exercised — CPR-ORTH.
 
 echo ""
 echo "=== G14 (F1): CONFIRM_<STAGE>=off waiver comes from the .env file, not process.env ==="
@@ -61,10 +56,11 @@ check "G14b2. detail not persisted complete by the refused markStep" \
 SID_C="g14c-$$"
 write_state "$SID_C" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete"}')"
 touch "$PLANS_DIR/${SID_C}-outline.md"
+seed_glossary "$SID_C" outline
 
-WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
+( cd "$GLOSSARY_REPO" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
   AGENTS_MAIN_ROOT="$CFG_ROOT_OFF" CONFIRM_OUTLINE=on \
-  run_with_timeout node "$NEXT_STEP" --session "$SID_C" >/dev/null 2>&1 || true
+  run_with_timeout node "$NEXT_STEP" --session "$SID_C" >/dev/null 2>&1 ) || true
 
 check "G14c. config-file CONFIRM_OUTLINE=off waives the gate (outline completes)" \
   "complete" "$(read_state_status "$SID_C" outline)"
@@ -73,8 +69,11 @@ check "G14c2. waiver is stamped as a confirm-flag-off audit record" \
 
 SID_CD="g14d-$$"
 write_state "$SID_CD" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code '{"plan_approvals":{"outline":{"source":"reset-sentinel","artifact_sha256":null,"artifact_hash_status":"not-applicable"}}}')"
+# #2529: the detail glossary_check scans the detail plan, so the waived completion needs one.
+touch "$PLANS_DIR/${SID_CD}-detail.md"
+seed_glossary "$SID_CD" detail
 
-OUT_CD="$(mark_probe "$CFG_ROOT_OFF" on on "$SID_CD" detail)"
+OUT_CD="$(in_glossary_repo mark_probe "$CFG_ROOT_OFF" on on "$SID_CD" detail)"
 check "G14d. config-file CONFIRM_DETAIL=off waives the detail gate (no throw)" \
   "NOERROR" "$OUT_CD"
 check "G14d2. detail persisted complete under the file-sourced waiver" \

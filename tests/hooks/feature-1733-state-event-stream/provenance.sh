@@ -24,8 +24,8 @@ MKV1="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mk-v1.js"
 echo "== G1: an ordinary markStep complete is genuine (observed) =="
 if run_case "G1/observed-is-genuine"; then
     next_sid
-    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
-S.markStep(sid, GENUINE_SUBJECT, "complete");
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS$GLOSSARY_JS"'
+complete_gated(sid, GENUINE_SUBJECT);
 plan_artifact(sid, false);
 console.log("genuine=" + genuine(sid));
 '
@@ -37,11 +37,12 @@ if run_case "G2/declared-is-genuine"; then
     next_sid
     # #2709: no sanctioned reset-sentinel token any more — a real approval backs the
     # declared complete, and the artifact it wrote is removed afterwards (S3 needs it absent).
-    nodejs "$SID" "$PRE$GENUINE_JS"'
+    nodejs "$SID" "$PRE$GENUINE_JS$GLOSSARY_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
 require("./tests/lib/plan-approval-fixture").approveLive(sid, GENUINE_SUBJECT);
-E.appendEvents(sid, [{ kind: "step_status", step: GENUINE_SUBJECT, status: "complete",
-                       provenance: "declared", origin: "reset-sentinel" }]);
+glossary_record(sid, GENUINE_SUBJECT);
+in_glossary_repo(() => E.appendEvents(sid, [{ kind: "step_status", step: GENUINE_SUBJECT, status: "complete",
+                       provenance: "declared", origin: "reset-sentinel" }]));
 plan_artifact(sid, false);
 console.log("genuine=" + genuine(sid));
 '
@@ -51,11 +52,12 @@ fi
 echo "== G3: a backfilled complete is NOT genuine =="
 if run_case "G3/backfilled-not-genuine"; then
     next_sid
-    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS$GLOSSARY_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
-E.appendEvents(sid, [{ kind: "step_status", step: GENUINE_SUBJECT, status: "complete",
+glossary_record(sid, GENUINE_SUBJECT);
+in_glossary_repo(() => E.appendEvents(sid, [{ kind: "step_status", step: GENUINE_SUBJECT, status: "complete",
                        provenance: "backfilled", origin: "session-inherit",
-                       inherited_from: "old-sid" }]);
+                       inherited_from: "old-sid" }]));
 plan_artifact(sid, false);
 console.log("genuine=" + genuine(sid) +
             " projects_complete=" + (cur().steps[GENUINE_SUBJECT].status === "complete"));
@@ -67,9 +69,9 @@ fi
 echo "== G4: the LATEST step_status decides, not any earlier one =="
 if run_case "G4/latest-event-decides"; then
     next_sid
-    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS$GLOSSARY_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
-S.markStep(sid, GENUINE_SUBJECT, "complete");
+complete_gated(sid, GENUINE_SUBJECT);
 plan_artifact(sid, false);
 const genuineFirst = genuine(sid);
 E.appendEvents(sid, [{ kind: "step_status", step: GENUINE_SUBJECT, status: "complete",
@@ -161,8 +163,8 @@ if run_case "G9/adapter-control"; then
     # WORKFLOW_PLANS_DIR empty. Restoring the artifact must flip the verdict, and
     # removing it again must flip it back — proving the pin is load-bearing and that
     # the observation is attributable to the classifier.
-    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS"'
-S.markStep(sid, GENUINE_SUBJECT, "complete");
+    nodejs "$SID" "$PRE$GENUINE_JS$APPROVE_GATED_JS$GLOSSARY_JS"'
+complete_gated(sid, GENUINE_SUBJECT);
 plan_artifact(sid, false);
 const noArtifact = genuine(sid);
 plan_artifact(sid, true);

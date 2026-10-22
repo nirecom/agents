@@ -28,6 +28,12 @@ const WS = req("hooks/workflow-state.js");
 const CA = req("hooks/workflow-state/completion-approval.js");
 const INH = req("hooks/workflow-state/inheritance");
 const STEPS = WS.VALID_STEPS;
+// #2529: a gated completion also needs a current glossary_check record; seeded right before
+// each markStep so the cases keep judging the approval alone.
+const { completeWithRecord } = require("../lib/glossary-check-record");
+function completeStep(sid, step) {
+  completeWithRecord(sid, step, path.join(SCRATCH, "repo"), WS.markStep);
+}
 
 // ---- reporting -------------------------------------------------------------
 let failures = 0;
@@ -224,7 +230,7 @@ let threw = null;
 try {
   CA.recordPlanApproval(D, "outline", { source: "confirm-sentinel", reason: "re-approved downstream",
     artifactSha: CA.computeArtifactSha(U, "outline"), artifactHashStatus: "recorded", artifactSessionId: U });
-  WS.markStep(D, "outline", "complete");
+  completeStep(D, "outline");
 } catch (e) { threw = `${e.code || e.name}: ${e.message}`; }
 check("re-approve: CONFIRM_OUTLINE re-approval lets markStep complete outline", threw === null, threw);
 check("re-approve: outline complete on disk", rawStatus(D, "outline") === "complete", rawStatus(D, "outline"));
@@ -238,7 +244,7 @@ inherit(D, U);
 check("off waiver: a stale confirm-sentinel record still reverts outline under CONFIRM_OUTLINE=off",
   annot(D, "outline", "inherit_revert_reason") === "approval:artifact-hash-mismatch", annot(D, "outline", "inherit_revert_reason"));
 let threw = null;
-try { WS.markStep(D, "outline", "complete"); } catch (e) { threw = `${e.code || e.name}: ${e.message}`; }
+try { completeStep(D, "outline"); } catch (e) { threw = `${e.code || e.name}: ${e.message}`; }
 check("off waiver: after the record is revoked, markStep outline completes", threw === null, threw);
 const last = evs(D).filter((e) => e.kind === "plan_approval" && e.step === "outline").pop();
 check("off waiver: completion stamped confirm-flag-off", !!last && last.source === "confirm-flag-off", JSON.stringify(last));

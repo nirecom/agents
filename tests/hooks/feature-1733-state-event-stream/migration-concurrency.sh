@@ -49,8 +49,8 @@ console.log("A:DONE");
     # Wait for A to be holding its snapshot.
     for _ in $(seq 1 300); do [ -f "$TMPROOT/bar-a" ] && break; sleep 0.1; done
 
-    nodejs "$SID_1" "$PRE"'
-S.markStep(sid, "review_security", "complete", { marker: "from-B" });
+    nodejs "$SID_1" "$PRE$GLOSSARY_JS"'
+complete_gated(sid, "review_security", { marker: "from-B" });
 console.log("B:v" + rd().version);
 '
     assert_eq "M1/B-migrated-and-appended" "B:v$EXPECT_STATE_VERSION" "$NODE_OUT"
@@ -75,11 +75,11 @@ if run_case "M2/persist-then-append"; then
     next_sid
     SID_2="$SID"
     seed_v1 "$SID_2" "ordering"
-    nodejs "$SID_2" "$PRE"'
+    nodejs "$SID_2" "$PRE$GLOSSARY_JS"'
 S.readState(sid);
 S.persistMigratedState(sid);
 const v = rd().version;
-S.markStep(sid, "review_security", "complete", { marker: "from-B" });
+complete_gated(sid, "review_security", { marker: "from-B" });
 const st = rd();
 console.log("after_persist=v" + v + " version=" + st.version +
             " B_event_present=" + st.events.some((e) => e.key === "marker"));
@@ -96,19 +96,20 @@ if run_case "M3/deterministic-prefix"; then
     # 3A: migrate via persistMigratedState, then append.  3B: append first (which
     # migrates in-lock), no explicit persist. The MIGRATED PREFIX must be identical:
     # the conversion is a pure function of the v1 bytes, so the route cannot matter.
-    nodejs "$SID_3A" "$PRE"'
+    # #2529: the first post-migration append is the glossary_check record; the prefix ends there.
+    M3_PREFIX_JS='const prefix = () => { const all = rd().events; const n = all.findIndex((e) => e.key === "glossary_check");
+  return JSON.stringify(all.slice(0, n).map((e) => ({ k: e.kind, s: e.step, st: e.status, key: e.key, at: e.at, p: e.provenance }))); };
+'
+    nodejs "$SID_3A" "$PRE$GLOSSARY_JS$M3_PREFIX_JS"'
 S.readState(sid); S.persistMigratedState(sid);
-S.markStep(sid, "review_security", "complete");
-const n = rd().events.length;
-fs.writeFileSync(process.env.WORKFLOW_STATE_DIR + "/prefix-a.json",
-  JSON.stringify(rd().events.slice(0, n - 1).map((e) => ({ k: e.kind, s: e.step, st: e.status, key: e.key, at: e.at, p: e.provenance }))));
+complete_gated(sid, "review_security");
+fs.writeFileSync(process.env.WORKFLOW_STATE_DIR + "/prefix-a.json", prefix());
 console.log("A-OK");
 '
     assert_eq "M3/route-a-ok" "A-OK" "$NODE_OUT"
-    nodejs "$SID_3B" "$PRE"'
-S.markStep(sid, "review_security", "complete");
-const n = rd().events.length;
-const b = JSON.stringify(rd().events.slice(0, n - 1).map((e) => ({ k: e.kind, s: e.step, st: e.status, key: e.key, at: e.at, p: e.provenance })));
+    nodejs "$SID_3B" "$PRE$GLOSSARY_JS$M3_PREFIX_JS"'
+complete_gated(sid, "review_security");
+const b = prefix();
 const a = fs.readFileSync(process.env.WORKFLOW_STATE_DIR + "/prefix-a.json", "utf8");
 console.log(a === b ? "IDENTICAL" : "DIFFER\nA=" + a + "\nB=" + b);
 '

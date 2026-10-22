@@ -81,6 +81,7 @@ WT_F10="${PAIR_F10#*|}"
 stage_test_file "$WT_F10" "tests/example.sh" "echo test F10"
 MANIFEST_F10="$(compute_manifest "$WT_F10")"
 write_state_f "$SID_F10" "feature/secF-wt10" "$MANIFEST_F10" "$WSID_F10" "$PLANS_F10"
+( export WORKFLOW_PLANS_DIR="$PLANS_F10"; glossary_check_record "$SID_F10" "$WT_F10" )  # #2529
 RES_F10="$(run_gate_wsid "$PLANS_F10" "$WT_F10" "$(build_gate_json 'git commit -m wip' "$SID_F10" "$WT_F10")")"
 if is_approve "$RES_F10"; then
     pass "F10. token matches AND wsid matches -> approve"
@@ -120,6 +121,7 @@ stage_test_file "$WT_F12" "tests/example.sh" "echo test F12"
 MANIFEST_F12="$(compute_manifest "$WT_F12")"
 # Empty wsid => write_state_f omits the field entirely (legacy entry).
 write_state_f "$SID_F12" "feature/secF-wt12" "$MANIFEST_F12" "" "$PLANS_F12"
+( export WORKFLOW_PLANS_DIR="$PLANS_F12"; glossary_check_record "$SID_F12" "$WT_F12" )  # #2529
 RES_F12="$(run_gate_wsid "$PLANS_F12" "$WT_F12" "$(build_gate_json 'git commit -m wip' "$SID_F12" "$WT_F12")")"
 if is_approve "$RES_F12"; then
     pass "F12. legacy entry (no wsid field) -> approve (backward compat)"

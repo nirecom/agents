@@ -35,12 +35,17 @@ Immediately after the `**PM type:**` line, before Background/Motivation. Single 
 
 ## `## Glossary` schema (mandatory heading)
 
-Immediately after `## Issues`. The intent glossary lists only the terms this session newly introduces.
+Immediately after `## Issues`. The intent glossary lists only the terms this session adds, deletes, or redefines.
 
-- Write the heading always; leave the body empty when no term is new — no fixed placeholder such as `(none)`.
-- Non-empty body: one table with the header `| Term | Category | Definition |`, a separator row, then one row per term.
+- Write the heading always; leave the body empty when no term changes — no fixed placeholder such as `(none)`.
+- Non-empty body: one table with the header `| Term | Category | Operation | Definition |`, a separator row, then one row per change.
+- Operation: `add` (a new term), `delete` (remove the term; Definition may be empty), `redefine` (replace the definition of an existing term in the same category).
+- Rename: a `delete` row for the old term plus an `add` row for the new one. Category move: a `delete` row in the old category plus an `add` row in the new one.
+- A same-category redefinition is one `redefine` row; a `delete` + `add` pair for the same term and category is a BLOCK (`use-redefine`); terms that differ only in case are a heading rename, written as that `delete` + `add` pair.
+- A legacy 3-column table (`| Term | Category | Definition |`) is still accepted; every row reads as `add`.
+- The `session` category allows `add` only.
 - Category values and how to pick one: `rules/docs/glossary.md`.
-- Term must be unique (case-insensitive) within the table.
+- Term + Operation must be unique (case-insensitive term) within the table.
 - The plan artifact hooks (`hooks/gate-plan-lang.js`, `hooks/check-plan-lang.js`) check this section on every write.
 
 ## `## Class members` schema (mandatory)

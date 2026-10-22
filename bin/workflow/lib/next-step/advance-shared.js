@@ -57,8 +57,12 @@ function resolveCurrentStep(sessionId, opts) {
     if (!steps) return null;
     for (const step of VALID_STEPS) {
       if (isTerminalStep(step)) continue;
-      const source = step === excludeDerivedFor ? rawSteps : steps;
-      const status = (source[step] || {}).status || "pending";
+      const derivedStatus = (steps[step] || {}).status || "pending";
+      // The raw read only refuses an evidence PROMOTION; a demotion of a recorded settle (veto,
+      // unapproved or glossary-refused complete, #2529) is kept, as the snapshot walk keeps it.
+      const status = step === excludeDerivedFor && isSettledStatus(derivedStatus)
+        ? (rawSteps[step] || {}).status || "pending"
+        : derivedStatus;
       if (!isSettledStatus(status)) return step;
     }
   } catch (_) { /* fail-open */ }

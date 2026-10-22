@@ -235,6 +235,17 @@ function composeAppendedState(sessionId, baseState, eventsOrBuilder, opts = {}) 
     validateEvent(event);
     built.push(event);
   }
+  // Glossary-check boundary (#2529): a glossary stage step reaching `complete` without a
+  // current, resolved glossary_check record throws here, before any byte is written.
+  // An inheritance copy carries completions the upstream's own boundary already judged; a
+  // RESET_FROM batch (its `reset` anchor) re-completes prior steps whose approvals the reset
+  // handler has already verified (#2709), so neither is re-judged for a glossary record.
+  const glossarySkip = opts.origin === "session-inherit" ? "session-inherit"
+    : built.some((e) => e.kind === "reset") ? "reset-sentinel" : null;
+  const glossaryOpts = glossarySkip ? Object.assign({}, opts, { sanctioned: glossarySkip }) : opts;
+  require("../glossary-check/record").glossaryBoundaryForBatch(
+    sessionId, projectState(base), projectState(withBatch), glossaryOpts
+  );
 
   // seq is assigned here and nowhere else: 1-based and contiguous over the
   // whole stream, so a gap or a duplicate is detectable as corruption.
