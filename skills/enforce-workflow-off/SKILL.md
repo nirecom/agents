@@ -47,7 +47,7 @@ Which hooks honour a marker and which never do: `docs/architecture/claude-code/m
 
 When `enforce-worktree.js` unexpectedly blocks a sanctioned command (e.g. a documented step in a skill's cascade script):
 
-1. Retry the command as-is. Sanctioned commands like `git worktree remove <path>` and `git worktree prune` are allowed unconditionally by `isAllowedWorktreeCommand`.
+1. Retry the command as-is. Sanctioned commands like `git worktree remove <path>` and `git worktree prune` are allowed by `isAllowedWorktreeCommand` (`hooks/enforce-worktree/main-worktree-allows/worktree-command.js`).
 2. If still blocked, file an issue via `/issue-create` so the hook or skill can be fixed at the source.
 
 Do NOT open this hatch to unblock a single command: it disables enforcement session-wide and masks the root cause.

@@ -24,6 +24,7 @@ RCS-2. Invoke `"$AGENTS_MAIN_ROOT/skills/review-code-security/scripts/run-codex-
   The security-scanner JSON prompt sets its `dispatch_directive` key to the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
 RCS-3. Triage — per `skills/_shared/priority-hierarchy.md`, reject a concern only when it directly contradicts a decision already settled in the approved intent.md / outline.md (including their `## Accepted Tradeoffs`). Raising a topic the code does not address is never grounds to reject; a reject must cite the specific governing decision.
 For each rejected concern, record the verdict durably so it does not re-surface next round: `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" reject --plans-dir <PLANS_DIR> --session-id <session-id> --format review-security-shared --id C<N> --reason "<cited decision>"` (#2185).
+Per `skills/_shared/glossary-drift-check.md`: count a concern whose text holds `[glossary-drift ` as unresolved whatever `concern-ledger reject` returns (never on the all-rejected path), and run its `--record` with `--stage code`.
 
 ## Completion
 

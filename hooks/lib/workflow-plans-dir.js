@@ -16,7 +16,7 @@ function getWorkflowPlansDir() {
         `WORKFLOW_PLANS_DIR must be an absolute path (tilde is not expanded). Got: ${v}`
       );
     }
-    return v;
+    return require("./branch-diff").toWindowsPath(v); // lazy: branch-diff's require chain may reach this module
   }
   return path.join(os.homedir(), ".workflow-plans");
 }

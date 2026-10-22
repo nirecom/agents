@@ -70,6 +70,9 @@ kv() {
 }
 out_lines() { tr -d '\r' < "$OUT" | wc -l | tr -d ' '; }
 out_text() { tr -d '\r' < "$OUT"; }
+# fallback_lines: every FALLBACK= line of the last stdout, comma-joined ("" when none), so a
+# duplicate line or a second reason shows up instead of hiding behind kv's first match.
+fallback_lines() { out_text | grep '^FALLBACK=' | paste -sd, -; }
 # keyset <csv>: lowercase, '-' -> '_', sorted, comma-joined (spelling-neutral key comparison).
 keyset() { printf '%s' "$1" | tr ',' '\n' | tr 'A-Z-' 'a-z_' | sed '/^$/d' | sort | paste -sd, -; }
 

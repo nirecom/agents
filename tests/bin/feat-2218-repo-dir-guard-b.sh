@@ -246,13 +246,14 @@ const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_R
 const st = createInitialState('$sid', { cwd: '$(node_path "$wt")' });
 st.closes_issues = [2218];
 writeState('$sid', st);
-// Mark steps 1..14 (workflow_init through cleanup) complete, leaving
-// pre_final_report_gate (step 15, session-close) as the first non-complete step.
-// outline/detail are approval-gated on write, so they carry a sanctioned token;
-// cleanup is NOT gated, so a plain markStep completes it.
-const steps = ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests','review_tests','write_code','run_tests','review_security','docs','user_verification','cleanup'];
-const gated = new Set(['outline','detail']);
-for (const s of steps) { markStep('$sid', s, 'complete', {}, gated.has(s) ? { sanctioned: 'reset-sentinel' } : {}); }
+// Mark every step from workflow_init through cleanup complete, leaving
+// pre_final_report_gate (session-close) as the first non-complete step; a skipped
+// step in between reads as inconsistent state and aborts.
+// The gated steps carry a real plan approval first (#2709: no sanctioned reset-sentinel token).
+const PAF = require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture');
+const steps = ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests','review_tests','write_code','run_tests','review_security','docs','review_docs','push_branch','user_verification','merge_to_main','cleanup'];
+const gated = new Set(['clarify_intent','outline','detail']);
+for (const s of steps) { if (gated.has(s)) PAF.approveLive('$sid', s); markStep('$sid', s, 'complete'); }
 " >/dev/null 2>&1
     # /worktree-end has removed the linked worktree from disk.
     rm -rf "$wt" 2>/dev/null || true

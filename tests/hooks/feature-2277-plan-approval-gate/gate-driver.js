@@ -122,6 +122,18 @@ function expectDeny(name, r, step, sid) {
     reason.includes(sid) || /\.md\b/.test(reason);
   F.check(name + " reason has no URL / plan path / sid", !leaks, reason);
   F.check(name + " never emits allow", !/"allow"/.test(r.out), r.out);
+  expectDenyWording(name, reason, step);
+}
+
+// #2650: the deny reason words the same-turn continuation and the after-reply fallback like
+// its sibling recovery hint (bin/workflow/lib/next-step/approval-reason.js).
+function expectDenyWording(name, reason, step) {
+  const { rowFor } = require(path.join(F.ROOT, "hooks/workflow-state/plan-stage-table.js"));
+  const row = rowFor(step);
+  F.check(name + " reason names the sentinel " + row.sentinel, reason.includes(row.sentinel), reason);
+  F.check(name + " reason words the same-turn path", reason.includes("when the turn-end prompt asks for it"), reason);
+  F.check(name + " reason keeps the after-reply fallback", reason.includes("after the user replies"), reason);
+  F.check(name + " reason names its hook", reason.includes("(Hook: gate-plan-skill-advance.js)"), reason);
 }
 
 const SKILL_PRIOR = { "make-outline-plan": "clarify_intent", "make-detail-plan": "outline", "write-tests": "detail" };

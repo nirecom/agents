@@ -57,6 +57,8 @@ NOW_ISO="$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -
 GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
 session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
 GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 
 # ---------------------------------------------------------------------------
 # Repo / worktree setup
@@ -203,10 +205,13 @@ build_mark_json() {
 }
 
 RC=0
+# run_mark <project_dir> <json> [run_dir]: the hook runs from run_dir (default project_dir).
+# #2529: the review_tests glossary boundary resolves the worktree from the hook's cwd git root
+# when the state names none, so the hook must run inside the fixture worktree.
 run_mark() {
-    local project_dir="$1" json="$2"
-    echo "$json" | run_with_timeout 30 env CLAUDE_PROJECT_DIR="$project_dir" \
-        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" >/dev/null 2>&1
+    local project_dir="$1" json="$2" run_dir="${3:-$1}"
+    echo "$json" | ( cd "$run_dir" && run_with_timeout 30 env CLAUDE_PROJECT_DIR="$project_dir" \
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" >/dev/null 2>&1 )
     RC=$?
 }
 
@@ -260,6 +265,8 @@ WT_B1="${PAIR_B1#*|}"
 stage_test_file "$WT_B1" "tests/example.sh" "echo test B1"
 FP_B1="$(compute_fingerprint "$WT_B1")"
 write_state "$SID_B1" "$(state_json "$SID_B1" pending pending)"
+# #2529: review_tests completes only with a current glossary_check of the staged tests.
+glossary_check_record "$SID_B1" "$WT_B1" tests
 SENTINEL_B1="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$FP_B1>>\""
 run_mark "$WT_B1" "$(build_mark_json "$SENTINEL_B1" "$SID_B1" 0 "$WT_B1")"
 RT_B1="$(read_state_step "$SID_B1" review_tests)"
@@ -281,6 +288,7 @@ printf 'src change\n' > "$WT_B2/src.js"
 git -C "$WT_B2" add src.js 2>/dev/null || true
 FP_B2="$(compute_fingerprint "$WT_B2")"
 write_state "$SID_B2" "$(state_json "$SID_B2" pending pending)"
+glossary_check_record "$SID_B2" "$WT_B2" tests
 SENTINEL_B2="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$FP_B2>>\""
 run_mark "$WT_B2" "$(build_mark_json "$SENTINEL_B2" "$SID_B2" 0 "$WT_B2")"
 RT_B2="$(read_state_step "$SID_B2" review_tests)"
@@ -301,6 +309,7 @@ WT_B3="${PAIR_B3#*|}"
 stage_test_file "$WT_B3" "tests/example.sh" "echo test B3"
 FP_B3="$(compute_fingerprint "$WT_B3")"
 write_state "$SID_B3" "$(state_json "$SID_B3" complete pending)"
+glossary_check_record "$SID_B3" "$WT_B3" tests
 SENTINEL_B3="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$FP_B3>>\""
 run_mark "$WT_B3" "$(build_mark_json "$SENTINEL_B3" "$SID_B3" 0 "$WT_B3")"
 RT_B3="$(read_state_step "$SID_B3" review_tests)"
@@ -321,6 +330,7 @@ WT_B4="${PAIR_B4#*|}"
 stage_test_file "$WT_B4" "tests/example.sh" "echo test B4"
 FP_B4="$(compute_fingerprint "$WT_B4")"
 write_state "$SID_B4" "$(state_json "$SID_B4" pending pending)"
+glossary_check_record "$SID_B4" "$WT_B4" tests
 SENTINEL_B4="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=$FP_B4 warnings=2>>\""
 run_mark "$WT_B4" "$(build_mark_json "$SENTINEL_B4" "$SID_B4" 0 "$WT_B4")"
 RT_B4="$(read_state_step "$SID_B4" review_tests)"
@@ -342,8 +352,9 @@ WT_B5="${PAIR_B5#*|}"
 stage_test_file "$WT_B5" "tests/example.sh" "echo test B5"
 FP_B5="$(compute_fingerprint "$WT_B5")"
 write_state "$SID_B5" "$(state_json "$SID_B5" pending pending)"
+glossary_check_record "$SID_B5" "$WT_B5" tests
 SENTINEL_B5="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$FP_B5>>\""
-run_mark "$MAIN_B5" "$(build_mark_json "$SENTINEL_B5" "$SID_B5" 0 "$WT_B5")"
+run_mark "$MAIN_B5" "$(build_mark_json "$SENTINEL_B5" "$SID_B5" 0 "$WT_B5")" "$WT_B5"
 RT_B5="$(read_state_step "$SID_B5" review_tests)"
 WTS_B5="$(read_state_step "$SID_B5" write_tests)"
 if [ "$RT_B5" = "complete" ] && [ "$WTS_B5" = "complete" ]; then
@@ -383,6 +394,8 @@ stage_test_file "$WT_B7" "tests/example.sh" "echo test B7 v1"
 FP_B7_V1="$(compute_fingerprint "$WT_B7")"
 
 write_state "$SID_B7" "$(state_json_full "$SID_B7" pending)"
+# #2529: review_tests completes only with a current glossary_check of the staged tests.
+glossary_check_record "$SID_B7" "$WT_B7" tests
 SENTINEL_B7_WARN="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=$FP_B7_V1 warnings=1>>\""
 run_mark "$WT_B7" "$(build_mark_json "$SENTINEL_B7_WARN" "$SID_B7" 0 "$WT_B7")"
 RT_B7_AFTER_WARN="$(read_state_step "$SID_B7" review_tests)"
@@ -392,6 +405,7 @@ stage_test_file "$WT_B7" "tests/example.sh" "echo test B7 v2 revised"
 SENTINEL_B7_ACCEPTED="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: addressed coverage gap>>\""
 run_mark "$WT_B7" "$(build_mark_json "$SENTINEL_B7_ACCEPTED" "$SID_B7" 0 "$WT_B7")"
 
+glossary_check_record "$SID_B7" "$WT_B7"
 WT_B7_N="$(cygpath -m "$WT_B7" 2>/dev/null || echo "$WT_B7")"
 GATE_B7_JSON="$(build_gate_json "git commit -m test-b7" "$SID_B7" "$WT_B7_N")"
 GATE_B7_RESULT="$(run_gate "$WT_B7" "$GATE_B7_JSON")"
@@ -413,6 +427,8 @@ fi
 # ============================================================================
 echo "=== B8: edit tests after WARNINGS_ACCEPTED → gate blocks (stale fingerprint) ==="
 stage_test_file "$WT_B7" "tests/example.sh" "echo test B7 v3 after-acceptance"
+# #2529: re-record the glossary_check so the review fingerprint is the only stale input left.
+glossary_check_record "$SID_B7" "$WT_B7"
 
 GATE_B8_JSON="$(build_gate_json "git commit -m test-b8" "$SID_B7" "$WT_B7_N")"
 GATE_B8_RESULT="$(run_gate "$WT_B7" "$GATE_B8_JSON")"

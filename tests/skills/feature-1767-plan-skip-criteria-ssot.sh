@@ -170,15 +170,15 @@ has "G6 the agent evaluates the shared rubric" "$AGENT" "$SSOT"
 has "G7 the agent answers with one SKIP_CONDITIONS: line" "$AGENT" "SKIP_CONDITIONS:"
 INPUT="$(section_body "$AGENT" "## Input")"
 if [ -n "$INPUT" ]; then pass "G8 the agent has an ## Input section"; else fail "G8 the agent has no ## Input section"; fi
-# Snapshot-first rule: read the snapshot, fall back to the header sources only
-# when a section is truncated/absent or the snapshot is not enough.
-if printf '%s\n' "$INPUT" | grep -qi 'snapshot' \
+# Jev-input-first rule: read the Jev input, fall back to the header sources only
+# when a section is truncated/absent or the Jev input is not enough.
+if printf '%s\n' "$INPUT" | grep -qF 'Jev input' \
   && printf '%s\n' "$INPUT" | grep -qi 'truncated' \
   && printf '%s\n' "$INPUT" | grep -qi 'absent' \
   && printf '%s\n' "$INPUT" | grep -qE '(^|[^_])sources([^_]|$)'; then
-  pass "G9 Input states the snapshot-first then sources rule"
+  pass "G9 Input states the Jev-input-first then sources rule"
 else
-  fail "G9 Input lacks the snapshot / truncated / absent / sources rule"
+  fail "G9 Input lacks the Jev input / truncated / absent / sources rule"
 fi
 # Fail-safe rule: a needed section listed in sources_unavailable means all keys false.
 if printf '%s\n' "$INPUT" | grep -qF 'sources_unavailable' \

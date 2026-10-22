@@ -1,12 +1,9 @@
 #!/bin/bash
-# Tests: hooks/enforce-issue-close.js, skills/issue-close-finalize/SKILL.md.
+# Tests: hooks/enforce-issue-close.js, skills/issue-close-finalize/SKILL.md
 # Tags: issue-close, enforce, hook, finalize, workflow, scope:issue-specific
 # Tests for hooks/enforce-issue-close.js — PreToolUse hook that blocks bare
 # `gh issue close` invocations unless the /issue-close skill set
 # ISSUE_CLOSE_SKILL=1 in the environment.
-#
-# RED: this suite fails clean while hooks/enforce-issue-close.js is missing.
-#
 # L3 gap (what this test does NOT catch):
 # - Whether the hook registration in settings.json actually fires in a real Claude Code session
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight

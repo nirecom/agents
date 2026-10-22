@@ -39,9 +39,11 @@ run_driver "$AD7_H" "$REPO" --resume "$CKPT7" --answer fresh
 assert_eq_desc "AD-7c. answering 'fresh' completes the pipeline" "done" "$(echo_driver_action)"
 assert_eq_guarded phase_ran "AD-7d. answering 'fresh' leaves the state all-pending" "pending" "$(step_status "$AD7_H" outline)"
 
-# --- AD-8: the opt-in half of the same gate.
+# --- AD-8: the opt-in half of the same gate. The donor's gated completions carry
+# valid approvals, so the #2633 copy keeps outline complete.
 AD8_D="ad8donor-$$"; AD8_H="ad8heir-$$"
 write_state_v2 "$AD8_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
+approve_donor "$AD8_D" outline detail
 write_state_v2 "$AD8_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 announce_donor "$AD8_D" "$CWD"
 run_driver "$AD8_H" "$REPO" --phase adopt-prior-state
@@ -49,7 +51,7 @@ CKPT8="$(get_kv "$DRIVER_OUT" CHECKPOINT)"
 run_driver "$AD8_H" "$REPO" --resume "$CKPT8" --answer adopt
 assert_eq_desc "AD-8a. answering 'adopt' completes the pipeline" "done" "$(echo_driver_action)"
 assert_eq_desc "AD-8b. answering 'adopt' inherits the donor's steps" "complete" "$(step_status "$AD8_H" outline)"
-assert_eq_desc "AD-8c. the adoption is attributed to the chosen donor" "$AD8_D" "$(inherited_from_of "$AD8_H")"
+assert_eq_desc "AD-8c. the adoption is attributed to the chosen donor (upstream_session_id)" "$AD8_D" "$(upstream_link_of "$AD8_H")"
 
 # --- AD-9: non-interactive must not hard-fail. This phase's value is optional
 # recovery and its default (`fresh`) is always safe, so blocking /workflow-init
@@ -73,6 +75,7 @@ assert_eq_guarded phase_ran "AD-9d. nothing is adopted silently" "pending" "$(st
 # than none (CPR-E2E), so the test runs the emitted command verbatim.
 AD10_D="ad10donor-$$"; AD10_H="ad10heir-$$"
 write_state_v2 "$AD10_D" "$CWD" "$BRANCH" "$STEPS_INHERITABLE"
+approve_donor "$AD10_D" outline detail
 write_state_v2 "$AD10_H" "$CWD" "$BRANCH" "$STEPS_ALL_PENDING"
 announce_donor "$AD10_D" "$CWD"
 export CI=1

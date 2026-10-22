@@ -169,7 +169,11 @@ function modeReason() {
     F.check(`approvalWaitFor ${step} unapproved: hint has no single quote`, typeof r.hint === "string" && !r.hint.includes("'"), String(r.hint));
   }
   const ok = ranAhead("ar-ok", "detail", {});
-  F.check("approvalWaitFor: approved step -> no wait", !call(ok, "detail"), JSON.stringify(call(ok, "detail")));
+  // #2529: an approved gated step also waits on its glossary_check record; seed a current one
+  // (from the fixture repo cwd) so this case keeps isolating the approval-only verdict.
+  const rec = F.runNode("bin/check-glossary-drift", ["--session", ok, "--stage", "detail", "--record"], "");
+  F.check("approvalWaitFor: approved step -> no wait", !call(ok, "detail"),
+    JSON.stringify(call(ok, "detail")) + ` record-exit=${rec.code} err=${rec.err}`);
   F.check("approvalWaitFor: non-gated step -> no wait", !call(ok, "write_tests"), JSON.stringify(call(ok, "write_tests")));
   const noEv = F.newSid("ar-noev");
   F.writeState(noEv, { workflow_init: "complete", clarify_intent: "pending" }, [], TOP);
@@ -177,7 +181,52 @@ function modeReason() {
     JSON.stringify(call(noEv, "clarify_intent")));
 }
 
+// #2650: the hint carries no URL and no path of the session's plan, and names both ways the
+// echo comes (the turn-end prompt, or the user's reply).
+function modeHint() {
+  const AR = load("bin/workflow/lib/next-step/approval-reason.js");
+  if (!AR || typeof AR.approvalWaitFor !== "function") { F.check("approvalWaitFor is exported", false, "missing"); return; }
+  for (const [step, suffix] of Object.entries(F.SUFFIX)) {
+    const sid = ranAhead("ah-" + suffix.slice(0, 2), step === "clarify_intent" ? "research" : step, { [step]: "none" });
+    const r = AR.approvalWaitFor(sid, step, readState(sid)) || {};
+    const hint = typeof r.hint === "string" ? r.hint : null;
+    const plan = path.resolve(F.planPath(sid, suffix));
+    const plansDirs = [path.resolve(F.PLANS_DIR), path.resolve(F.PLANS_DIR).replace(/\\/g, "/")];
+    F.check(`hint ${step}: present (precondition)`, hint !== null, JSON.stringify(r));
+    if (hint === null) continue;
+    F.check(`hint ${step}: no URL`, !/https?:\/\//.test(hint), hint);
+    F.check(`hint ${step}: no plan path, plans dir, file name or sid`,
+      !hint.includes(plan) && !hint.includes(plan.replace(/\\/g, "/")) && !plansDirs.some((d) => hint.includes(d)) &&
+      !hint.includes(path.basename(plan)) && !hint.includes(sid), hint);
+    F.check(`hint ${step}: the echo follows the turn-end prompt or the user's reply`,
+      hint.includes("when the turn-end prompt asks for it") && hint.includes("after the user replies with approval"), hint);
+  }
+}
+
+// #2650: completion-approval's recoveryFor names the same-turn prompt and the after-reply
+// fallback, and carries no URL, no local path and no session id.
+function modeRecovery() {
+  const CA = load("hooks/workflow-state/completion-approval.js");
+  if (!CA || typeof CA.recoveryFor !== "function") { F.check("recoveryFor is exported", false, "missing"); return; }
+  for (const [step, suffix] of Object.entries(F.SUFFIX)) {
+    const sid = ranAhead("rc-" + suffix.slice(0, 2), step === "clarify_intent" ? "research" : step, { [step]: "none" });
+    const text = CA.recoveryFor(step);
+    F.check(`recovery ${step}: is a string (precondition)`, typeof text === "string" && text.length > 0, String(text));
+    if (typeof text !== "string") continue;
+    F.check(`recovery ${step}: same-turn guidance`, text.includes("when the turn-end prompt asks for it"), text);
+    F.check(`recovery ${step}: after-reply fallback`, text.includes("Otherwise emit it after the user replies with approval"), text);
+    F.check(`recovery ${step}: no URL`, !/https?:\/\//.test(text), text);
+    const plan = path.resolve(F.planPath(sid, suffix));
+    const dirs = [path.resolve(F.PLANS_DIR), path.resolve(F.STATE_DIR)];
+    const local = [plan, ...dirs].flatMap((p) => [p, p.replace(/\\/g, "/")]);
+    F.check(`recovery ${step}: no local path`, !local.some((p) => text.includes(p)) && !text.includes(path.basename(plan)) &&
+      !/[A-Za-z]:[\\/]|(^|\s)\/[A-Za-z]/.test(text), text);
+    F.check(`recovery ${step}: no session id`, !text.includes(sid) &&
+      !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text), text);
+  }
+}
+
 const mode = process.argv[2];
-const MODES = { effective: modeEffective, current: modeCurrent, nextstep: modeNextStep, gate: modeGate, reason: modeReason };
+const MODES = { effective: modeEffective, current: modeCurrent, nextstep: modeNextStep, gate: modeGate, reason: modeReason, hint: modeHint, recovery: modeRecovery };
 if (!MODES[mode]) { console.log(`FAIL|driver|unknown mode ${mode}`); process.exit(0); }
 MODES[mode]();

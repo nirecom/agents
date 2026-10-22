@@ -17,6 +17,7 @@ GATE_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate.js"
 MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 CODEX_BIN="$SCRIPT_CHECKOUT_ROOT/bin/review-code-codex"
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 
 PASS=0
 FAIL=0
@@ -459,6 +460,7 @@ echo "x" > "$WT_17B/file.txt"
 git -C "$WT_17B" add file.txt
 SID_17B="c17b-$$"
 write_state "$SID_17B" "$(state_json "$SID_17B" "feature/secC-wt17b-main" "pending" "complete")"
+glossary_check_record "$SID_17B" "$WT_17B"
 RES_17B="$(run_gate "$MAIN_17B" "$(build_gate_json 'git commit -m x' "$SID_17B" "$WT_17B")")"
 if is_approve "$RES_17B"; then pass "C17b. payload cwd = linked worktree → resolves to worktree, uv skipped"
 else fail "C17b. expected approve (worktree gate), got: $RES_17B"; fi
@@ -473,11 +475,28 @@ git -C "$PRIMARY_17C" add src.txt tests/t.sh
 SID_17C="c17c-$$"
 write_state "$SID_17C" "$(state_json_custom "$SID_17C" "main" \
     write_tests pending user_verification complete)"
+glossary_check_record "$SID_17C" "$PRIMARY_17C"
 RES_17C="$(run_gate "$PRIMARY_17C" "$(build_gate_json 'git commit -m x' "$SID_17C" "$PAYLOAD_17C")")"
 if is_approve "$RES_17C"; then
     pass "C17c. payload cwd = main checkout → falls through, primary staged-change search wins"
 else
     fail "C17c. expected approve (payload cwd should NOT override primary), got: $RES_17C"
+fi
+
+# 17d. (#2529 T6-8) C17b without glossary_check_record: the same staged code file and
+# complete review_security block on the missing glossary record.
+PAIR_17D="$(setup_linked_worktree "secC-wt17d")"
+MAIN_17D="${PAIR_17D%|*}"
+WT_17D="${PAIR_17D#*|}"
+echo "x" > "$WT_17D/file.txt"
+git -C "$WT_17D" add file.txt
+SID_17D="c17d-$$"
+write_state "$SID_17D" "$(state_json "$SID_17D" "feature/secC-wt17d-main" "pending" "complete")"
+RES_17D="$(run_gate "$MAIN_17D" "$(build_gate_json 'git commit -m x' "$SID_17D" "$WT_17D")")"
+if is_block "$RES_17D" && echo "$RES_17D" | grep -q 'glossary-check-missing'; then
+    pass "C17d. C17b without the glossary record → block glossary-check-missing"
+else
+    fail "C17d. expected block naming glossary-check-missing, got: $RES_17D"
 fi
 
 # ============================================================================
@@ -614,8 +633,8 @@ MOCK_EOF
         fail "E23. expected SKIPPED+empty; got: $OUT_23"
     fi
 
-    # 24. Branch has commits past base + also has staged → PERFORMED based on committed diff;
-    #     staged sentinel NOT in prompt
+    # 24. Branch has commits past base + also has staged → PERFORMED over the working tree vs
+    #     merge-base: committed AND staged-only sentinels both in the prompt, no EXCLUDED line
     REPO_24="$TMPDIR_BASE/codex-repo-24"
     mkdir -p "$REPO_24"
     git -C "$REPO_24" init -q -b main
@@ -634,15 +653,16 @@ MOCK_EOF
     git -C "$REPO_24" add staged-only.txt
     write_codex_capture_mock
     rm -f "$CAPTURE"
-    OUT_24="$(cd "$REPO_24" && PATH="$MOCK_BIN_PATH:$PATH" HOME="$TMPDIR_BASE" \
+    OUT_24="$(cd "$REPO_24" && PATH="$MOCK_BIN_PATH:$PATH" HOME="$TMPDIR_BASE" CODEX_REVIEW_MAX_DIFF_LINES=5000 \
         run_with_timeout 60 bash "$CODEX_BIN" --base main --no-log 2>&1 || true)"
     if echo "$OUT_24" | grep -q "## Codex Review: PERFORMED" \
        && [ -f "$CAPTURE" ] \
        && grep -q "$SENTINEL_COMMIT" "$CAPTURE" \
-       && ! grep -q "$SENTINEL_STAGED" "$CAPTURE"; then
-        pass "E24. branch w/ commits + staged → PERFORMED on committed only (no staged sentinel)"
+       && grep -q "$SENTINEL_STAGED" "$CAPTURE" \
+       && ! echo "$OUT_24" | grep -q "^## Codex Review Scope: EXCLUDED"; then
+        pass "E24. branch w/ commits + staged → PERFORMED with committed and staged sentinels, no EXCLUDED line"
     else
-        fail "E24. expected PERFORMED+commit-sentinel only; capture-exists=$([ -f "$CAPTURE" ] && echo y || echo n) out: $OUT_24"
+        fail "E24. expected PERFORMED+commit-sentinel+staged-sentinel and no EXCLUDED line; capture-exists=$([ -f "$CAPTURE" ] && echo y || echo n) out: $OUT_24"
     fi
 fi
 
@@ -665,6 +685,7 @@ test_wip_commit_skips_user_verification() {
     # F1. git -c workflow.wip=1 commit + uv:pending, others complete → approve
     local SID_F1="f1-$$"
     write_state "$SID_F1" "$(state_json "$SID_F1" "main" "pending" "complete")"
+    glossary_check_record "$SID_F1" "$REPO_F"
     local RES_F1
     RES_F1="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=1 commit -m "wip"' "$SID_F1" "$REPO_F")")"
     if is_approve "$RES_F1"; then
@@ -676,6 +697,7 @@ test_wip_commit_skips_user_verification() {
     # F2. workflow.wip=true → approve
     local SID_F2="f2-$$"
     write_state "$SID_F2" "$(state_json "$SID_F2" "main" "pending" "complete")"
+    glossary_check_record "$SID_F2" "$REPO_F"
     local RES_F2
     RES_F2="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=true commit -m "wip"' "$SID_F2" "$REPO_F")")"
     if is_approve "$RES_F2"; then
@@ -687,6 +709,7 @@ test_wip_commit_skips_user_verification() {
     # F3. -c workflow.wip=1 + -C "/some/path" → approve (flag ordering)
     local SID_F3="f3-$$"
     write_state "$SID_F3" "$(state_json "$SID_F3" "main" "pending" "complete")"
+    glossary_check_record "$SID_F3" "$REPO_F"
     local RES_F3
     RES_F3="$(run_gate "$REPO_F" "$(build_gate_json "git -c workflow.wip=1 -C \"$REPO_F\" commit -m \"wip\"" "$SID_F3" "$REPO_F")")"
     if is_approve "$RES_F3"; then
@@ -698,6 +721,7 @@ test_wip_commit_skips_user_verification() {
     # F4. -c "workflow.wip=1" (quoted) → approve
     local SID_F4="f4-$$"
     write_state "$SID_F4" "$(state_json "$SID_F4" "main" "pending" "complete")"
+    glossary_check_record "$SID_F4" "$REPO_F"
     local RES_F4
     RES_F4="$(run_gate "$REPO_F" "$(build_gate_json 'git -c "workflow.wip=1" commit -m "wip"' "$SID_F4" "$REPO_F")")"
     if is_approve "$RES_F4"; then
@@ -793,6 +817,7 @@ test_wip_commit_skips_user_verification() {
     # F12. After WIP approve, state file uv must still be pending (gate must not write state)
     local SID_F12="f12-$$"
     write_state "$SID_F12" "$(state_json "$SID_F12" "main" "pending" "complete")"
+    glossary_check_record "$SID_F12" "$REPO_F"
     local RES_F12
     RES_F12="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=1 commit -m "wip"' "$SID_F12" "$REPO_F")")"
     local UV_F12

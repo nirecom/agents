@@ -2,6 +2,9 @@
 # Gate — new feature: skipped status is accepted for write_tests
 # ===========================================================================
 
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+
 echo ""
 echo "=== WS-SK-GATE-1: write_tests=skipped + all others complete → gate approves ==="
 
@@ -14,6 +17,7 @@ write_state "$SID" "$STATE_JSON"
 
 echo "source" > "$REPO/app.js"
 git -C "$REPO" add app.js
+glossary_check_record "$SID" "$REPO"  # #2529: staged app.js needs a current glossary_check
 
 GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$REPO_N" "$SID")
 GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -36,6 +40,7 @@ write_state "$SID" "$STATE_JSON"
 
 echo "source" > "$REPO/app.js"
 git -C "$REPO" add app.js
+glossary_check_record "$SID" "$REPO"  # #2529: staged app.js needs a current glossary_check
 
 GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$REPO_N" "$SID")
 GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -66,6 +71,7 @@ echo "$TMP_JSON" > "$WORKFLOW_DIR/${SID}.json"
 
 echo "source" > "$REPO/app.js"
 git -C "$REPO" add app.js
+glossary_check_record "$SID" "$REPO"  # #2529: staged app.js needs a current glossary_check
 
 GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$REPO_N" "$SID")
 GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -94,6 +100,7 @@ write_state "$SID" "$STATE_JSON"
 
 echo "source" > "$REPO/app.js"
 git -C "$REPO" add app.js
+glossary_check_record "$SID" "$REPO"  # #2529: staged app.js needs a current glossary_check
 
 GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$REPO_N" "$SID")
 GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -116,6 +123,7 @@ write_state "$SID" "$STATE_JSON"
 
 echo "source" > "$REPO/app.js"
 git -C "$REPO" add app.js
+glossary_check_record "$SID" "$REPO"  # #2529: staged app.js needs a current glossary_check
 
 GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$REPO_N" "$SID")
 GATE_OUT=$(run_gate "$GATE_INPUT")

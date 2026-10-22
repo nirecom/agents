@@ -6,15 +6,18 @@
 # the very file this line locates, and ${BASH_SOURCE[0]} is bash's own answer
 # for where this script lives — not caller input (round 10 C2 exception 2).
 _CL_SAFE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/safe-state-path.sh"
-if [ ! -f "$_CL_SAFE_LIB" ]; then
-    printf 'concern-ledger: required library not found at %s — incomplete installation\n' "$_CL_SAFE_LIB" >&2
-    return 1 2>/dev/null || exit 1
-fi
-# shellcheck source=../safe-state-path.sh
-if ! source "$_CL_SAFE_LIB"; then
-    printf 'concern-ledger: failed to load %s\n' "$_CL_SAFE_LIB" >&2
-    return 1 2>/dev/null || exit 1
-fi
+for _cl_dep in "$_CL_SAFE_LIB" "${_CL_SAFE_LIB%/*}/concern-ledger/defang-fences.sh"; do
+    if [ ! -f "$_cl_dep" ]; then
+        printf 'concern-ledger: required library not found at %s — incomplete installation\n' "$_cl_dep" >&2
+        return 1 2>/dev/null || exit 1
+    fi
+    # shellcheck source=/dev/null
+    if ! source "$_cl_dep"; then
+        printf 'concern-ledger: failed to load %s\n' "$_cl_dep" >&2
+        return 1 2>/dev/null || exit 1
+    fi
+done
+unset _cl_dep
 
 # ---------------------------------------------------------------------------
 # String helpers
@@ -416,19 +419,16 @@ _cl_reject_bad_tokens() {
     return 0
 }
 
-# _cl_defang_untrusted — stdin→stdout. Neutralises reviewer-forgeable sentinels
-# once (CPR-SSOT/CPR-E2C; siblings: bin/review-code-codex:459-460,
-# bin/review-loop-summarize-concerns' sanitize()). Loops to a fixed point (t
+# _cl_defang_untrusted — stdin→stdout. Neutralises reviewer-forgeable fences
+# (concern-ledger/defang-fences.sh, shared with bin/review-code-codex) and sentinels
+# (sibling: bin/review-loop-summarize-concerns' sanitize()). Loops to a fixed point (t
 # branch) so nested decoys can't reassemble after one pass, and the reason
 # class is `.*` (not `[^>]*`) to stay a superset of hooks/lib/sentinel-
 # patterns.js's greedy RESET_FROM_LOOKSLIKE_RE (#2025 security-scanner F1).
 _cl_defang_untrusted() {
     sed -E \
-        -e 's/\[PRIOR CONCERNS START\]/(PRIOR CONCERNS START)/g' \
-        -e 's/\[PRIOR CONCERNS END\]/(PRIOR CONCERNS END)/g' \
-        -e 's/\[DIFF START\]/(DIFF START)/g' \
-        -e 's/\[DIFF END\]/(DIFF END)/g' \
         -e ':lp' \
+        -e "$DEFANG_FENCE_SED_EXPR" \
         -e 's/<<(WORKFLOW_[A-Z_]+.*|DETAIL_SKIPPABLE_BY_PLANNER:.*)>>//g' \
         -e 'tlp'
 }
@@ -450,15 +450,14 @@ _cl_placehold_empty_concerns() {
 # ---------------------------------------------------------------------------
 # Rejection — a terminal triage verdict, preserved across cleanup by the carrier
 # ---------------------------------------------------------------------------
-# cl_reject <ledger> <id> <reason> — mark one concern rejected and record the
-# rejection in the carrier keyed by DISCRIM (#2185). The ledger row is rewritten
-# in place, line by line, touching only the target's STATE (field 3) and FLAGS
-# (field 10): headers, other C-rows, #unparsed and #merged-alt lines are emitted
-# verbatim, so this never reuses reduce's array-rebuild serializer (which depends
-# on reduce-local temps and would drop those aux lines). The reason lives only in
-# the carrier — the ledger row stays 11 fields (parse-compatible).
-cl_reject() {
-    local ledger="$1" id="$2" reason="$3"
+# cl_reject <ledger> <id> <reason> — refuse (4) a concern cl_guard_reject (drift-tag.sh)
+# reserves, else dismiss it (#2185). _cl_dismiss_write <ledger> <id> <reason> <label>
+# rewrites only the target row's STATE (field 3) and FLAGS (field 10) line by line —
+# aux lines stay verbatim, so reduce's serializer is never reused — and upserts the
+# reason, prefixed by <label> when set, into the carrier keyed by DISCRIM.
+cl_reject() { cl_guard_reject "$1" "$2" || return 4; _cl_dismiss_write "$1" "$2" "$3" ""; }
+_cl_dismiss_write() {
+    local ledger="$1" id="$2" reason="$3" label="${4:-}"
     [ -f "$ledger" ] || return 1
     local tline
     tline="$(grep -m1 -E "^${id}\|" "$ledger" 2>/dev/null)" || return 1
@@ -478,13 +477,12 @@ cl_reject() {
             esac
         done < "$ledger"
     } | sp_publish_stdin "$ledger" || return 1
-    # Upsert the rejection into the carrier. Text and reason are producer- or
-    # author-authored, so both pass through the same defanger the render surfaces
-    # use before they reach the durable record.
+    # Text and reason are untrusted, so both pass through the render defanger.
     local carrier dtext dreason newf
     carrier="$(_cl_carrier_from_ledger "$ledger")"
     dtext="$(printf '%s' "$rest" | _cl_defang_untrusted)"
     dreason="$(printf '%s' "$reason" | _cl_defang_untrusted)"
+    [ -z "$label" ] || dreason="$label $dreason"
     newf="$(sp_mktemp_beside "$carrier")" || return 1
     printf -- '- %s [%s] REJECTED %s — reason: %s\n' "$f7" "$f2" "$dtext" "$dreason" > "$newf" \
         || { rm -f "$newf"; return 1; }

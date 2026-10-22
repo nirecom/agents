@@ -1,7 +1,7 @@
 "use strict";
 // bin/workflow/lib/jev-complexity-adapter/request.js — the shadow path's Jev request (hook
 // dispatches): header, the dispatch prompt, then intent/outline/detail, each redacted by
-// redactOutbound before the 16000-char cap. The CLI path builds its state from snapshot.js.
+// redactOutbound before the 16000-char cap. The CLI path builds its state from jev-input.js.
 
 const crypto = require("crypto");
 const path = require("path");

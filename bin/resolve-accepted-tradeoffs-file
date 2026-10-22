@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Resolve the --accepted-tradeoffs source for a codex review stage.
-# Scans $PLANS_DIR/$SESSION_ID-<suffix>.md in the given order and prints the
+# Scans the session's (owner-resolved) <suffix> plan in the given order and prints the
 # first readable non-empty candidate that stays inside PLANS_DIR after symlink
 # resolution; an escaping or unverifiable candidate is skipped (fail closed).
 # When nothing qualifies the last candidate is printed as-is so the caller's
@@ -76,9 +76,27 @@ canon_status() {
   return 1
 }
 
+# Owner-resolved basename (#2633): a downstream session's plan is <upstream-sid>-<suffix>.md.
+# Only the basename is taken from bin/plan-artifact-path, so the candidate keeps PLANS_DIR's own
+# spelling and every inside-PLANS_DIR check below still applies to the resolved file.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+owned_name() {
+  local p name
+  p="$(node "$SCRIPT_DIR/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+  name="${p##*[/\\]}"
+  if [[ -n "$name" && "$name" == *"-$1.md" && "$name" != *..* ]]; then
+    printf '%s' "$name"
+  else
+    printf '%s' "$SESSION_ID-$1.md"
+  fi
+}
+
 LAST=""
 for sfx in "$@"; do
-  CAND="$PLANS_DIR/$SESSION_ID-$sfx.md"
+  case "$sfx" in
+    intent|outline|detail) CAND="$PLANS_DIR/$(owned_name "$sfx")" ;;
+    *) CAND="$PLANS_DIR/$SESSION_ID-$sfx.md" ;;
+  esac
   LAST="$CAND"
   [[ -f "$CAND" && -s "$CAND" && -r "$CAND" ]] || continue
   ST=0

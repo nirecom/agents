@@ -1,20 +1,17 @@
-// Plan-link turn checks shared by the confirm-plan Stop guard (hooks/stop-confirm-plan-guard.js)
-// and the CONFIRM dialog (hooks/confirm-checkpoint.js): a plan stage's plan-link output — the
-// blob URL when one exists, otherwise the plan's local path — must end the presentation turn.
-// Pure helpers; the caller supplies the transcript entries and the link resolver. Fail-open.
+// Plan-link turn checks of the confirm-plan Stop guard (hooks/stop-confirm-plan-guard.js) and
+// its presented-stage judgment (hooks/lib/confirm-continuation.js): where a plan stage's
+// plan-link output — the blob URL when one exists, otherwise the local path — appears in the turn.
+// Pure helpers; the caller supplies the transcript entries and the link resolver.
 "use strict";
 
 const os = require("os");
-const path = require("path");
 const { isCommandTool, commandTextOf } = require("./tool-command-text");
 const { parseSentinel } = require("./confirm-sentinel");
-const { isRealUserPrompt, parseLines, splitTurns } = require("./transcript-reader");
-const { STAGES, PLAN_LINK_COMMAND } = require("./plan-link");
+const { isRealUserPrompt } = require("./transcript-reader");
+const { STAGES, REASONS, REASON_TEXT, PLAN_LINK_COMMAND, entryLine } = require("./plan-link");
 
 // A link ends where path characters stop; one trailing "." or ")" is prose, not the link.
 const CONTINUES_RE = /^\.?[A-Za-z0-9_~%/\\-]/;
-const PLAN_WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
-const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep"]);
 const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
 
 // turnEntriesOf(entries) -> the entries after the last real user prompt (the current turn).
@@ -38,12 +35,6 @@ function turnEntriesFromLines(lines) {
     out.push(entry);
   }
   return out.reverse();
-}
-
-// previousTurnEntriesFromLines(lines) -> the entries between the last two real prompts; [] when
-// no real prompt precedes the last one.
-function previousTurnEntriesFromLines(lines) {
-  return splitTurns(parseLines(lines)).prevTurnEntries;
 }
 
 function assistantContent(entry) {
@@ -72,41 +63,6 @@ function collectTurnAssistantText(entries) {
 function lastTextBlockOf(entries) {
   const texts = textItems(turnEntriesOf(entries));
   return texts.length > 0 ? texts[texts.length - 1] : null;
-}
-
-function samePath(a, b) {
-  const norm = (p) => {
-    const r = path.resolve(String(p)).replace(/\\/g, "/");
-    return process.platform === "win32" ? r.toLowerCase() : r;
-  };
-  try { return norm(a) === norm(b); } catch (_) { return false; }
-}
-
-function isConfirmEcho(item) {
-  return isCommandTool(item.name) && parseSentinel(commandTextOf(item.name, item.input)) !== null;
-}
-
-// Any non-read tool naming the plan's basename may write it (a Bash redirect, a script, ...).
-function mentionsBasename(item, base) {
-  if (READ_ONLY_TOOLS.has(item.name) || isConfirmEcho(item)) return false;
-  let s = "";
-  try { s = JSON.stringify(item.input === undefined ? null : item.input) || ""; } catch (_) { return false; }
-  return s.toLowerCase().includes(base);
-}
-
-// currentTurnWritesStage(entries, absPath) -> whether this turn wrote (or may have written) the plan.
-function currentTurnWritesStage(entries, absPath) {
-  if (typeof absPath !== "string" || !absPath) return false;
-  const base = absPath.replace(/\\/g, "/").split("/").pop().toLowerCase();
-  for (const entry of turnEntriesOf(entries)) {
-    for (const item of assistantContent(entry)) {
-      if (!item || item.type !== "tool_use") continue;
-      const fp = item.input && item.input.file_path;
-      if (PLAN_WRITE_TOOLS.has(item.name) && typeof fp === "string" && fp && samePath(fp, absPath)) return true;
-      if (base && mentionsBasename(item, base)) return true;
-    }
-  }
-  return false;
 }
 
 // stagesToCheck({ markers, turnEntries, includeConfirm }) -> deduplicated plan stages written
@@ -209,23 +165,76 @@ function shown(link, text) {
   return localPathForms(link.path).some((form) => containsLink(prose, form));
 }
 
+// The entryLine shapes: a URL line (optionally with its inline-code path), and a no-URL line that
+// renderModelContext may follow with " — " plus the text of the reason that same line names.
+const STAGE_ALT = STAGES.join("|");
+const URL_LINE_RE = new RegExp(`^(?:${STAGE_ALT}): https?://\\S+(?: \\(\`[^\`]+\`\\))?$`);
+const NO_URL_LINE_RE = new RegExp(`^((?:${STAGE_ALT}): (?:\`[^\`]+\` \\(no URL|\\(unavailable): ` +
+  `(${Object.values(REASONS).join("|")})\\))(?: — (.*))?$`);
+
+// planLinkLineBare(line) -> the entryLine part of a plan-link output line, or null for anything else.
+function planLinkLineBare(line) {
+  if (URL_LINE_RE.test(line)) return line;
+  const m = line.match(NO_URL_LINE_RE);
+  if (!m || (m[3] !== undefined && m[3] !== REASON_TEXT[m[2]])) return null;
+  return m[1];
+}
+
+// inTrailingLinkRun(lastText, link) -> whether the text's prose, outside code fences, closes on a
+// run of plan-link lines (blank lines between them allowed) that holds the line of link.stage
+// (any spelling of its local path). Several stages presented together close on one run.
+function inTrailingLinkRun(lastText, link) {
+  if (!link || typeof link !== "object" || !STAGES.includes(link.stage)) return false;
+  const raw = trimmedLines(typeof lastText === "string" ? lastText : "");
+  const block = new Set();
+  let last = raw.length - 1;
+  for (; last >= 0; last--) {
+    if (raw[last] === "") continue;
+    const bare = planLinkLineBare(raw[last]);
+    if (bare === null) break;
+    block.add(bare);
+  }
+  const tail = raw.slice(last + 1).join("\n").replace(/^\n+/, "");
+  // A tail inside a code fence is not prose, so it does not close the turn.
+  const prose = trimmedLines(stripFencedCode(raw.join("\n"))).join("\n");
+  if (!tail || !(prose === tail || prose.endsWith("\n" + tail))) return false;
+  const { stage, url, reason } = link;
+  if (typeof url === "string" && url && block.has(entryLine({ stage, url }))) return true;
+  if (typeof link.path !== "string" || !link.path) return false;
+  return localPathForms(link.path).some((form) => block.has(entryLine({ stage, url, path: form, reason })));
+}
+
+// shownInTurn(link, entries) -> shown() over every assistant text item of the current turn.
+function shownInTurn(link, entries) {
+  return shown(link, textItems(turnEntriesOf(entries)).join("\n"));
+}
+
+function trimmedLines(text) {
+  return text.trimEnd().split("\n").map((l) => l.trimEnd());
+}
+
 function stopReason(missing) {
   return "[confirm-plan] plan-link: this turn wrote the " + missing.join(", ") +
     " plan but its last text block does not carry the plan-link line (the URL when one exists, otherwise the" +
     " local path) — run " + PLAN_LINK_COMMAND + ", end the final body text of the turn with its output as-is" +
-    " and close the turn; the CONFIRM echo comes in the turn after the user's reply. (Hook: stop-confirm-plan-guard.js)";
+    " and close the turn on that line; the next step is prompted after it. (Hook: stop-confirm-plan-guard.js)";
 }
 
-// checkPlanUrlInTurn({ stages, turnText, resolve, reasonFor }) -> { block, reason? }.
+// checkPlanUrlInTurn({ stages, turnText, entries, scope, resolve, reasonFor }) -> { block, reason? }.
 // resolve(stage) returns plan-link's { url?, path?, reason? }; a throw or no path never blocks.
+// scope ("last" | "turn", or stage -> either; default "last"): "last" looks at turnText (the last
+// text block), "turn" at every assistant text item of entries' current turn (shownInTurn).
 // reasonFor(missingStages) words the block; omitted, it is the Stop guard's reason.
-function checkPlanUrlInTurn({ stages, turnText, resolve, reasonFor } = {}) {
+function checkPlanUrlInTurn({ stages, turnText, entries, scope, resolve, reasonFor } = {}) {
   const text = typeof turnText === "string" ? turnText : "";
   const missing = [];
   for (const stage of Array.isArray(stages) ? stages : []) {
     let link = null;
     try { link = resolve(stage); } catch (_) { link = null; }
-    if (shown(link, text) === false) missing.push(stage);
+    let s = "last";
+    try { s = typeof scope === "function" ? scope(stage) : scope; } catch (_) { s = "last"; }
+    const seen = s === "turn" ? shownInTurn(link, entries) : shown(link, text);
+    if (seen === false) missing.push(stage);
   }
   if (missing.length === 0) return { block: false };
   return { block: true, reason: typeof reasonFor === "function" ? reasonFor(missing) : stopReason(missing) };
@@ -238,7 +247,7 @@ module.exports = {
   turnEntriesOf,
   turnEntriesFromLines,
   lastTextBlockOf,
-  previousTurnEntriesFromLines,
-  currentTurnWritesStage,
   shown,
+  shownInTurn,
+  inTrailingLinkRun,
 };

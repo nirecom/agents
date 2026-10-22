@@ -12,7 +12,7 @@ main worktree and on the default branch.
 
 For parallel sessions, use `/worktree-start` to create the worktree — see `worktree.md`.
 
-> **Note:** `ENFORCE_WORKTREE=on` blocks all writes from the **main worktree** regardless of
+> **Note:** `ENFORCE_WORKTREE=on` makes `hooks/enforce-worktree.js` block all writes from the **main worktree** regardless of
 > which branch is checked out there. A feature branch alone does not satisfy the guard —
 > you must work from a **linked worktree** (via `/worktree-start`) or set `ENFORCE_WORKTREE=off`.
 

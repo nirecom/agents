@@ -35,5 +35,6 @@ check_ne "G08b. unapproved intent.md evidence does not complete clarify_intent" 
 check "G08b2. no plan_approvals for clarify_intent" "no" "$(has_approval "$SID" clarify_intent)"
 run_with_timeout node "$PLAN_APPROVAL_FIXTURE" approve "$SID" clarify_intent >/dev/null ||
   echo "FAIL: G08c setup: could not record the clarify_intent approval"
-run_next_step --session "$SID" >/dev/null
+seed_glossary "$SID" intent
+in_glossary_repo run_next_step --session "$SID" >/dev/null
 check "G08c. approved intent.md evidence auto-completes clarify_intent" "complete" "$(read_state_status "$SID" clarify_intent)"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/fix-2025-module-load-failclosed.sh
 # Tests: bin/lib/concern-ledger.sh, bin/concern-ledger, bin/build-codex-context, bin/run-codex-review-loop, bin/lib/codex-review-loop/ref-kind-input.sh
-# Tags: concern-ledger, library-load, fail-closed, incomplete-install, security, scope:issue-specific, pwsh-not-required
+# Tags: concern-ledger, library-load, fail-closed, incomplete-install, security, scope:issue-specific, pwsh-not-required, issue-2529
 #
 # None of these scripts runs under `set -e`, so an unchecked `source` leaves
 # every cl_* call resolving to "command not found" — and a round whose findings
@@ -153,6 +153,7 @@ echo "--- load 2: one module removed at a time ---"
     done <<'TABLE'
 # label                  ~ relpath                              ~ want_says
 core.sh                  ~ bin/lib/concern-ledger/core.sh       ~ concern-ledger/core.sh — refusing
+drift-tag.sh             ~ bin/lib/concern-ledger/drift-tag.sh  ~ concern-ledger/drift-tag.sh — refusing
 parse.sh                 ~ bin/lib/concern-ledger/parse.sh      ~ concern-ledger/parse.sh — refusing
 reduce.sh                ~ bin/lib/concern-ledger/reduce.sh     ~ concern-ledger/reduce.sh — refusing
 render.sh                ~ bin/lib/concern-ledger/render.sh     ~ concern-ledger/render.sh — refusing
@@ -160,7 +161,7 @@ finalize.sh              ~ bin/lib/concern-ledger/finalize.sh   ~ concern-ledger
 the whole module dir     ~ bin/lib/concern-ledger              ~ library modules not found at
 safe-state-path.sh       ~ bin/lib/safe-state-path.sh           ~ required library not found at
 TABLE
-    assert_eq_nz "2: every module in the table was removed and tried" "7" "${ROWS2:-0}"
+    assert_eq_nz "2: every module in the table was removed and tried" "8" "${ROWS2:-0}"
 }
 case_end
 
@@ -270,8 +271,8 @@ echo "--- load 5: the guards themselves ---"
 # 5. The ref-kind input helper inherited the deleted wrapper's role as the fifth
 #    caller, and it is the one this file cannot drive (Skipped-Because: reaching
 #    its guard needs a full codex review), so its two lines are pinned where they
-#    are written. The entrypoint's five checked sources are pinned for the same
-#    reason a per-module row exists: one lost check is invisible in the other four.
+#    are written. The entrypoint's six checked sources are pinned for the same
+#    reason a per-module row exists: one lost check is invisible in the other five.
 {
     REFKIND="$AGENTS_ROOT/bin/lib/codex-review-loop/ref-kind-input.sh"
     assert_eq_nz "5: ref-kind-input checks the library is there before sourcing it" \
@@ -279,7 +280,7 @@ echo "--- load 5: the guards themselves ---"
     assert_eq_nz "5: and checks that sourcing it worked" \
         "1" "$(grep -c -F 'the safe-path library failed to load' "$REFKIND" | tr -d ' ')"
     assert_eq_nz "5: the entrypoint checks the return value of every module it sources" \
-        "5" "$(grep -c -E '^if ! source "\$CL_LIB_DIR/' "$AGENTS_ROOT/bin/lib/concern-ledger.sh" | tr -d ' ')"
+        "6" "$(grep -c -E '^if ! source "\$CL_LIB_DIR/' "$AGENTS_ROOT/bin/lib/concern-ledger.sh" | tr -d ' ')"
     assert_eq_nz "5: and the CLI checks the entrypoint's own" \
         "1" "$(grep -c -F 'if ! . "$SELF_DIR/lib/concern-ledger.sh"' "$AGENTS_ROOT/bin/concern-ledger" | tr -d ' ')"
 }

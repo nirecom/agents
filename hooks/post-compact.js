@@ -43,6 +43,19 @@ try {
   }, "compaction");
 } catch (_e) { /* fail-open */ }
 
+// #2594: point at session-progress.md (path only — never created here) and leave the compaction's
+// pending state for hooks/progress-nudge.js. Outside the workflow active period: nothing.
+let progressLine = null;
+try {
+  const { isWorkflowActivePeriod } = require("./lib/workflow-active-period");
+  if (isWorkflowActivePeriod(sessionId)) {
+    const { progressPathFor } = require("./lib/progress-file");
+    const p = progressPathFor(sessionId);
+    if (p) progressLine = `session-progress.md: ${p} (read "Current state" first)`;
+    require("./lib/progress-compaction").recordCompaction(sessionId, Date.now());
+  }
+} catch (_e) { /* fail-open */ }
+
 try {
   const lines = [
     // Lineage evidence for #1305 — the compacted transcript carries this
@@ -79,6 +92,8 @@ try {
       lines.push("(no state file found — run /workflow-init)");
     }
   } catch (_e) { /* fail-open */ }
+
+  if (progressLine) lines.push(progressLine);
 
   try {
     const convLang = getConvLangInjection();

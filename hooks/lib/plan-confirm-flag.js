@@ -36,11 +36,9 @@ function getConfirmFlagName(suffix) {
   return null;
 }
 
-// Exact (case-insensitive) literals. Whitespace-padded values fail-safe to "on".
-const OFF_LITERALS = new Set(["off"]);
-
 // Reads CONFIRM_<STAGE> from the parsed .env FILE only, never process.env, so an
 // inline `CONFIRM_OUTLINE=off node bin/...` prefix on a model-issued command cannot waive the gate.
+// The value is classified by config-flag's kindOfValue, the one owner of what "off" means.
 function isConfirmOffForStageFromFile(stage) {
   const flagName = getConfirmFlagName(stage);
   if (!flagName) return false;
@@ -53,7 +51,7 @@ function isConfirmOffForStageFromFile(stage) {
   }
   const raw = fileEnv ? fileEnv[flagName] : undefined;
   if (raw == null) return false;
-  return OFF_LITERALS.has(String(raw).toLowerCase());
+  return require("./config-flag").kindOfValue(String(raw)) === "off";
 }
 
 module.exports = {

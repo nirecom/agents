@@ -15,7 +15,7 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 
 ### MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
-Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Read `<PLANS_DIR>/<session-id>-intent.md` and `<PLANS_DIR>/<session-id>-outline.md` if present; otherwise proceed with task context alone.
+Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Set `<INTENT_MD>` / `<OUTLINE_MD>` to the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` / `--stage outline` (a resumed session reads its upstream's files); substitute them for every `$INTENT_MD` / `$OUTLINE_MD` below. Read both if present; otherwise proceed with task context alone.
 
 ### MDP-2 — Surface delivery plan
 
@@ -74,7 +74,7 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_MAIN_ROOT/skills/mak
 
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source. `## Class members` is NOT carried into detail.md — its SSOT is intent.md (#2228).
 
-Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
+Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind outline "$OUTLINE_MD" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
 
 After assemble-mandatory.sh succeeds, run `bash "$AGENTS_MAIN_ROOT/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the gate check — blocks even on the `proceed` (auto-approval) path.
 
@@ -89,7 +89,7 @@ Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) w
 - `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3) that carries the plan-link line (protocol CPA-2).
 - `GATE_ACTION=present-and-stop`: present the scope change line from `GATE_HINT` and the relevant detail plan section, then end the turn.
 - After `present-and-stop`, on approval run the standalone `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate --scope-change-approved` and follow its `GATE_ACTION` (normally `proceed`); on a change request, loop to MDP-5.
-- `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"` alone in the next turn; after Allow, run Completion and co-emit either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation.
+- `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_DETAIL: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, run Completion and co-emit either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per the Completion branching record) or the `write-tests` Skill invocation.
 
 ## Research Escalation
 
@@ -116,7 +116,7 @@ See `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts/skip-conditions.sh"
 - Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) the plan-link line (protocol CPA-2); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by the MDP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
 - Write the MDP-7 orchestrator-authored detail.md body in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - Follow `rules/core-principles.md`.
-- **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.
+- **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`.
 - Deliver user-facing analysis summaries (approach comparison, risk assessment, trade-off rationale) as turn-final assistant text or via AskUserQuestion preview/description — not as mid-turn text between tool calls, which is invisible in VS Code.
 - Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

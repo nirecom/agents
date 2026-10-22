@@ -142,7 +142,7 @@ function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
     } else if (positionals.length === 2) {
       const [remote, branch] = positionals;
       if (branch.includes(":") || branch.startsWith("refs/") || branch.startsWith("+")) return false;
-      if (!/^[A-Za-z0-9._\/-]+$/.test(branch)) return false;
+      if (!/^[A-Za-z0-9._/-]+$/.test(branch)) return false;
       const checkRes = spawnSync("git", ["rev-parse", "--verify", `${remote}/${branch}`], {
         cwd: repoRoot, timeout: 2000,
       });
@@ -228,7 +228,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
     // Strict form: --no-edit then exactly one origin/<branch> refspec. Rejects
     // extra flags, --ff-only (ff predicate territory), --abort/--continue/--skip
     // (isAllowedMidOperationAbort territory), colon refspecs, `+`, refs/ form.
-    const m = rest.length === 2 && rest[0] === "--no-edit" ? rest[1].match(/^origin\/([A-Za-z0-9._\/-]+)$/) : null;
+    const m = rest.length === 2 && rest[0] === "--no-edit" ? rest[1].match(/^origin\/([A-Za-z0-9._/-]+)$/) : null;
     if (!m) return false;
     // C1: operand must match the current branch's upstream on origin (fail-closed).
     const upstream = resolveUpstream(repoRoot, "origin");

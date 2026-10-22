@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # filename: tests/bin/fix-1681-veto-derivation.sh
-# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, bin/workflow/lib/next-step/
+# Tests: bin/workflow/next-step, hooks/workflow-gate.js, hooks/session-start.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, skip-verdict, veto, derivation, next-step, workflow-gate, session-start, TL2, scope:common
 # #1681: a vetoed outline skip must read back effective-pending, every later step too,
 #   via read-time derivation only (#1352 reset contract; state.json never rewritten).
@@ -142,7 +142,8 @@ run_next_step() { run_with_timeout 120 node "$NEXT_STEP" "$@" 2>/dev/null || tru
 run_gate() {
     local repo="$1" sid="$2"
     local json="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $repo commit -m test\",\"cwd\":\"$repo\"},\"session_id\":\"$sid\"}"
-    script_checkout_fixture_copy "$repo" hooks bin/review-code-size
+    # bin/lib: the commit gate's glossary-record check reads the glossary through it (#2529).
+    script_checkout_fixture_copy "$repo" hooks bin/review-code-size bin/lib
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" AGENTS_MAIN_ROOT="$repo" \
         run_with_timeout 120 node "$repo/hooks/workflow-gate.js" 2>/dev/null || true
 }

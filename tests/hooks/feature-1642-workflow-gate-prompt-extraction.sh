@@ -106,6 +106,8 @@ write_workflow_off_marker() {
 # the hook is launched from a copy of this checkout attached to the repo under test.
 # shellcheck source=tests/lib/session-repo-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
 session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
 # setup_repo runs in a command substitution, so the repo under test is handed over in a file.
@@ -422,8 +424,11 @@ t09_non_agents_repo_skipped() {
     local cfg; cfg="$(make_plain_cfg_root c9)"
     write_complete_state "$wfdir" "$sid"
     stage_violation "$repo"
+    # #2529: the staged rules/bloated.md needs a current glossary_check.
+    ( export WORKFLOW_STATE_DIR="$wfdir" WORKFLOW_PLANS_DIR="$FIXTURE_PLANS_DIR"
+      glossary_check_record "$sid" "$repo" )
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
-    assert_approve "T09: repo with no .prompt-extraction-allowlist -> Gate 3 skipped"
+    assert_approve "T09:repo with no .prompt-extraction-allowlist -> Gate 3 skipped"
 }
 
 run_all() {

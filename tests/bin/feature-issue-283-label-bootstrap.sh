@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/github-issues, bin/github-issues/bootstrap-labels.sh, bin/github-issues/bootstrap-labels.sh., bin/github-issues/sync-labels.sh
+# Tests: bin/github-issues, bin/github-issues/bootstrap-labels.sh, bin/github-issues/sync-labels.sh
 # Tags: workflow, github, issues, labels, sync, scope:issue-specific
 # Tests for issue #283 — bin/github-issues/bootstrap-labels.sh.
 # bootstrap-labels.sh copies the label-sync skeleton (labels.yml, sync-labels.sh,

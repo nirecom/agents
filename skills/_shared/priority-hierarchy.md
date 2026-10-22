@@ -16,6 +16,8 @@ When a reviewer or codex concern would contradict an upstream artifact, the plan
 
 Cite the upstream section being preserved (e.g., `intent.md ## Confirmed non-goals`). This is the canonical sub-form of `reject: <reason>`.
 
+Never `reject:` a concern tagged `[glossary-drift ` even when it contradicts upstream; resolve it per `skills/_shared/glossary-drift-check.md`.
+
 ## Reviewer: do not reopen upstream decisions
 
 Before emitting a concern, verify it does not contradict an upstream artifact. If it would reopen a settled decision, suppress it (or downgrade to LOW under `## Accepted Tradeoffs`).

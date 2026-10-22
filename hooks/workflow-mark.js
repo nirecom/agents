@@ -35,7 +35,9 @@ const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const runTestsAcceptHandler = require("./workflow-mark/run-tests-accept-handler");
 const runTestsBaselineAcceptHandler = require("./workflow-mark/run-tests-baseline-accept-handler");
+const glossaryAcceptHandler = require("./workflow-mark/glossary-accept-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
+const supervisorBlockOverrideHandler = require("./workflow-mark/supervisor-block-override-handler");
 const resetHandler = require("./workflow-mark/reset-handler");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
@@ -162,8 +164,10 @@ for (const cmd of sentinelParts) {
   if (reviewTestsHandler.handle({ ...ctx, cmd })) continue;
   if (runTestsAcceptHandler.handle({ ...ctx, cmd })) continue;
   if (runTestsBaselineAcceptHandler.handle({ ...ctx, cmd })) continue;
+  if (glossaryAcceptHandler.handle({ ...ctx, cmd })) continue;
   if (markStepHandler.handle({ ...ctx, cmd })) continue;
   if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;
+  if (supervisorBlockOverrideHandler.handle({ ...ctx, cmd })) continue;
   if (resetHandler.handle({ ...ctx, cmd })) continue;
 }
 

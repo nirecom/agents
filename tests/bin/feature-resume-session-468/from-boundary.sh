@@ -42,10 +42,12 @@ assert_field "T24c. reason=unknown-session names WHY nothing is available" "reas
 assert_exit "T24d. exit 3 — the documented 'nothing survives for that id' code, not the exit 1 of a bad flag" "3"
 
 # T25 — the --from value is attacker-influenced (it arrives from a donor list,
-# a pasted id, or a delegating agent) and `artifactsFor()` joins it straight
-# into a path under WORKFLOW_PLANS_DIR. Two separate harms to keep out: the CLI
-# must never execute it, and it must never read a file's CONTENT from outside
-# the plans dir into this conversation.
+# a pasted id, or a delegating agent). Since #2302 `buildUpstreamView()` and
+# `artifactsFor()` validate it against SESSION_ID_VALID_RE before any path is
+# built, so a malformed id is refused as unknown-session without ever touching
+# the filesystem. Three separate harms to keep out: the CLI must never execute
+# it, never read a file's CONTENT from outside the plans dir, and never disclose
+# an outside PATH into this conversation.
 T25_ROOT=$(t24_root_of t25)
 mkdir -p "$T25_ROOT/plans" "$T25_ROOT/state" "$T25_ROOT/transcripts"
 # Sentinels planted OUTSIDE WORKFLOW_PLANS_DIR, at exactly the names a `../`
@@ -76,32 +78,65 @@ for T25_ARG in '../../../etc/passwd' '..' '/' '\' 'a/b' 'a\b' ';id' '$(id)' 'x`i
     T25_REJECTED=$((T25_REJECTED + 1))
 done
 
+# Each of these fails SESSION_ID_VALID_RE, so the refusal is the validation
+# itself (#2302) — not the accident that no file happens to exist at the
+# joined path.
 if [ -z "$T25_PROBLEMS" ]; then
-    pass "T25a. all $T25_REJECTED separator/traversal/metacharacter ids are refused as unknown-session with exit 3, and none reaches a shell"
+    pass "T25a. all $T25_REJECTED separator/traversal/metacharacter ids are refused by sid validation as unknown-session with exit 3, and none reaches a shell"
 else
     fail "T25a. a boundary --from value was mishandled;$T25_PROBLEMS"
 fi
 
-# T25b — the one shape that does resolve a path outside the plans dir:
-# `../<name>` with artifacts planted next to the plans dir. What must hold is
-# that nothing outside is DISCLOSED or ADOPTED — no sentinel body in the
-# output, no state inherited. (Known gap, reported upstream and deliberately
-# not asserted as correct here: the record still echoes the resolved outside
-# PATH, because artifactsFor() joins the id unvalidated.)
+# T25b — the one shape that would resolve a path outside the plans dir if the
+# id were joined unvalidated: `../<name>` with artifacts planted next to the
+# plans dir. Since #2302 the id fails SESSION_ID_VALID_RE, so it must be
+# refused exactly like any other unknown id — exit 3, availability=none,
+# reason=unknown-session — and nothing outside may be DISCLOSED: no sentinel
+# body, no planted artifact filename, no outside absolute path, and no state
+# adoption attempted.
 run_from_arg "$T25_ROOT/adjacent" "../escape-t25"
 T25B_PROBLEMS=""
-# Anchor: the escape must actually have reached the planted files, or the two
-# absence assertions below hold for the boring reason that nothing was found.
-printf '%s' "$LAST_OUT" | grep -qF 'escape-t25-intent.md' ||
-    T25B_PROBLEMS="$T25B_PROBLEMS [fixture never exercised: the ../ id resolved to no planted artifact]"
+# Fixture anchor: the planted files must exist, or the absence checks below
+# would hold for the boring reason that there was nothing to find.
+[ -f "$T25_ROOT/adjacent/escape-t25-intent.md" ] ||
+    T25B_PROBLEMS="$T25B_PROBLEMS [fixture never planted the outside artifact]"
+[ "$LAST_EXIT" = "3" ] ||
+    T25B_PROBLEMS="$T25B_PROBLEMS [exited $LAST_EXIT, not 3]"
+printf '%s' "$LAST_OUT" | grep -qF '"availability":"none"' ||
+    T25B_PROBLEMS="$T25B_PROBLEMS [not answered with availability=none]"
+printf '%s' "$LAST_OUT" | grep -qF '"reason":"unknown-session"' ||
+    T25B_PROBLEMS="$T25B_PROBLEMS [not rejected as unknown-session]"
 case "$LAST_OUT$LAST_ERR" in
     *T25-OUTSIDE-SECRET-BODY*)
         T25B_PROBLEMS="$T25B_PROBLEMS [the body of a file outside the plans dir was read into the output]" ;;
 esac
-printf '%s' "$LAST_OUT" | grep -qF '"attempted":false' ||
+for T25B_NAME in escape-t25-intent.md escape-t25-outline.md escape-t25-detail.md; do
+    case "$LAST_OUT$LAST_ERR" in
+        *"$T25B_NAME"*)
+            T25B_PROBLEMS="$T25B_PROBLEMS [the outside artifact name $T25B_NAME was disclosed]" ;;
+    esac
+done
+# The outside absolute path, in every spelling the CLI could emit it: the
+# shell's own, the forward-slash Windows form, and the JSON-escaped backslash form.
+T25B_ADJ_FORMS="$T25_ROOT/adjacent/escape-t25"
+if command -v cygpath >/dev/null 2>&1; then
+    T25B_ADJ_M="$(cygpath -m "$T25_ROOT/adjacent")/escape-t25"
+    T25B_ADJ_W="$(cygpath -w "$T25_ROOT/adjacent")\\escape-t25"
+    T25B_ADJ_FORMS="$T25B_ADJ_FORMS
+$T25B_ADJ_M
+${T25B_ADJ_W//\\/\\\\}"
+fi
+while IFS= read -r T25B_FORM; do
+    [ -n "$T25B_FORM" ] || continue
+    case "$LAST_OUT$LAST_ERR" in
+        *"$T25B_FORM"*)
+            T25B_PROBLEMS="$T25B_PROBLEMS [the outside absolute path <$T25B_FORM> was disclosed]" ;;
+    esac
+done <<< "$T25B_ADJ_FORMS"
+printf '%s' "$LAST_OUT" | grep -qF '"attempted":true' &&
     T25B_PROBLEMS="$T25B_PROBLEMS [state adoption was attempted for a donor conjured from outside the plans dir]"
 if [ -z "$T25B_PROBLEMS" ]; then
-    pass "T25b. a ../ id planted against real files outside the plans dir discloses no file content and adopts no state"
+    pass "T25b. a ../ id planted against real files outside the plans dir is refused by sid validation (exit 3, unknown-session) and discloses no file content, artifact name or outside path"
 else
-    fail "T25b. the plans-dir boundary leaked;$T25B_PROBLEMS - raw: $LAST_OUT"
+    fail "T25b. the plans-dir boundary leaked;$T25B_PROBLEMS - raw: $LAST_OUT - stderr: $LAST_ERR"
 fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/confirm-checkpoint.js, hooks/lib/turn-marker.js
-# Tags: confirm-checkpoint, hook, plan, sentinel, workflow, scope:issue-specific, plan-sync, additional-context, fail-open
+# Tags: confirm-checkpoint, hook, plan, sentinel, workflow, scope:issue-specific, plan-sync, additional-context, fail-open, presentation-receipt, fail-closed
 # hooks/confirm-checkpoint.js — PreToolUse hook for WORKFLOW_CONFIRM_* sentinels in Bash.
 # L3 gap (what this test does NOT catch):
 # - confirm-checkpoint.js firing in a real Claude Code PreToolUse session (hook wiring)
@@ -159,6 +159,19 @@ clear_markers() {
   rm -f "$WORKFLOW_DIR_TEST/$SID".confirm-plan-turn-*.json 2>/dev/null || true
 }
 
+# #2729: the dialog needs the presentation receipt the Stop hook writes; seed_receipt <stage>
+# writes it for <plans>/<SID>-<stage>.md in the current env (prints the path, or NONE).
+RECEIPT_SEED="$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/lib/presentation-receipt-seed.js"
+seed_receipt() { run_with_timeout node "$RECEIPT_SEED" "$SID" "$1" 2>/dev/null; }
+
+# extract_decision <hook-output> — hookSpecificOutput.permissionDecision, or empty.
+extract_decision() {
+  echo "$1" | run_with_timeout node -e "
+    let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(0); }
+    process.stdout.write(((d && d.hookSpecificOutput) || {}).permissionDecision || '');
+  " 2>/dev/null
+}
+
 # ── T1: non-Bash tool_name → empty stdout, exit 0 ──────────────────────────
 echo "=== T1: non-Bash tool_name (Write) ==="
 expect_empty "T1 non-Bash tool → noop" \
@@ -173,9 +186,10 @@ expect_empty "T2 Bash without sentinel → noop" "$T2_JSON"
 # ── T3: WORKFLOW_CONFIRM_INTENT + turn marker → systemMessage with abs path ─
 echo "=== T3: CONFIRM_INTENT + turn marker present ==="
 clear_markers
-T3_ABS="$PLANS_DIR/sess-abc-intent.md"
+T3_ABS="$PLANS_DIR/$SID-intent.md"
 touch "$T3_ABS"
 write_marker "intent" "$T3_ABS"
+seed_receipt intent >/dev/null
 T3_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")
 T3_OUT=$(run_hook "$T3_JSON")
 T3_MSG=$(extract_system_message "$T3_OUT")
@@ -196,6 +210,7 @@ echo "=== T4: CONFIRM_INTENT + no marker + PLANS_DIR file ==="
 clear_markers
 T4_ABS="$PLANS_DIR/$SID-intent.md"
 touch "$T4_ABS"
+seed_receipt intent >/dev/null
 T4_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")
 T4_OUT=$(run_hook "$T4_JSON")
 T4_MSG=$(extract_system_message "$T4_OUT")
@@ -206,26 +221,25 @@ else
 fi
 rm -f "$T4_ABS"
 
-# ── T5: CONFIRM_INTENT + neither marker nor file → systemMessage w/o path ──
-echo "=== T5: CONFIRM_INTENT + neither marker nor file ==="
+# ── T5 (#2729, inverted): CONFIRM_INTENT + neither marker nor file → denied (fail-closed) ──
+echo "=== T5: CONFIRM_INTENT + neither marker nor file → deny ==="
 clear_markers
 T5_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")
 T5_OUT=$(run_hook "$T5_JSON")
 T5_MSG=$(extract_system_message "$T5_OUT")
-if [ -z "$T5_MSG" ]; then
-  fail "T5 expected systemMessage with Click Allow text, got empty"
-elif echo "$T5_MSG" | grep -qF "Click Allow"; then
-  pass "T5 systemMessage has Click Allow even without file path"
+if [ "$(extract_decision "$T5_OUT")" = "deny" ] && ! echo "$T5_MSG" | grep -qF "Click Allow"; then
+  pass "T5 no artifact → denied, no Click Allow dialog (unverifiable-artifact)"
 else
-  fail "T5 systemMessage missing 'Click Allow' — got: $T5_MSG"
+  fail "T5 no artifact → expected a deny without the dialog — got: $T5_OUT"
 fi
 
 # ── T6: WORKFLOW_CONFIRM_OUTLINE sentinel → [outline] prefix ────────────────
 echo "=== T6: WORKFLOW_CONFIRM_OUTLINE ==="
 clear_markers
-T6_ABS="$PLANS_DIR/sess-outline-test-outline.md"
+T6_ABS="$PLANS_DIR/$SID-outline.md"
 touch "$T6_ABS"
 write_marker "outline" "$T6_ABS"
+seed_receipt outline >/dev/null
 T6_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")
 T6_OUT=$(run_hook "$T6_JSON")
 T6_MSG=$(extract_system_message "$T6_OUT")
@@ -235,13 +249,15 @@ else
   fail "T6 systemMessage missing [outline] prefix — got: $T6_MSG"
 fi
 clear_markers
+rm -f "$T6_ABS"
 
 # ── T7: WORKFLOW_CONFIRM_DETAIL sentinel → [detail] prefix ──────────────────
 echo "=== T7: WORKFLOW_CONFIRM_DETAIL ==="
 clear_markers
-T7_ABS="$PLANS_DIR/sess-detail-test-detail.md"
+T7_ABS="$PLANS_DIR/$SID-detail.md"
 touch "$T7_ABS"
 write_marker "detail" "$T7_ABS"
+seed_receipt detail >/dev/null
 T7_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_DETAIL>>\"")
 T7_OUT=$(run_hook "$T7_JSON")
 T7_MSG=$(extract_system_message "$T7_OUT")
@@ -253,11 +269,14 @@ fi
 clear_markers
 
 # ── T9: CONFIRM_OUTLINE=off → "[confirm-skipped: CONFIRM_OUTLINE=off]" ─────
+# #2726/#2729: plan-stage flags come from $AGENTS_MAIN_ROOT/.env only — cases use confirm_env_root.
+# shellcheck source=../lib/confirm-env-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/lib/confirm-env-fixture.sh"
 echo "=== T9: CONFIRM_OUTLINE=off → skipped systemMessage ==="
 clear_markers
 T9_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")
 T9_OUT=$(
-  export CONFIRM_OUTLINE=off
+  confirm_env_root "$ISOLATED_CFG_DIR/t9" CONFIRM_OUTLINE=off
   echo "$T9_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
 )
 T9_MSG=$(extract_system_message "$T9_OUT")
@@ -270,9 +289,10 @@ fi
 # ── T10: systemMessage always contains "Click Allow to proceed, Deny to abort." (plan ON) ──
 echo "=== T10: 'Click Allow' tagline on plan stage (ON) ==="
 clear_markers
-T10_ABS="$PLANS_DIR/sess-t10-detail.md"
+T10_ABS="$PLANS_DIR/$SID-detail.md"
 touch "$T10_ABS"
 write_marker "detail" "$T10_ABS"
+seed_receipt detail >/dev/null
 T10_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_DETAIL>>\"")
 T10_OUT=$(run_hook "$T10_JSON")
 T10_MSG=$(extract_system_message "$T10_OUT")
@@ -282,6 +302,7 @@ else
   fail "T10 missing 'Click Allow to proceed, Deny to abort.' — got: $T10_MSG"
 fi
 clear_markers
+rm -f "$T10_ABS"
 
 # ── T12: CONFIRM_OUTLINE=off in .env file (NOT exported) → [confirm-skipped] ─
 echo "=== T12: CONFIRM_OUTLINE=off in .env file → skipped systemMessage ==="
@@ -301,6 +322,44 @@ else
 fi
 rm -f "$ISOLATED_CFG_DIR/.env"
 
+# ── T12b/T12c (#2726/#2729): an exported plan-stage flag is ignored; the .env file decides ──
+echo "=== T12b: exported CONFIRM_OUTLINE=off, .env silent → regular confirm dialog ==="
+clear_markers
+# A presentable outline (plan file, turn marker, receipt — as T6) so the regular dialog can appear.
+T12B_ABS="$PLANS_DIR/$SID-outline.md"
+touch "$T12B_ABS"
+write_marker "outline" "$T12B_ABS"
+T12B_OUT=$(
+  confirm_env_root "$ISOLATED_CFG_DIR/t12b"
+  seed_receipt outline >/dev/null
+  export CONFIRM_OUTLINE=off
+  echo "$T12_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
+)
+T12B_MSG=$(extract_system_message "$T12B_OUT")
+clear_markers
+rm -f "$T12B_ABS"
+if echo "$T12B_MSG" | grep -qF "[confirm-skipped"; then
+  fail "T12b exported CONFIRM_OUTLINE=off must be ignored — got skipped: $T12B_MSG"
+elif echo "$T12B_MSG" | grep -qF "[outline]" && echo "$T12B_MSG" | grep -qF "Click Allow"; then
+  pass "T12b exported CONFIRM_OUTLINE=off ignored — regular confirm dialog text"
+else
+  fail "T12b exported CONFIRM_OUTLINE=off — expected the regular confirm systemMessage, got: $T12B_MSG"
+fi
+
+echo "=== T12c: .env CONFIRM_OUTLINE=off, exported CONFIRM_OUTLINE=on → skipped ==="
+clear_markers
+T12C_OUT=$(
+  confirm_env_root "$ISOLATED_CFG_DIR/t12c" CONFIRM_OUTLINE=off
+  export CONFIRM_OUTLINE=on
+  echo "$T12_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
+)
+T12C_MSG=$(extract_system_message "$T12C_OUT")
+if echo "$T12C_MSG" | grep -qF "[confirm-skipped: CONFIRM_OUTLINE=off]"; then
+  pass "T12c .env CONFIRM_OUTLINE=off beats exported on → '[confirm-skipped: CONFIRM_OUTLINE=off]'"
+else
+  fail "T12c .env CONFIRM_OUTLINE=off + exported on — missing expected skipped message: $T12C_MSG"
+fi
+
 # ── T25-T28 (#2277): CONFIRM_INTENT=off no longer skips (even with the stage table unloadable); CONFIRM_DETAIL/OUTLINE=off still do ──
 # shellcheck source=feature-confirm-checkpoint/off-per-stage.sh
 . "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/off-per-stage.sh"
@@ -308,6 +367,17 @@ rm -f "$ISOLATED_CFG_DIR/.env"
 # ── T13-T15 (#2513): published blob URL, push failure, no editor launch ──────
 # shellcheck source=feature-confirm-checkpoint/plan-sync.sh
 . "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/plan-sync.sh"
+
+# ── #2729: continuation marks are replaced by presentation receipts ──
+# The receipt store is pinned by tests/hooks/feature-2729-presentation-receipt.sh; here only the
+# retired mark API is checked to be gone from turn-marker.js.
+echo "=== #2729: turn-marker.js no longer exports the continuation-mark API ==="
+CM_LEFT=$(run_with_timeout node -e "
+  const tm = require('$TURN_MARKER_LIB');
+  process.stdout.write(['writeContinuationMark', 'takeContinuationMark', 'clearContinuationMarks'].filter((k) => k in tm).join(','));
+" 2>&1)
+if [ -z "$CM_LEFT" ]; then pass "#2729 turn-marker.js exports no continuation-mark function"
+else fail "#2729 turn-marker.js still exports: $CM_LEFT"; fi
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

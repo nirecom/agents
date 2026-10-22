@@ -73,7 +73,12 @@ run_wf_meta_evidence_tests() {
     # intent.md names an issue first: the closes_issues gate reads it (#2654) and the fixture keeps an existing file.
     WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" write_intent_issues "case30" 1053
     WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" node "$NEXT_STEP_AGENTS_DIR/tests/lib/plan-approval-fixture.js" approve case30 clarify_intent >/dev/null 2>&1
-    OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" run_next_step --session "case30" 2>/dev/null || true)"
+    # #2529: the auto-repair also needs the intent stage's glossary_check record, taken against
+    # the same plans dir and fixture repo the next-step run below recomputes it from.
+    local C30_REPO
+    C30_REPO="$(mk_glossary_repo "$TMPDIR_WT/case30-repo")"
+    WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" glossary_check_record "case30" "$C30_REPO" intent
+    OUT="$(cd "$C30_REPO" && WORKFLOW_PLANS_DIR="$PLANS_DIR_WT" CLAUDE_PROJECT_DIR="$C30_REPO" run_next_step --session "case30" 2>/dev/null || true)"
     eval "$OUT" 2>/dev/null || true
     # After auto-repair, next-step should advance past clarify_intent to research/survey-code
     if [ "${NEXT_SKILL:-}" != "clarify-intent" ] && [ "${ACTION:-}" = "invoke" ]; then

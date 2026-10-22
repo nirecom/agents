@@ -115,8 +115,9 @@ to suspend. Their only switch is `JEV` — see [jev.md](../jev.md).
 prompt through `updatedInput` and never blocks, so there is no marker for it to read.
 
 `hooks/confirm-checkpoint.js` and `hooks/gate-plan-skill-advance.js` (#2513 / #2277) read no
-marker. The checkpoint's plan-link deny is waived only by its own `CONFIRM_<STAGE>=off`, which
-never covers intent. The Skill gate denies only on an `unapproved` stage; a session with no
+marker. The checkpoint's plan-link deny is waived only by its own `CONFIRM_<STAGE>=off`, read
+through the shared plan gate (`hooks/lib/confirm-gate/plan-gate.js`), which never covers intent.
+The presentation receipt (#2729) is not a bypass marker either: it is the evidence that lets a CONFIRM echo reach the dialog, matched against today's plan and spent on use. The Skill gate denies only on an `unapproved` stage; a session with no
 state file reads as `not-applicable` and passes, so work outside the workflow is never stopped.
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info

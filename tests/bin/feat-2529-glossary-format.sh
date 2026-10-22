@@ -15,11 +15,16 @@ T="$(make_tmp)"
 readonly T
 harness_isolate "$T/iso"
 trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/transcripts"
+export CLAUDE_TRANSCRIPT_BASE_DIR="$T/transcripts"
+unset CLAUDE_CODE_SESSION_ID
 
 MOD="$(np "$SCRIPT_CHECKOUT_ROOT/bin/lib/glossary-format.js")"
+WF="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state.js")"
 PROMOTE="$SCRIPT_CHECKOUT_ROOT/bin/glossary-promote"
 GATE="$SCRIPT_CHECKOUT_ROOT/bin/review-doc-glossary"
 PROBE="$T/probe.js"
+APPROVE="$T/approve.js"
 
 # probe.js <module> <mode> <fn> <arg>... — call one export; '@<path>' args are file text,
 # other args are JSON. Modes: sign | empty | terms | path | json.
@@ -41,6 +46,18 @@ else if (mode === 'terms') {
 else console.log(r == null ? 'null' : JSON.stringify(r));
 EOF
 PROBE="$(np "$PROBE")"
+
+# approve.js <workflow-state> <sid> — record the CONFIRM_INTENT approval (confirm-sentinel,
+# with the sha of <WORKFLOW_PLANS_DIR>/<sid>-intent.md) the way the confirm handler does.
+cat > "$APPROVE" <<'EOF'
+'use strict';
+const wf = require(process.argv[2]);
+const sid = process.argv[3];
+const sha = wf.computeArtifactSha(sid, 'clarify_intent');
+if (!sha) { console.error('approve: intent sha uncomputable for ' + sid); process.exit(1); }
+wf.recordPlanApproval(sid, 'clarify_intent', { source: 'confirm-sentinel', reason: '2529 fixture', artifactSha: sha, artifactHashStatus: 'recorded' });
+EOF
+APPROVE="$(np "$APPROVE")"
 
 # expect_probe <name> <want> <mode> <fn> <arg>...
 expect_probe() {
@@ -68,9 +85,26 @@ gloss() {
 intent() {
   local f="$1" row
   shift
+  mkdir -p "$(dirname "$f")"
   printf '# Fixture intent\n\n## Issues\n\n- #1: fixture\n\n## Glossary\n\n| Term | Category | Definition |\n|---|---|---|\n' > "$f"
   for row in "$@"; do printf '| %s |\n' "${row//|/ | }" >> "$f"; done
   printf '\n## Background/Motivation\n\nFixture.\n' >> "$f"
+}
+
+# approve <sid> — record the approval of the intent already written at the session's path.
+approve() {
+  run_with_timeout 120 node "$APPROVE" "$WF" "$1" >/dev/null 2>&1 || fail "fixture approval for $1" "approve.js failed"
+}
+
+# approved_intent <sid> <row>... — the session's own intent.md (<WORKFLOW_PLANS_DIR>/<sid>-intent.md,
+# the only path glossary-promote accepts, #2529) with a confirm-sentinel approval of its bytes;
+# sets INTENT to the node-ready path.
+approved_intent() {
+  local sid="$1"
+  shift
+  intent "$WORKFLOW_PLANS_DIR/$sid-intent.md" "$@"
+  approve "$sid"
+  INTENT="$(np "$WORKFLOW_PLANS_DIR/$sid-intent.md")"
 }
 
 # run_promote <args...> — sets PROMOTE_OUT / PROMOTE_RC; a missing CLI fails loudly (RED).
@@ -151,82 +185,83 @@ one continuation line (2 lines) passes       ; EMPTY                        ; em
 two continuation lines (3 lines) blocks      ; NONEMPTY                     ; empty ; checkGlossaryFile ; @three-lines.md
 empty Definition text blocks                 ; NONEMPTY                     ; empty ; checkGlossaryFile ; @empty-def.md
 # parseGlossaryPath: category|range, or null when unparseable
-unsplit user                                 ; user|none                    ; path  ; parseGlossaryPath ; "docs/glossary-user.md"
-unsplit internal                             ; internal|none                ; path  ; parseGlossaryPath ; "docs/glossary-internal.md"
-ranged user a-m                              ; user|a-m                     ; path  ; parseGlossaryPath ; "docs/glossary-user-a-m.md"
-ranged internal n-z                          ; internal|n-z                 ; path  ; parseGlossaryPath ; "docs/glossary-internal-n-z.md"
-single-letter range                          ; user|q-q                     ; path  ; parseGlossaryPath ; "docs/glossary-user-q-q.md"
-word suffix is unparseable                   ; null                         ; path  ; parseGlossaryPath ; "docs/glossary-user-foo.md"
-reversed range is unparseable                ; null                         ; path  ; parseGlossaryPath ; "docs/glossary-user-m-a.md"
-multi-letter bound is unparseable            ; null                         ; path  ; parseGlossaryPath ; "docs/glossary-user-a-mm.md"
+unsplit user                                 ; user|none                    ; path  ; parseGlossaryPath ; "docs/glossary/user.md"
+unsplit internal                             ; internal|none                ; path  ; parseGlossaryPath ; "docs/glossary/internal.md"
+ranged user a-m                              ; user|a-m                     ; path  ; parseGlossaryPath ; "docs/glossary/user-a-m.md"
+ranged internal n-z                          ; internal|n-z                 ; path  ; parseGlossaryPath ; "docs/glossary/internal-n-z.md"
+single-letter range                          ; user|q-q                     ; path  ; parseGlossaryPath ; "docs/glossary/user-q-q.md"
+word suffix is unparseable                   ; null                         ; path  ; parseGlossaryPath ; "docs/glossary/user-foo.md"
+reversed range is unparseable                ; null                         ; path  ; parseGlossaryPath ; "docs/glossary/user-m-a.md"
+multi-letter bound is unparseable            ; null                         ; path  ; parseGlossaryPath ; "docs/glossary/user-a-mm.md"
 index page is not a glossary file            ; null                         ; path  ; parseGlossaryPath ; "docs/glossary.md"
+nested directory is not a glossary file      ; null                         ; path  ; parseGlossaryPath ; "docs/glossary/sub/user.md"
 # termBucket: first letter, non a-z leading terms go to a
 underscore-leading term goes to a            ; "a"                          ; json  ; termBucket        ; "_foo"
 digit-leading term goes to a                 ; "a"                          ; json  ; termBucket        ; "2fa"
 upper-case term is lowercased                ; "z"                          ; json  ; termBucket        ; "Zeta"
 plain term keeps its first letter            ; "m"                          ; json  ; termBucket        ; "mike"
 # fileForTerm: route a term to the file of its category and range
-zulu routes to n-z                           ; "docs/glossary-user-n-z.md"  ; json  ; fileForTerm       ; ["docs/glossary-user-a-m.md","docs/glossary-user-n-z.md","docs/glossary-internal.md"] ; "user"     ; "zulu"
-Beta routes to a-m                           ; "docs/glossary-user-a-m.md"  ; json  ; fileForTerm       ; ["docs/glossary-user-a-m.md","docs/glossary-user-n-z.md","docs/glossary-internal.md"] ; "user"     ; "Beta"
-m boundary stays in a-m                      ; "docs/glossary-user-a-m.md"  ; json  ; fileForTerm       ; ["docs/glossary-user-a-m.md","docs/glossary-user-n-z.md","docs/glossary-internal.md"] ; "user"     ; "mike"
-_priv routes to the range starting at a      ; "docs/glossary-user-a-m.md"  ; json  ; fileForTerm       ; ["docs/glossary-user-a-m.md","docs/glossary-user-n-z.md","docs/glossary-internal.md"] ; "user"     ; "_priv"
-internal routes to the unsplit internal file ; "docs/glossary-internal.md"  ; json  ; fileForTerm       ; ["docs/glossary-user-a-m.md","docs/glossary-user-n-z.md","docs/glossary-internal.md"] ; "internal" ; "xray"
-absent category has no file                  ; null                         ; json  ; fileForTerm       ; ["docs/glossary-user.md"]                                                               ; "internal" ; "xray"
+zulu routes to n-z                           ; "docs/glossary/user-n-z.md"  ; json  ; fileForTerm       ; ["docs/glossary/user-a-m.md","docs/glossary/user-n-z.md","docs/glossary/internal.md"] ; "user"     ; "zulu"
+Beta routes to a-m                           ; "docs/glossary/user-a-m.md"  ; json  ; fileForTerm       ; ["docs/glossary/user-a-m.md","docs/glossary/user-n-z.md","docs/glossary/internal.md"] ; "user"     ; "Beta"
+m boundary stays in a-m                      ; "docs/glossary/user-a-m.md"  ; json  ; fileForTerm       ; ["docs/glossary/user-a-m.md","docs/glossary/user-n-z.md","docs/glossary/internal.md"] ; "user"     ; "mike"
+_priv routes to the range starting at a      ; "docs/glossary/user-a-m.md"  ; json  ; fileForTerm       ; ["docs/glossary/user-a-m.md","docs/glossary/user-n-z.md","docs/glossary/internal.md"] ; "user"     ; "_priv"
+internal routes to the unsplit internal file ; "docs/glossary/internal.md"  ; json  ; fileForTerm       ; ["docs/glossary/user-a-m.md","docs/glossary/user-n-z.md","docs/glossary/internal.md"] ; "internal" ; "xray"
+absent category has no file                  ; null                         ; json  ; fileForTerm       ; ["docs/glossary/user.md"]                                                               ; "internal" ; "xray"
 TABLE
 case_end
 
 case_begin "promote-inserts-in-order-and-skips-session" "bin/glossary-promote"
 R="$T/promote-order"
-gloss "$R/docs/glossary-user.md" alpha omega
-gloss "$R/docs/glossary-internal.md" kilo
-intent "$R/intent.md" "Gamma|user|The third fixture term." "delta|internal|An internal fixture term." "scratch|session|Session-only word."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user.md" alpha omega
+gloss "$R/docs/glossary/internal.md" kilo
+approved_intent "f2529-fmt-order" "Gamma|user|The third fixture term." "delta|internal|An internal fixture term." "scratch|session|Session-only word."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "promote with user/internal/session rows" 0
-expect_promote_out "summary line" "ADDED=2 SKIPPED_EXISTING=0 SKIPPED_SESSION=1"
-a="$(heading_line "$R/docs/glossary-user.md" alpha)"
-g="$(heading_line "$R/docs/glossary-user.md" Gamma)"
-o="$(heading_line "$R/docs/glossary-user.md" omega)"
+expect_promote_out "summary line" "ADDED=2 DELETED=0 REDEFINED=0 SKIPPED_EXISTING=0 SKIPPED_SESSION=1"
+a="$(heading_line "$R/docs/glossary/user.md" alpha)"
+g="$(heading_line "$R/docs/glossary/user.md" Gamma)"
+o="$(heading_line "$R/docs/glossary/user.md" omega)"
 if [[ -n "$a" && -n "$g" && -n "$o" ]] && ((a < g && g < o)); then pass "Gamma inserted between alpha and omega"
 else fail "Gamma inserted between alpha and omega" "lines alpha=$a Gamma=$g omega=$o"; fi
-d="$(heading_line "$R/docs/glossary-internal.md" delta)"
-k="$(heading_line "$R/docs/glossary-internal.md" kilo)"
+d="$(heading_line "$R/docs/glossary/internal.md" delta)"
+k="$(heading_line "$R/docs/glossary/internal.md" kilo)"
 if [[ -n "$d" && -n "$k" ]] && ((d < k)); then pass "delta inserted before kilo in internal"
 else fail "delta inserted before kilo in internal" "lines delta=$d kilo=$k"; fi
-if grep -q -x -F -- "- **Definition**: The third fixture term." "$R/docs/glossary-user.md" && grep -q -x -F -- "- **Related**: TODO" "$R/docs/glossary-user.md"; then pass "generated entry carries Definition and Related TODO"
-else fail "generated entry carries Definition and Related TODO" "$(cat "$R/docs/glossary-user.md")"; fi
-expect_no_term "session row not in user file" "$R/docs/glossary-user.md" scratch
-expect_no_term "session row not in internal file" "$R/docs/glossary-internal.md" scratch
+if grep -q -x -F -- "- **Definition**: The third fixture term." "$R/docs/glossary/user.md" && grep -q -x -F -- "- **Related**: TODO" "$R/docs/glossary/user.md"; then pass "generated entry carries Definition and Related TODO"
+else fail "generated entry carries Definition and Related TODO" "$(cat "$R/docs/glossary/user.md")"; fi
+expect_no_term "session row not in user file" "$R/docs/glossary/user.md" scratch
+expect_no_term "session row not in internal file" "$R/docs/glossary/internal.md" scratch
 case_end
 
 case_begin "promote-is-idempotent" "bin/glossary-promote"
 R="$T/promote-idem"
-gloss "$R/docs/glossary-user.md" alpha omega
-gloss "$R/docs/glossary-internal.md" kilo
-intent "$R/intent.md" "Gamma|user|The third fixture term." "delta|internal|An internal fixture term." "scratch|session|Session-only word."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
-cp "$R/docs/glossary-user.md" "$T/idem-user.1"
-cp "$R/docs/glossary-internal.md" "$T/idem-internal.1"
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user.md" alpha omega
+gloss "$R/docs/glossary/internal.md" kilo
+approved_intent "f2529-fmt-idem" "Gamma|user|The third fixture term." "delta|internal|An internal fixture term." "scratch|session|Session-only word."
+run_promote "$INTENT" "$(np "$R")"
+cp "$R/docs/glossary/user.md" "$T/idem-user.1"
+cp "$R/docs/glossary/internal.md" "$T/idem-internal.1"
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "second run" 0
-expect_promote_out "second run adds nothing" "ADDED=0 SKIPPED_EXISTING=2 SKIPPED_SESSION=1"
-expect_same_file "user file unchanged by second run" "$T/idem-user.1" "$R/docs/glossary-user.md"
-expect_same_file "internal file unchanged by second run" "$T/idem-internal.1" "$R/docs/glossary-internal.md"
+expect_promote_out "second run adds nothing" "ADDED=0 DELETED=0 REDEFINED=0 SKIPPED_EXISTING=2 SKIPPED_SESSION=1"
+expect_same_file "user file unchanged by second run" "$T/idem-user.1" "$R/docs/glossary/user.md"
+expect_same_file "internal file unchanged by second run" "$T/idem-internal.1" "$R/docs/glossary/internal.md"
 case_end
 
 case_begin "promote-never-creates-missing-glossary-file" "bin/glossary-promote"
 R="$T/promote-missing"
-gloss "$R/docs/glossary-user.md" alpha
-intent "$R/intent.md" "delta|internal|An internal fixture term."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user.md" alpha
+approved_intent "f2529-fmt-missing" "delta|internal|An internal fixture term."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "internal row with no internal file" 0
 expect_promote_out "missing internal file warns not promoted" "not promoted"
 expect_promote_out "missing internal file adds nothing" "ADDED=0"
-if [[ ! -e "$R/docs/glossary-internal.md" ]]; then pass "glossary-internal.md not created"
-else fail "glossary-internal.md not created" "file was created"; fi
+if [[ ! -e "$R/docs/glossary/internal.md" ]]; then pass "glossary/internal.md not created"
+else fail "glossary/internal.md not created" "file was created"; fi
 R="$T/promote-none"
 mkdir -p "$R"
-intent "$R/intent.md" "Gamma|user|A user fixture term."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+approved_intent "f2529-fmt-none" "Gamma|user|A user fixture term."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "repo with no glossary files" 0
 expect_promote_out "glossary-less repo warns not promoted" "not promoted"
 expect_promote_out "glossary-less repo adds nothing" "ADDED=0"
@@ -236,12 +271,12 @@ case_end
 
 case_begin "promote-invalid-intent-table-exits-1" "bin/glossary-promote"
 R="$T/promote-invalid"
-gloss "$R/docs/glossary-user.md" alpha
-cp "$R/docs/glossary-user.md" "$T/invalid-user.before"
-intent "$R/intent.md" "Gamma|bogus|Unknown category."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user.md" alpha
+cp "$R/docs/glossary/user.md" "$T/invalid-user.before"
+approved_intent "f2529-fmt-invalid" "Gamma|bogus|Unknown category."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "unknown category value" 1
-expect_same_file "glossary untouched on invalid table" "$T/invalid-user.before" "$R/docs/glossary-user.md"
+expect_same_file "glossary untouched on invalid table" "$T/invalid-user.before" "$R/docs/glossary/user.md"
 case_end
 
 case_begin "promote-usage-error-exits-2" "bin/glossary-promote"
@@ -251,77 +286,81 @@ case_end
 
 case_begin "promote-missing-intent-file-changes-nothing" "bin/glossary-promote"
 R="$T/promote-no-intent"
-gloss "$R/docs/glossary-user.md" alpha
-gloss "$R/docs/glossary-internal.md" kilo
-cp "$R/docs/glossary-user.md" "$T/no-intent-user.before"
-cp "$R/docs/glossary-internal.md" "$T/no-intent-internal.before"
+gloss "$R/docs/glossary/user.md" alpha
+gloss "$R/docs/glossary/internal.md" kilo
+cp "$R/docs/glossary/user.md" "$T/no-intent-user.before"
+cp "$R/docs/glossary/internal.md" "$T/no-intent-internal.before"
 run_promote "$(np "$R/does-not-exist-intent.md")" "$(np "$R")"
 # 127 is the harness's missing-CLI code, so it must not count as the expected refusal.
 if [[ "$PROMOTE_RC" != 0 && "$PROMOTE_RC" != 127 ]]; then pass "missing intent file exits non-zero (rc=$PROMOTE_RC)"
 else fail "missing intent file exits non-zero" "rc=$PROMOTE_RC; output: ${PROMOTE_OUT:0:600}"; fi
-expect_same_file "user file untouched without an intent file" "$T/no-intent-user.before" "$R/docs/glossary-user.md"
-expect_same_file "internal file untouched without an intent file" "$T/no-intent-internal.before" "$R/docs/glossary-internal.md"
+expect_same_file "user file untouched without an intent file" "$T/no-intent-user.before" "$R/docs/glossary/user.md"
+expect_same_file "internal file untouched without an intent file" "$T/no-intent-internal.before" "$R/docs/glossary/internal.md"
 case_end
 
+# A lone add of a term that already lives in the other category is refused before any
+# write (category-conflict, #2529); a category move needs the paired delete row.
 case_begin "promote-term-in-opposite-category-changes-nothing" "bin/glossary-promote"
 R="$T/promote-cross"
-gloss "$R/docs/glossary-user.md" alpha
-gloss "$R/docs/glossary-internal.md" kilo
-cp "$R/docs/glossary-user.md" "$T/cross-user.before"
-cp "$R/docs/glossary-internal.md" "$T/cross-internal.before"
-intent "$R/intent.md" "kilo|user|Already defined as an internal term."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
-# Refused (exit 1) or reported as existing (exit 0 + SKIPPED_EXISTING=1) are both acceptable.
-if [[ "$PROMOTE_RC" == 1 ]] || [[ "$PROMOTE_RC" == 0 && "$PROMOTE_OUT" == *"ADDED=0 SKIPPED_EXISTING=1"* ]]; then
-  pass "term in the opposite category is refused or reported (rc=$PROMOTE_RC)"
-else fail "term in the opposite category is refused or reported" "rc=$PROMOTE_RC; output: ${PROMOTE_OUT:0:600}"; fi
-expect_same_file "user file untouched by a cross-category term" "$T/cross-user.before" "$R/docs/glossary-user.md"
-expect_same_file "internal file untouched by a cross-category term" "$T/cross-internal.before" "$R/docs/glossary-internal.md"
+gloss "$R/docs/glossary/user.md" alpha
+gloss "$R/docs/glossary/internal.md" kilo
+cp "$R/docs/glossary/user.md" "$T/cross-user.before"
+cp "$R/docs/glossary/internal.md" "$T/cross-internal.before"
+approved_intent "f2529-fmt-cross" "kilo|user|Already defined as an internal term."
+run_promote "$INTENT" "$(np "$R")"
+expect_promote_rc "term in the opposite category is refused" 1
+expect_promote_out "refusal names category-conflict" "category-conflict"
+expect_same_file "user file untouched by a cross-category term" "$T/cross-user.before" "$R/docs/glossary/user.md"
+expect_same_file "internal file untouched by a cross-category term" "$T/cross-internal.before" "$R/docs/glossary/internal.md"
 case_end
 
 case_begin "promote-routes-into-range-split-files" "bin/glossary-promote"
 R="$T/promote-ranged"
-gloss "$R/docs/glossary-user-a-m.md" alpha mike
-gloss "$R/docs/glossary-user-n-z.md" november
-intent "$R/intent.md" "beta|user|A fixture term." "zulu|user|A fixture term." "_priv|user|A fixture term."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user-a-m.md" alpha mike
+gloss "$R/docs/glossary/user-n-z.md" november
+approved_intent "f2529-fmt-ranged" "beta|user|A fixture term." "zulu|user|A fixture term." "_priv|user|A fixture term."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "ranged insert" 0
-expect_has_term "beta in a-m" "$R/docs/glossary-user-a-m.md" beta
-expect_has_term "_priv in a-m (non a-z leading)" "$R/docs/glossary-user-a-m.md" _priv
-expect_has_term "zulu in n-z" "$R/docs/glossary-user-n-z.md" zulu
-expect_no_term "zulu not in a-m" "$R/docs/glossary-user-a-m.md" zulu
+expect_has_term "beta in a-m" "$R/docs/glossary/user-a-m.md" beta
+expect_has_term "_priv in a-m (non a-z leading)" "$R/docs/glossary/user-a-m.md" _priv
+expect_has_term "zulu in n-z" "$R/docs/glossary/user-n-z.md" zulu
+expect_no_term "zulu not in a-m" "$R/docs/glossary/user-a-m.md" zulu
 case_end
 
 case_begin "promote-refuses-invalid-file-set" "bin/glossary-promote"
 R="$T/promote-overlap"
-gloss "$R/docs/glossary-user-a-m.md" alpha
-gloss "$R/docs/glossary-user-m-z.md" zulu
-cp "$R/docs/glossary-user-a-m.md" "$T/overlap-am.before"
-cp "$R/docs/glossary-user-m-z.md" "$T/overlap-mz.before"
-intent "$R/intent.md" "beta|user|A fixture term."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user-a-m.md" alpha
+gloss "$R/docs/glossary/user-m-z.md" zulu
+cp "$R/docs/glossary/user-a-m.md" "$T/overlap-am.before"
+cp "$R/docs/glossary/user-m-z.md" "$T/overlap-mz.before"
+approved_intent "f2529-fmt-overlap" "beta|user|A fixture term."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "overlapping ranges" 1
-expect_same_file "a-m untouched" "$T/overlap-am.before" "$R/docs/glossary-user-a-m.md"
-expect_same_file "m-z untouched" "$T/overlap-mz.before" "$R/docs/glossary-user-m-z.md"
+expect_same_file "a-m untouched" "$T/overlap-am.before" "$R/docs/glossary/user-a-m.md"
+expect_same_file "m-z untouched" "$T/overlap-mz.before" "$R/docs/glossary/user-m-z.md"
 case_end
 
+# The pre-promote glossary is committed so the staged change holds exactly the promoted adds;
+# the gate's glossary provenance check then matches them against the same approved session (#2529).
 case_begin "promote-round-trip-passes-gate" "bin/glossary-promote"
 R="$T/promote-roundtrip"
 harness_git_init "$R"
 git -C "$R" config core.autocrlf false
 git -C "$R" config user.email "test@example.com"
 git -C "$R" config user.name "test"
-gloss "$R/docs/glossary-user-a-m.md" alpha mike
-gloss "$R/docs/glossary-user-n-z.md" november
-intent "$T/roundtrip-intent.md" "beta|user|A fixture term." "zulu|user|A fixture term." "_priv|user|A fixture term."
-run_promote "$(np "$T/roundtrip-intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user-a-m.md" alpha mike
+gloss "$R/docs/glossary/user-n-z.md" november
+git -C "$R" add docs
+git -C "$R" commit -q -m "glossary before promote"
+approved_intent "f2529-fmt-roundtrip" "beta|user|A fixture term." "zulu|user|A fixture term." "_priv|user|A fixture term."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "round-trip promotion" 0
-sed -i 's#^- \*\*Related\*\*: TODO$#- **Related**: [owner](architecture/owner.md)#' "$R/docs/glossary-user-a-m.md" "$R/docs/glossary-user-n-z.md"
+sed -i 's#^- \*\*Related\*\*: TODO$#- **Related**: [owner](architecture/owner.md)#' "$R/docs/glossary/user-a-m.md" "$R/docs/glossary/user-n-z.md"
 git -C "$R" add docs
 GATE_RC=127
 if [[ -f "$GATE" ]]; then
   GATE_RC=0
-  GATE_OUT="$(cd "$R" && run_with_timeout 120 bash "$GATE" --staged 2>&1)" || GATE_RC=$?
+  GATE_OUT="$(cd "$R" && run_with_timeout 120 bash "$GATE" --staged --session f2529-fmt-roundtrip 2>&1)" || GATE_RC=$?
 else
   GATE_OUT="TOOL NOT FOUND: bin/review-doc-glossary"
 fi
@@ -331,73 +370,75 @@ case_end
 
 case_begin "promote-empty-glossary-section-is-noop" "bin/glossary-promote"
 R="$T/promote-empty"
-gloss "$R/docs/glossary-user.md" alpha
-gloss "$R/docs/glossary-internal.md" kilo
-cp "$R/docs/glossary-user.md" "$T/empty-user.before"
-cp "$R/docs/glossary-internal.md" "$T/empty-internal.before"
+gloss "$R/docs/glossary/user.md" alpha
+gloss "$R/docs/glossary/internal.md" kilo
+cp "$R/docs/glossary/user.md" "$T/empty-user.before"
+cp "$R/docs/glossary/internal.md" "$T/empty-internal.before"
 # The intent() helper always emits a table; an empty-bodied heading is written directly.
-printf '# Fixture intent\n\n## Issues\n\n- #1: fixture\n\n## Glossary\n\n## Background/Motivation\n\nFixture.\n' > "$R/intent.md"
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+printf '# Fixture intent\n\n## Issues\n\n- #1: fixture\n\n## Glossary\n\n## Background/Motivation\n\nFixture.\n' > "$WORKFLOW_PLANS_DIR/f2529-fmt-empty-intent.md"
+approve "f2529-fmt-empty"
+run_promote "$(np "$WORKFLOW_PLANS_DIR/f2529-fmt-empty-intent.md")" "$(np "$R")"
 expect_promote_rc "empty Glossary section" 0
-expect_promote_out "empty section adds nothing" "ADDED=0 SKIPPED_EXISTING=0 SKIPPED_SESSION=0"
-expect_same_file "user file untouched by an empty section" "$T/empty-user.before" "$R/docs/glossary-user.md"
-expect_same_file "internal file untouched by an empty section" "$T/empty-internal.before" "$R/docs/glossary-internal.md"
+expect_promote_out "empty section adds nothing" "ADDED=0 DELETED=0 REDEFINED=0 SKIPPED_EXISTING=0 SKIPPED_SESSION=0"
+expect_same_file "user file untouched by an empty section" "$T/empty-user.before" "$R/docs/glossary/user.md"
+expect_same_file "internal file untouched by an empty section" "$T/empty-internal.before" "$R/docs/glossary/internal.md"
 case_end
 
 case_begin "promote-validates-whole-table-before-writing" "bin/glossary-promote"
 R="$T/promote-partial"
-gloss "$R/docs/glossary-user.md" alpha
-gloss "$R/docs/glossary-internal.md" kilo
-cp "$R/docs/glossary-user.md" "$T/partial-user.before"
-cp "$R/docs/glossary-internal.md" "$T/partial-internal.before"
+gloss "$R/docs/glossary/user.md" alpha
+gloss "$R/docs/glossary/internal.md" kilo
+cp "$R/docs/glossary/user.md" "$T/partial-user.before"
+cp "$R/docs/glossary/internal.md" "$T/partial-internal.before"
 # Valid user/internal rows precede a 2-cell row: a row-by-row writer would promote them first.
-intent "$R/intent.md" "Gamma|user|A valid user term." "delta|internal|A valid internal term." "broken|user"
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+approved_intent "f2529-fmt-partial" "Gamma|user|A valid user term." "delta|internal|A valid internal term." "broken|user"
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "malformed row after valid rows" 1
-expect_same_file "user file untouched when a later row is malformed" "$T/partial-user.before" "$R/docs/glossary-user.md"
-expect_same_file "internal file untouched when a later row is malformed" "$T/partial-internal.before" "$R/docs/glossary-internal.md"
+expect_same_file "user file untouched when a later row is malformed" "$T/partial-user.before" "$R/docs/glossary/user.md"
+expect_same_file "internal file untouched when a later row is malformed" "$T/partial-internal.before" "$R/docs/glossary/internal.md"
 case_end
 
 case_begin "promote-table-with-trailing-prose-exits-1" "bin/glossary-promote"
 R="$T/promote-trailing-prose"
-gloss "$R/docs/glossary-user.md" alpha
-gloss "$R/docs/glossary-internal.md" kilo
-cp "$R/docs/glossary-user.md" "$T/prose-user.before"
-cp "$R/docs/glossary-internal.md" "$T/prose-internal.before"
-printf '# Fixture intent\n\n## Issues\n\n- #1: fixture\n\n## Glossary\n\n| Term | Category | Definition |\n|---|---|---|\n| Gamma | user | A valid user term. |\n\nStray prose after the table.\n\n## Background/Motivation\n\nFixture.\n' > "$R/intent.md"
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user.md" alpha
+gloss "$R/docs/glossary/internal.md" kilo
+cp "$R/docs/glossary/user.md" "$T/prose-user.before"
+cp "$R/docs/glossary/internal.md" "$T/prose-internal.before"
+printf '# Fixture intent\n\n## Issues\n\n- #1: fixture\n\n## Glossary\n\n| Term | Category | Definition |\n|---|---|---|\n| Gamma | user | A valid user term. |\n\nStray prose after the table.\n\n## Background/Motivation\n\nFixture.\n' > "$WORKFLOW_PLANS_DIR/f2529-fmt-prose-intent.md"
+approve "f2529-fmt-prose"
+run_promote "$(np "$WORKFLOW_PLANS_DIR/f2529-fmt-prose-intent.md")" "$(np "$R")"
 expect_promote_rc "valid table followed by stray prose" 1
-expect_same_file "user file untouched by a table with trailing prose" "$T/prose-user.before" "$R/docs/glossary-user.md"
-expect_same_file "internal file untouched by a table with trailing prose" "$T/prose-internal.before" "$R/docs/glossary-internal.md"
+expect_same_file "user file untouched by a table with trailing prose" "$T/prose-user.before" "$R/docs/glossary/user.md"
+expect_same_file "internal file untouched by a table with trailing prose" "$T/prose-internal.before" "$R/docs/glossary/internal.md"
 case_end
 
 case_begin "promote-empty-cell-row-exits-1" "bin/glossary-promote"
 R="$T/promote-empty-cell"
-gloss "$R/docs/glossary-user.md" alpha
-gloss "$R/docs/glossary-internal.md" kilo
-cp "$R/docs/glossary-user.md" "$T/cell-user.before"
-cp "$R/docs/glossary-internal.md" "$T/cell-internal.before"
-intent "$R/intent.md" "Gamma|user| "
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user.md" alpha
+gloss "$R/docs/glossary/internal.md" kilo
+cp "$R/docs/glossary/user.md" "$T/cell-user.before"
+cp "$R/docs/glossary/internal.md" "$T/cell-internal.before"
+approved_intent "f2529-fmt-cell-def" "Gamma|user| "
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "row with an empty Definition cell" 1
-expect_same_file "user file untouched by an empty Definition cell" "$T/cell-user.before" "$R/docs/glossary-user.md"
-expect_same_file "internal file untouched by an empty Definition cell" "$T/cell-internal.before" "$R/docs/glossary-internal.md"
-intent "$R/intent.md" "delta| |An internal fixture term."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+expect_same_file "user file untouched by an empty Definition cell" "$T/cell-user.before" "$R/docs/glossary/user.md"
+expect_same_file "internal file untouched by an empty Definition cell" "$T/cell-internal.before" "$R/docs/glossary/internal.md"
+approved_intent "f2529-fmt-cell-cat" "delta| |An internal fixture term."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "row with an empty Category cell" 1
-expect_same_file "user file untouched by an empty Category cell" "$T/cell-user.before" "$R/docs/glossary-user.md"
-expect_same_file "internal file untouched by an empty Category cell" "$T/cell-internal.before" "$R/docs/glossary-internal.md"
+expect_same_file "user file untouched by an empty Category cell" "$T/cell-user.before" "$R/docs/glossary/user.md"
+expect_same_file "internal file untouched by an empty Category cell" "$T/cell-internal.before" "$R/docs/glossary/internal.md"
 case_end
 
 case_begin "promote-existing-term-matches-case-insensitively" "bin/glossary-promote"
 R="$T/promote-case"
-gloss "$R/docs/glossary-user.md" alpha "Combined Glossary" omega
-cp "$R/docs/glossary-user.md" "$T/case-user.before"
-intent "$R/intent.md" "combined glossary|user|Differs from the existing entry only in case."
-run_promote "$(np "$R/intent.md")" "$(np "$R")"
+gloss "$R/docs/glossary/user.md" alpha "Combined Glossary" omega
+cp "$R/docs/glossary/user.md" "$T/case-user.before"
+approved_intent "f2529-fmt-case" "combined glossary|user|Differs from the existing entry only in case."
+run_promote "$INTENT" "$(np "$R")"
 expect_promote_rc "case-only variant of an existing term" 0
-expect_promote_out "case-only variant counted as existing" "ADDED=0 SKIPPED_EXISTING=1 SKIPPED_SESSION=0"
-expect_same_file "no duplicate entry for a case-only variant" "$T/case-user.before" "$R/docs/glossary-user.md"
+expect_promote_out "case-only variant counted as existing" "ADDED=0 DELETED=0 REDEFINED=0 SKIPPED_EXISTING=1 SKIPPED_SESSION=0"
+expect_same_file "no duplicate entry for a case-only variant" "$T/case-user.before" "$R/docs/glossary/user.md"
 case_end
 
 echo ""

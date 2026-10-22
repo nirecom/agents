@@ -12,7 +12,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 
 const { getPlansArtifactPath } = require("../lib/plans-artifact-registry");
-const { isConfirmOffForStageFromFile } = require("../lib/plan-confirm-flag");
+const { planGateState } = require("../lib/confirm-gate/plan-gate");
 const { SESSION_ID_VALID_RE, readState } = require("./state-io");
 const { PLAN_STAGE_TABLE, rowFor } = require("./plan-stage-table");
 
@@ -26,26 +26,21 @@ const APPROVAL_GATED_STEPS = Object.freeze(Object.keys(PLAN_STAGE_TABLE));
 const SANCTIONED_SOURCES = Object.freeze([
   "confirm-sentinel",
   "confirm-flag-off",
-  "reset-sentinel",
-  // #1305: a completion carried over from a session this one provably descends
-  // from (fork lineage) or that the user named by hand via
-  // bin/workflow/adopt-session-state. The approval was given in that
-  // conversation; the donor simply predates plan_approvals or never recorded
-  // one. Used ONLY when the donor holds no approval record at all for the gated
-  // steps in the batch — a donor that HAS a record is verified normally, so a
-  // tampered or missing artifact is still refused.
-  "session-inherit",
+  // "session-inherit" was a member until #2633-1: inheritance now copies the upstream
+  // stream verbatim and reverts any stage whose approval no longer verifies, so it never
+  // crosses the boundary on a token. Existing records stay readable via HASH_EXEMPT_SOURCES.
 ]);
 
 // Approval sources that are approval-equivalent on their own (audit records):
 // the source itself encodes an explicit user approval, so no artifact hash is
 // bound to them.
 const HASH_EXEMPT_SOURCES = Object.freeze([
+  // legacy read-only: no longer created from this PR on (#2709) — RESET_FROM now verifies the
+  // prior gates instead of synthesising an approval, but records already in a state still approve.
   "reset-sentinel",
   "confirm-flag-off",
-  // #1305: no artifact hash was ever bound to it — there was no donor record to
-  // take one from. Omitting it here would make the audit record this module
-  // itself stamps fail its own later re-read (artifact-hash-unverifiable).
+  // legacy read-only: no longer created since #2633-1, but a pre-#2633 inheritance stamped
+  // it with no artifact hash, and those records must still approve on re-read.
   "session-inherit",
 ]);
 
@@ -59,20 +54,6 @@ class UnapprovedCompletionError extends Error {
     this.code = code;
     this.recovery = recovery || "";
   }
-}
-
-let _envLoaded = false;
-// plan-confirm-flag.js deliberately does not load .env (its hook callers do).
-// workflow-mark.js and bin/workflow/next-step do NOT call loadDefaultEnv(), so
-// this module loads it once itself — otherwise CONFIRM_<STAGE>=off users would
-// be incorrectly blocked.
-function ensureEnvLoaded() {
-  if (_envLoaded) return;
-  _envLoaded = true;
-  try {
-    const { loadDefaultEnv } = require("../lib/load-env");
-    loadDefaultEnv();
-  } catch (_) { /* fail-open: env stays as-is */ }
 }
 
 function isApprovalGatedStep(step) {
@@ -92,20 +73,11 @@ function recoveryFor(step) {
     ? " (or set " + row.confirmFlag + "=off to waive the gate)"
     : " (this gate has no off waiver)";
   return (
-    "Approval for " + step + " is not on record. Re-present the plan and end that turn with " +
-    "the plan-link line (bin/plan-link); after the user replies with approval, emit echo \"<<" +
-    confirmSentinelFor(step) + ": {summary}>>\" on its own to record it" +
-    waiver + ". Do NOT use --mark."
+    "Approval for " + step + " is not on record. End the presentation turn with " +
+    "the plan-link line (bin/plan-link); when the turn-end prompt asks for it, emit echo \"<<" +
+    confirmSentinelFor(step) + ": {summary}>>\" alone to record it" + waiver +
+    ". Otherwise emit it after the user replies with approval. Do NOT use --mark."
   );
-}
-
-// isOffWaived(step) -> whether the CONFIRM_* flag in the config FILE waives this gate. Never
-// process.env: bin/workflow/next-step is spawnable by the Bash tool, so an inline
-// `CONFIRM_<STAGE>=off node ...` prefix would otherwise mint a fake user-waiver record.
-function isOffWaived(step) {
-  const row = rowFor(step);
-  if (!row || !row.offWaivable) return false;
-  try { return isConfirmOffForStageFromFile(row.suffix) === true; } catch (_) { return false; }
 }
 
 // Named exception (CPR-UNV): a row's digestExcludes H2 sections are cut from the heading line up
@@ -146,10 +118,31 @@ function computeArtifactSha(sessionId, step) {
   try {
     if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return null;
     if (!isApprovalGatedStep(step)) return null;
-    const row = rowFor(step);
-    const artifact = getPlansArtifactPath(sessionId, row.suffix);
-    const buf = digestBody(fs.readFileSync(artifact), row.digestExcludes);
-    return crypto.createHash("sha256").update(buf).digest("hex");
+    const artifact = getPlansArtifactPath(sessionId, rowFor(step).suffix);
+    return shaOfArtifactBuffer(fs.readFileSync(artifact), step);
+  } catch (_) {
+    return null;
+  }
+}
+
+// The approval range of an artifact's bytes (digestExcludes cut); null for a non-gated step.
+// The glossary check scans and fingerprints this same range (#2529 I-FP rule R-A).
+function artifactRangeOfBuffer(buf, step) {
+  if (!isApprovalGatedStep(step)) return null;
+  return digestBody(buf, rowFor(step).digestExcludes);
+}
+
+function shaOfArtifactBuffer(buf, step) {
+  const range = artifactRangeOfBuffer(buf, step);
+  if (range === null) return null;
+  return crypto.createHash("sha256").update(range).digest("hex");
+}
+
+// sha256 of the whole file, digestExcludes NOT applied: a presentation receipt must catch an edit
+// to intent's `## Issues` too (#2628). null when the file does not read.
+function computeContentSha(absPath) {
+  try {
+    return crypto.createHash("sha256").update(fs.readFileSync(absPath)).digest("hex");
   } catch (_) {
     return null;
   }
@@ -177,6 +170,10 @@ function recordPlanApproval(sessionId, step, fields = {}) {
   }
   const source = fields.source;
   assertSanctionedSource(source, step);
+  const owner = fields.artifactSessionId;
+  if (owner !== undefined && owner !== null && (typeof owner !== "string" || !SESSION_ID_VALID_RE.test(owner))) {
+    throw new Error(`recordPlanApproval: invalid artifactSessionId: ${JSON.stringify(owner)}`);
+  }
 
   const { appendEvents } = require("./state-io");
   appendEvents(sessionId, [
@@ -188,8 +185,9 @@ function recordPlanApproval(sessionId, step, fields = {}) {
       artifact_sha256: fields.artifactSha || null,
       // Session whose artifact the recorded hash was taken from. Artifacts are
       // named <sid>-<suffix>.md, so a record inherited by a LATER session must keep
-      // pointing at the session that owns the approved artifact (#1133).
-      artifact_session_id: fields.artifactSha ? sessionId : null,
+      // pointing at the session that owns the approved artifact (#1133). A downstream
+      // session hashes its upstream's file, so the caller names that owner (#2633).
+      artifact_session_id: fields.artifactSha ? (owner || sessionId) : null,
       artifact_hash_status: fields.artifactHashStatus || "unknown",
       provenance: "declared",
       origin: "record-plan-approval",
@@ -224,21 +222,34 @@ function buildAuditApprovalEvent(step, source, reason, origin) {
   });
 }
 
+// Owner of <sid>-<suffix>.md as seen from the evaluated state; any anomaly -> sessionId.
+function resolveOwnerSid(sessionId, step, state) {
+  try {
+    const { resolvePlanArtifactOwner } = require("./plan-artifact-owner");
+    return resolvePlanArtifactOwner(sessionId, rowFor(step).suffix, state || null).ownerSid;
+  } catch (_) {
+    return sessionId;
+  }
+}
+
 // Authoritative verdict for "may this gated step be persisted complete?" -> { approved, code,
 // source }. Shared by the effective-state snapshot and the write boundary so they never diverge.
 // confirm-sentinel needs a recorded sha equal to the current one (else artifact-hash-mismatch /
 // -unverifiable); HASH_EXEMPT_SOURCES approve without a hash; no record -> no-approval-record.
-function evaluateCompletionApproval(sessionId, step, state) {
+// opts.gate: the stage's gate the caller already holds, so one judgment probes the flag once.
+function evaluateCompletionApproval(sessionId, step, state, opts) {
   if (!isApprovalGatedStep(step)) {
     return { approved: true, code: null, source: null };
   }
 
-  ensureEnvLoaded();
-  const record = readPlanApproval(state, step);
-
-  if ((!record || record.source === "confirm-flag-off") && isOffWaived(step)) {
+  // #2726: an OFF gate waives whatever record is on file (a stale confirm-sentinel hash
+  // included). planGateState answers ON for a stage without an off waiver (intent).
+  const given = opts && opts.gate;
+  const gate = given === "ON" || given === "OFF" || given === "ERROR" ? given : planGateState(rowFor(step).suffix);
+  if (gate === "OFF") {
     return { approved: true, code: null, source: "confirm-flag-off" };
   }
+  const record = readPlanApproval(state, step);
 
   if (!record) {
     return { approved: false, code: "no-approval-record", source: null };
@@ -262,8 +273,14 @@ function evaluateCompletionApproval(sessionId, step, state) {
     return { approved: false, code: "artifact-hash-unverifiable", source };
   }
   // A record inherited across a session boundary stays bound to the artifact it
-  // was approved against (<owner-sid>-<suffix>.md), so the hash still verifies.
-  const artifactSessionId = record.artifact_session_id || sessionId;
+  // was approved against (<owner-sid>-<suffix>.md), so the hash still verifies. A record
+  // without an owner is resolved the way the reader would resolve it (#2633).
+  const artifactSessionId = record.artifact_session_id || resolveOwnerSid(sessionId, step, state);
+  // The reader prefers the session's own file (plan-artifact-owner), so once one exists a record
+  // still bound to another session's file approves content nobody reads: it needs re-approval.
+  if (artifactSessionId !== sessionId && computeArtifactSha(sessionId, step)) {
+    return { approved: false, code: "artifact-hash-mismatch", source };
+  }
   const currentSha = computeArtifactSha(artifactSessionId, step);
   if (!currentSha) {
     return { approved: false, code: "artifact-hash-unverifiable", source };
@@ -287,6 +304,8 @@ function completionBoundaryEventsForBatch(sessionId, prevProjection, nextProject
     return (entry && entry.status) || "pending";
   };
   const origin = (opts && typeof opts.origin === "string" && opts.origin) || "completion-boundary";
+  // A revocation inside an inheritance copy is reconstructed, not observed (#2633-1).
+  const revokeProvenance = opts && opts.provenance === "backfilled" ? "backfilled" : "declared";
 
   // Sanctioned token validation (throws on an unknown token, before any write).
   const rawToken = opts && opts.sanctioned;
@@ -305,7 +324,7 @@ function completionBoundaryEventsForBatch(sessionId, prevProjection, nextProject
           kind: "plan_approval_revoked",
           step,
           reason: "gated step left complete",
-          provenance: "declared",
+          provenance: revokeProvenance,
           origin,
         });
       }
@@ -314,10 +333,7 @@ function completionBoundaryEventsForBatch(sessionId, prevProjection, nextProject
 
     if (before === "complete" || after !== "complete") continue;
 
-    // 2. Sanctioned bypass. session-inherit never vouches for a stage with no off waiver
-    // (intent): the inherited complete stays unapproved, so the effective state falls back
-    // to pending until the user confirms that stage in this session.
-    if (sanctioned === "session-inherit" && !(rowFor(step) || {}).offWaivable) continue;
+    // 2. Sanctioned bypass.
     if (sanctioned) {
       extra.push(buildAuditApprovalEvent(step, sanctioned, opts && opts.reason, origin));
       continue;
@@ -353,6 +369,9 @@ module.exports = {
   isApprovalGatedStep,
   assertSanctionedSource,
   computeArtifactSha,
+  artifactRangeOfBuffer,
+  shaOfArtifactBuffer,
+  computeContentSha,
   readPlanApproval,
   recordPlanApproval,
   buildAuditApproval,
@@ -362,5 +381,4 @@ module.exports = {
   completionBoundaryEventsForBatch,
   recoveryFor,
   confirmSentinelFor,
-  isOffWaived,
 };

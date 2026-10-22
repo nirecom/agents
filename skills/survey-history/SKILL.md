@@ -20,7 +20,7 @@ those instead.
 
 SH-1. **Input and issue number resolution:**
    Input precedence (read whichever exists first):
-     (a) `<PLANS_DIR>/<session-id>-intent.md` — preferred (post-clarify-intent calls)
+     (a) the path printed by `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` (it follows a resumed session's upstream) — preferred (post-clarify-intent calls)
      (b) `<PLANS_DIR>/<session-id>-context.md` — fallback (pre-clarify-intent calls
          from workflow-init)
    Issue number N:

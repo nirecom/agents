@@ -46,6 +46,28 @@ set means adding the new target to `TARGETS` in
 `tests/fix-1532-node-guard/common.sh` and adding one more dispatcher at
 `tests/bin/fix-1532-node-guard-<name>.sh` (coverage check G6 fails otherwise).
 
+## JavaScript lint
+
+Background: write-code's JavaScript lint recipe needs an ESLint that every
+worktree can run without a global install, and the repo had no ESLint config
+(#2739). `eslint.config.js` at the repo root now defines the rules, and
+`bin/run-eslint` is the single entry point.
+
+**Usage**: `node bin/run-eslint <path>...` — files or directories, several at
+once. Exit 0 means no errors (warnings do not fail), 1 means lint errors, 2 means
+a usage or ESLint API failure. A file the config does not cover prints
+`eslint not applicable — check skipped (...)` instead of failing.
+
+**Side effect — lazy `npm ci`**: on the first run in a worktree, or whenever
+`package-lock.json` changes, the wrapper runs `npm ci --ignore-scripts` and
+creates `node_modules/` in that worktree (git-ignored). Auto-install happens
+only inside the agents repository; another repository must opt in with
+`RUN_ESLINT_PROVISION=1`, otherwise the wrapper prints
+`eslint not found — check skipped (...)`.
+
+**Versions**: `package.json` (exact pins) and `package-lock.json` are the source
+of truth for the ESLint toolchain; change versions there, never in the wrapper.
+
 ## Where session state files live
 
 Control files (JSON, counters, markers) go to `<WORKFLOW_STATE_DIR>/<sid>.control/`, prose artifacts to `WORKFLOW_PLANS_DIR`; register every new name in `hooks/lib/plans-artifact-registry.json` with its retention class — the commit gate reads that file from the tree being committed, so the registration and its first use can share one commit. Policy: `docs/architecture/claude-code/state-dirs.md`.

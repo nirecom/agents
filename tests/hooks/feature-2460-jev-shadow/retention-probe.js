@@ -127,7 +127,7 @@ function tombInvalid() {
 }
 
 // A stale session holding every stage-2 file kind (versioned pending ticket hand, breaker and
-// liveness, ticket snapshot/answer/merged files, a done marker, jev-sources/<ticket>/) beside a
+// liveness, ticket Jev input/answer/merged files, a done marker, jev-sources/<ticket>/) beside a
 // fresh session holding the same kinds. Prints
 // "<removed>|<stale dir>|<onOrphan calls>|<fresh dir>|<fresh files>".
 function ticketFiles(sid) {
@@ -139,7 +139,7 @@ function ticketFiles(sid) {
     put(d, "breaker.json", JSON.stringify({ version: 2, count: 0, open_until: 0 }));
     put(d, "breaker-complexity-judge.json", JSON.stringify({ version: 2, count: 0, open_until: 0 }));
     put(d, "liveness.json", JSON.stringify({ version: 1, ok_ms: 0 }));
-    put(path.join(d, "tickets"), T + ".snapshot.md", "# snapshot\n");
+    put(path.join(d, "tickets"), T + ".input.md", "# Jev input\n");
     put(path.join(d, "tickets"), T + ".answer.json", "{}");
     put(path.join(d, "tickets"), T + ".merged.json", "{}");
     put(path.join(d, "tickets-done"), T + ".json",

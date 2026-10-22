@@ -83,6 +83,8 @@ REPO_MIX_N="$(nrm "$REPO_MIX")"
 GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
 session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
 GATE_HOOK_N="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 # Neutral CWD: hooks that call `git rev-parse` must not resolve the real repo.
 cd "$TMPDIR_BASE" || exit 1
 
@@ -253,7 +255,8 @@ MARK_OUT="$(run_mark_hook c5 "$SENTINEL")"
 check "C1-5 setup: skip legitimately recorded while docs-only" \
   '"skipped"' "$(step_field c5 run_tests status)"
 # Baseline: still docs-only → the gate honors the skip (without this the block
-# below could pass for any unrelated reason).
+# below could pass for any unrelated reason). #2529: the staged docs need a current glossary_check.
+glossary_check_record c5 "$REPO_MIX_N"
 GATE_OUT="$(run_gate_commit c5 "$REPO_MIX_N")"
 check_contains "C1-5a docs-only staged: commit gate approves" '"approve"' "$GATE_OUT"
 check_not_contains "C1-5a docs-only staged: commit gate does not block" '"block"' "$GATE_OUT"

@@ -2,19 +2,10 @@
 # tests/hooks/feature-1733-state-event-stream/intervals.sh
 # Tests: hooks/workflow-state/state-io/intervals.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, intervals, measurement, scope:issue-specific, pwsh-not-required, TL2
-#
-# The acceptance criterion of #1733 is "interval durations are computable after the
-# fact". computeIntervals is that capability. The strongest single assertion is a
-# CLOSURE property: the interval durations must tile the whole session with no gap and
-# no overlap, i.e. their sum equals created_at -> terminal `at`. A renderer that
-# silently skipped an event would break the sum even if every individual row looked fine.
-#
-# TL3 gap (what this test does NOT catch):
-# - real wall-clock spans: every event here is written inside one test run, so a
-#   host clock/timezone defect that only shows up over minutes is invisible.
-# - hook registration: markStep is called as a module, not via a fired hook.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration.
+# #1733: computeIntervals makes interval durations computable after the fact; the CLOSURE
+# property (durations tile created_at -> terminal `at`, no gap or overlap) catches a skipped event.
+# TL3 gap: real wall-clock spans (host clock/timezone) and hook registration (markStep runs as a
+# module); mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category: hook-registration.
 
 CASE_TAG="iv"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -23,9 +14,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 echo "== I1: intervals tile the session with no gaps (sum == created_at -> terminal) =="
 if run_case "I1/closure-property"; then
     next_sid
-    nodejs "$SID" "$PRE$APPROVE_GATED_JS"'
+    nodejs "$SID" "$PRE$APPROVE_GATED_JS$GLOSSARY_JS"'
 const IV = require("./hooks/workflow-state/state-io/intervals");
-for (const step of S.VALID_STEPS) { S.markStep(sid, step, "complete"); sleep(2); }
+// #2529: a glossary-gated step records its glossary_check right before its own completion.
+for (const step of S.VALID_STEPS) {
+  if (step in GCR.STAGE_OF_STEP) complete_gated(sid, step); else S.markStep(sid, step, "complete");
+  sleep(2);
+}
 const st = rd();
 const rows = IV.computeIntervals(st);
 const sum = rows.reduce((a, r) => a + (r.duration_ms || 0), 0);

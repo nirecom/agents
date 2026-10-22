@@ -184,6 +184,7 @@ else
   fail "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode — systemMessage missing: $T21_RESULT"
 fi
 
+# T-NEW-1..5 set the keys in the global .env (#2726/#2729: file-only), via expect_message_with_env.
 # ── T-NEW-1: CONFIRM_DETAIL=off on *-detail.md → systemMessage emitted ─────
 echo "=== T-NEW-1: CONFIRM_DETAIL=off on detail.md — breadcrumb fires ==="
 expect_message_with_env "T-NEW-1 CONFIRM_DETAIL=off — systemMessage emitted regardless" \

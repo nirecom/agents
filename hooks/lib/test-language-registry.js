@@ -67,7 +67,7 @@ const globsOf = (entry) => entry.patterns.map(globOf);
 
 function matcherOf(entry) {
   if (!matchers.has(entry)) {
-    const res = entry.patterns.map((p) => new RegExp(`^${p.split("*").map((s) => s.replace(/[.\-]/g, "\\$&")).join("[\\s\\S]+")}$`));
+    const res = entry.patterns.map((p) => new RegExp(`^${p.split("*").map((s) => s.replace(/[.-]/g, "\\$&")).join("[\\s\\S]+")}$`));
     matchers.set(entry, (name) => res.some((re) => re.test(name)));
   }
   return matchers.get(entry);

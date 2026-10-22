@@ -9,7 +9,6 @@ const fs = require("fs");
 
 const FLUSH_STEP_MS = 50;
 const FLUSH_STEPS = 10;
-const BOUNDARY_RETRY_MS = 100;
 const waitCell = new Int32Array(new SharedArrayBuffer(4));
 
 function sleep(ms) {
@@ -54,20 +53,21 @@ function textItemsOf(entry) {
   return c.filter((it) => it && it.type === "text" && typeof it.text === "string").map((it) => it.text);
 }
 
-// tailOf(entries) -> {lastAssistantEntry, lastTextBlock}: the last assistant entry, and the last
-// text item of the current turn (null when the turn has none).
+// tailOf(entries) -> {lastAssistantEntry, lastTextBlock, lastTextEntry}: the last assistant entry,
+// the last text item of the current turn and the entry holding it (null when the turn has none).
 function tailOf(entries) {
   let lastAssistantEntry = null;
   let lastTextBlock = null;
+  let lastTextEntry = null;
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
     if (isRealUserPrompt(e)) break;
     if (e.type !== "assistant") continue;
     if (!lastAssistantEntry) lastAssistantEntry = e;
     const texts = textItemsOf(e);
-    if (texts.length > 0) { lastTextBlock = texts[texts.length - 1]; break; }
+    if (texts.length > 0) { lastTextBlock = texts[texts.length - 1]; lastTextEntry = e; break; }
   }
-  return { lastAssistantEntry, lastTextBlock };
+  return { lastAssistantEntry, lastTextBlock, lastTextEntry };
 }
 
 function flushed(lastTextBlock, message) {
@@ -103,18 +103,4 @@ function splitTurns(entries) {
   return { prevTurnEntries: entries.slice(prompts[prompts.length - 2] + 1, last), currentTurnEntries, hasPriorPrompt: true };
 }
 
-// readPreviousTurn({transcriptPath}) -> splitTurns(...) plus `readable`. PreToolUse judges the
-// previous turn, which is long flushed, so the only wait is one retry when no turn boundary shows.
-function readPreviousTurn({ transcriptPath } = {}) {
-  let lines = readTranscriptLines(transcriptPath);
-  let entries = parseLines(lines);
-  if (lines.length > 0 && !entries.some(isRealUserPrompt)) {
-    sleep(BOUNDARY_RETRY_MS);
-    lines = readTranscriptLines(transcriptPath);
-    entries = parseLines(lines);
-  }
-  // Readable means at least one line parsed: an all-malformed transcript is undecidable.
-  return { ...splitTurns(entries), readable: entries.length > 0 };
-}
-
-module.exports = { readTranscriptLines, readTurnTail, readPreviousTurn, parseLines, isRealUserPrompt, splitTurns, tailOf };
+module.exports = { readTranscriptLines, readTurnTail, parseLines, isRealUserPrompt, splitTurns, tailOf };
