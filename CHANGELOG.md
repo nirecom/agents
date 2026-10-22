@@ -831,3 +831,7 @@ Changes: Fixed resume-session state inheritance: the resumed session now receive
 ### FEATURE: PR #2738 (2026-10-21)
 Background: feat(#2724): bind the plan-link duty to CONFIRM and back prompt claims with a gate
 Changes: CONFIRM_INTENT, CONFIRM_OUTLINE and CONFIRM_DETAIL set to off now take effect only from the global `.env` file; an export or `.env.local` no longer turns them off.;A repeated denied CONFIRM no longer lets the approval dialog through: the plan must be presented again each time.;With plan-sync available, a plan that has not been published can no longer be confirmed; environments that cannot publish present the local path instead.
+
+### FEATURE: PR #2752 (2026-10-22)
+Background: feat(#2739): introduce ESLint so write-code's JavaScript lint recipe ...
+Changes: Added `node bin/run-eslint <path>...`, a one-command JavaScript lint that works in every worktree (it installs the pinned ESLint on first use), and the write-code skill's JavaScript/TypeScript lint step now uses it.
