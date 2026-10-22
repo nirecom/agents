@@ -18,7 +18,7 @@ After each skill completes, run: `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step
   - `--next` emits no `ACTION=` line when the settled step is not the session's current step (`ADVANCE_SCOPE=not-current-step`) — treat a missing `ACTION=` as "proceed to your own next step," not an error.
 - Do not use `--permission-mode plan`. Always use default mode for implementation tasks.
 - Workflow state reset is main-conversation only — emit `<<WORKFLOW_RESET_FROM_{step}: {reason}>>` only when holistic context justifies it.
-- Not auto-injected — Read each before the work it governs (ordered by first use in the workflow):
+- Not auto-injected — Read each before the work it governs:
   - `rules/github-issues.md` — any issue or PR operation.
   - `rules/architecture-principles.md` — designing or changing a mechanism, guard, gate, or check.
   - `rules/branch.md` — naming a branch or recording branching.
