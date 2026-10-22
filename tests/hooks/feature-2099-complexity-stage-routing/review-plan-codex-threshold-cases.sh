@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/review-plan-codex-threshold-cases.sh
 # Tests: bin/review-plan-codex, bin/lib/codex-core.sh, bin/get-config-var
 # Tags: complexity, routing, codex, review-plan, threshold, truncation, subprocess, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 
 # Why: #2099 replaced review-plan-codex's hard-coded MAX_PLAN_LINES=5000 with a
 # three-tier resolve_threshold (process env -> bin/get-config-var -> built-in

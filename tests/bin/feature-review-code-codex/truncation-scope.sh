@@ -4,32 +4,13 @@
 # The X-series (#1638), moved verbatim out of the parent at the 500-line hard split limit. Reuses TMPDIR_BASE, REPO, MOCK_BIN, SCRIPT, _timeout, fail, pass from the parent; leaves BIG_REPO set for later parts.
 # TL3 gap: codex is a shell mock, so a prompt correctly announced as truncated may still exceed the live model's context window, and the real CLI's arg/exit-code handling is unexercised; X rows pass --base-state directly rather than letting a real resolver derive it. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
-# X (#1638) — `## Codex Review: PERFORMED` says a review ran, not that it saw the whole change.
-#   1. TRUNCATION: the prompt is capped at MAX_DIFF_LINES; the dropped tail was only an stderr
-#      warning while the verdict a reviewer reads still said PERFORMED — "nothing concerning"
-#      on the first 5000 lines of a 280k-line diff is a finding about 2% of it.
-#   2. AN UNTRUSTWORTHY RANGE: the diff was taken against a base someone else resolved; a wrong
-#      base makes the review complete and correct about the wrong thing.
-#   Both now get a line under the DISTINCT `## Codex Review Scope:` label rather than
-#   `## Codex Review:` — X6 pins this separation, since callers parse the verdict label for
-#   PERFORMED/SKIPPED/FAILED and a fourth value there would silently break them.
 
-# A repository whose committed diff is comfortably past the cap, so truncation is real
-# rather than simulated by an injected constant.
-BIG_REPO="$TMPDIR_BASE/big-repo"
-mkdir -p "$BIG_REPO"
-git -C "$BIG_REPO" init -q
-git -C "$BIG_REPO" config core.hooksPath "$BIG_REPO/.git/no-such-hooks"
-git -C "$BIG_REPO" config user.email "test@example.com"
-git -C "$BIG_REPO" config user.name "Test"
-git -C "$BIG_REPO" config commit.gpgsign false
-echo "init" > "$BIG_REPO/README.md"
-git -C "$BIG_REPO" add README.md
-git -C "$BIG_REPO" commit -q -m "initial"
-git -C "$BIG_REPO" checkout -q -b feature-big
-awk 'BEGIN { for (i = 0; i < 6000; i++) print "generated line " i }' > "$BIG_REPO/big.txt"
-git -C "$BIG_REPO" add big.txt
-git -C "$BIG_REPO" commit -q -m "big commit"
+# X (#1638) — PERFORMED says a review ran, not that it saw the whole change: a truncated diff or an untrustworthy
+# base each get a line under the DISTINCT `## Codex Review Scope:` label (X6 pins the separation from the verdict).
+
+# BIG_REPO: a committed diff comfortably past the cap (shared with -path-priority).
+# shellcheck source=./big-repo-fixture.sh
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/big-repo-fixture.sh"
 
 # The mock from case 4 is still on disk; make sure a PERFORMED verdict is what we get.
 cat > "$MOCK_BIN/codex" << 'MOCK_EOF'
@@ -86,12 +67,13 @@ fi
 #         an injection point AND a way to fabricate a state that does not exist. It is
 #         normalised, not echoed, and the run still exits 0 like every other path here.
 X_RC=0
-X_OUT="$( (cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --base-state 'foo; touch /tmp/pwned-1638' --no-log 2>"$TMPDIR_BASE/x5err") || X_RC=$?; :)"
+X5_MARK="$TMPDIR_BASE/pwned-1638"
+X_OUT="$( (cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --base-state "foo; touch $X5_MARK" --no-log 2>"$TMPDIR_BASE/x5err") || X_RC=$?; :)"
 X5_ERR="$(cat "$TMPDIR_BASE/x5err" 2>/dev/null || true)"
-if echo "$X_OUT" | grep -q "touch /tmp/pwned-1638"; then
+if echo "$X_OUT" | grep -q "touch $X5_MARK"; then
     fail "X5: the raw --base-state value was echoed into stdout. Output: $X_OUT"
-elif [ -e /tmp/pwned-1638 ]; then
-    rm -f /tmp/pwned-1638
+elif [ -e "$X5_MARK" ]; then
+    rm -f "$X5_MARK"
     fail "X5: the --base-state value was executed"
 elif ! echo "$X_OUT" | grep -q "^## Codex Review: "; then
     # A usage error that aborts the run would satisfy "the value was not echoed" without

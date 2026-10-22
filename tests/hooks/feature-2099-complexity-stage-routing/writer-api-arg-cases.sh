@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/writer-api-arg-cases.sh
 # Tests: hooks/workflow-state/state-io/session-fields.js, hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, writer-api, error-handling, edge-cases, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # R-16 pins the ARITY change only. The signals-only contract moved level
 # derivation inside the writer, so the second argument's VALUE now decides a
 # routing outcome — and detail.md D1 step 3 names exactly ONE outcome for a

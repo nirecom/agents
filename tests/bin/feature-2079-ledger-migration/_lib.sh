@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/_lib.sh
 # Tests: bin/lib/run-all-ledger-migrate.sh
 # Tags: tests, bin, ledger, migration, helpers, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # Helpers for the #2079 ledger-migration dispatcher; sourced, never run standalone.
 # Parent side (LM_CHILD unset): temp root, the uname stub, lm_run, ck, lm_v.
 # Child side (LM_CHILD=1, via _driver.sh): helpers that need the libraries loaded.
@@ -53,7 +53,8 @@ lm_cache() { mktemp -d "$LM_TMP/cacheXXXXXX"; }
 # LM_XVAR is one free-form value a case may hand to its child (e.g. a seam's epoch).
 lm_run() {
   local cache="$1"; shift
-  run_with_timeout 60 env -u RUN_ALL_DUR_REPO_ID -u RUN_ALL_DUR_HOST_TOKEN -u RTB_LEDGER_REPO \
+  # Default stays well under the 660 s single-file runner budget so a hung child fails inside the file.
+  run_with_timeout "${LM_CHILD_TIMEOUT:-300}" env -u RUN_ALL_DUR_REPO_ID -u RUN_ALL_DUR_HOST_TOKEN -u RTB_LEDGER_REPO \
     PATH="$LM_TMP/stubbin:$PATH" HOSTNAME="$LM_HOST" \
     LM_STUB_S="$LM_S" LM_STUB_R="$LM_R" LM_STUB_M="$LM_ARCH" LM_STUB_N="$LM_HOST" \
     RUN_ALL_CACHE_DIR="$cache" LM_CHILD=1 LM_TMP="$LM_TMP" LM_REPO="$LM_REPO" LM_HOST="$LM_HOST" \

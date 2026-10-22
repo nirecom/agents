@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/consumer-normalize-chain.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/normalize-judge-signals, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, helpers, normalize, jev, shared-procedure, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh before consumer-orchestration-cases.sh.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints before consumer-orchestration-cases.sh.
 # Since #2460 MDP-3 / WT-6 / WCD-3 only name skills/_shared/jev-two-stage-judge.md with a point
 # and a stage; the chain itself (JJ-1 query -> answer file -> JJ-3 finalize -> JJ-4 derive) lives
 # there. The point/stage are read off the skill, the three commands off the shared procedure, and

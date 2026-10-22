@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/cli-hardening-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, hooks/workflow-state/state-io.js
 # Tags: complexity, routing, cli, read-back, corruption, normalization, security, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 
 # --- H-RB: read-back invariant, one case per mutated field -------------------
 # The invariant is "what the raw event says must agree with what was recorded".

@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/consumers-static.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, bin/workflow/read-session-facts
 # Tags: complexity, routing, prompt-static, consumers, scope:issue-specific, jev, shared-procedure
-# Sourced by ../feature-2099-complexity-stage-routing.sh (helpers: there and skill-section-helpers.sh).
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints (helpers: there and skill-section-helpers.sh).
 # Consumers name only their own stage and never restate a threshold (detail.md D4/P5).
 # Stage-5 call-site checks live in ../feature-2460-jev-call-sites-static.sh.
 # lang-check: ignore -- rubric-consistency regex asserts bilingual (English/Japanese) phrasing

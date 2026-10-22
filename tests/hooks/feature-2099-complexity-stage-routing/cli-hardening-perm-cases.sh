@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/cli-hardening-perm-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation
 # Tags: complexity, routing, cli, permissions, hardening, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # The H-PERM family, split out of cli-hardening-cases.sh at the 500-line HARD
 # limit (rules/coding/file-split.md Pattern A). One axis: what the writers do
 # when the filesystem refuses the write they were told to make — loudly, or by

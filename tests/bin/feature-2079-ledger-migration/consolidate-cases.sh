@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/consolidate-cases.sh
 # Tests: bin/lib/run-all-durations-consolidate.sh
 # Tags: tests, bin, ledger, durations, consolidate, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n18 (1)-(15) (#2079 S7b): closed segments, old bases and leftovers fold into one base per
 # OS attribute; each key keeps the value with the newest provenance, never the file order.
 
@@ -104,7 +104,7 @@ C18_MANY=70
 c18_many_stamp() { printf '%sT%02d%02d00' "$DC_D" $((10 + $1 / 60)) $(($1 % 60)); }
 c18_many() {
   local i
-  for ((i = 1; i <= C18_MANY; i++)); do dc_plant "$(c18_many_stamp "$i")-$((100 + i)).closed" 30 "#os $DC_L" "$i:k$i.sh"; done
+  for ((i = ${1:-1}; i <= ${2:-C18_MANY}; i++)); do dc_plant "$(c18_many_stamp "$i")-$((100 + i)).closed" 30 "#os $DC_L" "$i:k$i.sh"; done
 }
 c18_cons_rc() { dc_cons; say rc "$?"; }
 
@@ -211,8 +211,11 @@ run_cons_reorder_cases() {
 
 run_cons_window_cases() {
   local c r i want got
+  # 70 planted segments spawn hundreds of processes; a loaded host (parallel run-all) needs more than a quick child; still under the 660 s file budget.
+  local LM_CHILD_TIMEOUT=300
   dc_lib_ck n18/15; c="$(lm_cache)"
-  lm_run "$c" c18_many
+  # Plant in 10-segment children so planting is bounded per child, not by one LM_CHILD_TIMEOUT.
+  for ((i = 1; i <= C18_MANY; i += 10)); do lm_run "$c" c18_many "$i" "$((i + 9 < C18_MANY ? i + 9 : C18_MANY))"; done
   r="$(lm_run "$c" dc_report k1.sh "k$C18_MANY.sh")"
   ck "n18/15/fixture-70-closed-oldest-outside-read-window" "$C18_MANY|- $C18_MANY" "$(lm_v "$r" nclosed)|$(lm_v "$r" vals)"
   ck "n18/15/consolidate-exit-0" "0" "$(lm_v "$(lm_run "$c" c18_cons_rc)" rc)"
