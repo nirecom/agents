@@ -22,7 +22,7 @@ UD-2. **Read current docs**: Read all target docs files.
      - Goal: make the reader think "I want to use this" — crisp features, "what it does for you"
      - Initial install/setup instructions go here, not in `ops.md`
    - `CHANGELOG.md` (repo root) for public repos. Create if missing (no manual seed needed — first run starts from here).
-   - When `docs/glossary-user*.md` or `docs/glossary-internal*.md` exists, Read `rules/docs/glossary.md` (on-demand-only) so its entry criteria drive the UD-3 glossary check.
+   - When `docs/glossary/` exists, Read `rules/docs/glossary.md` (on-demand-only) so its entry criteria drive the UD-3 glossary check.
 UD-3. **Identify gaps**: Compare git log against each document's content. Look for:
    - Unrecorded commits or phases
    - Architecture/design changes not yet documented
@@ -36,8 +36,10 @@ UD-4. **Propose updates**: For each file that needs updating, present:
    - Before drafting History/Changelog bullets: apply the language configured by `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE`, routed by repo visibility — one policy covers both history and changelog
    - Which sections need changes and why
    - Specific additions or modifications
+UD-4a. **Glossary self-review**: apply the reviewer directives of `skills/_shared/combined-glossary.md` to the UD-4 proposal text, and raise each drift as a tagged concern per `skills/_shared/glossary-drift-check.md`.
 UD-5. **CONFIRM_DOCS gate**:
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
+   - Both branches: include the approval list of `skills/_shared/glossary-drift-check.md` in the shown proposal (the `ask` AskUserQuestion body, the `proceed` display).
    - `GATE_ACTION=ask`: present the UD-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
    - `GATE_ACTION=proceed`: apply the edits and continue to UD-6 without waiting.
    - When applying, run `node "$AGENTS_MAIN_ROOT/bin/glossary-promote" "<INTENT_MD>" "<project-root>"` first, then replace each promoted entry's `Related: TODO` with a link to the doc that owns the term.

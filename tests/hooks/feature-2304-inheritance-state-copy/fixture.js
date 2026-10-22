@@ -24,6 +24,23 @@ function worktreeEvent(cwd, branch) {
   };
 }
 
+// A throwaway git repo (created once, inside the pinned state dir's parent) that the #2529
+// glossary_check records bind to: R-S stages read its (empty) index.
+let glossaryRepo = null;
+function glossaryRepoDir() {
+  if (glossaryRepo) return glossaryRepo;
+  glossaryRepo = path.join(path.dirname(process.env.WORKFLOW_STATE_DIR), "glossary-repo");
+  fs.mkdirSync(glossaryRepo, { recursive: true });
+  require(path.join(ROOT, "tests/lib/harness")).gitInit(glossaryRepo);
+  return glossaryRepo;
+}
+
+// #2529: a glossary-gated completion also needs a current glossary_check record.
+function completeGated(sid, step) {
+  require(path.join(ROOT, "tests/lib/glossary-check-record"))
+    .completeWithRecord(sid, step, glossaryRepoDir(), (...a) => S().markStep(...a));
+}
+
 // seedUpstream(sid, opts) — a session upstream carrying a worktree entry, a gated completion with
 // its approval, an annotated skip, worktree-dependent completions (one with a wsid) and session facts.
 function seedUpstream(sid, opts) {
@@ -33,10 +50,10 @@ function seedUpstream(sid, opts) {
   io.appendEvents(sid, [worktreeEvent("/fixture/up-wt", "feature/up")]);
   io.markStep(sid, "workflow_init", "complete");
   require(path.join(ROOT, "tests/lib/plan-approval-fixture")).approveLive(sid, "clarify_intent");
-  io.markStep(sid, "clarify_intent", "complete");
+  completeGated(sid, "clarify_intent");
   io.markStep(sid, "research", "skipped", { skip_reason: "nothing to survey" });
   io.markStep(sid, "write_tests", "complete", { wsid: "wsid-up" });
-  io.markStep(sid, "review_tests", "complete");
+  completeGated(sid, "review_tests");
   if (o.cleanup) io.markStep(sid, "cleanup", o.cleanup);
   if (o.model) io.recordSessionModel(sid, { id: o.model, source: "transcript" });
   io.recordComplexityEvaluation(sid, ["S1-multi-file"]);

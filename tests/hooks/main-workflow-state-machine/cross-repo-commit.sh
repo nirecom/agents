@@ -2,6 +2,9 @@
 # Case group: Section 2 — Cross-Repo Commit.
 # Sourced by main-workflow-state-machine.sh; relies on helpers from common.sh.
 
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$DOTFILES_DIR/tests/lib/glossary-check-record.sh"
+
 run_cross_repo_commit_tests() {
     # ---------------------------------------------------------------------------
     # Section 2: Cross-Repo Commit
@@ -197,6 +200,7 @@ EOF
     mkdir -p "$REPO_A/tests"
     echo "test" > "$REPO_A/tests/test-case.sh"
     git -C "$REPO_A" add tests/test-case.sh
+    glossary_check_record "$SID_2D" "$REPO_A"  # #2529
     L2D_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2D\"}"
     L2D_RESULT=$(echo "$L2D_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
@@ -277,6 +281,7 @@ EOF
     mkdir -p "$REPO_A/test"
     echo "unit test" > "$REPO_A/test/unit.sh"
     git -C "$REPO_A" add test/unit.sh
+    glossary_check_record "$SID_2H" "$REPO_A"  # #2529
     L2H_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2H\"}"
     L2H_RESULT=$(echo "$L2H_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)
@@ -311,6 +316,7 @@ EOF
 )"
     echo "changelog" > "$REPO_A/CHANGES.md"
     git -C "$REPO_A" add CHANGES.md
+    glossary_check_record "$SID_2I" "$REPO_A"  # #2529
     L2I_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2I\"}"
     L2I_RESULT=$(echo "$L2I_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
         node "$GATE_HOOK" 2>/dev/null || true)

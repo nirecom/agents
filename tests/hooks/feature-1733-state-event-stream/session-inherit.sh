@@ -83,13 +83,13 @@ start_session() {
 # every case in this file would be red for a fixture reason rather than a feature one.
 SEED_DONOR="$PRE"'
 S.writeState(sid, S.createInitialState(sid, S.getCurrentContext()));
-'"$APPROVE_GATED_JS"'
+'"$APPROVE_GATED_JS$GLOSSARY_JS"'
 S.markStep(sid, "workflow_init", "complete");
-S.markStep(sid, "clarify_intent", "complete");
+complete_gated(sid, "clarify_intent");
 S.markStep(sid, "research", "skipped", { skip_reason: "nothing to survey" });
-S.markStep(sid, "outline", "complete");
-S.markStep(sid, "detail", "complete");
-S.markStep(sid, "review_tests", "complete", { token: "tok-donor", wsid: "wsid-donor", warnings_summary: "2 advisory findings" });
+complete_gated(sid, "outline");
+complete_gated(sid, "detail");
+complete_gated(sid, "review_tests", { token: "tok-donor", wsid: "wsid-donor", warnings_summary: "2 advisory findings" });
 S.markStep(sid, "branching_complete", "pending", { reset_reason: "post-merge" });
 S.markStep(sid, "cleanup", "complete", { skip_reason: "donor-cleanup-note" });
 require("./hooks/workflow-state/state-io/skip-verdict").recordSkipVerdict(sid, "detail", "confirm", "skip-verifier");

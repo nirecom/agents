@@ -15,8 +15,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 echo "== N1: last-write-wins per (step, key), independently across keys =="
 if run_case "N1/last-write-wins"; then
     next_sid
-    nodejs "$SID" "$PRE"'
-S.markStep(sid, "review_tests", "complete", { token: "t1", wsid: "w1" });
+    nodejs "$SID" "$PRE$GLOSSARY_JS"'
+complete_gated(sid, "review_tests", { token: "t1", wsid: "w1" });
 S.markStep(sid, "review_tests", "complete", { token: "t2" });
 const e = cur().steps.review_tests;
 console.log("token=" + e.token + " wsid=" + e.wsid +
@@ -41,9 +41,9 @@ fi
 echo "== N3: value:null deletes the key from the projection but stays in the stream =="
 if run_case "N3/null-deletes"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    nodejs "$SID" "$PRE$GLOSSARY_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
-S.markStep(sid, "review_tests", "complete", { token: "t1", wsid: "w1" });
+complete_gated(sid, "review_tests", { token: "t1", wsid: "w1" });
 E.appendEvents(sid, [{ kind: "step_annotation", step: "review_tests", key: "token", value: null,
                        provenance: "observed", origin: "test" }]);
 const e = cur().steps.review_tests;
@@ -64,9 +64,9 @@ if run_case "N4/annotations-cleared"; then
     # null". seq_finite_before pins that the pre-clear value was a real number, otherwise
     # undefined === undefined would false-green the preservation check.
     next_sid
-    nodejs "$SID" "$PRE"'
+    nodejs "$SID" "$PRE$GLOSSARY_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
-S.markStep(sid, "review_tests", "complete", { token: "t1", wsid: "w1", warnings_summary: "2 findings" });
+complete_gated(sid, "review_tests", { token: "t1", wsid: "w1", warnings_summary: "2 findings" });
 const before = cur().steps.review_tests.updated_seq;
 E.appendEvents(sid, [{ kind: "step_annotations_cleared", step: "review_tests",
                        provenance: "declared", origin: "test" }]);
@@ -83,9 +83,9 @@ fi
 echo "== N5: annotations after a clear are kept (the clear is not sticky) =="
 if run_case "N5/clear-not-sticky"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    nodejs "$SID" "$PRE$GLOSSARY_JS"'
 const E = require("./hooks/workflow-state/state-io/events");
-S.markStep(sid, "review_tests", "complete", { token: "t1" });
+complete_gated(sid, "review_tests", { token: "t1" });
 E.appendEvents(sid, [{ kind: "step_annotations_cleared", step: "review_tests", provenance: "declared", origin: "test" }]);
 S.markStep(sid, "review_tests", "complete", { token: "t2" });
 console.log("token=" + cur().steps.review_tests.token);
@@ -96,9 +96,10 @@ fi
 echo "== N6: clearReviewTestsWarnings keeps review_scope_manifest/wsid (the carry-by-hand hazard) =="
 if run_case "N6/clear-warnings-keeps-fingerprint"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    nodejs "$SID" "$PRE$GLOSSARY_JS"'
 const RT = require("./hooks/workflow-state/state-io/review-tests");
-RT.markReviewTestsComplete(sid, { "tests/a.sh": "oid-1" }, { wsid: "wsid-1", warnings_summary: "2 advisory findings" });
+glossary_record(sid, "review_tests");
+in_glossary_repo(() => RT.markReviewTestsComplete(sid, { "tests/a.sh": "oid-1" }, { wsid: "wsid-1", warnings_summary: "2 advisory findings" }));
 const before = cur().steps.review_tests;
 RT.clearReviewTestsWarnings(sid);
 const after = cur().steps.review_tests;
@@ -114,9 +115,10 @@ fi
 echo "== N7: clearReviewTestsWarnings with nothing to clear appends no annotation (idempotent) =="
 if run_case "N7/clear-warnings-noop"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    nodejs "$SID" "$PRE$GLOSSARY_JS"'
 const RT = require("./hooks/workflow-state/state-io/review-tests");
-RT.markReviewTestsComplete(sid, { "tests/a.sh": "oid-1" }, { wsid: "wsid-1" });
+glossary_record(sid, "review_tests");
+in_glossary_repo(() => RT.markReviewTestsComplete(sid, { "tests/a.sh": "oid-1" }, { wsid: "wsid-1" }));
 const n0 = rd().events.length;
 RT.clearReviewTestsWarnings(sid);
 const n1 = rd().events.length;
@@ -163,9 +165,9 @@ fi
 echo "== N10: recordSkipJudgment does not clobber the step status (no read-back needed) =="
 if run_case "N10/skip-judgment-preserves-status"; then
     next_sid
-    nodejs "$SID" "$PRE$APPROVE_GATED_JS"'
+    nodejs "$SID" "$PRE$APPROVE_GATED_JS$GLOSSARY_JS"'
 const R = require("./hooks/workflow-state/skip-signal-resolver");
-S.markStep(sid, "detail", "complete");
+complete_gated(sid, "detail");
 R.recordSkipJudgment(sid, "detail", { c1: true, c2: true }, "test-source");
 const e = cur().steps.detail;
 const j = e.skip_judgment || {};

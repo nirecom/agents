@@ -136,4 +136,4 @@ function hasUnstagedTrackedChanges(repoDir) {
   }
 }
 
-module.exports = { DOCS_ONLY_ALLOWLIST, hasStagedTestChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedDocChanges, hasStagedChanges, hasUnstagedTrackedChanges };
+module.exports = { DOCS_ONLY_ALLOWLIST, stagedOids, hasStagedTestChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedDocChanges, hasStagedChanges, hasUnstagedTrackedChanges };

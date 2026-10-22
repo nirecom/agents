@@ -6,6 +6,9 @@
 # workflow-mark.js MARK_STEP rejection / NOT_NEEDED handlers (WS-EV-6..8).
 # Sourced by main-workflow-evidence.sh; relies on helpers from common.sh.
 
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$DOTFILES_DIR/tests/lib/glossary-check-record.sh"
+
 run_gate_and_mark_tests() {
     local REPO REPO_N SID GATE_INPUT GATE_OUT MARK_JSON MARK_OUT ACTUAL_STATUS EV8_REASON
 
@@ -24,6 +27,7 @@ run_gate_and_mark_tests() {
     mkdir -p "$REPO/tests"
     echo "test content" > "$REPO/tests/my-test.sh"
     git -C "$REPO" add tests/my-test.sh
+    glossary_check_record "$SID" "$REPO"  # #2529
 
     GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$REPO_N" "$SID")
     GATE_OUT=$(run_gate "$GATE_INPUT")
@@ -45,6 +49,7 @@ run_gate_and_mark_tests() {
     mkdir -p "$REPO/docs"
     echo "doc content" > "$REPO/docs/guide.md"
     git -C "$REPO" add docs/guide.md
+    glossary_check_record "$SID" "$REPO"  # #2529
 
     GATE_INPUT=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m \\"test\\""},"session_id":"%s"}' "$REPO_N" "$SID")
     GATE_OUT=$(run_gate "$GATE_INPUT")

@@ -2,17 +2,10 @@
 # tests/hooks/feature-1701-workflow-gate-code-size/infra-and-config.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
-#
-# Fragment of tests/hooks/feature-1701-workflow-gate-code-size.sh — sourced by the
-# parent, not run directly. Owns cases 8-14: infrastructure failure handling
-# (missing bash, missing script, unexpected exit, timeout = the only fail-open
-# path) and CODE_FILE_EXTENSIONS resolution (.env authoritative, process.env
-# ignored, no .env at all).
-#
-# Depends on the parent for: TMPDIR_BASE, fresh_workflow_dir, setup_repo,
-# make_plain_cfg_root, make_marker_cfg_root, write_complete_state,
-# make_lines, build_commit_payload, run_hook, assert_approve, assert_block,
-# HOOK_OUT, pass, fail, skip.
+# Fragment sourced by tests/hooks/feature-1701-workflow-gate-code-size.sh (cases 8-14:
+# infrastructure failure handling, CODE_FILE_EXTENSIONS resolution); not run directly.
+# Depends on the parent for its fixture helpers, run_hook, the assert_* helpers,
+# HOOK_OUT, pass/fail/skip, and glossary_check_record (#2529).
 
 # 8. bash not on PATH -> block (infrastructure error, NOT fail-open).
 test_8_bash_missing_blocks() {
@@ -103,6 +96,7 @@ test_11_timeout_fail_open() {
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"
     git -C "$repo" add bin/big.js
+    ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
     assert_approve "11: review-code-size timeout -> approve (only fail-open path)"
 }
@@ -118,6 +112,7 @@ test_12_env_var_ignored() {
     mkdir -p "$repo/src"
     make_lines 501 > "$repo/src/big.ts"
     git -C "$repo" add src/big.ts
+    ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg" "CODE_FILE_EXTENSIONS=ts"
     assert_approve "12: forged process.env CODE_FILE_EXTENSIONS=ts ignored, .env (js;sh;py) authoritative -> approve"
 }

@@ -56,6 +56,8 @@ NOW_ISO="$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -
 # a copy of this checkout attached to the fixture repo.
 # shellcheck source=tests/lib/session-repo-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
 session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
 GATE_HOOK="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
@@ -339,6 +341,7 @@ MANIFEST_A2="$(compute_manifest "$WT_A2")"
 write_state "$SID_A2" "$(state_json_custom "$SID_A2" "feature/secA-wt2" \
     review_tests complete \
     review_scope_manifest "$MANIFEST_A2")"
+glossary_check_record "$SID_A2" "$WT_A2"  # #2529: the all-complete control needs a current glossary_check
 RES_A2="$(run_gate "$WT_A2" "$(build_gate_json 'git commit -m wip' "$SID_A2" "$WT_A2")")"
 if is_approve "$RES_A2"; then
     pass "A2. all-complete (incl. review_tests w/ matching manifest) → approve"

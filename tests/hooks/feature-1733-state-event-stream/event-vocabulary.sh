@@ -179,17 +179,19 @@ const bad = [];
 // approval-gated (#1133): APPROVE_GATED_JS seeded a plan_approval for both above, so
 // their "complete" transition below satisfies the completion-approval precondition
 // the same way every other kind-vocabulary assertion in this file does.
+// #2529: the six glossary-gated steps likewise carry a glossary_check record (GLOSSARY_JS).
 const C = require("./hooks/workflow-state/state-io/core");
-(C.VALID_STEPS || []).forEach((s) => {
+glossary_record(sid, ...Object.keys(GCR.STAGE_OF_STEP));
+in_glossary_repo(() => (C.VALID_STEPS || []).forEach((s) => {
   if (!accepts(mk("step_status", { step: s }))) bad.push("step:" + s + ":rejected");
-});
+}));
 ["not_a_step", "Research", "", null].forEach((s, i) => {
   if (!rejects(mk("step_status", { step: s }))) bad.push("badstep" + i + ":accepted");
 });
 report(bad);
 JS
 )
-    nodejs "$SID" "$PRE$VOCAB_JS$APPROVE_GATED_JS$_ev_script"
+    nodejs "$SID" "$PRE$VOCAB_JS$APPROVE_GATED_JS$GLOSSARY_JS$_ev_script"
     assert_eq "EV6/status-domain" "OK" "$NODE_OUT"
 fi
 case_end

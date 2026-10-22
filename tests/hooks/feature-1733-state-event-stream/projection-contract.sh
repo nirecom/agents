@@ -14,12 +14,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 echo "== P1: every projection key readState pastes equals projectState(raw) =="
 if run_case "P1/projection-agreement"; then
     next_sid
-    nodejs "$SID" "$PRE"'
+    nodejs "$SID" "$PRE$GLOSSARY_JS"'
 const PJ = require("./hooks/workflow-state/state-io/projection");
 const CA = require("./hooks/workflow-state/completion-approval");
 S.markStep(sid, "workflow_init", "complete");
 require("./tests/lib/plan-approval-fixture").approveLive(sid, "outline");
-S.markStep(sid, "outline", "complete");
+complete_gated(sid, "outline");
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
 S.recordComplexityEvaluation(sid, ["S1-multi-file", "S2-architecture"]);
 S.markStep(sid, "research", "skipped", { skip_reason: "n/a" });

@@ -163,15 +163,15 @@ case_end
 
 # --- glossary-format.js prompt-data -------------------------------------------
 
-PD_USER="$TMP_ROOT/pd/docs/glossary-user.md"
-PD_INT="$TMP_ROOT/pd/docs/glossary-internal.md"
+PD_USER="$TMP_ROOT/pd/docs/glossary/user.md"
+PD_INT="$TMP_ROOT/pd/docs/glossary/internal.md"
 write_glossary "$PD_USER" "Glossary - user" "P" 3
 write_glossary "$PD_INT" "Glossary - internal" "Q" 2
 
 # ============================================================================
 case_begin "prompt-data-emits-terms-and-definitions" "bin/lib/glossary-format.js"
 # ============================================================================
-prompt_data "docs/glossary-user.md" "$(np "$PD_USER")" "docs/glossary-internal.md" "$(np "$PD_INT")"
+prompt_data "docs/glossary/user.md" "$(np "$PD_USER")" "docs/glossary/internal.md" "$(np "$PD_INT")"
 assert_rc "D1/exit-0" "$PD_RC" 0
 for e in Pterm0001 Pterm0003 Qterm0001 Qterm0002; do
     assert_file_has "D1/has-term-line-$e" "$PD_OUT" "### $e"
@@ -185,15 +185,15 @@ assert_file_lacks "D1/intro-prose-dropped" "$PD_OUT" "Entries for the fixture."
 assert_file_lacks "D1/no-start-delimiter-from-node" "$PD_OUT" "$START_DELIM"
 assert_file_lacks "D1/no-end-delimiter-from-node" "$PD_OUT" "$END_DELIM"
 assert_file_lacks "D1/under-cap-not-truncated" "$PD_OUT" "[TRUNCATED:"
-lab_u="$(first_line_no "$PD_OUT" "docs/glossary-user.md")"; ent_u="$(first_line_no "$PD_OUT" "### Pterm0001")"
-lab_i="$(first_line_no "$PD_OUT" "docs/glossary-internal.md")"; ent_i="$(first_line_no "$PD_OUT" "### Qterm0001")"
+lab_u="$(first_line_no "$PD_OUT" "docs/glossary/user.md")"; ent_u="$(first_line_no "$PD_OUT" "### Pterm0001")"
+lab_i="$(first_line_no "$PD_OUT" "docs/glossary/internal.md")"; ent_i="$(first_line_no "$PD_OUT" "### Qterm0001")"
 if [[ -n "$lab_u" && -n "$ent_u" ]] && (( lab_u < ent_u )); then pass "D1/user-label-heads-its-entries"
 else fail "D1/user-label-heads-its-entries" "label=${lab_u:-none} entry=${ent_u:-none}"; fi
 if [[ -n "$lab_i" && -n "$ent_i" && -n "$ent_u" ]] && (( lab_i < ent_i && lab_i > ent_u )); then pass "D1/internal-label-heads-its-entries"
 else fail "D1/internal-label-heads-its-entries" "label=${lab_i:-none} entry=${ent_i:-none} user-entry=${ent_u:-none}"; fi
 case_end
 
-PD_SPOOF="$TMP_ROOT/pd-spoof/glossary-user.md"
+PD_SPOOF="$TMP_ROOT/pd-spoof/user.md"
 mkdir -p "$(dirname "$PD_SPOOF")"
 {
     printf '# Glossary - user\n\n'
@@ -206,7 +206,7 @@ mkdir -p "$(dirname "$PD_SPOOF")"
 # ============================================================================
 case_begin "prompt-data-neutralizes-markers" "bin/lib/glossary-format.js"
 # ============================================================================
-prompt_data "docs/glossary-user.md" "$(np "$PD_SPOOF")"
+prompt_data "docs/glossary/user.md" "$(np "$PD_SPOOF")"
 assert_rc "D2/exit-0" "$PD_RC" 0
 assert_file_has "D2/spoof-definition-kept" "$PD_OUT" "SPOOFSENT"
 assert_file_has "D2/entry-after-spoof-kept" "$PD_OUT" "SPOOFTAIL"
@@ -216,13 +216,13 @@ assert_file_lacks "D2/comment-open-neutralized" "$PD_OUT" "<!--"
 assert_file_lacks "D2/comment-close-neutralized" "$PD_OUT" "-->"
 case_end
 
-PD_BIG="$TMP_ROOT/pd-big/glossary-user.md"
+PD_BIG="$TMP_ROOT/pd-big/user.md"
 write_glossary "$PD_BIG" "Glossary - user" "B" 300
 
 # ============================================================================
 case_begin "prompt-data-truncates-on-max-lines" "bin/lib/glossary-format.js"
 # ============================================================================
-prompt_data --max-lines 40 "docs/glossary-user.md" "$(np "$PD_BIG")"
+prompt_data --max-lines 40 "docs/glossary/user.md" "$(np "$PD_BIG")"
 assert_rc "D3/exit-0" "$PD_RC" 0
 check_entries_whole "$PD_OUT" "B" "D3"
 emitted="$(read_emitted)"
@@ -235,7 +235,7 @@ case_end
 # ============================================================================
 case_begin "prompt-data-truncates-on-max-bytes" "bin/lib/glossary-format.js"
 # ============================================================================
-prompt_data --max-bytes 1500 "docs/glossary-user.md" "$(np "$PD_BIG")"
+prompt_data --max-bytes 1500 "docs/glossary/user.md" "$(np "$PD_BIG")"
 assert_rc "D4/exit-0" "$PD_RC" 0
 check_entries_whole "$PD_OUT" "B" "D4"
 emitted="$(read_emitted)"
@@ -249,11 +249,11 @@ case_end
 # ============================================================================
 case_begin "prompt-data-tolerates-missing-path" "bin/lib/glossary-format.js"
 # ============================================================================
-prompt_data "docs/glossary-internal.md" "$(np "$TMP_ROOT/pd/docs/does-not-exist.md")"
+prompt_data "docs/glossary/internal.md" "$(np "$TMP_ROOT/pd/docs/does-not-exist.md")"
 assert_rc "D5/missing-only-exit-0" "$PD_RC" 0
 if [[ "$PD_RC" == 0 ]] && ! grep -q '^### ' "$PD_OUT" 2>/dev/null; then pass "D5/missing-only-emits-no-entry"
 else fail "D5/missing-only-emits-no-entry" "rc=$PD_RC or an entry line appeared for a missing file"; fi
-prompt_data "docs/glossary-internal.md" "$(np "$TMP_ROOT/pd/docs/does-not-exist.md")" "docs/glossary-user.md" "$(np "$PD_USER")"
+prompt_data "docs/glossary/internal.md" "$(np "$TMP_ROOT/pd/docs/does-not-exist.md")" "docs/glossary/user.md" "$(np "$PD_USER")"
 assert_rc "D5/missing-plus-present-exit-0" "$PD_RC" 0
 assert_file_has "D5/present-file-still-emitted" "$PD_OUT" "### Pterm0002"
 case_end
@@ -275,14 +275,14 @@ while IFS='|' read -r _name _args _want; do
 done <<'TABLE'
 # name                    | args                                                | want
 no-arguments              |                                                     | 2
-label-without-path        | docs/glossary-user.md                               | 2
+label-without-path        | docs/glossary/user.md                               | 2
 max-lines-without-value   | --max-lines                                         | 2
-max-lines-not-numeric     | --max-lines abc docs/glossary-user.md @USER         | 2
-max-bytes-not-numeric     | --max-bytes abc docs/glossary-user.md @USER         | 2
-max-lines-zero            | --max-lines 0 docs/glossary-user.md @USER           | 2
-max-lines-negative        | --max-lines -1 docs/glossary-user.md @USER          | 2
-max-bytes-zero            | --max-bytes 0 docs/glossary-user.md @USER           | 2
-max-bytes-negative        | --max-bytes -5 docs/glossary-user.md @USER          | 2
+max-lines-not-numeric     | --max-lines abc docs/glossary/user.md @USER         | 2
+max-bytes-not-numeric     | --max-bytes abc docs/glossary/user.md @USER         | 2
+max-lines-zero            | --max-lines 0 docs/glossary/user.md @USER           | 2
+max-lines-negative        | --max-lines -1 docs/glossary/user.md @USER          | 2
+max-bytes-zero            | --max-bytes 0 docs/glossary/user.md @USER           | 2
+max-bytes-negative        | --max-bytes -5 docs/glossary/user.md @USER          | 2
 TABLE
 case_end
 
@@ -290,7 +290,7 @@ case_end
 case_begin "prompt-data-exact-fit-limits-not-truncated" "bin/lib/glossary-format.js"
 # ============================================================================
 PD_FULL="$TMP_ROOT/prompt-data-full.out"
-prompt_data "docs/glossary-user.md" "$PD_USER_NODE" "docs/glossary-internal.md" "$(np "$PD_INT")"
+prompt_data "docs/glossary/user.md" "$PD_USER_NODE" "docs/glossary/internal.md" "$(np "$PD_INT")"
 cp "$PD_OUT" "$PD_FULL" 2>/dev/null || : > "$PD_FULL"
 full_rc="$PD_RC"
 full_lines="$(awk 'END { print NR }' "$PD_FULL")"
@@ -300,7 +300,7 @@ else fail "D7/uncapped-baseline" "rc=$full_rc lines=$full_lines bytes=$full_byte
 for _cap in "--max-lines $full_lines" "--max-bytes $full_bytes"; do
     read -r -a _argv <<< "$_cap"
     _tag="${_argv[0]#--}"
-    prompt_data "${_argv[@]}" "docs/glossary-user.md" "$PD_USER_NODE" "docs/glossary-internal.md" "$(np "$PD_INT")"
+    prompt_data "${_argv[@]}" "docs/glossary/user.md" "$PD_USER_NODE" "docs/glossary/internal.md" "$(np "$PD_INT")"
     assert_rc "D7/$_tag-exact-exit-0" "$PD_RC" 0
     assert_file_lacks "D7/$_tag-exact-no-trailer" "$PD_OUT" "[TRUNCATED:"
     if [[ "$PD_RC" == 0 && -s "$PD_FULL" ]] && cmp -s "$PD_OUT" "$PD_FULL"; then pass "D7/$_tag-exact-output-identical"
