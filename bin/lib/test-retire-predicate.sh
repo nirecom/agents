@@ -53,6 +53,9 @@ TRP_CASE_END_LINES=()
 TRP_CASE_ALIVE=()
 # shellcheck disable=SC2034
 TRP_CASE_NAMES=()
+# The file's content hash before its cases were read; orphan-removal.sh refuses a changed file.
+# shellcheck disable=SC2034
+TRP_CASE_FILE_HASH=""
 TRP_REFCOUNT=0
 TRP_ORPHAN_CASE_IDX=()
 TRP_UNIT_MODE="file"
@@ -182,14 +185,23 @@ trp_survival_verdict() {
 
 # ── case-unit refcount verdict ───────────────────────────────────────────────
 
+# _trp_file_hash <abs-path> — prints the file's content hash, or nothing on failure.
+_trp_file_hash() {
+  git hash-object --no-filters -- "$1" 2>/dev/null || cksum 2>/dev/null < "$1" || true
+}
+
 # trp_case_refcount_verdict <repo-root> <file> — top-level entry the scan loops
 # call. Sets $TRP_VERDICT, $TRP_REFCOUNT and $TRP_UNIT_MODE. Case-conforming
 # files decide per case; malformed and marker-less files fall back to
 # trp_survival_verdict (C8). A file whose reader could not run (TRP_READER_FAILED)
 # is undeterminable: its cases are unknown, so the header must not decide.
+# Also sets $TRP_CASE_FILE_HASH (hashed before the cases are read).
 trp_case_refcount_verdict() {
   local repo_root="${1:?trp_case_refcount_verdict: repo root required}"
   local file="${2:?trp_case_refcount_verdict: test file required}"
+  local abs="$file"
+  [[ "$abs" != /* ]] && abs="$repo_root/$file" || true
+  TRP_CASE_FILE_HASH="$(_trp_file_hash "$abs")"
   trp_enumerate_cases "$repo_root" "$file"
   if [[ -n "$TRP_READER_FAILED" ]]; then
     TRP_VERDICT=undeterminable; TRP_UNIT_MODE="file"; TRP_REFCOUNT=1

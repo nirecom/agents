@@ -20,6 +20,7 @@ const IDENT = /[A-Za-z_$][\w$]*/g;
 const COUNTER = /^(?:let|var)\s+(PASS|FAIL|passed|failed)\s*=\s*0\s*(?:;|$)/;
 const EXPORTS = /module\.exports\s*=\s*\{([^}]*)\}/;
 const NODE_TEST = /\b(?:require\s*\(|from\s+|import\s*\()\s*["']node:test["']/;
+const NODE_TEST_LITERAL = /^["']node:test["']$/;
 
 // The file's code lines (1-based; comments and string text blanked) and its column-0
 // declarations outside every case: { name, line, func }.
@@ -105,10 +106,17 @@ function selfImpl(lines, helper) {
 }
 
 // custom-runner: without node:test the wrapper runs the file as a plain script, so the cases
-// are the file's own loop and the per-case reporter sees none of them.
+// are the file's own loop and the per-case reporter sees none of them. Only the code region
+// decides: a comment, string or template that names node:test is blanked, and only a real
+// "node:test" literal survives the scan for NODE_TEST to match.
 function skipReason(lines) {
-  const code = lines.map((raw) => raw.replace(/\/\/.*$/, "")).join("\n");
-  return NODE_TEST.test(code) ? [] : ["custom-runner"];
+  const code = [];
+  let stack = [];
+  for (const raw of lines) {
+    stack = scanCode(raw, stack, code, (literal) => NODE_TEST_LITERAL.test(literal));
+    code.push("\n");
+  }
+  return NODE_TEST.test(code.join("")) ? [] : ["custom-runner"];
 }
 
 // node --check parses the file without running it; its stderr is the reason.

@@ -45,13 +45,67 @@ function targetIsValid(target) {
   return parts[0] !== "." && !parts.includes("..");
 }
 
+const REGEX_AFTER_WORD = new Set([
+  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
+]);
+
+const CONTROL_WORD = new Set(["if", "while", "for", "with"]);
+
+// Whether a `/` after the line's significant code `sig` opens a regex (else it divides).
+// A literal or template stands in `sig` as `"`, a whitespace run as one space; the previous
+// line is not consulted. A `)` closing a control-statement paren is settled by scanCode instead.
+function regexAllowed(sig) {
+  const code = sig.trimEnd();
+  const last = code[code.length - 1];
+  if (last === undefined) return true;
+  if (/[\w$]/.test(last)) return REGEX_AFTER_WORD.has(/[\w$]+$/.exec(code)[0]);
+  return !/[)\]"]/.test(last);
+}
+
+// Whether a `(` after `sig` opens a control-statement paren: `if`, `while`, `for` or `with` as a
+// word of its own, not a property such as `x.if`.
+function opensControlParen(sig) {
+  const m = /(\.\s*)?([\w$]+)$/.exec(sig.trimEnd());
+  return Boolean(m) && !m[1] && CONTROL_WORD.has(m[2]);
+}
+
+// The index just past the regex literal (flags included) opened at `start`, or -1 when the line
+// ends first: a regex never spans a line.
+function regexEnd(raw, start) {
+  let inClass = false;
+  for (let i = start + 1; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (ch === "\\") i += 1;
+    else if (ch === "[") inClass = true;
+    else if (ch === "]") inClass = false;
+    else if (ch === "/" && !inClass) {
+      let j = i + 1;
+      while (j < raw.length && /[A-Za-z]/.test(raw[j])) j += 1;
+      return j;
+    }
+  }
+  return -1;
+}
+
 // Walks one line and returns the region stack after it. Entries: { kind: "comment" },
 // { kind: "template" }, { kind: "expr", depth } (inside `${`, depth = open inner `{`); empty = code.
-// When `code` (an array) is given, the line's code characters are pushed onto it; comments and
-// string or template text become one space each.
-function scanCode(raw, stack, code) {
+// When `code` (an array) is given, the line's code characters are pushed onto it; comments,
+// string, template and regex literal text become one space each; a quoted literal
+// `keep(literal)` accepts is pushed as written. Within the line, a `/` right after the `)` of an
+// `if`/`while`/`for`/`with` paren may open a regex; every other `)` (an unbalanced one too) divides.
+function scanCode(raw, stack, code, keep) {
   const s = stack.map((e) => ({ ...e }));
-  const emit = code ? (t) => code.push(t) : () => {};
+  const out = code ? (t) => code.push(t) : () => {};
+  let sig = "";
+  const parens = [];
+  let afterControlParen = false;
+  const emit = (t, value) => {
+    out(t);
+    if (value) sig += '"';
+    else if (t.trim()) sig += t;
+    else if (sig && !sig.endsWith(" ")) sig += " ";
+    if (value || t.trim()) afterControlParen = false;
+  };
   let i = 0;
   while (i < raw.length) {
     const top = s[s.length - 1];
@@ -69,11 +123,12 @@ function scanCode(raw, stack, code) {
       if (ch === "\\") i += 2;
       else if (ch === "`") {
         s.pop();
-        emit(" ");
+        emit(" ", true);
         i += 1;
       } else if (two === "${") {
         s.push({ kind: "expr", depth: 0 });
         emit(" ");
+        sig += "{";
         i += 2;
       } else i += 1;
       continue;
@@ -84,11 +139,21 @@ function scanCode(raw, stack, code) {
       i += 2;
       continue;
     }
+    if (ch === "/" && (afterControlParen || regexAllowed(sig))) {
+      const end = regexEnd(raw, i);
+      if (end !== -1) {
+        emit(" ", true);
+        i = end;
+        continue;
+      }
+    }
     if (ch === '"' || ch === "'") {
+      const start = i;
       i += 1;
       while (i < raw.length && raw[i] !== ch) i += raw[i] === "\\" ? 2 : 1;
-      emit(" ");
       i += 1;
+      const literal = raw.slice(start, i);
+      emit(keep && keep(literal) ? literal : " ", true);
       continue;
     }
     if (ch === "`") s.push({ kind: "template" });
@@ -101,7 +166,10 @@ function scanCode(raw, stack, code) {
       }
       top.depth -= 1;
     }
+    const control = ch === "(" ? opensControlParen(sig) : false;
     if (ch !== "`") emit(ch);
+    if (ch === "(") parens.push(control);
+    else if (ch === ")" && parens.length) afterControlParen = parens.pop();
     i += 1;
   }
   return s;

@@ -7,6 +7,7 @@
 # --rel tests/bin/test_foo.py each CLI judges it as pytest and prints the rel path, never the
 # temp path. Without --rel the file's own path is used, as today. --rel or --head with two
 # files is an infra error (exit 2). The language-match CLI is also driven as pester and js.
+# With --head it reports only a mismatch HEAD lacks; an empty value or a missing head copy is exit 2.
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -207,6 +208,56 @@ run_cli "$LM_CLI" --rel "$REL" "$_copy" "$REL"
 expect_rc "check-test-language-match --rel + 2 files" 2 "$R_RC"
 run_cli "$LM_CLI" --head "$_copy" "$_copy" "$REL"
 expect_rc "check-test-language-match --head + 2 files" 2 "$R_RC"
+case_end
+
+# rel_head_lm <label> <head-body> <edited-body> <want-rc> [<mismatch-text>] — --rel with --head:
+# head.tmp (the HEAD body) is the baseline, copy.tmp (the edited body) the version judged.
+printf '%s\n' '# Tests: bin/a.py' '# Tags: scope:common' 'import pytest' '' '' 'def test_a():' '    assert pytest is not None' > "$BODIES/py-a"
+rel_head_lm() {
+  _copy="$(copy_as "$3")"
+  cp "$BODIES/$2" "$TMPBASE/x/head.tmp"
+  run_cli "$LM_CLI" --rel "$REL" --head "$TMPBASE/x/head.tmp" "$_copy"
+  expect_rc "$1" "$4" "$R_RC"
+  lacks "$1" "$R_OUT$R_ERR" ".tmp"
+  if [ -n "${5:-}" ]; then
+    every_line_starts "$1" "$R_OUT" "HIGH: $REL"
+    has "$1" "$R_OUT" "$5"
+  else
+    assert_eq "$1: output=[$R_OUT]" "$1: output=[]"
+  fi
+}
+
+case_begin "rel-with-head-judges-against-head" "bin/check-test-language-match.sh"
+rel_head_lm "head on python, edited on js: new mismatch" py-a py-mismatch 1 "test language pytest does not match code language js of bin/foo.js (new file shape: "
+rel_head_lm "head and edited both on js: existing state" py-mismatch py-mismatch 0
+rel_head_lm "head on js, edited on python: fixed" py-mismatch py-a 0
+case_end
+
+# usage_err <label> <cli> <want-stderr> <arg>... — exit 2, <want-stderr> on stderr, no stdout.
+usage_err() {
+  local label="$1" cli="$2" want="$3"
+  shift 3
+  run_cli "$cli" "$@"
+  expect_rc "$label" 2 "$R_RC"
+  has "$label" "$R_ERR" "$want"
+  assert_eq "$label stdout=[$R_OUT]" "$label stdout=[]"
+}
+
+case_begin "rel-value-missing-or-empty-case-markers" "bin/check-case-markers.sh"
+usage_err "check-case-markers --rel without value" "$CM_CLI" "check-case-markers.sh: --rel needs a value" --rel
+usage_err "check-case-markers --rel empty" "$CM_CLI" "check-case-markers.sh: --rel needs a value" --rel "" "$_copy"
+case_end
+
+case_begin "rel-value-missing-or-empty-self-impl" "bin/check-self-impl.sh"
+usage_err "check-self-impl --rel without value" "$SI_CLI" "check-self-impl.sh: --rel needs a value" --rel
+usage_err "check-self-impl --rel empty" "$SI_CLI" "check-self-impl.sh: --rel needs a value" --rel "" "$_copy"
+case_end
+
+case_begin "rel-and-head-value-errors-language-match" "bin/check-test-language-match.sh"
+usage_err "check-test-language-match --rel without value" "$LM_CLI" "check-test-language-match.sh: --rel needs a value" "$_copy" --rel
+usage_err "check-test-language-match --rel empty" "$LM_CLI" "check-test-language-match.sh: --rel needs a value" --rel "" "$_copy"
+usage_err "check-test-language-match --head empty" "$LM_CLI" "check-test-language-match.sh: --head needs a value" --head "" "$_copy"
+usage_err "check-test-language-match --head copy absent" "$LM_CLI" "check-test-language-match.sh: head copy not found: $TMPBASE/x/no-head.tmp" --rel "$REL" --head "$TMPBASE/x/no-head.tmp" "$_copy"
 case_end
 
 echo ""

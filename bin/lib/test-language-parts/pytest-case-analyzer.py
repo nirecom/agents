@@ -4,7 +4,10 @@ caseEmbedRules analyzer child.
 Parses the file with `ast` (never imports or runs it), enumerates the cases with
 pytest_case_scan.py (the test case reader's own code) and prints:
   deps           ORDER\\t<idx>\\t<begin>\\t<end> per case, then <idx>\\t<csv> per case
-  leftover-defs  <line>\\t<name> per module-level function no other code names
+  leftover-defs  <line>\\t<name> per module-level function no other code names, except the
+                 ones pytest calls itself: a fixture (@pytest.fixture, its `import pytest as X`
+                 alias @X.fixture, or @fixture), a pytest_* hook
+                 or an xunit setup_module / teardown_module / setup_function / teardown_function
   self-impl <helper>  <line>\\t<kind>\\t<detail> per module-level counter-init / harness-redef
   skip-reason    parametrized-case when a test uses @pytest.mark.parametrize; else nothing
   syntax-check   nothing; exit 0 when the file parses, 1 with the reason on stderr otherwise
@@ -24,6 +27,7 @@ from pytest_case_scan import DEFINITIONS, is_case, scan_cases
 ASSIGNMENTS = (ast.Assign, ast.AnnAssign, ast.AugAssign)
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 COUNTERS = ("PASS", "FAIL", "passed", "failed")
+XUNIT_FUNCTIONS = ("setup_module", "teardown_module", "setup_function", "teardown_function")
 
 
 class NotConforming(Exception):
@@ -70,15 +74,42 @@ def deps(tree: ast.Module) -> list[str]:
 
 def leftover_defs(tree: ast.Module) -> list[str]:
     defs = top_definitions(tree)
+    modules = pytest_modules(tree)
     rows = []
     for name, line, is_function in defs:
         if not is_function:
             continue
         own = next(n for n in tree.body if isinstance(n, DEFINITIONS) and n.name == name and n.lineno == line)
+        if is_pytest_called(own, modules):
+            continue
         others = [n for n in tree.body if n is not own]
         if not any(name in used_names(n) for n in others) and name not in used_names_inside(own):
             rows.append(f"{line}\t{name}")
     return rows
+
+
+def pytest_modules(tree: ast.Module) -> set[str]:
+    """The names the pytest module goes by in the file: `pytest` plus every `import pytest as X` alias."""
+    return {"pytest"} | {
+        alias.asname
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name == "pytest" and alias.asname
+    }
+
+
+def is_fixture(node: ast.AST, modules: set[str]) -> bool:
+    """A `<pytest module>.fixture` (`pytest` or an alias in modules) or bare `fixture` decorator, called or not."""
+    target = node.func if isinstance(node, ast.Call) else node
+    if isinstance(target, ast.Attribute):
+        return target.attr == "fixture" and isinstance(target.value, ast.Name) and target.value.id in modules
+    return isinstance(target, ast.Name) and target.id == "fixture"
+
+
+def is_pytest_called(node: ast.AST, modules: set[str]) -> bool:
+    """pytest calls a fixture, a pytest_* hook or an xunit setup/teardown itself, with no name reference."""
+    return node.name.startswith("pytest_") or node.name in XUNIT_FUNCTIONS or any(is_fixture(d, modules) for d in node.decorator_list)
 
 
 def used_names_inside(node: ast.AST) -> set[str]:
@@ -114,20 +145,25 @@ def self_impl(tree: ast.Module, args: list[str]) -> list[str]:
 
 
 def is_parametrize(node: ast.AST) -> bool:
-    """A `pytest.mark.parametrize` / `mark.parametrize` decorator, called or not."""
+    """A `<x>.mark.parametrize` or bare `mark.parametrize` (`from pytest import mark`) decorator, called or not."""
     target = node.func if isinstance(node, ast.Call) else node
-    return (
-        isinstance(target, ast.Attribute)
-        and target.attr == "parametrize"
-        and isinstance(target.value, ast.Attribute)
-        and target.value.attr == "mark"
-    )
+    if not (isinstance(target, ast.Attribute) and target.attr == "parametrize"):
+        return False
+    mark = target.value
+    return (isinstance(mark, ast.Attribute) and mark.attr == "mark") or (isinstance(mark, ast.Name) and mark.id == "mark")
 
 
 def skip_reason(tree: ast.Module) -> list[str]:
-    """parametrized-case: one function stands for several cases, so a case cannot be cut alone."""
-    for node in ast.walk(tree):
-        if isinstance(node, DEFINITIONS) and any(is_parametrize(d) for d in node.decorator_list):
+    """parametrized-case: one function stands for several cases, so a case cannot be cut alone.
+
+    Only a test case's parametrize counts: a module-level case (is_case) or a test_* method of a
+    Test* class; a parametrized helper or nested function leaves every case cuttable.
+    """
+    for node in tree.body:
+        if not is_case(node):
+            continue
+        methods = [m for m in node.body if isinstance(m, FUNCTIONS) and is_case(m)] if isinstance(node, ast.ClassDef) else []
+        if any(is_parametrize(d) for case in [node, *methods] for d in case.decorator_list):
             return ["parametrized-case"]
     return []
 

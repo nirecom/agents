@@ -19,10 +19,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+import harness  # noqa: E402,F401
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "bin" / "github-issues" / "issue-to-history.sh"
@@ -59,69 +63,70 @@ requires_bash = pytest.mark.skipif(
 )
 
 
-def _run_script(target_checkout_root: Path, issue_num: str) -> subprocess.CompletedProcess:
-    """Run issue-to-history.sh under bash with --target-checkout-root target_checkout_root.
-
-    The script will:
-      1. cd into the target checkout root
-      2. Check docs/history.md + docs/history/ for the idempotency pattern
-      3. If found → print "Already in history..." and exit 0
-      4. If NOT found → continue to `gh issue view`, which fails outside CI →
-         exit non-zero, and "Already in history" is NOT in stdout
-
-    Returns the CompletedProcess. Callers should assert on
-    `"Already in history" in result.stdout` (not on returncode for non-detect
-    cases — gh failure produces a non-zero exit that's expected).
-    """
-    # A fake gh first on PATH: the script must never reach the real gh (#2590 command guard).
-    stub_dir = Path(tempfile.mkdtemp(prefix="gh-stub-"))
-    stub = stub_dir / "gh"
-    stub.write_text("#!/bin/bash\nexit 1\n", encoding="utf-8", newline="\n")
-    stub.chmod(0o755)
-    env = {"PATH": str(stub_dir) + os.pathsep + os.environ.get("PATH", "")}
-    # Inherit SYSTEMROOT/USERPROFILE/etc. on Windows for bash to function
-    for key in ("SYSTEMROOT", "USERPROFILE", "HOME", "TMP", "TEMP", "LANG", "LC_ALL"):
-        if key in os.environ:
-            env[key] = os.environ[key]
-    return subprocess.run(
-        [BASH, str(SCRIPT_PATH), issue_num, "--target-checkout-root", str(target_checkout_root)],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-
-def _write_history(agents_dir: Path, history_content: str) -> None:
-    docs = agents_dir / "docs"
-    docs.mkdir(parents=True, exist_ok=True)
-    (docs / "history.md").write_text(history_content, encoding="utf-8")
-
-
+@pytest.mark.target("bin/github-issues/issue-to-history.sh")
 @requires_bash
 class TestIssueToHistoryIdempotency:
+    @staticmethod
+    def _run_script(target_checkout_root: Path, issue_num: str) -> subprocess.CompletedProcess:
+        """Run issue-to-history.sh under bash with --target-checkout-root target_checkout_root.
+
+        The script will:
+          1. cd into the target checkout root
+          2. Check docs/history.md + docs/history/ for the idempotency pattern
+          3. If found → print "Already in history..." and exit 0
+          4. If NOT found → continue to `gh issue view`, which fails outside CI →
+             exit non-zero, and "Already in history" is NOT in stdout
+
+        Returns the CompletedProcess. Callers should assert on
+        `"Already in history" in result.stdout` (not on returncode for non-detect
+        cases — gh failure produces a non-zero exit that's expected).
+        """
+        # A fake gh first on PATH: the script must never reach the real gh (#2590 command guard).
+        stub_dir = Path(tempfile.mkdtemp(prefix="gh-stub-"))
+        stub = stub_dir / "gh"
+        stub.write_text("#!/bin/bash\nexit 1\n", encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+        env = {"PATH": str(stub_dir) + os.pathsep + os.environ.get("PATH", "")}
+        # Inherit SYSTEMROOT/USERPROFILE/etc. on Windows for bash to function
+        for key in ("SYSTEMROOT", "USERPROFILE", "HOME", "TMP", "TEMP", "LANG", "LC_ALL"):
+            if key in os.environ:
+                env[key] = os.environ[key]
+        return subprocess.run(
+            [BASH, str(SCRIPT_PATH), issue_num, "--target-checkout-root", str(target_checkout_root)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    @staticmethod
+    def _write_history(agents_dir: Path, history_content: str) -> None:
+        docs = agents_dir / "docs"
+        docs.mkdir(parents=True, exist_ok=True)
+        (docs / "history.md").write_text(history_content, encoding="utf-8")
+
     def test_detect_subject_line_issue_number(self, tmp_path):
         """(a) Subject line contains #733 → detected as already-in-history."""
-        _write_history(
+        self._write_history(
             tmp_path,
             "### Fix #733: foo (2026-06-03, abc1234)\n"
             "Background: x\n"
             "Changes: y\n",
         )
-        result = _run_script(tmp_path, "733")
+        result = self._run_script(tmp_path, "733")
         assert "Already in history" in result.stdout, (
             f"expected idempotency hit; stdout={result.stdout!r} stderr={result.stderr!r}"
         )
 
     def test_no_false_positive_word_boundary(self, tmp_path):
         """(b) #7330 must NOT match issue #733 (word boundary)."""
-        _write_history(
+        self._write_history(
             tmp_path,
             "### FEATURE: bar (2026-06-03, #7330, abc1234)\n"
             "Background: x\n"
             "Changes: y\n",
         )
-        result = _run_script(tmp_path, "733")
+        result = self._run_script(tmp_path, "733")
         # No idempotency hit — script proceeds to gh (which fails). We only
         # care that the wrong-match message is absent.
         assert "Already in history" not in result.stdout, (
@@ -130,26 +135,26 @@ class TestIssueToHistoryIdempotency:
 
     def test_detect_mid_parens_issue_number(self, tmp_path):
         """(c) #733 appears mid-parens (followed by comma, not closing paren) → detected."""
-        _write_history(
+        self._write_history(
             tmp_path,
             "### FEATURE: baz (2026-06-03, #733, abc1234)\n"
             "Background: x\n"
             "Changes: y\n",
         )
-        result = _run_script(tmp_path, "733")
+        result = self._run_script(tmp_path, "733")
         assert "Already in history" in result.stdout, (
             f"expected idempotency hit; stdout={result.stdout!r} stderr={result.stderr!r}"
         )
 
     def test_detect_trailing_parens_legacy_format(self, tmp_path):
         """(d) #733 at end of parens → detected (existing pattern handles this)."""
-        _write_history(
+        self._write_history(
             tmp_path,
             "### FEATURE: qux (2026-06-03, abc1234, #733)\n"
             "Background: x\n"
             "Changes: y\n",
         )
-        result = _run_script(tmp_path, "733")
+        result = self._run_script(tmp_path, "733")
         assert "Already in history" in result.stdout, (
             f"expected idempotency hit; stdout={result.stdout!r} stderr={result.stderr!r}"
         )

@@ -178,6 +178,29 @@ check("self-impl does not report a destructured require or renamed look-alikes",
 const skipCases = [
   { name: "skip-reason names a runner outside node:test", lines: CUSTOM_RUNNER, want: [["custom-runner"]] },
   { name: "skip-reason is empty for a node:test file", lines: SAMPLE, want: [] },
+  // node:test named only in a comment or a string is no require: the file still runs its own loop.
+  { name: "skip-reason ignores a require in a one-line block comment", lines: ['/* const t = require("node:test"); */', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores a require in a multi-line block comment", lines: ["/*", 'const t = require("node:test");', "*/", ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores a require inside a string literal", lines: [`const s = 'require("node:test")';`, ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores an import inside a template literal", lines: ["const s = `", 'import test from "node:test";', "`;", ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores a require in a line comment", lines: ['// const t = require("node:test");', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason accepts a require after a closed block comment", lines: ['/* x */ const t = require("node:test");', ...CUSTOM_RUNNER], want: [] },
+  { name: "skip-reason accepts an import from node:test", lines: ['import test from "node:test";', ...CUSTOM_RUNNER], want: [] },
+  { name: "skip-reason accepts a dynamic import of node:test", lines: ['const t = import("node:test");', ...CUSTOM_RUNNER], want: [] },
+  { name: "skip-reason accepts a single-quoted require of node:test", lines: ["const t = require('node:test');", ...CUSTOM_RUNNER], want: [] },
+  { name: "skip-reason accepts a single-quoted import from node:test", lines: ["import test from 'node:test';", ...CUSTOM_RUNNER], want: [] },
+  // A regex literal body is no code; a division (`a / b`) opens no regex.
+  { name: "skip-reason ignores a require inside a regex literal", lines: ['const re = /require("node:test")/;', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores an import inside a regex literal", lines: ['const re = /import test from "node:test"/;', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason accepts a require beside division lines", lines: ['const t = require("node:test");', "const total = 4;", "const half = total / 2;", "const a = 8, b = 2, c = 2;", "const r = a / b / c;", ...CUSTOM_RUNNER], want: [] },
+  { name: "skip-reason accepts a require after a regex literal holding a quote", lines: ['const q = /"/; const test = require("node:test");', ...CUSTOM_RUNNER], want: [] },
+  // The `)` closing a control statement's condition opens a regex; any other `)` opens a division.
+  { name: "skip-reason ignores a require inside a regex literal after an if condition", lines: ['if (false) /require("node:test")/.test("x");', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores an import inside a regex literal after a while condition", lines: ['function w(x, s) { while (x) /import("node:test")/.test(s); }', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores an import inside a regex literal after a for head", lines: ['function g(s) { for (;;) /from "node:test"/.test(s); }', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason ignores a require inside a regex literal after a nested-paren if condition", lines: ['function h(f, a) { if (f(a)) /require("node:test")/.test("x"); }', ...CUSTOM_RUNNER], want: [["custom-runner"]] },
+  { name: "skip-reason accepts a require after a division of a parenthesized group", lines: ['const a = 4; const n = (a) / 2; const test = require("node:test");', ...CUSTOM_RUNNER], want: [] },
+  { name: "skip-reason accepts a require after a division of a call result", lines: ['const f = (v) => v, a = 8, b = 2, c = 2; const r = f(a) / b / c; const test = require("node:test");', ...CUSTOM_RUNNER], want: [] },
 ];
 for (const { name, lines, want } of skipCases) {
   check(name, (n) => assert.deepStrictEqual(analyzeOk(n, "skip-reason", sample("skip/s.js", lines)), want, `${n}: skip-reason`));

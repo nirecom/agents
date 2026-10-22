@@ -3,7 +3,7 @@
 # Usage: bin/audit-tests-common.sh [--dry-run] [--apply] [--offline]
 #                                  [--stale-months N] [--format text|json]
 #                                  [--fix-headers] [--dup-groups]
-#        bin/audit-tests-common.sh --embed-cases [--band-size N] [--order frequency|priority]
+#        bin/audit-tests-common.sh --embed-cases [--band-size N] [--order frequency|priority] [--only-file <relpath>]
 # Exit:  0 = orphans found, 1 = no orphans, 2 = error. Writes by default: a flagless
 # run DELETES orphans (git rm); --dry-run reports only. --dup-groups: read-only TSV
 # (bin/lib/test-dup-group.sh). --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
