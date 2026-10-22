@@ -122,7 +122,7 @@ function handle(ctx) {
           `echo "<<${confirmSentinelFor(stepName)}: {summary}>>" ` +
           `(or verify CONFIRM_${stepName.toUpperCase()}=off in your config).`
       );
-    } else if (!res.ok && res.kind === "no-release-evidence") {
+    } else if (!res.ok && (res.kind === "no-release-evidence" || res.kind === "glossary-incomplete")) {
       pushMessage(`workflow-mark: ${res.message.replace(/^record-step-verdict: /, "")}`);
     } else if (!res.ok) {
       pushMessage(

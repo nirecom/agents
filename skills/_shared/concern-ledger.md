@@ -55,6 +55,9 @@ A round 1 that meets a live ledger opens a new cycle rather than colliding with 
 
 Resolution is by absence, and absence only counts when the round was complete — see the fail-closed rule below. A `rejected` concern is terminal: `reduce` never reopens it even when a producer re-reports it (the binding recognition #2185 depends on).
 
+Tagged concern (TEXT holds `[glossary-drift `): `reject` always refuses with exit 4 and writes nothing.
+`accept --id C<N> --reason R` closes a tagged concern only — as `rejected`, reason prefixed `accepted(glossary-drift)` — and only when a `WORKFLOW_GLOSSARY_ACCEPTED` grant matches its term and DISCRIM; otherwise exit 4. Rule owner: `bin/lib/concern-ledger/drift-tag.sh`.
+
 ## Dual authority — ledger vs carrier, and durable identity
 
 The rejection verdict lives in two places with different jobs, and the split is deliberate (CPR-SSOT).
@@ -156,7 +159,9 @@ Callers treat a failed finalize as terminal: `bin/run-codex-review-loop` returns
 | `begin-round --round N` | Open a new cycle when round 1 meets a live ledger |
 | `render-prior` | The still-open concerns, as the block a producer is handed |
 | `render-concerns-log` | Re-derive the DISCRIM-keyed carrier (open + preserved rejected) and print its path; exit 3 when there is nothing to carry |
-| `reject --id C<N> --reason R` | Mark one concern `rejected` (terminal) and record the reason in the carrier |
+| `reject --id C<N> --reason R` | Mark one concern `rejected` (terminal) and record the reason in the carrier; exit 4 for a tagged concern |
+| `accept --id C<N> --reason R` | Close a tagged concern under a matching glossary grant; exit 4 when none, exit 2 for an untagged concern |
+| `list-drift` | Open / reopened tagged concerns as `DISCRIM<TAB>term`; empty with exit 0 when no ledger, exit 1 when unreadable |
 | `stage --producer P --from-report F` | Parse one producer's report into this round's delta |
 | `check-staged --round N` | Report producers that have not completely staged this round; stdout: `<producer>:<reason>` (reasons: `missing` / `round-mismatch:<R>` / `incomplete:<LABEL>` / `producer-mismatch:<NAME>`); exit 1 when any unsatisfied, exit 0 when all satisfied. |
 | `reduce --round N` | Bind, merge, and re-state the ledger from the round's deltas |
@@ -164,4 +169,4 @@ Callers treat a failed finalize as terminal: `bin/run-codex-review-loop` returns
 | `finalize --mode M --reason R --round N` | Write the unresolved-concerns artifact |
 | `check-finalized` | Verify that artifact; exit 1 when it cannot be trusted |
 
-Exit codes: 0 ok, 2 usage, 5 finalize could not produce the artifact. `render-concerns-log` additionally uses exit 3 for "no ledger / nothing to carry" (benign) and exit 5 for a true render/merge failure.
+Exit codes: 0 ok, 2 usage, 4 refused for a `[glossary-drift]` concern, 5 finalize could not produce the artifact. `render-concerns-log` additionally uses exit 3 for "no ledger / nothing to carry" (benign) and exit 5 for a true render/merge failure.

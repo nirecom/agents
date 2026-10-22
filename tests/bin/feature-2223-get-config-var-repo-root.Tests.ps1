@@ -38,6 +38,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
             'PROJECT_NFR=global-nfr'
             'ENFORCE_WORKTREE=on'
             'CONFIRM_DETAIL=on'
+            'CONFIRM_CODE=on'
             'PLAIN_KEY=globalplain'
         )
 
@@ -51,6 +52,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
             'PROJECT_NFR=local-nfr-no-decl'
             'ENFORCE_WORKTREE=off'
             'CONFIRM_DETAIL=off'
+            'CONFIRM_CODE=off'
             'PLAIN_KEY=localplain'
         )
         $script:missingDir = Join-Path $script:projDir 'no-such-subdir'
@@ -83,6 +85,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         [System.Environment]::SetEnvironmentVariable('PROJECT_NFR', $null, 'Process')
         [System.Environment]::SetEnvironmentVariable('ENFORCE_WORKTREE', $null, 'Process')
         [System.Environment]::SetEnvironmentVariable('CONFIRM_DETAIL', $null, 'Process')
+        [System.Environment]::SetEnvironmentVariable('CONFIRM_CODE', $null, 'Process')
     }
 
     Context 'Value mode' {
@@ -146,9 +149,16 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         }
 
         It 'lets an ordinary gate go OFF from the project layer (exit 0)' {
-            $out = (& pwsh -NoProfile -File $script:helper -IsOff -RepoRoot $script:projDir CONFIRM_DETAIL 2>&1) -join ''
+            $out = (& pwsh -NoProfile -File $script:helper -IsOff -RepoRoot $script:projDir CONFIRM_CODE 2>&1) -join ''
             Assert-ScriptWasEntered $out
             $LASTEXITCODE | Should -Be 0
+        }
+
+        # #2726/#2729: a plan-stage gate is read from the global file only.
+        It 'ignores a project-layer off for a plan-stage gate (exit 1)' {
+            $out = (& pwsh -NoProfile -File $script:helper -IsOff -RepoRoot $script:projDir CONFIRM_DETAIL 2>&1) -join ''
+            Assert-ScriptWasEntered $out
+            $LASTEXITCODE | Should -Be 1
         }
 
         It 'reports a key absent from both layers as unset (exit 2)' {

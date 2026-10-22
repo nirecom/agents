@@ -171,7 +171,7 @@ sentinel is allowed.
 
 | Last terminal verdict | `freshness_key` | Action |
 |---|---|---|
-| BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via `bin/supervisor-record-block-override`. |
+| BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via the ask-gated `WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED` sentinel (see below). |
 | BLOCK | mismatch | arm a run against the new key (deny + dispatch). Non-BLOCK → stage 2; BLOCK again → hold again. |
 | key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the shared null-freshness predicate (`hooks/lib/null-freshness.js`) certifies the last TR5 terminal run: verdict in the CONTINUE-only allow-list, no later BLOCK, no newer audit run unsettled (`audit_phase` pending / in_progress / frozen), and every per-artifact hash (`artifact_keys`, absence compared as a value) unchanged since that run; arm a full re-audit otherwise. A run without a per-artifact breakdown is fail-closed. `recurrence-patterns` is excluded from the arm set (infinite-arm guard, #2323). |
 | key uncomputable — artifact-side null (`input_version` non-null, plan artifact missing) | — | Same predicate, plus `trigger_input_keys.TR5` of that run must equal the current `input_version` (absent / null / non-string stored key is fail-closed, #2360). Hashing the artifacts closes the hole where a post-TR5 intent/detail edit passed on a code-only match (#2400). |
@@ -197,11 +197,20 @@ extra arms. `uv_attempt_seq` is recorded only for tracing.
 
 ### BLOCK rejection record
 
-`bin/supervisor-record-block-override` takes session-id / run-id / reason
-(minimum length enforced), appends `{ run_id, freshness_key, reason, actor,
-timestamp }` to `audit.block_overrides`, and forces a `severity=warning,
-category=audit-override` supervisor finding — there is no silent bypass
-(fail-closed). Stage 1 treats a BLOCK as resolved only when an override matches on
+The only write path is the sentinel
+`echo "<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: <run-id> <reason>>>"`. A
+`permissions.ask` rule in `settings.json` puts every emission through the user's
+approval dialog (ask outranks allow), so the model cannot record an override on its
+own (#2709). The workflow-mark handler
+(`hooks/workflow-mark/supervisor-block-override-handler.js`) delegates to
+`hooks/lib/supervisor-block-override.js`, which refuses a reason under 20
+characters before touching state, and a run id that is not the last terminal run
+or whose verdict is not BLOCK. It writes to the same supervisor state the TR5 gate
+reads (`resolveSupervisorState().effectiveSid`), appends `{ run_id, freshness_key,
+reason, actor, recorded_at }` to `audit.block_overrides`, and forces a
+`severity=warning` supervisor finding (reporter
+`workflow-mark:supervisor-block-override`) — there is no silent bypass
+(fail-closed). A malformed emission draws a format error and records nothing. Stage 1 treats a BLOCK as resolved only when an override matches on
 **both** `run_id` and `freshness_key`, so any later code diff or intent / outline /
 detail edit invalidates the override automatically.
 

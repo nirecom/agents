@@ -35,6 +35,20 @@ api_exists() {
 
 # shellcheck source=../lib/skip-judgment.sh
 . "$NEXT_STEP_AGENTS_DIR/tests/lib/skip-judgment.sh"
+# shellcheck source=../lib/glossary-check-record.sh
+. "$NEXT_STEP_AGENTS_DIR/tests/lib/glossary-check-record.sh"
+
+# #2529: an approved clarify_intent counts as complete only with a current glossary_check
+# record. The record and the next-step run that recomputes its fingerprint must resolve the
+# same repo (the cwd git root, and CLAUDE_PROJECT_DIR), so both run inside this throwaway
+# repo — never the real worktree, whose glossary would enter the fingerprint.
+mk_glossary_repo() {
+  local dir="${1:?mk_glossary_repo: dir required}"
+  mkdir -p "$dir"
+  git -C "$dir" init -q
+  git -C "$dir" config core.hooksPath /dev/null
+  cygpath -m "$dir" 2>/dev/null || echo "$dir"
+}
 
 check() {
   local desc="$1" expected="$2" actual="$3"

@@ -807,3 +807,31 @@ Changes: Confirm gates read config flags without starting a subprocess, so `CONF
 ### FEATURE: PR #2707 (2026-10-18)
 Background: fix(#2698): stop supervisor alert false fires on dialog turns and bun...
 Changes: Supervisor no longer interrupts you with an alert while it is waiting for your answer, and alert and audit no longer double-intervene back to back.;The premature-stop guard leaves read-only answers to your questions, and AskUserQuestion prompts, alone.;A paused supervisor alert stays paused.;Supervisor interventions follow your configured conversation language, and a failed codex review now says why.
+
+### FEATURE: PR #2719 (2026-10-18)
+Background: fix(#2701): give the Jev input its own budget so write-code is judged...
+Changes: Jev now judges task complexity at the write-code stage instead of always falling back to the LLM judge, because its input has a larger, dedicated size budget.;A Jev answer demoted because its source files changed now reports FALLBACK=source-changed, the same as the other demotion reasons.
+
+### FEATURE: PR #2721 (2026-10-18)
+Background: test(#2717): remove PARTIAL_ORPHAN cases and fix malformed Tests: hea...
+Changes: Test-suite hygiene: the audit now reports no orphaned test cases, missing `Tests:` headers or malformed header entries. No behavior change for users.
+
+### FEATURE: PR #2667 (2026-10-19)
+Background: feat(#2650): approve a plan with one action instead of a reply plus a...
+Changes: Approving an intent, outline or detail plan now takes one action: the approval dialog appears right after the plan link, with no reply needed first. If the dialog does not appear, replying still works as before.
+
+### FEATURE: PR #2697 (2026-10-19)
+Background: feat(#2594): make session-progress.md the standard session-handover r...
+Changes: Sessions now keep a session-progress.md handover file that the model updates at step boundaries, after transcript growth and after compaction; resume and post-compact point at it.;Codex reviews withhold credential-shaped and symlinked inputs and defang fences in plan and context text.
+
+### FEATURE: PR #2722 (2026-10-20)
+Background: fix(resume-session): copy the session upstream's state verbatim and c...
+Changes: Fixed resume-session state inheritance: the resumed session now receives the upstream session's state verbatim, including settling an unsettled audit run (#2633, #2304);Closed approval-bypass paths for ask-protected sentinels and hardened finish-path readers (#2709, #2297)
+
+### FEATURE: PR #2738 (2026-10-21)
+Background: feat(#2724): bind the plan-link duty to CONFIRM and back prompt claims with a gate
+Changes: CONFIRM_INTENT, CONFIRM_OUTLINE and CONFIRM_DETAIL set to off now take effect only from the global `.env` file; an export or `.env.local` no longer turns them off.;A repeated denied CONFIRM no longer lets the approval dialog through: the plan must be presented again each time.;With plan-sync available, a plan that has not been published can no longer be confirmed; environments that cannot publish present the local path instead.
+
+### FEATURE: PR #2752 (2026-10-22)
+Background: feat(#2739): introduce ESLint so write-code's JavaScript lint recipe ...
+Changes: Added `node bin/run-eslint <path>...`, a one-command JavaScript lint that works in every worktree (it installs the pinned ESLint on first use), and the write-code skill's JavaScript/TypeScript lint step now uses it.

@@ -11,7 +11,7 @@ const {
   renderNoIssueSection,
 } = require("../issue-comments");
 
-// The Issue body of a session with no issue; the Jev snapshot treats it as an exempt section.
+// The Issue body of a session with no issue; the Jev input treats it as an exempt section.
 const NO_ISSUE_BODY = "(none — no issue)";
 // The Issue body section and the section written right after it. The body is third-party
 // markdown with headings of its own, so a reader ends it at the last `next` line, never at the first "## ".

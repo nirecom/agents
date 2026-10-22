@@ -102,6 +102,7 @@ const ARTIFACT_NAMES = Object.freeze({
   outline: () => "outline.md",
   detail: () => "detail.md",
   context: () => "context.md",
+  progress: () => "session-progress.md",
   "issue-prefill": () => "issue-prefill.md",
   "test-review": () => "test-review.md",
   "concerns-log": (p) => (p && p.stage ? `${p.stage}-concerns-log.md` : "concerns-log.md"),
@@ -158,9 +159,29 @@ function planArtifactNames() {
   return SYNCED_PLAN_ARTIFACT_KINDS.map((kind) => ARTIFACT_NAMES[kind]());
 }
 
+// Everything plan-sync publishes and keeps a project-host record for: the synced plan
+// artifacts plus session-progress.md (#2594). The allowlist and project-host read only this list.
+const SYNCED_ARTIFACT_KINDS = Object.freeze([...SYNCED_PLAN_ARTIFACT_KINDS, "progress"]);
+
+function syncedArtifactNames() {
+  return SYNCED_ARTIFACT_KINDS.map((kind) => ARTIFACT_NAMES[kind]());
+}
+
+// syncedArtifactStage(basename) -> "intent" | "outline" | "detail" | "session-progress" | null.
+function syncedArtifactStage(basename) {
+  const parsed = parsePlansEntry(basename);
+  if (!parsed || parsed.verdict !== "artifact") return null;
+  if (parsed.kind !== "plan-artifact" && parsed.kind !== "progress") return null;
+  if (!syncedArtifactNames().includes(parsed.name)) return null;
+  return parsed.name.replace(/\.md$/, "");
+}
+
 module.exports = {
   SYNCED_PLAN_ARTIFACT_KINDS,
+  SYNCED_ARTIFACT_KINDS,
   planArtifactNames,
+  syncedArtifactNames,
+  syncedArtifactStage,
   FORMAT_TOKENS,
   CONTROL_KINDS,
   MIGRATABLE_KINDS,

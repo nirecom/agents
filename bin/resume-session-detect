@@ -65,6 +65,14 @@ function runFrom(from) {
   process.exit(view.availability === "none" ? 3 : 0);
 }
 
+// An out-of-charset id is answered as cwd-unknown before it can reach a path join (CWE-22).
+function runClassifyCwd(sid) {
+  const { classifyUpstreamCwd, CWD_CLASSES } = require("./lib/resume-session/upstream-cwd");
+  const valid = /^[A-Za-z0-9_-]+$/.test(sid);
+  emit(valid ? classifyUpstreamCwd(sid) : { classification: CWD_CLASSES.CWD_UNKNOWN, worktree_path: null });
+  process.exit(0);
+}
+
 function runList(query, limit) {
   const { listUpstreamCandidates } =
     require("../hooks/workflow-state/upstream-search");
@@ -92,6 +100,7 @@ function main() {
     process.exit(1);
   }
   if (parsed.mode === "from") return runFrom(parsed.from);
+  if (parsed.mode === "classify-cwd") return runClassifyCwd(parsed.classify);
   if (parsed.mode === "list") return runList(parsed.query, parsed.limit);
   emit(detect());
   process.exit(0);

@@ -113,6 +113,11 @@ arm_terminal_guard() {
   return "$rc"
 }
 
+# Owner-resolved intent (#2633): a resumed session reads its upstream's file.
+INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+INTENT_FILE="$PLANS_DIR/${INTENT_FILE##*[/\\]}"
+[[ "$INTENT_FILE" == *-intent.md ]] || INTENT_FILE="$PLANS_DIR/$SESSION_ID-intent.md"
+
 args=(
   --format test-review
   --session-id "$SESSION_ID"
@@ -120,7 +125,7 @@ args=(
   --draft-file "$PLANS_DIR/$SESSION_ID-test-review.md"
   --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
-  --class-members "$PLANS_DIR/$SESSION_ID-intent.md"
+  --class-members "$INTENT_FILE"
   --repo-root "$REPO_ROOT_VAL"
 )
 

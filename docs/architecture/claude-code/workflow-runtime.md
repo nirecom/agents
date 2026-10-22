@@ -182,8 +182,13 @@ A session can inherit from an upstream session it has no transcript lineage to, 
 
 - **Step context-dependence** — whether a step's completion evidence lives in the worktree or in
   the session's own record. `hooks/workflow-state/state-io/step-context-class.js` owns the
-  classification for every step; `granularity: "context-independent-only"` inherits only the
-  latter set, `"full"` inherits everything.
+  classification for every step; `granularity: "context-independent-only"` keeps only the
+  latter set, `"full"` keeps everything. It is decided internally from whether the downstream runs
+  in the upstream's worktree; `--granularity` / `--verified-equivalent` are removed (exit 2).
+  Before `--from`, `--classify-cwd` (`upstream-cwd.js`) sorts the upstream's recorded cwd into
+  `live-linked-worktree` / `main-worktree` / `worktree-gone` / `cwd-unknown`, so the skill can
+  enter the worktree first. State copy, per-stage approval revert, and overwrite protection:
+  [workflow.md](workflow.md).
 - **Evidence class** — what the upstream actually left behind. The state file (7-day TTL) and the
   handoff artifact (no TTL) expire independently, so availability degrades through
   `state-and-artifacts` → `state-only` → `artifacts-only` → `none` rather than failing outright.
@@ -225,7 +230,7 @@ When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confir
 
 `next-step --gate` is the single branching source for the seven confirm gates (`skills/_shared/confirm-plan.md` CPA-3). It is read-only and prints `GATE_ACTION`, the `GATE_CONFIRM_<X>` value line (omitted for `none`), `GATE_HINT`, and `REASON`.
 
-- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate). When the probe cause is not `ok`, `REASON` carries `probe-<cause>`.
+- `GATE_ACTION` is a closed vocabulary: `proceed` (gate OFF), `ask` (gate ON or ERROR), `present-and-stop`, `none` (unresolved session, or the recorded step has no gate). When the probe cause is not `ok`, `REASON` carries `probe-<cause>`. For a plan stage `proceed` needs a waived or approved `checkPlanApproval` verdict, while the `GATE_CONFIRM_<X>` line still shows the raw flag (#2726, #2729).
 - At `detail` it also runs `bin/detect-scope-change.sh` on outline.md vs detail.md: a detected scope change turns `proceed` into `present-and-stop` (the scope change is shown even when `CONFIRM_DETAIL=off`); a failed check adds `scope-change-check-failed` to `REASON`, appends a warn-the-user sentence to `GATE_HINT`, and is otherwise treated as no change.
 - `--scope-change-approved` (only with `--gate`, else exit 64) is a stateless flag the skill passes once after the user approves the scope change, so an OFF detail gate resolves to `proceed`. Combining `--gate` with `--list` / `--reset` / `--mark` / `--advance` exits 64.
 
@@ -322,20 +327,17 @@ and (since #2169) the UserPromptSubmit mechanism-failure notifier's
 pre-workflow-init exemption (`hooks/user-prompt-submit-mechanism-check.js` —
 see "Exception: pre-workflow-init sessions get no notification" below). A
 naive "is any step settled?" check is fooled by cross-session
-inheritance (`hooks/session-start.js` can replay a prior session's entire
-event stream, stamped `origin: "session-inherit"`), so the predicate is an
-explicit allow-list on the settling event's `origin`, not a denylist on
-`session-inherit`: only origins known to represent the current session's own
-genuine action count (CPR-UNV — no implicit fallback).
+inheritance (`hooks/session-start.js` can copy a prior session's entire
+event stream), so the predicate counts only events after `upstream_copy_seq`
+and, among those, an explicit allow-list on the settling event's `origin`,
+not a denylist on `session-inherit` (CPR-UNV — no implicit fallback).
 
 `hooks/workflow-state/lifecycle.js#isEffectivelyPendingStep` is the separate,
-narrower SSOT for a different question — not "did this session start the
-workflow" but "did this specific step receive any genuine work" — used by
-adoption-gate readers deciding whether a heir session's step is safe to
-overwrite. Its sole consumer today is
-`hooks/workflow-state/inheritance/adopt.js#isAllPending` (#2279); any future
+narrower SSOT for "did this specific step receive any genuine work". It backs
+`inheritance/adopt.js#isAllPending` (#2279), which `checkOverwriteAllowed`
+uses for the first adoption (not as a blanket gate on re-adoption); any
 reader asking "is this step still untouched" should call it rather than
-re-deriving the same in-progress/origin check.
+re-deriving the check.
 
 `ADOPTION_ORIGINS` currently contains:
 
@@ -345,14 +347,12 @@ re-deriving the same in-progress/origin check.
   session's own pre-#1733 history into the new event-stream schema, so it is
   not session inheritance.
 - `reset-sentinel` — the `WORKFLOW_RESET_FROM_{step}` sentinel path
-  (`hooks/workflow-mark/reset-handler.js`). This sentinel is gated by
-  `permissions.ask` in `settings.json`, so every reset-sentinel event
-  required the user's explicit, THIS-session approval — as genuine as a
-  direct `mark-step` call, even though the rollback it produces resets later
-  steps to `pending`.
+  (`hooks/workflow-mark/reset-handler.js`), gated by `permissions.ask`, so
+  each event carries the user's explicit THIS-session approval. It writes no
+  approval records (#2709) and refuses when an earlier gated stage is unapproved.
 
 Deliberately EXCLUDED: `session-inherit` (cross-session inheritance, by
-design — see above); `next-step-evidence-resolution` /
+design); `next-step-evidence-resolution` /
 `next-step-recorded-verdict-skip` (automated `next-step` auto-persist paths
 — see `bin/workflow/lib/next-step/verdict.js` header comment); and any
 automated PostToolUse detection such as `hooks/workflow-run-tests.js`'s

@@ -7,6 +7,7 @@
 #
 # Exit codes: 0 ok, 1 verdict "not satisfied", 2 usage/invalid argument,
 # 3 check-staged could not read the round at all (distinct from 1 — #2025 C6),
+# 4 refused for a [glossary-drift] concern (reject, or accept without its grant — #2529),
 # 5 artifact could not be produced (includes a failed library load).
 set -uo pipefail
 
@@ -30,6 +31,8 @@ usage: concern-ledger <subcommand> [options]
   render-prior    --plans-dir D --session-id S --format F
   render-concerns-log --plans-dir D --session-id S --format F
   reject          --plans-dir D --session-id S --format F --id C<N> --reason R
+  accept          --plans-dir D --session-id S --format F --id C<N> --reason R
+  list-drift      --plans-dir D --session-id S --format F
   stage           --plans-dir D --session-id S --format F --round N
                   --producer P --from-report FILE [--exec LABEL] [--parser MODE]
   reduce          --plans-dir D --session-id S --format F --round N
@@ -120,8 +123,8 @@ validate_args() {
     case "$1" in
         slot)     need "$APATH" --path; need "$AANCHOR" --anchor; need "$ACAT" --category ;;
         bind)     need "$LEDGER_ARG" --ledger; need "$DELTA_ARG" --delta ;;
-        render-prior|render-concerns-log|tally|check-finalized) need_addr ;;
-        reject)   need_addr; need "$REJECT_ID" --id; need "$REASON" --reason; validate_reject_id ;;
+        render-prior|render-concerns-log|tally|check-finalized|list-drift) need_addr ;;
+        reject|accept) need_addr; need "$REJECT_ID" --id; need "$REASON" --reason; validate_reject_id ;;
         begin-round)    need_addr; need "$ROUND" --round ;;
         reduce)   need_addr; need "$ROUND" --round; validate_glob_tokens reduce ;;
         stage)    need_addr; need "$ROUND" --round; need "$PRODUCER" --producer; need "$REPORT" --from-report ;;
@@ -209,7 +212,28 @@ case "$SUB" in
     reject)
         LED="$(resolve_ledger)"
         [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
-        cl_reject "$LED" "$REJECT_ID" "$REASON" || exit 5
+        RJ_RC=0; cl_reject "$LED" "$REJECT_ID" "$REASON" || RJ_RC=$?
+        if [ "$RJ_RC" -eq 4 ]; then
+            printf 'concern-ledger: reject refused — the concern carries a [glossary-drift …] tag; only accept closes it, under a WORKFLOW_GLOSSARY_ACCEPTED grant\n' >&2
+            exit 4
+        fi
+        [ "$RJ_RC" -eq 0 ] || exit 5
+        ;;
+    accept)
+        LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
+        AC_RC=0; cl_accept "$LED" "$REJECT_ID" "$REASON" "$SID" "$FORMAT" || AC_RC=$?
+        case "$AC_RC" in
+            0) ;;
+            2) printf 'concern-ledger: accept refused — %s carries no [glossary-drift …] tag; use reject\n' "$REJECT_ID" >&2; exit 2 ;;
+            4) printf 'concern-ledger: accept refused — no matching WORKFLOW_GLOSSARY_ACCEPTED grant for %s (or the grant could not be read)\n' "$REJECT_ID" >&2; exit 4 ;;
+            *) exit 5 ;;
+        esac
+        ;;
+    list-drift)
+        LED="$(resolve_ledger)"
+        [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
+        cl_list_drift "$LED" || { printf 'concern-ledger: the ledger could not be read\n' >&2; exit 1; }
         ;;
     begin-round)
         LED="$(resolve_ledger)"

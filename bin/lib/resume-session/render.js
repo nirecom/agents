@@ -13,6 +13,25 @@ const AVAILABILITY_NOTE = Object.freeze({
   none: "Nothing survives for this session id.",
 });
 
+const SUPERVISOR_NOTE = Object.freeze({
+  copied: "Supervisor state copied from the session upstream (findings and audit verdicts carry over).",
+  absent: "Supervisor state absent upstream — nothing to copy.",
+  failed: "Supervisor state copy failed — this session starts without the upstream audit record; expect a fresh audit.",
+});
+
+// The two facts the inheritance sentence does not carry: the supervisor copy outcome and
+// that plan artifacts stay named after the session upstream (#2304).
+function inheritanceSideLines(inheritance, fallbackUpstreamSid) {
+  const inh = inheritance || {};
+  const upstreamSid = inh.upstream_session_id || fallbackUpstreamSid || "(unknown)";
+  const lines = [];
+  if (typeof inh.supervisor_state === "string") {
+    lines.push(SUPERVISOR_NOTE[inh.supervisor_state] || `Supervisor state: ${inh.supervisor_state}.`);
+  }
+  lines.push(`Each plan artifact is still named after upstream ${upstreamSid}; it is read from there, not renamed.`);
+  return lines;
+}
+
 function renderUpstreamView(view) {
   if (!view || view.availability === "none") {
     return `No upstream evidence for ${(view && view.upstream_session_id) || "(unknown)"}.`;
@@ -26,6 +45,7 @@ function renderUpstreamView(view) {
     lines.push(`No state was adopted (${r.reason}).`);
   } else if (r.ok === true) {
     lines.push(describeGranularInheritance(r.inheritance));
+    lines.push(...inheritanceSideLines(r.inheritance, view.upstream_session_id));
   } else {
     lines.push(`Adoption was refused: ${r.error}`);
   }
@@ -51,4 +71,4 @@ function renderCandidateList(records) {
     .join("\n");
 }
 
-module.exports = { AVAILABILITY_NOTE, renderUpstreamView, renderCandidateList };
+module.exports = { AVAILABILITY_NOTE, inheritanceSideLines, renderUpstreamView, renderCandidateList };

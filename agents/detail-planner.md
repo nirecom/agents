@@ -18,6 +18,7 @@ See agents/detail-planner/procedure.md for the full Procedure and NEEDS_RESEARCH
 
 - Before proposing approaches, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
 - Follow `skills/_shared/combined-glossary.md` (writer directives).
+- Never answer a concern tagged `[glossary-drift term=<term>]` with `reject:` (including `reject: contradicts approved <intent|outline>`): revise, or write `accepted(glossary-drift): <reason>` when the revision prompt says the user accepted it via `WORKFLOW_GLOSSARY_ACCEPTED`.
 - The **Delivery plan** section must appear first among substantive plan sections, immediately after the `## Issues` carry-forward header. Do not place Delivery plan after Background or Files to modify.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
@@ -70,7 +71,7 @@ On every NEEDS_REVISION followup turn, end your reply with exactly:
 
     <!-- begin-planner-response -->
     ROUND_RESPONSE
-    1. <reviewer concern #1>: <accept and revise | reject: <reason> | defer to next round>
+    1. <reviewer concern #1>: <accept and revise | reject: <reason> | accepted(glossary-drift): <reason> | defer to next round>
     2. <reviewer concern #2>: ...
     <!-- end-planner-response -->
 

@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Glossary entry-file review. Usage: review-doc-glossary [--staged | --all]
+# Glossary entry-file review. Usage: review-doc-glossary [--staged | --all] [--session <sid>]
 #
-# Targets docs/glossary-user*.md and docs/glossary-internal*.md only; the
-# docs/glossary.md index page and any other glossary-*.md name are out of scope.
+# Targets every *.md directly under docs/glossary/ (a name other than
+# <category>[-<from>-<to>].md is a BLOCK). The docs/glossary.md index page is checked only for
+# holding no entries: a `### ` heading outside fenced code there is a BLOCK.
 # --staged: SKIP unless a target path is staged (deletions count). Otherwise every
 # target file in the index is checked from its staged blob, so a split or a deletion
-# that opens a range gap is judged on what will be committed. Exits 1 on any BLOCK.
-# --all: check the working-tree target files; advisory only, always exits 0.
+# that opens a range gap is judged; an unreadable blob is a BLOCK. Exits 1 on any BLOCK.
+# During the layout migration a staged non-deletion old-layout glossary name also triggers and BLOCKs;
+# a staged deletion of one triggers without a BLOCK of its own.
+# A staged non-deletion index page is read from its staged blob; an entry in it triggers and BLOCKs.
+# --staged also runs bin/check-glossary-provenance (with --session when given).
+# --all: check the working-tree target files; advisory only, always exits 0, no provenance.
 # Entry form, order, range membership, duplicates and the file-set rule are checked
 # by bin/lib/glossary-format.js; the rules themselves live in rules/docs/glossary.md.
 
@@ -15,7 +20,8 @@ set -uo pipefail
 HDR="## Doc-glossary Review"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FORMAT_JS="$SCRIPT_DIR/lib/glossary-format.js"
-TARGET_RE='^docs/glossary-(user|internal)(-[^/]*)?\.md$'
+TARGET_RE='^docs/glossary/[^/]+\.md$'
+INDEX_PATH="docs/glossary.md"
 
 emit_skip() {
   printf '%s\n' "$HDR: SKIPPED — $1"
@@ -25,10 +31,14 @@ emit_skip() {
 ALL_SCAN=0
 STAGED_ONLY=0
 BAD_ARG=0
+SESSION_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) ALL_SCAN=1; shift ;;
     --staged) STAGED_ONLY=1; shift ;;
+    --session)
+      if [[ $# -lt 2 ]]; then BAD_ARG=1; shift; continue; fi
+      SESSION_ARGS=(--session "$2"); shift 2 ;;
     *) BAD_ARG=1; shift ;;
   esac
 done
@@ -60,7 +70,7 @@ if [[ "$ALL_SCAN" -eq 1 ]]; then
   echo "$HDR: PERFORMED (all-scan mode)"
   echo ""
   ARGS=()
-  for file in docs/glossary-*.md; do
+  for file in docs/glossary/*.md; do
     [[ -f "$file" ]] || continue
     is_target "$file" || continue
     ARGS+=("$file" "$file")
@@ -70,37 +80,101 @@ if [[ "$ALL_SCAN" -eq 1 ]]; then
   elif run_checks "${ARGS[@]}"; then
     echo "  OK: $(( ${#ARGS[@]} / 2 )) file(s), no findings"
   fi
+  if [[ -f "$INDEX_PATH" ]]; then
+    INDEX_RC=0
+    node "$FORMAT_JS" check-index "$INDEX_PATH" "$INDEX_PATH" || INDEX_RC=$?
+    [[ "$INDEX_RC" -eq 2 ]] && echo "  BLOCK: glossary checker failed to run (see stderr above)"
+  fi
   echo ""
   echo "  Findings are advisory in all-scan mode."
   exit 0
 fi
 
 # --- staged mode ---
+legacy_check() { :; }
+# --- BEGIN temporary: docs/glossary-<category>.md -> docs/glossary/<category>.md migration added 2026-10-17 ---
+# deletion-condition: remove once origin/main has no docs/glossary-user.md / docs/glossary-internal.md and no worktree in "git worktree list" still has them, together with the matching blocks listed in bin/lib/glossary-format/files.js and tests/bin/feat-2529-glossary-legacy-read.sh
+# A staged add / modify / rename-into of an old-layout name triggers and BLOCKs; a deletion passes
+# but still triggers, so the glossary provenance check sees the terms it removes from HEAD.
+legacy_check() {
+  local changed=()
+  local f
+  # Superset trigger: a deletion that is no glossary file yields zero operations there.
+  while IFS= read -r -d '' f; do TRIGGER=1; done \
+    < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=D -- 'docs/glossary-*' 2>/dev/null || true)
+  # The glob is a superset prefilter (no node spawn otherwise); LEGACY_CANDIDATE_RE decides.
+  while IFS= read -r -d '' f; do changed+=("$f"); done \
+    < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRT -- 'docs/glossary-*' 2>/dev/null || true)
+  [[ "${#changed[@]}" -gt 0 ]] || return 0
+  LEGACY_OUT="$(node "$FORMAT_JS" legacy-paths "${changed[@]}")" || LEGACY_RC=$?
+}
+# --- END temporary: docs/glossary-<category>.md -> docs/glossary/<category>.md migration ---
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+# index_check — a staged add / modify / rename-into of the index page is read from its staged
+# blob (unreadable -> BLOCK); a deletion passes. Sets INDEX_OUT / INDEX_RC like legacy_check.
+index_check() {
+  local f staged=0
+  while IFS= read -r -d '' f; do [[ "$f" == "$INDEX_PATH" ]] && staged=1; done \
+    < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRT -- "$INDEX_PATH" 2>/dev/null || true)
+  [[ "$staged" -eq 1 ]] || return 0
+  if ! git show ":./$INDEX_PATH" > "$WORK_DIR/index.md" 2>/dev/null; then
+    INDEX_OUT="  BLOCK: $INDEX_PATH: cannot read the staged blob (the index lists it)"
+    INDEX_RC=1
+    return 0
+  fi
+  INDEX_OUT="$(node "$FORMAT_JS" check-index "$INDEX_PATH" "$WORK_DIR/index.md")" || INDEX_RC=$?
+}
+
 TRIGGER=0
 while IFS= read -r -d '' file; do
   is_target "$file" && TRIGGER=1
 done < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRTD 2>/dev/null || true)
+LEGACY_OUT=""
+LEGACY_RC=0
+legacy_check
+[[ "$LEGACY_RC" -ne 0 ]] && TRIGGER=1
+INDEX_OUT=""
+INDEX_RC=0
+index_check
+[[ "$INDEX_RC" -ne 0 ]] && TRIGGER=1
 [[ "$TRIGGER" -eq 1 ]] || emit_skip "no glossary entry file staged"
 
 echo "$HDR: PERFORMED (staged mode)"
 echo ""
-WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK_DIR"' EXIT
+RC=0
+# report_pre <out> <rc> — print a pre-trigger check's findings; rc 2 is a checker failure.
+report_pre() {
+  [[ "$2" -ne 0 ]] || return 0
+  [[ -n "$1" ]] && printf '%s\n' "$1"
+  [[ "$2" -eq 1 ]] || echo "  BLOCK: glossary checker failed to run (see stderr above)"
+  RC=1
+}
+report_pre "$LEGACY_OUT" "$LEGACY_RC"
+report_pre "$INDEX_OUT" "$INDEX_RC"
 ARGS=()
 SEQ=0
 while IFS= read -r -d '' file; do
   is_target "$file" || continue
   SEQ=$((SEQ + 1))
-  git show ":./$file" > "$WORK_DIR/$SEQ.md" 2>/dev/null || continue
+  if ! git show ":./$file" > "$WORK_DIR/$SEQ.md" 2>/dev/null; then
+    echo "  BLOCK: $file: cannot read the staged blob (the index lists it)"
+    RC=1
+    continue
+  fi
   ARGS+=("$file" "$WORK_DIR/$SEQ.md")
-done < <(git -c core.quotePath=false ls-files -z -- 'docs/glossary-*.md' 2>/dev/null || true)
+done < <(git -c core.quotePath=false ls-files -z -- 'docs/glossary/*.md' 2>/dev/null || true)
 
-RC=0
-if [[ "${#ARGS[@]}" -eq 0 ]]; then
+if [[ "$SEQ" -eq 0 ]]; then
   echo "  (no glossary entry file left in the index)"
-else
+elif [[ "${#ARGS[@]}" -gt 0 ]]; then
   run_checks "${ARGS[@]}" || RC=1
 fi
+# Provenance (#2529 S1): the session decides which approved intent the operations must match;
+# without --session the CLI resolves it itself (B / no-session are judged there).
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+node "$SCRIPT_DIR/check-glossary-provenance" --staged ${SESSION_ARGS[@]+"${SESSION_ARGS[@]}"} --repo "$REPO_ROOT" || RC=1
 echo ""
 echo "  Any finding blocks the commit (exit 1)."
 exit "$RC"

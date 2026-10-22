@@ -9,11 +9,15 @@
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# The shared harness supplies the case markers the multi-target part files open (run root,
+# root decoy and command guard come with it); the suite keeps its own ERRORS-based verdict.
+# shellcheck source=../lib/harness.sh
+source "$AGENTS_ROOT/tests/lib/harness.sh"
 SCRIPT="$AGENTS_ROOT/bin/review-code-codex"
 ERRORS=0
 
-fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
-pass() { echo "PASS: $1"; }
+fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); FAIL=$((FAIL + 1)); _harness_case_failed; }
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 
 # ---------------------------------------------------------------------------
 # Setup: temp git repo with a commit on a branch vs main
@@ -446,6 +450,10 @@ fi
 # boundary rows above built (Y_AT_REPO / Y_OVER_REPO) rather than rebuilding them.
 # shellcheck source=./feature-review-code-codex/path-priority.sh
 . "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority.sh"
+
+# The --context defang and helper fail-closed rows replace the mock codex, so they run last.
+# shellcheck source=./feature-review-code-codex/context-defang-and-fail-closed.sh
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/context-defang-and-fail-closed.sh"
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -2,8 +2,9 @@
 # Tests: bin/workflow/handoff-append
 # Tags: handoff, handoff-artifact, cli-ux, discoverability, regression-2279, scope:issue-specific, pwsh-not-required, TL2
 
-# rules/handoff-emergency-flush.md tells a context-pressured session to run this
-# CLI with seven flags from memory. That session cannot afford to read the
+# A context-pressured session runs this CLI with seven flags from memory (the
+# flush rule, now rules/progress-update.md, moved its facts to session-progress.md in
+# #2594; the CLI itself stays until #2652). That session cannot afford to read the
 # source, so the command must answer for itself: --help must work, and a
 # rejection must name the field it rejected.
 

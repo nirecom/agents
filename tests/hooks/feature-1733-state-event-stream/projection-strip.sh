@@ -2,21 +2,10 @@
 # tests/hooks/feature-1733-state-event-stream/projection-strip.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow-state, event-stream, projection, allowlist, persistence, single-source-of-truth, scope:issue-specific, pwsh-not-required, TL2
-#
-# readState pastes a projection onto the state object; a naive JSON.stringify of that
-# object would write the legacy fields straight back into the v2 file and create a
-# SECOND state representation next to `events` (CPR-SSOT violation, and a fork that would
-# silently diverge). serializeStateForPersist is the only guard: an allowlist plus a
-# regenerated `current`. These cases assert the guard from the OUTSIDE — by the key set
-# actually present in the bytes on disk — so an implementation that forgets one key
-# cannot pass.
-#
-# TL3 gap (what this test does NOT catch):
-# - a writer that bypasses the state layer entirely (a skill or script editing the
-#   state file with jq/Write). Only file bytes are checked here, after writes that
-#   went through the module.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
+# serializeStateForPersist (allowlist + regenerated `current`) keeps the pasted projection off
+# disk (CPR-SSOT); asserted from the outside by the key set in the bytes on disk.
+# TL3 gap: a writer bypassing the state layer (jq/Write); mitigation: WORKFLOW_USER_VERIFIED
+# preflight, bin/check-verification-gate.sh category: skill-orchestration.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CASE_TAG="pstrip"
@@ -28,9 +17,9 @@ FORBIDDEN="steps,plan_approvals,git_branch,cwd,is_bugfix,session_model,complexit
 echo "== S1: after real writes, no projection key is a top-level key on disk =="
 if run_case "S1/no-projection-on-disk"; then
     next_sid
-    nodejs_env "FORBIDDEN=$FORBIDDEN" "$SID" "$PRE$APPROVE_GATED_JS"'
+    nodejs_env "FORBIDDEN=$FORBIDDEN" "$SID" "$PRE$APPROVE_GATED_JS$GLOSSARY_JS"'
 S.markStep(sid, "workflow_init", "complete");
-S.markStep(sid, "outline", "complete");
+complete_gated(sid, "outline");
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
 S.recordComplexityEvaluation(sid, ["S1-multi-file", "S2-architecture"]);
 S.markStep(sid, "research", "skipped", { skip_reason: "n/a", skip_judgment: { decision: "skip" } });

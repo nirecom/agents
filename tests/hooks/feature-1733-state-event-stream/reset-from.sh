@@ -14,13 +14,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # Seeds a realistic mid-session state: gated approvals, several complete steps with
 # annotations, and every top-level setting RESET_FROM used to lose.
-SEED_JS="$PRE$APPROVE_GATED_JS"'
+SEED_JS="$PRE$APPROVE_GATED_JS$GLOSSARY_JS"'
 S.markStep(sid, "workflow_init", "complete");
-S.markStep(sid, "clarify_intent", "complete");
+complete_gated(sid, "clarify_intent");
 S.markStep(sid, "research", "skipped", { skip_reason: "nothing to survey" });
-S.markStep(sid, "outline", "complete");
-S.markStep(sid, "detail", "complete");
-S.markStep(sid, "review_tests", "complete", { review_scope_manifest: {v:1,files:{"tests/f.sh":"tok-1"}}, wsid: "wsid-1" });
+complete_gated(sid, "outline");
+complete_gated(sid, "detail");
+complete_gated(sid, "review_tests", { review_scope_manifest: {v:1,files:{"tests/f.sh":"tok-1"}}, wsid: "wsid-1" });
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
 S.setLastPushedSha(sid, "0".repeat(40));
 { const st = S.readState(sid); st.closes_issues = [1733]; st.deliverable_type = "wf-code"; S.writeState(sid, st); }
@@ -115,25 +115,26 @@ console.log([
         "$NODE_OUT"
 fi
 
-echo "== R6: gated steps before from_step get a synthetic plan_approval =="
-if run_case "R6/gated-approval-synthesised"; then
+echo "== R6: gated steps before from_step keep their own approval — the reset synthesises none =="
+if run_case "R6/no-synthetic-approval"; then
     next_sid
+    # #2709: a reset no longer writes a reset-sentinel plan_approval; the prior gated steps
+    # must already carry a verified approval (SEED_JS records real ones), which still verifies.
     nodejs "$SID" "$SEED_JS$RESET_JS"'
 const CA2 = require("./hooks/workflow-state/completion-approval");
 const st = S.readState(sid);
 const i = S.VALID_STEPS.indexOf("detail");
 const gatedBefore = CA2.APPROVAL_GATED_STEPS.filter((s) => S.VALID_STEPS.indexOf(s) < i);
-const resetApprovals = rd().events.filter((e) => e.kind === "plan_approval" && e.origin === "reset-sentinel");
-const missing = gatedBefore.filter((s) => !resetApprovals.some((e) => e.step === s));
-const one = resetApprovals[0] || {};
-console.log("gated_before=" + gatedBefore.join(",") +
-            " missing=" + (missing.join(",") || "0") +
-            " hash_status=" + one.artifact_hash_status +
-            " provenance=" + one.provenance);
+const synthetic = rd().events.filter((e) => e.kind === "plan_approval" &&
+  (e.origin === "reset-sentinel" || e.source === "reset-sentinel")).length;
+const unapproved = gatedBefore.filter((s) => !CA2.evaluateCompletionApproval(sid, s, st).approved);
+console.log("gated_before=" + gatedBefore.join(",") + " synthetic=" + synthetic +
+            " unapproved=" + (unapproved.join(",") || "0") +
+            " resets=" + rd().events.filter((e) => e.kind === "reset").length);
 '
     # #2277: clarify_intent joined the approval-gated class (plan-stage-table.js).
-    assert_eq "R6/gated-approval-synthesised" \
-        "gated_before=clarify_intent,outline missing=0 hash_status=not-applicable provenance=declared" "$NODE_OUT"
+    assert_eq "R6/no-synthetic-approval" \
+        "gated_before=clarify_intent,outline synthetic=0 unapproved=0 resets=1" "$NODE_OUT"
 fi
 
 echo "== R7: history from before the reset is still readable (the point of #1733) =="
@@ -260,9 +261,13 @@ const statusesOf = (steps) => {
   for (const k of Object.keys(steps)) out[k] = steps[k].status;
   return out;
 };
-for (const s of S.VALID_STEPS) {
-  if (s !== "final_report") S.markStep(sid, s, "complete");
-}
+// #2529: the two glossary-gated steps SEED_JS leaves pending need their own record.
+glossary_record(sid, "review_security", "review_docs");
+in_glossary_repo(() => {
+  for (const s of S.VALID_STEPS) {
+    if (s !== "final_report") S.markStep(sid, s, "complete");
+  }
+});
 const beforeStatuses = JSON.stringify(statusesOf(S.readState(sid).steps));
 '"$(reset_to final_report 'redo the report')"'
 const st = S.readState(sid);

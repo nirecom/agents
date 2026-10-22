@@ -11,11 +11,15 @@ const {
   CONFIRM_OUTLINE_RE_DQ,
   CONFIRM_DETAIL_RE_DQ,
 } = require("../lib/sentinel-patterns");
+const path = require("path");
 const {
   computeArtifactSha,
   recordPlanApproval,
   confirmSentinelFor,
 } = require("../workflow-state/completion-approval");
+const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
+const { rowFor } = require("../workflow-state/plan-stage-table");
+const { readState } = require("../workflow-state/state-io");
 
 const STAGE_PATTERNS = [
   { step: "clarify_intent", re: CONFIRM_INTENT_RE_DQ },
@@ -44,7 +48,10 @@ function handle(ctx) {
   }
 
   try {
-    const sha = computeArtifactSha(sessionId, stage);
+    // A downstream session (resume-session --from) has no artifact of its own: the
+    // approved file is the upstream's, so the hash and the record name that owner (#2633).
+    const owner = resolvePlanArtifactOwner(sessionId, rowFor(stage).suffix, readState(sessionId));
+    const sha = computeArtifactSha(owner.ownerSid, stage);
     recordPlanApproval(sessionId, stage, {
       source: "confirm-sentinel",
       reason: m[1],
@@ -53,10 +60,14 @@ function handle(ctx) {
       // a protocol violation. It is recorded honestly and rejected fail-closed
       // later, never downgraded to an existence-only check.
       artifactHashStatus: sha ? "recorded" : "uncomputable-at-record",
+      artifactSessionId: owner.ownerSid,
     });
+    const ownerNote = owner.ownerSid !== sessionId
+      ? ` hashed ${path.basename(owner.path)} (owned by session upstream).`
+      : "";
     pushMessage(
       `workflow-mark: ${stage} approval recorded (source: confirm-sentinel, ` +
-        `hash-status: ${sha ? "recorded" : "uncomputable-at-record"}).`
+        `hash-status: ${sha ? "recorded" : "uncomputable-at-record"}).` + ownerNote
     );
   } catch (e) {
     pushMessage(

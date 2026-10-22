@@ -70,8 +70,8 @@ When a new standalone B-layer file is added for a language that currently has on
 | Language | Command |
 |---|---|
 | Python | `uv run ruff check <file>` |
-| JavaScript | `npx eslint <file>` |
-| TypeScript | `npx eslint <file>` + `npx tsc --noEmit` |
+| JavaScript | `node "$AGENTS_MAIN_ROOT/bin/run-eslint" <file>` |
+| TypeScript | `node "$AGENTS_MAIN_ROOT/bin/run-eslint" <file>` + `npx tsc --noEmit` |
 | PowerShell | `pwsh -NoProfile -Command Invoke-ScriptAnalyzer -Path <file>` |
 | Bash | `shellcheck <file>` |
 | JSON | `node -e "JSON.parse(require('fs').readFileSync('<file>','utf8'))"` |

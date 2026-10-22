@@ -19,7 +19,7 @@ const { applyDispatchOutcome } = require("./workflow-run-tests/dispatch-outcome"
 const { recordRun } = require("./workflow-run-tests/record-run");
 const { runAllHits, workerHits } = require("./workflow-run-tests/hit-summary");
 const { CONTRACT_PREFIX_RE, findSingleContract, runtimeLabels } = require("./lib/run-contract");
-const { sanitizeLine, collapseControl, redactSecrets } = require("./lib/output-sanitize");
+const { sanitizeUntrustedField } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
@@ -37,7 +37,7 @@ function done(message) {
 // The trigger is untrusted, durable text (#1378): collapse control bytes, elide
 // credentials, then sentinel-redact and cap — so truncation never leaves a secret prefix.
 function sanitizeTrigger(command) {
-  return sanitizeLine(redactSecrets(collapseControl(String(command || ""))), MAX_TRIGGER_LEN);
+  return sanitizeUntrustedField(command || "", MAX_TRIGGER_LEN);
 }
 
 // --- payload scoping (#1273 round 3) -----------------------------------------

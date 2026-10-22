@@ -3,7 +3,8 @@
 # Source this file: source "$(dirname "$0")/lib/codex-core.sh"
 #
 # Provides: codex_core_init, codex_core_adversarial_preamble, codex_core_check_cli,
-#           codex_core_run, codex_core_log, codex_core_emit_failed
+#           codex_core_run, codex_core_log, codex_core_emit_failed,
+#           codex_core_credential_shaped_path, codex_core_input_refused
 #
 # Re-exports codex_timeout_resolve / CODEX_TIMEOUT_SECS_DEFAULT from lib/codex-timeout.sh
 # so a script that already sources this library needs no second source line.
@@ -166,7 +167,7 @@ codex_core_run() {
 
   local _timeout
   _timeout="$(codex_timeout_resolve)"
-  codex_out=$(timeout "$_timeout" codex exec --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
+  codex_out=$(timeout "$_timeout" codex exec --sandbox read-only --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
 
   case $codex_exit in
     0)
@@ -212,6 +213,33 @@ codex_core_emit_failed() {
   local reason="$1"
   echo "## ${CODEX_LABEL}: FAILED — ${reason}"
   exit 0
+}
+
+# codex_core_credential_shaped_path <path>
+# SSOT of the credential-shaped name rule for content sent to the external reviewer: succeeds
+# when the path matches, case-insensitively, a basename pattern or a directory component.
+# Lowercasing goes through C-locale tr, not ${x,,} or sed's GNU-only I flag (CPR-UNV); a
+# backslash counts as a separator so a Windows-form path splits the same way.
+codex_core_credential_shaped_path() {
+  local lc base dir=""
+  lc="$(printf '%s' "${1//\\//}" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  base="${lc##*/}"
+  [[ "$lc" == */* ]] && dir="/${lc%/*}/"
+  case "$base" in
+    .env*|*.env|*.env.*|*.pem|*.key|id_rsa*|id_dsa*|id_ecdsa*|id_ed25519*|*credential*|*secret*|.npmrc|.pypirc|.netrc|.pgpass|.htpasswd|*.p12|*.pfx|*.jks|*.keystore|*.ppk|*.kdbx|*.tfstate|*token*|*passw*|kubeconfig)
+      return 0 ;;
+  esac
+  case "$dir" in
+    */.ssh/*|*/.aws/*|*/.gnupg/*|*/.kube/*|*/secrets/*) return 0 ;;
+  esac
+  return 1
+}
+
+# codex_core_input_refused <path>
+# Succeeds when a caller-supplied input file must not be read into a codex prompt: a symlink
+# (its target may sit anywhere) or a credential-shaped name.
+codex_core_input_refused() {
+  [[ -L "$1" ]] || codex_core_credential_shaped_path "$1"
 }
 
 # ---------------------------------------------------------------------------

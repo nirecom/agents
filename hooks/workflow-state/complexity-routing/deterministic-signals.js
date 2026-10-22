@@ -13,6 +13,7 @@ const S4_PATH_RULES = Object.freeze([
   { name: "install-first-segment", test: (segs) => segs[0] === "install" },
   { name: "dotfiles-segment", test: (segs) => segs.includes("dotfiles") },
 ]);
+// eslint-disable-next-line no-control-regex -- matching control characters is the purpose
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 
 function insideRel(rel) {
