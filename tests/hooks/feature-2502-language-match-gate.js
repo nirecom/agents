@@ -390,22 +390,41 @@ test("(c) a clean new file is approved and the notice stays empty", () => {
 });
 caseEnd();
 
-caseBegin("existing-file-not-checked", "hooks/block-case-markers.js");
-// The self-impl check skips a file HEAD already has. The file has no markers, so S4-4b counts
-// code lines: a counter that replaces a line passes, one that adds a line is a case addition
-// (the user's C2 decision) and blocks on that alone, never on SELF_IMPLEMENTED_HARNESS.
-test("an Edit adding a counter to a file HEAD already has is never self-impl checked", () => {
+// #2502 S4-4b rule b: an existing marker-less file is judged for case addition unless the working
+// Tests: lists exactly one path. The added lines are plain echo, never a self-implemented harness.
+caseBegin("existing-file-one-path-case-added-approves", "hooks/lib/precommit-tests-frontmatter.sh");
+test("an existing one-path bash test gaining a code line passes both callers", () => {
+  row({ rel: "tests/bin/old.sh", head: BODY.shClean, work: BODY.shClean + "echo extra\n", code: null });
+});
+caseEnd();
+
+caseBegin("existing-file-two-paths-case-added-blocks", "hooks/lib/precommit-tests-frontmatter.sh");
+test("an existing two-path bash test without markers gaining a code line is blocked by both callers", () => {
+  const work = BODY.shTwoPathsNoMarkers + "echo extra\n";
+  row({ rel: "tests/bin/old.sh", head: BODY.shTwoPathsNoMarkers, work, code: "CASE_ADDED_WITHOUT_MARKERS" });
+});
+caseEnd();
+
+caseBegin("existing-file-two-paths-value-rewrite-approves", "hooks/lib/precommit-tests-frontmatter.sh");
+test("an existing two-path bash test without markers whose line is rewritten passes both callers", () => {
+  const work = BODY.shTwoPathsNoMarkers.replace("echo no markers", "echo changed");
+  assert.notStrictEqual(work, BODY.shTwoPathsNoMarkers);
+  row({ rel: "tests/bin/old.sh", head: BODY.shTwoPathsNoMarkers, work, code: null });
+});
+caseEnd();
+
+caseBegin("existing-file-one-path-not-self-impl-checked", "hooks/block-case-markers.js");
+// The self-impl check skips a file HEAD already has; a one-path Tests: also exempts it from S4-4b.
+test("an Edit adding a counter to an existing one-path file is approved and never self-impl checked", () => {
   const repo = mkRepo({ ...SI_HEAD, "tests/bin/old.sh": BODY.shClean });
   const abs = path.join(repo, "tests", "bin", "old.sh");
-  const edit = (newString) => siHook({
-    tool_name: "Edit", cwd: repo,
-    tool_input: { file_path: abs, old_string: "echo done\n", new_string: newString },
-  });
+  const edit = (newString) => siHook({ tool_name: "Edit", cwd: repo,
+    tool_input: { file_path: abs, old_string: "echo done\n", new_string: newString } });
   const same = edit("PASS=0; echo done\n");
   expectApprove(same);
-  assert.ok(!contextOf(same).includes("SELF_IMPL"), show(same));
+  assert.ok(!(reasonOf(same) + contextOf(same)).includes("SELF_IMPL"), show(same));
   const added = edit("PASS=0\necho done\n");
-  expectBlock(added, "tests/bin/old.sh", "code lines 2 -> 3", "code=CASE_ADDED_WITHOUT_MARKERS");
+  expectApprove(added);
   assert.ok(!(reasonOf(added) + contextOf(added)).includes("SELF_IMPL"), show(added));
 });
 caseEnd();

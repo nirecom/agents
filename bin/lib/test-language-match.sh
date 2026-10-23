@@ -240,8 +240,8 @@ _tlm_migration() {
 # with an empty <head-copy>), an added case's target, a paired case's target turned mismatched —
 # and, when either version is not conforming, a CASE_ADDED_WITHOUT_MARKERS line for a case added.
 # Not by case addition: a file that is not a test entrypoint (_tlm_entrypoint; run-all.sh and
-# suite parts are not), a new file whose Tests: has one token, and markers put into a HEAD that
-# had none valid (_tlm_migration).
+# suite parts are not), a file (new or existing) whose working Tests: has exactly one token, and
+# markers put into a HEAD that had none valid (_tlm_migration).
 # rc 0: none; 1: printed; 2: the code-language table is unreadable; 3: the test language is not
 # a supported entry (nothing judged).
 tlm_judge() {
@@ -252,8 +252,8 @@ tlm_judge() {
   test_id="$TLR_ID"
   _tlm_entrypoint "$match" "$test_id" && entry=1
   _tlm_header_new "$head" "$file" "$match" "$test_id"
+  n_tok="${#TLM_TOKENS[@]}"
   if [[ -z "$head" ]]; then
-    n_tok="${#TLM_TOKENS[@]}"
     _tlm_cases "$file" "$match"
     if [[ "$entry" -eq 1 && "$TLM_STATE" != conforming && "$n_tok" -ne 1 ]]; then _tlm_case_addition "" "$file" "$match"; fi
     for i in "${!TLM_C_TARGET[@]}"; do
@@ -271,7 +271,7 @@ tlm_judge() {
       fi
       _tlm_report "$match" "$test_id" "${TLM_C_LINE[$i]}" "${TLM_C_TARGET[$i]}"
     done
-  elif ! _tlm_migration "$head" "$file" "$match" "$test_id" && [[ "$entry" -eq 1 ]]; then
+  elif ! _tlm_migration "$head" "$file" "$match" "$test_id" && [[ "$entry" -eq 1 && "$n_tok" -ne 1 ]]; then
     _tlm_case_addition "$head" "$file" "$match"
   fi
   [[ "$_TLM_HITS" -eq 1 ]] && return 1

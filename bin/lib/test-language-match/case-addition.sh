@@ -5,7 +5,7 @@
 #   _tlm_case_addition <head-copy-or-empty> <work-file> <match-path>  one CASE_ADDED_WITHOUT_MARKERS line
 #   _tlm_code_lines <file> <match-path>  the count of lines neither blank nor a comment
 # Units come from the case-count op, else both versions' code lines; an empty <head-copy> counts 0.
-# tlm_judge runs it on test entrypoints only, minus a new one-Tests:-token file and a migration.
+# tlm_judge runs it on test entrypoints only, minus a migration and a one-working-Tests:-path file.
 
 # _tlm_code_lines <file> <match-path> — prints the number of lines that are not blank and do not
 # start (after leading blanks) with the comment prefix of <match-path>'s registry entry.

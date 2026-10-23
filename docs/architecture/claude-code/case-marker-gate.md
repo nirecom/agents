@@ -71,8 +71,11 @@ names the code language's new-file name shape.
   line carries no line number and says to add the entry's marker to every case first, after which
   each case's target is judged. Fixes that do not grow the count (edits, deletions, renames,
   reordering) pass; one case removed and one added passes; an added line in a version that cannot
-  be counted blocks. A new non-conforming file counts from 0, except one whose `Tests:` header has
-  a single token (no markers are required there; its header tokens are still judged).
+  be counted blocks. A new non-conforming file counts from 0.
+- Markers are required only where the working `Tests:` header does not list exactly one path, so
+  the case-addition check is skipped, for new and existing files alike, when the working header
+  has one token; its header tokens are still judged. A header with no token stays fail-closed, and
+  an edit that grows a one-path header to two paths blocks like any other multi-path file.
 - This case-addition check applies to test entrypoints only: a 2-level `tests/<category>/<file>`
   file matching a `supported` registry pattern whose helper library exists. Other candidates
   (`tests/run-all.sh`, sibling part files) get the language judgment alone.
