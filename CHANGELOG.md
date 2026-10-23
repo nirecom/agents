@@ -835,3 +835,7 @@ Changes: CONFIRM_INTENT, CONFIRM_OUTLINE and CONFIRM_DETAIL set to off now take 
 ### FEATURE: PR #2752 (2026-10-22)
 Background: feat(#2739): introduce ESLint so write-code's JavaScript lint recipe ...
 Changes: Added `node bin/run-eslint <path>...`, a one-command JavaScript lint that works in every worktree (it installs the pinned ESLint on first use), and the write-code skill's JavaScript/TypeScript lint step now uses it.
+
+### FEATURE: PR #2753 (2026-10-22)
+Background: feat(#2529): glossary provenance check, docs/glossary/ layout, and gl...
+Changes: Glossary changes are now checked at commit time: adding, redefining or deleting a glossary entry is blocked unless the approved intent lists it or you accept it with `WORKFLOW_GLOSSARY_ACCEPTED`.;Glossary files moved to `docs/glossary/` (one file per category); the old `docs/glossary-user.md` / `docs/glossary-internal.md` layout is still read during migration.;Each workflow stage (intent, outline, detail, tests, code, docs) now flags text that drifts from a defined glossary term, such as a case or hyphen variant, before the step can complete.
