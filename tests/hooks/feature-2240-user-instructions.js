@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/user-instructions.js, hooks/session-start.js, hooks/post-compact.js
-// Tags: TL2, hooks, user-instructions, session-start, post-compact, truncation, utf8, scope:issue-specific, lang, plan-lang, fail-open
-// #2240 Change 4: user-instructions.local.md at the agents checkout root is injected under a
+// Tags: TL2, hooks, user-instructions, session-start, post-compact, truncation, utf8, scope:issue-specific, lang, plan-lang, fail-open, html-comment
+// #2240 Change 4 (#2731 rename): user-instructions.md at the agents checkout root is injected under a
 // "[user-instructions]" header at SessionStart and PostCompact only — never at UserPromptSubmit or
 // SubagentStart. Absent, empty or blank -> nothing; over 4096 bytes -> cut on a UTF-8 boundary + marker.
 // Fixture: hooks/ is copied into a temp checkout so the file never touches the real repo root.
@@ -35,8 +35,9 @@ process.on("exit", () => {
 
 const ROOT = path.join(__dirname, "..", "..");
 const COPY = path.join(TMP, "agents");
-fs.cpSync(path.join(ROOT, "hooks"), path.join(COPY, "hooks"), { recursive: true, filter: (src) => !/[\\/](node_modules|\.git)([\\/]|$)/.test(src) });
-const UI_FILE = path.join(COPY, "user-instructions.local.md");
+// bin/ too: hooks/lib/confirm-gate/plan-gate.js requires bin/workflow/lib/next-step/gate-line.
+for (const d of ["hooks", "bin"]) fs.cpSync(path.join(ROOT, d), path.join(COPY, d), { recursive: true, filter: (src) => !/[\\/](node_modules|\.git)([\\/]|$)/.test(src) });
+const UI_FILE = path.join(COPY, "user-instructions.md");
 const UI_LIB = path.join(COPY, "hooks", "lib", "user-instructions.js");
 const HEADER = "[user-instructions]";
 const MARK = "[user-instructions truncated at 4096 bytes]";
@@ -220,6 +221,56 @@ caseBegin("unreadable-state-fails-open", "hooks/post-compact.js");
   check("F1: an unreadable state file -> post-compact still exits 0 with additionalContext", () => { lines = compact(sid, { CONV_LANG: "japanese", PLAN_LANG: "japanese" }); });
   check("F2: ... no PLAN_LANG line (isPlanning fails open to false)", () => eq(planLines(lines || [], "japanese"), [], "PLAN_LANG lines"));
   check("F3: ... the session-id and CONV_LANG lines survive", () => eq([(lines || []).some((x) => x.includes(sid)), (lines || []).some((x) => x.startsWith(CONV_HEAD("japanese")))], [true, true], "[sid line, conv line]"));
+}
+caseEnd();
+
+// #2731: the loader reads user-instructions.md (not the old .local.md name) and strips <!-- --> comments.
+caseBegin("provider-reads-renamed-file-only", "hooks/lib/user-instructions.js");
+{
+  check("R1: USER_INSTRUCTIONS_FILE names user-instructions.md", () => { delete require.cache[require.resolve(UI_LIB)]; eq(path.basename(require(UI_LIB).USER_INSTRUCTIONS_FILE), "user-instructions.md", "basename"); });
+  const OLD = path.join(COPY, "user-instructions.local.md");
+  setFile(null);
+  fs.writeFileSync(OLD, UI_BODY + "\n");
+  check("R2: only the old user-instructions.local.md present -> null (old name is not read)", () => eq(inject(), null, "injection"));
+  fs.rmSync(OLD, { force: true });
+}
+caseEnd();
+
+caseBegin("provider-strips-html-comments", "hooks/lib/user-instructions.js");
+{
+  setFile("<!-- only a note -->\n");
+  check("C1: single-line comment-only file -> null", () => eq(inject(), null, "injection"));
+  setFile("\n\n<!--\nCopy this file.\nSave it as user-instructions.md.\n-->\n\n");
+  check("C2: multi-line comment-only file with blank lines around it -> null", () => eq(inject(), null, "injection"));
+  setFile("<!-- hidden-note-2731 -->\nLine A real.\nLine B real.\n");
+  check("C3: comment + real lines -> only the real lines, header first", () => {
+    const s = inject();
+    eq([typeof s, String(s).split("\n")[0].startsWith(HEADER), String(s).includes("Line A real.\nLine B real."), String(s).includes("hidden-note-2731"), String(s).includes("<!--"), String(s).includes("-->")], ["string", true, true, false, false, false], `[type, header, content, comment text, <!--, -->] in ${show(s)}`);
+  });
+  setFile("<!-- first-c -->\nBODY-X\n<!-- second-c\nstill comment -->\n");
+  check("C4: two comments around content -> only the content remains", () => {
+    const s = inject();
+    eq([typeof s, String(s).split("\n").slice(1).filter((l) => l.trim() !== "")], ["string", ["BODY-X"]], `[type, non-blank lines after header] in ${show(s)}`);
+  });
+  setFile("keep this <!-- never closed\nmore\n");
+  check("C5: unterminated <!-- -> everything from it to the end of the file is dropped", () => {
+    const s = inject();
+    eq([typeof s, String(s).includes("keep this"), String(s).includes("never closed"), String(s).split("\n").includes("more"), String(s).includes("<!--")], ["string", true, false, false, false], `[type, kept text, comment text, "more" line, <!--] in ${show(s)}`);
+  });
+  setFile("REAL-HEAD\n<!-- " + "z".repeat(5000) + " -->\nREAL-TAIL\n");
+  check("C6: comments are stripped before the 4096-byte cap -> both real lines kept, no marker", () => {
+    const s = inject();
+    eq([typeof s, String(s).includes("REAL-HEAD"), String(s).includes("REAL-TAIL"), String(s).includes("zzzz"), String(s).includes("<!--"), String(s).includes(MARK)], ["string", true, true, false, false, false], `[type, head, tail, zzzz, <!--, marker] in ${show(String(s).slice(0, 200))}`);
+  });
+  setFile(null);
+}
+caseEnd();
+
+caseBegin("comment-only-file-not-injected-at-session-start", "hooks/session-start.js");
+{
+  setFile("<!--\nexplanatory text only\n-->\n");
+  check("H5: comment-only file -> SessionStart exits 0 and its context has no header", () => { const ss = run("session-start.js", ev("ui-ss5", "SessionStart")); eq([ss.includes(HEADER), ss.includes("explanatory text only")], [false, false], "[header, comment text] present"); });
+  setFile(null);
 }
 caseEnd();
 

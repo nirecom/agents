@@ -85,14 +85,19 @@ and SubagentStart already cover every point where the context is replaced.
 
 ## User-local instruction file
 
-`user-instructions.local.md` at the agents checkout root (next to `.env` and `CLAUDE.local.md`;
+`user-instructions.md` at the agents checkout root (next to `.env` and `CLAUDE.local.md`;
 gitignored) holds free-form per-user instructions. `hooks/lib/user-instructions.js` injects it
 under a `[user-instructions]` header line at SessionStart and PostCompact only — not per turn and
-not into subagents.
+not into subagents (#2774 tracks static auto-inject and SubagentStart).
 
-- Cap: 4096 bytes, cut on a UTF-8 character boundary, followed by
+- Setup mirrors `.env` / `.env.example`: copy the tracked template `user-instructions.example.md`
+  to `user-instructions.md` and write the instructions below its comments.
+- HTML comments (`<!-- ... -->`) are stripped on the whole text before anything else, so the
+  template's explanation never reaches the model; an unclosed `<!--` runs to the end of the file.
+- Cap: 4096 bytes after comment stripping, cut on a UTF-8 character boundary, followed by
   `[user-instructions truncated at 4096 bytes]` when cut.
-- A missing, unreadable, or blank file injects nothing.
+- A missing, unreadable, or blank-after-stripping file injects nothing, so an untouched copy of
+  the template injects nothing.
 - It is not documented in `.env.example`: it is a file, not an environment variable, so it does
   not fit the one-block-per-variable form of `rules/docs/env-example.md`.
 
