@@ -67,8 +67,3 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 ### test case reader
 - **Definition**: The per-language part that reads one test file and returns one record per case (name, target, line range, malformed reason); the sweep, the checks, and the retire judgment get these records through the common window, which adds each case's deps.
 - **Related**: [architecture/claude-code/test-language-registry.md](../architecture/claude-code/test-language-registry.md)
-
-### turn
-
-- **Definition**: One user utterance and the one response to it; hooks that fire per turn (`UserPromptSubmit`, `Stop`) count in turns, not in workflow steps.
-- **Related**: [architecture/claude-code/settings/hooks.md](../architecture/claude-code/settings/hooks.md)
