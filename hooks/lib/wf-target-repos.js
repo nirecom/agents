@@ -45,8 +45,7 @@ function parseWorktrees(intentPath) {
   return results;
 }
 
-// The intent a session reads is owner-resolved (#2633): own file, its approval record or history,
-// then upstream_session_id. An heir whose intent approval names nobody still reads the donor its
+// The intent a session reads is owner-resolved (#2633, plan-artifact-owner.js). An heir whose intent approval names nobody still reads the donor its
 // outline/detail approval names.
 function resolveIntentPath(sessionId, state) {
   try {

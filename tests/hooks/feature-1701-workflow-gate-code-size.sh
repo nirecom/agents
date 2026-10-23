@@ -96,6 +96,10 @@ const state = { version: 1, session_id: '$sid', created_at: now, steps };
 if (process.env.STATE_CWD) state.cwd = process.env.STATE_CWD;
 fs.writeFileSync(path.join('$wfdir', '$sid' + '.json'), JSON.stringify(state, null, 2));
 "
+    # A gated `complete` counts only with a plan-approval record (#2277); without it the step
+    # scan blocks every case that should approve, masking the Gate 2 verdict under test.
+    node "$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js" inject \
+        "$wfdir/$sid.json" clarify_intent outline detail >/dev/null
 }
 
 write_workflow_off_marker() {
@@ -180,8 +184,21 @@ build_commit_payload() {
 
 HOOK_OUT=""
 HOOK_RC=0
+# The gate's inner 3 s budget fails open on a timeout; under host load an incidental timeout would
+# flip a block case to approve. Re-run such an attempt (bounded); case 11 sets 0 to keep its timeout.
+HOOK_TIMEOUT_RETRIES=2
 # run_hook <payload> <wfdir> <cfgdir> [extra KEY=VALUE ...]
 run_hook() {
+    local attempt
+    for ((attempt = 0; attempt <= HOOK_TIMEOUT_RETRIES; attempt++)); do
+        run_hook_once "$@"
+        echo "$HOOK_OUT" | grep -qE 'review-code-size --staged timed out|ETIMEDOUT' || return 0
+        ((attempt < HOOK_TIMEOUT_RETRIES)) || return 0
+        echo "    note: incidental review-code-size timeout, retrying (attempt $((attempt + 1)))" >&2
+    done
+}
+
+run_hook_once() {
     local payload="$1" wfdir="$2" cfg="$3"; shift 3
     # The launched checkout belongs to the repo under test, except when the cfg dir is itself a
     # git repo: then it belongs to that foreign repo (the cross-repo case).

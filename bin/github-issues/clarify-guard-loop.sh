@@ -63,7 +63,10 @@ if [[ "$NON_GITHUB" -eq 1 ]]; then
     GUARD_FLAG="--non-github"
 fi
 
-INTENT_FILE="${REAL_PLANS_DIR}/${SESSION_ID}-intent.md"
+# Owner-resolved intent (#2631): a resumed session's intent is its upstream's file.
+INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$REAL_PLANS_DIR" 2>/dev/null || true)"
+INTENT_FILE="${REAL_PLANS_DIR}/${INTENT_FILE##*[/\\]}"
+[[ "$INTENT_FILE" == *-intent.md ]] || INTENT_FILE="${REAL_PLANS_DIR}/${SESSION_ID}-intent.md"
 CHECK_RC=0
 bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/check-closes-issues-nonempty.sh" \
     "$INTENT_FILE" $GUARD_FLAG >/dev/null 2>&1 || CHECK_RC=$?

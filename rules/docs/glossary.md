@@ -22,7 +22,7 @@ Add an entry only by glossary promotion of an intent glossary row of the same ca
 
 The category decides the file: `user` goes to `docs/glossary-user.md`, `internal` to `docs/glossary-internal.md`.
 Keep `docs/glossary.md` as a short index that links both files; put no entries in it.
-When a category file exceeds the HARD 500 lines, split it by alphabetical range into `docs/glossary-<category>-<from>-<to>.md`.
+When a category file exceeds the docs HARD of [../coding/file-split.md](../coding/file-split.md#size-limits), split it by alphabetical range into `docs/glossary-<category>-<from>-<to>.md`.
 Write `<from>` and `<to>` as single lowercase letters; both ends are inclusive.
 Make the ranges of one category non-overlapping and together cover a to z.
 After a split, delete the unsplit category file.

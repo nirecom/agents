@@ -116,7 +116,7 @@ If it terminates without writing that file, write a synthetic fallback:
 
 ```bash
 node "$AGENTS_MAIN_ROOT/bin/issue-close-write-outcome.js" \
-  --fallback "<PLANS_DIR>/<session-id>-intent.md" \
+  --fallback "<INTENT_MD: output of bin/plan-artifact-path --stage intent>" \
   "<CONTROL_DIR>/issue-close-outcome.json"
 ```
 

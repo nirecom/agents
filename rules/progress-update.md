@@ -16,6 +16,8 @@ Rewrite the `Current state` section on every update: what is being done now and 
 
 Overwrite `Current state`; never turn it into a diary or append dated entries.
 
+Keep `Current state` within the `progress` limit of `rules/coding/file-split.md` (Pattern E); the edit-time size check blocks an edit over it.
+
 When this session writes its own intent, outline, or detail plan, point the `Plan files` lines at it; an inherited file still names the donor session's plans.
 
 Add only facts a fresh session cannot recover from any other file, under the four kinds of fact (`Facts to carry over`):

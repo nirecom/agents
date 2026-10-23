@@ -7,7 +7,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { getPlansArtifactPath } = require("./plans-artifact-registry");
+const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
 const { normalizeSlashes } = require("./path-match");
 const { parseSentinel } = require("./confirm-sentinel");
 const { isCommandTool, commandTextOf } = require("./tool-command-text");
@@ -20,8 +20,22 @@ const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../../bin/workflow/lib/next
 // Below this, a probe cannot finish within the Stop hook's budget; the turn ends as before.
 const MIN_PROBE_MS = 200;
 
+// The approval target is the owner-resolved file (plan-artifact-owner.js), the one the approval
+// handler hashes: a resumed session's target is its upstream's file (#2631).
+function approvalArtifactOwner(sid, stage) {
+  try { return resolvePlanArtifactOwner(sid, stage); } catch (_) { return null; }
+}
+
 function approvalArtifactPath(sid, stage) {
-  try { return getPlansArtifactPath(sid, stage); } catch (_) { return null; }
+  const owner = approvalArtifactOwner(sid, stage);
+  return owner ? owner.path : null;
+}
+
+function approvalArtifactSha(sid, stage) {
+  const owner = approvalArtifactOwner(sid, stage);
+  if (!owner) return null;
+  const { computeArtifactSha } = require("../workflow-state/completion-approval");
+  return computeArtifactSha(owner.ownerSid, stepForSuffix(stage));
 }
 
 function linkKey(link) {
@@ -136,8 +150,7 @@ function pickContinuationStage({ sid, lastText, plansDir, markers, entries, prob
   if (!(timeoutMs >= MIN_PROBE_MS)) return null;
   const gate = typeof probe === "function" ? probe : planGateState;
   if (gate(c.stage, { timeoutMs }) !== "ON") return null;
-  const { computeArtifactSha } = require("../workflow-state/completion-approval");
-  const sha = computeArtifactSha(sid, stepForSuffix(c.stage));
+  const sha = approvalArtifactSha(sid, c.stage);
   if (!sha) return null;
   return { stage: c.stage, absPath: c.absPath, link: c.link, sha };
 }
@@ -156,6 +169,6 @@ function sameTurnDenyReason(stage) {
 
 module.exports = {
   MIN_PROBE_MS,
-  approvalArtifactPath, linkKey, samePath, anchorHasToolUse, anchorClosesOnLink, sameTurnContinuation, markBindsArtifact,
+  approvalArtifactPath, approvalArtifactSha, linkKey, samePath, anchorHasToolUse, anchorClosesOnLink, sameTurnContinuation, markBindsArtifact,
   pickContinuationStage, continueReason, sameTurnDenyReason,
 };

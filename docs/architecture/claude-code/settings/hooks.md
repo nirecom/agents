@@ -96,6 +96,21 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   lands in. Unreadable file or an `old_string` absent from disk approve (fail-open); the
   PostToolUse checker below remains the backstop. Block prefix:
   `[gate-worktree-notes-lang] WORKTREE_NOTES.md language check failed`.
+- `block-post-edit-size.js` (PreToolUse, matcher: `Write|Edit|MultiEdit`; renamed from `block-comment-block-size.js`, #2631) —
+  dispatcher over two checks in `hooks/block-post-edit-size/`: `comment-block.js` (long comment block, #1894) and
+  `file-size.js` (post-edit line or char count: over WARN adds advice, over HARD denies unless the edit shrinks the
+  count). Results merge into one block or one advice. Each check fails open on its own. Marker honoring is per
+  check: `file-size` is skipped only in `WORKFLOW_OFF` sessions and in sessions that never started a workflow
+  (`WORKTREE_OFF` does not exempt); `comment-block` never honors `WORKFLOW_OFF`, and `COMMENT_BLOCK_ENFORCE=off`
+  applies to it alone. Limits: `hooks/lib/size-limits.js` (SSOT; the table in `rules/coding/file-split.md` is
+  generated) — not restated here. Session gating: `hooks/lib/size-session-gate.js`.
+- Plan-size gates (#2631): `confirm-checkpoint.js` (PreToolUse) denies the CONFIRM of a plan artifact over HARD
+  whatever `CONFIRM_<STAGE>` says (the planner must compress it) and adds advice over WARN; the Stop-side
+  counterpart is `stop-confirm-plan-guard.js` Layer 2 below. Both use the same session gate as `file-size`.
+- Pre-commit size gate (`hooks/lib/precommit-size-gate.sh`, sourced by `hooks/pre-commit`, #2631) — one
+  `bin/size-check --staged-auto --session-gate` call judges every staged file against the same SSOT. HARD blocks the
+  commit; `size-check` rc 2 or rc 3 (infrastructure) and newline paths fail closed. A commit whose session id cannot
+  be resolved is still checked.
 - `block-case-markers.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a
   write leaving a NEW `.sh` test entrypoint (absent from HEAD, repo carrying `tests/lib/harness.sh`)
   with missing or malformed `case_begin`/`case_end` markers (#2388). Each MultiEdit element is
@@ -112,7 +127,8 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   prefixes. The former Layer 1, which blocked any plans-directory path in the last message, is
   removed: the local path is now part of the plan-link line. Layer 2 runs on EVERY Stop (#2278 removed the marker precondition): when a
   `CONFIRM_<STAGE>` sentinel appears in the last assistant turn, it first re-lints the confirmed
-  artifact against a strict `PLAN_LANG` (`[confirm-plan] Layer 2/plan-lang:`) and then requires a
+  artifact against a strict `PLAN_LANG` (`[confirm-plan] Layer 2/plan-lang:`), blocks a plan over the
+  HARD size limit (`[confirm-plan] Layer 2/plan-size:`, #2631), and then requires a
   stage-valid follow-up tool_use after the Allowed echo's result in the same turn (`[confirm-plan] Layer 2/follow-up:`);
   a denied echo needs none. The re-lint resolves `<sid>-<stage>.md` only for UUID or timestamp
   session ids; any other id, an absent or unreadable artifact, or a non-strict policy skips it.
@@ -220,7 +236,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
   Path coverage (`ENFORCE_WORKTREE_EXCLUDE`), gh command classification, dispatch provenance
-  (#2064), additional repos, quote-span analysis, the script checkout root trust anchor, the
+  (#2064), additional repos, quote-span analysis, the `SCRIPT_CHECKOUT_ROOT` trust anchor, the
   worker-dispatch sanction (#1643, #1673) and the heredoc gate widening (#2120/#2121) are
   detailed in [enforce-worktree.md](enforce-worktree.md).
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:

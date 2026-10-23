@@ -15,7 +15,10 @@ rwc_resolve detail-plan make-detail-plan
 INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
 INTENT_FILE="$PLANS_DIR/${INTENT_FILE##*[/\\]}"
 [[ "$INTENT_FILE" == *-intent.md ]] || INTENT_FILE="$PLANS_DIR/$SESSION_ID-intent.md"
-DRAFT_FILE="$PLANS_DIR/$SESSION_ID-detail.md"
+# The draft follows the same owner (#2631): a resumed session writes its upstream's detail plan.
+DRAFT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage detail --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+DRAFT_FILE="$PLANS_DIR/${DRAFT_FILE##*[/\\]}"
+[[ "$DRAFT_FILE" == *-detail.md ]] || DRAFT_FILE="$PLANS_DIR/$SESSION_ID-detail.md"
 CUR_FP="$(git hash-object -- "$DRAFT_FILE" 2>/dev/null || true)"
 TG_RC=0
 rwc_check_terminal make-detail-plan "$CUR_FP" || TG_RC=$?

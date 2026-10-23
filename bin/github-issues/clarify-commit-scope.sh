@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 # clarify-commit-scope.sh — GH reconcile extraction for clarify-intent (#513)
-# Args: --session-id <sid> --plans-dir <dir> --issues <csv>
-#       [--repo-map IDX:owner/repo ...] [--non-github] [--repo <slug>]
+# Args: --session-id <sid> --plans-dir <dir> --issues <csv> [--repo-map IDX:owner/repo ...] [--non-github] [--repo <slug>]
 # stdout: CREATED:<N> | CLOSED:<N> | RC2 | SCAN_BLOCKED
-# exit: 0 success, 1 gh failure or missing intent.md, 2 CLOSED entry or WIP RC2,
-#       2 bad plans-dir, 2 Path C outbound-scan block (stdout SCAN_BLOCKED)
-#
-# Path B (non-empty --issues): CLOSED pre-scan first (no side effects until all clear),
-#   then per-N: gh issue edit --add-label → wip-set-single.sh → ensure-board-card.sh.
-# Path C (empty --issues): title/body from <sid>-intent.md → outbound scan guard →
-#   gh issue create --label intent:clarified → CREATED:<N>. A scan block prints
-#   SCAN_BLOCKED, writes the reason to <session control dir>/intent-scan-block.txt
-#   (the caller discards stderr), and exits 2.
-# --non-github: skip all gh calls, exit 0.
-# --repo-map IDX:owner/repo: per-issue repo routing for Path B (repeatable).
-# --repo <slug>: repo for Path C gh issue create (backward compat).
+# exit: 0 success; 1 gh failure or missing intent.md; 2 CLOSED entry, WIP RC2, bad plans-dir, or Path C scan block
+# Path B (non-empty --issues): CLOSED pre-scan first (no side effects until all clear), then per-N
+#   gh issue edit --add-label → wip-set-single.sh → ensure-board-card.sh.
+# Path C (empty --issues): title/body from the owner-resolved intent.md (#2631; a resumed session's is its
+#   upstream's) → outbound scan guard → gh issue create --label intent:clarified → CREATED:<N>. A scan block
+#   prints SCAN_BLOCKED and writes the reason to <session control dir>/intent-scan-block.txt (stderr is discarded).
+# --non-github: skip all gh calls, exit 0. --repo-map: Path B per-issue repo (repeatable). --repo: Path C repo.
 set -uo pipefail
 
 if [ "${AGENTS_BASH_MAJOR_OVERRIDE:-${BASH_VERSINFO:-0}}" -lt 4 ]; then
@@ -81,7 +75,9 @@ fi
 if [[ "$ISSUES_SET" -eq 1 && -z "$ISSUES_CSV" ]]; then
     # shellcheck source=lib/intent-to-issue.sh
     source "$SCRIPT_DIR/lib/intent-to-issue.sh"
-    INTENT_PATH="$REAL_PLANS_DIR/$SESSION_ID-intent.md"
+    INTENT_PATH="$(node "$SCRIPT_DIR/../plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$REAL_PLANS_DIR" 2>/dev/null || true)"
+    INTENT_PATH="$REAL_PLANS_DIR/${INTENT_PATH##*[/\\]}"
+    [[ "$INTENT_PATH" == *-intent.md ]] || INTENT_PATH="$REAL_PLANS_DIR/$SESSION_ID-intent.md"
     if [[ ! -f "$INTENT_PATH" ]]; then
         echo "[clarify-commit-scope] intent.md not found: $INTENT_PATH" >&2
         exit 1

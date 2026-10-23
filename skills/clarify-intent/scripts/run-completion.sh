@@ -47,7 +47,10 @@ fi
 # rc=2 → fail-open as GitHub (NON_GITHUB_ARG stays empty)
 
 # Phase 3 — Parse closes_issues via hooks/lib/parse-closes-issues.js
-INTENT_PATH="$PLANS_DIR/$SESSION_ID-intent.md"
+# Owner-resolved intent (#2631): a resumed session's intent is its upstream's file.
+INTENT_PATH="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+INTENT_PATH="$PLANS_DIR/${INTENT_PATH##*[/\\]}"
+[[ "$INTENT_PATH" == *-intent.md ]] || INTENT_PATH="$PLANS_DIR/$SESSION_ID-intent.md"
 JSON=""
 JSON="$(node -e "
 const path = require('path');

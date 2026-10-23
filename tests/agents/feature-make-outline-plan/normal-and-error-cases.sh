@@ -25,13 +25,14 @@ assert_contains "$SKILL_MD" "outline-reviewer" \
 assert_contains "$SKILL_MD" "revision_rounds|2.*round|round.*2" \
     "N4: 2-round max mentioned in SKILL_MD"
 
-# N5: the MOP-8 write instruction targets <session-id>-outline.md (the Stage-2 artifact was
-# renamed from approach.md to outline.md). Anchored to the MOP-8 line so the description and
-# Output Schema heading cannot satisfy it. Checks the repo copy (LOCAL_SKILL_MD), never $HOME.
-_N5_PATTERN='^MOP-8\. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline\.md`'
+# N5: the MOP-8 write instruction targets <OUTLINE_MD>, the owner-resolved outline path
+# (bin/plan-artifact-path --stage outline; a resumed session writes its upstream's file).
+# Anchored to the MOP-8 line so the description and Output Schema heading cannot satisfy it.
+# Checks the repo copy (LOCAL_SKILL_MD), never $HOME.
+_N5_PATTERN='^MOP-8\. Write the chosen approach to `<OUTLINE_MD>`'
 _n5_check() { [ -f "$1" ] && grep -qE "$_N5_PATTERN" "$1"; }
 if _n5_check "$LOCAL_SKILL_MD"; then
-    pass "N5: <session-id>-outline.md output filename mentioned in LOCAL_SKILL_MD"
+    pass "N5: MOP-8 writes to the owner-resolved outline path <OUTLINE_MD> in LOCAL_SKILL_MD"
 else
     fail "N5" "pattern $_N5_PATTERN not found in $LOCAL_SKILL_MD"
 fi

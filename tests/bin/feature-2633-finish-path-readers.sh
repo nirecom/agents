@@ -141,13 +141,22 @@ assert_eq "closed-closed-rc=$RC" "closed-closed-rc=1"
 asked_both "closed-closed"
 case_end
 
-case_begin "own-intent-wins-over-upstream" "bin/parse-closes-issues"
+# #2631 SSOT: U's existing intent wins over S's own; the own intent is only the legacy fallback
+# when the declared upstream has none (LG).
+case_begin "upstream-intent-wins-over-own" "bin/parse-closes-issues"
 S="$(new_sid)"
 write_state "$S" "$U"
 write_intent "$PLANS" "$S" 5151
 run_cap node "$BIN/parse-closes-issues" --session "$S"
-if [[ "$OUT" == *5151* && "$OUT" != *4242* ]]; then pass "own intent (#5151) is used, not U's"
-else fail "own intent (#5151) is used, not U's" "out=$OUT"; fi
+if [[ "$OUT" == *4242* && "$OUT" != *5151* ]]; then pass "U's intent (#4242) is used, not S's own (#5151)"
+else fail "U's intent (#4242) is used, not S's own (#5151)" "out=$OUT"; fi
+LG="$(new_sid)"
+LGU="$(new_sid)"
+write_state "$LG" "$LGU"
+write_intent "$PLANS" "$LG" 5252
+run_cap node "$BIN/parse-closes-issues" --session "$LG"
+if [[ "$OUT" != *5252* ]]; then pass "upstream without an intent -> own intent (#5252) is never read"
+else fail "upstream without an intent -> own intent (#5252) is never read" "out=$OUT"; fi
 case_end
 
 case_begin "no-intent-anywhere-stays-active-without-gh" "bin/supervisor-check-session-active"
@@ -183,13 +192,22 @@ if cli_present "plan-artifact-path exists"; then
 fi
 case_end
 
-case_begin "plan-artifact-path-missing-prints-own-path" "bin/plan-artifact-path"
+# #2631: a resumed session's write target is the upstream path even before that file exists.
+case_begin "plan-artifact-path-missing-prints-upstream-write-target" "bin/plan-artifact-path"
 if cli_present "plan-artifact-path exists"; then
   D2="$(new_sid)"; U2="$(new_sid)"
   write_state "$D2" "$U2"
   run_cap node "$CLI" --stage detail --session "$D2"
-  if [ "$RC" -eq 0 ] && same_path "$OUT" "$PLANS/$D2-detail.md"; then pass "missing everywhere -> own path, exit 0"
-  else fail "missing everywhere -> own path, exit 0" "rc=$RC out=$OUT err=$ERR"; fi
+  if [ "$RC" -eq 0 ] && same_path "$OUT" "$PLANS/$U2-detail.md" && [ ! -e "$PLANS/$U2-detail.md" ]; then pass "resumed, upstream has no file -> upstream path, exit 0"
+  else fail "resumed, upstream has no file -> upstream path, exit 0" "rc=$RC out=$OUT err=$ERR"; fi
+  run_cap node "$CLI" --stage intent --session "$S"
+  if [ "$RC" -eq 0 ] && same_path "$OUT" "$PLANS/$U-intent.md"; then pass "own + upstream both exist -> upstream path"
+  else fail "own + upstream both exist -> upstream path" "rc=$RC out=$OUT err=$ERR"; fi
+  NR="$(new_sid)"
+  write_state "$NR"
+  run_cap node "$CLI" --stage detail --session "$NR"
+  if [ "$RC" -eq 0 ] && same_path "$OUT" "$PLANS/$NR-detail.md"; then pass "non-resumed, no file -> own path, exit 0"
+  else fail "non-resumed, no file -> own path, exit 0" "rc=$RC out=$OUT err=$ERR"; fi
 fi
 case_end
 
@@ -309,11 +327,60 @@ if same_path "$(argv_of --draft-file)" "$PLANS/$U-detail.md"; then pass "review-
 else fail "review-plan-security: reviewer reviews U's detail" "got=$(argv_of --draft-file)"; fi
 case_end
 
-case_begin "review-wrapper-own-intent-wins" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+case_begin "review-wrapper-upstream-intent-wins-over-own" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
 run_wrapper make-detail-plan "$S"
-if same_path "$(argv_of --class-members)" "$PLANS/$S-intent.md"; then pass "own intent is passed, not U's"
-else fail "own intent is passed, not U's" "rc=$WRAP_RC got=$(argv_of --class-members)"; fi
+if same_path "$(argv_of --class-members)" "$PLANS/$U-intent.md"; then pass "U's intent is passed, not S's own"
+else fail "U's intent is passed, not S's own" "rc=$WRAP_RC got=$(argv_of --class-members)"; fi
+run_wrapper make-detail-plan "$LG"
+if same_path "$(argv_of --class-members)" "$PLANS/$LGU-intent.md"; then pass "upstream without an intent -> the upstream's (missing) intent path is passed, not the own one"
+else fail "upstream without an intent -> the upstream's (missing) intent path is passed, not the own one" "rc=$WRAP_RC got=$(argv_of --class-members)"; fi
 case_end
+
+# #2631: the outline / detail draft the reviewer gets follows the owner, like the intent.
+case_begin "plan-wrappers-draft-follows-upstream-owner" "skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+for pair in make-outline-plan:outline make-detail-plan:detail; do
+  run_wrapper "${pair%%:*}" "$D"
+  if same_path "$(argv_of --draft-file)" "$PLANS/$U-${pair#*:}.md"; then pass "${pair%%:*}: D's draft is U's ${pair#*:}"
+  else fail "${pair%%:*}: D's draft is U's ${pair#*:}" "rc=$WRAP_RC got=$(argv_of --draft-file) out=$(head -c 300 "$TMP_ROOT/wrap.out")"; fi
+done
+case_end
+
+case_begin "plan-wrappers-draft-own-path-for-non-resumed-session" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+P="$(new_sid)"
+write_state "$P"
+write_intent "$PLANS" "$P" 8181
+for pair in make-outline-plan:outline make-detail-plan:detail; do
+  run_wrapper "${pair%%:*}" "$P"
+  if same_path "$(argv_of --draft-file)" "$PLANS/$P-${pair#*:}.md"; then pass "${pair%%:*}: non-resumed draft is its own ${pair#*:}"
+  else fail "${pair%%:*}: non-resumed draft is its own ${pair#*:}" "rc=$WRAP_RC got=$(argv_of --draft-file)"; fi
+done
+case_end
+
+# A plan-artifact-path that fails or prints a path outside the plans dir: the draft stays inside
+# PLANS_DIR, and a non-matching name falls back to the session's own file.
+PAP="$FROOT/bin/plan-artifact-path"
+cp "$PAP" "$TMP_ROOT/plan-artifact-path.real"
+printf '%s\n' 'process.stdout.write(process.env.STUB_PAP_OUT || "");' 'process.exit(Number(process.env.STUB_PAP_RC || 0));' >"$PAP"
+
+case_begin "plan-wrappers-draft-falls-back-on-bad-resolver-output" "skills/make-outline-plan/scripts/run-codex-review-loop.sh"
+for pair in make-outline-plan:outline make-detail-plan:detail; do
+  st="${pair#*:}"
+  export STUB_PAP_RC=1 STUB_PAP_OUT=""
+  run_wrapper "${pair%%:*}" "$D"
+  if same_path "$(argv_of --draft-file)" "$PLANS/$D-$st.md"; then pass "${pair%%:*}: resolver failure -> own $st"
+  else fail "${pair%%:*}: resolver failure -> own $st" "rc=$WRAP_RC got=$(argv_of --draft-file)"; fi
+  export STUB_PAP_RC=0 STUB_PAP_OUT="$TMP_ROOT/outside/secret.md"
+  run_wrapper "${pair%%:*}" "$D"
+  if same_path "$(argv_of --draft-file)" "$PLANS/$D-$st.md"; then pass "${pair%%:*}: foreign name -> own $st"
+  else fail "${pair%%:*}: foreign name -> own $st" "rc=$WRAP_RC got=$(argv_of --draft-file)"; fi
+  export STUB_PAP_OUT="$TMP_ROOT/outside/$U-$st.md"
+  run_wrapper "${pair%%:*}" "$D"
+  if same_path "$(argv_of --draft-file)" "$PLANS/$U-$st.md"; then pass "${pair%%:*}: outside dir is re-rooted under PLANS_DIR"
+  else fail "${pair%%:*}: outside dir is re-rooted under PLANS_DIR" "rc=$WRAP_RC got=$(argv_of --draft-file)"; fi
+done
+unset STUB_PAP_RC STUB_PAP_OUT
+case_end
+cp "$TMP_ROOT/plan-artifact-path.real" "$PAP"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

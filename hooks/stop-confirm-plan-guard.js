@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stop hook: structurally enforce the confirm-plan protocol. Fail-open everywhere.
 // Layer 2 (every Stop, #2278): when CONFIRM_<STAGE> appears in the last assistant
-// entry, block unless the confirmed artifact passes PLAN_LANG re-lint AND a
+// entry, block unless the confirmed artifact is within HARD, passes PLAN_LANG re-lint AND a
 // stage-valid follow-up tool_use appears after the sentinel. A CONFIRM echo whose
 // tool_result is an error (denied) needs no follow-up: closing the turn is right.
 // Plan-link check (after Layer 2): a turn that wrote a plan (show-plan-link.js turn marker)
@@ -44,11 +44,18 @@ function block(reason) {
   process.exit(2);
 }
 
-// Blocks when the stage's plan violates PLAN_LANG (#2278): Layer 2 and the continuation share it.
-function blockOnPlanLang(sid, stage) {
+// Blocks when the stage's plan is over HARD (#2631) or violates PLAN_LANG (#2278): Layer 2 and the continuation share it.
+function blockOnPlanRelint(sid, stage) {
   const { relintPlanArtifact, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
   const relint = relintPlanArtifact(sid, stage);
-  if (relint.skipped === null && relint.violations.length > 0) {
+  if (relint.skipped !== null) return;
+  const size = relint.size;
+  if (size && size.verdict === "hard" && require("./lib/size-session-gate").sizeCheckActive(sid)) {
+    block("[confirm-plan] Layer 2/plan-size: " + path.basename(relint.artifactPath) + " is " + size.value + " " +
+      size.unit + ", over HARD " + size.hard + " — compress it below HARD (send it back to the planner) before CONFIRM_" +
+      stage.toUpperCase() + "; limits: rules/coding/file-split.md");
+  }
+  if (relint.violations.length > 0) {
     block("[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
       " violates plan-artifact language/heading rules (PLAN_LANG=" + relint.policy + ", " +
       relint.violations.length + " line(s)) — fix body language and use canonical English schema headings before CONFIRM_" +
@@ -72,7 +79,7 @@ function layer2(sid, content, entries) {
   if (resultIsError(entries, content[confirmIdx].id)) return;
   // Re-lint the confirmed artifact against PLAN_LANG before the follow-up
   // check: a non-compliant plan must be rewritten, not merely continued (#2278).
-  blockOnPlanLang(sid, stage);
+  blockOnPlanRelint(sid, stage);
   const nextSkill = nextSkillFor(stage);
   for (let i = confirmIdx + 1; i < content.length; i++) {
     const item = content[i];
@@ -129,7 +136,7 @@ function continuation(sid, markers, tail, deadline) {
     timeoutMsFor: () => Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, deadline - Date.now() - PROBE_RESERVE_MS),
   });
   if (!pick) return;
-  blockOnPlanLang(sid, pick.stage);
+  blockOnPlanRelint(sid, pick.stage);
   const { writeContinuationMark } = require("./lib/turn-marker");
   const written = writeContinuationMark(sid, pick.stage, {
     anchorUuid: anchor.uuid, absPath: pick.absPath, link: CC.linkKey(pick.link), artifactSha: pick.sha,

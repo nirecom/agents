@@ -14,6 +14,7 @@ const { withLock } = require("./jsonl-rotating-log");
 const { getPlansArtifactPath } = require("./plans-artifact-registry");
 
 const PRESSURE_SUFFIX = "progress-pressure.json";
+const CURRENT_STATE_SECTION = "Current state";
 const TEMPLATE_PATH = path.join(__dirname, "..", "..", "templates", "progress.md");
 
 function stateIo() {
@@ -216,6 +217,7 @@ function bumpUpdateProgress(sid) {
 
 module.exports = {
   PRESSURE_SUFFIX,
+  CURRENT_STATE_SECTION,
   TEMPLATE_PATH,
   isValidSid,
   readPressure,

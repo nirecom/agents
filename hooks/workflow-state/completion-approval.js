@@ -275,9 +275,10 @@ function evaluateCompletionApproval(sessionId, step, state) {
   // was approved against (<owner-sid>-<suffix>.md), so the hash still verifies. A record
   // without an owner is resolved the way the reader would resolve it (#2633).
   const artifactSessionId = record.artifact_session_id || resolveOwnerSid(sessionId, step, state);
-  // The reader prefers the session's own file (plan-artifact-owner), so once one exists a record
-  // still bound to another session's file approves content nobody reads: it needs re-approval.
-  if (artifactSessionId !== sessionId && computeArtifactSha(sessionId, step)) {
+  // A record bound to a file other than the existing one the reader resolves (plan-artifact-owner)
+  // approves content nobody reads: it needs re-approval.
+  const readerSid = resolveOwnerSid(sessionId, step, state);
+  if (artifactSessionId !== readerSid && computeArtifactSha(readerSid, step)) {
     return { approved: false, code: "artifact-hash-mismatch", source };
   }
   const currentSha = computeArtifactSha(artifactSessionId, step);

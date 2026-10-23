@@ -2,17 +2,9 @@
 # tests/hooks/feature-1701-workflow-gate-code-size/infra-and-config.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
-#
-# Fragment of tests/hooks/feature-1701-workflow-gate-code-size.sh — sourced by the
-# parent, not run directly. Owns cases 8-14: infrastructure failure handling
-# (missing bash, missing script, unexpected exit, timeout = the only fail-open
-# path) and CODE_FILE_EXTENSIONS resolution (.env authoritative, process.env
-# ignored, no .env at all).
-#
-# Depends on the parent for: TMPDIR_BASE, fresh_workflow_dir, setup_repo,
-# make_plain_cfg_root, make_marker_cfg_root, write_complete_state,
-# make_lines, build_commit_payload, run_hook, assert_approve, assert_block,
-# HOOK_OUT, pass, fail, skip.
+# Fragment sourced by tests/hooks/feature-1701-workflow-gate-code-size.sh (not run directly): cases 8-14,
+# infrastructure failures (timeout = the only fail-open path) and CODE_FILE_EXTENSIONS resolution.
+# Every helper it calls (run_hook, assert_*, setup_repo, ...) is defined by that parent.
 
 # 8. bash not on PATH -> block (infrastructure error, NOT fail-open).
 test_8_bash_missing_blocks() {
@@ -103,8 +95,16 @@ test_11_timeout_fail_open() {
     mkdir -p "$repo/bin"
     make_lines 501 > "$repo/bin/big.js"
     git -C "$repo" add bin/big.js
+    local saved_retries="$HOOK_TIMEOUT_RETRIES"
+    HOOK_TIMEOUT_RETRIES=0
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
-    assert_approve "11: review-code-size timeout -> approve (only fail-open path)"
+    HOOK_TIMEOUT_RETRIES="$saved_retries"
+    assert_approve "11: review-code-size timeout -> approve (only fail-open path)" || return
+    if echo "$HOOK_OUT" | grep -q 'timed out'; then
+        pass "11: approve comes from the timeout fail-open diagnostic"
+    else
+        fail "11: approve without the timeout diagnostic" "$HOOK_OUT"
+    fi
 }
 
 # 12. process.env CODE_FILE_EXTENSIONS is ignored by gate — only .env is authoritative.

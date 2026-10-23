@@ -62,18 +62,100 @@ function confirmViaHook(sid, step) {
 const approvalOf = (sid, step) => ((WS().readState(sid) || {}).plan_approvals || {})[step] || null;
 const statusOf = (sid, step) => (((WS().readState(sid) || {}).steps || {})[step] || {}).status;
 
-caseBegin("owner-resolver-own-upstream-missing", "hooks/workflow-state/plan-artifact-owner.js");
-F.run("resolver basic", () => {
+// #2631 SSOT: an existing candidate file wins even over the own file; a declared owner without a
+// file is the write target (owner-missing); the own file is never a fallback.
+caseBegin("owner-resolver-upstream-first-matrix", "hooks/workflow-state/plan-artifact-owner.js");
+F.run("resolver matrix", () => {
   F.check("resolvePlanArtifactOwner is exported", typeof owner().resolvePlanArtifactOwner === "function", "missing export");
+  const R = (sid, kind, st) => owner().resolvePlanArtifactOwner(sid, kind, st);
+  const is = (r, via, sid, kind, exists) => r.via === via && r.ownerSid === sid && r.exists === exists && F.samePath(r.path, F.planPath(sid, kind));
   const { U, D } = downstream(["outline"]);
-  let r = owner().resolvePlanArtifactOwner(D, "outline");
-  F.check("upstream-only -> via upstream, owner U", r.via === "upstream" && r.ownerSid === U && r.exists === true &&
-    F.samePath(r.path, F.planPath(U, "outline")), JSON.stringify(r));
+  let r = R(D, "outline");
+  F.check("upstream only -> via upstream, owner U", is(r, "upstream", U, "outline", true), JSON.stringify(r));
   F.writePlan(D, "outline", F.body("outline", "own-D"));
-  r = owner().resolvePlanArtifactOwner(D, "outline");
-  F.check("own file wins over upstream", r.via === "own" && r.ownerSid === D && F.samePath(r.path, F.planPath(D, "outline")), JSON.stringify(r));
-  r = owner().resolvePlanArtifactOwner(D, "detail");
-  F.check("nothing anywhere -> missing, own path", r.via === "missing" && r.ownerSid === D && r.exists === false, JSON.stringify(r));
+  r = R(D, "outline");
+  F.check("own + upstream both exist -> upstream wins", is(r, "upstream", U, "outline", true), JSON.stringify(r));
+  r = R(D, "detail");
+  F.check("neither exists -> U's path, exists:false, via owner-missing", is(r, "owner-missing", U, "detail", false), JSON.stringify(r));
+  F.writePlan(D, "intent", F.body("intent", "own-D"));
+  r = R(D, "intent");
+  F.check("own file only with declared upstream -> U's path, exists:false, owner-missing (no own fallback)", is(r, "owner-missing", U, "intent", false), JSON.stringify(r));
+  const S = F.newSid();
+  F.writeState(S, null, []);
+  r = R(S, "outline");
+  F.check("no upstream, no file -> own path, via missing", is(r, "missing", S, "outline", false), JSON.stringify(r));
+  F.writePlan(S, "outline", F.body("outline", "own-S"));
+  r = R(S, "outline");
+  F.check("no upstream, own file -> own", is(r, "own", S, "outline", true), JSON.stringify(r));
+  r = R(D, "outline", null);
+  F.check("state null -> own only (U's existing file ignored)", is(r, "own", D, "outline", true), JSON.stringify(r));
+  r = R(D, "detail", null);
+  F.check("state null, no own file -> own path, via missing", is(r, "missing", D, "detail", false), JSON.stringify(r));
+});
+caseEnd();
+
+caseBegin("owner-resolver-follows-upstream-chain-to-root", "hooks/workflow-state/plan-artifact-owner.js");
+F.run("resolver chain D -> M -> R", () => {
+  const R = (sid, kind) => owner().resolvePlanArtifactOwner(sid, kind);
+  const chain = () => {
+    const Rt = F.newSid();
+    const M = F.newSid();
+    const D = F.newSid();
+    F.writeState(Rt, null, []);
+    F.writeState(M, { upstream_session_id: Rt, upstream_copy_seq: 0 }, []);
+    F.writeState(D, { upstream_session_id: M, upstream_copy_seq: 0 }, []);
+    return { Rt, M, D };
+  };
+  let c = chain();
+  F.writePlan(c.Rt, "outline", F.body("outline", "R"));
+  F.writePlan(c.M, "outline", F.body("outline", "M"));
+  let r = R(c.D, "outline");
+  F.check("root's file exists -> root wins over the intermediate", r.ownerSid === c.Rt && r.exists === true && r.via === "root" && F.samePath(r.path, F.planPath(c.Rt, "outline")), JSON.stringify(r));
+  c = chain();
+  F.writePlan(c.M, "outline", F.body("outline", "M"));
+  r = R(c.D, "outline");
+  F.check("only the intermediate's file exists -> M", r.ownerSid === c.M && r.exists === true && F.samePath(r.path, F.planPath(c.M, "outline")), JSON.stringify(r));
+  c = chain();
+  r = R(c.D, "outline");
+  F.check("no file anywhere -> root's path, owner-missing", r.ownerSid === c.Rt && r.exists === false && r.via === "owner-missing" && F.samePath(r.path, F.planPath(c.Rt, "outline")), JSON.stringify(r));
+  const A = F.newSid();
+  const B = F.newSid();
+  F.writeState(A, { upstream_session_id: B, upstream_copy_seq: 0 }, []);
+  F.writeState(B, { upstream_session_id: A, upstream_copy_seq: 0 }, []);
+  r = R(A, "outline");
+  F.check("cycle in the upstream chain terminates at B (owner-missing)", r.ownerSid === B && r.exists === false && r.via === "owner-missing", JSON.stringify(r));
+  const Rt2 = F.newSid();
+  const M2 = F.newSid();
+  const D2 = F.newSid();
+  F.writePlan(Rt2, "outline", F.body("outline", "R2"));
+  F.writeState(M2, { upstream_session_id: "bad id/..", upstream_copy_seq: 0 }, []);
+  F.writeState(D2, { upstream_session_id: M2, upstream_copy_seq: 0 }, []);
+  r = R(D2, "outline");
+  F.check("invalid sid in the chain stops the walk at M", r.ownerSid === M2 && r.exists === false && r.via === "owner-missing" && !String(r.path).includes("bad id"), JSON.stringify(r));
+});
+caseEnd();
+
+caseBegin("owner-resolver-ignores-invalid-candidate-sids","hooks/workflow-state/plan-artifact-owner.js");
+F.run("resolver invalid candidates", () => {
+  const R = (sid, kind) => owner().resolvePlanArtifactOwner(sid, kind);
+  const D = F.newSid();
+  F.writeState(D, { upstream_session_id: D }, []);
+  let r = R(D, "outline");
+  F.check("upstream == own sid -> no candidate, own path missing", r.via === "missing" && r.ownerSid === D, JSON.stringify(r));
+  const X = F.newSid();
+  const xBody = F.body("outline", "X-valid");
+  F.writePlan(X, "outline", xBody);
+  const D2 = F.newSid();
+  F.writeState(D2, { upstream_session_id: "bad id/.." }, [F.approvalEvent("outline", X, F.sha(xBody))]);
+  r = R(D2, "outline");
+  F.check("invalid upstream skipped, valid approval record used", r.via === "approval-record" && r.ownerSid === X && r.exists === true, JSON.stringify(r));
+  r = R(D2, "detail");
+  F.check("invalid upstream is no candidate: detail stays the own path, never owner-missing", r.via === "missing" && r.ownerSid === D2 && !String(r.path).includes("bad id"), JSON.stringify(r));
+  const U3 = F.newSid();
+  const D3 = F.newSid();
+  F.writeState(D3, { upstream_session_id: U3 }, [F.approvalEvent("outline", F.newSid(), "a".repeat(64))]);
+  r = R(D3, "outline");
+  F.check("record + upstream declared, no file -> owner-missing targets the upstream", r.via === "owner-missing" && r.ownerSid === U3, JSON.stringify(r));
 });
 caseEnd();
 
@@ -179,34 +261,47 @@ F.run("downstream outline re-approval via workflow-mark.js subprocess", () => {
 });
 caseEnd();
 
-caseBegin("confirm-prefers-own-artifact", "hooks/workflow-mark/confirm-approval-handler.js");
-F.run("own artifact preferred", () => {
-  const { D } = downstream(["outline"]);
+// #2631 SSOT: with both files present the upstream's file is the one read, so it is the one hashed.
+caseBegin("confirm-prefers-upstream-artifact-over-own", "hooks/workflow-mark/confirm-approval-handler.js");
+F.run("upstream artifact preferred", () => {
+  const { U, D } = downstream(["outline"]);
   F.writePlan(D, "outline", F.body("outline", "own-D"));
   const msg = confirm(D, "outline");
   const rec = approvalOf(D, "outline");
-  F.check("artifact_session_id is D", rec && rec.artifact_session_id === D, msg);
-  F.check("no upstream-owner note", !msg.includes("owned by session upstream") && msg.includes("hash-status: recorded"), msg);
+  F.check("artifact_session_id is U, not D", rec && rec.artifact_session_id === U && rec.artifact_hash_status === "recorded", msg + " " + JSON.stringify(rec));
+  F.check("recorded sha is U's file", rec && rec.artifact_sha256 === F.sha(fs.readFileSync(F.planPath(U, "outline"), "utf8")), JSON.stringify(rec));
+  const v = CA().evaluateCompletionApproval(D, "outline", WS().readState(D));
+  F.check("evaluation approved", v.approved === true, JSON.stringify(v));
+  const L = downstream([]);
+  F.writePlan(L.D, "outline", F.body("outline", "legacy-own"));
+  confirm(L.D, "outline");
+  const lrec = approvalOf(L.D, "outline");
+  F.check("upstream without a file -> approval never binds to the own file (uncomputable-at-record)",
+    lrec && lrec.artifact_session_id !== L.D && lrec.artifact_hash_status === "uncomputable-at-record", JSON.stringify(lrec));
 });
 caseEnd();
 
-caseBegin("own-artifact-written-after-upstream-bound-approval-needs-reapproval", "hooks/workflow-state/completion-approval.js");
-F.run("stale upstream-bound approval", () => {
+caseBegin("own-artifact-written-after-upstream-bound-approval-keeps-it-valid", "hooks/workflow-state/completion-approval.js");
+F.run("upstream-bound approval survives a later own file", () => {
   const { U, D } = downstream(["outline"]);
   confirm(D, "outline");
   F.check("approval bound to U", (approvalOf(D, "outline") || {}).artifact_session_id === U, JSON.stringify(approvalOf(D, "outline")));
   F.writePlan(D, "outline", F.body("outline", "own-D-later"));
+  const r = owner().resolvePlanArtifactOwner(D, "outline");
+  F.check("reader stays on U's file", r.ownerSid === U && r.exists === true && F.samePath(r.path, F.planPath(U, "outline")), JSON.stringify(r));
   const v = CA().evaluateCompletionApproval(D, "outline", WS().readState(D));
-  F.check("stale approval -> artifact-hash-mismatch", v.approved === false && v.code === "artifact-hash-mismatch", JSON.stringify(v));
-  let threw = null;
-  try { WS().markStep(D, "outline", "complete"); } catch (e) { threw = e; }
-  F.check("markStep(complete) refused with the mismatch code", threw !== null && threw.code === "artifact-hash-mismatch",
-    threw ? `${threw.code} ${threw.message}` : "no throw");
-  F.check("outline stays not complete", statusOf(D, "outline") !== "complete", statusOf(D, "outline"));
+  F.check("approval stays valid after D creates its own file", v.approved === true, JSON.stringify(v));
   confirm(D, "outline");
-  F.check("re-approval binds to D", (approvalOf(D, "outline") || {}).artifact_session_id === D, JSON.stringify(approvalOf(D, "outline")));
+  F.check("re-approval binds to U", (approvalOf(D, "outline") || {}).artifact_session_id === U, JSON.stringify(approvalOf(D, "outline")));
   WS().markStep(D, "outline", "complete");
-  F.check("completes after re-approval", statusOf(D, "outline") === "complete", statusOf(D, "outline"));
+  F.check("completes", statusOf(D, "outline") === "complete", statusOf(D, "outline"));
+  // Mismatch control: a record bound to D's own file while the reader resolves U's is stale.
+  const M = downstream(["outline"]);
+  const own = F.body("outline", "own-M");
+  F.writePlan(M.D, "outline", own);
+  F.writeState(M.D, { upstream_session_id: M.U, upstream_copy_seq: 0 }, [F.approvalEvent("outline", M.D, F.sha(own))]);
+  const vm = CA().evaluateCompletionApproval(M.D, "outline", WS().readState(M.D));
+  F.check("record bound to the own file while U's is read -> artifact-hash-mismatch", vm.approved === false && vm.code === "artifact-hash-mismatch", JSON.stringify(vm));
 });
 caseEnd();
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // bin/plan-artifact-path --stage <intent|outline|detail> [--session <sid>] [--plans-dir <dir>]
-// Prints the absolute path of the plan artifact the session reads, one line, after resolving its
-// owner (hooks/workflow-state/plan-artifact-owner.js): a session adopted via resume-session --from
-// reads the artifact its upstream wrote. When no candidate exists the session's own path is
-// printed with exit 0, so the reader decides "absent" itself. The session defaults to the current
+// Prints the absolute path of the plan artifact the session reads and writes, one line, after resolving
+// its owner (hooks/workflow-state/plan-artifact-owner.js): a session adopted via resume-session --from
+// reads and writes the artifact its upstream wrote (#2631), even before that file exists (the write
+// target). The printed path may not exist (exit 0), so the reader decides "absent" itself. The session defaults to the current
 // session (hooks/workflow-state resolveSessionId). Read-only.
 // Exit: 0 path printed; 1 no usable session id; 2 usage error.
 "use strict";

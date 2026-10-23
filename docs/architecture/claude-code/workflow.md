@@ -48,7 +48,7 @@ which steps each deliverable type requires, of the delivery path that drops a st
 `push_branch` and `cleanup`; the order never changes), and of each step's commit-gate attribute
 (`required`, `exempt`, or `deferred-in-worktree`, consumed by `hooks/workflow-gate/commit-gate-steps.js`).
 `effective-state.js` reads the table once per entrypoint instead of each consumer computing its own
-wf-meta check. A recorded state field outranks the live config, so flipping `ENFORCE_WORKTREE`
+`wf-meta` check. A recorded state field outranks the live config, so flipping `ENFORCE_WORKTREE`
 mid-session never changes what the session owes; only the `WORKFLOW_OFF` marker overrides the PM type.
 
 ## State file
@@ -213,10 +213,10 @@ Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rej
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its
 record, so a stale approval can never re-validate a later re-completion.
 
-The hash is computed on the plan artifact's **owner**, which after an inheritance is the upstream's
-`<upstream-sid>-<stage>.md`, not the current session's. `resolvePlanArtifactOwner`
-(`plan-artifact-owner.js`, CLI `bin/plan-artifact-path`) is the SSOT: own file, recorded
-`artifact_session_id`, past approval events, then `upstream_session_id`. Re-approval records that owner.
+The hash is computed on the plan artifact's **owner**, which after an inheritance is the root of the
+`upstream_session_id` chain; the downstream reads AND writes `<root-sid>-<stage>.md`, never its own (#2631). `resolvePlanArtifactOwner`
+(`plan-artifact-owner.js`, CLI `bin/plan-artifact-path`; its header owns the candidate order) takes the recorded owner, then the root, whose file exists;
+none existing -> the root's path as the write target. The own file is used only by a session with no declared owner. Re-approval records that owner.
 
 ### Inheritance is a state copy (#2304, #2633)
 
