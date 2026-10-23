@@ -127,3 +127,34 @@ JS
 }
 
 _cp_run
+
+# #2730: --list-categories prints CATEGORIES one per line (the supervisor prompt
+# enumerates exactly what the validator accepts); --mode is unaffected.
+# NOTE: RED until write-code adds the CATEGORIES export and --list-categories.
+_cp_list_categories_run() {
+    echo ""
+    echo "--- codex-parse --list-categories (#2730) ---"
+    local want got rc exported
+    want="$(printf '%s\n' intent outline detail workflow code test security performance env other)"
+    rc=0
+    got="$(run_with_timeout 30 node "$PARSE_MODULE" --list-categories 2>/dev/null </dev/null)" || rc=$?
+    got="$(printf '%s' "$got" | tr -d '\r')"
+    assert_eq "cp --list-categories: exit 0" "0" "$rc"
+    assert_eq "cp --list-categories: one category per line, CATEGORIES order" "$want" "$got"
+    exported="$(run_with_timeout 30 node -e '
+      const m = require(process.argv[1]);
+      process.stdout.write(Array.isArray(m.CATEGORIES) ? m.CATEGORIES.join("\n") : "NOT-EXPORTED");
+    ' "$PARSE_MODULE" 2>/dev/null)"
+    assert_eq "cp CATEGORIES export equals --list-categories output (SSOT)" "$got" "$exported"
+    # Every listed category is accepted by the validator (CPR-ORTH: list == accept set).
+    local B='<!-- begin-codex-output -->' E='<!-- end-codex-output -->' c bad="" po of
+    for c in intent outline detail workflow code test security performance env other; do
+        po="$(printf '%s\n%s\n%s\n' "$B" "{\"categories\":[\"$c\"],\"severity\":\"notice\",\"detail\":\"probe $c\"}" "$E" \
+            | run_with_timeout 30 node "$PARSE_MODULE" --mode alert 2>/dev/null)"
+        of="$(printf '%s\n' "$po" | sed -n 's/^OUTFILE: //p' | head -1)"
+        if [ -n "$of" ]; then rm -f "$of"; else bad="$bad $c"; fi
+    done
+    assert_eq "cp every listed category is accepted by --mode alert" "" "$bad"
+}
+
+_cp_list_categories_run

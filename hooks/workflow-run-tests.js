@@ -27,10 +27,19 @@ const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 const HOOK_NAME = "workflow-run-tests";
 const MAX_TRIGGER_LEN = 300;
 
-// `systemMessage` is HUMAN-FACING DIAGNOSTICS ONLY: nothing may read it back as a
-// judgement input (W-3 / Risk 10). The workflow-state file is the only machine output.
+// message: { head, detail } — the fact line goes to systemMessage, the explanation to the
+// model via additionalContext. DIAGNOSTICS ONLY: nothing may read either back as a judgement
+// input (W-3 / Risk 10). The workflow-state file is the only machine output.
 function done(message) {
-  console.log(JSON.stringify(message ? { systemMessage: message } : {}));
+  if (!message) {
+    console.log(JSON.stringify({}));
+    process.exit(0);
+  }
+  const { withConvLang } = require("./lib/conv-lang");
+  console.log(JSON.stringify({
+    systemMessage: message.head,
+    hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: withConvLang(message.detail) },
+  }));
   process.exit(0);
 }
 

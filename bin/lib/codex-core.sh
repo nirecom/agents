@@ -4,7 +4,7 @@
 #
 # Provides: codex_core_init, codex_core_adversarial_preamble, codex_core_check_cli,
 #           codex_core_run, codex_core_log, codex_core_emit_failed,
-#           codex_core_credential_shaped_path, codex_core_input_refused
+#           codex_core_credential_shaped_path, codex_core_input_refused, codex_lang_line
 #
 # Re-exports codex_timeout_resolve / CODEX_TIMEOUT_SECS_DEFAULT from lib/codex-timeout.sh
 # so a script that already sources this library needs no second source line.
@@ -13,6 +13,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/codex-timeout.sh"
 # Re-exports the guard functions and CODEX_INPUT_CHAR_LIMIT from lib/cli-exec-guard.sh.
 # shellcheck source=cli-exec-guard.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/cli-exec-guard.sh"
+# shellcheck source=codex-lang.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/codex-lang.sh"
 
 # codex_core_init <label>
 # Sets: CODEX_LABEL, LOG_DIR, START_TS, START_EPOCH, SESSION_ID, BRANCH
@@ -41,11 +43,15 @@ codex_core_init() {
   SESSION_ID="${SESSION_ID//\//_}"
 }
 
-# codex_core_adversarial_preamble <artifact-kind>
-# Echoes the adversarial preamble text for use as a prompt prefix.
+# codex_core_adversarial_preamble <artifact-kind> [conv|plan]
+# Echoes the adversarial preamble text for use as a prompt prefix; with a surface
+# argument, the codex_lang_line for it follows on the next line when non-empty.
 codex_core_adversarial_preamble() {
-  local artifact_kind="${1:-artifact}"
+  local artifact_kind="${1:-artifact}" lang_line=""
   printf 'The following %s was authored by Claude (a different LLM, not by a human). Your job is to provide an independent, adversarial second opinion. Do not assume Claude'\''s reasoning is correct. Actively look for blind spots and issues Claude may have missed. Be skeptical of design choices and challenge them.\n' "$artifact_kind"
+  [ -n "${2:-}" ] && lang_line="$(codex_lang_line "$2")"
+  [ -n "$lang_line" ] && printf '%s\n' "$lang_line"
+  return 0
 }
 
 # Cap on the NFR text a project can push into every review prompt. Validated

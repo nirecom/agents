@@ -33,7 +33,7 @@ function present(s, opts) {
 const readReceipt = (sid, stage) => { try { return JSON.parse(fs.readFileSync(X.receiptPath(sid, stage), "utf8")); } catch (_) { return null; } };
 const noReceipt = (s, stage) => !X.receiptExists(s.sid, stage || s.stage);
 // blocks: the continue block alone (gates controls); continues: the block plus the anchored receipt.
-const blocks = (r) => r.rc === 2 && r.json.decision === "block" && r.reason.startsWith(CONT);
+const blocks = (r) => r.rc === 2 && r.json.decision === "block" && r.reason.includes(CONT);
 function continues(r, s) {
   const m = readReceipt(s.sid, s.stage);
   return blocks(r) && !!m && m.anchorUuid === "a-anchor";
@@ -175,7 +175,7 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
   const s = X.sessionAt("outline", { body: "# Outline\n\n## Approach\n\nThis plan body is written entirely in English words.\n\n## Issues\n\n- #1 fixture\n" });
   const r = X.runStop(s.sid, present(s), { env: { PLAN_LANG: "japanese" } });
   check("N9 relint violation — a plan-lang block, not the continuation, no receipt",
-    r.rc === 2 && /plan-lang/.test(r.reason) && !r.reason.startsWith(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
+    r.rc === 2 && /plan-lang/.test(r.reason) && !r.reason.includes(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
 }
 
 // N11 (two stages at once) and N12 (a stale continuation mark) are gone with the mark: the
@@ -206,7 +206,7 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
   const r = X.runStop(s.sid, present(s, { extraMarkers: [{ stage: "outline", plan: other.plan }] }));
   const ok = twin("outline", "N18 two marker paths");
   check("N18 two marker paths for one stage — [confirm-plan] plan-link: block (other file's link not shown), no continuation, no receipt",
-    ok && r.rc === 2 && r.reason.startsWith("[confirm-plan] plan-link:") && !r.reason.startsWith(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
+    ok && r.rc === 2 && r.reason.startsWith("[confirm-plan] plan-link:") && !r.reason.includes(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
 }
 
 // N20: the target exists but cannot be read, so computeArtifactSha is null.
@@ -215,7 +215,7 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
   const r = X.runStop(s.sid, present(s), { preloads: [UNREADABLE], env: { CC_UNREADABLE: s.plan } });
   const ok = twin("outline", "N20 sha unavailable");
   check("N20 sha unavailable — exit 0, no output, no continuation, no receipt",
-    ok && r.rc === 0 && r.out === "" && !r.reason.startsWith(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
+    ok && r.rc === 0 && r.out === "" && !r.reason.includes(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
 }
 
 // T6: the clock origin is moved back so no probe budget remains — planGateState is ERROR without
@@ -239,7 +239,7 @@ function runPre(s, tpath) {
   let json = {};
   try { json = r.stdout ? JSON.parse(r.stdout) : {}; } catch (_) { json = { unparsed: r.stdout }; }
   const deny = (json.hookSpecificOutput || {}).permissionDecision === "deny";
-  const admitted = !deny && r.status === 0 && json.decision !== "block" && String(json.systemMessage || "").includes("Click Allow");
+  const admitted = !deny && r.status === 0 && json.decision !== "block" && /^\[(intent|outline|detail)\] /.test(String(json.systemMessage || ""));
   return { rc: r.status, json, deny, admitted };
 }
 
@@ -268,7 +268,7 @@ function runPre(s, tpath) {
   const se = scene(s, [BASH("ls", "b9")]);
   const r = X.runStop(s.sid, X.writeTranscript(s.sid, se));
   check("N21 text + Bash in the anchor entry — Stop: exit 0, no output, no continue reason, no receipt",
-    ctl && r.rc === 0 && r.out === "" && !r.reason.startsWith(CONT) && noReceipt(s), show({ control: ctl, rc: r.rc, out: r.out, receipt: readReceipt(s.sid, "outline") }));
+    ctl && r.rc === 0 && r.out === "" && !r.reason.includes(CONT) && noReceipt(s), show({ control: ctl, rc: r.rc, out: r.out, receipt: readReceipt(s.sid, "outline") }));
   const p = runPre(s, echoTurn(s, se));
   check("N21 text + Bash in the anchor entry — the same-turn CONFIRM echo is denied, not admitted",
     ctl && p.deny && !p.admitted, show({ control: ctl, rc: p.rc, pre: p.json }));

@@ -61,7 +61,7 @@ function normalizeValue(v) {
 
 // Shape guard for any language value spliced into injected prompt context.
 // Not an allowlist of languages — free-text names in any script pass
-// ("brazilian portuguese", "español", "日本語"); anything carrying injection
+// ("brazilian portuguese", Spanish or Japanese in native script); anything carrying injection
 // framing (parens, colons, newlines, backticks, $, quotes) or over 40 chars does
 // not. \p{M} keeps decomposed accents and Vietnamese tone marks legal.
 // Applied to the already trimmed+lowercased value.
@@ -92,16 +92,21 @@ function loadLangConfig(surface, options) {
   return "any";
 }
 
-// Proactive PLAN_LANG directive for planning contexts. SSOT for the plan-artifact
-// language instruction consumed by the UserPromptSubmit hook and subagent-start.
-// Distinct from conv-lang's "Respond to the user..." — targets plan files, not the
-// conversation reply. Returns null when PLAN_LANG is noop (unset/""/any/control-char).
+// Proactive PLAN_LANG directive for planning contexts; the wording lives in the PLAN_LANG line of
+// lang-directives.txt. Distinct from conv-lang's "Respond to the user..." — targets plan files,
+// not the conversation reply. resolvePlanLang() returns the guarded name, or null when PLAN_LANG
+// is noop (unset/""/any/control-char) or not a plausible language name.
 // Note the asymmetry with CONV_LANG: "english" is a valid directive here (not null).
-function getPlanLangInjection() {
+function resolvePlanLang() {
   const lang = loadLangConfig("plan");
   if (classifyPolicy(lang) === "noop") return null;
   if (!isPlausibleLanguageName(lang)) return null;
-  return `Write planning artifacts (files under the plans directory) in ${lang}.`;
+  return lang;
+}
+
+function getPlanLangInjection() {
+  const lang = resolvePlanLang();
+  return lang ? require("./lang-directive").renderDirective("PLAN_LANG", lang) : null;
 }
 
 // Raw CODE_LANG_EXCLUDE string (semicolon-separated absolute paths / globs).
@@ -115,4 +120,4 @@ function loadCodeLangExclude() {
   return typeof v === "string" ? v : "";
 }
 
-module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES, isPlausibleLanguageName, getPlanLangInjection, loadCodeLangExclude };
+module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES, isPlausibleLanguageName, resolvePlanLang, getPlanLangInjection, loadCodeLangExclude };

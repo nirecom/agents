@@ -2,22 +2,10 @@
 # tests/hooks/feature-1665-run-outcome/c-crash-no-contract.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/outcome.js
 # Tags: workflow, run-outcome, tombstone, fail-safe, hook, TL2, scope:issue-specific
-#
-# TL2 — real hook process, real workflow-state file.
-#
-# SCOPE PIN (read before changing b-direct-run-failure.sh): the approved outline's
-# rule (3) — "a non-zero exit fail-safe writes NO outcome" — applies to THIS case
-# and ONLY this case: a non-zero exit with NO contract at all (crash, interrupt,
-# shell error, forced kill). It does NOT apply to a run that emitted a valid
-# FAIL>0 contract and then exited 1; that run reported itself as failed and the
-# report is kept (see b-direct-run-failure.sh B1). The clause's purpose is "do not
-# fabricate an outcome for a failure nobody observed", not "discard an observed
-# failure". This comment is the boundary between the two cases; if a future change
-# makes B1 and C1 agree, one of them has been misread.
-#
-# The second half of this file pins the TOMBSTONE: null is not "leave the old value
-# alone", it is "clear it". A stale run_outcome:"fail" surviving a later, silent run
-# would keep the resume cascade firing forever on evidence that no longer exists.
+# TL2 (real hook, real state file). SCOPE PIN: "non-zero exit writes NO outcome" applies only to a
+# run with NO contract (crash/kill); a FAIL>0 contract + exit 1 keeps its report (b-direct-run-failure.sh B1).
+# Second half pins the TOMBSTONE: null clears a stale run_outcome, so the resume cascade cannot fire forever.
+# #2731 S3-5: the demotion systemMessage is the fact line `[run_tests] pending (<reason>)`.
 
 C_CRASH_STDOUT="Running tests/alpha.sh
 bash: line 1: node: command not found
@@ -72,5 +60,5 @@ RUN_CONTRACT: PASS=3 FAIL=2 SKIP=0 EXECUTED=5" >/dev/null
     # visible; the outcome axis must not have quietly replaced it.
     local msg
     msg="$(drive_hook "$RUNALL_CMD" 0 "f1665-c5" "no contract here")"
-    assert_contains "C5/systemMessage-preserved" "run_tests demoted to pending" "$msg"
+    assert_contains "C5/systemMessage-preserved" "[run_tests] pending (contract-absent)" "$msg"
 }

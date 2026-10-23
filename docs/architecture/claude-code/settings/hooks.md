@@ -82,7 +82,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
-- `show-plan-link.js` — PostToolUse on the edit-write tool class and `assemble-mandatory.sh` commands. Runs when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It records the project host (from the hook input's `cwd`), publishes the file through plan-sync, then always emits `hookSpecificOutput.additionalContext` (`[plan-link]`): the blob URL plus the local path, or the local path plus a reason, for the model to write in its response text. The `systemMessage` breadcrumb (`Plan file: <local path>` plus a `[plan-sync]` status line) is added only when there is no URL for a reason other than the project-host verdict (`host-mismatch`, `no-project-host`). Fail-open: a sync failure never aborts the hook or the workflow. Design and setup: [../plan-sync.md](../plan-sync.md).
+- `show-plan-link.js` — PostToolUse on the edit-write tool class and `assemble-mandatory.sh` commands. Runs when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It records the project host (from the hook input's `cwd`), publishes the file through plan-sync, then always emits `hookSpecificOutput.additionalContext` (`[plan-link]`): the blob URL plus the local path, or the local path plus a reason, for the model to write in its response text. The `systemMessage` breadcrumb (`[plan-file] <local path>` plus a `[plan-sync]` status line) is added only when there is no URL for a reason other than the project-host verdict (`host-mismatch`, `no-project-host`). Fail-open: a sync failure never aborts the hook or the workflow. Design and setup: [../plan-sync.md](../plan-sync.md).
 - `confirm-checkpoint.js` (PreToolUse, CONFIRM sentinel) — reaches the dialog only on a presentation receipt (#2729, [glossary](../../../glossary/internal.md)): the receipt the Stop hook wrote for this stage must still match today's plan path, link (published URL, or the local path where no URL can be made) and whole-file content sha, and the judgment spends it, so two concurrent echoes cannot both pass. Anything it cannot verify denies with a present-again reason (`no-receipt`, `unpublished`, `unreadable-receipt`, a path/link/content mismatch, …), with no deny cap: a third echo is denied like the first. The one fail-open is a hook input it cannot read, where not even the sentinel is known. Otherwise it emits the user-facing `systemMessage` plus `additionalContext` (`[plan-link]`); it never emits allow. The off waiver comes from `hooks/lib/confirm-gate/plan-gate.js` (`planGateState`), the same predicate `next-step --gate` uses; `ERROR` shows the dialog, and intent has no waiver. Where plan-sync can publish, an unpublished plan is denied before any receipt is looked at.
 - `gate-plan-skill-advance.js` (PreToolUse, matcher: `Skill`) — denies `make-outline-plan` / `make-detail-plan` / `write-tests` while the preceding plan stage's approval is `unapproved` (#2277); every other state, including unreadable ones, passes silently. A deterrent only — the side-effect owners (`run-completion.sh`, the completion sentinels) fail closed.
 - `block-send-user-file.js` (PreToolUse, matcher: `SendUserFile`) — denies the tool so a plan is shown by its plan-link line in the response text, never sent as a file. Any other tool or unreadable stdin passes with no output.
@@ -133,7 +133,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   (at most one `planGateState` probe inside a 4000 ms budget), it blocks once so the CONFIRM
   echo follows in the same turn. Logic: `hooks/lib/confirm-continuation.js`. Fail-open
   throughout.
-- `hooks/lib/transcript-reader.js` — the one transcript reader of the Stop and PreToolUse hooks (#2610). At Stop it waits until the transcript's last text block agrees with `last_assistant_message`, which only confirms the flush and is never judged as the body; a flush that never agrees reads as `undecidable` and the caller fails open. `readPreviousTurn` splits the previous and current turns for `confirm-checkpoint.js`.
+- `hooks/lib/transcript-reader.js` — the one transcript reader of the Stop and PreToolUse hooks (#2610). At Stop it waits until the transcript's last text block agrees with `last_assistant_message`, which only confirms the flush and is never judged as the body; a flush that never agrees reads as `undecidable` and the caller fails open. `splitTurns` and `isRealUserPrompt` give the turn boundaries that `lib/user-dialog-turn.js` and `lib/plan-link-turn-check.js` read.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
   Detects test runner commands over the shared command IR (`hooks/lib/command-ir.js` `parse()` +
@@ -242,6 +242,8 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` for every subagent type
   whenever the policy is not noop, so a mis-dispatched `general-purpose` planner still receives
   it). Fail-open: any error yields `{}`.
+  Wording SSOT, every injection point and the autonomous-run re-injection (`conv-lang-reinject.js`):
+  [lang-directives.md](../lang-directives.md).
 - `codegraph-context-inject.js` (UserPromptSubmit) — forwards the upstream CodeGraph prompt-hook's
   OUTPUT as `additionalContext`, without ever running `codegraph install` (which would rewrite
   `~/.claude/CLAUDE.md` and register the hook itself). Gated three ways before it spawns anything:
@@ -324,8 +326,9 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   text in `hooks/lib/` rather than `rules/*.md` is what makes it cost zero context while the flag is
   off. Which model is driving the session is resolved once at SessionStart from the hook payload's
   `model` field, and frozen in the session state file (`session_model` + `verbose_prompt`), so later
-  reads never re-decide. Two consumers: `session-start.js` (resolves, freezes, then injects) and
-  `post-compact.js` (read-only re-injection after compaction). Fail-open throughout: an unresolvable
+  reads never re-decide. Three consumers: `session-start.js` (resolves, freezes, then injects) and
+  `post-compact.js` (read-only re-injection after compaction), plus `subagent-start.js` (parent
+  session's flag; see [lang-directives.md](../lang-directives.md)). Fail-open throughout: an unresolvable
   model, an unusable session id, or an unwritable state directory all yield no injection.
   The directive names the five observed failure modes of less compliant models — skipping skill
   steps, summarizing over a prescribed command's output, editing append-only documents directly,

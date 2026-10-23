@@ -106,20 +106,20 @@ else
     SCP_C_ST="$(scp_log_field "$SCP_LOG_C" 0 status)"
     SCP_C_ACT="$(scp_log_field "$SCP_LOG_C" 0 active)"
     SCP_C_REASON="$(scp_log_field "$SCP_LOG_C" 0 reason)"
-    if [[ "$SCP_C_ACT" == "false" && "$SCP_C_ST" == "2" && "$SCP_C_REASON" == "[confirm-plan] continue:"* ]]; then
+    if [[ "$SCP_C_ACT" == "false" && "$SCP_C_ST" == "2" && "$SCP_C_REASON" == *"[confirm-plan] continue:"* ]]; then
         pass "SCP-C1a. the presentation turn's first Stop blocks with the continuation reason"
     else
         fail "SCP-C1a. continuation block — active=$SCP_C_ACT status=$SCP_C_ST reason=$SCP_C_REASON claude rc=$SCP_C_RC output: $SCP_C_OUT"
     fi
 
-    # confirm-checkpoint on the echo: no deny, the dialog text ("Click Allow").
+    # confirm-checkpoint on the echo: no deny, the dialog fact line (#2731: "[outline] ...", no "Click Allow").
     SCP_C_CP="$(node -e '
 const rows = (() => { try { return require("fs").readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)); } catch (_) { return []; } })();
 const r = rows.find((x) => /WORKFLOW_CONFIRM_OUTLINE/.test(x.command));
 if (!r) { process.stdout.write("no-echo"); process.exit(0); }
 let o = {}; try { o = JSON.parse(r.stdout || "{}"); } catch (_) {}
 const deny = ((o.hookSpecificOutput || {}).permissionDecision) === "deny";
-process.stdout.write(!deny && String(o.systemMessage || "").includes("Click Allow") ? "pass" : "other:" + r.stdout);
+process.stdout.write(!deny && /^\[outline\] /.test(String(o.systemMessage || "")) ? "pass" : "other:" + r.stdout);
 ' "$(node_path "$SCP_LOG_CP")")"
     if [[ "$SCP_C_CP" == "no-echo" ]]; then
         fail "SCP-C1p2. PRECONDITION (model behaviour): no CONFIRM_OUTLINE echo reached PreToolUse — output: $SCP_C_OUT"
