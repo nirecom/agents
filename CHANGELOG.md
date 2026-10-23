@@ -839,3 +839,7 @@ Changes: Added `node bin/run-eslint <path>...`, a one-command JavaScript lint th
 ### FEATURE: PR #2753 (2026-10-22)
 Background: feat(#2529): glossary provenance check, docs/glossary/ layout, and gl...
 Changes: Glossary changes are now checked at commit time: adding, redefining or deleting a glossary entry is blocked unless the approved intent lists it or you accept it with `WORKFLOW_GLOSSARY_ACCEPTED`.;Glossary files moved to `docs/glossary/` (one file per category); the old `docs/glossary-user.md` / `docs/glossary-internal.md` layout is still read during migration.;Each workflow stage (intent, outline, detail, tests, code, docs) now flags text that drifts from a defined glossary term, such as a case or hyphen variant, before the step can complete.
+
+### FEATURE: PR #2773 (2026-10-24)
+Background: fix(#2765): resolve the merged PR in find-pr-by-marker.sh
+Changes: Fixed `/issue-close-finalize` failing with "no PR found" for issues whose closing PR had merged; the merged PR and its merge commit are resolved again.
