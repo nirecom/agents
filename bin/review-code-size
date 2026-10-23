@@ -1,28 +1,18 @@
 #!/usr/bin/env bash
-# Code file size / quality review for code files.
-# Usage: review-code-size [--base <ref>] [--all] [--staged]
-#
-# --staged: check only files staged in the git index. Line counts are read from the
-# staged blob via `git show :<file>` (not the working tree), so a commit that performs
-# a split passes. Exits 1 when any staged code file exceeds the HARD limit.
-# Mutually exclusive with --all / --base.
-#
-# File extensions checked: semicolon-separated list in CODE_FILE_EXTENSIONS env var.
-# Default: "js;sh;py". Example override: CODE_FILE_EXTENSIONS="js;sh;py;tf;java;ts"
-#
-# Always emits one of:
-#   ## Code-size Review: PERFORMED
-#   ## Code-size Review: PERFORMED (all-scan mode)
-#   ## Code-size Review: SKIPPED — <reason>
-#
-# Exits 1 when any changed code file exceeds the HARD limit (>500 lines) in diff mode. --all mode always exits 0 (audit/discovery).
+# Code file size review. Usage: review-code-size [--base <ref>] [--all] [--staged]
+# bin/size-check owns counting, target filtering and the limits (SSOT hooks/lib/size-limits.js).
+# --staged judges the staged blobs against HEAD (a commit that performs a split passes); diff mode
+# judges the working tree against the merge-base. Over HARD exits 1 unless the file shrinks;
+# --all always exits 0. --staged excludes --all/--base. Extensions: CODE_FILE_EXTENSIONS ("js;sh;py").
+# Emits "## Code-size Review: PERFORMED[ (all-scan mode| staged mode)]" or "...: SKIPPED — <reason>";
+# a bin/size-check infrastructure error emits "## Code-size Review: ERROR" and exits 2.
 
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/lib/review-size.sh"
 
+HDR="## Code-size Review"
 HARD_HIT=0
-# Build extension pattern from CODE_FILE_EXTENSIONS (default: js;sh;py)
 _EXTS="${CODE_FILE_EXTENSIONS:-js;sh;py}"
-_EXT_PATTERN="$(printf '%s' "$_EXTS" | tr ';' '|')"
 
 BASE_REF="origin/main"
 BASE_EXPLICIT=0
@@ -34,7 +24,7 @@ while [[ $# -gt 0 ]]; do
     --staged) STAGED_ONLY=1; shift ;;
     --base)
       if [[ $# -lt 2 ]]; then
-        echo "## Code-size Review: SKIPPED (--base requires an argument)"; exit 0
+        echo "$HDR: SKIPPED (--base requires an argument)"; exit 0
       fi
       BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; shift ;;
@@ -42,128 +32,77 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
-  echo "## Code-size Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+  echo "$HDR: SKIPPED — --base and --all are mutually exclusive"; exit 0
 fi
 
 if [[ "$STAGED_ONLY" -eq 1 && ( "$ALL_SCAN" -eq 1 || "$BASE_EXPLICIT" -eq 1 ) ]]; then
-  echo "## Code-size Review: SKIPPED — --staged is mutually exclusive with --all/--base"; exit 0
+  echo "$HDR: SKIPPED — --staged is mutually exclusive with --all/--base"; exit 0
 fi
 
-# Shared extension + exclusion filter for a newline-delimited path list.
-filter_code_targets() {
-  printf '%s\n' "$1" \
-    | grep -E "\.($_EXT_PATTERN)$" \
-    | grep -v 'node_modules/' \
-    | grep -v '\.git/' \
-    | grep -v '_archive/' \
-    | grep -v '_archived/' || true
-}
-
-# Line count from the staged blob (git index), not the working tree.
-# M1: use :./<path> to avoid git parsing a colon-prefixed name as <stage>:<path>.
-count_lines_index() {
-  git show ":./${1}" 2>/dev/null | wc -l | tr -d ' '
-}
-
-count_lines_worktree() {
-  wc -l < "${1}" | tr -d ' '
-}
-
-report_targets() {
-  local targets="$1"
-  local source="${2:-worktree}"
+report_records() {
+  local verdict value pre warn hard unit file
   echo ""
   echo "[Line counts]"
-  while IFS= read -r file; do
-    local lines
-    if [[ "$source" == "index" ]]; then
-      git cat-file -e ":./$file" 2>/dev/null || continue
-      lines=$(count_lines_index "$file")
-    else
-      [[ -f "$file" ]] || continue
-      lines=$(count_lines_worktree "$file")
-    fi
-    if (( lines > 500 )); then
-      echo "  HARD: $file — $lines lines total (exceeds 500-line hard limit; split into <name>/ sibling folder — see rules/coding/file-split.md)"
-      HARD_HIT=1
-    elif (( lines > 300 )); then
-      echo "WARN: $file — $lines lines (exceeds 300-line warn threshold)"
-    else
-      echo "INFO: $file — $lines lines"
-    fi
-  done <<< "$targets"
+  while IFS=$'\t' read -r verdict value pre warn hard unit file; do
+    case "$verdict" in
+      HARD)
+        echo "  HARD: $file — $value lines total (exceeds ${hard}-line hard limit; split into <name>/ sibling folder — see rules/coding/file-split.md)"
+        HARD_HIT=1 ;;
+      SHRINK) echo "SHRINK: $file — $value lines (over the ${hard}-line hard limit, down from $pre; reducing changes pass)" ;;
+      WARN) echo "WARN: $file — $value lines (exceeds ${warn}-line warn threshold)" ;;
+      OK) echo "INFO: $file — $value lines" ;;
+    esac
+  done <<< "$RS_RECORDS"
   echo ""
-
   echo "  HARD findings block the workflow (exit 1) in diff mode. WARN/INFO are advisory."
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
-  TARGETS=$(find . -type f \
-    -not -path '*/node_modules/*' \
-    -not -path '*/.git/*' \
-    -not -path '*/_archive/*' \
-    -not -path '*/_archived/*' 2>/dev/null \
-    | grep -E "\.($_EXT_PATTERN)$" | sort || true)
-  if [[ -z "$TARGETS" ]]; then
-    echo "## Code-size Review: SKIPPED — no code files found"; exit 0
+  review_size_check "$HDR" code none worktree < <(find . -type f \
+    -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | sort | review_size_worktree_nul)
+  if [[ "$RS_TARGETS" -eq 0 ]]; then
+    echo "$HDR: SKIPPED — no code files found"; exit 0
   fi
-  echo "## Code-size Review: PERFORMED (all-scan mode)"
+  echo "$HDR: PERFORMED (all-scan mode)"
   echo ""
-  COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-  echo "All code files scanned: $COUNT (extensions: $_EXTS)"
-  report_targets "$TARGETS" worktree
+  echo "All code files scanned: $RS_TARGETS (extensions: $_EXTS)"
+  report_records
   exit 0
 fi
 
 if [[ "$STAGED_ONLY" -eq 1 ]]; then
-  # H1: use -z + core.quotePath=false so non-ASCII and special-char paths are
-  # delivered as null-delimited raw bytes rather than C-escaped quoted strings.
-  TARGETS=""
-  while IFS= read -r -d '' file; do
-    if echo "$file" | grep -qE "\.($_EXT_PATTERN)$" \
-      && ! echo "$file" | grep -q 'node_modules/' \
-      && ! echo "$file" | grep -q '\.git/' \
-      && ! echo "$file" | grep -q '_archive/' \
-      && ! echo "$file" | grep -q '_archived/'; then
-      TARGETS="${TARGETS}${file}"$'\n'
-    fi
-  done < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
-  if [[ -z "$TARGETS" ]]; then
-    echo "## Code-size Review: SKIPPED — no code files staged"; exit 0
+  # -z + core.quotePath=false: non-ASCII and special-char paths arrive as raw NUL-separated bytes.
+  review_size_check "$HDR" code "$(review_size_pre_head)" index < <(git -c core.quotePath=false diff -z \
+    --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+  if [[ "$RS_TARGETS" -eq 0 ]]; then
+    echo "$HDR: SKIPPED — no code files staged"; exit 0
   fi
-  echo "## Code-size Review: PERFORMED (staged mode)"
+  echo "$HDR: PERFORMED (staged mode)"
   echo ""
-  COUNT=$(printf '%s\n' "$TARGETS" | grep -c . || true)
-  echo "Changed code files: $COUNT (extensions: $_EXTS)"
-  report_targets "$TARGETS" index
+  echo "Changed code files: $RS_TARGETS (extensions: $_EXTS)"
+  report_records
   [[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0
 fi
 
 BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
-  echo "## Code-size Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+  echo "$HDR: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
 }
 
 ERR=$(mktemp)
 trap 'rm -f "$ERR"' EXIT
-CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
+git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD >/dev/null 2>"$ERR" || true
 if [[ -s "$ERR" ]]; then
-  echo "## Code-size Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
-fi
-CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
-CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
-CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
-CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
-
-TARGETS=$(filter_code_targets "$CHANGED")
-
-if [[ -z "$TARGETS" ]]; then
-  echo "## Code-size Review: SKIPPED — no code files changed"; exit 0
+  echo "$HDR: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
 fi
 
-echo "## Code-size Review: PERFORMED"
+review_size_check "$HDR" code "rev:$BASE_SHA" worktree < <(review_size_changed_nul "$BASE_SHA")
+if [[ "$RS_TARGETS" -eq 0 ]]; then
+  echo "$HDR: SKIPPED — no code files changed"; exit 0
+fi
+
+echo "$HDR: PERFORMED"
 echo ""
-COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-echo "Changed code files: $COUNT (extensions: $_EXTS)"
-report_targets "$TARGETS" worktree
+echo "Changed code files: $RS_TARGETS (extensions: $_EXTS)"
+report_records
 
 [[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0

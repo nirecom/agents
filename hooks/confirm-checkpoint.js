@@ -7,6 +7,7 @@
 // very plan, link and content (hooks/lib/presentation-receipt.js); the receipt is spent here.
 // Fail-closed: anything it cannot verify denies with a present-again reason. The one exception is
 // an unreadable hook input, where not even the sentinel is known: that stays a no-op.
+// #2631: a plan over HARD is denied (uncounted) whatever CONFIRM_<STAGE> says; over WARN adds advice.
 "use strict";
 
 const fs = require("fs");
@@ -104,6 +105,36 @@ function receiptDiagnostic(sid, stage) {
   }
 }
 
+// The Japanese "send back to the planner" is matched verbatim in plan text. lang-check: ignore
+const SEND_BACK = "planner に差し戻す";
+
+// #2631: the size verdict of the plan the approval would bind (<first_session_id>-<stage>.md), or
+// null. Runs before the CONFIRM_*=off exit and records no deny finding.
+function planSizeDeny(sid, stage) {
+  if (!sid || !require("./lib/size-session-gate").sizeCheckActive(sid)) return null;
+  const relint = require("./lib/plan-artifact-lang").relintPlanArtifact(sid, stage);
+  const size = relint.size;
+  if (!size) return null;
+  const artifactPath = relint.artifactPath;
+  if (size.verdict !== "hard" && size.verdict !== "warn") return { artifactPath };
+  // The full path, not the basename: a resumed session's plan is named after its first_session_id.
+  const head = `${artifactPath} is ${size.value} ${size.unit}`;
+  if (size.verdict === "hard") {
+    return { artifactPath, deny: `[${stage}] plan-size: ${head}, over HARD ${size.hard} — not confirmable; ${SEND_BACK} ` +
+      `(send it back to the planner to compress below HARD; limits: rules/coding/file-split.md).` };
+  }
+  return { artifactPath, advice: `[${stage}] plan-size WARN: ${head}, over WARN ${size.warn} (HARD ${size.hard}) — consider compressing it.\n` };
+}
+
+function emitSizeDeny(reason) {
+  process.stdout.write(JSON.stringify({
+    decision: "block",
+    reason,
+    hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
+  }));
+  process.exit(0);
+}
+
 function recordDenyFinding(sid, stage, cause) {
   if (!sid) return;
   try {
@@ -151,12 +182,19 @@ function main() {
     sid = resolveSessionId({ sessionIdFromInput: input.session_id, transcriptPath: input.transcript_path });
   } catch (_) { /* judged as unverifiable-session */ }
 
+  let sizeVerdict = null;
+  try { sizeVerdict = planSizeDeny(sid, stage); } catch (_) { /* fail-open */ }
+  if (sizeVerdict && sizeVerdict.deny) emitSizeDeny(sizeVerdict.deny);
+  const sizeAdvice = sizeVerdict && sizeVerdict.advice ? sizeVerdict.advice : "";
+
   // The shared plan gate (plan-gate.js) owns the classification: OFF waives the dialog; an
   // error or an unloadable stage table shows the dialog path (the fail-closed judge below).
   let gate = "ERROR";
   try { gate = require("./lib/confirm-gate/plan-gate").planGateState(stage); } catch (_) { /* judged below */ }
   if (gate === "OFF") {
-    process.stdout.write(JSON.stringify({ systemMessage: `[confirm-skipped: CONFIRM_${stage.toUpperCase()}=off]` }));
+    const skipped = { systemMessage: `[confirm-skipped: CONFIRM_${stage.toUpperCase()}=off]` };
+    if (sizeAdvice) skipped.hookSpecificOutput = { hookEventName: "PreToolUse", additionalContext: sizeAdvice };
+    process.stdout.write(JSON.stringify(skipped));
     process.exit(0);
   }
 
@@ -182,7 +220,7 @@ function main() {
     if (PR.consumeReceipt(sid, stage)) {
       const link = verdict.link;
       const entry = { stage, url: link.url, path: link.path, reason: link.reason };
-      const additionalContext = CL.withConvLang(PL.renderModelContext([entry], { when: "confirm" }));
+      const additionalContext = sizeAdvice + CL.withConvLang(PL.renderModelContext([entry], { when: "confirm" }));
       out = {
         systemMessage: renderMessage(stage, absPath, link.url || null),
         hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext },

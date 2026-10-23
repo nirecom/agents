@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-# Prompt file size / quality review.
-# Usage: review-prompt-size [--base <ref>] [--all]
-#
-# Always emits one of:
-#   ## Prompt Size Review: PERFORMED
-#   ## Prompt Size Review: PERFORMED (all-scan mode)
-#   ## Prompt Size Review: SKIPPED — <reason>
-#
-# Exits 1 when any changed prompt file exceeds the HARD limit (>200 lines) in diff mode. --all mode always exits 0 (audit/discovery).
+# Prompt file size / quality review. Usage: review-prompt-size [--base <ref>] [--all]
+# bin/size-check owns counting, target filtering and the limits (SSOT hooks/lib/size-limits.js).
+# Emits "## Prompt Size Review: PERFORMED[ (all-scan mode)]" or "...: SKIPPED — <reason>".
+# Diff mode exits 1 when a changed prompt file is over HARD and does not shrink; --all always
+# exits 0. A bin/size-check infrastructure error emits "## Prompt Size Review: ERROR" and exits 2.
 
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/lib/review-size.sh"
 
+HDR="## Prompt Size Review"
 HARD_HIT=0
 BASE_REF="origin/main"
 BASE_EXPLICIT=0
@@ -20,7 +18,7 @@ while [[ $# -gt 0 ]]; do
     --all) ALL_SCAN=1; shift ;;
     --base)
       if [[ $# -lt 2 ]]; then
-        echo "## Prompt Size Review: SKIPPED (--base requires an argument)"; exit 0
+        echo "$HDR: SKIPPED (--base requires an argument)"; exit 0
       fi
       BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; shift ;;
@@ -28,26 +26,23 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
-  echo "## Prompt Size Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+  echo "$HDR: SKIPPED — --base and --all are mutually exclusive"; exit 0
 fi
 
-report_targets() {
-  local targets="$1"
+report_records() {
+  local verdict value pre warn hard unit file
   echo ""
   echo "[Line counts]"
-  while IFS= read -r file; do
-    [[ -f "$file" ]] || continue
-    local lines
-    lines=$(wc -l < "$file" | tr -d ' ')
-    if (( lines > 200 )); then
-      echo "HARD: $file — $lines lines total (exceeds 200-line hard limit; move multi-step procedures to skills/<name>/scripts/ or bin/<tool> — see rules/coding/file-split.md Pattern B)"
-      HARD_HIT=1
-    elif (( lines > 100 )); then
-      echo "WARN: $file — $lines lines (exceeds 100-line safety net)"
-    else
-      echo "INFO: $file — $lines lines"
-    fi
-  done <<< "$targets"
+  while IFS=$'\t' read -r verdict value pre warn hard unit file; do
+    case "$verdict" in
+      HARD)
+        echo "HARD: $file — $value lines total (exceeds ${hard}-line hard limit; move multi-step procedures to skills/<name>/scripts/ or bin/<tool> — see rules/coding/file-split.md Pattern B)"
+        HARD_HIT=1 ;;
+      SHRINK) echo "SHRINK: $file — $value lines (over the ${hard}-line hard limit, down from $pre; reducing changes pass)" ;;
+      WARN) echo "WARN: $file — $value lines (exceeds ${warn}-line safety net)" ;;
+      OK) echo "INFO: $file — $value lines" ;;
+    esac
+  done <<< "$RS_RECORDS"
   echo ""
 
   cat <<'EOF'
@@ -60,48 +55,41 @@ EOF
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
-  TARGETS=$(
-    { find skills/ -name SKILL.md -not -path '*/_archived/*' 2>/dev/null || true; \
-      find rules/ -name '*.md' -not -path '*/_archived/*' 2>/dev/null || true; \
-      find agents/ -name '*.md' -not -path '*/_archived/*' 2>/dev/null || true; \
-      find skills/_shared/ -name '*.md' 2>/dev/null || true; } | sort -u
+  review_size_check "$HDR" prompt none worktree < <(
+    { find skills/ -name SKILL.md 2>/dev/null || true; \
+      find rules/ -name '*.md' 2>/dev/null || true; \
+      find agents/ -name '*.md' 2>/dev/null || true; \
+      find skills/_shared/ -name '*.md' 2>/dev/null || true; } | sort -u | review_size_worktree_nul
   )
-  if [[ -z "$TARGETS" ]]; then
-    echo "## Prompt Size Review: SKIPPED — no prompt files found"; exit 0
+  if [[ "$RS_TARGETS" -eq 0 ]]; then
+    echo "$HDR: SKIPPED — no prompt files found"; exit 0
   fi
-  echo "## Prompt Size Review: PERFORMED (all-scan mode)"
+  echo "$HDR: PERFORMED (all-scan mode)"
   echo ""
-  COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-  echo "All prompt files scanned: $COUNT"
-  report_targets "$TARGETS"
+  echo "All prompt files scanned: $RS_TARGETS"
+  report_records
   exit 0
 fi
 
 BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
-  echo "## Prompt Size Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+  echo "$HDR: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
 }
 
 ERR=$(mktemp)
 trap 'rm -f "$ERR"' EXIT
-CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
+git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD >/dev/null 2>"$ERR" || true
 if [[ -s "$ERR" ]]; then
-  echo "## Prompt Size Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
-fi
-CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
-CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
-CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
-CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
-
-TARGETS=$(printf '%s\n' "$CHANGED" | grep -E '^(skills/.+/SKILL\.md|rules/.+\.md|agents/.+\.md|skills/_shared/.+\.md)$' | grep -v '/_archived/' || true)
-
-if [[ -z "$TARGETS" ]]; then
-  echo "## Prompt Size Review: SKIPPED — no prompt files changed"; exit 0
+  echo "$HDR: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
 fi
 
-echo "## Prompt Size Review: PERFORMED"
+review_size_check "$HDR" prompt "rev:$BASE_SHA" worktree < <(review_size_changed_nul "$BASE_SHA")
+if [[ "$RS_TARGETS" -eq 0 ]]; then
+  echo "$HDR: SKIPPED — no prompt files changed"; exit 0
+fi
+
+echo "$HDR: PERFORMED"
 echo ""
-COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-echo "Changed prompt files: $COUNT"
-report_targets "$TARGETS"
+echo "Changed prompt files: $RS_TARGETS"
+report_records
 
 [[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0

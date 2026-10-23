@@ -1,0 +1,146 @@
+#!/usr/bin/env node
+"use strict";
+// bin/size-check — count and judge files against hooks/lib/size-limits.js (#2631).
+//   --kind <code|prompt|docs> --pre <none|rev:REF> --post <index|worktree>
+//       NUL-separated paths on stdin, filtered by the kind.
+//   --staged-auto [--session-gate]
+//       the staged paths, each classified by size-classify; pre is HEAD, post is the index.
+// Prints `TARGETS\t<n>` then `<OK|WARN|SHRINK|HARD>\t<value>\t<pre>\t<warn>\t<hard>\t<unit>\t<path>`.
+// rc: 0 no HARD, 1 HARD, 2 usage error, 3 infrastructure error (git failure, unreadable path).
+
+const fs = require("fs");
+const path = require("path");
+const HOOKS_LIB = path.join(__dirname, "..", "hooks", "lib");
+const { measure, judge } = require(path.join(HOOKS_LIB, "size-limits.js"));
+const { classifyRepoPath, matchesKind } = require(path.join(HOOKS_LIB, "size-classify.js"));
+const { parseExtensions } = require(path.join(HOOKS_LIB, "comment-block-scan.js"));
+const { readDefaultEnvFile } = require(path.join(HOOKS_LIB, "load-env.js"));
+const { GitError, showPrefix, stagedPaths, catFileBatch } = require(path.join(__dirname, "lib", "size-check", "git-blobs.js"));
+
+const USAGE = "usage: size-check --kind <code|prompt|docs> --pre <none|rev:REF> --post <index|worktree>\n" +
+  "       size-check --staged-auto [--session-gate]";
+const KINDS = new Set(["code", "prompt", "docs"]);
+
+class UsageError extends Error {}
+
+function parseArgs(argv) {
+  const o = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--staged-auto" || a === "--session-gate") { o[a.slice(2)] = true; continue; }
+    if (a === "--kind" || a === "--pre" || a === "--post") {
+      if (i + 1 >= argv.length) throw new UsageError(`${a} requires a value`);
+      o[a.slice(2)] = argv[++i];
+      continue;
+    }
+    throw new UsageError(`unknown argument: ${a}`);
+  }
+  const kindMode = o.kind !== undefined || o.pre !== undefined || o.post !== undefined;
+  if (o["staged-auto"]) {
+    if (kindMode) throw new UsageError("--staged-auto excludes --kind/--pre/--post");
+    return { mode: "staged", sessionGate: o["session-gate"] === true };
+  }
+  if (o["session-gate"]) throw new UsageError("--session-gate needs --staged-auto");
+  if (!KINDS.has(o.kind)) throw new UsageError(`--kind must be one of code, prompt, docs (got ${o.kind})`);
+  if (o.pre !== "none" && !/^rev:.+$/.test(o.pre || "")) throw new UsageError(`--pre must be none or rev:REF (got ${o.pre})`);
+  if (o.post !== "index" && o.post !== "worktree") throw new UsageError(`--post must be index or worktree (got ${o.post})`);
+  return { mode: "kind", kind: o.kind, rev: o.pre === "none" ? null : o.pre.slice(4), post: o.post };
+}
+
+function readStdinPaths() {
+  let raw = "";
+  try { raw = fs.readFileSync(0, "utf8"); } catch (e) { if (e.code !== "EOF") throw e; }
+  return raw.split("\0").filter((p) => p.length > 0);
+}
+
+function uniqueSafe(paths) {
+  const seen = new Set();
+  const out = [];
+  for (const p of paths) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
+function sessionGateOpen() {
+  let sid = null;
+  try { sid = require(path.join(__dirname, "..", "hooks", "workflow-state", "session-id.js")).resolveSessionId(); } catch (_e) { sid = null; }
+  return require(path.join(HOOKS_LIB, "size-session-gate.js")).commitSizeCheckActive(sid || "");
+}
+
+// targets: [{ path, kind, gitPath }]; reads every blob in one cat-file call.
+function evaluate(targets, rev, post) {
+  const errors = [];
+  const queries = [];
+  const slot = (name) => queries.push(name) - 1;
+  const revSlot = rev && targets.length > 0 ? slot(`${rev}^{commit}`) : -1;
+  const plan = targets.map((t) => ({
+    t, postSlot: post === "index" ? slot(`:${t.gitPath}`) : -1, preSlot: rev ? slot(`${rev}:${t.gitPath}`) : -1,
+  }));
+  const blobs = catFileBatch(queries);
+  if (revSlot !== -1 && !blobs[revSlot]) throw new GitError(`--pre rev:${rev} does not resolve to a commit`);
+  const text = (b) => (b && b.type === "blob" ? b.data.toString("utf8") : null);
+  const records = [];
+  for (const { t, postSlot, preSlot } of plan) {
+    let postText;
+    if (post === "index") postText = text(blobs[postSlot]);
+    else { try { postText = fs.readFileSync(t.path, "utf8"); } catch (_e) { postText = null; } }
+    if (postText == null) { errors.push(`${t.path}: not found in the ${post}`); continue; }
+    const preText = preSlot === -1 ? null : text(blobs[preSlot]);
+    const r = judge(t.kind, preText == null ? 0 : measure(t.kind, preText), measure(t.kind, postText));
+    records.push([r.verdict.toUpperCase(), r.value, r.pre, r.warn, r.hard, r.unit, t.path]);
+  }
+  return { records, errors };
+}
+
+function collectTargets(opts) {
+  if (opts.mode === "staged") {
+    // The commit gate is the last line of defence: the configured extensions come from the .env file
+    // (as in the edit-time hook and workflow-gate), never from an inheritable process.env value.
+    const exts = parseExtensions((readDefaultEnvFile() || {}).CODE_FILE_EXTENSIONS);
+    const targets = [];
+    for (const p of uniqueSafe(stagedPaths())) {
+      const kind = classifyRepoPath(p, exts);
+      if (kind) targets.push({ path: p, kind, gitPath: p });
+    }
+    const hasHead = targets.length > 0 && catFileBatch(["HEAD^{commit}"])[0] != null;
+    return { targets, rev: hasHead ? "HEAD" : null, post: "index" };
+  }
+  const exts = parseExtensions(process.env.CODE_FILE_EXTENSIONS);
+  const paths = uniqueSafe(readStdinPaths()).filter((p) => matchesKind(opts.kind, p, exts));
+  const needGit = paths.length > 0 && (opts.post === "index" || opts.rev);
+  const prefix = needGit ? showPrefix() : "";
+  const targets = paths.map((p) => ({
+    path: p, kind: opts.kind, gitPath: path.posix.normalize(prefix + p.replace(/\\/g, "/")),
+  }));
+  return { targets, rev: opts.rev, post: opts.post };
+}
+
+function main(argv) {
+  let opts;
+  try { opts = parseArgs(argv); } catch (e) {
+    if (!(e instanceof UsageError)) throw e;
+    process.stderr.write(`size-check: ${e.message}\n${USAGE}\n`);
+    return 2;
+  }
+  try {
+    if (opts.mode === "staged" && opts.sessionGate && !sessionGateOpen()) {
+      process.stderr.write("size-check: session gate closed (WORKFLOW_OFF / no workflow state)\n");
+      process.stdout.write("TARGETS\t0\n");
+      return 0;
+    }
+    const { targets, rev, post } = collectTargets(opts);
+    const { records, errors } = evaluate(targets, rev, post);
+    process.stdout.write([`TARGETS\t${targets.length}`].concat(records.map((r) => r.join("\t"))).join("\n") + "\n");
+    for (const e of errors) process.stderr.write(`size-check: ${e}\n`);
+    if (records.some((r) => r[0] === "HARD")) return 1;
+    return errors.length > 0 ? 3 : 0;
+  } catch (e) {
+    process.stderr.write(`size-check: ${e && e.message ? e.message : String(e)}\n`);
+    return 3;
+  }
+}
+
+process.exitCode = main(process.argv.slice(2));

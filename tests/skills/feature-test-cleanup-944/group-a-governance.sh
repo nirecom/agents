@@ -14,9 +14,9 @@ if [[ -f "$TEST_DESIGN" ]]; then
         fail "Case 2: test-design.md missing scope:common definition"
     fi
 
-    if grep -qE '300' "$TEST_DESIGN" && grep -qE '500' "$TEST_DESIGN" \
-       && grep -qiE 'WARN|warn' "$TEST_DESIGN" && grep -qiE 'HARD|hard' "$TEST_DESIGN"; then
-        pass "Case 3: test-design.md contains size limits (300 WARN / 500 HARD)"
+    if grep -qE '^## Size Limits' "$TEST_DESIGN" \
+       && grep -qE 'kind `code` of the generated Size limits table in `rules/coding/file-split.md`' "$TEST_DESIGN"; then
+        pass "Case 3: test-design.md size limits reference the SSOT table (kind code)"
     else
         fail "Case 3: test-design.md missing size limits section"
     fi

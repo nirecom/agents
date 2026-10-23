@@ -648,7 +648,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-comment-block-size.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-post-edit-size.js\"",
             "timeout": 15
           }
         ]

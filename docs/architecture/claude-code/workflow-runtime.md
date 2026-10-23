@@ -99,8 +99,8 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
     Detection logic: hasUnstagedTrackedChanges() in hooks/workflow-gate/staged-evidence.js.
   Gate 2 (code-size HARD limit, #1701): runs `bash bin/review-code-size --staged` against the
-    staged index and blocks when any staged code file exceeds the 500-line HARD limit
-    (rules/coding/file-split.md). The script owns thresholds and line counting (CPR-SSOT);
+    staged index and blocks when any staged code file exceeds the code HARD limit (SSOT:
+    hooks/lib/size-limits.js, #2631). The script owns line counting (CPR-SSOT);
     the hook only maps exit 1 → block. Line counts come from the staged blob
     (`git show :<file>`), not the working tree, so the commit that performs a split passes.
     Not skipped by the docs-only short-circuit, `workflow.wip=1`, or WORKTREE_OFF —

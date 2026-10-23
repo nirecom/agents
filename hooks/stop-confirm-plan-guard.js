@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Stop hook: structurally enforce the confirm-plan protocol. Each check returns a block reason or
-// null; the first reason found blocks (layer 2, plan-link, close-on-link, unpublished, plan-lang).
-// Layer 2 (#2278): a CONFIRM echo in the last assistant entry needs a PLAN_LANG-clean plan and a
-// stage-valid follow-up tool_use. Plan-link: a turn that wrote a plan shows its link line — in the
+// null; the first reason found blocks (layer 2, plan-link, close-on-link, unpublished, plan-size / plan-lang).
+// Layer 2 (#2278): a CONFIRM echo in the last assistant entry needs a plan within HARD (#2631) and
+// PLAN_LANG-clean, and a stage-valid follow-up tool_use. Plan-link: a turn that wrote a plan shows its link line — in the
 // last text block when the stage's gate is ON, anywhere in the turn when it is OFF.
 // Presentation (#2729): a turn the hook lets through that closes on unapproved stages' link lines
 // gets a presentation receipt per stage (hooks/lib/presentation-receipt.js) and the current stage is
@@ -14,7 +14,7 @@
 const fs = require("fs");
 const path = require("path");
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
-const { firstBlock, planLangReason, PLAN_STAGES } = require("./stop-confirm-plan-guard/block-reasons");
+const { firstBlock, planRelintReason, PLAN_STAGES } = require("./stop-confirm-plan-guard/block-reasons");
 
 const STOP_BUDGET_MS = 4000;
 const PROBE_RESERVE_MS = 500;
@@ -94,8 +94,8 @@ function recordUnblocked(sid, block) {
 // a stage the real final message (last_assistant_message) closes on is recorded: with the anchored
 // entry's uuid when an anchored text entry also presents it, otherwise with anchorUuid "" (no anchor,
 // or final-only). A stage only the anchored text presents stays unrecorded. A stage whose plan
-// violates PLAN_LANG or is unpublished is left unrecorded with its earlier receipt untouched, as the
-// decidable path would block it.
+// is over HARD, violates PLAN_LANG or is unpublished is left unrecorded with its earlier receipt
+// untouched, as the decidable path would block it.
 function recordUndecidable({ sid, input, tail, markers, deadline, active }) {
   const UD = require("./stop-confirm-plan-guard/undecidable");
   const CC = require("./lib/confirm-continuation");
@@ -108,16 +108,16 @@ function recordUndecidable({ sid, input, tail, markers, deadline, active }) {
   const finalStages = inFinal.map((p) => p.stage);
   const tailStages = fromTail.map((p) => p.stage);
   const presented = [...fromTail.filter((p) => finalStages.includes(p.stage)), ...inFinal.filter((p) => !tailStages.includes(p.stage))];
-  const langBlocked = presented.filter((p) => planLangReason(sid, p.stage)).map((p) => p.stage);
-  const unpublished = presented.filter((p) => !p.receiptLink && !langBlocked.includes(p.stage)).map((p) => p.stage);
-  const recordable = presented.filter((p) => !langBlocked.includes(p.stage) && !unpublished.includes(p.stage));
+  const relintBlocked = presented.filter((p) => planRelintReason(sid, p.stage)).map((p) => p.stage);
+  const unpublished = presented.filter((p) => !p.receiptLink && !relintBlocked.includes(p.stage)).map((p) => p.stage);
+  const recordable = presented.filter((p) => !relintBlocked.includes(p.stage) && !unpublished.includes(p.stage));
   const both = recordReceipts(sid, recordable.filter((p) => tailStages.includes(p.stage)), anchored ? anchored.lastTextEntry.uuid : "", active);
   const finalOnly = recordReceipts(sid, recordable.filter((p) => !tailStages.includes(p.stage)), "", active);
   const failed = [...both.failed, ...finalOnly.failed];
   const written = [...both.written, ...finalOnly.written];
   const writtenStages = written.map((p) => p.stage);
   const unwritten = maybe.filter((stage) => !writtenStages.includes(stage) && probes.gateFor(stage) !== "OFF");
-  return { unrecorded: [...new Set([...langBlocked, ...unpublished, ...failed, ...unwritten])], written };
+  return { unrecorded: [...new Set([...relintBlocked, ...unpublished, ...failed, ...unwritten])], written };
 }
 
 function mayHavePresented(sid, markers, input) {
