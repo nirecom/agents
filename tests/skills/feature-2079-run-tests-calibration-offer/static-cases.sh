@@ -23,7 +23,7 @@ _prev="${_l6a:-0}"; _order_bad=""
 for _frag in \
     'skills/run-tests/scripts/probe-calibration.sh" --cwd <cwd> --session <sid>` and read `decision=`' \
     '`none` -> go to RNT-7.' \
-    'when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> show `notice=` verbatim, write no record, go to RNT-7.' \
+    'when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> ' \
     'skills/run-tests/scripts/mark-calibration-asked.sh" --session <sid>`; if it fails or prints `first=no`, treat as `notice`.' \
     'calibrate now (long-running) / not now' \
     'skills/run-tests/scripts/answer-calibration.sh" defer --cwd <cwd> --session <sid>`, then go to RNT-7.' \
@@ -73,6 +73,28 @@ _cal="$(line_of 'answer-calibration.sh" calibrate')"
 ck "ES2 wait message sits after PAUSE and before the calibrate launch" "yes" \
     "$( [ "${_w:-0}" -gt "${_pause:-0}" ] && [ "${_pause:-0}" -gt 0 ] && [ "${_w:-0}" -lt "${_cal:-0}" ] && echo yes || echo no)"
 case_ran ES2
+
+# ── CL1 (#2731 R5) notice= is conveyed in CONV_LANG; commands and paths stay verbatim ─
+# Both RNT-6a lines that surface notice= (non-interactive fallback, pre-question) change.
+_nl="$(sed -n "$(line_of 'when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> ')p" "$SKILL_MD" 2>/dev/null)"
+_ql="$(sed -n "$(line_of 'calibrate now (long-running) / not now')p" "$SKILL_MD" 2>/dev/null)"
+for _pair in "fallback|$_nl" "question|$_ql"; do
+    _tag="${_pair%%|*}"; _ln="${_pair#*|}"
+    case "$_ln" in
+        *'`notice=`'*CONV_LANG*|*CONV_LANG*'`notice=`'*) pass "CL1 $_tag line conveys notice= in CONV_LANG" ;;
+        *) fail "CL1 $_tag line does not convey notice= in CONV_LANG" "line=$(printf '%q' "$_ln")" ;;
+    esac
+    case "$_ln" in
+        *verbatim*) pass "CL1 $_tag line keeps commands and paths verbatim" ;;
+        *) fail "CL1 $_tag line drops the verbatim rule for commands and paths" "line=$(printf '%q' "$_ln")" ;;
+    esac
+done
+case "$_nl" in
+    *'write no record, go to RNT-7.'*) pass "CL1 fallback line still writes no record and goes to RNT-7" ;;
+    *) fail "CL1 fallback line lost 'write no record, go to RNT-7.'" "line=$(printf '%q' "$_nl")" ;;
+esac
+ck "CL1 old wording 'show \`notice=\` verbatim' is retired" "0" "$(grep -c 'show `notice=` verbatim' "$SKILL_MD" || true)"
+case_ran CL1
 
 case_end
 

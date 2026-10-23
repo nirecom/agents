@@ -68,6 +68,8 @@ mkdir -p "$EMPTY_DIR"
 EMPTY_DIR_NODE="$(to_node_path "$EMPTY_DIR")"
 
 LANG_CONFIG_NODE="$(to_node_path "$LANG_CONFIG_LIB")"
+# The TERMS line of hooks/lib/lang-directives.txt, rendered into every directive (#2731).
+TERMS_SENTENCE='Keep glossary terms in their exact spelling, and leave common engineering terms, identifiers and command names untranslated (e.g. gap, fallback).'
 CONV_LANG_NODE="$(to_node_path "$CONV_LANG_LIB")"
 
 # Helper: run getPlanLangInjection() with given PLAN_LANG env value.
@@ -283,12 +285,12 @@ process.stdout.write(JSON.stringify(r === undefined ? null : r));
         fi
 
         # G1-T9: exact text for english
-        EXPECTED_PLAN_EN='"Write planning artifacts (files under the plans directory) in english."'
+        EXPECTED_PLAN_EN="\"Write planning artifacts (files under the plans directory) in english. Write each sentence in english. $TERMS_SENTENCE\""
         got=$(call_plan_injection "set" "english")
         assert_eq "G1-T9: PLAN_LANG=english exact text" "$EXPECTED_PLAN_EN" "$got"
 
         # G1-T10: exact text for japanese
-        EXPECTED_PLAN_JA='"Write planning artifacts (files under the plans directory) in japanese."'
+        EXPECTED_PLAN_JA="\"Write planning artifacts (files under the plans directory) in japanese. Write each sentence in japanese. $TERMS_SENTENCE\""
         got=$(call_plan_injection "set" "japanese")
         assert_eq "G1-T10: PLAN_LANG=japanese exact text" "$EXPECTED_PLAN_JA" "$got"
     fi
@@ -305,7 +307,7 @@ echo "=== Group 2: getConvLangInjection() regression + new wording ==="
 if [ ! -f "$CONV_LANG_LIB" ]; then
     skip "G2: hooks/lib/conv-lang.js not found"
 else
-    EXPECTED_CONV_JA='Respond to the user in japanese. This applies to all text you write, including narration between tool calls.'
+    EXPECTED_CONV_JA="Respond to the user in japanese. This covers everything you write, including narration between tool calls and a subagent's final report to its caller. Write each sentence in japanese. $TERMS_SENTENCE"
 
     # G2-T1: japanese → exact new wording
     got=$(call_conv_injection "set" "japanese")

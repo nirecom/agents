@@ -21,7 +21,9 @@ AGENT_FILES=(
     "$_HELPERS_SCRIPT_CHECKOUT_ROOT/agents/outline-reviewer.md"
 )
 
-EXPECTED_JA='Respond to the user in japanese. This applies to all text you write, including narration between tool calls.'
+# The CONV_LANG line of hooks/lib/lang-directives.txt rendered with its TERMS line (#2731).
+TERMS_SENTENCE='Keep glossary terms in their exact spelling, and leave common engineering terms, identifiers and command names untranslated (e.g. gap, fallback).'
+EXPECTED_JA="Respond to the user in japanese. This covers everything you write, including narration between tool calls and a subagent's final report to its caller. Write each sentence in japanese. $TERMS_SENTENCE"
 
 PASS=0
 FAIL=0

@@ -20,7 +20,7 @@ const { isEditWriteTool, isCommandTool, collectEditWritePaths, commandListOf } =
 
 const { readHookInput } = require("./lib/read-stdin");
 
-const RUN_HINT = '— run node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"';
+const RUN_HINT = 'node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"';
 // One budget per invocation, kept below the 30 s hook timeout in settings.json.
 const SHARED_SYNC_BUDGET_MS = 20000;
 // Skip reasons that are the project-host verdict itself: shown to the model, not the user.
@@ -35,21 +35,33 @@ function isFinalPlanArtifact(filePath) {
   return getSuffix(filePath) !== null;
 }
 
-// formatBreadcrumb(result, absPath) — the 1-2 line message for one syncPlanFile result.
+// The explanation of a breadcrumb state, for the model only (additionalContext); the user sees facts.
+const EXPLANATIONS = {
+  "no-blob-url": "plan-sync pushed the plan, but this remote has no blob URL.",
+  off: "plan-sync is not configured: PLAN_SYNC_REMOTE_URL is empty.",
+  "not-regular-file": "plan-sync skipped the plan: it is not a regular file (symlink, directory, or missing).",
+  "budget-exhausted": "plan-sync skipped the plan: the shared sync budget ran out; retry by re-saving the plan.",
+};
+
+function explanationKey(result) {
+  const r = result || {};
+  if (r.status === "pushed" && !r.url) return "no-blob-url";
+  return r.status === "off" ? "off" : (r.status === "skipped" ? r.reason : null);
+}
+
+// formatBreadcrumb(result, absPath) — the 1-2 fact lines for one syncPlanFile result.
 function formatBreadcrumb(result, absPath) {
   const r = result || {};
-  if (r.status === "pushed" && r.url) return `Plan file: ${r.url}`;
-  const lines = [`Plan file: ${absPath}`];
-  if (r.status === "pushed") lines.push("[plan-sync] pushed (no blob URL for this remote)");
-  else if (r.status === "off") lines.push("[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)");
+  if (r.status === "pushed" && r.url) return `[plan-file] ${r.url}`;
+  const lines = [`[plan-file] ${absPath}`];
+  if (r.status === "pushed") lines.push("[plan-sync] pushed no-blob-url");
+  else if (r.status === "off") lines.push("[plan-sync] off PLAN_SYNC_REMOTE_URL=");
   else if (r.status === "not-provisioned" || r.status === "failed") {
     lines.push(`[plan-sync] ${r.reason || r.status} ${RUN_HINT}`);
-  } else if (r.status === "skipped" && r.reason === "not-regular-file") {
-    lines.push("[plan-sync] skipped: not a regular file (symlink, directory, or missing)");
-  } else if (r.status === "skipped" && r.reason === "budget-exhausted") {
-    lines.push("[plan-sync] skipped: shared sync budget exhausted (retry by re-saving the plan)");
+  } else if (r.status === "skipped" && (r.reason === "not-regular-file" || r.reason === "budget-exhausted")) {
+    lines.push(`[plan-sync] skipped ${r.reason}`);
   } else if (r.status === "skipped" && QUIET_SKIP_REASONS.has(r.reason)) {
-    lines.push(`[plan-sync] not sent: ${r.reason}`);
+    lines.push(`[plan-sync] not-sent ${r.reason}`);
   }
   return lines.join("\n");
 }
@@ -243,11 +255,15 @@ function emitForArtifacts(filePaths, input, opts) {
   const out = {};
   try {
     const { renderModelContext } = require("./lib/plan-link");
+    const { withConvLang } = require("./lib/conv-lang");
+    const notes = runs.map((r) => explanationKey(r.result))
+      .filter((k) => Object.prototype.hasOwnProperty.call(EXPLANATIONS, k)).map((k) => EXPLANATIONS[k]);
     const deadline = start + budgetMs;
     const entries = runs.map((r) => entryFor(r, Math.max(0, deadline - clock())));
+    const rows = renderModelContext(entries, { when: "after-write" });
     out.hookSpecificOutput = {
       hookEventName: "PostToolUse",
-      additionalContext: renderModelContext(entries, { when: "after-write" }),
+      additionalContext: withConvLang([rows, ...notes].join("\n")),
     };
   } catch (_) { /* fail-open: the breadcrumb below still reaches the user */ }
   const shown = runs.filter((r) => !out.hookSpecificOutput || showsMessage(r.result));

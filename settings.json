@@ -389,6 +389,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/conv-lang-reinject.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/codegraph-context-inject.js\"",
             "timeout": 5
           }
@@ -758,6 +763,11 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/conv-lang-reinject.js\"",
             "timeout": 5
           }
         ]
