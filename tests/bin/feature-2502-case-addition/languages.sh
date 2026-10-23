@@ -9,7 +9,7 @@ echo ""
 echo "=== case addition: pester, pytest, js ==="
 
 # --- pester: tests/bin/foo.Tests.ps1, two top-level Describe blocks, 7 code lines ------------
-P_H=('# Tests: bin/m.ps1' '# Tags: scope:common' 'BeforeAll { function Invoke-Tool { & pwsh -File "$PSScriptRoot/../../bin/m.ps1" } }')
+P_H=('# Tests: bin/m.ps1, bin/n.ps1' '# Tags: scope:common' 'BeforeAll { function Invoke-Tool { & pwsh -File "$PSScriptRoot/../../bin/m.ps1" } }')
 P_D1=("Describe 'one' {" "    It 'runs' { 1 | Should -Be 1 }" '}')
 P_D2=("Describe 'two' {" "    It 'runs' { 2 | Should -Be 2 }" '}')
 P_D3=("Describe 'three' {" "    It 'calls' { Invoke-Tool }" '}')
@@ -44,8 +44,25 @@ expect_clean "pester rc 69, a value rewritten"
 LM_CLI="$LM_CLI_REAL"
 case_end
 
+# One-path rows never reach 4b (no case-count, no code lines), so they run without pwsh / uv
+# guards; the 1 -> 2 rows check the code only, since the basis depends on the runtime.
+P_H1=('# Tests: bin/m.ps1' "${P_H[@]:1}")
+raw ca-p1-head "${P_H1[@]}" "${P_D1[@]}" "${P_D2[@]}"
+
+case_begin "ca-pester-one-path-case-added-passes" "bin/lib/test-language-match.sh"
+raw ca-p1-add "${P_H1[@]}" "${P_D1[@]}" "${P_D2[@]}" "${P_D3[@]}"
+lm tests/bin/foo.Tests.ps1 ca-p1-add ca-p1-head
+expect_clean "pester, one path, Describe three added"
+case_end
+
+case_begin "ca-pester-tests-grown-to-two-paths-blocks" "bin/lib/test-language-match.sh"
+raw ca-p1-grow "${P_H[@]}" "${P_D1[@]}" "${P_D2[@]}" "${P_D3[@]}"
+lm tests/bin/foo.Tests.ps1 ca-p1-grow ca-p1-head
+expect_added "pester, Tests: 1 -> 2 paths, Describe three added" tests/bin/foo.Tests.ps1 pester "*"
+case_end
+
 # --- pytest: tests/bin/test_foo.py, test_one and class TestGroup (2 units), 8 code lines -----
-Y_H=('# Tests: bin/m.py' '# Tags: scope:common' 'import subprocess' '' '' 'def run_tool():' \
+Y_H=('# Tests: bin/m.py, bin/n.py' '# Tags: scope:common' 'import subprocess' '' '' 'def run_tool():' \
   '    return subprocess.run(["python", "bin/m.py"], check=False)' '' '')
 Y_ONE=('def test_one():' '    assert 1 == 1' '' '')
 Y_CLS=('class TestGroup:' '    def test_a(self):' '        assert True')
@@ -71,8 +88,23 @@ else
 fi
 case_end
 
+Y_H1=('# Tests: bin/m.py' "${Y_H[@]:1}")
+raw ca-y1-head "${Y_H1[@]}" "${Y_ONE[@]}" "${Y_CLS[@]}"
+
+case_begin "ca-pytest-one-path-case-added-passes" "bin/lib/test-language-match.sh"
+raw ca-y1-add "${Y_H1[@]}" "${Y_ONE[@]}" "${Y_CLS[@]}" '' '' 'def test_three():' '    run_tool()'
+lm tests/bin/test_foo.py ca-y1-add ca-y1-head
+expect_clean "pytest, one path, test_three added"
+case_end
+
+case_begin "ca-pytest-tests-grown-to-two-paths-blocks" "bin/lib/test-language-match.sh"
+raw ca-y1-grow "${Y_H[@]}" "${Y_ONE[@]}" "${Y_CLS[@]}" '' '' 'def test_three():' '    run_tool()'
+lm tests/bin/test_foo.py ca-y1-grow ca-y1-head
+expect_added "pytest, Tests: 1 -> 2 paths, test_three added" tests/bin/test_foo.py pytest "*"
+case_end
+
 # --- js: tests/bin/foo.js, check() calls without caseBegin (no unit), 5 code lines -----------
-J_H=('"use strict";' '// Tests: hooks/x.js' '// Tags: scope:common' 'const assert = require("node:assert");' \
+J_H=('"use strict";' '// Tests: hooks/x.js, bin/foo.js' '// Tags: scope:common' 'const assert = require("node:assert");' \
   'function check(name, fn) { fn(); }')
 J_1=('check("one", () => { assert.equal(1, 1); });')
 J_2=('check("two", () => { assert.equal(2, 2); });')
@@ -88,4 +120,20 @@ expect_clean "js, a value rewritten"
 raw ca-j-comment "${J_H[@]}" "${J_1[@]}" '// a note on check two' "${J_2[@]}"
 lm tests/bin/foo.js ca-j-comment ca-j-head
 expect_clean "js, a comment line added"
+case_end
+
+J_H1=("${J_H[0]}" '// Tests: hooks/x.js' "${J_H[@]:2}")
+J_3='check("three", () => { require("../../hooks/x.js"); });'
+raw ca-j1-head "${J_H1[@]}" "${J_1[@]}" "${J_2[@]}"
+
+case_begin "ca-js-one-path-case-added-passes" "bin/lib/test-language-match.sh"
+raw ca-j1-add "${J_H1[@]}" "${J_1[@]}" "${J_2[@]}" "$J_3"
+lm tests/bin/foo.js ca-j1-add ca-j1-head
+expect_clean "js, one path, check three added"
+case_end
+
+case_begin "ca-js-tests-grown-to-two-paths-blocks" "bin/lib/test-language-match.sh"
+raw ca-j1-grow "${J_H[@]}" "${J_1[@]}" "${J_2[@]}" "$J_3"
+lm tests/bin/foo.js ca-j1-grow ca-j1-head
+expect_added "js, Tests: 1 -> 2 paths, check three added" tests/bin/foo.js js "*"
 case_end

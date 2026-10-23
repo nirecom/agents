@@ -40,10 +40,13 @@ expect_added "new file, header bin/a.sh + bin/foo.sh" tests/bin/n4.sh bash "case
 assert_eq "two .sh tokens: mismatch lines=$(count_code TEST_LANGUAGE_MISMATCH)" "two .sh tokens: mismatch lines=0"
 case_end
 
-# A marker-less existing bash test: two code lines of setup and two per case (6 in all).
-H_SH=('#!/usr/bin/env bash' '# Tests: bin/a.sh' '# Tags: scope:common' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
-H_E2E=('#!/usr/bin/env bash' '# Tests: bin/a.sh' '# Tags: scope:common, test-lang-exception:e2e' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
-H_OTHER=('#!/usr/bin/env bash' '# Tests: bin/a.sh' '# Tags: scope:common, test-lang-exception:other' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
+# A marker-less existing bash test: two code lines of setup and two per case (6 in all). The
+# shared headers list two paths, since an existing file whose Tests: has one path skips 4b.
+H_SH=('#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/foo.sh' '# Tags: scope:common' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
+H_SH1=('#!/usr/bin/env bash' '# Tests: bin/a.sh' '# Tags: scope:common' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
+H_SH0=('#!/usr/bin/env bash' '# Tags: scope:common' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
+H_E2E=('#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/foo.sh' '# Tags: scope:common, test-lang-exception:e2e' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
+H_OTHER=('#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/foo.sh' '# Tags: scope:common, test-lang-exception:other' "$SRC" 'run_hook() { node "$REPO/hooks/x.js"; }')
 C1=('# case one' 'echo one' 'assert_eq 1 1')
 C2=('# case two' 'echo two' 'assert_eq 2 2')
 C3_HOOK=('# case three' 'run_hook' 'assert_eq 0 "$?"')
@@ -134,7 +137,7 @@ expect_clean "markers added, hooks/x.js already in HEAD's header"
 case_end
 
 # Malformed in both versions: the first case is never closed.
-H_A=('#!/usr/bin/env bash' '# Tests: bin/a.sh' '# Tags: scope:common' "$SRC")
+H_A=('#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/foo.sh' '# Tags: scope:common' "$SRC")
 raw ca-mal-head "${H_A[@]}" "$MB \"a\" \"bin/a.sh\"" 'echo a'
 
 case_begin "ca-malformed-case-added-counts-units" "bin/lib/test-language-match/case-addition.sh"
@@ -176,4 +179,59 @@ raw ca-deps-same "${H_A[@]}" '# deps-fail' "${CF_A[@]}" "$MB \"b\" \"bin/a.sh\""
 lm tests/bin/d2.sh ca-deps-same ca-cf-head
 expect_clean "deps op fails, no case added"
 LM_CLI="$LM_CLI_REAL"
+case_end
+
+# Rule b (user decision 2026-10-22): the working version's Tests: token count decides 4b for an
+# existing file too. Exactly one path skips it; zero tokens and two or more are still judged.
+raw ca-nm1-head "${H_SH1[@]}" "${C1[@]}" "${C2[@]}"
+
+case_begin "ca-no-markers-one-path-case-added-passes" "bin/lib/test-language-match.sh"
+raw ca-nm1-add "${H_SH1[@]}" "${C1[@]}" "${C2[@]}" "${C3_HOOK[@]}"
+lm tests/bin/t1.sh ca-nm1-add ca-nm1-head
+expect_clean "no markers, one path, case calling run_hook added"
+case_end
+
+case_begin "ca-no-markers-tests-grown-to-two-paths-case-added-blocks" "bin/lib/test-language-match.sh"
+raw ca-nm1-grow "${H_SH[@]}" "${C1[@]}" "${C2[@]}" "${C3_HOOK[@]}"
+lm tests/bin/t2.sh ca-nm1-grow ca-nm1-head
+expect_added "no markers, Tests: 1 -> 2 paths, case added" tests/bin/t2.sh bash "case count unavailable: no case unit; code lines 6 -> 8"
+assert_eq "Tests: 1 -> 2 paths: mismatch lines=$(count_code TEST_LANGUAGE_MISMATCH)" "Tests: 1 -> 2 paths: mismatch lines=0"
+case_end
+
+case_begin "ca-no-markers-tests-shrunk-to-one-path-case-added-passes" "bin/lib/test-language-match.sh"
+# The working version's token count decides, so dropping a path in the same edit skips 4b.
+raw ca-nm2-shrink "${H_SH1[@]}" "${C1[@]}" "${C2[@]}" "${C3_HOOK[@]}"
+lm tests/bin/t3.sh ca-nm2-shrink ca-nm-head
+expect_clean "no markers, Tests: 2 -> 1 path, case added"
+case_end
+
+case_begin "ca-no-markers-one-path-header-retargeted-to-js-mismatch-only" "bin/lib/test-language-match.sh"
+raw ca-nm1-js "${H_SH1[0]}" '# Tests: hooks/x.js' "${H_SH1[@]:2}" "${C1[@]}" "${C2[@]}" "${C3_HOOK[@]}"
+lm tests/bin/t4.sh ca-nm1-js ca-nm1-head
+expect_rc "no markers, one path retargeted to hooks/x.js" 1
+expect_mismatch "no markers, one path retargeted to hooks/x.js" tests/bin/t4.sh hooks/x.js
+assert_eq "retargeted to hooks/x.js: mismatch lines=$(count_code TEST_LANGUAGE_MISMATCH)" "retargeted to hooks/x.js: mismatch lines=1"
+assert_eq "retargeted to hooks/x.js: CASE_ADDED lines=$(count_code CASE_ADDED_WITHOUT_MARKERS)" "retargeted to hooks/x.js: CASE_ADDED lines=0"
+case_end
+
+case_begin "ca-markers-added-one-path-js-target-blocks" "bin/lib/test-language-match.sh"
+# Pins _tlm_migration ahead of the token count: the case on hooks/x.js begins on line 14.
+raw ca-mk1-js "${H_SH1[@]}" "${MK_1[@]}" "${MK_2[@]}" "${MK_JS[@]}"
+lm tests/bin/t5.sh ca-mk1-js ca-nm1-head
+expect_rc "one path, markers added, hooks/x.js target" 1
+case "$LM_OUT" in
+  *"HIGH: tests/bin/t5.sh line 14: "*"of hooks/x.js "*"code=TEST_LANGUAGE_MISMATCH"*) pass "one path migration: mismatch on line 14" ;;
+  *) fail "one path migration" "no line-14 TEST_LANGUAGE_MISMATCH for hooks/x.js: out=[$LM_OUT] err=[$LM_ERR]" ;;
+esac
+assert_eq "one path migration: mismatch lines=$(count_code TEST_LANGUAGE_MISMATCH)" "one path migration: mismatch lines=1"
+assert_eq "one path migration: CASE_ADDED lines=$(count_code CASE_ADDED_WITHOUT_MARKERS)" "one path migration: CASE_ADDED lines=0"
+case_end
+
+case_begin "ca-no-markers-no-tests-header-case-added-blocks" "bin/lib/test-language-match.sh"
+# Zero tokens stays fail-closed: the condition is "not exactly one", not "two or more".
+raw ca-nm0-head "${H_SH0[@]}" "${C1[@]}" "${C2[@]}"
+raw ca-nm0-add "${H_SH0[@]}" "${C1[@]}" "${C2[@]}" "${C3_HOOK[@]}"
+lm tests/bin/t6.sh ca-nm0-add ca-nm0-head
+expect_added "no markers, no Tests: line, case added" tests/bin/t6.sh bash "case count unavailable: no case unit; code lines 6 -> 8"
+assert_eq "no Tests: line: mismatch lines=$(count_code TEST_LANGUAGE_MISMATCH)" "no Tests: line: mismatch lines=0"
 case_end

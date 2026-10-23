@@ -88,7 +88,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### test-lang-exception
 - **Definition**: A value in a test file's `# Tags:` line (`text-only`, `symmetry`, or `e2e`) that lets the whole file be written in a language other than the code it tests.
-- **Related**: [rules/test.md](../rules/test.md)
+- **Related**: [rules/test.md](../../rules/test.md)
 
 ### WF-CODE
 
