@@ -61,7 +61,7 @@ function normalizeValue(v) {
 
 // Shape guard for any language value spliced into injected prompt context.
 // Not an allowlist of languages — free-text names in any script pass
-// ("brazilian portuguese", Spanish or Japanese in native script); anything carrying injection
+// ("brazilian portuguese", "español", "日本語"); anything carrying injection
 // framing (parens, colons, newlines, backticks, $, quotes) or over 40 chars does
 // not. \p{M} keeps decomposed accents and Vietnamese tone marks legal.
 // Applied to the already trimmed+lowercased value.
