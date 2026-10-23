@@ -10,8 +10,10 @@
 const { literalById } = require("./forbidden-literals");
 const { buildScriptEscapeHatch } = require("../lib/alt-target-remedy");
 const { NOTIFY_CODES } = require("./reasons");
+const { GIT_DEVIANT_FORMS } = require("./git-deviant/forms");
 
 const RULE_OWNER = 'rules/shell-commands.md "Command-Line Issuance Discipline"';
+const GIT_DEVIANT_RULE_OWNER = 'rules/git.md "Force Push"';
 
 function escapeHatch() {
   try {
@@ -68,4 +70,15 @@ function buildNotifyMessage(hit, code) {
   return `${remedy} [bash-guard ${id}]`;
 }
 
-module.exports = { buildDenyMessage, buildNotifyMessage, RULE_OWNER };
+/**
+ * @param {string} formId a git-deviant/forms.js id
+ * @returns {string} the form's fixed guidance, its [bash-guard <code>] tag and the policy owner
+ */
+function buildGitDeviantMessage(formId) {
+  const form = GIT_DEVIANT_FORMS[formId];
+  const guidance = form ? form.message : "Blocked for security reasons: deviant git command form.";
+  const tag = form ? ` [bash-guard ${form.code}]` : "";
+  return `${guidance}${tag}\n\nPolicy owner: ${GIT_DEVIANT_RULE_OWNER}.`;
+}
+
+module.exports = { buildDenyMessage, buildNotifyMessage, buildGitDeviantMessage, RULE_OWNER, GIT_DEVIANT_RULE_OWNER };
