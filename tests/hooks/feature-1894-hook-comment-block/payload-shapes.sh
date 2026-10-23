@@ -1,19 +1,9 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block/payload-shapes.sh
-# Tests: hooks/block-comment-block-size.js, hooks/lib/write-tools.js
+# Tests: hooks/block-post-edit-size.js, hooks/block-post-edit-size/comment-block.js, hooks/lib/write-tools.js
 # Tags: comment-block-size, hook, pretooluse, payload, multiedit, fail-open, scope:issue-specific, scope:feature-1894, layer:TL2
-
-# Part 2 — reconstructing the post-edit file from the payload.
-# decision-boundary.sh assumes the hook knows what the file looks like after
-# the tool runs; producing that is the most failure-prone job here — it must
-# reimplement each tool's semantics (first-match vs all-matches, sequential
-# MultiEdit) from JSON, before the tool runs, with no way to check its
-# answer. Every reconstructible branch gets a row; every branch it CANNOT
-# reconstruct gets an approve row — asymmetric on purpose: guessing wrong and
-# approving only loses a shift-left catch pre-commit still makes, guessing
-# wrong and blocking stops a valid write with no override. Uncertainty
-# resolves to approve (detail plan S3-1 steps 2, 8, 11).
-
+# Part 2 — rebuilding the post-edit file from the payload (first-match vs all-matches, sequential MultiEdit).
+# Every unrebuildable branch gets an approve row: a wrong approve loses only a catch pre-commit still makes.
 # Sourced by the dispatcher; all helpers are defined there.
 
 # ============================================================================

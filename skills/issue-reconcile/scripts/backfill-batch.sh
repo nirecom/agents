@@ -80,7 +80,7 @@ if ! (cd "$SCRIPT_CHECKOUT_ROOT" && uv run bin/sort-history.py "$HISTORY"); then
 fi
 
 # Rotate once, with the same thresholds doc-append's auto-rotation would use.
-if ! (cd "$SCRIPT_CHECKOUT_ROOT" && uv run bin/doc-rotate.py "$HISTORY" --threshold-warn 500 --floor 20); then
+if ! (cd "$SCRIPT_CHECKOUT_ROOT" && uv run bin/doc-rotate.py "$HISTORY" --threshold-warn-ssot --floor 20); then
     echo "Error: doc-rotate.py failed" >&2
     exit 1
 fi

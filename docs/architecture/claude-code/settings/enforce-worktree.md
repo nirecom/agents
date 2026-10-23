@@ -113,7 +113,7 @@ plus a fail reason, and every consumer maps `ok:false` to the write/block side. 
 boundaries return their input unchanged instead of throwing, so a pathological command cannot
 crash the hook into emitting no verdict at all (a crash would be fail-open).
 
-## Script checkout root trust anchor
+## `SCRIPT_CHECKOUT_ROOT` trust anchor
 
 Predicates that recognize a sanctioned script by
 `<script-checkout-root>/<relative-path>` resolve that directory through
@@ -136,7 +136,7 @@ does **not** call the quote-spans scanner: rather than parse arbitrary quoting, 
 only two token shapes (a bare word free of quote characters, or a fully double-quoted word)
 and rejects everything else, so no env prefix, redirect, pipe, `&&`, or `$VAR` can ride
 along. Three locks must all hold: the script path's derived root equals the marker-validated
-script checkout root; the `<target-main-root>` argument equals the repo under judgement; and that
+`SCRIPT_CHECKOUT_ROOT`; the `<target-main-root>` argument equals the repo under judgement; and that
 same argument is one of `getSessionRepoRoots()`'s trusted main worktrees. The payload must
 live under the plans dir. Argument values are screened against the reject set exported by
 `hooks/enforce-worktree/arg-value-guard.js` (`UNSAFE_ARG_VALUE_RE`, `hasControlChar`,

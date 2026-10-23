@@ -70,8 +70,8 @@ tmp → rename so a reader never observes a half-written file.
   "current_issue_number": 1673,
   "issue_repo": "owner/repo",
   "owner_repo": "owner/repo",
-  "script_checkout_root": "<resolved script checkout root>",
-  "target_main_root": "<resolved target-main-root>",
+  "script_checkout_root": "<resolved SCRIPT_CHECKOUT_ROOT>",
+  "target_main_root": "<resolved TARGET_MAIN_ROOT>",
   "merge_commit": "<40-hex or empty>",
   "phase": "init_done",
   "triage_action": "resume_e",
@@ -117,8 +117,8 @@ refuses the pass **before any child process is spawned**.
 | `current_issue_number` | int | min 1 |
 | `owner_repo` | `owner-repo` | rebind target |
 | `issue_repo` | `repo-ref` | optional |
-| `script_checkout_root` | `anchor-script-checkout-root` | must equal the resolved script checkout root |
-| `target_main_root` | `anchor-target-main-root` | must equal the resolved target-main-root |
+| `script_checkout_root` | `anchor-script-checkout-root` | must equal the resolved `SCRIPT_CHECKOUT_ROOT` |
+| `target_main_root` | `anchor-target-main-root` | must equal the resolved `TARGET_MAIN_ROOT` |
 | `phase` | enum | `init_done` \| `awaiting_recursion` \| `terminal` |
 | `triage_action` | closed set | `resume_e` \| `resume_h` \| `resume_j` \| `auto_close_path` \| `admin_close_path` \| `meta_pending_subs`, or `^stuck_[a-z0-9_]{1,32}$` |
 | `merge_commit` | text, max 64 | `^[0-9a-f]{0,40}$` |
@@ -190,8 +190,8 @@ first.
 
 ## Environment resolution
 
-Every child's extra environment is built from the trust anchors (script
-checkout root, target-main-root), never read from `process.env`. `envPassthrough` in the registry
+Every child's extra environment is built from the trust anchors
+(`SCRIPT_CHECKOUT_ROOT`, `TARGET_MAIN_ROOT`), never read from `process.env`. `envPassthrough` in the registry
 describes what *may* reach a child, not what *should*; relying on inheritance
 would make a child's behaviour depend on the ambient environment of whoever
 launched the session.
@@ -199,12 +199,12 @@ launched the session.
 | phase | `extraEnv` | cwd |
 |---|---|---|
 | `initial` | `FINALIZE_SCRIPTS_DIR`, `TARGET_MAIN_ROOT` | `target_main_root` |
-| `loop_step` | `FINALIZE_SCRIPTS_DIR` | target-main-root |
-| `finalize_terminal` | *(none)* | target-main-root |
+| `loop_step` | `FINALIZE_SCRIPTS_DIR` | `TARGET_MAIN_ROOT` |
+| `finalize_terminal` | *(none)* | `TARGET_MAIN_ROOT` |
 
 `AGENTS_MAIN_ROOT` is absent from every row on purpose:
 `bin/worker-dispatch/spawn.js` sets it itself, deriving the agents main worktree
-from the script checkout root anchor, and the child
+from the `SCRIPT_CHECKOUT_ROOT` anchor, and the child
 env allowlist deliberately refuses it as a caller-supplied value.
 
 ## Phase 1 (`issue-close-stage`) for contrast

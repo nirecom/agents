@@ -3,9 +3,9 @@
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
 # Fragment sourced by tests/hooks/feature-1701-workflow-gate-code-size.sh (cases 8-14:
-# infrastructure failure handling, CODE_FILE_EXTENSIONS resolution); not run directly.
-# Depends on the parent for its fixture helpers, run_hook, the assert_* helpers,
-# HOOK_OUT, pass/fail/skip, and glossary_check_record (#2529).
+# infrastructure failure handling, timeout = the only fail-open path, CODE_FILE_EXTENSIONS
+# resolution); not run directly. Depends on the parent for its fixture helpers, run_hook,
+# the assert_* helpers, HOOK_OUT, pass/fail/skip, and glossary_check_record (#2529).
 
 # 8. bash not on PATH -> block (infrastructure error, NOT fail-open).
 test_8_bash_missing_blocks() {
@@ -97,8 +97,16 @@ test_11_timeout_fail_open() {
     make_lines 501 > "$repo/bin/big.js"
     git -C "$repo" add bin/big.js
     ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
+    local saved_retries="$HOOK_TIMEOUT_RETRIES"
+    HOOK_TIMEOUT_RETRIES=0
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
-    assert_approve "11: review-code-size timeout -> approve (only fail-open path)"
+    HOOK_TIMEOUT_RETRIES="$saved_retries"
+    assert_approve "11: review-code-size timeout -> approve (only fail-open path)" || return
+    if echo "$HOOK_OUT" | grep -q 'timed out'; then
+        pass "11: approve comes from the timeout fail-open diagnostic"
+    else
+        fail "11: approve without the timeout diagnostic" "$HOOK_OUT"
+    fi
 }
 
 # 12. process.env CODE_FILE_EXTENSIONS is ignored by gate — only .env is authoritative.

@@ -142,7 +142,7 @@ Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` cont
 
 ## Size Limits
 
-- Same limits as code files: WARN at >300 lines, HARD at >500 lines.
+- Same limits as code files: kind `code` of the generated Size limits table in `rules/coding/file-split.md`.
 - Split mechanism: same as code — `tests/<name>/` sibling folder with a dispatcher file in the same language. See `rules/coding/file-split.md`.
 - Canonical split example: `tests/hooks/main-workflow-skip-sentinels/` (PR #867).
 - `tests/_archive/` is excluded from size checks.

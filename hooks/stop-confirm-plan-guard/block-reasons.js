@@ -1,6 +1,6 @@
 "use strict";
 // hooks/stop-confirm-plan-guard/block-reasons.js — the Stop guard's block reasons, ranked by
-// firstBlock: layer 2, plan-link, close-on-link, unpublished, plan-lang.
+// firstBlock: layer 2, plan-link, close-on-link, unpublished, plan-size / plan-lang.
 
 const fs = require("fs");
 const path = require("path");
@@ -28,15 +28,23 @@ function resultIsError(entries, id) {
   return false;
 }
 
-// The stage's plan violates PLAN_LANG (#2278): Layer 2 and the presentation share it.
-function planLangReason(sid, stage) {
+// The stage's plan is over HARD (#2631) or violates PLAN_LANG (#2278): Layer 2 and the
+// presentation share it. -> {kind: "plan-size"|"plan-lang", reason} | null, size first.
+function planRelintReason(sid, stage) {
   const { relintPlanArtifact, formatPlanLangViolations } = require("../lib/plan-artifact-lang");
   const relint = relintPlanArtifact(sid, stage);
-  if (relint.skipped !== null || relint.violations.length === 0) return null;
-  return "[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
+  if (relint.skipped !== null) return null;
+  const size = relint.size;
+  if (size && size.verdict === "hard" && require("../lib/size-session-gate").sizeCheckActive(sid)) {
+    return { kind: "plan-size", reason: "[confirm-plan] Layer 2/plan-size: " + path.basename(relint.artifactPath) + " is " +
+      size.value + " " + size.unit + ", over HARD " + size.hard + " — compress it below HARD (send it back to the planner) before CONFIRM_" +
+      stage.toUpperCase() + "; limits: rules/coding/file-split.md" };
+  }
+  if (relint.violations.length === 0) return null;
+  return { kind: "plan-lang", reason: "[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
     " violates plan-artifact language/heading rules (PLAN_LANG=" + relint.policy + ", " +
     relint.violations.length + " line(s)) — fix body language and use canonical English schema headings before CONFIRM_" +
-    stage.toUpperCase() + ":\n" + formatPlanLangViolations(relint.violations).join("\n");
+    stage.toUpperCase() + ":\n" + formatPlanLangViolations(relint.violations).join("\n") };
 }
 
 function layer2Reason(sid, content, entries) {
@@ -55,8 +63,8 @@ function layer2Reason(sid, content, entries) {
   if (resultIsError(entries, content[confirmIdx].id)) return null;
   // Re-lint the confirmed artifact before the follow-up check: a non-compliant plan must be
   // rewritten, not merely continued (#2278).
-  const lang = planLangReason(sid, stage);
-  if (lang) return lang;
+  const relint = planRelintReason(sid, stage);
+  if (relint) return relint.reason;
   const nextSkill = nextSkillFor(stage);
   for (let i = confirmIdx + 1; i < content.length; i++) {
     const item = content[i];
@@ -140,7 +148,7 @@ function unpublishedReason(presented) {
   return { kind: "unpublished", reason: require("../lib/confirm-continuation").presentAgainReason(hit.stage, "unpublished") };
 }
 
-// Wrapped here, not in the reason builders: planLangReason is reused inside layer2Reason.
+// Wrapped here, not in the reason builders: planRelintReason is reused inside layer2Reason.
 function convLang(reason) {
   try { return require("../lib/conv-lang").withConvLang(reason); } catch (_) { return reason; /* the bare reason still blocks */ }
 }
@@ -156,10 +164,10 @@ function firstBlock(ctx, presented) {
   const found = closeOnLinkReason(ctx) || unpublishedReason(presented);
   if (found) return found;
   for (const p of presented) {
-    const lang = planLangReason(sid, p.stage);
-    if (lang) return { kind: "plan-lang", reason: convLang(lang) };
+    const relint = planRelintReason(sid, p.stage);
+    if (relint) return { kind: relint.kind, reason: convLang(relint.reason) };
   }
   return null;
 }
 
-module.exports = { firstBlock, planLangReason, PLAN_STAGES };
+module.exports = { firstBlock, planRelintReason, PLAN_STAGES };

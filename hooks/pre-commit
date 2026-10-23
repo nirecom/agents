@@ -330,6 +330,11 @@ _precommit_check_test_language_match || exit 1
 _precommit_section agents-repo-gates
 _precommit_agents_repo_gates
 
+# File-size gate (#2631): agents repo only; rationale in hooks/lib/precommit-size-gate.sh.
+# shellcheck source=hooks/lib/precommit-size-gate.sh
+. "$_cfg_dir/hooks/lib/precommit-size-gate.sh"
+_precommit_size_gate
+
 # ---------- comment-block size gate (issue #1894) ----------
 # Blocking, but only on the scanner's rc 1 — that value is the verdict "staged
 # code grew an over-threshold comment run". Every other non-zero rc is an

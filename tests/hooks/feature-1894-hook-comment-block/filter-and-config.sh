@@ -1,18 +1,9 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block/filter-and-config.sh
-# Tests: hooks/block-comment-block-size.js, hooks/lib/load-env.js, hooks/lib/comment-block-scan.js
+# Tests: hooks/block-post-edit-size.js, hooks/block-post-edit-size/comment-block.js, hooks/lib/load-env.js, hooks/lib/comment-block-scan.js
 # Tags: comment-block-size, hook, pretooluse, dotenv, config, extensions, exclusions, spoofing, scope:issue-specific, scope:feature-1894, layer:TL2
-
-# Part 4 — what the hook scans, and who gets to change the rules. Two
-# questions sharing a code path (CPR-SC): Scope — extensions/excluded dirs,
-# a hot-path filter run on every Edit, deliberately first; failure direction
-# is "scanned something it shouldn't" (latency, false blocks in vendored
-# trees). Control — numbers come from the agents main root's .env and NOWHERE
-# else; process.env is never consulted, since `COMMENT_BLOCK_MAX_LINES=999999
-# claude` could otherwise disable the feature silently for the session. The
-# spoof rows are the point: each has a matched .env/ambient pair with
-# opposite meanings, so a hook reading process.env has to move on one.
-
+# Part 4 — Scope (extension / excluded-dir filter, first on the hot path) and Control (numbers only from
+# the agents main root's .env, never process.env; spoof rows pair .env and ambient with opposite meanings).
 # Sourced by the dispatcher; all helpers are defined there.
 
 # ============================================================================

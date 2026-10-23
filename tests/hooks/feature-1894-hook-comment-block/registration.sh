@@ -1,18 +1,13 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block/registration.sh
-# Tests: settings.json, hooks/block-comment-block-size.js
+# Tests: settings.json, hooks/block-post-edit-size.js
 # Tags: comment-block-size, hook, pretooluse, settings, registration, wiring, e2e, integration, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Part 6 — the wiring. Every other case invokes the hook directly, which
-# proves it works but says nothing about whether it ever runs; an
-# unregistered hook passes its tests and guards nothing, silently — authors
-# keep writing long blocks, the suite stays green. G1-G4 read settings.json
-# as data; G5 EXECUTES the command string it found as a child process and
-# validates the response against the PreToolUse protocol — the integration
-# half a hook-registration change requires (rules/test.md). Beyond that:
-# whether Claude Code itself routes an Edit into the hook (TL3 gap — also,
-# ~/.claude/settings.json is installer-assembled and needs a reinstall).
-
+# Part 6 — the wiring: an unregistered hook passes its tests and guards nothing, silently.
+# G1-G4 read settings.json as data; G5 EXECUTES the registered command string and validates the
+# response against the PreToolUse protocol (the integration half rules/test.md requires).
+# TL3 gap: whether Claude Code itself routes an Edit into the hook (~/.claude/settings.json is
+# installer-assembled and needs a reinstall).
 # Sourced by the dispatcher; all helpers are defined there.
 
 REG_JS="$TMPDIR_BASE/reg.js"
@@ -40,11 +35,11 @@ reg_lookup() {
 # ============================================================================
 g1_registered_once() {
     local rows
-    rows="$(reg_lookup block-comment-block-size.js)"
+    rows="$(reg_lookup block-post-edit-size.js)"
     local n
     n="$(printf '%s' "$rows" | grep -c . || true)"
     if [ "$n" = "1" ]; then
-        pass "G1: block-comment-block-size.js is registered exactly once"
+        pass "G1: block-post-edit-size.js is registered exactly once"
     else
         fail "G1: found $n PreToolUse registration(s), expected 1" \
              "rows: ${rows:-<none>}"
@@ -115,32 +110,24 @@ g4_target_exists_and_runs() {
     if node --check "$(mpath "$HOOK")" >/dev/null 2>&1; then
         pass "G4: the hook parses as valid Node"
     else
-        fail "G4: node --check failed on hooks/block-comment-block-size.js"
+        fail "G4: node --check failed on hooks/block-post-edit-size.js"
     fi
     # Loading the module must not run the hook: a require.main guard is what
     # lets tests and other hooks import it without consuming stdin.
     if grep -q 'require.main' "$HOOK"; then
         pass "G4: the hook has a require.main guard"
     else
-        fail "G4: no require.main guard in hooks/block-comment-block-size.js" \
+        fail "G4: no require.main guard in hooks/block-post-edit-size.js" \
              "Without it, requiring the module executes the hook."
     fi
 }
 
-# G5 — the registered command line, run as a process, answers in the host
-# protocol (Codex round-1 C1). G1-G3 read settings.json as data, and every
-# other case invokes `node <path-to-hook>` composed by the TEST; between
-# those sits what actually runs in production — the command STRING
-# settings.json carries. A typo'd path, missing `node`, or bad quoting is
-# green under both halves and dead in the field; so is a bare "block" line,
-# a stray console.log before JSON, or a non-zero exit (Claude Code surfaces
-# that as a hook error, not a verdict).
-
-# This case takes the command verbatim from settings.json, expands only
-# $AGENTS_MAIN_ROOT to the worktree under test, and hands it a real payload
-# on stdin through `bash -c`, exercising the host's own tokenisation. TL3
-# gap: proves the command is runnable and protocol-correct; whether Claude
-# Code dispatches an Edit into it is only checkable on a real host.
+# G5 — the registered command line, run as a process, answers in the host protocol (Codex
+# round-1 C1). A typo'd path, missing `node`, bad quoting, a bare "block" line, a stray
+# console.log before JSON, or a non-zero exit is green under G1-G4 and dead in the field.
+# The command is taken verbatim from settings.json, only $AGENTS_MAIN_ROOT is expanded to the
+# worktree under test, and it runs through `bash -c` (the host's own tokenisation).
+# TL3 gap: whether Claude Code dispatches an Edit into it is only checkable on a real host.
 E2E_JS="$TMPDIR_BASE/verdict.js"
 cat > "$E2E_JS" <<'E2EJS'
 // Validates one PreToolUse hook response. Prints "OK <decision> <reasonLen>"

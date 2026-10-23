@@ -16,7 +16,7 @@ Every child process the dispatcher starts holds all three:
    script resolved from an anchor plus a hardcoded relative path. The payload
    never names an executable.
 3. **The child env is an allowlist.** `AGENTS_MAIN_ROOT` is set explicitly from
-   the resolved script checkout root anchor and is never inherited, so a poisoned parent env
+   the resolved `SCRIPT_CHECKOUT_ROOT` anchor and is never inherited, so a poisoned parent env
    cannot redirect a child at a planted checkout.
 
 ## External commands derived from the test language registry
