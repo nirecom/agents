@@ -4,7 +4,8 @@
 # Tags: TL2, bin, self-impl, test-language-registry, pre-commit, scope:issue-specific
 # Issue #2502 S3: bin/check-self-impl.sh reports a test that builds its own harness
 # (a hand-made pass/fail counter, or a redefinition of a helper-library name) for every
-# registered language, and check-test-frontmatter.sh --staged runs it on new files only.
+# registered language, and check-test-frontmatter.sh --staged runs it on new files and, against
+# the HEAD copy, on existing ones.
 # Cases live in the sibling directory: cli.sh drives the CLI, commit-time.sh the commit gate.
 # TL3 gap: a real git commit through the installed hook (mitigation: the precommit lib split
 # test drives the staged path, and tests/hooks/feature-2502-block-self-impl.js the edit path).
@@ -139,6 +140,12 @@ case_end
 . "$CASE_DIR/cli.sh"
 # shellcheck source=feature-2502-check-self-impl/commit-time.sh
 . "$CASE_DIR/commit-time.sh"
+# shellcheck source=feature-2502-check-self-impl/bodies-head.sh
+. "$CASE_DIR/bodies-head.sh"
+# shellcheck source=feature-2502-check-self-impl/cli-head.sh
+. "$CASE_DIR/cli-head.sh"
+# shellcheck source=feature-2502-check-self-impl/commit-time-langs.sh
+. "$CASE_DIR/commit-time-langs.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

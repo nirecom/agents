@@ -30,6 +30,17 @@ source "$(dirname "$0")/../../tests/lib/harness.sh"
 PASS=0
 echo done
 EOF
+# sh-bad-edit-unrelated: sh-bad-edit with only an unrelated line changed (existing debt kept).
+cat > "$BODIES/sh-bad-edit-unrelated" <<'EOF'
+#!/usr/bin/env bash
+# Tests: bin/a.sh
+# Tags: scope:common
+source "$(dirname "$0")/../../tests/lib/harness.sh"
+PASS=0
+echo finished
+EOF
+# sh-bad-edit-dup: sh-bad-edit with its counter written twice (lines 5 and 6).
+sed 's/^PASS=0$/PASS=0\nPASS=0/' "$BODIES/sh-bad-edit" > "$BODIES/sh-bad-edit-dup"
 
 # pytest-bad: counter on line 5, redefinition of the helper's isolate on line 8.
 cat > "$BODIES/pytest-bad" <<'EOF'
