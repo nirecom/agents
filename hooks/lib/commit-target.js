@@ -3,7 +3,7 @@
 // Extracted from hooks/scan-outbound.js (file-split rule: >300 lines).
 
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./limited-child-process");
 const { parse, analysisOf } = require("./command-ir");
 const { FLAGS_WITH_ARG } = require("./parse-git-args");
 const { parseCdCommand } = require("./parse-git-args");

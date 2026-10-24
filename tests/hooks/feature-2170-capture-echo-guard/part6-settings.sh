@@ -29,18 +29,36 @@ assert_eq() {
 # future tool-name addition surfaces as a registration failure rather than drifting.
 EXPECTED="$(node "$DRIVER" --expected-matcher)"
 
-assert_eq "E-1a-block-capture-echo-matcher" "$EXPECTED" \
-    "$(node "$DRIVER" --matcher-for "block-capture-echo.js")"
-assert_eq "E-1b-block-capture-echo-timeout" "5" \
-    "$(node "$DRIVER" --timeout-for "block-capture-echo.js")"
-
-assert_eq "E-2a-auto-approve-covers-command-tools" "yes" \
-    "$(node "$DRIVER" --covers-command-tools "preuse-auto-approve.js")"
-# The pre-existing Monitor/EnterWorktree coverage must survive the matcher extension.
-auto_matcher="$(node "$DRIVER" --matcher-for "preuse-auto-approve.js")"
+# Since #2676 block-capture-echo and preuse-auto-approve run as members of the merged
+# allow-deny hook: the primary group reaches the command tools, the monitor-worktree group
+# reaches Monitor/EnterWorktree, and each member's tool list (members.js) scopes it.
+NEEDLE_PRIMARY='merged-allow-deny.js" --matcher-group primary'
+NEEDLE_MW='merged-allow-deny.js" --matcher-group monitor-worktree'
 has_tok() { case "|$1|" in *"|$2|"*) printf 'yes' ;; *) printf 'no' ;; esac; }
-assert_eq "E-2b-auto-approve-keeps-monitor"       "yes" "$(has_tok "$auto_matcher" "Monitor")"
-assert_eq "E-2c-auto-approve-keeps-enterworktree" "yes" "$(has_tok "$auto_matcher" "EnterWorktree")"
+
+assert_eq "E-1a-block-capture-echo-member-tools" "$EXPECTED" \
+    "$(node "$DRIVER" --member-tools "block-capture-echo")"
+assert_eq "E-1a-primary-group-covers-command-tools" "yes" \
+    "$(node "$DRIVER" --covers-command-tools "$NEEDLE_PRIMARY")"
+assert_eq "E-1a-block-capture-echo-no-standalone-entry" "NOT_REGISTERED" \
+    "$(node "$DRIVER" --matcher-for "block-capture-echo.js")"
+assert_eq "E-1b-primary-group-timeout" "15" \
+    "$(node "$DRIVER" --timeout-for "$NEEDLE_PRIMARY")"
+
+assert_eq "E-2a-auto-approve-member-covers-command-tools" "yes" \
+    "$(node "$DRIVER" --member-covers-command-tools "preuse-auto-approve")"
+assert_eq "E-2a-auto-approve-no-standalone-entry" "NOT_REGISTERED" \
+    "$(node "$DRIVER" --matcher-for "preuse-auto-approve.js")"
+# The pre-existing Monitor/EnterWorktree coverage must survive the merge: the group
+# registration reaches the tool AND the member judges it.
+mw_matcher="$(node "$DRIVER" --matcher-for "$NEEDLE_MW")"
+auto_tools="$(node "$DRIVER" --member-tools "preuse-auto-approve")"
+for tool in Monitor EnterWorktree; do
+    assert_eq "E-2bc-monitor-worktree-group-has-[$tool]" "yes" "$(has_tok "$mw_matcher" "$tool")"
+    assert_eq "E-2bc-auto-approve-member-judges-[$tool]" "yes" "$(has_tok "$auto_tools" "$tool")"
+done
+assert_eq "E-2d-monitor-worktree-group-timeout" "15" \
+    "$(node "$DRIVER" --timeout-for "$NEEDLE_MW")"
 
 # E-4: the SSOT file buildRemedy reads is present and non-empty.
 ssot_state="missing"
@@ -51,10 +69,11 @@ assert_eq "E-4-ssot-file-present" "present" "$ssot_state"
 # settings from. It is exercised HERE, at TL2, because TL3 is gated off by default —
 # an extractor that only ever runs behind RUN_TL3 is an untested test dependency.
 ENTRY_DRV="$(cd "$(dirname "$0")" && pwd)/real-hook-entry.js"
-for hook in block-capture-echo.js preuse-auto-approve.js; do
-    assert_eq "E-5a-matcher-agrees-with-settings-driver-[$hook]" \
+for group in primary monitor-worktree; do
+    hook="merged-allow-deny.js\" --matcher-group $group"
+    assert_eq "E-5a-matcher-agrees-with-settings-driver-[$group]" \
         "$(node "$DRIVER" --matcher-for "$hook")" "$(node "$ENTRY_DRV" --matcher "$hook")"
-    assert_eq "E-5b-timeout-agrees-with-settings-driver-[$hook]" \
+    assert_eq "E-5b-timeout-agrees-with-settings-driver-[$group]" \
         "$(node "$DRIVER" --timeout-for "$hook")" "$(node "$ENTRY_DRV" --timeout "$hook")"
 
     emitted="$(node "$ENTRY_DRV" --emit "$hook")"
@@ -68,7 +87,7 @@ let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
   console.log([es.length, hs.length, placeholder ? "unresolved" : "resolved",
                cmd.indexOf(process.argv[1]) !== -1 ? "names-hook" : "hook-MISSING"].join("/"));
 });' "$hook")"
-    assert_eq "E-5c-emitted-fixture-is-one-resolved-entry-[$hook]" "1/1/resolved/names-hook" "$shape"
+    assert_eq "E-5c-emitted-fixture-is-one-resolved-entry-[$group]" "1/1/resolved/names-hook" "$shape"
 done
 
 # Non-vacuity: the extractor must be able to say NO.

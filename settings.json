@@ -433,17 +433,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-dotenv.js\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands|mcp__codegraph__codegraph_explore",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-credentials.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/merged-allow-deny.js\" --matcher-group primary",
             "timeout": 15
           }
         ]
@@ -553,16 +543,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/bash-guard.js\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/rtk-rewrite.js\"",
             "timeout": 15
           }
@@ -584,16 +564,6 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-cross-platform.js\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|runInTerminal|runCommands",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-capture-echo.js\"",
             "timeout": 15
           }
         ]
@@ -719,11 +689,11 @@
         ]
       },
       {
-        "matcher": "Monitor|EnterWorktree|Bash|runInTerminal|runCommands",
+        "matcher": "Monitor|EnterWorktree",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/preuse-auto-approve.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/merged-allow-deny.js\" --matcher-group monitor-worktree",
             "timeout": 15
           }
         ]

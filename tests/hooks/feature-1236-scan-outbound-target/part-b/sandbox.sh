@@ -28,6 +28,9 @@ build_sandbox() {
     cp -r "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/." "$sbox/hooks/workflow-state/" 2>/dev/null || true
     # Copy workflow-gate (required by hooks/workflow-state/evidence-resolver.js)
     cp -r "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/." "$sbox/hooks/workflow-gate/" 2>/dev/null || true
+    # Copy scan-outbound/ (the hook's private modules, e.g. staged-blobs.js)
+    mkdir -p "$sbox/hooks/scan-outbound"
+    cp -r "$_HELPERS_SCRIPT_CHECKOUT_ROOT/hooks/scan-outbound/." "$sbox/hooks/scan-outbound/" 2>/dev/null || true
     # Stub session-markers.js to avoid deep dependency chain for sandbox isolation
     cat > "$sbox/hooks/lib/session-markers.js" <<'SESSIONSTUB'
 "use strict";

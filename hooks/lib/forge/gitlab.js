@@ -61,7 +61,7 @@ const codehostGitlab = {
   isPrivateRepo(remoteUrl) {
     const { resolveForgeTarget } = require("../parse-remote-url");
     const { readGitlabHostConfig } = require("../forge-router");
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     const { type, project } = resolveForgeTarget(remoteUrl, { gitlabHost: readGitlabHostConfig() });
     // fail-safe: when glab is unavailable or the path is unresolvable, treat the
     // repo as private so its name is never leaked to glab (#2308 CPR-ORTH contract).
@@ -79,7 +79,7 @@ const codehostGitlab = {
   // forge-router reader when given. An SSH-alias URL is asked on the web host; an HTTP(S)
   // non-default port rides on --hostname. glab api has no --jq, so the JSON is parsed here.
   repoVisibility(remoteUrl, settings) {
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     try {
       const { resolveRemoteTarget } = require("../plan-sync/remote-url");
       const t = resolveRemoteTarget(remoteUrl, glabSettings(settings));
@@ -99,7 +99,7 @@ const codehostGitlab = {
     }
   },
   shouldScanAsPublicTarget(projectId) {
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     try {
       if (!projectId || typeof projectId !== "string") return true;
       const r = spawnSync("glab", ["api", "projects/" + encodePath(projectId), "--jq", ".visibility"],
@@ -119,7 +119,7 @@ const codehostGitlab = {
   // MR state mapped onto the shared PR vocabulary (./pr-state.js).
   // opts.timeoutMs (default 8000) bounds the glab call.
   prStateForBranch(repoDir, opts) {
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     try {
       const r = spawnSync("glab", ["mr", "view", "--json", "state", "--jq", ".state"],
         { cwd: repoDir, encoding: "utf8", timeout: timeoutOf(opts) });
@@ -144,7 +144,7 @@ const codehostGitlab = {
   prForBranch(repoDir, opts) {
     const state = codehostGitlab.prStateForBranch(repoDir, opts);
     if (state === "NONE" || state === "UNKNOWN") return { state, number: "" };
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     if (state === "OPEN" || state === "MERGED") {
       let sha = "";
       try {
@@ -171,7 +171,7 @@ const codehostGitlab = {
   // detailed_merge_status mapping lives in ./merge-state.js (SSOT).
   mergeStateForBranch(repoDir, opts) {
     const ms = require("./merge-state");
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     const timeoutMs = (opts && opts.timeoutMs) || ms.FORGE_QUERY_TIMEOUT_MS;
     let r;
     try {

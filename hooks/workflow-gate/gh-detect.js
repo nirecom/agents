@@ -4,7 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { resolveCodehostDescriptor } = require("../lib/forge-router");
 
 // findGhInPath: locate the gh executable by searching PATH via Node's filesystem API.

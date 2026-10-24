@@ -5,7 +5,7 @@
 // session repo (allowed) from one aimed at the CWD repo (gated). Every value is read
 // from IR argv, never raw text — a `--repo` inside a quoted body is just a value.
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { stripQuotedArgs } = require("../lib/strip-quoted-args");
 const { resolveGhSegmentArgv, resolveGhSubArgv } = require("../lib/bash-write-patterns/patterns");
 const { commandBasename } = require("../lib/bash-write-patterns/segment-utils");

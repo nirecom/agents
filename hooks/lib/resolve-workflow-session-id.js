@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync } = require("./limited-child-process");
 // CPR-SSOT (#2108): the WORKTREE_NOTES parser and the own-worktree matcher were
 // private copies here and in workflow-state/session-id.js; both now share one.
 const {

@@ -1,68 +1,12 @@
 #!/usr/bin/env node
-// PreToolUse hook: block Read/Edit/Write/Grep/Glob/Bash access to credential
-// files. Absorbs the former hooks/block-ssh-private-key.js. WORKFLOW_OFF does
-// NOT bypass this hook — credentials are never a legitimate working-document
-// target.
 "use strict";
-const fs = require("fs");
-const {
-  isCredentialPath,
-  isCredentialGlobPattern,
-  checkExploreQuery,
-  commandTouchesCredentials,
-} = require("./lib/credential-check");
-const { isCommandTool } = require("./lib/tool-command-text");
-const { scannableCommandListOf } = require("./lib/scannable-command-list");
-const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
+// PreToolUse hook: block Read/Edit/Write/Grep/Glob/Bash access to credential files. Absorbs the
+// former hooks/block-ssh-private-key.js. WORKFLOW_OFF does NOT bypass this hook.
+// Single-member entry; since #2676 settings.json runs it inside hooks/merged-allow-deny.js.
+// Dispatch only; the judgment lives in ./block-credentials/judge.js.
 
-const HOOK_NAME = "block-credentials";
+const { judgeCredentials } = require("./block-credentials/judge");
 
-function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
-function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
+module.exports = { judgeCredentials };
 
-const BLOCK_MSG =
-  "Access to credential files (~/.ssh, ~/.aws, ~/.gnupg, ~/.kube, ~/.git-credentials, " +
-  "~/.docker/config.json, ~/.npmrc, ~/.pypirc, ~/.gem/credentials, ~/.netrc, ~/.pgpass, " +
-  "~/.my.cnf, ~/.curlrc, ~/.m2/settings.xml, ~/.gradle/gradle.properties, " +
-  "~/.terraform.d/credentials.tfrc.json, ~/.terraformrc, ~/.terraform.rc, ~/.azure, " +
-  "~/.config/gh, ~/.config/gcloud, ~/.vault-token, ~/.cargo/credentials.toml, ~/.config/op) is blocked by hooks/block-credentials.js. " +
-  "WORKFLOW_OFF does not bypass this hook. If this is a false-positive (e.g. the path " +
-  "appears only inside a text-flag value or a quoted message), file an issue.";
-
-const r = readHookInput();
-if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
-if (r.kind === "json-invalid") {
-  try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
-  approve();
-}
-const input = r.input;
-const toolName = input.tool_name;
-const toolInput = input.tool_input || {};
-
-if (isCommandTool(toolName)) {
-  if (scannableCommandListOf(toolName, toolInput).some((cmd) => commandTouchesCredentials(cmd))) block(BLOCK_MSG);
-}
-
-switch (toolName) {
-  case "Read":
-    if (isCredentialPath(toolInput.file_path)) block(BLOCK_MSG);
-    break;
-  case "mcp__codegraph__codegraph_explore":
-    if (checkExploreQuery(toolInput.query) || isCredentialPath(toolInput.projectPath)) block(BLOCK_MSG);
-    break;
-  case "Grep":
-    if (isCredentialPath(toolInput.path) || isCredentialGlobPattern(toolInput.glob)) block(BLOCK_MSG);
-    break;
-  case "Glob":
-    if (isCredentialGlobPattern(toolInput.pattern)) block(BLOCK_MSG);
-    break;
-  case "Edit":
-  case "Write":
-  case "MultiEdit":
-  case "editFiles":
-    if (isCredentialPath(toolInput.file_path)) block(BLOCK_MSG);
-    break;
-  default:
-    break;
-}
-approve();
+if (require.main === module) require("./merged-allow-deny/run").runMembers(["block-credentials"]);

@@ -16,6 +16,7 @@ const { evaluateProtectedWrite, TOKEN_BLOCK_MSG, MARKER_BLOCK_MSG, collectEditWr
 const { bashHitsProtected } = require("./block-clearance-token-write/bash-scan");
 const { classifyProtectedPath, hitsProtectedPath } = require("./lib/protected-basenames");
 const { readHookInput, readFailureReason, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { armDecisionTimeLimit } = require("./lib/decision-time-limit");
 
 const HOOK_NAME = "block-clearance-token-write";
 
@@ -24,6 +25,7 @@ function block(reason) { console.log(JSON.stringify({ decision: "block", reason 
 
 if (require.main === module) {
   const r = readHookInput();
+  armDecisionTimeLimit({ hookName: HOOK_NAME });
   if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
   if (r.kind !== "ok") {
     try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
