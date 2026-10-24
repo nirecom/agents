@@ -855,3 +855,7 @@ Changes: PreToolUse hooks: a slow hook now asks with a reason naming the unfinis
 ### FEATURE: PR #2786 (2026-10-24)
 Background: feat(#2762): give the commit-push worker's commit a staged-size timeout
 Changes: The commit-push worker gives long pre-commit runs time to finish: its commit timeout now scales with the number of staged files (override with COMMIT_TIMEOUT_SECS). A timeout now reports `commit_timeout` together with the pre-commit section that was running.
+
+### FEATURE: PR #2780 (2026-10-25)
+Background: fix(#2771): keep presentation receipts across Stop blocks and undecidable tails
+Changes: Approving a plan you have already seen no longer fails with "present the plan again (no-receipt)" after a blocked or follow-up turn; when the hook cannot confirm a presentation it now tells you which stages need presenting again.
