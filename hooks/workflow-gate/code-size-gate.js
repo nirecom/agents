@@ -4,7 +4,7 @@
 // bin/review-code-size --staged owns the thresholds and line counting (CPR-SSOT);
 // this module only spawns it and maps the exit code to a gate verdict.
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const fs = require("fs");
 const path = require("path");
 const { resolveScriptCheckoutRoot } = require("../lib/script-checkout-root");
@@ -45,8 +45,8 @@ const RESOLVE_RAW =
  * @returns {{action: "ok"}|{action: "block", reason: string}}
  */
 function checkCodeSizeHardLimit(rawRepoDir) {
-  // L2: normalize POSIX drive-letter paths (/c/...) to Windows form before
-  // passing to spawnSync cwd — Node.js fs/process APIs fail with ENOENT on /c/.
+  // L2: normalize MSYS drive-letter paths to Windows form before passing to
+  // spawnSync cwd — Node.js fs/process APIs fail with ENOENT on that form.
   const repoDir = normalizeForWindows(rawRepoDir);
   const SCRIPT_CHECKOUT_ROOT = resolveScriptCheckoutRoot();
   if (!SCRIPT_CHECKOUT_ROOT) {

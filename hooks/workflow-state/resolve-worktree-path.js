@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { execFileSync } = require("../lib/limited-child-process");
 const { readState } = require("./state-io");
 
 // True when `dir` is the main worktree (git-dir === git-common-dir).

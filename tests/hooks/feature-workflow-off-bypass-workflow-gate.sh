@@ -52,6 +52,17 @@ GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
 session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
 HOOK_JS="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
 
+# The cases judge the decision, not the #2676 decision time limit: run from a fresh copy, with each git
+# call going through the run-all command guard, A's commit path overruns the decision time limit on Windows and asks.
+# The copy's limit is raised (fails loudly if the declaration moved); the limit has its own tests.
+node -e '
+const fs = require("fs"), file = process.argv[1], re = /(const DECISION_TIME_LIMIT_MS\s*=\s*)\d+/;
+const src = fs.readFileSync(file, "utf8");
+if (!re.test(src)) process.exit(1);
+fs.writeFileSync(file, src.replace(re, (_m, head) => head + "20000"));
+' "$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/lib/decision-time-limit.js)" \
+    || { echo "FAIL: cannot raise the decision time limit in the gate checkout copy"; exit 1; }
+
 run_with_timeout() {
     local secs="$1"; shift
     if command -v timeout >/dev/null 2>&1; then

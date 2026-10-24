@@ -1,7 +1,7 @@
 "use strict";
 
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../../lib/limited-child-process");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { isExcluded, rejectRceGitFlags } = require("../shared-cmd-utils");
 const { collectBashWriteTargets } = require("../bash-write-scope");

@@ -92,6 +92,7 @@ function getEffectiveCwd(toolCwd, sessionId, readStateFn) {
 if (require.main === module) {
 
 let _read = readHookInput();
+require("./lib/decision-time-limit").armDecisionTimeLimit({ hookName: "enforce-worktree" });
 // Valid JSON that is not an object (`null`, `5`) shares the json-invalid verdict.
 if (_read.kind === "ok" && (!_read.input || typeof _read.input !== "object")) {
   _read = { kind: "json-invalid", text: _read.text, error: new TypeError("non-object hook input") };

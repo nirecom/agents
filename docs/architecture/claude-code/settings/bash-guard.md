@@ -2,9 +2,10 @@
 
 Full behavior contract of `hooks/bash-guard.js`; the hook table and every other hook live in [hooks.md](hooks.md).
 
-- `bash-guard.js` (PreToolUse, matcher: `Bash`) — classifies each Bash command into one of
+- `bash-guard.js` (PreToolUse; since #2676 registered as a member of `hooks/merged-allow-deny.js`,
+  `--matcher-group primary`, see [hook-timeout.md](hook-timeout.md)) — classifies each Bash command into one of
   four verdicts, in priority order: **deny** → **notify** → **allow** → **passThrough**.
-  **Matcher is bare `Bash`**, unlike most hooks in this table (`Bash|runInTerminal|runCommands`)
+  **It judges bare `Bash` only** (the merged hook routes no other tool to it), unlike most hooks in this table (`Bash|runInTerminal|runCommands`)
   — `runInTerminal`/`runCommands` can drive pwsh, where a backtick is a line continuation and
   `{ }` a script block, so reading that with a bash parser would produce confident false denials;
   those tools are deliberately out of scope (a documented hole, see "Known limitations" in [settings.md](../settings.md)), not an
@@ -42,7 +43,10 @@ Full behavior contract of `hooks/bash-guard.js`; the hook table and every other 
     `hooks/bash-guard/readonly-class.js`) also allows, with `BG-ALLOW-READONLY-GIT` /
     `BG-ALLOW-READONLY-GH` / `BG-ALLOW-READONLY-GENERIC` — see `settings.md`. A newline or CR
     in the command skips every allow.
-  - **passThrough**: no verdict to report; silent exit 0, normal permission flow continues.
+  - **passThrough**: no verdict to report. Output: the legacy `{decision:"approve"}` (notify
+    adds its `systemMessage` / `additionalContext` to it). #2676 gate 1 measured that approve
+    skips the permission prompt, unlike a silent exit 0 or `{}`, so this is kept as is, not
+    changed to "no output" ([settings.md](../settings.md) "Known limitations").
     Reason codes: `BG-TOOL-OUT-OF-SCOPE` / `BG-INTERLOCK-QUIET` / `BG-PARSE-FAILURE` / `BG-NO-HIT`.
   Reason-code namespace is disjoint from workflow-gate's `T-A..T-E` tiers.
   **Interlock (C6)**: stays quiet while the early-write gate is actually blocking

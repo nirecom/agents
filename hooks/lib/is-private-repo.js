@@ -1,7 +1,7 @@
 // Shared module: dynamically check if a git repo is private via GitHub API
 // Returns true if repo is private, false otherwise (fail-open on any error)
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./limited-child-process");
 const { parseGitCArg } = require("./parse-git-args");
 const { extractHost, extractRepoId, parseOriginOwnerRepo } = require("./parse-remote-url");
 const { resolveCodehostDescriptor, FORGE_DESCRIPTORS } = require("./forge-router");

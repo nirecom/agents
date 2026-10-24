@@ -295,8 +295,10 @@ try {
       break;
     }
 
-    // Every PreToolUse matcher whose group runs hooks/bash-guard.js. C4: it must be the
-    // bare "Bash" -- runInTerminal / runCommands may drive pwsh, a different dialect.
+    // The tools bash-guard judges. C4: it must be the bare "Bash" -- runInTerminal /
+    // runCommands may drive pwsh, a different dialect. Since #2676 bash-guard runs as a
+    // member of hooks/merged-allow-deny.js (primary group), so the scope is the member's
+    // tool list, provided the primary group is registered and no standalone entry remains.
     case "guard-hook-matchers": {
       let settings;
       try {
@@ -305,8 +307,23 @@ try {
         out("<MISSING:settings.json>");
       }
       const groups = (settings.hooks && settings.hooks.PreToolUse) || [];
-      const hit = groups.filter((g) => JSON.stringify(g.hooks || []).indexOf("bash-guard") !== -1);
-      out(hit.length === 0 ? "<NOT-REGISTERED>" : hit.map((g) => g.matcher).join(","));
+      const commands = (g) => (g.hooks || []).map((h) => String(h.command || ""));
+      const standalone = groups.filter((g) => commands(g).some((c) => c.indexOf("bash-guard") !== -1));
+      if (standalone.length > 0) out("<STANDALONE:" + standalone.map((g) => g.matcher).join(",") + ">");
+      const primary = groups.filter((g) => commands(g).some((c) =>
+        c.indexOf("merged-allow-deny.js") !== -1 && /--matcher-group primary\b/.test(c)));
+      if (primary.length !== 1) out("<PRIMARY-GROUP-REGISTRATIONS:" + primary.length + ">");
+      let members;
+      try {
+        members = require(path.join(AGENTS, "hooks", "merged-allow-deny", "members.js"));
+      } catch (e) {
+        out("<MISSING:hooks/merged-allow-deny/members.js>");
+      }
+      const member = (members.MEMBERS || []).find((m) => m.name === "bash-guard");
+      if (!member) out("<NOT-A-MEMBER>");
+      const outside = member.tools.filter((t) => primary[0].matcher.split("|").indexOf(t) === -1);
+      if (outside.length > 0) out("<NOT-IN-PRIMARY-MATCHER:" + outside.join(",") + ">");
+      out(member.tools.join(","));
       break;
     }
 

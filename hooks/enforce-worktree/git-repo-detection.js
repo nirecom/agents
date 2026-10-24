@@ -3,7 +3,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { parseCdCommand, parseCdCommandInInterpreter, extractGitScopeFlagsFromArgv } = require("../lib/parse-git-args");
 const { parse } = require("../lib/command-ir");
