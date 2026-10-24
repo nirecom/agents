@@ -106,15 +106,22 @@ T3_MSG=$(extract_system_message "$T3_OUT")
 if [ -z "$T3_MSG" ]; then
   fail "T3 expected systemMessage with PR info, got empty"
 else
-  if echo "$T3_MSG" | grep -qF "PR #42 created" && echo "$T3_MSG" | grep -qF "$T3_URL"; then
-    pass "T3 systemMessage contains 'PR #42 created' and URL"
+  # #2731 S3-4: the systemMessage is the single fact line `[pr-created] #<N> <url>`.
+  if [ "$T3_MSG" = "[pr-created] #42 $T3_URL" ]; then
+    pass "T3 systemMessage is exactly '[pr-created] #42 <url>'"
   else
-    fail "T3 systemMessage missing PR# or URL — got: $T3_MSG"
+    fail "T3 expected '[pr-created] #42 $T3_URL' — got: $T3_MSG"
   fi
   if echo "$T3_MSG" | grep -qF "Click Allow"; then
-    pass "T3 systemMessage contains 'Click Allow'"
+    fail "T3 systemMessage still carries 'Click Allow' — got: $T3_MSG"
   else
-    fail "T3 systemMessage missing 'Click Allow' — got: $T3_MSG"
+    pass "T3 systemMessage has no 'Click Allow'"
+  fi
+  T3_CONTRACT=$(run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/lib/system-message-contract.js" check "$T3_MSG")
+  if [ "$T3_CONTRACT" = "OK" ]; then
+    pass "T3 systemMessage meets the #2731 systemMessage contract"
+  else
+    fail "T3 systemMessage contract — $T3_CONTRACT"
   fi
 fi
 

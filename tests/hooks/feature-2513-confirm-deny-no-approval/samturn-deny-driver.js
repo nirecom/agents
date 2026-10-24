@@ -28,7 +28,8 @@ function preToolUse(s, tp) {
   try { json = r.out ? JSON.parse(r.out) : {}; } catch (_) { json = { unparsed: r.out }; }
   const hso = json.hookSpecificOutput || {};
   const deny = hso.permissionDecision === "deny";
-  const ask = !deny && r.code === 0 && json.decision !== "block" && String(json.systemMessage || "").includes("Click Allow");
+  // #2731: the dialog systemMessage is the stage fact line (`[<stage>] ...`), no "Click Allow" wording.
+  const ask = !deny && r.code === 0 && json.decision !== "block" && /^\[(intent|outline|detail)\] /.test(String(json.systemMessage || ""));
   return { deny, ask, rc: r.code, json };
 }
 

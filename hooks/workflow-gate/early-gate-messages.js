@@ -8,6 +8,8 @@
 // to hunt for a bypass. Both branches must still name the ALLOWED write targets,
 // which is the line whose absence produced #2108.
 
+const { withConvLang } = require("../lib/conv-lang");
+
 const TIERS = {
   workflow_init: {
     until: "the workflow is routed",
@@ -53,7 +55,7 @@ function buildEarlyGateReason({ tier, toolName, isSubagent, allowedTargets }) {
     allowedTargetsBlock(allowedTargets) + "\n\n";
 
   if (isSubagent) {
-    return (
+    return withConvLang(
       head +
       "Subagent context: this call carries a subagent identity, so the routes the\n" +
       "main conversation would take (invoking a skill, emitting a workflow-state\n" +
@@ -64,7 +66,7 @@ function buildEarlyGateReason({ tier, toolName, isSubagent, allowedTargets }) {
     );
   }
 
-  return (
+  return withConvLang(
     head +
     "To complete:\n" +
     "  1. Invoke the `" + spec.skill + "` skill via the Skill tool, OR\n" +

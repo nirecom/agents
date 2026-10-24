@@ -20,6 +20,7 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
 
 Required reading: Read `rules/github-issues.md` before Pre-flight — it is on-demand-only and never auto-injected.
 Read `rules/coding.md` before writing any issue title or body — on-demand-only, never auto-injected; its Public GitHub Rules govern this outbound write.
+Apply the TERMS line of hooks/lib/lang-directives.txt and the Writer directives in skills/_shared/combined-glossary.md to issue titles and bodies; both govern terminology only, not the body language.
 
 ## Phase 0b — Project preflight
 

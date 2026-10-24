@@ -227,8 +227,9 @@ clear_markers
 T5_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")
 T5_OUT=$(run_hook "$T5_JSON")
 T5_MSG=$(extract_system_message "$T5_OUT")
-if [ "$(extract_decision "$T5_OUT")" = "deny" ] && ! echo "$T5_MSG" | grep -qF "Click Allow"; then
-  pass "T5 no artifact → denied, no Click Allow dialog (unverifiable-artifact)"
+# #2731: a deny carries no dialog systemMessage at all (the reason goes to the model only).
+if [ "$(extract_decision "$T5_OUT")" = "deny" ] && [ -z "$T5_MSG" ]; then
+  pass "T5 no artifact → denied, no dialog systemMessage (unverifiable-artifact)"
 else
   fail "T5 no artifact → expected a deny without the dialog — got: $T5_OUT"
 fi
@@ -286,8 +287,8 @@ else
   fail "T9 CONFIRM_OUTLINE=off — missing expected skipped message: $T9_MSG"
 fi
 
-# ── T10: systemMessage always contains "Click Allow to proceed, Deny to abort." (plan ON) ──
-echo "=== T10: 'Click Allow' tagline on plan stage (ON) ==="
+# ── T10: #2731 S3-3 — the plan ON systemMessage is facts only: `[detail] <absPath>` ──
+echo "=== T10: plan stage (ON) systemMessage is the fact line only ==="
 clear_markers
 T10_ABS="$PLANS_DIR/$SID-detail.md"
 touch "$T10_ABS"
@@ -296,10 +297,16 @@ seed_receipt detail >/dev/null
 T10_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_DETAIL>>\"")
 T10_OUT=$(run_hook "$T10_JSON")
 T10_MSG=$(extract_system_message "$T10_OUT")
-if echo "$T10_MSG" | grep -qF "Click Allow to proceed, Deny to abort."; then
-  pass "T10 plan ON path has 'Click Allow to proceed, Deny to abort.'"
+if [ "$T10_MSG" = "[detail] $T10_ABS" ]; then
+  pass "T10 plan ON systemMessage is exactly '[detail] <absPath>'"
 else
-  fail "T10 missing 'Click Allow to proceed, Deny to abort.' — got: $T10_MSG"
+  fail "T10 expected '[detail] $T10_ABS' — got: $T10_MSG"
+fi
+T10_CONTRACT=$(run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/lib/system-message-contract.js" check "$T10_MSG")
+if [ "$T10_CONTRACT" = "OK" ]; then
+  pass "T10 systemMessage meets the #2731 systemMessage contract"
+else
+  fail "T10 systemMessage contract — $T10_CONTRACT"
 fi
 clear_markers
 rm -f "$T10_ABS"
@@ -340,7 +347,7 @@ clear_markers
 rm -f "$T12B_ABS"
 if echo "$T12B_MSG" | grep -qF "[confirm-skipped"; then
   fail "T12b exported CONFIRM_OUTLINE=off must be ignored — got skipped: $T12B_MSG"
-elif echo "$T12B_MSG" | grep -qF "[outline]" && echo "$T12B_MSG" | grep -qF "Click Allow"; then
+elif echo "$T12B_MSG" | grep -qE '^\[outline\] '; then
   pass "T12b exported CONFIRM_OUTLINE=off ignored — regular confirm dialog text"
 else
   fail "T12b exported CONFIRM_OUTLINE=off — expected the regular confirm systemMessage, got: $T12B_MSG"

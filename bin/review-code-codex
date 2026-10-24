@@ -350,7 +350,7 @@ ${PRIOR_TEXT}
 "
 fi
 
-PREAMBLE=$(codex_core_adversarial_preamble "code diff")
+PREAMBLE=$(codex_core_adversarial_preamble "code diff" plan)
 
 # Project non-functional requirements; empty unless --project-root names a
 # project that declares PROJECT_NFR (resolved from disk, never from the env).

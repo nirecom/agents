@@ -50,7 +50,7 @@ function recordFailedExit(r) {
   return null;
 }
 
-// Returns the human-facing diagnostic; nothing reads it back as a judgement input.
+// Returns the diagnostic { head, detail }; nothing reads it back as a judgement input.
 // Exit 77 is "nothing passed" (all skipped or unrunnable), not a failure, so it demotes here.
 function recordDemotion(r) {
   markStep(r.sessionId, "run_tests", "pending", {
@@ -131,7 +131,7 @@ function isGreen(input, contract) {
     && contract.fail === 0 && contract.unrunnable === 0 && !(contract.hits > 0);
 }
 
-// -> the systemMessage to surface, or null. `unsettledStem` blocks completion:
+// -> the { head, detail } diagnostic to surface, or null. `unsettledStem` blocks completion:
 // while a dispatch is unsettled a run may take run_tests away, never grant it,
 // and records no observation that could stand for that dispatch.
 function recordRun(r) {

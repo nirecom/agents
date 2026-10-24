@@ -65,7 +65,8 @@ if (mode === "stop") {
     const hso = json.hookSpecificOutput || {};
     return { json, rc: r.status, deny: hso.permissionDecision === "deny", msg: json.systemMessage || "" };
   };
-  const passes = (r) => !r.deny && r.rc === 0 && r.json.decision !== "block" && r.msg.includes("Click Allow");
+  // #2731: the dialog systemMessage is the stage fact line (`[<stage>] ...`), no "Click Allow" wording.
+  const passes = (r) => !r.deny && r.rc === 0 && r.json.decision !== "block" && /^\[(intent|outline|detail)\] /.test(r.msg);
   // sameTurn(s, anchorText, extra, echoEntry) -> the presentation turn, the Stop feedback, extras, the echo.
   const sameTurn = (s, anchorText, extra, echoEntry) => [U("write the plan", "u-prompt"), A("a-write", W(s.plan)), TR("w1", "u-tr"),
     A("a-anchor", T(anchorText)), STOPFB(FB, "u-fb"), ...(extra || []), echoEntry || A("a-echo", ECHO(STAGE, "e1"))];
@@ -117,7 +118,7 @@ if (mode === "stop") {
   {
     const r = scene("B5 URL-capable env, path-only receipt", (s) => sameTurn(s, anchor(s) + "\n"),
       { receipt: true, publish: true, link: (s) => ({ kind: "path", value: s.plan }) });
-    check("B5 URL-capable env, path-only presentation — the echo is denied (link mismatch)", r.deny && !r.msg.includes("Click Allow"), show(r.json));
+    check("B5 URL-capable env, path-only presentation — the echo is denied (link mismatch)", r.deny && r.msg === "", show(r.json));
   }
 } else {
   check("strict-end-hook-driver mode", false, "unknown mode: " + mode);

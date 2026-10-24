@@ -20,12 +20,14 @@ module.exports = { judgeBashCommand };
 // G-b=(b2) fallback form (detail.md:96): legacy {decision:"approve"} bypasses the
 // permission prompt; passThrough and notify must output the same to preserve current
 // behaviour. A silent passThrough would add prompts for every unlisted command.
+// The user sees only `[bash-guard] <code>` (#2731); the explanation goes to the model.
+function convLang(text) { return require("./lib/conv-lang").withConvLang(text); }
 const ENVELOPES = Object.freeze({
-  deny: (v) => ({ decision: "block", reason: v.message }),
+  deny: (v) => ({ decision: "block", reason: convLang(v.message) }),
   notify: (v) => ({
     decision: "approve",
-    systemMessage: v.message,
-    hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: v.message },
+    systemMessage: `[bash-guard] ${v.code}`,
+    hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: convLang(v.message) },
   }),
   allow: (v) => ({
     hookSpecificOutput: {

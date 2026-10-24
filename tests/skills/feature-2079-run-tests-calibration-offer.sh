@@ -92,7 +92,7 @@ GRP_FINISHED="$(printf '%s' "$GRP_DONE" | grep -v '^$' | LC_ALL=C sort | tr '\n'
 ck "GRP1 every case file is sourced and every sourced case file exists" "$GRP_PRESENT" "$GRP_SOURCED"
 ck "GRP2 every sourced case file ran to its completion marker" "$GRP_SOURCED" "$GRP_FINISHED"
 CASE_MISSING=""
-for _c in P1 P2 P3 P5 P6 P7 P8 P9 P10 P11 P12 P13 P14 S1 S2 S3 S4 S5 A1 I1 AC4 AC5 ES1 ES2 ES3; do
+for _c in P1 P2 P3 P5 P6 P7 P8 P9 P10 P11 P12 P13 P14 S1 S2 S3 S4 S5 A1 I1 AC4 AC5 ES1 ES2 ES3 CL1; do
     case " $CASE_RAN " in *" $_c "*) ;; *) CASE_MISSING="${CASE_MISSING:+$CASE_MISSING }$_c" ;; esac
 done
 ck "CASE1 every planned case id ran" "" "$CASE_MISSING"
