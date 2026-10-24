@@ -100,6 +100,13 @@ try {
     if (convLang) lines.push(convLang);
   } catch (_e) { /* fail-open */ }
 
+  try {
+    if (require("./lib/planning-phase").isPlanning(sessionId)) {
+      const planLang = require("./lib/lang-config").getPlanLangInjection();
+      if (planLang) lines.push(planLang);
+    }
+  } catch (_e) { /* fail-open */ }
+
   // Re-inject the model-conditional hardening line after compaction. Read-only:
   // the flag was frozen at SessionStart, so PostCompact never resolves the model
   // and never writes state.
@@ -107,6 +114,11 @@ try {
     const { getVerbosePromptInjection } = require("./lib/verbose-prompt");
     const verbosePrompt = getVerbosePromptInjection(sessionId);
     if (verbosePrompt) lines.push(verbosePrompt);
+  } catch (_e) { /* fail-open */ }
+
+  try {
+    const userInstructions = require("./lib/user-instructions").getUserInstructionsInjection();
+    if (userInstructions) lines.push(userInstructions);
   } catch (_e) { /* fail-open */ }
 
   console.log(JSON.stringify({ additionalContext: lines.join("\n") }));

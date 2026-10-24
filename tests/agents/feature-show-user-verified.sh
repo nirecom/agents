@@ -3,7 +3,7 @@
 # Tags: user-verified, workflow, hook, sentinel, permissions, scope:issue-specific
 # Tests for hooks/show-user-verified-context.js
 # PreToolUse Bash hook: detects <<WORKFLOW_USER_VERIFIED>> in tool_input.command,
-# emits "User verification context:" systemMessage with staged files and open PR URL
+# emits `[user-verified] ...` fact-line systemMessage (staged count/files, open PR URL; #2731)
 # BEFORE the permission dialog renders (sentinel is permissions.ask-listed).
 set -uo pipefail
 
@@ -62,11 +62,18 @@ echo "=== U1: sentinel in command → User verification context: ==="
 U1_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 U1_RESULT=$(run_hook "$U1_JSON")
 U1_MSG=$(echo "$U1_RESULT" | extract_msg)
-if echo "$U1_MSG" | grep -q "User verification context:" && echo "$U1_MSG" | grep -q "Staged files:"; then
-  pass "U1 sentinel in command → systemMessage with User verification context:"
+# #2731 S3: fact lines `[user-verified] staged=<N>` / `staged-file=<path>` / `pr=<url>`; no prose.
+if [ "$U1_MSG" = "[user-verified] staged=1
+[user-verified] staged-file=foo.txt" ]; then
+  pass "U1 sentinel in command → [user-verified] staged=1 + staged-file=foo.txt"
 else
-  fail "U1 — expected 'User verification context:' and 'Staged files:', got: $U1_MSG"
+  fail "U1 — expected '[user-verified] staged=1' + 'staged-file=foo.txt', got: $U1_MSG"
 fi
+for U1_RETIRED in "User verification context:" "Staged files:" "(none)" "Open PR:" "Click Allow"; do
+  if echo "$U1_MSG" | grep -qF "$U1_RETIRED"; then fail "U1 retired wording '$U1_RETIRED' still present: $U1_MSG"; else pass "U1 no retired wording '$U1_RETIRED'"; fi
+done
+U1_CONTRACT=$(run_with_timeout node "$SCRIPT_CHECKOUT_ROOT/tests/lib/system-message-contract.js" check "$U1_MSG")
+if [ "$U1_CONTRACT" = "OK" ]; then pass "U1 systemMessage meets the #2731 contract"; else fail "U1 systemMessage contract — $U1_CONTRACT"; fi
 
 # ── U2: Wrong tool (Write) → noop ─────────────────────────────────────────
 echo "=== U2: wrong tool (Write) → noop ==="
@@ -99,10 +106,10 @@ git -C "$EMPTY_REPO" config user.name "Test"
 U4_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$EMPTY_REPO\"}}"
 U4_RESULT=$(run_hook "$U4_JSON")
 U4_MSG=$(echo "$U4_RESULT" | extract_msg)
-if echo "$U4_MSG" | grep -q "User verification context:" && echo "$U4_MSG" | grep -q "(none)"; then
-  pass "U4 no staged files → (none)"
+if [ "$U4_MSG" = "[user-verified] staged=0" ]; then
+  pass "U4 no staged files → [user-verified] staged=0"
 else
-  fail "U4 — expected '(none)', got: $U4_MSG"
+  fail "U4 — expected '[user-verified] staged=0', got: $U4_MSG"
 fi
 
 # ── U5: Open PR exists → Open PR: <url> ────────────────────────────────────
@@ -128,10 +135,10 @@ SHIM
   U5_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
   U5_RESULT=$(SHOW_USER_VERIFIED_NO_BROWSER=1 PATH="$GH_BIN_DIR:$PATH" run_hook "$U5_JSON")
   U5_MSG=$(echo "$U5_RESULT" | extract_msg)
-  if echo "$U5_MSG" | grep -q "Open PR: https://github.com/nirecom/agents/pull/314"; then
-    pass "U5 open PR → Open PR: url in systemMessage"
+  if echo "$U5_MSG" | grep -qxF "[user-verified] pr=https://github.com/nirecom/agents/pull/314"; then
+    pass "U5 open PR → [user-verified] pr=<url> in systemMessage"
   else
-    fail "U5 — expected 'Open PR: https://...', got: $U5_MSG"
+    fail "U5 — expected '[user-verified] pr=https://...', got: $U5_MSG"
   fi
 fi
 
@@ -147,8 +154,8 @@ chmod +x "$GH_FAIL_DIR/gh"
 U6_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 U6_RESULT=$(PATH="$GH_FAIL_DIR:$PATH" run_hook "$U6_JSON")
 U6_MSG=$(echo "$U6_RESULT" | extract_msg)
-if echo "$U6_MSG" | grep -q "Staged files:" && ! echo "$U6_MSG" | grep -q "Open PR:"; then
-  pass "U6 gh exits 1 → staged files shown, no Open PR: line"
+if echo "$U6_MSG" | grep -qxF "[user-verified] staged=1" && ! echo "$U6_MSG" | grep -qF "[user-verified] pr="; then
+  pass "U6 gh exits 1 → staged count shown, no pr= line"
 else
   fail "U6 — unexpected output: $U6_MSG"
 fi
@@ -167,8 +174,8 @@ SHIM
 chmod +x "$GH_ABSENT_DIR/gh"
 U7_RESULT=$(PATH="$GH_ABSENT_DIR:$PATH" run_hook "$U7_JSON")
 U7_MSG=$(echo "$U7_RESULT" | extract_msg)
-if echo "$U7_MSG" | grep -q "Staged files:" && ! echo "$U7_MSG" | grep -q "Open PR:"; then
-  pass "U7 gh not on PATH → graceful, staged files shown, no Open PR:"
+if echo "$U7_MSG" | grep -qxF "[user-verified] staged=1" && ! echo "$U7_MSG" | grep -qF "[user-verified] pr="; then
+  pass "U7 gh not on PATH → graceful, staged count shown, no pr= line"
 else
   fail "U7 — unexpected output: $U7_MSG"
 fi
@@ -180,10 +187,10 @@ mkdir -p "$NON_GIT"
 U8_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$NON_GIT\"}}"
 U8_RESULT=$(run_hook "$U8_JSON")
 U8_MSG=$(echo "$U8_RESULT" | extract_msg)
-if echo "$U8_MSG" | grep -q "User verification context:"; then
-  pass "U8 non-git cwd → graceful (no crash, systemMessage emitted)"
+if [ "$U8_MSG" = "[user-verified] staged=0" ]; then
+  pass "U8 non-git cwd → graceful (no crash, [user-verified] staged=0 emitted)"
 else
-  fail "U8 — expected User verification context:, got: $U8_MSG"
+  fail "U8 — expected '[user-verified] staged=0', got: $U8_MSG"
 fi
 
 # ── U9: Idempotency — two runs produce identical output ────────────────────
@@ -232,10 +239,10 @@ echo "=== U12: PreToolUse payload without tool_response → systemMessage ==="
 U12_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 U12_RESULT=$(run_hook "$U12_JSON")
 U12_MSG=$(echo "$U12_RESULT" | extract_msg)
-if echo "$U12_MSG" | grep -q "User verification context:" && echo "$U12_MSG" | grep -q "foo.txt"; then
-  pass "U12 PreToolUse payload (no tool_response) → systemMessage with staged file"
+if echo "$U12_MSG" | grep -qxF "[user-verified] staged-file=foo.txt"; then
+  pass "U12 PreToolUse payload (no tool_response) → systemMessage with staged-file=foo.txt"
 else
-  fail "U12 — expected User verification context: with foo.txt, got: $U12_MSG"
+  fail "U12 — expected '[user-verified] staged-file=foo.txt', got: $U12_MSG"
 fi
 
 # ── U13: cwd regression — tool_input.cwd wins over CLAUDE_PROJECT_DIR ───────
@@ -317,11 +324,11 @@ fi
 # Windows-format stub dir; in that case, the text-line assertion is covered by U5/U13
 # on POSIX runners (which have the gh shim accessible) and this block is a no-op.
 U14_MSG=$(echo "$U14_RESULT" | extract_msg)
-if echo "$U14_MSG" | grep -q "Open PR:"; then
-  if echo "$U14_MSG" | grep -q "Open PR: https://github.com/nirecom/agents/pull/314"; then
-    pass "U14a Open PR text line — still present in systemMessage after openInBrowser removal"
+if echo "$U14_MSG" | grep -qF "[user-verified] pr="; then
+  if echo "$U14_MSG" | grep -qxF "[user-verified] pr=https://github.com/nirecom/agents/pull/314"; then
+    pass "U14a pr= line — still present in systemMessage after openInBrowser removal"
   else
-    fail "U14a — 'Open PR: ...' text line present but wrong URL: $U14_MSG"
+    fail "U14a — '[user-verified] pr=' line present but wrong URL: $U14_MSG"
   fi
 else
   pass "U14a Open PR text line — gh not accessible via Node.js spawnSync on this runner; text-line coverage deferred to U5/U13 on POSIX"

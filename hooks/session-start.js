@@ -325,4 +325,8 @@ try {
   const verbosePrompt = getVerbosePromptInjection(sessionId);
   if (verbosePrompt) lines.push(verbosePrompt);
 } catch (_e) { /* fail-open */ }
+try {
+  const userInstructions = require("./lib/user-instructions").getUserInstructionsInjection();
+  if (userInstructions) lines.push(userInstructions);
+} catch (_e) { /* fail-open */ }
 console.log(JSON.stringify({ additionalContext: lines.join("\n") }));

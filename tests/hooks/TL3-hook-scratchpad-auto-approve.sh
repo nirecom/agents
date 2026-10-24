@@ -72,23 +72,27 @@ printf 'echo "hello from args, arg1=$1"\nmkdir -p "%s/args-ran"\nmkdir -p "%s/ar
 # The fixture carries the REAL PreToolUse registration lifted out of the deployable
 # settings.json (round 13, C9), so a matcher or event drift in the shipped artifact is
 # what fails here. real-hook-entry.js is itself covered at TL2 by part6-settings.sh E-5.
+# Since #2676 preuse-auto-approve runs as a member of the merged allow-deny hook; Bash
+# reaches it through the primary group (`merged-allow-deny.js --matcher-group primary`).
 ENTRY_DRV="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2170-capture-echo-guard/real-hook-entry.js"
-node "$ENTRY_DRV" --emit "preuse-auto-approve.js" > "$REPO/.claude/settings.json"
+node "$ENTRY_DRV" --emit 'merged-allow-deny.js" --matcher-group primary' > "$REPO/.claude/settings.json"
 if grep -q 'NOT_REGISTERED\|SETTINGS_UNREADABLE\|BAD_MODE' "$REPO/.claude/settings.json"; then
-    echo "FAIL: preuse-auto-approve.js is not registered in the real settings.json" >&2
+    echo "FAIL: the merged allow-deny primary group is not registered in the real settings.json" >&2
     exit 1
 fi
 
 # Isolation made visible rather than assumed: --emit reduces the entry to the single
-# hook whose command carries the needle, so no sibling PreToolUse guard is registered
-# here and none can author the refusal that a suspect-turn row would attribute to
-# the auto-approve decision. Asserted, because that reduction lives in another file.
+# command carrying the needle, so no guard outside the merged hook is registered here.
+# Inside it, the other members (block-dotenv, block-credentials, bash-guard,
+# block-capture-echo) can only deny or stay quiet for `bash <scratchpad>/x.sh` — bash-guard's
+# allow covers read-only commands and agents-root scripts, not a scratchpad script — so
+# the allow a passing turn observes is still the auto-approve member's.
 N_CMDS="$(grep -c '"command"[[:space:]]*:' "$REPO/.claude/settings.json")"
-case_begin "fixture-registers-only-the-hook-under-test" "hooks/preuse-auto-approve.js"
-if [ "$N_CMDS" = "1" ] && grep -q 'preuse-auto-approve\.js' "$REPO/.claude/settings.json"; then
+case_begin "fixture-registers-only-the-hook-under-test" "hooks/merged-allow-deny.js"
+if [[ "$N_CMDS" == "1" ]] && grep -q 'merged-allow-deny\.js[^,]*--matcher-group primary' "$REPO/.claude/settings.json"; then
     pass "fixture-registers-only-the-hook-under-test"
 else
-    fail "fixture-registers-only-the-hook-under-test" "the fixture settings.json carries $N_CMDS hook command(s) — another PreToolUse guard could produce the refusal this file attributes to the auto-approve decision"
+    fail "fixture-registers-only-the-hook-under-test" "the fixture settings.json carries $N_CMDS hook command(s), or not the merged primary group — another PreToolUse guard could decide what this file attributes to the auto-approve member"
 fi
 case_end
 

@@ -38,7 +38,8 @@ function main() {
 
   const context = require("./progress-nudge/evaluate").evaluate({ sid, event, tool, transcriptPath, now });
   if (!context) return quiet();
-  process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: context } })}\n`);
+  const { withConvLang } = require("./lib/conv-lang");
+  process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: withConvLang(context) } })}\n`);
 }
 
 try {

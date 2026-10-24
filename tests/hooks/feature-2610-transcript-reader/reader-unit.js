@@ -48,12 +48,13 @@ try {
 
 const call = (fn, arg) => { try { return fn(arg); } catch (e) { return { threw: e.message }; } };
 const tail = (input) => call(tr.readTurnTail, { input });
-const prev = (transcriptPath) => call(tr.readPreviousTurn, { transcriptPath });
+const prev = (transcriptPath) => call((p) => tr.splitTurns(tr.parseLines(tr.readTranscriptLines(p))), transcriptPath);
 const textOf = (r) => (r && typeof r.lastTextBlock === "string" ? r.lastTextBlock : r && r.lastTextBlock);
 
 try {
-  ["readTranscriptLines", "readTurnTail", "readPreviousTurn"].forEach((f) =>
+  ["readTranscriptLines", "readTurnTail", "parseLines", "splitTurns"].forEach((f) =>
     ok(f + " is exported", typeof tr[f] === "function", typeof tr[f]));
+  ok("readPreviousTurn is not exported (removed in #2738)", !("readPreviousTurn" in tr), typeof tr.readPreviousTurn);
 
   // Late flush: the final text line arrives ~150ms after the read starts; last_assistant_message
   // names it, so the reader waits (50ms steps, 500ms cap) and returns the flushed block.
@@ -137,7 +138,7 @@ try {
     const rm = tail({ transcript_path: missing });
     ok("missing transcript — readTurnTail does not throw, no text block", rm && !rm.threw && !textOf(rm), show(rm));
     const rp = prev(missing);
-    ok("missing transcript — readPreviousTurn does not throw", rp && !rp.threw, show(rp));
+    ok("missing transcript — splitTurns over the read does not throw, no prior prompt", rp && !rp.threw && rp.hasPriorPrompt === false && rp.currentTurnEntries.length === 0, show(rp));
   }
 
   // A malformed JSONL line is skipped, before or after the text that matters.
@@ -150,15 +151,32 @@ try {
     ok("malformed lines — matches last_assistant_message without waiting out", r2 && r2.undecidable !== true && textOf(r2) === "GOOD-TEXT", show(r2));
   }
 
-  // A transcript whose every line is malformed is unreadable, so PreToolUse fails open.
+  // Parser table: each row's raw input goes through parseLines (and, for array rows, through a
+  // written transcript and readTranscriptLines first); a malformed line or non-array input yields
+  // no entry and never throws.
   {
-    const p = tpath();
-    writeT(p, ["{not json", "{\"type\":\"user\","]);
-    const r = prev(p);
-    ok("all-malformed transcript — readPreviousTurn reports readable=false", r && !r.threw && r.readable === false, show(r));
+    const PARSE_CASES = [
+      { name: "valid", input: [line(U("go")), line(A(T("OK")))], expected: [U("go"), A(T("OK"))] },
+      { name: "mixed", input: [line(U("go")), "{not json", line(A(T("GOOD-TEXT"))), "{\"type\":\"assistant\",\"message\":", "42", "null"], expected: [U("go"), A(T("GOOD-TEXT"))] },
+      { name: "malformed", input: ["{not json", "{\"type\":\"user\","], expected: [] },
+      { name: "non-array (null)", input: null, expected: [] },
+      { name: "non-array (string)", input: line(U("go")), expected: [] },
+      { name: "non-array (object)", input: { 0: line(U("go")), length: 1 }, expected: [] },
+    ];
+    for (const c of PARSE_CASES) {
+      const got = call(tr.parseLines, c.input);
+      ok("parseLines table — " + c.name, Array.isArray(got) && show(got) === show(c.expected), show(got));
+      if (!Array.isArray(c.input)) continue;
+      const p = tpath();
+      fs.writeFileSync(p, c.input.join("\n") + "\n");
+      const lines = call(tr.readTranscriptLines, p);
+      ok("readTranscriptLines table — " + c.name + " returns every raw line", show(lines) === show(c.input), show(lines));
+      const viaFile = call(tr.parseLines, lines);
+      ok("read+parse table — " + c.name, Array.isArray(viaFile) && show(viaFile) === show(c.expected), show(viaFile));
+    }
   }
 
-  // readPreviousTurn: the previous turn is the span between the last two real prompts.
+  // splitTurns: the previous turn is the span between the last two real prompts.
   {
     const p = tpath();
     writeT(p, [U("first"), A(T("OLDEST")), U("second"), A(T("PREV-TURN-TEXT")), U("third"), A(B("echo x"))]);
@@ -171,24 +189,36 @@ try {
     ok("previous turn — currentTurnEntries holds this turn's tool_use", has(r && r.currentTurnEntries, "echo x"), show(r));
     ok("previous turn — currentTurnEntries excludes the previous turn", lacks(r && r.currentTurnEntries, "PREV-TURN-TEXT"), show(r));
   }
+  // Entries that are not real prompts stay inside the turn they appear in; the exact turn contents
+  // are compared so a splitTurns that drops or moves an entry fails.
   {
-    const p = tpath();
-    writeT(p, [U("only prompt"), A(T("PRESENTED")), A(B("echo x"))]);
-    const r = prev(p);
-    ok("single prompt — hasPriorPrompt:false", r && r.hasPriorPrompt === false, show(r));
-  }
-  {
-    const p = tpath();
-    writeT(p, [U("only prompt"), A(T("PRESENTED")), UMETA("<local-command-caveat>meta</local-command-caveat>"), A(B("echo x"))]);
-    const r = prev(p);
-    ok("isMeta entry is not a real prompt — hasPriorPrompt:false", r && r.hasPriorPrompt === false, show(r));
-  }
-  {
-    const p = tpath();
+    const meta = UMETA("<local-command-caveat>meta</local-command-caveat>");
     const compact = { type: "user", isCompactSummary: true, message: { role: "user", content: "This session is being continued..." } };
-    writeT(p, [U("only prompt"), A(T("PRESENTED")), compact, A(B("echo x"))]);
-    const r = prev(p);
-    ok("compact summary is not a real prompt — hasPriorPrompt:false", r && r.hasPriorPrompt === false, show(r));
+    const toolResult = { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "ok" }] } };
+    const SPLIT_CASES = [
+      { name: "single prompt",
+        entries: [U("only prompt"), A(T("PRESENTED")), A(B("echo x"))],
+        expected: { hasPriorPrompt: false, prevTurnEntries: [], currentTurnEntries: [A(T("PRESENTED")), A(B("echo x"))] } },
+      { name: "isMeta entry is not a real prompt",
+        entries: [U("only prompt"), A(T("PRESENTED")), meta, A(B("echo x"))],
+        expected: { hasPriorPrompt: false, prevTurnEntries: [], currentTurnEntries: [A(T("PRESENTED")), meta, A(B("echo x"))] } },
+      { name: "compact summary is not a real prompt",
+        entries: [U("only prompt"), A(T("PRESENTED")), compact, A(B("echo x"))],
+        expected: { hasPriorPrompt: false, prevTurnEntries: [], currentTurnEntries: [A(T("PRESENTED")), compact, A(B("echo x"))] } },
+      { name: "tool_result-only user entry does not open a turn",
+        entries: [U("first"), A(T("PREV-TEXT")), toolResult, A(T("PREV-AFTER-RESULT")), U("second"), A(B("echo x")), toolResult, A(T("CUR-AFTER-RESULT"))],
+        expected: { hasPriorPrompt: true,
+          prevTurnEntries: [A(T("PREV-TEXT")), toolResult, A(T("PREV-AFTER-RESULT"))],
+          currentTurnEntries: [A(B("echo x")), toolResult, A(T("CUR-AFTER-RESULT"))] } },
+    ];
+    for (const c of SPLIT_CASES) {
+      const p = tpath();
+      writeT(p, c.entries);
+      const r = prev(p);
+      ok(c.name + " — hasPriorPrompt:" + c.expected.hasPriorPrompt, r && r.hasPriorPrompt === c.expected.hasPriorPrompt, show(r));
+      ok(c.name + " — prevTurnEntries exact", r && show(r.prevTurnEntries) === show(c.expected.prevTurnEntries), show(r && r.prevTurnEntries));
+      ok(c.name + " — currentTurnEntries exact", r && show(r.currentTurnEntries) === show(c.expected.currentTurnEntries), show(r && r.currentTurnEntries));
+    }
   }
 } catch (e) {
   ok("driver does not throw", false, e && e.stack);

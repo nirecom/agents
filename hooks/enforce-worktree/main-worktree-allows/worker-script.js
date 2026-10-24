@@ -5,7 +5,7 @@
 // Extracted from standard.js (file-split per rules/coding/file-split.md Pattern A).
 
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../../lib/limited-child-process");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { normalizeForCompare } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");

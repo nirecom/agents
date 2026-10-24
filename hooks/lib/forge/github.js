@@ -24,7 +24,7 @@ function isNoPrResult(r) {
 const codehostGithub = {
   isPrivateRepo(remoteUrl) {
     const { parseOriginOwnerRepo } = require("../parse-remote-url");
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     const parsed = parseOriginOwnerRepo(remoteUrl);
     if (!parsed.ok) return false;
     try {
@@ -40,7 +40,7 @@ const codehostGithub = {
   },
   repoVisibility(remoteUrl) {
     const { parseOriginOwnerRepo } = require("../parse-remote-url");
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     try {
       const parsed = parseOriginOwnerRepo(remoteUrl);
       if (!parsed.ok) return null;
@@ -57,7 +57,7 @@ const codehostGithub = {
     }
   },
   shouldScanAsPublicTarget(ownerRepo) {
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     try {
       if (!ownerRepo || typeof ownerRepo !== "string") return true;
       const result = spawnSync("gh", ["api", "repos/" + ownerRepo, "--jq", ".private"], {
@@ -86,7 +86,7 @@ const codehostGithub = {
     // Lazy require breaks the cycle: gh-detect requires forge-router at top level,
     // forge-router requires this module at top level.
     const { findGhInPath, toMsys2Path } = require("../../workflow-gate/gh-detect");
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     const ghPath = findGhInPath();
     const ghArg = ghPath ? toMsys2Path(ghPath) : "gh";
     let r;
@@ -113,7 +113,7 @@ const codehostGithub = {
   // and when the PR was merged from another commit than the local HEAD (./pr-state.js).
   prForBranch(repoDir, opts) {
     const { findGhInPath, toMsys2Path } = require("../../workflow-gate/gh-detect");
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     const ghPath = findGhInPath();
     let r;
     try {
@@ -139,7 +139,7 @@ const codehostGithub = {
   // spawned directly (no bash wrapper) so the timeout kills the gh process itself.
   mergeStateForBranch(repoDir, opts) {
     const ms = require("./merge-state");
-    const { spawnSync } = require("child_process");
+    const { spawnSync } = require("../limited-child-process");
     const timeoutMs = (opts && opts.timeoutMs) || ms.FORGE_QUERY_TIMEOUT_MS;
     let r;
     try {

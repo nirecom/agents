@@ -4,7 +4,7 @@
 // error leaves the step pending, and the idempotent skill re-checks the real
 // state. No predicate fetches; the remote-tracking refs are taken as recorded.
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../../lib/limited-child-process");
 
 // user_verification (#2527 4-4): on the web-merge channel the human's merge on the web IS the
 // release approval; the dialog channel has no evidence (the USER_VERIFIED dialog records it).

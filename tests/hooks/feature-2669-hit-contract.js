@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/run-contract.js, hooks/lib/worker-outcome-contract.js, bin/worker-dispatch/emit.js, bin/workflow/lib/run-tests-baseline-evidence.js, hooks/workflow-mark/run-tests-baseline-accept-handler.js, hooks/workflow-run-tests/outcome.js, hooks/workflow-run-tests/record-run.js, hooks/workflow-run-tests/demotion.js
-// Tags: TL2, hooks, run-tests, run-contract, hit-attribution, baseline, scope:issue-specific
+// Tags: TL2, hooks, run-tests, run-contract, hit-attribution, baseline, demotion, system-message-contract, conv-lang, scope:issue-specific
 // #2669: the optional HITS field of RUN_CONTRACT (old 4- and 6-field lines still read as hits=0),
 // its outcome-file and YAML carriers, and every judge that must treat a run with HITS>0 as failing:
 // the run outcome, green, the UNRUNNABLE-only reading, the baseline grant and the evidence CLI.
@@ -350,6 +350,62 @@ caseBegin("evidence-failing-reports-the-hits", "bin/workflow/lib/run-tests-basel
   });
   check("T7: the recorded entry with hits grants nothing", () => {
     eq(evidence().grantKind(runTests("f2669-evidence-hits")), null, "kind");
+  });
+}
+caseEnd();
+
+// #2731 S3-5: demotionMessage splits into { head, detail }; done() shows only the fact line
+// [run_tests] pending (<reason>) and sends the detail to additionalContext via withConvLang.
+const SMC = require("../lib/system-message-contract");
+caseBegin("demotion-message-head-detail", "hooks/workflow-run-tests/demotion.js");
+{
+  const D = mod("hooks/workflow-run-tests/demotion.js");
+  const SHAPES = [
+    ["contract-unrunnable", { unrunnable: 3 }, (d) => d.includes(D.UNRUNNABLE_ACCEPT_SENTINEL_FORM) && d.includes("3")],
+    ["contract-legacy-shape", null, (d) => /legacy/i.test(d) && /rebase/i.test(d)],
+    ["contract-absent", null, (d) => d.includes("RUN_CONTRACT")],
+  ];
+  for (const [reason, c, detailOk] of SHAPES) {
+    check(`D1: demotionMessage(${reason}) returns { head, detail }`, () => {
+      const m = D.demotionMessage(reason, c);
+      if (!m || typeof m !== "object") return `an object, got ${show(m)}`;
+      eq([typeof m.head, typeof m.detail], ["string", "string"], "head/detail types");
+      if (!m.head.includes(reason)) return `head does not name the reason: ${m.head}`;
+      return detailOk(m.detail) ? undefined : `detail lacks the explanation: ${m.detail}`;
+    });
+  }
+}
+caseEnd();
+
+caseBegin("run-tests-done-fact-line", "hooks/workflow-run-tests/record-run.js");
+{
+  const { spawnSync } = require("child_process");
+  const REPO = path.resolve(ROOT).replace(/\\/g, "/");
+  const wf = mod("hooks/workflow-state");
+  const drive = (sid, lang) => {
+    wf.markStep(sid, "write_tests", "complete");
+    const input = { session_id: sid, tool_name: "Bash", tool_input: { command: `bash ${REPO}/tests/run-all.sh`, cwd: REPO },
+      tool_response: { exit_code: 0, stdout: "no contract here" } };
+    const r = spawnSync(process.execPath, [path.join(ROOT, "hooks", "workflow-run-tests.js")],
+      { input: JSON.stringify(input), env: { ...process.env, CONV_LANG: lang }, encoding: "utf8", timeout: 60000 });
+    if (r.status !== 0) throw new Error(`hook exit ${r.status}: ${r.stderr}`);
+    eq(wf.readState(sid).steps.run_tests.status, "pending", "fixture: the run is demoted");
+    const j = JSON.parse(String(r.stdout).trim() || "{}");
+    return { msg: j.systemMessage || "", ctx: (j.hookSpecificOutput || {}).additionalContext || "" };
+  };
+  check("D2: japanese — systemMessage is exactly [run_tests] pending (contract-absent); detail prefixed once", () => {
+    const r = drive("f2731-demote-ja", "japanese");
+    eq(r.msg, "[run_tests] pending (contract-absent)", "systemMessage");
+    SMC.assertSystemMessageContract(r.msg);
+    if (!SMC.prefixedOnce(r.ctx, "japanese")) return `additionalContext not prefixed once: ${show(r.ctx)}`;
+    return r.ctx.includes("RUN_CONTRACT") ? undefined : "the explanation is not in additionalContext";
+  });
+  check("D3: english — additionalContext carries the detail without the directive", () => {
+    const r = drive("f2731-demote-en", "english");
+    eq(r.msg, "[run_tests] pending (contract-absent)", "systemMessage");
+    if (!r.ctx.includes("RUN_CONTRACT")) return `the explanation is not in additionalContext: ${show(r.ctx)}`;
+    eq(SMC.countDirective(r.ctx), 0, "directive count");
+    return undefined;
   });
 }
 caseEnd();

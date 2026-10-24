@@ -159,23 +159,31 @@ RUN_CMD_PROMPT="Using the Bash tool, run exactly this one command and report ver
 NO_RETRY="Do not rewrite it, do not use any other form, and do not retry with a different command if it is refused."
 
 # =============================================================================
-# (b) HARD GATE G-b -- legacy approve vs silence. `git --version` is outside every allow
-# list and has no side effect. Expected branch (b1): BOTH refused, i.e. the legacy approve
-# never bypassed the prompt, so passThrough may go silent without adding any prompt.
-echo "=== (b) legacy approve vs silent exit 0 ==="
+# (b) The four PreToolUse envelopes. `git --version` is outside every allow list and has no
+# side effect. #2676 gate 1 (b) measured b-rejected: the legacy approve DOES skip the prompt
+# (B1 executed, as the hookSpecificOutput allow does), while {} and no output both leave it.
+echo "=== (b) legacy approve / allow / {} / silent exit 0 ==="
 case_begin "probe-b-legacy-approve" "hooks/bash-guard.js"
 B1="bbbbbbbb-2264-4000-8000-0000000000b1"
 B2="bbbbbbbb-2264-4000-8000-0000000000b2"
-write_settings "$STUBS/approve-stub.js"
-run_turn "$B1" "$RUN_CMD_PROMPT git --version. $NO_RETRY"
-write_settings "$STUBS/silent-stub.js"
-run_turn "$B2" "$RUN_CMD_PROMPT git --version. $NO_RETRY"
+B3="bbbbbbbb-2264-4000-8000-0000000000b3"
+B4="bbbbbbbb-2264-4000-8000-0000000000b4"
+for pair in "$B1:approve-stub.js" "$B2:silent-stub.js" "$B3:empty-object-stub.js" "$B4:allow-stub.js"; do
+    write_settings "$STUBS/${pair#*:}"
+    run_turn "${pair%%:*}" "$RUN_CMD_PROMPT git --version. $NO_RETRY"
+done
 cli_ok "$B1" B1
 cli_ok "$B2" B2
+cli_ok "$B3" B3
+cli_ok "$B4" B4
 expect "B2-silent-hook-leaves-the-prompt (fixture precondition)" "refused" "$(outcome "$B2" "git --version")" \
-    "(b3) a silent hook did not end in the permission refusal -- the fixture grants the command some other way; fix the probe, do not implement"
-expect "B1-legacy-approve-did-not-bypass-the-prompt (G-b)" "refused" "$(outcome "$B1" "git --version")" \
-    "(b2) the legacy approve ran the command without a prompt -- Step 7's fallback envelope applies and the silence decision goes to the user"
+    "a silent hook did not end in the permission refusal -- the fixture grants the command some other way; fix the probe, do not implement"
+expect "B3-empty-object-leaves-the-prompt" "refused" "$(outcome "$B3" "git --version")" \
+    "{} skipped the prompt -- it is not the silence #2676 treats it as; re-measure gate 1 (b)"
+expect "B4-allow-skips-the-prompt" "executed" "$(outcome "$B4" "git --version")" \
+    "permissionDecision allow did not run the command -- the envelope #2676 moves to no longer allows"
+expect "B1-legacy-approve-skips-the-prompt (b-rejected)" "executed" "$(outcome "$B1" "git --version")" \
+    "the legacy approve no longer skips the prompt -- gate 1 (b) changed; re-measure before relying on approve"
 case_end
 
 # =============================================================================
