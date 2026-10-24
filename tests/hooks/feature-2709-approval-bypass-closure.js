@@ -1,9 +1,8 @@
 "use strict";
 // Tests: hooks/lib/sentinel-patterns.js, hooks/lib/supervisor-block-override.js, hooks/workflow-mark/supervisor-block-override-handler.js, hooks/workflow-mark.js, hooks/workflow-mark/reset-handler.js, hooks/workflow-state/completion-approval.js, hooks/workflow-gate/user-verified-audit.js, settings.json
 // Tags: supervisor, block-override, reset-from, plan-approval, sentinel, permissions, scope:issue-specific, TL2
-// #2709 — two routes that recorded an approval without the user: the un-gated override CLI
-// (now the ask-gated WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED sentinel) and RESET_FROM's
-// synthesised plan approvals (now refused unless each prior gated step is really approved).
+// #2709 — two routes that recorded an approval without the user: the un-gated override CLI (now the ask-gated
+// WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED sentinel, #2597) and RESET_FROM's synthesised plan approvals (now refused).
 // TL3 gap: the real permissions.ask dialog is not exercised; settings.json is checked
 // statically and the sentinel is fed to the PostToolUse hook as if the user had allowed it.
 
@@ -64,13 +63,11 @@ caseEnd();
 
 caseBegin("A2 recorded override releases the TR5 hold for its run and key", "hooks/workflow-gate/user-verified-audit.js");
 run("A2 recorded override releases the TR5 hold for its run and key", () => {
-  const sid = nextSid("a2");
-  seedSup(sid, [terminalRun("run-0011", "BLOCK")]);
-  markHook(sid, sentinel(`run-0011 ${REASON}`));
-  const { overrideReleases } = mod("hooks/workflow-gate/user-verified-audit.js");
-  const audit = supState(sid).audit;
-  eq(overrideReleases(audit, terminalRun("run-0011", "BLOCK"), FK), true, "releases at the pinned key");
-  eq(overrideReleases(audit, terminalRun("run-0011", "BLOCK"), "fk-moved"), false, "a moved key does not release");
+  const { acceptanceReleasesNonNull: rel } = mod("hooks/lib/null-freshness.js"); // #2597: a legacy record keeps releasing
+  const legacy = [{ run_id: "run-0011", freshness_key: FK, reason: REASON, actor: "t", recorded_at: "2026-01-01T00:00:00Z" }];
+  const tr5Run = terminalRun("run-0011", "BLOCK");
+  eq(rel({ tr5Run, overrides: legacy, currentFk: FK }), true, "releases at the pinned key");
+  eq(rel({ tr5Run, overrides: legacy, currentFk: "fk-moved" }), false, "a moved key does not release");
 });
 caseEnd();
 
@@ -108,13 +105,16 @@ run("A5 run that is not the last terminal run is refused", () => {
 });
 caseEnd();
 
-caseBegin("A6 non-BLOCK verdict is refused", "hooks/workflow-mark/supervisor-block-override-handler.js");
-run("A6 non-BLOCK verdict is refused", () => {
+caseBegin("A6 CONTINUE is refused and WARN is accepted", "hooks/workflow-mark/supervisor-block-override-handler.js");
+run("A6 CONTINUE is refused and WARN is accepted", () => {
   const sid = nextSid("a6");
   seedSup(sid, [terminalRun("run-0011", "CONTINUE")]);
   const msg = markHook(sid, sentinel(`run-0011 ${REASON}`));
-  eq(overrides(sid).length, 0, "nothing recorded");
-  ok(/BLOCK/.test(msg), `refusal explains the verdict is not BLOCK; got ${show(msg)}`);
+  eq(overrides(sid).length, 0, "CONTINUE: nothing recorded");
+  ok(/CONTINUE/.test(msg), `refusal names the CONTINUE verdict; got ${show(msg)}`);
+  const warn = nextSid("a6w");
+  seedSup(warn, [terminalRun("run-0011", "WARN")]); markHook(warn, sentinel(`run-0011 ${REASON}`));
+  eq(overrides(warn).map((b) => [b.run_id, b.verdict]), [["run-0011", "WARN"]], "WARN: one acceptance recorded");
 });
 caseEnd();
 
@@ -169,10 +169,8 @@ caseEnd();
 
 caseBegin("A14 the same valid override sent twice appends two audit records", "hooks/workflow-mark/supervisor-block-override-handler.js");
 run("A14 the same valid override sent twice appends two audit records", () => {
-  // Design reading: block_overrides is an append-only audit trail (audit-ledger.appendBlockOverride
-  // pushes without dedupe, and each hook run is a separate user-approved ask-dialog act). The run stays
-  // the last BLOCK terminal run, so the second send is valid again: two records, two findings, and the
-  // hold stays released.
+  // block_overrides is append-only (appendBlockOverride never dedupes; each send is its own ask-dialog act),
+  // so a second valid send gives two records, two findings, and the hold stays released.
   const sid = nextSid("a14");
   seedSup(sid, [terminalRun("run-0011", "BLOCK")]);
   markHook(sid, sentinel(`run-0011 ${REASON}`));
@@ -181,8 +179,8 @@ run("A14 the same valid override sent twice appends two audit records", () => {
   eq(bo.map((b) => [b.run_id, b.freshness_key]), [["run-0011", FK], ["run-0011", FK]], "two override records");
   const f = ((supState(sid) || {}).layer1 || {}).findings || [];
   eq(f.filter((x) => x.reporter === "workflow-mark:supervisor-block-override").length, 2, "two override findings");
-  const { overrideReleases } = mod("hooks/workflow-gate/user-verified-audit.js");
-  eq(overrideReleases(supState(sid).audit, terminalRun("run-0011", "BLOCK"), FK), true, "hold stays released");
+  const { acceptanceReleasesNonNull: rel } = mod("hooks/lib/null-freshness.js");
+  eq(rel({ tr5Run: terminalRun("run-0011", "BLOCK"), overrides: bo, currentFk: FK }), true, "hold stays released");
 });
 caseEnd();
 
@@ -190,12 +188,16 @@ caseBegin("A9 lib records directly and a short reason touches no state", "hooks/
 run("A9 lib records directly and a short reason touches no state", () => {
   const lib = mod("hooks/lib/supervisor-block-override.js");
   const sid = nextSid("a9");
-  seedSup(sid, [terminalRun("run-0011", "BLOCK")]);
-  const good = lib.recordReviewedBlockOverride(sid, { runId: "run-0011", reason: REASON, actor: "lib-actor" });
+  const AK = { intent: "h-i", outline: null, detail: "h-d" };
+  seedSup(sid, [Object.assign(terminalRun("run-0011", "WARN"), { artifact_keys: AK, trigger_input_keys: { TR5: "iv-a9" } })]);
+  const good = lib.recordReviewedVerdictAcceptance(sid, { runId: "run-0011", reason: REASON, actor: "lib-actor" });
   eq(good && good.ok, true, `accepted result ${show(good)}`);
-  eq(overrides(sid).map((b) => b.actor), ["lib-actor"], "recorded actor");
+  eq(overrides(sid).map((b) => [b.actor, b.run_id, b.verdict, b.freshness_key, b.artifact_keys, b.trigger_key]),
+    [["lib-actor", "run-0011", "WARN", FK, AK, "iv-a9"]], "recorded acceptance pins the run id, verdict and snapshot");
+  const cont = nextSid("a9c"); seedSup(cont, [terminalRun("run-0011", "CONTINUE")]);
+  eq((lib.recordReviewedVerdictAcceptance(cont, { runId: "run-0011", reason: REASON }) || {}).code, "verdict-not-acceptable", "CONTINUE");
   const fresh = nextSid("a9b");
-  const bad = lib.recordReviewedBlockOverride(fresh, { runId: "run-0011", reason: "too short", actor: "x" });
+  const bad = lib.recordReviewedVerdictAcceptance(fresh, { runId: "run-0011", reason: "too short", actor: "x" });
   eq(bad && bad.ok, false, `short reason result ${show(bad)}`);
   ok(typeof bad.message === "string" && bad.message.length > 0, "refusal carries a message");
   ok(!fs.existsSync(writer.getStatePath(fresh)), "no supervisor state file materialised");
@@ -223,8 +225,8 @@ caseEnd();
 caseBegin("A11 sentinel patterns recognise the override form", "hooks/lib/sentinel-patterns.js");
 run("A11 sentinel patterns recognise the override form", () => {
   const sp = mod("hooks/lib/sentinel-patterns.js");
-  ok(sp.SUPERVISOR_BLOCK_ACCEPTED_RE_DQ instanceof RegExp, "SUPERVISOR_BLOCK_ACCEPTED_RE_DQ exported");
-  ok(sp.SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE instanceof RegExp, "SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE exported");
+  ok(sp.SUPERVISOR_VERDICT_ACCEPTED_RE_DQ instanceof RegExp, "SUPERVISOR_VERDICT_ACCEPTED_RE_DQ exported");
+  ok(sp.SUPERVISOR_VERDICT_ACCEPTED_LOOKSLIKE_RE instanceof RegExp, "SUPERVISOR_VERDICT_ACCEPTED_LOOKSLIKE_RE exported");
 });
 caseEnd();
 
@@ -260,7 +262,7 @@ caseBegin("A12 the un-gated CLI is gone and the hold reason points at the sentin
 run("A12 the un-gated CLI is gone and the hold reason points at the sentinel", () => {
   ok(!fs.existsSync(path.join(ROOT, "bin", "supervisor-record-block-override")), "bin/supervisor-record-block-override still exists");
   const src = fs.readFileSync(path.join(ROOT, "hooks", "workflow-gate", "user-verified-audit.js"), "utf8");
-  ok(src.includes(SENT), "holdReason does not name the override sentinel");
+  ok(String(mod("hooks/workflow-gate/user-verified-audit.js").holdReason("run-0011")).includes(SENT), "holdReason does not name the sentinel");
   ok(!src.includes("bin/supervisor-record-block-override"), "holdReason still names the removed CLI");
 });
 caseEnd();
