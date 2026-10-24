@@ -18,6 +18,7 @@ see "External read-only allow in bash-guard" below.
 See `docs/security-policy.md` for the full pattern list.
 
 **Hook format**: Nested format — `matcher` + `hooks` array. Timeout in seconds.
+How Claude Code applies the `timeout`, and the PreToolUse decision time limit under it: [settings/hook-timeout.md](settings/hook-timeout.md).
 
 ```json
 { "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "node .../hook.js", "timeout": 5 }] }
@@ -104,14 +105,15 @@ allowed by a positive argv judge instead of a spelling.
 **Known limitations**:
 - TL3 verification gap: `tests/hooks/TL3-hook-bash-guard-envelope.sh` (gated by `RUN_TL3=on`) probes
   three claims about bash-guard's live behavior — (a) that `systemMessage` / `additionalContext` reach
-  the model, (b) that `passThrough` (silent exit 0) and the legacy `{decision:"approve"}` output are
-  equivalent in Claude Code's permission engine, and (c) that a companion hook's `{decision:"block"}`
-  prevails over bash-guard's `permissionDecision:"allow"`. Research findings
-  `[hook-silent-exit0]` and `[hook-allow-respects-rules]` are the current evidence base for (b) and (c)
-  respectively; the first covers the silent-exit case, the second covers settings.json deny/ask
-  priority over hook allow. Hook-to-hook composition (whether one hook's allow is overridden by another
-  hook's block) is not explicitly documented by the product. `RUN_TL3=off` (the default in `.env`)
-  skips the live-environment probes; a developer setting `RUN_TL3=on` activates them.
+  the model, (b) how the four PreToolUse envelopes act in the permission engine, and (c) that a
+  companion hook's `{decision:"block"}` prevails over bash-guard's `permissionDecision:"allow"`.
+  For (b), #2676 gate 1 measured that the legacy `{decision:"approve"}` is NOT the same as a silent
+  exit 0: approve and `permissionDecision:"allow"` both skip the prompt, while `{}` and no output
+  leave it (a refusal under `claude -p`). So a hook that means "no decision" must print nothing or
+  `{}`, never approve ([settings/hook-timeout.md](settings/hook-timeout.md)). Research finding
+  `[hook-allow-respects-rules]` covers settings.json deny/ask priority over a hook allow; hook-to-hook
+  composition is not documented by the product. `RUN_TL3=off` (the default in `.env`) skips the
+  live-environment probes; a developer setting `RUN_TL3=on` activates them.
 - PreToolUse hook on Edit|Write bypasses the "Ask before edits" dialog (hook success =
   permission granted). Delegate Edit|Write scanning to the pre-commit hook.
 - Hook format must be nested. Flat format (matcher/command/timeout at the same level) causes
@@ -119,7 +121,7 @@ allowed by a positive argv judge instead of a spelling.
 - VSCode's "Ask before edits" mode covers Edit/Write only — Bash commands do not trigger
   the ask dialog.
 - Hot-reloading of settings.json hook changes is unreliable. Restart Claude Code after changes.
-- `bash-guard.js`'s matcher is `Bash` only (see [settings/bash-guard.md](settings/bash-guard.md)) — a compound command issued through
+- `bash-guard` judges `Bash` only, also inside the merged allow-deny hook (see [settings/bash-guard.md](settings/bash-guard.md)) — a compound command issued through
   `runInTerminal` / `runCommands` (VS Code-integrated terminal tools) never reaches it and
   is not otherwise denied. Parsing pwsh with a bash-syntax parser is worse than not parsing
   it at all (backtick = continuation not command-substitution, `{ }` = script block not

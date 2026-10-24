@@ -1,75 +1,17 @@
 #!/usr/bin/env node
-// PreToolUse hook: refuses "assign a command substitution to a variable, then do
-// nothing but display it" — the model should reissue the inner command bare and
-// read its stdout instead (rules/shell-commands.md, Command-Line Issuance
-// Discipline). Unconditional deny: no marker (.workflow-off / .worktree-off) is
-// honoured, because issuance discipline is orthogonal to workflow on/off.
-// Dispatch only; the predicate lives in block-capture-echo/shape.js and the
-// wording in block-capture-echo/remedy.js (rules/coding/file-split.md Pattern A).
 "use strict";
+// PreToolUse hook: refuses "assign a command substitution to a variable, then do nothing but
+// display it" — the model should reissue the inner command bare and read its stdout instead
+// (rules/shell-commands.md, Command-Line Issuance Discipline). Unconditional deny: no marker is
+// honoured. Since #2676 settings.json runs it inside hooks/merged-allow-deny.js.
+// Dispatch only; the judgment lives in ./block-capture-echo/judge.js.
 
-const fs = require("fs");
-const { isCommandTool, commandListOf } = require("./lib/tool-command-text");
-// Imported from the clearance-token scanner because that file is the ONE sanctioned
-// site enabling the preserveSubstitutionSpans option (fix-1780-round11 X1/X2).
-const { parseWithSubstitutionSpans } = require("./block-clearance-token-write/bash-scan/scan");
-const { detectCaptureEcho } = require("./block-capture-echo/shape");
-const { buildRemedy } = require("./block-capture-echo/remedy");
-const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { judgeCaptureEcho } = require("./block-capture-echo/judge");
 
-function passThrough() {
-  console.log("{}");
-  process.exit(0);
-}
-
-// Dual-field output, following hooks/check-worktree-notes-lang.js: `decision`
-// blocks before the permission prompt resolves, `hookSpecificOutput` is the
-// current-form spelling of the same verdict. Always exit 0 — never exit 2.
-function block(reason) {
-  console.log(JSON.stringify({
-    decision: "block",
-    reason,
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: reason,
-    },
-  }));
-  process.exit(0);
-}
-
-// PARSE-ONCE contract, specialised to this hook: the unit is not the tool call but
-// the EXECUTION UNIT (one element of commandListOf). Never parse the same unit
-// twice, and never share state across units — detectCaptureEcho is pure.
-// commandTextOf's newline join must NEVER be used here: newlines are not segment
-// separators, so joining two genuinely separate shell executions would fabricate a
-// single assignment→echo unit and reject a shape that never existed.
 function main() {
-  const r = readHookInput();
-  if (r.kind !== "ok") {
-    try { fs.writeSync(2, readFailOpenDiagnostic("block-capture-echo", r, "check skipped") + "\n"); } catch (_) {}
-    passThrough();
-  }
-  const input = r.input;
-  if (!input || typeof input !== "object") passThrough();
-  if (!isCommandTool(input.tool_name)) passThrough();
-
-  const units = commandListOf(input.tool_name, input.tool_input);
-  if (!Array.isArray(units) || units.length === 0) passThrough();
-
-  for (const unit of units) {
-    const hit = detectCaptureEcho(parseWithSubstitutionSpans(unit));
-    if (hit) block(buildRemedy(hit));
-  }
-  passThrough();
+  require("./merged-allow-deny/run").runMembers(["block-capture-echo"]);
 }
 
-if (require.main === module) {
-  try {
-    main();
-  } catch (_e) {
-    passThrough();
-  }
-}
+module.exports = { main, judgeCaptureEcho };
 
-module.exports = { main };
+if (require.main === module) main();

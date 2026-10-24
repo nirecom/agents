@@ -68,24 +68,39 @@ fi
 # leaves a pre-approved tool that can name .env or ~/.ssh/id_rsa and never reach a
 # guard (#2150 review). Parsed as JSON so the claim is about the matcher a hook is
 # actually registered under, not about a string elsewhere in the file.
+# Since #2676 both guards are members of hooks/merged-allow-deny.js: the registration is
+# the primary group (`--matcher-group primary`), and each member's own tool list
+# (hooks/merged-allow-deny/members.js) must also name the tool, or the group reaches the
+# merged hook but never the guard.
 echo "=== W11: both credential guards match the CodeGraph explore tool ==="
 
 READ_MATCHERS='const fs=require("fs");const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const want=process.argv[2];const out=[];for(const g of ((s.hooks&&s.hooks.PreToolUse)||[])){for(const h of (g.hooks||[])){if(String(h.command||"").includes(want))out.push(String(g.matcher||""));}}console.log(out.join("\n"));'
-for guard in block-dotenv.js block-credentials.js; do
-    if [ ! -f "$SETTINGS" ]; then
-        fail "W11/$guard: settings.json is absent" "cannot read hooks.PreToolUse"
-        continue
-    fi
-    MATCHERS="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 node -e "$READ_MATCHERS" "$(nodepath "$SETTINGS")" "$guard" 2>/dev/null || true)"
+READ_MEMBER_TOOLS='const m=require(process.argv[1]).MEMBERS.find((x)=>x.name===process.argv[2]);console.log(m?m.tools.join("|"):"<NOT-A-MEMBER>");'
+PRIMARY_NEEDLE='merged-allow-deny.js" --matcher-group primary'
+MEMBERS_JS="$SCRIPT_CHECKOUT_ROOT/hooks/merged-allow-deny/members.js"
+if [[ ! -f "$SETTINGS" ]]; then
+    fail "W11: settings.json is absent" "cannot read hooks.PreToolUse"
+else
+    MATCHERS="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 node -e "$READ_MATCHERS" "$(nodepath "$SETTINGS")" "$PRIMARY_NEEDLE" 2>/dev/null || true)"
     HITS="$(printf '%s' "$MATCHERS" | grep -c . || true)"
-    assert_eq "W11/$guard: registered under exactly one PreToolUse matcher" "1" "${HITS:-0}"
+    assert_eq "W11: the merged allow-deny primary group is registered under exactly one PreToolUse matcher" "1" "${HITS:-0}"
     if printf '%s' "$MATCHERS" | grep -qF 'mcp__codegraph__codegraph_explore'; then
-        pass "W11/$guard: its matcher lists mcp__codegraph__codegraph_explore"
+        pass "W11: the primary group matcher lists mcp__codegraph__codegraph_explore"
     else
-        fail "W11/$guard: its PreToolUse matcher does not list mcp__codegraph__codegraph_explore" \
+        fail "W11: the primary group PreToolUse matcher does not list mcp__codegraph__codegraph_explore" \
              "matcher=$(printf '%s' "$MATCHERS" | tr '\n' ' ')"
     fi
-done
+    for guard in block-dotenv block-credentials; do
+        STANDALONE="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 node -e "$READ_MATCHERS" "$(nodepath "$SETTINGS")" "hooks/$guard.js" 2>/dev/null || true)"
+        assert_eq "W11/$guard: no standalone PreToolUse registration remains" "" "$STANDALONE"
+        TOOLS="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 node -e "$READ_MEMBER_TOOLS" "$(nodepath "$MEMBERS_JS")" "$guard" 2>/dev/null || true)"
+        if [[ "|$TOOLS|" == *"|mcp__codegraph__codegraph_explore|"* ]]; then
+            pass "W11/$guard: the merged member judges mcp__codegraph__codegraph_explore"
+        else
+            fail "W11/$guard: the merged member's tool list does not name mcp__codegraph__codegraph_explore" "tools=${TOOLS:-<none>}"
+        fi
+    done
+fi
 
 assert_count_re "W9-02" ".env.example" '^[[:space:]]*CODEGRAPH=' 1 \
     "a duplicate assignment makes the last one win silently, so the documented default and the effective default diverge"

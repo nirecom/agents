@@ -2,11 +2,14 @@
 
 Per-hook behavior contracts for the hooks registered in `settings.json`. This is the detail companion of [settings.md](../settings.md), which keeps the allow/deny model, permission glob matching, generated allow rules, and known limitations.
 
+PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and the decision time limit: [hook-timeout.md](hook-timeout.md).
+
 **Hooks**:
+- `merged-allow-deny.js` (PreToolUse, registered twice: `--matcher-group primary` and `--matcher-group monitor-worktree`) — runs `block-dotenv`, `block-credentials`, `bash-guard`, `block-capture-echo` and `preuse-auto-approve` in one process; each member judges only its own tools (`hooks/merged-allow-deny/members.js`). Contract (routing, merge order, no-decision vs approve, fail-open / fail-closed): [hook-timeout.md](hook-timeout.md) "Merged allow-deny hook".
 - `scan-outbound.js` (PreToolUse, matcher: `Bash`) — scans commands for private info patterns
-- `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit`) — blocks `.env` file access (read and write).
+- `block-dotenv.js` (merged allow-deny hook member, `primary` group tools) — blocks `.env` file access (read and write).
   Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives
-- `block-credentials.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands`) — blocks Read/Edit/Write/Grep/Glob/Bash access to 22 credential-path families (24 protected roots; Terraform spans 3 roots): SSH keys, GnuPG, AWS, Azure, gh CLI config, git credentials, Docker config, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform, gcloud SDK, HashiCorp Vault, Cargo, password-manager CLI. Supersedes `block-ssh-private-key.js` (issue #254). WORKFLOW_OFF does NOT bypass. Path table: `CREDENTIALS_TABLE` in `hooks/block-credentials.js`. Recognizes `~`, `$HOME`, `${HOME}`, `$USERPROFILE`, `${USERPROFILE}`, and dot-segment forms; additionally recognizes the corresponding `/root/<tail>` sibling of every `~/`-rooted family (same path with `~/` stripped; see `CREDENTIALS_TABLE` in `hooks/block-credentials.js`). `..` traversal resolved by `path.posix.normalize`.
+- `block-credentials.js` (merged allow-deny hook member, `primary` group tools) — blocks Read/Edit/Write/Grep/Glob/Bash access to 22 credential-path families (24 protected roots; Terraform spans 3 roots): SSH keys, GnuPG, AWS, Azure, gh CLI config, git credentials, Docker config, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform, gcloud SDK, HashiCorp Vault, Cargo, password-manager CLI. Supersedes `block-ssh-private-key.js` (issue #254). WORKFLOW_OFF does NOT bypass. Path table: `CREDENTIALS_TABLE` in `hooks/block-credentials.js`. Recognizes `~`, `$HOME`, `${HOME}`, `$USERPROFILE`, `${USERPROFILE}`, and dot-segment forms; additionally recognizes the corresponding `/root/<tail>` sibling of every `~/`-rooted family (same path with `~/` stripped; see `CREDENTIALS_TABLE` in `hooks/block-credentials.js`). `..` traversal resolved by `path.posix.normalize`.
 - `confirm-forge-target-ownership.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — asks
   before a `gh issue create` / `gh api` issue write whose target repository is not proven to belong to
   the authenticated account. Silence requires positive proof (login match or repo admin); an
@@ -50,7 +53,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   Use case: follow-up commits that tick a checkbox in `docs/todo.md`, append to
   `docs/history.md`, or refresh the user-visible description in root `README.md`.
   Replaces `check-docs-updated.js` and `check-tests-updated.js`
-- `bash-guard.js` (PreToolUse, matcher: `Bash`) — Bash command classifier with four verdicts
+- `bash-guard.js` (merged allow-deny hook member, tool `Bash`) — Bash command classifier with four verdicts
   (deny → notify → allow → passThrough); full contract: [bash-guard.md](bash-guard.md).
 - `rtk-rewrite.js` (PreToolUse, matcher: `Bash`) — when `RTK=on` in `.env`, rewrites
   eligible Bash commands to pipe their output through the RTK binary before it reaches

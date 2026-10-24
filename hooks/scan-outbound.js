@@ -2,7 +2,9 @@
 // Claude Code PreToolUse hook: check Edit/Write content for private information
 // Skips scanning for private repos (detected dynamically via GitHub API)
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./lib/limited-child-process");
+const { armDecisionTimeLimit, checkDecisionTime } = require("./lib/decision-time-limit");
+const { readStagedBlobs } = require("./scan-outbound/staged-blobs");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames, findPrivateName, toNativePath } = require("./lib/is-private-repo");
@@ -55,6 +57,7 @@ const OFFENSIVE_SCANNER = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "scan-offensive
 // Main async logic wrapped in an IIFE to allow await on Promise-returning stubs
 (async function main() {
   const r = readHookInput();
+  armDecisionTimeLimit({ hookName: HOOK_NAME });
   if (r.kind === "read-error") block(readFailureReason(HOOK_NAME, r.error));
   if (r.kind === "json-invalid") {
     try { fs.writeSync(2, readFailOpenDiagnostic(HOOK_NAME, r, "check skipped") + "\n"); } catch (_) {}
@@ -86,6 +89,7 @@ const OFFENSIVE_SCANNER = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "scan-offensive
       const { inline, filePaths } = extractTexts(command);
       const parts = [...inline];
       for (const fp of filePaths) {
+        checkDecisionTime("forge body file read");
         const normalizedFp = normalizePath(fp);
         try {
           const stat = fs.statSync(normalizedFp);
@@ -175,14 +179,14 @@ const OFFENSIVE_SCANNER = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "scan-offensive
           if (relFiles.length > 0) {
             const rs = Buffer.from("\x1e");
             const frames = [];
-            for (const rel of relFiles) {
-              const blob = spawnSync("git", ["show", ":" + rel], {
-                cwd: toNativePath(commitRepoDir), timeout: 5000,
-              });
-              if (blob.error || blob.status !== 0) {
-                block("Staged file blob unreadable: " + rel);
-              }
-              const blobBuf = blob.stdout;
+            const staged = readStagedBlobs(toNativePath(commitRepoDir), relFiles);
+            if (!staged.blobs) {
+              block(staged.unreadable === null
+                ? "Staged file blobs unreadable (git cat-file failed)"
+                : "Staged file blob unreadable: " + staged.unreadable);
+            }
+            for (const { rel, content: blobBuf } of staged.blobs) {
+              checkDecisionTime("staged file scan");
               if (blobBuf.indexOf(0) !== -1) continue; // skip binary
               const pathBuf = Buffer.from(rel, "utf8");
               const lenBuf = Buffer.from(String(blobBuf.length), "utf8");

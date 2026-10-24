@@ -10,6 +10,7 @@
 
 const fs = require("fs");
 const { detectStalledSteps, reportMechanismFailureOnce, STATE_PSEUDO_STEP } = require("./lib/mechanism-failure");
+const { newCancelNotice } = require("./lib/hook-cancel-notice");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -128,24 +129,31 @@ function main() {
   }
   if (!sid || !SID_RE.test(sid)) return {};
 
-  const allFindings = reportableFindings(sid);
-  if (allFindings.length === 0) return {};
+  // #2676: a PreToolUse hook cancelled at its timeout since the last prompt (transcript only).
+  let cancelNotice = null;
+  try { cancelNotice = newCancelNotice(sid, input && input.transcript_path); } catch (_e) { cancelNotice = null; }
 
+  const allFindings = reportableFindings(sid);
   const findings = allFindings.filter((f) => !isFindingExemptFromPromptNotify(sid, f));
-  if (findings.length === 0) return {};
+  if (findings.length === 0) return cancelNotice ? withNotice({}, cancelNotice.systemMessage, cancelNotice.additionalContext) : {};
 
   for (const finding of findings) {
     try { reportMechanismFailureOnce(sid, finding); } catch (_e) {}
   }
 
+  // The user sees only `[mechanism-failure] <ids>` (#2731); the explanation goes to the model.
   const { withConvLang } = require("./lib/conv-lang");
+  const userText = "[mechanism-failure] " + findingIds(findings);
+  const sessionText = withConvLang(describe(findings));
+  if (!cancelNotice) return withNotice({ blocks: true }, userText, sessionText);
+  return withNotice({ blocks: true }, userText + "\n" + cancelNotice.systemMessage, sessionText + "\n" + cancelNotice.additionalContext);
+}
+
+function withNotice(base, userText, sessionText) {
   return {
-    blocks: true,
-    systemMessage: "[mechanism-failure] " + findingIds(findings),
-    hookSpecificOutput: {
-      hookEventName: "UserPromptSubmit",
-      additionalContext: withConvLang(describe(findings)),
-    },
+    ...base,
+    systemMessage: userText,
+    hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: sessionText },
   };
 }
 

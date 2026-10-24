@@ -1,7 +1,7 @@
 "use strict";
 
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { hasStagedDocChanges } = require("../lib/staged-doc-changes");
 const { SESSION_ID_VALID_RE } = require("../workflow-state/state-io");
 

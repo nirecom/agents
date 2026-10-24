@@ -40,3 +40,4 @@ skills/run-tests/scripts/mark-calibration-asked.sh
 bin/workflow/handoff-append
 bin/workflow/jev-judge
 bin/workflow/release-channel
+bin/check-unstaged-tracked.sh
