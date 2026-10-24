@@ -220,27 +220,19 @@ for (const { name, lines, code } of synCases) {
   });
 }
 
-// case-count (#2502 S4-4b): the column-0 marker calls in the code region; one number, rc 1
-// when there is none. Marker text inside a block comment or a template literal is no unit.
-const COUNT_HIDDEN = [
-  ...SAMPLE,
-  "/*",
-  `${B}("in-comment", "bin/a.sh");`,
-  "*/",
-  "const doc = `",
-  `${B}("in-template", "bin/a.sh");`,
-  "`;",
-];
+// case-count (#2502 S4-4b, user decision 2026-10-24): js has no case unit apart from its
+// markers, so the op answers rc 1 with no count for any file, and 4b compares code lines.
+const COUNT_UNCLOSED = [...SAMPLE, `${B}("open", "bin/a.sh");`, "check();"];
 const countCases = [
-  { name: "case-count counts the three marker calls", lines: SAMPLE, code: 0, out: "3" },
-  { name: "case-count skips marker text in block comments and templates", lines: COUNT_HIDDEN, code: 0, out: "3" },
-  { name: "case-count fails a file without case markers", lines: CUSTOM_RUNNER, code: 1, out: "" },
+  { name: "case-count answers no unit for a conforming file", lines: SAMPLE },
+  { name: "case-count answers no unit for a file with an unclosed case", lines: COUNT_UNCLOSED },
+  { name: "case-count answers no unit for a file without case markers", lines: CUSTOM_RUNNER },
 ];
-for (const { name, lines, code, out } of countCases) {
+for (const { name, lines } of countCases) {
   check(name, (n) => {
     const r = run(n, ANALYZER, ["case-count", sample("count/c.js", lines)]);
-    assert.strictEqual(r.status, code, `${n}: exit code; stderr: ${r.stderr}`);
-    assert.strictEqual(r.stdout.trim(), out, `${n}: case-count stdout`);
+    assert.strictEqual(r.status, 1, `${n}: exit code; stderr: ${r.stderr}`);
+    assert.strictEqual(r.stdout.trim(), "", `${n}: case-count stdout`);
   });
 }
 

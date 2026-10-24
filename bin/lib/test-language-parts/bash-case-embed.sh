@@ -156,27 +156,6 @@ _bce_skip_reason() {
   return 0
 }
 
-# _bce_case_count <file> — the column-0 case_begin lines outside heredoc bodies; rc 1 when none.
-# A malformed begin line still counts: it marks where a case unit starts.
-_bce_case_count() {
-  local line n=0 in_hd=0 term="" strip=0 chk re_unit='^case_begin([[:space:]]|$)'
-  local _TRP_HD_TERM="" _TRP_HD_STRIP=0
-  [[ -f "$1" ]] || return 1
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line="${line%$'\r'}"
-    if [[ "$in_hd" -eq 1 ]]; then
-      chk="$line"
-      [[ "$strip" -eq 1 ]] && chk="${chk#"${chk%%[![:blank:]]*}"}"
-      [[ "$chk" == "$term" ]] && in_hd=0
-      continue
-    fi
-    [[ "$line" =~ $re_unit ]] && n=$((n + 1))
-    if _trp_heredoc_term "$line"; then in_hd=1; term="$_TRP_HD_TERM"; strip="$_TRP_HD_STRIP"; fi
-  done <"$1"
-  [[ "$n" -gt 0 ]] || return 1
-  printf '%s\n' "$n"
-}
-
 _bce_result_summary() {
   local rc="$1" out="$2" cls p="" f="" line re='Results:[[:space:]]*([0-9]+)[[:space:]]+passed,[[:space:]]*([0-9]+)[[:space:]]+failed'
   case "$rc" in 77) cls=skip ;; 0) cls=pass ;; *) cls=fail ;; esac
@@ -199,7 +178,8 @@ bash_case_embed() {
     skip-reason) _bce_skip_reason "${1:?bash_case_embed skip-reason: file required}" ;;
     # bash -n parses without running; its message is the reason on stderr, rc 1 on failure.
     syntax-check) bash -n "${1:?bash_case_embed syntax-check: file required}" >/dev/null || return 1 ;;
-    case-count) _bce_case_count "${1:?bash_case_embed case-count: file required}" ;;
+    # bash has no case unit apart from its markers, so no file holds a count.
+    case-count) return 1 ;;
     result-summary) _bce_result_summary "${1:?bash_case_embed result-summary: rc required}" "${2:?bash_case_embed result-summary: stdout file required}" ;;
     *) printf '[bash-case-embed] unknown op: %s\n' "$op" >&2; return 2 ;;
   esac

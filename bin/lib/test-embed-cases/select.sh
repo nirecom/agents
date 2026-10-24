@@ -39,7 +39,7 @@ tec_only_file_select() {
     tec_die "--only-file $p is not directly under tests/<category>/ (categories: $TEC_CATEGORIES)"; return 2
   fi
   tlr_match "$p" || { tec_die "--only-file $p: no test language matches this name"; return 2; }
-  # Two levels deep and a known language yet not a candidate: its language has no case reader.
+  # Two levels deep and a known language yet not a candidate: its language has no test case reader.
   tec_die "--only-file $p: language $TLR_ID has no test case reader (not an embed candidate)"; return 2
 }
 

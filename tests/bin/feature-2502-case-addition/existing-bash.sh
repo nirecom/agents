@@ -1,6 +1,6 @@
 # New files and bash tests (#2502 S4-4b): a version that is not conforming (no markers, malformed,
-# or a deps op that fails) makes check-test-language-match.sh compare case units, or code lines
-# when bash has no unit to count. Sourced by tests/bin/feature-2502-case-addition.sh.
+# or a deps op that fails) makes check-test-language-match.sh compare code lines, since bash
+# has no case unit apart from its markers. Sourced by tests/bin/feature-2502-case-addition.sh.
 # shellcheck shell=bash
 # shellcheck disable=SC2016 # fixture lines hold literal $REPO and $(...) text on purpose
 
@@ -140,16 +140,35 @@ case_end
 H_A=('#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/foo.sh' '# Tags: scope:common' "$SRC")
 raw ca-mal-head "${H_A[@]}" "$MB \"a\" \"bin/a.sh\"" 'echo a'
 
-case_begin "ca-malformed-case-added-counts-units" "bin/lib/test-language-match/case-addition.sh"
+# bash has no case unit apart from its markers (user decision 2026-10-24), so case-count is
+# always rc 1 and every row below compares code lines.
+case_begin "ca-malformed-case-added-uses-code-lines" "bin/lib/test-language-match/case-addition.sh"
 raw ca-mal-add "${H_A[@]}" "$MB \"a\" \"bin/a.sh\"" 'echo a' "$MB \"n\" \"bin/a.sh\"" 'echo n' "$ME"
 lm tests/bin/m1.sh ca-mal-add ca-mal-head
-expect_added "malformed, case n added" tests/bin/m1.sh bash "case units 1 -> 2"
+expect_added "malformed, case n added" tests/bin/m1.sh bash "case count unavailable: no case unit; code lines 3 -> 6"
 case_end
 
 case_begin "ca-malformed-line-rewritten-passes" "bin/lib/test-language-match/case-addition.sh"
 raw ca-mal-edit "${H_A[@]}" "$MB \"a\" \"bin/a.sh\"" 'echo b'
 lm tests/bin/m2.sh ca-mal-edit ca-mal-head
 expect_clean "malformed, a line rewritten"
+case_end
+
+case_begin "ca-malformed-unclosed-marker-less-case-added-uses-code-lines" "bin/lib/test-language-match/case-addition.sh"
+# Review F1: a marker-less case added after an unclosed one adds no marker line, only code lines.
+raw ca-mal-nm-add "${H_A[@]}" "$MB \"a\" \"bin/a.sh\"" 'echo a' '# case n' 'echo n' 'assert_eq 1 1'
+lm tests/bin/m5.sh ca-mal-nm-add ca-mal-head
+expect_added "malformed, marker-less case n added" tests/bin/m5.sh bash "case count unavailable: no case unit; code lines 3 -> 5"
+case_end
+
+case_begin "ca-duplicate-name-marker-less-case-added-uses-code-lines" "bin/lib/test-language-match/case-addition.sh"
+# Markers balanced and closed, but case a is named twice (duplicate-name), so neither version
+# is conforming; a marker-less case adds no marker line, only code lines (7 -> 9).
+DUP_A=("$MB \"a\" \"bin/a.sh\"" 'echo a' "$ME" "$MB \"a\" \"bin/a.sh\"" 'echo a2' "$ME")
+raw ca-dup-head "${H_A[@]}" "${DUP_A[@]}"
+raw ca-dup-nm-add "${H_A[@]}" "${DUP_A[@]}" '# case n' 'echo n' 'assert_eq 1 1'
+lm tests/bin/m7.sh ca-dup-nm-add ca-dup-head
+expect_added "duplicate name, marker-less case n added" tests/bin/m7.sh bash "case count unavailable: no case unit; code lines 7 -> 9"
 case_end
 
 # HEAD conforming (cases a and b), the working version malformed.
@@ -165,7 +184,14 @@ case_end
 case_begin "ca-conforming-to-malformed-case-added-blocks" "bin/lib/test-language-match/case-addition.sh"
 raw ca-cf-broken-add "${H_A[@]}" "${CF_A[@]}" "$MB \"b\" \"bin/a.sh\"" 'echo b' "$MB \"c\" \"bin/a.sh\"" 'echo c' "$ME"
 lm tests/bin/m4.sh ca-cf-broken-add ca-cf-head
-expect_added "end marker dropped, case c added" tests/bin/m4.sh bash "case units 2 -> 3"
+expect_added "end marker dropped, case c added" tests/bin/m4.sh bash "case count unavailable: no case unit; code lines 7 -> 9"
+case_end
+
+case_begin "ca-conforming-marked-case-added-passes" "bin/lib/test-language-match/case-addition.sh"
+# Review F1 control: both versions conforming, so the case-addition judgment never runs.
+raw ca-cf-add "${H_A[@]}" "${CF_A[@]}" "$MB \"b\" \"bin/a.sh\"" 'echo b' "$ME" "$MB \"c\" \"bin/a.sh\"" 'echo c' "$ME"
+lm tests/bin/m6.sh ca-cf-add ca-cf-head
+expect_clean "conforming, marked case c added"
 case_end
 
 case_begin "ca-deps-op-failure-enters-the-judgment" "bin/lib/test-language-match/case-addition.sh"
@@ -174,7 +200,7 @@ case_begin "ca-deps-op-failure-enters-the-judgment" "bin/lib/test-language-match
 LM_CLI="$STUB_CLI"
 raw ca-deps-add "${H_A[@]}" '# deps-fail' "${CF_A[@]}" "$MB \"b\" \"bin/a.sh\"" 'echo b' "$ME" "$MB \"c\" \"bin/a.sh\"" 'echo c' "$ME"
 lm tests/bin/d1.sh ca-deps-add ca-cf-head
-expect_added "deps op fails, case c added" tests/bin/d1.sh bash "case units 2 -> 3"
+expect_added "deps op fails, case c added" tests/bin/d1.sh bash "case count unavailable: no case unit; code lines 7 -> 10"
 raw ca-deps-same "${H_A[@]}" '# deps-fail' "${CF_A[@]}" "$MB \"b\" \"bin/a.sh\"" 'echo bb' "$ME"
 lm tests/bin/d2.sh ca-deps-same ca-cf-head
 expect_clean "deps op fails, no case added"

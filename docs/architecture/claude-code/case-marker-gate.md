@@ -71,8 +71,8 @@ names the code language's new-file name shape.
   added case blocks on a mismatch; a paired one blocks only if its `HEAD` target matched. Otherwise
   only header tokens absent from the `HEAD` header are judged.
 - When either version is not conforming, cases cannot be paired, so a grown file blocks with
-  `CASE_ADDED_WITHOUT_MARKERS`: by the `case-count` op when both versions can be counted, else
-  by non-blank, non-comment lines. Whatever language the added case tests, it blocks; the
+  `CASE_ADDED_WITHOUT_MARKERS`: by the `case-count` op when both versions can be counted (pytest,
+  pester), else by non-blank, non-comment lines (always for bash and js). Whatever language the added case tests, it blocks; the
   line carries no line number and says to add the entry's marker to every case first, after which
   each case's target is judged. Fixes that do not grow the count (edits, deletions, renames,
   reordering) pass; one case removed and one added passes; an added line in a version that cannot

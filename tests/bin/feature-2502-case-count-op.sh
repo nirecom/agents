@@ -3,10 +3,10 @@
 # Tests: bin/lib/test-language-parts/bash-case-embed.sh, bin/lib/test-language-match/case-addition.sh
 # Tags: TL2, bin, case-markers, test-language-registry, test-language-match, table-driven, scope:issue-specific
 # Issue #2502 S4-4b: the caseEmbedRules op case-count and _tlm_code_lines, the two yardsticks of
-# the case-addition judgment. bash counts its column-0 case markers outside heredocs (rc 1 for
-# none); every supported language answers case-count through the registry (rc 69 without its
-# runtime); _tlm_code_lines counts lines that are neither blank nor comments in the match-path's
-# comment prefix. The per-language units are pinned by the three analyzer tests.
+# the case-addition judgment. bash and js have no case unit apart from their markers, so their
+# case-count is rc 1 for any file (user decision 2026-10-24); pester and pytest answer a count;
+# every language is reached through the registry (rc 69 without its runtime); _tlm_code_lines
+# counts lines that are neither blank nor comments in the match-path's comment prefix.
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -66,18 +66,12 @@ printf '%s\n' '#!/usr/bin/env bash' "$MB \"a\" \"bin/a.sh\"" 'echo a' "$ME" \
   'if true; then' "  $MB \"indented\" \"bin/a.sh\"" "  $ME" 'fi' >"$FX/hidden.sh"
 printf '%s\n' '#!/usr/bin/env bash' '# Tests: bin/a.sh' 'echo plain' >"$FX/none.sh"
 
-case_begin "bash-case-count-table" "bin/lib/test-language-parts/bash-case-embed.sh"
-# file|rc|stdout
-while IFS='|' read -r f want_rc want_out; do
-  [ -n "$f" ] || continue
+case_begin "bash-case-count-is-always-no-unit" "bin/lib/test-language-parts/bash-case-embed.sh"
+# Conforming, malformed, hidden-marker and marker-less files alike: rc 1, no count.
+for f in three.sh two-begins.sh hidden.sh none.sh; do
   cc bash "$FX/$f"
-  assert_eq "bash case-count $f: rc=$CC_RC out=[$CC_OUT]" "bash case-count $f: rc=$want_rc out=[$want_out]"
-done <<'ROWS'
-three.sh|0|3
-two-begins.sh|0|2
-hidden.sh|0|1
-none.sh|1|
-ROWS
+  assert_eq "bash case-count $f: rc=$CC_RC out=[$CC_OUT]" "bash case-count $f: rc=1 out=[]"
+done
 case_end
 
 # --- the op through the registry, every language ---------------------------------------------
@@ -87,24 +81,24 @@ printf '%s\n' '"use strict";' "const { test } = require(\"node:test\");" \
   "$JB(\"a\", \"bin/a.sh\");" 'test("a", () => {});' "$JE();" \
   "$JB(\"b\", \"bin/a.sh\");" 'test("b", () => {});' "$JE();" >"$FX/two.js"
 
-# id|fixture|runtime
-LANG_ROWS='pester|two.Tests.ps1|pwsh
-pytest|test_two.py|uv
-js|two.js|node'
+# id|fixture|runtime|rc|stdout — each fixture holds two cases; js has no unit, so rc 1.
+LANG_ROWS='pester|two.Tests.ps1|pwsh|0|2
+pytest|test_two.py|uv|0|2
+js|two.js|node|1|'
 
 case_begin "case-count-op-dispatch-every-language" "bin/lib/test-language-parts/bash-case-embed.sh"
 # The op is reached through the registry for every supported language (the lib calls only
-# tlr_call_part); each two-unit fixture answers 2.
-while IFS='|' read -r id f rt; do
+# tlr_call_part).
+while IFS='|' read -r id f rt want_rc want_out; do
   if ! command -v "$rt" >/dev/null 2>&1; then skip "$id case-count: $rt not installed"; continue; fi
   cc "$id" "$FX/$f"
-  assert_eq "$id case-count: rc=$CC_RC out=[$CC_OUT]" "$id case-count: rc=0 out=[2]"
+  assert_eq "$id case-count: rc=$CC_RC out=[$CC_OUT]" "$id case-count: rc=$want_rc out=[$want_out]"
 done <<<"$LANG_ROWS"
 case_end
 
 case_begin "case-count-op-runtime-missing-is-69" "bin/lib/test-language-parts/bash-case-embed.sh"
 # Without its runtime the op says so (rc 69), never a count and never rc 0.
-while IFS='|' read -r id f rt; do
+while IFS='|' read -r id f rt _rc _out; do
   cc "$id" "$FX/$f" "$(path_without "$rt")"
   assert_eq "$id case-count without $rt: rc=$CC_RC out=[$CC_OUT]" "$id case-count without $rt: rc=69 out=[]"
 done <<<"$LANG_ROWS"
