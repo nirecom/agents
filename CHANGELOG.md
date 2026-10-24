@@ -847,3 +847,7 @@ Changes: Fixed `/issue-close-finalize` failing with "no PR found" for issues who
 ### FEATURE: PR #2743 (2026-10-24)
 Background: feat(#2731): keep glossary and engineering terms untranslated and clo...
 Changes: Conversations in a non-English CONV_LANG stay in that language through long autonomous runs, subagent reports, hook messages and codex reviews, while glossary and engineering terms are kept as written instead of being translated.;New optional `user-instructions.md` at the agents checkout root: copy `user-instructions.example.md` to it and add free-form personal instructions, injected at session start and after compaction (4 KB cap; the template's comments are never injected).;Supervisor findings and codex review text now follow your conversation language, and supervisor audits no longer fall back to the slower engine because of unlisted categories.
+
+### FEATURE: PR #2755 (2026-10-24)
+Background: fix(#2676): decide within 10 s, merge allow/deny hooks, cancel notice
+Changes: PreToolUse hooks: a slow hook now asks with a reason naming the unfinished check after 10 s instead of being cancelled at its timeout, so a deny is never silently lost (#2676).;PreToolUse hooks: the light allow-deny hooks run in one process (`hooks/merged-allow-deny.js`), and every PreToolUse hook timeout is 15 s (#2676).;A hook cancelled by its timeout is now reported to the user at the next prompt (#2676).;`bin/check-unstaged-tracked.sh` no longer triggers a permission dialog (#2540).
