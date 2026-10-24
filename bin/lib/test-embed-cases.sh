@@ -12,11 +12,12 @@ TEC_CATEGORIES="hooks bin skills agents install tests"
 
 tec_usage() {
   printf '%s\n' \
-    'Usage: audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority] [--dry-run] [--fix-headers]' \
+    'Usage: audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority] [--only-file <relpath>] [--dry-run] [--fix-headers]' \
     '       audit-tests.sh --embed-apply <workdir>' \
     '  --embed-cases         Stage 1: pick one band of tests to wrap in case markers (default: write the workdir).' \
     '  --band-size N         Band size, a positive integer (default 5).' \
     '  --order VALUE         frequency (run-all ledger count, then git churn) or priority (header shape).' \
+    '  --only-file PATH      Plan only this repo-relative test file (no --band-size / --order).' \
     '  --dry-run             Print the BAND / SKIP plan only; write nothing.' \
     '  --embed-apply DIR     Stage 3: verify the stage-2 outputs of DIR and apply the passing ones.' \
     'Contract: docs/architecture/claude-code/sweep-tests-embed-cases.md'
@@ -28,7 +29,7 @@ tec_dispatch() {
   local a
   for a in "$@"; do
     case "$a" in
-      --embed-cases | --embed-apply | --band-size | --order)
+      --embed-cases | --embed-apply | --band-size | --order | --only-file)
         tec_main "$@"
         exit 0
         ;;
@@ -39,16 +40,21 @@ tec_dispatch() {
 
 tec_main() {
   local embed=0 apply_dir="" band="" order="" fix=0 dry=0 help=0 format=text conflict="" root
+  local -a only=()
   sweep_write_mode_init
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --embed-cases) embed=1; shift ;;
-      --embed-apply | --band-size | --order | --format | --stale-months)
+      --embed-apply | --band-size | --order | --only-file | --format | --stale-months)
         [[ "$#" -ge 2 ]] || { tec_die "$1 needs a value"; return 2; }
         case "$1" in
           --embed-apply) apply_dir="$2" ;;
           --band-size) band="$2" ;;
           --order) order="$2" ;;
+          --only-file)
+            [[ "${#only[@]}" -eq 0 ]] || { tec_die "--only-file given more than once"; return 2; }
+            only=("$2")
+            ;;
           --format) format="$2" ;;
           --stale-months) conflict="${conflict:-$1}" ;;
         esac
@@ -63,8 +69,13 @@ tec_main() {
     esac
   done
   if [[ "$help" -eq 1 ]]; then tec_usage; return 0; fi
+  if [[ "${#only[@]}" -gt 0 && -z "$apply_dir" ]]; then
+    [[ "$embed" -eq 1 ]] || { tec_die "--only-file needs --embed-cases"; return 2; }
+    [[ -z "$band" ]] || { tec_die "--band-size has no meaning with --only-file"; return 2; }
+    [[ -z "$order" ]] || { tec_die "--order has no meaning with --only-file"; return 2; }
+  fi
   if [[ -n "$apply_dir" ]]; then
-    if [[ "$embed" -eq 1 || -n "$band$order" || "$dry" -eq 1 || "$fix" -eq 1 ]]; then
+    if [[ "$embed" -eq 1 || -n "$band$order" || "$dry" -eq 1 || "$fix" -eq 1 || "${#only[@]}" -gt 0 ]]; then
       tec_die "--embed-apply takes no other stage flag"; return 2
     fi
   elif [[ "$embed" -eq 0 ]]; then
@@ -87,11 +98,14 @@ tec_main() {
 
   TEC_TMP="$(mktemp -d "${TMPDIR:-/tmp}/tec.XXXXXX")"
   trap 'rm -rf "$TEC_TMP"' EXIT
+  # The pester caseEmbedRules part answers every op from one analyzer run kept here.
+  export CASE_EMBED_CACHE_DIR="$TEC_TMP/case-embed-cache"
+  mkdir -p "$CASE_EMBED_CACHE_DIR"
   # Called bare (no `||`) so errexit stays armed inside the stages.
   if [[ -n "$apply_dir" ]]; then
     tec_stage_apply "$apply_dir"
   else
-    tec_stage_plan "$band" "$order"
+    tec_stage_plan "$band" "$order" ${only[@]+"${only[@]}"}
   fi
 }
 

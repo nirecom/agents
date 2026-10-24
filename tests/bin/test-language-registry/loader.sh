@@ -44,6 +44,15 @@ for n in a.sh x.Tests.ps1 test_a.py a.test.js a_test.py README.md; do printf "<%
 assert_eq "$got" "[file][pwsh][uv][.py][bin/lib/test-retire-predicate/case-parser.sh][has_table_driven_js][bin/lib/test-language-parts/pester.sh]<a><x><test_a><a.test><a_test.py><README.md>"
 case_end
 
+case_begin "loader-issue-stem" "bin/lib/test-language-registry.sh"
+# #2502 S5-4c: tlr_issue_stem drops the entry's issueNamePrefix once from tlr_stem's result;
+# only the pytest entry has one, and a name no entry covers stays as it is.
+got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96
+printf "[%s]" "$(tlr_field pytest issueNamePrefix)" "$(tlr_field bash issueNamePrefix)"
+for n in test_feature-2502-x.py test_test_a.py feature-2502-x.sh test_feature-2502-x.sh x.Tests.ps1 a.test.js README.md; do printf "<%s>" "$(tlr_issue_stem "$n")"; done')"
+assert_eq "$got" "[test_][]<feature-2502-x><test_a><feature-2502-x><test_feature-2502-x><x><a.test><README.md>"
+case_end
+
 case_begin "loader-conditions" "bin/lib/test-language-registry.sh"
 # Conditions are decided by which fields an entry has, never by its id. The expected
 # "patterns|globs" come from the JSON, so a new entry needs no edit here.

@@ -2,8 +2,13 @@
 # bin/lib/test-retire-predicate/case-parser.sh — source-only; not executable.
 # Entrypoint-private sibling of test-retire-predicate.sh (file-split Pattern A):
 # the case-boundary parser. GC decisioning stays in the predicate (CPR-SSOT).
-# find_renamed_path + FRONTMATTER_TOKEN_VALID_RE come from the predicate's source.
+# find_renamed_path comes from the predicate's source.
 # shellcheck shell=bash
+
+# shellcheck source=case-state-rules.sh
+. "${BASH_SOURCE[0]%/*}/case-state-rules.sh" || return 1
+# shellcheck source=../case-target-path-rule.sh
+. "${BASH_SOURCE[0]%/*}/../case-target-path-rule.sh" || return 1
 
 # _trp_parse_fail <line> <reason> — record the first violation (parse phase).
 _trp_parse_fail() {
@@ -101,6 +106,29 @@ _trp_heredoc_term() {
   [[ -n "$_TRP_HD_TERM" ]]
 }
 
+# _trp_end_owns_line <line> — rc 0 when only case_end's own words follow it: a case
+# owns its begin and end lines, so cutting the range can never take another command
+# with it. Allowlist, mirroring case_begin's `|| true` (re_begin) plus the #2081 C7
+# suffix `|| rc=$?` (tests/bin/fix-2081-case-unit-refcount/group-a.sh): at most one
+# `||` clause, `true` or `<name>=$?`, plus redirections (`>f`, `N>>f`, `<f`, `N>&M`,
+# `&>f`, ...) whose target is a bare word or a quoted string; anything else
+# (`|| cmd`, `|`, `;`, `&`) is rc 1.
+_trp_end_owns_line() {
+  local _TRP_CODE="" tail or_seen=0
+  local re_tok='^[[:space:]]*(\|\|[[:space:]]*(true|[A-Za-z_][A-Za-z0-9_]*=\$\?)|[0-9]*[<>]&[0-9]+|([0-9]*(>>|>|<)|&>>|&>)[[:space:]]*([^[:space:];&|<>()'\''"$`\]+|"[^"$`\]*"|'\''[^'\'']*'\''))([[:space:]]|$)'
+  _trp_scan_line "$1" || true
+  tail="${_TRP_CODE#case_end}"
+  while [[ "$tail" == *[![:space:]]* ]]; do
+    [[ "$tail" =~ $re_tok ]] || return 1
+    if [[ "${BASH_REMATCH[1]}" == '||'* ]]; then
+      [[ "$or_seen" -eq 0 ]] || return 1
+      or_seen=1
+    fi
+    tail="${tail:${#BASH_REMATCH[0]}}"
+  done
+  return 0
+}
+
 # trp_parse_case_markers <file> — analysis phase only (no repo root, no survival).
 # Sets TRP_HAS_MARKERS, TRP_CASE_COUNT, TRP_CASE_{BEGIN,END}_LINES[],
 # TRP_CASE_NAMES[], TRP_CASE_TARGETS[], _TRP_MARKER_MALFORMED,
@@ -119,6 +147,7 @@ trp_parse_case_markers() {
   [[ -f "$abs" ]] || return 0
 
   local re_cand='(^|[^[:alnum:]_])case_(begin|end)([^[:alnum:]_]|$)'
+  # A TAB or CR inside the quotes is kept: _trp_reject_record_delimiters (case-state-rules.sh) rejects it.
   local re_begin='^case_begin[[:space:]]+"([^"$`\]*)"[[:space:]]+"([^"$`\]*)"([[:space:]]*\|\|[[:space:]]*true)?[[:space:]]*$'
   local re_end='^case_end([[:space:]].*)?$'
   # D1: a body ending in `; fi|done|esac|}` (optionally followed by a redirect,
@@ -160,14 +189,12 @@ trp_parse_case_markers() {
         if [[ "$depth" -ne 0 ]]; then
           _trp_parse_fail "$lineno" depth; _TRP_MARKER_UNCERTAIN="$quote_risk"; return 0
         fi
-        if [[ ! "$tgt" =~ $FRONTMATTER_TOKEN_VALID_RE \
-           || "$tgt" == /* || "$tgt" == '.' || "$tgt" == './' \
-           || "$tgt" == '..' || "$tgt" == '../'* \
-           || "$tgt" == *'/..' || "$tgt" == *'/../'* ]]; then
+        # A delimiter-bearing value is left to the shared delimiter rule, so it reads grammar.
+        if [[ "$tgt" != *[$'\t\r']* ]] && ! ctp_target_path_valid "$tgt"; then
           _trp_parse_fail "$lineno" target; return 0
         fi
         m_kind+=(begin); m_name+=("$nm"); m_target+=("$tgt"); m_line+=("$lineno")
-      elif [[ "$line" =~ $re_end ]]; then
+      elif [[ "$line" =~ $re_end ]] && _trp_end_owns_line "$line"; then
         if [[ "$depth" -ne 0 ]]; then
           _trp_parse_fail "$lineno" depth; _TRP_MARKER_UNCERTAIN="$quote_risk"; return 0
         fi
@@ -228,32 +255,10 @@ trp_parse_case_markers() {
   return 0
 }
 
-# _trp_reject_duplicate_names — when a marked, not yet malformed file has two cases of one name,
-# makes it malformed (duplicate-name) on the later case's begin line and empties the case arrays.
-_trp_reject_duplicate_names() {
-  [[ "${_TRP_MARKER_MALFORMED:-0}" -eq 0 && "${TRP_HAS_MARKERS:-0}" -eq 1 ]] || return 0
-  local -A seen=()
-  local -a names=(${TRP_CASE_NAMES[@]+"${TRP_CASE_NAMES[@]}"})
-  local -a begins=(${TRP_CASE_BEGIN_LINES[@]+"${TRP_CASE_BEGIN_LINES[@]}"})
-  local i key
-  for i in "${!names[@]}"; do
-    key="k${names[$i]}"
-    if [[ -n "${seen[$key]+x}" ]]; then
-      _TRP_MARKER_MALFORMED=1
-      _TRP_MARKER_MALFORMED_LINE="${begins[$i]:-}"
-      _TRP_MARKER_MALFORMED_REASON=duplicate-name
-      TRP_CASE_BEGIN_LINES=(); TRP_CASE_END_LINES=(); TRP_CASE_NAMES=(); TRP_CASE_TARGETS=()
-      TRP_CASE_COUNT=0
-      return 0
-    fi
-    seen[$key]=1
-  done
-  return 0
-}
-
 # trp_enumerate_cases <repo-root> <file> — parse the markers, then resolve each
 # case target's survival. Sets the trp_parse_case_markers globals plus
-# TRP_CASE_ALIVE[], TRP_ORPHAN_CASE_IDX[] and TRP_REFCOUNT.
+# TRP_CASE_ALIVE[], TRP_ORPHAN_CASE_IDX[], TRP_REFCOUNT and TRP_READER_FAILED
+# (empty, or unavailable|reader when the cases could not be read).
 trp_enumerate_cases() {
   local repo_root="${1:?trp_enumerate_cases: repo root required}"
   local file="${2:?trp_enumerate_cases: test file required}"
@@ -265,10 +270,11 @@ trp_enumerate_cases() {
   TRP_CASE_COUNT=0; TRP_REFCOUNT=0; TRP_HAS_MARKERS=0
   TRP_UNIT_MODE="file"; TRP_GC=0; _TRP_MARKER_MALFORMED=0
   _TRP_MARKER_MALFORMED_LINE=""; _TRP_MARKER_MALFORMED_REASON=""; _TRP_MARKER_UNCERTAIN=0
+  TRP_READER_FAILED=""
 
   # C10 guard: only a supported registry entry with a caseMarkerReader has case markers;
   # every other file stays file-level (TRP_HAS_MARKERS=0) by structure, not luck.
-  tlr_load || { _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader; return 0; }
+  tlr_load || { _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader; TRP_READER_FAILED=reader; return 0; }
   tlr_match "$file" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 0
   # Per-case removal is checked by the entry's caseEmbedRules; an entry without them stays file-level.
   _tlr_get "$TLR_ID" caseEmbedRules.file || return 0
@@ -277,9 +283,14 @@ trp_enumerate_cases() {
   [[ "$abs" != /* ]] && abs="$repo_root/$file" || true
   [[ -f "$abs" ]] || return 0
 
-  # An unreachable reader (rc 70) is "cannot check", never a silent "no markers".
-  if ! tlr_call_part "$TLR_ID" caseMarkerReader "$abs"; then
-    _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader; return 0
+  # A reader that cannot run is "cannot check" (TRP_READER_FAILED: unavailable for rc 79, no
+  # runtime; reader otherwise), never a silent "no markers" nor a header fallback.
+  local rc=0
+  tlr_call_part "$TLR_ID" caseMarkerReader "$abs" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=reader
+    if [[ "$rc" -eq 79 ]]; then TRP_READER_FAILED=unavailable; else TRP_READER_FAILED=reader; fi
+    return 0
   fi
   trp_marker_state_from_globals
   [[ "$TRP_MARKER_STATE" == conforming ]] || return 0
@@ -287,7 +298,7 @@ trp_enumerate_cases() {
   # Survival: resolve each target against the repo root (rename-tracked, ORTH).
   local saved_pwd="$PWD"
   if ! cd "$repo_root" 2>/dev/null; then
-    _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=target; return 0
+    _TRP_MARKER_MALFORMED=1; _TRP_MARKER_MALFORMED_REASON=target; TRP_READER_FAILED=reader; return 0
   fi
   local alive_count=0 target i
   for i in "${!TRP_CASE_TARGETS[@]}"; do

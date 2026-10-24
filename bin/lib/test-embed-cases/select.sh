@@ -15,6 +15,34 @@ tec_candidates() {
   return 0
 }
 
+# tec_is_candidate <relpath> — rc 0 when <relpath> is in TEC_CANDIDATES (stage 1 and stage 3).
+tec_is_candidate() {
+  local c
+  for c in ${TEC_CANDIDATES[@]+"${TEC_CANDIDATES[@]}"}; do [[ "$c" != "$1" ]] || return 0; done
+  return 1
+}
+
+# tec_only_file_select <relpath> — the --only-file band: rc 0 with TEC_ORDER_RELS /
+# TEC_ORDER_METRICS set to the one candidate, else tec_die (rc 2) with the first failed check.
+tec_only_file_select() {
+  local p="$1" cat name
+  case "$p" in "" | /* | [A-Za-z]:/* | ./*) tec_die "--only-file $p is not a repo-relative path"; return 2 ;; esac
+  case "/$p/" in */../*) tec_die "--only-file $p is not a repo-relative path"; return 2 ;; esac
+  [[ -f "$p" ]] || { tec_die "--only-file $p: no such file"; return 2; }
+  if tec_is_candidate "$p"; then
+    TEC_ORDER_RELS=("$p") TEC_ORDER_METRICS=(selected=only-file)
+    return 0
+  fi
+  cat="${p#tests/}" name="${p#tests/*/}"
+  cat="${cat%%/*}"
+  if [[ "$p" != tests/* || "$name" == "$p" || "$name" == */* || " $TEC_CATEGORIES " != *" $cat "* ]]; then
+    tec_die "--only-file $p is not directly under tests/<category>/ (categories: $TEC_CATEGORIES)"; return 2
+  fi
+  tlr_match "$p" || { tec_die "--only-file $p: no test language matches this name"; return 2; }
+  # Two levels deep and a known language yet not a candidate: its language has no test case reader.
+  tec_die "--only-file $p: language $TLR_ID has no test case reader (not an embed candidate)"; return 2
+}
+
 # tec_total_tests — the run-all denominator: supported files directly in tests/<cat>.
 tec_total_tests() {
   local cat n=0

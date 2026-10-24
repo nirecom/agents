@@ -60,18 +60,22 @@ TABLE
 # an extra file.
 # Since #2081 the definitions are split: the predicate body owns the verdict/gate
 # and the case-unit refcount + removal helpers; the case boundary parser owns
-# trp_enumerate_cases in the private sibling case-parser.sh (C11).
+# trp_enumerate_cases in the private sibling case-parser.sh (C11). Since #2502 the
+# --apply removal helper lives in the private sibling orphan-removal.sh.
 K_CASE_PARSER="$AGENTS_ROOT/bin/lib/test-retire-predicate/case-parser.sh"
+K_ORPHAN_REMOVAL="$AGENTS_ROOT/bin/lib/test-retire-predicate/orphan-removal.sh"
 k_defines() { # <file> <fn> — 1 when the file defines the function, else 0
     grep -qE "^[[:space:]]*(function[[:space:]]+)?$2[[:space:]]*\(\)" "$1" 2>/dev/null \
         && echo 1 || echo 0
 }
 if [[ -f "$RETIRE_LIB" ]]; then
     K_UNDEF=""
-    for k_fn in trp_survival_verdict trp_delete_gate trp_case_refcount_verdict trp_remove_orphan_cases; do
+    for k_fn in trp_survival_verdict trp_delete_gate trp_case_refcount_verdict; do
         [[ "$(k_defines "$RETIRE_LIB" "$k_fn")" == "1" ]] || K_UNDEF="$K_UNDEF $k_fn"
     done
-    assert_eq "K1c predicate body defines the verdict/gate/refcount/removal fns" "" "$K_UNDEF"
+    assert_eq "K1c predicate body defines the verdict/gate/refcount fns" "" "$K_UNDEF"
+    assert_eq "K1c-removal orphan-removal.sh sibling defines trp_remove_orphan_cases" \
+        "1" "$(k_defines "$K_ORPHAN_REMOVAL" trp_remove_orphan_cases)"
     if [[ -f "$K_CASE_PARSER" ]]; then
         assert_eq "K1c-parser case-parser.sh sibling defines trp_enumerate_cases" \
             "1" "$(k_defines "$K_CASE_PARSER" trp_enumerate_cases)"

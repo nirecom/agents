@@ -53,12 +53,6 @@ _tec_item_dir_ok() {
   done
 }
 
-_tec_is_candidate() {
-  local c
-  for c in ${TEC_CANDIDATES[@]+"${TEC_CANDIDATES[@]}"}; do [[ "$c" != "$1" ]] || return 0; done
-  return 1
-}
-
 # tec_apply_load <workdir> — validation; fills the W_* arrays.
 tec_apply_load() {
   local wd="${1%/}" root rroot bad idx rel in out doc hs hash st att
@@ -77,7 +71,7 @@ tec_apply_load() {
     [[ -n "$att" && "$idx" =~ ^[0-9]+$ && "$att" =~ ^[0-9]+$ ]] || { tec_die "malformed worklist row: $idx"; return 2; }
     case "$rel" in /* | [A-Za-z]:/*) tec_die "absolute relpath: $rel"; return 2 ;; esac
     case "/$rel/" in */../*) tec_die "relpath with ..: $rel"; return 2 ;; esac
-    _tec_is_candidate "$rel" || { tec_die "relpath is not an embed candidate: $rel"; return 2; }
+    tec_is_candidate "$rel" || { tec_die "relpath is not an embed candidate: $rel"; return 2; }
     _tec_item_path_ok "$idx" "$in" || { tec_die "input outside items/$idx/: $in"; return 2; }
     _tec_item_path_ok "$idx" "$out" || { tec_die "output outside items/$idx/: $out"; return 2; }
     _tec_item_dir_ok "$idx" "$rel" "$in" "$out" || { tec_die "items/$idx/ leaves the workdir or holds a symlink"; return 2; }
@@ -131,7 +125,7 @@ _tec_ng() {
 _tec_replace() {
   local rel="${W_REL[$1]}" tmp mode
   mode="$(stat -c '%a' "$rel" 2>/dev/null || stat -f '%Lp' "$rel" 2>/dev/null || true)"
-  tmp="$(mktemp "${rel%/*}/.tec-apply.XXXXXX")"
+  tmp="$(mktemp "${rel%/*}/.embed-apply.XXXXXX")"
   cp "$2" "$tmp"
   [[ -z "$mode" ]] || chmod "$mode" "$tmp" 2>/dev/null || true
   mv -f "$tmp" "$rel"

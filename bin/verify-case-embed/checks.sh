@@ -4,6 +4,9 @@
 # already at <relpath> and the caller in the repo root, and sets VCE_LINE1 / VCE_LINE3 /
 # VCE_LINE4 / VCE_LINE5 (CHECK<n>\t<status>\t<detail>) plus VCE_EXEMPT (EXEMPT lines).
 
+# shellcheck source=../lib/test-self-impl-window.sh
+declare -F tsi_report >/dev/null 2>&1 || . "${BASH_SOURCE[0]%/*}/../lib/test-self-impl-window.sh"
+
 VCE_STATE="" VCE_ID=""
 VCE_NAMES=() VCE_TARGETS=()
 
@@ -96,7 +99,7 @@ _vce_check4() {
 
 # Check 5: the shared harness is sourced and no self-implemented harness piece is left.
 _vce_check5() {
-  local rel="$1" re line found=0 out
+  local rel="$1" re line found=0 out rc=0
   if [[ -z "$VCE_ID" ]] || ! _tlr_get "$VCE_ID" helperLibrary.sourceRegex; then
     VCE_LINE5="$(_vce_line 5 SKIP no-helper-library)"; return 0
   fi
@@ -107,14 +110,13 @@ _vce_check5() {
   if [[ "$found" -eq 0 ]]; then
     VCE_LINE5="$(_vce_line 5 FAIL "helper library not sourced")"; return 0
   fi
-  if _tlr_get "$VCE_ID" caseEmbedRules.file; then
-    if ! out="$(tlr_call_part "$VCE_ID" caseEmbedRules self-impl "$VCE_ROOT/$rel")"; then
-      VCE_LINE5="$(_vce_line 5 FAIL "self-impl op failed")"; return 0
-    fi
-    if [[ -n "$out" ]]; then
-      out="${out//$'\t'/:}"
-      VCE_LINE5="$(_vce_line 5 FAIL "self-impl: ${out//$'\n'/, }")"; return 0
-    fi
+  out="$(tsi_report "$VCE_ROOT/$rel" "$rel")" || rc=$?
+  if [[ "$rc" -ne 0 && "$rc" -ne 3 ]]; then
+    VCE_LINE5="$(_vce_line 5 FAIL "self-impl op failed")"; return 0
+  fi
+  if [[ -n "$out" ]]; then
+    out="${out//$'\t'/:}"
+    VCE_LINE5="$(_vce_line 5 FAIL "self-impl: ${out//$'\n'/, }")"; return 0
   fi
   VCE_LINE5="$(_vce_line 5 PASS "helper library sourced")"
 }
