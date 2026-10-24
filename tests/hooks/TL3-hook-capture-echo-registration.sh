@@ -70,10 +70,12 @@ chmod +x "$REPO/captured.sh" "$REPO/control.sh"
 # settings.json (round 13, C9): a hand-written matcher would test this file's author,
 # not the artifact that ships. real-hook-entry.js itself is covered at TL2 by
 # tests/hooks/feature-2170-capture-echo-guard/part6-settings.sh E-5.
+# Since #2676 block-capture-echo runs as a member of the merged allow-deny hook, so the
+# registration lifted is the primary group (`merged-allow-deny.js --matcher-group primary`).
 ENTRY_DRV="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2170-capture-echo-guard/real-hook-entry.js"
-node "$ENTRY_DRV" --emit "block-capture-echo.js" > "$REPO/.claude/settings.json"
+node "$ENTRY_DRV" --emit 'merged-allow-deny.js" --matcher-group primary' > "$REPO/.claude/settings.json"
 if grep -q 'NOT_REGISTERED\|SETTINGS_UNREADABLE\|BAD_MODE' "$REPO/.claude/settings.json"; then
-    echo "FAIL: block-capture-echo.js is not registered in the real settings.json" >&2
+    echo "FAIL: the merged allow-deny primary group is not registered in the real settings.json" >&2
     exit 1
 fi
 
@@ -181,13 +183,28 @@ done
 # leaves behind — a model that paraphrased the prompt, refused on its own, or reached
 # for a different tool satisfies every assertion above while proving nothing about the
 # hook. These two rows close that: the targeted command must appear as a real Bash
-# tool_use, and its result must carry the capture guard's OWN wording, so the denial is
-# attributable to hooks/block-capture-echo.js rather than to an error or a timeout.
+# tool_use, and its result must carry a merged allow-deny member's OWN wording, so the
+# denial is attributable to hooks/merged-allow-deny.js rather than to an error or a timeout.
+# Since #2676 the capture guard shares one process with bash-guard, whose deny ranks first
+# for this `$(...)`/`;` command (merge.js keeps the first deny), so either member's wording
+# attributes the refusal to the merged hook; which member wins is TL2's
+# (tests/hooks/feature-2676-merged-allow-deny.js).
 echo ""
-echo "=== the attribution: the command was attempted, and THIS guard refused it ==="
-GUARD_MARK="Capture-then-display rejected"
-A_PROBE="$(probe_turn "$T1" "captured.sh" "$GUARD_MARK")"
-B_PROBE="$(probe_turn "$T2" "control.sh" "$GUARD_MARK")"
+echo "=== the attribution: the command was attempted, and the merged guard refused it ==="
+CAPTURE_MARK="Capture-then-display rejected"
+BASH_GUARD_MARK="Bash command not issued"
+A_PROBE="$(probe_turn "$T1" "captured.sh" "$CAPTURE_MARK")"
+B_PROBE="$(probe_turn "$T2" "control.sh" "$CAPTURE_MARK")"
+A_BG_PROBE="$(probe_turn "$T1" "captured.sh" "$BASH_GUARD_MARK")"
+B_BG_PROBE="$(probe_turn "$T2" "control.sh" "$BASH_GUARD_MARK")"
+GUARD_MARK="$CAPTURE_MARK | $BASH_GUARD_MARK"
+merged_marker() {
+    if [[ "$(field "$1" marker)" == "true" || "$(field "$2" marker)" == "true" ]]; then
+        printf 'true'
+    else
+        printf 'false'
+    fi
+}
 
 got="$(field "$A_PROBE" attempted)"
 if [ "$got" = "true" ]; then
@@ -196,11 +213,11 @@ else
     fail "blocked-turn-attempted-the-command" "no Bash tool_use carrying ./captured.sh was found (attempted=$got) — the absent marker proves nothing about the hook"
 fi
 
-got="$(field "$A_PROBE" marker)"
+got="$(merged_marker "$A_PROBE" "$A_BG_PROBE")"
 if [ "$got" = "true" ]; then
-    pass "blocked-turn-denial-is-the-capture-guards"
+    pass "blocked-turn-denial-is-the-merged-guards"
 else
-    fail "blocked-turn-denial-is-the-capture-guards" "the attempt's tool_result does not carry \"$GUARD_MARK\" (marker=$got) — the command may have failed for an unrelated reason"
+    fail "blocked-turn-denial-is-the-merged-guards" "the attempt's tool_result carries neither of \"$GUARD_MARK\" (marker=$got) — the command may have failed for an unrelated reason"
 fi
 
 got="$(field "$A_PROBE" result_error)"
@@ -231,11 +248,11 @@ else
     fail "control-turn-attempted-the-command" "no Bash tool_use carrying ./control.sh was found (attempted=$got)"
 fi
 
-got="$(field "$B_PROBE" marker)"
+got="$(merged_marker "$B_PROBE" "$B_BG_PROBE")"
 if [ "$got" = "false" ]; then
-    pass "control-turn-not-refused-by-the-capture-guard"
+    pass "control-turn-not-refused-by-the-merged-guard"
 else
-    fail "control-turn-not-refused-by-the-capture-guard" "marker=$got — the bare command was refused by the capture guard, which is over-blocking"
+    fail "control-turn-not-refused-by-the-merged-guard" "marker=$got — the bare command was refused by the merged guard, which is over-blocking"
 fi
 
 echo ""

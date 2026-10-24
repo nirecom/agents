@@ -9,7 +9,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./limited-child-process");
 const { computeWorkingTreeDiff, toWindowsPath } = require("./branch-diff");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
 
