@@ -27,7 +27,7 @@ WORKER_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push.js"
 # both groups read the WHOLE implementation and a literal moving between these
 # files is not a behaviour change.
 WORKER_DIR="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch/workers/commit-push"
-WORKER_SRCS=("$WORKER_JS" "$WORKER_DIR/gate.js" "$WORKER_DIR/procedure.js" "$WORKER_DIR/push.js" "$WORKER_DIR/pr.js")
+WORKER_SRCS=("$WORKER_JS" "$WORKER_DIR/gate.js" "$WORKER_DIR/procedure.js" "$WORKER_DIR/push.js" "$WORKER_DIR/pr.js" "$WORKER_DIR/commit-timeout.js")
 SKILL_MD="$SCRIPT_CHECKOUT_ROOT/skills/commit-push/SKILL.md"
 # #2527: the status branch table moved out of SKILL.md into the shared dispatch procedure.
 DISPATCH_MD="$SCRIPT_CHECKOUT_ROOT/skills/_shared/commit-push-dispatch.md"
@@ -348,7 +348,7 @@ keys=SCAN_FAILED"
 # are two halves of one contract: a status the SKILL cannot branch on is a
 # block or a failure the caller silently treats as success.
 # ===========================================================================
-STATUSES="staging_incomplete staging_check_failed gate_blocked bootstrap_pending pushed pr_created pr_reused push_failed conflict"
+STATUSES="staging_incomplete staging_check_failed gate_blocked bootstrap_pending pushed pr_created pr_reused push_failed conflict commit_timeout"
 
 group_e() {
     local s absent

@@ -3,36 +3,22 @@
 # Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js
 # Tags: worker-dispatch, naming, skill-orchestration, static, prompt-contract, TL1, scope:issue-specific
 #
-# Issue #1805 — "dispatch `X`" is ambiguous: X may be a plain-script worker, an
-# LLM subagent, or a skill, and the three are dispatched by completely different
-# mechanisms. A reader (human or model) that guesses wrong spawns the wrong thing.
-# The fix is a naming convention with one visible marker per form:
-#
-#   worker    the word "worker" adjacent to the name  — `doc-append` worker
-#   subagent  the word "subagent" adjacent to the name — `plan-skip-judge` subagent
-#   skill     the slash form                           — /commit-push
-#
-# The worker roster is read from the registry SSOT (hooks/lib/worker-dispatch-
-# registry.js), so a tenth worker inherits the check automatically.
-#
+# Issue #1805: every dispatch line names its form — `X` worker, `X` subagent, or /X (skill) —
+# since the three run by different mechanisms (convention: worker-dispatch.md ## Naming).
+# The worker roster comes from the registry SSOT, so a new worker inherits the check.
 # TL1 (static): the subject is prompt text plus a pure-data registry.
-#
-# RED before write-code: worker-dispatch.md has no ## Naming section yet and
-# several callers still write a bare "dispatch `<name>`".
+# Group D (#2762): WD-CP names the already-dispatched exit and the new --seq re-run.
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
 
 REGISTRY_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/worker-dispatch-registry.js"
 SHARED_REL="skills/_shared/worker-dispatch.md"
 SHARED_MD="$SCRIPT_CHECKOUT_ROOT/$SHARED_REL"
-
-PASS=0
-FAIL=0
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -166,18 +152,8 @@ group_worker_sites_say_worker() {
 # ===========================================================================
 # Group C — the marker on a dispatch line must match the entity's actual kind
 # ===========================================================================
-# "Carries some marker" is not the convention. The whole point of #1805 is that
-# the reader can tell WHICH mechanism will run, so a subagent labelled "worker",
-# a worker labelled "subagent", or a line carrying two markers at once is just as
-# misleading as no marker at all — and a check that accepts any marker cannot
-# distinguish them.
-#
-# Kind is derived from three SSOTs: the registry roster (worker),
-# agents/*.md (subagent), skills/*/ (skill). A name present in two of them —
-# e.g. an agent and a same-named skill directory — legitimately has two allowed
-# kinds, so either marker is accepted for it; what is never accepted is a marker
-# for a kind the name does not have.
-#
+# A wrong marker or two markers mislead as much as none. Kinds come from the registry
+# (worker), agents/*.md (subagent), skills/*/ (skill); a name in two SSOTs accepts either.
 # ENT_KINDS_FILE holds one "<name> <kind>[ <kind>...]" row per entity.
 ENT_KINDS_FILE=""
 
@@ -321,10 +297,43 @@ group_no_bare_dispatch_residual() {
     fi
 }
 
+# ===========================================================================
+# Group D — WD-CP names the already-dispatched exit (#2762)
+# ===========================================================================
+# commit-push always runs through WD-CP, so WD-CP alone must say that a payload already
+# dispatched exits 1 with status: failed and that a re-run needs a new --seq payload.
+# The block runs from the WD-CP. line to the next WD- or ## line.
+wd_cp_block() {
+    awk '/^WD-CP\./ { inb = 1; print; next } inb && /^(WD-|## )/ { exit } inb { print }' "$SHARED_MD"
+}
+
+group_wd_cp_already_dispatched() {
+    local block line hit=""
+    block="$(wd_cp_block)"
+    if [[ -z "$block" ]]; then
+        fail "D1: $SHARED_REL has no WD-CP. block"
+        return
+    fi
+    while IFS= read -r line; do
+        [[ "$line" =~ exit(s|ed)?\ 1([^0-9]|$) && "$line" == *"status: failed"* ]] || continue
+        [[ "$line" == *"new \`--seq\`"* && "$line" == *"payload"* ]] || continue
+        hit="$line"
+    done <<<"$block"
+    if [[ -n "$hit" ]]; then
+        pass "D1: WD-CP states that an already-dispatched payload exits 1 with status: failed and a re-run publishes a new --seq payload"
+    else
+        fail "D1: WD-CP lacks one line naming exit 1, status: failed and a new \`--seq\` payload" "$block"
+    fi
+}
+
 group_naming_section
 group_worker_sites_say_worker
 group_marker_oracle_cases
 group_no_bare_dispatch_residual
+
+case_begin "wd-cp-already-dispatched-rerun" "skills/_shared/worker-dispatch.md"
+group_wd_cp_already_dispatched
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

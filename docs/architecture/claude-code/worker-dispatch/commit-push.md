@@ -18,6 +18,7 @@ child-process contract (`envScope`, `input`, anchors) lives in
 | `commit-push/gate.js` | the D1 gate seam, gate env resolution, child-process helpers |
 | `commit-push/push.js` | step 7 — push attempts and the rebase ladder |
 | `commit-push/pr.js` | step 9 — the idempotent PR step and the outbound scan |
+| `commit-push/commit-timeout.js` | step 4 — the commit timeout limit and the `commit_timeout` report |
 
 ## The ten steps
 
@@ -30,7 +31,7 @@ reader of either document is looking at the same procedure:
 | 1 | `git diff --cached --stat` | staged changes exist at all |
 | 2 | `bin/check-unstaged-tracked.sh` | Gate 3 staging verification (skipped in `wip_mode`) |
 | 3 | D1-a: workflow-gate before commit | see D1 below |
-| 4 | `git commit` | `--no-verify` is prohibited; `hooks/pre-commit` still runs |
+| 4 | `git commit` | `--no-verify` is prohibited; `hooks/pre-commit` still runs, under [the commit timeout limit](#the-commit-timeout-limit-and-the-pre-commit-section-marker) |
 | 5 | `bin/probe-remote-bootstrap.sh` | empty remote → `bootstrap_pending`, deferred to `/merge-to-main` (MM-3b) |
 | 6 | D1-b: workflow-gate before push | see D1 below |
 | 7 | `git push`, 3 attempts, rebase ladder | never a force flag |
@@ -127,6 +128,59 @@ Without a `.env` value the dir is `getSessionStateDir(sid, { pin: null, envFallb
 it never reads `process.env.WORKFLOW_STATE_DIR`, and routes from `<HOME>` exactly
 as the gate child would for that session (`~/.workflow-state/`, or the legacy
 root for a pre-move session — [state-dirs.md](../state-dirs.md#state-root-migration-temporary)).
+
+## The commit timeout limit and the pre-commit section marker
+
+The worker's commit runs `hooks/pre-commit`, whose run time grows with the staged set. A
+fixed 300 s git timeout killed a legitimate 696 s commit (#2762), so the commit
+alone runs under the commit timeout limit; every other git call keeps the 300 s default.
+
+**Decision order.** `COMMIT_TIMEOUT_SECS` in the script checkout `.env` (read via
+`readEnvFile()`, never `process.env`, like the gate env above) is used as-is when
+it is an integer 1-86400 without a leading zero (at most 5 characters), with
+neither floor nor cap, and the staged files are not counted. Any other non-empty
+value is logged as ignored. Otherwise the limit is
+`min(3600 s, max(300 s, staged files × 5 s))`; when the staged files cannot be
+counted it is the 300 s floor. `.env.local` cannot override it
+(`ENV_ENTRY_BLOCKLIST_EXACT`), since an override the reader never sees would only
+mislead.
+
+**Coefficients.** The measured cost was 3.35 s per staged file; 5 s per file
+leaves headroom. The 300 s floor is the old fixed timeout, so a small commit is
+never given less than before; the 3600 s cap bounds a run nobody is watching.
+Revisit them once #2507 changes the pre-commit cost.
+
+**Scope.** Only `git commit` uses the limit. Push, fetch, rebase and the PR step
+are network- or replay-bound, not bound by the staged set.
+
+**What `commit_timeout` reports.** `commit_timeout` needs both a kill and an
+elapsed time that reached the commit timeout limit: the shared spawner flags any
+signal kill as timed out, so an earlier kill (an external kill, an output
+overflow) is a plain commit failure naming the signal, without the after-stop
+probes. The summary (≤ 300 characters) gives the elapsed time, the commit
+timeout limit and where it came from, the name in the last pre-commit section
+marker, and the state found after the stop, and says to raise
+`COMMIT_TIMEOUT_SECS` in `.env`.
+
+**After the stop.** A stopped commit may still have landed, so the worker never
+says "nothing was committed". It compares HEAD before and after (`unchanged`,
+`advanced`, or `unknown` when either probe failed) and checks whether
+`index.lock` remains. It never deletes the lock: on POSIX git removes it when
+killed by SIGTERM, but a forced kill on Windows can leave it behind, and only the
+user can tell whether another git process still owns it. The caller's re-run
+pushes a landed commit through the empty-stage resume.
+
+**Pre-commit section marker contract.** At the start of each section, before that section's
+own guard, `hooks/pre-commit` prints one stderr line `pre-commit-section: <name>`
+(`<name>` matches `[a-z0-9][a-z0-9-]*`); the agents-repo gate runner prints
+`agents-repo-gate-<checker name without .sh>` before each checker. The helper is
+`hooks/lib/precommit-section-marker.sh`. The worker reads only the last pre-commit section marker,
+truncated to 48 characters, and reports `unknown` when there is none.
+
+**Always in the background.** The limit can exceed the 600 s cap of a foreground
+Bash call, and only the worker knows it before the run. Copying that computation
+into each caller would break the single source, so callers always dispatch
+commit-push in the background (`skills/_shared/worker-dispatch.md` WD-CP).
 
 ## Step 7 — the push retry and the rebase ladder
 
