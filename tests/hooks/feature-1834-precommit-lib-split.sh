@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1834-precommit-lib-split.sh
 # Tests: hooks/pre-commit, hooks/lib/precommit-tests-frontmatter.sh, hooks/lib/precommit-agents-repo-gates.sh, bin/check-test-frontmatter.sh
-# Tags: pre-commit, tests-frontmatter, cause-messages, refactor, file-split, TL2, scope:issue-specific, agents-repo-gates, session-id-ssot, migration-blocks, security, word-splitting, error-path, fail-open, case-markers, fail-closed
+# Tags: pre-commit, tests-frontmatter, cause-messages, refactor, file-split, TL2, scope:issue-specific, agents-repo-gates, session-id-ssot, migration-blocks, security, word-splitting, error-path, fail-open, case-markers, fail-closed, section-marker, commit-timeout, stderr-contract, real-git
 set -u
 
 # Protects the #1834 file split of hooks/pre-commit (two gate blocks moved to hooks/lib/).
 # Part A: cause-specific block messages of _precommit_check_tests_frontmatter (A1-A5).
 # Part B: hook wiring (B1) + the split's size reason (B2).
 # Part C: _precommit_agents_repo_gates (session-id/migration gates C1) + frontmatter
-# security/codes (C2/C3). Part D: staged case-marker gate (#2388). This dispatcher owns shared harness+module sourcing and ALL
+# security/codes (C2/C3). Part D: staged case-marker gate (#2388). Part E: real-commit gate
+# wiring (#2589). Part F: stderr section markers (#2762). This dispatcher owns shared harness+module sourcing and ALL
 # fixture helpers/globals; per-part cases live in feature-1834-precommit-lib-split/*.sh.
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
@@ -261,6 +262,8 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-1834-precommit-lib-split"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 # shellcheck source=./feature-1834-precommit-lib-split/part-e-commit-wiring.sh
 . "$SCRIPT_DIR/part-e-commit-wiring.sh"
+# shellcheck source=./feature-1834-precommit-lib-split/part-f-section-markers.sh
+. "$SCRIPT_DIR/part-f-section-markers.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
