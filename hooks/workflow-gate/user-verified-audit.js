@@ -27,6 +27,11 @@ const {
   unsettledAuditRun,
   unreadableArtifacts,
   describeUnreadableArtifacts,
+  describeUnsettled,
+  acceptanceReleasesNonNull,
+  describeAcceptanceCommand,
+  safeRunId,
+  ACCEPTABLE_VERDICTS,
 } = require("../lib/null-freshness");
 const { formatAgentModelLine } = require("../lib/role-model");
 const { withConvLang } = require("../lib/conv-lang");
@@ -35,19 +40,6 @@ const TR_RANK = { TR1: 1, TR2: 2, TR3: 3, TR4: 4, TR5: 5, TR6: 6 };
 
 function plansDirOf() {
   return process.env.WORKFLOW_PLANS_DIR || (os.homedir() + "/.workflow-plans");
-}
-
-// An override releases the hold only while it still names the run it was taken
-// against AND the working tree has not moved since (freshness_key pin).
-function overrideReleases(audit, tr5Run, currentFk) {
-  const overrides = Array.isArray(audit.block_overrides) ? audit.block_overrides : [];
-  for (const bo of overrides) {
-    if (!bo) continue;
-    if (bo.run_id !== tr5Run.id) continue;
-    if (typeof bo.freshness_key !== "string" || bo.freshness_key.length === 0) continue;
-    if (currentFk && bo.freshness_key === currentFk) return true;
-  }
-  return false;
 }
 
 // The declared-files snapshot has gone stale when it was truncated, or when the
@@ -96,31 +88,37 @@ function coveredSetSettled(audit, tr5Run, freshness, planSessionId, plansDir) {
   return true;
 }
 
-function holdReason() {
+function holdReason(tr5Run) {
   return withConvLang([
     "[EM Supervisor] user_verification (TR5) audit hold: the last verdict is BLOCK and is unresolved.",
     "The recorded BLOCK stands while the code and plan artifacts are unchanged.",
-    "Resolve by addressing the audit findings and re-running the user_verification audit,",
-    "or record a reviewed override:",
-    "  echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: <run-id> <reason>>>\"" +
-      " (the user's approval dialog appears; <reason> is at least 20 characters)",
+    "Resolve by addressing the audit findings and re-running the user_verification audit.",
+    describeAcceptanceCommand(tr5Run && tr5Run.id),
   ].join("\n"));
 }
 
-function armReason(armResult) {
-  const runId = (armResult && (armResult.run_id || armResult.audit_run_id)) || "<none>";
-  const subChecks = armResult && Array.isArray(armResult.sub_checks) ? armResult.sub_checks.join(", ") : "";
+// #2536: every run / sub-check id here was read back from state, so each is shape-checked.
+// ctx = { tr5Run, nullKey, unsettled }: the state the arm was decided on.
+function armReason(armResult, ctx = {}) {
+  const r = armResult || {};
+  const rawId = r.run_id || r.audit_run_id;
+  const runId = rawId ? safeRunId(rawId) : "<none>";
+  const subChecks = Array.isArray(r.sub_checks) ? r.sub_checks.filter((id) => ALL_SUB_CHECK_IDS.includes(id)).join(", ") : "";
   const lines = [
     "[EM Supervisor] user_verification (TR5) audit required before the sentinel is accepted.",
     `An audit run has been armed (${runId}${subChecks ? `: ${subChecks}` : ""}).`,
   ];
-  if (armResult && armResult.superseded_run_id) {
-    lines.push(`It inherits the sub-checks of the deferred run ${armResult.superseded_run_id}, which is superseded.`);
+  if (r.superseded_run_id) {
+    lines.push(`It inherits the sub-checks of the deferred run ${safeRunId(r.superseded_run_id)}, which is superseded.`);
   }
-  lines.push(
-    "Run agents/supervisor-audit.md as a subagent, then re-issue the sentinel.",
-    formatAgentModelLine("reviewer"),
-  );
+  if (ctx.unsettled) lines.push(`It was armed because ${describeUnsettled(ctx.unsettled)}`);
+  lines.push("Run agents/supervisor-audit.md as a subagent, then re-issue the sentinel.");
+  const tr5Run = ctx.tr5Run;
+  if (ctx.nullKey && tr5Run && ACCEPTABLE_VERDICTS.includes(tr5Run.verdict)) {
+    lines.push(`The freshness key is null, so every unaccepted ${tr5Run.verdict} verdict re-arms this audit.`,
+      describeAcceptanceCommand(tr5Run.id));
+  }
+  lines.push(formatAgentModelLine("reviewer"));
   return withConvLang(lines.join("\n"));
 }
 
@@ -185,7 +183,12 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
     }
     const currentFk = freshness && freshness.freshness_key;
 
-    const arm = (subCheckIds, narrowed) => {
+    const tr5Run = lastTr5TerminalRun(audit);
+    const nullKey = !currentFk;
+    const overrides = audit.block_overrides;
+    const unsettled = unsettledAuditRun(audit);
+
+    const arm = (subCheckIds, narrowed, why = {}) => {
       const result = armAuditRun(effectiveSid, {
         tr_ids: ["TR5"],
         cause: stepCompleteCause("user_verification"),
@@ -196,12 +199,13 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
         declared_files_narrowed: narrowed === true,
         // #2698: the deny reason is itself the launch, so an unshown run is superseded here.
         launch_shown: true,
+        // #2534: on the non-null unsettled path the slot's run is what holds the gate, so reusing it
+        // would leave the sentinel held; the null path keeps the in-flight run (no re-launch loop).
+        supersede_unsettled: Boolean(why.unsettled),
       });
-      blockFn(armReason(result));
+      blockFn(armReason(result, Object.assign({ tr5Run, nullKey }, why)));
       return { authoritative: true };
     };
-
-    const tr5Run = lastTr5TerminalRun(audit);
 
     // Stage 1 — a standing BLOCK verdict holds the sentinel (fail-closed).
     // Also block when a later non-TR5 (e.g. TR6) BLOCK postdates the TR5 non-BLOCK run;
@@ -219,32 +223,29 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
       return { authoritative: true };
     }
 
-    // #2323/#2400: a null freshness_key self-recovers only through the shared predicate
-    // (allow-listed verdict, no later BLOCK, no newer audit run unsettled, code side and
-    // per-artifact hashes unchanged since the TR5 run) — the rule the pre-merge backstop applies.
-    const selfRecovering = !currentFk && evaluateNullFreshnessRecovery({
-      freshness, tr5Run, laterBlockExists: Boolean(laterBlockExists), unsettledRun: unsettledAuditRun(audit),
+    // #2323/#2400/#2597: a null freshness_key self-recovers only through the shared predicate
+    // (CONTINUE, or a WARN / BLOCK the user accepted for this run's snapshot; no later BLOCK;
+    // no newer audit run unsettled; code side and per-artifact hashes unchanged since the TR5
+    // run) — the rule the pre-merge backstop applies.
+    const selfRecovering = nullKey && evaluateNullFreshnessRecovery({
+      freshness, tr5Run, laterBlockExists: Boolean(laterBlockExists), unsettledRun: unsettled, overrides,
     }).approve;
 
     if (tr5Run && (tr5Run.verdict === "BLOCK" || laterBlockExists)) {
-      // An override can only release a BLOCK carried by the TR5 run itself,
-      // and only when no later TR6 BLOCK exists. A later BLOCK is an independent
-      // run the TR5 override never speaks to — approving over it would bypass
-      // that BLOCK entirely (#2256 C13/C22 override scope + later-block guard).
-      if (!laterBlockExists && tr5Run.verdict === "BLOCK" && overrideReleases(audit, tr5Run, currentFk)) {
-        approveFn();
-        return { authoritative: true };
-      }
-      // selfRecovering is structurally always false here (the shared null-freshness
-      // predicate refuses a BLOCK verdict and a later BLOCK), so this check never
-      // fires; it is present for CPR-ORTH symmetry with Stage 2 so both null-arm sites
-      // share identical guards and future restructuring cannot leave one unprotected.
-      if (!currentFk) {
+      // Both null-arm sites share the predicate above, so Stage 1 and Stage 2 cannot drift.
+      if (nullKey) {
         if (selfRecovering) { approveFn(); return { authoritative: true }; }
         return arm(filterNullKeySubChecks(ALL_SUB_CHECK_IDS.slice(), freshness), false);
       }
+      // An acceptance releases only the BLOCK the TR5 run itself carries, never a later
+      // BLOCK it does not speak to (#2256 C13/C22), and never while a newer run is unsettled (#2534).
+      if (!laterBlockExists && acceptanceReleasesNonNull({ tr5Run, overrides, currentFk })) {
+        if (unsettled) return arm(ALL_SUB_CHECK_IDS.slice(), false, { unsettled });
+        approveFn();
+        return { authoritative: true };
+      }
       if (tr5Run.freshness_key === currentFk) {
-        blockFn(holdReason());
+        blockFn(holdReason(tr5Run));
         return { authoritative: true };
       }
       return arm(filterNullKeySubChecks(ALL_SUB_CHECK_IDS.slice(), freshness), false);
@@ -259,6 +260,9 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
       if (selfRecovering) { approveFn(); return { authoritative: true }; }
       return arm(filterNullKeySubChecks(ALL_SUB_CHECK_IDS.slice(), freshness), false);
     }
+
+    // #2534: a newer run still pending / in_progress / frozen has not judged this tree yet.
+    if (unsettled) return arm(ALL_SUB_CHECK_IDS.slice(), false, { unsettled });
 
     const { truncated, narrowed } = snapshotStale(audit, plansDir, planSessionId);
     if (truncated || narrowed) return arm(ALL_SUB_CHECK_IDS.slice(), true);
@@ -281,7 +285,6 @@ function checkUserVerifiedAudit(sessionId, hookCwd, opts = {}) {
 
 module.exports = {
   checkUserVerifiedAudit,
-  overrideReleases,
   snapshotStale,
   armJudgmentSet,
   coveredSetSettled,

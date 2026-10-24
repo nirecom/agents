@@ -5,7 +5,7 @@
     "WORKER": "worker-[a-z0-9]+(?:-[a-z0-9]+)*"
   },
   "controlKinds": [
-    { "kind": "review-round-state", "source": "%FORMAT%-(?:round-number|last-round|terminal)\\.txt", "retention": "non-plan" },
+    { "kind": "review-round-state", "source": "%FORMAT%-(?:round-number|last-round|terminal|continuing)\\.txt", "retention": "non-plan" },
     { "kind": "unresolved-concerns", "source": "%FORMAT%-unresolved-concerns\\.json", "retention": "non-plan" },
     { "kind": "concern-ledger", "source": "%FORMAT%-concern-ledger(?:-cycle[0-9]+|-cap-snapshot)?\\.txt", "retention": "non-plan" },
     { "kind": "concern-carrier", "source": "%FORMAT%-concern-carrier\\.md", "retention": "non-plan" },

@@ -8,7 +8,7 @@ declared in the data file `hooks/lib/plans-artifact-registry.json` (SSOT), which
 
 | Directory | Holds | Who may write |
 |---|---|---|
-| `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review rounds) | The model (Write), workers, wrappers |
+| `WORKFLOW_PLANS_DIR` (default `~/.workflow-plans/`) | **Artifacts** — prose a human reads (`<sid>-detail.md`, surveys, raw review round output) | The model (Write), workers, wrappers |
 | `<WORKFLOW_STATE_DIR>/<sid>.control/` (default root `~/.workflow-state/`) | **Control files** — JSON and numbers a machine reads to drive a gate (round counters, terminal markers, ledgers, payloads, outcomes) | Only the owning CLI or hook, never the model while `WORKFLOW=on` |
 
 When `PLAN_SYNC_REMOTE_URL` is set and `bin/plan-sync-init` has run, the artifacts
@@ -75,7 +75,7 @@ guard refuse every model write there without touching the artifact workflow.
 
 | Kind | Canonical writer | Readers |
 |---|---|---|
-| `<fmt>-round-number.txt`, `-last-round.txt`, `-terminal.txt`, `-unresolved-concerns.json` | `run-codex-review-loop` via the wrappers | Wrappers, evidence-resolver, `state-io/review-tests.js` |
+| `<fmt>-round-number.txt`, `-last-round.txt`, `-terminal.txt`, `-continuing.txt` (test-review exit 1/5; recovery rule: `skills/_shared/codex-review-loop/exit-codes.md` "Accepted-warning recovery"), `-unresolved-concerns.json` | `run-codex-review-loop` via the wrappers | Wrappers, evidence-resolver, `state-io/review-tests.js` |
 | `<fmt>-concern-ledger[-cycle<N>\|-cap-snapshot].txt`, `-concern-carrier.md`, `-round-<N>-delta-<producer>.txt` | `bin/concern-ledger`, `bin/lib/concern-ledger/` | concern-ledger, evidence-resolver |
 | `{security-code,review-plan-security,review-tests}-exit6-accepted.txt` | `bin/accept-exit6-residual` | The three security/test wrappers |
 | `{outline,detail}-risk-signal.txt` | `bin/record-risk-signal` | make-{outline,detail}-plan wrappers |
@@ -172,7 +172,7 @@ target into three classes:
 
 | Class | Target | `WORKFLOW=off` |
 |---|---|---|
-| (a) | Protected tokens and OFF markers (`.off-clearance`, sentinels) | Still blocked |
+| (a) | Protected tokens and OFF markers (`.off-clearance`, any sentinel) | Still blocked |
 | (b) `control-dir` | Anything under any state root, by spelling or through a symlink or junction (an unresolvable path counts as inside): control dirs, any session's `<sid>.json` and other sessions' files (#1814) | Allowed |
 | (c) `plans-unregistered` | A PLANS_DIR entry that parses as control, ambiguous or unregistered | Allowed |
 

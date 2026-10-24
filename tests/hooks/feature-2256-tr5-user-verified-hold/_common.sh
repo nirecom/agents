@@ -166,7 +166,7 @@ override_via_handler() {
 let h;
 try { h = require(process.env.H); } catch (e) { process.stdout.write('HANDLER-MISSING:' + String(e.message).split('\n')[0]); process.exit(0); }
 const msgs = [];
-const cmd = 'echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: ' + process.env.RID + ' ' + process.env.RSN + '>>\"';
+const cmd = 'echo \"<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: ' + process.env.RID + ' ' + process.env.RSN + '>>\"';
 const handled = h.handle({ cmd, sessionId: process.env.SESS, pushMessage: (m) => msgs.push(String(m)),
   signalFatal: (m) => msgs.push(String(m)), repoCwd: process.cwd() });
 process.stdout.write((handled ? '' : 'NOT-HANDLED ') + msgs.join('\n'));
