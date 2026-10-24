@@ -430,7 +430,7 @@ while IFS='|' read -r rname rout; do
   CK_RC=$?
   assert_eq "$rname: rc=$CK_RC stdout=$CK_OUT" "$rname: rc=2 stdout="
   case "$(cat "$TMPBASE/ck.err")" in
-    *"case-marker reader unavailable: $TWO_PATHS"*) pass "$rname: stderr names the reader failure" ;;
+    *"test case reader unavailable: $TWO_PATHS"*) pass "$rname: stderr names the test case reader failure" ;;
     *) fail "$rname stderr" "$(cat "$TMPBASE/ck.err")" ;;
   esac
 done <<'ROWS'

@@ -236,6 +236,8 @@ case_end
 . "$CASE_DIR/gate-checker.sh"
 # shellcheck source=feature-2411-gate-three-languages/gate-hooks.sh
 . "$CASE_DIR/gate-hooks.sh"
+# shellcheck source=feature-2411-gate-three-languages/gate-existing-self-impl.sh
+. "$CASE_DIR/gate-existing-self-impl.sh"
 # shellcheck source=feature-2411-gate-three-languages/gate-helper-load.sh
 . "$CASE_DIR/gate-helper-load.sh"
 # shellcheck source=feature-2411-gate-three-languages/gate-unsupported.sh
