@@ -127,7 +127,7 @@ ${PLAN_CONTENT}
 }
 
 rpc_prompt_outline_plan() {
-    PREAMBLE=$(codex_core_adversarial_preamble "outline plan proposal")
+    PREAMBLE=$(codex_core_adversarial_preamble "outline plan proposal" plan)
     CONTEXT_BLOCK=""
     CONTEXT_NOTE=""
     if [[ -n "$CONTEXT_CONTENT" ]]; then

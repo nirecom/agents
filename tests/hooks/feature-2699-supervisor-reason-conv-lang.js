@@ -17,6 +17,7 @@ const { after, test } = require("node:test");
 const { scanSource, sweepFiles } = require("./feature-2699-supervisor-reason-conv-lang/scan");
 const X = require("./feature-2698-supervisor/fixture");
 const S = require("./feature-2698-supervisor/audit-scene");
+const SMC = require("../lib/system-message-contract");
 
 const restore = isolate();
 const ROOT = X.tmpRoot("convlang");
@@ -60,10 +61,20 @@ function resolveModule(mod) {
   return null;
 }
 const registered = () => loadRegistry().entries.map((e) => ({ ...e, file: e && e.module ? resolveModule(e.module) : null }));
+// #2731 exemption: a `systemMessage:` property value whose text after the tag is one bare enum token
+// plus key=value facts only (prose is never wrapped by withConvLang, so it must not appear there).
+const FACT_TAIL = /^\s*(?:[a-z][\w-]*\s+)?(?:[A-Za-z][\w-]*=\S*\s*)+$/;
+function isSystemMessageFact(l) {
+  if (typeof l.srcLine !== "string") return false;
+  const at = l.srcLine.indexOf(l.text.slice(0, 16));
+  const tag = /^\[[^\]]+\]/.exec(l.text);
+  return at > 0 && /systemMessage\s*:\s*[`"']$/.test(l.srcLine.slice(0, at)) && !!tag
+    && FACT_TAIL.test(l.text.slice(tag[0].length)) && SMC.systemMessageProblems(l.text).length === 0;
+}
 // violations(literals, reg) -> "file:line in fn" for every literal outside an injected file, an
-// injected formatter, or a registry entry of the same file and export.
+// injected formatter, a registry entry of the same file and export, or a systemMessage fact line.
 function violations(literals, reg) {
-  const allowed = (l) => INJECTED_FILES.has(l.file)
+  const allowed = (l) => INJECTED_FILES.has(l.file) || isSystemMessageFact(l)
     || (INJECTED[l.file] || []).includes(l.fn)
     || reg.some((e) => e.file && rel(e.file) === l.file && e.export === l.fn);
   return literals.filter((l) => !allowed(l)).map((l) => `${l.file}:${l.line} in ${l.fn || "<module scope>"}`);
@@ -111,6 +122,19 @@ test("an unregistered reason generator cannot slip through the sweep check", () 
     { file: "hooks/supervisor-off-proposal-shim.js", line: 1, fn: null }];
   assert.deepStrictEqual(violations(injected, []), [], "an injected formatter and an injected file pass");
 });
+test("only a systemMessage fact line is exempt; prose or a non-systemMessage literal is still flagged", () => {
+  const src = [
+    "function a(f) { out({ systemMessage: `[EM Supervisor] block severity=error findings=${f.length}` }); }",
+    'function b() { out({ systemMessage: "[EM Supervisor] please review the findings now" }); }',
+    'function c() { out({ systemMessage: "[EM Supervisor] please review" }); }',
+    'function d() { out({ reason: "[EM Supervisor] block severity=error" }); }',
+    'function e() { out({ systemMessage: "[C4 premature-stop] stop blocked for this turn count=2" }); }',
+  ].join("\n");
+  const lines = src.split("\n");
+  const lits = scanSource(src).map((l) => ({ file: "hooks/lib/supervisor-rogue.js", srcLine: lines[l.line - 1], ...l }));
+  assert.deepStrictEqual(violations(lits, []), ["hooks/lib/supervisor-rogue.js:2 in b",
+    "hooks/lib/supervisor-rogue.js:3 in c", "hooks/lib/supervisor-rogue.js:4 in d", "hooks/lib/supervisor-rogue.js:5 in e"]);
+});
 caseEnd();
 
 caseBegin("with-conv-lang-helper", "hooks/lib/conv-lang.js");
@@ -126,7 +150,11 @@ caseBegin("static-sweep-literals-registered", "hooks/lib/supervisor-reason-regis
 test("every [EM Supervisor]/[C4 literal in the supervisor file set is in a registered or injected generator", () => {
   const files = sweepFiles(HOOKS);
   const literals = [];
-  for (const f of files) for (const l of scanSource(fs.readFileSync(f, "utf8"))) literals.push({ file: rel(f), ...l });
+  for (const f of files) {
+    const src = fs.readFileSync(f, "utf8");
+    const lines = src.split(/\r?\n/);
+    for (const l of scanSource(src)) literals.push({ file: rel(f), srcLine: lines[l.line - 1], ...l });
+  }
   assert.ok(literals.length >= 20, `the scanner sees the known literals (${literals.length})`);
   assert.ok(literals.some((l) => l.file === "hooks/lib/supervisor-report-format.js" && l.fn === "formatCumSevErrorReason"),
     "scanner sanity: formatCumSevErrorReason's literal is attributed to it");

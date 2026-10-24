@@ -1,6 +1,7 @@
 # unit-helper.sh — T1–T9, T22, T24, T25, T27: Unit tests for hooks/lib/conv-lang.js
 # Tests: hooks/lib/conv-lang.js, hooks/lib/lang-config.js
 # Tags: lang, conv-lang, injection, TL2
+# lang-check: ignore -- a native-script language name is a deliberate fixture value.
 # Sourced after helpers.sh; inherits all variables and functions.
 # Which value shapes are accepted or rejected: hooks/lib/lang-config.js LANGUAGE_NAME_RE.
 
@@ -68,7 +69,7 @@ else
 
     # T8 [Edge] CONV_LANG=traditional-chinese → injected as-is
     OUT=$(call_helper set "traditional-chinese")
-    EXPECTED_TC='"Respond to the user in traditional-chinese. This applies to all text you write, including narration between tool calls."'
+    EXPECTED_TC="\"$(expected_conv traditional-chinese)\""
     if [ "$OUT" = "$EXPECTED_TC" ]; then
         pass "T8: CONV_LANG=traditional-chinese → multi-word injection"
     else

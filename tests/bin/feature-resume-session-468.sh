@@ -192,6 +192,15 @@ else
 fi
 case_end
 
+case_begin "ask-conv-lang" "skills/resume-session/SKILL.md"
+if [[ ! -f "$FRAG_DIR/ask-conv-lang.sh" ]]; then
+    fail "fragment missing: $FRAG_DIR/ask-conv-lang.sh"
+else
+    # shellcheck source=/dev/null
+    . "$FRAG_DIR/ask-conv-lang.sh"
+fi
+case_end
+
 case_begin "from-boundary" "bin/resume-session-detect"
 if [[ ! -f "$FRAG_DIR/from-boundary.sh" ]]; then
     fail "fragment missing: $FRAG_DIR/from-boundary.sh"

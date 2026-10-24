@@ -55,10 +55,18 @@ function reportableFindings(sid) {
   return findings.filter((f) => f && f.kind !== "state-absent");
 }
 
+function stepIdOf(finding) {
+  return isKnownStep(finding.step) ? canonicalStepNameSafe(finding.step) : "(unrecognized-step)";
+}
+
+// findingIds(findings) -> "<id>, <id>" — the fact list the user sees in the systemMessage.
+function findingIds(findings) {
+  return findings.map(stepIdOf).join(", ");
+}
+
+// describe(findings) -> the full explanation, for the model only.
 function describe(findings) {
-  const items = findings
-    .map((f) => "'" + (isKnownStep(f.step) ? canonicalStepNameSafe(f.step) : "(unrecognized-step)") + "' (" + f.kind + ")")
-    .join(", ");
+  const items = findings.map((f) => "'" + stepIdOf(f) + "' (" + f.kind + ")").join(", ");
   return (
     "mechanism-failure: the workflow mechanism has stalled — " + items + ". " +
     "Nothing settled the step, so every quiet layer kept honouring it. " +
@@ -130,13 +138,13 @@ function main() {
     try { reportMechanismFailureOnce(sid, finding); } catch (_e) {}
   }
 
-  const message = describe(findings);
+  const { withConvLang } = require("./lib/conv-lang");
   return {
     blocks: true,
-    systemMessage: message,
+    systemMessage: "[mechanism-failure] " + findingIds(findings),
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: message,
+      additionalContext: withConvLang(describe(findings)),
     },
   };
 }
@@ -149,6 +157,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  reportableFindings, describe, isKnownStep,
+  reportableFindings, describe, findingIds, isKnownStep,
   PROMPT_NOTIFY_EXEMPTIONS, isPromptNotifyExempt, isFindingExemptFromPromptNotify,
 };

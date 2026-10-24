@@ -2,31 +2,13 @@
 # tests/bin/feature-1673-open-pr-url.sh
 # Tests: bin/open-pr-url.js, hooks/lib/open-external.js, skills/commit-push/SKILL.md, hooks/pr-created-open.js
 # Tags: worker-dispatch, commit-push, pr-url, open-external, url-validation, fail-open, TL2, scope:issue-specific
-#
-# Issue #1673 D2 — replacing a PostToolUse hook that no longer fires.
-#
-# hooks/pr-created-open.js reacted to a Bash-tool `gh pr create`. Once that call
-# moves inside a dispatcher child it is no longer a tool invocation, so the hook
-# never runs: the browser does not open and the PR URL never reaches the user.
-# bin/open-pr-url.js restores the reachable half, and skills/commit-push/SKILL.md
-# CP-2b restores the visible half by putting the URL in the turn's final response.
-#
-# What is deliberately NOT restored: the "Click Allow to proceed, Deny to abort"
-# line. It belonged to a tool-permission dialog that no longer exists at that
-# point, and leaving the words in would advertise a decision the user is not
-# being offered. Group B pins its absence so a copy-paste from the old hook is
-# caught rather than shipped.
-#
-# openInBrowser is diverted through its own documented test mode
-# (SHOW_USER_VERIFIED_NO_SPAWN / SHOW_USER_VERIFIED_MARKER_FILE) rather than
-# through a duplicate stub, so the SSOT this CLI shares with the hook is the code
-# actually exercised.
-#
-# TL3 gap (what this TL2 test does NOT catch):
-#   - A real browser process starting. openInBrowser's spawn path is diverted
-#     here, and no tier of this suite launches a real browser — the marker file
-#     is the boundary of what is mechanically checkable.
-#   - The SKILL.md CP-2b instruction actually being followed by a live model.
+
+# Issue #1673 D2: bin/open-pr-url.js opens and announces the PR URL hooks/pr-created-open.js misses inside a dispatcher child; commit-push CP-2b shows it.
+# Not restored on purpose: "Click Allow to proceed, Deny to abort" belonged to a permission dialog that no longer exists
+# there, so it would advertise a decision the user is not offered; Group B pins its absence against a copy-paste.
+# openInBrowser is diverted through its own test mode (SHOW_USER_VERIFIED_NO_SPAWN / _MARKER_FILE).
+
+# TL3 gap: a real browser process starting; a live model following SKILL.md CP-2b.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
@@ -131,14 +113,6 @@ group_wording() {
         *"Deny to abort"*) fail "wording/no-deny-wording" "the retired permission-dialog wording is still emitted" ;;
         *) pass "wording/no-deny-wording" ;;
     esac
-    # Non-vacuity: the old hook DOES carry that wording, so the greps above are
-    # matching something that exists rather than a typo of my own.
-    if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/pr-created-open.js" ] && grep -qF "Click Allow" "$SCRIPT_CHECKOUT_ROOT/hooks/pr-created-open.js"; then
-        pass "wording/old-hook-still-has-it (grep is live)"
-    else
-        fail "wording/old-hook-still-has-it (grep is live)" \
-            "hooks/pr-created-open.js no longer contains 'Click Allow' — the assertions above prove nothing"
-    fi
 }
 
 # ===========================================================================
@@ -209,6 +183,7 @@ group_skill() {
         *) fail "skill/cp-2b-mentions-pr-reused-exclusion" "CP-2b does not say pr_reused is excluded" ;;
     esac
     # codex C6: the dialog is gone, so the URL has to arrive in the response text.
+    # lang-check: ignore -- the pattern below matches Japanese wording in the SKILL.md under test.
     case "$cp2b" in
         *"final response"*|*"最終応答"*) pass "skill/cp-2b-requires-url-in-final-response" ;;
         *) fail "skill/cp-2b-requires-url-in-final-response" \

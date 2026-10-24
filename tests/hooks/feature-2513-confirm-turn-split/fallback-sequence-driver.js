@@ -49,7 +49,8 @@ const r = X.F.runNode("hooks/confirm-checkpoint.js", [], JSON.stringify({ sessio
 let json = {};
 try { json = r.out ? JSON.parse(r.out) : {}; } catch (_) { json = { unparsed: r.out }; }
 const deny = (json.hookSpecificOutput || {}).permissionDecision === "deny";
-const ask = !deny && r.code === 0 && json.decision !== "block" && String(json.systemMessage || "").includes("Click Allow");
+// #2731: the dialog systemMessage is the stage fact line (`[<stage>] ...`), no "Click Allow" wording.
+const ask = !deny && r.code === 0 && json.decision !== "block" && /^\[(intent|outline|detail)\] /.test(String(json.systemMessage || ""));
 if (VARIANT === "ends-on-link") {
   check(`${L} — the receipt survives the second Stop`, before, "no receipt");
   check(`${L} — the echo reaches the ask dialog through the receipt`, before && ask, show(json));

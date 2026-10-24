@@ -13,6 +13,7 @@ const { approvalArtifactPath } = require("./presentation-receipt");
 const { planGateState } = require("./confirm-gate/plan-gate");
 const { stepForSuffix } = require("../workflow-state/plan-stage-table");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../../bin/workflow/lib/next-step/gate-line");
+const { withConvLang } = require("./conv-lang");
 
 function textOnlyAnchor(tail) {
   const t = tail || {};
@@ -70,14 +71,14 @@ function continuationStage(presented, currentStage) {
 
 function continueReason(stage) {
   const S = String(stage).toUpperCase();
-  return `[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the approval dialog follows.`;
+  return withConvLang(`[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the approval dialog follows.`);
 }
 
 const CAUSE_TEXT = {
   "not-last": "its plan-link line is followed by other text, so the line did not close the turn",
   unpublished: "it is not published yet although this environment can publish it — rewrite it through the plan-sync path (the Write or Edit tool on the plan file) and present it only once its URL line is available",
   "no-receipt": "no presentation of it is on record",
-  "unreadable-receipt": "its presentation record cannot be read",
+  "unreadable-receipt": "its presentation receipt cannot be read",
   path: "the presented file is not the plan being approved",
   link: "the link shown then differs from the plan's link now",
   content: "the plan changed after it was presented",
@@ -91,9 +92,9 @@ const CAUSE_TEXT = {
 // presentAgainReason(stage, cause) -> the Stop block and the CONFIRM deny reason, shared.
 function presentAgainReason(stage, cause) {
   const why = CAUSE_TEXT[cause] || CAUSE_TEXT["no-receipt"];
-  return `[confirm-plan] present the ${stage} plan again (${cause}): ${why}. ` +
+  return withConvLang(`[confirm-plan] present the ${stage} plan again (${cause}): ${why}. ` +
     `Run ${PL.PLAN_LINK_COMMAND.replace("<stage>", stage)}, end the last text block of the turn with its output as-is, ` +
-    "with no text after the line, and close the turn; echo the CONFIRM only after the user's reply.";
+    "with no text after the line, and close the turn; echo the CONFIRM only after the user's reply.");
 }
 
 module.exports = { presentedStages, continuationStage, continueReason, presentAgainReason };
