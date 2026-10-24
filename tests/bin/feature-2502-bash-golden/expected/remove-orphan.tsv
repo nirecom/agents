@@ -1,0 +1,298 @@
+tests/bin/vce/deleted-is-target.sh	verdict=partial-orphan	unit=case	rc=0	removed=gone
+tests/bin/vce/deleted-is-target.sh	body	1	#!/usr/bin/env bash
+tests/bin/vce/deleted-is-target.sh	body	2	# Tests: bin/a.sh, bin/gone.sh
+tests/bin/vce/deleted-is-target.sh	body	3	# Tags: TL2, scope:common
+tests/bin/vce/deleted-is-target.sh	body	4	. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../tests/lib/harness.sh"
+tests/bin/vce/deleted-is-target.sh	body	5	
+tests/bin/vce/deleted-is-target.sh	body	6	case_begin "a" "bin/a.sh"
+tests/bin/vce/deleted-is-target.sh	body	7	pass "a works"
+tests/bin/vce/deleted-is-target.sh	body	8	case_end
+tests/bin/vce/deleted-is-target.sh	body	9	
+tests/bin/vce/deleted-is-target.sh	body	10	
+tests/bin/vce/deleted-is-target.sh	body	11	echo "Results: $PASS passed, $FAIL failed"
+tests/bin/vce/deleted-is-target.sh	body	12	exit "$FAIL"
+tests/bin/ec/embedded-orphan.sh	verdict=partial-orphan	unit=case	rc=0	removed=block-2
+tests/bin/ec/embedded-orphan.sh	body	1	#!/usr/bin/env bash
+tests/bin/ec/embedded-orphan.sh	body	2	# Tests: bin/alpha.sh, bin/zulu.sh
+tests/bin/ec/embedded-orphan.sh	body	3	# Tags: TL2, scope:common
+tests/bin/ec/embedded-orphan.sh	body	4	ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+tests/bin/ec/embedded-orphan.sh	body	5	source "$ROOT/tests/lib/harness.sh"
+tests/bin/ec/embedded-orphan.sh	body	6	
+tests/bin/ec/embedded-orphan.sh	body	7	case_begin "block-1" "bin/alpha.sh"
+tests/bin/ec/embedded-orphan.sh	body	8	if [ -d "$ROOT/bin" ]; then pass "bin dir 1"; else fail "bin dir 1"; fi
+tests/bin/ec/embedded-orphan.sh	body	9	case_end
+tests/bin/ec/embedded-orphan.sh	body	10	
+tests/bin/ec/embedded-orphan.sh	body	11	
+tests/bin/ec/embedded-orphan.sh	body	12	echo "Results: $PASS passed, $FAIL failed"
+tests/bin/ec/embedded-orphan.sh	body	13	exit "$FAIL"
+tests/bin/fix-gh-native-path.sh	verdict=partial-orphan	unit=case	rc=0	removed=issue-create-body-file,issue-body-append-body-file
+tests/bin/fix-gh-native-path.sh	body	1	#!/usr/bin/env bash
+tests/bin/fix-gh-native-path.sh	body	2	# Tests: bin/lib/native-path.sh, bin/github-issues/issue-create.sh, bin/github-issues/issue-body-append.sh, bin/github-issues/reopen-with-update.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh, bin/github-issues/migration/migrate-history.sh, bin/github-issues/migration/migrate-todo.sh
+tests/bin/fix-gh-native-path.sh	body	3	# Tags: github, gh, windows-path, msys, scope:issue-specific, TL1, TL2
+tests/bin/fix-gh-native-path.sh	body	4	# Issue #2221 Change 3: under MSYS_NO_PATHCONV=1 native gh.exe cannot read an MSYS file path; native_path
+tests/bin/fix-gh-native-path.sh	body	5	# converts once at the gh boundary (cygpath -m when present, else or on failure unchanged, `-` untouched).
+tests/bin/fix-gh-native-path.sh	body	6	# A recording gh stub shows what issue-create.sh and issue-body-append.sh actually pass as --body-file.
+tests/bin/fix-gh-native-path.sh	body	7	# TL3 gap (what this test does NOT catch):
+tests/bin/fix-gh-native-path.sh	body	8	# - The real gh.exe opening the converted --body-file/--input path (the stub only records argv).
+tests/bin/fix-gh-native-path.sh	body	9	# Closest-to-action mitigation: none — no check-verification-gate category covers gh; check by hand on Git Bash.
+tests/bin/fix-gh-native-path.sh	body	10	set -uo pipefail
+tests/bin/fix-gh-native-path.sh	body	11	
+tests/bin/fix-gh-native-path.sh	body	12	SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+tests/bin/fix-gh-native-path.sh	body	13	# shellcheck source=tests/lib/harness.sh
+tests/bin/fix-gh-native-path.sh	body	14	. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+tests/bin/fix-gh-native-path.sh	body	15	# shellcheck source=tests/lib/script-checkout-fixture.sh
+tests/bin/fix-gh-native-path.sh	body	16	. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+tests/bin/fix-gh-native-path.sh	body	17	
+tests/bin/fix-gh-native-path.sh	body	18	GNP_TMP="$(make_tmp)"
+tests/bin/fix-gh-native-path.sh	body	19	readonly GNP_TMP
+tests/bin/fix-gh-native-path.sh	body	20	trap 'rm -rf "$GNP_TMP"' EXIT
+tests/bin/fix-gh-native-path.sh	body	21	harness_isolate "$GNP_TMP"
+tests/bin/fix-gh-native-path.sh	body	22	export HOME="$GNP_TMP/home"
+tests/bin/fix-gh-native-path.sh	body	23	export USERPROFILE="$HOME"
+tests/bin/fix-gh-native-path.sh	body	24	mkdir -p "$HOME"
+tests/bin/fix-gh-native-path.sh	body	25	unset CLAUDE_CODE_SESSION_ID CLAUDECODE REPO_OVERRIDE 2>/dev/null || true
+tests/bin/fix-gh-native-path.sh	body	26	
+tests/bin/fix-gh-native-path.sh	body	27	LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/native-path.sh"
+tests/bin/fix-gh-native-path.sh	body	28	EMPTY_BIN="$GNP_TMP/empty-bin"
+tests/bin/fix-gh-native-path.sh	body	29	FAILING_BIN="$GNP_TMP/failing-cygpath-bin"
+tests/bin/fix-gh-native-path.sh	body	30	mkdir -p "$EMPTY_BIN" "$FAILING_BIN"
+tests/bin/fix-gh-native-path.sh	body	31	# A cygpath that always fails and records each call, so the fallback and the `-` bypass are visible.
+tests/bin/fix-gh-native-path.sh	body	32	printf '#!/bin/sh\necho "$*" >> "%s/cygpath-calls"\nexit 1\n' "$GNP_TMP" > "$FAILING_BIN/cygpath"
+tests/bin/fix-gh-native-path.sh	body	33	chmod +x "$FAILING_BIN/cygpath"
+tests/bin/fix-gh-native-path.sh	body	34	HAVE_CYGPATH=0
+tests/bin/fix-gh-native-path.sh	body	35	command -v cygpath >/dev/null 2>&1 && HAVE_CYGPATH=1
+tests/bin/fix-gh-native-path.sh	body	36	
+tests/bin/fix-gh-native-path.sh	body	37	# np_call <PATH> <input> — prints native_path's output; exit 99 when the lib cannot be sourced.
+tests/bin/fix-gh-native-path.sh	body	38	np_call() {
+tests/bin/fix-gh-native-path.sh	body	39	  run_with_timeout 10 env PATH="$1" "$BASH" -c '. "$1" || exit 99; native_path "$2"' _ "$LIB" "$2"
+tests/bin/fix-gh-native-path.sh	body	40	}
+tests/bin/fix-gh-native-path.sh	body	41	
+tests/bin/fix-gh-native-path.sh	body	42	# np_row <label> <PATH> <input> <mode> <want> — mode: eq (exact) or re (extended regex).
+tests/bin/fix-gh-native-path.sh	body	43	np_row() {
+tests/bin/fix-gh-native-path.sh	body	44	  local label="$1" p="$2" in="$3" mode="$4" want="$5" got rc ok=0
+tests/bin/fix-gh-native-path.sh	body	45	  got="$(np_call "$p" "$in" 2>"$GNP_TMP/np.err")"
+tests/bin/fix-gh-native-path.sh	body	46	  rc=$?
+tests/bin/fix-gh-native-path.sh	body	47	  if [ "$rc" -eq 0 ]; then
+tests/bin/fix-gh-native-path.sh	body	48	    case "$mode" in
+tests/bin/fix-gh-native-path.sh	body	49	      eq) [ "$got" = "$want" ] && ok=1 ;;
+tests/bin/fix-gh-native-path.sh	body	50	      re) printf '%s' "$got" | grep -qE "$want" && ok=1 ;;
+tests/bin/fix-gh-native-path.sh	body	51	    esac
+tests/bin/fix-gh-native-path.sh	body	52	  fi
+tests/bin/fix-gh-native-path.sh	body	53	  if [ "$ok" -eq 1 ]; then
+tests/bin/fix-gh-native-path.sh	body	54	    pass "native_path[$label] '$in' -> '$got'"
+tests/bin/fix-gh-native-path.sh	body	55	  else
+tests/bin/fix-gh-native-path.sh	body	56	    fail "native_path[$label] '$in'" "rc=$rc got='$got' want($mode)='$want' err=$(head -c 200 "$GNP_TMP/np.err")"
+tests/bin/fix-gh-native-path.sh	body	57	  fi
+tests/bin/fix-gh-native-path.sh	body	58	}
+tests/bin/fix-gh-native-path.sh	body	59	
+tests/bin/fix-gh-native-path.sh	body	60	case_begin "native-path-table" "bin/lib/native-path.sh"
+tests/bin/fix-gh-native-path.sh	body	61	if [ "$HAVE_CYGPATH" -eq 1 ]; then
+tests/bin/fix-gh-native-path.sh	body	62	  np_row "cygpath dash" "$PATH" "-" eq "-"
+tests/bin/fix-gh-native-path.sh	body	63	  np_row "cygpath relative" "$PATH" "body.md" eq "body.md"
+tests/bin/fix-gh-native-path.sh	body	64	  np_row "cygpath dash-led relative" "$PATH" "-x.md" eq "-x.md"
+tests/bin/fix-gh-native-path.sh	body	65	  np_row "cygpath msys abs" "$PATH" "/tmp/x" re '^[A-Za-z]:/.*/x$'
+tests/bin/fix-gh-native-path.sh	body	66	  np_row "cygpath mixed abs" "$PATH" "C:/x" eq "C:/x"
+tests/bin/fix-gh-native-path.sh	body	67	  np_row "cygpath space" "$PATH" "/tmp/a b/c.md" re '^[A-Za-z]:/.*/a b/c\.md$'
+tests/bin/fix-gh-native-path.sh	body	68	else
+tests/bin/fix-gh-native-path.sh	body	69	  skip "native_path with a real cygpath: not on this host (TL3 gap: Windows Git Bash only)"
+tests/bin/fix-gh-native-path.sh	body	70	fi
+tests/bin/fix-gh-native-path.sh	body	71	for _in in "-" "body.md" "/tmp/x" "C:/x" "/tmp/a b/c.md"; do
+tests/bin/fix-gh-native-path.sh	body	72	  np_row "no cygpath" "$EMPTY_BIN" "$_in" eq "$_in"
+tests/bin/fix-gh-native-path.sh	body	73	done
+tests/bin/fix-gh-native-path.sh	body	74	rm -f "$GNP_TMP/cygpath-calls"
+tests/bin/fix-gh-native-path.sh	body	75	for _in in "/tmp/x" "/tmp/a b/c.md"; do
+tests/bin/fix-gh-native-path.sh	body	76	  np_row "cygpath fails" "$FAILING_BIN" "$_in" eq "$_in"
+tests/bin/fix-gh-native-path.sh	body	77	done
+tests/bin/fix-gh-native-path.sh	body	78	if [ -s "$GNP_TMP/cygpath-calls" ]; then
+tests/bin/fix-gh-native-path.sh	body	79	  pass "native_path: a failing cygpath was really consulted before the fallback"
+tests/bin/fix-gh-native-path.sh	body	80	else
+tests/bin/fix-gh-native-path.sh	body	81	  fail "native_path: the failing cygpath was never called" "the fallback rows above passed without exercising cygpath"
+tests/bin/fix-gh-native-path.sh	body	82	fi
+tests/bin/fix-gh-native-path.sh	body	83	rm -f "$GNP_TMP/cygpath-calls"
+tests/bin/fix-gh-native-path.sh	body	84	np_row "dash never converted" "$FAILING_BIN" "-" eq "-"
+tests/bin/fix-gh-native-path.sh	body	85	if [ "$(np_call "$FAILING_BIN" "-" 2>/dev/null)" = "-" ] && [ ! -e "$GNP_TMP/cygpath-calls" ]; then
+tests/bin/fix-gh-native-path.sh	body	86	  pass "native_path: '-' (stdin) never reaches cygpath"
+tests/bin/fix-gh-native-path.sh	body	87	else
+tests/bin/fix-gh-native-path.sh	body	88	  fail "native_path: '-' was passed to cygpath" "$(cat "$GNP_TMP/cygpath-calls")"
+tests/bin/fix-gh-native-path.sh	body	89	fi
+tests/bin/fix-gh-native-path.sh	body	90	# A dash-led path other than `-` is a path, not a cygpath option: it must follow `--`.
+tests/bin/fix-gh-native-path.sh	body	91	np_row "no cygpath dash-led" "$EMPTY_BIN" "-x.md" eq "-x.md"
+tests/bin/fix-gh-native-path.sh	body	92	rm -f "$GNP_TMP/cygpath-calls"
+tests/bin/fix-gh-native-path.sh	body	93	np_row "cygpath fails dash-led" "$FAILING_BIN" "-x.md" eq "-x.md"
+tests/bin/fix-gh-native-path.sh	body	94	if grep -qE -- '(^| )-- -x\.md$' "$GNP_TMP/cygpath-calls" 2>/dev/null; then
+tests/bin/fix-gh-native-path.sh	body	95	  pass "native_path: '-x.md' reaches cygpath only after '--', never as an option"
+tests/bin/fix-gh-native-path.sh	body	96	else
+tests/bin/fix-gh-native-path.sh	body	97	  fail "native_path: '-x.md' not passed after '--'" "calls=[$(cat "$GNP_TMP/cygpath-calls" 2>/dev/null)]"
+tests/bin/fix-gh-native-path.sh	body	98	fi
+tests/bin/fix-gh-native-path.sh	body	99	case_end
+tests/bin/fix-gh-native-path.sh	body	100	
+tests/bin/fix-gh-native-path.sh	body	101	# ---------------------------------------------------------------- gh integration
+tests/bin/fix-gh-native-path.sh	body	102	# A checkout copy whose is-github-dotcom-remote says non-GitHub (skips Phase 0a label repair).
+tests/bin/fix-gh-native-path.sh	body	103	# The copy holds tracked files only, so the lib under test is copied in when present.
+tests/bin/fix-gh-native-path.sh	body	104	CO="$GNP_TMP/co"
+tests/bin/fix-gh-native-path.sh	body	105	script_checkout_fixture_copy "$CO" bin >/dev/null 2>&1 || fail "fixture" "checkout copy failed"
+tests/bin/fix-gh-native-path.sh	body	106	[ -f "$LIB" ] && cp "$LIB" "$CO/bin/lib/native-path.sh"
+tests/bin/fix-gh-native-path.sh	body	107	printf '#!/usr/bin/env bash\nexit 1\n' > "$CO/bin/is-github-dotcom-remote"
+tests/bin/fix-gh-native-path.sh	body	108	chmod +x "$CO/bin/is-github-dotcom-remote"
+tests/bin/fix-gh-native-path.sh	body	109	: > "$CO/.private-info-allowlist"
+tests/bin/fix-gh-native-path.sh	body	110	: > "$CO/.private-info-blocklist"
+tests/bin/fix-gh-native-path.sh	body	111	STUB_BIN="$GNP_TMP/stub-bin"
+tests/bin/fix-gh-native-path.sh	body	112	mkdir -p "$STUB_BIN"
+tests/bin/fix-gh-native-path.sh	body	113	cat > "$STUB_BIN/gh" <<'GH'
+tests/bin/fix-gh-native-path.sh	body	114	#!/usr/bin/env bash
+tests/bin/fix-gh-native-path.sh	body	115	case "$*" in
+tests/bin/fix-gh-native-path.sh	body	116	  auth\ status*) echo "scopes: 'project', 'repo'"; exit 0 ;;
+tests/bin/fix-gh-native-path.sh	body	117	  issue\ view*) echo "ORIGINAL body"; exit 0 ;;
+tests/bin/fix-gh-native-path.sh	body	118	esac
+tests/bin/fix-gh-native-path.sh	body	119	printf '%s\n' "$@" > "$GNP_GH_LOG"
+tests/bin/fix-gh-native-path.sh	body	120	case "$*" in issue\ create*) echo "https://github.com/example/repo/issues/7" ;; esac
+tests/bin/fix-gh-native-path.sh	body	121	exit 0
+tests/bin/fix-gh-native-path.sh	body	122	GH
+tests/bin/fix-gh-native-path.sh	body	123	chmod +x "$STUB_BIN/gh"
+tests/bin/fix-gh-native-path.sh	body	124	export GNP_GH_LOG="$GNP_TMP/gh-args"
+tests/bin/fix-gh-native-path.sh	body	125	mkdir -p "$GNP_TMP/body dir"
+tests/bin/fix-gh-native-path.sh	body	126	BODY_FILE="$GNP_TMP/body dir/body.md"
+tests/bin/fix-gh-native-path.sh	body	127	printf 'ordinary body text\n' > "$BODY_FILE"
+tests/bin/fix-gh-native-path.sh	body	128	
+tests/bin/fix-gh-native-path.sh	body	129	# is_abs_path <p> — POSIX absolute or drive-letter absolute (gh resolves a relative one against its cwd).
+tests/bin/fix-gh-native-path.sh	body	130	is_abs_path() { case "$1" in /*|[A-Za-z]:/*|[A-Za-z]:\\*) return 0 ;; esac; return 1; }
+tests/bin/fix-gh-native-path.sh	body	131	
+tests/bin/fix-gh-native-path.sh	body	132	# recorded_body_file — the argument after --body-file in the last recorded gh call.
+tests/bin/fix-gh-native-path.sh	body	133	recorded_body_file() { awk 'prev == "--body-file" { print; exit } { prev = $0 }' "$GNP_GH_LOG" 2>/dev/null; }
+tests/bin/fix-gh-native-path.sh	body	134	
+tests/bin/fix-gh-native-path.sh	body	135	# gh_check <label> <rc> <input path> — the recorded --body-file is native (cygpath host) or unchanged.
+tests/bin/fix-gh-native-path.sh	body	136	gh_check() {
+tests/bin/fix-gh-native-path.sh	body	137	  local label="$1" rc="$2" in="$3" got
+tests/bin/fix-gh-native-path.sh	body	138	  got="$(recorded_body_file)"
+tests/bin/fix-gh-native-path.sh	body	139	  if [ "$HAVE_CYGPATH" -eq 1 ]; then
+tests/bin/fix-gh-native-path.sh	body	140	    if [ "$rc" -eq 0 ] && printf '%s' "$got" | grep -qE '^[A-Za-z]:/'; then
+tests/bin/fix-gh-native-path.sh	body	141	      pass "$label: --body-file reaches gh in native form ($got)"
+tests/bin/fix-gh-native-path.sh	body	142	    else
+tests/bin/fix-gh-native-path.sh	body	143	      fail "$label: --body-file not native" "rc=$rc got='$got' (want ^[A-Za-z]:/)"
+tests/bin/fix-gh-native-path.sh	body	144	    fi
+tests/bin/fix-gh-native-path.sh	body	145	  elif [ "$rc" -eq 0 ] && [ "$got" = "$in" ]; then
+tests/bin/fix-gh-native-path.sh	body	146	    pass "$label: without cygpath --body-file is passed unchanged"
+tests/bin/fix-gh-native-path.sh	body	147	  else
+tests/bin/fix-gh-native-path.sh	body	148	    fail "$label: without cygpath" "rc=$rc got='$got' want='$in'"
+tests/bin/fix-gh-native-path.sh	body	149	  fi
+tests/bin/fix-gh-native-path.sh	body	150	}
+tests/bin/fix-gh-native-path.sh	body	151	
+tests/bin/fix-gh-native-path.sh	body	152	
+tests/bin/fix-gh-native-path.sh	body	153	
+tests/bin/fix-gh-native-path.sh	body	154	# ---------------------------------------------------------------- sibling audit (static)
+tests/bin/fix-gh-native-path.sh	body	155	# Every gh file-path argument of the audited siblings goes through native_path (CPR-ORTH).
+tests/bin/fix-gh-native-path.sh	body	156	case_begin "sibling-gh-file-args" "bin/lib/native-path.sh"
+tests/bin/fix-gh-native-path.sh	body	157	AUDITED="bin/github-issues/issue-create.sh bin/github-issues/issue-body-append.sh
+tests/bin/fix-gh-native-path.sh	body	158	bin/github-issues/reopen-with-update.sh bin/lib/github-contents-write.sh
+tests/bin/fix-gh-native-path.sh	body	159	bin/lib/github-git-data-write.sh bin/github-issues/migration/migrate-history.sh
+tests/bin/fix-gh-native-path.sh	body	160	bin/github-issues/migration/migrate-todo.sh"
+tests/bin/fix-gh-native-path.sh	body	161	for rel in $AUDITED; do
+tests/bin/fix-gh-native-path.sh	body	162	  f="$SCRIPT_CHECKOUT_ROOT/$rel"
+tests/bin/fix-gh-native-path.sh	body	163	  raw="$(grep -cE -- '--(body-file|input) "\$[A-Za-z_{]' "$f" 2>/dev/null)"
+tests/bin/fix-gh-native-path.sh	body	164	  wrapped="$(grep -cE -- '--(body-file|input) "\$\(native_path ' "$f" 2>/dev/null)"
+tests/bin/fix-gh-native-path.sh	body	165	  if [ -f "$f" ] && [ "${raw:-0}" -eq 0 ] && [ "${wrapped:-0}" -ge 1 ] && grep -q 'native-path\.sh' "$f"; then
+tests/bin/fix-gh-native-path.sh	body	166	    pass "$rel: every gh --body-file/--input path goes through native_path"
+tests/bin/fix-gh-native-path.sh	body	167	  else
+tests/bin/fix-gh-native-path.sh	body	168	    fail "$rel" "unwrapped=${raw:-?} wrapped=${wrapped:-?} sources-lib=$(grep -q 'native-path\.sh' "$f" 2>/dev/null && echo y || echo n)"
+tests/bin/fix-gh-native-path.sh	body	169	  fi
+tests/bin/fix-gh-native-path.sh	body	170	done
+tests/bin/fix-gh-native-path.sh	body	171	# Discovery: every bin/ file with a non-comment line invoking `gh ` with --body-file/--input must be
+tests/bin/fix-gh-native-path.sh	body	172	# audited above, so a new gh file-path call site cannot bypass native_path unnoticed.
+tests/bin/fix-gh-native-path.sh	body	173	GH_SCAN="$(cd "$SCRIPT_CHECKOUT_ROOT" && grep -rlE '^[^#]*(^|[^A-Za-z0-9_.-])gh [^#]*--(body-file|input)( |=|$)' bin | sort -u)"
+tests/bin/fix-gh-native-path.sh	body	174	GH_UNAUDITED="$(comm -23 <(printf '%s\n' "$GH_SCAN") <(printf '%s\n' $AUDITED | sort -u))"
+tests/bin/fix-gh-native-path.sh	body	175	if [ -n "$GH_SCAN" ] && [ -z "$GH_UNAUDITED" ]; then
+tests/bin/fix-gh-native-path.sh	body	176	  pass "bin/ scan: all $(printf '%s\n' "$GH_SCAN" | wc -l | tr -d ' ') gh --body-file/--input files are audited"
+tests/bin/fix-gh-native-path.sh	body	177	else
+tests/bin/fix-gh-native-path.sh	body	178	  fail "bin/ scan: gh --body-file/--input call sites outside the audited list" "unaudited=[$GH_UNAUDITED] scanned=[$GH_SCAN]"
+tests/bin/fix-gh-native-path.sh	body	179	fi
+tests/bin/fix-gh-native-path.sh	body	180	case_end
+tests/bin/fix-gh-native-path.sh	body	181	
+tests/bin/fix-gh-native-path.sh	body	182	echo ""
+tests/bin/fix-gh-native-path.sh	body	183	echo "fix-gh-native-path: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
+tests/bin/fix-gh-native-path.sh	body	184	[ "$FAIL" -eq 0 ]
+tests/bin/get-config-var-checkout-only.sh	verdict=partial-orphan	unit=case	rc=0	removed=rtk-cmd-uses-only-its-own-checkout-copy
+tests/bin/get-config-var-checkout-only.sh	body	1	#!/usr/bin/env bash
+tests/bin/get-config-var-checkout-only.sh	body	2	# tests/bin/get-config-var-checkout-only.sh
+tests/bin/get-config-var-checkout-only.sh	body	3	# Tests: bin/rtk-cmd, bin/lib/codex-timeout.sh
+tests/bin/get-config-var-checkout-only.sh	body	4	# Tags: get-config-var, rtk, codex, path-fallback, checkout-root, scope:issue-specific, TL2
+tests/bin/get-config-var-checkout-only.sh	body	5	# #2561: both callers read config only through their own checkout's bin/get-config-var.
+tests/bin/get-config-var-checkout-only.sh	body	6	# A PATH-first fake get-config-var (it prints a sentinel value, records the call and says
+tests/bin/get-config-var-checkout-only.sh	body	7	# "on") must never be used. Without the checkout copy the caller takes its default and
+tests/bin/get-config-var-checkout-only.sh	body	8	# writes one warning line to stderr; with it, the copy's answer is used silently.
+tests/bin/get-config-var-checkout-only.sh	body	9	
+tests/bin/get-config-var-checkout-only.sh	body	10	set -uo pipefail
+tests/bin/get-config-var-checkout-only.sh	body	11	
+tests/bin/get-config-var-checkout-only.sh	body	12	SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+tests/bin/get-config-var-checkout-only.sh	body	13	# shellcheck source=tests/lib/harness.sh
+tests/bin/get-config-var-checkout-only.sh	body	14	source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+tests/bin/get-config-var-checkout-only.sh	body	15	
+tests/bin/get-config-var-checkout-only.sh	body	16	TMP_ROOT="$(make_tmp)"
+tests/bin/get-config-var-checkout-only.sh	body	17	[[ -n "$TMP_ROOT" && -d "$TMP_ROOT" ]] || { echo "cannot create a temp root" >&2; exit 1; }
+tests/bin/get-config-var-checkout-only.sh	body	18	readonly TMP_ROOT
+tests/bin/get-config-var-checkout-only.sh	body	19	trap 'rm -rf "$TMP_ROOT"' EXIT
+tests/bin/get-config-var-checkout-only.sh	body	20	harness_isolate "$TMP_ROOT/iso"
+tests/bin/get-config-var-checkout-only.sh	body	21	unset RTK RTK_BIN CODEX_TIMEOUT_SECS
+tests/bin/get-config-var-checkout-only.sh	body	22	
+tests/bin/get-config-var-checkout-only.sh	body	23	# PATH-first fakes: get-config-var answers 4242 / exit 1 (= RTK on) and leaves a marker;
+tests/bin/get-config-var-checkout-only.sh	body	24	# rtk prints RTK-FAKE plus its argv.
+tests/bin/get-config-var-checkout-only.sh	body	25	FAKE="$TMP_ROOT/fake-path"
+tests/bin/get-config-var-checkout-only.sh	body	26	mkdir -p "$FAKE"
+tests/bin/get-config-var-checkout-only.sh	body	27	printf '#!/usr/bin/env bash\ntouch "%s/path-gcv-called"\nprintf "4242\\n"\nexit 1\n' "$TMP_ROOT" >"$FAKE/get-config-var"
+tests/bin/get-config-var-checkout-only.sh	body	28	printf '#!/usr/bin/env bash\nprintf "RTK-FAKE %%s\\n" "$*"\n' >"$FAKE/rtk"
+tests/bin/get-config-var-checkout-only.sh	body	29	chmod +x "$FAKE/get-config-var" "$FAKE/rtk"
+tests/bin/get-config-var-checkout-only.sh	body	30	
+tests/bin/get-config-var-checkout-only.sh	body	31	# make_checkout <label> <absent|present> — a checkout holding the two callers; "present"
+tests/bin/get-config-var-checkout-only.sh	body	32	# adds a bin/get-config-var that answers 1234 (silent for --is-off) / exit 1. Prints the path.
+tests/bin/get-config-var-checkout-only.sh	body	33	make_checkout() {
+tests/bin/get-config-var-checkout-only.sh	body	34	  local co="$TMP_ROOT/co-$1"
+tests/bin/get-config-var-checkout-only.sh	body	35	  mkdir -p "$co/bin/lib"
+tests/bin/get-config-var-checkout-only.sh	body	36	  cp "$SCRIPT_CHECKOUT_ROOT/bin/rtk-cmd" "$co/bin/rtk-cmd"
+tests/bin/get-config-var-checkout-only.sh	body	37	  cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/codex-timeout.sh" "$co/bin/lib/codex-timeout.sh"
+tests/bin/get-config-var-checkout-only.sh	body	38	  if [ "$2" = present ]; then
+tests/bin/get-config-var-checkout-only.sh	body	39	    printf '#!/usr/bin/env bash\n[ "$1" = --is-off ] || printf "1234\\n"\nexit 1\n' >"$co/bin/get-config-var"
+tests/bin/get-config-var-checkout-only.sh	body	40	    chmod +x "$co/bin/get-config-var"
+tests/bin/get-config-var-checkout-only.sh	body	41	  fi
+tests/bin/get-config-var-checkout-only.sh	body	42	  printf '%s' "$co"
+tests/bin/get-config-var-checkout-only.sh	body	43	}
+tests/bin/get-config-var-checkout-only.sh	body	44	
+tests/bin/get-config-var-checkout-only.sh	body	45	# check_row <label> <rc> <stdout> <want_stdout> <stderr_file> <want_warn_lines>
+tests/bin/get-config-var-checkout-only.sh	body	46	# Both the value-present path and the fallback path must exit normally (rc 0): a caller that
+tests/bin/get-config-var-checkout-only.sh	body	47	# dies after printing the right text would otherwise pass.
+tests/bin/get-config-var-checkout-only.sh	body	48	check_row() {
+tests/bin/get-config-var-checkout-only.sh	body	49	  local label="$1" rc="$2" out="$3" want="$4" errf="$5" want_warn="$6" lines
+tests/bin/get-config-var-checkout-only.sh	body	50	  lines="$(grep -c . "$errf")"
+tests/bin/get-config-var-checkout-only.sh	body	51	  if [ -e "$TMP_ROOT/path-gcv-called" ]; then
+tests/bin/get-config-var-checkout-only.sh	body	52	    fail "$label" "the PATH get-config-var was called"
+tests/bin/get-config-var-checkout-only.sh	body	53	  elif [ "$rc" -ne 0 ]; then
+tests/bin/get-config-var-checkout-only.sh	body	54	    fail "$label" "exit code $rc, want 0: $(cat "$errf")"
+tests/bin/get-config-var-checkout-only.sh	body	55	  elif [ "$out" != "$want" ]; then
+tests/bin/get-config-var-checkout-only.sh	body	56	    fail "$label" "stdout=$(printf '%q' "$out") want=$(printf '%q' "$want")"
+tests/bin/get-config-var-checkout-only.sh	body	57	  elif [ "$lines" != "$want_warn" ]; then
+tests/bin/get-config-var-checkout-only.sh	body	58	    fail "$label" "stderr has $lines line(s), want $want_warn: $(cat "$errf")"
+tests/bin/get-config-var-checkout-only.sh	body	59	  elif [ "$want_warn" = 1 ] && ! grep -q 'get-config-var' "$errf"; then
+tests/bin/get-config-var-checkout-only.sh	body	60	    fail "$label" "the warning does not name get-config-var: $(cat "$errf")"
+tests/bin/get-config-var-checkout-only.sh	body	61	  else
+tests/bin/get-config-var-checkout-only.sh	body	62	    pass "$label"
+tests/bin/get-config-var-checkout-only.sh	body	63	  fi
+tests/bin/get-config-var-checkout-only.sh	body	64	  rm -f "$TMP_ROOT/path-gcv-called"
+tests/bin/get-config-var-checkout-only.sh	body	65	}
+tests/bin/get-config-var-checkout-only.sh	body	66	
+tests/bin/get-config-var-checkout-only.sh	body	67	# Rows: copy|want_stdout|want_warn_lines
+tests/bin/get-config-var-checkout-only.sh	body	68	RTK_ROWS='absent|hi|1
+tests/bin/get-config-var-checkout-only.sh	body	69	present|RTK-FAKE echo hi|0'
+tests/bin/get-config-var-checkout-only.sh	body	70	CODEX_ROWS='absent|900|1
+tests/bin/get-config-var-checkout-only.sh	body	71	present|1234|0'
+tests/bin/get-config-var-checkout-only.sh	body	72	
+tests/bin/get-config-var-checkout-only.sh	body	73	
+tests/bin/get-config-var-checkout-only.sh	body	74	case_begin "codex-timeout-uses-only-its-own-checkout-copy" "bin/lib/codex-timeout.sh"
+tests/bin/get-config-var-checkout-only.sh	body	75	while IFS='|' read -r copy want warn; do
+tests/bin/get-config-var-checkout-only.sh	body	76	  co="$(make_checkout "codex-$copy" "$copy")"
+tests/bin/get-config-var-checkout-only.sh	body	77	  rc=0
+tests/bin/get-config-var-checkout-only.sh	body	78	  out="$(PATH="$FAKE:$PATH" run_with_timeout 20 bash -c 'source "$1"; codex_timeout_resolve' _ "$co/bin/lib/codex-timeout.sh" 2>"$TMP_ROOT/err")" || rc=$?
+tests/bin/get-config-var-checkout-only.sh	body	79	  check_row "codex-timeout[$copy]: own checkout copy only, PATH fake unused" "$rc" "$out" "$want" "$TMP_ROOT/err" "$warn"
+tests/bin/get-config-var-checkout-only.sh	body	80	done <<<"$CODEX_ROWS"
+tests/bin/get-config-var-checkout-only.sh	body	81	case_end
+tests/bin/get-config-var-checkout-only.sh	body	82	
+tests/bin/get-config-var-checkout-only.sh	body	83	echo ""
+tests/bin/get-config-var-checkout-only.sh	body	84	echo "Results: $PASS passed, $FAIL failed"
+tests/bin/get-config-var-checkout-only.sh	body	85	[ "$FAIL" -eq 0 ]

@@ -237,6 +237,7 @@
     {"file":"tests/hooks/feature-2731-conv-lang-reinject.js","allow":[],"forms":["agents-root-subpath"],"reason":"compares settings.json hook commands, which name a hook of the agents main worktree"},
     {"file":"tests/hooks/feature-2731-r2-show-plan-link.js","allow":[],"forms":["agents-root-subpath"],"reason":"its fixtures quote the command line the hook prints for the user, which names a tool of the agents main worktree"},
     {"file":"tests/bin/feature-2452-relative-bin-invocations.sh","allow":[],"forms":["agents-root-subpath"],"reason":"its fixtures quote skill text, which names a tool of the agents main worktree"},
+    {"file":"tests/bin/feature-2502-bash-golden/regen.sh","allow":[],"forms":["own-script-root-form"],"reason":"run by hand, not sourced: it assigns the root that the record and registry helpers it sources read"},
     {"file":"tests/bin/feature-refactor-prompts-extract.sh","allow":[],"forms":["agents-root-subpath"],"reason":"moves aside the keyword source files the extractor reads under the agents main worktree"},
     {"file":"tests/install/cc-instructions-loaded-registration.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
     {"file":"tests/install/install-path-exposed-commands.sh","allow":[],"forms":["agents-root-subpath"],"reason":"its fixtures quote skill script text, which names a tool of the agents main worktree"},

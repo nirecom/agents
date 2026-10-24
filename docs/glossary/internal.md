@@ -68,3 +68,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 - **Definition**: The main worktree of the repository a tool operates on, which need not be the agents repository; an ordinary variable, never an environment variable.
 - **Related**: [architecture/claude-code/root-names.md](../architecture/claude-code/root-names.md)
+
+### test case reader
+- **Definition**: The per-language part that reads one test file and returns one record per case (name, target, line range, malformed reason); the sweep, the checks, and the retire judgment get these records through the common window, which adds each case's deps.
+- **Related**: [architecture/claude-code/test-language-registry.md](../architecture/claude-code/test-language-registry.md)

@@ -186,6 +186,39 @@ for (const { name, open, close } of uncertainCases) {
   });
 }
 
+// #2712: a TAB, CR or LF that reaches a name or a target would split the TSV, so the reader
+// reports grammar at the begin line itself (LF arrives through a multi-line template).
+const delimiterCases = [
+  { name: "a TAB in the name is grammar", call: [begin("al\tpha", "bin/a.sh")] },
+  { name: "a CR in the name is grammar", call: [begin("al\rpha", "bin/a.sh")] },
+  { name: "an LF in a template name is grammar", call: [`${BEGIN}(${BACKTICK}al`, `pha${BACKTICK}, "bin/a.sh");`] },
+  { name: "a TAB in the target is grammar", call: [begin("alpha", "bin/a\t.sh")] },
+  { name: "a CR in the target is grammar", call: [begin("alpha", "bin/a\r.sh")] },
+  { name: "an LF in a template target is grammar", call: [`${BEGIN}("alpha", ${BACKTICK}bin/a`, `.sh${BACKTICK});`] },
+];
+for (const { name, call } of delimiterCases) {
+  check(name, (n) => assertMalformed(n, sample("delimiter.js", ["check(0);", ...call, END]), "grammar", 2));
+}
+// Review F2: an escape sequence evaluates to the same TAB, CR or LF as the raw character.
+const escapeCases = [
+  { name: "a backslash-t escape in the name is grammar", call: begin("al\\tpha", "bin/a.sh") },
+  { name: "a backslash-r escape in the name is grammar", call: begin("al\\rpha", "bin/a.sh") },
+  { name: "a backslash-n escape in the name is grammar", call: begin("al\\npha", "bin/a.sh") },
+  { name: "a backslash-x09 escape in the name is grammar", call: begin("al\\x09pha", "bin/a.sh") },
+  { name: "a backslash-u000a escape in the name is grammar", call: begin("al\\u000apha", "bin/a.sh") },
+  { name: "a backslash-u{d} escape in the name is grammar", call: begin("al\\u{d}pha", "bin/a.sh") },
+  { name: "a backslash-x0d escape in the target is grammar", call: begin("alpha", "bin/a\\x0d.sh") },
+];
+for (const { name, call } of escapeCases) {
+  check(name, (n) => assertMalformed(n, sample("escape.js", ["check(0);", call, END]), "grammar", 2));
+}
+// Accept: an escaped backslash is the two characters `\t`, not a TAB.
+check("an escaped backslash-t in the name is not a delimiter", (n) =>
+  assertRecords(n, sample("escaped-t.js", [begin("al\\\\tpha", "bin/a.sh"), END]), "conforming", [["CASE", "al\\tpha", "bin/a.sh", "1", "2", "", ""]]));
+// A non-delimiter escape such as `\x41` is not grammar; the reader keeps it non-constant.
+check("a backslash-x41 escape in the name is constant, not grammar", (n) =>
+  assertMalformed(n, sample("escape-x41.js", ["check(0);", begin("al\\x41pha", "bin/a.sh"), END]), "constant", 2));
+
 check("the file under read is never executed", (n) => {
   const sentinel = path.join(TMP, "executed.flag");
   const lines = [`require("fs").writeFileSync(${JSON.stringify(sentinel)}, "ran");`, begin("alpha", "bin/a.sh"), END];
