@@ -177,7 +177,10 @@ check "P10e: code diff and an artifact moved together are both named, code first
     "$(pred eval '{"runSet":{"trigger_input_keys.TR5":"iv-old"},"fSet":{"artifact_keys.intent":"h-intent-2"}}')"
 check "P13: code side — a detail edit is caught by the artifact match" \
     "approve=false;kind=code-side;refusal=inputs-moved;moved=detail" \
-    "$(pred eval '{"kind":"code","fSet":{"artifact_keys.detail":"h-detail-2"}}')"
+    "$(pred eval '{"kind":"code","runDel":["trigger_input_keys"],"fSet":{"artifact_keys.detail":"h-detail-2"}}')"
+check "P13b: code side now null but the run pinned a diff key — the code diff counts as moved" \
+    "approve=false;kind=code-side;refusal=inputs-moved;moved=code diff (input_version)" \
+    "$(pred eval '{"kind":"code"}')"
 case_end
 
 case_begin "row9-approve" "hooks/lib/null-freshness.js"

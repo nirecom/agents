@@ -91,6 +91,10 @@ function fallbackRaw(sid, firstLine, markerPath, offsetSec = 2) {
   const t = fs.statSync(markerPath).mtimeMs / 1000 + offsetSec;
   fs.utimesSync(p, t, t);
 }
+// ownWsid(wsid, sid) — the plan context of wsid records the CC session sid, so the resolver trusts wsid.
+function ownWsid(wsid, sid) {
+  fs.writeFileSync(path.join(PLANS, `${wsid}-context.md`), `# context\nsession-id: ${sid}\n`);
+}
 // glossary(sid, d) — the glossary_check record a restore-to-complete crosses (#2529).
 function glossary(sid, d) {
   const env = Object.assign({}, process.env, { CLAUDE_PROJECT_DIR: d });
@@ -111,11 +115,12 @@ function send(sid, d, wsid) {
   return `${r.stdout || ""}${r.stderr || ""}`;
 }
 const rawState = (sid) => JSON.parse(fs.readFileSync(path.join(STATE, `${sid}.json`), "utf8"));
-const status = (sid) => {
+const reviewTests = (sid) => {
   const { readState } = require(path.join(ROOT, "hooks", "workflow-state"));
   const s = readState(sid);
-  return ((s && s.steps && s.steps.review_tests) || {}).status;
+  return (s && s.steps && s.steps.review_tests) || {};
 };
+const status = (sid) => reviewTests(sid).status;
 // recoverySources(sid) -> every `source` value carried by the recovery batch's events.
 const recoverySources = (sid) => (rawState(sid).events || [])
   .filter((e) => e && /^accept-.*review-tests$/.test(String(e.origin || "")))
@@ -152,6 +157,7 @@ test("T-RT3: terminal rc 3 + a newer fallback-raw whose verdict is NEEDS_REVISIO
   const d = repo(wsid);
   const sid = sidOf("f3");
   seed(sid);
+  ownWsid(wsid, sid);
   fallbackRaw(wsid, "NEEDS_REVISION", marker(sid, "terminal", "3", fp(d)));
   const out = send(sid, d, wsid);
   assert.strictEqual(status(sid), "complete", `restored to complete (${out})`);
@@ -186,11 +192,127 @@ test("T-RT9: the first fallback-raw found (wsid, APPROVED) is the only one judge
   const d = repo(wsid);
   const sid = sidOf("f9");
   seed(sid);
+  ownWsid(wsid, sid);
   const m = marker(sid, "terminal", "3", fp(d));
   fallbackRaw(wsid, "APPROVED", m);
   fallbackRaw(sid, "NEEDS_REVISION", m);
   const out = send(sid, d, wsid);
   assert.strictEqual(status(sid), "in_progress", `not recovered (${out})`);
+});
+test("T-RT10: a wsid whose context does not record this CC session is another session's — its fallback-raw is not used", () => {
+  const wsid = `${sidOf("w10")}wf`;
+  const d = repo(wsid);
+  const sid = sidOf("f10");
+  seed(sid);
+  fs.writeFileSync(path.join(PLANS, `${wsid}-context.md`), "# context\n\nsession: some-other-session\n");
+  const m = marker(sid, "terminal", "3", fp(d));
+  fallbackRaw(wsid, "NEEDS_REVISION", m);
+  const out = send(sid, d, wsid);
+  assert.strictEqual(status(sid), "in_progress", `foreign NEEDS_REVISION ignored (${out})`);
+});
+test("T-RT10: with a foreign wsid, the CC-id fallback-raw is judged instead", () => {
+  const wsid = `${sidOf("w10b")}wf`;
+  const d = repo(wsid);
+  const sid = sidOf("f10b");
+  seed(sid);
+  const m = marker(sid, "terminal", "3", fp(d));
+  fallbackRaw(wsid, "APPROVED", m);
+  fallbackRaw(sid, "NEEDS_REVISION", m);
+  const out = send(sid, d, wsid);
+  assert.strictEqual(status(sid), "complete", `restored to complete (${out})`);
+});
+// approvalTrace(sid) -> every recorded trace of an acceptance: the reason, the recovery source, the recovery events.
+const approvalTrace = (sid) => {
+  const rt = reviewTests(sid);
+  return JSON.stringify({ reason: rt.warnings_accepted_reason || null, source: rt.recovery_source || null, recovery: recoverySources(sid) });
+};
+test("T-RT10c (C1): a foreign wsid whose context holds only a prefix-truncated CC id does not own it -> its fallback-raw is ignored", () => {
+  const wsid = `${sidOf("w10c")}wf`;
+  const d = repo(wsid);
+  const sid = sidOf("f10c");
+  seed(sid);
+  fs.writeFileSync(path.join(PLANS, `${wsid}-context.md`), `# context\n\nsession: ${sid.slice(0, -2)}\nprefix: ${sid.slice(0, 4)}\n`);
+  const m = marker(sid, "terminal", "3", fp(d));
+  fallbackRaw(wsid, "NEEDS_REVISION", m);
+  const before = approvalTrace(sid);
+  const out = send(sid, d, wsid);
+  assert.strictEqual(status(sid), "in_progress", `partial id is not ownership (${out})`);
+  assert.strictEqual(approvalTrace(sid), before, "no approval event is added");
+  assert.strictEqual(recoverySources(sid), "", "no recovery event exists");
+});
+test("T-RT10d: a foreign wsid whose context holds a longer id or only a quoted mention of the CC id does not own it -> its fallback-raw is ignored", () => {
+  const bodies = [
+    ["longer", (sid) => `# context\nsession-id: ${sid}-extra\n`],
+    ["quoted", (sid) => `# context\n> was session-id: ${sid} earlier\nnote: ${sid}\n`],
+  ];
+  for (const [label, body] of bodies) {
+    const wsid = `${sidOf(`w10d${label}`)}wf`;
+    const d = repo(wsid);
+    const sid = sidOf(`f10d${label}`);
+    seed(sid);
+    fs.writeFileSync(path.join(PLANS, `${wsid}-context.md`), body(sid));
+    const m = marker(sid, "terminal", "3", fp(d));
+    fallbackRaw(wsid, "NEEDS_REVISION", m);
+    const before = approvalTrace(sid);
+    const out = send(sid, d, wsid);
+    assert.strictEqual(status(sid), "in_progress", `${label}: not ownership (${out})`);
+    assert.strictEqual(approvalTrace(sid), before, `${label}: no approval event is added`);
+    assert.strictEqual(recoverySources(sid), "", `${label}: no recovery event exists`);
+  }
+});
+caseEnd();
+
+caseBegin("rt-accept-replay-is-inert", "hooks/workflow-state/state-io/review-tests.js");
+test("T-RT11 (C2): re-sending the ACCEPTED sentinel after a recovery changes neither state nor events and revives no marker", () => {
+  const scenes = [
+    ["fallback-3", (sid, d, wsid) => fallbackRaw(wsid, "NEEDS_REVISION", marker(sid, "terminal", "3", fp(d)))],
+    ["continuing-1", (sid, d) => marker(sid, "continuing", "1", fp(d))],
+  ];
+  for (const [label, arrange] of scenes) {
+    const wsid = `${sidOf("w11")}wf`;
+    const d = repo(wsid);
+    const sid = sidOf(`r11${label.replace(/\W/g, "")}`);
+    seed(sid);
+    ownWsid(wsid, sid);
+    arrange(sid, d, wsid);
+    const out1 = send(sid, d, wsid);
+    assert.strictEqual(status(sid), "complete", `${label}: recovered (${out1})`);
+    const after1 = rawState(sid);
+    const after1RT = reviewTests(sid);
+    const out2 = send(sid, d, wsid);
+    assert.strictEqual(status(sid), "complete", `${label}: still complete (${out2})`);
+    // send() re-records the glossary_check itself (test helper), so those events are not the hook's.
+    const hookEvents = (s) => (s.events || []).filter((e) => e && e.origin !== "check-glossary-drift");
+    assert.deepStrictEqual(hookEvents(rawState(sid)), hookEvents(after1), `${label}: no event added by the replay`);
+    assert.deepStrictEqual(reviewTests(sid), after1RT, `${label}: review_tests unchanged`);
+    for (const k of ["continuing", "terminal"]) {
+      assert.ok(!fs.existsSync(path.join(STATE, `${sid}.control`, `test-review-${k}.txt`)), `${label}: no ${k} marker revived`);
+    }
+  }
+});
+caseEnd();
+
+caseBegin("rt-refusal-writes-nothing", "hooks/workflow-state/state-io/review-tests.js");
+test("T-RT12 (C3): an invalid fallback-raw or a stale marker writes no approval reason and no recovery event", () => {
+  const scenes = [
+    ["missing", null, 0, false], ["approved", "APPROVED", 2, false], ["inputerror", "INPUT_ERROR tests/x.sh", 2, false],
+    ["empty", "", 2, false], ["garbage", "LGTM ship it", 2, false], ["older", "NEEDS_REVISION", -60, false],
+    ["stale", "NEEDS_REVISION", 2, true],
+  ];
+  for (const [label, first, offset, moved] of scenes) {
+    const d = repo();
+    const sid = sidOf(`x12${label}`);
+    seed(sid);
+    const m = marker(sid, "terminal", "3", fp(d));
+    if (first !== null) fallbackRaw(sid, first, m, offset);
+    if (moved) stage(d, "tests/x.sh", "echo x changed after the review");
+    const before = approvalTrace(sid);
+    const out = send(sid, d);
+    assert.strictEqual(status(sid), "in_progress", `${label}: not recovered (${out})`);
+    assert.strictEqual(approvalTrace(sid), before, `${label}: no approval reason / recovery event written`);
+    assert.strictEqual(reviewTests(sid).warnings_accepted_reason == null, true, `${label}: no acceptance reason`);
+    assert.strictEqual(recoverySources(sid), "", `${label}: no recovery event`);
+  }
 });
 caseEnd();
 

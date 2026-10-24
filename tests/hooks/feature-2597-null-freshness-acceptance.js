@@ -133,15 +133,17 @@ test("P-2534a: zero comparands + an accepted WARN -> NO_ARTIFACT_COMPARAND (the 
   assert.strictEqual(r.approve, false);
   assert.strictEqual(r.refusal, code);
 });
+// A run audited while the code side was also uncomputable stored no TR5 trigger key.
+const NO_KEY = { trigger_input_keys: { TR5: null } };
 test("P-2534b: one comparand (code side null, only intent non-null and matching) + CONTINUE -> approve", () => {
   const ak = { intent: "h-intent", outline: null, detail: null };
-  const r = evaluate({ freshness: codeSide(ak), tr5Run: run("CONTINUE", { artifact_keys: ak }) });
+  const r = evaluate({ freshness: codeSide(ak), tr5Run: run("CONTINUE", Object.assign({ artifact_keys: ak }, NO_KEY)) });
   assert.strictEqual(r.approve, true, JSON.stringify(r));
 });
 test("P-2534b: one comparand (only intent non-null) + an accepted WARN -> approve", () => {
   const ak = { intent: "h-intent", outline: null, detail: null };
-  const r = evaluate({ freshness: codeSide(ak), tr5Run: run("WARN", { artifact_keys: ak }),
-    overrides: [acceptance({ artifact_keys: ak })] });
+  const r = evaluate({ freshness: codeSide(ak), tr5Run: run("WARN", Object.assign({ artifact_keys: ak }, NO_KEY)),
+    overrides: [acceptance({ artifact_keys: ak, trigger_key: null })] });
   assert.strictEqual(r.approve, true, JSON.stringify(r));
   assert.notStrictEqual(r.refusal, NF.REFUSAL.NO_ARTIFACT_COMPARAND);
 });
@@ -160,9 +162,18 @@ test("P-A1: WARN + a valid acceptance + matching artifacts -> approve with accep
   assert.deepStrictEqual(r.accepted, { run_id: "run-0011", verdict: "WARN" });
 });
 test("P-A1: BLOCK + a valid BLOCK acceptance -> approve (both reviewed verdicts share the path)", () => {
-  const r = evaluate({ freshness: codeSide(), tr5Run: run("BLOCK"), overrides: [acceptance({ verdict: "BLOCK" })] });
+  const r = evaluate({ freshness: codeSide(), tr5Run: run("BLOCK", NO_KEY),
+    overrides: [acceptance({ verdict: "BLOCK", trigger_key: null })] });
   assert.strictEqual(r.approve, true, JSON.stringify(r));
   assert.deepStrictEqual(r.accepted, { run_id: "run-0011", verdict: "BLOCK" });
+});
+test("P-A1b: code side now null but the run stored a diff key + a valid acceptance -> INPUTS_MOVED (code diff)", () => {
+  for (const verdict of ["WARN", "BLOCK"]) {
+    const r = evaluate({ freshness: codeSide(), tr5Run: run(verdict), overrides: [acceptance({ verdict })] });
+    assert.strictEqual(r.approve, false, JSON.stringify(r));
+    assert.strictEqual(r.refusal, NF.REFUSAL.INPUTS_MOVED);
+    assert.ok(r.moved.includes("code diff (input_version)"), JSON.stringify(r.moved));
+  }
 });
 test("P-A1: no acceptance -> WARN stays refused (P5e unchanged)", () => {
   const r = evaluate({ freshness: artifactSide(), tr5Run: run("WARN") });
