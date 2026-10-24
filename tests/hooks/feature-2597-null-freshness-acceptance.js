@@ -140,12 +140,13 @@ test("P-2534b: one comparand (code side null, only intent non-null and matching)
   const r = evaluate({ freshness: codeSide(ak), tr5Run: run("CONTINUE", Object.assign({ artifact_keys: ak }, NO_KEY)) });
   assert.strictEqual(r.approve, true, JSON.stringify(r));
 });
-test("P-2534b: one comparand (only intent non-null) + an accepted WARN -> approve", () => {
+test("P-2534b: one comparand (only intent non-null) + an accepted WARN, no stored trigger key -> NO_TRIGGER_KEY", () => {
   const ak = { intent: "h-intent", outline: null, detail: null };
   const r = evaluate({ freshness: codeSide(ak), tr5Run: run("WARN", Object.assign({ artifact_keys: ak }, NO_KEY)),
     overrides: [acceptance({ artifact_keys: ak, trigger_key: null })] });
-  assert.strictEqual(r.approve, true, JSON.stringify(r));
-  assert.notStrictEqual(r.refusal, NF.REFUSAL.NO_ARTIFACT_COMPARAND);
+  assert.strictEqual(r.approve, false, JSON.stringify(r));
+  assert.strictEqual(r.refusal, refusalCode("NO_TRIGGER_KEY"));
+  assert.ok(!r.accepted, JSON.stringify(r));
 });
 test("P-2534c: artifact side has one comparand (input_version) though every artifact is null -> approve", () => {
   // Not a zero-comparand state: the matching trigger key compares the code side (detail.md 2-2).
@@ -161,11 +162,29 @@ test("P-A1: WARN + a valid acceptance + matching artifacts -> approve with accep
   assert.strictEqual(r.approve, true, JSON.stringify(r));
   assert.deepStrictEqual(r.accepted, { run_id: "run-0011", verdict: "WARN" });
 });
-test("P-A1: BLOCK + a valid BLOCK acceptance -> approve (both reviewed verdicts share the path)", () => {
-  const r = evaluate({ freshness: codeSide(), tr5Run: run("BLOCK", NO_KEY),
-    overrides: [acceptance({ verdict: "BLOCK", trigger_key: null })] });
+test("P-A1: BLOCK + a valid BLOCK acceptance on the artifact side -> approve (both reviewed verdicts share the path)", () => {
+  const r = evaluate({ freshness: artifactSide(), tr5Run: run("BLOCK"), overrides: [acceptance({ verdict: "BLOCK" })] });
   assert.strictEqual(r.approve, true, JSON.stringify(r));
   assert.deepStrictEqual(r.accepted, { run_id: "run-0011", verdict: "BLOCK" });
+});
+test("P-A1c: code side + an accepted WARN / BLOCK with no stored trigger key -> NO_TRIGGER_KEY (fail-closed)", () => {
+  for (const verdict of ["WARN", "BLOCK"]) {
+    for (const stored of [{ TR5: null }, { TR5: "" }, {}, { TR5: 42 }]) {
+      const r = evaluate({ freshness: codeSide(), tr5Run: run(verdict, { trigger_input_keys: stored }),
+        overrides: [acceptance({ verdict, trigger_key: null })] });
+      const tag = `${verdict} ${JSON.stringify(stored)}: ${JSON.stringify(r)}`;
+      assert.strictEqual(r.approve, false, tag);
+      // An empty-string stored key never equals the acceptance's pinned null, so the record is not matched first.
+      const expected = stored.TR5 === "" ? "VERDICT_NOT_ALLOWED" : "NO_TRIGGER_KEY";
+      assert.strictEqual(r.refusal, refusalCode(expected), tag);
+      assert.ok(!r.accepted, tag);
+      if (expected === "NO_TRIGGER_KEY") {
+        const msg = describe(r);
+        assert.ok(msg.includes("no trigger key"), `${tag}: ${msg}`);
+        assert.ok(!/inputs moved|recovery was refused/.test(msg), `a dedicated message: ${msg}`);
+      }
+    }
+  }
 });
 test("P-A1b: code side now null but the run stored a diff key + a valid acceptance -> INPUTS_MOVED (code diff)", () => {
   for (const verdict of ["WARN", "BLOCK"]) {
@@ -173,6 +192,21 @@ test("P-A1b: code side now null but the run stored a diff key + a valid acceptan
     assert.strictEqual(r.approve, false, JSON.stringify(r));
     assert.strictEqual(r.refusal, NF.REFUSAL.INPUTS_MOVED);
     assert.ok(r.moved.includes("code diff (input_version)"), JSON.stringify(r.moved));
+  }
+});
+test("P-A1b: code side now null but the run stored a diff key, verdict CONTINUE (no acceptance) -> INPUTS_MOVED (code diff)", () => {
+  const r = evaluate({ freshness: codeSide(), tr5Run: run("CONTINUE") });
+  assert.strictEqual(r.approve, false, JSON.stringify(r));
+  assert.strictEqual(r.refusal, NF.REFUSAL.INPUTS_MOVED);
+  assert.ok(r.moved.includes("code diff (input_version)"), JSON.stringify(r.moved));
+});
+test("P-A1b: code side null, no stored trigger key (null / empty / unset / non-string), CONTINUE, intent hash moved -> INPUTS_MOVED", () => {
+  const moved = { intent: "h-intent-edited", outline: null, detail: "h-detail" };
+  for (const stored of [{ TR5: null }, { TR5: "" }, {}, { TR5: 42 }]) {
+    const r = evaluate({ freshness: codeSide(moved), tr5Run: run("CONTINUE", { trigger_input_keys: stored }) });
+    assert.strictEqual(r.approve, false, `${JSON.stringify(stored)}: ${JSON.stringify(r)}`);
+    assert.strictEqual(r.refusal, NF.REFUSAL.INPUTS_MOVED, JSON.stringify(stored));
+    assert.ok(r.moved.includes("intent"), JSON.stringify(r.moved));
   }
 });
 test("P-A1: no acceptance -> WARN stays refused (P5e unchanged)", () => {
