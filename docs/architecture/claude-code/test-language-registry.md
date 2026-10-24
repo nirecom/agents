@@ -121,7 +121,7 @@ An analyzer-backed `deps` op checks the analyzer's case order against those glob
 | `skip-reason` | one reason word when the file must not be embedded (bash: `narrow-harness`, a sourced `tests/lib/*harness*.sh` that is not the entry's `helperLibrary`); the words are listed in each `embed-rules/<lang>.md` |
 | `result-summary <rc> <stdout-file>` | `<pass\|fail\|skip>\t<passed>\t<failed>`; counts empty when the output has none |
 | `syntax-check` | nothing; rc 0 when the file parses, 1 with the reason on stderr otherwise. Retire's per-case cut runs it on the rewrite, which keeps the original's extension |
-| `case-count` | the number of top-level case units; rc 1 when there is none (see [test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)) |
+| `case-count` | the number of top-level case units; rc 1 when there is none, and always for bash and js (see [test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md)) |
 
 ## test case reader
 

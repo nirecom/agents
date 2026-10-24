@@ -17,6 +17,7 @@ const CALL_LOOKING = /^\s*case(?:Begin|End)\(/;
 // The "Case target path rule" section of docs/architecture/claude-code/test-language-registry.md owns TARGET_OK.
 const TARGET_OK = /^[A-Za-z0-9._/-]+$/;
 const RECORD_DELIMITER = /[\t\r\n]/;
+const ESCAPE = /\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|u\{([0-9A-Fa-f]+)\}|([\s\S]?))/g;
 
 // Thrown to end the scan with its verdict; scanLines catches it.
 class Verdict {
@@ -32,11 +33,18 @@ function finish(state, line, reason, cases) {
   throw new Verdict(state, line, reason, cases);
 }
 
-// The literal's value, or null when it holds an escape other than a quote or a backslash.
+// The literal's value, or null when it holds an escape other than a quote, a backslash, or one
+// that evaluates to a TAB, CR or LF (`\t`, `\x09`, `\u000a`, `\u{d}` ...), which walk reads as grammar.
 function constantValue(literal) {
-  const body = literal.slice(1, -1);
-  if (/\\/.test(body.replace(/\\[\\"'`]/g, ""))) return null;
-  return body.replace(/\\(.)/g, "$1");
+  let constant = true;
+  const value = literal.slice(1, -1).replace(ESCAPE, (all, hex2, hex4, hexN, ch) => {
+    if (/[\\"'`]/.test(ch || "")) return ch;
+    const code = ch ? { t: 9, r: 13, n: 10 }[ch] : parseInt(hex2 || hex4 || hexN, 16);
+    if (code === 9 || code === 13 || code === 10) return String.fromCharCode(code);
+    constant = false;
+    return all;
+  });
+  return constant ? value : null;
 }
 
 function targetIsValid(target) {
@@ -234,17 +242,6 @@ function walk(lines) {
   finish(cases.length ? "conforming" : "none", "", "", cases);
 }
 
-// The column-0 caseBegin( lines in the code region (block comments and templates skipped as walk does).
-function countBegins(lines) {
-  let n = 0;
-  let stack = [];
-  for (const raw of lines) {
-    if (!stack.length && raw.startsWith("caseBegin(")) n += 1;
-    stack = scanCode(raw, stack);
-  }
-  return n;
-}
-
 // The file's lines: a leading BOM dropped, split on LF or CRLF. Throws when unreadable.
 function readLines(file) {
   const text = fs.readFileSync(file, "utf8");
@@ -263,4 +260,4 @@ function scanLines(lines) {
   throw new Error("js-case-scan: no verdict");
 }
 
-module.exports = { countBegins, readLines, scanCode, scanLines };
+module.exports = { readLines, scanCode, scanLines };

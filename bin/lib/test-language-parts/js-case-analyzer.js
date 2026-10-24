@@ -6,13 +6,13 @@
 //   self-impl <file> <helper>  <line>\t<kind>\t<detail> per top-level counter-init / harness-redef
 //   skip-reason    custom-runner when the file does not require node:test; else nothing
 //   syntax-check   nothing; exit 0 when `node --check` accepts the file, 1 with its reason otherwise
-//   case-count     the count of column-0 caseBegin calls in the code region; exit 1 when none
+//   case-count     nothing; exit 1 for every file: js has no case unit apart from its markers
 // Exit 1: unreadable, a syntax error, not conforming (deps) or no unit (case-count); 2: unknown op.
 // The analysis is an approximation: top-level means column 0 outside every case and region.
 
 const fs = require("fs");
 const { spawnSync } = require("child_process");
-const { countBegins, readLines, scanCode, scanLines } = require("./js-case-scan");
+const { readLines, scanCode, scanLines } = require("./js-case-scan");
 
 const DECL = /^(?:(?:async\s+)?function\s*\*?\s*|(?:const|let|var)\s+|class\s+)([A-Za-z_$][\w$]*)/;
 const FUNC_VALUE = /^(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/;
@@ -126,10 +126,8 @@ function syntaxCheck(file) {
   throw new Error((done.stderr || done.error?.message || `node --check exited ${done.status}`).trim());
 }
 
-function caseCount(lines) {
-  const n = countBegins(lines);
-  if (n === 0) throw new Error("no case unit");
-  return [String(n)];
+function caseCount() {
+  throw new Error("no case unit");
 }
 
 const OPS = {

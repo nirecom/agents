@@ -33,10 +33,10 @@ for _lang in "${LANGS[@]}"; do
   has "$_lang block text" "$HK_REASON" "($LREASON) code=MALFORMED_CASE_MARKER"
 done
 # Uncertain nesting is only a WARN for the case-marker check, but an uncertain new file whose
-# header lists two Tests: tokens is not conforming, so #2502 S4-4b counts its cases (0 -> 2) and blocks on that.
+# header lists two Tests: tokens is not conforming, so #2502 S4-4b compares its code lines (0 -> 9) and blocks on that.
 hook_write "$REPO_EDIT" tests/bin/uncertain.js js-uncertain
 assert_eq "js uncertain -> $HK_DECISION" "js uncertain -> block"
-has "js uncertain block text" "$HK_REASON" "(case units 0 -> 2)"
+has "js uncertain block text" "$HK_REASON" "(case count unavailable: no case unit; code lines 0 -> 9)"
 has "js uncertain block text" "$HK_REASON" "code=CASE_ADDED_WITHOUT_MARKERS"
 lacks "js uncertain block text" "$HK_REASON" "code=MALFORMED_CASE_MARKER"
 lacks "js uncertain block text" "$HK_REASON" "code=MISSING_CASE_MARKERS"

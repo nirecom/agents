@@ -70,10 +70,10 @@ A failed op (other than 69) or a row that breaks the contract is `FILE uncertain
 
 ## case-count
 
-`case-count <file>` prints the number of case units at top level (the same units the test case reader marks: bash `case_begin` lines at column 0 outside heredocs, js `caseBegin(` calls at depth 0, pytest top-level tests, pester top-level `Describe` blocks).
+`case-count <file>` prints the number of case units at top level: pytest top-level tests, pester top-level `Describe` blocks — the same units the test case reader marks, counted with or without markers.
 A file with no unit returns 1.
-`bin/lib/test-language-match/case-addition.sh` compares the counts of `HEAD` and the working copy when either one is not conforming, so a case added there is still caught. When this comparison is skipped: [case-marker-gate.md](../case-marker-gate.md).
-The bash count also takes a malformed `case_begin` line, so a broken marker still counts as a unit.
+For bash and js the unit is the marker itself, so a file that is not conforming has no countable unit outside its markers: their `case-count` always returns 1 with no output.
+`bin/lib/test-language-match/case-addition.sh` compares the counts of `HEAD` and the working copy when either one is not conforming, and compares code lines when either count fails, so a case added there is still caught. When this comparison is skipped: [case-marker-gate.md](../case-marker-gate.md).
 
 `crr_read` calls the op inside `$(...)`, and that subshell sees the reader's globals.
 A direct call with no case globals runs the test case reader into locals first, so the check still holds.

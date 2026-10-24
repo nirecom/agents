@@ -1,6 +1,6 @@
 # pester, pytest and js tests without markers (#2502 S4-4b): case-count runs for real (pester's
 # top-level Describe, pytest's module-level test_* / Test*), and code lines take over where it
-# cannot count (js without caseBegin, a pytest syntax error, the stub's pester rc 69).
+# cannot count (js always, a pytest syntax error, the stub's pester rc 69).
 # Sourced by tests/bin/feature-2502-case-addition.sh.
 # shellcheck shell=bash
 # shellcheck disable=SC2016 # fixture lines hold literal $PSScriptRoot text on purpose
@@ -120,6 +120,15 @@ expect_clean "js, a value rewritten"
 raw ca-j-comment "${J_H[@]}" "${J_1[@]}" '// a note on check two' "${J_2[@]}"
 lm tests/bin/foo.js ca-j-comment ca-j-head
 expect_clean "js, a comment line added"
+case_end
+
+case_begin "ca-js-unclosed-marker-less-case-added-uses-code-lines" "bin/lib/test-language-match/case-addition.sh"
+# Review F1: a marker-less check added after an unclosed case adds no marker line, only code lines.
+J_OPEN='caseBegin("one", "hooks/x.js");'
+raw ca-j-open-head "${J_H[@]}" "$J_OPEN" "${J_1[@]}"
+raw ca-j-open-add "${J_H[@]}" "$J_OPEN" "${J_1[@]}" "${J_2[@]}"
+lm tests/bin/foo.js ca-j-open-add ca-j-open-head
+expect_added "js, unclosed case, marker-less check two added" tests/bin/foo.js js "case count unavailable: no case unit; code lines 5 -> 6"
 case_end
 
 J_H1=("${J_H[0]}" '// Tests: hooks/x.js' "${J_H[@]:2}")
