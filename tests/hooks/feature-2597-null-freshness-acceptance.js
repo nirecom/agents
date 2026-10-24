@@ -181,6 +181,7 @@ test("P-A1c: code side + an accepted WARN / BLOCK with no stored trigger key -> 
       if (expected === "NO_TRIGGER_KEY") {
         const msg = describe(r);
         assert.ok(msg.includes("no trigger key"), `${tag}: ${msg}`);
+        assert.ok(/re-issue the USER_VERIFIED sentinel/.test(msg), `names the recovery: ${msg}`);
         assert.ok(!/inputs moved|recovery was refused/.test(msg), `a dedicated message: ${msg}`);
       }
     }
@@ -207,6 +208,12 @@ test("P-A1b: code side null, no stored trigger key (null / empty / unset / non-s
     assert.strictEqual(r.approve, false, `${JSON.stringify(stored)}: ${JSON.stringify(r)}`);
     assert.strictEqual(r.refusal, NF.REFUSAL.INPUTS_MOVED, JSON.stringify(stored));
     assert.ok(r.moved.includes("intent"), JSON.stringify(r.moved));
+  }
+});
+test("P-A1d: code side null, no stored trigger key, CONTINUE, artifacts unchanged -> approve (self-recovery for an always-null code side, #2256/#2400)", () => {
+  for (const stored of [{ TR5: null }, {}]) {
+    const r = evaluate({ freshness: codeSide(), tr5Run: run("CONTINUE", { trigger_input_keys: stored }) });
+    assert.strictEqual(r.approve, true, `${JSON.stringify(stored)}: ${JSON.stringify(r)}`);
   }
 });
 test("P-A1: no acceptance -> WARN stays refused (P5e unchanged)", () => {

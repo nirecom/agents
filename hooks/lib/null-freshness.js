@@ -130,6 +130,8 @@ function evaluateNullFreshnessRecovery({ freshness, tr5Run, laterBlockExists, un
   if (kind === NULL_KIND.CODE_SIDE) {
     if (isNonEmptyString(storedTriggerKey(tr5Run))) moved.push(CODE_DIFF_COMPONENT);
     // An accepted WARN/BLOCK with no code key on either side cannot show the code stayed put.
+    // CONTINUE keeps the artifact-only certification: a repo whose code side is always null
+    // stores no key, and refusing it would re-create the self-recovery deadlock (#2256, #2400).
     else if (accepted) return refuse(REFUSAL.NO_TRIGGER_KEY);
   }
   moved.push(...artifactsMoved);
@@ -173,7 +175,8 @@ function describeNullFreshnessRefusal(result) {
     case REFUSAL.NO_ARTIFACT_BREAKDOWN:
       return `${prefix} and the TR5 run recorded no per-artifact hashes to compare (fail-closed).`;
     case REFUSAL.NO_TRIGGER_KEY:
-      return `${prefix} and the TR5 run recorded no trigger key to compare the code diff against (fail-closed).`;
+      return `${prefix} and the TR5 run recorded no trigger key to compare the code diff against (fail-closed).\n` +
+        "Make the code diff computable (a merge base, a full clone), then re-issue the USER_VERIFIED sentinel to arm a fresh audit.";
     case REFUSAL.NO_ARTIFACT_COMPARAND:
       return `${prefix} and every plan artifact is absent, so nothing is left to prove the inputs unchanged ` +
         "since the TR5 verdict; create the plan artifacts or make the code diff computable (fail-closed).";
