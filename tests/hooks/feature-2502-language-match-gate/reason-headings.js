@@ -2,13 +2,13 @@
 // Tests: hooks/block-case-markers.js
 // Tags: TL2, hooks, test-language-match, block-reason, scope:issue-specific
 // Block-reason headings of the edit-time hook: a language-match HIGH goes under its own heading,
-// never under the case-marker one. The entrypoint feature-2502-language-match-gate.js passes its
+// never under the case-marker one. The entrypoint feature-2502-language-match-gate-existing.js passes its
 // fixture helpers in ({ mkRepo, bashBody, runHook, MB, ME }).
 const assert = require("node:assert");
 const path = require("node:path");
 const { test } = require("node:test");
 
-const CM_HEADING = "[block-case-markers] New test file(s) fail the case-marker gate:";
+const CM_HEADING = "[block-case-markers] Test file(s) fail the test gates:";
 const LM_HEADING = "[block-case-markers] Test file(s) fail the language-match gate:";
 
 // headingOf(lines, i) — the nearest heading line above line i, or null.
@@ -36,7 +36,7 @@ function languageMatchOnlyHeading(h) {
     const at = lines.indexOf(LM_HEADING);
     assert.ok(at >= 0, `no language-match heading: ${show}`);
     assert.ok((lines[at + 1] || "").includes(`${rel}: `) && lines[at + 1].includes("code=TEST_LANGUAGE_MISMATCH"), show);
-    assert.ok(!r.reason.includes("New test file(s) fail the case-marker gate"), show);
+    assert.ok(!r.reason.includes("Test file(s) fail the test gates"), show);
   });
 }
 
