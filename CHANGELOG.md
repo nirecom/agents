@@ -843,3 +843,7 @@ Changes: Glossary changes are now checked at commit time: adding, redefining or 
 ### FEATURE: PR #2773 (2026-10-24)
 Background: fix(#2765): resolve the merged PR in find-pr-by-marker.sh
 Changes: Fixed `/issue-close-finalize` failing with "no PR found" for issues whose closing PR had merged; the merged PR and its merge commit are resolved again.
+
+### FEATURE: PR #2743 (2026-10-24)
+Background: feat(#2731): keep glossary and engineering terms untranslated and clo...
+Changes: Conversations in a non-English CONV_LANG stay in that language through long autonomous runs, subagent reports, hook messages and codex reviews, while glossary and engineering terms are kept as written instead of being translated.;New optional `user-instructions.md` at the agents checkout root: copy `user-instructions.example.md` to it and add free-form personal instructions, injected at session start and after compaction (4 KB cap; the template's comments are never injected).;Supervisor findings and codex review text now follow your conversation language, and supervisor audits no longer fall back to the slower engine because of unlisted categories.
