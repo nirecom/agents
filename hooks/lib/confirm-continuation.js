@@ -35,19 +35,20 @@ function gateForFrom(timeoutMsFor) {
   };
 }
 
-// presentedStages({sid, tail, plansDir, timeoutMsFor, gateFor, linkFor}) -> [{stage, absPath, reason,
-// receiptLink, contentSha}]. gateFor (stage -> gate) and linkFor (absPath -> link) let the caller
-// share one probe per stage and one git lookup per file; without gateFor the gate is probed within
-// timeoutMsFor(). receiptLink is null when the plan has no link that may stand for it (not published).
-function presentedStages({ sid, tail, plansDir, timeoutMsFor, gateFor, linkFor } = {}) {
-  if (!textOnlyAnchor(tail)) return [];
-  const lastText = tail.lastTextBlock;
+// presentedStagesOfText({sid, lastText, stages, plansDir, timeoutMsFor, gateFor, linkFor}) -> [{stage,
+// absPath, reason, receiptLink, contentSha}] among `stages`, judging `lastText` as the turn's last
+// text block. gateFor (stage -> gate) and linkFor (absPath -> link) let the caller share one probe
+// per stage and one git lookup per file; without gateFor the gate is probed within timeoutMsFor().
+// receiptLink is null when the plan has no link that may stand for it (not published).
+function presentedStagesOfText({ sid, lastText, stages, plansDir, timeoutMsFor, gateFor, linkFor } = {}) {
+  if (typeof lastText !== "string" || !lastText || !Array.isArray(stages)) return [];
   const gate = typeof gateFor === "function" ? gateFor : gateForFrom(timeoutMsFor);
   const linkOf = typeof linkFor === "function" ? linkFor : (p) => PL.linkForFile(p, plansDir ? { plansDir } : {});
   const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
   const { computeContentSha } = require("../workflow-state/completion-approval");
   const out = [];
   for (const stage of PL.STAGES) {
+    if (!stages.includes(stage)) continue;
     const absPath = approvalArtifactPath(sid, stage);
     if (!absPath || !fs.existsSync(absPath)) continue;
     const link = linkOf(absPath);
@@ -58,6 +59,13 @@ function presentedStages({ sid, tail, plansDir, timeoutMsFor, gateFor, linkFor }
     out.push({ stage, absPath, reason: link.reason || null, receiptLink: PL.receiptLinkOf(link), contentSha: computeContentSha(absPath) });
   }
   return out;
+}
+
+// presentedStages({sid, tail, plansDir, timeoutMsFor, gateFor, linkFor}): presentedStagesOfText over
+// every stage, for a tail whose last assistant entry is its text-only last text entry.
+function presentedStages({ sid, tail, plansDir, timeoutMsFor, gateFor, linkFor } = {}) {
+  if (!textOnlyAnchor(tail)) return [];
+  return presentedStagesOfText({ sid, lastText: tail.lastTextBlock, stages: PL.STAGES, plansDir, timeoutMsFor, gateFor, linkFor });
 }
 
 // continuationStage(presented, currentStage) -> the stage the Stop hook asks to echo, or null:
@@ -96,4 +104,4 @@ function presentAgainReason(stage, cause) {
     "with no text after the line, and close the turn; echo the CONFIRM only after the user's reply.";
 }
 
-module.exports = { presentedStages, continuationStage, continueReason, presentAgainReason };
+module.exports = { presentedStages, presentedStagesOfText, continuationStage, continueReason, presentAgainReason };

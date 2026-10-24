@@ -1,6 +1,6 @@
 "use strict";
-// #2729 R3-R12: the presentation receipt end to end (Stop writes / discards it, confirm-checkpoint
-// matches and consumes it). Usage: node r-cases-driver.js <R3|R4|R5|R6|R7|R8|R9|R10|R11|R12|R14|R15>.
+// #2729 R3-R12: the presentation receipt end to end (Stop writes it and, since #2771, keeps earlier
+// ones across a block or an exception; confirm-checkpoint matches and consumes it). Usage: node r-cases-driver.js <R3|R4|R5|R6|R7|R8|R9|R10|R11|R12|R14|R15>.
 // Prints PASS|name / FAIL|name|detail lines.
 const fs = require("fs");
 const path = require("path");
@@ -30,6 +30,13 @@ function seedReceipts(s) {
   }
 }
 const allGone = (sid) => STAGES.every((st) => !R.receiptExists(sid, st));
+// snap(sid) -> every stage's raw receipt; keptAsIs(before, sid) -> each seeded one still there, byte-for-byte.
+const snap = (sid) => STAGES.map((st) => R.readReceiptRaw(sid, st));
+const keptAsIs = (before, sid) => {
+  const after = snap(sid);
+  return before.every((b, i) => b === null ? after[i] === null : after[i] !== null && JSON.stringify(after[i]) === JSON.stringify(b));
+};
+const seeded = (s) => { seedReceipts(s); return snap(s.sid); };
 const appendTo = (p, text) => fs.writeFileSync(p, fs.readFileSync(p, "utf8") + text);
 
 const mode = process.argv[2];
@@ -197,52 +204,84 @@ if (mode === "R3") {
     const s = R.sessionAt("outline", { tag: 101 });
     present(s, "outline");
     check("R10 setup: the outline receipt exists", R.receiptExists(s.sid, "outline"), "no receipt");
+    const before = snap(s.sid);
     const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "I rewrote the outline; more to come."));
     check("R10 plan-link missing (presented empty): Stop blocks", st.blocked && !st.continued, show({ rc: st.rc, out: st.out }));
-    check("R10 plan-link missing: the earlier outline receipt is discarded", !R.receiptExists(s.sid, "outline"), "still present");
+    check("R10 plan-link missing: the earlier outline receipt is kept unchanged", keptAsIs(before, s.sid), show({ before, after: snap(s.sid) }));
     const e = R.echo(s.sid, "outline");
-    check("R10 plan-link missing: the echo right after is denied", e.denied && !e.dialog, show(e.json));
+    check("R10 plan-link missing: the echo right after reaches the dialog (plan unchanged)", e.dialog, show(e.json));
     const ok = present(s, "outline");
     const e2 = R.echo(s.sid, "outline");
     check("R10 after closing again without a block, the echo reaches the dialog", ok.continued && e2.dialog, show({ stop: ok.out, json: e2.json }));
   }
   {
+    // The receipt kept across a block still binds the content: an edit after the block is denied.
+    const s = R.sessionAt("outline", { tag: 107 });
+    present(s, "outline");
+    const before = snap(s.sid);
+    const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "I rewrote the outline; more to come."));
+    check("R10 block before an edit: the earlier outline receipt is kept unchanged", keptAsIs(before, s.sid), show({ before, after: snap(s.sid) }));
+    appendTo(s.plan, "\nedited after the blocked turn\n");
+    const e = R.echo(s.sid, "outline");
+    check("R10 receipt kept across a block, plan edited after it: Stop blocked", st.blocked, show({ rc: st.rc, out: st.out }));
+    check("R10 receipt kept across a block, plan edited after it: the echo is denied (content)", e.denied && !e.dialog && e.reason.includes("(content)"), e.reason || show(e.json));
+  }
+  {
+    const s = R.sessionAt("outline", { tag: 108 });
+    const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "Here is the plan.\n\n" + s.urlLine + "\n\n" + QUESTION));
+    check("R10 closeOnLink block without a seed: Stop blocks", st.blocked && presentAgain(st.reason, "outline"), show({ rc: st.rc, out: st.out }));
+    check("R10 closeOnLink block without a seed: the blocked turn writes no receipt", allGone(s.sid), show(STAGES.map((x) => R.readReceiptRaw(s.sid, x))));
+  }
+  {
     const s = R.sessionAt("outline", { tag: 102 });
-    seedReceipts(s);
+    const before = seeded(s);
     const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "Here is the plan.\n\n" + s.urlLine + "\n\n" + QUESTION));
     check("R10 closeOnLink block: Stop blocks", st.blocked && presentAgain(st.reason, "outline"), show({ rc: st.rc, out: st.out }));
-    check("R10 closeOnLink block: every stage's receipt is discarded", allGone(s.sid), show(STAGES.map((x) => R.receiptExists(s.sid, x))));
+    check("R10 closeOnLink block: every seeded stage's receipt is kept unchanged", keptAsIs(before, s.sid), show({ before, after: snap(s.sid) }));
   }
   {
     const s = R.sessionAt("outline", { tag: 103 });
-    seedReceipts(s);
+    const before = seeded(s);
     const tp = R.writeTranscript(s.sid, [R.U("go", "u-p"), A("a-echo", BASH(R.echoOf("outline"), "e1")), TR("e1", "u-e1")]);
     const st = R.stop(s.sid, tp);
     check("R10 layer2 block: Stop blocks", st.blocked && st.reason.includes("Layer 2"), show({ rc: st.rc, out: st.out }));
-    check("R10 layer2 block: every stage's receipt is discarded", allGone(s.sid), show(STAGES.map((x) => R.receiptExists(s.sid, x))));
+    check("R10 layer2 block: every seeded stage's receipt is kept unchanged", keptAsIs(before, s.sid), show({ before, after: snap(s.sid) }));
   }
   {
     const s = R.sessionAt("outline", { tag: 104 });
-    seedReceipts(s);
+    const before = seeded(s);
     const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "Here is the plan.\n\n" + pathLine(s, "outline", "not-published")), { mode: "not-published" });
     check("R10 unpublished block: Stop blocks", st.blocked && presentAgain(st.reason, "outline"), show({ rc: st.rc, out: st.out }));
-    check("R10 unpublished block: every stage's receipt is discarded", allGone(s.sid), show(STAGES.map((x) => R.receiptExists(s.sid, x))));
+    check("R10 unpublished block: every seeded stage's receipt is kept unchanged", keptAsIs(before, s.sid), show({ before, after: snap(s.sid) }));
+  }
+  {
+    // Two stages in one turn, no seed: intent unpublished (the block cause), outline published.
+    // The publishable outline must not get a receipt written ahead of the block decision.
+    const s = R.sessionAt("outline", { tag: 109 });
+    fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
+    const close = "Both plans are ready.\n\n" + pathLine(s, "intent", "not-published") + "\n" + s.urlLine;
+    const st = R.stop(s.sid, R.presentTurn(s, ["intent", "outline"], close), { env: { CC_UNPUBLISHED_STAGE: "intent" } });
+    check("R10 two stages, intent unpublished: Stop blocks (unpublished)", st.blocked && presentAgain(st.reason, "intent"), show({ rc: st.rc, out: st.out }));
+    check("R10 two stages, intent unpublished: no receipt is written for either stage", allGone(s.sid), show(STAGES.map((x) => R.readReceiptRaw(s.sid, x))));
   }
   {
     // Japanese prose built from code points so the file stays ASCII-only.
     const JA_BODY = String.fromCharCode(0x3053, 0x306e, 0x8a08, 0x753b, 0x306f, 0x65e5, 0x672c, 0x8a9e, 0x3067, 0x66f8, 0x304b, 0x308c, 0x305f, 0x672c, 0x6587, 0x3067, 0x3059, 0x3002, 0x82f1, 0x8a9e, 0x3067, 0x306f, 0x3042, 0x308a, 0x307e, 0x305b, 0x3093, 0x3002);
     const s = R.sessionAt("outline", { tag: 105, body: "# Outline\n\n## Approach\n\n" + JA_BODY + "\n\n## Issues\n\n- #1 fixture\n" });
-    seedReceipts(s);
+    const before = seeded(s);
     const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "Here is the plan.\n\n" + s.urlLine));
     check("R10 planLang block: Stop blocks", st.blocked && /plan-lang/i.test(st.reason), show({ rc: st.rc, out: st.out }));
-    check("R10 planLang block: every stage's receipt is discarded", allGone(s.sid), show(STAGES.map((x) => R.receiptExists(s.sid, x))));
+    check("R10 planLang block: every seeded stage's receipt is kept unchanged", keptAsIs(before, s.sid), show({ before, after: snap(s.sid) }));
   }
   {
     const s = R.sessionAt("outline", { tag: 106 });
-    seedReceipts(s);
+    const before = seeded(s);
     const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "Here is the plan.\n\n" + s.urlLine + "\n\n" + QUESTION), { input: { stop_hook_active: true } });
     check("R10 stop_hook_active with a block condition: no block is emitted", st.rc === 0 && st.out.trim() === "", show({ rc: st.rc, out: st.out }));
-    check("R10 stop_hook_active with a block condition: every stage's receipt is discarded", allGone(s.sid), show(STAGES.map((x) => R.receiptExists(s.sid, x))));
+    check("R10 stop_hook_active with a block condition: every seeded stage's receipt is kept unchanged", keptAsIs(before, s.sid), show({ before, after: snap(s.sid) }));
+    const details = R.findings(s.sid).map((f) => String(f && f.detail));
+    check("R10 stop_hook_active: the finding no longer claims every receipt was voided",
+      details.some((d) => d.includes("stop-confirm-plan-guard")) && !details.some((d) => d.includes("every receipt voided")), show(details));
   }
 } else if (mode === "R11") {
   for (const reason of ["plan-sync-off", "not-provisioned", "host-mismatch"]) {
@@ -279,11 +318,21 @@ if (mode === "R3") {
   const s = R.sessionAt("outline", { tag: 12 });
   present(s, "outline");
   check("R12 setup: the outline receipt exists", R.receiptExists(s.sid, "outline"), "no receipt");
+  const before = R.readReceiptRaw(s.sid, "outline") || {};
   const st = present(s, "outline", { fault: "presented-throws" });
   check("R12 an exception inside the Stop evaluation exits 0", st.rc === 0, show({ rc: st.rc, out: st.out, err: st.err.slice(0, 200) }));
-  check("R12 the existing receipt is discarded and none is written", allGone(s.sid), show(R.readReceiptRaw(s.sid, "outline")));
+  const kept = R.readReceiptRaw(s.sid, "outline");
+  check("R12 the existing receipt is kept", kept !== null && kept.anchorUuid === before.anchorUuid && kept.writtenAt === before.writtenAt, show({ before, kept }));
+  check("R12 no receipt is written for the other stages", !R.receiptExists(s.sid, "intent") && !R.receiptExists(s.sid, "detail"), "a receipt was written");
+  // The turn carries an outline marker, so the unrecorded presentation is noticed on stdout.
+  let notice = null;
+  try { notice = JSON.parse(st.out.trim()); } catch (_) { notice = null; }
+  check("R12 stdout is one JSON object with a systemMessage string and no decision",
+    notice !== null && typeof notice === "object" && !Array.isArray(notice) && typeof notice.systemMessage === "string" &&
+    notice.systemMessage !== "" && !("decision" in notice), show({ out: st.out }));
+  check("R12 the notice names the outline stage", notice !== null && /\boutline\b/i.test(String(notice.systemMessage)), show({ out: st.out }));
   const e = R.echo(s.sid, "outline");
-  check("R12 the later echo is denied", e.denied && !e.dialog, show(e.json));
+  check("R12 the later echo reaches the dialog (plan unchanged)", e.dialog, show(e.json));
 } else if (mode === "R14") {
   // Two concurrent echoes on one receipt: only the process whose consume (unlink) succeeds passes.
   (async () => {
