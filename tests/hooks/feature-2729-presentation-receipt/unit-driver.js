@@ -1,6 +1,6 @@
 "use strict";
 // #2729 unit cases for hooks/lib/presentation-receipt.js: the receipt store's write guard, the
-// read shapes, discard / discardAll, and matchReceipt's causes. Prints PASS|name / FAIL|name|detail.
+// read shapes, discard (discardAll is gone, #2771), and matchReceipt's causes. Prints PASS|name / FAIL|name|detail.
 const path = require("path");
 const R = require("./fixture");
 const { check, show } = R;
@@ -53,14 +53,13 @@ check("discardReceipt removes the file", !R.receiptExists(s.sid, "outline"), "st
 let threw = null;
 try { PR.discardReceipt(s.sid, "outline"); } catch (e) { threw = e.message; }
 check("discardReceipt of a missing file does not throw", threw === null, threw);
-PR.writeReceipt(s.sid, "outline", fields);
-PR.discardAllReceipts(s.sid);
-check("discardAllReceipts removes intent, outline and detail", ["intent", "outline", "detail"].every((st) => !R.receiptExists(s.sid, st)), "a receipt survived");
+// #2771: nothing voids every receipt at once any more (a block or an exception keeps them).
+check("discardAllReceipts is no longer exported", typeof PR.discardAllReceipts === "undefined", typeof PR.discardAllReceipts);
+PR.discardReceipt(s.sid, "detail");
 
 // A failed write (fs error on the temp file or on the rename) is fail-closed: writeReceipt returns
 // false without throwing, leaves neither the receipt nor its temp file, and a later read is absent,
-// so the echo that follows is denied. writeReceipt itself never calls discardAllReceipts; that
-// invalidation belongs to the Stop hook's block / exception paths (R12).
+// so the echo that follows is denied.
 const fs = require("fs");
 const stateDir = path.dirname(R.receiptPath(s.sid, "outline"));
 const tmpsLeft = () => { try { return fs.readdirSync(stateDir).filter((n) => n.includes(".confirm-plan-receipt-") && n.endsWith(".tmp")).length; } catch (_) { return 0; } };
