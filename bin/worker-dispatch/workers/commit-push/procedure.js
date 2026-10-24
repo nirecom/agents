@@ -2,7 +2,8 @@
 // bin/worker-dispatch/workers/commit-push/procedure.js
 //
 // The commit-push run() spine — steps 0-6, 8 and 10 — with step 7 in ./push.js,
-// step 9 in ./pr.js, the empty-stage resume in ./resume.js, the D1 gate in ./gate.js.
+// step 9 in ./pr.js, the empty-stage resume in ./resume.js, the D1 gate in ./gate.js,
+// the step 4 commit timeout limit in ./commit-timeout.js.
 //
 // The step numbers are those of the agent prompt this worker replaced (#1673),
 // so a reader of either document is looking at the same procedure. What each
@@ -10,7 +11,16 @@
 // docs/architecture/claude-code/worker-dispatch/commit-push.md
 
 const { ensurePullRequest, resolveForgeForWorktree } = require("./pr");
-const { firstLine, isProtectedBranch, resolveGateEnv, runGate, runGit, runScript } = require("./gate");
+const {
+  countStagedFiles,
+  firstNonMarkerLine,
+  formatCommitTimeoutSummary,
+  inspectAfterCommitTimeout,
+  lastSectionMarker,
+  probeHead,
+  resolveCommitTimeoutLimit,
+} = require("./commit-timeout");
+const { firstLine, isProtectedBranch, readCheckoutEnv, resolveGateEnv, runGate, runGit, runScript } = require("./gate");
 const { pushToRemote } = require("./push");
 const { resumeFromEmptyStage } = require("./resume");
 const { tryWriteLog } = require("../../worker-log");
@@ -110,15 +120,39 @@ function run(payload, ctx) {
   }
 
   // Step 4 — commit. `--no-verify` is prohibited; hooks/pre-commit still runs.
-  const committed = runGit(ctx, payload, commitArgs, log, String(payload.commit_message));
+  // It alone runs under the commit timeout limit (commit-push.md, commit-timeout.js).
+  const limit = resolveCommitTimeoutLimit(readCheckoutEnv(ctx), () => countStagedFiles(runGit, ctx, payload, log));
+  const limitSecs = Math.round(limit.ms / 1000);
+  const limitFrom = limit.source === "computed" && limit.stagedCount !== null ? `, ${limit.stagedCount} staged files` : "";
+  log.push(`commit timeout limit: ${limitSecs}s (${limit.source}${limitFrom})`);
+  if (limit.invalidRaw !== null) {
+    log.push(`COMMIT_TIMEOUT_SECS='${limit.invalidRaw}' is not a valid value (an integer 1-86400 without a leading zero); ignored, using the computed commit timeout limit`);
+  }
+  const headBefore = probeHead(runGit, ctx, payload, log);
+  const committed = runGit(ctx, payload, commitArgs, log, String(payload.commit_message), undefined, limit.ms);
+  // spawn.js reports timedOut for any signal kill, so only a kill at the limit is a timeout.
+  // A timed-out commit may still have landed; HEAD decides, the caller's re-run pushes.
+  if (committed !== null && committed.timedOut && committed.elapsedMs >= limit.ms) {
+    const after = inspectAfterCommitTimeout(runGit, ctx, payload, log, headBefore);
+    return finish("commit_timeout", formatCommitTimeoutSummary({
+      elapsedMs: committed.elapsedMs,
+      limit,
+      marker: lastSectionMarker(committed.stderr),
+      after,
+    }));
+  }
   if (committed === null || committed.status !== 0) {
-    return finish(
-      "staging_check_failed",
-      `git commit failed: ${committed === null ? "could not start" : firstLine(committed.stderr) || `exit ${committed.status}`}`,
-    );
+    return finish("staging_check_failed", `git commit failed: ${describeCommitFailure(committed)}`);
   }
 
   return pushTail(payload, ctx, gateEnv, log, finish, "");
+}
+
+function describeCommitFailure(committed) {
+  if (committed === null) return "could not start";
+  const detail = firstNonMarkerLine(committed.stderr);
+  if (committed.signal) return detail ? `killed by ${committed.signal} (${detail})` : `killed by ${committed.signal}`;
+  return detail || `exit ${committed.status}`;
 }
 
 // Step 5 probe: true only when the remote is a confirmed empty repo.

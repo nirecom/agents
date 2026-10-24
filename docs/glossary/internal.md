@@ -32,6 +32,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   The two-stage judge's query builds it, and the backup subagent reads it first.
 - **Related**: [architecture/jev/two-stage-broker.md](../architecture/jev/two-stage-broker.md)
 
+### pre-commit section marker
+
+- **Definition**: pre-commit が点検の区切りに入ったことを示す、決まった形式の 1 行の出力
+- **Related**: [architecture/claude-code/worker-dispatch/commit-push.md](../architecture/claude-code/worker-dispatch/commit-push.md)
+
 ### presentation receipt
 
 - **Definition**: The per-stage record the Stop hook writes when a turn closes on a plan's link line: the plan path, the link shown (URL, or the local path where none can be made) and the whole-file content hash.

@@ -5,6 +5,10 @@
 # gate (#2434), the plans-dir isolation gate (#2512) and the root-names gate
 # (#2561). All are skipped unless the repo under commit IS the agents repo.
 
+# Self-contained when sourced on its own (tests do); hooks/pre-commit has already defined it.
+# shellcheck source=hooks/lib/precommit-section-marker.sh
+declare -F _precommit_section >/dev/null || . "${BASH_SOURCE[0]%/*}/precommit-section-marker.sh"
+
 # _precommit_agents_repo_gates — reads $_cfg_dir (ambient). Exits the hook with 1
 # on a violation or a gate outage; returns 0 otherwise. No-op in a non-agents repo.
 _precommit_agents_repo_gates() {
@@ -111,6 +115,7 @@ _precommit_run_agents_gate() {
     local _g_top="$1" _g_checker="$2" _g_runner="$3" _g_what="$4" _g_doc="$5" _g_name _g_rc=0 _g_out
     shift 5
     _g_name="${_g_checker##*/}"
+    _precommit_section "agents-repo-gate-$(printf '%s' "${_g_name%.sh}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')"
     if [ ! -f "$_g_checker" ] || { [ "$_g_runner" = exec ] && [ ! -x "$_g_checker" ]; } \
         || { [ "$_g_runner" != exec ] && ! command -v "$_g_runner" >/dev/null 2>&1; }; then
         echo "pre-commit: $_g_name missing or not runnable (${_g_runner}) at $_g_checker." >&2
