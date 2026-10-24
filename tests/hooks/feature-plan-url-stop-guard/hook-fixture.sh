@@ -79,7 +79,8 @@ if (markerStage !== '-') {
 process.stdout.write(PLANS);
 JS
 
-# upg_case <label> <sid> <stage-marker|-> <transcript-js> <want: allow|block> <reason-prefix|-> [stdin-extra-json]
+# upg_case <label> <sid> <stage-marker|-> <transcript-js> <want: allow|block|notice> <reason-prefix|stage|-> [stdin-extra-json]
+# notice: rc 0, stdout one JSON object with no decision whose systemMessage names <stage>.
 # transcript-js: a JS array of entries; U/R/RT/A/T/B/S/C, url/nat/fwd/tilde/uri(stage) of the
 # case's own plan, and URL_INTENT/URL_OUTLINE/URL_DETAIL/PLANS of the GitHub scene are in scope.
 # Scene vars: UPG_PLANS (plans dir), UPG_REMOTE (PLAN_SYNC_REMOTE_URL, "" = off), UPG_BLOB_BASE,
@@ -87,7 +88,7 @@ JS
 # UPG_MARKERS_LEFT to the number of turn markers the hook left behind.
 upg_case() {
   local label="$1" sid="$2" mstage="$3" js="$4" want="$5" prefix="$6" extra="${7:-}"
-  local plans="${UPG_PLANS:-$PLANS}" tpath="$TDIR/$sid-$RANDOM$RANDOM.jsonl" native out rc reason ok=1
+  local plans="${UPG_PLANS:-$PLANS}" tpath="$TDIR/$sid-$RANDOM$RANDOM.jsonl" native out rc reason notice ok=1
   local -a henv left
   UPG_MARKERS_LEFT=0
   rm -f "$WORKFLOW_STATE_DIR/$sid".confirm-plan-turn-*.json
@@ -110,6 +111,12 @@ let o = {}; try { o = JSON.parse(require('fs').readFileSync(0, 'utf8') || '{}');
 process.stdout.write(o.decision === 'block' && typeof o.reason === 'string' ? o.reason : '');")"
   if [ "$want" = allow ]; then
     if [ "$rc" -ne 0 ] || [ -n "$out" ]; then ok=0; fi
+  elif [ "$want" = notice ]; then
+    notice="$(printf '%s' "$out" | psf_timeout 30 node -e "
+let o = null; try { o = JSON.parse(require('fs').readFileSync(0, 'utf8').trim()); } catch (e) {}
+const m = o && typeof o === 'object' && !Array.isArray(o) && !('decision' in o) && typeof o.systemMessage === 'string' ? o.systemMessage : '';
+process.stdout.write(new RegExp('\\\\b' + process.argv[1] + '\\\\b', 'i').test(m) ? m : '');" "$prefix")"
+    if [ "$rc" -ne 0 ] || [ -z "$notice" ]; then ok=0; fi
   elif [ "$rc" -ne 2 ] || [ -z "$reason" ] || [ "${reason#"$prefix"}" = "$reason" ]; then
     ok=0
   fi
