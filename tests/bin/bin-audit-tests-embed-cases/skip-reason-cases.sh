@@ -181,7 +181,7 @@ check_eq "SR11 the uncertain file has no SKIP line" "" "$(ec_skip_reason tests/b
 case_end
 
 # Discovery exclusions: an archived test, a suite part file sourced by a dispatcher,
-# and tests in languages without a case-marker reader never reach BAND or SKIP.
+# and tests in languages without a test case reader never reach BAND or SKIP.
 EX_REPO="$(ec_make_repo)"
 ec_add_test "$EX_REPO" tests/bin/t-plain.sh "bin/alpha.sh"
 ec_add_test "$EX_REPO" tests/_archive/old-archived.sh "bin/bravo.sh"

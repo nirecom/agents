@@ -260,6 +260,44 @@ usage_err "check-test-language-match --head empty" "$LM_CLI" "check-test-languag
 usage_err "check-test-language-match --head copy absent" "$LM_CLI" "check-test-language-match.sh: head copy not found: $TMPBASE/x/no-head.tmp" --rel "$REL" --head "$TMPBASE/x/no-head.tmp" "$_copy"
 case_end
 
+# A uv that exits 1 makes the pytest test case reader fail on $REL (reader rc 1, not 79).
+UV_FAIL="$TMPBASE/shim-uv-fail"
+mkdir -p "$UV_FAIL"
+printf '#!%s\nexit 1\n' "$(command -v bash)" > "$UV_FAIL/uv"
+chmod +x "$UV_FAIL/uv"
+printf '%s\n' '#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/a.js' '# Tags: scope:common' \
+  'case_begin "alpha" "bin/a.sh"' 'echo a' 'case_end' 'case_begin "beta" "bin/a.js"' 'echo b' 'case_end' > "$REPO/tests/bin/cm-clean.sh"
+printf '%s\n' '#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/a.js' '# Tags: scope:common' 'echo a' > "$REPO/tests/bin/cm-missing.sh"
+
+# run_cm_uv_fail <file>... — check-case-markers.sh on the files with the failing uv first on PATH.
+run_cm_uv_fail() {
+  local saved="$PATH"
+  PATH="$UV_FAIL:$PATH"
+  run_cli "$CM_CLI" "$@"
+  PATH="$saved"
+}
+
+case_begin "case-markers-reader-failure-beside-clean-file" "bin/check-case-markers.sh"
+named py-missing
+run_cli "$CM_CLI" tests/bin/cm-clean.sh
+expect_rc "control: clean file alone" 0 "$R_RC"
+assert_eq "control: output=[$R_OUT$R_ERR]" "control: output=[]"
+run_cm_uv_fail "$REL" tests/bin/cm-clean.sh
+expect_rc "reader failure + clean file" 2 "$R_RC"
+assert_eq "reader failure + clean file: stdout=[$R_OUT]" "reader failure + clean file: stdout=[]"
+assert_eq "reader failure + clean file: stderr=[$R_ERR]" "reader failure + clean file: stderr=[check-case-markers.sh: test case reader unavailable: $REL]"
+case_end
+
+BASH_MARKER_NAME="$(node -e 'const t=require(process.argv[1]);const e=t.entries.find(x=>x.id==="bash");process.stdout.write(String(((e||{}).diagnostics||{}).markerName||""))' "$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json")")"
+
+case_begin "case-markers-high-outranks-reader-failure" "bin/check-case-markers.sh"
+named py-missing
+run_cm_uv_fail tests/bin/cm-missing.sh "$REL"
+expect_rc "HIGH file + reader failure" 1 "$R_RC"
+assert_eq "HIGH file + reader failure: stdout=[$R_OUT]" "HIGH file + reader failure: stdout=[HIGH: tests/bin/cm-missing.sh (2 paths in # Tests: header, no $BASH_MARKER_NAME markers) code=MISSING_CASE_MARKERS]"
+assert_eq "HIGH file + reader failure: stderr=[$R_ERR]" "HIGH file + reader failure: stderr=[check-case-markers.sh: test case reader unavailable: $REL]"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" -gt 0 ]; then

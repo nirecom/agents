@@ -108,7 +108,7 @@ function sourceRootRe(files) {
 }
 
 // Only bin/lib/test-language-parts/ holds pure per-language parts; a part registered from
-// anywhere else (a case-marker reader) is ordinary code and is scanned.
+// anywhere else (a test case reader) is ordinary code and is scanned.
 function inScope(p) {
   if (TABLE_FILES.has(p)) return false;
   if (p.startsWith("bin/lib/test-language-parts/") || p.startsWith("skills/synced/")) return false;
