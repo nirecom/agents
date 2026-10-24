@@ -11,7 +11,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { resolveGitArgvForSegment, isGitWriteArgv, resolveGitSubArgv } = require("../lib/bash-write-patterns/git-write-ir");
 const { getProtectedBranches, getCurrentBranch } = require("./config");
 const { extractGitScopeFlagsFromArgv } = require("../lib/parse-git-args");

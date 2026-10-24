@@ -3,21 +3,22 @@
 //
 // tool_name must be exactly "Bash" (runInTerminal / runCommands may drive pwsh, where a
 // backtick is a line continuation and `{ }` a script block) -> parse() failing is FAIL-OPEN,
-// the one named exception to deny-on-doubt in hooks/ -> detect() decides deny ->
-// detectIneffective() decides notify -> matchSelfScript() then matchReadOnlyCommand() decide
-// allow. A newline or CR skips the whole allow path: the IR does not split on it (#1253), so
-// one "plain" command could run a second line. While the early write gate blocks, only a
-// read-only allow may speak. Every failure lands on passThrough: allow skips the prompt.
+// the one named exception to deny-on-doubt in hooks/ -> detect() then detectGitDeviant()
+// decide deny -> detectIneffective() decides notify -> matchSelfScript() then
+// matchReadOnlyCommand() decide allow. A newline or CR skips the whole allow path: the IR does
+// not split on it (#1253). While the early write gate blocks, only git-deviant (a security
+// guard, #2617) and a read-only allow may speak. Every failure lands on passThrough.
 
 const path = require("path");
 const { parse, analysisOf } = require("../lib/command-ir");
 const { earlyWriteGateStatus } = require("../lib/early-write-gate");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { detect, detectIneffective } = require("./detect");
+const { detectGitDeviant } = require("./git-deviant");
 const { matchSelfScript } = require("./allow");
 const { matchReadOnlyCommand } = require("./readonly-class");
 const { PASS_THROUGH_CODES, reasonCodeFor } = require("./reasons");
-const { buildDenyMessage, buildNotifyMessage } = require("./message");
+const { buildDenyMessage, buildNotifyMessage, buildGitDeviantMessage } = require("./message");
 
 const IN_SCOPE_TOOL = "Bash";
 const LINE_BREAK_RE = /[\r\n]/;
@@ -27,11 +28,33 @@ const verdictOf = (verdict, code, fields) => ({
   code,
   literalId: null,
   notifyId: null,
+  formId: null,
   sample: null,
   message: "",
   ...fields,
 });
 const passThrough = (code) => verdictOf("passThrough", code);
+
+// The IR does not split on a line break (#1253), so a force push on a later line is invisible
+// to the whole-command pass: each line is parsed on its own too. A line that fails to parse is
+// skipped (fail-open, as for the whole command).
+function detectGitDeviantPerLine(commandText) {
+  if (!LINE_BREAK_RE.test(commandText)) return null;
+  for (const line of commandText.split(/\r\n|\r|\n/)) {
+    if (line.trim() === "") continue;
+    const lineIr = parse(line);
+    if (lineIr.parseFailure === true) continue;
+    const hit = detectGitDeviant(lineIr);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function gitDeviantVerdict(ir, commandText) {
+  const hit = detectGitDeviant(ir) || detectGitDeviantPerLine(commandText);
+  if (!hit) return null;
+  return verdictOf("deny", hit.code, { formId: hit.formId, message: buildGitDeviantMessage(hit.formId) });
+}
 
 function readCommand(input) {
   const toolInput = (input && input.tool_input) || {};
@@ -54,14 +77,17 @@ function readCwd(input) {
 const contextOf = (ir, commandText, input, agentsRoot) =>
   ({ ir, analysis: analysisOf(ir), commandText, cwd: readCwd(input), agentsRoot });
 
-// Interlock (C6): the early write gate blocks Edit/Write, not Bash reads, so a plain
-// read-only command still allows; deny, notify and self-script stay silent.
+// Interlock (C6): the early write gate blocks Edit/Write, not Bash, so a plain read-only
+// command still allows and literal deny, notify and self-script stay silent. git-deviant still
+// denies: silencing it would let `git push origin +main` reach the `git push origin *` allow.
 function judgeUnderInterlock(commandText, input) {
   const quiet = passThrough(PASS_THROUGH_CODES.INTERLOCK_QUIET);
   try {
-    if (LINE_BREAK_RE.test(commandText)) return quiet;
     const ir = parse(commandText);
-    if (ir.parseFailure === true || detect(ir).length > 0) return quiet;
+    if (ir.parseFailure === true) return quiet;
+    const deviant = gitDeviantVerdict(ir, commandText);
+    if (deviant) return deviant;
+    if (LINE_BREAK_RE.test(commandText) || detect(ir).length > 0) return quiet;
     const ctx = contextOf(ir, commandText, input);
     if (detectIneffective(ir, ctx).length > 0) return quiet;
     const allowCode = matchReadOnlyCommand(ir, ctx);
@@ -75,8 +101,8 @@ function judgeUnderInterlock(commandText, input) {
  * @param {object} input a PreToolUse hook payload
  * @param {{root?: string}} [opts] agents root override — a test seam; the hook never passes it
  * @returns {{verdict: "allow"|"deny"|"notify"|"passThrough", code: string,
- *            literalId: string|null, notifyId: string|null, sample: string|null,
- *            message: string}}
+ *            literalId: string|null, notifyId: string|null, formId: string|null,
+ *            sample: string|null, message: string}}
  */
 function judgeBashCommand(input, opts) {
   try {
@@ -105,6 +131,9 @@ function judgeBashCommand(input, opts) {
         message: buildDenyMessage(hit, code),
       });
     }
+
+    const deviant = gitDeviantVerdict(ir, commandText);
+    if (deviant) return deviant;
 
     const ctx = contextOf(ir, commandText, input, root);
     const notices = detectIneffective(ir, ctx);

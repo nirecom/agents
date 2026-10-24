@@ -6,7 +6,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./limited-child-process");
 const { getProtectedBranches } = require("./merge-detect");
 
 // Git Bash delivers POSIX drive-letter paths; Node fs/spawnSync need the Windows form. No-op on POSIX.

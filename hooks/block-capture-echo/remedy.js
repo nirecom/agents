@@ -13,7 +13,7 @@ const { resolveEffectiveSegment } = require("../lib/command-ir");
 // enabling the preserveSubstitutionSpans option (fix-1780-round11 X1/X2).
 const { parseWithSubstitutionSpans } = require("../block-clearance-token-write/bash-scan/scan");
 const { peelWrappers, commandBasename } = require("../lib/bash-write-patterns/segment-utils");
-const { normalizeForCompare } = require("../preuse-auto-approve.js");
+const { normalizeForCompare } = require("../preuse-auto-approve/path-compare");
 const { isSecretShaped } = require("../workflow-state/complexity-routing/secret-shape");
 
 const SSOT_REL = ["install", "settings-allow-commands.txt"];

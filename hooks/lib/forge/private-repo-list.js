@@ -24,7 +24,7 @@ function parseVisibilityRows(stdout) {
 function listVisibilityTagged(cmd, args) {
   try {
     // Must finish under the 5 s scan-outbound PreToolUse hook timeout (settings.json).
-    const r = require("child_process").spawnSync(cmd, args, { encoding: "utf8", timeout: 4000 });
+    const r = require("../limited-child-process").spawnSync(cmd, args, { encoding: "utf8", timeout: 4000 });
     if (r.error || r.status !== 0) return [];
     return parseVisibilityRows(r.stdout);
   } catch (e) {

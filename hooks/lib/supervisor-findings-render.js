@@ -35,6 +35,7 @@ function formatLayer2Findings(findings, opts) {
   const actionableOnly = opts.actionableOnly === true;
 
   if (summaryOnly) {
+    // No withConvLang: this line flows verbatim into the Final Report (final-report-schema.js).
     const SRANK = { error: 2, warning: 1, notice: 0 };
     let highestSev = "notice";
     for (const f of findings) {

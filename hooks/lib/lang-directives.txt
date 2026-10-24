@@ -1,0 +1,9 @@
+# SSOT for the language directives injected by hooks/lib/lang-directive.js (#2731, #2240).
+# Format: KEY=text on one line; lines starting with '#' are comments.
+# {lang} is replaced with the language name; {terms} is replaced with the TERMS line.
+# Keep CONV_LANG's first sentence "Respond to the user in {lang}." unchanged: it is the trigger of
+# the conv-lang-fallback lines in agents/*.md and the planning SKILL.md files.
+TERMS=Keep glossary terms in their exact spelling, and leave common engineering terms, identifiers and command names untranslated (e.g. gap, fallback).
+CONV_LANG=Respond to the user in {lang}. This covers everything you write, including narration between tool calls and a subagent's final report to its caller. Write each sentence in {lang}. {terms}
+PLAN_LANG=Write planning artifacts (files under the plans directory) in {lang}. Write each sentence in {lang}. {terms}
+CODEX_FREE_TEXT=Write every free-text field (detail, summary, concern text) in {lang}. Keep JSON keys and enum values exactly as given. {terms}

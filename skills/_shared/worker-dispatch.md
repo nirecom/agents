@@ -22,6 +22,13 @@ WD-BG. Background dispatch — `test-runner` only (no other worker writes an out
 - `OUTCOME=absent` or `OUTCOME=untrusted`: surface `OUTCOME_REASON` and treat the run as `status: runner-error`; a re-run publishes a new `--seq` payload.
 - Never use the background task's output file as evidence of the result — only the display above counts.
 
+WD-CP. Background dispatch — the `commit-push` worker, always (its commit timeout limit is decided inside the worker and can exceed the 600 s foreground cap):
+
+- Emit `<<WORKFLOW_NEXT_STEP_PAUSE: {reason}>>`, then run the WD-3 command with `run_in_background: true`, wait for its completion notice, then emit `<<WORKFLOW_NEXT_STEP_RESUME: {reason}>>`.
+- Read the output the completion notice points to; its `status:` / `summary:` / `artifact_path:` lines stand in for the WD-4 stdout. Reading it is allowed here because the result is no workflow step's completion evidence — `hooks/workflow-state/record-step-verdict/release-steps.js` re-verifies push and merge from the PR and branch state.
+- No `status:` line in the output (interrupted, exit 2): show the output's tail, record blocked, and stop. A re-run publishes a new `--seq` payload; a commit that did land is picked up by the worker's empty-stage resume.
+- A payload already dispatched exits 1 with `status: failed` (WD-4); a re-run publishes a new `--seq` payload.
+
 ## Naming
 
 Name the form on every dispatch line — the three kinds are spawned by different mechanisms, and an unmarked name leaves the reader guessing which one runs.

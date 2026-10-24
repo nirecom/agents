@@ -14,7 +14,7 @@ Exclude the `settings.json` `model` and `effort` fields from the commit — the 
 
 ## Dispatch
 
-Dispatch to the `commit-push` worker per `skills/_shared/worker-dispatch.md`.
+Dispatch to the `commit-push` worker per `skills/_shared/worker-dispatch.md` WD-CP (always in the background).
 Sibling pre-check (non-blocking): `bash "$AGENTS_MAIN_ROOT/bin/check-sibling-uncommitted.sh"` — it warns when a sibling worktree in `## SiblingWorktrees` has uncommitted or unpushed work.
 Payload keys: `commit_message`, `branch`, `closes_issues`, `pr_body_template` (the worker appends the run_tests completion note itself), `wip_mode`, `enforce_worktree`, `script_checkout_root`, `artifact_dir` (= `PLANS_DIR`), `worktree_path` (= `git rev-parse --show-toplevel`), `session_id`.
 Pass `closes_issues` as the `hooks/lib/parse-closes-issues.js` records verbatim (`{number, repo?}` objects) — never flatten them to bare numbers.
@@ -26,6 +26,7 @@ The worker skips staging verification only when `wip_mode: true` — `--wip`, or
 Record each outcome per `skills/_shared/handoff-record.md`: blocked → `node "$AGENTS_MAIN_ROOT/bin/workflow/handoff-append" --class D --step <STEP> --key commit-push:blocked`; landed → `--class E --step <STEP> --key commit-push:pushed`.
 On `branch_mismatch`: nothing was committed; re-derive `branch` from `git rev-parse --abbrev-ref HEAD` in that worktree and re-run — never re-dispatch the same value. Record blocked.
 On `staging_incomplete` or `staging_check_failed`: surface summary + artifact_path, record blocked, and stop.
+On `commit_timeout`: the worker stopped git commit at its time limit; the summary states what it found afterwards (HEAD unchanged / advanced / unknown, index.lock left or not) — report that, never assume nothing was committed. Surface summary + artifact_path, record blocked, and stop. Never delete index.lock yourself.
 On `gate_blocked`: surface the summary verbatim, record blocked, complete the workflow step it names, and re-run the caller. Never retry by another route.
 On `push_failed` or `conflict`: surface summary + artifact_path, record blocked, and stop.
 On `bootstrap_pending` (the remote has no default branch): nothing was pushed; record blocked; the caller's own step decides what follows.

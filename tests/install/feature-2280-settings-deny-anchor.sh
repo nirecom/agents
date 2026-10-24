@@ -83,7 +83,7 @@ ANCHORED="$NEW_RULE_PRESENT"
 # expected and PENDs); "no" means the row's verdict is invariant either way (O/L series,
 # and the G-series members that turned out independent -- a mismatch is a real bug and
 # FAILs immediately regardless of ANCHORED). Round-4 fix: this used to be unconditional,
-# which let a genuinely-wrong "no"-class row (G5) hide behind PEND for two review rounds.
+# which let a genuinely-wrong "no"-class row (G5) hide behind PEND for two review round passes.
 check_deny_row() { # <id> <command> <target-deny-pattern|any> <MATCHED|NO-MATCH> <depends-on-anchoring>
     local id="$1" cmd="$2" pat="$3" want="$4" depends="$5" got detail
     ROWS=$((ROWS + 1))
@@ -119,6 +119,7 @@ check_deny_row() { # <id> <command> <target-deny-pattern|any> <MATCHED|NO-MATCH>
 }
 
 . "$PART_DIR/regression-cases.sh"
+. "$PART_DIR/cases-2617-overmatch.sh"
 
 t_mirror_crosscheck
 t_matcher_robustness
@@ -126,11 +127,12 @@ t_deny_regression_table
 t_launch_form_completeness
 t_bug_reproduction_evidence
 t_row_well_formed_selftest
+t_2617_overmatch
 
 # #2403: the read-only allow enumeration (former lines 21-75) retired into bash-guard's N3-N5
 # classes. Checked as a CLASS (any cmd0 / git read spelling), not a line list, so a re-added
 # variant spelling (`Bash(git log*)`) fails too; permissions.allow only -- deny is untouched.
-# RA_KEPT: every permissions.allow entry OUTSIDE the retired block (former lines 21-75), all 67,
+# RA_KEPT: every permissions.allow entry OUTSIDE the retired block (former lines 21-75), all 68,
 # so the retirement cannot take a non-read-only entry with it. Heredoc: entries carry quotes.
 RA_KEPT="$(cat <<'KEPT'
 ["Read(**/.env.example)","Read(**/.env.sample)","Read(**/.env.template)","Read(**/.env.dist)",
@@ -138,7 +140,8 @@ RA_KEPT="$(cat <<'KEPT'
  "Bash(git add .)","Bash(git add -A)","Bash(git add *)","Bash(git -C * add *)",
  "Bash(git push)","Bash(git push origin *)","Bash(git -C * push)","Bash(git -C * push origin *)",
  "Bash(git -C * push -u origin *)","Bash(git push -u origin *)",
- "Bash(git push *--force-with-lease*)","Bash(git -C * push *--force-with-lease*)",
+ "Bash(git push *--force-with-lease=*:*)","Bash(git -C * push *--force-with-lease=*:*)",
+ "Bash(git --no-pager push *--force-with-lease=*:*)",
  "Bash(git fetch origin *)","Bash(git -C * fetch origin *)",
  "Bash(git fetch --prune origin)","Bash(git -C * fetch --prune origin)",
  "Bash(git pull --rebase --autostash origin *)","Bash(git -C * pull --rebase --autostash origin *)",
@@ -196,13 +199,13 @@ t_retired_readonly_allow() {
     assert_eq "RA1: no read-only Bash allow spelling (git read / ls / grep / find ...) remains in permissions.allow" \
         "" "${ra[0]}"
     ROWS=$((ROWS + 1))
-    assert_eq "RA2: every non-read-only allow entry (all 67 outside the retired block) is kept" \
+    assert_eq "RA2: every non-read-only allow entry (all 68 outside the retired block) is kept" \
         "" "${ra[1]}"
     ROWS=$((ROWS + 1))
     assert_eq "RA2b: the pinned kept list itself is complete (vacuity guard)" \
-        "67" "${ra[2]}"
+        "68" "${ra[2]}"
     ROWS=$((ROWS + 1))
-    assert_eq "RA4: permissions.allow is exactly the kept set (nothing beyond the 67 remains)" \
+    assert_eq "RA4: permissions.allow is exactly the kept set (nothing beyond the 68 remains)" \
         "0" "${ra[3]}"
     ROWS=$((ROWS + 1))
     if deny_list_has "$SETTINGS" "git push --force"; then pass "RA3: the force-push deny survives the allow retirement"
@@ -321,11 +324,11 @@ t_glossary_accept_ask
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
 # crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
 # N6-N13 MUST-trigger narration rows + L6-L15 sanctioned-command counterweights + P37
-# refspec compound tail) + launch-form completeness 48 (12 triggers x 4 launch forms -- round-4
-# C8 added +refspec/positional-force/git-clean triggers, PEND under ANCHORED=0) +
+# refspec compound tail) + launch-form completeness 80 (20 triggers x 4 launch forms -- #2617
+# covers every retained push floor row, incl. the positional `*-f` / `*-f *`; PEND under ANCHORED=0) +
 # bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501) +
-# baseline-accept ask 4 (#2517) + glossary-accept ask 4 (#2529).
-ROWS_EXPECTED=177
+# baseline-accept ask 4 (#2517) + glossary-accept ask 4 (#2529) + 2617 over-match 49 (#2617; OV7 adds 4 positional `*-f *` MATCHED rows).
+ROWS_EXPECTED=258
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

@@ -119,6 +119,7 @@ const RELEASE_PREFILTER_RE = /merge|push|graphql|mergeRequestAccept/i;
 
 if (require.main === module) {
   const r = readHookInput();
+  require("./lib/decision-time-limit").armDecisionTimeLimit({ hookName: "workflow-gate" });
   if (r.kind === "read-error") block(readFailureReason("workflow-gate", r.error));
   const input = r.input;
   if (r.kind === "json-invalid" || !input || typeof input !== "object") {

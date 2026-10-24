@@ -1,28 +1,19 @@
 "use strict";
-// The session's merge-base baseline: WHERE THIS BRANCH STARTED, recorded as a fact rather
-// than guessed later.
-//
-// THE INVARIANT THIS FILE OWNS:
-//   exactly ONE automatic writer   — hooks/workflow-mark/branching-handler.js, on
-//                                    BRANCHING_COMPLETE, write-once.
-//   exactly ONE override           — approveMergeBaseBaseline(), reached only through
-//                                    bin/workflow/record-merge-base-baseline after the user
-//                                    confirmed the base. It is the ONLY path allowed to
-//                                    replace an existing record.
-// Any third writer turns the baseline back into a guess, which is the #1638 failure.
-//
-// `base` is `git rev-parse HEAD` at branching time, UNCONDITIONALLY. It is deliberately not a
-// merge-base against a remote branch: a remote-derived base is exactly the stale value #1638
-// was caused by, and recording it here would give that guess the authority of a fact.
-//
-// `post_session_head` and `alt_base` are EVIDENCE, never decisions. They let a consumer say
-// "the recorded base may be behind your current HEAD, here is the alternative" without any
-// code silently switching to the alternative.
+// The session's merge-base baseline: WHERE THIS BRANCH STARTED, recorded as a fact.
+// INVARIANT: exactly ONE automatic writer (hooks/workflow-mark/branching-handler.js, on
+// BRANCHING_COMPLETE, write-once) and exactly ONE override (approveMergeBaseBaseline(), only via
+// bin/workflow/record-merge-base-baseline after the user confirmed the base — the ONLY path that
+// may replace a record). Any third writer turns the baseline back into a guess (#1638).
+// `base` is `git rev-parse HEAD` at branching time, UNCONDITIONALLY — never a merge-base against
+// a remote branch, the stale value #1638 was caused by.
+// `post_session_head` / `alt_base` are EVIDENCE, never decisions: a consumer may say "the
+// recorded base may be behind your HEAD, here is the alternative", but no code silently
+// switches to it.
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { readState, writeState, createInitialState } = require("./state-io");
 
-// Git Bash hands out /c/... paths; spawnSync on Windows must be given C:\... instead.
+// Git Bash hands out MSYS drive-letter paths; spawnSync on Windows must be given the Windows form instead.
 // Same normalization as hooks/enforce-worktree/git-repo-detection.js.
 function toWindowsPath(raw) {
   if (!raw) return raw;

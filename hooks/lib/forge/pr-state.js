@@ -13,7 +13,7 @@ function isPrPresentOrUnknown(state) {
 
 function localHead(repoDir) {
   try {
-    const r = require("child_process").spawnSync("git", ["-C", repoDir, "rev-parse", "HEAD"],
+    const r = require("../limited-child-process").spawnSync("git", ["-C", repoDir, "rev-parse", "HEAD"],
       { encoding: "utf8", timeout: 5000, windowsHide: true });
     if (!r || r.error || r.status !== 0) return "";
     return (r.stdout || "").trim().toLowerCase();

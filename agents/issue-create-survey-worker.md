@@ -50,6 +50,7 @@ Receive a JSON object with:
 - Worker context: no sentinel emission, no interactive confirmation, no skill invocations.
 - Phase 3 reopen/make-parent confirmation stays in the calling main context.
 - Do not install packages.
+- Apply the TERMS line of `$agents_main_root/hooks/lib/lang-directives.txt` and the Writer directives in `$agents_main_root/skills/_shared/combined-glossary.md` to the `reason` free text; both govern terminology only, not its language.
 
 ## Output contract
 

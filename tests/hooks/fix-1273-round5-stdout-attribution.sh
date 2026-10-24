@@ -2,78 +2,10 @@
 # tests/hooks/fix-1273-round5-stdout-attribution.sh
 # Tests: hooks/workflow-run-tests.js, hooks/workflow-run-tests/exec-model.js
 # Tags: workflow, tests, runner, hook, classifier, provenance, worker-dispatch, stdout-attribution, security, TL1, TL2, scope:common
-#
-# WHY (CPR-WPH): round 4 (NEW-N1) fixed WHICH EMITTER IDENTITY a compound command
-# is attributed to — resolveTestProvenance() flags `ambiguous:true` when two
-# DISTINCT verified emitters occupy execution positions. That closed one half of
-# the attribution problem.
-#
-# H1 (this file) is the other half: WHICH BYTES OF STDOUT are the trusted payload
-# region. `responseHeader()` / `payloadHeader()` (workflow-run-tests.js ~L96-108)
-# scope the worker-dispatch reading window by slicing the CONCATENATED stdout
-# FROM INDEX 0 to the first `log_tail: |` marker. That slice encodes an assumption
-# the shell never guarantees: that stdout BEGINS with the emitter's own bytes. It
-# is false the moment ANY earlier segment writes to stdout — and such a segment is
-# free, because a `printf` (or a second run of the SAME emitter) is not a second
-# DISTINCT emitter and never trips round 4's flag.
-#
-# Two root causes, deliberately separated (CPR-SC):
-#   N1 (round 4, fixed)  — attribution of the EMITTER IDENTITY
-#   H1 (round 5, here)   — attribution of the STDOUT BYTES
-# Every row below is built so N1's check provably does NOT fire (single distinct
-# emitter) — that is what makes H1 a distinct finding, not a restatement.
-#
-#   H1a  forged-header-then-real-payload: `printf '<header ending in a log_tail
-#        marker>'; node bin/worker-dispatch.js test-runner …`. Single verified
-#        emitter, ambiguous=false. payloadHeader() cuts at the FORGED marker, so
-#        the trusted window is 100% attacker text and the real payload
-#        (`status: fail`, FAIL=2) sits entirely in the discarded remainder —
-#        neither the NEW-L2 veto nor the NEW-M2 scoping sees a worker-written byte.
-#
-#   H1b  same-emitter-twice: `node …test-runner a.json; node …test-runner b.json`.
-#        ambiguous=false BY DESIGN (round 4). The first payload's header wins the
-#        slice; the second run — the real one, which failed — is invisible.
-#
-#   H1c  run-all route, forged contract prepended: `printf 'RUN_CONTRACT: …';
-#        bash tests/run-all.sh --help`. NEW-M2 scoped header parsing to the
-#        worker-dispatch route only, so the whole stdout is read; the forged line
-#        becomes the run's sole contract while the genuine segment printed none.
-#
-# ==== H1b / N1c TENSION NOTE — READ BEFORE IMPLEMENTING THE FIX ====
-# H1b is in DIRECT tension with a row this file must not and does not edit:
-# `tests/hooks/fix-1273-round4-emitter-ambiguity.sh` case
-# `N1c/control-same-emitter-twice-is-not-ambiguous`, which pins "two verifying
-# positions naming the SAME emitter keep completing". H1b is exactly that shape
-# and must NOT complete. Both cannot hold under a fix expressed purely at the
-# provenance layer. The implementer must consciously pick one of:
-#   (i)  broaden the demotion rule to "more than one verifying execution POSITION
-#        is ambiguous" — which RETIRES/INVERTS the pinned N1c row, a change that
-#        must be made deliberately and recorded, not discovered by a red suite; or
-#   (ii) fix at the BYTE-ATTRIBUTION layer instead (the narrower, preferred shape):
-#        stop assuming stdout starts at the emitter's first byte — e.g. anchor the
-#        trusted window to a renderer-owned payload BEGIN marker, or demote when
-#        the payload region is not provably the whole of stdout. That preserves
-#        N1c's semantics (identity attribution unchanged) while still demoting
-#        H1b, because the second payload's bytes are unaccounted for.
-# This file does not choose between them; it only makes the trade visible.
-# ===================================================================
-#
-# Layering: `*-resolves-*` / `*-not-ambiguous` rows are TL1 (exec-model.js
-# required directly, proving round 4's check does not fire); every
-# `*-must-not-complete-run-tests` / `*-must-actively-demote` row is TL2 (real hook
-# process, real workflow-state file), mirroring round 3 / round 4.
-#
-# RED-FIRST: rows named `*-must-*` assert the SAFE / post-fix outcome and report
-# FAIL against pre-fix code — that FAIL IS the vulnerability evidence. `control-*`
-# rows are GREEN today and pin behaviour that must survive the fix.
-#
-# TL3 gap (what this test does NOT catch):
-#   - Whether a real Bash tool call delivers a compound command's stdout
-#     concatenated in the order these fixtures assume; the stdout is synthesised
-#     here because the hook's WINDOWING decision, not the shell, is under test.
-#   - Whether a real `printf` on the host emits the exact bytes assumed (Windows
-#     shell quoting, `\n` handling). tests/bin/TL3-worker-dispatch-run-tests.sh is the
-#     gated tier for the real-invocation shape.
+# H1 (round 5): which STDOUT BYTES are trusted; round 4 (N1) fixed emitter identity. Rows keep N1 dormant.
+# H1b vs round-4 N1c tension: fix at the byte-attribution layer, or retire N1c deliberately (issue #1273).
+# `-resolves-`/`-not-ambiguous` rows are TL1; `-must-*` rows are TL2 and red pre-fix; `control-*` stay green.
+# TL3 gap: real Bash stdout ordering and host printf bytes (tests/bin/TL3-worker-dispatch-run-tests.sh).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 
@@ -290,7 +222,6 @@ RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0"
 # stdout, and an earlier segment gets to place that marker. The worker's own
 # verdict fields and its own contract both fall outside the window, so NEW-L2
 # (veto) and NEW-M2 (scoping) each evaluate over text the worker never wrote.
-# ===========================================================================
 
 # TL1 — proof that round 4's fix is NOT what should catch this: exactly one
 # distinct verified emitter, so `ambiguous` is false and the N1 demotion path is
@@ -319,13 +250,12 @@ assert_eq "H1a/forged-header-before-failing-worker-payload-must-actively-demote"
     "pending" "$(run_tests_status "$SID")"
 
 # RED / TL2, LENIENT (diagnostics category) — a demotion must stay attributable.
-# demotionReason() already names its four causes and the hook surfaces one line of
-# systemMessage on every demotion; whatever tag the H1 fix adds must reach that
-# same channel. The row asserts only that the channel FIRES with the standard
-# prefix, never a tag spelling, because the tag does not exist yet.
+# The hook surfaces one systemMessage fact line per demotion (#2731 S3-5:
+# `[run_tests] pending (<reason>)`); the row pins only the line's prefix, never
+# the reason spelling, because the H1 tag does not exist yet.
 H1A_MSG="$(drive_hook_capture "$FORGED_HEADER_CMD" 0 "h1a3-$$-$RANDOM" "$FORGED_THEN_REAL_STDOUT" "$AGENTS_WIN")"
 assert_contains "H1a/lenient-demotion-must-be-attributable-via-system-message" \
-    "run_tests demoted to pending" "$H1A_MSG"
+    "[run_tests] pending (" "$H1A_MSG"
 
 # CONTROL (GREEN today) — the differential that isolates the finding: the SAME
 # failing worker payload with NO forged prefix is correctly vetoed. So H1a is a

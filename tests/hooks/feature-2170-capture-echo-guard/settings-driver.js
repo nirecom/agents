@@ -20,6 +20,21 @@ if (mode === "--expected-matcher") {
   process.exit(0);
 }
 
+// Merged allow-deny member scope (#2676, hooks/merged-allow-deny/members.js):
+// --member-tools <name> prints its tools "|"-joined; --member-covers-command-tools <name> prints yes|no.
+if (mode === "--member-tools" || mode === "--member-covers-command-tools") {
+  const { MEMBERS } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "merged-allow-deny", "members.js"));
+  const member = MEMBERS.find((m) => m.name === process.argv[3]);
+  if (!member) {
+    console.log("NOT_A_MEMBER");
+  } else if (mode === "--member-tools") {
+    console.log(member.tools.join("|"));
+  } else {
+    console.log(COMMAND_TOOL_NAMES.every((n) => member.tools.indexOf(n) !== -1) ? "yes" : "no");
+  }
+  process.exit(0);
+}
+
 let settings;
 try {
   settings = JSON.parse(fs.readFileSync(path.join(SCRIPT_CHECKOUT_ROOT, "settings.json"), "utf8"));

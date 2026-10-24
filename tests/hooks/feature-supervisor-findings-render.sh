@@ -116,6 +116,22 @@ process.stdout.write(result || '');
     else
         fail "T4d: summaryOnly:true output does not match canonical one-line format, got: $(printf '%q' "$out_sum")"
     fi
+
+    # T4e (#2731 S3-9): summaryOnly stays bare under CONV_LANG=japanese — the line is embedded
+    # verbatim in the Final Report, so the directive must never appear in it.
+    local out_sum_ja
+    out_sum_ja=$(CONV_LANG=japanese run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [{ categories: ['workflow'], severity: 'error', detail: 'd', reporter: 'test', timestamp: new Date().toISOString() }];
+process.stdout.write(r.formatLayer2Findings(findings, { sessionId: 's', supervisorPath: '/s.md', stateFilePath: '/st.json', summaryOnly: true }) || 'NULL');
+" 2>/dev/null)
+    if [ "$out_sum_ja" = "NULL" ] || [ -z "$out_sum_ja" ]; then
+        fail "T4e: summaryOnly under CONV_LANG=japanese returned nothing"
+    elif printf '%s' "$out_sum_ja" | grep -qF "Respond to the user in"; then
+        fail "T4e: summaryOnly under CONV_LANG=japanese carries the directive, got: $(printf '%q' "$out_sum_ja")"
+    else
+        pass "T4e: summaryOnly under CONV_LANG=japanese carries no directive"
+    fi
 }
 
 # --- T5: CONV_LANG symmetric coverage for formatL2ArmedReason, formatWorktreeOffProposalReason (Fix 3 / C4) ---
