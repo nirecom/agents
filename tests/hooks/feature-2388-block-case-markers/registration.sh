@@ -142,7 +142,7 @@ parity_placement() {
 }
 
 # rel|today's verdict — the six category roots, flat tests/<name>, one name per
-# language that has a case-marker reader (#2411), the same names off an entrypoint
+# language that has a test case reader (#2411), the same names off an entrypoint
 # placement, and names the registry places in an entry without a reader (or in none).
 PARITY_ROWS=(
   "tests/hooks/a.sh|1" "tests/bin/a.sh|1" "tests/skills/a.sh|1"

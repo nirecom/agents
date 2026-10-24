@@ -5,7 +5,13 @@
 #   FILE\t<state>\t<line>\t<reason>                                  state: none|conforming|malformed|uncertain
 #   CASE\t<name>\t<target>\t<begin>\t<end>\t<deps>\t<reason>      (conforming only, at least one, in file order; name and target non-empty)
 # It sets the globals trp_parse_case_markers sets, so trp_marker_state_from_globals reads them.
-# rc: 0 loaded, 79 <command> is not installed, 1 the child failed or broke the format above.
+# rc: 0 loaded, 79 <command> is not installed, 1 the child failed or broke the format above
+# (a CASE target that fails ctp_target_path_valid included).
+
+_crb_dir="${BASH_SOURCE[0]}"
+case "$_crb_dir" in */*) _crb_dir="${_crb_dir%/*}" ;; *) _crb_dir=. ;; esac
+# shellcheck source=case-target-path-rule.sh
+declare -F ctp_target_path_valid >/dev/null 2>&1 || . "$_crb_dir/case-target-path-rule.sh" || return 1
 
 # crb_native_path <path> — sets CRB_PATH to the form a non-shell child process can open.
 crb_native_path() {
@@ -45,6 +51,7 @@ crb_run() {
       CASE)
         [[ "${#CRB_COL[@]}" -eq 7 && -n "${CRB_COL[1]}" && -n "${CRB_COL[2]}" ]] || return 1
         [[ "${CRB_COL[3]}" =~ ^[0-9]+$ && "${CRB_COL[4]}" =~ ^[0-9]+$ ]] || return 1
+        ctp_target_path_valid "${CRB_COL[2]}" || return 1
         names+=("${CRB_COL[1]}"); targets+=("${CRB_COL[2]}"); begins+=("${CRB_COL[3]}"); ends+=("${CRB_COL[4]}")
         ;;
       *) return 1 ;;

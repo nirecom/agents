@@ -32,8 +32,14 @@ for _lang in "${LANGS[@]}"; do
   assert_eq "$_lang malformed -> $HK_DECISION" "$_lang malformed -> block"
   has "$_lang block text" "$HK_REASON" "($LREASON) code=MALFORMED_CASE_MARKER"
 done
+# Uncertain nesting is only a WARN for the case-marker check, but an uncertain new file whose
+# header lists two Tests: tokens is not conforming, so #2502 S4-4b counts its cases (0 -> 2) and blocks on that.
 hook_write "$REPO_EDIT" tests/bin/uncertain.js js-uncertain
-assert_eq "js uncertain -> $HK_DECISION" "js uncertain -> approve"
+assert_eq "js uncertain -> $HK_DECISION" "js uncertain -> block"
+has "js uncertain block text" "$HK_REASON" "(case units 0 -> 2)"
+has "js uncertain block text" "$HK_REASON" "code=CASE_ADDED_WITHOUT_MARKERS"
+lacks "js uncertain block text" "$HK_REASON" "code=MALFORMED_CASE_MARKER"
+lacks "js uncertain block text" "$HK_REASON" "code=MISSING_CASE_MARKERS"
 case_end
 
 case_begin "gate-commit-time-blocks-missing-passes-conforming" "hooks/lib/precommit-tests-frontmatter.sh"
@@ -232,4 +238,57 @@ for _rel in "${PARITY_RELS[@]}"; do
     fail "target $_rel" "want=$_want edit-time=${_js:-none} commit-time=$_sh"
   fi
 done
+case_end
+
+# #2502 S3-5: the reader-less classification (a placed file whose registry entry has no
+# caseMarkerReader) on the same path table. The pair names are assumed — the plan names only the
+# role: isReaderlessCaseMarkerTarget (hook export) / _precommit_is_readerless_case_marker_target.
+PARITY_RL_JS="$TMPBASE/parity-readerless.js"
+cat > "$PARITY_RL_JS" <<'PARITYRLJS'
+let m;
+try {
+  m = require(process.argv[2]);
+} catch (e) {
+  console.log("MODULE_MISSING");
+  process.exit(3);
+}
+if (typeof m.isReaderlessCaseMarkerTarget !== "function") {
+  console.log("NO_EXPORT");
+  process.exit(4);
+}
+for (const rel of process.argv.slice(3)) console.log(rel + "|" + (m.isReaderlessCaseMarkerTarget(rel) ? 1 : 0));
+PARITYRLJS
+
+case_begin "gate-readerless-predicates-agree" "hooks/block-case-markers.js"
+# name|path|want (1 = reader-less target, 0 = not one).
+PARITY_RL_TABLE="readerless-bin|tests/bin/test_a.rb|1
+readerless-hooks|tests/hooks/test_a.rb|1
+readerless-top|tests/test_a.rb|1
+excluded-lib|tests/lib/test_a.rb|0
+excluded-archive|tests/_archive/test_a.rb|0
+excluded-suite-subfile|tests/bin/suite/test_a.rb|0
+excluded-outside-tests|bin/test_a.rb|0
+unmatched-json|tests/bin/fixture.json|0
+has-reader-sh|tests/bin/a.sh|0
+has-reader-js|tests/bin/a.js|0"
+PARITY_RELS=()
+while IFS='|' read -r _name _rel _want; do
+  PARITY_RELS+=("$_rel")
+done <<<"$PARITY_RL_TABLE"
+PARITY_OUT="$(cd "$NEUTRAL_CWD" && node "$(np "$PARITY_RL_JS")" "$(np "$HOOK")" "${PARITY_RELS[@]}" 2>&1)"
+while IFS='|' read -r _name _rel _want; do
+  _js="$(printf '%s\n' "$PARITY_OUT" | grep -F -x -e "$_rel|1" -e "$_rel|0" | head -n 1)"
+  _js="${_js##*|}"
+  _sh=0
+  if declare -F _precommit_is_readerless_case_marker_target >/dev/null 2>&1; then
+    _precommit_is_readerless_case_marker_target "$_rel" </dev/null && _sh=1
+  else
+    _sh=127
+  fi
+  if [[ "$_js" == "$_want" && "$_sh" == "$_want" && "$_js" == "$_sh" ]]; then
+    pass "reader-less target [$_name] $_rel -> $_want (edit-time and commit-time agree)"
+  else
+    fail "reader-less target [$_name] $_rel" "want=$_want edit-time=${_js:-none} (${PARITY_OUT%%$'\n'*}) commit-time=$_sh"
+  fi
+done <<<"$PARITY_RL_TABLE"
 case_end

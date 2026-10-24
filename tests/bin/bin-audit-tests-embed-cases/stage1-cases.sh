@@ -85,4 +85,40 @@ if [[ "$RC" -eq 0 && -n "$EC_WORKDIR" ]]; then pass "S1-9 --embed-cases --fix-he
 check_eq "S1-9 --fix-headers with --embed-cases still leaves the original untouched" "$S1_FIXABLE_BEFORE" "$(git -C "$S1_REPO" hash-object tests/bin/t-fixable.sh)"
 case_end
 
+S1_ONLY_BAND="$(printf 'BAND\t1\ttests/bin/t-clean.sh\tselected=only-file')"
+
+case_begin "stage1-only-file-plans-one-file" "bin/lib/test-embed-cases/stage-plan.sh"
+ec_stage1 "$S1_REPO" "$AUDIT" --only-file tests/bin/t-clean.sh
+check_eq "S1-10 --only-file stage 1 exits 0 (rc=$RC err=${ERR:0:200})" "0" "$RC"
+check_eq "S1-10 the only BAND line is the chosen file with selected=only-file" "$S1_ONLY_BAND" "$(printf '%s\n' "$OUT" | grep '^BAND')"
+check_eq "S1-10 the other candidate t-fixable gets no BAND line" "" "$(ec_band_paths | grep -xF tests/bin/t-fixable.sh)"
+if [[ -n "$EC_WORKDIR" && "$EC_WORKDIR" == "$S1_PLANS_ROOT"* && -f "$EC_WORKDIR/worklist.tsv" ]]; then
+  pass "S1-10 EMBED_WORKDIR holds a worklist.tsv under <plans>/sweep-tests-embed/"
+else
+  fail "S1-10 EMBED_WORKDIR holds a worklist.tsv under <plans>/sweep-tests-embed/" "workdir='$EC_WORKDIR' out=${OUT:0:300}"
+fi
+_s1_rows="$(awk -F'\t' '$2 ~ /^tests\// { print }' "$EC_WORKDIR/worklist.tsv" 2>/dev/null)"
+check_eq "S1-10 worklist.tsv holds one item row" "1" "$(printf '%s\n' "$_s1_rows" | grep -c .)"
+check_eq "S1-10 the row has 9 columns" "9" "$(printf '%s\n' "$_s1_rows" | awk -F'\t' 'NF { print NF }')"
+check_eq "S1-10 the row's relpath is the chosen file" "tests/bin/t-clean.sh" "$(printf '%s\n' "$_s1_rows" | cut -f2)"
+check_eq "S1-10 the row is item 1, pending, 0 attempts" "1 pending 0" "$(ec_wl_field tests/bin/t-clean.sh 1) $(ec_wl_field tests/bin/t-clean.sh 8) $(ec_wl_field tests/bin/t-clean.sh 9)"
+if [[ -n "$EC_WORKDIR" && -f "$EC_WORKDIR/items/1/input/t-clean.sh" && ! -e "$EC_WORKDIR/items/2" ]]; then
+  pass "S1-10 only items/1/ is written, holding the chosen file's copy"
+else
+  fail "S1-10 only items/1/ is written, holding the chosen file's copy" "workdir='$EC_WORKDIR'"
+fi
+_items="$(printf '%s\n' "$OUT" | sed -n '/^<<<EMBED-GATE-STE4/,/^>>>/p' | awk -F'\t' '$1 == "ITEM"')"
+check_eq "S1-10 the gate block carries one ITEM row" "1" "$(printf '%s\n' "$_items" | grep -c .)"
+check_eq "S1-10 the repo stays clean" "" "$(git -C "$S1_REPO" status --porcelain)"
+case_end
+
+case_begin "stage1-only-file-dry-run-writes-nothing" "bin/lib/test-embed-cases/stage-plan.sh"
+_s1_wd_before="$(ls -1A "$S1_PLANS_ROOT" 2>/dev/null)"
+ec_run "$S1_REPO" "$AUDIT" --embed-cases --dry-run --only-file tests/bin/t-clean.sh
+check_eq "S1-11 --only-file --dry-run exits 0 (err=${ERR:0:200})" "0" "$RC"
+check_eq "S1-11 the BAND line matches the apply-mode one" "$S1_ONLY_BAND" "$(printf '%s\n' "$OUT" | grep '^BAND')"
+check_eq "S1-11 no EMBED_WORKDIR line" "" "$(printf '%s\n' "$OUT" | grep '^EMBED_WORKDIR:')"
+check_eq "S1-11 nothing is created under the workdir root" "$_s1_wd_before" "$(ls -1A "$S1_PLANS_ROOT" 2>/dev/null)"
+case_end
+
 grp_done stage1-cases.sh

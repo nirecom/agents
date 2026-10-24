@@ -35,9 +35,22 @@ cli() {
 fx_root_decoy() {
   local d="$1" f
   mkdir -p "$d/tests/lib" "$d/tests/bin"
-  for f in tests/lib/root-decoy.sh tests/lib/root-decoy-build.js tests/bin/feature-2561-root-names-residue.sh; do
+  # root-decoy-build.js requires ./test-cache-base (since #2641), so it travels with it.
+  for f in tests/lib/root-decoy.sh tests/lib/root-decoy-build.js tests/lib/test-cache-base.js tests/bin/feature-2561-root-names-residue.sh; do
     cp "$SCRIPT_CHECKOUT_ROOT/$f" "$d/$f"
   done
+}
+
+# fx_harness <dir> — the shared harness and the libraries it sources on load (the root
+# decoy; since #2641 also the run root and the command guard), so a fixture test can load it.
+fx_harness() {
+  local d="$1" f
+  mkdir -p "$d/tests/lib"
+  for f in harness.sh test-run-root.sh command-guard.sh command-guard-build.js; do
+    cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/$f" "$d/tests/lib/$f"
+  done
+  cp -R "$SCRIPT_CHECKOUT_ROOT/tests/lib/command-guard" "$d/tests/lib/command-guard"
+  fx_root_decoy "$d"
 }
 
 # fx_checkout <dir> [<table.json>] — a minimal agents checkout in a git repo:
@@ -51,8 +64,7 @@ fx_checkout() {
     if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/$f" ]; then cp "$SCRIPT_CHECKOUT_ROOT/bin/$f" "$d/bin/$f"; fi
   done
   install_test_language_registry "$d" "$SCRIPT_CHECKOUT_ROOT"
-  cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh" "$d/tests/lib/harness.sh"
-  fx_root_decoy "$d"
+  fx_harness "$d"
   if [ -n "$t" ]; then cp "$t" "$d/hooks/lib/test-language-registry.json"; fi
   harness_git_init "$d"
   git -C "$d" config user.email t@example.com

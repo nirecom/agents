@@ -29,5 +29,6 @@ Design and fail-open behavior: `docs/architecture/claude-code/case-marker-gate.m
 - Blocks (HIGH): no markers at all (`MISSING_CASE_MARKERS`); a marker the language's reader rejects (`MALFORMED_CASE_MARKER`, with the reason in parentheses).
 - Warns only (WARN): a marker whose placement the reader cannot settle (`UNCERTAIN_CASE_MARKER`); a language runtime that is not installed (`CASE_MARKER_RUNTIME_UNAVAILABLE`).
 - Not checked (soft rules above): descriptive names and agreement between a target and the `Tests:` header.
-- Existing files already in HEAD are out of scope; a rename counts as a new file.
+- Existing files already in HEAD are out of scope of this gate; a rename counts as a new file.
+- Adding a case to an existing marker-less file whose working `Tests:` header lists 2+ paths (or none) is blocked as `CASE_ADDED_WITHOUT_MARKERS` by `bin/check-test-language-match.sh`; a file whose header keeps exactly one path is not checked. Design: `docs/architecture/claude-code/case-marker-gate.md`.
 - Migrate existing marker-less files with `/sweep-tests` STE-4 (`--embed-cases`), never by hand in bulk.

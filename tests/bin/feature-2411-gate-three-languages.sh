@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2411-gate-three-languages.sh
 # Tests: bin/check-case-markers.sh, bin/check-test-frontmatter.sh, hooks/block-case-markers.js, hooks/lib/precommit-tests-frontmatter.sh, hooks/lib/test-language-registry.json
-# Tags: TL2, bin, hooks, case-markers, test-language-registry, pre-commit, scope:issue-specific
+# Tags: TL2, bin, hooks, case-markers, test-language-registry, pre-commit, unsupported, scope:issue-specific
 # Issue #2411: the marker gate for PowerShell, Python and JavaScript tests, and the bash
 # verdicts and wording it must leave byte-identical. Cases live in the sibling directory:
 # pin-*.sh hold today's behaviour, gate-*.sh hold the three-language behaviour.
@@ -236,8 +236,12 @@ case_end
 . "$CASE_DIR/gate-checker.sh"
 # shellcheck source=feature-2411-gate-three-languages/gate-hooks.sh
 . "$CASE_DIR/gate-hooks.sh"
+# shellcheck source=feature-2411-gate-three-languages/gate-existing-self-impl.sh
+. "$CASE_DIR/gate-existing-self-impl.sh"
 # shellcheck source=feature-2411-gate-three-languages/gate-helper-load.sh
 . "$CASE_DIR/gate-helper-load.sh"
+# shellcheck source=feature-2411-gate-three-languages/gate-unsupported.sh
+. "$CASE_DIR/gate-unsupported.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

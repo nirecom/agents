@@ -76,7 +76,15 @@ VCE_BK_FILE="$VCE_BK/${VCE_REL##*/}"
 vce_restore() {
   if [[ -f "$VCE_BK_FILE" && ! -L "$VCE_BK_FILE" ]]; then cp "$VCE_BK_FILE" "$VCE_REL" && rm -f "$VCE_BK_FILE"; fi
 }
-trap vce_restore EXIT
+# The pester caseEmbedRules part answers every op from one analyzer run kept here.
+CASE_EMBED_CACHE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/case-embed-cache.XXXXXX")"
+export CASE_EMBED_CACHE_DIR
+# shellcheck disable=SC2329  # the EXIT trap calls it
+vce_exit() {
+  vce_restore
+  rm -rf "${CASE_EMBED_CACHE_DIR:?}"
+}
+trap vce_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 

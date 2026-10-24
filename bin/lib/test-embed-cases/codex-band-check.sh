@@ -12,10 +12,10 @@ codex_core_init "EMBED_CASE_BOUNDARY"
 codex_core_check_cli
 
 cbc_prompt="$(codex_core_adversarial_preamble "case-marker embedding rewrite")
-Each file below is a test rewritten so that every assertion sits inside a
-case_begin \"<name>\" \"<target>\" ... case_end block. Judge only the case boundaries:
-a block must not cut an assertion, a fixture it depends on, or a loop in half, and the
-target named on case_begin must be what the block's assertions exercise.
+Each file below is a test rewritten so that every assertion sits inside one case of
+its language's case-marker notation: a named case that names one target path. Judge
+only the case boundaries: a case must not cut an assertion, a fixture it depends on,
+or a loop in half, and the target the case names must be what its assertions exercise.
 Answer with exactly one line per file and nothing else:
 CASE_BOUNDARY: <relpath>: OK
 CASE_BOUNDARY: <relpath>: NG <one-line reason>
