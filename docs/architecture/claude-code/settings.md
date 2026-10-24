@@ -38,6 +38,10 @@ at this settings.json level — no anchored rule spans the `cd &&` prefix. That 
 defense is `bash-guard.js`, which issues an unconditional deny for any compound form containing `&&`/`;`/`|`/backtick/`$(…)`/redirect/leading-env-prefix — the forbidden-literal check fires before the
 permission engine ever evaluates the command string. Only interactive approval ("Yes, don't ask
 again") saves individual rules for a given pattern.
+A glob `*` spans spaces and also matches the empty string, so a rule cannot say "this token is
+a flag": `git push *-f*` denied every push whose branch name held `-f` (#2617). Any judgment
+that depends on argument position belongs in a hook (`bash-guard`'s git-deviant detector);
+settings.json keeps only floor rows whose match is position-safe.
 
 **Self-script allow in bash-guard**: agents' own commands bypass the permission prompt via
 `bash-guard.js`'s allow path — no generated `permissions.allow` spellings needed.
@@ -94,7 +98,8 @@ allowed by a positive argv judge instead of a spelling.
   for the same reason.
 - Interlock: while the early-write gate blocks, deny/notify/self-script stay quiet but a
   read-only allow still speaks — only when deny and notify find nothing (see
-  [settings/hooks.md](settings/hooks.md)).
+  [settings/hooks.md](settings/hooks.md)). The git-deviant deny also still speaks, since
+  silencing it would hand `git push origin +main` to the `git push origin *` allow row.
 
 **Known limitations**:
 - TL3 verification gap: `tests/hooks/TL3-hook-bash-guard-envelope.sh` (gated by `RUN_TL3=on`) probes

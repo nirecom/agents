@@ -12,8 +12,9 @@ not proof against deliberate bypass via shell indirection, which is a separate t
 
 | Category | Examples |
 |---|---|
-| Force push (denied) | `git push --force`, `git push -f`, `+<ref>` refspec form |
-| Force push (allowed) | `git push --force-with-lease` — auto-permitted on feature branches |
+| Force push (denied) | `git push --force` / `-f`, `+<ref>` refspec, `--delete` / `--prune` / `:<ref>`, `:` matching push, `--mirror`, a lease without `<branch>:<sha>` — `bash-guard` hook (argv parse) + `settings.json` floor rows; `:` refspecs also hit the `origin :*` row |
+| Force push (allowed) | `git push --force-with-lease=<branch>:<sha>` only — auto-permitted on feature branches |
+| Forced cleanup (denied) | `git clean -f` / `--force`, `git worktree remove -f` / `--force` — `bash-guard` hook + `settings.json` floor rows |
 | `.env` direct access | Read/Edit/Write on `.env`, `.env.local`, `.env.production`, etc. |
 | Bulk deletion | `rm -rf`, `Remove-Item -Recurse -Force`, `find -delete`, `find -exec rm` |
 | AWS destructive ops | `aws * delete`, `aws * terminate`, `aws * destroy`, `aws s3 rm`, etc. |
@@ -30,9 +31,12 @@ MUST-trigger git rules are anchored to the START of a real git-invocation form (
 `git -C *`, `git -c *`, `git --no-pager`) — see `docs/architecture/claude-code/settings.md`
 "Permission glob matching" for the full anchoring contract and the #2280 incident that
 anchoring fixes. This means:
-- `git push --force` / `git push -f*` / `git push *-f*` catch bare `--force`/`-f`; the
-  `-with-lease` suffix prevents any match against `--force-with-lease`
-- `git push *+*` catches `+<ref>` force-push refspec syntax
+- `*` spans spaces and matches the empty string, so a glob cannot tell an `-f` flag from an
+  `-f` inside a branch name (#2617: `git push *-f*` denied `feature/…` pushes and the lease
+  form). Argument-position judgment therefore lives in `bash-guard`'s git-deviant detector;
+  settings.json keeps only position-safe floor rows (`git push --force *`, `git push -f*`, `git push *-f`, …)
+- Only the explicit lease `--force-with-lease=<branch>:<sha>` is allowed; a lease without a
+  value, or with a non-40-hex sha, is denied by the hook
 - Interior `*` in a deny glob (e.g. `git push *--force`) is a deliberate widening so that
   `git push origin branch --force` — remote/refspec args between the subcommand and the flag
   — still matches; the failure direction is toward more caution, never a bypass

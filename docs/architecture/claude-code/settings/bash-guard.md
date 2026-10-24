@@ -14,6 +14,17 @@ Full behavior contract of `hooks/bash-guard.js`; the hook table and every other 
     `<<`, `>`/`>>`, leading `FOO=1 cmd` env-prefix) per `rules/shell-commands.md`.
     A pipe into `xargs` is forgiven at that hit only (xargs-pipe exemption in
     `hooks/bash-guard/detect.js`). Output: `{decision:"block", reason}`.
+  - **deny (git-deviant, #2617)**: after the literal check, `hooks/bash-guard/git-deviant.js`
+    parses git argv (launch options, env/command wrappers, path-qualified and `.exe` git peeled
+    by the shared `git-write-ir` resolvers) and denies 8 forms: push `-f`/`--force`, `+refspec`,
+    delete (`-d`/`--delete`/`--prune`/`:<ref>`), matching `:` refspec, `--mirror`, a lease without
+    `<branch>:<40-hex sha>`; `clean -f`/`--force`; `worktree remove -f`/`--force`. Short clusters,
+    unique long prefixes, `--` and value-taking options are honored; with `--repo` every push
+    positional is a refspec, else the first is the remote. A multi-line command is also checked
+    line by line, because the IR does not split on a line break; a quoted multi-line text that
+    holds a git line is denied too (an accepted false deny). Registry and guidance text:
+    `hooks/bash-guard/git-deviant/forms.js` (codes in `reasons.js` `GIT_DEVIANT_CODES`; policy
+    owner `rules/git.md`). A parse failure fails open, leaving only the settings.json floor rows.
   - **notify** (non-blocking): ineffective issuance form detected. Three classes —
     L1 sentinel without `echo`, L2 sentinel in wrong form (unknown or LOOKSLIKE-only pattern;
     LOOKSLIKE forms are left to `workflow-mark.js`'s existing handlers to avoid double-notification),
@@ -36,8 +47,9 @@ Full behavior contract of `hooks/bash-guard.js`; the hook table and every other 
   Reason-code namespace is disjoint from workflow-gate's `T-A..T-E` tiers.
   **Interlock (C6)**: stays quiet while the early-write gate is actually blocking
   (`hooks/lib/early-write-gate.js` `earlyWriteGateStatus(sessionId).active`), so the two
-  guards never talk over each other. One exception: when deny and notify both find nothing,
-  a read-only class match still allows (the gate blocks Edit/Write, not Bash reads) — see
+  guards never talk over each other. Two exceptions: the git-deviant deny still fires (a
+  security guard; silencing it would let `+refspec` reach the `git push origin *` allow), and
+  when deny and notify both find nothing, a read-only class match still allows (the gate blocks Edit/Write, not Bash reads) — see
   `marker-bypass-contract.md`, which also records
   that this hook is never bypassed by `WORKFLOW_OFF`/`WORKTREE_OFF`.
   **Stdin**: unreadable stdin → deny; malformed JSON → no stdout, one stderr diagnostic line
