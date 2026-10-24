@@ -107,14 +107,13 @@ check_content() {
   return "$rc"
 }
 
-# staged_content <file> — prints the content to validate in --staged mode.
+# staged_content <file> <repo-root> — prints the content to validate in --staged mode.
 # Reads the staged blob via `git show :<rel>` when the path is repo-relative and
 # staged; otherwise falls back to the working-tree file (keeps non-git and
-# absolute-path callers working).
+# absolute-path callers working). <repo-root> is empty outside a git repository.
 staged_content() {
-  local f="$1"
-  local repo_root rel blob
-  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  local f="$1" repo_root="$2"
+  local rel blob
   rel="$f"
   if [[ "$f" == /* && -n "$repo_root" && "$f" == "$repo_root/"* ]]; then
     rel="${f#"$repo_root"/}"
@@ -159,6 +158,9 @@ case "$mode" in
     # The self-impl sibling is staged-mode only, so --all never needs it on disk.
     # shellcheck source=check-test-frontmatter/self-impl.sh
     source "$SCRIPT_DIR/check-test-frontmatter/self-impl.sh" || { echo "ERROR: check-test-frontmatter/self-impl.sh not readable" >&2; exit 2; }
+    repo_root_hs="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    st_files=()
+    st_rels=()
     for f in "$@"; do
       # Accept both relative (tests/foo.sh) and absolute paths.
       # _archive/ files are excluded regardless of path form.
@@ -167,17 +169,23 @@ case "$mode" in
         */tests/*|tests/*) _is_supported_test "$f" || continue ;;
         *) continue ;;
       esac
-      # Compute the repo-relative path once; reused by both the flat-layout
-      # rejection and the harness-source check below.
+      # Compute the repo-relative path once; reused by every check below.
       rel="$f"
-      repo_root_hs="$(git rev-parse --show-toplevel 2>/dev/null || true)"
       if [[ "$f" == /* && -n "$repo_root_hs" && "$f" == "$repo_root_hs/"* ]]; then
         rel="${f#"$repo_root_hs"/}"
       fi
+      st_files+=("$f")
+      st_rels+=("$rel")
+    done
+    # One git process reads every HEAD blob; ctf_head_has answers as git cat-file -e HEAD:<rel>.
+    ctf_head_load ${st_rels[@]+"${st_rels[@]}"}
+    for ((st_i = 0; st_i < ${#st_files[@]}; st_i++)); do
+      f="${st_files[st_i]}"
+      rel="${st_rels[st_i]}"
       # 2-level enforcement (#1834, #2392): a NEWLY-ADDED flat test is rejected with its
       # entry's flatRejectCode and nameLabel. Existing flat files are grandfathered
       # (swept by #2372); run-all.sh is the infra runner (exempted by _is_flat_test).
-      if _is_flat_test "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+      if _is_flat_test "$rel" && ! ctf_head_has "$rel"; then
         _tlr_get "$TLR_ID" diagnostics.flatRejectCode || true
         code="$_TLR_V"
         _tlr_get "$TLR_ID" diagnostics.nameLabel || true
@@ -185,22 +193,22 @@ case "$mode" in
         FAIL=1
         continue
       fi
-      content="$(staged_content "$f")" || continue
+      content="$(staged_content "$f" "$repo_root_hs")" || continue
       extract_headers "$content" "$f"
       check_content "$f" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
       # Helper-library check: a new entrypoint of an entry with a helperLibrary must load
       # it, once the repo ships that library (gradual adoption). Edits are exempt.
       if _is_test_entrypoint "$rel" \
          && [[ -n "$repo_root_hs" && -f "$repo_root_hs/$HL_PATH" ]]; then
-        if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+        if ! ctf_head_has "$rel"; then
           check_harness_source "$f" "$content" "$HL_RE" || FAIL=1
         fi
       fi
-      # Self-implemented harness check (#2502): new files only, every language.
-      if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
-        ctf_self_impl "$rel" "$content" || FAIL=1
-      fi
+      # Self-implemented harness check (#2502): every language; an existing file blocks only on
+      # a detection its HEAD version lacks. Queued here, judged in one run after the loop.
+      ctf_self_impl_add "$rel" "$content"
     done
+    ctf_self_impl_run || FAIL=1
     [[ "$FAIL" -eq 1 ]] && exit 1
     exit 0
     ;;

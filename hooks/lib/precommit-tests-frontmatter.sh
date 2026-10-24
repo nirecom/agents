@@ -29,16 +29,13 @@ _precommit_is_suite_subfile() {
     return 1
 }
 
-# _precommit_is_case_marker_target <rel> — case-marker entrypoint SSOT (mirrored by
-# hooks/block-case-markers.js isCaseMarkerTarget; parity-tested): a placed file whose
-# registry entry is supported with a caseMarkerReader. rc 0 = target, rc 1 = excluded
-# (archive/lib/run-all/suite sub-file), rc 2 = unclassified (or registry unreadable).
-_precommit_is_case_marker_target() {
+# _precommit_case_marker_placement <rel> — the path shape of a case-marker entrypoint: rc 0 =
+# a category root or flat tests/<name>, rc 1 = excluded (archive/lib/run-all/suite sub-file),
+# rc 2 = unclassified. Registry-free; shared by the two predicates below.
+_precommit_case_marker_placement() {
     case "$1" in
         tests/_archive/*|tests/lib/*|tests/run-all.sh) return 1 ;;
     esac
-    _precommit_tlr_ready || return 2
-    tlr_match "$1" && [ "$TLR_STATUS" = supported ] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 2
     _precommit_is_suite_subfile "$1" && return 1
     case "$1" in
         tests/hooks/*|tests/bin/*|tests/skills/*|tests/agents/*|tests/install/*|tests/tests/*) return 0 ;;
@@ -46,6 +43,32 @@ _precommit_is_case_marker_target() {
         tests/*) return 0 ;;  # flat tests/<name>
         *) return 2 ;;
     esac
+}
+
+# _precommit_is_case_marker_target <rel> — case-marker entrypoint SSOT (mirrored by
+# hooks/block-case-markers.js isCaseMarkerTarget; parity-tested): a placed file whose
+# registry entry is supported with a caseMarkerReader. rc 0 = target, rc 1 = excluded
+# (archive/lib/run-all/suite sub-file), rc 2 = unclassified (or registry unreadable).
+_precommit_is_case_marker_target() {
+    local rc=0
+    _precommit_case_marker_placement "$1" || rc=$?
+    [ "$rc" -eq 1 ] && return 1
+    _precommit_tlr_ready || return 2
+    tlr_match "$1" && [ "$TLR_STATUS" = supported ] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 2
+    return "$rc"
+}
+
+# _precommit_is_readerless_case_marker_target <rel> — a placed file some registry entry matches
+# but which is no case-marker target (no caseMarkerReader; mirrored by isReaderlessCaseMarkerTarget,
+# parity-tested). rc 0 = reader-less, rc 1 = not, rc 2 = registry unreadable.
+_precommit_is_readerless_case_marker_target() {
+    _precommit_case_marker_placement "$1" || return 1
+    _precommit_tlr_ready || return 2
+    tlr_match "$1" || return 1
+    if [ "$TLR_STATUS" = supported ] && _tlr_get "$TLR_ID" caseMarkerReader.file; then
+        return 1
+    fi
+    return 0
 }
 
 # _precommit_check_tests_frontmatter — reads $_cfg_dir (ambient, as load-env.sh does).
@@ -106,7 +129,7 @@ _precommit_check_tests_frontmatter() {
         echo "Each file must have '# Tests: <path>' (comma-separated tokens) and '# Tags: ... scope:...'."
     fi
     if printf '%s\n' "$_out" | grep -qE '^HIGH: .* code=SELF_IMPLEMENTED_HARNESS'; then
-        echo "Commit blocked: new test file(s) build their own harness."
+        echo "Commit blocked: test file(s) add a self-implemented harness HEAD does not have."
         echo "Load the language's helper library (tests/lib/harness.*) and use its counters and helpers instead."
     fi
     return 1
@@ -114,7 +137,8 @@ _precommit_check_tests_frontmatter() {
 
 # _precommit_check_tests_case_markers — judges the STAGED blob of every new (HEAD-absent,
 # renames included) case-marker entrypoint with bin/check-case-markers.sh, in repos carrying
-# its entry's helperLibrary. Checker infra errors fail open with a stderr diagnostic.
+# its entry's helperLibrary, and every new reader-less one (its WARN only, #2502). Checker infra
+# errors fail open with a stderr diagnostic.
 # rc 0 = ok / not applicable; rc 1 = block the commit.
 _precommit_check_tests_case_markers() {
     local repo_top rel tmp="" n=0 tmpfile out rc line id hint lf=$'\n'
@@ -136,9 +160,13 @@ _precommit_check_tests_case_markers() {
             tried=1
             _precommit_tlr_ready || { _precommit_tlr_unreadable "case-marker check"; return 0; }
         fi
-        _precommit_is_case_marker_target "$rel" || continue
-        # Staged view, like the blobs judged below: an unstaged add/delete must not flip applicability.
-        _tlr_get "$TLR_ID" helperLibrary.path && git cat-file -e ":$_TLR_V" 2>/dev/null || continue
+        if _precommit_is_case_marker_target "$rel"; then
+            # Staged view, like the blobs judged below: an unstaged add/delete must not flip applicability.
+            _tlr_get "$TLR_ID" helperLibrary.path && git cat-file -e ":$_TLR_V" 2>/dev/null || continue
+        else
+            # A reader-less one gets the CLI's CASE_MARKER_READER_UNSUPPORTED WARN, helper library or not.
+            _precommit_is_readerless_case_marker_target "$rel" || continue
+        fi
         git cat-file -e "HEAD:$rel" 2>/dev/null && continue
         rels+=("$rel"); ids+=("$TLR_ID")
     done < <(git diff --cached --name-only -z --diff-filter=ACMR -- 'tests/' 2>/dev/null || true)

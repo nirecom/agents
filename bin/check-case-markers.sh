@@ -95,7 +95,7 @@ for file in "$@"; do
       echo "WARN: $name: case markers not checked (no test case reader for this language) code=CASE_MARKER_READER_UNSUPPORTED" ;;
     conforming) ;;
     *)
-      echo "check-case-markers.sh: case-marker reader unavailable: $name" >&2
+      echo "check-case-markers.sh: test case reader unavailable: $name" >&2
       reader_failed=1 ;;
   esac
 done

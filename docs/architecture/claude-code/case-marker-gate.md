@@ -36,14 +36,19 @@ were read, but its case records are incomplete.
 
 ## Self-implemented harness
 
-The same two points also judge a new test file of any language with `bin/check-self-impl.sh`
+The same two points also judge a test file of any language with `bin/check-self-impl.sh`
 (#2502): a hand-made pass/fail counter, or a redefinition of a name the entry's helper library
-defines, is `SELF_IMPLEMENTED_HARNESS` and blocks. The detection is the entry's `caseEmbedRules`
+defines, is `SELF_IMPLEMENTED_HARNESS` and blocks. A new file blocks on any detection. An existing
+file is compared with its HEAD copy (`--head`): detections are counted per (kind, detail) key, and
+only those beyond HEAD's count for the same key block, so an existing file's old counter does not
+stop an unrelated edit, while adding one more of the same kind does. The detection is the entry's `caseEmbedRules`
 `self-impl` op (reached through `tsi_report` in `bin/lib/test-self-impl-window.sh`); its limits are
 in [test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md). A
 language with no `caseEmbedRules` passes with `SELF_IMPL_CHECK_UNSUPPORTED`, and one whose runtime
 is missing with `SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE`. The commit layer calls it from
-`bin/check-test-frontmatter.sh --staged` (new files only, so existing bash tests are unaffected).
+`bin/check-test-frontmatter.sh --staged`, with the same new-file and HEAD-count rule. When HEAD
+lists the file but its content cannot be read, the HEAD copy is empty and the file is judged as
+new: the commit blocks on any detection (fail-closed), with no separate diagnostic.
 
 ## Test-language match
 
