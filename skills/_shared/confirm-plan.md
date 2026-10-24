@@ -20,7 +20,8 @@ To look the line up later, run `node "$AGENTS_MAIN_ROOT/bin/plan-link" --stage <
 Never hand the plan over with `SendUserFile`.
 Never copy the blob URL into a PR body, `history.md`, `CHANGELOG.md`, or a public issue — the plan repo is private; leak guard: `docs/architecture/claude-code/plan-sync.md`.
 Enforcement (Stop): `stop-confirm-plan-guard.js` reads each stage's gate and blocks a turn that wrote a plan without its line, a link line of an unapproved stage followed by other text, or an unpublished plan where a URL can be made.
-`stop-confirm-plan-guard.js` records a presentation receipt only for a turn it lets through that closes on the link lines, and a blocked turn voids every stage's receipt.
+`stop-confirm-plan-guard.js` records a presentation receipt only for a turn it lets through that closes on the link lines; a blocked turn records none and keeps earlier receipts.
+When the transcript tail is undecidable, it records each stage the final message closes on, never blocks, and tells the user which stages got no receipt.
 Enforcement (PreToolUse): `confirm-checkpoint.js` passes a CONFIRM echo to the dialog only when the presentation receipt matches the plan's current path, link, and content, and spends the receipt.
 On a mismatch, or when it cannot verify, it denies and asks you to present the plan again; there is no cap.
 

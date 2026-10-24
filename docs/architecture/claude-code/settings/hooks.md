@@ -129,8 +129,14 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   presentation receipt (#2729): a turn the hook lets through that closed on unapproved stages'
   link lines (every stage whose link run ends the last text block, Gap 5) gets one receipt per
   stage, holding the plan path, the link shown and the whole-file content sha. A turn the hook
-  blocks voids every receipt of the session. An `ON` stage whose plan is not published where
-  plan-sync could publish it is blocked once as unpublished.
+  blocks records no receipt and keeps the earlier ones (#2771). An `ON` stage whose plan is not
+  published where plan-sync could publish it is blocked once as unpublished.
+  An undecidable tail (#2771) is never blocked: every plan stage the final message
+  (`last_assistant_message`) closes on gets a receipt — with the anchored text entry's uuid when
+  that entry presents it too, otherwise with an empty anchor. A stage whose plan violates
+  `PLAN_LANG` or is unpublished is left unrecorded with its earlier receipt untouched. Every Stop
+  that leaves a stage unrecorded, `stop_hook_active` included, tells the user through a
+  `systemMessage` and a supervisor notice. Logic: `hooks/stop-confirm-plan-guard/undecidable.js`.
   The continuation (`[confirm-plan] continue:`, last, #2650): when the last text block shows
   exactly one plan stage's link line and that stage is unapproved, not yet echoed, and `ON`
   (at most one `planGateState` probe inside a 4000 ms budget), it blocks once so the CONFIRM
