@@ -106,10 +106,6 @@ function consumeReceipt(sid, stage) {
   try { fs.unlinkSync(receiptPath(sid, stage)); return true; } catch (_) { return false; }
 }
 
-function discardAllReceipts(sid) {
-  for (const stage of STAGES) discardReceipt(sid, stage);
-}
-
 // matchReceipt(receipt, {absPath, link, contentSha}) -> {ok:true} | {ok:false, cause}.
 function matchReceipt(receipt, current) {
   const r = receipt || {};
@@ -124,5 +120,5 @@ function matchReceipt(receipt, current) {
 
 module.exports = {
   STAGES, approvalArtifactPath, linkKey, samePath,
-  receiptPath, writeReceipt, readReceipt, discardReceipt, consumeReceipt, discardAllReceipts, matchReceipt,
+  receiptPath, writeReceipt, readReceipt, discardReceipt, consumeReceipt, matchReceipt,
 };
