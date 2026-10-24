@@ -83,3 +83,4 @@ Resolve these through the accept path:
 - A proper noun that capitalizes a term mid-sentence (`AWS Step Functions`), or put it in backticks.
 - Ordinary English that spells out an identifier term's words in order, such as the words foo, bars and dir against `FOO_BARS_DIR`.
 - A distinct identifier that differs from an identifier term only by a plural word.
+- A correctly spelled kebab-case identifier outside a fixed-format line, such as `allow-deny-hook` mid-line in a code comment against the term `allow-deny hook`. Only terms holding `_` are matched as identifiers, so the matcher cannot tell the identifier from a hyphenated rewording of the term. The planned Identifier field, fed through `identifierSpellings(terms)`, is meant to remove this case.
