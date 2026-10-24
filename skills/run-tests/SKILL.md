@@ -51,9 +51,9 @@ RNT-6. **Run tests.**
 RNT-6a. **Calibration offer.**
    - Run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/probe-calibration.sh" --cwd <cwd> --session <sid>` and read `decision=`.
    - `none` -> go to RNT-7.
-   - `notice`, or `ask` when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> show `notice=` verbatim, write no record, go to RNT-7.
+   - `notice`, or `ask` when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> convey the `notice=` content in CONV_LANG, keeping commands and paths verbatim, write no record, go to RNT-7.
    - `ask` -> first run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/mark-calibration-asked.sh" --session <sid>`; if it fails or prints `first=no`, treat as `notice`.
-   - Then show `notice=` and ask with AskUserQuestion: calibrate now (long-running) / not now.
+   - Then convey the `notice=` content in CONV_LANG, keeping commands and paths verbatim, and ask with AskUserQuestion: calibrate now (long-running) / not now.
    - not now or no answer -> run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/answer-calibration.sh" defer --cwd <cwd> --session <sid>`, then go to RNT-7.
    - calibrate now -> run Bash `echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=run_tests] run-tests calibration>>"`.
    - Then show, in the conversation language, "Calibrating max jobs per host (about <estimate> min). Measuring now; please wait." with <estimate> from the probe's `estimate=`; when it is empty, omit the parenthesized estimate.

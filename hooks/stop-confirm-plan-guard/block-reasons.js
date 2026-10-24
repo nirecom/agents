@@ -135,19 +135,24 @@ function unpublishedReason(presented) {
   return { kind: "unpublished", reason: require("../lib/confirm-continuation").presentAgainReason(hit.stage, "unpublished") };
 }
 
+// Wrapped here, not in the reason builders: planLangReason is reused inside layer2Reason.
+function convLang(reason) {
+  try { return require("../lib/conv-lang").withConvLang(reason); } catch (_) { return reason; /* the bare reason still blocks */ }
+}
+
 // firstBlock(ctx, presented) -> {kind, reason} | null, in the order the reasons are ranked.
 function firstBlock(ctx, presented) {
   const { sid, tail } = ctx;
   const content = tail.lastAssistantEntry && tail.lastAssistantEntry.message && tail.lastAssistantEntry.message.content;
   const l2 = Array.isArray(content) ? layer2Reason(sid, content, tail.entries) : null;
-  if (l2) return { kind: "layer2", reason: l2 };
+  if (l2) return { kind: "layer2", reason: convLang(l2) };
   const link = planLinkReason(ctx);
-  if (link) return { kind: "plan-link", reason: link };
+  if (link) return { kind: "plan-link", reason: convLang(link) };
   const found = closeOnLinkReason(ctx) || unpublishedReason(presented);
   if (found) return found;
   for (const p of presented) {
     const lang = planLangReason(sid, p.stage);
-    if (lang) return { kind: "plan-lang", reason: lang };
+    if (lang) return { kind: "plan-lang", reason: convLang(lang) };
   }
   return null;
 }

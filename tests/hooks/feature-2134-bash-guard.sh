@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2134-bash-guard.sh
-# Tests: hooks/bash-guard.js, hooks/bash-guard/judge.js, hooks/bash-guard/detect.js, hooks/bash-guard/allow.js, hooks/bash-guard/forbidden-literals.js, hooks/bash-guard/reasons.js, hooks/bash-guard/message.js, hooks/lib/allow-command-list.js, hooks/lib/sentinel-patterns.js, hooks/lib/early-write-gate.js, hooks/workflow-gate/early-gate.js, settings.json, bin/print-forbidden-literals, rules/shell-commands.md
+# Tests: hooks/bash-guard.js, hooks/bash-guard/judge.js, hooks/bash-guard/detect.js, hooks/bash-guard/allow.js, hooks/bash-guard/forbidden-literals.js, hooks/bash-guard/reasons.js, hooks/bash-guard/message.js, hooks/bash-guard/git-deviant.js, hooks/bash-guard/git-deviant/forms.js, hooks/bash-guard/git-deviant/options.js, hooks/bash-guard/git-deviant/push.js, hooks/bash-guard/git-deviant/clean.js, hooks/bash-guard/git-deviant/worktree-remove.js, hooks/lib/allow-command-list.js, hooks/lib/sentinel-patterns.js, hooks/lib/early-write-gate.js, hooks/workflow-gate/early-gate.js, settings.json, bin/print-forbidden-literals, rules/shell-commands.md
 # Tags: hook, bash-guard, pretooluse, classifier, guard, forbidden-literals, interlock, fail-open, notify, self-script-allow, readonly-allow, newline-guard, scope:issue-specific, pwsh-not-required, TL2
 
 set -uo pipefail
@@ -15,12 +15,13 @@ PART_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2134-bash-guard"
 PROBE_JS="$PART_DIR/judge-probe.js"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-# THE CONTRACT UNDER TEST. bash-guard is a PRESENTATION guard, not a safety guard.
+# THE CONTRACT UNDER TEST. The forbidden literals are a PRESENTATION guard; git-deviant (#2617) is a
+# SECURITY guard that denies even while the interlock silences everything else.
 # judgeBashCommand(input) returns one of four verdicts, deny > notify > allow > passThrough:
 # tool_name must be exactly "Bash" -> the early-write-gate interlock silences it -> parseFailure
 # fails OPEN -> detect() decides deny -> detectIneffective() decides notify -> matchSelfScript()
 # then matchReadOnlyCommand() decide allow (skipped on a newline, #2403) -> otherwise passThrough. Every fail-open lands on passThrough, NEVER allow.
-# Detection reads only the IR and analysisOf(ir); settings.json allow rules are not consulted.
+# Detection reads only the IR and analysisOf(IR); settings.json allow rules are not consulted.
 
 # OUT OF SCOPE: runInTerminal / runCommands (pwsh dialect, only pinned as out of scope),
 # `||` and background `&` (absent from the approved forbidden set), the L1 doc-sync check
@@ -220,8 +221,9 @@ bg_batched_stdin() {
 # leaves a file that counts only its failures reporting green. Breakdown: detect 14 +
 # allow-direction 13 + hit-scope 5 + xargs-pipe 5 + negative 10 + not-forbidden 3 +
 # forbidden-literals-doc-sync 4 + tool-scope 2 + fail-open 3 + interlock 8 + notify-sentinel 19 +
-# notify-interpreter 15 + allow-self-script 102 + precedence 8 + message 27 + runtime 20.
-ROWS_EXPECTED=258
+# notify-interpreter 15 + allow-self-script 102 + precedence 8 + message 27 + runtime 20 +
+# git-deviant 177.
+ROWS_EXPECTED=435
 
 # TL3 gap (what this test does NOT catch):
 # - Whether Claude Code actually INVOKES hooks/bash-guard.js on a real Bash tool call. The
@@ -249,6 +251,7 @@ ROWS_EXPECTED=258
 . "$PART_DIR/cases-precedence.sh"
 . "$PART_DIR/cases-message.sh"
 . "$PART_DIR/cases-runtime-pretooluse.sh"
+. "$PART_DIR/cases-git-deviant.sh"
 
 case_begin "row-budget" "hooks/bash-guard/judge.js"
 assert_eq "BUDGET: every table-driven loop executed its full row count (a short count means an empty or unreachable table reported green)" \

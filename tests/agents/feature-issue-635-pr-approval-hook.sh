@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-user-verified-context.js
 # Tags: user-verified, workflow, hook, agent, bin, scope:issue-specific
-# Tests for issue #635 — PR approval phrase added to show-user-verified-context.js systemMessage.
-# These tests assert the new fixed English approval-instruction line:
-#   "Click Allow on the next dialog to approve; click Deny to stop."
-# The phrase is the SSOT for the approval-dialog surrounding text; prompts must NOT duplicate it.
-#
-# TDD red phase: U13–U15 are expected to FAIL until hooks/show-user-verified-context.js
-# is modified to append the approval line.
+# Issue #635 added the approval line "Click Allow on the next dialog to approve; click Deny to stop."
+# #2731 S3 retires it: the systemMessage carries only `[user-verified] ...` fact lines, so U13-U15
+# now assert that the approval line is ABSENT in every state (with PR, without PR, no staged files).
 set -uo pipefail
 
 # isolation (#2512): pin state and plans dirs once for this file
@@ -68,21 +64,26 @@ git -C "$EMPTY_REPO" config core.hooksPath /dev/null 2>/dev/null || true
 git -C "$EMPTY_REPO" config user.email "test@example.com"
 git -C "$EMPTY_REPO" config user.name "Test"
 
-EXPECTED_APPROVAL_LINE="Click Allow on the next dialog to approve; click Deny to stop."
+RETIRED_APPROVAL_LINE="Click Allow on the next dialog to approve; click Deny to stop."
 
-# ── U13: Approval-phrase line present in systemMessage ─────────────────────
-echo "=== U13: approval phrase line present (exact wording) ==="
+# ── U13: no approval line; the message is fact lines only ──────────────────
+echo "=== U13: retired approval line absent, fact lines present ==="
 U13_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 U13_RESULT=$(run_hook "$U13_JSON")
 U13_MSG=$(echo "$U13_RESULT" | extract_msg)
-if echo "$U13_MSG" | grep -qF "$EXPECTED_APPROVAL_LINE"; then
-  pass "U13 approval phrase line present in systemMessage"
+if [ -n "$U13_MSG" ] && ! echo "$U13_MSG" | grep -qF "Click Allow"; then
+  pass "U13 systemMessage emitted without the retired approval line"
 else
-  fail "U13 — expected approval phrase '$EXPECTED_APPROVAL_LINE' in systemMessage, got: $U13_MSG"
+  fail "U13 — expected a systemMessage without '$RETIRED_APPROVAL_LINE', got: $U13_MSG"
+fi
+if echo "$U13_MSG" | grep -qxF "[user-verified] staged=1"; then
+  pass "U13 systemMessage carries '[user-verified] staged=1'"
+else
+  fail "U13 — expected '[user-verified] staged=1', got: $U13_MSG"
 fi
 
-# ── U14: Approval phrase appears AFTER the Open PR line (ordering) ─────────
-echo "=== U14: approval phrase ordering (after Open PR) ==="
+# ── U14: with a PR, the pr= line is the last line (no trailing prose) ──────
+echo "=== U14: pr= line is last, no approval line after it ==="
 IS_WINDOWS_U14=0
 case "$(uname -s 2>/dev/null || echo unknown)" in
   MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U14=1 ;;
@@ -91,7 +92,7 @@ esac
 if [ "$IS_WINDOWS_U14" = "1" ]; then
   # Node.js spawnSync on Windows cannot find bash-script shims via a POSIX-format PATH
   # inherited from Git-Bash (same constraint as U5 in feature-show-user-verified.sh).
-  pass "U14 approval-phrase ordering — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
+  pass "U14 pr= last line — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
 else
   GH_BIN_DIR_U14="$WORK_DIR/gh-shim-u14"
   mkdir -p "$GH_BIN_DIR_U14"
@@ -104,19 +105,18 @@ SHIM
   U14_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
   U14_RESULT=$(PATH="$GH_BIN_DIR_U14:$PATH" run_hook "$U14_JSON")
   U14_MSG=$(echo "$U14_RESULT" | extract_msg)
-  PR_LINE_NO=$(echo "$U14_MSG" | grep -n "^Open PR:" | head -1 | cut -d: -f1)
-  APPROVAL_LINE_NO=$(echo "$U14_MSG" | grep -nF "$EXPECTED_APPROVAL_LINE" | head -1 | cut -d: -f1)
-  if [ -n "$PR_LINE_NO" ] && [ -n "$APPROVAL_LINE_NO" ] && [ "$APPROVAL_LINE_NO" -gt "$PR_LINE_NO" ]; then
-    pass "U14 approval phrase appears after Open PR: line (PR line=$PR_LINE_NO, approval line=$APPROVAL_LINE_NO)"
+  U14_LAST=$(printf '%s\n' "$U14_MSG" | tail -1)
+  if [ "$U14_LAST" = "[user-verified] pr=https://github.com/nirecom/agents/pull/635" ]; then
+    pass "U14 '[user-verified] pr=<url>' is the last line (no approval line after it)"
   else
-    fail "U14 — expected approval line after Open PR: line; PR line=$PR_LINE_NO approval line=$APPROVAL_LINE_NO; output: $U14_MSG"
+    fail "U14 — expected last line '[user-verified] pr=<url>'; got last='$U14_LAST'; output: $U14_MSG"
   fi
 fi
 
-# ── U15: Approval phrase present even when no PR / no staged files ─────────
-echo "=== U15: approval phrase present in degraded state (no PR, no staged files) ==="
-# Shadow gh with an always-fail shim so getPrUrl returns "" (no Open PR: line),
-# and use the empty repo so Staged files: shows (none). Approval phrase must still appear.
+# ── U15: degraded state (no PR, no staged files) → only staged=0, no approval line ──
+echo "=== U15: degraded state → exactly '[user-verified] staged=0' ==="
+# Shadow gh with an always-fail shim so getPrUrl returns "" (no pr= line),
+# and use the empty repo so the staged count is 0.
 GH_FAIL_DIR_U15="$WORK_DIR/gh-fail-u15"
 mkdir -p "$GH_FAIL_DIR_U15"
 cat > "$GH_FAIL_DIR_U15/gh" << 'SHIM'
@@ -127,10 +127,10 @@ chmod +x "$GH_FAIL_DIR_U15/gh"
 U15_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$EMPTY_REPO\"}}"
 U15_RESULT=$(PATH="$GH_FAIL_DIR_U15:$PATH" run_hook "$U15_JSON")
 U15_MSG=$(echo "$U15_RESULT" | extract_msg)
-if echo "$U15_MSG" | grep -qF "$EXPECTED_APPROVAL_LINE"; then
-  pass "U15 approval phrase present even with no staged files / no PR"
+if [ "$U15_MSG" = "[user-verified] staged=0" ]; then
+  pass "U15 degraded state → exactly '[user-verified] staged=0' (no approval line)"
 else
-  fail "U15 — expected approval phrase '$EXPECTED_APPROVAL_LINE' in degraded state, got: $U15_MSG"
+  fail "U15 — expected exactly '[user-verified] staged=0' in degraded state, got: $U15_MSG"
 fi
 
 # ── Results ─────────────────────────────────────────────────────────────────

@@ -271,18 +271,17 @@ R2-push-force-residual@@git commit -m "docs: mention git push --force and git co
 
 # Positive: true positives that anchoring must preserve, across the four launch forms.
 P1@@git push --force@@git push --force@@MATCHED@@yes
-P2@@git push origin +main@@git push *+*@@MATCHED@@yes
+P2@@git push origin +main@@any@@NO-MATCH@@yes
 P3@@git -C /x push -f@@git -C * push -f*@@MATCHED@@yes
 P4@@git commit --amend@@git commit --amend*@@MATCHED@@yes
 P5@@git -C /repo push --force@@git -C * push --force@@MATCHED@@yes
 P6@@git reset --hard@@git reset --hard*@@MATCHED@@yes
-# P7/P19 DEVIATE FROM detail.md, which predicted MATCHED. Derived fact: the `*`
-# after `-f` is preceded by a WORD char, so patternToRegExp emits the
-# `(?![A-Za-z0-9_])` guard -- `git clean *-f*d*` cannot match the BUNDLED `-fd`
-# form at all. Pre-existing (the current rule body is unchanged by #2280), so it is
-# pinned as a gap, not a regression. P7b/P19b pin the separated form that does match.
+# P2/P19b (#2617): `+refspec` and a `-d`-first clean moved to the argv-aware bash-guard hook
+# (cases-git-deviant.sh); the settings floor no longer carries a substring rule for them.
+# P7/P19: matcher.sh's `(?![A-Za-z0-9_])` guard after `-f*` keeps the BUNDLED `-fd` from
+# matching `git clean -f*` here (the host has no such guard). P7b/P30 pin the separated form.
 P7@@git clean -fd@@any@@NO-MATCH@@yes
-P7b-clean-separated@@git clean -f -d@@git clean *-f*d*@@MATCHED@@yes
+P7b-clean-separated@@git clean -f -d@@git clean -f*@@MATCHED@@yes
 P8@@git worktree remove --force ../wt@@git worktree remove*--force*@@MATCHED@@yes
 P9@@git push origin :feature-branch@@git push origin :*@@MATCHED@@yes
 P10@@git commit --no-verify -m "skip hooks"@@git *--no-verify*@@MATCHED@@yes
@@ -303,8 +302,8 @@ P16-mirror@@git push --mirror@@git push --mirror*@@MATCHED@@yes
 P17-delete@@git push --delete origin feature-branch@@git push --delete*@@MATCHED@@yes
 P18-force-after-remote@@git push origin feature-branch --force@@git push *--force@@MATCHED@@yes
 P19-clean-df@@git clean -df@@any@@NO-MATCH@@yes
-P19b-clean-df-separated@@git clean -d -f@@git clean *-d*f*@@MATCHED@@yes
-P20-worktree-remove-f@@git worktree remove -f ../wt@@git worktree remove*-f*@@MATCHED@@yes
+P19b-clean-df-separated@@git clean -d -f@@any@@NO-MATCH@@yes
+P20-worktree-remove-f@@git worktree remove -f ../wt@@git worktree remove -f*@@MATCHED@@yes
 P21-compound-bypass-push-remote@@cd /tmp/x && git commit -m "x" && git push origin main --force@@any@@NO-MATCH@@yes
 P22-compound-bypass-push-origin-colon@@cd /tmp/x && git commit -m "x" && git push -v origin :feature-branch@@any@@NO-MATCH@@yes
 
@@ -322,14 +321,14 @@ P28-compound-bypass-worktree-remove-f@@cd /tmp/x && git commit -m "x" && git wor
 # P29-P31 spot-check launch form x trigger pairings the P1-P22 grid leaves implicit:
 # each pairs an already-covered global-option form with a trigger it never met.
 P29-global-c-resethard@@git -c user.name=x reset --hard@@git -c * reset --hard*@@MATCHED@@yes
-P30-global-C-clean@@git -C /repo clean -f -d@@git -C * clean *-f*d*@@MATCHED@@yes
+P30-global-C-clean@@git -C /repo clean -f -d@@git -C * clean -f*@@MATCHED@@yes
 P31-global-nopager-mirror@@git --no-pager push --mirror@@git --no-pager push --mirror*@@MATCHED@@yes
 
 # P32-P36: bare-launch-form MUST-trigger rows the P1-P31 grid left implicit -- the plain
 # `-f` short flag and the remote-qualified mirror/delete/refspec-delete spellings, each
 # with no `-C`/`-c`/`--no-pager` prefix at all (the simplest, most common invocation shape).
 P32-bare-push-f@@git push -f@@git push -f*@@MATCHED@@yes
-P33-bare-push-remote-f@@git push origin main -f@@git push *-f*@@MATCHED@@yes
+P33-bare-push-remote-f@@git push origin main -f@@git push *-f@@MATCHED@@yes
 P34-bare-push-mirror@@git push origin --mirror@@git push *--mirror*@@MATCHED@@yes
 P35-bare-push-delete@@git push origin --delete branch@@git push *--delete*@@MATCHED@@yes
 P36-bare-push-refspec-delete@@git push -v origin :branch@@git push *origin :*@@MATCHED@@yes
@@ -394,10 +393,10 @@ TABLE
 # ---------------------------------------------------------------------------
 t_launch_form_completeness() {
     local triggers=(
-        "push --force" "push -f*" "push --mirror*" "push --delete*"
-        "push origin :*" "commit --amend*" "reset --hard*"
-        "worktree remove*--force*" "*--no-verify*"
-        "push *+*" "push *-f*" "clean *-f*d*"
+        "push --force" "push --force *" "push *--force" "push *--force *" "push -f*" "push *-f" "push *-f *"
+        "push --mirror*" "push *--mirror*" "push --delete*" "push *--delete*" "push origin :*" "push *origin :*"
+        "commit --amend*" "reset --hard*" "worktree remove*--force*" "*--no-verify*"
+        "clean -f*" "clean --force*" "worktree remove -f*"
     )
     local form_labels=(bare dashC dashc nopager)
     local form_prefixes=("git " "git -C * " "git -c * " "git --no-pager ")

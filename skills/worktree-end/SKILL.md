@@ -81,8 +81,8 @@ WE-10c releases the CodeGraph index lock immediately before WE-11 — see cleanu
 - Cleanup runs only after `merge_to_main` is settled (Precondition). No destructive steps on wait/abort/error paths.
 - Never merge, push, or emit the release-approval sentinel here — `/get-release-approval` and `/merge-to-main` own them.
 - AUTO_MERGE_PR=off (pull_request only): the human merges on the web; /merge-to-main never merges.
-- `git worktree remove --force` is prohibited; blocked at the `settings.json` deny layer, not by prose in `rules/ops.md`.
-- The worktree/workflow escape-hatch sentinels must NOT be emitted to unblock WE-11; /sweep-worktrees reclaims — proceed to WE-16 (WE-12 fallback).
+- `git worktree remove --force` is prohibited; blocked at the `bash-guard` and `settings.json` deny layers, not by prose in `rules/ops.md`.
+- The worktree/workflow escape-hatch sentinel must NOT be emitted to unblock WE-11; /sweep-worktrees reclaims — proceed to WE-16 (WE-12 fallback).
 - `ExitWorktree` is called only at WE-9a — never before the WE-9 `cd`.
 - `git branch -D` (WE-15 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
 - CWD must remain in the linked worktree through WE-8; switch to main worktree only at WE-9.

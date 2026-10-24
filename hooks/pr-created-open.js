@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PostToolUse hook: when `gh pr create` succeeds, open the PR URL in the
-// default browser and emit a one-line systemMessage with PR #N + URL.
+// default browser and emit a one-line systemMessage `[pr-created] #<N> <url>`.
 //
 // Fast-fail chain: tool_name !== Bash → command lacks "gh pr create" → exit
 // code non-zero → no PR URL in stdout. Any of these is a silent no-op.
@@ -42,9 +42,7 @@ if (require.main === module) {
   try { openInBrowser(prUrl); } catch (_) { /* fail-open */ }
 
   const n = prUrl.match(/\/pull\/(\d+)/);
-  const msg = n
-    ? `PR #${n[1]} created: ${prUrl}\nClick Allow to proceed, Deny to abort.`
-    : `PR created: ${prUrl}\nClick Allow to proceed, Deny to abort.`;
+  const msg = n ? `[pr-created] #${n[1]} ${prUrl}` : `[pr-created] ${prUrl}`;
 
   process.stdout.write(JSON.stringify({ systemMessage: msg }));
   process.exit(0);
