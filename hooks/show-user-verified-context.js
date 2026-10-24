@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // PreToolUse hook: when a command tool is about to run the <<WORKFLOW_USER_VERIFIED>>
-// sentinel, emit a "User verification context:" systemMessage (staged files + open PR
-// URL) BEFORE the permission dialog. Protocol: skills/_shared/user-verified.md.
+// sentinel, emit `[user-verified] ...` fact lines (staged files + open PR URL) as the
+// systemMessage BEFORE the permission dialog. Protocol: skills/_shared/user-verified.md.
 // PreToolUse payloads carry no tool_response, so no exit-code gating is performed.
 // Fail-open on all error paths — must never block the workflow.
 "use strict";
@@ -62,16 +62,10 @@ if (require.main === module) {
   const staged = getStagedFiles(cwd);
   const prUrl = getPrUrl(cwd);
 
-  // Fixed prefix matches outline.md description — single SSOT for the surfaced wording.
-  const lines = ["User verification context:", "Staged files:"];
-  if (staged.length === 0) {
-    lines.push("  (none)");
-  } else {
-    for (const f of staged) lines.push(`  - ${f}`);
-  }
-  if (prUrl) lines.push(`Open PR: ${prUrl}`);
-  // SSOT: approval instruction. Prompts must NOT duplicate this wording (rules/prompt.md §3.1).
-  lines.push("Click Allow on the next dialog to approve; click Deny to stop.");
+  // Facts only (#2731): the dialog itself carries the Allow/Deny choice.
+  const lines = [`[user-verified] staged=${staged.length}`];
+  for (const f of staged) lines.push(`[user-verified] staged-file=${f}`);
+  if (prUrl) lines.push(`[user-verified] pr=${prUrl}`);
 
   process.stdout.write(JSON.stringify({ systemMessage: lines.join("\n") }));
   process.exit(0);

@@ -118,7 +118,7 @@ T_BASH_7_MSG=$(echo "$T_BASH_7_STDOUT" | run_with_timeout node -e "
   let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
-if echo "$T_BASH_7_MSG" | grep -qF "Plan file: " && echo "$T_BASH_7_MSG" | grep -qF "$OFF_LINE"; then
+if echo "$T_BASH_7_MSG" | grep -qF "[plan-file] " && echo "$T_BASH_7_MSG" | grep -qF "$OFF_LINE"; then
   pass "T-BASH-7 CONFIRM_OUTLINE=off — systemMessage still emitted (#563 always-on)"
 else
   fail "T-BASH-7 CONFIRM_OUTLINE=off — systemMessage missing: $T_BASH_7_STDOUT"

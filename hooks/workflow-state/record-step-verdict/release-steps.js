@@ -25,7 +25,7 @@ function readRecorded(sessionId) {
 // default branch now exists on origin and HEAD is exactly its tip. Declared
 // gate only — navigation evidence keeps no bootstrap branch (detail 3-3).
 function isBootstrapDelivered(repoDir) {
-  const { spawnSync } = require("child_process");
+  const { spawnSync } = require("../../lib/limited-child-process");
   const { getProtectedBranches } = require("../../lib/merge-detect");
   const rev = (ref) => {
     const r = spawnSync("git", ["-C", repoDir, "rev-parse", "--verify", "-q", ref], { encoding: "utf8", timeout: 5000 });

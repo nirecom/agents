@@ -12,7 +12,8 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./lib/limited-child-process");
+const { armDecisionTimeLimit } = require("./lib/decision-time-limit");
 const { readPre, applyEdits, resolveTargetPath, groupEditTargets } = require("./lib/post-edit-content");
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 const { runChecker } = require("./lib/block-case-markers/run-checker");
@@ -201,6 +202,7 @@ function collectCandidates(input, toolName, toolInput) {
 
 function main() {
   const r = readHookInput();
+  armDecisionTimeLimit({ hookName: "block-case-markers" });
   if (r.kind !== "ok") {
     try { fs.writeSync(2, readFailOpenDiagnostic("block-case-markers", r, "check skipped") + "\n"); } catch (_) {}
     approve();

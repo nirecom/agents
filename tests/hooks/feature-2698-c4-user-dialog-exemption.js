@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/lib/stop-exemption-policy.js
-// Tags: TL2, hooks, stop-hook, c4, c2, supervisor-guard, exemption, user-dialog-turn, premature-stop, mechanism-failure, scope:issue-specific, ask-user-question
+// Tags: TL2, hooks, stop-hook, c4, c2, supervisor-guard, exemption, user-dialog-turn, premature-stop, mechanism-failure, scope:issue-specific, ask-user-question, system-message-contract
 // #2698 change 1: the real C4 Stop hook stays silent (no block, no finding) when the turn ends
 // a dialog with the user, while the same session blocks for a non-dialog turn and for no
 // transcript; the mechanism-failure lane still blocks on a stall. The real C2 supervisor-guard
@@ -163,6 +163,22 @@ test("alert armed + a turn ending in AskUserQuestion -> C2 silent", () => {
   const r = X.runHook(C2, dir, X.stopInput(dir, sid, AUQ_END()));
   assert.strictEqual(r.status, 0, `rc 0 (stdout: ${r.stdout} stderr: ${r.stderr})`);
   assert.ok(!r.json || r.json.decision !== "block", `no block (got ${r.stdout})`);
+});
+caseEnd();
+
+// #2731 S3-10: the cumSev=error block shows the user only a fact line; the reason is unchanged.
+caseBegin("c2-cumsev-error-fact-line", "hooks/supervisor-guard.js");
+test("cumSev=error + non-dialog -> systemMessage is [EM Supervisor] block severity=error findings=<N>", () => {
+  const C = require("../lib/system-message-contract");
+  const s = started("c2err");
+  const f = (d) => ({ categories: ["workflow"], severity: "error", detail: d, reporter: "test", timestamp: new Date().toISOString() });
+  X.seedSup(s.dir, s.sid, { alert: { cumulative_severity: "error", findings: [f("e-one"), f("e-two")] } });
+  const r = X.runHook(C2, s.dir, X.stopInput(s.dir, s.sid, X.NON_DIALOG()));
+  assert.strictEqual(r.status, 2, `rc 2 (stdout: ${r.stdout} stderr: ${r.stderr})`);
+  assert.ok(r.json && r.json.decision === "block" && typeof r.json.reason === "string", `a block with a reason (got ${r.stdout})`);
+  assert.strictEqual(r.json.systemMessage, "[EM Supervisor] block severity=error findings=2");
+  C.assertSystemMessageContract(r.json.systemMessage);
+  assert.ok(r.json.reason.length > r.json.systemMessage.length, "the model-facing reason keeps its explanation");
 });
 caseEnd();
 

@@ -68,6 +68,8 @@ const ENV_ENTRY_BLOCKLIST_EXACT = new Set([
   "CONFIRM_INTENT",
   "CONFIRM_OUTLINE",
   "CONFIRM_DETAIL",
+  // The commit-push worker reads it from the checkout .env only, never process.env.
+  "COMMIT_TIMEOUT_SECS",
 ]);
 
 // SESSION_ also covers the harness-supplied SESSION_ID; PROPAGATE_ covers the

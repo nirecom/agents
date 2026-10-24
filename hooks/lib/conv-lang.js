@@ -1,8 +1,10 @@
 "use strict";
 const { loadDefaultEnv } = require("./load-env");
 const { isPlausibleLanguageName } = require("./lang-config");
+const { renderDirective } = require("./lang-directive");
 
-function getConvLangInjection() {
+// The guarded CONV_LANG name, or null when no directive applies (unset, english, any, invalid).
+function resolveConvLang() {
   loadDefaultEnv();
   const raw = process.env.CONV_LANG;
   if (typeof raw !== "string") return null;
@@ -11,7 +13,12 @@ function getConvLangInjection() {
   // eslint-disable-next-line no-control-regex -- rejecting control characters is the purpose
   if (/[\x00-\x1f]/.test(normalized)) return null;
   if (!isPlausibleLanguageName(normalized)) return null;
-  return `Respond to the user in ${normalized}. This applies to all text you write, including narration between tool calls.`;
+  return normalized;
+}
+
+function getConvLangInjection() {
+  const lang = resolveConvLang();
+  return lang ? renderDirective("CONV_LANG", lang) : null;
 }
 
 // withConvLang(text) — the single CONV_LANG wrapper for a block reason: prepends the injection
@@ -21,4 +28,4 @@ function withConvLang(text) {
   return inj ? `${inj}\n${text}` : text;
 }
 
-module.exports = { getConvLangInjection, withConvLang };
+module.exports = { resolveConvLang, getConvLangInjection, withConvLang };

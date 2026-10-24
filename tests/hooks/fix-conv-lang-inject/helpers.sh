@@ -140,4 +140,9 @@ try {
 " "$raw" 2>/dev/null
 }
 
-EXPECTED_JA='Respond to the user in japanese. This applies to all text you write, including narration between tool calls.'
+# expected_conv <lang> — the CONV_LANG line of hooks/lib/lang-directives.txt rendered with its TERMS line (#2731).
+TERMS_SENTENCE='Keep glossary terms in their exact spelling, and leave common engineering terms, identifiers and command names untranslated (e.g. gap, fallback).'
+expected_conv() {
+    printf '%s' "Respond to the user in $1. This covers everything you write, including narration between tool calls and a subagent's final report to its caller. Write each sentence in $1. $TERMS_SENTENCE"
+}
+EXPECTED_JA="$(expected_conv japanese)"

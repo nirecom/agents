@@ -7,7 +7,7 @@
 
 function resolveTrustedRepoDir() {
   try {
-    const { execFileSync } = require("child_process");
+    const { execFileSync } = require("../../lib/limited-child-process");
     const out = execFileSync("git", ["rev-parse", "--show-toplevel"], {
       encoding: "utf8",
       timeout: 5000,

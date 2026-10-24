@@ -1,6 +1,6 @@
 "use strict";
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const path = require("path");
 const { parseGitCPath, findRepoRoot } = require("./git-repo-detection");
 const { isCoveredByEntryList } = require("../lib/path-coverage-match");

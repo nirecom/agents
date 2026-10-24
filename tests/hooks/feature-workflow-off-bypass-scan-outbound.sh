@@ -111,11 +111,12 @@ HOOK_RC=0
 run_hook() {
     local payload="$1" wfdir="$2"
     HOOK_RC=0
-    HOOK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
+    # A no-remote CWD: listPrivateRepoNames() resolves to [] without reaching gh.
+    HOOK_OUT="$( ( cd "$TMPDIR_BASE" && printf '%s' "$payload" | run_with_timeout 30 \
         env \
         "WORKFLOW_STATE_DIR=$wfdir" \
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
-        node "$HOOK_JS" 2>&1)" || HOOK_RC=$?
+        node "$HOOK_JS" 2>&1 ) )" || HOOK_RC=$?
 }
 
 # ============================================================================

@@ -839,3 +839,15 @@ Changes: Added `node bin/run-eslint <path>...`, a one-command JavaScript lint th
 ### FEATURE: PR #2753 (2026-10-22)
 Background: feat(#2529): glossary provenance check, docs/glossary/ layout, and gl...
 Changes: Glossary changes are now checked at commit time: adding, redefining or deleting a glossary entry is blocked unless the approved intent lists it or you accept it with `WORKFLOW_GLOSSARY_ACCEPTED`.;Glossary files moved to `docs/glossary/` (one file per category); the old `docs/glossary-user.md` / `docs/glossary-internal.md` layout is still read during migration.;Each workflow stage (intent, outline, detail, tests, code, docs) now flags text that drifts from a defined glossary term, such as a case or hyphen variant, before the step can complete.
+
+### FEATURE: PR #2773 (2026-10-24)
+Background: fix(#2765): resolve the merged PR in find-pr-by-marker.sh
+Changes: Fixed `/issue-close-finalize` failing with "no PR found" for issues whose closing PR had merged; the merged PR and its merge commit are resolved again.
+
+### FEATURE: PR #2743 (2026-10-24)
+Background: feat(#2731): keep glossary and engineering terms untranslated and clo...
+Changes: Conversations in a non-English CONV_LANG stay in that language through long autonomous runs, subagent reports, hook messages and codex reviews, while glossary and engineering terms are kept as written instead of being translated.;New optional `user-instructions.md` at the agents checkout root: copy `user-instructions.example.md` to it and add free-form personal instructions, injected at session start and after compaction (4 KB cap; the template's comments are never injected).;Supervisor findings and codex review text now follow your conversation language, and supervisor audits no longer fall back to the slower engine because of unlisted categories.
+
+### FEATURE: PR #2755 (2026-10-24)
+Background: fix(#2676): decide within 10 s, merge allow/deny hooks, cancel notice
+Changes: PreToolUse hooks: a slow hook now asks with a reason naming the unfinished check after 10 s instead of being cancelled at its timeout, so a deny is never silently lost (#2676).;PreToolUse hooks: the light allow-deny hooks run in one process (`hooks/merged-allow-deny.js`), and every PreToolUse hook timeout is 15 s (#2676).;A hook cancelled by its timeout is now reported to the user at the next prompt (#2676).;`bin/check-unstaged-tracked.sh` no longer triggers a permission dialog (#2540).

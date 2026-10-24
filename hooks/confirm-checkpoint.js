@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // PreToolUse hook: when Bash emits a <<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>> sentinel, surface
 // the plan above the permission dialog so the user can Allow or Deny inline; never "allow".
-// Output: { systemMessage } for the user plus additionalContext with the plan-link line for the
-// model (hooks/lib/plan-link.js). Sentinel patterns: hooks/lib/confirm-sentinel.js.
+// Output: { systemMessage } with facts only for the user plus additionalContext with the plan-link
+// line for the model (hooks/lib/plan-link.js). Sentinel patterns: hooks/lib/confirm-sentinel.js.
 // #2729: the echo reaches the dialog only on a presentation receipt the Stop hook wrote for this
 // very plan, link and content (hooks/lib/presentation-receipt.js); the receipt is spent here.
 // Fail-closed: anything it cannot verify denies with a present-again reason. The one exception is
@@ -26,6 +26,7 @@ const { loadDefaultEnv } = require("./lib/load-env");
 const lazy = (p) => { let m = null; return new Proxy({}, { get: (_, k) => (m || (m = require(p)))[k] }); };
 const PR = lazy("./lib/presentation-receipt");
 const PL = lazy("./lib/plan-link");
+const CL = lazy("./lib/conv-lang");
 
 const { readHookInput } = require("./lib/read-stdin");
 
@@ -52,11 +53,8 @@ function resolveArtifact(stage, sid, plansDir) {
 
 // url: the published blob URL (hooks/lib/plan-link.js), shown together with the local path.
 function renderMessage(stage, absPath, url) {
-  if (absPath) {
-    const shownAs = url ? `${url} (${absPath})` : absPath;
-    return `[${stage}] Plan file: ${shownAs}\nClick Allow to proceed, Deny to abort.`;
-  }
-  return `[${stage}] Plan ready (file path unavailable)\nClick Allow to proceed, Deny to abort.`;
+  if (absPath) return url ? `[${stage}] ${url} (${absPath})` : `[${stage}] ${absPath}`;
+  return `[${stage}] plan-file=none`;
 }
 
 // judge(sid, stage, absPath, plansDir) -> {pass:true, link} | {pass:false, cause}. Every check
@@ -105,6 +103,7 @@ function emitDeny(stage, cause) {
     reason = require("./lib/confirm-continuation").presentAgainReason(stage, cause);
   } catch (_) {
     reason = `[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (${cause}): present the plan again (plan-link --stage ${stage}), then echo the sentinel.`;
+    try { reason = CL.withConvLang(reason); } catch (_) { /* the bare reason still denies */ }
   }
   process.stdout.write(JSON.stringify({
     decision: "block",
@@ -162,9 +161,10 @@ function main() {
     if (PR.consumeReceipt(sid, stage)) {
       const link = verdict.link;
       const entry = { stage, url: link.url, path: link.path, reason: link.reason };
+      const additionalContext = CL.withConvLang(PL.renderModelContext([entry], { when: "confirm" }));
       out = {
         systemMessage: renderMessage(stage, absPath, link.url || null),
-        hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: PL.renderModelContext([entry], { when: "confirm" }) },
+        hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext },
       };
     } else {
       failCause = "no-receipt"; // a concurrent CONFIRM spent it between the judgment and here
