@@ -171,13 +171,14 @@ sentinel is allowed.
 
 | Last terminal verdict | `freshness_key` | Action |
 |---|---|---|
-| BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a rejection via the ask-gated `WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED` sentinel (see below). |
+| BLOCK | match | **hold** (deny). Resolve only by (1) moving the input to get a non-BLOCK run on the new key, or (2) recording a reviewed acceptance via the ask-gated `WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED` sentinel (see below). An acceptance releases only while no newer audit run is unsettled; otherwise a fresh run is armed. |
 | BLOCK | mismatch | arm a run against the new key (deny + dispatch). Non-BLOCK → stage 2; BLOCK again → hold again. |
-| key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the shared null-freshness predicate (`hooks/lib/null-freshness.js`) certifies the last TR5 terminal run: verdict in the CONTINUE-only allow-list, no later BLOCK, no newer audit run unsettled (`audit_phase` pending / in_progress / frozen), and every per-artifact hash (`artifact_keys`, absence compared as a value) unchanged since that run; arm a full re-audit otherwise. A run without a per-artifact breakdown is fail-closed. `recurrence-patterns` is excluded from the arm set (infinite-arm guard, #2323). |
+| key uncomputable — code-side null (`input_version` null, e.g. no merge base / shallow clone) | — | **approve** when the shared null-freshness predicate (`hooks/lib/null-freshness.js`) certifies the last TR5 terminal run: verdict CONTINUE — or WARN / BLOCK with a reviewed acceptance that matches the run (see below) — no later BLOCK, no newer audit run unsettled (`audit_phase` pending / in_progress / frozen), and every per-artifact hash (`artifact_keys`, absence compared as a value) unchanged since that run; arm a full re-audit otherwise. A run without a per-artifact breakdown is fail-closed. `recurrence-patterns` is excluded from the arm set (infinite-arm guard, #2323). |
 | key uncomputable — artifact-side null (`input_version` non-null, plan artifact missing) | — | Same predicate, plus `trigger_input_keys.TR5` of that run must equal the current `input_version` (absent / null / non-string stored key is fail-closed, #2360). Hashing the artifacts closes the hole where a post-TR5 intent/detail edit passed on a code-only match (#2400). |
 
 An unreadable plan artifact holds the sentinel without arming, on either null
-kind — no audit can judge it.
+kind — no audit can judge it. A code-side null key with every plan artifact
+absent has nothing left to compare, so no acceptance can certify it (fail-closed).
 
 **Stage 2 — diff-driven re-audit (including plan-artifact freshness).** Judged on
 two axes: (α) does code-side `input_version` match the last terminal run, and (β)
@@ -188,31 +189,49 @@ detail.md edit pass on stale judgment; (β) closes that. Outcomes range from
 through "arm a recurrence-patterns-only TR5 run", "changed-file-scoped re-audit",
 up to "full re-audit" when a change reaches outside the declared file set, when
 review_security is skipped/failed, or when the ledger / identity / snapshot /
-freshness key is missing or inconsistent.
+freshness key is missing or inconsistent. While a newer audit run is still
+pending / in_progress / frozen, stage 2 never passes on the older verdict: it arms
+a fresh run that supersedes the in-flight one (#2534).
 
 **Termination** rests on `freshness_key`, not an attempt counter: once a verdict
 is terminal and non-BLOCK for the current key with TR5 covered, the next attempt
 passes. Untouched plan artifacts keep (β) all-matching, so the normal flow adds no
 extra arms. `uv_attempt_seq` is recorded only for tracing.
 
-### BLOCK rejection record
+### Reviewed verdict acceptance
+
+Why: a WARN or BLOCK the user has reviewed must not hold `USER_VERIFIED` forever,
+and on a null key a WARN used to re-arm the audit on every emission (#2597).
 
 The only write path is the sentinel
-`echo "<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: <run-id> <reason>>>"`. A
+`echo "<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: <run-id> <reason>>>"`. A
 `permissions.ask` rule in `settings.json` puts every emission through the user's
-approval dialog (ask outranks allow), so the model cannot record an override on its
-own (#2709). The workflow-mark handler
+approval dialog (ask outranks allow), so the model cannot record an acceptance on
+its own (#2709). The workflow-mark handler
 (`hooks/workflow-mark/supervisor-block-override-handler.js`) delegates to
 `hooks/lib/supervisor-block-override.js`, which refuses a reason under 20
 characters before touching state, and a run id that is not the last terminal run
-or whose verdict is not BLOCK. It writes to the same supervisor state the TR5 gate
-reads (`resolveSupervisorState().effectiveSid`), appends `{ run_id, freshness_key,
-reason, actor, recorded_at }` to `audit.block_overrides`, and forces a
-`severity=warning` supervisor finding (reporter
-`workflow-mark:supervisor-block-override`) — there is no silent bypass
-(fail-closed). A malformed emission draws a format error and records nothing. Stage 1 treats a BLOCK as resolved only when an override matches on
-**both** `run_id` and `freshness_key`, so any later code diff or intent / outline /
-detail edit invalidates the override automatically.
+or whose verdict is not WARN or BLOCK. It writes to the same supervisor state the
+TR5 gate reads (`resolveSupervisorState().effectiveSid`), appends `{ run_id,
+verdict, freshness_key, artifact_keys, trigger_key, reason, actor, recorded_at }`
+to `audit.block_overrides`, and forces a `severity=warning` supervisor finding
+(reporter `workflow-mark:supervisor-block-override`) — there is no silent bypass.
+A malformed emission draws a format error and records nothing. The retired name
+`WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED` records nothing and points at the new name:
+its ask row is gone, so honouring it would let an un-dialogued emission write.
+
+`hooks/lib/null-freshness/acceptance.js` decides when a record releases, always
+matched against the TR5 run's own `id` and `verdict`:
+
+- Non-null key: the record's `freshness_key` must equal the current key.
+- Null key: the record must pin the run's snapshot — `freshness_key`, every
+  `artifact_keys` entry, and the TR5 `trigger_key` — and the shared predicate
+  must still pass, so any later code diff or intent / outline / detail edit
+  invalidates the acceptance automatically.
+- A record written before #2597 (no `verdict`) is read as a BLOCK acceptance and
+  releases only on the non-null path.
+- A record never outranks a later BLOCK or a newer unsettled run; anything
+  malformed is ignored (fail-closed).
 
 ## Pre-merge freshness backstop
 
@@ -235,10 +254,11 @@ denies naming the null kind and what moved. It also denies while a newer audit
 run has no verdict (armed, in progress, or frozen): with a code-side null key,
 code moved after TR5 is invisible, and a pending later run could still return
 BLOCK. An unreadable plan artifact is denied by name rather than compared as
-absent. A block override never releases a null
-key (it pins a non-null `freshness_key`), and WARN is denied on this path because
-the allow-list is CONTINUE-only. Sharing one predicate keeps the sentinel gate and
-the merge gate from disagreeing (#2400).
+absent. A WARN or BLOCK passes a null key only with a reviewed acceptance that
+pins the run's snapshot (see [Reviewed verdict acceptance](#reviewed-verdict-acceptance)).
+On a non-null key the backstop likewise denies while a newer run is unsettled,
+even when the fresh verdict is accepted (#2534). Sharing one predicate keeps the
+sentinel gate and the merge gate from disagreeing (#2400).
 
 ## State writer locking
 

@@ -269,15 +269,15 @@ fi
 # The positive counterpart to case 7 (a fresh BLOCK denies the merge). Once the
 # reviewer records an override for the exact run + freshness key, the read-only
 # backstop must APPROVE the merge — arming nothing and appending no error finding.
-# Deleting the override-release branch (checkSupervisorPreMerge's overrideActive) flips case 25 to
-# a deny, so the positive path is what this case pins.
+# Deleting the acceptance-release branch (null-freshness.js acceptanceReleasesNonNull, #2597) flips
+# case 25 to a deny, so the positive path is what this case pins.
 FK_OV="$(fresh_key)"
 seed_state BLOCK "$FK_OV" >/dev/null
 # #2709: the override is recorded only through the ask-gated sentinel handler (the CLI is gone).
 H="$HOOKS_NODE/workflow-mark/supervisor-block-override-handler.js" SESS="$SID" bash "$RWT" 60 node -e "
 const h = require(process.env.H);
 h.handle({
-  cmd: 'echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: run-0011 verified manually with the reviewer; the BLOCK is a false positive here>>\"',
+  cmd: 'echo \"<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: run-0011 verified manually with the reviewer; the BLOCK is a false positive here>>\"',
   sessionId: process.env.SESS, pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
 });
 " >/dev/null 2>&1
