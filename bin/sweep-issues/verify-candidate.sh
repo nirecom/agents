@@ -120,7 +120,7 @@ for token in "${safe_tokens[@]}"; do
   done
 
   # (b) real run, always through the timeout wrapper: a tests/ file of a supported language
-  # with a case-marker reader (the run below stays `bash`; #2502 owns per-language launch).
+  # with a test case reader (the run below stays `bash`; #2502 owns per-language launch).
   [[ "$TLR_OK" == 1 && "$token" == tests/* ]] || continue
   tlr_match "$token" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || continue
   [[ -f "$REPO_ROOT/$token" ]] || continue
