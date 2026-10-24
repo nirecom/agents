@@ -74,12 +74,28 @@ function readControlMarker(sessionId, name) {
 // The exit-3 fallback output. Candidates: the workflow session id (the wrapper's SESSION_ID
 // names plan artifacts), then the CC session id. Only the first existing file is judged, so a
 // later candidate can never rescue a refused one (fail-closed).
+// The ambient workflow session id (cwd / env driven) can name ANOTHER session's plan
+// artifacts, and the review-scope fingerprint is shared across sessions, so it is trusted only
+// when its context.md records this CC session id (the resolver's own tie-break).
+function wsidOwnedBy(wsid, ccSid) {
+  try {
+    const path = require("path");
+    const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
+    const text = fs.readFileSync(path.join(getWorkflowPlansDir(), `${wsid}-context.md`), "utf8");
+    // Exact `session-id:` line only: a longer id or a quoted mention must not count as ownership.
+    return text.split(/\r?\n/).some((line) => line.trim() === `session-id: ${ccSid}`);
+  } catch (_) {
+    return false;
+  }
+}
+
 function resolveFallbackRawPath(ccSid) {
   const { SESSION_ID_VALID_RE } = require("./core");
   const { resolveWorkflowSessionId } = require("../../lib/resolve-workflow-session-id");
   const { getPlansArtifactPath } = require("../../lib/plans-artifact-registry");
   let wsid = null;
   try { wsid = resolveWorkflowSessionId() || null; } catch (_) {}
+  if (wsid !== ccSid && !(typeof wsid === "string" && SESSION_ID_VALID_RE.test(wsid) && wsidOwnedBy(wsid, ccSid))) wsid = null;
   const seen = new Set();
   for (const sid of [wsid, ccSid]) {
     if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid) || seen.has(sid)) continue;

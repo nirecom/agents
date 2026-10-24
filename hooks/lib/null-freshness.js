@@ -126,6 +126,8 @@ function evaluateNullFreshnessRecovery({ freshness, tr5Run, laterBlockExists, un
     if (!isNonEmptyString(storedTriggerKey(tr5Run))) return refuse(REFUSAL.NO_TRIGGER_KEY);
     if (!inputVersionMatches(tr5Run, freshness.input_version)) moved.push(CODE_DIFF_COMPONENT);
   }
+  // A run audited while the code side was computable pinned a diff key; a now-null side is not that key.
+  if (kind === NULL_KIND.CODE_SIDE && isNonEmptyString(storedTriggerKey(tr5Run))) moved.push(CODE_DIFF_COMPONENT);
   moved.push(...artifactsMoved);
   if (moved.length > 0) return refuse(REFUSAL.INPUTS_MOVED, moved);
 
