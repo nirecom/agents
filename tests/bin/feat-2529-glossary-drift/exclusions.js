@@ -77,7 +77,7 @@ const OTHER_TERM = [
   "# Outline", "",
   ["exact spelling of another glossary-file term", "Mid-line the concern-ledger is another glossary term."],
   ["exact spelling of an intent-row term", "Mid-line the Glossary-Drift is an intent term."],
-  ["CONTROL", "Mid-line the GLOSSARY-DRIFT differs in case only."],
+  ["CONTROL", "Mid-line the glossary-Drift differs in case only."],
 ];
 function otherTerm(F) {
   const files = Object.assign({}, F.GLOSSARY_FILES, {
@@ -96,8 +96,8 @@ function otherTerm(F) {
   const r = F.drift(sid, "outline", repo, false);
   assertLines(F, "another term's exact spelling (outline)", r, labelled, `${sid}-outline.md`);
   const caseOnly = labelled.find((x) => x.label === "CONTROL").line;
-  const ledger = F.driftLines(r.all).filter((d) => d.line === caseOnly && d.variant === "GLOSSARY-DRIFT");
-  F.check("T5-2 another term: the case-only sequence is reported as the variant GLOSSARY-DRIFT", ledger.length > 0, r.all);
+  const ledger = F.driftLines(r.all).filter((d) => d.line === caseOnly && d.variant === "glossary-Drift");
+  F.check("T5-2 another term: the case-only sequence is reported as the variant glossary-Drift", ledger.length > 0, r.all);
 }
 
 function run(F) {
