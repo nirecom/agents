@@ -851,3 +851,7 @@ Changes: Conversations in a non-English CONV_LANG stay in that language through 
 ### FEATURE: PR #2755 (2026-10-24)
 Background: fix(#2676): decide within 10 s, merge allow/deny hooks, cancel notice
 Changes: PreToolUse hooks: a slow hook now asks with a reason naming the unfinished check after 10 s instead of being cancelled at its timeout, so a deny is never silently lost (#2676).;PreToolUse hooks: the light allow-deny hooks run in one process (`hooks/merged-allow-deny.js`), and every PreToolUse hook timeout is 15 s (#2676).;A hook cancelled by its timeout is now reported to the user at the next prompt (#2676).;`bin/check-unstaged-tracked.sh` no longer triggers a permission dialog (#2540).
+
+### FEATURE: PR #2786 (2026-10-24)
+Background: feat(#2762): give the commit-push worker's commit a staged-size timeout
+Changes: The commit-push worker gives long pre-commit runs time to finish: its commit timeout now scales with the number of staged files (override with COMMIT_TIMEOUT_SECS). A timeout now reports `commit_timeout` together with the pre-commit section that was running.
