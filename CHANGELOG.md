@@ -859,3 +859,7 @@ Changes: The commit-push worker gives long pre-commit runs time to finish: its c
 ### FEATURE: PR #2780 (2026-10-25)
 Background: fix(#2771): keep presentation receipts across Stop blocks and undecidable tails
 Changes: Approving a plan you have already seen no longer fails with "present the plan again (no-receipt)" after a blocked or follow-up turn; when the hook cannot confirm a presentation it now tells you which stages need presenting again.
+
+### FEATURE: PR #2740 (2026-10-25)
+Background: feat(#2502): check and sweep Pester, pytest, and JS tests, and gate t...
+Changes: Test checks and `/sweep-tests` now support Pester, pytest, and JS tests in addition to bash.;New commit gate: a test must be written in the same language as the code it tests, unless its `Tags:` declares `test-lang-exception:text-only|symmetry|e2e`.;Adding a case to an existing test file that has no case markers is now blocked, unless the file's `Tests:` header lists exactly one path.;`bin/audit-tests.sh --embed-cases --only-file <path>` embeds case markers into one chosen test file.;Audit no longer retires cases one day early in non-UTC time zones.
