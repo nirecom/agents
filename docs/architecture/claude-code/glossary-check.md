@@ -130,6 +130,11 @@ complete. The boundary requires a record even when the R-S file set is empty.
 A plan stage already recorded complete whose record no longer verifies reads as `pending`:
 `gatedCompleteRefusal` (`effective-state.js`) is the one predicate the reconciled view, `current-step.js`
 and the `--advance` "already complete" answer share, so a re-issued `--advance` is refused, not `already`.
+A post-delivery session is exempt (#2796): once `final_report` is recorded complete or `merge_to_main` is
+recorded settled (complete or skipped), `gatedCompleteRefusal` returns null, so the delivered plan stages
+stay complete when main's glossary changes and the stop guard stops demanding a re-plan.
+`isPostDeliverySession` (`effective-state/post-delivery.js`) judges the raw record, not the table-skip
+projection, so a WF-META session whose `merge_to_main` is only table-skipped stays pre-delivery.
 
 ### Commit gate
 
