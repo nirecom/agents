@@ -867,3 +867,7 @@ Changes: Test checks and `/sweep-tests` now support Pester, pytest, and JS tests
 ### FEATURE: PR #2779 (2026-10-25)
 Background: fix(#2597): let a reviewed acceptance release a WARN or BLOCK on a nu...
 Changes: Fixed: a supervisor audit WARN on a session without an outline artifact no longer blocks WORKFLOW_USER_VERIFIED and the pre-merge check indefinitely; you can now accept a reviewed WARN or BLOCK with WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED (replaces WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED).;Fixed: review_tests no longer stays stuck in progress after a review that ends with exit 1, 3 or 5.
+
+### FEATURE: PR #2793 (2026-10-25)
+Background: feat(#2761): leave merge-incoming files out of the commit-time glossa...
+Changes: Merging main into a feature branch no longer makes the commit-time glossary drift check report drift in files that came in unchanged from main; only files the branch changed or resolved are scanned.
