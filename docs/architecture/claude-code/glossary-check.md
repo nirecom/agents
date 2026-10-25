@@ -39,6 +39,17 @@ everything else. Content comes from the index blobs (`stagedOids`, read through 
 never from the working tree. A staged deletion enters as the pair (path, `"deleted"`). The digest is the
 sha256 of `JSON.stringify(pairs)`; `empty` is true when no path matched.
 
+**Merge-incoming exclusion.** While a merge is in progress (a `MERGE_HEAD` file exists), R-S drops
+every merge-incoming file before reading blobs: a staged path whose index state (blob ID, or absence)
+equals the state of the same path in `MERGE_HEAD`. Such a file came in with the merge untouched by the
+branch, so scanning it would report drift the branch never introduced. `hooks/lib/merge-incoming.js`
+decides this by reading the `git rev-parse --git-path MERGE_HEAD` file once (a ref named `MERGE_HEAD`
+is never consulted) and asking git once for the index-versus-`MERGE_HEAD` diff. An octopus merge, a
+malformed `MERGE_HEAD`, or a git failure is undecidable, and the stage keeps every path (fail-safe).
+Outside a merge the pairs and the digest are unchanged; inside one the digest covers the remaining
+pairs. `artifact.mergeIncoming` reports the outcome for diagnostics and is not part of the digest. The
+module inherits `GIT_DIR` / `GIT_INDEX_FILE` from the environment.
+
 Worktree resolution order: `opts.repoDir`, then `resolveSessionWorktreePath(sid)`, then the git root of
 the cwd. None resolving is the error `worktree-unresolved`.
 
@@ -97,7 +108,7 @@ and counts as missing.
 
 `evaluateGlossaryCheck` (`record.js`) judges in this order:
 
-1. Commit mode, an R-S stage, and `artifact.empty` — ok (this commit stages nothing for the stage).
+1. Commit mode, an R-S stage, and `artifact.empty` — ok (this commit stages nothing for the stage, including when every staged path of the stage is a merge-incoming file).
 2. No record, or no `fingerprint` in it — `glossary-check-missing`.
 3. The current fingerprint cannot be computed — `glossary-fingerprint-unavailable`.
 4. The fingerprints differ — `glossary-check-stale`, with `detail.changed` naming the changed inputs.
