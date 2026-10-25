@@ -15,6 +15,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   Skills follow it verbatim and never branch on the display-only `GATE_CONFIRM_<X>` line.
 - **Related**: [architecture/claude-code/workflow-runtime.md](../architecture/claude-code/workflow-runtime.md)
 
+### identifier context
+- **Definition**: glossary drift check が識別子として扱う文脈 (コードスパン、`_ = $ { }` に隣接する語、大文字語の連続、Tags 行などの固定形式行と固定スキーマ見出し)。識別子の綴りとだけ照合する。
+- **Related**: [architecture/claude-code/glossary-check/matching-rules.md](../architecture/claude-code/glossary-check/matching-rules.md)
+
 ### in-skill step
 
 - **Definition**: An ID-labelled line of a skill's Procedure (`CI-3`, `WI-10`, …); it is not a workflow step, and its heading carries the ID alone.
@@ -42,6 +46,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The per-stage record the Stop hook writes when a turn closes on a plan's link line: the plan path, the link shown (URL, or the local path where none can be made) and the whole-file content hash.
   The CONFIRM checkpoint lets the echo reach the dialog only when it still matches the plan and spends it; it proves the user was shown the plan, and is not an approval.
 - **Related**: [architecture/claude-code/settings/hooks.md](../architecture/claude-code/settings/hooks.md)
+
+### prose context
+- **Definition**: glossary drift check が identifier context 以外として扱う文脈。prose の見出し語と照合し、複数形と見出し行の大小だけを同じ語として許容する。
+- **Related**: [architecture/claude-code/glossary-check/matching-rules.md](../architecture/claude-code/glossary-check/matching-rules.md)
 
 ### review round
 

@@ -44,4 +44,4 @@ function describeTermChars(chars) {
   }).join(", ");
 }
 
-module.exports = { normalizeTerm, unsafeTermChars, describeTermChars };
+module.exports = { normalizeTerm, singular, unsafeTermChars, describeTermChars };
