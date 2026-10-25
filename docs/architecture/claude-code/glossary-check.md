@@ -7,7 +7,7 @@ combined glossary is owned by [combined-glossary.md](../../../skills/_shared/com
 | Check | Question | Owner |
 |---|---|---|
 | glossary provenance check | did every glossary add / delete / redefine come from the approved intent glossary? | `bin/check-glossary-provenance`, `bin/lib/glossary-provenance.js` |
-| deterministic drift | does a stage's artifact spell a glossary term with a case, hyphen or plural variant? | `bin/check-glossary-drift`, `bin/lib/glossary-drift.js` |
+| deterministic drift | does a stage's artifact spell a glossary term with a variant the [matching rules](#matching-rules) count as drift? | `bin/check-glossary-drift`, `bin/lib/glossary-drift.js` |
 | tagged concern | did a reviewer raise a glossary-drift concern that is still open? | `bin/lib/concern-ledger/drift-tag.sh` |
 
 The user lifts any of the three, term by term, with one sentinel: `WORKFLOW_GLOSSARY_ACCEPTED`.
@@ -63,21 +63,16 @@ only reader of them. It is the sha256 of `JSON.stringify` of the four input dige
 | `artifact` | R-A range or R-S pairs, as above |
 | `glossary` | sha256 of `JSON.stringify([[label, sha]…], legacy)` over `listMainGlossaryFiles` of the main worktree (the first `worktree ` line of `git worktree list --porcelain`); a read failure is `glossary-unavailable` |
 | `intent_rows` | sha256 of the sorted JSON of `[term (case-exact, as the drift scan reads it), category, operation, normalizeDefinition(definition)]`; the intent stage builds rows from its own range, every other stage reads intent.md once, and a missing file means no rows |
-| `rules` | sha256 over the path-sorted per-file sha256 of `RULE_MODULES`: `bin/lib/glossary-drift.js`, `hooks/lib/glossary-term.js`, `hooks/lib/comment-block-scan.js`, `hooks/lib/markdown-fence.js`, `bin/lib/glossary-provenance.js` |
+| `rules` | sha256 over the path-sorted per-file sha256 of `RULE_MODULES`: `bin/lib/glossary-drift.js`, `hooks/lib/glossary-term.js`, `hooks/lib/comment-block-scan.js`, `hooks/lib/markdown-fence.js`, `bin/lib/glossary-provenance.js`, and the modules of `bin/lib/glossary-drift/` (`extract.js`, `terms.js`, `context.js`, `match.js`, `scan.js`) |
 
 A changed matcher therefore stales every record, exactly as a changed artifact or glossary does.
 
 ## Deterministic drift check
 
 `bin/check-glossary-drift --session <sid> --stage <stage> [--record]` scans the stage inputs for
-spelling variants only (case, hyphen, plural) — intent Accepted Tradeoff "the deterministic drift check covers spelling variants only".
-A hyphen variant is matched on the separator-stripped form, so splitting a one-word term (`work-flow`) or joining a multi-word term (`glossarydrift`) counts too.
-A whitespace break counts only where the term itself has a word break: `presentation-turn` and `Presentation Turn` are variants of `presentation turn`, but `set up` is ordinary English, not a variant of `setup`.
-An identifier term (one with `_`, e.g. `AGENTS_MAIN_ROOT`) is checked in prose as well: case and separator variants (`agents_main_root`, `agents main root`, `agents-main-root`, `AGENTSMAINROOT`) count; camelCase / PascalCase (`agentsMainRoot`) and plurals do not.
-Known false positive: ordinary English that spells out an identifier's words (`the user verified the fix` against `USER_VERIFIED`) — resolve it through the accept path.
+spelling variants only — intent Accepted Tradeoff "the deterministic drift check covers spelling variants only".
+Which variants count is set by the [matching rules](#matching-rules).
 A term an intent row deletes is no longer canonical, so its variants are not checked, even while the main worktree glossary file still lists it; a delete paired with an add of the same term (a category move) keeps it. A delete row matches its own spelling only (case-insensitive, not singularized), so deleting `workflows` keeps a distinct `workflow`.
-Plurals are matched by suffix rules in `hooks/lib/glossary-term.js`: `-ies`, `-es` after `s` / `x` / `z` / `ch` / `sh`, `-s`, with `-us` / `-sis` / `-ss` singulars kept whole (`statuses` → `status`, `analyses` → `analysis`) and acronym plurals (`GPUs`) dropping their `s`; `-ves`, `-oes` (`echoes`), irregular plurals (`indices`) and `-us` plurals (`menus`) are not matched — a missed variant costs one review miss, while a looser stem match would flag derived words (`tester`, `gating`).
-Terms that share a separator-stripped form (`workflow`, `work flow`) are all candidates: a variant goes to the one whose word breaks admit its whitespace breaks and whose separators differ least from its own, ties broken by sorted order.
 Meaning drift stays with the reviewers. It reads the current intent.md, not the approved version.
 
 Exit codes: `0` no open finding, `1` open findings, `2` usage error, unreadable inputs, or fingerprint
@@ -86,6 +81,15 @@ unavailable. Each open finding prints
 `  DRIFT: <stage> "<variant>" -> "<term>" at <file>:<line>`
 
 followed by a narrow accept example (`term=<term> stage=<stage>`).
+
+### Matching rules
+
+Words are matched in one of two contexts (#2763). In `identifier context` (code spans, chunks with
+`_ = $ { }`, capital words, fixed-format lines) a naming-convention difference is not drift, but a
+changed word form or a whitespace split is. In `prose context` a regular plural and the capitals of a
+sentence start, a heading line or a table header row are tolerated; case mid-sentence, a hyphen for a
+space, and an identifier split into words stay drift. The full rules, with examples, are in
+[matching-rules.md](glossary-check/matching-rules.md).
 
 ### `glossary_check` record
 

@@ -456,6 +456,36 @@ for h in gate-plan-lang check-plan-lang; do
 done
 case_end
 
+# ============================================================================
+case_begin "reviewer-directives-reference-matching-rules" "skills/_shared/combined-glossary.md"
+# ============================================================================
+# #2763: the reviewer directives point at the Matching rules section and ask for backticked identifiers.
+REVIEWER_SECTION="$TMP_ROOT/reviewer-directives.txt"
+awk '/^## /{ on = ($0 ~ /^## Reviewer directives/); next } on' "$FRAGMENT" > "$REVIEWER_SECTION" 2>/dev/null
+has "D19/reviewer-refs-matching-rules" "$REVIEWER_SECTION" 'glossary-check\.md#matching-rules'
+has "D19/reviewer-has-backtick-omission-item" "$REVIEWER_SECTION" '^- .*\bwithout backticks\b.*\bgets an untagged LOW concern\b'
+if grep -Eq -- '^- .*\bwithout backticks\b.*\bgets an untagged LOW concern\b' "$REVIEWER_SECTION" 2>/dev/null; then pass "D19/reviewer-backtick-item-is-low"
+else fail "D19/reviewer-backtick-item-is-low" "no backtick-omission bullet that gets an untagged LOW (upper-case) concern"; fi
+has "D19/reviewer-backtick-item-untagged" "$REVIEWER_SECTION" '^- .*\bwithout backticks\b.*\bgets an untagged LOW concern\b.*\bwith no `\[glossary-drift'
+# The legitimate "with no `[glossary-drift ...]` tag" and "without backticks" phrases are cut before the negation scan.
+BACKTICK_ITEM="$(grep -E -m1 -- '^- .*\bwithout backticks\b' "$REVIEWER_SECTION" 2>/dev/null | tr -d '\r' | sed -E -e 's/with no `\[glossary-drift[^]]*\]` tag//' -e 's/without backticks//')"
+if [[ -z "$BACKTICK_ITEM" ]]; then fail "D19/reviewer-backtick-item-not-negated" "no backtick-omission bullet in the reviewer directives"
+elif printf '%s\n' "$BACKTICK_ITEM" | grep -Eqi -- "\b(not|never|no|none|nor)\b|n't\b"; then fail "D19/reviewer-backtick-item-not-negated" "the backtick-omission bullet carries a negation: $BACKTICK_ITEM"
+else pass "D19/reviewer-backtick-item-not-negated"; fi
+has "D19/reviewer-has-multi-word-part-item" "$REVIEWER_SECTION" "^- .*\bgeneric word that is part of a multi-word term\b.*\bis no rewording of that term unless it names the term's concept\b"
+has "D19/reviewer-has-japanese-item" "$REVIEWER_SECTION" '^- Never map a Japanese expression to a glossary term\b'
+has "D19/reviewer-has-misspelled-identifier-item" "$REVIEWER_SECTION" '^- .*\bmisspelled identifier\b.*\bglossary-drift concern\b.*\bbackticked or not\b'
+# The legitimate "backticked or not" phrase is cut before the negation scan.
+MISSPELLED_ITEM="$(grep -E -m1 -- '^- .*\bmisspelled identifier\b' "$REVIEWER_SECTION" 2>/dev/null | tr -d '\r' | sed -E 's/backticked or not//')"
+if [[ -z "$MISSPELLED_ITEM" ]]; then fail "D19/reviewer-misspelled-identifier-item-not-negated" "no misspelled-identifier bullet in the reviewer directives"
+elif printf '%s\n' "$MISSPELLED_ITEM" | grep -Eqi -- "\b(not|never|no|none|nor)\b|n't\b"; then fail "D19/reviewer-misspelled-identifier-item-not-negated" "the misspelled-identifier bullet carries a negation: $MISSPELLED_ITEM"
+else pass "D19/reviewer-misspelled-identifier-item-not-negated"; fi
+WRITER_SECTION="$TMP_ROOT/writer-directives.txt"
+awk '/^## /{ on = ($0 ~ /^## Writer directives/); next } on' "$FRAGMENT" > "$WRITER_SECTION" 2>/dev/null
+has "D19/writer-has-backtick-item" "$WRITER_SECTION" '^- .*backtick'
+has "D19/writer-refs-matching-rules" "$WRITER_SECTION" 'glossary-check\.md#matching-rules'
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -11,6 +11,8 @@ SSOT for the glossary drift check every stage runs (intent, outline, detail, tes
 - Rerun it on every later commit that stages targets of the same stage.
 - Rerun it after any change to the artifact, the combined glossary, the intent glossary rows, or the check rules; an earlier grant never covers new inputs.
 - On a `DRIFT` line, fix the artifact and rerun, or add the term to the intent glossary (CONFIRM_INTENT is taken again).
+- Fix an `identifier context` finding by correcting the identifier's spelling.
+- Fix a split identifier in prose by writing it as the identifier is spelled, inside backticks.
 - To accept a finding unfixed, confirm with the user via AskUserQuestion, then emit the narrow `WORKFLOW_GLOSSARY_ACCEPTED` form the CLI prints.
 - Use the term-only form (no identifiers) only when the user accepts every pending finding of that term.
 
