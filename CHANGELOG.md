@@ -871,3 +871,7 @@ Changes: Fixed: a supervisor audit WARN on a session without an outline artifact
 ### FEATURE: PR #2793 (2026-10-25)
 Background: feat(#2761): leave merge-incoming files out of the commit-time glossa...
 Changes: Merging main into a feature branch no longer makes the commit-time glossary drift check report drift in files that came in unchanged from main; only files the branch changed or resolved are scanned.
+
+### FEATURE: PR #2805 (2026-10-26)
+Background: fix(#2796): stop demoting a delivered session's plan stages on glossa...
+Changes: Fixed: a delivered workflow session no longer asks to re-run the outline planning step after the shared glossary changes on main.
