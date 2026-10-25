@@ -18,6 +18,7 @@ done <<'TABLE'
 detail-plan-round-number.txt                        | control
 outline-plan-last-round.txt                         | control
 test-review-terminal.txt                            | control
+test-review-continuing.txt                          | control
 security-code-unresolved-concerns.json              | control
 review-security-shared-concern-ledger.txt           | control
 security-plan-concern-ledger-cycle3.txt             | control
@@ -64,6 +65,7 @@ survey-code.md                                      | artifact
 survey-history.md                                   | artifact
 issue-prefill.md                                    | artifact
 test-review.md                                      | artifact
+test-review-fallback-raw.md                         | artifact
 concerns-log.md                                     | artifact
 codex-round-2-raw.md                                | artifact
 complexity-judge-raw.txt                            | artifact
