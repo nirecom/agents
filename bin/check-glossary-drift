@@ -48,6 +48,12 @@ function main() {
 
   const loaded = loadStageInputs(sid, stage, {});
   if (!loaded.ok) fail(2, `cannot read the ${stage} inputs (${loaded.error}${loaded.detail ? `: ${loaded.detail}` : ""})`);
+  const mi = loaded.artifact && loaded.artifact.mergeIncoming;
+  if (mi && mi.state === "merging" && mi.excluded > 0) {
+    process.stderr.write(`check-glossary-drift: merge in progress; ${mi.excluded} staged path(s) equal to MERGE_HEAD left out of the ${stage} scan\n`);
+  } else if (mi && mi.state === "undecidable") {
+    process.stderr.write(`check-glossary-drift: merge state undecidable (${mi.reason}); scanning every staged path\n`);
+  }
   const fp = fingerprintOf(loaded);
   if (!fp.ok) fail(2, `fingerprint unavailable (${fp.error})`);
   const findings = scanStageInputs(loaded);
