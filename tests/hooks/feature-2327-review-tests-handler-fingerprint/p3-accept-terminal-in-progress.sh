@@ -86,13 +86,25 @@ case_end
 case_begin "ti6-ti7-ti11-non-terminal-marker-stays-in-progress" "hooks/workflow-state/state-io/review-tests.js"
 T6="$TMPDIR_BASE/t6"; T6_N="$(np "$T6")"
 make_repo "$T6"
-for TI_RC in 3 7 "" abc; do
+for TI_RC in 7 "" abc; do
   TI_SID="ti6rc${TI_RC:-empty}sid"
   seed_state "$TI_SID" '{"status":"in_progress"}' complete
   write_terminal_marker "$TI_SID" "$TI_RC" fpx
   send_cmd "$TI_SID" "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
   check "TI6/7/11: rc=[$TI_RC] stays in_progress (fail-closed)" "in_progress" "$(sv "$TI_SID" status)"
 done
+# #2664: rc 3 (fallback review) branches on the fallback output. Line 2 carries the current
+# review-scope fingerprint, so the fallback-raw file is the only variable here.
+T6_FP="$(run_with_timeout 60 node -e 'process.stdout.write(String(require(process.env.EVIDENCE_N).computeReviewScopeFingerprint(process.argv[1]).fingerprint))' "$T6_N")"
+seed_state ti6rc3nofbsid '{"status":"in_progress"}' complete
+write_terminal_marker ti6rc3nofbsid 3 "$T6_FP"
+send_cmd ti6rc3nofbsid "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
+check "TI6: rc=[3] without a fallback-raw stays in_progress (fail-closed)" "in_progress" "$(sv ti6rc3nofbsid status)"
+seed_state ti6rc3fbsid '{"status":"in_progress"}' complete
+write_terminal_marker ti6rc3fbsid 3 "$T6_FP"
+printf 'NEEDS_REVISION\n- tests/x.sh misses the error path\n' > "$WORKFLOW_PLANS_DIR/ti6rc3fbsid-test-review-fallback-raw.md"
+send_cmd_glossary ti6rc3fbsid "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
+check "TI6: rc=[3] with a NEEDS_REVISION fallback-raw for the current scope completes" "complete" "$(sv ti6rc3fbsid status)"
 case_end
 
 case_begin "ti8-terminal-marker-manifest-unavailable-fail-closed" "hooks/workflow-mark/review-tests-handler.js"

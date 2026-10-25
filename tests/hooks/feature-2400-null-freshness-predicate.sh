@@ -177,7 +177,10 @@ check "P10e: code diff and an artifact moved together are both named, code first
     "$(pred eval '{"runSet":{"trigger_input_keys.TR5":"iv-old"},"fSet":{"artifact_keys.intent":"h-intent-2"}}')"
 check "P13: code side — a detail edit is caught by the artifact match" \
     "approve=false;kind=code-side;refusal=inputs-moved;moved=detail" \
-    "$(pred eval '{"kind":"code","fSet":{"artifact_keys.detail":"h-detail-2"}}')"
+    "$(pred eval '{"kind":"code","runDel":["trigger_input_keys"],"fSet":{"artifact_keys.detail":"h-detail-2"}}')"
+check "P13b: code side now null but the run pinned a diff key — the code diff counts as moved" \
+    "approve=false;kind=code-side;refusal=inputs-moved;moved=code diff (input_version)" \
+    "$(pred eval '{"kind":"code"}')"
 case_end
 
 case_begin "row9-approve" "hooks/lib/null-freshness.js"
@@ -278,6 +281,10 @@ file_lacks "P16a: user-verified-audit.js defines no private filterNullKeySubChec
 file_has "P16b: user-verified-audit.js requires the shared lib" "$REQ_LIB_RE" "$UVA"
 file_has "P16f: user-verified-audit.js passes the unsettled audit run to the predicate" 'unsettledAuditRun\(' "$UVA"
 file_has "P16g: user-verified-audit.js holds on unreadable artifacts" 'unreadableArtifacts\(' "$UVA"
+# #2597: the acceptance-release rule moved into the shared lib; the gate keeps no copy of it.
+file_lacks "P16k: user-verified-audit.js has no private overrideReleases" '\boverrideReleases\b' "$UVA"
+file_lacks "P16l: user-verified-audit.js does not walk block_overrides itself" 'Array\.isArray\(audit\.block_overrides\)' "$UVA"
+file_has "P16m: user-verified-audit.js asks the lib whether an acceptance releases a non-null run" 'acceptanceReleasesNonNull\(' "$UVA"
 case_end
 
 case_begin "ssot-audit-arm" "hooks/supervisor-guard/audit-arm.js"
@@ -290,6 +297,8 @@ case_end
 case_begin "ssot-supervisor-check" "hooks/workflow-gate/supervisor-check.js"
 file_has "P16e: supervisor-check.js requires the shared lib" "$REQ_LIB_RE" "$SUPC"
 file_has "P16j: supervisor-check.js passes the unsettled audit run to the predicate" 'unsettledAuditRun\(' "$SUPC"
+file_lacks "P16n: supervisor-check.js keeps no inline block_overrides judgment" 'Array\.isArray\(audit\.block_overrides\)' "$SUPC"
+file_lacks "P16o: supervisor-check.js has no private overrideReleases" '\boverrideReleases\b' "$SUPC"
 case_end
 
 # #2594 4b: the arm reason asks for a session-progress.md update BEFORE the audit launch line.

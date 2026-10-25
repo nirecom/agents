@@ -98,6 +98,7 @@ if [[ -f "$TERMINAL_FILE" ]]; then
        exit "$TG_RC" ;;
   esac
 fi
+rwc_clear_continuing
 
 arm_terminal_guard() {
   local rc=$1 fp
@@ -108,6 +109,11 @@ arm_terminal_guard() {
     2|3|6|7)
       fp="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || fp=""
       rwc_arm_terminal "$rc" "$fp"
+      ;;
+    # #2664: exit 1/5 leave recovery evidence instead (not a guard).
+    1|5)
+      fp="$(compute_review_scope_fingerprint "$REPO_ROOT_VAL")" || fp=""
+      rwc_arm_continuing "$rc" "$fp"
       ;;
   esac
   return "$rc"
