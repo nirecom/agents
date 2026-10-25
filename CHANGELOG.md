@@ -863,3 +863,7 @@ Changes: Approving a plan you have already seen no longer fails with "present th
 ### FEATURE: PR #2740 (2026-10-25)
 Background: feat(#2502): check and sweep Pester, pytest, and JS tests, and gate t...
 Changes: Test checks and `/sweep-tests` now support Pester, pytest, and JS tests in addition to bash.;New commit gate: a test must be written in the same language as the code it tests, unless its `Tags:` declares `test-lang-exception:text-only|symmetry|e2e`.;Adding a case to an existing test file that has no case markers is now blocked, unless the file's `Tests:` header lists exactly one path.;`bin/audit-tests.sh --embed-cases --only-file <path>` embeds case markers into one chosen test file.;Audit no longer retires cases one day early in non-UTC time zones.
+
+### FEATURE: PR #2779 (2026-10-25)
+Background: fix(#2597): let a reviewed acceptance release a WARN or BLOCK on a nu...
+Changes: Fixed: a supervisor audit WARN on a session without an outline artifact no longer blocks WORKFLOW_USER_VERIFIED and the pre-merge check indefinitely; you can now accept a reviewed WARN or BLOCK with WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED (replaces WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED).;Fixed: review_tests no longer stays stuck in progress after a review that ends with exit 1, 3 or 5.
