@@ -875,3 +875,7 @@ Changes: Merging main into a feature branch no longer makes the commit-time glos
 ### FEATURE: PR #2805 (2026-10-26)
 Background: fix(#2796): stop demoting a delivered session's plan stages on glossa...
 Changes: Fixed: a delivered workflow session no longer asks to re-run the outline planning step after the shared glossary changes on main.
+
+### FEATURE: PR #2778 (2026-10-26)
+Background: feat(#2763): match glossary drift in identifier and prose contexts
+Changes: The glossary drift check no longer flags regular plurals, title case on heading lines and table header rows, naming-convention differences of an identifier (case, `_` or `-`), or lower-case command names for capital terms in code comments.;The glossary drift check now flags an identifier whose words change form or are split by whitespace, including inside code spans.;Existing glossary check records and their ACCEPTED grants go stale once, because the matcher rules changed.
