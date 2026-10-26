@@ -172,19 +172,22 @@ function approvalOf(sid) {
 }
 
 // loadIntentGlossary(sid) -> { ok: true, rows, approvalSha } | { ok: false, case, reason, detail }.
-// One read of intent.md; the approval sha and the parse come from the same bytes.
+// One read of <first_session_id>-intent.md (#2748); the approval sha and the parse come from the
+// same bytes. The approval record is the current session's, bound to first_session_id.
 function loadIntentGlossary(sid) {
   const fail = (c, reason, detail) => ({ ok: false, case: c, reason, detail: detail || null });
   let buf;
+  let firstSid;
   try {
-    const { getPlansArtifactPath } = require("../../hooks/lib/plans-artifact-registry");
-    buf = fs.readFileSync(getPlansArtifactPath(sid, "intent"));
+    const owner = require("../../hooks/workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, "intent");
+    firstSid = owner.ownerSid;
+    buf = fs.readFileSync(owner.path);
   } catch (e) {
     return fail("A", "intent-missing", e && e.code ? e.code : String(e && e.message));
   }
   const rec = approvalOf(sid);
   if (!rec || rec.source !== "confirm-sentinel" || typeof rec.artifact_sha256 !== "string" ||
-    rec.artifact_sha256 === "" || rec.artifact_session_id !== sid) {
+    rec.artifact_sha256 === "" || rec.artifact_session_id !== firstSid) {
     return fail("P", "intent-unapproved");
   }
   const { shaOfArtifactBuffer } = require("../../hooks/workflow-state/completion-approval");

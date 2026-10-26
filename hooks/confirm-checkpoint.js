@@ -10,7 +10,6 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
 
 // #2256 S5-a2: Bash/runInTerminal/runCommands normalization (SSOT: hooks/lib/tool-command-text.js).
 // The CONFIRM patterns are unanchored, so the joined command text finds the sentinel in any element.
@@ -33,7 +32,7 @@ const { readHookInput } = require("./lib/read-stdin");
 function noopExit() { process.stdout.write(""); process.exit(0); }
 
 // Resolve absolute path to <stage>.md artifact for the current session: a marker of this turn
-// first, else <PLANS_DIR>/<sid>-<stage>.md (the usual case: the Stop hook spent the markers).
+// first, else <PLANS_DIR>/<first_session_id>-<stage>.md (the usual case: the Stop hook spent the markers).
 function resolveArtifact(stage, sid, plansDir) {
   if (sid) {
     try {
@@ -43,9 +42,9 @@ function resolveArtifact(stage, sid, plansDir) {
     } catch (_) { /* fall back to the plans dir */ }
   }
   if (sid && plansDir) {
-    const candidate = path.join(plansDir, `${sid}-${stage}.md`);
     try {
-      if (fs.existsSync(candidate)) return candidate;
+      const owner = require("./workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir });
+      if (owner.exists) return owner.path;
     } catch (_) { /* no artifact */ }
   }
   return null;

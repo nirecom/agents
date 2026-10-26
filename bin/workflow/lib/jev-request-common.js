@@ -110,14 +110,29 @@ function readCapped(file, maxBytes) {
   return r.over_cap ? new StringDecoder("utf8").write(r.bytes) : r.bytes.toString("utf8");
 }
 
+const validSid = (sid) => typeof sid === "string" && SID_RE.test(sid) && !sid.includes("..");
+
+// The session chain's first_session_id, or sid itself when it cannot be resolved to a valid name.
+function firstSidOf(sid) {
+  try {
+    const { resolveFirstSid } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "state-ancestry.js"));
+    const first = resolveFirstSid(sid);
+    return validSid(first) ? first : sid;
+  } catch (_e) {
+    return sid;
+  }
+}
+
 // The read cap bounds memory and time far above MAX_STATE_CHARS; the header's line count
 // is then over the read portion only.
+// Plans carry the first_session_id name (#2748), so a session-downstream reads its chain's plans.
 function readArtifactsFor(dir, id) {
-  if (typeof id !== "string" || !SID_RE.test(id) || id.includes("..")) return [];
+  if (!validSid(id)) return [];
+  const planSid = firstSidOf(id);
   const out = [];
   for (const name of ARTIFACTS) {
     try {
-      const text = readCapped(path.join(dir, `${id}-${name}.md`), MAX_ARTIFACT_READ_BYTES);
+      const text = readCapped(path.join(dir, `${planSid}-${name}.md`), MAX_ARTIFACT_READ_BYTES);
       out.push({ name, text: text.replace(/\r\n/g, "\n") });
     } catch (_e) { /* absent artifact */ }
   }
@@ -128,16 +143,17 @@ function plansDir() {
   return require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "workflow-plans-dir.js")).getWorkflowPlansDir();
 }
 
-const validSid = (sid) => typeof sid === "string" && SID_RE.test(sid) && !sid.includes("..");
-
 // [{section, file, copy}] for the stage's source sections whose artifact exists, in SECTION_ORDER.
+// The plan sections carry the first_session_id name (#2748); the others stay the session's own.
 function artifactPathsFor(sid, stage) {
   if (!validSid(sid) || !Object.prototype.hasOwnProperty.call(STAGE_SOURCE_SECTIONS, stage)) return [];
   const dir = plansDir();
+  const planSid = firstSidOf(sid);
   const out = [];
   for (const section of SECTION_ORDER) {
     if (!STAGE_SOURCE_SECTIONS[stage].includes(section)) continue;
-    const file = path.join(dir, sid + SECTION_FILES[section].suffix);
+    const owner = ARTIFACTS.includes(section) ? planSid : sid;
+    const file = path.join(dir, owner + SECTION_FILES[section].suffix);
     try {
       if (fs.statSync(file).isFile()) out.push({ section, file, copy: SECTION_FILES[section].copy });
     } catch (_e) { /* absent artifact */ }

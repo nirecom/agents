@@ -4,7 +4,7 @@ Publishes each final session plan (`<sid>-intent.md`, `-outline.md`, `-detail.md
 private git remote so the plan can be read from the iOS/Android Claude apps or any
 browser, not only from the machine that wrote it (#2513).
 
-`<rootSid>-session-progress.md` ([progress-file.md](progress-file.md)) is synced the same way, but
+`<first_session_id>-session-progress.md` ([progress-file.md](progress-file.md)) is synced the same way, but
 silently: `hooks/show-plan-link.js` records its project host and pushes it on every
 Edit/Write inside the same sync budget, with no plan link and no turn marker (#2594). The
 remote's git history keeps every earlier version, which is the recovery path for a bad write.

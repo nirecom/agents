@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1733-state-event-stream/event-vocabulary.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js
-# Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, pwsh-not-required, TL2
+# Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, regression-2748, pwsh-not-required, TL2
 #
 # EVENT_KINDS and PERSISTED_TOP_LEVEL_KEYS are covered by ITERATION over the exported
 # constants, never by a hand-picked sample: a new member with no table row fails the
@@ -253,13 +253,13 @@ fi
 case_end
 
 case_begin "ev9-persisted-keys-set-equality" "hooks/workflow-state/state-io/projection.js"
-echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twenty-one documented keys (v5, #2527; #2304 adds upstream_session_id/upstream_copy_seq; #2311 adds previous_session_ids) =="
+echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twenty-two documented keys (v5, #2527; #2304 adds upstream_session_id/upstream_copy_seq; #2311 adds previous_session_ids; #2748 adds first_session_id) =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
 const want = ["auto_merge_pr", "auto_merge_pr_origin", "auto_merge_pr_source", "closes_issues", "created_at", "current", "deliverable_type", "delivery_path",
-  "delivery_path_origin", "events", "last_pushed_sha", "merge_base_baseline",
+  "delivery_path_origin", "events", "first_session_id", "last_pushed_sha", "merge_base_baseline",
   "previous_session_ids", "project_management_type", "session_id", "session_start_context", "session_worktree",
   "upstream_copy_seq", "upstream_session_id", "verbose_prompt", "version"].sort();
 const got = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []).slice().sort();
@@ -267,7 +267,7 @@ console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GO
 JS
 )
     nodejs "$SID" "$PRE$_ev_script"
-    assert_eq "EV9/persisted-keys-set-equality" "21 MATCH" "$NODE_OUT"
+    assert_eq "EV9/persisted-keys-set-equality" "22 MATCH" "$NODE_OUT"
 fi
 case_end
 

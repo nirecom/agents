@@ -62,7 +62,9 @@ if [[ -z "$PLANS_DIR" ]]; then
 fi
 
 # Owner-resolved (#2633): a downstream session reads its upstream's intent. A resolver failure
-# (bad sid, no node) keeps the session's own path, so a missing intent still means "active".
+# (no node) keeps the session's own path, so a missing intent still means "active". A sid outside
+# the session-id alphabet is never joined into a path (#2748): it reads as "active".
+[[ "$WSID" =~ ^[A-Za-z0-9_-]+$ ]] || exit 0
 INTENT_MD="$(node "${SCRIPT_DIR}/plan-artifact-path" --stage intent --session "$WSID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
 [[ -n "$INTENT_MD" ]] || INTENT_MD="${PLANS_DIR}/${WSID}-intent.md"
 

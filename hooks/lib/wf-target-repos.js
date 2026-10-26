@@ -8,14 +8,9 @@
 // "in". Distinct from "location-unknown", where the commit dir itself is not a repo.
 
 const fs = require("fs");
-const path = require("path");
 const { toWindowsPath } = require("./branch-diff");
 const { resolveRepoLocation } = require("./repo-identity");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
-
-function getPlansArtifactPath(sid, stage) {
-  return path.join(getWorkflowPlansDir(), `${sid}-${stage}.md`);
-}
 
 // Entries of the intent's `## worktrees` section; [] when absent or unreadable.
 function parseWorktrees(intentPath) {
@@ -45,24 +40,15 @@ function parseWorktrees(intentPath) {
   return results;
 }
 
-// The intent a session reads is owner-resolved (#2633): own file, its approval record or history,
-// then upstream_session_id. An heir whose intent approval names nobody still reads the donor its
-// outline/detail approval names.
+// The intent a session reads is <first_session_id>-intent.md (#2633, #2748); null when absent.
 function resolveIntentPath(sessionId, state) {
   try {
     const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
     const owner = resolvePlanArtifactOwner(sessionId, "intent", state || null, { plansDir: getWorkflowPlansDir() });
-    if (owner.exists) return owner.path;
+    return owner.exists ? owner.path : null;
   } catch (_) {
     return null;
   }
-  const approvals = (state && state.plan_approvals) || (state && state.current && state.current.plan_approvals);
-  const donorSid =
-    (approvals && approvals.outline && approvals.outline.artifact_session_id) ||
-    (approvals && approvals.detail && approvals.detail.artifact_session_id);
-  if (typeof donorSid !== "string" || !/^[A-Za-z0-9_-]+$/.test(donorSid)) return null;
-  const donor = getPlansArtifactPath(donorSid, "intent");
-  return fs.existsSync(donor) ? donor : null;
 }
 
 function readWfTargetRepos(sessionId, state) {
@@ -123,5 +109,4 @@ module.exports = {
   findMainMember,
   classifyDirAgainstWfTargetRepos,
   parseWorktrees,
-  getPlansArtifactPath,
 };
