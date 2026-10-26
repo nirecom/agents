@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-state/session-facts.js, hooks/lib/parse-closes-issues.js, bin/workflow/next-step, bin/workflow/lib/next-step/verdict.js, hooks/workflow-state/state-io/projection.js
-# Tags: tl2, workflow, session-facts, closes-issues, scope:issue-specific
+# Tags: tl2, workflow, session-facts, closes-issues, scope:issue-specific, regression-2748
 # getClosesIssues() parses <plans>/<sid>-intent.md on every call and never reads or
 # writes state.closes_issues (#2654); getSessionRepoContext() is read-only (#1644).
 # TL3 gap: real call sites / migrated consumers; covered by stage-4 call-site tests.
@@ -16,6 +16,8 @@ SF_MODULE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state/session-facts.js"
 WFSTATE_MODULE_N="$SCRIPT_CHECKOUT_ROOT_N/hooks/workflow-state"
 NEXT_STEP_N="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
 PARSE_CLI_N="$SCRIPT_CHECKOUT_ROOT_N/bin/parse-closes-issues"
+
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -67,7 +69,8 @@ fixture_state() {
   local sid="$1" complete="$2" cwd="$3" branch="$4" issues="${5:-}"
   local json='{"steps":{' first=1 s st
   for s in $STEPS_ALL; do
-    st="pending"; case " $complete " in *" $s "*) st="complete" ;; esac
+    st="pending"
+    case " $complete " in *" $s "*) st="complete" ;; esac
     [ $first -eq 1 ] || json="$json,"; first=0
     json="$json\"$s\":{\"status\":\"$st\"}"
   done
@@ -124,13 +127,16 @@ run_ns() {
   NS_OUT="$(run_with_timeout node "$NEXT_STEP_N" "$@" 2>/dev/null)" || true
 }
 
+case_begin "module-exists" "hooks/workflow-state/session-facts.js"
 echo "=== G1: module exists (sanity gate -- RED until session-facts.js lands) ==="
 if [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/session-facts.js" ]; then
   pass "G1: hooks/workflow-state/session-facts.js exists"
 else
   fail "G1: hooks/workflow-state/session-facts.js exists -- file not found"
 fi
+case_end
 
+case_begin "closes-issues-read-without-write" "hooks/workflow-state/session-facts.js"
 echo ""
 echo "=== G2: getClosesIssues returns the intent.md set and does not write it into state ==="
 fixture_state g2 "workflow_init clarify_intent" "$FIXTURE_REPO" "feature/roundtrip-reduction"
@@ -140,13 +146,17 @@ check "G2a: getClosesIssues returns the parsed issue set" \
   '[{"number":1644},{"number":1655}]' "$OUT"
 check "G2b: state.closes_issues is still absent after the call (no write)" \
   'null' "$(raw_closes g2)"
+case_end
 
+case_begin "intent-removal-empties-result" "hooks/workflow-state/session-facts.js"
 echo ""
 echo "=== G3: deleting intent.md empties the result (no fallback to a recorded value) ==="
 rm_intent g2
 OUT2="$(gci g2)"
 check "G3: getClosesIssues after intent.md is removed returns []" '[]' "$OUT2"
+case_end
 
+case_begin "intent-narrowing-narrows-result" "hooks/workflow-state/session-facts.js"
 echo ""
 echo "=== G4: #2654 regression -- narrowing intent.md from 4 issues to 2 narrows the result ==="
 fixture_state g4 "workflow_init clarify_intent" "$FIXTURE_REPO" "feature/roundtrip-reduction"
@@ -161,7 +171,9 @@ check "G4b: after intent.md is rewritten to 2 issues, the next call returns thos
   '[{"number":1644},{"number":1655}]' "$SECOND"
 check "G4c: the on-disk state file bytes did not change across both calls" \
   "$BEFORE" "$(raw_file_bytes g4)"
+case_end
 
+case_begin "agrees-with-parse-closes-issues" "hooks/lib/parse-closes-issues.js"
 echo ""
 echo "=== G5: the recorded content matches parseClosesIssues() itself for the same intent.md ==="
 fixture_state g5 "workflow_init clarify_intent" "$FIXTURE_REPO" "feature/roundtrip-reduction"
@@ -169,7 +181,9 @@ write_intent g5 "#1644" "repo#42"
 DIRECT="$(parse_direct g5)"
 VIA_FACTS="$(gci g5)"
 check "G5: getClosesIssues agrees with parseClosesIssues on the same intent.md" "$DIRECT" "$VIA_FACTS"
+case_end
 
+case_begin "closes-issues-empty-gate-unchanged" "bin/workflow/next-step"
 echo ""
 echo "=== G6: Path C regression -- the pre-existing closes_issues-empty gate is unchanged ==="
 # The Node-form cwd must match next-step's own repoDir, or the #2218 repo-dir guard aborts first.
@@ -185,7 +199,9 @@ run_ns --session g6
 check_not_contains "G6b: once intent.md names an issue, the blocked state clears without any recording call" \
   "REASON='closes_issues-empty'" "$NS_OUT"
 check_contains "G6c: ... and next-step routes to clarify-intent" "NEXT_SKILL=clarify-intent" "$NS_OUT"
+case_end
 
+case_begin "repo-context-read-only" "hooks/workflow-state/session-facts.js"
 echo ""
 echo "=== G7: getSessionRepoContext is read-only over session_start_context ==="
 fixture_state g7 "workflow_init clarify_intent" "$FIXTURE_REPO" "feature/roundtrip-reduction"
@@ -194,7 +210,9 @@ CTX="$(grc g7)"
 check "G7a: getSessionRepoContext synthesizes cwd/git_branch from session_start_context" \
   "$(printf '{"cwd":"%s","git_branch":"feature/roundtrip-reduction"}' "$FIXTURE_REPO")" "$CTX"
 check "G7b: getSessionRepoContext performs no write" "$BEFORE" "$(raw_file_bytes g7)"
+case_end
 
+case_begin "persisted-top-level-keys-allowlist" "hooks/workflow-state/state-io/projection.js"
 echo ""
 echo "=== G8: stage 4 introduces no new persisted top-level state key ==="
 # Baseline captured from hooks/workflow-state/state-io/projection.js
@@ -204,10 +222,35 @@ echo "=== G8: stage 4 introduces no new persisted top-level state key ==="
 # byte-for-byte unchanged after the implementation lands. #2527 (schema v5) later
 # renamed workflow_type and added the session-profile keys; #2304 added upstream_session_id /
 # upstream_copy_seq for the state copy; #2311 added previous_session_ids for the
-# inherited lineage; the baseline tracks all of them.
-BASELINE='["auto_merge_pr","auto_merge_pr_origin","auto_merge_pr_source","closes_issues","created_at","current","deliverable_type","delivery_path","delivery_path_origin","events","last_pushed_sha","merge_base_baseline","previous_session_ids","project_management_type","session_id","session_start_context","session_worktree","upstream_copy_seq","upstream_session_id","verbose_prompt","version"]'
+# inherited session chain; #2748 added first_session_id for the first generation's sid;
+# the baseline tracks all of them.
+BASELINE='["auto_merge_pr","auto_merge_pr_origin","auto_merge_pr_source","closes_issues","created_at","current","deliverable_type","delivery_path","delivery_path_origin","events","first_session_id","last_pushed_sha","merge_base_baseline","previous_session_ids","project_management_type","session_id","session_start_context","session_worktree","upstream_copy_seq","upstream_session_id","verbose_prompt","version"]'
 ACTUAL="$(WFM="$WFSTATE_MODULE_N" run_with_timeout node "$TOPKEYS_PROBE" 2>/dev/null || echo "")"
 check "G8: PERSISTED_TOP_LEVEL_KEYS is unchanged from the pre-stage-4 baseline" "$BASELINE" "$ACTUAL"
+
+# The allowlist is enforced at write time (#2748): a listed key (first_session_id)
+# serializes and keeps its value; an unlisted key aborts the write with UnknownStateKeyError.
+ALLOW_PROBE="$TMPDIR_BASE/allowlist-probe.js"
+cat > "$ALLOW_PROBE" <<'EOF'
+const S = require(process.env.WFM + "/state-io");
+const base = () => S.createInitialState("g8-allow", { cwd: "/x", git_branch: "feature/x" });
+const out = [];
+try {
+  const st = base(); st.first_session_id = "g8-first";
+  const ser = JSON.parse(S.serializeStateForPersist(st));
+  out.push("listed=" + (ser.first_session_id === "g8-first" ? "kept" : "dropped"));
+} catch (e) { out.push("listed=threw:" + e.name); }
+try {
+  const st = base(); st.g8_not_a_state_key = 1;
+  S.serializeStateForPersist(st);
+  out.push("unlisted=accepted");
+} catch (e) { out.push("unlisted=" + (e instanceof S.UnknownStateKeyError ? "rejected" : "threw:" + e.name)); }
+process.stdout.write(out.join(" "));
+EOF
+ALLOW_OUT="$(WFM="$WFSTATE_MODULE_N" run_with_timeout node "$ALLOW_PROBE" 2>/dev/null || echo "")"
+check_contains "G8: a listed key (first_session_id) is written with its value" "listed=kept" "$ALLOW_OUT"
+check_contains "G8: an unlisted key is rejected with UnknownStateKeyError" "unlisted=rejected" "$ALLOW_OUT"
+case_end
 
 echo ""
 echo "=== Results ==="

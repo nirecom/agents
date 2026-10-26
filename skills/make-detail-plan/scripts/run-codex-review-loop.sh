@@ -11,11 +11,16 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-rev
 # so a containment refusal is never read as ESCALATE or as codex-unavailable.
 ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
 rwc_resolve detail-plan make-detail-plan
-# Owner-resolved intent (#2633): a resumed session reads its upstream's file.
-INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
-INTENT_FILE="$PLANS_DIR/${INTENT_FILE##*[/\\]}"
-[[ "$INTENT_FILE" == *-intent.md ]] || INTENT_FILE="$PLANS_DIR/$SESSION_ID-intent.md"
-DRAFT_FILE="$PLANS_DIR/$SESSION_ID-detail.md"
+# Plans are named after first_session_id (#2748); PLANS_DIR keeps its spelling, only the basename
+# comes from the CLI. An unresolvable plan path halts (4) instead of falling back to the own sid.
+plan_file() {
+  local p
+  p="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || return 1
+  [[ "${p##*[/\\]}" == *"-$1.md" ]] || return 1
+  printf '%s/%s' "$PLANS_DIR" "${p##*[/\\]}"
+}
+INTENT_FILE="$(plan_file intent)" || { echo "make-detail-plan: cannot resolve the intent path" >&2; exit 4; }
+DRAFT_FILE="$(plan_file detail)" || { echo "make-detail-plan: cannot resolve the detail path" >&2; exit 4; }
 CUR_FP="$(git hash-object -- "$DRAFT_FILE" 2>/dev/null || true)"
 TG_RC=0
 rwc_check_terminal make-detail-plan "$CUR_FP" || TG_RC=$?

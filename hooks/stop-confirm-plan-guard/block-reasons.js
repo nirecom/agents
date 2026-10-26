@@ -73,13 +73,18 @@ function layer2Reason(sid, content, entries) {
 }
 
 // A written artifact may carry another session's id, and one call may write several files of a
-// stage: every file a marker names is checked, else <plans>/<sid>-<stage>.md.
+// stage: every file a marker names is checked, else <plans>/<first_session_id>-<stage>.md.
 function filesOf(sid, markers, plansDir, stage) {
   const named = [];
   for (const m of markers) {
     if (m && m.suffix === stage && typeof m.absPath === "string" && m.absPath) named.push(m.absPath);
   }
-  return named.length > 0 ? named : [path.join(plansDir, `${sid}-${stage}.md`)];
+  if (named.length > 0) return named;
+  try {
+    return [require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir }).path];
+  } catch (_) {
+    return [];
+  }
 }
 
 function planLinkReason(ctx) {

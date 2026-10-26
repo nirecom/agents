@@ -120,17 +120,19 @@ function asDeclaredPath(token) {
   return t.includes("/") || PATH_EXT_RE.test(t) ? t : null;
 }
 
-// Declared "## Files to modify" paths from the session's (owner-resolved, #2633) detail plan.
+// Declared "## Files to modify" paths from the session's detail plan, named after
+// first_session_id (#2633, #2748). null for an invalid wsid or an unresolvable plan.
 function parseDetailFilesToModify(plansDir, wsid) {
   try {
-    if (!plansDir || !wsid) return null;
+    if (!plansDir || typeof wsid !== "string") return null;
+    if (!require("../workflow-state/state-io/core").SESSION_ID_VALID_RE.test(wsid)) return null;
     const dir = toWindowsPath(plansDir);
     let detailPath;
     try {
       detailPath = require("../workflow-state/plan-artifact-owner")
         .resolvePlanArtifactOwner(wsid, "detail", undefined, { plansDir: dir }).path;
     } catch (_) {
-      detailPath = path.join(dir, `${wsid}-detail.md`);
+      return null;
     }
     let text;
     try { text = fs.readFileSync(detailPath, "utf8"); } catch (_) { return null; }

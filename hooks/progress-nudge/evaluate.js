@@ -70,14 +70,13 @@ function progressUpdatePatch(cur, progressPath, transcriptPath, now, created) {
 // evaluate({sid, event, tool, transcriptPath, now}) -> additionalContext string | null.
 function evaluate(o) {
   const { sid, event, tool, transcriptPath, now } = o;
-  const rootSid = PF.resolveRootSid(sid);
   const ensured = PF.ensureProgressFile(sid);
   // No usable progress file: consume nothing, so the completes are requested once it can be created.
   if (!ensured.path) return null;
   const progressPath = ensured.path;
   const stepCandidate = event === "Stop" || (event === "PostToolUse" && (isCommandTool(tool) || tool === "Agent" || tool === "Task"));
   const steps = PF.updatePressure(sid, (cur) => {
-    const pre = { root_sid: rootSid, progress_path: progressPath };
+    const pre = { progress_path: progressPath };
     Object.assign(pre, progressUpdatePatch(cur, progressPath, transcriptPath, now, ensured.created));
     if (!stepCandidate) return { patch: pre, result: [] };
     const cursor = typeof cur.event_cursor === "number" ? cur.event_cursor : 0;
