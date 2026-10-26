@@ -9,7 +9,6 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { getSessionStateDir } = require("../workflow-state");
-const { getPlansArtifactPath } = require("./plans-artifact-registry");
 const { normalizeSlashes } = require("./path-match");
 const { PLAN_STAGE_TABLE } = require("../workflow-state/plan-stage-table");
 
@@ -17,10 +16,14 @@ const SID_RE = /^[A-Za-z0-9_-]+$/;
 const STAGES = Object.freeze(Object.values(PLAN_STAGE_TABLE).map((row) => row.suffix));
 const validSid = (sid) => typeof sid === "string" && SID_RE.test(sid);
 
-// approvalArtifactPath(sid, stage) -> <plans>/<sid>-<stage>.md, the file the approval binds; null
-// for an unusable sid.
+// approvalArtifactPath(sid, stage) -> <plans>/<first_session_id>-<stage>.md, the file the approval
+// binds (#2748); null for an unusable sid or stage.
 function approvalArtifactPath(sid, stage) {
-  try { return getPlansArtifactPath(sid, stage); } catch (_) { return null; }
+  try {
+    return require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage).path;
+  } catch (_) {
+    return null;
+  }
 }
 
 // linkKey(linkResult) -> the URL when one exists, else the local path, else null.

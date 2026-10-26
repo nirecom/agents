@@ -32,6 +32,7 @@ const PERSISTED_TOP_LEVEL_KEYS = [
   "upstream_session_id",
   "upstream_copy_seq",
   "previous_session_ids",
+  "first_session_id",
   "deliverable_type",
   "project_management_type",
   "delivery_path",

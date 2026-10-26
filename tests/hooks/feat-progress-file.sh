@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-progress-file.sh
 # Tests: hooks/lib/progress-file.js, bin/progress-file
-# Tags: progress-file, root-sid, inheritance, template, idempotent, cli, scope:issue-specific, pwsh-not-required, TL1
+# Tags: progress-file, root-sid, inheritance, template, idempotent, cli, regression-2748, scope:issue-specific, pwsh-not-required, TL1
 
 # Issue #2594 stage 1 — one session-progress.md is written across every generation of a handed-off session, so its name carries the first generation's sid. Each generation copies the root sid its donor saved (so neither chain length nor an expired middle state can split the file); chain walking is only the fallback. ensure must never overwrite what the model already wrote.
 
@@ -28,14 +28,21 @@ CLI="$SCRIPT_CHECKOUT_ROOT/bin/progress-file"
 nj() { run_with_timeout 60 node "$(np "$TMP/$1")" "${@:2}" 2>&1; }
 expect() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=${2:0:400}"; fi; }
 
-# seed.js <sid> [donor] — a session state; with a donor, the backfilled
-# session-inheritance event that names it (the record /resume-session --from writes).
+# #2748: session chains are built with the real applyInheritance (the record /resume-session --from
+# writes), never with a hand-written inherited_from event.
+# seed.js <sid> [upstream] — a session state; with an upstream, <sid> adopts it through applyInheritance.
+# seed.js --legacy <sid> <upstream> — a pre-#2311 raw state carrying upstream_session_id only.
+# seed.js --strip <sid> — drop first_session_id from <sid>'s state (a state written before #2748).
 # seed.js --root <sid> <root> — plant the root sid saved in <sid>'s control file.
 # seed.js --drop <sid> — delete <sid>'s state file (an expired middle generation).
 cat > "$TMP/seed.js" <<'JS'
 const fs = require('fs');
 const path = require('path');
 const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
+const A = require(process.env.AGENTS + '/hooks/workflow-state/inheritance/apply');
+const CTX = { cwd: '/x', git_branch: 'feature/x' };
+const raw = (sid) => JSON.parse(fs.readFileSync(S.getStatePath(sid), 'utf8'));
+const writeRaw = (sid, st) => fs.writeFileSync(S.getStatePath(sid), JSON.stringify(st, null, 2));
 const a = process.argv.slice(2);
 if (a[0] === '--root') {
   const dir = path.join(process.env.WORKFLOW_STATE_DIR, a[1] + '.control');
@@ -43,15 +50,26 @@ if (a[0] === '--root') {
   fs.writeFileSync(path.join(dir, 'progress-pressure.json'), JSON.stringify({ root_sid: a[2] }));
 } else if (a[0] === '--drop') {
   fs.rmSync(S.getStatePath(a[1]), { force: true });
+} else if (a[0] === '--legacy') {
+  const st = S.createInitialState(a[1], CTX);
+  delete st.previous_session_ids;
+  delete st.first_session_id;
+  st.upstream_session_id = a[2];
+  writeRaw(a[1], st);
+} else if (a[0] === '--strip') {
+  const st = raw(a[1]);
+  delete st.first_session_id;
+  writeRaw(a[1], st);
 } else {
-  S.writeState(a[0], S.createInitialState(a[0], { cwd: '/x', git_branch: 'feature/x' }));
-  if (a[1]) S.appendEvents(a[0], [{ kind: 'step_status', step: 'workflow_init', status: 'complete',
-    provenance: 'backfilled', origin: 'session-inheritance', inherited_from: a[1] }]);
-  else S.markStep(a[0], 'workflow_init', 'complete');
+  S.writeState(a[0], S.createInitialState(a[0], CTX));
+  if (a[1]) {
+    const res = A.applyInheritance(a[0], raw(a[0]).created_at, a[1]);
+    if (!res || res.ok === false) { process.stdout.write('applyInheritance failed: ' + JSON.stringify(res)); process.exit(1); }
+  } else S.markStep(a[0], 'workflow_init', 'complete');
 }
 process.stdout.write('ok');
 JS
-seed() { nj seed.js "$@" >/dev/null; }
+seed() { local out; out="$(nj seed.js "$@")"; [ "$out" = "ok" ] || fail "seed $*" "${out:0:400}"; }
 
 cat > "$TMP/root.js" <<'JS'
 const P = require(process.env.AGENTS + '/hooks/lib/progress-file.js');
@@ -63,15 +81,23 @@ case_begin "root-sid-resolution" "hooks/lib/progress-file.js"
 seed solo
 expect "B1: no inheritance -> the session's own sid" "$(root_of solo)" "solo"
 seed g1; seed g2 g1
-expect "B2: two generations -> the donor's sid" "$(root_of g2)" "g1"
-seed h1; seed h2 h1; seed h3 h2; seed --root h2 h-first
-expect "B3: three generations -> the root sid the donor saved is copied (not the chain's end)" "$(root_of h3)" "h-first"
-seed k1; seed k2 k1; seed k3 k2; seed k4 k3; seed --root k3 k1; seed --drop k2
-expect "B4: a middle generation's state expired -> the donor's saved value still names the first generation" "$(root_of k4)" "k1"
-seed m2 m-gone
-expect "B5: the chain breaks at once and nothing was saved -> the oldest sid reached" "$(root_of m2)" "m-gone"
+expect "B2: two generations -> the session-upstream's sid" "$(root_of g2)" "g1"
+seed g3 g2
+expect "B2: three generations -> the first generation, not the session-upstream" "$(root_of g3)" "g1"
+seed h1; seed h2 h1; seed h3 h2; seed --strip h3; seed --root h3 h-first
+expect "B3: a recorded previous_session_ids list wins over a disagreeing pin (state written before #2748)" "$(root_of h3)" "h1"
+seed k1; seed k2 k1; seed k3 k2; seed k4 k3; seed --drop k2
+expect "B4: a middle generation's state expired -> the own state still names the first generation" "$(root_of k4)" "k1"
+seed q1; seed q2 q1; seed q3 q2; seed --strip q3; seed --root q3 q3; seed --drop q2
+expect "B4: a self pin on a later generation is the split trace, not the answer" "$(root_of q3)" "q1"
+seed --legacy m2 m-gone
+expect "B5: a legacy walk whose session-upstream has no state -> the oldest sid reached" "$(root_of m2)" "m-gone"
+seed --legacy n1 n0; seed --legacy n2 n1
+expect "B5: a legacy walk follows upstream_session_id to the oldest sid reached" "$(root_of n2)" "n0"
 seed own; seed --root own own-saved
-expect "B6: the session's own saved value wins over everything" "$(root_of own)" "own-saved"
+expect "B6: the session's own pin naming another sid wins on a first generation" "$(root_of own)" "own-saved"
+seed --legacy p2 p1; seed --root p2 p-pin
+expect "B6: a pin naming another sid wins on a legacy state with no previous_session_ids (no walk)" "$(root_of p2)" "p-pin"
 case_end
 
 cat > "$TMP/ensure.js" <<'JS'

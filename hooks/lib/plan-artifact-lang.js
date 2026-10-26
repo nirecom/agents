@@ -24,11 +24,13 @@ function isPlanArtifactPath(resolvedPath) {
   return isPlanArtifact(path.basename(resolved));
 }
 
-// The joined basename must itself be a plan artifact: this rejects separators,
-// traversal and any sid outside the UUID / timestamp classes in one check.
+// The plan is named after first_session_id (#2748). The joined basename must itself be a plan
+// artifact: this rejects separators, traversal and any sid outside the UUID / timestamp classes.
 function resolvePlanArtifactPath(sid, stage) {
   if (typeof sid !== "string" || typeof stage !== "string" || !STAGES.has(stage)) return null;
-  const base = sid + "-" + stage + ".md";
+  const firstSid = require("../workflow-state/state-ancestry").resolveFirstSid(sid);
+  if (typeof firstSid !== "string") return null;
+  const base = firstSid + "-" + stage + ".md";
   if (!isPlanArtifact(base)) return null;
   return path.join(getWorkflowPlansDir(), base);
 }

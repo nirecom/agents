@@ -1,6 +1,6 @@
 ---
 name: make-detail-plan
-description: Stage 3 of three-stage planning pipeline. Produce a file-level implementation plan via detail-planner/detail-reviewer loop, then get user approval. Inputs are confirmed intent (<session-id>-intent.md) and outline (<session-id>-outline.md) from prior stages.
+description: Stage 3 of three-stage planning pipeline. Produce a file-level implementation plan via detail-planner/detail-reviewer loop, then get user approval. Inputs are confirmed intent (<first_session_id>-intent.md) and outline (<first_session_id>-outline.md) from prior stages.
 model: sonnet
 user-invocable: false
 ---
@@ -15,7 +15,7 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 
 ### MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
-Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Set `<INTENT_MD>` / `<OUTLINE_MD>` to the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` / `--stage outline` (a resumed session reads its upstream's files); substitute them for every `$INTENT_MD` / `$OUTLINE_MD` below. Read both if present; otherwise proceed with task context alone.
+Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Set `<INTENT_MD>` / `<OUTLINE_MD>` / `<DETAIL_MD>` to the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` / `--stage outline` / `--stage detail` (every generation of the session chain shares the first_session_id names); substitute them for every `$INTENT_MD` / `$OUTLINE_MD` / `$DETAIL_MD` below. When the detail call fails, write no detail: halt and surface its stderr. Read intent and outline if present; otherwise proceed with task context alone.
 
 ### MDP-2 — Surface delivery plan
 
@@ -72,18 +72,18 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_MAIN_ROOT/skills/mak
 
 ### MDP-7 — Assemble + confirm
 
-On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source. `## Class members` is NOT carried into detail.md — its SSOT is intent.md (#2228).
+On reviewer `APPROVED`: assemble `<DETAIL_MD>` via the shared helper. Helper carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source. `## Class members` is NOT carried into detail.md — its SSOT is intent.md (#2228).
 
-Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind outline "$OUTLINE_MD" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
+Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind outline "$OUTLINE_MD" "$DETAIL_MD" "$DETAIL_MD"` (Bash). Do NOT instruct planner to author the 2 mandatory sections — helper strips planner-authored copies (including any `## Class members` residue). Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt.
 
-After assemble-mandatory.sh succeeds, run `bash "$AGENTS_MAIN_ROOT/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the gate check — blocks even on the `proceed` (auto-approval) path.
+After assemble-mandatory.sh succeeds, run `bash "$AGENTS_MAIN_ROOT/bin/check-issues-class-coverage" --mode detail "$DETAIL_MD"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the gate check — blocks even on the `proceed` (auto-approval) path.
 
 Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
 At detail, `--gate` also folds in the outline→detail scope change, so it runs after the assembly above.
 
 Issue the standalone call `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG`; when its stdout `<CONV_LANG>` is non-empty, write both the `proceed` one-paragraph summary and the `ask` one-line `<<WORKFLOW_CONFIRM_DETAIL: ...>>` summary in that language.
 
-Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
+Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<DETAIL_MD>` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - Re-entering MDP-7 from a Revise loop: rerun the gate check from the trigger line, without `--scope-change-approved`.
 - `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3) that carries the plan-link line (protocol CPA-2).
