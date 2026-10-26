@@ -59,14 +59,20 @@ function resolveWorkflowSessionId(ctx = {}) {
 
   // Priority 2: native CLAUDE_CODE_SESSION_ID (existence-guarded). Guard against
   // selecting a session with no plan artifacts yet (early-session false resolve) —
-  // accept only when any `<value>-*.md` artifact exists in plans-dir.
+  // accept only when any `<value>-*.md` artifact exists in plans-dir. A session-downstream's
+  // progress file and plans carry its first_session_id name (#2748), so that name counts too.
   if (nativeSid) {
     const v = nativeSid;
     let hasArtifact = false;
     try {
+      const prefixes = [v + "-"];
+      try {
+        const first = require("../workflow-state/state-ancestry").resolveFirstSid(v);
+        if (first !== v && /^[A-Za-z0-9_-]+$/.test(first)) prefixes.push(first + "-");
+      } catch (_) {}
       hasArtifact = fs
         .readdirSync(plansDir)
-        .some((f) => f.startsWith(v + "-") && f.endsWith(".md"));
+        .some((f) => f.endsWith(".md") && prefixes.some((p) => f.startsWith(p)));
     } catch (_) {}
     if (hasArtifact) return v;
   }

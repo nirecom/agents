@@ -9,6 +9,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The hard-to-undo act of landing the change on the default branch — a PR merge or a direct commit and push — performed by `/merge-to-main` right after the USER_VERIFIED confirmation.
 - **Related**: [skills/merge-to-main/SKILL.md](../../skills/merge-to-main/SKILL.md)
 
+### first_session_id
+
+- **Definition**: session chain の第一世代の session id。session-progress.md と plan の名前はこれで決まる。
+- **Related**: [architecture/claude-code/progress-file.md](../architecture/claude-code/progress-file.md)
+
 ### GATE_ACTION
 
 - **Definition**: The closed-vocabulary confirm-gate verdict `next-step --gate` prints: `proceed`, `ask`, `present-and-stop`, or `none`.
@@ -61,6 +66,21 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 - **Definition**: The checkout (main or linked worktree) holding the script currently running; each file assigns it once from its own path to find sibling code, never as an environment variable.
 - **Related**: [architecture/claude-code/root-names.md](../architecture/claude-code/root-names.md)
+
+### session chain
+
+- **Definition**: 一つのセッションでは足りず、--from で次のセッションを継ぎ足していった連なり。先頭の世代が第一世代。
+- **Related**: [architecture/claude-code/progress-file.md](../architecture/claude-code/progress-file.md)
+
+### session-downstream
+
+- **Definition**: 引き継ぎ先のセッション。--from で再開した側の世代。
+- **Related**: [skills/resume-session/SKILL.md](../../skills/resume-session/SKILL.md)
+
+### session-upstream
+
+- **Definition**: 引き継ぎ元のセッション。--from で再開されるときの、再開元の世代。
+- **Related**: [skills/resume-session/SKILL.md](../../skills/resume-session/SKILL.md)
 
 ### step table
 
