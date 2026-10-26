@@ -879,3 +879,7 @@ Changes: Fixed: a delivered workflow session no longer asks to re-run the outlin
 ### FEATURE: PR #2778 (2026-10-26)
 Background: feat(#2763): match glossary drift in identifier and prose contexts
 Changes: The glossary drift check no longer flags regular plurals, title case on heading lines and table header rows, naming-convention differences of an identifier (case, `_` or `-`), or lower-case command names for capital terms in code comments.;The glossary drift check now flags an identifier whose words change form or are split by whitespace, including inside code spans.;Existing glossary check records and their ACCEPTED grants go stale once, because the matcher rules changed.
+
+### FEATURE: PR #2810 (2026-10-26)
+Background: fix(#2748): resolve plans and progress by first_session_id, migrate orphan progress files, and validate the resume-session reader sid
+Changes: Resumed sessions (`/resume-session --from`) keep writing the first generation's progress file and plans instead of starting their own; a temporary `bin/migrate-orphan-progress-files` merges files left by earlier resumes.
