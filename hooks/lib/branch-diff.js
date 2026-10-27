@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { getProtectedBranches } = require("./merge-detect");
 
-// Git Bash delivers `/c/path`; Node fs/spawnSync need `C:\path`. No-op on POSIX.
+// Git Bash delivers POSIX drive-letter paths; Node fs/spawnSync need the Windows form. No-op on POSIX.
 function toWindowsPath(raw) {
   if (typeof raw !== "string" || raw === "") return raw;
   if (process.platform !== "win32") return raw;
@@ -108,28 +108,46 @@ function computeWorkingTreeDiff(rawCwd) {
   }
 }
 
-// Declared "## Files to modify" paths from the session's detail plan.
+// A backticked token is a declared path only when it looks like one: no whitespace or shell /
+// call syntax, and either a "/" or a file extension. Symbols, keys and commands are skipped.
+const PATH_EXT_RE = /\.(?:js|cjs|mjs|ts|json|md|sh|ps1|psm1|py|yml|yaml|toml|txt)$/;
+function asDeclaredPath(token) {
+  const t = token.replace(/\\/g, "/").replace(/:\d+(?:-\d+)?(?:,\d+)*$/, "");
+  if (!t || /[()<>{}$"'|;,=*?`]/.test(t)) return null;
+  // A space is allowed inside a path (docs/User Guide.md) only when the token starts with a
+  // path segment and ends in an extension; "git diff a/b.js" starts with a bare command word.
+  if (/\s/.test(t)) return /^[^\s/]+\//.test(t) && PATH_EXT_RE.test(t) && !/^\s|\s$/.test(t) ? t : null;
+  return t.includes("/") || PATH_EXT_RE.test(t) ? t : null;
+}
+
+// Declared "## Files to modify" paths from the session's (owner-resolved, #2633) detail plan.
 function parseDetailFilesToModify(plansDir, wsid) {
   try {
     if (!plansDir || !wsid) return null;
-    const detailPath = path.join(toWindowsPath(plansDir), `${wsid}-detail.md`);
+    const dir = toWindowsPath(plansDir);
+    let detailPath;
+    try {
+      detailPath = require("../workflow-state/plan-artifact-owner")
+        .resolvePlanArtifactOwner(wsid, "detail", undefined, { plansDir: dir }).path;
+    } catch (_) {
+      detailPath = path.join(dir, `${wsid}-detail.md`);
+    }
     let text;
     try { text = fs.readFileSync(detailPath, "utf8"); } catch (_) { return null; }
     const paths = [];
+    const add = (p) => { if (p && !paths.includes(p)) paths.push(p); };
     let inSection = false;
     for (const line of text.split(/\r?\n/)) {
       if (line.trim() === "## Files to modify") { inSection = true; continue; }
       if (inSection && /^## /.test(line)) break;
-      if (inSection) {
-        // Two declared-file spellings appear in real detail plans and fixtures:
-        // backtick-wrapped `path` and a plain dash bullet `- path`. Prefer the
-        // backtick form; fall back to a single-token dash/star bullet so a prose
-        // bullet with spaces is never mistaken for a declared file.
-        const bt = line.match(/`([^`]+)`/);
-        if (bt) { paths.push(bt[1].replace(/\\/g, "/")); continue; }
-        const bullet = line.match(/^\s*[-*]\s+(\S+)\s*$/);
-        if (bullet) paths.push(bullet[1].replace(/\\/g, "/"));
-      }
+      if (!inSection || /^\s*#/.test(line)) continue;
+      // Every path-shaped backticked token on the line counts; a line without one falls back to
+      // a single-token dash/star bullet, so a prose bullet is never mistaken for a declared file.
+      const tokens = [...line.matchAll(/`([^`]+)`/g)].map((m) => asDeclaredPath(m[1])).filter(Boolean);
+      if (tokens.length > 0) { tokens.forEach(add); continue; }
+      if (line.includes("`")) continue;
+      const bullet = line.match(/^\s*[-*]\s+(\S+)\s*$/);
+      if (bullet) add(bullet[1].replace(/\\/g, "/"));
     }
     return paths;
   } catch (_) {

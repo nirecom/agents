@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1904-inheritance-origin-stamp.sh
 # Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js
-# Tags: session-inherit, provenance, regression-1904, scope:issue-specific, pwsh-not-required, TL1, TL2
+# Tags: session-inherit, provenance, regression-1904, scope:issue-specific, pwsh-not-required, TL1, TL2, regression-2304
 
-# Regression for #1904: applyInheritance stamps every inherited event with origin:"session-inherit",
-# provenance:"backfilled", inherited_from:<donor sid> and at:<heir created_at> — regardless of the
-# donor's OWN event origin. Case A uses a donor migrated by migrateV1ToV2 (origin "migration-v1-to-v2",
-# which also differs in `provenance` for status events — the stronger anchor than a mark-step donor);
-# Case B is the control group for the ordinary mark-step donor shape.
+# #1904 as revised by #2304: applyInheritance copies the donor's events verbatim (origin, provenance, at)
+# up to upstream_copy_seq and stamps origin:"session-inherit"/provenance:"backfilled" only on what it
+# appends after the boundary; no event carries inherited_from. Case A uses a donor migrated by
+# migrateV1ToV2 (origin "migration-v1-to-v2"); Case B is the control for an ordinary mark-step donor.
 
 set -u
 
@@ -28,11 +27,26 @@ mkdir -p "$_ISOLATION_TMP_ROOT/workflow-state" "$_ISOLATION_TMP_ROOT/plans"
 export WORKFLOW_STATE_DIR="$_ISOLATION_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_ISOLATION_TMP_ROOT/plans"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
+# Shared heir check (#2304): events up to upstream_copy_seq equal the donor's normalized events
+# verbatim, and only the events after the boundary are session-inherit/backfilled.
+BOUNDARY_CHECK_JS="
+const heirRaw = JSON.parse(require('fs').readFileSync(require('path').join(process.env.WORKFLOW_STATE_DIR, heirSid + '.json'), 'utf8'));
+const b = heirRaw.upstream_copy_seq;
+if (typeof b !== 'number') problems.push('no-upstream_copy_seq');
+if (heirRaw.upstream_session_id !== donorSid) problems.push('upstream_session_id:' + heirRaw.upstream_session_id);
+const pre = heirRaw.events.filter((e) => e.seq <= b);
+if (donor && JSON.stringify(pre) !== JSON.stringify(donor.events)) problems.push('pre-boundary-not-verbatim:' + JSON.stringify(pre.map((e) => [e.kind, e.step, e.origin])));
+const post = heirRaw.events.filter((e) => !(e.seq <= b));
+const badPost = post.filter((e) => e.origin !== 'session-inherit' || e.provenance !== 'backfilled');
+if (badPost.length > 0) problems.push('bad-post:' + JSON.stringify(badPost.map((e) => [e.kind, e.step, e.origin, e.provenance])));
+const named = heirRaw.events.filter((e) => Object.prototype.hasOwnProperty.call(e, 'inherited_from'));
+if (named.length > 0) problems.push('inherited_from-present:' + named.length);
+"
+
 # ---------------------------------------------------------------------------
 # run_1904a: v1-shaped donor migrated in-flight via migrateV1ToV2, then
 # inherited. Asserts positive anchors on the donor (migration actually ran and
-# produced the expected origin/kinds) before asserting the heir's inherited
-# events all carry the four session-inherit fields.
+# produced the expected origin/kinds) before the heir boundary check.
 # ---------------------------------------------------------------------------
 run_1904a() {
     local tmp tn out
@@ -88,37 +102,22 @@ if (donor) {
 
 const heirCreatedAt = '2026-01-01T00:00:00.000Z';
 writeState(heirSid, createInitialState(heirSid, { cwd: '/heir', git_branch: null }));
-applyInheritance(heirSid, heirCreatedAt, donor);
-
-const heir = readState(heirSid);
-const inherited = heir.events.filter((e) => e.inherited_from === donorSid);
-if (inherited.length < 1) problems.push('heir-no-inherited-events');
-const inheritedAnnotations = inherited.filter((e) => e.kind === 'step_annotation');
-if (inheritedAnnotations.length < 1) problems.push('heir-no-inherited-annotations');
-
-const badOriginHeir = inherited.filter((e) => e.origin !== 'session-inherit');
-const badProvenance = inherited.filter((e) => e.provenance !== 'backfilled');
-const badInheritedFrom = inherited.filter((e) => e.inherited_from !== donorSid);
-const badAt = inherited.filter((e) => e.at !== heirCreatedAt);
-if (badOriginHeir.length > 0) problems.push('bad-origin:' + JSON.stringify(badOriginHeir.map((e) => [e.kind, e.step, e.origin])));
-if (badProvenance.length > 0) problems.push('bad-provenance:' + JSON.stringify(badProvenance.map((e) => [e.kind, e.step, e.provenance])));
-if (badInheritedFrom.length > 0) problems.push('bad-inherited-from:' + JSON.stringify(badInheritedFrom.map((e) => [e.kind, e.step, e.inherited_from])));
-if (badAt.length > 0) problems.push('bad-at:' + JSON.stringify(badAt.map((e) => [e.kind, e.step, e.at])));
+applyInheritance(heirSid, heirCreatedAt, donorSid);
+$BOUNDARY_CHECK_JS
 
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
-        pass "1904a: v1-shaped donor migrated via migrateV1ToV2 -> all inherited events stamp origin/provenance/inherited_from/at correctly"
+        pass "1904a: v1-shaped donor migrated via migrateV1ToV2 -> migrated events copied verbatim up to upstream_copy_seq, session-inherit only after it"
     else
         fail "1904a: expected 'OK', got '${out:-<err>}'"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# run_1904b: mark-step donor (control group). Same four-field assertion, using
-# an ordinary origin:"mark-step" donor to demonstrate the invariant holds
-# independent of the donor's own event origin.
+# run_1904b: mark-step donor (control group). Same boundary check, using an
+# ordinary origin:"mark-step" donor.
 # ---------------------------------------------------------------------------
 run_1904b() {
     local tmp tn out
@@ -144,26 +143,14 @@ if (donor === null) problems.push('donor-null');
 
 const heirCreatedAt = '2026-01-02T00:00:00.000Z';
 writeState(heirSid, createInitialState(heirSid, { cwd: '/heir', git_branch: null }));
-applyInheritance(heirSid, heirCreatedAt, donor);
-
-const heir = readState(heirSid);
-const inherited = heir.events.filter((e) => e.inherited_from === donorSid);
-if (inherited.length < 1) problems.push('heir-no-inherited-events');
-
-const badOrigin = inherited.filter((e) => e.origin !== 'session-inherit');
-const badProvenance = inherited.filter((e) => e.provenance !== 'backfilled');
-const badInheritedFrom = inherited.filter((e) => e.inherited_from !== donorSid);
-const badAt = inherited.filter((e) => e.at !== heirCreatedAt);
-if (badOrigin.length > 0) problems.push('bad-origin:' + JSON.stringify(badOrigin.map((e) => [e.kind, e.step, e.origin])));
-if (badProvenance.length > 0) problems.push('bad-provenance:' + JSON.stringify(badProvenance.map((e) => [e.kind, e.step, e.provenance])));
-if (badInheritedFrom.length > 0) problems.push('bad-inherited-from:' + JSON.stringify(badInheritedFrom.map((e) => [e.kind, e.step, e.inherited_from])));
-if (badAt.length > 0) problems.push('bad-at:' + JSON.stringify(badAt.map((e) => [e.kind, e.step, e.at])));
+applyInheritance(heirSid, heirCreatedAt, donorSid);
+$BOUNDARY_CHECK_JS
 
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     if [ "$out" = "OK" ]; then
-        pass "1904b: mark-step donor (control) -> all inherited events stamp origin/provenance/inherited_from/at correctly"
+        pass "1904b: mark-step donor (control) -> mark-step events copied verbatim up to upstream_copy_seq, session-inherit only after it"
     else
         fail "1904b: expected 'OK', got '${out:-<err>}'"
     fi

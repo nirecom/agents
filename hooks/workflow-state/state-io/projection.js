@@ -29,6 +29,9 @@ const PERSISTED_TOP_LEVEL_KEYS = [
   "session_id",
   "created_at",
   "session_start_context",
+  "upstream_session_id",
+  "upstream_copy_seq",
+  "previous_session_ids",
   "deliverable_type",
   "project_management_type",
   "delivery_path",
@@ -306,7 +309,7 @@ function guardProjection(value) {
     const child = guardProjection(value[key]);
     Object.defineProperty(guarded, key, {
       get: () => child,
-      set: () => refuseWrite(key),
+      set: () => { refuseWrite(key); },
       enumerable: true,
       configurable: false,
     });

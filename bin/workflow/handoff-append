@@ -18,9 +18,6 @@ const { appendHandoffEntryIfActive } = require(path.join(__dirname, "..", "..", 
 const { resolveSessionId } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "session-id"));
 const { SESSION_ID_VALID_RE } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "state-io"));
 
-// Only a main-session flush moves the nudge baseline (hooks/lib/handoff-pressure.js).
-const FLUSH_ORIGIN = "flush";
-
 const FLAGS = {
   "--session": "session",
   "--class": "cls",
@@ -31,7 +28,8 @@ const FLAGS = {
   "--origin": "origin",
 };
 
-// A context-pressured session runs this from memory (rules/handoff-emergency-flush.md)
+// A context-pressured session runs this from memory (the --origin flush path; its facts move to
+// session-progress.md under rules/progress-update.md, and the path itself retires in #2652)
 // and cannot afford to open the source, so the command answers for itself.
 // --origin has no default on purpose: the producer is never inferred.
 const USAGE = [
@@ -123,7 +121,6 @@ function main() {
     process.stderr.write(`handoff-append: rejected — --session ${JSON.stringify(sid)} is not a valid session id\n`);
     return 2;
   }
-  const writeTime = new Date().toISOString();
   const result = appendHandoffEntryIfActive(sid, {
     cls: opts.cls,
     step: opts.step,
@@ -133,7 +130,6 @@ function main() {
     origin: opts.origin,
   });
   if (result.written) {
-    if (opts.origin === FLUSH_ORIGIN) markFlush(sid, writeTime);
     process.stdout.write(`WRITTEN=1 REASON=${result.reason}\n`);
     return 0;
   }
@@ -148,17 +144,6 @@ function main() {
   }
   process.stdout.write(`WRITTEN=0 REASON=${result.reason}\n`);
   return 0;
-}
-
-// Sized from the transcript the nudge measured (discovery only when none is
-// recorded) so post-flush growth still counts toward the next nudge. A lost
-// mark never changes the CLI's result.
-function markFlush(sid, writeTime) {
-  try {
-    const { discoverUpstreamTranscript } = require(path.join(__dirname, "..", "lib", "resume-session", "transcript-fallback"));
-    const { measuredTranscriptPath, recordFlushMark } = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-pressure"));
-    recordFlushMark(sid, measuredTranscriptPath(sid) || discoverUpstreamTranscript(sid), writeTime);
-  } catch (_e) { /* fail-open */ }
 }
 
 process.exit(main());

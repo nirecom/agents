@@ -36,21 +36,43 @@ TMPDIR_WT="$GT_BASE/workflow-state"
 # Fixture settings root: only its .env is read. next-step finds confirm-off, get-config-var
 # and the scope-change detector beside itself, so a case that needs one of them broken or
 # stubbed builds a tree with mk_tree and runs that tree's next-step with run_next_step_in.
-CFG="$GT_BASE/cfg"; mkdir -p "$CFG"; : > "$CFG/.env"
-export AGENTS_MAIN_ROOT="$(np "$CFG")"
+# shellcheck source=../../lib/confirm-env-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/confirm-env-fixture.sh"
+CFG="$GT_BASE/cfg"; confirm_env_root "$CFG"
+# #2726/#2729: CONFIRM_INTENT/OUTLINE/DETAIL are read from the settings root's .env only, so a
+# plan gate lives in PLAN_PINS (written into $CFG/.env and every mk_tree .env); the rest stay exports.
+PLAN_PINS=""
+cfg_env() { confirm_env_set "$CFG" $PLAN_PINS "$@"; } # [KEY=VAL ...]: plan pins + extra lines
+set_gate() { # <KEY> <value>
+  case "$1" in
+    CONFIRM_INTENT|CONFIRM_OUTLINE|CONFIRM_DETAIL)
+      local p keep=""
+      for p in $PLAN_PINS; do [ "${p%%=*}" = "$1" ] || keep="$keep $p"; done
+      PLAN_PINS="${keep# } $1=$2"; PLAN_PINS="${PLAN_PINS# }"; cfg_env ;;
+    *) export "$1=$2" ;;
+  esac
+}
 # shellcheck source=../../lib/script-checkout-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 mk_tree() {
   script_checkout_fixture_copy "$1" bin/workflow hooks bin/confirm-off bin/get-config-var bin/detect-scope-change.sh
   : > "$1/.env"
 }
+# sync_plan_pins <tree>: the tree's .env keeps its own lines, prefixed by the current plan pins.
+sync_plan_pins() {
+  local f="$1/.env" keep p
+  keep="$(grep -vE '^(CONFIRM_INTENT|CONFIRM_OUTLINE|CONFIRM_DETAIL)=' "$f" 2>/dev/null || true)"
+  : > "$f"
+  for p in $PLAN_PINS; do printf '%s\n' "$p" >> "$f"; done
+  [ -z "$keep" ] || printf '%s\n' "$keep" >> "$f"
+}
 run_next_step_in() { # <tree> <next-step args...>
-  local t; t="$(np "$1")"; shift
+  local t; sync_plan_pins "$1"; t="$(np "$1")"; shift
   AGENTS_MAIN_ROOT="$t" run_with_timeout node "$t/bin/workflow/next-step" "$@"
 }
 
 GATE_KEYS="CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL CONFIRM_TESTS CONFIRM_CODE CONFIRM_DOCS CONFIRM_WORKTREE"
-pin_confirm() { local k; for k in $GATE_KEYS; do export "$k=$1"; done; }
+pin_confirm() { local k; for k in $GATE_KEYS; do set_gate "$k" "$1"; done; }
 pin_confirm on
 GATE_STEPS="clarify_intent outline detail write_tests write_code docs branching_complete"
 gate_key_of() {

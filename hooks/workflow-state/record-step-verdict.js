@@ -22,7 +22,6 @@ const {
 const {
   APPROVAL_GATED_STEPS,
   UnapprovedCompletionError,
-  confirmSentinelFor,
 } = require("./completion-approval");
 const { isSkipAllowedForCliPath, hasRecordedSkipJudgment } = require("./plan-skip-allowance");
 const { validateSkipReason } = require("../workflow-mark/skip-reason");
@@ -398,9 +397,7 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
     if (e instanceof UnapprovedCompletionError) {
       return fail(
         2,
-        `record-step-verdict: ${step} NOT recorded — no user approval on record (${e.code}). ` +
-          `Ask the user to approve, then emit: echo "<<${confirmSentinelFor(step)}: {summary}>>" ` +
-          `(or verify CONFIRM_${step.toUpperCase()}=off in your config).`,
+        `record-step-verdict: ${step} NOT recorded — the approval does not verify (${e.code}). ${e.recovery}`,
         "unapproved",
         e.code
       );

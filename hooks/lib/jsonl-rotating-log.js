@@ -90,11 +90,21 @@ function stealIfStale(lockPath, staleMs) {
 // Steal is keyed on lock file mtime (age), never on this caller's wait time.
 // Only a hung/crashed holder whose mtime ages past staleMs is stolen; release removes
 // the lock only while it still holds this caller's owner token.
+// opts.maxWaitMs (optional) bounds the total wait: past it, throws code "ELOCKWAIT" without running fn.
 function withLock(lockPath, opts, fn) {
   const staleMs = (opts && opts.staleMs) || LOCK_STALE_MS;
   const retryMs = (opts && opts.retryMs) || LOCK_RETRY_MS;
+  const maxWaitMs = opts && typeof opts.maxWaitMs === "number" ? opts.maxWaitMs : null;
+  const waitStart = Date.now();
+  const checkWait = () => {
+    if (maxWaitMs === null || Date.now() - waitStart <= maxWaitMs) return;
+    const err = new Error(`lock wait exceeded ${maxWaitMs} ms: ${lockPath}`);
+    err.code = "ELOCKWAIT";
+    throw err;
+  };
   let deniedSince = 0;
   for (;;) {
+    checkWait();
     let fd;
     try {
       fd = fs.openSync(lockPath, "wx");

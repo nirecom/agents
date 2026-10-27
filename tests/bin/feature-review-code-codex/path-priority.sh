@@ -1,7 +1,7 @@
 # Part of tests/bin/feature-review-code-codex-path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/resolve-merge-base.sh, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: codex, review, truncation, priority, path-ordering, budget, merge-base, scope:issue-specific, pwsh-not-required, TL2
-# P (#1976 / #1750): X/Y pin that a diff past the cap is ANNOUNCED, not WHICH lines survive — `head -n` over a concatenated diff can drop all three edited files behind an unrelated committed one (#1976) and counts the diff one line short (#1750). Rows below target the NOT-yet-implemented fix: priority file set, per-path chunks, stop-at-first-skip, configurable budget, EXCLUDED and PRIORITY-UNTRUSTED reports — expected to fail until it lands. Sourced last, after base-state-scope.sh, to reuse its Y1/Y2 fixtures and 6000-line BIG_REPO.
+# P (#1976 / #1750): X/Y pin that a diff past the cap is ANNOUNCED, not WHICH lines survive — `head -n` over a concatenated diff can drop all three edited files behind an unrelated committed one (#1976) and counts the diff one line short (#1750). Rows below target the NOT-yet-implemented fix: priority file set, per-path chunks, stop-at-first-skip, configurable budget, PRIORITY-UNTRUSTED report (EXCLUDED is retired by the E24 redefinition) — expected to fail until it lands. Sourced last, after base-state-scope.sh, to reuse its Y1/Y2 fixtures and 6000-line BIG_REPO.
 # TL3 gap: real codex CLI arg/stdin handling and live model context limits are untested; P8 stubs resolve-merge-base.sh so `warn` is an asserted input, not a real branching sentinel. Mitigation: WORKFLOW_USER_VERIFIED preflight, category merge-base-suspect.
 
 # The fixture builders and the prompt/breakdown observation helpers, shared with the sibling
@@ -47,7 +47,8 @@ fi
 PP_R1F="$(pp_new_repo pp-p1f)"
 pp_gen "$PP_R1F/a-small.txt" 5 "pp-p1f-small-marker"
 pp_gen "$PP_R1F/z-huge.txt" 6000 "pp-p1f-huge-marker"
-PP_OUT="$(pp_run "$PP_R1F" --base main --no-log)"
+# RESOLVED: both files are untracked, and an omitted base state (UNKNOWN) withholds untracked content (H1).
+PP_OUT="$(pp_run "$PP_R1F" --base main --base-state RESOLVED --no-log)"
 if [ -f "$PP_CAPTURE" ] && pp_diff_body "$PP_CAPTURE" | grep -q "pp-p1f-small-marker"; then
     pass "P1-fallback: with no committed range, the small changed file still survives alongside an over-budget one"
 else
@@ -180,13 +181,13 @@ PP_ENV=()
 # ---------------------------------------------------------------------------
 PP_R6="$(pp_new_repo pp-p6)"
 echo "pp-p6-tracked-edit" >> "$PP_R6/README.md"
-pp_gen "$PP_R6/secret-untracked.txt" 10 "pp-p6-untracked-marker"
+pp_gen "$PP_R6/plain-untracked.txt" 10 "pp-p6-untracked-marker"  # not secret-*: H2 withholds that name under every state
 
 for pp_state in SUSPECT FALLBACK UNRESOLVED; do
     PP_OUT="$(pp_run "$PP_R6" --base main --base-state "$pp_state" --no-log)"
     if [ -f "$PP_CAPTURE" ] && grep -q "pp-p6-untracked-marker" "$PP_CAPTURE"; then
         fail "P6[$pp_state]: an untracked file's raw content was sent to the model under a degraded base state"
-    elif pp_has "$PP_OUT" "secret-untracked.txt"; then
+    elif pp_has "$PP_OUT" "plain-untracked.txt"; then
         fail "P6[$pp_state]: the untracked path was named in the scope report while degraded. Output: $PP_OUT"
     elif ! pp_has "$PP_OUT" "^## Codex Review: "; then
         fail "P6[$pp_state]: the run produced no verdict, so its silence about the untracked file proves nothing. Output: $PP_OUT"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2256-tr5-user-verified-hold.sh
-# Tests: hooks/workflow-gate.js, hooks/lib/audit-ledger.js, bin/supervisor-record-block-override
+# Tests: hooks/workflow-gate.js, hooks/lib/audit-ledger.js, hooks/lib/supervisor-block-override.js, hooks/workflow-mark/supervisor-block-override-handler.js
 # Tags: supervisor, tr5, user-verified, hold, freshness, TL2, scope:issue-specific
 
 # #2256 S5-b / S5-c / S5-d — the USER_VERIFIED sentinel's two-stage TR5 gate.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2513-confirm-deny-no-approval.sh
 # Tests: hooks/confirm-checkpoint.js, hooks/workflow-mark/confirm-approval-handler.js
-# Tags: confirm-checkpoint, plan-approval, confirm-sentinel, deny, pretooluse, posttooluse, hook-order, TL2, scope:issue-specific, same-turn-continuation
+# Tags: confirm-checkpoint, plan-approval, confirm-sentinel, deny, pretooluse, posttooluse, hook-order, TL2, scope:issue-specific, same-turn-continuation, presentation-receipt
 # #2513: a CONFIRM_<STAGE> echo that confirm-checkpoint denies never reaches the PostToolUse
 # approval handler, so it leaves no plan_approvals record and nothing downstream (the Skill gate,
 # next-step --advance) can complete the stage. The allowed control records the approval bound to
@@ -57,7 +57,7 @@ cdn_run() {
   cdn_report "$(run_with_timeout 120 node "$DRIVER" "$@" 2>&1 || printf 'FAIL|driver %s|exit=%s\n' "$*" "$?")"
 }
 
-# #2650: same-turn continuation (valid mark) -> ask dialog -> Deny -> no PostToolUse.
+# #2650/#2729: same-turn continuation (presentation receipt) -> ask dialog -> Deny -> no PostToolUse.
 SAMTURN_DRIVER="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2513-confirm-deny-no-approval/samturn-deny-driver.js"
 cdn_run_samturn() {
   cdn_report "$(run_with_timeout 120 node "$SAMTURN_DRIVER" "$@" 2>&1 || printf 'FAIL|samturn driver %s|exit=%s\n' "$*" "$?")"

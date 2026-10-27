@@ -196,6 +196,7 @@ const CTL_HIT = `command-guard tests/ctl.sh gh \u001b[31m--version\u0007 a\u007f
 const CTL_WANT = "command-guard tests/ctl.sh gh  [31m--version  a b\tc <<_REDACTED_WORKFLOW_FAKE: r>>";
 const LF_HIT = "command-guard tests/lf.sh gh\nBASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0";
 const LF_WANT = "command-guard tests/lf.sh gh BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=0";
+// eslint-disable-next-line no-control-regex -- matching control characters is the purpose
 const UNSAFE_RE = /[\u0000-\u0008\u000b-\u001f\u007f]|<<\s*WORKFLOW/i;
 
 function hitSummaryIsSanitized() {

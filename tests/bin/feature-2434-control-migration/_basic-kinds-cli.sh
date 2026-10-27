@@ -17,7 +17,7 @@ outline-risk-signal.txt detail-risk-signal.txt codex-context.md plan.jsonl chang
 complexity-signals.txt detail-signals.txt write-tests-signals.txt write-code-signals.txt
 finalize-state-1.json finalize-binding-1.json issue-close-outcome.json session-close-gate.json
 final-report-env.json supervisor-state.json wi-checkpoint.json handoff.md wt-cleanup-active
-handoff-risk.json handoff-pressure.json handoff-flush-mark.json
+handoff-risk.json handoff-pressure.json handoff-flush-mark.json progress-pressure.json
 workflow-init-aborted-pathA-multiN-label-failure.md companion-precheck.json intent-scan-block.txt
 worker-main.json worker-main-1.json worker-main-1.dispatched
 SAMPLES

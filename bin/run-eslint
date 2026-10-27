@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+// bin/run-eslint <path>... — lints files or directories with the nearest eslint.config.* above
+// each path, through the ESLint Node API resolved from the directory holding that config. In the
+// agents repository (or with RUN_ESLINT_PROVISION=1) the pinned devDependencies are installed on
+// demand with `npm ci`, keyed by a sha256 stamp of package-lock.json. A missing tool or config is
+// a visible `check skipped` notice, never a silent pass.
+// Exit: 0 clean, warnings only, or skipped; 1 an error under any lint root; 2 usage or ESLint API error.
+"use strict";
+const path = require("path");
+
+const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
+
+require(path.join(SCRIPT_CHECKOUT_ROOT, "bin", "run-eslint.d", "main.js"))
+  .main(process.argv.slice(2))
+  .then((code) => { process.exitCode = code; }, (e) => {
+    process.stderr.write(`run-eslint: ${e && e.stack ? e.stack : e}\n`);
+    process.exitCode = 2;
+  });

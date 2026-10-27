@@ -2,24 +2,25 @@
 
 // Stage 4 (#1644) — session-scoped facts (closes_issues, repo context).
 //
-// closes_issues is parsed from <plansDir>/<sid>-intent.md on every call (#2654);
+// closes_issues is parsed from the session's (owner-resolved) intent on every call (#2654);
 // this module never reads or writes state.closes_issues. Repo context is a
 // read-only view over the EXISTING session_start_context state key.
 
-const path = require("path");
 const { readState, assertValidSessionId } = require("./state-io");
 const { parseClosesIssues } = require("../lib/parse-closes-issues");
+const { resolvePlanArtifactOwner } = require("./plan-artifact-owner");
 
 // getClosesIssues(sessionId, { plansDir }) -> Array<{number, repo?}>
 //
-// Parses <plansDir>/<sessionId>-intent.md `## Issues` via parseClosesIssues()
+// Parses the owner-resolved intent (plan-artifact-owner.js) `## Issues` via parseClosesIssues()
 // (the format-parsing SSOT) on each call. A missing or unreadable intent.md
 // yields [] — no fallback to any recorded value.
 function getClosesIssues(sessionId, opts) {
   // sessionId flows into a path join below; reject traversal-shaped ids.
   assertValidSessionId(sessionId);
-  const plansDir = (opts && opts.plansDir) || "";
-  return parseClosesIssues(path.join(plansDir, `${sessionId}-intent.md`));
+  const plansDir = (opts && opts.plansDir) || undefined;
+  // A downstream session reads the intent its upstream owns (#2633).
+  return parseClosesIssues(resolvePlanArtifactOwner(sessionId, "intent", undefined, { plansDir }).path);
 }
 
 // getSessionRepoContext(sessionId) -> { cwd, git_branch }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/assemble-cmd-parse.js, hooks/show-plan-link.js, skills/_shared/assemble-mandatory.sh
-# Tags: plan, vscode, hook, workflow, plans, scope:issue-specific, plan-sync, breadcrumb, edit-write-tools, command-tools, additional-context
+# Tags: plan, vscode, hook, workflow, plans, scope:issue-specific, plan-sync, breadcrumb, edit-write-tools, command-tools, additional-context, gate-duty, confirm-file-only
 # Tests for isFinalPlanArtifact detection and systemMessage output in hooks/show-plan-link.js.
 #
 # Uses WORKFLOW_PLANS_DIR to control the resolved plans directory so tests work
@@ -40,7 +40,7 @@ PLANS_DIR="$WORKFLOW_PLANS_DIR"
 WORKFLOW_DIR_TEST="$WORKFLOW_STATE_DIR"
 CFG_DIR_TEST="$_ISOLATION_TMP_ROOT/cfg"
 mkdir -p "$CFG_DIR_TEST"
-# #2513: plan-sync off (empty export + empty agents main root .env), so every
+# #2513: plan-sync off (empty export + empty AGENTS_MAIN_ROOT .env), so every
 # breadcrumb is the local path plus the "not configured" line.
 export AGENTS_MAIN_ROOT="$CFG_DIR_TEST"
 export PLAN_SYNC_REMOTE_URL=""
@@ -106,19 +106,21 @@ expect_message() {
   fi
 }
 
-# Helper: run hook with CONFIRM_* env vars and assert systemMessage is emitted
+# #2726/#2729: the plan-stage CONFIRM keys are read from $AGENTS_MAIN_ROOT/.env only.
+# shellcheck source=../lib/confirm-env-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/confirm-env-fixture.sh"
+MWE_SEQ=0
+
+# Helper: run hook with CONFIRM_* keys in a fresh global .env and assert systemMessage is emitted
 # $1 = description, $2 = file_path (under PLANS_DIR), $3 = expected substring,
-# $4... = KEY=VAL env assignments
+# $4... = KEY=VAL .env lines
 expect_message_with_env() {
   local desc="$1" file_path="$2" expected="$3"
   shift 3
   local result
+  MWE_SEQ=$((MWE_SEQ + 1))
   result=$(
-    for assignment in "$@"; do
-      key="${assignment%%=*}"
-      val="${assignment#*=}"
-      export "$key=$val"
-    done
+    confirm_env_root "$_ISOLATION_TMP_ROOT/mwe-cfg-$MWE_SEQ" "$@"
     echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$file_path\"},\"tool_response\":{\"success\":true}}" \
       | run_with_timeout node "$HOOK" 2>/dev/null
   )
@@ -158,6 +160,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/feature-show-plan-link/write-tool.sh"
 # shellcheck source=feature-show-plan-link/bash-tool.sh
 . "$SCRIPT_DIR/feature-show-plan-link/bash-tool.sh"
+# shellcheck source=feature-show-plan-link/gate-duty.sh
+. "$SCRIPT_DIR/feature-show-plan-link/gate-duty.sh"
 # shellcheck source=feature-show-plan-link/plan-sync-breadcrumb.sh
 . "$SCRIPT_DIR/feature-show-plan-link/plan-sync-breadcrumb.sh"
 # shellcheck source=feature-show-plan-link/plan-link-rows.sh

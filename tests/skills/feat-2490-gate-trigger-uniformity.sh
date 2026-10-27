@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/skills/feat-2490-gate-trigger-uniformity.sh
 # Tests: skills/_shared/confirm-plan.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, skills/update-docs/SKILL.md, skills/worktree-start/SKILL.md
-# Tags: tl2, static, confirm-gate, skill-prompt, scope:issue-specific, pwsh-not-required
+# Tags: tl2, static, confirm-gate, skill-prompt, scope:issue-specific, pwsh-not-required, gate-duty, presentation-receipt
 # #2490 (c): the seven gate sections share one trigger line and no longer probe bin/confirm-off.
 
 # TL3 gap (what this test does NOT catch): whether a live model actually runs
@@ -51,7 +51,7 @@ for v in proceed ask present-and-stop none; do
   check "CPA-3 names GATE_ACTION value $v" yes "$([ "$(sec_count "$S" "\`$v\`")" -ge 1 ] && echo yes || echo no)"
 done
 check "CPA-3 has a display-only GATE_CONFIRM_ line" yes \
-  "$(printf '%s\n' "$S" | grep -F 'GATE_CONFIRM_' | grep -qiE 'display|表示' && echo yes || echo no)"
+  "$(printf '%s\n' "$S" | grep -F 'GATE_CONFIRM_' | grep -qiE $'display|\xe8\xa1\xa8\xe7\xa4\xba' && echo yes || echo no)"
 case_end
 
 echo "=== gate sections: non-empty, carry the trigger, zero bin/confirm-off ==="
@@ -155,6 +155,40 @@ check "CPA-3 proceed covers plan stages (CI-5 delegation target)" yes "$(cpa_def
 check "CPA-3 ask = the caller's ON branch" yes "$(cpa_def_ok "$CPA" ask "ON branch")"
 check "CPA-3 present-and-stop ends the turn" yes "$(cpa_def_ok "$CPA" present-and-stop "end the turn")"
 check "CPA-3 none takes neither branch" yes "$(cpa_def_ok "$CPA" none "take neither branch")"
+case_end
+
+echo "=== #2729 stage 5: CPA-2 duty follows each stage's gate; receipt-based enforcement, no cap ==="
+case_begin "cpa2-gate-duty-and-receipt" "skills/_shared/confirm-plan.md"
+yn() { if "$@"; then echo yes; else echo no; fi; }
+S2="$(section "$CPA" CPA-2)"
+check "CPA-2 section extracted (non-empty)" yes "$(yn test -n "$S2")"
+check "Steps: no bare 'CPA-1 through CPA-3 always run.'" 0 "$(count_fixed 'CPA-1 through CPA-3 always run.' "$CPA")"
+check "Steps: CPA-1..3 run regardless of the gate, and the gate decides CPA-2's closing" yes \
+  "$(yn grep -qiE 'regardless of the gate.*CPA-2|CPA-2.*regardless of the gate|gate (decides|determines|selects).*CPA-2' "$CPA")"
+check "CPA-2: OFF puts the link once inside the summary" yes \
+  "$(printf '%s\n' "$S2" | grep -E '\bOFF\b' | grep -iE 'summary' | grep -qiE 'once' && echo yes || echo no)"
+check "CPA-2: ON / ERROR end the presentation turn with the link lines" yes \
+  "$(printf '%s\n' "$S2" | grep -E '\bON\b' | grep -E 'ERROR' | grep -qiE 'last text block|end' && echo yes || echo no)"
+check "CPA-2: no sentence after the link lines" yes "$(printf '%s\n' "$S2" | grep -qiE 'no (text|sentence|prose) after|nothing after|not follow' && echo yes || echo no)"
+check "CPA-2: URL-capable env without URL -> publish before presenting" yes \
+  "$(printf '%s\n' "$S2" | grep -qiE 'publish.*(before|first)|(before|first).*publish' && echo yes || echo no)"
+check "the 'does not read CONFIRM_<STEP>' sentence is gone" 0 "$(count_fixed 'does not read `CONFIRM_<STEP>`' "$CPA")"
+check "the deny-cap sentence (third echo passes) is gone" 0 "$(grep -ciE 'third echo passes|two denies in a row' "$CPA" || true)"
+check "Enforcement (PreToolUse) names confirm-checkpoint.js and the presentation receipt" yes \
+  "$(grep -F 'confirm-checkpoint.js' "$CPA" | grep -qiE 'receipt' && echo yes || echo no)"
+check "Enforcement states there is no cap" yes "$(yn grep -qiE 'no cap|without a cap|never passes after' "$CPA")"
+check "Enforcement (Stop): stop-confirm-plan-guard.js reads the gate" yes \
+  "$(grep -F 'stop-confirm-plan-guard.js' "$CPA" | grep -qiE 'gate' && echo yes || echo no)"
+case_end
+
+echo "=== #2729 stage 5: the gate line names CPA-3's branch; OFF proceed and Stop receipt wording ==="
+case_begin "cpa-gate-line-proceed-and-stop-receipt" "skills/_shared/confirm-plan.md"
+check "Steps: the regardless-of-the-gate line also names CPA-3's branch" yes \
+  "$(grep -E 'CPA-1.*regardless of the gate' "$CPA" | grep -F 'CPA-2' | grep -qF 'CPA-3' && echo yes || echo no)"
+check "CPA-3 proceed (OFF) no longer ends the last text block with the link" 0 \
+  "$(section "$CPA" CPA-3 | grep -E -- '^- `proceed`' | grep -cF 'last text block ends with the CPA-2 plan-link line' || true)"
+check "Enforcement (Stop): stop-confirm-plan-guard.js records the presentation receipt" yes \
+  "$(grep -F 'stop-confirm-plan-guard.js' "$CPA" | grep -qF 'receipt' && echo yes || echo no)"
 case_end
 
 echo "=== mutation probe: the branch assertions can fail (temp copies only) ==="

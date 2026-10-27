@@ -1,30 +1,29 @@
 # #2277 per-stage off handling: intent has no off waiver (offWaivable:false), so CONFIRM_INTENT=off
-# no longer skips the dialog; CONFIRM_DETAIL=off still does. The transcript is unreadable here,
-# so the plan-link judgement fails open and only the skip branch decides the output.
+# no longer skips the dialog; CONFIRM_DETAIL=off still does. #2729: a stage that is not skipped
+# goes to the fail-closed judge, which denies here (no plan file, no presentation receipt).
 # T27-T28 repeat the intent/outline pair with plan-stage-table unloadable from the hook.
-# Sourced by ../feature-confirm-checkpoint.sh (needs make_bash_json, extract_system_message, clear_markers).
+# Sourced by ../feature-confirm-checkpoint.sh (needs make_bash_json, extract_system_message, extract_decision, clear_markers,
+# confirm_env_root, ISOLATED_CFG_DIR). Each case sets its flag in a per-case .env (#2726/#2729).
 # isolation: inherits-from ../feature-confirm-checkpoint.sh
 
 clear_markers
 T25_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")
 T25_OUT=$(
-  export CONFIRM_INTENT=off
-  unset CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
+  confirm_env_root "$ISOLATED_CFG_DIR/t25" CONFIRM_INTENT=off
   echo "$T25_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
 )
 T25_MSG=$(extract_system_message "$T25_OUT")
 if echo "$T25_MSG" | grep -qF "[confirm-skipped"; then
   fail "T25 CONFIRM_INTENT=off — intent must not be skipped: $T25_MSG"
-elif echo "$T25_MSG" | grep -qF "Click Allow"; then
-  pass "T25 CONFIRM_INTENT=off — intent still shows the confirm dialog text"
+elif [ "$(extract_decision "$T25_OUT")" = "deny" ]; then
+  pass "T25 CONFIRM_INTENT=off — intent is not skipped; the judge denies (no receipt)"
 else
-  fail "T25 CONFIRM_INTENT=off — expected the regular confirm systemMessage, got: $T25_MSG"
+  fail "T25 CONFIRM_INTENT=off — expected the judge's deny (no receipt), got: $T25_OUT"
 fi
 
 T26_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_DETAIL>>\"")
 T26_OUT=$(
-  export CONFIRM_DETAIL=off
-  unset CONFIRM_INTENT CONFIRM_OUTLINE 2>/dev/null || true
+  confirm_env_root "$ISOLATED_CFG_DIR/t26" CONFIRM_DETAIL=off
   echo "$T26_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
 )
 T26_MSG=$(extract_system_message "$T26_OUT")
@@ -51,23 +50,23 @@ fi
 clear_markers
 T27_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")
 T27_OUT=$(
-  export CONFIRM_INTENT=off NODE_OPTIONS="--require \"$T27_STUB\""
-  unset CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
+  confirm_env_root "$ISOLATED_CFG_DIR/t27" CONFIRM_INTENT=off
+  export NODE_OPTIONS="--require \"$T27_STUB\""
   echo "$T27_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
 )
 T27_MSG=$(extract_system_message "$T27_OUT")
 if echo "$T27_MSG" | grep -qF "[confirm-skipped"; then
   fail "T27 CONFIRM_INTENT=off + unloadable plan-stage-table — intent must not be skipped: $T27_MSG"
-elif echo "$T27_MSG" | grep -qF "Click Allow"; then
-  pass "T27 CONFIRM_INTENT=off + unloadable plan-stage-table — intent still shows the confirm dialog text"
+elif [ "$(extract_decision "$T27_OUT")" = "deny" ]; then
+  pass "T27 CONFIRM_INTENT=off + unloadable plan-stage-table — intent is not skipped; the judge denies"
 else
-  fail "T27 CONFIRM_INTENT=off + unloadable plan-stage-table — expected the regular confirm systemMessage, got: $T27_MSG"
+  fail "T27 CONFIRM_INTENT=off + unloadable plan-stage-table — expected the judge's deny, got: $T27_OUT"
 fi
 
 T28_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")
 T28_OUT=$(
-  export CONFIRM_OUTLINE=off NODE_OPTIONS="--require \"$T27_STUB\""
-  unset CONFIRM_INTENT CONFIRM_DETAIL 2>/dev/null || true
+  confirm_env_root "$ISOLATED_CFG_DIR/t28" CONFIRM_OUTLINE=off
+  export NODE_OPTIONS="--require \"$T27_STUB\""
   echo "$T28_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
 )
 T28_MSG=$(extract_system_message "$T28_OUT")

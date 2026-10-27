@@ -164,7 +164,7 @@ function appendExclude({ targetMainRoot, pattern }) {
     gitStat = fs.lstatSync(gitPath);
   } catch (e) {
     if (e.code === "ENOENT") {
-      throw new Error(`no .git directory at ${targetMainRoot}`);
+      throw new Error(`no .git directory at ${targetMainRoot}`, { cause: e });
     }
     throw e;
   }

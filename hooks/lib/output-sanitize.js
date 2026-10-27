@@ -122,11 +122,19 @@ function redactSecrets(input) {
   return out;
 }
 
+// The full pass for text another session or a producer wrote. Collapse FIRST:
+// SECRET_OPTION_RE is space-anchored, so a secret split across a literal newline
+// is only reassembled into one matchable line by collapsing.
+function sanitizeUntrustedField(value, maxLen) {
+  return sanitizeLine(redactSecrets(collapseControl(String(value === undefined || value === null ? "" : value))), maxLen);
+}
+
 module.exports = {
   collapseControl,
   redactSentinels,
   redactSecrets,
   sanitizeLine,
+  sanitizeUntrustedField,
   SENTINEL_REDACT_RE,
   MAX_LINE,
 };

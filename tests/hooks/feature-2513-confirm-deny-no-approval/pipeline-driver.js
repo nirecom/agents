@@ -72,6 +72,11 @@ const skillGate = (sid) => F.runNode("hooks/gate-plan-skill-advance.js", [], JSO
 const advance = (sid) => F.runNode("bin/workflow/next-step", ["--session", sid, "--advance", "--step", STEP, "--complete"], "", ARMED);
 const gateDenies = (r) => /"permissionDecision"\s*:\s*"deny"/.test(r.out);
 
+// #2729: the judge reads only the presentation receipt the Stop hook wrote; the transcript shape
+// decides nothing. seed(s) stands in for that Stop hook (plan-sync off -> a path receipt).
+const RS = require("../../lib/presentation-receipt-seed");
+const seed = (s) => RS.seedReceipt(s.sid, STAGE);
+
 // Denied echo: no record, nothing downstream may complete the stage.
 {
   const s = newSession("denied");
@@ -86,9 +91,18 @@ const gateDenies = (r) => /"permissionDecision"\s*:\s*"deny"/.test(r.out);
   F.check(`${STAGE} denied echo — ${STEP} stays not complete`, F.readStep(s.sid, STEP) !== "complete", F.readStep(s.sid, STEP));
 }
 
-// Allowed control: same session shape, the plan-link line ends the previous turn.
+// #2729: the previous turn ends on the plan-link line, but no receipt exists -> still denied.
+{
+  const s = newSession("shape-only");
+  const h = hostEcho(s, true);
+  F.check(`${STAGE} presented transcript without a receipt — confirm-checkpoint denies`, h.deny && h.pre.code === 0, h.pre.out + h.pre.err);
+  F.check(`${STAGE} presented transcript without a receipt — no plan_approval event`, approvalEvents(s.sid).length === 0, JSON.stringify(approvalEvents(s.sid)));
+}
+
+// Allowed control: same session shape plus the presentation receipt.
 {
   const s = newSession("allowed");
+  F.check(`${STAGE} allowed echo — receipt seeded`, !!seed(s), RS.receiptPath(s.sid, STAGE));
   const h = hostEcho(s, true);
   F.check(`${STAGE} allowed echo — confirm-checkpoint does not deny`, !h.deny && h.pre.code === 0, h.pre.out + h.pre.err);
   F.check(`${STAGE} allowed echo — workflow-mark PostToolUse ran`, h.post && h.post.code === 0, h.post && (h.post.out + h.post.err));
@@ -103,12 +117,24 @@ const gateDenies = (r) => /"permissionDecision"\s*:\s*"deny"/.test(r.out);
     `exit=${a.code} status=${F.readStep(s.sid, STEP)} ${a.err}`);
 }
 
-// Recovery: a denied echo, then a correct presentation in the same session records the approval.
+// No cap: repeated echoes without a receipt keep denying (the 3rd is not let through).
+{
+  const s = newSession("no-cap");
+  const r = [hostEcho(s, true), hostEcho(s, true), hostEcho(s, true)].map((h) => h.deny);
+  F.check(`${STAGE} no cap — the 3rd echo without a receipt is still denied`, r.every(Boolean), JSON.stringify(r));
+  F.check(`${STAGE} no cap — no plan_approval event`, approvalEvents(s.sid).length === 0, JSON.stringify(approvalEvents(s.sid)));
+}
+
+// Recovery: a denied echo, then a fresh presentation (receipt) in the same session records the approval.
 {
   const s = newSession("recovered");
   const d = hostEcho(s, false);
+  seed(s);
   const h = hostEcho(s, true);
-  F.check(`${STAGE} recovery — deny first, then the presented echo passes`, d.deny && !h.deny, JSON.stringify([d.deny, h.deny]));
+  F.check(`${STAGE} recovery — deny first, then the echo with a receipt passes`, d.deny && !h.deny, JSON.stringify([d.deny, h.deny]));
   F.check(`${STAGE} recovery — exactly one approval, from the allowed echo`, approvalEvents(s.sid).length === 1, JSON.stringify(approvalEvents(s.sid)));
   F.check(`${STAGE} recovery — check-plan-approval says approved`, cliVerdict(s.sid) === "APPROVAL=approved", cliVerdict(s.sid));
+  F.check(`${STAGE} recovery — the pass consumed the receipt`, !RS.receiptExists(s.sid, STAGE), RS.receiptPath(s.sid, STAGE));
+  const again = hostEcho(s, true);
+  F.check(`${STAGE} recovery — a re-echo after the consumed receipt is denied`, again.deny, again.pre.out);
 }

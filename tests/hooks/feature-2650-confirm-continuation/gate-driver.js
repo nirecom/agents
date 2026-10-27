@@ -19,23 +19,20 @@ const state = (stage, opts) => {
   if (typeof PG.planGateState !== "function") return "planGateState is not exported";
   try { return PG.planGateState(stage, opts); } catch (e) { return "threw:" + e.message; }
 };
-// withEnv(over, fn): run fn with process.env keys set (null deletes), then restore.
+// withEnv(over, fn): run fn with the CONFIRM_* flags in a per-call .env (#2726/#2729: file-only;
+// a null value leaves the key out of the file), AGENTS_MAIN_ROOT pointed at it, then restore.
+const CFG_BASE = path.join(X.F.STATE_DIR, "gate-cfg");
 function withEnv(over, fn) {
-  const saved = {};
-  for (const k of Object.keys(over)) { saved[k] = process.env[k]; if (over[k] === null) delete process.env[k]; else process.env[k] = over[k]; }
-  try { return fn(); } finally {
-    // Reverse order: on Windows process.env keys are case-insensitive (Path / PATH).
-    for (const k of Object.keys(saved).reverse()) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
-  }
+  const vars = Object.assign({ CONFIRM_INTENT: "on", CONFIRM_OUTLINE: "on", CONFIRM_DETAIL: "on" }, over);
+  return X.CE.withConfirmEnv(X.CE.confirmEnvRoot(CFG_BASE, vars), fn);
 }
 // A session at the stage. detail gets the outline's text, so the scope-change check finds no change.
 const session = (stage) => X.sessionAt(stage, stage === "detail" ? { body: X.F.PLAN_BODY.outline } : {});
 
-// childEnv(over, fault) -> the child env; fault (a probe-fault-preload mode) breaks its probe.
+// childEnv(over, fault) -> the child env (flags via gateEnv's .env); fault (a probe-fault-preload mode) breaks its probe.
 function childEnv(over, fault) {
-  const env = Object.assign({}, process.env, X.gateEnv());
+  const env = Object.assign({}, process.env, X.gateEnv(over));
   delete env.CLAUDE_CODE_SESSION_ID;
-  for (const k of Object.keys(over || {})) { if (over[k] === null) delete env[k]; else env[k] = over[k]; }
   return fault ? X.probeFaultEnv(env, fault) : env;
 }
 // cli(sid, key, over, fault) -> {action, value, cause, out}: next-step --gate for the recorded step;
@@ -107,33 +104,48 @@ if (mode === "G1") {
   const on = X.runStop(t.sid, tp);
   const continued = on.rc === 2 && on.json.decision === "block" && on.reason.startsWith("[confirm-plan] continue:");
   check("G3 control: the Stop hook continues with a working probe", continued, show({ rc: on.rc, out: on.out, err: on.err.slice(0, 200) }));
+  // #2726/#2729: the plan-stage keys are read from the config file only (readDefaultEnvFile), so
+  // the faults sit on that read. "exception" (the read throws) is ERROR with its cause named;
+  // "unreadable" (the .env cannot be opened) reads as absent -> the default, so it must never be
+  // OFF (fail-closed), and the CLI asks.
   for (const fault of PF.MODES) {
     const before = PC.count();
     const disarm = PF.arm(fault);
     let got;
     try { got = withEnv(OFF, () => state("outline")); } finally { disarm(); }
-    check(`G3 probe failure (${fault}): planGateState is ERROR`, healthy === "OFF" && got === "ERROR", show(got));
-    check(`G3 probe failure (${fault}): the failing probe was taken once`, PC.count() - before === 1, show({ probes: PC.count() - before }));
     const c = cli(s.sid, "CONFIRM_OUTLINE", OFF, fault);
-    check(`G3 probe failure (${fault}): the CLI asks and names the cause`,
-      cc.action === "proceed" && c.action === "ask" && c.value === "ERROR" && c.cause === fault, show([c.value, c.action, c.cause, c.out]));
-    // confirm-checkpoint: with the probe broken, CONFIRM_OUTLINE=off waives nothing; the dialog shows.
+    if (fault === "exception") {
+      check(`G3 probe failure (${fault}): planGateState is ERROR`, healthy === "OFF" && got === "ERROR", show(got));
+      check(`G3 probe failure (${fault}): the CLI asks and names the cause`,
+        cc.action === "proceed" && c.action === "ask" && c.value === "ERROR" && c.cause === fault, show([c.value, c.action, c.cause, c.out]));
+    } else {
+      check(`G3 probe failure (${fault}): planGateState is never OFF`, healthy === "OFF" && (got === "ON" || got === "ERROR"), show(got));
+      check(`G3 probe failure (${fault}): the CLI asks and never prints OFF`,
+        cc.action === "proceed" && c.action === "ask" && (c.value === "ON" || c.value === "ERROR"), show([c.value, c.action, c.cause, c.out]));
+    }
+    check(`G3 probe failure (${fault}): the failing probe was taken once`, PC.count() - before === 1, show({ probes: PC.count() - before }));
+    // confirm-checkpoint: with the probe broken, CONFIRM_OUTLINE=off waives nothing; with the
+    // presentation receipt (#2729) the judge passes to the dialog.
+    X.seedReceipt(s.sid, "outline");
     const k = checkpoint(s.sid, "outline", OFF, fault);
     check(`G3 probe failure (${fault}): confirm-checkpoint shows the dialog, not [confirm-skipped]`, skipped(ctl) && dialog(k), show(k.json));
-    // Stop hook: the presented-plan turn continues with a working probe, not with a broken one.
+    // Stop hook (#2729 stage 2: ERROR is treated as ON): the presented-plan turn still continues and
+    // writes the receipt, as with a working probe.
     const [u, up] = presented();
     const off = X.runStop(u.sid, up, { probeFault: fault });
-    check(`G3 probe failure (${fault}): the Stop hook does not continue (exit 0, no output, no mark)`,
-      continued && off.rc === 0 && off.out.trim() === "" && X.readMark(u.sid, "outline") === null, show({ rc: off.rc, out: off.out }));
+    check(`G3 probe failure (${fault}): the Stop hook treats the failed read as ON — continues and writes the receipt`,
+      continued && off.rc === 2 && off.reason.startsWith("[confirm-plan] continue:") && X.receiptExists(u.sid, "outline"), show({ rc: off.rc, out: off.out }));
   }
 } else if (mode === "G4") {
-  // "off " (trailing blank) is not the off literal: ON everywhere.
-  const got = withEnv({ CONFIRM_OUTLINE: "off " }, () => state("outline"));
+  // "off " (trailing blank) is not the off literal: ON everywhere. Quoted, so the .env parser keeps the blank.
+  const OFF_BLANK = "\"off \"";
+  const got = withEnv({ CONFIRM_OUTLINE: OFF_BLANK }, () => state("outline"));
   check("G4 'off ': planGateState is ON", got === "ON", show(got));
   const s = session("outline");
-  const c = cli(s.sid, "CONFIRM_OUTLINE", { CONFIRM_OUTLINE: "off " });
+  const c = cli(s.sid, "CONFIRM_OUTLINE", { CONFIRM_OUTLINE: OFF_BLANK });
   check("G4 'off ': the CLI asks", c.action === "ask" && c.value === "ON", show([c.value, c.action, c.out]));
-  const k = checkpoint(s.sid, "outline", { CONFIRM_OUTLINE: "off " });
+  X.seedReceipt(s.sid, "outline");
+  const k = checkpoint(s.sid, "outline", { CONFIRM_OUTLINE: OFF_BLANK });
   check("G4 'off ': confirm-checkpoint shows the dialog, not [confirm-skipped]", dialog(k), show(k.json));
 } else if (mode === "G5") {
   for (const ms of [0, -1]) {

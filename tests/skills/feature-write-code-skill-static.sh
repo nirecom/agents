@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/_shared/judge-task-complexity.md, skills/write-code/SKILL.md, CLAUDE.md, .env.example, rules/coding/python.md, rules/coding/nodejs.md
-# Tags: skill, bin, env, config, tests, scope:common
+# Tags: skill, bin, env, config, tests, scope:common, lint
 # Static grep-based checks for the /write-code skill implementation: SKILL.md
 # content, CLAUDE.md's write-code step docs, .env.example's CONFIRM_CODE, and
 # module-system SSOT (rules/coding/nodejs.md is canonical; SKILL.md must not
@@ -30,6 +30,10 @@ case_end
 
 case_begin "wcd-7-staging" "skills/write-code/SKILL.md"
 . "$SUITE_DIR/e-wcd-7-staging.sh"
+case_end
+
+case_begin "lint-recipes" "skills/write-code/SKILL.md"
+. "$SUITE_DIR/f-lint-recipes.sh"
 case_end
 
 static_finish
