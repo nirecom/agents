@@ -891,3 +891,7 @@ Changes: Plan confirmation: approving a plan right after the Stop hook's continu
 ### FEATURE: PR #2817 (2026-10-27)
 Background: fix(#2812): resolve merge-parent baselines for the tests gates
 Changes: Merge commits no longer fail the tests pre-commit gates for test files that already exist on the merged-in branch; files changed during the merge are still judged, against both parents.
+
+### FEATURE: PR #2815 (2026-10-27)
+Background: fix(#2808): update codex through npm directly after claude and codex exit
+Changes: Windows install no longer prints an npm cleanup EPERM warning when updating Codex CLI; it waits for running Claude Code and Codex to exit, then updates through npm directly.
