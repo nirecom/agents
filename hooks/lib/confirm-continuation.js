@@ -102,7 +102,8 @@ function presentAgainReason(stage, cause) {
   const why = CAUSE_TEXT[cause] || CAUSE_TEXT["no-receipt"];
   return withConvLang(`[confirm-plan] present the ${stage} plan again (${cause}): ${why}. ` +
     `Run ${PL.PLAN_LINK_COMMAND.replace("<stage>", stage)}, end the last text block of the turn with its output as-is, ` +
-    "with no text after the line, and close the turn; echo the CONFIRM only after the user's reply.");
+    "with no text after the line, and close the turn. When the turn end then returns \"[confirm-plan] continue:\", " +
+    "emit only the CONFIRM echo as your next message; without that prompt, echo the CONFIRM after the user's reply.");
 }
 
 module.exports = { presentedStages, presentedStagesOfText, continuationStage, continueReason, presentAgainReason };
