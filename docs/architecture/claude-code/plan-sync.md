@@ -1,4 +1,4 @@
-# Plan Sync
+# plan-sync
 
 Publishes each final session plan (`<sid>-intent.md`, `-outline.md`, `-detail.md`) to a
 private git remote so the plan can be read from the iOS/Android Claude apps or any
@@ -23,7 +23,7 @@ A plan carries the design of the project it was written for, so it is sent only 
 remote on the same host as that project: a plan for a project hosted on one forge never
 reaches a plan remote on another.
 
-Plan sync is a sibling of [session-sync](session-sync.md) and uses the same remote-URL
+plan-sync is a sibling of [session-sync](session-sync.md) and uses the same remote-URL
 format, but it is a different mechanism: session-sync moves whole session history on
 demand; plan-sync publishes the existing plans once at init, then pushes one plan file
 at the moment it is written.
@@ -41,7 +41,7 @@ at the moment it is written.
    GitHub or GitLab (github.com or a self-hosted GitLab declared by `GITLAB_HOSTNAME` /
    `GITLAB_SSH_HOSTNAME`). SSH or HTTPS both work. HTTPS needs credentials that never prompt
    (Git Credential Manager, `gh auth setup-git`); never put a token inside the URL. Empty
-   (the default) turns plan sync off; the plan link carries the local path only.
+   (the default) turns plan-sync off; the plan link carries the local path only.
    Pick an HTTP(S) URL when the forge's web side is plain `http` or on a non-default port:
    an SSH URL's blob link always uses `https` on the default port.
 3. Provision once with `bin/plan-sync-init` (Windows wrapper
@@ -71,7 +71,7 @@ reading the exported value until the export is removed.
 
 `PLAN_SYNC_REMOTE_URL` is on the `.env.local` overlay blocklist (see
 [local-env-overrides.md](local-env-overrides.md)): a project must not redirect where
-every plan is published. Plan sync's forge settings (`GITLAB_HOSTNAME`, `GITLAB_SSH_HOSTNAME`) are
+every plan is published. plan-sync's forge settings (`GITLAB_HOSTNAME`, `GITLAB_SSH_HOSTNAME`) are
 read from the agents configuration only, never from a project's `.env.local`.
 `--remote-url` on the init CLI overrides the hook-resolved value; because the hook keeps
 reading env then `.env`, init warns after success when the two differ.
@@ -147,7 +147,7 @@ reason, with a hint to run `bin/plan-sync-init`.
   URL exists only when `origin/main` holds byte-identical content to the local file.
 - **Presentation, then one approval.** The model ends the final body text of the presentation
   with the line as-is as its last line and closes the turn. The Stop hook continues that turn
-  once, and the `CONFIRM_<STAGE>` echo comes alone right after, so the user approves in the
+  once, even when it follows a Stop block (#2811), and the `CONFIRM_<STAGE>` echo comes alone right after, so the user approves in the
   dialog alone, with no reply first (#2650). When no continuation comes or the echo is denied,
   the earlier order applies: the echo comes alone in the turn after the user's reply. After
   Allow the next skill follows in that same turn (`skills/_shared/confirm-plan.md` CPA-2/CPA-3).
