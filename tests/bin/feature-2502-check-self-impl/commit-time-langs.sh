@@ -69,6 +69,8 @@ echo "=== commit time: the HEAD blob batch lookup ==="
 put "$REPO_FML" tests/bin/fm-debt.sh sh-h-ctr
 git -C "$REPO_FML" add -A >/dev/null 2>&1
 git -C "$REPO_FML" commit -q -m boundaries >/dev/null 2>&1
+# The per-file read re-reads a baseline by its oid (#2812): git cat-file blob <oid>.
+HB_DEBT_OID="$(git -C "$REPO_FML" rev-parse HEAD:tests/bin/fm-debt.sh)"
 HB_RELS=(tests/bin/fm-hb-new.sh tests/bin/fm-empty.sh tests/bin/fm-debt.sh tests/bin/fm-debt.js tests/bin/fm-clean.js)
 stage "$REPO_FML" tests/bin/fm-hb-new.sh sh-h-ctr
 stage "$REPO_FML" tests/bin/fm-empty.sh sh-h-ctr
@@ -111,7 +113,7 @@ lacks "HEAD counter after a missing entry" "$FM_ERR" "tests/bin/fm-debt.sh line"
 lacks "js HEAD counter after a zero-size entry" "$FM_ERR" "tests/bin/fm-debt.js line"
 has "js counter HEAD lacks" "$FM_ERR" "HIGH: tests/bin/fm-clean.js line 5: self-implemented harness (counter-init FAIL=0)"
 has "batch lookup: one cat-file --batch" "$HB_CALLS" "cat-file --batch"
-lacks "batch lookup: no per-file fallback" "$HB_CALLS" "cat-file -e"
+lacks "batch lookup: no per-file fallback" "$HB_CALLS" "cat-file blob"
 case_end
 
 # A broken git cat-file --batch answer falls back to the per-file lookup with the same verdict.
@@ -123,7 +125,7 @@ while IFS='|' read -r _name _body; do
   hb_run "$(hb_git_shim "$_name" "$_body")"
   expect_rc "$_name" "$HB_BASE_RC" "$FM_RC" "$FM_OUT $FM_ERR"
   assert_eq "$_name: lines=[$HB_LINES]" "$_name: lines=[$HB_BASE_LINES]"
-  has "$_name: falls back" "$HB_CALLS" "cat-file -e HEAD:tests/bin/fm-debt.sh"
+  has "$_name: falls back" "$HB_CALLS" "cat-file blob $HB_DEBT_OID"
 done <<'TABLE'
 garbage-header | "$REAL" "$@" >/dev/null; echo garbage; exit 0
 truncated-blob | "$REAL" "$@" | head -c 160; exit 0
@@ -138,14 +140,14 @@ _hb_res="$(
   SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/bin"
   . "$SCRIPT_DIR/check-test-frontmatter/self-impl.sh"
   for _run in 1 2; do
-    ctf_head_load "${HB_RELS[@]}"
+    ctf_parents_load "" "${HB_RELS[@]}"
     _d="$CTF_SI_DIR"
     for _r in "${HB_RELS[@]}"; do ctf_self_impl_add "$_r" "$(git show ":$_r")"; done
     _rc=0
     ctf_self_impl_run 2>"$TMPBASE/hb-run$_run.err" || _rc=$?
     _left=no
     if [ -z "$_d" ] || [ -e "$_d" ]; then _left=yes; fi
-    echo "run$_run rc=$_rc dir-left=$_left state=[$CTF_SI_DIR|$CTF_SI_N|${#CTF_HEAD_RELS[@]}]"
+    echo "run$_run rc=$_rc dir-left=$_left state=[$CTF_SI_DIR|$CTF_SI_N|${#CTF_PAR_RELS[@]}]"
   done
 )"
 assert_eq "$_hb_res" "run1 rc=1 dir-left=no state=[|0|0]"$'\n'"run2 rc=1 dir-left=no state=[|0|0]"
@@ -156,12 +158,13 @@ case_end
 
 for _r in "${HB_RELS[@]}"; do git -C "$REPO_FML" reset -q -- "$_r" >/dev/null 2>&1; done
 
-# hr_git_shim <name> <cat-file --batch body> — as hb_git_shim, and git show HEAD:<rel> fails too,
-# while git cat-file -e still answers: HEAD has the path but its content cannot be read.
+# hr_git_shim <name> <cat-file --batch body> — as hb_git_shim, and the per-file git cat-file blob
+# <oid> fails too, while the parent lookup still answers: a parent has the path but its content
+# cannot be read.
 hr_git_shim() {
   local d="$TMPBASE/shim-git-hr-$1"
   mkdir -p "$d"
-  printf '#!%s\nREAL=%q\necho "$*" >>%q\nif [ "$1 $2" = "cat-file --batch" ]; then %s; fi\ncase "$1 $2" in "show HEAD:"*) exit 128 ;; esac\nexec "$REAL" "$@"\n' \
+  printf '#!%s\nREAL=%q\necho "$*" >>%q\nif [ "$1 $2" = "cat-file --batch" ]; then %s; fi\ncase "$1 $2" in "cat-file blob") exit 128 ;; esac\nexec "$REAL" "$@"\n' \
     "$_hb_bash" "$_hb_git" "$HB_LOG" "$2" > "$d/git"
   chmod +x "$d/git"
   printf '%s' "$d:$PATH"
@@ -189,8 +192,8 @@ while IFS='|' read -r _name _body; do
   expect_rc "$_name: HEAD content unreadable" 1 "$FM_RC" "$FM_OUT $FM_ERR"
   assert_eq "$_name: stdout=[$FM_OUT]" "$_name: stdout=[]"
   assert_eq "$_name: stderr=[$FM_ERR]" "$_name: stderr=[HIGH: tests/bin/fm-debt.sh line 5: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS]"
-  has "$_name: presence answered" "$HB_CALLS" "cat-file -e HEAD:tests/bin/fm-debt.sh"
-  has "$_name: content read tried" "$HB_CALLS" "show HEAD:tests/bin/fm-debt.sh"
+  has "$_name: batch read tried" "$HB_CALLS" "cat-file --batch"
+  has "$_name: per-file read by oid tried" "$HB_CALLS" "cat-file blob $HB_DEBT_OID"
 done <<'TABLE'
 batch-fails     | exit 128
 batch-truncated | "$REAL" "$@" | head -c 60; exit 0
