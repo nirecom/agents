@@ -1,7 +1,7 @@
 # adoptability.sh — U7-U13: what a listed record CLAIMS about adoptability vs
 # what `--from` would actually manage. Sourced by feat-2218-upstream-search.sh.
 # Tests: hooks/workflow-state/upstream-search.js, bin/lib/resume-session/upstream-view.js
-# Tags: session-upstream, upstream-search, resume-session, adoptability, cost-cap, regression-2279, scope:issue-specific, pwsh-not-required, TL2
+# Tags: session-upstream, upstream-search, resume-session, adoptability, cost-cap, regression-2279, scope:issue-specific, pwsh-not-required, TL2, regression-2297
 
 # #2279's secondary finding: `--list` answers adoptable yes/no, but `--from`
 # answers at a finer grain and silently degrades, so a user picks from the list

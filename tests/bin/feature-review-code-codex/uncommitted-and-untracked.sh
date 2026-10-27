@@ -56,7 +56,8 @@ exit 0
 MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
-OUTPUT=$(cd "$UNTRACKED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>&1) || true
+# --base-state RESOLVED: an omitted state (UNKNOWN) withholds untracked content fail-closed (H1).
+OUTPUT=$(cd "$UNTRACKED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --base-state RESOLVED --no-log 2>&1) || true
 
 if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "Untracked-only: review PERFORMED"
@@ -72,13 +73,11 @@ fi
 
 # ---------------------------------------------------------------------------
 # 17. Committed+uncommitted: when a committed diff exists (BASE...HEAD non-empty),
-#     the whole uncommitted/untracked set is outside the review target — it is
-#     disclosed by name on the '## Codex Review Scope: EXCLUDED' line rather than
-#     sent to the reviewer (E24, #1702; see also P10 in path-priority/
-#     exclusion-and-cross-reference.sh, which asserts the same rule for a path
-#     that is both committed and separately staged). This supersedes the earlier
-#     dual-section design this test used to assert (separate labeled
-#     [COMMITTED DIFF]/[UNCOMMITTED CHANGES] blocks, both sent in full).
+#     the review target is the WORKING TREE against merge-base(BASE, HEAD) (E24
+#     redefinition, origin #1702 coverage gap): the unstaged edit on top of the
+#     committed path and the untracked file both reach the prompt, and no
+#     '## Codex Review Scope: EXCLUDED' line is printed (see also P10 in
+#     path-priority/exclusion-and-cross-reference.sh for the staged-on-top case).
 # ---------------------------------------------------------------------------
 COMMITTED_REPO="$TMPDIR_BASE/committed-repo"
 mkdir -p "$COMMITTED_REPO"
@@ -105,7 +104,7 @@ exit 0
 MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
-OUTPUT=$(cd "$COMMITTED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>&1) || true
+OUTPUT=$(cd "$COMMITTED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" CODEX_REVIEW_MAX_DIFF_LINES=5000 _timeout bash "$SCRIPT" --base main --base-state RESOLVED --no-log 2>&1) || true
 
 if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
     pass "Committed+uncommitted: review PERFORMED"
@@ -119,20 +118,34 @@ else
     fail "Committed+uncommitted: committed diff content missing. File exists: $([ -f "$CAPTURE_FILE17" ] && echo yes || echo no)"
 fi
 
-if echo "$OUTPUT" | grep -E "^## Codex Review Scope: EXCLUDED" | grep -q "tracked-file.txt"; then
-    pass "Committed+uncommitted: uncommitted edit to the committed file disclosed via EXCLUDED (E24, #1702)"
+if [[ -f "$CAPTURE_FILE17" ]] && grep -q "^+uncommitted edit" "$CAPTURE_FILE17"; then
+    pass "Committed+uncommitted: the unstaged edit on top of the committed file is in the prompt"
 else
-    fail "Committed+uncommitted: EXCLUDED line does not name tracked-file.txt. Output: $OUTPUT"
-fi
-
-if echo "$OUTPUT" | grep -E "^## Codex Review Scope: EXCLUDED" | grep -q "new-untracked.txt"; then
-    pass "Committed+uncommitted: untracked file disclosed via EXCLUDED (E24, #1702)"
-else
-    fail "Committed+uncommitted: EXCLUDED line does not name new-untracked.txt. Output: $OUTPUT"
+    fail "Committed+uncommitted: the unstaged edit to tracked-file.txt is missing from the prompt. Output: $OUTPUT"
 fi
 
 if [[ -f "$CAPTURE_FILE17" ]] && grep -q "untracked-content-xyz" "$CAPTURE_FILE17"; then
-    fail "Committed+uncommitted: untracked file content leaked into the prompt despite being excluded"
+    pass "Committed+uncommitted: untracked file content is in the prompt"
 else
-    pass "Committed+uncommitted: untracked file content correctly excluded from the prompt"
+    fail "Committed+uncommitted: untracked file content missing from the prompt. Output: $OUTPUT"
+fi
+
+if echo "$OUTPUT" | grep -q "^## Codex Review Scope: EXCLUDED"; then
+    fail "Committed+uncommitted: an EXCLUDED line was printed although nothing is excluded any more. Output: $OUTPUT"
+else
+    pass "Committed+uncommitted: no EXCLUDED line is printed"
+fi
+
+if echo "$OUTPUT" | grep -q "^Note: BASE...HEAD empty"; then
+    fail "Committed+uncommitted: the empty-committed fallback note was printed although a committed diff exists. Output: $OUTPUT"
+else
+    pass "Committed+uncommitted: no empty-committed fallback note when a committed diff exists"
+fi
+
+if [[ ! -s "$CAPTURE_FILE17" ]]; then
+    fail "Committed+uncommitted: no prompt was captured, so the absence of an exclusion caveat proves nothing"
+elif grep -qF -e "were excluded from this review" -e "EXCLUDED SCOPE" "$CAPTURE_FILE17"; then
+    fail "Committed+uncommitted: the prompt still carries an exclusion SCOPE CAVEAT although nothing is excluded"
+else
+    pass "Committed+uncommitted: the prompt carries no exclusion SCOPE CAVEAT"
 fi

@@ -12,7 +12,7 @@ function getWorktreeBaseDirResolved() {
   const raw = (process.env.WORKTREE_BASE_DIR || "").trim();
   const baseRaw = raw || path.join(os.homedir(), "git", "worktrees");
   const expanded = baseRaw.startsWith("~")
-    ? path.join(os.homedir(), baseRaw.slice(1).replace(/^[\/\\]/, ""))
+    ? path.join(os.homedir(), baseRaw.slice(1).replace(/^[/\\]/, ""))
     : baseRaw;
   return path.resolve(expanded);
 }

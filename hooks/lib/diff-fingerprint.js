@@ -134,6 +134,17 @@ function artifactPresence(abs) {
   return st.isFile() ? "present" : "unreadable";
 }
 
+// A downstream session's plan is its upstream's file (#2633); a sid the owner resolver rejects
+// keeps the literal <sid>-<name>.md path.
+function ownedArtifactPath(dir, sessionId, name) {
+  try {
+    const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
+    return resolvePlanArtifactOwner(sessionId, name, undefined, { plansDir: dir }).path;
+  } catch (_) {
+    return path.join(dir, `${sessionId}-${name}.md`);
+  }
+}
+
 function digestArtifacts(plansDir, sessionId, artifactNames) {
   if (!sessionId || !Array.isArray(artifactNames) || artifactNames.length === 0) {
     return { key: null, unreadable: [] };
@@ -143,7 +154,7 @@ function digestArtifacts(plansDir, sessionId, artifactNames) {
     const dir = toWindowsPath(plansDir || getWorkflowPlansDir());
     const hash = crypto.createHash('sha256');
     for (const name of artifactNames) {
-      const abs = path.join(dir, `${sessionId}-${name}.md`);
+      const abs = ownedArtifactPath(dir, sessionId, name);
       const presence = artifactPresence(abs);
       if (presence === "absent") return { key: null, unreadable };
       if (presence === "unreadable") {

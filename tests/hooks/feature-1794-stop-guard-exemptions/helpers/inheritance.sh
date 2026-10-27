@@ -7,8 +7,8 @@
 # under the 300-line WARN. Expects SCRIPT_CHECKOUT_ROOT, RWT, STATEIO_NODE, make_tmp, node_path.
 
 # These build a REAL inherited session — donor state, announcing transcript, and an
-# heir created by launching hooks/session-start.js itself — so inherited step_status
-# carries provenance:"backfilled"/origin:"session-inherit" as a live SessionStart writes.
+# heir created by launching hooks/session-start.js itself — so the heir holds the donor's
+# events verbatim up to upstream_copy_seq, plus backfilled revert events, as a live SessionStart writes.
 # Layout under <tmp>: wf/ (workflow+plans, dual-pinned), repo/, tr/, home/, cfg/.
 
 SESSION_START_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/session-start.js"
@@ -93,7 +93,7 @@ if ('$mode' === 'complete') {
     inh_node "$tmp" --hook "$heir"
     [ "$mode" = "complete" ] && return 0
 
-    # closes_issues is not inherited, and next-step blocks clarify_intent on an empty
+    # This donor records no closes_issues, and next-step blocks clarify_intent on an empty
     # set (REASON=closes_issues-empty), so the heir's intent.md above names #1794 —
     # the source the gate reads since #2654. The state stamp below serves only the
     # pre-#2654 reader (state.closes_issues); it settles no step and appends no
@@ -148,19 +148,21 @@ $3"
 
 # inh_anchor <tmp> <sid> — POSITIVE ANCHOR for the inherited-only shape. Echoes
 # ANCHOR_OK only when the heir really did inherit: workflow_init projects
-# `complete` AND at least one step_status event exists AND every one of them is
-# backfilled/session-inherit. Without this a silently-broken fixture would make
-# C4/C2 correctly silent for the WRONG reason (nothing to guard against at all).
+# `complete`, upstream_copy_seq bounds at least one copied step_status event, and
+# every step_status event after the boundary is backfilled/session-inherit (#2304).
+# Without this a silently-broken fixture would make C4/C2 silent for the WRONG reason.
 inh_anchor() {
     inh_probe "$1" "$2" "
+const b = st.upstream_copy_seq;
 const ss = st.events.filter((e) => e.kind === 'step_status');
-const foreign = ss.filter((e) => e.provenance !== 'backfilled' || e.origin !== 'session-inherit')
+const foreign = ss.filter((e) => !(e.seq <= b) && (e.provenance !== 'backfilled' || e.origin !== 'session-inherit'))
   .map((e) => e.step + ':' + e.provenance + '/' + e.origin);
 const wi = ((st.current || {}).steps || {}).workflow_init || {};
 const bad = [];
 if (wi.status !== 'complete') bad.push('workflow_init=' + wi.status);
-if (ss.length < 1) bad.push('no-step_status-events');
-if (foreign.length) bad.push('not-backfilled(' + foreign.join(',') + ')');
+if (typeof b !== 'number') bad.push('no-upstream_copy_seq');
+if (ss.filter((e) => e.seq <= b).length < 1) bad.push('no-copied-step_status-events');
+if (foreign.length) bad.push('not-backfilled-after-boundary(' + foreign.join(',') + ')');
 console.log(bad.length ? 'ANCHOR_BAD:' + bad.join(' ') : 'ANCHOR_OK');"
 }
 

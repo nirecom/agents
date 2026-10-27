@@ -94,11 +94,11 @@ node "$AGENTS_MAIN_ROOT/bin/issue-close-write-outcome.js" \
   "<CONTROL_DIR>/issue-close-outcome.json"
 ```
 
-`<ISSUES_JSON_ARRAY>` is the JSON number array the LLM parses from intent.md
-via `hooks/lib/parse-closes-issues.js`, inlined as a literal at substitution time.
+`<ISSUES_JSON_ARRAY>` is the JSON number array printed by
+`node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session <session-id>`, inlined as a literal at substitution time.
 
-- Zero → GitHub remote. Parse `closes_issues` from
-  `<PLANS_DIR>/<session-id>-intent.md` via the canonical parser.
+- Zero → GitHub remote. Read `closes_issues` from
+  `node "$AGENTS_MAIN_ROOT/bin/parse-closes-issues" --session <session-id>`.
   - `[]` → write empty outcome, skip to SC-6:
 
 ```bash

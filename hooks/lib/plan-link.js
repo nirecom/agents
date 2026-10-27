@@ -41,6 +41,11 @@ const REASON_TEXT = Object.freeze({
 });
 
 const REASON_VALUES = Object.values(REASONS);
+// Reasons for an environment that can never build a URL: there the local path is the plan's
+// link. not-published is absent on purpose — a URL could exist, so the path does not stand in.
+const UNPUBLISHABLE_REASONS = Object.freeze([
+  REASONS.PLAN_SYNC_OFF, REASONS.NOT_PROVISIONED, REASONS.HOST_MISMATCH, REASONS.NO_PROJECT_HOST, REASONS.UNKNOWN_FORGE,
+]);
 // Sync-result reasons that carry over to the link unchanged.
 const CARRIED_SYNC_REASONS = new Set([REASONS.HOST_MISMATCH, REASONS.NO_PROJECT_HOST, REASONS.UNKNOWN_FORGE]);
 
@@ -90,7 +95,10 @@ function resolvePlanLink(sid, stage, opts) {
   try {
     const o = opts || {};
     plansDir = toWindowsPath(o.plansDir || require("./workflow-plans-dir").getWorkflowPlansDir());
-    return linkForFile(o.absPath || path.join(plansDir, `${sid}-${stage}.md`), { plansDir });
+    // Owner-resolved: a downstream session's plan is its upstream's file (#2633).
+    const abs = o.absPath ||
+      require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir }).path;
+    return linkForFile(abs, { plansDir });
   } catch (_) {
     return { reason: REASONS.NO_ARTIFACT };
   }
@@ -112,6 +120,16 @@ function linkForFile(absPath, opts) {
   return { path: abs, ...linkOf(plansDir, abs) };
 }
 
+// receiptLinkOf(linkResult) -> {kind:"url"|"path", value} | null — the one place the Stop guard and
+// confirm-checkpoint decide which link a presentation receipt binds (#2729). null means the plan
+// has no link that may stand for it (not published yet, or no plan file).
+function receiptLinkOf(linkResult) {
+  const r = linkResult && typeof linkResult === "object" ? linkResult : {};
+  if (typeof r.url === "string" && /^https?:\/\//.test(r.url)) return { kind: "url", value: r.url };
+  if (typeof r.path === "string" && r.path && UNPUBLISHABLE_REASONS.includes(r.reason)) return { kind: "path", value: r.path };
+  return null;
+}
+
 // entryLine({stage, url?, path?, reason?}) -> one line, shared by the hooks and the CLI.
 // The local path is inline code so it is never a second, mistappable link beside the URL on
 // mobile; the URL stays bare so the reply auto-links it.
@@ -124,21 +142,35 @@ function entryLine(entry) {
   return p ? `${stage}: \`${p}\` (no URL: ${reason})` : `${stage}: (unavailable: ${reason})`;
 }
 
+const CONFIRM_DUTY = "End this turn's last text block (the presentation turn) with each line above as-is; do not repeat it in later turns. The CONFIRM echo follows when prompted, or after the user's reply, and never carries the line.";
+const ON_DUTY = "End this turn's last text block with each line above as-is so the user can open the plan; do not repeat it in later turns. When the stage asks for confirmation, the CONFIRM echo follows when prompted, or after the user's reply.";
+const ON_DUTY_ONE = "End this turn's last text block with the line above as-is so the user can open the plan; do not repeat it in later turns.";
+const OFF_DUTY = "Show each line above once in this step's summary so the user can open the plan; it need not close the turn, and do not repeat it in later turns.";
+const OFF_DUTY_ONE = "Show the line above once in this step's summary; it need not close the turn, and do not repeat it in later turns.";
+const PUBLISH_NOTE = "This plan is not published yet: CONFIRM will not pass until it is published and presented with its URL line.";
+
+// An entry without a gate, or with ERROR, carries the ON duty (fail-safe).
+const dutyOf = (e) => (e && e.gate === "OFF" ? "OFF" : "ON");
+
 // renderModelContext(entries, {when: "after-write" | "confirm"}) -> additionalContext text.
+// after-write: the duty follows each entry's gate; one shared gate prints it once at the end.
 function renderModelContext(entries, opts) {
   const list = Array.isArray(entries) ? entries : [];
   const confirm = Boolean(opts && opts.when === "confirm");
   const lines = [confirm ? "[plan-link] The plan being confirmed:" : "[plan-link] Plan artifact written:"];
+  const duties = new Set(list.map(dutyOf));
+  const mixed = !confirm && duties.size > 1;
   // The reason's meaning rides its own entry line, so each reason word appears once per plan.
   for (const e of list) {
     const line = entryLine(e);
     const hasUrl = e && typeof e.url === "string" && /^https?:\/\//.test(e.url);
     const reason = e && REASON_VALUES.includes(e.reason) ? e.reason : REASONS.NOT_PUBLISHED;
     lines.push(hasUrl ? line : `${line} — ${REASON_TEXT[reason]}`);
+    if (mixed) lines.push(dutyOf(e) === "OFF" ? OFF_DUTY_ONE : ON_DUTY_ONE);
+    if (!confirm && !hasUrl && reason === REASONS.NOT_PUBLISHED && dutyOf(e) === "ON") lines.push(PUBLISH_NOTE);
   }
-  lines.push(confirm
-    ? "End this turn's last text block (the presentation turn) with each line above as-is; do not repeat it in later turns. The CONFIRM echo follows when prompted, or after the user's reply, and never carries the line."
-    : "End this turn's last text block with each line above as-is so the user can open the plan; do not repeat it in later turns. When the stage asks for confirmation, the CONFIRM echo follows when prompted, or after the user's reply.");
+  if (confirm) lines.push(CONFIRM_DUTY);
+  else if (!mixed) lines.push(duties.has("OFF") ? OFF_DUTY : ON_DUTY);
   lines.push(`When asked later where a plan is, run ${PLAN_LINK_COMMAND} and write its output as-is; never send the plan with SendUserFile.`);
   return lines.join("\n");
 }
@@ -147,12 +179,14 @@ module.exports = {
   REASONS,
   STAGES,
   REASON_TEXT,
+  UNPUBLISHABLE_REASONS,
   PLAN_LINK_COMMAND,
   SESSION_ID_RE,
   isSessionId,
   linkFromSyncResult,
   resolvePlanLink,
   linkForFile,
+  receiptLinkOf,
   entryLine,
   renderModelContext,
 };

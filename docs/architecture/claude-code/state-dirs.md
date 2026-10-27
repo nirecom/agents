@@ -57,6 +57,7 @@ guard refuse every model write there without touching the artifact workflow.
 | Kind (after `<sid>-`) | Writer | Main readers |
 |---|---|---|
 | `intent.md`, `outline.md`, `detail.md`, `context.md` | Model | Skills and hooks (confirm-checkpoint, completion-approval, diff-fingerprint, branch-diff) |
+| `session-progress.md` | Model (`/update-progress`, seeded from `templates/progress.md` by `bin/progress-file`) | resume-session, supervisor codex input, plan-sync ([progress-file.md](progress-file.md)) |
 | `survey-<name>.md` | Model | Plan skills |
 | `issue-prefill.md`, `test-review.md` | Model | Issue skills, review-tests |
 | `[<stage>-]concerns-log.md`, `[<stage>-]codex-round-<N>-raw.md`, `<stage>-debug.log` | Orchestrator, wrapper | Planner, human |
@@ -86,7 +87,8 @@ guard refuse every model write there without touching the artifact workflow.
 | `finalize-state-<N>.json`, `finalize-binding-<N>.json`, `issue-close-outcome.json`, `session-close-gate.json`, `final-report-env.json` | Workers, `issue-close-write-outcome.js`, `capture-env.sh` | Close-family skills, stop-final-report-guard, session-close-build-env |
 | `supervisor-state.json` | `hooks/lib/supervisor-state-writer/` | Supervisor agents, `bin/supervisor-*`, sweep-supervisor-state |
 | `wi-checkpoint.json`, `handoff.md`, `wt-cleanup-active`, `workflow-init-aborted-*.md` | checkpoint.js, handoff-artifact.js, worktree-cleanup-marker.js, path-a-label-and-board.sh | The same modules, workflow-init |
-| `handoff-{risk,pressure,flush-mark}.json` | handoff-sidecar.js (one writer each: `recordRiskSignal`, the nudge hook, `handoff-append`) | handoff-pressure.js, handoff-risk-signal.js |
+| `handoff-risk.json`, `progress-pressure.json` | handoff-sidecar.js (`recordRiskSignal`; the progress request, `recordCompaction`, `bin/progress-file`) | progress-pressure.js, handoff-risk-signal.js, progress-nudge.js ([progress-file.md](progress-file.md#state-file)) |
+| `handoff-{pressure,flush-mark}.json` | Nobody since #2594 (a leftover stays registered until #2652) | Nobody |
 | `companion-precheck.json`, `intent-scan-block.txt`, `guard-attempt.tmp` | precheck-companions.sh, clarify-commit-scope.sh, clarify-guard-loop.sh | clarify-intent |
 | `calibration-asked.txt` | `skills/run-tests/scripts/mark-calibration-asked.sh` (before the dialog), `answer-calibration.sh` | `probe-calibration.sh` |
 | `sweep-plans-gate.tsv` | `bin/sweep-plans/gate-artifact.js` (pass 1 of `--include-plan-and-user-requested`) | The same script in pass 2, which consumes it |

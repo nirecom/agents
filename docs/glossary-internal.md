@@ -11,7 +11,7 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 
 ### GATE_ACTION
 
-- **Definition**: The closed-vocabulary confirm-gate verdict `next-step --gate` prints: `proceed`, `ask`, `present-and-stop`, or `none`.
+- **Definition**: The closed-vocabulary confirm gate verdict `next-step --gate` prints: `proceed`, `ask`, `present-and-stop`, or `none`.
   Skills follow it verbatim and never branch on the display-only `GATE_CONFIRM_<X>` line.
 - **Related**: [architecture/claude-code/workflow-runtime.md](architecture/claude-code/workflow-runtime.md)
 
@@ -31,6 +31,12 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 - **Definition**: The text sent to Jev as its state for one judgment: a stage's sections, packed within a budget, and the names of the source copies.
   The two-stage judge's query builds it, and the backup subagent reads it first.
 - **Related**: [architecture/jev/two-stage-broker.md](architecture/jev/two-stage-broker.md)
+
+### presentation receipt
+
+- **Definition**: The per-stage record the Stop hook writes when a turn closes on a plan's link line: the plan path, the link shown (URL, or the local path where none can be made) and the whole-file content hash.
+  The CONFIRM checkpoint lets the echo reach the dialog only when it still matches the plan and spends it; it proves the user was shown the plan, and is not an approval.
+- **Related**: [architecture/claude-code/settings/hooks.md](architecture/claude-code/settings/hooks.md)
 
 ### review round
 
@@ -57,8 +63,3 @@ Entry criteria and form: [rules/docs/glossary.md](../rules/docs/glossary.md).
 
 - **Definition**: The main worktree of the repository a tool operates on, which need not be the agents repository; an ordinary variable, never an environment variable.
 - **Related**: [architecture/claude-code/root-names.md](architecture/claude-code/root-names.md)
-
-### turn
-
-- **Definition**: One user utterance and the one response to it; hooks that fire per turn (`UserPromptSubmit`, `Stop`) count in turns, not in workflow steps.
-- **Related**: [architecture/claude-code/settings/hooks.md](architecture/claude-code/settings/hooks.md)

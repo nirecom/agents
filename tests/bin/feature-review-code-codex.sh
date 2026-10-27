@@ -8,6 +8,9 @@
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# The shared harness brings the run root, root decoy and command guard, as in the sibling entrypoints.
+# shellcheck source=../lib/harness.sh
+. "$AGENTS_ROOT/tests/lib/harness.sh"
 # Fixtures + helpers: feature-review-code-codex/_lib.sh (shared by the -truncation-scope, -base-state-scope and -path-priority entrypoints).
 . "$AGENTS_ROOT/tests/bin/feature-review-code-codex/_lib.sh"
 
@@ -322,7 +325,7 @@ fi
 # ---------------------------------------------------------------------------
 # 14. Uncommitted-fallback: unstaged-only changes on a fresh branch are reviewed
 #     (regression guard — earlier fallback used `git diff --cached` and missed
-#     unstaged working tree, the common state at workflow Step 6).
+#     unstaged working tree, the common state during a workflow).
 # ---------------------------------------------------------------------------
 FRESH_REPO="$TMPDIR_BASE/fresh-repo"
 fixture_template_copy "$REPO_TEMPLATE" "$FRESH_REPO"
@@ -358,4 +361,9 @@ fi
 
 # The X-series, Y-series and path-priority rows run as their own entrypoints
 # (feature-review-code-codex-truncation-scope.sh, -base-state-scope.sh, -path-priority.sh).
+
+# The --context defang and helper fail-closed rows replace the mock codex, so they run last.
+# shellcheck source=./feature-review-code-codex/context-defang-and-fail-closed.sh
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/context-defang-and-fail-closed.sh"
+
 rcc_finish

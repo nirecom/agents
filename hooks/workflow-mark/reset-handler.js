@@ -11,7 +11,12 @@
 const { validateSkipReason } = require("./skip-reason");
 const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, readState, appendEvents, clearDeliveryProfile } = require("../workflow-state");
-const { APPROVAL_GATED_STEPS } = require("../workflow-state/completion-approval");
+const {
+  APPROVAL_GATED_STEPS,
+  UnapprovedCompletionError,
+  evaluateCompletionApproval,
+  recoveryFor,
+} = require("../workflow-state/completion-approval");
 const { appendAutoRecord } = require("../lib/handoff-auto-record");
 const { isWorkflowActivePeriod } = require("../lib/workflow-active-period");
 
@@ -48,25 +53,21 @@ function buildResetEvents(fromStep, rawReason) {
     });
   }
 
-  // WORKFLOW_RESET_FROM_* is permissions.ask — the user already approved this
-  // rollback, so the force-completed steps carry a sanctioned audit record
-  // rather than tripping the completion-approval invariant (#1133).
+  return events;
+}
+
+// Approving the rollback is not approving the plans it re-completes (#2709): every gated step
+// before the target must already hold a verified approval, whatever its current status — a
+// complete step whose artifact changed since approval is refused too. Throws
+// UnapprovedCompletionError for the first one that does not; CONFIRM_<STAGE>=off waivers are
+// honoured here and stamped as confirm-flag-off by the ordinary completion boundary.
+function assertPriorGatesApproved(sessionId, fromStep, state) {
+  const fromIndex = VALID_STEPS.indexOf(fromStep);
   for (const step of APPROVAL_GATED_STEPS) {
     if (VALID_STEPS.indexOf(step) >= fromIndex) continue;
-    events.push({
-      kind: "plan_approval",
-      step,
-      source: ORIGIN,
-      reason: rawReason,
-      artifact_sha256: null,
-      artifact_session_id: null,
-      artifact_hash_status: "not-applicable",
-      provenance: "declared",
-      origin: ORIGIN,
-    });
+    const verdict = evaluateCompletionApproval(sessionId, step, state);
+    if (!verdict.approved) throw new UnapprovedCompletionError(step, verdict.code, recoveryFor(step));
   }
-
-  return events;
 }
 
 function handle(ctx) {
@@ -130,11 +131,24 @@ function handle(ctx) {
       // period, yet the breadcrumb is exactly what the resuming session needs.
       const activeBeforeEvent = isWorkflowActivePeriod(sessionId);
       // Builder form: the batch is produced INSIDE the lock, so two resets racing
-      // on the same file both land instead of one clobbering the other.
-      appendEvents(sessionId, () => buildResetEvents(fromStep, rawReason), {
-        sanctioned: ORIGIN,
-        reason: rawReason,
-      });
+      // on the same file both land instead of one clobbering the other, and the
+      // prior-gate verdict is taken on the very state the batch is appended to.
+      try {
+        appendEvents(sessionId, (_events, projection) => {
+          // The evaluator resolves an ownerless inherited approval through upstream_session_id
+          // and the event history, which the bare projection lacks.
+          assertPriorGatesApproved(sessionId, fromStep,
+            Object.assign({}, readState(sessionId), { events: _events }, projection));
+          return buildResetEvents(fromStep, rawReason);
+        });
+      } catch (e) {
+        if (!(e instanceof UnapprovedCompletionError)) throw e;
+        pushMessage(
+          `workflow-mark: RESET_FROM_${fromStep} refused — ${e.step} has no verified approval ` +
+            `(${e.code}). ${e.recovery}`
+        );
+        return true;
+      }
       // #2527 judgment D: re-opening branching_complete re-opens the delivery decision,
       // so the pinned profile is cleared for the re-completion to record afresh. A
       // reset from a later step keeps it.

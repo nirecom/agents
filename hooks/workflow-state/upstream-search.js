@@ -11,6 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
+const { sanitizeUntrustedField } = require("../lib/output-sanitize");
 const { listRecentContextCandidates, lastActivityOf } = require("./inheritance/candidates");
 
 const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail", "handoff"]);
@@ -83,9 +84,10 @@ function issuesOf(body) {
 
 // Only 108 of 667 real intent.md files carry a `**Title:**` line, so its
 // absence is normal and never removes a session from the search.
+// A donor's title is written by another session: it reaches `--list` sanitized (#2301).
 function titleOf(body) {
   const m = TITLE_RE.exec(body);
-  return m ? m[1] : null;
+  return m ? sanitizeUntrustedField(m[1]) : null;
 }
 
 function normalizeQuery(query) {
@@ -180,8 +182,8 @@ function contextRecord(candidate, searchRec) {
   };
 }
 
-// Fills in each record's adoptable_granularity from the SAME decideGranularity
-// the `--from` path runs (CPR-SSOT). Called only on the page being returned, so
+// Fills in each record's adoptability from the SAME overwrite and granularity
+// judgements the `--from` path runs (CPR-SSOT). Called only on the page being returned, so
 // the readState/git cost is bounded by displayed records, not by candidates.
 // The require is lazy: upstream-view.js reaches back into this tree, and a
 // top-level require would close the cycle.
@@ -201,6 +203,10 @@ function enrichAdoptability(records, input) {
       } catch (e) {
         preview = null;
       }
+    }
+    if (preview && rec.adoptable === true && preview.adoptable !== true) {
+      rec.adoptable = false;
+      rec.adoptable_reason = preview.adoptable_reason;
     }
     rec.adoptable_granularity = preview ? preview.adoptable_granularity : null;
   }

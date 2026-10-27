@@ -83,7 +83,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
 - `show-plan-link.js` — PostToolUse on the edit-write tool class and `assemble-mandatory.sh` commands. Runs when a final plan artifact (`*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written, regardless of `CONFIRM_<STEP>`. It records the project host (from the hook input's `cwd`), publishes the file through plan-sync, then always emits `hookSpecificOutput.additionalContext` (`[plan-link]`): the blob URL plus the local path, or the local path plus a reason, for the model to write in its response text. The `systemMessage` breadcrumb (`Plan file: <local path>` plus a `[plan-sync]` status line) is added only when there is no URL for a reason other than the project-host verdict (`host-mismatch`, `no-project-host`). Fail-open: a sync failure never aborts the hook or the workflow. Design and setup: [../plan-sync.md](../plan-sync.md).
-- `confirm-checkpoint.js` (PreToolUse, CONFIRM sentinel) — admits the echo on two paths: the same turn, right after the Stop hook's continuation prompt, when the one-shot continuation mark is anchored in this turn, only this echo followed it, and the mark still binds the plan's path, the link shown and the artifact sha (#2650); or the turn after the user's reply, when the previous turn ended its last text block on the stage's plan-link line and this turn did not rewrite the plan (#2513). Any other echo is denied; otherwise it emits the user-facing `systemMessage` plus `additionalContext` (`[plan-link]`). The mark is consumed on every echo, whatever follows. Two denies in a row per (session, stage) are the cap: the third echo passes with a cap note and a supervisor finding, and the counter resets. Unreadable transcript, counter or link fail open to the plain dialog; it never emits allow. The off waiver comes from `hooks/lib/confirm-gate/plan-gate.js` (`planGateState`), the same predicate `next-step --gate` uses; `ERROR` shows the dialog, and intent has no waiver.
+- `confirm-checkpoint.js` (PreToolUse, CONFIRM sentinel) — reaches the dialog only on a presentation receipt (#2729, [glossary](../../../glossary-internal.md)): the receipt the Stop hook wrote for this stage must still match today's plan path, link (published URL, or the local path where no URL can be made) and whole-file content sha, and the judgment spends it, so two concurrent echoes cannot both pass. Anything it cannot verify denies with a present-again reason (`no-receipt`, `unpublished`, `unreadable-receipt`, a path/link/content mismatch, …), with no deny cap: a third echo is denied like the first. The one fail-open is a hook input it cannot read, where not even the sentinel is known. Otherwise it emits the user-facing `systemMessage` plus `additionalContext` (`[plan-link]`); it never emits allow. The off waiver comes from `hooks/lib/confirm-gate/plan-gate.js` (`planGateState`), the same predicate `next-step --gate` uses; `ERROR` shows the dialog, and intent has no waiver. Where plan-sync can publish, an unpublished plan is denied before any receipt is looked at.
 - `gate-plan-skill-advance.js` (PreToolUse, matcher: `Skill`) — denies `make-outline-plan` / `make-detail-plan` / `write-tests` while the preceding plan stage's approval is `unapproved` (#2277); every other state, including unreadable ones, passes silently. A deterrent only — the side-effect owners (`run-completion.sh`, the completion sentinels) fail closed.
 - `block-send-user-file.js` (PreToolUse, matcher: `SendUserFile`) — denies the tool so a plan is shown by its plan-link line in the response text, never sent as a file. Any other tool or unreadable stdin passes with no output.
 - `gate-plan-lang.js` (PreToolUse, matcher: `Write|Edit|MultiEdit|editFiles`) — rejects a write to a final plan artifact under the plans directory whose submitted text violates a strict `PLAN_LANG` (`english` / `japanese`) BEFORE the file changes (#2278). The unit of analysis is the per-edit fragment: each `edits[]` element carries its own path (inheriting the top-level one when absent) and is linted on its own, so an unclosed code fence in one fragment cannot hide prose in the next. The gate never reads the target file and never writes; the block reason is prefixed `[gate-plan-lang] PLAN_LANG=<policy>` and echoes only the violating lines, numbered relative to the fragment. Hint-tier policies and every error path approve silently. Why a PreToolUse gate when `check-plan-lang.js` already exists: a PostToolUse block lands after the bytes are on disk, so a non-compliant model could still confirm the stage. A `Write` to an intent artifact carries the whole document, so it also gets the intent `## Glossary` structure check (#2529), reported under `[gate-plan-lang] intent structure`; Edit fragments skip it because a headingless fragment is normal.
@@ -121,12 +121,18 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   that stage's plan-link output — the blob URL when one exists, otherwise the local path in any
   of its spellings (native, forward-slash, `~`, `file:///`, inline code). Parsing lives in
   `hooks/lib/plan-link-turn-check.js`; the check blocks once (stands down on `stop_hook_active`).
-  The continuation (`[confirm-plan] continue:`, last, #2650): when the turn's last assistant entry is
-  a text block showing exactly one plan stage's plan-link line, and that stage is unapproved, not
-  yet echoed, and its gate is `ON` (at most one `planGateState` probe inside a 4000 ms budget), it
-  writes a one-shot continuation mark and blocks once so the CONFIRM echo follows in the same
-  turn. Every Stop clears stale marks first; any doubt ends the turn as before. Logic:
-  `hooks/lib/confirm-continuation.js`. Fail-open throughout.
+  The plan-link duty follows the stage's gate: with the gate `ON` the link line must close the
+  turn's last text block; with it `OFF` the line may sit anywhere in the turn (#2724). The
+  presentation receipt (#2729): a turn the hook lets through that closed on unapproved stages'
+  link lines (every stage whose link run ends the last text block, Gap 5) gets one receipt per
+  stage, holding the plan path, the link shown and the whole-file content sha. A turn the hook
+  blocks voids every receipt of the session. An `ON` stage whose plan is not published where
+  plan-sync could publish it is blocked once as unpublished.
+  The continuation (`[confirm-plan] continue:`, last, #2650): when the last text block shows
+  exactly one plan stage's link line and that stage is unapproved, not yet echoed, and `ON`
+  (at most one `planGateState` probe inside a 4000 ms budget), it blocks once so the CONFIRM
+  echo follows in the same turn. Logic: `hooks/lib/confirm-continuation.js`. Fail-open
+  throughout.
 - `hooks/lib/transcript-reader.js` — the one transcript reader of the Stop and PreToolUse hooks (#2610). At Stop it waits until the transcript's last text block agrees with `last_assistant_message`, which only confirms the flush and is never judged as the body; a flush that never agrees reads as `undecidable` and the caller fails open. `readPreviousTurn` splits the previous and current turns for `confirm-checkpoint.js`.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
@@ -220,7 +226,7 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
   Path coverage (`ENFORCE_WORKTREE_EXCLUDE`), gh command classification, dispatch provenance
-  (#2064), additional repos, quote-span analysis, the script checkout root trust anchor, the
+  (#2064), additional repos, quote-span analysis, the trust anchor in the checkout a hook runs from, the
   worker-dispatch sanction (#1643, #1673) and the heredoc gate widening (#2120/#2121) are
   detailed in [enforce-worktree.md](enforce-worktree.md).
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
@@ -243,10 +249,10 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   scope gate that refuses the home directory and any filesystem root — upstream's own exclusion,
   ported. Fail-open at every step: a missing flag, a failed spawn, a non-zero exit, empty output, or
   any throw all yield `{}` and exit 0, so a prompt is never blocked or delayed past the 5s timeout.
-- `handoff-pressure-nudge.js` (UserPromptSubmit) — inside the workflow active period only, injects a
-  `[handoff check]` omission-check nudge when the transcript has grown or time has passed since the
-  last check (the trigger table and its state files live in
-  [handoff-artifact.md — Omission-check nudge](../handoff-artifact.md#omission-check-nudge)).
+- `progress-nudge.js` (UserPromptSubmit, PostToolUse matcher `""`, Stop) — in the active period and
+  main conversation only, injects a `[progress check]` request to update `session-progress.md`; PostToolUse
+  leaves after a stat-only pre-check unless something could fire. Kinds, cap, Stop handling, state:
+  [progress-file.md — Progress request](../progress-file.md#progress-request).
   Fail-open: any error yields `{}`.
 - `user-prompt-submit-wf-init-mark.js` (UserPromptSubmit) — when the user's prompt invokes `/workflow-init`
   (detected via `promptInvokesWfInit` in `hooks/lib/step-in-flight-policy.js`), records `workflow_init`

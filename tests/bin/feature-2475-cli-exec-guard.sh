@@ -28,6 +28,7 @@ PATHS_FILE="$CEG_TMP/paths.txt"
 export MOCK_CALLED="$CEG_TMP/mock-called"
 export GUARD_CALLED="$CEG_TMP/guard-called"
 LIMIT=1048576
+EM_DASH="$(printf '\342\200\224')" # U+2014 as UTF-8 bytes; the guard's FAILED lines carry it
 
 # Fixtures: generated once by node, read by children from disk.
 cat > "$CEG_TMP/gen.js" <<'JS'
@@ -35,8 +36,8 @@ const fs = require('fs');
 const path = require('path');
 const dir = process.argv[2];
 const w = (name, s) => fs.writeFileSync(path.join(dir, name), s, 'utf8');
-w('big-kana-1048576.txt', 'あ'.repeat(1048576));
-w('big-kana-1048577.txt', 'あ'.repeat(1048577));
+w('big-kana-1048576.txt', '\u{3042}'.repeat(1048576));
+w('big-kana-1048577.txt', '\u{3042}'.repeat(1048577));
 w('ascii-1048577.txt', 'a'.repeat(1048577));
 w('nonbmp-1048576.txt', '\u{1F600}'.repeat(1048576));
 w('small.txt', 'hello');
@@ -163,7 +164,7 @@ case_end
 
 case_begin "codex-core-input-limit" "bin/lib/codex-core.sh"
 core "$FIX/big-kana-1048577.txt" 0
-has "over limit -> FAILED input too large" "## Probe: FAILED — input too large: 1048577 chars > limit 1048576"
+has "over limit -> FAILED input too large" "## Probe: FAILED ${EM_DASH} input too large: 1048577 chars > limit 1048576"
 called "over limit -> codex not invoked" "$MOCK_CALLED" no
 tmpfiles_gone "over limit -> prompt/stderr tmpfiles removed"
 core "$FIX/big-kana-1048576.txt" 0
@@ -173,7 +174,7 @@ case_end
 
 case_begin "codex-core-size-check-fails-closed" "bin/lib/codex-core.sh"
 core "$FIX/small.txt" 0 "$CEG_TMP/badnode:$MOCK_PATH"
-has "node failing -> FAILED input size check failed" "## Probe: FAILED — input size check failed"
+has "node failing -> FAILED input size check failed" "## Probe: FAILED ${EM_DASH} input size check failed"
 lacks "node failing -> not PERFORMED" "## Probe: PERFORMED"
 called "node failing -> codex not invoked" "$MOCK_CALLED" no
 tmpfiles_gone "node failing -> prompt/stderr tmpfiles removed"
@@ -194,9 +195,10 @@ case_end
 RPC_DIR="$CEG_TMP/rpc"
 mkdir -p "$RPC_DIR/bin/lib" "$CEG_TMP/rpc-log"
 cp "$SCRIPT_CHECKOUT_ROOT/bin/review-plan-codex" "$RPC_DIR/bin/review-plan-codex"
-for _lib in codex-core.sh codex-timeout.sh cli-exec-guard.sh; do
+for _lib in codex-core.sh codex-timeout.sh cli-exec-guard.sh codex-glossary.sh main-worktree.sh native-path.sh; do
   if [ -f "$SCRIPT_CHECKOUT_ROOT/bin/lib/$_lib" ]; then cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/$_lib" "$RPC_DIR/bin/lib/$_lib"; fi
 done
+cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib/concern-ledger" "$SCRIPT_CHECKOUT_ROOT/bin/lib/review-plan-codex" "$RPC_DIR/bin/lib/"
 # rpc <sid> <input> <mock-exit>
 rpc() {
   rm -f "$MOCK_CALLED"
@@ -212,7 +214,7 @@ round_log_has() { # <label> <sid> <verdict>
 case_begin "review-plan-codex-input-limit" "bin/review-plan-codex"
 if command -v jq >/dev/null 2>&1; then
   rpc sid-big "$FIX/ascii-1048577.txt" 0
-  _n="$(sed -n 's/.*FAILED — input too large: \([0-9][0-9]*\) chars > limit 1048576.*/\1/p' "$OUT" | head -n 1)"
+  _n="$(sed -n "s/.*FAILED ${EM_DASH} input too large: \([0-9][0-9]*\) chars > limit 1048576.*/\1/p" "$OUT" | head -n 1)"
   if [ -n "$_n" ] && [ "$_n" -gt "$LIMIT" ]; then pass "review-plan-codex over limit -> FAILED input too large ($_n)"
   else fail "review-plan-codex over limit -> FAILED input too large" "got: $(head -c 400 "$OUT")"; fi
   round_log_has "review-plan-codex over limit -> round log FAILED-input-too-large" sid-big FAILED-input-too-large

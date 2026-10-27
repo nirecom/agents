@@ -82,7 +82,9 @@ DENY_PREFIXES="$(probe blocklist-keys prefixes)"
 # Full membership, not a count: a silently dropped entry is the regression here.
 WANT_EXACT="$(printf '%s\n' AGENTS_MAIN_ROOT AGENTS_STATE_DIR AUTO_APPROVE_TOOLS \
     CLAUDE_CODE_AUTO_COMPACT_WINDOW \
-    CODE_FILE_EXTENSIONS CODE_LANG_EXCLUDE DEFAULT_BRANCHES ENFORCE_WORKTREE \
+    CODE_FILE_EXTENSIONS CODE_LANG_EXCLUDE \
+    CONFIRM_DETAIL CONFIRM_INTENT CONFIRM_OUTLINE \
+    DEFAULT_BRANCHES ENFORCE_WORKTREE \
     ENFORCE_WORKTREE_ADDITIONAL_REPOS ENFORCE_WORKTREE_EXCLUDE ISSUE_VERDICT_WEB_SEARCH \
     JEV MCP_FS_DEBUG MERGE_BASE_MAX_DIFF_FILES MERGE_BASE_MAX_DIFF_LINES \
     NODE_EXTRA_CA_CERTS NODE_OPTIONS NODE_TLS_REJECT_UNAUTHORIZED NODE_USE_ENV_PROXY \
@@ -239,7 +241,7 @@ assert_not_contains "T2223N2-escalate-node-tls-absent-from-map" "$esc_node_json"
 assert_contains "T2223N2-escalate-node-env-in-map" "$esc_node_json" '"NODE_ENV":"node-env-2460"'
 unset CLAUDE_PROJECT_DIR
 
-# A decoy agents main root the local file tries to point the reader at. Load-bearing on
+# A decoy AGENTS_MAIN_ROOT the local file tries to point the reader at. Load-bearing on
 # the map itself: the decoy path must be absent from it, so removing
 # AGENTS_MAIN_ROOT from the exact set lets the key ride in and fails this row.
 DECOY_CFG="$TMP_ROOT/decoy-cfg-2223"
@@ -252,7 +254,7 @@ assert_map_lacks "T2223N2-escalate-agents-main-root-never-redirects" "$esc_cfg_j
 assert_eq "T2223N2-escalate-agents-main-root-global-value-kept" '"english"' \
   "$(probe effective "$CASE_ROOT_NODE" CODE_LANG)"
 # Controls: the local file really was read at all, and the decoy really is a
-# readable agents main root with a different answer of its own.
+# readable AGENTS_MAIN_ROOT with a different answer of its own.
 assert_contains "T2223N2-escalate-control-local-file-read" "$esc_cfg_json" 'ok-cfg-2223'
 ESC_SAVED_CFG="$CASE_CFG"
 CASE_CFG="$DECOY_CFG"

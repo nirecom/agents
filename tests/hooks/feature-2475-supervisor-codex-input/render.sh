@@ -8,7 +8,7 @@ RD_T="$SCI_TMP/proj/sidA.jsonl"
   printf '%s\n' '{"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"utter-one"},"uuid":"a1","timestamp":"2026-01-01T00:00:01Z"}'
   printf '%s\n' '{"type":"user","isMeta":true,"origin":{"kind":"human"},"message":{"role":"user","content":"meta-body-secret"},"uuid":"a2"}'
   printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"echo render-cmd"}}]},"uuid":"a3"}'
-  printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t4","name":"Edit","input":{"file_path":"C:/r/b.js","old_string":"old-secret","new_string":"n"}}]},"uuid":"a4"}'
+  printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t4","name":"Edit","input":{"file_path":"C:/rr/b.js","old_string":"old-secret","new_string":"n"}}]},"uuid":"a4"}'
   printf '%s\n' '{"type":"user","origin":{"kind":"human"},"message":{"role":"user","content":"utter-two"},"uuid":"a5","timestamp":"2026-01-01T00:00:05Z"}'
   printf '%s\n' '{"type":"attachment","attachment":{"type":"queued_command","prompt":"utter-queued","origin":{"kind":"human"},"commandMode":"prompt"},"uuid":"a6"}'
 } > "$RD_T"
@@ -28,11 +28,11 @@ sci_eq "render: exit 0" "$SCI_RC" "0"
 sci_match "render: stdout CURSOR_STATUS line" "$SCI_STDOUT" '^CURSOR_STATUS: fresh$'
 sci_match "render: stdout CURSOR_NEXT line" "$SCI_STDOUT" '^CURSOR_NEXT: \{'
 RD_ORDER=""
-for tag in "[SUPERVISOR INPUT HEADER]" "[HANDOFF START]" "[USER UTTERANCES START]" "[ACTIONS SINCE PREVIOUS ALERT RUN START]" "[PLAN ARTIFACTS START]" "[SUPERVISOR STATE START]"; do
+for tag in "[SUPERVISOR INPUT HEADER]" "[HANDOFF START]" "[PROGRESS START]" "[USER UTTERANCES START]" "[ACTIONS SINCE PREVIOUS ALERT RUN START]" "[PLAN ARTIFACTS START]" "[SUPERVISOR STATE START]"; do
   RD_ORDER="$RD_ORDER $(rd_line "$RD_OUT" "$tag")"
 done
 RD_ORDER_OK="$(printf '%s\n' $RD_ORDER | awk 'NR>1 && $1<=prev{bad=1} $1==0{bad=1} {prev=$1} END{print (bad ? "bad:" : "ok")}')"
-sci_eq "render: six blocks present in plan order (lines:$RD_ORDER)" "$RD_ORDER_OK" "ok"
+sci_eq "render: seven blocks present in plan order, PROGRESS between HANDOFF and USER UTTERANCES (lines:$RD_ORDER)" "$RD_ORDER_OK" "ok"
 RD_H="$(sci_header "$RD_OUT")"
 sci_has "render header: transcript path" "$RD_H" "sidA.jsonl"
 sci_has "render header: action range L1..L6" "$RD_H" "L1..L6"
@@ -46,7 +46,7 @@ sci_has "render: utterance two" "$RD_U" "utter-two"
 sci_has "render: queued utterance" "$RD_U" "utter-queued"
 RD_A="$(sci_block "$RD_OUT" "ACTIONS SINCE PREVIOUS ALERT RUN")"
 sci_match "render: action line format L<n> cmd:" "$RD_A" '^L3 .*cmd: echo render-cmd'
-sci_has "render: edit action" "$RD_A" "edit: Edit C:/r/b.js"
+sci_has "render: edit action" "$RD_A" "edit: Edit C:/rr/b.js"
 RD_P="$(sci_block "$RD_OUT" "PLAN ARTIFACTS")"
 sci_has "render: intent artifact heading" "$RD_P" "--- wsX-intent.md ---"
 sci_has "render: intent artifact body" "$RD_P" "intent-body"
@@ -167,7 +167,7 @@ echo "--- render: per-mode cursor independence ---"
 sci_mkstate rdmode alert "$RD_TN" 3 a3
 sci_run "$(np "$RD_OUT")" --mode alert --sid rdmode --wsid UNAVAILABLE --transcript "$RD_TN"
 RD_A="$(sci_block "$RD_OUT" "ACTIONS SINCE PREVIOUS ALERT RUN")"
-sci_has "mode alert: ACTIONS from L4 (edit)" "$RD_A" "edit: Edit C:/r/b.js"
+sci_has "mode alert: ACTIONS from L4 (edit)" "$RD_A" "edit: Edit C:/rr/b.js"
 sci_lacks "mode alert: ACTIONS exclude L3 (cmd)" "$RD_A" "echo render-cmd"
 sci_has "mode alert: USER UTTERANCES still from L1" "$(sci_block "$RD_OUT" "USER UTTERANCES")" "utter-one"
 sci_run "$(np "$RD_OUT")" --mode audit --sid rdmode --wsid UNAVAILABLE --transcript "$RD_TN"

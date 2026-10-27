@@ -181,7 +181,7 @@ ${body}
 # Group B helper: invoke the REAL review-plan-codex with a given format
 REAL_REVIEW_PLAN_CODEX="$AGENTS_WORKTREE/bin/review-plan-codex"
 
-# REAL_RPC_TEMPLATE: the real review-plan-codex plus its three lib files, built once (#2723).
+# REAL_RPC_TEMPLATE: the real review-plan-codex plus its lib files, built once (#2723).
 build_real_rpc_tree() {
   local mock_dir="$1"
   mkdir -p "$mock_dir/bin/lib"
@@ -196,6 +196,11 @@ build_real_rpc_tree() {
   if [[ -f "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" ]]; then
     cp "$AGENTS_WORKTREE/bin/lib/cli-exec-guard.sh" "$mock_dir/bin/lib/cli-exec-guard.sh"
   fi
+  local lib
+  for lib in codex-glossary.sh main-worktree.sh native-path.sh; do
+    cp "$AGENTS_WORKTREE/bin/lib/$lib" "$mock_dir/bin/lib/$lib"
+  done
+  cp -R "$AGENTS_WORKTREE/bin/lib/concern-ledger" "$AGENTS_WORKTREE/bin/lib/review-plan-codex" "$mock_dir/bin/lib/"
 }
 
 invoke_real_review_plan_codex() {

@@ -4,6 +4,9 @@
 # hasValidSkipJudgment(sid, target) to allow the *_NOT_NEEDED sentinel.
 # Relies on helpers.sh being sourced by the dispatcher.
 
+# shellcheck source=../../lib/confirm-env-fixture.sh
+. "$_HELPERS_SCRIPT_CHECKOUT_ROOT/tests/lib/confirm-env-fixture.sh"
+
 # Plant a valid record only if the API exists (otherwise it's a no-op; the
 # gate is still exercised for its fail-safe/legacy behavior).
 plant_record() {
@@ -72,7 +75,10 @@ assert_passthrough_gate "RV-8: no record + no CONFIRM_OUTLINE → pass-through" 
 echo ""
 echo "=== RV-9: CONFIRM_OUTLINE=off + no record → allow (legacy path) ==="
 INPUT="$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: legacy path>>"')"
-OUT="$(AGENTS_MAIN_ROOT="$EMPTY_CFG_ROOT" CONFIRM_OUTLINE=off WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_SESSION_ID="rv9-no-record" run_gate "$INPUT")"
+# The plan-stage flags come from $AGENTS_MAIN_ROOT/.env only (#2729): the off value lives in a
+# per-case config file; confirm_env_root runs inside the subshell, so the pin stays local.
+OUT="$(confirm_env_root "$TMPDIR_BASE/rv9-cfg" CONFIRM_OUTLINE=off
+  WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_SESSION_ID="rv9-no-record" run_gate "$INPUT")"
 assert_allow_gate "RV-9: CONFIRM_OUTLINE=off + no record → allow (legacy preserved)" "$OUT"
 
 # ---------------------------------------------------------------------------

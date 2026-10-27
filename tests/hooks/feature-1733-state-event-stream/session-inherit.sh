@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1733-state-event-stream/session-inherit.sh
 # Tests: hooks/session-start.js, hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/effective-state.js
-# Tags: workflow-state, event-stream, session-inherit, provenance, backfilled, regression-772, regression-1133, scope:issue-specific, pwsh-not-required, TL2
+# Tags: workflow-state, event-stream, session-inherit, provenance, backfilled, regression-772, regression-1133, scope:issue-specific, pwsh-not-required, TL2, regression-2304
 
-# session-start.js inheritance becomes a synthesised event batch under #1733; the risk is subtraction — carrying only `status` and
-# losing skip_reason / skip_verdict / token / wsid / warnings, the fields the /review-tests and skip gates decide on. Every row of the
-# plan's inheritance table is asserted in both directions (what MUST travel, and what must NOT: cleanup annotations per #772,
-# session_model, complexity_evaluation, worktree_*). The one deliberate change — inherited `updated_at` becomes the NEW session's
-# created_at, marked by provenance:backfilled + inherited_from — is pinned so intent stays distinguishable from regression.
+# Since #2304 session-start.js copies the donor's stream verbatim (seq/at/origin/provenance kept) up to upstream_copy_seq and appends
+# only the revert events (#772 cleanup triple) after it; session facts travel with the copy. Every annotation the gates decide on
+# must still travel, the cleanup notes must still be dropped, and the copied events must not count as this session's own action.
 # TL3 gap: a real SessionStart firing inside Claude Code (the hook is fed stdin JSON from a real cwd/branch; settings.json registration is not exercised).
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
@@ -39,17 +37,17 @@ TRANSCRIPT_DIR="$TRANSCRIPTS_BASE/$ENCODED_CWD"; mkdir -p "$TRANSCRIPT_DIR"
 #   1. Writes a synthetic transcript line, shaped exactly like a real Claude Code
 #      SessionStart hook attachment, announcing the donor's session_id. This is the
 #      ancestor-id → state-file breadcrumb, not an inheritance trigger.
-#   2. Drops the clarify_intent plan artifact the donor's state needs: SEED_DONOR
-#      marks clarify_intent complete with genuine (non-backfilled) provenance, and
-#      evaluateResumability's S3 rule (hooks/workflow-state/effective-state.js)
-#      treats a genuinely-complete clarify_intent with no intent.md as unusable
-#      state — without this file every case below would be refused on the donor
-#      itself, independent of whether the lineage resolved at all.
+#   2. Ensures the clarify_intent plan artifact exists (evaluateResumability's S3 rule
+#      refuses a genuinely-complete clarify_intent with no intent.md). SEED_DONOR's
+#      approvals already wrote it; it is never overwritten, because the approval
+#      recorded its hash and the copy would revert on artifact-hash-mismatch (#2633).
 announce_donor() {
     local donor="$1"
     printf '{"type":"attachment","attachment":{"hookEvent":"SessionStart","exitCode":0,"stdout":"Current workflow session_id: %s"}}\n' \
         "$donor" > "$TRANSCRIPT_DIR/$donor.jsonl"
-    printf '# fixture intent\n' > "$PLANS/$donor-intent.md"
+    if [ ! -e "$PLANS/$donor-intent.md" ]; then
+        printf '# fixture intent\n' > "$PLANS/$donor-intent.md"
+    fi
 }
 
 # seed_heir_lineage <heir-sid> <donor-sid> — the heir's own transcript, carrying
@@ -113,59 +111,58 @@ seed_pair() { # sets DONOR and HEIR
     start_session "$HEIR"
 }
 
-echo "== SI1: the heir's stream starts fresh — no donor event is copied over =="
-if run_case "SI1/fresh-stream"; then
+echo "== SI1: the heir's stream opens with a verbatim copy of the donor's, bounded by upstream_copy_seq =="
+if run_case "SI1/verbatim-copy"; then
     seed_pair
     nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE$GENUINE_JS"'
 const heir = rd();
 const donorEvents = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.DONOR + ".json"), "utf8")).events;
-const donorSeqs = new Set(donorEvents.map((e) => e.at + "|" + e.kind + "|" + e.step));
-const copied = heir.events.filter((e) => donorSeqs.has(e.at + "|" + e.kind + "|" + e.step));
-const created = heir.created_at;
-const before = heir.events.filter((e) => e.at < created);
-console.log("verbatim_copies=" + copied.length +
-            " events_before_created_at=" + before.length +
+const pre = heir.events.filter((e) => e.seq <= heir.upstream_copy_seq);
+console.log("boundary_is_donor_count=" + (heir.upstream_copy_seq === donorEvents.length) +
+            " pre_equals_donor=" + (JSON.stringify(pre) === JSON.stringify(donorEvents)) +
             " seq_contiguous=" + heir.events.every((e, i) => e.seq === i + 1));
 '
-    assert_eq "SI1/fresh-stream" "verbatim_copies=0 events_before_created_at=0 seq_contiguous=true" "$NODE_OUT"
+    assert_eq "SI1/verbatim-copy" "boundary_is_donor_count=true pre_equals_donor=true seq_contiguous=true" "$NODE_OUT"
 fi
 
-echo "== SI2: inherited step_status events are backfilled and name their donor =="
-if run_case "SI2/backfilled-inherited-from"; then
+echo "== SI2: only the events after the boundary are session-inherit/backfilled; none names a donor =="
+if run_case "SI2/boundary-provenance"; then
     seed_pair
     nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE$GENUINE_JS"'
 const st = rd();
-const inherited = st.events.filter((e) => e.origin === "session-inherit" && e.kind === "step_status");
-const badProv = inherited.filter((e) => e.provenance !== "backfilled").map((e) => e.step);
-const badFrom = inherited.filter((e) => e.inherited_from !== process.env.DONOR).map((e) => e.step);
-const badAt = inherited.filter((e) => e.at !== st.created_at).map((e) => e.step);
-console.log("n=" + (inherited.length > 0) +
-            " wrong_provenance=" + (badProv.join(",") || "0") +
-            " wrong_inherited_from=" + (badFrom.join(",") || "0") +
-            " at_not_created_at=" + (badAt.join(",") || "0"));
+const b = st.upstream_copy_seq;
+const post = st.events.filter((e) => e.seq > b && e.step !== undefined);
+const badPost = post.filter((e) => e.origin !== "session-inherit" || e.provenance !== "backfilled").map((e) => e.kind + ":" + e.step);
+const preInherit = st.events.filter((e) => e.seq <= b && e.origin === "session-inherit").length;
+const named = st.events.filter((e) => Object.prototype.hasOwnProperty.call(e, "inherited_from")).length;
+console.log("post=" + (post.length > 0) +
+            " post_not_backfilled_inherit=" + (badPost.join(",") || "0") +
+            " pre_session_inherit=" + preInherit +
+            " inherited_from=" + named +
+            " upstream=" + (st.upstream_session_id === process.env.DONOR));
 '
-    assert_eq "SI2/backfilled-inherited-from" \
-        "n=true wrong_provenance=0 wrong_inherited_from=0 at_not_created_at=0" "$NODE_OUT"
+    assert_eq "SI2/boundary-provenance" \
+        "post=true post_not_backfilled_inherit=0 pre_session_inherit=0 inherited_from=0 upstream=true" "$NODE_OUT"
 fi
 
-echo "== SI3: only non-pending statuses are inherited as step_status =="
-if run_case "SI3/only-non-pending-status"; then
+echo "== SI3: statuses project as in the donor; a pending step keeps exactly the donor's events =="
+if run_case "SI3/statuses-as-donor"; then
     seed_pair
     nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE$GENUINE_JS"'
 const st = S.readState(sid);
 const s = st.steps;
+const count = (raw) => raw.events.filter((e) => e.kind === "step_status" && e.step === "branching_complete").length;
+const donorRaw = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.DONOR + ".json"), "utf8"));
 console.log([
   "workflow_init=" + s.workflow_init.status,
   "research=" + s.research.status,
   "review_tests=" + s.review_tests.status,
-  // branching_complete was explicitly pending in the donor: it must stay pending and
-  // must NOT get a step_status event of its own.
   "branching_complete=" + s.branching_complete.status,
-  "branching_status_events=" + rd().events.filter((e) => e.kind === "step_status" && e.step === "branching_complete").length,
+  "branching_status_events_as_donor=" + (count(rd()) === count(donorRaw) && count(donorRaw) > 0),
 ].join(" "));
 '
-    assert_eq "SI3/only-non-pending-status" \
-        "workflow_init=complete research=skipped review_tests=complete branching_complete=pending branching_status_events=0" \
+    assert_eq "SI3/statuses-as-donor" \
+        "workflow_init=complete research=skipped review_tests=complete branching_complete=pending branching_status_events_as_donor=true" \
         "$NODE_OUT"
 fi
 
@@ -240,23 +237,26 @@ console.log("steps=" + steps.join(",") +
     assert_eq "SI6/plan-approvals-1133" "steps=clarify_intent,detail,outline wrong_artifact_sid=0 events=3" "$NODE_OUT"
 fi
 
-echo "== SI7: session_model / complexity_evaluation / worktree_* are NOT inherited =="
-if run_case "SI7/not-inherited"; then
+echo "== SI7: session facts (session_model, complexity, closes_issues, last_pushed_sha) are copied =="
+if run_case "SI7/session-facts-copied"; then
     seed_pair
     nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE$GENUINE_JS"'
 const st = S.readState(sid);
+const donor = S.readState(process.env.DONOR);
 const ev = rd().events;
+const donorEv = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, process.env.DONOR + ".json"), "utf8")).events;
+const n = (list, kind) => list.filter((e) => e.kind === kind).length;
 console.log([
-  "session_model=" + JSON.stringify(st.session_model || null),
-  "complexity=" + JSON.stringify(st.complexity_evaluation),
-  "model_events=" + ev.filter((e) => e.kind === "session_model").length,
-  "complexity_events=" + ev.filter((e) => e.kind === "complexity_evaluation").length,
+  "session_model=" + (JSON.stringify(st.session_model) === JSON.stringify(donor.session_model) && !!st.session_model),
+  "complexity=" + (JSON.stringify(st.complexity_evaluation) === JSON.stringify(donor.complexity_evaluation) && !!st.complexity_evaluation),
+  "model_events=" + (n(ev, "session_model") === n(donorEv, "session_model")),
+  "complexity_events=" + (n(ev, "complexity_evaluation") === n(donorEv, "complexity_evaluation")),
   "closes_issues=" + JSON.stringify(st.closes_issues || null),
   "last_pushed_sha=" + JSON.stringify(st.last_pushed_sha || null),
 ].join(" "));
 '
-    assert_eq "SI7/not-inherited" \
-        "session_model=null complexity=null model_events=0 complexity_events=0 closes_issues=null last_pushed_sha=null" \
+    assert_eq "SI7/session-facts-copied" \
+        "session_model=true complexity=true model_events=true complexity_events=true closes_issues=[1733] last_pushed_sha=\"0000000000000000000000000000000000000000\"" \
         "$NODE_OUT"
 fi
 
@@ -273,29 +273,23 @@ console.log("branch_matches_cwd=" + (st.git_branch === ctx.git_branch) +
     assert_eq "SI8/own-context" "branch_matches_cwd=true cwd_matches=true session_id=true" "$NODE_OUT"
 fi
 
-echo "== SI9: inherited completes are NOT genuine — the new provenance contract =="
-if run_case "SI9/inherited-not-genuine"; then
+echo "== SI9: copied completes keep the donor's provenance yet do not count as this session's start =="
+if run_case "SI9/copied-not-started"; then
     seed_pair
-    nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE$GENUINE_JS"'
-
-// Deliberate semantic change (plan risk #11): pre-#1733 the inherited updated_at made
-// these look genuinely recorded. Now provenance says backfilled, which is the honest
-// answer — and a later real markStep in THIS session flips it back to genuine.
-// genuine() observes the predicate through evaluateResumability, whose subject IS
-// clarify_intent (GENUINE_SUBJECT) — see the contract in common.sh.
-// Guard first: "not genuine" is only meaningful if the subject WAS inherited. Without
-// this, a donor that failed to seed (or an inheritance that copied nothing) would leave
-// the subject pending and hand the case a vacuous inherited=false.
-const seeded = rd().events.some((e) => e.kind === "step_status" && e.step === GENUINE_SUBJECT &&
-                                       e.origin === "session-inherit" && e.status === "complete");
-const before = genuine(sid);
-S.markStep(sid, GENUINE_SUBJECT, "complete");
-const after = genuine(sid);
-console.log("subject_inherited=" + seeded + " inherited=" + before + " after_real_mark=" + after +
+    nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE"'
+const L = require("./hooks/workflow-state/lifecycle");
+const st0 = rd();
+// Guard: the subject must have been copied as the donor recorded it, or "not started" is vacuous.
+const seeded = st0.events.some((e) => e.kind === "step_status" && e.step === "clarify_intent" && e.status === "complete" &&
+                                      e.origin === "mark-step" && e.provenance === "observed" && e.seq <= st0.upstream_copy_seq);
+const before = L.isWorkflowStarted(sid);
+S.markStep(sid, "outline", "skipped", { skip_reason: "fixture" });
+const after = L.isWorkflowStarted(sid);
+console.log("subject_copied=" + seeded + " started_after_copy=" + before + " after_real_mark=" + after +
             " still_projects_complete=" + (S.readState(sid).steps.clarify_intent.status === "complete"));
 '
-    assert_eq "SI9/inherited-not-genuine" \
-        "subject_inherited=true inherited=false after_real_mark=true still_projects_complete=true" "$NODE_OUT"
+    assert_eq "SI9/copied-not-started" \
+        "subject_copied=true started_after_copy=false after_real_mark=true still_projects_complete=true" "$NODE_OUT"
 fi
 
 echo "== SI10: inheritance is one batch — a second SessionStart is a no-op =="
@@ -369,9 +363,10 @@ if run_case "SI12/donor-immutable"; then
     # And the heir must actually have inherited — otherwise "donor untouched" is trivially
     # true because nothing happened.
     nodejs_env "DONOR=$DONOR" "$HEIR" "$PRE"'
-console.log("inherit_events=" + (rd().events.filter((e) => e.origin === "session-inherit").length > 0));
+console.log("inherit_events=" + (rd().events.filter((e) => e.origin === "session-inherit").length > 0) +
+            " upstream=" + (rd().upstream_session_id === process.env.DONOR));
 '
-    assert_eq "SI12/heir-did-inherit" "inherit_events=true" "$NODE_OUT"
+    assert_eq "SI12/heir-did-inherit" "inherit_events=true upstream=true" "$NODE_OUT"
 fi
 
 finish "session-inherit"

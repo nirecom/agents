@@ -202,13 +202,33 @@ silently disabling the gate:
 | Source | Recorded by | Hash-bound |
 |---|---|---|
 | `confirm-sentinel` | `<<WORKFLOW_CONFIRM_INTENT\|OUTLINE\|DETAIL: {summary}>>` | yes — a re-edited plan artifact invalidates the approval (intent's `## Issues` section is outside the hash) |
-| `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver; intent has none | no (audit record) |
-| `reset-sentinel` | `<<WORKFLOW_RESET_FROM_*>>` re-seeding steps below the reset point | no (audit record) |
-| `session-inherit` | inheritance of a donor's `complete` gated step when the donor holds no record; never for intent, which stays unapproved until `CONFIRM_INTENT` in the new session | no (audit record) |
+| `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver, read from the global `.env` file only (an export or `.env.local` does not count); intent has none. It outranks a stale `confirm-sentinel` record. `checkPlanApproval` is the one entry that `--gate` and `evaluateCompletionApproval` share; `confirm-checkpoint` reads the same OFF verdict through `planGateState` (#2726, #2729) | no (audit record) |
+
+`reset-sentinel` and `session-inherit` are legacy read-only (`HASH_EXEMPT_SOURCES`): old records still
+approve, nothing writes them (#2709, #2633). `RESET_FROM` refuses when a gated step before the reset
+point is unapproved; a supervisor BLOCK is overridden only by the ask-gated
+`<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: ...>>` ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)).
 
 Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rejection,
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its
 record, so a stale approval can never re-validate a later re-completion.
+
+The hash is computed on the plan artifact's **owner**, which after an inheritance is the upstream's
+`<upstream-sid>-<stage>.md`, not the current session's. `resolvePlanArtifactOwner`
+(`plan-artifact-owner.js`, CLI `bin/plan-artifact-path`) is the SSOT: own file, recorded
+`artifact_session_id`, past approval events, then `upstream_session_id`. Re-approval records that owner.
+
+### Inheritance is a state copy (#2304, #2633)
+
+`/resume-session --from` copies the upstream's event stream verbatim (`inheritance/apply.js`) and sets
+`upstream_session_id` / `upstream_copy_seq`, in one `writeStateLocked` (a crash leaves it untouched
+or fully inherited); the supervisor state file is copied afterwards. Each approval-gated
+stage is re-verified in that write: the first stage that no longer verifies, and every later stage
+including `cleanup`, returns to `pending` with an `inherit_revert_reason`; the downstream re-approves
+with `CONFIRM_*`. Events up to `upstream_copy_seq` are not the downstream's own work. `buildCopy`
+alone writes `previous_session_ids`, the upstream lineage oldest first (#2311); readers validate each
+element as a session id. Granularity: `full` in the upstream's worktree, else `context-independent-only`
+(`decideInheritanceGranularity`). `checkOverwriteAllowed` permits adoption into an untouched downstream, or a same-upstream re-adopt only while the downstream holds no records of its own.
 
 Recovery: a gated step recorded `complete` without a valid approval (no record, or a hash
 mismatch) reads as `pending` in the effective state. `next-step` answers it with

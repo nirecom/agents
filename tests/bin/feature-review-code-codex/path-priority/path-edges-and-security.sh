@@ -148,10 +148,12 @@ else
 
     # Report integrity: every line that opens with the report's own prefix must be one the
     # script itself emits. A forged one is indistinguishable to a reader — and to a parser.
+    # UNTRACKED-WITHHELD / WITHHELD are genuine labels too: on a host where an invalid-name
+    # fixture stays untracked under UNKNOWN base state, the script legitimately emits one.
     s_bad="$(printf '%s\n' "$PP_OUT_TEXT" \
         | grep -E "^## Codex Review" \
         | grep -vE "^## Codex Review: (PERFORMED|SKIPPED|FAILED)$" \
-        | grep -vE "^## Codex Review Scope: (TRUNCATED|EXCLUDED|PRIORITY-UNTRUSTED)( |$)" || true)"
+        | grep -vE "^## Codex Review Scope: (TRUNCATED|PRIORITY-UNTRUSTED|UNTRACKED-WITHHELD|WITHHELD)( |$)" || true)"
     if [ -z "$s_bad" ]; then
         pass "S2-labels: every '## Codex Review' line on stdout is one of the script's own labels"
     else
@@ -204,7 +206,7 @@ else
     s2a_bad="$(printf '%s\n' "$PP_OUT_TEXT" \
         | grep -E "^## Codex Review" \
         | grep -vE "^## Codex Review: (PERFORMED|SKIPPED|FAILED)$" \
-        | grep -vE "^## Codex Review Scope: (TRUNCATED|EXCLUDED|PRIORITY-UNTRUSTED)( |$)" || true)"
+        | grep -vE "^## Codex Review Scope: (TRUNCATED|PRIORITY-UNTRUSTED|UNTRACKED-WITHHELD|WITHHELD)( |$)" || true)"
     if [ -z "$s2a_bad" ]; then
         pass "S2a-labels: no forged '## Codex Review' line reached stdout from the compositional filenames"
     else

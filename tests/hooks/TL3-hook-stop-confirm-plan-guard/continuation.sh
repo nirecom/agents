@@ -17,6 +17,10 @@ SCP_LOG_CP="$SCP_BASE/hook-c1-pre.jsonl"
 mkdir -p "$SCP_REPO_C/.claude" "$SCP_CFG_C"
 git -C "$SCP_REPO_C" init -q
 git -C "$SCP_REPO_C" config core.hooksPath /dev/null
+# #2726/#2729: plan-stage gates are read from $AGENTS_MAIN_ROOT/.env only — pin them in SCP_CFG_C/.env.
+# shellcheck source=../../lib/confirm-env-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/confirm-env-fixture.sh"
+confirm_env_set "$SCP_CFG_C" CONFIRM_INTENT=on CONFIRM_OUTLINE=on CONFIRM_DETAIL=on
 
 # Generic PreToolUse recorder: node pre-recorder.js <hook.js> <log> — passes I/O through unchanged.
 cat > "$SCP_BASE/pre-recorder.js" <<'PRE_EOF'
@@ -50,8 +54,8 @@ SETTINGS_EOF
 # scp_c_node <script> [args...] — node with the sandbox pins (state, plans, config root, gates on).
 scp_c_node() {
     WORKFLOW_STATE_DIR="$SCP_WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$SCP_PLANS_DIR" AGENTS_MAIN_ROOT="$SCP_CFG_C" \
-    CONFIRM_INTENT=on CONFIRM_OUTLINE=on CONFIRM_DETAIL=on PLAN_SYNC_REMOTE_URL="" PLAN_LANG=english \
-    node -e "$1" "$(node_path "$SCRIPT_CHECKOUT_ROOT")" "${@:2}"
+    PLAN_SYNC_REMOTE_URL="" PLAN_LANG=english \
+    env -u CONFIRM_INTENT -u CONFIRM_OUTLINE -u CONFIRM_DETAIL node -e "$1" "$(node_path "$SCRIPT_CHECKOUT_ROOT")" "${@:2}"
 }
 
 # A session at outline through the #2650 fixture: prints "<sid>\t<plan-link line>\t<sha>".
@@ -72,11 +76,10 @@ else
     set +e
     SCP_C_OUT=$(
         cd "$SCP_REPO_C" &&
-        unset CLAUDECODE CLAUDE_CODE_SESSION_ID &&
+        unset CLAUDECODE CLAUDE_CODE_SESSION_ID CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL &&
         WORKFLOW_STATE_DIR="$SCP_WORKFLOW_DIR" \
         WORKFLOW_PLANS_DIR="$SCP_PLANS_DIR" \
         AGENTS_MAIN_ROOT="$SCP_CFG_C" \
-        CONFIRM_INTENT=on CONFIRM_OUTLINE=on CONFIRM_DETAIL=on \
         PLAN_SYNC_REMOTE_URL="" PLAN_LANG=english \
         SCP_HOOK_JS="$HOOK_JS" \
         SCP_HOOK_LOG="$(node_path "$SCP_LOG_C")" \

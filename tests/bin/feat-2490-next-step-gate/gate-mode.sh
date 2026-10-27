@@ -40,9 +40,10 @@ printf '#!/usr/bin/env bash\nexit 2\n' > "$CFG_S2/bin/detect-scope-change.sh"
 # #2681: the gate resolves in-process, so an unreadable gate is a tree without hooks/lib/config-flag.js.
 CFG_NOLIB="$GT_BASE/cfg-nolib"; mk_tree "$CFG_NOLIB"; rm -f "$CFG_NOLIB/hooks/lib/config-flag.js"
 # A load-env whose CONFIRM_* lookups take 1700 ms (> the 1500 ms budget) but still answer.
+# #2729: a plan key is read through readDefaultEnvFile, so a config-flag.js call to it naps too.
 CFG_SLOW="$GT_BASE/cfg-slow"; mk_tree "$CFG_SLOW"
 mv "$CFG_SLOW/hooks/lib/load-env.js" "$CFG_SLOW/hooks/lib/load-env-real.js"
-printf '"use strict";\nconst real = require("./load-env-real");\nmodule.exports = Object.assign({}, real, { resolveConfigVar: function (n, d, o) { if (/^CONFIRM_/.test(n)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1700); return real.resolveConfigVar(n, d, o); } });\n' > "$CFG_SLOW/hooks/lib/load-env.js"
+printf '"use strict";\nconst real = require("./load-env-real");\nconst nap = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1700);\nmodule.exports = Object.assign({}, real, { resolveConfigVar: function (n, d, o) { if (/^CONFIRM_/.test(n)) nap(); return real.resolveConfigVar(n, d, o); }, readDefaultEnvFile: function () { if (/config-flag\\.js/.test(String(new Error().stack))) nap(); return real.readDefaultEnvFile.apply(this, arguments); } });\n' > "$CFG_SLOW/hooks/lib/load-env.js"
 
 case_begin "relocated-detector-exists" "bin/detect-scope-change.sh"
 check "bin/detect-scope-change.sh exists" "yes" "$([ -f "$SCRIPT_CHECKOUT_ROOT/bin/detect-scope-change.sh" ] && echo yes || echo no)"
@@ -51,7 +52,7 @@ case_end
 
 echo "=== detail scope change ==="
 case_begin "detail-off-scope-change-present-and-stop" "bin/workflow/lib/next-step/gate-mode.js"
-export CONFIRM_DETAIL=off
+set_gate CONFIRM_DETAIL off
 gate --session gm-sc
 check "exit 0" 0 "$RC"
 check "GATE_ACTION=present-and-stop" "present-and-stop" "$(val GATE_ACTION)"
@@ -69,7 +70,7 @@ check "plain rerun: present-and-stop again (flag leaves no state)" "present-and-
 case_end
 
 case_begin "detail-on-change-ask" "bin/workflow/lib/next-step/gate-mode.js"
-export CONFIRM_DETAIL=on
+set_gate CONFIRM_DETAIL on
 gate --session gm-sc
 check "ON + change: ask" "ask" "$(val GATE_ACTION)"
 check "ON + change: HINT carries the change line" yes "$(has "$CHANGE_LINE" "$(hint)")"
@@ -85,17 +86,17 @@ check "ERROR: REASON names probe-exception" yes "$(has probe-exception "$(reason
 case_end
 
 case_begin "scope-change-approved-carries-probe-cause" "bin/workflow/lib/next-step/gate-mode.js"
-export CONFIRM_DETAIL=off
+set_gate CONFIRM_DETAIL off
 OUT="$(run_next_step_in "$CFG_SLOW" --gate --session gm-sc --scope-change-approved 2>/dev/null || true)"
 ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
 check "slow OFF + change + flag: proceed" "proceed" "$(val GATE_ACTION)"
 check "slow OFF + change + flag: value line stays OFF" "OFF" "$(val GATE_CONFIRM_DETAIL)"
 check "slow OFF + change + flag: REASON" "scope-change-approved, probe-over-budget" "$(reason)"
-export CONFIRM_DETAIL=on
+set_gate CONFIRM_DETAIL on
 case_end
 
 case_begin "detail-off-no-change-proceed" "bin/workflow/lib/next-step/gate-mode.js"
-export CONFIRM_DETAIL=off
+set_gate CONFIRM_DETAIL off
 gate --session gm-same
 check "OFF, no change: proceed" "proceed" "$(val GATE_ACTION)"
 gate --session gm-nodet
@@ -119,12 +120,12 @@ case_begin "gate-from-recorded-step" "bin/workflow/lib/next-step/gate-mode.js"
 write_state gm-ci "$(json_at clarify_intent)"; put_plan gm-ci intent "$INTENT_FULL"
 gate --session gm-ci
 check "recorded clarify_intent + intent.md: CONFIRM_INTENT" "ON" "$(val GATE_CONFIRM_INTENT)"
-printf 'CONFIRM_OUTLINE=off\n' > "$CFG/.env"; export CONFIRM_OUTLINE=off
+set_gate CONFIRM_OUTLINE off
 write_state gm-ol "$(json_at outline)"; put_plan gm-ol intent "$INTENT_FULL"; put_plan gm-ol outline "## Adopted approach: A"
 gate --session gm-ol
 check "recorded outline (snapshot would advance): CONFIRM_OUTLINE" "OFF" "$(val GATE_CONFIRM_OUTLINE)"
 check "recorded outline: proceed" "proceed" "$(val GATE_ACTION)"
-: > "$CFG/.env"; export CONFIRM_OUTLINE=on
+set_gate CONFIRM_OUTLINE on
 gate --session gm-same
 check "recorded detail: CONFIRM_DETAIL" "OFF" "$(val GATE_CONFIRM_DETAIL)"
 case_end
@@ -158,15 +159,15 @@ for step in $GATE_STEPS; do
   rows="off:proceed on:ask"
   [ "$step" = "clarify_intent" ] && rows="off:ask on:ask"
   for row in $rows; do
-    export "$key=${row%%:*}"
+    set_gate "$key" "${row%%:*}"
     gate --session "$sid"
     check "$step ${row%%:*}: ${row#*:}" "${row#*:}" "$(val GATE_ACTION)"
   done
   if [ "$step" = "clarify_intent" ]; then
-    export "$key=off"; gate --session "$sid"
+    set_gate "$key" off; gate --session "$sid"
     check "clarify_intent off: REASON says no-off-waiver" yes "$(has no-off-waiver "$(reason)")"
   fi
-  export "$key=on"
+  set_gate "$key" on
 done
 export CONFIRM_TESTS=off
 gate --session gm-t-write_tests --scope-change-approved
@@ -200,21 +201,21 @@ echo "=== .env freshness: each --gate call re-reads .env ==="
 case_begin "dotenv-switch-flips-gate-action" "bin/workflow/lib/next-step/gate-mode.js"
 write_state gm-env "$(json_at write_tests)"
 unset CONFIRM_TESTS
-printf 'CONFIRM_TESTS=off\n' > "$CFG/.env"
+cfg_env CONFIRM_TESTS=off
 gate --session gm-env
 check ".env off, env unset: proceed" "proceed" "$(val GATE_ACTION)"
 check ".env off, env unset: value line OFF" "OFF" "$(val GATE_CONFIRM_TESTS)"
-printf 'CONFIRM_TESTS=on\n' > "$CFG/.env"
+cfg_env CONFIRM_TESTS=on
 gate --session gm-env
 check ".env switched on, env unset: ask" "ask" "$(val GATE_ACTION)"
 check ".env switched on, env unset: value line ON" "ON" "$(val GATE_CONFIRM_TESTS)"
-: > "$CFG/.env"; export CONFIRM_TESTS=on
+cfg_env; export CONFIRM_TESTS=on
 case_end
 
 echo "=== detector failure warning reaches GATE_HINT ==="
 case_begin "detector-failure-warns-in-hint" "bin/workflow/lib/next-step/gate-mode.js"
 for row in off:proceed on:ask; do
-  export CONFIRM_DETAIL="${row%%:*}"
+  set_gate CONFIRM_DETAIL "${row%%:*}"
   OUT="$(run_next_step_in "$CFG_S2" --gate --session gm-same 2>/dev/null || true)"
   ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
   check "detector exit 2, ${row%%:*}: ${row#*:}" "${row#*:}" "$(val GATE_ACTION)"
@@ -224,7 +225,7 @@ for row in off:proceed on:ask; do
   gate --session gm-same
   check "working detector, ${row%%:*}: HINT carries no failure warning" no "$(has "check failed" "$(hint)")"
 done
-export CONFIRM_DETAIL=on
+set_gate CONFIRM_DETAIL on
 case_end
 
 case_begin "closed-vocabulary-and-no-single-quote" "bin/workflow/lib/next-step/gate-mode.js"

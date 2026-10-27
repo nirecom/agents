@@ -16,7 +16,7 @@ const {
 } = require("../../../../hooks/lib/confirm-gate/probe");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("./gate-line");
 const { rowFor } = require("../../../../hooks/workflow-state/plan-stage-table");
-const { planGateFromValue } = require("../../../../hooks/lib/confirm-gate/plan-gate");
+const { checkPlanApproval } = require("../../../../hooks/workflow-state/plan-approval-check");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");
 
@@ -48,11 +48,14 @@ function print(action, gateLine, hint, reason) {
 }
 
 // { changed, line, failed }: exit 0 = change (stdout line), 1 = none, anything else = check failed.
+// Both plans are owner-resolved: a downstream session compares its upstream's files (#2633).
 function detectScopeChange(sid) {
   try {
-    const plans = getWorkflowPlansDir();
-    const outline = posixJoin(plans, sid + "-outline.md");
-    const detail = posixJoin(plans, sid + "-detail.md");
+    const { resolvePlanArtifactOwner } = require("../../../../hooks/workflow-state/plan-artifact-owner");
+    const plansDir = getWorkflowPlansDir();
+    const ownedPath = (kind) => posixJoin(resolvePlanArtifactOwner(sid, kind, undefined, { plansDir }).path);
+    const outline = ownedPath("outline");
+    const detail = ownedPath("detail");
     const r = spawnSync("bash", [posixJoin(SCRIPT_CHECKOUT_ROOT, "bin", "detect-scope-change.sh"), outline, detail], {
       cwd: SCRIPT_CHECKOUT_ROOT,
       encoding: "utf8",
@@ -83,10 +86,11 @@ function runGate(rawSession, opts) {
   const gateLine = "GATE_" + key + "=" + value;
   const reasons = [step + ": " + key + "=" + value];
   if (causeReason) reasons.push(causeReason);
-  // #2277/#2650: a plan stage takes the shared gate predicate; the value line stays the raw flag.
+  // #2729: a plan stage proceeds only on checkPlanApproval's verdict (waived or approved), the
+  // one approval judgment it shares with evaluateCompletionApproval; the value line stays the raw flag.
   const row = rowFor(step);
   if (value === "OFF" && row && !row.offWaivable) reasons.push("no-off-waiver");
-  const off = row ? planGateFromValue(row.suffix, value) === "OFF" : value === "OFF";
+  const off = row ? checkPlanApproval(sid, step).verdict === "approved" : value === "OFF";
   let action = off ? "proceed" : "ask";
   let hint = HINTS[action];
 
@@ -111,4 +115,4 @@ function runGate(rawSession, opts) {
   return print(action, gateLine, hint, reasons.join(", "));
 }
 
-module.exports = { runGate };
+module.exports = { runGate, detectScopeChange };

@@ -9,17 +9,17 @@
 // degrades with its own honest reason instead.
 
 const fs = require("fs");
-const path = require("path");
-const { readState } = require("../../../hooks/workflow-state/state-io");
-const { getWorkflowPlansDir } = require("../../../hooks/lib/workflow-plans-dir");
-const { adoptState } = require("../../../hooks/workflow-state/inheritance/adopt");
-const {
-  VERDICTS,
-  compareRepoIdentity,
-  compareRepoContentEquivalence,
-} = require("../../../hooks/lib/repo-identity");
+const { readState, readRawState, SESSION_ID_VALID_RE } = require("../../../hooks/workflow-state/state-io");
+const { getPlansArtifactPath } = require("../../../hooks/lib/plans-artifact-registry");
+const { adoptState, checkOverwriteAllowed, heirContextOf: adoptHeirContextOf } =require("../../../hooks/workflow-state/inheritance/adopt");
+const { judgeInheritanceGranularity } = require("../../../hooks/workflow-state/inheritance/granularity");
+// Per call, so a swapped owner cache entry is honored.
+const repoIdentity = () => require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
-const { readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
+const { findHandoffPath, readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
+const { progressPathFor, isRegularFile } = require("../../../hooks/lib/progress-file");
+
+const PROGRESS_FIRST_SECTION = "Current state";
 
 const AVAILABILITY = Object.freeze({
   STATE_AND_ARTIFACTS: "state-and-artifacts",
@@ -29,22 +29,34 @@ const AVAILABILITY = Object.freeze({
 });
 
 const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail", "handoff"]);
-const GRANULARITY_FULL = "full";
 const GRANULARITY_DEGRADED = "context-independent-only";
 
-function artifactsFor(sid) {
-  const dir = getWorkflowPlansDir();
-  const out = {};
-  for (const kind of ARTIFACT_KINDS) {
-    const p = path.join(dir, `${sid}-${kind}.md`);
-    let ok = false;
-    try {
-      ok = fs.existsSync(p);
-    } catch (e) {
-      ok = false;
-    }
-    out[kind] = ok ? p : null;
+function isValidSid(sid) {
+  return typeof sid === "string" && SESSION_ID_VALID_RE.test(sid);
+}
+
+function existingPlansArtifact(sid, kind) {
+  try {
+    const p = getPlansArtifactPath(sid, kind);
+    return fs.existsSync(p) ? p : null;
+  } catch (e) {
+    return null;
   }
+}
+
+// Each kind has exactly one resolver: plan artifacts live in the plans dir, the
+// handoff where its writer puts it (the control dir, #2576).
+const ARTIFACT_RESOLVERS = Object.freeze({
+  intent: (sid) => existingPlansArtifact(sid, "intent"),
+  outline: (sid) => existingPlansArtifact(sid, "outline"),
+  detail: (sid) => existingPlansArtifact(sid, "detail"),
+  handoff: (sid) => findHandoffPath(sid),
+});
+
+function artifactsFor(sid) {
+  const valid = isValidSid(sid);
+  const out = {};
+  for (const kind of ARTIFACT_KINDS) out[kind] = valid ? ARTIFACT_RESOLVERS[kind](sid) : null;
   return out;
 }
 
@@ -66,18 +78,10 @@ function classify(state, artifacts) {
   return AVAILABILITY.NONE;
 }
 
-// A sibling worktree of the SAME repo whose content is provably identical is
-// the one cross-worktree case where the worktree-dependent steps still hold;
-// everything else degrades rather than claiming evidence it cannot see.
+// Cwd-pair form of judgeInheritanceGranularity (#2297): only the same checkout
+// keeps full; a sibling worktree degrades even with identical content.
 function decideGranularity(upstreamCwd, heirCwd) {
-  const verdict = compareRepoIdentity(upstreamCwd, heirCwd);
-  if (verdict === VERDICTS.SAME) {
-    return { granularity: GRANULARITY_FULL, verifiedEquivalent: false, repo_verdict: verdict };
-  }
-  if (verdict === VERDICTS.SIBLING && compareRepoContentEquivalence(upstreamCwd, heirCwd)) {
-    return { granularity: GRANULARITY_FULL, verifiedEquivalent: true, repo_verdict: verdict };
-  }
-  return { granularity: GRANULARITY_DEGRADED, verifiedEquivalent: false, repo_verdict: verdict };
+  return judgeInheritanceGranularity(heirCwd, { cwd: upstreamCwd }, repoIdentity());
 }
 
 // The ONE resolver for "which cwd/branch is the heir working in?" (#2279 C3).
@@ -97,33 +101,42 @@ function heirContextOf(input) {
       state = null;
     }
   }
-  const cwd = cwdOf(state);
-  if (cwd === null) return null;
-  const start = (state && state.session_start_context) || null;
-  const branch = state && state.git_branch !== undefined && state.git_branch !== null
-    ? state.git_branch
-    : (start && start.git_branch) ?? null;
-  return { cwd, git_branch: branch };
+  // adopt.js owns the state-derived context (it discounts copied worktree events), so
+  // the listing judges the heir exactly as `--from` does.
+  return state ? adoptHeirContextOf(state) : null;
 }
 
 // createAdoptabilityPreviewer({heirState|heirSid|ctx}) → { heir_cwd, preview(record) }
 //
-// `--list` says adoptable yes/no while `--from` answers at decideGranularity's
-// finer grain; the previewer runs THAT function so a listing cannot promise more
-// than the adoption would hand over (#2279 CPR-E2E). Granularity is memoized per
-// donor cwd because a listing evaluates many candidates against one heir.
+// The previewer runs the SAME two judgements adoptState runs — checkOverwriteAllowed
+// and judgeInheritanceGranularity — so a listing cannot promise more than `--from`
+// would hand over (#2279 CPR-E2E, #2297). Granularity is memoized per upstream sid
+// because a listing evaluates many candidates against one heir.
 function createAdoptabilityPreviewer(input) {
-  const heirCtx = heirContextOf(input);
+  const opts = input || {};
+  const heirCtx = heirContextOf(opts);
   const heirCwd = heirCtx && heirCtx.cwd;
-  const granularityByCwd = new Map();
+  let heirRecord = opts.heirState || null;
+  if (!heirRecord && opts.heirSid) {
+    try {
+      heirRecord = readRawState(opts.heirSid);
+    } catch (e) {
+      heirRecord = null;
+    }
+  }
+  const granularityBySid = new Map();
 
-  function granularityFor(donorCwd) {
-    const key = typeof donorCwd === "string" && donorCwd.length ? donorCwd : null;
-    if (granularityByCwd.has(key)) return granularityByCwd.get(key);
-    const decided = heirCwd
-      ? decideGranularity(donorCwd, heirCwd).granularity
-      : GRANULARITY_DEGRADED;
-    granularityByCwd.set(key, decided);
+  function granularityFor(record) {
+    const key = record.sid || null;
+    if (key !== null && granularityBySid.has(key)) return granularityBySid.get(key);
+    let upstream = null;
+    try {
+      upstream = key ? readState(key) : null;
+    } catch (e) {
+      upstream = null;
+    }
+    const decided = judgeInheritanceGranularity(heirCwd, upstream || { cwd: record.cwd || null }, repoIdentity()).granularity;
+    if (key !== null) granularityBySid.set(key, decided);
     return decided;
   }
 
@@ -132,20 +145,24 @@ function createAdoptabilityPreviewer(input) {
     // A record that may not be adopted has no granularity to state — null is the
     // honest answer, never a guess the caller would have to interpret.
     preview(record) {
-      const adoptable = !!record && record.adoptable === true;
-      // A donor accepted only through the degradation path never travels at full
-      // granularity, regardless of repo identity — mirrors adopt.js's
-      // effectiveGranularity, which forces this the same way (CPR-ORTH).
+      let adoptable = !!record && record.adoptable === true;
+      let reason = (record && record.adoptable_reason) || null;
+      // No heir record to judge (a ctx-only listing) leaves overwrite protection to `--from`.
+      if (adoptable && heirRecord) {
+        const ow = checkOverwriteAllowed(heirRecord, record.sid);
+        if (!ow.ok) {
+          adoptable = false;
+          reason = ow.error;
+        }
+      }
+      // Evidence accepted only through the degradation path never travels at full
+      // granularity — mirrors adoptState, which forces this the same way (CPR-ORTH).
       const granularity = !adoptable
         ? null
-        : (record && record.resumability_degraded_reason)
+        : record.resumability_degraded_reason
           ? GRANULARITY_DEGRADED
-          : granularityFor(record && record.cwd);
-      return {
-        adoptable,
-        adoptable_reason: (record && record.adoptable_reason) || null,
-        adoptable_granularity: granularity,
-      };
+          : granularityFor(record);
+      return { adoptable, adoptable_reason: reason, adoptable_granularity: granularity };
     },
   };
 }
@@ -159,19 +176,13 @@ function attemptInherit(heirSid, upstreamSid, upstreamState, heirState) {
   if (!heirSid || !heirState) {
     return { attempted: false, reason: "no-heir-state" };
   }
-  const plan = decideGranularity(cwdOf(upstreamState), cwdOf(heirState));
-  const r = adoptState({
-    heirSid,
-    donorSid: upstreamSid,
-    granularity: plan.granularity,
-    verifiedEquivalent: plan.verifiedEquivalent,
-  });
+  const r = adoptState({ heirSid, donorSid: upstreamSid });
+  const plan = r.ok === true ? null : decideGranularity(cwdOf(upstreamState), (adoptHeirContextOf(heirState) || {}).cwd);
   return {
     attempted: true,
     ok: r.ok === true,
     error: r.ok === true ? null : r.error,
-    repo_verdict: plan.repo_verdict,
-    verified_equivalent: plan.verifiedEquivalent,
+    repo_verdict: r.ok === true ? r.repo_verdict : plan.repo_verdict,
     granularity: r.ok === true ? r.granularity : plan.granularity,
     degraded_reason: r.ok === true ? r.degraded_reason || null : null,
     inheritance: r.ok === true ? r.inheritance || null : null,
@@ -191,11 +202,34 @@ function renderedHandoffFor(upstreamSid, artifacts) {
   return typeof rendered === "string" && rendered.length ? rendered : null;
 }
 
+// session-progress.md of the upstream's first generation (#2594): the path and the section a resumed
+// session reads first. Absent file → no field, so a caller never points at nothing.
+function progressFileFor(upstreamSid) {
+  try {
+    const p = progressPathFor(upstreamSid);
+    if (!p || !isRegularFile(p)) return {};
+    return { progress_file: { path: p, section: PROGRESS_FIRST_SECTION } };
+  } catch (e) {
+    return {};
+  }
+}
+
 // buildUpstreamView({ heirSid, upstreamSid }) → view | { availability: "none" }
 function buildUpstreamView(input) {
   const opts = input || {};
   const upstreamSid = opts.upstreamSid;
   const heirSid = opts.heirSid || null;
+  // A malformed id must not reach any path join (#2302, CWE-22): no store is looked up.
+  if (!isValidSid(upstreamSid)) {
+    return {
+      type: "upstream",
+      upstream_session_id: upstreamSid,
+      availability: AVAILABILITY.NONE,
+      reason: "unknown-session",
+      handoff_rendered: null,
+      transcript_tail: captureTranscriptTail({ upstreamSid }),
+    };
+  }
   let upstreamState = null;
   try {
     upstreamState = readState(upstreamSid);
@@ -213,6 +247,7 @@ function buildUpstreamView(input) {
       availability,
       reason: "unknown-session",
       handoff_rendered: null,
+      ...progressFileFor(upstreamSid),
       transcript_tail: captureTranscriptTail({ upstreamSid, cwd: cwdOf(upstreamState) }),
     };
   }
@@ -238,6 +273,7 @@ function buildUpstreamView(input) {
     artifacts,
     inherit_result: inherit,
     handoff_rendered: renderedHandoffFor(upstreamSid, artifacts),
+    ...progressFileFor(upstreamSid),
     transcript_tail: captureTranscriptTail({ upstreamSid, cwd: cwdOf(upstreamState) }),
   };
 }

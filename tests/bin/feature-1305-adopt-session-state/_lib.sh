@@ -52,6 +52,16 @@ write_state_v2() {
     ' "$WORKFLOW_DIR_NODE" "$1" "$2" "$3" "$4" "$NOW_ISO"
 }
 
+# approve_donor <sid> <step...> — appends valid confirm-sentinel plan_approval events (and
+# the plan artifacts they hash) so the #2633 copy keeps those gated completions.
+approve_donor() {
+    local sid="$1"; shift
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" run_with_timeout node \
+        "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" inject "$WORKFLOW_DIR_NODE/$sid.json" "$@")"
+    [ "$out" = "ok" ] || fail "approve_donor $sid: $out"
+}
+
 # announce_donor <donor-sid> <resolved-cwd>
 # The breadcrumb listRecentContextCandidates follows. The announce string is a
 # byte-for-byte SSOT contract — do not reword it.
@@ -134,19 +144,20 @@ event_signature() {
       catch (e) { console.log("NO_STATE"); process.exit(0); }
       const evs = Array.isArray(raw.events) ? raw.events : [];
       console.log(evs.map((e) => [e.kind, e.step || "", e.status || "", e.provenance || "",
-        e.origin || "", e.inherited_from ? "FROM_DONOR" : ""].join(":")).join("|"));
+        e.origin || ""].join(":")).join("|"));
     ' "$WORKFLOW_DIR_NODE" "$1"
 }
 
-# inherited_from_of <sid> — the donor id recorded on the backfilled events
-inherited_from_of() {
+# upstream_link_of <sid> — #2304/#2297: the copied state names its upstream at
+# the top level; per-event inherited_from stamping is gone (":STAMPED" if any remains).
+upstream_link_of() {
     run_with_timeout node -e '
       const fs = require("fs"), path = require("path");
       let raw;
       try { raw = JSON.parse(fs.readFileSync(path.join(process.argv[1], process.argv[2] + ".json"), "utf8")); }
       catch (e) { console.log("NO_STATE"); process.exit(0); }
-      const ids = new Set((raw.events || []).map((e) => e.inherited_from).filter(Boolean));
-      console.log(ids.size ? [...ids].join(",") : "NONE");
+      const stamped = (raw.events || []).filter((e) => "inherited_from" in e).length;
+      console.log((raw.upstream_session_id || "NONE") + (stamped ? ":STAMPED" : ""));
     ' "$WORKFLOW_DIR_NODE" "$1"
 }
 

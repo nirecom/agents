@@ -115,25 +115,26 @@ console.log([
         "$NODE_OUT"
 fi
 
-echo "== R6: gated steps before from_step get a synthetic plan_approval =="
-if run_case "R6/gated-approval-synthesised"; then
+echo "== R6: gated steps before from_step keep their own approval — the reset synthesises none =="
+if run_case "R6/no-synthetic-approval"; then
     next_sid
+    # #2709: a reset no longer writes a reset-sentinel plan_approval; the prior gated steps
+    # must already carry a verified approval (SEED_JS records real ones), which still verifies.
     nodejs "$SID" "$SEED_JS$RESET_JS"'
 const CA2 = require("./hooks/workflow-state/completion-approval");
 const st = S.readState(sid);
 const i = S.VALID_STEPS.indexOf("detail");
 const gatedBefore = CA2.APPROVAL_GATED_STEPS.filter((s) => S.VALID_STEPS.indexOf(s) < i);
-const resetApprovals = rd().events.filter((e) => e.kind === "plan_approval" && e.origin === "reset-sentinel");
-const missing = gatedBefore.filter((s) => !resetApprovals.some((e) => e.step === s));
-const one = resetApprovals[0] || {};
-console.log("gated_before=" + gatedBefore.join(",") +
-            " missing=" + (missing.join(",") || "0") +
-            " hash_status=" + one.artifact_hash_status +
-            " provenance=" + one.provenance);
+const synthetic = rd().events.filter((e) => e.kind === "plan_approval" &&
+  (e.origin === "reset-sentinel" || e.source === "reset-sentinel")).length;
+const unapproved = gatedBefore.filter((s) => !CA2.evaluateCompletionApproval(sid, s, st).approved);
+console.log("gated_before=" + gatedBefore.join(",") + " synthetic=" + synthetic +
+            " unapproved=" + (unapproved.join(",") || "0") +
+            " resets=" + rd().events.filter((e) => e.kind === "reset").length);
 '
     # #2277: clarify_intent joined the approval-gated class (plan-stage-table.js).
-    assert_eq "R6/gated-approval-synthesised" \
-        "gated_before=clarify_intent,outline missing=0 hash_status=not-applicable provenance=declared" "$NODE_OUT"
+    assert_eq "R6/no-synthetic-approval" \
+        "gated_before=clarify_intent,outline synthetic=0 unapproved=0 resets=1" "$NODE_OUT"
 fi
 
 echo "== R7: history from before the reset is still readable (the point of #1733) =="

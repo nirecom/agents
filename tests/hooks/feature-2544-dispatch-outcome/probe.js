@@ -176,7 +176,7 @@ const MODES = {
     const approval = require(path.join(ROOT, "hooks/workflow-state/completion-approval.js"));
     for (const s of PRE_RUN_TESTS) {
       if (approval.isApprovalGatedStep(s)) {
-        approval.recordPlanApproval(a[0], s, { source: "reset-sentinel", reason: "2544 fixture" });
+        require(path.join(ROOT, "tests/lib/plan-approval-fixture.js")).approveLive(a[0], s);
       }
       wf().markStep(a[0], s, "complete");
     }
