@@ -3,7 +3,7 @@
 # code it tests (#2502 S4). The test language is the registry entry its name matches; a target's
 # code language is the entry whose codeLanguage takes it (test-route-destination/language.sh), so
 # no language name is written here. A target no entry takes (docs, json) is not judged.
-# Used by bin/check-test-language-match.sh, the one place the verdict and the exception check run.
+# Used by bin/check-test-language-match.sh; the merge 3-way is test-language-match/multi-baseline.sh.
 #   tlm_lang_exception <file> <match-path>  the Tags: test-lang-exception declaration
 #   tlm_added_cases <head-copy> <work-file> <match-path>  each work case: added or paired
 #   tlm_judge <file> <match-path> <head-copy-or-empty>  TEST_LANGUAGE_MISMATCH / CASE_ADDED_WITHOUT_MARKERS
@@ -16,6 +16,7 @@ declare -F _trl_token_index >/dev/null 2>&1 || . "$_tlm_dir/test-route-destinati
 declare -F crr_read >/dev/null 2>&1 || . "$_tlm_dir/case-record-reader.sh" || return 1
 declare -F extract_headers_file >/dev/null 2>&1 || . "$_tlm_dir/test-frontmatter-headers.sh" || return 1
 declare -F _tlm_case_addition >/dev/null 2>&1 || . "$_tlm_dir/test-language-match/case-addition.sh" || return 1
+declare -F tlm_judge_multi >/dev/null 2>&1 || . "$_tlm_dir/test-language-match/multi-baseline.sh" || return 1
 
 # Category list kept per tool, like test-dup-group.sh (consolidation: #2473); sourcing
 # test-route-destination.sh for it costs about a second per hook run.
@@ -30,6 +31,8 @@ TLM_C_NAME=(); TLM_C_TARGET=(); TLM_C_LINE=()
 TLM_P_KIND=(); TLM_P_HEAD_TARGET=()
 _TLM_SEEN=""
 _TLM_HITS=0
+_TLM_KEYS=(); _TLM_LINES=()
+_TLM_CA_REACHED=0
 
 # _tlm_trim <var-name> — trims leading/trailing whitespace (and a CR) in place.
 _tlm_trim() {
@@ -177,9 +180,12 @@ tlm_added_cases() {
 # _tlm_report <name> <test-language-id> <line-or-empty> <target> — one HIGH line per target and
 # file (the caller keeps _TLM_SEEN).
 _tlm_report() {
+  # Every occurrence is kept before the dedup: the merge 3-way (multi-baseline.sh) counts them.
+  if [[ -n "$3" ]]; then _TLM_KEYS+=("case:$4"); else _TLM_KEYS+=("hdr:$4"); fi
+  _TLM_LINES+=("HIGH: $1${3:+ line $3}: test language $2 does not match code language $TLM_CODE_LANG of $4 (new file shape: $TLM_CODE_SHAPE) code=TEST_LANGUAGE_MISMATCH")
   case "$_TLM_SEEN" in *$'\n'"$4"$'\n'*) return 0 ;; esac
   _TLM_SEEN="$_TLM_SEEN$4"$'\n'
-  echo "HIGH: $1${3:+ line $3}: test language $2 does not match code language $TLM_CODE_LANG of $4 (new file shape: $TLM_CODE_SHAPE) code=TEST_LANGUAGE_MISMATCH"
+  echo "${_TLM_LINES[${#_TLM_LINES[@]}-1]}"
   _TLM_HITS=1
 }
 
@@ -246,7 +252,7 @@ _tlm_migration() {
 # a supported entry (nothing judged).
 tlm_judge() {
   local file="$1" match="$2" head="${3:-}" test_id i n_tok entry=0
-  _TLM_SEEN=$'\n'; _TLM_HITS=0
+  _TLM_SEEN=$'\n'; _TLM_HITS=0; _TLM_KEYS=(); _TLM_LINES=(); _TLM_CA_REACHED=0
   _trl_init || return 2
   if ! tlr_match "$match" || [[ "$TLR_STATUS" != supported ]]; then return 3; fi
   test_id="$TLR_ID"

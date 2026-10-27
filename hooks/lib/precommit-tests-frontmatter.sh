@@ -1,12 +1,10 @@
 #!/bin/bash
 # Sourced by hooks/pre-commit. Staged tests/ entrypoint gates (frontmatter / case markers).
-# Frontmatter (#1834, #2392): validates staged test entrypoints and rejects newly-added flat
-# ones; the CAUSE-SPECIFIC message is keyed on check-test-frontmatter.sh stderr codes
-# (FLAT_TEST*_REJECTED = location, MISSING_*/INVALID_* = shape); both may fire in one run.
+# Frontmatter (#1834, #2392): validates staged test entrypoints and rejects newly-added flat ones; the
+# message is keyed on check-test-frontmatter.sh codes (FLAT_TEST*_REJECTED = location, MISSING_*/INVALID_* = shape).
 # Case markers (#2388) and language match (#2502): docs/architecture/claude-code/case-marker-gate.md.
 
-# _precommit_tlr_ready — loads $_cfg_dir's test language registry (once per _cfg_dir);
-# rc 1 when it is unreadable. Called only once a staged tests/ path is known.
+# _precommit_tlr_ready — loads $_cfg_dir's registry once per _cfg_dir, after a staged tests/ path; rc 1 if unreadable.
 _precommit_tlr_ready() {
     if [ "${_PRECOMMIT_TLR_CFG-}" != "$_cfg_dir" ]; then
         # shellcheck source=bin/lib/test-language-registry.sh
@@ -19,6 +17,15 @@ _precommit_tlr_ready() {
 # _precommit_tlr_unreadable <gate> — the single stderr line of an unreadable registry.
 _precommit_tlr_unreadable() {
     echo "pre-commit: test language registry not readable — $1 skipped (commit continues)" >&2
+}
+
+# _precommit_merge_parents_file — staged tests/ parent records in _PRECOMMIT_MP_FILE, one CLI call per commit
+# (#2812; hooks/pre-commit sets no EXIT trap); rc 1 when the library is unreadable (callers fall back to HEAD).
+_precommit_merge_parents_file() {
+    # shellcheck source=bin/lib/merge-parents.sh
+    declare -F mp_staged_once >/dev/null || . "$_cfg_dir/bin/lib/merge-parents.sh" 2>/dev/null || return 1
+    mp_staged_once "$_cfg_dir/bin"
+    _PRECOMMIT_MP_FILE="$MP_STAGED_FILE"
 }
 
 # _precommit_is_suite_subfile <rel> — under a tests/<category>/<dir>/ (a split test's sub-file).
@@ -71,8 +78,7 @@ _precommit_is_readerless_case_marker_target() {
     return 0
 }
 
-# _precommit_check_tests_frontmatter — reads $_cfg_dir (ambient, as load-env.sh does).
-# rc 0 = ok / nothing staged; rc 1 = block the commit.
+# _precommit_check_tests_frontmatter — reads $_cfg_dir (ambient). rc 0 = ok / nothing staged; rc 1 = block.
 _precommit_check_tests_frontmatter() {
     local -a _staged_tests=()
     local f _out _rc=0 _id _labels=""
@@ -98,12 +104,11 @@ _precommit_check_tests_frontmatter() {
     done < <(git diff --cached --name-only -z -- 'tests/' 2>/dev/null || true)
 
     [ "${#_staged_tests[@]}" -eq 0 ] && return 0
+    _precommit_merge_parents_file
 
-    # Capture stderr so the cause can be classified; the checker prints only
-    # diagnostics (no stdout), so 2>&1 collects the per-file CODE: lines.
-    # _cfg_dir is the ambient contract var set by the sourcing hooks/pre-commit.
-    # shellcheck disable=SC2154
-    _out="$("$_cfg_dir/bin/check-test-frontmatter.sh" --staged "${_staged_tests[@]}" 2>&1)" || _rc=$?
+    # The checker prints only diagnostics (no stdout), so 2>&1 collects the per-file CODE: lines.
+    # shellcheck disable=SC2154 # _cfg_dir: the ambient contract var set by hooks/pre-commit
+    _out="$("$_cfg_dir/bin/check-test-frontmatter.sh" --staged ${_PRECOMMIT_MP_FILE:+--merge-parents "$_PRECOMMIT_MP_FILE"} "${_staged_tests[@]}" 2>&1)" || _rc=$?
     if [ "$_rc" -eq 0 ]; then
         # WARN lines (an unchecked self-impl, #2502) never block but must not pass silently.
         printf '%s\n' "$_out" | grep -E '^WARN: .* code=' >&2 || true
@@ -129,17 +134,15 @@ _precommit_check_tests_frontmatter() {
         echo "Each file must have '# Tests: <path>' (comma-separated tokens) and '# Tags: ... scope:...'."
     fi
     if printf '%s\n' "$_out" | grep -qE '^HIGH: .* code=SELF_IMPLEMENTED_HARNESS'; then
-        echo "Commit blocked: test file(s) add a self-implemented harness HEAD does not have."
+        echo "Commit blocked: test file(s) add a self-implemented harness the parent commit(s) do not have."
         echo "Load the language's helper library (tests/lib/harness.*) and use its counters and helpers instead."
     fi
     return 1
 }
 
-# _precommit_check_tests_case_markers — judges the STAGED blob of every new (HEAD-absent,
-# renames included) case-marker entrypoint with bin/check-case-markers.sh, in repos carrying
-# its entry's helperLibrary, and every new reader-less one (its WARN only, #2502). Checker infra
-# errors fail open with a stderr diagnostic.
-# rc 0 = ok / not applicable; rc 1 = block the commit.
+# _precommit_check_tests_case_markers — bin/check-case-markers.sh on the STAGED blob of every new (no
+# parent has it, renames included) case-marker entrypoint in repos carrying its helperLibrary, and every
+# new reader-less one (WARN only, #2502). Infra errors fail open. rc 0 = ok / n.a.; rc 1 = block.
 _precommit_check_tests_case_markers() {
     local repo_top rel tmp="" n=0 tmpfile out rc line id hint lf=$'\n'
     local -a rels=() ids=() high=()
@@ -167,11 +170,12 @@ _precommit_check_tests_case_markers() {
             # A reader-less one gets the CLI's CASE_MARKER_READER_UNSUPPORTED WARN, helper library or not.
             _precommit_is_readerless_case_marker_target "$rel" || continue
         fi
-        git cat-file -e "HEAD:$rel" 2>/dev/null && continue
+        # Without the library, the pre-#2812 HEAD-only judgment still runs the gate.
+        if _precommit_merge_parents_file; then mp_in_parent "$rel" && continue
+        elif git cat-file -e "HEAD:$rel" 2>/dev/null; then continue; fi
         rels+=("$rel"); ids+=("$TLR_ID")
     done < <(git diff --cached --name-only -z --diff-filter=ACMR -- 'tests/' 2>/dev/null || true)
     [ "${#rels[@]}" -eq 0 ] && return 0
-
     if ! tmp="$(mktemp -d 2>/dev/null)" || [ -z "$tmp" ]; then
         echo "pre-commit: mktemp failed — case-marker check skipped (commit continues)" >&2
         return 0
@@ -226,53 +230,48 @@ _precommit_check_tests_case_markers() {
     return 1
 }
 
-# _precommit_check_test_language_match — judges the STAGED blob of every staged tests/ file
-# (new or existing, any language; tests/_archive/ and tests/lib/ excluded) with
-# bin/check-test-language-match.sh, handing it the HEAD blob of a file HEAD has (#2502 S4-7).
+# _precommit_check_test_language_match — bin/check-test-language-match.sh on the STAGED blob of every
+# staged tests/ file but tests/_archive/ and tests/lib/, with its parent baseline(s) (#2502 S4-7, #2812).
 # Checker infra errors fail open with a stderr diagnostic. rc 0 = ok; rc 1 = block the commit.
 _precommit_check_test_language_match() {
-    local rel tmp="" n=0 tmpfile headcopy out rc line
-    local -a rels=() high=() args=()
+    local rel tmp="" n=0 tmpfile copy out rc line mp_ok=""
+    local -a rels=() high=()
 
     if ! git diff --cached --name-only -- 'tests/' >/dev/null 2>&1; then
         echo "pre-commit: cannot list staged tests — language-match check skipped (commit continues)" >&2
         return 0
     fi
     while IFS= read -r -d '' rel; do
-        case "$rel" in
-            ''|tests/_archive/*|tests/lib/*) continue ;;
-        esac
+        case "$rel" in ''|tests/_archive/*|tests/lib/*) continue ;; esac
         rels+=("$rel")
     done < <(git diff --cached --name-only -z --diff-filter=ACMR -- 'tests/' 2>/dev/null || true)
     [ "${#rels[@]}" -eq 0 ] && return 0
-
+    _precommit_merge_parents_file && mp_ok=1
     if ! tmp="$(mktemp -d 2>/dev/null)" || [ -z "$tmp" ]; then
         echo "pre-commit: mktemp failed — language-match check skipped (commit continues)" >&2
         return 0
     fi
-
     for rel in "${rels[@]}"; do
         n=$((n + 1))
-        mkdir -p "$tmp/$n/head"
+        mkdir -p "$tmp/$n"
         tmpfile="$tmp/$n/${rel##*/}"
-        headcopy="$tmp/$n/head/${rel##*/}"
         if ! git show ":$rel" > "$tmpfile" 2>/dev/null; then
             echo "pre-commit: cannot read staged blob for $rel — language-match check skipped for it" >&2
             continue
         fi
-        args=(--rel "$rel")
-        if git cat-file -e "HEAD:$rel" 2>/dev/null; then
-            if ! git show "HEAD:$rel" > "$headcopy" 2>/dev/null; then
-                # Judged as new, it could block a mismatch HEAD already had.
-                echo "pre-commit: cannot read HEAD blob for $rel — language-match check skipped for it" >&2
-                continue
-            fi
-            args+=(--head "$headcopy")
+        if [ -z "$mp_ok" ]; then
+            # Without the library, the pre-#2812 HEAD-only baseline (as the case-marker gate does).
+            MP_ARGS=(); MP_COPIES=("$tmp/$n/head/${rel##*/}"); mkdir -p "$tmp/$n/head"
+            git show "HEAD:$rel" > "${MP_COPIES[0]}" 2>/dev/null && MP_ARGS=(--head "${MP_COPIES[0]}")
+        elif ! mp_baseline_args "$rel" "$tmp/$n"; then
+            # Judged as new, it could block a mismatch a parent already had.
+            echo "pre-commit: cannot read a parent blob for $rel — language-match check skipped for it" >&2
+            continue
         fi
         rc=0
         # shellcheck disable=SC2154 # _cfg_dir: the ambient contract var set by hooks/pre-commit
-        out="$(bash "$_cfg_dir/bin/check-test-language-match.sh" "${args[@]}" "$tmpfile" 2>&1)" || rc=$?
-        out="${out//"$headcopy"/$rel}"
+        out="$(bash "$_cfg_dir/bin/check-test-language-match.sh" --rel "$rel" ${MP_ARGS[@]+"${MP_ARGS[@]}"} "$tmpfile" 2>&1)" || rc=$?
+        for copy in ${MP_COPIES[@]+"${MP_COPIES[@]}"}; do out="${out//"$copy"/$rel}"; done
         out="${out//"$tmpfile"/$rel}"
         if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -qE '^HIGH: .* code='; then
             while IFS= read -r line; do
