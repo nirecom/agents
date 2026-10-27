@@ -67,6 +67,127 @@ function New-CmdStub {
     $path
 }
 
+# New-InstallerStubSet — one PATH-first stub directory for the installer .ps1 tests (#2808):
+#   <Cli> (claude|codex)  appends "<cli> <args>" to Log, exits CliExit
+#   npm                   appends "npm <args>" to Log; `prefix` echoes PrefixOut (own exit code);
+#                         `install` exits NpmExit
+#   fnm                   appends to Log, prints FnmOutput, exits FnmExit
+#   wait helper (ps1)     takes -ProcessName (default claude), appends it to WaitLog, exits
+#                         ClaudeWaitExit / CodexWaitExit; hand it over via WAIT_CC_EXIT_SCRIPT_OVERRIDE
+# The stub directory doubles as the npm global prefix, so `Get-Command codex` resolves under it.
+function New-InstallerStubSet {
+    param(
+        [Parameter(Mandatory)][string]$Base,
+        [Parameter(Mandatory)][string]$Cli,
+        [int]$CliExit = 0,
+        [int]$ClaudeWaitExit = 0,
+        [int]$CodexWaitExit = 0,
+        [string]$PrefixOut,
+        [int]$PrefixExit = 0,
+        [int]$NpmExit = 0,
+        [int]$FnmExit = 0,
+        [string]$FnmOutput = '# noop',
+        [switch]$PrefixEmpty,
+        [switch]$NoNpm,
+        [switch]$NpmStderr
+    )
+    New-Item -ItemType Directory -Path $Base -Force | Out-Null
+    $stub = Join-Path $Base 'bin'
+    $log  = Join-Path $Base 'call-log.txt'
+    $wlog = Join-Path $Base 'wait-log.txt'
+    $wait = Join-Path $Base 'wait-stub.ps1'
+    New-Item -ItemType Directory -Path $stub -Force | Out-Null
+    if (-not $PrefixOut) { $PrefixOut = $stub }
+
+    [System.IO.File]::WriteAllText($wait, (@(
+        'param([string]$ProcessName = ''claude'')'
+        "Add-Content -LiteralPath '$($wlog -replace "'", "''")' -Value `$ProcessName"
+        "if (`$ProcessName -eq 'codex') { exit $CodexWaitExit }"
+        "exit $ClaudeWaitExit"
+    ) -join "`n") + "`n")
+
+    if ($IsWindows) {
+        New-CmdStub -Directory $stub -Name $Cli -Line @('@echo off', "echo $Cli %* >> `"$log`"", "exit /b $CliExit") | Out-Null
+        New-CmdStub -Directory $stub -Name 'fnm' -Line @('@echo off', "echo fnm %* >> `"$log`"", "echo $FnmOutput", "exit /b $FnmExit") | Out-Null
+        if (-not $NoNpm) {
+            $prefixLine = if ($PrefixEmpty) { 'echo.' } else { "echo $PrefixOut" }
+            $lines = @(
+                '@echo off'
+                "echo npm %* >> `"$log`""
+                'if "%1"=="prefix" goto prefix'
+                'if "%1"=="install" goto install'
+                'exit /b 0'
+                ':prefix'
+                $prefixLine
+                "exit /b $PrefixExit"
+                ':install'
+            )
+            if ($NpmStderr) { $lines += 'echo npm ERR boom 1>&2' }
+            $lines += "exit /b $NpmExit"
+            New-CmdStub -Directory $stub -Name 'npm' -Line $lines | Out-Null
+        }
+    } else {
+        New-ShStub -Directory $stub -Name $Cli -Line @("echo `"$Cli `$@`" >> '$log'", "exit $CliExit") | Out-Null
+        New-ShStub -Directory $stub -Name 'fnm' -Line @("echo `"fnm `$@`" >> '$log'", "echo '$FnmOutput'", "exit $FnmExit") | Out-Null
+        if (-not $NoNpm) {
+            $prefixCmd = if ($PrefixEmpty) { 'echo' } else { "echo '$PrefixOut'" }
+            $lines = @(
+                "echo `"npm `$@`" >> '$log'"
+                'case "$1" in'
+                "  prefix) $prefixCmd; exit $PrefixExit ;;"
+                '  install)'
+            )
+            if ($NpmStderr) { $lines += '    echo "npm ERR boom" >&2' }
+            $lines += "    exit $NpmExit ;;"
+            $lines += 'esac'
+            $lines += 'exit 0'
+            New-ShStub -Directory $stub -Name 'npm' -Line $lines | Out-Null
+        }
+    }
+    [pscustomobject]@{
+        Stub = $stub; Prefix = $stub; Log = $log; WaitLog = $wlog; Wait = $wait
+    }
+}
+
+# Invoke-StubbedInstaller — run an installer .ps1 in a child pwsh with the stub set first on PATH.
+# -RestrictPath keeps only the stub dir, pwsh's dir and the OS system dir on PATH (no real npm/fnm).
+# AGENTS_ROOT and the memo stay unset so the WAIT_CC_EXIT_SCRIPT_OVERRIDE seam alone redirects the helper.
+function Invoke-StubbedInstaller {
+    param(
+        [Parameter(Mandatory)][string]$Installer,
+        [Parameter(Mandatory)]$Set,
+        [hashtable]$Environment = @{},
+        [switch]$RestrictPath,
+        [int]$TimeoutSec = 90,
+        [string]$WorkingDirectory
+    )
+    $sep = [IO.Path]::PathSeparator
+    $path = if ($RestrictPath) {
+        $dirs = @($Set.Stub, (Split-Path -Parent $script:PwshExe))
+        if ($IsWindows) { $dirs += (Join-Path $env:SystemRoot 'System32') } else { $dirs += @('/usr/bin', '/bin') }
+        $dirs -join $sep
+    } else { $Set.Stub + $sep + $env:PATH }
+    $envMap = @{
+        PATH                         = $path
+        AGENTS_ROOT                  = $null
+        WAIT_CC_EXIT_SCRIPT_OVERRIDE = $Set.Wait
+        WAIT_CC_RESULT               = $null
+    }
+    foreach ($k in $Environment.Keys) { $envMap[$k] = $Environment[$k] }
+    $childArgs = @{ File = $Installer; TimeoutSec = $TimeoutSec; Environment = $envMap }
+    if ($WorkingDirectory) { $childArgs['WorkingDirectory'] = $WorkingDirectory }
+    $r = Invoke-PwshChild @childArgs
+    # Outer @() keeps an empty log an empty array: an `if` statement that emits @() yields $null.
+    $calls = @(if (Test-Path -LiteralPath $Set.Log)     { Get-Content -LiteralPath $Set.Log })
+    $waits = @(if (Test-Path -LiteralPath $Set.WaitLog) { Get-Content -LiteralPath $Set.WaitLog })
+    [pscustomobject]@{
+        ExitCode = $r.ExitCode; Output = $r.Output; Calls = $calls; Waits = $waits
+        NpmInstalled = [bool]($calls | Where-Object { $_ -match '^npm install -g @openai/codex' })
+        CodexUpdated = [bool]($calls | Where-Object { $_ -match '^codex update' })
+        Updated = [bool]($calls | Where-Object { $_ -match '^(claude|codex) update' })
+    }
+}
+
 # New-ShStub <dir> <name> <body-lines> — extensionless bash stub for non-Windows pwsh.
 function New-ShStub {
     param(

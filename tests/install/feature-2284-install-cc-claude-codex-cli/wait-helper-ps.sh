@@ -7,6 +7,7 @@
 if [ ! -f "$WAIT_PS" ]; then
     fail "A9: install/lib/wait-cc-exit.ps1 does not exist"
     fail "A10: install/lib/wait-cc-exit.ps1 does not exist"
+    fail "A11: install/lib/wait-cc-exit.ps1 does not exist"
 else
     # A9: default values
     if grep -iE 'WAIT_CC_POLL_INTERVAL' "$WAIT_PS" | grep -qE '[-=,][[:space:]]*3[^0-9]' \
@@ -18,10 +19,23 @@ else
 
     # A10: must use "claude" as the exact process name and (#2476) filter each
     # process through Test-CCWaitTarget (Desktop app shell exclusion).
-    if grep -iE 'Get-Process[[:space:]]+-Name' "$WAIT_PS" | grep -qi '"claude"' \
+    # #2808: the name is now the -ProcessName parameter (default 'claude'); the claude
+    # stage keeps the Test-CCWaitTarget filter.
+    if grep -iE 'Get-Process[[:space:]]+-Name' "$WAIT_PS" | grep -qiE '"claude"|\$ProcessName|\$_?[a-z]*[Nn]ame' \
+    && grep -qE "ValidateSet\('claude'[[:space:]]*,[[:space:]]*'codex'\)" "$WAIT_PS" \
+    && grep -qE "ProcessName[[:space:]]*=[[:space:]]*'claude'" "$WAIT_PS" \
     && grep -q 'Test-CCWaitTarget' "$WAIT_PS"; then
-        pass "A10: wait-cc-exit.ps1 uses Get-Process -Name \"claude\" filtered by Test-CCWaitTarget"
+        pass "A10: wait-cc-exit.ps1 takes -ProcessName (ValidateSet claude|codex, default claude) and keeps the Test-CCWaitTarget filter"
     else
-        fail "A10: wait-cc-exit.ps1 lacks Get-Process -Name \"claude\" or the Test-CCWaitTarget filter"
+        fail "A10: wait-cc-exit.ps1 lacks the -ProcessName ValidateSet('claude','codex') param (default 'claude') or the Test-CCWaitTarget filter"
+    fi
+
+    # A11: separate codex seam, distinct from the claude seam; claude-only memo; display names.
+    if grep -q 'WAIT_CODEX_PROCESS_OVERRIDE' "$WAIT_PS" \
+    && grep -q 'WAIT_CC_PROCESS_OVERRIDE' "$WAIT_PS" \
+    && grep -q 'Codex' "$WAIT_PS" && grep -q 'Claude Code' "$WAIT_PS"; then
+        pass "A11: wait-cc-exit.ps1 has a separate WAIT_CODEX_PROCESS_OVERRIDE seam and Codex/Claude Code display names"
+    else
+        fail "A11: wait-cc-exit.ps1 lacks WAIT_CODEX_PROCESS_OVERRIDE or the Codex / Claude Code display names"
     fi
 fi
