@@ -883,3 +883,7 @@ Changes: The glossary drift check no longer flags regular plurals, title case on
 ### FEATURE: PR #2810 (2026-10-26)
 Background: fix(#2748): resolve plans and progress by first_session_id, migrate orphan progress files, and validate the resume-session reader sid
 Changes: Resumed sessions (`/resume-session --from`) keep writing the first generation's progress file and plans instead of starting their own; a temporary `bin/migrate-orphan-progress-files` merges files left by earlier resumes.
+
+### FEATURE: PR #2816 (2026-10-27)
+Background: fix(#2804): keep live presentation receipts through zombie cleanup and diagnose no-receipt denials
+Changes: Plan confirmation: approving a plan right after the Stop hook's continue prompt no longer gets denied with `no-receipt` because another session's startup deleted the presentation receipt.
