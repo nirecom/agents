@@ -8,6 +8,8 @@
 "use strict";
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const assert = require("node:assert");
+const { test } = require("node:test");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -27,11 +29,10 @@ process.on("exit", () => {
 const X = require("./feature-2650-confirm-continuation/fixture");
 const { A, T, BASH, show } = X;
 
-let failed = 0;
+// check(name, ok, detail) — one node:test test over a verdict computed now.
 function check(name, ok, detail) {
-  if (ok) { process.stdout.write(`PASS: ${name}\n`); return; }
-  failed += 1;
-  process.stdout.write(`FAIL: ${name} — ${typeof detail === "string" ? detail : show(detail)}\n`);
+  const why = typeof detail === "string" ? detail : show(detail);
+  test(name, () => { if (!ok) assert.fail(why); });
 }
 
 const CC = X.tryRequire("hooks/lib/confirm-continuation.js");
@@ -122,5 +123,77 @@ caseBegin("presented-stages-keeps-text-only-anchor", "hooks/lib/confirm-continua
 }
 caseEnd();
 
-process.stdout.write(`\n${failed === 0 ? "OK" : `${failed} failed`}\n`);
-process.exitCode = failed === 0 ? 0 : 1;
+// #2804 Step 4: presentAgainReason reads as one procedure — present via the plan-link line and close
+// the turn, then the echo alone when Stop returns "[confirm-plan] continue:", else after the user's reply.
+const CONTINUE_CORE = (S) => `[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the approval dialog follows.`;
+// againOf(stage, cause) -> the reason from "[confirm-plan] present" on (a CONV_LANG prefix is cut off), or {threw}.
+function againOf(stage, cause) {
+  if (CC.__missing || typeof CC.presentAgainReason !== "function") return { threw: "presentAgainReason is not available" };
+  try {
+    const r = String(CC.presentAgainReason(stage, cause));
+    const i = r.indexOf("[confirm-plan] present");
+    return i < 0 ? { threw: "no [confirm-plan] present head: " + r } : r.slice(i);
+  } catch (e) { return { threw: e.message }; }
+}
+
+caseBegin("present-again-one-procedure", "hooks/lib/confirm-continuation.js");
+{
+  for (const stage of ["intent", "outline", "detail"]) {
+    for (const cause of ["no-receipt", "not-last", "unpublished"]) {
+      const t = againOf(stage, cause);
+      const ok = typeof t === "string";
+      // The command reads `node "$AGENTS_MAIN_ROOT/bin/plan-link" --stage <stage>`: plan-link, then --stage.
+      const iStage = ok ? t.indexOf(`--stage ${stage}`) : -1;
+      const iLink = iStage >= 0 && t.slice(0, iStage).includes("plan-link") ? iStage : -1;
+      const iCont = ok && iLink >= 0 ? t.indexOf("[confirm-plan] continue:", iLink) : -1;
+      const iReply = ok && iCont >= 0 ? t.indexOf("reply", iCont) : -1;
+      check(`presentAgainReason(${stage}, ${cause}): plan-link --stage, then the continue: echo, then the user's reply, in that order`,
+        iLink >= 0 && iCont > iLink && iReply > iCont, { iLink, iCont, iReply, t });
+      check(`presentAgainReason(${stage}, ${cause}): the old "echo only after the reply" ending is gone`,
+        ok && !t.includes("echo the CONFIRM only after the user's reply"), t);
+    }
+  }
+}
+caseEnd();
+
+// branchesOf(t) -> {cont, other}: the text from "[confirm-plan] continue:" up to the first ";", and after it.
+function branchesOf(t) {
+  const i = typeof t === "string" ? t.indexOf("[confirm-plan] continue:") : -1;
+  if (i < 0) return null;
+  const rest = t.slice(i);
+  const j = rest.indexOf(";");
+  return j < 0 ? null : { cont: rest.slice(0, j), other: rest.slice(j + 1) };
+}
+// The continue branch emits only the echo and waits for nothing; the other branch echoes after the reply.
+const contBranchOk = (b) => !!b && /emit only the CONFIRM echo/.test(b.cont) && !/reply|wait/i.test(b.cont);
+const otherBranchOk = (b) => !!b && /without that prompt/.test(b.other) && /echo the CONFIRM after the user's reply/.test(b.other);
+
+caseBegin("present-again-branch-wording", "hooks/lib/confirm-continuation.js");
+{
+  for (const stage of ["intent", "outline", "detail"]) {
+    for (const cause of ["no-receipt", "not-last", "unpublished"]) {
+      const b = branchesOf(againOf(stage, cause));
+      check(`presentAgainReason(${stage}, ${cause}): the continue: branch emits only the echo, with no wait for a reply`, contBranchOk(b), b);
+      check(`presentAgainReason(${stage}, ${cause}): the other branch echoes after the user's reply`, otherBranchOk(b), b);
+    }
+  }
+  // Mutation probe: a contradictory wording with the same keyword order must be rejected.
+  const flipped = "[confirm-plan] present the outline plan again (no-receipt): x. Run plan-link --stage outline, " +
+    "close the turn. When the turn end then returns \"[confirm-plan] continue:\", wait for the user's reply before you emit only the CONFIRM echo; " +
+    "without that prompt, emit only the CONFIRM echo at once.";
+  const fb = branchesOf(flipped);
+  check("probe: a continue: branch that waits for the reply is rejected", fb !== null && !contBranchOk(fb), fb);
+  check("probe: an other branch that echoes at once is rejected", fb !== null && !otherBranchOk(fb), fb);
+  check("probe: a text without the continue: marker yields no branches", branchesOf("present again; echo after the reply") === null, "branches found");
+}
+caseEnd();
+
+caseBegin("continue-reason-unchanged", "hooks/lib/confirm-continuation.js");
+{
+  for (const stage of ["intent", "outline", "detail"]) {
+    let r;
+    try { r = String(CC.continueReason(stage)); } catch (e) { r = "threw: " + e.message; }
+    check(`continueReason(${stage}): still carries the exact continue core`, r.includes(CONTINUE_CORE(stage.toUpperCase())), r);
+  }
+}
+caseEnd();

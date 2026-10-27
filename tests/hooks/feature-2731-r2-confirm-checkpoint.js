@@ -46,12 +46,13 @@ function seed(s, stage) {
   const p = CE.withConfirmEnv(CFG, () => RS.seedReceipt(s.sid, stage), { PLAN_SYNC_REMOTE_URL: "" });
   assert.ok(p, `fixture: a receipt was seeded for ${stage}`);
 }
-function runHook(s, stage, lang) {
+// runHook(s, stage, lang, nodeArgs) -> the hook's parsed output; nodeArgs go before the hook path (e.g. ["-r", preload]).
+function runHook(s, stage, lang, nodeArgs = []) {
   const input = { session_id: s.sid, transcript_path: path.join(TDIR, "absent.jsonl"), hook_event_name: "PreToolUse", cwd: TDIR,
     tool_name: "Bash", tool_input: { command: `echo "<<WORKFLOW_CONFIRM_${stage.toUpperCase()}: approve the ${stage} plan>>"` } };
   const env = Object.assign(CE.childEnvWith(CFG), { PLAN_SYNC_REMOTE_URL: "", CLAUDE_TRANSCRIPT_BASE_DIR: TBASE, CONV_LANG: lang });
   delete env.CLAUDE_CODE_SESSION_ID;
-  const r = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), cwd: TMP, env, encoding: "utf8", timeout: 60000 });
+  const r = spawnSync(process.execPath, nodeArgs.concat([HOOK]), { input: JSON.stringify(input), cwd: TMP, env, encoding: "utf8", timeout: 60000 });
   assert.strictEqual(r.status, 0, `hook exit ${r.status}: ${r.stderr}`);
   const json = r.stdout ? JSON.parse(r.stdout) : {};
   const hso = json.hookSpecificOutput || {};
@@ -152,4 +153,45 @@ for (const stage of STAGES) {
     });
   }
 }
+caseEnd();
+
+// #2804: when the shared wording cannot load, emitDeny still denies with its inline fallback reason.
+// The preload (written inside TMP) makes every require of hooks/lib/confirm-continuation.js throw.
+const NO_CC = path.join(TMP, "no-confirm-continuation.js");
+fs.writeFileSync(NO_CC, [
+  "\"use strict\";",
+  "const Module = require(\"module\");",
+  "const orig = Module._load;",
+  "Module._load = function (request, parent, isMain) {",
+  "  let f = \"\";",
+  "  try { f = Module._resolveFilename(request, parent, isMain); } catch (_) { return orig.apply(this, arguments); }",
+  "  if (/[\\\\/]hooks[\\\\/]lib[\\\\/]confirm-continuation\\.js$/.test(f)) throw new Error(\"injected: confirm-continuation unavailable\");",
+  "  return orig.apply(this, arguments);",
+  "};",
+  "",
+].join("\n"));
+
+caseBegin("deny-fallback-without-shared-wording", "hooks/confirm-checkpoint.js");
+for (const stage of STAGES) {
+  test(`deny fallback (${stage}, english, no receipt): the inline reason names the cause, plan-link and the continue prompt`, () => {
+    const s = newSession(stage);
+    const r = runHook(s, stage, "english", ["-r", NO_CC]);
+    assert.ok(r.deny, `fixture: no receipt -> deny: ${JSON.stringify(r.json)}`);
+    const reason = r.json.reason || "";
+    assert.ok(reason.startsWith(`[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (no-receipt): present the plan again`), `fallback head:\n${reason}`);
+    assert.ok(reason.includes(`(plan-link --stage ${stage})`), `plan-link command:\n${reason}`);
+    assert.ok(reason.includes("on a \"[confirm-plan] continue:\" prompt emit only the echo"), `continue prompt:\n${reason}`);
+    assert.ok(!reason.includes(`present the ${stage} plan again (no-receipt)`), `the shared wording was not used:\n${reason}`);
+    assert.strictEqual(r.json.hookSpecificOutput.permissionDecisionReason, reason, "permissionDecisionReason equals the block reason");
+    assert.strictEqual(C.countDirective(reason), 0, `english fallback carries no directive:\n${reason}`);
+    assert.strictEqual(r.msg, "", "a deny shows no dialog systemMessage");
+  });
+}
+test("deny fallback (outline, japanese, no receipt): the inline reason is prefixed once", () => {
+  const s = newSession("outline");
+  const r = runHook(s, "outline", "japanese", ["-r", NO_CC]);
+  assert.ok(r.deny, `fixture: deny: ${JSON.stringify(r.json)}`);
+  assert.ok(r.json.reason.includes("CONFIRM_OUTLINE denied (no-receipt)"), `fallback body:\n${r.json.reason}`);
+  assert.ok(C.prefixedOnce(r.json.reason, "japanese"), `reason prefixed once:\n${r.json.reason}`);
+});
 caseEnd();

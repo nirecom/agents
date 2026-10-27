@@ -84,13 +84,34 @@ function judge(sid, stage, absPath, plansDir) {
   return m.ok ? { pass: true, link } : { pass: false, cause: m.cause };
 }
 
+// receiptDiagnostic(sid, stage) -> the no-receipt detail suffix (#2804): the expected receipt, whether it
+// exists, and the presentation-receipt log's last write and any consume after it; "" when it cannot be built.
+function receiptDiagnostic(sid, stage) {
+  try {
+    const p = PR.receiptPath(sid, stage);
+    const head = ` [receipt ${p} exists=${fs.existsSync(p)}`;
+    const lines = PR.readReceiptLog(sid).filter((l) => l && l.stage === stage);
+    let wi = -1;
+    lines.forEach((l, i) => { if (l.event === "write") wi = i; });
+    if (wi < 0) return `${head}; no write record]`;
+    const at = lines[wi].at;
+    const ms = Date.now() - Date.parse(at);
+    const elapsed = Number.isNaN(ms) ? "elapsed unknown" : `elapsed ${ms}ms`;
+    const consumed = lines.slice(wi + 1).some((l) => l.event === "consume");
+    return `${head}; last write at ${at} (${elapsed}); ${consumed ? "a consume record follows it" : "no consume record follows it"}]`;
+  } catch (_) {
+    return "";
+  }
+}
+
 function recordDenyFinding(sid, stage, cause) {
   if (!sid) return;
   try {
+    const diag = cause === "no-receipt" ? receiptDiagnostic(sid, stage) : "";
     require("./lib/supervisor-state-writer").appendFinding(sid, {
       categories: ["workflow"],
       severity: "notice",
-      detail: `confirm-checkpoint: CONFIRM_${stage.toUpperCase()} denied (${cause}) — the plan must be presented again`,
+      detail: `confirm-checkpoint: CONFIRM_${stage.toUpperCase()} denied (${cause}) — the plan must be presented again${diag}`,
       reporter: "confirm-checkpoint",
     });
   } catch (_) { /* the finding is advisory */ }
@@ -101,7 +122,8 @@ function emitDeny(stage, cause) {
   try {
     reason = require("./lib/confirm-continuation").presentAgainReason(stage, cause);
   } catch (_) {
-    reason = `[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (${cause}): present the plan again (plan-link --stage ${stage}), then echo the sentinel.`;
+    reason = `[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (${cause}): present the plan again (plan-link --stage ${stage}) and close the turn; ` +
+      `on a "[confirm-plan] continue:" prompt emit only the echo, otherwise echo after the user's reply.`;
     try { reason = CL.withConvLang(reason); } catch (_) { /* the bare reason still denies */ }
   }
   process.stdout.write(JSON.stringify({

@@ -4,7 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { normalizeStateVersion } = require("./core");
+const { normalizeStateVersion, SESSION_ID_VALID_RE } = require("./core");
 const { listStateRoots } = require("./state-root");
 const { RECEIPT_DIR_SUFFIX } = require("../../lib/instructions-loaded-receipt");
 const { WORKER_LOGS_DIRNAME } = require("./control-dir");
@@ -147,6 +147,18 @@ function cleanupRoot(workflowDir, maxAgeDays) {
     }
 
     if (!file.endsWith(".json")) continue;
+
+    const stem = file.slice(0, -".json".length);
+    if (!SESSION_ID_VALID_RE.test(stem)) {
+      // A non-state JSON is never read: kept while its owner's state exists, else reclaimed by mtime.
+      const dot = stem.indexOf(".");
+      const owner = dot > 0 ? stem.slice(0, dot) : "";
+      if (owner && SESSION_ID_VALID_RE.test(owner) && fs.existsSync(path.join(workflowDir, `${owner}.json`))) continue;
+      try {
+        if (fs.statSync(filePath).mtimeMs < Date.now() - CONTROL_RETENTION_DAYS * 24 * 60 * 60 * 1000) fs.unlinkSync(filePath);
+      } catch (e) {}
+      continue;
+    }
 
     try {
       const raw = fs.readFileSync(filePath, "utf8");
