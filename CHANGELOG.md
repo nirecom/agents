@@ -887,3 +887,7 @@ Changes: Resumed sessions (`/resume-session --from`) keep writing the first gene
 ### FEATURE: PR #2816 (2026-10-27)
 Background: fix(#2804): keep live presentation receipts through zombie cleanup and diagnose no-receipt denials
 Changes: Plan confirmation: approving a plan right after the Stop hook's continue prompt no longer gets denied with `no-receipt` because another session's startup deleted the presentation receipt.
+
+### FEATURE: PR #2817 (2026-10-27)
+Background: fix(#2812): resolve merge-parent baselines for the tests gates
+Changes: Merge commits no longer fail the tests pre-commit gates for test files that already exist on the merged-in branch; files changed during the merge are still judged, against both parents.
