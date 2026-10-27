@@ -4,8 +4,9 @@
 # non-empty, each comma-separated token matching FRONTMATTER_TOKEN_VALID_RE) and
 # the `# Tags:` scope tag (scope:issue-specific or scope:common).
 # Usage:
-#   bin/check-test-frontmatter.sh --staged <file1> [<file2>...]
+#   bin/check-test-frontmatter.sh --staged [--merge-parents <file>] <file1> [<file2>...]
 #   bin/check-test-frontmatter.sh --all [<root>]
+#   --merge-parents: the bin/merge-parents record file; without it, one CLI call is made here.
 # Exit:  0 = all OK, 1 = validation failure on one or more files, 2 = usage error
 #        or the registry is unreadable
 
@@ -145,7 +146,7 @@ check_harness_source() {
 
 if [[ $# -eq 0 ]]; then
   echo "Usage:" >&2
-  echo "  $(basename "$0") --staged <file1> [<file2>...]" >&2
+  echo "  $(basename "$0") --staged [--merge-parents <file>] <file1> [<file2>...]" >&2
   echo "  $(basename "$0") --all [<root>]" >&2
   exit 2
 fi
@@ -155,6 +156,11 @@ mode="$1"; shift
 case "$mode" in
   --staged)
     FAIL=0
+    mp_file=""
+    if [[ "${1:-}" == --merge-parents ]]; then
+      [[ "$#" -ge 2 && -n "$2" ]] || { echo "ERROR: --merge-parents needs a file" >&2; exit 2; }
+      mp_file="$2"; shift 2
+    fi
     # The self-impl sibling is staged-mode only, so --all never needs it on disk.
     # shellcheck source=check-test-frontmatter/self-impl.sh
     source "$SCRIPT_DIR/check-test-frontmatter/self-impl.sh" || { echo "ERROR: check-test-frontmatter/self-impl.sh not readable" >&2; exit 2; }
@@ -177,15 +183,15 @@ case "$mode" in
       st_files+=("$f")
       st_rels+=("$rel")
     done
-    # One git process reads every HEAD blob; ctf_head_has answers as git cat-file -e HEAD:<rel>.
-    ctf_head_load ${st_rels[@]+"${st_rels[@]}"}
+    # A test any parent commit has (HEAD, or MERGE_HEAD during a merge, #2812) is not a new one.
+    ctf_parents_load "$mp_file" ${st_rels[@]+"${st_rels[@]}"}
     for ((st_i = 0; st_i < ${#st_files[@]}; st_i++)); do
       f="${st_files[st_i]}"
       rel="${st_rels[st_i]}"
       # 2-level enforcement (#1834, #2392): a NEWLY-ADDED flat test is rejected with its
       # entry's flatRejectCode and nameLabel. Existing flat files are grandfathered
       # (swept by #2372); run-all.sh is the infra runner (exempted by _is_flat_test).
-      if _is_flat_test "$rel" && ! ctf_head_has "$rel"; then
+      if _is_flat_test "$rel" && ! ctf_in_parent "$rel"; then
         _tlr_get "$TLR_ID" diagnostics.flatRejectCode || true
         code="$_TLR_V"
         _tlr_get "$TLR_ID" diagnostics.nameLabel || true
@@ -200,12 +206,12 @@ case "$mode" in
       # it, once the repo ships that library (gradual adoption). Edits are exempt.
       if _is_test_entrypoint "$rel" \
          && [[ -n "$repo_root_hs" && -f "$repo_root_hs/$HL_PATH" ]]; then
-        if ! ctf_head_has "$rel"; then
+        if ! ctf_in_parent "$rel"; then
           check_harness_source "$f" "$content" "$HL_RE" || FAIL=1
         fi
       fi
       # Self-implemented harness check (#2502): every language; an existing file blocks only on
-      # a detection its HEAD version lacks. Queued here, judged in one run after the loop.
+      # a detection its parent versions lack. Queued here, judged in one run after the loop.
       ctf_self_impl_add "$rel" "$content"
     done
     ctf_self_impl_run || FAIL=1
@@ -242,7 +248,7 @@ case "$mode" in
   *)
     echo "Unknown mode: $mode" >&2
     echo "Usage:" >&2
-    echo "  $(basename "$0") --staged <file1> [<file2>...]" >&2
+    echo "  $(basename "$0") --staged [--merge-parents <file>] <file1> [<file2>...]" >&2
     echo "  $(basename "$0") --all [<root>]" >&2
     exit 2
     ;;

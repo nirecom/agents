@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Report a test written in another language than the code it tests (#2502 S4), after validating
 # the test-lang-exception declaration that lets one through (bin/lib/test-language-match.sh).
-# Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>...
-#   --rel: the original path of one temp copy (output name, registry entry); --head: a temp copy
-#   of the HEAD version, absent for a new file. Both take one file. Run from the repo root.
-# Exit 0: no HIGH (WARN lines allowed). 1: HIGH found. 2: usage, a missing file, the library or
-# the registry unavailable (infra error). Codes: docs/architecture/claude-code/case-marker-gate.md.
+# Usage: check-test-language-match.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]]
+#        | --declaration-only] <file>...
+#   --rel: the original path of one temp copy (output name, registry entry); --head: a temp copy of
+#   a parent version, absent for a new file; two heads (a merge, #2812) judge the 3-way against both
+#   and --base, the merge-base copy. --declaration-only: validate only the declaration (a file equal
+#   to a parent). Run from the repo root. Exit 0: no HIGH (WARN allowed). 1: HIGH found. 2: usage,
+#   a missing file, the library or registry unavailable. Codes: docs/architecture/claude-code/case-marker-gate.md.
 set -euo pipefail
 
 _ctlm_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
@@ -21,30 +23,42 @@ if ! tlr_load; then
 fi
 
 _ctlm_usage() {
-  echo "Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>..." >&2
+  echo "Usage: check-test-language-match.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]] | --declaration-only] <file>..." >&2
   [[ -z "${1:-}" ]] || echo "check-test-language-match.sh: $1" >&2
   exit 2
 }
 
 rel=""
 head=""
+head2=""
+base=""
+decl_only=0
 files=()
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --rel) [[ "$#" -ge 2 && -n "$2" ]] || _ctlm_usage "--rel needs a value"; rel="$2"; shift 2 ;;
-    --head) [[ "$#" -ge 2 && -n "$2" ]] || _ctlm_usage "--head needs a value"; head="$2"; shift 2 ;;
+    --head)
+      [[ "$#" -ge 2 && -n "$2" ]] || _ctlm_usage "--head needs a value"
+      if [[ -z "$head" ]]; then head="$2"; elif [[ -z "$head2" ]]; then head2="$2"; else _ctlm_usage "--head takes at most two copies"; fi
+      shift 2 ;;
+    --base) [[ "$#" -ge 2 && -n "$2" ]] || _ctlm_usage "--base needs a value"; base="$2"; shift 2 ;;
+    --declaration-only) decl_only=1; shift ;;
     --) shift; files+=("$@"); break ;;
     -*) _ctlm_usage "unknown option: $1" ;;
     *) files+=("$1"); shift ;;
   esac
 done
 [[ "${#files[@]}" -gt 0 ]] || _ctlm_usage
+if [[ "$decl_only" -eq 1 && ( -n "$head" || -n "$base" ) ]]; then _ctlm_usage "--declaration-only takes no --head or --base"; fi
+if [[ -n "$base" && -z "$head2" ]]; then _ctlm_usage "--base needs two --head copies"; fi
 if [[ -n "$rel" && "${#files[@]}" -ne 1 ]]; then _ctlm_usage "--rel takes exactly one file"; fi
 if [[ -n "$head" && "${#files[@]}" -ne 1 ]]; then _ctlm_usage "--head takes exactly one file"; fi
-if [[ -n "$head" && ! -f "$head" ]]; then
-  echo "check-test-language-match.sh: head copy not found: $head" >&2
-  exit 2
-fi
+for _ctlm_copy in "$head" "$head2" "$base"; do
+  if [[ -n "$_ctlm_copy" && ! -f "$_ctlm_copy" ]]; then
+    echo "check-test-language-match.sh: head copy not found: $_ctlm_copy" >&2
+    exit 2
+  fi
+done
 
 # Tests: tokens and case targets are repo-relative; extensionless ones are read for a shebang.
 TRD_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -56,7 +70,11 @@ trap 'rm -rf "$CASE_EMBED_CACHE_DIR"' EXIT
 _ctlm_abs() { printf '%s/%s\n' "$(cd "$(dirname "$1")" && pwd)" "${1##*/}"; }
 
 head_abs=""
+head2_abs=""
+base_abs=""
 [[ -z "$head" ]] || head_abs="$(_ctlm_abs "$head")"
+[[ -z "$head2" ]] || head2_abs="$(_ctlm_abs "$head2")"
+[[ -z "$base" ]] || base_abs="$(_ctlm_abs "$base")"
 violations=0
 infra=0
 for file in "${files[@]}"; do
@@ -75,6 +93,7 @@ for file in "${files[@]}"; do
     echo "HIGH: $name: invalid test-lang-exception value '$TLM_LANG_EXCEPTION_BAD' (allowed: ${TLR_LANG_EXCEPTIONS:-none}) code=INVALID_TEST_LANG_EXCEPTION"
     violations=1
   fi
+  [[ "$decl_only" -eq 0 ]] || continue
 
   # (b) A test language the registry does not support is reported, not passed silently.
   if ! tlr_match "$name"; then
@@ -89,7 +108,11 @@ for file in "${files[@]}"; do
   # (c) A valid declaration lets a mismatch through.
   [[ -z "$exception" ]] || continue
   rc=0
-  tlm_judge "$abs" "$name" "$head_abs" || rc=$?
+  if [[ -n "$head2" ]]; then
+    tlm_judge_multi "$abs" "$name" "$base_abs" "$head_abs" "$head2_abs" || rc=$?
+  else
+    tlm_judge "$abs" "$name" "$head_abs" || rc=$?
+  fi
   case "$rc" in
     0) ;;
     1) violations=1 ;;
