@@ -79,8 +79,9 @@ Fix marker placement — see $PIN_DOC."
 case_end
 
 # The self-implemented harness summary of the frontmatter gate (#2502): a new file and an existing
-# file whose staged copy adds a counter HEAD lacks both get the same two lines after the checker's.
-PIN_SI_HEAD="Commit blocked: test file(s) add a self-implemented harness HEAD does not have."
+# file whose staged copy adds a counter the parent commit(s) lack both get the same two lines after
+# the checker's (#2812 widened the baseline from HEAD to every parent).
+PIN_SI_HEAD="Commit blocked: test file(s) add a self-implemented harness the parent commit(s) do not have."
 PIN_SI_OLD="Commit blocked: new test file(s) build their own harness."
 PIN_SI_LOAD="Load the language's helper library (tests/lib/harness.*) and use its counters and helpers instead."
 PIN_SI_LINES=('#!/usr/bin/env bash' '# Tests: bin/a.sh' '# Tags: scope:common' 'source "$(dirname "$0")/../../tests/lib/harness.sh"' 'echo start')
