@@ -160,3 +160,157 @@ _reach_probe guarded-ps           "$MUT_DIR/good.ps1"           ps 1
 _reach_probe guarded-ps-multiline "$MUT_DIR/reach-ps-multi.ps1" ps 1
 _reach_probe uncond-after-sh      "$MUT_DIR/reach-uncond.sh"    sh 0
 _reach_probe uncond-after-ps      "$MUT_DIR/reach-uncond.ps1"   ps 0
+
+# ---------------------------------------------------------------------------
+# #2808: codex.ps1 structure detectors (wait order, prefix guard, try/catch).
+# ---------------------------------------------------------------------------
+cat > "$MUT_DIR/good-codex.ps1" << 'GOOD_CODEX_EOF'
+if (Get-Command codex -ErrorAction SilentlyContinue) {
+    foreach ($_proc in @('claude', 'codex')) {
+        & pwsh -NoProfile -File (Join-Path $SCRIPT_CHECKOUT_ROOT "install\lib\wait-cc-exit.ps1") -ProcessName $_proc
+        if ($LASTEXITCODE -ne 0) { Write-Warning "$_proc running; skipping update."; exit 0 }
+    }
+    try {
+        $prefix = (& npm prefix -g)
+        if (Test-CodexUnderNpmPrefix -NpmPrefix $prefix) {
+            npm install -g @openai/codex
+            $npmExit = $LASTEXITCODE
+            if ($npmExit -ne 0) {
+                Write-Warning "npm install failed"
+            }
+        } else {
+            Write-Warning "codex is not under the npm global prefix"
+        }
+    } catch {
+        Write-Warning "codex update skipped"
+    }
+    exit 0
+}
+Write-Host "Installing..."
+GOOD_CODEX_EOF
+
+# Only claude waited for (codex stage missing).
+sed "s|@('claude', 'codex')|@('claude')|" "$MUT_DIR/good-codex.ps1" > "$MUT_DIR/codex-wait-claude-only.ps1"
+# Order reversed: codex first.
+sed "s|@('claude', 'codex')|@('codex', 'claude')|" "$MUT_DIR/good-codex.ps1" > "$MUT_DIR/codex-wait-reversed.ps1"
+# Loop header only mentioned in a comment.
+sed "s|^    foreach (\$_proc in @('claude', 'codex')) {|    # @('claude', 'codex')\n    foreach (\$_proc in @('claude')) {|" "$MUT_DIR/good-codex.ps1" > "$MUT_DIR/codex-wait-commented.ps1"
+# Prefix guard removed: npm runs unconditionally.
+sed 's|if (Test-CodexUnderNpmPrefix -NpmPrefix \$prefix) {|if ($true) {|' "$MUT_DIR/good-codex.ps1" > "$MUT_DIR/codex-no-prefix-check.ps1"
+# Guard negated: the update would run when NOT under the prefix.
+sed 's|if (Test-CodexUnderNpmPrefix -NpmPrefix \$prefix) {|if (-not (Test-CodexUnderNpmPrefix -NpmPrefix $prefix)) {|' "$MUT_DIR/good-codex.ps1" > "$MUT_DIR/codex-prefix-negated.ps1"
+# Guard in a comment only.
+sed 's|if (Test-CodexUnderNpmPrefix -NpmPrefix \$prefix) {|if ($true) { # Test-CodexUnderNpmPrefix|' "$MUT_DIR/good-codex.ps1" > "$MUT_DIR/codex-prefix-commented.ps1"
+# Update placed in the else side of the guard.
+cat > "$MUT_DIR/codex-update-in-else.ps1" << 'CODEX_ELSE_EOF'
+if (Get-Command codex -ErrorAction SilentlyContinue) {
+    foreach ($_proc in @('claude', 'codex')) {
+        & pwsh -NoProfile -File (Join-Path $SCRIPT_CHECKOUT_ROOT "install\lib\wait-cc-exit.ps1") -ProcessName $_proc
+        if ($LASTEXITCODE -ne 0) { exit 0 }
+    }
+    try {
+        if (Test-CodexUnderNpmPrefix -NpmPrefix $prefix) {
+            Write-Host "ok"
+        } else {
+            npm install -g @openai/codex
+        }
+    } catch {
+        Write-Warning "skipped"
+    }
+    exit 0
+}
+CODEX_ELSE_EOF
+# try removed (update section no longer wrapped).
+cat > "$MUT_DIR/codex-no-try.ps1" << 'CODEX_NOTRY_EOF'
+if (Get-Command codex -ErrorAction SilentlyContinue) {
+    $prefix = (& npm prefix -g)
+    if (Test-CodexUnderNpmPrefix -NpmPrefix $prefix) {
+        npm install -g @openai/codex
+        $npmExit = $LASTEXITCODE
+        if ($npmExit -ne 0) {
+            Write-Warning "npm install failed"
+        }
+    }
+    exit 0
+}
+try { Write-Host "elsewhere" } catch { Write-Warning "x" }
+CODEX_NOTRY_EOF
+# try exists but the update sits after its closing brace and catch.
+cat > "$MUT_DIR/codex-try-elsewhere.ps1" << 'CODEX_TRYELSE_EOF'
+if (Get-Command codex -ErrorAction SilentlyContinue) {
+    try {
+        $prefix = (& npm prefix -g)
+    } catch {
+        Write-Warning "prefix failed"
+    }
+    if (Test-CodexUnderNpmPrefix -NpmPrefix $prefix) {
+        npm install -g @openai/codex
+        $npmExit = $LASTEXITCODE
+        if ($npmExit -ne 0) {
+            Write-Warning "npm install failed"
+        }
+    }
+    exit 0
+}
+CODEX_TRYELSE_EOF
+# try without an immediate catch (finally only).
+sed 's|^    } catch {$|    } finally {|' "$MUT_DIR/good-codex.ps1" > "$MUT_DIR/codex-try-no-catch.ps1"
+
+# _cprobe <name> <detector> <file> <want>
+_cprobe() {
+    local name="$1" fn="$2" file="$3" want="$4" got=0
+    "$fn" "$file" && got=1
+    if [ "$got" = "$want" ]; then
+        pass "MUT-codex-$name: $fn returns $got as required"
+    else
+        fail "MUT-codex-$name: $fn returned $got, expected $want"
+    fi
+}
+_cprobe good-wait            wait_covers_claude_then_codex "$MUT_DIR/good-codex.ps1"             1
+_cprobe wait-claude-only     wait_covers_claude_then_codex "$MUT_DIR/codex-wait-claude-only.ps1" 0
+_cprobe wait-reversed        wait_covers_claude_then_codex "$MUT_DIR/codex-wait-reversed.ps1"    0
+_cprobe wait-commented       wait_covers_claude_then_codex "$MUT_DIR/codex-wait-commented.ps1"   0
+_cprobe good-prefix          update_requires_prefix_check  "$MUT_DIR/good-codex.ps1"             1
+_cprobe no-prefix-check      update_requires_prefix_check  "$MUT_DIR/codex-no-prefix-check.ps1"  0
+_cprobe prefix-negated       update_requires_prefix_check  "$MUT_DIR/codex-prefix-negated.ps1"   0
+_cprobe prefix-commented     update_requires_prefix_check  "$MUT_DIR/codex-prefix-commented.ps1" 0
+_cprobe update-in-else       update_requires_prefix_check  "$MUT_DIR/codex-update-in-else.ps1"   0
+_cprobe good-try             update_section_is_try_wrapped "$MUT_DIR/good-codex.ps1"             1
+_cprobe no-try               update_section_is_try_wrapped "$MUT_DIR/codex-no-try.ps1"          0
+_cprobe try-elsewhere        update_section_is_try_wrapped "$MUT_DIR/codex-try-elsewhere.ps1"    0
+_cprobe try-no-catch         update_section_is_try_wrapped "$MUT_DIR/codex-try-no-catch.ps1"     0
+
+# Table-driven update_line contract: name | cli | input | want.
+# input "@file:<name>" reads $MUT_DIR/<name>; any other input is written as a single line.
+# want is the expected line number, or "none" when no update must be detected.
+while IFS='|' read -r _ul_name _ul_cli _ul_input _ul_want; do
+    [[ -z "$_ul_name" || "$_ul_name" =~ ^[[:space:]]*# ]] && continue
+    _ul_name="${_ul_name//[[:space:]]/}"
+    _ul_cli="${_ul_cli//[[:space:]]/}"
+    _ul_want="${_ul_want//[[:space:]]/}"
+    _ul_ref="${_ul_input//[[:space:]]/}"
+    if [[ "$_ul_ref" == @file:* ]]; then
+        _ul_file="$MUT_DIR/${_ul_ref#@file:}"
+    else
+        _ul_file="$MUT_DIR/ul-row.ps1"
+        printf '%s\n' "$_ul_input" > "$_ul_file"
+    fi
+    _ul_got="$(update_line "$_ul_file" "$_ul_cli")"
+    [ -n "$_ul_got" ] || _ul_got="none"
+    if [ "$_ul_got" = "$_ul_want" ]; then
+        pass "MUT-codex-update-line-$_ul_name: got=$_ul_got"
+    else
+        fail "MUT-codex-update-line-$_ul_name: got=$_ul_got, expected $_ul_want"
+    fi
+done <<'UL_TABLE'
+npm-form-file      | codex  | @file:good-codex.ps1                                   | 9
+claude-in-codex    | claude | @file:good-codex.ps1                                   | none
+exec-indented      | codex  |     npm install -g @openai/codex                       | 1
+exec-then-comment  | codex  | npm install -g @openai/codex # refresh                 | 1
+in-double-quotes   | codex  | Write-Host "npm install -g @openai/codex"              | none
+quoted-with-semi   | codex  | Write-Host "x; npm install -g @openai/codex"           | none
+trailing-comment   | codex  | foo # npm install -g @openai/codex                     | none
+whole-comment      | codex  | # npm install -g @openai/codex                         | none
+similar-codex-foo  | codex  | npm install -g @openai/codex-foo                       | none
+similar-codexx     | codex  | npm install -g @openai/codexx                          | none
+UL_TABLE

@@ -59,6 +59,8 @@ case_end
 
 case_begin "codex-ps-update-guarded" "install/win/codex.ps1"
 check_update_group "D4" "$CODEX_PS" "codex" "ps"
+# #2808: codex.ps1 updates via npm; serial two-stage wait, identity guard, try/catch.
+check_codex_ps_update_group "D4" "$CODEX_PS"
 case_end
 
 # --- CPR-ORTH: guard is symmetric across both platforms ---
