@@ -36,7 +36,7 @@ Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different val
   - Presentation: end the final body text with "The approval dialog follows this message; if it does not appear, reply once you have reviewed the plan." and then the CPA-2 plan-link line as the last line, then close the turn.
   - CONFIRM echo (main path): when the turn end is blocked with a `[confirm-plan] continue:` prompt, emit only `echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>"` as your next message.
   - CONFIRM echo (fallback): when no prompt came, let the turn close and wait for the user's reply; on a change request, revise and loop back to CPA-1, otherwise emit only that echo in the next turn.
-  - Denied echo: present the plan again as the deny reason says, close the turn, and echo only after the user's reply.
+  - Denied echo: present the plan again as the deny reason says and close the turn; when the turn end then returns a `[confirm-plan] continue:` prompt, emit only the echo as your next message, otherwise echo after the user's reply.
   - Next response: **Allow** → run the caller's completion, then co-emit the caller's next tool_use (Skill or Bash) in the same turn; **Deny** → the turn stops, so wait for the user's revision instructions.
   - `confirm-checkpoint.js` (PreToolUse) surfaces the dialog; `stop-confirm-plan-guard.js` (Stop, Layer 2) blocks the turn when no stage-valid follow-up comes after the Allowed echo's result in that same turn.
 - `present-and-stop` (detail only): follow `GATE_HINT` — present, then end the turn without the completion sentinel or `--advance`.
