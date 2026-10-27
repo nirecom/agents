@@ -176,7 +176,7 @@ EOF
 run_B20() {
     local settings guard problems=""
     settings="$SCRIPT_CHECKOUT_ROOT/settings.json"
-    guard="$SCRIPT_CHECKOUT_ROOT/hooks/stop-confirm-plan-guard.js"
+    guard="$SCRIPT_CHECKOUT_ROOT/hooks/stop-confirm-plan-guard/block-reasons.js"
     if [ ! -f "$settings" ]; then
         fail "B20: settings.json not found at $settings"
         return
@@ -186,10 +186,10 @@ run_B20() {
     grep -q 'postuse-step-in-flight-mark' "$settings" ||
         problems="$problems [settings.json does not register postuse-step-in-flight-mark.js]"
     if [ ! -f "$guard" ]; then
-        problems="$problems [stop-confirm-plan-guard.js not found]"
+        problems="$problems [stop-confirm-plan-guard/block-reasons.js not found]"
     else
         grep -q 'input\.skill' "$guard" ||
-            problems="$problems [stop-confirm-plan-guard.js no longer reads 'input.skill' — the field name the new exclusion keys on has drifted]"
+            problems="$problems [stop-confirm-plan-guard/block-reasons.js no longer reads 'input.skill' — the field name the new exclusion keys on has drifted]"
     fi
     if [ -z "$problems" ]; then
         pass "B20: settings.json still routes Skill to the auto-mark hook, and 'input.skill' is the same field the in-tree Skill-payload reader uses"

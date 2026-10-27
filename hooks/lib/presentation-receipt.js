@@ -76,28 +76,63 @@ function validLink(link, absPath) {
   return false;
 }
 
-// writeReceipt(sid, stage, {absPath, link, contentSha, anchorUuid}) -> true when written.
+// writeBody(file, body, verify) -> true when renamed into place; verify() runs just before the rename.
+function writeBody(file, body, verify) {
+  const tmp = `${file}.${crypto.randomBytes(4).toString("hex")}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(body), "utf8");
+    if (verify && !verify()) {
+      fs.unlinkSync(tmp);
+      return false;
+    }
+    fs.renameSync(tmp, file);
+    return true;
+  } catch (_) {
+    try { fs.unlinkSync(tmp); } catch (_e) { /* tmp never written */ }
+    return false;
+  }
+}
+
+const isContinued = (receipt) => !!receipt && typeof receipt.continuedAt === "string" && receipt.continuedAt !== "";
+
+// writeReceipt(sid, stage, {absPath, link, contentSha, anchorUuid, carryMark}) -> true when written.
+// carryMark keeps the existing continuedAt only while the receipt's path, link and content are unchanged.
 function writeReceipt(sid, stage, fields) {
   const f = fields || {};
   if (!validSid(sid) || !STAGES.includes(stage)) return false;
   if (typeof f.absPath !== "string" || !f.absPath || typeof f.contentSha !== "string" || !f.contentSha) return false;
   if (!validLink(f.link, f.absPath)) return false;
-  const file = receiptPath(sid, stage);
-  const tmp = `${file}.${crypto.randomBytes(4).toString("hex")}.tmp`;
   const body = {
     absPath: f.absPath, link: { kind: f.link.kind, value: f.link.value }, contentSha: f.contentSha,
     anchorUuid: typeof f.anchorUuid === "string" ? f.anchorUuid : "", writtenAt: new Date().toISOString(),
   };
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify(body), "utf8");
-    fs.renameSync(tmp, file);
-  } catch (_) {
-    try { fs.unlinkSync(tmp); } catch (_e) { /* tmp never written */ }
-    return false;
+  if (f.carryMark === true) {
+    const prev = readReceipt(sid, stage);
+    if (prev.ok && isContinued(prev.receipt) && matchReceipt(prev.receipt, body).ok) body.continuedAt = prev.receipt.continuedAt;
   }
+  if (!writeBody(receiptPath(sid, stage), body)) return false;
   appendReceiptLog(sid, "write", stage);
   return true;
+}
+
+const sameReceipt = (a, b) => matchReceipt(a, b).ok && a.anchorUuid === b.anchorUuid;
+
+// markContinued(sid, stage) -> true when the receipt now carries continuedAt; false when it is absent,
+// unreadable, consumed or replaced before the rename, or the write fails. Never throws.
+function markContinued(sid, stage) {
+  try {
+    const before = readReceipt(sid, stage);
+    if (!before.ok) return false;
+    const body = Object.assign({}, before.receipt, { continuedAt: new Date().toISOString() });
+    const verify = () => {
+      const now = readReceipt(sid, stage);
+      return now.ok && sameReceipt(now.receipt, before.receipt);
+    };
+    return writeBody(receiptPath(sid, stage), body, verify);
+  } catch (_) {
+    return false;
+  }
 }
 
 function wellFormed(r) {
@@ -148,4 +183,5 @@ function matchReceipt(receipt, current) {
 module.exports = {
   STAGES, approvalArtifactPath, linkKey, samePath,
   receiptPath, writeReceipt, readReceipt, discardReceipt, consumeReceipt, matchReceipt, readReceiptLog,
+  isContinued, markContinued,
 };
