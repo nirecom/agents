@@ -256,6 +256,28 @@ if [[ -n "$SESSION_ID" && -f "$READ_CLI" ]]; then
   fi
 fi
 
+# A recorded base is accepted when it is an ancestor of HEAD or, during a merge, of a valid
+# MERGE_HEAD commit (same reading rule as review-comment-block-size.d/baseline.sh).
+base_reachable() {
+  local cand="$1" gitdir mh_file line sha n=0
+  g merge-base --is-ancestor "$cand" HEAD >/dev/null 2>&1 && return 0
+  gitdir="$(g rev-parse --git-dir 2>/dev/null)" || return 1
+  [[ -n "$gitdir" ]] || return 1
+  [[ "$gitdir" == /* || "$gitdir" =~ ^[A-Za-z]:[/\\] ]] || gitdir="$TARGET_CHECKOUT_ROOT/$gitdir"
+  mh_file="$gitdir/MERGE_HEAD"
+  [[ -f "$mh_file" ]] || return 1
+  while IFS= read -r line || [[ -n "${line:-}" ]]; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || continue
+    [[ "$n" -ge 8 ]] && break
+    sha="$(g rev-parse --verify --quiet "${line}^{commit}" 2>/dev/null)" || continue
+    [[ "$sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || continue
+    n=$((n + 1))
+    g merge-base --is-ancestor "$cand" "$sha" >/dev/null 2>&1 && return 0
+  done < "$mh_file"
+  return 1
+}
+
 # Three identity conditions, all of which must hold. A record that cannot be verified is
 # treated exactly like one that failed verification: adopting an unverified base is the
 # failure mode this whole helper exists to prevent.
@@ -266,13 +288,13 @@ if [[ $REC_PRESENT -eq 1 ]]; then
   # read from disk, not derived, so a tampered or corrupt record with a value starting with
   # '-' would otherwise be parsed by `git merge-base --is-ancestor` as an option rather than
   # rejected by the ancestry check that follows.
-  elif ! [[ "$REC_HEAD" =~ ^[0-9a-f]{7,40}$ ]]; then
+  elif ! [[ "$REC_HEAD" =~ ^([0-9a-f]{7,40}|[0-9a-f]{64})$ ]]; then
     DEMOTE_REASON="recorded baseline ignored: the recorded branch_head is not a well-formed commit hash"
-  elif ! [[ "$REC_BASE" =~ ^[0-9a-f]{7,40}$ ]]; then
+  elif ! [[ "$REC_BASE" =~ ^([0-9a-f]{7,40}|[0-9a-f]{64})$ ]]; then
     DEMOTE_REASON="recorded baseline ignored: the recorded base is not a well-formed commit hash"
   elif ! g merge-base --is-ancestor "$REC_HEAD" HEAD >/dev/null 2>&1; then
     DEMOTE_REASON="recorded baseline ignored: the recorded branch_head is not a verified ancestor of HEAD"
-  elif ! g merge-base --is-ancestor "$REC_BASE" HEAD >/dev/null 2>&1; then
+  elif ! base_reachable "$REC_BASE"; then
     DEMOTE_REASON="recorded baseline ignored: the recorded base is not a verified ancestor of HEAD"
   else
     BASE="$REC_BASE"

@@ -24,10 +24,11 @@ RCO_SUT_REL="$F1465_SUT_REL_DIR/run-completion.sh"
 RCO_REAL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 _rco_sid() { node -e 'process.stdout.write(require("crypto").randomUUID())'; }
-# _rco_state <sid> [<upstream-sid>] — a raw v5 state file.
+# _rco_state <sid> [<upstream-sid>] [<first-sid>] — a raw v5 state file.
 _rco_state() {
     local up=""
     [ -n "${2:-}" ] && up=",\"upstream_session_id\":\"$2\",\"upstream_copy_seq\":0"
+    [ -n "${3:-}" ] && up="$up,\"first_session_id\":\"$3\""
     printf '{"version":5,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","session_start_context":{"cwd":"%s","git_branch":"feature/f2631"},"events":[]%s}\n' \
         "$1" "$RCO_TMP_ROOT" "$up" >"$WORKFLOW_STATE_DIR/$1.json"
 }
@@ -40,6 +41,9 @@ _rco_setup() {
     mkdir -p "$TEST_DIR/plans"
     cp -r "$RCO_REAL_ROOT/hooks/." "$TEST_DIR/hooks/"
     cp "$RCO_REAL_ROOT/bin/plan-artifact-path" "$TEST_DIR/bin/plan-artifact-path"
+    # The resolver's only bin/ dependency outside itself (via hooks/lib/confirm-gate/plan-gate.js).
+    mkdir -p "$TEST_DIR/bin/workflow/lib/next-step"
+    cp "$RCO_REAL_ROOT/bin/workflow/lib/next-step/gate-line.js" "$TEST_DIR/bin/workflow/lib/next-step/gate-line.js"
     write_mock "$TEST_DIR/bin/is-github-dotcom-remote" 0
     mock_plan_approval "APPROVAL=approved"
     RCO_SCOPE_ARGS="$TEST_DIR/scope_args.txt"
@@ -103,21 +107,23 @@ test_RCO_3_non_resumed_own_intent() {
     cleanup_test_dir
 }
 
-# RCO-4: a resolver that fails or prints a foreign name falls back to the own intent.
-test_RCO_4_resolver_failure_falls_back() {
-    local label="RCO-4: plan-artifact-path failure / foreign output → own intent (#7070)"
+# RCO-4: no own-sid fallback (#2748): a failing resolver stops the run before the scope step,
+# and a foreign name never makes the own intent (#7070) parsed.
+test_RCO_4_resolver_failure_has_no_own_fallback() {
+    local label="RCO-4: plan-artifact-path failure → no scope call; foreign output → never own intent (#7070)"
     _rco_setup
-    local S got1 got2
+    local S got1 got2 called1
     S="$(_rco_sid)"
     _rco_state "$S"
     _rco_intent "$S" 7070
     printf '%s\n' 'process.exit(1);' >"$TEST_DIR/bin/plan-artifact-path"
     got1="$(_rco_issues "$S")"
+    called1=no; [ -f "$RCO_SCOPE_ARGS" ] && called1=yes
     printf '%s\n' 'process.stdout.write("/elsewhere/secret.txt\n");' >"$TEST_DIR/bin/plan-artifact-path"
     rm -f "$RCO_SCOPE_ARGS"
     got2="$(_rco_issues "$S")"
-    if [ "$got1" = "7070" ] && [ "$got2" = "7070" ]; then pass "$label"
-    else fail "$label — failure='$got1' foreign='$got2'"; fi
+    if [ "$called1" = no ] && [ -z "$got1" ] && [ "$got2" != "7070" ]; then pass "$label"
+    else fail "$label — failure: scope_called=$called1 issues='$got1'; foreign='$got2'"; fi
     cleanup_test_dir
 }
 
@@ -134,10 +140,26 @@ test_RCO_5_no_intent_anywhere() {
     cleanup_test_dir
 }
 
+# RCO-6 (#2748): a session-downstream recording first_session_id only (no upstream_session_id)
+# parses the first generation's intent, never its own: a fallback to the legacy field fails here.
+test_RCO_6_first_session_id_only_reads_first_generation() {
+    local label="RCO-6: first_session_id-only downstream parses the first generation's intent (#5151), never its own (#6262)"
+    _rco_setup
+    local F X got
+    F="$(_rco_sid)"; X="$(_rco_sid)"
+    _rco_state "$F"; _rco_state "$X" "" "$F"
+    _rco_intent "$F" 5151
+    _rco_intent "$X" 6262
+    got="$(_rco_issues "$X")"
+    if [ "$got" = "5151" ]; then pass "$label"; else fail "$label — issues='$got'"; fi
+    cleanup_test_dir
+}
+
 echo "=== run-completion.sh owner-resolved intent (#2631) ==="
 test_RCO_1_resumed_reads_upstream_intent
 test_RCO_2_upstream_intent_wins_over_own
 test_RCO_3_non_resumed_own_intent
-test_RCO_4_resolver_failure_falls_back
+test_RCO_4_resolver_failure_has_no_own_fallback
 test_RCO_5_no_intent_anywhere
+test_RCO_6_first_session_id_only_reads_first_generation
 rm -rf "$RCO_TMP_ROOT"

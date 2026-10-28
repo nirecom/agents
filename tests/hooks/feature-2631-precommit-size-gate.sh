@@ -23,48 +23,66 @@ harness_isolate "$TMP_ROOT/iso"
 harness_assert_isolated
 unset CLAUDE_CODE_SESSION_ID CODE_FILE_EXTENSIONS 2>/dev/null || true
 
-# Bodies live in the sibling folder; lane.sh runs them. Serially they cost over 200 s, so the
-# lanes below (each about 30-40 s alone) start together and every case below replays its lane's
-# section. Rebalance by moving a case=function pair to another lane.
+# Bodies live in the sibling folder; lane.sh runs them, and every case below replays its lanes'
+# sections. One hooks/pre-commit run costs about 7-10 s on a Windows host (twice that under load)
+# and a lane's fixture about 10-15 s, so each lane holds at most 4-5 runs (about 30-50 s alone).
+# Lanes run LANE_JOBS at a time: the host saturates, and 3 or 4 at once pushed 4-run lanes past
+# LANE_TIMEOUT where 2 at once kept them near 70 s. A heavy table case is split across lanes by naming its rows
+# (case=function:row:row); rebalance by moving a spec to another lane.
 LANE_DIR="$ROOT/tests/hooks/feature-2631-precommit-size-gate"
 LANE_TIMEOUT=110
+LANE_JOBS=2
 
-# lane | case=function ...
+# lane | case=function[:row...] ... (heaviest first, so the last wave holds the short lanes)
+running=0
 while IFS='|' read -r lane specs; do
   [[ -z "$lane" || "$lane" =~ ^[[:space:]]*# ]] && continue
+  if ((running >= LANE_JOBS)); then wait -n; running=$((running - 1)); fi
   # shellcheck disable=SC2086 # specs is a word list on purpose
   run_with_timeout "$LANE_TIMEOUT" bash "$LANE_DIR/lane.sh" "$TMP_ROOT/$lane" $specs < /dev/null > "$TMP_ROOT/lane-$lane.log" 2>&1 &
+  running=$((running + 1))
 done <<'EOF'
-core-new|fixture-premise-small-commit-passes=core_case_fixture_premise new-file-over-hard-blocks-exactly-hard-passes=core_case_new_file_over_hard_blocks_exactly_hard_passes gate-makes-exactly-one-node-call=core_case_gate_makes_exactly_one_node_call
-core-head|over-hard-head-file-may-shrink-only=core_case_over_hard_head_file_may_shrink_only exempt-stream-records-pass=core_case_exempt_stream_records_pass
-core-ssot|odd-file-name-survives-the-nul-route=core_case_odd_file_name ssot-limit-change-propagates=core_case_ssot_limit_change_propagates initial-commit-over-hard-blocks-exactly-hard-passes=edge_case_initial_commit
-edges|session-markers-and-unresolved-sid=edge_case_session_markers_and_unresolved_sid non-agents-repo-is-a-no-op=edge_case_non_agents_repo_is_a_no_op size-check-rc2-and-rc3-both-block-fail-closed=edge_case_size_check_rc2_and_rc3_block newline-path-is-checked-fail-closed=edge_case_newline_path
-gc-route|git-commit-invokes-the-size-gate=gc_case_git_commit_invokes_the_gate git-commit-judges-the-staged-blob-not-the-worktree=gc_case_staged_size_beats_worktree_size
-gc-shrink|git-commit-allows-an-index-shrink-of-an-over-hard-file=gc_case_shrink_of_over_hard_file_judged_by_index shell-metacharacter-path-survives-the-nul-route=gc_case_shell_metachar_path
+edge-session|session-markers-and-unresolved-sid=edge_case_session_markers_and_unresolved_sid
+core-new-code-prompt|new-file-over-hard-blocks-exactly-hard-passes=core_case_new_file_over_hard_blocks_exactly_hard_passes:code:prompt
+core-shrink|over-hard-head-file-may-shrink-only=core_case_over_hard_head_file_may_shrink_only
+core-ssot|ssot-limit-change-propagates=core_case_ssot_limit_change_propagates
+edge-nohead|initial-commit-over-hard-blocks-exactly-hard-passes=edge_case_initial_commit size-check-rc2-and-rc3-both-block-fail-closed=edge_case_size_check_rc2_and_rc3_block
+names|odd-file-name-survives-the-nul-route=core_case_odd_file_name newline-path-is-checked-fail-closed=edge_case_newline_path
 gc-mixed|git-commit-mixed-kinds-judges-every-staged-file=gc_case_mixed_kinds_small_then_over_hard
+gc-route|git-commit-invokes-the-size-gate=gc_case_git_commit_invokes_the_gate git-commit-judges-the-staged-blob-not-the-worktree=gc_case_staged_size_beats_worktree_size
+core-premise-new-docs|fixture-premise-small-commit-passes=core_case_fixture_premise gate-makes-exactly-one-node-call=core_case_gate_makes_exactly_one_node_call non-agents-repo-is-a-no-op=edge_case_non_agents_repo_is_a_no_op new-file-over-hard-blocks-exactly-hard-passes=core_case_new_file_over_hard_blocks_exactly_hard_passes:docs
+core-exempt-a|exempt-stream-records-pass=core_case_exempt_stream_records_pass:docs/history.md:CHANGELOG.md:docs/history/2026.md
+gc-shrink-exempt-b|git-commit-allows-an-index-shrink-of-an-over-hard-file=gc_case_shrink_of_over_hard_file_judged_by_index exempt-stream-records-pass=core_case_exempt_stream_records_pass:changelog/2026.md:docs/_archive/old.md
+gc-meta|shell-metacharacter-path-survives-the-nul-route=gc_case_shell_metachar_path
 EOF
 wait
 
-# replay <case-name> — re-issue the lane section's PASS / FAIL / SKIP lines in this file's open
-# case; a missing section or one with no closing @@ line (lane crashed or timed out) fails.
+# replay <case-name> — re-issue every lane section of the case (a split case has several) in this
+# file's open case; no section, a section with no closing @@ line (lane crashed or timed out), or a
+# section with no assertion fails. Each log is read on its own, so a killed lane's open section
+# cannot close on the next log's @@CASE line.
 replay() {
-  local name="$1" line state=out closed=0
-  while IFS= read -r line; do
-    if [ "$state" = in ]; then
-      case "$line" in
-        @@*) closed=1
-          break ;;
-        "PASS: "*) pass "${line#PASS: }" ;;
-        "FAIL: "*) fail "${line#FAIL: }" ;;
-        "SKIP: "*) skip "${line#SKIP: }" ;;
-        *) printf '%s\n' "$line" ;;
-      esac
-    elif [ "$line" = "@@CASE $name" ]; then
-      state=in
-    fi
-  done < <(cat "$TMP_ROOT"/lane-*.log)
-  if [ "$state" = out ]; then fail "lane reached case $name" "no section; a lane died before it (log tails: $(tail -n 3 "$TMP_ROOT"/lane-*.log | head -c 600))"
-  elif [ "$closed" = 0 ]; then fail "lane finished case $name" "no closing marker; the lane crashed or passed ${LANE_TIMEOUT}s"; fi
+  local name="$1" line state log seen=0 asserted
+  for log in "$TMP_ROOT"/lane-*.log; do
+    state=out
+    while IFS= read -r line; do
+      if [ "$state" = in ]; then
+        case "$line" in
+          @@*) state=closed
+            break ;;
+          "PASS: "*) pass "${line#PASS: }"; asserted=1 ;;
+          "FAIL: "*) fail "${line#FAIL: }"; asserted=1 ;;
+          "SKIP: "*) skip "${line#SKIP: }"; asserted=1 ;;
+          *) printf '%s\n' "$line" ;;
+        esac
+      elif [ "$line" = "@@CASE $name" ]; then
+        state=in asserted=0 seen=$((seen + 1))
+      fi
+    done < "$log"
+    if [ "$state" = in ]; then fail "lane finished case $name" "no closing marker in ${log##*/}; the lane crashed or passed ${LANE_TIMEOUT}s"
+    elif [ "$state" = closed ] && [ "$asserted" = 0 ]; then fail "lane section of case $name asserts something" "empty section in ${log##*/} (a row filter matched nothing?)"; fi
+  done
+  if [ "$seen" = 0 ]; then fail "lane reached case $name" "no section; a lane died before it (log tails: $(tail -n 3 "$TMP_ROOT"/lane-*.log | head -c 600))"; fi
 }
 
 case_begin "fixture-premise-small-commit-passes" "hooks/pre-commit"

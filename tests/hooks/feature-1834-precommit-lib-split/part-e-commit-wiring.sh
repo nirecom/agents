@@ -18,7 +18,7 @@ E_CHECKERS=(
 
 # The hook, the libraries it sources and the env OS filter, committed once; each case copies it.
 E_TEMPLATE="$TMPBASE/e-template"
-if ! script_checkout_fixture_copy "$E_TEMPLATE" hooks/pre-commit hooks/lib bin/env-os-filter; then
+if ! script_checkout_fixture_copy "$E_TEMPLATE" hooks/pre-commit hooks/lib bin/env-os-filter bin/size-check bin/lib/size-check; then
     fail "E: commit-wiring template" "script_checkout_fixture_copy failed"
 fi
 init_repo_bare "$E_TEMPLATE"

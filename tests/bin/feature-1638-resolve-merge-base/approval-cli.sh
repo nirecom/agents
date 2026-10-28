@@ -172,8 +172,9 @@ setup_recovery_tree() { # <sid>
   P_TREE="$(mktemp -d "$TMPROOT/ptree.XXXXXX")"
   cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$P_TREE/bin"
   cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$P_TREE/hooks"
-  mkdir -p "$P_TREE/tests"
-  : > "$P_TREE/tests/feature-689-select-tests.sh"
+  # select-tests.sh lists tests only under the category dirs (tests/bin, tests/hooks, ...).
+  mkdir -p "$P_TREE/tests/bin"
+  : > "$P_TREE/tests/bin/feature-689-select-tests.sh"
   printf '#!/usr/bin/env bash\necho "%s"\n' "$1" > "$P_TREE/bin/resolve-session-id"
   chmod +x "$P_TREE/bin/resolve-session-id" 2>/dev/null || true
 }

@@ -28,20 +28,10 @@ if [ ! -f "$HOOK_JS" ]; then
     exit 77
 fi
 
-PASS=0
-FAIL=0
-SKIP=0
+# shellcheck source=tests/lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
-skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
-
-TMPDIR_BASE="$(node -e "
-const os=require('os'),path=require('path'),fs=require('fs');
-const d=path.join(os.tmpdir(),'gate2-'+process.pid).replace(/\\\\/g,'/');
-fs.mkdirSync(d,{recursive:true});
-console.log(d);
-" 2>/dev/null)"
+TMPDIR_BASE="$(node -e "const os=require('os'),path=require('path'),fs=require('fs');const d=path.join(os.tmpdir(),'gate2-'+process.pid).replace(/\\\\/g,'/');fs.mkdirSync(d,{recursive:true});console.log(d);" 2>/dev/null)"
 [ -z "$TMPDIR_BASE" ] && TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
@@ -85,7 +75,7 @@ fresh_workflow_dir() {
 # repo that seeds the WF target repo set (#1633). Without it the set is unknown.
 write_complete_state() {
     local wfdir="$1" sid="$2" cwd="${3:-}"
-    STATE_CWD="$cwd" node -e "
+    STATE_CWD="$cwd" node - <<NODEEOF
 const fs = require('fs');
 const path = require('path');
 const { VALID_STEPS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state.js');
@@ -95,7 +85,7 @@ for (const s of VALID_STEPS) steps[s] = { status: 'complete', updated_at: now };
 const state = { version: 1, session_id: '$sid', created_at: now, steps };
 if (process.env.STATE_CWD) state.cwd = process.env.STATE_CWD;
 fs.writeFileSync(path.join('$wfdir', '$sid' + '.json'), JSON.stringify(state, null, 2));
-"
+NODEEOF
     # A gated `complete` counts only with a plan-approval record (#2277); without it the step
     # scan blocks every case that should approve, masking the Gate 2 verdict under test.
     node "$_SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture.js" inject \
@@ -253,24 +243,6 @@ FRAGMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1701-workflo
 # shellcheck source=tests/hooks/feature-1701-workflow-gate-code-size/infra-and-config.sh
 . "$FRAGMENT_DIR/infra-and-config.sh"
 
-run_all() {
-    test_1_hard_limit_block
-    test_2_ok_300_lines
-    test_3_untracked_only_approves
-    test_4_workflow_off_bypass
-    test_5_wip_does_not_bypass
-    test_6_cross_repo_bypass
-    test_6b_no_cwd_blocks
-    test_7_split_passes
-    test_8_bash_missing_blocks
-    test_9_script_missing_blocks
-    test_10_unexpected_exit_blocks
-    test_11_timeout_fail_open
-    test_12_env_var_ignored
-    test_13_env_from_dotenv
-    test_14_no_dotenv
-}
-
 if command -v timeout >/dev/null 2>&1; then
     if [ -z "${_GATE2_E2E_INNER:-}" ]; then
         _GATE2_E2E_INNER=1 timeout 300 bash "$0" "$@"
@@ -278,7 +250,51 @@ if command -v timeout >/dev/null 2>&1; then
     fi
 fi
 
-run_all
+case_begin "hard-limit-staged-file-blocks" "hooks/workflow-gate/code-size-gate.js"
+test_1_hard_limit_block
+case_end
+case_begin "under-limit-file-approves" "bin/review-code-size"
+test_2_ok_300_lines
+case_end
+case_begin "untracked-only-oversize-approves" "hooks/workflow-gate/code-size-gate.js"
+test_3_untracked_only_approves
+case_end
+case_begin "workflow-off-marker-bypasses" "hooks/workflow-gate.js"
+test_4_workflow_off_bypass
+case_end
+case_begin "wip-commit-does-not-bypass" "hooks/workflow-gate/code-size-gate.js"
+test_5_wip_does_not_bypass
+case_end
+case_begin "cross-repo-commit-bypasses" "hooks/workflow-gate.js"
+test_6_cross_repo_bypass
+case_end
+case_begin "no-state-cwd-blocks" "hooks/workflow-gate.js"
+test_6b_no_cwd_blocks
+case_end
+case_begin "split-file-passes" "bin/review-code-size"
+test_7_split_passes
+case_end
+case_begin "bash-missing-blocks" "hooks/workflow-gate/code-size-gate.js"
+test_8_bash_missing_blocks
+case_end
+case_begin "review-script-missing-blocks" "hooks/workflow-gate/code-size-gate.js"
+test_9_script_missing_blocks
+case_end
+case_begin "unexpected-exit-blocks" "hooks/workflow-gate/code-size-gate.js"
+test_10_unexpected_exit_blocks
+case_end
+case_begin "hung-review-asks-at-decision-limit" "hooks/workflow-gate/code-size-gate.js"
+test_11_hung_review_asks
+case_end
+case_begin "process-env-extensions-ignored" "hooks/workflow-gate/code-size-gate.js"
+test_12_env_var_ignored
+case_end
+case_begin "dotenv-extensions-honoured" "hooks/workflow-gate/code-size-gate.js"
+test_13_env_from_dotenv
+case_end
+case_begin "no-dotenv-uses-defaults" "hooks/workflow-gate/code-size-gate.js"
+test_14_no_dotenv
+case_end
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

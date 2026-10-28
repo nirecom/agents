@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2631-precommit-size-gate/lane.sh — one parallel lane of
-# tests/hooks/feature-2631-precommit-size-gate.sh. The whole file costs over 200 s serially on
-# Windows, so the entry starts several lanes at once and replays their PASS / FAIL lines into its
+# tests/hooks/feature-2631-precommit-size-gate.sh. The whole file costs several minutes serially on
+# Windows, so the entry runs the lanes a few at a time and replays their PASS / FAIL lines into its
 # own case records.
-# Usage: bash lane.sh <lane-tmp-dir> <case-name>=<function> ...
+# Usage: bash lane.sh <lane-tmp-dir> <case-name>=<function>[:<arg>...] ...
 # Prints "@@CASE <case-name>" before each body and "@@DONE" after the last; a section with no
 # closing @@ line tells the entry that the lane died inside that body.
 set -uo pipefail
@@ -32,6 +32,7 @@ LANE_DIR="$ROOT/tests/hooks/feature-2631-precommit-size-gate"
 
 for spec in "$@"; do
   printf '@@CASE %s\n' "${spec%%=*}"
-  "${spec#*=}"
+  IFS=: read -r -a call <<<"${spec#*=}"
+  "${call[@]}"
 done
 printf '@@DONE\n'

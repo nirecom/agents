@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2631-confirm-size-stop.js
 // Tests: hooks/stop-confirm-plan-guard.js, hooks/lib/plan-artifact-lang.js, hooks/lib/size-limits.js, hooks/lib/size-session-gate.js, hooks/workflow-state/plan-artifact-owner.js
-// Tags: scope:issue-specific, size-limits, hook, stop, confirm, plan-artifact, block, layer:TL2
+// Tags: scope:issue-specific, size-limits, hook, stop, confirm, plan-artifact, block, layer:TL2, ssot
 // TL3 gap (what this test does NOT catch):
 // - the real Claude Code host firing the Stop hook and continuing the turn on its block decision
 // Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
@@ -10,7 +10,7 @@
 // #2631 stage 4, Stop: the Layer 2 re-check of a confirmed plan and the #2650 continuation both
 // block with "[confirm-plan] Layer 2/plan-size:" when the stage's artifact is over HARD; a
 // WORKFLOW_OFF session is left alone. In a resumed session the size check and the PLAN_LANG
-// re-lint read the owner's file (upstream_session_id / plan_approvals artifact_session_id).
+// re-lint read the owner's file (first_session_id / a legacy upstream_session_id, #2748).
 // tests/hooks/fix-524-confirm-plan-guard.sh (layer2-cases.sh) stays the plan-lang regression.
 
 const fs = require("fs");
@@ -85,17 +85,12 @@ F.run("C7 stop", () => {
   F.check("upstream_session_id: U's detail at HARD+1 blocks D's Stop",
     C.blockedWith(r, C.SIZE_PREFIX, [path.basename(C.planPath(U, "detail")), n]), r.raw);
 
+  // #2748: first_session_id names the plan of every generation (an approval record is no candidate).
   const Xs = F.newSid();
-  const text = C.planOf(n);
-  C.writePlan(Xs, "detail", text);
-  const approval = {
-    kind: "plan_approval", step: "detail", source: "confirm-sentinel", reason: "fixture approval",
-    artifact_sha256: require("crypto").createHash("sha256").update(text).digest("hex"),
-    artifact_session_id: Xs, artifact_hash_status: "recorded", provenance: "declared", origin: "test-fixture",
-  };
-  const D2 = C.session("detail", null, { events: [approval] });
+  C.writePlan(Xs, "detail", C.planOf(n));
+  const D2 = C.session("detail", null, { top: { first_session_id: Xs } });
   const r2 = C.stop(D2, C.layer2Transcript("detail"));
-  F.check("plan_approvals artifact_session_id: X's detail at HARD+1 blocks D2's Stop",
+  F.check("first_session_id: X's detail at HARD+1 blocks D2's Stop",
     C.blockedWith(r2, C.SIZE_PREFIX, [path.basename(C.planPath(Xs, "detail")), n]), r2.raw);
 
   const U3 = F.newSid();
@@ -121,6 +116,41 @@ F.run("C7 stop", () => {
   const D5 = C.session("detail", null, { top: { upstream_session_id: U5, upstream_copy_seq: 0 } });
   const r5 = C.stop(D5, C.layer2Transcript("detail"), { env: ja });
   F.check("a compliant upstream detail under PLAN_LANG=japanese stops quietly", C.quiet(r5), r5.raw);
+});
+caseEnd();
+
+// One SSOT for both gates: a copied checkout whose size-limits.js says another detail HARD moves
+// the CONFIRM deny and the Stop block together, for the same plan. Every number is read from the
+// module; the original checkout is the control with the opposite verdicts.
+caseBegin("C9-detail-limit-change-moves-confirm-and-stop-together", "hooks/lib/size-limits.js");
+F.run("C9 ssot", () => {
+  const { limitsTree } = require("./feature-2631-size-limits/mutate-limits");
+  const base = F.load("hooks/lib/size-limits.js").LIMITS.detail;
+  const dialog = (r) => r.decision !== "block" && /^\[detail\] (?!plan-file=none)\S/.test(r.msg);
+  const denied = (r, needles) => r.deny && r.reason.includes(C.SEND_BACK) && needles.every((n) => r.reason.includes(String(n)));
+  const lo = { warn: Math.floor(base.warn / 2), hard: Math.floor(base.hard / 2) };
+  const hi = { warn: base.hard + 50, hard: base.hard + 100 };
+  // name | changed limits | plan lines: over the changed HARD only (lowered) / over the original only (raised)
+  for (const [name, lim, n] of [["lowered", lo, lo.hard + 1], ["raised", hi, base.hard + 1]]) {
+    const t = limitsTree(path.join(F.work(), `tree-${name}`), "detail", lim.warn, lim.hard);
+    F.check(`${name}: premise: the copied size-limits.js says detail ${lim.warn}/${lim.hard}`, t.ok, t.detail);
+    if (!t.ok) continue;
+    const tree = path.dirname(path.dirname(t.hook));
+    const copied = require(path.join(tree, "hooks", "lib", "size-limits.js")).LIMITS.detail;
+    const over = n > copied.hard;
+    F.check(`${name}: premise: ${n} lines sit between the original HARD ${base.hard} and the copied HARD ${copied.hard}`,
+      over !== (n > base.hard), JSON.stringify({ n, base, copied }));
+    for (const [label, root, hard, blocks] of [["copied", tree, copied.hard, over], ["original (control)", F.ROOT, base.hard, n > base.hard]]) {
+      const cs = C.session("detail", n);
+      const rc = C.confirm(cs, "detail", { root });
+      F.check(`${name} / ${label}: CONFIRM_DETAIL on a ${n}-line plan ${blocks ? `denies against HARD ${hard}` : "reaches the dialog"}`,
+        blocks ? denied(rc, [path.basename(C.planPath(cs, "detail")), n, hard]) : dialog(rc) && !rc.deny, rc.raw);
+      const ss = C.session("detail", n);
+      const rs = C.stop(ss, C.layer2Transcript("detail"), { root });
+      F.check(`${name} / ${label}: Stop on the same ${n}-line plan ${blocks ? `blocks against HARD ${hard}` : "stops quietly"}`,
+        blocks ? C.blockedWith(rs, C.SIZE_PREFIX, [path.basename(C.planPath(ss, "detail")), n, hard]) : C.quiet(rs), rs.raw);
+    }
+  }
 });
 caseEnd();
 
