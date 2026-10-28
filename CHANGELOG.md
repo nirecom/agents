@@ -911,3 +911,7 @@ Changes: Core principles gained four entries (Release Is the Goal; Quality, Cost
 ### FEATURE: PR #2830 (2026-10-29)
 Background: feat(#2768): plan-sync makes one commit per user prompt
 Changes: plan-sync now publishes one commit per user prompt instead of one per plan write, so the plan repository keeps the versions you saw, not every intermediate draft. When the remote forbids force pushes, a turn-diff link shows that prompt's changes.
+
+### FEATURE: PR #2756 (2026-10-29)
+Background: test(#2723): split the slowest test files into parallel entrypoints
+Changes: Slow test files are split into smaller entrypoints that run in parallel, so a full test run spends less time stuck behind a single long file.
