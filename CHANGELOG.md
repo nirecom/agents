@@ -899,3 +899,7 @@ Changes: Windows install no longer prints an npm cleanup EPERM warning when upda
 ### FEATURE: PR #2821 (2026-10-28)
 Background: fix(#2811,#2813): continue confirm-plan presentation under stop_hook_active once per receipt, and point feature-2013 B20 at the current skill dispatch
 Changes: The plan approval dialog now follows a plan presentation even when that turn came after a Stop hook block, or when the transcript flush lagged but completed before the turn settled (#2811); a flush that lags past that point is tracked in #2822.
+
+### FEATURE: PR #2823 (2026-10-28)
+Background: feat(#2327): scope review-tests re-reviews after implementation changes to the delta
+Changes: review-tests re-reviews after an implementation change now read only the changed and covering tests, falling back to a full review when coverage cannot be determined (#2327)
