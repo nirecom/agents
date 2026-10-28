@@ -44,7 +44,7 @@ const mode = process.argv[2];
 if (mode === "R3") {
   const s = R.sessionAt("outline", { tag: 3 });
   const st = present(s, "outline", { input: { stop_hook_active: true } });
-  check("R3 stop_hook_active, clean presentation: no block is emitted", st.rc === 0 && st.out.trim() === "", show({ rc: st.rc, out: st.out }));
+  check("R3 stop_hook_active, clean presentation: no block, one continue (#2811)", st.rc === 2 && st.continued === true && st.reason.includes("WORKFLOW_CONFIRM_OUTLINE"), show({ rc: st.rc, out: st.out }));
   const rc = R.readReceiptRaw(s.sid, "outline");
   check("R3 stop_hook_active, clean presentation: the outline receipt is written", rc !== null && rc.link && rc.link.kind === "url", show(rc));
   const e = R.echo(s.sid, "outline");
