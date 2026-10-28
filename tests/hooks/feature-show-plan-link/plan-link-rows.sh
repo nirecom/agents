@@ -157,7 +157,7 @@ fi
 echo "=== R9: the record is written before the push is attempted (unreachable destination) ==="
 if [ -d "$SPS_PD/.git" ] && [ -d "$SPS_DEAD_PROJ/.git" ]; then
   printf 'r9 body\n' > "$SPS_PD/sprdead-outline.md"
-  WORKFLOW_PLANS_DIR="$SPS_PD" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" GIT_SSH_COMMAND=false \
+  WORKFLOW_PLANS_DIR="$SPS_PD" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" psf_with_ssh_offline \
     sps_run_hook "$(psf_write_json "$SPS_PD/sprdead-outline.md" sprdead "$(psf_np "$SPS_DEAD_PROJ")")"
   spr_expect_record "R9 push failed: the record already matches the destination host" "$SPS_PD" sprdead-outline.md "$PSF_ORIGIN_DEAD" match
   sps_expect_msg_has "R9 push failed: systemMessage reports the failure" "Plan file: " "sprdead-outline.md" "[plan-sync] " "$SPS_RUN_HINT"

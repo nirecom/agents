@@ -259,6 +259,11 @@ Per-hook behavior contracts for the hooks registered in `settings.json`. This is
   as `in_progress` via `hooks/lib/wf-init-begun-mark.js` (#1633). A slash command expands to prompt text
   rather than a Skill tool call, so `postuse-step-in-flight-mark.js` cannot see it; this hook closes that
   gap. Fail-open throughout: a missed mark only delays the "begun" read in the workflow gate.
+- `user-prompt-submit-turn-id.js` (UserPromptSubmit) — gives each user prompt a fresh random id in
+  `<sid>.control/prompt-turn.json`, which plan-sync uses to fold one prompt's plan writes into one
+  commit (#2768, [plan-sync/turn-commit.md](../plan-sync/turn-commit.md)). It removes the previous
+  file before writing, so a failed write leaves no id rather than the previous prompt's. No network.
+  Fail-open throughout: a missing id only makes plan-sync append a commit instead of replacing one.
 - `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
   escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
   from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes

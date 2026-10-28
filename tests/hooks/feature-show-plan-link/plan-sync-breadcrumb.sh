@@ -156,7 +156,7 @@ SPS_PD="$PSF_ROOT/pd-plans"
 SPS_DEAD_PROJ="$PSF_ROOT/dead-proj"
 if psf_make_provisioned "$SPS_PD" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1 && psf_make_project "$SPS_DEAD_PROJ" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1; then
   printf 'plan\n' > "$SPS_PD/s2513-detail.md"
-  WORKFLOW_PLANS_DIR="$SPS_PD" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" GIT_SSH_COMMAND=false \
+  WORKFLOW_PLANS_DIR="$SPS_PD" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" psf_with_ssh_offline \
     sps_run_hook "$(psf_write_json "$SPS_PD/s2513-detail.md" test-sid-h5 "$(psf_np "$SPS_DEAD_PROJ")")"
   sps_expect_msg_has "H5 Plan file + [plan-sync] reason" "Plan file: " "s2513-detail.md" "[plan-sync] " "$SPS_RUN_HINT"
   if [ "$HOOK_RC" = 0 ] && [ "$HOOK_SECS" -lt 25 ]; then pass "H5 exit 0 within budget (${HOOK_SECS}s)"

@@ -379,6 +379,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/user-prompt-submit-turn-id.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/user-prompt-submit-mechanism-check.js\"",
             "timeout": 5
           },
