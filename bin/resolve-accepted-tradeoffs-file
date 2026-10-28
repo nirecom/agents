@@ -76,25 +76,32 @@ canon_status() {
   return 1
 }
 
-# Owner-resolved basename (#2633): a downstream session's plan is <upstream-sid>-<suffix>.md.
-# Only the basename is taken from bin/plan-artifact-path, so the candidate keeps PLANS_DIR's own
-# spelling and every inside-PLANS_DIR check below still applies to the resolved file.
+# Plan basename <first_session_id>-<suffix>.md (#2633, #2748). Only the basename is taken from
+# bin/plan-artifact-path, so the candidate keeps PLANS_DIR's own spelling and every
+# inside-PLANS_DIR check below still applies. An unresolvable plan is no candidate at all.
+# Exception: an id that is not a session id (SESSION_ID_VALID_RE, hooks/workflow-state/state-io/core.js)
+# has no state and so no session chain; its first_session_id is itself, and the containment checks
+# below still judge the resulting name.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "$PLANS_DIR" in /*|[A-Za-z]:*) ABS_PLANS_DIR="$PLANS_DIR" ;; *) ABS_PLANS_DIR="$PWD/$PLANS_DIR" ;; esac
 owned_name() {
   local p name
-  p="$(node "$SCRIPT_DIR/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
-  name="${p##*[/\\]}"
-  if [[ -n "$name" && "$name" == *"-$1.md" && "$name" != *..* ]]; then
-    printf '%s' "$name"
-  else
+  if [[ ! "$SESSION_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
     printf '%s' "$SESSION_ID-$1.md"
+    return 0
   fi
+  p="$(node "$SCRIPT_DIR/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$ABS_PLANS_DIR" 2>/dev/null)" || return 1
+  name="${p##*[/\\]}"
+  [[ -n "$name" && "$name" == *"-$1.md" && "$name" != *..* ]] || return 1
+  printf '%s' "$name"
 }
 
 LAST=""
 for sfx in "$@"; do
   case "$sfx" in
-    intent|outline|detail) CAND="$PLANS_DIR/$(owned_name "$sfx")" ;;
+    intent|outline|detail)
+      NAME="$(owned_name "$sfx")" || continue
+      CAND="$PLANS_DIR/$NAME" ;;
     *) CAND="$PLANS_DIR/$SESSION_ID-$sfx.md" ;;
   esac
   LAST="$CAND"
@@ -106,6 +113,10 @@ for sfx in "$@"; do
   exit 0
 done
 
+if [[ -z "$LAST" ]]; then
+  echo "resolve-accepted-tradeoffs-file: no candidate plan path could be resolved." >&2
+  exit 3
+fi
 LEX_LAST="$(lex_norm "$LAST")"
 if [[ "$LEX_LAST" != "$LEX_DIR"/* ]]; then
   echo "resolve-accepted-tradeoffs-file: the last candidate path leaves the plans directory; refusing to forward it." >&2

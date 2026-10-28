@@ -2,19 +2,11 @@
 # tests/hooks/feature-990-scan-outbound-offensive-integration.sh
 # Tests: hooks/scan-outbound.js, bin/scan-offensive
 # Tags: scan, offensive, outbound, hook, integration, scope:issue-specific
-# RED for issue #990 — scan-outbound.js must call bin/scan-offensive OUTSIDE
-# the private-repo skip branch.
-#
-# L3 gap (what this test does NOT catch):
-# - real Claude Code session loading the modified hook from settings.json
-# - real `gh issue create` end-to-end against GitHub API (covered by manual smoke)
-#
-# Strategy: we cannot test the real bin/scan-offensive integration without it
-# existing. We use a shim sandbox: copy hooks/scan-outbound.js + its lib deps
-# into a temp dir, place a stub bin/scan-offensive that exits with a controlled
-# code, then invoke the hook with crafted JSON. This validates the integration
-# wiring (hook calls scan-offensive; offensive scan applies regardless of repo
-# privacy).
+# Issue #990: scan-outbound.js must call bin/scan-offensive OUTSIDE the private-repo skip branch.
+# Strategy: copy the hook and its module dirs into a temp sandbox with stub bin/scan-outbound.sh and
+# bin/scan-offensive (controlled exit codes), then feed crafted JSON to check the wiring.
+# L3 gap: a real Claude Code session loading the hook from settings.json; a real `gh issue create`
+# against the GitHub API (manual smoke).
 
 set -u
 
@@ -54,13 +46,20 @@ require_hook() {
     return 0
 }
 
-build_sandbox_full() {
-    local sandbox="$1" ob_exit="$2" sf_exit="$3"
+# copy_hook_tree <sandbox> — scan-outbound.js and every module directory it requires.
+copy_hook_tree() {
+    local sandbox="$1" d
     mkdir -p "$sandbox/hooks/lib" "$sandbox/bin"
     cp "$HOOK_SRC" "$sandbox/hooks/scan-outbound.js"
-    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$sandbox/hooks/lib/" 2>/dev/null || true
-    mkdir -p "$sandbox/hooks/workflow-gate"
-    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/." "$sandbox/hooks/workflow-gate/" 2>/dev/null || true
+    for d in lib workflow-gate scan-outbound; do
+        mkdir -p "$sandbox/hooks/$d"
+        cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/$d/." "$sandbox/hooks/$d/" 2>/dev/null || true
+    done
+}
+
+build_sandbox_full() {
+    local sandbox="$1" ob_exit="$2" sf_exit="$3"
+    copy_hook_tree "$sandbox"
     cat > "$sandbox/bin/scan-outbound.sh" <<STUBSH
 #!/bin/bash
 exit ${ob_exit}
@@ -76,12 +75,7 @@ STUBJS
 # Build a sandbox layout: $SANDBOX/{hooks,bin,lib}
 build_sandbox() {
     local sandbox="$1" sf_exit="$2"
-    mkdir -p "$sandbox/hooks/lib" "$sandbox/bin"
-    cp "$HOOK_SRC" "$sandbox/hooks/scan-outbound.js"
-    # Copy all hooks/lib files used by scan-outbound.js
-    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$sandbox/hooks/lib/" 2>/dev/null || true
-    mkdir -p "$sandbox/hooks/workflow-gate"
-    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/." "$sandbox/hooks/workflow-gate/" 2>/dev/null || true
+    copy_hook_tree "$sandbox"
     # Provide a stub bin/scan-outbound.sh that always exits 0 (clean).
     cat > "$sandbox/bin/scan-outbound.sh" <<'SH'
 #!/bin/bash
@@ -109,7 +103,10 @@ run_sandboxed_hook() {
     else
         sandbox_node="$sandbox"
     fi
-    echo "$json" | run_with_timeout 15 node "$sandbox_node/hooks/scan-outbound.js" 2>/dev/null
+    # The sandbox is not a repo, so the cwd visibility lookup ends before reaching gh.
+    (cd "$sandbox" || exit 1
+     unset HOOK_CWD CLAUDE_PROJECT_DIR
+     echo "$json" | run_with_timeout 15 node "$sandbox_node/hooks/scan-outbound.js" 2>/dev/null)
 }
 
 # Check if the current hook source code calls bin/scan-offensive at all.
@@ -258,11 +255,7 @@ run_t6() {
 
 build_sandbox_no_offensive() {
     local sandbox="$1"
-    mkdir -p "$sandbox/hooks/lib" "$sandbox/bin"
-    cp "$HOOK_SRC" "$sandbox/hooks/scan-outbound.js"
-    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$sandbox/hooks/lib/" 2>/dev/null || true
-    mkdir -p "$sandbox/hooks/workflow-gate"
-    cp -r "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-gate/." "$sandbox/hooks/workflow-gate/" 2>/dev/null || true
+    copy_hook_tree "$sandbox"
     # scan-outbound.sh stub (clean)
     cat > "$sandbox/bin/scan-outbound.sh" <<'SH'
 #!/bin/bash

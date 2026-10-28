@@ -149,10 +149,11 @@ STUB_REQUIRES="$(tlr_bash "$CO_STUB" 'tlr_load || exit 96; tlr_field pester laun
 
 case_begin "stub-reader-part-is-called" "bin/lib/case-record-reader.sh"
 # Guards the cases below: the stub part is reached, so a non-zero return is what they observe.
+# The real deps op fails on the stub's made-up case (lines 3-9), so crr_read answers
+# uncertain case-embed with no CASE line (S1-3b); only a reader that returned 0 gets that far.
 export CRR_STUB_RC=0
 crr "$CO_STUB" "$FXD/x.Tests.ps1"
-assert_eq "rc=$CRR_RC out=$CRR_OUT" "rc=0 out=FILE${T}conforming${T}${T}
-CASE${T}stale${T}bin/stale.sh${T}3${T}9${T}?${T}"
+assert_eq "rc=$CRR_RC out=$CRR_OUT" "rc=0 out=FILE${T}uncertain${T}${T}case-embed"
 assert_eq "requires=$STUB_REQUIRES" "requires=pwsh"
 unset CRR_STUB_RC
 case_end

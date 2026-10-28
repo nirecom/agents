@@ -40,11 +40,11 @@ PLANS_DIR="$WORKFLOW_PLANS_DIR"
 WORKFLOW_DIR_TEST="$WORKFLOW_STATE_DIR"
 CFG_DIR_TEST="$_ISOLATION_TMP_ROOT/cfg"
 mkdir -p "$CFG_DIR_TEST"
-# #2513: plan-sync off (empty export + empty agents main root .env), so every
-# breadcrumb is the local path plus the "not configured" line.
+# #2513: plan-sync off (empty export + empty $AGENTS_MAIN_ROOT/.env), so every
+# breadcrumb is the local path plus the off line (#2731 S3-10: fact lines only).
 export AGENTS_MAIN_ROOT="$CFG_DIR_TEST"
 export PLAN_SYNC_REMOTE_URL=""
-OFF_LINE="[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"
+OFF_LINE="[plan-sync] off PLAN_SYNC_REMOTE_URL="
 unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR 2>/dev/null || true
 export GITLAB_HOSTNAME="" GITLAB_SSH_HOSTNAME=""
 
@@ -97,8 +97,8 @@ expect_message() {
     fail "$desc — stdout is not valid JSON: $result"
   elif [ $rc -eq 2 ]; then
     fail "$desc — JSON has no .systemMessage field: $result"
-  elif ! echo "$msg" | grep -qF "Plan file: "; then
-    fail "$desc — .systemMessage lacks the 'Plan file: ' breadcrumb: $msg"
+  elif ! echo "$msg" | grep -qF "[plan-file] "; then
+    fail "$desc — .systemMessage lacks the '[plan-file] ' breadcrumb: $msg"
   elif echo "$msg" | grep -qF "$expected"; then
     pass "$desc"
   else
@@ -133,8 +133,8 @@ expect_message_with_env() {
     let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
     process.stdout.write(d.systemMessage || '');
   " 2>/dev/null)
-  if ! echo "$msg" | grep -qF "Plan file: "; then
-    fail "$desc — .systemMessage lacks the 'Plan file: ' breadcrumb: $msg"
+  if ! echo "$msg" | grep -qF "[plan-file] "; then
+    fail "$desc — .systemMessage lacks the '[plan-file] ' breadcrumb: $msg"
   elif echo "$msg" | grep -qF "$expected"; then
     pass "$desc"
   else

@@ -8,10 +8,12 @@
 const fs = require("fs");
 const path = require("path");
 const { OFF_CLEARANCE_INVOCATION } = require("./lib/off-clearance-invocation.js");
+const { armDecisionTimeLimit } = require("./lib/decision-time-limit");
 
 let input = "";
 process.stdin.on("data", (d) => { input += d; });
 process.stdin.on("end", () => {
+  armDecisionTimeLimit({ hookName: "supervisor-off-proposal-shim" });
   try {
     let resolvedWsid = null;
     let wsidResolved = false;

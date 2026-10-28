@@ -839,3 +839,67 @@ Changes: Added `node bin/run-eslint <path>...`, a one-command JavaScript lint th
 ### FEATURE: PR #2753 (2026-10-22)
 Background: feat(#2529): glossary provenance check, docs/glossary/ layout, and gl...
 Changes: Glossary changes are now checked at commit time: adding, redefining or deleting a glossary entry is blocked unless the approved intent lists it or you accept it with `WORKFLOW_GLOSSARY_ACCEPTED`.;Glossary files moved to `docs/glossary/` (one file per category); the old `docs/glossary-user.md` / `docs/glossary-internal.md` layout is still read during migration.;Each workflow stage (intent, outline, detail, tests, code, docs) now flags text that drifts from a defined glossary term, such as a case or hyphen variant, before the step can complete.
+
+### FEATURE: PR #2773 (2026-10-24)
+Background: fix(#2765): resolve the merged PR in find-pr-by-marker.sh
+Changes: Fixed `/issue-close-finalize` failing with "no PR found" for issues whose closing PR had merged; the merged PR and its merge commit are resolved again.
+
+### FEATURE: PR #2743 (2026-10-24)
+Background: feat(#2731): keep glossary and engineering terms untranslated and clo...
+Changes: Conversations in a non-English CONV_LANG stay in that language through long autonomous runs, subagent reports, hook messages and codex reviews, while glossary and engineering terms are kept as written instead of being translated.;New optional `user-instructions.md` at the agents checkout root: copy `user-instructions.example.md` to it and add free-form personal instructions, injected at session start and after compaction (4 KB cap; the template's comments are never injected).;Supervisor findings and codex review text now follow your conversation language, and supervisor audits no longer fall back to the slower engine because of unlisted categories.
+
+### FEATURE: PR #2755 (2026-10-24)
+Background: fix(#2676): decide within 10 s, merge allow/deny hooks, cancel notice
+Changes: PreToolUse hooks: a slow hook now asks with a reason naming the unfinished check after 10 s instead of being cancelled at its timeout, so a deny is never silently lost (#2676).;PreToolUse hooks: the light allow-deny hooks run in one process (`hooks/merged-allow-deny.js`), and every PreToolUse hook timeout is 15 s (#2676).;A hook cancelled by its timeout is now reported to the user at the next prompt (#2676).;`bin/check-unstaged-tracked.sh` no longer triggers a permission dialog (#2540).
+
+### FEATURE: PR #2786 (2026-10-24)
+Background: feat(#2762): give the commit-push worker's commit a staged-size timeout
+Changes: The commit-push worker gives long pre-commit runs time to finish: its commit timeout now scales with the number of staged files (override with COMMIT_TIMEOUT_SECS). A timeout now reports `commit_timeout` together with the pre-commit section that was running.
+
+### FEATURE: PR #2780 (2026-10-25)
+Background: fix(#2771): keep presentation receipts across Stop blocks and undecidable tails
+Changes: Approving a plan you have already seen no longer fails with "present the plan again (no-receipt)" after a blocked or follow-up turn; when the hook cannot confirm a presentation it now tells you which stages need presenting again.
+
+### FEATURE: PR #2740 (2026-10-25)
+Background: feat(#2502): check and sweep Pester, pytest, and JS tests, and gate t...
+Changes: Test checks and `/sweep-tests` now support Pester, pytest, and JS tests in addition to bash.;New commit gate: a test must be written in the same language as the code it tests, unless its `Tags:` declares `test-lang-exception:text-only|symmetry|e2e`.;Adding a case to an existing test file that has no case markers is now blocked, unless the file's `Tests:` header lists exactly one path.;`bin/audit-tests.sh --embed-cases --only-file <path>` embeds case markers into one chosen test file.;Audit no longer retires cases one day early in non-UTC time zones.
+
+### FEATURE: PR #2779 (2026-10-25)
+Background: fix(#2597): let a reviewed acceptance release a WARN or BLOCK on a nu...
+Changes: Fixed: a supervisor audit WARN on a session without an outline artifact no longer blocks WORKFLOW_USER_VERIFIED and the pre-merge check indefinitely; you can now accept a reviewed WARN or BLOCK with WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED (replaces WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED).;Fixed: review_tests no longer stays stuck in progress after a review that ends with exit 1, 3 or 5.
+
+### FEATURE: PR #2793 (2026-10-25)
+Background: feat(#2761): leave merge-incoming files out of the commit-time glossa...
+Changes: Merging main into a feature branch no longer makes the commit-time glossary drift check report drift in files that came in unchanged from main; only files the branch changed or resolved are scanned.
+
+### FEATURE: PR #2805 (2026-10-26)
+Background: fix(#2796): stop demoting a delivered session's plan stages on glossa...
+Changes: Fixed: a delivered workflow session no longer asks to re-run the outline planning step after the shared glossary changes on main.
+
+### FEATURE: PR #2778 (2026-10-26)
+Background: feat(#2763): match glossary drift in identifier and prose contexts
+Changes: The glossary drift check no longer flags regular plurals, title case on heading lines and table header rows, naming-convention differences of an identifier (case, `_` or `-`), or lower-case command names for capital terms in code comments.;The glossary drift check now flags an identifier whose words change form or are split by whitespace, including inside code spans.;Existing glossary check records and their ACCEPTED grants go stale once, because the matcher rules changed.
+
+### FEATURE: PR #2810 (2026-10-26)
+Background: fix(#2748): resolve plans and progress by first_session_id, migrate orphan progress files, and validate the resume-session reader sid
+Changes: Resumed sessions (`/resume-session --from`) keep writing the first generation's progress file and plans instead of starting their own; a temporary `bin/migrate-orphan-progress-files` merges files left by earlier resumes.
+
+### FEATURE: PR #2816 (2026-10-27)
+Background: fix(#2804): keep live presentation receipts through zombie cleanup and diagnose no-receipt denials
+Changes: Plan confirmation: approving a plan right after the Stop hook's continue prompt no longer gets denied with `no-receipt` because another session's startup deleted the presentation receipt.
+
+### FEATURE: PR #2817 (2026-10-27)
+Background: fix(#2812): resolve merge-parent baselines for the tests gates
+Changes: Merge commits no longer fail the tests pre-commit gates for test files that already exist on the merged-in branch; files changed during the merge are still judged, against both parents.
+
+### FEATURE: PR #2815 (2026-10-27)
+Background: fix(#2808): update codex through npm directly after claude and codex exit
+Changes: Windows install no longer prints an npm cleanup EPERM warning when updating Codex CLI; it waits for running Claude Code and Codex to exit, then updates through npm directly.
+
+### FEATURE: PR #2821 (2026-10-28)
+Background: fix(#2811,#2813): continue confirm-plan presentation under stop_hook_active once per receipt, and point feature-2013 B20 at the current skill dispatch
+Changes: The plan approval dialog now follows a plan presentation even when that turn came after a Stop hook block, or when the transcript flush lagged but completed before the turn settled (#2811); a flush that lags past that point is tracked in #2822.
+
+### FEATURE: PR #2823 (2026-10-28)
+Background: feat(#2327): scope review-tests re-reviews after implementation changes to the delta
+Changes: review-tests re-reviews after an implementation change now read only the changed and covering tests, falling back to a full review when coverage cannot be determined (#2327)

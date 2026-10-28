@@ -10,7 +10,7 @@
 //           since repoRoot follows the caller's cwd. Fail-closed: any failure returns null.
 
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../../lib/limited-child-process");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { normalizeForCompare } = require("../git-repo-detection");
 const { getSessionRepoRoots } = require("../session-scope");

@@ -196,4 +196,21 @@ if printf '%s\n' "$OUT" | grep -q '^APPLIED'; then fail "A9 nothing is APPLIED" 
 unset FAKE_CODEX_LOG
 case_end
 
+case_begin "apply-only-file-workdir-applies-chosen-file" "bin/lib/test-embed-cases/stage-apply.sh"
+S3_REPO="$(ec_make_repo)"
+for _n in alpha bravo; do ec_add_test "$S3_REPO" "tests/bin/t-$_n.sh" "bin/$_n.sh"; done
+ec_commit "$S3_REPO" init
+ec_stage1 "$S3_REPO" "$AUDIT" --only-file tests/bin/t-alpha.sh
+check_eq "A10 --only-file stage 1 exits 0 (err=${ERR:0:200})" "0" "$RC"
+_hb="$(s3_hash bravo)"
+[[ -z "$EC_WORKDIR" ]] || s3_good alpha
+ec_codex_says "CASE_BOUNDARY: tests/bin/t-alpha.sh: OK"
+ec_apply "$S3_REPO"
+check_eq "A10 apply exits 0 (err=${ERR:0:200})" "0" "$RC"
+check_eq "A10 the only APPLIED line is the chosen file" "$(printf 'APPLIED\ttests/bin/t-alpha.sh')" "$(printf '%s\n' "$OUT" | grep '^APPLIED')"
+if [[ -n "$EC_WORKDIR" ]] && cmp -s "$(ec_item_output tests/bin/t-alpha.sh)" "$S3_REPO/tests/bin/t-alpha.sh"; then pass "A10 the chosen file now holds the stage-2 output"; else fail "A10 the chosen file now holds the stage-2 output" "workdir='$EC_WORKDIR'"; fi
+s3_untouched "A10 (not chosen)" bravo "$_hb"
+check_eq "A10 the unchosen file has no worklist row" "" "$(ec_wl_field tests/bin/t-bravo.sh 1)"
+case_end
+
 grp_done stage3-apply-cases.sh

@@ -127,16 +127,21 @@ ok("L5.lrm-widr-no-after", LRM([mev({"tests/a.sh":"aaa"}), widrClear()]) === nul
   const r = DRS({ v:1, files }, { ok:true, files });
   ok("D5.drs-explicit-rereview", r.scope === "full" && r.reason === "explicit-rereview"); }
 
-// D6: D has impl file → full, impl-changed
+// D6: D has impl file covered by tests/a.sh → delta, impl-changed (covering test only)
 { const r = DRS(
-    { v:1, files:{"tests/a.sh":"aaa","hooks/impl.js":"old"} },
-    { ok:true, files:{"tests/a.sh":"aaa","hooks/impl.js":"new"} });
-  ok("D6.drs-impl-changed", r.scope === "full" && r.reason === "impl-changed"); }
+    { v:1, files:{"tests/a.sh":"aaa","tests/b.sh":"bbb","tests/c.sh":"ccc","hooks/impl.js":"old"} },
+    { ok:true, files:{"tests/a.sh":"aaa","tests/b.sh":"bbb","tests/c.sh":"ccc","hooks/impl.js":"new"} },
+    { "tests/a.sh":["hooks/impl.js"], "tests/b.sh":[], "tests/c.sh":[] });
+  ok("D6.drs-impl-changed", r.scope === "delta" && r.reason === "impl-changed", JSON.stringify(r));
+  ok("D6.drs-impl-changed-review", JSON.stringify(r.review) === JSON.stringify(["tests/a.sh"]), JSON.stringify(r.review));
+  ok("D6.drs-impl-changed-inventory", JSON.stringify(r.inventory) === JSON.stringify(["tests/b.sh","tests/c.sh"]), JSON.stringify(r.inventory));
+  ok("D6.drs-impl-changed-deleted-empty", (r.deleted||[]).length === 0);
+  ok("D6.drs-impl-changed-source", (r.sources||[]).includes("hooks/impl.js")); }
 
-// D7: D is tests-only → delta, tests-only
+// D7: D is tests-only → delta, tests-only (2 unchanged tests keep review at 1/3)
 { const r = DRS(
-    { v:1, files:{"tests/a.sh":"old","hooks/impl.js":"same"} },
-    { ok:true, files:{"tests/b.sh":"new","hooks/impl.js":"same"} });
+    { v:1, files:{"tests/a.sh":"old","tests/k1.sh":"k1","tests/k2.sh":"k2","hooks/impl.js":"same"} },
+    { ok:true, files:{"tests/b.sh":"new","tests/k1.sh":"k1","tests/k2.sh":"k2","hooks/impl.js":"same"} });
   ok("D7.drs-tests-only-delta", r.scope === "delta" && r.reason === "tests-only"); }
 
 // D8: delta scope — added test in review, deleted test in deleted, unchanged in inventory
@@ -174,15 +179,23 @@ ok("L5.lrm-widr-no-after", LRM([mev({"tests/a.sh":"aaa"}), widrClear()]) === nul
   ok("D11.source-no-docs",      !srcs.some(p => p.includes("docs/guide")));
   ok("D11.source-no-readme",    !srcs.some(p => p === "README.md" || p.endsWith("/README.md"))); }
 
-// D12: SOURCE excludes excluded paths in delta scope too
+// D12: SOURCE excludes excluded paths in delta scope too (2 unchanged tests keep review at 1/3)
 { const r = DRS(
-    { v:1, files:{"tests/a.sh":"old","hooks/impl.js":"same","CHANGELOG.md":"x"} },
-    { ok:true, files:{"tests/b.sh":"new","hooks/impl.js":"same","CHANGELOG.md":"x"} });
+    { v:1, files:{"tests/a.sh":"old","tests/k1.sh":"k1","tests/k2.sh":"k2","hooks/impl.js":"same","CHANGELOG.md":"x"} },
+    { ok:true, files:{"tests/b.sh":"new","tests/k1.sh":"k1","tests/k2.sh":"k2","hooks/impl.js":"same","CHANGELOG.md":"x"} });
   ok("D12.delta-source-no-changelog",
      r.scope === "delta" && !(r.sources||[]).some(p => String(p).includes("CHANGELOG"))); }
 JSEOF
 
-out=$(run_with_timeout 30 node "$TMPDIR_BASE/runner.js" "$DELTA_JS" 2>&1) || true
+# Every ok() call above emits exactly one PASS/FAIL line; a runner that crashes part-way (non-zero
+# exit) or stops early (fewer lines) must fail the suite, not pass on the lines it did print.
+EXPECTED_RESULTS=35
+runner_rc=0
+out=$(run_with_timeout 30 node "$TMPDIR_BASE/runner.js" "$DELTA_JS" 2>&1) || runner_rc=$?
+
+if [ "$runner_rc" -ne 0 ]; then
+  fail "review-scope-delta.js runner exit status" "runner exited $runner_rc: $out"
+fi
 
 if printf '%s\n' "$out" | grep -q "^MODULE_MISSING:"; then
   msg=$(printf '%s\n' "$out" | grep "^MODULE_MISSING:" | head -1)
@@ -196,6 +209,10 @@ else
   done <<< "$out"
   if ! printf '%s\n' "$out" | grep -qE "^(PASS|FAIL):"; then
     fail "review-scope-delta.js runner" "no PASS/FAIL output — unexpected: $out"
+  fi
+  got_results=$(printf '%s\n' "$out" | grep -cE "^(PASS|FAIL):" || true)
+  if [ "$got_results" -ne "$EXPECTED_RESULTS" ]; then
+    fail "review-scope-delta.js runner case count" "want $EXPECTED_RESULTS PASS/FAIL lines, got $got_results"
   fi
 fi
 

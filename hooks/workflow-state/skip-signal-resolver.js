@@ -10,7 +10,6 @@
 // all_conditions_met, and the jev-judge ticket if any.
 
 const fs = require("fs");
-const path = require("path");
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
 const { CONDITION_SCHEMAS, JUDGMENT_SOURCES } = require("./skip-signal-resolver/condition-schemas");
@@ -57,7 +56,9 @@ function isTrivial(sessionId, plansDir) {
     const dir = (typeof plansDir === "string" && plansDir.length)
       ? plansDir
       : getWorkflowPlansDir();
-    const intentPath = path.join(dir, sessionId + "-intent.md");
+    // The intent of the session chain is named after first_session_id (#2748).
+    const intentPath = require("./plan-artifact-owner")
+      .resolvePlanArtifactOwner(sessionId, "intent", undefined, { plansDir: dir }).path;
     if (!fs.existsSync(intentPath)) return false;
     const text = fs.readFileSync(intentPath, "utf8").toLowerCase();
 
@@ -156,11 +157,13 @@ function hasValidSkipJudgment(sessionId, targetStep) {
   try {
     const sj = readSkipJudgment(sessionId, targetStep);
     if (!sj) return false;
-    // Artifact path mapping (intent.md scope):
-    //   outline → <PLANS_DIR>/<sid>-intent.md
-    //   detail  → <PLANS_DIR>/<sid>-outline.md
-    const artifactSuffix = targetStep === "detail" ? "-outline.md" : "-intent.md";
-    const artifactPath = path.join(getWorkflowPlansDir(), sessionId + artifactSuffix);
+    if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
+    // Artifact mapping (named after first_session_id, #2748):
+    //   outline → <PLANS_DIR>/<first_session_id>-intent.md
+    //   detail  → <PLANS_DIR>/<first_session_id>-outline.md
+    const artifactKind = targetStep === "detail" ? "outline" : "intent";
+    const artifactPath = require("./plan-artifact-owner")
+      .resolvePlanArtifactOwner(sessionId, artifactKind, undefined, { plansDir: getWorkflowPlansDir() }).path;
     let artifactMtimeMs;
     try {
       artifactMtimeMs = fs.statSync(artifactPath).mtimeMs;
@@ -184,7 +187,7 @@ function hasValidSkipJudgment(sessionId, targetStep) {
 function describeSkipSignal(predicate) {
   if (predicate === "isTrivial") {
     return [
-      "<PLANS_DIR>/<sessionId>-intent.md contains a mechanical-transformation keyword " +
+      "<PLANS_DIR>/<first_session_id>-intent.md contains a mechanical-transformation keyword " +
         "(rename / fix typo / typo / remove unused / extract / move)",
       "AND contains no broad-change keyword (across the codebase / redesign / new interface / every / entire)",
       "AND contains no new-API-surface declaration (new api / new endpoint / public api / new interface / new command / new sentinel)",

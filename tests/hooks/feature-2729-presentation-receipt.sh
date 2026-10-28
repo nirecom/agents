@@ -6,7 +6,7 @@
 # and the real plan-sync publish timing; mitigated by bin/check-verification-gate.sh (category: hook-registration).
 # #2729 (Gap 1/4/5) + #2628: Stop writes a presentation receipt only for a non-blocked turn that
 # closes on its link-line run; confirm-checkpoint matches path, link and content against it,
-# fail-closed, with no cap. Repro drivers (R1, R2, R13) and R3-R12, R14, R15 live in the sibling directory.
+# fail-closed, with no cap; #2771: a block or an exception keeps earlier receipts. Repro drivers (R1, R2, R13) and R3-R12, R14, R15 live in the sibling directory.
 set -euo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -89,7 +89,7 @@ case_begin "r9-gate-off-no-receipt-no-block" "hooks/stop-confirm-plan-guard.js"
 prr_run r-cases-driver.js R9
 case_end
 
-case_begin "r10-blocked-turn-discards-all-receipts" "hooks/stop-confirm-plan-guard.js"
+case_begin "r10-blocked-turn-keeps-receipts" "hooks/stop-confirm-plan-guard.js"
 prr_run r-cases-driver.js R10
 case_end
 
@@ -97,7 +97,7 @@ case_begin "r11-unpublishable-path-receipt-and-not-published-block" "hooks/stop-
 prr_run r-cases-driver.js R11
 case_end
 
-case_begin "r12-exception-discards-receipts" "hooks/stop-confirm-plan-guard.js"
+case_begin "r12-exception-keeps-receipts" "hooks/stop-confirm-plan-guard.js"
 prr_run r-cases-driver.js R12
 case_end
 

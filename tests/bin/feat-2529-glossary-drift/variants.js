@@ -1,11 +1,13 @@
 "use strict";
 // T5-1 part of tests/bin/feat-2529-glossary-drift.js (#2529). Holds no case markers; the
 // entrypoint wraps run() in one.
-// Six stages × four variant kinds (case, hyphen, plural, merged) each give a DRIFT line; the R-S stages
-// read the staged blob, never the working tree; an intent `## Issues` variant is not scanned.
+// Six stages × four variant kinds (case, hyphen, plural with a hyphen, merged) each give a DRIFT
+// line, and a regular plural line gives none; the R-S stages read the staged blob, never the
+// working tree; an intent `## Issues` variant is not scanned.
 
-const VARIANTS = [["case", "Glossary Drift"], ["hyphen", "glossary-drift"], ["plural", "glossary drifts"],
+const VARIANTS = [["case", "Glossary Drift"], ["hyphen", "glossary-drift"], ["plural with a hyphen", "glossary-drifts"],
   ["merged", "glossarydrift"]];
+const PLURAL = "glossary drifts";
 const line = (v) => `Mid-line the ${v} shows up here.`;
 const lineOf = (text, needle) => text.split("\n").findIndex((l) => l.includes(needle)) + 1;
 
@@ -34,7 +36,7 @@ function perStage(F) {
   for (const stage of F.STAGES) {
     const repo = F.mkRepo(`v-${stage}`);
     const sid = F.newSid(`v-${stage}`);
-    const lines = VARIANTS.map(([, v]) => line(v));
+    const lines = VARIANTS.map(([, v]) => line(v)).concat([line(PLURAL)]);
     const files = artifactFor(F, stage, sid, lines);
     placeArtifact(F, repo, sid, files);
     F.seedAt(sid, F.STAGE_STEP[stage], repo);
@@ -49,6 +51,11 @@ function perStage(F) {
         d.line === want.line && d.file.endsWith(tail));
       F.check(`T5-1 ${stage} × ${kind}: DRIFT "${v}" -> "${F.TERM}" at ${tail}:${want.line}`, !!hit, r.all);
     }
+    const pf = files.find((x) => x.text.includes(line(PLURAL)));
+    const pTail = pf.suffix ? `${sid}-${pf.suffix}.md` : pf.rel;
+    const pLine = lineOf(pf.text, line(PLURAL));
+    const pHits = found.filter((d) => d.line === pLine && d.file.endsWith(pTail));
+    F.check(`T5-1 ${stage} × regular plural: no DRIFT at ${pTail}:${pLine}`, F.reached(r) && pHits.length === 0, JSON.stringify(pHits));
   }
 }
 
@@ -104,7 +111,7 @@ const SPLIT_MERGE = [
   ["single-word term split by a space (not a variant)", ["workflow"], "the work flow here", []],
   ["single-word term split and pluralized", ["workflow"], "the work-flows here", ["work-flows"]],
   ["single-word term split with case change", ["workflow"], "the Work-Flow here", ["Work-Flow"]],
-  ["single-word term in capitals", ["workflow"], "the WORKFLOW here", ["WORKFLOW"]],
+  ["capital word never matches a lower-case term (not a variant)", ["workflow"], "the WORKFLOW here", []],
   ["single-word term split by a tab (not a variant)", ["workflow"], "the work\tflow here", []],
   ["single-word term split by a space and pluralized (not a variant)", ["workflow"], "the work flows here", []],
   ["ordinary English `set up` for setup", ["setup"], "please set up the repo", []],
@@ -115,7 +122,7 @@ const SPLIT_MERGE = [
   ["multi-word term with a space inside a word (not a variant)", ["presentation turn"], "the present ation turn here", []],
   ["multi-word term merged", ["glossary drift"], "the glossarydrift here", ["glossarydrift"]],
   ["multi-word term hyphenated (unchanged)", ["glossary drift"], "the glossary-drift here", ["glossary-drift"]],
-  ["multi-word term pluralized (unchanged)", ["glossary drift"], "the glossary drifts", ["glossary drifts"]],
+  ["multi-word term with a regular plural (not a variant)", ["glossary drift"], "the glossary drifts", []],
   ["exact single-word spelling", ["workflow"], "the workflow here", []],
   ["exact multi-word spelling", ["glossary drift"], "the glossary drift here", []],
   ["exact spelling at a sentence start", ["workflow"], "Workflow starts here", []],
@@ -124,44 +131,52 @@ const SPLIT_MERGE = [
   ["sentence break between the parts", ["workflow"], "the work. flow here", []],
   ["spaced dash between the parts", ["workflow"], "the work - flow here", []],
   ["longer word that ends in the part", ["workflow"], "the network flow here", []],
-  ["-us singular in capitals", ["status"], "the STATUS here", ["STATUS"]],
-  ["-uses plural of a -us term", ["status"], "the statuses here", ["statuses"]],
+  ["-us singular as a capital word (not a variant)", ["status"], "the STATUS here", []],
+  ["-uses regular plural of a -us term (not a variant)", ["status"], "the statuses here", []],
   ["-uses plural, title case mid-sentence", ["status"], "the Statuses here", ["Statuses"]],
-  ["-uses plural in capitals", ["status"], "the STATUSES here", ["STATUSES"]],
+  ["-uses plural as a capital word (not a variant)", ["status"], "the STATUSES here", []],
   ["-yses plural of a -sis term", ["analysis"], "the Analyses here", ["Analyses"]],
   ["exact -us spelling", ["status"], "the status here", []],
 ];
-// Owner decision (round 8): an identifier term (one with `_`) is checked in prose too — case and
-// separator variants are flagged; camelCase / PascalCase may name it in another language and are
-// not. Known false positive: ordinary English spelling out the words (`user verified`).
+// Identifier terms (one with `_`) follow the identifier context of the matching rules:
+// docs/architecture/claude-code/glossary-check.md#matching-rules (SSOT).
 const ID = ["AGENTS_MAIN_ROOT"];
 const IDENT = [
   ["exact spelling", ID, "set AGENTS_MAIN_ROOT here", []],
   ["exact spelling at a sentence start", ID, "AGENTS_MAIN_ROOT is set", []],
-  ["lower case, same separators", ID, "set agents_main_root here", ["agents_main_root"]],
-  ["title case, same separators", ID, "set Agents_Main_Root here", ["Agents_Main_Root"]],
+  ["lower case, same separators (naming convention)", ID, "set agents_main_root here", []],
+  ["title case, same separators (naming convention)", ID, "set Agents_Main_Root here", []],
   ["space-split, lower case", ID, "set agents main root here", ["agents main root"]],
   ["space-split, capitals", ID, "set AGENTS MAIN ROOT here", ["AGENTS MAIN ROOT"]],
   ["hyphen-split", ID, "set agents-main-root here", ["agents-main-root"]],
   ["merged, lower case", ID, "set agentsmainroot here", ["agentsmainroot"]],
-  ["merged, capitals", ID, "set AGENTSMAINROOT here", ["AGENTSMAINROOT"]],
-  ["mixed underscore and hyphen", ID, "set AGENTS_MAIN-ROOT here", ["AGENTS_MAIN-ROOT"]],
+  ["merged, capitals (naming convention)", ID, "set AGENTSMAINROOT here", []],
+  ["mixed underscore and hyphen (naming convention)", ID, "set AGENTS_MAIN-ROOT here", []],
   ["mixed underscore and space", ID, "set agents_main root here", ["agents_main root"]],
   ["camelCase (not a variant)", ID, "set agentsMainRoot here", []],
   ["PascalCase (not a variant)", ID, "set AgentsMainRoot here", []],
   ["a space inside a word (not a variant)", ID, "set agen tsmainroot here", []],
   ["a longer identifier (not a variant)", ID, "set AGENTS_MAIN_ROOT_DIR here", []],
-  ["code span stays blanked", ID, "set `agents_main_root` here", []],
+  ["code span is identifier context, naming convention is no variant", ID, "set `agents_main_root` here", []],
   ["known false positive: ordinary English", ["USER_VERIFIED"], "the user verified the fix", ["user verified"]],
-  ["plural is no identifier variant", ["WORKTREE_NOTES"], "the WORKTREE_NOTE here", []],
+  ["per-word singular form is a variant", ["WORKTREE_NOTES"], "the WORKTREE_NOTE here", ["WORKTREE_NOTE"]],
 ];
 
-function table(F, label, rows) {
+// The findDrift export, or null with the red reason logged.
+function findDriftOf(F) {
   const drift = F.mod("bin/lib/glossary-drift.js");
-  if (!drift) return;
+  if (!drift) return null;
+  if (typeof drift.findDrift === "function") return drift.findDrift;
+  F.check("bin/lib/glossary-drift.js exports findDrift", false, Object.keys(drift).join(","));
+  return null;
+}
+
+function table(F, label, rows) {
+  const findDrift = findDriftOf(F);
+  if (!findDrift) return;
   for (const [name, terms, text, want] of rows) {
-    const got = drift.findVariants(drift.extractCheckableText(text, "markdown"), terms).map((h) => h.variant);
-    F.check(`T5-1 findVariants ${label}${name}: ${JSON.stringify(text)} -> ${JSON.stringify(want)}`,
+    const got = findDrift(text, "markdown", terms).map((h) => h.variant);
+    F.check(`T5-1 findDrift ${label}${name}: ${JSON.stringify(text)} -> ${JSON.stringify(want)}`,
       JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
   }
 }
@@ -171,7 +186,7 @@ function table(F, label, rows) {
 const COLLIDE = [
   ["space split goes to the spaced term", ["workflow", "work flow"], "the Work Flow here", [["work flow", "Work Flow"]]],
   ["hyphen split goes to the one-word term", ["workflow", "work flow"], "the Work-Flow here", [["workflow", "Work-Flow"]]],
-  ["capitals go to the one-word term", ["workflow", "work flow"], "the WORKFLOW here", [["workflow", "WORKFLOW"]]],
+  ["inner capital goes to the one-word term", ["workflow", "work flow"], "the WorkFlow here", [["workflow", "WorkFlow"]]],
   ["exact spelling of either term", ["workflow", "work flow"], "the workflow and the work flow here", []],
   ["sentence start of the spaced term", ["workflow", "work flow"], "Work flow starts here", []],
   ["hyphen split goes to the hyphenated term", ["work-flow", "work flow"], "the Work-Flow here", [["work-flow", "Work-Flow"]]],
@@ -179,12 +194,12 @@ const COLLIDE = [
   ["merged form ties, sorted order breaks it", ["work-flow", "work flow"], "the workflow here", [["work flow", "workflow"]]],
 ];
 function collisions(F) {
-  const drift = F.mod("bin/lib/glossary-drift.js");
-  if (!drift) return;
+  const findDrift = findDriftOf(F);
+  if (!findDrift) return;
   for (const [name, terms, text, want] of COLLIDE) {
     for (const order of [terms, terms.slice().reverse()]) {
-      const got = drift.findVariants(drift.extractCheckableText(text, "markdown"), order).map((h) => [h.term, h.variant]);
-      F.check(`T5-1 findVariants collision ${name} ${JSON.stringify(order)}: ${JSON.stringify(text)} -> ${JSON.stringify(want)}`,
+      const got = findDrift(text, "markdown", order).map((h) => [h.term, h.variant]);
+      F.check(`T5-1 findDrift collision ${name} ${JSON.stringify(order)}: ${JSON.stringify(text)} -> ${JSON.stringify(want)}`,
         JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
     }
   }
@@ -218,12 +233,12 @@ function deleteRows(F) {
 // A delete row removes only the glossary terms of its own spelling (trimmed, case-insensitive),
 // never every term with the same normalizeTerm form. Rows: [name, fileTerms, rows, text, [[term, variant]]].
 const SPELLING_ROWS = [
-  ["delete of the plural keeps the singular", ["workflow", "workflows"], [["workflows", "delete"]], "the WORKFLOW here", [["workflow", "WORKFLOW"]]],
-  ["delete of the plural in another case", ["workflow", "workflows"], [["Workflows", "delete"]], "the WORKFLOW here", [["workflow", "WORKFLOW"]]],
-  ["delete in another case removes the term", ["workflows"], [["Workflows", "delete"]], "the WORKFLOWS here", []],
+  ["delete of the plural keeps the singular", ["workflow", "workflows"], [["workflows", "delete"]], "the Workflow here", [["workflow", "Workflow"]]],
+  ["delete of the plural in another case", ["workflow", "workflows"], [["Workflows", "delete"]], "the Workflow here", [["workflow", "Workflow"]]],
+  ["delete in another case removes the term", ["workflows"], [["Workflows", "delete"]], "the Workflows here", []],
   ["delete with padding and capitals removes the term", ["Workflow"], [["  WORKFLOW ", "delete"]], "the work-flow here", []],
   ["delete of the plural leaves a lone singular", ["workflow"], [["workflows", "delete"]], "the work-flow here", [["workflow", "work-flow"]]],
-  ["delete + add of the same spelling keeps it", ["workflows"], [["workflows", "delete"], ["workflows", "add"]], "the WORKFLOWS here", [["workflows", "WORKFLOWS"]]],
+  ["delete + add of the same spelling keeps it", ["workflows"], [["workflows", "delete"], ["workflows", "add"]], "the Workflows here", [["workflows", "Workflows"]]],
   ["no delete row: both spellings stay exact", ["workflow", "workflows"], [], "the workflow and the workflows here", []],
 ];
 function deleteSpelling(F) {

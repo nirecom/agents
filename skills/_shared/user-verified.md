@@ -60,11 +60,11 @@ The `: <reason>` is mandatory — describe what the user is approving
 same sentence so the permission dialog shows it.
 
 `hooks/show-user-verified-context.js` fires before the dialog (SSOT) and surfaces:
-- Staged files (`git diff --cached --name-only`), or `(none)`
-- `Open PR: <url>` when available
-- The approval instruction line shown above the Allow / Deny buttons
+- `[user-verified] staged=<N>` (`git diff --cached --name-only`)
+- one `[user-verified] staged-file=<path>` line per staged file
+- `[user-verified] pr=<url>` when available
 
-Do not pre-print this context, the PR URL, or the approval instruction in chat —
+Do not pre-print this context or the PR URL in chat —
 the hook is the single source of truth for the dialog's surrounding text.
 
 **User answers the dialog**

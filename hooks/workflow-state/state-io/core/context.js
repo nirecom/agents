@@ -7,7 +7,7 @@ const path = require("path");
 // execFileSync, never execSync: since #1733 these git calls receive a path that
 // came from TOOL INPUT (postuse-native-worktree-record passes tool_input.path),
 // and a shell would expand `$(...)` / backticks inside it. Argv form has no shell.
-const { execFileSync } = require("child_process");
+const { execFileSync } = require("../../../lib/limited-child-process");
 const { normalizeCwd } = require("../../../lib/path-normalize");
 
 // getCurrentContext(dir) -> { cwd, git_branch }. With no argument this is a
@@ -34,7 +34,6 @@ function getCurrentContext(dir) {
 // `path_source` records how the path was obtained: a path read from tool
 // input is evidence, a process cwd is a guess, and the two must never be
 // conflated downstream.
-//
 // A path is only trusted as `tool_input` when it's a non-empty string that
 // normalizes to an absolute, existing directory where `git -C <path>
 // rev-parse --git-dir` succeeds. Any failure falls through to the

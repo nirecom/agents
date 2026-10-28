@@ -9,18 +9,22 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { getSessionStateDir } = require("../workflow-state");
-const { getPlansArtifactPath } = require("./plans-artifact-registry");
 const { normalizeSlashes } = require("./path-match");
 const { PLAN_STAGE_TABLE } = require("../workflow-state/plan-stage-table");
+const { controlPath } = require("../workflow-state/state-io/control-dir");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 const STAGES = Object.freeze(Object.values(PLAN_STAGE_TABLE).map((row) => row.suffix));
 const validSid = (sid) => typeof sid === "string" && SID_RE.test(sid);
 
-// approvalArtifactPath(sid, stage) -> <plans>/<sid>-<stage>.md, the file the approval binds; null
-// for an unusable sid.
+// approvalArtifactPath(sid, stage) -> <plans>/<first_session_id>-<stage>.md, the file the approval
+// binds (#2748); null for an unusable sid or stage.
 function approvalArtifactPath(sid, stage) {
-  try { return getPlansArtifactPath(sid, stage); } catch (_) { return null; }
+  try {
+    return require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage).path;
+  } catch (_) {
+    return null;
+  }
 }
 
 // linkKey(linkResult) -> the URL when one exists, else the local path, else null.
@@ -44,6 +48,26 @@ function receiptPath(sid, stage) {
   return path.join(getSessionStateDir(sid), `${sid}.confirm-plan-receipt-${stage}.json`);
 }
 
+const RECEIPT_LOG_NAME = "presentation-receipt-log.jsonl";
+
+// appendReceiptLog(sid, event, stage): one {event, stage, path, at} line (#2804); never throws.
+function appendReceiptLog(sid, event, stage) {
+  try {
+    const line = { event, stage, path: receiptPath(sid, stage), at: new Date().toISOString() };
+    fs.appendFileSync(controlPath(sid, RECEIPT_LOG_NAME, { forWrite: true }), `${JSON.stringify(line)}\n`, "utf8");
+  } catch (_) { /* the log is diagnostic only */ }
+}
+
+// readReceiptLog(sid) -> the parsed log lines, [] when absent or unreadable; never throws.
+function readReceiptLog(sid) {
+  try {
+    const raw = fs.readFileSync(controlPath(sid, RECEIPT_LOG_NAME), "utf8");
+    return raw.split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (_) { return null; } }).filter(Boolean);
+  } catch (_) {
+    return [];
+  }
+}
+
 // A link stands for the plan only as an http(s) URL, or as the plan's own local path.
 function validLink(link, absPath) {
   if (!link || typeof link !== "object" || typeof link.value !== "string" || !link.value) return false;
@@ -52,25 +76,61 @@ function validLink(link, absPath) {
   return false;
 }
 
-// writeReceipt(sid, stage, {absPath, link, contentSha, anchorUuid}) -> true when written.
+// writeBody(file, body, verify) -> true when renamed into place; verify() runs just before the rename.
+function writeBody(file, body, verify) {
+  const tmp = `${file}.${crypto.randomBytes(4).toString("hex")}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(body), "utf8");
+    if (verify && !verify()) {
+      fs.unlinkSync(tmp);
+      return false;
+    }
+    fs.renameSync(tmp, file);
+    return true;
+  } catch (_) {
+    try { fs.unlinkSync(tmp); } catch (_e) { /* tmp never written */ }
+    return false;
+  }
+}
+
+const isContinued = (receipt) => !!receipt && typeof receipt.continuedAt === "string" && receipt.continuedAt !== "";
+
+// writeReceipt(sid, stage, {absPath, link, contentSha, anchorUuid, carryMark}) -> true when written.
+// carryMark keeps the existing continuedAt only while the receipt's path, link and content are unchanged.
 function writeReceipt(sid, stage, fields) {
   const f = fields || {};
   if (!validSid(sid) || !STAGES.includes(stage)) return false;
   if (typeof f.absPath !== "string" || !f.absPath || typeof f.contentSha !== "string" || !f.contentSha) return false;
   if (!validLink(f.link, f.absPath)) return false;
-  const file = receiptPath(sid, stage);
-  const tmp = `${file}.${crypto.randomBytes(4).toString("hex")}.tmp`;
   const body = {
     absPath: f.absPath, link: { kind: f.link.kind, value: f.link.value }, contentSha: f.contentSha,
     anchorUuid: typeof f.anchorUuid === "string" ? f.anchorUuid : "", writtenAt: new Date().toISOString(),
   };
+  if (f.carryMark === true) {
+    const prev = readReceipt(sid, stage);
+    if (prev.ok && isContinued(prev.receipt) && matchReceipt(prev.receipt, body).ok) body.continuedAt = prev.receipt.continuedAt;
+  }
+  if (!writeBody(receiptPath(sid, stage), body)) return false;
+  appendReceiptLog(sid, "write", stage);
+  return true;
+}
+
+const sameReceipt = (a, b) => matchReceipt(a, b).ok && a.anchorUuid === b.anchorUuid;
+
+// markContinued(sid, stage) -> true when the receipt now carries continuedAt; false when it is absent,
+// unreadable, consumed or replaced before the rename, or the write fails. Never throws.
+function markContinued(sid, stage) {
   try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify(body), "utf8");
-    fs.renameSync(tmp, file);
-    return true;
+    const before = readReceipt(sid, stage);
+    if (!before.ok) return false;
+    const body = Object.assign({}, before.receipt, { continuedAt: new Date().toISOString() });
+    const verify = () => {
+      const now = readReceipt(sid, stage);
+      return now.ok && sameReceipt(now.receipt, before.receipt);
+    };
+    return writeBody(receiptPath(sid, stage), body, verify);
   } catch (_) {
-    try { fs.unlinkSync(tmp); } catch (_e) { /* tmp never written */ }
     return false;
   }
 }
@@ -103,11 +163,9 @@ function discardReceipt(sid, stage) {
 // concurrent CONFIRM calls cannot both spend it.
 function consumeReceipt(sid, stage) {
   if (!validSid(sid) || !STAGES.includes(stage)) return false;
-  try { fs.unlinkSync(receiptPath(sid, stage)); return true; } catch (_) { return false; }
-}
-
-function discardAllReceipts(sid) {
-  for (const stage of STAGES) discardReceipt(sid, stage);
+  try { fs.unlinkSync(receiptPath(sid, stage)); } catch (_) { return false; }
+  appendReceiptLog(sid, "consume", stage);
+  return true;
 }
 
 // matchReceipt(receipt, {absPath, link, contentSha}) -> {ok:true} | {ok:false, cause}.
@@ -124,5 +182,6 @@ function matchReceipt(receipt, current) {
 
 module.exports = {
   STAGES, approvalArtifactPath, linkKey, samePath,
-  receiptPath, writeReceipt, readReceipt, discardReceipt, consumeReceipt, discardAllReceipts, matchReceipt,
+  receiptPath, writeReceipt, readReceipt, discardReceipt, consumeReceipt, matchReceipt, readReceiptLog,
+  isContinued, markContinued,
 };

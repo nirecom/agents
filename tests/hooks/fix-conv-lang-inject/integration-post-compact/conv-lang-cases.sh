@@ -6,11 +6,6 @@
 # order IS the execution order. Owns the CONV_LANG injection contract for
 # post-compact.js and its fail-open behaviour on malformed stdin.
 
-# ===========================================================================
-# Integration tests for post-compact.js (T12, T13)
-# ===========================================================================
-
-# T12 [Integration] post-compact with CONV_LANG=japanese
 CTX=$(call_post_compact "t12-$RANDOM" set "japanese")
 if [ -z "$CTX" ]; then
     skip "T12: post-compact produced no output"
@@ -106,23 +101,13 @@ else
     skip "T16: hooks/lib directory missing — cannot stub helper"
 fi
 
-# ===========================================================================
-# T17 [Security] CONV_LANG with shell metachar $() — pass-through behavior
-# Shell metachars like $() are NOT filtered by the control-char guard
-# ([\x00-\x1f]). They pass through as plain text to the LLM prompt, where
-# they are NOT shell-executed. This test verifies the defined behavior:
-# the value is injected as-is into the prompt string.
-#
-# L3 GAP: If the injection string were ever passed to a shell (e.g. eval),
-# $() would execute. The current code path is LLM-only (no shell eval), so
-# this is a prompt-injection concern only if the LLM treats $() specially.
-# That risk is out of scope for L2 testing.
-# ===========================================================================
+# T17 [Security] CONV_LANG with shell metachar $() — injected as plain text into the
+# prompt (never shell-evaluated). L3 GAP: a future shell eval of the string would run $().
 if [ ! -f "$CONV_LANG_LIB" ]; then
     skip "T17: $CONV_LANG_LIB does not exist yet (pre-implementation)"
 else
     METACHAR_VAL='$(echo injected)'
-    EXPECTED_META="\"Respond to the user in \$(echo injected). This applies to all text you write, including narration between tool calls.\""
+    EXPECTED_META="\"$(expected_conv "$METACHAR_VAL")\""
     OUT=$(call_helper set "$METACHAR_VAL")
     if [ "$OUT" = "$EXPECTED_META" ]; then
         pass "T17: CONV_LANG with shell metachar passes through as plain text: $OUT"

@@ -156,8 +156,8 @@ upg_case "T3 URL in the last text block of the final entry — allow" "$SID_PUB"
 case_end
 
 case_begin "hook-last-assistant-message" "hooks/stop-confirm-plan-guard.js"
-upg_case "LM1 last_assistant_message never matches the transcript (undecidable) — allow" "$SID_PUB" intent \
-  '[U("go"), A(T("The intent plan is written."))]' allow - ',"last_assistant_message":"A final text that is never flushed."'
+upg_case "LM1 last_assistant_message never matches the transcript (undecidable) + marker — no block, notice names intent" "$SID_PUB" intent \
+  '[U("go"), A(T("The intent plan is written."))]' notice intent ',"last_assistant_message":"A final text that is never flushed."'
 upg_case "LM2 last_assistant_message matches, no link — plan-link block" "$SID_PUB" intent \
   '[U("go"), A(T("The intent plan is written."))]' block "$PL_PREFIX" ',"last_assistant_message":"The intent plan is written."'
 upg_case "LM3 last_assistant_message matches, link present — allow" "$SID_PUB" intent \
@@ -253,8 +253,8 @@ upg_case "A1 marker intent, plan file absent, nothing in the reply — allow" "$
   '[U("go"), A(T("The intent plan is written."))]' allow -
 upg_case "A2 no marker, CONFIRM_OUTLINE + follow-up, outline file absent — allow" "$SID_LOCAL" - \
   '[U("ok"), A(T("Confirmed."), C("outline"), S("make-detail-plan"))]' allow -
-UPG_HOOK_PLANS="relative-plans" upg_case "A3 plans dir cannot be resolved (non-absolute), marker, nothing in the reply — allow" \
-  "$SID_LOCAL" intent '[U("go"), A(T("The intent plan is written."))]' allow -
+UPG_HOOK_PLANS="relative-plans" upg_case "A3 plans dir cannot be resolved (non-absolute), marker, nothing in the reply — no block, notice names intent" \
+  "$SID_LOCAL" intent '[U("go"), A(T("The intent plan is written."))]' notice intent
 case_end
 
 case_begin "hook-blocks-once" "hooks/stop-confirm-plan-guard.js"

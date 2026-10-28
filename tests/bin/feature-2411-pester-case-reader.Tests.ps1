@@ -240,6 +240,25 @@ Describe 'pester-case-reader' -Tag 'target:bin/lib/test-language-parts/pester-ca
         Assert-Record -Label 'duplicate names' -Path $path -State 'conforming' -Case @('CASE|alpha|bin/a.sh|1|2||', 'CASE|alpha|bin/b.sh|3|4||')
     }
 
+    # #2712: a TAB, CR or LF that reaches the name or the target would split the TSV; grammar at the Describe line.
+    It 'grammar: a record delimiter in the <Label>' -ForEach @(
+        @{ Label = 'name (TAB escape)'; Head = 'Describe "al`tpha" -Tag ''target:bin/a.sh'' {' }
+        @{ Label = 'name (CR escape)'; Head = 'Describe "al`rpha" -Tag ''target:bin/a.sh'' {' }
+        @{ Label = 'name (LF escape)'; Head = 'Describe "al`npha" -Tag ''target:bin/a.sh'' {' }
+        @{ Label = 'name (raw TAB in single quotes)'; Head = "Describe 'al$([char]9)pha' -Tag 'target:bin/a.sh' {" }
+        @{ Label = 'target (TAB escape)'; Head = 'Describe ''alpha'' -Tag "target:bin/a`t.sh" {' }
+        @{ Label = 'target (CR escape)'; Head = 'Describe ''alpha'' -Tag "target:bin/a`r.sh" {' }
+        @{ Label = 'target (LF escape)'; Head = 'Describe ''alpha'' -Tag "target:bin/a`n.sh" {' }
+    ) {
+        $path = New-Sample -Name 'delimiter.Tests.ps1' -Line @('$x = 1', $Head, '}')
+        Assert-Malformed -Label "grammar: delimiter in the $Label" -Path $path -Reason 'grammar' -Line 2
+    }
+
+    It 'conforming: a written backslash-t in the name is not a delimiter' {
+        $path = New-Sample -Name 'written-t.Tests.ps1' -Line @('Describe "al\tpha" -Tag ''target:bin/a.sh'' {', '}')
+        Assert-Record -Label 'conforming: written backslash-t' -Path $path -State 'conforming' -Case @('CASE|al\tpha|bin/a.sh|1|2||')
+    }
+
     It 'never executes the file under read' {
         $sentinel = Join-Path $TestDrive 'executed.flag'
         $line = @("Set-Content -LiteralPath '$sentinel' -Value 'ran'", "Describe 'alpha' -Tag 'target:bin/a.sh' {", '}')

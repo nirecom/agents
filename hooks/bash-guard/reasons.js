@@ -7,12 +7,17 @@
 // REASON_CODES holds exactly the deny codes — one per forbidden-literal id, so the
 // registry's size is a direct check on the approved set. The three non-deny verdicts
 // (passThrough, notify, allow) each own a separate registry for that reason.
+// GIT_DEVIANT_CODES is the git-deviant deny registry (#2617), derived from its own SSOT
+// (git-deviant/forms.js) and kept out of REASON_CODES so that size check still holds.
 
 const { LITERAL_IDS } = require("./forbidden-literals");
+const { GIT_DEVIANT_FORMS } = require("./git-deviant/forms");
 
 const codeFor = (literalId) => "BG-" + literalId.toUpperCase();
 
 const REASON_CODES = Object.freeze(LITERAL_IDS.map(codeFor));
+
+const GIT_DEVIANT_CODES = Object.freeze(Object.values(GIT_DEVIANT_FORMS).map((f) => f.code));
 
 const PASS_THROUGH_CODES = Object.freeze({
   TOOL_OUT_OF_SCOPE: "BG-TOOL-OUT-OF-SCOPE",
@@ -44,4 +49,4 @@ function reasonCodeFor(literalId) {
   return codeFor(literalId);
 }
 
-module.exports = { REASON_CODES, PASS_THROUGH_CODES, NOTIFY_CODES, ALLOW_CODES, reasonCodeFor };
+module.exports = { REASON_CODES, GIT_DEVIANT_CODES, PASS_THROUGH_CODES, NOTIFY_CODES, ALLOW_CODES, reasonCodeFor };

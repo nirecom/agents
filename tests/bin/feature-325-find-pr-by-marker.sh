@@ -5,11 +5,10 @@
 # Tests for issue #325 — bin/github-issues/find-pr-by-marker.sh
 
 # Maps issue N → (PR_NUMBER, MERGE_COMMIT) using:
-#   primary:  gh issue view --json closedByPullRequestsReferences
-#             (CLOSED state, sort_by mergedAt, last entry's PR + mergeCommit.oid)
-#   fallback: marker-based PR search (issue-close-pr-of:N in PR body)
-#
-# RED: this suite fails clean while the script is missing.
+#   primary:  closedByPullRequestsReferences (numbers only) + gh pr view <n>
+#             (CLOSED state; unmerged excluded; latest mergedAt wins)
+#   fallback: keyword search + exact client-side issue-close-pr-of marker match
+# gh-mock applies the script's real --jq to raw API-shaped JSON (#2765).
 
 set -u
 
@@ -114,12 +113,13 @@ else
 fi
 teardown_tmp_find
 
-# --- F4: multiple PRs with marker → latest by mergedAt selected (PR 100)
-# The mock returns the pre-jq'd output (latest entry after sort_by(.mergedAt) | last).
+# --- F4: two marker PRs with different mergedAt → the newer (PR 11) is selected.
+# The newer PR is listed first so list order alone cannot satisfy the case.
 setup_tmp_find
-GH_MOCK_MARKER_PR_RESULT="100	cafe4567" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
-if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "100" ] && [ "$FIND_MERGE_COMMIT" = "cafe4567" ]; then
-    pass "F4: multiple PRs with marker → latest mergedAt selected (PR 100)"
+RAW_F4='[{"number":11,"mergedAt":"2026-02-01T00:00:00Z","mergeCommit":{"oid":"new11bbb"},"body":"y\n<!-- issue-close-pr-of: 42 -->"},{"number":10,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"oid":"old10aaa"},"body":"x\n<!-- issue-close-pr-of: 42 -->"}]'
+GH_MOCK_MARKER_PR_RAW="$RAW_F4" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "11" ] && [ "$FIND_MERGE_COMMIT" = "new11bbb" ]; then
+    pass "F4: two marker PRs → latest mergedAt selected (PR 11)"
 else
     fail "F4: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT"
 fi
@@ -163,11 +163,17 @@ else
 fi
 teardown_tmp_find
 
-# --- F8: multiple closedByPullRequestsReferences → sort_by(mergedAt)|last picks most recent
+# --- F8: multiple closedByPullRequestsReferences → the most recent merge wins.
+# The newer PR is listed first so list order alone cannot satisfy the case.
 setup_tmp_find
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42="200 100" \
+GH_MOCK_PR_MERGE_SHA_FOR_100=oldsha100 \
+GH_MOCK_PR_MERGED_AT_FOR_100=2026-01-01T00:00:00Z \
+GH_MOCK_PR_MERGE_SHA_FOR_200=newsha200 \
+GH_MOCK_PR_MERGED_AT_FOR_200=2026-02-01T00:00:00Z \
 GH_MOCK_SCENARIO=closed_multi_reference \
     run_find 42; RC=$?
-if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "200" ]; then
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "200" ] && [ "$FIND_MERGE_COMMIT" = "newsha200" ]; then
     pass "F8: closed_multi_reference → sort_by(mergedAt)|last selects PR 200"
 else
     fail "F8: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
@@ -242,185 +248,185 @@ fi
 teardown_tmp_find
 
 # ============================================================================
-# G-series (#2308) — GitLab forge path. CPR-ORTH mirror of the GitHub F-series:
-# primary `glab api .../closed_by`, marker fallback across merged MR
-# descriptions, primary-wins, and the gitlab-only edges (unresolvable project,
-# cross-repo rejection). Forge is forced with a fake bin/detect-forge-type in a
-# fake script checkout the script runs from; glab is a mock keyed by GL_MOCK_*.
+# #2765 regressions — the real API returns PR numbers only (no mergedAt /
+# mergeCommit), so the merge data must be resolved per PR via `gh pr view`.
 # ============================================================================
 
-# setup_tmp_gl: fake detect-forge-type (gitlab) + glab mock; SHIM_PROJECT picks
-# the resolved project path (empty = unresolvable). GL_MOCK_CLOSED_BY /
-# GL_MOCK_MARKER hold pre-jq'd `<iid>\t<sha>` lines (real tab), empty = miss.
-setup_tmp_gl() {
-    TMP="$(mktemp -d)"
-    FAKE_SCRIPT_CHECKOUT_ROOT="$TMP/fake-script-checkout-root"
-    mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" "$TMP/glmockbin"
-    GL_FIND_SCRIPT="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/find-pr-by-marker.sh"
-    cp "$FIND_SCRIPT" "$GL_FIND_SCRIPT"
-    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/detect-forge-type" <<'NODE'
-"use strict";
-const argv = process.argv;
-function arg(n){const i=argv.indexOf(n);return i>=0&&i+1<argv.length?argv[i+1]:null;}
-const field = arg("--field");
-if (field === "type") process.stdout.write("gitlab\n");
-else if (field === "project") process.stdout.write((process.env.SHIM_PROJECT === undefined ? "acme/widgets" : process.env.SHIM_PROJECT) + "\n");
-else process.stdout.write("\n");
-NODE
-    export GL_LOG="$TMP/glab.log"
-    : > "$GL_LOG"
-    cat > "$TMP/glmockbin/glab" <<'EOF'
-#!/bin/bash
-printf '%s\n' "$*" >> "$GL_LOG"
-# GL_MOCK_EXIT simulates a glab API failure (auth/network): the call is logged
-# (so callers can prove glab WAS queried) then exits non-zero before any output.
-[ -n "${GL_MOCK_EXIT:-}" ] && exit "$GL_MOCK_EXIT"
-case "$*" in
-    *closed_by*) [ -n "${GL_MOCK_CLOSED_BY:-}" ] && printf '%s\n' "$GL_MOCK_CLOSED_BY"; exit 0 ;;
-    *merge_requests*) [ -n "${GL_MOCK_MARKER:-}" ] && printf '%s\n' "$GL_MOCK_MARKER"; exit 0 ;;
-esac
-exit 0
-EOF
-    chmod +x "$TMP/glmockbin/glab"
-    _GL_OLDPATH="$PATH"
-    export PATH="$TMP/glmockbin:$PATH"
-}
-
-teardown_tmp_gl() {
-    export PATH="$_GL_OLDPATH"
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then rm -rf "$TMP"; fi
-    unset FAKE_SCRIPT_CHECKOUT_ROOT GL_FIND_SCRIPT GL_LOG SHIM_PROJECT GL_MOCK_CLOSED_BY GL_MOCK_MARKER GL_MOCK_EXIT TMP
-}
-
-# run_find_gl [--repo <slug>] <N>: run under the gitlab setup; parses PR_NUMBER /
-# MERGE_COMMIT like run_find and exposes FIND_ERR.
-run_find_gl() {
-    local out rc
-    out=$(run_with_timeout 15 bash "$GL_FIND_SCRIPT" "$@" 2>/tmp/find_gl_err.$$)
-    rc=$?
-    FIND_ERR=$(cat /tmp/find_gl_err.$$ 2>/dev/null)
-    rm -f /tmp/find_gl_err.$$
-    FIND_OUT="$out"
-    unset PR_NUMBER MERGE_COMMIT
-    eval "$out" 2>/dev/null
-    FIND_PR_NUMBER="${PR_NUMBER:-}"
-    FIND_MERGE_COMMIT="${MERGE_COMMIT:-}"
-    return $rc
-}
-
-GL_CB=$(printf '3\tsha1230')   # closed_by primary line
-GL_MK=$(printf '5\tsha4560')   # marker fallback line
-
-# --- G1 (mirror F2): gitlab primary closed_by hit → PR 3 / sha1230.
-setup_tmp_gl
-GL_MOCK_CLOSED_BY="$GL_CB" run_find_gl 42; RC=$?
-if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "3" ] && [ "$FIND_MERGE_COMMIT" = "sha1230" ]; then
-    pass "G1: gitlab primary closed_by hit → PR 3 sha1230"
+# --- F12: CLOSED issue, one merged PR number only → PR and SHA both non-empty.
+# The old implementation read mergeCommit from the references and got an empty
+# SHA, so the primary path never succeeded.
+setup_tmp_find
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42=55 \
+GH_MOCK_PR_MERGE_SHA_FOR_55=dead1234 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "55" ] && [ "$FIND_MERGE_COMMIT" = "dead1234" ]; then
+    pass "F12: numbers-only references resolved via pr view → PR 55 dead1234"
 else
-    fail "G1: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
+    fail "F12: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
-teardown_tmp_gl
+teardown_tmp_find
 
-# --- G2 (mirror F1): primary empty → marker fallback across merged MRs → PR 5.
-setup_tmp_gl
-GL_MOCK_MARKER="$GL_MK" run_find_gl 42; RC=$?
-if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "5" ] && [ "$FIND_MERGE_COMMIT" = "sha4560" ]; then
-    pass "G2: gitlab marker fallback when closed_by empty → PR 5 sha4560"
+# --- F13: unmerged PR 300 (no merge SHA) is excluded; merged PR 301 is chosen.
+setup_tmp_find
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42="300 301" \
+GH_MOCK_PR_MERGE_SHA_FOR_301=feed3010 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "301" ] && [ "$FIND_MERGE_COMMIT" = "feed3010" ]; then
+    pass "F13: unmerged PR 300 excluded → merged PR 301"
 else
-    fail "G2: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
+    fail "F13: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
-teardown_tmp_gl
+teardown_tmp_find
 
-# --- G3 (mirror F3): primary miss + fallback empty → exit 1 "no MR".
-setup_tmp_gl
-run_find_gl 42; RC=$?
-if [ "$RC" -ne 0 ] && echo "$FIND_ERR" | grep -qi "no MR"; then
-    pass "G3: gitlab primary miss + fallback empty → exit 1 (no MR)"
+# --- F14: fallback must match the marker exactly — a PR for issue 420 does not
+# satisfy a search for issue 42 (keyword search is loose on the number token).
+setup_tmp_find
+RAW_F14='[{"number":900,"mergedAt":"2026-03-01T00:00:00Z","mergeCommit":{"oid":"bad9000"},"body":"z\n<!-- issue-close-pr-of: 420 -->"}]'
+GH_MOCK_MARKER_PR_RAW="$RAW_F14" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
+if [ "$RC" -eq 1 ] && [ -z "$FIND_PR_NUMBER" ] && echo "$FIND_ERR" | grep -q "no PR found for #42"; then
+    pass "F14: fallback rejects marker of issue 420 for N=42 → exit 1"
 else
-    fail "G3: rc=$RC err=$FIND_ERR"
+    fail "F14: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
-teardown_tmp_gl
+teardown_tmp_find
 
-# --- G4 (mirror F7): closed_by primary wins over a stale marker MR.
-setup_tmp_gl
-GL_MOCK_CLOSED_BY="$GL_CB" GL_MOCK_MARKER="$GL_MK" run_find_gl 42; RC=$?
-if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "3" ] && [ "$FIND_MERGE_COMMIT" = "sha1230" ]; then
-    pass "G4: gitlab closed_by primary wins over marker fallback"
+# --- F15: candidates for 420 and 42 mixed → the 42 PR is chosen even though the
+# 420 PR merged later.
+setup_tmp_find
+RAW_F15='[{"number":900,"mergedAt":"2026-03-01T00:00:00Z","mergeCommit":{"oid":"bad9000"},"body":"<!-- issue-close-pr-of: 420 -->"},{"number":42,"mergedAt":"2026-01-15T00:00:00Z","mergeCommit":{"oid":"good420"},"body":"<!-- issue-close-pr-of: 42 -->"}]'
+GH_MOCK_MARKER_PR_RAW="$RAW_F15" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "42" ] && [ "$FIND_MERGE_COMMIT" = "good420" ]; then
+    pass "F15: marker 420 ignored, marker 42 PR selected"
 else
-    fail "G4: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
+    fail "F15: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
-teardown_tmp_gl
+teardown_tmp_find
 
-# --- G5 (gitlab edge): project path unresolvable → exit 1, glab never queried.
-setup_tmp_gl
-SHIM_PROJECT="" GL_MOCK_CLOSED_BY="$GL_CB" run_find_gl 42; RC=$?
-if [ "$RC" -eq 1 ] && echo "$FIND_ERR" | grep -qi "could not resolve GitLab project" && [ ! -s "$GL_LOG" ]; then
-    pass "G5: gitlab unresolvable project → exit 1, glab not called"
+# --- F16: --repo is forwarded to the per-PR `gh pr view` lookup, not only to
+# `gh issue view`.
+setup_tmp_find
+GH_MOCK_CALL_LOG="$TMP/calls.log"
+: > "$GH_MOCK_CALL_LOG"
+export GH_MOCK_CALL_LOG
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42=77 \
+GH_MOCK_PR_MERGE_SHA_FOR_77=bbb9999 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find_repo "nirecom/my-private-repo" 42; RC=$?
+if [ "$RC" -eq 0 ] \
+    && grep -E '^issue view .*--repo nirecom/my-private-repo' "$GH_MOCK_CALL_LOG" >/dev/null 2>&1 \
+    && grep -E '^pr view 77 .*--repo nirecom/my-private-repo' "$GH_MOCK_CALL_LOG" >/dev/null 2>&1; then
+    pass "F16: --repo forwarded to gh pr view 77"
 else
-    fail "G5: rc=$RC err=$FIND_ERR gl_log=[$(cat "$GL_LOG" 2>/dev/null)]"
+    fail "F16: rc=$RC calls=[$(cat "$GH_MOCK_CALL_LOG" 2>/dev/null)]"
 fi
-teardown_tmp_gl
+unset GH_MOCK_CALL_LOG
+teardown_tmp_find
 
-# --- G6 (gitlab edge): cross-repo --repo mismatch → exit 2, glab never queried.
-setup_tmp_gl
-GL_MOCK_CLOSED_BY="$GL_CB" run_find_gl --repo other/project 42; RC=$?
-if [ "$RC" -eq 2 ] && echo "$FIND_ERR" | grep -qi "does not support cross-repo" && [ ! -s "$GL_LOG" ]; then
-    pass "G6: gitlab cross-repo --repo mismatch → exit 2, glab not called"
+# --- F17: references exist but every PR is unmerged → no PR (exit 1).
+setup_tmp_find
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42="300 302" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
+if [ "$RC" -eq 1 ] && [ -z "$FIND_PR_NUMBER" ] && echo "$FIND_ERR" | grep -q "no PR found for #42"; then
+    pass "F17: all referenced PRs unmerged → exit 1"
 else
-    fail "G6: rc=$RC err=$FIND_ERR gl_log=[$(cat "$GL_LOG" 2>/dev/null)]"
+    fail "F17: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
-teardown_tmp_gl
+teardown_tmp_find
 
-# --- G7 (gitlab edge): --repo equal to the resolved project is accepted and the
-# primary lookup still runs (proves the guard rejects only a MISMATCH).
-setup_tmp_gl
-GL_MOCK_CLOSED_BY="$GL_CB" run_find_gl --repo acme/widgets 42; RC=$?
-if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "3" ]; then
-    pass "G7: gitlab --repo matching the project is accepted → PR 3"
+# --- F18: fallback candidate without a merge commit is not accepted → exit 1.
+setup_tmp_find
+RAW_F18='[{"number":21,"mergedAt":null,"mergeCommit":null,"body":"<!-- issue-close-pr-of: 42 -->"}]'
+GH_MOCK_MARKER_PR_RAW="$RAW_F18" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
+if [ "$RC" -eq 1 ] && [ -z "$FIND_PR_NUMBER" ]; then
+    pass "F18: fallback candidate without merge commit → exit 1"
 else
-    fail "G7: rc=$RC pr=$FIND_PR_NUMBER err=$FIND_ERR"
+    fail "F18: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
-teardown_tmp_gl
+teardown_tmp_find
 
-# --- G8 (mirror F6, ORTH): non-numeric N rejected BEFORE forge detection → exit
-# 1, no shell injection, and glab is never invoked (numeric guard precedes forge).
-setup_tmp_gl
-GL_MOCK_CLOSED_BY="$GL_CB" run_with_timeout 15 bash "$GL_FIND_SCRIPT" "42; touch /tmp/G8_INJECT" >/dev/null 2>&1
-RC=$?
-if [ "$RC" -ne 0 ] && [ ! -f /tmp/G8_INJECT ] && [ ! -s "$GL_LOG" ]; then
-    pass "G8: gitlab non-numeric N → exit 1 before forge detection, glab not called"
+# --- F19: a reference from another repository is resolved in THAT repository,
+# not in the issue's repository (same PR number could exist in both).
+setup_tmp_find
+GH_MOCK_CALL_LOG="$TMP/calls.log"
+: > "$GH_MOCK_CALL_LOG"
+export GH_MOCK_CALL_LOG
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42=88 \
+GH_MOCK_CLOSED_BY_PR_REPO_FOR_88=other-owner/other-repo \
+GH_MOCK_PR_MERGE_SHA_FOR_88=ccc8888 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "88" ] \
+    && grep -E '^pr view 88 .*--repo other-owner/other-repo' "$GH_MOCK_CALL_LOG" >/dev/null 2>&1; then
+    pass "F19: cross-repo reference resolved with --repo other-owner/other-repo"
 else
-    fail "G8: rc=$RC inject=$([ -f /tmp/G8_INJECT ] && echo yes || echo no) gl_log=[$(cat "$GL_LOG" 2>/dev/null)]"
-    rm -f /tmp/G8_INJECT 2>/dev/null
+    fail "F19: rc=$RC pr=$FIND_PR_NUMBER calls=[$(cat "$GH_MOCK_CALL_LOG" 2>/dev/null)]"
 fi
-teardown_tmp_gl
+unset GH_MOCK_CALL_LOG
+teardown_tmp_find
 
-# --- G9 (gitlab edge): glab API hard failure (non-zero exit, e.g. auth/network).
-# The script wraps every glab call in `... 2>/dev/null) || VAR=""`, so a non-zero
-# glab degrades to the same not-found path — exit 1 "no MR" — WITHOUT crashing
-# under `set -uo pipefail`. glab MUST have been queried (log non-empty), which
-# distinguishes this from G5 (unresolvable project → glab never called).
-setup_tmp_gl
-GL_MOCK_EXIT=1 GL_MOCK_CLOSED_BY="$GL_CB" GL_MOCK_MARKER="$GL_MK" run_find_gl 42; RC=$?
-if [ "$RC" -eq 1 ] && echo "$FIND_ERR" | grep -qi "no MR" && [ -s "$GL_LOG" ]; then
-    pass "G9: gitlab glab API failure (non-zero exit) → exit 1 (no MR), glab was queried"
+# --- F20: a failed per-PR lookup aborts (exit 1) instead of letting the older
+# merged PR win silently.
+setup_tmp_find
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42="200 100" \
+GH_MOCK_PR_VIEW_FAIL_FOR_200=1 \
+GH_MOCK_PR_MERGE_SHA_FOR_100=old1000 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find 42; RC=$?
+if [ "$RC" -eq 1 ] && [ -z "$FIND_PR_NUMBER" ] && echo "$FIND_ERR" | grep -q "gh pr view 200 failed"; then
+    pass "F20: failed per-PR lookup → exit 1, older PR not selected"
 else
-    fail "G9: rc=$RC err=$FIND_ERR gl_log=[$(cat "$GL_LOG" 2>/dev/null)]"
+    fail "F20: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
-teardown_tmp_gl
+teardown_tmp_find
 
-# --- G10 (gitlab edge): nested-namespace project path (3+ segments) is URL-encoded
-# so `/` → `%2F` before interpolation into `glab api projects/<path>/...`. Proves
-# the script encodes subgroup paths correctly (a raw `/` would address the wrong
-# REST endpoint). The primary closed_by lookup still resolves PR 3.
-setup_tmp_gl
-SHIM_PROJECT="group/sub/project" GL_MOCK_CLOSED_BY="$GL_CB" run_find_gl 42; RC=$?
-if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "3" ] && grep -q "projects/group%2Fsub%2Fproject/issues/42/closed_by" "$GL_LOG" 2>/dev/null; then
-    pass "G10: gitlab subgroup project path encoded group%2Fsub%2Fproject → PR 3"
+# --- F21 / F22: reversed list order of F4 / F8 — the older merge is listed
+# first, so a pick-first implementation fails while latest-mergedAt passes.
+setup_tmp_find
+RAW_F21='[{"number":10,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"oid":"old10aaa"},"body":"x\n<!-- issue-close-pr-of: 42 -->"},{"number":11,"mergedAt":"2026-02-01T00:00:00Z","mergeCommit":{"oid":"new11bbb"},"body":"y\n<!-- issue-close-pr-of: 42 -->"}]'
+GH_MOCK_MARKER_PR_RAW="$RAW_F21" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "11" ] && [ "$FIND_MERGE_COMMIT" = "new11bbb" ]; then
+    pass "F21: marker PRs, older listed first → latest mergedAt still selected (PR 11)"
 else
-    fail "G10: rc=$RC pr=$FIND_PR_NUMBER err=$FIND_ERR gl_log=[$(cat "$GL_LOG" 2>/dev/null)]"
+    fail "F21: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT"
 fi
-teardown_tmp_gl
+teardown_tmp_find
+
+setup_tmp_find
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42="100 200" \
+GH_MOCK_PR_MERGE_SHA_FOR_100=oldsha100 \
+GH_MOCK_PR_MERGED_AT_FOR_100=2026-01-01T00:00:00Z \
+GH_MOCK_PR_MERGE_SHA_FOR_200=newsha200 \
+GH_MOCK_PR_MERGED_AT_FOR_200=2026-02-01T00:00:00Z \
+GH_MOCK_SCENARIO=closed_multi_reference \
+    run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "200" ] && [ "$FIND_MERGE_COMMIT" = "newsha200" ]; then
+    pass "F22: references, older listed first → latest mergedAt still selected (PR 200)"
+else
+    fail "F22: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
+fi
+teardown_tmp_find
+
+# --- F23: first reference resolves, a LATER reference's lookup fails → exit 1
+# with no PR_NUMBER=/MERGE_COMMIT= output (the earlier PR must not win).
+setup_tmp_find
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42="100 200" \
+GH_MOCK_PR_MERGE_SHA_FOR_100=old1000 \
+GH_MOCK_PR_MERGED_AT_FOR_100=2026-01-01T00:00:00Z \
+GH_MOCK_PR_VIEW_FAIL_FOR_200=1 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find 42; RC=$?
+if [ "$RC" -eq 1 ] && ! echo "$FIND_OUT" | grep -qE '^(PR_NUMBER|MERGE_COMMIT)=' \
+    && echo "$FIND_ERR" | grep -q "gh pr view 200 failed"; then
+    pass "F23: later per-PR lookup fails → exit 1, no PR/commit output"
+else
+    fail "F23: rc=$RC out=$FIND_OUT err=$FIND_ERR"
+fi
+teardown_tmp_find
+
+# G-series (#2308): GitLab forge cases.
+# shellcheck source=feature-325-find-pr-by-marker/gitlab-cases.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-325-find-pr-by-marker/gitlab-cases.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

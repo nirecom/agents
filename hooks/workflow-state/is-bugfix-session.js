@@ -9,7 +9,7 @@
 //      Retained for a state whose fold yields a branch but no boolean.
 //   3. runtime branch probe (last resort; may be wrong in detached HEAD / rename)
 
-const { execFileSync } = require("child_process");
+const { execFileSync } = require("../lib/limited-child-process");
 
 // Returns true when branchName starts with "fix/" followed by at least one char.
 // Bare "fix/" (nothing after the slash) returns false — it is not a valid branch name.

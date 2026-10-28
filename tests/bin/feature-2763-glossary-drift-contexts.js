@@ -1,0 +1,34 @@
+"use strict";
+// Tests: bin/lib/glossary-drift.js, bin/lib/glossary-drift/, hooks/lib/glossary-term.js, bin/check-glossary-drift
+// Tags: TL2, bin, glossary, glossary-drift, scope:issue-specific
+// #2763 / #2767: the drift matcher splits matching into the identifier context and the prose
+// context (rules: docs/architecture/claude-code/glossary-check.md#matching-rules). Dispatch only;
+// the parts live in feature-2763-glossary-drift-contexts/, the fixture is feat-2529's.
+// TL3 gap: none for the matcher (pure functions over a string); acceptance.js spawns the real
+// bin/check-glossary-drift CLI against a fixture repo, so only a live session's commit-time hook
+// wiring is not driven here.
+const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+
+const restore = isolate();
+const F = require("./feat-2529-glossary-drift/fixture");
+
+try {
+caseBegin("identifier-context-table", "bin/lib/glossary-drift.js");
+require("./feature-2763-glossary-drift-contexts/identifier").run(F);
+caseEnd();
+
+caseBegin("singular-export", "hooks/lib/glossary-term.js");
+require("./feature-2763-glossary-drift-contexts/identifier").runSingular(F);
+caseEnd();
+
+caseBegin("prose-context-table", "bin/lib/glossary-drift.js");
+require("./feature-2763-glossary-drift-contexts/prose").run(F);
+caseEnd();
+
+caseBegin("acceptance-through-the-cli", "bin/check-glossary-drift");
+require("./feature-2763-glossary-drift-contexts/acceptance").run(F);
+caseEnd();
+} finally {
+  F.finish();
+  restore();
+}

@@ -28,5 +28,22 @@ try {
 }
 caseEnd();
 
+// #2763: a module split out of bin/lib/glossary-drift.js must move the rules digest too.
+caseBegin("every glossary-drift split module is a rule module", "hooks/workflow-state/glossary-check/scope.js");
+try {
+  const scope = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope.js"));
+  const listed = new Set(scope.RULE_MODULES.map((p) => F.slash(path.relative(F.ROOT, p))));
+  const dir = path.join(F.ROOT, "bin", "lib", "glossary-drift");
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) => n.endsWith(".js")) : [];
+  F.check("bin/lib/glossary-drift/ holds .js modules", files.length > 0, `no .js under ${F.slash(dir)}`);
+  for (const n of files) {
+    const rel = `bin/lib/glossary-drift/${n}`;
+    F.check(`scope.RULE_MODULES lists ${rel}`, listed.has(rel), JSON.stringify([...listed]));
+  }
+} catch (e) {
+  F.check("rule-module coverage ran to the end", false, (e && e.stack) || e);
+}
+caseEnd();
+
 restoreIsolation();
 F.finish();

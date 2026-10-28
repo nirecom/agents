@@ -4,7 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync } = require("../lib/limited-child-process");
 
 // Evidence-based check: WORKTREE_NOTES.md ## History Notes or ## Changelog Notes
 // contains real bullets (post-#436 staging path under ENFORCE_WORKTREE=on).

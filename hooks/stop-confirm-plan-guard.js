@@ -5,196 +5,169 @@
 // stage-valid follow-up tool_use. Plan-link: a turn that wrote a plan shows its link line — in the
 // last text block when the stage's gate is ON, anywhere in the turn when it is OFF.
 // Presentation (#2729): a turn the hook lets through that closes on unapproved stages' link lines
-// gets a presentation receipt per stage (hooks/lib/presentation-receipt.js); a blocked turn voids
-// every receipt of the session, and the current stage is continued once for the CONFIRM echo.
+// gets a presentation receipt per stage (hooks/lib/presentation-receipt.js) and the current stage is
+// continued once for the CONFIRM echo; a blocked turn records none and keeps earlier receipts. An
+// undecidable tail (#2771) records what the final message confirms and notifies on every Stop.
 // Reason prefixes and the marker contract: docs/architecture/claude-code/settings.md.
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
-const SP = require("./lib/sentinel-patterns");
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { firstBlock, planLangReason, PLAN_STAGES } = require("./stop-confirm-plan-guard/block-reasons");
 
 const STOP_BUDGET_MS = 4000;
 const PROBE_RESERVE_MS = 500;
-const PLAN_STAGES = ["intent", "outline", "detail"];
 
-// The table's next skill for a plan suffix; detail may also branch straight to BRANCHING_COMPLETE.
-function nextSkillFor(stage) {
-  const { rowFor, stepForSuffix } = require("./workflow-state/plan-stage-table");
-  const row = rowFor(stepForSuffix(stage));
-  return row ? row.nextSkill : null;
-}
-
-// Whether the tool_result answering tool_use `id` reports an error (a denied echo).
-function resultIsError(entries, id) {
-  if (typeof id !== "string" || !id) return false;
-  for (const e of entries) {
-    const c = e && e.type === "user" && e.message && e.message.content;
-    if (!Array.isArray(c)) continue;
-    for (const it of c) {
-      if (it && it.type === "tool_result" && it.tool_use_id === id) return it.is_error === true;
+// probesFor(deadline) -> {plansDir, gateFor, linkFor}: one gate probe per stage within the budget (a
+// spent budget reads ERROR, treated as ON) and one git lookup per plan file, shared by every check.
+function probesFor(deadline) {
+  const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+  const { planGateState } = require("./lib/confirm-gate/plan-gate");
+  const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../bin/workflow/lib/next-step/gate-line");
+  const gates = {};
+  const gateFor = (stage) => {
+    if (!(stage in gates)) {
+      const timeoutMs = Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, deadline - Date.now() - PROBE_RESERVE_MS);
+      gates[stage] = planGateState(stage, { timeoutMs });
     }
-  }
-  return false;
+    return gates[stage];
+  };
+  const plansDir = getWorkflowPlansDir();
+  const links = new Map();
+  const linkFor = (absPath) => {
+    const key = path.resolve(absPath);
+    if (!links.has(key)) links.set(key, require("./lib/plan-link").linkForFile(absPath, { plansDir }));
+    return links.get(key);
+  };
+  return { plansDir, gateFor, linkFor };
 }
 
-// The stage's plan violates PLAN_LANG (#2278): Layer 2 and the presentation share it.
-function planLangReason(sid, stage) {
-  const { relintPlanArtifact, formatPlanLangViolations } = require("./lib/plan-artifact-lang");
-  const relint = relintPlanArtifact(sid, stage);
-  if (relint.skipped !== null || relint.violations.length === 0) return null;
-  return "[confirm-plan] Layer 2/plan-lang: " + path.basename(relint.artifactPath) +
-    " violates plan-artifact language/heading rules (PLAN_LANG=" + relint.policy + ", " +
-    relint.violations.length + " line(s)) — fix body language and use canonical English schema headings before CONFIRM_" +
-    stage.toUpperCase() + ":\n" + formatPlanLangViolations(relint.violations).join("\n");
-}
-
-function layer2Reason(sid, content, entries) {
-  let confirmIdx = -1;
-  let stage = null;
-  for (let i = 0; i < content.length; i++) {
-    const item = content[i];
-    if (!item || item.type !== "tool_use" || item.name !== "Bash") continue;
-    const c = item.input && item.input.command;
-    if (typeof c !== "string") continue;
-    stage = SP.CONFIRM_INTENT_RE_DQ.test(c) ? "intent" : SP.CONFIRM_OUTLINE_RE_DQ.test(c) ? "outline"
-      : SP.CONFIRM_DETAIL_RE_DQ.test(c) ? "detail" : null;
-    if (stage) { confirmIdx = i; break; }
-  }
-  if (confirmIdx === -1) return null;
-  if (resultIsError(entries, content[confirmIdx].id)) return null;
-  // Re-lint the confirmed artifact before the follow-up check: a non-compliant plan must be
-  // rewritten, not merely continued (#2278).
-  const lang = planLangReason(sid, stage);
-  if (lang) return lang;
-  const nextSkill = nextSkillFor(stage);
-  for (let i = confirmIdx + 1; i < content.length; i++) {
-    const item = content[i];
-    if (!item || item.type !== "tool_use") continue;
-    if (item.name === "Skill" && item.input && typeof item.input.skill === "string" &&
-        nextSkill && item.input.skill.includes(nextSkill)) return null;
-    if (stage === "detail" && item.name === "Bash" && item.input && typeof item.input.command === "string"
-        && item.input.command.includes("WORKFLOW_BRANCHING_COMPLETE")) return null;
-  }
-  // #871: a found follow-up may later markStep(sid, stage, "complete") here.
-  const hint = nextSkill ? nextSkill + (stage === "detail" ? " or WORKFLOW_BRANCHING_COMPLETE" : "") : "";
-  return "[confirm-plan] Layer 2/follow-up: stage-valid follow-up Skill not found after CONFIRM_" +
-    stage.toUpperCase() + (hint ? " — invoke " + hint : "");
-}
-
-// A written artifact may carry another session's id, and one call may write several files of a
-// stage: every file a marker names is checked, else <plans>/<sid>-<stage>.md.
-function filesOf(sid, markers, plansDir, stage) {
-  const named = [];
-  for (const m of markers) {
-    if (m && m.suffix === stage && typeof m.absPath === "string" && m.absPath) named.push(m.absPath);
-  }
-  return named.length > 0 ? named : [path.join(plansDir, `${sid}-${stage}.md`)];
-}
-
-function planLinkReason(ctx) {
-  const { sid, markers, tail, plansDir, gateFor, linkFor } = ctx;
-  const tc = require("./lib/plan-link-turn-check");
-  // Stop judges only the stages this turn wrote; a CONFIRM turn is judged at PreToolUse.
-  const stages = tc.stagesToCheck({ markers, includeConfirm: false });
-  for (const stage of stages) {
-    // OFF needs the line once in the turn; ON and ERROR need it in the last text block.
-    const scope = gateFor(stage) === "OFF" ? "turn" : "last";
-    for (const absPath of filesOf(sid, markers, plansDir, stage)) {
-      const verdict = tc.checkPlanUrlInTurn({
-        stages: [stage], turnText: tail.lastTextBlock || "", entries: tail.entries, scope,
-        resolve: () => linkFor(absPath),
-      });
-      if (verdict.block) return verdict.reason;
-    }
-  }
-  return null;
-}
-
-// Gap 5: an unapproved stage's link line in the last text block must close it. Every stage whose
-// link appears there is judged, so a re-quoted earlier plan followed by prose blocks too.
-function closeOnLinkReason(ctx) {
-  const { sid, markers, tail, plansDir, gateFor, linkFor } = ctx;
-  const tc = require("./lib/plan-link-turn-check");
-  const CC = require("./lib/confirm-continuation");
-  const { checkPlanApproval } = require("./workflow-state/plan-approval-check");
-  const { stepForSuffix } = require("./workflow-state/plan-stage-table");
-  const { approvalArtifactPath } = require("./lib/presentation-receipt");
-  const lastText = tail.lastTextBlock || "";
-  for (const stage of PLAN_STAGES) {
-    const approved = approvalArtifactPath(sid, stage);
-    const files = markers.some((m) => m && m.suffix === stage) || !approved
-      ? filesOf(sid, markers, plansDir, stage) : [approved];
-    for (const absPath of files) {
-      if (!fs.existsSync(absPath)) continue;
-      const link = linkFor(absPath);
-      if (tc.shown(link, lastText) !== true) continue;
-      if (tc.inTrailingLinkRun(lastText, Object.assign({ stage }, link))) continue;
-      const gate = gateFor(stage);
-      if (gate === "OFF") continue;
-      if (checkPlanApproval(sid, stepForSuffix(stage), { gate }).verdict !== "unapproved") continue;
-      return { kind: "not-last", reason: CC.presentAgainReason(stage, "not-last") };
-    }
-  }
-  return null;
-}
-
-function unpublishedReason(presented) {
-  const hit = presented.find((p) => !p.receiptLink);
-  if (!hit) return null;
-  return { kind: "unpublished", reason: require("./lib/confirm-continuation").presentAgainReason(hit.stage, "unpublished") };
-}
-
-// firstBlock(ctx, presented) -> {kind, reason} | null, in the order the reasons are ranked.
-function firstBlock(ctx, presented) {
-  const { sid, tail } = ctx;
-  const content = tail.lastAssistantEntry && tail.lastAssistantEntry.message && tail.lastAssistantEntry.message.content;
-  const l2 = Array.isArray(content) ? layer2Reason(sid, content, tail.entries) : null;
-  if (l2) return { kind: "layer2", reason: l2 };
-  const link = planLinkReason(ctx);
-  if (link) return { kind: "plan-link", reason: link };
-  const found = closeOnLinkReason(ctx) || unpublishedReason(presented);
-  if (found) return found;
+// recordReceipts(sid, presented, anchorUuid, carryMark) -> {written, failed}: one receipt per presented
+// stage that has a receipt link; a stage that cannot be written loses its stale receipt.
+function recordReceipts(sid, presented, anchorUuid, carryMark) {
+  const PR = require("./lib/presentation-receipt");
+  const written = [];
+  const failed = [];
   for (const p of presented) {
-    const lang = planLangReason(sid, p.stage);
-    if (lang) return { kind: "plan-lang", reason: lang };
+    const ok = p.receiptLink && PR.writeReceipt(sid, p.stage, {
+      absPath: p.absPath, link: p.receiptLink, contentSha: p.contentSha, anchorUuid, carryMark,
+    });
+    if (ok) {
+      written.push(p);
+    } else {
+      PR.discardReceipt(sid, p.stage);
+      failed.push(p.stage);
+    }
   }
-  return null;
+  return { written, failed };
 }
 
-// judgeTurn(ctx) -> {block, written}: voids every receipt on a block, else writes one per
-// presented stage that has a receipt link. Throws are the caller's (it voids the receipts).
+// judgeTurn(ctx) -> {block, written, failed}: a block leaves every receipt as it is.
 function judgeTurn(ctx) {
   const CC = require("./lib/confirm-continuation");
-  const PR = require("./lib/presentation-receipt");
   const presented = CC.presentedStages({ sid: ctx.sid, tail: ctx.tail, plansDir: ctx.plansDir, gateFor: ctx.gateFor, linkFor: ctx.linkFor });
   const block = firstBlock(ctx, presented);
-  if (block) {
-    PR.discardAllReceipts(ctx.sid);
-    return { block, written: [] };
-  }
-  const written = [];
-  for (const p of presented) {
-    const ok = p.receiptLink && PR.writeReceipt(ctx.sid, p.stage, {
-      absPath: p.absPath, link: p.receiptLink, contentSha: p.contentSha, anchorUuid: ctx.tail.lastTextEntry.uuid,
-    });
-    if (ok) written.push(p); else PR.discardReceipt(ctx.sid, p.stage);
-  }
-  return { block: null, written };
+  if (block) return { block, written: [], failed: [] };
+  const anchorUuid = ctx.tail.lastTextEntry ? ctx.tail.lastTextEntry.uuid : "";
+  const { written, failed } = recordReceipts(ctx.sid, presented, anchorUuid, ctx.active);
+  return { block: null, written, failed };
 }
 
-// Under stop_hook_active nothing is blocked, so a Gap 5 or unpublished hit is left for the supervisor.
-function recordUnblocked(sid, block) {
-  if (!block || (block.kind !== "not-last" && block.kind !== "unpublished")) return;
+function appendNotice(sid, detail) {
   try {
     require("./lib/supervisor-state-writer").appendFinding(sid, {
-      categories: ["workflow"],
-      severity: "notice",
-      detail: `stop-confirm-plan-guard: ${block.kind} presentation passed unblocked (stop_hook_active); every receipt voided`,
-      reporter: "stop-confirm-plan-guard",
+      categories: ["workflow"], severity: "notice", detail: `stop-confirm-plan-guard: ${detail}`, reporter: "stop-confirm-plan-guard",
     });
   } catch (_) { /* the finding is advisory */ }
+}
+
+// Under stop_hook_active a block is not emitted, so a Gap 5 or unpublished hit is left for the supervisor.
+function recordUnblocked(sid, block) {
+  if (!block || (block.kind !== "not-last" && block.kind !== "unpublished")) return;
+  appendNotice(sid, `${block.kind} presentation passed unblocked (stop_hook_active); no receipt recorded for this turn; earlier receipts kept`);
+}
+
+// recordUndecidable({sid, input, tail, markers, deadline, active}) -> {unrecorded, written}: unrecorded
+// is the failed writes plus every stage whose gate is not OFF that may have been presented but got no
+// receipt; written is the presented stages recorded. Only
+// a stage the real final message (last_assistant_message) closes on is recorded: with the anchored
+// entry's uuid when an anchored text entry also presents it, otherwise with anchorUuid "" (no anchor,
+// or final-only). A stage only the anchored text presents stays unrecorded. A stage whose plan
+// violates PLAN_LANG or is unpublished is left unrecorded with its earlier receipt untouched, as the
+// decidable path would block it.
+function recordUndecidable({ sid, input, tail, markers, deadline, active }) {
+  const UD = require("./stop-confirm-plan-guard/undecidable");
+  const CC = require("./lib/confirm-continuation");
+  const maybe = UD.mayHavePresented({ sid, markers, input });
+  if (deadline - Date.now() < PROBE_RESERVE_MS) return { unrecorded: maybe, written: [] };
+  const probes = probesFor(deadline);
+  const anchored = UD.anchoredTailOf(tail);
+  const inFinal = CC.presentedStagesOfText(Object.assign({ sid, lastText: input.last_assistant_message, stages: PLAN_STAGES }, probes));
+  const fromTail = anchored ? CC.presentedStages(Object.assign({ sid, tail: anchored }, probes)) : [];
+  const finalStages = inFinal.map((p) => p.stage);
+  const tailStages = fromTail.map((p) => p.stage);
+  const presented = [...fromTail.filter((p) => finalStages.includes(p.stage)), ...inFinal.filter((p) => !tailStages.includes(p.stage))];
+  const langBlocked = presented.filter((p) => planLangReason(sid, p.stage)).map((p) => p.stage);
+  const unpublished = presented.filter((p) => !p.receiptLink && !langBlocked.includes(p.stage)).map((p) => p.stage);
+  const recordable = presented.filter((p) => !langBlocked.includes(p.stage) && !unpublished.includes(p.stage));
+  const both = recordReceipts(sid, recordable.filter((p) => tailStages.includes(p.stage)), anchored ? anchored.lastTextEntry.uuid : "", active);
+  const finalOnly = recordReceipts(sid, recordable.filter((p) => !tailStages.includes(p.stage)), "", active);
+  const failed = [...both.failed, ...finalOnly.failed];
+  const written = [...both.written, ...finalOnly.written];
+  const writtenStages = written.map((p) => p.stage);
+  const unwritten = maybe.filter((stage) => !writtenStages.includes(stage) && probes.gateFor(stage) !== "OFF");
+  return { unrecorded: [...new Set([...langBlocked, ...unpublished, ...failed, ...unwritten])], written };
+}
+
+function mayHavePresented(sid, markers, input) {
+  try {
+    return require("./stop-confirm-plan-guard/undecidable").mayHavePresented({ sid, markers, input });
+  } catch (_) {
+    return [];
+  }
+}
+
+// tailAllowsContinue(input) -> true only when one more read of the transcript (no wait) holds the final
+// message anchored on a text entry with no tool_use and only thinking after it; the undecidable path's continue gate.
+function tailAllowsContinue(input, deadline) {
+  try {
+    if (deadline - Date.now() < PROBE_RESERVE_MS) return false;
+    const TR = require("./lib/transcript-reader");
+    const entries = TR.parseLines(TR.readTranscriptLines(input.transcript_path));
+    const tail = Object.assign(TR.tailOf(entries), { entries });
+    if (typeof input.last_assistant_message !== "string" || !TR.flushed(tail.lastTextBlock, input.last_assistant_message)) return false;
+    return require("./stop-confirm-plan-guard/undecidable").anchoredTailOf(tail) !== null;
+  } catch (_) {
+    return false;
+  }
+}
+
+// settleStop: notify on every Stop that leaves a stage unrecorded, spend the markers outside
+// stop_hook_active, then continue the current stage once (the receipt's continuedAt caps it). Order:
+// receipts written -> mark checked -> mark written -> continue with the notice. Every other exit is
+// finish(), which still carries the notice.
+function settleStop(sid, active, { unrecorded, written }, TM, undecidableInput, deadline) {
+  const notice = unrecorded.length > 0 ? require("./stop-confirm-plan-guard/undecidable").noticeFor(unrecorded) : "";
+  if (notice) appendNotice(sid, `presentation receipt not recorded for ${unrecorded.join(", ")}; the user was notified`);
+  const finish = () => {
+    if (notice) {
+      try { fs.writeSync(1, JSON.stringify({ systemMessage: notice })); } catch (_) { /* the notice is advisory */ }
+    }
+    process.exit(0);
+  };
+  if (!active) TM.readAndDeleteTurnMarkers(sid);
+  const CC = require("./lib/confirm-continuation");
+  const PR = require("./lib/presentation-receipt");
+  const current = currentStage(sid);
+  // A current stage that failed to record must not hand the continue to another written stage.
+  let stage = unrecorded.includes(current) ? null : CC.continuationStage(written, current);
+  if (stage && undecidableInput && !tailAllowsContinue(undecidableInput, deadline)) stage = null;
+  if (!stage) finish();
+  const receipt = PR.readReceipt(sid, stage);
+  if (receipt.ok && PR.isContinued(receipt.receipt)) finish();
+  if (!PR.markContinued(sid, stage)) finish();
+  emitBlock(CC.continueReason(stage), notice);
 }
 
 // The recorded step's stage: the first plan stage not settled. Unlike resolveCurrentEffectiveStep it
@@ -217,21 +190,23 @@ function currentStage(sid) {
   }
 }
 
-function emitBlock(reason) {
-  process.stdout.write(JSON.stringify({ decision: "block", reason }));
+function emitBlock(reason, systemMessage) {
+  process.stdout.write(JSON.stringify(Object.assign({ decision: "block", reason }, systemMessage ? { systemMessage } : {})));
   process.exit(2);
 }
 
+// readTail(input) -> {kind: "ok"|"undecidable", tail} | {kind: "none", tail?}: "none" is a tail the
+// hook cannot read or whose last assistant entry is malformed, so no receipt is inferred from it.
 function readTail(input) {
   try {
     const { readTurnTail, parseLines } = require("./lib/transcript-reader");
     const tail = readTurnTail({ input });
-    if (tail.undecidable) return null;
     tail.entries = parseLines(tail.lines);
     const content = tail.lastAssistantEntry && tail.lastAssistantEntry.message && tail.lastAssistantEntry.message.content;
-    return tail.lastAssistantEntry && !Array.isArray(content) ? null : tail;
+    if (tail.lastAssistantEntry && !Array.isArray(content)) return { kind: "none", tail };
+    return { kind: tail.undecidable ? "undecidable" : "ok", tail };
   } catch (_) {
-    return null;
+    return { kind: "none" };
   }
 }
 
@@ -253,51 +228,38 @@ function main() {
   if (!sid) process.exit(0);
 
   const TM = require("./lib/turn-marker");
-  const tail = readTail(input);
-  if (!tail) {
-    // An undecidable turn is let through; its markers are spent so they cannot judge the next turn.
-    if (!active) TM.readAndDeleteTurnMarkers(sid);
-    process.exit(0);
+  let markers = [];
+  try { markers = TM.peekTurnMarkers(sid); } catch (_) { /* judged as a turn that wrote no plan */ }
+  const { kind, tail } = readTail(input);
+  if (kind !== "ok") {
+    let settled;
+    try {
+      settled = kind === "undecidable"
+        ? recordUndecidable({ sid, input, tail, markers, deadline, active })
+        : { unrecorded: mayHavePresented(sid, markers, input), written: [] };
+    } catch (_) {
+      settled = { unrecorded: mayHavePresented(sid, markers, input), written: [] };
+    }
+    settleStop(sid, active, settled, TM, kind === "undecidable" ? input : null, deadline);
   }
 
   let verdict;
   try {
-    const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-    const { planGateState } = require("./lib/confirm-gate/plan-gate");
-    const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../bin/workflow/lib/next-step/gate-line");
-    const gates = {};
-    // One probe per stage, within the budget; a spent budget reads ERROR, treated as ON.
-    const gateFor = (stage) => {
-      if (!(stage in gates)) {
-        const timeoutMs = Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, deadline - Date.now() - PROBE_RESERVE_MS);
-        gates[stage] = planGateState(stage, { timeoutMs });
-      }
-      return gates[stage];
-    };
-    const plansDir = getWorkflowPlansDir();
-    // One git lookup per plan file: the plan-link, close-on-link and presentation checks share it.
-    const links = new Map();
-    const linkFor = (absPath) => {
-      const key = path.resolve(absPath);
-      if (!links.has(key)) links.set(key, require("./lib/plan-link").linkForFile(absPath, { plansDir }));
-      return links.get(key);
-    };
-    verdict = judgeTurn({ sid, markers: TM.peekTurnMarkers(sid), tail, plansDir, gateFor, linkFor });
+    verdict = judgeTurn(Object.assign({ sid, markers, tail, active }, probesFor(deadline)));
   } catch (_) {
-    try { require("./lib/presentation-receipt").discardAllReceipts(sid); } catch (_e) { /* nothing more to void */ }
-    process.exit(0);
+    // An exception says only that the turn could not be judged: earlier receipts stay.
+    settleStop(sid, active, { unrecorded: mayHavePresented(sid, markers, input), written: [] }, TM, null, deadline);
   }
 
-  if (active) {
-    recordUnblocked(sid, verdict.block);
-    process.exit(0);
+  if (verdict.block) {
+    if (active) {
+      recordUnblocked(sid, verdict.block);
+      process.exit(0);
+    }
+    TM.readAndDeleteTurnMarkers(sid);
+    emitBlock(verdict.block.reason);
   }
-  TM.readAndDeleteTurnMarkers(sid);
-  if (verdict.block) emitBlock(verdict.block.reason);
-  const CC = require("./lib/confirm-continuation");
-  const stage = CC.continuationStage(verdict.written, currentStage(sid));
-  if (stage) emitBlock(CC.continueReason(stage));
-  process.exit(0);
+  settleStop(sid, active, { unrecorded: verdict.failed, written: verdict.written }, TM, null, deadline);
 }
 
 if (require.main === module) main();

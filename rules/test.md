@@ -15,12 +15,14 @@ Do not write or edit test files directly in the main conversation.
 Write a test in the same language as the code it tests.
 The supported languages and their file names: `docs/architecture/claude-code/test-language-registry.md`.
 
-| Case | Treatment |
-|---|---|
-| The test inspects the code as text only and never executes it | Exception — any language |
-| The test checks symmetry across languages | Exception — any language |
-| The target is not code (documentation, configuration) | Outside the principle |
-| One end-to-end run crosses processes | Write it in the entry point's language |
+| Case | Treatment | `Tags:` declaration |
+|---|---|---|
+| The test inspects the code as text only and never executes it | Exception — any language | `test-lang-exception:text-only` |
+| The test checks symmetry across languages | Exception — any language | `test-lang-exception:symmetry` |
+| The target is not code (documentation, configuration) | Outside the principle | none — not judged |
+| One end-to-end run crosses processes | Write it in the entry point's language | `test-lang-exception:e2e` |
+
+The gate and the allowed values: `docs/architecture/claude-code/case-marker-gate.md`.
 
 ## Test Fixture Isolation
 
@@ -35,6 +37,8 @@ See [root-names.md](../docs/architecture/claude-code/root-names.md) for the repo
 After writing test code, run `/review-tests`. WF-CODE-5 (`/write-code`) is blocked until both `write_tests` and `review_tests` are complete or both are skipped.
 
 `/review-tests` records a review-scope fingerprint (staged tests plus implementation files) at sentinel-emission time — re-editing any file in that scope after a passing review invalidates the pairing and forces re-review before commit.
+With at least one staged test, an implementation-only change reopens `/review-tests` too; with no staged test it skips as `no-tests`.
+A re-review reads only the delta — changed tests plus each covering test (a staged test whose `Tests:` header names a changed implementation) — and lists the other staged tests as a paths-only inventory; otherwise it reviews every staged test in full, with REASON `impl-uncovered`, `large-change`, `header-map-unavailable`, `no-record`, or `explicit-rereview` (vocabulary SSOT: `hooks/workflow-gate/review-scope-delta.js`).
 
 Skip path: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"` symmetrically waives both gates (no separate skip sentinel for review).
 

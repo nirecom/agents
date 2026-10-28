@@ -50,10 +50,11 @@ tlr_load() {
   _TLR_M_ID=(); _TLR_M_ST=(); _TLR_M_GLOB=()
   _TLR_F_KEY=(); _TLR_F_VAL=()
   _TLR_A_ID=(); _TLR_A_KIND=(); _TLR_A_VAL=()
-  TLR_HEADER_MAX_LINES=""; TLR_TABLE_DRIVEN_FALLBACK=""
+  TLR_HEADER_MAX_LINES=""; TLR_TABLE_DRIVEN_FALLBACK=""; TLR_LANG_EXCEPTIONS=""
   while IFS=$'\t' read -r kind a b c; do
     case "$kind" in
       headerMaxLines) TLR_HEADER_MAX_LINES="$a" ;;
+      testLanguageExceptions) TLR_LANG_EXCEPTIONS="$a" ;;
       tableDrivenFallbackEntry) TLR_TABLE_DRIVEN_FALLBACK="$a" ;;
       entry) _TLR_E_ID+=("$a"); _TLR_E_ST+=("$b"); _TLR_E_SELF+=("$c") ;;
       pattern) _TLR_P_ID+=("$a"); _TLR_P_PAT+=("$b") ;;
@@ -122,14 +123,12 @@ tlr_match() {
 }
 
 # tlr_stem <name> — the name without its entry's nameStrip; unchanged when nothing matches.
-tlr_stem() {
+# _tlr_stem_set sets TLR_STEM instead of printing, so a per-file loop can skip the subshell.
+_tlr_stem_set() {
   local name="$1" id st pre suf
   id="${TLR_ID:-}"; st="${TLR_STATUS:-}"
-  if ! tlr_match "$name"; then
-    TLR_ID="$id"; TLR_STATUS="$st"
-    printf '%s\n' "$name"
-    return 0
-  fi
+  TLR_STEM="$name"
+  tlr_match "$name" || { TLR_ID="$id"; TLR_STATUS="$st"; return 0; }
   _tlr_get "$TLR_ID" nameStrip.prefix || true
   pre="$_TLR_V"
   _tlr_get "$TLR_ID" nameStrip.suffix || true
@@ -138,8 +137,22 @@ tlr_stem() {
   case "$name" in
     "$pre"*"$suf") [ "${#name}" -gt $((${#pre} + ${#suf})) ] && name="${name#"$pre"}" && name="${name%"$suf"}" ;;
   esac
-  printf '%s\n' "$name"
+  TLR_STEM="$name"
 }
+tlr_stem() { _tlr_stem_set "$1"; printf '%s\n' "$TLR_STEM"; }
+
+# tlr_issue_stem <name> — tlr_stem's result without its entry's issueNamePrefix (once), the form
+# an issue reference is read from. Leaves TLR_ID / TLR_STATUS unchanged.
+# _tlr_issue_stem_set sets TLR_ISSUE_STEM instead of printing.
+_tlr_issue_stem_set() {
+  local stem id="${TLR_ID:-}" st="${TLR_STATUS:-}" pre=""
+  _tlr_stem_set "$1"; stem="$TLR_STEM"
+  if tlr_match "$1" && _tlr_get "$TLR_ID" issueNamePrefix; then pre="$_TLR_V"; fi
+  TLR_ID="$id"; TLR_STATUS="$st"
+  if [ -n "$pre" ] && [ "${#stem}" -gt "${#pre}" ]; then stem="${stem#"$pre"}"; fi
+  TLR_ISSUE_STEM="$stem"
+}
+tlr_issue_stem() { _tlr_issue_stem_set "$1"; printf '%s\n' "$TLR_ISSUE_STEM"; }
 
 # tlr_comment_prefix <path> — header.commentPrefix of the file's entry; a file no entry (or
 # no header) covers takes tableDrivenFallbackEntry's. Leaves TLR_ID / TLR_STATUS unchanged.

@@ -7,7 +7,7 @@
 // Fail-closed on every infrastructure error. Timeout is the ONLY fail-open path
 // (mirrors Gate 2 / code-size-gate.js — CPR-ORTH).
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const fs = require("fs");
 const path = require("path");
 const { resolveScriptCheckoutRoot } = require("../lib/script-checkout-root");

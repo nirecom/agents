@@ -35,7 +35,8 @@ function runHook(s, entries, opts) {
   const hso = json.hookSpecificOutput || {};
   return { json, rc: r.status, deny: hso.permissionDecision === "deny", msg: json.systemMessage || "" };
 }
-const passes = (r) => !r.deny && r.rc === 0 && r.json.decision !== "block" && r.msg.includes("Click Allow");
+// #2731: the dialog systemMessage is the stage fact line (`[<stage>] ...`), no "Click Allow" wording.
+const passes = (r) => !r.deny && r.rc === 0 && r.json.decision !== "block" && /^\[(intent|outline|detail)\] /.test(r.msg);
 function expectDeny(label, r, s) {
   ok(label + " — deny", r.deny, show(r.json));
   if (!r.deny) return;

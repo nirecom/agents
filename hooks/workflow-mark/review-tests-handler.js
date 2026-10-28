@@ -1,5 +1,5 @@
 "use strict";
-// Issue #833 / #2327 — WORKFLOW_REVIEW_TESTS_COMPLETE / _WARNINGS / _WARNINGS_ACCEPTED sentinels.
+// Issue #833 / #2327 — WORKFLOW_REVIEW_TESTS_COMPLETE / _WARNINGS / _WARNINGS_ACCEPTED sentinel family.
 //
 // COMPLETE : echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint={hex} [meta]>>"
 // WARNINGS : echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint={hex} [warnings=N ...]>>"
@@ -86,7 +86,7 @@ function verifyFingerprint(label, payload, ctx) {
 }
 
 const NOTHING_TO_ACCEPT_MSG =
-  "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) or terminal-reviewed (in_progress) state; state unchanged.";
+  "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) or reviewed (in_progress, with terminal / continuing / fallback evidence) state; state unchanged.";
 
 function acceptedMessage(outcome, manifest) {
   switch (outcome) {
@@ -94,6 +94,13 @@ function acceptedMessage(outcome, manifest) {
       return "reopen accepted — review_tests restored to complete (current review scope recorded).";
     case CLEAR_OUTCOME.RECOVERED_TERMINAL:
       return "terminal review accepted — review_tests restored to complete (current review scope recorded).";
+    case CLEAR_OUTCOME.RECOVERED_CONTINUING:
+      return "continuing review (exit 1/5) accepted — review_tests restored to complete (current review scope recorded).";
+    case CLEAR_OUTCOME.RECOVERED_FALLBACK:
+      return "fallback review (exit 3, NEEDS_REVISION) accepted — review_tests restored to complete (current review scope recorded).";
+    case CLEAR_OUTCOME.STALE_EVIDENCE:
+      return "review_tests state unchanged — the review scope changed after the review, so its warnings cannot be accepted; " +
+        "re-run /review-tests on the current scope.";
     case CLEAR_OUTCOME.WARNINGS_CLEARED:
       return "warnings cleared — /write-code unblocked.";
     case CLEAR_OUTCOME.MANIFEST_UNAVAILABLE:
@@ -163,7 +170,8 @@ function handle(ctx) {
   // Clears warnings_summary and re-records the current review-scope manifest (#2287)
   // so the gate unblocks /write-code.
   // A write_code-reopened (pending) review_tests is restored to complete (#2482).
-  // in_progress with a terminal record (#2491) is also restored to complete.
+  // in_progress with a terminal record (#2491), or with exit-1/5 / exit-3 fallback evidence
+  // pinned to the current review scope (#2664), is also restored to complete.
   const acceptedMatch = cmd.match(REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ);
   if (acceptedMatch) {
     const reason = acceptedMatch[1];
@@ -182,10 +190,17 @@ function handle(ctx) {
     }
     try {
       const manifest = computeAcceptedManifest(sessionId, repoCwd);
-      const outcome = clearReviewTestsWarnings(sessionId, reason, manifest.ok ? manifest : null);
+      const files = manifest.ok ? manifest.files : null;
+      const fingerprint = files && Object.keys(files).length > 0 ? fingerprintOfManifest(files) : null;
+      const outcome = clearReviewTestsWarnings(sessionId, reason, manifest.ok ? manifest : null, { fingerprint });
       // #1361: accepting the gap ends this review — drop the re-invoke guard marker.
       // must stay AFTER clearReviewTestsWarnings: the recovery branch reads the marker
-      if (outcome !== CLEAR_OUTCOME.MANIFEST_UNAVAILABLE) clearReviewTestsTerminalMarker(sessionId);
+      // Kept on MANIFEST_UNAVAILABLE / STALE_EVIDENCE / NOTHING_TO_CLEAR (state unchanged) so a retry
+      // or the next review can re-judge.
+      if (outcome !== CLEAR_OUTCOME.MANIFEST_UNAVAILABLE && outcome !== CLEAR_OUTCOME.STALE_EVIDENCE &&
+          outcome !== CLEAR_OUTCOME.NOTHING_TO_CLEAR) {
+        clearReviewTestsTerminalMarker(sessionId);
+      }
       pushMessage(`[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: ${acceptedMessage(outcome, manifest)}`);
     } catch (e) {
       pushMessage(

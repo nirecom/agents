@@ -15,6 +15,15 @@ Two contracts govern exit codes. The internal contract (between `review-loop-ver
 - The model never creates, edits, or deletes a control file.
 - When a guard refuses a write, return to this table.
 
+## Accepted-warning recovery {#accepted-warning-recovery}
+
+An accepted warning releases a gate only when the review ended non-blocking and the acceptance is pinned to the review-scope manifest. test-review evidence (`<CONTROL_DIR>` markers: line 1 = rc, line 2 = review-scope fingerprint at that exit):
+
+- `test-review-terminal.txt` rc 2 / 6 — judged on line 1 only (the wrapper may write an empty line 2).
+- `test-review-terminal.txt` rc 3 — line 2 must equal the current fingerprint, and `<session-id>-test-review-fallback-raw.md` must open with `NEEDS_REVISION` and be no older than the marker.
+- `test-review-continuing.txt` rc 1 / 5 (removed at the next wrapper start) — line 2 must equal the current fingerprint.
+- A pin mismatch leaves review_tests `in_progress` (`stale-evidence`); otherwise accepting records the current manifest and drops both markers.
+
 **Contract A — Internal verdict exit code** (`review-loop-verdict` → `run-codex-review-loop`, internal only):
 
 | Internal exit | Verdict | `run-codex-review-loop` action |

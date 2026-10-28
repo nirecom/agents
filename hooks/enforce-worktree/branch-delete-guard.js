@@ -1,6 +1,6 @@
 "use strict";
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { stripQuotedArgs } = require("../lib/strip-quoted-args");
 const { stripTrailingRedirects } = require("../lib/command-parser");
 const { hasShellChaining } = require("./shared-cmd-utils");

@@ -1,8 +1,9 @@
 #!/bin/bash
 # find-pr-by-marker.sh [--repo <owner/repo|repo>] <N>
 # Resolve issue #<N> -> (PR_NUMBER, MERGE_COMMIT). Primary: gh/glab "closed by"
-# API (issue must be CLOSED; newest merged wins). Fallback: PR/MR body marker
-# `<!-- issue-close-pr-of: <N> -->`. --repo targets a cross-repo (GitHub only;
+# API (issue must be CLOSED; GitHub resolves each PR via `gh pr view`; newest
+# merged wins). Fallback: PR/MR body marker `<!-- issue-close-pr-of: <N> -->`
+# (GitHub: keyword search + exact client-side match). --repo targets a cross-repo (GitHub only;
 # short form normalized via `gh repo view`). GitLab: forge auto-detected,
 # cross-repo rejected, project path is the CWD origin's (nested namespace ok).
 # Output: PR_NUMBER=<n> / MERGE_COMMIT=<sha>; exit 1 on failure (stderr diagnostic).
@@ -93,18 +94,35 @@ if [[ -n "$REPO_ARG" ]] && [[ "$REPO_ARG" != *"/"* ]]; then
 fi
 
 # Primary: closedByPullRequestsReferences (GitHub SSOT — #418 fix).
-# Only meaningful when CLOSED. Pre-jq'd output: `<number>\t<sha>`.
+# Only meaningful when CLOSED. The references carry only the PR number and its
+# repository (no mergedAt/mergeCommit — #2765), so each PR is resolved with
+# `gh pr view` in its own repository (a PR in another repo can close the issue);
+# unmerged PRs are dropped and the newest merge wins. A failed state, reference
+# or per-PR lookup aborts rather than letting an older (or marker) merge win silently.
 PR_NUM=""
 MERGE_SHA=""
-STATE=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json state --jq '.state' 2>/dev/null) || STATE=""
+BEST_AT=""
+STATE=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json state --jq '.state' 2>/dev/null) || { echo "Error: fetching state failed for #${N}" >&2; exit 1; }
 if [ "$STATE" = "CLOSED" ]; then
-    PRIMARY_LINE=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json closedByPullRequestsReferences \
-        --jq '[.closedByPullRequestsReferences[]] | sort_by(.mergedAt) | last | "\(.number)\t\(.mergeCommit.oid // "")"' \
-        2>/dev/null) || PRIMARY_LINE=""
-    if [ -n "$PRIMARY_LINE" ]; then
-        PR_NUM=$(printf '%s' "$PRIMARY_LINE" | cut -f1)
-        MERGE_SHA=$(printf '%s' "$PRIMARY_LINE" | cut -f2)
-    fi
+    REFS=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json closedByPullRequestsReferences \
+        --jq '.closedByPullRequestsReferences[] | "\(.number)\t\(if .repository then "\(.repository.owner.login)/\(.repository.name)" else "" end)"' \
+        2>/dev/null) || { echo "Error: fetching closedByPullRequestsReferences failed for #${N}" >&2; exit 1; }
+    while IFS=$'\t' read -r c REF_REPO; do
+        [[ "$c" =~ ^[0-9]+$ ]] || continue
+        [[ "$REF_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || REF_REPO="$REPO_ARG"
+        if ! LINE=$(gh pr view "$c" ${REF_REPO:+--repo "$REF_REPO"} --json mergeCommit,mergedAt \
+            --jq '"\(.mergedAt // "")\t\(.mergeCommit.oid // "")"' 2>/dev/null); then
+            echo "Error: gh pr view ${c} failed while resolving #${N}" >&2
+            exit 1
+        fi
+        AT=$(printf '%s' "$LINE" | cut -f1)
+        SHA=$(printf '%s' "$LINE" | cut -f2)
+        [ -n "$SHA" ] || continue
+        # ISO-8601 UTC timestamps sort lexically.
+        if [ -z "$MERGE_SHA" ] || [[ "$AT" > "$BEST_AT" ]]; then
+            PR_NUM="$c"; MERGE_SHA="$SHA"; BEST_AT="$AT"
+        fi
+    done <<< "$REFS"
 fi
 
 if [ -n "$PR_NUM" ] && [ -n "$MERGE_SHA" ]; then
@@ -112,16 +130,18 @@ if [ -n "$PR_NUM" ] && [ -n "$MERGE_SHA" ]; then
     exit 0
 fi
 
-# Fallback: marker-based PR search across merged PRs. Pre-jq'd output:
-# `<number>\t<sha>`. When there are multiple matches, `sort_by(.mergedAt) | last`
-# keeps the most recent merge.
+# Fallback: marker-based PR search across merged PRs. The search is a loose
+# keyword match (phrase search on the HTML comment is unreliable — #2765), so
+# the body is matched exactly client-side; ` -->` stops 42 matching 420.
+# Pre-jq'd output: `<number>\t<sha>`; the most recent merge wins.
 # When --repo is set, fallback is skipped — the cross-repo PR is in the named repo.
 PR_LINE=""
 if [ -z "$REPO_ARG" ]; then
+  MARKER="<!-- issue-close-pr-of: ${N} -->"
   PR_LINE=$(gh pr list \
-      --search "in:body \"<!-- issue-close-pr-of: ${N} -->\"" \
-      --state merged --json number,mergedAt,mergeCommit \
-      --jq '[.[]] | sort_by(.mergedAt) | last | "\(.number)\t\(.mergeCommit.oid // "")"' \
+      --search "issue-close-pr-of ${N} in:body" \
+      --state merged --limit 1000 --json number,mergedAt,mergeCommit,body \
+      --jq '[.[] | select((.body // "") | contains("'"$MARKER"'")) | select(.mergeCommit != null)] | sort_by(.mergedAt) | last | "\(.number)\t\(.mergeCommit.oid // "")"' \
       2>/dev/null) || PR_LINE=""
 fi
 

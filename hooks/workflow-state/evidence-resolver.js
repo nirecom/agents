@@ -9,7 +9,7 @@
 // approval record in completion-approval.js; a true result here is necessary, never sufficient.
 
 const path = require("path");
-const { execSync, execFileSync } = require("child_process");
+const { execSync, execFileSync } = require("../lib/limited-child-process");
 const { controlPath, diagnoseControlMigration } = require("./state-io/control-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
 const { hasStagedDocChanges, hasStagedTestChanges } = require("../workflow-gate/staged-evidence");

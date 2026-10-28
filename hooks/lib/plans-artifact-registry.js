@@ -105,6 +105,7 @@ const ARTIFACT_NAMES = Object.freeze({
   progress: () => "session-progress.md",
   "issue-prefill": () => "issue-prefill.md",
   "test-review": () => "test-review.md",
+  "test-review-fallback-raw": () => "test-review-fallback-raw.md",
   "concerns-log": (p) => (p && p.stage ? `${p.stage}-concerns-log.md` : "concerns-log.md"),
   "codex-round-raw": (p) => `${p && p.stage ? `${p.stage}-` : ""}codex-round-${Number(p && p.round)}-raw.md`,
   "worker-draft": (p) => `worker-${p.worker}${p.seq !== undefined ? `-${p.seq}` : ""}.draft.json`,

@@ -4,6 +4,11 @@
 
 SCENARIO="${GH_MOCK_SCENARIO:-default}"
 
+# Invocation log (original args, before --repo stripping) for cross-repo assertions.
+if [ -n "${GH_MOCK_CALL_LOG:-}" ]; then
+    printf '%s\n' "$*" >> "$GH_MOCK_CALL_LOG"
+fi
+
 # Strip --repo <value> pairs so existing tests remain transparent
 # when callers pass --repo for cross-repo operations (forward-compat).
 _FILTERED_ARGS=()
@@ -32,6 +37,27 @@ ARGS="$*"
 # server-side. The mock hardcodes the per-scenario output for known patterns.
 # Handled here (before the per-scenario `case`) so every scenario shares it.
 # ----------------------------------------------------------------------------
+
+# Helper: apply the caller's real `--jq` expression to a raw JSON document, as
+# the real gh does (so a wrong expression is caught). `-r` mirrors gh's raw
+# string output. Without `--jq`, the raw JSON is printed as-is.
+mock_apply_jq() {
+  local raw="$1" expr=""
+  shift
+  while [ $# -gt 0 ]; do
+    if [ "$1" = "--jq" ] && [ $# -ge 2 ]; then expr="$2"; break; fi
+    shift
+  done
+  if [ -n "$expr" ]; then
+    # A failed expression fails the call, as real gh does. tr: Windows jq.exe
+    # emits CRLF, which real gh (gojq) never does.
+    local out
+    out=$(printf '%s' "$raw" | jq -r "$expr") || exit 1
+    [ -n "$out" ] && printf '%s\n' "$out" | tr -d '\r'
+  else
+    printf '%s\n' "$raw"
+  fi
+}
 
 # Helper: emit the bare state string for `--json state --jq .state`.
 mock_state_for_scenario() {
@@ -247,15 +273,44 @@ case "$ARGS" in
     fi
     exit 0
     ;;
-  # find-pr-by-marker.sh primary: marker-based PR search (issue-close-pr-of:N in PR body).
-  # GH_MOCK_MARKER_PR_RESULT controls output (tab-separated number\tsha), empty = no match.
-  "pr list"*"issue-close-pr-of:"*"--state merged"*"--jq"*)
-    if [ -n "${GH_MOCK_MARKER_PR_RESULT:-}" ]; then
-        printf '%s\n' "$GH_MOCK_MARKER_PR_RESULT"
+  # find-pr-by-marker.sh fallback: keyword search for the issue-close-pr-of marker.
+  # Raw JSON source: GH_MOCK_MARKER_PR_RAW (verbatim) or, when unset,
+  # GH_MOCK_MARKER_PR_RESULT (`<number>\t<sha>`, one PR whose body carries the
+  # marker of the searched N). Neither set = empty list. The caller's --jq is
+  # applied to it for real.
+  "pr list"*"issue-close-pr-of"*"--state merged"*"--jq"*)
+    if [ -n "${GH_MOCK_MARKER_PR_RAW:-}" ]; then
+        RAW="$GH_MOCK_MARKER_PR_RAW"
+    elif [ -n "${GH_MOCK_MARKER_PR_RESULT:-}" ]; then
+        SEARCH_N=$(printf '%s' "$ARGS" | sed -nE 's/.*issue-close-pr-of:? ([0-9]+).*/\1/p')
+        RES_NUM=$(printf '%s' "$GH_MOCK_MARKER_PR_RESULT" | cut -f1)
+        RES_SHA=$(printf '%s' "$GH_MOCK_MARKER_PR_RESULT" | cut -f2)
+        RAW=$(jq -cn --arg n "$RES_NUM" --arg sha "$RES_SHA" --arg sn "$SEARCH_N" '[{number:($n|tonumber),mergedAt:"2026-01-01T00:00:00Z",mergeCommit:{oid:$sha},body:("<!-- issue-close-pr-of: "+$sn+" -->")}]')
+    else
+        RAW='[]'
     fi
+    mock_apply_jq "$RAW" "$@"
     exit 0
     ;;
-  # find-pr-by-marker.sh fallback step 2: pr view N --json mergeCommit --jq .mergeCommit.oid
+  # find-pr-by-marker.sh primary, per-PR lookup: pr view N --json mergeCommit,mergedAt --jq ...
+  # GH_MOCK_PR_MERGE_SHA_FOR_<n> non-empty = merged (mergedAt from
+  # GH_MOCK_PR_MERGED_AT_FOR_<n>, default 2026-01-01T00:00:00Z); empty = unmerged.
+  # GH_MOCK_PR_VIEW_FAIL_FOR_<n> non-empty = the lookup fails (exit 1).
+  "pr view "*" --json mergeCommit,mergedAt --jq"*)
+    PR_N=$(printf '%s' "$ARGS" | sed -nE 's/.*pr view ([0-9]+) .*/\1/p')
+    fail_var="GH_MOCK_PR_VIEW_FAIL_FOR_${PR_N}"
+    [ -n "${!fail_var:-}" ] && exit 1
+    sha_var="GH_MOCK_PR_MERGE_SHA_FOR_${PR_N}"
+    at_var="GH_MOCK_PR_MERGED_AT_FOR_${PR_N}"
+    if [ -n "${!sha_var:-}" ]; then
+        RAW=$(jq -cn --arg sha "${!sha_var}" --arg at "${!at_var:-2026-01-01T00:00:00Z}" '{mergeCommit:{oid:$sha},mergedAt:$at}')
+    else
+        RAW='{"mergeCommit":null,"mergedAt":null}'
+    fi
+    mock_apply_jq "$RAW" "$@"
+    exit 0
+    ;;
+  # find-pr-by-marker.sh fallback, per-PR lookup: pr view N --json mergeCommit --jq .mergeCommit.oid
   "pr view "*" --json mergeCommit --jq"*)
     PR_N=$(printf '%s' "$ARGS" | sed -nE 's/.*pr view ([0-9]+) .*/\1/p')
     var="GH_MOCK_PR_MERGE_SHA_FOR_${PR_N}"
@@ -269,25 +324,21 @@ case "$ARGS" in
   "issue view "*" --json closedByPullRequestsReferences --jq"*)
     N=$(printf '%s' "$ARGS" | sed -nE 's/.*issue view ([0-9]+) .*/\1/p')
     if [[ "$ARGS" == *".number"* ]]; then
-        # find-pr-by-marker.sh: new primary jq returns "<number>\t<sha>".
+        # find-pr-by-marker.sh: raw API shape — references carry only
+        # id/number/url (never mergedAt/mergeCommit); the caller's real --jq is
+        # applied. GH_MOCK_CLOSED_BY_PR_NUM_FOR_<N> = space-separated PR numbers;
+        # GH_MOCK_CLOSED_BY_PR_REPO_FOR_<n> = owner/name adds that PR's repository.
         var="GH_MOCK_CLOSED_BY_PR_NUM_FOR_${N}"
-        if [ -n "${!var+x}" ] && [ -n "${!var}" ]; then
-            PR_N="${!var}"
-            sha_var="GH_MOCK_PR_MERGE_SHA_FOR_${PR_N}"
-            SHA="${!sha_var:-}"
-            printf '%s\t%s\n' "$PR_N" "$SHA"
-            exit 0
-        fi
-        # Handle closed_multi_reference scenario specially: two PRs in
-        # closedByPullRequestsReferences (PR 100 older, PR 200 newer).
-        # sort_by(.mergedAt) | last → PR 200.
-        case "${GH_MOCK_SCENARIO:-}" in
-            closed_multi_reference)
-                printf '%s\t%s\n' "200" "newsha200"
-                exit 0
-                ;;
-        esac
-        # No match → empty result.
+        REFS=""
+        for PR_N in ${!var:-}; do
+            repo_var="GH_MOCK_CLOSED_BY_PR_REPO_FOR_${PR_N}"
+            REPO_JSON=""
+            if [ -n "${!repo_var:-}" ]; then
+                REPO_JSON=",\"repository\":{\"name\":\"${!repo_var#*/}\",\"owner\":{\"login\":\"${!repo_var%%/*}\"}}"
+            fi
+            REFS="${REFS:+$REFS,}{\"id\":\"x\",\"number\":${PR_N}${REPO_JSON},\"url\":\"u\"}"
+        done
+        mock_apply_jq "{\"closedByPullRequestsReferences\":[${REFS}]}" "$@"
         exit 0
     else
         # backfill-commit-comments.sh (Tier 0a): wants mergeCommit.oid
@@ -835,9 +886,8 @@ case "$SCENARIO" in
     esac
     ;;
   closed_multi_reference)
-    # find-pr-by-marker.sh primary: two PRs in closedByPullRequestsReferences,
-    # PR 100 (older) and PR 200 (newer). The .createdAt/.number dispatch above
-    # returns "200\tnewsha200" for this scenario.
+    # find-pr-by-marker.sh primary: CLOSED state only. The PR numbers and merge
+    # data come from GH_MOCK_CLOSED_BY_PR_NUM_FOR_<N> / GH_MOCK_PR_MERGE_SHA_FOR_<n>.
     case "$ARGS" in
       "issue view "*" --json state")
         echo '{"state":"CLOSED"}'

@@ -2,7 +2,7 @@
 # audit-tests.sh — Retire checker for issue-specific test files.
 # Usage: bin/audit-tests.sh [--dry-run] [--stale-months N] [--offline]
 #                           [--format text|json] [--fix-headers] [--dup-groups]
-#        bin/audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority]
+#        bin/audit-tests.sh --embed-cases [--band-size N] [--order frequency|priority] [--only-file <relpath>]
 # Exit:  0 = candidates found, 1 = no candidates, 2 = error. Writes by default: a
 # flagless run DELETES candidates (git rm), --fix-headers rewrites headers in place;
 # --dry-run reports only. --dup-groups: read-only TSV (bin/lib/test-dup-group.sh).
@@ -78,6 +78,10 @@ if [[ ! "$STALE_MONTHS" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --stale-months must be a non-negative integer (got: $STALE_MONTHS)" >&2
   exit 2
 fi
+# One run-scoped cache for the caseEmbedRules ops (test-language-registry/case-embed-ops.md).
+CASE_EMBED_CACHE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/case-embed-cache.XXXXXX")"
+export CASE_EMBED_CACHE_DIR
+trap 'rm -rf "${CASE_EMBED_CACHE_DIR:?}"' EXIT
 
 # Fail closed: with apply-by-default, an unresolvable repo root must delete
 # nothing rather than operate against whatever tests/ the CWD happens to expose.
@@ -100,7 +104,7 @@ if [[ "$DUP_GROUPS" -eq 1 ]]; then
   exit 1
 fi
 
-TODAY="$(date +%Y-%m-%d)"
+TODAY="$(date -u +%Y-%m-%d)"
 trp_compute_cutoff "$STALE_MONTHS" >/dev/null
 CUTOFF_DATE="$TRP_CUTOFF_DATE"
 TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
@@ -110,7 +114,8 @@ DISPATCHERS=()
 for _cat in hooks bin skills agents install tests; do
   tlr_list_dir_into "tests/$_cat" supported || continue
   for _f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
-    [[ "${_f##*/}" == feature-[0-9]*-* ]] && DISPATCHERS+=("$_f")
+    trp_name_axes "$_f"
+    [[ "$TRP_SCOPE" == issue-specific ]] && DISPATCHERS+=("$_f")
   done
 done
 
@@ -138,7 +143,7 @@ JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests.sh report — ${TODAY}"
-  echo "# Scope: tests/<cat>/feature-<N>-*.sh and tests/<cat>/feature-<N>-*.Tests.ps1 (six categories, issue-specific)"
+  echo "# Scope: tests/<cat>/feature-<N>-* test files of every supported language, read after the entry's issueNamePrefix (six categories, issue-specific)"
   echo "# Criteria: every '# Tests:' target is missing — issue state gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -149,9 +154,9 @@ fi
 
 for dispatcher in ${DISPATCHERS[@]+"${DISPATCHERS[@]}"}; do
   [[ -e "$dispatcher" ]] || continue
-  base="$(basename "$dispatcher")"
-  [[ "$base" =~ ^feature-([0-9]+)- ]] || continue
-  issue_num="${BASH_REMATCH[1]}"
+  trp_name_axes "$dispatcher"
+  issue_num="$TRP_ISSUE_NUMBER"; scope="$TRP_SCOPE"; ref="$TRP_ISSUE_REF"
+  [[ -n "$issue_num" ]] || continue
 
   # Primary filter: case-unit refcount (falls back to file-level survival for
   # non-conforming/marker-less files). Never the issue's state.
@@ -170,13 +175,17 @@ for dispatcher in ${DISPATCHERS[@]+"${DISPATCHERS[@]}"}; do
       if [[ "$FORMAT" == "text" ]]; then echo "NO_TESTS_HEADER: ${dispatcher}"; fi
       continue
       ;;
+    undeterminable)
+      [[ -n "$TRP_READER_FAILED" ]] || continue
+      DIAG_FILES+=("$dispatcher"); DIAG_KINDS+=("reader_unavailable")
+      if [[ "$FORMAT" == "text" ]]; then echo "SKIP_DELETE_READER_UNAVAILABLE: ${dispatcher} (${TRP_READER_FAILED})"; fi
+      continue
+      ;;
     partial-orphan)
       # C4: trp_remove_orphan_cases below relies on the TRP_CASE_* state just set
       # by trp_case_refcount_verdict — no TRP_CASE_*-mutating call may intervene.
       po_names=()
       for _i in "${TRP_ORPHAN_CASE_IDX[@]}"; do po_names+=("${TRP_CASE_NAMES[$_i]}"); done
-      scope="$(trp_scope_of "$base")"
-      ref="$(trp_issue_ref "$base")"
       trp_fetch_issue_meta "$issue_num" >/dev/null
       meta="$TRP_ISSUE_META"
       trp_delete_gate "$verdict" "$scope" "$ref" "$meta" >/dev/null
@@ -237,8 +246,6 @@ for dispatcher in ${DISPATCHERS[@]+"${DISPATCHERS[@]}"}; do
     *)        issue_state="unknown"; issue_closed_date="" ;;
   esac
 
-  scope="$(trp_scope_of "$base")"
-  ref="$(trp_issue_ref "$base")"
   trp_delete_gate "$verdict" "$scope" "$ref" "$meta" >/dev/null
   gate="$TRP_GATE"
 

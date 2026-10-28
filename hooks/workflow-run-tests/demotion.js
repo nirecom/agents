@@ -1,6 +1,6 @@
 "use strict";
-// Why a run_tests demotion happened, and the one human-facing message per reason. Diagnostics
-// only: no code path reads the reason or the message back (workflow-run-tests.js done()).
+// Why a run_tests demotion happened, and the one message per reason (a fact line plus a
+// model-facing detail). Diagnostics only: no code path reads them back (workflow-run-tests.js done()).
 // The message is the same on both routes, so the reader's next action never depends on which
 // emitter ran the suite. Contract shapes: hooks/lib/run-contract.js.
 
@@ -35,19 +35,21 @@ function demotionReason(t) {
   return t.contractMiss && t.contractMiss.reason === "ambiguous" ? "contract-ambiguous" : "contract-absent";
 }
 
+// -> { head, detail }: head is the fact line for the user, detail the explanation for the model.
 function demotionMessage(reason, contract) {
-  const head = `run_tests demoted to pending (${reason}). `;
+  const head = `[run_tests] pending (${reason})`;
+  const lead = `run_tests demoted to pending (${reason}). `;
   if (reason === "contract-unrunnable") {
-    return head + `Selected tests marked UNRUNNABLE: ${contract.unrunnable}. ` +
+    return { head, detail: lead + `Selected tests marked UNRUNNABLE: ${contract.unrunnable}. ` +
       "Install the runtimes listed on the `Missing runtimes:` output line and run again. " +
-      `If a runtime cannot be installed, accept this run only with ${UNRUNNABLE_ACCEPT_SENTINEL_FORM}.`;
+      `If a runtime cannot be installed, accept this run only with ${UNRUNNABLE_ACCEPT_SENTINEL_FORM}.` };
   }
   if (reason === "contract-legacy-shape") {
-    return head + "RUN_CONTRACT has the legacy 4-field form: the worktree's tests/run-all.sh predates this change, " +
-      "so rebase onto main and run again.";
+    return { head, detail: lead + "RUN_CONTRACT has the legacy 4-field form: the worktree's tests/run-all.sh predates this change, " +
+      "so rebase onto main and run again." };
   }
-  return head + "Completion requires tests/run-all.sh (or the worker-dispatch test-runner) " +
-    "and exactly one valid RUN_CONTRACT line in its output.";
+  return { head, detail: lead + "Completion requires tests/run-all.sh (or the worker-dispatch test-runner) " +
+    "and exactly one valid RUN_CONTRACT line in its output." };
 }
 
 module.exports = {

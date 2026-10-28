@@ -79,13 +79,15 @@ def assert_records(case: str, path: Path, state: str, cases: list[list[str]]) ->
     assert got_cases == cases, f"{case}: CASE lines"
 
 
-def assert_malformed(case: str, path: Path, reason: str) -> None:
+def assert_malformed(case: str, path: Path, reason: str, line: int | None = None) -> None:
     code, files, cases = read_cases(case, path)
     assert code == 0, f"{case}: exit code"
     assert len(files) == 1, f"{case}: exactly one FILE line"
     assert len(files[0]) == 4, f"{case}: FILE line has four fields"
     assert [files[0][1], files[0][3]] == ["malformed", reason], f"{case}: state and reason"
     assert files[0][2].isdigit() and int(files[0][2]) >= 1, f"{case}: line number"
+    if line is not None:
+        assert files[0][2] == str(line), f"{case}: line number"
     assert cases == [], f"{case}: no CASE line"
 
 
@@ -225,6 +227,24 @@ def test_mark_below_module_level_is_nested_target(case, tmp_path,lines):
 )
 def test_syntax_error_is_malformed_grammar(case, tmp_path,lines):
     assert_malformed(case, write_sample(tmp_path / "test_broken.py", lines), "grammar")
+
+
+@pytest.mark.parametrize(
+    "target_expr",
+    [
+        pytest.param(json.dumps("bin/a\t.sh"), id="tab-escape"),
+        pytest.param(json.dumps("bin/a\r.sh"), id="cr-escape"),
+        pytest.param(json.dumps("bin/a\n.sh"), id="lf-escape"),
+        pytest.param('"""bin/a\n.sh"""', id="lf-in-triple-quotes"),
+    ],
+)
+def test_record_delimiter_in_the_target_is_grammar(case, tmp_path, target_expr):
+    """#2712: names are identifiers, so only the target can carry a TAB / CR / LF into the TSV."""
+    assert_malformed(case, write_sample(tmp_path / "test_delimiter.py", marked(target_expr)), "grammar", 4)
+
+
+def test_raw_string_backslash_t_is_the_path_rule_not_a_delimiter(case, tmp_path):
+    assert_malformed(case, write_sample(tmp_path / "test_raw.py", marked('r"bin/a\\t.sh"')), "target", 4)
 
 
 def test_duplicate_names_pass_through_the_reader_the_shared_state_rule_rejects_them(case, tmp_path):

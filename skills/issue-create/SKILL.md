@@ -20,6 +20,7 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
 
 Required reading: Read `rules/github-issues.md` before Pre-flight — it is on-demand-only and never auto-injected.
 Read `rules/coding.md` before writing any issue title or body — on-demand-only, never auto-injected; its Public GitHub Rules govern this outbound write.
+Apply the TERMS line of hooks/lib/lang-directives.txt and the Writer directives in skills/_shared/combined-glossary.md to issue titles and bodies; both govern terminology only, not the body language.
 
 ## Phase 0b — Project preflight
 
@@ -49,7 +50,7 @@ Phase 1 runs regardless of gate outcome.
 IC-1. Resolve session intent:
    Resolve `<PLANS_DIR>` with one standalone Bash call —
    `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` — and read `<SESSION_ID>`
-   from `$CLAUDE_CODE_SESSION_ID`. `<INTENT_MD>` is `<PLANS_DIR>/<SESSION_ID>-intent.md`.
+   from `$CLAUDE_CODE_SESSION_ID`. `<INTENT_MD>` is the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent --session <SESSION_ID>` (a failed call counts as no intent).
    Skip the gate silently when `<SESSION_ID>` is empty or `<INTENT_MD>` does not exist.
 
 IC-1a. Read `rules/mid-workflow-findings.md` — on-demand-only, never auto-injected; it owns the capture paths the IC-3 notice points the user at.
