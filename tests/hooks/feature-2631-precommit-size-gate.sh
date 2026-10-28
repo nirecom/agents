@@ -34,14 +34,7 @@ LANE_TIMEOUT=110
 LANE_JOBS=2
 
 # lane | case=function[:row...] ... (heaviest first, so the last wave holds the short lanes)
-running=0
-while IFS='|' read -r lane specs; do
-  [[ -z "$lane" || "$lane" =~ ^[[:space:]]*# ]] && continue
-  if ((running >= LANE_JOBS)); then wait -n; running=$((running - 1)); fi
-  # shellcheck disable=SC2086 # specs is a word list on purpose
-  run_with_timeout "$LANE_TIMEOUT" bash "$LANE_DIR/lane.sh" "$TMP_ROOT/$lane" $specs < /dev/null > "$TMP_ROOT/lane-$lane.log" 2>&1 &
-  running=$((running + 1))
-done <<'EOF'
+LANE_TABLE="$(cat <<'EOF'
 edge-session|session-markers-and-unresolved-sid=edge_case_session_markers_and_unresolved_sid
 core-new-code-prompt|new-file-over-hard-blocks-exactly-hard-passes=core_case_new_file_over_hard_blocks_exactly_hard_passes:code:prompt
 core-shrink|over-hard-head-file-may-shrink-only=core_case_over_hard_head_file_may_shrink_only
@@ -54,15 +47,53 @@ core-premise-new-docs|fixture-premise-small-commit-passes=core_case_fixture_prem
 core-exempt-a|exempt-stream-records-pass=core_case_exempt_stream_records_pass:docs/history.md:CHANGELOG.md:docs/history/2026.md
 gc-shrink-exempt-b|git-commit-allows-an-index-shrink-of-an-over-hard-file=gc_case_shrink_of_over_hard_file_judged_by_index exempt-stream-records-pass=core_case_exempt_stream_records_pass:changelog/2026.md:docs/_archive/old.md
 gc-meta|shell-metacharacter-path-survives-the-nul-route=gc_case_shell_metachar_path
+merge|merge-incoming-equal-passes-differing-blocks=merge_case_incoming_equal_passes_differing_blocks
 EOF
+)"
+readonly LANE_TABLE
+running=0
+while IFS='|' read -r lane specs; do
+  [[ -z "$lane" || "$lane" =~ ^[[:space:]]*# ]] && continue
+  if ((running >= LANE_JOBS)); then wait -n; running=$((running - 1)); fi
+  # shellcheck disable=SC2086 # specs is a word list on purpose
+  run_with_timeout "$LANE_TIMEOUT" bash "$LANE_DIR/lane.sh" "$TMP_ROOT/$lane" $specs < /dev/null > "$TMP_ROOT/lane-$lane.log" 2>&1 &
+  running=$((running + 1))
+done <<<"$LANE_TABLE"
 wait
+
+# lane_gaps <log-dir> <case-name> [table] — one line per missing result: a lane the table names for
+# the case whose log is absent, holds fewer closed sections of the case than the table has rows for
+# it, or never printed @@DONE. replay fails on each line, so the other lanes cannot hide a dead one.
+lane_gaps() {
+  local dir="$1" name="$2" table="${3:-$LANE_TABLE}" lane specs spec want got finished log line state
+  while IFS='|' read -r lane specs; do
+    [[ -z "$lane" || "$lane" =~ ^[[:space:]]*# ]] && continue
+    want=0
+    for spec in $specs; do [[ "${spec%%=*}" == "$name" ]] && want=$((want + 1)); done
+    ((want == 0)) && continue
+    log="$dir/lane-$lane.log"
+    if [[ ! -f "$log" ]]; then printf 'lane %s: no log\n' "$lane"; continue; fi
+    got=0 finished=0 state=out
+    while IFS= read -r line; do
+      [[ "$line" == @@* ]] || continue
+      [[ "$state" == in ]] && got=$((got + 1))
+      [[ "$line" == "@@DONE" ]] && finished=1
+      if [[ "$line" == "@@CASE $name" ]]; then state=in; else state=out; fi
+    done < "$log"
+    ((got >= want)) || printf 'lane %s: %d of %d sections of %s closed\n' "$lane" "$got" "$want" "$name"
+    ((finished == 1)) || printf 'lane %s: no @@DONE (the lane did not finish)\n' "$lane"
+  done <<<"$table"
+}
 
 # replay <case-name> — re-issue every lane section of the case (a split case has several) in this
 # file's open case; no section, a section with no closing @@ line (lane crashed or timed out), or a
 # section with no assertion fails. Each log is read on its own, so a killed lane's open section
 # cannot close on the next log's @@CASE line.
 replay() {
-  local name="$1" line state log seen=0 asserted
+  local name="$1" line state log seen=0 asserted gap
+  while IFS= read -r gap; do
+    [[ -n "$gap" ]] && fail "every lane named for case $name finished it" "$gap"
+  done <<<"$(lane_gaps "$TMP_ROOT" "$name")"
   for log in "$TMP_ROOT"/lane-*.log; do
     state=out
     while IFS= read -r line; do
@@ -84,6 +115,23 @@ replay() {
   done
   if [ "$seen" = 0 ]; then fail "lane reached case $name" "no section; a lane died before it (log tails: $(tail -n 3 "$TMP_ROOT"/lane-*.log | head -c 600))"; fi
 }
+
+case_begin "replay-fails-when-one-lane-result-is-missing" "hooks/pre-commit"
+SC_DIR="$TMP_ROOT/replay-selfcheck"
+mkdir -p "$SC_DIR"
+SC_TABLE=$'ok|split=f:a\ngone|split=f:b\ncut|split=f:c\nfull|whole=f'
+printf '@@CASE split\nPASS: a\n@@DONE\n' > "$SC_DIR/lane-ok.log"
+printf '@@CASE split\nPASS: c\n' > "$SC_DIR/lane-cut.log"
+printf '@@CASE whole\nPASS: w\n@@DONE\n' > "$SC_DIR/lane-full.log"
+sc_gaps="$(lane_gaps "$SC_DIR" split "$SC_TABLE")"
+for sc_want in "lane gone: no log" "lane cut: 0 of 1 sections of split closed" "lane cut: no @@DONE"; do
+  if [[ "$sc_gaps" == *"$sc_want"* ]]; then pass "gap reported: $sc_want"
+  else fail "gap reported: $sc_want" "got: $sc_gaps"; fi
+done
+if [[ "$sc_gaps" != *"lane ok"* ]]; then pass "a finished lane reports no gap"
+else fail "a finished lane reports no gap" "got: $sc_gaps"; fi
+assert_eq "$(lane_gaps "$SC_DIR" whole "$SC_TABLE")" ""
+case_end
 
 case_begin "fixture-premise-small-commit-passes" "hooks/pre-commit"
 replay fixture-premise-small-commit-passes
@@ -151,6 +199,10 @@ case_end
 
 case_begin "shell-metacharacter-path-survives-the-nul-route" "hooks/lib/precommit-size-gate.sh"
 replay shell-metacharacter-path-survives-the-nul-route
+case_end
+
+case_begin "merge-incoming-equal-passes-differing-blocks" "hooks/pre-commit"
+replay merge-incoming-equal-passes-differing-blocks
 case_end
 
 echo ""

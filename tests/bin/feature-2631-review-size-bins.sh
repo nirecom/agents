@@ -362,6 +362,18 @@ case_end
 case_begin "size-check-rc0-with-hard-record-is-rc2" "bin/review-code-size"
 ri_case_disagree rc0-hard 0 HARD
 case_end
+case_begin "size-check-rc0-without-targets-line-is-rc2" "bin/review-code-size"
+ri_case_no_targets_line
+case_end
+
+# shellcheck source=feature-2631-review-size-bins/merge-incoming.sh
+. "$ROOT/tests/bin/feature-2631-review-size-bins/merge-incoming.sh"
+case_begin "merge-incoming-review-code-size" "bin/review-code-size"
+mi_case_merge review-code-size code bin/big.js
+case_end
+case_begin "merge-incoming-review-doc-size" "bin/review-doc-size"
+mi_case_merge review-doc-size docs docs/big.md
+case_end
 
 xfail_summary
 echo ""

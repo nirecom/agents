@@ -154,6 +154,55 @@ F.run("C9 ssot", () => {
 });
 caseEnd();
 
+// #2631 stage 9: an unknown session state (the size session gate cannot load the state reader, so
+// readState throws, or the state file is corrupt) is checked, not exempt; a relint that skips (no
+// readable plan) never blocks for size, so Layer 2 keeps passing an unjudgeable plan to the CONFIRM side.
+const STATE_THROWS = { preload: C.THROW_PRELOAD, env: { F2631_THROW_MODULE: "hooks/workflow-state/state-io/core.js", F2631_THROW_PARENT: "hooks/lib/size-session-gate.js" } };
+function gateStateUnder(sid, env) {
+  const gate = JSON.stringify(path.join(F.ROOT, "hooks", "lib", "size-session-gate.js"));
+  const r = require("child_process").spawnSync(process.execPath, ["-r", C.THROW_PRELOAD, "-e", `process.stdout.write(require(${gate}).sizeCheckState(${JSON.stringify(sid)}))`],
+    { encoding: "utf8", timeout: 30000, env: Object.assign({}, process.env, env) });
+  return r.stdout || `rc=${r.status} ${r.stderr}`;
+}
+function corruptSession(n) {
+  const sid = F.newSid();
+  fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, `${sid}.json`), "{ not json");
+  if (n != null) C.writePlan(sid, "detail", C.planOf(n));
+  return sid;
+}
+
+caseBegin("T1-unknown-session-state-blocks-over-hard", "hooks/stop-confirm-plan-guard.js");
+F.run("T1", () => {
+  const n = C.HARD.detail + 1;
+  const sid = C.session("detail", n);
+  const g = gateStateUnder(sid, STATE_THROWS.env);
+  F.check("premise: under the preload the gate reports \"unknown\" (the injection reaches readState)", g === "unknown", g);
+  F.check("premise: without the preload the same session is \"active\"", gateStateUnder(sid, { F2631_THROW_MODULE: "" }) === "active", "");
+  const r = C.stop(sid, C.layer2Transcript("detail"), STATE_THROWS);
+  F.check("readState throws, detail at HARD+1: blocks with the plan-size reason",
+    C.blockedWith(r, C.SIZE_PREFIX, [path.basename(C.planPath(sid, "detail")), n]), r.raw);
+  const ok = C.stop(C.session("detail", C.HARD.detail), C.layer2Transcript("detail"), STATE_THROWS);
+  F.check("control: readState throws, detail at HARD: stops quietly", C.quiet(ok), ok.raw);
+  const bad = corruptSession(n);
+  const b = C.stop(bad, C.layer2Transcript("detail"));
+  F.check("corrupt state, own detail at HARD+1: blocks with the plan-size reason",
+    C.blockedWith(b, C.SIZE_PREFIX, [path.basename(C.planPath(bad, "detail")), n]), b.raw);
+});
+caseEnd();
+
+caseBegin("T2-skipped-relint-never-blocks-for-size", "hooks/stop-confirm-plan-guard.js");
+F.run("T2", () => {
+  const dir = C.session("detail", null);
+  fs.mkdirSync(C.planPath(dir, "detail"), { recursive: true });
+  const d = C.stop(dir, C.layer2Transcript("detail"));
+  F.check("started session, detail is a directory (relint unreadable): no plan-size block", !d.reason.startsWith(C.SIZE_PREFIX), d.raw);
+  const none = C.stop(C.session("detail", null), C.layer2Transcript("detail"), STATE_THROWS);
+  F.check("readState throws, no detail file (relint unreadable): no plan-size block", !none.reason.startsWith(C.SIZE_PREFIX), none.raw);
+  const bad = C.stop(corruptSession(null), C.layer2Transcript("detail"));
+  F.check("corrupt state, no detail file (relint unreadable): no plan-size block", !bad.reason.startsWith(C.SIZE_PREFIX), bad.raw);
+});
+caseEnd();
+
 process.chdir(savedCwd);
 restore();
 const failed = F.failureCount();

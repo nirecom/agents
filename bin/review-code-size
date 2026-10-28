@@ -74,12 +74,13 @@ if [[ "$STAGED_ONLY" -eq 1 ]]; then
   # -z + core.quotePath=false: non-ASCII and special-char paths arrive as raw NUL-separated bytes.
   review_size_check "$HDR" code "$(review_size_pre_head)" index < <(git -c core.quotePath=false diff -z \
     --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
-  if [[ "$RS_TARGETS" -eq 0 ]]; then
+  if [[ "$RS_TARGETS" -eq 0 && "$RS_MERGE_EXCLUDED" -eq 0 ]]; then
     echo "$HDR: SKIPPED — no code files staged"; exit 0
   fi
   echo "$HDR: PERFORMED (staged mode)"
   echo ""
   echo "Changed code files: $RS_TARGETS (extensions: $_EXTS)"
+  [[ "$RS_MERGE_EXCLUDED" -gt 0 ]] && echo "Merge-incoming files left out: $RS_MERGE_EXCLUDED"
   report_records
   [[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0
 fi

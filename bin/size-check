@@ -76,8 +76,9 @@ function evaluate(targets, rev, post) {
   const queries = [];
   const slot = (name) => queries.push(name) - 1;
   const revSlot = rev && targets.length > 0 ? slot(`${rev}^{commit}`) : -1;
+  // `:0:` pins the stage so a path starting with `0:` is not read as stage + path.
   const plan = targets.map((t) => ({
-    t, postSlot: post === "index" ? slot(`:${t.gitPath}`) : -1, preSlot: rev ? slot(`${rev}:${t.gitPath}`) : -1,
+    t, postSlot: post === "index" ? slot(`:0:${t.gitPath}`) : -1, preSlot: rev ? slot(`${rev}:${t.gitPath}`) : -1,
   }));
   const blobs = catFileBatch(queries);
   if (revSlot !== -1 && !blobs[revSlot]) throw new GitError(`--pre rev:${rev} does not resolve to a commit`);
@@ -118,6 +119,23 @@ function collectTargets(opts) {
   return { targets, rev: opts.rev, post: opts.post };
 }
 
+// During a merge, a target whose index state (blob and mode) equals MERGE_HEAD's is merge-incoming:
+// the other side's content, not this branch's, so it is left out. Undecidable judges every path.
+function excludeMergeIncoming(targets) {
+  if (targets.length === 0) return targets;
+  const { detectMergeIncoming, MERGE_INCOMING_STATE } = require(path.join(HOOKS_LIB, "merge-incoming.js"));
+  const mi = detectMergeIncoming(process.cwd(), targets.map((t) => t.gitPath));
+  if (mi.state === MERGE_INCOMING_STATE.UNDECIDABLE) {
+    process.stderr.write(`size-check: merge state undecidable (${mi.reason}); judging every staged path\n`);
+    return targets;
+  }
+  if (mi.state !== MERGE_INCOMING_STATE.MERGING) return targets;
+  const kept = targets.filter((t) => !mi.paths.has(t.gitPath));
+  const excluded = targets.length - kept.length;
+  if (excluded > 0) process.stderr.write(`size-check: merge in progress; ${excluded} staged path(s) equal to MERGE_HEAD left out\n`);
+  return kept;
+}
+
 function main(argv) {
   let opts;
   try { opts = parseArgs(argv); } catch (e) {
@@ -131,7 +149,9 @@ function main(argv) {
       process.stdout.write("TARGETS\t0\n");
       return 0;
     }
-    const { targets, rev, post } = collectTargets(opts);
+    const collected = collectTargets(opts);
+    const { rev, post } = collected;
+    const targets = post === "index" ? excludeMergeIncoming(collected.targets) : collected.targets;
     const { records, errors } = evaluate(targets, rev, post);
     process.stdout.write([`TARGETS\t${targets.length}`].concat(records.map((r) => r.join("\t"))).join("\n") + "\n");
     for (const e of errors) process.stderr.write(`size-check: ${e}\n`);

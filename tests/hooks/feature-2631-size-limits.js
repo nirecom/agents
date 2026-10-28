@@ -185,12 +185,11 @@ F.run("sizeCheckActive", () => {
 });
 caseEnd();
 
-// The intended asymmetry: a state file with no self-recorded settled step is "exempt" for the
-// edit-time / CONFIRM / Stop gates, while the commit gate checks it (the file exists). A sid with
-// no state file is exempt on both sides. The commit-route pair: precommit-size-gate.sh
-// (session-markers-and-unresolved-sid).
-caseBegin("size-session-gate-commit-vs-edit-asymmetry", "hooks/lib/size-session-gate.js");
-F.run("asymmetry", () => {
+// Stage 9: a readable state file with no self-recorded settled step is "active" on the edit side,
+// matching the commit gate (the file exists). A sid with no state file is exempt on both sides.
+// The commit-route pair: precommit-size-gate.sh (session-markers-and-unresolved-sid).
+caseBegin("size-session-gate-commit-and-edit-agree", "hooks/lib/size-session-gate.js");
+F.run("commit-and-edit-agree", () => {
   const gate = F.load("hooks/lib/size-session-gate.js");
   const lc = F.load("hooks/workflow-state/lifecycle.js");
   const state = (sid) => (typeof gate.sizeCheckState === "function" ? gate.sizeCheckState(sid) : "sizeCheckState is not exported");
@@ -208,8 +207,8 @@ F.run("asymmetry", () => {
     F.check(`${name}: premise: the state file exists and holds no self-recorded settlement`,
       lc.hasSelfRecordedStepSettlement(JSON.parse(fs.readFileSync(p, "utf8"))) === false, p);
     F.check(`${name}: the commit side checks it (commitSizeCheckActive true)`, gate.commitSizeCheckActive(sid) === true, "");
-    F.check(`${name}: the edit side does not (sizeCheckActive false)`, gate.sizeCheckActive(sid) === false, "");
-    F.check(`${name}: sizeCheckState is "exempt"`, state(sid) === "exempt", state(sid));
+    F.check(`${name}: the edit side checks it too (sizeCheckActive true)`, gate.sizeCheckActive(sid) === true, "");
+    F.check(`${name}: sizeCheckState is "active"`, state(sid) === "active", state(sid));
   }
   const none = F.newSid();
   F.check("no state file: premise: none exists", !fs.existsSync(path.join(process.env.WORKFLOW_STATE_DIR, `${none}.json`)), none);
@@ -219,6 +218,50 @@ F.run("asymmetry", () => {
   F.writeStartedState(started);
   F.check("control: a started session is \"active\" and checked on both sides",
     state(started) === "active" && gate.sizeCheckActive(started) === true && gate.commitSizeCheckActive(started) === true, state(started));
+});
+caseEnd();
+
+// S1-S4 (stage 9): sizeCheckState is exempt / active / unknown, and sizeCheckActive is true only
+// for active. The no-state exempt and settled-less active rows, where edit time, CONFIRM and
+// pre-commit agree, are in the commit-and-edit-agree case above.
+caseBegin("size-check-state-exempt-active-unknown", "hooks/lib/size-session-gate.js");
+F.run("sizeCheckState", () => {
+  const gate = F.load("hooks/lib/size-session-gate.js");
+  const state = (sid) => (typeof gate.sizeCheckState === "function" ? gate.sizeCheckState(sid) : "sizeCheckState is not exported");
+  const { MAX_KNOWN_STATE_VERSION } = F.load("hooks/workflow-state/state-io/core.js");
+  const raw = (body) => { const sid = F.newSid(); fs.writeFileSync(path.join(process.env.WORKFLOW_STATE_DIR, `${sid}.json`), body); return sid; };
+  const started = F.newSid();
+  F.writeStartedState(started);
+  const off = F.newSid();
+  F.writeStartedState(off);
+  F.writeMarker(off, "workflow-off");
+  const future = F.newSid();
+  F.writeStartedState(future, { version: MAX_KNOWN_STATE_VERSION + 1 });
+  // name | sid | want
+  const rows = [["S1 empty sid", "", "exempt"], ["S1 undefined sid", undefined, "exempt"], ["S1 WORKFLOW_OFF", off, "exempt"],
+    ["S2 settled", started, "active"], ["S4 invalid JSON", raw("{not json"), "unknown"], ["S4 a JSON array", raw("[]"), "unknown"],
+    ["S4 version above MAX_KNOWN_STATE_VERSION", future, "unknown"]];
+  for (const [name, sid, want] of rows) {
+    F.check(`${name}: sizeCheckState is "${want}"`, state(sid) === want, state(sid));
+    F.check(`${name}: sizeCheckActive is ${want === "active"} (true only for active)`, gate.sizeCheckActive(sid) === (want === "active"), gate.sizeCheckActive(sid));
+  }
+  // S3: the state reader fails to load -> unknown (never exempt), and the edit-time gate stays off.
+  // A broken lifecycle module no longer matters: sizeCheckState does not require it.
+  const Module = require("module");
+  const load = Module._load;
+  const inject = (re) => {
+    Module._load = function (req) {
+      if (re.test(req)) throw new Error("injected load failure");
+      return load.apply(this, arguments);
+    };
+  };
+  try {
+    inject(/workflow-state[\\/]state-io[\\/]core(\.js)?$/);
+    F.check("S3 state-io core require throws: sizeCheckState is \"unknown\"", state(started) === "unknown", state(started));
+    F.check("S3 state-io core require throws: sizeCheckActive is false", gate.sizeCheckActive(started) === false, "");
+    inject(/workflow-state[\\/]lifecycle(\.js)?$/);
+    F.check("S3 lifecycle require throws: sizeCheckState stays \"active\"", state(started) === "active", state(started));
+  } finally { Module._load = load; }
 });
 caseEnd();
 

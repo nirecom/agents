@@ -77,3 +77,23 @@ ri_case_disagree() {
     fi
   done
 }
+
+# ri_case_no_targets_line — every bin, every mode: a size-check that exits 0 but prints no TARGETS
+# line has not reported a count, so the bin fails closed (rc 2) instead of reading "no targets".
+ri_case_no_targets_line() {
+  local tree="$TMP_ROOT/stub-no-targets" row bin mode path hard repo
+  build_tree "$tree" >/dev/null
+  printf '#!/usr/bin/env node\nprocess.exit(0);\n' > "$tree/bin/size-check"
+  chmod +x "$tree/bin/size-check"
+  for row in "${TABLE[@]}"; do
+    IFS='|' read -r bin mode path hard <<<"$row"
+    repo="$(scenario "$mode" - make_lines 10 "$path")"
+    judge "$tree" "$bin" "$mode" "$repo"
+    if [ "$RC" = 2 ] && printf '%s\n' "$OUT" | grep -q 'ERROR'; then
+      pass "$bin $mode: size-check rc 0 with no TARGETS line -> rc 2 ERROR"
+    else
+      fail "$bin $mode: size-check rc 0 with no TARGETS line -> rc 2 ERROR" \
+        "rc=$RC out=$(printf '%s' "$OUT" | head -c 400)"
+    fi
+  done
+}

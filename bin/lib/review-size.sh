@@ -1,6 +1,6 @@
 # bin/lib/review-size.sh — sourced by bin/review-{code,prompt,doc}-size (#2631).
 # review_size_check <hdr> <kind> <pre> <post> runs bin/size-check once over the NUL-separated
-# paths on stdin and sets RS_TARGETS (count) and RS_RECORDS (tab records, one per line).
+# paths on stdin and sets RS_TARGETS (count), RS_RECORDS (tab records, one per line) and RS_MERGE_EXCLUDED.
 # An infrastructure error prints a non-SKIPPED diagnostic and exits 2, so callers fail closed.
 
 RS_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,6 +16,13 @@ review_size_check() {
     exit 2
   fi
   cat "$err" >&2
+  # RS_MERGE_EXCLUDED: staged paths size-check left out as merge-incoming (its stderr notice), so a
+  # --staged run whose every target was excluded still counts as performed, not skipped.
+  # shellcheck disable=SC2034 # read by the sourcing bins
+  RS_MERGE_EXCLUDED=0
+  line="$(grep -m1 -oE 'merge in progress; [0-9]+ staged path' "$err" || true)"
+  # shellcheck disable=SC2034
+  [[ "$line" =~ ([0-9]+) ]] && RS_MERGE_EXCLUDED="${BASH_REMATCH[1]}"
   rm -f "$err"
   RS_TARGETS=0
   RS_RECORDS=""
@@ -36,6 +43,10 @@ review_size_check() {
       RS_RECORDS+="$line"$'\n'
     fi
   done <<< "$out"
+  if [[ "$seen_targets" -eq 0 ]]; then
+    printf '%s: ERROR — bin/size-check printed no TARGETS line\n' "$hdr"
+    exit 2
+  fi
   # Fail closed: the exit code (1 = HARD found) and the HARD records must agree.
   if [[ ( "$rc" -eq 1 && "$has_hard" -eq 0 ) || ( "$rc" -eq 0 && "$has_hard" -eq 1 ) ]]; then
     printf '%s: ERROR — bin/size-check exit code and HARD records disagree\n' "$hdr"

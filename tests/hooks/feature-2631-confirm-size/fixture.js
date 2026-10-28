@@ -68,7 +68,13 @@ function parseLast(stdout) {
 }
 
 // confirm / stop take opts.root: the checkout whose hook is spawned (default: this repo), so an
-// SSOT-propagation case can run the hook of a copied tree with a rewritten size-limits.js.
+// SSOT-propagation case can run the hook of a copied tree with a rewritten size-limits.js, and
+// opts.preload: a module the hook is started with (`node -r`), e.g. throw-preload.js. confirm
+// also takes opts.input: fields that replace the hook input's (e.g. an empty transcript_path).
+function hookArgv(o, hook) {
+  const file = path.join(o.root || F.ROOT, "hooks", hook);
+  return o.preload ? ["-r", o.preload, file] : [file];
+}
 // confirm(sid, stage, opts) -> {decision, deny, reason, ctx, msg, raw}. Unless opts.present is
 // false, the plan is first "presented": present.js writes the #2729 receipt in the child env, so
 // a deny here comes from the size check, or from a plan file that cannot be found.
@@ -83,8 +89,9 @@ function confirm(sid, stage, opts) {
     tool_input: { command: `echo "<<WORKFLOW_CONFIRM_${stage.toUpperCase()}: ok>>"` },
     session_id: sid, tool_use_id: `tu-${++seq}`,
     transcript_path: path.join(F.work(), "no-such-transcript.jsonl"),
+    ...(o.input || {}),
   };
-  const r = spawnSync(process.execPath, [path.join(o.root || F.ROOT, "hooks", "confirm-checkpoint.js")], {
+  const r = spawnSync(process.execPath, hookArgv(o, "confirm-checkpoint.js"), {
     input: JSON.stringify(input), encoding: "utf8", timeout: 60000, cwd: F.work(), env,
   });
   const out = parseLast(r.stdout) || {};
@@ -92,6 +99,7 @@ function confirm(sid, stage, opts) {
   return {
     decision: out.decision, deny: out.decision === "block" && hso.permissionDecision === "deny",
     reason: String(out.reason || ""), ctx: String(hso.additionalContext || ""), msg: String(out.systemMessage || ""),
+    skipped: /\[confirm-skipped: /.test(String(out.systemMessage || "")),
     raw: `rc=${r.status} out=${r.stdout} err=${String(r.stderr || "").slice(0, 300)}`,
   };
 }
@@ -111,7 +119,7 @@ function layer2Transcript(stage, followUp) {
 function stop(sid, tpath, opts) {
   const o = opts || {};
   const input = { session_id: sid, transcript_path: tpath, hook_event_name: "Stop", stop_hook_active: false };
-  const r = spawnSync(process.execPath, [path.join(o.root || F.ROOT, "hooks", "stop-confirm-plan-guard.js")], {
+  const r = spawnSync(process.execPath, hookArgv(o, "stop-confirm-plan-guard.js"), {
     input: JSON.stringify(input), encoding: "utf8", timeout: 60000, cwd: F.work(), env: childEnv(o.cfg || onCfg(), o.env),
   });
   const out = String(r.stdout || "");
@@ -122,10 +130,11 @@ function stop(sid, tpath, opts) {
   };
 }
 const quiet = (r) => r.rc === 0 && r.out.trim() === "";
+const THROW_PRELOAD = path.join(__dirname, "throw-preload.js");
 const blockedWith = (r, prefix, needles) => r.rc === 2 && r.reason.startsWith(prefix) &&
   (needles || []).every((n) => r.reason.includes(String(n)));
 
 module.exports = {
   F, HARD, WARN, STEP, FOLLOW, SEND_BACK, JA_LINE, SIZE_PREFIX, LANG_PREFIX,
-  cfg, onCfg, planPath, writePlan, planOf, session, confirm, layer2Transcript, stop, quiet, blockedWith,
+  cfg, onCfg, planPath, writePlan, planOf, session, confirm, layer2Transcript, stop, quiet, blockedWith, THROW_PRELOAD,
 };
