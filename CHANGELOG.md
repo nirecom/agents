@@ -903,3 +903,7 @@ Changes: The plan approval dialog now follows a plan presentation even when that
 ### FEATURE: PR #2823 (2026-10-28)
 Background: feat(#2327): scope review-tests re-reviews after implementation changes to the delta
 Changes: review-tests re-reviews after an implementation change now read only the changed and covering tests, falling back to a full review when coverage cannot be determined (#2327)
+
+### FEATURE: PR #2751 (2026-10-29)
+Background: feat(#2672, #2725): CPR 4 項目追加と rules/architecture-principles.md 新設
+Changes: Core principles gained four entries (Release Is the Goal; Quality, Cost, Delivery; Evidence First; Root Cause Analysis), and a new on-demand design-principles rule (exit before gate, shift left) is now read when outlining, detailing and writing code.
