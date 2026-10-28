@@ -64,7 +64,7 @@ const ENFORCE_WORKFLOW_OFF_RE_DQ =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: ([^>]+)>>"$/;
 const ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF([: ].*)?>>"$/;
-// EMERGENCY OFF sentinels (#1608): bypass the Phase1 clearance examination.
+// EMERGENCY OFF sentinel family (#1608): bypass the Phase1 clearance examination.
 // Human-only (settings.json `ask`) and audited. Distinct strings, so the normal
 // OFF DQ regexes above never match them — that is the bypass mechanism itself.
 // Note: neither the normal *_RE_DQ nor the normal *_LOOKSLIKE_RE forms match the
@@ -93,7 +93,7 @@ const NEXT_STEP_RESUME_RE_DQ =
   /^echo "<<WORKFLOW_NEXT_STEP_RESUME: ([^>]+)>>"$/;
 const NEXT_STEP_RESUME_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_NEXT_STEP_RESUME([: ].*)?>>"$/;
-// CONFIRM_<STAGE> sentinels emitted by clarify-intent / make-outline-plan /
+// CONFIRM_<STAGE> sentinel family emitted by clarify-intent / make-outline-plan /
 // make-detail-plan after the artifact is written. PreToolUse `confirm-checkpoint.js`
 // surfaces the dialog. Stop hook `stop-confirm-plan-guard.js` (Layer 2) returns
 // `decision:block` + reason when no stage-valid follow-up Skill appears after the
@@ -133,11 +133,18 @@ const RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_BA
 // Glossary grant (#2529): term (no `=`), up to 3 op=/cat=/stage= discriminators, reason.
 const GLOSSARY_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=([^>()\x60;|&=]+?)((?: (?:op|cat|stage)=[a-z-]+){0,3}) — ([^>()\x60;|&]+)>>"$/;
 const GLOSSARY_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_GLOSSARY_ACCEPTED([: ].*)?>>"\s*$/;
-// Supervisor BLOCK override (#2709): the user's reviewed rejection of a standing TR5 BLOCK.
-// Human-only via settings.json `ask`; the workflow-mark handler is its only write path.
-const SUPERVISOR_BLOCK_ACCEPTED_RE_DQ =
+// Supervisor verdict acceptance (#2709, renamed in #2597): the user's reviewed acceptance of a
+// TR5 BLOCK / WARN verdict. Human-only via settings.json `ask`; the workflow-mark handler is its
+// only write path.
+const SUPERVISOR_VERDICT_ACCEPTED_RE_DQ =
+  /^echo "<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: (run-[A-Za-z0-9_-]+) ([^>]+)>>"$/;
+const SUPERVISOR_VERDICT_ACCEPTED_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED([: ].*)?>>"$/;
+// The retired #2709 name stays recognised so it reaches the handler, which records nothing and
+// names the new sentinel, and so a subagent still cannot emit it.
+const SUPERVISOR_BLOCK_ACCEPTED_RETIRED_RE_DQ =
   /^echo "<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: (run-[A-Za-z0-9_-]+) ([^>]+)>>"$/;
-const SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE =
+const SUPERVISOR_BLOCK_ACCEPTED_RETIRED_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED([: ].*)?>>"$/;
 
 // ISSUE_CLOSE_VERIFIED ON/OFF: session-scoped bypass for gh issue close only.
@@ -215,8 +222,10 @@ function isSentinel(cmd) {
     RUN_TESTS_BASELINE_ACCEPTED_RE_DQ.test(cmd) ||
     RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
     GLOSSARY_ACCEPTED_RE_DQ.test(cmd) || GLOSSARY_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
-    SUPERVISOR_BLOCK_ACCEPTED_RE_DQ.test(cmd) ||
-    SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
+    SUPERVISOR_VERDICT_ACCEPTED_RE_DQ.test(cmd) ||
+    SUPERVISOR_VERDICT_ACCEPTED_LOOKSLIKE_RE.test(cmd) ||
+    SUPERVISOR_BLOCK_ACCEPTED_RETIRED_RE_DQ.test(cmd) ||
+    SUPERVISOR_BLOCK_ACCEPTED_RETIRED_LOOKSLIKE_RE.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
@@ -224,10 +233,10 @@ function isSentinel(cmd) {
   );
 }
 
-// Used by workflow-gate.js Step 1 (early-approve of standalone sentinels).
+// Used by workflow-gate.js Step 1 (early-approve of a standalone sentinel).
 // Uses only strict DQ/SQ regexes — LOOKSLIKE fallbacks use greedy `.*` that
 // can span across `>>` and incorrectly match chained commands as single
-// sentinels. Strict DQ regexes use `[^>]+` for reason fields, which stops at
+// sentinel. Strict DQ regexes use `[^>]+` for reason fields, which stops at
 // the first `>` and correctly rejects `echo "<<SENTINEL: reason>>" && other`.
 function isStrictSentinel(cmd) {
   return (
@@ -261,7 +270,8 @@ function isStrictSentinel(cmd) {
     RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ.test(cmd) ||
     RUN_TESTS_BASELINE_ACCEPTED_RE_DQ.test(cmd) ||
     GLOSSARY_ACCEPTED_RE_DQ.test(cmd) ||
-    SUPERVISOR_BLOCK_ACCEPTED_RE_DQ.test(cmd) ||
+    SUPERVISOR_VERDICT_ACCEPTED_RE_DQ.test(cmd) ||
+    SUPERVISOR_BLOCK_ACCEPTED_RETIRED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd)
   );
@@ -325,8 +335,10 @@ module.exports = {
   RUN_TESTS_BASELINE_ACCEPTED_RE_DQ,
   RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE,
   GLOSSARY_ACCEPTED_RE_DQ, GLOSSARY_ACCEPTED_LOOKSLIKE_RE,
-  SUPERVISOR_BLOCK_ACCEPTED_RE_DQ,
-  SUPERVISOR_BLOCK_ACCEPTED_LOOKSLIKE_RE,
+  SUPERVISOR_VERDICT_ACCEPTED_RE_DQ,
+  SUPERVISOR_VERDICT_ACCEPTED_LOOKSLIKE_RE,
+  SUPERVISOR_BLOCK_ACCEPTED_RETIRED_RE_DQ,
+  SUPERVISOR_BLOCK_ACCEPTED_RETIRED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_RE_DQ,
   ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_END_RE_DQ,

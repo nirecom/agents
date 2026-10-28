@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-929-agents.sh
 # Tests: bin/supervisor-findings-codex, hooks/lib/supervisor-codex-parse.js, hooks/workflow-state/state-io/core.js, hooks/session-start.js, bin/supervisor-write-audit-verdict, hooks/lib/supervisor-state-writer/audit-run.js
-# Tags: supervisor, em-supervisor, codex, audit, alert, transcript, parser, atomic-write, TL2, scope:issue-specific, codex-input, transcript-cursor
+# Tags: supervisor, em-supervisor, codex, audit, alert, transcript, parser, atomic-write, TL2, scope:issue-specific, codex-input, transcript-cursor, conv-lang, codex-prompt, categories
 #
 # #929 EM Supervisor audit mode accuracy — Codex engine + review layer.
 # Dispatcher for the split folder tests/bin/feature-929-agents/.
@@ -169,6 +169,15 @@ case_end
 case_begin "audit-subcheck-prompt" "bin/supervisor-write-audit-verdict"
 # shellcheck source=./feature-929-agents/audit-subcheck-prompt.sh
 . "$SCRIPT_DIR/audit-subcheck-prompt.sh"
+case_end
+
+case_begin "audit-category-prompt" "bin/supervisor-findings-codex"
+_asp_categories_run
+case_end
+
+case_begin "alert-prompt" "bin/supervisor-findings-codex"
+# shellcheck source=./feature-929-agents/alert-prompt.sh
+. "$SCRIPT_DIR/alert-prompt.sh"
 case_end
 
 case_begin "dual-id" "hooks/workflow-state/state-io/core.js"

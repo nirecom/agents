@@ -175,14 +175,14 @@ case_end
 EOF
 cat > "$BODIES/uncertain.sh" <<'EOF'
 #!/usr/bin/env bash
-# Tests: bin/a.sh, bin/b.sh
+# Tests: bin/a.sh
 # Tags: scope:common
 node -e '
 for (const a of [1]) console.log(a)
 '
 case_begin "a" "bin/a.sh"
 case_end
-case_begin "b" "bin/b.sh"
+case_begin "b" "bin/a.sh"
 case_end
 EOF
 cat > "$BODIES/single-path.sh" <<'EOF'

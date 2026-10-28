@@ -37,8 +37,17 @@ SAFE_TOKEN_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/safe-state-pat
 source "$SAFE_TOKEN_LIB" || { echo "build-codex-context: required library failed to load: $SAFE_TOKEN_LIB" >&2; exit 1; }
 sp_valid_token "$SID" || { echo "build-codex-context: --session-id is not a safe path token: $SID" >&2; exit 1; }
 
-INTENT="$PLANS_DIR/$SID-intent.md"
-OUTLINE="$PLANS_DIR/$SID-outline.md"
+# Plans are named after first_session_id (#2748): only the basename comes from
+# bin/plan-artifact-path, so PLANS_DIR keeps its spelling. Unresolvable = absent.
+plan_name() {
+    local p
+    p="$(node "$(dirname "${BASH_SOURCE[0]}")/plan-artifact-path" --stage "$1" --session "$SID" 2>/dev/null)" || return 0
+    p="${p##*[/\\]}"
+    [[ "$p" == *"-$1.md" ]] && printf '%s' "$PLANS_DIR/$p"
+    return 0
+}
+INTENT="$(plan_name intent)"
+OUTLINE="$(plan_name outline)"
 
 INTENT_PRESENT=0
 OUTLINE_PRESENT=0

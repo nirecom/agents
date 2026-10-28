@@ -47,7 +47,7 @@ switch (op) {
     break;
   case 'mark': S.markStep(sid, arg, process.argv[5] || 'complete'); break;
   case 'backfill':
-    S.appendEvents(sid, [{ kind: 'step_status', step: arg, status: 'complete', provenance: 'backfilled', origin: 'session-inheritance', inherited_from: 'donor-x' }]);
+    S.appendEvents(sid, [{ kind: 'step_status', step: arg, status: 'complete', provenance: 'backfilled', origin: 'session-inheritance' }]);
     break;
   case 'pause': require(A + '/hooks/lib/next-step-pause-marker').writePauseMarker(sid, { reason: 'test pause' }); break;
   case 'unpause': require(A + '/hooks/lib/next-step-pause-marker').removePauseMarker(sid); break;

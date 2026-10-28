@@ -22,11 +22,11 @@ wait_ref_line() {
         | grep -vE '^[0-9]+:[[:space:]]*#' | head -n1 | cut -d: -f1
 }
 
-# First `<cli> update` invocation (comments excluded — HIGH-3).
+# First update invocation (`<cli> update` or `npm install -g @openai/<cli>`; comments excluded — HIGH-3).
 update_line() {
     local file="$1" cli="$2"
     [ -f "$file" ] || return 0
-    grep -nE "(^|[^-[:alnum:]])${cli}[[:space:]]+update([[:space:]]|\$)" "$file" \
+    grep -nE "(^|[^-[:alnum:]])(${cli}[[:space:]]+update|npm[[:space:]]+install[[:space:]]+-g[[:space:]]+@openai/${cli})([[:space:]]|\$)" "$file" \
         | grep -vE '^[0-9]+:[[:space:]]*#' | head -n1 | cut -d: -f1
 }
 

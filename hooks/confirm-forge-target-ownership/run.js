@@ -17,6 +17,7 @@ const { loadDirty, saveDirty } = require("./auth-context");
 const { evaluateLine, addCode, addTarget, GITHUB, ENV_BLOCKING_ASSIGN_RE } = require("./evaluate");
 const { DYNAMIC_TEXT_RE } = require("./segment-shape");
 const { readHookInput, readFailOpenDiagnostic } = require("../lib/read-stdin");
+const { armDecisionTimeLimit } = require("../lib/decision-time-limit");
 
 // DECIDED unwinds to the single exit point instead of calling process.exit, so
 // the decision is written exactly once and the process still ends normally. An
@@ -97,6 +98,7 @@ function clearLoginProof(state, sid) {
 
 function main() {
   const r = readHookInput();
+  armDecisionTimeLimit({ hookName: "confirm-forge-target-ownership" });
   if (r.kind !== "ok") {
     try { fs.writeSync(2, readFailOpenDiagnostic("confirm-forge-target-ownership", r, "check skipped") + "\n"); } catch (_) {}
     passThrough();

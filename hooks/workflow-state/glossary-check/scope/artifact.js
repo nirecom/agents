@@ -1,6 +1,7 @@
 "use strict";
 // Input 1 (artifact) of the glossary-check fingerprint (#2529 I-FP): rule R-A reads a plan
 // artifact once and cuts its approval range; rule R-S reads the staged blobs of one stage.
+// During a merge, R-S leaves out the merge-incoming files (#2761); mergeIncoming is diagnostic only.
 
 const fs = require("fs");
 const crypto = require("crypto");
@@ -9,6 +10,7 @@ const { toWindowsPath } = require("../../../lib/branch-diff");
 const { artifactRangeOfBuffer } = require("../../completion-approval");
 const { rowFor } = require("../../plan-stage-table");
 const { stagedOids } = require("../../../workflow-gate/staged-evidence");
+const { detectMergeIncoming, MERGE_INCOMING_STATE } = require("../../../lib/merge-incoming");
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 const kindOf = (p) => (/\.md$/i.test(p) ? "markdown" : "code");
@@ -94,7 +96,15 @@ function readBlobs(repoDir, oids) {
 function artifactRS(repoDir, stage, classify) {
   try {
     const names = git(repoDir, ["diff", "--cached", "--name-only", "-z", "--no-renames"]).toString("utf8");
-    const paths = names.split("\0").filter(Boolean).filter((p) => classify(p) === stage).sort();
+    const listed = names.split("\0").filter(Boolean).filter((p) => classify(p) === stage).sort();
+    let paths = listed;
+    let mergeIncoming = { state: "skipped", excluded: 0 };
+    if (listed.length > 0) {
+      const r = detectMergeIncoming(repoDir, listed);
+      if (r.state === MERGE_INCOMING_STATE.MERGING) paths = listed.filter((p) => !r.paths.has(p));
+      mergeIncoming = { state: r.state, excluded: listed.length - paths.length };
+      if (r.state === MERGE_INCOMING_STATE.UNDECIDABLE) mergeIncoming.reason = r.reason;
+    }
     const oids = paths.length > 0 ? stagedOids(toWindowsPath(repoDir), paths) : {};
     const pairs = paths.map((p) => [p, oids[p] || "deleted"]);
     const present = pairs.filter(([, oid]) => oid !== "deleted");
@@ -103,7 +113,7 @@ function artifactRS(repoDir, stage, classify) {
     const files = pairs.map(([p, oid]) => (oid === "deleted"
       ? { path: p, kind: kindOf(p), text: "", deleted: true }
       : { path: p, kind: kindOf(p), text: blobs.get(oid) }));
-    return { ok: true, artifact: { files, digest: sha256(JSON.stringify(pairs)), empty: paths.length === 0 } };
+    return { ok: true, artifact: { files, digest: sha256(JSON.stringify(pairs)), empty: paths.length === 0, mergeIncoming } };
   } catch (e) {
     return { ok: false, error: "git-failed", detail: e && e.message ? e.message : String(e) };
   }

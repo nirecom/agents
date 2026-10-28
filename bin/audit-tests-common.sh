@@ -3,7 +3,7 @@
 # Usage: bin/audit-tests-common.sh [--dry-run] [--apply] [--offline]
 #                                  [--stale-months N] [--format text|json]
 #                                  [--fix-headers] [--dup-groups]
-#        bin/audit-tests-common.sh --embed-cases [--band-size N] [--order frequency|priority]
+#        bin/audit-tests-common.sh --embed-cases [--band-size N] [--order frequency|priority] [--only-file <relpath>]
 # Exit:  0 = orphans found, 1 = no orphans, 2 = error. Writes by default: a flagless
 # run DELETES orphans (git rm); --dry-run reports only. --dup-groups: read-only TSV
 # (bin/lib/test-dup-group.sh). --embed-cases: docs/architecture/claude-code/sweep-tests-embed-cases.md.
@@ -78,6 +78,10 @@ if [[ ! "$STALE_MONTHS" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --stale-months must be a non-negative integer (got: $STALE_MONTHS)" >&2
   exit 2
 fi
+# One run-scoped cache for the caseEmbedRules ops (test-language-registry/case-embed-ops.md).
+CASE_EMBED_CACHE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/case-embed-cache.XXXXXX")"
+export CASE_EMBED_CACHE_DIR
+trap 'rm -rf "${CASE_EMBED_CACHE_DIR:?}"' EXIT
 
 # Fail closed: with apply-by-default, an unresolvable repo root must delete
 # nothing rather than operate against whatever tests/ the CWD happens to expose.
@@ -100,19 +104,19 @@ if [[ "$DUP_GROUPS" -eq 1 ]]; then
   exit 1
 fi
 
-TODAY="$(date +%Y-%m-%d)"
+TODAY="$(date -u +%Y-%m-%d)"
 trp_compute_cutoff "$STALE_MONTHS" >/dev/null
 CUTOFF_DATE="$TRP_CUTOFF_DATE"
 TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
 
 # in_common_scope <relpath> — top-level, non-archived, non-issue-specific.
 in_common_scope() {
-  local rel="$1" name
-  name="$(basename "$rel")"
+  local rel="$1"
   case "$rel" in
     tests/_archive/*) return 1 ;;
   esac
-  [[ "$(trp_scope_of "$name")" == "common" ]]
+  trp_name_axes "$rel"
+  [[ "$TRP_SCOPE" == "common" ]]
 }
 
 # Top-level files of a supported test language per category; scope is filtered per file below.
@@ -145,7 +149,7 @@ JSON_ITEMS=()
 
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests-common.sh report — ${TODAY}"
-  echo "# Scope: tests/<cat>/*.sh, tests/<cat>/*.Tests.ps1, tests/<cat>/test_*.py (six categories) excluding feature-<N>-*"
+  echo "# Scope: tests/<cat>/ test files of every supported language (six categories) excluding feature-<N>-* (read after the entry's issueNamePrefix)"
   echo "# Criteria: every '# Tests:' target is missing — the filename's issue reference gates deletion only"
   echo "# Cutoff: ${CUTOFF_DATE} (stale-months: ${STALE_MONTHS})"
   if [[ "$OFFLINE" -eq 1 ]]; then
@@ -157,7 +161,8 @@ fi
 for testfile in ${TESTFILES[@]+"${TESTFILES[@]}"}; do
   [[ -e "$testfile" ]] || continue
   in_common_scope "$testfile" || continue
-  base="$(basename "$testfile")"
+  trp_name_axes "$testfile"
+  scope="$TRP_SCOPE"; ref="$TRP_ISSUE_REF"; issue_num="$TRP_ISSUE_NUMBER"
 
   trp_case_refcount_verdict "$REPO_ROOT" "$testfile" >/dev/null
   verdict="$TRP_VERDICT"
@@ -174,16 +179,20 @@ for testfile in ${TESTFILES[@]+"${TESTFILES[@]}"}; do
       if [[ "$FORMAT" == "text" ]]; then echo "NO_TESTS_HEADER: ${testfile}"; fi
       continue
       ;;
+    undeterminable)
+      [[ -n "$TRP_READER_FAILED" ]] || continue
+      DIAG_FILES+=("$testfile"); DIAG_KINDS+=("reader_unavailable")
+      if [[ "$FORMAT" == "text" ]]; then echo "SKIP_DELETE_READER_UNAVAILABLE: ${testfile} (${TRP_READER_FAILED})"; fi
+      continue
+      ;;
     partial-orphan)
       # C4: trp_remove_orphan_cases below relies on the TRP_CASE_* state just set
       # by trp_case_refcount_verdict — no TRP_CASE_*-mutating call may intervene.
       po_names=()
       for _i in "${TRP_ORPHAN_CASE_IDX[@]}"; do po_names+=("${TRP_CASE_NAMES[$_i]}"); done
-      scope="$(trp_scope_of "$base")"
-      ref="$(trp_issue_ref "$base")"
       meta="none"
       if [[ "$ref" == "explicit" ]]; then
-        trp_fetch_issue_meta "$(trp_issue_number "$base")" >/dev/null
+        trp_fetch_issue_meta "$issue_num" >/dev/null
         meta="$TRP_ISSUE_META"
       fi
       trp_delete_gate "$verdict" "$scope" "$ref" "$meta" >/dev/null
@@ -231,11 +240,8 @@ for testfile in ${TESTFILES[@]+"${TESTFILES[@]}"}; do
   sib_count="$TRP_SIBLING_COUNT"
   unit_paths=("${TRP_UNIT_PATHS[@]}")
 
-  scope="$(trp_scope_of "$base")"
-  ref="$(trp_issue_ref "$base")"
   meta="none"
   if [[ "$ref" == "explicit" ]]; then
-    issue_num="$(trp_issue_number "$base")"
     trp_fetch_issue_meta "$issue_num" >/dev/null
     meta="$TRP_ISSUE_META"
   fi

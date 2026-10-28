@@ -119,8 +119,8 @@ The wrapper internally:
    `-context.md` to avoid WI-9 collision) via
    `bin/build-codex-context`. Section headers: `## Section 1: Intent (User Requirements)`
    and `## Section 2: Outline (Design Proposal)`, prefixed by
-   `<!-- Source: <PLANS_DIR>/<session-id>-intent.md -->` and
-   `<!-- Source: <PLANS_DIR>/<session-id>-outline.md -->`.
+   `<!-- Source: <PLANS_DIR>/<first_session_id>-intent.md -->` and
+   `<!-- Source: <PLANS_DIR>/<first_session_id>-outline.md -->`.
    - If only the intent file exists, only Section 1 is written.
    - If only the outline file exists, only Section 2 is written.
    - If neither exists, the output file is deleted and no `--context <context.md>` is passed downstream.

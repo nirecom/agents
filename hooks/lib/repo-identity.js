@@ -6,7 +6,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./limited-child-process");
 
 const VERDICTS = Object.freeze({
   SAME: "same",

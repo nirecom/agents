@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/skills/feature-1643-worker-dispatch-callers.sh
 # Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js, skills/run-tests/SKILL.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/update-docs/SKILL.md, skills/issue-reconcile/SKILL.md, skills/session-close/SKILL.md, skills/_shared/commit-push-dispatch.md, skills/issue-close-stage/SKILL.md, skills/issue-close-finalize/SKILL.md
-# Tags: worker-dispatch, callers, skill-orchestration, static, regression, TL1, scope:issue-specific
+# Tags: worker-dispatch, callers, skill-orchestration, static, regression, TL1, scope:issue-specific, commit-timeout, wd-cp, background-dispatch
 #
 # Issue #1643/#1673 caller-side contract: every calling skill dispatches its worker per
 # skills/_shared/worker-dispatch.md, never via a subagent. Symmetric negative: a caller
@@ -348,6 +348,22 @@ group_negative_detector_probe
 group_shared_command_purity
 group_shared_exit_codes
 group_shared_payload_location
+case_end
+
+# Group E (#2762) — commit-push is always dispatched in the background (WD-CP).
+. "$SCRIPT_CHECKOUT_ROOT/tests/skills/feature-1643-worker-dispatch-callers/commit-push-background.sh"
+
+case_begin "commit-push-background-dispatch" "skills/_shared/worker-dispatch.md"
+group_wd_cp_block
+group_wd_cp_matcher_probe
+group_wd_bg_unmixed
+group_shared_size
+case_end
+
+case_begin "commit-push-dispatch-commit-timeout" "skills/_shared/commit-push-dispatch.md"
+group_cp_dispatch_section
+group_cp_outcome_commit_timeout
+group_handoff_blocked_list
 case_end
 
 echo ""

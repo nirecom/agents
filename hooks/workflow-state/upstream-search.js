@@ -13,6 +13,7 @@ const path = require("path");
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { sanitizeUntrustedField } = require("../lib/output-sanitize");
 const { listRecentContextCandidates, lastActivityOf } = require("./inheritance/candidates");
+const { SESSION_ID_VALID_RE } = require("./state-io/core");
 
 const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail", "handoff"]);
 // Without a query the reachable-only section is an appendix, not a dump of
@@ -54,6 +55,7 @@ function indexPlansDir(plansDir) {
     const m = ARTIFACT_RE.exec(name);
     if (!m) continue;
     const sid = m[1];
+    if (!SESSION_ID_VALID_RE.test(sid)) continue;
     const kind = m[2];
     const full = path.join(plansDir, name);
     let rec = index.get(sid);

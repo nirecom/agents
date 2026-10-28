@@ -2,7 +2,7 @@
 # fixture checkout). Source-only. Each stub records that it ran, then returns a fixed result.
 # shellcheck shell=bash
 
-# fake_read_markers <abs> — a fixed one-case result in the case-marker reader contract.
+# fake_read_markers <abs> — a fixed one-case result in the test case reader contract.
 fake_read_markers() {
   FAKE_READER_ARG="$1"
   TRP_CASE_BEGIN_LINES=(3); TRP_CASE_END_LINES=(5)

@@ -65,6 +65,7 @@ const literalsMod = () => tryRequire("hooks/bash-guard/forbidden-literals.js");
 const reasonsMod = () => tryRequire("hooks/bash-guard/reasons.js");
 const gateMod = () => tryRequire("hooks/lib/early-write-gate.js");
 const irMod = () => tryRequire("hooks/lib/command-ir.js");
+const gitDeviantFormsMod = () => tryRequire("hooks/bash-guard/git-deviant/forms.js");
 
 function judgeInput() {
   const toolInput = { command: commandText };
@@ -115,12 +116,13 @@ function sortedValues(obj) {
 function evaluate() {
 try {
   switch (mode) {
-    // verdict \t code \t literalId|notifyId. The 4-value verdict is allow|deny|notify|passThrough.
+    // verdict \t code \t literalId|notifyId|formId. The 4-value verdict is allow|deny|notify|passThrough;
+    // formId is the git-deviant form (#2617), reached only when no literal or notify id is set.
     case "judge": {
       const m = judgeMod();
       if (!m || typeof m.judgeBashCommand !== "function") sentinel();
       const v = m.judgeBashCommand(judgeInput());
-      const id = v && (v.literalId != null ? v.literalId : v.notifyId);
+      const id = v && (v.literalId != null ? v.literalId : v.notifyId != null ? v.notifyId : v.formId);
       out([v && v.verdict, v && v.code, id].map((x) => (x == null ? "-" : x)).join("\t"));
       break;
     }
@@ -187,7 +189,7 @@ try {
       break;
     }
 
-    // detectIneffective(ir, ctx) -> sorted notifyId list; the hit shape is also checked so a
+    // detectIneffective(IR, ctx) -> sorted notifyId list; the hit shape is also checked so a
     // sample carrying command text fails here rather than leaking into a transcript.
     case "notify-hits": {
       const d = detectMod();
@@ -203,7 +205,7 @@ try {
       break;
     }
 
-    // matchSelfScript(ir, ctx, {root}) -> the ALLOW code, or "null".
+    // matchSelfScript(IR, ctx, {root}) -> the ALLOW code, or "null".
     case "self-script": {
       const a = allowMod();
       const ctx = buildCtx();
@@ -248,6 +250,19 @@ try {
       out(codes.slice().sort().join(","));
       break;
     }
+    // The git-deviant registry's codes, sorted (#2617). The form table is required here and only
+    // here, so a missing hooks/bash-guard/git-deviant/forms.js fails this mode alone, per row.
+    case "git-deviant-codes": {
+      const m = gitDeviantFormsMod();
+      if (!m) sentinel();
+      const table = m.GIT_DEVIANT_FORMS || m.FORMS || m;
+      const codes = Object.keys(table || {})
+        .map((k) => table[k])
+        .filter((e) => e && typeof e.code === "string")
+        .map((e) => e.code);
+      out((Object.isFrozen(table) ? "" : "<NOT-FROZEN>") + codes.sort().join(","));
+      break;
+    }
     // KEY=VALUE pairs of the three non-deny registries, sorted; "<ABSENT>" when not exported.
     case "pass-through-codes":
     case "notify-codes":
@@ -280,8 +295,10 @@ try {
       break;
     }
 
-    // Every PreToolUse matcher whose group runs hooks/bash-guard.js. C4: it must be the
-    // bare "Bash" -- runInTerminal / runCommands may drive pwsh, a different dialect.
+    // The tools bash-guard judges. C4: it must be the bare "Bash" -- runInTerminal /
+    // runCommands may drive pwsh, a different dialect. Since #2676 bash-guard runs as a
+    // member of hooks/merged-allow-deny.js (primary group), so the scope is the member's
+    // tool list, provided the primary group is registered and no standalone entry remains.
     case "guard-hook-matchers": {
       let settings;
       try {
@@ -290,8 +307,23 @@ try {
         out("<MISSING:settings.json>");
       }
       const groups = (settings.hooks && settings.hooks.PreToolUse) || [];
-      const hit = groups.filter((g) => JSON.stringify(g.hooks || []).indexOf("bash-guard") !== -1);
-      out(hit.length === 0 ? "<NOT-REGISTERED>" : hit.map((g) => g.matcher).join(","));
+      const commands = (g) => (g.hooks || []).map((h) => String(h.command || ""));
+      const standalone = groups.filter((g) => commands(g).some((c) => c.indexOf("bash-guard") !== -1));
+      if (standalone.length > 0) out("<STANDALONE:" + standalone.map((g) => g.matcher).join(",") + ">");
+      const primary = groups.filter((g) => commands(g).some((c) =>
+        c.indexOf("merged-allow-deny.js") !== -1 && /--matcher-group primary\b/.test(c)));
+      if (primary.length !== 1) out("<PRIMARY-GROUP-REGISTRATIONS:" + primary.length + ">");
+      let members;
+      try {
+        members = require(path.join(AGENTS, "hooks", "merged-allow-deny", "members.js"));
+      } catch (e) {
+        out("<MISSING:hooks/merged-allow-deny/members.js>");
+      }
+      const member = (members.MEMBERS || []).find((m) => m.name === "bash-guard");
+      if (!member) out("<NOT-A-MEMBER>");
+      const outside = member.tools.filter((t) => primary[0].matcher.split("|").indexOf(t) === -1);
+      if (outside.length > 0) out("<NOT-IN-PRIMARY-MATCHER:" + outside.join(",") + ">");
+      out(member.tools.join(","));
       break;
     }
 

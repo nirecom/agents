@@ -1,6 +1,6 @@
 "use strict";
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../limited-child-process");
 const path = require("path");
 
 /**

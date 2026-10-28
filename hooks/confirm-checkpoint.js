@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // PreToolUse hook: when Bash emits a <<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>> sentinel, surface
 // the plan above the permission dialog so the user can Allow or Deny inline; never "allow".
-// Output: { systemMessage } for the user plus additionalContext with the plan-link line for the
-// model (hooks/lib/plan-link.js). Sentinel patterns: hooks/lib/confirm-sentinel.js.
+// Output: { systemMessage } with facts only for the user plus additionalContext with the plan-link
+// line for the model (hooks/lib/plan-link.js). Sentinel patterns: hooks/lib/confirm-sentinel.js.
 // #2729: the echo reaches the dialog only on a presentation receipt the Stop hook wrote for this
 // very plan, link and content (hooks/lib/presentation-receipt.js); the receipt is spent here.
 // Fail-closed: anything it cannot verify denies with a present-again reason. The one exception is
@@ -10,7 +10,6 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
 
 // #2256 S5-a2: Bash/runInTerminal/runCommands normalization (SSOT: hooks/lib/tool-command-text.js).
 // The CONFIRM patterns are unanchored, so the joined command text finds the sentinel in any element.
@@ -26,13 +25,14 @@ const { loadDefaultEnv } = require("./lib/load-env");
 const lazy = (p) => { let m = null; return new Proxy({}, { get: (_, k) => (m || (m = require(p)))[k] }); };
 const PR = lazy("./lib/presentation-receipt");
 const PL = lazy("./lib/plan-link");
+const CL = lazy("./lib/conv-lang");
 
 const { readHookInput } = require("./lib/read-stdin");
 
 function noopExit() { process.stdout.write(""); process.exit(0); }
 
 // Resolve absolute path to <stage>.md artifact for the current session: a marker of this turn
-// first, else <PLANS_DIR>/<sid>-<stage>.md (the usual case: the Stop hook spent the markers).
+// first, else <PLANS_DIR>/<first_session_id>-<stage>.md (the usual case: the Stop hook spent the markers).
 function resolveArtifact(stage, sid, plansDir) {
   if (sid) {
     try {
@@ -42,9 +42,9 @@ function resolveArtifact(stage, sid, plansDir) {
     } catch (_) { /* fall back to the plans dir */ }
   }
   if (sid && plansDir) {
-    const candidate = path.join(plansDir, `${sid}-${stage}.md`);
     try {
-      if (fs.existsSync(candidate)) return candidate;
+      const owner = require("./workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir });
+      if (owner.exists) return owner.path;
     } catch (_) { /* no artifact */ }
   }
   return null;
@@ -52,11 +52,8 @@ function resolveArtifact(stage, sid, plansDir) {
 
 // url: the published blob URL (hooks/lib/plan-link.js), shown together with the local path.
 function renderMessage(stage, absPath, url) {
-  if (absPath) {
-    const shownAs = url ? `${url} (${absPath})` : absPath;
-    return `[${stage}] Plan file: ${shownAs}\nClick Allow to proceed, Deny to abort.`;
-  }
-  return `[${stage}] Plan ready (file path unavailable)\nClick Allow to proceed, Deny to abort.`;
+  if (absPath) return url ? `[${stage}] ${url} (${absPath})` : `[${stage}] ${absPath}`;
+  return `[${stage}] plan-file=none`;
 }
 
 // judge(sid, stage, absPath, plansDir) -> {pass:true, link} | {pass:false, cause}. Every check
@@ -87,13 +84,34 @@ function judge(sid, stage, absPath, plansDir) {
   return m.ok ? { pass: true, link } : { pass: false, cause: m.cause };
 }
 
+// receiptDiagnostic(sid, stage) -> the no-receipt detail suffix (#2804): the expected receipt, whether it
+// exists, and the presentation-receipt log's last write and any consume after it; "" when it cannot be built.
+function receiptDiagnostic(sid, stage) {
+  try {
+    const p = PR.receiptPath(sid, stage);
+    const head = ` [receipt ${p} exists=${fs.existsSync(p)}`;
+    const lines = PR.readReceiptLog(sid).filter((l) => l && l.stage === stage);
+    let wi = -1;
+    lines.forEach((l, i) => { if (l.event === "write") wi = i; });
+    if (wi < 0) return `${head}; no write record]`;
+    const at = lines[wi].at;
+    const ms = Date.now() - Date.parse(at);
+    const elapsed = Number.isNaN(ms) ? "elapsed unknown" : `elapsed ${ms}ms`;
+    const consumed = lines.slice(wi + 1).some((l) => l.event === "consume");
+    return `${head}; last write at ${at} (${elapsed}); ${consumed ? "a consume record follows it" : "no consume record follows it"}]`;
+  } catch (_) {
+    return "";
+  }
+}
+
 function recordDenyFinding(sid, stage, cause) {
   if (!sid) return;
   try {
+    const diag = cause === "no-receipt" ? receiptDiagnostic(sid, stage) : "";
     require("./lib/supervisor-state-writer").appendFinding(sid, {
       categories: ["workflow"],
       severity: "notice",
-      detail: `confirm-checkpoint: CONFIRM_${stage.toUpperCase()} denied (${cause}) — the plan must be presented again`,
+      detail: `confirm-checkpoint: CONFIRM_${stage.toUpperCase()} denied (${cause}) — the plan must be presented again${diag}`,
       reporter: "confirm-checkpoint",
     });
   } catch (_) { /* the finding is advisory */ }
@@ -104,7 +122,9 @@ function emitDeny(stage, cause) {
   try {
     reason = require("./lib/confirm-continuation").presentAgainReason(stage, cause);
   } catch (_) {
-    reason = `[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (${cause}): present the plan again (plan-link --stage ${stage}), then echo the sentinel.`;
+    reason = `[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (${cause}): present the plan again (plan-link --stage ${stage}) and close the turn; ` +
+      `on a "[confirm-plan] continue:" prompt emit only the echo, otherwise echo after the user's reply.`;
+    try { reason = CL.withConvLang(reason); } catch (_) { /* the bare reason still denies */ }
   }
   process.stdout.write(JSON.stringify({
     decision: "block",
@@ -162,9 +182,10 @@ function main() {
     if (PR.consumeReceipt(sid, stage)) {
       const link = verdict.link;
       const entry = { stage, url: link.url, path: link.path, reason: link.reason };
+      const additionalContext = CL.withConvLang(PL.renderModelContext([entry], { when: "confirm" }));
       out = {
         systemMessage: renderMessage(stage, absPath, link.url || null),
-        hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: PL.renderModelContext([entry], { when: "confirm" }) },
+        hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext },
       };
     } else {
       failCause = "no-receipt"; // a concurrent CONFIRM spent it between the judgment and here

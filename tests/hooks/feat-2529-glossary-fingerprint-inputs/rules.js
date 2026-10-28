@@ -2,7 +2,7 @@
 // T7-4 (input 4, rules): through the opts.ruleModules seam, one changed byte in a copy of each
 // RULE_MODULES file (inside a function body) moves rulesVersion() and stales the record for all
 // six stages; the stale record's grants are not carried over. A file outside RULE_MODULES does
-// not move the digest, and the real digest is computed from the five files' bytes (no probes).
+// not move the digest, and the real digest is computed from every rule module's bytes (no probes).
 
 const fs = require("node:fs");
 const os = require("node:os");
@@ -11,10 +11,12 @@ const F = require("../../lib/glossary-check-fixture");
 const C = require("./common");
 
 const RULE_MODULES = ["bin/lib/glossary-drift.js", "hooks/lib/glossary-term.js",
-  "hooks/lib/comment-block-scan.js", "hooks/lib/markdown-fence.js", "bin/lib/glossary-provenance.js"];
+  "hooks/lib/comment-block-scan.js", "hooks/lib/markdown-fence.js", "bin/lib/glossary-provenance.js",
+  "bin/lib/glossary-drift/extract.js", "bin/lib/glossary-drift/terms.js", "bin/lib/glossary-drift/context.js",
+  "bin/lib/glossary-drift/match.js", "bin/lib/glossary-drift/scan.js"];
 const digestOf = (v) => (typeof v === "string" ? v : v && v.digest) || null;
 
-// Copies of the five rule modules under one temp root; returns { root, paths } or null.
+// Copies of the rule modules under one temp root; returns { root, paths } or null.
 function copies(tag) {
   const root = F.slash(fs.mkdtempSync(path.join(os.tmpdir(), `g2529-rules-${tag}-`)));
   const paths = [];
@@ -39,7 +41,7 @@ function realDigest(m) {
   const shas = RULE_MODULES.slice().sort().map((rel) => F.sha256(fs.readFileSync(path.join(F.ROOT, rel))));
   const got = digestOf(m.scope.rulesVersion());
   const candidates = [shas.join(""), shas.join("\n"), JSON.stringify(shas)].map((s) => F.sha256(s));
-  F.check("rulesVersion(): the real digest is the sha256 of the five files' sha256 in path order",
+  F.check("rulesVersion(): the real digest is the sha256 of every rule module's sha256 in path order",
     !!got && candidates.includes(got), JSON.stringify({ got, shas }));
   const src = fs.readFileSync(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope.js"), "utf8");
   F.check("scope.js: no probe-word list feeds the rules digest", !/probe/i.test(src), "probe found");

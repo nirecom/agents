@@ -15,6 +15,15 @@ PASS=${PASS:-0}; FAIL=${FAIL:-0}; SKIP=${SKIP:-0}
 # case runs that copy.
 F1465_SUT_REL_DIR="skills/clarify-intent/scripts"
 _F1465_SUT_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../$F1465_SUT_REL_DIR" && pwd)"
+_F1465_REAL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+
+# #2748: the SUT resolves the intent path through bin/plan-artifact-path, which reads
+# the state file of the session chain; pin both dirs so the real CLI sees an empty store.
+readonly _F1465_ISO_ROOT="$(mktemp -d)"
+trap 'rm -rf "$_F1465_ISO_ROOT"' EXIT
+mkdir -p "$_F1465_ISO_ROOT/state" "$_F1465_ISO_ROOT/plans"
+export WORKFLOW_STATE_DIR="$_F1465_ISO_ROOT/state" WORKFLOW_PLANS_DIR="$_F1465_ISO_ROOT/plans"
+unset CLAUDE_CODE_SESSION_ID
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -55,6 +64,15 @@ setup_test_dir() {
     mkdir -p "$TEST_DIR/hooks/lib"
     mkdir -p "$TEST_DIR/$F1465_SUT_REL_DIR"
     cp "$_F1465_SUT_SRC_DIR"/*.sh "$TEST_DIR/$F1465_SUT_REL_DIR/" 2>/dev/null || true
+    _f1465_delegate_plan_artifact_path
+}
+
+# The fake tree's bin/plan-artifact-path delegates to the real CLI, so the SUT gets the
+# real first_session_id contract while hooks/lib in the fake tree stays mockable.
+_f1465_delegate_plan_artifact_path() {
+    local real_node
+    real_node="$(cygpath -m "$_F1465_REAL_ROOT/bin/plan-artifact-path" 2>/dev/null || printf '%s' "$_F1465_REAL_ROOT/bin/plan-artifact-path")"
+    printf '%s\n' "require('$real_node');" > "$TEST_DIR/bin/plan-artifact-path"
 }
 
 cleanup_test_dir() {

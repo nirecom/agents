@@ -20,13 +20,15 @@ To look the line up later, run `node "$AGENTS_MAIN_ROOT/bin/plan-link" --stage <
 Never hand the plan over with `SendUserFile`.
 Never copy the blob URL into a PR body, `history.md`, `CHANGELOG.md`, or a public issue — the plan repo is private; leak guard: `docs/architecture/claude-code/plan-sync.md`.
 Enforcement (Stop): `stop-confirm-plan-guard.js` reads each stage's gate and blocks a turn that wrote a plan without its line, a link line of an unapproved stage followed by other text, or an unpublished plan where a URL can be made.
-`stop-confirm-plan-guard.js` records a presentation receipt only for a turn it lets through that closes on the link lines, and a blocked turn voids every stage's receipt.
+`stop-confirm-plan-guard.js` records a presentation receipt only for a turn it lets through that closes on the link lines; a blocked turn records none and keeps earlier receipts.
+When the transcript tail is undecidable, it records each stage the final message closes on, never blocks, and tells the user which stages got no receipt.
+It sends the `[confirm-plan] continue:` prompt at most once per receipt, also when the presentation followed a Stop block.
 Enforcement (PreToolUse): `confirm-checkpoint.js` passes a CONFIRM echo to the dialog only when the presentation receipt matches the plan's current path, link, and content, and spends the receipt.
 On a mismatch, or when it cannot verify, it denies and asks you to present the plan again; there is no cap.
 
 **CPA-3 — Gate check (`next-step --gate`).**
 Run the standalone command `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --gate` and follow the `GATE_ACTION` line of its stdout.
-Plan stages: before `--gate`, run `check-glossary-drift --stage <intent|outline|detail> --record` per `skills/_shared/glossary-drift-check.md`, and put that file's approval list in the Presentation turn, the `present-and-stop` presentation, and the `proceed` summary.
+Plan stages: before `--gate`, run `check-glossary-drift --stage <intent|outline|detail> --record` per `skills/_shared/glossary-drift-check.md`, and put that file's approval list in the presentation turn, the `present-and-stop` presentation, and the `proceed` summary.
 Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different value.
 `--gate` judges the RECORDED current step, which can lag the step the calling skill is on: when the step named at the start of `REASON` (`<step>: CONFIRM_X=...`) is not your own step, treat the result as `none`.
 - `proceed`: take the caller's OFF branch (plan stages: print a one-paragraph prose summary, then proceed; the summary carries the CPA-2 plan-link line once). When `GATE_HINT` carries a warning sentence (e.g. a failed scope-change check), relay it to the user in that summary.
@@ -35,7 +37,7 @@ Never interpret ON/OFF yourself, and never read `GATE_ACTION` as a different val
   - Presentation: end the final body text with "The approval dialog follows this message; if it does not appear, reply once you have reviewed the plan." and then the CPA-2 plan-link line as the last line, then close the turn.
   - CONFIRM echo (main path): when the turn end is blocked with a `[confirm-plan] continue:` prompt, emit only `echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>"` as your next message.
   - CONFIRM echo (fallback): when no prompt came, let the turn close and wait for the user's reply; on a change request, revise and loop back to CPA-1, otherwise emit only that echo in the next turn.
-  - Denied echo: present the plan again as the deny reason says, close the turn, and echo only after the user's reply.
+  - Denied echo: present the plan again as the deny reason says and close the turn; when the turn end then returns a `[confirm-plan] continue:` prompt, emit only the echo as your next message, otherwise echo after the user's reply.
   - Next response: **Allow** → run the caller's completion, then co-emit the caller's next tool_use (Skill or Bash) in the same turn; **Deny** → the turn stops, so wait for the user's revision instructions.
   - `confirm-checkpoint.js` (PreToolUse) surfaces the dialog; `stop-confirm-plan-guard.js` (Stop, Layer 2) blocks the turn when no stage-valid follow-up comes after the Allowed echo's result in that same turn.
 - `present-and-stop` (detail only): follow `GATE_HINT` — present, then end the turn without the completion sentinel or `--advance`.

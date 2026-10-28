@@ -2,6 +2,7 @@
 # Tests: bin/doc-append.py, hooks/check-japanese-in-docs.js
 # Tags: docs, append, history, hook, bin, scope:common
 # Test suite for check-japanese-in-docs.js PreToolUse hook
+# lang-check: ignore — the Japanese strings below are the inputs the hook must block.
 set -euo pipefail
 
 # isolation (#2512): pin state and plans dirs once for this file
@@ -14,9 +15,12 @@ DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$DOTFILES_DIR/hooks/check-japanese-in-docs.js"
 ERRORS=0
 
-# Set CLAUDE_PROJECT_DIR to dotfiles repo so resolveRepoDir is deterministic
-# (dotfiles is a public repo → isPrivateRepo returns false → block path is reachable)
-export CLAUDE_PROJECT_DIR="$DOTFILES_DIR"
+# Pin CLAUDE_PROJECT_DIR to a fixture repo with no origin: isPrivateRepo returns false without
+# calling gh (a test must never reach the real gh), so the block path is reachable.
+FIXTURE_REPO="$_ISOLATION_TMP_ROOT/repo"
+git init -q "$FIXTURE_REPO"
+git -C "$FIXTURE_REPO" config core.hooksPath /dev/null
+export CLAUDE_PROJECT_DIR="$FIXTURE_REPO"
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }

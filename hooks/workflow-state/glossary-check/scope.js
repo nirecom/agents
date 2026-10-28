@@ -24,7 +24,9 @@ const STAGE_LEDGER_FORMAT = Object.freeze({
 
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
 const RULE_MODULES = Object.freeze(["bin/lib/glossary-drift.js", "hooks/lib/glossary-term.js",
-  "hooks/lib/comment-block-scan.js", "hooks/lib/markdown-fence.js", "bin/lib/glossary-provenance.js"].map((rel) => path.join(REPO_ROOT, rel)));
+  "hooks/lib/comment-block-scan.js", "hooks/lib/markdown-fence.js", "bin/lib/glossary-provenance.js",
+  "bin/lib/glossary-drift/extract.js", "bin/lib/glossary-drift/terms.js", "bin/lib/glossary-drift/context.js",
+  "bin/lib/glossary-drift/match.js", "bin/lib/glossary-drift/scan.js"].map((rel) => path.join(REPO_ROOT, rel)));
 
 function stageOfStep(step) {
   return Object.keys(STAGE_STEP).find((s) => STAGE_STEP[s] === step) || null;

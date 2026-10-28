@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-progress-codex-input.sh
 # Tests: hooks/lib/supervisor-codex-input/assemble.js
-# Tags: progress-file, supervisor, codex-input, root-sid, inheritance, scope:issue-specific, pwsh-not-required, TL1
+# Tags: progress-file, supervisor, codex-input, root-sid, inheritance, regression-2748, scope:issue-specific, pwsh-not-required, TL1
 # Issue #2594 stage 3 — the supervisor's codex input carries session-progress.md in a PROGRESS block
 # between HANDOFF and USER UTTERANCES. The block is headed as model-written (not evidence),
-# capped like HANDOFF (handoff-artifact MAX_BYTES), and read from the first generation's
+# capped like HANDOFF (the handoff artifact's MAX_BYTES), and read from the first generation's
 # session-progress.md, so an heir session's supervisor sees what earlier generations wrote.
 # TDD (write_code has not run): the PROGRESS cases are expected to FAIL.
 set -uo pipefail
@@ -37,15 +37,22 @@ pci_line() { awk -v s="$1" '$0==s{print NR; exit}' "$PCI_TMP/out.txt" 2>/dev/nul
 pci_has() { case "$2" in *"$3"*) pass "$1" ;; *) fail "$1" "missing '$3' in: ${2:0:300}" ;; esac; }
 pci_eq() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=${2:0:300}"; fi; }
 
-# seed.js <sid> [donor] — a workflow state; with a donor, the session-inheritance record.
+# seed.js <sid> [upstream] — a workflow state; with an upstream, <sid> adopts it through the real
+# applyInheritance (#2748: never a hand-written inherited_from event).
 cat > "$PCI_TMP/seed.js" <<'JS'
+const fs = require('fs');
 const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
-const [sid, donor] = process.argv.slice(2);
+const A = require(process.env.AGENTS + '/hooks/workflow-state/inheritance/apply');
+const [sid, up] = process.argv.slice(2);
 S.writeState(sid, S.createInitialState(sid, { cwd: '/x', git_branch: 'feature/x' }));
-if (donor) S.appendEvents(sid, [{ kind: 'step_status', step: 'workflow_init', status: 'complete', provenance: 'backfilled', origin: 'session-inheritance', inherited_from: donor }]);
-else S.markStep(sid, 'workflow_init', 'complete');
+if (up) {
+  const createdAt = JSON.parse(fs.readFileSync(S.getStatePath(sid), 'utf8')).created_at;
+  const res = A.applyInheritance(sid, createdAt, up);
+  if (!res || res.ok === false) { process.stdout.write('applyInheritance failed: ' + JSON.stringify(res)); process.exit(1); }
+} else S.markStep(sid, 'workflow_init', 'complete');
+process.stdout.write('ok');
 JS
-seed() { run_with_timeout 30 node "$(np "$PCI_TMP/seed.js")" "$@" >/dev/null 2>&1; }
+seed() { local out; out="$(run_with_timeout 30 node "$(np "$PCI_TMP/seed.js")" "$@" 2>&1)"; [ "$out" = "ok" ] || fail "seed $*" "${out:0:300}"; }
 
 echo "=== PROGRESS block: placement, header, content ==="
 seed pw1

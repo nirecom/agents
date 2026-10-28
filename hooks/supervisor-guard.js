@@ -236,7 +236,7 @@ if (require.main === module) {
     const reason = withAuditLaunch(formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId));
     try {
       process.stdout.write(
-        JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n"
+        JSON.stringify({ decision: "block", reason, systemMessage: `[EM Supervisor] block severity=error findings=${findings.length}` }) + "\n"
       );
     } catch (_) {}
     process.exit(2);

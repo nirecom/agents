@@ -1,17 +1,24 @@
 # shellcheck shell=bash
 # bin/lib/test-embed-cases/stage-plan.sh — stage 1 of --embed-cases. Source only.
-# tec_stage_plan <band-size> <order> prints SKIP / BAND lines and, unless DRY_RUN=1, writes
-# the workdir (worklist.tsv + items/<idx>/{input,output,backup}) and the EMBED-GATE-STE4 block.
+# tec_stage_plan <band-size> <order> [<only-file>] prints SKIP / BAND lines and, unless DRY_RUN=1,
+# writes the workdir (worklist.tsv + items/<idx>/{input,output,backup}) and the EMBED-GATE-STE4 block.
 # Every candidate is judged, so each skipped file gets its SKIP line even past the band.
+# With <only-file> the band is that one file; a skipped one returns rc 1 (dry run too).
 
 TEC_BAND_RELS=() TEC_BAND_IDS=()
 
 tec_stage_plan() {
   local band="$1" order="$2" total i rel n=0
   tec_candidates
-  total="$(tec_total_tests)"
-  tec_retry_load
-  "tec_order_$order" "$total"
+  if [[ "$#" -ge 3 ]]; then
+    tec_retry_load
+    tec_only_file_select "$3" || return
+    band=1
+  else
+    total="$(tec_total_tests)"
+    tec_retry_load
+    "tec_order_$order" "$total"
+  fi
   TEC_BAND_RELS=() TEC_BAND_IDS=()
   for i in "${!TEC_ORDER_RELS[@]}"; do
     rel="${TEC_ORDER_RELS[$i]}"
@@ -26,6 +33,10 @@ tec_stage_plan() {
     TEC_BAND_IDS+=("$TEC_LANG_ID")
     printf 'BAND\t%s\t%s\t%s\n' "$n" "$rel" "${TEC_ORDER_METRICS[$i]}"
   done
+  if [[ "$#" -ge 3 && "$n" -eq 0 ]]; then
+    printf 'NOTE: embed-cases: --only-file %s is not embeddable (%s); no workdir written\n' "$3" "$TEC_SKIP" >&2
+    return 1
+  fi
   [[ "${DRY_RUN:-0}" != 1 ]] || return 0
   if [[ "$n" -eq 0 ]]; then
     printf 'NOTE: no file to embed in this band; no workdir written\n'

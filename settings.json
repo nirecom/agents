@@ -28,8 +28,9 @@
       "Bash(git -C * push origin *)",
       "Bash(git -C * push -u origin *)",
       "Bash(git push -u origin *)",
-      "Bash(git push *--force-with-lease*)",
-      "Bash(git -C * push *--force-with-lease*)",
+      "Bash(git push *--force-with-lease=*:*)",
+      "Bash(git -C * push *--force-with-lease=*:*)",
+      "Bash(git --no-pager push *--force-with-lease=*:*)",
       "Bash(git fetch origin *)",
       "Bash(git -C * fetch origin *)",
       "Bash(git fetch --prune origin)",
@@ -125,10 +126,6 @@
       "Bash(git -C * push *-f *)",
       "Bash(git -c * push *-f *)",
       "Bash(git --no-pager push *-f *)",
-      "Bash(git push *-f*)",
-      "Bash(git -C * push *-f*)",
-      "Bash(git -c * push *-f*)",
-      "Bash(git --no-pager push *-f*)",
       "Bash(git push --mirror*)",
       "Bash(git -C * push --mirror*)",
       "Bash(git -c * push --mirror*)",
@@ -145,10 +142,6 @@
       "Bash(git -C * push *--delete*)",
       "Bash(git -c * push *--delete*)",
       "Bash(git --no-pager push *--delete*)",
-      "Bash(git push *+*)",
-      "Bash(git -C * push *+*)",
-      "Bash(git -c * push *+*)",
-      "Bash(git --no-pager push *+*)",
       "Bash(git commit --amend*)",
       "Bash(git -C * commit --amend*)",
       "Bash(git -c * commit --amend*)",
@@ -165,22 +158,22 @@
       "Bash(git -C * reset --hard*)",
       "Bash(git -c * reset --hard*)",
       "Bash(git --no-pager reset --hard*)",
-      "Bash(git clean *-f*d*)",
-      "Bash(git -C * clean *-f*d*)",
-      "Bash(git -c * clean *-f*d*)",
-      "Bash(git --no-pager clean *-f*d*)",
-      "Bash(git clean *-d*f*)",
-      "Bash(git -C * clean *-d*f*)",
-      "Bash(git -c * clean *-d*f*)",
-      "Bash(git --no-pager clean *-d*f*)",
+      "Bash(git clean -f*)",
+      "Bash(git -C * clean -f*)",
+      "Bash(git -c * clean -f*)",
+      "Bash(git --no-pager clean -f*)",
+      "Bash(git clean --force*)",
+      "Bash(git -C * clean --force*)",
+      "Bash(git -c * clean --force*)",
+      "Bash(git --no-pager clean --force*)",
       "Bash(git worktree remove*--force*)",
       "Bash(git -C * worktree remove*--force*)",
       "Bash(git -c * worktree remove*--force*)",
       "Bash(git --no-pager worktree remove*--force*)",
-      "Bash(git worktree remove*-f*)",
-      "Bash(git -C * worktree remove*-f*)",
-      "Bash(git -c * worktree remove*-f*)",
-      "Bash(git --no-pager worktree remove*-f*)",
+      "Bash(git worktree remove -f*)",
+      "Bash(git -C * worktree remove -f*)",
+      "Bash(git -c * worktree remove -f*)",
+      "Bash(git --no-pager worktree remove -f*)",
       "Bash(*docker volume rm*)",
       "Bash(*docker compose *down*-v*)",
       "Bash(*docker compose *down*--volumes*)",
@@ -240,7 +233,7 @@
       "Bash(echo \"<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: *>>\")",
       "Bash(echo \"<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: *>>\")",
       "Bash(echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: *>>\")",
-      "Bash(echo \"<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: *>>\")",
       "Bash(uv run bin/doc-rotate.py *)",
       "Bash(*aws * create*)",
       "Bash(*aws * put*)",
@@ -394,6 +387,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/conv-lang-reinject.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/codegraph-context-inject.js\"",
             "timeout": 5
           }
@@ -440,17 +438,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-dotenv.js\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands|mcp__codegraph__codegraph_explore",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-credentials.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/merged-allow-deny.js\" --matcher-group primary",
             "timeout": 15
           }
         ]
@@ -560,16 +548,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/bash-guard.js\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/rtk-rewrite.js\"",
             "timeout": 15
           }
@@ -591,16 +569,6 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/check-cross-platform.js\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|runInTerminal|runCommands",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-capture-echo.js\"",
             "timeout": 15
           }
         ]
@@ -726,11 +694,11 @@
         ]
       },
       {
-        "matcher": "Monitor|EnterWorktree|Bash|runInTerminal|runCommands",
+        "matcher": "Monitor|EnterWorktree",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_MAIN_ROOT/hooks/preuse-auto-approve.js\"",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/merged-allow-deny.js\" --matcher-group monitor-worktree",
             "timeout": 15
           }
         ]
@@ -763,6 +731,11 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/progress-nudge.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/conv-lang-reinject.js\"",
             "timeout": 5
           }
         ]

@@ -414,10 +414,10 @@ redirect         ~ ls > f                                ~ deny|BG-REDIRECT-OUT
 newline-git      ~ git status\nrm -rf x                  ~ passThrough|BG-NO-HIT
 newline-self     ~ node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --list\nrm x ~ passThrough|BG-NO-HIT
 settings-find    ~ find . -exec rm -rf {} \;             ~ passThrough|BG-NO-HIT
-settings-push    ~ git push --force                      ~ passThrough|BG-NO-HIT
+settings-push    ~ git push --force                      ~ deny|BG-GIT-PUSH-FORCE
 settings-noverif ~ git commit --no-verify                ~ passThrough|BG-NO-HIT
 settings-reset   ~ git reset --hard                      ~ passThrough|BG-NO-HIT
-settings-clean   ~ git clean -fd                         ~ passThrough|BG-NO-HIT
+settings-clean   ~ git clean -fd                         ~ deny|BG-GIT-CLEAN-FORCE
 TABLE
 ROWS=$((ROWS + 1))
 check "R7/cr-git: a CR inside the command skips the allow path" \

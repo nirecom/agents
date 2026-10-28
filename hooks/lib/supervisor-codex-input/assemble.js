@@ -9,7 +9,8 @@ const path = require("path");
 const { classify } = require("./rules");
 const cursorLib = require("./cursor");
 const { getHandoffPath, readDocumentFile, MAX_BYTES } = require("../handoff-artifact");
-const { progressPathFor, isRegularFile } = require("../progress-file");
+const { progressPathFor, isRegularFile, isValidSid } = require("../progress-file");
+const { resolvePlanArtifactOwner } = require("../../workflow-state/plan-artifact-owner");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { getStatePath } = require("../supervisor-state-writer");
 const { diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
@@ -135,13 +136,16 @@ function progressLines(transcriptPath, wsid) {
   return out;
 }
 
+// The plans every generation of the session chain reads: <first_session_id>-<kind>.md (#2748).
 function planLines(wsid, planScope, artifact) {
-  if (!wsid || wsid === "UNAVAILABLE") return [];
+  if (!wsid || wsid === "UNAVAILABLE" || !isValidSid(wsid)) return [];
   const kinds = planScope === "intent" ? ["intent"] : ["intent", "outline", "detail"];
   const out = [];
   const taken = [];
+  const plansDir = getWorkflowPlansDir();
   for (const k of kinds) {
-    const p = path.join(getWorkflowPlansDir(), `${wsid}-${k}.md`);
+    let p;
+    try { p = resolvePlanArtifactOwner(wsid, k, undefined, { plansDir }).path; } catch (_) { continue; }
     const text = readOptional(p);
     if (text === null) continue;
     taken.push(p);

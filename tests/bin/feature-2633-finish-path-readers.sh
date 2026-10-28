@@ -141,13 +141,15 @@ assert_eq "closed-closed-rc=$RC" "closed-closed-rc=1"
 asked_both "closed-closed"
 case_end
 
-case_begin "own-intent-wins-over-upstream" "bin/parse-closes-issues"
+# #2748: the intent of a session chain is named after first_session_id, so a session-downstream's
+# own-sid intent is ignored even when present.
+case_begin "first-session-intent-wins-over-own" "bin/parse-closes-issues"
 S="$(new_sid)"
 write_state "$S" "$U"
 write_intent "$PLANS" "$S" 5151
 run_cap node "$BIN/parse-closes-issues" --session "$S"
-if [[ "$OUT" == *5151* && "$OUT" != *4242* ]]; then pass "own intent (#5151) is used, not U's"
-else fail "own intent (#5151) is used, not U's" "out=$OUT"; fi
+if [[ "$OUT" == *4242* && "$OUT" != *5151* ]]; then pass "first_session_id intent (#4242) is used, not the own-sid one (#5151)"
+else fail "first_session_id intent (#4242) is used, not the own-sid one (#5151)" "out=$OUT"; fi
 case_end
 
 case_begin "no-intent-anywhere-stays-active-without-gh" "bin/supervisor-check-session-active"
@@ -183,13 +185,13 @@ if cli_present "plan-artifact-path exists"; then
 fi
 case_end
 
-case_begin "plan-artifact-path-missing-prints-own-path" "bin/plan-artifact-path"
+case_begin "plan-artifact-path-missing-prints-first-session-path" "bin/plan-artifact-path"
 if cli_present "plan-artifact-path exists"; then
   D2="$(new_sid)"; U2="$(new_sid)"
   write_state "$D2" "$U2"
   run_cap node "$CLI" --stage detail --session "$D2"
-  if [ "$RC" -eq 0 ] && same_path "$OUT" "$PLANS/$D2-detail.md"; then pass "missing everywhere -> own path, exit 0"
-  else fail "missing everywhere -> own path, exit 0" "rc=$RC out=$OUT err=$ERR"; fi
+  if [ "$RC" -eq 0 ] && same_path "$OUT" "$PLANS/$U2-detail.md"; then pass "missing everywhere -> first_session_id path, exit 0"
+  else fail "missing everywhere -> first_session_id path, exit 0" "rc=$RC out=$OUT err=$ERR"; fi
 fi
 case_end
 
@@ -309,10 +311,10 @@ if same_path "$(argv_of --draft-file)" "$PLANS/$U-detail.md"; then pass "review-
 else fail "review-plan-security: reviewer reviews U's detail" "got=$(argv_of --draft-file)"; fi
 case_end
 
-case_begin "review-wrapper-own-intent-wins" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
+case_begin "review-wrapper-first-session-intent-wins" "skills/make-detail-plan/scripts/run-codex-review-loop.sh"
 run_wrapper make-detail-plan "$S"
-if same_path "$(argv_of --class-members)" "$PLANS/$S-intent.md"; then pass "own intent is passed, not U's"
-else fail "own intent is passed, not U's" "rc=$WRAP_RC got=$(argv_of --class-members)"; fi
+if same_path "$(argv_of --class-members)" "$PLANS/$U-intent.md"; then pass "first_session_id intent is passed, not the own-sid one"
+else fail "first_session_id intent is passed, not the own-sid one" "rc=$WRAP_RC got=$(argv_of --class-members)"; fi
 case_end
 
 echo ""

@@ -11,13 +11,16 @@ const REMOTE = "https://example.invalid/test-owner/test-repo.git";
 const BLOB = "https://example.invalid/test-owner/test-repo/blob/main/";
 const MODE = process.env.CC_PUBLISH_MODE || "published";
 const FAULT = process.env.CC_FAULT || "";
+// CC_UNPUBLISHED_STAGE=<stage> leaves only that stage's plan (<sid>-<stage>.md) unpublished (#2771).
+const UNPUBLISHED_STAGE = process.env.CC_UNPUBLISHED_STAGE || "";
+const unpublishedStage = (abs) => UNPUBLISHED_STAGE !== "" && path.basename(String(abs)).endsWith(`-${UNPUBLISHED_STAGE}.md`);
 
 const stub = {
   resolveRemoteUrl: () => (MODE === "plan-sync-off" ? { value: "", loadFailed: false } : { value: REMOTE, loadFailed: false }),
   checkProvisioned: () => (MODE === "not-provisioned" ? { ok: false } : { ok: true, pushUrl: REMOTE }),
   readProjectHostState: () => (MODE === "host-mismatch" ? "host-mismatch" : "match"),
   resolveRemoteTarget: () => ({ type: MODE === "unknown-forge" ? "unknown" : "github" }),
-  publishedBlobUrl: (_dir, abs) => (MODE === "not-published" ? null : BLOB + path.basename(String(abs))),
+  publishedBlobUrl: (_dir, abs) => (MODE === "not-published" || unpublishedStage(abs) ? null : BLOB + path.basename(String(abs))),
 };
 
 const patched = new WeakSet();
