@@ -24,7 +24,7 @@ function firstLine(text) {
 }
 
 // Step 1 — inventory. Its only remaining consumer is the log and this
-// precondition check: a target-main-root git cannot enumerate its own ignored files
+// precondition check: git at TARGET_MAIN_ROOT cannot enumerate its own ignored files
 // means nothing downstream is trustworthy either.
 function inventory(ctx) {
   const counts = {};

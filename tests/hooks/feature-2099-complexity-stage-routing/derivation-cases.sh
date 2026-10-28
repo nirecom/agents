@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/derivation-cases.sh
 # Tests: hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, derivation, table-driven, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # Pins the D2 routing table (detail.md) as a table-driven matrix so a silent
 # threshold edit shows up as a diff, not as a behaviour change.
 

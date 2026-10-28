@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/judge-boundary-live-cases.sh
 # Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, judge, live-agent, boundary, tl3, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh after judge-threshold-live-cases.sh.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints after judge-threshold-live-cases.sh.
 # #2460 retired S1-multi-file and S6-long-plan, so their live boundary pairs
 # (JT-11..JT-14) were removed. What remains is deterministic and spends no
 # token: the rubric must no longer state either retired numeric threshold.

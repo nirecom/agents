@@ -2,16 +2,12 @@
 # tests/hooks/feature-2099-complexity-stage-routing/consumer-orchestration-cases.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, integration, model-selection, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # Runs each consumer's OWN extracted stored-evaluation read command and maps it to
 # a model; the NONE branch (skills/_shared/jev-two-stage-judge.md, #2460) is pinned
 # statically in consumers-static.sh, not executed here.
 
-# Every consumer row: skill dir | stage key | level step | Agent-launch step.
-# live-e2e-cases.sh walks this table too.
-D2099_CONSUMERS="make-detail-plan|detail|MDP-3|MDP-4
-write-tests|write_tests|WT-6|WT-7
-write-code|write_code|WCD-3|WCD-4"
+# D2099_CONSUMERS (every consumer row) lives in consumer-read-cli.sh (sourced first).
 
 # The consumers that still READ a stored evaluation (#2460: WCD-3 judges every
 # time, so write-code has no stored-read path left to execute).

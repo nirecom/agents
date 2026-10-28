@@ -10,9 +10,11 @@
 #   - Hard violation banner "Commit blocked" still emitted after the loop
 set -euo pipefail
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SCANNER_SRC="$DOTFILES_DIR/bin/scan-outbound.sh"
-PRECOMMIT_SRC="$DOTFILES_DIR/hooks/pre-commit"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+# The fixture repos are main worktrees; this test targets the scan, not the worktree gate (#1349).
+export ENFORCE_WORKTREE=off
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -31,10 +33,11 @@ trap 'rm -rf "$TMPBASE"' EXIT
 
 # Build a fake "agents" tree (so $_cfg_dir/.. resolves to the agents root)
 FAKE_AGENTS="$TMPBASE/agents"
-mkdir -p "$FAKE_AGENTS/bin" "$FAKE_AGENTS/hooks"
-cp "$SCANNER_SRC"   "$FAKE_AGENTS/bin/scan-outbound.sh"
-cp "$PRECOMMIT_SRC" "$FAKE_AGENTS/hooks/pre-commit"
-chmod +x "$FAKE_AGENTS/bin/scan-outbound.sh" "$FAKE_AGENTS/hooks/pre-commit"
+mkdir -p "$FAKE_AGENTS"
+# The hook sources hooks/lib/* unconditionally, so the whole hooks tree is copied (#1349).
+script_checkout_fixture_copy "$FAKE_AGENTS" hooks bin/scan-outbound.sh bin/lib || { echo "FAIL: fixture copy"; exit 1; }
+# The hook's settings root is this fixture, never the decoy or the real main root.
+export AGENTS_MAIN_ROOT="$FAKE_AGENTS"
 : > "$FAKE_AGENTS/.private-info-allowlist"
 cat > "$FAKE_AGENTS/.private-info-blocklist" <<'EOF'
 forbiddenword[0-9]+
@@ -105,10 +108,10 @@ if [ "$PC_RC" = "1" ]; then
 else
     fail "hard -> expected rc=1, got rc=$PC_RC. out=[$PC_OUT]"
 fi
-if echo "$PC_OUT" | grep -qF "Commit blocked"; then
-    pass "hard -> 'Commit blocked' banner present (proves rc captured + post-loop reached)"
+if echo "$PC_OUT" | grep -qF "Commit blocked: private information detected"; then
+    pass "hard -> 'private information detected' banner present (proves rc captured + hard class reached)"
 else
-    fail "hard -> 'Commit blocked' missing. out=[$PC_OUT]"
+    fail "hard -> 'private information detected' missing. out=[$PC_OUT]"
 fi
 
 echo ""
@@ -128,6 +131,11 @@ if echo "$PC_OUT" | grep -Eq "no TTY|auto-block|auto blocked|automatically block
 else
     fail "warn no-TTY -> expected 'no TTY' or 'auto-block' in output. out=[$PC_OUT]"
 fi
+if echo "$PC_OUT" | grep -qF "Commit blocked: warn-only patterns detected"; then
+    pass "warn no-TTY -> 'warn-only patterns detected' banner present"
+else
+    fail "warn no-TTY -> 'warn-only patterns detected' missing. out=[$PC_OUT]"
+fi
 
 echo ""
 echo "=== Normal: warn + hard mixed, no TTY -> hard 'Commit blocked' wins ==="
@@ -141,10 +149,10 @@ if [ "$PC_RC" = "1" ]; then
 else
     fail "mixed -> expected rc=1, got rc=$PC_RC. out=[$PC_OUT]"
 fi
-if echo "$PC_OUT" | grep -qF "Commit blocked"; then
-    pass "mixed -> 'Commit blocked' banner present"
+if echo "$PC_OUT" | grep -qF "Commit blocked: private information detected"; then
+    pass "mixed -> 'private information detected' banner present"
 else
-    fail "mixed -> 'Commit blocked' missing. out=[$PC_OUT]"
+    fail "mixed -> 'private information detected' missing. out=[$PC_OUT]"
 fi
 
 echo ""

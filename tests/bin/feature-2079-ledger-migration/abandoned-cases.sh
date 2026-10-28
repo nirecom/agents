@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/abandoned-cases.sh
 # Tests: bin/lib/run-all-durations-consolidate.sh
 # Tags: tests, bin, ledger, durations, consolidate, concurrency, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n19 (1)-(8) (#2079 S7b): the 6-hour abandon boundary, a misjudged live writer, the lock,
 # and every interruption or failure point of publish-then-delete converging next round.
 

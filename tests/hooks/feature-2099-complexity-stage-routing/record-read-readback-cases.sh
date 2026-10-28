@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/record-read-readback-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation,hooks/workflow-state/state-io/session-fields.js
 # Tags: complexity, routing, cli, read-back, injection, security, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh —
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints AFTER record-read-cases.sh —
 # the state probes (d2099_raw_ce_count / d2099_projected_ce) live there.
 # Split out of record-read-cases.sh per rules/coding/file-split.md Pattern A.
 

@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/combination-escalation-cases.sh
 # Tests: hooks/workflow-state/complexity-routing.js, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, combination-escalation, set-membership, table-driven, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # #2460 retired outline/detail's only combination row (S1b-wide-change + S6-long-plan):
 # S6-long-plan is no longer a signal, so combination_escalation is empty at every stage.
 # These rows pin that NO multi-signal set of individually-low signals escalates, and
