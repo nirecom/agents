@@ -34,7 +34,7 @@ Before #2748 a session-downstream could write its own `<sid>-session-progress.md
 
 `templates/progress.md` holds three sections:
 
-- `Current state` — what is being done and what comes next; rewritten on every update, never a diary.
+- `Current state` — what is being done and what comes next; rewritten on every update, never a diary. Its size limit is the `progress` row of `rules/coding/file-split.md` (Pattern E), enforced at edit time by `hooks/block-post-edit-size.js`.
 - `Plan files` — the intent / outline / detail paths, filled in at creation; step state is read from `next-step --list`, never copied.
 - `Facts to carry over` — `User decisions`, `Deviations`, `Rejected approaches` (with the reason), `Open questions`.
 

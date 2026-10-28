@@ -1,7 +1,8 @@
 "use strict";
 // hooks/lib/post-edit-content.js — the file content a Write/Edit/MultiEdit will
 // leave on disk, rebuilt in memory for PreToolUse gates (#2388; formerly private
-// copies in block-comment-block-size.js and pretool-lang-gate.js, CPR-SSOT).
+// copies in the comment-block hook and pretool-lang-gate.js, CPR-SSOT; consumed by
+// hooks/block-post-edit-size/ since #2631).
 // Nothing here writes: a PreToolUse hook that materialised the post file would
 // have performed the very write it is about to refuse. null = "cannot rebuild",
 // which every caller turns into approve (fail-open). Depends only on
@@ -27,8 +28,8 @@ function pathOf(obj) {
   return null;
 }
 
-// Canonical form for path EQUALITY: relative vs absolute, `/c/...` vs `C:\...`
-// and `./` segments must collapse, or a MultiEdit element under an alias
+// Canonical form for path EQUALITY: relative vs absolute, MSYS drive-letter
+// vs Windows drive-letter spellings and `./` segments must collapse, or a MultiEdit element under an alias
 // spelling escapes grouping. No case folding (no such repo convention).
 function normalizePath(p) {
   if (typeof p !== "string" || p.length === 0) return p;

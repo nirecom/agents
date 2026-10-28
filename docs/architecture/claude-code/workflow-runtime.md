@@ -99,8 +99,8 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
     Detection logic: hasUnstagedTrackedChanges() in hooks/workflow-gate/staged-evidence.js.
   Gate 2 (code-size HARD limit, #1701): runs `bash bin/review-code-size --staged` against the
-    staged index and blocks when any staged code file exceeds the 500-line HARD limit
-    (rules/coding/file-split.md). The script owns thresholds and line counting (CPR-SSOT);
+    staged index and blocks when any staged code file exceeds the code HARD limit (SSOT:
+    hooks/lib/size-limits.js, #2631). The script owns line counting (CPR-SSOT);
     the hook only maps exit 1 → block. Line counts come from the staged blob
     (`git show :<file>`), not the working tree, so the commit that performs a split passes.
     Not skipped by the docs-only short-circuit, `workflow.wip=1`, or WORKTREE_OFF —
@@ -226,7 +226,7 @@ When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confir
 
 `session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
 
-### `--gate` (confirm-gate check, #2490)
+### `--gate` (confirm gate check, #2490)
 
 `next-step --gate` is the single branching source for the seven confirm gates (`skills/_shared/confirm-plan.md` CPA-3). It is read-only and prints `GATE_ACTION`, the `GATE_CONFIRM_<X>` value line (omitted for `none`), `GATE_HINT`, and `REASON`.
 
@@ -310,7 +310,7 @@ fire. The gate does NOT mutate state in the WIP path — `user_verification` rem
 `pending`, so the next non-WIP commit re-blocks until the user verifies.
 
 Gate 2 (code-size HARD limit) also continues to fire for WIP commits — a WIP
-commit must not be able to land a file that exceeds the 500-line HARD limit.
+commit must not be able to land a file that exceeds the code HARD limit (SSOT: `hooks/lib/size-limits.js`).
 
 The `-c key=value` form is parsed by `parseGitConfigValues` (in
 `hooks/lib/parse-git-args.js`) and only recognized when it appears **before**

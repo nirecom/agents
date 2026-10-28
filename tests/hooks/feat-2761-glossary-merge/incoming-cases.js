@@ -225,6 +225,21 @@ guarded("A12", () => {
   }
 });
 caseEnd();
+
+// #2631 stage 9: MERGE_HEAD must name a commit (`<oid>^{commit}`). A tree oid is a valid tree-ish
+// for `git diff --cached`, so without the peel it would pass as a merge and exclude files.
+caseBegin("MERGE_HEAD naming a tree or a blob is undecidable", "hooks/lib/merge-incoming.js");
+guarded("A13", () => {
+  for (const kind of ["tree", "blob"]) {
+    const repo = F.mkRepo(`a13-${kind}`);
+    const fx = M.standardMerge(repo, WORD);
+    const oid = M.git(repo, ["rev-parse", kind === "tree" ? `${fx.mergeHead}^{tree}` : `${fx.mergeHead}:docs/main-only.md`]).stdout.trim();
+    F.check(`A13 ${kind}: premise: the oid names a ${kind}`, M.git(repo, ["cat-file", "-t", oid]).stdout.trim() === kind, oid);
+    fs.writeFileSync(fx.mergeHeadPath, `${oid}\n`);
+    expectState(`A13 MERGE_HEAD is a ${kind} oid`, detect(`A13 ${kind}`, repo, M.stagedNames(repo)), "undecidable", "diff-failed");
+  }
+});
+caseEnd();
 }
 
 module.exports = { run };

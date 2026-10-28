@@ -3,16 +3,10 @@
 # Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size.d/scan-cli.js
 # Tags: comment-block-size, parser, node, table-driven, ssot, parity, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# hooks/lib/comment-block-scan.js is the recognition SSOT (CPR-SSOT), shared by
-# the Edit-time hook (in-process) and the bash CLI (stdin/stdout adapter); this
-# file is its direct unit surface. scanner-core.sh duplicates the case table on
-# purpose: it sees the core THROUGH the CLI (one number per file), while the run
-# list, boundaries and sub-threshold state are only visible here (CPR-E2E).
-
-# TL3 gap: real Edit-time latency, require-ability from both consumers
-# post-packaging, and editor byte sequences mktemp fixtures don't produce
-# (UTF-16, mixed CRLF/LF at scale). Mitigation: scanner-core.sh runs the same
-# rules through the real CLI on every run.
+# hooks/lib/comment-block-scan.js is the recognition SSOT shared by the Edit-time hook and the
+# bash CLI; this is its direct unit surface (scanner-core.sh sees it only THROUGH the CLI, CPR-E2E).
+# TL3 gap: Edit-time latency, post-packaging require-ability, editor byte sequences (UTF-16,
+# mixed CRLF/LF at scale). Mitigation: scanner-core.sh runs the same rules through the real CLI.
 
 echo ""
 echo "=== N0: module contract ==="
@@ -152,7 +146,7 @@ if [ "$NS_HAVE_NODE" = "1" ]; then
 
     # C3: every scanText call site passes the threshold explicitly — a defaulted
     # call re-opens the ambient-config bypass, invisibly to behavioural tests.
-    for _f in "$NS_CLI" "$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"; do
+    for _f in "$NS_CLI" "$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size/comment-block.js"; do
         if [ -f "$_f" ]; then
             if grep -n 'scanText(' "$_f" | grep -qv ','; then
                 fail "N0/threshold-always-explicit-in-$(basename "$_f")" \
