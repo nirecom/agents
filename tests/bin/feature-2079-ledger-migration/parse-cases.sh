@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/parse-cases.sh
 # Tests: bin/lib/run-all-durations-consolidate.sh
 # Tags: tests, bin, ledger, durations, consolidate, parser, table-driven, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n22 (#2079 S6/S7b) table-driven parsing through the public entries (run_all_dur_consolidate
 # and run_all_dur_lookup): segment-name states, record lines, and the `#os` / `#run` headers.
 # Tables use `;` as the column separator because record lines themselves contain `|`.
@@ -103,11 +103,26 @@ cp_headers() {
 
 # ---- parent side --------------------------------------------------------------
 
-# cp_check <label> <table-file> <child-fn> — one assertion per named row against its 4th
-# (want) column; the child's whole output is left in CP_LAST.
+# cp_check <label> <table-file> <child-fn> [chunk] — one assertion per named row against its 4th
+# (want) column; the children's whole output is left in CP_LAST. With chunk=N the rows run N
+# at a time, each chunk in its own child with a fresh cache, so a slow host is bounded per
+# chunk (LM_CHILD_TIMEOUT) and a killed child fails only its own rows (they read got=[]).
+# Chunk only tables whose rows are independent; without chunk the whole table is one child.
 cp_check() {
-  local r name a b want
-  r="$(LM_XVAR="$2" lm_run "$(lm_cache)" "$3")"
+  local r="" name a b want chunk="${4:-0}" line n=0 k=0 part
+  if [ "$chunk" -gt 0 ]; then
+    while IFS= read -r line; do
+      case "$(cp_trim "$line")" in ''|'#'*) continue ;; esac
+      [ $((n % chunk)) -ne 0 ] || { k=$((k + 1)); : > "$2.$k"; }
+      printf '%s\n' "$line" >> "$2.$k"; n=$((n + 1))
+    done < "$2"
+    for ((n = 1; n <= k; n++)); do
+      part="$(LM_XVAR="$2.$n" lm_run "$(lm_cache)" "$3")"
+      r="$r$part"$'\n'
+    done
+  else
+    r="$(LM_XVAR="$2" lm_run "$(lm_cache)" "$3")"
+  fi
   while IFS=$'\t' read -r name a b want; do
     ck "$1/$name" "$want" "$(lm_v "$r" "row\\.$name")"
   done < <(cp_rows "$2")
@@ -139,7 +154,7 @@ non-numeric-pid-abandoned-age   ; ${DC_D}T010000-abc                            
 unknown-state-suffix            ; ${DC_D}T010000-11.done                             ; 30  ; kept/5
 garbage-name                    ; garbage                                            ; 30  ; kept/5
 TABLE
-  cp_check "n22/names" "$t" cp_names
+  cp_check "n22/names" "$t" cp_names 4
 }
 
 run_parse_line_cases() {
@@ -199,5 +214,5 @@ run-non-numeric-pid   ; #os $DC_L               ; #run ${DC_D}T080000-x    ; $DC
 run-empty-pid         ; #os $DC_L               ; #run ${DC_D}T080000-     ; $DC_L|$p|1
 run-no-space          ; #os $DC_L               ; #run${DC_D}T080000-9     ; $DC_L|$p|1
 TABLE
-  cp_check "n22/headers" "$t" cp_headers
+  cp_check "n22/headers" "$t" cp_headers 4
 }

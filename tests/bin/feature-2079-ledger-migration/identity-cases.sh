@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/identity-cases.sh
 # Tests: bin/lib/run-all-parallelism.sh
 # Tags: tests, bin, ledger, host-identity, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n16 (#2079 S6): the Windows key no longer carries the launch path or build, every other
 # OS keeps its key byte-for-byte, and both ledgers write the OS attribute the plan names.
 # Sourced by the dispatcher (parent side) and by _driver.sh (child side).

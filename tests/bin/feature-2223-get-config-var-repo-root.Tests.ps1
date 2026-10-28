@@ -72,7 +72,7 @@ Describe 'get-config-var.ps1 -RepoRoot local-override resolution' {
         }
     }
 
-    # Fixture isolation: pin the agents main root and both halves of the plans-dir
+    # Fixture isolation: pin AGENTS_MAIN_ROOT and both halves of the plans-dir
     # pair, and drop inherited session ids so no child resolves live state.
     BeforeEach {
         [System.Environment]::SetEnvironmentVariable('AGENTS_MAIN_ROOT', $script:cfgDir, 'Process')

@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/judge-threshold-live-cases.sh
 # Tests: skills/_shared/judge-task-complexity.md, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, judge, live-agent, boundary, tl3, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # A real judge must emit exactly the JUDGED signals (S2/S3/S5) a fixture carries and
 # never the deterministic S1b/S4 (#2460). Billable, gated like PI-5.
 

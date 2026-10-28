@@ -1,8 +1,8 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/skill-section-helpers.sh
-# Tests: tests/hooks/feature-2099-complexity-stage-routing.sh
+# Tests: tests/hooks/feature-2099-complexity-stage-routing/_lib.sh
 # Tags: complexity, routing, prompt-static, helpers, jev, shared-procedure, scope:issue-specific
-# Helper-only, no cases of its own. Sourced by ../feature-2099-complexity-stage-routing.sh
+# Helper-only, no cases of its own. Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints
 # and by ../feature-2460-jev-call-sites-static.sh, so the stage-1 suite and the
 # stage-5 call-site suite read SKILL.md sections through ONE extractor (CPR-SSOT).
 # Needs SCRIPT_CHECKOUT_ROOT from the sourcing runner. Single-path # Tests: (the

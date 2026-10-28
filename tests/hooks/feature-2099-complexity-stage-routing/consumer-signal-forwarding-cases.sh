@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/consumer-signal-forwarding-cases.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/read-session-facts
 # Tags: complexity, routing, consumers, signals, integration, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh after the consumer
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints after the consumer
 # orchestration suite — d2099_consumer_read / d2099_skill_file come from there.
 # Why: that suite drives model selection off the reader's `level=` line only.
 # The second line, `signals=`, is asserted nowhere behaviorally — consumers-static
@@ -19,25 +19,7 @@ D2099SF_CSV="S1b-wide-change,S3-security,S4-installer"
 D2099SF_ROWS="make-detail-plan|low
 write-tests|high"
 
-d2099sf_read() {
-    # What the skill's OWN read command answers, normalized to the two values the
-    # skill tells the orchestrator to parse: `level=<v>` then `signals=<csv>`.
-    # d2099_consumer_read picks the consumer's own CLI — the direct reader's
-    # `level=`/`signals=` lines for make-detail-plan, the bundled record's
-    # `COMPLEXITY_LEVEL_<stage>`/`COMPLEXITY_SIGNALS` keys for the other two (#2102).
-    local f="$1" sid="$2" out first second
-    out=$(d2099_consumer_read "$f" "$sid")
-    first=$(printf '%s\n' "$out" | sed -n 1p)
-    [ "$first" = "__NO_COMMAND__" ] && { echo "NO_READ_COMMAND_IN_SKILL"; return; }
-    [ "$first" = "NONE" ] && { echo "NONE"; return; }
-    second=$(printf '%s\n' "$out" | sed -n 2p)
-    case "$first" in level=*) ;; *) echo "UNPARSEABLE_LEVEL:$first"; return ;; esac
-    case "$second" in
-        signals=*) printf '%s %s' "$first" "$second" ;;
-        '') echo "$first NO_SIGNALS_LINE" ;;
-        *) printf '%s UNPARSEABLE_SIGNALS:%s' "$first" "$second" ;;
-    esac
-}
+# d2099sf_read (the skill's own read, normalized) lives in consumer-read-cli.sh.
 
 d2099sf_multi_signal_reaches_each_consumer() {
     # CSF-1..CSF-3: one stored record, read back through each consumer's own

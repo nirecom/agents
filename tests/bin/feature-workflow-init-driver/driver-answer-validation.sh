@@ -207,6 +207,6 @@ check_c20 d "{$C20_HEAD,\"state\":null}"                    # present but null �
 # A corrupt `issue_json_cache` under an otherwise usable `state` is deliberately NOT
 # listed here: refetching is a legitimate recovery for it, so demanding a blocked
 # directive would over-constrain the design. Its contract is asserted where it is
-# actually observable — driver-issue-comments.sh C11, through write-context.
+# actually observable — the driver-issue-comments/ groups' C11, through write-context.
 
 finish

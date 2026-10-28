@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/validate-table-cases.sh
 # Tests: hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, validation, shape, table-driven, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # Split out of derivation-cases.sh purely for the >300-line WARN threshold
 # (rules/coding/file-split.md Pattern A); detail.md groups both concerns as case file 1.
 

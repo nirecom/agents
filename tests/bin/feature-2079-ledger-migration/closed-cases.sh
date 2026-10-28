@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/closed-cases.sh
 # Tests: bin/lib/run-all-durations.sh
 # Tags: tests, bin, ledger, durations, consolidate, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n21 (#2079 S7b): the closed marker. (1)-(5), (7) through a real runner (_runner-closed.sh),
 # (6) through direct calls: a second close is a no-op and an append after close writes nothing.
 

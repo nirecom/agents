@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/secret-shape-classifier-cases.sh
 # Tests: hooks/workflow-state/complexity-routing/secret-shape.js, hooks/workflow-state/complexity-routing.js, bin/scan-outbound.sh
 # Tags: complexity, routing, secret-shape, classifier, table-driven, security, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # Why: isSecretShaped is the filter that decides whether a judge-authored token is
 # echoed back into the persisted signal list (canonicalizeSignalsForPersistence).
 # The sibling suites only observe it through that consumer, where a pattern that
