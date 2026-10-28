@@ -224,7 +224,7 @@ echo "=== T14: push failure (local main ahead of origin/main) -> local path, no 
 clear_markers
 T14_STATE=$(
   ccp_ps_env || exit 0
-  export GIT_SSH_COMMAND=false
+  export GIT_SSH_STUB_FAIL=offline
   printf 'edited locally\n' > "$PUB_ABS"
   s="$(ccp_sync "$SID-intent.md" 2>&1)"
   l="$(git -C "$PUB" rev-parse --verify -q refs/heads/main 2>/dev/null)"
@@ -240,7 +240,7 @@ if [ "$T14_STATE" = "sync=failed|ahead=yes" ]; then
   write_marker "intent" "$PUB_ABS"
   # #2729 (inverted): the plan could have a URL but is not published, so a path-only presentation
   # never passes; the echo is denied (unpublished) instead of showing the local path.
-  T14_OUT=$(ccp_ps_env; export GIT_SSH_COMMAND=false; ccp_confirm_run; printf '%s' "$CCP_OUT")
+  T14_OUT=$(ccp_ps_env; export GIT_SSH_STUB_FAIL=offline; ccp_confirm_run; printf '%s' "$CCP_OUT")
   CCP_OUT="$T14_OUT"; CCP_MSG="$(psf_sysmsg "$T14_OUT")"
   ccp_expect_deny "T14 unpushed blob -> denied (unpublished), no dialog with the local path"
 else

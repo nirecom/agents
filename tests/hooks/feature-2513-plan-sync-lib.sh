@@ -83,7 +83,7 @@ case_begin "render-gitignore" "hooks/lib/plan-sync.js"
 OUT="$(psf_node 'const l = ps.renderGitignore().split("\n").filter((x) => x !== "");
 process.stdout.write((l[0].startsWith("#") ? "comment" : "no-comment") + "|" + l.slice(1).join(" "));')"
 expect_eq "renderGitignore: comment line + allowlist patterns" "$OUT" \
-  "comment|/* !/*-intent.md !/*-outline.md !/*-detail.md /.* !/.gitignore"
+  "comment|/* !/*-intent.md !/*-outline.md !/*-detail.md !/*-session-progress.md /.* !/.gitignore"
 GI_REPO="$PSF_ROOT/gi-repo"
 harness_git_init "$GI_REPO"
 psf_node 'fs.writeFileSync(path.join(process.argv[1], ".gitignore"), ps.renderGitignore());' "$GI_REPO" >/dev/null
@@ -96,6 +96,7 @@ done <<'TABLE'
 s2513-intent.md|tracked
 s2513-outline.md|tracked
 s2513-detail.md|tracked
+s2513-session-progress.md|tracked
 .gitignore|tracked
 s2513-context.md|ignored
 drafts/x-intent.md|ignored
@@ -226,7 +227,7 @@ if psf_make_provisioned "$OV" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1; then
   printf 'a\n' > "$OV/s2513a-intent.md"; psf_commit_file "$OV" s2513a-intent.md refs/remotes/origin/main
   rm -f "$OV/s2513a-intent.md"; printf 'b\n' > "$OV/s2513b-intent.md"
   psf_record "$OV" s2513b-intent.md "$PSF_HOST_DEAD"
-  OUT="$(PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" GIT_SSH_COMMAND=false WORKFLOW_PLANS_DIR="$OV" sync_status "$OV" "$OV/s2513b-intent.md")"
+  OUT="$(PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" WORKFLOW_PLANS_DIR="$OV" psf_with_ssh_offline sync_status "$OV" "$OV/s2513b-intent.md")"
   expect_eq "syncPlanFile: unreachable remote -> failed" "${OUT%%|*}" "failed"
   TREE="$(git -C "$OV" ls-tree -r --name-only refs/heads/main 2>&1 | tr '\n' ' ')"
   expect_eq "overlay: base-only entry kept, target added, nothing deleted" "$TREE" ".gitignore s2513a-intent.md s2513b-intent.md "
