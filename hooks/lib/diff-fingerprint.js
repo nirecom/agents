@@ -9,7 +9,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./limited-child-process");
 const { computeWorkingTreeDiff, toWindowsPath } = require("./branch-diff");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
 
@@ -134,19 +134,20 @@ function artifactPresence(abs) {
   return st.isFile() ? "present" : "unreadable";
 }
 
-// A downstream session's plan is its upstream's file (#2633); a sid the owner resolver rejects
-// keeps the literal <sid>-<name>.md path.
+// Every generation of a session chain reads <first_session_id>-<name>.md (#2633, #2748); null when
+// the resolver rejects the name, which the caller treats as absent.
 function ownedArtifactPath(dir, sessionId, name) {
   try {
     const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
     return resolvePlanArtifactOwner(sessionId, name, undefined, { plansDir: dir }).path;
   } catch (_) {
-    return path.join(dir, `${sessionId}-${name}.md`);
+    return null;
   }
 }
 
 function digestArtifacts(plansDir, sessionId, artifactNames) {
-  if (!sessionId || !Array.isArray(artifactNames) || artifactNames.length === 0) {
+  const { SESSION_ID_VALID_RE } = require("../workflow-state/state-io/core");
+  if (typeof sessionId !== "string" || !SESSION_ID_VALID_RE.test(sessionId) || !Array.isArray(artifactNames) || artifactNames.length === 0) {
     return { key: null, unreadable: [] };
   }
   const unreadable = [];
@@ -155,7 +156,7 @@ function digestArtifacts(plansDir, sessionId, artifactNames) {
     const hash = crypto.createHash('sha256');
     for (const name of artifactNames) {
       const abs = ownedArtifactPath(dir, sessionId, name);
-      const presence = artifactPresence(abs);
+      const presence = abs === null ? "absent" : artifactPresence(abs);
       if (presence === "absent") return { key: null, unreadable };
       if (presence === "unreadable") {
         unreadable.push(name);

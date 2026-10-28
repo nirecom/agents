@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/output-sanitize.js, hooks/workflow-state/upstream-search.js
-// Tags: TL2, session-upstream, upstream-search, resume-session, prompt-injection, security, output-sanitize, regression-2301, scope:issue-specific, pwsh-not-required
+// Tags: TL2, session-upstream, upstream-search, resume-session, prompt-injection, security, output-sanitize, regression-2301, regression-2748, scope:issue-specific, pwsh-not-required
 // #2301: a donor's `**Title:**` line is written by another session, so the title a
 // search record carries goes through sanitizeUntrustedField — control bytes collapsed,
-// credential shapes redacted, workflow sentinels redacted, length capped.
+// credential shapes redacted, each workflow sentinel redacted, length capped.
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
@@ -141,6 +141,55 @@ caseBegin("title-of-sanitizes-search-records", "hooks/workflow-state/upstream-se
     const t = titleFor("f2301-long");
     eq(typeof t === "string" && t.length <= 500, true, "title length " + (t && t.length));
   });
+}
+caseEnd();
+
+// #2748 R1: a plan file whose name carries a sid outside SESSION_ID_VALID_RE is no session;
+// the index must not offer it as an upstream candidate, nor read or stat the file (fs is spied in-process).
+caseBegin("index-plans-dir-skips-invalid-sid", "hooks/workflow-state/upstream-search.js");
+{
+  const search = mod("hooks/workflow-state/upstream-search");
+  const cases = [
+    { name: "hyphen", sid: "f2748-good", valid: true },
+    { name: "underscore", sid: "f2748_good_under", valid: true },
+    { name: "upper-and-digits", sid: "F2748GOOD9", valid: true },
+    { name: "dot", sid: "f2748bad.sid", valid: false },
+    { name: "space", sid: "f2748bad sid", valid: false },
+    { name: "plus", sid: "f2748bad+sid", valid: false },
+    { name: "tilde", sid: "f2748bad~sid", valid: false },
+    { name: "dollar", sid: "f2748bad$sid", valid: false },
+    { name: "non-ascii", sid: "f2748badésid", valid: false },
+  ];
+  const fileOf = (sid, kind) => path.join(PLANS_DIR, `${sid}-${kind}.md`);
+  for (const { sid } of cases) {
+    for (const kind of ["intent", "detail"]) fs.writeFileSync(fileOf(sid, kind), "**Title:** f2748 shared marker" + NL + "body" + NL);
+  }
+  const invalidFiles = new Set(cases.filter((c) => !c.valid).flatMap((c) => ["intent", "detail"].map((k) => path.resolve(fileOf(c.sid, k)).toLowerCase())));
+  const touched = [];
+  const spied = ["readFileSync", "statSync", "lstatSync", "openSync", "existsSync"];
+  const real = Object.fromEntries(spied.map((fn) => [fn, fs[fn]]));
+  for (const fn of spied) {
+    fs[fn] = function spy(p, ...rest) {
+      if ((typeof p === "string" || p instanceof URL) && invalidFiles.has(path.resolve(String(p)).toLowerCase())) touched.push(`${fn}:${path.basename(String(p))}`);
+      return real[fn].call(fs, p, ...rest);
+    };
+  }
+  let rows;
+  try {
+    rows = search.searchUpstreamSessions("f2748 shared marker", { plansDir: PLANS_DIR, limit: 50 });
+  } finally {
+    for (const fn of spied) fs[fn] = real[fn];
+  }
+  const sids = (Array.isArray(rows) ? rows : []).map((r) => r.sid);
+  for (const { name, sid, valid } of cases) {
+    check(`R1 ${name}: ${show(sid)} is ${valid ? "found as an upstream candidate" : "skipped"}`, () => eq(sids.includes(sid), valid, `${show(sid)} in ${show(sids)}`));
+    if (!valid) {
+      check(`R1 ${name}: the plan files of ${show(sid)} are never read nor stat'd`, () => {
+        const hits = touched.filter((t) => t.includes(`:${sid}-`));
+        return hits.length === 0 ? undefined : `touched=${show(hits)}`;
+      });
+    }
+  }
 }
 caseEnd();
 

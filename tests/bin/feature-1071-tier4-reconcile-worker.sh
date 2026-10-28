@@ -224,6 +224,121 @@ test_ir_user_invocable_false() {
     fi
 }
 
+# ── Tests 11-12 (#2731): issue writers take the terminology rule, never a language ─
+# The reference names the TERMS line of hooks/lib/lang-directives.txt plus the glossary
+# Writer directives; it never names the CONV_LANG line (that would impose a body language).
+LANG_DIRECTIVES_TXT="${SCRIPT_CHECKOUT_ROOT}/hooks/lib/lang-directives.txt"
+
+# directive_text <file> — the text the writer is told: frontmatter and HTML comments blanked,
+# line numbers kept, so a mention that only sits in metadata or a comment never counts.
+directive_text() {
+    awk '
+        NR == 1 && $0 == "---" { infm = 1; print ""; next }
+        infm { if ($0 == "---") infm = 0; print ""; next }
+        {
+            rest = $0; out = ""
+            while (rest != "") {
+                if (incom) {
+                    i = index(rest, "-->"); if (i == 0) { rest = ""; break }
+                    rest = substr(rest, i + 3); incom = 0
+                } else {
+                    i = index(rest, "<!--"); if (i == 0) { out = out rest; rest = ""; break }
+                    out = out substr(rest, 1, i - 1); rest = substr(rest, i + 4); incom = 1
+                }
+            }
+            print out
+        }' "$1"
+}
+
+# terms_reference_problems <file> — prints the problems found; empty means the reference is right.
+terms_reference_problems() {
+    local text ref_lines problems=""
+    text="$(directive_text "$1")"
+    ref_lines="$(printf '%s\n' "$text" | grep -F 'lang-directives.txt' || true)"
+    [ -n "$ref_lines" ] || problems="$problems [no lang-directives.txt reference in the directive text]"
+    if [ -n "$ref_lines" ] && ! printf '%s\n' "$ref_lines" | grep -qF 'TERMS'; then
+        problems="$problems [lang-directives.txt reference does not name the TERMS line]"
+    fi
+    if printf '%s\n' "$ref_lines" | grep -qE 'CONV_LANG|PLAN_LANG'; then
+        problems="$problems [lang-directives.txt reference names a language-bearing line]"
+    fi
+    printf '%s\n' "$text" | grep -qF 'combined-glossary.md' || problems="$problems [no combined-glossary.md reference in the directive text]"
+    printf '%s' "$problems"
+}
+
+check_terms_reference() {
+    local id="$1" file="$2" label="$3"
+    if [ ! -f "$file" ]; then
+        fail "$id: $label missing"
+        return
+    fi
+    local problems
+    problems="$(terms_reference_problems "$file")"
+    if [ -z "$problems" ]; then
+        pass "$id: $label applies the TERMS line and combined-glossary, not the CONV_LANG line"
+    else
+        fail "$id: $label terminology reference wrong" "$problems"
+    fi
+}
+
+test_ic_terms_reference() {
+    check_terms_reference "11" "$IC_MD" "skills/issue-create/SKILL.md"
+}
+
+test_survey_worker_terms_reference() {
+    check_terms_reference "12" "$SURVEY_WORKER_MD" "agents/issue-create-survey-worker.md"
+    # The worker's reference is a Rule line (free-text `reason`), placed under ## Rules.
+    local rules_ln ref_ln out_ln
+    rules_ln="$(grep -n '^## Rules' "$SURVEY_WORKER_MD" 2>/dev/null | head -n 1 | cut -d: -f1)"
+    out_ln="$(grep -n '^## Output contract' "$SURVEY_WORKER_MD" 2>/dev/null | head -n 1 | cut -d: -f1)"
+    ref_ln="$( [ -f "$SURVEY_WORKER_MD" ] && directive_text "$SURVEY_WORKER_MD" | grep -nF 'lang-directives.txt' | head -n 1 | cut -d: -f1)"
+    if [ -n "$rules_ln" ] && [ -n "$out_ln" ] && [ -n "$ref_ln" ] && [ "$rules_ln" -lt "$ref_ln" ] && [ "$ref_ln" -lt "$out_ln" ]; then
+        pass "12b: survey-worker TERMS reference sits under ## Rules"
+    else
+        fail "12b: survey-worker TERMS reference not under ## Rules" "rules=${rules_ln:-none} ref=${ref_ln:-none} output=${out_ln:-none}"
+    fi
+}
+
+# ── Test 13 (#2731): the TERMS line carries no {lang} — it never imposes a language ─
+test_terms_line_language_free() {
+    if [ ! -f "$LANG_DIRECTIVES_TXT" ]; then
+        fail "13: hooks/lib/lang-directives.txt missing"
+        return
+    fi
+    local terms_lines terms
+    terms_lines="$(grep -c '^TERMS=' "$LANG_DIRECTIVES_TXT" || true)"
+    terms="$(grep '^TERMS=' "$LANG_DIRECTIVES_TXT" | head -n 1)"
+    if [ "$terms_lines" != "1" ]; then
+        fail "13: lang-directives.txt must hold exactly one TERMS= line" "count=$terms_lines"
+    elif [ "$terms" = "TERMS=" ]; then
+        fail "13: TERMS line is empty"
+    elif printf '%s' "$terms" | grep -qF '{lang}'; then
+        fail "13: TERMS line contains {lang}" "$terms"
+    else
+        pass "13: TERMS line is non-empty and carries no {lang}"
+    fi
+}
+
+# ── Test 14 (#2731): the TERMS check rejects a mention that sits only in metadata or a comment ─
+test_terms_reference_ignores_comments() {
+    local tmp_dir ref
+    tmp_dir="$(mktemp -d)"
+    ref='Apply the TERMS line of hooks/lib/lang-directives.txt and the Writer directives in skills/_shared/combined-glossary.md to issue titles and bodies.'
+    printf -- '---\ndescription: %s\n---\n\n# Skill\n<!-- %s -->\nBody.\n<!--\n%s\n-->\n' "$ref" "$ref" "$ref" > "$tmp_dir/comment-only.md"
+    printf -- '---\nname: x\n---\n\n# Skill\n%s\n' "$ref" > "$tmp_dir/directive.md"
+    local comment_problems directive_problems
+    comment_problems="$(terms_reference_problems "$tmp_dir/comment-only.md")"
+    directive_problems="$(terms_reference_problems "$tmp_dir/directive.md")"
+    rm -rf "$tmp_dir"
+    if [ -z "$comment_problems" ]; then
+        fail "14: a frontmatter / HTML-comment-only TERMS mention passed the check"
+    elif [ -n "$directive_problems" ]; then
+        fail "14: control — the same sentence as a directive line was rejected" "$directive_problems"
+    else
+        pass "14: comment-only TERMS mention fails the check; the same sentence as a directive passes"
+    fi
+}
+
 test_reconcile_worker_exists
 test_reconcile_output_contract
 test_reconcile_worker_readonly
@@ -234,6 +349,10 @@ test_survey_worker_no_ask
 test_ic_phase3_confirm_reopen_makeparent
 test_ic_phase3_gate_conditions_documented
 test_ir_user_invocable_false
+test_ic_terms_reference
+test_survey_worker_terms_reference
+test_terms_line_language_free
+test_terms_reference_ignores_comments
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

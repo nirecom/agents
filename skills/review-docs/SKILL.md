@@ -22,12 +22,14 @@ Use after `/update-docs`, once doc/changelog edits are staged, before commit.
 ## Procedure
 
 RD-1. Run `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --all` for an advisory full-tree scan of size and heading-order issues.
-RD-2. Run `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --staged` to see exactly what the commit gate will block; exit 1 means a staged doc violates a HARD limit.
+RD-2. Run `bash "$AGENTS_MAIN_ROOT/bin/resolve-session-id"` as a standalone command, then `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --staged --session <its stdout>` to see exactly what the commit gate will block; exit 1 means a staged doc violates a HARD limit or the glossary provenance check blocks.
+   When `resolve-session-id` exits 2 (no session), omit `--session`; on any other non-zero exit, HALT and surface its stderr.
 RD-3. Fix each HARD failure — split an oversized file per Pattern A/C, or reorder README sections per the SSOT block — then re-run RD-2 until it exits 0.
+   With the docs staged, run the `--record` of `skills/_shared/glossary-drift-check.md` with `--stage docs` and resolve its findings there.
 
 ## Completion
 
-Emit only after RD-2 exits 0 (or nothing doc-related is staged, in which case the gate self-skips). As a standalone Bash call: `echo "<<WORKFLOW_MARK_STEP_review_docs_complete>>"`.
+Emit only after RD-2 exits 0 and the RD-3 glossary drift check leaves no unresolved finding (or nothing doc-related is staged, in which case the gate self-skips). As a standalone Bash call: `echo "<<WORKFLOW_MARK_STEP_review_docs_complete>>"`.
 
 If a doc review genuinely does not apply (no staged doc changes and none intended), skip instead: `echo "<<WORKFLOW_REVIEW_DOCS_NOT_NEEDED: reason>>"` (reason mandatory, >=3 non-space chars, no `>`).
 

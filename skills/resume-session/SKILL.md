@@ -15,7 +15,7 @@ Detects a `workflow-state` `in_progress` step or a `worktree-end` cleanup marker
 
 ### RSM-1 — Hard-fail check
 
-Call AskUserQuestion: "Confirm: resume interrupted workflow session?" with options `Resume` / `Cancel`.
+Call AskUserQuestion in CONV_LANG asking whether to resume the interrupted workflow session, with options `Resume` / `Cancel`.
 - If AskUserQuestion is unavailable (non-interactive context), abort immediately: output `Error: /resume-session requires an interactive session.` and stop.
 - If user picks `Cancel`, stop.
 
@@ -51,7 +51,7 @@ Parse stdout as JSON. Dispatch by `type` in RSM-4.
 | type | Action |
 |---|---|
 | `none` | Output "No interrupted workflow detected." and stop. |
-| `skill` | AskUserQuestion "Workflow paused at `<step>`. Re-run `/<skill>`?" (`Resume` / `Cancel`). On Resume: invoke `<skill>` skill. |
+| `skill` | AskUserQuestion in CONV_LANG whether to re-run `/<skill>` for the step paused at `<step>`, keeping step and skill names verbatim (`Resume` / `Cancel`). On Resume: invoke `<skill>` skill. |
 | `sentinel-wait` (step ≠ `user_verification`) | Display `hint`. AskUserQuestion: `Acknowledged (I'll handle manually)` / `Cancel`. No auto-emit, no auto-skip. |
 | `sentinel-wait` (step = `user_verification`) | Display: "user_verification pending. Emit `<<WORKFLOW_USER_VERIFIED: {reason}>>` manually when ready." AskUserQuestion: `Acknowledged` / `Cancel`. Never auto-emit or auto-advance. |
 

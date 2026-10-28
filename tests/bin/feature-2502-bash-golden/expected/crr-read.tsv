@@ -1,0 +1,73 @@
+tests/bin/crr/none.sh	FILE	none		
+tests/bin/crr/conforming.sh	FILE	conforming		
+tests/bin/crr/conforming.sh	CASE	alpha	bin/a.sh	7	10	helper_a,helper_b	
+tests/bin/crr/conforming.sh	CASE	beta	bin/b.sh	11	13		
+tests/bin/crr/malformed.sh	FILE	malformed	3	grammar
+tests/bin/crr/uncertain.sh	FILE	uncertain	5	depth
+tests/bin/crr/heredoc-pseudo.sh	FILE	none		
+tests/bin/crr/deps-heredoc.sh	FILE	conforming		
+tests/bin/crr/deps-heredoc.sh	CASE	a	bin/a.sh	4	9	real_fn	
+tests/bin/crr/deps-boundary.sh	FILE	conforming		
+tests/bin/crr/deps-boundary.sh	CASE	word-boundary	bin/a.sh	8	11	mk_more	
+tests/bin/crr/deps-boundary.sh	CASE	function-keyword	bin/a.sh	12	14	fn_kw	
+tests/bin/crr/leftover.sh	FILE	conforming		
+tests/bin/crr/leftover.sh	CASE	a	bin/a.sh	5	7	used_in_case	
+tests/bin/crr/self-impl.sh	FILE	none		
+tests/bin/crr/self-impl-clean.sh	FILE	none		
+tests/bin/crr/skip-narrow-dot-agents.sh	FILE	none		
+tests/bin/crr/skip-narrow-source-repo-root.sh	FILE	none		
+tests/bin/crr/skip-narrow-unquoted.sh	FILE	none		
+tests/bin/crr/skip-shared-harness.sh	FILE	none		
+tests/bin/crr/skip-section-runner.sh	FILE	none		
+tests/bin/crr/skip-narrow-in-heredoc.sh	FILE	none		
+tests/bin/crr/tab-in-name.sh	FILE	malformed	2	grammar
+tests/bin/vce/before.sh	FILE	none		
+tests/bin/vce/good.sh	FILE	conforming		
+tests/bin/vce/good.sh	CASE	a	bin/a.sh	6	8		
+tests/bin/vce/good.sh	CASE	b	bin/b.sh	10	12		
+tests/bin/vce/good-three.sh	FILE	conforming		
+tests/bin/vce/good-three.sh	CASE	a	bin/a.sh	6	9		
+tests/bin/vce/good-three.sh	CASE	b	bin/b.sh	11	13		
+tests/bin/vce/malformed.sh	FILE	malformed	5	grammar
+tests/bin/vce/uncertain2.sh	FILE	uncertain	8	depth
+tests/bin/vce/uncertain1.sh	FILE	uncertain	8	depth
+tests/bin/vce/leftover.sh	FILE	conforming		
+tests/bin/vce/leftover.sh	CASE	a	bin/a.sh	7	9		
+tests/bin/vce/leftover.sh	CASE	b	bin/b.sh	11	13		
+tests/bin/vce/deleted-not-target.sh	FILE	conforming		
+tests/bin/vce/deleted-not-target.sh	CASE	a	bin/a.sh	6	8		
+tests/bin/vce/deleted-is-target.sh	FILE	conforming		
+tests/bin/vce/deleted-is-target.sh	CASE	a	bin/a.sh	6	8		
+tests/bin/vce/deleted-is-target.sh	CASE	gone	bin/gone.sh	10	12		
+tests/bin/vce/target-not-in-header.sh	FILE	conforming		
+tests/bin/vce/target-not-in-header.sh	CASE	a	bin/a.sh	6	8		
+tests/bin/vce/target-not-in-header.sh	CASE	b	bin/b.sh	10	12		
+tests/bin/vce/target-not-in-header.sh	CASE	c	bin/c.sh	14	16		
+tests/bin/vce/merged-abc.sh	FILE	conforming		
+tests/bin/vce/merged-abc.sh	CASE	ab	bin/a.sh	6	8		
+tests/bin/vce/merged-abc.sh	CASE	c	bin/c.sh	10	12		
+tests/bin/vce/merged-missing.sh	FILE	conforming		
+tests/bin/vce/merged-missing.sh	CASE	ab	bin/a.sh	6	8		
+tests/bin/vce/no-harness.sh	FILE	conforming		
+tests/bin/vce/no-harness.sh	CASE	a	bin/a.sh	8	10	pass	
+tests/bin/vce/no-harness.sh	CASE	b	bin/b.sh	12	14	pass	
+tests/bin/vce/unguarded.sh	FILE	conforming		
+tests/bin/vce/unguarded.sh	CASE	a	bin/a.sh	7	9		
+tests/bin/vce/unguarded.sh	CASE	b	bin/b.sh	11	13		
+tests/bin/ec/plain.sh	FILE	none		
+tests/bin/ec/single.sh	FILE	none		
+tests/bin/ec/embedded.sh	FILE	conforming		
+tests/bin/ec/embedded.sh	CASE	block-1	bin/alpha.sh	7	9		
+tests/bin/ec/embedded.sh	CASE	block-2	bin/bravo.sh	11	13		
+tests/bin/ec/embedded-orphan.sh	FILE	conforming		
+tests/bin/ec/embedded-orphan.sh	CASE	block-1	bin/alpha.sh	7	9		
+tests/bin/ec/embedded-orphan.sh	CASE	block-2	bin/zulu.sh	11	13		
+tests/bin/fix-gh-native-path.sh	FILE	conforming		
+tests/bin/fix-gh-native-path.sh	CASE	native-path-table	bin/lib/native-path.sh	60	99	np_call,np_row	
+tests/bin/fix-gh-native-path.sh	CASE	issue-create-body-file	bin/github-issues/issue-create.sh	152	160	gh_check	
+tests/bin/fix-gh-native-path.sh	CASE	issue-body-append-body-file	bin/github-issues/issue-body-append.sh	162	175	is_abs_path,recorded_body_file,gh_check	
+tests/bin/fix-gh-native-path.sh	CASE	sibling-gh-file-args	bin/lib/native-path.sh	179	203		
+tests/bin/feature-2434-control-migration.sh	FILE	none		
+tests/bin/get-config-var-checkout-only.sh	FILE	conforming		
+tests/bin/get-config-var-checkout-only.sh	CASE	rtk-cmd-uses-only-its-own-checkout-copy	bin/rtk-cmd	73	80	make_checkout,check_row	
+tests/bin/get-config-var-checkout-only.sh	CASE	codex-timeout-uses-only-its-own-checkout-copy	bin/lib/codex-timeout.sh	82	89	make_checkout,check_row	

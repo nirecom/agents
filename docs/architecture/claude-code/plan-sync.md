@@ -4,7 +4,7 @@ Publishes each final session plan (`<sid>-intent.md`, `-outline.md`, `-detail.md
 private git remote so the plan can be read from the iOS/Android Claude apps or any
 browser, not only from the machine that wrote it (#2513).
 
-`<rootSid>-session-progress.md` ([progress-file.md](progress-file.md)) is synced the same way, but
+`<first_session_id>-session-progress.md` ([progress-file.md](progress-file.md)) is synced the same way, but
 silently: `hooks/show-plan-link.js` records its project host and pushes it on every
 Edit/Write inside the same sync budget, with no plan link and no turn marker (#2594). The
 remote's git history keeps every earlier version, which is the recovery path for a bad write.
@@ -158,7 +158,7 @@ reason, with a hint to run `bin/plan-sync-init`.
   it cannot (plan-sync off, not provisioned, host mismatch, …), the local path is the
   presentation and the content sha still catches any later edit
   ([settings/hooks.md](settings/hooks.md)).
-- **Breadcrumb `systemMessage`.** `show-plan-link.js` shows the user `Plan file:` plus a
+- **Breadcrumb `systemMessage`.** `show-plan-link.js` shows the user `[plan-file]` plus a
   `[plan-sync]` status line only when something needs attention: no URL for a reason other
   than the project-host verdict. A published plan or a held-back plan shows nothing extra.
 - **`bin/plan-link`.** `bin/plan-link [--session <id>] [--stage intent|outline|detail]` is a

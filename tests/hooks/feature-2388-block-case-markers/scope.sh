@@ -25,9 +25,20 @@ case_end
 case_begin "non-entrypoint-path-approves" "hooks/block-case-markers.js"
 # Placement or name alone rules these out; the three non-bash names sit off a
 # category root because a category-root one is an entrypoint since #2411.
+# The pester path gets a body whose targets are PowerShell code: since #2502 S4 the
+# language-match check judges every new tests/ file, and bash targets would be a
+# mismatch there. The body still has no markers, so the case-marker gate is what
+# would block it.
+sed 's#bin/a\.sh, bin/b\.sh#bin/a.ps1, bin/b.ps1#' "$BODIES/missing.sh" > "$BODIES/missing-ps1.txt"
+body_for() {
+  case "$1" in
+    *.Tests.ps1) printf '%s' "$BODIES/missing-ps1.txt" ;;
+    *) printf '%s' "$BODIES/missing.sh" ;;
+  esac
+}
 for rel in tests/hooks/suite/sub.sh tests/lib/extra.sh tests/run-all.sh tests/_archive/old.sh tests/hooks/suite/x.Tests.ps1 bin/tool.sh \
     tests/lib/test_x.py tests/hooks/suite/a.js tests/hooks/.sh tests/hooks/a.test.ts; do
-  mkpayload Write "$REPO_M" "$REPO_M/$rel" "content=@$BODIES/missing.sh"
+  mkpayload Write "$REPO_M" "$REPO_M/$rel" "content=@$(body_for "$rel")"
   hk_run
   assert_decision "non-entrypoint-path-approves $rel" approve
 done
@@ -37,7 +48,7 @@ for lib in harness.ps1 harness.py harness.js; do
   printf 'stub\n' > "$REPO/tests/lib/$lib"
 done
 for rel in tests/hooks/suite/x.Tests.ps1 tests/lib/test_x.py tests/hooks/suite/a.js; do
-  mkpayload Write "$REPO_M" "$REPO_M/$rel" "content=@$BODIES/missing.sh"
+  mkpayload Write "$REPO_M" "$REPO_M/$rel" "content=@$(body_for "$rel")"
   hk_run
   assert_decision "non-entrypoint-path-approves with helper libraries $rel" approve
 done

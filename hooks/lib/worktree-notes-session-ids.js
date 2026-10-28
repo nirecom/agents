@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync } = require("./limited-child-process");
 
 const NOTES_BASENAME = "WORKTREE_NOTES.md";
 

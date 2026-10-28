@@ -11,6 +11,7 @@ MARK_HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js"
 CODEX_BIN="$SCRIPT_CHECKOUT_ROOT/bin/review-code-codex"
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/fixture-template.sh"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 
 PASS=0
 FAIL=0

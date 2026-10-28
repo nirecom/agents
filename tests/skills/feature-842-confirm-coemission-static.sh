@@ -1,8 +1,9 @@
 #!/bin/bash
-# Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md
+# Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md, hooks/stop-confirm-plan-guard/block-reasons.js, hooks/stop-confirm-plan-guard/undecidable.js
 # Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard, scope:common
 # Static wiring: outline/detail mark-step emission order, the shared confirm-plan.md
-# protocol, stop-confirm-plan-guard.js CONFIRM_<STAGE>_RE_DQ for all three stages,
+# protocol, CONFIRM_<STAGE>_RE_DQ for all three stages across stop-confirm-plan-guard.js
+# and its private modules (hooks/stop-confirm-plan-guard/*.js),
 # and the retired PR-created confirmation in commit-push.
 # L3 gap: a live stall-prevention run; mitigation: hook-registration preflight.
 set -u
@@ -109,17 +110,31 @@ done
 
 # ---------------------------------------------------------------------------
 # 7. stop-confirm-plan-guard.js Layer 2: references all CONFIRM_<STAGE>_RE_DQ
-#    constants so it can dispatch follow-up checks per stage.
+#    constants so it can dispatch follow-up checks per stage. The guard set is
+#    the entrypoint plus its private modules (rules/coding/file-split.md).
 # ---------------------------------------------------------------------------
-echo "=== 7. stop-confirm-plan-guard.js: CONFIRM_<STAGE>_RE_DQ references ==="
+echo "=== 7. stop-confirm-plan-guard.js + private modules: CONFIRM_<STAGE>_RE_DQ references ==="
 STOP_GUARD="$REPO_ROOT/hooks/stop-confirm-plan-guard.js"
+STOP_GUARD_DIR="$REPO_ROOT/hooks/stop-confirm-plan-guard"
+STOP_GUARD_SET=("$STOP_GUARD")
+for guard_module in "$STOP_GUARD_DIR"/*.js; do
+    if [ -f "$guard_module" ]; then
+        STOP_GUARD_SET+=("$guard_module")
+    fi
+done
+
+# fixed-string match anywhere in the guard set, returns 0/1
+guard_set_has() {
+    grep -F -q -- "$1" "${STOP_GUARD_SET[@]}" 2>/dev/null
+}
+
 if require_file "$STOP_GUARD"; then
-    if has_fixed "CONFIRM_INTENT_RE_DQ" "$STOP_GUARD" \
-       && has_fixed "CONFIRM_OUTLINE_RE_DQ" "$STOP_GUARD" \
-       && has_fixed "CONFIRM_DETAIL_RE_DQ" "$STOP_GUARD"; then
-        pass "stop-confirm-plan-guard.js references all three CONFIRM_<STAGE>_RE_DQ"
+    if guard_set_has "CONFIRM_INTENT_RE_DQ" \
+       && guard_set_has "CONFIRM_OUTLINE_RE_DQ" \
+       && guard_set_has "CONFIRM_DETAIL_RE_DQ"; then
+        pass "stop-confirm-plan-guard.js + private modules reference all three CONFIRM_<STAGE>_RE_DQ"
     else
-        fail "stop-confirm-plan-guard.js missing one of CONFIRM_{INTENT,OUTLINE,DETAIL}_RE_DQ"
+        fail "stop-confirm-plan-guard.js + private modules missing one of CONFIRM_{INTENT,OUTLINE,DETAIL}_RE_DQ"
     fi
 fi
 
@@ -262,15 +277,15 @@ if require_file "$SETTINGS_JSON"; then
 fi
 
 # ---------------------------------------------------------------------------
-# Case H: stop-confirm-plan-guard.js must NOT contain CONFIRM_PR_CREATED_RE_DQ
+# Case H: stop-confirm-plan-guard.js + private modules must NOT contain
+#         CONFIRM_PR_CREATED_RE_DQ (same guard set as check 7)
 # ---------------------------------------------------------------------------
-echo "=== Case H: stop-confirm-plan-guard.js: CONFIRM_PR_CREATED_RE_DQ absent ==="
-STOP_GUARD="$REPO_ROOT/hooks/stop-confirm-plan-guard.js"
+echo "=== Case H: stop-confirm-plan-guard.js + private modules: CONFIRM_PR_CREATED_RE_DQ absent ==="
 if require_file "$STOP_GUARD"; then
-    if has_fixed "CONFIRM_PR_CREATED_RE_DQ" "$STOP_GUARD"; then
-        fail "stop-confirm-plan-guard.js still contains CONFIRM_PR_CREATED_RE_DQ"
+    if guard_set_has "CONFIRM_PR_CREATED_RE_DQ"; then
+        fail "stop-confirm-plan-guard.js + private modules still contain CONFIRM_PR_CREATED_RE_DQ"
     else
-        pass "stop-confirm-plan-guard.js: CONFIRM_PR_CREATED_RE_DQ absent"
+        pass "stop-confirm-plan-guard.js + private modules: CONFIRM_PR_CREATED_RE_DQ absent"
     fi
 fi
 

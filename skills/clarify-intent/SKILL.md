@@ -66,7 +66,10 @@ CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
 CI-3c. Decide the terms this session newly introduces; check each against the combined glossary per `skills/_shared/combined-glossary.md` and reuse the existing term when it is a rewording.
 Pick each term's category per `rules/docs/glossary.md`; CI-4 records the new terms in `## Glossary`.
 
-CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Use `$CLAUDE_CODE_SESSION_ID` as `<session-id>`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+CI-4. Write the intent (Write tool, no mkdir) to the path `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` prints (`<PLANS_DIR>/<first_session_id>-intent.md`); when the CLI fails with a session id set, do not write — halt and report its stderr. With no session id, write `<PLANS_DIR>/YYYYMMDD-HHMMSS-intent.md`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+
+CI-4a. Self-review the intent.md body with `skills/_shared/combined-glossary.md` (reviewer directives); raise each drift as a tagged concern per `skills/_shared/glossary-drift-check.md`.
+Rerun CI-4a whenever a CI-5 Revise changes intent.md.
 
 CI-5. Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
 Apply the rest of the `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On `GATE_ACTION=ask`: follow the three CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, run Completion and co-emit the `make-outline-plan` Skill invocation. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol CPA-1.

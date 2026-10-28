@@ -1,8 +1,9 @@
 "use strict";
 
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 const { hasStagedDocChanges } = require("../lib/staged-doc-changes");
+const { SESSION_ID_VALID_RE } = require("../workflow-state/state-io");
 
 const GATES_SCRIPT = path.join(__dirname, "..", "..", "bin", "review-doc-gates");
 
@@ -16,12 +17,15 @@ const GATES_SCRIPT = path.join(__dirname, "..", "..", "bin", "review-doc-gates")
 function checkReviewDocs(step, stepState, opts) {
   if (step !== "review_docs") return { action: "not_handled" };
 
-  const { repoDir } = opts || {};
+  const { repoDir, sessionId } = opts || {};
 
   // Nothing staged to review → skip regardless of recorded status.
   if (!hasStagedDocChanges(repoDir)) return { action: "skip" };
 
-  const res = spawnSync("bash", [GATES_SCRIPT, "--staged"], {
+  // An unvalidated sid is not forwarded; the provenance CLI then resolves the session itself.
+  const args = [GATES_SCRIPT, "--staged"];
+  if (typeof sessionId === "string" && SESSION_ID_VALID_RE.test(sessionId)) args.push("--session", sessionId);
+  const res = spawnSync("bash", args, {
     cwd: repoDir,
     encoding: "utf8",
   });

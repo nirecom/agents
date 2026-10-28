@@ -72,22 +72,29 @@ process.stdout.write(JSON.stringify(j));
 " -- "$cmd" "$sid" "$cwd" 2>/dev/null
 }
 
+# #2529: review_tests reaches complete only with a current glossary_check record. With no
+# session worktree in the state, the record and the hook's boundary both resolve the worktree
+# from the cwd git root, so the hook runs inside the fixture repo and a case that expects
+# complete seeds `glossary_check_record <sid> <repo> tests` first.
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+
 run_mark() {
     local repo="$1" json="$2"
     local repo_n; repo_n="$(np "$repo")"
-    echo "$json" | run_with_timeout 30 env \
+    echo "$json" | ( cd "$repo" && run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$repo_n" \
         WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" \
-        node "$MARK_HOOK" 2>/dev/null
+        node "$MARK_HOOK" 2>/dev/null )
 }
 
 run_mark_rc() {
     local repo="$1" json="$2"
     local repo_n; repo_n="$(np "$repo")"
-    echo "$json" | run_with_timeout 30 env \
+    echo "$json" | ( cd "$repo" && run_with_timeout 30 env \
         CLAUDE_PROJECT_DIR="$repo_n" \
         WORKFLOW_STATE_DIR="$WORKFLOW_STATE_DIR" \
-        node "$MARK_HOOK" >/dev/null 2>/dev/null
+        node "$MARK_HOOK" >/dev/null 2>/dev/null )
     echo $?
 }
 
@@ -136,6 +143,7 @@ if [ -z "$FP_C1" ]; then
 else
     SID_C1="hc1-$$"
     write_state_json "$SID_C1"
+    glossary_check_record "$SID_C1" "$REPO_C1" tests
     SENTINEL_C1="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$FP_C1>>\""
     run_mark "$REPO_C1" "$(build_mark_json "$SENTINEL_C1" "$SID_C1" "$REPO_C1_N")" >/dev/null
 
@@ -246,6 +254,7 @@ if [ -z "$FP_W1" ]; then
 else
     SID_W1="hw1-$$"
     write_state_json "$SID_W1"
+    glossary_check_record "$SID_W1" "$REPO_W1" tests
     SENTINEL_W1="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=$FP_W1 warnings=2>>\""
     run_mark "$REPO_W1" "$(build_mark_json "$SENTINEL_W1" "$SID_W1" "$REPO_W1_N")" >/dev/null
 
@@ -381,8 +390,10 @@ echo "=== markReviewTestsComplete: new signature records manifest and tombstones
 
 SID_S1="hs1-$$"
 MANIFEST_ARG='{"tests/foo.sh":"abc123def456abcd1234567890abcdef"}'
+REPO_S1="$(setup_repo "h-new-signature")"
 
-NEW_SIG_OUT=$(run_with_timeout 15 node -e "
+# Runs inside REPO_S1: the glossary_check record (#2529) and the completion resolve it alike.
+NEW_SIG_OUT=$(cd "$REPO_S1" && run_with_timeout 30 node -e "
 try {
   var S = require('$AGENTS_N/hooks/workflow-state/state-io.js');
   var sid = '$SID_S1';
@@ -392,6 +403,10 @@ try {
   S.markStep(sid, 'review_tests', 'pending', {token:'oldtoken', reopen_reason:'write-code-stale'});
   var seeded = (S.readState(sid).steps || {}).review_tests || {};
   if(!('token' in seeded) || !('reopen_reason' in seeded)) { process.stdout.write('SEED_FAILED:' + JSON.stringify(seeded)); process.exit(0); }
+  var rec = require('child_process').spawnSync(process.execPath,
+    ['$AGENTS_N/bin/check-glossary-drift', '--session', sid, '--stage', 'tests', '--record'],
+    { encoding: 'utf8', timeout: 20000, cwd: process.cwd(), env: Object.assign({}, process.env, { CLAUDE_PROJECT_DIR: process.cwd() }) });
+  if(rec.status !== 0) { process.stdout.write('GLOSSARY_RECORD_FAILED:' + rec.status + ':' + rec.stderr); process.exit(0); }
   var files = $MANIFEST_ARG;
   // New signature: markReviewTestsComplete(sessionId, manifestFiles, extraFields)
   S.markReviewTestsComplete(sid, files, {});

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/supervisor-codex-input/assemble.js
-// Tags: TL1, hooks, supervisor, codex-input, progress-file, defang, prompt-injection, bounded-read, scope:common
+// Tags: TL1, hooks, supervisor, codex-input, progress-file, defang, prompt-injection, bounded-read, plan-artifact-owner, regression-2748, scope:common
 // The PROGRESS block of the supervisor codex input: session-progress.md is model-written, so it is
 // read with a bounded read (never the whole file) and every fence variant inside it is neutralised.
 // Bounded read is observed by wrapping fs.openSync/readSync/readFileSync in-process: a read of the
@@ -203,6 +203,88 @@ caseBegin("hard-linked-progress-is-unavailable", "hooks/lib/supervisor-codex-inp
     check("C5: a hard-linked session-progress.md's content never reaches the assembled input", () => (text.includes("spd-hardlink-secret-marker") ? "marker leaked into the assembled input" : undefined));
     check("C5: the PROGRESS block reads (none), as for an unavailable progress file", () => ((progressBlock(text) || "").trim() === "(none)" ? undefined : `block=${JSON.stringify(progressBlock(text))}`));
   }
+}
+caseEnd();
+
+// #2748 R6: a wsid outside SESSION_ID_VALID_RE never reaches a plans path, so a file planted at
+// <plans>/../<x>-intent.md cannot be pulled into the supervisor input.
+function planBlock(text) {
+  const s = text.indexOf("[PLAN ARTIFACTS START]\n");
+  const e = text.indexOf("\n[PLAN ARTIFACTS END]");
+  return s < 0 || e < 0 ? null : text.slice(s + "[PLAN ARTIFACTS START]\n".length, e);
+}
+caseBegin("invalid-wsid-yields-empty-plan-artifacts", "hooks/lib/supervisor-codex-input/assemble.js");
+{
+  const sid = "spd-r6";
+  const escape = "spd-r6-escape";
+  fs.writeFileSync(path.join(process.env.WORKFLOW_PLANS_DIR, "..", `${escape}-intent.md`), "# Intent\nspd-r6-escaped-marker\n");
+  let text = "";
+  check("R6: assemble with a traversal wsid does not throw", () => {
+    text = assemble({ mode: "alert", sid, wsid: `../${escape}`, transcript: transcriptFor(sid), planScope: "all" }).text;
+  });
+  check("R6: the planted <plans>/../<x>-intent.md never reaches the assembled input", () => (text.includes("spd-r6-escaped-marker") ? "escaped marker leaked" : undefined));
+  check("R6: the PLAN ARTIFACTS block reads (none)", () => ((planBlock(text) || "").trim() === "(none)" ? undefined : `block=${JSON.stringify(planBlock(text))}`));
+}
+caseEnd();
+
+// #2748 O5-O8: the PLAN ARTIFACTS block resolves each plan kind through the owner resolution, so a
+// session-downstream's supervisor input carries the first generation's plans (headed with the
+// resolved file name) instead of an empty block. The session chain is built with the real applyInheritance.
+const F = require("./feature-2304-inheritance-state-copy/fixture");
+const PLANS = process.env.WORKFLOW_PLANS_DIR;
+function renderPlans(sid, extra) {
+  const text = assemble(Object.assign({ mode: "alert", sid, wsid: sid, transcript: transcriptFor(sid), planScope: "all" }, extra || {})).text;
+  return planBlock(text) || "";
+}
+function writePlan(sid, kind) {
+  const p = path.join(PLANS, `${sid}-${kind}.md`);
+  fs.writeFileSync(p, `# ${kind} of ${sid}\nmarker-${sid}-${kind}\n`);
+  return p;
+}
+// buildChain(prefix) — the session chain A (all three plans) -> B (no plan) -> C (no plan), real applyInheritance hops.
+function buildChain(prefix) {
+  const [A, B, C] = ["a", "b", "c"].map((g) => `${prefix}-${g}`);
+  F.seedDownstream(A);
+  for (const k of ["intent", "outline", "detail"]) writePlan(A, k);
+  for (const [down, up] of [[B, A], [C, B]]) {
+    const res = F.mod("hooks/workflow-state/inheritance/apply").applyInheritance(down, F.seedDownstream(down), up);
+    if (!res || res.ok === false) throw new Error(`applyInheritance(${down}, ${up}) failed: ${JSON.stringify(res)}`);
+  }
+  return { A, B, C };
+}
+const headed = (block, sid, kind) => block.includes(`--- ${sid}-${kind}.md ---`) && block.includes(`marker-${sid}-${kind}`);
+
+caseBegin("plan-artifacts-carry-first-generation-plans", "hooks/lib/supervisor-codex-input/assemble.js");
+{
+  const { A, C } = buildChain("o5");
+  const block = renderPlans(C);
+  for (const k of ["intent", "outline", "detail"]) {
+    check(`O5: the block carries ${A}-${k}.md with its header and body`, () => (headed(block, A, k) ? undefined : `block=${JSON.stringify(block)}`));
+  }
+  check("O5: no header names the session-downstream's own C-*.md", () => (block.includes(`--- ${C}-`) ? `block=${JSON.stringify(block)}` : undefined));
+  const intentOnly = renderPlans(C, { planScope: "intent" });
+  check("O6: planScope intent carries only A's intent", () => (headed(intentOnly, A, "intent") &&
+    !intentOnly.includes(`${A}-outline.md`) && !intentOnly.includes(`${A}-detail.md`) ? undefined : `block=${JSON.stringify(intentOnly)}`));
+}
+caseEnd();
+
+caseBegin("plan-artifacts-read-first-session-name-only", "hooks/lib/supervisor-codex-input/assemble.js");
+{
+  const { A, C } = buildChain("o7");
+  writePlan(C, "intent");
+  const block = renderPlans(C);
+  check("O7: the session-downstream's own-sid intent is ignored", () => (!block.includes(`${C}-intent.md`) && !block.includes(`marker-${C}-intent`) ? undefined : `block=${JSON.stringify(block)}`));
+  check("O7: the first_session_id intent, outline and detail are carried", () => (headed(block, A, "intent") && headed(block, A, "outline") && headed(block, A, "detail") ? undefined : `block=${JSON.stringify(block)}`));
+}
+caseEnd();
+
+caseBegin("plan-artifacts-dedupe-artifact-argument", "hooks/lib/supervisor-codex-input/assemble.js");
+{
+  const { A, C } = buildChain("o8");
+  const detail = path.join(PLANS, `${A}-detail.md`);
+  const block = renderPlans(C, { artifact: detail });
+  check("O8: A's detail is carried under its resolved header", () => (headed(block, A, "detail") ? undefined : `block=${JSON.stringify(block)}`));
+  check("O8: the artifact argument naming the same file adds no second copy", () => (count(block, `marker-${A}-detail`) === 1 ? undefined : `copies=${count(block, `marker-${A}-detail`)}`));
 }
 caseEnd();
 

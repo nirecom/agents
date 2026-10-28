@@ -14,13 +14,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # Seeds a realistic mid-session state: gated approvals, several complete steps with
 # annotations, and every top-level setting RESET_FROM used to lose.
-SEED_JS="$PRE$APPROVE_GATED_JS"'
+SEED_JS="$PRE$APPROVE_GATED_JS$GLOSSARY_JS"'
 S.markStep(sid, "workflow_init", "complete");
-S.markStep(sid, "clarify_intent", "complete");
+complete_gated(sid, "clarify_intent");
 S.markStep(sid, "research", "skipped", { skip_reason: "nothing to survey" });
-S.markStep(sid, "outline", "complete");
-S.markStep(sid, "detail", "complete");
-S.markStep(sid, "review_tests", "complete", { review_scope_manifest: {v:1,files:{"tests/f.sh":"tok-1"}}, wsid: "wsid-1" });
+complete_gated(sid, "outline");
+complete_gated(sid, "detail");
+complete_gated(sid, "review_tests", { review_scope_manifest: {v:1,files:{"tests/f.sh":"tok-1"}}, wsid: "wsid-1" });
 S.recordSessionModel(sid, { id: "claude-opus-5", source: "transcript" });
 S.setLastPushedSha(sid, "0".repeat(40));
 { const st = S.readState(sid); st.closes_issues = [1733]; st.deliverable_type = "wf-code"; S.writeState(sid, st); }
@@ -261,9 +261,13 @@ const statusesOf = (steps) => {
   for (const k of Object.keys(steps)) out[k] = steps[k].status;
   return out;
 };
-for (const s of S.VALID_STEPS) {
-  if (s !== "final_report") S.markStep(sid, s, "complete");
-}
+// #2529: the two glossary-gated steps SEED_JS leaves pending need their own record.
+glossary_record(sid, "review_security", "review_docs");
+in_glossary_repo(() => {
+  for (const s of S.VALID_STEPS) {
+    if (s !== "final_report") S.markStep(sid, s, "complete");
+  }
+});
 const beforeStatuses = JSON.stringify(statusesOf(S.readState(sid).steps));
 '"$(reset_to final_report 'redo the report')"'
 const st = S.readState(sid);

@@ -13,7 +13,8 @@ const ROOT = path.resolve(__dirname, "..", "..", "..");
 const mod = (rel) => require(path.join(ROOT, rel));
 
 const FK = "fk-2709";
-const SENT = "WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED";
+// #2597: renamed from WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED (BLOCK and WARN share one acceptance).
+const SENT = "WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED";
 
 function make({ TMP, CFG, eq, ok, show }) {
   const S = mod("hooks/workflow-state/state-io");

@@ -1,5 +1,5 @@
 "use strict";
-// Shared #2729 fixture: presentation turns, the Stop hook and confirm-checkpoint run as child
+// Shared #2729 fixture: the presentation turn, the Stop hook and confirm-checkpoint run as child
 // processes against a per-call config root (.env) and the publish-mode preload, plus raw access
 // to the presentation receipt and the supervisor findings. Builds on the #2650 fixture.
 // Requires WORKFLOW_STATE_DIR and WORKFLOW_PLANS_DIR pinned by the calling test.
@@ -18,7 +18,8 @@ const DEFAULT_CFG = CE.confirmEnvRoot(CFG_BASE, BASE_VARS);
 // cfg(over) -> a config root whose .env is BASE_VARS with `over` applied.
 const cfg = (over) => (over ? CE.confirmEnvRoot(CFG_BASE, Object.assign({}, BASE_VARS, over)) : DEFAULT_CFG);
 
-// envFor({cfg, mode, fault}) -> child env: the config root, the publish-mode preload, no session id.
+// envFor({cfg, mode, fault, env}) -> child env: the config root, the publish-mode preload, no session id;
+// `env` adds per-call variables (CC_UNPUBLISHED_STAGE, STOP_CONFIRM_CONTINUE_T0_OFFSET_MS) last.
 function envFor(o) {
   const opt = o || {};
   const env = CE.childEnvWith(opt.cfg || DEFAULT_CFG);
@@ -26,6 +27,9 @@ function envFor(o) {
   env.CC_PUBLISH_MODE = opt.mode || "published";
   if (opt.fault) env.CC_FAULT = opt.fault; else delete env.CC_FAULT;
   env.NODE_OPTIONS = X.nodeOptions([PRELOAD]);
+  delete env.CC_UNPUBLISHED_STAGE;
+  delete env.STOP_CONFIRM_CONTINUE_T0_OFFSET_MS;
+  if (opt.env) Object.assign(env, opt.env);
   return env;
 }
 

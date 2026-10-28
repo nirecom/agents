@@ -11,6 +11,7 @@
 // docs/architecture/claude-code/worker-dispatch/commit-push.md
 
 const path = require("path");
+const { performance } = require("perf_hooks");
 
 const { readEnvFile } = require("../../../../hooks/lib/load-env");
 const { getSessionStateDir } = require("../../../../hooks/workflow-state/state-io/state-root");
@@ -46,6 +47,11 @@ function homeDir() {
   return process.env.HOME || process.env.USERPROFILE || "";
 }
 
+// The script checkout .env as a map; also the source of the commit timeout limit.
+function readCheckoutEnv(ctx) {
+  return readEnvFile(path.join(ctx.anchors.scriptCheckoutRoot, ".env")) || {};
+}
+
 // Each of the six is resolved to a concrete value here — never read from
 // process.env — with the documented default computed when no source names one.
 // The four that name a session, a checkout, or the worktree-enforcement mode
@@ -56,7 +62,7 @@ function homeDir() {
 // resolution". readEnvFile returns null for a missing or unreadable file, which
 // is treated exactly like an empty map.
 function resolveGateEnv(payload, ctx) {
-  const cfg = readEnvFile(path.join(ctx.anchors.scriptCheckoutRoot, ".env")) || {};
+  const cfg = readCheckoutEnv(ctx);
   return {
     // Per-session routed dir (#2511); envFallback:false — process.env is never consulted.
     WORKFLOW_STATE_DIR: getSessionStateDir(payload.session_id, {
@@ -89,15 +95,20 @@ function isProtectedBranch(branch, defaultBranches) {
 // `envScope` defaults to the EMPTY set, not to the worker's full declared set:
 // the SSH signing socket must reach only the network calls, never `git commit`
 // or a repo-configured hook (core.hooksPath) a plain commit can also trigger.
-function runGit(ctx, payload, args, log, input, envScope) {
+//
+// `timeoutMs` is given only by the commit step (its commit timeout limit); any
+// other value keeps GIT_TIMEOUT_MS.
+function runGit(ctx, payload, args, log, input, envScope, timeoutMs) {
   let res = null;
+  // Monotonic clock: a wall-clock step must not move the commit timeout decision.
+  const startedAt = performance.now();
   try {
     const opts = {
       anchors: ctx.anchors,
       command: "git",
       args,
       cwd: payload.worktree_path,
-      timeoutMs: GIT_TIMEOUT_MS,
+      timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : GIT_TIMEOUT_MS,
       envScope: envScope || [],
     };
     if (input !== undefined) opts.input = input;
@@ -107,7 +118,7 @@ function runGit(ctx, payload, args, log, input, envScope) {
     return null;
   }
   log.push(`$ git ${args.join(" ")} -> status=${res.status}`, res.stdout, res.stderr);
-  return res;
+  return { ...res, elapsedMs: Math.round(performance.now() - startedAt) };
 }
 
 function runScript(ctx, payload, scriptKey, args, log, envScope) {
@@ -213,6 +224,7 @@ function runGate(ctx, payload, gateEnv, gitArgs, log) {
 module.exports = {
   firstLine,
   isProtectedBranch,
+  readCheckoutEnv,
   resolveGateEnv,
   runGate,
   runGit,

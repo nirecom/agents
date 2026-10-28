@@ -104,17 +104,6 @@ function scanText(text, threshold) {
   const t = parseMaxLines(threshold);
   const runs = [];
   let longest = 0;
-  if (typeof text !== "string" || text.length === 0) {
-    return { runs, count: 0, longest };
-  }
-
-  // A leading BOM belongs to the file, not to line 1's content.
-  const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-  const lines = body.split("\n");
-  // split() invents a trailing empty element for a newline-terminated file.
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-
-  let inBlock = false;
   let run = 0;
   let first = 0;
   let last = 0;
@@ -127,6 +116,33 @@ function scanText(text, threshold) {
     run = 0;
   };
 
+  for (const { lineNo, kind } of classifyLines(text)) {
+    if (kind === "comment") {
+      if (run === 0) first = lineNo;
+      run++;
+      last = lineNo;
+    } else if (kind === "code") {
+      flush();
+    }
+    // kind === "neutral" bridges the run without touching it.
+  }
+  flush();
+
+  return { runs, count: runs.length, longest };
+}
+
+// classifyLines(text) -> [{ lineNo, kind }] with kind comment / neutral / code (see scanText).
+function classifyLines(text) {
+  const out = [];
+  if (typeof text !== "string" || text.length === 0) return out;
+
+  // A leading BOM belongs to the file, not to line 1's content.
+  const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const lines = body.split("\n");
+  // split() invents a trailing empty element for a newline-terminated file.
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+
+  let inBlock = false;
   for (let i = 0; i < lines.length; i++) {
     const lineNo = i + 1;
     let s = lines[i];
@@ -158,22 +174,13 @@ function scanText(text, threshold) {
     } else {
       kind = "code";
     }
-
-    if (kind === "comment") {
-      if (run === 0) first = lineNo;
-      run++;
-      last = lineNo;
-    } else if (kind === "code") {
-      flush();
-    }
-    // kind === "neutral" bridges the run without touching it.
+    out.push({ lineNo, kind });
   }
-  flush();
-
-  return { runs, count: runs.length, longest };
+  return out;
 }
 
 module.exports = {
+  classifyLines,
   DEFAULT_MAX_LINES,
   EXCLUDED_PATH_SEGMENTS,
   NEUTRAL_NOOP_TOKENS,

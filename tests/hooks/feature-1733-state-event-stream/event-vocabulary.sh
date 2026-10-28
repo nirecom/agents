@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1733-state-event-stream/event-vocabulary.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js
-# Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, pwsh-not-required, TL2
+# Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, regression-2748, pwsh-not-required, TL2
 #
 # EVENT_KINDS and PERSISTED_TOP_LEVEL_KEYS are covered by ITERATION over the exported
 # constants, never by a hand-picked sample: a new member with no table row fails the
@@ -179,17 +179,19 @@ const bad = [];
 // approval-gated (#1133): APPROVE_GATED_JS seeded a plan_approval for both above, so
 // their "complete" transition below satisfies the completion-approval precondition
 // the same way every other kind-vocabulary assertion in this file does.
+// #2529: the six glossary-gated steps likewise carry a glossary_check record (GLOSSARY_JS).
 const C = require("./hooks/workflow-state/state-io/core");
-(C.VALID_STEPS || []).forEach((s) => {
+glossary_record(sid, ...Object.keys(GCR.STAGE_OF_STEP));
+in_glossary_repo(() => (C.VALID_STEPS || []).forEach((s) => {
   if (!accepts(mk("step_status", { step: s }))) bad.push("step:" + s + ":rejected");
-});
+}));
 ["not_a_step", "Research", "", null].forEach((s, i) => {
   if (!rejects(mk("step_status", { step: s }))) bad.push("badstep" + i + ":accepted");
 });
 report(bad);
 JS
 )
-    nodejs "$SID" "$PRE$VOCAB_JS$APPROVE_GATED_JS$_ev_script"
+    nodejs "$SID" "$PRE$VOCAB_JS$APPROVE_GATED_JS$GLOSSARY_JS$_ev_script"
     assert_eq "EV6/status-domain" "OK" "$NODE_OUT"
 fi
 case_end
@@ -251,13 +253,13 @@ fi
 case_end
 
 case_begin "ev9-persisted-keys-set-equality" "hooks/workflow-state/state-io/projection.js"
-echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twenty-one documented keys (v5, #2527; #2304 adds upstream_session_id/upstream_copy_seq; #2311 adds previous_session_ids) =="
+echo "== EV9: PERSISTED_TOP_LEVEL_KEYS is exactly the twenty-two documented keys (v5, #2527; #2304 adds upstream_session_id/upstream_copy_seq; #2311 adds previous_session_ids; #2748 adds first_session_id) =="
 if run_case "EV9/persisted-keys-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const P = require("./hooks/workflow-state/state-io/projection");
 const want = ["auto_merge_pr", "auto_merge_pr_origin", "auto_merge_pr_source", "closes_issues", "created_at", "current", "deliverable_type", "delivery_path",
-  "delivery_path_origin", "events", "last_pushed_sha", "merge_base_baseline",
+  "delivery_path_origin", "events", "first_session_id", "last_pushed_sha", "merge_base_baseline",
   "previous_session_ids", "project_management_type", "session_id", "session_start_context", "session_worktree",
   "upstream_copy_seq", "upstream_session_id", "verbose_prompt", "version"].sort();
 const got = Array.from(P.PERSISTED_TOP_LEVEL_KEYS || []).slice().sort();
@@ -265,7 +267,7 @@ console.log(got.length + " " + (got.join(",") === want.join(",") ? "MATCH" : "GO
 JS
 )
     nodejs "$SID" "$PRE$_ev_script"
-    assert_eq "EV9/persisted-keys-set-equality" "21 MATCH" "$NODE_OUT"
+    assert_eq "EV9/persisted-keys-set-equality" "22 MATCH" "$NODE_OUT"
 fi
 case_end
 

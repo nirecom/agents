@@ -16,17 +16,17 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-rev
 ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" outline intent)" || exit 4
 rwc_resolve security-plan review-plan-security
 
-# Owner-resolved plans (#2633): a resumed session reviews/reads its upstream's files. Only the
-# basename comes from bin/plan-artifact-path, so the path keeps PLANS_DIR's own spelling.
+# Plans are named after first_session_id (#2748). Only the basename comes from
+# bin/plan-artifact-path, so the path keeps PLANS_DIR's own spelling; no own-sid fallback.
 owned_plan() {
   local p
-  p="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+  p="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || return 1
   p="${p##*[/\\]}"
-  [[ "$p" == *"-$1.md" ]] || p="$SESSION_ID-$1.md"
+  [[ "$p" == *"-$1.md" ]] || return 1
   printf '%s' "$PLANS_DIR/$p"
 }
-DRAFT_FILE="$(owned_plan detail)"
-INTENT_FILE="$(owned_plan intent)"
+DRAFT_FILE="$(owned_plan detail)" || { echo "review-plan-security: cannot resolve the detail path" >&2; exit 4; }
+INTENT_FILE="$(owned_plan intent)" || { echo "review-plan-security: cannot resolve the intent path" >&2; exit 4; }
 
 # Fingerprint the draft plan file by its git object SHA (content hash). Any real
 # edit to the plan flips it; an untouched file does not.

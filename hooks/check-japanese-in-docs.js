@@ -7,11 +7,13 @@ const { hasCommandHead } = require("./lib/command-head");
 const { hasCJK } = require("./lib/detect-cjk");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { armDecisionTimeLimit } = require("./lib/decision-time-limit");
 
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
 const hookInput = readHookInput();
+armDecisionTimeLimit({ hookName: "check-japanese-in-docs" });
 if (hookInput.kind !== "ok") {
   try {
     fs.writeSync(2, readFailOpenDiagnostic("check-japanese-in-docs", hookInput, "check skipped") + "\n");

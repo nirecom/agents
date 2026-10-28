@@ -5,7 +5,7 @@
 #
 # Shared harness for the #1733 event-stream suite. SOURCED, never run standalone.
 # ISOLATION: state dir, AGENTS_MAIN_ROOT, HOME and plans dir all point at per-file temp dirs.
-# NO SKIP PATH: a missing module must surface as a FAILING assertion; report_totals turns
+# NO SKIP PATH: a missing module must surface as a FAILING assertion; report_totals converts
 # any SKIP into a FAIL and finish() exits 0 or 1 only (77 is the dispatcher's node-absent code).
 
 set -uo pipefail
@@ -257,6 +257,27 @@ const PAF = require("./tests/lib/plan-approval-fixture");
 for (const s of CA.APPROVAL_GATED_STEPS) {
   PAF.approveLive(sid, s);
 }
+'
+
+# #2529: a glossary-gated step (clarify_intent, outline, detail, review_tests, review_security,
+# review_docs) reaches `complete` only with a current glossary_check record. Every record binds
+# to GLOSSARY_REPO, a throwaway repo whose index is empty, so the real worktree's index and
+# glossary never enter a fingerprint. The completion boundary recomputes the fingerprint from
+# the cwd git root, so the completing call runs inside in_glossary_repo as well.
+GLOSSARY_REPO="$TMPROOT/glossary-repo"
+mk_git_repo "$GLOSSARY_REPO" main || { echo "FAIL: common.sh could not build the glossary fixture repo"; exit 1; }
+GLOSSARY_REPO_NATIVE="$(native_path "$GLOSSARY_REPO")"
+export GLOSSARY_REPO_NATIVE
+GLOSSARY_JS='const GCR = require("./tests/lib/glossary-check-record");
+const GLOSSARY_REPO = process.env.GLOSSARY_REPO_NATIVE;
+const in_glossary_repo = (fn) => {
+  const prev = process.cwd();
+  process.chdir(GLOSSARY_REPO);
+  try { return fn(); } finally { process.chdir(prev); }
+};
+const glossary_record = (s, ...steps) => { for (const st of steps) GCR.recordGlossaryCheck(s, st, GLOSSARY_REPO); };
+const complete_gated = (s, step, extra) =>
+  GCR.completeWithRecord(s, step, GLOSSARY_REPO, (a, b, c) => S.markStep(a, b, c, extra));
 '
 
 # One diagnostic line per case file (gates nothing — see the contract at the top).

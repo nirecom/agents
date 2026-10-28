@@ -423,4 +423,69 @@ p_state "P8 duplicate name then balance keeps balance (last line)" "dup-then-bal
 p_state "P8 duplicate name with quote-risk depth stays uncertain" "dup-quote-risk-depth.sh" uncertain 12 depth
 case_end
 
-unset P1_REPO P2_ROWS P4_ROWS P5_ROWS _row _l _f _m _n _r _u
+# ── P9: a case owns its end line (no other command after the end marker) ───
+# Each row writes a two-case file whose first end marker (line 4) carries <tail>. Only an optional
+# `|| true` and redirections may follow the marker; anything else would be cut with the case: grammar.
+P9_END="case""_end"  # split so this line is not read as a marker
+p9_fx() {
+    printf '%s\n' '#!/usr/bin/env bash' "$P_DUP_BEGIN \"a\" \"bin/a.sh\"" 'echo a' "$P9_END$2" \
+        "$P_DUP_BEGIN \"b\" \"bin/b.sh\"" 'echo b' "$P9_END" | p_fx "$1"
+}
+
+case_begin "end-marker-owns-its-line" "bin/lib/test-retire-predicate/case-parser.sh"
+# Columns tail^verdict^why, split on '^' (never in a tail; tails hold '|' and an empty tail must
+# stay a field, which a TAB would collapse). A line starting with '#' is a comment row.
+_i=0
+while IFS='^' read -r _t _v _w; do
+    [[ -z "$_t$_v" || "$_t" == '#'* ]] && continue
+    _i=$((_i + 1))
+    _l="P9 $_v: $_w"
+    p9_fx "p9-$_i.sh" "$_t"
+    if [[ "$_v" == accept ]]; then
+        p_check "$_l" "p9-$_i.sh" 0 "" "" 0
+        assert_eq "$_l case names" "a b" "$(join_sp "${TRP_CASE_NAMES[@]:-}")"
+        assert_eq "$_l end lines" "4 7" "$(join_sp "${TRP_CASE_END_LINES[@]:-}")"
+    else
+        p_check "$_l" "p9-$_i.sh" 1 4 grammar 0
+        assert_eq "$_l yields no cases" "0" "$TRP_CASE_COUNT"
+    fi
+done <<'TABLE'
+# reject: another command follows the marker and would be cut with the case
+ ; echo live^reject^spaced semicolon
+;echo live^reject^bare semicolon
+ && echo live^reject^and-list
+ &^reject^background ampersand
+ & # bg^reject^background ampersand before a comment
+ || touch survivor^reject^or-list running a side effect
+ || echo x^reject^or-list running a command other than true
+ | tee survivor^reject^pipe into a command
+ |& cat^reject^pipe with stderr into a command
+ || true || x^reject^a second or-list clause after or-list true
+>out.log^reject^no whitespace after the marker so re_end does not read it as an end marker
+ >$(cmd)^reject^redirect target is a command substitution
+ >`cmd`^reject^redirect target is a backtick command substitution
+ >"$(touch survivor)"^reject^double-quoted target holding a command substitution
+ >"`touch survivor`"^reject^double-quoted target holding a backtick substitution
+ <<EOF^reject^heredoc opened on the end line
+# accept: the marker owns its line
+^accept^plain
+ || true^accept^or-list true
+ >/dev/null 2>&1^accept^stdout and stderr to /dev/null
+ 2>&1^accept^stderr to stdout
+ &>/dev/null^accept^both-stream redirect
+ # comment^accept^comment
+ # ; not a command && neither^accept^separator only inside the comment
+ >"a;b"^accept^double-quoted target holding a semicolon
+ >'a&b'^accept^single-quoted target holding an ampersand
+ >'$(cmd)'^accept^single-quoted target is literal
+ >/dev/null 2>&1 || true^accept^redirections then or-list true
+ || true 2>/dev/null^accept^or-list true then a redirection
+ <input.txt^accept^stdin redirected from a file
+ 2>>err.log^accept^stderr appended to a file
+ 2>out.log^accept^stderr written to a file
+ &>>all.log^accept^both streams appended to a file
+ || rc=$?^accept^or-list capturing the exit status
+TABLE
+case_end
+
+unset P1_REPO P2_ROWS P4_ROWS P5_ROWS P9_END _row _l _f _m _n _r _u _t _v _w _i

@@ -5,7 +5,7 @@
 // zero context while the flag is off — rules/*.md would load unconditionally
 // into every session.
 //
-// Consumers: hooks/session-start.js, hooks/post-compact.js.
+// Consumers: hooks/session-start.js, hooks/post-compact.js, hooks/subagent-start.js.
 
 const { readState, SESSION_ID_VALID_RE } = require("../workflow-state");
 

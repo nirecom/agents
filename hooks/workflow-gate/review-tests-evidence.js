@@ -7,7 +7,7 @@
 // Scope: every staged path (`--diff-filter=d`, so deletions never reach the OID
 // lookup — issue #1068) for which isReviewScopeExcludedPath is false.
 
-const { execFileSync } = require("child_process");
+const { execFileSync } = require("../lib/limited-child-process");
 const crypto = require("crypto");
 
 function toSlash(p) {

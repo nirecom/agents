@@ -2,8 +2,39 @@
 // Staged-change evidence helpers: detect whether tests, docs, or any files are
 // staged — provides the evidential basis for workflow step verification decisions.
 
-const { execSync, execFileSync } = require("child_process");
+const { execSync, execFileSync } = require("../lib/limited-child-process");
+const { checkDecisionTime, isDecisionTimeLimitArmed } = require("../lib/decision-time-limit");
 const path = require("path");
+
+const readStagedNames = (dir) => execSync("git diff --cached --name-only", {
+  cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+});
+
+// One `git diff --cached --name-only` per directory per hook process (#2676): the gate asks
+// the same question up to four times per commit. A failure is remembered and thrown again.
+// Only an armed (single-decision) hook process caches; any other caller reads afresh.
+const stagedNameCache = new Map();
+function stagedNameOutput(dir) {
+  if (!isDecisionTimeLimitArmed()) return readStagedNames(dir);
+  const key = path.resolve(String(dir));
+  if (!stagedNameCache.has(key)) {
+    try {
+      stagedNameCache.set(key, { out: readStagedNames(dir) });
+    } catch (error) {
+      stagedNameCache.set(key, { error });
+    }
+  }
+  const cached = stagedNameCache.get(key);
+  if (cached.error) throw cached.error;
+  return cached.out;
+}
+
+// Each staged name passes the decision time limit check before it is judged.
+function checkedNames(out) {
+  const names = out.trim().split("\n");
+  names.forEach(() => checkDecisionTime("staged evidence scan"));
+  return names;
+}
 
 // Evidence-based check: staged files contain tests/ changes.
 //
@@ -16,10 +47,8 @@ const path = require("path");
 // worktree-local test staging mechanism, mirror the docs treatment here.
 function hasStagedTestChanges(repoDir) {
   try {
-    const out = execSync("git diff --cached --name-only", {
-      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
-    });
-    return out.trim().split("\n").some((f) => f.startsWith("tests/") || f.startsWith("test/"));
+    const out = stagedNameOutput(repoDir);
+    return checkedNames(out).some((f) => f.startsWith("tests/") || f.startsWith("test/"));
   } catch (e) {
     process.stderr.write(`workflow-gate: hasStagedTestChanges failed (cwd=${repoDir}): ${e.message}\n`);
     return false;
@@ -37,10 +66,8 @@ const DOCS_ONLY_ALLOWLIST = /^(docs\/.+\.md|(README|CHANGELOG|CONTRIBUTING|LICEN
 // Evidence-based check: ALL staged files are human-facing docs (no behavior code)
 function isDocsOnlyStaged(repoDir) {
   try {
-    const out = execSync("git diff --cached --name-only", {
-      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
-    });
-    const files = out.trim().split("\n").filter(Boolean);
+    const out = stagedNameOutput(repoDir);
+    const files = checkedNames(out).filter(Boolean);
     return files.length > 0 && files.every((f) => DOCS_ONLY_ALLOWLIST.test(f));
   } catch (e) {
     process.stderr.write(`workflow-gate: isDocsOnlyStaged failed (cwd=${repoDir}): ${e.message}\n`);
@@ -94,10 +121,8 @@ function dropWriteCodeStaged(dir, candidates, snapshot) {
 function hasStagedDocChanges(repoDir, opts = {}) {
   const hasDocs = (dir, withSnapshot) => {
     try {
-      const out = execSync("git diff --cached --name-only", {
-        cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
-      });
-      const candidates = out.trim().split("\n").filter((f) => f.startsWith("docs/") || /\.md$/i.test(f));
+      const out = stagedNameOutput(dir);
+      const candidates = checkedNames(out).filter((f) => f.startsWith("docs/") || /\.md$/i.test(f));
       const kept = withSnapshot ? dropWriteCodeStaged(dir, candidates, opts.writeCodeSnapshot) : candidates;
       return kept.length > 0;
     } catch (e) {
@@ -112,10 +137,7 @@ function hasStagedDocChanges(repoDir, opts = {}) {
 // Return true if dir has any staged changes.
 function hasStagedChanges(dir) {
   try {
-    const out = execSync("git diff --cached --name-only", {
-      cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
-    });
-    return out.trim().length > 0;
+    return stagedNameOutput(dir).trim().length > 0;
   } catch (e) {
     return false;
   }
@@ -136,4 +158,4 @@ function hasUnstagedTrackedChanges(repoDir) {
   }
 }
 
-module.exports = { DOCS_ONLY_ALLOWLIST, hasStagedTestChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedDocChanges, hasStagedChanges, hasUnstagedTrackedChanges };
+module.exports = { DOCS_ONLY_ALLOWLIST, stagedOids, hasStagedTestChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedDocChanges, hasStagedChanges, hasUnstagedTrackedChanges };

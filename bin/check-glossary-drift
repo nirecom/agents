@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+"use strict";
+// bin/check-glossary-drift — the deterministic spelling-drift check of one glossary stage (#2529 S3).
+// Usage: check-glossary-drift --session <sid> --stage <intent|outline|detail|tests|code|docs> [--record]
+// Exit: 0 no unresolved finding; 1 unresolved findings; 2 usage error, unreadable artifact or
+// fingerprint unavailable. --record writes the stage's glossary_check record (findings, the
+// grants bound to the current fingerprint, every ledger grant).
+
+const path = require("path");
+const ROOT = path.join(__dirname, "..");
+const { STAGE_STEP, loadStageInputs, fingerprintOf } = require(path.join(ROOT, "hooks/workflow-state/glossary-check/scope"));
+const { RECORD_KEY, checkRecordEvents } = require(path.join(ROOT, "hooks/workflow-state/glossary-check/record"));
+const { scanStageInputs } = require(path.join(ROOT, "bin/lib/glossary-drift"));
+const { unsafeTermChars, describeTermChars } = require(path.join(ROOT, "hooks/lib/glossary-term"));
+
+const USAGE = "usage: check-glossary-drift --session <sid> --stage <" + Object.keys(STAGE_STEP).join("|") + "> [--record]";
+
+function parseArgs(argv) {
+  const out = { record: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--record") out.record = true;
+    else if ((a === "--session" || a === "--stage") && i + 1 < argv.length) out[a.slice(2)] = argv[++i];
+    else return { error: `unknown or incomplete argument: ${a}` };
+  }
+  if (!out.session) return { error: "--session is required" };
+  if (!out.stage || !Object.prototype.hasOwnProperty.call(STAGE_STEP, out.stage)) return { error: "--stage is missing or unknown" };
+  return out;
+}
+
+function fail(code, message) {
+  process.stderr.write(`check-glossary-drift: ${message}\n`);
+  process.exit(code);
+}
+
+const recordIn = (projection, step) => {
+  const entry = projection && projection.steps && projection.steps[step];
+  return (entry && entry[RECORD_KEY]) || null;
+};
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.error) fail(2, `${args.error}\n${USAGE}`);
+  const ws = require(path.join(ROOT, "hooks/workflow-state"));
+  if (!ws.SESSION_ID_VALID_RE.test(args.session)) fail(2, `invalid session id: ${args.session}`);
+  const { stage, session: sid } = args;
+  const step = STAGE_STEP[stage];
+
+  const loaded = loadStageInputs(sid, stage, {});
+  if (!loaded.ok) fail(2, `cannot read the ${stage} inputs (${loaded.error}${loaded.detail ? `: ${loaded.detail}` : ""})`);
+  const mi = loaded.artifact && loaded.artifact.mergeIncoming;
+  if (mi && mi.state === "merging" && mi.excluded > 0) {
+    process.stderr.write(`check-glossary-drift: merge in progress; ${mi.excluded} staged path(s) equal to MERGE_HEAD left out of the ${stage} scan\n`);
+  } else if (mi && mi.state === "undecidable") {
+    process.stderr.write(`check-glossary-drift: merge state undecidable (${mi.reason}); scanning every staged path\n`);
+  }
+  const fp = fingerprintOf(loaded);
+  if (!fp.ok) fail(2, `fingerprint unavailable (${fp.error})`);
+  const findings = scanStageInputs(loaded);
+
+  let value;
+  if (args.record) {
+    try {
+      ws.appendEvents(sid, (_events, current) => {
+        const evs = checkRecordEvents(recordIn(current, step), stage, fp, findings);
+        value = evs[0].value;
+        return evs;
+      });
+    } catch (e) {
+      fail(2, `failed to write the glossary_check record — ${e && e.message ? e.message : e}`);
+    }
+  } else {
+    value = checkRecordEvents(recordIn(ws.readState(sid), step), stage, fp, findings)[0].value;
+  }
+
+  const granted = new Set(value.grants.map((g) => g.norm));
+  const open = findings.filter((f) => !granted.has(f.norm));
+  for (const f of open) {
+    process.stdout.write(`  DRIFT: ${stage} "${f.variant}" -> "${f.term}" at ${f.path}:${f.line}\n`);
+    const unsafe = unsafeTermChars(f.term);
+    if (unsafe.length > 0) {
+      process.stdout.write(`    accept: the term has a forbidden character (${describeTermChars(unsafe)}), so it cannot be accepted with GLOSSARY_ACCEPTED — fix the heading or record it in the intent glossary\n`);
+    } else {
+      process.stdout.write(`    accept: echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=${f.term} stage=${stage} — <reason>>>"\n`);
+    }
+  }
+  if (args.record) process.stdout.write(`check-glossary-drift: recorded glossary_check for ${step} (${open.length} open)\n`);
+  process.exit(open.length > 0 ? 1 : 0);
+}
+
+main();

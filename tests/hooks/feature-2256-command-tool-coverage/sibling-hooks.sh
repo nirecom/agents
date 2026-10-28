@@ -54,7 +54,7 @@ confirm_env_set "$WORK/cfg"
 for s in $SHAPES; do
     p="$(payload "$s" "$SENTINEL_UV" "$repo" "$SID")"
     assert_match "11-14 ($s): the user-verification context message is emitted" \
-        "$(run_hook show-user-verified-context.js "$p")" 'User verification context:'
+        "$(run_hook show-user-verified-context.js "$p")" '\[user-verified\] staged='
 done
 
 # --- 15: the same hook stays silent for a non-command tool ---

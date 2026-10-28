@@ -5,7 +5,7 @@
 // inconsistency scan so it cannot false-abort (#1148). NEVER writes state
 // (Approach B: read-time derivation); the caller persists only evidence
 // resolutions, and only after the scan passes. ORDERING (do not reorder):
-// 1 effectiveStatus input-gate → 2 veto de-skip → 3 post-veto reset / unapproved-complete →
+// 1 effectiveStatus input-gate → 2 veto de-skip → 3 post-veto reset / unapproved-complete / glossary-check refusal (not once post-delivery, #2796) →
 // 3b delivery boundary (navigate only) → 4 evidence(+approval) resolution → 5 write_code resume mask (second pass,
 // overrides 4). Detail: effective-state/write-code-resume.js and the #1681/
 // #1665 suites. Resolution stops at the first unsettled step unless opts.resolveAll.
@@ -15,6 +15,7 @@ const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver"
 const { readSkipVerdict } = require("./skip-verdict");
 const { applyWriteCodeResume } = require("./effective-state/write-code-resume");
 const { navigateBoundaryStatus } = require("./effective-state/delivery-boundary");
+const { recordedStatusOf, isPostDeliverySession } = require("./effective-state/post-delivery");
 const { isStepRequired, canonicalStepName } = require("./step-table");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const {
@@ -61,7 +62,10 @@ function canResolveFromEvidence(step, state, sessionId, opts) {
   if (!evidenced) return false;
   if (!isApprovalGatedStep(step)) return true;
   const verdict = evaluateCompletionApproval(sessionId, step, state);
-  return verdict.approved === true;
+  if (verdict.approved !== true) return false;
+  // #2529: the same glossary-check predicate the appendEvents boundary applies (lazy: avoids a cycle).
+  const { evaluateGlossaryCheck } = require("./glossary-check/record");
+  return evaluateGlossaryCheck(sessionId, step, state, { repoDir: opts && opts.repoDir }).ok === true;
 }
 
 // isUnapprovedGatedComplete(step, raw, state, sessionId) → true when a gated step is recorded
@@ -75,6 +79,32 @@ function isUnapprovedGatedComplete(step, raw, state, sessionId) {
   } catch (_) {
     return false;
   }
+}
+
+// glossaryRefusalOfGatedComplete(step, raw, state, sessionId, opts) → the glossary-check refusal
+// code (stale / findings-unresolved / fingerprint-unavailable) of a plan stage recorded complete
+// with a glossary_check record, else null (#2529). Read-time only, like the approval re-check
+// above. A returned unreadable-inputs verdict is a refusal; only a thrown error is fail-open.
+function glossaryRefusalOfGatedComplete(step, raw, state, sessionId, opts) {
+  if (raw !== "complete" || !isApprovalGatedStep(step)) return null;
+  try {
+    const sid = sessionId || (state && state.session_id) || null;
+    const { glossaryRefusalOfComplete } = require("./glossary-check/record");
+    return glossaryRefusalOfComplete(sid, step, state, { repoDir: opts && opts.repoDir }) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// gatedCompleteRefusal(step, raw, state, sessionId, opts) → why a gated step recorded complete
+// does not read as complete ("unapproved-complete" or a glossary-check code), else null. The one
+// predicate every reader that picks the current step or answers "already complete" shares (#2529).
+// A post-delivery session is never refused: a delivered change is not re-approved against a
+// moving main glossary (#2796).
+function gatedCompleteRefusal(step, raw, state, sessionId, opts) {
+  if (isPostDeliverySession(state)) return null;
+  if (isUnapprovedGatedComplete(step, raw, state, sessionId)) return "unapproved-complete";
+  return glossaryRefusalOfGatedComplete(step, raw, state, sessionId, opts);
 }
 
 // recordedEventsOf(state) → the events actually recorded for this state, or
@@ -142,8 +172,6 @@ function hasGenuineRecordedComplete(state, step) {
 // eligible (inheritance is a convenience, never a safety gate).
 function evaluateResumability(state) {
   try {
-    const steps = (state && state.steps) || {};
-
     // S0: nothing has happened yet — there is nothing to carry over.
     //
     // Judged on the RECORDED stream, not on `state.steps`: readState() runs
@@ -156,7 +184,7 @@ function evaluateResumability(state) {
 
     // S1: the session's change was delivered (#2527: approval alone no longer
     // finishes a session — merge_to_main is the step after it).
-    if (steps.merge_to_main && steps.merge_to_main.status === "complete") {
+    if (recordedStatusOf(state, "merge_to_main") === "complete") {
       return { eligible: false, reason: "delivered" };
     }
 
@@ -240,10 +268,13 @@ function reconcileEffectiveState(state, sessionId, opts = {}) {
       status = "pending";
       resolvedFrom = "post-veto-reset";
       derived = true;
-    } else if (status === "complete" && isUnapprovedGatedComplete(step, raw, state, sessionId)) {
-      status = "pending";
-      resolvedFrom = "unapproved-complete";
-      derived = true;
+    } else if (status === "complete") {
+      const refusal = gatedCompleteRefusal(step, raw, state, sessionId, opts);
+      if (refusal) {
+        status = "pending";
+        resolvedFrom = refusal;
+        derived = true;
+      }
     }
 
     // 3b. delivery boundary — navigation callers only (./effective-state/delivery-boundary.js).
@@ -298,6 +329,7 @@ module.exports = {
   APPROVAL_GATED_STEPS,
   effectiveStatus,
   isUnapprovedGatedComplete,
+  gatedCompleteRefusal,
   reconcileEffectiveState,
   evaluateResumability,
   evaluateInheritance,

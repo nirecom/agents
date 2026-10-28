@@ -129,7 +129,10 @@ function armCore(sessionId, opts) {
   // into armCore, so the second Stop finds phase=pending and exits here (#2256 S2-c).
   // #2698 exception: a shown arm replaces an unshown run — no agent ever ran it, so the
   // finalize CAS cannot collide; its judgment set is carried into the new run.
-  const prior = opts.launch_shown === true ? ledger.unshownRun(audit) : null;
+  // #2534 exception: supersede_unsettled replaces even a shown or in_progress run — the caller
+  // has decided that run cannot settle the current gate, so returning it would only re-hold.
+  const prior = opts.supersede_unsettled === true ? ledger.inFlightRun(audit)
+    : opts.launch_shown === true ? ledger.unshownRun(audit) : null;
   if (!prior && (audit.audit_phase === "pending" || audit.audit_phase === "in_progress")) {
     return {
       ok: true,
@@ -346,14 +349,19 @@ function recordBlockOverride(sessionId, opts = {}) {
     const state = readStateOrInit(sessionId);
     const audit = auditOf(state);
     const nowIso = new Date().toISOString();
+    const orNull = (v) => (v === undefined ? null : v);
+    // #2597: verdict + snapshot (artifact_keys, trigger_key) let the null-key path pin the acceptance.
     ledger.appendBlockOverride(audit, {
-      run_id: opts.audit_run_id === undefined ? null : opts.audit_run_id,
-      freshness_key: opts.freshness_key === undefined ? null : opts.freshness_key,
-      reason: opts.reason === undefined ? null : opts.reason,
-      actor: opts.actor === undefined ? null : opts.actor,
+      run_id: orNull(opts.audit_run_id),
+      verdict: orNull(opts.verdict),
+      freshness_key: orNull(opts.freshness_key),
+      artifact_keys: orNull(opts.artifact_keys),
+      trigger_key: orNull(opts.trigger_key),
+      reason: orNull(opts.reason),
+      actor: orNull(opts.actor),
       recorded_at: nowIso,
     });
-    // An override overrules a standing BLOCK audit hold; that is a governance act
+    // An acceptance overrules a standing BLOCK / WARN audit verdict; that is a governance act
     // worth an audit-trail finding, not a silent state edit.
     if (!state.layer1 || typeof state.layer1 !== "object" || Array.isArray(state.layer1)) state.layer1 = { findings: [] };
     if (!Array.isArray(state.layer1.findings)) state.layer1.findings = [];

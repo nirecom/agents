@@ -30,12 +30,11 @@ Steps 14–18 are the **release phase**: one step, one skill, each skill complet
 (`push_branch` → `/commit-push`, `user_verification` → `/get-release-approval`, `merge_to_main` → `/merge-to-main`,
 `cleanup` → `/worktree-end`, `pre_final_report_gate` → `/session-close`). Which steps a session owes
 is read from the [step table](#the-step-table-deliverable-type-x-pm-type), not from per-consumer checks;
-the per-type rendering is under [Deliverable types](#deliverable-types-in-next-step---list) below.
+the per-type rendering is under [Per-deliverable-type rendering](#per-deliverable-type-rendering-in-next-step---list) below.
 
 ## The step table (deliverable type x PM type)
 
-Terms: [glossary-user.md](../../glossary-user.md#deliverable-type). A session is described by three facts
-(its **session profile**, `hooks/workflow-state/session-profile.js`):
+Terms: [glossary/user.md](../../glossary/user.md#deliverable-type). A session is described by three facts (its **session profile**, `hooks/workflow-state/session-profile.js`):
 
 | Fact | Question | Values | State field |
 |---|---|---|---|
@@ -48,7 +47,7 @@ which steps each deliverable type requires, of the delivery path that drops a st
 `push_branch` and `cleanup`; the order never changes), and of each step's commit-gate attribute
 (`required`, `exempt`, or `deferred-in-worktree`, consumed by `hooks/workflow-gate/commit-gate-steps.js`).
 `effective-state.js` reads the table once per entrypoint instead of each consumer computing its own
-wf-meta check. A recorded state field outranks the live config, so flipping `ENFORCE_WORKTREE`
+WF-META check. A recorded state field outranks the live config, so flipping `ENFORCE_WORKTREE`
 mid-session never changes what the session owes; only the `WORKFLOW_OFF` marker overrides the PM type.
 
 ## State file
@@ -206,8 +205,8 @@ silently disabling the gate:
 
 `reset-sentinel` and `session-inherit` are legacy read-only (`HASH_EXEMPT_SOURCES`): old records still
 approve, nothing writes them (#2709, #2633). `RESET_FROM` refuses when a gated step before the reset
-point is unapproved; a supervisor BLOCK is overridden only by the ask-gated
-`<<WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED: ...>>` ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)).
+point is unapproved; a supervisor WARN / BLOCK is accepted only by the ask-gated
+`<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: ...>>` ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)).
 
 Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rejection,
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its
@@ -239,8 +238,9 @@ session resumes from the recorded position. That reason is a Stop exemption
 
 Progress gates: `gate-plan-skill-advance.js` only deters (it denies the next skill on
 `unapproved` and passes every unreadable state), while the side-effect owners fail closed —
-the completion sentinels and `--advance` record nothing without approval, and
+each completion sentinel and `--advance` record nothing without approval, and
 `run-completion.sh` stops on anything but `APPROVAL=approved` from `bin/workflow/check-plan-approval`.
+Six steps also need a fresh glossary drift-check record to complete: [glossary-check.md](glossary-check.md).
 
 `session_start_context` records where the session began and never changes; `current.cwd` /
 `current.git_branch` track where it is now, folded from `worktree` events. `git_branch` is
@@ -450,10 +450,10 @@ the gate, not in the file.
 `clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending` in the effective view, evidence already resolves it to `complete` inside the snapshot — no write-back occurs (Approach B). This resolves compaction gaps where the step completed but the marker was lost.
 
 `research`, `outline`, `detail`, and `write_tests` can be bypassed with `skipped` status via
-their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"`)
+their respective `NOT_NEEDED` sentinel (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"`)
 when CLAUDE.md skip conditions are met.
 
-### Deliverable types in `next-step --list`
+### Per-deliverable-type rendering in `next-step --list`
 
 `bin/workflow/next-step --list` renders the full step plan for the session's deliverable type.
 The standard **WF-CODE** rendering has every step active (a `direct` delivery path additionally

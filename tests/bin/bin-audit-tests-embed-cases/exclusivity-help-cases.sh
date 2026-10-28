@@ -27,6 +27,24 @@ EX_TABLE=(
   "2|--embed-apply WORKDIR --order frequency"
   "2|--embed-apply WORKDIR --dry-run"
   "ok|--embed-cases --apply --band-size 1"
+  "2|--only-file tests/bin/t-alpha.sh"
+  "2|--embed-cases --only-file tests/bin/t-alpha.sh --band-size 1"
+  "2|--embed-cases --only-file tests/bin/t-alpha.sh --order priority"
+  "2|--embed-apply WORKDIR --only-file tests/bin/t-alpha.sh"
+  "2|--embed-cases --only-file tests/bin/t-alpha.sh --only-file tests/bin/t-bravo.sh"
+  "2|--embed-cases --dry-run --only-file"
+  "ok|--embed-cases --dry-run --only-file tests/bin/t-alpha.sh"
+  "note|--embed-cases --dry-run --fix-headers --only-file tests/bin/t-alpha.sh"
+)
+
+# <args>|<message>: the tec_die text each --only-file exit-2 row of EX_TABLE must print.
+EX_ONLY_MSG=(
+  "--only-file tests/bin/t-alpha.sh|--only-file needs --embed-cases"
+  "--embed-cases --only-file tests/bin/t-alpha.sh --band-size 1|--band-size has no meaning with --only-file"
+  "--embed-cases --only-file tests/bin/t-alpha.sh --order priority|--order has no meaning with --only-file"
+  "--embed-apply WORKDIR --only-file tests/bin/t-alpha.sh|--embed-apply takes no other stage flag"
+  "--embed-cases --only-file tests/bin/t-alpha.sh --only-file tests/bin/t-bravo.sh|--only-file given more than once"
+  "--embed-cases --dry-run --only-file|--only-file needs a value"
 )
 
 # ex_row <entrypoint> <row> — runs one table row and asserts its expectation.
@@ -62,6 +80,19 @@ case_begin "exclusivity-table-audit-tests-common" "bin/audit-tests-common.sh"
 for _row in "${EX_TABLE[@]}"; do ex_row "$AUDIT_COMMON" "$_row"; done
 case_end
 
+case_begin "only-file-rejection-messages" "bin/lib/test-embed-cases.sh"
+for _s in "$AUDIT" "$AUDIT_COMMON"; do
+  for _row in "${EX_ONLY_MSG[@]}"; do
+    read -r -a _args <<<"${_row%%|*}"
+    _args=("${_args[@]//WORKDIR/$WORKFLOW_PLANS_DIR/sweep-tests-embed/ex-run}")
+    ec_run "$EX_REPO" "$_s" "${_args[@]}"
+    _label="EXO $(basename "$_s") [${_row%%|*}]"
+    check_eq "$_label exits 2" "2" "$RC"
+    if [[ "$ERR" == *"ERROR: embed-cases: ${_row#*|}"* ]]; then pass "$_label prints: ${_row#*|}"; else fail "$_label prints: ${_row#*|}" "err=${ERR:0:300}"; fi
+  done
+done
+case_end
+
 case_begin "exclusivity-rejects-leave-repo-clean" "bin/lib/test-embed-cases.sh"
 check_eq "EX the whole table leaves no worktree change in the fixture" "" "$(git -C "$EX_REPO" status --porcelain)"
 case_end
@@ -75,6 +106,7 @@ for _s in "$AUDIT" "$AUDIT_COMMON"; do
   else
     fail "H1 $(basename "$_s") --embed-cases -h prints the embed usage" "out=${OUT:0:300}"
   fi
+  if [[ "$OUT" == *"--only-file"* ]]; then pass "H1 $(basename "$_s") --embed-cases -h mentions --only-file"; else fail "H1 $(basename "$_s") --embed-cases -h mentions --only-file" "out=${OUT:0:300}"; fi
   if printf '%s\n' "$OUT" | grep -q '^BAND'; then fail "H1 $(basename "$_s") -h plans nothing" "out=${OUT:0:200}"; else pass "H1 $(basename "$_s") -h plans nothing"; fi
 done
 case_end
@@ -82,7 +114,7 @@ case_end
 case_begin "entrypoint-help-lists-embed-cases" "bin/audit-tests.sh"
 ec_run "$EX_REPO" "$AUDIT" --help
 check_eq "H2 audit-tests.sh --help exits 0" "0" "$RC"
-for _w in "--embed-cases" "--band-size" "--order frequency|priority" "sweep-tests-embed-cases.md" "Unit=case"; do
+for _w in "--embed-cases" "--band-size" "--order frequency|priority" "sweep-tests-embed-cases.md" "Unit=case" "--only-file"; do
   if [[ "$OUT" == *"$_w"* ]]; then pass "H2 audit-tests.sh --help mentions $_w"; else fail "H2 audit-tests.sh --help mentions $_w" "out=${OUT:0:400}"; fi
 done
 case_end
@@ -90,7 +122,7 @@ case_end
 case_begin "entrypoint-common-help-lists-embed-cases" "bin/audit-tests-common.sh"
 ec_run "$EX_REPO" "$AUDIT_COMMON" --help
 check_eq "H3 audit-tests-common.sh --help exits 0" "0" "$RC"
-for _w in "--embed-cases" "--band-size" "--order frequency|priority" "sweep-tests-embed-cases.md" "unit=case"; do
+for _w in "--embed-cases" "--band-size" "--order frequency|priority" "sweep-tests-embed-cases.md" "unit=case" "--only-file"; do
   if [[ "$OUT" == *"$_w"* ]]; then pass "H3 audit-tests-common.sh --help mentions $_w"; else fail "H3 audit-tests-common.sh --help mentions $_w" "out=${OUT:0:400}"; fi
 done
 case_end

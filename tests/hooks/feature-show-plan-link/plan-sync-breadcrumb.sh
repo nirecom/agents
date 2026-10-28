@@ -9,7 +9,10 @@ psf_setup || { fail "H setup — psf_setup failed"; return 0; }
 trap 'psf_cleanup; rm -rf "$PLANS_DIR" "$WORKFLOW_DIR_TEST" "$CFG_DIR_TEST"' EXIT
 SPS_HOOK="$(psf_np "$HOOK")"
 SPS_PLANS="$WORKFLOW_PLANS_DIR"
-SPS_RUN_HINT='— run node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"'
+# #2731 S3-10: the breadcrumb is fact lines only — `[plan-file] <path|url>` + `[plan-sync] <enum> ...`,
+# and the run hint is the command alone (no English "— run").
+SPS_RUN_HINT='node "$AGENTS_MAIN_ROOT/bin/plan-sync-init"'
+SPS_PF="[plan-file] "
 # #2513: the hook-input cwd names the project; a github.com project matches the destination host.
 PSF_PROJECT="$PSF_ROOT/spl-project"
 psf_make_project "$PSF_PROJECT" "$PSF_ORIGIN_GH" >/dev/null 2>&1 || fail "H setup — project fixture"
@@ -89,24 +92,28 @@ OUT="$(PSF_HOOK="$SPS_HOOK" psf_timeout 30 node -e '
 const m = require(process.env.PSF_HOOK);
 if (typeof m.formatBreadcrumb !== "function") { process.stdout.write("NOT_IMPLEMENTED"); process.exit(0); }
 const abs = "/plans/s2513-intent.md"; const url = "https://github.com/test-owner/test-repo/blob/main/s2513-intent.md";
-const hint = " — run node \"$AGENTS_MAIN_ROOT/bin/plan-sync-init\"";
+const hint = " node \"$AGENTS_MAIN_ROOT/bin/plan-sync-init\"";
 const cases = [
-  [{ status: "pushed", url }, ["Plan file: " + url]],
-  [{ status: "off" }, ["Plan file: " + abs, "[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"]],
-  [{ status: "not-provisioned", reason: "no-repo" }, ["Plan file: " + abs, "[plan-sync] no-repo" + hint]],
-  [{ status: "failed", reason: "offline" }, ["Plan file: " + abs, "[plan-sync] offline" + hint]],
+  [{ status: "pushed", url }, ["[plan-file] " + url]],
+  [{ status: "off" }, ["[plan-file] " + abs, "[plan-sync] off PLAN_SYNC_REMOTE_URL="]],
+  [{ status: "not-provisioned", reason: "no-repo" }, ["[plan-file] " + abs, "[plan-sync] no-repo" + hint]],
+  [{ status: "failed", reason: "offline" }, ["[plan-file] " + abs, "[plan-sync] offline" + hint]],
+  [{ status: "failed" }, ["[plan-file] " + abs, "[plan-sync] failed" + hint]],
+  [{ status: "skipped", reason: "budget-exhausted" }, ["[plan-file] " + abs, "[plan-sync] skipped budget-exhausted"]],
+  [{ status: "skipped", reason: "host-mismatch" }, ["[plan-file] " + abs, "[plan-sync] not-sent host-mismatch"]],
+  [{ status: "skipped", reason: "no-project-host" }, ["[plan-file] " + abs, "[plan-sync] not-sent no-project-host"]],
 ];
 const bad = cases.filter(([r, want]) => JSON.stringify(m.formatBreadcrumb(r, abs).split(/\r?\n/)) !== JSON.stringify(want));
 process.stdout.write((bad.map(([r]) => r.status + "/" + (r.reason || r.url ? "x" : "")).join(",") || "all-match")
   + "|" + ("workspaceFolderUriFrom" in m ? "uri-exported" : "uri-removed"));' 2>&1)"
-if [ "$OUT" = "all-match|uri-removed" ]; then pass "H1 formatBreadcrumb 4 results + workspaceFolderUriFrom removed"
-else fail "H1 formatBreadcrumb 4 results + workspaceFolderUriFrom removed — got=$OUT"; fi
+if [ "$OUT" = "all-match|uri-removed" ]; then pass "H1 formatBreadcrumb 8 results (#2731 fact lines) + workspaceFolderUriFrom removed"
+else fail "H1 formatBreadcrumb 8 results (#2731 fact lines) + workspaceFolderUriFrom removed — got=$OUT"; fi
 OUT="$(PSF_HOOK="$SPS_HOOK" psf_timeout 30 node -e '
 const m = require(process.env.PSF_HOOK);
 process.stdout.write(m.formatBreadcrumb({ status: "pushed" }, "/plans/s2513-intent.md"));' 2>&1)"
 case "$OUT" in
   *[Gg]it[Hh]ub*) fail "H1 pushed without a URL: wording no longer names GitHub — got=$(printf '%q' "$OUT")" ;;
-  "Plan file: /plans/s2513-intent.md"$'\n'"[plan-sync] pushed"*) pass "H1 pushed without a URL: local path + pushed line, no forge named" ;;
+  "[plan-file] /plans/s2513-intent.md"$'\n'"[plan-sync] pushed no-blob-url") pass "H1 pushed without a URL: local path + pushed line, no forge named" ;;
   *) fail "H1 pushed without a URL: local path + pushed line — got=$(printf '%q' "$OUT")" ;;
 esac
 
@@ -114,25 +121,25 @@ echo "=== H1b: formatBreadcrumb renders skipped/not-regular-file ==="
 OUT="$(PSF_HOOK="$SPS_HOOK" psf_timeout 30 node -e '
 const m = require(process.env.PSF_HOOK);
 process.stdout.write(m.formatBreadcrumb({ status: "skipped", reason: "not-regular-file" }, "/plans/s2513-intent.md"));' 2>&1)"
-SPS_NRF_LINE="[plan-sync] skipped: not a regular file"
+SPS_NRF_LINE="[plan-sync] skipped not-regular-file"
 case "$OUT" in
-  "Plan file: /plans/s2513-intent.md"$'\n'"$SPS_NRF_LINE"*) pass "H1b local path + not-a-regular-file line" ;;
+  "[plan-file] /plans/s2513-intent.md"$'\n'"$SPS_NRF_LINE") pass "H1b local path + not-a-regular-file line" ;;
   *) fail "H1b local path + not-a-regular-file line — got=$(printf '%q' "$OUT")" ;;
 esac
 
 echo "=== H2: unprovisioned PLANS_DIR -> local path + no-repo hint, marker written ==="
 printf 'plan\n' > "$SPS_PLANS/s2513-intent.md"
 PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h2 "$PSF_PROJECT")"
-sps_expect_msg_has "H2 Plan file + [plan-sync] no-repo + run hint" "Plan file: " "s2513-intent.md" "[plan-sync] no-repo $SPS_RUN_HINT"
+sps_expect_msg_has "H2 [plan-file] + [plan-sync] no-repo + run hint" "$SPS_PF" "s2513-intent.md" "[plan-sync] no-repo $SPS_RUN_HINT"
 sps_expect_ctx_reason "H2 additionalContext carries not-provisioned + the local path" not-provisioned "$SPS_PLANS"
 if [ "$HOOK_RC" = 0 ]; then pass "H2 exit 0"; else fail "H2 exit 0 — rc=$HOOK_RC"; fi
 SPS_MARKERS=("$WORKFLOW_STATE_DIR"/test-sid-h2.confirm-plan-turn-*.json)
 if [ -f "${SPS_MARKERS[0]}" ]; then pass "H2 turn marker written before the message"
 else fail "H2 turn marker written before the message — no test-sid-h2.confirm-plan-turn-*.json"; fi
 
-echo "=== H3: empty PLAN_SYNC_REMOTE_URL -> not configured ==="
+echo "=== H3: empty PLAN_SYNC_REMOTE_URL -> [plan-sync] off ==="
 PLAN_SYNC_REMOTE_URL="" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513-intent.md" test-sid-h3 "$PSF_PROJECT")"
-sps_expect_msg_has "H3 Plan file + not configured" "Plan file: " "[plan-sync] not configured (PLAN_SYNC_REMOTE_URL empty)"
+sps_expect_msg_has "H3 [plan-file] + [plan-sync] off" "$SPS_PF" "[plan-sync] off PLAN_SYNC_REMOTE_URL="
 sps_expect_ctx_reason "H3 additionalContext carries plan-sync-off + the local path" plan-sync-off "$SPS_PLANS"
 
 echo "=== H4: provisioned repo + local insteadOf -> url-rewritten, no URL ==="
@@ -141,7 +148,7 @@ if psf_make_provisioned "$SPS_PI" "$PSF_ORIGIN_GH" >/dev/null 2>&1; then
   git -C "$SPS_PI" config "url.ssh://git@127.0.0.1:1/.insteadOf" "git@github.com:"
   printf 'plan\n' > "$SPS_PI/s2513-outline.md"
   WORKFLOW_PLANS_DIR="$SPS_PI" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PI/s2513-outline.md" test-sid-h4 "$PSF_PROJECT")"
-  sps_expect_msg_has "H4 Plan file + [plan-sync] url-rewritten" "Plan file: " "s2513-outline.md" "[plan-sync] url-rewritten"
+  sps_expect_msg_has "H4 [plan-file] + [plan-sync] url-rewritten" "$SPS_PF" "s2513-outline.md" "[plan-sync] url-rewritten"
   case "$HOOK_MSG" in
     *https://github.com*) fail "H4 no blob URL on url-rewritten — msg=$HOOK_MSG" ;;
     "") fail "H4 no blob URL on url-rewritten — empty message" ;;
@@ -158,7 +165,7 @@ if psf_make_provisioned "$SPS_PD" "$PSF_ORIGIN_DEAD" >/dev/null 2>&1 && psf_make
   printf 'plan\n' > "$SPS_PD/s2513-detail.md"
   WORKFLOW_PLANS_DIR="$SPS_PD" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" GIT_SSH_COMMAND=false \
     sps_run_hook "$(psf_write_json "$SPS_PD/s2513-detail.md" test-sid-h5 "$(psf_np "$SPS_DEAD_PROJ")")"
-  sps_expect_msg_has "H5 Plan file + [plan-sync] reason" "Plan file: " "s2513-detail.md" "[plan-sync] " "$SPS_RUN_HINT"
+  sps_expect_msg_has "H5 [plan-file] + [plan-sync] reason" "$SPS_PF" "s2513-detail.md" "[plan-sync] " "$SPS_RUN_HINT"
   if [ "$HOOK_RC" = 0 ] && [ "$HOOK_SECS" -lt 25 ]; then pass "H5 exit 0 within budget (${HOOK_SECS}s)"
   else fail "H5 exit 0 within budget — rc=$HOOK_RC secs=$HOOK_SECS"; fi
 else
@@ -172,7 +179,7 @@ process.stdout.write(JSON.stringify({ tool_name: "Bash", tool_response: { exit_c
   "$SPS_PLANS/s2513-outline.md" "$PSF_PROJECT")"
 printf 'outline\n' > "$SPS_PLANS/s2513-outline.md"
 PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$SPS_H6_JSON"
-sps_expect_msg_has "H6 assemble destination -> no-repo breadcrumb" "Plan file: " "s2513-outline.md" "[plan-sync] no-repo"
+sps_expect_msg_has "H6 assemble destination -> no-repo breadcrumb" "$SPS_PF" "s2513-outline.md" "[plan-sync] no-repo"
 
 echo "=== H7: drafts/ plan -> no breadcrumb, no sync ==="
 mkdir -p "$SPS_PLANS/drafts"; printf 'd\n' > "$SPS_PLANS/drafts/s2513-intent.md"
@@ -188,7 +195,7 @@ try { fs.symlinkSync(process.argv[1], process.argv[2], "file"); } catch (e) { pr
 process.exit(fs.lstatSync(process.argv[2]).isSymbolicLink() ? 0 : 1);' \
   "$PSF_ROOT/h8-outside/secret.txt" "$SPS_PLANS/s2513h8-detail.md" 2>/dev/null; then
   PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_GH" sps_run_hook "$(psf_write_json "$SPS_PLANS/s2513h8-detail.md" test-sid-h8 "$PSF_PROJECT")"
-  sps_expect_msg_has "H8 Plan file + [plan-sync] skipped: not a regular file" "Plan file: " "s2513h8-detail.md" "$SPS_NRF_LINE"
+  sps_expect_msg_has "H8 [plan-file] + [plan-sync] skipped not-regular-file" "$SPS_PF" "s2513h8-detail.md" "$SPS_NRF_LINE"
   case "$HOOK_MSG" in
     *https://github.com*|*H8-SECRET*) fail "H8 no blob URL / target content — msg=$HOOK_MSG" ;;
     *) pass "H8 no blob URL / target content" ;;
@@ -254,7 +261,7 @@ else
   setup_ssh_stub "$SPS_H8B_BARE"
   WORKFLOW_PLANS_DIR="$SPS_H8B" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_E2E" \
     sps_run_hook "$(psf_write_json "$SPS_H8B/s2513h8b-detail.md" test-sid-h8b "$PSF_PROJECT")"
-  sps_expect_msg_has "H8b Plan file + [plan-sync] skipped: not a regular file" "Plan file: " "s2513h8b-detail.md" "$SPS_NRF_LINE"
+  sps_expect_msg_has "H8b [plan-file] + [plan-sync] skipped not-regular-file" "$SPS_PF" "s2513h8b-detail.md" "$SPS_NRF_LINE"
   case "$HOOK_MSG" in
     *https://github.com*|*"$SPS_H8B_MARK"*) fail "H8b no blob URL / secret content — msg=$HOOK_MSG" ;;
     *) pass "H8b no blob URL / secret content" ;;
@@ -395,7 +402,7 @@ fi
 # ── C1-C2: one edit-write call naming several paths -> one sync per distinct final plan ──
 # The driver builds the payload in node (a backslash variant cannot ride printf JSON) and
 # either prints it (real hook) or runs finalPlanPaths + breadcrumbsForArtifacts with a
-# recording sync stub, printing "calls=<n>|sync=<basenames>|crumbs=<Plan file: lines>".
+# recording sync stub, printing "calls=<n>|sync=<basenames>|crumbs=<[plan-file] lines>".
 SPS_MX_DRIVER="$PSF_ROOT/mx-driver.js"
 printf '%s\n' '"use strict";' \
   'const path = require("path");' \
@@ -415,7 +422,7 @@ printf '%s\n' '"use strict";' \
   'const m = require(hook); const calls = [];' \
   'const msg = m.breadcrumbsForArtifacts(m.finalPlanPaths(input), input,' \
   '  { sync: (abs) => { calls.push(path.basename(abs)); return { status: "off" }; } });' \
-  'const crumbs = msg ? msg.split(/\r?\n/).filter((l) => l.startsWith("Plan file: ")).length : 0;' \
+  'const crumbs = msg ? msg.split(/\r?\n/).filter((l) => l.startsWith("[plan-file] ")).length : 0;' \
   'process.stdout.write("calls=" + calls.length + "|sync=" + calls.join(",") + "|crumbs=" + crumbs);' \
   > "$SPS_MX_DRIVER"
 SPS_MX_ONE="calls=1|sync=s2513mx-detail.md|crumbs=1"
@@ -426,11 +433,11 @@ printf 'd\n' > "$SPS_PLANS/drafts/s2513mx-intent.md"
 
 # sps_mx_stub <mode> — recording-stub result line for the mode's payload.
 sps_mx_stub() { psf_timeout 30 node "$SPS_MX_DRIVER" stub "$1" "$SPS_HOOK" "$SPS_PLANS" 2>&1; }
-# sps_mx_hook <name> <mode> — real hook, sync off: exactly one Plan file line, for the detail plan only.
+# sps_mx_hook <name> <mode> — real hook, sync off: exactly one [plan-file] line, for the detail plan only.
 sps_mx_hook() {
   local name="$1" n
   PLAN_SYNC_REMOTE_URL="" sps_run_hook "$(psf_timeout 30 node "$SPS_MX_DRIVER" payload "$2" "$SPS_HOOK" "$SPS_PLANS" "$PSF_PROJECT")"
-  n="$(printf '%s\n' "$HOOK_MSG" | grep -c '^Plan file: ')"
+  n="$(printf '%s\n' "$HOOK_MSG" | grep -c '^\[plan-file\] ')"
   case "$HOOK_MSG" in
     *notes-mx.md*|*drafts*) fail "$name — non-plan / drafts path reached the breadcrumb — msg=$(printf '%q' "$HOOK_MSG")" ;;
     *s2513mx-detail.md*)

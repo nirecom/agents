@@ -135,10 +135,12 @@ if (group === "begun") {
     { origin: "intent-worktrees", repoSlug: "o/sib2" },
   ]);
   check("intent-sibling-location-resolved", wt, () => membersOf("lib-t-two").members[1].location, loc(sib1));
-  // heir: no intent of its own; the outline approval names the donor that wrote one.
-  writeV1("lib-t-heir", { cwd: main, plan_approvals: { outline: { source: "user", artifact_session_id: "lib-t-donor" } } });
-  writeIntent("lib-t-donor", [{ repo: "o/sib2", path: sib2 }]);
-  check("heir-reads-donor-intent", wt, () => shape(membersOf("lib-t-heir")), [
+  // #2748: a session-downstream reads <first_session_id>-intent.md; its own-sid intent is ignored.
+  writeV1("lib-t-downstream", { cwd: main });
+  io.updateTopLevel("lib-t-downstream", (s) => { s.previous_session_ids = ["lib-t-first"]; s.upstream_session_id = "lib-t-first"; });
+  writeIntent("lib-t-downstream", [{ repo: "o/sib-src", path: sib1 }]);
+  writeIntent("lib-t-first", [{ repo: "o/sib2", path: sib2 }]);
+  check("downstream-reads-first-session-intent", wt, () => shape(membersOf("lib-t-downstream")), [
     { origin: "session-start", repoSlug: null },
     { origin: "intent-worktrees", repoSlug: "o/sib2" },
   ]);

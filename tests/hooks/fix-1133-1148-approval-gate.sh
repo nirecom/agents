@@ -146,6 +146,15 @@ write_state() {
     echo "FAIL: write_state($sid): could not inject the clarify_intent approval"
 }
 
+# #2529: a gated step reaches complete only with a current glossary_check record. The record
+# and the completing call both resolve the worktree from the cwd git root, so both run inside
+# one fixture repo: seed_glossary <sid> <stage>, then in_glossary_repo <completing command...>.
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+GLOSSARY_REPO="$(setup_repo)"
+seed_glossary() { glossary_check_record "$1" "$GLOSSARY_REPO" "$2"; }
+in_glossary_repo() { ( cd "$GLOSSARY_REPO" && "$@" ); }
+
 # The three raw readers below accept BOTH state shapes: the legacy top-level
 # `steps` / `plan_approvals` maps, and the same maps inside `.current` (the derived
 # projection introduced by #1733). Fixtures here are hand-written v1 files that the

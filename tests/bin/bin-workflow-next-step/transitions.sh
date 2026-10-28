@@ -140,7 +140,12 @@ run_transitions_tests() {
   # The gate reads intent.md (#2654); an approved one keeps the run on the inconsistency scan.
   write_intent_issues "case13b" 1053
   node "$NEXT_STEP_AGENTS_DIR/tests/lib/plan-approval-fixture.js" approve case13b clarify_intent >/dev/null 2>&1
-  OUT="$(run_next_step --session "case13b" 2>/dev/null || true)"
+  # #2529: the approved intent also needs its glossary_check record, or next-step stops on
+  # glossary-check-missing before the scan; record and run share one fixture repo.
+  local C13B_REPO
+  C13B_REPO="$(mk_glossary_repo "$TMPDIR_WT/case13b-repo")"
+  glossary_check_record "case13b" "$C13B_REPO" intent
+  OUT="$(cd "$C13B_REPO" && CLAUDE_PROJECT_DIR="$C13B_REPO" run_next_step --session "case13b" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
   check "13b: cross-task-contam ACTION=abort" "abort" "${ACTION:-}"
   check_contains "13b: cross-task-contam REASON marker" "inconsistent:" "${REASON:-}"

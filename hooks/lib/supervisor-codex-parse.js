@@ -6,7 +6,8 @@
 // FINDING objects. parseSupervisorFindings(input, mode) → {ok, verdict, findings,
 // reason (on failure)}. CLI (stdin, --mode): on ok writes FINDING-only JSONL to
 // os.tmpdir and prints `OUTFILE:`; audit also prints `VERDICT:`; on failure prints
-// `REASON:` and exits 1. Contract SSOT: detail.md Step 8.
+// `REASON:` and exits 1. `--list-categories` prints CATEGORIES one per line (#2730).
+// Contract SSOT: detail.md Step 8.
 
 const os = require("os");
 const fs = require("fs");
@@ -96,9 +97,11 @@ function parseSupervisorFindings(input, mode) {
   return { ok: true, verdict: null, findings };
 }
 
-module.exports = { parseSupervisorFindings };
+module.exports = { parseSupervisorFindings, CATEGORIES: [...CATEGORIES] };
 
-if (require.main === module) {
+if (require.main === module && process.argv.includes("--list-categories")) {
+  process.stdout.write([...CATEGORIES].map((c) => `${c}\n`).join(""));
+} else if (require.main === module) {
   const args = process.argv.slice(2);
   let mode = null;
   for (let i = 0; i < args.length; i++) {
