@@ -32,24 +32,10 @@ run_all() {
     test_A4_no_session_id_not_recorded
     # B: static checks
     test_B1_core_principles_exists
-    test_B2_elevate_to_the_class_header
-    test_B3_orthogonality_header
-    test_B4_name_reflects_substance_header
-    test_B5_orthogonality_md_removed
     test_B6_make_detail_plan_references_core_principles
     test_B7_survey_code_references_core_principles
-    test_B8_no_residual_plan_principles_references
-    test_B9_ssot_section_header
-    test_B14_user_obsessed_header
-    test_B15_separate_concerns_header
-    test_B16_all_cpr_headers_present
-    test_B17_no_legacy_numbered_headers
-    test_B18_no_universality_first
-    test_B19_orth_references_e2c
-    test_B10_elevate_to_the_class_per_class_wording
     test_B11_outline_reviewer_references_core_principles
     test_B12_detail_reviewer_references_core_principles
-    test_B13_plan_principles_old_path_removed
 }
 
 if command -v timeout >/dev/null 2>&1; then

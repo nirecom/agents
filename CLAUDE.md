@@ -18,15 +18,17 @@ After each skill completes, run: `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step
   - `--next` emits no `ACTION=` line when the settled step is not the session's current step (`ADVANCE_SCOPE=not-current-step`) — treat a missing `ACTION=` as "proceed to your own next step," not an error.
 - Do not use `--permission-mode plan`. Always use default mode for implementation tasks.
 - Workflow state reset is main-conversation only — emit `<<WORKFLOW_RESET_FROM_{step}: {reason}>>` only when holistic context justifies it.
-- `rules/test.md` is not auto-injected — Read it before writing, reviewing, or running tests.
-- `rules/docs.md` is not auto-injected — Read it before writing or updating documentation.
-- `rules/github-issues.md` is not auto-injected — Read it before any issue or PR operation.
-- `rules/branch.md` is not auto-injected — Read it before naming a branch or recording branching.
-- `rules/worktree.md` is not auto-injected — Read it before creating, entering, or removing a worktree.
-- `rules/coding.md` is not auto-injected — Read it before writing or editing code.
-- `rules/ops.md` is not auto-injected — Read it before any destructive or system-state-changing operation.
+- Not auto-injected — Read each before the work it governs:
+  - `rules/github-issues.md` — any issue or PR operation.
+  - `rules/architecture-principles.md` — designing or changing a mechanism, guard, gate, or check.
+  - `rules/branch.md` — naming a branch or recording branching.
+  - `rules/worktree.md` — creating, entering, or removing a worktree.
+  - `rules/ops.md` — any destructive or system-state-changing operation.
+  - `rules/test.md` — writing, reviewing, or running tests.
+  - `rules/coding.md` — writing or editing code.
+  - `rules/docs.md` — writing or updating documentation.
+  - `rules/mid-workflow-findings.md` — bugs, follow-ups, or next-task findings discovered mid-workflow.
 - For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md` (when it applies) and `/enforce-workflow-off` (how).
-- `rules/mid-workflow-findings.md` is not auto-injected — Read it for bugs, follow-ups, or next-task findings discovered mid-workflow.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
 - When you encounter an issue, concern, or unexpected outcome that core-principles + workflow don't resolve, report it: [rules/supervisor-reporting.md](rules/supervisor-reporting.md) says when, `/supervisor-report` does it.
 - Asked where a plan is: run `node "$AGENTS_MAIN_ROOT/bin/plan-link" --stage <stage>` and write its output as-is in the response.
