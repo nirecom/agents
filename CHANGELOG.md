@@ -907,3 +907,7 @@ Changes: review-tests re-reviews after an implementation change now read only th
 ### FEATURE: PR #2751 (2026-10-29)
 Background: feat(#2672, #2725): CPR 4 項目追加と rules/architecture-principles.md 新設
 Changes: Core principles gained four entries (Release Is the Goal; Quality, Cost, Delivery; Evidence First; Root Cause Analysis), and a new on-demand design-principles rule (exit before gate, shift left) is now read when outlining, detailing and writing code.
+
+### FEATURE: PR #2830 (2026-10-29)
+Background: feat(#2768): plan-sync makes one commit per user prompt
+Changes: plan-sync now publishes one commit per user prompt instead of one per plan write, so the plan repository keeps the versions you saw, not every intermediate draft. When the remote forbids force pushes, a turn-diff link shows that prompt's changes.
