@@ -185,6 +185,43 @@ F.run("sizeCheckActive", () => {
 });
 caseEnd();
 
+// The intended asymmetry: a state file with no self-recorded settled step is "exempt" for the
+// edit-time / CONFIRM / Stop gates, while the commit gate checks it (the file exists). A sid with
+// no state file is exempt on both sides. The commit-route pair: precommit-size-gate.sh
+// (session-markers-and-unresolved-sid).
+caseBegin("size-session-gate-commit-vs-edit-asymmetry", "hooks/lib/size-session-gate.js");
+F.run("asymmetry", () => {
+  const gate = F.load("hooks/lib/size-session-gate.js");
+  const lc = F.load("hooks/workflow-state/lifecycle.js");
+  const state = (sid) => (typeof gate.sizeCheckState === "function" ? gate.sizeCheckState(sid) : "sizeCheckState is not exported");
+  const at = new Date().toISOString();
+  // name | events of a state file that exists but holds no settled step
+  const variants = [
+    ["empty event stream", []],
+    ["only an in_progress lookahead mark", [{ kind: "step_status", step: "workflow_init", status: "in_progress", provenance: "observed", origin: "postuse-in-flight", at, seq: 1 }]],
+  ];
+  for (const [name, events] of variants) {
+    const sid = F.newSid();
+    const p = path.join(process.env.WORKFLOW_STATE_DIR, `${sid}.json`);
+    fs.writeFileSync(p, JSON.stringify({ version: 5, session_id: sid, created_at: at,
+      session_start_context: { cwd: F.work(), git_branch: "feature/f2631-fixture" }, events }, null, 2));
+    F.check(`${name}: premise: the state file exists and holds no self-recorded settlement`,
+      lc.hasSelfRecordedStepSettlement(JSON.parse(fs.readFileSync(p, "utf8"))) === false, p);
+    F.check(`${name}: the commit side checks it (commitSizeCheckActive true)`, gate.commitSizeCheckActive(sid) === true, "");
+    F.check(`${name}: the edit side does not (sizeCheckActive false)`, gate.sizeCheckActive(sid) === false, "");
+    F.check(`${name}: sizeCheckState is "exempt"`, state(sid) === "exempt", state(sid));
+  }
+  const none = F.newSid();
+  F.check("no state file: premise: none exists", !fs.existsSync(path.join(process.env.WORKFLOW_STATE_DIR, `${none}.json`)), none);
+  F.check("no state file: the commit side passes too (commitSizeCheckActive false)", gate.commitSizeCheckActive(none) === false, "");
+  F.check("no state file: sizeCheckState is \"exempt\"", state(none) === "exempt", state(none));
+  const started = F.newSid();
+  F.writeStartedState(started);
+  F.check("control: a started session is \"active\" and checked on both sides",
+    state(started) === "active" && gate.sizeCheckActive(started) === true && gate.commitSizeCheckActive(started) === true, state(started));
+});
+caseEnd();
+
 caseBegin("L7-generated-table-in-file-split", "bin/print-size-limits");
 F.run("print-size-limits", () => {
   const name = "size-limits";

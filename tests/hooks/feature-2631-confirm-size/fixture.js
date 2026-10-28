@@ -51,7 +51,8 @@ function session(stage, lines, opts) {
 }
 
 function childEnv(root, over) {
-  const env = Object.assign({}, process.env, roots[root] || {}, {
+  // CONV_LANG is pinned: the parent session's value would prefix every block reason (#2699).
+  const env = Object.assign({}, process.env, { CONV_LANG: "english" }, roots[root] || {}, {
     AGENTS_MAIN_ROOT: root, CLAUDE_TRANSCRIPT_BASE_DIR: emptyDir(),
   }, over || {});
   delete env.CLAUDE_CODE_SESSION_ID;
@@ -66,18 +67,25 @@ function parseLast(stdout) {
   try { return JSON.parse(String(stdout || "").trim().split("\n").pop()); } catch (_) { return null; }
 }
 
-// confirm(sid, stage, opts) -> {decision, deny, reason, ctx, msg, raw}. The transcript does not
-// exist, so the #2513 plan-link deny fails open: any deny here comes from the size check.
+// confirm / stop take opts.root: the checkout whose hook is spawned (default: this repo), so an
+// SSOT-propagation case can run the hook of a copied tree with a rewritten size-limits.js.
+// confirm(sid, stage, opts) -> {decision, deny, reason, ctx, msg, raw}. Unless opts.present is
+// false, the plan is first "presented": present.js writes the #2729 receipt in the child env, so
+// a deny here comes from the size check, or from a plan file that cannot be found.
 function confirm(sid, stage, opts) {
   const o = opts || {};
+  const env = childEnv(o.cfg || onCfg(), o.env);
+  if (o.present !== false) {
+    spawnSync(process.execPath, [path.join(__dirname, "present.js"), sid, stage], { encoding: "utf8", timeout: 60000, cwd: F.work(), env });
+  }
   const input = {
     tool_name: "Bash", hook_event_name: "PreToolUse",
     tool_input: { command: `echo "<<WORKFLOW_CONFIRM_${stage.toUpperCase()}: ok>>"` },
     session_id: sid, tool_use_id: `tu-${++seq}`,
     transcript_path: path.join(F.work(), "no-such-transcript.jsonl"),
   };
-  const r = spawnSync(process.execPath, [path.join(F.ROOT, "hooks", "confirm-checkpoint.js")], {
-    input: JSON.stringify(input), encoding: "utf8", timeout: 60000, cwd: F.work(), env: childEnv(o.cfg || onCfg(), o.env),
+  const r = spawnSync(process.execPath, [path.join(o.root || F.ROOT, "hooks", "confirm-checkpoint.js")], {
+    input: JSON.stringify(input), encoding: "utf8", timeout: 60000, cwd: F.work(), env,
   });
   const out = parseLast(r.stdout) || {};
   const hso = out.hookSpecificOutput || {};
@@ -103,7 +111,7 @@ function layer2Transcript(stage, followUp) {
 function stop(sid, tpath, opts) {
   const o = opts || {};
   const input = { session_id: sid, transcript_path: tpath, hook_event_name: "Stop", stop_hook_active: false };
-  const r = spawnSync(process.execPath, [path.join(F.ROOT, "hooks", "stop-confirm-plan-guard.js")], {
+  const r = spawnSync(process.execPath, [path.join(o.root || F.ROOT, "hooks", "stop-confirm-plan-guard.js")], {
     input: JSON.stringify(input), encoding: "utf8", timeout: 60000, cwd: F.work(), env: childEnv(o.cfg || onCfg(), o.env),
   });
   const out = String(r.stdout || "");

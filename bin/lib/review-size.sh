@@ -19,18 +19,28 @@ review_size_check() {
   rm -f "$err"
   RS_TARGETS=0
   RS_RECORDS=""
+  local seen_targets=0 has_hard=0
   while IFS= read -r line; do
     if [[ "$line" == TARGETS$'\t'* ]]; then
+      # Only the first TARGETS line counts; later ones can only come from a newline-bearing filename.
+      [[ "$seen_targets" -eq 1 ]] && continue
+      seen_targets=1
       RS_TARGETS="${line#TARGETS$'\t'}"
-      # A newline-bearing filename can forge this line; the count reaches an arithmetic test, so reject non-digits.
+      # The count reaches an arithmetic test, so reject non-digits.
       if [[ ! "$RS_TARGETS" =~ ^[0-9]+$ ]]; then
         printf '%s: ERROR — bin/size-check printed a non-numeric TARGETS count\n' "$hdr"
         exit 2
       fi
     elif [[ -n "$line" ]]; then
+      [[ "${line%%$'\t'*}" == HARD ]] && has_hard=1
       RS_RECORDS+="$line"$'\n'
     fi
   done <<< "$out"
+  # Fail closed: the exit code (1 = HARD found) and the HARD records must agree.
+  if [[ ( "$rc" -eq 1 && "$has_hard" -eq 0 ) || ( "$rc" -eq 0 && "$has_hard" -eq 1 ) ]]; then
+    printf '%s: ERROR — bin/size-check exit code and HARD records disagree\n' "$hdr"
+    exit 2
+  fi
 }
 
 # review_size_worktree_nul — newline-separated paths on stdin to NUL-separated existing files.

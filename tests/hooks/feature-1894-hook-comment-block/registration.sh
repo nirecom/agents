@@ -10,6 +10,8 @@
 # installer-assembled and needs a reinstall).
 # Sourced by the dispatcher; all helpers are defined there.
 
+readonly PRETOOLUSE_TIMEOUT_CAP_S=15  # value #2676's interim patch (5f64fcee) gave every PreToolUse hook; when #2676's body changes it, fix only this line
+
 REG_JS="$TMPDIR_BASE/reg.js"
 cat > "$REG_JS" <<'REGJS'
 // Prints one line per PreToolUse entry whose command mentions the hook:
@@ -92,10 +94,25 @@ g3_invocation_shape() {
     assert_absent "G3/no-absolute-home-path" "/Users/" "$cmd"
     assert_absent "G3/no-absolute-windows-path" ":\\" "$cmd"
     # A hook on the Edit hot path without a timeout can hang the editor.
-    if [ -n "$timeout" ] && [ "$timeout" -le 10 ] 2>/dev/null; then
-        pass "G3/timeout-is-bounded ($timeout s)"
+    if [[ "$timeout" =~ ^[1-9][0-9]*$ ]]; then
+        pass "G3/timeout-is-set ($timeout s)"
     else
-        fail "G3/timeout-is-bounded" "timeout=${timeout:-<unset>}; expected a value <= 10"
+        fail "G3/timeout-is-set" "timeout=${timeout:-<unset>}; expected a positive integer"
+        return
+    fi
+    # Same value as the PreToolUse hook guarding the same tool class, so a uniform change
+    # (as #2676 made) moves both together; the cap still stops both drifting too high.
+    local sibling_timeout
+    sibling_timeout="$(reg_lookup block-tests-direct.js | head -1 | cut -f3)"
+    if [[ -z "$sibling_timeout" ]]; then
+        fail "G3/timeout-equals-sibling" "block-tests-direct.js is not registered — no sibling to compare against"
+    else
+        assert_eq "G3/timeout-equals-sibling" "$sibling_timeout" "$timeout"
+    fi
+    if [[ "$timeout" -le "$PRETOOLUSE_TIMEOUT_CAP_S" ]]; then
+        pass "G3/timeout-within-cap ($timeout s <= $PRETOOLUSE_TIMEOUT_CAP_S s)"
+    else
+        fail "G3/timeout-within-cap" "timeout=$timeout; expected <= $PRETOOLUSE_TIMEOUT_CAP_S"
     fi
 }
 
@@ -184,7 +201,7 @@ g5_registered_command_speaks_the_protocol() {
     cmd="$(printf '%s' "$row" | cut -f5)"
     E2E_TIMEOUT="$(printf '%s' "$row" | cut -f3)"
     case "$E2E_TIMEOUT" in ''|*[!0-9]*) E2E_TIMEOUT=10 ;; esac
-    # Expand only the agents-main-root placeholder, and only to the worktree copy:
+    # Expand only the AGENTS_MAIN_ROOT placeholder, and only to the worktree copy:
     # the deployed ~/.claude tree is not the state under test.
     E2E_CMD="${cmd//\$AGENTS_MAIN_ROOT/$(mpath "$SCRIPT_CHECKOUT_ROOT")}"
     E2E_CMD="${E2E_CMD//\$\{AGENTS_MAIN_ROOT\}/$(mpath "$SCRIPT_CHECKOUT_ROOT")}"

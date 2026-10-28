@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2631-review-size-bins.sh
 # Tests: bin/review-code-size, bin/review-prompt-size, bin/review-doc-size, bin/size-check, hooks/workflow-gate/code-size-gate.js, bin/doc-rotate.py, bin/doc-append.py, rules/docs.md, rules/docs/history.md, rules/docs/architecture.md, rules/docs/glossary.md, skills/review-docs/SKILL.md, skills/_shared/test-design.md, bin/lib/test-route-destination.sh
-# Tags: scope:issue-specific, size-limits, review, bin, git, block, shrink, fail-closed, table-driven, layer:TL2, ssot, non-ascii-path
+# Tags: scope:issue-specific, size-limits, review, bin, git, block, shrink, fail-closed, table-driven, layer:TL2, ssot, non-ascii-path, test-lang-exception:text-only
 # #2631 stage 2: the three review bins judge through bin/size-check (SSOT hooks/lib/size-limits.js).
 # An over-HARD file that shrinks passes, growing or equal still blocks; the HARD boundary counts a
 # last line that has no trailing newline; a size-check infrastructure error (rc 3) is a non-SKIPPED
@@ -211,6 +211,15 @@ LIMIT_PATTERNS=(
   -e '(LIMIT|LINES|MAX[A-Z_]*) *= *[0-9]{3}' -e '\b(300|500|800)( |-)lines?\b'
   -e '--threshold-warn [0-9]' -e '\(\( *lines *> *[0-9]+'
 )
+# "300/500"-style WARN/HARD pairs, built from the SSOT rows so a dated or path-like a/b is not one.
+SLASH_PAIRS=""
+while IFS='|' read -r _ _ _ _ warn hard _; do
+  warn="${warn//[[:space:]]/}"
+  hard="${hard//[[:space:]]/}"
+  [[ "$warn" =~ ^[0-9]+$ && "$hard" =~ ^[0-9]+$ ]] || continue
+  SLASH_PAIRS="${SLASH_PAIRS:+$SLASH_PAIRS|}$warn/$hard"
+done < <(node "$ROOT/bin/print-size-limits" --markdown-table)
+[[ -n "$SLASH_PAIRS" ]] && LIMIT_PATTERNS+=(-e "\\b($SLASH_PAIRS)\\b")
 # no_limits <repo path> — the file exists and names no limit number (it reads the SSOT).
 no_limits() {
   local f="$1" hits
@@ -221,12 +230,38 @@ no_limits() {
 }
 
 case_begin "limit-patterns-premise" "bin/size-check"
-for probe in "HARD: 500" "exceeds 300-line warn" "if (( lines > 500 ))" "--threshold-warn 500" "HARD_LIMIT=500"; do
-  if printf '%s\n' "$probe" | grep -qE "${LIMIT_PATTERNS[@]}"; then pass "premise: the patterns catch '$probe'"
-  else fail "premise: the patterns catch '$probe'"; fi
-done
-if printf '%s\n' "keep it <100 lines" | grep -qE "${LIMIT_PATTERNS[@]}"; then fail "premise: '<100 lines' prose is not flagged"
-else pass "premise: '<100 lines' prose is not flagged"; fi
+if [[ "$SLASH_PAIRS" == *"300/500"* && "$SLASH_PAIRS" == *"500/800"* ]]; then
+  pass "premise: the SSOT rows yield the slash pairs ($SLASH_PAIRS)"
+else fail "premise: the SSOT rows yield the slash pairs" "got '$SLASH_PAIRS'"; fi
+while IFS='|' read -r name probe want; do
+  [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+  name="${name//[[:space:]]/}"
+  probe="${probe#"${probe%%[![:space:]]*}"}"
+  probe="${probe%"${probe##*[![:space:]]}"}"
+  want="${want//[[:space:]]/}"
+  if printf '%s\n' "$probe" | grep -qE "${LIMIT_PATTERNS[@]}"; then got=hit; else got=clean; fi
+  if [[ "$got" == "$want" ]]; then pass "premise $name: '$probe' -> $want"
+  else fail "premise $name: '$probe'" "want=$want got=$got"; fi
+done <<'TABLE'
+hard-colon        | HARD: 500                        | hit
+n-line            | exceeds 300-line warn            | hit
+arith-compare     | if (( lines > 500 ))             | hit
+threshold-flag    | --threshold-warn 500             | hit
+assign            | HARD_LIMIT=500                   | hit
+slash-code        | code files are capped at 300/500 | hit
+slash-history     | history rotates at 500/800       | hit
+slash-prompt      | prompt 100/200 lines             | hit
+lt-prose          | keep it <100 lines               | clean
+date              | released 2026/10/27              | clean
+ratio-not-ssot    | a 300/600 split                  | clean
+longer-number     | ids 1300/5000 in the log         | clean
+url-path          | see /api/v1/items/42             | clean
+TABLE
+SLASH_FIXTURE="$TMP_ROOT/slash-fixture.md"
+printf 'intro\nWARN/HARD stay at 300/500 lines.\n' > "$SLASH_FIXTURE"
+if grep -nE "${LIMIT_PATTERNS[@]}" "$SLASH_FIXTURE" | grep -q '^2:'; then
+  pass "fixture: a file quoting 300/500 fails the no_limits scan (line 2)"
+else fail "fixture: a file quoting 300/500 fails the no_limits scan"; fi
 case_end
 
 case_begin "no-hard-coded-limit-review-code-size" "bin/review-code-size"
@@ -268,6 +303,29 @@ case_end
 case_begin "no-hard-coded-limit-test-route-destination" "bin/lib/test-route-destination.sh"
 no_limits bin/lib/test-route-destination.sh
 case_end
+# Stage 6 documents and the progress rule: every sibling, not only the one found to drift (CPR-E2C).
+case_begin "no-hard-coded-limit-workflow-runtime" "docs/architecture/claude-code/workflow-runtime.md"
+no_limits docs/architecture/claude-code/workflow-runtime.md
+case_end
+case_begin "no-hard-coded-limit-settings-hooks" "docs/architecture/claude-code/settings/hooks.md"
+no_limits docs/architecture/claude-code/settings/hooks.md
+case_end
+case_begin "no-hard-coded-limit-marker-bypass-contract" "docs/architecture/claude-code/marker-bypass-contract.md"
+no_limits docs/architecture/claude-code/marker-bypass-contract.md
+case_end
+case_begin "no-hard-coded-limit-progress-file" "docs/architecture/claude-code/progress-file.md"
+no_limits docs/architecture/claude-code/progress-file.md
+case_end
+case_begin "no-hard-coded-limit-e2e-testing" "docs/architecture/claude-code/e2e-testing.md"
+no_limits docs/architecture/claude-code/e2e-testing.md
+case_end
+case_begin "no-hard-coded-limit-progress-update-rule" "rules/progress-update.md"
+no_limits rules/progress-update.md
+case_end
+# next-step's verdict text quotes the limits to the model too: a sibling consumer (CPR-E2C).
+case_begin "no-hard-coded-limit-next-step-verdict" "bin/workflow/lib/next-step/verdict.js"
+no_limits bin/workflow/lib/next-step/verdict.js
+case_end
 
 # shellcheck source=feature-2631-review-size-bins/all-scan.sh
 . "$ROOT/tests/bin/feature-2631-review-size-bins/all-scan.sh"
@@ -291,6 +349,18 @@ ud_case_non_ascii_diff_path review-code-size "bin/$(printf '\xe6\x97\xa5\xe6\x9c
 case_end
 case_begin "diff-mode-non-ascii-path-review-prompt-size" "bin/review-prompt-size"
 ud_case_non_ascii_diff_path review-prompt-size "rules/$(printf '\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e').md" 200
+case_end
+
+# shellcheck source=feature-2631-review-size-bins/records-integrity.sh
+. "$ROOT/tests/bin/feature-2631-review-size-bins/records-integrity.sh"
+case_begin "forged-targets-line-in-filename-is-rejected" "bin/review-code-size"
+ri_case_forged_targets_line
+case_end
+case_begin "size-check-rc1-without-hard-record-is-rc2" "bin/review-code-size"
+ri_case_disagree rc1-no-hard 1 OK
+case_end
+case_begin "size-check-rc0-with-hard-record-is-rc2" "bin/review-code-size"
+ri_case_disagree rc0-hard 0 HARD
 case_end
 
 xfail_summary

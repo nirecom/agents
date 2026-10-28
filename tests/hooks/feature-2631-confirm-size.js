@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2631-confirm-size.js
-// Tests: hooks/confirm-checkpoint.js, hooks/lib/size-limits.js, hooks/lib/size-session-gate.js, hooks/lib/confirm-deny-counter.js, hooks/workflow-state/plan-artifact-owner.js
+// Tests: hooks/confirm-checkpoint.js, hooks/lib/size-limits.js, hooks/lib/size-session-gate.js, hooks/workflow-state/plan-artifact-owner.js
 // Tags: scope:issue-specific, size-limits, hook, pre-tool-use, confirm, plan-artifact, block, layer:TL2
 // TL3 gap (what this test does NOT catch):
 // - the real Claude Code host firing confirm-checkpoint on the CONFIRM echo and showing or skipping the dialog
@@ -9,8 +9,8 @@
 "use strict";
 // #2631 stage 4, PreToolUse: a CONFIRM_<STAGE> echo whose plan artifact is over HARD is denied
 // (sent back to the planner) before the dialog, whatever CONFIRM_<STAGE> says; at or under HARD
-// the dialog proceeds, with WARN advice above WARN. The size deny never touches the #2513 deny
-// counter, is disabled for WORKFLOW_OFF, and judges the owner's file in a resumed session.
+// the dialog proceeds, with WARN advice above WARN. The size deny is disabled for WORKFLOW_OFF and
+// judges the owner's file in a resumed session. Every echo follows a presentation receipt (#2729).
 // The Stop-hook side: feature-2631-confirm-size-stop.js.
 
 const path = require("path");
@@ -30,8 +30,8 @@ function denies(name, r, sid, stage, value) {
   const miss = need.filter((n) => !r.reason.includes(n));
   F.check(name, r.deny && miss.length === 0, `missing ${JSON.stringify(miss)} in ${r.raw}`);
 }
-// dialog(r) — the plain confirm dialog: no deny, the plan file shown to the user.
-const dialog = (r) => r.decision !== "block" && /Plan file:/.test(r.msg);
+// dialog(r) — the plain confirm dialog: no deny, "[<stage>] <plan path>" shown to the user.
+const dialog = (r) => r.decision !== "block" && /^\[(intent|outline|detail)\] (?!plan-file=none)\S/.test(r.msg);
 
 caseBegin("C1-over-hard-denies-per-stage", "hooks/confirm-checkpoint.js");
 F.run("C1", () => {
@@ -84,14 +84,12 @@ F.run("C3-intent", () => {
 });
 caseEnd();
 
-caseBegin("C4-size-deny-is-not-counted", "hooks/lib/confirm-deny-counter.js");
+caseBegin("C4-size-deny-repeats-and-precedes-the-receipt", "hooks/confirm-checkpoint.js");
 F.run("C4", () => {
-  const counter = F.load("hooks/lib/confirm-deny-counter.js");
   const n = C.HARD.detail + 1;
   const sid = C.session("detail", n);
-  F.check("fixture premise: counter seeded to 1", counter.bump(sid, "detail") === 1, counter.read(sid, "detail"));
   for (let i = 1; i <= 3; i++) denies(`size deny #${i} still denies (no deny cap)`, C.confirm(sid, "detail"), sid, "detail", n);
-  F.check("the #2513 deny counter stays at 1", counter.read(sid, "detail") === 1, counter.read(sid, "detail"));
+  denies("without a presentation receipt the size deny still comes first", C.confirm(sid, "detail", { present: false }), sid, "detail", n);
 });
 caseEnd();
 
@@ -107,6 +105,47 @@ F.run("C5", () => {
 });
 caseEnd();
 
+caseBegin("C5b-never-started-session-skips-the-size-deny", "hooks/lib/size-session-gate.js");
+F.run("C5b", () => {
+  const n = C.HARD.detail + 1;
+  const fresh = F.newSid();
+  C.writePlan(fresh, "detail", C.planOf(n));
+  const r = C.confirm(fresh, "detail");
+  F.check("no workflow state: HARD+1 is not size-denied", !(r.deny && r.reason.includes(C.SEND_BACK)), r.raw);
+  F.check("no workflow state: HARD+1 reaches the dialog, with no deny or block of any kind", dialog(r) && !r.deny && r.decision !== "block", r.raw);
+  const on = C.session("detail", n);
+  denies("control: the same plan in a started session denies", C.confirm(on, "detail"), on, "detail", n);
+});
+caseEnd();
+
+// The symmetric half of C5b: the state file exists, but no step is self-recorded settled.
+caseBegin("C5c-state-without-settled-step-skips-the-size-deny", "hooks/lib/size-session-gate.js");
+F.run("C5c", () => {
+  const fs = require("fs");
+  const lc = F.load("hooks/workflow-state/lifecycle.js");
+  const n = C.HARD.detail + 1;
+  const at = new Date().toISOString();
+  const variants = [
+    { name: "empty event stream", events: [] },
+    { name: "only an in_progress lookahead mark", events: [{ kind: "step_status", step: "workflow_init", status: "in_progress", provenance: "observed", origin: "postuse-in-flight", at, seq: 1 }] },
+  ];
+  for (const v of variants) {
+    const sid = F.newSid();
+    const statePath = path.join(process.env.WORKFLOW_STATE_DIR, `${sid}.json`);
+    const state = { version: 5, session_id: sid, created_at: at, session_start_context: { cwd: F.work(), git_branch: "feature/f2631-fixture" }, events: v.events };
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+    C.writePlan(sid, "detail", C.planOf(n));
+    F.check(`${v.name}: premise: the state file exists and holds no self-recorded settlement`,
+      fs.existsSync(statePath) && lc.hasSelfRecordedStepSettlement(JSON.parse(fs.readFileSync(statePath, "utf8"))) === false, statePath);
+    const r = C.confirm(sid, "detail");
+    F.check(`${v.name}: HARD+1 is not size-denied (exempt)`, !(r.deny && r.reason.includes(C.SEND_BACK)), r.raw);
+    F.check(`${v.name}: HARD+1 reaches the dialog, with no deny or block of any kind`, dialog(r) && !r.deny && r.decision !== "block", r.raw);
+  }
+  const on = C.session("detail", n);
+  denies("control: the same plan in a started session denies", C.confirm(on, "detail"), on, "detail", n);
+});
+caseEnd();
+
 caseBegin("C7-resumed-session-judges-the-owner-file", "hooks/workflow-state/plan-artifact-owner.js");
 F.run("C7", () => {
   const n = C.HARD.detail + 1;
@@ -115,16 +154,11 @@ F.run("C7", () => {
   const D = C.session("detail", null, { top: { upstream_session_id: U, upstream_copy_seq: 0 } });
   denies("upstream_session_id: U's detail at HARD+1 denies in D", C.confirm(D, "detail"), U, "detail", n);
 
+  // #2748: first_session_id names the plan of every generation (an approval record is no candidate).
   const X = F.newSid();
-  const xText = C.planOf(n);
-  C.writePlan(X, "detail", xText);
-  const sha = require("crypto").createHash("sha256").update(xText).digest("hex");
-  const approval = {
-    kind: "plan_approval", step: "detail", source: "confirm-sentinel", reason: "fixture approval",
-    artifact_sha256: sha, artifact_session_id: X, artifact_hash_status: "recorded", provenance: "declared", origin: "test-fixture",
-  };
-  const D2 = C.session("detail", null, { events: [approval] });
-  denies("plan_approvals artifact_session_id: X's detail at HARD+1 denies in D2", C.confirm(D2, "detail"), X, "detail", n);
+  C.writePlan(X, "detail", C.planOf(n));
+  const D2 = C.session("detail", null, { top: { first_session_id: X } });
+  denies("first_session_id: X's detail at HARD+1 denies in D2", C.confirm(D2, "detail"), X, "detail", n);
 
   const U3 = F.newSid();
   C.writePlan(U3, "detail", C.planOf(C.HARD.detail));
@@ -137,6 +171,8 @@ caseEnd();
 // The dialog and the model-facing plan-link line name the owner's file in a resumed session.
 const NO_FILE = "no plan file for this stage yet";
 const UNAVAILABLE = "file path unavailable";
+// A missing plan file is denied before any dialog (#2729): no "path unavailable" dialog exists.
+const noFileDeny = (r) => r.deny && r.reason.includes("unverifiable-artifact") && !r.msg.includes(UNAVAILABLE);
 caseBegin("C8-resumed-session-dialog-shows-the-owner-path", "hooks/confirm-checkpoint.js");
 F.run("C8", () => {
   for (const stage of ["intent", "outline", "detail"]) {
@@ -152,7 +188,7 @@ F.run("C8", () => {
 caseEnd();
 
 // #2631 SSOT: an existing upstream file wins even over the session's own file; with a declared
-// owner and no file, the own file is never shown (path unavailable).
+// owner and no file, the own file is never shown: the echo is denied (#2729 fail-closed).
 caseBegin("C9-upstream-file-wins-over-the-own-file", "hooks/confirm-checkpoint.js");
 F.run("C9", () => {
   const U = F.newSid();
@@ -163,7 +199,7 @@ F.run("C9", () => {
   F.check("the dialog carries no upstream-owner note", !/owned by session upstream/.test(r.msg + r.ctx), r.raw);
   const L = C.session("intent", 12, { top: { upstream_session_id: F.newSid(), upstream_copy_seq: 0 } });
   const l = C.confirm(L, "intent");
-  F.check("upstream without a file -> 'Plan ready (file path unavailable)', never L's own intent", l.msg.includes("Plan ready (file path unavailable)") && !l.msg.includes(`${L}-intent.md`), l.raw);
+  F.check("upstream without a file -> denied (unverifiable-artifact), never L's own intent", l.deny && l.reason.includes("unverifiable-artifact") && !(l.msg + l.reason).includes(`${L}-intent.md`), l.raw);
   const P = C.session("intent", 12);
   const p = C.confirm(P, "intent");
   F.check("non-resumed session: the dialog shows its own intent", dialog(p) && p.msg.includes(`${P}-intent.md`), p.raw);
@@ -178,18 +214,18 @@ F.run("C10", () => {
   const D = C.session("intent", null, { top: { upstream_session_id: U, upstream_copy_seq: 0 } });
   const r = C.confirm(D, "intent");
   denies("U's intent at HARD+1 denies D's CONFIRM_INTENT (no fail-open to the dialog)", r, U, "intent", n);
-  F.check("the deny is not the plain dialog", !/Plan file:/.test(r.msg), r.raw);
+  F.check("the deny is not the plain dialog", !dialog(r), r.raw);
 });
 caseEnd();
 
-caseBegin("C11-no-owner-and-no-own-file-stays-path-unavailable", "hooks/confirm-checkpoint.js");
+caseBegin("C11-no-owner-and-no-own-file-is-denied", "hooks/confirm-checkpoint.js");
 F.run("C11", () => {
   const lone = C.session("intent", null);
   const r = C.confirm(lone, "intent");
-  F.check("no upstream, no own file: the dialog says the path is unavailable", r.msg.includes(UNAVAILABLE), r.raw);
+  F.check("no upstream, no own file: the echo is denied (unverifiable-artifact)", noFileDeny(r), r.raw);
   const D = C.session("detail", null, { top: { upstream_session_id: F.newSid(), upstream_copy_seq: 0 } });
   const d = C.confirm(D, "detail");
-  F.check("upstream without a file: the dialog says the path is unavailable", d.msg.includes(UNAVAILABLE) && d.decision !== "block", d.raw);
+  F.check("upstream without a file: the echo is denied (unverifiable-artifact)", noFileDeny(d), d.raw);
 });
 caseEnd();
 
@@ -212,22 +248,23 @@ F.run("C12", () => {
 caseEnd();
 
 // The resolver names U's path as the write target before it exists; the dialog never shows it.
-caseBegin("C13-upstream-without-plan-is-owner-missing-not-the-own-path", "hooks/workflow-state/plan-artifact-owner.js");
+caseBegin("C13-upstream-without-plan-is-missing-not-the-own-path", "hooks/workflow-state/plan-artifact-owner.js");
 F.run("C13", () => {
   const CK = F.load("hooks/confirm-checkpoint.js");
   const plans = process.env.WORKFLOW_PLANS_DIR;
   const U = F.newSid();
   const D = C.session("outline", null, { top: { upstream_session_id: U, upstream_copy_seq: 0 } });
   const o = F.load("hooks/workflow-state/plan-artifact-owner.js").resolvePlanArtifactOwner(D, "outline", undefined, { plansDir: plans });
-  F.check("resolver: U's path, exists:false, via owner-missing", o.via === "owner-missing" && o.ownerSid === U && o.exists === false &&
+  F.check("resolver: U's path, exists:false, via missing", o.via === "missing" && o.ownerSid === U && o.exists === false &&
     path.resolve(o.path) === path.resolve(C.planPath(U, "outline")), JSON.stringify(o));
   const got = CK.resolveArtifact("outline", D, plans);
   F.check("resolveArtifact(D) -> null (neither the missing U path nor D's own path)", got === null, String(got));
 });
 caseEnd();
 
-// Order: the owner-resolved file beats the turn marker; the marker is only a fallback.
-caseBegin("C14-owner-file-wins-over-the-turn-marker", "hooks/confirm-checkpoint.js");
+// Order: a marker of this turn first, else the owner file in the plans dir. A marker path that is
+// not the owner path is still denied downstream: judge() binds the approval to the owner path.
+caseBegin("C14-turn-marker-first-and-a-foreign-marker-is-denied", "hooks/confirm-checkpoint.js");
 F.run("C14", () => {
   const CK = F.load("hooks/confirm-checkpoint.js");
   const TM = F.load("hooks/lib/turn-marker.js");
@@ -237,19 +274,12 @@ F.run("C14", () => {
   const U = F.newSid();
   const uPath = C.writePlan(U, "detail", C.planOf(4));
   const D = C.session("detail", null, { top: { upstream_session_id: U, upstream_copy_seq: 0 } });
+  F.check("no marker: resolveArtifact returns U's owner file", path.resolve(String(CK.resolveArtifact("detail", D, plans))) === path.resolve(uPath), "not U's file");
   TM.writeTurnMarker(D, { suffix: "detail", absPath: markerFile });
   const got = CK.resolveArtifact("detail", D, plans);
-  F.check("both exist: resolveArtifact returns U's file, not the marker path", path.resolve(String(got)) === path.resolve(uPath), String(got));
-  const U2 = F.newSid();
-  const D2 = C.session("detail", null, { top: { upstream_session_id: U2, upstream_copy_seq: 0 } });
-  TM.writeTurnMarker(D2, { suffix: "detail", absPath: markerFile });
-  const got2 = CK.resolveArtifact("detail", D2, plans);
-  F.check("control: owner file missing, marker path unrelated to the owner -> null", got2 === null, String(got2));
-  const U3 = F.newSid();
-  const D3 = C.session("detail", null, { top: { upstream_session_id: U3, upstream_copy_seq: 0 } });
-  TM.writeTurnMarker(D3, { suffix: "detail", absPath: C.planPath(U3, "detail") });
-  const got3 = CK.resolveArtifact("detail", D3, plans);
-  F.check("owner file missing, marker path equals the owner path -> returned", got3 !== null && path.resolve(String(got3)) === path.resolve(C.planPath(U3, "detail")), String(got3));
+  F.check("both exist: resolveArtifact returns this turn's marker path", path.resolve(String(got)) === path.resolve(markerFile), String(got));
+  const r = C.confirm(D, "detail", { present: false });
+  F.check("a marker path that is not the owner path is denied (unverifiable-artifact)", r.deny && r.reason.includes("unverifiable-artifact"), r.raw);
 });
 caseEnd();
 

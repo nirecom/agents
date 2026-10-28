@@ -22,6 +22,8 @@ ROOT_NODE="$(np "$ROOT")"
 
 # shellcheck source=tests/lib/session-repo-fixture.sh
 . "$ROOT/tests/lib/session-repo-fixture.sh"
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$ROOT/tests/lib/glossary-check-record.sh"
 CHECKOUT="$TMP_ROOT/checkout"
 session_repo_fixture_create "$CHECKOUT"
 # A second copy whose SSOT is rewritten, so the first copy keeps the repo numbers.
@@ -86,6 +88,8 @@ HOOK_RC=0
 run_gate_once() {
   local sid="$1" repo="$2" checkout="$3" owner="$4"
   HOOK_RC=0
+  # #2529: the gate blocks a commit whose staged index has no glossary-check record.
+  glossary_check_record "$sid" "$repo"
   session_repo_fixture_attach "$checkout" "$owner"
   HOOK_OUT="$(payload "$sid" "$repo" | run_with_timeout 60 env -u CODE_FILE_EXTENSIONS \
     "AGENTS_MAIN_ROOT=$CFG" node "$(session_repo_fixture_path "$checkout" hooks/workflow-gate.js)" 2>&1)" || HOOK_RC=$?

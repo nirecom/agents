@@ -14,11 +14,23 @@ core_case_fixture_premise() {
   expect_pass "premise: a 10-line staged .js passes every other gate of the fixture install"
 }
 
+# core_row_wanted <key> [wanted ...] — true with no wanted list, or when <key> is in it; a heavy
+# table case is split across lanes by naming its rows.
+core_row_wanted() {
+  local key="$1" w
+  shift
+  [ "$#" = 0 ] && return 0
+  for w in "$@"; do [ "$w" = "$key" ] && return 0; done
+  return 1
+}
+
+# [kind ...] — only these rows (all when none).
 core_case_new_file_over_hard_blocks_exactly_hard_passes() {
   local kind path hard cfg
   # kind | path | HARD
   while IFS='|' read -r -u 3 kind path hard; do
     [[ -z "$kind" || "$kind" =~ ^[[:space:]]*# ]] && continue
+    core_row_wanted "$kind" "$@" || continue
     cfg="$(new_cfg)"
     stage "$cfg" "$path" $((hard + 1))
     run_pc "$cfg" "$cfg"
@@ -55,10 +67,12 @@ core_case_over_hard_head_file_may_shrink_only() {
 }
 
 # Stream records are never split on size; 501 is over the docs HARD and under the history HARD.
+# [path ...] — only these rows (all when none).
 core_case_exempt_stream_records_pass() {
   local path cfg
   while IFS='|' read -r -u 3 path; do
     [[ -z "$path" || "$path" =~ ^[[:space:]]*# ]] && continue
+    core_row_wanted "$path" "$@" || continue
     cfg="$(new_cfg)"
     stage "$cfg" "$path" 501
     run_pc "$cfg" "$cfg"

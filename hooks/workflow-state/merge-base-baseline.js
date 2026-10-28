@@ -10,10 +10,14 @@
 // recorded base may be behind your HEAD, here is the alternative", but no code silently
 // switches to it.
 
+const fs = require("fs");
+const path = require("path");
 const { spawnSync } = require("../lib/limited-child-process");
 const { readState, writeState, createInitialState } = require("./state-io");
 
-// Git Bash hands out MSYS drive-letter paths; spawnSync on Windows must be given the Windows form instead.
+const FULL_OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+// Git Bash hands out drive paths in POSIX form (slash, drive letter, slash); spawnSync on Windows must be given C:\... instead.
 // Same normalization as hooks/enforce-worktree/git-repo-detection.js.
 function toWindowsPath(raw) {
   if (!raw) return raw;
@@ -53,7 +57,7 @@ function gitOk(repoRoot, args) {
 function resolveBaselineForRepo(repoRoot, sessionCreatedAt) {
   if (typeof repoRoot !== "string" || !repoRoot) return null;
   const head = git(repoRoot, ["rev-parse", "HEAD"]);
-  if (!head || !/^[0-9a-f]{40}$/.test(head)) return null;
+  if (!head || !FULL_OID.test(head)) return null;
 
   let branch = git(repoRoot, ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (!branch || branch === "HEAD") branch = null;
@@ -123,6 +127,32 @@ function recordMergeBaseBaseline(sessionId, repoRoot) {
   }
 }
 
+// Commits an in-progress merge brings in (MERGE_HEAD), read like
+// bin/review-comment-block-size.d/baseline.sh collect_inprogress_refs: blank lines skipped, CR
+// stripped, at most 8 accepted. A line counts only when it is wholly a 40- or 64-digit lowercase
+// hex id that resolves to a commit; refs, expressions and padded lines are rejected uncounted.
+// Empty when no merge is running. bin/resolve-merge-base.sh base_reachable applies the same rule.
+function mergeHeadCommits(repoRoot) {
+  const gitdir = git(repoRoot, ["rev-parse", "--git-dir"]);
+  if (!gitdir) return [];
+  const dir = path.resolve(toWindowsPath(repoRoot), toWindowsPath(gitdir));
+  let text;
+  try {
+    text = fs.readFileSync(path.join(dir, "MERGE_HEAD"), "utf8");
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\r$/, "");
+    if (!FULL_OID.test(line)) continue;
+    if (out.length >= 8) break;
+    const sha = git(repoRoot, ["rev-parse", "--verify", "--quiet", `${line}^{commit}`]);
+    if (sha && FULL_OID.test(sha)) out.push(sha);
+  }
+  return out;
+}
+
 // approveMergeBaseBaseline(sessionId, repoRoot, base, reason):
 // The ONLY write-once-breaking path, and the reason it is safe to break it: the value came
 // from the user, not from a heuristic. Validation is what keeps a sha that does not resolve —
@@ -140,10 +170,11 @@ function approveMergeBaseBaseline(sessionId, repoRoot, base, reason) {
   }
   const wanted = base.trim();
   const resolved = git(repoRoot, ["rev-parse", "--verify", `${wanted}^{commit}`]);
-  if (!resolved || !/^[0-9a-f]{40}$/.test(resolved)) {
+  if (!resolved || !FULL_OID.test(resolved)) {
     return { recorded: false, reason: `base does not resolve to a commit in ${repoRoot}: ${wanted}` };
   }
-  if (!gitOk(repoRoot, ["merge-base", "--is-ancestor", resolved, "HEAD"])) {
+  const tips = ["HEAD", ...mergeHeadCommits(repoRoot)];
+  if (!tips.some((tip) => gitOk(repoRoot, ["merge-base", "--is-ancestor", resolved, tip]))) {
     return { recorded: false, reason: `base is not an ancestor of HEAD: ${wanted}` };
   }
 

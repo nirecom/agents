@@ -36,10 +36,11 @@ command -v cygpath >/dev/null 2>&1 && GH_BIN_DIR="$(cygpath -u "$GH_BIN_DIR")"
 export PATH="$GH_BIN_DIR:$PATH"
 
 new_sid() { node -e 'process.stdout.write(require("crypto").randomUUID())'; }
-# write_state <sid> [<upstream-sid>] — a raw v5 state file.
+# write_state <sid> [<upstream-sid>] [<first-sid>] — a raw v5 state file.
 write_state() {
   local up=""
   [ -n "${2:-}" ] && up=",\"upstream_session_id\":\"$2\",\"upstream_copy_seq\":0"
+  [ -n "${3:-}" ] && up="$up,\"first_session_id\":\"$3\""
   printf '{"version":5,"session_id":"%s","created_at":"2026-01-01T00:00:00.000Z","session_start_context":{"cwd":"%s","git_branch":"feature/f2631"},"events":[]%s}\n' \
     "$1" "$TMP_ROOT/cwd" "$up" >"$WORKFLOW_STATE_DIR/$1.json"
 }
@@ -119,8 +120,30 @@ else fail "the missing path named is the upstream's intent (the write target)" "
 assert_eq "gh-calls=[$(gh_log)]" "gh-calls=[]"
 case_end
 
-# A copied checkout whose bin/plan-artifact-path fails or prints a foreign name: both scripts
-# fall back to <plans>/<sid>-intent.md, so S2's own intent (#9191) is read, never U's.
+# #2748: a session-downstream X recording first_session_id only (no upstream_session_id) reads the
+# first generation F's intent (#5151), never its own (#6262): a fallback to the legacy field fails here.
+F1="$(new_sid)"; X="$(new_sid)"
+write_state "$F1"
+write_state "$X" "" "$F1"
+write_intent "$F1" "First-generation intent" 5151
+write_intent "$X" "Own downstream intent" 6262
+
+case_begin "guard-loop-first-session-id-only-reads-first-generation-intent" "bin/github-issues/clarify-guard-loop.sh"
+guard "$ROOT_N" "$X"
+assert_eq "first-sid-out=$OUT" "first-sid-out=PROCEED"
+if [[ "$(gh_log)" == *"issue view 5151"* && "$(gh_log)" != *"6262"* ]]; then pass "guard asked gh about F's #5151, never X's own #6262"
+else fail "guard asked gh about F's #5151, never X's own #6262" "gh log: $(gh_log)"; fi
+case_end
+
+case_begin "commit-scope-path-c-first-session-id-only-titles-from-first-generation" "bin/github-issues/clarify-commit-scope.sh"
+scope_c "$ROOT_N" "$X"
+assert_eq "first-sid-rc=$RC out=$OUT" "first-sid-rc=0 out=CREATED:77"
+if [[ "$(gh_log)" == *"--title First-generation intent"* && "$(gh_log)" != *"Own downstream intent"* ]]; then pass "issue created with F's title, never X's own"
+else fail "issue created with F's title, never X's own" "gh log: $(gh_log) err=$(head -c 300 "$TMP_ROOT/last.err")"; fi
+case_end
+
+# A copied checkout whose bin/plan-artifact-path fails or prints a foreign name: an unresolvable
+# intent is no intent (#2748), so neither S2's own intent (#9191) nor U's is read.
 FROOT="$TMP_ROOT/froot"
 mkdir -p "$FROOT"
 cp -r "$ROOT_N/bin" "$ROOT_N/hooks" "$FROOT/"
@@ -133,21 +156,22 @@ S2="$(new_sid)"
 write_state "$S2" "$U"
 write_intent "$S2" "Fallback intent" 9191
 
-case_begin "guard-loop-falls-back-to-own-intent-on-bad-resolver" "bin/github-issues/clarify-guard-loop.sh"
+case_begin "guard-loop-bad-resolver-is-no-intent" "bin/github-issues/clarify-guard-loop.sh"
 for mode in "1:" "0:/elsewhere/secret.txt"; do
   export STUB_PAP_RC="${mode%%:*}" STUB_PAP_OUT="${mode#*:}"
   guard "$FROOT" "$S2"
-  if [ "$OUT" = "PROCEED" ] && [[ "$(gh_log)" == *"issue view 9191"* ]]; then pass "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> own intent"
-  else fail "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> own intent" "out=$OUT gh log: $(gh_log)"; fi
+  if [ "$OUT" = "NEED_ISSUE" ] && [[ "$(gh_log)" != *"issue view"* ]]; then pass "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> no intent (NEED_ISSUE, no gh view)"
+  else fail "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> no intent (NEED_ISSUE, no gh view)" "out=$OUT gh log: $(gh_log)"; fi
 done
 case_end
 
-case_begin "commit-scope-falls-back-to-own-intent-on-bad-resolver" "bin/github-issues/clarify-commit-scope.sh"
+case_begin "commit-scope-bad-resolver-is-no-intent" "bin/github-issues/clarify-commit-scope.sh"
 for mode in "1:" "0:/elsewhere/secret.txt"; do
   export STUB_PAP_RC="${mode%%:*}" STUB_PAP_OUT="${mode#*:}"
   scope_c "$FROOT" "$S2"
-  if [ "$RC" -eq 0 ] && [[ "$(gh_log)" == *"--title Fallback intent"* ]]; then pass "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> own intent"
-  else fail "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> own intent" "rc=$RC out=$OUT gh log: $(gh_log) err=$(head -c 400 "$TMP_ROOT/last.err")"; fi
+  if [ "$RC" -eq 1 ] && [[ "$(gh_log)" != *"issue create"* ]] && grep -qF 'intent.md not found' "$TMP_ROOT/last.err"; then
+    pass "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> rc 1 intent not found, no issue created"
+  else fail "resolver rc=$STUB_PAP_RC out=[$STUB_PAP_OUT] -> rc 1 intent not found, no issue created" "rc=$RC out=$OUT gh log: $(gh_log) err=$(head -c 400 "$TMP_ROOT/last.err")"; fi
 done
 unset STUB_PAP_RC STUB_PAP_OUT
 case_end
