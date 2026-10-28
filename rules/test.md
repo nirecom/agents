@@ -37,6 +37,8 @@ See [root-names.md](../docs/architecture/claude-code/root-names.md) for the repo
 After writing test code, run `/review-tests`. WF-CODE-5 (`/write-code`) is blocked until both `write_tests` and `review_tests` are complete or both are skipped.
 
 `/review-tests` records a review-scope fingerprint (staged tests plus implementation files) at sentinel-emission time — re-editing any file in that scope after a passing review invalidates the pairing and forces re-review before commit.
+With at least one staged test, an implementation-only change reopens `/review-tests` too; with no staged test it skips as `no-tests`.
+A re-review reads only the delta — changed tests plus each covering test (a staged test whose `Tests:` header names a changed implementation) — and lists the other staged tests as a paths-only inventory; otherwise it reviews every staged test in full, with REASON `impl-uncovered`, `large-change`, `header-map-unavailable`, `no-record`, or `explicit-rereview` (vocabulary SSOT: `hooks/workflow-gate/review-scope-delta.js`).
 
 Skip path: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"` symmetrically waives both gates (no separate skip sentinel for review).
 
