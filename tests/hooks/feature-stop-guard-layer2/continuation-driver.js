@@ -38,6 +38,16 @@ function continues(r, s) {
   const m = readReceipt(s.sid, s.stage);
   return blocks(r) && !!m && m.anchorUuid === "a-anchor";
 }
+// noticeOnly: exit 0 and stdout is exactly a {systemMessage} JSON (no decision) — the #2811 unrecorded notice.
+function noticeOnly(r) {
+  let j = null;
+  try { j = JSON.parse(r.out); } catch (_) { return false; }
+  return r.rc === 0 && !!j && typeof j.systemMessage === "string" && j.systemMessage !== "" && !("decision" in j);
+}
+// noticeFor: the notice must be the unrecorded-presentation notice of exactly the given stages.
+const noticeIs = (r, stages) => {
+  try { return JSON.parse(r.out).systemMessage === require("../../../hooks/stop-confirm-plan-guard/undecidable").noticeFor(stages); } catch (_) { return false; }
+};
 const quiet = (r, s) => r.rc === 0 && r.out === "" && noReceipt(s);
 
 function expectContinue(label, r, s) {
@@ -153,13 +163,19 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
 // N6: intent is not off-waivable, so CONFIRM_INTENT=off still continues.
 { const s = X.sessionAt("intent"); expectContinue("N6 CONFIRM_INTENT=off on intent", X.runStop(s.sid, present(s), { env: { CONFIRM_INTENT: "off" } }), s); }
 
-// N7: stop_hook_active — no block, but a presentation that closes on the link still writes its receipt.
+// N7: stop_hook_active (#2811) — a complete presentation still continues once: the receipt is written
+// and marked continuedAt; a second Stop under the same state is capped (exit 0, no continue).
 {
   const s = X.sessionAt("outline");
-  const r = X.runStop(s.sid, present(s), { input: { stop_hook_active: true } });
-  const ok = twin("outline", "N7 stop_hook_active");
-  check("N7 stop_hook_active — exit 0, no output, the receipt is written",
-    ok && r.rc === 0 && r.out === "" && !noReceipt(s), show({ rc: r.rc, out: r.out, receipt: readReceipt(s.sid, "outline") }));
+  const tp = present(s);
+  const r = X.runStop(s.sid, tp, { input: { stop_hook_active: true } });
+  const m = readReceipt(s.sid, "outline");
+  check("N7 stop_hook_active, complete presentation — continues once: exit 2, decision:block, continue reason, receipt written with continuedAt",
+    continues(r, s) && !!m && !!m.continuedAt, show({ rc: r.rc, out: r.out, receipt: m }));
+  const r2 = X.runStop(s.sid, tp, { input: { stop_hook_active: true } });
+  const m2 = readReceipt(s.sid, "outline");
+  check("N7 stop_hook_active, second Stop under the same state — capped: exit 0, no output, receipt kept with continuedAt",
+    r2.rc === 0 && r2.out === "" && !!m2 && !!m2.continuedAt, show({ rc: r2.rc, out: r2.out, receipt: m2 }));
 }
 
 // N8: the plan was written but the last text does not show the link — the plan-link block wins.
@@ -195,7 +211,12 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
   fs.mkdirSync(X.receiptPath(s.sid, "outline"), { recursive: true });
   const r = X.runStop(s.sid, present(s));
   const ok = twin("outline", "N14 receipt unwritable");
-  check("N14 receipt unwritable — exit 0, no output", ok && r.rc === 0 && r.out === "", show({ rc: r.rc, out: r.out }));
+  check("N14 receipt unwritable — exit 0, no continue, stdout is only the systemMessage notice",
+    ok && noticeOnly(r), show({ rc: r.rc, out: r.out }));
+  check("N14 receipt unwritable — the notice names the outline stage as not recorded",
+    ok && noticeIs(r, ["outline"]), show({ rc: r.rc, out: r.out }));
+  check("N14 receipt unwritable — no valid receipt remains for the outline stage",
+    ok && readReceipt(s.sid, "outline") === null, show({ receipt: readReceipt(s.sid, "outline") }));
 }
 
 // N18: the turn wrote the target and another session's file of the stage; only the target's link shown.
@@ -214,8 +235,10 @@ for (const [label, stage, key] of [["N5 CONFIRM_OUTLINE=off", "outline", "CONFIR
   const s = X.sessionAt("outline");
   const r = X.runStop(s.sid, present(s), { preloads: [UNREADABLE], env: { CC_UNREADABLE: s.plan } });
   const ok = twin("outline", "N20 sha unavailable");
-  check("N20 sha unavailable — exit 0, no output, no continuation, no receipt",
-    ok && r.rc === 0 && r.out === "" && !r.reason.includes(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
+  check("N20 sha unavailable — exit 0, no continuation, no receipt, stdout is only the systemMessage notice",
+    ok && noticeOnly(r) && !r.reason.includes(CONT) && noReceipt(s), show({ rc: r.rc, out: r.out }));
+  check("N20 sha unavailable — the notice names the outline stage as not recorded",
+    ok && noticeIs(r, ["outline"]), show({ rc: r.rc, out: r.out }));
 }
 
 // T6: the clock origin is moved back so no probe budget remains — planGateState is ERROR without
