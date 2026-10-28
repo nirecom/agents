@@ -13,10 +13,9 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_CHECKOUT_ROOT_NATIVE="$(cd "$SCRIPT_CHECKOUT_ROOT" && (pwd -W 2>/dev/null || pwd))"
 HOOK="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/confirm-checkpoint.js"
 TURN_MARKER_LIB="$SCRIPT_CHECKOUT_ROOT_NATIVE/hooks/lib/turn-marker.js"
-ERRORS=0
 
-fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
-pass() { echo "PASS: $1"; }
+# shellcheck source=../lib/harness.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 run_with_timeout() {
   if command -v timeout >/dev/null 2>&1; then
@@ -35,12 +34,7 @@ if [[ ! -f "$HOOK" ]]; then
 fi
 
 # Skip if peekTurnMarkers is not yet exported from turn-marker.js
-HAS_PEEK=$(run_with_timeout node -e "
-  try {
-    const tm = require('$TURN_MARKER_LIB');
-    process.stdout.write(typeof tm.peekTurnMarkers === 'function' ? '1' : '0');
-  } catch (e) { process.stdout.write('0'); }
-" 2>/dev/null)
+HAS_PEEK=$(run_with_timeout node -e "try { const tm = require('$TURN_MARKER_LIB'); process.stdout.write(typeof tm.peekTurnMarkers === 'function' ? '1' : '0'); } catch (e) { process.stdout.write('0'); }" 2>/dev/null)
 if [ "$HAS_PEEK" != "1" ]; then
   echo "SKIP: turn-marker.js peekTurnMarkers not yet exported"
   echo ""
@@ -102,10 +96,7 @@ expect_empty() {
 # Returns the .systemMessage value of a hook output JSON, or empty string.
 extract_system_message() {
   local result="$1"
-  echo "$result" | run_with_timeout node -e "
-    let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
-    process.stdout.write(d.systemMessage || '');
-  " 2>/dev/null
+  echo "$result" | run_with_timeout node -e "let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); } process.stdout.write(d.systemMessage || '');" 2>/dev/null
 }
 
 expect_contains() {
@@ -129,29 +120,14 @@ expect_contains() {
 # $1 = command string (must be JSON-escape-safe — no quotes inside)
 make_bash_json() {
   local cmd="$1"
-  run_with_timeout node -e "
-    process.stdout.write(JSON.stringify({
-      tool_name: 'Bash',
-      tool_input: { command: process.argv[1] },
-      session_id: '$SID',
-      transcript_path: '/tmp/nope.jsonl'
-    }));
-  " "$cmd"
+  run_with_timeout node -e "process.stdout.write(JSON.stringify({ tool_name: 'Bash', tool_input: { command: process.argv[1] }, session_id: '$SID', transcript_path: '/tmp/nope.jsonl' }));" "$cmd"
 }
 
 # Write a turn marker file for the session, with given suffix and absPath.
 # Uses writeTurnMarker if available; falls back to direct write.
 write_marker() {
   local suffix="$1" absPath="$2"
-  run_with_timeout node -e "
-    const tm = require('$TURN_MARKER_LIB');
-    tm.writeTurnMarker('$SID', {
-      absPath: '$absPath',
-      suffix: '$suffix',
-      ts: Date.now(),
-      created_at: new Date().toISOString()
-    });
-  " 2>/dev/null
+  run_with_timeout node -e "const tm = require('$TURN_MARKER_LIB'); tm.writeTurnMarker('$SID', { absPath: '$absPath', suffix: '$suffix', ts: Date.now(), created_at: new Date().toISOString() });" 2>/dev/null
 }
 
 clear_markers() {
@@ -166,24 +142,26 @@ seed_receipt() { run_with_timeout node "$RECEIPT_SEED" "$SID" "$1" 2>/dev/null; 
 
 # extract_decision <hook-output> — hookSpecificOutput.permissionDecision, or empty.
 extract_decision() {
-  echo "$1" | run_with_timeout node -e "
-    let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(0); }
-    process.stdout.write(((d && d.hookSpecificOutput) || {}).permissionDecision || '');
-  " 2>/dev/null
+  echo "$1" | run_with_timeout node -e "let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(0); } process.stdout.write(((d && d.hookSpecificOutput) || {}).permissionDecision || '');" 2>/dev/null
 }
 
 # ── T1: non-Bash tool_name → empty stdout, exit 0 ──────────────────────────
+case_begin "t1-non-bash-tool-is-noop" "hooks/confirm-checkpoint.js"
 echo "=== T1: non-Bash tool_name (Write) ==="
 expect_empty "T1 non-Bash tool → noop" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/tmp/foo.md\"},\"session_id\":\"$SID\"}"
+case_end
 
 # ── T2: Bash without sentinel → empty stdout, exit 0 ────────────────────────
+case_begin "t2-bash-without-sentinel-is-noop" "hooks/confirm-checkpoint.js"
 echo "=== T2: Bash without sentinel ==="
 clear_markers
 T2_JSON=$(make_bash_json "echo hello")
 expect_empty "T2 Bash without sentinel → noop" "$T2_JSON"
+case_end
 
 # ── T3: WORKFLOW_CONFIRM_INTENT + turn marker → systemMessage with abs path ─
+case_begin "t3-confirm-intent-with-turn-marker" "hooks/confirm-checkpoint.js"
 echo "=== T3: CONFIRM_INTENT + turn marker present ==="
 clear_markers
 T3_ABS="$PLANS_DIR/$SID-intent.md"
@@ -204,8 +182,10 @@ else
   fail "T3 systemMessage missing [intent] prefix — got: $T3_MSG"
 fi
 clear_markers
+case_end
 
 # ── T4: CONFIRM_INTENT + no marker, PLANS_DIR file exists ───────────────────
+case_begin "t4-confirm-intent-plans-dir-file" "hooks/confirm-checkpoint.js"
 echo "=== T4: CONFIRM_INTENT + no marker + PLANS_DIR file ==="
 clear_markers
 T4_ABS="$PLANS_DIR/$SID-intent.md"
@@ -220,8 +200,10 @@ else
   fail "T4 systemMessage missing PLANS_DIR file path — got: $T4_MSG"
 fi
 rm -f "$T4_ABS"
+case_end
 
 # ── T5 (#2729, inverted): CONFIRM_INTENT + neither marker nor file → denied (fail-closed) ──
+case_begin "t5-no-artifact-is-denied" "hooks/confirm-checkpoint.js"
 echo "=== T5: CONFIRM_INTENT + neither marker nor file → deny ==="
 clear_markers
 T5_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_INTENT>>\"")
@@ -233,8 +215,10 @@ if [ "$(extract_decision "$T5_OUT")" = "deny" ] && [ -z "$T5_MSG" ]; then
 else
   fail "T5 no artifact → expected a deny without the dialog — got: $T5_OUT"
 fi
+case_end
 
 # ── T6: WORKFLOW_CONFIRM_OUTLINE sentinel → [outline] prefix ────────────────
+case_begin "t6-confirm-outline-prefix" "hooks/confirm-checkpoint.js"
 echo "=== T6: WORKFLOW_CONFIRM_OUTLINE ==="
 clear_markers
 T6_ABS="$PLANS_DIR/$SID-outline.md"
@@ -251,8 +235,10 @@ else
 fi
 clear_markers
 rm -f "$T6_ABS"
+case_end
 
 # ── T7: WORKFLOW_CONFIRM_DETAIL sentinel → [detail] prefix ──────────────────
+case_begin "t7-confirm-detail-prefix" "hooks/confirm-checkpoint.js"
 echo "=== T7: WORKFLOW_CONFIRM_DETAIL ==="
 clear_markers
 T7_ABS="$PLANS_DIR/$SID-detail.md"
@@ -268,11 +254,13 @@ else
   fail "T7 systemMessage missing [detail] prefix — got: $T7_MSG"
 fi
 clear_markers
+case_end
 
 # ── T9: CONFIRM_OUTLINE=off → "[confirm-skipped: CONFIRM_OUTLINE=off]" ─────
 # #2726/#2729: plan-stage flags come from $AGENTS_MAIN_ROOT/.env only — cases use confirm_env_root.
 # shellcheck source=../lib/confirm-env-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/lib/confirm-env-fixture.sh"
+case_begin "t9-confirm-outline-off-skips" "hooks/confirm-checkpoint.js"
 echo "=== T9: CONFIRM_OUTLINE=off → skipped systemMessage ==="
 clear_markers
 T9_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")
@@ -286,8 +274,10 @@ if echo "$T9_MSG" | grep -qF "[confirm-skipped: CONFIRM_OUTLINE=off]"; then
 else
   fail "T9 CONFIRM_OUTLINE=off — missing expected skipped message: $T9_MSG"
 fi
+case_end
 
 # ── T10: #2731 S3-3 — the plan ON systemMessage is facts only: `[detail] <absPath>` ──
+case_begin "t10-plan-on-system-message-is-fact-line" "hooks/confirm-checkpoint.js"
 echo "=== T10: plan stage (ON) systemMessage is the fact line only ==="
 clear_markers
 T10_ABS="$PLANS_DIR/$SID-detail.md"
@@ -310,8 +300,10 @@ else
 fi
 clear_markers
 rm -f "$T10_ABS"
+case_end
 
 # ── T12: CONFIRM_OUTLINE=off in .env file (NOT exported) → [confirm-skipped] ─
+case_begin "t12-dotenv-confirm-outline-off-skips" "hooks/confirm-checkpoint.js"
 echo "=== T12: CONFIRM_OUTLINE=off in .env file → skipped systemMessage ==="
 clear_markers
 # Write to .env file in AGENTS_MAIN_ROOT; do NOT export to shell
@@ -328,8 +320,10 @@ else
   fail "T12 .env CONFIRM_OUTLINE=off — missing expected skipped message: $T12_MSG"
 fi
 rm -f "$ISOLATED_CFG_DIR/.env"
+case_end
 
 # ── T12b/T12c (#2726/#2729): an exported plan-stage flag is ignored; the .env file decides ──
+case_begin "t12b-exported-flag-is-ignored" "hooks/confirm-checkpoint.js"
 echo "=== T12b: exported CONFIRM_OUTLINE=off, .env silent → regular confirm dialog ==="
 clear_markers
 # A presentable outline (plan file, turn marker, receipt — as T6) so the regular dialog can appear.
@@ -352,7 +346,9 @@ elif echo "$T12B_MSG" | grep -qE '^\[outline\] '; then
 else
   fail "T12b exported CONFIRM_OUTLINE=off — expected the regular confirm systemMessage, got: $T12B_MSG"
 fi
+case_end
 
+case_begin "t12c-dotenv-off-beats-exported-on" "hooks/confirm-checkpoint.js"
 echo "=== T12c: .env CONFIRM_OUTLINE=off, exported CONFIRM_OUTLINE=on → skipped ==="
 clear_markers
 T12C_OUT=$(
@@ -366,32 +362,36 @@ if echo "$T12C_MSG" | grep -qF "[confirm-skipped: CONFIRM_OUTLINE=off]"; then
 else
   fail "T12c .env CONFIRM_OUTLINE=off + exported on — missing expected skipped message: $T12C_MSG"
 fi
+case_end
 
 # ── T25-T28 (#2277): CONFIRM_INTENT=off no longer skips (even with the stage table unloadable); CONFIRM_DETAIL/OUTLINE=off still do ──
+case_begin "t25-t28-off-per-stage" "hooks/confirm-checkpoint.js"
 # shellcheck source=feature-confirm-checkpoint/off-per-stage.sh
 . "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/off-per-stage.sh"
+case_end
 
 # ── T13-T15 (#2513): published blob URL, push failure, no editor launch ──────
+case_begin "t13-t15-plan-sync" "hooks/confirm-checkpoint.js"
 # shellcheck source=feature-confirm-checkpoint/plan-sync.sh
 . "$SCRIPT_CHECKOUT_ROOT_NATIVE/tests/hooks/feature-confirm-checkpoint/plan-sync.sh"
+case_end
 
 # ── #2729: continuation marks are replaced by presentation receipts ──
 # The receipt store is pinned by tests/hooks/feature-2729-presentation-receipt.sh; here only the
 # retired mark API is checked to be gone from turn-marker.js.
+case_begin "continuation-mark-api-is-gone" "hooks/lib/turn-marker.js"
 echo "=== #2729: turn-marker.js no longer exports the continuation-mark API ==="
-CM_LEFT=$(run_with_timeout node -e "
-  const tm = require('$TURN_MARKER_LIB');
-  process.stdout.write(['writeContinuationMark', 'takeContinuationMark', 'clearContinuationMarks'].filter((k) => k in tm).join(','));
-" 2>&1)
+CM_LEFT=$(run_with_timeout node -e "const tm = require('$TURN_MARKER_LIB'); process.stdout.write(['writeContinuationMark', 'takeContinuationMark', 'clearContinuationMarks'].filter((k) => k in tm).join(','));" 2>&1)
 if [ -z "$CM_LEFT" ]; then pass "#2729 turn-marker.js exports no continuation-mark function"
 else fail "#2729 turn-marker.js still exports: $CM_LEFT"; fi
+case_end
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
-if [ "$ERRORS" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ]; then
   echo "All tests passed!"
 else
-  echo "$ERRORS test(s) failed"
+  echo "$FAIL test(s) failed"
   exit 1
 fi

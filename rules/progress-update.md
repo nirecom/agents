@@ -16,6 +16,8 @@ Rewrite the `Current state` section on every update: what is being done now and 
 
 Overwrite `Current state`; never turn it into a diary or append dated entries.
 
+Keep `Current state` within the `progress` limit of `rules/coding/file-split.md` (Pattern E); the edit-time size check blocks an edit over it.
+
 Point the `Plan files` lines at the plans this session writes; every generation, a session-downstream included, writes them under the first_session_id name.
 
 Add only facts a fresh session cannot recover from any other file, under the four kinds of fact (`Facts to carry over`):

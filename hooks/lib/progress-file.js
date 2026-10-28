@@ -14,6 +14,7 @@ const { getPlansArtifactPath } = require("./plans-artifact-registry");
 const sidecar = require("./progress-pressure-sidecar");
 const { isValidSid, resolveFirstSid } = require("../workflow-state/state-ancestry");
 
+const CURRENT_STATE_SECTION = "Current state";
 const TEMPLATE_PATH = path.join(__dirname, "..", "..", "templates", "progress.md");
 
 // progressPathFor(sid) -> <plans dir>/<first_session_id>-session-progress.md, or null for an invalid sid.
@@ -106,6 +107,7 @@ function bumpUpdateProgress(sid) {
 
 module.exports = {
   PRESSURE_SUFFIX: sidecar.PRESSURE_SUFFIX,
+  CURRENT_STATE_SECTION,
   TEMPLATE_PATH,
   isValidSid,
   readPressure: sidecar.readPressure,

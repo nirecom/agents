@@ -64,7 +64,8 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/supervisor-trigger.js` | PostToolUse | Yes | No |
 | `hooks/pre-commit` (worktree-isolation gate + prompt-extraction backstop) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
-| `hooks/block-comment-block-size.js` | PreToolUse | **No** | **No** |
+| `hooks/block-post-edit-size.js` (per check: `file-size` honors WORKFLOW_OFF only; `comment-block` honors neither) | PreToolUse | Partial (`file-size` only) | **No** |
+| `hooks/lib/precommit-size-gate.sh` (size gate sourced by `hooks/pre-commit`) | git pre-commit | Yes (also skipped in sessions that never started a workflow) | **No** |
 | `hooks/block-case-markers.js` | PreToolUse | **No** | **No** |
 | `hooks/postuse-step-in-flight-mark.js` | PostToolUse | **No** | **No** |
 | `hooks/user-prompt-submit-mechanism-check.js` | UserPromptSubmit | **No** | **No** |

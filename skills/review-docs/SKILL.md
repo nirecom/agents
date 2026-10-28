@@ -13,7 +13,7 @@ Use after `/update-docs`, once doc/changelog edits are staged, before commit.
 ## Rules
 
 - The commit gate re-runs `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --staged` on every commit (TOCTOU-safe); a passing review now does not exempt a later staged edit.
-- Line limits: SSOT is `rules/coding/file-split.md` Pattern C (WARN 300, HARD 500). History/archive/CHANGELOG files are exempt.
+- Line limits: SSOT is `rules/coding/file-split.md` Pattern C (kind `docs` of its generated Size limits table). History/archive/CHANGELOG files are exempt.
 - README section order: SSOT is the parseable block in `rules/docs/readme.md`.
 - Glossary entry files: the glossary gate (`bin/review-doc-glossary`) enforces entry form, order and file ranges per `rules/docs/glossary.md`.
 - Judge each changed glossary entry's category fit against `rules/docs/glossary.md`, and apply `skills/_shared/combined-glossary.md` (reviewer directives) to the changed docs.

@@ -69,9 +69,10 @@ function lintPlanArtifactStructure(text, stage) {
 // policy, but canonical-heading checks run regardless of policy (#2338): when
 // the stage resolves, heading violations are returned even under a non-strict
 // policy, so a non-strict policy no longer short-circuits the whole re-lint.
+// result.size is the #2631 size verdict of the same text (null when skipped).
 function relintPlanArtifact(sid, stage) {
   const { policy, tier } = loadPlanPolicy();
-  const result = { skipped: null, policy, tier, artifactPath: null, violations: [] };
+  const result = { skipped: null, policy, tier, artifactPath: null, size: null, violations: [] };
   const artifactPath = resolvePlanArtifactPath(sid, stage);
   if (artifactPath === null) return Object.assign(result, { skipped: "unresolved" });
   // A non-strict policy with no resolvable stage has nothing to check: heading
@@ -85,6 +86,8 @@ function relintPlanArtifact(sid, stage) {
   } catch (e) {
     return Object.assign(result, { skipped: "unreadable" });
   }
+  const { judge, measure } = require("./size-limits");
+  result.size = judge(stage, 0, measure(stage, text));
   result.violations = lintPlanArtifactText(text, policy, stage);
   return result;
 }

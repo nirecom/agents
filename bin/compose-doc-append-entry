@@ -357,6 +357,7 @@ if [[ "$WANT_HISTORY" -eq 1 ]]; then
             --category "$CATEGORY" \
             --subject "$SUBJECT" \
             --date "$TODAY" \
+            --no-auto-rotate \
             --commits "$COMMITS_ARG" \
             --background "$BG" \
             --changes "$CHANGES_WITH_SENTINEL" \
@@ -419,13 +420,19 @@ HISTORY_ROTATED=0
 ROTATE_DIR=""
 HISTORY_FILES_ARGS=()
 if [[ "$WANT_HISTORY" -eq 1 ]]; then
-    H_LINES=$(wc -l < "$HISTORY_STAGING")
-    if (( H_LINES >= 500 )); then
-        if ! uv run --no-project "$SCRIPT_CHECKOUT_ROOT/bin/doc-rotate.py" "$HISTORY_STAGING" --threshold-warn 500 >&2; then
+    H_LINES=$(grep -c '' "$HISTORY_STAGING")  # counts an unterminated last line, as size-limits countLines does
+    if ! read -r H_WARN _ < <(node "$SCRIPT_CHECKOUT_ROOT/bin/print-size-limits" --get history) || [[ ! "$H_WARN" =~ ^[0-9]+$ ]]; then
+        echo "compose-doc-append-entry: print-size-limits --get history failed" >&2
+        exit 1
+    fi
+    if (( H_LINES >= H_WARN )); then
+        if ! uv run --no-project "$SCRIPT_CHECKOUT_ROOT/bin/doc-rotate.py" "$HISTORY_STAGING" --threshold-warn-ssot >&2; then
             echo "compose-doc-append-entry: doc-rotate.py failed" >&2
             exit 1
         fi
-        ROTATE_DIR="$(dirname "$HISTORY_STAGING")/history"
+        # doc-rotate.py writes archives beside the file under its lower-cased stem (path.stem.lower()).
+        HISTORY_STAGING_BASE="$(basename "$HISTORY_STAGING" .md)"
+        ROTATE_DIR="$(dirname "$HISTORY_STAGING")/${HISTORY_STAGING_BASE,,}"
         HISTORY_ROTATED=1
         HISTORY_FILES_ARGS=(--file "docs/history.md=$HISTORY_STAGING")
         if [[ -d "$ROTATE_DIR" ]]; then

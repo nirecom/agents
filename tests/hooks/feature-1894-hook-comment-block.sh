@@ -1,40 +1,21 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block.sh
-# Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js, settings.json
+# Tests: hooks/block-post-edit-size.js, hooks/block-post-edit-size/comment-block.js, hooks/lib/comment-block-scan.js, settings.json
 # Tags: comment-block-size, hook, pretooluse, edit-time, shift-left, no-bypass, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
-
-# Issue #1894 — Edit-time half of the block, the half the issue was actually
-# filed for. Pre-commit already caught these blocks but ~40% of sessions
-# ignored it, so the user ended up pointing it out by hand; the cheapest fix
-# point is the moment the block is written, not after it's staged. This hook
-# is the shift-left; hooks/pre-commit is its backstop.
-
-# The two layers deliberately judge differently (detail plan S3-2, CPR-SC):
-# Edit-time (here) is PURE ABSOLUTE on the post-Edit file — blocked even if
-# this edit didn't touch the violation and nothing got worse. pre-commit is
-# baseline-relative — only a WORSENING blocks. The absolute rule is the sharp
-# edge: a file with an old violation is unwritable until fixed (accepted,
-# detail plan Risks #10) — pinned as a REQUIREMENT so a later "usability fix"
-# reverting to worsening-only judgment fails a named test.
-
-# Two ABSENCE properties get their own cases: no bypass — WORKFLOW_OFF /
-# WORKTREE_OFF never suspend this hook because it never reads marker state
-# (no-bypass.sh); config comes from the agents main root's .env, never
-# process.env, so an inline COMMENT_BLOCK_MAX_LINES can't lift the bar
-# (filter-and-config.sh). Dispatcher: harness here, cases in
-# tests/hooks/feature-1894-hook-comment-block/*.sh.
-
-# TL3 gap: whether Claude Code actually routes a real Edit through this hook
-# (cases feed a hand-built payload; registration.sh checks settings.json
-# only); real editFiles/NotebookEdit payload shapes; latency. Mitigation:
-# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category
-# hook-registration).
+# Issue #1894 — edit-time shift-left of the comment-block check; hooks/pre-commit is the backstop.
+# Edit-time is PURE ABSOLUTE on the post-edit file (an old violation keeps the file unwritable until
+# fixed); pre-commit is baseline-relative (CPR-SC). Absence properties: no marker bypass (no-bypass.sh),
+# config only from the agents main root's .env (filter-and-config.sh). Cases: feature-1894-hook-comment-block/*.sh.
+# TL3 gap: a real Edit routed through the hook, real editFiles/NotebookEdit payloads, latency.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category hook-registration).
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The worktree copies are the state under test — never the deployed ~/.claude.
-HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size.js"
+# The comment-block check itself, split out of the dispatch by #2631 (no-bypass.sh B2 greps it).
+CB_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size/comment-block.js"
 SCAN_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-scan.js"
 SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
 SCANNER_SH="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size.d/scan.sh"
@@ -330,7 +311,7 @@ wfile() {
 
 if [ ! -f "$HOOK" ]; then
     echo "NOTE: $HOOK does not exist yet — every case below is expected to fail"
-    echo "      until hooks/block-comment-block-size.js is implemented (issue #1894)."
+    echo "      until hooks/block-post-edit-size.js is implemented (issue #1894)."
 fi
 
 # ============================================================================

@@ -24,8 +24,8 @@ DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})")
 INCIDENT_RE = re.compile(r"^### (?:INCIDENT: )?#(\d+):", re.MULTILINE)
 ENTRY_RE = re.compile(r"^### ", re.MULTILINE)
 
-WARN_LINES = 500
 DATE_ORDER_TOLERANCE_DAYS = 7
+ROTATE_FLOOR = "20"
 
 
 def _detect_line_ending(data: bytes) -> bytes:
@@ -129,11 +129,6 @@ def _find_last_incident_in_text(text: str) -> int | None:
     if not matches:
         return None
     return max(int(m.group(1)) for m in matches)
-
-
-def _count_lines(path: Path) -> int:
-    with open(path, "rb") as f:
-        return f.read().count(b"\n")
 
 
 def _build_entry(args, incident_num: int | None, eol: bytes) -> bytes:
@@ -318,27 +313,27 @@ def main():
             f.write(eol + eol)
         f.write(entry_bytes)
 
-    # Auto-rotate when file exceeds the warn threshold
+    # doc-rotate owns the threshold (size-limit SSOT) and exits untouched below it.
     if not args.no_auto_rotate:
-        lines = _count_lines(path)
-        if lines >= WARN_LINES:
-            rotate_script = Path(__file__).parent / "doc-rotate.py"
+        rotate_script = Path(__file__).parent / "doc-rotate.py"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(rotate_script),
+                str(path),
+                "--threshold-warn-ssot",
+                "--floor",
+                ROTATE_FLOOR,
+            ],
+            check=False,
+        )
+        # The entry is already appended, so the exit code stays 0 (a retrying caller would
+        # duplicate it); the failure is reported so an over-limit file is not mistaken for rotated.
+        if result.returncode != 0:
             print(
-                f"Note: {path} is now {lines} lines (>= {WARN_LINES}). "
-                "Auto-rotating...",
+                f"doc-append: entry appended, but doc-rotate failed (exit {result.returncode}); "
+                f"{path} was not rotated",
                 file=sys.stderr,
-            )
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(rotate_script),
-                    str(path),
-                    "--threshold-warn",
-                    str(WARN_LINES),
-                    "--floor",
-                    "20",
-                ],
-                check=False,
             )
 
 
