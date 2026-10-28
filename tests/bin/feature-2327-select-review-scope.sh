@@ -144,21 +144,31 @@ JSEOF
 T_S4() {
   if [ "$CLI_EXISTS" -eq 0 ]; then fail "S4.deleted-missing" "bin/select-review-scope.js not yet implemented"; return; fi
   local sid="s4-scope-$$"
-  # Manifest has tests/gone.sh, current has tests/here.sh (tests-only delta)
+  # Manifest has tests/gone.sh, current has tests/here.sh (tests-only delta: the impl and two
+  # unchanged tests keep their recorded OIDs, so the review stays 1/3, under the #2327 threshold).
   # tests/gone.sh does not exist on disk (deleted = normal for DELETED)
-  mkdir -p "$REPO/tests"
+  mkdir -p "$REPO/tests" "$REPO/hooks"
   echo "# here" > "$REPO/tests/here.sh"
-  git -C "$REPO" add tests/here.sh
-  setup_state_with_manifest "$sid" '{"tests/gone.sh":"old123","hooks/impl.js":"ii"}'
+  echo "# s4 keep1" > "$REPO/tests/s4k1.sh"
+  echo "# s4 keep2" > "$REPO/tests/s4k2.sh"
   # Also stage impl so SOURCE is non-empty
-  mkdir -p "$REPO/hooks"
   echo "impl" > "$REPO/hooks/impl.js"
-  git -C "$REPO" add hooks/impl.js
-  local rc=0
-  run_cli --session "$sid" --worktree "$REPO_NP" > /dev/null || rc=$?
-  git -C "$REPO" rm -f --cached tests/here.sh hooks/impl.js 2>/dev/null || true
-  rm -f "$REPO/tests/here.sh" "$REPO/hooks/impl.js"
+  git -C "$REPO" add tests/here.sh tests/s4k1.sh tests/s4k2.sh hooks/impl.js
+  local oi ok1 ok2
+  oi="$(git -C "$REPO" rev-parse :hooks/impl.js)"
+  ok1="$(git -C "$REPO" rev-parse :tests/s4k1.sh)"
+  ok2="$(git -C "$REPO" rev-parse :tests/s4k2.sh)"
+  setup_state_with_manifest "$sid" "{\"tests/gone.sh\":\"old123\",\"hooks/impl.js\":\"$oi\",\"tests/s4k1.sh\":\"$ok1\",\"tests/s4k2.sh\":\"$ok2\"}"
+  local rc=0 out
+  out="$(run_cli --session "$sid" --worktree "$REPO_NP")" || rc=$?
+  git -C "$REPO" rm -f --cached tests/here.sh tests/s4k1.sh tests/s4k2.sh hooks/impl.js 2>/dev/null || true
+  rm -f "$REPO/tests/here.sh" "$REPO/tests/s4k1.sh" "$REPO/tests/s4k2.sh" "$REPO/hooks/impl.js"
   [ "$rc" -eq 0 ] && pass "S4. DELETED missing → exit 0" || fail "S4. DELETED missing → exit 0" "got exit $rc"
+  printf '%s\n' "$out" | tr -d '\r' | grep -qx "SCOPE=delta" && pass "S4. SCOPE=delta" || fail "S4. SCOPE=delta" "$out"
+  local dl
+  dl="$(printf '%s\n' "$out" | tr -d '\r' | grep -c "^DELETED" || true)"
+  printf '%s\n' "$out" | tr -d '\r' | grep -qxF $'DELETED\ttests/gone.sh' && [ "$dl" -eq 1 ] \
+    && pass "S4. exactly one DELETED line, tests/gone.sh" || fail "S4. exactly one DELETED line, tests/gone.sh" "$out"
 }
 
 # ============================================================
@@ -205,18 +215,23 @@ T_S10() {
   if [ "$CLI_EXISTS" -eq 0 ]; then fail "S10.delta-changed-and-test-dir" "bin/select-review-scope.js not yet implemented"; return; fi
   local sid="s10-scope-$$"
   mkdir -p "$REPO/tests" "$REPO/test"
+  # Two unchanged tests keep the review at 2/4: the 50% boundary stays delta.
   echo "# mod v1" > "$REPO/tests/mod.sh"
-  git -C "$REPO" add tests/mod.sh
-  local old_oid
+  echo "# s10 k1" > "$REPO/tests/s10k1.sh"
+  echo "# s10 k2" > "$REPO/tests/s10k2.sh"
+  git -C "$REPO" add tests/mod.sh tests/s10k1.sh tests/s10k2.sh
+  local old_oid k1_oid k2_oid
   old_oid=$(git -C "$REPO" rev-parse :tests/mod.sh)
-  setup_state_with_manifest "$sid" "{\"tests/mod.sh\":\"$old_oid\"}"
+  k1_oid=$(git -C "$REPO" rev-parse :tests/s10k1.sh)
+  k2_oid=$(git -C "$REPO" rev-parse :tests/s10k2.sh)
+  setup_state_with_manifest "$sid" "{\"tests/mod.sh\":\"$old_oid\",\"tests/s10k1.sh\":\"$k1_oid\",\"tests/s10k2.sh\":\"$k2_oid\"}"
   echo "# mod v2 edited" > "$REPO/tests/mod.sh"
   echo "# fx" > "$REPO/test/fx.sh"
   git -C "$REPO" add tests/mod.sh test/fx.sh
   local out rc=0
   out=$(run_cli --session "$sid" --worktree "$REPO_NP") || rc=$?
-  git -C "$REPO" rm -f --cached tests/mod.sh test/fx.sh 2>/dev/null || true
-  rm -f "$REPO/tests/mod.sh" "$REPO/test/fx.sh"
+  git -C "$REPO" rm -f --cached tests/mod.sh test/fx.sh tests/s10k1.sh tests/s10k2.sh 2>/dev/null || true
+  rm -f "$REPO/tests/mod.sh" "$REPO/test/fx.sh" "$REPO/tests/s10k1.sh" "$REPO/tests/s10k2.sh"
   local tab=$'\t'
   [ "$rc" -eq 0 ] && pass "S10. delta → exit 0" || fail "S10. delta → exit 0" "got exit $rc; $out"
   printf '%s\n' "$out" | grep -qx "SCOPE=delta" && pass "S10. SCOPE=delta" || fail "S10. SCOPE=delta" "$out"
@@ -245,18 +260,23 @@ T_S11() {
   git -C "$repo" add .gitkeep
   git -C "$repo" commit -q -m "init"
   mkdir -p "$repo/tests/sub" "$repo/test"
+  # keep3/keep4 keep the review at 4/8: the 50% boundary stays delta.
   echo "# keep" > "$repo/tests/keep.sh"
   echo "# keep2" > "$repo/test/keep2.sh"
+  echo "# keep3" > "$repo/tests/keep3.sh"
+  echo "# keep4" > "$repo/test/keep4.sh"
   echo "# mod v1" > "$repo/tests/sub/mod.sh"
   echo "# tmod v1" > "$repo/test/tmod.sh"
-  git -C "$repo" add tests/keep.sh test/keep2.sh tests/sub/mod.sh test/tmod.sh
-  local k1 k2 m1 m2
+  git -C "$repo" add tests/keep.sh test/keep2.sh tests/keep3.sh test/keep4.sh tests/sub/mod.sh test/tmod.sh
+  local k1 k2 k3 k4 m1 m2
   k1=$(git -C "$repo" rev-parse :tests/keep.sh)
   k2=$(git -C "$repo" rev-parse :test/keep2.sh)
+  k3=$(git -C "$repo" rev-parse :tests/keep3.sh)
+  k4=$(git -C "$repo" rev-parse :test/keep4.sh)
   m1=$(git -C "$repo" rev-parse :tests/sub/mod.sh)
   m2=$(git -C "$repo" rev-parse :test/tmod.sh)
   local gone="1111111111111111111111111111111111111111"
-  setup_state_with_manifest "$sid" "{\"tests/keep.sh\":\"$k1\",\"test/keep2.sh\":\"$k2\",\"tests/sub/mod.sh\":\"$m1\",\"test/tmod.sh\":\"$m2\",\"tests/gone.sh\":\"$gone\",\"test/gone2.sh\":\"$gone\"}"
+  setup_state_with_manifest "$sid" "{\"tests/keep.sh\":\"$k1\",\"test/keep2.sh\":\"$k2\",\"tests/keep3.sh\":\"$k3\",\"test/keep4.sh\":\"$k4\",\"tests/sub/mod.sh\":\"$m1\",\"test/tmod.sh\":\"$m2\",\"tests/gone.sh\":\"$gone\",\"test/gone2.sh\":\"$gone\"}"
   echo "# mod v2" > "$repo/tests/sub/mod.sh"
   echo "# tmod v2" > "$repo/test/tmod.sh"
   echo "# add" > "$repo/tests/add.sh"
@@ -269,7 +289,8 @@ T_S11() {
     "REVIEW${tab}$repo_np/tests/add.sh" "REVIEW${tab}$repo_np/test/tadd.sh" \
     "REVIEW${tab}$repo_np/tests/sub/mod.sh" "REVIEW${tab}$repo_np/test/tmod.sh" \
     "DELETED${tab}tests/gone.sh" "DELETED${tab}test/gone2.sh" \
-    "INVENTORY${tab}tests/keep.sh" "INVENTORY${tab}test/keep2.sh" | LC_ALL=C sort)"
+    "INVENTORY${tab}tests/keep.sh" "INVENTORY${tab}test/keep2.sh" \
+    "INVENTORY${tab}tests/keep3.sh" "INVENTORY${tab}test/keep4.sh" | LC_ALL=C sort)"
   got="$(printf '%s\n' "$out" | tr -d '\r' | grep -v '^$' | LC_ALL=C sort)"
   [ "$rc" -eq 0 ] && pass "S11. delta → exit 0" || fail "S11. delta → exit 0" "got exit $rc; $out"
   if [ "$got" = "$want" ]; then
