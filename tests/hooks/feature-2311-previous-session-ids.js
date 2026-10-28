@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io.js, hooks/session-start.js, bin/resume-session-detect
-// Tags: TL2, session-inherit, workflow-state, lineage, regression-2311, scope:issue-specific, pwsh-not-required
+// Tags: TL2, session-inherit, workflow-state, session-chain, regression-2311, progress-file, regression-2748, scope:issue-specific, pwsh-not-required
 // #2311: every inheritance writes previous_session_ids = the upstream's own chain plus the
 // upstream sid, oldest first, de-duplicated (first occurrence kept), with every element a valid
 // sid. The chain comes from upstream.previous_session_ids when it is an array, else from a valid
@@ -233,6 +233,105 @@ caseBegin("session-start-writes-same-lineage", "hooks/session-start.js");
     eq(viaHook.upstream_session_id, "p4-up", "the hook inherited from p4-up");
     eq(viaHook.previous_session_ids, explicit, "hook chain vs explicit chain");
     eq(viaHook.previous_session_ids, ["p4-root", "p4-up"], "hook chain");
+  });
+}
+caseEnd();
+
+// #2748: every inheritance writes first_session_id = resolveFirstSid(upstream) into the copy, so
+// each generation names the first generation of its session chain without a walk. A first generation
+// carries no first_session_id. A legacy upstream is a raw state carrying upstream_session_id only.
+const PF = F.mod("hooks/lib/progress-file");
+// adopt(down, up) — like inherit, but fails loudly and returns the downstream's whole state.
+function adopt(down, up) {
+  const createdAt = F.seedDownstream(down);
+  const res = apply().applyInheritance(down, createdAt, up);
+  if (!res || res.ok === false) throw new Error(`applyInheritance(${down}, ${up}) failed: ${show(res)}`);
+  return F.raw(down);
+}
+
+caseBegin("persisted-key-first-session-id", "hooks/workflow-state/state-io/projection.js");
+{
+  check("A7: PERSISTED_TOP_LEVEL_KEYS lists first_session_id right after previous_session_ids", () => {
+    const keys = Array.from(F.mod("hooks/workflow-state/state-io/projection").PERSISTED_TOP_LEVEL_KEYS || []);
+    eq(keys.indexOf("first_session_id") !== -1, true, "first_session_id in the allow-list");
+    eq(keys.indexOf("first_session_id"), keys.indexOf("previous_session_ids") + 1, "position");
+  });
+}
+caseEnd();
+
+caseBegin("build-copy-writes-first-session-id", "hooks/workflow-state/inheritance/apply.js");
+{
+  check("A7: A -> B writes B.first_session_id = A", () => {
+    F.seedUpstream("a7-a");
+    eq(adopt("a7-b", "a7-a").first_session_id, "a7-a", "B.first_session_id");
+  });
+  check("A8: A -> B -> C writes C.first_session_id = A and previous_session_ids [A, B]", () => {
+    F.seedUpstream("a8-a");
+    adopt("a8-b", "a8-a");
+    const c = adopt("a8-c", "a8-b");
+    eq(c.first_session_id, "a8-a", "C.first_session_id");
+    eq(c.previous_session_ids, ["a8-a", "a8-b"], "C.previous_session_ids");
+  });
+  check("A8: A -> B -> C -> D keeps first_session_id = A on D", () => {
+    F.seedUpstream("a8d-a");
+    adopt("a8d-b", "a8d-a");
+    adopt("a8d-c", "a8d-b");
+    eq(adopt("a8d-d", "a8d-c").first_session_id, "a8d-a", "D.first_session_id");
+  });
+}
+caseEnd();
+
+caseBegin("build-copy-first-session-id-from-self-pinned-or-legacy-upstream", "hooks/workflow-state/inheritance/apply.js");
+{
+  check("A9: a self-pinned upstream (no first_session_id field) still gives C.first_session_id = A", () => {
+    F.seedUpstream("a9-a");
+    const b = adopt("a9-b", "a9-a");
+    // B as written before #2748: no first_session_id, and its sidecar pinned to itself (a self-pinned sidecar).
+    delete b.first_session_id;
+    F.writeRaw("a9-b", b);
+    if (!PF.mergePressure("a9-b", { root_sid: "a9-b" })) throw new Error("could not pin a9-b");
+    eq(adopt("a9-c", "a9-b").first_session_id, "a9-a", "C.first_session_id");
+  });
+  check("A9b: a legacy upstream (upstream_session_id only) gives C.first_session_id = A and the #2311 chain", () => {
+    F.seedUpstream("a9b-a");
+    F.seedUpstream("a9b-b");
+    const b = F.raw("a9b-b");
+    delete b.previous_session_ids;
+    delete b.first_session_id;
+    b.upstream_session_id = "a9b-a";
+    F.writeRaw("a9b-b", b);
+    const c = adopt("a9b-c", "a9b-b");
+    eq(c.first_session_id, "a9b-a", "C.first_session_id");
+    eq(c.previous_session_ids, ["a9b-a", "a9b-b"], "C.previous_session_ids");
+  });
+  check("A9b: a three-generation legacy upstream chain resolves to its oldest member", () => {
+    F.seedUpstream("a9c-a");
+    F.seedUpstream("a9c-b");
+    F.seedUpstream("a9c-c");
+    const b = F.raw("a9c-b");
+    delete b.previous_session_ids;
+    b.upstream_session_id = "a9c-a";
+    F.writeRaw("a9c-b", b);
+    const c = F.raw("a9c-c");
+    delete c.previous_session_ids;
+    c.upstream_session_id = "a9c-b";
+    F.writeRaw("a9c-c", c);
+    eq(adopt("a9c-d", "a9c-c").first_session_id, "a9c-a", "D.first_session_id");
+  });
+}
+caseEnd();
+
+caseBegin("first-generation-has-no-first-session-id", "hooks/workflow-state/inheritance/apply.js");
+{
+  check("A10: a first generation carries no first_session_id", () => {
+    F.seedUpstream("a10-a");
+    eq(Object.prototype.hasOwnProperty.call(F.raw("a10-a"), "first_session_id"), false, "first_session_id key on A");
+  });
+  check("A10: inheriting from A leaves A without first_session_id", () => {
+    F.seedUpstream("a10b-a");
+    const b = adopt("a10b-b", "a10b-a");
+    eq(Object.prototype.hasOwnProperty.call(F.raw("a10b-a"), "first_session_id"), false, "first_session_id key on A");
+    eq(b.first_session_id, "a10b-a", "B.first_session_id");
   });
 }
 caseEnd();

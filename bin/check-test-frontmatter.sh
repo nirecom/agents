@@ -4,8 +4,9 @@
 # non-empty, each comma-separated token matching FRONTMATTER_TOKEN_VALID_RE) and
 # the `# Tags:` scope tag (scope:issue-specific or scope:common).
 # Usage:
-#   bin/check-test-frontmatter.sh --staged <file1> [<file2>...]
+#   bin/check-test-frontmatter.sh --staged [--merge-parents <file>] <file1> [<file2>...]
 #   bin/check-test-frontmatter.sh --all [<root>]
+#   --merge-parents: the bin/merge-parents record file; without it, one CLI call is made here.
 # Exit:  0 = all OK, 1 = validation failure on one or more files, 2 = usage error
 #        or the registry is unreadable
 
@@ -14,6 +15,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/test-frontmatter-constants.sh
 source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh" || { echo "ERROR: test language registry not readable" >&2; exit 2; }
+# shellcheck source=lib/test-frontmatter-headers.sh
+source "$SCRIPT_DIR/lib/test-frontmatter-headers.sh" || { echo "ERROR: lib/test-frontmatter-headers.sh not readable" >&2; exit 2; }
 
 # _trim <var-name> — trims leading/trailing whitespace in place (no subprocess).
 _trim() {
@@ -105,32 +108,13 @@ check_content() {
   return "$rc"
 }
 
-# extract_headers <content> <path> — sets EXT_TESTS / EXT_TAGS from a content
-# string; <path> picks the registry header.commentPrefix, matched as a fixed string.
-extract_headers() {
-  local content="$1"
-  tlr_comment_prefix "$2" >/dev/null
-  EXT_TESTS="$(printf '%s\n' "$content" | awk -v p="$TLR_COMMENT_PREFIX Tests:" 'index($0, p) == 1 { print; exit }' || true)"
-  EXT_TAGS="$(printf '%s\n' "$content" | awk -v p="$TLR_COMMENT_PREFIX Tags:" 'index($0, p) == 1 { print; exit }' || true)"
-}
-
-# extract_headers_file <file> — sets EXT_TESTS / EXT_TAGS by reading a file
-# directly (fewer subprocesses than cat|awk — matters for the --all repo scan).
-extract_headers_file() {
-  local file="$1"
-  tlr_comment_prefix "$file" >/dev/null
-  EXT_TESTS="$(awk -v p="$TLR_COMMENT_PREFIX Tests:" 'index($0, p) == 1 { print; exit }' "$file" 2>/dev/null || true)"
-  EXT_TAGS="$(awk -v p="$TLR_COMMENT_PREFIX Tags:" 'index($0, p) == 1 { print; exit }' "$file" 2>/dev/null || true)"
-}
-
-# staged_content <file> — prints the content to validate in --staged mode.
+# staged_content <file> <repo-root> — prints the content to validate in --staged mode.
 # Reads the staged blob via `git show :<rel>` when the path is repo-relative and
 # staged; otherwise falls back to the working-tree file (keeps non-git and
-# absolute-path callers working).
+# absolute-path callers working). <repo-root> is empty outside a git repository.
 staged_content() {
-  local f="$1"
-  local repo_root rel blob
-  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  local f="$1" repo_root="$2"
+  local rel blob
   rel="$f"
   if [[ "$f" == /* && -n "$repo_root" && "$f" == "$repo_root/"* ]]; then
     rel="${f#"$repo_root"/}"
@@ -162,7 +146,7 @@ check_harness_source() {
 
 if [[ $# -eq 0 ]]; then
   echo "Usage:" >&2
-  echo "  $(basename "$0") --staged <file1> [<file2>...]" >&2
+  echo "  $(basename "$0") --staged [--merge-parents <file>] <file1> [<file2>...]" >&2
   echo "  $(basename "$0") --all [<root>]" >&2
   exit 2
 fi
@@ -172,6 +156,17 @@ mode="$1"; shift
 case "$mode" in
   --staged)
     FAIL=0
+    mp_file=""
+    if [[ "${1:-}" == --merge-parents ]]; then
+      [[ "$#" -ge 2 && -n "$2" ]] || { echo "ERROR: --merge-parents needs a file" >&2; exit 2; }
+      mp_file="$2"; shift 2
+    fi
+    # The self-impl sibling is staged-mode only, so --all never needs it on disk.
+    # shellcheck source=check-test-frontmatter/self-impl.sh
+    source "$SCRIPT_DIR/check-test-frontmatter/self-impl.sh" || { echo "ERROR: check-test-frontmatter/self-impl.sh not readable" >&2; exit 2; }
+    repo_root_hs="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    st_files=()
+    st_rels=()
     for f in "$@"; do
       # Accept both relative (tests/foo.sh) and absolute paths.
       # _archive/ files are excluded regardless of path form.
@@ -180,17 +175,23 @@ case "$mode" in
         */tests/*|tests/*) _is_supported_test "$f" || continue ;;
         *) continue ;;
       esac
-      # Compute the repo-relative path once; reused by both the flat-layout
-      # rejection and the harness-source check below.
+      # Compute the repo-relative path once; reused by every check below.
       rel="$f"
-      repo_root_hs="$(git rev-parse --show-toplevel 2>/dev/null || true)"
       if [[ "$f" == /* && -n "$repo_root_hs" && "$f" == "$repo_root_hs/"* ]]; then
         rel="${f#"$repo_root_hs"/}"
       fi
+      st_files+=("$f")
+      st_rels+=("$rel")
+    done
+    # A test any parent commit has (HEAD, or MERGE_HEAD during a merge, #2812) is not a new one.
+    ctf_parents_load "$mp_file" ${st_rels[@]+"${st_rels[@]}"}
+    for ((st_i = 0; st_i < ${#st_files[@]}; st_i++)); do
+      f="${st_files[st_i]}"
+      rel="${st_rels[st_i]}"
       # 2-level enforcement (#1834, #2392): a NEWLY-ADDED flat test is rejected with its
       # entry's flatRejectCode and nameLabel. Existing flat files are grandfathered
       # (swept by #2372); run-all.sh is the infra runner (exempted by _is_flat_test).
-      if _is_flat_test "$rel" && ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+      if _is_flat_test "$rel" && ! ctf_in_parent "$rel"; then
         _tlr_get "$TLR_ID" diagnostics.flatRejectCode || true
         code="$_TLR_V"
         _tlr_get "$TLR_ID" diagnostics.nameLabel || true
@@ -198,18 +199,22 @@ case "$mode" in
         FAIL=1
         continue
       fi
-      content="$(staged_content "$f")" || continue
+      content="$(staged_content "$f" "$repo_root_hs")" || continue
       extract_headers "$content" "$f"
       check_content "$f" "$EXT_TESTS" "$EXT_TAGS" || FAIL=1
       # Helper-library check: a new entrypoint of an entry with a helperLibrary must load
       # it, once the repo ships that library (gradual adoption). Edits are exempt.
       if _is_test_entrypoint "$rel" \
          && [[ -n "$repo_root_hs" && -f "$repo_root_hs/$HL_PATH" ]]; then
-        if ! git cat-file -e "HEAD:${rel}" 2>/dev/null; then
+        if ! ctf_in_parent "$rel"; then
           check_harness_source "$f" "$content" "$HL_RE" || FAIL=1
         fi
       fi
+      # Self-implemented harness check (#2502): every language; an existing file blocks only on
+      # a detection its parent versions lack. Queued here, judged in one run after the loop.
+      ctf_self_impl_add "$rel" "$content"
     done
+    ctf_self_impl_run || FAIL=1
     [[ "$FAIL" -eq 1 ]] && exit 1
     exit 0
     ;;
@@ -243,7 +248,7 @@ case "$mode" in
   *)
     echo "Unknown mode: $mode" >&2
     echo "Usage:" >&2
-    echo "  $(basename "$0") --staged <file1> [<file2>...]" >&2
+    echo "  $(basename "$0") --staged [--merge-parents <file>] <file1> [<file2>...]" >&2
     echo "  $(basename "$0") --all [<root>]" >&2
     exit 2
     ;;

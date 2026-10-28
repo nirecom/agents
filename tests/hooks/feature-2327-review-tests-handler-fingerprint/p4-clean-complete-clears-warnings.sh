@@ -58,6 +58,8 @@ if [ -z "$P4_FP1" ]; then
     fail "P4-1 setup: fingerprint unavailable"
 else
     write_state_json "$P4_S1"
+    # #2529: review_tests completes only with a current glossary_check (see p1 run_mark).
+    glossary_check_record "$P4_S1" "$P4_R1" tests
     p4_send "$P4_R1" "$P4_S1" WARNINGS "$P4_FP1"
     p4_eq "P4-1 premise: WARNINGS records warnings_summary" "\"fingerprint=$P4_FP1 warnings=2\"" "$(read_step_field "$P4_S1" warnings_summary)"
     p4_eq "P4-1 premise: gate blocks on warnings-pending" "block/warnings-pending" "$(p4_gate "$P4_R1" "$P4_S1")"
@@ -76,6 +78,7 @@ if [ -z "$P4_FP2" ]; then
     fail "P4-2 setup: fingerprint unavailable"
 else
     write_state_json "$P4_S2"
+    glossary_check_record "$P4_S2" "$P4_R2" tests
     p4_send "$P4_R2" "$P4_S2" WARNINGS "$P4_FP2"
     p4_send "$P4_R2" "$P4_S2" ACCEPTED
     p4_eq "P4-2 premise: acceptance reason recorded" "\"$P4_REASON\"" "$(read_step_field "$P4_S2" warnings_accepted_reason)"
@@ -93,6 +96,7 @@ if [ -z "$P4_FP3" ]; then
 else
     # Sentinel route only: write_state_json would overwrite the whole state file.
     write_state_json "$P4_S3"
+    glossary_check_record "$P4_S3" "$P4_R3" tests
     p4_send "$P4_R3" "$P4_S3" WARNINGS "$P4_FP3" 2
     p4_send "$P4_R3" "$P4_S3" ACCEPTED
     p4_eq "P4-3 premise: acceptance reason recorded" "\"$P4_REASON\"" "$(read_step_field "$P4_S3" warnings_accepted_reason)"
@@ -110,6 +114,7 @@ if [ -z "$P4_FP4" ]; then
     fail "P4-4 setup: fingerprint unavailable"
 else
     write_state_json "$P4_S4"
+    glossary_check_record "$P4_S4" "$P4_R4" tests
     p4_send "$P4_R4" "$P4_S4" WARNINGS "$P4_FP4"
     p4_eq "P4-4 premise: WARNINGS records warnings_summary" "\"fingerprint=$P4_FP4 warnings=2\"" "$(read_step_field "$P4_S4" warnings_summary)"
     p4_send "$P4_R4" "$P4_S4" ACCEPTED
@@ -127,6 +132,7 @@ if [ -z "$P4_FP5" ]; then
     fail "P4-5 setup: fingerprint unavailable"
 else
     write_state_json "$P4_S5"
+    glossary_check_record "$P4_S5" "$P4_R5" tests
     p4_send "$P4_R5" "$P4_S5" COMPLETE "$P4_FP5"
     p4_eq "P4-5 clean COMPLETE: status complete" "complete" "$(read_step_status "$P4_S5")"
     p4_eq "P4-5 clean COMPLETE: warnings_summary absent" "MISSING" "$(read_step_field "$P4_S5" warnings_summary)"

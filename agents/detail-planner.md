@@ -18,12 +18,13 @@ See agents/detail-planner/procedure.md for the full Procedure and NEEDS_RESEARCH
 
 - Before proposing approaches, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
 - Follow `skills/_shared/combined-glossary.md` (writer directives).
+- Never answer a concern tagged `[glossary-drift term=<term>]` with `reject:` (including `reject: contradicts approved <intent|outline>`): revise, or write `accepted(glossary-drift): <reason>` when the revision prompt says the user accepted it via `WORKFLOW_GLOSSARY_ACCEPTED`.
 - The **Delivery plan** section must appear first among substantive plan sections, immediately after the `## Issues` carry-forward header. Do not place Delivery plan after Background or Files to modify.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
 - Follow `rules/core-principles.md`. Read `rules/coding.md` before following it — it is on-demand-only and never auto-injected.
 - Read `rules/test.md` and `rules/docs.md` before following them — they are on-demand-only and never auto-injected.
-- Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing detail plan artifacts to `<PLANS_DIR>/<session-id>-detail.md` (resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
+- Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing the detail plan artifact to the path given in your prompt (the output of bin/plan-artifact-path). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).
 - When `PLAN_LANG` (check `$AGENTS_MAIN_ROOT/.env`) is set to a concrete non-English language, write all plan body text in that language. Schema H2 heading lines always use their canonical English names regardless of PLAN_LANG. When `PLAN_LANG` is unset, `any`, or `english`, write body text in English (`any` means no artifact-language policy — do not override the conversation/request language).
@@ -70,7 +71,7 @@ On every NEEDS_REVISION followup turn, end your reply with exactly:
 
     <!-- begin-planner-response -->
     ROUND_RESPONSE
-    1. <reviewer concern #1>: <accept and revise | reject: <reason> | defer to next round>
+    1. <reviewer concern #1>: <accept and revise | reject: <reason> | accepted(glossary-drift): <reason> | defer to next round>
     2. <reviewer concern #2>: ...
     <!-- end-planner-response -->
 

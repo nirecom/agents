@@ -99,6 +99,18 @@ function appendLedgerEntry(audit, entry) {
 function unshownRun(audit) {
   if (!audit || typeof audit !== "object") return null;
   if (audit.audit_phase !== "pending" || audit.audit_dispatched_at != null) return null;
+  return slotRun(audit);
+}
+
+// #2534: the run in the slot while it is still pending or in_progress, shown or not — what an
+// arm that must not reuse the slot (supersede_unsettled) replaces. Same shape as unshownRun.
+function inFlightRun(audit) {
+  if (!audit || typeof audit !== "object") return null;
+  if (audit.audit_phase !== "pending" && audit.audit_phase !== "in_progress") return null;
+  return slotRun(audit);
+}
+
+function slotRun(audit) {
   const runId = audit.audit_run_id;
   if (typeof runId !== "string" || runId === "") return null;
   const entries = ledgerOf(audit).filter((e) => e && e.id === runId);
@@ -169,6 +181,7 @@ module.exports = {
   appendLedgerEntry,
   markLedgerEntrySuperseded,
   unshownRun,
+  inFlightRun,
   extendConsumedTransitions,
   appendBlockOverride,
   capDeclaredFiles,

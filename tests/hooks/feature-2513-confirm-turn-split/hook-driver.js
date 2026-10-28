@@ -10,6 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const CE = require("../../lib/confirm-env-fixture");
 const RS = require("../../lib/presentation-receipt-seed");
+const SMC = require("../../lib/system-message-contract");
 
 const out = [];
 const ok = (n, c, d) => out.push(c ? "PASS|" + n : "FAIL|" + n + "|" + String(d).replace(/\n/g, "\\n").slice(0, 240));
@@ -115,7 +116,9 @@ function expectNoBlock(label, r) {
     r.json.unparsed === undefined && r.json.decision !== "block" && hso.permissionDecision !== "deny", show([r.rc, r.raw]));
 }
 function expectPass(label, r) {
-  ok(label + " — no deny, the dialog systemMessage", !r.deny && r.rc === 0 && r.msg.includes("Click Allow"), show(r.json));
+  // #2731: the dialog systemMessage is the stage fact line (`[<stage>] ...`), no "Click Allow" wording.
+  ok(label + " — no deny, the dialog systemMessage", !r.deny && r.rc === 0 && /^\[(intent|outline|detail)\] /.test(r.msg)
+    && SMC.systemMessageProblems(r.msg).length === 0, show(r.json));
   expectNoBlock(label, r);
 }
 // passWithReceipt(label, s, entries, opts, link): seed the receipt, then the echo reaches the dialog.

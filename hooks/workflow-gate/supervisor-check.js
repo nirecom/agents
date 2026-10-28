@@ -23,6 +23,8 @@ const {
   evaluateNullFreshnessRecovery,
   describeNullFreshnessRefusal,
   unsettledAuditRun,
+  describeUnsettled,
+  acceptanceReleasesNonNull,
 } = require("../lib/null-freshness");
 
 // Resolve supervisor state with wsid fallback.
@@ -164,12 +166,14 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd, opts = {}) {
       return { authoritative: true };
     }
 
-    // A null key is certified only by the shared predicate; override and the fk
+    // A null key is certified only by the shared predicate (which also reads reviewed
+    // acceptances, #2597); the non-null acceptance rule and the fk
     // comparison below need a key, so they stay on the non-null path (#2400).
     // A newer unsettled run (armed / in_progress / frozen) blocks certification (#2400 run-0003).
     if (!currentFk) {
       const recovery = evaluateNullFreshnessRecovery({
         freshness: current, tr5Run, laterBlockExists, unsettledRun: unsettledAuditRun(audit),
+        overrides: audit.block_overrides,
       });
       if (recovery.approve) return { authoritative: true };
       deny(describeNullFreshnessRefusal(recovery));
@@ -182,18 +186,17 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd, opts = {}) {
       return { authoritative: true };
     }
 
+    // #2534: a fresh verdict — or an acceptance of it — does not speak for a newer run
+    // that has not judged the tree yet.
+    const unsettled = unsettledAuditRun(audit);
+    if (unsettled) {
+      deny(describeUnsettled(unsettled));
+      return { authoritative: true };
+    }
+
     if (tr5Run.verdict === "BLOCK") {
-      // Honor a recorded block override so USER_VERIFIED + merge can complete
-      // end-to-end when the user has reviewed the BLOCK and accepted the risk.
-      // The override must match the same run_id and freshness_key that the
-      // user_verification gate checked (#2256 override end-to-end).
-      const overrides = Array.isArray(audit.block_overrides) ? audit.block_overrides : [];
-      const overrideActive = overrides.some((bo) =>
-        bo && bo.run_id === tr5Run.id &&
-        typeof bo.freshness_key === "string" && bo.freshness_key.length > 0 &&
-        currentFk && bo.freshness_key === currentFk
-      );
-      if (overrideActive) {
+      // The same acceptance rule the user_verification gate applies (#2256 override end-to-end).
+      if (acceptanceReleasesNonNull({ tr5Run, overrides: audit.block_overrides, currentFk })) {
         return { authoritative: true };
       }
       // Path (i-b), doubled safety net: a fresh BLOCK verdict must never reach

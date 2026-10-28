@@ -30,11 +30,16 @@ if [ ! -d "$CL_LIB_DIR" ]; then
 fi
 # Every module's return value is checked. A module that refuses to load (core.sh
 # cannot find safe-state-path.sh, say) stops the entrypoint here: half-loading is
-# the silent findings loss this subsystem exists to stop. Five explicit blocks
+# the silent findings loss this subsystem exists to stop. Six explicit blocks
 # rather than a loop, because shellcheck source= needs a literal path.
 # shellcheck source=./concern-ledger/core.sh
 if ! source "$CL_LIB_DIR/core.sh"; then
     printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' "$CL_LIB_DIR/core.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
+# shellcheck source=./concern-ledger/drift-tag.sh
+if ! source "$CL_LIB_DIR/drift-tag.sh"; then
+    printf 'concern-ledger: failed to load %s — refusing to run half-loaded\n' "$CL_LIB_DIR/drift-tag.sh" >&2
     return 1 2>/dev/null || exit 1
 fi
 # shellcheck source=./concern-ledger/parse.sh

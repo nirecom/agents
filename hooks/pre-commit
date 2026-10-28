@@ -17,6 +17,10 @@ _load_env_file
 # Commit-gate blocks extracted to hooks/lib/ (rules/coding/file-split.md Pattern A:
 # shared-across-entrypoints helpers live in an adjacent lib/). Both reference the
 # ambient $_cfg_dir and exit 1 on a violation, preserving in-place blocking behavior.
+# The section marker is optional: a checkout without the helper still commits, unmarked.
+# shellcheck source=hooks/lib/precommit-section-marker.sh
+[ -r "$_cfg_dir/hooks/lib/precommit-section-marker.sh" ] && . "$_cfg_dir/hooks/lib/precommit-section-marker.sh"
+declare -F _precommit_section >/dev/null || _precommit_section() { :; }
 # shellcheck source=hooks/lib/precommit-tests-frontmatter.sh
 . "$_cfg_dir/hooks/lib/precommit-tests-frontmatter.sh"
 # shellcheck source=hooks/lib/precommit-agents-repo-gates.sh
@@ -77,6 +81,7 @@ _is_agents_session_repo() {
     [ "$_isr_agents_abs" = "$_isr_repo_abs" ]
 }
 
+_precommit_section enforce-worktree
 if _is_enforce_worktree_on; then
     # ENFORCE_WORKTREE_EXCLUDE: unified path-coverage check via a committed Node
     # helper. Exit 0 → all staged files covered → skip the enforcement gate below.
@@ -166,6 +171,7 @@ if _is_enforce_worktree_on; then
 fi
 
 # Auto-unstage settings.json if the only change is effortLevel
+_precommit_section settings-effort-unstage
 SETTINGS="settings.json"
 if git diff --cached --name-only | grep -qx "$SETTINGS"; then
     # Compare HEAD vs staged after stripping effortLevel from both
@@ -187,6 +193,7 @@ fi
 # a matched exclusion prints a one-line audit trace (below) rather than skipping
 # silently. If the repo root cannot be determined it throws, and the catch below
 # fails open ("lint-commit-lang skipped").
+_precommit_section code-lang
 if [ -n "${CODE_LANG:-}" ]; then
     _lang_cfg_dir="$_cfg_dir"
     if command -v cygpath >/dev/null 2>&1; then
@@ -228,6 +235,7 @@ if [ -n "${CODE_LANG:-}" ]; then
 fi
 
 # Check execute permission on staged .sh files
+_precommit_section sh-exec-bit
 SH_NO_EXEC=""
 while IFS= read -r f; do
     [ -z "$f" ] && continue
@@ -255,6 +263,7 @@ fi
 #
 # Exit-code mapping: 1 -> block; anything else -> warn on stderr and continue.
 # The backstop is a safety net, not an availability dependency.
+_precommit_section prompt-extraction
 _pe_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$_pe_repo_top" ] && [ -f "$_pe_repo_top/.prompt-extraction-allowlist" ]; then
     _pe_cfg_dir="$_cfg_dir"
@@ -310,12 +319,15 @@ fi
 
 # Validate staged tests/<category>/*.sh frontmatter + reject new flat tests/*.sh
 # (#1834). Cause-specific block messages: hooks/lib/precommit-tests-frontmatter.sh.
+_precommit_section tests-frontmatter
 _precommit_check_tests_frontmatter || exit 1
 _precommit_check_tests_case_markers || exit 1
+_precommit_check_test_language_match || exit 1
 
 # Agents-repo-only commit gates (on-demand rules notation #2270, session-id SSOT
 # #2270, migration blocks #1987). No-op outside the agents repo; exits 1 on a
 # violation. Full rationale + exit maps: hooks/lib/precommit-agents-repo-gates.sh.
+_precommit_section agents-repo-gates
 _precommit_agents_repo_gates
 
 # ---------- comment-block size gate (issue #1894) ----------
@@ -328,6 +340,7 @@ _precommit_agents_repo_gates
 #
 # Deliberately not suspendable: this gate consults no per-session escape state,
 # by omission (outline plan accepted tradeoff).
+_precommit_section comment-block-size
 _cb_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 _cb_script="$_cfg_dir/bin/review-comment-block-size"
 if (unset AGENTS_MAIN_ROOT; _is_agents_session_repo "$_cb_repo_top") && [ -x "$_cb_script" ]; then
@@ -378,6 +391,7 @@ if (unset AGENTS_MAIN_ROOT; _is_agents_session_repo "$_cb_repo_top") && [ -x "$_
 fi
 
 # Check if this repo is private via GitHub API (skip scanning if private)
+_precommit_section repo-visibility
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "$REMOTE_URL" ]; then
     # Extract hostname — non-GitHub hosts are treated as private (skip scanning)
@@ -395,6 +409,7 @@ if [ -n "$REMOTE_URL" ]; then
 fi
 
 # Block direct commits of .env files (use .env.example / .env.sample / .env.template instead)
+_precommit_section env-file-block
 ENV_FILES="$(git diff --cached --name-only --diff-filter=AM | grep -E '(^|/)\.env$' || true)"
 if [ -n "$ENV_FILES" ]; then
     echo "pre-commit: .env file(s) staged for commit:"
@@ -404,6 +419,7 @@ if [ -n "$ENV_FILES" ]; then
 fi
 
 # Get staged files (added, copied, modified)
+_precommit_section outbound-scan
 STAGED_FILES="$(git diff-index --cached --name-only --diff-filter=ACM HEAD 2>/dev/null || true)"
 if [ -z "$STAGED_FILES" ]; then
     exit 0

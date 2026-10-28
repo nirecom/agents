@@ -5,7 +5,8 @@
 // re-export only — the implementation lives in the sibling commit-push/ folder
 // (rules/coding/file-split.md Pattern A): procedure.js (the run() spine),
 // gate.js (the D1 gate seam and the child-process helpers), push.js (step 7),
-// pr.js (step 9). What/Why for all four:
+// pr.js (step 9), commit-timeout.js (the step 4 commit timeout limit). What/Why
+// for all five:
 // docs/architecture/claude-code/worker-dispatch/commit-push.md
 
 const { isProtectedBranch, resolveGateEnv } = require("./commit-push/gate");

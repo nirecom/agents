@@ -78,7 +78,9 @@ const fn = m.breadcrumbsForArtifacts;
 if (typeof fn !== "function") { ok("breadcrumbsForArtifacts is exported", false, `typeof=${typeof fn}`); done(); }
 const abs = (p) => { const r = path.resolve(p); return process.platform === "win32" ? r.replace(/\//g, "\\") : r; };
 const p1 = path.join(dir, "s2513bud-intent.md"), p2 = path.join(dir, "s2513bud-outline.md");
-const url = (p) => `Plan file: https://github.com/o/r/blob/main/${path.basename(p)}`;
+// #2731 S3-10: the breadcrumb tag is `[plan-file] ` (was "Plan file: ").
+const PF = "[plan-file] ";
+const url = (p) => `${PF}https://github.com/o/r/blob/main/${path.basename(p)}`;
 function rig(advances, throwOn) {
   let t = 1000000, i = 0;
   const calls = [];
@@ -86,7 +88,7 @@ function rig(advances, throwOn) {
     calls.push({ abs: a, budgetMs: o && o.budgetMs });
     t += advances[i++] || 0;
     if (throwOn === i) throw new Error("boom");
-    return { status: "pushed", url: url(a).slice("Plan file: ".length) };
+    return { status: "pushed", url: url(a).slice(PF.length) };
   };
   return { calls, sync, now: () => t };
 }
@@ -99,7 +101,7 @@ function run(paths, r, budgetMs) {
   return String(msg);
 }
 const budgetLine = (msg) => /^\[plan-sync\][^\n]*budget/im.test(msg);
-const count = (msg) => (msg.match(/^Plan file: /gm) || []).length;
+const count = (msg) => (msg.match(/^\[plan-file\] /gm) || []).length;
 const show = (x) => JSON.stringify(x);
 let r, msg;
 switch (sc) {
@@ -119,13 +121,13 @@ switch (sc) {
     r = rig([25000]); msg = run([p1, p2], r, 20000);
     ok("exhausted plan is not synced", r.calls.length === 1, `calls=${show(r.calls)}`);
     ok("synced plan keeps its URL breadcrumb", msg.includes(url(p1)), show(msg));
-    ok("exhausted plan gets a local-path breadcrumb", msg.includes(`Plan file: ${abs(p2)}`) && !msg.includes(url(p2)), show(msg));
+    ok("exhausted plan gets a local-path breadcrumb", msg.includes(`${PF}${abs(p2)}`) && !msg.includes(url(p2)), show(msg));
     ok("exhausted plan gets a [plan-sync] budget status line", budgetLine(msg), show(msg));
     break;
   case "C4a":
     r = rig([20000]); msg = run([p1, p2], r, 20000);
     ok("remaining exactly 0 -> second not synced", r.calls.length === 1, `calls=${show(r.calls)}`);
-    ok("remaining exactly 0 -> [plan-sync] budget line + local path", budgetLine(msg) && msg.includes(`Plan file: ${abs(p2)}`), show(msg));
+    ok("remaining exactly 0 -> [plan-sync] budget line + local path", budgetLine(msg) && msg.includes(`${PF}${abs(p2)}`), show(msg));
     break;
   case "C4b":
     r = rig([19999]); msg = run([p1, p2], r, 20000);
@@ -134,7 +136,7 @@ switch (sc) {
     break;
   case "C5":
     r = rig([5000, 0], 1); msg = run([p1, p2], r, 20000);
-    ok("throwing sync -> failed breadcrumb for first plan", msg.includes(`Plan file: ${abs(p1)}`) && /^\[plan-sync\] internal-error/m.test(msg), show(msg));
+    ok("throwing sync -> failed breadcrumb for first plan", msg.includes(`${PF}${abs(p1)}`) && /^\[plan-sync\] internal-error/m.test(msg), show(msg));
     ok("second plan still synced with the remainder in (0, 15000]", r.calls.length === 2 && r.calls[1].budgetMs > 0 && r.calls[1].budgetMs <= 15000, `calls=${show(r.calls)}`);
     ok("second plan keeps its URL breadcrumb", msg.includes(url(p2)), show(msg));
     break;
@@ -266,7 +268,7 @@ const run = (name, input, block) => {
   r = await run("s2513e1c-intent.md", { session_id: "s2513e1c", cwd: proj }, true);
   ok("record write fails: sync is not called", r.seen.length === 0, show(r));
   ok("record write fails: breadcrumb reports internal-error with the local path",
-    /^Plan file: .*s2513e1c-intent\.md$/m.test(r.msg) && /^\[plan-sync\] internal-error/m.test(r.msg), show(r.msg));
+    /^\[plan-file\] .*s2513e1c-intent\.md$/m.test(r.msg) && /^\[plan-sync\] internal-error/m.test(r.msg), show(r.msg));
   process.stdout.write(out.join("\n") + "\n");
 })();' "$SPL_JS" "$SPL_PS_LIB" "$SPL_E_PLANS" "$SPL_E_PROJ") || printf 'FAIL|E1 node harness|exit=%s\n' "$?"
 }

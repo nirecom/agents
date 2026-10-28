@@ -202,6 +202,36 @@ while IFS= read -r reg_line; do
 done <<<"$REG_OUT"
 case_end
 
+# #2502 S5-5: tableDrivenDetector for pester (-ForEach / -TestCases on It) and pytest
+# (@pytest.mark.parametrize), reached through the real registry like has_table_driven_js.
+# td_route <id> <file>... — prints "fn=<function> rc=<rc per file...>"; rc 70 = no part.
+td_route() {
+  run_with_timeout 60 bash -c '. "$1/bin/lib/test-language-registry.sh" || exit 97
+tlr_load || exit 96
+id="$2"; shift 2; out=""
+for f in "$@"; do tlr_call_part "$id" tableDrivenDetector "$f" >/dev/null 2>&1; out="$out $?"; done
+printf "fn=%s rc=%s" "$(tlr_field "$id" tableDrivenDetector.function 2>/dev/null)" "${out# }"' _ "$SCRIPT_CHECKOUT_ROOT" "$@" 2>"$TMPBASE/td.err"
+}
+TD="$TMPBASE/td"
+mkdir -p "$TD"
+printf '%s\n' "Describe 'a' {" "    It 'adds <n>' -ForEach @(@{ n = 1 }, @{ n = 2 }) { \$n | Should -BeGreaterThan 0 }" "}" >"$TD/foreach.Tests.ps1"
+printf '%s\n' "Describe 'a' {" "    It 'adds <n>' -TestCases @(@{ n = 1 }) { \$n | Should -Be 1 }" "}" >"$TD/testcases.Tests.ps1"
+printf '%s\n' "Describe 'a' {" "    It 'plain' { 1..3 | ForEach-Object { \$_ | Should -BeGreaterThan 0 } }" "}" >"$TD/plain.Tests.ps1"
+printf '%s\n' "import pytest" "" "" '@pytest.mark.parametrize("n", [1, 2])' "def test_n(n):" "    assert n > 0" >"$TD/test_param.py"
+printf '%s\n' "import pytest" "" "" "def test_loop():" "    for n in [1, 2]:" "        assert n > 0" >"$TD/test_plain.py"
+
+case_begin "pester-table-driven-detector" "bin/lib/test-language-parts/pester.sh"
+# Positive: -ForEach and -TestCases on It; negative: a ForEach-Object pipeline in a plain It.
+assert_eq "pester $(td_route pester "$TD/foreach.Tests.ps1" "$TD/testcases.Tests.ps1" "$TD/plain.Tests.ps1")" \
+  "pester fn=has_table_driven_pester rc=0 0 1"
+case_end
+
+case_begin "pytest-table-driven-detector" "bin/lib/test-language-parts/pytest.sh"
+# Positive: @pytest.mark.parametrize; negative: a for loop inside a plain test.
+assert_eq "pytest $(td_route pytest "$TD/test_param.py" "$TD/test_plain.py")" \
+  "pytest fn=has_table_driven_pytest rc=0 1"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" -gt 0 ]; then

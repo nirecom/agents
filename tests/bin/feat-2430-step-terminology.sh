@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # tests/bin/feat-2430-step-terminology.sh
-# Tests: docs/glossary-user.md, docs/glossary-internal.md, docs/architecture/claude-code/workflow.md, docs/architecture/claude-code/workflow-runtime.md, docs/architecture/claude-code/settings/hooks.md, README.md, CLAUDE.md, rules/progress-update.md, docs/architecture/claude-code/handoff-artifact.md
+# Tests: docs/glossary/user.md, docs/glossary/internal.md, docs/architecture/claude-code/workflow.md, docs/architecture/claude-code/workflow-runtime.md, docs/architecture/claude-code/settings/hooks.md, README.md, CLAUDE.md, rules/progress-update.md, docs/architecture/claude-code/handoff-artifact.md
 # Tags: terminology, glossary, docs, handoff, static-check, regression-2430, regression-2594, progress-update, scope:issue-specific, pwsh-not-required, TL1
 
 # Issue #2430 — "step" drifted between three meanings (a workflow step, a numbered line inside a skill procedure, a conversational turn) and the docs disagreed on how many workflow steps exist (16 vs 17). The glossary becomes the one owner of the three terms, the prose stops restating a count that VALID_STEPS already owns (CPR-SSOT), the flush rule owns "What to record", and the handoff class table files a RESET_FROM under class E (a sentinel emitted).
-# Issue #2529 split the glossary by category: workflow step lives in docs/glossary-user.md, in-skill step and turn in docs/glossary-internal.md, and entries no longer carry file paths.
+# Issue #2529 split the glossary by category: workflow step lives in docs/glossary/user.md, in-skill step and turn in docs/glossary/internal.md, and entries no longer carry file paths.
 
 set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,13 +18,13 @@ section() { awk -v h="## $2" '$0 == h { on = 1; next } /^## / { on = 0 } on' "$1
 # entry <file> <term> — the body of one "### <term>" glossary entry.
 entry() { awk -v h="### $2" '{ sub(/\r$/, "") } $0 == h { on = 1; next } /^##+ / { on = 0 } on' "$1" 2>/dev/null; }
 
-GL_USER="$SCRIPT_CHECKOUT_ROOT/docs/glossary-user.md"
-GL_INTERNAL="$SCRIPT_CHECKOUT_ROOT/docs/glossary-internal.md"
+GL_USER="$SCRIPT_CHECKOUT_ROOT/docs/glossary/user.md"
+GL_INTERNAL="$SCRIPT_CHECKOUT_ROOT/docs/glossary/internal.md"
 
-case_begin "glossary-owns-the-three-terms" "docs/glossary-user.md"
-expect "S1: glossary-user.md has a '### workflow step' entry" "$(grep -cx '### workflow step' "$GL_USER" 2>/dev/null)" "1"
-expect "S1: glossary-internal.md has a '### in-skill step' entry" "$(grep -cx '### in-skill step' "$GL_INTERNAL" 2>/dev/null)" "1"
-expect "S1: glossary-internal.md has a '### turn' entry" "$(grep -cx '### turn' "$GL_INTERNAL" 2>/dev/null)" "1"
+case_begin "glossary-owns-the-three-terms" "docs/glossary/user.md"
+expect "S1: glossary/user.md has a '### workflow step' entry" "$(grep -cx '### workflow step' "$GL_USER" 2>/dev/null)" "1"
+expect "S1: glossary/internal.md has a '### in-skill step' entry" "$(grep -cx '### in-skill step' "$GL_INTERNAL" 2>/dev/null)" "1"
+expect "S1: glossary/internal.md has a '### turn' entry" "$(grep -cx '### turn' "$GL_INTERNAL" 2>/dev/null)" "1"
 expect "S1: the workflow step entry is non-empty" "$([ -n "$(entry "$GL_USER" 'workflow step')" ] && echo yes || echo no)" "yes"
 case_end
 
@@ -36,9 +36,9 @@ no_count() {
     expect "S2: $1 states no workflow-step count" "$(grep -nEi "$COUNT_RE" "$SCRIPT_CHECKOUT_ROOT/$1" 2>/dev/null)" ""
 }
 
-case_begin "glossary-states-no-step-count" "docs/glossary-user.md"
-no_count docs/glossary-user.md
-no_count docs/glossary-internal.md
+case_begin "glossary-states-no-step-count" "docs/glossary/user.md"
+no_count docs/glossary/user.md
+no_count docs/glossary/internal.md
 case_end
 
 case_begin "workflow-doc-states-no-step-count" "docs/architecture/claude-code/workflow.md"
@@ -95,9 +95,9 @@ expect "S5: the handoff doc no longer calls /resume-session the only reader" "$(
 expect "S5: the handoff doc names the supervisor codex engine" "$(grep -qiE 'supervisor.{0,40}codex|codex.{0,40}supervisor' "$DOC" && echo yes || echo no)" "yes"
 case_end
 
-case_begin "glossary-handoff-names-two-readers" "docs/glossary-user.md"
+case_begin "glossary-handoff-names-two-readers" "docs/glossary/user.md"
 HA="$(entry "$GL_USER" 'handoff artifact')"
-expect "S5: glossary-user.md has a handoff artifact entry" "$([ -n "$HA" ] && echo yes || echo no)" "yes"
+expect "S5: glossary/user.md has a handoff artifact entry" "$([ -n "$HA" ] && echo yes || echo no)" "yes"
 expect "S5: the handoff artifact entry names /resume-session" "$(printf '%s\n' "$HA" | grep -qF '/resume-session' && echo yes || echo no)" "yes"
 expect "S5: the handoff artifact entry names the supervisor" "$(printf '%s\n' "$HA" | grep -qi 'supervisor' && echo yes || echo no)" "yes"
 case_end

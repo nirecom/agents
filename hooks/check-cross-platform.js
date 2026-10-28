@@ -8,10 +8,11 @@
 //   1. Permanent: .cross-platform-skiplist (base tool names, one per line)
 //   2. One-time:  .git/.cross-platform-reviewed (short HEAD hash — git rev-parse --short HEAD)
 
-const { execSync } = require("child_process");
+const { execSync } = require("./lib/limited-child-process");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
+const { armDecisionTimeLimit } = require("./lib/decision-time-limit");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
@@ -90,6 +91,7 @@ function hasValidMarker(repoDir) {
 }
 
 const hookInput = readHookInput();
+armDecisionTimeLimit({ hookName: "check-cross-platform" });
 if (hookInput.kind !== "ok") {
   try {
     fs.writeSync(2, readFailOpenDiagnostic("check-cross-platform", hookInput, "check skipped") + "\n");

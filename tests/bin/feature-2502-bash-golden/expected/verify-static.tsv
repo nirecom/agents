@@ -1,0 +1,30 @@
+tests/bin/vce/good.sh	rc=0
+tests/bin/vce/good.sh	CHECK1	PASS	state=conforming
+tests/bin/vce/good.sh	CHECK3	PASS	no leftover definitions
+tests/bin/vce/good.sh	CHECK4	PASS	every header token is a case target
+tests/bin/vce/good.sh	CHECK5	PASS	helper library sourced
+tests/bin/vce/malformed.sh	rc=1
+tests/bin/vce/malformed.sh	CHECK1	FAIL	state=malformed
+tests/bin/vce/malformed.sh	CHECK3	PASS	no leftover definitions
+tests/bin/vce/malformed.sh	CHECK4	FAIL	header-not-target=[bin/a.sh,bin/b.sh] target-not-in-header=[]
+tests/bin/vce/malformed.sh	CHECK5	PASS	helper library sourced
+tests/bin/vce/leftover.sh	rc=1
+tests/bin/vce/leftover.sh	CHECK1	PASS	state=conforming
+tests/bin/vce/leftover.sh	CHECK3	FAIL	leftover: 5:orphan_fn
+tests/bin/vce/leftover.sh	CHECK4	PASS	every header token is a case target
+tests/bin/vce/leftover.sh	CHECK5	PASS	helper library sourced
+tests/bin/vce/target-not-in-header.sh	rc=1
+tests/bin/vce/target-not-in-header.sh	CHECK1	PASS	state=conforming
+tests/bin/vce/target-not-in-header.sh	CHECK3	PASS	no leftover definitions
+tests/bin/vce/target-not-in-header.sh	CHECK4	FAIL	header-not-target=[] target-not-in-header=[bin/c.sh]
+tests/bin/vce/target-not-in-header.sh	CHECK5	PASS	helper library sourced
+tests/bin/vce/unguarded.sh	rc=1
+tests/bin/vce/unguarded.sh	CHECK1	PASS	state=conforming
+tests/bin/vce/unguarded.sh	CHECK3	PASS	no leftover definitions
+tests/bin/vce/unguarded.sh	CHECK4	PASS	every header token is a case target
+tests/bin/vce/unguarded.sh	CHECK5	FAIL	self-impl: 5:counter-init:PASS=0
+tests/bin/fix-gh-native-path.sh	rc=1
+tests/bin/fix-gh-native-path.sh	CHECK1	PASS	state=conforming
+tests/bin/fix-gh-native-path.sh	CHECK3	PASS	no leftover definitions
+tests/bin/fix-gh-native-path.sh	CHECK4	FAIL	header-not-target=[bin/github-issues/reopen-with-update.sh,bin/lib/github-contents-write.sh,bin/lib/github-git-data-write.sh,bin/github-issues/migration/migrate-history.sh,bin/github-issues/migration/migrate-todo.sh] target-not-in-header=[]
+tests/bin/fix-gh-native-path.sh	CHECK5	PASS	helper library sourced

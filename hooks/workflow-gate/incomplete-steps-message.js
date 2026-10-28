@@ -67,6 +67,11 @@ function buildIncompleteStepsMessage(incomplete, incompleteReasons, docsOnly) {
         "    (note: /review-tests reported coverage warnings — re-run /write-tests to address gaps, then /review-tests again)"
       );
     }
+    // #2529: glossary-record-checker reasons arrive as "<step>: glossary-<code>... — run: ...".
+    const reason = incompleteReasons[step];
+    if (typeof reason === "string" && reason.startsWith(`${step}: glossary-`)) {
+      lines.push(`    (note: ${reason})`);
+    }
   }
 
   return lines.join("\n");

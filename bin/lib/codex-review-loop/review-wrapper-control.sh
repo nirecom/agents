@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # bin/lib/codex-review-loop/review-wrapper-control.sh — sourced by the five stage
 # wrappers skills/*/scripts/run-codex-review-loop.sh (#2434). Resolves <sid>.control
-# once (a legacy PLANS_DIR terminal is migrated first) and owns the terminal guard.
+# once (a legacy PLANS_DIR terminal is migrated first) and owns the terminal guard
+# and the review_tests continuing marker.
 # Caller globals: SESSION_ID. Sets CONTROL_DIR TERMINAL_FILE.
 # Loaded from the wrapper's own tree, so a stub checkout without bin/lib still works.
 # Escalation per format and exit code: skills/_shared/codex-review-loop/exit-codes.md.
@@ -46,13 +47,30 @@ rwc_check_terminal() {
   rm -f "$TERMINAL_FILE"
 }
 
-# rwc_arm_terminal <rc> <fingerprint> — atomic publish of the terminal file.
-rwc_arm_terminal() {
+# _rwc_publish <dest> <rc> <fingerprint> — atomic publish of a two-line control marker.
+_rwc_publish() {
   local tmp
   tmp="$(mktemp "$CONTROL_DIR/.sg-XXXXXX" 2>/dev/null)" || return 0
-  if printf '%s\n%s\n' "$1" "$2" > "$tmp"; then
-    mv -f "$tmp" "$TERMINAL_FILE" || rm -f "$tmp"
+  if printf '%s\n%s\n' "$2" "$3" > "$tmp"; then
+    mv -f "$tmp" "$1" || rm -f "$tmp"
   else
     rm -f "$tmp"
   fi
+}
+
+# rwc_arm_terminal <rc> <fingerprint> — atomic publish of the terminal file.
+rwc_arm_terminal() {
+  _rwc_publish "$TERMINAL_FILE" "$1" "$2"
+}
+
+# rwc_arm_continuing <rc> <fingerprint> — #2664: evidence that the review ended on a
+# continuing exit (1/5), read by the WARNINGS_ACCEPTED recovery. Never a re-invoke guard.
+rwc_arm_continuing() {
+  _rwc_publish "$CONTROL_DIR/test-review-continuing.txt" "$1" "$2"
+}
+
+# rwc_clear_continuing — drop the previous run's continuing marker so it only ever
+# describes the latest review.
+rwc_clear_continuing() {
+  rm -f "$CONTROL_DIR/test-review-continuing.txt"
 }

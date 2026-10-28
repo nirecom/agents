@@ -253,7 +253,9 @@ case_end
 
 case_begin "odd-characters-are-data-not-code" "bin/lib/case-reader-bridge.sh"
 ODD_NAMES=('$(touch pwned-1)' '`touch pwned-2`' 'a; touch pwned-3' '*' 'two  spaces' '"dq" and '\''sq'\''' '-n' '%s%d' 'back\slash\n' '${HOME}' '[f]?' ' lead')
-ODD_TARGETS=('bin/$(touch pwned-4).sh' '*' 'bin/a b.sh' 'bin/`touch pwned-5`' 'bin/a;touch pwned-6' 'bin/"q".sh' '-e' 'bin/%s' 'bin\a.sh' '~/x' 'f?' 'bin/&&x')
+# #2712: crb_run re-checks each target against the path rule, so these are valid but unusual
+# paths; the invalid ones (glob, space, substitution) are rc 1 in invalid-targets-are-rc-1 below.
+ODD_TARGETS=('bin/a.sh' 'bin/lib/b.ps1' 'bin/-e' 'bin/-n.sh' 'bin/a..b.sh' 'bin/.hidden' 'bin/a_b-c.sh' 'A/B.SH' 'x' 'bin/a.b.c.d' 'tests/t.Tests.ps1' 'bin/lib/test_x.py')
 printf 'FILE\tconforming\t\t\n' >"$TMPBASE/odd.out"
 for i in "${!ODD_NAMES[@]}"; do
   printf '%s\n' "CASE$T${ODD_NAMES[$i]}$T${ODD_TARGETS[$i]}$T$((i + 1))$T$((i + 2))$T$T" >>"$TMPBASE/odd.out"
@@ -266,6 +268,43 @@ for i in "${!ODD_NAMES[@]}"; do
   assert_eq "$i: $(br "name$i")" "$i: ${ODD_NAMES[$i]}"
   assert_eq "$i: $(br "target$i")" "$i: ${ODD_TARGETS[$i]}"
 done
+assert_eq "cwd entries: $(ls -A "$TMPBASE/cwd" | tr '\n' ' ')" "cwd entries: f1 f2 "
+case_end
+
+# #2712: crb_run re-checks every CASE target with ctp_target_path_valid; a reader child that
+# leaks an invalid target makes crb_run return 1, the last guard beside the column checks.
+# rv_run <target>... — one conforming FILE row and a CASE row per target (case i on lines
+# 5+4i..7+4i), written as text so a backslash stays literal; prints crb_run's rc.
+rv_run() {
+  local i=0 b t
+  printf 'FILE\tconforming\t\t\n' >"$STUB.out"
+  for t in "$@"; do
+    b=$((5 + 4 * i))
+    printf '%s\n' "CASE${T}c$i$T$t$T$b$T$((b + 2))$T$T" >>"$STUB.out"
+    i=$((i + 1))
+  done
+  printf '0\n' >"$STUB.rc"
+  BR_OUT="$(cd "$TMPBASE/cwd" && run_with_timeout 120 bash "$RUNNER" "$SCRIPT_CHECKOUT_ROOT" "$SAMPLE" bash "$STUB" 2>"$TMPBASE/bridge.err")"
+  printf 'rc=%s' "$(br rc)"
+}
+
+case_begin "valid-targets-stay-rc-0" "bin/lib/case-reader-bridge.sh"
+# Control: legal paths, including dots and dashes that are not a `..` segment or a leading `./`.
+for t in bin/a.sh bin/lib/b.ps1 bin/a..b.sh bin/.hidden bin/-e x; do
+  assert_eq "$t: $(rv_run "$t")" "$t: rc=0"
+done
+assert_eq "two valid cases: $(rv_run bin/a.sh bin/b.sh)" "two valid cases: rc=0"
+case_end
+
+case_begin "invalid-targets-are-rc-1" "bin/lib/case-reader-bridge.sh"
+BAD=('*' 'bin/a b.sh' '/abs/x.sh' './x.sh' 'a/../b.sh' '..' '../x.sh' 'bin/..'
+  'bin/$(touch pwned-1).sh' 'bin/`touch pwned-2`' 'bin/a;touch pwned-3' 'bin/"q".sh'
+  'bin/%s' 'bin\a.sh' '~/x' 'f?' 'bin/&&x')
+for t in "${BAD[@]}"; do
+  assert_eq "$t: $(rv_run "$t")" "$t: rc=1"
+done
+assert_eq "valid then invalid: $(rv_run bin/a.sh '/abs/b.sh')" "valid then invalid: rc=1"
+# Whatever the verdict, no target text ran as a command in the child's working directory.
 assert_eq "cwd entries: $(ls -A "$TMPBASE/cwd" | tr '\n' ' ')" "cwd entries: f1 f2 "
 case_end
 
@@ -317,7 +356,7 @@ case_end
 # the command named by $BRIDGE_STUB_CMD, so crr_read is seen end to end without a real runtime.
 CO="$TMPBASE/co"
 fx_table_edit "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json" "$TMPBASE/bridge-stub.json" \
-  't.entries.find((e) => e.id === "pester").caseMarkerReader = { file: "bin/lib/test-language-parts/bridge-stub.sh", function: "bridge_stub_markers" };'
+  'const p = t.entries.find((e) => e.id === "pester"); p.caseMarkerReader = { file: "bin/lib/test-language-parts/bridge-stub.sh", function: "bridge_stub_markers" }; p.caseEmbedRules = null;'
 fx_checkout "$CO" "$TMPBASE/bridge-stub.json"
 cat >"$CO/$PARTS/bridge-stub.sh" <<'PART'
 declare -F crb_run >/dev/null 2>&1 || . "${BASH_SOURCE[0]%/*}/../case-reader-bridge.sh"
@@ -391,7 +430,7 @@ while IFS='|' read -r rname rout; do
   CK_RC=$?
   assert_eq "$rname: rc=$CK_RC stdout=$CK_OUT" "$rname: rc=2 stdout="
   case "$(cat "$TMPBASE/ck.err")" in
-    *"case-marker reader unavailable: $TWO_PATHS"*) pass "$rname: stderr names the reader failure" ;;
+    *"test case reader unavailable: $TWO_PATHS"*) pass "$rname: stderr names the test case reader failure" ;;
     *) fail "$rname stderr" "$(cat "$TMPBASE/ck.err")" ;;
   esac
 done <<'ROWS'

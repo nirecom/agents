@@ -10,6 +10,12 @@ pester_case_markers() {
     crb_run "$1" pwsh -NoProfile -NonInteractive -File "$CRB_PATH"
 }
 
+# has_table_driven_pester <file> — rc 0 when an `It` line carries a -ForEach / -TestCases table
+# (a line scan, so no pwsh is needed; PowerShell names are case-insensitive).
+has_table_driven_pester() {
+    grep -qiE '^[[:space:]]*It[[:space:]].*[[:space:]]-(ForEach|TestCases)([[:space:]]|$)' "$1" 2>/dev/null
+}
+
 # pester_env_clear_line <names-ERE> <line> — rc 0 when the line is one `Remove-Item [-Path]
 # Env:[\]NAME` of a named var, optionally with -ErrorAction SilentlyContinue / -Force. Prints nothing.
 pester_env_clear_line() {

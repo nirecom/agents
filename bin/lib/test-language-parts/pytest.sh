@@ -10,6 +10,12 @@ pytest_case_markers() {
     crb_run "$1" uv run --no-project python "$CRB_PATH"
 }
 
+# has_table_driven_pytest <file> — rc 0 when a test is decorated with @pytest.mark.parametrize
+# (or `@mark.parametrize` after `from pytest import mark`); a line scan, so no uv is needed.
+has_table_driven_pytest() {
+    grep -qE '^[[:space:]]*@(pytest\.)?mark\.parametrize([[:space:](]|$)' "$1" 2>/dev/null
+}
+
 # pytest_env_clear_line <names-ERE> <line> — rc 0 when the line is one `os.environ.pop("NAME", None)`
 # (either quote) of a named var and nothing else. Prints nothing.
 pytest_env_clear_line() {

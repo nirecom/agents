@@ -10,7 +10,7 @@
 // doc changes). This one is intentionally the *.md-only class, the predicate the
 // review_docs skip guard needs; the two are not interchangeable.
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("./limited-child-process");
 
 function hasStagedDocChanges(repoDir) {
   const res = spawnSync(

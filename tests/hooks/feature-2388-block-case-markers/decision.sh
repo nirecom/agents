@@ -38,6 +38,7 @@ case_end
 
 case_begin "write-new-uncertain-approves" "hooks/block-case-markers.js"
 # A multi-line quoted string before a marker is only a WARN (rc 0): never block.
+# One-token header: a 2+ token header with unreadable markers is blocked by 4b (#2502).
 mkpayload Write "$REPO_M" "$REPO_M/tests/hooks/new-uncertain.sh" "content=@$BODIES/uncertain.sh"
 hk_run
 assert_decision "write-new-uncertain-approves" approve

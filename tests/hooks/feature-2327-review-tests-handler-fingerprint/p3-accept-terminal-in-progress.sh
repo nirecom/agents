@@ -31,7 +31,7 @@ T1="$TMPDIR_BASE/t1"; T1_N="$(np "$T1")"
 make_repo "$T1"
 seed_state ti1sid "$STALE_RT" complete
 write_terminal_marker ti1sid 6 fp1
-TI1_OUT="$(send_cmd ti1sid "$T1_N" "$(accept_cmd "$REASON")")"
+TI1_OUT="$(send_cmd_glossary ti1sid "$T1_N" "$(accept_cmd "$REASON")")"
 check "TI1: status complete" "complete" "$(sv ti1sid status)"
 check "TI1: reopen_reason cleared" "none" "$(sv ti1sid reopen)"
 check "TI1: warnings_summary gone" "gone" "$(sv ti1sid summary)"
@@ -49,7 +49,7 @@ T2="$TMPDIR_BASE/t2"; T2_N="$(np "$T2")"
 make_repo "$T2"
 seed_state ti2sid "$STALE_RT" complete
 write_terminal_marker ti2sid 2 fp2
-send_cmd ti2sid "$T2_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ti2sid "$T2_N" "$(accept_cmd "$REASON")" >/dev/null
 check "TI2: status complete (rc=2 valid terminal)" "complete" "$(sv ti2sid status)"
 case_end
 
@@ -58,7 +58,7 @@ T3="$TMPDIR_BASE/t3"; T3_N="$(np "$T3")"
 make_repo "$T3"
 seed_state ti3sid '{"status":"in_progress"}' complete
 write_terminal_marker ti3sid 6 fp3
-send_cmd ti3sid "$T3_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ti3sid "$T3_N" "$(accept_cmd "$REASON")" >/dev/null
 check "TI3: status complete without reopen_reason" "complete" "$(sv ti3sid status)"
 check "TI3: manifest records current impl oid" "$IMPL_OID" "$(sv ti3sid impl)"
 check "TI3: freshness is fresh after accept" "true:match" "$(fresh ti3sid "$T3_N")"
@@ -86,13 +86,25 @@ case_end
 case_begin "ti6-ti7-ti11-non-terminal-marker-stays-in-progress" "hooks/workflow-state/state-io/review-tests.js"
 T6="$TMPDIR_BASE/t6"; T6_N="$(np "$T6")"
 make_repo "$T6"
-for TI_RC in 3 7 "" abc; do
+for TI_RC in 7 "" abc; do
   TI_SID="ti6rc${TI_RC:-empty}sid"
   seed_state "$TI_SID" '{"status":"in_progress"}' complete
   write_terminal_marker "$TI_SID" "$TI_RC" fpx
   send_cmd "$TI_SID" "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
   check "TI6/7/11: rc=[$TI_RC] stays in_progress (fail-closed)" "in_progress" "$(sv "$TI_SID" status)"
 done
+# #2664: rc 3 (fallback review) branches on the fallback output. Line 2 carries the current
+# review-scope fingerprint, so the fallback-raw file is the only variable here.
+T6_FP="$(run_with_timeout 60 node -e 'process.stdout.write(String(require(process.env.EVIDENCE_N).computeReviewScopeFingerprint(process.argv[1]).fingerprint))' "$T6_N")"
+seed_state ti6rc3nofbsid '{"status":"in_progress"}' complete
+write_terminal_marker ti6rc3nofbsid 3 "$T6_FP"
+send_cmd ti6rc3nofbsid "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
+check "TI6: rc=[3] without a fallback-raw stays in_progress (fail-closed)" "in_progress" "$(sv ti6rc3nofbsid status)"
+seed_state ti6rc3fbsid '{"status":"in_progress"}' complete
+write_terminal_marker ti6rc3fbsid 3 "$T6_FP"
+printf 'NEEDS_REVISION\n- tests/x.sh misses the error path\n' > "$WORKFLOW_PLANS_DIR/ti6rc3fbsid-test-review-fallback-raw.md"
+send_cmd_glossary ti6rc3fbsid "$T6_N" "$(accept_cmd "$REASON")" >/dev/null
+check "TI6: rc=[3] with a NEEDS_REVISION fallback-raw for the current scope completes" "complete" "$(sv ti6rc3fbsid status)"
 case_end
 
 case_begin "ti8-terminal-marker-manifest-unavailable-fail-closed" "hooks/workflow-mark/review-tests-handler.js"
@@ -115,7 +127,7 @@ T10="$TMPDIR_BASE/t10"; T10_N="$(np "$T10")"
 make_repo "$T10"
 seed_state ti10sid "{\"status\":\"pending\",\"reopen_reason\":\"write-code-stale\",\"review_scope_manifest\":$OLD_MANIFEST}" complete
 write_terminal_marker ti10sid 6 fp10
-send_cmd ti10sid "$T10_N" "$(accept_cmd "$REASON")" >/dev/null
+send_cmd_glossary ti10sid "$T10_N" "$(accept_cmd "$REASON")" >/dev/null
 check "TI10: pending recovered to complete" "complete" "$(sv ti10sid status)"
 check "TI10: reopen_reason cleared" "none" "$(sv ti10sid reopen)"
 case_end

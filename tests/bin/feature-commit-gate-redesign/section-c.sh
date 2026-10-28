@@ -63,6 +63,7 @@ echo "x" > "$WT_17B/file.txt"
 git -C "$WT_17B" add file.txt
 SID_17B="c17b-$$"
 write_state "$SID_17B" "$(state_json "$SID_17B" "feature/secC-wt17b-main" "pending" "complete")"
+glossary_check_record "$SID_17B" "$WT_17B"
 RES_17B="$(run_gate "$MAIN_17B" "$(build_gate_json 'git commit -m x' "$SID_17B" "$WT_17B")")"
 if is_approve "$RES_17B"; then pass "C17b. payload cwd = linked worktree → resolves to worktree, uv skipped"
 else fail "C17b. expected approve (worktree gate), got: $RES_17B"; fi
@@ -77,9 +78,26 @@ git -C "$PRIMARY_17C" add src.txt tests/t.sh
 SID_17C="c17c-$$"
 write_state "$SID_17C" "$(state_json_custom "$SID_17C" "main" \
     write_tests pending user_verification complete)"
+glossary_check_record "$SID_17C" "$PRIMARY_17C"
 RES_17C="$(run_gate "$PRIMARY_17C" "$(build_gate_json 'git commit -m x' "$SID_17C" "$PAYLOAD_17C")")"
 if is_approve "$RES_17C"; then
     pass "C17c. payload cwd = main checkout → falls through, primary staged-change search wins"
 else
     fail "C17c. expected approve (payload cwd should NOT override primary), got: $RES_17C"
+fi
+
+# 17d. (#2529 T6-8) C17b without glossary_check_record: the same staged code file and
+# complete review_security block on the missing glossary record.
+PAIR_17D="$(setup_linked_worktree "secC-wt17d")"
+MAIN_17D="${PAIR_17D%|*}"
+WT_17D="${PAIR_17D#*|}"
+echo "x" > "$WT_17D/file.txt"
+git -C "$WT_17D" add file.txt
+SID_17D="c17d-$$"
+write_state "$SID_17D" "$(state_json "$SID_17D" "feature/secC-wt17d-main" "pending" "complete")"
+RES_17D="$(run_gate "$MAIN_17D" "$(build_gate_json 'git commit -m x' "$SID_17D" "$WT_17D")")"
+if is_block "$RES_17D" && echo "$RES_17D" | grep -q 'glossary-check-missing'; then
+    pass "C17d. C17b without the glossary record → block glossary-check-missing"
+else
+    fail "C17d. expected block naming glossary-check-missing, got: $RES_17D"
 fi

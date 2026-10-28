@@ -1,0 +1,202 @@
+tests/bin/crr/none.sh	deps	rc=0
+tests/bin/crr/none.sh	leftover-defs	rc=0
+tests/bin/crr/none.sh	self-impl	rc=0
+tests/bin/crr/none.sh	skip-reason	rc=0
+tests/bin/crr/conforming.sh	deps	rc=0
+tests/bin/crr/conforming.sh	deps	0	helper_a,helper_b
+tests/bin/crr/conforming.sh	deps	1	
+tests/bin/crr/conforming.sh	leftover-defs	rc=0
+tests/bin/crr/conforming.sh	self-impl	rc=0
+tests/bin/crr/conforming.sh	skip-reason	rc=0
+tests/bin/crr/malformed.sh	deps	rc=0
+tests/bin/crr/malformed.sh	leftover-defs	rc=0
+tests/bin/crr/malformed.sh	self-impl	rc=0
+tests/bin/crr/malformed.sh	skip-reason	rc=0
+tests/bin/crr/uncertain.sh	deps	rc=0
+tests/bin/crr/uncertain.sh	leftover-defs	rc=0
+tests/bin/crr/uncertain.sh	self-impl	rc=0
+tests/bin/crr/uncertain.sh	skip-reason	rc=0
+tests/bin/crr/heredoc-pseudo.sh	deps	rc=0
+tests/bin/crr/heredoc-pseudo.sh	leftover-defs	rc=0
+tests/bin/crr/heredoc-pseudo.sh	leftover-defs	2	hd_fn
+tests/bin/crr/heredoc-pseudo.sh	self-impl	rc=0
+tests/bin/crr/heredoc-pseudo.sh	skip-reason	rc=0
+tests/bin/crr/deps-heredoc.sh	deps	rc=0
+tests/bin/crr/deps-heredoc.sh	deps	0	real_fn
+tests/bin/crr/deps-heredoc.sh	leftover-defs	rc=0
+tests/bin/crr/deps-heredoc.sh	self-impl	rc=0
+tests/bin/crr/deps-heredoc.sh	skip-reason	rc=0
+tests/bin/crr/deps-boundary.sh	deps	rc=0
+tests/bin/crr/deps-boundary.sh	deps	0	mk_more
+tests/bin/crr/deps-boundary.sh	deps	1	fn_kw
+tests/bin/crr/deps-boundary.sh	leftover-defs	rc=0
+tests/bin/crr/deps-boundary.sh	leftover-defs	2	mk
+tests/bin/crr/deps-boundary.sh	self-impl	rc=0
+tests/bin/crr/deps-boundary.sh	skip-reason	rc=0
+tests/bin/crr/leftover.sh	deps	rc=0
+tests/bin/crr/leftover.sh	deps	0	used_in_case
+tests/bin/crr/leftover.sh	leftover-defs	rc=0
+tests/bin/crr/leftover.sh	leftover-defs	4	orphan_fn
+tests/bin/crr/leftover.sh	self-impl	rc=0
+tests/bin/crr/leftover.sh	skip-reason	rc=0
+tests/bin/crr/self-impl.sh	deps	rc=0
+tests/bin/crr/self-impl.sh	leftover-defs	rc=0
+tests/bin/crr/self-impl.sh	leftover-defs	5	pass
+tests/bin/crr/self-impl.sh	self-impl	rc=0
+tests/bin/crr/self-impl.sh	self-impl	3	counter-init	PASS=0
+tests/bin/crr/self-impl.sh	self-impl	4	counter-init	FAIL=0
+tests/bin/crr/self-impl.sh	self-impl	5	harness-redef	pass
+tests/bin/crr/self-impl.sh	skip-reason	rc=0
+tests/bin/crr/self-impl-clean.sh	deps	rc=0
+tests/bin/crr/self-impl-clean.sh	leftover-defs	rc=0
+tests/bin/crr/self-impl-clean.sh	self-impl	rc=0
+tests/bin/crr/self-impl-clean.sh	skip-reason	rc=0
+tests/bin/crr/skip-narrow-dot-agents.sh	deps	rc=0
+tests/bin/crr/skip-narrow-dot-agents.sh	leftover-defs	rc=0
+tests/bin/crr/skip-narrow-dot-agents.sh	self-impl	rc=0
+tests/bin/crr/skip-narrow-dot-agents.sh	skip-reason	rc=0
+tests/bin/crr/skip-narrow-dot-agents.sh	skip-reason	narrow-harness
+tests/bin/crr/skip-narrow-source-repo-root.sh	deps	rc=0
+tests/bin/crr/skip-narrow-source-repo-root.sh	leftover-defs	rc=0
+tests/bin/crr/skip-narrow-source-repo-root.sh	self-impl	rc=0
+tests/bin/crr/skip-narrow-source-repo-root.sh	skip-reason	rc=0
+tests/bin/crr/skip-narrow-source-repo-root.sh	skip-reason	narrow-harness
+tests/bin/crr/skip-narrow-unquoted.sh	deps	rc=0
+tests/bin/crr/skip-narrow-unquoted.sh	leftover-defs	rc=0
+tests/bin/crr/skip-narrow-unquoted.sh	self-impl	rc=0
+tests/bin/crr/skip-narrow-unquoted.sh	skip-reason	rc=0
+tests/bin/crr/skip-narrow-unquoted.sh	skip-reason	narrow-harness
+tests/bin/crr/skip-shared-harness.sh	deps	rc=0
+tests/bin/crr/skip-shared-harness.sh	leftover-defs	rc=0
+tests/bin/crr/skip-shared-harness.sh	self-impl	rc=0
+tests/bin/crr/skip-shared-harness.sh	skip-reason	rc=0
+tests/bin/crr/skip-section-runner.sh	deps	rc=0
+tests/bin/crr/skip-section-runner.sh	leftover-defs	rc=0
+tests/bin/crr/skip-section-runner.sh	self-impl	rc=0
+tests/bin/crr/skip-section-runner.sh	skip-reason	rc=0
+tests/bin/crr/skip-narrow-in-heredoc.sh	deps	rc=0
+tests/bin/crr/skip-narrow-in-heredoc.sh	leftover-defs	rc=0
+tests/bin/crr/skip-narrow-in-heredoc.sh	self-impl	rc=0
+tests/bin/crr/skip-narrow-in-heredoc.sh	skip-reason	rc=0
+tests/bin/crr/tab-in-name.sh	deps	rc=0
+tests/bin/crr/tab-in-name.sh	leftover-defs	rc=0
+tests/bin/crr/tab-in-name.sh	self-impl	rc=0
+tests/bin/crr/tab-in-name.sh	skip-reason	rc=0
+tests/bin/vce/before.sh	deps	rc=0
+tests/bin/vce/before.sh	leftover-defs	rc=0
+tests/bin/vce/before.sh	self-impl	rc=0
+tests/bin/vce/before.sh	skip-reason	rc=0
+tests/bin/vce/good.sh	deps	rc=0
+tests/bin/vce/good.sh	deps	0	
+tests/bin/vce/good.sh	deps	1	
+tests/bin/vce/good.sh	leftover-defs	rc=0
+tests/bin/vce/good.sh	self-impl	rc=0
+tests/bin/vce/good.sh	skip-reason	rc=0
+tests/bin/vce/good-three.sh	deps	rc=0
+tests/bin/vce/good-three.sh	deps	0	
+tests/bin/vce/good-three.sh	deps	1	
+tests/bin/vce/good-three.sh	leftover-defs	rc=0
+tests/bin/vce/good-three.sh	self-impl	rc=0
+tests/bin/vce/good-three.sh	skip-reason	rc=0
+tests/bin/vce/malformed.sh	deps	rc=0
+tests/bin/vce/malformed.sh	leftover-defs	rc=0
+tests/bin/vce/malformed.sh	self-impl	rc=0
+tests/bin/vce/malformed.sh	skip-reason	rc=0
+tests/bin/vce/uncertain2.sh	deps	rc=0
+tests/bin/vce/uncertain2.sh	leftover-defs	rc=0
+tests/bin/vce/uncertain2.sh	self-impl	rc=0
+tests/bin/vce/uncertain2.sh	skip-reason	rc=0
+tests/bin/vce/uncertain1.sh	deps	rc=0
+tests/bin/vce/uncertain1.sh	leftover-defs	rc=0
+tests/bin/vce/uncertain1.sh	self-impl	rc=0
+tests/bin/vce/uncertain1.sh	skip-reason	rc=0
+tests/bin/vce/leftover.sh	deps	rc=0
+tests/bin/vce/leftover.sh	deps	0	
+tests/bin/vce/leftover.sh	deps	1	
+tests/bin/vce/leftover.sh	leftover-defs	rc=0
+tests/bin/vce/leftover.sh	leftover-defs	5	orphan_fn
+tests/bin/vce/leftover.sh	self-impl	rc=0
+tests/bin/vce/leftover.sh	skip-reason	rc=0
+tests/bin/vce/deleted-not-target.sh	deps	rc=0
+tests/bin/vce/deleted-not-target.sh	deps	0	
+tests/bin/vce/deleted-not-target.sh	leftover-defs	rc=0
+tests/bin/vce/deleted-not-target.sh	self-impl	rc=0
+tests/bin/vce/deleted-not-target.sh	skip-reason	rc=0
+tests/bin/vce/deleted-is-target.sh	deps	rc=0
+tests/bin/vce/deleted-is-target.sh	deps	0	
+tests/bin/vce/deleted-is-target.sh	deps	1	
+tests/bin/vce/deleted-is-target.sh	leftover-defs	rc=0
+tests/bin/vce/deleted-is-target.sh	self-impl	rc=0
+tests/bin/vce/deleted-is-target.sh	skip-reason	rc=0
+tests/bin/vce/target-not-in-header.sh	deps	rc=0
+tests/bin/vce/target-not-in-header.sh	deps	0	
+tests/bin/vce/target-not-in-header.sh	deps	1	
+tests/bin/vce/target-not-in-header.sh	deps	2	
+tests/bin/vce/target-not-in-header.sh	leftover-defs	rc=0
+tests/bin/vce/target-not-in-header.sh	self-impl	rc=0
+tests/bin/vce/target-not-in-header.sh	skip-reason	rc=0
+tests/bin/vce/merged-abc.sh	deps	rc=0
+tests/bin/vce/merged-abc.sh	deps	0	
+tests/bin/vce/merged-abc.sh	deps	1	
+tests/bin/vce/merged-abc.sh	leftover-defs	rc=0
+tests/bin/vce/merged-abc.sh	self-impl	rc=0
+tests/bin/vce/merged-abc.sh	skip-reason	rc=0
+tests/bin/vce/merged-missing.sh	deps	rc=0
+tests/bin/vce/merged-missing.sh	deps	0	
+tests/bin/vce/merged-missing.sh	leftover-defs	rc=0
+tests/bin/vce/merged-missing.sh	self-impl	rc=0
+tests/bin/vce/merged-missing.sh	skip-reason	rc=0
+tests/bin/vce/no-harness.sh	deps	rc=0
+tests/bin/vce/no-harness.sh	deps	0	pass
+tests/bin/vce/no-harness.sh	deps	1	pass
+tests/bin/vce/no-harness.sh	leftover-defs	rc=0
+tests/bin/vce/no-harness.sh	self-impl	rc=0
+tests/bin/vce/no-harness.sh	self-impl	4	counter-init	PASS=0
+tests/bin/vce/no-harness.sh	self-impl	5	counter-init	FAIL=0
+tests/bin/vce/no-harness.sh	self-impl	6	harness-redef	pass
+tests/bin/vce/no-harness.sh	skip-reason	rc=0
+tests/bin/vce/unguarded.sh	deps	rc=0
+tests/bin/vce/unguarded.sh	deps	0	
+tests/bin/vce/unguarded.sh	deps	1	
+tests/bin/vce/unguarded.sh	leftover-defs	rc=0
+tests/bin/vce/unguarded.sh	self-impl	rc=0
+tests/bin/vce/unguarded.sh	self-impl	5	counter-init	PASS=0
+tests/bin/vce/unguarded.sh	skip-reason	rc=0
+tests/bin/ec/plain.sh	deps	rc=0
+tests/bin/ec/plain.sh	leftover-defs	rc=0
+tests/bin/ec/plain.sh	self-impl	rc=0
+tests/bin/ec/plain.sh	skip-reason	rc=0
+tests/bin/ec/single.sh	deps	rc=0
+tests/bin/ec/single.sh	leftover-defs	rc=0
+tests/bin/ec/single.sh	self-impl	rc=0
+tests/bin/ec/single.sh	skip-reason	rc=0
+tests/bin/ec/embedded.sh	deps	rc=0
+tests/bin/ec/embedded.sh	deps	0	
+tests/bin/ec/embedded.sh	deps	1	
+tests/bin/ec/embedded.sh	leftover-defs	rc=0
+tests/bin/ec/embedded.sh	self-impl	rc=0
+tests/bin/ec/embedded.sh	skip-reason	rc=0
+tests/bin/ec/embedded-orphan.sh	deps	rc=0
+tests/bin/ec/embedded-orphan.sh	deps	0	
+tests/bin/ec/embedded-orphan.sh	deps	1	
+tests/bin/ec/embedded-orphan.sh	leftover-defs	rc=0
+tests/bin/ec/embedded-orphan.sh	self-impl	rc=0
+tests/bin/ec/embedded-orphan.sh	skip-reason	rc=0
+tests/bin/fix-gh-native-path.sh	deps	rc=0
+tests/bin/fix-gh-native-path.sh	deps	0	np_call,np_row
+tests/bin/fix-gh-native-path.sh	deps	1	gh_check
+tests/bin/fix-gh-native-path.sh	deps	2	is_abs_path,recorded_body_file,gh_check
+tests/bin/fix-gh-native-path.sh	deps	3	
+tests/bin/fix-gh-native-path.sh	leftover-defs	rc=0
+tests/bin/fix-gh-native-path.sh	self-impl	rc=0
+tests/bin/fix-gh-native-path.sh	skip-reason	rc=0
+tests/bin/feature-2434-control-migration.sh	deps	rc=0
+tests/bin/feature-2434-control-migration.sh	leftover-defs	rc=0
+tests/bin/feature-2434-control-migration.sh	self-impl	rc=0
+tests/bin/feature-2434-control-migration.sh	skip-reason	rc=0
+tests/bin/get-config-var-checkout-only.sh	deps	rc=0
+tests/bin/get-config-var-checkout-only.sh	deps	0	make_checkout,check_row
+tests/bin/get-config-var-checkout-only.sh	deps	1	make_checkout,check_row
+tests/bin/get-config-var-checkout-only.sh	leftover-defs	rc=0
+tests/bin/get-config-var-checkout-only.sh	self-impl	rc=0
+tests/bin/get-config-var-checkout-only.sh	skip-reason	rc=0

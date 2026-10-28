@@ -9,26 +9,9 @@
 
 const { getConvLangInjection } = require("./lib/conv-lang");
 const { getPlanLangInjection } = require("./lib/lang-config");
-const { resolveSessionId, readState } = require("./workflow-state");
+const { resolveSessionId } = require("./workflow-state");
 const { readHookInput } = require("./lib/read-stdin");
-
-const PLAN_STEPS = ["clarify_intent", "outline", "detail"];
-
-// Planning context = any planning step still pending/in_progress (not
-// complete and not skipped). Fail-open to false on state-read failure.
-function isPlanning(sessionId) {
-  if (!sessionId) return false;
-  try {
-    const state = readState(sessionId);
-    if (!state || !state.steps) return false;
-    return PLAN_STEPS.some((step) => {
-      const s = (state.steps[step] || {}).status || "pending";
-      return s !== "complete" && s !== "skipped";
-    });
-  } catch (e) {
-    return false;
-  }
-}
+const { isPlanning } = require("./lib/planning-phase");
 
 function main() {
   let sessionId;

@@ -6,11 +6,12 @@
 // an ask. There are exactly two rungs: the authenticated login IS the owner, or
 // the authenticated identity holds admin on the repository. Anything else the
 // API might imply (push rights, org membership) is not ownership.
-const { spawnSync } = require("child_process");
+const { spawnSync, checkNameOf } = require("../lib/limited-child-process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { probeTimeout, chargeBudget } = require("./budget");
+const { probeTimeout, chargeBudget, MIN_PROBE_MS } = require("./budget");
+const decisionTimeLimit = require("../lib/decision-time-limit");
 const { isValidOwner, isValidRepo, GITHUB_HOST } = require("../lib/parse-remote-url");
 const { AUTH_FP_VARS } = require("./auth-context");
 const { readJsonState, writeJsonState } = require("./gh-env-state");
@@ -79,7 +80,13 @@ function probeEnv(ctx) {
 // injectable so the proof path can be exercised without a real gh on PATH.
 function runProbe(argv, budget, capMs, options, ctx) {
   const timeout = probeTimeout(budget, capMs);
-  if (timeout === null) return null;
+  if (timeout === null) {
+    // Declined because the decision time limit is near: asking beats an unproven "no".
+    if (decisionTimeLimit.isDecisionTimeLimitArmed() && decisionTimeLimit.remainingDecisionMs() < MIN_PROBE_MS) {
+      decisionTimeLimit.askAndExit(checkNameOf(argv[0], argv.slice(1)));
+    }
+    return null;
+  }
   const injected = budget && typeof budget.spawn === "function";
   const spawn = injected ? budget.spawn : spawnSync;
   const started = Date.now();

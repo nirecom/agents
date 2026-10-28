@@ -9,18 +9,22 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { getSessionStateDir } = require("../workflow-state");
-const { getPlansArtifactPath } = require("./plans-artifact-registry");
 const { normalizeSlashes } = require("./path-match");
 const { PLAN_STAGE_TABLE } = require("../workflow-state/plan-stage-table");
+const { controlPath } = require("../workflow-state/state-io/control-dir");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 const STAGES = Object.freeze(Object.values(PLAN_STAGE_TABLE).map((row) => row.suffix));
 const validSid = (sid) => typeof sid === "string" && SID_RE.test(sid);
 
-// approvalArtifactPath(sid, stage) -> <plans>/<sid>-<stage>.md, the file the approval binds; null
-// for an unusable sid.
+// approvalArtifactPath(sid, stage) -> <plans>/<first_session_id>-<stage>.md, the file the approval
+// binds (#2748); null for an unusable sid or stage.
 function approvalArtifactPath(sid, stage) {
-  try { return getPlansArtifactPath(sid, stage); } catch (_) { return null; }
+  try {
+    return require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage).path;
+  } catch (_) {
+    return null;
+  }
 }
 
 // linkKey(linkResult) -> the URL when one exists, else the local path, else null.
@@ -42,6 +46,26 @@ function samePath(a, b) {
 
 function receiptPath(sid, stage) {
   return path.join(getSessionStateDir(sid), `${sid}.confirm-plan-receipt-${stage}.json`);
+}
+
+const RECEIPT_LOG_NAME = "presentation-receipt-log.jsonl";
+
+// appendReceiptLog(sid, event, stage): one {event, stage, path, at} line (#2804); never throws.
+function appendReceiptLog(sid, event, stage) {
+  try {
+    const line = { event, stage, path: receiptPath(sid, stage), at: new Date().toISOString() };
+    fs.appendFileSync(controlPath(sid, RECEIPT_LOG_NAME, { forWrite: true }), `${JSON.stringify(line)}\n`, "utf8");
+  } catch (_) { /* the log is diagnostic only */ }
+}
+
+// readReceiptLog(sid) -> the parsed log lines, [] when absent or unreadable; never throws.
+function readReceiptLog(sid) {
+  try {
+    const raw = fs.readFileSync(controlPath(sid, RECEIPT_LOG_NAME), "utf8");
+    return raw.split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (_) { return null; } }).filter(Boolean);
+  } catch (_) {
+    return [];
+  }
 }
 
 // A link stands for the plan only as an http(s) URL, or as the plan's own local path.
@@ -68,11 +92,12 @@ function writeReceipt(sid, stage, fields) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(tmp, JSON.stringify(body), "utf8");
     fs.renameSync(tmp, file);
-    return true;
   } catch (_) {
     try { fs.unlinkSync(tmp); } catch (_e) { /* tmp never written */ }
     return false;
   }
+  appendReceiptLog(sid, "write", stage);
+  return true;
 }
 
 function wellFormed(r) {
@@ -103,11 +128,9 @@ function discardReceipt(sid, stage) {
 // concurrent CONFIRM calls cannot both spend it.
 function consumeReceipt(sid, stage) {
   if (!validSid(sid) || !STAGES.includes(stage)) return false;
-  try { fs.unlinkSync(receiptPath(sid, stage)); return true; } catch (_) { return false; }
-}
-
-function discardAllReceipts(sid) {
-  for (const stage of STAGES) discardReceipt(sid, stage);
+  try { fs.unlinkSync(receiptPath(sid, stage)); } catch (_) { return false; }
+  appendReceiptLog(sid, "consume", stage);
+  return true;
 }
 
 // matchReceipt(receipt, {absPath, link, contentSha}) -> {ok:true} | {ok:false, cause}.
@@ -124,5 +147,5 @@ function matchReceipt(receipt, current) {
 
 module.exports = {
   STAGES, approvalArtifactPath, linkKey, samePath,
-  receiptPath, writeReceipt, readReceipt, discardReceipt, consumeReceipt, discardAllReceipts, matchReceipt,
+  receiptPath, writeReceipt, readReceipt, discardReceipt, consumeReceipt, matchReceipt, readReceiptLog,
 };

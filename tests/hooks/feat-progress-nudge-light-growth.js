@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/progress-nudge.js, hooks/progress-nudge/light.js
-// Tags: TL2, hooks, progress-nudge, light-path, elapsed-trigger, transcript-growth, regression, scope:common
+// Tags: TL2, hooks, progress-nudge, light-path, elapsed-trigger, transcript-growth, regression, conv-lang, scope:common
 // #2594: the cheap pre-check (needsFullPath) escalates on elapsed time only when the transcript
 // also grew past the baseline — the elapsed trigger of lib/progress-pressure fires only with growth,
 // so an old baseline over an idle transcript must not send every non-Bash call down the full path.
@@ -143,6 +143,33 @@ caseBegin("hook-read-call-stays-light-on-idle-transcript", "hooks/progress-nudge
   fs.appendFileSync(transcriptOf(sid), Buffer.alloc(1, 121));
   hook(sid, "PostToolUse", "Read");
   check("L9: control — after one byte of growth the same Read call takes the full path", () => eq(evaluateCalls(), ["PostToolUse:Read"], "evaluate calls"));
+}
+caseEnd();
+
+// #2731 S3-7: the nudge reaches the model through withConvLang — the directive leads once.
+// A second preload pins evaluate()'s answer so the case isolates the emit line.
+const CTX_PRELOAD = path.join(TMP, "fixed-evaluate.js");
+fs.writeFileSync(CTX_PRELOAD, "require(process.env.LG_EVALUATE).evaluate = () => process.env.LG_CTX;\n");
+function hookCtx(sid, lang) {
+  const e = { session_id: sid, transcript_path: transcriptOf(sid), cwd: T, hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: "true" }, tool_response: {} };
+  const env = Object.assign({}, process.env, { NODE_OPTIONS: `--require ${CTX_PRELOAD.replace(/\\/g, "/")}`, LG_EVALUATE: EVALUATE, LG_CTX: "[progress check] update the session-progress file.", CONV_LANG: lang });
+  const r = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(e), cwd: TMP, env, encoding: "utf8", timeout: 60000 });
+  if (r.error || r.status !== 0) throw new Error(`hook exit=${r.status} err=${r.error} stderr=${r.stderr}`);
+  const h = (JSON.parse(String(r.stdout).trim() || "{}") || {}).hookSpecificOutput;
+  return h && typeof h.additionalContext === "string" ? h.additionalContext : "";
+}
+caseBegin("nudge-additional-context-conv-lang", "hooks/progress-nudge.js");
+{
+  const C = require("../lib/system-message-contract");
+  const sid = "lg-lang";
+  S.writeState(sid, S.createInitialState(sid, { cwd: "/x", git_branch: "feature/x" }));
+  S.markStep(sid, "workflow_init", "complete");
+  fs.writeFileSync(transcriptOf(sid), Buffer.alloc(BASE, 120));
+  const ja = hookCtx(sid, "japanese");
+  check("L10: fixture — the pinned nudge reaches additionalContext", () => (ja.includes("[progress check]") ? undefined : `got ${show(ja)}`));
+  check("L10: CONV_LANG=japanese -> the directive leads additionalContext exactly once", () => (C.prefixedOnce(ja, "japanese") ? undefined : `got ${show(ja)}`));
+  const en = hookCtx(sid, "english");
+  check("L11: CONV_LANG=english -> no directive", () => eq(C.countDirective(en), 0, "directive count"));
 }
 caseEnd();
 

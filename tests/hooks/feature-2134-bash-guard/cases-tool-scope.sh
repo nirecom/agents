@@ -49,9 +49,10 @@ assert_eq "T3: a non-command tool is out of scope" \
     "passThrough" "$(verdict_of 'irrelevant' 'sid-bg-armed' 'Edit')"
 case_end
 
-# T4: registration. The PreToolUse group that runs hooks/bash-guard.js carries the bare
-# matcher "Bash". This is the structural half of the TL3 gap recorded in the dispatcher.
+# T4: registration. Since #2676 bash-guard runs as a member of the merged allow-deny hook
+# (--matcher-group primary) and has no standalone settings.json entry; its member tool list
+# is the bare "Bash". This is the structural half of the TL3 gap recorded in the dispatcher.
 case_begin "tool-scope-registration" "settings.json"
-assert_eq "T4: bash-guard is registered under exactly one PreToolUse matcher, and it is Bash" \
+assert_eq "T4: bash-guard has no standalone entry, the primary merged group is registered, and the member judges Bash only" \
     "Bash" "$(probe guard-hook-matchers '')"
 case_end

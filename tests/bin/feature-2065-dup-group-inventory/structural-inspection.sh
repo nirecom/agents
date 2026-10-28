@@ -116,22 +116,36 @@ assert_eq "SI4a the skip reason sets are pairwise disjoint" "$SI_UNIQ" "$SI_TOTA
 assert_eq "SI4b the duplicate+malformed file is not also under malformed_header" \
     "0" "$(row_files "$SI_OUT" skip malformed_header | grep -c 'si-dup-malformed\.sh' || true)"
 
-# SI5 — the pre-commit HARD gate is deliberately unchanged by this PR: duplicate
-# and position-violating files must still be accepted. When the hand-off issue
-# from S11 lands the structural check in check-test-frontmatter.sh, INVERT this
-# case rather than deleting it.
-SI_GATE_REPO="$(make_repo)"
-add_src "$SI_GATE_REPO" "bin/si-first.sh"
-add_src "$SI_GATE_REPO" "bin/si-second.sh"
-mkdir -p "$SI_GATE_REPO/tests/bin"
-cp "$SI_REPO/tests/bin/si-dup.sh" "$SI_GATE_REPO/tests/bin/si-dup.sh"
-cp "$SI_REPO/tests/bin/si-late.sh" "$SI_GATE_REPO/tests/bin/si-late.sh"
-cp "$SI_REPO/tests/bin/si-boundary.sh" "$SI_GATE_REPO/tests/bin/si-boundary.sh"
-commit_repo "$SI_GATE_REPO" "frontmatter gate fixture"
+# SI5 — the late-header half of the structural check landed in #2502 (the header
+# reader stops at headerMaxLines), so the pre-commit HARD gate now rejects a late
+# header. Duplicate headers are still accepted; when duplicate detection lands,
+# INVERT SI5c rather than deleting it. Separate repos keep each verdict observable.
+SI_LATE_GATE_REPO="$(make_repo)"
+add_src "$SI_LATE_GATE_REPO" "bin/si-second.sh"
+mkdir -p "$SI_LATE_GATE_REPO/tests/bin"
+cp "$SI_REPO/tests/bin/si-late.sh" "$SI_LATE_GATE_REPO/tests/bin/si-late.sh"
+commit_repo "$SI_LATE_GATE_REPO" "late-header gate fixture"
 
-run_in_repo "$SI_GATE_REPO" "$FM_CHECK" --all "$SI_GATE_REPO"
-assert_eq "SI5 check-test-frontmatter.sh --all still accepts duplicate/late headers" \
+run_in_repo "$SI_LATE_GATE_REPO" "$FM_CHECK" --all "$SI_LATE_GATE_REPO"
+assert_eq "SI5a check-test-frontmatter.sh --all rejects a header at line 11" \
+    "1" "$RC"
+assert_eq "SI5b the rejection names the late-header file as MISSING_TESTS_HEADER" \
+    "1" "$(grep -cxF 'MISSING_TESTS_HEADER: tests/bin/si-late.sh' <<<"$ERR" || true)"
+
+SI_DUP_GATE_REPO="$(make_repo)"
+add_src "$SI_DUP_GATE_REPO" "bin/si-first.sh"
+add_src "$SI_DUP_GATE_REPO" "bin/si-second.sh"
+add_src "$SI_DUP_GATE_REPO" "bin/si-edge.sh"
+mkdir -p "$SI_DUP_GATE_REPO/tests/bin"
+cp "$SI_REPO/tests/bin/si-dup.sh" "$SI_DUP_GATE_REPO/tests/bin/si-dup.sh"
+cp "$SI_REPO/tests/bin/si-boundary.sh" "$SI_DUP_GATE_REPO/tests/bin/si-boundary.sh"
+commit_repo "$SI_DUP_GATE_REPO" "duplicate/boundary gate fixture"
+
+run_in_repo "$SI_DUP_GATE_REPO" "$FM_CHECK" --all "$SI_DUP_GATE_REPO"
+assert_eq "SI5c check-test-frontmatter.sh --all still accepts duplicate and line-10 headers" \
     "0" "$RC"
+assert_eq "SI5d the accepting run mentions neither the duplicate nor the boundary file" \
+    "0" "$(grep -cE 'si-(dup|boundary)\.sh' <<<"$OUT$ERR" || true)"
 
 case_end
 

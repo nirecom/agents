@@ -13,6 +13,7 @@ const { readStdinJson, pathOf, normalizePath, collectEditTargets, approve, block
 const { loadDocsLangConfig, classifyPolicy } = require("./lib/lang-config");
 const { lintWorktreeNotesLang, enforcementFor } = require("./lib/lint-worktree-notes-lang");
 const { safeIsPrivateRepo } = require("./lib/is-private-repo");
+const { armDecisionTimeLimit } = require("./lib/decision-time-limit");
 
 const TARGET_BASENAME = "WORKTREE_NOTES.md";
 const HEADING_RE = /^## (History Notes|Changelog Notes)$/m;
@@ -49,6 +50,7 @@ function lintPath(filePath, targets, toolInput, config, isPriv, isWrite) {
 
 function main() {
   const input = readStdinJson();
+  armDecisionTimeLimit({ hookName: "gate-worktree-notes-lang" });
   if (!input || typeof input !== "object") return approve();
   const targets = collectEditTargets(input.tool_name, input.tool_input)
     .filter((t) => path.basename(t.filePath) === TARGET_BASENAME);

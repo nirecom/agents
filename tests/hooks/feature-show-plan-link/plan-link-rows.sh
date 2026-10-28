@@ -97,7 +97,7 @@ if psf_make_bare "$SPR_BARE" && psf_make_provisioned "$SPR" "$PSF_ORIGIN_E2E" >/
   SPR_LINE="$(sps_ctx_line "$SPR_BLOB/sprblk-intent.md")"
   if [ -n "$SPR_LINE" ] && sps_has_dir "$SPR_LINE" "$SPR"; then pass "R4 no record, identical: line carries the URL and the local path"
   else fail "R4 no record, identical: line carries the URL and the local path — ctx=$(printf '%q' "$HOOK_CTX")"; fi
-  sps_expect_msg_has "R4 no record, identical: systemMessage reports the record failure" "Plan file: " "[plan-sync] internal-error"
+  sps_expect_msg_has "R4 no record, identical: systemMessage reports the record failure" "[plan-file] " "[plan-sync] internal-error"
 
   echo "=== R5: record cannot be written -> the changed plan is not sent, no host record is left ==="
   printf 'r4 v2\n' > "$SPR/sprblk-intent.md"
@@ -110,7 +110,7 @@ if psf_make_bare "$SPR_BARE" && psf_make_provisioned "$SPR" "$PSF_ORIGIN_E2E" >/
     fail "R5 record write failed: destination unchanged, no host record — destination=$(printf '%q' "$SPR_GOT") record=$SPR_REC"
   fi
   spr_expect_reason_line "R5 no record, content differs: local path + not-published, systemMessage shown" not-published "$SPR" shown
-  sps_expect_msg_has "R5 systemMessage reports the record failure" "Plan file: " "sprblk-intent.md" "[plan-sync] internal-error"
+  sps_expect_msg_has "R5 systemMessage reports the record failure" "[plan-file] " "sprblk-intent.md" "[plan-sync] internal-error"
 
   echo "=== R6: record cannot be written, plan never sent -> local path + not-published, systemMessage shown ==="
   printf 'r6 body\n' > "$SPR/sprabs-detail.md"
@@ -160,7 +160,7 @@ if [ -d "$SPS_PD/.git" ] && [ -d "$SPS_DEAD_PROJ/.git" ]; then
   WORKFLOW_PLANS_DIR="$SPS_PD" PLAN_SYNC_REMOTE_URL="$PSF_ORIGIN_DEAD" GIT_SSH_COMMAND=false \
     sps_run_hook "$(psf_write_json "$SPS_PD/sprdead-outline.md" sprdead "$(psf_np "$SPS_DEAD_PROJ")")"
   spr_expect_record "R9 push failed: the record already matches the destination host" "$SPS_PD" sprdead-outline.md "$PSF_ORIGIN_DEAD" match
-  sps_expect_msg_has "R9 push failed: systemMessage reports the failure" "Plan file: " "sprdead-outline.md" "[plan-sync] " "$SPS_RUN_HINT"
+  sps_expect_msg_has "R9 push failed: systemMessage reports the failure" "[plan-file] " "sprdead-outline.md" "[plan-sync] " "$SPS_RUN_HINT"
   spr_expect_reason_line "R9 push failed: local path + not-published, systemMessage shown" not-published "$SPS_PD" shown
 else
   fail "R9 fixture — the H5 provisioned repo / dead-origin project is missing"

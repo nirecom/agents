@@ -3,7 +3,7 @@
 // refusal fires, bounded to 3 seconds; any failure falls back to the forge's
 // "view --web" command so the refusal text never depends on the network.
 
-const { spawnSync } = require("child_process");
+const { spawnSync } = require("../lib/limited-child-process");
 
 const LOOKUP_TIMEOUT_MS = 3000;
 

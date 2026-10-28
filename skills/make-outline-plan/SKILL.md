@@ -1,6 +1,6 @@
 ---
 name: make-outline-plan
-description: Propose 2-3 mutually-exclusive high-level approaches via outline-planner + outline-reviewer, then get user sign-off. Stage 2 of the three-stage planning pipeline. Outputs <session-id>-outline.md.
+description: Propose 2-3 mutually-exclusive high-level approaches via outline-planner + outline-reviewer, then get user sign-off. Stage 2 of the three-stage planning pipeline. Outputs <first_session_id>-outline.md.
 model: sonnet
 user-invocable: false
 ---
@@ -16,12 +16,12 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 - `<INTENT_MD>` — output of `clarify-intent` (cross-session carry-in allowed)
 - `<PLANS_DIR>/<session-id>-survey-{code,history}.md` — optional; contain `## Verified Claims`
 - All sentinels in MOP-0 are emitted by the orchestrator (Bash tool), never by a subagent.
-- Session-id used for `*-outline.md` matches the intent file actually used.
+- `<OUTLINE_MD>` and `<INTENT_MD>` both carry first_session_id, shared by every generation of the session chain.
 
 ## Procedure
 
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Reuse across steps.
-Run `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` once; substitute its output for every `<INTENT_MD>` / `$INTENT_MD` below.
+Run `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` and `... --stage outline` once each; substitute the outputs for every `<INTENT_MD>` / `$INTENT_MD` and `<OUTLINE_MD>` / `$OUTLINE_MD` below. When the outline call fails, write no outline: halt and surface its stderr.
 
 MOP-0. **Surface premise contradictions** from Research artifacts.
    MOP-0a. Determine session-id from `CLAUDE_CODE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).
@@ -34,7 +34,7 @@ MOP-0. **Surface premise contradictions** from Research artifacts.
 MOP-1. Locate the intent file:
    a. `<INTENT_MD>` exists → use it (it already follows a resumed session's upstream).
    b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
-   c. After (b) only, extract session-id from the chosen file's name and use it for all subsequent output paths. After (a), keep the current session id: `<INTENT_MD>` may be the session upstream's file, and every output path stays the session downstream's own.
+   c. After (b) only, rerun the outline CLI with `--session <the chosen file's session-id>` and use its output as `<OUTLINE_MD>`. After (a), keep `<OUTLINE_MD>`: it already names the session chain's first_session_id.
    d. Judge the outline skip: follow `skills/_shared/jev-two-stage-judge.md` with point=`outline-skip` stage=`outline`; on `SKIP=true` (outline already settled skipped by finalize) skip to Completion.
 
 MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_MAIN_ROOT/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID" --stage outline'`. If line 1 is not `NONE`, use its `model=<alias>` and `signals=<csv-or-none>` lines directly.
@@ -48,9 +48,9 @@ MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_
 MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
-   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/<session-id>-outline.md`. Do NOT write `## Issues` / `## Accepted Tradeoffs` — the helper carries them forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
+   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<OUTLINE_MD>`. Do NOT write `## Issues` / `## Accepted Tradeoffs` — the helper carries them forward next. Do NOT write `## Class members` — its SSOT is intent.md (#2228).
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
-     Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$INTENT_MD" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
+     Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$INTENT_MD" "$OUTLINE_MD" "$OUTLINE_MD"` (Bash tool).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (CPA-1+CPA-2+CPA-3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — the CPA-3 steps (presentation, CONFIRM echo on the turn-end block or else in the next turn, next response) cover that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
    - Proceed to the **Completion** sequence below.
 
@@ -58,7 +58,7 @@ MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then r
 
 MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
    After outline-planner returns its draft (initial or revised round), the orchestrator carries the 2 mandatory sections (`## Issues`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
-   Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$INTENT_MD" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
+   Run `bash "$AGENTS_MAIN_ROOT/skills/_shared/assemble-mandatory.sh" --source-kind intent "$INTENT_MD" "$OUTLINE_MD" "$OUTLINE_MD"` (Bash tool).
    - The helper extracts the 2 sections from intent.md with headers, strips any planner-authored copies (plus any planner-authored `## Class members` residue) and the planner's H1 from the draft, and writes the assembled outline.md.
    - `## Class members` is NOT carried into outline.md — its SSOT is intent.md (#2228).
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
@@ -117,12 +117,12 @@ MOP-7. On `APPROVED`:
 
    Do NOT write this prose to outline.md. MOP-8 handles the file write.
 
-MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + plan-link line).
+MOP-8. Write the chosen approach to `<OUTLINE_MD>` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + plan-link line).
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
    - **`GATE_ACTION=proceed`:** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
    - **`GATE_ACTION=ask`:** follow the three confirm-plan CPA-3 steps — the presentation turn, then `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"` alone — as the next message when the turn end is blocked, otherwise in the next turn; after Allow, co-emit the `make-detail-plan` Skill invocation. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
-## Output Schema (`<session-id>-outline.md`)
+## Output Schema (`<OUTLINE_MD>`)
 
 The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
@@ -149,9 +149,9 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 - Write every orchestrator-authored outline.md body — both the MOP-3 minimal single-approach file and the MOP-8 chosen-approach file — in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `next-step --advance --step detail` is NOT called here; only `make-detail-plan` completes `detail`. This skill completes `outline` via MOP-C1's `next-step --advance --step outline --complete --next` call.
-- **Confirmation dialogs per run**: OFF mode fires none. ON mode fires exactly one: the MOP-8 `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel. The MOP-7 AskUserQuestion and the multi-approach passthrough bypass option are abolished (#1522); the orchestrator auto-selects the recommended approach. `CONFIRM_OUTLINE=off` is the sole remaining MOP-8 bypass path.
+- **Confirmation dialogs per run**: OFF mode fires none. ON mode fires exactly one: the MOP-8 `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel. The MOP-7 AskUserQuestion and the multi-approach passthrough bypass option are abolished (#1522); the orchestrator auto-selects the recommended approach. `CONFIRM_OUTLINE=off` is the sole remaining MOP-8 bypass path. The AskUserQuestion that confirms accepting a `[glossary-drift ` concern unfixed does not count toward this (exception below; `skills/_shared/glossary-drift-check.md`).
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the MOP-7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
-- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only.
+- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ## Completion

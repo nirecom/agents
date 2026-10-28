@@ -45,6 +45,8 @@ mkdir -p "$WORKFLOW_STATE_DIR"
 # copy of this checkout, which setup_repo attaches to the repo it builds.
 # shellcheck source=tests/lib/session-repo-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
+# shellcheck source=tests/lib/glossary-check-record.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 GATE_CHECKOUT="$TMPDIR_BASE/gate-checkout"
 session_repo_fixture_create "$GATE_CHECKOUT" || { echo "FAIL: cannot copy the checkout for the gate"; exit 1; }
 HOOK_JS="$(session_repo_fixture_path "$GATE_CHECKOUT" hooks/workflow-gate.js)"
@@ -165,6 +167,7 @@ test_A_baseline_clean_approves() {
     # Edit + stage app.js; nothing left unstaged.
     echo "edit" >> "$repo/app.js"
     git -C "$repo" add app.js
+    ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
     local payload; payload="$(build_commit_payload "$sid" "$repo")"
     run_hook "$payload" "$wfdir"
     if [ "$HOOK_RC" -ne 0 ]; then
@@ -216,6 +219,7 @@ test_C_wip_skips_gate1() {
     echo "doc-edit" >> "$repo/README.md"
     git -C "$repo" add README.md
     echo "unstaged-edit" >> "$repo/app.js"
+    ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
     # NOTE: -c MUST come before the `commit` subcommand verb.
     local payload; payload="$(build_commit_payload "$sid" "$repo" \
         "git -C $repo -c workflow.wip=1 commit -m \"wip\"")"

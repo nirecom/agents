@@ -16,7 +16,7 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 ## Session model
 
 - Relation: 1 session = N issues (N ≥ 1) = N `history.md` entries = 1 PR.
-- `closes_issues` source: `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` (canonical parser: `hooks/lib/parse-closes-issues.js` — do not reimplement).
+- `closes_issues` source: the output of `bin/plan-artifact-path --stage intent` (canonical parser: `hooks/lib/parse-closes-issues.js` — do not reimplement).
 - `closes_issues` order: insertion order. All entries are semantically symmetric.
 
 ## Active task list

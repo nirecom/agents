@@ -45,9 +45,10 @@ ccp_sync() {
 # (blob URL, or the local path for an unpublishable reason) the hook resolves there (#2729).
 ccp_seed_pub() { (ccp_ps_env >/dev/null 2>&1; seed_receipt "$1"); }
 
-# ccp_expect_deny <name> — the last run denied the echo and showed no dialog (#2729 fail-closed).
+# ccp_expect_deny <name> — the last run denied the echo and showed no dialog (#2729 fail-closed;
+# #2731: the dialog has no "Click Allow" wording, so "no dialog" is "no systemMessage at all").
 ccp_expect_deny() {
-  if [ "$(extract_decision "$CCP_OUT")" = "deny" ] && [[ "$CCP_MSG" != *"Click Allow"* ]]; then pass "$1"
+  if [ "$(extract_decision "$CCP_OUT")" = "deny" ] && [ -z "$CCP_MSG" ]; then pass "$1"
   else fail "$1 — expected a deny without the dialog, got: $CCP_OUT"; fi
 }
 
@@ -143,7 +144,7 @@ clear_markers
 echo "=== T20 (#2729, inverted): plan-sync on, no artifact for the stage -> deny, no dialog ==="
 clear_markers
 ccp_confirm_pub OUTLINE
-ccp_expect_deny "T20 no artifact -> denied (unverifiable-artifact), no Click Allow dialog"
+ccp_expect_deny "T20 no artifact -> denied (unverifiable-artifact), no dialog systemMessage"
 clear_markers
 
 echo "=== T24 (#2729, inverted): no record, plan never sent (URL-capable env) -> deny as unpublished ==="
@@ -293,7 +294,7 @@ write_marker "intent" "$T17_ABS"
 seed_receipt intent >/dev/null
 ccp_confirm_run
 ccp_expect_ctx "T17 sync off -> PreToolUse additionalContext line carries plan-sync-off and the local path" "plan-sync-off" "$PLANS_DIR"
-if echo "$CCP_MSG" | grep -qF "Plan file: $T17_ABS"; then pass "T17 sync off -> systemMessage shows the local path"
+if [ "$CCP_MSG" = "[intent] $T17_ABS" ]; then pass "T17 sync off -> systemMessage shows the local path"
 else fail "T17 sync off -> systemMessage shows the local path — got: $CCP_MSG"; fi
 clear_markers
 
@@ -320,7 +321,7 @@ T18_OUT=$(
 T18_MSG="$(psf_sysmsg "$T18_OUT")"
 if [ -f "$T18_CANARY" ]; then pass "T18 precondition: the hook required lib/plan-link"
 else fail "T18 precondition: the hook required lib/plan-link — canary absent (plan-link not wired)"; fi
-if [ -f "$T18_CANARY" ] && [ "$(extract_decision "$T18_OUT")" = "deny" ] && ! echo "$T18_MSG" | grep -qF "Click Allow"; then
+if [ -f "$T18_CANARY" ] && [ "$(extract_decision "$T18_OUT")" = "deny" ] && [ -z "$T18_MSG" ]; then
   pass "T18 plan-link exception -> denied (unverifiable-link), no dialog"
 else
   fail "T18 plan-link exception -> denied (unverifiable-link), no dialog — got: $T18_OUT"
