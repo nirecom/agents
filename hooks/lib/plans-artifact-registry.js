@@ -24,8 +24,8 @@ const {
 const RETENTION_CLASSES = Object.freeze(["plan", "user-requested", "non-plan"]);
 
 const SHORT_LIVED = new Set(["guard-attempt"]);
-// Born in the control dir only (#2544): a PLANS_DIR copy is planted, never migrated into trust.
-const NEVER_IN_PLANS_DIR = new Set(["worker-outcome", "worker-ingested"]);
+// Born in the control dir only (#2544, #2768): a PLANS_DIR copy is planted, never migrated into trust.
+const NEVER_IN_PLANS_DIR = new Set(["worker-outcome", "worker-ingested", "prompt-turn"]);
 const MIGRATABLE_KINDS = Object.freeze(
   CONTROL_KINDS.filter((c) => !SHORT_LIVED.has(c.kind) && !NEVER_IN_PLANS_DIR.has(c.kind)),
 );

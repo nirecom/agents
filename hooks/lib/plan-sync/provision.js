@@ -12,6 +12,7 @@ const { renderGitignore } = require("./allowlist");
 const { readVerifiedRegularFile } = require("./local-file");
 const { sendPredicate } = require("./project-host");
 const G = require("./git");
+const { clearRemoteState } = require("./remote-state");
 
 const INIT_VERSION = 1;
 const NETWORK_TIMEOUT_MS = 30000;
@@ -250,6 +251,8 @@ function provisionRepo(plansDir, url, deps) {
 
   const v = G.runGit(plansDir, ["config", "--local", "plansync.version", String(INIT_VERSION)]);
   if (v.status !== 0) return fail("init-failed", notes, v.stderr);
+  // A (re)provisioned destination is a fresh start: nothing learned about the remote carries over.
+  clearRemoteState(plansDir);
   const post = checkProvisioned(plansDir, url, deps);
   if (!post.ok) return fail(post.reason, notes, "post-init check failed");
   const known = target.type !== "unknown" && target.project;
