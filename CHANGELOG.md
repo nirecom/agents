@@ -895,3 +895,7 @@ Changes: Merge commits no longer fail the tests pre-commit gates for test files 
 ### FEATURE: PR #2815 (2026-10-27)
 Background: fix(#2808): update codex through npm directly after claude and codex exit
 Changes: Windows install no longer prints an npm cleanup EPERM warning when updating Codex CLI; it waits for running Claude Code and Codex to exit, then updates through npm directly.
+
+### FEATURE: PR #2821 (2026-10-28)
+Background: fix(#2811,#2813): continue confirm-plan presentation under stop_hook_active once per receipt, and point feature-2013 B20 at the current skill dispatch
+Changes: The plan approval dialog now follows a plan presentation even when that turn came after a Stop hook block, or when the transcript flush lagged but completed before the turn settled (#2811); a flush that lags past that point is tracked in #2822.
