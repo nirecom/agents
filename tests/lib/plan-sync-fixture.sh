@@ -62,6 +62,12 @@ psf_setup() {
 
 psf_cleanup() {
   cd / 2>/dev/null || true
+  local shim
+  if [[ -n "${PSF_ROOT:-}" && -f "$PSF_ROOT/extra-shims" ]]; then
+    while IFS= read -r shim; do
+      [[ "$shim" == */path-shim-* ]] && rm -rf "$shim"
+    done < "$PSF_ROOT/extra-shims"
+  fi
   if [ -n "${PSF_ROOT:-}" ] && [ -d "$PSF_ROOT" ]; then
     chmod -R u+rwX "$PSF_ROOT" 2>/dev/null
     rm -rf "$PSF_ROOT"
@@ -146,8 +152,17 @@ setup_ssh_stub() {
   export GIT_SSH_STUB_BARE; GIT_SSH_STUB_BARE="$(psf_np "$1")"
   export GIT_SSH_STUB_LOG="$PSF_ROOT/ssh-stub.log"
   : > "$GIT_SSH_STUB_LOG"
-  export GIT_SSH_COMMAND; GIT_SSH_COMMAND="sh $(psf_np "$PSF_AGENTS_DIR/tests/lib/git-ssh-stub.sh")"
+  export GIT_SSH_COMMAND; GIT_SSH_COMMAND="$(psf_ssh_stub_cmd)"
   export GIT_SSH_VARIANT=ssh
+}
+
+psf_ssh_stub_cmd() { printf 'sh %s\n' "$(psf_np "$PSF_AGENTS_DIR/tests/lib/git-ssh-stub.sh")"; }
+
+# psf_with_ssh_offline <cmd...> — runs <cmd> with every ssh connection failing like an unreachable
+# host (the stub's offline mode, exit 255). Use it, not GIT_SSH_COMMAND=false, for a dead
+# destination: the command guard lets an ssh URL through only via the declared stub.
+psf_with_ssh_offline() {
+  GIT_SSH_COMMAND="$(psf_ssh_stub_cmd)" GIT_SSH_VARIANT=ssh GIT_SSH_STUB_FAIL=offline "$@"
 }
 
 # psf_up <path> — POSIX form for PATH entries (a drive-letter colon would split PATH).
@@ -158,8 +173,11 @@ psf_up() {
 # psf_drop_cli_from_path <cli> — exports PATH without any directory holding a <cli> executable,
 # so no test reaches the real forge CLI (network). Such a directory that also holds git /
 # node / sh / bash (e.g. /usr/bin) becomes a shim dir linking everything except <cli>.
+# A command guard bin (its parent holds guard.conf) is shimmed inside that guard dir: the guard
+# reads ../guard.conf beside the invoked file, and Git Bash `ln -s` copies, so a shim elsewhere
+# would lose its guard.conf. Those shims are listed in $PSF_ROOT/extra-shims for psf_cleanup.
 psf_drop_cli_from_path() {
-  local cli="$1" kept="" dir f t shim n=0 essential
+  local cli="$1" kept="" dir f t shim n=0 essential parent
   local -a dirs
   IFS=: read -r -a dirs <<< "$PATH"
   for dir in "${dirs[@]}"; do
@@ -168,7 +186,13 @@ psf_drop_cli_from_path() {
       essential=""
       for t in git node sh bash; do [ -e "$dir/$t" ] || [ -e "$dir/$t.exe" ] && essential=1; done
       [ -z "$essential" ] && continue
-      n=$((n + 1)); shim="$(psf_up "$PSF_ROOT/path-shim-$cli-$n")"; mkdir -p "$shim"
+      n=$((n + 1)); parent="${dir%/}"; parent="${parent%/*}"
+      if [[ -n "$parent" && -f "$parent/guard.conf" ]]; then
+        shim="$(mktemp -d "$parent/path-shim-$cli-XXXXXX")" || return 1
+        printf '%s\n' "$shim" >> "$PSF_ROOT/extra-shims"
+      else
+        shim="$(psf_up "$PSF_ROOT/path-shim-$cli-$n")"; mkdir -p "$shim"
+      fi
       for f in "$dir"/*; do
         case "${f##*/}" in "$cli"|"$cli.exe"|"$cli.cmd"|"$cli.bat") continue ;; esac
         ln -s "$f" "$shim/${f##*/}" 2>/dev/null || true

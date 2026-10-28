@@ -35,7 +35,8 @@
     { "kind": "workflow-init-aborted", "source": "workflow-init-aborted-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\\.md", "retention": "non-plan" },
     { "kind": "companion-precheck", "source": "companion-precheck\\.json", "retention": "non-plan" },
     { "kind": "intent-scan-block", "source": "intent-scan-block\\.txt", "retention": "non-plan" },
-    { "kind": "guard-attempt", "source": "guard-attempt\\.tmp", "retention": "non-plan" }
+    { "kind": "guard-attempt", "source": "guard-attempt\\.tmp", "retention": "non-plan" },
+    { "kind": "prompt-turn", "source": "prompt-turn\\.json", "retention": "non-plan" }
   ],
   "artifactKinds": [
     { "kind": "plan-artifact", "source": "(?:intent|outline|detail|context)\\.md", "retention": "plan" },
