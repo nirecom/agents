@@ -29,6 +29,10 @@ LANE_DIR="$ROOT/tests/hooks/feature-2631-precommit-size-gate"
 . "$LANE_DIR/cases-edges.sh"
 # shellcheck source=git-commit-route.sh
 . "$LANE_DIR/git-commit-route.sh"
+# shellcheck source=../../lib/size-merge-fixture.sh
+. "$ROOT/tests/lib/size-merge-fixture.sh"
+# shellcheck source=cases-merge.sh
+. "$LANE_DIR/cases-merge.sh"
 
 for spec in "$@"; do
   printf '@@CASE %s\n' "${spec%%=*}"

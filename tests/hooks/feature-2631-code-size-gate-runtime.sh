@@ -208,6 +208,34 @@ run_gate sid-g2 "$repo"
 expect_decision "control: no marker, the same file blocks" block src/big.js
 case_end
 
+# #2631 stage 9 (G-M1 / G-M2): a commit that concludes a merge. One attempt only (run_gate_once):
+# the gate fails open on its own 3 s spawn timeout, so a retried or timed-out approve proves nothing.
+# shellcheck source=tests/lib/size-merge-fixture.sh
+. "$ROOT/tests/lib/size-merge-fixture.sh"
+# expect_in_budget <label> — the decision came from the gate's verdict, not its 3 s timeout.
+expect_in_budget() {
+  if [[ "$HOOK_OUT" == *"timed out"* || "$HOOK_OUT" == *ETIMEDOUT* ]]; then fail "$1" "the size check hit the 3 s timeout: $HOOK_OUT"
+  else pass "$1"; fi
+}
+case_begin "merge-incoming-equal-blob-approves" "hooks/workflow-gate/code-size-gate.js"
+make_merge_repo "$TMP_ROOT/repos/gm1" "src/big.js=$(($(smf_hard code) + 1))"
+repo="$(np "$TMP_ROOT/repos/gm1")"
+write_state sid-gm1 "$repo"
+run_gate_once sid-gm1 "$repo" "$CHECKOUT" "$repo"
+expect_decision "G-M1 a HARD+1 src/big.js staged equal to MERGE_HEAD approves" approve
+expect_in_budget "G-M1 the verdict fits the 3 s spawn budget"
+case_end
+
+case_begin "merge-incoming-differing-blob-blocks" "hooks/workflow-gate/code-size-gate.js"
+make_merge_repo "$TMP_ROOT/repos/gm2" "src/big.js=$(($(smf_hard code) + 1))"
+smf_grow "$TMP_ROOT/repos/gm2" src/big.js
+repo="$(np "$TMP_ROOT/repos/gm2")"
+write_state sid-gm2 "$repo"
+run_gate_once sid-gm2 "$repo" "$CHECKOUT" "$repo"
+expect_decision "G-M2 src/big.js differing from MERGE_HEAD by one line blocks" block src/big.js
+expect_in_budget "G-M2 the verdict fits the 3 s spawn budget"
+case_end
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 exit $((FAIL > 0 ? 1 : 0))

@@ -9,7 +9,7 @@
 edge_put_state() { printf '{"session_id":"%s","events":[]}\n' "$1" > "$WORKFLOW_STATE_DIR/$1.json"; }
 
 # edge_expect_size_state <sid> <want> <name> — the edit / CONFIRM / Stop side's sizeCheckState for
-# the same sid the commit run just judged (the intended asymmetry of #2631 stage 9).
+# the same sid the commit run just judged (#2631 stage 9: both sides agree).
 edge_expect_size_state() {
   local got
   got="$(node -e 'const g=require(process.argv[1]);process.stdout.write(typeof g.sizeCheckState==="function"?String(g.sizeCheckState(process.argv[2])):"not-exported")' "$ROOT/hooks/lib/size-session-gate.js" "$1" 2>&1)"
@@ -41,7 +41,7 @@ edge_case_session_markers_and_unresolved_sid() {
   stage "$cfg" src/new.js 501
   run_pc "$cfg" "$cfg" CLAUDE_CODE_SESSION_ID=sess-2631-plain
   expect_block "control: known sid with state and no marker: HARD+1 blocks" src/new.js
-  edge_expect_size_state sess-2631-plain exempt "the same empty-events state is exempt on the edit side (sizeCheckState exempt) while the commit blocks"
+  edge_expect_size_state sess-2631-plain active "the same empty-events state is active on the edit side too (sizeCheckState active), matching the commit block"
   cfg="$(new_cfg)"
   stage "$cfg" src/new.js 501
   run_pc "$cfg" "$cfg"

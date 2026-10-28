@@ -7,7 +7,8 @@
 // very plan, link and content (hooks/lib/presentation-receipt.js); the receipt is spent here.
 // Fail-closed: anything it cannot verify denies with a present-again reason. The one exception is
 // an unreadable hook input, where not even the sentinel is known: that stays a no-op.
-// #2631: a plan over HARD is denied (uncounted) whatever CONFIRM_<STAGE> says; over WARN adds advice.
+// #2631: a plan over HARD, or one the size check cannot judge, is denied (uncounted) whatever
+// CONFIRM_<STAGE> says; over WARN adds advice. Only an exempt session (size-session-gate.js) skips it.
 "use strict";
 
 const fs = require("fs");
@@ -109,13 +110,22 @@ function receiptDiagnostic(sid, stage) {
 const SEND_BACK = "planner に差し戻す";
 
 // #2631: the size verdict of the plan the approval would bind (<first_session_id>-<stage>.md), or
-// null. Runs before the CONFIRM_*=off exit and records no deny finding.
+// null for an exempt session. Fail-closed: no sid or an unmeasured plan denies; a throw denies in
+// main. Runs before the CONFIRM_*=off exit and records no deny finding.
 function planSizeDeny(sid, stage) {
-  if (!sid || !require("./lib/size-session-gate").sizeCheckActive(sid)) return null;
+  if (!sid) {
+    return { deny: `[${stage}] plan-size could not be verified: session id unresolved — not confirmable; ` +
+      "the session cannot be identified (check the transcript and the session id)." };
+  }
+  if (require("./lib/size-session-gate").sizeCheckState(sid) === "exempt") return null;
   const relint = require("./lib/plan-artifact-lang").relintPlanArtifact(sid, stage);
   const size = relint.size;
-  if (!size) return null;
   const artifactPath = relint.artifactPath;
+  // A missing plan file is unjudgeable too: it denies here, before the judge and the OFF exit.
+  if (!size) {
+    return { artifactPath, deny: `[${stage}] plan-size could not be judged (${relint.skipped || "unmeasured"}) — not confirmable; ` +
+      `make the plan readable again (the file exists and can be read: ${artifactPath || `the ${stage} plan`}), then present it again.` };
+  }
   if (size.verdict !== "hard" && size.verdict !== "warn") return { artifactPath };
   // The full path, not the basename: a resumed session's plan is named after its first_session_id.
   const head = `${artifactPath} is ${size.value} ${size.unit}`;
@@ -180,15 +190,20 @@ function main() {
   let sid = null;
   try {
     sid = resolveSessionId({ sessionIdFromInput: input.session_id, transcriptPath: input.transcript_path });
-  } catch (_) { /* judged as unverifiable-session */ }
+  } catch (_) { /* planSizeDeny denies it (session id unresolved) */ }
 
-  let sizeVerdict = null;
-  try { sizeVerdict = planSizeDeny(sid, stage); } catch (_) { /* fail-open */ }
+  let sizeVerdict;
+  try {
+    sizeVerdict = planSizeDeny(sid, stage);
+  } catch (e) {
+    sizeVerdict = { deny: `[${stage}] plan-size check failed: ${e && e.message ? e.message : String(e)} — not confirmable; ` +
+      "make the plan readable again (the file exists and can be read), then present it again." };
+  }
   if (sizeVerdict && sizeVerdict.deny) emitSizeDeny(sizeVerdict.deny);
   const sizeAdvice = sizeVerdict && sizeVerdict.advice ? sizeVerdict.advice : "";
 
-  // The shared plan gate (plan-gate.js) owns the classification: OFF waives the dialog; an
-  // error or an unloadable stage table shows the dialog path (the fail-closed judge below).
+  // The shared plan gate (plan-gate.js) owns the classification: OFF waives the dialog, never the
+  // size deny above; an error or an unloadable stage table shows the dialog path (the judge below).
   let gate = "ERROR";
   try { gate = require("./lib/confirm-gate/plan-gate").planGateState(stage); } catch (_) { /* judged below */ }
   if (gate === "OFF") {

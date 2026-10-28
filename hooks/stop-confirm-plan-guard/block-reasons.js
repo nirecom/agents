@@ -35,7 +35,7 @@ function planRelintReason(sid, stage) {
   const relint = relintPlanArtifact(sid, stage);
   if (relint.skipped !== null) return null;
   const size = relint.size;
-  if (size && size.verdict === "hard" && require("../lib/size-session-gate").sizeCheckActive(sid)) {
+  if (size && size.verdict === "hard" && require("../lib/size-session-gate").sizeCheckState(sid) !== "exempt") {
     return { kind: "plan-size", reason: "[confirm-plan] Layer 2/plan-size: " + path.basename(relint.artifactPath) + " is " +
       size.value + " " + size.unit + ", over HARD " + size.hard + " — compress it below HARD (send it back to the planner) before CONFIRM_" +
       stage.toUpperCase() + "; limits: rules/coding/file-split.md" };
