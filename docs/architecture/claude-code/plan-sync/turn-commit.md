@@ -78,6 +78,10 @@ refusal; both are bound to the push URL, so a changed remote starts clean.
 - **Misclassified refusal.** A transient pre-receive rejection can be recorded as a force
   refusal; the turn then appends until `bin/plan-sync-init` clears it.
 - **Link cap.** A turn with more than 5 interleaved commits lists only the first 5.
+- **Copied trailer.** The tip check reads the commit identity and the trailer (session id and
+  turn id), not the machine. A commit from another machine that carries the same identity and
+  trailer, such as a cherry-pick or a copy, can be replaced. Such a commit exists only when
+  someone copies it on purpose.
 
 Code: `hooks/lib/plan-sync/{turn-trailer,turn-commit,lease-push,remote-state,commit-push}.js`,
 `hooks/lib/prompt-turn-id.js`, `hooks/user-prompt-submit-turn-id.js`,
