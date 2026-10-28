@@ -157,7 +157,7 @@ TRANSCRIPT_T2="$TRANSCRIPT_DIR/${SID_T2}.jsonl"
 write_transcript "$TRANSCRIPT_T2" "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"$PLANS_DIR/abc-detail.md\"}]}}"
 run_stop_hook "{\"stop_hook_active\":true,\"session_id\":\"$SID_T2\",\"transcript_path\":\"$TRANSCRIPT_T2\"}"
 if [ "$STOP_RC" -eq 0 ]; then
-  pass "T2 stop_hook_active=true — exit 0 (no recursive guard)"
+  pass "T2 stop_hook_active=true, no plan-link line in the turn — exit 0 (#2811: a presented plan continues once; this turn presents none)"
 else
   fail "T2 stop_hook_active=true — rc=$STOP_RC stdout='$STOP_STDOUT' stderr='$STOP_STDERR'"
 fi

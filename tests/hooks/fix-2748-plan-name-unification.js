@@ -219,6 +219,96 @@ caseBegin("relint-resolves-first-session-artifact", "hooks/lib/plan-artifact-lan
 }
 caseEnd();
 
+// #2811 receipt mark API (continuedAt / carryMark / isContinued / markContinued).
+const PRM = () => F.mod("hooks/lib/presentation-receipt");
+const markFields = (sha) => ({ absPath: path.join(SCRATCH, "plan-2811.md"), link: { kind: "url", value: "https://example.test/p" }, contentSha: sha || "sha-a", anchorUuid: "a1" });
+const rawReceipt = (sid) => JSON.parse(fs.readFileSync(PRM().receiptPath(sid, "outline"), "utf8"));
+const tmpLeft = (sid) => fs.readdirSync(path.dirname(PRM().receiptPath(sid, "outline"))).filter((n) => n.startsWith(`${sid}.confirm-plan-receipt-outline`) && n.endsWith(".tmp"));
+// Runs fn with fs.writeFileSync wrapped so that `after` fires once, right after the receipt tmp file is written.
+function afterTmpWrite(after, fn) {
+  const orig = fs.writeFileSync;
+  let fired = false;
+  fs.writeFileSync = function (file, ...rest) {
+    const out = orig.call(this, file, ...rest);
+    if (!fired && typeof file === "string" && file.endsWith(".tmp") && file.includes("confirm-plan-receipt-")) { fired = true; after(); }
+    return out;
+  };
+  try { return fn(); } finally { fs.writeFileSync = orig; }
+}
+
+caseBegin("receipt-continued-mark-api", "hooks/lib/presentation-receipt.js");
+{
+  check("mark: a receipt without continuedAt reads ok, is not continued, and matches", () => {
+    const sid = crypto.randomUUID();
+    if (!PRM().writeReceipt(sid, "outline", markFields())) return "writeReceipt failed";
+    const r = PRM().readReceipt(sid, "outline");
+    return r.ok && !PRM().isContinued(r.receipt) && PRM().matchReceipt(r.receipt, markFields()).ok ? undefined : `got=${show(r)}`;
+  });
+  check("mark: a receipt carrying continuedAt reads ok, is continued, and still matches", () => {
+    const sid = crypto.randomUUID();
+    PRM().writeReceipt(sid, "outline", markFields());
+    const body = Object.assign(rawReceipt(sid), { continuedAt: new Date().toISOString() });
+    fs.writeFileSync(PRM().receiptPath(sid, "outline"), JSON.stringify(body));
+    const r = PRM().readReceipt(sid, "outline");
+    return r.ok && PRM().isContinued(r.receipt) && PRM().matchReceipt(r.receipt, markFields()).ok ? undefined : `got=${show(r)}`;
+  });
+  check("mark: isContinued is false for an empty or non-string continuedAt", () => {
+    const f = PRM().isContinued;
+    return typeof f === "function" && !f({ continuedAt: "" }) && !f({ continuedAt: 5 }) && !f({}) ? undefined : "isContinued missing or too lax";
+  });
+  check("mark: markContinued stamps the receipt and keeps every other field", () => {
+    const sid = crypto.randomUUID();
+    PRM().writeReceipt(sid, "outline", markFields());
+    const before = rawReceipt(sid);
+    if (PRM().markContinued(sid, "outline") !== true) return "markContinued did not return true";
+    const after = rawReceipt(sid);
+    const same = ["absPath", "contentSha", "anchorUuid", "writtenAt"].every((k) => after[k] === before[k]) && show(after.link) === show(before.link);
+    return same && typeof after.continuedAt === "string" && after.continuedAt !== "" ? undefined : `after=${show(after)}`;
+  });
+  check("mark: markContinued on an absent receipt returns false and creates nothing", () => {
+    const sid = crypto.randomUUID();
+    return PRM().markContinued(sid, "outline") === false && !fs.existsSync(PRM().receiptPath(sid, "outline")) ? undefined : "created or true";
+  });
+  const carried = (sid, sha, carry) => {
+    PRM().writeReceipt(sid, "outline", Object.assign(markFields(sha), { carryMark: carry }));
+    return rawReceipt(sid).continuedAt;
+  };
+  for (const [name, sha, carry, want] of [
+    ["carryMark=true with the same identity keeps continuedAt", "sha-a", true, true],
+    ["carryMark=false drops continuedAt", "sha-a", false, false],
+    ["carryMark=true with a changed contentSha drops continuedAt", "sha-b", true, false],
+  ]) {
+    check(`carry: ${name}`, () => {
+      const sid = crypto.randomUUID();
+      PRM().writeReceipt(sid, "outline", markFields());
+      PRM().markContinued(sid, "outline");
+      const mark = rawReceipt(sid).continuedAt;
+      const got = carried(sid, sha, carry);
+      return (want ? got === mark && typeof mark === "string" : got === undefined) ? undefined : `mark=${show(mark)} got=${show(got)}`;
+    });
+  }
+}
+caseEnd();
+
+caseBegin("receipt-mark-race-with-consume-or-replace", "hooks/lib/presentation-receipt.js");
+{
+  check("t: a receipt consumed between read and rename is not resurrected (false, no tmp)", () => {
+    const sid = crypto.randomUUID();
+    PRM().writeReceipt(sid, "outline", markFields());
+    const got = afterTmpWrite(() => PRM().consumeReceipt(sid, "outline"), () => PRM().markContinued(sid, "outline"));
+    return got === false && !fs.existsSync(PRM().receiptPath(sid, "outline")) && tmpLeft(sid).length === 0 ? undefined : `got=${show(got)} tmp=${show(tmpLeft(sid))}`;
+  });
+  check("u: a receipt replaced with another contentSha is left as replaced (false, no tmp)", () => {
+    const sid = crypto.randomUUID();
+    PRM().writeReceipt(sid, "outline", markFields());
+    const swapped = Object.assign(rawReceipt(sid), { contentSha: "sha-swapped" });
+    const got = afterTmpWrite(() => fs.writeFileSync(PRM().receiptPath(sid, "outline"), JSON.stringify(swapped)), () => PRM().markContinued(sid, "outline"));
+    const now = rawReceipt(sid);
+    return got === false && now.contentSha === "sha-swapped" && now.continuedAt === undefined && tmpLeft(sid).length === 0 ? undefined : `got=${show(got)} now=${show(now)}`;
+  });
+}
+caseEnd();
+
 caseBegin("upstream-view-intent-is-first-session-path", "bin/lib/resume-session/upstream-view.js");
 {
   check("U7: buildUpstreamView with a session-upstream that is itself a downstream names <first>-intent.md", () => {

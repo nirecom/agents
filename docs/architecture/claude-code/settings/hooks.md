@@ -141,7 +141,12 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   exactly one plan stage's link line and that stage is unapproved, not yet echoed, and `ON`
   (at most one `planGateState` probe inside a 4000 ms budget), it blocks once so the CONFIRM
   echo follows in the same turn. Logic: `hooks/lib/confirm-continuation.js`. Fail-open
-  throughout.
+  throughout. The continue also comes under `stop_hook_active` (a presentation that follows
+  any Stop block) and on an undecidable tail (#2811), capped at once per receipt by its
+  `continuedAt` mark: the mark is carried over only while `stop_hook_active` holds, so a
+  re-presentation in a new user turn gets a fresh continue. On an undecidable tail the continue
+  needs one more transcript read showing the final message flushed and no `tool_use` after it.
+  A decidable receipt write that fails is reported with the same `systemMessage` notice.
 - `hooks/lib/transcript-reader.js` — the one transcript reader of the Stop and PreToolUse hooks (#2610). At Stop it waits until the transcript's last text block agrees with `last_assistant_message`, which only confirms the flush and is never judged as the body; a flush that never agrees reads as `undecidable` and the caller fails open. `splitTurns` and `isRealUserPrompt` give the turn boundaries that `lib/user-dialog-turn.js` and `lib/plan-link-turn-check.js` read.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
@@ -235,7 +240,7 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
   Path coverage (`ENFORCE_WORKTREE_EXCLUDE`), gh command classification, dispatch provenance
-  (#2064), additional repos, quote-span analysis, the trust anchor in the checkout a hook runs from, the
+  (#2064), additional repos, quote-span analysis, the trust anchor for the running script's own checkout, the
   worker-dispatch sanction (#1643, #1673) and the heredoc gate widening (#2120/#2121) are
   detailed in [enforce-worktree.md](enforce-worktree.md).
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
