@@ -162,7 +162,7 @@ notation-doc-other-existing-file|pester|x|e.notationDoc = t.entries.find((o) => 
 marker-wrap-hint-other-string|bash|x|e.diagnostics.markerWrapHint = "wrap each case, then rerun";
 helper-path-other-existing-file|bash|x|e.helperLibrary.path = e.notationDoc;
 source-patterns-distinct-between-entries|pester|x|e.codeLanguage.sourcePatterns = ["*.fxp1", "*.fxp2"];
-reader-and-helper-both-present|pester|x|e.caseMarkerReader = { file: "fx/reader-pester.sh", function: "fx_other" };
+reader-and-helper-both-present|pester|x|e.caseMarkerReader = Object.assign({}, e.caseMarkerReader, { file: "fx/reader-pester.sh", function: "fx_other" });
 reader-and-helper-both-absent|js|x|e.caseMarkerReader = null; e.helperLibrary = null;
 ROWS
 case_end
@@ -255,7 +255,7 @@ case_begin "pin-env-clear-line-well-formed-accepts" "hooks/lib/test-language-reg
 run_rows accept <<'ROWS'
 env-clear-line-recognized-only-null|test-naming-convention|x|e.envClearLine = null;
 env-clear-line-recognized-only-absent|test-naming-convention|x|delete e.envClearLine;
-env-clear-line-other-existing-file|bash|x|e.envClearLine.file = e.caseMarkerReader.file;
+env-clear-line-other-existing-file|bash|x|e.envClearLine.file = t.entries.find((o) => o.id === "js").envClearLine.file;
 env-clear-line-other-function-name|js|x|e.envClearLine.function = "fx_other_clear_2";
 ROWS
 case_end
@@ -304,7 +304,7 @@ case_end
 
 case_begin "future-real-registry-env-clear-line-per-entry" "hooks/lib/test-language-registry.json"
 for id in bash pester pytest js; do
-  assert_eq "$id: $(fact_of env "$id")" "$id: bin/lib/test-language-parts/$id.sh|${id}_env_clear_line|exists=yes"
+  assert_eq "$id: $(fact_of env "$id")" "$id: hooks/lib/test-gates/parts/env-clear/$id.js|envClearLine|exists=yes"
 done
 assert_eq "test-naming-convention: $(fact_of env test-naming-convention)" "test-naming-convention: null"
 case_end

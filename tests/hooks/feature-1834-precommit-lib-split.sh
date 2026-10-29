@@ -1,93 +1,62 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1834-precommit-lib-split.sh
-# Tests: hooks/pre-commit, hooks/lib/precommit-tests-frontmatter.sh, hooks/lib/precommit-agents-repo-gates.sh, bin/check-test-frontmatter.sh
+# Tests: hooks/pre-commit, bin/check-test-frontmatter.sh
 # Tags: pre-commit, tests-frontmatter, cause-messages, refactor, file-split, TL2, scope:issue-specific, agents-repo-gates, session-id-ssot, migration-blocks, security, word-splitting, error-path, fail-open, case-markers, fail-closed, test-language-match, section-marker, commit-timeout, stderr-contract, real-git
 set -u
 
-# Protects the #1834 file split of hooks/pre-commit (two gate blocks moved to hooks/lib/).
-# Part A: cause-specific block messages of _precommit_check_tests_frontmatter (A1-A5).
-# Part B: hook wiring (B1) + the split's size reason (B2).
-# Part C: _precommit_agents_repo_gates (session-id/migration gates C1) + frontmatter
-# security/codes (C2/C3). Part D: staged case-marker gate (#2388). Part E: real-commit gate
-# wiring (#2589). Part F: stderr section markers (#2762). This dispatcher owns shared harness+module sourcing and ALL
-# fixture helpers/globals; per-part cases live in feature-1834-precommit-lib-split/*.sh.
+# Protects the gate blocks #1834 split out of hooks/pre-commit; #2507 moved them into the Node
+# body (hooks/pre-commit.d), where they are the tests-frontmatter and agents-repo-gates checks.
+# Part A: cause-specific block messages of the tests-frontmatter check. Part B: hook wiring and size.
+# Part C: the agents-repo gates and frontmatter security/codes. Part D: the staged case-marker gate.
+# Part E: real-commit gate wiring (#2589). Part F: language-match gate and stderr section markers.
+# This dispatcher owns the harness, all fixture helpers and globals; cases live in the sibling folder.
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 _ISOLATION_TMP_ROOT="$(make_tmp)"; readonly _ISOLATION_TMP_ROOT
 harness_isolate "$_ISOLATION_TMP_ROOT"
 
-# Layer: TL2 (real checker + real git fixtures + the real module, not the claude -p host).
+# Layer: TL2 (real checks + real git fixtures, not the claude -p host).
 # TL3 gap (what this test does NOT catch):
-# - Parts A-D call the functions directly; Part E commits through a fixture copy of
-#   hooks/pre-commit via core.hooksPath, but not through the installed global hook.
+# - Parts A-D run one check or gate through tests/lib/precommit-check-runner.js; Part E commits
+#   through a fixture copy of hooks/pre-commit via core.hooksPath, but not the installed global hook.
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: hook-registration.
 PRECOMMIT="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit"
-LIB_FM="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh"
+RUNNER="$(np "$SCRIPT_CHECKOUT_ROOT/tests/lib/precommit-check-runner.js")"
+CHECKOUT_NP="$(np "$SCRIPT_CHECKOUT_ROOT")"
 
 # Tier 1: implementation-missing guard, ahead of any fixture work.
-MISSING=0
-[ -f "$PRECOMMIT" ] || { echo "FAIL: IMPLEMENTATION MISSING: $PRECOMMIT"; MISSING=1; }
-[ -f "$LIB_FM" ]    || { echo "FAIL: IMPLEMENTATION MISSING: $LIB_FM"; MISSING=1; }
-if [ "$MISSING" -eq 1 ]; then
-    echo ""
-    echo "Results: 0 passed, 1 failed (target not yet implemented — #1834 file split)"
-    exit 1
-fi
+for _f in "$PRECOMMIT" "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/tests-frontmatter.js" \
+    "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/agents-repo-gates.js"; do
+    if [ ! -f "$_f" ]; then
+        echo "FAIL: IMPLEMENTATION MISSING: $_f"
+        echo ""
+        echo "Results: 0 passed, 1 failed (target not yet implemented)"
+        exit 1
+    fi
+done
 
-# _cfg_dir is the ambient contract var the extracted function reads. Point it at the REAL
-# worktree so the function invokes the real bin/check-test-frontmatter.sh.
-_cfg_dir="$SCRIPT_CHECKOUT_ROOT"
-# shellcheck source=hooks/lib/precommit-tests-frontmatter.sh
-. "$LIB_FM"
-
-if ! declare -f _precommit_check_tests_frontmatter >/dev/null 2>&1; then
-    echo "FAIL: IMPLEMENTATION MISSING: $LIB_FM lacks _precommit_check_tests_frontmatter"
-    echo ""
-    echo "Results: 0 passed, 1 failed (target not yet implemented — #1834 file split)"
-    exit 1
-fi
-
-# Part C also drives the second extracted module. _cfg_dir (above) is the ambient
-# fallback; each Part C case overrides it inside run_agents_gates to point the gates
-# at a fixture repo. The module only defines a function, so sourcing is side-effect-free.
-LIB_AR="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh"
-[ -f "$LIB_AR" ] || { echo "FAIL: IMPLEMENTATION MISSING: $LIB_AR"; echo ""; echo "Results: 0 passed, 1 failed (target not yet implemented — #1834 file split)"; exit 1; }
-# shellcheck source=hooks/lib/precommit-agents-repo-gates.sh
-. "$LIB_AR"
-if ! declare -f _precommit_agents_repo_gates >/dev/null 2>&1; then
-    echo "FAIL: IMPLEMENTATION MISSING: $LIB_AR lacks _precommit_agents_repo_gates"
-    echo ""
-    echo "Results: 0 passed, 1 failed (target not yet implemented — #1834 file split)"
-    exit 1
-fi
-
-# split-modules-wired — structural proof of the #1834 split. The tier-1 guards above
-# abort on absence; this case additionally asserts the WIRING: that hooks/pre-commit
-# actually sources both extracted lib basenames — something nothing else here checks.
-# It also re-affirms both lib files exist and both functions are defined, so the case
-# is a single honest assertion of the split outcome behind the 4-path # Tests: header.
+# split-modules-wired — hooks/pre-commit runs the Node body, whose registry lists both gate blocks
+# as checks with their check modules present.
 case_begin "split-modules-wired" "hooks/pre-commit"
 _wire_fail=""
-[ -f "$LIB_FM" ] || _wire_fail="$_wire_fail missing-file:$LIB_FM"
-[ -f "$LIB_AR" ] || _wire_fail="$_wire_fail missing-file:$LIB_AR"
-declare -f _precommit_check_tests_frontmatter >/dev/null 2>&1 || _wire_fail="$_wire_fail undefined:_precommit_check_tests_frontmatter"
-declare -f _precommit_agents_repo_gates >/dev/null 2>&1 || _wire_fail="$_wire_fail undefined:_precommit_agents_repo_gates"
-grep -qF 'precommit-tests-frontmatter.sh' "$PRECOMMIT" || _wire_fail="$_wire_fail unwired:precommit-tests-frontmatter.sh"
-grep -qF 'precommit-agents-repo-gates.sh' "$PRECOMMIT" || _wire_fail="$_wire_fail unwired:precommit-agents-repo-gates.sh"
+grep -qF 'hooks/pre-commit.d/main.js' "$PRECOMMIT" || _wire_fail="$_wire_fail unwired:pre-commit.d/main.js"
+for _ck in tests-frontmatter agents-repo-gates; do
+    grep -qF "[\"$_ck\"," "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/registry.js" || _wire_fail="$_wire_fail unregistered:$_ck"
+    [ -f "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/$_ck.js" ] || _wire_fail="$_wire_fail missing-check:$_ck.js"
+done
 if [ -n "$_wire_fail" ]; then
-    fail "split-modules-wired" "#1834 split incomplete —$_wire_fail"
+    fail "split-modules-wired" "gate blocks not wired —$_wire_fail"
 else
-    pass "split-modules-wired: both lib modules exist, both functions are defined, and hooks/pre-commit sources both lib files"
+    pass "split-modules-wired: hooks/pre-commit runs the Node body and both gate blocks are registered checks"
 fi
 case_end
 
 TMPBASE="$(make_tmp)"
 trap 'rm -rf "$TMPBASE"' EXIT
 
-# init_fixture <dir> — throwaway git repo with HEAD (so git cat-file -e HEAD:<rel>
-# distinguishes new files) and hooks disabled.
+# init_fixture <dir> — throwaway git repo with HEAD (so new files are told apart) and hooks disabled.
 init_fixture() {
     local dir="$1"
     mkdir -p "$dir"
@@ -101,14 +70,17 @@ init_fixture() {
     git -C "$dir" commit -q -m initial >/dev/null 2>&1
 }
 
+# run_check <repo> <cfg> <check> [gate] — one check (or one tests-frontmatter gate) over <repo>'s
+# index, with <cfg> as the agents checkout; sets OUT (stdout+stderr) and RC.
 OUT=""; RC=0
-# run_fm_check <repo> — invoke the function with the fixture as CWD, so its git diff and
-# the checker's git show :<rel> resolve the fixture repo.
-run_fm_check() {
-    local repo="$1"
-    OUT="$( ( cd "$repo" && _precommit_check_tests_frontmatter ) 2>&1 )"
-    RC=$?
+run_check() {
+    local repo="$1" cfg="$2"
+    shift 2
+    RC=0
+    OUT="$(cd "$repo" && node "$RUNNER" --cfg "$(np "$cfg")" "$@" 2>&1)" || RC=$?
 }
+# run_fm_check <repo> — the tests-frontmatter check with the real checkout.
+run_fm_check() { run_check "$1" "$CHECKOUT_NP" tests-frontmatter; }
 
 # flat_new.sh carries VALID frontmatter so its ONLY defect is the flat location;
 # broken.sh omits every header so its ONLY defect is frontmatter shape.
@@ -140,10 +112,8 @@ write_good_categorized() {
     git -C "$repo" add --chmod=+x -- tests/hooks/good.sh >/dev/null 2>&1
 }
 
-# write_staged_nofm <repo> <relpath> — stage a HEADERLESS file at an arbitrary tests/ path.
-# Headerless means it WOULD fail frontmatter validation if the checker inspected it; staging
-# it at an excluded path and getting rc 0 with no output proves the path is filtered BEFORE
-# the checker runs (the exclusion is a true gate no-op, not a lenient checker pass).
+# write_staged_nofm <repo> <relpath> — stage a HEADERLESS file at an arbitrary tests/ path; staging
+# it at an excluded path and getting rc 0 with no output proves the path is filtered before judging.
 write_staged_nofm() {
     local repo="$1" rel="$2"
     mkdir -p "$repo/$(dirname "$rel")"
@@ -154,11 +124,6 @@ write_staged_nofm() {
 LOC_MSG='must live under tests/<category>/'
 FM_MSG='fail frontmatter validation'
 
-# Part C shared fixtures. mk_agents_fixture wires a repo so _od_cfg_dir == repo-top (the
-# agents-repo match the gates guard on). The on-demand checker is a pass-through stub
-# (covered by cc-pre-commit-on-demand-rules.sh); the session-id/migration checkers are
-# shims onto the REAL bin/*.sh, so C1a-C1e exercise real gates. Per fixture-isolation.md
-# the fixtures disable git hooks and set an identity.
 init_repo_bare() {
     local dir="$1"
     mkdir -p "$dir"
@@ -168,73 +133,64 @@ init_repo_bare() {
     git -C "$dir" config core.hooksPath /dev/null
     git -C "$dir" config core.autocrlf false
 }
-# _install_other_gates_clean <dir> — the three later gates (plans artifacts, plans-dir
-# isolation, root names) as clean stubs: with fail-closed gates (#2589) a missing one blocks,
-# so a fixture aimed at the first three gates must still provide them.
-_install_other_gates_clean() {
-    local dir="$1"
-    printf 'process.exit(0);\n' > "$dir/bin/check-plans-artifacts"
-    _install_gate_shim "$dir/bin/check-plans-dir-isolation.sh" clean
-    _install_gate_shim "$dir/bin/check-root-names.sh" clean
-}
-# shellcheck disable=SC2016  # "$@" is written literally into each shim, not expanded here.
-mk_agents_fixture() {
-    local dir="$1"
-    init_repo_bare "$dir"
-    mkdir -p "$dir/bin" "$dir/hooks"
-    _install_other_gates_clean "$dir"
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/bin/check-on-demand-rules.sh"
-    chmod +x "$dir/bin/check-on-demand-rules.sh"
-    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-session-id-ssot.sh" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$dir/bin/check-session-id-ssot.sh"
-    chmod +x "$dir/bin/check-session-id-ssot.sh"
-    printf '#!/usr/bin/env bash\nexec bash "%s/bin/check-migration-blocks.sh" "$@"\n' "$SCRIPT_CHECKOUT_ROOT" > "$dir/bin/check-migration-blocks.sh"
-    chmod +x "$dir/bin/check-migration-blocks.sh"
-    printf 'init\n' > "$dir/README.md"
-    git -C "$dir" add -A >/dev/null 2>&1
-    git -C "$dir" commit -q -m initial >/dev/null 2>&1
-}
 
-# _install_gate_shim <path> <mode> — write (or omit) a controlled checker shim.
-#   clean -> exec exit 0   rc2 -> exec exit 2   rc3 -> exec exit 3
-#   absent -> no file (the [ ! -x ] guard fires the fail-open skip)
+# Part C fixtures: a repo that IS its own agents checkout (the Node body, hooks/lib, and the real
+# session-id and migration gate modules), so the agents-repo gates arm. Built once, copied per case.
+# shellcheck source=tests/lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+# shellcheck source=../lib/node-entry-sandbox.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh"
+declare -A G_MODULE=(
+    [on-demand]=bin/lib/check-on-demand-rules.js [session-id]=bin/check-session-id-ssot/main.js
+    [migration]=bin/lib/check-migration-blocks.js [plans-artifacts]=bin/check-plans-artifacts
+    [plans-dir]=bin/check-plans-dir-isolation/main.js [root-names]=bin/check-root-names/main.js
+)
+G_TEMPLATE="$TMPBASE/g-template"
+script_checkout_fixture_copy "$G_TEMPLATE" hooks/pre-commit hooks/lib bin/check-session-id-ssot bin/check-session-id-ssot.sh >/dev/null ||
+    fail "C: gate template" "script_checkout_fixture_copy failed"
+node_entry_sandbox_copy "$G_TEMPLATE" hooks/pre-commit.d/main.js "${G_MODULE[session-id]}" "${G_MODULE[migration]}" >/dev/null ||
+    fail "C: gate template" "node_entry_sandbox_copy failed"
+init_repo_bare "$G_TEMPLATE"
+
+# _install_gate_shim <dir> <gate> <mode> — the gate's module answers clean (0), rc2, rc3, is absent,
+# or stays the shipped one (real).
 _install_gate_shim() {
-    local path="$1" mode="$2"
-    case "$mode" in
-        clean)  printf '#!/usr/bin/env bash\nexit 0\n' > "$path"; chmod +x "$path" ;;
-        rc2)    printf '#!/usr/bin/env bash\nexit 2\n' > "$path"; chmod +x "$path" ;;
-        rc3)    printf '#!/usr/bin/env bash\nexit 3\n' > "$path"; chmod +x "$path" ;;
-        absent) rm -f "$path" ;;
-        *) echo "_install_gate_shim: unknown mode '$mode'" >&2; return 1 ;;
+    local f="$1/${G_MODULE[$2]}"
+    mkdir -p "$(dirname "$f")"
+    case "$3" in
+        clean)  printf 'exports.run = async () => 0;\n' > "$f" ;;
+        rc2)    printf 'exports.run = async () => 2;\n' > "$f" ;;
+        rc3)    printf 'exports.run = async () => 3;\n' > "$f" ;;
+        absent) rm -f "$f" ;;
+        real)   ;;
+        *) echo "_install_gate_shim: unknown mode '$3'" >&2; return 1 ;;
     esac
 }
 
-# mk_agents_fixture_rc <dir> <si_mode> <mb_mode> [od_mode] — like mk_agents_fixture but with
-# CONTROLLED session-id/migration checker exits, to exercise the shared rc-handling
-# template (skip-on-nonexec / block-on-1|2 / fail-open-on-unexpected-rc) without a real
-# violation. On-demand shim defaults to clean exit-0 (override via od_mode). Non-target gates stay clean so a
-# fail-open case returns GRC 0 and a block is attributable to the target gate; the gates
-# run on-demand -> session-id -> migration, so a clean session-id lets control reach it.
+# mk_agents_fixture_rc <dir> <si_mode> <mb_mode> [od_mode] — controlled session-id / migration /
+# on-demand modules; the three later gates are clean stubs, so a block is the target gate's.
 mk_agents_fixture_rc() {
-    local dir="$1" si_mode="$2" mb_mode="$3" od_mode="${4:-clean}"
-    init_repo_bare "$dir"
-    mkdir -p "$dir/bin" "$dir/hooks"
-    _install_gate_shim "$dir/bin/check-on-demand-rules.sh" "$od_mode"
-    _install_gate_shim "$dir/bin/check-session-id-ssot.sh" "$si_mode"
-    _install_gate_shim "$dir/bin/check-migration-blocks.sh" "$mb_mode"
-    _install_other_gates_clean "$dir"
+    local dir="$1"
+    rm -rf "$dir"
+    cp -R "$G_TEMPLATE" "$dir"
+    _install_gate_shim "$dir" on-demand "${4:-clean}"
+    _install_gate_shim "$dir" session-id "$2"
+    _install_gate_shim "$dir" migration "$3"
+    _install_gate_shim "$dir" plans-artifacts clean
+    _install_gate_shim "$dir" plans-dir clean
+    _install_gate_shim "$dir" root-names clean
     printf 'init\n' > "$dir/README.md"
     git -C "$dir" add -A >/dev/null 2>&1
     git -C "$dir" commit -q -m initial >/dev/null 2>&1
 }
+# mk_agents_fixture <dir> — the real session-id and migration gates, the others clean.
+mk_agents_fixture() { mk_agents_fixture_rc "$1" real real clean; }
 
-# run_agents_gates <repo> <cfg-dir> — the function calls `exit 1` on a violation, so it
-# must run in a subshell (else it would kill the test). _cfg_dir is the only input the
-# gates resolve their checkout from; CWD is the repo under commit.
+# run_agents_gates <repo> <cfg-dir> — the agents-repo-gates check; sets GOUT and GRC.
 GOUT=""; GRC=0
 run_agents_gates() {
-    local repo="$1" cfg="$2"
-    GOUT="$( ( cd "$repo" && _cfg_dir="$cfg" && _precommit_agents_repo_gates ) 2>&1 )"
-    GRC=$?
+    run_check "$1" "$2" agents-repo-gates
+    GOUT="$OUT"; GRC="$RC"
 }
 
 SID_MSG='session-id env reads bypassing the SSOT resolver'
@@ -258,8 +214,6 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-1834-precommit-lib-split"
 . "$SCRIPT_DIR/part-c-frontmatter.sh"
 # shellcheck source=./feature-1834-precommit-lib-split/part-d-case-markers.sh
 . "$SCRIPT_DIR/part-d-case-markers.sh"
-# shellcheck source=tests/lib/script-checkout-fixture.sh
-. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 # shellcheck source=./feature-1834-precommit-lib-split/part-e-commit-wiring.sh
 . "$SCRIPT_DIR/part-e-commit-wiring.sh"
 # shellcheck source=./feature-1834-precommit-lib-split/part-f-language-match.sh

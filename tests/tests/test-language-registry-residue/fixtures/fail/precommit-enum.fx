@@ -1,4 +1,4 @@
-=== hooks/lib/precommit-tests-frontmatter.sh
+=== hooks/lib/precommit-enum-sample.sh
     while IFS= read -r f; do
         case "$f" in
             tests/hooks/*/*.Tests.ps1|tests/bin/*/*.Tests.ps1|tests/*/*/test_*.py) continue ;;

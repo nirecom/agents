@@ -15,12 +15,3 @@ pester_case_markers() {
 has_table_driven_pester() {
     grep -qiE '^[[:space:]]*It[[:space:]].*[[:space:]]-(ForEach|TestCases)([[:space:]]|$)' "$1" 2>/dev/null
 }
-
-# pester_env_clear_line <names-ERE> <line> — rc 0 when the line is one `Remove-Item [-Path]
-# Env:[\]NAME` of a named var, optionally with -ErrorAction SilentlyContinue / -Force. Prints nothing.
-pester_env_clear_line() {
-    local re
-    re='^[[:space:]]*Remove-Item([[:space:]]+-Path)?[[:space:]]+Env:\\?('"$1"')([[:space:]]+(-ErrorAction[[:space:]]+SilentlyContinue|-Force))*[[:space:]]*$'
-    [[ "${2%$'\r'}" =~ $re ]] && return 0
-    return 1
-}

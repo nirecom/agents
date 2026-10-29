@@ -10,7 +10,7 @@ echo "=== Part C: frontmatter security/codes (real bin/check-test-frontmatter.sh
 # C2a — a VALID categorized test whose PATH contains a space. Post-fix the array +
 # NUL-delimited read preserve the path as ONE argv element, so the file is actually
 # VALIDATED (not bypassed) and passes because it is well-formed: rc 0, no block message.
-case_begin "C2a-valid-space-not-blocked" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "C2a-valid-space-not-blocked" "hooks/pre-commit"
 R="$TMPBASE/c2a"; init_fixture "$R"
 mkdir -p "$R/tests/hooks"
 printf '%s\n' '#!/usr/bin/env bash' \
@@ -31,7 +31,7 @@ case_end
 # C2b — the core regression proof: a FLAT test whose PATH contains a space. Post-fix the
 # single-token path reaches the checker, which rejects the flat tests/*.sh location
 # (FLAT_TEST_SH_REJECTED). The location gate can no longer be evaded by a space.
-case_begin "C2b-flat-space-rejected" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "C2b-flat-space-rejected" "hooks/pre-commit"
 R="$TMPBASE/c2b"; init_fixture "$R"
 mkdir -p "$R/tests"
 printf '%s\n' '#!/usr/bin/env bash' \
@@ -53,7 +53,7 @@ case_end
 # PATH contains a space and which OMITS the required headers. Post-fix it is validated as
 # one argv element: rc 1, the frontmatter message fires, and the location message does NOT
 # (it is correctly categorized). Frontmatter-shape validation can no longer be evaded.
-case_begin "C2c-defective-space-frontmatter-rejected" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "C2c-defective-space-frontmatter-rejected" "hooks/pre-commit"
 R="$TMPBASE/c2c"; init_fixture "$R"
 mkdir -p "$R/tests/hooks"
 printf '%s\n' '#!/usr/bin/env bash' \
@@ -76,7 +76,7 @@ case_end
 # literal argv element — no word-split, no pathname expansion — so the checker still sees
 # a flat tests/*.sh and rejects it (LOC_MSG, rc 1). The staging pathspec uses :(literal)
 # so git treats the bracket as a filename char, not a pathspec glob.
-case_begin "C2d-flat-glob-rejected" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "C2d-flat-glob-rejected" "hooks/pre-commit"
 R="$TMPBASE/c2d"; init_fixture "$R"
 mkdir -p "$R/tests"
 printf '%s\n' '#!/usr/bin/env bash' \
@@ -104,7 +104,7 @@ case_end
 # parentheses (outside [A-Za-z0-9._/-]) fails FRONTMATTER_TOKEN_VALID_RE. The
 # frontmatter message fires; the location message must NOT (the file is correctly
 # categorized, so only the token shape is wrong).
-case_begin "C3a-invalid-tests-token" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "C3a-invalid-tests-token" "hooks/pre-commit"
 R="$TMPBASE/c3a"; init_fixture "$R"
 mkdir -p "$R/tests/hooks"
 printf '%s\n' '#!/usr/bin/env bash' \
@@ -128,7 +128,7 @@ case_end
 # in the repo under commit and the entrypoint is newly added. The fixture ships a
 # harness stub, then stages a valid-frontmatter entrypoint that never sources it, so
 # the harness-source check fires the frontmatter message.
-case_begin "C3b-missing-harness-source" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "C3b-missing-harness-source" "hooks/pre-commit"
 R="$TMPBASE/c3b"; init_fixture "$R"
 mkdir -p "$R/tests/lib" "$R/tests/hooks"
 printf '%s\n' '#!/usr/bin/env bash' '# harness stub' > "$R/tests/lib/harness.sh"

@@ -244,9 +244,11 @@ while IFS='|' read -r _name _args _want; do
   si "$REPO_HEAD" "${_argv[@]}"
   expect_rc "$_name" 2 "$SI_RC" "$SI_OUT $SI_ERR"
   has "$_name" "$SI_ERR" "$_want"
+  # #2507: Node prints the manifest path in the host's form, so only its basename is pinned.
+  if [ "$_name" = manifest-missing ]; then has "$_name names the file" "$SI_ERR" "absent.manifest"; fi
   assert_eq "$_name: stdout=[$SI_OUT]" "$_name: stdout=[]"
 done <<'TABLE'
-manifest-missing   | --manifest @MFDIR/absent.manifest                                   | file not found: @MFDIR/absent.manifest
+manifest-missing   | --manifest @MFDIR/absent.manifest                                   | file not found:
 manifest-no-value  | --manifest                                                        | --manifest needs a value
 copy-field-empty   | --manifest @MFDIR/nocopy.manifest                                   | malformed manifest line: tests/bin/mf-ok.sh
 copy-missing       | --manifest @MFDIR/nofile.manifest                                   | file not found: @MFDIR/w/no-such.sh

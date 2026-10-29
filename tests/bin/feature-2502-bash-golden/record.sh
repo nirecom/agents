@@ -6,6 +6,8 @@
 # which compares them with expected/, and by regen.sh, which rewrites expected/. Needs
 # SCRIPT_CHECKOUT_ROOT, TMPBASE, the shared harness and tests/bin/test-language-registry/_lib.sh.
 
+# shellcheck source=../../lib/node-entry-sandbox.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh"
 GB_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2502-bash-golden"
 GB_KINDS="crr-read embed-ops enumerate-cases remove-orphan check-case-markers verify-static"
 GB_INPUTS=()
@@ -50,6 +52,10 @@ gb_build() {
   cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$co/bin/lib"
   cp -R "$SCRIPT_CHECKOUT_ROOT/bin/verify-case-embed" "$co/bin/verify-case-embed"
   cp "$SCRIPT_CHECKOUT_ROOT/bin/verify-case-embed.sh" "$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh" "$co/bin/"
+  # #2507: check-case-markers.sh execs a Node CLI; carry it with its require closure and the
+  # registered Node reader parts it loads by path.
+  node_entry_sandbox_copy "$co" bin/check-case-markers/cli.js \
+    hooks/lib/test-gates/parts/{bash-case-reader,bash-case-embed,external-runtime}.js >/dev/null
   install_test_language_registry "$co" "$SCRIPT_CHECKOUT_ROOT"
   cp "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh" "$co/tests/lib/harness.sh"
   fx_root_decoy "$co"

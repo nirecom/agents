@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2434-plans-dir-lint.sh
-# Tests: bin/check-plans-artifacts, hooks/lib/plans-artifact-registry.js, .github/workflows/migration-blocks-audit.yml, hooks/lib/precommit-agents-repo-gates.sh
+# Tests: bin/check-plans-artifacts, hooks/lib/plans-artifact-registry.js, .github/workflows/migration-blocks-audit.yml, hooks/pre-commit
 # Tags: scope:issue-specific, TL2, plans-dir-lint, feature-2434, plans-dir, control-dir, registry, classification, table-driven, pwsh-not-required, retention, sweep-plans
 # Entry: setup + shared helpers; cases live in sourced part files under
 # tests/bin/feature-2434-plans-dir-lint/ (lint, judged-table, registry, consumers, retention, commit-gate).

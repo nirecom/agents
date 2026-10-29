@@ -1,27 +1,12 @@
 "use strict";
 
-// Commit-time language check for staged text files (CODE_LANG surface).
-// Policy from lang-config.js classifyPolicy(): english -> block CJK lines;
-// japanese -> block English-only runs; other non-empty token -> hint-only;
-// unset/"any" -> noop. CJK detection SSOT: detect-cjk.js hasCJK(). English-run
-// detection reuses lint-plan-lang.js primitives (no reimplementation). Security:
-// records store only file:line and the trimmed
-// line capped at 80 chars -- never whole-file content -- so staged secrets are
-// not echoed to the terminal.
-//
-// CODE_LANG_EXCLUDE (repo-granularity opt-out): when the repository root matches
-// an entry, the whole check is skipped (return carries excluded:true so the
-// pre-commit caller can emit a one-line audit trace) -- it is a repo-level
-// bypass, not a per-file filter. Matching is delegated to path-coverage-match.js
-// isCoveredByEntryList(), deliberately NOT shared-cmd-utils.isExcluded(): that
-// helper adds basename matching and built-in exclude patterns, neither of which
-// is wanted for a repo-root comparison. When the exclude list is non-empty but
-// the repo root cannot be determined, check() throws -- the existing catch in
-// hooks/pre-commit turns that into fail-open ("lint-commit-lang skipped").
-// Known limitation (out of scope here): glob entries must be written in
-// OS-native absolute path form, a constraint of the shared matcher.
-// The matcher modules are required lazily, inside the gate, so the default
-// (no exclusions) path keeps the pre-existing require graph unchanged.
+// Commit-time CODE_LANG check of staged text files: english blocks CJK lines, japanese blocks
+// English-only runs, any other token gives hints, unset/"any" is a noop. Records carry only
+// file:line and the line capped at 80 chars, never whole-file content (staged secrets stay off
+// the terminal). CODE_LANG_EXCLUDE is a repo-root opt-out (excluded:true); an unknown root with
+// a non-empty list throws and the caller fails open. options.files / options.read hand in the
+// pre-commit snapshot; without them the index is read through git.
+// Contract: docs/architecture/claude-code/pre-commit-runner.md (code-lang).
 
 const { spawnSync } = require("child_process");
 const { hasCJK } = require("./detect-cjk");
@@ -98,9 +83,11 @@ function check(options) {
         if (isCoveredByEntryList(raw, root)) return { violations: [], hints: [], excluded: true };
       }
     }
-    for (const file of stagedFiles()) {
-      const buf = stagedBlob(file);
-      if (buf === null) continue;
+    const list = Array.isArray(opts.files) ? opts.files : stagedFiles();
+    const read = typeof opts.read === "function" ? opts.read : stagedBlob;
+    for (const file of list) {
+      const buf = read(file);
+      if (buf === null || buf === undefined) continue;
       if (buf.includes(0x00)) continue;
       const content = buf.toString("utf8");
       if (content.includes("lang-check: ignore")) continue;

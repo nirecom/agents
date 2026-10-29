@@ -1,0 +1,400 @@
+{
+  "meta": {
+    "generator": "tests/bin/feature-2507-scan-outbound-node/generate-golden.js",
+    "locale": {
+      "LANG": null,
+      "LC_ALL": null,
+      "LC_CTYPE": "C.UTF-8"
+    },
+    "bash": "GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)",
+    "git": "git version 2.53.0.windows.1",
+    "node": "v24.14.0",
+    "file": "file-5.46",
+    "platform": "win32"
+  },
+  "fileParams": {
+    "encoding": 65536,
+    "bytes": 7340032,
+    "helpFirstLine": "Usage: file [OPTION...] [FILE...]"
+  },
+  "cases": {
+    "empty": {
+      "mode": "100644",
+      "size": 0,
+      "mime": "/dev/stdin: application/x-empty; charset=binary",
+      "binary": true
+    },
+    "ascii-line": {
+      "mode": "100644",
+      "size": 4,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "ascii-no-newline": {
+      "mode": "100644",
+      "size": 3,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "nul-in-middle": {
+      "mode": "100644",
+      "size": 4,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "utf8-bom": {
+      "mode": "100644",
+      "size": 7,
+      "mime": "/dev/stdin: text/plain; charset=utf-8",
+      "binary": false
+    },
+    "utf8-multibyte": {
+      "mode": "100644",
+      "size": 10,
+      "mime": "/dev/stdin: text/plain; charset=utf-8",
+      "binary": false
+    },
+    "utf16le-bom": {
+      "mode": "100644",
+      "size": 8,
+      "mime": "/dev/stdin: text/plain; charset=utf-16le",
+      "binary": false
+    },
+    "latin1-high-byte": {
+      "mode": "100644",
+      "size": 5,
+      "mime": "/dev/stdin: text/plain; charset=iso-8859-1",
+      "binary": false
+    },
+    "control-bytes": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "escape-sequence-text": {
+      "mode": "100644",
+      "size": 9,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "del-byte": {
+      "mode": "100644",
+      "size": 4,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "shebang-script": {
+      "mode": "100755",
+      "size": 18,
+      "mime": "/dev/stdin: text/x-shellscript; charset=us-ascii",
+      "binary": false
+    },
+    "png-header": {
+      "mode": "100644",
+      "size": 29,
+      "mime": "/dev/stdin: image/png; charset=binary",
+      "binary": true
+    },
+    "gzip-header": {
+      "mode": "100644",
+      "size": 20,
+      "mime": "/dev/stdin: application/gzip; charset=binary",
+      "binary": true
+    },
+    "pdf-header": {
+      "mode": "100644",
+      "size": 33,
+      "mime": "/dev/stdin: application/pdf; charset=iso-8859-1",
+      "binary": false
+    },
+    "json-text": {
+      "mode": "100644",
+      "size": 8,
+      "mime": "/dev/stdin: application/json; charset=us-ascii",
+      "binary": false
+    },
+    "nul-last-byte-of-window": {
+      "mode": "100644",
+      "size": 65536,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "nul-first-byte-after-window": {
+      "mode": "100644",
+      "size": 65537,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "nul-far-after-window": {
+      "mode": "100644",
+      "size": 131078,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "invalid-utf8": {
+      "mode": "100644",
+      "size": 7,
+      "mime": "/dev/stdin: text/plain; charset=iso-8859-1",
+      "binary": false
+    },
+    "utf8-truncated-sequence": {
+      "mode": "100644",
+      "size": 5,
+      "mime": "/dev/stdin: text/plain; charset=unknown-8bit",
+      "binary": false
+    },
+    "utf16be-bom": {
+      "mode": "100644",
+      "size": 8,
+      "mime": "/dev/stdin: text/plain; charset=utf-16be",
+      "binary": false
+    },
+    "utf32le-bom": {
+      "mode": "100644",
+      "size": 12,
+      "mime": "/dev/stdin: text/plain; charset=utf-32le",
+      "binary": false
+    },
+    "cr-only-newlines": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "crlf-newlines": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "zip-header": {
+      "mode": "100644",
+      "size": 28,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "high-bytes-0x80-0x9f": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=unknown-8bit",
+      "binary": false
+    },
+    "symlink-to-text-name": {
+      "mode": "120000",
+      "size": 18,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "symlink-to-utf8-name": {
+      "mode": "120000",
+      "size": 13,
+      "mime": "/dev/stdin: text/plain; charset=utf-8",
+      "binary": false
+    },
+    "gitlink": {
+      "mode": "160000",
+      "size": null,
+      "mime": "/dev/stdin: application/x-empty; charset=binary",
+      "binary": true
+    },
+    "control-0x00": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x01": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x02": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x03": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x04": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x05": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x06": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x07": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x08": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x09": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x0a": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x0b": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x0c": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x0d": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x0e": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x0f": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x10": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x11": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x12": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x13": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x14": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x15": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x16": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x17": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x18": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x19": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x1a": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x1b": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: text/plain; charset=us-ascii",
+      "binary": false
+    },
+    "control-0x1c": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x1d": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x1e": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x1f": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    },
+    "control-0x7f": {
+      "mode": "100644",
+      "size": 6,
+      "mime": "/dev/stdin: application/octet-stream; charset=binary",
+      "binary": true
+    }
+  }
+}

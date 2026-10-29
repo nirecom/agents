@@ -101,7 +101,7 @@ NOREG="$TMPBASE/noreg"
 mkdir -p "$NOREG/hooks" "$NOREG/bin"
 cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$NOREG/hooks/lib"
 cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$NOREG/bin/lib"
-cp "$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh" "$NOREG/bin/check-case-markers.sh"
+cp -R "$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh" "$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers" "$NOREG/bin/"  # #2507: the entry execs check-case-markers/cli.js
 # shellcheck source=../../lib/test-language-registry-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
 install_test_language_registry "$NOREG" "$SCRIPT_CHECKOUT_ROOT"

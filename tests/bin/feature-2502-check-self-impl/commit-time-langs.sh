@@ -90,86 +90,43 @@ hb_git_shim() {
   printf '%s' "$d:$PATH"
 }
 
-# hb_run <shim-path> — fm_run over HB_RELS through <shim-path>; HB_LINES the sorted output lines.
-hb_run() {
-  rm -f "$HB_LOG"
-  FM_PATH="$1"
-  fm_run "$REPO_FML" "${HB_RELS[@]}"
-  FM_PATH=""
-  HB_LINES="$(printf '%s\n%s\n' "$FM_OUT" "$FM_ERR" | grep -v '^$' | LC_ALL=C sort)"
-  HB_CALLS="$(cat "$HB_LOG" 2>/dev/null)"
-}
+# The git calls are counted by the Node preload of tests/lib/node-spawn-log.sh, which a PATH shim
+# cannot replace: Node's spawnSync never runs a bash git shim on Windows.
+# shellcheck source=../../lib/node-spawn-log.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-spawn-log.sh"
+HB_SPAWN_LOG="$TMPBASE/hb-spawns.log"
+HB_GIT='^(.*/)?git(\.exe)?( -C [^ ]+)? '
 
 case_begin "fm-head-load-boundaries" "bin/check-test-frontmatter.sh"
-hb_run "$(hb_git_shim log-only ':')"
-HB_BASE_RC="$FM_RC"
-HB_BASE_LINES="$HB_LINES"
+nsl_on "$HB_SPAWN_LOG"
+fm_run "$REPO_FML" "${HB_RELS[@]}"
+nsl_off
 expect_rc "batch lookup" 1 "$FM_RC" "$FM_OUT $FM_ERR"
 has "path absent at HEAD is new" "$FM_ERR" "HIGH: tests/bin/fm-hb-new.sh line 5: self-implemented harness (counter-init PASS=0)"
 has "zero-size HEAD blob grown a counter" "$FM_ERR" "HIGH: tests/bin/fm-empty.sh line 5: self-implemented harness (counter-init PASS=0)"
 lacks "HEAD counter after a missing entry" "$FM_ERR" "tests/bin/fm-debt.sh line"
 lacks "js HEAD counter after a zero-size entry" "$FM_ERR" "tests/bin/fm-debt.js line"
 has "js counter HEAD lacks" "$FM_ERR" "HIGH: tests/bin/fm-clean.js line 5: self-implemented harness (counter-init FAIL=0)"
-has "batch lookup: one cat-file --batch" "$HB_CALLS" "cat-file --batch"
-lacks "batch lookup: no per-file fallback" "$HB_CALLS" "cat-file -e"
+_hb_main="$(nsl_count "$HB_SPAWN_LOG" main '[/]check-test-frontmatter/cli\.js( |$)')"
+if [ "$_hb_main" -lt 1 ]; then
+  fail "batch lookup call log" "the Node preload recorded no check-test-frontmatter start: $(cat "$HB_SPAWN_LOG" 2>/dev/null)"
+else
+  _hb_batch="$(nsl_count "$HB_SPAWN_LOG" spawn "${HB_GIT}cat-file --batch\$")"
+  _hb_reads="$(nsl_count "$HB_SPAWN_LOG" spawn "${HB_GIT}(cat-file|show)( |\$)")"
+  assert_eq "batch lookup: cat-file --batch calls=$_hb_batch" "batch lookup: cat-file --batch calls=1"
+  assert_eq "batch lookup: per-file blob reads=$((_hb_reads - _hb_batch))" "batch lookup: per-file blob reads=0"
+fi
 case_end
 
-# A broken git cat-file --batch answer falls back to the per-file lookup with the same verdict.
-case_begin "fm-head-load-broken-batch-falls-back" "bin/check-test-frontmatter.sh"
-while IFS='|' read -r _name _body; do
-  [[ -z "$_name" || "$_name" =~ ^[[:space:]]*# ]] && continue
-  _name="${_name//[[:space:]]/}"
-  _body="${_body#"${_body%%[![:space:]]*}"}"
-  hb_run "$(hb_git_shim "$_name" "$_body")"
-  expect_rc "$_name" "$HB_BASE_RC" "$FM_RC" "$FM_OUT $FM_ERR"
-  assert_eq "$_name: lines=[$HB_LINES]" "$_name: lines=[$HB_BASE_LINES]"
-  has "$_name: falls back" "$HB_CALLS" "cat-file -e HEAD:tests/bin/fm-debt.sh"
-done <<'TABLE'
-garbage-header | "$REAL" "$@" >/dev/null; echo garbage; exit 0
-truncated-blob | "$REAL" "$@" | head -c 160; exit 0
-git-fails      | exit 128
-TABLE
-case_end
-
-# ctf_self_impl_run leaves no state: a second load and run in the same shell sees no stale temp dir.
-case_begin "fm-head-load-second-run-same-shell" "bin/check-test-frontmatter.sh"
-_hb_res="$(
-  cd "$REPO_FML" || exit 99
-  SCRIPT_DIR="$SCRIPT_CHECKOUT_ROOT/bin"
-  . "$SCRIPT_DIR/check-test-frontmatter/self-impl.sh"
-  for _run in 1 2; do
-    ctf_head_load "${HB_RELS[@]}"
-    _d="$CTF_SI_DIR"
-    for _r in "${HB_RELS[@]}"; do ctf_self_impl_add "$_r" "$(git show ":$_r")"; done
-    _rc=0
-    ctf_self_impl_run 2>"$TMPBASE/hb-run$_run.err" || _rc=$?
-    _left=no
-    if [ -z "$_d" ] || [ -e "$_d" ]; then _left=yes; fi
-    echo "run$_run rc=$_rc dir-left=$_left state=[$CTF_SI_DIR|$CTF_SI_N|${#CTF_HEAD_RELS[@]}]"
-  done
-)"
-assert_eq "$_hb_res" "run1 rc=1 dir-left=no state=[|0|0]"$'\n'"run2 rc=1 dir-left=no state=[|0|0]"
-_hb_err1="$(LC_ALL=C sort "$TMPBASE/hb-run1.err")"
-assert_eq "run2 lines=[$(LC_ALL=C sort "$TMPBASE/hb-run2.err")]" "run2 lines=[$_hb_err1]"
-assert_eq "run1 lines=[$_hb_err1]" "run1 lines=[$(printf '%s\n' "$HB_BASE_LINES" | grep -F SELF_IMPL)]"
-case_end
+# #2507 retired fm-head-load-broken-batch-falls-back and fm-head-load-second-run-same-shell: the
+# Node check has no per-file fallback (a broken batch stops the run, as the case below pins) and
+# keeps no shell state (the sourced self-impl.sh is gone).
 
 for _r in "${HB_RELS[@]}"; do git -C "$REPO_FML" reset -q -- "$_r" >/dev/null 2>&1; done
 
-# hr_git_shim <name> <cat-file --batch body> — as hb_git_shim, and git show HEAD:<rel> fails too,
-# while git cat-file -e still answers: HEAD has the path but its content cannot be read.
-hr_git_shim() {
-  local d="$TMPBASE/shim-git-hr-$1"
-  mkdir -p "$d"
-  printf '#!%s\nREAL=%q\necho "$*" >>%q\nif [ "$1 $2" = "cat-file --batch" ]; then %s; fi\ncase "$1 $2" in "show HEAD:"*) exit 128 ;; esac\nexec "$REAL" "$@"\n' \
-    "$_hb_bash" "$_hb_git" "$HB_LOG" "$2" > "$d/git"
-  chmod +x "$d/git"
-  printf '%s' "$d:$PATH"
-}
-
 # An unrelated edit to an existing counter: blocks nothing while HEAD is readable; when the HEAD
-# content read fails the empty HEAD copy judges the counter as new, with no HEAD-read diagnostic.
-case_begin "fm-head-content-unreadable-judged-as-new" "bin/check-test-frontmatter.sh"
+# batch read fails the CLI stops with rc 2 and a cat-file diagnostic (fail-closed, #2507 D7).
+case_begin "fm-head-content-unreadable-fails-closed" "bin/check-test-frontmatter.sh"
 stage "$REPO_FML" tests/bin/fm-debt.sh sh-h-ctr2
 rm -f "$HB_LOG"
 FM_PATH="$(hb_git_shim log-only ':')"
@@ -182,15 +139,17 @@ while IFS='|' read -r _name _body; do
   _name="${_name//[[:space:]]/}"
   _body="${_body#"${_body%%[![:space:]]*}"}"
   rm -f "$HB_LOG"
-  FM_PATH="$(hr_git_shim "$_name" "$_body")"
+  FM_PATH="$(hb_git_shim "$_name" "$_body")"
   fm_run "$REPO_FML" tests/bin/fm-debt.sh
   FM_PATH=""
-  HB_CALLS="$(cat "$HB_LOG" 2>/dev/null)"
-  expect_rc "$_name: HEAD content unreadable" 1 "$FM_RC" "$FM_OUT $FM_ERR"
+  if [ ! -f "$HB_LOG" ]; then
+    skip "$_name: the git shim is not reached by Node here"
+    continue
+  fi
+  expect_rc "$_name: HEAD content unreadable" 2 "$FM_RC" "$FM_OUT $FM_ERR"
   assert_eq "$_name: stdout=[$FM_OUT]" "$_name: stdout=[]"
-  assert_eq "$_name: stderr=[$FM_ERR]" "$_name: stderr=[HIGH: tests/bin/fm-debt.sh line 5: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS]"
-  has "$_name: presence answered" "$HB_CALLS" "cat-file -e HEAD:tests/bin/fm-debt.sh"
-  has "$_name: content read tried" "$HB_CALLS" "show HEAD:tests/bin/fm-debt.sh"
+  has "$_name: HEAD read diagnostic" "$FM_ERR" "cat-file"
+  lacks "$_name: not judged as new" "$FM_ERR" "SELF_IMPLEMENTED_HARNESS"
 done <<'TABLE'
 batch-fails     | exit 128
 batch-truncated | "$REAL" "$@" | head -c 60; exit 0

@@ -4,7 +4,7 @@
 
 const { spawnSync } = require("./lib/limited-child-process");
 const { armDecisionTimeLimit, checkDecisionTime } = require("./lib/decision-time-limit");
-const { readStagedBlobs } = require("./scan-outbound/staged-blobs");
+const { readStagedBlobs } = require("./lib/staged-blobs");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames, findPrivateName, toNativePath } = require("./lib/is-private-repo");

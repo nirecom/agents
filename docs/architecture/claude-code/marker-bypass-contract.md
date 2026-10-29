@@ -2,8 +2,8 @@
 
 Session-scoped markers grant bypass only to the enforcement hooks explicitly listed in
 the Honoring-hooks table below. This document defines the cross-hook honoring contract,
-the session-ID resolution chain used in the git hook context, and the exit-code
-semantics for the pre-commit inline Node snippet.
+the session-ID resolution chain used in the git hook context, and the return-code
+semantics of the pre-commit marker probe.
 
 ## Markers
 
@@ -21,8 +21,8 @@ check `.worktree-off` treat it as also active.
 ## Honoring hooks
 
 Inclusion criterion: every hook that calls `isWorkflowOff` / `isWorktreeOff` from
-`hooks/lib/session-markers.js`, plus `hooks/pre-commit` (which reimplements the same
-check inline for the git context — see Session-ID resolution below). This is a
+`hooks/lib/session-markers.js`, plus `hooks/pre-commit` (whose Node body in `hooks/pre-commit.d/` calls them
+for the git context — see Session-ID resolution below). This is a
 grep-derivable criterion (`grep -rl "isWorkflowOff\|isWorktreeOff" hooks/`), not an
 enumerated guess: a hook absent from this table does not call either function and is
 never bypassed. This table is the SSOT (CPR-SSOT); no other document enumerates
@@ -81,21 +81,21 @@ It is a guard against the recognised merge commands (`hooks/lib/merge-detect.js`
 substitute for branch protection: a merge issued in a form the detector does not recognise is
 not refused.
 
-`hooks/pre-commit` honors both markers for **two separate sections**: the worktree-isolation
-gate ("commits from main worktree are blocked" / "commits to protected branch" guard) and
-the prompt-extraction backstop (`bin/check-prompt-extraction --staged` runner added in
-issue #1642). Both sections check the same markers via the shared `_session_marker_off()`
-function. The permanent escape hatch for the prompt-extraction backstop is the committed
+`hooks/pre-commit` honors both markers for **two separate checks**: the worktree-isolation
+gate (the `enforce-worktree` check: "commits from main worktree are blocked" / "commits to
+protected branch" guard) and the prompt-extraction backstop (the `prompt-extraction` check,
+issue #1642). Both checks read the same markers via the shared `sessionMarkerOff()` of
+`hooks/pre-commit.d/lib/support.js`. The permanent escape hatch for the prompt-extraction backstop is the committed
 `.prompt-extraction-allowlist` file; the session markers are for emergency bypass only.
 
 Note that prompt-extraction violations are a reversible quality concern, not secret leakage,
-which is why markers bypass the backstop here (unlike `scan-outbound.sh` which is
+which is why markers bypass the backstop here (unlike the `outbound-scan` check, which is
 unconditional — secret leakage is irreversible). Users needing permanent per-file exemptions
 should use `.prompt-extraction-allowlist` instead of session markers.
 
-The private-info scanner (`scan-outbound.sh`) that runs later in the same hook is **not**
+The private-info scanner (the `outbound-scan` check) that runs later in the same hook is **not**
 bypassed by markers — secret leakage protection is unconditional on the git side.
-The case-marker gate in the same hook (`_precommit_check_tests_case_markers`, #2388) is not bypassed by markers either.
+The case-marker gate in the same hook (the case-marker gate of the `tests-frontmatter` check, #2388) is not bypassed by markers either.
 Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.
 
@@ -121,7 +121,7 @@ The presentation receipt (#2729) is not a bypass marker either: it is the eviden
 state file reads as `not-applicable` and passes, so work outside the workflow is never stopped.
 
 `hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
-scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-ORTH). Users
+scan is unconditional, symmetric with the git-side `outbound-scan` check above (CPR-ORTH). Users
 who need to bypass a specific match must use `.private-info-allowlist` instead.
 
 `hooks/bash-guard.js` does not read either marker directly either (CPR-SC): the only
@@ -153,14 +153,13 @@ See that module for the full priority chain. The git hook context is notable:
 - When that variable is absent, `resolveSessionId()` returns null — it never infers an id
   from filesystem traces (see [session-id-resolution.md](session-id-resolution.md)).
 
-## Exit-code contract (pre-commit inline Node)
+## Return-code contract (pre-commit `sessionMarkerOff()`)
 
-| rc | Meaning | Shell action |
+| rc | Meaning | Check action |
 |---|---|---|
-| 0 | Bypass granted (marker present, sid valid) | `_enforce_skip=1` |
-| 2 | No bypass (sid unresolved, no marker, or `AGENTS_MAIN_ROOT` missing) | Enforcement continues |
+| 0 | Bypass granted (marker present, sid valid) | The check passes |
+| 2 | No bypass (sid unresolved or no marker) | Enforcement continues |
 | 3 | `require()` or thrown error inside try | Warning to stderr; enforcement continues |
-| other | Unexpected (e.g. 127 = node not found) | Warning to stderr; enforcement continues |
 
 All error paths fail closed: bypass is granted only when the session ID resolves AND a
 marker file exists on disk.

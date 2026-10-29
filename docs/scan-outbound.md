@@ -14,7 +14,9 @@ Checkpoints scan for private information:
 | Claude Code commit | Every `git commit` via Bash tool | PreToolUse hook (`claude-global/hooks/scan-outbound.js`) |
 | Claude Code forge write | Every `gh issue`/`pr` create/edit/close/comment/review via Bash tool | PreToolUse hook (`claude-global/hooks/scan-outbound.js`) |
 
-All call `bin/scan-outbound.sh` as the scanner (single source of truth for patterns).
+All share one scanner, `hooks/lib/outbound-scan/` (single source of truth for patterns): the
+pre-commit hook runs it in process (the `outbound-scan` check, `hooks/pre-commit.d/checks/outbound-scan.js`),
+and the other callers reach it through `bin/scan-outbound.sh`, a thin adapter over `bin/scan-outbound.d/cli.js`.
 
 **Known false-negatives (v1):** `gh repo edit/create/rename/archive` commands are not scanned — they have zero callers in the current codebase. `gh api` raw calls are not scanned regardless of payload. Non-github.com remotes follow the same private-repo skip path as all other commands.
 
@@ -154,7 +156,9 @@ Ensure `settings.json` has the hooks section (check `~/.claude/settings.json`).
 
 | File | Purpose |
 |:---|:---|
-| `bin/scan-outbound.sh` | Scanner script (detection patterns); its `HARD_SECRET_PATTERNS` block is the hard-secret SSOT that `hooks/workflow-state/complexity-routing/secret-shape.js` also parses |
+| `bin/scan-outbound.sh` | Scanner CLI: a thin adapter over `bin/scan-outbound.d/cli.js` (arguments, `--stdin`, exit codes) |
+| `hooks/lib/outbound-scan/` | Scanner core (detection patterns, allowlist/blocklist, line scan, output format), shared by the CLI and the pre-commit hook |
+| `hooks/lib/outbound-scan/hard-secret-patterns.js` | `HARD_SECRET_PATTERNS`, the hard-secret SSOT that `hooks/workflow-state/complexity-routing/secret-shape.js` and `hooks/lib/output-sanitize.js` also read |
 | `bin/lib/gh-outbound-guard.sh` | Sourceable fail-closed guard wrapper scripts call before handing free text to `gh` |
 | `claude-global/hooks/pre-commit` | Git pre-commit hook (staged files) |
 | `claude-global/hooks/commit-msg` | Git commit-msg hook (commit message) |
