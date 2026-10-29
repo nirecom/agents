@@ -1,0 +1,412 @@
+{
+  "meta": {
+    "generator": "tests/bin/feature-2507-scan-outbound-node/generate-golden.js",
+    "langCheck": "lang-check: ignore",
+    "locale": {
+      "LANG": null,
+      "LC_ALL": null,
+      "LC_CTYPE": "C.UTF-8"
+    },
+    "bash": "GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)",
+    "git": "git version 2.53.0.windows.1",
+    "node": "v24.14.0",
+    "file": "file-5.46",
+    "platform": "win32"
+  },
+  "overrides": {
+    "note": "\\w follows GNU regex ([_[:alnum:]]), not Windows Git Bash, whose \\w leaves out _; rows listed in overrides are not the probe's answer",
+    "cases": [
+      "backslash-w",
+      "backslash-W-underscore"
+    ]
+  },
+  "cases": {
+    "class-alpha-ascii": {
+      "ere": "^[[:alpha:]]+$",
+      "subject": "abc",
+      "status": "match",
+      "text": "abc"
+    },
+    "class-alpha-latin": {
+      "ere": "^[[:alpha:]]$",
+      "subject": "é",
+      "status": "match",
+      "text": "é"
+    },
+    "class-alpha-hiragana": {
+      "ere": "^[[:alpha:]]$",
+      "subject": "あ",
+      "status": "match",
+      "text": "あ"
+    },
+    "class-alpha-digit": {
+      "ere": "^[[:alpha:]]$",
+      "subject": "1",
+      "status": "nomatch"
+    },
+    "class-alnum-latin": {
+      "ere": "^[[:alnum:]]$",
+      "subject": "é",
+      "status": "match",
+      "text": "é"
+    },
+    "class-digit-ascii": {
+      "ere": "^[[:digit:]]$",
+      "subject": "7",
+      "status": "match",
+      "text": "7"
+    },
+    "class-digit-fullwidth": {
+      "ere": "^[[:digit:]]$",
+      "subject": "１",
+      "status": "nomatch"
+    },
+    "class-upper-latin": {
+      "ere": "^[[:upper:]]$",
+      "subject": "À",
+      "status": "match",
+      "text": "À"
+    },
+    "class-upper-lower": {
+      "ere": "^[[:upper:]]$",
+      "subject": "a",
+      "status": "nomatch"
+    },
+    "class-lower-sharp-s": {
+      "ere": "^[[:lower:]]$",
+      "subject": "ß",
+      "status": "match",
+      "text": "ß"
+    },
+    "class-space-tab": {
+      "ere": "^[[:space:]]$",
+      "subject": "\t",
+      "status": "match",
+      "text": "\t"
+    },
+    "class-space-nbsp": {
+      "ere": "^[[:space:]]$",
+      "subject": " ",
+      "status": "match",
+      "text": " "
+    },
+    "class-space-ideographic": {
+      "ere": "^[[:space:]]$",
+      "subject": "　",
+      "status": "match",
+      "text": "　"
+    },
+    "class-blank-tab": {
+      "ere": "^[[:blank:]]$",
+      "subject": "\t",
+      "status": "match",
+      "text": "\t"
+    },
+    "class-punct-ascii": {
+      "ere": "^[[:punct:]]$",
+      "subject": "!",
+      "status": "match",
+      "text": "!"
+    },
+    "class-punct-cjk": {
+      "ere": "^[[:punct:]]$",
+      "subject": "、",
+      "status": "match",
+      "text": "、"
+    },
+    "class-xdigit-f": {
+      "ere": "^[[:xdigit:]]$",
+      "subject": "f",
+      "status": "match",
+      "text": "f"
+    },
+    "class-xdigit-g": {
+      "ere": "^[[:xdigit:]]$",
+      "subject": "g",
+      "status": "nomatch"
+    },
+    "class-cntrl": {
+      "ere": "^[[:cntrl:]]$",
+      "subject": "\u0001",
+      "status": "match",
+      "text": "\u0001"
+    },
+    "class-print-latin": {
+      "ere": "^[[:print:]]$",
+      "subject": "é",
+      "status": "match",
+      "text": "é"
+    },
+    "class-graph-space": {
+      "ere": "^[[:graph:]]$",
+      "subject": " ",
+      "status": "nomatch"
+    },
+    "class-unknown-name": {
+      "ere": "[[:nope:]]",
+      "subject": "a",
+      "status": "invalid"
+    },
+    "dot-two-byte": {
+      "ere": "^x.$",
+      "subject": "xé",
+      "status": "match",
+      "text": "xé"
+    },
+    "dot-astral": {
+      "ere": "^x.$",
+      "subject": "x😀",
+      "status": "match",
+      "text": "x😀"
+    },
+    "dot-cjk": {
+      "ere": "^x.$",
+      "subject": "xあ",
+      "status": "match",
+      "text": "xあ"
+    },
+    "negated-bracket-two-byte": {
+      "ere": "^x[^a]$",
+      "subject": "xé",
+      "status": "match",
+      "text": "xé"
+    },
+    "bracket-backslash-literal": {
+      "ere": "[\\]b",
+      "subject": "a\\b",
+      "status": "match",
+      "text": "\\b"
+    },
+    "bracket-backslash-n-on-n": {
+      "ere": "^[\\n]$",
+      "subject": "n",
+      "status": "match",
+      "text": "n"
+    },
+    "bracket-backslash-n-on-backslash": {
+      "ere": "^[\\n]$",
+      "subject": "\\",
+      "status": "match",
+      "text": "\\"
+    },
+    "bracket-close-first": {
+      "ere": "^[]a]$",
+      "subject": "]",
+      "status": "match",
+      "text": "]"
+    },
+    "bracket-negated-close-first": {
+      "ere": "^[^]a]$",
+      "subject": "b",
+      "status": "match",
+      "text": "b"
+    },
+    "bracket-dash-last": {
+      "ere": "^[a-]$",
+      "subject": "-",
+      "status": "match",
+      "text": "-"
+    },
+    "word-begin-hit": {
+      "ere": "\\<ab",
+      "subject": "x ab",
+      "status": "match",
+      "text": "ab"
+    },
+    "word-begin-miss": {
+      "ere": "\\<ab",
+      "subject": "xab",
+      "status": "nomatch"
+    },
+    "word-end-hit": {
+      "ere": "ab\\>",
+      "subject": "ab c",
+      "status": "match",
+      "text": "ab"
+    },
+    "word-end-miss": {
+      "ere": "ab\\>",
+      "subject": "abc",
+      "status": "nomatch"
+    },
+    "backslash-d-on-d": {
+      "ere": "\\d",
+      "subject": "d",
+      "status": "invalid"
+    },
+    "backslash-d-on-digit": {
+      "ere": "\\d",
+      "subject": "5",
+      "status": "invalid"
+    },
+    "backslash-w": {
+      "ere": "a\\w",
+      "subject": "a_",
+      "status": "match",
+      "text": "a_"
+    },
+    "backslash-w-latin": {
+      "ere": "a\\w",
+      "subject": "aé",
+      "status": "match",
+      "text": "aé"
+    },
+    "backslash-W-underscore": {
+      "ere": "a\\W",
+      "subject": "a_",
+      "status": "nomatch"
+    },
+    "backslash-W-space": {
+      "ere": "a\\W",
+      "subject": "a ",
+      "status": "match",
+      "text": "a "
+    },
+    "backslash-s": {
+      "ere": "a\\sb",
+      "subject": "a b",
+      "status": "match",
+      "text": "a b"
+    },
+    "backslash-b": {
+      "ere": "\\bfoo",
+      "subject": "x foo",
+      "status": "match",
+      "text": "foo"
+    },
+    "escaped-plus": {
+      "ere": "a\\+",
+      "subject": "a+",
+      "status": "match",
+      "text": "a+"
+    },
+    "escaped-dot-hit": {
+      "ere": "a\\.b",
+      "subject": "a.b",
+      "status": "match",
+      "text": "a.b"
+    },
+    "escaped-dot-miss": {
+      "ere": "a\\.b",
+      "subject": "axb",
+      "status": "nomatch"
+    },
+    "longest-alternation": {
+      "ere": "(a|ab)(c|bcd)",
+      "subject": "abcd",
+      "status": "match",
+      "text": "abcd"
+    },
+    "longest-prefix-alternation": {
+      "ere": "x(a|ab)",
+      "subject": "xab",
+      "status": "match",
+      "text": "xab"
+    },
+    "longest-classic-weeknights": {
+      "ere": "(wee|week)(knights|night)",
+      "subject": "weeknights",
+      "status": "match",
+      "text": "weeknights"
+    },
+    "longest-three-alternatives": {
+      "ere": "a|ab|abc",
+      "subject": "abcd",
+      "status": "match",
+      "text": "abc"
+    },
+    "leftmost-before-longer": {
+      "ere": "b+|ab",
+      "subject": "aabbb",
+      "status": "match",
+      "text": "ab"
+    },
+    "plus-then-question": {
+      "ere": "a+?",
+      "subject": "aaa",
+      "status": "invalid"
+    },
+    "star-star": {
+      "ere": "a**",
+      "subject": "aaa",
+      "status": "invalid"
+    },
+    "brace-open-lower": {
+      "ere": "a{,3}",
+      "subject": "aaaa",
+      "status": "invalid"
+    },
+    "brace-zero": {
+      "ere": "xa{0}y",
+      "subject": "xy",
+      "status": "match",
+      "text": "xy"
+    },
+    "case-sensitive": {
+      "ere": "abc",
+      "subject": "ABC",
+      "status": "nomatch"
+    },
+    "backreference": {
+      "ere": "(a)\\1",
+      "subject": "aa",
+      "status": "match",
+      "text": "aa"
+    },
+    "empty-alternative": {
+      "ere": "(|a)b",
+      "subject": "ab",
+      "status": "invalid"
+    },
+    "empty-group": {
+      "ere": "a()b",
+      "subject": "ab",
+      "status": "match",
+      "text": "ab"
+    },
+    "anchor-caret-miss": {
+      "ere": "^b",
+      "subject": "ab",
+      "status": "nomatch"
+    },
+    "anchor-dollar-before-cr": {
+      "ere": "a$",
+      "subject": "a\r",
+      "status": "nomatch"
+    },
+    "invalid-brace-order": {
+      "ere": "a{2,1}",
+      "subject": "aaa",
+      "status": "invalid"
+    },
+    "invalid-open-paren": {
+      "ere": "(abc",
+      "subject": "abc",
+      "status": "invalid"
+    },
+    "invalid-range": {
+      "ere": "[z-a]",
+      "subject": "abc",
+      "status": "invalid"
+    },
+    "invalid-leading-star": {
+      "ere": "*abc",
+      "subject": "abc",
+      "status": "invalid"
+    },
+    "invalid-open-brace": {
+      "ere": "a{1",
+      "subject": "a{1",
+      "status": "invalid"
+    },
+    "invalid-trailing-backslash": {
+      "ere": "abc\\",
+      "subject": "abc",
+      "status": "invalid"
+    }
+  },
+  "untranslatable": {
+    "fixture-eq-[[=a=]]": "valid-in-bash",
+    "fixture-coll-[[.-.]]": "valid-in-bash"
+  }
+}

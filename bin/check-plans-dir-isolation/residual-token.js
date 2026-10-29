@@ -49,10 +49,28 @@ function stagedPaths(repoRoot) {
   return nulList(git(repoRoot, ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"]));
 }
 
-// stagedHits(repoRoot, paths) → lines for the staged blob of each path.
+// stagedHits(repoRoot, paths) → lines for the staged blob of each path, read through one
+// `git cat-file --batch`; a path holding a newline cannot be asked that way and is read alone.
 function stagedHits(repoRoot, paths) {
   const out = [];
-  for (const rel of paths) out.push(...hits(rel, git(repoRoot, ["show", `:${rel}`])));
+  const batched = paths.filter((rel) => !rel.includes("\n"));
+  for (const rel of paths.filter((p) => p.includes("\n"))) out.push(...hits(rel, git(repoRoot, ["show", `:${rel}`])));
+  if (batched.length === 0) return out;
+  const buf = execFileSync("git", ["-C", repoRoot, "cat-file", "--batch"], {
+    input: batched.map((rel) => `:${rel}`).join("\n") + "\n",
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  let pos = 0;
+  for (const rel of batched) {
+    const nl = buf.indexOf(0x0a, pos);
+    const header = nl < 0 ? [] : buf.toString("utf8", pos, nl).split(" ");
+    const end = nl + 1 + Number(header[2]);
+    if (header.length !== 3 || !/^[0-9]+$/.test(header[2]) || buf[end] !== 0x0a) {
+      throw new Error(`cannot read the staged content of ${rel}`);
+    }
+    out.push(...hits(rel, buf.subarray(nl + 1, end)));
+    pos = end + 1;
+  }
   return out;
 }
 

@@ -1,0 +1,129 @@
+# envClearLine corpus: name | ERE | line. Every row runs through all four language parts.
+# ERE: G = the two retired names, O = OTHER_VAR, M = the retired names and OTHER_VAR, S1 = the
+# retired session name alone. Placeholders: @S@ / @E@ the retired names (this tree is not
+# tombstone-exempt), @P@ a pipe, @CR@ a carriage return, @TAB@ a tab. The line is everything after
+# the second pipe, less one leading space. Rows up to py-ere-other-cleared come from
+# tests/bin/feature-2411-env-clear-line.sh; the rest are the #2507 additions.
+sh-unset-one | G | unset @S@
+sh-unset-two | G | unset @S@ @E@
+sh-unset-among-others | G | unset FOO @E@ BAR
+sh-unset-quiet | G |   unset @S@ @E@ 2>/dev/null @P@@P@ true
+sh-env-dash-u-both | G | env -u @E@ -u @S@ cmd
+sh-env-dash-u-run | G | env -u @E@ bash x.sh
+sh-array-dash-u | G | DENV=(env -u WORKFLOW_STATE_DIR -u @S@
+sh-no-guarded-name | G | echo hello
+sh-suffix-name-only | G | env -u @E@_X printenv
+sh-export | G | export @E@=x
+sh-assign | G | @E@=/tmp/x
+sh-read | G | echo "$@S@"
+sh-comment | G | # @E@ is cleared above
+sh-unset-then-use | G | unset @S@ && echo "$@E@"
+sh-dash-u-plus-bare-other | G | echo "$@S@" -u @E@
+sh-dash-u-plus-bare-same | G | env -u @S@ printenv @S@
+sh-js-delete | G | delete process.env.@S@;
+sh-py-pop | G | os.environ.pop("@S@", None)
+sh-ps-remove | G | Remove-Item -Path Env:@E@ -ErrorAction SilentlyContinue
+sh-ere-other-export | O | export OTHER_VAR=1
+sh-ere-other-unset | O | unset OTHER_VAR
+js-delete-sid | G | delete process.env.@S@;
+js-delete-no-semicolon | G | delete process.env.@E@
+js-indented-space-semi | G |     delete process.env.@S@ ;
+js-crlf | G | delete process.env.@E@;@CR@
+js-other-var | G | delete process.env.OTHER_VAR;
+js-suffix-name | G | delete process.env.@E@_X;
+js-prefix-name | G | delete process.env.X_@S@;
+js-assign | G | process.env.@S@ = "x";
+js-read-assert | G | assert.strictEqual(process.env.@E@, undefined);
+js-list-literal | G | const R = ["@S@", "@E@"];
+js-bracket-delete | G | delete process.env["@S@"];
+js-trailing-comment | G | delete process.env.@S@; // clear
+js-two-on-one-line | G | delete process.env.@S@; delete process.env.@E@;
+js-bash-unset | G | unset @S@
+js-py-pop | G | os.environ.pop("@S@", None)
+js-ere-other-cleared | O | delete process.env.OTHER_VAR;
+js-ere-other-guarded | O | delete process.env.@S@;
+ps-path-form | G | Remove-Item -Path Env:@S@ -ErrorAction SilentlyContinue
+ps-bare-form | G | Remove-Item Env:@E@
+ps-backslash-force | G | Remove-Item Env:\@S@ -Force
+ps-both-switches | G | Remove-Item -Path Env:@E@ -ErrorAction SilentlyContinue -Force
+ps-switches-reversed | G | Remove-Item Env:@E@ -Force -ErrorAction SilentlyContinue
+ps-indented | G |         Remove-Item -Path Env:@S@ -ErrorAction SilentlyContinue
+ps-crlf | G | Remove-Item -Path Env:@S@ -ErrorAction SilentlyContinue@CR@
+ps-other-var | G | Remove-Item Env:OTHER_VAR -Force
+ps-suffix-name | G | Remove-Item Env:@E@_X
+ps-other-switch | G | Remove-Item Env:@S@ -Recurse
+ps-assign | G | $env:@S@ = 'x'
+ps-read-assert | G | $env:@E@ @P@ Should -BeNullOrEmpty
+ps-list-literal | G | $names = @('@S@', '@E@')
+ps-trailing-comment | G | Remove-Item Env:@S@ -Force # clear
+ps-two-on-one-line | G | Remove-Item Env:@S@; Remove-Item Env:@E@
+ps-py-pop | G | os.environ.pop("@S@", None)
+ps-js-delete | G | delete process.env.@S@;
+ps-ere-other-cleared | O | Remove-Item Env:OTHER_VAR
+py-double-quote | G | os.environ.pop("@S@", None)
+py-single-quote | G | os.environ.pop('@E@', None)
+py-no-space-after-comma | G | os.environ.pop("@S@",None)
+py-indented | G |         os.environ.pop("@E@", None)
+py-crlf | G | os.environ.pop("@S@", None)@CR@
+py-other-var | G | os.environ.pop("OTHER_VAR", None)
+py-suffix-name | G | os.environ.pop("@E@_X", None)
+py-mixed-quotes | G | os.environ.pop("@S@', None)
+py-no-default | G | os.environ.pop("@S@")
+py-del | G | del os.environ["@S@"]
+py-assign | G | os.environ["@S@"] = "x"
+py-read-assert | G | assert "@E@" not in os.environ
+py-tuple-literal | G | _R = ("@S@", "@E@")
+py-trailing-comment | G | os.environ.pop("@S@", None)  # clear
+py-two-on-one-line | G | os.environ.pop("@S@", None); os.environ.pop("@E@", None)
+py-ps-remove | G | Remove-Item -Path Env:@S@ -Force
+py-bash-unset | G | unset @S@
+py-ere-other-cleared | O | os.environ.pop("OTHER_VAR", None)
+x-empty-line | G |
+x-blank-line | G |    @TAB@
+x-tab-unset | G | @TAB@unset@TAB@@S@
+x-unset-crlf | G | unset @S@@CR@
+x-export-crlf | G | export @S@=1@CR@
+x-cr-only-name | G | @S@@CR@
+x-cr-mid-line | G | delete process.env.@S@@CR@;
+x-dash-u-chain-three | M | env -u @S@ -u @E@ -u OTHER_VAR cmd
+x-dash-u-chain-tail-bare | G | env -u @S@ -u @E@ cmd @E@
+x-dash-u-repeated-same | G | env -u @S@ -u @S@ cmd
+x-dash-u-tab | G | env -u@TAB@@S@ cmd
+x-dash-u-glued | G | env -u@S@ cmd
+x-dash-u-trailing | G | env -u @S@
+x-dash-u-name-in-quotes | G | env -u "@S@" cmd
+x-dash-u-then-assign | G | env -u @S@ @E@=1 cmd
+x-dash-u-prefix-dash | G | env --u @S@ cmd
+x-unset-func-flag | G | unset -v @S@
+x-unset-quiet-spaces | G | unset @S@  2>  /dev/null  @P@@P@  true
+x-unset-and-other-cmd | G | unset @S@ @P@@P@ echo x
+x-multi-ere-unset | M | unset @S@ OTHER_VAR
+x-multi-ere-export | M | export OTHER_VAR=1
+x-multi-ere-js | M | delete process.env.OTHER_VAR;
+x-multi-ere-ps | M | Remove-Item Env:OTHER_VAR -Force
+x-multi-ere-py | M | os.environ.pop('OTHER_VAR', None)
+x-single-ere-other-name | S1 | export @E@=1
+x-single-ere-dash-u | S1 | env -u @S@ printenv @E@
+x-partial-suffix-word | G | echo @S@X
+x-partial-prefix-word | G | echo X@S@
+x-partial-digit-suffix | G | echo @S@2
+x-partial-prefix-only | G | echo CLAUDE_SESSION
+x-partial-dash-joined | G | echo @S@-x
+x-partial-dot-joined | G | echo $@S@.x
+x-js-tabs | G | @TAB@delete process.env.@S@@TAB@;@TAB@
+x-js-double-semicolon | G | delete process.env.@S@;;
+x-js-space-crlf | G |   delete process.env.@S@ ; @CR@
+x-js-optional-chain | G | delete process?.env.@S@;
+x-js-uppercase-delete | G | DELETE process.env.@S@;
+x-ps-tab | G | Remove-Item@TAB@Env:@S@
+x-ps-lowercase | G | remove-item Env:@S@
+x-ps-double-backslash | G | Remove-Item Env:\\@S@
+x-ps-force-twice | G | Remove-Item -Path Env:@S@ -Force -Force
+x-ps-trailing-space | G | Remove-Item Env:@S@ -Force
+x-ps-path-no-space | G | Remove-Item -PathEnv:@S@
+x-py-space-in-paren | G | os.environ.pop( "@S@", None)
+x-py-tab-before-none | G | os.environ.pop("@S@",@TAB@None)
+x-py-trailing-spaces | G | os.environ.pop("@S@", None)
+x-py-default-other | G | os.environ.pop("@S@", "")
+x-non-ascii-comment | G | delete process.env.@S@; // é
+x-non-ascii-before-name | G | echo "é @S@"

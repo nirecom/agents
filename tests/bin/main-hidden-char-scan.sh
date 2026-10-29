@@ -32,8 +32,8 @@ FAKE_DOTFILES="$TMPBASE/dotfiles"
 FAKE_PRIVATE="$TMPBASE/my-private-repo"
 mkdir -p "$FAKE_DOTFILES/bin"
 mkdir -p "$FAKE_PRIVATE"
-cp "$SCANNER_SRC" "$FAKE_DOTFILES/bin/scan-outbound.sh"
-chmod +x "$FAKE_DOTFILES/bin/scan-outbound.sh"
+source "$DOTFILES_DIR/tests/lib/node-entry-sandbox.sh"  # #2507: the scanner execs a Node CLI
+node_entry_sandbox_copy "$FAKE_DOTFILES" bin/scan-outbound.sh
 SCANNER="$FAKE_DOTFILES/bin/scan-outbound.sh"
 : > "$FAKE_DOTFILES/.private-info-allowlist"
 # Baseline blocklist for hidden-char normal-case tests: an empty (comment-only)
@@ -131,8 +131,7 @@ A_RC=0; A_OUT=""; A_ERR=""
 # a_checkout <dir> — make <dir> a scanner checkout (lists are written by the caller).
 a_checkout() {
     mkdir -p "$1/bin"
-    cp "$SCANNER_SRC" "$1/bin/scan-outbound.sh"
-    chmod +x "$1/bin/scan-outbound.sh"
+    node_entry_sandbox_copy "$1" bin/scan-outbound.sh >/dev/null
 }
 
 # run_anchor <checkout|__unset__> <stdin-content> [agents-main-root] — run the scanner

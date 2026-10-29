@@ -1,0 +1,242 @@
+{
+  "fm-ok": {
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "fm-tests-header": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "MISSING_TESTS_HEADER: tests/bin/fm-no-tests.sh\nMISSING_TESTS_HEADER: tests/bin/fm-empty-tests.sh\nINVALID_TESTS_TOKEN: tests/bin/fm-bad-token.sh: bin/a b.sh\nINVALID_TESTS_TOKEN: tests/bin/fm-bad-token.sh: bin/x;y.sh\n"
+  },
+  "fm-scope-tag": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "MISSING_SCOPE_TAG: tests/bin/fm-no-tags.sh (no # Tags: line)\nMISSING_SCOPE_TAG: tests/bin/fm-no-scope.sh (# Tags: line lacks scope:issue-specific or scope:common)\nMISSING_SCOPE_TAG: tests/bin/fm-tags-late.sh (no # Tags: line)\nMISSING_SCOPE_TAG: tests/bin/fm-crlf-bad.sh (# Tags: line lacks scope:issue-specific or scope:common)\n"
+  },
+  "fm-flat": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "FLAT_TEST_SH_REJECTED: tests/fm-flat.sh (new .sh tests must live under tests/<category>/; categories: hooks bin skills agents install tests)\nFLAT_TEST_REJECTED: tests/fm-flat.js (new .js tests must live under tests/<category>/; categories: hooks bin skills agents install tests)\nMISSING_TESTS_HEADER: tests/fm-old.sh\nMISSING_SCOPE_TAG: tests/run-all.sh (no # Tags: line)\n"
+  },
+  "fm-harness-source": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "MISSING_HARNESS_SOURCE: tests/bin/fm-nosrc.sh\nMISSING_HARNESS_SOURCE: tests/bin/fm-nosrc.js\nMISSING_HARNESS_SOURCE: tests/bin/fm-src-comment.sh\nMISSING_TESTS_HEADER: tests/hooks/fm-suite/sub.sh\n"
+  },
+  "fm-self-impl": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "HIGH: tests/bin/fm-si-new.sh line 5: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/fm-si-new.sh line 6: self-implemented harness (counter-init FAIL=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/fm-si-new.sh line 7: self-implemented harness (harness-redef pass) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/fm-si-old.sh line 6: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/fm-si.js line 5: self-implemented harness (counter-init passed=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/fm-si.js line 6: self-implemented harness (harness-redef caseBegin) code=SELF_IMPLEMENTED_HARNESS\n"
+  },
+  "fm-filter": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "MISSING_TESTS_HEADER: tests/lib/fm-helper.sh\nMISSING_SCOPE_TAG: tests/lib/fm-helper.sh (no # Tags: line)\n"
+  },
+  "fm-content-forms": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "MISSING_SCOPE_TAG: tests/bin/fm-work.sh (no # Tags: line)\n"
+  },
+  "fm-no-head": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "FLAT_TEST_SH_REJECTED: tests/fm-first-flat.sh (new .sh tests must live under tests/<category>/; categories: hooks bin skills agents install tests)\nHIGH: tests/bin/fm-first.sh line 5: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS\n"
+  },
+  "fm-runtime-unavailable": {
+    "rc": 0,
+    "stdout": "",
+    "stderr": "WARN: tests/bin/fm.Tests.ps1: harness self-implementation not checked (pwsh is not installed) code=SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE\nWARN: tests/bin/test_fm.py: harness self-implementation not checked (uv is not installed) code=SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE\n"
+  },
+  "fm-all": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "INVALID_TESTS_TOKEN: tests/bin/fm-bad-token.sh: bin/a b.sh\nINVALID_TESTS_TOKEN: tests/bin/fm-bad-token.sh: bin/x;y.sh\nMISSING_SCOPE_TAG: tests/bin/fm-crlf-bad.sh (# Tags: line lacks scope:issue-specific or scope:common)\nMISSING_TESTS_HEADER: tests/bin/fm-empty-tests.sh\nMISSING_SCOPE_TAG: tests/bin/fm-no-scope.sh (# Tags: line lacks scope:issue-specific or scope:common)\nMISSING_SCOPE_TAG: tests/bin/fm-no-tags.sh (no # Tags: line)\nMISSING_TESTS_HEADER: tests/bin/fm-no-tests.sh\nMISSING_SCOPE_TAG: tests/bin/fm-tags-late.sh (no # Tags: line)\nMISSING_SCOPE_TAG: tests/bin/fm-work.sh (no # Tags: line)\n"
+  },
+  "fm-usage-none": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage:\n  check-test-frontmatter.sh --staged <file1> [<file2>...]\n  check-test-frontmatter.sh --all [<root>]\n"
+  },
+  "fm-usage-mode": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Unknown mode: --bogus\nUsage:\n  check-test-frontmatter.sh --staged <file1> [<file2>...]\n  check-test-frontmatter.sh --all [<root>]\n"
+  },
+  "fm-no-node": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "[test-language-registry] node not on PATH; cannot read the registry table\nERROR: test language registry not readable\n"
+  },
+  "mk-bash": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/mk-none.sh (2 paths in # Tests: header, no case_begin/case_end markers) code=MISSING_CASE_MARKERS\nHIGH: tests/bin/mk-indent.sh line 5: malformed case marker (grammar) code=MALFORMED_CASE_MARKER\nHIGH: tests/bin/mk-depth.sh line 6: malformed case marker (depth) code=MALFORMED_CASE_MARKER\nHIGH: tests/bin/mk-open.sh line 6: malformed case marker (balance) code=MALFORMED_CASE_MARKER\nHIGH: tests/bin/mk-target.sh line 5: malformed case marker (target) code=MALFORMED_CASE_MARKER\n",
+    "stderr": ""
+  },
+  "mk-bash-quote": {
+    "rc": 0,
+    "stdout": "WARN: tests/bin/mk-quote.sh line 8: case marker nesting uncertain (multi-line quoted string before the marker; use a heredoc so retire can split cases) code=UNCERTAIN_CASE_MARKER\n",
+    "stderr": ""
+  },
+  "mk-js": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/mk-none.js (2 paths in // Tests: header, no caseBegin/caseEnd markers) code=MISSING_CASE_MARKERS\nHIGH: tests/bin/mk-dup.js line 7: malformed case marker (duplicate-name) code=MALFORMED_CASE_MARKER\nHIGH: tests/bin/mk-open.js line 5: malformed case marker (balance) code=MALFORMED_CASE_MARKER\nHIGH: tests/bin/mk-const.js line 5: malformed case marker (constant) code=MALFORMED_CASE_MARKER\nWARN: tests/bin/mk-comment.js line 6: case marker nesting uncertain (a caseBegin/caseEnd-looking line sits inside a block comment or a multi-line template string; move it out so the cases can be read line by line) code=UNCERTAIN_CASE_MARKER\n",
+    "stderr": ""
+  },
+  "mk-runtime-unavailable": {
+    "rc": 0,
+    "stdout": "WARN: tests/bin/mk.Tests.ps1: case markers not checked (pwsh is not installed) code=CASE_MARKER_RUNTIME_UNAVAILABLE\nWARN: tests/bin/test_mk.py: case markers not checked (uv is not installed) code=CASE_MARKER_RUNTIME_UNAVAILABLE\n",
+    "stderr": ""
+  },
+  "mk-reader-unsupported": {
+    "rc": 0,
+    "stdout": "WARN: tests/bin/test_mk.txt: case markers not checked (no test case reader for this language) code=CASE_MARKER_READER_UNSUPPORTED\nWARN: tests/bin/mk.txt: case markers not checked (no test case reader for this language) code=CASE_MARKER_READER_UNSUPPORTED\n",
+    "stderr": ""
+  },
+  "mk-rel": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/renamed.sh (2 paths in # Tests: header, no case_begin/case_end markers) code=MISSING_CASE_MARKERS\n",
+    "stderr": ""
+  },
+  "mk-usage-none": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "Usage: check-case-markers.sh <file1> [file2 ...]\n"
+  },
+  "mk-usage-missing": {
+    "rc": 1,
+    "stdout": "",
+    "stderr": "check-case-markers.sh: file not found: tests/bin/absent.sh\n"
+  },
+  "mk-usage-rel-value": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-case-markers.sh: --rel needs a value\n"
+  },
+  "mk-usage-rel-two": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-case-markers.sh: --rel takes exactly one file\n"
+  },
+  "mk-no-node": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-case-markers.sh: predicate library unavailable\n"
+  },
+  "lm-main": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/lm-mis.sh: test language bash does not match code language js of bin/b.js (new file shape: <name>.js) code=TEST_LANGUAGE_MISMATCH\nHIGH: tests/bin/lm-mis-line.sh: test language bash does not match code language js of bin/b.js (new file shape: <name>.js) code=TEST_LANGUAGE_MISMATCH\nHIGH: tests/bin/lm-shebang.sh: test language bash does not match code language js of bin/tool (new file shape: <name>.js) code=TEST_LANGUAGE_MISMATCH\nHIGH: tests/bin/lm-mis.js: test language js does not match code language bash of bin/a.sh (new file shape: <name>.sh) code=TEST_LANGUAGE_MISMATCH\n",
+    "stderr": ""
+  },
+  "lm-exception": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/lm-bad-exc.sh: invalid test-lang-exception value 'bogus' (allowed: text-only symmetry e2e) code=INVALID_TEST_LANG_EXCEPTION\nHIGH: tests/bin/lm-bad-exc.sh: test language bash does not match code language js of bin/b.js (new file shape: <name>.js) code=TEST_LANGUAGE_MISMATCH\nHIGH: tests/bin/lm-two-exc.sh: invalid test-lang-exception value 'symmetry,e2e' (allowed: text-only symmetry e2e) code=INVALID_TEST_LANG_EXCEPTION\nHIGH: tests/bin/lm-two-exc.sh: test language bash does not match code language js of bin/b.js (new file shape: <name>.js) code=TEST_LANGUAGE_MISMATCH\n",
+    "stderr": ""
+  },
+  "lm-unsupported": {
+    "rc": 0,
+    "stdout": "WARN: tests/bin/lm-x.txt: test language not checked (no test language registry entry matches this name) code=TEST_LANGUAGE_UNSUPPORTED\nWARN: tests/bin/test_lm.txt: test language not checked (test-naming-convention is recognized-only in the test language registry) code=TEST_LANGUAGE_UNSUPPORTED\n",
+    "stderr": ""
+  },
+  "lm-case-added-head": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/lm-add.sh: case added to a test file without valid case markers (case count unavailable: no case unit; code lines 2 -> 4); add case_begin/case_end to every case first, then each case's target is checked code=CASE_ADDED_WITHOUT_MARKERS\n",
+    "stderr": ""
+  },
+  "lm-case-added-new": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/lm-new-add.sh: case added to a test file without valid case markers (case count unavailable: no case unit; code lines 0 -> 3); add case_begin/case_end to every case first, then each case's target is checked code=CASE_ADDED_WITHOUT_MARKERS\n",
+    "stderr": ""
+  },
+  "lm-usage-none": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>...\n"
+  },
+  "lm-usage-option": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>...\ncheck-test-language-match.sh: unknown option: --bogus\n"
+  },
+  "lm-usage-rel-two": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>...\ncheck-test-language-match.sh: --rel takes exactly one file\n"
+  },
+  "lm-usage-head-missing": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-test-language-match.sh: head copy not found: .head/absent.sh\n"
+  },
+  "lm-usage-file-missing": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-test-language-match.sh: file not found: tests/bin/absent.sh\n"
+  },
+  "lm-no-node": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-test-language-match.sh: library unavailable\n"
+  },
+  "si-main": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/si.sh line 5: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.sh line 6: self-implemented harness (counter-init FAIL=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.sh line 7: self-implemented harness (harness-redef pass) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.sh line 11: self-implemented harness (harness-redef skip) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 5: self-implemented harness (counter-init passed=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 6: self-implemented harness (counter-init FAIL=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 7: self-implemented harness (harness-redef caseBegin) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 8: self-implemented harness (harness-redef isolate) code=SELF_IMPLEMENTED_HARNESS\nWARN: tests/bin/si.txt: harness self-implementation not checked (no caseEmbedRules) code=SELF_IMPL_CHECK_UNSUPPORTED\n",
+    "stderr": ""
+  },
+  "si-head": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/si-two.sh line 6: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS\n",
+    "stderr": ""
+  },
+  "si-head-same": {
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "si-runtime-unavailable": {
+    "rc": 0,
+    "stdout": "WARN: tests/bin/si.Tests.ps1: harness self-implementation not checked (pwsh is not installed) code=SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE\nWARN: tests/bin/test_si.py: harness self-implementation not checked (uv is not installed) code=SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE\n",
+    "stderr": ""
+  },
+  "si-manifest": {
+    "rc": 1,
+    "stdout": "HIGH: tests/bin/renamed.sh line 6: self-implemented harness (counter-init PASS=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 5: self-implemented harness (counter-init passed=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 6: self-implemented harness (counter-init FAIL=0) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 7: self-implemented harness (harness-redef caseBegin) code=SELF_IMPLEMENTED_HARNESS\nHIGH: tests/bin/si.js line 8: self-implemented harness (harness-redef isolate) code=SELF_IMPLEMENTED_HARNESS\n",
+    "stderr": ""
+  },
+  "si-manifest-bad": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\ncheck-self-impl.sh: malformed manifest line: tests/bin/x.sh\n"
+  },
+  "si-usage-none": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\n"
+  },
+  "si-usage-option": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\ncheck-self-impl.sh: unknown option: --bogus\n"
+  },
+  "si-usage-manifest-file": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\ncheck-self-impl.sh: --manifest takes no --rel, --head or file\n"
+  },
+  "si-usage-manifest-missing": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-self-impl.sh: file not found: .absent.tsv\n"
+  },
+  "si-usage-file-missing": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "check-self-impl.sh: file not found: tests/bin/absent.sh\n"
+  },
+  "si-no-node": {
+    "rc": 2,
+    "stdout": "",
+    "stderr": "[test-language-registry] node not on PATH; cannot read the registry table\ncheck-self-impl.sh: registry unreadable\n"
+  }
+}

@@ -232,7 +232,8 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   destinations through the same predicate (#2108, `hooks/workflow-gate/early-gate-allowlist.js`),
   so an agent blocked by one hook is not handed a different answer by the other. Non-directory `New-Item`, in-repo targets, quoted
   paths that expand into the repo, and mixed/unresolvable target sets stay fail-closed.
-  Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
+  Defense-in-depth at commit time via the `enforce-worktree` check of `pre-commit`
+  (`hooks/pre-commit.d/checks/enforce-worktree.js`). Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
   Path coverage (`ENFORCE_WORKTREE_EXCLUDE`), gh command classification, dispatch provenance
   (#2064), additional repos, quote-span analysis, the script checkout root trust anchor, the

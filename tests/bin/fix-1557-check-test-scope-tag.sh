@@ -208,23 +208,33 @@ else
 fi
 rm -rf "$SLASH_DIR"
 
-# TC11 (#2502 S4-6): the header reader lives in one place, bin/lib/test-frontmatter-headers.sh,
-# which check-test-frontmatter.sh and bin/lib/test-language-match.sh both source. TC1-TC10
-# above are the unchanged expectations once it moves there.
-HEADERS_LIB="$REPO_ROOT/bin/lib/test-frontmatter-headers.sh"
+# TC11 (#2502 S4-6; #2507 moved it to Node): the header reader lives in one place,
+# hooks/lib/test-gates/headers.js, which the frontmatter check and the language-match check both
+# require. TC1-TC10 above are the unchanged expectations once it moves there.
+HEADERS_JS="$REPO_ROOT/hooks/lib/test-gates/headers.js"
+if command -v cygpath >/dev/null 2>&1; then HEADERS_JS="$(cygpath -m "$HEADERS_JS")"; fi
 set +e
-TC11_OUT="$(bash -c '. "$1" || exit 97; declare -F extract_headers extract_headers_file' _ "$HEADERS_LIB" 2>&1)"
+TC11_OUT="$(node -e 'console.log(typeof require(process.argv[1]).readHeaders)' "$HEADERS_JS" 2>&1)"
 RC=$?
 set -e
-if [[ $RC -eq 0 && "$TC11_OUT" == *extract_headers*extract_headers_file* ]]; then
-  pass "TC11 bin/lib/test-frontmatter-headers.sh defines extract_headers and extract_headers_file"
+if [[ $RC -eq 0 && "${TC11_OUT%$'\r'}" == function ]]; then
+  pass "TC11 hooks/lib/test-gates/headers.js exports readHeaders"
 else
-  fail "TC11 bin/lib/test-frontmatter-headers.sh defines extract_headers and extract_headers_file" "rc=$RC out=<<$TC11_OUT>>"
+  fail "TC11 hooks/lib/test-gates/headers.js exports readHeaders" "rc=$RC out=<<$TC11_OUT>>"
 fi
-if grep -qE '^[[:space:]]*(function[[:space:]]+)?extract_headers(_file)?[[:space:]]*\(\)' "$SCRIPT"; then
-  fail "TC11 check-test-frontmatter.sh no longer defines the header reader itself" "definition still in $SCRIPT"
+TC11_MISSING=""
+for f in frontmatter/staged.js frontmatter/all.js language-match/exception.js; do
+  grep -qF 'require("../headers")' "$REPO_ROOT/hooks/lib/test-gates/$f" || TC11_MISSING="$TC11_MISSING $f"
+done
+if [[ -z "$TC11_MISSING" ]]; then
+  pass "TC11 the frontmatter and language-match checks read headers through headers.js"
 else
-  pass "TC11 check-test-frontmatter.sh no longer defines the header reader itself"
+  fail "TC11 the frontmatter and language-match checks read headers through headers.js" "no require in:$TC11_MISSING"
+fi
+if grep -qE '(function[[:space:]]+|const[[:space:]]+)(readHeaders|extract_headers)' "$SCRIPT" "$REPO_ROOT/bin/check-test-frontmatter/cli.js"; then
+  fail "TC11 check-test-frontmatter defines no header reader of its own" "a definition remains in the CLI"
+else
+  pass "TC11 check-test-frontmatter defines no header reader of its own"
 fi
 
 # TC12 (#2502 S4-6): the test-lang-exception value is validated only by

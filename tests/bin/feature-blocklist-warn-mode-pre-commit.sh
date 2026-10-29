@@ -32,9 +32,8 @@ trap 'rm -rf "$TMPBASE"' EXIT
 # Build a fake "agents" tree (so $_cfg_dir/.. resolves to the agents root)
 FAKE_AGENTS="$TMPBASE/agents"
 mkdir -p "$FAKE_AGENTS/bin" "$FAKE_AGENTS/hooks"
-cp "$SCANNER_SRC"   "$FAKE_AGENTS/bin/scan-outbound.sh"
-cp "$PRECOMMIT_SRC" "$FAKE_AGENTS/hooks/pre-commit"
-chmod +x "$FAKE_AGENTS/bin/scan-outbound.sh" "$FAKE_AGENTS/hooks/pre-commit"
+source "$DOTFILES_DIR/tests/lib/node-entry-sandbox.sh"  # #2507: both entries exec Node modules
+node_entry_sandbox_copy "$FAKE_AGENTS" bin/scan-outbound.sh hooks/pre-commit
 : > "$FAKE_AGENTS/.private-info-allowlist"
 cat > "$FAKE_AGENTS/.private-info-blocklist" <<'EOF'
 forbiddenword[0-9]+
@@ -75,7 +74,8 @@ run_commit() {
     local repo="$1" msg="$2"
     local out
     set +e
-    out="$(PATH="$EXEC_PATH" run_with_timeout git -C "$repo" commit -m "$msg" </dev/null 2>&1)"
+    # The fixture repo is a main worktree; the worktree gate is out of this suite's scope.
+    out="$(PATH="$EXEC_PATH" ENFORCE_WORKTREE=off run_with_timeout git -C "$repo" commit -m "$msg" </dev/null 2>&1)"
     PC_RC=$?
     set -e
     PC_OUT="$out"

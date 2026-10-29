@@ -249,10 +249,10 @@ report and acting on it: [ops.md](../ops.md#jev).
   adds `github_pat_` tokens, URL userinfo credentials, `Authorization` scheme
   values, `token=` / `password:`-style assignments, and private-key blocks.
 - **One pattern source with the pre-commit scanner**: the first redactor loads
-  its shapes from the `# BEGIN hard-secret-patterns` / `# END hard-secret-patterns`
-  block in `bin/scan-outbound.sh`, so a shape the scanner learns is redacted
+  its shapes from `HARD_SECRET_PATTERNS` in `hooks/lib/outbound-scan/hard-secret-patterns.js`,
+  the list the scanner itself uses, so a shape the scanner learns is redacted
   from Jev requests too. Every match is redacted wherever it occurs.
-- **Fail closed on missing patterns**: if that block cannot be loaded, the
+- **Fail closed on missing patterns**: if that list cannot be loaded or is empty, the
   redactor throws rather than pass text through; no query is sent.
 - **Bounded reads**: each source and the answer file are read only up to 1 MiB.
 - **The answer never rides a command line**: the subagent's answer reaches

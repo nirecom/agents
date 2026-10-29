@@ -2,33 +2,11 @@
 # tests/hooks/feature-1894-hook-comment-block.sh
 # Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js, settings.json
 # Tags: comment-block-size, hook, pretooluse, edit-time, shift-left, no-bypass, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
-
-# Issue #1894 — Edit-time half of the block, the half the issue was actually
-# filed for. Pre-commit already caught these blocks but ~40% of sessions
-# ignored it, so the user ended up pointing it out by hand; the cheapest fix
-# point is the moment the block is written, not after it's staged. This hook
-# is the shift-left; hooks/pre-commit is its backstop.
-
-# The two layers deliberately judge differently (detail plan S3-2, CPR-SC):
-# Edit-time (here) is PURE ABSOLUTE on the post-Edit file — blocked even if
-# this edit didn't touch the violation and nothing got worse. pre-commit is
-# baseline-relative — only a WORSENING blocks. The absolute rule is the sharp
-# edge: a file with an old violation is unwritable until fixed (accepted,
-# detail plan Risks #10) — pinned as a REQUIREMENT so a later "usability fix"
-# reverting to worsening-only judgment fails a named test.
-
-# Two ABSENCE properties get their own cases: no bypass — WORKFLOW_OFF /
-# WORKTREE_OFF never suspend this hook because it never reads marker state
-# (no-bypass.sh); config comes from the agents main root's .env, never
-# process.env, so an inline COMMENT_BLOCK_MAX_LINES can't lift the bar
-# (filter-and-config.sh). Dispatcher: harness here, cases in
-# tests/hooks/feature-1894-hook-comment-block/*.sh.
-
-# TL3 gap: whether Claude Code actually routes a real Edit through this hook
-# (cases feed a hand-built payload; registration.sh checks settings.json
-# only); real editFiles/NotebookEdit payload shapes; latency. Mitigation:
-# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category
-# hook-registration).
+# #1894: the Edit-time half (shift-left; hooks/pre-commit is the baseline-relative backstop).
+# Edit-time is PURE ABSOLUTE on the post-Edit file (detail plan S3-2, Risks #10); no marker
+# bypass (no-bypass.sh); config from the main root's .env only (filter-and-config.sh).
+# Cases: tests/hooks/feature-1894-hook-comment-block/*.sh.
+# TL3 gap: real Edit routing, real payload shapes, latency (WORKFLOW_USER_VERIFIED preflight).
 
 set -u
 
@@ -37,7 +15,7 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"
 SCAN_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-scan.js"
 SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
-SCANNER_SH="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size.d/scan.sh"
+REVIEW_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-review/review.js"
 SCANNER_CLI="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size"
 CASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1894-hook-comment-block"
 

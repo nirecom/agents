@@ -44,8 +44,9 @@ setup() {
     TMP="$(mktemp -d)"
     export MOCK_LOG_DIR="$TMP"
     mkdir -p "$TMP/mock-bin" "$TMP/fake_main_root/bin"
-    cp "$REAL_SCANNER" "$TMP/fake_main_root/bin/scan-outbound.sh"
-    chmod +x "$TMP/fake_main_root/bin/scan-outbound.sh"
+    # #2507: the scanner entry execs a Node CLI beside it; copy the entry with its closure.
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh"
+    node_entry_sandbox_copy "$TMP/fake_main_root" bin/scan-outbound.sh
     : > "$TMP/fake_main_root/.private-info-allowlist"
     : > "$TMP/fake_main_root/.private-info-blocklist"
     # is-github-dotcom-remote mock -> non-github (exit 1) so Phase 0a label
@@ -141,6 +142,7 @@ setup_checkout() {
     printf '#!/usr/bin/env bash\nexit %s\n' "$1" > "$CO/bin/is-github-dotcom-remote"
     chmod +x "$CO/bin/is-github-dotcom-remote"
     script_checkout_fixture_copy "$CO" bin || return 1
+    node_entry_sandbox_copy "$CO" bin/scan-outbound.sh || return 1  # its Node closure lives in hooks/lib
     # The copy is outside git, so its scanner reads the lists of the copy itself (never
     # AGENTS_MAIN_ROOT); without a blocklist there it fail-closes with rc 4 (#2589).
     : > "$CO/.private-info-allowlist"

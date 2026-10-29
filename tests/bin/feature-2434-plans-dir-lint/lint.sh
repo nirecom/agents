@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/check-plans-artifacts, hooks/lib/plans-artifact-registry.js, .github/workflows/migration-blocks-audit.yml, hooks/lib/precommit-agents-repo-gates.sh
+# Tests: bin/check-plans-artifacts, hooks/lib/plans-artifact-registry.js, .github/workflows/migration-blocks-audit.yml, hooks/pre-commit
 # Tags: scope:issue-specific, TL2, plans-dir-lint, feature-2434, plans-dir, table-driven, pwsh-not-required
 # Part file of tests/bin/feature-2434-plans-dir-lint.sh (sourced; uses its T, LINT,
 # make_tree, table_tree, edit_table, run_source, run_source_gate, run_dir, check and
@@ -149,14 +149,14 @@ else
 fi
 case_end
 
-case_begin "static-precommit-gates-has-lint" "hooks/lib/precommit-agents-repo-gates.sh"
-GATES="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh"
-GATES_OK=0
-grep -qF "check-plans-artifacts --source" "$GATES" 2>/dev/null && GATES_OK=1
-if [ "$GATES_OK" = "1" ]; then
+# #2507: the gate list is AGENTS_REPO_GATES in hooks/pre-commit.d/registry.js.
+case_begin "static-precommit-gates-has-lint" "hooks/pre-commit"
+GATES="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/registry.js")"
+GATES_ROW="$(node -e 'const g = require(process.argv[1]).AGENTS_REPO_GATES.find((x) => x.cliPath === "bin/check-plans-artifacts"); process.stdout.write(g ? `${g.cliPath} ${g.args.join(" ")}` : "none");' "$GATES" 2>&1 || true)"
+if [ "$GATES_ROW" = "bin/check-plans-artifacts --source" ]; then
   pass "static-precommit-gates-has-lint"
 else
-  fail "static-precommit-gates-has-lint" "check-plans-artifacts --source not in precommit-agents-repo-gates.sh"
+  fail "static-precommit-gates-has-lint" "AGENTS_REPO_GATES row for check-plans-artifacts: $GATES_ROW"
 fi
 case_end
 true
