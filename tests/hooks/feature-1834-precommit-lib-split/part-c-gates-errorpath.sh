@@ -46,38 +46,38 @@ c1_failclosed() {
     fi
 }
 
-case_begin "C1f-session-id-rc2-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1f-session-id-rc2-blocks" "hooks/pre-commit"
 c1_rc2_blocks c1f session-id "$SID_MSG" rc2 clean
 case_end
 
-case_begin "C1g-session-id-absent-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1g-session-id-absent-blocks" "hooks/pre-commit"
 c1_failclosed c1g session-id check-session-id-ssot "$SID_SKIP_MSG" 0 absent clean
 case_end
 
-case_begin "C1h-session-id-unexpected-rc-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1h-session-id-unexpected-rc-blocks" "hooks/pre-commit"
 c1_failclosed c1h session-id check-session-id-ssot "$SID_SKIP_MSG" 1 rc3 clean
 case_end
 
-case_begin "C1i-migration-rc2-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1i-migration-rc2-blocks" "hooks/pre-commit"
 c1_rc2_blocks c1i migration "$MIG_MSG" clean rc2
 case_end
 
-case_begin "C1j-migration-absent-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1j-migration-absent-blocks" "hooks/pre-commit"
 c1_failclosed c1j migration check-migration-blocks "$MIG_SKIP_MSG" 0 clean absent
 case_end
 
-case_begin "C1k-migration-unexpected-rc-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1k-migration-unexpected-rc-blocks" "hooks/pre-commit"
 c1_failclosed c1k migration check-migration-blocks "$MIG_SKIP_MSG" 1 clean rc3
 case_end
 
-case_begin "C1l-on-demand-rc2-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1l-on-demand-rc2-blocks" "hooks/pre-commit"
 c1_rc2_blocks c1l on-demand "$OD_MSG" clean clean rc2
 case_end
 
-case_begin "C1m-on-demand-absent-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1m-on-demand-absent-blocks" "hooks/pre-commit"
 c1_failclosed c1m on-demand check-on-demand-rules "$OD_SKIP_MSG" 0 clean clean absent
 case_end
 
-case_begin "C1n-on-demand-unexpected-rc-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1n-on-demand-unexpected-rc-blocks" "hooks/pre-commit"
 c1_failclosed c1n on-demand check-on-demand-rules "$OD_SKIP_MSG" 1 clean clean rc3
 case_end

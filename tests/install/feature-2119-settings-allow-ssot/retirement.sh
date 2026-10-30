@@ -5,6 +5,7 @@
 # tests/install/feature-2119-settings-allow-ssot.sh, which owns PASS/FAIL/ROWS and assert_eq.
 
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/precommit-gate-stub.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh"
 
 RETIRED_REVIEWER_REL="bin/review-settings-allow"
 RETIRED_REVIEWER="$SCRIPT_CHECKOUT_ROOT/$RETIRED_REVIEWER_REL"
@@ -80,14 +81,14 @@ t39_sandbox() { # <dir> <absent|finding>
     git -C "$d" config user.email "test@example.com"
     git -C "$d" config user.name "Test"
     git -C "$d" config commit.gpgsign false
-    cp "$PRECOMMIT" "$d/hooks/pre-commit"
-    # Every lib the hook sources at load time, or it dies before any gate runs.
-    cp "$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh" \
-       "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh" "$d/hooks/lib/"
+    # The bash entry plus the Node body it runs (#2507) and hooks/lib, which the checks load from
+    # the hook copy's own checkout; without them the hook dies before any check runs.
+    node_entry_sandbox_copy "$d" hooks/pre-commit hooks/pre-commit.d/main.js >/dev/null
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib/." "$d/hooks/lib/"
     # The sandbox IS the hook copy's own repo, so the agents-repo gates arm and fail closed on a
     # missing checker before the .env control is reached; plant a passing stub for each (#2649).
     local stubs
-    if stubs="$(precommit_gate_stub_plant "$d/hooks/lib/precommit-agents-repo-gates.sh" "$d" 2>&1)"; then
+    if stubs="$(precommit_gate_stub_plant "$d/hooks/pre-commit.d/registry.js" "$d" 2>&1)"; then
         printf 'planted:%s' "$stubs" > "$TMPROOT/t39-$2.stubs"
     else
         printf 'DRIFT:%s' "$stubs" > "$TMPROOT/t39-$2.stubs"
@@ -169,7 +170,7 @@ t39_behaviour_table() {
         assert_eq "T39[$id]: $label" "$want" "$got"
     done <<'T39_CASES'
 arming|armed|PRECONDITION: the sandbox meets every condition the deleted gate armed on, so a silent run below is evidence of retirement rather than of a fixture that never triggered it
-stubs|planted|PRECONDITION: one passing stub per agents-repo gate call line in hooks/lib/precommit-agents-repo-gates.sh was derived and planted (count > 0 and equal to the call lines) -- without it those gates fail closed above the .env control and the rows below read MISSED for a reason unrelated to the retirement
+stubs|planted|PRECONDITION: one passing stub per agents-repo gate module in hooks/pre-commit.d/registry.js was derived and planted (count > 0 and equal to the registry rows) -- without it those gates fail closed above the .env control and the rows below read MISSED for a reason unrelated to the retirement
 absent|silent/fired|with no bin/review-settings-allow anywhere, a commit in that repo is NOT blocked -- and the .env gate further down the same hook still blocks it, so the run really did execute past where the gate used to be
 finding|silent/fired|CPR-ORTH: the gate's OTHER fail-closed branch is gone too -- an executable reviewer that reports a finding no longer blocks either, which a deletion that left the invocation behind would fail
 T39_CASES

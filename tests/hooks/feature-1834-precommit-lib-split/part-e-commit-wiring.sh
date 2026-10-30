@@ -15,12 +15,27 @@ E_CHECKERS=(
     bin/check-plans-dir-isolation.sh
     bin/check-root-names.sh
 )
+# #2507: the Node body runs each gate's CLI module in process (hooks/pre-commit.d/registry.js
+# GATE_ROWS), so a stub stands at the module path and the hook names the gate by its CLI path.
+declare -A E_MODULE=(
+    [bin/check-on-demand-rules.sh]=bin/lib/check-on-demand-rules.js
+    [bin/check-session-id-ssot.sh]=bin/check-session-id-ssot/main.js
+    [bin/check-migration-blocks.sh]=bin/lib/check-migration-blocks.js
+    [bin/check-plans-artifacts]=bin/check-plans-artifacts
+    [bin/check-plans-dir-isolation.sh]=bin/check-plans-dir-isolation/main.js
+    [bin/check-root-names.sh]=bin/check-root-names/main.js
+)
 
-# The hook, the libraries it sources and the env OS filter, committed once; each case copies it.
+# The hook, its Node body, the libraries it sources and the env OS filter, committed once;
+# each case copies it.
 E_TEMPLATE="$TMPBASE/e-template"
 if ! script_checkout_fixture_copy "$E_TEMPLATE" hooks/pre-commit hooks/lib bin/env-os-filter bin/size-check bin/lib/size-check; then
     fail "E: commit-wiring template" "script_checkout_fixture_copy failed"
 fi
+# shellcheck source=../../lib/node-entry-sandbox.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh"
+node_entry_sandbox_copy "$E_TEMPLATE" hooks/pre-commit.d/main.js >/dev/null ||
+    fail "E: commit-wiring template" "node_entry_sandbox_copy failed"
 init_repo_bare "$E_TEMPLATE"
 printf 'ENFORCE_WORKTREE=off\n' > "$E_TEMPLATE/.env"
 printf '.env\n' > "$E_TEMPLATE/.gitignore"
@@ -28,17 +43,13 @@ git -C "$E_TEMPLATE" add -A >/dev/null 2>&1
 git -C "$E_TEMPLATE" commit -q -m template >/dev/null 2>&1
 git -C "$E_TEMPLATE" remote add origin https://example.invalid/agents-fixture.git
 
-# e_stub <repo> <checker> <rc> — a checker that records its own name in <repo>.calls, then exits <rc>.
+# e_stub <repo> <checker> <rc> — the checker's module: run() records the checker's CLI path in
+# <repo>.calls, then answers <rc>.
 e_stub() {
-    local f="$1/$2" log
+    local f="$1/${E_MODULE[$2]}" log
     log="$(np "$1.calls")"
     mkdir -p "$(dirname "$f")"
-    if [ "$2" = bin/check-plans-artifacts ]; then
-        printf '%s\n' "require(\"fs\").appendFileSync(\"$log\", \"$2\\n\");" "process.exit($3);" > "$f"
-    else
-        printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' '$2' >> '$log'" "exit $3" > "$f"
-    fi
-    chmod +x "$f"
+    printf '%s\n' "exports.run = async () => { require(\"fs\").appendFileSync(\"$log\", \"$2\\n\"); return $3; };" > "$f"
 }
 
 # e_fixture <name> — copy of the template with the hook armed, six clean checkers and app.txt staged.
@@ -87,7 +98,7 @@ case_end
 case_begin "E2-missing-checker-rejects-the-commit" "hooks/pre-commit"
 for c in "${E_CHECKERS[@]}"; do
     e_fixture "missing-${c##*/}"
-    rm -f "$R/$c"
+    rm -f "$R/${E_MODULE[$c]}"
     e_commit "$R"
     if [ "$CRC" -eq 0 ] || [ "$CHEAD" != 2 ]; then
         fail "E2: missing $c rejects the commit" "rc $CRC, $CHEAD commits — out: $(e_flat "$COUT")"
@@ -114,15 +125,16 @@ for c in "${E_CHECKERS[@]}"; do
 done
 case_end
 
-# E4: mutation control — the same fixture with the gates call removed from the hook commits and
-# runs no checker, so E1-E3 can only pass while hooks/pre-commit really calls the gates.
+# E4: mutation control — the same fixture with the gates check removed from the hook's registry
+# commits and runs no checker, so E1-E3 can only pass while hooks/pre-commit really runs the gates.
+# #2507: the gates are the agents-repo-gates row of hooks/pre-commit.d/registry.js.
 case_begin "E4-gates-call-removed-is-detected" "hooks/pre-commit"
 e_fixture mutant
-sed -i 's/^_precommit_agents_repo_gates\([[:space:]].*\)\{0,1\}$/: gates call removed/' "$R/hooks/pre-commit"
-if ! grep -qx ': gates call removed' "$R/hooks/pre-commit"; then
-    fail "E4: mutation applied" "hooks/pre-commit has no top-level _precommit_agents_repo_gates call line"
+sed -i 's/^  \["agents-repo-gates",.*$/  \/\/ gates call removed/' "$R/hooks/pre-commit.d/registry.js"
+if ! grep -qx '  // gates call removed' "$R/hooks/pre-commit.d/registry.js"; then
+    fail "E4: mutation applied" "hooks/pre-commit.d/registry.js has no agents-repo-gates row"
 else
-    rm -f "$R/bin/check-root-names.sh"
+    rm -f "$R/${E_MODULE[bin/check-root-names.sh]}"
     e_commit "$R"
     if [ "$CRC" -eq 0 ] && [ ! -s "$R.calls" ]; then
         pass "E4: without the call the commit goes through and no checker runs (E1-E3 discriminate)"

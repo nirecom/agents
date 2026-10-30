@@ -42,7 +42,7 @@ trap 'rm -rf "$TMPBASE"' EXIT
 # ---- Build the fake agents tree ----
 FAKE_AGENTS="$TMPBASE/agents"
 mkdir -p "$FAKE_AGENTS/bin" "$FAKE_AGENTS/hooks/lib"
-cp "$SCANNER_SRC"   "$FAKE_AGENTS/bin/scan-outbound.sh"
+source "$DOTFILES_DIR/tests/lib/node-entry-sandbox.sh"  # #2507: the scanner execs a Node CLI
 cp "$HOOK_SRC"      "$FAKE_AGENTS/hooks/scan-outbound.js"
 cp "$ISPRIV_SRC"    "$FAKE_AGENTS/hooks/lib/is-private-repo.js"
 [ -f "$PARSEGIT_SRC" ]   && cp "$PARSEGIT_SRC"   "$FAKE_AGENTS/hooks/lib/parse-git-args.js"
@@ -67,7 +67,7 @@ EOF
     echo "INFO: hooks/lib/forge-write-extract.js missing — using no-op stub (forge tests expected to FAIL)"
 fi
 
-chmod +x "$FAKE_AGENTS/bin/scan-outbound.sh"
+node_entry_sandbox_copy "$FAKE_AGENTS" bin/scan-outbound.sh
 cat > "$FAKE_AGENTS/bin/scan-offensive" <<'STUBJS'
 #!/usr/bin/env node
 process.exit(0);

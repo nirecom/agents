@@ -15,11 +15,3 @@ has_table_driven_js() {
     local file="$1"
     grep -qE "cases\.forEach\(|for \(const " "$file" 2>/dev/null
 }
-
-# js_env_clear_line <names-ERE> <line> — rc 0 when the line is one `delete process.env.NAME;` of a
-# named var and nothing else. Prints nothing.
-js_env_clear_line() {
-    local re="^[[:space:]]*delete[[:space:]]+process\\.env\\.($1)[[:space:]]*;?[[:space:]]*\$"
-    [[ "${2%$'\r'}" =~ $re ]] && return 0
-    return 1
-}

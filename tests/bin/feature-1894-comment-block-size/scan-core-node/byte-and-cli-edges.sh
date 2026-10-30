@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1894-comment-block-size/scan-core-node/byte-and-cli-edges.sh
-# Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size.d/scan-cli.js
+# Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size
 # Tags: comment-block-size, parser, node, ssot, scope:issue-specific, scope:feature-1894, layer:TL2
-# Sections N5/N6 of ../scan-core-node.sh, split out to keep that file under the
+# Section N5 of ../scan-core-node.sh (N6 left with the scan adapter, #2507), split out to keep that file under the
 # 500-line HARD limit (rules/coding/file-split.md). Sourced, not run: helpers
 # and NS_* state come from the parent case file and the dispatcher.
 # N5 — byte/line edges the awk core handled implicitly. The port moved line
@@ -85,45 +85,3 @@ if [ "$NS_HAVE_NODE" = "1" ]; then
     assert_eq "N5/tab-only-line-bridges-run" "12" "$(nsv longest 10 "$_p")"
 fi
 
-# N6 — scan-cli.js, the bash-facing adapter. The CLI parses this stdout with
-# the reader it used for awk, so the line format is a contract.
-echo ""
-echo "=== N6: scan-cli.js stdout/rc contract ==="
-if [ "$NS_HAVE_NODE" = "1" ]; then
-    # Sets NS_OUT / NS_ERR / NS_RC in the CURRENT shell — never call it inside
-    # $( ), or the exit code is lost with the subshell.
-    NS_OUT=""
-    ns_cli() {
-        local t="$1" f="$2" errf="$NS_DIR/clierr.txt"
-        NS_RC=0
-        run_with_timeout 30 node "$NS_CLI_P" --threshold "$t" <"$f" \
-            >"$NS_DIR/cliout.txt" 2>"$errf" || NS_RC=$?
-        NS_OUT="$(cat "$NS_DIR/cliout.txt" 2>/dev/null || true)"
-        NS_ERR="$(cat "$errf" 2>/dev/null || true)"
-    }
-
-    render_spec "x=1 //a*11 x=1 //b*5 x=1 //c*12" > "$NS_DIR/cli.txt"
-    ns_cli 10 "$NS_DIR/cli.txt"
-    assert_eq "N6/rc-zero-with-findings" "0" "$NS_RC"
-    assert_eq "N6/line-format" "2-12:11,20-31:12" \
-        "$(printf '%s\n' "$NS_OUT" | awk 'NF{printf "%s%s-%s:%s", (n++?",":""), $1, $2, $3}')"
-    assert_eq "N6/nothing-on-stderr" "" "$NS_ERR"
-
-    render_spec "//a*10 x=1" > "$NS_DIR/cli.txt"
-    ns_cli 10 "$NS_DIR/cli.txt"
-    assert_eq "N6/rc-zero-without-findings" "0" "$NS_RC"
-    assert_eq "N6/no-output-without-findings" "" "${NS_OUT//[[:space:]]/}"
-
-    # rc 2 is the usage error. rc 1 is RESERVED for the blocking verdict and
-    # this adapter must never return it — a bash caller that treated 1 as
-    # "scanner failed" would fail open on every future block.
-    : > "$NS_DIR/cli.txt"
-    ns_cli "" "$NS_DIR/cli.txt"
-    assert_eq "N6/missing-threshold-is-rc2" "2" "$NS_RC"
-    ns_cli "abc" "$NS_DIR/cli.txt"
-    assert_eq "N6/non-numeric-threshold-is-rc2" "2" "$NS_RC"
-
-    NS_RC=0
-    run_with_timeout 30 node "$NS_CLI_P" </dev/null >/dev/null 2>&1 || NS_RC=$?
-    assert_eq "N6/no-args-is-rc2" "2" "$NS_RC"
-fi

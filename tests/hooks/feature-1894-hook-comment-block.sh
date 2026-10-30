@@ -18,7 +18,7 @@ HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size.js"
 CB_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size/comment-block.js"
 SCAN_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-scan.js"
 SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
-SCANNER_SH="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size.d/scan.sh"
+REVIEW_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-review/review.js"
 SCANNER_CLI="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size"
 CASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1894-hook-comment-block"
 

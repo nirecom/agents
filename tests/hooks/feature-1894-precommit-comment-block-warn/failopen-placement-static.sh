@@ -3,19 +3,9 @@
 # Tests: hooks/pre-commit, bin/review-comment-block-size, rules/coding/file-split.md
 # Tags: comment-block-size, pre-commit, hook, fail-open, ordering, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Part 2 — placement and blast radius, rather than the guard. The conversion
-# to a hard block splits this file's subject in two, deliberately (CPR-SC):
-# the section now owns `exit 1`, but ONLY for scanner rc 1 — every other
-# non-zero rc is an outage, not a verdict, and must leave the commit alone
-# with a diagnostic. Cases pin, separately: fail-open survives (rc 3, an
-# unnamed rc); a clean run stays silent and can't abort under `set -u`; the
-# section runs BEFORE the hook's unconditional early exits; `exit 1` doesn't
-# swallow downstream verdicts; statically, `exit 1` lives only in the rc-1
-# branch and the section reads no session-marker state. Case prefix F (not
-# P): part 1 owns P.
-
-# Sourced by the dispatcher; every helper (run_precommit, make_repo, assert_*)
-# and every shared constant is defined there.
+# Part 2 (prefix F) — placement and fail-open: only scanner rc 1 blocks; other rcs pass with
+# a diagnostic; the section runs before the early exits and reads no session marker.
+# Sourced by the dispatcher, which defines every helper and shared constant.
 
 # ============================================================================
 # F1 — scanner rc 3 -> fail-open with a diagnostic, commit still succeeds
@@ -106,11 +96,16 @@ f5_downstream_rules_keep_their_verdict() {
 # ============================================================================
 # S1 / S2 — static placement and initialisation guards
 # ============================================================================
+# #2507: sections are the rows of hooks/pre-commit.d/registry.js in run order; the
+# comment-block section is hooks/pre-commit.d/checks/comment-block-size.js.
+PC_REGISTRY="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/registry.js"
+PC_CB_CHECK="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/comment-block-size.js"
+
 s1_static_placement() {
     local first_ref private_ref frontmatter_ref
-    first_ref="$(grep -n 'review-comment-block-size' "$PRECOMMIT" | head -1 | cut -d: -f1)"
-    private_ref="$(grep -n 'Check if this repo is private' "$PRECOMMIT" | head -1 | cut -d: -f1)"
-    frontmatter_ref="$(grep -n 'check-test-frontmatter.sh' "$PRECOMMIT" | head -1 | cut -d: -f1)"
+    first_ref="$(grep -n '^  \["comment-block-size",' "$PC_REGISTRY" | head -1 | cut -d: -f1)"
+    private_ref="$(grep -n '^  \["repo-visibility",' "$PC_REGISTRY" | head -1 | cut -d: -f1)"
+    frontmatter_ref="$(grep -n '^  \["tests-frontmatter",' "$PC_REGISTRY" | head -1 | cut -d: -f1)"
     if [ -z "$first_ref" ]; then
         fail "S1: hooks/pre-commit has no review-comment-block-size section yet (issue #1894)"
         return
@@ -127,39 +122,29 @@ s1_static_placement() {
     fi
 }
 
-# _cb_section — the hook text from the section's first line to the start of the
-# repo-visibility block (S1 pins that this range is the section's home). Echoed
-# on stdout; empty when either anchor is missing.
+# _cb_section — the comment-block check's source (#2507: one Node module).
 _cb_section() {
-    awk '/review-comment-block-size/{f=1} f && /^# Check if this repo is private/{f=0} f' "$PRECOMMIT"
+    [ -f "$PC_CB_CHECK" ] && cat "$PC_CB_CHECK"
 }
 
+# #2507 retired the bash-only _cb_out/_cb_rc pre-initialisation guard. The shared
+# repo identity is the registry's agentsRepoOnly flag, decided once (context.isAgentsRepo).
 s2_static_initialisation() {
-    if grep -q '_cb_rc=0' "$PRECOMMIT" && grep -q '_cb_out=""' "$PRECOMMIT"; then
-        pass "S2: _cb_out / _cb_rc are pre-initialised before the rc capture"
-    else
-        fail "S2: hooks/pre-commit does not pre-initialise _cb_out/_cb_rc" \
-             "Required so 'set -euo pipefail' cannot abort on the success path."
-    fi
-    # Counting call sites, not the definition: a helper that exists but is
-    # never called (or called from only one of the two places) would satisfy a
-    # bare existence grep while leaving the duplication CPR-SSOT forbids.
-    local defs calls
-    defs="$(grep -c '^[[:space:]]*_is_agents_session_repo[[:space:]]*()' "$PRECOMMIT" || true)"
-    calls="$(grep -c '_is_agents_session_repo' "$PRECOMMIT" || true)"
-    calls=$((calls - defs))
+    local defs row
+    defs="$(grep -c 'isAgentsRepo:' "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/context.js" || true)"
     if [ "$defs" -eq 1 ]; then
-        pass "S2: _is_agents_session_repo() is defined exactly once"
+        pass "S2: the agents-repo identity is decided exactly once (context.isAgentsRepo)"
     else
-        fail "S2: _is_agents_session_repo() definition count is $defs, expected 1" \
+        fail "S2: context.isAgentsRepo definition count is $defs, expected 1" \
              "The prompt-extraction backstop and this section must share one implementation (CPR-SSOT)."
     fi
-    if [ "$calls" -ge 2 ]; then
-        pass "S2: _is_agents_session_repo() is called from both consumers ($calls call sites)"
-    else
-        fail "S2: _is_agents_session_repo() has $calls call site(s), expected >= 2" \
-             "Both the prompt-extraction backstop and the comment-block section must call it."
-    fi
+    for row in prompt-extraction comment-block-size; do
+        if grep -qE "^  \[\"$row\", \"(open|closed)\", true," "$PC_REGISTRY"; then
+            pass "S2: $row is gated by the shared agentsRepoOnly identity"
+        else
+            fail "S2: $row is not marked agentsRepoOnly in hooks/pre-commit.d/registry.js"
+        fi
+    done
 }
 
 # ============================================================================
@@ -176,36 +161,28 @@ s2c_exit_is_confined_to_the_rc1_branch() {
         fail "S2c: could not locate the comment-block section in hooks/pre-commit (issue #1894)"
         return
     fi
+    # #2507: the Node check's `exit 1` is its one `verdict: "block"`; it never ends the hook early.
     local exits
-    exits="$(printf '%s\n' "$section" | grep -cE '^[[:space:]]*exit[[:space:]]' || true)"
+    exits="$(printf '%s\n' "$section" | grep -cF 'verdict: "block"' || true)"
     if [ "$exits" = "1" ]; then
-        pass "S2c: the section contains exactly one exit"
+        pass "S2c: the section returns exactly one block verdict"
     else
-        fail "S2c: the section contains $exits exit statements, expected 1" \
+        fail "S2c: the section returns $exits block verdicts, expected 1" \
              "rc 1 is the only scanner result that may stop the commit."
     fi
-    if printf '%s\n' "$section" | grep -qE '^[[:space:]]*exit[[:space:]]+1'; then
-        pass "S2c: that exit is exit 1"
-    else
-        fail "S2c: the section has no 'exit 1'" \
-             "The blocking verdict is what issue #1894 adds."
-    fi
-    if printf '%s\n' "$section" | grep -qE '^[[:space:]]*exit[[:space:]]+0'; then
-        fail "S2c: the section contains 'exit 0'" \
+    if printf '%s\n' "$section" | grep -qE 'skip-rest|process\.exit'; then
+        fail "S2c: the section can end the hook early" \
              "An unconditional success exit here would skip every rule after it."
     else
-        pass "S2c: the section never exits 0"
+        pass "S2c: the section never ends the hook early"
     fi
-    # The exit must be downstream of an rc-1 test. Line numbers within the
-    # extracted section, so an rc comparison elsewhere in the hook cannot stand
-    # in for the missing one.
     local rc1_line exit_line
-    rc1_line="$(printf '%s\n' "$section" | grep -nE '_cb_rc"?[[:space:]]*(=|-eq)[[:space:]]*"?1' | head -1 | cut -d: -f1)"
-    exit_line="$(printf '%s\n' "$section" | grep -nE '^[[:space:]]*exit[[:space:]]+1' | head -1 | cut -d: -f1)"
+    rc1_line="$(printf '%s\n' "$section" | grep -nF 'if (rc === 1)' | head -1 | cut -d: -f1)"
+    exit_line="$(printf '%s\n' "$section" | grep -nF 'verdict: "block"' | head -1 | cut -d: -f1)"
     if [ -n "$rc1_line" ] && [ -n "$exit_line" ] && [ "$rc1_line" -lt "$exit_line" ]; then
-        pass "S2c: exit 1 follows an explicit _cb_rc = 1 comparison"
+        pass "S2c: the block verdict follows an explicit rc === 1 comparison"
     else
-        fail "S2c: exit 1 is not guarded by an _cb_rc = 1 comparison" \
+        fail "S2c: the block verdict is not guarded by an rc === 1 comparison" \
              "rc1_line=${rc1_line:-none} exit_line=${exit_line:-none}"
     fi
 }
@@ -227,7 +204,7 @@ s2d_section_reads_no_session_marker() {
     fi
     local hits=""
     local m
-    for m in _session_marker_off workflow-off worktree-off WORKFLOW_OFF WORKTREE_OFF; do
+    for m in sessionMarkerOff session-markers workflow-off worktree-off WORKFLOW_OFF WORKTREE_OFF; do
         if printf '%s\n' "$section" | grep -qF -- "$m"; then hits="$hits $m"; fi
     done
     if [ -z "$hits" ]; then
@@ -236,61 +213,29 @@ s2d_section_reads_no_session_marker() {
         fail "S2d: the section references session-marker state:$hits" \
              "The comment-block block is deliberately not suspendable (outline plan)."
     fi
-    # Positive control: the marker helper does exist in this hook, so the
-    # absence above is a property of the section and not of the whole file.
-    if grep -q '_session_marker_off' "$PRECOMMIT"; then
-        pass "S2d/control: hooks/pre-commit does define _session_marker_off elsewhere"
+    # Positive control: another check does read the marker, so the absence is the section's own.
+    if grep -q 'sessionMarkerOff' "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/prompt-extraction.js"; then
+        pass "S2d/control: the prompt-extraction check does read sessionMarkerOff"
     else
-        fail "S2d/control: hooks/pre-commit no longer defines _session_marker_off" \
+        fail "S2d/control: no other pre-commit check reads sessionMarkerOff" \
              "Without it the absence assertion above proves nothing."
     fi
 }
 
+# #2507: the backstop is checks/prompt-extraction.js; it must take repo identity from the
+# shared agentsRepoOnly gate (S2), never from a comparison of its own.
 s2b_old_inline_comparison_is_gone() {
-    # S7a calls the helper a behaviour-preserving EXTRACTION, and an extraction
-    # that leaves the original in place is not one — it is a copy, which is the
-    # duplication CPR-SSOT forbids and the exact state a call-site count cannot
-    # distinguish from success (the backstop would still "call" the helper while
-    # deciding identity with its own inline code).
-    #
-    # These four locals are the prompt-extraction backstop's own common-dir
-    # comparison as it stands before issue #1894. None may survive the edit.
-    local leftovers="" v
-    for v in _pe_agents_common _pe_repo_common _pe_agents_abs _pe_repo_abs; do
-        if grep -q "$v" "$PRECOMMIT"; then leftovers="$leftovers $v"; fi
-    done
-    if [ -z "$leftovers" ]; then
-        pass "S2b: the backstop's inline common-dir comparison is gone"
-    else
-        fail "S2b: inline common-dir comparison still present in hooks/pre-commit" \
-             "leftover variable(s):$leftovers — the helper must REPLACE it, not sit beside it."
-    fi
-
-    # Scoped counterpart: the enforce-worktree block earlier in the hook compares
-    # --git-common-dir against --git-dir for a different purpose and must stay,
-    # so the absence assertion is confined to the backstop section itself. Anchor
-    # on the section's own BANNER line (not any prose mention of the phrase) —
-    # an ordinary comment elsewhere in the hook (e.g. the CPR-SSOT note above
-    # _session_marker_off()) also contains "prompt-extraction backstop" and would
-    # open the range too early, swallowing the enforce-worktree block's
-    # legitimate --git-common-dir usage.
     local section
-    section="$(awk '/^# -+ prompt-extraction backstop/{f=1} f && /^# Check scope tag on staged/{f=0} f' "$PRECOMMIT")"
+    section="$(cat "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/prompt-extraction.js" 2>/dev/null)"
     if [ -z "$section" ]; then
-        fail "S2b: could not locate the prompt-extraction backstop section in hooks/pre-commit"
+        fail "S2b: could not locate hooks/pre-commit.d/checks/prompt-extraction.js"
         return
     fi
-    if printf '%s\n' "$section" | grep -qF -- '--git-common-dir'; then
-        fail "S2b: the backstop section still resolves --git-common-dir itself" \
-             "Repo identity must come from _is_agents_session_repo() alone."
+    if printf '%s\n' "$section" | grep -qE -- '--git-common-dir|isAgentsRepo|sameRepo'; then
+        fail "S2b: the backstop check decides repo identity itself" \
+             "Repo identity must come from the registry's agentsRepoOnly gate alone."
     else
-        pass "S2b: the backstop section resolves no common dir of its own"
-    fi
-    if printf '%s\n' "$section" | grep -q '_is_agents_session_repo'; then
-        pass "S2b: the backstop section decides identity via _is_agents_session_repo()"
-    else
-        fail "S2b: the backstop section does not call _is_agents_session_repo()" \
-             "The extraction's whole point is that this consumer uses the helper."
+        pass "S2b: the backstop check resolves no repo identity of its own"
     fi
 }
 

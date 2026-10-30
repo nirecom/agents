@@ -1,5 +1,5 @@
 "use strict";
-// Tests: hooks/block-case-markers.js, hooks/lib/precommit-tests-frontmatter.sh
+// Tests: hooks/block-case-markers.js
 // Tags: TL2, hooks, edit-time, warn-context, scope:issue-specific, self-impl, fail-open, dup-group-keep:size-hard-limit
 // #2502 S3-4: the edit-time hook runs bin/check-self-impl.sh on every NEW test file and blocks on a
 // self-implemented harness. A WARN alone goes out as additionalContext, next to a HIGH it joins

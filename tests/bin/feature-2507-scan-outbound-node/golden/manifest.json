@@ -1,0 +1,195 @@
+{
+  "meta": {
+    "generator": "tests/bin/feature-2507-scan-outbound-node/generate-golden.js",
+    "locale": {
+      "LANG": null,
+      "LC_ALL": null,
+      "LC_CTYPE": "C.UTF-8"
+    },
+    "bash": "GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)",
+    "git": "git version 2.53.0.windows.1",
+    "node": "v24.14.0",
+    "file": "file-5.46",
+    "platform": "win32"
+  },
+  "cases": {
+    "len-zero-empty-body": {
+      "expect": "golden",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "body-truncated-at-eof": {
+      "expect": "golden",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        },
+        {
+          "file": "t.txt",
+          "line": 1,
+          "kind": "github-token",
+          "matchedSha256": "83feddae9777c86d145fd9acf62db24ff3c80842645d192448ac3dd1e626baef"
+        }
+      ]
+    },
+    "sep-missing-leading-rs": {
+      "expect": "golden",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "l.txt",
+          "line": 1,
+          "kind": "github-token",
+          "matchedSha256": "83feddae9777c86d145fd9acf62db24ff3c80842645d192448ac3dd1e626baef"
+        },
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "len-zero-stray-bytes": {
+      "expect": "rc4",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "len-negative": {
+      "expect": "rc4",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "len-oversized": {
+      "expect": "rc4",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "o.txt",
+          "line": 1,
+          "kind": "github-token",
+          "matchedSha256": "83feddae9777c86d145fd9acf62db24ff3c80842645d192448ac3dd1e626baef"
+        },
+        {
+          "file": "o.txt",
+          "line": 3,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "len-not-a-number": {
+      "expect": "rc4",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "sep-space-instead-of-rs": {
+      "expect": "rc4",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "sep-empty-path": {
+      "expect": "rc4",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "after.txt",
+          "line": 1,
+          "kind": "aws-key",
+          "matchedSha256": "2e795b818431329f3dcb8cf7fb5a8f209b7b9258557044aa623d81998862291b"
+        }
+      ]
+    },
+    "len-zero-stray-bytes-alone": {
+      "expect": "rc4",
+      "rc": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": []
+    },
+    "len-negative-alone": {
+      "expect": "rc4",
+      "rc": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": []
+    },
+    "len-oversized-alone": {
+      "expect": "rc4",
+      "rc": 1,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": [
+        {
+          "file": "o.txt",
+          "line": 1,
+          "kind": "github-token",
+          "matchedSha256": "83feddae9777c86d145fd9acf62db24ff3c80842645d192448ac3dd1e626baef"
+        }
+      ]
+    },
+    "len-not-a-number-alone": {
+      "expect": "rc4",
+      "rc": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": []
+    },
+    "sep-space-instead-of-rs-alone": {
+      "expect": "rc4",
+      "rc": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": []
+    },
+    "sep-empty-path-alone": {
+      "expect": "rc4",
+      "rc": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "findings": []
+    }
+  }
+}

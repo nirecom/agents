@@ -6,7 +6,7 @@ echo "=== Part C: agents-repo gates (real checkers) ==="
 
 # C1a: session-id SSOT gate VIOLATION — a direct process.env.CLAUDE_CODE_SESSION_ID read
 # in an in-scope tracked file must block with the session-id diagnostic.
-case_begin "C1a-session-id-violation" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1a-session-id-violation" "hooks/pre-commit"
 R="$TMPBASE/c1a"; mk_agents_fixture "$R"
 printf 'const x = process.env.CLAUDE_CODE_SESSION_ID;\n' > "$R/hooks/leak.js"
 git -C "$R" add -- hooks/leak.js >/dev/null 2>&1
@@ -23,7 +23,7 @@ case_end
 # C1b: migration-block gate VIOLATION — a temporary block whose description lacks the
 # arrow/`migration` keyword must block with the migration diagnostic (session-id clean,
 # so the migration gate is actually reached).
-case_begin "C1b-migration-violation" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1b-migration-violation" "hooks/pre-commit"
 R="$TMPBASE/c1b"; mk_agents_fixture "$R"
 printf '%s\n' '# --- BEGIN temporary: just a description ---' 'x=1' '# --- END temporary: ---' > "$R/foo.sh"
 git -C "$R" add -- foo.sh >/dev/null 2>&1
@@ -39,7 +39,7 @@ case_end
 
 # C1c: session-id gate CLEAN — a file with no direct read must not be blocked
 # (CPR-ORTH non-targeted verdict: no false-positive over-blocking).
-case_begin "C1c-session-id-clean" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1c-session-id-clean" "hooks/pre-commit"
 R="$TMPBASE/c1c"; mk_agents_fixture "$R"
 printf 'const x = 1;\n' > "$R/hooks/ok.js"
 git -C "$R" add -- hooks/ok.js >/dev/null 2>&1
@@ -54,7 +54,7 @@ fi
 case_end
 
 # C1d: migration gate CLEAN — a file with no temporary block must not be blocked.
-case_begin "C1d-migration-clean" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1d-migration-clean" "hooks/pre-commit"
 R="$TMPBASE/c1d"; mk_agents_fixture "$R"
 printf 'plain content, no temporary block\n' > "$R/foo.sh"
 git -C "$R" add -- foo.sh >/dev/null 2>&1
@@ -72,7 +72,7 @@ case_end
 # must have ALL gates skipped even with content that WOULD trip a gate. The whole
 # function shares this guard, so the on-demand gate's no-op is transitively covered
 # here (and directly in cc-pre-commit-on-demand-rules.sh W6); one case suffices.
-case_begin "C1e-non-agents-repo-noop" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "C1e-non-agents-repo-noop" "hooks/pre-commit"
 CFG="$TMPBASE/c1e-cfg"; mk_agents_fixture "$CFG"
 OTHER="$TMPBASE/c1e-other"; init_repo_bare "$OTHER"
 printf 'init\n' > "$OTHER/README.md"

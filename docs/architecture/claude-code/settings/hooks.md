@@ -110,7 +110,7 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
 - Plan-size gates (#2631): `confirm-checkpoint.js` (PreToolUse) denies the CONFIRM of a plan artifact over HARD
   whatever `CONFIRM_<STAGE>` says (the planner must compress it) and adds advice over WARN; the Stop-side
   counterpart is `stop-confirm-plan-guard.js` Layer 2 below. Both use the same session gate as `file-size`.
-- Pre-commit size gate (`hooks/lib/precommit-size-gate.sh`, sourced by `hooks/pre-commit`, #2631) — one
+- Pre-commit size gate (`hooks/pre-commit.d/checks/size-gate.js`, run after the agents-repo gates, #2631) — one
   `bin/size-check --staged-auto --session-gate` call judges every staged file against the same SSOT. HARD blocks the
   commit; `size-check` rc 2 or rc 3 (infrastructure) and newline paths fail closed. A commit whose session id cannot
   be resolved is still checked.
@@ -253,7 +253,8 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   destinations through the same predicate (#2108, `hooks/workflow-gate/early-gate-allowlist.js`),
   so an agent blocked by one hook is not handed a different answer by the other. Non-directory `New-Item`, in-repo targets, quoted
   paths that expand into the repo, and mixed/unresolvable target sets stay fail-closed.
-  Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
+  Defense-in-depth at commit time via the `enforce-worktree` check of `pre-commit`
+  (`hooks/pre-commit.d/checks/enforce-worktree.js`). Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
   Path coverage (`ENFORCE_WORKTREE_EXCLUDE`), gh command classification, dispatch provenance
   (#2064), additional repos, quote-span analysis, the trust anchor for the running script's own checkout, the

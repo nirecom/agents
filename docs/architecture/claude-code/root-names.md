@@ -126,8 +126,8 @@ A file that reads its configuration from its own checkout by design carries the 
 
 ### Pre-commit gates fail closed
 
-In the agents repository the pre-commit hook runs six checkers, this gate among them (`hooks/lib/precommit-agents-repo-gates.sh`). Only exit 0 lets a commit through.
-Exit 1 or 2 is a violation. A missing checker, a missing interpreter, or any other exit is an outage the gate cannot vouch for, so it blocks as well and says which checker failed.
+In the agents repository the pre-commit hook runs six checkers, this gate among them (the `agents-repo-gates` check, `hooks/pre-commit.d/checks/agents-repo-gates.js`; the checkers are listed in `hooks/pre-commit.d/registry.js`). Only exit 0 lets a commit through.
+Exit 1 or 2 is a violation. A missing checker module, a throw, or any other exit is an outage the gate cannot vouch for, so it blocks as well and says which checker failed.
 The emergency bypass is `git commit --no-verify`.
 
 The retired names are listed between the `retired-names:begin` and `retired-names:end` markers of `tests/bin/feature-2561-root-names-residue.sh`. `docs/history*`, `CHANGELOG.md`, `changelog/` and the list file itself are exempt from `residue`.

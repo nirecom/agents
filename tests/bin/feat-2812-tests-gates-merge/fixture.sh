@@ -1,4 +1,4 @@
-# Tests: hooks/lib/precommit-tests-frontmatter.sh
+# Tests: hooks/pre-commit
 # Tags: TL2, bin, hooks, pre-commit, merge, tests-gates, scope:issue-specific
 # Fixture repos, bodies and gate runners for tests/bin/feat-2812-tests-gates-merge.sh (sourced by it,
 # after tests/lib/harness.sh, harness_isolate and TMPBASE). A merge fixture is a real
@@ -6,15 +6,17 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2016 # body lines hold literal $(...) text on purpose
 
-GATE_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh"
+# Node takes the checkout root in its own path form (a /c/... path is not one on Windows).
+GATE_CFG="$SCRIPT_CHECKOUT_ROOT"
+command -v cygpath >/dev/null 2>&1 && GATE_CFG="$(cygpath -m "$SCRIPT_CHECKOUT_ROOT")"
 SI_CLI="$SCRIPT_CHECKOUT_ROOT/bin/check-self-impl.sh"
 LM_CLI="$SCRIPT_CHECKOUT_ROOT/bin/check-test-language-match.sh"
 FM_CLI="$SCRIPT_CHECKOUT_ROOT/bin/check-test-frontmatter.sh"
 BODIES="$TMPBASE/bodies"
 mkdir -p "$BODIES"
-FG=_precommit_check_tests_frontmatter
-CM=_precommit_check_tests_case_markers
-LG=_precommit_check_test_language_match
+FG=frontmatter-gate
+CM=case-markers-gate
+LG=language-match-gate
 NOTE_HEAD="pre-commit: merge parents "
 NOTE_TAIL=" — tests/ gates judge against HEAD only"
 
@@ -111,11 +113,54 @@ crissfx() {
     "fixture ${d##*/}: merge-bases=2"
 }
 
-# gate <repo> <fn>... — the named pre-commit gate functions, in one shell, with <repo> as cwd and
-# _cfg_dir at this checkout. Sets GATE_RC GATE_OUT GATE_ERR GATE_ALL. GATE_PATH replaces PATH.
-GATE_DRIVER="$TMPBASE/gate-driver.sh"
-printf '%s\n' '_cfg_dir="$1"' 'shift' '. "$_cfg_dir/hooks/lib/precommit-tests-frontmatter.sh" || exit 98' \
-  'rc=0' 'for fn in "$@"; do "$fn" || rc=1; done' 'exit "$rc"' > "$GATE_DRIVER"
+# gate <repo> <gate>... — the named Node pre-commit gate modules (FG/CM/LG above), in one process,
+# with <repo> as cwd and the context, snapshot and merge detection built as hooks/pre-commit.d/main.js
+# builds them. Every staged file goes to the gate (no merge narrowing), so the gate itself must judge
+# a merge against its parents. GATE_MP_MODE=fail makes the merge-parents resolver throw; =log appends
+# one line per resolver call to GATE_MP_LOG. Sets GATE_RC GATE_OUT GATE_ERR GATE_ALL; GATE_PATH
+# replaces PATH. rc 98: a module failed to load.
+GATE_DRIVER="$TMPBASE/gate-driver.js"
+printf '%s\n' \
+  '"use strict";' \
+  'const path = require("path");' \
+  'const fs = require("fs");' \
+  'const cfg = process.argv[2];' \
+  'const names = process.argv.slice(3);' \
+  'const mode = process.env.GATE_MP_MODE || "";' \
+  'let R, output, gates, buildContext, createSnapshot, detect;' \
+  'try {' \
+  '  if (mode) {' \
+  '    const mp = require(path.join(cfg, "hooks/lib/merge-parents"));' \
+  '    const real = mp.resolveMergeParents;' \
+  '    mp.resolveMergeParents = (...a) => {' \
+  '      if (mode === "fail") throw new Error("resolver forced to fail");' \
+  '      fs.appendFileSync(process.env.GATE_MP_LOG, "resolve\n");' \
+  '      return real(...a);' \
+  '    };' \
+  '  }' \
+  '  R = require(path.join(cfg, "hooks/lib/test-gates/registry"));' \
+  '  output = require(path.join(cfg, "hooks/pre-commit.d/output"));' \
+  '  ({ buildContext } = require(path.join(cfg, "hooks/pre-commit.d/context")));' \
+  '  ({ createSnapshot } = require(path.join(cfg, "hooks/pre-commit.d/snapshot")));' \
+  '  ({ detectMergeIncoming: detect } = require(path.join(cfg, "hooks/lib/merge-incoming")));' \
+  '  gates = names.map((n) => require(path.join(cfg, "hooks/pre-commit.d/checks/tests-frontmatter", n)).gate);' \
+  '} catch (e) { process.stderr.write(`gate-driver: load: ${e.message}\n`); process.exit(98); }' \
+  '(async () => {' \
+  '  const env = process.env;' \
+  '  const repoTop = process.cwd();' \
+  '  const context = await buildContext({ cfgDir: cfg, repoTop, env, isTTY: false });' \
+  '  const snapshot = await createSnapshot({ repoTop, env });' \
+  '  const files = await snapshot.files();' \
+  '  context.merge = detect(repoTop, files);' \
+  '  let rc = 0;' \
+  '  for (const g of gates) {' \
+  '    const r = R.withEnv(env, () => g({ context, snapshot, files }));' \
+  '    output.writeMessages(r.messages);' \
+  '    if (r.block) rc = 1;' \
+  '  }' \
+  '  return rc;' \
+  '})().then((rc) => { process.exitCode = rc; }, (e) => { process.stderr.write(`gate-driver: ${(e && e.stack) || e}\n`); process.exitCode = 97; });' \
+  > "$GATE_DRIVER"
 GATE_RC=0; GATE_OUT=""; GATE_ERR=""; GATE_ALL=""; GATE_PATH=""
 gate() {
   local repo="$1"
@@ -124,7 +169,7 @@ gate() {
   (
     cd "$repo" || exit 99
     [ -n "$GATE_PATH" ] && PATH="$GATE_PATH"
-    bash "$RWT" 90 bash "$GATE_DRIVER" "$SCRIPT_CHECKOUT_ROOT" "$@"
+    bash "$RWT" 90 node "$GATE_DRIVER" "$GATE_CFG" "$@"
   ) >"$TMPBASE/gate.out" 2>"$TMPBASE/gate.err" || GATE_RC=$?
   GATE_OUT="$(cat "$TMPBASE/gate.out")"
   GATE_ERR="$(cat "$TMPBASE/gate.err")"

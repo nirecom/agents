@@ -1,24 +1,19 @@
 // hooks/lib/comment-block-scan.js
 //
-// SSOT (CPR-SSOT) for comment-run recognition, ported from the awk core
-// bin/review-comment-block-size.d/scan.sh used to carry, so the Edit-time
-// hook and the commit-time CLI judge files identically.
-//
-// FILE-LEVEL filter rules are duplicated in bash; drift net is
-// tests/hooks/feature-1894-hook-comment-block/filter-parity.sh. Purity contract:
-// no config, no filesystem, no output — every value arrives as an argument.
+// SSOT (CPR-SSOT) for comment-run recognition and the file-level filters, so the
+// Edit-time hook and the commit-time review (hooks/lib/comment-block-review/)
+// judge files identically. Purity contract: no config, no filesystem, no
+// output — every value arrives as an argument.
 "use strict";
 
 // Default threshold: a run of MORE than this many consecutive comment lines is
 // a finding. The comparator is strictly `>` — a run of exactly N is allowed.
 const DEFAULT_MAX_LINES = 10;
 
-// Default code extensions. Bash twin: the `CODE_FILE_EXTENSIONS:-js;sh;py`
-// default in bin/review-comment-block-size.
+// Default code extensions (the CODE_FILE_EXTENSIONS default).
 const DEFAULT_EXTENSIONS = ["js", "sh", "py"];
 
 // Path segments never scanned: vendored trees and archived code.
-// Bash twin: the `path_ok()` case arm in bin/review-comment-block-size.
 const EXCLUDED_PATH_SEGMENTS = ["node_modules", ".git", "_archive", "_archived"];
 
 // Neutral bridging tokens: a line consisting of only one of these (after
@@ -48,8 +43,7 @@ function parseExtensions(raw) {
   return parts.length > 0 ? parts : DEFAULT_EXTENSIONS.slice();
 }
 
-// hasScannableExtension is the bash `ext_ok()`: a plain case-sensitive suffix
-// match on the whole path, so `dir.sh/a.md` is not a shell script.
+// hasScannableExtension: a plain case-sensitive suffix match on the whole path, so `dir.sh/a.md` is not a shell script.
 function hasScannableExtension(filePath, extensions) {
   if (typeof filePath !== "string" || filePath.length === 0) return false;
   const list = Array.isArray(extensions) ? extensions : parseExtensions(extensions);
@@ -60,7 +54,7 @@ function hasScannableExtension(filePath, extensions) {
   return false;
 }
 
-// isExcludedPath is the bash `path_ok()` inverted: the segment must be a whole
+// isExcludedPath: the excluded segment must be a whole
 // path component, so `my_node_modules/` and `_archiver/` are ordinary source.
 // Backslashes are normalized first — the Edit-time hook receives Windows paths.
 function isExcludedPath(filePath) {

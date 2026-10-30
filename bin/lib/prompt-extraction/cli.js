@@ -33,21 +33,26 @@ const EXIT_BLOCK = 1;
 const EXIT_USAGE = 2;
 const EXIT_INFRA = 3;
 
-const out = [];
+// One run's sinks; finish / usageError / infraError end the run by throwing Exit, which run() turns into rc.
+let io = null;
+class Exit {
+  constructor(code) {
+    this.code = code;
+  }
+}
 function emit(line) {
-  out.push(line);
+  io.out.push(line);
 }
 function finish(code) {
-  if (out.length > 0) process.stdout.write(out.join("\n") + "\n");
-  process.exit(code);
+  throw new Exit(code);
 }
 function usageError(message) {
-  process.stderr.write(`check-prompt-extraction: ${message}\n`);
-  process.exit(EXIT_USAGE);
+  io.stderr.write(`check-prompt-extraction: ${message}\n`);
+  throw new Exit(EXIT_USAGE);
 }
 function infraError(message) {
-  process.stderr.write(`check-prompt-extraction: ${message}\n`);
-  process.exit(EXIT_INFRA);
+  io.stderr.write(`check-prompt-extraction: ${message}\n`);
+  throw new Exit(EXIT_INFRA);
 }
 
 // ---------------------------------------------------------------- arg parsing
@@ -141,7 +146,7 @@ function readAllowlistText(opts, repoRoot) {
     }
     const abs = path.isAbsolute(opts.allowlistFile)
       ? opts.allowlistFile
-      : path.join(repoRoot || process.cwd(), opts.allowlistFile);
+      : path.join(repoRoot || io.cwd, opts.allowlistFile);
     try {
       return fs.readFileSync(abs, "utf8");
     } catch (_e) {
@@ -207,9 +212,9 @@ function countByKindPath(violations) {
 }
 
 // ----------------------------------------------------------------------- main
-function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  const repoRoot = targets.resolveRepoRoot(process.cwd());
+function main(argv) {
+  const opts = parseArgs(argv);
+  const repoRoot = targets.resolveRepoRoot(io.cwd);
 
   // --allowlist-total short-circuits every scan: it reports on the allowlist only.
   if (opts.allowlistTotal) {
@@ -235,6 +240,7 @@ function main() {
     // null = git ls-files or git cat-file failed. An empty scan set is [], never
     // null, so this can only be an infrastructure failure — never report clean.
     if (files === null) infraError("git diff --cached failed");
+    if (io.only) files = files.filter((f) => io.only.has(f.path));
   } else {
     files = targets.collectBase(repoRoot, opts.baseRef);
     if (files === null) infraError(`base ref could not be resolved: ${opts.baseRef}`);
@@ -321,4 +327,22 @@ function main() {
   finish(blocking > 0 ? EXIT_BLOCK : EXIT_OK);
 }
 
-main();
+// run({ argv, cwd, stdout, stderr, only }) -> rc; the emitted report goes to stdout in one write.
+// only, when given, limits --staged to those index paths (pre-commit's merge-narrowed set).
+function run({ argv = [], cwd = process.cwd(), stdout = process.stdout, stderr = process.stderr, only } = {}) {
+  io = { cwd, stderr, out: [], only: only ? new Set(only) : null };
+  try {
+    main(argv);
+    return EXIT_OK;
+  } catch (e) {
+    if (!(e instanceof Exit)) throw e;
+    if (io.out.length > 0) stdout.write(io.out.join("\n") + "\n");
+    return e.code;
+  } finally {
+    io = null;
+  }
+}
+
+module.exports = { run };
+
+if (require.main === module) process.exitCode = run({ argv: process.argv.slice(2) });

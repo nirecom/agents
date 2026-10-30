@@ -33,9 +33,8 @@ trap 'rm -rf "$TMPBASE"' EXIT
 
 # Build a fake "agents" tree (so $_cfg_dir/.. resolves to the agents root)
 FAKE_AGENTS="$TMPBASE/agents"
-mkdir -p "$FAKE_AGENTS"
-# The hook sources hooks/lib/* unconditionally, so the whole hooks tree is copied (#1349).
-script_checkout_fixture_copy "$FAKE_AGENTS" hooks bin/scan-outbound.sh bin/lib || { echo "FAIL: fixture copy"; exit 1; }
+# #2507: both entries exec Node modules; the sandbox copies them with their Node code.
+mkdir -p "$FAKE_AGENTS" && source "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh" && node_entry_sandbox_copy "$FAKE_AGENTS" bin/scan-outbound.sh hooks/pre-commit || { echo "FAIL: fixture copy"; exit 1; }
 # The hook's settings root is this fixture, never the decoy or the real main root.
 export AGENTS_MAIN_ROOT="$FAKE_AGENTS"
 : > "$FAKE_AGENTS/.private-info-allowlist"

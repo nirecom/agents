@@ -1,122 +1,143 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1894-comment-block-size/escaper-placement-static.sh
-# Tests: bin/review-comment-block-size
-# Tags: comment-block-size, injection, control-bytes, escaping, static-guard, enumeration, scope:issue-specific, scope:feature-1894, layer:TL2
+# Tests: hooks/lib/comment-block-review/review.js, hooks/lib/comment-block-review/report.js
+# Tags: comment-block-size, injection, control-bytes, escaping, static-guard, enumeration, scope:issue-specific, scope:feature-1894, layer:TL2, test-lang-exception:text-only
 #
-# Part 10 — the call sites no dynamic case can reach.
-#
-# injection-hardening.sh drives the WARN path, because that is the path a normal
-# run takes. The scanner interpolates the SAME untrusted value into three ERROR
-# lines ("staged blob unreadable", "baseline blob unreadable", "file
-# unreadable"), and those fire only when a blob genuinely cannot be read — a
-# state that is environment-fragile to stage and not portably forceable. An
-# escaping fix applied to the WARN call sites alone would therefore pass every
-# dynamic case in this suite while leaving F1 half-open. So the remaining sites
-# get a STATIC guard on the source text instead; the idiom is borrowed from
-# failopen-placement-static.sh in the sibling suite.
-#
-# Deliberately agnostic to the escaper's eventual NAME: the WARN sites define
-# what "escaped" looks like, and every other site — the ERROR lines and the
-# `extensions:` header, F5's own site — must match whatever form that turns out
-# to be. The enumeration is by SHAPE, so a call site added later is covered the
-# day it lands, and an enumeration that finds nothing fails loudly instead of
-# quietly asserting nothing.
-#
-# Mutation-checked before landing: a WARN-only fix trips both the bare-
-# interpolation assertion and the symmetry assertion; a complete fix is green
-# whether it wraps in a call (`$(esc "$dst")`) or pre-escapes into a local
-# (`$dst_e`); renaming the variables away empties the enumeration and fails.
-#
+# Part 10 — static guard for sites no dynamic case reaches: ERROR lines fire only on
+# an unreadable blob. Every review.js report template literal (WARN/ERROR/BLOCK and the
+# `extensions: ` header) interpolating dst/src/f/extensionsRaw must use the WARN site's
+# escaper, exported by report.js. Enumerated by SHAPE; an empty enumeration fails.
 # Sourced by the dispatcher; every helper and constant is defined there.
 
-# The untrusted values, matched two ways on purpose: the LOOSE form selects
-# lines (it must also catch a fix that renames `$dst` to a pre-escaped
-# `$dst_e`), the STRICT form detects a BARE interpolation (`\>` makes `$dst_e`
-# not a use of `$dst`, so a pre-escaped local is accepted).
-I5_LOOSE='\$\{?(dst|src|f|_EXTS)'
-I5_BARE_RE='\$(dst|src|f|_EXTS)\>|\$\{(dst|src|f|_EXTS)\}'
+I5_REVIEW_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-review/review.js"
+I5_REPORT_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-review/report.js"
+I5_BT='`'
 
-i5_norm() { printf '%s' "$1" | sed -E 's/\$\{?(dst|src|f|_EXTS)\}?/$@VAR@/g'; }
-i5_nosub() { printf '%s' "$1" | sed -E 's/\$\([^)]*\)/@ESCAPED@/g'; }
+# The untrusted values: git paths (dst/src/f) and the configured extension list.
+I5_ID='(dst|src|f|(cfg\.)?extensionsRaw)'
+# LOOSE is a prefix match on purpose: it must also select a pre-escaped local (dstE).
+I5_LOOSE="(^|[^A-Za-z0-9_\$.])$I5_ID"
+# An escaped interpolation normalizes to exactly one call around the value.
+I5_WRAPPED_RE='^[A-Za-z_$][A-Za-z0-9_$.]*\(@VAR@\)$'
+I5_DECL_RE='^[[:space:]]*const[[:space:]]+([A-Za-z_$][A-Za-z0-9_$]*)[[:space:]]*=[[:space:]]*([A-Za-z_$][A-Za-z0-9_$.]*)\((dst|src|f|(cfg\.)?extensionsRaw)\)[[:space:]]*;'
+
+# Pre-escaped locals (`const dstE = esc(dst);`) stand for the call they were built from.
+declare -A I5_LOCAL_SIG=()
+while IFS= read -r i5_decl; do
+    [[ "$i5_decl" =~ $I5_DECL_RE ]] || continue
+    I5_LOCAL_SIG["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}(@VAR@)"
+done < <(grep -E '^[[:space:]]*const ' "$I5_REVIEW_JS" 2>/dev/null || true)
+
+i5_norm() { printf '%s' "$1" | sed -E "s/(^|[^A-Za-z0-9_\$.])$I5_ID([^A-Za-z0-9_\$]|\$)/\\1@VAR@\\4/g"; }
+i5_sig() {
+    if [[ -n "${I5_LOCAL_SIG[$1]+x}" ]]; then printf '%s' "${I5_LOCAL_SIG[$1]}"; else i5_norm "$1"; fi
+}
+# i5_exprs <text> — the untrusted-carrying `${...}` bodies in <text>, one per line.
+i5_exprs() {
+    local ex
+    printf '%s\n' "$1" | grep -oE '\$\{[^}]*\}' | while IFS= read -r ex; do
+        ex="${ex#\$\{}"
+        ex="${ex%\}}"
+        printf '%s' "$ex" | grep -qE "$I5_LOOSE" && printf '%s\n' "$ex"
+    done
+}
+# i5_seg_sigs <text after the marker> <terminator> — signatures of that segment only.
+i5_seg_sigs() {
+    local ex
+    while IFS= read -r ex; do
+        [[ -n "$ex" ]] && printf '%s\n' "$(i5_sig "$ex")"
+    done <<< "$(i5_exprs "${1%%"$2"*}")"
+}
 
 echo ""
-echo "=== I5: static guard — ERROR lines and the header escape too (F1/F5) ==="
+echo "=== I5: static guard — ERROR/BLOCK lines and the header escape too (F1/F5) ==="
 
 I5_WARN_SIGS=""
+I5_BLOCK_SIGS=""
 I5_ERR_SIGS=""
 I5_HDR_SIG=""
 I5_BARE_AT=""
 I5_N=0
 
-# Report-emitting lines: an add_line/printf whose argument opens with the
-# report's own `WARN: ` / `ERROR: ` marker, plus the summary line that prints
-# `extensions: `. Comment lines are excluded so prose cannot pad the count.
-I5_HITS="$(grep -nE '(add_line|printf).*"(WARN|ERROR): |printf.*extensions: ' "$SCRIPT" \
-    | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
+# Report-emitting template literals; comment lines are excluded so prose cannot pad the count.
+I5_HITS="$(grep -nE "${I5_BT}(WARN|ERROR|BLOCK): |extensions: \\$\\{" "$I5_REVIEW_JS" 2>/dev/null \
+    | grep -vE '^[0-9]+:[[:space:]]*(//|\*)' || true)"
 
 while IFS= read -r hit; do
-    [ -z "$hit" ] && continue
+    [[ -z "$hit" ]] && continue
     lno="${hit%%:*}"
     line="${hit#*:}"
-    # `ERROR: (staged index) — git diff --cached failed (rc=$rc)` carries only a
-    # numeric git exit code, so it is not selected — and would be, automatically,
-    # the moment someone interpolates a path into it.
-    printf '%s' "$line" | grep -qE "$I5_LOOSE" || continue
+    # `ERROR: (staged index) — ... (rc=${list.status})` carries only a number, so it is
+    # not selected — and would be, automatically, once a path is interpolated into it.
+    exprs="$(i5_exprs "$line")"
+    [[ -z "$exprs" ]] && continue
     I5_N=$((I5_N + 1))
-    if i5_nosub "$line" | grep -qE "$I5_BARE_RE"; then
-        I5_BARE_AT="$I5_BARE_AT $lno"
-    fi
+    while IFS= read -r ex; do
+        [[ "$(i5_sig "$ex")" =~ $I5_WRAPPED_RE ]] || I5_BARE_AT="$I5_BARE_AT $lno:\${$ex}"
+    done <<< "$exprs"
     case "$line" in
-        *'"WARN: '*)
-            rest="${line#*\"WARN: }"
-            I5_WARN_SIGS="$I5_WARN_SIGS$(i5_norm "${rest%% —*}")"$'\n' ;;
-        *'"ERROR: '*)
-            rest="${line#*\"ERROR: }"
-            I5_ERR_SIGS="$I5_ERR_SIGS$(i5_norm "${rest%% —*}")"$'\n' ;;
-        *'extensions: '*)
-            rest="${line#*extensions: }"
-            I5_HDR_SIG="$(i5_norm "${rest%%;*}")" ;;
+        *"${I5_BT}WARN: "*) I5_WARN_SIGS="$I5_WARN_SIGS$(i5_seg_sigs "${line#*"${I5_BT}"WARN: }" ' —')"$'\n' ;;
+        *"${I5_BT}BLOCK: "*) I5_BLOCK_SIGS="$I5_BLOCK_SIGS$(i5_seg_sigs "${line#*"${I5_BT}"BLOCK: }" ' —')"$'\n' ;;
+        *"${I5_BT}ERROR: "*) I5_ERR_SIGS="$I5_ERR_SIGS$(i5_seg_sigs "${line#*"${I5_BT}"ERROR: }" ' —')"$'\n' ;;
+        *'extensions: ${'*) I5_HDR_SIG="$(i5_seg_sigs "${line#*extensions: }" ';')" ;;
     esac
 done <<< "$I5_HITS"
 
-# Non-vacuity: this whole case is an enumeration, and an enumeration that
-# selects nothing asserts nothing. A rename that empties any group must break
-# the test rather than quietly vacate it.
-if [ "$I5_N" -gt 0 ]; then
+# Non-vacuity: an enumeration that selects nothing asserts nothing, so a rename
+# that empties any group must break the test rather than quietly vacate it.
+if [[ "$I5_N" -gt 0 ]]; then
     pass "I5/enumeration-is-not-empty ($I5_N report line(s) carry an untrusted value)"
 else
     fail "I5/enumeration-is-not-empty" \
-         "no report-emitting line in $SCRIPT references dst/src/f/_EXTS — the selector is stale, not the source clean."
+         "no report template literal in $I5_REVIEW_JS references dst/src/f/extensionsRaw — the selector is stale, not the source clean."
 fi
 assert_absent "I5/warn-group-is-not-empty" "EMPTY" "${I5_WARN_SIGS:-EMPTY}"
+assert_absent "I5/block-group-is-not-empty" "EMPTY" "${I5_BLOCK_SIGS:-EMPTY}"
 assert_absent "I5/error-group-is-not-empty" "EMPTY" "${I5_ERR_SIGS:-EMPTY}"
 assert_absent "I5/header-site-was-found" "EMPTY" "${I5_HDR_SIG:-EMPTY}"
 
-# (1) fail-before-fix: no site may interpolate the value bare.
-if [ -z "$I5_BARE_AT" ]; then
+# (1) fail-before-fix: no site may interpolate the value bare (or through an unknown local).
+if [[ -z "$I5_BARE_AT" ]]; then
     pass "I5/no-site-interpolates-an-untrusted-value-bare"
 else
     fail "I5/no-site-interpolates-an-untrusted-value-bare" \
-         "bare \$dst/\$src/\$f/\$_EXTS at line(s):$I5_BARE_AT of $SCRIPT"
+         "unescaped interpolation at line(s):$I5_BARE_AT of $I5_REVIEW_JS"
 fi
 
-# (2) symmetry (CPR-ORTH): whatever wrapper the WARN sites settle on, every
-# other site uses the SAME one. This is what a WARN-only fix trips on.
-i5_sig_known() { printf '%s\n' "$I5_WARN_SIGS" | grep -qxF -- "$1"; }
-I5_ODD=""
+# (2) the WARN sites' escaper is the one report.js defines and exports.
+I5_ESC_BAD=""
+I5_ESC_SEEN=0
 while IFS= read -r sig; do
-    [ -z "$sig" ] && continue
-    i5_sig_known "$sig" || I5_ODD="$I5_ODD [$sig]"
-done <<< "$I5_ERR_SIGS"
-if [ -z "$I5_ODD" ]; then
-    pass "I5/error-sites-use-the-same-wrapper-as-warn-sites"
+    [[ -z "$sig" ]] && continue
+    I5_ESC_SEEN=1
+    callee="${sig%(@VAR@)}"
+    grep -qE "^const \\{[^}]*\\b${callee}\\b[^}]*\\} = require\\(\"\\./report\"\\)" "$I5_REVIEW_JS" \
+        && grep -qE "^function ${callee}\\(" "$I5_REPORT_JS" \
+        && grep -qE "^module\\.exports = \\{[^}]*\\b${callee}\\b" "$I5_REPORT_JS" \
+        || I5_ESC_BAD="$I5_ESC_BAD [$sig]"
+done <<< "$I5_WARN_SIGS"
+if [[ "$I5_ESC_SEEN" -eq 1 && -z "$I5_ESC_BAD" ]]; then
+    pass "I5/warn-escaper-is-the-one-report-js-exports"
 else
-    fail "I5/error-sites-use-the-same-wrapper-as-warn-sites" \
-         "ERROR-site form(s)$I5_ODD not among the WARN-site form(s): $(printf '%s' "$I5_WARN_SIGS" | tr '\n' ' ')"
+    fail "I5/warn-escaper-is-the-one-report-js-exports" \
+         "WARN-site form(s)${I5_ESC_BAD:- [none]} not an escaper review.js imports from ./report and report.js defines"
 fi
-if i5_sig_known "${I5_HDR_SIG:-EMPTY}"; then
-    pass "I5/header-uses-the-same-wrapper-as-warn-sites"
-else
-    fail "I5/header-uses-the-same-wrapper-as-warn-sites" \
-         "extensions: form [${I5_HDR_SIG:-EMPTY}] not among the WARN-site form(s): $(printf '%s' "$I5_WARN_SIGS" | tr '\n' ' ')"
-fi
+
+# (3) symmetry (CPR-ORTH): every other site uses the SAME wrapper as the WARN sites.
+i5_sig_known() { printf '%s\n' "$I5_WARN_SIGS" | grep -qxF -- "$1"; }
+i5_assert_same_wrapper() {
+    local name="$1" sigs="$2" sig odd=""
+    while IFS= read -r sig; do
+        [[ -z "$sig" ]] && continue
+        i5_sig_known "$sig" || odd="$odd [$sig]"
+    done <<< "$sigs"
+    [[ -z "$sigs" ]] && odd=" [EMPTY]"
+    if [[ -z "$odd" ]]; then
+        pass "$name"
+    else
+        fail "$name" "form(s)$odd not among the WARN-site form(s): $(printf '%s' "$I5_WARN_SIGS" | tr '\n' ' ')"
+    fi
+}
+i5_assert_same_wrapper "I5/error-sites-use-the-same-wrapper-as-warn-sites" "$I5_ERR_SIGS"
+i5_assert_same_wrapper "I5/block-sites-use-the-same-wrapper-as-warn-sites" "$I5_BLOCK_SIGS"
+i5_assert_same_wrapper "I5/header-uses-the-same-wrapper-as-warn-sites" "$I5_HDR_SIG"

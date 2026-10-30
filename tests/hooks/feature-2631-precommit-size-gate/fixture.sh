@@ -6,7 +6,7 @@
 # with a non-GitHub origin, so a gate placed after the hook's early `exit 0`s never runs (= FAIL).
 
 NON_GITHUB="https://git.example.com/acme/widgets.git"
-GATE="$ROOT/hooks/lib/precommit-size-gate.sh"
+GATE="$ROOT/hooks/pre-commit.d/checks/size-gate.js"
 
 # make_lines <n> [tag] — exactly n newline-terminated lines.
 make_lines() { local i; for ((i = 1; i <= $1; i++)); do printf '%s line %d\n' "${2:-v1}" "$i"; done; }
@@ -27,13 +27,16 @@ init_repo() {
 CFG_TEMPLATE="$TMP_ROOT/cfg-template"
 init_repo "$CFG_TEMPLATE"
 cp -r "$ROOT/hooks" "$ROOT/bin" "$ROOT/rules" "$CFG_TEMPLATE/"
-# The other agents-repo gates (hooks/lib/precommit-agents-repo-gates.sh) are not under test and
-# need the whole repo (skills/, tests/ data files); their checkers are stubbed clean here.
-for g in check-on-demand-rules.sh check-session-id-ssot.sh check-migration-blocks.sh check-plans-dir-isolation.sh check-root-names.sh; do
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$CFG_TEMPLATE/bin/$g"
-  chmod +x "$CFG_TEMPLATE/bin/$g"
-done
-printf '#!/usr/bin/env node\nprocess.exit(0);\n' > "$CFG_TEMPLATE/bin/check-plans-artifacts"
+# The other agents-repo gates are not under test and need the whole repo (skills/, tests/ data
+# files). hooks/pre-commit.d/checks/agents-repo-gates.js requires each registry gate's module in
+# process, so the module itself (listed by the registry, not by hand) is stubbed clean here.
+FIXTURE_GATE_MODULES="$(node -e 'for (const g of require(process.argv[1]).AGENTS_REPO_GATES) console.log(g.module)' "$ROOT/hooks/pre-commit.d/registry.js")"
+[ -n "$FIXTURE_GATE_MODULES" ] || { echo "fixture: the registry lists no agents-repo gate module" >&2; exit 1; }
+while IFS= read -r g; do
+  [ -n "$g" ] || continue
+  mkdir -p "$(dirname "$CFG_TEMPLATE/$g")"
+  printf '#!/usr/bin/env node\n"use strict";\nmodule.exports = { run: async () => 0 };\nif (require.main === module) process.exit(0);\n' > "$CFG_TEMPLATE/$g"
+done <<<"$FIXTURE_GATE_MODULES"
 mkdir -p "$CFG_TEMPLATE/src"
 make_lines 600 v1 > "$CFG_TEMPLATE/src/old.js"
 echo init > "$CFG_TEMPLATE/README.md"
