@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # tests/skills/feat-2218-review-tests-choke-point.sh
-# Tests: skills/review-tests/scripts/run-codex-review-loop.sh, hooks/lib/handoff-artifact.js
-# Tags: review-tests, handoff, choke-point, class-d, exit-code, regression-2218, scope:issue-specific, pwsh-not-required, TL1
+# Tests: skills/review-tests/scripts/run-codex-review-loop.sh
+# Tags: review-tests, handoff, choke-point, class-d, exit-code, regression-2218, regression-2652, state-handoff-record, scope:issue-specific, pwsh-not-required, TL1
 
 # Issue #2218 Step 12 — exits 4, 7 and 8 leave the review loop without ever reaching the completion-sentinel choke point that records every other outcome, so those three are precisely the ones a resumed session would find no trace of. The record therefore belongs in the script itself, immediately before the exit, and must name the code and which path was taken (HALT vs no-sentinel) — "the review ended" is not enough to resume from.
 
 # TL3 gap: the real codex loop is stubbed, so the mapping from a genuine codex verdict to exit 4/7/8 is not re-verified here (bin/run-codex-review-loop owns that); this file drives the exit codes directly and asserts only what the script does with them. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: workflow-state.
 
-# TDD (write_code has not run): every case is expected to FAIL with "MODULE NOT FOUND: hooks/lib/handoff-artifact.js".
+# Issue #2652 — the record is a state handoff record (a `state_handoff_record` event in the session's state file), no longer a handoff.md line; the script still calls bin/workflow/handoff-append, whose name and flags do not change. hooks/lib/handoff-artifact.js is deleted, so it left the Tests: header.
+
+# TDD (write_code has not run): the recording rows (R1, R3, R6, R7) are expected to FAIL with "MODULE NOT FOUND: hooks/lib/state-handoff-record.js"; the exit-code and non-recording rows keep holding.
 
 set -u
 
@@ -36,12 +38,27 @@ control_marker() { printf '%s' "$1/wf/$2.control/test-review-terminal.txt"; }
 legacy_marker() { printf '%s' "$1/wf/$2-test-review-terminal.txt"; }
 any_terminal_marker() { [ -f "$(control_marker "$1" "$2")" ] || [ -f "$(legacy_marker "$1" "$2")" ]; }
 
-ARTIFACT="hooks/lib/handoff-artifact.js"
+ARTIFACT="hooks/lib/state-handoff-record.js"
 
 require_module() {
     if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
-    fail "MODULE NOT FOUND: $1 — expected per issue #2218 Step 12, not yet implemented (write_code has not run)"
+    fail "MODULE NOT FOUND: $1 — expected per issue #2652 S1, not yet implemented (write_code has not run)"
     return 1
+}
+
+# count_exit_records <tmp> <sid> — the number of review-tests:codex-exit state
+# handoff records in the sid's state file (0 when absent or unreadable).
+count_exit_records() {
+    local tmp="$1" sid="$2"
+    env -u CLAUDE_CODE_SESSION_ID SID="$sid" \
+        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
+        HOME="$tmp/home" USERPROFILE="$tmp/home" \
+        "$RWT" 30 node -e "
+const S = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
+let ev = [];
+try { ev = ((S.readRawState(process.env.SID) || {}).events || []); } catch (e) { ev = []; }
+process.stdout.write(String(ev.filter((e) => e && e.kind === 'state_handoff_record' && e.record_key === 'review-tests:codex-exit').length));
+" 2>/dev/null
 }
 
 # One config fixture serves every case: a copy of the real hooks/ and bin/ (so
@@ -107,52 +124,30 @@ S.markStep('$sid', 'workflow_init', 'complete');
 " >/dev/null 2>&1
 }
 
-# Read the entry back through the module's own reader: the grammar belongs to
-# the writer, this file only claims what the record must say.
+# Read the state handoff record back from the state file; this file claims only
+# what the record must say. An empty <want_path> skips the path-text check — the
+# three EXIT_REINVOKE_AFTER_TERMINAL sites (R1's line-61 row, R6/R7) share one
+# exit code but the wording of "which path was taken" is not pinned there.
 inspect() {
-    local tmp="$1" sid="$2" want_code="$3" want_path="$4"
+    local tmp="$1" sid="$2" want_code="$3" want_path="${4:-}"
     env -u CLAUDE_CODE_SESSION_ID \
         SID="$sid" WANT_CODE="$want_code" WANT_PATH="$want_path" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const { readHandoff } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$ARTIFACT');
+const S = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const problems = [];
-const doc = readHandoff(process.env.SID);
-const all = [].concat.apply([], Object.values(doc.entriesByClass || {})).filter((x) => x.key === 'review-tests:codex-exit');
-if (all.length !== 1) problems.push('codex-exit-entries:' + all.length);
+let ev = [];
+try { ev = ((S.readRawState(process.env.SID) || {}).events || []); } catch (err) { problems.push('state-unreadable:' + err.message); }
+const all = ev.filter((x) => x && x.kind === 'state_handoff_record' && x.record_key === 'review-tests:codex-exit');
+if (all.length !== 1) problems.push('codex-exit-records:' + all.length);
 else {
   const e = all[0];
-  if (e.class !== 'D') problems.push('class:' + e.class);
+  if (e.cls !== 'D') problems.push('cls:' + e.cls);
   if (e.origin !== 'procedure-point') problems.push('origin:' + e.origin);
   const s = String(e.summary);
   if (!new RegExp('(^|[^0-9])' + process.env.WANT_CODE + '([^0-9]|$)').test(s)) problems.push('summary-omits-exit-code:' + s);
-  if (s.toLowerCase().indexOf(process.env.WANT_PATH.toLowerCase()) === -1) problems.push('summary-omits-path:' + s);
-}
-process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
-" 2>&1
-}
-
-# Same claim as inspect(), minus the path-text check — the three
-# EXIT_REINVOKE_AFTER_TERMINAL sites (R1's line-61 row, and R6/R7 below) share
-# one exit code but the wording of "which path was taken" is not pinned here.
-inspect_code_only() {
-    local tmp="$1" sid="$2" want_code="$3"
-    env -u CLAUDE_CODE_SESSION_ID \
-        SID="$sid" WANT_CODE="$want_code" \
-        WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
-        HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 30 node -e "
-const { readHandoff } = require('$SCRIPT_CHECKOUT_ROOT_NODE/$ARTIFACT');
-const problems = [];
-const doc = readHandoff(process.env.SID);
-const all = [].concat.apply([], Object.values(doc.entriesByClass || {})).filter((x) => x.key === 'review-tests:codex-exit');
-if (all.length !== 1) problems.push('codex-exit-entries:' + all.length);
-else {
-  const e = all[0];
-  if (e.class !== 'D') problems.push('class:' + e.class);
-  const s = String(e.summary);
-  if (!new RegExp('(^|[^0-9])' + process.env.WANT_CODE + '([^0-9]|$)').test(s)) problems.push('summary-omits-exit-code:' + s);
+  if (process.env.WANT_PATH && s.toLowerCase().indexOf(process.env.WANT_PATH.toLowerCase()) === -1) problems.push('summary-omits-path:' + s);
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1
@@ -200,15 +195,13 @@ run_R1() {
 # sentinel, which already owns that outcome; a second record here would be a
 # duplicate of a fact the sentinel path already carries (CPR-SSOT).
 run_R2() {
-    require_module "$ARTIFACT" || return 0
     local tmp rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
+    seed_active "$tmp" "clean-sid-r2"
     run_loop "$tmp" "clean-sid-r2" 0 "$tmp/target"; rc=$?
     [ "$rc" -eq 0 ] || problems="$problems exit:$rc"
-    if [ -f "$tmp/wf/clean-sid-r2.control/handoff.md" ]; then
-        grep -q 'review-tests:codex-exit' "$tmp/wf/clean-sid-r2.control/handoff.md" && problems="$problems recorded-a-sentinel-reaching-run"
-    fi
+    [ "$(count_exit_records "$tmp" "clean-sid-r2")" = "0" ] || problems="$problems recorded-a-sentinel-reaching-run"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
         pass "R2: a clean exit 0 reaches the completion sentinel and records no codex-exit entry"
@@ -228,33 +221,29 @@ run_R3() {
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
     run_loop "$tmp" "repeat-sid-r3" 4 "$tmp/target"
-    if [ ! -f "$tmp/wf/repeat-sid-r3.control/handoff.md" ]; then
-        problems="$problems nothing-recorded"
-    else
-        n=$(grep -c 'review-tests:codex-exit' "$tmp/wf/repeat-sid-r3.control/handoff.md" 2>/dev/null || true)
-        [ "${n:-0}" -eq 1 ] || problems="$problems repeated-identical-exit-wrote:${n:-0}"
-    fi
+    n="$(count_exit_records "$tmp" "repeat-sid-r3")"
+    [ "${n:-0}" = "1" ] || problems="$problems repeated-identical-exit-wrote:${n:-none}"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
-        pass "R3: the same terminal exit repeated three times stays one line (noop-identical)"
+        pass "R3: the same terminal exit repeated three times stays one state handoff record (noop-identical)"
     else
         fail "R3: —$problems"
     fi
 }
 
 # R4 — the invariant. The review's verdict is the script's contract; a breadcrumb
-# that cannot be written must not turn exit 4 into anything else.
+# that cannot be written must not turn exit 4 into anything else. #2652: a
+# corrupt state file is what makes the state handoff record write fail.
 run_R4() {
-    require_module "$ARTIFACT" || return 0
     local tmp rc problems
     tmp="$(make_tmp)"; problems=""
-    mkdir -p "$tmp/wf/unwritable-sid-r4.control/handoff.md"
-    seed_active "$tmp" "unwritable-sid-r4"
+    mkdir -p "$tmp/wf"
+    printf '{ not json' > "$tmp/wf/unwritable-sid-r4.json"
     run_loop "$tmp" "unwritable-sid-r4" 4 "$tmp/target"; rc=$?
-    [ "$rc" -eq 4 ] || problems="$problems exit-changed-by-a-failed-artifact-write:$rc"
+    [ "$rc" -eq 4 ] || problems="$problems exit-changed-by-a-failed-record-write:$rc"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
-        pass "R4: a failing handoff write leaves the script's exit code at 4"
+        pass "R4: a failing state handoff record write leaves the script's exit code at 4"
     else
         fail "R4: —$problems"
     fi
@@ -266,17 +255,15 @@ run_R4() {
 # arm, but no review-tests:codex-exit record belongs to this non-choke-point
 # exit. An implementation that records on every nonzero rc fails this row.
 run_R5() {
-    require_module "$ARTIFACT" || return 0
     local tmp sid rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     sid="codex-exit-6-nonrecording"
+    seed_active "$tmp" "$sid"
     run_loop "$tmp" "$sid" 6 "$tmp/target"; rc=$?
     [ "$rc" -eq 6 ] || problems="$problems exit-code:$rc"
     [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems guard-not-armed"
-    if [ -f "$tmp/wf/$sid.control/handoff.md" ]; then
-        grep -q 'review-tests:codex-exit' "$tmp/wf/$sid.control/handoff.md" && problems="$problems recorded-a-non-choke-point-exit"
-    fi
+    [ "$(count_exit_records "$tmp" "$sid")" = "0" ] || problems="$problems recorded-a-non-choke-point-exit"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
         pass "R5: exit 6 arms the #1361 re-invoke guard but records no review-tests:codex-exit entry (only 4/7/8 do)"
@@ -301,7 +288,7 @@ run_R6() {
     run_loop_at "$tmp" "$tmp" "$sid" 0 "NOSTATE"; rc=$?
     [ "$rc" -eq 8 ] || problems="$problems exit-code:$rc"
     [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems terminal-marker-removed"
-    out="$(inspect_code_only "$tmp" "$sid" "8")"
+    out="$(inspect "$tmp" "$sid" "8")"
     [ "$out" = "OK" ] || problems="$problems entry:'$out'"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
@@ -329,7 +316,7 @@ run_R7() {
     run_loop_at "$tmp" "$tmp" "$sid" 0 ""; rc=$?
     [ "$rc" -eq 8 ] || problems="$problems exit-code:$rc"
     [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems terminal-marker-removed"
-    out="$(inspect_code_only "$tmp" "$sid" "8")"
+    out="$(inspect "$tmp" "$sid" "8")"
     [ "$out" = "OK" ] || problems="$problems entry:'$out'"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
@@ -345,17 +332,15 @@ run_R7() {
 # is not a choke-point exit (#2218 Step 12 names only 4/7/8), so — like R5 —
 # no review-tests:codex-exit record belongs to this exit either.
 run_R8() {
-    require_module "$ARTIFACT" || return 0
     local tmp sid rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
     sid="codex-exit-3-nonrecording"
+    seed_active "$tmp" "$sid"
     run_loop "$tmp" "$sid" 3 "$tmp/target"; rc=$?
     [ "$rc" -eq 3 ] || problems="$problems exit-code:$rc"
     [ -f "$tmp/wf/$sid.control/test-review-terminal.txt" ] || problems="$problems guard-not-armed"
-    if [ -f "$tmp/wf/$sid.control/handoff.md" ]; then
-        grep -q 'review-tests:codex-exit' "$tmp/wf/$sid.control/handoff.md" && problems="$problems recorded-a-non-choke-point-exit"
-    fi
+    [ "$(count_exit_records "$tmp" "$sid")" = "0" ] || problems="$problems recorded-a-non-choke-point-exit"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
         pass "R8: exit 3 arms the #1361 re-invoke guard but records no review-tests:codex-exit entry (#1742)"
@@ -371,7 +356,6 @@ run_R8() {
 # nothing pre-armed, so it must exit 3 and must never itself write a
 # terminal marker (it never calls arm_terminal_guard).
 run_R9() {
-    require_module "$ARTIFACT" || return 0
     local tmp sid rc problems
     tmp="$(make_tmp)"; problems=""
     mkdir -p "$tmp/wf"
@@ -392,7 +376,6 @@ run_R9() {
 # the #1361 re-invoke guard. Guards against a future overly-broad pattern
 # (e.g. an accidental `*)`) going undetected.
 run_R10() {
-    require_module "$ARTIFACT" || return 0
     local tmp sid rc code problems
     problems=""
     for code in 4 5; do
@@ -418,7 +401,6 @@ run_R10() {
 # both the positive (rc=2 arms) and the new negative (rc=1 does not) edge, plus
 # rc=7 (FINALIZE_FAILED, #2313) — the other terminal arm — at the control path.
 run_R11() {
-    require_module "$ARTIFACT" || return 0
     local tmp sid rc problems
     problems=""
 
@@ -458,14 +440,14 @@ run_R11() {
     fi
 }
 
-# Shared setup for both cases below. Copying the config fixture is only worth its
-# cost once the recorder exists; until then every R stops at its own require_module guard.
-if [ -f "$LOOP" ] && [ -f "$SCRIPT_CHECKOUT_ROOT/$ARTIFACT" ]; then build_cfg; fi
+# Shared setup for both cases below. The non-recording rows run before the
+# state handoff record module exists; the recording rows stop at require_module.
+if [ -f "$LOOP" ]; then build_cfg; fi
 
-# What the recorder leaves in the handoff artifact: one class D entry per
+# What the recorder leaves as a state handoff record: one class D record per
 # choke-point exit (R1), deduplicated on repeat (R3), and never at the cost of
 # the exit code when the write itself fails (R4).
-case_begin "handoff-artifact-recorder" "hooks/lib/handoff-artifact.js"
+case_begin "state-handoff-record-recorder" "skills/review-tests/scripts/run-codex-review-loop.sh"
 if [ ! -f "$LOOP" ]; then
     fail "SCRIPT NOT FOUND: skills/review-tests/scripts/run-codex-review-loop.sh"
 else

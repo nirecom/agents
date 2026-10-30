@@ -2,31 +2,10 @@
 # tests/hooks/feature-1733-state-event-stream/cleanup-stale.sh
 # Tests: hooks/workflow-state/state-io/zombie-cleanup.js, hooks/workflow-state/state-io/state-lock.js, hooks/workflow-state/state-io/core.js
 # Tags: workflow-state, event-stream, zombie-cleanup, stale-lock, tmp-leftovers, scope:issue-specific, pwsh-not-required, TL2
-#
-# The sweep that keeps ~/.claude/workflow from growing forever decided "is this session
-# still alive?" from `created_at` + `steps[*].updated_at`. #1733 deletes `steps` from the
-# file, so an unchanged sweep reads a long-running session as untouched-since-creation and
-# DELETES IT — a live workflow losing its state mid-session, which no assertion elsewhere
-# in this suite would notice. Hence Z1: old created_at + recent events must SURVIVE.
-#
-# The same sweep gains two new kinds of debris, both created by #1733 and both left behind
-# when a writer is killed: `<sid>.json.lock` and the unique `<sid>.json.<pid>.<n>.tmp`.
-# Reclaiming those is only safe if it is age-based — a sweep that deletes a FRESH lock or
-# another process's in-flight tmp corrupts the very write it was meant to tidy up after.
-#
-# Z7/Z8 pin the blast radius of ONE bad file. This sweep runs on EVERY SessionStart over
-# the WHOLE workflow dir, so an uncaught JSON.parse (a truncated file left by a killed
-# writer, a zero-byte file, a stray `.txt`/`.bak`, a subdirectory) does not merely skip
-# that entry — it aborts the sweep for every other session in the directory, and the
-# symptom is a workflow dir that silently stops being reclaimed. Per-entry containment is
-# therefore asserted directly: the bad entry must neither crash the sweep nor be rewritten,
-# while the valid stale/fresh files around it are still judged correctly.
-#
-# TL3 gap (what this file does NOT catch):
-# - the real SessionStart invocation (`cleanupZombies(7)` in hooks/session-start.js).
-# - a genuinely killed writer: the debris is fabricated with fs + utimes rather than by
-#   SIGKILLing a node process mid-write.
-# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh.
+# Liveness = created_at + newest events[].at (Z1); stale = idle > STATE_RETENTION_DAYS (30, #2652).
+# .lock / .tmp debris is reclaimed by age only (Z4/Z5); one bad entry never aborts the sweep (Z7/Z8).
+# TL3 gap: the real SessionStart call and a genuinely killed writer (debris is fabricated with utimes).
+# Mitigation: hook-registration category in bin/check-verification-gate.sh.
 
 CASE_TAG="clean"
 # shellcheck source=tests/hooks/feature-1733-state-event-stream/common.sh
@@ -76,8 +55,8 @@ echo "== Z2: a session whose newest event is older than the cutoff is removed ==
 if run_case "Z2/genuinely-stale-removed"; then
     next_sid
     nodejs "$SID" "$PRE$CLEAN_JS"'
-put("z2-stale.json", v2("z2-stale", 30, 20));
-put("z2-empty.json", v2("z2-empty", 30, null));   // no events at all: created_at decides
+put("z2-stale.json", v2("z2-stale", 50, 40));     // idle 40 days > 30-day state retention
+put("z2-empty.json", v2("z2-empty", 50, null));   // no events at all: created_at decides
 put("z2-fresh.json", v2("z2-fresh", 30, 0.5));
 sweep(7);
 console.log([
@@ -96,8 +75,8 @@ if run_case "Z3/v1-file-still-judged-correctly"; then
 // The sweep runs before anything migrates these files, so it must keep understanding v1.
 put("z3-v1-active.json", { version: 1, session_id: "z3a", created_at: ago(30),
   steps: { run_tests: { status: "in_progress", updated_at: ago(0.5) } } });
-put("z3-v1-stale.json", { version: 1, session_id: "z3s", created_at: ago(30),
-  steps: { run_tests: { status: "complete", updated_at: ago(25) } } });
+put("z3-v1-stale.json", { version: 1, session_id: "z3s", created_at: ago(50),
+  steps: { run_tests: { status: "complete", updated_at: ago(40) } } });
 sweep(7);
 console.log("active=" + exists("z3-v1-active.json") + " stale=" + exists("z3-v1-stale.json"));
 '
@@ -185,7 +164,7 @@ const CORRUPT = ["z7-aaa-truncated.json", "z7-bbb-empty.json", "z7-zzz-garbage.j
 put("z7-aaa-truncated.json", "{ \"version\": 2, \"session_id\": \"z7a\", \"events\": [ { \"seq\": 1,", 10);
 put("z7-bbb-empty.json", "", 10);                       // zero bytes: JSON.parse("") throws too
 put("z7-zzz-garbage.json", "<<< not json at all >>>", 10);
-put("z7-mmm-stale.json", v2("z7-mmm-stale", 30, 20));   // genuinely stale -> must be removed
+put("z7-mmm-stale.json", v2("z7-mmm-stale", 50, 40));   // genuinely stale -> must be removed
 put("z7-nnn-fresh.json", v2("z7-nnn-fresh", 30, 0.5));  // active         -> must survive
 const before = {};
 CORRUPT.forEach((n) => { before[n] = fs.readFileSync(P(n), "utf8"); });
@@ -219,7 +198,7 @@ put("z8-state.json.bak", JSON.stringify(v2("z8-bak", 30, 20)), 10);
 put("z8-no-extension", "stray", 10);
 put("z8-live.json", v2("z8-live", 1, 0.1));
 put("z8-live.json.lock", JSON.stringify({ pid: process.pid, host: os.hostname(), at: ago(0) }), 0);
-put("z8-stale.json", v2("z8-stale", 30, 20));
+put("z8-stale.json", v2("z8-stale", 50, 40));
 put("z8-fresh.json", v2("z8-fresh", 30, 0.5));
 let threw = "none";
 try { sweep(7); } catch (e) { threw = (e && e.name) || "Error"; }

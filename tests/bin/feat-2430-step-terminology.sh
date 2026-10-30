@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # tests/bin/feat-2430-step-terminology.sh
-# Tests: docs/glossary/user.md, docs/glossary/internal.md, docs/architecture/claude-code/workflow.md, docs/architecture/claude-code/workflow-runtime.md, docs/architecture/claude-code/settings/hooks.md, README.md, CLAUDE.md, rules/progress-update.md, docs/architecture/claude-code/handoff-artifact.md
-# Tags: terminology, glossary, docs, handoff, static-check, regression-2430, regression-2594, progress-update, scope:issue-specific, pwsh-not-required, TL1
+# Tests: docs/glossary/user.md, docs/glossary/internal.md, docs/architecture/claude-code/workflow.md, docs/architecture/claude-code/workflow-runtime.md, docs/architecture/claude-code/settings/hooks.md, README.md, CLAUDE.md, rules/progress-update.md, docs/architecture/claude-code/state-handoff-record.md
+# Tags: terminology, glossary, docs, handoff, static-check, regression-2430, regression-2594, regression-2652, state-handoff-record, progress-update, scope:issue-specific, pwsh-not-required, TL1
 
 # Issue #2430 — "step" drifted between three meanings (a workflow step, a numbered line inside a skill procedure, a conversational turn) and the docs disagreed on how many workflow steps exist (16 vs 17). The glossary becomes the one owner of the three terms, the prose stops restating a count that VALID_STEPS already owns (CPR-SSOT), the flush rule owns "What to record", and the handoff class table files a RESET_FROM under class E (a sentinel emitted).
 # Issue #2529 split the glossary by category: workflow step lives in docs/glossary/user.md, in-skill step and turn in docs/glossary/internal.md, and entries no longer carry file paths.
+# Issue #2652 renamed docs/architecture/claude-code/handoff-artifact.md to state-handoff-record.md and replaced the glossary's "handoff artifact" entry with "state handoff record" (user); RESET_FROM keeps its class E row (the state handoff reader derives the reset-from entry from the `reset` event), and the two-reader claims move with the doc and the entry.
 
 set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -74,10 +75,12 @@ LINES="$(wc -l < "$RULE" 2>/dev/null | tr -d ' ')"
 expect "S3: the progress rule stays under 200 lines" "$([ "${LINES:-0}" -gt 0 ] && [ "$LINES" -lt 200 ] && echo yes || echo "no:${LINES:-missing}")" "yes"
 case_end
 
-case_begin "class-table-files-reset-from-under-e" "docs/architecture/claude-code/handoff-artifact.md"
-DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/handoff-artifact.md"
-expect "S4: the class E row names RESET_FROM" "$(grep -E '^\| *E *\|' "$DOC" | grep -c 'RESET_FROM')" "1"
-expect "S4: no other class row names RESET_FROM" "$(grep -E '^\| *[ABCDFG] *\|' "$DOC" | grep -c 'RESET_FROM')" "0"
+case_begin "class-table-files-reset-from-under-e" "docs/architecture/claude-code/state-handoff-record.md"
+DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/state-handoff-record.md"
+expect "S4: the state handoff record doc exists" "$([ -f "$DOC" ] && echo yes || echo no)" "yes"
+expect "S4: the class E row names RESET_FROM" "$(grep -E '^\| *E *\|' "$DOC" 2>/dev/null | grep -c 'RESET_FROM')" "1"
+expect "S4: no other class row names RESET_FROM" "$(grep -E '^\| *[ABCDFG] *\|' "$DOC" 2>/dev/null | grep -c 'RESET_FROM')" "0"
+expect "S4: the retired handoff-artifact.md is gone" "$([ -e "$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/handoff-artifact.md" ] && echo present || echo gone)" "gone"
 case_end
 
 # #2475: the supervisor codex engine became a second (read-only) handoff reader.
@@ -89,17 +92,19 @@ expect "S5: the progress rule exists" "$([ -f "$RULE" ] && echo yes || echo no)"
 expect "S5: the progress rule does not say nothing else consumes the file" "$(grep -c 'nothing else consumes it' "$RULE" 2>/dev/null)" "0"
 case_end
 
-case_begin "handoff-doc-names-two-readers" "docs/architecture/claude-code/handoff-artifact.md"
-DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/handoff-artifact.md"
-expect "S5: the handoff doc no longer calls /resume-session the only reader" "$(grep -c "only reader is \`/resume-session\`" "$DOC")" "0"
-expect "S5: the handoff doc names the supervisor codex engine" "$(grep -qiE 'supervisor.{0,40}codex|codex.{0,40}supervisor' "$DOC" && echo yes || echo no)" "yes"
+case_begin "handoff-doc-names-two-readers" "docs/architecture/claude-code/state-handoff-record.md"
+DOC="$SCRIPT_CHECKOUT_ROOT/docs/architecture/claude-code/state-handoff-record.md"
+expect "S5: the state handoff record doc exists" "$([ -f "$DOC" ] && echo yes || echo no)" "yes"
+expect "S5: the doc does not call /resume-session the only reader" "$(grep -c "only reader is \`/resume-session\`" "$DOC" 2>/dev/null)" "0"
+expect "S5: the doc names the supervisor codex engine" "$(grep -qiE 'supervisor.{0,40}codex|codex.{0,40}supervisor' "$DOC" 2>/dev/null && echo yes || echo no)" "yes"
 case_end
 
 case_begin "glossary-handoff-names-two-readers" "docs/glossary/user.md"
-HA="$(entry "$GL_USER" 'handoff artifact')"
-expect "S5: glossary/user.md has a handoff artifact entry" "$([ -n "$HA" ] && echo yes || echo no)" "yes"
-expect "S5: the handoff artifact entry names /resume-session" "$(printf '%s\n' "$HA" | grep -qF '/resume-session' && echo yes || echo no)" "yes"
-expect "S5: the handoff artifact entry names the supervisor" "$(printf '%s\n' "$HA" | grep -qi 'supervisor' && echo yes || echo no)" "yes"
+HA="$(entry "$GL_USER" 'state handoff record')"
+expect "S5: glossary/user.md has a state handoff record entry" "$([ -n "$HA" ] && echo yes || echo no)" "yes"
+expect "S5: the state handoff record entry names /resume-session" "$(printf '%s\n' "$HA" | grep -qF '/resume-session' && echo yes || echo no)" "yes"
+expect "S5: the state handoff record entry names the supervisor" "$(printf '%s\n' "$HA" | grep -qi 'supervisor' && echo yes || echo no)" "yes"
+expect "S5: glossary/user.md no longer has a handoff artifact entry" "$(grep -cx '### handoff artifact' "$GL_USER" 2>/dev/null)" "0"
 case_end
 
 echo ""

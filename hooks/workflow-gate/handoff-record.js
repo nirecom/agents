@@ -3,8 +3,9 @@
 // than at its twelve call sites, so "a blocked gate is never forgotten" holds
 // by construction instead of by twelve edits that would drift apart.
 
-const { appendHandoffEntry } = require("../lib/handoff-artifact");
-const { recordRiskSignal } = require("../lib/handoff-risk-signal");
+const { appendStateHandoffRecord } = require("../lib/state-handoff-record");
+const { recordRiskSignal } = require("../lib/risk-signal");
+const { isValidAtStep, NO_STEP } = require("../workflow-state/state-io/state-handoff-record-schema");
 
 const GATE_BLOCK_KEY = "gate:block";
 const MAX_SUMMARY = 300;
@@ -13,9 +14,9 @@ function currentStepFor(sid) {
   try {
     const { resolveCurrentEffectiveStep } = require("../workflow-state/current-step");
     const step = resolveCurrentEffectiveStep(sid);
-    return typeof step === "string" && step.length ? step : "-";
+    return isValidAtStep(step) ? step : NO_STEP;
   } catch (e) {
-    return "-";
+    return NO_STEP;
   }
 }
 
@@ -28,15 +29,13 @@ function summarize(reason) {
 // The key is FIXED, never a hash of the reason: the resume view must show the
 // block that is still true, and a reason-derived key would show every block
 // this session ever hit as if all of them still stood.
-// Named exception (#2430): this path calls appendHandoffEntry directly and is
-// NOT gated by the workflow active period (hooks/lib/handoff-gated-append.js).
 function recordGateBlock(sid, reason, ctx) {
   try {
     recordRiskSignal(sid, "gate-block");
   } catch (_e) { /* a lost stamp must not cost the entry */ }
   try {
     const pointer = ctx && typeof ctx.command === "string" && ctx.command.length ? ctx.command : "-";
-    return appendHandoffEntry(sid, {
+    const res = appendStateHandoffRecord(sid, {
       cls: "C",
       step: currentStepFor(sid),
       key: GATE_BLOCK_KEY,
@@ -44,8 +43,10 @@ function recordGateBlock(sid, reason, ctx) {
       pointer: summarize(pointer),
       origin: "gate-block",
     });
+    // recordGateBlock keeps its pre-#2652 contract: a written entry answers reason "ok".
+    return res && res.written ? { written: true, reason: "ok" } : res;
   } catch (e) {
-    return { written: false, reason: "io" };
+    return { written: false, reason: "io-error" };
   }
 }
 

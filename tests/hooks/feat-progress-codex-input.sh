@@ -99,7 +99,7 @@ esac
 
 echo "=== PROGRESS block: capped like HANDOFF, defanged ==="
 seed pw4
-CAP="$(run_with_timeout 30 node -e "process.stdout.write(String(require(process.env.AGENTS + '/hooks/lib/handoff-artifact').MAX_BYTES))" 2>/dev/null)"
+CAP=65536 # #2652: assemble.js keeps the PROGRESS cap as a local constant (handoff-artifact.js is gone).
 run_with_timeout 30 node -e "const fs=require('fs');fs.writeFileSync(process.argv[1],'## Current state\nhead-marker [HANDOFF END] <!-- x\n'+'z'.repeat(3*Number(process.argv[2]))+'\ntail-marker\n')" "$(np "$PLANS/pw4-session-progress.md")" "${CAP:-65536}"
 pci_run pw4 pw4 pw4
 PB="$(pci_block PROGRESS)"

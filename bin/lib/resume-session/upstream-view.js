@@ -1,12 +1,8 @@
 "use strict";
-// What is still knowable about an upstream session, and how much of it may be
-// adopted here (#2218 Step 5/11).
-//
-// The ladder exists because the three evidence stores expire independently: the
-// state file has a 7-day TTL, the plan artifacts outlive it, and the transcript
-// outlives both. Calling adoptState on an expired state file reports "not
-// resumable", which is a lie about work that plainly happened — so each rung
-// degrades with its own honest reason instead.
+// What is still knowable about an upstream session, and how much of it may be adopted here (#2218).
+// The three evidence stores expire independently (state file 30-day TTL < plan artifacts < transcript);
+// adoptState on an expired state file would report "not resumable" about work that plainly happened,
+// so each rung degrades with its own honest reason instead.
 
 const { readState, readRawState, SESSION_ID_VALID_RE } = require("../../../hooks/workflow-state/state-io");
 const { resolvePlanArtifactOwner } = require("../../../hooks/workflow-state/plan-artifact-owner");
@@ -15,7 +11,7 @@ const { judgeInheritanceGranularity } = require("../../../hooks/workflow-state/i
 // Per call, so a swapped owner cache entry is honored.
 const repoIdentity = () => require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
-const { findHandoffPath, readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
+const { readStateHandoff, renderStateHandoffForResume } = require("../../../hooks/lib/state-handoff-record");
 const { progressPathFor, isRegularFile } = require("../../../hooks/lib/progress-file");
 
 const PROGRESS_FIRST_SECTION = "Current state";
@@ -27,7 +23,7 @@ const AVAILABILITY = Object.freeze({
   NONE: "none",
 });
 
-const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail", "handoff"]);
+const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail"]);
 const GRANULARITY_DEGRADED = "context-independent-only";
 
 function isValidSid(sid) {
@@ -44,13 +40,12 @@ function existingPlansArtifact(sid, kind) {
   }
 }
 
-// Each kind has exactly one resolver: plan artifacts live in the plans dir, the
-// handoff where its writer puts it (the control dir, #2576).
+// Each kind has exactly one resolver; plan artifacts live in the plans dir. State handoff
+// records are not an artifact: the state handoff reader owns where they are (#2652).
 const ARTIFACT_RESOLVERS = Object.freeze({
   intent: (sid) => existingPlansArtifact(sid, "intent"),
   outline: (sid) => existingPlansArtifact(sid, "outline"),
   detail: (sid) => existingPlansArtifact(sid, "detail"),
-  handoff: (sid) => findHandoffPath(sid),
 });
 
 function artifactsFor(sid) {
@@ -70,11 +65,13 @@ function cwdOf(state) {
   return null;
 }
 
-function classify(state, artifacts) {
+// Record entries are not a plan artifact: with a state file they never hide intent-artifact-missing.
+// A session-upstream holding only legacy pre-#2652 record entries is still ARTIFACTS_ONLY, never NONE.
+function classify(state, artifacts, hasHandoffEntries) {
   const hasArtifact = ARTIFACT_KINDS.some((k) => artifacts[k] !== null);
   if (state && hasArtifact) return AVAILABILITY.STATE_AND_ARTIFACTS;
   if (state) return AVAILABILITY.STATE_ONLY;
-  if (hasArtifact) return AVAILABILITY.ARTIFACTS_ONLY;
+  if (hasArtifact || hasHandoffEntries === true) return AVAILABILITY.ARTIFACTS_ONLY;
   return AVAILABILITY.NONE;
 }
 
@@ -189,17 +186,26 @@ function attemptInherit(heirSid, upstreamSid, upstreamState, heirState) {
   };
 }
 
-// The handoff artifact records what the state file cannot hold; without this
-// reader it would be written durably and never restored into a resumed session.
-function renderedHandoffFor(upstreamSid, artifacts) {
-  if (!artifacts || artifacts.handoff === null) return null;
-  let rendered = "";
+// State handoff records hold what the step statuses cannot; without this view
+// they would be written durably and never restored into a resumed session.
+function renderedHandoffFor(entries) {
+  let rendered = null;
   try {
-    rendered = renderHandoffForResume(readHandoff(upstreamSid));
+    rendered = renderStateHandoffForResume(entries);
   } catch (e) {
     return null;
   }
   return typeof rendered === "string" && rendered.length ? rendered : null;
+}
+
+// errors names the unreadable sources, so "the reader failed" never reads as "no records" (as --list).
+function readHandoffFor(upstreamSid) {
+  try {
+    const r = readStateHandoff(upstreamSid);
+    return { entries: r.entries, errors: Array.isArray(r.errors) ? r.errors : [] };
+  } catch (e) {
+    return { entries: [], errors: ["reader"] };
+  }
 }
 
 // session-progress.md of the upstream's first generation (#2594): the path and the section a resumed
@@ -227,6 +233,7 @@ function buildUpstreamView(input) {
       availability: AVAILABILITY.NONE,
       reason: "unknown-session",
       handoff_rendered: null,
+      state_handoff_errors: [],
       transcript_tail: captureTranscriptTail({ upstreamSid }),
     };
   }
@@ -236,17 +243,20 @@ function buildUpstreamView(input) {
   } catch (e) {
     upstreamState = null;
   }
+  const handoff = readHandoffFor(upstreamSid);
   const artifacts = artifactsFor(upstreamSid);
-  const availability = classify(upstreamState, artifacts);
+  const availability = classify(upstreamState, artifacts, handoff.entries.length > 0);
   if (availability === AVAILABILITY.NONE) {
     // The transcript is the last rung of the ladder, so this branch — state AND
     // artifacts both gone — is the one it exists for; it must not skip the field.
+    // A state file that exists but cannot be read is damage, not a session that never existed.
     return {
       type: "upstream",
       upstream_session_id: upstreamSid,
       availability,
-      reason: "unknown-session",
+      reason: handoff.errors.includes("state") ? "state-unreadable" : "unknown-session",
       handoff_rendered: null,
+      state_handoff_errors: handoff.errors,
       ...progressFileFor(upstreamSid),
       transcript_tail: captureTranscriptTail({ upstreamSid, cwd: cwdOf(upstreamState) }),
     };
@@ -259,10 +269,10 @@ function buildUpstreamView(input) {
     heirState = null;
   }
 
-  // The state file aged out; adopting is impossible, but nothing here failed a
-  // resumability judgement, so no such verdict may be reported.
+  // No readable state: adopting is impossible, but nothing here failed a resumability
+  // judgement. A state file that exists but cannot be read is damage, not expiry.
   const inherit = availability === AVAILABILITY.ARTIFACTS_ONLY
-    ? { attempted: false, reason: "state_expired" }
+    ? { attempted: false, reason: handoff.errors.includes("state") ? "state-unreadable" : "state_expired" }
     : attemptInherit(heirSid, upstreamSid, upstreamState, heirState);
 
   return {
@@ -272,7 +282,8 @@ function buildUpstreamView(input) {
     reason: availability === AVAILABILITY.STATE_ONLY ? "intent-artifact-missing" : null,
     artifacts,
     inherit_result: inherit,
-    handoff_rendered: renderedHandoffFor(upstreamSid, artifacts),
+    handoff_rendered: renderedHandoffFor(handoff.entries),
+    state_handoff_errors: handoff.errors,
     ...progressFileFor(upstreamSid),
     transcript_tail: captureTranscriptTail({ upstreamSid, cwd: cwdOf(upstreamState) }),
   };

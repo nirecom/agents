@@ -8,7 +8,7 @@
 // Any request moves the baseline to the measured transcript, so it is not re-asked at once.
 
 const fs = require("fs");
-const { toMillis } = require("../lib/handoff-sidecar");
+const { toMillis } = require("../lib/control-sidecar");
 const PF = require("../lib/progress-file");
 const { computePressureSignal, writeBaseline } = require("../lib/progress-pressure");
 const { isCommandTool } = require("../lib/tool-command-text");

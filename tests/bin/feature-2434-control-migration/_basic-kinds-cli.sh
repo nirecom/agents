@@ -11,13 +11,16 @@ REG_JS="$_BASIC_SCRIPT_CHECKOUT_ROOT/hooks/lib/plans-artifact-registry.js"
 # SAMPLES only supplies one concrete control-file name per kind (a regex kind
 # has no canonical instance); the driver fails any MIGRATABLE_KINDS entry that
 # no sample instantiates, so a newly added kind cannot pass untested.
+# #2652: a "?" sample is a retired name whose leftover kind may or may not stay
+# registered; it is used only while some kind still matches it.
 cat > "$T/samples.txt" <<'SAMPLES'
 security-code-exit6-accepted.txt review-plan-security-exit6-accepted.txt review-tests-exit6-accepted.txt
 outline-risk-signal.txt detail-risk-signal.txt codex-context.md plan.jsonl changed-files.txt
 complexity-signals.txt detail-signals.txt write-tests-signals.txt write-code-signals.txt
 finalize-state-1.json finalize-binding-1.json issue-close-outcome.json session-close-gate.json
-final-report-env.json supervisor-state.json wi-checkpoint.json handoff.md wt-cleanup-active
-handoff-risk.json handoff-pressure.json handoff-flush-mark.json progress-pressure.json
+final-report-env.json supervisor-state.json wi-checkpoint.json wt-cleanup-active
+risk-signal.json progress-pressure.json
+?handoff.md ?handoff-risk.json ?handoff-pressure.json ?handoff-flush-mark.json
 workflow-init-aborted-pathA-multiN-label-failure.md companion-precheck.json intent-scan-block.txt
 worker-main.json worker-main-1.json worker-main-1.dispatched
 SAMPLES
@@ -44,7 +47,7 @@ const reOf = (k) => { const r = k instanceof RegExp ? k : k && (k.re || k.regex 
   return r instanceof RegExp ? r : typeof r === "string" ? new RegExp(r) : null; };
 const idOf = (k) => (k && (k.kind || k.name || k.id)) || String(reOf(k) || k);
 const full = (k, s) => { if (typeof k === "string") return k === s; const r = reOf(k); const m = r && s.match(r); return !!m && m[0] === s; };
-const samples = fs.readFileSync(samplesFile, "utf8").split(/\s+/).filter(Boolean);
+const samples = fs.readFileSync(samplesFile, "utf8").split(/\s+/).filter(Boolean).flatMap((s) => s[0] !== "?" ? [s] : kinds.some((k) => full(k, s.slice(1))) ? [s.slice(1)] : []);
 const legacy = (n) => (typeof reg.legacyBasename === "function" ? reg.legacyBasename(sid, n) : `${sid}-${n}`);
 // Noncanonical shapes: odd whitespace, unsorted keys, CRLF, tabs, non-ASCII,
 // and every trailing-newline variant (none, LF, CRLF, doubled). A migration

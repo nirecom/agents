@@ -64,7 +64,7 @@ not complete or skipped; fails open to false) and is shared by `lang-inject.js` 
 ### Autonomous-run re-injection (`conv-lang-reinject.js`)
 
 Between human prompts the per-turn injection never fires, and drift concentrates there. The hook
-keeps a per-session baseline (`conv-lang-reinject.json` sidecar via `hooks/lib/handoff-sidecar.js`)
+keeps a per-session baseline (`conv-lang-reinject.json` sidecar via `hooks/lib/control-sidecar.js`)
 of the transcript size:
 - UserPromptSubmit resets the baseline (`lang-inject.js` already injected for this turn).
 - PostToolUse stats the transcript; once growth since the baseline reaches

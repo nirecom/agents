@@ -57,13 +57,13 @@ if (!ok) {
 // Five skills call this CLI, so the breadcrumb belongs to its success path
 // rather than to five prompt files that would drift. The entry says only "a
 // report exists, here" — the body stays canonical in the supervisor state file.
-// Outside the workflow active period the gate records nothing; the finding above
-// is written regardless.
+// Outside the recording period no state handoff record is written; the finding
+// above is written regardless.
 try {
   const path = require("path");
-  const { appendHandoffEntryIfActive } = require("../hooks/lib/handoff-gated-append");
+  const { appendStateHandoffRecord } = require("../hooks/lib/state-handoff-record");
   const { getSessionControlDir } = require("../hooks/workflow-state/state-io/control-dir");
-  appendHandoffEntryIfActive(rawSid, {
+  appendStateHandoffRecord(rawSid, {
     cls: "E",
     step: "-",
     key: "supervisor-reported",

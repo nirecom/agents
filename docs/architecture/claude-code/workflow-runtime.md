@@ -42,7 +42,7 @@ Session start → session-start.js (SessionStart hook)
     + "NEXT ACTION: <next-step NEXT_HINT>" into additionalContext (fail-open)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
     (→ recorded in transcript for future sessions to find via the scan above)
-  runs zombie cleanup (deletes state files older than 7 days)
+  runs zombie cleanup (deletes state files inactive for 30 days, markers older than 7 days)
 
 Compaction → post-compact.js (PostCompact hook)
   reads session_id from hook stdin JSON
@@ -128,7 +128,7 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
 
 State inheritance is keyed on provable transcript descent (lineage), not on cwd+branch alone
 (#1305) — cwd+branch (`contextMatches`) is a necessary condition checked after lineage, never
-the primary key. The practical inheritance window is 7 days (zombie cleanup limit). Non-git
+the primary key. The practical inheritance window is 30 days (the state file's zombie cleanup limit). Non-git
 directories and detached HEAD both use `git_branch: null` — they match each other but not
 named branches. Delivered workflows (`merge_to_main: complete`) are never inherited — the
 ancestor is treated as not-resumable so the new session starts fresh.
@@ -189,11 +189,11 @@ A session can inherit from an upstream session it has no transcript lineage to, 
   `live-linked-worktree` / `main-worktree` / `worktree-gone` / `cwd-unknown`, so the skill can
   enter the worktree first. State copy, per-stage approval revert, and overwrite protection:
   [workflow.md](workflow.md).
-- **Evidence class** — what the upstream actually left behind. The state file (7-day TTL) and the
-  handoff artifact (no TTL) expire independently, so availability degrades through
-  `state-and-artifacts` → `state-only` → `artifacts-only` → `none` rather than failing outright.
-  The artifact contract is in
-  [handoff-artifact.md](handoff-artifact.md).
+- **Evidence class** — what the upstream actually left behind. The state file (30-day retention),
+  the plan artifacts and, during the migration, a legacy `handoff.md` expire independently, so
+  availability degrades through `state-and-artifacts` → `state-only` → `artifacts-only` → `none`
+  rather than failing outright. The upstream's state handoff records are read through the state
+  handoff reader: [state-handoff-record.md](state-handoff-record.md).
 
 ## Fail-safe behavior
 
@@ -226,7 +226,7 @@ When the invoked step has a `CONFIRM_*` gate (step→gate map: `hooks/lib/confir
 
 `session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
 
-### `--gate` (confirm-gate check, #2490)
+### `--gate` (confirm gate check, #2490)
 
 `next-step --gate` is the single branching source for the seven confirm gates (`skills/_shared/confirm-plan.md` CPA-3). It is read-only and prints `GATE_ACTION`, the `GATE_CONFIRM_<X>` value line (omitted for `none`), `GATE_HINT`, and `REASON`.
 

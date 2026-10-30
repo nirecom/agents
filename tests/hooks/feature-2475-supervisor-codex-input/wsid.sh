@@ -32,7 +32,8 @@ done
 
 echo "--- wsid: a ../ wsid cannot pull a file from outside the plans dir (C3) ---"
 printf '%s\n' "# intent" "traversal-secret-body" > "$PLANS/../escape-intent.md"
-printf '%s\n' "traversal-handoff-secret" > "$PLANS/../escape-handoff.md"
+mkdir -p "$WORKFLOW_STATE_DIR/../escape.control"
+printf '%s\n' "# Handoff — escape" "" "handoff_schema_version: 1" "" "## A" "- 2026-01-01T00:00:00.000Z | procedure-point | - | k | traversal-handoff-secret | -" > "$WORKFLOW_STATE_DIR/../escape.control/handoff.md"
 WS_OUT="$SCI_TMP/wsid-escape.txt"
 rm -f "$WS_OUT"
 sci_run "$(np "$WS_OUT")" --mode alert --sid wssid --wsid "../escape" --transcript "$WS_TN"

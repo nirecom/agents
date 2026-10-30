@@ -82,6 +82,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: 引き継ぎ元のセッション。--from で再開されるときの、再開元の世代。
 - **Related**: [skills/resume-session/SKILL.md](../../skills/resume-session/SKILL.md)
 
+### state handoff reader
+
+- **Definition**: 指定した session の state handoff record を読み、時刻順に並べて返すコード。`/resume-session --from` と `--list` では、session-downstream が session-upstream の記録を読む。supervisor の codex 入力では、自分の session の記録を読む。移行期間中は、同じ session の旧 handoff.md も合わせて読む(この部分は Migration Code Blocks で囲む)。
+- **Related**: [architecture/claude-code/state-handoff-record.md](../architecture/claude-code/state-handoff-record.md)
+
 ### step table
 
 - **Definition**: The single source of the step order, which workflow steps each deliverable type requires, which delivery path drops a step, and each step's commit-gate attribute.

@@ -34,7 +34,7 @@ function main() {
   const event = input.hook_event_name;
   if (event !== "UserPromptSubmit" && event !== "PostToolUse") return quiet();
   const size = fs.statSync(transcriptPath).size;
-  const { readSidecar, writeSidecar } = require("./lib/handoff-sidecar");
+  const { readSidecar, writeSidecar } = require("./lib/control-sidecar");
   const baseline = (readSidecar(sid, SIDECAR) || {}).baselineBytes;
   const known = typeof baseline === "number" && Number.isFinite(baseline);
 

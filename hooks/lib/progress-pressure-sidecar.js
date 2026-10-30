@@ -5,7 +5,7 @@
 // which hold one lock so concurrent hooks never drop each other's keys. A legacy root_sid key is
 // read only (hooks/workflow-state/state-ancestry.js); nothing writes it any more.
 
-const { sidecarPath, readSidecar, writeSidecar } = require("./handoff-sidecar");
+const { sidecarPath, readSidecar, writeSidecar } = require("./control-sidecar");
 const { withLock } = require("./jsonl-rotating-log");
 
 const PRESSURE_SUFFIX = "progress-pressure.json";

@@ -34,7 +34,7 @@ process.on("exit", () => {
 const ROOT = path.join(__dirname, "..", "..");
 const S = require(path.join(ROOT, "hooks", "workflow-state", "state-io"));
 const PF = require(path.join(ROOT, "hooks", "lib", "progress-file"));
-const { sidecarPath } = require(path.join(ROOT, "hooks", "lib", "handoff-sidecar"));
+const { sidecarPath } = require(path.join(ROOT, "hooks", "lib", "control-sidecar"));
 const { evaluate } = require(path.join(ROOT, "hooks", "progress-nudge", "evaluate"));
 
 let passed = 0;

@@ -17,8 +17,7 @@ const {
   evaluateCompletionApproval,
   recoveryFor,
 } = require("../workflow-state/completion-approval");
-const { appendAutoRecord } = require("../lib/handoff-auto-record");
-const { isWorkflowActivePeriod } = require("../lib/workflow-active-period");
+const { recordRiskSignal } = require("../lib/risk-signal");
 
 const ORIGIN = "reset-sentinel";
 
@@ -127,9 +126,6 @@ function handle(ctx) {
         );
         return true;
       }
-      // Evaluated before the rollback: RESET_FROM_workflow_init ends the active
-      // period, yet the breadcrumb is exactly what the resuming session needs.
-      const activeBeforeEvent = isWorkflowActivePeriod(sessionId);
       // Builder form: the batch is produced INSIDE the lock, so two resets racing
       // on the same file both land instead of one clobbering the other, and the
       // prior-gate verdict is taken on the very state the batch is appended to.
@@ -159,15 +155,11 @@ function handle(ctx) {
           pushMessage(`workflow-mark: warning — reset applied but the delivery profile was NOT cleared: ${e.message}`);
         }
       }
+      // The reset event above is the one record of the rollback (#2652); the state handoff
+      // reader derives its entry from it. Only the omission-check risk stamp remains here.
       try {
-        appendAutoRecord(sessionId, {
-          cls: "E",
-          step: fromStep,
-          key: "reset-from",
-          summary: "RESET_FROM " + fromStep + ": " + rawReason,
-          pointer: "-",
-        }, "reset-from", { activeBeforeEvent });
-      } catch (_e) { /* a lost breadcrumb must not read as a failed reset */ }
+        recordRiskSignal(sessionId, "reset-from");
+      } catch (_e) { /* a lost stamp must not read as a failed reset */ }
     } catch (e) {
       pushMessage(`workflow-mark: reset-from failed — ${e.message}.`);
     }

@@ -53,7 +53,7 @@ switch (op) {
   case 'unpause': require(A + '/hooks/lib/next-step-pause-marker').removePauseMarker(sid); break;
   case 'off': fs.mkdirSync(stateDir(), { recursive: true }); fs.writeFileSync(path.join(stateDir(), sid + '.workflow-off'), 'test'); break;
   case 'on': fs.rmSync(path.join(stateDir(), sid + '.workflow-off'), { force: true }); break;
-  case 'risk': require(A + '/hooks/lib/handoff-risk-signal').recordRiskSignal(sid, 'gate-block'); break;
+  case 'risk': require(A + '/hooks/lib/risk-signal').recordRiskSignal(sid, 'gate-block'); break;
   case 'grow': fs.appendFileSync(T, Buffer.alloc(Number(arg), 121)); break;
   case 'touch-progress': {
     // session-progress.md written by the model just now (mtime a few seconds ahead of every baseline).

@@ -1,10 +1,11 @@
 "use strict";
-// "Is this session inside its workflow active period?" — the one predicate every
-// handoff writer except gate-block asks (#2430).
+// "Is this session inside its workflow active period?" (#2430) — asked by the progress
+// nudge and by post-compact before they touch session-progress.md.
 //
 // Active = workflow_init complete, no terminal step complete, no WORKFLOW_OFF
-// marker, and no unexpired pause covering the current step. Outside that period
-// there is no workflow for /resume-session to resume, so a breadcrumb is noise.
+// marker, and no unexpired pause covering the current step. State handoff records
+// use their own recording period (hooks/lib/state-handoff-record/write.js), which
+// ignores the pause and the OFF marker (#2578).
 
 const { readState, TERMINAL_STEPS, SESSION_ID_VALID_RE } = require("../workflow-state/state-io");
 const { resolveCurrentEffectiveStep } = require("../workflow-state/current-step");

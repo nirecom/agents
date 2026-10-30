@@ -30,7 +30,7 @@ guard refuse every model write there without touching the artifact workflow.
 
 - A prose file a human reads is an artifact. A JSON or number file a machine
   reads, or a file whose mere existence changes a gate, is control.
-- Extension is not a signal: `concern-carrier.md`, `handoff.md` and
+- Extension is not a signal: `concern-carrier.md` and
   `workflow-init-aborted-*.md` are control files.
 - Names are parsed kind-first (`parsePlansEntry`): the basename is split at
   every `-`, the prefix must match the one session-id grammar
@@ -86,9 +86,9 @@ guard refuse every model write there without touching the artifact workflow.
 | `{complexity,outline,detail,write-tests,write-code}-signals.txt` | `normalize-judge-signals` | `derive-complexity-level`, handoff-record |
 | `finalize-state-<N>.json`, `finalize-binding-<N>.json`, `issue-close-outcome.json`, `session-close-gate.json`, `final-report-env.json` | Workers, `issue-close-write-outcome.js`, `capture-env.sh` | Close-family skills, stop-final-report-guard, session-close-build-env |
 | `supervisor-state.json` | `hooks/lib/supervisor-state-writer/` | Supervisor agents, `bin/supervisor-*`, sweep-supervisor-state |
-| `wi-checkpoint.json`, `handoff.md`, `wt-cleanup-active`, `workflow-init-aborted-*.md` | checkpoint.js, handoff-artifact.js, worktree-cleanup-marker.js, path-a-label-and-board.sh | The same modules, workflow-init |
-| `handoff-risk.json`, `progress-pressure.json` | handoff-sidecar.js (`recordRiskSignal`; the progress request, `recordCompaction`, `bin/progress-file`) | progress-pressure.js, handoff-risk-signal.js, progress-nudge.js ([progress-file.md](progress-file.md#state-file)) |
-| `handoff-{pressure,flush-mark}.json` | Nobody since #2594 (a leftover stays registered until #2652) | Nobody |
+| `wi-checkpoint.json`, `wt-cleanup-active`, `workflow-init-aborted-*.md` | checkpoint.js, worktree-cleanup-marker.js, path-a-label-and-board.sh | The same modules, workflow-init |
+| `risk-signal.json`, `progress-pressure.json` | control-sidecar.js (`recordRiskSignal`; the progress request, `recordCompaction`, `bin/progress-file`) | progress-pressure.js, risk-signal.js, progress-nudge.js ([progress-file.md](progress-file.md#state-file)) |
+| `handoff.md`, `handoff-{risk,pressure,flush-mark}.json` (kind `legacy-handoff`) | Nobody since #2652; the state handoff records live in the state file ([state-handoff-record.md](state-handoff-record.md)) | The state handoff reader reads a leftover `handoff.md` during the migration; the JSON files are read by nobody |
 | `companion-precheck.json`, `intent-scan-block.txt`, `guard-attempt.tmp` | precheck-companions.sh, clarify-commit-scope.sh, clarify-guard-loop.sh | clarify-intent |
 | `calibration-asked.txt` | `skills/run-tests/scripts/mark-calibration-asked.sh` (before the dialog), `answer-calibration.sh` | `probe-calibration.sh` |
 | `sweep-plans-gate.tsv` | `bin/sweep-plans/gate-artifact.js` (pass 1 of `--include-plan-and-user-requested`) | The same script in pass 2, which consumes it |
@@ -308,7 +308,7 @@ renaming it needs a migration. Rule:
 |---|---|
 | `bin/worker-dispatch/workers/issue-close-finalize/state.js` | `schema_version` |
 | `bin/github-issues/migration/state.sh` | `schema_version` |
-| `hooks/lib/handoff-artifact.js` | `handoff_schema_version` |
+| `hooks/lib/state-handoff-record/legacy-handoff-md.js` (reads the legacy `handoff.md` only) | `handoff_schema_version` |
 | `hooks/lib/mechanism-failure.js` | `version` |
 | `hooks/workflow-state/state-io/core.js` | `version` |
 
@@ -319,7 +319,9 @@ renaming it needs a migration. Rule:
   this never shortens the PLANS_DIR retention), and any `*.tmp` inside it
   (including `*.migrating.*.tmp`) after 24 hours. A worker log written after
   the session ended counts as the newest file, so it restarts the 30 days.
-- `zombie-cleanup` judges `<wf>/<sid>.json` state files by their 7-day age. A
+- `zombie-cleanup` judges `<wf>/<sid>.json` state files by 30 days since their
+  last activity (`STATE_RETENTION_DAYS`, equal to the control-dir retention,
+  because the state file holds the state handoff records); markers keep 7 days. A
   `.json` whose stem is not a session id (a sidecar such as
   `<sid>.confirm-plan-receipt-<stage>.json`) is never read as state: it is kept
   while `<owner>.json` exists (owner = the stem before the first dot), and

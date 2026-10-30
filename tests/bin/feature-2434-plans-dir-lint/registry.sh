@@ -50,7 +50,7 @@ session-close-gate.json                             | control
 final-report-env.json                               | control
 supervisor-state.json                               | control
 wi-checkpoint.json                                  | control
-handoff.md                                          | control
+risk-signal.json                                    | control
 wt-cleanup-active                                   | control
 workflow-init-aborted-pathA-multiN-label-failure.md | control
 companion-precheck.json                             | control

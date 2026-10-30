@@ -36,6 +36,8 @@ const SAMPLE = {
   plan_approval: { step: "detail", source: "confirm-sentinel", reason: "approved", artifact_sha256: "ab12", artifact_session_id: "sfix", artifact_hash_status: "match" },
   plan_approval_revoked: { step: "detail", reason: "artifact changed" },
   reset: { from_step: "detail", reason: "user asked" },
+  // #2652: this kind's origin is a closed vocabulary (ORIGINS), so the row carries its own.
+  state_handoff_record: { cls: "A", origin: "auto-record", at_step: "-", record_key: "voc:k1", summary: "s", pointer: "p" },
 };
 const KINDS = Object.keys(SAMPLE);
 const mk = (kind, over) => Object.assign({ kind: kind, provenance: "observed", origin: "vocab-test" }, SAMPLE[kind] || {}, over || {});
@@ -46,7 +48,7 @@ JS
 )
 
 case_begin "ev1-event-kinds-set-equality" "hooks/workflow-state/state-io/events.js"
-echo "== EV1: EVENT_KINDS is exactly the nine documented kinds, in both directions =="
+echo "== EV1: EVENT_KINDS is exactly the ten documented kinds, in both directions =="
 if run_case "EV1/event-kinds-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
@@ -58,7 +60,7 @@ console.log([exported.length, missing.join(",") || "-", extra.join(",") || "-"].
 JS
 )
     nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
-    assert_eq "EV1/event-kinds-set-equality" "9 - -" "$NODE_OUT"
+    assert_eq "EV1/event-kinds-set-equality" "10 - -" "$NODE_OUT"
 fi
 case_end
 
@@ -71,13 +73,12 @@ S.markStep(sid, "workflow_init", "complete");
 const bad = KINDS.filter((k) => !accepts(mk(k))).map((k) => k + ":rejected");
 // The stream must have grown by exactly one event per kind, each carrying the common
 // fields. A kind accepted but dropped on the floor is the same defect as a rejection.
-const evsAll = rd().events.filter((e) => e.origin === "vocab-test");
+const evsAll = rd().events.filter((e) => KINDS.includes(e.kind) && e.origin === mk(e.kind).origin);
 if (evsAll.length !== KINDS.length) bad.push("appended=" + evsAll.length + "/" + KINDS.length);
 evsAll.forEach((e, i) => {
   if (e.seq !== i + 2) bad.push(e.kind + ":seq=" + e.seq);
   if (typeof e.at !== "string" || !/^\d{4}-\d\d-\d\dT.*Z$/.test(e.at)) bad.push(e.kind + ":at=" + e.at);
   if (e.provenance !== "observed") bad.push(e.kind + ":prov=" + e.provenance);
-  if (e.origin !== "vocab-test") bad.push(e.kind + ":origin=" + e.origin);
 });
 report(bad);
 JS

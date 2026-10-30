@@ -161,7 +161,7 @@ caseBegin("primed-session-recovers-after-obstacle-removed", "hooks/progress-nudg
 }
 caseEnd();
 
-const { sidecarPath } = require(path.join(ROOT, "hooks", "lib", "handoff-sidecar"));
+const { sidecarPath } = require(path.join(ROOT, "hooks", "lib", "control-sidecar"));
 // The real lock updatePressure takes; a token naming a live pid with a fresh mtime is never stolen early.
 const lockPathOf = (sid) => `${sidecarPath(sid, PF.PRESSURE_SUFFIX, { forWrite: true })}.lock`;
 const holdLock = (sid) => fs.writeFileSync(lockPathOf(sid), `${process.pid}.held-by-test`);

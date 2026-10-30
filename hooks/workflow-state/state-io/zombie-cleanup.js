@@ -31,6 +31,8 @@ function lastActivityMs(parsed) {
 
 const CONTROL_DIR_SUFFIX = ".control";
 const CONTROL_RETENTION_DAYS = 30;
+// <sid>.json holds the state handoff records (#2652), so it lives as long as its control dir.
+const STATE_RETENTION_DAYS = CONTROL_RETENTION_DAYS;
 
 // <sid>.control/ (#2434): stale .tmp inside goes on the 24h rule; the directory itself
 // only once <sid>.json is gone and nothing in it changed for CONTROL_RETENTION_DAYS.
@@ -84,6 +86,7 @@ function cleanupRoot(workflowDir, maxAgeDays) {
 
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
   const tmpCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const stateCutoff = Date.now() - STATE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
   for (const file of files) {
     const filePath = path.join(workflowDir, file);
@@ -163,7 +166,7 @@ function cleanupRoot(workflowDir, maxAgeDays) {
     try {
       const raw = fs.readFileSync(filePath, "utf8");
       const state = JSON.parse(raw);
-      if (lastActivityMs(state) < cutoff) fs.unlinkSync(filePath);
+      if (lastActivityMs(state) < stateCutoff) fs.unlinkSync(filePath);
     } catch (e) {
       // Unreadable, corrupt, or a subdirectory — skip THIS entry only. The sweep
       // runs over every session's file on each SessionStart, so an uncaught throw
