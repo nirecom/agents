@@ -65,8 +65,35 @@ function caseAddition(head, file, match) {
     if (!(wLines > hLines)) return null;
     basis = `case count unavailable: ${why}; code lines ${hLines} -> ${wLines}`;
   }
-  const marker = R.fieldValue(m.entry, "diagnostics.markerName") || "case markers";
+  return addedLine(m.entry, match, basis);
+}
+
+function addedLine(entry, match, basis) {
+  const marker = R.fieldValue(entry, "diagnostics.markerName") || "case markers";
   return `HIGH: ${match}: case added to a test file without valid case markers (${basis}); add ${marker} to every case first, then each case's target is checked code=CASE_ADDED_WITHOUT_MARKERS`;
 }
 
-module.exports = { caseAddition, codeLines, unitCount };
+// caseAddition3way(file, match, h1, h2, base) — the merge form (#2812): existing =
+// max(0, n(h1) + n(h2) - n(base)), n(no base) = 0; a line when the staged count exceeds it. Every
+// version is counted in case units, or all in code lines when any one cannot be (units never mix).
+function caseAddition3way(file, match, h1, h2, base) {
+  const m = R.match(match);
+  if (!m) return null;
+  const versions = [file, h1, h2, ...(base ? [base] : [])];
+  let label = "case units";
+  let n = [];
+  for (const f of versions) {
+    const u = unitCount(m.entry, f);
+    if (u.why !== undefined) {
+      label = `case count unavailable: ${u.why}; code lines`;
+      n = versions.map((v) => codeLines(v, match));
+      break;
+    }
+    n.push(u.count);
+  }
+  const existing = Math.max(0, n[1] + n[2] - (base ? n[3] : 0));
+  if (!(n[0] > existing)) return null;
+  return addedLine(m.entry, match, `${label} H+M−B = ${existing} -> ${n[0]}`);
+}
+
+module.exports = { caseAddition, caseAddition3way, codeLines, unitCount };

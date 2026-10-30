@@ -103,4 +103,4 @@ function splitTurns(entries) {
   return { prevTurnEntries: entries.slice(prompts[prompts.length - 2] + 1, last), currentTurnEntries, hasPriorPrompt: true };
 }
 
-module.exports = { readTranscriptLines, readTurnTail, parseLines, isRealUserPrompt, splitTurns, tailOf };
+module.exports = { readTranscriptLines, readTurnTail, parseLines, isRealUserPrompt, splitTurns, tailOf, flushed };

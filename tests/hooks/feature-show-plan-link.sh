@@ -40,7 +40,7 @@ PLANS_DIR="$WORKFLOW_PLANS_DIR"
 WORKFLOW_DIR_TEST="$WORKFLOW_STATE_DIR"
 CFG_DIR_TEST="$_ISOLATION_TMP_ROOT/cfg"
 mkdir -p "$CFG_DIR_TEST"
-# #2513: plan-sync off (empty export + empty $AGENTS_MAIN_ROOT/.env), so every
+# #2513: plan-sync off (empty export + empty AGENTS_MAIN_ROOT .env), so every
 # breadcrumb is the local path plus the off line (#2731 S3-10: fact lines only).
 export AGENTS_MAIN_ROOT="$CFG_DIR_TEST"
 export PLAN_SYNC_REMOTE_URL=""

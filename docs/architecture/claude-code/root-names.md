@@ -72,7 +72,7 @@ They name the repository a tool works on, so they are plain variables in the fil
 - `AGENTS_MAIN_ROOT` reaches a child through the environment it already lives in. A file that builds a child environment from an allow-list sets it explicitly and carries `set-agents-root`.
 - `SCRIPT_CHECKOUT_ROOT` stays inside its own process. The gate rejects exporting it, prefixing a command with it, passing it through `env`, assigning it to `process.env`, using it as an object key, and assigning `$env:SCRIPT_CHECKOUT_ROOT`. Reading `process.env.SCRIPT_CHECKOUT_ROOT` or `$env:SCRIPT_CHECKOUT_ROOT` is rejected as well.
 - One shell form is accepted: a command prefix whose command takes `-e` or `-c`, because the inline program is the same file's code.
-- `TARGET_MAIN_ROOT` and `TARGET_CHECKOUT_ROOT` reach a child as an argument: the flag `--target-main-root <dir>` or `--target-checkout-root <dir>`, or the positional the child documents. A script that falls back to the agents main root does so only when the argument is absent.
+- `TARGET_MAIN_ROOT` and `TARGET_CHECKOUT_ROOT` reach a child as an argument: the flag `--target-main-root <dir>` or `--target-checkout-root <dir>`, or the positional the child documents. A script that falls back to `AGENTS_MAIN_ROOT` does so only when the argument is absent.
 - In non-test JavaScript, a function parameter named after the checkout root is rejected: each file derives its own.
 
 ### Named exceptions for handing over the checkout root
@@ -120,7 +120,7 @@ Two kinds of occurrence are judged per reference; every other occurrence is judg
 | a definition from a checkout top (`rev-parse --show-toplevel`) | `TARGET_CHECKOUT_ROOT` |
 | a config read (`<name>/.env`, `<name>/.env.local`, `<name>/docs/private-info`, or the same target as the next argument of a path join) | `AGENTS_MAIN_ROOT` |
 
-A main-worktree marker wins over the script's location, and the script's location wins over a checkout top: the top of the script's own checkout is the script checkout root.
+A main-worktree marker wins over the script's location, and the script's location wins over a checkout top: the top of the script's own checkout is `SCRIPT_CHECKOUT_ROOT`.
 An occurrence whose role the syntax does not decide — an argument, a flag value, `cd && pwd`, an echo, a join to a code directory — passes this check and stays with the file's table rule.
 A file that reads its configuration from its own checkout by design carries the form `config-from-script-checkout` and its reason in the table.
 

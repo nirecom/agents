@@ -875,3 +875,43 @@ Changes: Merging main into a feature branch no longer makes the commit-time glos
 ### FEATURE: PR #2805 (2026-10-26)
 Background: fix(#2796): stop demoting a delivered session's plan stages on glossa...
 Changes: Fixed: a delivered workflow session no longer asks to re-run the outline planning step after the shared glossary changes on main.
+
+### FEATURE: PR #2778 (2026-10-26)
+Background: feat(#2763): match glossary drift in identifier and prose contexts
+Changes: The glossary drift check no longer flags regular plurals, title case on heading lines and table header rows, naming-convention differences of an identifier (case, `_` or `-`), or lower-case command names for capital terms in code comments.;The glossary drift check now flags an identifier whose words change form or are split by whitespace, including inside code spans.;Existing glossary check records and their ACCEPTED grants go stale once, because the matcher rules changed.
+
+### FEATURE: PR #2810 (2026-10-26)
+Background: fix(#2748): resolve plans and progress by first_session_id, migrate orphan progress files, and validate the resume-session reader sid
+Changes: Resumed sessions (`/resume-session --from`) keep writing the first generation's progress file and plans instead of starting their own; a temporary `bin/migrate-orphan-progress-files` merges files left by earlier resumes.
+
+### FEATURE: PR #2816 (2026-10-27)
+Background: fix(#2804): keep live presentation receipts through zombie cleanup and diagnose no-receipt denials
+Changes: Plan confirmation: approving a plan right after the Stop hook's continue prompt no longer gets denied with `no-receipt` because another session's startup deleted the presentation receipt.
+
+### FEATURE: PR #2817 (2026-10-27)
+Background: fix(#2812): resolve merge-parent baselines for the tests gates
+Changes: Merge commits no longer fail the tests pre-commit gates for test files that already exist on the merged-in branch; files changed during the merge are still judged, against both parents.
+
+### FEATURE: PR #2815 (2026-10-27)
+Background: fix(#2808): update codex through npm directly after claude and codex exit
+Changes: Windows install no longer prints an npm cleanup EPERM warning when updating Codex CLI; it waits for running Claude Code and Codex to exit, then updates through npm directly.
+
+### FEATURE: PR #2821 (2026-10-28)
+Background: fix(#2811,#2813): continue confirm-plan presentation under stop_hook_active once per receipt, and point feature-2013 B20 at the current skill dispatch
+Changes: The plan approval dialog now follows a plan presentation even when that turn came after a Stop hook block, or when the transcript flush lagged but completed before the turn settled (#2811); a flush that lags past that point is tracked in #2822.
+
+### FEATURE: PR #2823 (2026-10-28)
+Background: feat(#2327): scope review-tests re-reviews after implementation changes to the delta
+Changes: review-tests re-reviews after an implementation change now read only the changed and covering tests, falling back to a full review when coverage cannot be determined (#2327)
+
+### FEATURE: PR #2751 (2026-10-29)
+Background: feat(#2672, #2725): CPR 4 項目追加と rules/architecture-principles.md 新設
+Changes: Core principles gained four entries (Release Is the Goal; Quality, Cost, Delivery; Evidence First; Root Cause Analysis), and a new on-demand design-principles rule (exit before gate, shift left) is now read when outlining, detailing and writing code.
+
+### FEATURE: PR #2830 (2026-10-29)
+Background: feat(#2768): plan-sync makes one commit per user prompt
+Changes: plan-sync now publishes one commit per user prompt instead of one per plan write, so the plan repository keeps the versions you saw, not every intermediate draft. When the remote forbids force pushes, a turn-diff link shows that prompt's changes.
+
+### FEATURE: PR #2756 (2026-10-29)
+Background: test(#2723): split the slowest test files into parallel entrypoints
+Changes: Slow test files are split into smaller entrypoints that run in parallel, so a full test run spends less time stuck behind a single long file.

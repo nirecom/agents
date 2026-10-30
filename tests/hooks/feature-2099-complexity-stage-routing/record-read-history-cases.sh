@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/record-read-history-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation,hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/events.js
 # Tags: complexity, routing, idempotency, history, projection, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh —
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints AFTER record-read-cases.sh —
 # d2099_raw_ce_count lives there. Split per rules/coding/file-split.md Pattern A.
 
 # The three stages exactly as a consumer reads them: one `--stage` call each.

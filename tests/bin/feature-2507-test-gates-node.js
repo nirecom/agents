@@ -18,10 +18,12 @@ const R = require("./feature-2507-test-gates-node/runtime-readers-cases");
 const F = require("./feature-2507-test-gates-node/fixture");
 const P = require("./feature-2507-test-gates-node/parity-cases");
 const L = require("./feature-2507-test-gates-node/placement-launch-cases");
+const M = require("./feature-2507-test-gates-node/merge-3way-cases");
 
 const restore = isolate();
 after(() => {
   F.cleanup();
+  M.cleanup();
   restore();
 });
 
@@ -163,4 +165,36 @@ caseEnd();
 
 caseBegin("content-normalization", "hooks/lib/test-gates/frontmatter.js");
 test("normalizeContent(): trailing LFs cut, one LF added, CRs kept", () => P.normalizeContent());
+caseEnd();
+
+caseBegin("self-impl-cli-two-heads-and-base-count-3-way", "bin/check-self-impl/cli.js");
+test("check-self-impl/cli.js run(): --head x2 --base counts H + M - B per key, clamped at 0", () => M.selfImplCli3Way());
+caseEnd();
+
+caseBegin("self-impl-cli-identical-heads-without-base", "bin/check-self-impl/cli.js");
+test("check-self-impl/cli.js run(): identical heads without a base judge against that one blob", () => M.selfImplCliTwoHeadsNoBase());
+caseEnd();
+
+caseBegin("self-impl-cli-equal-to-a-parent-is-skipped", "bin/check-self-impl/cli.js");
+test("check-self-impl/cli.js run(): a file equal to HEAD or to MERGE_HEAD is not judged", () => M.selfImplCliEqualToAParent());
+caseEnd();
+
+caseBegin("self-impl-cli-head-base-arg-errors", "bin/check-self-impl/cli.js");
+test("check-self-impl/cli.js run(): bad --head / --base combinations give rc 2", () => M.selfImplCliArgErrors());
+caseEnd();
+
+caseBegin("self-impl-cli-single-head-unchanged", "bin/check-self-impl/cli.js");
+test("check-self-impl/cli.js run(): the single --head and no-head forms keep their verdicts", () => M.selfImplCliSingleHeadUnchanged());
+caseEnd();
+
+caseBegin("self-impl-cli-5-column-manifest", "bin/check-self-impl/cli.js");
+test("check-self-impl/cli.js run(): a 5-column manifest judges each row 3-way", () => M.selfImplCliManifest5());
+caseEnd();
+
+caseBegin("self-impl-judge-two-heads-and-base", "bin/check-self-impl/cli.js");
+test("self-impl-judge judge(): heads + base answer the 3-way table", () => M.judge3Way());
+caseEnd();
+
+caseBegin("language-match-cli-head-base-and-declaration-only", "bin/check-test-language-match/cli.js");
+test("check-test-language-match/cli.js run(): --head x2 --base and --declaration-only alone", () => M.langMatchArgs());
 caseEnd();

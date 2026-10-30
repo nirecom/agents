@@ -4,9 +4,8 @@
 # tests/<category>/<name>.sh file or needs a new one. The same-token-set rule lives in
 # skills/_shared/test-design/append-vs-new.md. Corpus scanning is delegated to
 # tdg_scan_corpus, structural validation to tdg_classify_parsed and token
-# extraction to tfm_parse_tests_matches (CPR-SSOT). The 500-line HARD default is owned by
-# skills/_shared/test-design.md "Size Limits" — bin/review-code-size hardcodes
-# the same number and no shared constant exists to reference instead.
+# extraction to tfm_parse_tests_matches (CPR-SSOT). The HARD default is the code HARD of the
+# size-limit SSOT (hooks/lib/size-limits.js), read once at source time via bin/print-size-limits.
 
 _TRD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-dup-group.sh
@@ -14,7 +13,9 @@ source "$_TRD_DIR/test-dup-group.sh" || return 1
 # shellcheck source=test-route-destination/language.sh
 source "$_TRD_DIR/test-route-destination/language.sh" || return 1
 
-TRD_HARD_MAX_DEFAULT=500
+TRD_HARD_MAX_DEFAULT=""
+read -r _ TRD_HARD_MAX_DEFAULT < <(node "$_TRD_DIR/../print-size-limits" --get code) || true
+[[ "$TRD_HARD_MAX_DEFAULT" =~ ^[0-9]+$ ]] || { echo "test-route-destination.sh: print-size-limits --get code failed" >&2; return 1; }
 
 # Output globals. Every one is rewritten by the call that owns it.
 TRD_ROOT=""

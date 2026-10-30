@@ -16,7 +16,9 @@ Rewrite the `Current state` section on every update: what is being done now and 
 
 Overwrite `Current state`; never turn it into a diary or append dated entries.
 
-When this session writes its own intent, outline, or detail plan, point the `Plan files` lines at it; an inherited file still names the donor session's plans.
+Keep `Current state` within the `progress` limit of `rules/coding/file-split.md` (Pattern E); the edit-time size check blocks an edit over it.
+
+Point the `Plan files` lines at the plans this session writes; every generation, a session-downstream included, writes them under the first_session_id name.
 
 Add only facts a fresh session cannot recover from any other file, under the four kinds of fact (`Facts to carry over`):
 - user decision (`User decisions`) — a decision the user made in conversation that no artifact records yet.

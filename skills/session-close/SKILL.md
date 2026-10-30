@@ -112,11 +112,11 @@ node "$AGENTS_MAIN_ROOT/bin/issue-close-write-outcome.js" --session "<session-id
 Invoke `/issue-close-finalize --from-session`. The sub-skill writes
 `<CONTROL_DIR>/issue-close-outcome.json` in its ICF-K.
 
-If it terminates without writing that file, write a synthetic fallback:
+If it terminates without writing that file, write a synthetic fallback; `<INTENT_MD>` is the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent --session "<session-id>"`:
 
 ```bash
 node "$AGENTS_MAIN_ROOT/bin/issue-close-write-outcome.js" \
-  --fallback "<PLANS_DIR>/<session-id>-intent.md" \
+  --fallback "<INTENT_MD>" \
   "<CONTROL_DIR>/issue-close-outcome.json"
 ```
 
@@ -169,6 +169,10 @@ Mark surfaced and complete:
 ## SC-9 — Relocate legacy session state (temporary, #2511)
 
 Run last, once: `bash "$AGENTS_MAIN_ROOT/skills/session-close/scripts/relocate-session-state.sh" "<session-id>"` (always exits 0; the script reports a failure itself).
+
+## SC-10 — Migrate every orphan progress file of this session chain (temporary, #2748)
+
+Run once after SC-9: `bash "$AGENTS_MAIN_ROOT/skills/session-close/scripts/migrate-own-session-chain.sh" "<session-id>"` (always exits 0; the script reports a failure itself).
 
 ## Rules
 

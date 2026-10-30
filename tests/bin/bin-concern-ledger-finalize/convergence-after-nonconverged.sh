@@ -1,16 +1,12 @@
 # tests/bin/bin-concern-ledger-finalize/convergence-after-nonconverged.sh
 # Tests: bin/concern-ledger, bin/lib/concern-ledger.sh, bin/lib/concern-ledger/finalize.sh, bin/lib/concern-ledger/core.sh, bin/lib/concern-ledger/reduce.sh, bin/lib/concern-ledger/render.sh, bin/run-codex-review-loop, skills/review-code-security/scripts/close-concern-round.sh
 # Tags: concern-ledger, finalize, convergence, non-converged-cycle, TL2, scope:common
-# Sourced by tests/bin/bin-concern-ledger-finalize.sh (after loop-integration.sh and
-# cap-outline-detail.sh, whose helpers are reused).
+# Sourced by tests/bin/bin-concern-ledger-finalize-loop.sh, after loop-integration.sh and cap-outline-detail.sh (helpers reused).
 
-# A non-converged round leaves a durable 'converged: false' file on a fixed
-# path. The next cycle may converge cleanly, and a clean convergence writes
-# nothing — so the artifact from the earlier cycle is still sitting there when
-# the caller asks whether this round finalized. Whether that leftover can be
-# mistaken for the current round's verdict is the whole question: the round
-# binding is the only thing standing between "an old failure" and "this plan
-# was rejected".
+# A non-converged round leaves a durable 'converged: false' file on a fixed path; a later clean
+# convergence writes nothing, so the old artifact is still there when the caller asks whether this
+# round finalized. Whether that leftover can be mistaken for the current round's verdict is the
+# whole question: the round binding is all that separates "an old failure" from "this plan was rejected".
 
 echo ""
 echo "--- finalize 13: a clean convergence after a non-converged round ---"

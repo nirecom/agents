@@ -71,11 +71,13 @@ cd "$TMPDIR_BASE" || exit 1
 # honestly. The crippled root is derived from an otherwise complete one so the
 # missing library is the *only* difference — run-codex-review-loop also exits 4
 # when rules/core-principles.md is absent, so an incomplete root would satisfy
-# the exit-4 case for the wrong reason.
+# the exit-4 case for the wrong reason. hooks/ is there because build-codex-context
+# resolves the intent path through bin/plan-artifact-path, which loads hooks/ (#2748).
 mk_root() {
     local dst="$1"
     mkdir -p "$dst/rules"
     cp -R "$AGENTS_ROOT/bin" "$dst/bin"
+    cp -R "$AGENTS_ROOT/hooks" "$dst/hooks"
     cp -R "$AGENTS_ROOT/rules/." "$dst/rules/"
 }
 
@@ -447,7 +449,7 @@ echo "--- contracts 6: #2088 at the process boundary ---"
 
     assert_eq "6: the plans and workflow dirs really are spelled with a backslash (precondition)" \
         "backslash backslash " \
-        "$(for _d in "$B_PLANS" "$B_WF"; do case "$_d" in *\\*) printf 'backslash ' ;; *) printf 'plain ' ;; esac; done)"
+        "$(for _d in "$B_PLANS" "$B_WF"; do [[ "$_d" == *\\* ]] && printf 'backslash ' || printf 'plain '; done)"
 
     WORKFLOW_STATE_DIR="$B_WF" rc_ok bash "$AGENTS_ROOT/bin/concern-ledger" stage \
         --plans-dir "$B_PLANS" --session-id "$B_SID" --format "$FORMAT" --round 1 \

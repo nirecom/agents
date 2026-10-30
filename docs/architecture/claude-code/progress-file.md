@@ -8,23 +8,33 @@ The rule the model follows is [`rules/progress-update.md`](../../../rules/progre
 
 ## Location and name
 
-`<PLANS_DIR>/<rootSid>-session-progress.md`, resolved through `getPlansArtifactPath(rootSid, "progress")` (`hooks/lib/plans-artifact-registry.js`, artifact kind `progress`). No caller builds the name by hand.
+`<PLANS_DIR>/<first_session_id>-session-progress.md`, resolved through `getPlansArtifactPath(firstSid, "progress")` (`hooks/lib/plans-artifact-registry.js`, artifact kind `progress`). No caller builds the name by hand.
 
 The `session-` part keeps the name apart from topic names that end in `-progress.md`: the registry tries every hyphen split as a sid boundary, so a bare `progress.md` kind made `<sid>-user-requested-project-progress.md` ambiguous.
 
-`rootSid` is the **first generation** of a handed-off session, so every generation keeps writing one file:
+`first_session_id` is the **first generation** of a session chain, so every generation — a session-downstream included — keeps writing one file. The plan artifacts carry the same name (#2748).
 
-- `resolveRootSid(sid)` (`hooks/lib/progress-file.js`) first returns the `root_sid` saved in the session's own `progress-pressure.json`.
-- Without one, it walks the inheritance chain: the last backfilled `step_status` event carrying `inherited_from` names the donor. A donor with a saved `root_sid` ends the walk with that value; otherwise the walk continues (depth ≤ 8, cycle-guarded) and ends at the last reachable sid.
-- The progress request saves the resolved value on its first evaluation, so later generations copy it instead of walking a chain whose control directories may have expired.
+`resolveFirstSid(sid)` (`hooks/workflow-state/state-ancestry.js`) reads it from the state and writes nothing:
+
+1. The state's `first_session_id`.
+2. Else `previous_session_ids[0]`.
+3. Else a legacy `root_sid` in `progress-pressure.json`; a self pin is ignored once the state has ancestors, since a pre-#2748 session-downstream pinned itself.
+4. Else, for a legacy state carrying only `upstream_session_id`, a bounded walk upstream (64 hops, cycle-guarded: a cycle answers its smallest sid).
+5. Else the sid itself.
+
+`resolveRootSid` stays exported from `hooks/lib/progress-file.js` as an alias of `resolveFirstSid` for existing callers.
 
 `bin/progress-file path --session <sid>` prints the path; `ensure` also creates the file. Exit 2 is a usage error or an invalid sid.
+
+### Orphan progress file migration (temporary)
+
+Before #2748 a session-downstream could write its own `<sid>-session-progress.md` and plans: an **orphan progress file**. `bin/migrate-orphan-progress-files` (dry-run by default, `--apply` to write) merges each one into the first_session_id file, renames the session-downstream's plans to the first_session_id name (the newer plan wins on a clash), and skips a session that is still active (`skip-active`). `/session-close` SC-10 runs it for the closing session chain. The CLI, `hooks/lib/temporary-migrations/orphan-progress-file/` and SC-10 are removed after 2026-11-22 (plans retention 30 days).
 
 ## Template
 
 `templates/progress.md` holds three sections:
 
-- `Current state` — what is being done and what comes next; rewritten on every update, never a diary.
+- `Current state` — what is being done and what comes next; rewritten on every update, never a diary. Its size limit is the `progress` row of `rules/coding/file-split.md` (Pattern E), enforced at edit time by `hooks/block-post-edit-size.js`.
 - `Plan files` — the intent / outline / detail paths, filled in at creation; step state is read from `next-step --list`, never copied.
 - `Facts to carry over` — `User decisions`, `Deviations`, `Rejected approaches` (with the reason), `Open questions`.
 
@@ -159,7 +169,8 @@ The threshold is measured (2026-10-16). Source: the class B `compaction` entries
 | Field | Meaning |
 |---|---|
 | `baseline_bytes`, `baseline_at`, `transcript_path` | The volume baseline |
-| `root_sid`, `progress_path` | The resolved first generation and its file |
+| `progress_path` | The resolved progress file |
+| `root_sid` | Legacy, read only: written before #2748, never written now |
 | `event_cursor` | The last state event `seq` judged for step completes |
 | `requests_at` | Capped request times within the cap window |
 | `compaction_pending`, `compactions_at` | The compaction flag and recent compaction times |

@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block/path-resolution.sh
-# Tests: hooks/block-comment-block-size.js, hooks/lib/path-normalize.js
+# Tests: hooks/block-post-edit-size.js, hooks/block-post-edit-size/comment-block.js, hooks/lib/path-normalize.js
 # Tags: comment-block-size, hook, pretooluse, path-resolution, worktree, windows, regression, scope:issue-specific, scope:feature-1894, layer:TL2
-
-# Part 3 — which file the hook actually opens. A wrong resolution never
-# surfaces as an error: the read fails or returns something else, the hook
-# fails open, and the gate silently stops gating — the quietest way this
-# feature can die. Two pinned failure modes, both prior plan regressions:
-# `path.resolve(process.cwd(), p)` (a PreToolUse hook's cwd is rarely the
-# repo being edited — resolveRepoCwd() exists for this); and ignoring
-# `input.cwd` when it disagrees with CLAUDE_PROJECT_DIR (the linked-worktree
-# signal, and the normal case here, not an edge one). Dispatcher runs from
-# $NEUTRAL_CWD, so a process.cwd()-based implementation can't pass by luck.
-
-# Sourced by the dispatcher; all helpers are defined there.
+# Part 3 — which file the hook opens; a wrong one fails open silently. Pinned regressions: resolving
+# against process.cwd(), and ignoring input.cwd when it disagrees with CLAUDE_PROJECT_DIR (worktrees).
+# Sourced by the dispatcher (runs from $NEUTRAL_CWD); all helpers are defined there.
 
 # ============================================================================
 # R1 — absolute file_path, hook launched from an unrelated directory

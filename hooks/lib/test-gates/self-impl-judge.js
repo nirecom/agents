@@ -1,8 +1,8 @@
 "use strict";
 // One file's self-implemented harness verdict (#2507 D7; ports _csi_check / _csi_head_keys of
-// bin/check-self-impl.sh). judge({ name, file, head }) -> { lines: [{ err, text }], high, infra }:
-// file / head are paths or in-memory files (source.js); head is the HEAD version, whose count of
-// each (kind, detail) key is subtracted. An err line belongs on stderr, the rest on stdout.
+// bin/check-self-impl.sh). judge({ name, file, head | heads, base }) -> { lines: [{ err, text }], high,
+// infra }: file / heads / base are paths or in-memory files (source.js); the parents' count of each
+// (kind, detail) key is subtracted (headKeys). An err line belongs on stderr, the rest on stdout.
 
 const R = require("./registry");
 const S = require("./source");
@@ -18,9 +18,28 @@ function rows(out) {
   }).filter((r) => r.line);
 }
 
-function headKeys(head, name) {
-  const r = report(head, name);
-  return r.rc === 0 ? rows(r.stdout).map((k) => `${k.kind}\t${k.detail}`) : [];
+// keysOf(copy, name) — the (kind, detail) key of each detection; null when the op cannot analyse it.
+function keysOf(copy, name) {
+  const r = report(copy, name);
+  return r.rc === 0 ? rows(r.stdout).map((k) => `${k.kind}\t${k.detail}`) : null;
+}
+
+// headKeys(heads, base, name) — the existing detections: head1's, or with two heads (a merge, #2812)
+// head1's + head2's minus one per base key (judge collapses identical base-less heads to one first).
+// head1 unanalysable → none; head2 or base → head1 alone.
+function headKeys(heads, base, name) {
+  const h1 = keysOf(heads[0], name);
+  if (!h1) return [];
+  if (!heads[1]) return h1;
+  const h2 = keysOf(heads[1], name);
+  const b = base ? keysOf(base, name) : [];
+  if (!h2 || !b) return h1;
+  const keys = [...h1, ...h2];
+  for (const k of b) {
+    const i = keys.indexOf(k);
+    if (i >= 0) keys.splice(i, 1);
+  }
+  return keys;
 }
 
 function runtimeOf(name) {
@@ -32,13 +51,17 @@ function runtimeOf(name) {
   }
 }
 
-function judge({ name, file, head }) {
+function judge({ name, file, head, heads, base }) {
   const res = { lines: [], high: false, infra: false };
-  if (head && S.bytesOf(head).equals(S.bytesOf(file))) return res;
+  const hs = (heads || [head]).filter(Boolean);
+  const bytes = hs.length ? S.bytesOf(file) : null;
+  if (hs.some((h) => S.bytesOf(h).equals(bytes))) return res;
+  // R5: identical heads are one parent, so a base-less pair must not count each key twice.
+  if (hs[1] && !base && S.bytesOf(hs[1]).equals(S.bytesOf(hs[0]))) hs.pop();
   const r = report(file, name);
   if (r.rc === 0) {
     const found = rows(r.stdout);
-    const keys = head && found.length ? headKeys(head, name) : [];
+    const keys = hs.length && found.length ? headKeys(hs, hs[1] ? base : null, name) : [];
     for (const d of found) {
       const i = keys.indexOf(`${d.kind}\t${d.detail}`);
       if (i >= 0) {

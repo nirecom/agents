@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/baseline-cases.sh
 # Tests: bin/lib/run-all-ledger-migrate.sh
 # Tags: tests, bin, ledger, baseline, migration, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # Baseline ledger migration (#2079 S7, plan cases 1-11b; b12-b16 in baseline-recovery-cases.sh): a pre-#2079 `<tok>-<e>-<p>.seg`
 # becomes `v2.<current tok>-<e>-<p>.seg` with 7-field lines, the same mtime and the same
 # epochs, so the 30-day windows neither stretch nor shrink and no record is lost.

@@ -222,11 +222,12 @@ function buildAuditApprovalEvent(step, source, reason, origin) {
   });
 }
 
-// Owner of <sid>-<suffix>.md as seen from the evaluated state; any anomaly -> sessionId.
+// The sid the plan artifact is read under (first_session_id) as seen from the evaluated state;
+// any anomaly -> sessionId. state goes through as given: undefined lets the resolver read it.
 function resolveOwnerSid(sessionId, step, state) {
   try {
     const { resolvePlanArtifactOwner } = require("./plan-artifact-owner");
-    return resolvePlanArtifactOwner(sessionId, rowFor(step).suffix, state || null).ownerSid;
+    return resolvePlanArtifactOwner(sessionId, rowFor(step).suffix, state).ownerSid;
   } catch (_) {
     return sessionId;
   }
@@ -272,16 +273,13 @@ function evaluateCompletionApproval(sessionId, step, state, opts) {
   if (!recordedSha) {
     return { approved: false, code: "artifact-hash-unverifiable", source };
   }
-  // A record inherited across a session boundary stays bound to the artifact it
-  // was approved against (<owner-sid>-<suffix>.md), so the hash still verifies. A record
-  // without an owner is resolved the way the reader would resolve it (#2633).
-  const artifactSessionId = record.artifact_session_id || resolveOwnerSid(sessionId, step, state);
-  // The reader prefers the session's own file (plan-artifact-owner), so once one exists a record
-  // still bound to another session's file approves content nobody reads: it needs re-approval.
-  if (artifactSessionId !== sessionId && computeArtifactSha(sessionId, step)) {
+  // Every generation of a session chain reads <first_session_id>-<suffix>.md (#2748). A record
+  // bound to any other name approves content nobody reads: it needs re-approval.
+  const readSid = resolveOwnerSid(sessionId, step, state);
+  if (record.artifact_session_id && record.artifact_session_id !== readSid) {
     return { approved: false, code: "artifact-hash-mismatch", source };
   }
-  const currentSha = computeArtifactSha(artifactSessionId, step);
+  const currentSha = computeArtifactSha(readSid, step);
   if (!currentSha) {
     return { approved: false, code: "artifact-hash-unverifiable", source };
   }

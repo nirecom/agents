@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/invalid-levels-atomicity-cases.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/migrations/v1-to-v2.js, hooks/workflow-state/skip-signal-resolver/complexity.js, bin/workflow/read-complexity-evaluation
 # Tags: complexity, routing, validation, atomicity, migration, projection, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh after record-read-cases.sh
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints after record-read-cases.sh
 # (reuses d2099_inject_raw_event / d2099_state_bytes / d2099_raw_ce_count).
 
 # Why: validateEvent is only the FIRST barrier against an out-of-vocabulary

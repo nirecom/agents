@@ -48,7 +48,9 @@ is never consulted) and asking git once for the index-versus-`MERGE_HEAD` diff. 
 malformed `MERGE_HEAD`, or a git failure is undecidable, and the stage keeps every path (fail-safe).
 Outside a merge the pairs and the digest are unchanged; inside one the digest covers the remaining
 pairs. `artifact.mergeIncoming` reports the outcome for diagnostics and is not part of the digest. The
-module inherits `GIT_DIR` / `GIT_INDEX_FILE` from the environment.
+module inherits `GIT_DIR` / `GIT_INDEX_FILE` from the environment. It reads the merge state through
+`hooks/lib/merge-state.js` (`readMergeState`), which the tests gates' merge-parent baseline also uses
+([case-marker-gate.md](case-marker-gate.md#merge-commits)).
 
 Worktree resolution order: `opts.repoDir`, then `resolveSessionWorktreePath(sid)`, then the git root of
 the cwd. None resolving is the error `worktree-unresolved`.

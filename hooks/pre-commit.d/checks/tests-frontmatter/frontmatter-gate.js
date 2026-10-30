@@ -1,14 +1,17 @@
 "use strict";
 // Frontmatter gate of the tests-frontmatter check (#2507 D7; ports _precommit_check_tests_frontmatter
 // of hooks/lib/precommit-tests-frontmatter.sh). Staged tests/ entrypoints go through the --staged
-// frontmatter check with the staged and HEAD blobs taken from the snapshot.
+// frontmatter check with the staged blobs taken from the snapshot, judged against every parent
+// commit (HEAD, or MERGE_HEAD during a merge, #2812).
 
 const fs = require("fs");
 const path = require("path");
 const R = require("../../../lib/test-gates/registry");
 const FM = require("../../../lib/test-gates/frontmatter");
+const FP = require("../../../lib/test-gates/frontmatter/parents");
 const { toWindowsPath } = require("../../../lib/branch-diff");
 const { out, err } = require("../../output");
+const { parentsOf } = require("./parents");
 
 const SUITE_SUBFILE = /^tests\/(hooks|bin|skills|agents|install|tests)\/[^/]*\//;
 const PLACED = /^tests\/(hooks|bin|skills|agents|install|tests)\//;
@@ -23,7 +26,8 @@ function readDisk(abs) {
   }
 }
 
-function io(context, snapshot) {
+// io(context, snapshot, tests, par) — par: the shared merge parents (./parents.js, #2812).
+function io(context, snapshot, tests, par) {
   const repoRoot = String(context.repoTop).replace(/\\/g, "/");
   return {
     repoRoot,
@@ -32,6 +36,7 @@ function io(context, snapshot) {
     work: (f) => readDisk(path.join(context.repoTop, f)),
     head: (rel) => snapshot.headContent(rel),
     isFile: (abs) => readDisk(abs) !== null,
+    parents: FP.parentsIo(tests, par.record, par.blobs),
   };
 }
 
@@ -66,7 +71,7 @@ function summaries(lines) {
     msgs.push("Each file must have '# Tests: <path>' (comma-separated tokens) and '# Tags: ... scope:...'.");
   }
   if (lines.some((l) => /^HIGH: .* code=SELF_IMPLEMENTED_HARNESS/.test(l))) {
-    msgs.push("Commit blocked: test file(s) add a self-implemented harness HEAD does not have.");
+    msgs.push("Commit blocked: test file(s) add a self-implemented harness the parent commit(s) do not have.");
     msgs.push("Load the language's helper library (tests/lib/harness.*) and use its counters and helpers instead.");
   }
   return msgs.map(out);
@@ -77,9 +82,12 @@ function gate({ context, snapshot, files }) {
   const sel = selectTests(files);
   if (!sel) return { block: false, messages: [err("pre-commit: test language registry not readable — frontmatter check skipped (commit continues)")] };
   if (sel.tests.length === 0) return { block: false, messages: sel.messages };
-  const r = FM.stagedCheck(sel.tests, io(context, snapshot));
-  if (r.rc === 0) return { block: false, messages: [...sel.messages, ...r.lines.filter((l) => /^WARN: .* code=/.test(l)).map(err)] };
-  return { block: true, messages: [...sel.messages, ...r.lines.map(out), out(""), ...summaries(r.lines)] };
+  const par = parentsOf({ context, snapshot, files });
+  const fio = io(context, snapshot, sel.tests, par);
+  const msgs = [...par.note(), ...sel.messages];
+  const r = FM.stagedCheck(sel.tests, fio);
+  if (r.rc === 0) return { block: false, messages: [...msgs, ...r.lines.filter((l) => /^WARN: .* code=/.test(l)).map(err)] };
+  return { block: true, messages: [...msgs, ...r.lines.map(out), out(""), ...summaries(r.lines)] };
 }
 
 module.exports = { gate };

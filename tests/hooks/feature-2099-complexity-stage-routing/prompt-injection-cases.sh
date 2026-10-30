@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/prompt-injection-cases.sh
 # Tests: skills/_shared/judge-task-complexity.md, hooks/workflow-state/complexity-routing.js, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, prompt-injection, security, adversarial, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # intent.md is USER-DERIVED text the judge reads before emitting a SIGNALS line.
 # Three separable layers, one case group each: the rubric's WORDING (PI-1), the
 # CLI/module layer's DATA HANDLING (PI-2..PI-4), and the judging AGENT's actual

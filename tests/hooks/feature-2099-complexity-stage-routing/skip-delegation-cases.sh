@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/skip-delegation-cases.sh
 # Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/skip-signal-resolver/complexity.js, hooks/workflow-state/skip-signal-resolver/condition-schemas.js, hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, skip-conditions, ssot, delegation, scope:issue-specific, no-auto-skip
-# Sourced by ../feature-2099-complexity-stage-routing.sh after skip-aggregate-cases.sh
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints after skip-aggregate-cases.sh
 # (d2099s_resolve and d2099s_step are reused from there).
 # Why: #2460 retires the zero-signal predicate the resolver used to delegate to.
 # A record written through the real CLI must now leave every step pending.

@@ -21,6 +21,8 @@ const {
 const GUARD_SRC = path.join(__dirname, "command-guard");
 const LAUNCHER_CS = path.join(GUARD_SRC, "launcher.cs");
 const MAIN_JS = path.join(GUARD_SRC, "main.js");
+// The ssh stub of this tree: the one ssh command the guard trusts (command-guard/ssh-stub.js).
+const SSH_STUB = path.join(__dirname, "git-ssh-stub.sh");
 const TOOLS = ["git", ...NETWORK_TOOLS];
 const IS_WIN = process.platform === "win32";
 const EXE = IS_WIN ? ".exe" : "";
@@ -234,6 +236,7 @@ function buildInstance(dirArg, allowedArg, realgitArg) {
     `fastverbs=${FAST_WRITE_VERBS.join(" ")}`,
     `fastdeny=${FAST_DENY_PREFIXES.join(" ")}`,
     `fastdenyenv=${FAST_DENY_ENV.join(" ")}`,
+    ...(fs.existsSync(SSH_STUB) ? [`sshstub=${mixed(SSH_STUB)}`] : []),
     "",
   ].join("\n");
   const tmp = path.join(dir, `guard.conf.tmp-${process.pid}`);

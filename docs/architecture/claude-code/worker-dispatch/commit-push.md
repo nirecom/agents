@@ -110,7 +110,7 @@ committed; an inherited `ENFORCE_WORKTREE` would let a poisoned parent env
 silently downgrade the gate's own enforcement mode.
 
 The other two have no payload or anchor counterpart, so they are read from the
-`.env` at the script checkout root anchor via `readEnvFile()`, which is pure and never consults
+`.env` at the `SCRIPT_CHECKOUT_ROOT` anchor via `readEnvFile()`, which is pure and never consults
 `process.env`. That file lives in the reviewed main checkout resolved from the
 module's own realpath (`anchor.js` `resolveScriptCheckoutRootAnchor` has no env candidate for the
 same reason), so neither value is forgeable by an inline `VAR=x node bin/...`

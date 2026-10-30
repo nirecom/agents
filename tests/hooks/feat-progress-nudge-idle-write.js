@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/progress-file.js, hooks/progress-nudge/evaluate.js
-// Tags: TL2, hooks, progress-nudge, progress-pressure, idle, no-op-write, regression, scope:common, progress-file, sidecar, root-sid, donor-chain
+// Tags: TL2, hooks, progress-nudge, progress-pressure, idle, no-op-write, regression, regression-2748, scope:common, progress-file, sidecar, root-sid, donor-chain
 // #2594 (A): updatePressure skips the sidecar write when every patch value JSON-equals the current
 // record, still returning out.result; a differing or new key writes the merged record.
 // #2594 (B): an idle evaluation (no new complete, no transcript growth, session-progress.md untouched)
@@ -206,17 +206,47 @@ caseBegin("new-complete-still-writes-pressure", "hooks/lib/progress-file.js");
 }
 caseEnd();
 
-// donorChain(prefix, n) -> sids g1..gn, where each g(k>1) inherited from g(k-1) and none has a
-// saved root_sid, so resolveRootSid can only find the root by walking the whole chain.
-function inherit(sid, donor) {
-  S.writeState(sid, S.createInitialState(sid, { cwd: "/x", git_branch: "feature/x" }));
-  if (donor) S.appendEvents(sid, [{ kind: "step_status", step: "workflow_init", status: "complete", provenance: "backfilled", origin: "session-inheritance", inherited_from: donor }]);
+// #2748: session chains come from the real applyInheritance; the cycle and cap cases use pre-#2311 legacy
+// states (raw upstream_session_id only), the one shape that still needs a walk.
+const APPLY = require(path.join(ROOT, "hooks", "workflow-state", "inheritance", "apply"));
+const CTX = { cwd: "/x", git_branch: "feature/x" };
+// firstGen(sid) — a first generation: no session chain keys.
+function firstGen(sid) {
+  S.writeState(sid, S.createInitialState(sid, CTX));
 }
-function donorChain(prefix, n) {
+// adopt(sid, up) — sid adopts up through the real applyInheritance.
+function adopt(sid, up) {
+  firstGen(sid);
+  const createdAt = JSON.parse(fs.readFileSync(S.getStatePath(sid), "utf8")).created_at;
+  const res = APPLY.applyInheritance(sid, createdAt, up);
+  if (!res || res.ok === false) throw new Error(`fixture: applyInheritance(${sid}, ${up}) failed: ${show(res)}`);
+}
+// legacy(sid, up) — a pre-#2311 raw state carrying upstream_session_id only.
+function legacy(sid, up) {
+  const st = S.createInitialState(sid, CTX);
+  delete st.previous_session_ids;
+  delete st.first_session_id;
+  st.upstream_session_id = up;
+  fs.writeFileSync(S.getStatePath(sid), JSON.stringify(st, null, 2));
+}
+// realChain / legacyChain(prefix, n) -> sids g1..gn, each g(k>1) a session-downstream of g(k-1),
+// none with a saved root_sid.
+function realChain(prefix, n) {
   const sids = [];
   for (let i = 1; i <= n; i++) {
     const sid = `${prefix}-g${i}`;
-    inherit(sid, i > 1 ? sids[i - 2] : null);
+    if (i === 1) firstGen(sid);
+    else adopt(sid, sids[i - 2]);
+    sids.push(sid);
+  }
+  return sids;
+}
+function legacyChain(prefix, n) {
+  const sids = [];
+  for (let i = 1; i <= n; i++) {
+    const sid = `${prefix}-g${i}`;
+    if (i === 1) firstGen(sid);
+    else legacy(sid, sids[i - 2]);
     sids.push(sid);
   }
   return sids;
@@ -224,7 +254,7 @@ function donorChain(prefix, n) {
 
 caseBegin("long-donor-chain-resolves-to-first-generation", "hooks/lib/progress-file.js");
 {
-  const sids = donorChain("prc-long", 11);
+  const sids = realChain("prc-long", 11);
   check("E1: the fixture saved no root_sid anywhere in the chain", () => eq(sids.filter((s) => PF.readPressure(s)), [], "sids with a pressure record"));
   check("E1: an 11-generation donor chain resolves to its first generation", () => eq(PF.resolveRootSid(sids[10]), sids[0], "root sid"));
   check("E1: a 9-generation tail of the same chain still resolves to the first generation", () => eq(PF.resolveRootSid(sids[8]), sids[0], "root sid"));
@@ -247,9 +277,9 @@ caseBegin("donor-cycle-terminates", "hooks/lib/progress-file.js");
   const b = "prc-cyc-b";
   const c = "prc-cyc-c";
   const a = "prc-cyc-a";
-  inherit(b, a);
-  inherit(c, b);
-  inherit(a, c);
+  legacy(b, a);
+  legacy(c, b);
+  legacy(a, c);
   check("E2: the cycle fixture saved no root_sid", () => eq([a, b, c].filter((s) => PF.readPressure(s)), [], "sids with a pressure record"));
   expectOneRoot("E2 cycle a->c->b->a", [b, c, a], a);
 
@@ -257,21 +287,21 @@ caseBegin("donor-cycle-terminates", "hooks/lib/progress-file.js");
   const z0 = "prc-tail-z0";
   const m1 = "prc-tail-m1";
   const a2 = "prc-tail-a2";
-  inherit(m1, a2);
-  inherit(a2, m1);
-  inherit(z0, m1);
+  legacy(m1, a2);
+  legacy(a2, m1);
+  legacy(z0, m1);
   expectOneRoot("E2 tail z0->m1->a2->m1", [z0, m1, a2], a2);
 
   const self = "prc-cyc-self";
-  inherit(self, self);
+  legacy(self, self);
   check("E2: a session naming itself as donor resolves to itself", () => eq(PF.resolveRootSid(self), self, "root sid"));
 
   // A saved root_sid on any member still wins over the cycle's smallest member.
   const sx = "prc-sav-x";
   const sy = "prc-sav-y";
   const saved = "prc-sav-root";
-  inherit(sx, sy);
-  inherit(sy, sx);
+  legacy(sx, sy);
+  legacy(sy, sx);
   check("E2: the saved-root fixture wrote its root_sid", () => eq(PF.mergePressure(sy, { root_sid: saved }), true, "mergePressure"));
   expectOneRoot("E2 saved root on a cycle member", [sx, sy], saved);
 }
@@ -292,18 +322,16 @@ function countStateReads(fn) {
 
 caseBegin("over-long-donor-chain-walk-is-bounded", "hooks/lib/progress-file.js");
 {
-  const sids = donorChain("prc-cap", 200);
+  const sids = legacyChain("prc-cap", 200);
   const first = countStateReads(() => PF.resolveRootSid(sids[199]));
   const second = PF.resolveRootSid(sids[199]);
-  check("F1: a 200-generation chain resolves to a valid sid", () => (PF.isValidSid(first.result) ? undefined : `root=${show(first.result)}`));
+  check("F1: a 200-generation legacy chain resolves to a valid sid", () => (PF.isValidSid(first.result) ? undefined : `root=${show(first.result)}`));
   check("F1: resolving the same sid twice gives the same root", () => eq(second, first.result, "root sid"));
-  check("F1: the donor walk stops after a bounded number of hops (<= 128 state reads, not 200)", () => (first.reads <= 128 ? undefined : `state reads=${first.reads}`));
-  // Contract under the cap (the true root g1 may lie past it): every sid within 64 hops of the newest
-  // resolves to one progress file, rooted at a sid of this chain, so a lineage never splits its history.
-  const near = [199, 196, 180, 135].map((i) => sids[i]);
-  const paths = near.map((s) => PF.progressPathFor(s));
-  check("F1: the newest sid and sids up to 64 hops older map to one progress.md path", () => eq(paths, near.map(() => paths[0]), "progress paths"));
-  check("F1: the shared progress.md is rooted at a sid of this chain", () => (sids.includes(first.result) && paths[0] === PF.progressPathFor(first.result) ? undefined : `root=${show(first.result)} path=${show(paths[0])}`));
+  check("F1: the legacy walk stops after a bounded number of hops (<= 128 state reads, not 200)", () => (first.reads <= 128 ? undefined : `state reads=${first.reads}`));
+  // #2748: the capped walk writes no pin back (pinCapRoot is gone), so only the newest sid's own
+  // answer is pinned down here: a sid of this chain, short of the true root g1.
+  check("F1: the capped answer is an older sid of this chain, short of the true root", () => (sids.includes(first.result) && first.result !== sids[0]
+    && first.result !== sids[199] ? undefined : `root=${show(first.result)}`));
 }
 caseEnd();
 
@@ -311,8 +339,8 @@ caseBegin("two-member-cycle-stays-deterministic", "hooks/lib/progress-file.js");
 {
   const a = "prc-cap-cyc-a";
   const b = "prc-cap-cyc-b";
-  inherit(a, b);
-  inherit(b, a);
+  legacy(a, b);
+  legacy(b, a);
   const ra = countStateReads(() => PF.resolveRootSid(a));
   check("F2: an A->B->A cycle terminates within a few state reads", () => (ra.reads <= 4 ? undefined : `state reads=${ra.reads}`));
   check("F2: both members and a repeated call agree on one root", () => eq([PF.resolveRootSid(b), PF.resolveRootSid(a)], [ra.result, ra.result], "roots"));
@@ -321,14 +349,14 @@ caseEnd();
 
 caseBegin("short-donor-chain-still-reaches-root", "hooks/lib/progress-file.js");
 {
-  const sids = donorChain("prc-short", 3);
+  const sids = realChain("prc-short", 3);
   check("F3: a 3-generation chain resolves to its first generation", () => eq(PF.resolveRootSid(sids[2]), sids[0], "root sid"));
 }
 caseEnd();
 
 // templated(sid) -> {file, ref}: the progress file ensureProgressFile creates, and its full text.
 function templated(sid) {
-  inherit(sid, null);
+  firstGen(sid);
   const r = PF.ensureProgressFile(sid);
   if (!r.path || !r.created) throw new Error(`fixture: ensureProgressFile did not create a file for ${sid}: ${show(r)}`);
   return { file: r.path, ref: fs.readFileSync(r.path, "utf8") };
@@ -409,7 +437,7 @@ caseEnd();
 caseBegin("symlinked-progress-file-is-refused", "hooks/lib/progress-file.js");
 {
   const sid = "pef-link";
-  inherit(sid, null);
+  firstGen(sid);
   const file = PF.progressPathFor(sid);
   const outside = path.join(TMP, "outside-target.md");
   fs.writeFileSync(outside, "outside-content\n");

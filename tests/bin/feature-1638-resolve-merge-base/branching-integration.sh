@@ -30,6 +30,7 @@ BI_ENFORCE="on"
 # tool_input.command is the sentinel echo.
 dispatch_branching() { # <sid> <decision>
   local sid="$1" decision="$2" cmd payload esc o e
+  node_state approvedetail "$sid" >/dev/null
   cmd="echo \"<<WORKFLOW_BRANCHING_COMPLETE: $decision>>\""
   esc="$(printf '%s' "$cmd" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   payload="$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0},"session_id":"%s"}' \

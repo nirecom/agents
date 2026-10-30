@@ -26,6 +26,12 @@ function loadSettings() {
   le.loadEnv(le.defaultEnvFilePath());
 }
 
+// loadCheck(entry) — checks/<name>.js; the file-size gate (#2631) rides on agents-repo-gates.
+function loadCheck(entry) {
+  const check = require(`./checks/${entry.name}`);
+  return entry.name === "agents-repo-gates" ? require("./checks/size-gate").after(check) : check;
+}
+
 async function main() {
   const cfgDir = path.resolve(__dirname, "..", "..");
   loadSettings();
@@ -40,7 +46,7 @@ async function main() {
     const { createSnapshot } = require("./snapshot");
     const snapshot = await createSnapshot({ repoTop, env });
     context.merge = require("../lib/merge-incoming").detectMergeIncoming(repoTop, await snapshot.files());
-    return await require("./orchestrator").run({ entries: registry.CHECKS, context, snapshot, loadCheck: (entry) => require(`./checks/${entry.name}`) });
+    return await require("./orchestrator").run({ entries: registry.CHECKS, context, snapshot, loadCheck });
   } finally {
     context.visibility.kill();
   }

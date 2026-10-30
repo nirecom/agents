@@ -1,0 +1,39 @@
+#!/usr/bin/env node
+"use strict";
+// merge-parents [--repo <dir>]: the per-path parent baselines of the tests/ pre-commit gates (#2812).
+// stdin: NUL-separated repo-relative paths. stdout (NUL-separated records): a header
+// `state<TAB><state><TAB><reason|->`, then per path `<in_parent><TAB><same><TAB><b1><TAB><b2><TAB><base>`
+// and `<path>` ("-" = absent oid). Exit 0 = resolved (HEAD-only fallback included), 2 = usage error
+// or unresolvable repo. Rules: hooks/lib/merge-parents.js.
+const fs = require("fs");
+const { resolveMergeParents } = require("../hooks/lib/merge-parents");
+const { toWindowsPath } = require("../hooks/lib/branch-diff");
+
+function usage(msg) {
+  process.stderr.write(`merge-parents: ${msg}\nusage: merge-parents [--repo <dir>] < NUL-separated paths\n`);
+  process.exit(2);
+}
+
+function main(argv) {
+  let repo = process.cwd();
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] !== "--repo") usage(`unknown argument: ${argv[i]}`);
+    if (i + 1 >= argv.length || argv[i + 1] === "") usage("--repo needs a value");
+    repo = toWindowsPath(argv[i + 1]);
+    i += 1;
+  }
+  const paths = fs.readFileSync(0).toString("utf8").split("\0").filter((p) => p !== "");
+  const r = resolveMergeParents(repo, paths);
+  if (!r.ok) {
+    process.stderr.write(`merge-parents: cannot resolve parents (${r.reason})\n`);
+    process.exit(2);
+  }
+  const dash = (v) => (v === "" || v === undefined || v === null ? "-" : String(v));
+  const out = [`state\t${r.state}\t${dash(r.reason)}`];
+  r.records.forEach((x, i) => {
+    out.push([x.in_parent, x.same, dash(x.b1), dash(x.b2), dash(x.base)].join("\t"), paths[i]);
+  });
+  process.stdout.write(out.map((s) => `${s}\0`).join(""));
+}
+
+main(process.argv.slice(2));

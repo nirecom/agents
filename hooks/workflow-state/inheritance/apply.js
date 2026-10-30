@@ -1,6 +1,6 @@
 "use strict";
-// The ONE execution point for carrying a session upstream's work record into the
-// session downstream (#1305, #2304). Two entry points use it — the automatic lineage
+// The ONE execution point for carrying a session-upstream's work record into the
+// session-downstream (#1305, #2304). Two entry points use it — the automatic lineage
 // path in the SessionStart hook and the explicit bin/workflow/adopt-session-state CLI
 // — so both produce byte-identical state only because there is one implementation.
 //
@@ -16,6 +16,7 @@ const { composeAppendedState } = require("../state-io/events");
 const { isContextIndependentStep } = require("../state-io/step-context-class");
 const CA = require("../completion-approval");
 const { rowFor } = require("../plan-stage-table");
+const { stateAncestors, dedupKeepFirst, resolveFirstSid } = require("../state-ancestry");
 
 const INHERIT_ORIGIN = "session-inherit";
 
@@ -55,25 +56,13 @@ function lastOfKind(events, kind) {
   return null;
 }
 
-const isValidSid = (v) => typeof v === "string" && core.SESSION_ID_VALID_RE.test(v);
-
-// The lineage the upstream already carries, oldest first. A state written before
-// previous_session_ids existed still names its own upstream in upstream_session_id.
-function inheritedChain(upstream) {
-  if (Array.isArray(upstream.previous_session_ids)) return upstream.previous_session_ids.filter(isValidSid);
-  if (isValidSid(upstream.upstream_session_id)) return [upstream.upstream_session_id];
-  return [];
-}
-
-function dedupKeepFirst(ids) {
-  return Array.from(new Set(ids));
-}
-
 // Steps (3)-(6) of the copy: identity, boundary, and the downstream's own location facts.
 function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) {
   const clone = upstream;
   // Read before upstream_session_id is overwritten below: clone IS the upstream object.
-  clone.previous_session_ids = dedupKeepFirst([...inheritedChain(upstream), upstreamSid]);
+  const firstSid = resolveFirstSid(upstreamSid, upstream);
+  clone.previous_session_ids = dedupKeepFirst([...stateAncestors(upstream), upstreamSid]);
+  clone.first_session_id = firstSid;
   clone.session_id = downstreamSid;
   clone.created_at = createdAt;
   clone.upstream_session_id = upstreamSid;
@@ -105,7 +94,6 @@ function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) 
 // The revert batch, evaluated against the copy inside composeAppendedState.
 // Returns { events, reverted } — `reverted` is the reverted_steps contract.
 function planReverts(downstreamSid, copy, projection, degraded) {
-  const upstreamSid = copy.upstream_session_id;
   const { VALID_STEPS } = core;
   const reverted = [];
   // The copy carries upstream_session_id and events, which a bare projection lacks;
@@ -116,14 +104,7 @@ function planReverts(downstreamSid, copy, projection, degraded) {
   // non-pending step (cleanup included), goes back to pending.
   for (const step of CA.APPROVAL_GATED_STEPS) {
     if (statusOf(projection, step) !== "complete") continue;
-    let verdict = CA.evaluateCompletionApproval(downstreamSid, step, evalState);
-    // A record bound to a third session's file is superseded once the session upstream
-    // authored its own file for the stage: the upstream itself already treats it as stale.
-    const rec = CA.readPlanApproval(evalState, step);
-    const boundTo = rec && rec.artifact_session_id;
-    if (verdict.approved && boundTo && boundTo !== upstreamSid && CA.computeArtifactSha(upstreamSid, step)) {
-      verdict = { approved: false, code: "artifact-hash-mismatch", source: verdict.source };
-    }
+    const verdict = CA.evaluateCompletionApproval(downstreamSid, step, evalState);
     if (verdict.approved) continue;
     reverted.push({ step, cause: "approval", code: verdict.code, trigger: step });
     for (const later of VALID_STEPS.slice(VALID_STEPS.indexOf(step) + 1)) {
@@ -225,7 +206,7 @@ function planPathHint(upstreamSid, step) {
   const suffix = row ? row.suffix : step;
   try {
     if (upstreamSid) {
-      return require("../../lib/plans-artifact-registry").getPlansArtifactPath(upstreamSid, suffix);
+      return require("../plan-artifact-owner").resolvePlanArtifactOwner(upstreamSid, suffix).path;
     }
   } catch (_) { /* fall through to the generic name */ }
   return `the ${suffix} plan`;

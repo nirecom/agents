@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/_runner-closed.sh
 # Tests: tests/run-all.sh
 # Tags: tests, bin, ledger, durations, consolidate, parallel, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n21 (1)-(5), (7) helper (#2079 S7b): a real run-all closes its own segment however it ends,
 # a run that measures nothing leaves no ledger, and the next run's start consolidates.
 # Prints `R21 <name>=<value>` lines; the dispatcher asserts them. Real uname/host on purpose.

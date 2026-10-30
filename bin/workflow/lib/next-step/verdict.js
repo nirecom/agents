@@ -3,8 +3,8 @@
 // (output writer: ./emit.js) (including its nested persistResolutions and
 // applyRecordedVerdictSkip, which self-recurses into computeVerdict).
 //
-// SIZE NOTE: knowingly over the 300-line WARN threshold; the 500-line HARD
-// limit is met. Second-stage split deferred to a follow-up issue.
+// SIZE NOTE: knowingly over the code WARN threshold; still under HARD
+// (SSOT: hooks/lib/size-limits.js). Second-stage split deferred to a follow-up issue.
 //
 // #1794: the markStep() auto-persist calls below carry explicit origins (not
 // ADOPTION_ORIGINS members) so lifecycle.js can tell auto-persist apart from a

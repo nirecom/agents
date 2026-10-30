@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/line-injection-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, cli, security, line-injection, adversarial, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # A DIFFERENT attack class from traversal-attack-cases.sh: the CLI output is a
 # LINE PROTOCOL (`level=`, `signals=`, `NONE`, `RECORDED_COMPLEXITY`) that real
 # consumers parse with grep/head. A --signals value carrying newlines, CRs, ANSI

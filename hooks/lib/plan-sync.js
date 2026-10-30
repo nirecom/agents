@@ -7,6 +7,8 @@ const allowlist = require("./plan-sync/allowlist");
 const provision = require("./plan-sync/provision");
 const commitPush = require("./plan-sync/commit-push");
 const projectHost = require("./plan-sync/project-host");
+const turnTrailer = require("./plan-sync/turn-trailer");
+const remoteState = require("./plan-sync/remote-state");
 
 module.exports = {
   isAllowedRemoteUrl: remoteUrl.isAllowedRemoteUrl,
@@ -17,6 +19,12 @@ module.exports = {
   resolveRemoteTarget: remoteUrl.resolveRemoteTarget,
   sameRemoteHost: remoteUrl.sameRemoteHost,
   blobUrlFor: remoteUrl.blobUrlFor,
+  compareUrlFor: remoteUrl.compareUrlFor,
+  commitUrlFor: remoteUrl.commitUrlFor,
+  formatTurnMessage: turnTrailer.formatTurnMessage,
+  parseTurnMessage: turnTrailer.parseTurnMessage,
+  readRemoteState: remoteState.readRemoteState,
+  clearRemoteState: remoteState.clearRemoteState,
   recordProjectHost: projectHost.recordProjectHost,
   readProjectHostState: projectHost.readProjectHostState,
   renderGitignore: allowlist.renderGitignore,

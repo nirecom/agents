@@ -14,7 +14,7 @@ const path = require("path");
 const fmt = require(path.join(__dirname, "lib", "glossary-format"));
 const prov = require(path.join(__dirname, "lib", "glossary-provenance"));
 const { SESSION_ID_VALID_RE } = require(path.join(__dirname, "..", "hooks", "workflow-state", "state-io"));
-const { getPlansArtifactPath } = require(path.join(__dirname, "..", "hooks", "lib", "plans-artifact-registry"));
+const { resolvePlanArtifactOwner } = require(path.join(__dirname, "..", "hooks", "workflow-state", "plan-artifact-owner"));
 const { toWindowsPath } = require(path.join(__dirname, "..", "hooks", "lib", "branch-diff"));
 
 const USAGE = "usage: glossary-promote <plans-dir>/<sid>-intent.md <repo-root>";
@@ -38,14 +38,20 @@ const samePath = (a, b) => {
   return process.platform === "win32" ? n(a).toLowerCase() === n(b).toLowerCase() : n(a) === n(b);
 };
 
-// sessionOf(intentPath) -> sid, or exit 2 unless the path is the session's own intent artifact.
+// sessionOf(intentPath) -> the current sid, or exit 2 unless the path is the intent that session
+// reads. The basename carries first_session_id (#2748), so the current session comes from
+// resolveProvenanceSession; the basename sid itself stands for a first generation.
 function sessionOf(intentPath) {
   const m = /^(.+)-intent\.md$/.exec(path.basename(String(intentPath).replace(/\\/g, "/")));
   if (!m || !SESSION_ID_VALID_RE.test(m[1])) fail(2, USAGE + " (basename must be <sid>-intent.md)");
-  let expected;
-  try { expected = getPlansArtifactPath(m[1], "intent"); } catch (e) { fail(2, USAGE + " (" + e.message + ")"); }
-  if (!samePath(intentPath, expected)) fail(2, USAGE + " (" + intentPath + " is not " + expected + ")");
-  return m[1];
+  const current = prov.resolveProvenanceSession(undefined).sid;
+  const candidates = [current, m[1]].filter((s, i, a) => typeof s === "string" && SESSION_ID_VALID_RE.test(s) && a.indexOf(s) === i);
+  let expected = null;
+  for (const sid of candidates) {
+    try { expected = resolvePlanArtifactOwner(sid, "intent").path; } catch (e) { fail(2, USAGE + " (" + e.message + ")"); }
+    if (samePath(intentPath, expected)) return sid;
+  }
+  return fail(2, USAGE + " (" + intentPath + " is not " + expected + ")");
 }
 
 // locate(texts, files, category, term) -> the file of `category` holding `term`, or null.

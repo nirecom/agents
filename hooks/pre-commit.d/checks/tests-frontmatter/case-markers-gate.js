@@ -1,6 +1,6 @@
 "use strict";
 // Case-marker gate of the tests-frontmatter check (#2507 D7; ports _precommit_check_tests_case_markers
-// of hooks/lib/precommit-tests-frontmatter.sh). The staged blob of every new (HEAD-absent) case-marker
+// of hooks/lib/precommit-tests-frontmatter.sh). The staged blob of every new (no parent has it, #2812) case-marker
 // entrypoint, in a repo whose index carries its entry's helperLibrary, and of every new reader-less
 // one, is judged in memory. A checker infra error fails open with a stderr diagnostic.
 
@@ -10,6 +10,7 @@ const placement = require("../../../lib/test-gates/placement");
 const { judge } = require("../../../lib/test-gates/case-markers");
 const { git } = require("../../lib/support");
 const { out, err } = require("../../output");
+const { parentsOf } = require("./parents");
 
 const ACMR = new Set(["A", "C", "M", "R"]);
 
@@ -30,7 +31,8 @@ function newTargets({ context, snapshot, files }) {
       const hl = R.fieldValue(m.entry, "helperLibrary.path");
       if (!hl || !indexHas(hl)) continue;
     } else if (!placement.isReaderlessCaseMarkerTarget(rel)) continue;
-    if (snapshot.status(rel) !== "A") continue;
+    targets.asked = true;
+    if (parentsOf({ context, snapshot, files }).record(rel).in_parent === 1) continue;
     targets.push({ rel, entry: m.entry });
   }
   return targets;
@@ -43,7 +45,7 @@ function addOnce(list, hint) {
 function gate({ context, snapshot, files }) {
   const targets = newTargets({ context, snapshot, files });
   if (!targets) return { block: false, messages: [err("pre-commit: test language registry not readable — case-marker check skipped (commit continues)")] };
-  const messages = [];
+  const messages = targets.asked ? parentsOf({ context, snapshot, files }).note() : [];
   const high = [];
   const missing = [];
   const malformed = [];

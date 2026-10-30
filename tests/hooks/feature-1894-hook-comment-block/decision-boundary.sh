@@ -1,27 +1,13 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block/decision-boundary.sh
-# Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js
+# Tests: hooks/block-post-edit-size.js, hooks/block-post-edit-size/comment-block.js, hooks/lib/comment-block-scan.js
 # Tags: comment-block-size, hook, pretooluse, boundary, absolute-judgment, table-driven, scope:issue-specific, scope:feature-1894, layer:TL2
-
-# Part 1 — what the hook decides, and on what. Two rules, settled after
-# review found holes in the alternatives: (1) verdict is computed on the
-# POST-edit file only — "block only if it got worse" would pass a file that
-# already had a 12-line block and gains a second 11-line block elsewhere,
-# since `longest` stays 12 (detail plan S3-2). (2) comparator is `>`, not
-# `>=`: COMMENT_BLOCK_MAX_LINES is the largest ALLOWED run, so 10 is silent
-# and 11 blocks — boundary rows are paired (10 approve / 11 block) since a
-# one-off slip in either direction needs both to be caught. Rule (1)'s
-# accepted cost: a file with a pre-existing violation is unwritable until
-# fixed, even for an edit that never touches it (D4).
-
+# Part 1 — verdict on the POST-edit file only (worse-only misses a second block, S3-2); comparator `>`:
+# COMMENT_BLOCK_MAX_LINES is the largest allowed run (10 approve / 11 block). Cost: an old violation blocks every edit (D4).
 # Sourced by the dispatcher; all helpers are defined there.
 
 # ============================================================================
-# D1 — the case from the issue: 5 existing + 6 added = 11
-#
-# This is why an added-lines-only rule was rejected. The edit adds 6 comment
-# lines, which no per-edit threshold would flag; the file ends up with an
-# 11-line run, which is the thing that matters.
+# D1 — the issue's case: 5 existing + 6 added = 11 (why an added-lines-only rule was rejected)
 # ============================================================================
 d1_existing_plus_added_crosses_the_line() {
     local f

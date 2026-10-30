@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/robust-cases.sh
 # Tests: bin/lib/run-all-ledger-migrate.sh
 # Tags: tests, bin, ledger, migration, concurrency, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n17 (9)-(13), (15), (15b), 16-17 (#2079 S7): quiet path, lock, 60-minute window, foreign repos,
 # invalid lines, appends around the claim, interruption recovery and a retried failed claim rename.
 

@@ -206,7 +206,7 @@ case_end
 
 case_begin "cli-unreachable-not-provisioned" "bin/plan-sync-init"
 CL4="$PSF_ROOT/cl4-plans"; mkdir -p "$CL4"
-WORKFLOW_PLANS_DIR="$CL4" GIT_SSH_COMMAND=false run_cli --remote-url "$PSF_ORIGIN_DEAD"
+WORKFLOW_PLANS_DIR="$CL4" psf_with_ssh_offline run_cli --remote-url "$PSF_ORIGIN_DEAD"
 expect_rc "CLI4 exit 1" 1
 if [ "$CLI_RC" = "NI" ]; then fail "CLI4 plansync.version not written" "not implemented ($CLI_OUT)"
 else CL4_VER="$(git -C "$CL4" config --get plansync.version 2>/dev/null)"
@@ -304,7 +304,7 @@ clw_case c "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_E2E
 " none
 # e: differing --remote-url but provisioning fails (unreachable) -> exit 1, no mismatch warning.
 CLWE="$PSF_ROOT/clw-e-plans"; mkdir -p "$CLWE"; printf 'PLAN_SYNC_REMOTE_URL=\n' > "$CLW_CFG/.env"
-AGENTS_MAIN_ROOT="$CLW_CFG" WORKFLOW_PLANS_DIR="$CLWE" GIT_SSH_COMMAND=false run_cli_stdout --remote-url "$PSF_ORIGIN_DEAD"
+AGENTS_MAIN_ROOT="$CLW_CFG" WORKFLOW_PLANS_DIR="$CLWE" psf_with_ssh_offline run_cli_stdout --remote-url "$PSF_ORIGIN_DEAD"
 expect_rc "CLIW-e unreachable remote -> exit 1" 1
 if [ "$CLI_RC" = "NI" ]; then fail "CLIW-e no mismatch warning when provisioning fails" "not implemented ($CLI_OUT)"
 elif has_env_warning "$CLI_OUT"; then fail "CLIW-e no mismatch warning when provisioning fails" "stdout=$CLI_OUT"

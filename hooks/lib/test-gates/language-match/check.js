@@ -1,12 +1,14 @@
 "use strict";
 // One test file through the language-match check (#2507 D7; ports the loop body of
-// bin/check-test-language-match.sh). check(file, name, head, { root }) ->
+// bin/check-test-language-match.sh). check(file, name, head, { root, base, declarationOnly }) ->
 // { lines: [{ err, text }], violation, infra }; an err line belongs on stderr. An invalid
-// declaration is reported and then counts as none.
+// declaration is reported and then counts as none. head may be [h1, h2] (a merge, #2812: the
+// 3-way with opts.base); declarationOnly (staged = a parent) checks the declaration alone.
 
 const R = require("../registry");
 const { langException } = require("./exception");
 const { judge } = require("./judge");
+const { judgeMulti } = require("./multi-baseline");
 
 const ME = "check-test-language-match.sh";
 
@@ -19,6 +21,7 @@ function check(file, name, head, opts = {}) {
     say(`HIGH: ${name}: invalid test-lang-exception value '${ex.bad}' (allowed: ${allowed}) code=INVALID_TEST_LANG_EXCEPTION`);
     res.violation = true;
   }
+  if (opts.declarationOnly) return res;
   const m = R.match(name);
   if (!m) {
     say(`WARN: ${name}: test language not checked (no test language registry entry matches this name) code=TEST_LANGUAGE_UNSUPPORTED`);
@@ -29,7 +32,9 @@ function check(file, name, head, opts = {}) {
     return res;
   }
   if (ex.ok && ex.value) return res;
-  const j = judge(file, name, head, opts);
+  const j = Array.isArray(head) && head.length === 2
+    ? judgeMulti(file, name, opts.base || null, head[0], head[1], opts)
+    : judge(file, name, Array.isArray(head) ? head[0] || null : head, opts);
   if (j.rc === 0) return res;
   if (j.rc === 1) {
     j.lines.forEach((l) => say(l));

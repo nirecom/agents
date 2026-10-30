@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2388-post-edit-content.sh
-# Tests: hooks/lib/post-edit-content.js, hooks/lib/pretool-lang-gate.js, hooks/block-comment-block-size.js
+# Tests: hooks/lib/post-edit-content.js, hooks/lib/pretool-lang-gate.js, hooks/block-post-edit-size/comment-block.js
 # Tags: TL1, hooks, post-edit-content, case-markers, scope:issue-specific
 # Unit contract of the shared post-edit reconstruction module (#2388 Step 4):
 # the content a Write/Edit/MultiEdit leaves on disk, rebuilt in memory, plus
 # per-edit-path grouping for MultiEdit. The two former owners (pretool-lang-gate,
-# block-comment-block-size) must consume it instead of keeping private copies.
+# the comment-block check) must consume it instead of keeping private copies.
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -262,11 +262,11 @@ case_begin "lang-gate-reexports-shared" "hooks/lib/pretool-lang-gate.js"
 expect sibling-reexport '[true,true,true]'
 case_end
 
-case_begin "comment-block-consumes-shared" "hooks/block-comment-block-size.js"
-if grep -qF "./lib/post-edit-content" "$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"; then
-  pass "comment-block-consumes-shared: requires ./lib/post-edit-content"
+case_begin "comment-block-consumes-shared" "hooks/block-post-edit-size/comment-block.js"
+if grep -qF "../lib/post-edit-content" "$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size/comment-block.js"; then
+  pass "comment-block-consumes-shared: requires ../lib/post-edit-content"
 else
-  fail "comment-block-consumes-shared" "hooks/block-comment-block-size.js does not require ./lib/post-edit-content"
+  fail "comment-block-consumes-shared" "hooks/block-post-edit-size/comment-block.js does not require ../lib/post-edit-content"
 fi
 case_end
 

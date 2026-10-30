@@ -96,9 +96,23 @@ function isAncestor(plansDir, a, b, opts) {
   return runGit(plansDir, ["merge-base", "--is-ancestor", a, b], opts).status === 0;
 }
 
+// indexBlobs(run) -> Map rel -> blob of the throwaway index, or null on failure.
+function indexBlobs(run) {
+  const ls = run(["ls-files", "--stage", "-z"]);
+  if (ls.status !== 0) return null;
+  const map = new Map();
+  for (const rec of ls.stdout.split("\0")) {
+    const m = rec.match(/^\d+ ([0-9a-f]+) \d+\t([\s\S]+)$/);
+    if (m) map.set(m[2], m[1]);
+  }
+  return map;
+}
+
 // overlayCommit(plansDir, base, entries, opts) -> {ok, commit, changed, error?}
 // base: commit sha or null (root commit). entries: [{rel, blob}] added or overwritten
 // on base's tree; nothing is ever deleted. An unchanged tree returns base itself.
+// opts.parent replaces base as the parent; opts.message may be fn(changedRels) -> string,
+// changedRels being the entries whose blob differs from base's (first-seen order).
 function overlayCommit(plansDir, base, entries, opts) {
   const o = opts || {};
   const idx = path.join(plansDir, ".git", `plansync-index-${process.pid}-${crypto.randomBytes(4).toString("hex")}`);
@@ -111,6 +125,12 @@ function overlayCommit(plansDir, base, entries, opts) {
     }
     // One update-index for every entry: init can overlay over a thousand plans at once.
     if (entries.some((e) => /[\t\r\n\0]/.test(e.rel))) return { ok: false, error: "unsafe path in entries" };
+    let changedRels = [];
+    if (typeof o.message === "function") {
+      const before = base ? indexBlobs(run) : new Map();
+      if (!before) return { ok: false, error: "ls-files failed" };
+      changedRels = [...new Set(entries.filter((e) => before.get(e.rel) !== e.blob).map((e) => e.rel))];
+    }
     if (entries.length > 0) {
       const info = entries.map((e) => `100644 ${e.blob}\t${e.rel}\n`).join("");
       const up = run(["update-index", "--add", "--index-info"], { input: info });
@@ -123,8 +143,10 @@ function overlayCommit(plansDir, base, entries, opts) {
       return { ok: true, commit: base, changed: false };
     }
     const args = ["commit-tree", tree];
-    if (base) args.push("-p", base);
-    args.push("-m", o.message || "plan-sync");
+    const parent = o.parent || base;
+    if (parent) args.push("-p", parent);
+    const message = typeof o.message === "function" ? o.message(changedRels) : o.message;
+    args.push("-m", message || "plan-sync");
     const ct = runGit(plansDir, args, { deadline: o.deadline, env: Object.assign({}, COMMIT_IDENTITY) });
     if (ct.status !== 0) return { ok: false, error: ct.stderr || "commit-tree failed" };
     return { ok: true, commit: ct.stdout.trim(), changed: true };
@@ -247,7 +269,9 @@ module.exports = {
   NULL_DEV,
   MAIN_REF,
   ORIGIN_MAIN_REF,
+  COMMIT_IDENTITY,
   runGit,
+  transferOpts,
   gitOut,
   revParse,
   hashObject,
