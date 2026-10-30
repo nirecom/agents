@@ -1,10 +1,11 @@
-# Tests: install/lib/wait-cc-exit-target.ps1, install/lib/wait-cc-exit.ps1, install.ps1, install/win/dotfileslink.ps1, install/win/claude-code.ps1
+# Tests: install/lib/wait-cc-exit-target.ps1, install/lib/wait-cc-exit.ps1, install.ps1, install/win/dotfileslink.ps1, install/win/claude-code.ps1, install/win/codex.ps1
 # Tags: installer, wait-cc-exit, TL2, scope:issue-specific, pwsh-required
 # #2476: parent waits for Claude Code once, hands the verdict to children via WAIT_CC_RESULT.
+# #2808: the codex stage of the helper ignores the memo and the Desktop exclusion (codex cases below).
 # TL2: real .ps1 sources run in a child pwsh (per-process env, .cmd stubs, TestDrive root);
 # pwsh-executing half of tests/install/feature-2476-installer-cc-wait-once.sh.
 # TL3 gap: real Desktop app (MSIX) beside a CLI claude; install.ps1 end-to-end (fnm,
-# winget, network); ping.exe copies may be blocked (Defender/AppLocker).
+# winget, network); a real running codex process and real npm/fnm (#2808); ping.exe copies may be blocked (Defender/AppLocker).
 # Closest-to-action mitigation: bin/check-verification-gate.sh category: installer.
 
 BeforeAll {
@@ -22,7 +23,7 @@ BeforeAll {
     }
 }
 
-Describe 'desktop-shell-excluded-by-path-predicate' {
+Describe 'desktop-shell-excluded-by-path-predicate' -Tag 'target:install/lib/wait-cc-exit-target.ps1' {
     # Test-CCWaitTarget -Path: $false only for the drive-rooted Desktop app shell
     # (<Drive>:\[Program Files\]WindowsApps\Claude_*\app\Claude.exe); every other path -
     # a user-writable lookalike included - and null/blank, waits.
@@ -50,7 +51,7 @@ Describe 'desktop-shell-excluded-by-path-predicate' {
     }
 }
 
-Describe 'result-memo-short-circuits-helpers' {
+Describe 'result-memo-short-circuits-helpers' -Tag 'target:install/lib/wait-cc-exit.ps1' {
     # WAIT_CC_RESULT memo contract: clear -> exit 0 at once, silent; timeout -> exit 1 at
     # once, silent; unset/empty -> poll as before; any other value (case-sensitive) -> one
     # "Ignoring invalid WAIT_CC_RESULT" diagnostic, then poll. The process override
@@ -118,7 +119,7 @@ Describe 'result-memo-short-circuits-helpers' {
     }
 }
 
-Describe 'helpers-list-waited-pids' {
+Describe 'helpers-list-waited-pids' -Tag 'target:install/lib/wait-cc-exit.ps1' {
     # PID display contract: "  PID <id>  <path|(unknown)>" on the first poll and whenever the
     # PID set changes (ps: Write-Host); none for the internal override modes.
     BeforeAll {
@@ -194,7 +195,7 @@ Describe 'helpers-list-waited-pids' {
         BeforeAll {
             $script:MockDriver = Join-Path $TestDrive 'disp-mock.ps1'
             Set-Content -LiteralPath $script:MockDriver -Value @'
-param([string]$Helper, [string]$Scenario, [string]$Desk, [string]$Cli)
+param([string]$Helper, [string]$Scenario, [string]$Desk, [string]$Cli, [string]$ProcessName)
 function New-MockProc([int]$Id, $Path) {
     [pscustomobject]@{ Id = $Id; Path = $Path; Name = 'claude'; ProcessName = 'claude' }
 }
@@ -202,22 +203,36 @@ switch ($Scenario) {
     'desktop-only' { $global:MockProcs = @(New-MockProc 3131 $Desk) }
     'mixed'        { $global:MockProcs = @((New-MockProc 3131 $Desk), (New-MockProc 4242 $Cli)) }
     'nullpath'     { $global:MockProcs = @(New-MockProc 777 $null) }
+    # #2808: a codex wait has no Desktop exclusion, so a Desktop-shaped path still waits.
+    'codex-desktop-path' { $global:MockProcs = @(New-MockProc 3131 $Desk) }
 }
 # Accepts and ignores the helper's call shape (-Name "claude" -ErrorAction SilentlyContinue).
 function global:Get-Process { $global:MockProcs }
-Remove-Item Env:WAIT_CC_RESULT, Env:WAIT_CC_PROCESS_OVERRIDE -ErrorAction SilentlyContinue
+Remove-Item Env:WAIT_CC_RESULT, Env:WAIT_CC_PROCESS_OVERRIDE, Env:WAIT_CODEX_PROCESS_OVERRIDE -ErrorAction SilentlyContinue
 $env:WAIT_CC_POLL_INTERVAL = '1'; $env:WAIT_CC_MAX_POLLS = '1'
-$out = & $Helper *>&1 | Out-String
+# -ProcessName is passed only when asked for, so the claude scenarios keep the old call shape.
+$helperArgs = @{}
+if ($ProcessName) { $helperArgs['ProcessName'] = $ProcessName }
+$out = & $Helper @helperArgs *>&1 | Out-String
 Write-Output "RC=$LASTEXITCODE"
 Write-Output $out
 '@
-            function Invoke-MockScenario([string]$Scenario) {
-                $r = Invoke-PwshChild -File $script:MockDriver -TimeoutSec 60 -ArgumentList @(
+            function Invoke-MockScenario([string]$Scenario, [string]$ProcessName) {
+                $args2 = @(
                     '-Helper', $script:WaitPs, '-Scenario', $Scenario,
                     '-Desk', 'C:\Program Files\WindowsApps\Claude_1.2.3.0_x64__abc\app\Claude.exe',
                     '-Cli', 'C:\Users\u\.local\bin\claude.exe')
+                if ($ProcessName) { $args2 += @('-ProcessName', $ProcessName) }
+                $r = Invoke-PwshChild -File $script:MockDriver -TimeoutSec 60 -ArgumentList $args2
                 $r.Output
             }
+        }
+
+        It 'D-ps-mock-codex-desktop-path: codex wait, Desktop-shaped path -> still waits (rc 1), PID 3131 shown' {
+            $out = Invoke-MockScenario 'codex-desktop-path' 'codex'
+            (Get-LineMatchCount $out '^RC=1$') | Should -Be 1 -Because $out
+            (Get-LineMatchCount $out 'PID 3131( |$)') | Should -BeGreaterThan 0
+            $out | Should -Match 'Codex'
         }
 
         It 'D-ps-mock-desktop-only: Desktop-shell path only -> rc 0, no poll, no PID line' {
@@ -243,7 +258,7 @@ Write-Output $out
     }
 }
 
-Describe 'ps-parent-waits-once-before-children' {
+Describe 'ps-parent-waits-once-before-children' -Tag 'target:install.ps1' {
     BeforeAll {
         $script:InstallLines = @(Get-Content -LiteralPath $script:InstallPs)
         # First 1-based line number matching $Pattern after line $After, or 0 (awk NR semantics).
@@ -316,7 +331,7 @@ foreach ($prior in '<unset>', 'prior') {
     }
 }
 
-Describe 'dotfileslink-ps-skips-only-settings-write' {
+Describe 'dotfileslink-ps-skips-only-settings-write' -Tag 'target:install/win/dotfileslink.ps1' {
     # dotfileslink.ps1 on a wait timeout skips only the settings.json write (node not called)
     # and still sets core.hooksPath and writes the launchers. The override contradicts the
     # memo so only a honored memo passes. Windows only: WindowsIdentity privilege check
@@ -365,7 +380,7 @@ Describe 'dotfileslink-ps-skips-only-settings-write' {
     }
 }
 
-Describe 'children-honor-parent-memo' {
+Describe 'children-honor-parent-memo' -Tag 'target:install/win/claude-code.ps1' {
     # Group G: the real claude-code child + the REAL wait helper (copied into a mock root,
     # unlike feature-2284 which mocks the helper) honor the parent memo. The process
     # override contradicts the memo so only a honored memo passes. The copy finds the
@@ -410,5 +425,47 @@ Describe 'children-honor-parent-memo' {
         $r = Invoke-ClaudeCodeChild 'ps-timeout' 'timeout' 'none'
         $r.Updated  | Should -BeFalse
         $r.ExitCode | Should -Be 0
+    }
+}
+
+Describe 'codex-child-claude-stage-honors-memo-codex-stage-does-not' -Tag 'target:install/win/codex.ps1' {
+    # #2808: the real codex child + the REAL wait helper copied into a mock root. The parent
+    # memo covers only the claude stage; the codex stage always polls its own seam.
+    BeforeAll {
+        function Invoke-CodexChild([string]$Label, [string]$Memo, [string]$ClaudeSeam, [string]$CodexSeam) {
+            $root = Join-Path $TestDrive "gc-root-$Label"
+            foreach ($d in @((Join-Path $root 'install/win'), (Join-Path $root 'install/lib'))) {
+                New-Item -ItemType Directory -Path $d -Force | Out-Null
+            }
+            Copy-Item -LiteralPath (Join-Path $script:AgentsDir 'install\win\codex.ps1') -Destination (Join-Path $root 'install/win/codex.ps1')
+            Copy-Item -LiteralPath $script:WaitPs, $script:TargetPs -Destination (Join-Path $root 'install/lib')
+            $set = New-InstallerStubSet -Base (Join-Path $TestDrive "gc-set-$Label") -Cli 'codex'
+            Invoke-StubbedInstaller -Installer (Join-Path $root 'install/win/codex.ps1') -Set $set -Environment @{
+                WAIT_CC_EXIT_SCRIPT_OVERRIDE = $null
+                WAIT_CC_RESULT               = $Memo
+                WAIT_CC_PROCESS_OVERRIDE     = $ClaudeSeam
+                WAIT_CODEX_PROCESS_OVERRIDE  = $CodexSeam
+                WAIT_CC_POLL_INTERVAL        = '1'
+                WAIT_CC_MAX_POLLS            = '2'
+            }
+        }
+    }
+
+    It 'G-ps-codex-clear: memo clear (claude seam alive) + codex none -> npm install called' {
+        $r = Invoke-CodexChild 'clear' 'clear' 'alive' 'none'
+        $r.NpmInstalled | Should -BeTrue -Because "rc=$($r.ExitCode) $($r.Output)"
+    }
+
+    It 'G-ps-codex-memo-ignored: memo clear + codex alive -> npm not called, rc 0, waits for Codex' {
+        $r = Invoke-CodexChild 'ignored' 'clear' 'none' 'alive'
+        $r.NpmInstalled | Should -BeFalse
+        $r.ExitCode     | Should -Be 0
+        $r.Output       | Should -Match 'Waiting for Codex'
+    }
+
+    It 'G-ps-codex-timeout: memo timeout -> claude stage skipped as timeout, npm not called, rc 0' {
+        $r = Invoke-CodexChild 'timeout' 'timeout' 'none' 'none'
+        $r.NpmInstalled | Should -BeFalse
+        $r.ExitCode     | Should -Be 0
     }
 }

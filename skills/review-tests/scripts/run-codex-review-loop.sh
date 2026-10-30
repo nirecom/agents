@@ -119,10 +119,9 @@ arm_terminal_guard() {
   return "$rc"
 }
 
-# Owner-resolved intent (#2633): a resumed session reads its upstream's file.
+# The intent of the session chain is named after first_session_id (#2748); unresolvable = no intent.
 INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
-INTENT_FILE="$PLANS_DIR/${INTENT_FILE##*[/\\]}"
-[[ "$INTENT_FILE" == *-intent.md ]] || INTENT_FILE="$PLANS_DIR/$SESSION_ID-intent.md"
+if [[ "${INTENT_FILE##*[/\\]}" == *-intent.md ]]; then INTENT_FILE="$PLANS_DIR/${INTENT_FILE##*[/\\]}"; else INTENT_FILE=""; fi
 
 args=(
   --format test-review
@@ -131,9 +130,9 @@ args=(
   --draft-file "$PLANS_DIR/$SESSION_ID-test-review.md"
   --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$ACCEPTED_TRADEOFFS_FILE"
-  --class-members "$INTENT_FILE"
   --repo-root "$REPO_ROOT_VAL"
 )
+if [[ -n "$INTENT_FILE" ]]; then args+=(--class-members "$INTENT_FILE"); fi
 
 # Soft scope (#1371): scope the review to files changed in this PR diff.
 CHANGED_FILES_CTX=""

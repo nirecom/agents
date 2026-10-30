@@ -127,9 +127,11 @@ function writeSetIssue(sessionId, cwd, plansDir) {
   const isOverwriteable = existing === null || existing === "⏳" || /^⏳\S/.test(existing);
   if (!isOverwriteable) return;
 
-  const intentPath = path.join(plansDir, sessionId + "-intent.md");
   let intentContent;
   try {
+    // The intent of the session chain is named after first_session_id (#2748).
+    const intentPath = require("../workflow-state/plan-artifact-owner")
+      .resolvePlanArtifactOwner(sessionId, "intent", undefined, { plansDir }).path;
     intentContent = fs.readFileSync(intentPath, "utf8");
   } catch (_) {
     return; // fail-open: missing intent.md

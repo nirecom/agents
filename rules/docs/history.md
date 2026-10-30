@@ -42,6 +42,6 @@ Install: `dotfileslink.sh` / `dotfileslink.ps1` generate `~/.local/bin/doc-appen
 
 **Ascending-date guard**: `doc-append` rejects an entry dated more than 7 days before the last entry, so the stream cannot silently fall out of order. Backfill of long-closed work is the one legitimate exception — pass `--allow-backdate`, then run `uv run bin/sort-history.py <path>` afterwards. Each append re-sorts the entries already in the file but writes the new entry at the tail, so only the final backdated entry needs the trailing sort.
 
-**Rotation thresholds**: `history.md` warns at 500 lines, hard limit at 800 lines.
-**Auto-rotation**: `doc-append` automatically invokes `doc-rotate.py --threshold-warn 500 --floor 20` after appending when the resulting file is ≥ 500 lines. Rotation also rebuilds `history/index.md`. Manual `doc-rotate.py --dry-run` is only needed when overriding defaults.
+**Rotation thresholds**: `history.md` uses the `history` WARN and HARD of the generated table in [../coding/file-split.md](../coding/file-split.md#size-limits).
+**Auto-rotation**: `doc-append` invokes `doc-rotate.py --threshold-warn-ssot --floor 20` after every append; doc-rotate rotates only when the file reaches the `history` WARN. Rotation also rebuilds `history/index.md`. Manual `doc-rotate.py --dry-run` is only needed when overriding defaults.
 After rotation, `history/index.md` is auto-generated with a year-grouped list of all entries for fast lookup. The index includes a Category Distribution summary and a backtick badge per entry. Run `doc-rotate.py <path> --rebuild-index` to regenerate without rotating.

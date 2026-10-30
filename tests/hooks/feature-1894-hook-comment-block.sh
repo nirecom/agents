@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block.sh
-# Tests: hooks/block-comment-block-size.js, hooks/lib/comment-block-scan.js, settings.json
+# Tests: hooks/block-post-edit-size.js, hooks/block-post-edit-size/comment-block.js, hooks/lib/comment-block-scan.js, settings.json
 # Tags: comment-block-size, hook, pretooluse, edit-time, shift-left, no-bypass, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
-# #1894: the Edit-time half (shift-left; hooks/pre-commit is the baseline-relative backstop).
-# Edit-time is PURE ABSOLUTE on the post-Edit file (detail plan S3-2, Risks #10); no marker
-# bypass (no-bypass.sh); config from the main root's .env only (filter-and-config.sh).
-# Cases: tests/hooks/feature-1894-hook-comment-block/*.sh.
-# TL3 gap: real Edit routing, real payload shapes, latency (WORKFLOW_USER_VERIFIED preflight).
+# Issue #1894 — edit-time shift-left of the comment-block check; hooks/pre-commit is the backstop.
+# Edit-time is PURE ABSOLUTE on the post-edit file (an old violation keeps the file unwritable until
+# fixed); pre-commit is baseline-relative (CPR-SC). Absence properties: no marker bypass (no-bypass.sh),
+# config only from the agents main root's .env (filter-and-config.sh). Cases: feature-1894-hook-comment-block/*.sh.
+# TL3 gap: a real Edit routed through the hook, real editFiles/NotebookEdit payloads, latency.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh, category hook-registration).
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The worktree copies are the state under test — never the deployed ~/.claude.
-HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-comment-block-size.js"
+HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size.js"
+# The comment-block check itself, split out of the dispatch by #2631 (no-bypass.sh B2 greps it).
+CB_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/block-post-edit-size/comment-block.js"
 SCAN_MODULE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-scan.js"
 SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
 REVIEW_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-review/review.js"
@@ -308,7 +311,7 @@ wfile() {
 
 if [ ! -f "$HOOK" ]; then
     echo "NOTE: $HOOK does not exist yet — every case below is expected to fail"
-    echo "      until hooks/block-comment-block-size.js is implemented (issue #1894)."
+    echo "      until hooks/block-post-edit-size.js is implemented (issue #1894)."
 fi
 
 # ============================================================================

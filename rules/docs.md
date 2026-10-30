@@ -16,11 +16,11 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 | `README.md` | Repo's project pitch and entry point — what it does, install, usage, configuration. Write initial install/setup instructions here first. | Compact | Always |
 | `CHANGELOG.md` | User-facing release log — what changed and why it matters to users. Written by `/update-docs` via `doc-append CHANGELOG.md` (no `--commits`). Public repos only. | Append-only | Public repos |
 | `overview.md` | Highest-level description of a project or directory — vision, goals, and overall shape. Most abstract document in its location. | Compact | Large projects only |
-| `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`). When split into `architecture/`, the main file is `architecture/design.md`. | <300 lines (split into `architecture/` when exceeded) | Always |
-| `architecture/design.md` | Main content file when `architecture.md` is split. Same What/Why scope. Other split files use topical names (e.g. `risks.md`, `stacks.md`). | Unlimited | When `architecture.md` exceeds 300 lines |
+| `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`). When split into `architecture/`, the main file is `architecture/design.md`. | Docs WARN (split into `architecture/` when exceeded) | Always |
+| `architecture/design.md` | Main content file when `architecture.md` is split. Same What/Why scope. Other split files use topical names (e.g. `risks.md`, `stacks.md`). | Unlimited | When `architecture.md` exceeds the docs WARN |
 | `roadmap.md` | Project-wide goals, milestones, and direction | Compact | Optional |
 | `todo.md` | Current work pointer — reading from top tells you what to do now | <100 lines | Always |
-| `history.md` | Completed work with why (background, incidents, decisions) — append-only | <500 lines warn / <800 lines hard (rotate when exceeded) | On first completion |
+| `history.md` | Completed work with why (background, incidents, decisions) — append-only | History WARN / HARD (rotate when exceeded) | On first completion |
 | `ops.md` | Day-to-day operations and procedures too detailed for README.md. Initial install instructions belong in README.md, not here. | Unlimited | On demand |
 | `infrastructure.md` | SSOT for physical machines, network, Docker stacks, ports, and cloud resources per stack/host. Other docs must reference this — never duplicate host placements. Path is defined in `CLAUDE.local.md`. | Unlimited | Always |
 
@@ -32,7 +32,8 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 - `infrastructure.md`: When adding or moving a service, update `infrastructure.md` first — downstream docs reference it. Use `/update-infrastructure` skill to keep it aligned.
 - `ops.md`: Day-to-day operations and complex procedures. Never write initial install steps here — those belong in README.md.
 - Do not duplicate content across documents — cross-reference instead.
-- Doc line limits (WARN 300 / HARD 500) and README section order are enforced at the `review_docs` step — see [coding/file-split.md](coding/file-split.md) Pattern C and [docs/readme.md](docs/readme.md).
+- Size limits in this file name a kind of the generated table in [coding/file-split.md](coding/file-split.md#size-limits); never copy its numbers.
+- Doc line limits and README section order are enforced at the `review_docs` step — see [coding/file-split.md](coding/file-split.md) Pattern C and [docs/readme.md](docs/readme.md).
 
 ## Progressive Disclosure (Cascade)
 
@@ -65,7 +66,7 @@ Loaded automatically when editing the relevant file type; also readable on deman
 - [docs/history.md](docs/history.md) — history.md format, append-only tools, and rotation thresholds
 - [docs/todo.md](docs/todo.md) — todo.md structure and user verification flow
 - [docs/changelog.md](docs/changelog.md) — CHANGELOG.md user-facing scope rules
-- [docs/architecture.md](docs/architecture.md) — architecture.md What/Why scope and 300-line split rule
+- [docs/architecture.md](docs/architecture.md) — architecture.md What/Why scope and split rule
 - [docs/readme.md](docs/readme.md) — README.md entry point rules
 - [docs/env-example.md](docs/env-example.md) — .env.example variable comment format
 - [docs/glossary.md](docs/glossary.md) — glossary entry criteria, category, and entry form

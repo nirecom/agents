@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/attr-cases.sh
 # Tests: bin/lib/run-all-durations-consolidate.sh
 # Tags: tests, bin, ledger, durations, consolidate, os-attribute, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n18 (16) (#2079 S6/S7b): one (repo, key) measured under two OS attributes. The winner is
 # global per (repo, key) by provenance, lands in its own attribute's base only, and later
 # rounds neither regress, duplicate nor lose it.

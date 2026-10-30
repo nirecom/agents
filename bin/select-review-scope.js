@@ -3,7 +3,8 @@
 
 // bin/select-review-scope.js — /review-tests RT-2 scope selection (#2327).
 // Usage: select-review-scope.js --session <sid> --worktree <path-or-empty>
-// Stdout, one item per line: SCOPE=<full|delta>, REASON=<...>, REVIEW\t<abs>,
+// Stdout, one item per line: SCOPE=<full|delta>, REASON=<...> (vocabulary:
+// hooks/workflow-gate/review-scope-delta.js), REVIEW\t<abs>,
 // DELETED\t<rel>, INVENTORY\t<rel>, SOURCE\t<abs>.
 // Exit: 0 ok; 2 usage / malformed session id; 4 input error (manifest failure, or a
 // REVIEW/SOURCE path missing from the worktree — the #1455 deterministic pre-check).
@@ -16,6 +17,7 @@ const { readState } = require("../hooks/workflow-state/state-io");
 const { resolveSessionWorktreePath } = require("../hooks/workflow-state/resolve-worktree-path");
 const { computeReviewScopeManifest } = require("../hooks/workflow-gate/review-tests-evidence");
 const { latestRecordedManifest, decideReviewScope } = require("../hooks/workflow-gate/review-scope-delta");
+const { buildHeaderTargets } = require("./lib/review-scope-header-targets");
 const { toWindowsPath } = require("../hooks/lib/branch-diff");
 
 const NAME = "select-review-scope";
@@ -52,6 +54,14 @@ function resolveWorktree(sid, explicit) {
   }
 }
 
+// The covering-test map (bash runs only when a test is staged), or null with one stderr line.
+function headerTargetsOf(worktree, files) {
+  const built = buildHeaderTargets(worktree, files);
+  if (built.ok) return built.targets;
+  process.stderr.write(`${NAME}: header map unavailable: ${String(built.error).replace(/\s+/g, " ")}\n`);
+  return null;
+}
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.error) {
@@ -70,7 +80,7 @@ function main(argv) {
   }
   const state = readState(args.session);
   const decision = state
-    ? decideReviewScope(latestRecordedManifest(state.events), current)
+    ? decideReviewScope(latestRecordedManifest(state.events), current, headerTargetsOf(worktree, current.files))
     : { ...decideReviewScope(null, current), reason: "no-state" };
 
   const root = slash(worktree);

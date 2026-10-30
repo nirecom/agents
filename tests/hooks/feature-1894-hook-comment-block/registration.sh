@@ -1,19 +1,16 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block/registration.sh
-# Tests: settings.json, hooks/block-comment-block-size.js
+# Tests: settings.json, hooks/block-post-edit-size.js
 # Tags: comment-block-size, hook, pretooluse, settings, registration, wiring, e2e, integration, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Part 6 — the wiring. Every other case invokes the hook directly, which
-# proves it works but says nothing about whether it ever runs; an
-# unregistered hook passes its tests and guards nothing, silently — authors
-# keep writing long blocks, the suite stays green. G1-G4 read settings.json
-# as data; G5 EXECUTES the command string it found as a child process and
-# validates the response against the PreToolUse protocol — the integration
-# half a hook-registration change requires (rules/test.md). Beyond that:
-# whether Claude Code itself routes an Edit into the hook (TL3 gap — also,
-# ~/.claude/settings.json is installer-assembled and needs a reinstall).
-
+# Part 6 — the wiring: an unregistered hook passes its tests and guards nothing, silently.
+# G1-G4 read settings.json as data; G5 EXECUTES the registered command string and validates the
+# response against the PreToolUse protocol (the integration half rules/test.md requires).
+# TL3 gap: whether Claude Code itself routes an Edit into the hook (~/.claude/settings.json is
+# installer-assembled and needs a reinstall).
 # Sourced by the dispatcher; all helpers are defined there.
+
+readonly PRETOOLUSE_TIMEOUT_CAP_S=15  # value #2676's interim patch (5f64fcee) gave every PreToolUse hook; when #2676's body changes it, fix only this line
 
 REG_JS="$TMPDIR_BASE/reg.js"
 cat > "$REG_JS" <<'REGJS'
@@ -40,11 +37,11 @@ reg_lookup() {
 # ============================================================================
 g1_registered_once() {
     local rows
-    rows="$(reg_lookup block-comment-block-size.js)"
+    rows="$(reg_lookup block-post-edit-size.js)"
     local n
     n="$(printf '%s' "$rows" | grep -c . || true)"
     if [ "$n" = "1" ]; then
-        pass "G1: block-comment-block-size.js is registered exactly once"
+        pass "G1: block-post-edit-size.js is registered exactly once"
     else
         fail "G1: found $n PreToolUse registration(s), expected 1" \
              "rows: ${rows:-<none>}"
@@ -97,10 +94,25 @@ g3_invocation_shape() {
     assert_absent "G3/no-absolute-home-path" "/Users/" "$cmd"
     assert_absent "G3/no-absolute-windows-path" ":\\" "$cmd"
     # A hook on the Edit hot path without a timeout can hang the editor.
-    if [ -n "$timeout" ] && [ "$timeout" -le 10 ] 2>/dev/null; then
-        pass "G3/timeout-is-bounded ($timeout s)"
+    if [[ "$timeout" =~ ^[1-9][0-9]*$ ]]; then
+        pass "G3/timeout-is-set ($timeout s)"
     else
-        fail "G3/timeout-is-bounded" "timeout=${timeout:-<unset>}; expected a value <= 10"
+        fail "G3/timeout-is-set" "timeout=${timeout:-<unset>}; expected a positive integer"
+        return
+    fi
+    # Same value as the PreToolUse hook guarding the same tool class, so a uniform change
+    # (as #2676 made) moves both together; the cap still stops both drifting too high.
+    local sibling_timeout
+    sibling_timeout="$(reg_lookup block-tests-direct.js | head -1 | cut -f3)"
+    if [[ -z "$sibling_timeout" ]]; then
+        fail "G3/timeout-equals-sibling" "block-tests-direct.js is not registered — no sibling to compare against"
+    else
+        assert_eq "G3/timeout-equals-sibling" "$sibling_timeout" "$timeout"
+    fi
+    if [[ "$timeout" -le "$PRETOOLUSE_TIMEOUT_CAP_S" ]]; then
+        pass "G3/timeout-within-cap ($timeout s <= $PRETOOLUSE_TIMEOUT_CAP_S s)"
+    else
+        fail "G3/timeout-within-cap" "timeout=$timeout; expected <= $PRETOOLUSE_TIMEOUT_CAP_S"
     fi
 }
 
@@ -115,32 +127,24 @@ g4_target_exists_and_runs() {
     if node --check "$(mpath "$HOOK")" >/dev/null 2>&1; then
         pass "G4: the hook parses as valid Node"
     else
-        fail "G4: node --check failed on hooks/block-comment-block-size.js"
+        fail "G4: node --check failed on hooks/block-post-edit-size.js"
     fi
     # Loading the module must not run the hook: a require.main guard is what
     # lets tests and other hooks import it without consuming stdin.
     if grep -q 'require.main' "$HOOK"; then
         pass "G4: the hook has a require.main guard"
     else
-        fail "G4: no require.main guard in hooks/block-comment-block-size.js" \
+        fail "G4: no require.main guard in hooks/block-post-edit-size.js" \
              "Without it, requiring the module executes the hook."
     fi
 }
 
-# G5 — the registered command line, run as a process, answers in the host
-# protocol (Codex round-1 C1). G1-G3 read settings.json as data, and every
-# other case invokes `node <path-to-hook>` composed by the TEST; between
-# those sits what actually runs in production — the command STRING
-# settings.json carries. A typo'd path, missing `node`, or bad quoting is
-# green under both halves and dead in the field; so is a bare "block" line,
-# a stray console.log before JSON, or a non-zero exit (Claude Code surfaces
-# that as a hook error, not a verdict).
-
-# This case takes the command verbatim from settings.json, expands only
-# $AGENTS_MAIN_ROOT to the worktree under test, and hands it a real payload
-# on stdin through `bash -c`, exercising the host's own tokenisation. TL3
-# gap: proves the command is runnable and protocol-correct; whether Claude
-# Code dispatches an Edit into it is only checkable on a real host.
+# G5 — the registered command line, run as a process, answers in the host protocol (Codex
+# round-1 C1). A typo'd path, missing `node`, bad quoting, a bare "block" line, a stray
+# console.log before JSON, or a non-zero exit is green under G1-G4 and dead in the field.
+# The command is taken verbatim from settings.json, only $AGENTS_MAIN_ROOT is expanded to the
+# worktree under test, and it runs through `bash -c` (the host's own tokenisation).
+# TL3 gap: whether Claude Code dispatches an Edit into it is only checkable on a real host.
 E2E_JS="$TMPDIR_BASE/verdict.js"
 cat > "$E2E_JS" <<'E2EJS'
 // Validates one PreToolUse hook response. Prints "OK <decision> <reasonLen>"
@@ -197,7 +201,7 @@ g5_registered_command_speaks_the_protocol() {
     cmd="$(printf '%s' "$row" | cut -f5)"
     E2E_TIMEOUT="$(printf '%s' "$row" | cut -f3)"
     case "$E2E_TIMEOUT" in ''|*[!0-9]*) E2E_TIMEOUT=10 ;; esac
-    # Expand only the agents-main-root placeholder, and only to the worktree copy:
+    # Expand only the AGENTS_MAIN_ROOT placeholder, and only to the worktree copy:
     # the deployed ~/.claude tree is not the state under test.
     E2E_CMD="${cmd//\$AGENTS_MAIN_ROOT/$(mpath "$SCRIPT_CHECKOUT_ROOT")}"
     E2E_CMD="${E2E_CMD//\$\{AGENTS_MAIN_ROOT\}/$(mpath "$SCRIPT_CHECKOUT_ROOT")}"

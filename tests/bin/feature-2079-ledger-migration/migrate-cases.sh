@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/migrate-cases.sh
 # Tests: bin/lib/run-all-ledger-migrate.sh
 # Tags: tests, bin, ledger, migration, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n17 (1)-(8) (#2079 S7): the writer's init folds pre-#2079 `dur.1.*` segments into
 # `dur.2.<current token>` outputs, one per OS attribute, without losing a key or the
 # newest-first order, and never touches new-format or (off Windows) foreign-token files.

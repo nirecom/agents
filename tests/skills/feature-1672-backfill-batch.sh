@@ -297,7 +297,7 @@ ROTATE_LINE10=$(grep '^rotate ' "$CFG10/rotate.log" 2>/dev/null | head -1 | tr '
 if [ "$RC10" -eq 0 ] \
     && [ "$SORT_LINE10" != "sort docs/history.md" ] \
     && [[ "$SORT_LINE10" == *"/$REPO10_BASE/docs/history.md" ]] \
-    && [[ "$ROTATE_LINE10" == *"/$REPO10_BASE/docs/history.md --threshold-warn 500 --floor 20" ]]; then
+    && [[ "$ROTATE_LINE10" == *"/$REPO10_BASE/docs/history.md --threshold-warn-ssot --floor 20" ]]; then
     pass "10: sort/rotate receive the absolute --repo-dir history.md path (not a cwd-relative 'docs/history.md')"
 else
     fail "10: rc=$RC10 sort='$SORT_LINE10' rotate='$ROTATE_LINE10' repo_base='$REPO10_BASE'"

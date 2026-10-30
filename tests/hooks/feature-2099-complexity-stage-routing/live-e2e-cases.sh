@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/live-e2e-cases.sh
 # Tests: skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, e2e, live-agent, cross-module, tl3, scope:common
-# Sourced by ../feature-2099-complexity-stage-routing.sh after the consumer-
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints after the consumer-
 # orchestration and judge case files — their helpers are reused wholesale.
 # Billable (spawns a real judge); gated exactly like JT-6.
 D2099E_LANE_NOTE="judge -> record CLI -> store -> reader -> model, one session"

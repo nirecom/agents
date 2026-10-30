@@ -2,7 +2,8 @@
 // tests/lib/command-guard/main.js — the command guard's decision (#2590).
 // Usage: node main.js <guard dir> <tool> <args...>   (from bin/<tool> or the Windows launcher)
 // gh / glab / codex: record a hit and exit 97, always. git: a network URL is refused, a read runs
-// the real git, and a write runs it only when every target sits inside the run root.
+// the real git, and a write runs it only when every target sits inside the run root. An ssh URL
+// served by the guard.conf `sshstub=` stub is not a network URL (ssh-stub.js).
 // Settings come from <guard dir>/guard.conf, never from the environment the test controls.
 
 const fs = require("fs");
@@ -11,6 +12,7 @@ const { spawn } = require("child_process");
 const { GUARD_EXIT, NETWORK_TOOLS, splitGlobals, isRead } = require("./classify");
 const { toNative, realish, makeGit, networkCheck, checkWrite, effectiveCwd } = require("./resolve-target");
 const { recordHit } = require("./record-hit");
+const { stubTrust } = require("./ssh-stub");
 
 function readConf(guardDir) {
   const conf = { allowed: [] };
@@ -83,6 +85,7 @@ function main(argv) {
     git: makeGit(conf.realgit, split.globals),
     allowed: conf.allowed.map((a) => realish(a)),
   };
+  ctx.trustedUrl = stubTrust(conf.sshstub, ctx.env, ctx.git);
   const url = networkCheck(ctx);
   if (url) return refuse(guardDir, tool, url, args, "network URL");
   if (!isRead(split.verb, split.rest)) {

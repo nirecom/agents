@@ -5,11 +5,13 @@
 // worktrees resolve exactly as the write itself would. Verbs that name a path of their own
 // (init, clone, worktree, archive, bundle, config --file / --global, push to a local remote)
 // add that path. Every target must sit inside one of the allowed roots after realpath.
+// Remote URLs are judged after git's own insteadOf / pushInsteadOf rewriting (remote-urls.js).
 
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { operands } = require("./classify");
+const { remoteUrls, rawUrlTargets, configGlobals } = require("./remote-urls");
 
 const IS_WIN = process.platform === "win32";
 
@@ -92,43 +94,37 @@ function optValue(rest, ...names) {
 function makeGit(realgit, globals) {
   return (args) => {
     const r = spawnSync(realgit, [...globals, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
-    return { status: r.status, lines: String(r.stdout || "").split(/\r?\n/).filter((l) => l !== "") };
+    const out = String(r.stdout || "");
+    return { status: r.status, out, lines: out.split(/\r?\n/).filter((l) => l !== "") };
   };
 }
 
-// The URLs a remote operand stands for: a configured remote's url / pushurl, else the operand
-// itself; no operand means every configured remote.
-function remoteUrls(git, operand, push) {
-  if (operand === null) {
-    return git(["config", "--get-regexp", "^remote\\..*\\.(url|pushurl)$"]).lines.map((l) => l.replace(/^\S+\s+/, ""));
-  }
-  if (!/^[A-Za-z0-9._-]+$/.test(operand)) return [operand];
-  const urls = git(["config", "--get-all", `remote.${operand}.url`]).lines;
-  if (push) urls.push(...git(["config", "--get-all", `remote.${operand}.pushurl`]).lines);
-  return urls.length > 0 ? urls : [operand];
-}
-
-// networkCheck(ctx) — the URL a command would reach over the network, or null.
+// networkCheck(ctx) — the URL a command would reach over the network after git's URL rewriting,
+// or null. ctx.remoteUrls keeps the rewritten push / fetch URLs for checkWrite. A network URL that
+// ctx.trustedUrl(url, pre, fresh) accepts (the declared ssh stub, ssh-stub.js) is not one; fresh
+// marks a URL fetched into a new repo, where the current repo's own config does not apply.
 function networkCheck(ctx) {
   const { verb, rest, git } = ctx;
+  const reaches = (u, pre, fresh) => isNetworkUrl(u) && !(ctx.trustedUrl && ctx.trustedUrl(u, pre, fresh));
+  const fetched = (url, pre) => (url ? rawUrlTargets(git, url, false, pre).find((u) => reaches(u, pre, true)) || null : null);
   if (["push", "fetch", "pull", "ls-remote"].includes(verb)) {
     const repo = optValue(rest, "--repo") || operands(rest, PUSH_FETCH_VALUE_OPTS)[0] || null;
     const urls = remoteUrls(git, repo, verb === "push");
     ctx.remoteUrls = urls;
-    return urls.find(isNetworkUrl) || null;
+    return urls.find((u) => reaches(u, [], false)) || null;
   }
-  if (verb === "clone") {
-    const src = operands(rest, CLONE_VALUE_OPTS)[0] || null;
-    return isNetworkUrl(src) ? src : null;
-  }
+  if (verb === "clone") return fetched(operands(rest, CLONE_VALUE_OPTS)[0] || null, configGlobals(rest));
   if (verb === "submodule") {
     const ops = operands(rest, ["-b", "--branch", "--name", "--reference", "--depth", "--jobs", "-j"]);
-    if (ops[0] === "add") return isNetworkUrl(ops[1]) ? ops[1] : null;
+    if (ops[0] === "add") return fetched(ops[1] || null, []);
     if (ops[0] === "update" || ops[0] === "init" || ops[0] === "sync") {
       const top = git(["rev-parse", "--show-toplevel"]).lines[0];
       const urls = git(["config", "--get-regexp", "^submodule\\..*\\.url$"]).lines;
       if (top) urls.push(...git(["config", "-f", `${top}/.gitmodules`, "--get-regexp", "^submodule\\..*\\.url$"]).lines);
-      return urls.map((l) => l.replace(/^\S+\s+/, "")).find(isNetworkUrl) || null;
+      for (const u of urls.map((l) => l.replace(/^\S+\s+/, ""))) {
+        const hit = fetched(u, []);
+        if (hit) return hit;
+      }
     }
   }
   return null;

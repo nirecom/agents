@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1894-hook-comment-block/no-bypass.sh
-# Tests: hooks/block-comment-block-size.js, docs/architecture/claude-code/marker-bypass-contract.md
+# Tests: hooks/block-post-edit-size/comment-block.js, docs/architecture/claude-code/marker-bypass-contract.md
 # Tags: comment-block-size, hook, pretooluse, no-bypass, workflow-off, worktree-off, omission, static-guard, scope:issue-specific, scope:feature-1894, layer:TL2
 
 # Part 5 — a property guaranteed by ABSENCE: unlike most guards, this hook honours no
@@ -43,19 +43,19 @@ b1_markers_do_not_suspend_the_block() {
 # B2 — the hook reads no marker state at all
 # ============================================================================
 b2_static_no_marker_reference() {
-    if [ ! -f "$HOOK" ]; then
-        fail "B2: $HOOK does not exist yet (issue #1894)"
+    if [ ! -f "$CB_MODULE" ]; then
+        fail "B2: $CB_MODULE does not exist yet (issue #2631)"
         return
     fi
     local hits="" needle
     for needle in isWorkflowOff isWorktreeOff session-markers workflow-off worktree-off \
                   WORKFLOW_OFF WORKTREE_OFF markerPath resolveSessionId; do
-        if grep -qF -- "$needle" "$HOOK"; then hits="$hits $needle"; fi
+        if grep -qF -- "$needle" "$CB_MODULE"; then hits="$hits $needle"; fi
     done
     if [ -z "$hits" ]; then
-        pass "B2: the hook references no session-marker machinery"
+        pass "B2: the comment-block check references no session-marker machinery"
     else
-        fail "B2: hooks/block-comment-block-size.js references:$hits" \
+        fail "B2: hooks/block-post-edit-size/comment-block.js references:$hits" \
              "This hook is deliberately not suspendable — the guarantee is that it never asks."
     fi
 }
@@ -113,10 +113,10 @@ b4_documented_as_non_honoring() {
         skip "B4: $doc not found — bypass contract table unavailable"
         return
     fi
-    if grep -qF 'block-comment-block-size.js' "$doc"; then
+    if grep -qF 'block-post-edit-size.js' "$doc"; then
         pass "B4: the hook appears in the marker-bypass contract"
     else
-        fail "B4: marker-bypass-contract.md does not mention block-comment-block-size.js" \
+        fail "B4: marker-bypass-contract.md does not mention block-post-edit-size.js" \
              "Issue #1894 adds the row marking it non-honoring for both markers."
     fi
 }

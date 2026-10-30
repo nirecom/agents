@@ -1,6 +1,6 @@
 "use strict";
 // Whether a test is written in the language of the code it tests (#2507 D7; ports tlm_judge of
-// bin/lib/test-language-match.sh). judge(file, match, head, { root }) -> { rc, lines }: rc 0 none,
+// bin/lib/test-language-match.sh). judge(file, match, head, { root }) -> { rc, lines, keys, reached }: rc 0 none,
 // 1 lines printed, 2 the code-language table unreadable, 3 the test language not supported.
 // file / head are paths or in-memory files; head null for a new file; root resolves targets.
 
@@ -36,6 +36,9 @@ function judge(file, match, head, opts = {}) {
   const testId = m.id;
   const lines = [];
   const seen = new Set();
+  // Every occurrence, kept before the dedup: the merge 3-way (multi-baseline.js) counts them.
+  const keys = [];
+  let reached = false;
   // mismatch(target) -> { lang, shape } when the target's code language is known and not testId.
   const mismatch = (target) => {
     const id = tokenLanguage(target, { root });
@@ -43,15 +46,18 @@ function judge(file, match, head, opts = {}) {
     return { lang: id, shape: R.fieldValue(R.entryById(id), "newFileNameShape") || "-" };
   };
   const report = (line, target, mm) => {
+    const text = `HIGH: ${match}${line ? ` line ${line}` : ""}: test language ${testId} does not match code language ${mm.lang} of ${target} (new file shape: ${mm.shape}) code=TEST_LANGUAGE_MISMATCH`;
+    keys.push({ key: `${line ? "case" : "hdr"}:${target}`, text });
     if (seen.has(target)) return;
     seen.add(target);
-    lines.push(`HIGH: ${match}${line ? ` line ${line}` : ""}: test language ${testId} does not match code language ${mm.lang} of ${target} (new file shape: ${mm.shape}) code=TEST_LANGUAGE_MISMATCH`);
+    lines.push(text);
   };
   const judgeTarget = (line, target) => {
     const mm = mismatch(target);
     if (mm) report(line, target, mm);
   };
   const addition = (h) => {
+    reached = true;
     const l = caseAddition(h, file, match);
     if (l) lines.push(l);
   };
@@ -77,7 +83,7 @@ function judge(file, match, head, opts = {}) {
       }
     } else if (!migration(head, file, match, judgeTarget) && entry && nTok !== 1) addition(head);
   }
-  return { rc: lines.length ? 1 : 0, lines };
+  return { rc: lines.length ? 1 : 0, lines, keys, reached };
 }
 
 // Markers put into a HEAD that was not conforming: false unless that is the shape. Otherwise every

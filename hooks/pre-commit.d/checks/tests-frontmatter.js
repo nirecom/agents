@@ -10,11 +10,14 @@ const { gate: languageMatch } = require("./tests-frontmatter/language-match-gate
 
 const GATES = [frontmatter, caseMarkers, languageMatch];
 
-function run({ context, snapshot, files }) {
+// A merge-narrowed list is widened back to every staged path: the gates judge a merge against both
+// parents themselves (#2812), so a file taken whole from MERGE_HEAD passes as an existing one.
+async function run({ context, snapshot, files, narrowed = false }) {
+  const all = narrowed ? await snapshot.files() : files || [];
   return R.withEnv(context.env || process.env, () => {
     const messages = [];
     for (const g of GATES) {
-      const r = g({ context, snapshot, files: files || [] });
+      const r = g({ context, snapshot, files: all });
       messages.push(...r.messages);
       if (r.block) return { verdict: "block", messages };
     }

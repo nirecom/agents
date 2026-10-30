@@ -1,8 +1,9 @@
 "use strict";
 // --staged of the frontmatter check (#2507 D7; ports that mode of bin/check-test-frontmatter.sh
 // and its self-impl.sh sibling). stagedCheck(files, io) -> { rc, lines } (every line for stderr).
-// io: { repoRoot, relOf(f), staged(rel), work(f), head(rel), isFile(abs) }; staged / work / head
-// give a Buffer or null (head null: HEAD lacks rel). Nothing is written to disk.
+// io: { repoRoot, relOf(f), staged(rel), work(f), head(rel), isFile(abs), parents?(rel) }; staged /
+// work / head give a Buffer or null. parents (#2812) gives { inParent, same, heads: [Buffer], base }:
+// heads holds two (with base, or null when the merge-base lacks rel) only for a judgeable 3-way.
 
 const path = require("path");
 const R = require("../registry");
@@ -34,12 +35,20 @@ function flatLine(f, m) {
   return `${code}: ${f} (new ${label} tests must live under tests/<category>/; categories: ${R.CATEGORIES.join(" ")})`;
 }
 
+// parentsOf(io, rel) — { inParent, same, heads, base } (#2812); an io without parents() has HEAD alone.
+function parentsOf(io, rel) {
+  if (typeof io.parents === "function") return io.parents(rel);
+  const head = io.head(rel);
+  return { inParent: Boolean(head), same: false, heads: head ? [head] : [], base: null };
+}
+
 function stagedCheck(files, io) {
   const lines = [];
   const queue = [];
   let fail = false;
   for (const { f, rel } of selected(files, io)) {
-    const head = io.head(rel);
+    const p = parentsOf(io, rel);
+    const head = p.inParent;
     const flat = isFlatTest(rel);
     if (flat && !head) {
       lines.push(flatLine(f, flat));
@@ -57,9 +66,12 @@ function stagedCheck(files, io) {
     }
     lines.push(...bad);
     if (bad.length) fail = true;
+    // Equal to a parent's blob: nothing the parents lack, so nothing is queued.
+    if (p.same) continue;
     const copy = Buffer.from(normalizeContent(text), "utf8");
-    if (head && head.equals(copy)) continue;
-    queue.push({ name: rel, file: S.mem(rel, copy), head: head ? S.mem(rel, head) : null });
+    if (p.heads.some((b) => b.equals(copy))) continue;
+    const heads = p.heads.map((b) => S.mem(rel, b));
+    queue.push({ name: rel, file: S.mem(rel, copy), heads, base: heads[1] && p.base ? S.mem(rel, p.base) : null });
   }
   for (const q of queue) {
     const j = judge(q);

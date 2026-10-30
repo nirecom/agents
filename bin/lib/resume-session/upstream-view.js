@@ -8,18 +8,15 @@
 // resumable", which is a lie about work that plainly happened — so each rung
 // degrades with its own honest reason instead.
 
-const fs = require("fs");
 const { readState, readRawState, SESSION_ID_VALID_RE } = require("../../../hooks/workflow-state/state-io");
-const { getPlansArtifactPath } = require("../../../hooks/lib/plans-artifact-registry");
+const { resolvePlanArtifactOwner } = require("../../../hooks/workflow-state/plan-artifact-owner");
 const { adoptState, checkOverwriteAllowed, heirContextOf: adoptHeirContextOf } =require("../../../hooks/workflow-state/inheritance/adopt");
 const { judgeInheritanceGranularity } = require("../../../hooks/workflow-state/inheritance/granularity");
 // Per call, so a swapped owner cache entry is honored.
 const repoIdentity = () => require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
 const { findHandoffPath, readHandoff, renderHandoffForResume } = require("../../../hooks/lib/handoff-artifact");
-const { progressPathFor, isRegularFile } = require("../../../hooks/lib/progress-file");
-
-const PROGRESS_FIRST_SECTION = "Current state";
+const { progressPathFor, isRegularFile, CURRENT_STATE_SECTION: PROGRESS_FIRST_SECTION } = require("../../../hooks/lib/progress-file");
 
 const AVAILABILITY = Object.freeze({
   STATE_AND_ARTIFACTS: "state-and-artifacts",
@@ -35,10 +32,11 @@ function isValidSid(sid) {
   return typeof sid === "string" && SESSION_ID_VALID_RE.test(sid);
 }
 
+// The plan the upstream's session chain reads: <first_session_id>-<kind>.md (#2748), when present.
 function existingPlansArtifact(sid, kind) {
   try {
-    const p = getPlansArtifactPath(sid, kind);
-    return fs.existsSync(p) ? p : null;
+    const owner = resolvePlanArtifactOwner(sid, kind);
+    return owner.exists ? owner.path : null;
   } catch (e) {
     return null;
   }

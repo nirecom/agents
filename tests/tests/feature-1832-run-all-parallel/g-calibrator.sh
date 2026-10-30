@@ -269,16 +269,33 @@ case_real_home_untouched() {
     ck "g-cal/isolation/real-home-run-all-untouched" "$REAL_PRE" "$now"
 }
 
-case_unreachable
-case_inquiry
-case_opt_in
-case_knee_curves
-case_protocol
-record_published
-case_knee_recorded_verbatim
-case_knee_top_warning
-case_dry_run_estimate
-case_real_home_untouched
+# CAL_CASES (space-separated case names) narrows the run so a split entrypoint owns a subset; unset = all.
+CAL_KNOWN=" unreachable inquiry opt_in knee_curves protocol record verbatim top_warning dry_run real_home "
+CAL_RAN=0
+want() {
+    [ -z "${CAL_CASES:-}" ] && return 0
+    case " $CAL_CASES " in *" $1 "*) CAL_RAN=$((CAL_RAN + 1)); return 0 ;; esac
+    return 1
+}
+# A typo in CAL_CASES must fail loudly, never yield a zero-case green run.
+if [ -n "${CAL_CASES:-}" ]; then
+    for tok in $CAL_CASES; do
+        case "$CAL_KNOWN" in *" $tok "*) ;; *) fail "g-cal/cal-cases/unknown-name" "CAL_CASES token '$tok' is not one of:$CAL_KNOWN" ;; esac
+    done
+fi
+want unreachable && case_unreachable
+want inquiry && case_inquiry
+want opt_in && case_opt_in
+want knee_curves && case_knee_curves
+want protocol && case_protocol
+want record && record_published
+want verbatim && case_knee_recorded_verbatim
+want top_warning && case_knee_top_warning
+want dry_run && case_dry_run_estimate
+want real_home && case_real_home_untouched
+if [ -n "${CAL_CASES:-}" ] && [ "$CAL_RAN" -eq 0 ]; then
+    fail "g-cal/cal-cases/none-ran" "CAL_CASES='$CAL_CASES' selected no case"
+fi
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

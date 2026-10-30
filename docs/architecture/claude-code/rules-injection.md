@@ -214,9 +214,11 @@ subagent context too, so before flipping a rule:
 2. Add an explicit Read step at each callsite that depends on the rule body.
 3. Add a `rule|readers` row to `ON_DEMAND_READERS` and remove the rule from
    `EXPECTED_UNCONDITIONAL`.
-4. Add a pointer line naming the rule in `CLAUDE.md`. A de-injected rule that nothing
-   points at is unreachable to a session that has not already decided to run the owning
-   skill; this is what `MISSING_ONDEMAND_POINTER` fires on.
+4. Add the rule to the `Not auto-injected` list in `CLAUDE.md`, at the position of its
+   first Read in the standard workflow. A de-injected rule that nothing points at is
+   unreachable to a session that has not already decided to run the owning skill; this
+   is what `MISSING_ONDEMAND_POINTER` fires on. The list states "not auto-injected" once
+   rather than per rule: what each entry must carry is the rule and when to Read it.
 5. Run `bin/check-on-demand-rules.sh --all`.
 
 Step 1 comes first. A reference added under a standing "do not re-read rules" directive

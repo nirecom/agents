@@ -15,7 +15,7 @@ WCD-0. Read the session facts once, before the pre-launch steps that consume the
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 Read `rules/ops.md` before any destructive or system-state-changing command (including inside WCD-4 self-repair) — on-demand-only, never auto-injected; it owns the recovery-options-first decision path.
 
-WCD-1. Read `rules/core-principles.md`, `rules/coding.md` (on-demand-only: not auto-injected, so this Read is the only way it arrives), and the target files identified from the plan.
+WCD-1. Read `rules/core-principles.md`, `rules/coding.md` and `rules/architecture-principles.md` (the latter two are on-demand-only: not auto-injected, so this Read is the only way they arrive), and the target files identified from the plan.
 
 WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent).
    - Write every file you plan to edit, one path per line (repo-relative, nothing else on the line), to `<PLANS_DIR>/<session-id>-write-code-files.txt` with the Write tool.
@@ -30,6 +30,7 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model alia
    - Target files and planned edit summary from WCD-2.
    - A-layer language essence block (see below).
    - Directive: "Read `rules/coding.md` (the hub — on-demand-only, so it does not reach you otherwise) and `rules/coding/<lang>.md` for each language present, before the first Edit."
+   - Directive: "Read `rules/architecture-principles.md` before adding or changing a guard, gate, or check — on-demand-only, so it does not reach you otherwise."
    - Directive: "Read `rules/shell-commands.md` before the first Bash command, or before writing a file — general-purpose dispatch does not inherit auto-injected rules."
    - The canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section, verbatim as a standalone line, with `<AGENTS_MAIN_ROOT>` replaced by the literal absolute path.
    - Directive: "Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules."

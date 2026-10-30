@@ -50,7 +50,7 @@ Phase 1 runs regardless of gate outcome.
 IC-1. Resolve session intent:
    Resolve `<PLANS_DIR>` with one standalone Bash call —
    `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` — and read `<SESSION_ID>`
-   from `$CLAUDE_CODE_SESSION_ID`. `<INTENT_MD>` is `<PLANS_DIR>/<SESSION_ID>-intent.md`.
+   from `$CLAUDE_CODE_SESSION_ID`. `<INTENT_MD>` is the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent --session <SESSION_ID>` (a failed call counts as no intent).
    Skip the gate silently when `<SESSION_ID>` is empty or `<INTENT_MD>` does not exist.
 
 IC-1a. Read `rules/mid-workflow-findings.md` — on-demand-only, never auto-injected; it owns the capture paths the IC-3 notice points the user at.

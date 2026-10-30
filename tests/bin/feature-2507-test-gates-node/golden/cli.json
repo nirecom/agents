@@ -57,12 +57,12 @@
   "fm-usage-none": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage:\n  check-test-frontmatter.sh --staged <file1> [<file2>...]\n  check-test-frontmatter.sh --all [<root>]\n"
+    "stderr": "Usage:\n  check-test-frontmatter.sh --staged [--merge-parents <file>] <file1> [<file2>...]\n  check-test-frontmatter.sh --all [<root>]\n"
   },
   "fm-usage-mode": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Unknown mode: --bogus\nUsage:\n  check-test-frontmatter.sh --staged <file1> [<file2>...]\n  check-test-frontmatter.sh --all [<root>]\n"
+    "stderr": "Unknown mode: --bogus\nUsage:\n  check-test-frontmatter.sh --staged [--merge-parents <file>] <file1> [<file2>...]\n  check-test-frontmatter.sh --all [<root>]\n"
   },
   "fm-no-node": {
     "rc": 2,
@@ -152,17 +152,17 @@
   "lm-usage-none": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>...\n"
+    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]] | --declaration-only] <file>...\n"
   },
   "lm-usage-option": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>...\ncheck-test-language-match.sh: unknown option: --bogus\n"
+    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]] | --declaration-only] <file>...\ncheck-test-language-match.sh: unknown option: --bogus\n"
   },
   "lm-usage-rel-two": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <head-copy>] <file>...\ncheck-test-language-match.sh: --rel takes exactly one file\n"
+    "stderr": "Usage: check-test-language-match.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]] | --declaration-only] <file>...\ncheck-test-language-match.sh: --rel takes exactly one file\n"
   },
   "lm-usage-head-missing": {
     "rc": 2,
@@ -207,22 +207,22 @@
   "si-manifest-bad": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\ncheck-self-impl.sh: malformed manifest line: tests/bin/x.sh\n"
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]]] <file>... | --manifest <manifest>\ncheck-self-impl.sh: malformed manifest line: tests/bin/x.sh\n"
   },
   "si-usage-none": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\n"
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]]] <file>... | --manifest <manifest>\n"
   },
   "si-usage-option": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\ncheck-self-impl.sh: unknown option: --bogus\n"
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]]] <file>... | --manifest <manifest>\ncheck-self-impl.sh: unknown option: --bogus\n"
   },
   "si-usage-manifest-file": {
     "rc": 2,
     "stdout": "",
-    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <head-copy>] <file>... | --manifest <manifest>\ncheck-self-impl.sh: --manifest takes no --rel, --head or file\n"
+    "stderr": "Usage: check-self-impl.sh [--rel <rel>] [--head <copy> [--head <copy> [--base <copy>]]] <file>... | --manifest <manifest>\ncheck-self-impl.sh: --manifest takes no --rel, --head or file\n"
   },
   "si-usage-manifest-missing": {
     "rc": 2,

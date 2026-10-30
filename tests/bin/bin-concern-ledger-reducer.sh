@@ -318,59 +318,63 @@ done
 clg_assert_harness_intact "pre-cases"
 clg_assert_library_intact "pre-cases"
 
+# Each group below runs only when CLG_GROUP names it (#2723 split): this file runs slot-bind; the
+# bin-concern-ledger-reducer-{merge,completeness,parse}.sh wrappers set CLG_GROUP and source it.
+CLG_GROUP="${CLG_GROUP:-slot-bind}"
 case_begin "reducer-slot-discrim" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/slot-discrim.sh
-. "$SUITE_DIR/slot-discrim.sh"
+[[ "$CLG_GROUP" == "slot-bind" ]] && . "$SUITE_DIR/slot-discrim.sh"
 case_end
 
 case_begin "reducer-bind" "bin/lib/concern-ledger/reduce.sh"
 # shellcheck source=./bin-concern-ledger-reducer/bind.sh
-. "$SUITE_DIR/bind.sh"
-case_end
-
-case_begin "reducer-merge" "bin/lib/concern-ledger/reduce.sh"
-# shellcheck source=./bin-concern-ledger-reducer/merge.sh
-. "$SUITE_DIR/merge.sh"
-case_end
-
-case_begin "reducer-transitions" "bin/lib/concern-ledger/reduce.sh"
-# shellcheck source=./bin-concern-ledger-reducer/transitions.sh
-. "$SUITE_DIR/transitions.sh"
-case_end
-
-case_begin "reducer-completeness" "bin/lib/concern-ledger/reduce.sh"
-# shellcheck source=./bin-concern-ledger-reducer/completeness.sh
-. "$SUITE_DIR/completeness.sh"
-case_end
-
-case_begin "reducer-cycle-migration-static" "bin/lib/concern-ledger/core.sh"
-# shellcheck source=./bin-concern-ledger-reducer/cycle-migration-static.sh
-. "$SUITE_DIR/cycle-migration-static.sh"
-case_end
-
-case_begin "reducer-pattern-discovery" "bin/lib/concern-ledger/parse.sh"
-# shellcheck source=./bin-concern-ledger-reducer/pattern-discovery.sh
-. "$SUITE_DIR/pattern-discovery.sh"
-case_end
-
-case_begin "reducer-path-shapes-and-framing" "bin/concern-ledger"
-# shellcheck source=./bin-concern-ledger-reducer/path-shapes-and-framing.sh
-. "$SUITE_DIR/path-shapes-and-framing.sh"
-case_end
-
-case_begin "reducer-backslash-reduce" "bin/lib/concern-ledger/reduce.sh"
-# shellcheck source=./bin-concern-ledger-reducer/backslash-reduce.sh
-. "$SUITE_DIR/backslash-reduce.sh"
+[[ "$CLG_GROUP" == "slot-bind" ]] && . "$SUITE_DIR/bind.sh"
 case_end
 
 # Must stay after the file-scope load and the cl() definition above: it asserts
 # the #2111 contract by calling cl() itself.
 case_begin "reducer-load-once-isolation" "bin/lib/concern-ledger.sh"
 # shellcheck source=./bin-concern-ledger-reducer/load-once-isolation.sh
-. "$SUITE_DIR/load-once-isolation.sh"
+[[ "$CLG_GROUP" == "slot-bind" ]] && . "$SUITE_DIR/load-once-isolation.sh"
 case_end
 
-# The two counters advanced by design while the ten case files ran, so they are
+case_begin "reducer-merge" "bin/lib/concern-ledger/reduce.sh"
+# shellcheck source=./bin-concern-ledger-reducer/merge.sh
+[[ "$CLG_GROUP" == "merge" ]] && . "$SUITE_DIR/merge.sh"
+case_end
+
+case_begin "reducer-transitions" "bin/lib/concern-ledger/reduce.sh"
+# shellcheck source=./bin-concern-ledger-reducer/transitions.sh
+[[ "$CLG_GROUP" == "merge" ]] && . "$SUITE_DIR/transitions.sh"
+case_end
+
+# Needs mk_codex_output from transitions.sh, so it runs in this group.
+case_begin "reducer-cycle-migration-static" "bin/lib/concern-ledger/core.sh"
+# shellcheck source=./bin-concern-ledger-reducer/cycle-migration-static.sh
+[[ "$CLG_GROUP" == "merge" ]] && . "$SUITE_DIR/cycle-migration-static.sh"
+case_end
+
+case_begin "reducer-backslash-reduce" "bin/lib/concern-ledger/reduce.sh"
+# shellcheck source=./bin-concern-ledger-reducer/backslash-reduce.sh
+[[ "$CLG_GROUP" == "merge" ]] && . "$SUITE_DIR/backslash-reduce.sh"
+case_end
+
+case_begin "reducer-completeness" "bin/lib/concern-ledger/reduce.sh"
+# shellcheck source=./bin-concern-ledger-reducer/completeness.sh
+[[ "$CLG_GROUP" == "completeness" ]] && . "$SUITE_DIR/completeness.sh"
+case_end
+
+case_begin "reducer-pattern-discovery" "bin/lib/concern-ledger/parse.sh"
+# shellcheck source=./bin-concern-ledger-reducer/pattern-discovery.sh
+[[ "$CLG_GROUP" == "parse" ]] && . "$SUITE_DIR/pattern-discovery.sh"
+case_end
+
+case_begin "reducer-path-shapes-and-framing" "bin/concern-ledger"
+# shellcheck source=./bin-concern-ledger-reducer/path-shapes-and-framing.sh
+[[ "$CLG_GROUP" == "parse" ]] && . "$SUITE_DIR/path-shapes-and-framing.sh"
+case_end
+
+# The two counters advanced by design while the group's case files ran, so they are
 # re-pinned here; the six identity scalars stay pinned to their load-time values.
 clg_rearm_counters
 clg_assert_harness_intact "post-cases"

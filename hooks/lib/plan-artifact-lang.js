@@ -24,11 +24,13 @@ function isPlanArtifactPath(resolvedPath) {
   return isPlanArtifact(path.basename(resolved));
 }
 
-// The joined basename must itself be a plan artifact: this rejects separators,
-// traversal and any sid outside the UUID / timestamp classes in one check.
+// The plan is named after first_session_id (#2748). The joined basename must itself be a plan
+// artifact: this rejects separators, traversal and any sid outside the UUID / timestamp classes.
 function resolvePlanArtifactPath(sid, stage) {
   if (typeof sid !== "string" || typeof stage !== "string" || !STAGES.has(stage)) return null;
-  const base = sid + "-" + stage + ".md";
+  const firstSid = require("../workflow-state/state-ancestry").resolveFirstSid(sid);
+  if (typeof firstSid !== "string") return null;
+  const base = firstSid + "-" + stage + ".md";
   if (!isPlanArtifact(base)) return null;
   return path.join(getWorkflowPlansDir(), base);
 }
@@ -67,9 +69,10 @@ function lintPlanArtifactStructure(text, stage) {
 // policy, but canonical-heading checks run regardless of policy (#2338): when
 // the stage resolves, heading violations are returned even under a non-strict
 // policy, so a non-strict policy no longer short-circuits the whole re-lint.
+// result.size is the #2631 size verdict of the same text (null when skipped).
 function relintPlanArtifact(sid, stage) {
   const { policy, tier } = loadPlanPolicy();
-  const result = { skipped: null, policy, tier, artifactPath: null, violations: [] };
+  const result = { skipped: null, policy, tier, artifactPath: null, size: null, violations: [] };
   const artifactPath = resolvePlanArtifactPath(sid, stage);
   if (artifactPath === null) return Object.assign(result, { skipped: "unresolved" });
   // A non-strict policy with no resolvable stage has nothing to check: heading
@@ -83,6 +86,8 @@ function relintPlanArtifact(sid, stage) {
   } catch (e) {
     return Object.assign(result, { skipped: "unreadable" });
   }
+  const { judge, measure } = require("./size-limits");
+  result.size = judge(stage, 0, measure(stage, text));
   result.violations = lintPlanArtifactText(text, policy, stage);
   return result;
 }

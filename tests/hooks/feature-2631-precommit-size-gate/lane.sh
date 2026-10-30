@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# tests/hooks/feature-2631-precommit-size-gate/lane.sh — one parallel lane of
+# tests/hooks/feature-2631-precommit-size-gate.sh. The whole file costs several minutes serially on
+# Windows, so the entry runs the lanes a few at a time and replays their PASS / FAIL lines into its
+# own case records.
+# Usage: bash lane.sh <lane-tmp-dir> <case-name>=<function>[:<arg>...] ...
+# Prints "@@CASE <case-name>" before each body and "@@DONE" after the last; a section with no
+# closing @@ line tells the entry that the lane died inside that body.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+. "$ROOT/tests/lib/harness.sh"
+
+TMP_ROOT="$1"
+readonly TMP_ROOT
+shift
+mkdir -p "$TMP_ROOT"
+harness_isolate "$TMP_ROOT/iso"
+harness_assert_isolated
+unset CLAUDE_CODE_SESSION_ID CODE_FILE_EXTENSIONS 2>/dev/null || true
+export CONFIRM_INTENT=on CONFIRM_OUTLINE=on CONFIRM_DETAIL=on COMMENT_BLOCK_ENFORCE=on
+
+LANE_DIR="$ROOT/tests/hooks/feature-2631-precommit-size-gate"
+# shellcheck source=fixture.sh
+. "$LANE_DIR/fixture.sh"
+# shellcheck source=cases-core.sh
+. "$LANE_DIR/cases-core.sh"
+# shellcheck source=cases-edges.sh
+. "$LANE_DIR/cases-edges.sh"
+# shellcheck source=git-commit-route.sh
+. "$LANE_DIR/git-commit-route.sh"
+# shellcheck source=../../lib/size-merge-fixture.sh
+. "$ROOT/tests/lib/size-merge-fixture.sh"
+# shellcheck source=cases-merge.sh
+. "$LANE_DIR/cases-merge.sh"
+
+for spec in "$@"; do
+  printf '@@CASE %s\n' "${spec%%=*}"
+  IFS=: read -r -a call <<<"${spec#*=}"
+  "${call[@]}"
+done
+printf '@@DONE\n'

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/repo-identity.js, bin/workflow/lib/next-step/repo-dir-guard.js, hooks/workflow-state/inheritance/adopt.js, bin/lib/resume-session/upstream-view.js
-# Tags: workflow, gate, hook, bin, git, repo-identity, scope:issue-specific, progress-file
+# Tags: workflow, gate, hook, bin, git, repo-identity, scope:issue-specific, progress-file, regression-2748
 # fix-1633 (TL1/TL2): the repo-identity comparator moves from the bin-side
 # repo-dir-guard into hooks/lib so the workflow gate can use it without a
 # hooks -> bin dependency. repo-dir-guard keeps re-exporting the SAME objects,
@@ -190,9 +190,11 @@ const S = require(agents + "/hooks/workflow-state/state-io");
 const plans = process.env.WORKFLOW_PLANS_DIR;
 const rows = [];
 // pf-up inherited from pf-root, whose state is gone: pf-root is the oldest reachable sid.
-S.writeState("pf-up", S.createInitialState("pf-up", { cwd: "/x", git_branch: "feature/x" }));
-S.appendEvents("pf-up", [{ kind: "step_status", step: "workflow_init", status: "complete",
-  provenance: "backfilled", origin: "session-inheritance", inherited_from: "pf-root" }]);
+// #2748: the session chain is the raw state's own keys, never a hand-written inherited_from event.
+const pfUp = S.createInitialState("pf-up", { cwd: "/x", git_branch: "feature/x" });
+pfUp.upstream_session_id = "pf-root";
+pfUp.previous_session_ids = ["pf-root"];
+fs.writeFileSync(S.getStatePath("pf-up"), JSON.stringify(pfUp, null, 2));
 fs.mkdirSync(plans, { recursive: true });
 fs.writeFileSync(path.join(plans, "pf-up-intent.md"), "# intent\n");
 fs.writeFileSync(path.join(plans, "pf-root-session-progress.md"), "## Current state\nroot-body\n");

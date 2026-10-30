@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/_runner-lpt.sh
 # Tests: tests/run-all.sh
 # Tags: tests, bin, ledger, migration, parallel, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # n17 (14) helper: a real run-all whose measurements exist only in the pre-#2079 format
 # must still plan longest-first after its next run. Prints `R14 <name>=<value>` lines;
 # the dispatcher asserts them. Real uname/host on purpose: the runner computes its own key.

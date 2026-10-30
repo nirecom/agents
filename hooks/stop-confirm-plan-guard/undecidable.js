@@ -42,7 +42,7 @@ function markerStages(markers) {
 }
 
 // mayHavePresented({sid, markers, input}) -> the stages the turn may have presented: those it wrote,
-// and those whose existing <sid>-<stage>.md the last assistant message names. No git or gate probe.
+// and those whose existing <first_session_id>-<stage>.md the last assistant message names. No git or gate probe.
 function mayHavePresented({ sid, markers, input } = {}) {
   const out = markerStages(markers);
   const text = input && typeof input.last_assistant_message === "string" ? input.last_assistant_message : "";

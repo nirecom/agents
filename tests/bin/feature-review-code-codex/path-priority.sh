@@ -1,4 +1,4 @@
-# Part of tests/bin/feature-review-code-codex.sh (sourced, not standalone).
+# Part of tests/bin/feature-review-code-codex-path-priority.sh (sourced, not standalone).
 # Tests: bin/review-code-codex, bin/resolve-merge-base.sh, skills/review-code-security/scripts/run-quality-gates.sh
 # Tags: codex, review, truncation, priority, path-ordering, budget, merge-base, scope:issue-specific, pwsh-not-required, TL2
 # P (#1976 / #1750): X/Y pin that a diff past the cap is ANNOUNCED, not WHICH lines survive — `head -n` over a concatenated diff can drop all three edited files behind an unrelated committed one (#1976) and counts the diff one line short (#1750). Rows below target the NOT-yet-implemented fix: priority file set, per-path chunks, stop-at-first-skip, configurable budget, PRIORITY-UNTRUSTED report (EXCLUDED is retired by the E24 redefinition) — expected to fail until it lands. Sourced last, after base-state-scope.sh, to reuse its Y1/Y2 fixtures and 6000-line BIG_REPO.
@@ -357,24 +357,5 @@ else
     fi
 fi
 
-# P10 onwards live in sourced parts: this file is at the 500-line hard split limit, and they
-# reuse every helper and fixture above. Order is load-bearing only in that helpers.sh must
-# already be sourced, which it is.
-# shellcheck source=./path-priority/exclusion-and-cross-reference.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/exclusion-and-cross-reference.sh"
-# shellcheck source=./path-priority/working-tree-target.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/working-tree-target.sh"
-# shellcheck source=./path-priority/budget-and-breakdown.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/budget-and-breakdown.sh"
-# shellcheck source=./path-priority/config-threshold.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/config-threshold.sh"
-# shellcheck source=./path-priority/path-edges-and-security.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/path-edges-and-security.sh"
-# shellcheck source=./path-priority/failure-and-leakage.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/failure-and-leakage.sh"
-# shellcheck source=./path-priority/concerns-file-parsing.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/concerns-file-parsing.sh"
-# shellcheck source=./path-priority/untracked-hardening.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/untracked-hardening.sh"
-# shellcheck source=./path-priority/untracked-withheld-reporting.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority/untracked-withheld-reporting.sh"
+# P10 onwards (path-priority/*.sh) run as their own entrypoints (#2723):
+# feature-review-code-codex-path-priority-{exclusion,config,edges,concerns}.sh.

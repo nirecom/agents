@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/path-charset-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, hooks/workflow-state.js
 # Tags: complexity, routing, cli, quoting, unicode, paths, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh AFTER
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints AFTER
 # traversal-attack-cases.sh — d2099t_snapshot and the canary tree come from there.
 # The complement of that file: those paths are HOSTILE and must be refused; these
 # are ORDINARY and must work. "C:/Users/Ana Lopez/プロジェクト (v2)" is a real home

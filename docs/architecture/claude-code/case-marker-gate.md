@@ -21,7 +21,8 @@ also names `caseEmbedRules` (all four supported entries since #2502). The marker
 message points to come from the entry's `diagnostics`. Writing rules live in
 `skills/_shared/test-design/case-markers.md`, with one notation document per language beside it.
 
-Only new files are judged — a test entrypoint absent from `HEAD`, a rename target included —
+Only new files are judged — a test entrypoint absent from `HEAD` (in a merge commit, absent from
+both parents; see [Merge commits](#merge-commits)), a rename target included —
 and only in a repository that carries the entry's helper library (the hook looks in the working
 tree, the commit layer in the staged index). Existing files that predate the gate are left
 alone, so an unrelated edit never blocks on old debt (tracked in #2372). The commit layer judges
@@ -53,7 +54,9 @@ is missing with `SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE`. The commit layer calls it
 frontmatter check (`stagedCheck` in `hooks/lib/test-gates/frontmatter/staged.js`, the logic of
 `bin/check-test-frontmatter.sh --staged`), with the same new-file and HEAD-count rule. When HEAD
 lists the file but its content cannot be read, the HEAD copy is empty and the file is judged as
-new: the commit blocks on any detection (fail-closed), with no separate diagnostic.
+new: the commit blocks on any detection (fail-closed), with no separate diagnostic. In a merge
+commit the baseline is the parent copy, or both parents and the merge-base
+([Merge commits](#merge-commits)).
 
 ## Test-language match
 
@@ -71,8 +74,10 @@ names the code language's new-file name shape.
   on every case target too — so a header naming same-language code cannot hide a case that tests
   another language.
 - A file in `HEAD` blocks only on a mismatch `HEAD` did not have, so editing or deleting an old
-  case never blocks. The hook and the commit layer pass the `HEAD` blob with `--head <copy>`. When
-  both versions are conforming, `pair` (`hooks/lib/test-gates/language-match/pairing.js`) pairs cases: same name first, then a renamed case
+  case never blocks. The hook passes the `HEAD` blob with `--head <copy>`, the commit layer in
+  memory; a merge commit uses the parent copy, or both parents and the merge-base
+  ([Merge commits](#merge-commits)). When both versions are conforming, `pair`
+  (`hooks/lib/test-gates/language-match/pairing.js`) pairs cases: same name first, then a renamed case
   paired 1:1 with a vanished `HEAD` case that had the same target; an unpaired case is added. An
   added case blocks on a mismatch; a paired one blocks only if its `HEAD` target matched. Otherwise
   only header tokens absent from the `HEAD` header are judged.
@@ -113,6 +118,59 @@ markers on existing files. Both are private to this check for now; #2440 should 
 shared entry point and call them from both checks. The case-marker check itself still
 judges new files only.
 
+## Merge commits
+
+In a merge commit `HEAD` is only the first parent, so a test that already sits on the other parent
+(`MERGE_HEAD`, usually `origin/main`) looked new and blocked a merge that changed nothing in it
+(#2812). The commit layer therefore judges each staged `tests/` path against its merge parents.
+`hooks/lib/merge-parents.js` (`resolveMergeParents`) decides the baseline once per commit; the
+three gates share that one resolution (`hooks/pre-commit.d/checks/tests-frontmatter/parents.js`),
+and `bin/merge-parents` hands it to a CLI caller as NUL-delimited records
+(`bin/check-test-frontmatter.sh --merge-parents`, read by `parseRecords`). The merge state (`MERGE_HEAD` read once, octopus or
+malformed → undecidable) comes from `hooks/lib/merge-state.js`, which
+[glossary-check.md](glossary-check.md)'s merge-incoming exclusion shares.
+
+Paths are compared by content (blob ID) only; a mode-only change counts as equal. With S the staged
+blob, H / M the parents' blobs and B the merge-base's, the first matching rule wins:
+
+| Rule | Condition | Baseline |
+|---|---|---|
+| R1 | S equals H or M | none — an existing file, not judged against a baseline |
+| R2 | neither parent has the path | none — a new file |
+| R3 / R4 | only H / only M has it | that parent (single baseline) |
+| R5 | both have it with the same content | that one blob (single baseline) |
+| R6 | both have it, contents differ, one merge-base | H, M and B (3-way) |
+| R7 | both have it, contents differ, merge-base not unique | H only (per-path fallback) |
+
+- Existence checks (the case-marker gate, the flat-test rejection, the helper-library check) treat a
+  path either parent has as existing.
+- A single baseline runs the same comparison as a normal commit's `HEAD` copy. R5 never reads the
+  merge-base, so a criss-cross merge keeps it a single baseline.
+- 3-way counts: an existing count per key is `count(H) + count(M) − count(B)` (never below 0).
+  `bin/check-self-impl.sh` takes `--head` twice plus `--base`. If any of the three copies cannot be
+  parsed, it counts against H alone instead of reading the missing count as 0.
+  The language-match check runs `judge` once per baseline and adds the
+  not-existing occurrences per `(header|case, target)` key as `a + b − c`
+  (`judgeMulti` in `hooks/lib/test-gates/language-match/multi-baseline.js`). `CASE_ADDED_WITHOUT_MARKERS` compares the case
+  count, or code lines when any version cannot be counted, against
+  `n(H) + n(M) − n(B)`.
+- R1 skips only the baseline judgment. `--declaration-only` still validates the `test-lang-exception`
+  declaration (`INVALID_TEST_LANG_EXCEPTION`) and prints no `TEST_LANGUAGE_UNSUPPORTED`. A normal
+  commit never takes this path.
+- Fallback: when the merge state is undecidable, the resolver fails, or its records are malformed, every
+  path is judged against `HEAD` only. The commit layer prints one stderr line
+  (`pre-commit: merge parents <reason> — tests/ gates judge against HEAD only`).
+
+Accepted behavior of the 3-way count (the same for every count above):
+
+- B 1, H 0, M 1: the existing count is 0, so a merged file that keeps a finding `HEAD` removed blocks.
+  `HEAD`-only judging blocks it too.
+- Parents that differ and each added one of the same key give an existing count of 2, so one more
+  added during the merge passes while the staged count stays 2. Capping the count would block the
+  legitimate merge of both parents' additions.
+- B 1, H 1, M 0: the existing count is 0, so keeping a finding `MERGE_HEAD` removed blocks. This is
+  stricter than `HEAD`-only judging, and it matches a clean 3-way merge, which drops that line.
+
 ## CLI output and the original path
 
 | CLI | HIGH (blocks) | WARN (reported, never blocks) |
@@ -134,7 +192,8 @@ file in the output; the copy is only read. Without `--rel` the file's own path i
 argument, not an environment variable, so the value a verdict used is visible on the command line
 and cannot leak into the next file of a loop. The hook runs the CLIs from the repository root.
 `bin/check-test-language-match.sh` also takes `--head <copy>` (one file only, like `--rel`); a
-missing copy is an infra error.
+missing copy is an infra error. A merge passes `--head` twice plus `--base`, or `--declaration-only`
+([Merge commits](#merge-commits)).
 
 ## Failure handling
 

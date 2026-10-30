@@ -3,8 +3,9 @@
 
 const { langException } = require("./language-match/exception");
 const { pair } = require("./language-match/pairing");
-const { caseAddition, codeLines } = require("./language-match/case-addition");
+const { caseAddition, caseAddition3way, codeLines } = require("./language-match/case-addition");
 const { judge } = require("./language-match/judge");
+const { judgeMulti } = require("./language-match/multi-baseline");
 const { check } = require("./language-match/check");
 
-module.exports = { langException, pair, caseAddition, codeLines, judge, check };
+module.exports = { langException, pair, caseAddition, caseAddition3way, codeLines, judge, judgeMulti, check };

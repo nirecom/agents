@@ -10,6 +10,14 @@ Decide every action by asking who the receiver is — user, repo owner, repo aud
 
 Write the length the receiver understands — one line when that suffices, explicit structure otherwise.
 
+## CPR-SHIP Release Is the Goal
+
+Value exists only once released; head straight for the intent's goal — take no side path that does not serve it, and specify nothing beyond what the NFRs require.
+
+## CPR-QCD Quality, Cost, Delivery
+
+Weigh the Q / C / D trade-off without blocking release.
+
 ## CPR-WPH Why Precedes How
 
 Lead with what the receiver lacks — in prose, the background before the approach; in code, only the why the code cannot show.
@@ -17,6 +25,14 @@ Lead with what the receiver lacks — in prose, the background before the approa
 ## CPR-SC Separate the Concerns
 
 When several phenomena, scenarios, or failure conditions are in play at once, separate them explicitly before reasoning — never treat a tangle as one undifferentiated whole. Use the 5W1H axes (who, what, when, where, why, how) to draw the cuts, and reason about each partition on its own terms.
+
+## CPR-EVD Evidence First
+
+Back every output with explicit evidence checked at its source; an unchecked claim is a hypothesis, not a premise.
+
+## CPR-RCA Root Cause Analysis
+
+Ask "why" of the symptom, then recursively of each answer, until the answer is a flaw in a mechanism or instruction you can change.
 
 ## CPR-SSOT Single Source of Truth
 

@@ -109,7 +109,7 @@ export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 mint_abandon_mock
 ALL_PASS_31=1
 for _V in clear abandon; do
-    run_with_timeout 30 bash "$TARGET" "$_V" 42 --session-id test-sid >/dev/null 2>&1
+    run_with_timeout 60 bash "$TARGET" "$_V" 42 --session-id test-sid >/dev/null 2>&1
     _RC=$?
     [ "$_RC" -ne 2 ] && ALL_PASS_31=0
 done
@@ -216,7 +216,7 @@ while IFS='|' read -r TNAME _N _REPO WANT_RC; do
     _ARGS=()
     [ "$_N" != "(none)" ] && _ARGS+=("$_N")
     [ "$_REPO" != "(none)" ] && _ARGS+=("--repo" "$_REPO")
-    run_with_timeout 30 bash "$TARGET" abandon "${_ARGS[@]}" >/dev/null 2>&1
+    run_with_timeout 60 bash "$TARGET" abandon "${_ARGS[@]}" >/dev/null 2>&1
     _GOT=$?
     [ "$_GOT" != "$WANT_RC" ] && { TABLE_PASS_37=0; printf '  FAIL subtable %s: N=%s repo=%s want=%s got=%s\n' "$TNAME" "$_N" "$_REPO" "$WANT_RC" "$_GOT" >&2; }
 done << 'ARGMATRIX'

@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/_lib-consolidate.sh
 # Tests: bin/lib/run-all-durations-consolidate.sh
 # Tags: tests, bin, ledger, durations, consolidate, helpers, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # Helpers for the #2079 S7b consolidation parts, on top of the ledger-migration helpers
 # (lm_run, ck, lm_v, lm_plant_dur, lm_get ...). Sourced by every part, parent and child.
 
