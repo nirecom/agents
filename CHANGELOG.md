@@ -915,3 +915,7 @@ Changes: plan-sync now publishes one commit per user prompt instead of one per p
 ### FEATURE: PR #2756 (2026-10-29)
 Background: test(#2723): split the slowest test files into parallel entrypoints
 Changes: Slow test files are split into smaller entrypoints that run in parallel, so a full test run spends less time stuck behind a single long file.
+
+### FEATURE: PR #2840 (2026-10-31)
+Background: feat(#2507): run the pre-commit checks in one Node.js process
+Changes: Commits are faster: the pre-commit hook now runs all of its checks in a single Node.js process instead of spawning bash, grep and git per staged file. Node.js is now required to commit; without it the hook stops the commit and says why.;The pre-commit secret scan now stops the commit on a malformed `--manifest` frame, and detects zero-width and bidi-override characters regardless of the hook's locale.;In blocklist and allowlist patterns, `\w` now includes `_` on every OS (GNU semantics).
