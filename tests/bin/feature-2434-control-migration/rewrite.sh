@@ -67,24 +67,25 @@ fi
 rm -rf "$T"
 case_end
 
-case_begin "rewrite-handoff-pointer" "hooks/lib/temporary-migrations/control-dir-split/rewrite.js"
+# #2652: handoff.md is no longer a control kind; the pointer rewrite is pinned on codex-context.md.
+case_begin "rewrite-control-md-pointer" "hooks/lib/temporary-migrations/control-dir-split/rewrite.js"
 T=$(make_tmp)
 harness_isolate "$T"
 SID="$UUID"
-OLD_PTR="$T/plans/${SID}-handoff.md"
-printf '# Handoff\n--pointer %s\n' "$OLD_PTR" > "$T/plans/${SID}-handoff.md"
+OLD_PTR="$T/plans/${SID}-codex-context.md"
+printf '# Context\n--pointer %s\n' "$OLD_PTR" > "$T/plans/${SID}-codex-context.md"
 printf 'terminal\n' > "$T/plans/${SID}-detail-plan-terminal.txt"
 run_migrate "$SID" "$(np "$T/workflow-state")" "$(np "$T/plans")" > /dev/null
-DST_HANDOFF="$T/workflow-state/${SID}.control/handoff.md"
-if [ -f "$DST_HANDOFF" ]; then
-  CONTENT=$(cat "$DST_HANDOFF" 2>/dev/null || echo missing)
-  if printf '%s' "$CONTENT" | grep -q "${SID}.control/handoff"; then
-    pass "rewrite-handoff-pointer"
+DST_CTX="$T/workflow-state/${SID}.control/codex-context.md"
+if [ -f "$DST_CTX" ]; then
+  CONTENT=$(cat "$DST_CTX" 2>/dev/null || echo missing)
+  if printf '%s' "$CONTENT" | grep -q "${SID}.control/codex-context"; then
+    pass "rewrite-control-md-pointer"
   else
-    fail "rewrite-handoff-pointer" "--pointer not rewritten in handoff.md: $CONTENT"
+    fail "rewrite-control-md-pointer" "--pointer not rewritten in codex-context.md: $CONTENT"
   fi
 else
-  fail "rewrite-handoff-pointer" "handoff.md dst missing"
+  fail "rewrite-control-md-pointer" "codex-context.md dst missing"
 fi
 rm -rf "$T"
 case_end
@@ -262,7 +263,7 @@ const input = "ptr " + legacy.split("/").join(sep) + " end";
 const expected = want === "move" ? "ptr " + ctl + "/" + rest + " end" : input;
 let got;
 try {
-  got = require(mod).rewriteContent(Buffer.from(input), { sid: sid, ctlDir: ctl, name: "handoff.md" }).toString("utf8");
+  got = require(mod).rewriteContent(Buffer.from(input), { sid: sid, ctlDir: ctl, name: "codex-context.md" }).toString("utf8");
 } catch (e) { got = "THREW:" + String((e && e.message) || e); }
 process.stdout.write(got === expected ? "OK" : "want=" + JSON.stringify(expected) + " got=" + JSON.stringify(got));
 '

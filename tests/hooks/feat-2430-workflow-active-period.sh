@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-2430-workflow-active-period.sh
 # Tests: hooks/lib/workflow-active-period.js
-# Tags: handoff, workflow-active-period, truth-table, never-throw, regression-2430, scope:issue-specific, pwsh-not-required, TL1
+# Tags: workflow-active-period, truth-table, never-throw, regression-2430, regression-2652, scope:issue-specific, pwsh-not-required, TL1
 
-# Issue #2430 — every handoff writer except gate-block now asks one predicate "is this session inside its workflow active period?" (workflow_init complete, final_report not complete, no WORKFLOW_OFF, no pause covering the current step). Outside that period there is no workflow to resume, so a breadcrumb is noise. One truth table pins the predicate for all of them (CPR-SSOT).
+# Issue #2430 — one predicate answers "is this session inside its workflow active period?" (workflow_init complete, final_report not complete, no WORKFLOW_OFF, no pause covering the current step). One truth table pins the predicate for every caller (CPR-SSOT).
+# Issue #2652 — the state handoff record writer no longer asks this predicate (it records whenever the session has a state file and workflow_init is complete, PAUSE included); the remaining callers are the progress nudge and the post-compact notice. The predicate itself is unchanged, so the table keeps its WORKFLOW_OFF and pause rows as false.
 
 # TDD (write_code has not run): every row is expected to FAIL with "MODULE NOT FOUND" until hooks/lib/workflow-active-period.js exists.
 

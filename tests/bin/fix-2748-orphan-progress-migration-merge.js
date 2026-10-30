@@ -109,7 +109,7 @@ caseBegin("skip-active-and-include-active", "hooks/lib/temporary-migrations/orph
   const { firstSid, downstreamSid } = setup("m6", { settle: false });
   const firstBefore = read(progressOf(firstSid));
   const statesBefore = [firstSid, downstreamSid].map((s) => read(F.statePath(s)));
-  const sidecarFile = F.mod("hooks/lib/handoff-sidecar").sidecarPath(downstreamSid, "progress-pressure.json");
+  const sidecarFile = F.mod("hooks/lib/control-sidecar").sidecarPath(downstreamSid, "progress-pressure.json");
   const sidecarBefore = read(sidecarFile);
   const r = cli(["--apply"]);
   check("M6: a session chain touched within 30 minutes is reported skip-active", () => (r.status === 0 && String(r.stdout).includes(`${firstSid} <- ${downstreamSid} (skip-active)`) ? undefined : why(r)));

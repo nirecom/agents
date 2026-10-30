@@ -3,7 +3,7 @@
 // risk signal that halves the omission-check nudge limits.
 
 const { resolveCurrentEffectiveStep } = require("../workflow-state/current-step");
-const { recordRiskSignal } = require("../lib/handoff-risk-signal");
+const { recordRiskSignal } = require("../lib/risk-signal");
 
 // Named exception: during these steps a red suite is the expected TDD state, not
 // a sign that working knowledge is at risk — stamping it would keep the nudge

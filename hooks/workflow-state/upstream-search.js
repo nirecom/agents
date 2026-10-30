@@ -15,12 +15,12 @@ const { sanitizeUntrustedField } = require("../lib/output-sanitize");
 const { listRecentContextCandidates, lastActivityOf } = require("./inheritance/candidates");
 const { SESSION_ID_VALID_RE } = require("./state-io/core");
 
-const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail", "handoff"]);
+const ARTIFACT_KINDS = Object.freeze(["intent", "outline", "detail"]);
 // Without a query the reachable-only section is an appendix, not a dump of
 // every session that ever ran on this machine.
 const SEARCH_ONLY_CAP = 10;
 const SEARCH_ONLY_REASON = "search-result-only: no lineage or context evidence that this session may be adopted here";
-const ARTIFACT_RE = /^(.+?)-(intent|outline|detail|handoff)\.md$/;
+const ARTIFACT_RE = /^(.+?)-(intent|outline|detail)\.md$/;
 const ISSUE_RE = /#(\d{1,7})/g;
 const TITLE_RE = /^\*\*Title:\*\*\s*(.+?)\s*$/m;
 
@@ -48,24 +48,62 @@ function mtimeIsoOrNull(p) {
   }
 }
 
+function recordFor(index, sid) {
+  let rec = index.get(sid);
+  if (!rec) {
+    rec = { sid, artifacts: {}, lastActivity: null, body: "" };
+    index.set(sid, rec);
+  }
+  return rec;
+}
+
+function touchActivity(rec, full) {
+  const at = mtimeIsoOrNull(full);
+  if (at !== null && (rec.lastActivity === null || at > rec.lastActivity)) rec.lastActivity = at;
+}
+
+// --- BEGIN temporary: handoff.md -> state handoff record migration added 2026-10-29 ---
+// deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and neither a control dir holding a legacy handoff.md nor a plans-dir <sid>-handoff.md remains
+const LEGACY_HANDOFF_RE = /^(.+?)-handoff\.md$/;
+
+// An old session whose only plans-dir file is <sid>-handoff.md must still be listed.
+function indexLegacyHandoff(index, plansDir, name) {
+  const m = LEGACY_HANDOFF_RE.exec(name);
+  if (!m || !SESSION_ID_VALID_RE.test(m[1])) return;
+  const full = path.join(plansDir, name);
+  // A non-regular entry would surface as a session-upstream whose record cannot be read.
+  if (!isLegacyRegularFile(full)) return;
+  touchActivity(recordFor(index, m[1]), full);
+}
+
+function isLegacyRegularFile(full) {
+  try {
+    return fs.lstatSync(full, { throwIfNoEntry: false })?.isFile() === true;
+  } catch (e) {
+    return false;
+  }
+}
+// --- END temporary: handoff.md -> state handoff record migration ---
+
 // sid → { artifacts: {kind: absolutePath}, lastActivity, body }
 function indexPlansDir(plansDir) {
   const index = new Map();
   for (const name of listPlansFiles(plansDir)) {
     const m = ARTIFACT_RE.exec(name);
-    if (!m) continue;
+    if (!m) {
+      // --- BEGIN temporary: handoff.md -> state handoff record migration added 2026-10-29 ---
+      // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and neither a control dir holding a legacy handoff.md nor a plans-dir <sid>-handoff.md remains
+      indexLegacyHandoff(index, plansDir, name);
+      // --- END temporary: handoff.md -> state handoff record migration ---
+      continue;
+    }
     const sid = m[1];
     if (!SESSION_ID_VALID_RE.test(sid)) continue;
     const kind = m[2];
     const full = path.join(plansDir, name);
-    let rec = index.get(sid);
-    if (!rec) {
-      rec = { sid, artifacts: {}, lastActivity: null, body: "" };
-      index.set(sid, rec);
-    }
+    const rec = recordFor(index, sid);
     rec.artifacts[kind] = full;
-    const at = mtimeIsoOrNull(full);
-    if (at !== null && (rec.lastActivity === null || at > rec.lastActivity)) rec.lastActivity = at;
+    touchActivity(rec, full);
     if (kind === "intent" || kind === "outline" || kind === "detail") {
       const text = readTextOrNull(full);
       if (text !== null) rec.body += text + "\n";
@@ -161,7 +199,7 @@ function contextRecord(candidate, searchRec) {
   const state = candidate.state || {};
   const base = searchRec || {
     matched_on: [], issues: [], title: null,
-    artifacts: { intent: null, outline: null, detail: null, handoff: null },
+    artifacts: { intent: null, outline: null, detail: null },
   };
   const degradedReason = candidate.degraded_reason || null;
   return {
@@ -211,8 +249,21 @@ function enrichAdoptability(records, input) {
       rec.adoptable_reason = preview.adoptable_reason;
     }
     rec.adoptable_granularity = preview ? preview.adoptable_granularity : null;
+    rec.state_handoff_records = stateHandoffCountOf(rec.sid);
   }
   return records;
+}
+
+// Entry count from the state handoff reader (legacy pre-#2652 entries included during the
+// migration), so a legacy-only session-upstream never reads as 0. null = unknown, not 0.
+function stateHandoffCountOf(sid) {
+  try {
+    const { readStateHandoff } = require("../lib/state-handoff-record");
+    const { entries, errors } = readStateHandoff(sid);
+    return errors.length > 0 ? null : entries.length;
+  } catch (e) {
+    return null;
+  }
 }
 
 // listUpstreamCandidates({heirSid, ctx, query, limit}) → [record, ...]

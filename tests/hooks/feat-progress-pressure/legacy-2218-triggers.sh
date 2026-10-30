@@ -22,7 +22,7 @@ const side = (sid) => { try { return JSON.parse(fs.readFileSync(ctl(sid, 'progre
 // ev(sid, {size, now, base, risk}) — plant the fixture and evaluate once.
 const ev = (sid, o) => {
   if (o.base) put(sid, 'progress-pressure.json', { baseline_bytes: o.base[0], baseline_at: o.base[1] });
-  if (o.risk !== undefined) put(sid, 'handoff-risk.json', typeof o.risk === 'string' ? o.risk : { last_risk_at: o.risk, source: 'gate-block' });
+  if (o.risk !== undefined) put(sid, 'risk-signal.json', typeof o.risk === 'string' ? o.risk : { last_risk_at: o.risk, source: 'gate-block' });
   const t = D + '/' + sid + '.jsonl';
   if (o.size !== undefined) fs.writeFileSync(t, Buffer.alloc(o.size, 120));
   return P.computePressureSignal({ sid, transcriptPath: t, now: o.now });
@@ -84,7 +84,7 @@ check('corrupt-risk-reads-as-none', (bad) => {
   const s = ev('c1', { base: [B0, t0], risk: '{ not json', size: B0 + MiB, now: t0 + 2 * MIN });
   want(bad, 'garbage', s, false);
   if (s && s.riskActive !== false) bad.push('riskActive:' + String(s.riskActive));
-  fs.mkdirSync(ctl('c2', 'handoff-risk.json'));
+  fs.mkdirSync(ctl('c2', 'risk-signal.json'));
   want(bad, 'directory', ev('c2', { base: [B0, t0], size: B0 + MiB, now: t0 + 2 * MIN }), false);
 });
 check('trigger-table-is-ored', (bad) => {

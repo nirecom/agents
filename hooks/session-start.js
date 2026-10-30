@@ -170,7 +170,7 @@ try {
 } catch (e) { /* best-effort */ }
 // --- END temporary: plans-dir control files -> workflow control dir migration ---
 
-// Clean up zombie state files (older than 7 days)
+// Clean up zombie files: session markers after 7 days, state files after 30 days
 try {
   cleanupZombies(7);
 } catch (e) {

@@ -200,20 +200,19 @@ else {
   if (rec.adoptable !== false) problems.push('search-only-record-claims-adoptable:' + String(rec.adoptable));
   if (typeof rec.adoptable_reason !== 'string' || rec.adoptable_reason.length === 0) problems.push('adoptable_reason:' + JSON.stringify(rec.adoptable_reason));
   const a = rec.artifacts || {};
-  for (const k of ['intent', 'outline', 'detail', 'handoff']) {
+  for (const k of ['intent', 'outline', 'detail']) {
     if (!(k in a)) problems.push('artifacts-missing-key:' + k);
     else if (typeof a[k] !== 'string' || a[k].length === 0) problems.push('artifact-path-not-set:' + k + '=' + JSON.stringify(a[k]));
   }
+  if ('handoff' in a) problems.push('handoff-is-still-an-artifact-kind:' + JSON.stringify(a.handoff));
   if (!rec.last_activity) problems.push('no-last_activity');
   if (typeof rec.last_activity_source !== 'string' || rec.last_activity_source.length === 0) problems.push('last_activity_source:' + JSON.stringify(rec.last_activity_source));
   if ((rec.sources || []).join(',') !== 'search') problems.push('sources:' + JSON.stringify(rec.sources));
 }
-const alpha = rows(search.searchUpstreamSessions('alpha-sess', {})).find((x) => x.sid === 'alpha-sess-01');
-if (alpha && alpha.artifacts && alpha.artifacts.handoff) problems.push('absent-handoff-reported-as-present:' + String(alpha.artifacts.handoff));
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
-        pass "U4: every record carries the 12-field shape, names its artifacts, and never claims adoptable from search evidence"
+        pass "U4: every record carries the 12-field shape, names its three plan artifacts (no handoff kind), and never claims adoptable from search evidence"
     else
         fail "U4: expected 'OK', got '${out:-<err>}'"
     fi

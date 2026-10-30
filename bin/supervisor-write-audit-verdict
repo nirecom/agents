@@ -84,7 +84,7 @@ const summary = args["verdict-summary"] === undefined ? null : args["verdict-sum
 // nothing). A lost breadcrumb never changes the exit code or stdout.
 function breadcrumb() {
   try {
-    require("../hooks/lib/handoff-auto-record").recordVerdictBreadcrumb(sid, verdict, summary);
+    require("../hooks/lib/auto-record").recordVerdictBreadcrumb(sid, verdict, summary);
   } catch (_e) { /* fail-open */ }
 }
 

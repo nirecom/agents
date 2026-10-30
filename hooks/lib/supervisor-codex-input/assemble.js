@@ -1,6 +1,6 @@
 "use strict";
 
-// #2475 supervisor codex input: transcript + handoff + session-progress.md + plan artifacts + state
+// #2475 supervisor codex input: transcript + state handoff records + session-progress.md + plan artifacts + state
 // rendered as seven delimited blocks. Every block body is defanged so embedded
 // text can never forge a delimiter or open an HTML comment.
 
@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const { classify } = require("./rules");
 const cursorLib = require("./cursor");
-const { getHandoffPath, readDocumentFile, MAX_BYTES } = require("../handoff-artifact");
+const { readStateHandoff } = require("../state-handoff-record");
 const { progressPathFor, isRegularFile, isValidSid } = require("../progress-file");
 const { resolvePlanArtifactOwner } = require("../../workflow-state/plan-artifact-owner");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
@@ -19,6 +19,10 @@ const { diagnoseControlMigration } = require("../../workflow-state/state-io/cont
 // are ignored: any "... START|BEGIN|END", plus the suffix-less fence this input itself uses.
 const FENCE_VARIANT_RE = /[[\uFF3B]([^[\]\uFF3B\uFF3D\n]{1,120})[\]\uFF3D]/g;
 const FENCE_WORDS_RE = /^(?:[A-Z]+ )*(?:START|BEGIN|END)$|^SUPERVISOR INPUT HEADER$/;
+// session-progress.md cap (the value the retired pre-#2652 handoff.md writer owned).
+const MAX_BYTES = 65536;
+// Room for the state's 64KB record budget plus the legacy pre-#2652 record file's 64KB cap.
+const SUPERVISOR_HANDOFF_MAX_BYTES = 131072;
 
 function fenceWords(inner) {
   return inner.normalize("NFKC").toUpperCase().replace(/[\s_]+/g, " ").trim();
@@ -82,15 +86,38 @@ function block(name, bodyLines) {
   return `[${name} START]\n${body}\n[${name} END]`;
 }
 
+// Every entry, one line each, in time order — no folding and no count cap, so an old gate block or
+// verdict still reaches the audit. One byte cap spans the whole block (every candidate sid): the
+// oldest lines drop first and the omitted line heads the block.
 function handoffLines(transcriptPath, wsid) {
   const candidates = [path.basename(transcriptPath).replace(/\.jsonl$/i, "")];
   if (wsid && wsid !== "UNAVAILABLE" && !candidates.includes(wsid)) candidates.push(wsid);
-  const out = [];
+  const sections = [];
+  const all = [];
   for (const sid of candidates) {
-    let p;
-    try { p = getHandoffPath(sid); } catch (e) { diagnoseControlMigration(e, "supervisor-codex-input"); continue; }
-    const text = readDocumentFile(p);
-    if (text !== null) out.push(`--- ${path.basename(p)} ---`, text.replace(/\n$/, ""));
+    const { entries, errors } = readStateHandoff(sid);
+    if (entries.length === 0 && errors.length === 0) continue;
+    const section = { sid, errors, kept: [] };
+    sections.push(section);
+    for (const e of entries) {
+      all.push({ section, at: String(e.at), line: [e.at, e.cls, e.origin, e.at_step, e.record_key, e.summary, e.pointer].join(" | ") });
+    }
+  }
+  const ordered = all.map((x, i) => ({ x, i })).sort((a, b) => (a.x.at < b.x.at ? -1 : a.x.at > b.x.at ? 1 : a.i - b.i)).map((y) => y.x);
+  let total = 0;
+  let keepFrom = ordered.length;
+  while (keepFrom > 0) {
+    const size = Buffer.byteLength(ordered[keepFrom - 1].line, "utf8") + 1;
+    if (total + size > SUPERVISOR_HANDOFF_MAX_BYTES) break;
+    total += size;
+    keepFrom -= 1;
+  }
+  for (const item of ordered.slice(keepFrom)) item.section.kept.push(item.line);
+  const out = keepFrom > 0 ? [`(${keepFrom} older entries omitted)`] : [];
+  for (const s of sections) {
+    out.push(`--- state handoff record entries: ${s.sid} ---`);
+    if (s.errors.length > 0) out.push(`(unreadable: ${s.errors.join(", ")})`);
+    out.push(...s.kept);
   }
   return out;
 }

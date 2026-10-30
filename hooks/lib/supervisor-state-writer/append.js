@@ -4,7 +4,7 @@ const fs = require("fs");
 const { withSessionStateLock } = require("./lock");
 const { controlPath, diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
 const { validateFinding, validate, SEVERITY_RANK, AUDIT_SEVERITY_THRESHOLD, TERMINAL_ALERT_PHASES } = require("../supervisor-state-schema");
-const { recordRiskSignal } = require("../handoff-risk-signal");
+const { recordRiskSignal } = require("../risk-signal");
 const {
   SESSION_ID_RE,
   CO_BLOCK_RECENCY,

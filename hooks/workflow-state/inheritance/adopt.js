@@ -13,7 +13,7 @@ const { judgeInheritanceGranularity } = require("./granularity");
 const repoIdentity = require("../../lib/repo-identity");
 
 // Resumability verdicts that mean "the EVIDENCE aged out", not "this record must
-// not be reused": a plan artifact past the 7-day retention leaves the donor's
+// not be reused": a plan artifact past its retention leaves the donor's
 // work record intact. Explicit adoption degrades on these (the missing artifact
 // is reported, not fatal) while `all-pending` and `delivered` — statements
 // about the WORK itself — stay hard refusals.
@@ -22,6 +22,8 @@ const DEGRADABLE_RESUMABILITY_REASONS = Object.freeze(["intent-artifact-missing"
 // Records a re-adopt may replace: where the process runs and on which model are
 // re-carried by the copy, and a pending or lookahead-only mark claims no finished work.
 const ENVIRONMENT_KINDS = Object.freeze(["worktree", "session_model"]);
+// The copy carries the downstream's own state handoff records too, so they replace nothing (#2652).
+const CARRIED_RECORD_KINDS = Object.freeze(["state_handoff_record"]);
 
 class AdoptionRefusedError extends Error {
   constructor(message) {
@@ -38,7 +40,7 @@ const isPlainObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 // file says where its work actually lives.
 function heirContextOf(heirState) {
   if (!heirState) return null;
-  // A copied worktree event describes the session upstream's location, not where this
+  // A copied worktree event describes the session-upstream location, not where this
   // process runs: after an adoption, projected cwd counts only for a worktree event
   // the downstream recorded itself past the copy boundary.
   const boundary = Number(heirState.upstream_copy_seq) || 0;
@@ -79,7 +81,7 @@ function retainedRecords(state) {
   const events = Array.isArray(state.events) ? state.events : [];
   return events
     .filter((e) => isPlainObject(e) && Number(e.seq) > boundary && e.origin !== INHERIT_ORIGIN)
-    .filter((e) => ENVIRONMENT_KINDS.indexOf(e.kind) === -1)
+    .filter((e) => ENVIRONMENT_KINDS.indexOf(e.kind) === -1 && CARRIED_RECORD_KINDS.indexOf(e.kind) === -1)
     .filter((e) => !(e.kind === "step_status" && isUnfinishedMark(e)))
     .map((e) => ({ kind: e.kind, seq: e.seq, step: e.step === undefined ? null : e.step }));
 }

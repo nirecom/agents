@@ -2,7 +2,7 @@
 
 ## Contents
 
-1. [Workflow State Machine](claude-code/workflow.md) — 10-step workflow, state file schema, merge-base baseline, session ID flow, fail-safe behavior
+1. [workflow State Machine](claude-code/workflow.md) — 10-step workflow, state file schema, merge-base baseline, session ID flow, fail-safe behavior
 2. [Session Sync](claude-code/session-sync.md) — cross-machine session history sync via private GitHub repo
 3. [settings.json Design](claude-code/settings.md) — allow/deny rules, hook inventory
 4. [Marker Bypass Contract](claude-code/marker-bypass-contract.md) — `WORKFLOW_OFF` / `WORKTREE_OFF` session markers, cross-hook honoring contract, exit-code semantics
@@ -15,7 +15,7 @@
 10. [Test Host Lanes and the Corpus Cache](claude-code/test-host-lanes.md) — host-wide lanes bounded by the max jobs per host and shared by find-tests and run-all (a run gets its fair share of the run-all lane pool, re-evaluated at each entry-script end, with load scale-in under external load), exit 4 on the wait cap, `bin/test-lanes-status.sh`, the git-keyed corpus parse cache
 11. [Test Language Registry](claude-code/test-language-registry.md) — the one table of test file names per language, its readers, per-language parts, the `UNSUPPORTED:` display, and the residue check
 12. [Test Result Contract](claude-code/test-result-contract.md) — language-independent exit codes and unit states (PASS / FAIL / SKIP / UNRUNNABLE / TIMEOUT), `cases.tsv` and case-level result lines, `RUN_CONTRACT:` / `Missing runtimes:`, neutralization, `run_outcome=unrunnable`, the UNRUNNABLE acceptance sentinel
-13. [Plan Sync](claude-code/plan-sync.md) — final plan files pushed to a private GitHub or GitLab remote on the project's own host so the model can write a URL readable from mobile apps or a browser; provisioning, interactive setup, send rule, plan link, visibility policy, risks
+13. [plan-sync](claude-code/plan-sync.md) — final plan files pushed to a private GitHub or GitLab remote on the project's own host so the model can write a URL readable from mobile apps or a browser; provisioning, interactive setup, send rule, plan link, visibility policy, risks
 14. [Shell Snapshot Repair](claude-code/shell-snapshot-repair.md) — Windows-form `PATH` in shell snapshots makes every Bash call exit 127; the SessionStart and PostToolUse(Failure) repair, `cygpath` lookup, recovery, and `native_path` for `gh.exe`
 
 ## 5. EM Supervisor (alert/audit two-mode design)
@@ -124,7 +124,7 @@ Alert mode generates findings through the shared engine `bin/supervisor-findings
 2. **SUCCESS** — read the `OUTFILE` line and ingest the validated JSONL via `bin/supervisor-write-alert --ingest-generated-jsonl <OUTFILE>`; Claude adds no findings independently.
 3. **Finalize** — single call: `bin/supervisor-write-alert --last-run-at <iso> --cumulative-severity <verdict> --clear-alert-armed-at --set-alert-phase done`. `--set-alert-phase done` is mandatory (#961).
 
-Helper modules (shared by alert and audit): `hooks/lib/supervisor-codex-input.js` assembles the Codex input (utterances, actions since the per-mode transcript cursor, handoff, plan artifacts, state — see [claude-code/supervisor-codex-input.md](claude-code/supervisor-codex-input.md)); `hooks/lib/supervisor-codex-parse.js` parses the STATUS channel. The prior three-phase draft/adversarial/adjudicate protocol and its `bin/supervisor-review-codex` critic are retired.
+Helper modules (shared by alert and audit): `hooks/lib/supervisor-codex-input.js` assembles the Codex input (utterances, actions since the per-mode transcript cursor, state handoff records, session-progress.md, plan artifacts, state — see [claude-code/supervisor-codex-input.md](claude-code/supervisor-codex-input.md)); `hooks/lib/supervisor-codex-parse.js` parses the STATUS channel. The prior three-phase draft/adversarial/adjudicate protocol and its `bin/supervisor-review-codex` critic are retired.
 
 **Trigger collector:** `hooks/supervisor-guard/collect-audit-triggers.js` — scans workflow-state step-completion transitions (not the transcript) and returns the armed triggers, reading the table in `hooks/lib/audit-triggers.js`. Uses `AUDIT_SEVERITY_THRESHOLD` constant for TR6.
 

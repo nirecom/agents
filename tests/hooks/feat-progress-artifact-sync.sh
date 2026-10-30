@@ -42,10 +42,10 @@ try { ap = R.getPlansArtifactPath('s1', 'progress', { plansDir: process.env.PLAN
 if (ap !== path.join(process.env.PLANS, 's1-session-progress.md')) bad.push('path:' + String(ap));
 const c = R.parsePlansEntry('s1-progress-pressure.json');
 if (!c || c.verdict !== 'control' || c.kind !== 'progress-pressure') bad.push('progress-pressure:' + JSON.stringify(c));
-for (const old of ['handoff-pressure.json', 'handoff-flush-mark.json', 'handoff-risk.json']) {
-  const o = R.parsePlansEntry('s1-' + old);
-  if (!o || o.kind !== 'handoff-sidecar') bad.push('old-sidecar-unregistered:' + old + ':' + JSON.stringify(o));
-}
+// #2652 renamed the risk sidecar; how pre-rename leftovers are registered is the implementation's call (S6-4).
+const rs = R.parsePlansEntry('s1-risk-signal.json');
+if (!rs || rs.verdict !== 'control') bad.push('risk-signal-not-control:' + JSON.stringify(rs));
+
 // One synced-kind list (the export name is the implementation's: any SYNCED* array).
 const lists = Object.keys(R).filter((k) => /^SYNCED/.test(k) && Array.isArray(R[k]));
 const synced = lists.map((k) => R[k]).find((a) => a.indexOf('progress') !== -1);
