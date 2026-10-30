@@ -11,7 +11,7 @@
 // The analysis is an approximation: top-level means column 0 outside every case and region.
 
 const fs = require("fs");
-const { spawnSync } = require("child_process");
+const cp = require("child_process");
 const { readLines, scanCode, scanLines } = require("./js-case-scan");
 
 const DECL = /^(?:(?:async\s+)?function\s*\*?\s*|(?:const|let|var)\s+|class\s+)([A-Za-z_$][\w$]*)/;
@@ -121,7 +121,7 @@ function skipReason(lines) {
 
 // node --check parses the file without running it; its stderr is the reason.
 function syntaxCheck(file) {
-  const done = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
+  const done = cp.spawnSync(process.execPath, ["--check", file], { encoding: "utf8", timeout: 60000 });
   if (done.status === 0) return [];
   throw new Error((done.stderr || done.error?.message || `node --check exited ${done.status}`).trim());
 }
@@ -139,27 +139,31 @@ const OPS = {
   "syntax-check": (lines, helper, file) => syntaxCheck(file),
 };
 
-function main(argv) {
-  const [op, file, helper] = argv;
-  if (!Object.hasOwn(OPS, op || "")) {
-    process.stderr.write(`[js-case-analyzer] unknown op: ${op || ""}\n`);
-    return 2;
-  }
+// analyze(op, file, helper) -> { rc, stdout, stderr }: one op in-process, as the CLI answers it.
+function analyze(op, file, helper) {
+  if (!Object.hasOwn(OPS, op || "")) return { rc: 2, stdout: "", stderr: `[js-case-analyzer] unknown op: ${op || ""}\n` };
   let lines;
   try {
     lines = readLines(file);
   } catch (err) {
-    process.stderr.write(`js-case-analyzer: cannot read ${file}: ${err.code || err.message}\n`);
-    return 1;
+    return { rc: 1, stdout: "", stderr: `js-case-analyzer: cannot read ${file}: ${err.code || err.message}\n` };
   }
   try {
     const rows = OPS[op](lines, helper, file);
-    if (rows.length) process.stdout.write(rows.join("\n") + "\n");
-    return 0;
+    return { rc: 0, stdout: rows.length ? rows.join("\n") + "\n" : "", stderr: "" };
   } catch (err) {
-    process.stderr.write(`js-case-analyzer: ${op} ${file}: ${err.message}\n`);
-    return 1;
+    return { rc: 1, stdout: "", stderr: `js-case-analyzer: ${op} ${file}: ${err.message}\n` };
   }
 }
 
-process.exitCode = main(process.argv.slice(2));
+function main(argv) {
+  const [op, file, helper] = argv;
+  const r = analyze(op, file, helper);
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  return r.rc;
+}
+
+module.exports = { OPS, analyze };
+
+if (require.main === module) process.exitCode = main(process.argv.slice(2));

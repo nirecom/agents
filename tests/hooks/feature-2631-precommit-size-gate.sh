@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2631-precommit-size-gate.sh
-# Tests: hooks/pre-commit, hooks/lib/precommit-size-gate.sh, bin/size-check
-# Tags: scope:issue-specific, size-limits, pre-commit, hook, git, block, shrink, exempt, table-driven, layer:TL2, ssot, non-ascii-path, session-marker, fail-open, fail-closed, newline-path, mixed-kinds, initial-commit
-# #2631 stage 3: hooks/pre-commit judges staged files through hooks/lib/precommit-size-gate.sh
-# (one node call into bin/size-check): HARD verdicts, shrink-only, exempt records, SSOT propagation,
+# Tests: hooks/pre-commit, hooks/pre-commit.d/checks/size-gate.js, bin/size-check
+# Tags: scope:issue-specific, size-limits, pre-commit, hook, git, block, shrink, exempt, table-driven, layer:TL2, ssot, non-ascii-path, session-marker, fail-open, fail-closed, newline-path, mixed-kinds, initial-commit, test-lang-exception:e2e, node-runner
+# #2631 stage 3: hooks/pre-commit (bash entry -> Node body) judges staged files through
+# hooks/pre-commit.d/checks/size-gate.js (one bin/size-check child): HARD verdicts, shrink-only, exempt records, SSOT propagation,
 # odd names, session markers, fail-closed rc 2 / rc 3, the first commit (no HEAD), real `git commit`.
 # The bin/size-check CLI contract is in -cli.sh.
 set -uo pipefail
 # TL3 gap (what this test does NOT catch):
 # - the installer actually setting core.hooksPath on a developer host (git commit gets it with -c)
-# - the other agents-repo gates, stubbed clean here, interacting with the size gate in a full checkout
+# - the other agents-repo gates (their registry modules stubbed clean here) interacting with the size gate in a full checkout
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
@@ -137,19 +137,19 @@ case_begin "fixture-premise-small-commit-passes" "hooks/pre-commit"
 replay fixture-premise-small-commit-passes
 case_end
 
-case_begin "new-file-over-hard-blocks-exactly-hard-passes" "hooks/lib/precommit-size-gate.sh"
+case_begin "new-file-over-hard-blocks-exactly-hard-passes" "hooks/pre-commit.d/checks/size-gate.js"
 replay new-file-over-hard-blocks-exactly-hard-passes
 case_end
 
-case_begin "gate-makes-exactly-one-node-call" "hooks/lib/precommit-size-gate.sh"
+case_begin "gate-makes-exactly-one-node-call" "hooks/pre-commit.d/checks/size-gate.js"
 replay gate-makes-exactly-one-node-call
 case_end
 
-case_begin "over-hard-head-file-may-shrink-only" "hooks/lib/precommit-size-gate.sh"
+case_begin "over-hard-head-file-may-shrink-only" "hooks/pre-commit.d/checks/size-gate.js"
 replay over-hard-head-file-may-shrink-only
 case_end
 
-case_begin "exempt-stream-records-pass" "hooks/lib/precommit-size-gate.sh"
+case_begin "exempt-stream-records-pass" "hooks/pre-commit.d/checks/size-gate.js"
 replay exempt-stream-records-pass
 case_end
 
@@ -157,7 +157,7 @@ case_begin "odd-file-name-survives-the-nul-route" "bin/size-check"
 replay odd-file-name-survives-the-nul-route
 case_end
 
-case_begin "ssot-limit-change-propagates" "hooks/lib/precommit-size-gate.sh"
+case_begin "ssot-limit-change-propagates" "hooks/pre-commit.d/checks/size-gate.js"
 replay ssot-limit-change-propagates
 case_end
 
@@ -165,7 +165,7 @@ case_begin "initial-commit-over-hard-blocks-exactly-hard-passes" "bin/size-check
 replay initial-commit-over-hard-blocks-exactly-hard-passes
 case_end
 
-case_begin "session-markers-and-unresolved-sid" "hooks/lib/precommit-size-gate.sh"
+case_begin "session-markers-and-unresolved-sid" "hooks/pre-commit.d/checks/size-gate.js"
 replay session-markers-and-unresolved-sid
 case_end
 
@@ -197,7 +197,7 @@ case_begin "git-commit-mixed-kinds-judges-every-staged-file" "hooks/pre-commit"
 replay git-commit-mixed-kinds-judges-every-staged-file
 case_end
 
-case_begin "shell-metacharacter-path-survives-the-nul-route" "hooks/lib/precommit-size-gate.sh"
+case_begin "shell-metacharacter-path-survives-the-nul-route" "hooks/pre-commit.d/checks/size-gate.js"
 replay shell-metacharacter-path-survives-the-nul-route
 case_end
 

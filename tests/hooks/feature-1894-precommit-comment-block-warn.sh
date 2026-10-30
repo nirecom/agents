@@ -3,38 +3,11 @@
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, hook, git, block, guard, fail-open, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Issue #1894 — the hooks/pre-commit comment-block section for
-# review-comment-block-size, converted from advisory WARN to a hard BLOCK.
-# Filename still says "warn" on purpose: the retire policy keys on the
-# feature-<N> prefix and suite identity, not the verdict asserted; renaming
-# would detach it from its own history for no behavioural gain.
-
-# What changed: the section now OWNS an exit code. rc 1 means "staged
-# content made a comment block worse" and must block the commit; every OTHER
-# non-zero rc must fail OPEN (a broken Node install shouldn't brick every
-# commit — detail plan S2-5). Tested separately (CPR-SC): (1) the
-# two-condition AND guard gating the section; (2) placement BEFORE the
-# hook's three unconditional early exits, or it never runs for repos that
-# matter; (3) `exit 1` only on rc-1, with _cb_out/_cb_rc pre-initialised so
-# `set -euo pipefail` can't abort the clean path; (3b) every SKIPPED result
-# on stderr — a silent skip is how a blocking check quietly stops existing;
-# (4) a real `git commit` with findings is REJECTED (part 3).
-
-# Kill switch and threshold resolve from the agents main root's .env ONLY —
-# `COMMENT_BLOCK_ENFORCE=off` / `COMMENT_BLOCK_MAX_LINES=999999` on `git
-# commit` are exactly the bypasses this issue closes, so run_precommit /
-# run_commit write config into $cfg/.env and keep those names out of the
-# child env; *_ambient does both, driving the hostile direction explicitly.
-# Dispatcher: harness here, cases in
-# tests/hooks/feature-1894-precommit-comment-block-warn/*.sh.
-
-# TL3 gap: installer deployment into a real core.hooksPath (part 3 only
-# proves git fires the hook for a self-pointed fixture repo); real `gh api`
-# repo-visibility resolution (represented by its non-GitHub-remote sibling);
-# interaction with the Claude Code PreToolUse chain (fixtures pin
-# ENFORCE_WORKTREE=off); whether rules/coding/file-split.md renders as the
-# installed rule a session loads. Mitigation: WORKFLOW_USER_VERIFIED
-# preflight (bin/check-verification-gate.sh, category hook-registration).
+# Issue #1894 — the hooks/pre-commit comment-block section: scanner rc 1 blocks; any other rc
+# fails open with a diagnostic; COMMENT_BLOCK_* come from the AGENTS_MAIN_ROOT .env only.
+# Harness here, cases in feature-1894-precommit-comment-block-warn/*.sh ("warn" kept for history).
+# TL3 gap: installer deployment into a real core.hooksPath, real `gh api` visibility, the PreToolUse
+# chain (fixtures pin ENFORCE_WORKTREE=off). Mitigation: WORKFLOW_USER_VERIFIED preflight.
 
 set -u
 
@@ -111,83 +84,8 @@ ADVISORY_NOTICE='pre-commit: comment-block warnings are advisory — commit cont
 # never surface on stdout or stderr.
 SENTINEL='SENTINEL-DO-NOT-LEAK-abc123'
 
-# Every stub records the argv it was called with, so a hook that invokes the
-# scanner with the wrong mode (or not at all) cannot pass silently.
-STUB_PROLOGUE='_argv_log="$(dirname "$0")/../../.scanner-argv"; { printf "%s\n" "$#"; if [ $# -gt 0 ]; then printf "%s\n" "$@"; fi; } > "$_argv_log"'
-
-# write_stub <path> <kind>: block -> ^BLOCK: output, rc 1 (the verdict);
-# clean -> no finding line, rc 0; skipped -> SKIPPED header, rc 0 (node
-# missing, kill switch, not a repo...); rc3 -> internal-error output, rc 3
-# (fail-open); rc7 -> an rc the contract doesn't name (fail-open); real ->
-# thin wrapper around the worktree's real scanner. rc is what the stubs
-# exist to control: mapping scanner rc to commit rc is the hook's whole new
-# job, and a real scanner can't be steered into every rc on demand.
-write_stub() {
-    local path="$1" kind="$2"
-    case "$kind" in
-        block)
-            cat > "$path" <<EOF
-#!/usr/bin/env bash
-$STUB_PROLOGUE
-echo "$SCANNER_HEADER"
-echo ""
-echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 comment lines per block)"
-echo "$BLOCK_LINE"
-echo "  L10-L32 (23 comment lines)"
-echo ""
-echo "  Compress to a one-line summary + a pointer to the authoritative doc (CPR-SSOT)."
-exit 1
-EOF
-            ;;
-        clean)
-            cat > "$path" <<EOF
-#!/usr/bin/env bash
-$STUB_PROLOGUE
-echo "$SCANNER_HEADER"
-echo ""
-echo "Staged code files scanned: 1 (extensions: js;sh;py; threshold: > 10 comment lines per block)"
-exit 0
-EOF
-            ;;
-        skipped)
-            cat > "$path" <<EOF
-#!/usr/bin/env bash
-$STUB_PROLOGUE
-echo "$SKIPPED_HEADER"
-exit 0
-EOF
-            ;;
-        rc3)
-            cat > "$path" <<EOF
-#!/usr/bin/env bash
-$STUB_PROLOGUE
-echo "$SCANNER_HEADER"
-echo "$ERR_LINE"
-exit 3
-EOF
-            ;;
-        rc7)
-            cat > "$path" <<EOF
-#!/usr/bin/env bash
-$STUB_PROLOGUE
-echo "$SCANNER_HEADER"
-exit 7
-EOF
-            ;;
-        real)
-            # Execs the fixture's OWN copied scanner (make_repo renames the
-            # copy aside to .review-comment-block-size.real before calling
-            # this), never the worktree's $LOCAL_SCANNER — the fixture must
-            # stay self-contained now that hooks/pre-commit resolves every
-            # path from its own $0, not from AGENTS_MAIN_ROOT.
-            { printf '#!/usr/bin/env bash\n'
-              printf '%s\n' "$STUB_PROLOGUE"
-              printf 'exec bash "$(dirname "$0")/.review-comment-block-size.real" "$@"\n'
-            } > "$path"
-            ;;
-    esac
-    chmod +x "$path" 2>/dev/null || true
-}
+# shellcheck source=feature-1894-precommit-comment-block-warn/fixture-stubs.sh
+. "$CASE_DIR/fixture-stubs.sh"
 
 # scanner_argc / scanner_argv <config-repo> — what the hook actually passed.
 scanner_argc() {
@@ -221,7 +119,7 @@ CFG
 }
 
 # make_repo <name> <scanner-kind> [remote]
-#   scanner-kind: block | clean | skipped | rc3 | rc7 | real | none | noexec
+#   scanner-kind: block | clean | skipped | rc3 | rc7 | real | none (fixture-stubs.sh)
 #   remote: "none" (default) or a URL
 #
 # hooks/pre-commit resolves _cfg_dir from its own $0 (issue #1894 item 1: the
@@ -244,17 +142,10 @@ make_repo() {
     # it identifies the repo as itself. Without a copy it sees an empty
     # rules/ and hard-blocks every fixture commit on INVALID_ON_DEMAND_PATHS.
     cp -r "$SCRIPT_CHECKOUT_ROOT/rules" "$dir/rules"
+    stub_agents_repo_gates "$dir"
     case "$kind" in
-        none) rm -f "$dir/bin/review-comment-block-size" ;;
-        noexec)
-            printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/bin/review-comment-block-size"
-            chmod 000 "$dir/bin/review-comment-block-size" 2>/dev/null || true
-            ;;
-        real)
-            mv "$dir/bin/review-comment-block-size" "$dir/bin/.review-comment-block-size.real"
-            write_stub "$dir/bin/review-comment-block-size" real
-            ;;
-        *) write_stub "$dir/bin/review-comment-block-size" "$kind" ;;
+        none) rm -f "$dir/bin/review-comment-block-size" "$dir/bin/review-comment-block-size.d/cli.js" ;;
+        *) write_stub "$dir" "$kind" ;;
     esac
     echo "init" > "$dir/README.md"
     # hooks/bin/rules are committed (not left as untracked filesystem writes)

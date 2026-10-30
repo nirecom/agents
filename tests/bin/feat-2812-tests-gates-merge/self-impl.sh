@@ -1,4 +1,4 @@
-# Tests: bin/check-test-frontmatter/self-impl.sh, bin/check-self-impl.sh
+# Tests: bin/check-test-frontmatter.sh, bin/check-self-impl.sh
 # Tags: TL2, bin, merge, tests-gates, self-impl, scope:issue-specific
 # Self-implemented harness during a merge: a MERGE_HEAD-only file is judged against the MERGE_HEAD
 # blob (R4), identical parents against that one blob (R5), and differing parents 3-way with the
@@ -22,7 +22,7 @@ si_merge() {
   gate "$TMPBASE/si-$tag" "$FG"
 }
 
-case_begin "r4-merge-head-file-counts-only-the-added-counter" "bin/check-test-frontmatter/self-impl.sh"
+case_begin "r4-merge-head-file-counts-only-the-added-counter" "bin/check-test-frontmatter.sh"
 sib r4-up 1 up
 sib r4-edit 2 up edited
 si_merge r4 - r4-up - r4-edit
@@ -30,7 +30,7 @@ expect_rc "R4: MERGE_HEAD has 1 counter, staged 2" 1 "$GATE_RC" "$GATE_ALL"
 expect_codes "R4: only the added counter" "$GATE_OUT" SELF_IMPLEMENTED_HARNESS 1
 case_end
 
-case_begin "r5-identical-parents-without-base-block-an-added-counter" "bin/check-test-frontmatter/self-impl.sh"
+case_begin "r5-identical-parents-without-base-block-an-added-counter" "bin/check-test-frontmatter.sh"
 sib r5-same 1 same
 sib r5-two 2 same edited
 si_merge r5a - r5-same r5-same r5-two
@@ -38,7 +38,7 @@ expect_rc "R5 (a): both parents 1 counter, no base, staged 2" 1 "$GATE_RC" "$GAT
 expect_codes "R5 (a)" "$GATE_OUT" SELF_IMPLEMENTED_HARNESS 1
 case_end
 
-case_begin "r5-identical-parents-pass-an-unrelated-edit" "bin/check-test-frontmatter/self-impl.sh"
+case_begin "r5-identical-parents-pass-an-unrelated-edit" "bin/check-test-frontmatter.sh"
 sib r5-edit 1 same edited
 si_merge r5b - r5-same r5-same r5-edit
 expect_rc "R5 (b): count kept, another line edited" 0 "$GATE_RC" "$GATE_ALL"
@@ -98,7 +98,7 @@ expect_rc "(clamp) B2 H2 M1 staged 1 (2+1-2=1 existing)" 0 "$GATE_RC" "$GATE_ALL
 expect_codes "(clamp) B2 H2 M1" "$GATE_ALL" SELF_IMPLEMENTED_HARNESS 0
 case_end
 
-case_begin "r3-head-only-file-counts-only-the-added-counter" "bin/check-test-frontmatter/self-impl.sh"
+case_begin "r3-head-only-file-counts-only-the-added-counter" "bin/check-test-frontmatter.sh"
 sib r3-edit 2 h edited
 si_merge r3 - - c1-h r3-edit
 expect_rc "R3: only HEAD has the file (1 counter), staged 2" 1 "$GATE_RC" "$GATE_ALL"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # tests/bin/feature-1894-comment-block-size/scan-core-node.sh
-# Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size.d/scan-cli.js
+# Tests: hooks/lib/comment-block-scan.js, bin/review-comment-block-size
 # Tags: comment-block-size, parser, node, table-driven, ssot, parity, scope:issue-specific, scope:feature-1894, layer:TL2
 
 # hooks/lib/comment-block-scan.js is the recognition SSOT shared by the Edit-time hook and the
-# bash CLI; this is its direct unit surface (scanner-core.sh sees it only THROUGH the CLI, CPR-E2E).
+# review module; this is its direct unit surface (scanner-core.sh sees it only THROUGH the CLI, CPR-E2E).
 # TL3 gap: Edit-time latency, post-packaging require-ability, editor byte sequences (UTF-16,
 # mixed CRLF/LF at scale). Mitigation: scanner-core.sh runs the same rules through the real CLI.
 
@@ -12,7 +12,8 @@ echo ""
 echo "=== N0: module contract ==="
 
 NS_MOD="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-scan.js"
-NS_CLI="$SCRIPT_CHECKOUT_ROOT/bin/review-comment-block-size.d/scan-cli.js"
+# #2507: the CLI's stdin/stdout scan adapter is retired; the review calls the module in process.
+NS_CLI="$SCRIPT_CHECKOUT_ROOT/hooks/lib/comment-block-review/review.js"
 NS_DIR="$TMPDIR_BASE/nodescan"
 mkdir -p "$NS_DIR"
 
@@ -22,7 +23,6 @@ ns_path() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
 NS_MOD_P="$(ns_path "$NS_MOD")"
-NS_CLI_P="$(ns_path "$NS_CLI")"
 
 # The driver keeps every assertion below to a single scalar on stdout, so a
 # thrown exception is never mistaken for a legitimate value.
@@ -380,7 +380,6 @@ archive/old.sh                  | no
 TABLE
 fi
 
-# N5 (line-splitting / byte edges) and N6 (scan-cli.js stdout contract) live in
-# the sibling folder — rules/coding/file-split.md Pattern A, 500-line HARD limit.
+# N5 (line-splitting / byte edges) lives in the sibling folder — rules/coding/file-split.md Pattern A, 500-line HARD limit.
 # shellcheck source=./scan-core-node/byte-and-cli-edges.sh
 . "$(dirname "${BASH_SOURCE[0]}")/scan-core-node/byte-and-cli-edges.sh"

@@ -24,7 +24,7 @@ const TESTS_RE = /^tests\/.*\.sh$/;
 
 class UsageError extends Error {}
 
-// Git Bash may hand over /c/... paths; Node's fs needs C:/... on Windows.
+// Git Bash may hand over MSYS drive paths (C: as /c); Node's fs needs C:/... on Windows.
 function nativePath(p) {
   const m = process.platform === "win32" && /^\/([A-Za-z])(\/.*)?$/.exec(p);
   return m ? `${m[1].toUpperCase()}:${m[2] || "/"}` : p;
@@ -88,7 +88,7 @@ function scanRoot(root, shownBase) {
   return isolation(targets, []);
 }
 
-function run(opts) {
+function collect(opts, only) {
   const testsRoot = path.join(SCRIPT_CHECKOUT_ROOT, "tests");
   if (opts.root !== null) {
     const root = path.resolve(nativePath(opts.root));
@@ -99,7 +99,8 @@ function run(opts) {
     return isolation(targets, listShellFiles(testsRoot));
   }
   if (opts.staged) {
-    const staged = residual.stagedPaths(SCRIPT_CHECKOUT_ROOT);
+    let staged = residual.stagedPaths(SCRIPT_CHECKOUT_ROOT);
+    if (only !== null) staged = staged.filter((p) => only.has(p));
     const out = residual.stagedHits(SCRIPT_CHECKOUT_ROOT, staged);
     if (staged.some((p) => TESTS_RE.test(p))) {
       // The commit carries the index, so every tests/*.sh is judged by its staged blob.
@@ -112,24 +113,28 @@ function run(opts) {
   return [...scanRoot(testsRoot, SCRIPT_CHECKOUT_ROOT), ...residual.trackedHits(SCRIPT_CHECKOUT_ROOT)];
 }
 
-function main(argv) {
+// run({ argv, stagedPaths, stdout, stderr }) -> rc; the repo judged is this module's checkout,
+// never cwd. stagedPaths, when given, limits --staged to those paths (merge narrowing).
+function run({ argv = [], stagedPaths = null, stdout = process.stdout, stderr = process.stderr } = {}) {
   let lines;
   try {
-    lines = run(parseArgs(argv));
+    lines = collect(parseArgs(argv), stagedPaths === null ? null : new Set(stagedPaths));
   } catch (e) {
     if (!(e instanceof UsageError)) throw e;
-    process.stderr.write(`check-plans-dir-isolation: ${e.message}\n`);
+    stderr.write(`check-plans-dir-isolation: ${e.message}\n`);
     return 2;
   }
   lines.sort();
-  if (lines.length > 0) process.stdout.write(lines.join("\n") + "\n");
+  if (lines.length > 0) stdout.write(lines.join("\n") + "\n");
   const violations = lines.filter(isViolation).length;
   if (violations === 0) return 0;
-  process.stderr.write(
+  stderr.write(
     `check-plans-dir-isolation: ${violations} violation(s). Pin WORKFLOW_STATE_DIR and ` +
       "WORKFLOW_PLANS_DIR once at top level before the first exec (rules/test/fixture-isolation.md).\n",
   );
   return 1;
 }
 
-process.exitCode = main(process.argv.slice(2));
+module.exports = { run };
+
+if (require.main === module) process.exitCode = run({ argv: process.argv.slice(2) });

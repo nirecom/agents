@@ -243,8 +243,9 @@ function walk(lines) {
 }
 
 // The file's lines: a leading BOM dropped, split on LF or CRLF. Throws when unreadable.
+// file is a path, or an in-memory { name, text } the pre-commit gates hold.
 function readLines(file) {
-  const text = fs.readFileSync(file, "utf8");
+  const text = file !== null && typeof file === "object" && typeof file.text === "string" ? file.text : fs.readFileSync(file, "utf8");
   const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   return body.split(/\r?\n/);
 }

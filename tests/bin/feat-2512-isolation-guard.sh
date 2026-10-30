@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/check-plans-dir-isolation.sh, hooks/lib/precommit-agents-repo-gates.sh, .github/workflows/migration-blocks-audit.yml
+# Tests: bin/check-plans-dir-isolation.sh, hooks/pre-commit, .github/workflows/migration-blocks-audit.yml
 # Tags: isolation, classifier, gate, pre-commit, ci, bin, scope:issue-specific, TL2, fail-closed
 # #2512 stage 4: the isolation classifier becomes a recursive gate (pin order,
 # source inheritance, residual old-name token) wired into pre-commit and CI.
@@ -145,7 +145,7 @@ case_begin "i12-whole-repo-clean" "bin/check-plans-dir-isolation.sh"
 c_i12_repo_clean
 case_end
 
-case_begin "i13-precommit-gate-blocks" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "i13-precommit-gate-blocks" "hooks/pre-commit"
 c_i13_precommit_gate
 case_end
 
@@ -234,19 +234,19 @@ case_begin "source-grandparent-pin-late" "bin/check-plans-dir-isolation.sh"
 c_grandparent_pin_late
 case_end
 
-case_begin "six-clean-checkers-pass" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "six-clean-checkers-pass" "hooks/pre-commit"
 c_fc_all_clean_passes
 case_end
 
-case_begin "missing-checker-blocks-the-commit" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "missing-checker-blocks-the-commit" "hooks/pre-commit"
 c_fc_missing_checker_blocks
 case_end
 
-case_begin "unexpected-checker-rc-blocks-the-commit" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "unexpected-checker-rc-blocks-the-commit" "hooks/pre-commit"
 c_fc_unexpected_rc_blocks
 case_end
 
-case_begin "non-agents-repo-runs-no-gate" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "non-agents-repo-runs-no-gate" "hooks/pre-commit"
 c_fc_other_repo_is_untouched
 case_end
 

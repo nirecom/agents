@@ -253,18 +253,20 @@ usage_err "check-self-impl --rel without value" "$SI_CLI" "check-self-impl.sh: -
 usage_err "check-self-impl --rel empty" "$SI_CLI" "check-self-impl.sh: --rel needs a value" --rel "" "$_copy"
 case_end
 
+# The Node CLI names the head copy in its native form (cygpath -m on Windows), not as typed.
 case_begin "rel-and-head-value-errors-language-match" "bin/check-test-language-match.sh"
 usage_err "check-test-language-match --rel without value" "$LM_CLI" "check-test-language-match.sh: --rel needs a value" "$_copy" --rel
 usage_err "check-test-language-match --rel empty" "$LM_CLI" "check-test-language-match.sh: --rel needs a value" --rel "" "$_copy"
 usage_err "check-test-language-match --head empty" "$LM_CLI" "check-test-language-match.sh: --head needs a value" --head "" "$_copy"
-usage_err "check-test-language-match --head copy absent" "$LM_CLI" "check-test-language-match.sh: head copy not found: $TMPBASE/x/no-head.tmp" --rel "$REL" --head "$TMPBASE/x/no-head.tmp" "$_copy"
+usage_err "check-test-language-match --head copy absent" "$LM_CLI" "check-test-language-match.sh: head copy not found: $(if command -v cygpath >/dev/null 2>&1; then cygpath -m "$TMPBASE/x/no-head.tmp"; else printf '%s' "$TMPBASE/x/no-head.tmp"; fi)" --rel "$REL" --head "$TMPBASE/x/no-head.tmp" "$_copy"
 case_end
 
 # A uv that exits 1 makes the pytest test case reader fail on $REL (reader rc 1, not 79).
 UV_FAIL="$TMPBASE/shim-uv-fail"
 mkdir -p "$UV_FAIL"
 printf '#!%s\nexit 1\n' "$(command -v bash)" > "$UV_FAIL/uv"
-chmod +x "$UV_FAIL/uv"
+# Windows: Node resolves uv.exe before the extensionless script it cannot exec, so a failing uv.exe sits beside it.
+chmod +x "$UV_FAIL/uv"; if command -v cygpath >/dev/null 2>&1; then cp "$(type -P false)" "$UV_FAIL/uv.exe"; fi
 printf '%s\n' '#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/a.js' '# Tags: scope:common' \
   'case_begin "alpha" "bin/a.sh"' 'echo a' 'case_end' 'case_begin "beta" "bin/a.js"' 'echo b' 'case_end' > "$REPO/tests/bin/cm-clean.sh"
 printf '%s\n' '#!/usr/bin/env bash' '# Tests: bin/a.sh, bin/a.js' '# Tags: scope:common' 'echo a' > "$REPO/tests/bin/cm-missing.sh"

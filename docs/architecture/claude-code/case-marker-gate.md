@@ -6,13 +6,17 @@ new multi-path test without well-placed case markers is blocked at two points (#
 `Edit`/`Write`/`MultiEdit` that would leave such a file is rejected before it lands
 (`hooks/block-case-markers.js`), and `git commit` blocks as a backstop for anything that reaches
 the staging area another way — editFiles, NotebookEdit, or a shell write
-(`_precommit_check_tests_case_markers` in `hooks/lib/precommit-tests-frontmatter.sh`).
+(the case-marker gate of the `tests-frontmatter` check,
+`hooks/pre-commit.d/checks/tests-frontmatter/case-markers-gate.js`; see
+[pre-commit-runner.md](pre-commit-runner.md)).
 
 The gate covers every language whose registry entry names both a `caseMarkerReader` and a
 `helperLibrary` (bash, Pester, pytest and JavaScript since #2411); neither layer names a language
-itself. Both layers judge with `bin/check-case-markers.sh`, whose verdict is the file state
-`crr_read` reports (`bin/lib/case-record-reader.sh`) — the same reader retire splits with, so a
-file the gate accepts is one retire can split. Retire splits per case only for an entry that
+itself. Both layers judge with the logic of `bin/check-case-markers.sh` (the hook through that CLI,
+the commit layer in process through `hooks/lib/test-gates/case-markers.js`), whose verdict is the
+file state `crr_read` reports (`bin/lib/case-record-reader.sh`, ported to
+`hooks/lib/test-gates/case-records.js`) — the same reader retire splits with, so a file the gate
+accepts is one retire can split. Retire splits per case only for an entry that
 also names `caseEmbedRules` (all four supported entries since #2502). The marker name, the hints and the document a
 message points to come from the entry's `diagnostics`. Writing rules live in
 `skills/_shared/test-design/case-markers.md`, with one notation document per language beside it.
@@ -43,11 +47,12 @@ defines, is `SELF_IMPLEMENTED_HARNESS` and blocks. A new file blocks on any dete
 file is compared with its HEAD copy (`--head`): detections are counted per (kind, detail) key, and
 only those beyond HEAD's count for the same key block, so an existing file's old counter does not
 stop an unrelated edit, while adding one more of the same kind does. The detection is the entry's `caseEmbedRules`
-`self-impl` op (reached through `tsi_report` in `bin/lib/test-self-impl-window.sh`); its limits are
+`self-impl` op (reached through `report` in `hooks/lib/test-gates/self-impl.js`); its limits are
 in [test-language-registry/case-embed-ops.md](test-language-registry/case-embed-ops.md). A
 language with no `caseEmbedRules` passes with `SELF_IMPL_CHECK_UNSUPPORTED`, and one whose runtime
-is missing with `SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE`. The commit layer calls it from
-`bin/check-test-frontmatter.sh --staged`, with the same new-file and HEAD-count rule. When HEAD
+is missing with `SELF_IMPL_CHECK_RUNTIME_UNAVAILABLE`. The commit layer calls it from the staged
+frontmatter check (`stagedCheck` in `hooks/lib/test-gates/frontmatter/staged.js`, the logic of
+`bin/check-test-frontmatter.sh --staged`), with the same new-file and HEAD-count rule. When HEAD
 lists the file but its content cannot be read, the HEAD copy is empty and the file is judged as
 new: the commit blocks on any detection (fail-closed), with no separate diagnostic. In a merge
 commit the baseline is the parent copy, or both parents and the merge-base
@@ -57,10 +62,11 @@ commit the baseline is the parent copy, or both parents and the merge-base
 
 `rules/test.md` "Test Language" says a test is written in the language of the code it tests. The
 same two points enforce it with `bin/check-test-language-match.sh` (#2502), on every `tests/` file
-outside `tests/_archive/` and `tests/lib/`, new or existing (the commit layer calls it from
-`_precommit_check_test_language_match`). The test's language is its registry entry; a code
-target's language is the entry whose `sourcePatterns` match its name, else its shebang
-(`_trl_token_index` in `bin/lib/test-route-destination/language.sh`). A target with no code
+outside `tests/_archive/` and `tests/lib/`, new or existing (the commit layer runs the same logic,
+`hooks/lib/test-gates/language-match.js`, from
+`hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js`). The test's language is its
+registry entry; a code target's language is the entry whose `sourcePatterns` match its name, else
+its shebang (`tokenLanguage` in `hooks/lib/test-gates/code-language.js`). A target with no code
 language (documentation, JSON) is not judged. A mismatch is `TEST_LANGUAGE_MISMATCH`, and the line
 names the code language's new-file name shape.
 
@@ -68,9 +74,10 @@ names the code language's new-file name shape.
   on every case target too — so a header naming same-language code cannot hide a case that tests
   another language.
 - A file in `HEAD` blocks only on a mismatch `HEAD` did not have, so editing or deleting an old
-  case never blocks. The hook and the commit layer pass the `HEAD` blob with `--head <copy>`; a
-  merge commit passes the parent copy, or both parents and the merge-base
-  ([Merge commits](#merge-commits)). When both versions are conforming, `tlm_added_cases` pairs cases: same name first, then a renamed case
+  case never blocks. The hook passes the `HEAD` blob with `--head <copy>`, the commit layer in
+  memory; a merge commit uses the parent copy, or both parents and the merge-base
+  ([Merge commits](#merge-commits)). When both versions are conforming, `pair`
+  (`hooks/lib/test-gates/language-match/pairing.js`) pairs cases: same name first, then a renamed case
   paired 1:1 with a vanished `HEAD` case that had the same target; an unpaired case is added. An
   added case blocks on a mismatch; a paired one blocks only if its `HEAD` target matched. Otherwise
   only header tokens absent from the `HEAD` header are judged.
@@ -96,19 +103,19 @@ names the code language's new-file name shape.
 
 A test that is a `rules/test.md` exception declares it in `Tags:` as `test-lang-exception:<value>`
 and is judged for neither mismatch nor case addition. Only the first `headerMaxLines` (10) lines of
-the file are read for `Tests:` / `Tags:` (`bin/lib/test-frontmatter-headers.sh`), so a `Tags:` line
+the file are read for `Tests:` / `Tags:` (`readHeaders` in `hooks/lib/test-gates/headers.js`), so a `Tags:` line
 further down is body text and declares nothing. The allowed values are the registry key `testLanguageExceptions`
 (see [test-language-registry.md](test-language-registry.md)). A value outside the list, or two
 declarations, is `INVALID_TEST_LANG_EXCEPTION` — on any file, mismatch or not — and counts as no
 declaration, so a bad value cannot slip the mismatch check. Validation lives in this CLI only; the
-frontmatter check (`check_content` in `bin/check-test-frontmatter.sh`) does not repeat it, so the
+frontmatter check (`checkContent` in `hooks/lib/test-gates/frontmatter/content.js`) does not repeat it, so the
 edit-time and commit-time verdicts come from one place and a commit never shows the line twice.
 
-Overlap with #2440: deciding whether an existing file gained a case (`tlm_added_cases` in
-`bin/lib/test-language-match.sh`) and collecting existing-file edits at edit time
+Overlap with #2440: deciding whether an existing file gained a case (`pair` and `caseAddition` under
+`hooks/lib/test-gates/language-match/`) and collecting existing-file edits at edit time
 (`hooks/lib/block-case-markers/language-match-candidates.js`) are what #2440 needs to enforce case
-markers on existing files. Both are private to this check for now; #2440 should move them to a
-shared `bin/lib/` entry point and call them from both checks. The case-marker check itself still
+markers on existing files. Both are private to this check for now; #2440 should expose them as a
+shared entry point and call them from both checks. The case-marker check itself still
 judges new files only.
 
 ## Merge commits
@@ -116,9 +123,10 @@ judges new files only.
 In a merge commit `HEAD` is only the first parent, so a test that already sits on the other parent
 (`MERGE_HEAD`, usually `origin/main`) looked new and blocked a merge that changed nothing in it
 (#2812). The commit layer therefore judges each staged `tests/` path against its merge parents.
-`hooks/lib/merge-parents.js` (`resolveMergeParents`) decides the baseline once per commit, and
-`bin/merge-parents` hands it to the bash gates as NUL-delimited records. The gates read those
-records only through `bin/lib/merge-parents.sh`. The merge state (`MERGE_HEAD` read once, octopus or
+`hooks/lib/merge-parents.js` (`resolveMergeParents`) decides the baseline once per commit; the
+three gates share that one resolution (`hooks/pre-commit.d/checks/tests-frontmatter/parents.js`),
+and `bin/merge-parents` hands it to a CLI caller as NUL-delimited records
+(`bin/check-test-frontmatter.sh --merge-parents`, read by `parseRecords`). The merge state (`MERGE_HEAD` read once, octopus or
 malformed → undecidable) comes from `hooks/lib/merge-state.js`, which
 [glossary-check.md](glossary-check.md)'s merge-incoming exclusion shares.
 
@@ -141,15 +149,15 @@ blob, H / M the parents' blobs and B the merge-base's, the first matching rule w
 - 3-way counts: an existing count per key is `count(H) + count(M) − count(B)` (never below 0).
   `bin/check-self-impl.sh` takes `--head` twice plus `--base`. If any of the three copies cannot be
   parsed, it counts against H alone instead of reading the missing count as 0.
-  `bin/check-test-language-match.sh` runs `tlm_judge` once per baseline and adds the
+  The language-match check runs `judge` once per baseline and adds the
   not-existing occurrences per `(header|case, target)` key as `a + b − c`
-  (`bin/lib/test-language-match/multi-baseline.sh`). `CASE_ADDED_WITHOUT_MARKERS` compares the case
+  (`judgeMulti` in `hooks/lib/test-gates/language-match/multi-baseline.js`). `CASE_ADDED_WITHOUT_MARKERS` compares the case
   count, or code lines when any version cannot be counted, against
   `n(H) + n(M) − n(B)`.
 - R1 skips only the baseline judgment. `--declaration-only` still validates the `test-lang-exception`
   declaration (`INVALID_TEST_LANG_EXCEPTION`) and prints no `TEST_LANGUAGE_UNSUPPORTED`. A normal
   commit never takes this path.
-- Fallback: when the merge state is undecidable, the CLI fails, or its records are malformed, every
+- Fallback: when the merge state is undecidable, the resolver fails, or its records are malformed, every
   path is judged against `HEAD` only. The commit layer prints one stderr line
   (`pre-commit: merge parents <reason> — tests/ gates judge against HEAD only`).
 

@@ -126,15 +126,35 @@ core_case_ssot_limit_change_propagates() {
   expect_block "control: the repo SSOT blocks the same 750-line file" src/new.js
 }
 
+# The Node gate hooks/pre-commit.d/checks/size-gate.js: one bin/size-check child per commit, chained
+# onto the agents-repo-only registry row agents-repo-gates, and never run once that row blocked.
 core_case_gate_makes_exactly_one_node_call() {
-  local n
+  local n got
   if [ ! -f "$GATE" ]; then
-    fail "hooks/lib/precommit-size-gate.sh exists" "missing"
-  else
-    n="$(grep -vE '^[[:space:]]*#' "$GATE" | grep -cE '(^|[^A-Za-z0-9_./-])node([[:space:]]|"|$)')"
-    if [ "$n" = 1 ]; then pass "precommit-size-gate.sh contains exactly one node invocation"
-    else fail "precommit-size-gate.sh contains exactly one node invocation" "found $n"; fi
+    fail "hooks/pre-commit.d/checks/size-gate.js exists" "missing"
+    return
   fi
-  if grep -q 'precommit-size-gate\.sh' "$ROOT/hooks/pre-commit"; then pass "hooks/pre-commit sources precommit-size-gate.sh"
-  else fail "hooks/pre-commit sources precommit-size-gate.sh"; fi
+  n="$(grep -vE '^[[:space:]]*//' "$GATE" | grep -cE 'spawnSync\(')"
+  if [ "$n" = 1 ]; then pass "size-gate.js spawns exactly one child"
+  else fail "size-gate.js spawns exactly one child" "found $n"; fi
+  if grep -qF '"--staged-auto", "--session-gate"' "$GATE" && grep -qF '"bin", "size-check"' "$GATE"; then
+    pass "the one child is bin/size-check --staged-auto --session-gate"
+  else fail "the one child is bin/size-check --staged-auto --session-gate"; fi
+  # shellcheck disable=SC2016 # a JS template literal, not a shell expansion
+  got="$(node -e 'const r=require(process.argv[1]).CHECKS.find((c)=>c.name==="agents-repo-gates");process.stdout.write(r?`${r.agentsRepoOnly}/${r.failMode}`:"absent")' "$ROOT/hooks/pre-commit.d/registry.js" 2>&1)"
+  if [ "$got" = "true/closed" ]; then pass "registry row agents-repo-gates is agents-repo-only and fails closed"
+  else fail "registry row agents-repo-gates is agents-repo-only and fails closed" "got $got"; fi
+  if grep -qF 'entry.name === "agents-repo-gates" ? require("./checks/size-gate").after(check)' "$ROOT/hooks/pre-commit.d/main.js"; then
+    pass "hooks/pre-commit.d/main.js chains size-gate.js onto the agents-repo-gates row"
+  else fail "hooks/pre-commit.d/main.js chains size-gate.js onto the agents-repo-gates row"; fi
+  if grep -qF 'hooks/pre-commit.d/main.js' "$ROOT/hooks/pre-commit"; then pass "hooks/pre-commit runs the Node body main.js"
+  else fail "hooks/pre-commit runs the Node body main.js"; fi
+  # A blocking agents-repo gate returns as is: no size-check child runs (the cfgDir has none, so a
+  # spawned child would add its rc diagnostic).
+  got="$(node -e '
+const g=require(process.argv[1]);const first={verdict:"block",messages:[]};
+g.after({run:async()=>first}).run({context:{cfgDir:process.argv[2],repoTop:process.argv[2]}}).then((r)=>process.stdout.write(r===first?"same":JSON.stringify(r)));
+' "$GATE" "$TMP_ROOT/no-such-cfg" 2>&1)"
+  if [ "$got" = same ]; then pass "a blocking agents-repo gate returns as is; size-check never runs after it"
+  else fail "a blocking agents-repo gate returns as is; size-check never runs after it" "got $got"; fi
 }

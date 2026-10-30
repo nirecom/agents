@@ -1,4 +1,4 @@
-# Tests: hooks/lib/precommit-tests-frontmatter.sh, bin/check-test-frontmatter.sh
+# Tests: hooks/pre-commit, bin/check-test-frontmatter.sh
 # Tags: TL2, bin, hooks, pre-commit, merge, tests-gates, case-markers, scope:issue-specific
 # #2748 reproduction: a test file only MERGE_HEAD has, staged unchanged, is an existing file for
 # every tests/ gate; the same bodies staged as new files still block (the false-green control).
@@ -8,7 +8,7 @@
 echo ""
 echo "=== existence: files that came from MERGE_HEAD ==="
 
-case_begin "merge-head-only-files-pass-every-gate" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "merge-head-only-files-pass-every-gate" "hooks/pre-commit"
 R="$TMPBASE/ex-merge"
 mergefx "$R" "" "$EX_PAIRS" "" ""
 git -C "$R" update-index --chmod=+x -- tests/bin/mode.sh
@@ -34,7 +34,7 @@ gate "$R" "$FG" "$CM" "$LG"
 expect_rc "all three gates in one shell" 0 "$GATE_RC" "$GATE_ALL"
 case_end
 
-case_begin "same-bodies-staged-as-new-files-still-block" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "same-bodies-staged-as-new-files-still-block" "hooks/pre-commit"
 R="$TMPBASE/ex-plain"
 mkrepo "$R"
 apply "$R" "$EX_PAIRS"

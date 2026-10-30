@@ -3,17 +3,8 @@
 # Tests: hooks/pre-commit, bin/review-comment-block-size
 # Tags: comment-block-size, pre-commit, guard, kill-switch, argv, worktree, dotenv, scope:issue-specific, scope:feature-1894, layer:TL2
 
-# Part 1 — who decides whether the section runs at all. Two independent
-# conditions must BOTH hold: (a) the repo being committed to is the agents
-# session repo, and (b) the scanner exists and is executable — each pinned
-# separately (CPR-ORTH), with every case also asserting the argv handed to
-# the scanner, since "silent" must mean "not invoked", not "invoked and
-# printed nothing". A third question: whether the kill switch can be
-# flipped by whoever runs `git commit` — it must not be, COMMENT_BLOCK_ENFORCE
-# reads from the agents main root's .env only, so P05 drives both the honest path
-# and the ambient spoof.
-
-# Sourced by the dispatcher; all helpers and constants are defined there.
+# Part 1 — whether the section runs: (a) agents repo and (b) scanner present, pinned with the
+# argv each case hands the scanner; the kill switch reads .env only (P05). Sourced by the dispatcher.
 
 # ============================================================================
 # P01 — both conditions true + findings -> commit BLOCKED
@@ -92,23 +83,13 @@ p03_agents_repo_without_scanner_silent() {
     stage_sample "$repo"
     run_precommit "$repo" "$repo"
     assert_eq "P03/rc" "0" "$RC"
-    assert_absent "P03/no-scanner-no-output" "comment-block" "$OUT$ERR"
+    # The hook's `pre-commit-section: <name>` progress markers name every section, run or not.
+    assert_absent "P03/no-scanner-no-output" "comment-block" \
+        "$(printf '%s\n' "$OUT$ERR" | grep -v '^pre-commit-section: ' || true)"
 }
 
-p03b_scanner_present_but_not_executable() {
-    local repo; repo="$(make_repo p03b noexec "$NON_GITHUB")"
-    if [ -x "$repo/bin/review-comment-block-size" ]; then
-        # MSYS2/NTFS reports every regular file as r-xr-xr-x, so the "present
-        # but not executable" state cannot be produced here. The guard's false
-        # verdict is still covered by P03 (script absent).
-        skip "P03b: execute bit cannot be cleared on this filesystem — -x false verdict covered by P03"
-        return
-    fi
-    stage_sample "$repo"
-    run_precommit "$repo" "$repo"
-    assert_eq "P03b/rc" "0" "$RC"
-    assert_absent "P03b/non-executable-scanner-silent" "comment-block" "$OUT$ERR"
-}
+# #2507 retired P03b (scanner present but not executable): the hook loads
+# bin/review-comment-block-size.d/cli.js in process, so no execute bit is consulted.
 
 # ============================================================================
 # P04 — COMMENT_BLOCK_ENFORCE kill switch, both verdicts
@@ -200,7 +181,6 @@ p01b_clean_scan_passes_silently
 p02_foreign_repo_untouched
 p02b_linked_worktree_is_the_same_repo
 p03_agents_repo_without_scanner_silent
-p03b_scanner_present_but_not_executable
 p04_kill_switch
 p05_ambient_cannot_disable
 p06_obsolete_names_are_inert

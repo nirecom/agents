@@ -15,8 +15,6 @@ const path = require("path");
 
 const { loadPolicyAsData } = require("../../hooks/lib/rules-policy-reader");
 
-// --- rule file parsing ------------------------------------------------------
-
 const FRONTMATTER_RE = /^---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
 function splitFrontmatter(text) {
@@ -65,8 +63,6 @@ function listRuleFiles(root) {
 function toRel(root, full) {
   return path.relative(root, full).split(path.sep).join("/");
 }
-
-// --- checks -----------------------------------------------------------------
 
 // A near-miss is any glob that is trying to be the reserved token and failing:
 // `!!on-demand-only`, `on-demand-only`, `.on-demand-only/never_match`. Spotting
@@ -158,43 +154,28 @@ function checkReaderRows(root, policy, violations) {
     const rule = row.key;
 
     if (row.values === null) {
-      violations.push([
-        "MALFORMED_READER_ROW",
-        rule,
-        "reader row has no '|' separator, so it names no skill obliged to Read the rule",
-      ]);
+      violations.push(["MALFORMED_READER_ROW", rule,
+        "reader row has no '|' separator, so it names no skill obliged to Read the rule"]);
     } else if (row.values.length === 0) {
-      violations.push([
-        "MALFORMED_READER_ROW",
-        rule,
-        "reader row carries a separator but zero readers — nobody is obliged to Read the rule",
-      ]);
+      violations.push(["MALFORMED_READER_ROW", rule,
+        "reader row carries a separator but zero readers — nobody is obliged to Read the rule"]);
     } else {
       for (const reader of row.values) {
         if (!isFileInRoot(root, reader)) {
-          violations.push([
-            "READER_TARGET_MISSING",
-            rule,
-            "declared reader '" + reader + "' is not a file inside the checked root",
-          ]);
+          violations.push(["READER_TARGET_MISSING", rule,
+            "declared reader '" + reader + "' is not a file inside the checked root"]);
         }
       }
     }
 
     if (unconditional.has(rule)) {
-      violations.push([
-        "DUPLICATE_POLICY_ENTRY",
-        rule,
-        "declared in both ON_DEMAND_READERS and EXPECTED_UNCONDITIONAL",
-      ]);
+      violations.push(["DUPLICATE_POLICY_ENTRY", rule,
+        "declared in both ON_DEMAND_READERS and EXPECTED_UNCONDITIONAL"]);
     }
 
     if (claudeMd !== null && !claudeMd.includes(rule)) {
-      violations.push([
-        "MISSING_ONDEMAND_POINTER",
-        rule,
-        "de-injected but CLAUDE.md never names it, so nothing points the model at it",
-      ]);
+      violations.push(["MISSING_ONDEMAND_POINTER", rule,
+        "de-injected but CLAUDE.md never names it, so nothing points the model at it"]);
     }
   }
 }
@@ -240,31 +221,22 @@ function checkMinimizedRows(root, policy, maxBytes, violations) {
     // Shape first, and the row is dropped on failure: nothing below may read a path this
     // checker has not already agreed is a rules file.
     if (!MINIMIZED_KEY_RE.test(rule)) {
-      violations.push([
-        "MALFORMED_MINIMIZED_KEY",
-        rule,
-        "minimized row key is not a 'rules/<name>.md' path — the row was not read",
-      ]);
+      violations.push(["MALFORMED_MINIMIZED_KEY", rule,
+        "minimized row key is not a 'rules/<name>.md' path — the row was not read"]);
       continue;
     }
 
     if (!unconditional.has(rule) || onDemand.has(rule)) {
-      violations.push([
-        "MINIMIZED_NOT_UNCONDITIONAL",
-        rule,
+      violations.push(["MINIMIZED_NOT_UNCONDITIONAL", rule,
         "declared minimized but not an unconditional rule (absent from EXPECTED_UNCONDITIONAL, " +
           "or wired as an on-demand reader row) — an escape hatch that is de-injected is one " +
-          "a stuck session cannot see",
-      ]);
+          "a stuck session cannot see"]);
     }
 
     const pointer = row.values === null ? null : (row.values.join(",") || null);
     if (pointer === null) {
-      violations.push([
-        "MINIMIZED_POINTER_MISSING",
-        rule,
-        "minimized row declares no pointer, so the rule names nowhere the moved procedure lives",
-      ]);
+      violations.push(["MINIMIZED_POINTER_MISSING", rule,
+        "minimized row declares no pointer, so the rule names nowhere the moved procedure lives"]);
       continue;
     }
 
@@ -282,13 +254,9 @@ function checkMinimizedRows(root, policy, maxBytes, violations) {
     }
 
     if (text === null) {
-      violations.push([
-        "MINIMIZED_POINTER_MISSING",
-        rule,
-        "declared minimized but the rule file cannot be read, so its pointer to '" +
-          pointer +
-          "' cannot be verified",
-      ]);
+      violations.push(["MINIMIZED_POINTER_MISSING", rule,
+        "declared minimized but the rule file cannot be read, so its pointer to '" + pointer +
+          "' cannot be verified"]);
     } else {
       // A skills/<n>/SKILL.md pointer is satisfied by the `/<n>` invocation form too —
       // that is how a prompt file tells a session to run it. Any other pointer (a doc or
@@ -296,34 +264,22 @@ function checkMinimizedRows(root, policy, maxBytes, violations) {
       const skill = /^skills\/([^/]+)\/SKILL\.md$/.exec(pointer);
       const named = text.includes(pointer) || (skill !== null && text.includes("/" + skill[1]));
       if (!named) {
-        violations.push([
-          "MINIMIZED_POINTER_MISSING",
-          rule,
-          "body names neither '" +
-            pointer +
-            "'" +
-            (skill !== null ? " nor '/" + skill[1] + "'" : "") +
-            " — the moved procedure is unreachable from the rule",
-        ]);
+        violations.push(["MINIMIZED_POINTER_MISSING", rule,
+          "body names neither '" + pointer + "'" + (skill !== null ? " nor '/" + skill[1] + "'" : "") +
+            " — the moved procedure is unreachable from the rule"]);
       }
     }
 
     if (!isFileInRoot(root, pointer)) {
-      violations.push([
-        "MINIMIZED_POINTER_TARGET_MISSING",
-        rule,
-        "declared pointer '" + pointer + "' is not a file inside the checked root",
-      ]);
+      violations.push(["MINIMIZED_POINTER_TARGET_MISSING", rule,
+        "declared pointer '" + pointer + "' is not a file inside the checked root"]);
     }
 
     // BYTES, not String.length: a JS length counts UTF-16 units, under which a
     // multibyte rule could reach roughly three times the agreed budget.
     if (bytes !== null && bytes > maxBytes) {
-      violations.push([
-        "MINIMIZED_RULE_TOO_LARGE",
-        rule,
-        "is " + bytes + " bytes, over the declared MINIMIZED_MAX_BYTES ceiling of " + maxBytes,
-      ]);
+      violations.push(["MINIMIZED_RULE_TOO_LARGE", rule,
+        "is " + bytes + " bytes, over the declared MINIMIZED_MAX_BYTES ceiling of " + maxBytes]);
     }
   }
 }
@@ -354,91 +310,58 @@ function checkTree(root, policy, violations) {
 
     for (const value of values || []) {
       if (value !== token && NEAR_MISS_RE.test(value)) {
-        violations.push([
-          "NONCANONICAL_ON_DEMAND_TOKEN",
-          rel,
-          "paths: glob '" + value + "' is a near-miss of the reserved token '" + token + "'",
-        ]);
+        violations.push(["NONCANONICAL_ON_DEMAND_TOKEN", rel,
+          "paths: glob '" + value + "' is a near-miss of the reserved token '" + token + "'"]);
       }
     }
 
     if (onDemand.has(rel)) {
       if (!annotated) {
-        violations.push([
-          "INVALID_ON_DEMAND_PATHS",
-          rel,
-          "listed in ON_DEMAND_READERS but its paths: is not exactly [\"" + token + "\"]",
-        ]);
+        violations.push(["INVALID_ON_DEMAND_PATHS", rel,
+          "listed in ON_DEMAND_READERS but its paths: is not exactly [\"" + token + "\"]"]);
       } else if (!marked) {
-        violations.push([
-          "MISSING_ON_DEMAND_MARKER",
-          rel,
-          "carries the reserved token but no on-demand marker comment in its body",
-        ]);
+        violations.push(["MISSING_ON_DEMAND_MARKER", rel,
+          "carries the reserved token but no on-demand marker comment in its body"]);
       }
       continue;
     }
 
     if (carriesToken) {
       if (!annotated) {
-        violations.push([
-          "INVALID_ON_DEMAND_PATHS",
-          rel,
-          "mixes the reserved token with other globs; paths: must be exactly [\"" + token + "\"]",
-        ]);
+        violations.push(["INVALID_ON_DEMAND_PATHS", rel,
+          "mixes the reserved token with other globs; paths: must be exactly [\"" + token + "\"]"]);
       } else if (!marked) {
-        violations.push([
-          "MISSING_ON_DEMAND_MARKER",
-          rel,
-          "carries the reserved token but no on-demand marker comment in its body",
-        ]);
+        violations.push(["MISSING_ON_DEMAND_MARKER", rel,
+          "carries the reserved token but no on-demand marker comment in its body"]);
       }
-      violations.push([
-        "UNREGISTERED_ON_DEMAND_RULE",
-        rel,
-        "annotated on-demand but absent from ON_DEMAND_READERS in the policy",
-      ]);
+      violations.push(["UNREGISTERED_ON_DEMAND_RULE", rel,
+        "annotated on-demand but absent from ON_DEMAND_READERS in the policy"]);
       continue;
     }
 
     if (marked) {
-      violations.push([
-        "ORPHAN_ON_DEMAND_MARKER",
-        rel,
-        "carries the on-demand marker comment without the reserved paths: token",
-      ]);
+      violations.push(["ORPHAN_ON_DEMAND_MARKER", rel,
+        "carries the on-demand marker comment without the reserved paths: token"]);
     }
     if (values === null && !unconditional.has(rel)) {
-      violations.push([
-        "UNLISTED_UNCONDITIONAL_RULE",
-        rel,
-        "has no paths: frontmatter and is absent from EXPECTED_UNCONDITIONAL",
-      ]);
+      violations.push(["UNLISTED_UNCONDITIONAL_RULE", rel,
+        "has no paths: frontmatter and is absent from EXPECTED_UNCONDITIONAL"]);
     }
   }
 
   for (const rel of onDemand) {
     if (!seen.has(rel)) {
-      violations.push([
-        "INVALID_ON_DEMAND_PATHS",
-        rel,
-        "listed in ON_DEMAND_READERS but no such file exists under rules/",
-      ]);
+      violations.push(["INVALID_ON_DEMAND_PATHS", rel,
+        "listed in ON_DEMAND_READERS but no such file exists under rules/"]);
     }
   }
 
   // C3: the reserved glob is reserved precisely because nothing may ever match
   // it. A real file at that path turns every on-demand rule back on at once.
-  if (token) {
-    // Through the containment helper, never path.join: the token is a policy VALUE, so a `..`
-    // segment in it would otherwise probe outside the checked root.
-    if (existsInRoot(root, token)) {
-      violations.push([
-        "RESERVED_PATH_EXISTS",
-        token,
-        "the reserved never-match path exists in the worktree",
-      ]);
-    }
+  // Through the containment helper, never path.join: the token is a policy VALUE, so a `..`
+  // segment in it would otherwise probe outside the checked root.
+  if (token && existsInRoot(root, token)) {
+    violations.push(["RESERVED_PATH_EXISTS", token, "the reserved never-match path exists in the worktree"]);
   }
 }
 
@@ -459,37 +382,23 @@ function checkStagedArgs(root, args, violations) {
       outside = true;
     }
     if (outside) {
-      violations.push([
-        "OUT_OF_ROOT_STAGED_PATH",
-        arg,
-        "staged path does not resolve inside the checked root",
-      ]);
+      violations.push(["OUT_OF_ROOT_STAGED_PATH", arg, "staged path does not resolve inside the checked root"]);
     }
   }
 }
 
-// --- entry ------------------------------------------------------------------
-
-function main() {
-  const mode = process.argv[2];
-  const root = process.argv[3];
-  const policyPath = process.argv[4];
-  const args = process.argv.slice(5);
-
+// check(mode, root, policyPath, args, io) — the checker over a resolved root and policy.
+function check(mode, root, policyPath, args, io) {
   let policy;
   try {
     policy = loadPolicyAsData(policyPath);
   } catch (e) {
-    process.stderr.write("check-on-demand-rules: cannot read policy file: " + policyPath + "\n");
+    io.stderr.write("check-on-demand-rules: cannot read policy file: " + policyPath + "\n");
     return 2;
   }
   if (!policy.ON_DEMAND_TOKEN || !policy.ON_DEMAND_MARKER_RE) {
-    process.stderr.write(
-      "check-on-demand-rules: policy file does not declare ON_DEMAND_TOKEN / " +
-        "ON_DEMAND_MARKER_RE as plain literals: " +
-        policyPath +
-        "\n"
-    );
+    io.stderr.write("check-on-demand-rules: policy file does not declare ON_DEMAND_TOKEN / " +
+      "ON_DEMAND_MARKER_RE as plain literals: " + policyPath + "\n");
     return 2;
   }
 
@@ -503,14 +412,8 @@ function main() {
   if (minimizedDeclared) {
     maxBytes = usableMaxBytes(policy.MINIMIZED_MAX_BYTES);
     if (maxBytes === null) {
-      process.stderr.write(
-        "check-on-demand-rules: MINIMIZED_UNCONDITIONAL is declared but MINIMIZED_MAX_BYTES is not a " +
-          "positive safe integer (got: " +
-          JSON.stringify(policy.MINIMIZED_MAX_BYTES) +
-          "): " +
-          policyPath +
-          "\n"
-      );
+      io.stderr.write("check-on-demand-rules: MINIMIZED_UNCONDITIONAL is declared but MINIMIZED_MAX_BYTES is not a " +
+        "positive safe integer (got: " + JSON.stringify(policy.MINIMIZED_MAX_BYTES) + "): " + policyPath + "\n");
       return 2;
     }
   }
@@ -529,26 +432,44 @@ function main() {
     // declaration is absent or unparseable would let deleting (or merely breaking) one const
     // silently switch off the byte ceiling, the pointer check and the membership check while the
     // checker still exits 0. Missing declaration = violation, never = nothing to check.
-    violations.push([
-      "MINIMIZED_DECLARATION_MISSING",
-      policyPath,
+    violations.push(["MINIMIZED_DECLARATION_MISSING", policyPath,
       "MINIMIZED_UNCONDITIONAL is absent or not a plain one-line array literal, so the minimized " +
-        "escape-hatch checks (byte ceiling, pointer, unconditional membership) cannot run",
-    ]);
+        "escape-hatch checks (byte ceiling, pointer, unconditional membership) cannot run"]);
   }
   if (mode === "--staged") checkStagedArgs(root, args, violations);
 
   if (violations.length === 0) return 0;
-  // Written with fs.writeSync so nothing is lost to an async pipe flush when
-  // process.exit() runs immediately after.
   const lines = violations.map(([token, subject, message]) => token + ": " + subject + " — " + message);
-  lines.push(
-    "",
-    violations.length +
-      " on-demand rules-injection violation(s). See docs/architecture/claude-code/rules-injection.md"
-  );
-  fs.writeSync(1, lines.join("\n") + "\n");
+  lines.push("", violations.length +
+    " on-demand rules-injection violation(s). See docs/architecture/claude-code/rules-injection.md");
+  io.stdout.write(lines.join("\n") + "\n");
   return 1;
 }
 
-process.exit(main());
+// run({ argv, cwd, env, stdout, stderr }) — the bin/check-on-demand-rules.sh contract in process:
+// `--all [<root>]` | `--staged [<staged-path>...]`; the policy comes from the tree under check.
+function run({ argv = [], cwd = process.cwd(), env = process.env, stdout = process.stdout, stderr = process.stderr } = {}) {
+  const [mode, ...rest] = argv;
+  let root;
+  if (mode === "--all" && rest.length <= 1) {
+    root = rest[0] || cwd;
+  } else if (mode === "--staged") {
+    const r = require("child_process").spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd, env, encoding: "utf8", timeout: 15000, windowsHide: true });
+    root = (!r.error && r.status === 0 && String(r.stdout).trim()) || cwd;
+  } else {
+    stderr.write("usage: check-on-demand-rules.sh --all [<root>]\n       check-on-demand-rules.sh --staged [<staged-path>...]\n");
+    return 2;
+  }
+  const policyPath = env.RULES_INJECTION_POLICY || path.join(root, "hooks/lib/rules-injection-policy.js");
+  return check(mode, root, policyPath, mode === "--staged" ? rest : [], { stdout, stderr });
+}
+
+module.exports = { run, check };
+
+// Direct CLI (bin/check-on-demand-rules.sh): argv <mode> <root> <policyPath> [stagedPath...].
+// fs.writeSync keeps the report from being lost to an async pipe flush before process.exit().
+if (require.main === module) {
+  const sync = (fd) => ({ write: (s) => fs.writeSync(fd, s) });
+  const [mode, root, policyPath, ...args] = process.argv.slice(2);
+  process.exit(check(mode, root, policyPath, args, { stdout: sync(1), stderr: sync(2) }));
+}

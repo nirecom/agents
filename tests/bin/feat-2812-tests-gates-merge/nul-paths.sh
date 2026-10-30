@@ -1,48 +1,65 @@
-# Tests: bin/lib/merge-parents.sh
+# Tests: hooks/pre-commit
 # Tags: TL2, bin, merge, merge-parents, tests-gates, scope:issue-specific
-# The bash reader of the bin/merge-parents record stream: a path holding a tab or a newline travels
-# as its own NUL record, so mp_load_file / mp_in_parent / mp_baselines map every field to the right
-# path and a neighbouring plain path is not shifted. No file with such a name is made on disk:
-# the reader case uses a printf'd record file, the CLI cases (not merging, and merging with R4 / R6)
-# index-only entries. Also: a table of malformed record files (each falls back to HEAD-only) and
-# 64-hex oids from a SHA-256 repo.
+# The Node reader of the bin/merge-parents record stream (hooks/lib/merge-parents.js parseRecords /
+# recordFor): a tab or newline path travels as its own NUL record, so every field maps to the right
+# path and a neighbouring plain path is not shifted. No such file is made on disk: the reader case
+# uses a printf'd record file, the CLI cases (not merging, merging with R4 / R6) index-only entries.
+# Also: malformed record files (each falls back to HEAD-only) and 64-hex oids from a SHA-256 repo.
 # Sourced by tests/bin/feat-2812-tests-gates-merge-shapes.sh after fixture.sh.
 # shellcheck shell=bash
 
 echo ""
-echo "=== merge-parents.sh reader: tab / newline paths ==="
+echo "=== merge-parents record reader: tab / newline paths ==="
 
-MP_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/merge-parents.sh"
 TAB=$'\t'
 LF=$'\n'
+# mp_path <path> — the path as Node on this host reads it.
+mp_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
+}
 
-# mp_probe <repo> <record-file|-> <label>:<rel>... — in a subshell (cwd <repo>): source the reader,
-# with "-" first run `mp_run` for the rels into a temp record file, then mp_load_file it, and print
-# `state=`, `count=` and one `<label>=<in_parent>|<same>|<b1>|<b2>|<base>` line per rel.
+# The probe: argv <agents-root> <repo> <record-file|-> <pairs-file>; <pairs-file> holds NUL-separated
+# <label> <rel> pairs. With "-" it runs `node bin/merge-parents` (cwd <repo>) for the rels and reads
+# its stdout; a missing record file reaches parseRecords as null. Prints `state=`, `count=` and one
+# `<label>=<in_parent>|<same>|<b1>|<b2>|<base>` line per pair ("" for an absent oid).
+MP_PROBE="$TMPBASE/mp-probe.js"
+printf '%s\n' \
+  '"use strict";' \
+  'const fs = require("fs"), path = require("path"), cp = require("child_process");' \
+  'const [root, repo, file, pairsFile] = process.argv.slice(2);' \
+  'let mp = {};' \
+  'try { mp = require(path.join(root, "hooks", "lib", "merge-parents.js")); } catch (e) { mp = {}; }' \
+  'if (typeof mp.parseRecords !== "function" || typeof mp.recordFor !== "function") { console.log("lib=missing"); process.exit(0); }' \
+  'const raw = fs.readFileSync(pairsFile, "utf8").split("\0"); raw.pop();' \
+  'const pairs = []; for (let i = 0; i + 1 < raw.length; i += 2) pairs.push([raw[i], raw[i + 1]]);' \
+  'let buf = null;' \
+  'if (file === "-") {' \
+  '  const r = cp.spawnSync(process.execPath, [path.join(root, "bin", "merge-parents")], { cwd: repo, input: Buffer.from(pairs.map((p) => p[1] + "\0").join(""), "utf8"), timeout: 60000 });' \
+  '  if (r.status !== 0) console.log("run-rc=" + r.status);' \
+  '  buf = r.stdout || Buffer.alloc(0);' \
+  '} else if (fs.existsSync(file)) buf = fs.readFileSync(file);' \
+  'const parsed = mp.parseRecords(buf);' \
+  'console.log("state=" + (parsed && parsed.state ? parsed.state : ""));' \
+  'const recs = parsed && parsed.records;' \
+  'console.log("count=" + (recs ? (recs instanceof Map ? recs.size : Object.keys(recs).length) : 0));' \
+  'const blank = (v) => (v === undefined || v === null || v === "-" ? "" : String(v));' \
+  'for (const [label, rel] of pairs) {' \
+  '  const rec = mp.recordFor(parsed, rel, repo) || {};' \
+  '  const ip = rec.in_parent !== undefined ? rec.in_parent : rec.inParent;' \
+  '  console.log(label + "=" + Number(ip) + "|" + Number(rec.same) + "|" + blank(rec.b1) + "|" + blank(rec.b2) + "|" + blank(rec.base));' \
+  '}' \
+  > "$MP_PROBE"
+
+# mp_probe <repo> <record-file|-> <label>:<rel>... — run the probe for the pairs; stderr goes to
+# $TMPBASE/mp-probe.err.
 mp_probe() {
-  local repo="$1" file="$2"
+  local repo="$1" file="$2" p pairs="$TMPBASE/mp-probe.pairs"
   shift 2
-  (
-    cd "$repo" || exit 3
-    if [ ! -f "$MP_LIB" ]; then echo "lib=missing"; exit 0; fi
-    # shellcheck source=/dev/null
-    . "$MP_LIB" || { echo "lib=unsourceable"; exit 0; }
-    local p rels=()
-    for p in "$@"; do rels+=("${p#*:}"); done
-    if [ "$file" = "-" ]; then
-      file="$TMPBASE/mp-probe.records"
-      mp_run "$SCRIPT_CHECKOUT_ROOT/bin" "$file" "${rels[@]}" || echo "run-rc=$?"
-    fi
-    mp_load_file "$file" || echo "load-rc=$?"
-    echo "state=${MP_STATE:-}"
-    echo "count=${#MP_RELS[@]}"
-    local ip
-    for p in "$@"; do
-      if mp_in_parent "${p#*:}"; then ip=1; else ip=0; fi
-      mp_baselines "${p#*:}"
-      echo "${p%%:*}=$ip|${MP_OUT_SAME:-}|${MP_OUT_B1:-}|${MP_OUT_B2:-}|${MP_OUT_BASE:-}"
-    done
-  ) 2>"$TMPBASE/mp-probe.err"
+  : > "$pairs"
+  for p in "$@"; do printf '%s\0%s\0' "${p%%:*}" "${p#*:}" >> "$pairs"; done
+  [ "$file" = "-" ] || file="$(mp_path "$file")"
+  bash "$RWT" 90 node "$(mp_path "$MP_PROBE")" "$GATE_CFG" "$(mp_path "$repo")" "$file" "$(mp_path "$pairs")" \
+    2>"$TMPBASE/mp-probe.err"
 }
 # probe_get <probe-output> <key> — the value of `<key>=` in the probe output ("(absent)" if none).
 probe_get() {
@@ -68,7 +85,7 @@ P_NL="tests/bin/nl${LF}name.sh"
 P_BOTH="tests/bin/both${TAB}x${LF}y.sh"
 P_LAST="tests/bin/last.sh"
 
-case_begin "reader-maps-tab-and-newline-paths-from-nul-records" "bin/lib/merge-parents.sh"
+case_begin "reader-maps-tab-and-newline-paths-from-nul-records" "hooks/pre-commit"
 R="$TMPBASE/mp-reader"
 mkrepo "$R"
 REC="$TMPBASE/mp-reader.records"
@@ -81,7 +98,6 @@ printf '%s\0' "state${TAB}merging${TAB}-" \
 OUT="$(mp_probe "$R" "$REC" "tab:$P_TAB" "plain:$P_PLAIN" "nl:$P_NL" "both:$P_BOTH" "last:$P_LAST" \
   "tabhead:tests/bin/tab" "nlhead:tests/bin/nl" "nltail:name.sh")"
 expect_probe "reader" "$OUT" lib "(absent)"
-expect_probe "reader" "$OUT" load-rc "(absent)"
 expect_probe "reader" "$OUT" state merging
 expect_probe "reader: five records, no split on tab or newline" "$OUT" count 5
 expect_probe "reader: tab path R6" "$OUT" tab "1|0|$O1|$O2|$O3"
@@ -121,7 +137,7 @@ no_sentinels() {
   assert_eq "$label: sentinel files=[${found# }]" "$label: sentinel files=[]"
 }
 
-case_begin "reader-and-cli-treat-shell-metacharacter-paths-as-data" "bin/lib/merge-parents.sh"
+case_begin "reader-and-cli-treat-shell-metacharacter-paths-as-data" "hooks/pre-commit"
 R="$TMPBASE/mp-meta"
 mkrepo "$R"
 REC="$TMPBASE/mp-meta.records"
@@ -131,7 +147,7 @@ printf '%s\0' "state${TAB}merging${TAB}-" \
   "1${TAB}0${TAB}$O5${TAB}-${TAB}-" "$P_TICK" \
   "1${TAB}0${TAB}$O6${TAB}$O7${TAB}-" "$P_LAST" > "$REC"
 OUT="$(mp_probe "$R" "$REC" "sub:$P_SUB" "semi:$P_SEMI" "tick:$P_TICK" "last:$P_LAST")"
-expect_probe "meta reader" "$OUT" load-rc "(absent)"
+expect_probe "meta reader" "$OUT" lib "(absent)"
 expect_probe "meta reader" "$OUT" state merging
 expect_probe "meta reader: four records" "$OUT" count 4
 expect_probe "meta reader: \$(...) path R6" "$OUT" sub "1|0|$O1|$O2|$O3"
@@ -146,7 +162,6 @@ stage_name "$R" "$P_TICK" tick >/dev/null
 OUT="$(mp_probe "$R" - "sub:$P_SUB" "semi:$P_SEMI" "tick:$P_TICK" "plain:bin/a.sh")"
 A_OID="$(git -C "$R" rev-parse HEAD:bin/a.sh)"
 expect_probe "meta cli" "$OUT" run-rc "(absent)"
-expect_probe "meta cli" "$OUT" load-rc "(absent)"
 expect_probe "meta cli" "$OUT" state not-merging
 expect_probe "meta cli: one record per requested path" "$OUT" count 4
 expect_probe "meta cli: \$(...) path equal to HEAD (R1)" "$OUT" sub "1|1|$S_OID||"
@@ -156,7 +171,7 @@ expect_probe "meta cli: plain path after them not shifted (R1)" "$OUT" plain "1|
 no_sentinels "meta cli" "$R" "$TMPBASE"
 case_end
 
-case_begin "cli-records-for-tab-and-newline-paths-load-through-the-reader" "bin/lib/merge-parents.sh"
+case_begin "cli-records-for-tab-and-newline-paths-load-through-the-reader" "hooks/pre-commit"
 R="$TMPBASE/mp-cli"
 mkrepo "$R"
 # Git for Windows refuses tab / newline index names under core.protectNTFS; no worktree file is made.
@@ -172,7 +187,6 @@ OUT="$(mp_probe "$R" - "tab:$P_TAB" "nl:$P_NL" "both:$P_BOTH" "plain:bin/a.sh")"
 A_OID="$(git -C "$R" rev-parse HEAD:bin/a.sh)"
 expect_probe "cli" "$OUT" lib "(absent)"
 expect_probe "cli" "$OUT" run-rc "(absent)"
-expect_probe "cli" "$OUT" load-rc "(absent)"
 expect_probe "cli" "$OUT" state not-merging
 expect_probe "cli: one record per requested path" "$OUT" count 4
 expect_probe "cli: tab path equal to HEAD (R1)" "$OUT" tab "1|1|$T_OID||"
@@ -184,7 +198,7 @@ case_end
 # A merge built from plumbing alone (Windows cannot check out these names, so `git merge` is not
 # used): base B, HEAD = B + the tab path edited, MERGE_HEAD = B + the tab path edited otherwise and
 # the newline path added; MERGE_HEAD is written by hand and the resolution is staged index-only.
-case_begin "cli-records-for-tab-and-newline-paths-during-a-merge" "bin/lib/merge-parents.sh"
+case_begin "cli-records-for-tab-and-newline-paths-during-a-merge" "hooks/pre-commit"
 R="$TMPBASE/mp-merge"
 mkrepo "$R"
 git -C "$R" config core.protectNTFS false
@@ -211,7 +225,6 @@ OUT="$(mp_probe "$R" - "tab:$P_TAB" "nl:$P_NL" "both:$P_BOTH" "plain:bin/a.sh")"
 A_OID="$(git -C "$R" rev-parse HEAD:bin/a.sh)"
 expect_probe "cli merge" "$OUT" lib "(absent)"
 expect_probe "cli merge" "$OUT" run-rc "(absent)"
-expect_probe "cli merge" "$OUT" load-rc "(absent)"
 expect_probe "cli merge" "$OUT" state merging
 expect_probe "cli merge: one record per requested path" "$OUT" count 4
 expect_probe "cli merge: tab path 3-way (R6)" "$OUT" tab "1|0|$H_TAB|$M_TAB|$B_TAB"
@@ -221,7 +234,7 @@ expect_probe "cli merge: plain path after them not shifted (R1)" "$OUT" plain "1
 case_end
 
 # Malformed record files: every row falls back as a whole (state=fallback, no record kept, even one
-# loaded before the bad record), and mp_find then synthesizes the HEAD-only record (R1 / R2).
+# loaded before the bad record), and recordFor then synthesizes the HEAD-only record (R1 / R2).
 # Columns: name | mode (nul / no-last-nul / empty / none = no file) | records | want.
 # records: comma-separated; H = merging header, G = meta record for O1, X = tests/bin/x.sh, EMPTY = ""
 # path, else literal with \t = tab and <O1> <O2> <OA> (O1 uppercase) <OG> (O3, g for 3) substituted.
@@ -257,7 +270,7 @@ mb_write() {
   fi
 }
 
-case_begin "reader-malformed-records-fall-back-to-head-only" "bin/lib/merge-parents.sh"
+case_begin "reader-malformed-records-fall-back-to-head-only" "hooks/pre-commit"
 R="$TMPBASE/mp-malformed"
 mkrepo "$R"
 A_OID="$(git -C "$R" rev-parse HEAD:bin/a.sh)"
@@ -274,7 +287,7 @@ while IFS='|' read -r MB_NAME MB_MODE MB_RECS MB_WANT; do
   mb_write "$MB_FILE" "$MB_MODE" "$MB_RECS"
   OUT="$(mp_probe "$R" "$MB_FILE" "x:$MB_X" "y:tests/bin/y.sh" "plain:bin/a.sh")"
   IFS=':' read -r MB_W_STATE MB_W_COUNT MB_W_X MB_W_Y MB_W_PLAIN <<< "$MB_WANT"
-  expect_probe "$MB_NAME" "$OUT" load-rc "(absent)"
+  expect_probe "$MB_NAME" "$OUT" lib "(absent)"
   expect_probe "$MB_NAME" "$OUT" state "$MB_W_STATE"
   [ "$MB_W_COUNT" = - ] || expect_probe "$MB_NAME: records kept" "$OUT" count "$MB_W_COUNT"
   [ "$MB_W_X" = - ] || expect_probe "$MB_NAME: listed path" "$OUT" x "${MB_W_X//\//|}"
@@ -303,7 +316,7 @@ TABLE
 case_end
 
 # SHA-256 object format: 64-hex oids travel from the CLI through the reader, merging included.
-case_begin "sha256-repo-oids-load-through-cli-and-reader" "bin/lib/merge-parents.sh"
+case_begin "sha256-repo-oids-load-through-cli-and-reader" "hooks/pre-commit"
 R="$TMPBASE/mp-sha256"
 if ! git init -q --object-format=sha256 "$R" >/dev/null 2>&1; then
   echo "SKIP: sha256-repo-oids-load-through-cli-and-reader (git init --object-format=sha256 unsupported)"

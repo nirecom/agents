@@ -29,7 +29,7 @@ readonly GONE="$TMP_ROOT/missing root"
 readonly OTHER="$TMP_ROOT/retired root"
 readonly NEUTRAL="$TMP_ROOT/neutral"
 mkdir -p "$CFG" "$BARE" "$OTHER" "$NEUTRAL"
-if ! script_checkout_fixture_copy "$FAKE" hooks/lib bin/scan-outbound.sh bin/lib/main-worktree.sh bin/env-os-filter; then
+if ! script_checkout_fixture_copy "$FAKE" hooks/lib bin/scan-outbound.sh bin/scan-outbound.d bin/lib/main-worktree.sh bin/env-os-filter; then
   echo "FAIL: fixture checkout copy — script_checkout_fixture_copy failed; no case can run"
   exit 1
 fi

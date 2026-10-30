@@ -26,35 +26,8 @@ const SELF_IMPL_CHECKER = binOf("check-self-impl.sh");
 const CHECKERS = [binOf("check-case-markers.sh"), SELF_IMPL_CHECKER];
 const LANGUAGE_MATCH_CHECKER = binOf("check-test-language-match.sh");
 
-// caseMarkerEntry — the registry entry of a placed case-marker entrypoint (repo-relative
-// `/` path: a category root or flat tests/<name>, supported with a caseMarkerReader), or
-// null. Mirrors _precommit_is_case_marker_target (hooks/lib/precommit-tests-frontmatter.sh);
-// the parity test pins the two together. Throws when the registry is unreadable.
-function caseMarkerEntry(rel, reg) {
-  const m = placedMatch(rel, reg);
-  return m && hasReader(m) ? m.entry : null;
-}
-
-// placedMatch — the registry match of a file at a case-marker placement, or null.
-function placedMatch(rel, reg) {
-  if (typeof rel !== "string") return null;
-  if (/^tests\/(_archive|lib)\//.test(rel) || rel === "tests/run-all.sh") return null;
-  if (!/^tests\/((hooks|bin|skills|agents|install|tests)\/)?[^/]+$/.test(rel)) return null;
-  return registry().matchBasename(rel.slice(rel.lastIndexOf("/") + 1), reg);
-}
-
-const hasReader = (m) => m.status === "supported" && Boolean(m.entry.caseMarkerReader);
-
-function isCaseMarkerTarget(rel, reg) {
-  return caseMarkerEntry(rel, reg) !== null;
-}
-
-// isReaderlessCaseMarkerTarget — a placed file some entry matches that has no caseMarkerReader.
-// Mirrors _precommit_is_readerless_case_marker_target (parity-tested).
-function isReaderlessCaseMarkerTarget(rel, reg) {
-  const m = placedMatch(rel, reg);
-  return m !== null && !hasReader(m);
-}
+// The case-marker placement lives in lib/test-gates/placement.js (shared with pre-commit).
+const { caseMarkerEntry, isCaseMarkerTarget, isReaderlessCaseMarkerTarget } = require("./lib/test-gates/placement");
 
 // The reader loads only once a target under tests/ is seen.
 function registry() {

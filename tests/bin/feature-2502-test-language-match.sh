@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2502-test-language-match.sh
-# Tests: bin/check-test-language-match.sh, bin/lib/test-language-match.sh
+# Tests: bin/check-test-language-match.sh
 # Tags: TL2, bin, test-language-match, test-lang-exception, test-language-registry, scope:issue-specific
 # Issue #2502 S4: the judgment table of bin/check-test-language-match.sh, driven with bash tests
 # and JavaScript code. A test written in one language whose target is code of another is a
@@ -24,7 +24,7 @@ CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2502-test-language-match"
 # shellcheck source=feature-2502-test-language-match/_lib.sh
 . "$CASE_DIR/_lib.sh"
 
-case_begin "lm-cli-and-lib-present" "bin/lib/test-language-match.sh"
+case_begin "lm-cli-and-lib-present" "bin/check-test-language-match.sh"
 if [ -f "$LM_CLI_REAL" ] && [ -f "$LM_LIB" ]; then
   pass "CLI and lib exist"
 else

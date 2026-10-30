@@ -16,7 +16,7 @@ const LOCAL_ENV_BASENAME = ".env.local";
 
 // ENFORCE_WORKTREE, ENFORCE_WORKTREE_EXCLUDE, ENFORCE_WORKTREE_ADDITIONAL_REPOS
 // and DEFAULT_BRANCHES are here for the half-applied reason: hooks/pre-commit
-// reads them through load-env.sh, which has no .env.local layer, so a local
+// reads them through loadEnv of load-env.js, with no .env.local layer, so a local
 // override would silence the Node guard while the pre-commit one still fires.
 // CODE_FILE_EXTENSIONS and CLAUDE_CODE_AUTO_COMPACT_WINDOW never reach a local
 // value at all — their readers bypass process.env. Per-repo ENFORCE_WORKTREE

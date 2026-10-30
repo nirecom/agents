@@ -105,8 +105,8 @@ function treeFiles(root) {
 // stagedFiles() → the staged changes (ACMRT) of the repository at the current directory,
 // read from its index — the index git hands the hook, which in a linked worktree is that
 // worktree's. Only a regular file's blob is content; a symlink or gitlink keeps its path.
-function stagedFiles() {
-  const top = git(process.cwd(), ["rev-parse", "--show-toplevel"]);
+function stagedFiles(cwd) {
+  const top = git(cwd, ["rev-parse", "--show-toplevel"]);
   if (top === null) throw new UsageError("--staged needs a git repository at the current directory");
   const root = top.toString("utf8").trim();
   const listed = git(root, ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT"]);
@@ -118,17 +118,37 @@ function stagedFiles() {
       .filter((e) => e.startsWith("160000 ") || e.startsWith("120000 "))
       .map((e) => e.slice(e.indexOf("\t") + 1)),
   );
-  const files = [];
-  for (const rel of nulList(listed)) {
-    if (special.has(rel)) {
-      files.push({ rel, text: null });
-      continue;
-    }
-    const blob = git(root, ["show", `:${rel}`]);
-    if (blob === null) throw new UsageError(`cannot read the staged content of ${rel}`);
-    files.push({ rel, text: textOf(blob) });
-  }
+  const rels = nulList(listed);
+  const blobs = indexBlobs(root, rels.filter((rel) => !special.has(rel)));
+  const files = rels.map((rel) => ({ rel, text: special.has(rel) ? null : textOf(blobs.get(rel)) }));
   return { root, files };
+}
+
+// indexBlobs(root, rels) → Map rel → staged blob, read through one `git cat-file --batch`;
+// a path holding a newline cannot be asked that way and is read on its own.
+function indexBlobs(root, rels) {
+  const out = new Map();
+  const unreadable = (rel) => new UsageError(`cannot read the staged content of ${rel}`);
+  const batched = rels.filter((rel) => !rel.includes("\n"));
+  for (const rel of rels.filter((r) => r.includes("\n"))) {
+    const blob = git(root, ["show", `:${rel}`]);
+    if (blob === null) throw unreadable(rel);
+    out.set(rel, blob);
+  }
+  if (batched.length === 0) return out;
+  const r = spawnSync("git", ["-C", root, "cat-file", "--batch"], { input: batched.map((rel) => `:${rel}`).join("\n") + "\n", maxBuffer: 1 << 30, windowsHide: true });
+  if (r.status !== 0) throw new UsageError("cannot read the index");
+  const buf = r.stdout;
+  let pos = 0;
+  for (const rel of batched) {
+    const nl = buf.indexOf(0x0a, pos);
+    const header = nl < 0 ? [] : buf.toString("utf8", pos, nl).split(" ");
+    const end = nl + 1 + Number(header[2]);
+    if (header.length !== 3 || header[1] !== "blob" || !/^[0-9]+$/.test(header[2]) || buf[end] !== 0x0a) throw unreadable(rel);
+    out.set(rel, buf.subarray(nl + 1, end));
+    pos = end + 1;
+  }
+  return out;
 }
 
 function namedFiles(names) {
@@ -164,11 +184,13 @@ function inScope(rel, scope) {
   return rel === prefix || rel.startsWith(`${prefix}/`);
 }
 
-function run(opts) {
+function collect(opts, cwd, only) {
   let files;
   let indexRoot = null;
-  if (opts.staged) ({ root: indexRoot, files } = stagedFiles());
-  else if (opts.files.length > 0) files = namedFiles(opts.files);
+  if (opts.staged) {
+    ({ root: indexRoot, files } = stagedFiles(cwd));
+    if (only !== null) files = files.filter((f) => only.has(f.rel));
+  } else if (opts.files.length > 0) files = namedFiles(opts.files);
   else files = treeFiles(opts.root === null ? SCRIPT_CHECKOUT_ROOT : path.resolve(nativePath(opts.root)));
   if (opts.scope !== null) files = files.filter((f) => inScope(f.rel, opts.scope));
   // An empty index is a real answer; an empty tree or scope means the gate looked at nothing.
@@ -194,20 +216,24 @@ function run(opts) {
   return names.flatMap((name) => CHECKS[name].check(ctx));
 }
 
-function main(argv) {
+// run({ argv, cwd, stagedPaths, stdout, stderr }) -> rc; --staged judges the repository at cwd.
+// stagedPaths, when given, limits --staged to those paths (merge narrowing).
+function run({ argv = [], cwd = process.cwd(), stagedPaths = null, stdout = process.stdout, stderr = process.stderr } = {}) {
   let lines;
   try {
-    lines = run(parseArgs(argv));
+    lines = collect(parseArgs(argv), nativePath(cwd), stagedPaths === null ? null : new Set(stagedPaths));
   } catch (e) {
     // Anything that stops a check from finishing is an error, never a clean verdict.
-    process.stderr.write(`check-root-names: ${e instanceof Error ? e.message : String(e)}\n`);
+    stderr.write(`check-root-names: ${e instanceof Error ? e.message : String(e)}\n`);
     return 2;
   }
   lines = [...new Set(lines)].sort();
   if (lines.length === 0) return 0;
-  process.stdout.write(lines.join("\n") + "\n");
-  process.stderr.write(`check-root-names: ${lines.length} violation(s). See docs or the classification table next to this gate.\n`);
+  stdout.write(lines.join("\n") + "\n");
+  stderr.write(`check-root-names: ${lines.length} violation(s). See docs or the classification table next to this gate.\n`);
   return 1;
 }
 
-process.exitCode = main(process.argv.slice(2));
+module.exports = { run };
+
+if (require.main === module) process.exitCode = run({ argv: process.argv.slice(2) });

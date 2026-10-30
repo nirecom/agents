@@ -1,4 +1,4 @@
-# Tests: hooks/lib/precommit-tests-frontmatter.sh
+# Tests: hooks/pre-commit
 # Tags: TL2, bin, hooks, pre-commit, merge, tests-gates, self-impl, case-markers, test-language-match, scope:issue-specific
 # R1 on a path both parents carry with different blobs (staged equal to MERGE_HEAD is existing for
 # every gate, with the two parents' bodies mirrored), and R2 during a merge (a test neither parent has still blocks on every gate: a guard
@@ -35,19 +35,19 @@ r1s_expect() {
 }
 
 # Staged equal to HEAD is absent from `git diff --cached`, so no gate sees it; JS R1-shared covers it.
-case_begin "r1-shared-path-staged-equal-to-merge-head-x-side-is-existing" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r1-shared-path-staged-equal-to-merge-head-x-side-is-existing" "hooks/pre-commit"
 R="$TMPBASE/r1s-x"
 mergefx "$R" "tests/bin/s.sh=r1s-base" "tests/bin/s.sh=r1s-x" "tests/bin/s.sh=r1s-y" "tests/bin/s.sh=r1s-x"
 r1s_expect "R1 shared = MERGE_HEAD (X):" "$R" MERGE_HEAD
 case_end
 
-case_begin "r1-shared-path-staged-equal-to-merge-head-y-side-is-existing" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r1-shared-path-staged-equal-to-merge-head-y-side-is-existing" "hooks/pre-commit"
 R="$TMPBASE/r1s-y"
 mergefx "$R" "tests/bin/s.sh=r1s-base" "tests/bin/s.sh=r1s-y" "tests/bin/s.sh=r1s-x" "tests/bin/s.sh=r1s-y"
 r1s_expect "R1 shared = MERGE_HEAD (Y):" "$R" MERGE_HEAD
 case_end
 
-case_begin "r2-new-test-during-a-merge-blocks-on-every-gate" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r2-new-test-during-a-merge-blocks-on-every-gate" "hooks/pre-commit"
 R="$TMPBASE/r2-merge"
 raw r2-up '# upstream note'
 mergefx "$R" "" "notes/up.txt=r2-up" "" "tests/bin/nsi.sh=ex-si tests/bin/nnomark.sh=ex-nomark tests/bin/nmm.sh=ex-mm"

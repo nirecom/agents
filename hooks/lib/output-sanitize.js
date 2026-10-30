@@ -58,7 +58,7 @@ function sanitizeLine(input, maxLen) {
 // questions, and a caller that only renders output must not silently rewrite
 // its payloads.
 //
-// Shapes are the vendor prefixes bin/scan-outbound.sh blocks; detection is
+// Shapes are the prefixes of hooks/lib/outbound-scan/hard-secret-patterns.js; detection is
 // shape-based, so a false positive costs characters and a miss costs a leak.
 const SECRET_VALUE_PATTERNS = [
   // A PEM private key block. Matched whole — header, body and footer — so the

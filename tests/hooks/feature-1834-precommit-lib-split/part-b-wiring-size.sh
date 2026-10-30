@@ -5,13 +5,14 @@ echo ""
 echo "=== Part B: wiring + size guards (real hooks/pre-commit) ==="
 
 # B1: structural wiring — un-wiring a module must be caught even if units stay green.
+# #2507: hooks/pre-commit execs hooks/pre-commit.d/main.js, whose registry runs both gate blocks.
 case_begin "B1-wiring-present" "hooks/pre-commit"
 w=0
-grep -q 'precommit-tests-frontmatter.sh' "$PRECOMMIT" || { fail "B1: wiring" "source of hooks/lib/precommit-tests-frontmatter.sh missing"; w=1; }
-grep -q '_precommit_check_tests_frontmatter' "$PRECOMMIT" || { fail "B1: wiring" "call to _precommit_check_tests_frontmatter missing"; w=1; }
-grep -q 'precommit-agents-repo-gates.sh' "$PRECOMMIT" || { fail "B1: wiring" "source of hooks/lib/precommit-agents-repo-gates.sh missing"; w=1; }
-grep -q '_precommit_agents_repo_gates' "$PRECOMMIT" || { fail "B1: wiring" "call to _precommit_agents_repo_gates missing"; w=1; }
-[ "$w" -eq 0 ] && pass "B1: hooks/pre-commit sources and calls both extracted modules"
+_reg="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/registry.js"
+grep -q 'node "$_cfg_dir/hooks/pre-commit.d/main.js"' "$PRECOMMIT" || { fail "B1: wiring" "run of hooks/pre-commit.d/main.js missing"; w=1; }
+grep -qF '["tests-frontmatter",' "$_reg" || { fail "B1: wiring" "tests-frontmatter check not registered"; w=1; }
+grep -qF '["agents-repo-gates",' "$_reg" || { fail "B1: wiring" "agents-repo-gates check not registered"; w=1; }
+[ "$w" -eq 0 ] && pass "B1: hooks/pre-commit runs the Node body and its registry lists both gate blocks"
 case_end
 
 # B2: size regression — the file-split.md Pattern A HARD limit is the reason for the split.

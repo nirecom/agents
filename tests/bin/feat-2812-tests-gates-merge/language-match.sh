@@ -1,4 +1,4 @@
-# Tests: bin/check-test-language-match.sh, bin/lib/test-language-match/case-addition.sh, bin/lib/test-language-match/multi-baseline.sh
+# Tests: bin/check-test-language-match.sh, hooks/pre-commit
 # Tags: TL2, bin, merge, tests-gates, test-language-match, scope:issue-specific
 # Language match during a merge: identical parents keep the single-baseline judgment (R5), differing
 # parents compose per-key counts a + b - c (D6a) and case-addition sizes H + M - B (D6b), and a file
@@ -45,21 +45,21 @@ expect_lm_block() {
 
 H3="bin/foo.sh, bin/bar.sh, bin/foo.js"
 
-case_begin "r5-identical-parents-keep-their-mismatch" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r5-identical-parents-keep-their-mismatch" "hooks/pre-commit"
 lb l5-same "$H3" a=bin/foo.sh j=bin/foo.js
 lb l5-edit "$H3" a=bin/foo.sh=edited j=bin/foo.js
 lm_merge r5c tests/bin/l.sh - l5-same l5-same l5-edit
 expect_lm_pass "R5 (c): both parents have the .js case, staged edits another case"
 case_end
 
-case_begin "r5-identical-parents-block-a-new-mismatch-target" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r5-identical-parents-block-a-new-mismatch-target" "hooks/pre-commit"
 lb l5-new "$H3" a=bin/foo.sh j=bin/foo.js k=bin/bar.js
 lm_merge r5c2 tests/bin/l.sh - l5-same l5-same l5-new
 expect_lm_block "R5 (c): new case on bin/bar.js" TEST_LANGUAGE_MISMATCH 1
 has "R5 (c): names the new target" "$GATE_OUT" "of bin/bar.js"
 case_end
 
-case_begin "r6-case-renamed-on-the-merge-head-side-is-existing" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-case-renamed-on-the-merge-head-side-is-existing" "bin/check-test-language-match.sh"
 lb lr-base "$H3" a=bin/foo.sh j=bin/foo.js
 lb lr-head "$H3" a=bin/foo.sh=ah j=bin/foo.js
 lb lr-up "$H3" a=bin/foo.sh j2=bin/foo.js
@@ -68,21 +68,21 @@ lm_merge rename tests/bin/l.sh lr-base lr-up lr-head lr-staged
 expect_lm_pass "case j renamed to j2 on MERGE_HEAD"
 case_end
 
-case_begin "r6-mismatch-fixed-in-both-parents-blocks-when-it-returns" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-mismatch-fixed-in-both-parents-blocks-when-it-returns" "bin/check-test-language-match.sh"
 lb lf-head "$H3" a=bin/foo.sh
 lb lf-up "$H3" a=bin/foo.sh j=bin/bar.sh
 lm_merge fixed tests/bin/l.sh lr-base lf-up lf-head lr-base
 expect_lm_block "HEAD dropped j, MERGE_HEAD moved it to .sh, staged has j on .js" TEST_LANGUAGE_MISMATCH 1
 case_end
 
-case_begin "r6-e3-mismatch-merge-head-removed-blocks" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-e3-mismatch-merge-head-removed-blocks" "bin/check-test-language-match.sh"
 lb le-up "$H3" a=bin/foo.sh m=bin/bar.sh
 lb le-staged "$H3" a=bin/foo.sh=ah j=bin/foo.js m=bin/bar.sh
 lm_merge e3 tests/bin/l.sh lr-base le-up lr-head le-staged
 expect_lm_block "E3: base and HEAD have j on .js, MERGE_HEAD removed it, staged keeps it" TEST_LANGUAGE_MISMATCH 1
 case_end
 
-case_begin "r6-l-two-parents-cases-on-one-mismatch-target-pass" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-l-two-parents-cases-on-one-mismatch-target-pass" "bin/check-test-language-match.sh"
 lb ll-head "$H3" a=bin/foo.sh h1=bin/foo.js
 lb ll-up "$H3" a=bin/foo.sh m1=bin/foo.js
 lb ll-staged "$H3" a=bin/foo.sh h1=bin/foo.js m1=bin/foo.js
@@ -90,7 +90,7 @@ lm_merge l tests/bin/l.sh - ll-up ll-head ll-staged
 expect_lm_pass "(l) no base, each parent one .js case, staged both"
 case_end
 
-case_begin "r6-l-a-third-case-on-the-target-blocks" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-l-a-third-case-on-the-target-blocks" "bin/check-test-language-match.sh"
 lb ll-extra "$H3" a=bin/foo.sh h1=bin/foo.js m1=bin/foo.js x1=bin/foo.js
 lm_merge l2 tests/bin/l.sh - ll-up ll-head ll-extra
 expect_lm_block "(l) a third .js case" TEST_LANGUAGE_MISMATCH 1
@@ -112,17 +112,17 @@ lb lt-up "$H4" a=bin/foo.sh m1=bin/bar.js
 lb lt-ok "$H4" a=bin/foo.sh h1=bin/foo.js m1=bin/bar.js
 lb lt-extra "$H4" a=bin/foo.sh h1=bin/foo.js h2=bin/foo.js m1=bin/bar.js
 
-case_begin "r6-two-targets-one-case-from-each-parent-passes" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-two-targets-one-case-from-each-parent-passes" "bin/check-test-language-match.sh"
 lm_merge t1 tests/bin/l.sh - lt-up lt-head lt-ok
 expect_lm_pass "two targets: H has foo.js, M has bar.js, staged both"
 case_end
 
-case_begin "r6-two-targets-extra-case-blocks-on-its-target-only" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-two-targets-extra-case-blocks-on-its-target-only" "bin/check-test-language-match.sh"
 lm_merge t2 tests/bin/l.sh - lt-up lt-head lt-extra
 expect_foo_only "two targets: a second foo.js case"
 case_end
 
-case_begin "r6-two-targets-shared-target-does-not-absorb-an-extra-case" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-two-targets-shared-target-does-not-absorb-an-extra-case" "bin/check-test-language-match.sh"
 # Per key: foo.js 1+2-2=1 (blocks), bar.js 0+0-1 (clamped to 0). A cross-key sum would give 0.
 lb ln-head "$H4" a=bin/foo.sh j=bin/bar.js=jh h1=bin/foo.js
 lb ln-up "$H4" a=bin/foo.sh j=bin/bar.js=jm
@@ -137,12 +137,12 @@ raw lj-up "$(hdr 'bin/a.sh, bin/foo.sh')" 'echo two' 'assert_eq 2 2'
 raw lj-staged "$(hdr 'bin/a.sh, bin/foo.sh')" 'echo one' 'assert_eq 1 1' 'echo two' 'assert_eq 2 2'
 raw lj-extra "$(hdr 'bin/a.sh, bin/foo.sh')" 'echo one' 'assert_eq 1 1' 'echo two' 'assert_eq 2 2' 'echo three' 'assert_eq 3 3'
 
-case_begin "r6-j-markerless-cases-from-both-parents-pass" "bin/lib/test-language-match/case-addition.sh"
+case_begin "r6-j-markerless-cases-from-both-parents-pass" "bin/check-test-language-match.sh"
 lm_merge j tests/bin/l.sh - lj-up lj-head lj-staged
 expect_lm_pass "(j) no base, each parent one marker-less case, staged both (3+3-0 >= 5)"
 case_end
 
-case_begin "r6-k-markerless-third-case-blocks" "bin/lib/test-language-match/case-addition.sh"
+case_begin "r6-k-markerless-third-case-blocks" "bin/check-test-language-match.sh"
 lm_merge k tests/bin/l.sh - lj-up lj-head lj-extra
 expect_lm_block "(k) a third marker-less case (7 > 3+3-0)" CASE_ADDED_WITHOUT_MARKERS 1
 has "(k) basis names the 3-way sizes" "$GATE_OUT" "H+M"
@@ -154,12 +154,12 @@ lb lh-up "bin/foo.sh, bin/bar.js" a=bin/foo.sh
 lb lh-ok "bin/foo.sh, bin/foo.js, bin/bar.js" a=bin/foo.sh
 lb lh-extra "bin/foo.sh, bin/foo.js, bin/bar.js, bin/baz.js" a=bin/foo.sh
 
-case_begin "r6-header-tokens-union-of-both-parents-passes" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-header-tokens-union-of-both-parents-passes" "bin/check-test-language-match.sh"
 lm_merge h1 tests/bin/l.sh - lh-up lh-head lh-ok
 expect_lm_pass "header: H declares foo.js, M declares bar.js, staged both"
 case_end
 
-case_begin "r6-header-token-beyond-the-union-blocks" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-header-token-beyond-the-union-blocks" "bin/check-test-language-match.sh"
 lm_merge h2 tests/bin/l.sh - lh-up lh-head lh-extra
 expect_lm_block "header: staged adds bin/baz.js to the union" TEST_LANGUAGE_MISMATCH 1
 has "header: names the new token" "$GATE_OUT" "bin/baz.js"
@@ -170,12 +170,12 @@ esac
 case_end
 
 # A file only MERGE_HEAD has (R4): the merge-head blob is the single baseline of an edit during the merge.
-case_begin "r4-merge-head-only-file-edit-keeps-its-mismatch" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r4-merge-head-only-file-edit-keeps-its-mismatch" "hooks/pre-commit"
 lm_merge r4a tests/bin/l.sh - l5-same - l5-edit
 expect_lm_pass "R4: MERGE_HEAD-only file, staged edits the .sh case, keeps the .js case"
 case_end
 
-case_begin "r4-merge-head-only-file-edit-blocks-a-new-mismatch" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r4-merge-head-only-file-edit-blocks-a-new-mismatch" "hooks/pre-commit"
 lm_merge r4b tests/bin/l.sh - l5-same - l5-new
 expect_lm_block "R4: MERGE_HEAD-only file, staged adds a case on bin/bar.js" TEST_LANGUAGE_MISMATCH 1
 has "R4: names the new target" "$GATE_OUT" "of bin/bar.js"
@@ -183,7 +183,7 @@ case_end
 
 # The same R4 merge with the MERGE_HEAD blob object gone: judging it as new could block a mismatch the
 # parent already had, so the gate skips the file with a diagnostic instead.
-case_begin "r4-unreadable-parent-blob-skips-with-a-diagnostic" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "r4-unreadable-parent-blob-skips-with-a-diagnostic" "hooks/pre-commit"
 R="$TMPBASE/lm-r4gone"
 mergefx "$R" "" "tests/bin/l.sh=l5-same" "" "tests/bin/l.sh=l5-new"
 M_OID="$(git -C "$R" rev-parse MERGE_HEAD:tests/bin/l.sh)"
@@ -230,18 +230,18 @@ lb lc-one "$H3" a=bin/foo.sh=edited j1=bin/foo.js
 lb lc-none "$H3" a=bin/foo.sh=edited
 lb lc-head2 "$H3" a=bin/foo.sh=ah j1=bin/foo.js j2=bin/foo.js
 
-case_begin "r6-clamped-b2-h1-m1-staged-1-blocks" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-clamped-b2-h1-m1-staged-1-blocks" "bin/check-test-language-match.sh"
 lm_merge cl1 tests/bin/l.sh lc-base lc-up lc-head lc-one
 expect_lm_block "B=2 H=1 M=1 differing, staged keeps one .js case (1+1-2=0 existing)" TEST_LANGUAGE_MISMATCH 1
 has "B=2 H=1 M=1: names bin/foo.js" "$GATE_OUT" "of bin/foo.js"
 case_end
 
-case_begin "r6-clamped-b2-h1-m1-staged-0-passes" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-clamped-b2-h1-m1-staged-0-passes" "bin/check-test-language-match.sh"
 lm_merge cl2 tests/bin/l.sh lc-base lc-up lc-head lc-none
 expect_lm_pass "B=2 H=1 M=1 differing, staged has no .js case"
 case_end
 
-case_begin "r6-clamped-b2-h2-m1-staged-1-passes" "bin/lib/test-language-match/multi-baseline.sh"
+case_begin "r6-clamped-b2-h2-m1-staged-1-passes" "bin/check-test-language-match.sh"
 lm_merge cl3 tests/bin/l.sh lc-base lc-up lc-head2 lc-one
 expect_lm_pass "B=2 H=2 M=1 differing, staged 1 (2+1-2=1 existing)"
 case_end
@@ -259,34 +259,23 @@ nm_modechange() {
   gate "$r" "$LG"
 }
 
-case_begin "normal-commit-mode-only-unsupported-language-keeps-its-warn" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "normal-commit-mode-only-unsupported-language-keeps-its-warn" "hooks/pre-commit"
 nm_modechange rb tests/bin/u.rb lm-rb
 expect_rc "normal commit, mode-only .rb" 0 "$GATE_RC" "$GATE_ALL"
 expect_codes "normal commit, mode-only .rb keeps the WARN" "$GATE_ALL" TEST_LANGUAGE_UNSUPPORTED 1
 has "normal commit, mode-only .rb: WARN names the path" "$GATE_ALL" "tests/bin/u.rb"
 case_end
 
-case_begin "normal-commit-mode-only-keeps-head-mismatch-parity" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "normal-commit-mode-only-keeps-head-mismatch-parity" "hooks/pre-commit"
 nm_modechange sh tests/bin/l.sh l5-same
 expect_lm_pass "normal commit, mode-only .sh with a HEAD mismatch case"
 case_end
 
-case_begin "mp-baseline-args-uses-declaration-only-for-a-merge-only" "bin/lib/merge-parents.sh"
-# mpa <state> <same> — MP_ARGS (basenames of the copies) of mp_baseline_args for one record.
-mpa() {
-  local r="$TMPBASE/nm-rb" oid
-  oid="$(git -C "$r" rev-parse HEAD:tests/bin/u.rb)"
-  (
-    cd "$r" || exit 99
-    # shellcheck source=/dev/null
-    . "$SCRIPT_CHECKOUT_ROOT/bin/lib/merge-parents.sh"
-    MP_STATE="$1"; MP_RELS=(tests/bin/u.rb); MP_INP=(1); MP_SAME=("$2"); MP_B1=("$oid"); MP_B2=(""); MP_BASE=("")
-    mp_baseline_args tests/bin/u.rb "$TMPBASE/mpa-$1-$2" || exit 98
-    printf '%s' "${MP_ARGS[0]}"
-    [ "${#MP_ARGS[@]}" -lt 2 ] || printf ' head-copy=%s' "$(basename "${MP_ARGS[1]}")"
-  )
-}
-assert_eq "not-merging, same=1: $(mpa not-merging 1)" "not-merging, same=1: --head head-copy=u.rb"
-assert_eq "merging, same=1: $(mpa merging 1)" "merging, same=1: --declaration-only"
-assert_eq "merging, same=0: $(mpa merging 0)" "merging, same=0: --head head-copy=u.rb"
+# Declaration-only is for a merge path staged equal to a parent only (case m3 above); the normal
+# commit keeps --head (the two cases above), and so does a merge path that differs from its parent.
+case_begin "merge-edit-of-a-parent-file-keeps-the-head-run" "bin/check-test-language-match.sh"
+raw lm-rb2 '# Tests: bin/a.sh' 'puts 2'
+lm_merge m4 tests/bin/u.rb - lm-rb - lm-rb2
+expect_rc "(m) staged .rb differs from MERGE_HEAD" 0 "$GATE_RC" "$GATE_ALL"
+expect_codes "(m) differing .rb keeps the WARN" "$GATE_ALL" TEST_LANGUAGE_UNSUPPORTED 1
 case_end

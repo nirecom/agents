@@ -32,8 +32,8 @@ trap 'rm -rf "$TMPBASE"' EXIT
 
 FAKE_DOTFILES="$TMPBASE/dotfiles"
 mkdir -p "$FAKE_DOTFILES/bin"
-cp "$SCANNER_SRC" "$FAKE_DOTFILES/bin/scan-outbound.sh"
-chmod +x "$FAKE_DOTFILES/bin/scan-outbound.sh"
+source "$DOTFILES_DIR/tests/lib/node-entry-sandbox.sh"  # #2507: the scanner execs a Node CLI
+node_entry_sandbox_copy "$FAKE_DOTFILES" bin/scan-outbound.sh
 SCANNER="$FAKE_DOTFILES/bin/scan-outbound.sh"
 : > "$FAKE_DOTFILES/.private-info-allowlist"
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2411-gate-three-languages.sh
-# Tests: bin/check-case-markers.sh, bin/check-test-frontmatter.sh, hooks/block-case-markers.js, hooks/lib/precommit-tests-frontmatter.sh, hooks/lib/test-language-registry.json
+# Tests: bin/check-case-markers.sh, bin/check-test-frontmatter.sh, hooks/block-case-markers.js, hooks/pre-commit, hooks/lib/test-language-registry.json
 # Tags: TL2, bin, hooks, case-markers, test-language-registry, pre-commit, unsupported, scope:issue-specific
 # Issue #2411: the marker gate for PowerShell, Python and JavaScript tests, and the bash
 # verdicts and wording it must leave byte-identical. Cases live in the sibling directory:
@@ -28,7 +28,6 @@ CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2411-gate-three-languages"
 CHECKER="$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh"
 FM_CHECK="$SCRIPT_CHECKOUT_ROOT/bin/check-test-frontmatter.sh"
 HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-case-markers.js"
-PRECOMMIT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh"
 TABLE="$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.json"
 
 NEUTRAL_CWD="$TMPBASE/neutral"
@@ -78,7 +77,9 @@ stage() {
 }
 
 # ck <file>... — the checker from a neutral cwd. Sets CK_RC CK_OUT CK_ERR.
-# CK_PATH replaces PATH for the checker when set.
+# CK_PATH replaces PATH for the checker when set. The checker is a Node CLI (#2507): under MSYS
+# it echoes /tmp args in their converted Windows form, mapped back to $TMPBASE here.
+TMPBASE_NATIVE="$(np "$TMPBASE")"
 CK_RC=0; CK_OUT=""; CK_ERR=""
 CK_PATH=""
 ck() {
@@ -90,6 +91,8 @@ ck() {
   ) >"$TMPBASE/ck.out" 2>"$TMPBASE/ck.err" || CK_RC=$?
   CK_OUT="$(cat "$TMPBASE/ck.out")"
   CK_ERR="$(cat "$TMPBASE/ck.err")"
+  CK_OUT="${CK_OUT//"$TMPBASE_NATIVE"/$TMPBASE}"
+  CK_ERR="${CK_ERR//"$TMPBASE_NATIVE"/$TMPBASE}"
 }
 
 # ck_exact <label> <rc> <stdout> <stderr> — the whole result, byte for byte.
@@ -154,28 +157,25 @@ hook_write() {
   case "$parsed" in *$'\n'*) HK_REASON="${parsed#*$'\n'}" ;; esac
 }
 
-PC_OK=0
-if [ -f "$PRECOMMIT_LIB" ]; then
-  # shellcheck source=../../hooks/lib/precommit-tests-frontmatter.sh
-  . "$PRECOMMIT_LIB"
-  declare -F _precommit_check_tests_case_markers >/dev/null 2>&1 && PC_OK=1
+# pc_run <repo> — the commit-time case-marker gate (#2507: a Node gate of the pre-commit body,
+# driven by the runner) with <repo> as cwd. Sets PC_RC PC_OUT PC_ERR. The runner starts from an
+# absolute node so PC_PATH only shapes what the gate itself can spawn. Under MSYS a Node child
+# cannot run the bash wrappers of tool-shim-path.sh, so PC_PATH gains the directory of git.exe.
+PC_RUNNER="$(np "$SCRIPT_CHECKOUT_ROOT/tests/lib/precommit-check-runner.js")"
+PC_NODE="$(command -v node)"
+PC_NATIVE_GIT_DIR=""
+if command -v cygpath >/dev/null 2>&1; then
+  PC_NATIVE_GIT_DIR="$(type -P git.exe)"
+  PC_NATIVE_GIT_DIR="${PC_NATIVE_GIT_DIR%/*}"
 fi
-_cfg_dir="$SCRIPT_CHECKOUT_ROOT"
-
-# pc_run <repo> — the commit-time gate with <repo> as cwd. Sets PC_RC PC_OUT PC_ERR.
 PC_RC=0; PC_OUT=""; PC_ERR=""
 PC_PATH=""
 pc_run() {
   PC_RC=0
-  if [ "$PC_OK" -ne 1 ]; then
-    PC_RC=127; PC_OUT=""; PC_ERR="commit-time gate function not defined"
-    return 0
-  fi
   (
     cd "$1" || exit 99
-    [ -n "$PC_PATH" ] && PATH="$PC_PATH"
-    _cfg_dir="$SCRIPT_CHECKOUT_ROOT"
-    _precommit_check_tests_case_markers
+    [ -n "$PC_PATH" ] && PATH="$PC_PATH${PC_NATIVE_GIT_DIR:+:$PC_NATIVE_GIT_DIR}"
+    "$PC_NODE" "$PC_RUNNER" tests-frontmatter case-markers
   ) >"$TMPBASE/pc.out" 2>"$TMPBASE/pc.err" || PC_RC=$?
   PC_OUT="$(cat "$TMPBASE/pc.out")"
   PC_ERR="$(cat "$TMPBASE/pc.err")"

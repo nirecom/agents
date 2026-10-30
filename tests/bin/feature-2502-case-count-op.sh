@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2502-case-count-op.sh
-# Tests: bin/lib/test-language-parts/bash-case-embed.sh, bin/lib/test-language-match/case-addition.sh
-# Tags: TL2, bin, case-markers, test-language-registry, test-language-match, table-driven, scope:issue-specific
-# Issue #2502 S4-4b: the caseEmbedRules op case-count and _tlm_code_lines, the two yardsticks of
-# the case-addition judgment. bash and js have no case unit apart from their markers, so their
-# case-count is rc 1 for any file (user decision 2026-10-24); pester and pytest answer a count;
-# every language is reached through the registry (rc 69 without its runtime); _tlm_code_lines
-# counts lines that are neither blank nor comments in the match-path's comment prefix.
+# Tests: bin/lib/test-language-parts/bash-case-embed.sh
+# Tags: TL2, bin, case-markers, test-language-registry, test-language-match, table-driven, scope:issue-specific, node-precommit
+# Issue #2502 S4-4b: the caseEmbedRules op case-count, a yardstick of the case-addition judgment.
+# bash and js have no case unit apart from their markers, so their case-count is rc 1 for any
+# file (user decision 2026-10-24); pester and pytest answer a count; every language is reached
+# through the registry (rc 69 without its runtime).
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -43,15 +42,6 @@ cc() {
 tlr_load || exit 96
 if [ -n "$4" ]; then PATH="$4"; fi
 tlr_call_part "$2" caseEmbedRules case-count "$3"' _ "$SCRIPT_CHECKOUT_ROOT" "$1" "$2" "${3:-}" 2>"$TMPBASE/cc.err")" || CC_RC=$?
-}
-
-# code_lines <file> <match-path> — _tlm_code_lines through the language-match library. Sets CL_RC / CL_OUT.
-code_lines() {
-  CL_RC=0
-  CL_OUT="$(run_with_timeout 120 bash -c '. "$1/bin/lib/test-language-match.sh" || exit 97
-tlr_load || exit 96
-declare -F _tlm_code_lines >/dev/null || exit 95
-_tlm_code_lines "$2" "$3"' _ "$SCRIPT_CHECKOUT_ROOT" "$1" "$2" 2>"$TMPBASE/cl.err")" || CL_RC=$?
 }
 
 # --- bash fixtures --------------------------------------------------------------------------
@@ -104,23 +94,8 @@ while IFS='|' read -r id f rt _rc _out; do
 done <<<"$LANG_ROWS"
 case_end
 
-# --- _tlm_code_lines ------------------------------------------------------------------------
-printf '%s\n' '#!/usr/bin/env bash' '# Tests: bin/a.sh' '' '   # indented comment' 'echo a' '  echo b' '' >"$FX/lines.sh"
-printf '%s\n' '"use strict";' '// Tests: bin/a.sh' '  // indented comment' '' 'const a = 1;' '# not a js comment' >"$FX/lines.js"
-printf '%s\n' '# Tests: bin/a.sh' '"""A docstring is code."""' '' 'import os' '    # indented comment' 'def test_a():' '    pass' >"$FX/lines.py"
-
-case_begin "code-lines-skip-blank-and-comment-lines" "bin/lib/test-language-match/case-addition.sh"
-# file|match-path|count — the comment prefix comes from the match-path's registry entry.
-while IFS='|' read -r f m want; do
-  [ -n "$f" ] || continue
-  code_lines "$FX/$f" "$m"
-  assert_eq "_tlm_code_lines $f as $m: rc=$CL_RC out=[$CL_OUT]" "_tlm_code_lines $f as $m: rc=0 out=[$want]"
-done <<'ROWS'
-lines.sh|tests/bin/x.sh|2
-lines.js|tests/bin/x.js|3
-lines.py|tests/bin/test_x.py|4
-ROWS
-case_end
+# The code-lines yardstick (#2507: now codeLines in Node) is pinned by
+# tests/hooks/feature-2507-case-addition-node.js.
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
