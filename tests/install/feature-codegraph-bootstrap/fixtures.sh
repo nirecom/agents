@@ -44,7 +44,7 @@ fi
 # The exact argv install/codegraph-mcp.js must hand the CLI, derived from the SSOT.
 WANT_MCP_ADD="mcp add codegraph --scope user --env CODEGRAPH_TELEMETRY=$CG_TELEMETRY --env DO_NOT_TRACK=$CG_DNT -- codegraph serve --mcp"
 WANT_MCP_REMOVE="mcp remove codegraph -s user"
-WANT_NPM_INSTALL="install -g --ignore-scripts @colbymchenry/codegraph@1.6.0"
+WANT_NPM_INSTALL="install -g --ignore-scripts @colbymchenry/codegraph@latest"
 
 CLAUDE_MD_BODY="# fixture CLAUDE.md — must survive the installer untouched"
 SETTINGS_BODY='{"permissions":{"allow":["Bash(ls:*)"]},"hooks":{}}'
