@@ -144,7 +144,7 @@ AC8C="$TMPDIR_BASE/ac8-cache"; mkdir -p "$AC8C"
 printf 'schema=1\nhost_id=%s\nrecorded_at=2026-01-01T00:00:00Z\n' "$L12_HID" > "$AC8C/calibration-never-ask.conf"
 lanes_drv "$AC8C" -- "$AC_PLAN"
 assert_eq "AC8 the default plan note keeps the calibrate hint despite a never-ask file" \
-    "jobs 2 of requested 2 (max jobs per host 4, source default, record missing; calibrate with $AC_HINT; the width is re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its fair share until they finish)" \
+    "jobs 2 of requested 2 (max jobs per host 4, source default, record missing; calibrate with $AC_HINT; starts at up to 4 and grows per run-all lane allocation sample (slow start); re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its per-run lane cap until they finish)" \
     "$(kv_of "$OUT" note)"
 lanes_drv "$AC8C" -- 'declare -F run_all_never_ask_active run_all_never_ask_write run_all_never_ask_file >/dev/null; echo "st=$?"'
 assert_eq "AC8 the never-ask functions are gone from the lib" "1" "$(kv_of "$OUT" st)"

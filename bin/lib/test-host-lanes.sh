@@ -350,7 +350,7 @@ _thl_heartbeat_start() {
             _thl_hb_refresh
             # The load tick runs beside the heartbeat (one at a time), so a slow probe
             # never delays a refresh past the stale limit.
-            if _thl_load_on && ! { [ -n "$_l" ] && kill -0 "$_l" 2>/dev/null; }; then
+            if ! { [ -n "$_l" ] && kill -0 "$_l" 2>/dev/null; }; then
                 thl_load_tick &
                 _l=$!
             fi
@@ -419,59 +419,23 @@ thl_plan() {
     THL_PLAN_JOBS="$_THL_WANT"
     _thl_source_text
     # shellcheck disable=SC2034  # read by tests/run-all.sh's `plan:` / `lanes:` progress lines
-    THL_NOTE="jobs $THL_PLAN_JOBS of requested $req ($_THL_SRC; the width is re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its fair share until they finish)${THL_RECORD_ADVICE:+; $THL_RECORD_ADVICE}"
+    THL_NOTE="jobs $THL_PLAN_JOBS of requested $req ($_THL_SRC; starts at up to 4 and grows per run-all lane allocation sample (slow start); re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its per-run lane cap until they finish)${THL_RECORD_ADVICE:+; $THL_RECORD_ADVICE}"
     return 0
 }
 
-# thl_status — read-only listing for bin/test-lanes-status.sh; never reclaims.
-# Line 1 never shows host_id or measured_at; `os` is shown only after its shape check.
-thl_status() {
-    local d i n=0 k=0 runs=0 line rows=""
-    thl_max_jobs_per_host
-    for d in "$THL_CACHE_ROOT"/runs/run.*; do
-        [ -d "$d" ] || continue
-        k=$((k + 1))
-        _thl_lane_state "$d"
-        case "$THL_STATE" in alive|foreign) runs=$((runs + 1)) ;; esac
-        if [ "$THL_STATE" = ownerless ]; then
-            rows="${rows}run.$k"$'\t-\t-\t-\t-\townerless\n'
-            continue
-        fi
-        rows="${rows}run.$k"$'\t'"${_THL_O_KIND//[!A-Za-z0-9._-]/?}"$'\t'"$_THL_O_PID"$'\t'"${_THL_O_ENV//[!A-Za-z0-9._-]/?}"$'\t'"$THL_AGE"$'\t'"$THL_STATE"$'\n'
-    done
-    line="max_jobs_per_host=$THL_MAX_JOBS_PER_HOST source=$THL_MAX_JOBS_PER_HOST_SOURCE"
-    [ -n "$THL_RECORD_REASON" ] && line="$line record=$THL_RECORD_REASON"
-    [ -n "$THL_RECORD_OS" ] && [ "$THL_RECORD_OS" != "$THL_OS_NOW" ] && line="$line measured_on=$THL_RECORD_OS now=$THL_OS_NOW"
-    [ -n "$THL_RECALIBRATE" ] && line="$line recalibrate=$THL_RECALIBRATE"
-    case "$THL_CAP_NOTE" in
-        capped*) line="$line capped=logical-cpu-count" ;;
-        ?*) line="$line logical_cpus=unknown" ;;
-    esac
-    printf '%s mode=%s runs=%s\n' "$line" "$THL_AUTO_CONFIG" "$runs"
-    for d in "$THL_CACHE_ROOT"/slots/lane.*; do
-        [ -d "$d" ] || continue
-        i="${d##*/lane.}"
-        [[ $i =~ ^[0-9]{1,6}$ ]] || continue
-        n=$((n + 1))
-        _thl_lane_state "$d"
-        if [ "$THL_STATE" = ownerless ]; then
-            printf 'lane.%s\t-\t-\t-\t-\townerless\n' "$i"
-            continue
-        fi
-        printf 'lane.%s\t%s\t%s\t%s\t%s\t%s\n' "$i" "${_THL_O_KIND//[!A-Za-z0-9._-]/?}" \
-            "$_THL_O_PID" "${_THL_O_ENV//[!A-Za-z0-9._-]/?}" "$THL_AGE" "$THL_STATE"
-    done
-    [ "$n" -gt 0 ] || printf 'no test lanes held\n'
-    printf '%s' "$rows"
-    return 0
-}
-
-# The fair-share, load and probe libraries (#2687), found next to this file.
+# The probe, run-all lane allocation sample, load, per-run lane cap, allocation (#2687, #2692) and status libraries,
+# found next to this file.
 _THL_LIB_DIR="${BASH_SOURCE[0]%/*}"
 [ "$_THL_LIB_DIR" = "${BASH_SOURCE[0]}" ] && _THL_LIB_DIR="."
 # shellcheck source=bin/lib/test-host-load-probe.sh
 . "$_THL_LIB_DIR/test-host-load-probe.sh"
+# shellcheck source=bin/lib/test-host-load-sample.sh
+. "$_THL_LIB_DIR/test-host-load-sample.sh"
 # shellcheck source=bin/lib/test-host-load.sh
 . "$_THL_LIB_DIR/test-host-load.sh"
 # shellcheck source=bin/lib/test-host-lanes-share.sh
 . "$_THL_LIB_DIR/test-host-lanes-share.sh"
+# shellcheck source=bin/lib/test-host-alloc.sh
+. "$_THL_LIB_DIR/test-host-alloc.sh"
+# shellcheck source=bin/lib/test-host-lanes-status.sh
+. "$_THL_LIB_DIR/test-host-lanes-status.sh"

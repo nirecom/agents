@@ -23,13 +23,13 @@ R_LANE_VARS="TEST_LANES TEST_MAX_JOBS_PER_HOST TEST_MAX_JOBS_PER_RUN TEST_LANES_
 # r_lanes_line — the runner's `lanes:` progress line, prefix stripped (empty if none).
 r_lanes_line() { sed -n 's/^\[run-all\] lanes: //p' "$R_ERR" | head -n 1; }
 
-# r_reset — drop every lane control and empty the shared slots/ between cases.
+# r_reset — drop every lane control and empty the shared slots/, load/ and runs/ between cases.
 # Controls are plain (unexported) shell vars: fx_control_args forwards them to
 # the runner explicitly and nothing else inherits them.
 r_reset() {
     # shellcheck disable=SC2086
     unset $R_LANE_VARS FX_WITH_LANES
-    rm -rf "$FX_CACHE_DIR/slots"
+    rm -rf "$FX_CACHE_DIR/slots" "$FX_CACHE_DIR/load" "$FX_CACHE_DIR/runs"
 }
 
 # r_root <n-peak-dummies> [dummy-opts] — echoes a fixture root with lanes.
@@ -79,9 +79,9 @@ r2_plan() {  # r2_plan <label> <want-jobs> <want-plan-note-prefix> [want-substri
     assert_eq "R2 $1: --print-plan creates no lane" "" "$(lane_names "$FX_CACHE_DIR")"
 }
 r_reset; TEST_MAX_JOBS_PER_HOST=3
-# #2687 ③: the plan note says the width is re-evaluated (a fair share), not a fixed lease.
+# #2687 ③ / #2692: the plan note says the width slow-starts and is re-evaluated, not a fixed lease.
 r2_plan "H=3 -j 8" 2 "jobs 2 of requested 8 (max jobs per host 3, source env" \
-    "the width is re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its fair share until they finish"
+    "starts at up to 4 and grows per run-all lane allocation sample (slow start); re-evaluated at each entry-script end; running jobs are never stopped, so a run may hold more than its per-run lane cap until they finish"
 r_reset; TEST_MAX_JOBS_PER_HOST=3; TEST_LANES=off
 r2_plan "TEST_LANES=off" 8 "not applied (TEST_LANES=off); jobs 8 as requested"
 r_reset; TEST_MAX_JOBS_PER_HOST=3; TEST_LANES_HELD=123
@@ -227,8 +227,8 @@ R12="$(r_root 6 --peak --sleep 1)"
 fx_exec "$R12" 120 "$R_OUT" "$R_ERR" -j 8 --all; _rc=$?
 assert_eq "R12 run starts on a partial grant and exits 0" "0" "$_rc"
 r_has_lanes_line && pass "R12 stderr carries a lanes: line" || fail "R12 no lanes: line — the run was not leased"
-[[ "$(r_lanes_line)" =~ ^jobs\ 2\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 4,\ source\ env\;\ lanes\ 2\ 3\) ]] \
-    && pass "R12 lanes: line reports the partial grant on lanes 2 3" \
+[[ "$(r_lanes_line)" =~ ^jobs\ 2\ of\ requested\ [0-9]+\ \(max\ jobs\ per\ host\ 4,\ source\ env\;\ lanes\ 2\ 3\;\ slow\ start\ from\ 2,\ grows\ per\ run-all\ lane\ allocation\ sample\) ]] \
+    && pass "R12 lanes: line reports the partial grant on lanes 2 3 with its slow start" \
     || fail "R12 lanes: line format — got $(printf '%q' "$(r_lanes_line)")"
 assert_eq "R12 N=4 with lane.1 busy: peak concurrency is the 2 granted lanes" "2" "$(fx_peak_of "$(fx_peak_log "$R12")")"
 assert_eq "R12 the busy lane.1 is untouched and nothing else is left" "lane.1" "$(lane_names "$FX_CACHE_DIR")"

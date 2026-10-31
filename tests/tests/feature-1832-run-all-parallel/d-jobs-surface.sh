@@ -291,10 +291,12 @@ else
 fi
 
 # --- AC6 (#2687): no per-run layer (or .env=auto) = unlimited, in both modes --------
-# The default 4 is gone: the width is the test count bounded by the run-all lane pool
-# (max jobs per host - 1). Max jobs per host is made mode-independent on purpose — pin 8 plus
-# a measured 8 gives 8 under on (min) and under off (pin only) — so one expectation covers
-# both modes. nproc answers 1024 so the logical-CPU ceiling never trims the pin.
+# No per-run cap (unlimited) is checked through the notice line; the progress `(j=` shows the
+# start width, which #2692's slow start caps at 4 (the 6 tests and a pool of 7 would allow more),
+# while the lane-pool rows (max jobs per host - 1 = 3) stay below that start width.
+# Max jobs per host is made mode-independent on purpose — pin 8 plus a measured 8 gives 8 under
+# on (min) and under off (pin only) — so one expectation covers both modes. nproc answers 1024
+# so the logical-CPU ceiling never trims the pin.
 AC6_CPU="$FX_TMP_ROOT/ac6-cpu"; mkdir -p "$AC6_CPU"
 printf '#!/bin/sh\nprintf "%%s\\n" 1024\n' > "$AC6_CPU/nproc"; chmod +x "$AC6_CPU/nproc"
 AC6_ROOT="$(FX_WITH_LANES=1 fx_new_root)"
@@ -324,10 +326,10 @@ while IFS='|' read -r name mode pin envspec want; do
     ac6_row "$(trim "$name")" "$(trim "$mode")" "$(trim "$pin")" "$(trim "$envspec")" "$(trim "$want")"
 done <<'TABLE'
 # name               | mode | host pin | envspec                          | want j
-no-layer-on          | on   | 8        |                                  | 6
-no-layer-off         | off  | 8        |                                  | 6
-dotenv-auto-on       | on   | 8        | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO | 6
-dotenv-auto-off      | off  | 8        | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO | 6
+no-layer-on          | on   | 8        |                                  | 4
+no-layer-off         | off  | 8        |                                  | 4
+dotenv-auto-on       | on   | 8        | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO | 4
+dotenv-auto-off      | off  | 8        | RUN_ALL_CONFIG_VAR_CMD=$DOT_AUTO | 4
 lane-pool-bound-on   | on   | 4        |                                  | 3
 lane-pool-bound-off  | off  | 4        |                                  | 3
 TABLE

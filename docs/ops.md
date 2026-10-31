@@ -304,6 +304,26 @@ which the layers resolve is owned by
 [test-host-lanes.md](architecture/claude-code/test-host-lanes.md) ("Resolution order of
 max jobs per host").
 
+### Watching the lanes
+
+`bash bin/test-lanes-status.sh` is read-only and prints, in order:
+
+1. The lane pool line: `max_jobs_per_host`, `source`, `mode`, `runs`, plus any
+   `record=`, `recalibrate=` or `capped=` notes.
+2. The `load` line, the run-all lane allocation sample (`~/.claude/run-all/load/sample`):
+   `state`, `age_s`, `external_centicores`, `reserved_cores`, `scale_in`,
+   `host_busy_centicores`, `mem_scope`, `mem_avail_mb`, `mem_reserve_mb`, `mem_cap`
+   and `pool`. `load state=none` means no valid sample yet.
+3. The fixed label `load is the run-all lane allocation sample`, naming line 2.
+
+Then one row per lane (kind, pid, environment, age, state) and one per run with its
+width, ssthresh, run-all per-run lane cap and `decided_by`: `per-run-cap`,
+`cpu-load-limit`, `memory-limit` or `slow-start` (still growing; a run reaches its cap
+over several heartbeats). External load counts only processes outside the test trees and
+`claude`; it shrinks lanes only above the reserved cores (logical CPUs minus the
+calibrated value). The mechanism is owned by
+[test-host-lanes.md](architecture/claude-code/test-host-lanes.md).
+
 Design rationale: [test-runner-parallelism.md](architecture/claude-code/test-runner-parallelism.md) Section 5.
 
 ## Jev
