@@ -935,3 +935,7 @@ Changes: Test runs now pick their parallelism automatically: they leave room for
 ### FEATURE: PR #2854 (2026-10-31)
 Background: fix(#2842,#2636): exclude merge-incoming paths from the review-tests ...
 Changes: review-tests: files that a merge brings in are excluded from the header map, so a review during a merge no longer times out, and exit 8 now says how to recover.
+
+### FEATURE: PR #2857 (2026-10-31)
+Background: fix(#2456): install CodeGraph @latest again instead of the 1.6.0 pin
+Changes: CodeGraph installs track the latest release again (`@latest`) instead of the temporary 1.6.0 pin; 1.6.2 carries the upstream fix for the Windows console flicker.
