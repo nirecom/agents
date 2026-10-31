@@ -13,7 +13,8 @@ const C = require("./common");
 const RULE_MODULES = ["bin/lib/glossary-drift.js", "hooks/lib/glossary-term.js",
   "hooks/lib/comment-block-scan.js", "hooks/lib/markdown-fence.js", "bin/lib/glossary-provenance.js",
   "bin/lib/glossary-drift/extract.js", "bin/lib/glossary-drift/terms.js", "bin/lib/glossary-drift/context.js",
-  "bin/lib/glossary-drift/match.js", "bin/lib/glossary-drift/scan.js"];
+  "bin/lib/glossary-drift/match.js", "bin/lib/glossary-drift/scan.js",
+  "hooks/workflow-state/glossary-check/scope/changed-lines.js"];
 const digestOf = (v) => (typeof v === "string" ? v : v && v.digest) || null;
 
 // Copies of the rule modules under one temp root; returns { root, paths } or null.

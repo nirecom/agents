@@ -78,8 +78,8 @@ function run(F) {
     !!rec4 && rec4.fingerprint === fp && Array.isArray(rec4.grants) && rec4.grants.length === 1 && rec4.grants[0].fingerprint === fp,
     JSON.stringify(rec4));
 
-  // Changing the artifact changes the fingerprint: the grant lapses, the finding reopens.
-  F.writePlan(sid, "outline", plan("\nOne more unrelated sentence.\n"));
+  // An artifact change that adds a new variant of the granted term: the grant lapses, the finding reopens.
+  F.writePlan(sid, "outline", plan("\nOne more sentence with the Glossary Drift.\n"));
   const r5 = F.drift(sid, "outline", repo, true);
   const rec5 = F.recordOf(sid, "outline");
   F.check("T5-3 artifact changed: exit 1 with the same DRIFT again",

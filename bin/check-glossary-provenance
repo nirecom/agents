@@ -19,7 +19,6 @@ const { PROVENANCE_KEY, PROVENANCE_STEP, provenanceRecordEvents } = require(path
 const USAGE = "usage: check-glossary-provenance --staged [--session <sid>] --repo <root>";
 const RERUN = "re-run inside the Claude session that made the change, or re-run with --session <sid>";
 const P_TEXT = "intent.md does not match the version approved with CONFIRM_INTENT — take CONFIRM_INTENT again, or clear it with GLOSSARY_ACCEPTED on the user's decision";
-const asArray = (v) => (Array.isArray(v) ? v : []);
 
 function fail(code, msg) {
   process.stderr.write("check-glossary-provenance: " + msg + "\n");
@@ -104,15 +103,18 @@ function main(argv) {
   const verdict = judge(ops, resolved);
   const fp = provenanceFingerprint({ ops: prov.opsFingerprint(ops), approvalSha: verdict.approvalSha });
   let pending = verdict.blocked;
+  const definitionOf = (b) => {
+    const op = ops.find((o) => o.term === b.term && o.category === b.category && o.operation === b.operation);
+    return op ? op.definition : "";
+  };
+  const unmatched = verdict.blocked.map((b) => ({ term: b.term, norm: normalizeTerm(b.term), operation: b.operation,
+    category: b.category, reason: b.reason, definition: definitionOf(b) }));
   try {
     appendEvents(resolved.sid, (_events, current) => {
       const entry = (current && current.steps && current.steps[PROVENANCE_STEP]) || {};
-      const prev = entry[PROVENANCE_KEY] || null;
-      const grants = asArray(prev && prev.grants).filter((g) => g && g.fingerprint === fp.fingerprint);
-      pending = verdict.blocked.filter((b) => !grants.some((g) =>
-        g.norm === normalizeTerm(b.term) && g.operation === b.operation && g.category === b.category));
-      const blocked = pending.map((b) => ({ term: b.term, norm: normalizeTerm(b.term), operation: b.operation, category: b.category, reason: b.reason }));
-      return provenanceRecordEvents(prev, fp, resolved.source, blocked);
+      const events = provenanceRecordEvents(entry[PROVENANCE_KEY] || null, fp, resolved.source, unmatched);
+      pending = events[0].value.blocked;
+      return events;
     });
   } catch (e) {
     for (const l of verdict.lines) process.stdout.write("  BLOCK: " + l + "\n");

@@ -2,6 +2,8 @@
 // Input 1 (artifact) of the glossary-check fingerprint (#2529 I-FP): rule R-A reads a plan
 // artifact once and cuts its approval range; rule R-S reads the staged blobs of one stage.
 // During a merge, R-S leaves out the merge-incoming files (#2761); mergeIncoming is diagnostic only.
+// Each staged file carries changedLines (#2770): the scan reports only those lines; the digest
+// stays over the staged blobs.
 
 const fs = require("fs");
 const crypto = require("crypto");
@@ -11,6 +13,7 @@ const { artifactRangeOfBuffer } = require("../../completion-approval");
 const { rowFor } = require("../../plan-stage-table");
 const { stagedOids } = require("../../../workflow-gate/staged-evidence");
 const { detectMergeIncoming, MERGE_INCOMING_STATE } = require("../../../lib/merge-incoming");
+const { changedLinesOf } = require("./changed-lines");
 
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 const kindOf = (p) => (/\.md$/i.test(p) ? "markdown" : "code");
@@ -109,10 +112,11 @@ function artifactRS(repoDir, stage, classify) {
     const pairs = paths.map((p) => [p, oids[p] || "deleted"]);
     const present = pairs.filter(([, oid]) => oid !== "deleted");
     const blobs = readBlobs(repoDir, [...new Set(present.map(([, oid]) => oid))]);
+    const changed = present.length > 0 ? changedLinesOf(git, repoDir) : new Map();
     // A staged deletion is listed with empty text: it is part of the artifact but has nothing to scan.
     const files = pairs.map(([p, oid]) => (oid === "deleted"
       ? { path: p, kind: kindOf(p), text: "", deleted: true }
-      : { path: p, kind: kindOf(p), text: blobs.get(oid) }));
+      : { path: p, kind: kindOf(p), text: blobs.get(oid), changedLines: changed.get(p) || [] }));
     return { ok: true, artifact: { files, digest: sha256(JSON.stringify(pairs)), empty: paths.length === 0, mergeIncoming } };
   } catch (e) {
     return { ok: false, error: "git-failed", detail: e && e.message ? e.message : String(e) };

@@ -63,9 +63,9 @@ only reader of them. It is the sha256 of `JSON.stringify` of the four input dige
 | Input | Digest |
 |---|---|
 | `artifact` | R-A range or R-S pairs, as above |
-| `glossary` | sha256 of `JSON.stringify([[label, sha]…], legacy)` over `listMainGlossaryFiles` of the main worktree (the first `worktree ` line of `git worktree list --porcelain`); a read failure is `glossary-unavailable` |
+| `glossary` | sha256 of `JSON.stringify([[label, sha]…], legacy)` over `listMainGlossaryFiles` of the session's own worktree (`git rev-parse --show-toplevel` of the resolved worktree, #2796), so a glossary change on main stales a branch's records only once the branch takes it in; a read failure is `glossary-unavailable` |
 | `intent_rows` | sha256 of the sorted JSON of `[term (case-exact, as the drift scan reads it), category, operation, normalizeDefinition(definition)]`; the intent stage builds rows from its own range, every other stage reads intent.md once, and a missing file means no rows |
-| `rules` | sha256 over the path-sorted per-file sha256 of `RULE_MODULES`: `bin/lib/glossary-drift.js`, `hooks/lib/glossary-term.js`, `hooks/lib/comment-block-scan.js`, `hooks/lib/markdown-fence.js`, `bin/lib/glossary-provenance.js`, and the modules of `bin/lib/glossary-drift/` (`extract.js`, `terms.js`, `context.js`, `match.js`, `scan.js`) |
+| `rules` | sha256 over the path-sorted per-file sha256 of `RULE_MODULES`: `bin/lib/glossary-drift.js`, `hooks/lib/glossary-term.js`, `hooks/lib/comment-block-scan.js`, `hooks/lib/markdown-fence.js`, `bin/lib/glossary-provenance.js`, and the modules of `bin/lib/glossary-drift/` (`extract.js`, `terms.js`, `context.js`, `match.js`, `scan.js`), and `hooks/workflow-state/glossary-check/scope/changed-lines.js` |
 
 A changed matcher therefore stales every record, exactly as a changed artifact or glossary does.
 
@@ -74,7 +74,7 @@ A changed matcher therefore stales every record, exactly as a changed artifact o
 `bin/check-glossary-drift --session <sid> --stage <stage> [--record]` scans the stage inputs for
 spelling variants only — intent Accepted Tradeoff "the deterministic drift check covers spelling variants only".
 Which variants count is set by the [matching rules](#matching-rules).
-A term an intent row deletes is no longer canonical, so its variants are not checked, even while the main worktree glossary file still lists it; a delete paired with an add of the same term (a category move) keeps it. A delete row matches its own spelling only (case-insensitive, not singularized), so deleting `workflows` keeps a distinct `workflow`.
+A term an intent row deletes is no longer canonical, so its variants are not checked, even while the worktree's glossary file still lists it; a delete paired with an add of the same term (a category move) keeps it. A delete row matches its own spelling only (case-insensitive, not singularized), so deleting `workflows` keeps a distinct `workflow`.
 Meaning drift stays with the reviewers. It reads the current intent.md, not the approved version.
 
 Exit codes: `0` no open finding, `1` open findings, `2` usage error, unreadable inputs, or fingerprint
@@ -93,6 +93,31 @@ sentence start, a heading line or a table header row are tolerated; case mid-sen
 space, and an identifier split into words stay drift. The full rules, with examples, are in
 [matching-rules.md](glossary-check/matching-rules.md).
 
+### Scan scope
+
+The `tests`, `code` and `docs` stages report a hit only on a line the staged change adds or modifies
+against HEAD (#2770): `scope/changed-lines.js` reads one zero-context `git diff --cached` and gives each
+staged file its `changedLines`, the line numbers in the staged file. A new file counts every line; a
+deletion counts none. The file is still extracted whole, so context such as a comment block is read as
+before, and the reported line is the staged file's line. During a merge the filter applies to the paths
+left after the merge-incoming exclusion; when that exclusion is undecidable, every path stays and the
+filter still applies. The artifact digest stays over the staged pairs. The `intent`, `outline` and
+`detail` stages scan their whole range: a plan file has no HEAD to diff against.
+
+### Grant carry-over
+
+A re-record keeps the grants of the new fingerprint, and also moves a grant of the previous fingerprint
+to the new one (#2770) when both hold: the artifact is the only input whose digest changed (glossary,
+intent rows and rules are the same), and every variant the new findings show for the granted norm was
+already among the previous findings' variants for it. A glossary definition change, an intent row
+change, a rules change, or a new variant of the granted norm lets the grant lapse. The provenance record
+follows the same rule with `ops` in the artifact's role and the unmatched entries of the granted norm
+(term spelling, operation, category and definition) as the compared set, so a spelling or definition
+change lapses its grant.
+The carry-over is decided at record time; the commit gate still compares fingerprints exactly, so an
+unrelated edit stales the record once and the agent's re-record clears it without a new
+`WORKFLOW_GLOSSARY_ACCEPTED`.
+
 ### `glossary_check` record
 
 `--record` writes a step annotation on the stage's step (provenance `observed`, origin
@@ -106,7 +131,7 @@ space, and an identifier split into words stay drift. The full rules, with examp
   "ledger_grants": [ { "norm": "…", "discrim": "…", "reason": "…" } ] }
 ```
 
-On re-record only `grants` with the new fingerprint carry over; `ledger_grants` always carry over. A
+On re-record `grants` with the new fingerprint carry over, plus those the [grant carry-over](#grant-carry-over) rule moves; `ledger_grants` always carry over. A
 record holding only `ledger_grants` (written by the sentinel before any `--record`) has no fingerprint
 and counts as missing.
 
@@ -190,9 +215,13 @@ Written on `review_docs` (origin `check-glossary-provenance`):
 { "v": 1, "fingerprint": "<sha256>",
   "inputs": { "ops": "…", "intent_rows": "<approval sha or null>", "rules": "…" },
   "session_source": "explicit",
-  "blocked": [ { "term": "…", "norm": "…", "operation": "add", "category": "user", "reason": "…" } ],
+  "blocked": [ { "term": "…", "norm": "…", "operation": "add", "category": "user", "reason": "…", "definition": "…" } ],
+  "unmatched": [ { "term": "…", "norm": "…", "operation": "add", "category": "user", "reason": "…", "definition": "…" } ],
   "grants": [ { "norm": "…", "operation": "add", "category": "user", "fingerprint": "<sha256>", "reason": "…" } ] }
 ```
+
+`unmatched` lists every operation the intent does not cover, before grants; `blocked` is the part no
+grant covers. A record written before #2770 has no `unmatched`, and its `blocked` stands in for it.
 
 `provenanceFingerprint` binds `ops` (`opsFingerprint`), the approval sha (null for cases B / A / P / C)
 and `rulesVersion`. `session_source` is `explicit` or `env`.

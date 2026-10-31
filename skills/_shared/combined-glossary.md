@@ -2,7 +2,7 @@
 
 SSOT for how writers and reviewers use the combined glossary: the agreed terms of the project, so every artifact names one concept with one word.
 
-**Source.** The combined glossary is the main worktree's `docs/glossary/*.md` (the main worktree is the first line of `git worktree list`; read it there, never the linked worktree's copy) plus the `## Glossary` table of the session intent.md (the intent glossary). In a codex prompt the file part arrives as the delimited combined glossary data and the intent glossary sits in the intent context.
+**Source.** The combined glossary is the session worktree's `docs/glossary/*.md` (the worktree of the branch under work) plus the `## Glossary` table of the session intent.md (the intent glossary). In a codex prompt the file part arrives as the delimited combined glossary data, read from the main worktree instead, and the intent glossary sits in the intent context.
 
 **Missing sides.** When one side is missing, use the other; when both are empty, this fragment asks nothing.
 
