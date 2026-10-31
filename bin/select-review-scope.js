@@ -8,14 +8,15 @@
 // DELETED\t<rel>, INVENTORY\t<rel>, SOURCE\t<abs>.
 // Exit: 0 ok; 2 usage / malformed session id; 4 input error (manifest failure, or a
 // REVIEW/SOURCE path missing from the worktree — the #1455 deterministic pre-check).
+// Side effect (#2842): writes / clears the unreviewed control marker (recordUnreviewedEvidence).
 
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { SESSION_ID_VALID_RE } = require("../hooks/workflow-state/state-io/core");
-const { readState } = require("../hooks/workflow-state/state-io");
+const { readState, recordReviewTestsUnreviewed, clearReviewTestsUnreviewed } = require("../hooks/workflow-state/state-io");
 const { resolveSessionWorktreePath } = require("../hooks/workflow-state/resolve-worktree-path");
-const { computeReviewScopeManifest } = require("../hooks/workflow-gate/review-tests-evidence");
+const { computeReviewScopeManifest, fingerprintOfManifest } = require("../hooks/workflow-gate/review-tests-evidence");
 const { latestRecordedManifest, decideReviewScope } = require("../hooks/workflow-gate/review-scope-delta");
 const { buildHeaderTargets } = require("./lib/review-scope-header-targets");
 const { toWindowsPath } = require("../hooks/lib/branch-diff");
@@ -62,6 +63,20 @@ function headerTargetsOf(worktree, files) {
   return null;
 }
 
+// #2842: a full selection leaves "not reviewed yet" evidence (the wrapper deletes it right before
+// it launches the review), so WARNINGS_ACCEPTED has an exit when /review-tests stops before RT-3.
+// A delta selection clears it. Fail-open: a failed write only leaves the old stuck state.
+function recordUnreviewedEvidence(sid, decision, files) {
+  try {
+    if (decision.scope !== "full") clearReviewTestsUnreviewed(sid);
+    else if (Object.keys(files || {}).length > 0) {
+      recordReviewTestsUnreviewed(sid, { origin: `scope-full:${decision.reason}`, fingerprint: fingerprintOfManifest(files) });
+    }
+  } catch (e) {
+    process.stderr.write(`${NAME}: unreviewed evidence not updated: ${String((e && e.message) || e).replace(/\s+/g, " ")}\n`);
+  }
+}
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.error) {
@@ -91,6 +106,7 @@ function main(argv) {
     return 4;
   }
 
+  if (state) recordUnreviewedEvidence(args.session, decision, current.files);
   const lines = [`SCOPE=${decision.scope}`, `REASON=${decision.reason}`];
   for (const rel of decision.review) lines.push(`REVIEW\t${abs(rel)}`);
   for (const rel of decision.deleted) lines.push(`DELETED\t${rel}`);

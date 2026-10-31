@@ -283,3 +283,46 @@ test("J7: a staged test OID that git cat-file reports missing or non-blob gives 
   }
 });
 caseEnd();
+
+// #2842: the header map's timeout scales with the staged test count (20000 + 100n, capped at
+// 300000); REVIEW_SCOPE_HEADER_TARGETS_TIMEOUT_MS, when a positive integer, is used as given.
+const TIMEOUT_ENV = "REVIEW_SCOPE_HEADER_TARGETS_TIMEOUT_MS";
+caseBegin("J8-J9-header-map-timeout", "bin/lib/review-scope-header-targets.js");
+test("J8: headerMapTimeoutMs — scaled default, cap, explicit env, ignored invalid env", () => {
+  const fn = lib().headerMapTimeoutMs;
+  assert.strictEqual(typeof fn, "function", "headerMapTimeoutMs is exported");
+  const CASES = [
+    { name: "zero-tests", n: 0, env: {}, want: 20000 },
+    { name: "one-test", n: 1, env: {}, want: 20100 },
+    { name: "sixty-tests", n: 60, env: {}, want: 26000 },
+    { name: "at-cap", n: 2800, env: {}, want: 300000 },
+    { name: "over-cap", n: 100000, env: {}, want: 300000 },
+    { name: "env-below-cap", n: 60, env: { [TIMEOUT_ENV]: "5000" }, want: 5000 },
+    { name: "env-above-cap-is-not-capped", n: 60, env: { [TIMEOUT_ENV]: "900000" }, want: 900000 },
+    ...["abc", "0", "-5", "1.5", "", "007"].map((v) => ({ name: `env-invalid-${JSON.stringify(v)}`, n: 60, env: { [TIMEOUT_ENV]: v }, want: 26000 })),
+  ];
+  for (const { name, n, env, want } of CASES) {
+    assert.strictEqual(fn(n, env), want, `J8/${name}`);
+  }
+});
+test("J9: buildHeaderTargets hands the same computed timeout to the git blob read and the bash run", () => {
+  const { repo } = stagedRepo("j9");
+  const files = manifestOf(repo);
+  for (const [name, env, want] of [["scaled", undefined, 20200], ["env", "45000", 45000]]) {
+    const seen = {};
+    const runGit = (exe, args, options) => { seen.git = options && options.timeout; return spawnSync(exe, args, options); };
+    const runBash = (exe, args, options) => { seen.bash = options && options.timeout; return spawnSync(exe, args, options); };
+    if (env === undefined) delete process.env[TIMEOUT_ENV];
+    else process.env[TIMEOUT_ENV] = env;
+    let got;
+    try {
+      got = lib().buildHeaderTargets(repo, files, { runGit, runBash });
+    } finally {
+      delete process.env[TIMEOUT_ENV];
+    }
+    assert.strictEqual(got.ok, true, `J9/${name}: ${JSON.stringify(got)}`);
+    assert.strictEqual(seen.git, want, `J9/${name}: the git cat-file timeout (runGit seam)`);
+    assert.strictEqual(seen.bash, want, `J9/${name}: the bash timeout`);
+  }
+});
+caseEnd();

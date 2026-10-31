@@ -159,21 +159,66 @@ assert_match "S12 RT-1a validates the tag against the excluded column" 'excluded
 assert_match "S12 RT-1a validates the tag against the reason column" 'reason' "$RT1A_BLOCK"
 assert_match "S12 RT-1a names the size-hard-limit claim it validates" 'size-hard-limit' "$RT1A_BLOCK"
 
-# ── S13 both git diff --cached call sites honour the added-only filter ─────
-# Counted rather than spelled out: the filter may be applied literally or through
-# a variable, but a call site that carries neither is the forgotten-path bug.
+# ── S13 both listing call sites go through the CLI and honour added-only ───
+# #2842: the staged listing moved behind bin/list-staged-review-paths.js so the
+# merge-incoming exclusion has one owner. Counted rather than spelled out: the
+# flag may be passed literally or through a variable, but a call site that
+# carries neither is the forgotten-path bug.
 case_ran S13
 SEL_TEXT="$(cat "$SELECT_SH" 2>/dev/null)"
-S13_SITES="$(printf '%s\n' "$SEL_TEXT" | grep -c 'diff --cached' || true)"
-S13_FILTERED="$(printf '%s\n' "$SEL_TEXT" | grep 'diff --cached' | grep -cE 'diff-filter|FILTER|ADDED' || true)"
+LIST_CLI="$AGENTS_ROOT/bin/list-staged-review-paths.js"
+S13_RAW="$(printf '%s\n' "$SEL_TEXT" | grep -c 'diff --cached' || true)"
+assert_eq "S13 select-staged-files.sh no longer runs git diff --cached itself" "0" "$S13_RAW"
+S13_SITES="$(printf '%s\n' "$SEL_TEXT" | grep -c 'list-staged-review-paths\.js' || true)"
+S13_FILTERED="$(printf '%s\n' "$SEL_TEXT" | grep 'list-staged-review-paths\.js' | grep -cE 'added-only|ADDED' || true)"
 if [[ "$S13_SITES" -ge 2 ]]; then
-    pass "S13 select-staged-files.sh still has $S13_SITES git diff --cached call sites"
+    pass "S13 select-staged-files.sh calls list-staged-review-paths.js at $S13_SITES sites"
 else
-    fail "S13 expected at least 2 git diff --cached call sites, found $S13_SITES"
+    fail "S13 expected at least 2 list-staged-review-paths.js call sites, found $S13_SITES"
 fi
-assert_eq "S13 every call site applies the added-only filter" "$S13_SITES" "$S13_FILTERED"
-assert_match "S13 the script knows the --diff-filter=A spelling" '\-\-diff-filter=A' "$SEL_TEXT"
+assert_eq "S13 every call site passes the added-only flag" "$S13_SITES" "$S13_FILTERED"
 assert_match "S13 the script accepts the --added-only flag" '\-\-added-only' "$SEL_TEXT"
+assert_match "S13 bin/list-staged-review-paths.js knows the --diff-filter=A spelling" \
+    '\-\-diff-filter=A' "$(cat "$LIST_CLI" 2>/dev/null)"
+
+# ── S24 select-staged-files.sh drops merge-incoming paths (#2842) ──────────
+# A real merge in progress: main's added test and changed impl are staged by the
+# merge with the index equal to MERGE_HEAD, so they are not this branch's work.
+case_ran S24
+S24REPO="$(make_repo)"
+S10REPO="$S24REPO"
+git -C "$S24REPO" checkout -q -b mainline >/dev/null 2>&1
+printf 'impl v1\n' > "$S24REPO/impl.js"
+git -C "$S24REPO" add -A >/dev/null 2>&1
+git -C "$S24REPO" commit -q --no-verify -m base >/dev/null 2>&1
+git -C "$S24REPO" checkout -q -b feature >/dev/null 2>&1
+printf 'echo branch\n' > "$S24REPO/tests/branch.sh"
+git -C "$S24REPO" add -A >/dev/null 2>&1
+git -C "$S24REPO" commit -q --no-verify -m branch >/dev/null 2>&1
+git -C "$S24REPO" checkout -q mainline >/dev/null 2>&1
+mkdir -p "$S24REPO/tests"
+printf 'echo main\n' > "$S24REPO/tests/main-a.sh"
+printf 'impl v2\n' > "$S24REPO/impl.js"
+git -C "$S24REPO" add -A >/dev/null 2>&1
+git -C "$S24REPO" commit -q --no-verify -m main >/dev/null 2>&1
+git -C "$S24REPO" checkout -q feature >/dev/null 2>&1
+git -C "$S24REPO" merge -q --no-commit --no-ff mainline >/dev/null 2>&1
+printf 'echo branch new\n' > "$S24REPO/tests/branch-new.sh"
+git -C "$S24REPO" add -- tests/branch-new.sh >/dev/null 2>&1
+if [[ -f "$S24REPO/.git/MERGE_HEAD" ]]; then
+    pass "S24 fixture is mid-merge (MERGE_HEAD present)"
+else
+    fail "S24 fixture did not reach a merge in progress"
+fi
+run_select
+assert_eq "S24 merging: default output drops main's test and impl, keeps the branch test" "tests/branch-new.sh" "$SOUT"
+run_select --added-only
+assert_eq "S24 merging: --added-only drops main's added test too" "tests/branch-new.sh" "$SOUT"
+# undecidable (octopus-shaped MERGE_HEAD): nothing is dropped, the old behaviour.
+S24_HEAD="$(head -n 1 "$S24REPO/.git/MERGE_HEAD")"
+printf '%s\n%s\n' "$S24_HEAD" "$S24_HEAD" > "$S24REPO/.git/MERGE_HEAD"
+run_select
+assert_eq "S24 undecidable merge state excludes nothing" "impl.js tests/branch-new.sh tests/main-a.sh" "$SOUT"
 
 # ── S14-S19 the RULES the steps must carry, not merely their labels ────────
 # S1-S13 pin that WT-5 / RT-1a exist and which COLUMNS they read. The rules a
