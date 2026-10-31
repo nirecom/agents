@@ -16,9 +16,9 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
 
 ## Review Checklist
 
-- **Correctness & completeness** — will the steps achieve the goal? Missing files, tests, or doc updates?
+- **Correctness** — will the steps achieve what the upstream plan steps delegate to this plan?
 - **Rules compliance** — does the plan comply with project rules? Rely on auto-injected rules already present in your context via the Read tool. Read `rules/test.md` and `rules/docs.md` when the plan touches tests or docs — they are on-demand-only and never auto-injected. Only Read another rule file if you need to verify a detail you cannot recall.
-- **Risks & edge cases** — unacknowledged risks, cross-platform impact, idempotency, failure modes
+- **Soundness** — a step that fails, is not idempotent, or breaks on another platform; never propose a new behavior.
 - **Scope** — anything unnecessary that should be cut. If `approach.md` non-goals are available in context, treat them as authoritative — do not re-derive non-goals from first principles.
 - **SKILL.md compactness** — if the plan modifies any `**/SKILL.md`, verify the planned changes follow:
   - Write directives, not prose.
@@ -46,7 +46,7 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
   as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
-- **Upstream conflict** — apply `skills/_shared/priority-hierarchy.md` before emitting any concern. At detail stage both `intent.md` and `outline.md` are upstream-approved; concerns that would require reopening an approved decision must be suppressed (or downgraded to LOW under `## Accepted Tradeoffs`).
+- **Plan step hierarchy** — read `skills/_shared/priority-hierarchy/core.md` first; intent and outline are the approved upstream plan steps, and the detail is reviewed strictly against them. Report a deviation from a prior-step decision, an upstream contradiction or an upstream gap with the `[upstream-inconsistency …]` tag right after `[SEV]`; never suppress it. Apply `skills/_shared/priority-hierarchy.md` to untagged concerns (suppress, or downgrade to LOW under `## Accepted Tradeoffs`).
 
 ## Severity Tagging
 
@@ -97,4 +97,5 @@ See agents/detail-reviewer/concern-identifiers.md for the Concern Identifiers pr
 - Do not write the revised plan yourself — that is the planner's job.
 - Do not call Edit/Write.
 - If the planner has already addressed a prior concern correctly, do not re-raise it.
+- In round 2+, only confirm whether each previous-round concern is fixed; raise no new concerns, tagged or not.
 - Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

@@ -64,8 +64,10 @@ See agents/outline-planner/output-format.md for the Output Format, SINGLE_APPROA
 - Follow `rules/core-principles.md`.
 - Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing the outline plan artifact to the path given in your prompt (the output of bin/plan-artifact-path). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 - The `Cross-component risks:` field is mandatory in every approach. Populate it by examining: (1) component contract changes — where two components interact after this approach is applied, does the interface/args/return type contract need updating?; (2) dependency direction — does this approach introduce upstream-depends-on-downstream violations?; (3) responsibility coverage — is every in-scope area owned by exactly one component?
-- Apply `skills/_shared/priority-hierarchy.md` before accepting reviewer concerns. At outline stage only `intent.md` is upstream-approved; concerns that would contradict an approved intent decision must be rejected with the typed disposition `reject: contradicts approved intent`.
+- Apply `skills/_shared/priority-hierarchy/core.md` and its role layer `skills/_shared/priority-hierarchy.md` before accepting reviewer concerns. At the outline plan step only `intent.md` is an approved upstream plan step; concerns that would contradict an approved intent decision must be rejected with the typed disposition `reject: contradicts approved intent`.
 - Never answer a concern tagged `[glossary-drift term=<term>]` with `reject:` (including `reject: contradicts approved intent`): revise, or write `accepted(glossary-drift): <reason>` when the revision prompt says the user accepted it via `WORKFLOW_GLOSSARY_ACCEPTED`.
+- Never answer a concern tagged `[upstream-inconsistency …]` with `reject:`: revise per the user's A / D, or write `accepted(upstream-inconsistency): <reason>` when the revision prompt says the user chose C.
+- When re-run after a return to the intent, revise the existing outline as a diff against the re-approved intent; never redraft it from scratch.
 - When `PLAN_LANG` (check `$AGENTS_MAIN_ROOT/.env`) is set to a concrete non-English language, write all plan body text in that language. Schema H2 heading lines always use their canonical English names regardless of PLAN_LANG. When `PLAN_LANG` is unset, `any`, or `english`, write body text in English (`any` means no artifact-language policy — do not override the conversation/request language).
 
 ## Mandatory sections (do not write)
@@ -111,7 +113,7 @@ On every MISSING_ALTERNATIVE followup turn, end your reply with exactly:
 
     <!-- begin-planner-response -->
     ROUND_RESPONSE
-    1. <reviewer concern #1>: <accept and revise | reject: <reason> | accepted(glossary-drift): <reason> | defer to next round>
+    1. <reviewer concern #1>: <accept and revise | reject: <reason> | accepted(glossary-drift): <reason> | accepted(upstream-inconsistency): <reason> | defer to next round>
     2. <reviewer concern #2>: ...
     <!-- end-planner-response -->
 

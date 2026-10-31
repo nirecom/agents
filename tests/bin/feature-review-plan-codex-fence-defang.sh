@@ -272,6 +272,9 @@ echo "--- review-plan-codex fence defang: a tree without the helper refuses to r
 TREE="$TMPDIR_BASE/tree"
 mkdir -p "$TREE"
 cp -r "$AGENTS_ROOT/bin" "$TREE/bin"
+# #2814: hierarchy.sh reads the format table from skills/_shared/priority-hierarchy/core.md (fail-closed).
+mkdir -p "$TREE/skills/_shared"
+cp -r "$AGENTS_ROOT/skills/_shared/priority-hierarchy" "$TREE/skills/_shared/priority-hierarchy"
 CAP_OK="$TMPDIR_BASE/prompt-tree-ok.txt"
 run_plan "$TREE/bin/review-plan-codex" detail-plan "$CAP_OK"
 assert_eq "fail-closed: the complete copied tree reviews normally (control)" \

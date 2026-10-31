@@ -7,7 +7,8 @@
 #
 # Exit codes: 0 ok, 1 verdict "not satisfied", 2 usage/invalid argument,
 # 3 check-staged could not read the round at all (distinct from 1 — #2025 C6),
-# 4 refused for a [glossary-drift] concern (reject, or accept without its grant — #2529),
+# 4 refused for a tagged concern ([glossary-drift] or [upstream-inconsistency]: reject, or
+#   accept without its grant / recorded C — #2529, #2814),
 # 5 artifact could not be produced (includes a failed library load).
 set -uo pipefail
 
@@ -214,7 +215,7 @@ case "$SUB" in
         [ -n "$LED" ] || { bad_path "the ledger path"; exit 2; }
         RJ_RC=0; cl_reject "$LED" "$REJECT_ID" "$REASON" || RJ_RC=$?
         if [ "$RJ_RC" -eq 4 ]; then
-            printf 'concern-ledger: reject refused — the concern carries a [glossary-drift …] tag; only accept closes it, under a WORKFLOW_GLOSSARY_ACCEPTED grant\n' >&2
+            printf 'concern-ledger: reject refused — the concern carries a [glossary-drift …] or [upstream-inconsistency …] tag; only accept closes it (under a WORKFLOW_GLOSSARY_ACCEPTED grant, or the user'"'"'s recorded C)\n' >&2
             exit 4
         fi
         [ "$RJ_RC" -eq 0 ] || exit 5
@@ -225,8 +226,8 @@ case "$SUB" in
         AC_RC=0; cl_accept "$LED" "$REJECT_ID" "$REASON" "$SID" "$FORMAT" || AC_RC=$?
         case "$AC_RC" in
             0) ;;
-            2) printf 'concern-ledger: accept refused — %s carries no [glossary-drift …] tag; use reject\n' "$REJECT_ID" >&2; exit 2 ;;
-            4) printf 'concern-ledger: accept refused — no matching WORKFLOW_GLOSSARY_ACCEPTED grant for %s (or the grant could not be read)\n' "$REJECT_ID" >&2; exit 4 ;;
+            2) printf 'concern-ledger: accept refused — %s carries no [glossary-drift …] or [upstream-inconsistency …] tag; use reject\n' "$REJECT_ID" >&2; exit 2 ;;
+            4) printf 'concern-ledger: accept refused — no matching grant or recorded C for %s (WORKFLOW_GLOSSARY_ACCEPTED for [glossary-drift …], a current-cycle C in bin/review-loop-upstream decide for [upstream-inconsistency …]), or it could not be read\n' "$REJECT_ID" >&2; exit 4 ;;
             *) exit 5 ;;
         esac
         ;;

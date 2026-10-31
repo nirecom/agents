@@ -41,6 +41,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
   The two-stage judge's query builds it, and the backup subagent reads it first.
 - **Related**: [architecture/jev/two-stage-broker.md](../architecture/jev/two-stage-broker.md)
 
+### plan step
+- **Definition**: intent / outline / detail の 3 つの workflow step。前の plan step ほど優先順位が高い。
+- **Related**: [skills/_shared/priority-hierarchy.md](../../skills/_shared/priority-hierarchy.md)
+
 ### pre-commit section marker
 
 - **Definition**: pre-commit が点検の区切りに入ったことを示す、決まった形式の 1 行の出力
@@ -51,6 +55,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The per-stage record the Stop hook writes when a turn closes on a plan's link line: the plan path, the link shown (URL, or the local path where none can be made) and the whole-file content hash.
   The CONFIRM checkpoint lets the echo reach the dialog only when it still matches the plan and spends it; it proves the user was shown the plan, and is not an approval.
 - **Related**: [architecture/claude-code/settings/hooks.md](../architecture/claude-code/settings/hooks.md)
+
+### prior-step decision
+- **Definition**: 前の plan step で決めたこと。後の plan step は、これを足す・緩める・削る・読み替えることができない。
+- **Related**: [skills/_shared/priority-hierarchy.md](../../skills/_shared/priority-hierarchy.md)
 
 ### prose context
 - **Definition**: glossary drift check が identifier context 以外として扱う文脈。prose の見出し語と照合し、複数形と見出し行の大小だけを同じ語として許容する。
@@ -66,6 +74,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 - **Definition**: The checkout (main or linked worktree) holding the script currently running; each file assigns it once from its own path to find sibling code, never as an environment variable.
 - **Related**: [architecture/claude-code/root-names.md](../architecture/claude-code/root-names.md)
+
+### section heading
+- **Definition**: plan や context の markdown 見出し（`## Issues` など）。各セクションが何であるかを読み手に示す。
+- **Related**: [architecture/claude-code/state-dirs.md](../architecture/claude-code/state-dirs.md)
 
 ### session chain
 

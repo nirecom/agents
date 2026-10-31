@@ -15,7 +15,9 @@ Read actual file contents via the Read tool.
 Read `skills/_shared/test-design.md` directly for the Test Case Categories checklist.
 Evaluate coverage against every category and sub-category in the checklist.
 Every concern carries a severity tag: [HIGH], [MEDIUM], or [LOW].
-Single-round only — no Cn revision rounds.
+No Cn revision rounds inside one dispatch.
+Read `skills/_shared/priority-hierarchy/core.md` first; it fixes the review scope, the round split and the `[upstream-inconsistency …]` tag written right after `[SEV]` on the concern line.
+The reviewed artifact is the test files, not a plan step; intent, outline, detail and test design are its upstream.
 
 ## Additional checks
 
@@ -55,4 +57,5 @@ Do not call Edit/Write.
 Read and follow `rules/shell-commands.md` before the first Bash command — dispatch does not inherit auto-injected rules.
 Follow its Subagent Dispatch Prompts section; your output contract still fixes the reply.
 Approve only when no coverage gaps remain.
+On a round 2+ `/review-tests` re-run, only confirm whether each previous round finding is fixed, and raise no new findings.
 Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

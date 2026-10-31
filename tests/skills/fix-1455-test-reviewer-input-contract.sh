@@ -98,40 +98,51 @@ case_end
 # ─────────────────────────────────────────────────────────
 case_begin "review-plan-codex-prompts" "bin/review-plan-codex"
 
-# RPC-1: review-plan-codex references the contract file
-if [ -f "$REVIEW_PLAN_CODEX" ] && grep -qF "test-review-input-contract" "$REVIEW_PLAN_CODEX"; then
+# #2814: the test-review prompt builder moved into this module; the entrypoint sources it and its
+# test-review) case arm calls rpc_prompt_test_review, so the contract checks read that function.
+REVIEW_ONLY_SH="$SCRIPT_CHECKOUT_ROOT/bin/lib/review-plan-codex/prompts-review-only.sh"
+TESTREV_FN=""
+[ -f "$REVIEW_ONLY_SH" ] && TESTREV_FN=$(awk '/^rpc_prompt_test_review\(\)/{f=1} f{print} f && /^}$/{exit}' "$REVIEW_ONLY_SH" 2>/dev/null)
+
+# RPC-1: review-plan-codex injects the contract through the sourced test-review builder
+TESTREV_ARM=$(awk '/^  test-review\)/{f=1} f && /^  ;;/{exit} f{print}' "$REVIEW_PLAN_CODEX" 2>/dev/null)
+if [ -f "$REVIEW_PLAN_CODEX" ] \
+  && grep -qF 'source "$SCRIPT_DIR/lib/review-plan-codex/prompts-review-only.sh"' "$REVIEW_PLAN_CODEX" \
+  && echo "$TESTREV_ARM" | grep -qE '^[[:space:]]*rpc_prompt_test_review[[:space:]]*$' \
+  && echo "$TESTREV_FN" | grep -qF "test-review-input-contract"; then
   pass "RPC-1 bin/review-plan-codex references test-review-input-contract"
 else
   fail "RPC-1 bin/review-plan-codex does not reference test-review-input-contract (contract not injected)"
 fi
 
 # RPC-2: Contract appears in Round 1 test-review prompt block (static)
-# In the test-review case block, the else branch (ROUND<2) must include the contract.
-if [ -f "$REVIEW_PLAN_CODEX" ]; then
-  # Extract the test-review) case body, then the Round-1 else block
-  TESTREV_BODY=$(awk '/test-review\)/{f=1} f && /^  ;;/{exit} f{print}' "$REVIEW_PLAN_CODEX" 2>/dev/null | head -120)
-  ROUND1_BLOCK=$(echo "$TESTREV_BODY" | awk '/else$/{f=1} f && /^    fi$/{exit} f{print}' | head -60)
+# In rpc_prompt_test_review, the else branch (ROUND<2) must include the contract.
+if [ -n "$TESTREV_FN" ]; then
+  ROUND1_BLOCK=$(echo "$TESTREV_FN" | awk '/^    else$/{f=1} f && /^    fi$/{exit} f{print}')
   if echo "$ROUND1_BLOCK" | grep -qF "test-review-input-contract"; then
     pass "RPC-2 contract appears in Round 1 test-review prompt"
   else
     fail "RPC-2 contract not found in Round 1 test-review prompt block"
   fi
+else
+  fail "RPC-2 rpc_prompt_test_review not found in bin/lib/review-plan-codex/prompts-review-only.sh"
 fi
 
 # RPC-3: Contract appears in Round 2+ test-review prompt block (static)
-if [ -f "$REVIEW_PLAN_CODEX" ]; then
-  TESTREV_BODY=$(awk '/test-review\)/{f=1} f && /^  ;;/{exit} f{print}' "$REVIEW_PLAN_CODEX" 2>/dev/null | head -120)
-  ROUND2_BLOCK=$(echo "$TESTREV_BODY" | awk '/ROUND.*-ge 2/{f=1} f && /^    fi$/{exit} f{print}' | head -60)
+if [ -n "$TESTREV_FN" ]; then
+  ROUND2_BLOCK=$(echo "$TESTREV_FN" | awk '/ROUND.*-ge 2/{f=1} f && /^    else$/{exit} f{print}')
   if echo "$ROUND2_BLOCK" | grep -qF "test-review-input-contract"; then
     pass "RPC-3 contract appears in Round 2+ test-review prompt"
   else
     fail "RPC-3 contract not found in Round 2+ test-review prompt block"
   fi
+else
+  fail "RPC-3 rpc_prompt_test_review not found in bin/lib/review-plan-codex/prompts-review-only.sh"
 fi
 
 # RPC-4: Failure path when contract file is unreadable (codex_core_emit_failed or exit 4)
-if [ -f "$REVIEW_PLAN_CODEX" ]; then
-  CONTRACT_CTX=$(grep -B3 -A5 "test-review-input-contract" "$REVIEW_PLAN_CODEX" 2>/dev/null || true)
+if [ -n "$TESTREV_FN" ]; then
+  CONTRACT_CTX=$(echo "$TESTREV_FN" | grep -B3 -A5 "test-review-input-contract" 2>/dev/null || true)
   if echo "$CONTRACT_CTX" | grep -qE "codex_core_emit_failed|exit 4"; then
     pass "RPC-4 failure path present when contract is unreadable"
   else
@@ -401,14 +412,14 @@ DI_DIR="$_TMPROOT/detect"
 mkdir -p "$DI_DIR"
 
 # DI-1: line-start INPUT_ERROR -> exit 4, offending line on stderr
-printf 'Reviewing...\nINPUT_ERROR /x/y.md\n' > "$DI_DIR/di1.md"
+printf 'Reviewing...\nINPUT_ERROR /xx/y.md\n' > "$DI_DIR/di1.md"
 RC_DI1="$(_run_detect "$DI_DIR/di1.md" "$DI_DIR/di1.err")"
 if [ "$RC_DI1" = "4" ]; then
   pass "DI-1 line-start INPUT_ERROR -> exit 4"
 else
   fail "DI-1 line-start INPUT_ERROR should exit 4, got: $RC_DI1"
 fi
-if grep -qF "/x/y.md" "$DI_DIR/di1.err" 2>/dev/null; then
+if grep -qF "/xx/y.md" "$DI_DIR/di1.err" 2>/dev/null; then
   pass "DI-1a INPUT_ERROR path printed on stderr"
 else
   fail "DI-1a INPUT_ERROR path not printed on stderr"
@@ -424,7 +435,7 @@ else
 fi
 
 # DI-3: INPUT_ERROR only mid-line -> no match, exit 0
-printf 'NEEDS_REVISION\n- the reviewer never emitted INPUT_ERROR /x/y.md here\n' > "$DI_DIR/di3.md"
+printf 'NEEDS_REVISION\n- the reviewer never emitted INPUT_ERROR /xx/y.md here\n' > "$DI_DIR/di3.md"
 RC_DI3="$(_run_detect "$DI_DIR/di3.md" "$DI_DIR/di3.err")"
 if [ "$RC_DI3" = "0" ]; then
   pass "DI-3 mid-line INPUT_ERROR is not matched -> exit 0"
