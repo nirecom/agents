@@ -9,8 +9,8 @@
 // stored. Design: docs/architecture/claude-code/progress-file.md.
 
 const fs = require("fs");
-const { toMillis } = require("./handoff-sidecar");
-const { readLastRiskAt } = require("./handoff-risk-signal");
+const { toMillis } = require("./control-sidecar");
+const { readLastRiskAt } = require("./risk-signal");
 const { readPressure, mergePressure } = require("./progress-file");
 
 // Measured defaults (docs/architecture/claude-code/progress-file.md "Omission-check nudge"):

@@ -94,7 +94,7 @@ case_begin "control-name-validation" "hooks/workflow-state/state-io/control-dir.
 # Names follow ^[A-Za-z0-9][A-Za-z0-9._-]*$ with no '..' — a leading dot or
 # dash, a separator, or a parent reference is refused.
 S="20260601-120001"
-for OK in detail-plan-terminal.txt codex-context.detail-plan.built worker-commit-push-2.json handoff.md wt-cleanup-active; do
+for OK in detail-plan-terminal.txt codex-context.detail-plan.built worker-commit-push-2.json risk-signal.json wt-cleanup-active; do
     check "controlPath accepts the name $OK" "$WF_FWD/$S.control/$OK" "$(res path "$S" "$OK")"
 done
 for BAD in "" ".." "../x" "a/b" 'a\b' ".hidden" "-rf" "a..b" "a b" 'a$b'; do
@@ -173,7 +173,7 @@ for F in hooks/workflow-state/evidence-resolver.js \
          hooks/workflow-state/state-io/review-tests.js \
          hooks/stop-final-report-guard.js \
          hooks/block-memory-direct.js \
-         hooks/lib/handoff-artifact.js \
+         hooks/lib/control-sidecar.js \
          hooks/lib/worktree-cleanup-marker.js \
          hooks/lib/supervisor-state-writer/shared.js; do
     check "$F no longer imports getWorkflowPlansDir" "0" \

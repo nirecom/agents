@@ -32,7 +32,7 @@ process.on("exit", () => {
 
 const ROOT = path.join(__dirname, "..", "..");
 const HOOK = path.join(ROOT, "hooks", "conv-lang-reinject.js");
-const { readSidecar, sidecarPath } = require(path.join(ROOT, "hooks", "lib", "handoff-sidecar"));
+const { readSidecar, sidecarPath } = require(path.join(ROOT, "hooks", "lib", "control-sidecar"));
 const SUFFIX = "conv-lang-reinject.json";
 const KB128 = 128 * 1024;
 const CONV_HEAD = "Respond to the user in japanese.";
@@ -218,7 +218,7 @@ caseBegin("unwritable-sidecar-fails-open", "hooks/conv-lang-reinject.js");
 }
 caseEnd();
 
-caseBegin("sidecar-location", "hooks/lib/handoff-sidecar.js");
+caseBegin("sidecar-location", "hooks/lib/control-sidecar.js");
 {
   check("P1: fixture — the baseline lives under <WORKFLOW_STATE_DIR>/<sid>.control/", () => eq(path.dirname(sidecarPath("rj-first", SUFFIX)), path.join(process.env.WORKFLOW_STATE_DIR, "rj-first.control"), "dir"));
 }

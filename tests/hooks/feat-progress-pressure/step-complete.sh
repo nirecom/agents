@@ -123,7 +123,7 @@ echo "=== 4a: the decision write fails after the cursor moved -> the complete is
 cat > "$PP_TMP/js/fail-nth-pressure-write.js" <<'JS'
 if (/progress-nudge\.js$/.test(String(process.argv[1] || ''))) {
   const fs = require('fs');
-  const hs = require(process.env.AGENTS + '/hooks/lib/handoff-sidecar');
+  const hs = require(process.env.AGENTS + '/hooks/lib/control-sidecar');
   const orig = hs.writeSidecar;
   const nth = Number(process.env.PP_FAIL_PRESSURE_WRITE_NTH);
   let n = 0;

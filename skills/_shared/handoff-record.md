@@ -1,10 +1,10 @@
 # Handoff Record Catalog
 
-What each step writes into the handoff artifact. When to write it is owned by the calling skill's in-skill step; the line grammar is owned by `docs/architecture/claude-code/handoff-artifact.md`.
+What each step writes as a state handoff record in the session's state file. When to write it is owned by the calling skill's in-skill step; the record fields are owned by `docs/architecture/claude-code/state-handoff-record.md`.
 
 Write every entry with `node "$AGENTS_MAIN_ROOT/bin/workflow/handoff-append"`, passing `--class` / `--step` / `--key` / `--summary` / `--pointer` / `--origin procedure-point`.
 
-Outside the workflow active period the CLI writes nothing and prints `WRITTEN=0 REASON=inactive`; continue the procedure unchanged.
+When the record is not written (`no-state`, `outside-period`, `noop-identical`, `overflow`) the CLI names the reason on one stderr line and still exits 0; continue the procedure unchanged.
 
 Use `--pointer -` when no canonical artifact owns the detail.
 

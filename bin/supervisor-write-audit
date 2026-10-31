@@ -207,7 +207,7 @@ if (!ok) {
 // store only (the mirror is a copy of the same verdict). Fail-open.
 if (activeFlags.has("set-audit-verdict")) {
   try {
-    require("../hooks/lib/handoff-auto-record").recordVerdictBreadcrumb(
+    require("../hooks/lib/auto-record").recordVerdictBreadcrumb(
       rawSid, args["set-audit-verdict"], args["set-audit-verdict-summary"]);
   } catch (_e) { /* a lost breadcrumb is not a failed write */ }
 }

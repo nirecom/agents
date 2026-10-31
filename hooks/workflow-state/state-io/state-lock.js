@@ -21,6 +21,8 @@ const DEFAULT_TIMEOUT_MS = 3000;
 const MIN_BACKOFF_MS = 5;
 const MAX_BACKOFF_MS = 25;
 const MAX_REACQUIRE = 2;
+// Delete-pending clears as soon as the reader closes its handle; a longer EPERM is not that.
+const EPERM_RETRY_MS = 500;
 
 class StateLockTimeoutError extends Error {
   constructor(message) {
@@ -49,13 +51,7 @@ function lockPathFor(sessionId) {
   return getStatePath(sessionId) + ".lock";
 }
 
-function readLockPayload(lockPath) {
-  let text;
-  try {
-    text = fs.readFileSync(lockPath, "utf8");
-  } catch (e) {
-    return null;
-  }
+function parseLockPayload(text) {
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -66,24 +62,40 @@ function readLockPayload(lockPath) {
   return parsed;
 }
 
-// Returns a reason string when the on-disk lock may be taken over, else null.
-function staleReason(lockPath) {
-  let stat;
+// Identity of the on-disk lock file, or null when it is gone.
+function lockSnapshot(lockPath) {
   try {
-    stat = fs.statSync(lockPath);
+    const stat = fs.statSync(lockPath);
+    const text = fs.readFileSync(lockPath, "utf8");
+    return { ino: stat.ino, mtimeMs: stat.mtimeMs, size: stat.size, text };
   } catch (e) {
-    return "vanished";
+    return null;
   }
-  if (Date.now() - stat.mtimeMs > STALE_MS) return "age";
+}
 
-  const payload = readLockPayload(lockPath);
+function sameSnapshot(a, b) {
+  return (
+    a !== null && b !== null &&
+    a.ino === b.ino && a.mtimeMs === b.mtimeMs && a.size === b.size && a.text === b.text
+  );
+}
+
+// Returns { reason, snapshot } when the on-disk lock may be taken over, else null.
+// `snapshot` is the identity the judgment was made on, so the caller can refuse
+// to unlink a lock that another process recreated after the judgment.
+function staleReason(lockPath) {
+  const snapshot = lockSnapshot(lockPath);
+  if (!snapshot) return { reason: "vanished", snapshot: null };
+  if (Date.now() - snapshot.mtimeMs > STALE_MS) return { reason: "age", snapshot };
+
+  const payload = parseLockPayload(snapshot.text);
   if (!payload) return null;
   if (typeof payload.host !== "string" || payload.host !== os.hostname()) return null;
   if (typeof payload.pid !== "number" || !Number.isInteger(payload.pid) || payload.pid <= 0) return null;
   try {
     process.kill(payload.pid, 0);
   } catch (e) {
-    if (e && e.code === "ESRCH") return "dead-pid";
+    if (e && e.code === "ESRCH") return { reason: "dead-pid", snapshot };
   }
   return null;
 }
@@ -92,14 +104,25 @@ function acquire(lockPath, timeoutMs) {
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
   const deadline = Date.now() + timeoutMs;
   const payload = JSON.stringify({ pid: process.pid, host: os.hostname(), at: new Date().toISOString() });
+  let epermDeadline = null;
   for (;;) {
     let fd;
     try {
       fd = fs.openSync(lockPath, "wx");
     } catch (e) {
+      // Windows: a lock unlinked while another process still reads it stays delete-pending, and
+      // O_EXCL open fails with EPERM until the last handle closes; a persistent EPERM still surfaces.
+      if (e && e.code === "EPERM" && process.platform === "win32") {
+        if (epermDeadline === null) epermDeadline = Math.min(deadline, Date.now() + EPERM_RETRY_MS);
+        if (Date.now() < epermDeadline) {
+          sleepSync(backoffMs());
+          continue;
+        }
+      }
       if (!e || e.code !== "EEXIST") throw e;
       fd = null;
     }
+    epermDeadline = null;
     if (fd !== null) {
       try {
         fs.writeSync(fd, payload);
@@ -108,14 +131,20 @@ function acquire(lockPath, timeoutMs) {
       }
       return;
     }
-    if (staleReason(lockPath)) {
-      try {
-        fs.unlinkSync(lockPath);
-      } catch (e) {
-        /* another process reclaimed it first */
+    const stale = staleReason(lockPath);
+    if (stale) {
+      // A vanished lock was released by its holder: unlinking would delete a successor's live lock.
+      // Residual window: a reclaim between the re-check and unlinkSync; closing it needs an atomic compare-and-unlink fs lacks.
+      if (stale.reason !== "vanished" && sameSnapshot(stale.snapshot, lockSnapshot(lockPath))) {
+        try {
+          fs.unlinkSync(lockPath);
+        } catch (e) {
+          /* another process reclaimed it first */
+        }
       }
-      continue;
     }
+    // Checked and backed off on every path: a lock that keeps reading as vanished, or a stale one
+    // that will not unlink, must neither spin forever nor burn the CPU until the deadline.
     if (Date.now() >= deadline) {
       throw new StateLockTimeoutError(
         `timed out after ${timeoutMs}ms waiting for workflow state lock: ${lockPath}`

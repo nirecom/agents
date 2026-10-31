@@ -98,7 +98,7 @@ __SID__-user-requested-2544-pre-2561-carryover.md   | user-requested
 __SID__-survey-code.md                              | non-plan
 __SID__-concerns-log.md                             | non-plan
 __SID__-note-topic.md                               | non-plan
-__SID__-handoff.md                                  | non-plan
+__SID__-risk-signal.json                            | non-plan
 # control outranks the artifact reading of the trailing context.md
 __SID__-codex-context.md                            | non-plan
 __SID__-sweep-plans-approved-sessions.txt           | non-plan

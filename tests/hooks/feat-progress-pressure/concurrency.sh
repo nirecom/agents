@@ -3,11 +3,11 @@
 # for any interleaving under correct locking, so the case may miss a race on a given run but
 # never goes red against correct code. Sourced by ../feat-progress-pressure.sh (fixture: _lib.sh).
 
-# burst-records.js <sid> — the number of class B "compaction-burst" lines in handoff.md.
+# burst-records.js <sid> — the number of "compaction-burst" entries the state handoff reader returns.
 cat > "$PP_TMP/js/burst-records.js" <<'JS'
-const { readHandoff } = require(process.env.AGENTS + '/hooks/lib/handoff-artifact');
-const all = [].concat.apply([], Object.values(readHandoff(process.argv[2]).entriesByClass || {}));
-process.stdout.write(String(all.filter((x) => x.key === 'compaction-burst').length));
+const { readStateHandoff } = require(process.env.AGENTS + '/hooks/lib/state-handoff-record');
+const all = readStateHandoff(process.argv[2]).entries || [];
+process.stdout.write(String(all.filter((x) => x.record_key === 'compaction-burst').length));
 JS
 
 # cc_count <needle> <file...> — how many of the hook outputs carry <needle> in additionalContext.

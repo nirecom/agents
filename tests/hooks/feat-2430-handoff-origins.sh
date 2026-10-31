@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # tests/hooks/feat-2430-handoff-origins.sh
-# Tests: hooks/lib/handoff-artifact.js, bin/workflow/handoff-append
-# Tags: handoff, origin, vocabulary, backward-compat, regression-2430, dup-group-keep:size-hard-limit, scope:issue-specific, pwsh-not-required, TL1
-# Split rationale: append target tests/hooks/feat-2218-handoff-artifact.sh is 488 lines; appending O1–O3 (~70 lines) would exceed the 500-line HARD limit.
+# Tests: bin/workflow/handoff-append
+# Tags: handoff, origin, vocabulary, backward-compat, regression-2430, regression-2652, state-handoff-record, dup-group-keep:size-hard-limit, scope:issue-specific, pwsh-not-required, TL1
+# Split rationale: append target tests/hooks/feat-2218-handoff-artifact.sh is near the 500-line HARD limit; the origin cases stay in their own file.
 
-# Issue #2430 — the origin vocabulary is renamed so each value says what produced the entry: "step-end" becomes "procedure-point" (a skill procedure's fixed recording point, not the end of a workflow step) and the mechanical records get their own "auto-record" instead of borrowing "flush". Writers must refuse the retired value so a stale caller surfaces, but handoff files already on disk are append-only history and must still read back in full.
+# Issue #2430 — the origin vocabulary says what produced each record: "procedure-point" (a skill procedure's fixed recording point), "gate-block" and "auto-record". A retired value must be refused so a stale caller surfaces.
+# Since #2652 "gate-block" and "auto-record" are hook-only (written by the hooks through write.js); the CLI refusing them is covered by tests/bin/feature-2652-handoff-append-origins.js.
+# Issue #2652 — the CLI writes a state handoff record (a `state_handoff_record` event in the session's state file) instead of a line in handoff.md, and the main-session "flush" origin retires: its facts live in session-progress.md (rules/progress-update.md). A handoff.md already on disk is history for the state handoff reader (owned by its own tests) and the writer never touches it.
+# Removed with #2652: the HANDOFF_ORIGINS export check, the legacy read-back/render case and readDocumentFile all exercised hooks/lib/handoff-artifact.js, which is deleted; reading legacy handoff.md now belongs to the state handoff reader (legacy-handoff-md.js) and its tests.
+# Module-level checks are not possible here: the test-language gate keeps a bash file from targeting a js module, so every case drives the CLI and reads the state file back.
 
-# TDD (write_code has not run): the vocabulary and rejection cases are expected to FAIL until HANDOFF_ORIGINS is renamed; the legacy read-back cases already hold and pin the compatibility contract.
+# TDD (write_code has not run): the state-file and flush-refusal assertions are expected to FAIL until handoff-append writes state handoff records and refuses flush; the step-end refusal already holds.
 
 set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
-TMP="$(make_tmp)"
+TMP="$(make_tmp)"; readonly TMP
 trap 'rm -rf "$TMP" 2>/dev/null || true' EXIT
 mkdir -p "$TMP/wf" "$TMP/home" "$TMP/transcripts"
 export WORKFLOW_STATE_DIR="$(np "$TMP/wf")"
@@ -20,99 +24,19 @@ export WORKFLOW_PLANS_DIR="$WORKFLOW_STATE_DIR"
 export HOME="$(np "$TMP/home")" USERPROFILE="$(np "$TMP/home")"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP/transcripts")"
 export AGENTS="$(np "$SCRIPT_CHECKOUT_ROOT")"
+unset CLAUDE_CODE_SESSION_ID
 cd "$TMP" || exit 1
 
+CLI="$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append"
 nj() { run_with_timeout 60 node "$(np "$TMP/$1")" "${@:2}" 2>&1; }
 expect() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$3 got=${2:0:300}"; fi; }
-
-# A handoff written before the rename: one step-end entry and one compaction
-# entry recorded under the old borrowed origin.
-cat > "$TMP/wf/legacy-sid-handoff.md" <<'MD'
-# Handoff — legacy-sid
-
-handoff_schema_version: 1
-
-## B
-- 2026-09-01T10:00:00.000Z | flush | - | compaction | context compaction occurred at 2026-09-01T10:00:00.000Z | -
-
-## E
-- 2026-09-01T09:00:00.000Z | step-end | write_tests | commit-push | pushed the red tests | feature/x
-MD
-
-cat > "$TMP/vocab.js" <<'JS'
-const H = require(process.env.AGENTS + '/hooks/lib/handoff-artifact.js');
-const bad = [];
-const want = ['procedure-point', 'gate-block', 'auto-record', 'flush'];
-if (JSON.stringify(H.HANDOFF_ORIGINS) !== JSON.stringify(want)) bad.push('HANDOFF_ORIGINS:' + JSON.stringify(H.HANDOFF_ORIGINS));
-const e = (origin, key) => ({ cls: 'D', step: '-', key, summary: 's', pointer: '-', origin });
-const r = H.appendHandoffEntry('vocab-sid', e('step-end', 'retired'));
-if (r.written !== false || r.reason !== 'invalid') bad.push('step-end-accepted:' + JSON.stringify(r));
-for (const o of want) {
-  const w = H.appendHandoffEntry('vocab-sid', e(o, 'k-' + o));
-  if (w.written !== true) bad.push(o + '-refused:' + JSON.stringify(w));
+# append <sid> <key> <origin> — one CLI call; prints "<stdout+stderr>|rc=N".
+append() {
+    local out rc
+    out="$(run_with_timeout 60 node "$CLI" --session "$1" --class D --step - --key "$2" --summary s --pointer - --origin "$3" 2>&1)"; rc=$?
+    printf '%s|rc=%s' "$out" "$rc"
 }
-process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
-JS
 
-case_begin "origin-vocabulary-is-renamed" "hooks/lib/handoff-artifact.js"
-expect "O1: HANDOFF_ORIGINS is the four renamed values; the writer refuses step-end and accepts each new value" "$(nj vocab.js)" "OK"
-case_end
-
-case_begin "cli-refuses-the-retired-origin" "bin/workflow/handoff-append"
-run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" --session cli-sid --class D --step - --key retired --summary s --pointer - --origin step-end >/dev/null 2>"$TMP/cli.err"
-RC=$?
-expect "O2: --origin step-end exits 2" "$RC" "2"
-expect "O2: the usage names procedure-point as a valid origin" "$(grep -q 'procedure-point' "$TMP/cli.err" && echo yes || echo no)" "yes"
-expect "O2: nothing is written" "$([ -e "$TMP/wf/cli-sid.control/handoff.md" ] || [ -e "$TMP/wf/cli-sid-handoff.md" ] && echo written || echo none)" "none"
-case_end
-
-cat > "$TMP/legacy.js" <<'JS'
-const H = require(process.env.AGENTS + '/hooks/lib/handoff-artifact.js');
-const bad = [];
-const all = () => [].concat.apply([], Object.values(H.readHandoff('legacy-sid').entriesByClass || {}));
-const has = (list, origin, key) => list.some((x) => x.origin === origin && x.key === key);
-let list = all();
-if (list.length !== 2 || !has(list, 'flush', 'compaction') || !has(list, 'step-end', 'commit-push')) bad.push('read:' + JSON.stringify(list));
-const view = H.renderHandoffForResume(H.readHandoff('legacy-sid'));
-if (view.indexOf('pushed the red tests') === -1 || view.indexOf('context compaction occurred') === -1) bad.push('render:' + view);
-if (process.argv[2] === 'append') {
-  const origin = H.HANDOFF_ORIGINS.indexOf('procedure-point') === -1 ? 'gate-block' : 'procedure-point';
-  const w = H.appendHandoffEntry('legacy-sid', { cls: 'E', step: 'run_tests', key: 'new-entry', summary: 'after the rename', pointer: '-', origin });
-  if (w.written !== true) bad.push('append:' + JSON.stringify(w));
-  list = all();
-  if (list.length !== 3 || !has(list, 'flush', 'compaction') || !has(list, 'step-end', 'commit-push')) bad.push('legacy-lost-on-append:' + JSON.stringify(list));
-}
-process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
-JS
-
-case_begin "legacy-origins-still-read-back" "hooks/lib/handoff-artifact.js"
-expect "O3: a pre-rename handoff (step-end, flush compaction) reads and renders in full" "$(nj legacy.js)" "OK"
-expect "O3: appending a new entry keeps every legacy line" "$(nj legacy.js append)" "OK"
-case_end
-
-# #2475: the supervisor codex input assembler reads handoff files through the
-# same reader (CPR-SSOT), so readDocumentFile is exported unchanged.
-cat > "$TMP/readdoc.js" <<'JS'
-const H = require(process.env.AGENTS + '/hooks/lib/handoff-artifact.js');
-const bad = [];
-if (typeof H.readDocumentFile !== 'function') {
-  bad.push('not-exported:' + typeof H.readDocumentFile);
-} else {
-  const p = H.getHandoffPath('legacy-sid');
-  const txt = H.readDocumentFile(p);
-  if (typeof txt !== 'string' || txt.indexOf('pushed the red tests') === -1) bad.push('read:' + JSON.stringify(txt));
-  const missing = H.readDocumentFile(H.getHandoffPath('no-such-sid'));
-  if (missing !== null) bad.push('missing-not-null:' + JSON.stringify(missing));
-}
-process.stdout.write(bad.length ? 'BAD:' + bad.join(' | ') : 'OK');
-JS
-
-case_begin "read-document-file-is-exported" "hooks/lib/handoff-artifact.js"
-expect "O4: readDocumentFile is exported, reads an existing handoff, returns null for a missing one" "$(nj readdoc.js)" "OK"
-case_end
-
-# #2594: session-progress.md's mtime is the nudge baseline now, so a flush no longer
-# writes handoff-flush-mark.json (the --origin flush path itself stays until #2652).
 cat > "$TMP/seed-active.js" <<'JS'
 const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
 const sid = process.argv[2];
@@ -121,13 +45,51 @@ S.markStep(sid, 'workflow_init', 'complete');
 process.stdout.write('seeded');
 JS
 
-case_begin "flush-writes-no-flush-mark" "bin/workflow/handoff-append"
-expect "O5: active session seeded" "$(nj seed-active.js flush-sid)" "seeded"
-O5_OUT="$(run_with_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/workflow/handoff-append" --session flush-sid --class D --step - --key o5-flush --summary s --pointer - --origin flush 2>&1)"
-O5_RC=$?
-expect "O5: --origin flush still exits 0" "$O5_RC" "0"
-expect "O5: --origin flush still writes the entry" "$(printf '%s' "$O5_OUT" | grep -c 'WRITTEN=1')" "1"
-expect "O5: no handoff-flush-mark.json is written" "$([ -e "$TMP/wf/flush-sid.control/handoff-flush-mark.json" ] && echo written || echo none)" "none"
+# recs.js <sid> [key] — the state handoff records in the sid's state file, as
+# "<origin>/<cls>/<record_key>" lines; NOSTATE when the file is absent.
+cat > "$TMP/recs.js" <<'JS'
+const fs = require('fs');
+const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
+const sid = process.argv[2], key = process.argv[3];
+if (!fs.existsSync(S.getStatePath(sid))) { process.stdout.write('NOSTATE'); process.exit(0); }
+let ev = [];
+try { ev = ((S.readRawState(sid) || {}).events || []); } catch (e) { process.stdout.write('READERR:' + e.message); process.exit(0); }
+const recs = ev.filter((e) => e && e.kind === 'state_handoff_record' && (!key || e.record_key === key));
+process.stdout.write(recs.map((e) => e.origin + '/' + e.cls + '/' + e.record_key).join(',') || 'NONE');
+JS
+
+# The CLI's one origin, procedure-point, lands as one state handoff record carrying it, and a
+# handoff.md written before #2652 stays byte-identical (the writer never touches it).
+# gate-block and auto-record are hook-only; their CLI refusal lives in tests/bin/feature-2652-handoff-append-origins.js.
+case_begin "cli-records-each-origin-in-state" "bin/workflow/handoff-append"
+expect "O1: active session seeded" "$(nj seed-active.js vocab-sid)" "seeded"
+mkdir -p "$TMP/wf/vocab-sid.control"
+printf '%s\n' '# Handoff — vocab-sid' '' 'handoff_schema_version: 1' '' '## E' '- 2026-09-01T09:00:00.000Z | step-end | write_tests | commit-push | pushed the red tests | feature/x' > "$TMP/wf/vocab-sid.control/handoff.md"
+cp "$TMP/wf/vocab-sid.control/handoff.md" "$TMP/legacy.before"
+for o in procedure-point; do
+    R="$(append vocab-sid "k-$o" "$o")"
+    expect "O1: --origin $o exits 0" "${R##*|rc=}" "0"
+    expect "O1: --origin $o lands as one state handoff record with that origin" "$(nj recs.js vocab-sid "k-$o")" "$o/D/k-$o"
+done
+expect "O1: the legacy handoff.md is byte-identical after the appends" "$(cmp -s "$TMP/legacy.before" "$TMP/wf/vocab-sid.control/handoff.md" && echo same || echo changed)" "same"
+case_end
+
+# Both retired values — step-end (#2430) and flush (#2652) — exit 2 with the
+# usage on stderr and write nothing.
+case_begin "cli-refuses-the-retired-origin" "bin/workflow/handoff-append"
+expect "O2: active session seeded" "$(nj seed-active.js cli-sid)" "seeded"
+for o in step-end flush; do
+    run_with_timeout 60 node "$CLI" --session cli-sid --class D --step - --key "retired-$o" --summary s --pointer - --origin "$o" >"$TMP/o2.out" 2>"$TMP/o2.err"
+    RC=$?
+    expect "O2: --origin $o exits 2" "$RC" "2"
+    expect "O2: --origin $o: stderr names procedure-point as a valid origin" "$(grep -q 'procedure-point' "$TMP/o2.err" && echo yes || echo no)" "yes"
+    expect "O2: --origin $o: stdout reports no write" "$(grep -c 'WRITTEN=1' "$TMP/o2.out")" "0"
+    expect "O2: --origin $o: no state handoff record is written" "$(nj recs.js cli-sid "retired-$o")" "NONE"
+done
+expect "O2: no handoff.md is written" "$([ -e "$TMP/wf/cli-sid.control/handoff.md" ] && echo written || echo none)" "none"
+expect "O2: no handoff-flush-mark.json is written" "$([ -e "$TMP/wf/cli-sid.control/handoff-flush-mark.json" ] && echo written || echo none)" "none"
+expect "O2: --help's origin list names no flush" "$(run_with_timeout 60 node "$CLI" --help 2>&1 | grep -E -c -- '--origin <origin>.*one of:.*flush')" "0"
+expect "O2: --help's origin list names procedure-point" "$(run_with_timeout 60 node "$CLI" --help 2>&1 | grep -E -c -- '--origin <origin>.*one of:.*procedure-point')" "1"
 case_end
 
 echo ""

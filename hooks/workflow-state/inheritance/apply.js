@@ -56,6 +56,14 @@ function lastOfKind(events, kind) {
   return null;
 }
 
+// A state handoff record belongs to the generation that wrote it: the upstream's stay in the
+// upstream's file (the reader finds them there), the downstream's own travel with it (#2652).
+const GENERATION_LOCAL_KINDS = Object.freeze(["state_handoff_record"]);
+
+function excludeGenerationLocalKinds(events) {
+  return events.filter((e) => !(e && GENERATION_LOCAL_KINDS.includes(e.kind)));
+}
+
 // Steps (3)-(6) of the copy: identity, boundary, and the downstream's own location facts.
 function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) {
   const clone = upstream;
@@ -73,8 +81,11 @@ function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) 
   const downOwn = {};
   for (const kind of ["worktree", "session_model"]) downOwn[kind] = lastOfKind(downEvents, kind);
 
-  const upEvents = clone.events;
-  clone.upstream_copy_seq = upEvents.length ? upEvents[upEvents.length - 1].seq : 0;
+  const downRecords = downEvents.filter((e) => GENERATION_LOCAL_KINDS.includes(e.kind));
+
+  // Renumbered below to 1..n, so the boundary is the filtered count.
+  clone.events = excludeGenerationLocalKinds(clone.events);
+  clone.upstream_copy_seq = clone.events.length;
 
   const downCtx = downstream && downstream.session_start_context;
   if (isPlainObject(downCtx) && JSON.stringify(downCtx) !== JSON.stringify(clone.session_start_context)) {
@@ -87,6 +98,7 @@ function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) 
     const ev = downOwn[kind];
     if (ev) clone.events.push(JSON.parse(JSON.stringify(ev)));
   }
+  for (const ev of downRecords) clone.events.push(JSON.parse(JSON.stringify(ev)));
   clone.events.forEach((e, i) => { e.seq = i + 1; });
   return clone;
 }

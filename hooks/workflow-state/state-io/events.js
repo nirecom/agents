@@ -20,6 +20,7 @@ const EVENT_KINDS = [
   "plan_approval",
   "plan_approval_revoked",
   "reset",
+  "state_handoff_record",
 ];
 
 // How much the recorded `at` can be trusted:
@@ -99,6 +100,7 @@ const REQUIRED_FIELDS = {
   ],
   plan_approval_revoked: ["step", "reason"],
   reset: ["from_step", "reason"],
+  state_handoff_record: ["cls", "at_step", "record_key", "summary", "pointer"],
 };
 
 class InvalidEventError extends Error {
@@ -148,6 +150,10 @@ function validateEvent(event) {
     if (RESERVED_ANNOTATION_KEYS.includes(event.key)) {
       throw new InvalidEventError(`event.key "${event.key}" is reserved and cannot be an annotation`);
     }
+  }
+  if (event.kind === "state_handoff_record") {
+    const recordError = require("./state-handoff-record-schema").stateHandoffRecordError(event);
+    if (recordError) throw new InvalidEventError(recordError);
   }
   if (event.kind === "worktree") {
     if (!WORKTREE_TRANSITIONS.includes(event.transition)) {

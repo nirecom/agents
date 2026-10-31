@@ -84,7 +84,7 @@ run_P2() {
     cat > "$tmp/p2.js" <<'JS'
 const fs = require('fs');
 const { computePressureSignal } = require(process.env.AGENTS + '/hooks/lib/progress-pressure.js');
-const { appendHandoffEntry } = require(process.env.AGENTS + '/hooks/lib/handoff-artifact.js');
+const fx = require(process.env.AGENTS + '/tests/lib/state-handoff-record-fixture.js');
 const D = process.env.TMPD, W = D + '/wf', MiB = 1024 * 1024, t0 = Date.parse('2026-01-01T00:00:00Z');
 const ms = (v) => new Date(v).getTime();
 const ctl = (sid, name) => { fs.mkdirSync(W + '/' + sid + '.control', { recursive: true }); return W + '/' + sid + '.control/' + name; };
@@ -107,12 +107,12 @@ if (!side || side.baseline_bytes !== 5 * MiB || ms(side.baseline_at) !== t0 + 60
 fs.appendFileSync(t, Buffer.alloc(10 * 1024, 122));
 s = computePressureSignal({ sid: 'a', transcriptPath: t, now: t0 + 120000 });
 if (!s || s.shouldNudge !== false) problems.push('re-fired-next-turn:' + JSON.stringify(s));
-// (d) auto-record / gate-block / procedure-point entries after the baseline do not move it.
+// (d) auto-record / gate-block / procedure-point state handoff records after the baseline do not move it.
 t = D + '/d.jsonl';
 fs.writeFileSync(ctl('d', 'progress-pressure.json'), JSON.stringify({ baseline_bytes: 0, baseline_at: t0 }));
-for (const origin of ['auto-record', 'gate-block', 'procedure-point']) {
-  appendHandoffEntry('d', { cls: 'C', step: '-', key: 'k-' + origin, summary: 's', pointer: '-', origin });
-}
+fx.makeState('d', W);
+fx.pushEvents('d', ['auto-record', 'gate-block', 'procedure-point'].map((origin) => fx.record({ record_key: 'k-' + origin, origin })));
+
 fs.writeFileSync(t, Buffer.alloc(2 * MiB, 120));
 s = computePressureSignal({ sid: 'd', transcriptPath: t, now: t0 + 60000 });
 if (!s || s.shouldNudge !== true) problems.push('hook-writes-silenced-the-check:' + JSON.stringify(s));

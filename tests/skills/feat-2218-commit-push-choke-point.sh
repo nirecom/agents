@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # tests/skills/feat-2218-commit-push-choke-point.sh
-# Tests: skills/commit-push/SKILL.md, skills/_shared/commit-push-dispatch.md, hooks/lib/handoff-artifact.js
-# Tags: commit-push, handoff, choke-point, class-d, class-e, static-check, table-driven, regression-2218, scope:issue-specific, pwsh-not-required, TL1
+# Tests: skills/commit-push/SKILL.md, skills/_shared/commit-push-dispatch.md
+# Tags: commit-push, handoff, choke-point, class-d, class-e, static-check, table-driven, regression-2218, regression-2652, state-handoff-record, scope:issue-specific, pwsh-not-required, TL1
 
 # Issue #2218 Step 12 — the worker outcomes are the last thing a session learns before it stops, and eight of them stop it (commit_timeout added by #2762). Since #2527 the outcome lines live in skills/_shared/commit-push-dispatch.md "## Outcomes" (shared by /commit-push and /merge-to-main): every outcome keeps a line, every line names its class (record blocked / record landed), the class-to-key mapping line names commit-push:blocked / commit-push:pushed, and SKILL.md does not grow.
 
 # TL3 gap: CP-2 is prompt text, so nothing here proves a model actually emits the recording call at runtime — only that the instruction covers all twelve outcomes and that the step's size invariant holds. Full behavioral verification requires running /commit-push end to end against a real worker dispatch (all eight blocked outcomes and all four success outcomes), which no automated layer in this repo drives. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: workflow-state.
+
+# Issue #2652 — the recording call (bin/workflow/handoff-append) keeps its name and flags but now writes a state handoff record into the session's state file; hooks/lib/handoff-artifact.js is deleted, so it left the Tests: header. Where the record lands is pinned by the CLI's own tests (tests/hooks/feat-2218-handoff-artifact.sh), not here.
 
 # TDD (write_code has not run): G2 is expected to FAIL — the outcome lines carry no handoff key yet. G1/G3 are structural invariants and are GREEN by design.
 

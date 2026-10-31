@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/block-clearance-token-write/placement-guard.js, hooks/lib/plans-artifact-registry.json
-// Tags: TL2, hooks, jev, placement-guard, plans-unregistered, registry, classifier, scope:issue-specific
+// Tags: TL2, hooks, jev, placement-guard, plans-unregistered, registry, classifier, scope:issue-specific, legacy-handoff, regression-2652
 // #2677: the Jev two-stage answer file (<sid>-jev-<16hex>-answer.txt) the backup subagent writes
 // is a registered plans artifact, so the placement guard lets the Write through; the Jev input and
 // a non-ticket-shaped name stay unregistered (the kind regex is no wider than the ticket shape).
@@ -62,4 +62,30 @@ test("artifactKinds has kind jev-answer, retention non-plan, and no control kind
   assert.strictEqual(re.test(`jev-${TID}-input.md`), false, "source does not match the Jev input file name");
   assert.strictEqual((reg.controlKinds || []).some((k) => k.kind === "jev-answer"), false);
 });
+caseEnd();
+
+// #2652: the retired handoff files stay registered as control kind legacy-handoff, read through the
+// registry loader the plans-dir lint and the control-dir migration use; near-miss names stay unregistered.
+caseBegin("registry-legacy-handoff-control-kind", "hooks/lib/plans-artifact-registry.json");
+{
+  const { parsePlansEntry, classifyPlansEntry } = require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "lib", "plans-artifact-registry.js"));
+  const cases = [
+    { name: "handoff-md", input: "handoff.md", want: "legacy-handoff" },
+    { name: "handoff-risk", input: "handoff-risk.json", want: "legacy-handoff" },
+    { name: "handoff-pressure", input: "handoff-pressure.json", want: "legacy-handoff" },
+    { name: "handoff-flush-mark", input: "handoff-flush-mark.json", want: "legacy-handoff" },
+    { name: "mdx-suffix", input: "handoff.mdx", want: "unregistered" },
+    { name: "x-prefix", input: "xhandoff.md", want: "unregistered" },
+    { name: "bak-suffix", input: "handoff.md.bak", want: "unregistered" },
+    { name: "other-json", input: "handoff-other.json", want: "unregistered" },
+  ];
+  for (const { name, input, want } of cases) {
+    test(`${name}: <sid>-${input} -> ${want}`, () => {
+      const file = `${SID}-${input}`;
+      const parsed = parsePlansEntry(file);
+      const got = parsed && parsed.verdict === "control" ? parsed.kind : classifyPlansEntry(file, CTX);
+      assert.strictEqual(got, want, `${name}: parsed=${JSON.stringify(parsed)}`);
+    });
+  }
+}
 caseEnd();
