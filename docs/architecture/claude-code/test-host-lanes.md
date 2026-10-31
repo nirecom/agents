@@ -70,7 +70,7 @@ fixed notice; a missing or rejected record shows its reason token and the calibr
 hint. The status line also carries `mode=on|off` and `runs=<active run count>`.
 
 The mode switches only the automatic parts: the measured record, the calibration
-offer and load scale-in. The fair share below applies in both modes.
+offer and load scale-in. The run-all per-run lane cap below applies in both modes.
 
 When the measured record warrants a new calibration, the lanes, plan and status lines
 add advice (`re-run RUN_CALIBRATION=1 bash bin/calibrate-test-parallelism.sh`,
@@ -87,7 +87,7 @@ the note `measured up to <n>`: the same corpus would not widen it, so no questio
 raised each time. The same OS-version drift note (`measured on X, now Y`) still
 applies. The advice shows only while the record decides the value.
 
-### Fair share
+### Run-all per-run lane cap, slow start and the lane allocation
 
 Each run-all keeps a presence record `runs/run.<token>` (the lane owner format plus its
 demanded max jobs per run and its own max jobs per host) and refreshes it with the same
@@ -95,37 +95,56 @@ heartbeat as its lanes. The records, ordered by start, make up the **active run 
 waiting runs included. Presence records go stale and are reclaimed by exactly the lane
 liveness rule below, through the same reclaim function.
 
-- The run-all lane pool is the smallest max jobs per host among the present records,
-  minus 1, minus the load scale-in, never below 1. Taking the smallest keeps a worktree
-  whose `.env` differs from widening the budget (#2545).
-- Each run's **fair share** is a max-min split of that pool, capped at its max jobs per
-  run (unlimited means the test count). Remainders and the unused part of a capped
-  run go one by one to the earliest runs. Example, max jobs per host 12 and no per-run
-  cap: 1 run gets 11, 2 get 6 and 5, 3 get 4, 4 and 3.
-- When the active run count exceeds the pool, the first pool runs get 1 and the later
-  ones get 0 and wait for a lane. The shares never sum to more than the pool.
-- find-tests takes 1 lane, searching from the max jobs per host downward, so the last
-  lane stays free for it. The single exception to the pool formula is a max jobs per
-  host of 1: the pool is still 1, because run-all could not move otherwise, and with the
-  find-tests lane the host may briefly hold one lane more — the behaviour that existed
-  before.
-- A run-all starts its heartbeat before it asks for a lane, so waiting is covered. It
-  waits while its fair share is 0 (one notice), bounded by the wait cap below, then
-  takes its first lanes through `thl_acquire`.
-- The share is re-evaluated at every entry-script end. Growing takes lanes that are free
-  now (one reclaim sweep, never a wait); shrinking releases the highest-numbered lanes
-  down to the larger of the new share and the jobs still running. Both paths keep the
-  run's token and its set of held lanes, so release at exit covers lanes taken later.
-- With nothing running and a share of 0 (the pool shrank under load), the run polls
-  until a lane is available. The wait is not capped by the wait cap but honors the run
-  deadline.
-- A partial grant runs at the narrower width instead of waiting. `--print-plan` applies
-  the same width rule without a lease, and `bin/test-lanes-status.sh` lists presence
-  records beside the lanes.
+**One allocator per host.** Each heartbeat, the run that holds the claim on the run-all
+lane allocation sample (`load/sample` under the run-all cache directory) measures the
+host once and decides every run's width in the same step, then writes one row per run
+token (`alloc.<token>=<width> <ssthresh> <cap> <decided_by>`; sample generation 2).
+Every other run only reads its own row. Measurement and allocation are serialized by the
+claim, so all widths come from the same input and sum to within the pool; no resident
+process is needed. A run on pre-#2692 code rejects generation 2 and falls back to the old
+per-run computation; lane acquisition is atomic, so lanes are never double-held.
 
-The deviation from the share comes only from the moment of re-evaluation. Running jobs
-are never stopped, so a run with long entry scripts holds more than its fair share until
-they finish; later runs get less, or wait, meanwhile.
+- The run-all lane pool is the smallest max jobs per host among the present records,
+  minus 1, minus the load scale-in, capped by the memory limit, never below 1. Taking the
+  smallest keeps a worktree whose `.env` differs from widening the budget (#2545).
+- Each run's **run-all per-run lane cap** is a max-min split of that pool, capped at its
+  max jobs per run (unlimited means the test count). Remainders and the unused part of a
+  capped run go one by one to the earliest runs. It is computed from demand, not from
+  current widths, so a late run's share stays reserved. Example, max jobs per host 12 and
+  no per-run cap: 1 run gets 11, 2 get 6 and 5, 3 get 4, 4 and 3.
+- When the active run count exceeds the pool, the first pool runs get 1 and the later
+  ones get 0 and wait for a lane.
+- **Slow start** (RFC 5681) sets the width inside the cap. A new run starts at 4 lanes,
+  limited by its cap and the free lanes. At each new sample the width doubles below
+  ssthresh and grows by 1 at or above it, up to the cap. It grows only when the sample is
+  measured, the previous sample was fresh, no load scale-in or memory limit applies, a
+  host lane is free and the run has used up its current width. It drops straight to a new
+  lower cap; a CPU or memory limit also lowers ssthresh to that cap (at least 2). A stale
+  or failed sample keeps every width. A run with no row yet takes only its initial width
+  from free lanes until the next sample, a delay of one heartbeat at most. Even a lone run
+  needs several heartbeats to reach the full cap; the cost is accepted so that a start-up
+  burst of sessions cannot promise lanes it cannot give.
+- **decided_by** names what set the width: `per-run-cap`, `cpu-load-limit` (load
+  scale-in), `memory-limit`, or `slow-start` (still growing). The run-all lanes log
+  (`per-run lane cap N among M runs, decided by <x>`) and the status line show the same
+  token.
+- find-tests takes 1 lane, searching from the max jobs per host downward, so the last
+  lane stays free for it; it is not subject to slow start. The single exception to the
+  pool formula is a max jobs per host of 1: the pool is still 1, because run-all could
+  not move otherwise, and with the find-tests lane the host may briefly hold one lane more.
+- A run-all starts its heartbeat before it asks for a lane, so waiting is covered. It
+  waits while its start width is 0 (one notice), bounded by the wait cap below.
+- A run re-evaluates at each new run-all lane allocation sample and at every entry-script
+  end: it reads its own row, then takes free lanes (one reclaim sweep, never a wait) or
+  releases the highest-numbered lanes down to the larger of the row's width and the jobs
+  still running. Both keep the run's token, so release at exit covers lanes taken later.
+- With nothing running and a width of 0, the run polls until a lane is available. The
+  wait is not capped by the wait cap but honors the run deadline.
+- `--print-plan` applies the same width rule without a lease, and
+  `bin/test-lanes-status.sh` lists presence records and their rows beside the lanes.
+
+Running jobs are never stopped, so a run with long entry scripts holds more than its cap
+until they finish; later runs get less, or wait, meanwhile.
 
 ### Why slots, and why load scale-in on top
 
@@ -135,36 +154,44 @@ measuring on Windows meant launching PowerShell at every acquisition. That reaso
 not hold when the host takes one sample per heartbeat period, so load scale-in was
 added **on top of** the lanes: it only lowers the pool.
 
-**Estimate.** External load is the host's busy CPU time minus the CPU time of the tests'
-own process tree. Subtracting the held-lane count instead would count tests that wait
-on I/O as load and shrink the pool for no reason. One heartbeat per host (guarded by an
-atomic `load/.claim` directory, reclaimed after 3 heartbeats) takes a snapshot, compares
-it with the last one and writes `load/sample`; every run reads it with the
-non-evaluating reader and ignores a sample older than 3 heartbeats.
+**External load and reserved cores.** External load is the summed CPU of the live
+processes, in logical CPUs, minus the **agents internal** processes: every run-all test
+process tree, and processes whose executable name is exactly `claude` (case-insensitive,
+optional `.exe`) with their descendants. Names match exactly, never by substring (a
+substring match once misclassified third-party tools). Short-lived processes are not
+counted, so external load can read low (accepted: the earlier overestimate, which counted
+Claude Code and test children as load, shrank the pool far more often). Host-wide CPU is
+used only to sanity-check a sample and for the status display. **Reserved cores** are the
+logical CPUs minus the calibrated max jobs per host (4 on the reference host); the tests
+may run at full width while that many cores stay free for other applications. Load
+scale-in therefore ignores external load up to the reserved cores and removes one lane
+per whole core above them (1 lane back per core when it falls again).
 
-**Counters per OS.**
+**Who measures.** The claim holder takes one snapshot per heartbeat (atomic `load/.claim`
+directory, reclaimed after 3 heartbeats; the claim records its holder's heartbeat, which
+the reclaimer uses). A tick that outlives 2 heartbeats is void and writes nothing, so a
+reclaimed holder cannot overwrite its successor's sample. Host-wide quantities (per-CPU
+times, free and total memory) come from node's host API on all three OSes; per-process
+quantities (pid, parent, name, CPU, memory) come from `/proc` on Linux, one PowerShell
+call on Windows (bounded to the shorter of 20 s and one heartbeat) and `ps` on macOS.
+Every run reads the sample with the non-evaluating reader and ignores one older than 3
+heartbeats (stale: widths are held, never grown).
 
-| OS | Host busy counter | Own tree |
-|---|---|---|
-| Linux | `/proc/stat` | `/proc/<pid>/stat` descendants of the lane and presence owners |
-| Windows | Per-processor idle counters from one PowerShell call (bounded to 20 s) | Process table of the same call; owner pids mapped through `/proc/<pid>/winpid` |
-| macOS | None readable without a compiled helper: `host_counter=process-sum` | `ps` table |
+**Memory limit.** Free memory means memory available at once (Linux `available`
+equivalent on every OS). When it falls below the reserve, max(2048 MB, 10% of total),
+the lanes shed are ceil((reserve - free) / per-lane), where per-lane is the larger of
+512 MB and the tests' own memory divided by the lanes they hold; the limit is the held
+lanes minus that, at least 1, and the smaller of it and the CPU pool wins. Above the
+reserve, or when memory cannot be measured, there is no limit.
 
-Only macOS takes the process-sum path by design; it is also the fallback when the
-Windows counters cannot be read. The sample records which was used (`host_counter`).
+**Unmeasurable.** An unreadable probe, a malformed snapshot, a missing previous snapshot
+or a counter that went backwards makes the sample `unmeasurable`: nothing shrinks and
+nothing grows.
 
-**Limits.** With the system counter, short-lived children of the tests that start and
-exit inside the interval count in the host total but not in the own share, so external
-load can be overestimated (shrinking too much). With the process sum, external
-processes that exit inside the interval are missed (shrinking too little, the safe
-side). An unreadable probe, a malformed snapshot, a missing previous snapshot, no
-resolvable own root or a host counter that went backwards makes the sample
-`unmeasurable`, and nothing shrinks.
-
-**Hysteresis.** The pool shrinks by the whole cores of external load once the load is at
-least 100 centicores for 2 consecutive samples, and returns after 3 consecutive samples
-below 50. Values in between hold the state, so one spike or one lull does not move the
-pool.
+**Hysteresis.** The pool shrinks by the whole cores of external load above the reserved
+cores once that excess is at least 100 centicores for 2 consecutive samples, and returns
+after 3 consecutive samples below 50. Values in between hold the state, so one spike or
+one lull does not move the pool.
 
 The calibrator is untouched by this: the load sample is not a calibration and writes no
 record (`test-runner-parallelism.md` Section 5).
@@ -178,11 +205,11 @@ accepts.
 
 **Heartbeat.** Only run-all, whose lease can outlive the TTL, runs a background
 heartbeat. It refreshes every lane and presence record that carries the run's token, so
-lanes taken after it started are covered, and in mode `on` it also drives the load
-sample. It holds no fd to the parent, so a worker's `spawnSync` still ends, and it is
+lanes taken after it started are covered, and in mode `on` the claim holder also
+drives the run-all lane allocation sample. It holds no fd to the parent, so a worker's `spawnSync` still ends, and it is
 stopped on every exit path.
 
-**Waiting.** When every lane is busy, or the fair share is 0, the caller waits, prints one notice naming
+**Waiting.** When every lane is busy, or the start width is 0, the caller waits, prints one notice naming
 `bash bin/test-lanes-status.sh`, and fails closed with **exit 4** at the cap: 540 s
 for find-tests (inside the 600 s Bash tool limit) and 1800 s for run-all, lowered to
 `--deadline` when that is smaller. Exit 4 emits no `Results:` or `RUN_CONTRACT:` line.
@@ -197,14 +224,14 @@ cap the width is bounded by the run-all lane pool instead and the note says so.
 
 **Unwritable cache directory.** When `slots/` cannot be created, the caller prints one
 notice and runs without a lane at the width the rule allows, and it stops re-evaluating
-the share. Load control is a courtesy between sessions, so a broken cache directory must
+the lane width. Load control is a courtesy between sessions, so a broken cache directory must
 never block a test run.
 
 **Write scope.** find-tests is auto-approved as a self-script. With the cache and lanes
 it now writes, but only under the run-all cache directory: `corpus/` entries and their
 retention, and `slots/` lanes, including reclaiming stale ones. run-all additionally
-writes its presence record under `runs/` and the shared load sample and snapshot under
-`load/`. Nothing is written in the repository.
+writes its presence record under `runs/` and the shared run-all lane allocation sample and snapshot
+under `load/`. Nothing is written in the repository.
 
 ## 4. Where things live
 
@@ -212,9 +239,12 @@ writes its presence record under `runs/` and the shared load sample and snapshot
 |---|---|
 | `bin/lib/test-corpus-cache.sh` | Cache key, non-evaluating loader, atomic writer with retention |
 | `bin/lib/test-host-lanes.sh` | Max jobs per host, width rule, lease, reclaim, heartbeat, release, status listing |
-| `bin/lib/test-host-lanes-share.sh` | Presence records, fair share, re-evaluation, waiting for a share |
-| `bin/lib/test-host-load.sh` | Load sample reader and writer, hysteresis, the pure external-load computation |
-| `bin/lib/test-host-load-probe.sh` | Per-OS snapshot of the host counter and the process table |
-| `bin/test-lanes-status.sh` | Read-only listing of lane holders and presence records |
+| `bin/lib/test-host-lanes-share.sh` | Presence records, run-all per-run lane cap, re-evaluation, waiting for a start width |
+| `bin/lib/test-host-alloc.sh` | Claim holder's allocation: memory limit, slow start, `decided_by` |
+| `bin/lib/test-host-load.sh` | Claim, hysteresis, the pure computation of external load |
+| `bin/lib/test-host-load-sample.sh` | Reader and writer of the run-all lane allocation sample (generation 2) |
+| `bin/lib/test-host-load-probe.sh` | Per-OS process table (name, CPU, memory) and host quantities |
+| `bin/lib/test-host-lanes-status.sh`, `bin/test-lanes-status.sh` | Read-only listing of the pool, the sample, lane holders and presence records |
 | `tests/bin/feature-2455-test-load-control/` | Cache, lanes, run-all lease and fork-count cases |
-| `tests/bin/feature-2687-test-host-lanes-share/`, `tests/bin/feature-2687-test-host-load/` | Fair share, re-evaluation and load scale-in cases |
+| `tests/bin/feature-2687-test-host-lanes-share/`, `tests/bin/feature-2687-test-host-load/` | Cases for the run-all per-run lane cap, re-evaluation, claim and load scale-in |
+| `tests/bin/feature-2692-test-host-alloc/`, `tests/bin/feature-2692-test-lanes-status.sh` | Slow start, memory limit, stale sample, `decided_by` and status cases |

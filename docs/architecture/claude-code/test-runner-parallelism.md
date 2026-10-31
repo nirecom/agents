@@ -140,9 +140,9 @@ When in doubt, the call goes to the serial side.
 **Two limits bound the width.** The **max jobs per run** is what one invocation asks
 for: `-j` > environment > `.env`. `-j auto` or the value `auto` passes to the next
 layer, an empty environment value counts as unset, and an empty or `auto` result means
-no per-run cap in both modes: the **fair share** of the run-all lane pool is then the
+no per-run cap in both modes: the **run-all per-run lane cap** (inside it, slow start decides the current width) is then the
 effective limit. The **max jobs per host** caps all runs on the machine together
-through the host lane lease; its resolution order, the fair share, the lease and the
+through the host lane lease; its resolution order, the run-all per-run lane cap, slow start, the lease and the
 `TEST_LANES*` knobs are owned by `test-host-lanes.md` ("Resolution order of max jobs
 per host").
 
@@ -474,7 +474,7 @@ every report line: [test-result-contract.md](test-result-contract.md).
 | `bin/lib/run-all-classify.sh`, `bin/lib/run-all-report.sh`, `bin/lib/timed-exec.sh` | Unit state, report lines and `neutralize_stream`, per-file timeout ([test-result-contract.md](test-result-contract.md)); sourced, never executed |
 | `bin/lib/run-all-ledger-migrate.sh` | Time-limited carry-over of pre-#2079 duration and baseline segments; sourced, never executed |
 | `bin/calibrate-test-parallelism.sh` | The measurement tool (modules in `bin/calibrate-test-parallelism/`); unreachable from a normal run |
-| `bin/lib/test-host-lanes.sh` | Max jobs per host, the host width rule, and the lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed. Its siblings `test-host-lanes-share.sh`, `test-host-load.sh` and `test-host-load-probe.sh` hold the fair share and load scale-in (`test-host-lanes.md`) |
+| `bin/lib/test-host-lanes.sh` | Max jobs per host, the host width rule, and the lane lease shared with `bin/find-tests-for-source.sh`; sourced, never executed. Its siblings `test-host-lanes-share.sh`, `test-host-alloc.sh`, `test-host-load.sh` and `test-host-load-probe.sh` hold the run-all per-run lane cap, slow start, the memory limit and load scale-in (`test-host-lanes.md`) |
 | `bin/test-lanes-status.sh` | Read-only listing of who holds which lane |
 | `bin/worker-dispatch/workers/test-runner.js` | Prepends `--deadline` and `-j` when building the runner argv |
 | `tests/tests/feature-1832-run-all-parallel/` | The suite covering every invariant above |

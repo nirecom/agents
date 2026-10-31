@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2687-test-host-lanes-share.sh
 # Tests: bin/lib/test-host-lanes-share.sh, bin/lib/test-host-lanes.sh, tests/run-all.sh
-# Tags: TL2, scope:issue-specific, lanes, fair-share, run-all
+# Tags: TL2, scope:issue-specific, lanes, fair-share, run-all, slow-start, per-run-cap, rebalance-on-sample
 # Serial: concurrent run-all fixtures and heartbeat timing must not compete with other tests
-# Dispatcher for #2687 / #2506 stage 3: presence records, fair share, per-entry-script rebalance.
+# Dispatcher for #2687 / #2506 stage 3: presence records, run-all per-run lane cap, per-entry-script rebalance.
 # TL3 gap (what this test does NOT catch):
 # - real Windows PowerShell load counters and real external load (3D games, builds) on this host
 # - several real Claude sessions running full suites at once; the fixture runs only dummies
@@ -115,8 +115,10 @@ else
     fail "GRP2 case file completion mismatch" "sourced-but-unfinished: [${GRP_UNFINISHED:-none}] marked-but-not-sourced: [${GRP_UNEXPECTED:-none}]"
 fi
 
-# CASE1 — every planned case id reported at least once (FS15 = the max-jobs-per-host-1 floor).
-CASE_EXPECTED="FS1 FS2 FS3 FS4 FS5 FS6 FS7 FS8 FS9 FS10 FS11 FS12 FS13 FS14 FS15 FS16"
+# CASE1 — every planned case id reported at least once (FS15 = the max-jobs-per-host-1 floor;
+# FS17-FS20 = the #2692 start width, burst and width-line cases; FS21 = stale sample -> tick -> rebalance;
+# FS22-FS23 = thl_sample_new and the run-all rebalance on a new sample while every job runs).
+CASE_EXPECTED="FS1 FS2 FS3 FS4 FS5 FS6 FS7 FS8 FS9 FS10 FS11 FS12 FS13 FS14 FS15 FS16 FS17 FS18 FS19 FS20 FS21 FS22 FS23"
 CASE_MISSING=""
 for _c in $CASE_EXPECTED; do
     case " $CASE_RAN " in

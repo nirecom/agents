@@ -78,14 +78,19 @@ drv_inv() {
     printf '%s=g%ss%so%s\n' "$1" "$THL_GRANTED" "$s" "$(own_lanes)"
 }
 
-# fs_row <pool> <demand...> — inside the driver: every position's share, space-joined.
+# fs_row <pool> <demand...> — inside the driver: every position's run-all per-run lane cap from
+# _thl_per_run_cap_all (#2692 rename), space-joined. The result array is the one THL_*ALLOC
+# array the share lib defines (its name is not part of the contract); "?" when none is filled.
 fs_row() {
-    local pool="$1" n i out=""; shift
+    local pool="$1" n i a arr="" out=""; shift
     n=$#
+    declare -F _thl_per_run_cap_all >/dev/null 2>&1 || { printf '%s\n' "no _thl_per_run_cap_all"; return 0; }
+    _thl_per_run_cap_all "$pool" "$@"
+    for a in $(compgen -A arrayvar THL_); do
+        case "$a" in *ALLOC) arr="$a"; break ;; esac
+    done
     for ((i = 0; i < n; i++)); do
-        THL_FAIR_SHARE=""
-        _thl_fair_share_compute "$pool" "$i" "$@"
-        out="$out ${THL_FAIR_SHARE:-?}"
+        if [ -n "$arr" ]; then a="$arr[$i]"; out="$out ${!a:-?}"; else out="$out ?"; fi
     done
     printf '%s\n' "${out# }"
 }
@@ -97,8 +102,11 @@ row_sum() {
     printf '%s' "$s"
 }
 
+# shellcheck source=../../lib/load-sample2-fixture.sh
+. "$AGENTS_ROOT/tests/lib/load-sample2-fixture.sh"
+
 DRV_HELPERS="$TMPDIR_BASE/share-drv-helpers.sh"
-declare -f now_epoch mk_slot mk_presence own_lanes drv_inv fs_row > "$DRV_HELPERS"
+{ declare -p LS2_KEYS; declare -f now_epoch mk_slot mk_presence own_lanes drv_inv fs_row ls2_write; } > "$DRV_HELPERS"
 
 cpu_shim() {
     mkdir -p "$1"
@@ -107,13 +115,19 @@ cpu_shim() {
 }
 CPU_SHIM_DIR="$TMPDIR_BASE/cpu-shim-1024"
 cpu_shim "$CPU_SHIM_DIR" 1024
+CPU4_SHIM_DIR="$TMPDIR_BASE/cpu-shim-4"
+cpu_shim "$CPU4_SHIM_DIR" 4
+
+# hold_claim <cache> — a fresh load/.claim, so no heartbeat tick of the driver writes load/sample
+# and each case's own ls2_write sample stays the one the reader sees.
+hold_claim() { [ -d "$1" ] && mkdir -p "$1/load/.claim"; return 0; }
 
 # The driver sources both libs and requires the share lib (#2687 ③) to have been loaded by them.
 LANES_DRV="$TMPDIR_BASE/share-drv.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'set -u' \
     '. "$DRV_PAR_LIB" 2>/dev/null || { echo "DRV: parallelism lib missing" >&2; exit 90; }' \
     '. "$DRV_LANES_LIB" 2>/dev/null || { echo "DRV: lanes lib missing" >&2; exit 91; }' \
-    'declare -F _thl_fair_share_compute >/dev/null 2>&1 || { echo "DRV: share lib not loaded (not implemented)" >&2; exit 92; }' \
+    'declare -F thl_rebalance >/dev/null 2>&1 || { echo "DRV: share lib not loaded (not implemented)" >&2; exit 92; }' \
     '. "$DRV_HELPERS"' \
     'eval "$1"' > "$LANES_DRV"
 
@@ -127,6 +141,7 @@ lanes_drv() {
     while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do envs+=("$1"); shift; done
     [ "$#" -gt 0 ] && shift
     local outf="$TMPDIR_BASE/drv.out" errf="$TMPDIR_BASE/drv.err"
+    hold_claim "$cache"
     (
         cd "$NEUTRAL_DIR" || exit 2
         bash "$RUN_TIMEOUT" 60 env "DRV_PAR_LIB=$PAR_LIB" "DRV_LANES_LIB=$LANES_LIB" "DRV_HELPERS=$DRV_HELPERS" \
@@ -144,6 +159,7 @@ lanes_drv_bg() {
     local -a envs=()
     while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do envs+=("$1"); shift; done
     [ "$#" -gt 0 ] && shift
+    hold_claim "$cache"
     (
         cd "$NEUTRAL_DIR" || exit 2
         bash "$RUN_TIMEOUT" 60 env "DRV_PAR_LIB=$PAR_LIB" "DRV_LANES_LIB=$LANES_LIB" "DRV_HELPERS=$DRV_HELPERS" \
@@ -213,6 +229,16 @@ log_overlap() {
         $1 == a { na++ } $1 == ea { na-- } $1 == b { nb++ } $1 == eb { nb-- }
         { if (na > 0 && nb > 0) o = 1 }
         END { printf "%d", o + 0 }' "$1"
+}
+
+# log_order <log> <tagA> <tagB> — `<max tagA inside while a tagB is inside> <1 when the first +tagB
+# precedes the last -tagA>`, counted the way log_overlap counts.
+log_order() {
+    [ -f "$1" ] || { printf '0 0'; return 0; }
+    awk -v a="+$2" -v b="+$3" -v ea="-$2" -v eb="-$3" '
+        $1 == a { na++ } $1 == ea { na--; lea = NR } $1 == b { nb++; if (!fb) fb = NR } $1 == eb { nb-- }
+        { if (nb > 0 && na > m) m = na }
+        END { printf "%d %d", m + 0, (fb && fb < lea) ? 1 : 0 }' "$1"
 }
 
 # wait_grep <secs> <file> <fixed-string> — 0 when the file carries the string in time (0.5s polls).

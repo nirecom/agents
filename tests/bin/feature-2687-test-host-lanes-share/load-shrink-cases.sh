@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2687-test-host-lanes-share/load-shrink-cases.sh — FS14: a load scale-in
-# shrinks the pool to 1 mid-run, so the later of two run-alls drops to fair share 0 and waits.
+# shrinks the pool to 1 mid-run, so the later of two run-alls drops to per-run lane cap 0 and waits.
 # Running jobs are never stopped, so only two things are asserted: (a) starts after a shrink
 # obey the latest width, (b) once every pre-shrink job ended, the combined inflight <= pool 1.
 
 case_begin "run-all-load-shrink" "tests/run-all.sh"
 
-r_reset; TEST_MAX_JOBS_PER_HOST=4; AUTO_CONFIG_TEST_MAX_JOBS=on; TEST_LANES_HEARTBEAT=1
+# Heartbeat 3: at 1 a loaded host misses the 2-heartbeat freshness window for the previous sample.
+r_reset; TEST_MAX_JOBS_PER_HOST=4; AUTO_CONFIG_TEST_MAX_JOBS=on; TEST_LANES_HEARTBEAT=3
 TEST_LANES_WAIT_CAP=60; TEST_LANES_WAIT_INTERVAL=1
 # A valid schema-3 record for this host, so mode on never starts a calibration in the fixture.
 FS14_HID="$(bash -c '. "$1"; run_all_host_id' _ "$PAR_LIB")"
 FS14_OS="$(bash -c '. "$1"; command -v run_all_os_attr >/dev/null 2>&1 && run_all_os_attr' _ "$PAR_LIB")"
-printf 'schema=3\nhost_id=%s\nos=%s\nmax_jobs_per_host=4\nmeasured_at=2026-01-01T00:00:00Z\nsample_size=3\nrepeat=1\nlogical_cpu_count=1024\nmax_width_measured=1024\nwidth_limit=logical-cpu-count\n' \
+printf 'schema=3\nhost_id=%s\nos=%s\nmax_jobs_per_host=4\nmeasured_at=2026-01-01T00:00:00Z\nsample_size=3\nrepeat=1\nlogical_cpu_count=4\nmax_width_measured=4\nwidth_limit=logical-cpu-count\n' \
     "$FS14_HID" "$FS14_OS" > "$FX_CACHE_DIR/parallelism.conf"
 
-# The probe stub: host busy time grows at 2 cores while the mode file says busy, 0 otherwise;
-# every own root (presence record and lane owners) is listed with 0 CPU, so external = host.
+# The format-2 probe stub: game.exe and the host busy time grow at 2 cores while the mode file
+# says busy, 0 otherwise; every own root (presence record and lane owner) is listed with 0 CPU.
+# 4 logical CPUs and max jobs per host 4 make reserved cores 0, so 2 external cores scale in 2.
+FS14_PATH_SAVE="$FX_PATH_PREFIX"; FX_PATH_PREFIX="$CPU4_SHIM_DIR"
 FS14_DIR="$FX_TMP_ROOT/fs14"; mkdir -p "$FS14_DIR"
 export FS14_MODE_FILE="$FS14_DIR/mode" FS14_ACC_FILE="$FS14_DIR/acc" FS14_CACHE="$FX_CACHE_DIR"
 printf 'idle\n' > "$FS14_MODE_FILE"
@@ -30,7 +33,8 @@ read -r pw pb < "$FS14_ACC_FILE" 2>/dev/null
 rate=0; [ "$mode" = busy ] && rate=2
 busy=$((pb + rate * (now - pw)))
 printf '%s %s\n' "$now" "$busy" > "$FS14_ACC_FILE"
-printf 'wall_ms=%s\nhost_busy_ms=%s\n' "$now" "$busy"
+printf 'wall_ms=%s\nsnapshot=2\nhost_busy_ms=%s\nhost_cpus=4\n' "$now" "$busy"
+printf '7100 1 %s 4096 game.exe\n' "$((busy - 1000000))"
 seen=" "
 for f in "$FS14_CACHE"/runs/run.*/owner "$FS14_CACHE"/slots/lane.*/owner; do
     p="$(sed -n 's/^pid=//p' "$f" 2>/dev/null)"
@@ -39,7 +43,7 @@ for f in "$FS14_CACHE"/runs/run.*/owner "$FS14_CACHE"/slots/lane.*/owner; do
         [ -n "$q" ] || continue
         case "$seen" in *" $q "*) continue ;; esac
         seen="$seen$q "
-        printf '%s 1 0\n' "$q"
+        printf '%s 1 0 1024 bash\n' "$q"
     done
 done
 exit 0
@@ -48,7 +52,8 @@ chmod +x "$FS14_PROBE"
 export TEST_LANES_LOAD_PROBE_CMD="$FS14_PROBE"
 
 FS14_LOG="$FX_TMP_ROOT/fs14.log"; rm -f "$FS14_LOG"
-FS14A="$(fs_root 30 a "$FS14_LOG" 1)"
+# Run A's 3s tests: with thirty 1s tests it would end before the scale-in engages.
+FS14A="$(fs_root 30 a "$FS14_LOG" 3)"
 FS14B="$(fs_root 30 b "$FS14_LOG" 1)"
 FS14_EA="$FX_TMP_ROOT/fs14a.err"; FS14_EB="$FX_TMP_ROOT/fs14b.err"
 fx_exec_bg "$FS14A" "$FX_TMP_ROOT/fs14a.out" "$FS14_EA" --all; FS14_PA="$FX_BG_PID"
@@ -57,11 +62,11 @@ fx_exec_bg "$FS14B" "$FX_TMP_ROOT/fs14b.out" "$FS14_EB" --all; FS14_PB="$FX_BG_P
 fx_wait_file 30 "$FS14B/pids/b1.self"
 printf 'busy\n' > "$FS14_MODE_FILE"
 FS14_SHRUNK=0
-if wait_grep 20 "$FS14_EA" "load scale-in 2" && wait_grep 10 "$FS14_EB" "load scale-in 2"; then
+if wait_grep 40 "$FS14_EA" "load scale-in 2" && wait_grep 20 "$FS14_EB" "load scale-in 2"; then
     FS14_SHRUNK=1
     pass "FS14 both runs report the load scale-in width change"
 else
-    fail "FS14 no 'load scale-in 2' width line in both runs within 30s (not implemented?)" \
+    fail "FS14 no 'load scale-in 2' width line in both runs within 60s (not implemented?)" \
         "a=$(printf '%q' "$(grep 'lanes' "$FS14_EA" 2>/dev/null)") b=$(printf '%q' "$(grep 'lanes' "$FS14_EB" 2>/dev/null)")"
 fi
 FS14_TSEEN="$(fx_now_ms)"
@@ -137,6 +142,7 @@ assert_eq "FS14 no presence record left" "" "$(run_names "$FX_CACHE_DIR")"
 case_ran FS14
 
 unset TEST_LANES_LOAD_PROBE_CMD FS14_MODE_FILE FS14_ACC_FILE FS14_CACHE
+FX_PATH_PREFIX="$FS14_PATH_SAVE"
 rm -f "$FX_CACHE_DIR/parallelism.conf"
 r_reset
 case_end
