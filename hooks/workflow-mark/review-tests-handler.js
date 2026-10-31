@@ -20,6 +20,7 @@ const {
   markReviewTestsComplete,
   clearReviewTestsWarnings,
   clearReviewTestsTerminalMarker,
+  clearReviewTestsUnreviewed,
   markStep,
   readState,
 } = require("../workflow-state");
@@ -86,7 +87,8 @@ function verifyFingerprint(label, payload, ctx) {
 }
 
 const NOTHING_TO_ACCEPT_MSG =
-  "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) or reviewed (in_progress, with terminal / continuing / fallback evidence) state; state unchanged.";
+  "nothing to accept — review_tests has no warnings and is not in a recoverable reopened (pending) or in_progress state " +
+  "(terminal / continuing / fallback / unreviewed evidence); state unchanged.";
 
 function acceptedMessage(outcome, manifest) {
   switch (outcome) {
@@ -98,6 +100,9 @@ function acceptedMessage(outcome, manifest) {
       return "continuing review (exit 1/5) accepted — review_tests restored to complete (current review scope recorded).";
     case CLEAR_OUTCOME.RECOVERED_FALLBACK:
       return "fallback review (exit 3, NEEDS_REVISION) accepted — review_tests restored to complete (current review scope recorded).";
+    case CLEAR_OUTCOME.RECOVERED_UNREVIEWED:
+      return "unreviewed scope accepted — no review completed on this scope; review_tests restored to complete without a review " +
+        "(current review scope recorded).";
     case CLEAR_OUTCOME.STALE_EVIDENCE:
       return "review_tests state unchanged — the review scope changed after the review, so its warnings cannot be accepted; " +
         "re-run /review-tests on the current scope.";
@@ -109,6 +114,11 @@ function acceptedMessage(outcome, manifest) {
     default:
       return NOTHING_TO_ACCEPT_MSG;
   }
+}
+
+// A recorded review result supersedes RT-2's "not reviewed yet" evidence (#2842). Fail-open.
+function clearUnreviewedMarker(sessionId) {
+  try { clearReviewTestsUnreviewed(sessionId); } catch (_) { /* the result is already recorded */ }
 }
 
 function backfillWriteTests(sessionId, repoCwd, pushMessage) {
@@ -136,6 +146,7 @@ function handle(ctx) {
     if (!files) return true;
     try {
       markReviewTestsComplete(sessionId, files);
+      clearUnreviewedMarker(sessionId);
       pushMessage(`[workflow] review_tests: complete (fingerprint: ${fingerprintOfManifest(files)}).`);
       backfillWriteTests(sessionId, repoCwd, pushMessage);
     } catch (e) {
@@ -154,6 +165,7 @@ function handle(ctx) {
     if (!files) return true;
     try {
       markReviewTestsComplete(sessionId, files, { warnings_summary: payload });
+      clearUnreviewedMarker(sessionId);
       pushMessage(
         `[workflow] /review-tests reported warnings: ${payload} — ` +
           "re-run /write-tests to address coverage gaps, then /review-tests again."
@@ -171,7 +183,8 @@ function handle(ctx) {
   // so the gate unblocks /write-code.
   // A write_code-reopened (pending) review_tests is restored to complete (#2482).
   // in_progress with a terminal record (#2491), or with exit-1/5 / exit-3 fallback evidence
-  // pinned to the current review scope (#2664), is also restored to complete.
+  // pinned to the current review scope (#2664), or with no review result at all (#2842: RT-2's
+  // unreviewed marker, rc 3 without a fresh fallback-raw), is also restored to complete.
   const acceptedMatch = cmd.match(REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ);
   if (acceptedMatch) {
     const reason = acceptedMatch[1];

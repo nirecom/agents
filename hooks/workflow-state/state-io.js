@@ -65,6 +65,8 @@ module.exports = {
   markReviewTestsComplete: reviewTests.markReviewTestsComplete,
   clearReviewTestsWarnings: reviewTests.clearReviewTestsWarnings,
   clearReviewTestsTerminalMarker: reviewTests.clearReviewTestsTerminalMarker,
+  recordReviewTestsUnreviewed: reviewTests.recordReviewTestsUnreviewed,
+  clearReviewTestsUnreviewed: reviewTests.clearReviewTestsUnreviewed,
   recordWriteCodeCompletionScope: reviewTests.recordWriteCodeCompletionScope,
   REVIEW_TESTS_REOPEN_REASONS: reviewTests.REVIEW_TESTS_REOPEN_REASONS,
   buildReviewScopeAnnotation: reviewTests.buildReviewScopeAnnotation,

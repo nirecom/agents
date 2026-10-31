@@ -3,6 +3,9 @@
 // re-review delta. Reads staged blobs (one `git cat-file --batch`), writes them to a temp dir and
 // lets bin/review-scope-header-targets.sh (the bash SSOT tokenizer) parse them in one bash run.
 // REVIEW_SCOPE_HEADER_TARGETS_BASH overrides the bash executable — a test seam only.
+// Timeout (this module is its SSOT): min(20000 + 100 * <staged test count>, 300000) ms, applied to
+// both the git cat-file read and the bash run; REVIEW_SCOPE_HEADER_TARGETS_TIMEOUT_MS, when a
+// positive integer, replaces it as given (uncapped).
 // Any failure yields { ok: false, error }, which the caller turns into a full review.
 
 const fs = require("fs");
@@ -15,7 +18,16 @@ const { toWindowsPath } = require("../../hooks/lib/branch-diff");
 
 const SCRIPT = posixJoin(__dirname, "..", "review-scope-header-targets.sh");
 const MAX_BUFFER = 8 * 1024 * 1024;
-const TIMEOUT_MS = 20000;
+const BASE_TIMEOUT_MS = 20000;
+const PER_TEST_TIMEOUT_MS = 100;
+const MAX_SCALED_TIMEOUT_MS = 300000;
+const TIMEOUT_ENV = "REVIEW_SCOPE_HEADER_TARGETS_TIMEOUT_MS";
+
+function headerMapTimeoutMs(testCount, env = process.env) {
+  const raw = env && env[TIMEOUT_ENV];
+  if (typeof raw === "string" && /^[1-9]\d*$/.test(raw)) return Number(raw);
+  return Math.min(BASE_TIMEOUT_MS + PER_TEST_TIMEOUT_MS * testCount, MAX_SCALED_TIMEOUT_MS);
+}
 
 function setKey(obj, key, value) {
   Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
@@ -40,10 +52,10 @@ function parseHeaderTargetsOutput(buf, expectedPaths) {
 }
 
 // One `git cat-file --batch` for every OID → Buffer[] in order; throws on missing / non-blob.
-function readBlobs(repoDir, oids) {
-  const res = spawnSync("git", ["cat-file", "--batch"], {
+function readBlobs(repoDir, oids, timeoutMs, runGit) {
+  const res = runGit("git", ["cat-file", "--batch"], {
     cwd: repoDir, input: oids.map((o) => `${o}\n`).join(""),
-    timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER, windowsHide: true,
+    timeout: timeoutMs, maxBuffer: MAX_BUFFER, windowsHide: true,
   });
   if (res.error) throw res.error;
   if (res.status !== 0) throw new Error(`git cat-file exited ${res.status}: ${String(res.stderr || "").trim()}`);
@@ -79,12 +91,14 @@ function bashFailure(res) {
 // files: the review-scope manifest's { path: blobOid }. → { ok: true, targets } | { ok: false, error }.
 function buildHeaderTargets(repoDir, files, opts) {
   const runBash = (opts && opts.runBash) || defaultRunBash;
+  const runGit = (opts && opts.runGit) || spawnSync;
   const tests = Object.keys(files || {})
     .filter((p) => isReviewScopeTestPath(p) && !isReviewScopeExcludedPath(p)).sort();
   if (tests.length === 0) return { ok: true, targets: {} };
+  const timeoutMs = headerMapTimeoutMs(tests.length);
   let tmp = null;
   try {
-    const blobs = readBlobs(toWindowsPath(repoDir), tests.map((p) => files[p]));
+    const blobs = readBlobs(toWindowsPath(repoDir), tests.map((p) => files[p]), timeoutMs, runGit);
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "review-scope-header-targets-"));
     tests.forEach((rel, i) => {
       const dest = path.join(tmp, rel);
@@ -94,7 +108,7 @@ function buildHeaderTargets(repoDir, files, opts) {
     const bashExe = process.env.REVIEW_SCOPE_HEADER_TARGETS_BASH || "bash";
     const res = runBash(bashExe, [SCRIPT, posixJoin(tmp)], {
       input: Buffer.from(tests.map((p) => `${p}\0`).join(""), "utf8"),
-      timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER, windowsHide: true,
+      timeout: timeoutMs, maxBuffer: MAX_BUFFER, windowsHide: true,
     });
     const failure = bashFailure(res || { error: new Error("no result") });
     if (failure) return { ok: false, error: failure };
@@ -112,4 +126,4 @@ function buildHeaderTargets(repoDir, files, opts) {
   }
 }
 
-module.exports = { buildHeaderTargets, parseHeaderTargetsOutput };
+module.exports = { buildHeaderTargets, headerMapTimeoutMs, parseHeaderTargetsOutput };

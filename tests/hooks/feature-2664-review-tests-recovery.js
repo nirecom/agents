@@ -1,10 +1,11 @@
 "use strict";
 // Tests: hooks/workflow-state/state-io/review-tests.js, hooks/workflow-mark/review-tests-handler.js
-// Tags: TL2, workflow, review-tests, warnings-accepted, recovery, fallback-raw, scope:issue-specific
+// Tags: TL2, workflow, review-tests, warnings-accepted, recovery, fallback-raw, scope:issue-specific, unreviewed
 // #2664 item 2 — WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED recovers an in_progress review_tests not
 // only after a terminal exit (rc 2/6) but also after exit 1/5 (continuing marker) and after an
 // exit 3 fallback that ended NEEDS_REVISION — each only while the review scope still matches the
-// fingerprint the marker pinned (T-RT1..T-RT9).
+// fingerprint the marker pinned (T-RT1..T-RT9). #2842 (UA-*): also with no review result — the RT-2
+// unreviewed marker and rc 3 with a missing / older fallback-raw; wsid markers via owner or pointer.
 // TL3 gap (what this test does NOT catch):
 // - the real run-codex-review-loop.sh writing the markers (tests/skills/feature-2664-review-tests-continuing-marker.sh)
 // - a real claude -p session firing the PostToolUse hook for the ACCEPTED sentinel
@@ -29,6 +30,7 @@ process.env.AGENTS_MAIN_ROOT = CFG;
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = path.join(TMP, "transcripts");
 delete process.env.CLAUDE_PROJECT_DIR;
 delete process.env.WORKFLOW_SESSION_ID;
+delete process.env.REVIEW_SCOPE_HEADER_TARGETS_BASH;
 after(() => { restore(); fs.rmSync(TMP, { recursive: true, force: true }); });
 
 const STATE = process.env.WORKFLOW_STATE_DIR;
@@ -36,7 +38,10 @@ const PLANS = process.env.WORKFLOW_PLANS_DIR;
 const REASON = "user accepts remaining gaps";
 const ACCEPT = `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: ${REASON}>>"`;
 const NOTHING = "nothing to accept";
+const UNREVIEWED = "test-review-unreviewed.txt";
 const ev = require(path.join(ROOT, "hooks", "workflow-gate", "review-tests-evidence.js"));
+const stateIo = require(path.join(ROOT, "hooks", "workflow-state", "state-io.js"));
+const BAD_BASH = path.join(TMP, "no-such-dir", "bash").replace(/\\/g, "/");
 
 const git = (dir, ...a) => {
   const r = spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
@@ -48,7 +53,7 @@ const stage = (repo, rel, body) => {
   git(repo, "add", "--", rel);
 };
 let seq = 0;
-// repo(wsid) -> a repo with tests/x.sh and hooks/impl.js staged; wsid names a WORKTREE_NOTES.md
+// repo(wsid) -> a repo with tests/x.sh (Tests: hooks/impl.js) and hooks/impl.js staged; wsid names a WORKTREE_NOTES.md
 // Session-ID (left unstaged) that makes the workflow session id differ from the CC session id.
 function repo(wsid) {
   const d = path.join(TMP, `repo-${++seq}`).replace(/\\/g, "/");
@@ -58,7 +63,7 @@ function repo(wsid) {
   fs.writeFileSync(path.join(d, "README.md"), "seed\n");
   git(d, "add", "README.md");
   git(d, "commit", "-qm", "init");
-  stage(d, "tests/x.sh", "echo x");
+  stage(d, "tests/x.sh", "#!/usr/bin/env bash\n# Tests: hooks/impl.js");
   stage(d, "hooks/impl.js", "impl");
   if (wsid) fs.writeFileSync(path.join(d, "WORKTREE_NOTES.md"), `# notes\n\nSession-ID: ${wsid}\n`);
   return d;
@@ -73,14 +78,14 @@ function seed(sid) {
   for (const s of ["run_tests", "review_security", "docs", "review_docs", "user_verification", "cleanup", "pre_final_report_gate", "final_report"]) steps[s] = { status: "pending" };
   fs.writeFileSync(path.join(STATE, `${sid}.json`), JSON.stringify({ version: 1, session_id: sid, steps, closes_issues: [2664] }));
 }
-// marker(sid, kind, rc, line2) -> the control marker path (kind: "terminal" | "continuing").
-function marker(sid, kind, rc, line2) {
-  const dir = path.join(STATE, `${sid}.control`);
-  fs.mkdirSync(dir, { recursive: true });
-  const p = path.join(dir, `test-review-${kind}.txt`);
-  fs.writeFileSync(p, `${rc}\n${line2 == null ? "" : line2}\n`);
-  return p;
+const ctl = (sid, name) => path.join(STATE, `${sid}.control`, name);
+function put(sid, name, body) {
+  fs.mkdirSync(path.join(STATE, `${sid}.control`), { recursive: true });
+  fs.writeFileSync(ctl(sid, name), body);
+  return ctl(sid, name);
 }
+// marker(sid, kind, rc, line2) -> the control marker path (kind: "terminal" | "continuing" | "unreviewed").
+const marker = (sid, kind, rc, line2) => put(sid, `test-review-${kind}.txt`, `${rc}\n${line2 == null ? "" : line2}\n`);
 // fallbackRaw(sid, firstLine, markerPath, offsetSec) — the exit-3 fallback output, its mtime set
 // offsetSec relative to the marker's; firstLine "" writes a file with no non-empty line at all.
 // The fallback reviewer's NEEDS_REVISION is the RT-5 WARNINGS outcome (SKILL.md exit 3 row), so
@@ -101,14 +106,16 @@ function glossary(sid, d) {
   spawnSync(process.execPath, [path.join(ROOT, "bin", "check-glossary-drift"), "--session", sid, "--stage", "tests", "--record"],
     { cwd: d, env, encoding: "utf8", timeout: 60000 });
 }
-// send(sid, d, wsid) -> stdout+stderr of the real workflow-mark.js hook on the ACCEPTED sentinel.
-function send(sid, d, wsid) {
+// send(sid, d, wsid, opts) -> stdout+stderr of the real workflow-mark.js hook on opts.cmd (default: the
+// ACCEPTED sentinel); opts.ccSid exports CLAUDE_CODE_SESSION_ID.
+function send(sid, d, wsid, opts = {}) {
   glossary(sid, d);
   if (wsid) glossary(wsid, d);
   const env = Object.assign({}, process.env);
   delete env.CLAUDE_PROJECT_DIR;
   delete env.CLAUDE_CODE_SESSION_ID;
-  const input = JSON.stringify({ session_id: sid, tool_name: "Bash", tool_input: { command: ACCEPT }, cwd: d });
+  if (opts.ccSid) env.CLAUDE_CODE_SESSION_ID = opts.ccSid;
+  const input = JSON.stringify({ session_id: sid, tool_name: "Bash", tool_input: { command: opts.cmd || ACCEPT }, cwd: d });
   const r = spawnSync(process.execPath, [path.join(ROOT, "hooks", "workflow-mark.js")],
     { input, env, cwd: d, encoding: "utf8", timeout: 60000 });
   assert.ok(!r.error, `hook ran: ${r.error && r.error.message}`);
@@ -127,6 +134,21 @@ const recoverySources = (sid) => (rawState(sid).events || [])
   .map((e) => JSON.stringify(e)).join("\n");
 let sidSeq = 0;
 const sidOf = (tag) => `rt${tag}${++sidSeq}sid`;
+// selectScope(sid, d, env) -> stdout of the real RT-2 CLI (it writes the unreviewed marker on a full selection).
+function selectScope(sid, d, env) {
+  const r = spawnSync(process.execPath, [path.join(ROOT, "bin", "select-review-scope.js"), "--session", sid, "--worktree", d],
+    { env: Object.assign({}, process.env, env || {}), encoding: "utf8", timeout: 60000 });
+  assert.strictEqual(r.status, 0, `select-review-scope: ${r.stderr}`);
+  return r.stdout;
+}
+const recordManifest = (sid, d) => stateIo.appendEvents(sid, [{
+  kind: "step_annotation", step: "review_tests", key: "review_scope_manifest",
+  value: { v: 1, files: ev.computeReviewScopeManifest(d).files }, provenance: "observed", origin: "review-tests-complete",
+}]);
+function assertRecovered(sid, out, source, label) {
+  assert.strictEqual(status(sid), "complete", `${label}: restored to complete (${out})`);
+  assert.ok(recoverySources(sid).includes(source), `${label}: recovery source ${source}: ${recoverySources(sid)}`);
+}
 
 caseBegin("rt-continuing-marker-recovers", "hooks/workflow-state/state-io/review-tests.js");
 test("control: terminal rc 6 recovers through this fixture (line 2 is not compared)", () => {
@@ -174,9 +196,9 @@ test("T-RT8: no wsid resolves -> the fallback-raw under the CC session id is use
 caseEnd();
 
 caseBegin("rt-fallback-invalid-stays-in-progress", "hooks/workflow-state/state-io/review-tests.js");
-test("T-RT4: rc 3 without a NEEDS_REVISION fallback-raw (missing / APPROVED / INPUT_ERROR / empty / garbage / older) stays in_progress", () => {
-  const scenes = [["missing", null, 0], ["approved", "APPROVED", 2], ["inputerror", "INPUT_ERROR tests/x.sh", 2],
-    ["empty", "", 2], ["garbage", "LGTM ship it", 2], ["older", "NEEDS_REVISION", -60]];
+test("T-RT4: rc 3 with a fallback-raw that ran but is not NEEDS_REVISION (APPROVED / INPUT_ERROR / empty / garbage) stays in_progress", () => {
+  const scenes = [["approved", "APPROVED", 2], ["inputerror", "INPUT_ERROR tests/x.sh", 2],
+    ["empty", "", 2], ["garbage", "LGTM ship it", 2]];
   for (const [label, first, offset] of scenes) {
     const d = repo();
     const sid = sidOf(`f4${label}`);
@@ -295,8 +317,8 @@ caseEnd();
 caseBegin("rt-refusal-writes-nothing", "hooks/workflow-state/state-io/review-tests.js");
 test("T-RT12 (C3): an invalid fallback-raw or a stale marker writes no approval reason and no recovery event", () => {
   const scenes = [
-    ["missing", null, 0, false], ["approved", "APPROVED", 2, false], ["inputerror", "INPUT_ERROR tests/x.sh", 2, false],
-    ["empty", "", 2, false], ["garbage", "LGTM ship it", 2, false], ["older", "NEEDS_REVISION", -60, false],
+    ["approved", "APPROVED", 2, false], ["inputerror", "INPUT_ERROR tests/x.sh", 2, false],
+    ["empty", "", 2, false], ["garbage", "LGTM ship it", 2, false],
     ["stale", "NEEDS_REVISION", 2, true],
   ];
   for (const [label, first, offset, moved] of scenes) {
@@ -343,11 +365,13 @@ test("T-RT6: continuing marker rc 7 / empty / abc -> in_progress (fail-closed)",
 caseEnd();
 
 caseBegin("rt-stale-evidence-refused", "hooks/workflow-mark/review-tests-handler.js");
-test("T-RT7: the scope moved after the marker (or line 2 is empty) -> STALE_EVIDENCE: in_progress, marker kept", () => {
+test("T-RT7 / UA-c / UA-g2: the scope moved after the marker (or line 2 is empty) -> STALE_EVIDENCE: in_progress, marker kept", () => {
   const scenes = [
     ["continuing-moved", "continuing", "1", true, false],
     ["fallback-moved", "terminal", "3", true, true],
     ["continuing-empty-line2", "continuing", "1", false, false],
+    ["UA-c unreviewed-moved", "unreviewed", "scope-full:no-record", true, false],
+    ["UA-g2 terminal3-empty-line2", "terminal", "3", false, false],
   ];
   for (const [label, kind, rc, pin, withFallback] of scenes) {
     const d = repo();
@@ -360,6 +384,112 @@ test("T-RT7: the scope moved after the marker (or line 2 is empty) -> STALE_EVID
     assert.strictEqual(status(sid), "in_progress", `${label}: not recovered (${out})`);
     assert.ok(fs.existsSync(m), `${label}: the marker is kept so the next review can re-judge`);
     assert.ok(!out.includes(NOTHING) && out.includes("/review-tests"), `${label}: tells the user to re-run /review-tests: ${out}`);
+  }
+});
+caseEnd();
+
+caseBegin("ua-scope-full-marker-accepted", "hooks/workflow-state/state-io/review-tests.js");
+test("UA-a: full/header-map-unavailable leaves a marker; ACCEPTED -> complete with unreviewed-scope-full source, marker gone", () => {
+  const d = repo();
+  const sid = sidOf("ua");
+  seed(sid);
+  recordManifest(sid, d);
+  stage(d, "hooks/impl.js", "impl v2");
+  assert.ok(selectScope(sid, d, { REVIEW_SCOPE_HEADER_TARGETS_BASH: BAD_BASH }).includes("header-map-unavailable"), "fixture reaches header-map-unavailable");
+  assert.ok(fs.existsSync(ctl(sid, UNREVIEWED)), "RT-2 wrote the unreviewed marker");
+  assert.deepStrictEqual(fs.readFileSync(ctl(sid, UNREVIEWED), "utf8").split(/\r?\n/).slice(0, 2), ["scope-full:header-map-unavailable", fp(d)]);
+  const out = send(sid, d);
+  assertRecovered(sid, out, "unreviewed-scope-full:header-map-unavailable", "UA-a");
+  assert.strictEqual(fs.existsSync(ctl(sid, UNREVIEWED)), false, "accepting removes the marker");
+});
+test("UA-b: the marker does not depend on REASON — no-record and explicit-rereview recover the same way", () => {
+  for (const [reason, arrange] of [["no-record", () => {}], ["explicit-rereview", (sid, d) => recordManifest(sid, d)]]) {
+    const d = repo();
+    const sid = sidOf(`ub${reason.length}`);
+    seed(sid);
+    arrange(sid, d);
+    assert.ok(selectScope(sid, d).includes(reason), `${reason}: fixture reaches the reason`);
+    const out = send(sid, d);
+    assertRecovered(sid, out, `unreviewed-scope-full:${reason}`, reason);
+  }
+});
+test("UA-e: an accepted COMPLETE sentinel removes the unreviewed marker", () => {
+  const d = repo();
+  const sid = sidOf("ue");
+  seed(sid);
+  marker(sid, "unreviewed", "scope-full:no-record", fp(d));
+  const out = send(sid, d, null, { cmd: `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=${fp(d)}>>"` });
+  assert.strictEqual(status(sid), "complete", out);
+  assert.strictEqual(fs.existsSync(ctl(sid, UNREVIEWED)), false, "COMPLETE clears the marker");
+});
+caseEnd();
+
+caseBegin("ua-terminal-3-without-fallback", "hooks/workflow-state/state-io/review-tests.js");
+// APPROVED / INPUT_ERROR (T-RT4) and NEEDS_REVISION (T-RT3, T-RT8) keep their outcome; only a fallback that never ran is new.
+test("UA-g: rc 3 pinned with the fallback-raw missing or older than the marker -> complete (source unreviewed-terminal-3)", () => {
+  for (const [label, offset] of [["missing", null], ["older", -60]]) {
+    const d = repo();
+    const sid = sidOf(`ug${label}`);
+    seed(sid);
+    const m = marker(sid, "terminal", "3", fp(d));
+    if (offset !== null) fallbackRaw(sid, "NEEDS_REVISION", m, offset);
+    assertRecovered(sid, send(sid, d), "unreviewed-terminal-3", label);
+  }
+});
+test("UA-h: terminal rc 2 with an empty line 2 is still accepted on line 1 alone", () => {
+  const d = repo();
+  const sid = sidOf("uh");
+  seed(sid);
+  marker(sid, "terminal", "2", "");
+  const out = send(sid, d);
+  assert.strictEqual(status(sid), "complete", out);
+});
+caseEnd();
+
+caseBegin("ua-wsid-markers", "hooks/workflow-state/state-io/review-tests.js");
+test("UA-i: markers only under an owned ambient wsid are judged and removed (terminal 3, continuing 1)", () => {
+  for (const [kind, rc, source] of [["terminal", "3", "unreviewed-terminal-3"], ["continuing", "1", "continuing"]]) {
+    const wsid = `${sidOf("uiw")}wf`;
+    const d = repo(wsid);
+    const sid = sidOf(`ui${kind}`);
+    seed(sid);
+    ownWsid(wsid, sid);
+    const m = marker(wsid, kind, rc, fp(d));
+    const out = send(sid, d, wsid);
+    assertRecovered(sid, out, source, `wsid ${kind}`);
+    assert.strictEqual(fs.existsSync(m), false, `wsid ${kind}: the wsid-side marker is removed`);
+  }
+});
+test("UA-j: a wsid owned by another CC session, with no pointer, is not read — nothing to accept, marker kept", () => {
+  const wsid = `${sidOf("ujw")}wf`;
+  const d = repo(wsid);
+  const sid = sidOf("uj");
+  seed(sid);
+  ownWsid(wsid, "some-other-session");
+  const m = marker(wsid, "terminal", "3", fp(d));
+  const out = send(sid, d, wsid);
+  assert.strictEqual(status(sid), "in_progress", out);
+  assert.ok(out.includes(NOTHING) && out.includes("unreviewed"), `nothing-to-accept names the unreviewed evidence: ${out}`);
+  assert.ok(fs.existsSync(m), "the foreign marker is kept");
+});
+test("UA-k: wsid != CC sid, ambient wsid = CC sid -> the CC-side pointer reaches the wsid terminal; an invalid pointer is ignored", () => {
+  for (const [label, pointer, want] of [["pointer", null, "complete"], ["bad-pointer", "../x", "in_progress"]]) {
+    const wsid = `${sidOf("ukw")}wf`;
+    const d = repo();
+    const sid = sidOf(`uk${label}`);
+    seed(sid);
+    fs.writeFileSync(path.join(PLANS, `${sid}-intent.md`), "# intent\n");
+    const m = marker(wsid, "terminal", "3", fp(d));
+    put(sid, "test-review-wsid.txt", `${pointer === null ? wsid : pointer}\n`);
+    const out = send(sid, d, null, { ccSid: sid });
+    assert.strictEqual(status(sid), want, `${label}: ${out}`);
+    if (want === "complete") {
+      assert.ok(recoverySources(sid).includes("unreviewed-terminal-3"), `${label}: ${recoverySources(sid)}`);
+      assert.strictEqual(fs.existsSync(m), false, `${label}: the wsid terminal is removed`);
+    } else {
+      assert.ok(out.includes(NOTHING), `${label}: nothing to accept: ${out}`);
+      assert.ok(fs.existsSync(m), `${label}: the marker is kept (fail-closed)`);
+    }
   }
 });
 caseEnd();

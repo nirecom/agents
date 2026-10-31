@@ -5,17 +5,14 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # append-vs-new check only ever applies to a test file that was just created: a
 # Modified path is the result of an append that already happened, so it carries
 # no missed-append signal. Default output is unchanged.
-ADDED_ONLY=0
+# The listing CLI under bin/ drops merge-incoming paths during a merge (#2842).
+ADDED_ONLY_FLAG=()
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    --added-only) ADDED_ONLY=1; shift ;;
+    --added-only) ADDED_ONLY_FLAG=(--added-only); shift ;;
     *) echo "[review-tests] ERROR: unknown option: $1" >&2; exit 2 ;;
   esac
 done
-DIFF_FILTER=()
-if [[ "$ADDED_ONLY" -eq 1 ]]; then
-  DIFF_FILTER=(--diff-filter=A)
-fi
 # Resolve the CC session id explicitly (SSOT: bin/resolve-session-id), then hand it
 # to the worktree resolver via --session. Only rc 2 means "no session" and omits the
 # flag; any other rc is a bridge fault and halts with exit 4 (distinct from the
@@ -30,7 +27,7 @@ esac
 WORKTREE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-worktree-path" ${CC_SID:+--session "$CC_SID"})"
 if [[ "$WORKTREE" == "NOSTATE" ]]; then
   # Test fixture / first-run: no session state. Use CWD as fallback.
-  git diff --cached ${DIFF_FILTER[@]+"${DIFF_FILTER[@]}"} --name-only
+  node "$SCRIPT_CHECKOUT_ROOT/bin/list-staged-review-paths.js" --repo "$PWD" ${ADDED_ONLY_FLAG[@]+"${ADDED_ONLY_FLAG[@]}"}
   exit 0
 elif [[ -z "$WORKTREE" ]]; then
   # Resolution failed (main worktree rejected or session state missing).
@@ -38,4 +35,4 @@ elif [[ -z "$WORKTREE" ]]; then
   exit 3
 fi
 # Linked worktree resolved: list staged files in that worktree only.
-git -C "$WORKTREE" diff --cached ${DIFF_FILTER[@]+"${DIFF_FILTER[@]}"} --name-only
+node "$SCRIPT_CHECKOUT_ROOT/bin/list-staged-review-paths.js" --repo "$WORKTREE" ${ADDED_ONLY_FLAG[@]+"${ADDED_ONLY_FLAG[@]}"}

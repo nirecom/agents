@@ -5,8 +5,8 @@
 #
 # #2664: a review that ends on exit 1 or 5 (round continuing) leaves evidence for the
 # WARNINGS_ACCEPTED recovery: <sid>.control/test-review-continuing.txt, line 1 = rc,
-# line 2 = review-scope fingerprint. Other exits never write it, the next wrapper start
-# removes a stale one, and the terminal guard (2|3|6|7) keeps its own behavior.
+# line 2 = review-scope fingerprint. Other exits never write it, the next start removes a stale
+# one, the terminal guard keeps its behavior. #2842: unreviewed marker cleared pre-review, exit 8 exit.
 # TL3 gap: a real /review-tests run with live codex ending on exit 1 — checked at the
 # WORKFLOW_USER_VERIFIED preflight.
 
@@ -41,11 +41,12 @@ fi
 # Fake checkout: the real wrapper + bin/lib + evidence.js, stubbed bin entrypoints.
 build_fake_config() {
     local fake; fake=$(make_tmp)
-    script_checkout_fixture_copy "$fake" bin/lib skills/review-tests/scripts >&2 || return 1
+    script_checkout_fixture_copy "$fake" bin/lib hooks/lib skills/review-tests/scripts >&2 || return 1
     mkdir -p "$fake/bin" "$fake/hooks/workflow-gate"
-    printf '#!/usr/bin/env bash\nexit "${STUB_RC:-0}"\n' > "$fake/bin/run-codex-review-loop"
+    # STUB_LOG records that the review itself was launched; STUB_CC_SID lets a case make CC sid != SESSION_ID.
+    printf '#!/usr/bin/env bash\n[ -z "${STUB_LOG:-}" ] || echo ran >> "$STUB_LOG"\nexit "${STUB_RC:-0}"\n' > "$fake/bin/run-codex-review-loop"
     printf '#!/usr/bin/env bash\necho NOSTATE\n' > "$fake/bin/resolve-worktree-path"
-    printf '#!/usr/bin/env bash\nprintf %s\n' "$SID" > "$fake/bin/resolve-session-id"
+    printf '#!/usr/bin/env bash\nprintf "%%s" "${STUB_CC_SID:-%s}"\n' "$SID" > "$fake/bin/resolve-session-id"
     printf '#!/usr/bin/env bash\necho /dev/null\nexit 0\n' > "$fake/bin/resolve-accepted-tradeoffs-file"
     chmod +x "$fake/bin/run-codex-review-loop" "$fake/bin/resolve-worktree-path" \
         "$fake/bin/resolve-session-id" "$fake/bin/resolve-accepted-tradeoffs-file"
@@ -204,6 +205,137 @@ run_case_rerun_not_blocked() {
     rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
 }
 
+# --- #2842 / #2636: the unreviewed marker (invariant U) and the exit 8 exit through the wsid pointer ---
+WSID="wsid2842"
+CCSID="ccsid2842"
+unrev_of() { printf '%s' "$1/wf/$2.control/test-review-unreviewed.txt"; }
+put_ctl() { mkdir -p "${1%/*}"; printf '%s\n%s\n' "$2" "$3" > "$1"; }
+
+# run_wrapper <root> <fake> <repo> <stub_rc> <session_id> <cc_sid> <plans_dir> <stub_log> <errfile> -> exit code
+run_wrapper() {
+    local root="$1" fake="$2" repo="$3" ec
+    ( cd "$repo" && pinned "$root" AGENTS_MAIN_ROOT="$fake" SESSION_ID="$5" STUB_CC_SID="$6" \
+        PLANS_DIR="$(np "$7")" EXTENSIONS_USED=0 STUB_RC="$4" STUB_LOG="$8" \
+        "$RWT" 40 bash "$fake/$SCRIPT_REL" >/dev/null 2>"$9" )
+    ec=$?
+    printf '%s' "$ec"
+}
+
+# accept_as <root> <cc_sid> <repo> -> hook output; review_tests of <cc_sid> seeded in_progress first.
+accept_as() {
+    local root="$1" sid="$2" repo="$3" cfg steps="" s
+    cfg="$root/cfg"; mkdir -p "$cfg" "$root/transcripts"; : > "$cfg/.env"
+    for s in workflow_init clarify_intent research outline detail branching_complete write_tests write_code; do steps="$steps\"$s\":{\"status\":\"complete\"},"; done
+    for s in run_tests review_security docs review_docs user_verification cleanup pre_final_report_gate final_report; do steps="$steps\"$s\":{\"status\":\"pending\"},"; done
+    printf '{"version":1,"session_id":"%s","steps":{%s"review_tests":{"status":"in_progress"}},"closes_issues":[2842]}' "$sid" "$steps" > "$root/wf/$sid.json"
+    ( cd "$repo" && pinned "$root" AGENTS_MAIN_ROOT="$(np "$cfg")" CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$root/transcripts")" \
+        CLAUDE_PROJECT_DIR="$(np "$repo")" "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/bin/check-glossary-drift" \
+        --session "$sid" --stage tests --record >/dev/null 2>&1 )
+    printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"echo \\"<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: user accepts the unreviewed scope>>\\""},"cwd":"%s"}' "$sid" "$(np "$repo")" \
+        | ( cd "$repo" && pinned "$root" AGENTS_MAIN_ROOT="$(np "$cfg")" CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$root/transcripts")" \
+            "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-mark.js" 2>&1 )
+}
+rt_status() {
+    pinned "$1" "$RWT" 30 node -e 'const {readState}=require(process.argv[1]); const s=readState(process.argv[2]); process.stdout.write(String(((s&&s.steps&&s.steps.review_tests)||{}).status||""))' \
+        "$(np "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state")" "$2" 2>/dev/null
+}
+
+# --- (w-a) a review that runs clears the unreviewed marker from the wsid and the CC sid dir ---
+run_case_unrev_cleared() {
+    local root fake repo fp out
+    root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo); fp="$(expected_fp "$repo")"
+    put_ctl "$(unrev_of "$root" "$WSID")" scope-full:no-record "$fp"
+    put_ctl "$(unrev_of "$root" "$CCSID")" scope-full:no-record "$fp"
+    run_wrapper "$root" "$fake" "$repo" 0 "$WSID" "$CCSID" "$root/plans" "$root/stub.log" "$root/err" >/dev/null
+    if [ -f "$root/stub.log" ] && [ ! -e "$(unrev_of "$root" "$WSID")" ] && [ ! -e "$(unrev_of "$root" "$CCSID")" ]; then
+        pass "(w-a) the review ran and the unreviewed marker is gone from both the wsid and the CC sid dir"
+    else
+        fail "(w-a) RED-EXPECTED: review ran=$([ -f "$root/stub.log" ] && echo y || echo n), wsid marker=$([ -e "$(unrev_of "$root" "$WSID")" ] && echo kept || echo gone), cc marker=$([ -e "$(unrev_of "$root" "$CCSID")" ] && echo kept || echo gone)"
+    fi
+    out="$(accept_as "$root" "$CCSID" "$repo")"
+    if [ "$(rt_status "$root" "$CCSID")" = "in_progress" ] && [[ "$out" == *"nothing to accept"* ]]; then
+        pass "(w-a2) after the review ran, ACCEPTED has nothing to accept (invariant U)"
+    else
+        fail "(w-a2) ACCEPTED after a real review run did not answer nothing-to-accept (out=$out)"
+    fi
+    rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
+}
+
+# --- (w-b/c) exit 8: sentinel exit on stderr, wsid pointer written, ACCEPTED recovers; unreviewed marker kept ---
+run_case_exit8_pointer() {
+    local root fake repo fp rc out rc2
+    root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo); fp="$(expected_fp "$repo")"
+    put_ctl "$root/wf/$WSID.control/test-review-terminal.txt" 3 "$fp"
+    rc=$(run_wrapper "$root" "$fake" "$repo" 0 "$WSID" "$CCSID" "$root/plans" "$root/stub.log" "$root/err")
+    if [ "$rc" = "8" ] && grep -qF '<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>' "$root/err"; then
+        pass "(w-b) exit 8 names the WARNINGS_ACCEPTED sentinel as the exit"
+    else
+        fail "(w-b) RED-EXPECTED: rc=$rc, stderr lacks the sentinel exit: $(tr '\n' ' ' < "$root/err")"
+    fi
+    if [ "$(sed -n 1p "$root/wf/$CCSID.control/test-review-wsid.txt" 2>/dev/null)" = "$WSID" ]; then
+        pass "(w-b2) the CC sid control dir holds the wsid pointer"
+    else
+        fail "(w-b2) RED-EXPECTED: no test-review-wsid.txt = $WSID under $CCSID.control"
+    fi
+    out="$(accept_as "$root" "$CCSID" "$repo")"
+    if [ "$(rt_status "$root" "$CCSID")" = "complete" ] && grep -q 'unreviewed-terminal-3' "$root/wf/$CCSID.json" \
+        && [ ! -e "$root/wf/$WSID.control/test-review-terminal.txt" ]; then
+        pass "(w-b3) ACCEPTED through the pointer -> complete (unreviewed-terminal-3), wsid terminal removed"
+    else
+        fail "(w-b3) RED-EXPECTED: ACCEPTED did not recover through the pointer (status=$(rt_status "$root" "$CCSID"), out=$out)"
+    fi
+    rc2=$(run_wrapper "$root" "$fake" "$repo" 0 "$WSID" "$CCSID" "$root/plans" "$root/stub.log" "$root/err")
+    if [ "$rc2" != "8" ]; then pass "(w-b4) the re-run is no longer exit 8 (rc=$rc2)"; else fail "(w-b4) RED-EXPECTED: the re-run is still exit 8"; fi
+    rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
+}
+run_case_exit8_keeps_unrev() {
+    local root fake repo fp rc
+    root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo); fp="$(expected_fp "$repo")"
+    put_ctl "$(term_of "$root")" 3 "$fp"
+    put_ctl "$(unrev_of "$root" "$SID")" scope-full:no-record "$fp"
+    rc=$(run_wrapper "$root" "$fake" "$repo" 0 "$SID" "$SID" "$root/plans" "$root/stub.log" "$root/err")
+    if [ "$rc" = "8" ] && [ -f "$(unrev_of "$root" "$SID")" ] && [ ! -f "$root/stub.log" ]; then
+        pass "(w-c) exit 8 launches no review and keeps the unreviewed marker"
+    else
+        fail "(w-c) exit 8 path: rc=$rc, marker=$([ -f "$(unrev_of "$root" "$SID")" ] && echo kept || echo gone)"
+    fi
+    rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
+}
+
+# --- (w-d) HALT before the review (REVIEW_OUT mktemp fails) -> exit 4, marker kept, ACCEPTED recovers ---
+run_case_mktemp_halt() {
+    local root fake repo fp rc out
+    root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo); fp="$(expected_fp "$repo")"
+    put_ctl "$(unrev_of "$root" "$SID")" scope-full:header-map-unavailable "$fp"
+    rc=$(run_wrapper "$root" "$fake" "$repo" 0 "$SID" "$SID" "$root/no-such-plans" "$root/stub.log" "$root/err")
+    if [ "$rc" = "4" ] && [ -f "$(unrev_of "$root" "$SID")" ] && [ ! -f "$root/stub.log" ]; then
+        pass "(w-d) mktemp failure HALTs (exit 4) before the review; the unreviewed marker stays"
+    else
+        fail "(w-d) mktemp HALT: rc=$rc, review ran=$([ -f "$root/stub.log" ] && echo y || echo n)"
+    fi
+    out="$(accept_as "$root" "$SID" "$repo")"
+    if [ "$(rt_status "$root" "$SID")" = "complete" ] && grep -q 'unreviewed-scope-full:header-map-unavailable' "$root/wf/$SID.json"; then
+        pass "(w-d2) ACCEPTED after the HALT recovers as unreviewed"
+    else
+        fail "(w-d2) RED-EXPECTED: ACCEPTED after the HALT did not recover (out=$out)"
+    fi
+    rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
+}
+
+# --- (w-e) the marker cannot be removed (a directory of that name) -> exit 4, review never launched ---
+run_case_unrev_undeletable() {
+    local root fake repo rc
+    root=$(mk_root); fake=$(build_fake_config); repo=$(build_repo)
+    mkdir -p "$(unrev_of "$root" "$SID")/blocker"
+    rc=$(run_wrapper "$root" "$fake" "$repo" 0 "$SID" "$SID" "$root/plans" "$root/stub.log" "$root/err")
+    if [ "$rc" = "4" ] && [ ! -f "$root/stub.log" ]; then
+        pass "(w-e) an undeletable unreviewed marker HALTs with exit 4 and the review is not launched"
+    else
+        fail "(w-e) RED-EXPECTED: rc=$rc, review ran=$([ -f "$root/stub.log" ] && echo y || echo n) (invariant U needs exit 4)"
+    fi
+    rm -rf "$root" "$fake" "$repo" 2>/dev/null || true
+}
+
 case_begin "rwc-arm-continuing-unit" "bin/lib/codex-review-loop/review-wrapper-control.sh"
 run_case_unit
 case_end
@@ -224,6 +356,17 @@ case_end
 case_begin "continuing-marker-lifecycle" "skills/review-tests/scripts/run-codex-review-loop.sh"
 run_case_stale_cleared
 run_case_rerun_not_blocked
+case_end
+
+case_begin "unreviewed-marker-wrapper-lifecycle" "skills/review-tests/scripts/run-codex-review-loop.sh"
+run_case_unrev_cleared
+run_case_exit8_keeps_unrev
+run_case_mktemp_halt
+run_case_unrev_undeletable
+case_end
+
+case_begin "exit8-wsid-pointer-exit" "bin/lib/codex-review-loop/review-wrapper-control.sh"
+run_case_exit8_pointer
 case_end
 
 echo ""

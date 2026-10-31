@@ -5,7 +5,9 @@
 // the write_code completion reopen and the re-review scope selector.
 //
 // Scope: every staged path (`--diff-filter=d`, so deletions never reach the OID
-// lookup — issue #1068) for which isReviewScopeExcludedPath is false.
+// lookup — issue #1068) for which isReviewScopeExcludedPath is false, minus the
+// merge-incoming paths during a merge (#2842: index equals MERGE_HEAD; an undecidable
+// merge state excludes nothing).
 
 const { execFileSync } = require("../lib/limited-child-process");
 const crypto = require("crypto");
@@ -40,16 +42,29 @@ function git(repoDir, args) {
   });
 }
 
-// { ok: true, files } (files may be empty) or { ok: false, error } on a git failure,
-// so "nothing staged" and "cannot tell" stay distinguishable.
+// → { paths, mergeState, excluded }: paths minus the merge-incoming ones when merging;
+// not-merging / undecidable pass the input through. merge-incoming is required lazily so the
+// review loop can still load this file standalone.
+function dropMergeIncomingPaths(repoDir, paths) {
+  const { detectMergeIncoming, MERGE_INCOMING_STATE } = require("../lib/merge-incoming");
+  const r = detectMergeIncoming(String(repoDir), paths);
+  if (r.state !== MERGE_INCOMING_STATE.MERGING) return { paths, mergeState: r.state, excluded: 0 };
+  const kept = paths.filter((p) => !r.paths.has(p));
+  return { paths: kept, mergeState: r.state, excluded: paths.length - kept.length };
+}
+
+// { ok: true, files, mergeExcluded } (files may be empty) or { ok: false, error } on a git
+// failure, so "nothing staged" and "cannot tell" stay distinguishable.
 function computeReviewScopeManifest(repoDir) {
   if (!repoDir) return { ok: false, error: "no repository directory" };
   try {
     const out = git(repoDir, ["diff", "--cached", "--name-only", "--diff-filter=d", "-z"]);
-    const paths = Buffer.from(out).toString("utf8").split("\0")
+    const staged = Buffer.from(out).toString("utf8").split("\0")
       .filter((p) => p && !isReviewScopeExcludedPath(p));
     const files = {};
-    if (paths.length === 0) return { ok: true, files };
+    if (staged.length === 0) return { ok: true, files, mergeExcluded: 0 };
+    const { paths, excluded: mergeExcluded } = dropMergeIncomingPaths(repoDir, staged);
+    if (paths.length === 0) return { ok: true, files, mergeExcluded };
     // One whole-index read (no per-path argv, so no command-line length limit);
     // -z keeps non-ASCII paths unquoted. Stage 0 only: a conflicted path has no OID.
     const index = new Map();
@@ -62,7 +77,7 @@ function computeReviewScopeManifest(repoDir) {
       if (!index.has(p)) return { ok: false, error: `no index entry for ${p}` };
       files[p] = index.get(p);
     }
-    return { ok: true, files };
+    return { ok: true, files, mergeExcluded };
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e).split("\n")[0] };
   }
@@ -108,6 +123,7 @@ function evaluateReviewScopeFreshness(stepState, current) {
 module.exports = {
   isReviewScopeExcludedPath,
   isReviewScopeTestPath,
+  dropMergeIncomingPaths,
   computeReviewScopeManifest,
   fingerprintOfManifest,
   computeReviewScopeFingerprint,

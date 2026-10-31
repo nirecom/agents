@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # bin/lib/codex-review-loop/review-wrapper-control.sh — sourced by the five stage
 # wrappers skills/*/scripts/run-codex-review-loop.sh (#2434). Resolves <sid>.control
-# once (a legacy PLANS_DIR terminal is migrated first) and owns the terminal guard
-# and the review_tests continuing marker.
+# once (a legacy PLANS_DIR terminal is migrated first) and owns the terminal guard,
+# the review_tests continuing / unreviewed markers and the wsid pointer (#2842).
 # Caller globals: SESSION_ID. Sets CONTROL_DIR TERMINAL_FILE.
 # Loaded from the wrapper's own tree, so a stub checkout without bin/lib still works.
 # Escalation per format and exit code: skills/_shared/codex-review-loop/exit-codes.md.
@@ -73,4 +73,32 @@ rwc_arm_continuing() {
 # describes the latest review.
 rwc_clear_continuing() {
   rm -f "$CONTROL_DIR/test-review-continuing.txt"
+}
+
+# rwc_clear_unreviewed [<cc-sid>] — #2842: the review is about to launch, so RT-2's
+# "not reviewed yet" marker must go from the wsid and the CC sid dir. rc 1 when one remains.
+rwc_clear_unreviewed() {
+  local name="test-review-unreviewed.txt" cc_file=""
+  rm -f "$CONTROL_DIR/$name" 2>/dev/null || true
+  [[ ! -e "$CONTROL_DIR/$name" ]] || return 1
+  if [[ -n "${1:-}" && "$1" != "$SESSION_ID" ]]; then
+    cc_file="$(sp_control_dir "$1" "$name")" || return 1
+    rm -f "$cc_file" 2>/dev/null || true
+    [[ ! -e "$cc_file" ]] || return 1
+  fi
+  return 0
+}
+
+# rwc_record_wsid_pointer <cc-sid> — #2842: tell the CC-sid handler which wsid holds this
+# run's markers. No-op when the ids match; rc 1 (fail-closed) when the write fails.
+rwc_record_wsid_pointer() {
+  local cc="${1:-}" dest tmp
+  [[ -n "$cc" && "$cc" != "$SESSION_ID" ]] || return 0
+  dest="$(sp_control_dir "$cc" test-review-wsid.txt)" || return 1
+  tmp="$(mktemp "${dest%/*}/.wsid-XXXXXX" 2>/dev/null)" || return 1
+  if printf '%s\n' "$SESSION_ID" > "$tmp" && mv -f "$tmp" "$dest"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
 }
