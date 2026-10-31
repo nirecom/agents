@@ -8,21 +8,21 @@ Two contracts govern exit codes. The internal contract (between `review-loop-ver
 |---|---|---|---|
 | 2 ESCALATE | Present the concern summary, stop the loop, confirm direction via AskUserQuestion, then re-clarify with `/clarify-intent` (MOP-6). No accept CLI. | Present the `review-loop-summarize-concerns` summary, stop the loop, wait for the user's decision. No accept CLI. | Not applicable (no risk signal). |
 | 6 HIGH_UNRESOLVED | Present the summary, stop, return to `/clarify-intent`. No accept CLI. | Present the summary, stop, AskUserQuestion: fix the plan and re-run / abort. No accept CLI. | Present the summary, stop, AskUserQuestion: fix and re-run / accept residual HIGH / abort. Accept → `node "$AGENTS_MAIN_ROOT/bin/accept-exit6-residual" --session <session-id> --format <security-plan\|security-code\|test-review> --reason "<text>"` (review-tests may use its sentinel instead). |
-| 8 unchanged re-run after terminal | AskUserQuestion: fix the content / abort. | Same. | Same. |
+| 8 unchanged re-run after terminal | AskUserQuestion: fix the content / abort. | Same. | Same (review-tests may emit its sentinel instead). |
 | 9 re-run after exit 6 without accept | Does not occur. | Does not occur. | Return to the exit 6 accept step. |
 | 4 infrastructure failure (incl. control-dir migration failure) | HALT; surface stderr verbatim. | Same. | Same. |
 
-- The model never creates, edits, or deletes a control file.
-- When a guard refuses a write, return to this table.
+- The model never creates, edits, or deletes a control file; when a guard refuses a write, return to this table.
 
 ## Accepted-warning recovery {#accepted-warning-recovery}
 
 An accepted warning releases a gate only when the review ended non-blocking and the acceptance is pinned to the review-scope manifest. test-review evidence (`<CONTROL_DIR>` markers: line 1 = rc, line 2 = review-scope fingerprint at that exit):
 
 - `test-review-terminal.txt` rc 2 / 6 — judged on line 1 only (the wrapper may write an empty line 2).
-- `test-review-terminal.txt` rc 3 — line 2 must equal the current fingerprint, and `<session-id>-test-review-fallback-raw.md` must open with `NEEDS_REVISION` and be no older than the marker.
+- `test-review-unreviewed.txt` (RT-2 full selection; line 1 = `scope-full:<REASON>`; removed right before the wrapper launches the review) — line 2 must equal the current fingerprint; accepted as unreviewed.
+- `test-review-terminal.txt` rc 3 — line 2 must equal the current fingerprint; `<session-id>-test-review-fallback-raw.md` opening with `NEEDS_REVISION` recovers the fallback, a raw absent or older than the marker is accepted as unreviewed (refused while a raw sits under an unowned ambient wsid).
 - `test-review-continuing.txt` rc 1 / 5 (removed at the next wrapper start) — line 2 must equal the current fingerprint.
-- A pin mismatch leaves review_tests `in_progress` (`stale-evidence`); otherwise accepting records the current manifest and drops both markers.
+- A pin mismatch leaves review_tests `in_progress` (`stale-evidence`); otherwise accepting records the current manifest and drops the markers.
 
 **Contract A — Internal verdict exit code** (`review-loop-verdict` → `run-codex-review-loop`, internal only):
 
@@ -95,7 +95,5 @@ Append to `CONCERNS_LOG`: a `## Round <N> (<ISO-timestamp>)` header, `Verdict: <
 
 ## Rationale: why a wrapper and not prose
 
-The previous version of this protocol relied on prose ordering instructions. An orchestrator
-that skipped step c (invoking `REVIEWER_AGENT` directly without ever calling `review-plan-codex`)
-was not detected. The wrapper makes the codex path the only sanctioned mechanical entry point;
-a `REVIEWER_AGENT` invocation is justified ONLY by exit 3, and exit 4 specifically forbids it.
+Prose ordering let an orchestrator skip step c (invoking `REVIEWER_AGENT` without `review-plan-codex`) undetected.
+The wrapper makes the codex path the only sanctioned entry point; a `REVIEWER_AGENT` invocation is justified ONLY by exit 3, and exit 4 forbids it.

@@ -19,6 +19,19 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/lib/codex-rev
 ACCEPTED_TRADEOFFS_FILE="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-accepted-tradeoffs-file" "$PLANS_DIR" "$SESSION_ID" detail outline intent)" || exit 4
 rwc_resolve test-review review-tests
 EXIT_REINVOKE_AFTER_TERMINAL=8
+# #2636: the exit 8 stderr names the sentinel that leaves the loop.
+EXIT8_HINT_ACCEPT='Exit: emit echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>" — it restores review_tests to complete (exit-codes.md "Accepted-warning recovery"), or change the reviewed input and re-run.'
+EXIT8_HINT_REVISE='Exit: change the reviewed input and re-run; WARNINGS_ACCEPTED does not clear this terminal state (exit-codes.md "Accepted-warning recovery").'
+# Only a terminal rc 2/3/6 is recoverable by WARNINGS_ACCEPTED (reviewRecoveryEvidence); any other rc
+# (7) or an unreadable marker gets the re-run hint, so the hint never names a sentinel that is refused.
+exit8_hint() {
+  local term_rc
+  term_rc="$(sed -n '1p' "$TERMINAL_FILE" 2>/dev/null || true)"
+  case "$term_rc" in
+    2|3|6) printf '%s' "$EXIT8_HINT_ACCEPT" ;;
+    *) printf '%s' "$EXIT8_HINT_REVISE" ;;
+  esac
+}
 
 # Exits 4, 7 and 8 leave this script without reaching the completion sentinel
 # that records every other outcome, so a resumed session would find no trace of
@@ -55,6 +68,12 @@ case "$BRIDGE_RC" in
   2) CC_SID="" ;;
   *) echo "[review-tests] ERROR: bin/resolve-session-id failed (rc $BRIDGE_RC)" >&2; exit 4 ;;
 esac
+# #2842: the handler holds the CC sid; the pointer names the wsid whose markers it must read.
+if ! rwc_record_wsid_pointer "$CC_SID"; then
+  echo "[review-tests] ERROR: cannot record the wsid pointer under session $CC_SID (HALT, exit 4)." >&2
+  record_codex_exit 4 "HALT"
+  exit 4
+fi
 COMMIT_TARGET="$("$SCRIPT_CHECKOUT_ROOT/bin/resolve-worktree-path" ${CC_SID:+--session "$CC_SID"})"
 # NOSTATE (session resolved, no state file) and "" (no session resolved at all) are
 # both legitimate bin/resolve-worktree-path outcomes -- neither is an error, so both
@@ -67,6 +86,7 @@ if [[ "$COMMIT_TARGET" == "NOSTATE" || -z "$COMMIT_TARGET" ]]; then
     if [[ -f "$TERMINAL_FILE" ]]; then
       # fail-CLOSED: cannot compare fingerprints, so the guard must stay armed.
       echo "[review-tests] ERROR: terminal marker present but commit-target is unresolvable; keeping the re-invoke guard." >&2
+      echo "[review-tests] $EXIT8_HINT_REVISE" >&2
       record_codex_exit "$EXIT_REINVOKE_AFTER_TERMINAL" "no-sentinel"
       exit "$EXIT_REINVOKE_AFTER_TERMINAL"
     fi
@@ -92,7 +112,7 @@ if [[ -f "$TERMINAL_FILE" ]]; then
   rwc_check_terminal review-tests "$CUR_FP" review-tests-exit6-accepted.txt test-review || TG_RC=$?
   case "$TG_RC" in
     0) ;;
-    8) echo "[review-tests] The WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED sentinel also accepts the coverage gap." >&2
+    8) echo "[review-tests] $(exit8_hint)" >&2
        record_codex_exit 8 "no-sentinel"; exit 8 ;;
     *) echo "[review-tests] Equivalent accept path: emit WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED." >&2
        exit "$TG_RC" ;;
@@ -176,6 +196,13 @@ RC=0
 # INPUT_ERROR <path> can HALT via the same detector the CC fallback uses.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REVIEW_OUT="$(mktemp "${PLANS_DIR}/.rt-out-XXXXXX")" || exit 4
+# #2842 invariant U: a review never launches while the unreviewed marker survives.
+if ! rwc_clear_unreviewed "$CC_SID"; then
+  rm -f "$REVIEW_OUT"
+  echo "[review-tests] ERROR: the unreviewed marker could not be removed (HALT, exit 4)." >&2
+  record_codex_exit 4 "HALT"
+  exit 4
+fi
 "$SCRIPT_CHECKOUT_ROOT/bin/run-codex-review-loop" "${args[@]}" | tee "$REVIEW_OUT" || RC=${PIPESTATUS[0]}
 DETECT_RC=0
 bash "$SCRIPT_DIR/detect-input-error.sh" "$REVIEW_OUT" || DETECT_RC=$?
