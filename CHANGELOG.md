@@ -943,3 +943,7 @@ Changes: CodeGraph installs track the latest release again (`@latest`) instead o
 ### FEATURE: PR #2861 (2026-10-31)
 Background: feat(#2770,#2796): scan only changed lines, carry glossary grants over unrelated edits, read the glossary from the branch worktree
 Changes: Glossary check asks for confirmation less often: it scans only changed lines of staged files, keeps an accepted grant across unrelated edits, and reads the glossary from the branch's own worktree (#2770, #2796).
+
+### FEATURE: PR #2864 (2026-11-01)
+Background: feat(#2862): upgrade an already-installed RTK in the installers when RTK=on
+Changes: With `RTK=on`, the installer now upgrades an already-installed RTK instead of leaving it as is. If the upgrade fails, the installed version is kept and setup continues.
