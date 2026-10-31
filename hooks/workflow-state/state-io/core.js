@@ -12,10 +12,10 @@ const { withStateLock } = require("./state-lock");
 const { getSessionStateDir } = require("./state-root");
 const { getCurrentContext, resolveWorktreeContext } = require("./core/context");
 const {
-  PROJECTION_KEYS,
   projectState,
   guardProjection,
   stripProjection,
+  composeStateView,
   assertProjectionUnmutated,
   serializeStateForPersist,
   assertStreamIntegrity,
@@ -225,9 +225,7 @@ function readState(sessionId) {
     return null;
   }
 
-  const out = stripProjection(state);
-  out.current = projection;
-  for (const key of PROJECTION_KEYS) out[key] = projection[key];
+  const out = composeStateView(state, projection);
   Object.defineProperty(out, "__projectionSnapshot", {
     value: projection,
     enumerable: false,

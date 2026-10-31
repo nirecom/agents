@@ -8,7 +8,7 @@
 // repeated fact is a repeated event, and the fold decides what it means.
 
 const { withStateLock } = require("./state-lock");
-const { projectState, assertStreamIntegrity } = require("./projection");
+const { projectState, composeStateView, assertStreamIntegrity } = require("./projection");
 
 const EVENT_KINDS = [
   "step_status",
@@ -193,7 +193,9 @@ function validateEvent(event) {
 //
 // The I/O-free core of appendEvents: `baseState` is never mutated and nothing is
 // read or written. `eventsOrBuilder` may be an event object, an array of them, or
-// a function `(events, current) => event|events` evaluated against `baseState`.
+// a function `(events, current) => event|events` evaluated against `baseState`;
+// `current` is the composeStateView view readState returns (not read-only), with its
+// own `events` copy so a write to it cannot reach the stream.
 // An empty batch returns `baseState`'s stream unchanged with `appended: []`.
 function composeAppendedState(sessionId, baseState, eventsOrBuilder, opts = {}) {
   const base = Object.assign({}, baseState);
@@ -206,7 +208,8 @@ function composeAppendedState(sessionId, baseState, eventsOrBuilder, opts = {}) 
 
   let produced = eventsOrBuilder;
   if (typeof eventsOrBuilder === "function") {
-    produced = eventsOrBuilder(base.events.slice(), projectState(base));
+    const view = composeStateView(Object.assign({}, base, { events: base.events.slice() }), projectState(base));
+    produced = eventsOrBuilder(base.events.slice(), view);
   }
   if (produced === null || produced === undefined) produced = [];
   if (!Array.isArray(produced)) produced = [produced];
@@ -232,7 +235,7 @@ function composeAppendedState(sessionId, baseState, eventsOrBuilder, opts = {}) 
     projectState(base),
     // The evaluator resolves an ownerless approval's artifact through upstream_session_id and the
     // approval history, which a bare projection lacks.
-    Object.assign({}, withBatch, projectState(withBatch)),
+    composeStateView(withBatch, projectState(withBatch)),
     opts
   );
   for (const partial of boundaryEvents) {

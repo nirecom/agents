@@ -42,7 +42,8 @@ function findings(F) {
   F.check("T4-2 (a) stage=<current stage>: grant recorded", grantsOf(F, st.sid, "outline").length === 1,
     JSON.stringify(F.recordOf(st.sid, "outline")));
   const sm = pendingOutline(F, "stage-ng");
-  F.expectRejected("T4-2 (a) stage=detail while the current stage is outline", sm.sid, F.accepted(F.TERM, "stage=detail", REASON), sm.repo);
+  F.expectRejected("T4-2 (a) stage=detail while the current stage is outline", sm.sid, F.accepted(F.TERM, "stage=detail", REASON), sm.repo,
+    /stage=detail has no open finding/);
   F.expectRejected("T4-2 (a) op=add on a finding with no provenance block", sm.sid, F.accepted(F.TERM, "op=add", REASON), sm.repo);
   F.inject(sm.sid, "review_docs", "glossary_provenance", F.provenanceRecord(F.FP("b"),
     [{ term: F.TERM2, operation: "add", category: "internal", reason: "unmatched" }]));
@@ -102,8 +103,11 @@ function provenance(F) {
   F.check("T4-2 (b) no discriminator: every block of eta term is granted",
     has("eta term", "add", "user") && has("eta term", "redefine", "internal"), JSON.stringify(pgrants()));
   F.check("T4-2 (b) grants total = 5 reasons + 2 zeta + 2 eta", pgrants().length === REASONS.length + 4, JSON.stringify(pgrants()));
-  F.expectRejected("T4-2 (a) ignored at write_code (no stage): the outline finding is not granted",
-    sid, F.accepted(F.TERM, "", REASON), repo);
+  // The injected record is stale (FP("d")) and holds an open finding, so the read side refuses
+  // outline's complete and the current step is outline again: (a) is refused with the --record
+  // reason. A current step with no stage is covered by cross-stage.js otherStage (R-S fixture).
+  F.expectRejected("T4-2 (a) an injected stale outline record reopens outline and is refused with the --record reason",
+    sid, F.accepted(F.TERM, "", REASON), repo, /--stage outline --record/);
 }
 
 // A grant is scoped to its stage and record: the next stage's record starts without it.
