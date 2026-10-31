@@ -23,7 +23,28 @@ if (-not $_rtkOn) {
 }
 
 if (Get-Command rtk -ErrorAction SilentlyContinue) {
-    Write-Host "RTK is already installed." -ForegroundColor DarkGray
+    # Already installed: upgrade in place. A failed upgrade keeps the installed
+    # version and falls through to config validation (non-fatal).
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Host "winget not found; skipping RTK upgrade (non-fatal)." -ForegroundColor DarkGray
+    } else {
+        Write-Host "Updating RTK..."
+        try {
+            $global:LASTEXITCODE = 0
+            winget upgrade rtk-ai.rtk --accept-source-agreements --accept-package-agreements
+            $_rtkUpgradeRc = $LASTEXITCODE
+            $global:LASTEXITCODE = 0
+            if ($_rtkUpgradeRc -ne 0) {
+                # Non-zero covers both "no newer version" and a real failure; winget does not tell them apart.
+                Write-Host "RTK is up to date or upgrade failed (winget exit code: $_rtkUpgradeRc; non-fatal). Re-run to retry." -ForegroundColor DarkGray
+            } else {
+                Write-Host "RTK updated." -ForegroundColor Green
+            }
+        } catch {
+            Write-Warning "RTK upgrade could not run (non-fatal): $($_.Exception.Message)"
+            $global:LASTEXITCODE = 0
+        }
+    }
 } else {
     Write-Host "Installing RTK..."
     winget install rtk-ai.rtk --accept-source-agreements --accept-package-agreements

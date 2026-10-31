@@ -39,7 +39,14 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 
 if command -v rtk >/dev/null 2>&1; then
-    printf "${C_GRAY}RTK is already installed.${C_RESET}\n"
+    # Already installed: upgrade in place. A failed upgrade keeps the installed
+    # version and falls through to config validation (non-fatal).
+    echo "Updating RTK..."
+    if brew upgrade rtk-ai/tap/rtk </dev/null; then
+        printf "${C_GREEN}RTK upgrade finished.${C_RESET}\n"
+    else
+        printf "${C_YELLOW}RTK upgrade failed; keeping the installed version (non-fatal). Re-run to retry.${C_RESET}\n" >&2
+    fi
 else
     echo "Installing RTK..."
     if ! brew install rtk-ai/tap/rtk </dev/null; then
