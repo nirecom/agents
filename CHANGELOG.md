@@ -927,3 +927,7 @@ Changes: Plan reviews now hold the detail to the approved outline and the outlin
 ### FEATURE: PR #2844 (2026-10-31)
 Background: feat(#2652,#2446,#2578): merge machine handoff records into the state...
 Changes: Session handoff records are now stored in the workflow state file; handoff.md is no longer written (existing files are still read during a migration window).
+
+### FEATURE: PR #2848 (2026-10-31)
+Background: feat(#2692): scale test parallelism automatically from external load,...
+Changes: Test runs now pick their parallelism automatically: they leave room for other apps by watching external CPU load and free memory, ramp up gradually when several runs start at once, and share lanes fairly between concurrent runs. The lane status display shows why each run got its width.
