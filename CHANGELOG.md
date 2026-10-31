@@ -939,3 +939,7 @@ Changes: review-tests: files that a merge brings in are excluded from the header
 ### FEATURE: PR #2857 (2026-10-31)
 Background: fix(#2456): install CodeGraph @latest again instead of the 1.6.0 pin
 Changes: CodeGraph installs track the latest release again (`@latest`) instead of the temporary 1.6.0 pin; 1.6.2 carries the upstream fix for the Windows console flicker.
+
+### FEATURE: PR #2861 (2026-10-31)
+Background: feat(#2770,#2796): scan only changed lines, carry glossary grants over unrelated edits, read the glossary from the branch worktree
+Changes: Glossary check asks for confirmation less often: it scans only changed lines of staged files, keeps an accepted grant across unrelated edits, and reads the glossary from the branch's own worktree (#2770, #2796).
