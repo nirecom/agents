@@ -34,11 +34,10 @@ if (-not $_cgOn) {
     return
 }
 
-# Pinned to 1.6.0: 1.6.1 regressed with Windows console flicker (#2456).
 # An installed binary is kept when the update fails.
 if (Get-Command npm -ErrorAction SilentlyContinue) {
-    Write-Host "Installing CodeGraph 1.6.0..."
-    npm install -g --ignore-scripts "@colbymchenry/codegraph@1.6.0"
+    Write-Host "Installing CodeGraph (latest)..."
+    npm install -g --ignore-scripts "@colbymchenry/codegraph@latest"
     $_npmExit = $LASTEXITCODE
     if ($_npmExit -eq 0) {
         Write-Host "CodeGraph is up to date." -ForegroundColor Green
