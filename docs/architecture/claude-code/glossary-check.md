@@ -249,10 +249,10 @@ fewer than 3 non-space characters; a missing session id is fatal. The `ask` perm
 
 Grant targets, all for the normalized term:
 
-- **(a) Finding.** An open deterministic finding of the current stage (`resolveCurrentStep` →
-  `stageOfStep`); skipped when `op=` or `cat=` is given. The handler recomputes the fingerprint before
-  the lock and grants only when it equals the record's; otherwise it answers that the record is older
-  than its inputs and to re-run `--record`.
+- **(a) Finding.** An open deterministic finding of the current stage and of every other stage that
+  holds one, or only of `stage=` when given; skipped when `op=` or `cat=` is given. The handler
+  recomputes each fingerprint before the lock and grants only when it equals the record's; otherwise it
+  names the stage and answers that the record is older than its inputs and to re-run `--record`.
 - **(b) Glossary provenance check block.** Entries of `glossary_provenance.blocked` with the same norm, narrowed by
   `op=` / `cat=`; skipped when `stage=` is given. The grant is bound to the record's fingerprint;
   freshness is checked on the next gate run.
@@ -261,7 +261,8 @@ Grant targets, all for the normalized term:
   term. A failed listing adds nothing (fail-closed).
 
 When nothing matches, the handler answers "nothing pending" and the state is unchanged. A grant never
-completes a step.
+completes a step. The current stage is read from the state view `composeStateView` builds, the same
+view `readState` returns, so a resumed session resolves it correctly.
 
 ## Tagged concerns
 

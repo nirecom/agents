@@ -74,7 +74,8 @@ function pending(F) {
 function failClosed(F) {
   const u = atStep(F, "lf-c", "detail", null, null);
   fs.mkdirSync(F.ledgerPath(u.sid, "detail-plan"), { recursive: true });
-  F.expectRejected("T4-2 (c) unreadable ledger (a directory): nothing granted", u.sid, F.accepted(F.TERM, "", REASON), u.repo);
+  F.expectRejected("T4-2 (c) unreadable ledger (a directory): nothing granted", u.sid, F.accepted(F.TERM, "", REASON), u.repo,
+    /detail concern ledger could not be listed/);
 
   const a = atStep(F, "lf-a", "outline", null, null);
   F.writePlan(a.sid, "outline", "# Outline\n\n## Approach\n\nMid-line the glossary-drift appears.\n");
