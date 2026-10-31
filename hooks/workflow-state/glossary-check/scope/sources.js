@@ -1,7 +1,7 @@
 "use strict";
 // Inputs 2 (combined glossary) and 3 (intent `## Glossary` rows) of the glossary-check
-// fingerprint (#2529 I-FP). The glossary is read from the main worktree, the first entry of
-// `git worktree list`, the same root bin/lib/codex-glossary.sh uses.
+// fingerprint (#2529 I-FP). The glossary is read from the session's own worktree (#2796), so a
+// glossary change on main moves the digest only once the branch takes it in.
 
 const fs = require("fs");
 const { toWindowsPath } = require("../../../lib/branch-diff");
@@ -11,17 +11,16 @@ const { parseGlossaryFile } = require("../../../../bin/lib/glossary-format/entri
 const { normalizeDefinition } = require("../../../../bin/lib/glossary-provenance");
 const { sha256, git } = require("./artifact");
 
-function mainRootOf(repoDir) {
-  const out = git(repoDir, ["worktree", "list", "--porcelain"]).toString("utf8");
-  const first = out.split(/\r?\n/).find((l) => l.startsWith("worktree "));
-  if (!first) throw new Error("git worktree list: no worktree line");
-  return toWindowsPath(first.slice("worktree ".length).trim());
+function worktreeRootOf(repoDir) {
+  const top = git(repoDir, ["rev-parse", "--show-toplevel"]).toString("utf8").trim();
+  if (!top) throw new Error("git rev-parse --show-toplevel: empty output");
+  return toWindowsPath(top);
 }
 
 // combinedGlossary(opts) -> { ok, files: [{ label, category, sha }], terms, digest, legacy }.
 function combinedGlossary(opts) {
   try {
-    const listed = listMainGlossaryFiles(mainRootOf(opts.repoDir));
+    const listed = listMainGlossaryFiles(worktreeRootOf(opts.repoDir));
     const files = [];
     const terms = [];
     for (const f of listed.files) {
@@ -67,4 +66,4 @@ function intentRowsOf(sid, rangeText) {
   return Object.assign({ ok: true }, rowsOfText(text));
 }
 
-module.exports = { mainRootOf, combinedGlossary, intentRowsOf };
+module.exports = { worktreeRootOf, combinedGlossary, intentRowsOf };

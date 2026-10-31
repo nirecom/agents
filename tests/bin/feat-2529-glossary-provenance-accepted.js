@@ -24,5 +24,9 @@ caseBegin("t3-6-b-grants-follow-the-same-rules", "bin/check-glossary-provenance"
 acc.bGrantSameRules();
 caseEnd();
 
+caseBegin("provenance-grant-carried-while-the-blocked-set-is-unchanged", "bin/check-glossary-provenance");
+acc.carryOnUnchangedBlocked();
+caseEnd();
+
 process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
 process.exitCode = totals.failed === 0 ? 0 : 1;

@@ -146,12 +146,11 @@ case_end
 # ============================================================================
 case_begin "drift-falls-back-to-old-paths" "bin/check-glossary-drift"
 # ============================================================================
-SID_LEG="p2529-legacy-drift-$$"
-INTENT_LEG="$TMP_ROOT/intent-legacy.md"
+SID_LEG="p2529-legacy-drift-$$"; INTENT_LEG="$TMP_ROOT/intent-legacy.md"
 intent_body "$INTENT_LEG" "Mid-line the glossary-drift shows up here." "| unrelated thing | session | add | Not a glossary term. |"
-seed_session "$SID_LEG" "$WT_LINKED" "$INTENT_LEG"
+seed_session "$SID_LEG" "$WT_MAIN" "$INTENT_LEG"  # drift reads its own worktree's glossary (#2796)
 D_LEG="$TMP_ROOT/drift-legacy.txt"
-rc="$(drift "$SID_LEG" "$WT_LINKED" "$D_LEG")"
+rc="$(drift "$SID_LEG" "$WT_MAIN" "$D_LEG")"
 if [ "$rc" = "1" ]; then pass "L2/drift-exit-1"; else fail "L2/drift-exit-1" "rc=$rc $(head -c 300 "$D_LEG" 2>/dev/null)"; fi
 has "L2/old-path-term-variant-is-drift" "$D_LEG" '"glossary-drift" -> "glossary drift"'
 case_end
