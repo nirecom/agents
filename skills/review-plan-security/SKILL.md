@@ -28,6 +28,8 @@ RPS-3. Triage — per `skills/_shared/priority-hierarchy.md`, reject a concern o
 - A concern about the consequences or residual risk of a settled decision is no contradiction of it; only a demand to reverse the decision is.
 - Forward each surviving concern to RPS-4.
 - When every concern is rejected on a cited decision, treat the review as having no RISK items and go to RPS-5.
+- A concern tagged `[upstream-inconsistency …]` stays outside this triage: follow the fork branch of [`skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`](../_shared/codex-review-loop/upstream-inconsistency-pause.md) (stop without the sentinel, return `## Upstream inconsistency`).
+- After A / D, the main conversation revises the detail per that procedure's table and re-runs `/review-plan-security`.
 - exit 0 carries no concerns and skips RPS-3.
 RPS-4. Present the surviving concerns with per-axis severity and proposed mitigations before implementation proceeds.
 RPS-5. Summary — APPROVED (including the all-rejected case): report no RISK items, and on the all-rejected path also list every rejected concern beside the settled decision cited against it; NEEDS_REVISION: summarize the RPS-4 mitigations.

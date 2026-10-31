@@ -2,44 +2,57 @@
 # Tags: codex, review, prompt-body, scope:issue-specific
 # GROUP G: Prompt body content assertions (cases 29-32, G1).
 # Asserts security axes, checklist references and the #2154 deferred/N-A
-# wording against grep results on bin/review-plan-codex — never against
+# wording against grep results on bin/review-plan-codex and its prompt modules — never against
 # hardcoded duplicates. Sourced by tests/bin/feature-1308-codex-review-allowlist.sh.
 echo ""
 echo "=== Group G: Prompt body content (static source assertions) ==="
 
+# #2814: the security-plan / test-review builders moved into this module, sourced by the entrypoint.
+REVIEW_ONLY_SRC="$AGENTS_WORKTREE/bin/lib/review-plan-codex/prompts-review-only.sh"
+PROMPT_LIB_DIR="$AGENTS_WORKTREE/bin/lib/review-plan-codex"
+
+# Case 29-pre: the entrypoint really sources the module the prompt assertions read
+{
+  if grep -qF 'source "$SCRIPT_DIR/lib/review-plan-codex/prompts-review-only.sh"' "$CODEX_SRC" 2>/dev/null; then
+    pass "29-pre: bin/review-plan-codex sources bin/lib/review-plan-codex/prompts-review-only.sh"
+  else
+    fail "29-pre: bin/review-plan-codex does not source bin/lib/review-plan-codex/prompts-review-only.sh"
+  fi
+}
+
 # Case 29: security-plan prompt references OWASP ASVS V8 Data Protection
 {
-  if grep -q 'OWASP ASVS V8 Data Protection' "$CODEX_SRC" 2>/dev/null; then
-    pass "29: bin/review-plan-codex security-plan prompt references 'OWASP ASVS V8 Data Protection'"
+  if sed -n '/^rpc_prompt_security_plan()/,/^}/p' "$REVIEW_ONLY_SRC" 2>/dev/null | grep -q 'OWASP ASVS V8 Data Protection'; then
+    pass "29: security-plan prompt (prompts-review-only.sh) references 'OWASP ASVS V8 Data Protection'"
   else
-    fail "29: bin/review-plan-codex missing 'OWASP ASVS V8 Data Protection' in security-plan prompt"
+    fail "29: security-plan prompt (prompts-review-only.sh) missing 'OWASP ASVS V8 Data Protection'"
   fi
 }
 
 # Case 30: security-plan prompt references CWE-78 OS command injection
 {
-  if grep -q 'CWE-78 OS command injection' "$CODEX_SRC" 2>/dev/null; then
-    pass "30: bin/review-plan-codex security-plan prompt references 'CWE-78 OS command injection'"
+  if sed -n '/^rpc_prompt_security_plan()/,/^}/p' "$REVIEW_ONLY_SRC" 2>/dev/null | grep -q 'CWE-78 OS command injection'; then
+    pass "30: security-plan prompt (prompts-review-only.sh) references 'CWE-78 OS command injection'"
   else
-    fail "30: bin/review-plan-codex missing 'CWE-78 OS command injection' in security-plan prompt"
+    fail "30: security-plan prompt (prompts-review-only.sh) missing 'CWE-78 OS command injection'"
   fi
 }
 
 # Case 31: test-review prompt references Test Case Categories checklist
 {
-  if grep -q 'Test Case Categories checklist' "$CODEX_SRC" 2>/dev/null; then
-    pass "31: bin/review-plan-codex test-review prompt references 'Test Case Categories checklist'"
+  if sed -n '/^rpc_prompt_test_review()/,/^}/p' "$REVIEW_ONLY_SRC" 2>/dev/null | grep -q 'Test Case Categories checklist'; then
+    pass "31: test-review prompt (prompts-review-only.sh) references 'Test Case Categories checklist'"
   else
-    fail "31: bin/review-plan-codex missing 'Test Case Categories checklist' in test-review prompt"
+    fail "31: test-review prompt (prompts-review-only.sh) missing 'Test Case Categories checklist'"
   fi
 }
 
 # Case 32: test-review prompt references test-design.md
 {
-  if grep -q 'test-design.md' "$CODEX_SRC" 2>/dev/null; then
-    pass "32: bin/review-plan-codex test-review prompt references 'test-design.md'"
+  if sed -n '/^rpc_prompt_test_review()/,/^}/p' "$REVIEW_ONLY_SRC" 2>/dev/null | grep -q 'test-design.md'; then
+    pass "32: test-review prompt (prompts-review-only.sh) references 'test-design.md'"
   else
-    fail "32: bin/review-plan-codex missing 'test-design.md' in test-review prompt"
+    fail "32: test-review prompt (prompts-review-only.sh) missing 'test-design.md'"
   fi
 }
 
@@ -54,9 +67,9 @@ echo "=== Group G: Prompt body content (static source assertions) ==="
 # tests/bin/feature-2154-accepted-tradeoffs-fallback/layer-b-prompt.sh cases 8-9,
 # which assert against the stdin bytes the mocked codex actually received.
 {
-  if grep -qF -- "prioritize the plan's committed test scope over exhaustive checklist enumeration" "$CODEX_SRC" 2>/dev/null; then
-    fail "G1: bin/review-plan-codex contains the WITHDRAWN broad wording 'prioritize the plan's committed test scope over exhaustive checklist enumeration'"
+  if grep -rqF -- "prioritize the plan's committed test scope over exhaustive checklist enumeration" "$CODEX_SRC" "$PROMPT_LIB_DIR" 2>/dev/null; then
+    fail "G1: bin/review-plan-codex or bin/lib/review-plan-codex/ contains the WITHDRAWN broad wording 'prioritize the plan's committed test scope over exhaustive checklist enumeration'"
   else
-    pass "G1: bin/review-plan-codex is free of the withdrawn broad suppression wording"
+    pass "G1: bin/review-plan-codex and bin/lib/review-plan-codex/ are free of the withdrawn broad suppression wording"
   fi
 }

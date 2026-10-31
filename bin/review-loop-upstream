@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+# bin/review-loop-upstream — the upstream-inconsistency pause of the plan review loops (#2814).
+# list finds the tagged concerns of one review report; decide records the user's A/B/C/D;
+# pick-upstream merges B return steps; return clears the review work data at and after a step
+# and bumps the cycle; accepted prints this cycle's C. Tag owner: bin/lib/concern-ledger/upstream-tag.sh.
+# Procedure: skills/_shared/codex-review-loop/upstream-inconsistency-pause.md.
+#
+# Exit codes: 0 ok, 1 an unreadable ledger / state or a failed write, 2 usage, a control
+# character, an unknown step or format, or a pair the latest list did not print, 3 return
+# before the workflow reset set the --to step back to pending.
+set -uo pipefail
+
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/lib/concern-ledger.sh
+if ! . "$SELF_DIR/lib/concern-ledger.sh"; then
+    printf 'review-loop-upstream: failed to load the concern-ledger library\n' >&2
+    exit 1
+fi
+FORMATS="outline-plan detail-plan security-plan test-review"
+
+usage() {
+    cat >&2 <<'EOF'
+usage: review-loop-upstream <subcommand> [options]
+  list          --session S --format F --round N --from-report FILE [--context-file FILE]...
+  decide        --session S --format F --id C<N> --text-hash H --choice A|B|C|D --reason R
+  pick-upstream <step>...
+  return        --session S --to STEP --from-format F
+  accepted      --session S --format F [--all-cycles]
+EOF
+    exit 2
+}
+die() { printf 'review-loop-upstream: %s\n' "$2" >&2; exit "$1"; }
+
+SUB="${1:-}"; [ -n "$SUB" ] || usage; shift
+SID=""; FMT=""; ROUND=""; REPORT=""; ID=""; HASH=""; CHOICE=""; REASON=""; TO=""; ALL=0
+CTX=(); STEPS_ARG=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --session|--format|--round|--from-report|--context-file|--id|--text-hash|--choice|--reason|--to|--from-format)
+            [ $# -ge 2 ] || die 2 "$1 needs a value"
+            case "$1" in
+                --session) SID="$2" ;; --format|--from-format) FMT="$2" ;; --round) ROUND="$2" ;;
+                --from-report) REPORT="$2" ;; --context-file) CTX+=("$2") ;; --id) ID="$2" ;;
+                --text-hash) HASH="$2" ;; --choice) CHOICE="$2" ;; --reason) REASON="$2" ;; --to) TO="$2" ;;
+            esac
+            shift 2 ;;
+        --all-cycles) ALL=1; shift ;;
+        -h|--help) usage ;;
+        -*) die 2 "unknown option: $1" ;;
+        *) STEPS_ARG+=("$1"); shift ;;
+    esac
+done
+
+# step_order — VALID_STEPS, one per line (hooks/workflow-state/state-io.js owns the list).
+step_order() { node "$SELF_DIR/lib/review-loop-upstream/step-order.js"; }
+step_index() { printf '%s\n' "$1" | awk -v s="$2" '{sub(/\r$/,"")} $0==s {print NR; exit}'; }
+
+need_fmt() {
+    case " $FORMATS " in *" $FMT "*) ;; *) die 2 "unknown format: ${FMT:-<none>}" ;; esac
+}
+# resolve_ctl — the session control dir (CTL), exported for the concern-ledger path builders.
+resolve_ctl() {
+    [ -n "$SID" ] || die 2 "--session is required"
+    CTL="$(sp_control_dir "$SID")" || die 2 "the session control dir could not be resolved"
+    [ -n "$CTL" ] || die 1 "the session control dir could not be resolved"
+    export CL_CONTROL_DIR="$CTL" CL_SESSION_ID="$SID"
+}
+ledger_of() { cl_ledger_path "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}" "$SID" "$1"; }
+
+# ledger_rows <ledger> — "<id>\t<state>\t<hash of [SEV] TEXT>" per open/reopened row.
+ledger_rows() {
+    local line id sev st last rest
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in C[0-9]*"|"*) ;; *) continue ;; esac
+        IFS='|' read -r id sev st _ last _ _ _ _ _ rest <<< "$line"
+        case "$st" in open|reopened) ;; *) continue ;; esac
+        printf '%s\t%s\n' "$id" "$(cl_upstream_text_hash "[$sev] $rest")"
+    done < "$1"
+}
+ledger_max_round() { awk -F'|' '/^C[0-9]+\|/ {if ($5+0 > m) m = $5+0} END{if (m) print m}' "$1" 2>/dev/null; }
+
+cmd_list() {
+    need_fmt; resolve_ctl
+    case "$ROUND" in ''|*[!0-9]*) die 2 "--round must be a positive integer" ;; esac
+    [ -f "$REPORT" ] || die 2 "--from-report does not exist: $REPORT"
+    local cyc ledger seen line n text id h out="" rows="" prior ev eff ret why v
+    local -A open_hash=()
+    cyc="$(cl_upstream_cycle "$CTL" "$FMT")" || die 1 "the review cycle could not be read"
+    ledger="$(ledger_of "$FMT")" || die 2 "the ledger path could not be derived"
+    seen="$CTL/$FMT-upstream-seen.tsv"
+    if [ -e "$ledger" ]; then
+        { [ -f "$ledger" ] && [ -r "$ledger" ]; } || die 1 "the concern ledger could not be read"
+        while IFS=$'\t' read -r id h; do open_hash[$id]="$h"; done < <(ledger_rows "$ledger")
+    fi
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        [[ "$line" =~ ^(C?)([0-9]+)\.\ \[([A-Z]+)\]\ (.*)$ ]] || continue
+        n="${BASH_REMATCH[2]}"; text="${BASH_REMATCH[4]}"
+        cl_is_upstream_tagged "$text" || continue
+        id="C$n"; h="$(cl_upstream_text_hash "$line")"
+        if [ -e "$ledger" ]; then
+            [ "${open_hash[$id]:-}" = "$h" ] || continue
+            prior="$(cl_upstream_prior_choice "$CTL" "$FMT" "$cyc" "$id" "$h")"
+        elif [ "$ROUND" -gt 1 ]; then
+            prior="$(seen_prior "$seen" "$cyc" "$h")" || continue
+        else
+            prior="$(cl_upstream_prior_choice "$CTL" "$FMT" "$cyc" "$id" "$h")"
+        fi
+        ev="$(cl_upstream_effective_recommend "$FMT" "$text" "$SID" "${CTX[@]}")"
+        # Split by hand: a tab is IFS whitespace, so `read` would merge an empty middle field.
+        eff="${ev%%$'\t'*}"; ev="${ev#*$'\t'}"; ret="${ev%%$'\t'*}"; why="${ev#*$'\t'}"
+        _cl_upstream_parse "$text" || true
+        cl_upstream_header "$text" || true
+        out+="$(printf '%s\t%s\t%s' "$cyc" "$id" "$h")"
+        for v in "$CLU_CAUSE" "$CLU_REC" "$eff" "$ret" "$why" "$prior" \
+            "$CLU_SECTION" "$CLU_QUOTE" "$CLU_DOWNSTREAM" "$CLU_DEFECT" "$CLU_REASON"; do
+            out+=$'\t'"$(cl_upstream_tsv_field "$v")"
+        done
+        out+=$'\n'; rows+="$cyc"$'\t'"$ROUND"$'\t'"$id"$'\t'"$h"$'\n'
+    done < "$REPORT"
+    [ -n "$rows" ] || rows="$cyc"$'\t'"$ROUND"$'\t-\t-\n'
+    put_seen "$seen" "$cyc" "$ROUND" "$rows" || die 1 "upstream-seen.tsv could not be written"
+    printf '%s' "$out"
+}
+
+# put_seen <seen> <cycle> <round> <rows> — this list's rows replace every row of the cycle at this
+# round or later, so the cycle's highest round holds only the latest list (what decide accepts).
+put_seen() {
+    local tmp="$1.tmp.$$"
+    if [ -e "$1" ]; then
+        { [ -f "$1" ] && [ -r "$1" ]; } || return 1
+        awk -F'\t' -v c="$2" -v n="$3" '{r=$0; sub(/\r$/,"",r); split(r,f,"\t")} !(f[1]==c && f[2]+0>=n+0)' "$1" > "$tmp" || { rm -f -- "$tmp"; return 1; }
+    else
+        : > "$tmp" || return 1
+    fi
+    if printf '%s' "$4" >> "$tmp" && mv -f -- "$tmp" "$1"; then return 0; fi
+    rm -f -- "$tmp"; return 1
+}
+
+# seen_prior <seen> <cycle> <hash> — rc 1 unless the hash was listed in an earlier round of the
+# cycle; prints C when an id of the latest such round carries a C for that hash (ids renumber).
+seen_prior() {
+    local id r
+    [ -f "$1" ] || return 1
+    r="$(awk -F'\t' -v c="$2" -v h="$3" -v n="$ROUND" '{sub(/\r$/,"")} $1==c && $4==h && $3!="-" && $2+0<n+0 {if ($2+0>m) m=$2+0}
+        END{if (m) print m}' "$1")"
+    [ -n "$r" ] || return 1
+    while IFS= read -r id; do
+        if [ "$(cl_upstream_prior_choice "$CTL" "$FMT" "$2" "$id" "$3")" = C ]; then printf 'C'; return 0; fi
+    done < <(awk -F'\t' -v c="$2" -v h="$3" -v r="$r" '{sub(/\r$/,"")} $1==c && $2+0==r+0 && $4==h {print $3}' "$1")
+    return 0
+}
+
+# put_decision <file> <row> — append one row through a temp copy, then rename (atomic).
+put_decision() {
+    local tmp="$1.tmp.$$"
+    if [ -e "$1" ]; then cp -- "$1" "$tmp" || { rm -f -- "$tmp"; return 1; }; else : > "$tmp" || return 1; fi
+    if printf '%s\n' "$2" >> "$tmp" && mv -f -- "$tmp" "$1"; then return 0; fi
+    rm -f -- "$tmp"; return 1
+}
+
+# cmd_decide — cl_upstream_accept closes a tagged concern only against a C row in decisions.tsv,
+# so a ledger C is committed first, then accepted; a failed accept restores the prior file, so no
+# C row outlives an open concern (the drift-grant wait aside, where C is meant to stand alone).
+cmd_decide() {
+    local v cyc ledger presence rc row f7 rest dec bak=""
+    for v in "$SID" "$FMT" "$ID" "$HASH" "$CHOICE" "$REASON"; do
+        cl_upstream_reject_control "$v" || die 2 "a control character (tab, CR, LF) is refused"
+    done
+    case "$CHOICE" in A|B|C|D) ;; *) die 2 "--choice must be A, B, C or D" ;; esac
+    need_fmt
+    case "$ID" in C[0-9]*|[0-9]*) ID="C${ID#C}" ;; esac
+    case "${ID#C}" in ''|*[!0-9]*) die 2 "--id must be C<N>" ;; esac
+    [[ "$HASH" =~ ^[0-9a-f]{64}$ ]] || die 2 "--text-hash must be 64 lowercase hex"
+    [ -n "$REASON" ] || die 2 "--reason is required"
+    resolve_ctl
+    cyc="$(cl_upstream_cycle "$CTL" "$FMT")" || die 1 "the review cycle could not be read"
+    cl_upstream_is_listed "$CTL" "$FMT" "$cyc" "$ID" "$HASH" || die 2 "$ID with that text hash was not printed by the latest list of cycle $cyc"
+    ledger="$(ledger_of "$FMT")" || die 2 "the ledger path could not be derived"
+    presence=absent; [ -f "$ledger" ] && presence=present
+    dec="$CTL/$FMT-upstream-decisions.tsv"
+    row="$(printf '%s\t%s\t%s\t%s\t%s\tledger=%s' "$cyc" "$ID" "$HASH" "$CHOICE" "$(cl_upstream_tsv_field "$REASON")" "$presence")"
+    if [ "$CHOICE" = C ] && [ "$presence" = present ] && [ -e "$dec" ]; then
+        bak="$dec.bak.$$"; cp -- "$dec" "$bak" || { rm -f -- "$bak"; die 1 "decisions.tsv could not be backed up"; }
+    fi
+    put_decision "$dec" "$row" || { [ -z "$bak" ] || rm -f -- "$bak"; die 1 "decisions.tsv could not be written"; }
+    [ "$CHOICE" = C ] && [ "$presence" = present ] || return 0
+    rc=0; cl_accept "$ledger" "$ID" "$REASON" "$SID" "$FMT" || rc=$?
+    if [ "$rc" -eq 4 ] && row="$(_cl_drift_row "$ledger" "$ID")" && cl_is_drift_tagged "$row" \
+        && IFS='|' read -r _ _ _ _ _ _ f7 _ _ _ rest <<< "$row" && ! _cl_drift_granted "$rest" "$f7" "$SID" "$FMT"; then
+        [ -z "$bak" ] || rm -f -- "$bak"
+        printf 'review-loop-upstream: C is recorded; %s also carries a glossary-drift tag and stays open until its WORKFLOW_GLOSSARY_ACCEPTED grant\n' "$ID" >&2
+        return 0
+    fi
+    if [ "$rc" -eq 0 ]; then [ -z "$bak" ] || rm -f -- "$bak"; return 0; fi
+    if [ -n "$bak" ]; then mv -f -- "$bak" "$dec"; else rm -f -- "$dec"; fi \
+        || die 1 "the ledger accept of $ID failed (rc $rc), and its C row could not be removed from $dec"
+    die 1 "the ledger accept of $ID failed (rc $rc); no C is recorded"
+}
+
+cmd_pick() {
+    local order s i best="" bi=0
+    [ "${#STEPS_ARG[@]}" -gt 0 ] || usage
+    order="$(step_order)" || die 1 "VALID_STEPS could not be read"
+    for s in "${STEPS_ARG[@]}"; do
+        i="$(step_index "$order" "$s")"
+        [ -n "$i" ] || die 2 "unknown step: $s"
+        if [ -z "$best" ] || [ "$i" -lt "$bi" ]; then best="$s"; bi="$i"; fi
+    done
+    printf '%s\n' "$best"
+}
+
+# reviewed_step <fmt> — the workflow step that writes the format's reviewed artifact.
+reviewed_step() {
+    local row; row="$(cl_upstream_format_row "$1")" || return 1
+    case "${row%%|*}" in
+        intent) printf 'clarify_intent' ;; outline) printf 'outline' ;; detail) printf 'detail' ;;
+        "test files") printf 'write_tests' ;; *) return 1 ;;
+    esac
+}
+
+# put_file <path> <value> — write one line through a temp file beside it, then rename.
+put_file() {
+    if printf '%s\n' "$2" > "$1.tmp.$$" && mv -f -- "$1.tmp.$$" "$1"; then return 0; fi
+    rm -f -- "$1.tmp.$$"; return 1
+}
+# jr_get <journal> <kind> <fmt> — the third field of the first "<kind>\t<fmt>" row; jr_has: rc only.
+jr_get() { awk -F'\t' -v k="$2" -v f="$3" '{sub(/\r$/,"")} $1==k && $2==f {print $3; exit}' "$1"; }
+jr_has() { awk -F'\t' -v f="$2" -v s="$3" '{sub(/\r$/,"")} $1=="done" && $2==f && $3==s {x=1} END{exit !x}' "$1"; }
+
+# cmd_return — runs only once the workflow reset set --to back to pending, so a refused or failed
+# reset never leaves the step in place with its review state gone. The journal fixes the target cycle
+# of every format before any change; each stage of a format is marked done once it succeeds, and the
+# cycle reaching its target marks the format done, so a re-run after a partial failure resumes
+# without repeating a stage or bumping a cycle twice.
+cmd_return() {
+    local order ti f si ledger rnd rn last cyc tgt jr body st set=""
+    need_fmt; resolve_ctl
+    order="$(step_order)" || die 1 "VALID_STEPS could not be read"
+    ti="$(step_index "$order" "$TO")"; [ -n "$ti" ] || die 2 "unknown step: ${TO:-<none>}"
+    for f in $FORMATS; do
+        si="$(step_index "$order" "$(reviewed_step "$f")")"; [ -n "$si" ] || die 1 "no reviewed step for $f"
+        [ "$si" -ge "$ti" ] && set+=" $f"
+    done
+    case "$set " in *" $FMT "*) ;; *) die 2 "$TO is not at or before the step $FMT reviews" ;; esac
+    st="$(node "$SELF_DIR/workflow/read-step-status" --session "$SID" --step "$TO")" || die 1 "the workflow status of $TO could not be read"
+    [ "${st%$'\r'}" = status=pending ] || die 3 "$TO is not reset ($st): emit <<WORKFLOW_RESET_FROM_$TO: …>> first, then re-run return"
+    for f in $FORMATS; do
+        [ "$f" = "$FMT" ] || [ ! -e "$CTL/$f-upstream-return.tsv" ] || die 1 "an earlier return from $f did not finish: re-run it as recorded in $CTL/$f-upstream-return.tsv, or remove that file after checking each format's cycle"
+    done
+    jr="$CTL/$FMT-upstream-return.tsv"
+    if [ -e "$jr" ]; then
+        { [ -f "$jr" ] && [ -r "$jr" ]; } || die 1 "the return journal could not be read: $jr"
+        [ "$(jr_get "$jr" op "$FMT")" = "$TO" ] || die 1 "an earlier return did not finish: re-run it as recorded in $jr, or remove that file after checking each format's cycle"
+    else
+        body="$(printf 'op\t%s\t%s' "$FMT" "$TO")"
+        for f in $set; do
+            cyc="$(cl_upstream_cycle "$CTL" "$f")" || die 1 "the review cycle of $f could not be read"
+            body+=$'\n'"$(printf 'target\t%s\t%s' "$f" "$((cyc + 1))")"
+        done
+        put_file "$jr" "$body" || die 1 "the return journal could not be written"
+    fi
+    for f in $set; do
+        tgt="$(jr_get "$jr" target "$f")"
+        case "$tgt" in ''|*[!0-9]*) die 1 "the return journal has no target cycle for $f" ;; esac
+        cyc="$(cl_upstream_cycle "$CTL" "$f")" || die 1 "the review cycle of $f could not be read"
+        [ "$cyc" -eq "$tgt" ] && continue
+        [ "$((cyc + 1))" -eq "$tgt" ] || die 1 "the review cycle of $f changed since the return began ($cyc, target $tgt)"
+        ledger="$(ledger_of "$f")" || die 2 "the ledger path could not be derived"
+        rn="$(cl_round_path "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}" "$SID" "$f")" || die 2 "the round path could not be derived"
+        rnd=""; [ -f "$ledger" ] && rnd="$(ledger_max_round "$ledger")"
+        if [ -n "$rnd" ] && ! jr_has "$jr" "$f" finalized; then
+            bash "$SELF_DIR/concern-ledger" finalize --session-id "$SID" --format "$f" --mode escalate \
+                --reason "upstream-return:$TO" --round "$rnd" >/dev/null || die 1 "finalize of $f failed"
+            printf 'done\t%s\tfinalized\n' "$f" >> "$jr" || die 1 "the return journal could not be written"
+        fi
+        if ! jr_has "$jr" "$f" cleared; then
+            last=""; [ -f "$rn" ] && last="$(tr -d '\r\n ' < "$rn")"
+            case "$last" in ''|*[!0-9]*) last="$rnd" ;; esac
+            if [ -n "$last" ]; then put_file "$CTL/$f-last-round.txt" "$last" || die 1 "last-round.txt of $f could not be written"; fi
+            rm -f -- "$ledger" "$rn" "$CTL/codex-context.$f.built" || die 1 "the work data of $f could not be removed"
+            printf 'done\t%s\tcleared\n' "$f" >> "$jr" || die 1 "the return journal could not be written"
+        fi
+        put_file "$CTL/$f-review-cycle.txt" "$tgt" || die 1 "the review cycle of $f could not be written"
+    done
+    rm -f -- "$jr" || die 1 "the return journal could not be removed: $jr"
+}
+
+cmd_accepted() {
+    local cyc f
+    need_fmt; resolve_ctl
+    cyc="$(cl_upstream_cycle "$CTL" "$FMT")" || die 1 "the review cycle could not be read"
+    f="$CTL/$FMT-upstream-decisions.tsv"
+    [ -f "$f" ] || return 0
+    awk -F'\t' -v c="$cyc" -v all="$ALL" '{sub(/\r$/,"")} $4=="C" && (all=="1" || $1==c)' "$f"
+}
+
+case "$SUB" in
+    list) cmd_list ;;
+    decide) cmd_decide ;;
+    pick-upstream) cmd_pick ;;
+    return) cmd_return ;;
+    accepted) cmd_accepted ;;
+    *) usage ;;
+esac

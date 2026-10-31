@@ -92,7 +92,7 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    **Exit 4 must NOT trigger `outline-reviewer` fallback** — halt and surface
    stderr to the user. Only exit 3 falls back silently.
 
-   **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` (`<N>` from `<CONTROL_DIR>/outline-plan-round-number.txt`, `<CONTROL_DIR>` = `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session <session-id>`); re-delegate to planner and loop back to MOP-5.
+   **exit 1 (CONTINUE):** save stdout to `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` (`<N>` from `<CONTROL_DIR>/outline-plan-round-number.txt`, `<CONTROL_DIR>` = `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session <session-id>`); re-delegate to planner and loop back to MOP-5. A `MISSING_ALTERNATIVE` carrying a `[upstream-inconsistency …]` concern is not a missing alternative: pause per [`upstream-inconsistency-pause.md`](../_shared/codex-review-loop/upstream-inconsistency-pause.md) first.
 
    **Exit 7 (FINALIZE_FAILED)** — `<CONTROL_DIR>/outline-plan-unresolved-concerns.json` could not be written: halt, surface the `## Concern Ledger: FINALIZE-FAILED` line, and emit no completion sentinel. After any ESCALATE, confirm the artifact with `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan` before the sentinel.
 
@@ -116,6 +116,8 @@ MOP-7. On `APPROVED`:
    Emit this prose rationale summary as the turn-final assistant message, not as mid-turn text between tool calls — the VS Code extension renders only turn-final assistant text. Write the summary in `CONV_LANG` (or English if unset). For each approach, write one paragraph (rationale + trade-offs + delivery plan). End with: `Recommended approach: <name> — <one-line reason>`.
 
    Do NOT write this prose to outline.md. MOP-8 handles the file write.
+
+   List "Accepted upstream inconsistencies" in this summary per `upstream-inconsistency-pause.md`; a re-run after B revises the existing outline as a diff per that procedure.
 
 MOP-8. Write the chosen approach to `<OUTLINE_MD>` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + plan-link line).
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
@@ -151,7 +153,7 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 - `next-step --advance --step detail` is NOT called here; only `make-detail-plan` completes `detail`. This skill completes `outline` via MOP-C1's `next-step --advance --step outline --complete --next` call.
 - **Confirmation dialogs per run**: OFF mode fires none. ON mode fires exactly one: the MOP-8 `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel. The MOP-7 AskUserQuestion and the multi-approach passthrough bypass option are abolished (#1522); the orchestrator auto-selects the recommended approach. `CONFIRM_OUTLINE=off` is the sole remaining MOP-8 bypass path. The AskUserQuestion that confirms accepting a `[glossary-drift ` concern unfixed does not count toward this (exception below; `skills/_shared/glossary-drift-check.md`).
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the MOP-7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
-- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`.
+- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`. Second exception: a `[upstream-inconsistency ` concern pauses the round for the user's decision, per `skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ## Completion

@@ -13,6 +13,12 @@ set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SUT="$SCRIPT_CHECKOUT_ROOT/bin/build-codex-context"
+# The build records provenance under the state root (#2814); pin it so the real ~/.workflow-state is untouched.
+BCC_ISO="$(mktemp -d)"
+readonly BCC_ISO
+mkdir -p "$BCC_ISO/workflow-state" "$BCC_ISO/plans"
+export WORKFLOW_STATE_DIR="$BCC_ISO/workflow-state" WORKFLOW_PLANS_DIR="$BCC_ISO/plans"
+unset CLAUDE_CODE_SESSION_ID
 
 PASS=0
 FAIL=0
@@ -49,6 +55,7 @@ mk_tmp() {
 }
 
 cleanup() {
+    rm -rf "$BCC_ISO"
     for d in "${ALL_TMPS[@]}"; do
         [ -d "$d" ] && rm -rf "$d"
     done
@@ -77,9 +84,9 @@ run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] \
    && [ -f "$OUT" ] \
-   && grep -qF "## Section 1: Intent (User Requirements)" "$OUT" \
+   && grep -qxF "## intent" "$OUT" \
    && grep -qF "This is intent." "$OUT" \
-   && ! grep -qF "## Section 2:" "$OUT" \
+   && ! grep -qxF "## outline" "$OUT" \
    && ! grep -qE "^---$" "$OUT"; then
     pass "C1: intent.md only → Section 1, no Section 2, no separator"
 else
@@ -96,9 +103,9 @@ run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] \
    && [ -f "$OUT" ] \
-   && grep -qF "## Section 2: Outline (Design Proposal)" "$OUT" \
+   && grep -qxF "## outline" "$OUT" \
    && grep -qF "This is outline." "$OUT" \
-   && ! grep -qF "## Section 1:" "$OUT" \
+   && ! grep -qxF "## intent" "$OUT" \
    && ! grep -qE "^---$" "$OUT"; then
     pass "C2: outline.md only → Section 2, no Section 1, no separator"
 else
@@ -115,9 +122,9 @@ printf '%s\n' "$OUTLINE_CONTENT" > "$TMP/${SID}-outline.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
 SEP_COUNT=$(grep -cE "^---$" "$OUT" 2>/dev/null || echo 0)
-S1_LINE=$(grep -nF "## Section 1: Intent" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
+S1_LINE=$(grep -nxF "## intent" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
 SEP_LINE=$(grep -nE "^---$" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
-S2_LINE=$(grep -nF "## Section 2: Outline" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
+S2_LINE=$(grep -nxF "## outline" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
 if [ "$RC" -eq 0 ] \
    && [ -f "$OUT" ] \
    && [ "$SEP_COUNT" -eq 1 ] \
@@ -151,7 +158,7 @@ OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC1=$?
-ROUND1_OK=$([ "$RC1" -eq 0 ] && [ -f "$OUT" ] && grep -qF "## Section 1:" "$OUT" && echo yes || echo no)
+ROUND1_OK=$([ "$RC1" -eq 0 ] && [ -f "$OUT" ] && grep -qxF "## intent" "$OUT" && echo yes || echo no)
 rm -f "$TMP/${SID}-intent.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC2=$?
@@ -201,9 +208,9 @@ printf '%s\n' "$OUTLINE_CONTENT" > "$TMP/${SID}-outline.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] \
-   && grep -qF "<!-- Source: $TMP/${SID}-intent.md -->" "$OUT" \
-   && grep -qF "<!-- Source: $TMP/${SID}-outline.md -->" "$OUT"; then
-    pass "C6: Source comments contain resolved plans-dir path"
+   && grep -qxF "<!-- codex-context-section: intent source=$TMP/${SID}-intent.md -->" "$OUT" \
+   && grep -qxF "<!-- codex-context-section: outline source=$TMP/${SID}-outline.md -->" "$OUT"; then
+    pass "C6: section markers (#2814) contain the role and the resolved plans-dir path"
 else
     fail "C6: rc=$RC — Source comment missing or unresolved"
 fi
@@ -240,13 +247,13 @@ OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC1=$?
-R1_OK=$([ "$RC1" -eq 0 ] && grep -qF "## Section 1:" "$OUT" && ! grep -qF "## Section 2:" "$OUT" && echo yes || echo no)
+R1_OK=$([ "$RC1" -eq 0 ] && grep -qxF "## intent" "$OUT" && ! grep -qxF "## outline" "$OUT" && echo yes || echo no)
 printf '%s\n' "$OUTLINE_CONTENT" > "$TMP/${SID}-outline.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC2=$?
 if [ "$R1_OK" = "yes" ] && [ "$RC2" -eq 0 ] \
-   && grep -qF "## Section 1:" "$OUT" \
-   && grep -qF "## Section 2:" "$OUT"; then
+   && grep -qxF "## intent" "$OUT" \
+   && grep -qxF "## outline" "$OUT"; then
     pass "C8: stale intent-only output replaced with both sections"
 else
     fail "C8: round1=$R1_OK rc2=$RC2"
@@ -265,9 +272,9 @@ printf '%s\n' "$OUTLINE_CONTENT" > "$SPACE_DIR/${SID}-outline.md"
 run_sut "$SPACE_DIR" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
 SEP_COUNT=$(grep -cE "^---$" "$OUT" 2>/dev/null || echo 0)
-S1_LINE=$(grep -nF "## Section 1: Intent" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
+S1_LINE=$(grep -nxF "## intent" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
 SEP_LINE=$(grep -nE "^---$" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
-S2_LINE=$(grep -nF "## Section 2: Outline" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
+S2_LINE=$(grep -nxF "## outline" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
 if [ "$RC" -eq 0 ] \
    && [ -f "$OUT" ] \
    && [ "$SEP_COUNT" -eq 1 ] \
@@ -291,10 +298,11 @@ OUT_TAIL=$(tail -c1 "$TMP/${SID}-outline.md" | wc -l | tr -d ' ')
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
 SEP_COUNT=$(grep -cE "^---$" "$OUT" 2>/dev/null || echo 0)
-S2_COUNT=$(grep -cE "^## Section 2: Outline \(Design Proposal\)$" "$OUT" 2>/dev/null || echo 0)
-S1_LINE=$(grep -nF "## Section 1: Intent" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
+S2_COUNT=$(grep -cE "^## outline$" "$OUT" 2>/dev/null)
+S2_COUNT=${S2_COUNT:-0}
+S1_LINE=$(grep -nxF "## intent" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
 SEP_LINE=$(grep -nE "^---$" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
-S2_LINE=$(grep -nF "## Section 2: Outline" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
+S2_LINE=$(grep -nxF "## outline" "$OUT" 2>/dev/null | head -1 | cut -d: -f1)
 if [ "$INT_TAIL" = "0" ] && [ "$OUT_TAIL" = "0" ] \
    && [ "$RC" -eq 0 ] \
    && [ "$SEP_COUNT" -eq 1 ] \

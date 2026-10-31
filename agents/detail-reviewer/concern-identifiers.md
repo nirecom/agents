@@ -1,7 +1,7 @@
 ## Concern Identifiers
 
 - **Round 1** — assign each concern a stable ID `C1`, `C2`, `C3`, … in order of appearance. Format: `C<N>. [<SEV>] <text>` (period after the ID).
-- **Round 2+** — DO NOT introduce new concerns. Reference each prior concern by ID and report its disposition:
+- **Round 2+** — only confirm whether each previous-round concern is fixed; DO NOT introduce new concerns, tagged or not. Reference each prior concern by ID and report its disposition:
     - `C<N>: resolved` — the planner's revision addresses the concern.
     - `C<N>: unresolved — <one-line reason>` — the concern still applies.
   Any line not matching `^C[0-9]+:` will be mechanically discarded by the orchestrator.
