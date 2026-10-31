@@ -947,3 +947,7 @@ Changes: Glossary check asks for confirmation less often: it scans only changed 
 ### FEATURE: PR #2864 (2026-11-01)
 Background: feat(#2862): upgrade an already-installed RTK in the installers when RTK=on
 Changes: With `RTK=on`, the installer now upgrades an already-installed RTK instead of leaving it as is. If the upgrade fails, the installed version is kept and setup continues.
+
+### FEATURE: PR #2866 (2026-11-01)
+Background: fix(#2828): grant WORKFLOW_GLOSSARY_ACCEPTED in resumed sessions and ...
+Changes: Fixed: `WORKFLOW_GLOSSARY_ACCEPTED` is no longer rejected as "nothing pending" in a resumed session, and one sentinel now covers findings of every stage that has one; when it grants nothing it says why.
