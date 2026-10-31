@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2687-test-host-load.sh
 # Tests: bin/lib/test-host-load.sh, bin/lib/test-host-load-probe.sh
-# Tags: TL2, scope:issue-specific, lanes, load-scale-in
-# Serial: sampler ticks age samples against wall-clock heartbeats; a timeout case waits 20s
+# Tags: TL2, scope:issue-specific, lanes, load-scale-in, external-load, reserved-cores
+# Serial: sampler ticks age samples against wall-clock heartbeats; probe-timeout cases wait out a heartbeat-clamped probe timeout (2-5s) and stub probes sleep up to 8s
 # Dispatcher for #2687 / #2506 stage 4: load sample, hysteresis, reader, computation, roots.
 # TL3 gap (what this test does NOT catch):
 # - real Windows PowerShell counters (Win32_PerfRawData_PerfOS_Processor) under real external load
@@ -19,6 +19,8 @@ PAR_LIB="$AGENTS_ROOT/bin/lib/run-all-parallelism.sh"
 LANES_LIB="$AGENTS_ROOT/bin/lib/test-host-lanes.sh"
 LOAD_LIB="$AGENTS_ROOT/bin/lib/test-host-load.sh"
 PROBE_LIB="$AGENTS_ROOT/bin/lib/test-host-load-probe.sh"
+SAMPLE_LIB="$AGENTS_ROOT/bin/lib/test-host-load-sample.sh"
+ALLOC_LIB="$AGENTS_ROOT/bin/lib/test-host-alloc.sh"
 RUN_TIMEOUT="$AGENTS_ROOT/bin/run-with-timeout.sh"
 
 assert_eq() {
@@ -34,7 +36,8 @@ TMPDIR_BASE="$(mktemp -d)"
 readonly TMPDIR_BASE
 LIVE_SLEEP=""
 LIVE_SLEEP2=""
-trap '[ -n "$LIVE_SLEEP" ] && kill "$LIVE_SLEEP" 2>/dev/null; [ -n "$LIVE_SLEEP2" ] && kill "$LIVE_SLEEP2" 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
+LIVE_SLEEP3=""
+trap '[ -n "$LIVE_SLEEP" ] && kill "$LIVE_SLEEP" 2>/dev/null; [ -n "$LIVE_SLEEP2" ] && kill "$LIVE_SLEEP2" 2>/dev/null; [ -n "$LIVE_SLEEP3" ] && kill "$LIVE_SLEEP3" 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 
 # Fixture isolation (rules/test/fixture-isolation.md).
 export WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow"
@@ -55,6 +58,9 @@ sleep 600 &
 LIVE_SLEEP=$!
 sleep 600 &
 LIVE_SLEEP2=$!
+# LIVE_SLEEP3 owns only an other-env lane (LS13): it must never become a root.
+sleep 600 &
+LIVE_SLEEP3=$!
 bash -c 'exit 0' &
 DEAD_PID=$!
 wait "$DEAD_PID" 2>/dev/null
@@ -83,6 +89,16 @@ case_end
 . "$GROUP_DIR/sampler-cases.sh"
 # shellcheck source=feature-2687-test-host-load/compute-cases.sh
 . "$GROUP_DIR/compute-cases.sh"
+# shellcheck source=feature-2687-test-host-load/internal-cases.sh
+. "$GROUP_DIR/internal-cases.sh"
+# shellcheck source=feature-2687-test-host-load/probe-cases.sh
+. "$GROUP_DIR/probe-cases.sh"
+# shellcheck source=feature-2687-test-host-load/claim-cases.sh
+. "$GROUP_DIR/claim-cases.sh"
+# shellcheck source=feature-2687-test-host-load/claim-heartbeat-cases.sh
+. "$GROUP_DIR/claim-heartbeat-cases.sh"
+# shellcheck source=feature-2687-test-host-load/claim-reread-cases.sh
+. "$GROUP_DIR/claim-reread-cases.sh"
 
 case_begin "suite-integrity" "bin/lib/test-host-load.sh"
 
@@ -108,7 +124,7 @@ else
     fail "GRP2 case file completion mismatch" "sourced-but-unfinished: [${GRP_UNFINISHED:-none}] marked-but-not-sourced: [${GRP_UNEXPECTED:-none}]"
 fi
 
-CASE_EXPECTED="LS1 LS2 LS3 LS4 LS5 LS6 LS7 LS8 LS9 LS10 LS11 LS12 LS13 LS14"
+CASE_EXPECTED="LS1 LS2 LS3 LS4 LS5 LS6 LS7 LS8 LS9 LS10 LS11 LS12 LS13 LS14 LS15 LS16 LS17 SNAP1 SNAP2 IN1 IN2 IN3 IN4 IN5 PB1 PB2 PB3 PB4 PB5 PB6 PB7 PB8 PB9 PB10 PB11 PB12 CL1 CL2 CL3 CL4 CL5 CL6 CL7 CL8 CL9 CL10 CL11 CL12 CL13 CL14 CL15 CL16 CL17 CL18 CL19"
 CASE_MISSING=""
 for _c in $CASE_EXPECTED; do
     case " $CASE_RAN " in

@@ -256,7 +256,9 @@ fi
     printf 'sample_size=24\n'
     printf 'repeat=3\n'
 } > "$CONF"
-cp "$FX_REPO_ROOT/bin/lib/test-host-lanes.sh" "$S/bin/lib/test-host-lanes.sh" 2>/dev/null || true
+for _lane_lib in test-host-lanes.sh test-host-lanes-share.sh test-host-load.sh test-host-load-probe.sh test-host-load-sample.sh test-host-alloc.sh test-host-lanes-status.sh; do
+    cp "$FX_REPO_ROOT/bin/lib/$_lane_lib" "$S/bin/lib/$_lane_lib" 2>/dev/null || true
+done
 
 export RUN_ALL_DURATIONS_LIB="$FX_TMP_ROOT/no-such-durations-lib.sh"
 fx_exec "$S" 60 "$S_OUT" "$S_ERR" --print-plan --all

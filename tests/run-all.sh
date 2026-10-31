@@ -353,7 +353,7 @@ esac
 say "reap: $REAP"
 
 # --- scheduler -------------------------------------------------------------
-NEXT=0; REPORTED=0; HARVESTED=0
+NEXT=0; REPORTED=0; HARVESTED=0; SAMPLE_NEW=0
 SERIAL_INFLIGHT=0; BARRIER_ANNOUNCED=0; DEADLINE_HIT=0; IDLE_SPINS=0; START_TS=$SECONDS
 # Host-wide lanes (#2455): the lease can only narrow RUN_JOBS, never widen it.
 if [ "$LANES_LIB_OK" -eq 1 ] && [ "$TOTAL" -gt 0 ]; then
@@ -432,12 +432,18 @@ flush() {
 
 # Without a deadline the wait BLOCKS — polling would burn a core for the whole
 # suite. With one, the same wait is bounded so a wedged child cannot outlive it.
+# Under lanes it polls each second so a new run-all lane allocation sample re-evaluates the width
+# while every job runs (SAMPLE_NEW=1); running jobs are never stopped.
 reap_wait() {
-  if [ "$DEADLINE" -gt 0 ]; then
+  local poll=0
+  SAMPLE_NEW=0
+  [ "$LANES_LIB_OK" -eq 1 ] && [ -n "${THL_TOKEN:-}" ] && [ "${THL_LANES_DEGRADED:-0}" != 1 ] && poll=1
+  if [ "$DEADLINE" -gt 0 ] || [ "$poll" = 1 ]; then
     while :; do
       harvest
       [ "$HARVESTED" -gt 0 ] && return 0
-      if [ $((SECONDS - START_TS)) -ge "$DEADLINE" ]; then DEADLINE_HIT=1; return 1; fi
+      [ "$poll" = 1 ] && thl_sample_new && { SAMPLE_NEW=1; return 0; }
+      if [ "$DEADLINE" -gt 0 ] && [ $((SECONDS - START_TS)) -ge "$DEADLINE" ]; then DEADLINE_HIT=1; return 1; fi
       sleep 1
     done
   fi
@@ -475,7 +481,7 @@ while [ "$REPORTED" -lt "$TOTAL" ]; do
   if [ "${#INFLIGHT[@]}" -eq 0 ]; then flush; break; fi
   reap_wait || break
   flush
-  [ "$HARVESTED" -gt 0 ] && [ "$LANES_LIB_OK" -eq 1 ] && { thl_rebalance "${#INFLIGHT[@]}"; RUN_JOBS="$THL_WIDTH"; }
+  { [ "$HARVESTED" -gt 0 ] || [ "$SAMPLE_NEW" -eq 1 ]; } && [ "$LANES_LIB_OK" -eq 1 ] && { thl_rebalance "${#INFLIGHT[@]}"; RUN_JOBS="$THL_WIDTH"; }
 done
 
 if [ "$DEADLINE_HIT" -eq 1 ]; then

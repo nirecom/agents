@@ -3,9 +3,10 @@
 # Read-only: never reclaims, never creates slots/. Design: docs/architecture/claude-code/test-host-lanes.md.
 # Usage: bash bin/test-lanes-status.sh [-h|--help]
 # Output: `max_jobs_per_host=<N> source=<env|dotenv|measured|default> [record=<reason>]
-#   [measured_on=<os> now=<os>] mode=<on|off> runs=<active run count>`, then one
-#   `lane.<i><TAB>kind<TAB>pid<TAB>env<TAB>age_s<TAB>state` row per lane, or `no test lanes held`,
-#   then one `run.<k><TAB>run-all<TAB>pid<TAB>env<TAB>age_s<TAB>state` row per presence record.
+#   [measured_on=<os> now=<os>] mode=<on|off> runs=<n>`, load/sample (`load state=none` or `load state=
+#   ... pool=`, #2692) then `load is the run-all lane allocation sample`, one `lane.<i>` row
+#   (kind pid env age_s state) per lane or `no test lanes held`, then one `run.<k>` row per presence
+#   record plus width ssthresh per_run_lane_cap decided_by (per-run-cap|cpu-load-limit|memory-limit|slow-start; `-`).
 # state: alive | stale-dead-pid | stale-ttl | foreign | ownerless.
 # Exit: 0 = listed, 2 = usage error.
 set -u
