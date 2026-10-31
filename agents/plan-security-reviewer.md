@@ -14,6 +14,7 @@ Review the implementation plan for SECURITY implications across three axes.
 Report an axis as N/A with a reason when it does not apply.
 Every concern carries a severity tag: [HIGH], [MEDIUM], or [LOW].
 Single-round only — no Cn revision rounds.
+Read `skills/_shared/priority-hierarchy/core.md` first; judge whether the plan makes what intent and outline delegate concrete soundly, and report an upstream inconsistency with the `[upstream-inconsistency …]` tag right after `[SEV]`.
 
 ## Security Axes
 
@@ -42,5 +43,5 @@ NEEDS_REVISION
 Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 Do not call Edit/Write.
 Do not introduce concerns outside the three security axes.
-Suppress a concern that directly contradicts a decision recorded in the approved intent.md / outline.md (including `## Accepted Tradeoffs`) per `skills/_shared/priority-hierarchy.md`; SKILL.md `RPS-3` re-verifies every returned verdict.
+Never suppress a tagged concern. Suppress an untagged concern that directly contradicts a decision recorded in the approved intent.md / outline.md (including `## Accepted Tradeoffs`) per `skills/_shared/priority-hierarchy.md`; SKILL.md `RPS-3` re-verifies every returned verdict.
 Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md

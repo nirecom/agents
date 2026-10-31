@@ -117,12 +117,13 @@ The wrapper internally:
 1. Builds (per-stage, marker-gated at `<CONTROL_DIR>/codex-context.<FORMAT>.built`)
    the unified context at `<CONTROL_DIR>/codex-context.md` (renamed from
    `-context.md` to avoid WI-9 collision) via
-   `bin/build-codex-context`. Section headers: `## Section 1: Intent (User Requirements)`
-   and `## Section 2: Outline (Design Proposal)`, prefixed by
-   `<!-- Source: <PLANS_DIR>/<first_session_id>-intent.md -->` and
-   `<!-- Source: <PLANS_DIR>/<first_session_id>-outline.md -->`.
-   - If only the intent file exists, only Section 1 is written.
-   - If only the outline file exists, only Section 2 is written.
+   `bin/build-codex-context`. Each part starts with its marker
+   `<!-- codex-context-section: intent source=<PLANS_DIR>/<session-id>-intent.md -->` or
+   `<!-- codex-context-section: outline source=<PLANS_DIR>/<session-id>-outline.md -->`
+   (`<session-id>` = first_session_id) and the section heading `## intent` / `## outline` (#2814); `review-plan-codex` splits by
+   the marker only a file whose provenance the build recorded (`bin/lib/codex-context-marker.sh`), drops it, and wraps each part in a nonce-bearing `[CONTEXT SECTION START|END …]` pair.
+   - If only the intent file exists, only the intent part is written.
+   - If only the outline file exists, only the outline part is written.
    - If neither exists, the output file is deleted and no `--context <context.md>` is passed downstream.
 2. Pre-flights `AGENTS_MAIN_ROOT` AND `$AGENTS_MAIN_ROOT/rules/core-principles.md`
    (both mandatory — missing either → exit 4).
@@ -157,5 +158,7 @@ Quick reference (public exit codes — Contract B):
 | 7 | FINALIZE_FAILED | HALT; surface `## Concern Ledger: FINALIZE-FAILED` line; do not emit sentinel. |
 | 8 | re-invoked after terminal (all three wrappers) | HALT; unchanged since last terminal exit — AskUserQuestion per "Escalation by format". |
 | 9 | exit 6 termination, content changed but residual HIGH not accepted (all three wrappers) | HALT; accept via `bin/accept-exit6-residual` (or `WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED` for review-tests) then re-run. |
+
+A concern tagged `[upstream-inconsistency …]` pauses the loop for the user's decision: [`skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`](codex-review-loop/upstream-inconsistency-pause.md).
 
 Full tables (Contract A, Contract B), RAW persistence rules, RAW naming, per-round log protocol, Outcomes, and Rationale: [`skills/_shared/codex-review-loop/exit-codes.md`](codex-review-loop/exit-codes.md).

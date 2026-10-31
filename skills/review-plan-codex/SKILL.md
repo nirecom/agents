@@ -98,7 +98,7 @@ or
 ```
 MISSING_ALTERNATIVE:
 C1. [HIGH] <missing approach that should be considered>
-C2. [MEDIUM] <additional missing alternative>
+C2. [MEDIUM] [upstream-inconsistency …] <a tagged concern, if any>
 ```
 
 ### `--format outline-plan` Round 2+ (`--round 2`, `--ledger <path>`)

@@ -455,9 +455,10 @@ _cl_placehold_empty_concerns() {
 # rewrites only the target row's STATE (field 3) and FLAGS (field 10) line by line —
 # aux lines stay verbatim, so reduce's serializer is never reused — and upserts the
 # reason, prefixed by <label> when set, into the carrier keyed by DISCRIM.
-cl_reject() { cl_guard_reject "$1" "$2" || return 4; _cl_dismiss_write "$1" "$2" "$3" ""; }
+cl_reject() { cl_guard_reject "$1" "$2" || return 4; cl_upstream_guard_reject "$1" "$2" || return 4; _cl_dismiss_write "$1" "$2" "$3" ""; }
 _cl_dismiss_write() {
-    local ledger="$1" id="$2" reason="$3" label="${4:-}"
+    # $5 (#2814): an extra row flag, so a user-accepted close stays visible in the ledger itself.
+    local ledger="$1" id="$2" reason="$3" label="${4:-}" rowflag="${5:-}"
     [ -f "$ledger" ] || return 1
     local tline
     tline="$(grep -m1 -E "^${id}\|" "$ledger" 2>/dev/null)" || return 1
@@ -466,6 +467,7 @@ _cl_dismiss_write() {
     IFS='|' read -r f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 rest <<< "$tline"
     local newflag
     newflag="$(_cl_flag_add "$f10" "rejected")"
+    [ -z "$rowflag" ] || newflag="$(_cl_flag_add "$newflag" "$rowflag")"
     {
         while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in

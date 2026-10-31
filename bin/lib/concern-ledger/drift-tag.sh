@@ -43,20 +43,32 @@ cl_guard_reject() {
     return 0
 }
 
+# _cl_drift_granted <text> <discrim> <sid> <format> — 0 when a grant covers the tag's term.
+_cl_drift_granted() {
+    local term
+    term="$(cl_drift_term "$1")"
+    [ -n "$term" ] && [ -n "$2" ] && [ -n "$3" ] && [ -n "$4" ] || return 1
+    [ -f "$CL_DRIFT_GRANT_CLI" ] || return 1
+    node "$CL_DRIFT_GRANT_CLI" --session "$3" --format "$4" \
+        --norm "$term" --discrim "$2" >/dev/null 2>&1 || return 1
+}
+
 # cl_accept <ledger> <id> <reason> <sid> <format> — close a tagged concern under a
 # matching grant. 0 written; 2 the concern is untagged; 4 refused (no ledger, no
 # row, no term, no grant, or the grant reader could not answer); 1 write failure.
 cl_accept() {
     local ledger="$1" id="$2" reason="$3" sid="${4:-}" format="${5:-}"
-    local row f7 rest term
+    local row f7 rest
     row="$(_cl_drift_row "$ledger" "$id")" || return 4
     IFS='|' read -r _ _ _ _ _ _ f7 _ _ _ rest <<< "$row"
+    # #2814: an [upstream-inconsistency …] concern closes on the user's recorded C; one that
+    # also carries the glossary-drift tag needs its grant as well (both decisions, either order).
+    if cl_is_upstream_tagged "$rest"; then
+        if cl_is_drift_tagged "$rest"; then _cl_drift_granted "$rest" "$f7" "$sid" "$format" || return 4; fi
+        cl_upstream_accept "$ledger" "$id" "$reason"; return $?
+    fi
     cl_is_drift_tagged "$rest" || return 2
-    term="$(cl_drift_term "$rest")"
-    [ -n "$term" ] && [ -n "$f7" ] && [ -n "$sid" ] && [ -n "$format" ] || return 4
-    [ -f "$CL_DRIFT_GRANT_CLI" ] || return 4
-    node "$CL_DRIFT_GRANT_CLI" --session "$sid" --format "$format" \
-        --norm "$term" --discrim "$f7" >/dev/null 2>&1 || return 4
+    _cl_drift_granted "$rest" "$f7" "$sid" "$format" || return 4
     _cl_dismiss_write "$ledger" "$id" "$reason" "$CL_DRIFT_ACCEPT_LABEL" || return 1
     return 0
 }

@@ -77,6 +77,7 @@ guard refuse every model write there without touching the artifact workflow.
 |---|---|---|
 | `<fmt>-round-number.txt`, `-last-round.txt`, `-terminal.txt`, `-continuing.txt` (test-review exit 1/5; recovery rule: `skills/_shared/codex-review-loop/exit-codes.md` "Accepted-warning recovery"), `-unresolved-concerns.json` | `run-codex-review-loop` via the wrappers | Wrappers, evidence-resolver, `state-io/review-tests.js` |
 | `<fmt>-concern-ledger[-cycle<N>\|-cap-snapshot].txt`, `-concern-carrier.md`, `-round-<N>-delta-<producer>.txt` | `bin/concern-ledger`, `bin/lib/concern-ledger/` | concern-ledger, evidence-resolver |
+| `<fmt>-review-cycle.txt` (B return cycle, distinct from the ledger header `cycle=<K>`), `<fmt>-upstream-seen.tsv` (cycle, round, id, text_hash; each `list` replaces the cycle's rows at its round and later, so `decide` accepts only the latest list), `-upstream-decisions.tsv`, `-upstream-return.tsv` (journal of an unfinished `return`, removed when it completes) | `bin/review-loop-upstream` | `bin/lib/concern-ledger/upstream-tag.sh` (`accept` / `reject` checks) |
 | `{security-code,review-plan-security,review-tests}-exit6-accepted.txt` | `bin/accept-exit6-residual` | The three security/test wrappers |
 | `{outline,detail}-risk-signal.txt` | `bin/record-risk-signal` | make-{outline,detail}-plan wrappers |
 | `worker-<name>[-<seq>].json`, `.dispatched` | `bin/worker-dispatch-payload`; the dispatcher writes `.dispatched` | worker-dispatch |
@@ -98,6 +99,7 @@ Named exceptions:
 
 - The sid-less `cache/` lives at `<WORKFLOW_STATE_DIR>/cache/`.
 - Sid-less worker logs live at `<WORKFLOW_STATE_DIR>/worker-logs/` (see "Worker logs").
+- The sid-less `codex-context-built/` holds one empty file per live `build-codex-context` output, named by the sha256 of its bytes; `review-plan-codex` splits a `codex-context.md` by its section markers only when that record exists, so a same-named file from anywhere else stays untrusted text (#2814). Owner: `bin/lib/codex-context-marker.sh`.
 - Never moved: `*.lock`, `*.tmp`, `*.migrating.*.tmp`, `.sg-*`, `.prev-*`. `guard-attempt.tmp` is a short-lived marker that expires in place (`MIGRATABLE_KINDS` excludes it).
 - Never migrated from the plans dir: `worker-outcome` and `worker-ingested`, so a
   forged outcome placed there cannot be carried into the control dir (#2544).

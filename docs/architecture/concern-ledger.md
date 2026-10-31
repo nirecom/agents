@@ -108,6 +108,7 @@ A reviewer that finds a term used outside its glossary definition, a coined term
 | `bin/lib/concern-ledger.sh` | Library entrypoint — the two identity decisions (bind, merge), every derived file name, and `_cl_carrier_from_ledger` (carrier path canonical derivation) |
 | `bin/lib/concern-ledger/core.sh` | `cl_reject` (in-place STATE update + carrier upsert), `_cl_list_pattern_files`, `_cl_reject_bad_tokens` |
 | `bin/lib/concern-ledger/drift-tag.sh` | Tagged concerns: the `reject` refusal and the `accept` grant check (`cl_is_drift_tagged`, `cl_drift_term`, `cl_guard_reject`, `cl_accept`) |
+| `bin/lib/concern-ledger/upstream-tag.sh` | `[upstream-inconsistency …]` concerns: tag parsing, the return cycle and recorded choice, the `reject` refusal and the `accept` check against a current-cycle C (`cl_is_upstream_tagged`, `cl_upstream_guard_reject`, `cl_upstream_accept`) |
 | `bin/lib/concern-ledger/render.sh` | `cl_tally`, `cl_render_prior`, `cl_render_concerns_log` (open+rejected re-derivation), `_cl_merge_concerns_log` (rejected-only carrier preservation) |
 | `bin/lib/concern-ledger/` | The rest of the library: hashing, parsing, reduction, finalize, discovery, token validation |
 | `bin/lib/safe-state-path.sh` | Shared primitive for every write under the session control dir: token validation, atomic publish, symlink/directory-pre-placement defense, containment |

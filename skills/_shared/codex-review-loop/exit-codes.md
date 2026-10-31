@@ -77,6 +77,8 @@ Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output
 
 ### e. Symmetric round log + planner-response trailer
 
+Before appending, run the upstream-inconsistency pause check ([`upstream-inconsistency-pause.md`](upstream-inconsistency-pause.md)); a pause stops the loop for the user's decision.
+
 Append to `CONCERNS_LOG`: a `## Round <N> (<ISO-timestamp>)` header, `Verdict: <NON_APPROVED_VERDICT>`, a `Concerns (verbatim from codex):` block with numbered concern lines, and `Planner's intended response (next round):` followed by the verbatim `ROUND_RESPONSE` trailer from `PLANNER_AGENT`.
 
 ## Outcomes
