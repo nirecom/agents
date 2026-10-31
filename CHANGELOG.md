@@ -923,3 +923,7 @@ Changes: Commits are faster: the pre-commit hook now runs all of its checks in a
 ### FEATURE: PR #2845 (2026-10-31)
 Background: feat(#2814): state the intent > outline > detail priority in codex pl...
 Changes: Plan reviews now hold the detail to the approved outline and the outline to the intent. When a reviewer finds that the problem sits in an upstream plan, the review pauses and asks you to choose how to proceed (keep, return upstream, accept, or stop) instead of silently patching the downstream plan.
+
+### FEATURE: PR #2844 (2026-10-31)
+Background: feat(#2652,#2446,#2578): merge machine handoff records into the state...
+Changes: Session handoff records are now stored in the workflow state file; handoff.md is no longer written (existing files are still read during a migration window).
