@@ -931,3 +931,7 @@ Changes: Session handoff records are now stored in the workflow state file; hand
 ### FEATURE: PR #2848 (2026-10-31)
 Background: feat(#2692): scale test parallelism automatically from external load,...
 Changes: Test runs now pick their parallelism automatically: they leave room for other apps by watching external CPU load and free memory, ramp up gradually when several runs start at once, and share lanes fairly between concurrent runs. The lane status display shows why each run got its width.
+
+### FEATURE: PR #2854 (2026-10-31)
+Background: fix(#2842,#2636): exclude merge-incoming paths from the review-tests ...
+Changes: review-tests: files that a merge brings in are excluded from the header map, so a review during a merge no longer times out, and exit 8 now says how to recover.
