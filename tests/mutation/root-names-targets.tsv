@@ -5,7 +5,6 @@
 script-to-main	bin/select-tests.sh
 script-to-main	hooks/scan-outbound.js
 main-to-script	hooks/lib/load-env.sh	tests/hooks/feature-2561-agents-main-root-unset-fallback.sh
-main-to-script	bin/scan-outbound.sh	tests/hooks/feature-2561-agents-main-root-unset-fallback.sh
 main-to-script	hooks/lib/load-env.js#2	tests/hooks/feature-2561-agents-main-root-unset-fallback.sh
 main-to-script	hooks/block-capture-echo/remedy.js	tests/hooks/feature-2170-capture-echo-guard.sh
 target-checkout-to-script	bin/github-issues/issue-to-history.sh	tests/bin/feature-2561-issue-to-history-target-root.sh

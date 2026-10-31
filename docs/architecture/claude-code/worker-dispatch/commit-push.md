@@ -110,7 +110,7 @@ committed; an inherited `ENFORCE_WORKTREE` would let a poisoned parent env
 silently downgrade the gate's own enforcement mode.
 
 The other two have no payload or anchor counterpart, so they are read from the
-`.env` at the script checkout root anchor via `readEnvFile()`, which is pure and never consults
+`.env` at the `SCRIPT_CHECKOUT_ROOT` anchor via `readEnvFile()`, which is pure and never consults
 `process.env`. That file lives in the reviewed main checkout resolved from the
 module's own realpath (`anchor.js` `resolveScriptCheckoutRootAnchor` has no env candidate for the
 same reason), so neither value is forgeable by an inline `VAR=x node bin/...`
@@ -170,12 +170,14 @@ killed by SIGTERM, but a forced kill on Windows can leave it behind, and only th
 user can tell whether another git process still owns it. The caller's re-run
 pushes a landed commit through the empty-stage resume.
 
-**Pre-commit section marker contract.** At the start of each section, before that section's
+**Pre-commit section marker contract.** At the start of each check, before that check's
 own guard, `hooks/pre-commit` prints one stderr line `pre-commit-section: <name>`
 (`<name>` matches `[a-z0-9][a-z0-9-]*`); the agents-repo gate runner prints
-`agents-repo-gate-<checker name without .sh>` before each checker. The helper is
-`hooks/lib/precommit-section-marker.sh`. The worker reads only the last pre-commit section marker,
-truncated to 48 characters, and reports `unknown` when there is none.
+`agents-repo-gate-<checker name without .sh>` before each checker. The line format is
+unchanged by the Node rewrite (#2507): the helper is `hooks/pre-commit.d/output.js`, and the
+section names and their order come from the registry `hooks/pre-commit.d/registry.js`
+([pre-commit-runner.md](../pre-commit-runner.md)). The worker reads only the last pre-commit
+section marker, truncated to 48 characters, and reports `unknown` when there is none.
 
 **Always in the background.** The limit can exceed the 600 s cap of a foreground
 Bash call, and only the worker knows it before the run. Copying that computation

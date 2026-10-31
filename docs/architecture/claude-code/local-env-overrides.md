@@ -66,8 +66,9 @@ each entry there. Two criteria put a key on it:
    pushed to; a project must not publish plans to a repo the operator never chose —
    [plan-sync.md](plan-sync.md)).
 2. **Half-applied.** Keys whose consumers do not all read the same layer.
-   `hooks/pre-commit` reads `ENFORCE_WORKTREE` through `load-env.sh`, which has
-   no local overlay by design, while the Node reader of the same name does — a local
+   `hooks/pre-commit` reads `ENFORCE_WORKTREE` through `loadEnv` of `load-env.js`
+   (`hooks/pre-commit.d/main.js`), which applies no local overlay by design, while
+   the Edit-time Node reader of the same name does — a local
    override would silence one guard and leave its sibling armed. A split-brain
    guard is worse than either answer, so the local value is refused outright.
 

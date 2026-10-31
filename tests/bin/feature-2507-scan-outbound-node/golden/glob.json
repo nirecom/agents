@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "generator": "tests/bin/feature-2507-scan-outbound-node/generate-golden.js",
+    "locale": {
+      "LANG": null,
+      "LC_ALL": null,
+      "LC_CTYPE": "C.UTF-8"
+    },
+    "bash": "GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)",
+    "git": "git version 2.53.0.windows.1",
+    "node": "v24.14.0",
+    "file": "file-5.46",
+    "platform": "win32"
+  },
+  "cases": {
+    "star-same-dir": {
+      "glob": "docs/*.md",
+      "subject": "docs/a.md",
+      "match": true
+    },
+    "star-crosses-slash": {
+      "glob": "docs/*.md",
+      "subject": "docs/sub/a.md",
+      "match": true
+    },
+    "star-wrong-ext": {
+      "glob": "docs/*.md",
+      "subject": "docs/a.txt",
+      "match": false
+    },
+    "anchored-start": {
+      "glob": "docs/*.md",
+      "subject": "xdocs/a.md",
+      "match": false
+    },
+    "qmark-one": {
+      "glob": "notes/?.txt",
+      "subject": "notes/a.txt",
+      "match": true
+    },
+    "qmark-two": {
+      "glob": "notes/?.txt",
+      "subject": "notes/ab.txt",
+      "match": false
+    },
+    "qmark-slash": {
+      "glob": "notes/?.txt",
+      "subject": "notes//.txt",
+      "match": true
+    },
+    "bracket-hit": {
+      "glob": "[ab]/x.txt",
+      "subject": "a/x.txt",
+      "match": true
+    },
+    "bracket-miss": {
+      "glob": "[ab]/x.txt",
+      "subject": "c/x.txt",
+      "match": false
+    },
+    "bracket-bang": {
+      "glob": "[!ab]/x.txt",
+      "subject": "c/x.txt",
+      "match": true
+    },
+    "bracket-caret": {
+      "glob": "[^ab]/x.txt",
+      "subject": "a/x.txt",
+      "match": false
+    },
+    "bracket-class": {
+      "glob": "[[:digit:]]*",
+      "subject": "1x",
+      "match": true
+    },
+    "star-empty": {
+      "glob": "*",
+      "subject": "",
+      "match": true
+    },
+    "escaped-star-hit": {
+      "glob": "a\\*b",
+      "subject": "a*b",
+      "match": true
+    },
+    "escaped-star-miss": {
+      "glob": "a\\*b",
+      "subject": "axb",
+      "match": false
+    },
+    "dot-literal": {
+      "glob": "a.b",
+      "subject": "axb",
+      "match": false
+    },
+    "paren-literal": {
+      "glob": "(a)",
+      "subject": "(a)",
+      "match": true
+    },
+    "star-any-depth": {
+      "glob": "*.md",
+      "subject": "a/b.md",
+      "match": true
+    },
+    "double-star": {
+      "glob": "**/x",
+      "subject": "a/b/x",
+      "match": true
+    },
+    "double-star-needs-slash": {
+      "glob": "**/x",
+      "subject": "x",
+      "match": false
+    },
+    "utf8-qmark": {
+      "glob": "é?",
+      "subject": "éx",
+      "match": true
+    },
+    "extglob-at": {
+      "glob": "@(a|b)/x.txt",
+      "subject": "b/x.txt",
+      "match": true
+    },
+    "extglob-plus": {
+      "glob": "+(a)/x.txt",
+      "subject": "aa/x.txt",
+      "match": true
+    },
+    "extglob-not": {
+      "glob": "!(a)/x.txt",
+      "subject": "c/x.txt",
+      "match": true
+    }
+  }
+}

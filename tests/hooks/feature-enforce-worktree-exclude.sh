@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-enforce-worktree-exclude.sh
 # Tests: hooks/lib/glob-match.js, hooks/pre-commit
-# Tags: worktree, enforce, hook, git, pre-commit, scope:issue-specific
+# Tags: worktree, enforce, hook, git, pre-commit, scope:issue-specific, node-precommit
 #
 # Integration tests for hooks/pre-commit ENFORCE_WORKTREE_EXCLUDE bypass: each
 # case stages files in a throwaway main worktree and invokes hooks/pre-commit
@@ -25,8 +25,9 @@ if [ ! -f "$PRE_COMMIT" ]; then
     exit 0
 fi
 
-if ! grep -q 'ENFORCE_WORKTREE_EXCLUDE' "$PRE_COMMIT" 2>/dev/null; then
-    echo "FAIL: ENFORCE_WORKTREE_EXCLUDE missing from hooks/pre-commit (required surface)"
+# #2507: hooks/pre-commit is a thin adapter; the exclude gate is a Node module.
+if ! grep -q 'ENFORCE_WORKTREE_EXCLUDE' "${SCRIPT_CHECKOUT_ROOT}/hooks/lib/precommit-exclude-check.js" 2>/dev/null; then
+    echo "FAIL: ENFORCE_WORKTREE_EXCLUDE missing from hooks/lib/precommit-exclude-check.js (required surface)"
     exit 1
 fi
 
@@ -395,10 +396,10 @@ test_regression_glob_via_committed_helper() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 test_c1_precommit_calls_exclude_check_js() {
-    if grep -q 'precommit-exclude-check' "$PRE_COMMIT" 2>/dev/null; then
-        pass "precommit-calls-exclude-check-js: hooks/pre-commit wires precommit-exclude-check"
+    if grep -q 'precommit-exclude-check' "${SCRIPT_CHECKOUT_ROOT}/hooks/pre-commit.d/checks/enforce-worktree.js" 2>/dev/null; then
+        pass "precommit-calls-exclude-check-js: the pre-commit enforce-worktree check wires precommit-exclude-check"
     else
-        fail "precommit-calls-exclude-check-js: string 'precommit-exclude-check' not found in hooks/pre-commit (wiring removed)"
+        fail "precommit-calls-exclude-check-js: string 'precommit-exclude-check' not found in hooks/pre-commit.d/checks/enforce-worktree.js (wiring removed)"
     fi
 }
 

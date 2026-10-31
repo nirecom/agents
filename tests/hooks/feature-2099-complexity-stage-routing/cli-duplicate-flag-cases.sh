@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/cli-duplicate-flag-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, cli, argument-parsing, security, edge-cases, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh AFTER record-read-cases.sh.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints AFTER record-read-cases.sh.
 # Siblings pass each flag once; a flag repeated with a different value (e.g. an
 # orchestrator appending a default --signals) is untested elsewhere.
 D2099DF_A="S1b-wide-change"

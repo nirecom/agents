@@ -1,35 +1,13 @@
 # tests/hooks/feature-1180-commit-lang-check/group-exclude-failopen.sh
 # Tests: hooks/lib/lint-commit-lang.js, hooks/lib/lang-config.js, hooks/pre-commit
-# Tags: lang-enforce, commit-hook, code-lang-exclude, scope:issue-specific
-#
-# Group X — C: fail-open when the repository root cannot be determined.
-# Cases X10, X11 (unit), X27 (unit precondition-probe) and X17, X18, X28, X29
-# (integration). Sourced by group-exclude.sh after group-exclude-lib.sh. The
-# Windows PATH-shim limitation behind X17/X28/X29 is documented in the TL3 gap
-# block of group-exclude.sh.
-#
-# The planned repoRoot() returns null on THREE distinct git-failure branches
-# (r.error / r.status !== 0 / empty stdout). All three must produce the same
-# fail-open outcome, and each branch is reached by a different fault. Do not
-# conflate the cases:
-#   X10, X11, X18 → the `r.status !== 0` branch (git RUNS, exits 128 from a
-#                   non-repo cwd — real fault, no mock).
-#   X17           → same 128-exit branch, but forced at the integration layer
-#                   through a PATH shim (POSIX-only).
-#   X27           → the `r.error` branch, as an isolated spawnSync PROBE: it
-#                   pins the primitive's error shape, never the hook.
-#   X28           → the `r.error` branch at the INTEGRATION layer — git absent
-#                   from PATH entirely, driven through the real hooks/pre-commit
-#                   (POSIX-only). This is what X27 cannot do.
-#   X29           → the "git exits 0 with EMPTY stdout" branch, via a PATH shim
-#                   that returns success-with-no-output for
-#                   `rev-parse --show-toplevel` only (POSIX-only).
-# Every branch of the planned repoRoot() therefore has integration coverage on
-# POSIX; on Windows the r.error / empty-stdout branches rest on X27 plus the
-# non-repo-cwd cases X10/X11/X18 (see the TL3 gap block in group-exclude.sh).
+# Tags: lang-enforce, commit-hook, code-lang-exclude, scope:issue-specific, node-precommit
+# Group X — C: repo-root detection failure. Unit X10/X11 (git exits 128), X27 (spawn-error probe);
+# integration X17/X29 (PATH shims, POSIX) fail open; X18/X28 (non-repo cwd, git absent) block with a
+# named reason since #2507, because the Node body reads the staged snapshot before any check.
+# Sourced by group-exclude.sh after group-exclude-lib.sh; Windows gaps: its TL3 gap block.
+# lang-check: ignore — the CJK fixture lines below are staged on purpose.
 
-# A plain temp directory that is NOT a git repo. Real fault injection: no mock,
-# no shim — `git rev-parse --show-toplevel` genuinely fails here.
+# A plain temp directory that is NOT a git repo: `git rev-parse --show-toplevel` genuinely fails.
 _X_NONREPO="$TMPDIR_BASE/nonrepo-$RANDOM-$$"
 mkdir -p "$_X_NONREPO"
 _X_NONREPO_OK=yes
@@ -38,16 +16,12 @@ if (cd "$_X_NONREPO" && git rev-parse --show-toplevel >/dev/null 2>&1); then
 fi
 
 # X10 (unit, all platforms): non-repo cwd + non-empty non-matching exclude list
-# → check() must THROW. The throw is what hooks/pre-commit's catch turns into
-# "lint-commit-lang skipped (...)" + exit 0 (fail-open). The gate runs before any
+# → check() must THROW; the pre-commit code-lang check turns the throw into
+# "lint-commit-lang skipped (...)" + pass (fail-open). The gate runs before any
 # staged-file scanning, so this fires even though nothing is staged here.
-#
-# The exclude value carries a unique marker token. The thrown message is allowed
-# to name the KEY (CODE_LANG_EXCLUDE) and the reason ("repository root"), but it
-# must NOT interpolate the VALUE: CODE_LANG_EXCLUDE is user/site configuration
-# that ends up in commit-time terminal output and CI logs, so echoing it back is
-# an avoidable disclosure. Asserting the token's ABSENCE pins that separately
-# from the two presence assertions — one of the three can fail on its own.
+# The exclude value carries a unique marker token: the message may name the KEY
+# (CODE_LANG_EXCLUDE) and the reason ("repository root") but must NOT echo the
+# VALUE, which is site configuration that would reach terminal output and CI logs.
 _X10_TOKEN="CLE-LEAKCANARY-9f2c71"
 _X10_VALUE="$_X_PARENT/__cle-no-such-dir-${_X10_TOKEN}__"
 if [ "$_X_NONREPO_OK" != "yes" ]; then
@@ -105,19 +79,12 @@ elif require_sut "X11" "$LINT_LIB"; then
         "$_x11_v violations:$_x11_res"
 fi
 
-# X27 (unit precondition-probe, all platforms): the `r.error` branch of the
-# planned repoRoot() — child_process.spawnSync() failing to LAUNCH git at all
-# (ENOENT / EACCES), as opposed to git launching and exiting 128 (X10/X11/X17/X18).
-#
-# This deliberately does NOT call repoRoot(): the SUT does not exist yet
-# (test-first), and X17's header records why a real spawn-failure PATH shim for
-# `git` is infeasible on Windows. What it DOES pin is the primitive contract the
-# planned `returns null if r.error` branch is written against — that spawnSync
-# reports a launch failure as a truthy `error` object with an ENOENT-shaped
-# `code`, rather than by throwing or by returning status!==0. If Node ever
-# changed that shape, repoRoot()'s r.error branch would silently stop firing and
-# nothing else in this group would notice.
-#
+# X27 (unit precondition-probe, all platforms): the `r.error` branch of repoRoot() —
+# spawnSync() failing to LAUNCH git (ENOENT / EACCES), as opposed to git exiting 128
+# (X10/X11/X17). It does not call repoRoot(); it pins the primitive contract that
+# branch is written against: a launch failure is a truthy `error` with an
+# ENOENT-shaped `code`, not a throw and not status!==0. If Node changed that shape,
+# the r.error branch would silently stop firing and nothing else here would notice.
 # Keep it a probe: no git repo, no hook, no fixture.
 _x27_out="$(run_with_timeout 15 node -e '
     const { spawnSync } = require("child_process");
@@ -132,25 +99,11 @@ assert_eq "X27: spawnSync() launch failure surfaces as a truthy ENOENT-shaped r.
     "error:present code:ENOENT threw:no" \
     "$_x27_out"
 
-# X28 (POSIX-only): the SAME `r.error` branch as X27, but exercised through the
-# REAL hooks/pre-commit path instead of a standalone spawnSync probe. X27 proves
-# the primitive's error shape; only X28 can show that the hook FAILS OPEN when
-# git cannot be launched at all.
-#
-# Fault: git is absent from PATH entirely — a strictly more radical manipulation
-# than X17's shim (which keeps a working `git` for every other subcommand). PATH
-# is rebuilt as a symlink farm holding the interpreters and coreutils that
-# hooks/pre-commit needs, and deliberately NO `git`. Stripping PATH outright is
-# not an option: `env` resolves `bash` through the NEW PATH, and the hook itself
-# shells out to node/printenv/tr.
-#
-# ENFORCE_WORKTREE=off for the same reason as X17: the worktree gate runs its own
-# git calls, and letting those fail would confound the assertion.
-#
-# Pre-feature this is RED by construction: today's stagedFiles() already tolerates
-# a spawn failure by returning [], so the hook exits 0 with NO skipped notice.
-# "skipped:present" is exactly the discriminator between that silent no-op and the
-# planned explicit fail-open — rc alone would be false-green.
+# X28 (POSIX-only): git absent from PATH entirely, driven through the real hooks/pre-commit.
+# PATH is a symlink farm with the interpreters and coreutils the hook needs and NO `git`.
+# ENFORCE_WORKTREE=off as in X17. #2507: the Node body reads the staged snapshot through git
+# before any check, so a spawn failure blocks with the failing step named ("spawnSync git
+# ENOENT"), never a silent pass; the exclude value must still not be echoed.
 if [ "$_X_PLATFORM" = "win32" ]; then
     echo "SKIP: X28: Skipped-Because: on Windows git-bash the interpreters the hook needs (bash, node) live alongside git.exe and PATH search is extension-driven, so a PATH with no resolvable git cannot be built without also breaking the hook — same class of gap as X17, see the TL3 gap block in group-exclude.sh (platform=$_X_PLATFORM)"
 else
@@ -178,14 +131,14 @@ else
             "CODE_LANG=english" \
             "CODE_LANG_EXCLUDE=$_X_PARENT/__cle-no-such-dir-${_X28_TOKEN}__")"
         _x28_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
-        _x28_v="rc:nonzero"; [ "$_x28_rc" -eq 0 ] && _x28_v="rc:zero"
-        _x28_skip="absent"; printf '%s' "$_x28_out" | grep -q 'lint-commit-lang skipped' && _x28_skip="present"
+        _x28_v="rc:zero"; [ "$_x28_rc" -ne 0 ] && _x28_v="rc:nonzero"
+        _x28_why="absent"; printf '%s' "$_x28_out" | grep -q 'ENOENT.*Commit blocked\.' && _x28_why="present"
         _x28_block="absent"; printf '%s' "$_x28_out" | grep -qF "$LANG_BLOCK_MARKER" && _x28_block="present"
         # stdout+stderr are merged by run_precommit, so this covers both.
         _x28_leak="absent"; printf '%s' "$_x28_out" | grep -qF "$_X28_TOKEN" && _x28_leak="present"
-        assert_eq "X28: git absent from PATH (spawn failure) → pre-commit fails open, does not block, does not echo the exclude value" \
-            "rc:zero skipped:present block:absent valueleak:absent" \
-            "$_x28_v skipped:$_x28_skip block:$_x28_block valueleak:$_x28_leak"
+        assert_eq "X28: git absent from PATH (spawn failure) → pre-commit blocks naming the spawn failure, no language verdict, no exclude value echoed" \
+            "rc:nonzero reason:present lang-block:absent valueleak:absent" \
+            "$_x28_v reason:$_x28_why lang-block:$_x28_block valueleak:$_x28_leak"
     fi
 fi
 
@@ -220,20 +173,11 @@ else
         "$_x17_v skipped:$_x17_skip block:$_x17_block"
 fi
 
-# X29 (POSIX-only): the third repoRoot() branch — git SUCCEEDS (exit 0) but
-# prints NOTHING for `rev-parse --show-toplevel`. Neither r.error nor a non-zero
-# status fires here, so an implementation that only guarded those two would treat
-# "" as the repo root and silently compare every exclude entry against the empty
-# string. It is reachable only by shimming git's stdout, hence the same PATH-shim
-# technique as X17 (and the same Windows limitation).
-#
-# The shim intercepts ONLY --show-toplevel and exec-delegates every other
-# subcommand to the real binary, so staging and diffing still work — without that
-# delegation the case would degenerate into X28's git-absent scenario and stop
-# testing the empty-stdout branch at all.
-#
-# Pre-feature this is RED: nothing consumes --show-toplevel today, so the CJK
-# fixture is scanned normally and the commit is blocked.
+# X29 (POSIX-only): the third repoRoot() branch — git exits 0 but prints NOTHING for
+# `rev-parse --show-toplevel`. Neither r.error nor a non-zero status fires, so an
+# implementation guarding only those two would compare every exclude entry against "".
+# The shim intercepts ONLY --show-toplevel and delegates every other subcommand to the
+# real binary, so staging and diffing still work (else this degenerates into X28).
 if [ "$_X_PLATFORM" = "win32" ]; then
     echo "SKIP: X29: Skipped-Because: Node's spawnSync(\"git\", ...) on Windows cannot execute an extensionless shell script found via PATH, so the empty-stdout git shim is unreachable from lint-commit-lang.js — same constraint as X17, see the TL3 gap block in group-exclude.sh (platform=$_X_PLATFORM)"
 else
@@ -260,10 +204,9 @@ else
         "$_x29_v skipped:$_x29_skip block:$_x29_block"
 fi
 
-# X18 (integration, all platforms): run hooks/pre-commit from a non-repo cwd.
-# Verified empirically that execution reaches the CODE_LANG block there (the
-# earlier `set -euo pipefail` sections all run their failing git calls inside
-# `if` conditions or command substitutions, so none of them abort the hook).
+# X18 (integration, all platforms): hooks/pre-commit from a non-repo cwd. #2507: the staged
+# snapshot fails first, so the hook blocks naming the failing git step instead of reaching
+# the CODE_LANG check; the lint's own fail-open in a non-repo cwd stays pinned by X10/X11.
 if [ "$_X_NONREPO_OK" != "yes" ]; then
     echo "SKIP: X18: Skipped-Because: the temp directory is itself inside a git repository on this host (see X10)"
 else
@@ -271,9 +214,11 @@ else
         "ENFORCE_WORKTREE=off" \
         "CODE_LANG=english" "CODE_LANG_EXCLUDE=$_X_MISS_A")"
     _x18_rc="$(cat "$TMPDIR_BASE/.last_pc_rc" 2>/dev/null || echo 0)"
-    _x18_v="rc:nonzero"; [ "$_x18_rc" -eq 0 ] && _x18_v="rc:zero"
-    _x18_skip="absent"; printf '%s' "$_x18_out" | grep -q 'lint-commit-lang skipped' && _x18_skip="present"
-    assert_eq "X18: pre-commit from a non-repo cwd + non-empty CODE_LANG_EXCLUDE → fails open (rc 0 + skipped notice)" \
-        "rc:zero skipped:present" \
-        "$_x18_v skipped:$_x18_skip"
+    _x18_v="rc:zero"; [ "$_x18_rc" -ne 0 ] && _x18_v="rc:nonzero"
+    _x18_why="absent"; printf '%s' "$_x18_out" | grep -q '^pre-commit: .*git diff --cached' && _x18_why="present"
+    _x18_end="absent"; printf '%s' "$_x18_out" | grep -q 'Commit blocked\.' && _x18_end="present"
+    _x18_block="absent"; printf '%s' "$_x18_out" | grep -qF "$LANG_BLOCK_MARKER" && _x18_block="present"
+    assert_eq "X18: pre-commit from a non-repo cwd → blocks naming the failing git step, no language verdict" \
+        "rc:nonzero reason:present blocked:present lang-block:absent" \
+        "$_x18_v reason:$_x18_why blocked:$_x18_end lang-block:$_x18_block"
 fi

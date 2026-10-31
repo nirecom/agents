@@ -41,6 +41,7 @@ MOP-2. **Select the planner model, then delegate.** Run `bash -c 'node "$AGENTS_
    If `NONE`: follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`outline`; use its `model=` and `SIGNALS_CSV` — never judge the level inline.
    Emit (Claude text, not Bash): `Model selected: **<model= alias>** (signals: [ids from the `signals=` line, or "none"])`.
    Delegate to **outline-planner** (Agent tool, `subagent_type: outline-planner`, `model: <model= from MOP-2>`). Pass full contents of `<INTENT_MD>` and task context.
+   Read `rules/architecture-principles.md` (on-demand-only, never auto-injected) and pass its contents to every outline-planner launch as design constraints.
    Every outline-planner prompt carries the canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section.
    Every outline-planner launch — here, the MOP-3 revise re-run, the MOP-4 re-prompt, the MOP-4a re-prompt, the MOP-5 CONTINUE re-delegate, and the MOP-8 revise re-run — passes the same `model: <model= from MOP-2>`.
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.

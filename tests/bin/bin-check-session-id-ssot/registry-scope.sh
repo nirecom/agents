@@ -7,6 +7,8 @@
 
 # shellcheck source=../../lib/test-language-registry-fixture.sh
 source "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
+# shellcheck source=../../lib/node-entry-sandbox.sh
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh"
 
 rs_np() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
 
@@ -17,7 +19,11 @@ rs_checkout() {
   if ! install_test_language_registry "$RS_CO" "$SCRIPT_CHECKOUT_ROOT" 2>/dev/null; then
     fail "RS/$1: registry checkout installed"; RS_CO=""; return 1
   fi
-  cp "$GUARD" "$RS_CO/bin/check-session-id-ssot.sh" || { fail "RS/$1: guard copied"; RS_CO=""; return 1; }
+  # #2507: the guard execs bin/check-session-id-ssot/main.js and requires each registered envClearLine
+  # part, whose matcher loads hooks/lib/ere by a computed path.
+  node_entry_sandbox_copy "$RS_CO" bin/check-session-id-ssot.sh hooks/lib/test-gates/parts/env-clear/{bash,js,pester,pytest}.js \
+    hooks/lib/ere/{translate,longest}.js \
+    || { fail "RS/$1: guard copied"; RS_CO=""; return 1; }
   mkdir -p "$RS_CO/bin/check-session-id-ssot" \
     && cp "$SCRIPT_CHECKOUT_ROOT/bin/check-session-id-ssot/path-tables.txt" "$RS_CO/bin/check-session-id-ssot/path-tables.txt" \
     || { fail "RS/$1: path tables copied"; RS_CO=""; return 1; }
@@ -74,8 +80,8 @@ if rs_checkout control 'void t;'; then
 fi
 
 # RS3: bash envClearLine names a function its part file does not define -> the unset line is reported.
-if rs_checkout bash-fn-absent 'E("bash").envClearLine = { file: "bin/lib/test-language-parts/bash.sh", function: "bash_env_clear_line_absent" };'; then
-  rs_tlr "RS3-pre (the edited envClearLine.function reaches tlr_field)" "bash_env_clear_line_absent" 'tlr_field bash envClearLine.function'
+if rs_checkout bash-fn-absent 'E("bash").envClearLine = { file: "hooks/lib/test-gates/parts/env-clear/bash.js", function: "envClearLineAbsent" };'; then
+  rs_tlr "RS3-pre (the edited envClearLine.function reaches tlr_field)" "envClearLineAbsent" 'tlr_field bash envClearLine.function'
   make_fixture rs3
   add_file tests/hooks/rs-unset.sh "$RS_UNSET"
   rs_run_co tests/hooks/rs-unset.sh
@@ -84,8 +90,8 @@ if rs_checkout bash-fn-absent 'E("bash").envClearLine = { file: "bin/lib/test-la
 fi
 
 # RS4: js envClearLine names a part file that does not exist -> the delete line is reported.
-if rs_checkout js-file-missing 'E("js").envClearLine = { file: "bin/lib/test-language-parts/no-such-js-part.sh", function: "js_env_clear_line" };'; then
-  rs_tlr "RS4-pre (the edited envClearLine.file reaches tlr_field)" "bin/lib/test-language-parts/no-such-js-part.sh" 'tlr_field js envClearLine.file'
+if rs_checkout js-file-missing 'E("js").envClearLine = { file: "hooks/lib/test-gates/parts/env-clear/no-such-js-part.js", function: "envClearLine" };'; then
+  rs_tlr "RS4-pre (the edited envClearLine.file reaches tlr_field)" "hooks/lib/test-gates/parts/env-clear/no-such-js-part.js" 'tlr_field js envClearLine.file'
   make_fixture rs4
   add_file tests/hooks/rs-delete.js "$RS_JS_DELETE"
   rs_run_co tests/hooks/rs-delete.js

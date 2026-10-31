@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/producer-orchestration-cases.sh
 # Tests: skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md, skills/_shared/complexity-and-outline-skip.md, bin/workflow/normalize-judge-signals, bin/workflow/record-complexity-evaluation,bin/workflow/read-complexity-evaluation
 # Tags: complexity, routing, producers, integration, skip-dispatch, jev, shared-procedure, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # #2460: CI-C1b / A3a delegate to the COS procedure, which runs the shared judge
 # (skills/_shared/jev-two-stage-judge.md); its JJ-4 complexity write is
 # `record-complexity-evaluation --signals "<SIGNALS_CSV>"`, so the producers'

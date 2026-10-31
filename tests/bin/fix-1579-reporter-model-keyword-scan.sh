@@ -196,9 +196,11 @@ echo "=== T19 matcher subprocess failure degrades to no label (never aborts) ===
 # The label table now lives in a JS module reached through `node`. On a host
 # without a working node, issue creation must still succeed — it just loses the
 # reporter-model:* label, exactly like an unknown model does today.
+# #2507: the outbound scan is a Node module too and fails closed without node, so the
+# shim breaks only the matcher's process and hands every other node call to the real one.
 BROKEN_NODE_DIR="$WORK/broken-node"
 mkdir -p "$BROKEN_NODE_DIR"
-printf '#!/usr/bin/env bash\nexit 127\n' > "$BROKEN_NODE_DIR/node"
+printf '#!/usr/bin/env bash\ncase "$*" in *model-match.js*) exit 127 ;; esac\nexec "%s" "$@"\n' "$(command -v node)" > "$BROKEN_NODE_DIR/node"
 chmod +x "$BROKEN_NODE_DIR/node"
 
 : > "$CAP"; : > "$CREATED"

@@ -93,32 +93,34 @@ assert_eq "${E2E_SQ#*\"decision\":}" "\"approve\"}"
 case_end
 
 echo ""
-echo "=== parity: isCaseMarkerTarget vs _precommit_is_case_marker_target ==="
+echo "=== parity: hook isCaseMarkerTarget vs the pre-commit case-marker gate predicate ==="
 
 # The verdict is derived, not written per row: placement class (restated in
 # parity_placement) x the registry reader's match (supported + caseMarkerReader).
 # Both shipped predicates must equal it; the row's literal pins today's table.
 PARITY_JS="$TMPBASE/parity.js"
 cat > "$PARITY_JS" <<'PARITYJS'
-// argv: <hook|registry> <list-file>. Prints "<rel>|<1|0>" per listed rel.
+// argv: <hook|precommit|registry> <list-file>. Prints "<rel>|<1|0>" per listed rel.
+// precommit = the predicate the pre-commit case-marker gate calls (test-gates/placement.js).
 const fs = require("fs");
 const mode = process.argv[2];
 const rels = fs.readFileSync(process.argv[3], "utf8").split("\n").filter(Boolean);
+const MOD = { hook: process.env.PARITY_HOOK, precommit: process.env.PARITY_PLACEMENT, registry: process.env.PARITY_REGISTRY };
 let m;
 try {
-  m = require(mode === "hook" ? process.env.PARITY_HOOK : process.env.PARITY_REGISTRY);
+  m = require(MOD[mode]);
 } catch (e) {
   console.log("MODULE_MISSING");
   process.exit(3);
 }
-const fn = mode === "hook" ? m.isCaseMarkerTarget : m.matchBasename;
+const fn = mode === "registry" ? m.matchBasename : m.isCaseMarkerTarget;
 if (typeof fn !== "function") {
   console.log("NO_EXPORT");
   process.exit(4);
 }
 for (const rel of rels) {
   let v;
-  if (mode === "hook") {
+  if (mode !== "registry") {
     v = fn(rel);
   } else {
     const r = fn(rel.split("/").pop());
@@ -161,31 +163,21 @@ PARITY_ROWS=(
 parity_run() {
   run_with_timeout 60 node "$(np "$PARITY_JS")" "$1" "$(np "$2")" 2>&1
 }
-# parity_bash <rel> — sets _PB: 1 when _precommit_is_case_marker_target returns 0.
-parity_bash() {
-  _PB=127
-  [ "$BASH_OK" -eq 1 ] || return 0
-  if _precommit_is_case_marker_target "$1"; then _PB=1; else _PB=0; fi
-}
-
+# #2507: the pre-commit side is the Node case-marker gate's predicate (PARITY_PLACEMENT); the
+# retired bash predicate _precommit_is_case_marker_target is no longer compared.
 PARITY_HOOK="$(np "$HOOK")"
+PARITY_PLACEMENT="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-gates/placement.js")"
 PARITY_REGISTRY="$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-language-registry.js")"
-export PARITY_HOOK PARITY_REGISTRY
-BASH_OK=0
-if [ -f "$PRECOMMIT_LIB" ]; then
-  # shellcheck source=../../../hooks/lib/precommit-tests-frontmatter.sh
-  . "$PRECOMMIT_LIB"
-  declare -F _precommit_is_case_marker_target >/dev/null 2>&1 && BASH_OK=1
-fi
-_cfg_dir="$SCRIPT_CHECKOUT_ROOT"
+export PARITY_HOOK PARITY_PLACEMENT PARITY_REGISTRY
 
-case_begin "entrypoint-predicate-parity" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "entrypoint-predicate-parity" "hooks/pre-commit"
 PARITY_LIST="$TMPBASE/parity-rows.txt"
 : > "$PARITY_LIST"
 for _row in "${PARITY_ROWS[@]}"; do
   printf '%s\n' "${_row%|*}" >> "$PARITY_LIST"
 done
 JS_OUT="$(parity_run hook "$PARITY_LIST")"
+PC_OUT="$(parity_run precommit "$PARITY_LIST")"
 REG_OUT="$(parity_run registry "$PARITY_LIST")"
 for _row in "${PARITY_ROWS[@]}"; do
   _rel="${_row%|*}"
@@ -197,12 +189,12 @@ for _row in "${PARITY_ROWS[@]}"; do
   [ "$_PL" = eligible ] && [ "$_reg" = 1 ] && _want=1
   _js="$(printf '%s\n' "$JS_OUT" | grep -F -x -e "$_rel|1" -e "$_rel|0" | head -n 1)"
   _js="${_js##*|}"
-  parity_bash "$_rel"
-  _sh="$_PB"
+  _sh="$(printf '%s\n' "$PC_OUT" | grep -F -x -e "$_rel|1" -e "$_rel|0" | head -n 1)"
+  _sh="${_sh##*|}"
   if [ -n "$_reg" ] && [ "$_want" = "$_pin" ] && [ "$_js" = "$_want" ] && [ "$_sh" = "$_want" ]; then
     pass "parity $_rel -> $_want"
   else
-    fail "parity $_rel" "pin=$_pin derived=$_want registry=${_reg:-none} js=${_js:-none} bash=$_sh js_out=$JS_OUT reg_out=$REG_OUT"
+    fail "parity $_rel" "pin=$_pin derived=$_want registry=${_reg:-none} js=${_js:-none} precommit=${_sh:-none} js_out=$JS_OUT reg_out=$REG_OUT"
   fi
 done
 case_end
@@ -212,17 +204,14 @@ case_begin "entrypoint-predicate-parity-tracked-tests" "hooks/block-case-markers
 PARITY_ALL="$TMPBASE/parity-all.txt"
 git -C "$SCRIPT_CHECKOUT_ROOT" ls-files tests > "$PARITY_ALL" 2>/dev/null
 ALL_JS="$(parity_run hook "$PARITY_ALL")"
+ALL_PC="$(parity_run precommit "$PARITY_ALL")"
 ALL_REG="$(parity_run registry "$PARITY_ALL")"
 _derived=""
-_bash=""
 while IFS='|' read -r _rel _r; do
   _w=0
   parity_placement "$_rel"
   [ "$_PL" = eligible ] && [ "$_r" = 1 ] && _w=1
   _derived="${_derived}${_rel}|${_w}
-"
-  parity_bash "$_rel"
-  _bash="${_bash}${_rel}|${_PB}
 "
 done <<< "$ALL_REG"
 _n_all="$(grep -c . "$PARITY_ALL")"
@@ -241,5 +230,5 @@ parity_same() {
   fi
 }
 parity_same "isCaseMarkerTarget" "$ALL_JS"
-parity_same "_precommit_is_case_marker_target" "${_bash%$'\n'}"
+parity_same "pre-commit case-marker gate predicate" "$ALL_PC"
 case_end

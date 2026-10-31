@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/signals-file-security-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/derive-complexity-level,hooks/workflow-state/complexity-routing.js
 # Tags: complexity, routing, cli, security, signals-file, path-traversal, secret-leakage, adversarial, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh AFTER traversal-attack-cases.sh (d2099t_snapshot comes from there).
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints AFTER traversal-attack-cases.sh (d2099t_snapshot comes from there).
 # --signals-file is the only #2099 arg handed to fs.readFileSync, so it is the only
 # one where a path decides which bytes get read, echoed and persisted. SF-1..SF-25
 # are the path axis (CWE-22/CWE-78); SF-26.. the secret-leakage axis (OWASP ASVS

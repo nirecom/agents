@@ -2,10 +2,9 @@
 # tests/hooks/feature-1701-workflow-gate-code-size/infra-and-config.sh
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
-# Fragment sourced by tests/hooks/feature-1701-workflow-gate-code-size.sh (cases 8-14:
-# infrastructure failure handling, CODE_FILE_EXTENSIONS resolution); not run directly.
-# Depends on the parent for its fixture helpers, run_hook, the assert_* helpers,
-# HOOK_OUT, pass/fail/skip, and glossary_check_record (#2529).
+# Fragment sourced by tests/hooks/feature-1701-workflow-gate-code-size.sh (not run directly): cases 8-14,
+# infrastructure failures (a hung child asks at the decision time limit) and CODE_FILE_EXTENSIONS resolution.
+# Every helper it calls (run_hook, assert_*, setup_repo, glossary_check_record (#2529), ...) is defined by that parent.
 
 # 8. bash not on PATH -> block (infrastructure error, NOT fail-open).
 test_8_bash_missing_blocks() {
@@ -49,7 +48,7 @@ process.stdout.write(r.error?String(r.error.code):'FOUND');
     fi
 }
 
-# 9. bin/review-code-size missing in the adopted agents main root -> block.
+# 9. bin/review-code-size missing in the adopted AGENTS_MAIN_ROOT -> block.
 test_9_script_missing_blocks() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2009"
@@ -84,8 +83,8 @@ test_10_unexpected_exit_blocks() {
     assert_block "10: unexpected exit code 2 -> block" "code-size"
 }
 
-# 11. Timeout is the ONLY fail-open path -> approve.
-test_11_timeout_fail_open() {
+# 11. A hung review-code-size -> ask at the decision time limit (#2676), not approve.
+test_11_hung_review_asks() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2011"
     local repo; repo="$(setup_repo "r11")"
@@ -97,8 +96,20 @@ test_11_timeout_fail_open() {
     make_lines 501 > "$repo/bin/big.js"
     git -C "$repo" add bin/big.js
     ( export WORKFLOW_STATE_DIR="$wfdir"; glossary_check_record "$sid" "$repo" )  # #2529
+    local saved_retries="$HOOK_TIMEOUT_RETRIES"
+    HOOK_TIMEOUT_RETRIES=0
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
-    assert_approve "11: review-code-size timeout -> approve (only fail-open path)"
+    HOOK_TIMEOUT_RETRIES="$saved_retries"
+    # #2676 (N1): with the decision time limit armed, the time left replaces the gate's own 3 s
+    # timeout, so a hung review-code-size ends in ask at the limit — never a silent approve.
+    if echo "$HOOK_OUT" | grep -q '"decision":"approve"'; then
+        fail "11: hung review-code-size must not approve" "$HOOK_OUT"
+    elif echo "$HOOK_OUT" | grep -q '"permissionDecision":"ask"' \
+        && echo "$HOOK_OUT" | grep -q 'decision time limit'; then
+        pass "11: hung review-code-size -> ask at the decision time limit"
+    else
+        fail "11: hung review-code-size -> expected ask at the decision time limit" "$HOOK_OUT"
+    fi
 }
 
 # 12. process.env CODE_FILE_EXTENSIONS is ignored by gate — only .env is authoritative.
@@ -132,7 +143,7 @@ test_13_env_from_dotenv() {
     assert_block "13: CODE_FILE_EXTENSIONS from .env only -> block" "big.ts"
 }
 
-# 14. No .env in the agents main root -> defaults apply, no crash.
+# 14. No .env in the AGENTS_MAIN_ROOT -> defaults apply, no crash.
 test_14_no_dotenv() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2014"

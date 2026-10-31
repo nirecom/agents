@@ -1,7 +1,7 @@
 "use strict";
 // hooks/workflow-gate/code-size-gate.js
 // Gate 2 (issue #1701): HARD file-size limit check for staged code files.
-// bin/review-code-size --staged owns the thresholds and line counting (CPR-SSOT);
+// bin/review-code-size --staged judges through bin/size-check (SSOT hooks/lib/size-limits.js);
 // this module only spawns it and maps the exit code to a gate verdict.
 
 const { spawnSync } = require("../lib/limited-child-process");
@@ -34,7 +34,7 @@ function infraBlock(causeLine, resolveLines) {
 }
 
 const RESOLVE_CONFIG =
-  "  - Confirm the hook runs from a valid agents checkout and bin/review-code-size exists.";
+  "  - Confirm the hook runs from a valid agents checkout and bin/review-code-size and bin/size-check exist.";
 const RESOLVE_BASH =
   "  - Confirm bash is on PATH (required on Windows via Git Bash).";
 const RESOLVE_RAW =
@@ -111,7 +111,7 @@ function checkCodeSizeHardLimit(rawRepoDir) {
     return {
       action: "block",
       reason: [
-        "workflow-gate: staged code file(s) exceed the 500-line HARD limit (rules/coding/file-split.md).",
+        "workflow-gate: staged code file(s) exceed the code HARD limit (rules/coding/file-split.md, Size limits).",
         hardLines,
         "",
         "Resolve by either:",
@@ -119,8 +119,8 @@ function checkCodeSizeHardLimit(rawRepoDir) {
         "    sibling <name>/ folder (shared helpers -> adjacent lib/). See rules/coding/file-split.md.",
         "  - Unstage the file if it is not part of this change: git restore --staged <file>",
         "",
-        "Note: a commit that performs the split passes this gate — the check reads the",
-        "post-split line count of the staged blob (git index), not the working tree.",
+        "Note: reducing changes pass — a staged blob (git index) with fewer lines than HEAD passes",
+        "even while still over the limit, so a commit that performs the split passes this gate.",
         "",
         BYPASS_LINE,
       ].join("\n"),

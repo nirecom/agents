@@ -1,36 +1,15 @@
-# Part D — staged case-marker gate _precommit_check_tests_case_markers (#2388).
+# Part D — staged case-marker gate of the tests-frontmatter check (#2388; Node since #2507).
 # Sourced by tests/hooks/feature-1834-precommit-lib-split.sh; shares its helpers/globals.
 # Fixture test bodies carrying marker text live only in heredoc bodies below.
-# shellcheck source=tests/lib/harness.sh
-source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 echo ""
 echo "=== Part D: staged case-marker gate (#2388) ==="
 
-LOAD_ENV_SH="$SCRIPT_CHECKOUT_ROOT/hooks/lib/load-env.sh"
-# shellcheck source=hooks/lib/load-env.sh
-[ -f "$LOAD_ENV_SH" ] && . "$LOAD_ENV_SH"
-
-# CM_CFG — a fixture agents main root: a copy of the real checker plus its predicate
-# library, so each case controls $_cfg_dir/.env without touching the developer's.
-CM_CFG="$TMPBASE/cm-cfg"
-mkdir -p "$CM_CFG/bin"
-cp "$SCRIPT_CHECKOUT_ROOT/bin/check-case-markers.sh" "$CM_CFG/bin/check-case-markers.sh"
-cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib" "$CM_CFG/bin/lib"
-
-# CM_BROKEN_CFG — checker replaced by a stub that exits 2 (infrastructure error).
-CM_BROKEN_CFG="$TMPBASE/cm-cfg-broken"
-mkdir -p "$CM_BROKEN_CFG/bin"
-printf '#!/usr/bin/env bash\necho "stub infra failure" >&2\nexit 2\n' > "$CM_BROKEN_CFG/bin/check-case-markers.sh"
-
-# Both config dirs carry the test language registry (CLI, reader, table, loader):
-# the gate resolves the entrypoint predicate through it, so only the checker differs.
-# shellcheck source=../../lib/test-language-registry-fixture.sh
-. "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
-for _cm_dir in "$CM_CFG" "$CM_BROKEN_CFG"; do
-    install_test_language_registry "$_cm_dir" "$SCRIPT_CHECKOUT_ROOT"
-done
-unset _cm_dir
+# CM_BAD_CFG — an agents checkout whose test language registry is unreadable (Part C's template
+# with a corrupt table): the gate cannot classify, so it fails open with a diagnostic.
+CM_BAD_CFG="$TMPBASE/cm-cfg-bad-registry"
+cp -R "$G_TEMPLATE" "$CM_BAD_CFG"
+printf '{ not json\n' > "$CM_BAD_CFG/hooks/lib/test-language-registry.json"
 
 CM_BODIES="$TMPBASE/cm-bodies"
 mkdir -p "$CM_BODIES"
@@ -110,18 +89,12 @@ cm_commit() {
     git -C "$1" commit -q -m "add $2" >/dev/null 2>&1
 }
 
-# run_cm <repo> [cfg] — call the gate in a subshell with the fixture as CWD.
-# Sets CM_RC, CM_OUT (stdout), CM_ERR (stderr). Extra environment for the
-# subshell comes from the CM_ENV array (NAME=value words, exported inside).
+# run_cm <repo> [cfg] — the case-marker gate alone, with the fixture as CWD. Sets CM_RC, CM_OUT
+# (stdout), CM_ERR (stderr). Extra environment comes from the CM_ENV array (NAME=value words).
 CM_OUT=""; CM_ERR=""; CM_RC=0
 CM_ENV=()
 run_cm() {
-    local repo="$1" cfg="${2:-$CM_CFG}"
-    if ! declare -F _precommit_check_tests_case_markers >/dev/null 2>&1; then
-        CM_RC=127; CM_OUT=""
-        CM_ERR="IMPLEMENTATION MISSING: _precommit_check_tests_case_markers"
-        return 0
-    fi
+    local repo="$1" cfg="${2:-$SCRIPT_CHECKOUT_ROOT}"
     CM_RC=0
     (
         cd "$repo" || exit 99
@@ -129,8 +102,7 @@ run_cm() {
         for kv in "${CM_ENV[@]+"${CM_ENV[@]}"}"; do
             export "${kv?}"
         done
-        _cfg_dir="$cfg"
-        _precommit_check_tests_case_markers
+        node "$RUNNER" --cfg "$(np "$cfg")" tests-frontmatter case-markers
     ) >"$TMPBASE/cm.out" 2>"$TMPBASE/cm.err" || CM_RC=$?
     CM_OUT="$(cat "$TMPBASE/cm.out")"
     CM_ERR="$(cat "$TMPBASE/cm.err")"
@@ -152,7 +124,7 @@ expect_pass_silent() {
         || pass "$1: no HIGH line"
 }
 
-case_begin "new-staged-missing-blocks" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "new-staged-missing-blocks" "hooks/pre-commit"
 R="$(cm_repo missing)"
 cm_stage "$R" tests/hooks/new-missing.sh missing.sh
 run_cm "$R"
@@ -163,7 +135,7 @@ printf '%s\n%s\n' "$CM_OUT" "$CM_ERR" | grep -q "$TMPBASE\|/tmp/" \
     || pass "new-staged-missing-blocks: temp path replaced by the rel path"
 case_end
 
-case_begin "new-staged-malformed-blocks" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "new-staged-malformed-blocks" "hooks/pre-commit"
 R="$(cm_repo malformed)"
 cm_stage "$R" tests/bin/new-bad.sh malformed.sh
 run_cm "$R"
@@ -171,14 +143,14 @@ expect_block "new-staged-malformed-blocks" '^HIGH: tests/bin/new-bad\.sh line 3:
 expect_block "new-staged-malformed-blocks cause message" 'Fix marker placement'
 case_end
 
-case_begin "new-staged-conforming-passes" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "new-staged-conforming-passes" "hooks/pre-commit"
 R="$(cm_repo conforming)"
 cm_stage "$R" tests/hooks/new-good.sh conforming.sh
 run_cm "$R"
 expect_pass_silent "new-staged-conforming-passes"
 case_end
 
-case_begin "new-staged-uncertain-warns" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "new-staged-uncertain-warns" "hooks/pre-commit"
 R="$(cm_repo uncertain)"
 cm_stage "$R" tests/hooks/new-unc.sh uncertain.sh
 run_cm "$R"
@@ -188,7 +160,7 @@ printf '%s\n' "$CM_ERR" | grep -Eq '^WARN: tests/hooks/new-unc\.sh line [0-9]+: 
     || fail "new-staged-uncertain-warns: WARN on stderr" "err=[$CM_ERR]"
 case_end
 
-case_begin "renamed-to-new-path-judged" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "renamed-to-new-path-judged" "hooks/pre-commit"
 R="$(cm_repo rename-bad)"
 cm_commit "$R" tests/hooks/old-name.sh missing.sh
 git -C "$R" mv tests/hooks/old-name.sh tests/hooks/new-name.sh
@@ -196,7 +168,7 @@ run_cm "$R"
 expect_block "renamed-to-new-path-judged" '^HIGH: tests/hooks/new-name\.sh .*code=MISSING_CASE_MARKERS$'
 case_end
 
-case_begin "renamed-existing-content-conforming-passes" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "renamed-existing-content-conforming-passes" "hooks/pre-commit"
 R="$(cm_repo rename-good)"
 cm_commit "$R" tests/hooks/old-good.sh conforming.sh
 git -C "$R" mv tests/hooks/old-good.sh tests/hooks/new-good.sh
@@ -204,7 +176,7 @@ run_cm "$R"
 expect_pass_silent "renamed-existing-content-conforming-passes"
 case_end
 
-case_begin "deleted-file-ignored" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "deleted-file-ignored" "hooks/pre-commit"
 R="$(cm_repo deleted)"
 cm_commit "$R" tests/hooks/gone.sh missing.sh
 git -C "$R" rm -q tests/hooks/gone.sh
@@ -213,7 +185,7 @@ expect_pass_silent "deleted-file-ignored"
 assert_eq "$CM_ERR" ""
 case_end
 
-case_begin "existing-file-skipped" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "existing-file-skipped" "hooks/pre-commit"
 R="$(cm_repo existing)"
 cm_commit "$R" tests/hooks/legacy.sh missing.sh
 printf 'echo edited\n' >> "$R/tests/hooks/legacy.sh"
@@ -222,7 +194,7 @@ run_cm "$R"
 expect_pass_silent "existing-file-skipped"
 case_end
 
-case_begin "partial-stage-blob-judged" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "partial-stage-blob-judged" "hooks/pre-commit"
 # Staged blob violates; the working tree was fixed but not re-staged → block.
 R="$(cm_repo partial)"
 cm_stage "$R" tests/hooks/partial.sh missing.sh
@@ -231,7 +203,7 @@ run_cm "$R"
 expect_block "partial-stage-blob-judged" '^HIGH: tests/hooks/partial\.sh .*code=MISSING_CASE_MARKERS$'
 case_end
 
-case_begin "partial-stage-inverse" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "partial-stage-inverse" "hooks/pre-commit"
 # Staged blob conforms; only the unstaged working tree violates → pass.
 R="$(cm_repo partial-inv)"
 cm_stage "$R" tests/hooks/partial.sh conforming.sh
@@ -241,7 +213,7 @@ expect_pass_silent "partial-stage-inverse"
 assert_eq "$CM_RC" "0"
 case_end
 
-case_begin "no-harness-repo-skipped" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "no-harness-repo-skipped" "hooks/pre-commit"
 R="$(cm_repo noharness noharness)"
 cm_stage "$R" tests/hooks/new-missing.sh missing.sh
 run_cm "$R"
@@ -249,7 +221,7 @@ expect_pass_silent "no-harness-repo-skipped"
 assert_eq "$CM_OUT" ""
 case_end
 
-case_begin "suite-subfile-skipped" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "suite-subfile-skipped" "hooks/pre-commit"
 R="$(cm_repo subfile)"
 cm_stage "$R" tests/hooks/suite/part.sh missing.sh
 run_cm "$R"
@@ -257,7 +229,7 @@ expect_pass_silent "suite-subfile-skipped"
 assert_eq "$CM_OUT" ""
 case_end
 
-case_begin "run-all-skipped" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "run-all-skipped" "hooks/pre-commit"
 R="$(cm_repo runall)"
 cm_stage "$R" tests/run-all.sh missing.sh
 run_cm "$R"
@@ -265,40 +237,40 @@ expect_pass_silent "run-all-skipped"
 assert_eq "$CM_OUT" ""
 case_end
 
-case_begin "single-path-header-skipped" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "single-path-header-skipped" "hooks/pre-commit"
 R="$(cm_repo single)"
 cm_stage "$R" tests/hooks/single.sh single-path.sh
 run_cm "$R"
 expect_pass_silent "single-path-header-skipped"
 case_end
 
-case_begin "env-file-off-still-blocks" "hooks/lib/precommit-tests-frontmatter.sh"
-# The gate has no disable switch: an off value in the agents main root .env is ignored.
+case_begin "env-off-still-blocks" "hooks/pre-commit"
+# The gate has no disable switch: an off value in the environment is ignored.
 R="$(cm_repo env-off)"
 cm_stage "$R" tests/hooks/new-missing.sh missing.sh
-printf 'CASE_MARKERS_ENFORCE=off\n' > "$CM_CFG/.env"
+CM_ENV=("CASE_MARKERS_ENFORCE=off")
 run_cm "$R"
-rm -f "$CM_CFG/.env"
-expect_block "env-file-off-still-blocks" 'code=MISSING_CASE_MARKERS'
+CM_ENV=()
+expect_block "env-off-still-blocks" 'code=MISSING_CASE_MARKERS'
 case_end
 
-case_begin "checker-infra-error-fail-open" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "registry-unreadable-fail-open" "hooks/pre-commit"
 R="$(cm_repo infra)"
 cm_stage "$R" tests/hooks/new-missing.sh missing.sh
-run_cm "$R" "$CM_BROKEN_CFG"
+run_cm "$R" "$CM_BAD_CFG"
 assert_eq "$CM_RC" "0"
-printf '%s\n' "$CM_ERR" | grep -qF 'pre-commit: check-case-markers rc=2 for tests/hooks/new-missing.sh — case-marker check incomplete (commit continues)' \
-    && pass "checker-infra-error-fail-open: diagnostic on stderr" \
-    || fail "checker-infra-error-fail-open: diagnostic" "err=[$CM_ERR]"
+printf '%s\n' "$CM_ERR" | grep -qF 'pre-commit: test language registry not readable — case-marker check skipped (commit continues)' \
+    && pass "registry-unreadable-fail-open: diagnostic on stderr" \
+    || fail "registry-unreadable-fail-open: diagnostic" "err=[$CM_ERR]"
 case_end
 
-case_begin "tmpdir-cleaned" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "tmpdir-cleaned" "hooks/pre-commit"
 R="$(cm_repo tmpclean)"
 cm_stage "$R" tests/hooks/new-missing.sh missing.sh
 cm_stage "$R" tests/hooks/new-good.sh conforming.sh
 CM_TMPDIR="$TMPBASE/cm-tmpdir"
 mkdir -p "$CM_TMPDIR"
-CM_ENV=("TMPDIR=$CM_TMPDIR")
+CM_ENV=("TMPDIR=$CM_TMPDIR" "TMP=$CM_TMPDIR" "TEMP=$CM_TMPDIR")
 run_cm "$R"
 CM_ENV=()
 assert_eq "$CM_RC" "1"
@@ -306,14 +278,12 @@ assert_eq "$(ls -A "$CM_TMPDIR")" ""
 case_end
 
 case_begin "hook-line-wired" "hooks/pre-commit"
-# The call sits on the line right after the frontmatter gate call.
-fm_ln="$(grep -n '^[[:space:]]*_precommit_check_tests_frontmatter || exit 1[[:space:]]*$' "$PRECOMMIT" | head -n 1 | cut -d: -f1)"
-next_line=""
-[ -n "$fm_ln" ] && next_line="$(sed -n "$((fm_ln + 1))p" "$PRECOMMIT" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-assert_eq "$next_line" "_precommit_check_tests_case_markers || exit 1"
+# #2507: the gate runs right after the frontmatter gate in the Node tests-frontmatter check.
+gates_line="$(grep -E '^const GATES = ' "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/tests-frontmatter.js")"
+assert_eq "$gates_line" "const GATES = [frontmatter, caseMarkers, languageMatch];"
 case_end
 
-case_begin "entrypoint-helper-classification" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "entrypoint-helper-classification" "hooks/pre-commit"
 # rel|expected (0 = case-marker target: a placed entrypoint whose registry entry has a
 # caseMarkerReader; 1 = not). A bare ".sh" names no entry (the registry's * is 1+ chars).
 CM_ROWS=(
@@ -325,21 +295,15 @@ CM_ROWS=(
     "tests/hooks/suite/x.Tests.ps1|1" "tests/lib/test_x.py|1" "tests/hooks/suite/x.js|1"
     "tests/hooks/x.test.ts|1" "tests/hooks/.sh|1"
 )
-cm_fn_ok=0
-declare -F _precommit_is_case_marker_target >/dev/null 2>&1 && cm_fn_ok=1
-assert_eq "$cm_fn_ok" "1"
+# The gate's predicate (hooks/lib/test-gates/placement.js isCaseMarkerTarget), one "rel|0/1" per row.
+CM_GOT="$(node -e '
+const p = require(process.argv[1]);
+for (const r of process.argv.slice(2)) console.log(`${r}|${p.isCaseMarkerTarget(r) ? 0 : 1}`);
+' "$(np "$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-gates/placement.js")" "${CM_ROWS[@]%|*}" 2>&1)"
 for _row in "${CM_ROWS[@]}"; do
-    _rel="${_row%|*}"
-    _want="${_row##*|}"
-    _got=127
-    if [ "$cm_fn_ok" -eq 1 ]; then
-        _got=0
-        _precommit_is_case_marker_target "$_rel" || _got=$?
-        [ "$_got" -ne 0 ] && _got=1
-    fi
-    [ "$_got" = "$_want" ] && pass "entrypoint-helper: $_rel -> $_want" \
-        || fail "entrypoint-helper: $_rel" "want $_want got $_got"
+    printf '%s\n' "$CM_GOT" | grep -qxF -- "$_row" && pass "entrypoint-helper: $_row" \
+        || fail "entrypoint-helper: ${_row%|*}" "want ${_row##*|}; predicate said: $(printf '%s' "$CM_GOT" | grep -F -- "${_row%|*}|" | head -n 1)"
 done
 case_end
 
-unset R CM_ROWS _row _rel _want _got cm_fn_ok fm_ln next_line CM_TMPDIR
+unset R CM_ROWS CM_GOT _row CM_TMPDIR

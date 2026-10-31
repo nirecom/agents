@@ -1,5 +1,5 @@
 "use strict";
-// Tests: hooks/block-case-markers.js, hooks/lib/precommit-tests-frontmatter.sh
+// Tests: hooks/block-case-markers.js, hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js
 // Tags: TL2, hooks, pre-commit, test-language-match, test-lang-exception:symmetry, edit-time, warn-context, scope:issue-specific, self-impl, fail-open
 // #2502 S4-7: bin/check-test-language-match.sh is called from the edit-time hook and from the
 // pre-commit gate _precommit_check_test_language_match; each row runs through both and must get
@@ -100,33 +100,33 @@ test("a MultiEdit changing case bodies only (HEAD's JavaScript case included) is
 });
 caseEnd();
 
-caseBegin("new-file-invalid-exception-blocks", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("new-file-invalid-exception-blocks", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 test("a new file declaring test-lang-exception:other is blocked by both callers", () => {
   row({ rel: "tests/bin/m4.sh", work: bashBody("scope:common, test-lang-exception:other", "bin/foo.sh"), code: "INVALID_TEST_LANG_EXCEPTION" });
 });
 caseEnd();
 
-caseBegin("existing-file-tags-changed-to-invalid-blocks", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("existing-file-tags-changed-to-invalid-blocks", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 test("an existing file whose Tags change to test-lang-exception:other is blocked by both callers", () => {
   const work = bashBody("scope:common, test-lang-exception:other", HDR, [["a", "bin/foo.sh"], ["b", "bin/bar.sh"]]);
   row({ rel: "tests/bin/m5.sh", head: BASE, work, code: "INVALID_TEST_LANG_EXCEPTION" });
 });
 caseEnd();
 
-caseBegin("valid-exception-passes", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("valid-exception-passes", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 test("a new file with test-lang-exception:e2e on JavaScript code passes both callers", () => {
   row({ rel: "tests/bin/m6.sh", work: bashBody("scope:common, test-lang-exception:e2e", "bin/foo.js"), code: null });
 });
 caseEnd();
 
-caseBegin("existing-mismatch-body-change-passes", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("existing-mismatch-body-change-passes", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 test("a body change to a case HEAD already had on JavaScript code passes both callers", () => {
   const work = bashBody("scope:common", HDR, [["a", "bin/foo.sh"], ["j", "bin/foo.js", "changed"]]);
   row({ rel: "tests/bin/m7.sh", head: BASE_JS, work, code: null });
 });
 caseEnd();
 
-caseBegin("existing-js-mismatch-retargeted-to-py-passes", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("existing-js-mismatch-retargeted-to-py-passes", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 // Plan S4-4: a paired case whose HEAD target was already mismatched is an existing state, so
 // moving it from JavaScript to Python code adds no mismatched case and both callers pass it.
 test("a case HEAD already had on JavaScript code, moved to Python code, passes both callers", () => {

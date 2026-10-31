@@ -4,9 +4,6 @@
 # Tags: worktree, enforce, hook, git, pre-commit, scope:common
 #
 # End-to-end test for hooks/pre-commit session-marker bypass (issue #550).
-#
-# TDD note: tests B and C will FAIL until pre-commit honors the session markers
-# (.workflow-off / .worktree-off) via session-markers.js.
 
 set -u
 
@@ -198,7 +195,8 @@ test_F_bad_agents_main_root_falls_through() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     printf '{"set_at":"x"}' > "$wfdir/$sid.workflow-off"
     local out rc=0
-    # Bad AGENTS_MAIN_ROOT for the marker-check; the script itself still resolves via $0.
+    # The marker probe resolves its modules from the hook's own location ($_cfg_dir, via $0),
+    # not from AGENTS_MAIN_ROOT, so a bad AGENTS_MAIN_ROOT must not disable a valid bypass (#1349).
     out="$(cd "$repo" && run_with_timeout 30 env \
         "AGENTS_MAIN_ROOT=/nonexistent/path" \
         "ENFORCE_WORKTREE=on" \
@@ -206,10 +204,27 @@ test_F_bad_agents_main_root_falls_through() {
         "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
         "CLAUDE_CODE_SESSION_ID=$sid" \
         bash "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit" 2>&1)" || rc=$?
-    if [ "$rc" -ne 0 ]; then
-        pass "F: bad AGENTS_MAIN_ROOT → graceful fall-through to enforcement"
+    if [ "$rc" -eq 0 ]; then
+        pass "F: bad AGENTS_MAIN_ROOT → marker bypass still resolved via the hook's own location"
     else
-        fail "F: expected non-zero, got rc=$rc out=$out"
+        fail "F: expected rc=0 (bypass via \$0), got rc=$rc out=$out"
+    fi
+
+    # Without a marker the same bad AGENTS_MAIN_ROOT falls through to enforcement.
+    local repo2; repo2="$(setup_main_repo "repoF2")"
+    local wfdir2; wfdir2="$(fresh_workflow_dir)"
+    rc=0
+    out="$(cd "$repo2" && run_with_timeout 30 env \
+        "AGENTS_MAIN_ROOT=/nonexistent/path" \
+        "ENFORCE_WORKTREE=on" \
+        "WORKFLOW_STATE_DIR=$wfdir2" \
+        "WORKFLOW_PLANS_DIR=$WORKFLOW_PLANS_DIR" \
+        "CLAUDE_CODE_SESSION_ID=testsessF002" \
+        bash "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit" 2>&1)" || rc=$?
+    if [ "$rc" -ne 0 ] && echo "$out" | grep -q "commits from main worktree are blocked"; then
+        pass "F2: bad AGENTS_MAIN_ROOT + no marker → graceful fall-through to enforcement"
+    else
+        fail "F2: expected block with main-worktree message; rc=$rc out=$out"
     fi
 }
 

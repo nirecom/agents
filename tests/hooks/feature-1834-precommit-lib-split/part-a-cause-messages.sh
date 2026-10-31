@@ -4,7 +4,7 @@
 echo "=== Part A: cause-specific block messages (real bin/check-test-frontmatter.sh) ==="
 
 # A1: flat-location cause fires ALONE.
-case_begin "A1-location-cause-alone" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A1-location-cause-alone" "hooks/pre-commit"
 R="$TMPBASE/a1"; init_fixture "$R"
 write_valid_flat "$R"
 run_fm_check "$R"
@@ -20,7 +20,7 @@ fi
 case_end
 
 # A2: frontmatter cause fires ALONE.
-case_begin "A2-frontmatter-cause-alone" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A2-frontmatter-cause-alone" "hooks/pre-commit"
 R="$TMPBASE/a2"; init_fixture "$R"
 write_broken_categorized "$R"
 run_fm_check "$R"
@@ -36,7 +36,7 @@ fi
 case_end
 
 # A3: BOTH causes fire in one run (CPR-ORTH both-may-fire).
-case_begin "A3-both-causes-fire" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A3-both-causes-fire" "hooks/pre-commit"
 R="$TMPBASE/a3"; init_fixture "$R"
 write_valid_flat "$R"
 write_broken_categorized "$R"
@@ -55,7 +55,7 @@ case_end
 # A4: clean sanctioned input — the non-targeted verdict (no over-blocking).
 # The fixture ships NO tests/lib/harness.sh, so the harness-source rule is skipped and
 # only frontmatter + location are checked; a well-formed categorized file passes clean.
-case_begin "A4-clean-input-passes" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A4-clean-input-passes" "hooks/pre-commit"
 R="$TMPBASE/a4"; init_fixture "$R"
 write_good_categorized "$R"
 run_fm_check "$R"
@@ -71,7 +71,7 @@ fi
 case_end
 
 # A5: edge — nothing staged under tests/.
-case_begin "A5-nothing-staged" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A5-nothing-staged" "hooks/pre-commit"
 R="$TMPBASE/a5"; init_fixture "$R"
 run_fm_check "$R"
 if [ "$RC" -ne 0 ]; then
@@ -87,7 +87,7 @@ case_end
 # exclusion must hold for EVERY excluded class, not just the observed one). Each fixture stages
 # a HEADERLESS file (would fail frontmatter validation if inspected) at an excluded path; the
 # gate must filter it before the checker runs, so the verdict is rc 0 with no block output.
-case_begin "A6-excluded-paths-bypass-gate" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A6-excluded-paths-bypass-gate" "hooks/pre-commit"
 _a6_fail=""
 for _rel in tests/_archive/old.sh tests/lib/harness-extra.sh tests/run-all.sh \
             tests/hooks/dispatcher/sub-part.sh tests/bin/suite/sub-part.sh; do
@@ -109,7 +109,7 @@ case_end
 
 # A7-A9 (#2392): .Tests.ps1 / test_*.py get the same classification as .sh — category-direct is
 # validated, a suite sub-file is skipped, a new flat file is forwarded and location-rejected.
-case_begin "A7-A9-nonsh-classification" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A7-A9-nonsh-classification" "hooks/pre-commit"
 _a7_fail=""
 for _nm in x.Tests.ps1 test_x.py; do
     # A7: headerless category-direct file must reach the checker → frontmatter block.
@@ -146,12 +146,13 @@ case_end
 
 # A10 (#2392): non-test entrypoints (helper.ps1, helper.py) are silently ignored —
 # files not matching *.Tests.ps1 or test_*.py must pass through the gate as a no-op.
-case_begin "A10-non-entrypoint-ignored" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "A10-non-entrypoint-ignored" "hooks/pre-commit"
 _a10_fail=""
 for _nm in helper.ps1 helper.py; do
     R="$TMPBASE/a10_$_nm"; init_fixture "$R"
     write_staged_nofm "$R" "tests/bin/$_nm"
-    run_fm_check "$R"
+    # The frontmatter gate alone: the language-match gate rightly WARNs on an unregistered name.
+    run_check "$R" "$CHECKOUT_NP" tests-frontmatter frontmatter
     if [ "$RC" -ne 0 ]; then
         _a10_fail="$_a10_fail [tests/bin/$_nm: want rc 0, got $RC]"
     elif [ -n "$OUT" ]; then

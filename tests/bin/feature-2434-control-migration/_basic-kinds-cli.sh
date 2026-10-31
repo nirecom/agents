@@ -93,17 +93,17 @@ kinds_driver() { node "$T/kinds-driver.js" "$1" "$(np "$REG_JS")" "$SID" "$(np "
 # never land in the control dir (the plan retires them in place).
 EPHEMERAL="guard-attempt.tmp"
 for e in $EPHEMERAL; do printf 'eph' > "$T/plans/${SID}-${e}"; done
-# #2544: an outcome or ingested marker never belongs in PLANS_DIR, so a planted one must
+# #2544 / #2768 prompt-turn: an outcome, ingested or prompt-turn marker never belongs in PLANS_DIR, so a planted one must
 # not be carried into the control dir where the hook would trust it.
-NEVER_MIGRATED="worker-test-runner-1.outcome.json worker-test-runner-1.ingested"
+NEVER_MIGRATED="worker-test-runner-1.outcome.json worker-test-runner-1.ingested prompt-turn.json"
 for e in $NEVER_MIGRATED; do printf '{"planted":true}' > "$T/plans/${SID}-${e}"; done
 NM_KINDS="$(node -e '
 const r = require(process.argv[1]);
-const names = ["worker-test-runner-1.outcome.json", "worker-test-runner-1.ingested"];
+const names = ["worker-test-runner-1.outcome.json", "worker-test-runner-1.ingested", "prompt-turn.json"];
 const hit = (list, n) => list.filter((c) => { const m = n.match(c.re || c.regex || c.pattern); return m && m[0] === n; }).map((c) => c.kind);
 process.stdout.write(names.map((n) => n + ":control=" + hit(r.CONTROL_KINDS || [], n).join("+") + ":migratable=" + hit(r.MIGRATABLE_KINDS || [], n).join("+")).join(" "));
 ' "$(np "$REG_JS")" 2>&1 | tr -d '\r')"
-if [ "$NM_KINDS" = "worker-test-runner-1.outcome.json:control=worker-outcome:migratable= worker-test-runner-1.ingested:control=worker-ingested:migratable=" ]; then
+if [ "$NM_KINDS" = "worker-test-runner-1.outcome.json:control=worker-outcome:migratable= worker-test-runner-1.ingested:control=worker-ingested:migratable= prompt-turn.json:control=prompt-turn:migratable=" ]; then
   pass "all-migratable-kinds:outcome-kinds-registered-but-not-migratable"
 else
   fail "all-migratable-kinds:outcome-kinds-registered-but-not-migratable" "got $NM_KINDS"

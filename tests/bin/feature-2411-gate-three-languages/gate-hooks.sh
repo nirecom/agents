@@ -42,7 +42,7 @@ lacks "js uncertain block text" "$HK_REASON" "code=MALFORMED_CASE_MARKER"
 lacks "js uncertain block text" "$HK_REASON" "code=MISSING_CASE_MARKERS"
 case_end
 
-case_begin "gate-commit-time-blocks-missing-passes-conforming" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "gate-commit-time-blocks-missing-passes-conforming" "hooks/pre-commit"
 for _lang in "${LANGS[@]}"; do
   _repo="$TMPBASE/repo-commit-$_lang"
   mkrepo "$_repo"
@@ -62,7 +62,7 @@ done
 case_end
 
 # The well-formed counterpart passing this gate is the conforming half of the case above.
-case_begin "gate-commit-time-blocks-malformed" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "gate-commit-time-blocks-malformed" "hooks/pre-commit"
 for _lang in "${LANGS[@]}"; do
   _repo="$TMPBASE/repo-commit-malformed-$_lang"
   mkrepo "$_repo"
@@ -78,7 +78,7 @@ for _lang in "${LANGS[@]}"; do
 done
 case_end
 
-case_begin "gate-commit-time-runtime-absent-passes" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "gate-commit-time-runtime-absent-passes" "hooks/pre-commit"
 for _lang in pester pytest; do
   lang_set "$_lang" missing
   _repo="$TMPBASE/repo-commit-nort-$_lang"
@@ -139,7 +139,7 @@ for _rel in ${OLD_RELS[@]+"${OLD_RELS[@]}"}; do
 done
 git -C "$REPO_OLD" add -A >/dev/null 2>&1
 
-case_begin "gate-existing-tests-are-not-judged" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "gate-existing-tests-are-not-judged" "hooks/pre-commit"
 if [ "${#OLD_RELS[@]}" -ge 3 ]; then
   pass "existing non-bash tests listed (${#OLD_RELS[@]})"
 else
@@ -211,6 +211,17 @@ if (typeof m.isCaseMarkerTarget !== "function") {
 for (const rel of process.argv.slice(3)) console.log(rel + "|" + (m.isCaseMarkerTarget(rel) ? 1 : 0));
 PARITYJS
 
+# The commit-time side (#2507): the placement module the Node case-marker gate requires.
+PC_PLACEMENT="$SCRIPT_CHECKOUT_ROOT/hooks/lib/test-gates/placement.js"
+PC_MARKER_GATE="$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/tests-frontmatter/case-markers-gate.js"
+parity_pc_wired() {
+  if grep -qF 'require("../../../lib/test-gates/placement")' "$PC_MARKER_GATE"; then
+    pass "commit-time gate reads its predicate from hooks/lib/test-gates/placement.js"
+  else
+    fail "commit-time predicate source" "case-markers-gate.js no longer requires the placement module"
+  fi
+}
+
 case_begin "gate-target-predicates-agree-on-three-languages" "hooks/block-case-markers.js"
 PARITY_RELS=()
 PARITY_WANT=()
@@ -220,18 +231,16 @@ for _lf in a.sh a.Tests.ps1 test_a.py a.js; do
   PARITY_WANT+=(1 1 1 0 0 0)
 done
 PARITY_OUT="$(cd "$NEUTRAL_CWD" && node "$(np "$PARITY_JS")" "$(np "$HOOK")" "${PARITY_RELS[@]}" 2>&1)"
+PARITY_PC_OUT="$(cd "$NEUTRAL_CWD" && node "$(np "$PARITY_JS")" "$(np "$PC_PLACEMENT")" "${PARITY_RELS[@]}" 2>&1)"
+parity_pc_wired
 _i=0
 for _rel in "${PARITY_RELS[@]}"; do
   _want="${PARITY_WANT[$_i]}"
   _i=$((_i + 1))
   _js="$(printf '%s\n' "$PARITY_OUT" | grep -F -x -e "$_rel|1" -e "$_rel|0" | head -n 1)"
   _js="${_js##*|}"
-  _sh=0
-  if declare -F _precommit_is_case_marker_target >/dev/null 2>&1; then
-    _precommit_is_case_marker_target "$_rel" && _sh=1
-  else
-    _sh=127
-  fi
+  _sh="$(printf '%s\n' "$PARITY_PC_OUT" | grep -F -x -e "$_rel|1" -e "$_rel|0" | head -n 1)"
+  _sh="${_sh##*|}"
   if [ "$_js" = "$_want" ] && [ "$_sh" = "$_want" ]; then
     pass "target $_rel -> $_want (edit-time and commit-time agree)"
   else
@@ -241,8 +250,7 @@ done
 case_end
 
 # #2502 S3-5: the reader-less classification (a placed file whose registry entry has no
-# caseMarkerReader) on the same path table. The pair names are assumed — the plan names only the
-# role: isReaderlessCaseMarkerTarget (hook export) / _precommit_is_readerless_case_marker_target.
+# caseMarkerReader) on the same path table: the hook export against placement.js (commit time).
 PARITY_RL_JS="$TMPBASE/parity-readerless.js"
 cat > "$PARITY_RL_JS" <<'PARITYRLJS'
 let m;
@@ -276,15 +284,13 @@ while IFS='|' read -r _name _rel _want; do
   PARITY_RELS+=("$_rel")
 done <<<"$PARITY_RL_TABLE"
 PARITY_OUT="$(cd "$NEUTRAL_CWD" && node "$(np "$PARITY_RL_JS")" "$(np "$HOOK")" "${PARITY_RELS[@]}" 2>&1)"
+PARITY_PC_OUT="$(cd "$NEUTRAL_CWD" && node "$(np "$PARITY_RL_JS")" "$(np "$PC_PLACEMENT")" "${PARITY_RELS[@]}" 2>&1)"
+parity_pc_wired
 while IFS='|' read -r _name _rel _want; do
   _js="$(printf '%s\n' "$PARITY_OUT" | grep -F -x -e "$_rel|1" -e "$_rel|0" | head -n 1)"
   _js="${_js##*|}"
-  _sh=0
-  if declare -F _precommit_is_readerless_case_marker_target >/dev/null 2>&1; then
-    _precommit_is_readerless_case_marker_target "$_rel" </dev/null && _sh=1
-  else
-    _sh=127
-  fi
+  _sh="$(printf '%s\n' "$PARITY_PC_OUT" | grep -F -x -e "$_rel|1" -e "$_rel|0" | head -n 1)"
+  _sh="${_sh##*|}"
   if [[ "$_js" == "$_want" && "$_sh" == "$_want" && "$_js" == "$_sh" ]]; then
     pass "reader-less target [$_name] $_rel -> $_want (edit-time and commit-time agree)"
   else

@@ -109,10 +109,16 @@ function redactUrl(url) {
   return redactOne(url);
 }
 
+// Scheme-less userinfo carrying a password (`user:SECRET@host`), as OpenSSH echoes it in its
+// "Permission denied" line; a bare `git@host:path` has no secret and stays readable.
+const SCP_SECRET_RE = /(^|[\s'"(<[])([A-Za-z0-9_][A-Za-z0-9_.-]*:(?!\/\/)[^@\s]+@)(?=[A-Za-z0-9])/gm;
+
 // redactText(text) — the same redaction applied to every URL inside free text (git stderr).
 function redactText(text) {
   if (typeof text !== "string") return "";
-  return text.replace(/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/@\s]+@/g, (m) => redactOne(m));
+  return text
+    .replace(/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/@\s]+@/g, (m) => redactOne(m))
+    .replace(SCP_SECRET_RE, (_m, lead, info) => lead + redactUserinfo(info));
 }
 
 // The owner placeholder .env.example ships; a copied-but-unedited value must never provision.
@@ -130,6 +136,15 @@ function fillPlaceholder(url, owner) {
 // blobUrlFor(target, branch, relPath) -> string | null — the web page of relPath on branch;
 // null for an unknown forge. An HTTP(S) destination keeps its scheme and non-default port.
 function blobUrlFor(target, branch, relPath) {
+  const project = projectWebUrl(target);
+  if (!project) return null;
+  const segs = String(relPath).split("/").map(encodeURIComponent).join("/");
+  return `${project}${forgeSep(target)}blob/${encodeURIComponent(branch)}/${segs}`;
+}
+
+// projectWebUrl(target) -> the project's web page URL, or null for an unknown forge.
+// An HTTP(S) destination keeps its scheme and non-default port.
+function projectWebUrl(target) {
   if (!target || !target.host || !target.project) return null;
   if (target.type !== "github" && target.type !== "gitlab") return null;
   let origin = `https://${target.host}`;
@@ -137,9 +152,23 @@ function blobUrlFor(target, branch, relPath) {
     const port = typeof target.port === "number" && target.port !== DEFAULT_PORTS[target.scheme] ? `:${target.port}` : "";
     origin = `${target.scheme}://${target.host}${port}`;
   }
-  const segs = String(relPath).split("/").map(encodeURIComponent).join("/");
-  const sep = target.type === "gitlab" ? "/-/blob/" : "/blob/";
-  return `${origin}/${target.project}${sep}${encodeURIComponent(branch)}/${segs}`;
+  return `${origin}/${target.project}`;
+}
+
+const forgeSep = (target) => (target.type === "gitlab" ? "/-/" : "/");
+
+// compareUrlFor(target, base, head) -> the forge's base...head comparison page, or null.
+function compareUrlFor(target, base, head) {
+  const project = projectWebUrl(target);
+  if (!project) return null;
+  return `${project}${forgeSep(target)}compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+}
+
+// commitUrlFor(target, sha) -> the forge's page of one commit, or null.
+function commitUrlFor(target, sha) {
+  const project = projectWebUrl(target);
+  if (!project) return null;
+  return `${project}${forgeSep(target)}commit/${encodeURIComponent(sha)}`;
 }
 
 module.exports = {
@@ -153,4 +182,6 @@ module.exports = {
   redactUrl,
   redactText,
   blobUrlFor,
+  compareUrlFor,
+  commitUrlFor,
 };

@@ -6,8 +6,13 @@ browser, not only from the machine that wrote it (#2513).
 
 `<first_session_id>-session-progress.md` ([progress-file.md](progress-file.md)) is synced the same way, but
 silently: `hooks/show-plan-link.js` records its project host and pushes it on every
-Edit/Write inside the same sync budget, with no plan link and no turn marker (#2594). The
-remote's git history keeps every earlier version, which is the recovery path for a bad write.
+Edit/Write inside the same sync budget, with no plan link and no turn marker (#2594).
+
+The writes of one user prompt (a turn) become one commit on the remote: a later write in the
+same turn replaces that turn's commit (#2768, [plan-sync/turn-commit.md](plan-sync/turn-commit.md)).
+The remote's git history keeps every version that ended a turn — the version the user saw — which
+is the recovery path for a bad write; a version that only existed in the middle of a turn is not
+kept.
 
 ## Why
 
@@ -138,8 +143,13 @@ reason, with a hint to run `bin/plan-sync-init`.
   Local `main` is never pushed as-is. A non-fast-forward fetches the tip and rebuilds, up
   to a small retry cap, inside a wall-clock budget. A "nothing to publish" result is
   trusted only after that attempt fetched the tip, so a stale `origin/main` cannot hide a
-  revision that never reached the remote. Remote content is only ever added or
+  revision that never reached the remote. Remote files are only ever added or
   overwritten, never deleted.
+- **One commit per turn.** Within one user prompt, plan-sync replaces its own commit of that
+  prompt with a force-with-lease push instead of stacking another one; a remote that refuses the
+  forced update gets an append and a turn-diff link instead. Turn ids, trailers, the replacement
+  conditions, the auth-failure backoff and the degraded paths:
+  [plan-sync/turn-commit.md](plan-sync/turn-commit.md).
 - **Plan link for the model.** `show-plan-link.js` (after a write) and
   `confirm-checkpoint.js` (before a CONFIRM) hand the model one `[plan-link]` line per plan
   as `additionalContext`: `<stage>: <blob URL> (<local path>)` when published, otherwise
@@ -172,8 +182,8 @@ reason, with a hint to run `bin/plan-sync-init`.
   ([settings/hooks.md](settings/hooks.md)).
 
 Code: `hooks/lib/plan-sync.js` (dispatch) and `hooks/lib/plan-sync/{remote-url,
-allowlist,provision,git,commit-push,local-file,project-host,init-interactive}.js`; link
-resolution `hooks/lib/plan-link.js`.
+allowlist,provision,git,commit-push,local-file,project-host,init-interactive,turn-trailer,
+turn-commit,lease-push,remote-state}.js`; link resolution `hooks/lib/plan-link.js`.
 
 ## Visibility policy
 
@@ -204,7 +214,12 @@ internal repo ([../../scan-outbound.md](../../scan-outbound.md)).
 
 ## Retention
 
-Plans live in the remote repository's history. Deleting a plan locally (`sweep-plans` deletes `plan` files only with `--include-plan-and-user-requested` after an approval prompt)
+Plans live in the remote repository's history. Every version that ended a user prompt stays
+there; versions written earlier in the same prompt are replaced by that prompt's commit and do
+not. When the turn id could not be cleared before a new prompt (the turn-id hook did not run),
+the new prompt's writes can replace the previous prompt's commit
+([plan-sync/turn-commit.md](plan-sync/turn-commit.md#residual-risks)).
+Deleting a plan locally (`sweep-plans` deletes `plan` files only with `--include-plan-and-user-requested` after an approval prompt)
 does not purge it from the remote, and sync never deletes remote files.
 Purging requires the user to rewrite or prune the plan repository itself.
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/precommit-tests-frontmatter.sh, bin/lib/merge-parents.sh, bin/check-test-frontmatter.sh, bin/check-test-frontmatter/self-impl.sh
+# Tests: hooks/pre-commit, bin/check-test-frontmatter.sh
 # Tags: TL2, bin, hooks, pre-commit, merge, merge-parents, tests-gates, worktree, scope:issue-specific
 # #2812: merge shapes for the tests/ gates — MERGE_HEAD-only files (the #2748 reproduction), R1 on a
 # shared path and R2 during a merge, a merge in a
 # linked worktree, a temporary GIT_INDEX_FILE, the HEAD-only fallbacks with their note, and the
-# bin/lib/merge-parents.sh reader on tab / newline paths. Split from
+# bin/merge-parents record stream on tab / newline paths. Split from
 # tests/bin/feat-2812-tests-gates-merge.sh so the two run in parallel; both share its sibling directory.
 # TL3 gap: a real merge `git commit` through the installed hooks/pre-commit binary (mitigation: the
-# gate functions run here exactly as hooks/pre-commit sources them, with _cfg_dir at this checkout).
+# Node gate modules run here with the context and snapshot built as hooks/pre-commit.d/main.js does).
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -34,7 +34,7 @@ CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2812-tests-gates-merge"
 # shellcheck source=feat-2812-tests-gates-merge/bodies.sh
 . "$CASE_DIR/bodies.sh"
 
-case_begin "criss-cross-fixture-leaves-a-merge-with-two-bases" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "criss-cross-fixture-leaves-a-merge-with-two-bases" "hooks/pre-commit"
 raw cfx-one '# one'
 crissfx "$TMPBASE/cfx" "" "notes/n.txt=cfx-one" "" ""
 assert_eq "fixture: MERGE_HEAD=$(git -C "$TMPBASE/cfx" rev-parse MERGE_HEAD 2>/dev/null)" \

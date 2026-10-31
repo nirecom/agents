@@ -61,10 +61,28 @@ lacks "new clean file" "$FM_OUT$FM_ERR" "SELF_IMPLEMENTED_HARNESS"
 git -C "$REPO_FM" rm -q --cached -- tests/bin/newclean.sh >/dev/null 2>&1
 case_end
 
+# fm_no_pwsh_path — FM_PATH: the pwsh-less wrapper PATH plus the directory of PATH's git, so Node
+# can spawn git (a wrapper is a bash script Node cannot run on Windows); empty + FM_NO_PWSH_WHY if not.
+fm_no_pwsh_path() {
+  local base git_dir
+  FM_PATH=""
+  FM_NO_PWSH_WHY=""
+  base="$(no_runtime_path pwsh)"
+  [[ -n "$base" ]] || { FM_NO_PWSH_WHY="could not build a PATH without pwsh"; return 0; }
+  git_dir="$(dirname "$(command -v git)")"
+  if PATH="$base:$git_dir" command -v pwsh >/dev/null 2>&1; then
+    FM_NO_PWSH_WHY="pwsh sits next to git in $git_dir"
+  elif ! PATH="$base:$git_dir" node -e 'process.exit(require("child_process").spawnSync("git",["--version"]).status===0?0:1)'; then
+    FM_NO_PWSH_WHY="Node cannot spawn git from $git_dir"
+  else
+    FM_PATH="$base:$git_dir"
+  fi
+}
+
 case_begin "fm-self-impl-warn-does-not-block" "bin/check-test-frontmatter.sh"
-FM_PATH="$(no_runtime_path pwsh)"
+fm_no_pwsh_path
 if [ -z "$FM_PATH" ]; then
-  skip "warn at commit time: could not build a PATH without pwsh"
+  skip "warn at commit time: $FM_NO_PWSH_WHY"
 else
   stage "$REPO_FM" tests/bin/newbad.Tests.ps1 pester-bad
   fm_run "$REPO_FM" tests/bin/newbad.Tests.ps1
@@ -76,18 +94,38 @@ fi
 FM_PATH=""
 case_end
 
-# A bash wrapper first on PATH logs one line per bin/check-self-impl.sh start, so a case can count them.
+# check-self-impl starts are counted on two channels: a bash wrapper first on PATH logs each bash
+# start of bin/check-self-impl.sh, and the Node preload of tests/lib/node-spawn-log.sh records every
+# Node process start and child_process call (a bash or node child, bin/check-self-impl/*.js) on any OS.
 FM_SI_LOG="$TMPBASE/si-starts.log"
+FM_SI_SPAWN_LOG="$TMPBASE/si-spawns.log"
+FM_SI_RE='(^|[/ ])check-self-impl(\.sh|/[^/ ]+\.js)( |$)'
 _fm_bash="$(command -v bash)"
 mkdir -p "$TMPBASE/shim-count-si"
 printf '#!%s\ncase " $* " in *check-self-impl.sh*) echo start >>%q ;; esac\nexec %q "$@"\n' \
   "$_fm_bash" "$FM_SI_LOG" "$_fm_bash" > "$TMPBASE/shim-count-si/bash"
 chmod +x "$TMPBASE/shim-count-si/bash"
 FM_COUNT_PATH="$TMPBASE/shim-count-si:$PATH"
+# shellcheck source=../../lib/node-spawn-log.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-spawn-log.sh"
 
-# fm_si_starts — the number of check-self-impl.sh starts logged since the log was last removed.
-fm_si_starts() {
-  if [ -f "$FM_SI_LOG" ]; then wc -l < "$FM_SI_LOG" | tr -d ' '; else echo 0; fi
+# fm_counted_run <repo> <rel>... — fm_run with both channels armed. FM_SI_STARTS: the starts seen,
+# or "unrecorded" when the preload logged no check-test-frontmatter start (never a silent 0).
+fm_counted_run() {
+  local shim=0 node_si=0
+  rm -f "$FM_SI_LOG"
+  nsl_on "$FM_SI_SPAWN_LOG"
+  FM_PATH="$FM_COUNT_PATH"
+  fm_run "$@"
+  FM_PATH=""
+  nsl_off
+  if [ "$(nsl_count "$FM_SI_SPAWN_LOG" main '[/]check-test-frontmatter/cli\.js( |$)')" -lt 1 ]; then
+    FM_SI_STARTS="unrecorded"
+    return 0
+  fi
+  [ -f "$FM_SI_LOG" ] && shim="$(wc -l < "$FM_SI_LOG" | tr -d ' ')"
+  node_si="$(nsl_count "$FM_SI_SPAWN_LOG" any "$FM_SI_RE")"
+  FM_SI_STARTS=$((shim + node_si))
 }
 
 # fm_sorted <text> [<fixed-string>] — the non-empty lines of <text> (only those holding the string), sorted.
@@ -122,10 +160,7 @@ for _r in "${_fb_rels[@]}"; do
   _fb_want+="$FM_OUT"$'\n'"$FM_ERR"$'\n'
   [ "$FM_RC" -le "$_fb_want_rc" ] || _fb_want_rc="$FM_RC"
 done
-rm -f "$FM_SI_LOG"
-FM_PATH="$FM_COUNT_PATH"
-fm_run "$REPO_FM" "${_fb_rels[@]}"
-FM_PATH=""
+fm_counted_run "$REPO_FM" "${_fb_rels[@]}"
 expect_rc "batch run" "$_fb_want_rc" "$FM_RC" "$FM_OUT $FM_ERR"
 expect_rc "batch run blocks" 1 "$FM_RC" "$FM_OUT $FM_ERR"
 assert_eq "self-impl lines=[$(fm_sorted "$FM_OUT"$'\n'"$FM_ERR" SELF_IMPL)]" \
@@ -136,7 +171,8 @@ has "batch run: existing file gains a counter" "$FM_ERR" "HIGH: tests/bin/existi
 has "batch run: new js file" "$FM_ERR" "HIGH: tests/bin/newbad.js line"
 lacks "batch run: HEAD debt" "$FM_ERR" "tests/bin/debt.sh line"
 lacks "batch run: clean file" "$FM_ERR" "tests/bin/newclean.sh line"
-assert_eq "check-self-impl.sh starts=$(fm_si_starts)" "check-self-impl.sh starts=1"
+# #2507: the Node check judges self-impl in-process, so the batch run starts no check-self-impl.
+assert_eq "check-self-impl starts=$FM_SI_STARTS" "check-self-impl starts=0"
 git -C "$REPO_FM" rm -q --cached -- tests/bin/newbad.sh tests/bin/newclean.sh tests/bin/newbad.js >/dev/null 2>&1
 git -C "$REPO_FM" rm -q --cached --ignore-unmatch -- tests/bin/test_fb_bad.py tests/bin/fb-bad.Tests.ps1 >/dev/null 2>&1
 git -C "$REPO_FM" reset -q -- tests/bin/existing.sh tests/bin/debt.sh >/dev/null 2>&1
@@ -144,13 +180,10 @@ put "$REPO_FM" tests/bin/existing.sh sh-clean
 put "$REPO_FM" tests/bin/debt.sh sh-bad-edit
 case_end
 
-# The starts counter is shown to work by the case above; here nothing differs from HEAD.
+# Here nothing differs from HEAD: no self-impl line and no check-self-impl.sh start.
 case_begin "fm-unchanged-set-starts-no-self-impl-cli" "bin/check-test-frontmatter.sh"
-rm -f "$FM_SI_LOG"
-FM_PATH="$FM_COUNT_PATH"
-fm_run "$REPO_FM" tests/bin/existing.sh tests/bin/debt.sh
-FM_PATH=""
+fm_counted_run "$REPO_FM" tests/bin/existing.sh tests/bin/debt.sh
 expect_rc "nothing differs from HEAD" 0 "$FM_RC" "$FM_OUT $FM_ERR"
 lacks "nothing differs from HEAD" "$FM_OUT$FM_ERR" "SELF_IMPL"
-assert_eq "check-self-impl.sh starts=$(fm_si_starts)" "check-self-impl.sh starts=0"
+assert_eq "check-self-impl starts=$FM_SI_STARTS" "check-self-impl starts=0"
 case_end

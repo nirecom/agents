@@ -899,3 +899,23 @@ Changes: Windows install no longer prints an npm cleanup EPERM warning when upda
 ### FEATURE: PR #2821 (2026-10-28)
 Background: fix(#2811,#2813): continue confirm-plan presentation under stop_hook_active once per receipt, and point feature-2013 B20 at the current skill dispatch
 Changes: The plan approval dialog now follows a plan presentation even when that turn came after a Stop hook block, or when the transcript flush lagged but completed before the turn settled (#2811); a flush that lags past that point is tracked in #2822.
+
+### FEATURE: PR #2823 (2026-10-28)
+Background: feat(#2327): scope review-tests re-reviews after implementation changes to the delta
+Changes: review-tests re-reviews after an implementation change now read only the changed and covering tests, falling back to a full review when coverage cannot be determined (#2327)
+
+### FEATURE: PR #2751 (2026-10-29)
+Background: feat(#2672, #2725): CPR 4 項目追加と rules/architecture-principles.md 新設
+Changes: Core principles gained four entries (Release Is the Goal; Quality, Cost, Delivery; Evidence First; Root Cause Analysis), and a new on-demand design-principles rule (exit before gate, shift left) is now read when outlining, detailing and writing code.
+
+### FEATURE: PR #2830 (2026-10-29)
+Background: feat(#2768): plan-sync makes one commit per user prompt
+Changes: plan-sync now publishes one commit per user prompt instead of one per plan write, so the plan repository keeps the versions you saw, not every intermediate draft. When the remote forbids force pushes, a turn-diff link shows that prompt's changes.
+
+### FEATURE: PR #2756 (2026-10-29)
+Background: test(#2723): split the slowest test files into parallel entrypoints
+Changes: Slow test files are split into smaller entrypoints that run in parallel, so a full test run spends less time stuck behind a single long file.
+
+### FEATURE: PR #2840 (2026-10-31)
+Background: feat(#2507): run the pre-commit checks in one Node.js process
+Changes: Commits are faster: the pre-commit hook now runs all of its checks in a single Node.js process instead of spawning bash, grep and git per staged file. Node.js is now required to commit; without it the hook stops the commit and says why.;The pre-commit secret scan now stops the commit on a malformed `--manifest` frame, and detects zero-width and bidi-override characters regardless of the hook's locale.;In blocklist and allowlist patterns, `\w` now includes `_` on every OS (GNU semantics).
