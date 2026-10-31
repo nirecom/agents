@@ -300,3 +300,113 @@ test("C15: a header hook that exits 3 degrades to full, exit 0, one stderr line 
   assert.ok(out.errLines[0].startsWith("select-review-scope: header map unavailable: bash exited 3"), out.errLines[0]);
 });
 caseEnd();
+
+// #2842: a full selection leaves the "review not yet run" evidence the WARNINGS_ACCEPTED exit
+// reads; a delta selection removes it. Path: <WORKFLOW_STATE_DIR>/<sid>.control/test-review-unreviewed.txt.
+const unreviewedPath = (sid) => path.join(process.env.WORKFLOW_STATE_DIR, `${sid}.control`, "test-review-unreviewed.txt");
+const markerLines = (sid) => (fs.existsSync(unreviewedPath(sid)) ? fs.readFileSync(unreviewedPath(sid), "utf8").split(/\r?\n/) : null);
+const { fingerprintOfManifest } = require(path.join(REPO_ROOT, "hooks", "workflow-gate", "review-tests-evidence.js"));
+const fpNow = (fx) => fingerprintOfManifest(computeReviewScopeManifest(fx.repo).files);
+caseBegin("U1-U5-unreviewed-marker", "bin/select-review-scope.js");
+test("U1: every full reason writes scope-full:<REASON> pinned to the current fingerprint", () => {
+  const scenes = [
+    ["header-map-unavailable", () => { const fx = fixture(C7_FILES); fx.change("hooks/impl.js", "2;\n"); return [fx, { [ENV_KEY]: fwd(path.join(TMP, "no-such-dir", "bash")) }]; }],
+    ["no-record", () => [fixture({ "tests/cover.sh": SH_COVER, "hooks/impl.js": "1;\n" }, { record: false })]],
+    ["impl-uncovered", () => { const fx = fixture({ "tests/u1.sh": shFor("bin/u1.sh"), "tests/u2.sh": shFor("bin/u2.sh"), "hooks/impl.js": "1;\n" }); fx.change("hooks/impl.js", "2;\n"); return [fx]; }],
+    ["large-change", () => {
+      const fx = fixture({ "tests/a.sh": shFor("bin/a.sh"), "tests/b.sh": shFor("bin/b.sh"), "tests/c.sh": shFor("bin/c.sh"), "tests/d.sh": shFor("bin/d.sh") });
+      for (const r of ["tests/a.sh", "tests/b.sh", "tests/c.sh"]) fx.change(r, `${shFor("bin/x.sh")}echo changed\n`);
+      return [fx];
+    }],
+  ];
+  for (const [reason, arrange] of scenes) {
+    const [fx, env] = arrange();
+    const out = runCli(fx, env);
+    assert.strictEqual(out.res.status, 0, `${reason}: ${out.res.stderr}`);
+    assert.ok(out.lines.includes(`REASON=${reason}`), `${reason}: fixture reaches the reason: ${out.res.stdout}`);
+    const lines = markerLines(fx.sid);
+    assert.ok(lines, `${reason}: the unreviewed marker is written`);
+    assert.strictEqual(lines[0], `scope-full:${reason}`, `${reason}: line 1`);
+    assert.strictEqual(lines[1], fpNow(fx), `${reason}: line 2 is the current fingerprint`);
+  }
+});
+test("U2: a delta selection removes an earlier unreviewed marker", () => {
+  const fx = fixture(C7_FILES);
+  fx.change("hooks/impl.js", "2;\n");
+  fs.mkdirSync(path.dirname(unreviewedPath(fx.sid)), { recursive: true });
+  fs.writeFileSync(unreviewedPath(fx.sid), `scope-full:no-record\n${fpNow(fx)}\n`);
+  assertRun(runCli(fx), expectLines(fx, {
+    scope: "delta", reason: "impl-changed", review: ["tests/cover.sh"], inventory: ["tests/u1.sh", "tests/u2.sh"], source: ["hooks/impl.js"],
+  }));
+  assert.strictEqual(fs.existsSync(unreviewedPath(fx.sid)), false, "delta clears the marker");
+});
+test("U3: no state, or an empty scope, writes no marker", () => {
+  const noState = fixture({ "tests/cover.sh": SH_COVER, "hooks/impl.js": "1;\n" }, { record: false });
+  fs.rmSync(stateIo.getStatePath(noState.sid), { force: true });
+  const r1 = runCli(noState);
+  assert.strictEqual(r1.res.status, 0, r1.res.stderr);
+  assert.strictEqual(fs.existsSync(unreviewedPath(noState.sid)), false, "no state -> no marker");
+  const empty = fixture({ "docs/only.md": "doc\n" }, { record: false });
+  const r2 = runCli(empty);
+  assert.strictEqual(r2.res.status, 0, r2.res.stderr);
+  assert.strictEqual(fs.existsSync(unreviewedPath(empty.sid)), false, "empty scope -> no marker");
+});
+test("U4: a marker write failure is fail-open: exit 0, the selection unchanged, one stderr line", () => {
+  const fx = fixture({ "tests/cover.sh": SH_COVER, "hooks/impl.js": "1;\n" }, { record: false });
+  fs.mkdirSync(unreviewedPath(fx.sid), { recursive: true });
+  fs.writeFileSync(path.join(unreviewedPath(fx.sid), "blocker"), "x");
+  const out = runCli(fx);
+  assertRun(out, expectLines(fx, { scope: "full", reason: "no-record", review: ["tests/cover.sh"], source: ["hooks/impl.js"] }));
+  assert.strictEqual(out.errLines.length, 1, `one diagnostic line: ${out.res.stderr}`);
+  assert.ok(fs.statSync(unreviewedPath(fx.sid)).isDirectory(), "the blocker is left alone");
+});
+caseEnd();
+
+// #2842: mid-merge of a mainline that added 60 tests, the merge-incoming tests leave the scope, so
+// a branch impl change after the recorded review stays a covering-test delta.
+function mergeFixture() {
+  const fx = fixture({ "README.md": "seed\n" }, { record: false });
+  const git = (...a) => {
+    const r = spawnSync("git", ["-C", fx.repo, ...a], { encoding: "utf8", timeout: 30000 });
+    if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr || r.error}`);
+  };
+  git("checkout", "-q", "-b", "mainline");
+  git("commit", "-qm", "base");
+  git("checkout", "-q", "-b", "feature");
+  const own = { "tests/cover.sh": SH_COVER, "tests/u1.sh": shFor("bin/u1.sh"), "tests/u2.sh": shFor("bin/u2.sh"), "hooks/impl.js": "1;\n" };
+  for (const [rel, body] of Object.entries(own)) fx.write(rel, body);
+  git("add", "--", ...Object.keys(own));
+  const m = computeReviewScopeManifest(fx.repo);
+  stateIo.appendEvents(fx.sid, [{
+    kind: "step_annotation", step: "review_tests", key: "review_scope_manifest",
+    value: { v: 1, files: m.files }, provenance: "observed", origin: "review-tests-complete",
+  }]);
+  git("reset", "-q");
+  git("checkout", "-q", "mainline");
+  for (let i = 1; i <= 60; i += 1) fx.write(`tests/main-${i}.sh`, shFor(`bin/main-${i}.sh`));
+  git("add", "--", "tests/main-*.sh");
+  git("commit", "-qm", "main");
+  git("checkout", "-q", "feature");
+  git("merge", "-q", "--no-commit", "--no-ff", "mainline");
+  git("add", "--", ...Object.keys(own));
+  fx.change("hooks/impl.js", "2;\n");
+  return fx;
+}
+caseBegin("U6-U7-merging-scope", "bin/select-review-scope.js");
+test("U6: merging -> delta/impl-changed reviewing only the branch's covering test", () => {
+  const fx = mergeFixture();
+  assertRun(runCli(fx), expectLines(fx, {
+    scope: "delta", reason: "impl-changed", review: ["tests/cover.sh"], inventory: ["tests/u1.sh", "tests/u2.sh"], source: ["hooks/impl.js"],
+  }));
+});
+test("U7: undecidable merge state -> main's tests stay in scope; a failing header map is full/header-map-unavailable", () => {
+  const fx = mergeFixture();
+  const mh = path.join(fx.repo, ".git", "MERGE_HEAD");
+  fs.writeFileSync(mh, "not-an-oid\n");
+  const out = runCli(fx, { [ENV_KEY]: fwd(path.join(TMP, "no-such-dir", "bash")) });
+  assert.strictEqual(out.res.status, 0, out.res.stderr);
+  assert.ok(out.lines.includes("SCOPE=full"), out.res.stdout);
+  assert.ok(out.lines.includes("REASON=header-map-unavailable"), out.res.stdout);
+  assert.strictEqual(out.lines.filter((l) => l.startsWith("REVIEW\t")).length, 63, "all 63 staged tests are reviewed");
+});
+caseEnd();

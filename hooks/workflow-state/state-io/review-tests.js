@@ -1,13 +1,15 @@
 "use strict";
 // review_tests step lifecycle: review-scope manifest record, warning clearance,
-// terminal-marker cleanup, write_code completion reopen, in_progress recovery after a
-// review that ended non-block (rc 2/6, rc 1/5, rc 3 fallback). Entrypoint-private to state-io.js.
+// write_code completion reopen, in_progress recovery after a review that ended non-block
+// (rc 2/6, rc 1/5, rc 3 fallback) or never ran (#2842). Marker IO: ./review-tests-markers.js.
+// Entrypoint-private to state-io.js.
 
 const fs = require("fs");
 const { assertValidSessionId, readState, markStep } = require("./core");
 // Called as events.appendEvents at call time (never destructured) so a wrapper
 // installed on the module is honoured.
 const events = require("./events");
+const markers = require("./review-tests-markers");
 
 const REVIEW_TESTS_REOPEN_REASONS = ["write-code-stale", "write-code-missing", "write-code-unavailable"];
 
@@ -43,6 +45,7 @@ const CLEAR_OUTCOME = Object.freeze({
   RECOVERED_TERMINAL: "recovered-terminal",
   RECOVERED_CONTINUING: "recovered-continuing",
   RECOVERED_FALLBACK: "recovered-fallback",
+  RECOVERED_UNREVIEWED: "recovered-unreviewed",
   WARNINGS_CLEARED: "warnings-cleared",
   NOTHING_TO_CLEAR: "nothing-to-clear",
   MANIFEST_UNAVAILABLE: "manifest-unavailable",
@@ -50,61 +53,29 @@ const CLEAR_OUTCOME = Object.freeze({
   NO_STATE: "no-state",
 });
 
-const TERMINAL_MARKER = "test-review-terminal.txt";
-const CONTINUING_MARKER = "test-review-continuing.txt";
-
-// Trust boundary: single-user local filesystem (NFR); forgeability risk accepted.
-function controlMarkerPath(sessionId, name) {
-  assertValidSessionId(sessionId);
-  const { controlPath } = require("./control-dir");
-  return controlPath(sessionId, name);
-}
-
-// -> { rc, fp, mtimeMs } (line 1 = wrapper rc, line 2 = review-scope fingerprint) or null.
-function readControlMarker(sessionId, name) {
-  try {
-    const p = controlMarkerPath(sessionId, name);
-    const lines = fs.readFileSync(p, "utf8").split("\n");
-    return { rc: (lines[0] || "").trim(), fp: (lines[1] || "").trim(), mtimeMs: fs.statSync(p).mtimeMs };
-  } catch (e) {
-    return null;
-  }
-}
-
-// The exit-3 fallback output. Candidates: the workflow session id (the wrapper's SESSION_ID
-// names plan artifacts), then the CC session id. Only the first existing file is judged, so a
-// later candidate can never rescue a refused one (fail-closed).
-// The ambient workflow session id (cwd / env driven) can name ANOTHER session's plan
-// artifacts, and the review-scope fingerprint is shared across sessions, so it is trusted only
-// when its context.md records this CC session id (the resolver's own tie-break).
-function wsidOwnedBy(wsid, ccSid) {
-  try {
-    const path = require("path");
-    const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
-    const text = fs.readFileSync(path.join(getWorkflowPlansDir(), `${wsid}-context.md`), "utf8");
-    // Exact `session-id:` line only: a longer id or a quoted mention must not count as ownership.
-    return text.split(/\r?\n/).some((line) => line.trim() === `session-id: ${ccSid}`);
-  } catch (_) {
-    return false;
-  }
-}
-
+// The exit-3 fallback output, looked up under reviewControlSids (pointer wsid, owned ambient
+// wsid, CC sid). Only the first existing file is judged, so a later candidate can never rescue a
+// refused one (fail-closed).
 function resolveFallbackRawPath(ccSid) {
-  const { SESSION_ID_VALID_RE } = require("./core");
-  const { resolveWorkflowSessionId } = require("../../lib/resolve-workflow-session-id");
   const { getPlansArtifactPath } = require("../../lib/plans-artifact-registry");
-  let wsid = null;
-  try { wsid = resolveWorkflowSessionId() || null; } catch (_) {}
-  if (wsid !== ccSid && !(typeof wsid === "string" && SESSION_ID_VALID_RE.test(wsid) && wsidOwnedBy(wsid, ccSid))) wsid = null;
-  const seen = new Set();
-  for (const sid of [wsid, ccSid]) {
-    if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid) || seen.has(sid)) continue;
-    seen.add(sid);
+  for (const sid of markers.reviewControlSids(ccSid)) {
     let p;
     try { p = getPlansArtifactPath(sid, "test-review-fallback-raw"); } catch (_) { continue; }
     if (fs.existsSync(p)) return p;
   }
   return null;
+}
+
+// A fallback-raw under an ambient wsid this session does not own means the fallback may have
+// run, so "never ran" (unreviewed-terminal-3) cannot be concluded from the candidates alone.
+function unownedFallbackRawExists(ccSid) {
+  try {
+    const wsid = require("../../lib/resolve-workflow-session-id").resolveWorkflowSessionId();
+    if (!wsid || markers.reviewControlSids(ccSid).includes(wsid)) return false;
+    return fs.existsSync(require("../../lib/plans-artifact-registry").getPlansArtifactPath(wsid, "test-review-fallback-raw"));
+  } catch (_) {
+    return false;
+  }
 }
 
 // The fallback reviewer's NEEDS_REVISION is the RT-5 WARNINGS outcome; APPROVED / INPUT_ERROR /
@@ -119,23 +90,30 @@ function fallbackRawRefusal(rawPath, markerMtimeMs) {
   }
 }
 
-// Evidence that the last review ended non-block, for the in_progress recovery (#2491, #2664).
-// -> { ok, source, reason }. terminal-2 / terminal-6 are judged on line 1 only (kept as before:
-// the wrapper writes an empty line 2 when the fingerprint fails); continuing-1/5 and fallback-3
-// must also be pinned to the current review-scope fingerprint, else reason "stale-evidence".
+// Evidence that the last review ended non-block or never ran, for the in_progress recovery
+// (#2491, #2664, #2842). -> { ok, source, reason }. Order: (a) terminal-2 / terminal-6 on line 1
+// only (the wrapper writes an empty line 2 when the fingerprint fails); (b) RT-2's unreviewed
+// marker; (c) terminal rc 3 — NEEDS_REVISION fallback-raw, or none / an older one (the fallback
+// never ran: unreviewed-terminal-3); (d) continuing-1/5. (b)-(d) must be pinned to the current
+// review-scope fingerprint, else reason "stale-evidence".
 function reviewRecoveryEvidence(sessionId, opts = {}) {
   const fingerprint = typeof opts.fingerprint === "string" ? opts.fingerprint : "";
   const pinned = (m) => m.fp !== "" && fingerprint !== "" && m.fp === fingerprint;
   const stale = { ok: false, source: null, reason: "stale-evidence" };
-  const term = readControlMarker(sessionId, TERMINAL_MARKER);
-  if (term && (term.rc === "2" || term.rc === "6")) return { ok: true, source: `terminal-${term.rc}`, reason: null };
+  const okWith = (source) => ({ ok: true, source, reason: null });
+  const term = markers.readControlMarker(sessionId, markers.TERMINAL_MARKER);
+  if (term && (term.rc === "2" || term.rc === "6")) return okWith(`terminal-${term.rc}`);
+  const unrev = markers.readControlMarker(sessionId, markers.UNREVIEWED_MARKER);
+  if (unrev && unrev.rc.startsWith("scope-full:")) return pinned(unrev) ? okWith(`unreviewed-${unrev.rc}`) : stale;
   if (term && term.rc === "3") {
     if (!pinned(term)) return stale;
     const raw = resolveFallbackRawPath(sessionId);
-    const refusal = raw ? fallbackRawRefusal(raw, term.mtimeMs) : "fallback-raw-missing";
-    return refusal ? { ok: false, source: null, reason: refusal } : { ok: true, source: "fallback-3", reason: null };
+    if (!raw && unownedFallbackRawExists(sessionId)) return { ok: false, source: null, reason: "fallback-raw-unowned" };
+    const refusal = raw ? fallbackRawRefusal(raw, term.mtimeMs) : "fallback-raw-absent";
+    if (refusal === "fallback-raw-absent" || refusal === "fallback-raw-stale") return okWith("unreviewed-terminal-3");
+    return refusal ? { ok: false, source: null, reason: refusal } : okWith("fallback-3");
   }
-  const cont = readControlMarker(sessionId, CONTINUING_MARKER);
+  const cont = markers.readControlMarker(sessionId, markers.CONTINUING_MARKER);
   if (cont && (cont.rc === "1" || cont.rc === "5")) {
     return pinned(cont) ? { ok: true, source: `continuing-${cont.rc}`, reason: null } : stale;
   }
@@ -145,6 +123,7 @@ function reviewRecoveryEvidence(sessionId, opts = {}) {
 function recoveredOutcomeOf(source) {
   if (source.startsWith("continuing-")) return CLEAR_OUTCOME.RECOVERED_CONTINUING;
   if (source.startsWith("fallback-")) return CLEAR_OUTCOME.RECOVERED_FALLBACK;
+  if (source.startsWith("unreviewed-")) return CLEAR_OUTCOME.RECOVERED_UNREVIEWED;
   return CLEAR_OUTCOME.RECOVERED_TERMINAL;
 }
 
@@ -220,21 +199,6 @@ function clearReviewTestsWarnings(sessionId, reason, manifest, opts = {}) {
   return outcome;
 }
 
-// Remove the review-loop terminal marker written by run-codex-review-loop.sh
-// after a non-success terminal exit (issue #1361), and the exit-1/5 continuing marker
-// (#2664). Accepting the coverage gap ends the review, so the re-invoke guard must no
-// longer fire and the evidence must not be reused. Fail-open.
-function clearReviewTestsTerminalMarker(sessionId) {
-  for (const name of [TERMINAL_MARKER, CONTINUING_MARKER]) {
-    try {
-      fs.unlinkSync(controlMarkerPath(sessionId, name));
-    } catch (e) {
-      // ENOENT (no marker) and any other failure are non-fatal.
-      try { require("./control-dir").diagnoseControlMigration(e, "review-tests"); } catch (_) { /* fail-open */ }
-    }
-  }
-}
-
 function normalizeReopenDecision(d) {
   if (typeof d === "string") return REVIEW_TESTS_REOPEN_REASONS.includes(d) ? d : `write-code-${d}`;
   return d && d.reopen && typeof d.reason === "string" ? d.reason : null;
@@ -271,7 +235,9 @@ module.exports = {
   buildReviewScopeAnnotation,
   markReviewTestsComplete,
   clearReviewTestsWarnings,
-  clearReviewTestsTerminalMarker,
+  clearReviewTestsTerminalMarker: markers.clearReviewTestsTerminalMarker,
+  recordReviewTestsUnreviewed: markers.recordReviewTestsUnreviewed,
+  clearReviewTestsUnreviewed: markers.clearReviewTestsUnreviewed,
   reviewRecoveryEvidence,
   resolveFallbackRawPath,
   recordWriteCodeCompletionScope,
