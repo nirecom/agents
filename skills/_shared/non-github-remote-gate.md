@@ -33,7 +33,7 @@ no-op stub, never on the GitHub handler (the no-fallback security invariant).
 | Axis | Resolver | Members | Fail-safe |
 |---|---|---|---|
 | Codehost (repo hosting) | `resolveCodehostDescriptor(remoteUrl)` | github (gh), gitlab/unknown (stub) | stub: `isPrivateRepo` false, `hasOpenPrForBranch` true |
-| Tracker (issues/MRs) | `resolveTrackerDescriptor(env, codehostType)` | github (gh), gitlab (glab), jira/unknown (stub) | stub: `isForgeScanTarget` false |
+| Tracker (issues/MRs) | `resolveTrackerDescriptor(env, codehostType)` | github (gh), gitlab (glab), jira/unknown (stub) | stub: `isForgeScanTarget` false, `issueTitle` null |
 
 Tracker axis: `FORGE_TRACKER` (from `.env`, read via `readTrackerConfig`) selects
 the tracker explicitly; unset/empty follows the codehost; an explicit but

@@ -31,7 +31,7 @@ const { normalizeInputPath } = require('./vscode-cc-repair/primitives');
 const { classifySessionFile, SESSION_FILE_PATTERN } = require('./vscode-cc-repair/prune');
 const { scanLines, parseLine, VERIFY_MAX_SCAN } = require('./vscode-cc-repair/prune/verify');
 const { listJsonlByMtimeStrict } = require('../hooks/workflow-state/session-id');
-const { _encodeCwd } = require('../hooks/lib/session-title');
+const { encodeCwd } = require('../hooks/lib/transcript-paths');
 
 const USAGE = [
   'Usage: count-subagents [options]',
@@ -268,7 +268,7 @@ function main() {
 
   // Default scope is the current repository's own slug — the full store is opt-in via
   // --all, because it can hold thousands of files across gigabytes.
-  const slugs = all ? [] : [_encodeCwd(slugCwd === null ? process.cwd() : slugCwd)];
+  const slugs = all ? [] : [encodeCwd(slugCwd === null ? process.cwd() : slugCwd)];
   const collected = collectSessionFiles({ root, slugs, all });
   for (const error of collected.errors) {
     warn('could not enumerate ' + error.scope + ': ' + error.path + ' (reason=' + error.code + ')');

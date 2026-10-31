@@ -13,7 +13,6 @@ This checklist covers agent behavior that cannot be tested mechanically.
 ## workflow-init gate (Step 3 routing)
 
 - [ ] On non-GitHub remote: step 3 skips `gh issue view`, proceeds as Path C (no issue)
-- [ ] On non-GitHub remote: session title is not set via `gh`
 - [ ] On GitHub remote: existing behavior unchanged
 
 ## clarify-intent gate (Completion steps)
