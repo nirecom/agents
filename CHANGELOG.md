@@ -951,3 +951,7 @@ Changes: With `RTK=on`, the installer now upgrades an already-installed RTK inst
 ### FEATURE: PR #2866 (2026-11-01)
 Background: fix(#2828): grant WORKFLOW_GLOSSARY_ACCEPTED in resumed sessions and ...
 Changes: Fixed: `WORKFLOW_GLOSSARY_ACCEPTED` is no longer rejected as "nothing pending" in a resumed session, and one sentinel now covers findings of every stage that has one; when it grants nothing it says why.
+
+### FEATURE: PR #2867 (2026-11-01)
+Background: feat(#299,#1127): title workflow-init sessions with the issue title v...
+Changes: Sessions started with `/workflow-init #N` are now titled `#N <issue title>` in the VS Code session list and the Claude app, fetched from GitHub or GitLab. The old title markers (⏳, PR #M, ✓) and `bin/cc-session-title` are removed.
