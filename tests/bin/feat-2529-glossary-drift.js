@@ -21,6 +21,10 @@ caseEnd();
 caseBegin("T5-3 resolution only by a fix or a same-fingerprint grant", "hooks/workflow-state/glossary-check/record.js");
 require("./feat-2529-glossary-drift/resolution").run(F);
 caseEnd();
+
+caseBegin("grant carried to the new fingerprint on an artifact-only change", "hooks/workflow-state/glossary-check/record.js");
+require("./feat-2529-glossary-drift/carry").run(F);
+caseEnd();
 } finally {
   F.finish();
   restore();

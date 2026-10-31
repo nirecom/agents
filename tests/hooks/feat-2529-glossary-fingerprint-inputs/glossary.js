@@ -1,8 +1,8 @@
 "use strict";
 // T7-2 (input 2, combined glossary): each glossary change below stales the record for all six
-// stages; a newly added heading surfaces DRIFT on rescan; a linked worktree reads the main
-// worktree's glossary (first line of git worktree list); a repo with no glossary files records
-// an empty digest without error.
+// stages; a newly added heading surfaces DRIFT on rescan; a linked worktree reads its own
+// glossary, not the main worktree's (#2770); a repo with no glossary files records an empty
+// digest without error.
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -62,15 +62,23 @@ function headingSurfacesDrift(stages = F.STAGES) {
   }
 }
 
+// #2770: the session worktree's glossary is read, so a main-worktree edit counts only once it is
+// merged into the linked worktree (fast-forward, which keeps the staged code file in the index).
 function linkedWorktree(m) {
   const main = F.mkRepo("t72-main");
+  const mainBranch = F.git(main, ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
   const wt = F.addWorktree(main, "t72");
   F.stageFile(wt, F.TARGET.code, F.targetBody("code", F.VARIANT));
   const ctx = { sid: F.seedSession("t72-wt", "code", { cwd: wt }), repo: wt, stage: "code" };
   C.recordAndGrant(m, ctx, "linked worktree baseline");
-  C.unchanged(m, ctx, "an unstaged glossary edit in the linked worktree", () => F.touchGlossary(wt, "?"));
-  C.cycle(m, ctx, "a glossary edit in the main worktree (read from the linked worktree)", "glossary",
-    () => F.touchGlossary(main, "!"));
+  C.unchanged(m, ctx, "a committed glossary edit in the main worktree (not read from the linked worktree)", () => {
+    F.touchGlossary(main, "!");
+    F.git(main, ["add", "-A"]);
+    F.commit(main, "fixture: main glossary edit");
+  });
+  C.cycle(m, ctx, "the main glossary edit merged into the linked worktree", "glossary",
+    () => F.git(wt, ["merge", "-q", "--ff-only", mainBranch]));
+  C.cycle(m, ctx, "an unstaged glossary edit in the linked worktree", "glossary", () => F.touchGlossary(wt, "?"));
 }
 
 function noGlossary(m) {

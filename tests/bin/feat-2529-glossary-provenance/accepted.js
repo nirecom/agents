@@ -116,4 +116,35 @@ function bGrantSameRules() {
 }
 caseEnd();
 
-module.exports = { blockRecordAndGrant, narrowGrants, bGrantSameRules };
+// #2770: a grant moves to the new fingerprint when only ops changed and the blocked set did not
+// grow or change; a new blocked entry for the granted norm drops it.
+const GAMMA_ROW = [["gamma", "user", "add", "Unrelated term."]];
+function grantedBeta(tag) {
+  const repo = handAdd(tag);
+  const sid = approvedSession(tag, GAMMA_ROW, { cwd: repo });
+  eq(prov(repo, sid).code, 1, "precondition: beta blocks");
+  eq(accept(sid, repo, "beta", "op=add cat=user").code, 0, "precondition: hook exit");
+  eq(prov(repo, sid).code, 0, "precondition: the grant passes");
+  return { repo, sid };
+}
+
+function carryOnUnchangedBlocked() {
+  check("#2770 an unrelated declared add staged after the grant: the gate still passes", () => {
+    const { repo, sid } = grantedBeta("carry");
+    stageUser(repo, [["alpha", DEFS.alpha], ["beta", BETA], ["gamma", "Unrelated term."], ["omega", DEFS.omega]]);
+    const r = prov(repo, sid);
+    eq(r.code, 0, `exit (out: ${r.all})`);
+    const rec = provRecord(sid) || {};
+    const g = (rec.grants || []).filter((x) => x.norm === "beta" && x.fingerprint === rec.fingerprint);
+    eq(g.length, 1, `grant on the new fingerprint: ${JSON.stringify(rec)}`);
+  });
+  check("#2770 a new blocked entry for the granted term after the grant: blocks and drops the grant", () => {
+    const { repo, sid } = grantedBeta("nocarry");
+    stageInternal(repo, [["kilo", DEFS.kilo], ["beta", BETA]]);
+    const r = prov(repo, sid);
+    eq(r.code, 1, `exit (out: ${r.all})`);
+    eq((provRecord(sid) || {}).grants || [], [], "grants");
+  });
+}
+
+module.exports = { blockRecordAndGrant, narrowGrants, bGrantSameRules, carryOnUnchangedBlocked };
