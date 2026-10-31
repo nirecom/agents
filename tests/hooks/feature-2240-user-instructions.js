@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/user-instructions.js, hooks/session-start.js, hooks/post-compact.js
-// Tags: TL2, hooks, user-instructions, session-start, post-compact, truncation, utf8, scope:issue-specific, lang, plan-lang, fail-open, html-comment
+// Tags: TL2, hooks, user-instructions, session-start, post-compact, truncation, utf8, scope:issue-specific, lang, plan-lang, fail-open, html-comment, session-title, removal
 // #2240 Change 4 (#2731 rename): user-instructions.md at the agents checkout root is injected under a
 // "[user-instructions]" header at SessionStart and PostCompact only — never at UserPromptSubmit or
 // SubagentStart. Absent, empty or blank -> nothing; over 4096 bytes -> cut on a UTF-8 boundary + marker.
@@ -271,6 +271,34 @@ caseBegin("comment-only-file-not-injected-at-session-start", "hooks/session-star
   setFile("<!--\nexplanatory text only\n-->\n");
   check("H5: comment-only file -> SessionStart exits 0 and its context has no header", () => { const ss = run("session-start.js", ev("ui-ss5", "SessionStart")); eq([ss.includes(HEADER), ss.includes("explanatory text only")], [false, false], "[header, comment text] present"); });
   setFile(null);
+}
+caseEnd();
+
+// #299: the transcript-append title mechanism (CLI, lib, session-start block, skill steps) is gone.
+// Tokens are concatenated so this file never matches them; bare "session-title" is not a token
+// (tests/bin/feature-2631-clarify-owner-paths.sh carries an unrelated name containing it).
+caseBegin("session-title-mechanism-removed", "hooks/session-start.js");
+{
+  const TOKENS = ["cc-" + "session-title", "lib/" + "session-title", "write" + "SetIssue", "write" + "AddPr", "write" + "MarkComplete", "CLAUDE_SESSION_" + "JSONL_PATH", "CI-" + "C1a", "CP-" + "2a", "SC-" + "6a", "_encode" + "Cwd", "_get" + "TranscriptBase"];
+  const SELF = "tests/hooks/feature-2240-user-instructions.js";
+  const excluded = (rel) => rel === SELF || rel.startsWith("docs/history/") || rel.split("/").includes("changelog") || path.posix.basename(rel) === "CHANGELOG.md";
+  check("R1: the retired CLI bin/cc-session-title is gone", () => eq(fs.existsSync(path.join(ROOT, "bin", "cc-" + "session-title")), false, "exists"));
+  check("R1: the retired lib hooks/lib/session-title.js is gone", () => eq(fs.existsSync(path.join(ROOT, "hooks", "lib", "session-" + "title.js")), false, "exists"));
+  check("R2: no retired token in tracked files outside the history records", () => {
+    const ls = spawnSync("git", ["-C", ROOT, "ls-files", "-z"], { encoding: "utf8", timeout: 60000, maxBuffer: 64 * 1024 * 1024 });
+    if (ls.status !== 0) return `git ls-files failed: ${ls.stderr}`;
+    const tracked = ls.stdout.split("\0").filter(Boolean);
+    if (!tracked.includes("hooks/lib/user-instructions.js")) return `git ls-files listed ${tracked.length} files, not the repo tree`;
+    const hits = [];
+    for (const rel of tracked.filter((r) => !excluded(r))) {
+      let text;
+      try { text = fs.readFileSync(path.join(ROOT, rel), "utf8"); } catch (_) { continue; } // deleted in the worktree
+      if (text.includes("\0")) continue;
+      for (const tok of TOKENS) if (text.includes(tok)) hits.push(`${rel}: ${tok}`);
+    }
+    eq(hits, [], "hits");
+  });
+  check("R2: skills/workflow-init/SKILL.md has no A1b step", () => eq(fs.readFileSync(path.join(ROOT, "skills", "workflow-init", "SKILL.md"), "utf8").includes("A1" + "b"), false, "A1b present"));
 }
 caseEnd();
 

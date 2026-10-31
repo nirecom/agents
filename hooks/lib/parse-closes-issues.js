@@ -1,19 +1,10 @@
 "use strict";
 
-// Single source of truth for ## Issues parsing (new SSOT per #548).
-// Falls back to legacy ## closes_issues only when ## Issues heading is wholly absent.
-// Code-level consumers (require this module):
-//   - bin/parse-closes-issues (CLI wrapper)
-//   - bin/parse-issue-tokens (CLI wrapper for token parsing)
-// Prose/prompt references (pointer comments only — no require):
-//   - skills/commit-push, issue-close-stage, issue-close-finalize
-//
-// Return type: Array<{number: number, repo?: string}>
-//   - Local issue:      { number: 42 }           (no repo field)
-//   - Short cross-repo: { number: 42, repo: "my-private-repo" }
-//   - Full cross-repo:  { number: 42, repo: "nirecom/my-private-repo" }
-// Normalization is lazy — stored as-received; full owner/repo is resolved at
-// call site via `gh repo view` when needed.
+// Single source of truth for ## Issues parsing (#548); legacy ## closes_issues only when
+// ## Issues is wholly absent. Consumers: bin/parse-closes-issues, bin/parse-issue-tokens,
+// hooks/user-prompt-submit-issue-title.
+// Return type: Array<{number: number, repo?: string}> — {number: 42} local, repo "r" short
+// cross-repo, repo "o/r" full cross-repo; stored as-received, resolved at the call site.
 
 const fs = require("fs");
 
@@ -71,6 +62,12 @@ function parseIssueToken(token) {
   return result;
 }
 
+// Split free text on whitespace / commas, keep the words carrying '#', parse each in order.
+function parseIssueTokens(text) {
+  const tokens = String(text || "").split(/[\s,\n]+/).filter(Boolean).filter((tok) => /#/.test(tok));
+  return tokens.map(parseIssueToken).filter(Boolean);
+}
+
 function parseClosesIssues(intentMdPath) {
   let text;
   try { text = fs.readFileSync(intentMdPath, "utf8"); }
@@ -86,4 +83,4 @@ function parseClosesIssues(intentMdPath) {
   return collectEntries(lines, /^## closes_issues\s*$/);
 }
 
-module.exports = { parseClosesIssues, parseIssueToken, ISSUE_TOKEN_CLI_GUARD_RE };
+module.exports = { parseClosesIssues, parseIssueToken, parseIssueTokens, ISSUE_TOKEN_CLI_GUARD_RE };

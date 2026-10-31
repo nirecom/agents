@@ -49,10 +49,8 @@ CP-1. **Stage changes** per `skills/_shared/commit-push-dispatch.md` "Stage".
 
 CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_shared/commit-push-dispatch.md` "Dispatch" and "Outcomes", with handoff step `push_branch`.
    On `bootstrap_pending`: surface "Remote has no default branch yet (new repo) — `/merge-to-main` pushes the first commit as `main`." and go to CP-2c; the advance gate records the bootstrap decision itself.
-   On `up_to_date`, `pushed`, `pr_created`, or `pr_reused`: continue to CP-2a.
+   On `up_to_date`, `pushed`, `pr_created`, or `pr_reused`: continue to CP-2b.
    On any other outcome: stop without completing `push_branch`.
-
-CP-2a. **Append PR number to session title:** `node "$AGENTS_MAIN_ROOT/bin/cc-session-title" add-pr "<PR_NUMBER>"` (the CLI defaults `<cwd>` to its own working directory) where `<PR_NUMBER>` is extracted from `pr_url` by taking the last path segment (format: `https://github.com/<owner>/<repo>/pull/<N>` → `<N>`). Skip when the outcome carries no PR URL (`pushed`, `up_to_date`). Fail-open.
 
 CP-2b. **Open the PR URL:** run `node "$AGENTS_MAIN_ROOT/bin/open-pr-url.js" "<pr_url>"` when the status is `pr_created` only — `pr_reused` did not create anything, so it must not re-open a tab (parity with the retired `pr-created-open.js`, which fired on `gh pr create` alone).
    The PR URL MUST also appear in this turn's final response text — the dispatcher path has no tool-permission dialog to display it.

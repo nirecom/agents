@@ -82,8 +82,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUB_DIR="$SCRIPT_DIR/feature-resolve-session-id-js"
 
 # shellcheck source=/dev/null
-. "$SUB_DIR/section-cc-session-title.sh"
-# shellcheck source=/dev/null
 . "$SUB_DIR/section-supply-tier.sh"
 
 # ---------------------------------------------------------------------------

@@ -47,8 +47,6 @@ try {
   sessionSource = input.source ?? null;
   transcriptPath = input.transcript_path ?? null;
   agentId = input.agent_id ?? null;
-  // transcript_path → correct JSONL path for worktree sessions
-  if (input.transcript_path) process.env.CLAUDE_SESSION_JSONL_PATH = input.transcript_path;
 } catch (e) {
   // Fail-open: malformed input — continue without setting session ID
 }
@@ -152,17 +150,6 @@ if (sessionId && !stateWriteError) {
   } catch (e) { /* fail-open */ }
 }
 
-// Set VS Code session title from intent.md issue #.
-// Delete CLAUDE_CODE_CHILD_SESSION so session-title.js write functions are
-// not silently suppressed (hooks may inherit this env var from Claude Code).
-delete process.env.CLAUDE_CODE_CHILD_SESSION;
-if (sessionId) {
-  try {
-    const { writeSetIssue } = require("./lib/session-title");
-    const plansDir = require("./lib/workflow-plans-dir").getWorkflowPlansDir();
-    writeSetIssue(sessionId, process.cwd(), plansDir);
-  } catch (e) { /* fail-open */ }
-}
 // --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
 // deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
 try {

@@ -2,13 +2,10 @@
 'use strict';
 const path = require('path');
 try {
-  const { parseIssueToken } = require(
+  const { parseIssueTokens } = require(
     path.join(path.dirname(__dirname), 'hooks', 'lib', 'parse-closes-issues.js')
   );
-  const raw = process.argv.slice(2).join(' ');
-  const tokens = raw.split(/[\s,\n]+/).filter(Boolean).filter((tok) => /#/.test(tok));
-  const results = tokens.map(parseIssueToken).filter(Boolean);
-  console.log(JSON.stringify(results));
+  console.log(JSON.stringify(parseIssueTokens(process.argv.slice(2).join(' '))));
 } catch (e) {
   process.stderr.write('[parse-issue-tokens] ' + e.message + '\n');
   console.log('[]');

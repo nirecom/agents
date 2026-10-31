@@ -68,8 +68,17 @@ function isBranchDirectlyMerged(repoDir) {
   return false;
 }
 
-function originUrl(repoDir) {
-  const remote = spawnSync("git", ["-C", repoDir, "remote", "get-url", "origin"], { encoding: "utf8", timeout: 5000 });
+// originUrl(repoDir, opts?) — opts.timeoutMs (default 5000) bounds git; opts.spawnSync is a test seam.
+function originUrl(repoDir, opts) {
+  const o = opts || {};
+  const spawn = o.spawnSync || spawnSync;
+  const timeout = Number.isFinite(o.timeoutMs) && o.timeoutMs > 0 ? o.timeoutMs : 5000;
+  let remote;
+  try {
+    remote = spawn("git", ["-C", repoDir, "remote", "get-url", "origin"], { encoding: "utf8", timeout, windowsHide: true });
+  } catch (e) {
+    return null;
+  }
   if (!remote || remote.error || remote.status !== 0) return null;
   return (remote.stdout || "").trim() || null;
 }

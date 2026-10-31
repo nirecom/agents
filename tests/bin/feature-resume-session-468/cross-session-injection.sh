@@ -45,7 +45,7 @@ fx.pushEvents('injdonor-t23', [fx.record({
 })]);
 // Same encoder the locator composes with, so the fixture lands at the address
 // captureTranscriptTail actually looks up (path.resolve is platform-dependent).
-const enc = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title.js')._encodeCwd('$T23_CWD');
+const enc = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/transcript-paths.js').encodeCwd('$T23_CWD');
 const tdir = path.join('$T23_ROOT_NODE/transcripts', enc);
 fs.mkdirSync(tdir, { recursive: true });
 fs.writeFileSync(path.join(tdir, 'injdonor-t23.jsonl'), [

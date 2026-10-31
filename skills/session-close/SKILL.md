@@ -141,8 +141,6 @@ On `status: complete`:
 Run: node "$AGENTS_MAIN_ROOT/bin/render-final-report.js" --session "<session-id>"
 Emit the stdout per `skills/_shared/final-report-emission.md` — verbatim scope and CONV_LANG scope are defined there.
 
-SC-6a. Mark session title complete: `node "$AGENTS_MAIN_ROOT/bin/cc-session-title" mark-complete`. Fail-open — the CLI defaults `<cwd>` to its own working directory.
-
 After emitting, mark completion with two separate Bash calls:
   bash "$AGENTS_MAIN_ROOT/skills/session-close/scripts/close-alert-phase.sh" "<session-id>" "<NOTES_BACKUP_PATH>"
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"

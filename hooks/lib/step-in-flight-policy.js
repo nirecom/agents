@@ -90,6 +90,19 @@ function promptInvokesWfInit(prompt) {
   return WF_INIT_BARE_RE.test(prompt.split(/\r?\n/)[0]);
 }
 
+// The arguments of a typed wf-init (wrapped <command-args>, or the rest of a bare first line);
+// null when the prompt does not invoke wf-init — same recognition as promptInvokesWfInit.
+function wfInitPromptArgs(prompt) {
+  if (typeof prompt !== "string") return null;
+  if (WF_INIT_WRAPPED_RE.test(prompt)) {
+    const m = prompt.match(/<command-args>([\s\S]*?)<\/command-args>/);
+    return m ? m[1].trim() : "";
+  }
+  const first = prompt.split(/\r?\n/)[0];
+  const m = first.match(WF_INIT_BARE_RE);
+  return m ? first.slice(m[0].length).trim() : null;
+}
+
 function isLookaheadDispatchTool(toolName) {
   return typeof toolName === "string" && LOOKAHEAD_DISPATCH_TOOLS.indexOf(toolName) !== -1;
 }
@@ -125,5 +138,6 @@ module.exports = {
   isMetaOpDispatch,
   isWfInitDispatch,
   promptInvokesWfInit,
+  wfInitPromptArgs,
   isFreshInFlightEntry,
 };

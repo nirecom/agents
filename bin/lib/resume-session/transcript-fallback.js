@@ -3,7 +3,7 @@
 // plan artifacts survived, the upstream transcript still holds the last turns.
 //
 // Two hard contracts (#2218 Step 11): the address is COMPOSED from the encoded
-// cwd rather than read from CLAUDE_SESSION_JSONL_PATH — that variable points at
+// cwd rather than taken from the hook input's transcript_path — that points at
 // the DOWNSTREAM session's own file, so following it would summarize the wrong
 // session — and the raw text never enters this process's stdout. Only a path to
 // a capped scratch file is returned; a subagent reads it (see
@@ -12,7 +12,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { _encodeCwd, _getTranscriptBase } = require("../../../hooks/lib/session-title");
+const { encodeCwd, getTranscriptBase } = require("../../../hooks/lib/transcript-paths");
 const { SESSION_ID_VALID_RE } = require("../../../hooks/workflow-state/state-io");
 
 const MAX_TAIL_BYTES = 200 * 1024;
@@ -26,27 +26,27 @@ function locateUpstreamTranscript(sid, cwd) {
   if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid)) return null;
   if (typeof cwd !== "string" || cwd.length === 0) return null;
   try {
-    return path.join(_getTranscriptBase(), _encodeCwd(cwd), sid + ".jsonl");
+    return path.join(getTranscriptBase(), encodeCwd(cwd), sid + ".jsonl");
   } catch (e) {
     return null;
   }
 }
 
 // The rung exists for the case where the state file is already gone, so the
-// caller has NO cwd left to encode — and `_encodeCwd` is lossy, so the encoded
+// caller has NO cwd left to encode — and `encodeCwd` is lossy, so the encoded
 // directory cannot be reversed either. Scanning the per-cwd directories for the
 // session id is the only address that survives that loss.
 function discoverUpstreamTranscript(sid) {
   if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid)) return null;
   let entries;
   try {
-    entries = fs.readdirSync(_getTranscriptBase(), { withFileTypes: true });
+    entries = fs.readdirSync(getTranscriptBase(),{ withFileTypes: true });
   } catch (e) {
     return null;
   }
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const candidate = path.join(_getTranscriptBase(), entry.name, sid + ".jsonl");
+    const candidate = path.join(getTranscriptBase(), entry.name, sid + ".jsonl");
     if (fs.existsSync(candidate)) return candidate;
   }
   return null;
