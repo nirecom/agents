@@ -919,3 +919,7 @@ Changes: Slow test files are split into smaller entrypoints that run in parallel
 ### FEATURE: PR #2840 (2026-10-31)
 Background: feat(#2507): run the pre-commit checks in one Node.js process
 Changes: Commits are faster: the pre-commit hook now runs all of its checks in a single Node.js process instead of spawning bash, grep and git per staged file. Node.js is now required to commit; without it the hook stops the commit and says why.;The pre-commit secret scan now stops the commit on a malformed `--manifest` frame, and detects zero-width and bidi-override characters regardless of the hook's locale.;In blocklist and allowlist patterns, `\w` now includes `_` on every OS (GNU semantics).
+
+### FEATURE: PR #2845 (2026-10-31)
+Background: feat(#2814): state the intent > outline > detail priority in codex pl...
+Changes: Plan reviews now hold the detail to the approved outline and the outline to the intent. When a reviewer finds that the problem sits in an upstream plan, the review pauses and asks you to choose how to proceed (keep, return upstream, accept, or stop) instead of silently patching the downstream plan.
