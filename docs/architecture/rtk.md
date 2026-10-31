@@ -6,8 +6,10 @@ it is never a required dependency.
 
 ## Enabling
 
-Set `RTK=on` in `.env`. RTK must already be installed (`rtk` on `PATH` or at a
-known location — see `RTK_BIN` in `.env.example`).
+Set `RTK=on` in `.env`. With `RTK=on`, the installer installs RTK when missing,
+upgrades it when present (a failed upgrade keeps the installed version and is
+non-fatal), and validates the config. Otherwise RTK must already be installed
+(`rtk` on `PATH` or at a known location — see `RTK_BIN` in `.env.example`).
 
 ## How the hook works
 
