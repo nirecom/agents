@@ -101,8 +101,10 @@ lt_reject() { lt_cli reject --plans-dir "$WORKFLOW_PLANS_DIR" --session-id "$1" 
 lt_accept() { lt_cli accept --plans-dir "$WORKFLOW_PLANS_DIR" --session-id "$1" --format "$2" --id "$3" --reason "${4:-the user accepted this spelling}"; }
 lt_list() { lt_cli list-drift --plans-dir "$WORKFLOW_PLANS_DIR" --session-id "$1" --format "$2"; }
 
-LT_MSG_REJECT="concern-ledger: reject refused — the concern carries a [glossary-drift"
-LT_MSG_ACCEPT="concern-ledger: accept refused — no matching WORKFLOW_GLOSSARY_ACCEPTED grant"
+# #2814 1-3: the refusal messages are generalised across the glossary-drift and
+# upstream-inconsistency tags; only the stable prefix is pinned here.
+LT_MSG_REJECT="concern-ledger: reject refused"
+LT_MSG_ACCEPT="concern-ledger: accept refused"
 
 # lt_gj <norm> <discrim> — one ledger grant as JSON.
 lt_gj() { printf '{"norm":"%s","discrim":"%s","reason":"fixture grant"}' "$1" "$2"; }

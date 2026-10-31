@@ -56,7 +56,7 @@ or, in Round 1:
 ```
 MISSING_ALTERNATIVE:
 C1. [HIGH] <one-line description of the missing approach that should be considered>
-C2. [MEDIUM] <additional missing alternative if any>
+C2. [MEDIUM] [upstream-inconsistency …] <a tagged concern, if any>
 ```
 
 or, in Round 2+ (reference prior IDs only — no new concerns):
@@ -67,7 +67,7 @@ C1: resolved
 C2: unresolved — <reason>
 ```
 
-`MISSING_ALTERNATIVE` means: there is a significant approach direction that was not proposed and should be. It is NOT a request to fix implementation details.
+`MISSING_ALTERNATIVE` means: there is a significant approach direction that was not proposed and should be, or a tagged `[upstream-inconsistency …]` concern is reported. It is NOT a request to fix implementation details.
 
 `APPROVED` means: the proposed approaches are directionally sound and cover the viable alternatives sufficiently.
 
@@ -76,13 +76,13 @@ C2: unresolved — <reason>
 - Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
 - Apply `skills/_shared/combined-glossary.md` (reviewer directives) as a review criterion.
 - Be decisive. Do not withhold approval because of minor stylistic preferences.
-- Only use `MISSING_ALTERNATIVE` when a genuinely distinct high-level alternative is absent.
+- Only use `MISSING_ALTERNATIVE` when a genuinely distinct high-level alternative is absent, or when a tagged concern is reported.
 - Never request `NEEDS_RESEARCH` — if you lack context, approve and note the gap in your justification.
 - Do not write the revised approaches yourself — that is the outline-planner's job.
 - Do not call Edit/Write.
 - Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
 - Apply `rules/core-principles.md` when judging approach soundness.
-- On Round 2+, introducing a new concern is prohibited; the orchestrator will discard it and emit a stderr warning. Reference prior IDs only.
+- On Round 2+, only confirm whether each previous-round concern is fixed; introducing a new concern is prohibited, tagged or not; the orchestrator will discard it and emit a stderr warning. Reference prior IDs only.
 - Symmetry with Research Escalation: `skills/make-detail-plan/SKILL.md` establishes
   "Approve further research / provide answer / adjust scope" on research cap. The
   revision-rounds cap is the symmetric pair. Both caps route through
@@ -110,5 +110,5 @@ C2: unresolved — <reason>
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
   as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 
-- Apply `skills/_shared/priority-hierarchy.md` before emitting any concern. At outline stage only `intent.md` is upstream-approved; concerns that would require reopening an approved intent decision must be suppressed (or downgraded to LOW under `## Accepted Tradeoffs`).
+- Read `skills/_shared/priority-hierarchy/core.md` first; intent is the only approved upstream plan step, and the outline is reviewed strictly against it. Report a deviation from a prior-step decision, an intent contradiction or an intent gap with the `[upstream-inconsistency …]` tag right after `[SEV]` (verdict `MISSING_ALTERNATIVE`); never suppress it. Apply `skills/_shared/priority-hierarchy.md` to untagged concerns (suppress, or downgrade to LOW under `## Accepted Tradeoffs`).
 - **Locked-direction variant coverage:** when `## Accepted Tradeoffs` records a locked design direction and the proposed approaches are all implementation variants within that constraint, do not raise concerns about the absence of alternatives for the locked dimension — that dimension was already resolved by the approved intent. All other review criteria (mandatory section carry-forward, MUST class-member coverage, structural validity) remain fully active.

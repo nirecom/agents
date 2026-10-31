@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/review-tests/SKILL.md
 # Tags: frontmatter, tests, review, scope:common
+# lang-check: ignore -- assertions match Japanese wording in the SKILL.md under test.
 # Structural tests for skills/review-tests/SKILL.md
 set -euo pipefail
 
@@ -162,6 +163,21 @@ if [ -f "$SKILL" ] && grep -qF 'my-private-repo/' "$SKILL" 2>/dev/null; then
     fail "SKILL.md references my-private-repo/ (private repo leak)"
 else
     pass "no references to my-private-repo/ in SKILL.md"
+fi
+case_end
+
+# #2814 audit run-0012 2: a round 2+ rerun falling back to test-reviewer passes the previous round's findings.
+case_begin "fallback-rerun-passes-previous-findings" "skills/review-tests/SKILL.md"
+RT_LINE="$(grep -iE 'round 2' "$SKILL" 2>/dev/null | grep -F 'test-reviewer' | grep -iE 'findings|concerns|指摘' || true)"
+if [ -n "$RT_LINE" ]; then
+    pass "a line hands the previous findings to test-reviewer on a round 2+ fallback"
+else
+    fail "no line names round 2, test-reviewer and the findings together"
+fi
+if printf '%s\n' "$RT_LINE" | grep -qiE '(previous|prior|preceding|last) round|直前の round'; then
+    pass "that line scopes the findings to the previous round"
+else
+    fail "that line does not scope the findings to the previous round"
 fi
 case_end
 

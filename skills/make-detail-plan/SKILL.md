@@ -85,6 +85,7 @@ At detail, `--gate` also folds in the outline→detail scope change, so it runs 
 Issue the standalone call `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG`; when its stdout `<CONV_LANG>` is non-empty, write both the `proceed` one-paragraph summary and the `ask` one-line `<<WORKFLOW_CONFIRM_DETAIL: ...>>` summary in that language.
 
 Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<DETAIL_MD>` artifact.
+- The approval presentation lists "Accepted upstream inconsistencies" per [`upstream-inconsistency-pause.md`](../_shared/codex-review-loop/upstream-inconsistency-pause.md); a re-run after B revises the existing detail as a diff per that procedure.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - Re-entering MDP-7 from a Revise loop: rerun the gate check from the trigger line, without `--scope-change-approved`.
 - `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3) that carries the plan-link line (protocol CPA-2).
@@ -118,6 +119,7 @@ See `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts/skip-conditions.sh"
 - Write the MDP-7 orchestrator-authored detail.md body in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`.
+- Second exception: a `[upstream-inconsistency ` concern pauses the round for the user's decision, per `skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`.
 - Deliver user-facing analysis summaries (approach comparison, risk assessment, trade-off rationale) as turn-final assistant text or via AskUserQuestion preview/description — not as mid-turn text between tool calls, which is invisible in VS Code.
 - Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

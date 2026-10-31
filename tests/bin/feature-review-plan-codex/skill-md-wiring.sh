@@ -29,13 +29,14 @@ check_exit_codes() {
   fi
 }
 
-check_shared "## Section 1: Intent (User Requirements)"
-check_shared "## Section 2: Outline (Design Proposal)"
+# #2814 4-1: each part opens with the role marker, then the `## <role>` section heading.
+check_shared "## intent"
+check_shared "## outline"
 check_shared "If only the intent file exists"
 check_shared "If only the outline file exists"
 check_shared "If neither exists"
-check_shared 'Source: <PLANS_DIR>/<session-id>-intent.md'
-check_shared 'Source: <PLANS_DIR>/<session-id>-outline.md'
+check_shared 'codex-context-section: intent source=<PLANS_DIR>/<session-id>-intent.md'
+check_shared 'codex-context-section: outline source=<PLANS_DIR>/<session-id>-outline.md'
 check_exit_codes "HALT with blocking error"
 check_exit_codes "Do **NOT** fall back"
 

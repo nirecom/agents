@@ -54,6 +54,17 @@ codex_core_adversarial_preamble() {
   return 0
 }
 
+# codex_core_plan_review_preamble <artifact-kind> <reviewed-artifact> [conv|plan]
+# Plan-review preamble (#2814): the skepticism is limited to the reviewed artifact; approved
+# upstream plan steps are decided, and an objection to them is reported with the tag only.
+codex_core_plan_review_preamble() {
+  local artifact_kind="${1:-artifact}" reviewed="${2:-artifact}" lang_line=""
+  printf 'The following %s was authored by Claude (a different LLM, not by a human). Your job is to provide an independent second opinion on the %s under review. Do not assume Claude'\''s reasoning is correct, but limit your skepticism to the %s. Treat the approved upstream plan steps as decided: never propose changing them; report any disagreement with them only as an [upstream-inconsistency ...] concern.\n' "$artifact_kind" "$reviewed" "$reviewed"
+  [ -n "${3:-}" ] && lang_line="$(codex_lang_line "$3")"
+  [ -n "$lang_line" ] && printf '%s\n' "$lang_line"
+  return 0
+}
+
 # Cap on the NFR text a project can push into every review prompt. Validated
 # numeric so a bad value falls back to the default instead of making `head -n`
 # fail and silently degrading to an empty NFR frame.
