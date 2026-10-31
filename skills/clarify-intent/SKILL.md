@@ -107,7 +107,6 @@ CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on it
 Note (CPR-ORTH Orthogonality): no new workflow sentinel is introduced. Interactive recovery remains in SKILL.md.
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
-CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_MAIN_ROOT/bin/cc-session-title" set-issue "<PLANS_DIR>"` (the CLI defaults `<cwd>` to its own working directory; mirrors workflow-init Path A A1b; call after intent.md is written).
 CI-C1b. **Complexity evaluation + outline-skip judgment**: follow `skills/_shared/complexity-and-outline-skip.md` end to end; its COS-3 outcome resumes here at CI-C2.
 CI-C2. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:

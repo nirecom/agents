@@ -11,7 +11,7 @@
 // `adopt-prior-state` phase, and session-start's startup-no-lineage notice.
 
 const path = require("path");
-const { _encodeCwd, _getTranscriptBase } = require("../../lib/session-title");
+const { encodeCwd, getTranscriptBase } = require("../../lib/transcript-paths");
 const { readState } = require("../state-io");
 const { _listJsonlByMtime } = require("../session-id");
 const { readLineageAncestors } = require("./lineage");
@@ -23,11 +23,11 @@ const { contextMatches } = require("./context-match");
 const DEGRADABLE_RESUMABILITY_REASONS = Object.freeze(["intent-artifact-missing"]);
 
 // The transcript directory Claude Code derives from a resolved cwd. The encoder
-// is session-title.js's, not a second copy: the two used to disagree on a
+// is hooks/lib/transcript-paths.js's, not a second copy: the two used to disagree on a
 // POSIX-style drive-letter cwd, so `--from` and `--list` resolved different
 // directories for one session.
 function transcriptDirFor(cwd) {
-  return path.join(_getTranscriptBase(), _encodeCwd(cwd));
+  return path.join(getTranscriptBase(), encodeCwd(cwd));
 }
 
 // A cwd recorded before any resolve step encodes differently from the resolved
@@ -35,7 +35,7 @@ function transcriptDirFor(cwd) {
 // looks in both rather than silently finding nothing.
 function transcriptDirsFor(cwd) {
   const dirs = [transcriptDirFor(cwd)];
-  const raw = path.join(_getTranscriptBase(), String(cwd).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-"));
+  const raw = path.join(getTranscriptBase(), String(cwd).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-"));
   if (raw !== dirs[0]) dirs.push(raw);
   return dirs;
 }

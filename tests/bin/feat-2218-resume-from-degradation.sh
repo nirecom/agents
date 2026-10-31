@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feat-2218-resume-from-degradation.sh
-# Tests: bin/resume-session-detect, bin/lib/resume-session/upstream-view.js, bin/lib/resume-session/transcript-fallback.js, hooks/lib/session-title.js, hooks/workflow-state/inheritance/candidates.js
+# Tests: bin/resume-session-detect, bin/lib/resume-session/upstream-view.js, bin/lib/resume-session/transcript-fallback.js, hooks/workflow-state/inheritance/candidates.js
 # Tags: resume-session, session-upstream, degradation, transcript-tail, granularity, regression-2218, scope:issue-specific, pwsh-not-required, TL2
 
 # Issue #2218 Step 5 / Step 11 — `--from <sid>` must degrade rather than refuse: a 7-day-expired state file still has readable plan artifacts, and a transcript still has the last few turns. Each degradation level has its own honest message, and none of them may fabricate a `not-resumable` verdict for what is really a TTL deletion.
@@ -226,10 +226,10 @@ process.stdout.write(String(((s.steps || {})['$2'] || {}).status || 'pending'));
     fi
 }
 
-# F4 — deterministic jsonl resolution (round2-fix C9). _getJsonlPath prefers
-# CLAUDE_SESSION_JSONL_PATH, which points at the DOWNSTREAM session's own
-# transcript; composing the path from _getTranscriptBase + _encodeCwd is the
-# only way `--from` reads the upstream session's file instead.
+# F4 — deterministic jsonl resolution (round2-fix C9). The hook input's
+# transcript_path names the DOWNSTREAM session's own transcript, so `--from`
+# composes the upstream path from getTranscriptBase + encodeCwd
+# (hooks/lib/transcript-paths.js) to read the upstream session's file instead.
 run_F4() {
     require_module "$TAIL" || return 0
     local tmp out problems
@@ -238,26 +238,26 @@ run_F4() {
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
-const t = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
 const fs = require('fs');
 const problems = [];
-if (typeof t._getTranscriptBase !== 'function') problems.push('session-title.js does not export _getTranscriptBase');
+let t = null;
+try { t = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/transcript-paths'); } catch (e) { problems.push('hooks/lib/transcript-paths.js does not load: ' + e.message); }
+if (t && typeof t.getTranscriptBase !== 'function') problems.push('transcript-paths.js does not export getTranscriptBase');
 const src = fs.readFileSync('$SCRIPT_CHECKOUT_ROOT_NODE/$TAIL', 'utf8');
-if (src.indexOf('_getJsonlPath') !== -1) problems.push('transcript-fallback.js still routes through _getJsonlPath');
+if (src.indexOf('/hooks/lib/transcript-paths') === -1) problems.push('transcript-fallback.js does not require hooks/lib/transcript-paths');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
     [ "$out" = "OK" ] || problems="$problems static:'$out'"
-    # Behavioural half: a decoy on CLAUDE_SESSION_JSONL_PATH must be ignored.
+    # Behavioural half: the composed path reads the upstream transcript.
     local upcwd encoded
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
     encoded=$(env "$RWT" 30 node -e "
-const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
-process.stdout.write(_encodeCwd('$upcwd'));
+const { encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/transcript-paths');
+process.stdout.write(encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
     cp "$FIXTURE" "$tmp/transcripts/$encoded/up-f4.jsonl"
-    printf '{"type":"user","sessionId":"decoy","message":{"role":"user","content":"DECOY-SHOULD-NOT-BE-READ"}}\n' > "$tmp/decoy.jsonl"
     env CLAUDE_CODE_SESSION_ID="heir-f4" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -275,7 +275,6 @@ markStep('up-f4', 'workflow_init', 'complete');
     out=$(env CLAUDE_CODE_SESSION_ID="heir-f4" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
-        CLAUDE_SESSION_JSONL_PATH="$tmp/decoy.jsonl" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 60 node "$CLI" --from up-f4 2>&1)
     local scratch
@@ -291,11 +290,10 @@ process.stdout.write(String(t.path || ''));
         problems="$problems scratch-file-missing:$scratch"
     else
         grep -q 'FEAT2218-TAIL-TOKEN' "$scratch" || problems="$problems scratch-does-not-hold-the-upstream-transcript"
-        grep -q 'DECOY-SHOULD-NOT-BE-READ' "$scratch" && problems="$problems followed-CLAUDE_SESSION_JSONL_PATH"
     fi
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
-        pass "F4: the upstream jsonl path is composed deterministically and ignores CLAUDE_SESSION_JSONL_PATH"
+        pass "F4: the upstream jsonl path is composed deterministically from the transcript base and the encoded upstream cwd"
     else
         fail "F4: —$problems"
     fi
@@ -311,8 +309,8 @@ run_F5() {
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
     encoded=$(env "$RWT" 30 node -e "
-const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
-process.stdout.write(_encodeCwd('$upcwd'));
+const { encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/transcript-paths');
+process.stdout.write(encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
     env "$RWT" 30 node -e "
@@ -387,8 +385,8 @@ run_F6() {
     upcwd="$(node_path "$tmp/upstream-repo")"
     mkdir -p "$tmp/upstream-repo"
     encoded=$(env "$RWT" 30 node -e "
-const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
-process.stdout.write(_encodeCwd('$upcwd'));
+const { encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/transcript-paths');
+process.stdout.write(encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
     cp "$FIXTURE" "$tmp/transcripts/$encoded/up-f6.jsonl"
@@ -449,8 +447,8 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     fi
 }
 
-# F7 — finding 8 (round 3): F4-F6 build fixtures with session-title.js's
-# _encodeCwd (which resolves cwd first), while upstream-search.sh's fixture and
+# F7 — finding 8 (round 3): F4-F6 build fixtures with transcript-paths.js's
+# encodeCwd (which resolves cwd first), while upstream-search.sh's fixture and
 # candidates.js's transcriptDirFor encode the raw string with no resolve step.
 # On a Windows POSIX drive-letter cwd the two disagree, so `--from` and `--list`
 # would resolve to different transcript directories for the same session. This
@@ -460,19 +458,19 @@ run_F7() {
     problems=""
     out=$(env "$RWT" 30 node -e "
 const path = require('path');
-const { _encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/session-title');
+const { encodeCwd } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/transcript-paths');
 const { transcriptDirFor } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/candidates');
 const problems = [];
 for (const cwd of ['/home/user/project', 'C:\\\\Users\\\\dev\\\\repo']) {
-  const left = _encodeCwd(cwd);
+  const left = encodeCwd(cwd);
   const right = path.basename(transcriptDirFor(cwd));
-  if (left !== right) problems.push('mismatch:' + JSON.stringify(cwd) + ':_encodeCwd=' + left + ':transcriptDirFor=' + right);
+  if (left !== right) problems.push('mismatch:' + JSON.stringify(cwd) + ':encodeCwd=' + left + ':transcriptDirFor=' + right);
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)
     [ "$out" = "OK" ] || problems="$problems $out"
     if [ -z "$problems" ]; then
-        pass "F7: session-title.js's _encodeCwd and candidates.js's transcriptDirFor agree on an absolute POSIX cwd and a drive-letter cwd"
+        pass "F7: transcript-paths.js's encodeCwd and candidates.js's transcriptDirFor agree on an absolute POSIX cwd and a drive-letter cwd"
     else
         fail "F7: the two cwd encoders disagree —$problems"
     fi

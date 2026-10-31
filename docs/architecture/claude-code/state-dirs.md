@@ -96,6 +96,7 @@ guard refuse every model write there without touching the artifact workflow.
 | `calibration-asked.txt` | `skills/run-tests/scripts/mark-calibration-asked.sh` (before the dialog), `answer-calibration.sh` | `probe-calibration.sh` |
 | `sweep-plans-gate.tsv` | `bin/sweep-plans/gate-artifact.js` (pass 1 of `--include-plan-and-user-requested`) | The same script in pass 2, which consumes it |
 | `prompt-turn.json` | `hooks/user-prompt-submit-turn-id.js` via `hooks/lib/prompt-turn-id.js` (unlink, then temp file + rename, once per user prompt) | `hooks/show-plan-link.js` (plan-sync's turn commit, [plan-sync/turn-commit.md](plan-sync/turn-commit.md)) |
+| `issue-title.json` (in `<first_session_id>.control/`, shared by the chain) | `hooks/user-prompt-submit-issue-title.js` (temp file + rename) | The same hook only (last emitted title, title and failure caches) |
 | `presentation-receipt-log.jsonl` | `hooks/lib/presentation-receipt.js` (one line per receipt write and consume) | `confirm-checkpoint.js` (the `no-receipt` finding's diagnostic) |
 
 Named exceptions:

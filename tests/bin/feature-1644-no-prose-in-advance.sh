@@ -46,7 +46,7 @@ hooks/workflow-state/record-step-verdict.js
 # live; the three artifact suffixes are the artifacts themselves.
 FORBIDDEN_TOKENS="isTrivial -intent.md -outline.md -detail.md getWorkflowPlansDir WORKFLOW_PLANS_DIR"
 # Modules whose entire purpose is parsing those artifacts.
-FORBIDDEN_REQUIRES="session-title parse-closes-issues parse-worktrees workflow-plans-dir"
+FORBIDDEN_REQUIRES="parse-closes-issues parse-worktrees workflow-plans-dir"
 
 echo "=== N1: the advance-path modules exist ==="
 for f in $TARGETS; do
