@@ -411,6 +411,8 @@ mk_slot "$LS2C" 2 "$(dead_pid)"
 mk_slot "$LS2C" 3 "$LIVE_PID" "$OSTYPE" run-all "$(( $(now_epoch) - 700 ))"
 mk_slot "$LS2C" 4 "$(dead_pid)" other-env
 mk_slot "$LS2C" 5 ""
+# #2692: a presence row has 10 columns (allocation columns `-` with no sample); lane rows keep 6.
+_r="$LS2C/runs/run.$LIVE_PID.1.1"; mkdir -p "$_r"; now_epoch > "$_r/hb"; printf 'pid=%s\nenv=%s\nkind=run-all\nstart=1\ntoken=%s.1.1\n' "$LIVE_PID" "$OSTYPE" "$LIVE_PID" > "$_r/owner"
 run_status "$LS2C" TEST_MAX_JOBS_PER_HOST=5 AUTO_CONFIG_TEST_MAX_JOBS=off
 assert_eq "LS2 status exits 0" "0" "$RC"
 assert_tokens "LS2 first line is max_jobs_per_host=<N> source=<...>" "max_jobs_per_host=5 source=env mode=off" "$(first_line "$OUT")"
@@ -424,6 +426,8 @@ for _st in alive stale-dead-pid stale-ttl foreign ownerless; do
     fi
 done
 assert_eq "LS2 status is read-only (all five lanes still present)" "lane.1 lane.2 lane.3 lane.4 lane.5" "$(lane_names "$LS2C")"
+assert_eq "LS2 presence row: 10 columns, '-' allocation; lane rows: 6 columns" "run:10:- - - - lane:6" \
+    "$(printf '%s\n' "$OUT" | awk -F'\t' '/^run\./ { r = "run:" NF ":" $7 " " $8 " " $9 " " $10 } /^lane\./ { l[NF] = 1 } END { for (n in l) r = r " lane:" n; print r }')"
 run_status "$LS2C" -- --bogus
 assert_eq "LS2 --bogus is a usage error (exit 2)" "2" "$RC"
 case_ran LS2

@@ -227,7 +227,7 @@ fx_new_root() {
         cp "$FX_REPO_ROOT/bin/lib/test-host-lanes.sh" "$root/bin/lib/test-host-lanes.sh" 2>/dev/null || true
         # #2687: the lanes lib sources these siblings from its own directory.
         local sib
-        for sib in test-host-lanes-share.sh test-host-load.sh test-host-load-probe.sh; do
+        for sib in test-host-lanes-share.sh test-host-load.sh test-host-load-probe.sh test-host-load-sample.sh test-host-alloc.sh test-host-lanes-status.sh; do
             cp "$FX_REPO_ROOT/bin/lib/$sib" "$root/bin/lib/$sib" 2>/dev/null || true
         done
     fi
