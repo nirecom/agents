@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/workflow-state/inheritance/granularity.js, hooks/workflow-state/inheritance/adopt.js, hooks/session-start.js, bin/lib/resume-session/upstream-view.js, bin/lib/resume-session/upstream-cwd.js, bin/lib/resume-session/args.js, bin/resume-session-detect, bin/workflow/adopt-session-state, skills/resume-session/SKILL.md
-// Tags: feature-2297, readopt, overwrite-protection, upstream-cwd, inheritance-granularity, resume-session, scope:issue-specific, TL2, pwsh-not-required
+// Tags: feature-2297, readopt, overwrite-protection, upstream-cwd, inheritance-granularity, resume-session, state-unreadable, scope:issue-specific, TL2, pwsh-not-required
 // #2297 (2c): granularity is a reported fact (SAME worktree -> full, anything else -> degraded), a
 // re-adopt from the same upstream is allowed only while the downstream holds no record of its own,
 // and the upstream's recorded cwd is classified before `--from` so the user can enter it first.
@@ -360,6 +360,31 @@ check("RSM-2 classifies, enters the worktree, warns about cd, explains recovery;
   assert.ok(at(/`cd`/) !== -1 && at(/state\.cwd/) !== -1, "no Bash cd warning");
   assert.ok(lines.some((l) => /degraded/i.test(l) && /--from/.test(l) && /worktree/i.test(l)), "no recovery line");
   assert.doesNotMatch(text, /--verified-equivalent/);
+});
+caseEnd();
+
+// A corrupt state file is damage, not expiry: the ARTIFACTS_ONLY branch must say so as the NONE branch does.
+caseBegin("from-artifacts-only-distinguishes-unreadable-from-expired", "bin/lib/resume-session/upstream-view.js");
+const seedIntent = (sid) => fs.writeFileSync(path.join(process.env.WORKFLOW_PLANS_DIR, `${sid}-intent.md`), "**Title:** fixture\n");
+check("corrupt state + intent artifact -> artifacts-only, inherit_result reason state-unreadable", () => {
+  const view = require(F.rel("bin/lib/resume-session/upstream-view.js"));
+  F.seedDownstream("down-c13-bad", SB.W1);
+  fs.mkdirSync(path.dirname(F.statePath("up-c13-bad")), { recursive: true });
+  fs.writeFileSync(F.statePath("up-c13-bad"), "{ not json");
+  seedIntent("up-c13-bad");
+  const v = view.buildUpstreamView({ heirSid: "down-c13-bad", upstreamSid: "up-c13-bad" });
+  assert.strictEqual(v.availability, "artifacts-only");
+  assert.ok((v.state_handoff_errors || []).includes("state"), `errors: ${JSON.stringify(v.state_handoff_errors)}`);
+  assert.deepStrictEqual(v.inherit_result, { attempted: false, reason: "state-unreadable" });
+});
+check("absent state + intent artifact -> artifacts-only, inherit_result reason state_expired", () => {
+  const view = require(F.rel("bin/lib/resume-session/upstream-view.js"));
+  F.seedDownstream("down-c13-gone", SB.W1);
+  seedIntent("up-c13-gone");
+  assert.strictEqual(fs.existsSync(F.statePath("up-c13-gone")), false, "fixture: state file exists");
+  const v = view.buildUpstreamView({ heirSid: "down-c13-gone", upstreamSid: "up-c13-gone" });
+  assert.strictEqual(v.availability, "artifacts-only");
+  assert.strictEqual((v.inherit_result || {}).reason, "state_expired");
 });
 caseEnd();
 

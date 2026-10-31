@@ -77,7 +77,7 @@ if (d) {
   for (const k of Object.keys(d)) if (ENVELOPE.indexOf(k) === -1) problems.push('injected-envelope-field:' + k);
   if (d.type !== 'list') problems.push('record-type-diverted:' + JSON.stringify(d.type));
   const cands = Array.isArray(d.candidates) ? d.candidates : [];
-  const ALLOWED = ['sid','adoptable','adoptable_reason','adoptable_granularity','resumability_degraded_reason','git_branch','cwd','last_activity','last_activity_source','matched_on','issues','title','artifacts','sources'];
+  const ALLOWED = ['sid','adoptable','adoptable_reason','adoptable_granularity','resumability_degraded_reason','git_branch','cwd','last_activity','last_activity_source','matched_on','issues','title','artifacts','sources','state_handoff_records'];
   for (const rec of cands) {
     for (const k of Object.keys(rec)) if (ALLOWED.indexOf(k) === -1) problems.push('injected-record-field:' + k);
     if ('skill' in rec) problems.push('record-carries-a-skill-to-dispatch:' + JSON.stringify(rec.skill));

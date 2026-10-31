@@ -1,6 +1,6 @@
 "use strict";
-// Small JSON sidecars next to the handoff artifact (#2430): the nudge baseline,
-// the flush mark and the risk stamp. Each file has exactly one writer; this
+// Small JSON sidecars in the session's control dir (#2430): the progress pressure
+// baseline, the risk stamp and the language re-inject baseline. Each file has exactly one writer; this
 // module only owns the path rule and the tmp + rename write, never the contents.
 // They are control files: <WORKFLOW_STATE_DIR>/<sid>.control/<suffix>.
 
@@ -23,7 +23,7 @@ function readSidecar(sid, suffix) {
     const v = JSON.parse(fs.readFileSync(p, "utf8"));
     return v && typeof v === "object" && !Array.isArray(v) ? v : null;
   } catch (e) {
-    diagnoseControlMigration(e, "handoff-sidecar");
+    diagnoseControlMigration(e, "control-sidecar");
     return null;
   }
 }
@@ -35,7 +35,7 @@ function writeSidecar(sid, suffix, obj) {
     p = sidecarPath(sid, suffix, { forWrite: true });
     if (p === null) return false;
   } catch (e) {
-    diagnoseControlMigration(e, "handoff-sidecar");
+    diagnoseControlMigration(e, "control-sidecar");
     return false;
   }
   const tmpPath = `${p}.${process.pid}.tmp`;

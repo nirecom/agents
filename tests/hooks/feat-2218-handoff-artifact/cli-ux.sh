@@ -1,17 +1,15 @@
-# cli-ux.sh — H12-H17: handoff-append as a COMMAND. Sourced by the main file.
+# cli-ux.sh — H12-H17, H19: handoff-append as a COMMAND. Sourced by the main file.
 # Tests: bin/workflow/handoff-append
-# Tags: handoff, handoff-artifact, cli-ux, discoverability, regression-2279, scope:issue-specific, pwsh-not-required, TL2
+# Tags: handoff, handoff-artifact, cli-ux, discoverability, regression-2279, regression-2652, scope:issue-specific, pwsh-not-required, TL2
 
-# A context-pressured session runs this CLI with seven flags from memory (the
-# flush rule, now rules/progress-update.md, moved its facts to session-progress.md in
-# #2594; the CLI itself stays until #2652). That session cannot afford to read the
-# source, so the command must answer for itself: --help must work, and a
-# rejection must name the field it rejected.
+# A skill runs this CLI with seven flags from memory at a procedure point. That
+# session cannot afford to read the source, so the command must answer for
+# itself: --help must work, and a rejection must name the field it rejected.
 
-# _hoff <args...> — run the CLI against a private PLANS_DIR; sets HO_OUT/HO_ERR/HO_RC.
+# _hoff <args...> — run the CLI against a private state dir; sets HO_OUT/HO_ERR/HO_RC and HO_NREC (records afterwards).
 _hoff() {
     local tmp tn
-    tmp="$(make_tmp)"; tn="$(node_path "$tmp")"
+    tmp="$(make_tmp)"; tn="$(np "$tmp")"
     mkdir -p "$tmp/wf" "$tmp/home"
     # #2430: the CLI writes only inside the workflow active period.
     seed_active "$tn" "h-cli"
@@ -21,6 +19,7 @@ _hoff() {
         "$RWT" 60 node "$SCRIPT_CHECKOUT_ROOT/$CLI" "$@" 2>"$tmp/err")
     HO_RC=$?
     HO_ERR=$(cat "$tmp/err" 2>/dev/null || true)
+    HO_NREC="$(count_recs "$tn" "h-cli")"
     rm -rf "$tmp" 2>/dev/null || true
 }
 
@@ -82,7 +81,7 @@ run_H14() {
 # and all six entry fields today, so the caller cannot tell which one it is.
 run_H15() {
     local problems=""
-    _hoff --class Z --step write_tests --key k --summary s --pointer - --origin flush
+    _hoff --class Z --step write_tests --key k --summary s --pointer - --origin procedure-point
     [ "$HO_RC" -ne 0 ] || problems="$problems [exit 0 for an out-of-vocabulary --class]"
     case "$HO_ERR" in
         *class*) : ;;
@@ -111,15 +110,16 @@ run_H16() {
     fi
 }
 
-# H17 — the non-regression pair: a well-formed call still writes, and a flag
-# given without a value still fails loudly. Any fix above must leave both alone.
+# H17 — the non-regression pair: a well-formed call still writes (into the state
+# file), and a flag given without a value still fails loudly.
 run_H17() {
     local problems=""
-    _hoff --class A --step write_tests --key k17 --summary "a summary" --pointer - --origin flush
+    _hoff --class A --step write_tests --key k17 --summary "a summary" --pointer - --origin procedure-point
     case "$HO_OUT" in
         *"WRITTEN=1"*) : ;;
         *) problems="$problems [a well-formed append printed '${HO_OUT:-<empty>}' (rc=$HO_RC, stderr='$HO_ERR')]" ;;
     esac
+    [ "$HO_NREC" = "1|A|write_tests|procedure-point|a summary|-" ] || problems="$problems [state records after the append: '$HO_NREC']"
     _hoff --class
     [ "$HO_RC" -ne 0 ] || problems="$problems [a value-less --class exited 0]"
     case "$HO_ERR" in
@@ -127,8 +127,32 @@ run_H17() {
         *) problems="$problems [a value-less --class did not name the flag: '$HO_ERR']" ;;
     esac
     if [ -z "$problems" ]; then
-        pass "H17: a well-formed append still writes, and a value-less flag still fails naming itself"
+        pass "H17: a well-formed append still records in the state file, and a value-less flag still fails naming itself"
     else
         fail "H17: the CLI's working paths regressed;$problems"
+    fi
+}
+
+# H19 — #2652 closes the flush origin: its facts live in session-progress.md
+# now, so --origin flush is a usage error (exit 2, usage on stderr naming the
+# origins that remain) and records nothing.
+run_H19() {
+    local problems=""
+    _hoff --class A --step write_tests --key k19 --summary s --pointer - --origin flush
+    [ "$HO_RC" -eq 2 ] || problems="$problems [exit $HO_RC, want 2]"
+    case "$HO_ERR" in
+        *[Uu]sage*) : ;;
+        *) problems="$problems [stderr carries no usage: '${HO_ERR:-<empty>}']" ;;
+    esac
+    case "$HO_ERR" in
+        *procedure-point*) : ;;
+        *) problems="$problems [stderr does not name the accepted origin]" ;;
+    esac
+    case "$HO_OUT" in *"WRITTEN=1"*) problems="$problems [stdout claims a write]" ;; esac
+    [ "$HO_NREC" = "0" ] || problems="$problems [recorded '$HO_NREC']"
+    if [ -z "$problems" ]; then
+        pass "H19: --origin flush is rejected with exit 2 and usage on stderr, recording nothing"
+    else
+        fail "H19: flush is still accepted;$problems"
     fi
 }

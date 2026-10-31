@@ -1,22 +1,19 @@
 #!/usr/bin/env node
 "use strict";
-// Thin CLI over appendHandoffEntryIfActive, for skill prompts and shell scripts.
+// Thin CLI over appendStateHandoffRecord (#2652), for skill prompts and shell scripts.
 // --session defaults to the CC-native sid (resolveSessionId), never the
 // PLANS_DIR filename heuristic: a wsid default would make writer and reader
 // look at different files.
-// Every origin passes the workflow active-period gate (#2430): outside it the
-// CLI records nothing, prints WRITTEN=0 REASON=inactive and still exits 0.
+// A record that is not written (no state file, outside the recording period, an identical
+// repeat, the budget reached) is named on one stderr line and still exits 0, so a skill's
+// recording call never fails its step.
 
 const path = require("path");
-const {
-  HANDOFF_CLASSES,
-  HANDOFF_ORIGINS,
-  HANDOFF_STEPS,
-  KEY_VALID_RE,
-} = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-artifact"));
-const { appendHandoffEntryIfActive } = require(path.join(__dirname, "..", "..", "hooks", "lib", "handoff-gated-append"));
-const { resolveSessionId } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "session-id"));
-const { SESSION_ID_VALID_RE } = require(path.join(__dirname, "..", "..", "hooks", "workflow-state", "state-io"));
+const HOOKS = path.join(__dirname, "..", "..", "hooks");
+const SCHEMA = require(path.join(HOOKS, "workflow-state", "state-io", "state-handoff-record-schema"));
+const { appendStateHandoffRecord } = require(path.join(HOOKS, "lib", "state-handoff-record"));
+const { resolveSessionId } = require(path.join(HOOKS, "workflow-state", "session-id"));
+const { SESSION_ID_VALID_RE } = require(path.join(HOOKS, "workflow-state", "state-io"));
 
 const FLAGS = {
   "--session": "session",
@@ -28,21 +25,28 @@ const FLAGS = {
   "--origin": "origin",
 };
 
-// A context-pressured session runs this from memory (the --origin flush path; its facts move to
-// session-progress.md under rules/progress-update.md, and the path itself retires in #2652)
-// and cannot afford to open the source, so the command answers for itself.
-// --origin has no default on purpose: the producer is never inferred.
+// Retired origins: step-end (#2430) and flush (#2652; a main-session fact belongs in
+// session-progress.md). A caller still passing one gets the usage, not just a rejection.
+const RETIRED_ORIGINS = ["step-end", "flush"];
+// The CLI writes declared records only (security review C2): an origin the hooks write
+// through write.js directly would let a CLI caller forge an "observed" record.
+const CLI_ORIGINS = ["procedure-point"];
+const HOOK_ONLY_ORIGINS = SCHEMA.ORIGINS.filter((o) => !CLI_ORIGINS.includes(o));
+
+// A skill runs this from memory at a procedure point and cannot afford to open the
+// source, so the command answers for itself. --origin has no default on purpose.
 const USAGE = [
   "Usage: handoff-append --class <A-G> --step <step|-> --key <id> --summary <text> --pointer <path|-> --origin <origin>",
   "",
   "Required flags:",
-  "  --class <A-G>       entry class; one of: " + HANDOFF_CLASSES.join(", "),
-  "  --step <step|->     workflow step the entry belongs to, or '-' for a stepless entry",
+  "  --class <A-G>       record class; one of: " + SCHEMA.CLASSES.join(", "),
+  "  --step <step|->     workflow step the record belongs to, or '-' for a stepless record",
   "  --key <id>          dedup identity; characters A-Z a-z 0-9 _ . : -",
-  "  --origin <origin>   what produced the entry; one of: " + HANDOFF_ORIGINS.join(", "),
-  "                      (skill procedures pass procedure-point; a main-session flush passes flush)",
+  "  --origin <origin>   what produced the record; one of: " + CLI_ORIGINS.join(", "),
+  "                      (" + HOOK_ONLY_ORIGINS.join(", ") + " are hook-only and refused)",
   "",
-  "Outside the workflow active period nothing is recorded: WRITTEN=0 REASON=inactive, exit 0.",
+  "The record goes into the session's state file. When it is not written (no-state,",
+  "outside-period, noop-identical, overflow) one stderr line names the reason; exit 0.",
   "",
   "Optional flags:",
   "  --summary <text>    what a fresh session needs; keep under 300 characters",
@@ -50,11 +54,12 @@ const USAGE = [
   "  --session <sid>     target session; defaults to the resolved Claude Code session id",
   "  --help, -h          print this message",
   "",
-  "Class vocabulary and the entry grammar: docs/architecture/claude-code/handoff-artifact.md",
+  "Class vocabulary and the record fields: docs/architecture/claude-code/state-handoff-record.md",
   "",
 ].join("\n");
 
 const HELP_FLAGS = ["--help", "-h"];
+const NOT_WRITTEN_REASONS = ["no-state", "outside-period", "noop-identical", "overflow"];
 
 function acceptedFlagList() {
   return Object.keys(FLAGS).concat(HELP_FLAGS).join(", ");
@@ -79,17 +84,19 @@ function parseArgs(argv) {
 // have to rerun the command to discover the second one.
 function invalidEntryFields(opts) {
   const bad = [];
-  if (HANDOFF_CLASSES.indexOf(opts.cls) === -1) {
-    bad.push(`--class ${JSON.stringify(opts.cls ?? null)} (want one of: ${HANDOFF_CLASSES.join(", ")})`);
+  if (!SCHEMA.CLASSES.includes(opts.cls)) {
+    bad.push(`--class ${JSON.stringify(opts.cls ?? null)} (want one of: ${SCHEMA.CLASSES.join(", ")})`);
   }
-  if (HANDOFF_STEPS.indexOf(opts.step) === -1) {
+  if (!SCHEMA.isValidAtStep(opts.step)) {
     bad.push(`--step ${JSON.stringify(opts.step ?? null)} (want a workflow step name, or '-')`);
   }
-  if (typeof opts.key !== "string" || !KEY_VALID_RE.test(opts.key)) {
-    bad.push(`--key ${JSON.stringify(opts.key ?? null)} (want characters A-Z a-z 0-9 _ . : -)`);
+  if (!SCHEMA.isValidKey(opts.key)) {
+    bad.push(`--key ${JSON.stringify(opts.key ?? null)} (want at most ${SCHEMA.KEY_MAX_CHARS} characters A-Z a-z 0-9 _ . : -)`);
+  } else if (opts.key === SCHEMA.OVERFLOW_KEY) {
+    bad.push(`--key ${JSON.stringify(opts.key)} (reserved for the overflow record)`);
   }
-  if (HANDOFF_ORIGINS.indexOf(opts.origin) === -1) {
-    bad.push(`--origin ${JSON.stringify(opts.origin ?? null)} (want one of: ${HANDOFF_ORIGINS.join(", ")})`);
+  if (!CLI_ORIGINS.includes(opts.origin)) {
+    bad.push(`--origin ${JSON.stringify(opts.origin ?? null)} (want one of: ${CLI_ORIGINS.join(", ")})`);
   }
   return bad;
 }
@@ -105,6 +112,14 @@ function main() {
     return 2;
   }
   const opts = parsed.opts;
+  if (RETIRED_ORIGINS.includes(opts.origin)) {
+    process.stderr.write(`handoff-append: --origin ${opts.origin} is retired\n${USAGE}`);
+    return 2;
+  }
+  if (HOOK_ONLY_ORIGINS.includes(opts.origin)) {
+    process.stderr.write(`handoff-append: --origin ${opts.origin} is hook-only; pass --origin ${CLI_ORIGINS.join(", ")}\n`);
+    return 2;
+  }
   const sid = opts.session !== undefined ? opts.session : resolveSessionId({});
   if (!sid) {
     process.stderr.write("handoff-append: no session id could be resolved\n");
@@ -115,13 +130,13 @@ function main() {
     process.stderr.write(`handoff-append: rejected — ${bad.length} field(s) out of vocabulary: ${bad.join("; ")}\n`);
     return 2;
   }
-  // Checked before the gate: an invalid sid is a caller error (exit 2), never
-  // an "inactive" session that would silently swallow the mistake.
+  // Checked before the write: an invalid sid is a caller error (exit 2), never
+  // a missing state that would silently swallow the mistake.
   if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid)) {
     process.stderr.write(`handoff-append: rejected — --session ${JSON.stringify(sid)} is not a valid session id\n`);
     return 2;
   }
-  const result = appendHandoffEntryIfActive(sid, {
+  const result = appendStateHandoffRecord(sid, {
     cls: opts.cls,
     step: opts.step,
     key: opts.key,
@@ -133,14 +148,14 @@ function main() {
     process.stdout.write(`WRITTEN=1 REASON=${result.reason}\n`);
     return 0;
   }
-  // invalidEntryFields and the sid check already cleared the entry, so
-  // `invalid` here is unexpected — still named rather than folded away.
+  // The fields and the sid were already cleared, so `invalid` here is unexpected — still named.
   if (result.reason === "invalid") {
-    process.stderr.write(`handoff-append: rejected — --session ${JSON.stringify(sid)} is not a valid session id\n`);
+    process.stderr.write("handoff-append: rejected — the record failed validation\n");
     return 2;
   }
-  if (result.reason === "inactive") {
-    process.stderr.write("handoff-append: outside the workflow active period — nothing recorded\n");
+  // lock-timeout and io-error already printed their `record dropped` line from the write entry.
+  if (NOT_WRITTEN_REASONS.includes(result.reason)) {
+    process.stderr.write(`handoff-append: not recorded — ${result.reason}\n`);
   }
   process.stdout.write(`WRITTEN=0 REASON=${result.reason}\n`);
   return 0;

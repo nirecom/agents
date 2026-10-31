@@ -13,13 +13,13 @@ Seven delimited blocks, in order: a header, `HANDOFF`, `PROGRESS`, `USER UTTERAN
 
 - User utterances are collected over the whole transcript. The user's intent does not expire: a request made at the start of the session still binds what happens at the end.
 - Actions (commands, edits, skill/agent invocations, sentinels, hook blocks) are collected only from the transcript cursor onward. Earlier actions were already reviewed by the previous run of the same mode.
-- The handoff artifact is read (never written) because it holds the decisions and deviations the transcript alone does not surface — see [handoff-artifact.md](handoff-artifact.md).
-- `session-progress.md` (the session's root file, [progress-file.md](progress-file.md)) is read the same way and capped at the handoff size cap (64KiB, with a truncation note). Its heading line says the model wrote it and it is not evidence: the reviewer checks it against the actions, never the other way round.
+- The session's state handoff records are read (never written) through the state handoff reader because they hold the gate blocks, verdicts and outcomes the transcript alone does not surface — see [state-handoff-record.md](state-handoff-record.md). `HANDOFF` lists every entry, one line each, with no folding, in one section per candidate session id (the transcript's, then the workflow session's), each section in time order; one 128KiB cap (`SUPERVISOR_HANDOFF_MAX_BYTES`) spans all candidate session ids, and when it is exceeded the oldest lines drop first under an `(N older entries omitted)` line.
+- `session-progress.md` (the session's root file, [progress-file.md](progress-file.md)) is read the same way and capped at 64KiB, with a truncation note. Its heading line says the model wrote it and it is not evidence: the reviewer checks it against the actions, never the other way round.
 - Plan artifacts and the supervisor state give the reviewer the plan to check the actions against.
 
 The header carries counts per record kind and the number of unparsable lines. When the transcript has user entries but no utterance matched, it adds a `schema drift?` warning: the rules depend on the Claude Code transcript schema, and a silent schema change would otherwise shrink the input without anyone noticing.
 
-Every block body is defanged (HTML comment markers and `[... START|BEGIN|END ...]` tags are neutralized) because transcript and handoff text is untrusted and must not forge a block boundary. This mirrors `neutralize_delimiters` in `bin/review-plan-codex`.
+Every block body is defanged (HTML comment markers and `[... START|BEGIN|END ...]` tags are neutralized) because transcript and state handoff record text is untrusted and must not forge a block boundary. This mirrors `neutralize_delimiters` in `bin/review-plan-codex`.
 
 ## The transcript cursor
 

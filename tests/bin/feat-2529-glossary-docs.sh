@@ -153,11 +153,11 @@ case_begin "kept-terms-follow-category-table" "docs/glossary/user.md"
 # ============================================================================
 # The curated kept terms must each appear exactly once in their category file. The check
 # asserts presence, not a total: a later PR adding a qualifying entry must not break it.
-USER_TERMS=(AGENTS_MAIN_ROOT "confirm gate" "deliverable type" "delivery path" detail "handoff artifact"
+USER_TERMS=(AGENTS_MAIN_ROOT "confirm gate" "deliverable type" "delivery path" detail "state handoff record"
             intent Jev meta outline plan-sync "PM type" "presentation turn" RTK sentinel
             WF-CODE WF-META workflow "workflow step")
 INTERNAL_TERMS=("delivery operation" GATE_ACTION "in-skill step" IR "review round" SCRIPT_CHECKOUT_ROOT
-                "step table" TARGET_CHECKOUT_ROOT TARGET_MAIN_ROOT turn)
+                "state handoff reader" "step table" TARGET_CHECKOUT_ROOT TARGET_MAIN_ROOT turn)
 # kept_terms_missing <user-file> <internal-file> — one line per curated term not present exactly once.
 kept_terms_missing() {
     local t n
@@ -241,8 +241,8 @@ removed_in_owner() {
     done
 }
 
-case_begin "removed-terms-in-handoff-artifact" "docs/architecture/claude-code/handoff-artifact.md"
-removed_in_owner docs/architecture/claude-code/handoff-artifact.md "workflow active period" "risk signal" "flush mark" "pressure baseline"
+case_begin "removed-terms-in-state-handoff-record" "docs/architecture/claude-code/state-handoff-record.md"
+removed_in_owner docs/architecture/claude-code/state-handoff-record.md "workflow active period" "risk signal" "flush mark" "pressure baseline"
 case_end
 
 case_begin "removed-terms-in-supervisor-audit-ledger" "docs/architecture/claude-code/supervisor-audit-ledger.md"

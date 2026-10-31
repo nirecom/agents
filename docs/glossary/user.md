@@ -32,12 +32,6 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The workflow step that turns the approved approach into a file-level implementation plan; produced by `/make-detail-plan` after outline.
 - **Related**: [skills/make-detail-plan/SKILL.md](../../skills/make-detail-plan/SKILL.md)
 
-### handoff artifact
-
-- **Definition**: The append-only per-session breadcrumb file that hooks and skill procedures write — context events, gate blocks, deviations, outcomes; the main conversation's own facts go to session-progress.md.
-  `/resume-session` reads it back, and the supervisor codex engine reads it read-only.
-- **Related**: [architecture/claude-code/handoff-artifact.md](../architecture/claude-code/handoff-artifact.md)
-
 ### intent
 
 - **Definition**: The scope, motivation, and non-goals that `/clarify-intent` settles with the user; the agreed baseline every later plan starts from.
@@ -85,6 +79,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 - **Definition**: A marker string of the form `<<WORKFLOW_...>>` that hooks detect to drive workflow state — step-complete marks, skip declarations, OFF switches, and the like.
 - **Related**: [skills/enforce-workflow-off/SKILL.md](../../skills/enforce-workflow-off/SKILL.md)
+
+### state handoff record
+
+- **Definition**: session の引き継ぎのために hook と skill の手順が workflow の state に追記する event。compaction、gate の block、supervisor の判定、手順の結果を持ち、`/resume-session` と supervisor codex engine が読む。main conversation 自身の事実は session-progress.md に書く。
+- **Related**: [architecture/claude-code/state-handoff-record.md](../architecture/claude-code/state-handoff-record.md)
 
 ### test-lang-exception
 - **Definition**: A value in a test file's `# Tags:` line (`text-only`, `symmetry`, or `e2e`) that lets the whole file be written in a language other than the code it tests.

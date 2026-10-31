@@ -3,10 +3,10 @@
 // unrecorded working knowledge is most likely to be lost. A stamp newer than the
 // request baseline restarts its timer and halves its limits (hooks/lib/progress-pressure.js).
 //
-// <WORKFLOW_STATE_DIR>/<sid>.control/handoff-risk.json = { last_risk_at, source }. Concurrent
+// <WORKFLOW_STATE_DIR>/<sid>.control/risk-signal.json = { last_risk_at, source }. Concurrent
 // producers are last-writer-wins: only "a risk happened recently" matters.
 
-const { readSidecar, writeSidecar, toMillis } = require("./handoff-sidecar");
+const { readSidecar, writeSidecar, toMillis } = require("./control-sidecar");
 
 const RISK_SOURCES = Object.freeze([
   "compaction",
@@ -16,7 +16,7 @@ const RISK_SOURCES = Object.freeze([
   "supervisor-finding",
   "test-failure",
 ]);
-const RISK_SUFFIX = "handoff-risk.json";
+const RISK_SUFFIX = "risk-signal.json";
 
 // Unknown source or invalid sid → no-op. Never throws.
 function recordRiskSignal(sid, source) {

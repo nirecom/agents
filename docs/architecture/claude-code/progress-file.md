@@ -78,7 +78,7 @@ Several completes seen in one evaluation are listed one line each in one request
 
 ### When nothing is emitted
 
-- Outside the workflow active period (see [handoff-artifact.md](handoff-artifact.md#active-period-gate)): nothing moves and nothing is created; the next active evaluation judges everything at once.
+- Outside the workflow active period (see [state-handoff-record.md](state-handoff-record.md#recording-period)): nothing moves and nothing is created; the next active evaluation judges everything at once.
 - A subagent call (`agent_id` set).
 - A `Stop` with `stop_hook_active` — that Stop belongs to a conversation the hook already continued.
 
@@ -115,11 +115,11 @@ The halved column is `limit / RISK_DIVISOR` (2). The growth condition on `elapse
 - Any request moves it to the current size and time.
 - A session-progress.md mtime newer than `baseline_at` and different from the last seen one (`MTIME_TOLERANCE_MS` = 2ms) means the model updated the file: the baseline moves, `last_update_at` is set and `progress_updates` counts it. The first sighting and the hook's own creation only record the mtime.
 - A transcript that shrank re-bases `baseline_bytes` only, without firing.
-- Handoff writes (`flush` included) no longer move it; the flush mark of #2430 is retired, and `bin/workflow/handoff-append` writes none.
+- State handoff record writes never move it; the flush mark of #2430 is retired, and `bin/workflow/handoff-append` rejects `flush` and writes none.
 
 ### Risk signals
 
-A risk signal marks an event after which unrecorded knowledge is most likely to be lost. `recordRiskSignal(sid, source)` (`hooks/lib/handoff-risk-signal.js`) stamps the time; `RISK_SOURCES` is the closed list:
+A risk signal marks an event after which unrecorded knowledge is most likely to be lost. `recordRiskSignal(sid, source)` (`hooks/lib/risk-signal.js`) stamps the time; `RISK_SOURCES` is the closed list:
 
 | source | Recorded by |
 |---|---|
@@ -130,7 +130,7 @@ A risk signal marks an event after which unrecorded knowledge is most likely to 
 | `supervisor-finding` | `appendFinding` (`hooks/lib/supervisor-state-writer/append.js`) for a finding at or above `AUDIT_SEVERITY_THRESHOLD` |
 | `test-failure` | `hooks/workflow-run-tests.js` on a non-zero test exit, except in the steps where red is expected (`write_tests`, `review_tests`, `write_code`) |
 
-The risk state is **derived, never stored**: a stamp newer than `baseline_at` makes the timer start at the stamp and halves both limits until the baseline moves past it, so a periodic request never lands right on top of the event. A risk never moves `baseline_bytes`. The stamp lives in `<sid>.control/handoff-risk.json` (`{last_risk_at, source}`, last writer wins); an unreadable stamp reads as "no risk".
+The risk state is **derived, never stored**: a stamp newer than `baseline_at` makes the timer start at the stamp and halves both limits until the baseline moves past it, so a periodic request never lands right on top of the event. A risk never moves `baseline_bytes`. The stamp lives in `<sid>.control/risk-signal.json` (`{last_risk_at, source}`, last writer wins); an unreadable stamp reads as "no risk".
 
 A user's Revise and a tool-permission refusal would also qualify, but have no mechanical record source yet; they are a follow-up.
 
@@ -149,7 +149,7 @@ Measured over 98 sessions (21 days, transcripts over 200KB): active transcript g
 
 More than `BURST_THRESHOLD` (7) compactions within `BURST_WINDOW_MS` (30 minutes) mean the session can no longer hold its own context. The first time per session, the hook writes one class B auto-record (key `compaction-burst`, the count and the window) and sets `burst_pending`; the next request carries one sentence the model passes to the user — the only user-facing line of the request — suggesting to update session-progress.md and hand over to a new session. `burst_shown`, set together with `burst_pending`, keeps it to once per session.
 
-The threshold is measured (2026-10-16). Source: the class B `compaction` entries in the handoff.md of 37 sessions. For each session we took the highest number of compactions inside any 30-minute window. Those per-session maxima were distributed as follows:
+The threshold is measured (2026-10-16). Source: the class B `compaction` entries in the handoff.md (the pre-#2652 record file) of 37 sessions. For each session we took the highest number of compactions inside any 30-minute window. Those per-session maxima were distributed as follows:
 
 | Max compactions in 30 min | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 11 | 17 | 18 | 23 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -164,7 +164,7 @@ The threshold is measured (2026-10-16). Source: the class B `compaction` entries
 
 ## State file
 
-`<WORKFLOW_STATE_DIR>/<sid>.control/progress-pressure.json`, read and merged through `hooks/lib/handoff-sidecar.js` (control kind `progress-pressure`). Timestamps are ISO strings or epoch milliseconds.
+`<WORKFLOW_STATE_DIR>/<sid>.control/progress-pressure.json`, read and merged through `hooks/lib/control-sidecar.js` (control kind `progress-pressure`). Timestamps are ISO strings or epoch milliseconds.
 
 | Field | Meaning |
 |---|---|
@@ -178,7 +178,7 @@ The threshold is measured (2026-10-16). Source: the class B `compaction` entries
 | `last_update_at`, `progress_updates`, `progress_seen_mtime` | Observed model updates of session-progress.md |
 | `counts` | `step_complete`, `volume`, `compaction`, `update_progress` |
 
-The old `handoff-pressure.json` and `handoff-flush-mark.json` are not read; they stay registered so a leftover file is never reported as unregistered (removed by #2652).
+The old `handoff-pressure.json` and `handoff-flush-mark.json` are not read; they stay registered under the `legacy-handoff` kind so a leftover file is never reported as unregistered, until the legacy handoff.md read is removed (#2652).
 
 ### Counts
 

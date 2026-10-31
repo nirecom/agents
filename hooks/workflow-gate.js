@@ -91,8 +91,8 @@ function block(reason, extras = undefined) {
 let _gateReportCtx = { sessionId: undefined, command: undefined, toolName: undefined, cwd: undefined };
 
 // Block without emitting a supervisor L1 finding (used for supervisor pre-merge
-// gates, to avoid recursing the pre-merge audit). It still leaves the #2218
-// handoff breadcrumb — a block is a block and must survive a compaction; only the
+// gates, to avoid recursing the pre-merge audit). It still leaves the gate-block
+// state handoff record — a block is a block and must survive a compaction; only the
 // supervisor L1 finding is intentionally omitted here.
 function blockWithoutError(reason) {
   try {
@@ -294,7 +294,7 @@ if (require.main === module) {
     // block is a workflow gate, not a supervisor anomaly, so it must NOT emit a
     // supervisor L1 finding — doing so would seed a findings-only supervisor state
     // that hijacks the freshness backstop on the very next merge attempt (path
-    // flip). The #2218 handoff breadcrumb is still recorded by blockWithoutError.
+    // flip). The gate-block state handoff record is still written by blockWithoutError.
     if (!sessionId) {
       blockWithoutError(
         "workflow-gate: merge to protected branch blocked — session_id missing.\n" +

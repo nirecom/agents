@@ -33,7 +33,7 @@ Never write:
 
 ## How to write
 
-Write with the Edit tool on session-progress.md; never write these facts into handoff.md.
+Write with the Edit tool on session-progress.md; never write these facts as state handoff records.
 
 Keep the template's section headings; add bullets under the matching kind.
 

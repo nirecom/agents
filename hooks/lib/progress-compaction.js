@@ -5,11 +5,11 @@
 //   - compaction_pending: set by the first compaction since the last 4a / 4c request or
 //     session-progress.md update only; later ones follow the (halved) volume threshold.
 //   - burst: more than BURST_THRESHOLD compactions inside BURST_WINDOW_MS leave one suggestion
-//     for the user, once per session, and one class B auto-record line.
-// BURST_THRESHOLD: in 37 sessions' handoff.md compaction records (2026-10-16), 30 (81%) peak at
+//     for the user, once per session, and one class B auto-record state handoff record.
+// BURST_THRESHOLD: in 37 sessions' compaction records (then in handoff.md, 2026-10-16), 30 (81%) peak at
 // 7 or fewer per 30 min: docs/architecture/claude-code/progress-file.md "Compaction burst".
 
-const { toMillis } = require("./handoff-sidecar");
+const { toMillis } = require("./control-sidecar");
 const { updatePressure } = require("./progress-file");
 
 const BURST_WINDOW_MS = 30 * 60 * 1000;
@@ -52,7 +52,7 @@ function recordCompaction(sid, nowMs) {
     if (r === null) return null;
     if (r.burst) {
       try {
-        const { appendAutoRecord } = require("./handoff-auto-record");
+        const { appendAutoRecord } = require("./auto-record");
         appendAutoRecord(sid, {
           cls: "B",
           step: "-",

@@ -22,7 +22,7 @@ f2544_d_predicate() {
     f2544_d_files "$sid" "$files"
     f2544_eq "D/unsettled $name" "$(f2544_probe unsettled "$sid")" "${want//\~/$F2544_T}"
   done <<'TABLE'
-no-payload|handoff.md|none
+no-payload|codex-context.md|none
 published-but-never-dispatched|~-1.json|none
 dispatched-but-no-outcome|~-1.json ~-1.dispatched|~-1
 outcome-present-not-ingested|~-1.json ~-1.dispatched ~-1.outcome.json|~-1
@@ -63,7 +63,7 @@ f2544_d_latest() {
     f2544_d_files "$sid" "$files"
     f2544_eq "D/latest $name" "$(f2544_probe latest "$sid" test-runner)" "${want//\~/$F2544_T}"
   done <<'TABLE'
-none|handoff.md|none
+none|codex-context.md|none
 payload-only|~-3.json|none
 max-of-markers|~-3.dispatched ~-7.dispatched|~-7/7
 nine-and-ten|~-9.dispatched ~-10.dispatched|~-10/10

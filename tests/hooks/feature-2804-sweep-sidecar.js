@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2804-sweep-sidecar.js
 // Tests: hooks/workflow-state/state-io/zombie-cleanup.js
-// Tags: TL2, hooks, workflow-state, zombie-cleanup, presentation-receipt, sidecar, scope:issue-specific, pwsh-not-required
+// Tags: TL2, hooks, workflow-state, zombie-cleanup, presentation-receipt, sidecar, state-retention, regression-2652, scope:issue-specific, pwsh-not-required
 // #2804 Step 1: the sweep judges `<sid>.json` (stem matches SESSION_ID_VALID_RE) as state by its
 // activity time, and every other `*.json` as a sidecar it never reads: kept while `<owner>.json`
 // exists, else removed only after CONTROL_RETENTION_DAYS (30) of mtime. Before #2804 a receipt
@@ -64,11 +64,12 @@ function sweep() {
 
 caseBegin("z9-real-zombie-state-removed", "hooks/workflow-state/state-io/zombie-cleanup.js");
 {
-  put("z9-owner.json", v2("z9-owner", 30, 20));
+  // 40 days, not 20: since #2652 a state is kept for STATE_RETENTION_DAYS (30) of inactivity.
+  put("z9-owner.json", v2("z9-owner", 50, 40));
   put("z9-fresh.json", v2("z9-fresh", 30, 0.5));
   const threw = sweep();
   check("Z9: the sweep does not throw", threw === null, threw);
-  check("Z9: a state whose newest activity is 20 days old is removed", !exists("z9-owner.json"), "z9-owner.json still exists");
+  check("Z9: a state whose newest activity is 40 days old is removed", !exists("z9-owner.json"), "z9-owner.json still exists");
   check("Z9: a state active 12 hours ago is kept", exists("z9-fresh.json"), "z9-fresh.json removed");
 }
 caseEnd();
@@ -117,7 +118,7 @@ caseEnd();
 
 caseBegin("z13-state-judged-by-name", "hooks/workflow-state/state-io/zombie-cleanup.js");
 {
-  put("20261027-101500.json", v2("20261027-101500", 30, 20));
+  put("20261027-101500.json", v2("20261027-101500", 50, 40));
   put("a.json", v2("a", 1, 0.1));
   put("a.b.json", { note: "dotted stem" }, 40);
   sweep();
@@ -190,5 +191,69 @@ caseBegin("sweep-idempotent","hooks/workflow-state/state-io/zombie-cleanup.js");
   check("idempotent: two sweeps in a row do not throw", first === null && second === null, show([first, second]));
   check("idempotent: the second sweep leaves the same entries as the first", show(a) === show(b), show({ a, b }));
   check("idempotent: live owner and its sidecar kept, orphan removed", show(b) === show([true, true, false]), show(b));
+}
+caseEnd();
+
+// #2652 S5: state handoff records live in <sid>.json, so the state file is kept for
+// STATE_RETENTION_DAYS (30) of inactivity; markers and receipt dirs keep the maxAgeDays (7) rule.
+caseBegin("s5-state-retention-30-days", "hooks/workflow-state/state-io/zombie-cleanup.js");
+{
+  const { RECEIPT_DIR_SUFFIX } = require("../../hooks/lib/instructions-loaded-receipt");
+  put("s5-ten.json", v2("s5-ten", 15, 10));
+  put("s5-thirty-one.json", v2("s5-thirty-one", 40, 31));
+  for (const [name, age] of [["s5-off-old.workflow-off", 8], ["s5-off-new.workflow-off", 6], ["s5-pause-old.next-step-paused", 8], ["s5-pause-new.next-step-paused", 6]]) put(name, "", age);
+  const receipt = "s5-receipt" + RECEIPT_DIR_SUFFIX;
+  fs.mkdirSync(P(receipt), { recursive: true });
+  fs.writeFileSync(path.join(P(receipt), "rule.json"), "{}");
+  touch(receipt, 8);
+  const threw = sweep();
+  check("S5: the sweep does not throw", threw === null, threw);
+  check("S5: a state whose newest activity is 10 days old is kept", exists("s5-ten.json"), "s5-ten.json removed");
+  check("S5: a state whose newest activity is 31 days old is removed", !exists("s5-thirty-one.json"), "s5-thirty-one.json kept");
+  const markers = ["s5-off-old.workflow-off", "s5-off-new.workflow-off", "s5-pause-old.next-step-paused", "s5-pause-new.next-step-paused", receipt].map(exists);
+  check("S5: markers and the receipt dir keep the 7-day rule (8 days removed, 6 days kept)", show(markers) === show([false, true, false, true, false]), show(markers));
+}
+caseEnd();
+
+caseBegin("s5-legacy-root-state-retention", "hooks/workflow-state/state-io/zombie-cleanup.js");
+{
+  // The legacy root is listed only without the WORKFLOW_STATE_DIR pin, so the sweep runs in a child
+  // whose HOME / USERPROFILE is a temp home; the child refuses to sweep if os.homedir() is elsewhere.
+  const { spawnSync } = require("child_process");
+  const { LEGACY_ROOT } = require("../../hooks/lib/temporary-migrations/state-dir-relocation/legacy");
+  const home = path.join(SCRATCH, "home");
+  const legacy = LEGACY_ROOT(home);
+  fs.mkdirSync(legacy, { recursive: true });
+  fs.writeFileSync(path.join(legacy, "l10.json"), JSON.stringify(v2("l10", 15, 10)));
+  fs.writeFileSync(path.join(legacy, "l31.json"), JSON.stringify(v2("l31", 40, 31)));
+  const env = Object.assign({}, process.env, { HOME: home, USERPROFILE: home });
+  delete env.WORKFLOW_STATE_DIR;
+  delete env.CLAUDE_CODE_SESSION_ID;
+  const script = "const os=require('os');if(os.homedir()!==process.argv[1]){console.log('HOME-NOT-PINNED');process.exit(3)}" +
+    "require(process.argv[2]).cleanupZombies(7);console.log('SWEPT')";
+  const r = spawnSync(process.execPath, ["-e", script, home, path.join(__dirname, "..", "..", "hooks/workflow-state/state-io/zombie-cleanup")], { env, encoding: "utf8", timeout: 60000 });
+  check("S5 legacy: the child swept with the temp home", r.status === 0 && /SWEPT/.test(r.stdout), `exit=${r.status} ${r.stdout} ${String(r.stderr).slice(0, 200)}`);
+  check("S5 legacy: a legacy-root state 10 days inactive is kept", fs.existsSync(path.join(legacy, "l10.json")), "l10.json removed");
+  check("S5 legacy: a legacy-root state 31 days inactive is removed", !fs.existsSync(path.join(legacy, "l31.json")), "l31.json kept");
+}
+caseEnd();
+
+caseBegin("s5-retention-boundary-table", "hooks/workflow-state/state-io/zombie-cleanup.js");
+{
+  // [name, idle days, kept]: 8 days would be removed under the pre-#2652 7-day state rule.
+  const STATES = [["s5b-eight.json", 8, true], ["s5b-twenty-nine.json", 29, true], ["s5b-thirty-one.json", 31, false]];
+  // [name, mtime age days, kept]: markers stay on maxAgeDays (7) — kinds not covered by s5-state-retention-30-days.
+  const MARKERS = [
+    ["s5b-wt-old.worktree-off", 8, false], ["s5b-wt-new.worktree-off", 6, true],
+    ["s5b-stall-old.stall-reported", 8, false], ["s5b-stall-new.stall-reported", 6, true],
+    ["s5b-icv-old.issue-close-verified", 29, false],
+  ];
+  for (const [name, days] of STATES) { const id = name.slice(0, -5); put(name, v2(id, days + 10, days)); }
+  for (const [name, days] of MARKERS) put(name, "", days);
+  const threw = sweep();
+  check("S5b: the sweep does not throw", threw === null, threw);
+  for (const [name, days, kept] of STATES.concat(MARKERS)) {
+    check(`S5b: ${name} at ${days} days is ${kept ? "kept" : "removed"}`, exists(name) === kept, `exists=${exists(name)}`);
+  }
 }
 caseEnd();

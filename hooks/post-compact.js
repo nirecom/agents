@@ -29,11 +29,11 @@ if (!sessionId) {
   process.exit(0);
 }
 
-// The one event the artifact exists for is also the one the compacted
+// The one event the state handoff record exists for is also the one the compacted
 // transcript can no longer describe, and PostCompact is the only code that runs
 // at that instant. A lost breadcrumb must never cost the re-injection below.
 try {
-  const { appendAutoRecord } = require("./lib/handoff-auto-record");
+  const { appendAutoRecord } = require("./lib/auto-record");
   appendAutoRecord(sessionId, {
     cls: "B",
     step: "-",

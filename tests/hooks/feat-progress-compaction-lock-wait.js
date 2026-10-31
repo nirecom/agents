@@ -17,7 +17,7 @@ process.on("exit", () => restore());
 const ROOT = path.join(__dirname, "..", "..");
 const PC = require(path.join(ROOT, "hooks", "lib", "progress-compaction"));
 const PF = require(path.join(ROOT, "hooks", "lib", "progress-file"));
-const { sidecarPath } = require(path.join(ROOT, "hooks", "lib", "handoff-sidecar"));
+const { sidecarPath } = require(path.join(ROOT, "hooks", "lib", "control-sidecar"));
 
 let passed = 0;
 let failed = 0;

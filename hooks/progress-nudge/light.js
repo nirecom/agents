@@ -4,7 +4,7 @@
 // Bash / Agent / Task (step completes, 4a) and Stop always take the full path.
 
 const fs = require("fs");
-const { toMillis } = require("../lib/handoff-sidecar");
+const { toMillis } = require("../lib/control-sidecar");
 const { readPressure } = require("../lib/progress-file");
 const { INCREMENT_BYTES, ELAPSED_MS, RISK_DIVISOR } = require("../lib/progress-pressure");
 
