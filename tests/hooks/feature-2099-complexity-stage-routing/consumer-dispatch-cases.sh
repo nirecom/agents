@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/consumer-dispatch-cases.sh
 # Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, skills/write-code/SKILL.md, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, consumers, integration, model-selection, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # consumers-static.sh greps the three SKILL.md files, which proves the text is written,
 # not that a RECORDED verdict reaches the Agent tool as the right model. Here the real
 # CLI answers and the level maps through the mapping READ OUT OF the skill file; the

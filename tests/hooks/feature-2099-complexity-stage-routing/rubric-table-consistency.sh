@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/rubric-table-consistency.sh
 # Tests: skills/_shared/judge-task-complexity.md, hooks/workflow-state/complexity-routing.js, bin/workflow/derive-complexity-level
 # Tags: complexity, routing, rubric, docs-code-consistency, mutation-probe, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # Two layers (detail.md D5): L1 byte-compares the generated blocks; L2 parses the
 # HAND-WRITTEN signal-definition headings, which L1 is structurally blind to.
 # lang-check: ignore -- asserts the rubric's bilingual (English/Japanese) threshold wording

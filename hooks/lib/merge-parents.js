@@ -87,4 +87,71 @@ function resolveMergeParents(repoDir, paths) {
   return { ok: true, state: ms.state, reason: ms.reason || "", records };
 }
 
-module.exports = { resolveMergeParents };
+// ---- Consumers: one parents set per commit, from the resolver or a bin/merge-parents record stream.
+// A set is { state, reason, records: Map<rel, record>, noted }; state "fallback" marks a malformed stream.
+const OID_FIELD = /^(-|[0-9a-f]{40}|[0-9a-f]{64})$/;
+const MALFORMED = { state: "fallback", reason: "merge-parents-records-malformed" };
+
+const parentsSet = (state, reason, map) => ({ state, reason: reason || "", records: map || new Map(), noted: false });
+
+// loadParents(repoDir, rels) — one resolver call (looked up on module.exports, so a stub applies);
+// a throw or ok:false is an undecidable set, every path then judged against HEAD only.
+function loadParents(repoDir, rels) {
+  let r;
+  try {
+    r = module.exports.resolveMergeParents(repoDir, rels);
+  } catch {
+    return parentsSet(MERGE_STATE.UNDECIDABLE, "merge-parents-resolver-failed");
+  }
+  if (!r || !r.ok) return parentsSet(MERGE_STATE.UNDECIDABLE, (r && r.reason) || "merge-parents-resolver-failed");
+  const map = new Map();
+  rels.forEach((rel, i) => { if (r.records[i]) map.set(rel, r.records[i]); });
+  return parentsSet(r.state, r.reason, map);
+}
+
+// parseRecords(buf) — the bin/merge-parents stream as a parents set; malformed → the fallback set.
+function parseRecords(buf) {
+  if (buf === null || buf === undefined) return parentsSet(MALFORMED.state, MALFORMED.reason);
+  const text = Buffer.isBuffer(buf) ? buf.toString("utf8") : String(buf);
+  const parts = text.split("\0");
+  const bad = () => parentsSet(MALFORMED.state, MALFORMED.reason);
+  if (parts.length < 2 || parts.pop() !== "" || parts.length % 2 !== 1) return bad();
+  const head = parts[0].split("\t");
+  if (head.length < 3 || head[0] !== "state" || !["not-merging", "merging", "undecidable"].includes(head[1])) return bad();
+  const map = new Map();
+  for (let i = 1; i < parts.length; i += 2) {
+    const f = parts[i].split("\t");
+    const rel = parts[i + 1];
+    if (f.length !== 5 || rel === "" || !/^[01]$/.test(f[0]) || !/^[01]$/.test(f[1])) return bad();
+    if (!f.slice(2).every((o) => OID_FIELD.test(o))) return bad();
+    const oid = (o) => (o === "-" ? "" : o);
+    map.set(rel, rec(Number(f[0]), Number(f[1]), oid(f[2]), oid(f[3]), oid(f[4])));
+  }
+  const reason = head.slice(2).join("\t");
+  return parentsSet(head[1], reason === "-" ? "" : reason, map);
+}
+
+// recordFor(set, rel, repoDir) — rel's record; a rel without one gets a HEAD-only record (R1-R3).
+function recordFor(set, rel, repoDir) {
+  if (set.records.has(rel)) return set.records.get(rel);
+  const oid = (spec) => {
+    const r = runGit(repoDir, ["rev-parse", "-q", "--verify", spec]);
+    return r.ok ? r.stdout.trim() : "";
+  };
+  const h = oid(`HEAD:${rel}`);
+  const s = h ? oid(`:${rel}`) : "";
+  const r = h ? rec(1, s === h ? 1 : 0, h) : rec(0, 0);
+  set.records.set(rel, r);
+  return r;
+}
+
+// noteLine(set, { fallbackOnly }) — the one HEAD-only notice for an undecidable or malformed set, else
+// null; fallbackOnly (a record file its producer already noted) notes only a malformed one.
+function noteLine(set, { fallbackOnly = false } = {}) {
+  if (set.noted) return null;
+  if (set.state !== "fallback" && (set.state !== MERGE_STATE.UNDECIDABLE || fallbackOnly)) return null;
+  set.noted = true;
+  return `pre-commit: merge parents ${set.reason || "unknown"} — tests/ gates judge against HEAD only`;
+}
+
+module.exports = { resolveMergeParents, loadParents, parseRecords, recordFor, noteLine };

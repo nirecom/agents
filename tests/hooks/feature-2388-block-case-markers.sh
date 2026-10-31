@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2388-block-case-markers.sh
-# Tests: hooks/block-case-markers.js, settings.json, hooks/lib/precommit-tests-frontmatter.sh
+# Tests: hooks/block-case-markers.js, settings.json, hooks/pre-commit
 # Tags: TL2, hooks, pretooluse, edit-time, case-markers, registration, dotenv, scope:issue-specific
 # Issue #2388 Step 5: the Edit-time case-marker gate for NEW .sh test entrypoints;
 # pre-commit is the backstop for what it cannot rebuild (editFiles, NotebookEdit).
@@ -19,7 +19,6 @@ fi
 
 HOOK="$SCRIPT_CHECKOUT_ROOT/hooks/block-case-markers.js"
 SETTINGS_JSON="$SCRIPT_CHECKOUT_ROOT/settings.json"
-PRECOMMIT_LIB="$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-tests-frontmatter.sh"
 CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2388-block-case-markers"
 
 TMPBASE="$(make_tmp)"

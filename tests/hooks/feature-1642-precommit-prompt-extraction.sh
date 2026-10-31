@@ -86,7 +86,7 @@ ROOT_NAMES_LIST="tests/bin/feature-2561-root-names-residue.sh"
 
 # An "agents-like" repo: the repo under commit IS the checkout the hook runs from, so
 # the hook sees identical git common-dirs. rules/ and skills/ are copied because the
-# other own-repo gates (hooks/lib/precommit-agents-repo-gates.sh) validate the whole tree.
+# other own-repo gates (hooks/pre-commit.d/checks/agents-repo-gates.js) validate the whole tree.
 #
 #   make_agents_like_repo <name> <allowlist:yes|no> <engine-spec>
 #     engine-spec = "real"    -> the real bin/check-prompt-extraction

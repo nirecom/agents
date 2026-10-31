@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/precommit-agents-repo-gates.sh, bin/check-plans-artifacts
+# Tests: hooks/pre-commit, bin/check-plans-artifacts
 # Tags: scope:issue-specific, TL2, plans-dir-lint, feature-2434, plans-dir, pwsh-not-required
 # Part file of tests/bin/feature-2434-plans-dir-lint.sh (sourced; uses its T, TABLE_REL,
 # edit_table, check, np and RWT). #2638: a real `git commit` in linked worktree B, with
@@ -69,7 +69,7 @@ gate_ready() {
   return 1
 }
 
-case_begin "worktree-commit-plans-kind-and-use-together" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "worktree-commit-plans-kind-and-use-together" "hooks/pre-commit"
 if gate_ready "wt-plans-pass: fixture"; then
   gate_reset
   printf '%s\n' '#!/usr/bin/env bash' "cat \"\$PLANS_DIR/\$SID-$GATE_KIND_FILE\"" > "$GATE_B/$GATE_PROBE"
@@ -84,7 +84,7 @@ if gate_ready "wt-plans-pass: fixture"; then
 fi
 case_end
 
-case_begin "worktree-commit-plans-use-without-kind-blocked" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "worktree-commit-plans-use-without-kind-blocked" "hooks/pre-commit"
 if gate_ready "wt-plans-block: fixture"; then
   gate_reset
   printf '%s\n' '#!/usr/bin/env bash' "cat \"\$PLANS_DIR/\$SID-$GATE_KIND_FILE\"" > "$GATE_B/$GATE_PROBE"
@@ -98,7 +98,7 @@ if gate_ready "wt-plans-block: fixture"; then
 fi
 case_end
 
-case_begin "worktree-commit-session-id-path-and-file-together" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "worktree-commit-session-id-path-and-file-together" "hooks/pre-commit"
 if gate_ready "wt-ssot-pass: fixture"; then
   gate_reset
   printf '%s\n' "// strips $GATE_RETIRED from the child environment" "module.exports = {};" > "$GATE_B/$GATE_SSOT_PROBE"
@@ -112,7 +112,7 @@ if gate_ready "wt-ssot-pass: fixture"; then
 fi
 case_end
 
-case_begin "worktree-commit-session-id-file-without-path-blocked" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "worktree-commit-session-id-file-without-path-blocked" "hooks/pre-commit"
 if gate_ready "wt-ssot-block: fixture"; then
   gate_reset
   printf '%s\n' "// strips $GATE_RETIRED from the child environment" "module.exports = {};" > "$GATE_B/$GATE_SSOT_PROBE"

@@ -9,7 +9,7 @@ const { spawnSync } = require("node:child_process");
 
 const CHECKOUT = path.resolve(__dirname, "..", "..", "..");
 const HOOK = path.join(CHECKOUT, "hooks", "block-case-markers.js");
-const PRECOMMIT_LIB = path.join(CHECKOUT, "hooks", "lib", "precommit-tests-frontmatter.sh");
+const RUNNER = path.join(CHECKOUT, "tests", "lib", "precommit-check-runner.js");
 
 const posix = (p) => p.replace(/\\/g, "/");
 
@@ -76,25 +76,23 @@ function make(ctx) {
     };
   }
 
-  // runPrecommit(repo) — _precommit_check_test_language_match with repo as cwd and the real
-  // checkout as AGENTS_MAIN_ROOT; rc 127 when the function is not defined.
-  function runPrecommit(repo) {
-    const script = '_cfg_dir="$2"; . "$1" || exit 97; declare -F _precommit_check_test_language_match >/dev/null || exit 127; _precommit_check_test_language_match';
-    const r = spawnSync("bash", ["-c", script, "_", posix(PRECOMMIT_LIB), posix(CHECKOUT)], {
-      cwd: repo, encoding: "utf8", env: process.env, timeout: 180000,
-    });
-    return { rc: r.status, text: `${r.stdout || ""}\n${r.stderr || ""}` };
-  }
-
-  // runPrecommitCaseMarkers(repo) — _precommit_check_tests_case_markers the same way, with
-  // stdout and stderr kept apart; rc 127 when the function is not defined.
-  function runPrecommitCaseMarkers(repo) {
-    const script = '_cfg_dir="$2"; . "$1" || exit 97; declare -F _precommit_check_tests_case_markers >/dev/null || exit 127; _precommit_check_tests_case_markers';
-    const r = spawnSync("bash", ["-c", script, "_", posix(PRECOMMIT_LIB), posix(CHECKOUT)], {
+  // runGate(repo, gate) — one gate of the Node tests-frontmatter pre-commit check over repo's
+  // index, the real checkout as cfgDir (rc 1 block, 0 pass, 3 throw).
+  function runGate(repo, gate) {
+    const r = spawnSync(process.execPath, [RUNNER, "--cfg", CHECKOUT, "tests-frontmatter", gate], {
       cwd: repo, encoding: "utf8", env: process.env, timeout: 180000,
     });
     return { rc: r.status, stdout: r.stdout || "", stderr: r.stderr || "" };
   }
+
+  // runPrecommit(repo) — the language-match gate; stdout and stderr as one text.
+  function runPrecommit(repo) {
+    const r = runGate(repo, "language-match");
+    return { rc: r.rc, text: `${r.stdout}\n${r.stderr}` };
+  }
+
+  // runPrecommitCaseMarkers(repo) — the case-marker gate, stdout and stderr kept apart.
+  const runPrecommitCaseMarkers = (repo) => runGate(repo, "case-markers");
 
   // row(spec) — runs one scenario through both callers. spec: {head, rel, work, edit, code, warn}.
   // code: the HIGH code both must block with (null = both pass); warn: a WARN code the hook's

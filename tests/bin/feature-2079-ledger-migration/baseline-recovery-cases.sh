@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/baseline-recovery-cases.sh
 # Tests: bin/lib/run-all-ledger-migrate.sh
 # Tags: tests, bin, ledger, baseline, migration, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # Baseline ledger migration recovery (#2079 S7, b12-b16): interrupted rounds, a failed claim
 # rename, a crash after publishing (review C4), the append path and expired records.
 # Helpers (lb_*, lm_*) live in baseline-cases.sh and _lib.sh; every part is loaded first.

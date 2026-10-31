@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "generator": "tests/bin/feature-2507-scan-outbound-node/generate-golden.js",
+    "locale": {
+      "LANG": null,
+      "LC_ALL": null,
+      "LC_CTYPE": "C.UTF-8"
+    },
+    "bash": "GNU bash, version 5.2.37(1)-release (x86_64-pc-msys)",
+    "git": "git version 2.53.0.windows.1",
+    "node": "v24.14.0",
+    "file": "file-5.46",
+    "platform": "win32"
+  },
+  "skipPatterns": "bin/scan-outbound.sh|\\.private-info-allowlist|\\.offensive-content-blocklist\\.example",
+  "cases": {
+    "bin/scan-outbound.sh": true,
+    "x/bin/scan-outbound.sh": true,
+    "bin/scan-outbound-sh": true,
+    "bin/scan-outbound.shx": true,
+    "bin/scan-outbound.d/cli.js": false,
+    ".private-info-allowlist": true,
+    "sub/.private-info-allowlist.bak": true,
+    "xprivate-info-allowlist": false,
+    ".private-info-blocklist": false,
+    ".offensive-content-blocklist.example": true,
+    ".offensive-content-blocklist": false,
+    "hooks/lib/outbound-scan/scan-line.js": false,
+    "hooks/lib/ere/translate.js": false
+  }
+}

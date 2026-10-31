@@ -1,5 +1,5 @@
 "use strict";
-// Tests: hooks/block-case-markers.js, hooks/lib/precommit-tests-frontmatter.sh
+// Tests: hooks/block-case-markers.js, hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js, hooks/pre-commit.d/checks/tests-frontmatter/case-markers-gate.js
 // Tags: TL2, hooks, pre-commit, edit-time, block-reason, test-language-match, scope:issue-specific, dup-group-keep:size-hard-limit, case-markers, unsupported, warn-context
 // #2502 S4-4b rule b through both callers (edit-time hook and pre-commit gate), the hook's
 // block-reason headings, and the S3-5 reader-less WARN (bodies in the sibling folder).
@@ -31,20 +31,20 @@ const { mkRepo, runHook, runPrecommitCaseMarkers, row } = make({ ROOT, NEUTRAL, 
 
 // #2502 S4-4b rule b: an existing marker-less file is judged for case addition unless its working
 // copy's Tests: header lists exactly one path. The added lines are plain echo, never a self-implemented harness.
-caseBegin("existing-file-one-path-case-added-approves", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("existing-file-one-path-case-added-approves", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 test("an existing one-path bash test gaining a code line passes both callers", () => {
   row({ rel: "tests/bin/old.sh", head: BODY.shClean, work: BODY.shClean + "echo extra\n", code: null });
 });
 caseEnd();
 
-caseBegin("existing-file-two-paths-case-added-blocks", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("existing-file-two-paths-case-added-blocks", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 test("an existing two-path bash test without markers gaining a code line is blocked by both callers", () => {
   const work = BODY.shTwoPathsNoMarkers + "echo extra\n";
   row({ rel: "tests/bin/old.sh", head: BODY.shTwoPathsNoMarkers, work, code: "CASE_ADDED_WITHOUT_MARKERS" });
 });
 caseEnd();
 
-caseBegin("existing-file-two-paths-value-rewrite-approves", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("existing-file-two-paths-value-rewrite-approves", "hooks/pre-commit.d/checks/tests-frontmatter/language-match-gate.js");
 test("an existing two-path bash test without markers whose line is rewritten passes both callers", () => {
   const work = BODY.shTwoPathsNoMarkers.replace("echo no markers", "echo changed");
   assert.notStrictEqual(work, BODY.shTwoPathsNoMarkers);
@@ -76,7 +76,7 @@ caseBegin("readerless-new-file-edit-time-warn", "hooks/block-case-markers.js");
 readerless.editTimeWarn(RL);
 caseEnd();
 
-caseBegin("readerless-new-file-commit-time-warn", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("readerless-new-file-commit-time-warn", "hooks/pre-commit.d/checks/tests-frontmatter/case-markers-gate.js");
 readerless.commitTimeWarn(RL);
 caseEnd();
 
@@ -84,6 +84,6 @@ caseBegin("readerless-negatives-edit-time-no-warn", "hooks/block-case-markers.js
 readerless.editTimeNegatives(RL);
 caseEnd();
 
-caseBegin("readerless-negatives-commit-time-no-warn", "hooks/lib/precommit-tests-frontmatter.sh");
+caseBegin("readerless-negatives-commit-time-no-warn", "hooks/pre-commit.d/checks/tests-frontmatter/case-markers-gate.js");
 readerless.commitTimeNegatives(RL);
 caseEnd();

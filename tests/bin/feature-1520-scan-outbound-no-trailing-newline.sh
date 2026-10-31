@@ -17,6 +17,7 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 # shellcheck source=tests/lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/node-entry-sandbox.sh"
 
 if [ ! -f "$REAL_SCRIPT" ]; then
     echo "SKIP: bin/scan-outbound.sh not found at $REAL_SCRIPT"
@@ -24,7 +25,7 @@ if [ ! -f "$REAL_SCRIPT" ]; then
 fi
 
 # Create a sandbox with:
-#   $sandbox/bin/scan-outbound.sh -> symlink to real script
+#   $sandbox/bin/scan-outbound.sh -> copy of the real entry (plus its Node closure)
 #   $sandbox/.private-info-blocklist  (caller writes content)
 #   $sandbox/.private-info-allowlist  (caller writes content)
 # Because scan-outbound.sh resolves SCRIPT_DIR from $0, placing a symlink in
@@ -34,12 +35,9 @@ make_sandbox() {
     local sb
     sb="$(mktemp -d)"
     mkdir -p "$sb/bin"
-    ln -s "$REAL_SCRIPT" "$sb/bin/scan-outbound.sh"
-    # #2589: carry the main-worktree helper so a scanner that sources it still runs here.
-    if [ -f "$SCRIPT_DIR_TEST/../../bin/lib/main-worktree.sh" ]; then
-        mkdir -p "$sb/bin/lib"
-        cp "$SCRIPT_DIR_TEST/../../bin/lib/main-worktree.sh" "$sb/bin/lib/main-worktree.sh"
-    fi
+    # #2507: the entry execs bin/scan-outbound.d/cli.js beside it, so the sandbox carries the
+    # entry and its Node closure (the lists still resolve to $sb/bin/..).
+    node_entry_sandbox_copy "$sb" bin/scan-outbound.sh >&2
     # Start with empty lists; caller overwrites as needed
     printf '' > "$sb/.private-info-blocklist"
     printf '' > "$sb/.private-info-allowlist"

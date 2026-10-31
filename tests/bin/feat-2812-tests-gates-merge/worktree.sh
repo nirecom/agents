@@ -1,10 +1,10 @@
-# Tests: hooks/lib/precommit-tests-frontmatter.sh
+# Tests: hooks/pre-commit, bin/check-test-frontmatter.sh
 # Tags: TL2, bin, hooks, pre-commit, merge, tests-gates, worktree, scope:issue-specific
 # Merge shapes on the hook path: a merge left in progress inside a linked worktree (MERGE_HEAD in the
 # per-worktree gitdir), and a temporary GIT_INDEX_FILE during a merge (the staged oid is read from the
 # index git was pointed at, not from .git/index).
 # Sourced by tests/bin/feat-2812-tests-gates-merge-shapes.sh after bodies.sh (EX_PAIRS, ex-si).
-# tab/newline paths in the merge-parents.sh record stream: nul-paths.sh.
+# tab/newline paths in the bin/merge-parents record stream: nul-paths.sh.
 # shellcheck shell=bash
 
 echo ""
@@ -35,7 +35,7 @@ wtfx() {
   fi
 }
 
-case_begin "linked-worktree-merge-head-only-files-pass-every-gate" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "linked-worktree-merge-head-only-files-pass-every-gate" "hooks/pre-commit"
 W="$TMPBASE/wt-linked"
 wtfx "$TMPBASE/wt-main" "$W" "$EX_PAIRS" ""
 gate "$W" "$FG"
@@ -48,7 +48,7 @@ expect_rc "worktree language-match gate" 0 "$GATE_RC" "$GATE_ALL"
 expect_codes "worktree language-match gate" "$GATE_ALL" TEST_LANGUAGE_MISMATCH 0
 case_end
 
-case_begin "linked-worktree-merge-head-file-counts-only-the-added-counter" "bin/check-test-frontmatter/self-impl.sh"
+case_begin "linked-worktree-merge-head-file-counts-only-the-added-counter" "bin/check-test-frontmatter.sh"
 raw wt-si2 "$(hdr bin/a.sh)" 'PASS=0' 'PASS=0' "$(mcase a bin/a.sh)"
 W="$TMPBASE/wt-linked2"
 wtfx "$TMPBASE/wt-main2" "$W" "tests/bin/si.sh=ex-si" "tests/bin/si.sh=wt-si2"
@@ -57,7 +57,7 @@ expect_rc "worktree R4: MERGE_HEAD 1 counter, staged 2" 1 "$GATE_RC" "$GATE_ALL"
 expect_codes "worktree R4: only the added counter" "$GATE_OUT" SELF_IMPLEMENTED_HARNESS 1
 case_end
 
-case_begin "temporary-index-during-a-merge-is-the-staged-side" "bin/lib/merge-parents.sh"
+case_begin "temporary-index-during-a-merge-is-the-staged-side" "hooks/pre-commit"
 # .git/index holds the MERGE_HEAD blob (1 counter); the temporary index holds a 3-counter edit of it.
 # Expected x2 (R4: 3 - 1). Each wrong reading gives another count: .git/index judged R1 -> x0,
 # .git/index judged against HEAD only -> x1, temporary index judged against HEAD only -> x3.

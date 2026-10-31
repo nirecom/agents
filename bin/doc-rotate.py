@@ -4,21 +4,23 @@
 Undated entries are treated as oldest and archived to history/legacy.md.
 Generates history/index.md with year-grouped list of all entries.
 
-Rotation is triggered when the file exceeds --threshold-warn lines (default 0 = always).
+Rotation is triggered when the file reaches --threshold-warn lines (default 0 = always);
+--threshold-warn-ssot takes it from the size-limits module (hooks/lib/size-limits.js, kind history).
 Entries beyond the --floor most recent are archived.
 
 Usage:
-    uv run bin/doc-rotate.py <path> [--threshold-warn 500] [--floor 20] [--dry-run]
+    uv run bin/doc-rotate.py <path> [--threshold-warn N | --threshold-warn-ssot] [--floor 20] [--dry-run]
 """
 
 import argparse
+import functools
 import re
+import subprocess
 import sys
 from pathlib import Path
 
-WARN_LINES = 500
-HARD_LINES = 800
 DEFAULT_FLOOR = 20
+PRINT_SIZE_LIMITS = Path(__file__).resolve().parent / "print-size-limits"
 
 CATEGORIES = ("INCIDENT", "BUGFIX", "FEATURE", "REFACTOR", "CONFIG", "SECURITY")
 CATEGORY_PREFIX_RE = re.compile(
@@ -132,12 +134,29 @@ def _first_sentence(body_lines: list[str]) -> str:
     return ""
 
 
+@functools.cache
+def ssot_history_limits() -> tuple[int, int]:
+    """(warn, hard) of the history kind, read once per run through bin/print-size-limits."""
+    try:
+        r = subprocess.run(
+            ["node", str(PRINT_SIZE_LIMITS), "--get", "history"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+        warn, hard = (int(x) for x in r.stdout.split())
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        raise SystemExit(f"Error: cannot read the history size limits via {PRINT_SIZE_LIMITS}: {e}") from e
+    return warn, hard
+
+
 def rotate(
     path: Path,
     floor: int,
     dry_run: bool,
     threshold_warn: int = 0,
-    threshold_hard: int = HARD_LINES,
+    threshold_hard: int | None = None,
 ) -> int:
     """Perform rotation. Returns 0 on success."""
     if not path.exists():
@@ -188,8 +207,10 @@ def rotate(
     if dry_run:
         line_count = len(content.splitlines())
         if threshold_warn > 0:
+            hard = threshold_hard if threshold_hard is not None else ssot_history_limits()[1]
             print(
-                f"Lines: {line_count} (threshold-warn: {threshold_warn}) - rotation triggered"
+                f"Lines: {line_count} (threshold-warn: {threshold_warn}, "
+                f"threshold-hard: {hard}) - rotation triggered"
             )
         print(
             f"Would archive {len(to_archive)} entries "
@@ -408,17 +429,23 @@ def main():
         description="Rotate history.md entries to archive files"
     )
     parser.add_argument("path", help="Path to history.md")
-    parser.add_argument(
+    warn_group = parser.add_mutually_exclusive_group()
+    warn_group.add_argument(
         "--threshold-warn",
         type=int,
         default=0,
         help="Skip rotation if file is under this many lines (0 = always rotate)",
     )
+    warn_group.add_argument(
+        "--threshold-warn-ssot",
+        action="store_true",
+        help="Use the history WARN of the size-limits module as --threshold-warn",
+    )
     parser.add_argument(
         "--threshold-hard",
         type=int,
-        default=HARD_LINES,
-        help="Hard line limit (informational only)",
+        default=None,
+        help="Hard line limit (informational only; default: the history HARD of the SSOT)",
     )
     parser.add_argument(
         "--floor",
@@ -442,7 +469,7 @@ def main():
             Path(args.path),
             floor=args.floor,
             dry_run=args.dry_run,
-            threshold_warn=args.threshold_warn,
+            threshold_warn=ssot_history_limits()[0] if args.threshold_warn_ssot else args.threshold_warn,
             threshold_hard=args.threshold_hard,
         )
     )

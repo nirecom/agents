@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/precommit-tests-frontmatter.sh, bin/check-test-frontmatter.sh, bin/check-test-frontmatter/self-impl.sh, bin/check-self-impl.sh, bin/check-test-language-match.sh, bin/lib/test-language-match/case-addition.sh, bin/lib/test-language-match/multi-baseline.sh
+# Tests: hooks/pre-commit, bin/check-test-frontmatter.sh, bin/check-self-impl.sh, bin/check-test-language-match.sh
 # Tags: TL2, bin, hooks, pre-commit, merge, tests-gates, self-impl, case-markers, test-language-match, scope:issue-specific
 # #2812: during a merge commit the tests/ gates judge each staged file against the parent(s) it came
 # from (MERGE_HEAD included, 3-way when both parents differ), on real `git merge` fixture repos.
 # This entrypoint: the self-impl and language-match rules, and the checker CLI arguments.
-# Existence, merge shapes, fallbacks and the merge-parents.sh reader:
+# Existence, merge shapes, fallbacks and the bin/merge-parents record stream:
 # tests/bin/feat-2812-tests-gates-merge-shapes.sh (split so the two run in parallel).
 # Cases live in the sibling directory feat-2812-tests-gates-merge/.
 # TL3 gap: a real merge `git commit` through the installed hooks/pre-commit binary (mitigation: the
-# gate functions run here exactly as hooks/pre-commit sources them, with _cfg_dir at this checkout).
+# Node gate modules run here with the context and snapshot built as hooks/pre-commit.d/main.js does).
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -35,7 +35,7 @@ CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feat-2812-tests-gates-merge"
 # shellcheck source=feat-2812-tests-gates-merge/bodies.sh
 . "$CASE_DIR/bodies.sh"
 
-case_begin "merge-fixture-leaves-merge-head" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "merge-fixture-leaves-merge-head" "hooks/pre-commit"
 raw fx-one '# one'
 raw fx-two '# two'
 mergefx "$TMPBASE/fx" "" "notes/n.txt=fx-one" "notes/n.txt=fx-two" "notes/n.txt=fx-one"

@@ -17,13 +17,14 @@ for c in "${E_CHECKERS[@]}"; do F_GATES+=("agents-repo-gate-$(basename "$c" .sh)
 # The full sequence of a commit in the agents repo: the gate markers sit inside agents-repo-gates.
 F_ALL=("${F_SECTIONS[@]:0:7}" "${F_GATES[@]}" "${F_SECTIONS[@]:7}")
 
-# f_fixture <name> [keep-origin] — Part E's fixture plus a passing outbound-scanner stub; without
+# f_fixture <name> [keep-origin] — Part E's fixture plus an untracked, pattern-free private-info
+# blocklist, so the in-process outbound scan (#2507) resolves its lists and passes; without
 # keep-origin the non-GitHub origin is removed so the hook runs through outbound-scan.
 f_fixture() {
     e_fixture "f-$1"
     [ "${2:-}" = keep-origin ] || git -C "$R" remote remove origin
-    printf '%s\n' '#!/bin/sh' 'exit 0' > "$R/bin/scan-outbound.sh"
-    chmod +x "$R/bin/scan-outbound.sh"
+    printf '%s\n' '# synthetic fixture list: no patterns' > "$R/.private-info-blocklist"
+    printf '%s\n' '.private-info-blocklist' >> "$R/.git/info/exclude"
 }
 
 # f_commit <repo> <hook-repo> — real git commit through <hook-repo>'s hooks with stdout and stderr
@@ -72,7 +73,7 @@ else
 fi
 case_end
 
-case_begin "F2-foreign-repo-prints-no-gate-markers" "hooks/lib/precommit-agents-repo-gates.sh"
+case_begin "F2-foreign-repo-prints-no-gate-markers" "hooks/pre-commit"
 H="$R"
 F="$TMPBASE/f-foreign"
 init_repo_bare "$F"
@@ -98,37 +99,5 @@ f_commit "$R" "$R"
 f_expect "F3: a commit blocked by ${E_CHECKERS[5]} ends with ${F_GATES[5]}" "${F_ALL[@]:0:13}"
 case_end
 
-case_begin "F4-missing-marker-helper-still-commits" "hooks/pre-commit"
-# The marker helper is optional: without it the hook still runs every section, unmarked.
-f_fixture nohelper
-rm -f "$R/hooks/lib/precommit-section-marker.sh"
-f_commit "$R" "$R"
-if [ "$CRC" -eq 0 ]; then
-    pass "F4: commit succeeds without the marker helper"
-else
-    fail "F4: commit succeeds without the marker helper" "rc=$CRC err: $(e_flat "$(cat "$R.err")")"
-fi
-if [ -z "$FMARKS" ] && ! grep -q 'pre-commit-section:' "$R.err"; then
-    pass "F4: no marker line on stderr without the helper"
-else
-    fail "F4: no marker line on stderr without the helper" "markers: $(e_flat "$FMARKS")"
-fi
-case_end
-
-case_begin "F5-missing-marker-helper-blocked-checker-still-rejects" "hooks/lib/precommit-agents-repo-gates.sh"
-# Without the marker helper a failing checker must still block the commit, unmarked.
-f_fixture nohelper-blocked
-rm -f "$R/hooks/lib/precommit-section-marker.sh"
-e_stub "$R" "${E_CHECKERS[5]}" 1
-f_commit "$R" "$R"
-if [ "$CRC" -ne 0 ]; then
-    pass "F5: a commit blocked by ${E_CHECKERS[5]} is rejected without the marker helper"
-else
-    fail "F5: a commit blocked by ${E_CHECKERS[5]} is rejected without the marker helper" "rc=0"
-fi
-if [ -z "$FMARKS" ] && ! grep -q 'pre-commit-section:' "$R.err"; then
-    pass "F5: no marker line on stderr for the blocked commit without the helper"
-else
-    fail "F5: no marker line on stderr for the blocked commit without the helper" "markers: $(e_flat "$FMARKS")"
-fi
-case_end
+# #2507 retired F4/F5 (missing marker helper): the Node body prints the markers itself
+# (hooks/pre-commit.d/output.js marker()); hooks/lib/precommit-section-marker.sh is no longer read.

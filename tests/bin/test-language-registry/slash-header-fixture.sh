@@ -6,9 +6,12 @@
 # Sourced by the test files that exercise one header reader each.
 # shellcheck source=../../lib/test-language-registry-fixture.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../../lib/test-language-registry-fixture.sh"
+# shellcheck source=../../lib/node-entry-sandbox.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../../lib/node-entry-sandbox.sh"
 
 # slash_fx_checkout <dir> <agents-dir> [<repo-relative path>...] — copies bin/lib, the
-# registry CLI/reader, harness.sh and the given extra scripts, then makes it a git repo.
+# registry CLI/reader, harness.sh and the given extra scripts with the Node code they run
+# (#2507: a bash entry may be a thin adapter), then makes it a git repo.
 slash_fx_checkout() {
   local d="$1" src="$2" f
   shift 2
@@ -20,6 +23,8 @@ slash_fx_checkout() {
   for f in "$@"; do
     mkdir -p "$d/$(dirname "$f")"
     cp -R "$src/$f" "$d/$f"
+    [ -f "$src/$f" ] || continue
+    node_entry_sandbox_copy "$d" "$f" || return 1
   done
   git init -q "$d"
   git -C "$d" config core.hooksPath /dev/null

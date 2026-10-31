@@ -15,12 +15,3 @@ pytest_case_markers() {
 has_table_driven_pytest() {
     grep -qE '^[[:space:]]*@(pytest\.)?mark\.parametrize([[:space:](]|$)' "$1" 2>/dev/null
 }
-
-# pytest_env_clear_line <names-ERE> <line> — rc 0 when the line is one `os.environ.pop("NAME", None)`
-# (either quote) of a named var and nothing else. Prints nothing.
-pytest_env_clear_line() {
-    local q="'" re
-    re="^[[:space:]]*os\\.environ\\.pop\\((\"($1)\"|${q}($1)${q}),[[:space:]]*None\\)[[:space:]]*\$"
-    [[ "${2%$'\r'}" =~ $re ]] && return 0
-    return 1
-}

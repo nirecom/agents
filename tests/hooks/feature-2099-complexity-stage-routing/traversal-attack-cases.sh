@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/traversal-attack-cases.sh
 # Tests: bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, hooks/workflow-state/state-io.js
 # Tags: complexity, routing, cli, security, path-traversal, adversarial, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 
 # --- TA: rejection is not containment ----------------------------------------
 # A non-zero exit only says the CLI complained; it says nothing about what the

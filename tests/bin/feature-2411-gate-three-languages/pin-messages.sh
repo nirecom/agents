@@ -44,7 +44,7 @@ hook_write "$REPO_MSG" tests/hooks/new-conforming.sh sh-conforming
 assert_eq "$HK_DECISION" "approve"
 case_end
 
-case_begin "pin-commit-time-block-text" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "pin-commit-time-block-text" "hooks/pre-commit"
 REPO_PC1="$TMPBASE/repo-pc-missing"
 mkrepo "$REPO_PC1"
 stage "$REPO_PC1" tests/hooks/new-missing.sh sh-missing
@@ -85,13 +85,13 @@ PIN_SI_HEAD="Commit blocked: test file(s) add a self-implemented harness the par
 PIN_SI_OLD="Commit blocked: new test file(s) build their own harness."
 PIN_SI_LOAD="Load the language's helper library (tests/lib/harness.*) and use its counters and helpers instead."
 PIN_SI_LINES=('#!/usr/bin/env bash' '# Tests: bin/a.sh' '# Tags: scope:common' 'source "$(dirname "$0")/../../tests/lib/harness.sh"' 'echo start')
-# pin_si_run <repo> — _precommit_check_tests_frontmatter with <repo> as cwd. Sets PS_RC PS_OUT.
+# pin_si_run <repo> — the frontmatter gate (#2507: Node, via the runner) with <repo> as cwd.
+# Sets PS_RC PS_OUT.
 pin_si_run() {
   PS_RC=0
   (
     cd "$1" || exit 99
-    _cfg_dir="$SCRIPT_CHECKOUT_ROOT"
-    _precommit_check_tests_frontmatter
+    "$PC_NODE" "$PC_RUNNER" tests-frontmatter frontmatter
   ) >"$TMPBASE/ps.out" 2>&1 || PS_RC=$?
   PS_OUT="$(cat "$TMPBASE/ps.out")"
 }
@@ -104,9 +104,9 @@ $PIN_SI_LOAD"
   lacks "$1" "$PS_OUT" "$PIN_SI_OLD"
 }
 
-case_begin "pin-commit-time-self-impl-text" "hooks/lib/precommit-tests-frontmatter.sh"
-if ! declare -F _precommit_check_tests_frontmatter >/dev/null 2>&1; then
-  fail "self-impl summary" "_precommit_check_tests_frontmatter not defined"
+case_begin "pin-commit-time-self-impl-text" "hooks/pre-commit"
+if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/pre-commit.d/checks/tests-frontmatter/frontmatter-gate.js" ]; then
+  fail "self-impl summary" "frontmatter gate module not found"
 else
   REPO_PS="$TMPBASE/repo-pc-self-impl"
   mkrepo "$REPO_PS"
@@ -127,7 +127,7 @@ else
 fi
 case_end
 
-case_begin "pin-commit-time-pass-is-silent" "hooks/lib/precommit-tests-frontmatter.sh"
+case_begin "pin-commit-time-pass-is-silent" "hooks/pre-commit"
 REPO_PC3="$TMPBASE/repo-pc-ok"
 mkrepo "$REPO_PC3"
 stage "$REPO_PC3" tests/hooks/new-conforming.sh sh-conforming

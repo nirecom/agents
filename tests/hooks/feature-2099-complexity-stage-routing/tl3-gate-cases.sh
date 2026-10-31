@@ -1,8 +1,8 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/tl3-gate-cases.sh
-# Tests: tests/skills/TL3-complexity-stage-routing-live-judge.sh, bin/select-tests.sh, tests/hooks/feature-2099-complexity-stage-routing.sh
+# Tests: tests/skills/TL3-complexity-stage-routing-live-judge.sh, bin/select-tests.sh, tests/hooks/feature-2099-complexity-stage-routing/_lib.sh
 # Tags: complexity, routing, tl3, skip-gate, test-infra, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by ../feature-2099-complexity-stage-routing-consumers.sh — helpers come from _lib.sh.
 # The GATE-OFF branch of the RUN_TL3-gated cases, covered deterministically here
 # (rules/test/claude-e2e.md: both branches of a config-gated behaviour need
 # coverage). Nothing below spends a token: it drives the gate, never the judge.
@@ -42,7 +42,7 @@ d2099g_lane_is_selected() {
 # GATE-5..: the gate's own two branches, on the real case files. A harness with
 # no-op assertion helpers sources each live case file against an SCRIPT_CHECKOUT_ROOT that
 # carries no gate binary, so the first gate is closed by construction. The
-# gated_skip implementation is lifted VERBATIM out of the dispatcher rather than
+# gated_skip implementation is lifted VERBATIM out of _lib.sh rather than
 # restated, so this measures the shipped helper.
 d2099g_harness() {
     local case_file="$1" require="$2" h fake
@@ -55,7 +55,7 @@ d2099g_harness() {
         printf 'fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }\n'
         printf 'pass() { echo "PASS: $1"; }\n'
         printf 'skip() { echo "SKIP: $1"; }\n'
-        sed -n '/^gated_skip() {/,/^}/p' "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2099-complexity-stage-routing.sh"
+        sed -n '/^gated_skip() {/,/^}/p' "$CASE_DIR/_lib.sh"
         # Everything else the sourced file touches before its gate, neutralized.
         printf 'assert_eq() { :; }\nassert_contains() { :; }\nassert_not_contains() { :; }\n'
         printf 'run_with_timeout() { :; }\nto_node_path() { echo "$1"; }\nnew_session() { echo gate; }\n'
@@ -71,9 +71,9 @@ d2099g_harness() {
 
 d2099g_gate_branches() {
     local out lifted
-    lifted=$(sed -n '/^gated_skip() {/,/^}/p' "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feature-2099-complexity-stage-routing.sh" | grep -c 'D2099_REQUIRE_LIVE')
+    lifted=$(sed -n '/^gated_skip() {/,/^}/p' "$CASE_DIR/_lib.sh" | grep -c 'D2099_REQUIRE_LIVE')
     if [ "$lifted" -lt 1 ]; then
-        fail "GATE-5 the dispatcher's gated_skip could not be lifted (or no longer reads D2099_REQUIRE_LIVE) — the branches below would test a stub"
+        fail "GATE-5 the shared lib's gated_skip could not be lifted (or no longer reads D2099_REQUIRE_LIVE) — the branches below would test a stub"
         return
     fi
     pass "GATE-5 the dispatcher's gated_skip is liftable and reads D2099_REQUIRE_LIVE"
@@ -131,9 +131,9 @@ d2099g_build_fake_lane() {
         printf 'printf "%%s" "${D2099_REQUIRE_LIVE:-unset}" > "%s/suite-was-invoked"\n' "$fake"
         printf 'for id in %s; do printf "PASS: $id the stub suite ran this case\\n"; done\n' "$ids"
         printf 'echo "=== Results ==="\nexit 0\n'
-    } > "$fake/tests/hooks/feature-2099-complexity-stage-routing.sh"
+    } > "$fake/tests/hooks/feature-2099-complexity-stage-routing-stub.sh"
     chmod +x "$fake/bin/get-config-var" "$fake/path/claude" \
-        "$fake/tests/hooks/feature-2099-complexity-stage-routing.sh" 2>/dev/null || true
+        "$fake/tests/hooks/feature-2099-complexity-stage-routing-stub.sh" 2>/dev/null || true
 }
 
 d2099g_lane_runs_when_on() {
@@ -245,7 +245,7 @@ case_begin "lane-is-selected" "tests/skills/TL3-complexity-stage-routing-live-ju
 d2099g_lane_is_selected
 case_end
 
-case_begin "gate-branches" "tests/hooks/feature-2099-complexity-stage-routing.sh"
+case_begin "gate-branches" "tests/hooks/feature-2099-complexity-stage-routing/_lib.sh"
 d2099g_gate_branches
 case_end
 

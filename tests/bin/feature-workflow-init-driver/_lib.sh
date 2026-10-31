@@ -99,13 +99,18 @@ ctrl_file() { printf '%s' "$WF/$SID.control/$1"; }
 CASE_ORIGIN_URL="https://github.com/originorg/originrepo.git"
 CASE_ORIGIN_OWNER_REPO="originorg/originrepo"
 
+# The unborn case repo (no HEAD, empty tree) is built once as a template; each case gets a
+# copy of its .git (the working tree is empty by construction). The template carries the
+# same branch, identity, hooksPath and origin the per-case `git init` + config used to set (#2723).
+. "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/fixture-template.sh"
+_CASE_REPO_TEMPLATE="$ROOT_TMP/case-repo-template"
+fixture_template_git_repo "$_CASE_REPO_TEMPLATE" "$(git config --get init.defaultBranch 2>/dev/null || echo master)" --no-commit
+git -C "$_CASE_REPO_TEMPLATE" config user.email "fixture@example.com"
+git -C "$_CASE_REPO_TEMPLATE" config user.name "Fixture"
+git -C "$_CASE_REPO_TEMPLATE" remote add origin "$CASE_ORIGIN_URL"
+
 _init_case_repo() {
-    git -C "$CASE_DIR" init -q
-    # MANDATORY per rules/test/fixture-isolation.md.
-    git -C "$CASE_DIR" config core.hooksPath /dev/null
-    git -C "$CASE_DIR" config user.email "fixture@example.com"
-    git -C "$CASE_DIR" config user.name "Fixture"
-    git -C "$CASE_DIR" remote add origin "$CASE_ORIGIN_URL"
+    cp -a "$_CASE_REPO_TEMPLATE/.git" "$CASE_DIR/.git"
 }
 
 case_set_origin() {  # <url>
@@ -276,7 +281,7 @@ mock_issue() {  # <N> <STATE> [labels-csv] [title]
 # raw text given. The payload is spliced in verbatim rather than re-serialized, so
 # it can be healthy JSON, structurally defective JSON (null elements, non-string
 # body, missing author), a non-array value, or syntactically broken text — the
-# corruption seams driver-issue-comments.sh needs. The literal `__DELETE__`
+# corruption seams the driver-issue-comments/ groups need. The literal `__DELETE__`
 # removes the key entirely (the "current version but no comments field" shape).
 mock_issue_comments() {  # <N> <comments-json-or-__DELETE__>
     node -e '

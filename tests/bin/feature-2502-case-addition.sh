@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2502-case-addition.sh
-# Tests: bin/lib/test-language-match.sh, bin/lib/test-language-match/case-addition.sh
-# Tags: TL2, bin, test-language-match, case-markers, test-language-registry, scope:issue-specific
+# Tests: bin/check-test-language-match.sh
+# Tags: TL2, bin, test-language-match, case-markers, test-language-registry, scope:issue-specific, node-precommit
 # Issue #2502 S4-4b: the case-addition judgment of bin/check-test-language-match.sh. When HEAD's
 # or the working version of a test is not conforming, a case added (more case units, or more
 # code lines when the units cannot be counted) is one HIGH CASE_ADDED_WITHOUT_MARKERS line,
@@ -23,9 +23,6 @@ CASE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2502-case-addition"
 # The fixture repo, body / lm / count_code / expect_* (one owner, shared with the match suite).
 # shellcheck source=feature-2502-test-language-match/_lib.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2502-test-language-match/_lib.sh"
-# fx_checkout (a stub checkout for the deps-op and no-runtime rows).
-# shellcheck source=test-language-registry/_lib.sh
-. "$SCRIPT_CHECKOUT_ROOT/tests/bin/test-language-registry/_lib.sh"
 # shellcheck source=../../bin/lib/test-language-registry.sh
 . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh"
 tlr_load || { echo "FAIL: registry unreadable"; exit 1; }
@@ -58,28 +55,13 @@ expect_added() {
   if [ "$found" = 1 ]; then pass "$1: basis $4"; else fail "$1" "no CASE_ADDED line with basis [$4]: out=[$LM_OUT] err=[$LM_ERR]"; fi
 }
 
-# A stub checkout: the bash part's deps op fails on a file holding a `# deps-fail` line, and
-# the pester part's case-count answers rc 69 (no runtime) on a file holding `# no-runtime`.
-STUB_CO="$TMPBASE/co-stub"
-fx_checkout "$STUB_CO"
-cp "$LM_CLI_REAL" "$STUB_CO/bin/check-test-language-match.sh"
-printf '%s\n' '' 'eval "_real_$(declare -f bash_case_embed)"' \
-  'bash_case_embed() {' \
-  '  if [ "${1:-}" = deps ] && grep -q "^# deps-fail" "${2:-/dev/null}"; then return 1; fi' \
-  '  _real_bash_case_embed "$@"' \
-  '}' >> "$STUB_CO/bin/lib/test-language-parts/bash-case-embed.sh"
-printf '%s\n' '' 'eval "_real_$(declare -f pester_case_embed)"' \
-  'pester_case_embed() {' \
-  '  if [ "${1:-}" = case-count ] && grep -q "^# no-runtime" "${2:-/dev/null}"; then return 69; fi' \
-  '  _real_pester_case_embed "$@"' \
-  '}' >> "$STUB_CO/bin/lib/test-language-parts/pester-case-embed.sh"
-STUB_CLI="$STUB_CO/bin/check-test-language-match.sh"
-
-case_begin "ca-cli-and-stub-present" "bin/lib/test-language-match/case-addition.sh"
-if [ -f "$LM_CLI_REAL" ] && [ -f "$STUB_CLI" ]; then
-  pass "CLI and stub checkout exist"
+# #2507: the judgment runs in-process now, so the rows that needed a stubbed part (a failing deps
+# op, a pester case-count of rc 69) live in tests/hooks/feature-2507-case-addition-node.js.
+case_begin "ca-cli-and-stub-present" "bin/check-test-language-match.sh"
+if [ -f "$LM_CLI_REAL" ] && [ -f "$LM_LIB" ]; then
+  pass "CLI and its Node entry exist"
 else
-  fail "CLI and stub checkout" "missing: $LM_CLI_REAL or $STUB_CLI"
+  fail "CLI and its Node entry" "missing: $LM_CLI_REAL or $LM_LIB"
 fi
 case_end
 

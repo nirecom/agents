@@ -2,15 +2,15 @@
 # Tests: bin/scan-outbound.sh, hooks/pre-commit
 # Tags: scan, filter, outbound, hook, git, scope:common
 # Test suite for pre-commit hook .env file blocking.
-# Tests that claude-global/hooks/pre-commit refuses to allow .env files to be
+# Tests that hooks/pre-commit refuses to allow .env files to be
 # committed, while allowing .env.example / .env.sample / .env.template.
-#
-# NOTE: Block cases will FAIL until the hook is extended with .env detection.
-# Allow cases and the empty-commit edge case should pass earlier.
 set -euo pipefail
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-HOOK_SRC="$DOTFILES_DIR/claude-global/hooks/pre-commit"
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=../lib/script-checkout-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+# The fixture repos are main worktrees; this test targets .env blocking, not the worktree gate (#1349).
+export ENFORCE_WORKTREE=off
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -31,22 +31,23 @@ TMPBASE="$(mktemp -d)"
 trap 'rm -rf "$TMPBASE"' EXIT
 
 # Init a git repo with the pre-commit hook installed and a HEAD commit.
-# The hook references DOTFILES_DIR=$(cd hook-dir/../.. && pwd), so we stage
-# it inside <repo>/claude-global/hooks/pre-commit and let the script also
-# find a real bin/scan-outbound.sh sibling for safety.
+# The hook resolves its tree root as $(dirname hook)/.., so a fake tree sits at
+# $CFG_DIR/hooks/pre-commit beside the hooks/lib/* it sources unconditionally and the
+# real bin/scan-outbound.sh. The tree lives OUTSIDE the fixture repo: inside it, the
+# hook would treat the fixture as the agents repo and run the agents-repo gates.
+CFG_DIR="$TMPBASE/cfg"
+mkdir -p "$CFG_DIR"
+script_checkout_fixture_copy "$CFG_DIR" hooks bin/scan-outbound.sh bin/lib || { echo "FAIL: fixture copy"; exit 1; }
+# The hook's settings root is this fixture, never the decoy or the real main root.
+export AGENTS_MAIN_ROOT="$CFG_DIR"
+: > "$CFG_DIR/.private-info-allowlist"
+# A resolvable, non-matching blocklist so the scan step runs and passes.
+printf '%s\n' 'forbiddenword[0-9]+' > "$CFG_DIR/.private-info-blocklist"
+
 init_repo() {
     local repo="$1"
     rm -rf "$repo"
-    mkdir -p "$repo/claude-global/hooks"
-    mkdir -p "$repo/bin"
-
-    # Copy the real hook
-    cp "$HOOK_SRC" "$repo/claude-global/hooks/pre-commit"
-    chmod +x "$repo/claude-global/hooks/pre-commit"
-
-    # Copy the scanner so the hook can invoke it
-    cp "$DOTFILES_DIR/bin/scan-outbound.sh" "$repo/bin/scan-outbound.sh"
-    chmod +x "$repo/bin/scan-outbound.sh"
+    mkdir -p "$repo"
 
     # Empty local allowlist (scanner expects it)
     : > "$repo/.private-info-allowlist"
@@ -69,8 +70,6 @@ init_repo() {
     # exec-perm check passes (Windows git doesn't preserve +x from `cp`).
     : > "$repo/README.md"
     git -C "$repo" add README.md .private-info-allowlist
-    git -C "$repo" add --chmod=+x bin/scan-outbound.sh
-    git -C "$repo" add --chmod=+x claude-global/hooks/pre-commit
     git -C "$repo" commit -q -m "init"
 }
 
@@ -79,7 +78,7 @@ run_hook() {
     local repo="$1"
     (
         cd "$repo"
-        run_with_timeout ./claude-global/hooks/pre-commit
+        run_with_timeout "$CFG_DIR/hooks/pre-commit"
     )
 }
 

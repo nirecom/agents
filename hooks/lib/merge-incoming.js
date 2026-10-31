@@ -4,6 +4,7 @@
 // throws: not-merging | merging { mergeHead, paths ⊆ stagedPaths } | undecidable { reason }.
 // The merge state itself comes from merge-state.js (readMergeState); git inherits GIT_DIR /
 // GIT_INDEX_FILE, so the temporary index of a `git commit <paths>` pre-commit (#2507) is compared.
+// The diff peels the oid with ^{commit}: a tree or blob oid in MERGE_HEAD is undecidable (diff-failed).
 
 const { readMergeState, runGit, MERGE_STATE, undecidable } = require("./merge-state");
 
@@ -15,7 +16,7 @@ function detect(repoDir, stagedPaths) {
   if (ms.state !== MERGE_STATE.MERGING) return ms;
   const mergeHead = ms.mergeHead;
   // --ignore-submodules=none: a user's diff.ignoreSubmodules must not hide a changed gitlink.
-  const diff = runGit(repoDir, ["diff", "--cached", "--name-only", "-z", "--no-renames", "--ignore-submodules=none", mergeHead]);
+  const diff = runGit(repoDir, ["diff", "--cached", "--name-only", "-z", "--no-renames", "--ignore-submodules=none", `${mergeHead}^{commit}`]);
   if (!diff.ok) return undecidable("diff-failed");
   const differing = new Set(diff.stdout.split("\0").filter(Boolean));
   return { state: MERGE_STATE.MERGING, mergeHead, paths: new Set(stagedPaths.filter((p) => !differing.has(p))) };

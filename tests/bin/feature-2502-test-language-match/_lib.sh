@@ -10,7 +10,7 @@ harness_isolate "$TMPBASE/iso"
 unset CLAUDE_CODE_SESSION_ID CLAUDE_PROJECT_DIR GIT_DIR GIT_WORK_TREE
 
 LM_CLI_REAL="$SCRIPT_CHECKOUT_ROOT/bin/check-test-language-match.sh"
-LM_LIB="$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-match.sh"
+LM_LIB="$SCRIPT_CHECKOUT_ROOT/bin/check-test-language-match/cli.js"
 LM_CLI="$LM_CLI_REAL"
 BODIES="$TMPBASE/bodies"
 mkdir -p "$BODIES"

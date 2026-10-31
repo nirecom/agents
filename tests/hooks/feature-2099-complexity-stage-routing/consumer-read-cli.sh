@@ -1,12 +1,36 @@
 #!/bin/bash
 # tests/hooks/feature-2099-complexity-stage-routing/consumer-read-cli.sh
-# Tests: tests/hooks/feature-2099-complexity-stage-routing.sh
+# Tests: tests/hooks/feature-2099-complexity-stage-routing/_lib.sh
 # Tags: complexity, routing, consumers, helpers, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh before the consumer
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints before the consumer
 # suites, whose cases call these. No cases of its own: split out of
 # consumer-orchestration-cases.sh at the 500-line HARD limit (Pattern A).
 # Single-path # Tests: (the sourcing runner) — the calling cases own the targets.
 D2099_READ_CLI_LOADED=1
+
+# Every consumer row: skill dir | stage key | level step | Agent-launch step.
+# live-e2e-cases.sh walks this table too.
+D2099_CONSUMERS="make-detail-plan|detail|MDP-3|MDP-4
+write-tests|write_tests|WT-6|WT-7
+write-code|write_code|WCD-3|WCD-4"
+
+# What the skill's OWN read command answers, normalized to `level=<v>` then
+# `signals=<csv>` (or NONE / a named token). Shared by the signal-forwarding and
+# fallback-forwarding suites, which follow this file in separate entrypoints.
+d2099sf_read() {
+    local f="$1" sid="$2" out first second
+    out=$(d2099_consumer_read "$f" "$sid")
+    first=$(printf '%s\n' "$out" | sed -n 1p)
+    [ "$first" = "__NO_COMMAND__" ] && { echo "NO_READ_COMMAND_IN_SKILL"; return; }
+    [ "$first" = "NONE" ] && { echo "NONE"; return; }
+    second=$(printf '%s\n' "$out" | sed -n 2p)
+    case "$first" in level=*) ;; *) echo "UNPARSEABLE_LEVEL:$first"; return ;; esac
+    case "$second" in
+        signals=*) printf '%s %s' "$first" "$second" ;;
+        '') echo "$first NO_SIGNALS_LINE" ;;
+        *) printf '%s UNPARSEABLE_SIGNALS:%s' "$first" "$second" ;;
+    esac
+}
 
 # The consumer skill's SKILL.md in the checkout under test.
 d2099_skill_file() { echo "$SCRIPT_CHECKOUT_ROOT/skills/$1/SKILL.md"; }

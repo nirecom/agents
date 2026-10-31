@@ -2,7 +2,7 @@
 # tests/bin/feature-2079-ledger-migration/_driver.sh
 # Tests: bin/lib/run-all-ledger-migrate.sh
 # Tags: tests, bin, ledger, migration, helpers, scope:issue-specific, TL2
-# TL3 gap (what this test does NOT catch): owned by the dispatcher header, tests/bin/feature-2079-ledger-migration.sh.
+# TL3 gap (what this test does NOT catch): owned by the dispatcher headers, tests/bin/feature-2079-ledger-migration-*.sh.
 # Child entry for lm_run: load the libraries the way their real callers do, then the
 # shared helpers and the part file, then call the named part function.
 

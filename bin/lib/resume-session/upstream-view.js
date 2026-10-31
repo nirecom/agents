@@ -12,9 +12,7 @@ const { judgeInheritanceGranularity } = require("../../../hooks/workflow-state/i
 const repoIdentity = () => require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
 const { readStateHandoff, renderStateHandoffForResume } = require("../../../hooks/lib/state-handoff-record");
-const { progressPathFor, isRegularFile } = require("../../../hooks/lib/progress-file");
-
-const PROGRESS_FIRST_SECTION = "Current state";
+const { progressPathFor, isRegularFile, CURRENT_STATE_SECTION: PROGRESS_FIRST_SECTION } = require("../../../hooks/lib/progress-file");
 
 const AVAILABILITY = Object.freeze({
   STATE_AND_ARTIFACTS: "state-and-artifacts",

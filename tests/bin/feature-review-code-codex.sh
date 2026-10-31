@@ -1,7 +1,6 @@
 #!/bin/bash
 # Tests: bin/review-code-codex
 # Tags: codex, review, labels, github, bin, scope:common, pwsh-not-required, TL2
-# Serial: injection guards assert the fixed paths /tmp/codex-injection-marker and /tmp/codex-injection-marker2 stay absent
 # Verifies: SKIPPED/PERFORMED/FAILED labels, JSONL logging, exit-0 guarantee, security, idempotency.
 # TL3 gap: real codex CLI is mocked (arg/stdin/exit-code contract unverified), real
 #   AGENTS_MAIN_ROOT precedence vs ~/.claude .env is untested, and host filesystem path
@@ -9,88 +8,11 @@
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-# The shared harness supplies the case markers the multi-target part files open (run root,
-# root decoy and command guard come with it); the suite keeps its own ERRORS-based verdict.
+# The shared harness brings the run root, root decoy and command guard, as in the sibling entrypoints.
 # shellcheck source=../lib/harness.sh
-source "$AGENTS_ROOT/tests/lib/harness.sh"
-SCRIPT="$AGENTS_ROOT/bin/review-code-codex"
-ERRORS=0
-
-fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); FAIL=$((FAIL + 1)); _harness_case_failed; }
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-
-# ---------------------------------------------------------------------------
-# Setup: temp git repo with a commit on a branch vs main
-# ---------------------------------------------------------------------------
-TMPDIR_BASE=$(mktemp -d)
-LOG_DIR="$TMPDIR_BASE/.claude/projects/codex-review"
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
-
-# Fixture isolation (rules/test/fixture-isolation.md). The cap-threshold rows below assert
-# behaviour against the built-in CODEX_REVIEW_MAX_DIFF_LINES default of 5000. Without isolation
-# they inherit the developer's real AGENTS_MAIN_ROOT, whose .env load-env.js loads; a
-# relaxed cap there (e.g. 10000) silently lets an over-cap diff through, so every TRUNCATED row
-# fails on that machine while passing on a clean one. Pin a clean main-worktree fixture (an empty
-# .env; get-config-var uses the load-env.js beside itself) as the inherited
-# default: any row that does not set its own cap now resolves to the 5000 built-in. The G-series
-# overrides AGENTS_MAIN_ROOT per row via PP_ENV, so this default never reaches it. The bare unset
-# closes the same leak for the raw subshell rows, which do not strip the ambient key the way
-# pp_run's `env -u` does.
-unset CODEX_REVIEW_MAX_DIFF_LINES
-CLEAN_CFG="$TMPDIR_BASE/clean-cfg"
-mkdir -p "$CLEAN_CFG"
-: > "$CLEAN_CFG/.env"
-export AGENTS_MAIN_ROOT="$CLEAN_CFG"
-# shellcheck source=../lib/script-checkout-fixture.sh
-source "$AGENTS_ROOT/tests/lib/script-checkout-fixture.sh"
-
-REPO="$TMPDIR_BASE/repo"
-mkdir -p "$REPO"
-git -C "$REPO" init -q
-git -C "$REPO" config core.hooksPath "$REPO/.git/no-such-hooks"
-git -C "$REPO" config user.email "test@example.com"
-git -C "$REPO" config user.name "Test"
-echo "init" > "$REPO/README.md"
-git -C "$REPO" add README.md
-git -C "$REPO" commit -q -m "initial"
-git -C "$REPO" checkout -q -b feature-test
-echo "change" >> "$REPO/README.md"
-git -C "$REPO" add README.md
-git -C "$REPO" commit -q -m "feature commit"
-
-# Mock codex bin dir
-MOCK_BIN="$TMPDIR_BASE/mock-bin"
-mkdir -p "$MOCK_BIN"
-
-# Portable: use system timeout if available
-_timeout() {
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 70 "$@"
-    else
-        perl -e 'alarm 70; exec @ARGV' -- "$@"
-    fi
-}
-
-# Run script in $REPO with a given PATH and HOME
-run_in_repo() {
-    local _path="${1}"; shift
-    local _home="$TMPDIR_BASE"
-    (cd "$REPO" && PATH="$_path" HOME="$_home" _timeout bash "$SCRIPT" "$@") || true
-}
-
-# Status-preserving twin of run_in_repo, for rows asserting the exit-0 contract.
-# run_in_repo's `|| true` masks the real exit status, so those rows need the actual code.
-# Command substitution can't carry status either (subshell), so stdout/stderr go to a
-# file and the real subprocess status is captured in RUN_STATUS for the caller.
-RUN_STATUS=0
-RUN_OUTPUT_FILE="$TMPDIR_BASE/run-output.txt"
-run_in_repo_status() { # <path> [args...] ; sets RUN_STATUS and OUTPUT
-    local _path="${1}"; shift
-    RUN_STATUS=0
-    (cd "$REPO" && PATH="$_path" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" "$@") \
-        >"$RUN_OUTPUT_FILE" 2>&1 || RUN_STATUS=$?
-    OUTPUT="$(cat "$RUN_OUTPUT_FILE")"
-}
+. "$AGENTS_ROOT/tests/lib/harness.sh"
+# Fixtures + helpers: feature-review-code-codex/_lib.sh (shared by the -truncation-scope, -base-state-scope and -path-priority entrypoints).
+. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/_lib.sh"
 
 # ---------------------------------------------------------------------------
 # 1. SKIPPED — codex CLI not installed
@@ -243,17 +165,25 @@ fi
 # 7. Security: malicious diff content does not cause shell injection
 # ---------------------------------------------------------------------------
 INJECTION_REPO="$TMPDIR_BASE/inject-repo"
-mkdir -p "$INJECTION_REPO"
-git -C "$INJECTION_REPO" init -q
-git -C "$INJECTION_REPO" config core.hooksPath "$INJECTION_REPO/.git/no-such-hooks"
-git -C "$INJECTION_REPO" config user.email "test@example.com"
-git -C "$INJECTION_REPO" config user.name "Test"
-echo "init" > "$INJECTION_REPO/safe.txt"
-git -C "$INJECTION_REPO" add safe.txt
-git -C "$INJECTION_REPO" commit -q -m "initial"
+fixture_template_copy "$REPO_TEMPLATE" "$INJECTION_REPO"
 git -C "$INJECTION_REPO" checkout -q -b injection-test
 
-printf '%s\n' '$(touch /tmp/codex-injection-marker)' '`touch /tmp/codex-injection-marker2`' > "$INJECTION_REPO/evil.txt"
+# The markers live under the per-run tmp dir, so no fixed path outside it is shared with another run.
+INJ_MARKER="$TMPDIR_BASE/codex-injection-marker"
+INJ_MARKER2="$TMPDIR_BASE/codex-injection-marker2"
+INJ_PAYLOAD1='$(touch '"$INJ_MARKER"')'
+INJ_PAYLOAD2='`touch '"$INJ_MARKER2"'`'
+printf '%s\n' "$INJ_PAYLOAD1" "$INJ_PAYLOAD2" > "$INJECTION_REPO/evil.txt"
+
+# Positive control: a shell that DID evaluate this payload would create both markers here,
+# so their absence after the real run below means something.
+eval "echo $INJ_PAYLOAD1 $INJ_PAYLOAD2" >/dev/null
+if [[ -f "$INJ_MARKER" && -f "$INJ_MARKER2" ]]; then
+    pass "Security control: the injection payload creates its marker files when evaluated"
+else
+    fail "Security control: the payload did not create its markers even when evaluated, so the absence check proves nothing"
+fi
+rm -f "$INJ_MARKER" "$INJ_MARKER2"
 git -C "$INJECTION_REPO" add evil.txt
 git -C "$INJECTION_REPO" commit -q -m "evil commit"
 
@@ -266,9 +196,9 @@ chmod +x "$MOCK_BIN/codex"
 
 (cd "$INJECTION_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log >/dev/null 2>&1) || true
 
-if [[ -f /tmp/codex-injection-marker ]] || [[ -f /tmp/codex-injection-marker2 ]]; then
+if [[ -f "$INJ_MARKER" ]] || [[ -f "$INJ_MARKER2" ]]; then
     fail "Security: shell injection succeeded — marker files created"
-    rm -f /tmp/codex-injection-marker /tmp/codex-injection-marker2
+    rm -f "$INJ_MARKER" "$INJ_MARKER2"
 else
     pass "Security: diff content with shell metacharacters not evaluated"
 fi
@@ -395,17 +325,10 @@ fi
 # ---------------------------------------------------------------------------
 # 14. Uncommitted-fallback: unstaged-only changes on a fresh branch are reviewed
 #     (regression guard — earlier fallback used `git diff --cached` and missed
-#     unstaged working tree, the common state at workflow Step 6).
+#     unstaged working tree, the common state during a workflow).
 # ---------------------------------------------------------------------------
 FRESH_REPO="$TMPDIR_BASE/fresh-repo"
-mkdir -p "$FRESH_REPO"
-git -C "$FRESH_REPO" init -q
-git -C "$FRESH_REPO" config core.hooksPath "$FRESH_REPO/.git/no-such-hooks"
-git -C "$FRESH_REPO" config user.email "test@example.com"
-git -C "$FRESH_REPO" config user.name "Test"
-echo "init" > "$FRESH_REPO/README.md"
-git -C "$FRESH_REPO" add README.md
-git -C "$FRESH_REPO" commit -q -m "initial"
+fixture_template_copy "$REPO_TEMPLATE" "$FRESH_REPO"
 git -C "$FRESH_REPO" checkout -q -b fresh-branch
 # Unstaged change only — no commits past main, nothing staged.
 echo "unstaged edit" >> "$FRESH_REPO/README.md"
@@ -436,33 +359,11 @@ fi
 # shellcheck source=./feature-review-code-codex/uncommitted-and-untracked.sh
 . "$AGENTS_ROOT/tests/bin/feature-review-code-codex/uncommitted-and-untracked.sh"
 
-# The X-series truncation/base-state scope rows (#1638) live in a sourced part for the same
-# reason, and must run after the cases above to preserve the original execution order.
-# shellcheck source=./feature-review-code-codex/truncation-scope.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/truncation-scope.sh"
-
-# The remaining merge-base scope rows live in a sourced part: this file is already past the
-# 500-line hard split limit, and they reuse REPO, MOCK_BIN and _timeout above.
-# shellcheck source=./feature-review-code-codex/base-state-scope.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/base-state-scope.sh"
-
-# The #1976/#1750 path-priority rows come last: they reuse the exact-size fixtures the
-# boundary rows above built (Y_AT_REPO / Y_OVER_REPO) rather than rebuilding them.
-# shellcheck source=./feature-review-code-codex/path-priority.sh
-. "$AGENTS_ROOT/tests/bin/feature-review-code-codex/path-priority.sh"
+# The X-series, Y-series and path-priority rows run as their own entrypoints
+# (feature-review-code-codex-truncation-scope.sh, -base-state-scope.sh, -path-priority.sh).
 
 # The --context defang and helper fail-closed rows replace the mock codex, so they run last.
 # shellcheck source=./feature-review-code-codex/context-defang-and-fail-closed.sh
 . "$AGENTS_ROOT/tests/bin/feature-review-code-codex/context-defang-and-fail-closed.sh"
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-echo ""
-if [[ $ERRORS -eq 0 ]]; then
-    echo "All tests passed."
-    exit 0
-else
-    echo "$ERRORS test(s) failed."
-    exit 1
-fi
+rcc_finish

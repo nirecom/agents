@@ -29,13 +29,18 @@ function walkTree(dir, cb) {
   }
 }
 
-function readIndexContent(filePath, root) {
+function readIndexContent(filePath, root, env) {
   const rel = path.relative(root, filePath);
   try {
-    return execFileSync("git", ["show", ":" + rel], { cwd: root, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+    return execFileSync("git", ["show", ":" + rel], { cwd: root, env: env || process.env, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 15000 });
   } catch (e) {
     return null;
   }
+}
+
+function stagedText(readStaged, rel) {
+  const buf = readStaged(rel.replace(/\\/g, "/"));
+  return buf == null ? null : buf.toString("utf8");
 }
 
 function parseBlocks(content, filePath) {
@@ -121,13 +126,13 @@ function checkAxis4(blocks, filePath, warnings) {
 
 // --stale-report: one `path:line:added` line per block older than STALE_DAYS; exit 0,
 // exit 2 when the root cannot be scanned (the sweep job must see that as a failure).
-function staleReport(rootArg) {
-  const root = rootArg ? path.resolve(rootArg) : getGitRoot();
+function staleReport(rootArg, io) {
+  const root = rootArg ? path.resolve(io.cwd, rootArg) : getGitRoot(io);
   try {
     if (!fs.statSync(root).isDirectory()) throw new Error("not a directory");
   } catch (e) {
-    process.stderr.write(`check-migration-blocks.js: cannot scan '${root}': ${e.message}\n`);
-    process.exit(2);
+    io.stderr.write(`check-migration-blocks.js: cannot scan '${root}': ${e.message}\n`);
+    return 2;
   }
   const lines = [];
   walkTree(root, (absPath) => {
@@ -139,54 +144,61 @@ function staleReport(rootArg) {
       lines.push(`${rel}:${b.beginLine}:${b.addedDate}`);
     }
   });
-  lines.forEach((l) => process.stdout.write(l + "\n"));
-  process.exit(0);
+  lines.forEach((l) => io.stdout.write(l + "\n"));
+  return 0;
 }
 
-function getGitRoot() {
+function getGitRoot(io) {
   try {
-    return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: io.cwd, env: io.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000 }).trim();
   } catch (e) {
-    return process.cwd();
+    return io.cwd;
   }
 }
 
-function main() {
-  const args = process.argv.slice(2);
-  if (args.length === 0) {
-    process.stderr.write("usage: check-migration-blocks.js --staged [<file>...]\n");
-    process.stderr.write("       check-migration-blocks.js --all [<root>]\n");
-    process.stderr.write("       check-migration-blocks.js --stale-report [<root>]\n");
-    process.exit(2);
+function verdict(violations, warnings, io) {
+  if (violations.length > 0) {
+    violations.forEach((v) => io.stdout.write(v + "\n"));
+    return 1;
   }
+  warnings.forEach((w) => io.stderr.write(w + "\n"));
+  return 0;
+}
+
+function usage(io) {
+  io.stderr.write("usage: check-migration-blocks.js --staged [<file>...]\n");
+  io.stderr.write("       check-migration-blocks.js --all [<root>]\n");
+  io.stderr.write("       check-migration-blocks.js --stale-report [<root>]\n");
+  return 2;
+}
+
+// run({ argv, cwd, env, stdout, stderr, readStaged }) -> rc: 0 clean, 1 violations, 2 usage /
+// unscannable. readStaged(rel) -> Buffer|null replaces the per-file `git show` of --staged.
+function run({ argv = [], cwd = process.cwd(), env = process.env, stdout = process.stdout, stderr = process.stderr, readStaged = null } = {}) {
+  const io = { cwd, env, stdout, stderr };
+  const args = argv;
+  if (args.length === 0) return usage(io);
 
   const mode = args[0];
 
   if (mode === "--staged") {
     const files = args.slice(1);
-    const root = getGitRoot();
+    const root = getGitRoot(io);
     const violations = [];
     const warnings = [];
     for (const f of files) {
       const absPath = path.isAbsolute(f) ? f : path.join(root, f);
-      const content = readIndexContent(absPath, root);
+      const content = readStaged ? stagedText(readStaged, path.relative(root, absPath)) : readIndexContent(absPath, root, env);
       if (content == null) continue;
       const { blocks, violations: v } = parseBlocks(content, f);
       violations.push(...v);
       checkAxis3(blocks, f, "staged", warnings);
       checkAxis4(blocks, f, warnings);
     }
-    if (violations.length > 0) {
-      violations.forEach((v) => process.stdout.write(v + "\n"));
-      process.exit(1);
-    }
-    if (warnings.length > 0) {
-      warnings.forEach((w) => process.stderr.write(w + "\n"));
-    }
-    process.exit(0);
+    return verdict(violations, warnings, io);
 
   } else if (mode === "--all") {
-    const root = args[1] ? path.resolve(args[1]) : process.cwd();
+    const root = args[1] ? path.resolve(cwd, args[1]) : cwd;
     const violations = [];
     const warnings = [];
     walkTree(root, (absPath) => {
@@ -201,25 +213,17 @@ function main() {
       checkAxis3(blocks, rel, "all", warnings);
       checkAxis4(blocks, rel, warnings);
     });
-    if (violations.length > 0) {
-      violations.forEach((v) => process.stdout.write(v + "\n"));
-      process.exit(1);
-    }
-    if (warnings.length > 0) {
-      warnings.forEach((w) => process.stderr.write(w + "\n"));
-    }
-    process.exit(0);
+    return verdict(violations, warnings, io);
 
   } else if (mode === "--stale-report") {
-    staleReport(args[1]);
-
-  } else {
-    process.stderr.write(`check-migration-blocks.js: unknown mode '${mode}'\n`);
-    process.stderr.write("usage: check-migration-blocks.js --staged [<file>...]\n");
-    process.stderr.write("       check-migration-blocks.js --all [<root>]\n");
-    process.stderr.write("       check-migration-blocks.js --stale-report [<root>]\n");
-    process.exit(2);
+    return staleReport(args[1], io);
   }
+  stderr.write(`check-migration-blocks.js: unknown mode '${mode}'\n`);
+  return usage(io);
 }
 
-main();
+module.exports = { run };
+
+if (require.main === module) {
+  process.exitCode = run({ argv: process.argv.slice(2) });
+}

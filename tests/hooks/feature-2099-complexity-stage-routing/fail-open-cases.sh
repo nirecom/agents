@@ -2,7 +2,7 @@
 # tests/hooks/feature-2099-complexity-stage-routing/fail-open-cases.sh
 # Tests: hooks/workflow-state.js, hooks/workflow-state/complexity-routing.js, hooks/workflow-state/skip-signal-resolver.js, bin/workflow/read-complexity-evaluation, bin/workflow/derive-complexity-level, bin/workflow/record-complexity-evaluation
 # Tags: complexity, routing, fail-open, isolation-fixture, exit-codes, scope:issue-specific
-# Sourced by ../feature-2099-complexity-stage-routing.sh — helpers come from there.
+# Sourced by the feature-2099-complexity-stage-routing-*.sh entrypoints — helpers come from there.
 # The corruption is applied to an ISOLATED copy of hooks/ + bin/ so the barrel's
 # relative require("./complexity-routing") actually resolves to the broken file
 # (detail.md R3-C7: the old in-place-copy fixture never did).

@@ -1,4 +1,4 @@
-# Tests: bin/check-test-frontmatter/self-impl.sh
+# Tests: bin/check-test-frontmatter.sh
 # Tags: TL2, bin, merge, tests-gates, self-impl, scope:issue-specific
 # Test-file bodies shared by the case files of both feat-2812-tests-gates-merge entrypoints
 # (sourced after fixture.sh). ex-*: one detection per body (EX_PAIRS stages them as one set);

@@ -41,11 +41,16 @@ function checkPattern(p, where) {
 }
 
 // existOpts carries checkRepoFile's options when the part file must exist, null when only its shape counts.
-function checkPart(ref, where, repoRoot, existOpts) {
+// The Node gates call ref.node ({file, function} of a .js part); the bash file/function stay for retire.
+function checkPart(ref, where, repoRoot, existOpts, { node = false, js = false } = {}) {
   if (ref === null || ref === undefined) return;
   if (!isObj(ref)) fail(where, "must be {file, function} or null");
   checkRepoFile(ref.file, `${where}.file`, repoRoot, existOpts || { repoFiles: false });
-  if (!isStr(ref.function) || !FUNCTION_RE.test(ref.function)) fail(`${where}.function`, "must be a bash function name");
+  if (js && !ref.file.endsWith(".js")) fail(`${where}.file`, "must be a .js part");
+  if (!isStr(ref.function) || !FUNCTION_RE.test(ref.function)) fail(`${where}.function`, "must be a function name");
+  if (!node) return;
+  if (!isObj(ref.node)) fail(`${where}.node`, "must be {file, function} of the Node part");
+  checkPart(ref.node, `${where}.node`, repoRoot, null, { js: true });
 }
 
 const absent = (v) => v === null || v === undefined;
@@ -178,8 +183,12 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
     fail(`${where}.header`, "must be {commentPrefix} or null");
   }
   checkLaunch(e.launch, `${where}.launch`, e.status, repoRoot);
-  for (const k of ["caseMarkerReader", "caseEmbedRules", "tableDrivenDetector"]) checkPart(e[k], `${where}.${k}`, repoRoot, null);
-  checkPart(e.envClearLine, `${where}.envClearLine`, repoRoot, opts);
+  const needNode = e.status === "supported" && opts.complete !== false;
+  for (const k of ["caseMarkerReader", "caseEmbedRules"]) {
+    checkPart(e[k], `${where}.${k}`, repoRoot, null, { node: needNode || (isObj(e[k]) && e[k].node !== undefined) });
+  }
+  checkPart(e.tableDrivenDetector, `${where}.tableDrivenDetector`, repoRoot, null);
+  checkPart(e.envClearLine, `${where}.envClearLine`, repoRoot, opts, { js: true });
   if (!nullOr(e.helperLibrary, isObj)) fail(`${where}.helperLibrary`, "must be {path, sourceRegex} or null");
   if (e.helperLibrary) {
     checkRepoFile(e.helperLibrary.path, `${where}.helperLibrary.path`, repoRoot, opts);
@@ -209,7 +218,8 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
 
 // opts.repoFiles === false skips the existence of helperLibrary.path, notationDoc and
 // envClearLine.file: a checkout that holds the tools without the test tree or the skills still loads the table.
-// opts.complete === false skips the fields checkRequired demands of a supported entry.
+// opts.complete === false skips the fields checkRequired demands of a supported entry, the
+// node item of its caseMarkerReader / caseEmbedRules included.
 function validate(t, repoRoot, opts = {}) {
   if (!isObj(t)) fail("table", "must be a JSON object");
   if (t.schema !== 1) fail("schema", "must be 1");

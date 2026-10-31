@@ -1,28 +1,29 @@
 # Gate wiring (pre-commit, CI) and stage-3 template cases for feat-2512-isolation-guard.sh.
 # Sourced by the dispatcher after its pin; defines case bodies only.
 
-# run_gate <consumer-dir> — run the agents-repo pre-commit gates in a consumer repo.
+# run_gate <consumer-dir> — the agents-repo-gates check in a consumer repo that is its own cfg.
 run_gate() {
   local cons="$1"
   PC_RC=0
-  PC_OUT="$(cd "$cons" && export _cfg_dir="$cons" &&run_with_timeout 60 bash -c '. "$1"; _precommit_agents_repo_gates' _ "$SCRIPT_CHECKOUT_ROOT/hooks/lib/precommit-agents-repo-gates.sh" 2>&1)" || PC_RC=$?
+  PC_OUT="$(cd "$cons" && run_with_timeout 60 node "$FC_RUNNER" --cfg "$cons" agents-repo-gates 2>&1)" || PC_RC=$?
 }
 
 c_i13_precommit_gate() {
   local cons rc
   cons="$(np "$T/i13")"
-  mkdir -p "$cons/bin"
-  harness_git_init "$cons"
-  git -C "$cons" config core.autocrlf false
-  git -C "$cons" config user.email test@example.com
-  git -C "$cons" config user.name test
+  # fc_repo / fc_stub_all_clean / FC_RUNNER live in fail-closed-cases.sh.
+  fc_repo "$cons"
   # The five sibling gates stay clean so every outcome below is the classifier's own (#2589:
-  # a missing sibling would now block). fc_stub_all_clean lives in fail-closed-cases.sh.
+  # a missing sibling would now block).
   fc_stub_all_clean "$cons" bin/check-plans-dir-isolation.sh
-  fx "$cons/bin/check-plans-dir-isolation.sh" '#!/usr/bin/env bash' \
-    'here="$(cd "$(dirname "$0")" && pwd)"' 'printf "%s\n" "$*" >> "$here/../stub-args.log"' \
-    'echo "STATE-UNPINNED: tests/hooks/stub-fixture.sh"' 'exit "$(cat "$here/../stub-rc")"'
-  chmod +x "$cons/bin/check-plans-dir-isolation.sh"
+  # The classifier stub logs its argv, prints one finding and answers the rc in stub-rc.
+  fx "$cons/bin/check-plans-dir-isolation/main.js" 'const fs = require("fs"), p = require("path");' \
+    'const root = p.join(__dirname, "..", "..");' \
+    'exports.run = async ({ argv, stdout }) => {' \
+    '  fs.appendFileSync(p.join(root, "stub-args.log"), argv.join(" ") + "\n");' \
+    '  stdout.write("STATE-UNPINNED: tests/hooks/stub-fixture.sh\n");' \
+    '  return Number(fs.readFileSync(p.join(root, "stub-rc"), "utf8").trim());' \
+    '};'
   printf '1\n' > "$cons/stub-rc"
   git -C "$cons" add -A
 
@@ -43,7 +44,7 @@ c_i13_precommit_gate() {
   expect "I13 an unexpected rc=3 names the classifier and rc=3" \
     grep -qE 'check-plans-dir-isolation[^ ]* .*rc=3' <<<"$PC_OUT"
   expect "I13 an unexpected rc=3 prints no skip diagnostic" test "${PC_OUT#*skipped}" = "$PC_OUT"
-  rm -f "$cons/bin/check-plans-dir-isolation.sh"
+  rm -f "$cons/bin/check-plans-dir-isolation/main.js"
   run_gate "$cons"
   expect "I13 a missing classifier blocks the commit" test "$PC_RC" = 1
   expect "I13 a missing classifier is named" grep -qE 'check-plans-dir-isolation' <<<"$PC_OUT"

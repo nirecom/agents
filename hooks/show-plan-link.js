@@ -69,7 +69,14 @@ function formatBreadcrumb(result, absPath) {
 function defaultSync(absPath, opts) {
   const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
   const { syncPlanFile } = require("./lib/plan-sync");
-  return syncPlanFile(getWorkflowPlansDir(), absPath, { budgetMs: opts.budgetMs });
+  return syncPlanFile(getWorkflowPlansDir(), absPath, { budgetMs: opts.budgetMs, turn: opts.turn });
+}
+
+// turnSync(input) -> defaultSync bound to this prompt's turn (#2768); no turn -> plain appends.
+function turnSync(input) {
+  let turn = null;
+  try { turn = require("./lib/prompt-turn-id").resolveTurnContext(input); } catch (_) { turn = null; }
+  return (absPath, opts) => defaultSync(absPath, { ...opts, turn });
 }
 
 // The project is the hook input's cwd alone: CLAUDE_PROJECT_DIR, the process cwd and the cwd
@@ -134,15 +141,16 @@ function progressPaths(input) {
 }
 
 // syncProgressQuietly(absPaths, input, budgetMs) -> remaining budget. A failed record write
-// sends nothing; every failure is swallowed (fail-open).
-function syncProgressQuietly(absPaths, input, { sync = defaultSync, now = Date.now, budgetMs = SHARED_SYNC_BUDGET_MS } = {}) {
+// sends nothing; every failure is swallowed (fail-open). opts.results collects {filePath, absPath, result}.
+function syncProgressQuietly(absPaths, input, { sync = defaultSync, now = Date.now, budgetMs = SHARED_SYNC_BUDGET_MS, results } = {}) {
   const deadline = now() + budgetMs;
   for (const absPath of absPaths) {
     try {
       if (!fs.lstatSync(absPath).isFile() || !recordHost(absPath, input || {}).ok) continue;
       const remaining = deadline - now();
       if (remaining <= 0) break;
-      sync(absPath, { budgetMs: remaining });
+      const result = sync(absPath, { budgetMs: remaining });
+      if (Array.isArray(results)) results.push({ filePath: absPath, absPath, result });
     } catch (_) { /* fail-open */ }
   }
   return Math.max(0, deadline - now());
@@ -242,17 +250,20 @@ function linkEntryFor(run) {
   return { stage, path: run.absPath, reason: fromSync.reason };
 }
 
-// opts.afterSync(remainingMs) (optional) runs once the plans are synced, before the exit.
+// opts.afterSync(remainingMs) (optional) runs once the plans are synced, before the exit; the
+// runs it returns join the plans' runs for the turn diff line.
 function emitForArtifacts(filePaths, input, opts) {
   const o = opts || {};
   const clock = o.now || Date.now;
   const start = clock();
   const budgetMs = o.budgetMs === undefined ? SHARED_SYNC_BUDGET_MS : o.budgetMs;
   const runs = runArtifacts(filePaths, input, opts);
+  let after = [];
   if (typeof o.afterSync === "function") {
-    try { o.afterSync(Math.max(0, budgetMs - (clock() - start))); } catch (_) { /* fail-open */ }
+    try { after = o.afterSync(Math.max(0, budgetMs - (clock() - start))) || []; } catch (_) { /* fail-open */ }
   }
   const out = {};
+  const diff = turnDiffBlock(runs.concat(Array.isArray(after) ? after : []));
   try {
     const { renderModelContext } = require("./lib/plan-link");
     const { withConvLang } = require("./lib/conv-lang");
@@ -261,19 +272,38 @@ function emitForArtifacts(filePaths, input, opts) {
     const deadline = start + budgetMs;
     const entries = runs.map((r) => entryFor(r, Math.max(0, deadline - clock())));
     const rows = renderModelContext(entries, { when: "after-write" });
+    const ctx = withConvLang([rows, ...notes].join("\n"));
     out.hookSpecificOutput = {
       hookEventName: "PostToolUse",
-      additionalContext: withConvLang([rows, ...notes].join("\n")),
+      additionalContext: diff ? `${ctx}\n\n${diff}` : ctx,
     };
   } catch (_) { /* fail-open: the breadcrumb below still reaches the user */ }
   const shown = runs.filter((r) => !out.hookSpecificOutput || showsMessage(r.result));
-  if (shown.length > 0) out.systemMessage = shown.map((r) => formatBreadcrumb(r.result, r.absPath)).join("\n");
+  if (shown.length > 0) {
+    // The user sees only the systemMessage, so the turn diff line (not the model's duty) rides there too.
+    const lines = shown.map((r) => formatBreadcrumb(r.result, r.absPath));
+    if (diff) lines.push(diff.split("\n")[0]);
+    out.systemMessage = lines.join("\n");
+  }
   process.stdout.write(JSON.stringify(out));
   process.exit(0);
 }
 
 function emitForArtifact(filePath, input) {
   emitForArtifacts([filePath], input);
+}
+
+function turnDiffBlock(runs) {
+  try { return require("./show-plan-link/turn-diff").renderTurnDiff(runs); } catch (_) { return ""; }
+}
+
+// A progress-only call prints nothing unless the turn diff has to be shown (#2768).
+function emitProgressOnly(runs) {
+  const block = turnDiffBlock(runs);
+  if (!block) noopExit();
+  const line = block.split("\n")[0];
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: block }, systemMessage: line }));
+  process.exit(0);
 }
 
 if (require.main === module) {
@@ -289,16 +319,21 @@ if (require.main === module) {
   try { plans = finalPlanPaths(input); } catch (_) { /* fail-open */ }
   let progress = [];
   try { progress = progressPaths(input); } catch (_) { /* fail-open */ }
+  if (plans.length === 0 && progress.length === 0) noopExit();
+  const sync = turnSync(input);
   // The plans of this call and its session-progress.md share the one sync budget; the plans
   // go first, so session-progress.md gets only what they leave.
   const syncProgress = (budgetMs) => {
-    if (progress.length > 0) syncProgressQuietly(progress, input, { budgetMs });
+    const results = [];
+    if (progress.length > 0) syncProgressQuietly(progress, input, { budgetMs, sync, results });
+    return results;
   };
   if (plans.length === 0) {
-    try { syncProgress(SHARED_SYNC_BUDGET_MS); } catch (_) { /* fail-open */ }
-    noopExit();
+    let runs = [];
+    try { runs = syncProgress(SHARED_SYNC_BUDGET_MS); } catch (_) { /* fail-open */ }
+    emitProgressOnly(runs);
   }
-  emitForArtifacts(plans, input, { budgetMs: SHARED_SYNC_BUDGET_MS, afterSync: syncProgress });
+  emitForArtifacts(plans, input, { budgetMs: SHARED_SYNC_BUDGET_MS, afterSync: syncProgress, sync });
 }
 
 module.exports = {

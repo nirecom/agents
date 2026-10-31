@@ -92,9 +92,9 @@ runner-without-ci    | fail/direct-runner       | 1 | has   | d-runner bin/lib/p
 runner-comment       | fail/direct-runner       | 1 | lacks | d-runner bin/lib/pester-config.sh:1
 run-all-globs-a      | fail/run-all-globs       | 1 | has   | a-pattern tests/run-all.sh:4
 run-all-globs-b      | fail/run-all-globs       | 1 | has   | b-location tests/run-all.sh:4
-precommit-enum-3     | fail/precommit-enum      | 1 | has   | a-pattern hooks/lib/precommit-tests-frontmatter.sh:3
-precommit-enum-4     | fail/precommit-enum      | 1 | has   | b-location hooks/lib/precommit-tests-frontmatter.sh:4
-precommit-enum-7     | fail/precommit-enum      | 1 | has   | a-pattern hooks/lib/precommit-tests-frontmatter.sh:7
+precommit-enum-3     | fail/precommit-enum      | 1 | has   | a-pattern hooks/lib/precommit-enum-sample.sh:3
+precommit-enum-4     | fail/precommit-enum      | 1 | has   | b-location hooks/lib/precommit-enum-sample.sh:4
+precommit-enum-7     | fail/precommit-enum      | 1 | has   | a-pattern hooks/lib/precommit-enum-sample.sh:7
 python-rglob-b       | fail/python-rglob        | 1 | has   | b-location bin/normalize-harness-position.py:3
 python-rglob-no-a    | fail/python-rglob        | 1 | lacks | a-pattern
 triple-strip         | fail/triple-strip        | 1 | has   | a-pattern bin/lib/test-retire-predicate.sh:3
