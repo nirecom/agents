@@ -51,28 +51,59 @@ function annotation(step, key, value, origin) {
   return { kind: "step_annotation", step, key, value, provenance: "observed", origin };
 }
 
+// carriedGrants(prev, fpResult, role, keysOf) -> prev's grants moved to the new fingerprint (#2770).
+// Only when `role` is the one input whose digest changed, and per grant only when every key
+// keysOf(list, norm) gives for the new list was already among the previous list's keys.
+function carriedGrants(prev, fpResult, role, keysOf, prevList, nextList) {
+  const a = prev.inputs || {};
+  const b = fpResult.inputs || {};
+  if (typeof prev.fingerprint !== "string" || prev.fingerprint === fpResult.fingerprint) return [];
+  const changed = [...new Set(Object.keys(a).concat(Object.keys(b)))].filter((k) => a[k] !== b[k]);
+  if (changed.length !== 1 || changed[0] !== role) return [];
+  return sameFp(prev.grants, prev.fingerprint).filter((g) => {
+    const before = new Set(keysOf(prevList, g.norm));
+    return keysOf(nextList, g.norm).every((k) => before.has(k));
+  }).map((g) => Object.assign({}, g, { fingerprint: fpResult.fingerprint }));
+}
+
+const variantsOf = (findings, norm) => asArray(findings).filter((f) => f && f.norm === norm).map((f) => f.variant);
+const entriesOf = (blocked, norm) => asArray(blocked).filter((b) => b && b.norm === norm)
+  .map((b) => JSON.stringify([b.term, b.operation, b.category, b.definition === undefined ? null : b.definition]));
+
 // checkRecordEvents(current, stage, fpResult, findings, origin) -> [step_annotation event].
-// current: the stage's previous glossary_check value (or null). Grants survive only at the same
-// fingerprint; ledger_grants are bound to a concern, not the fingerprint, and always carry.
+// current: the stage's previous glossary_check value (or null). Grants survive at the same
+// fingerprint, or move to the new one when only the artifact changed and the granted norm shows
+// no variant it did not show before; ledger_grants are bound to a concern and always carry.
 function checkRecordEvents(current, stage, fpResult, findings, origin) {
   const prev = current || {};
+  const next = asArray(findings).map((f) => ({
+    source: "deterministic", class: "spelling", term: f.term, norm: f.norm, variant: f.variant, where: f.where,
+  }));
   const value = {
-    v: 1, stage, fingerprint: fpResult.fingerprint, inputs: fpResult.inputs,
-    findings: asArray(findings).map((f) => ({
-      source: "deterministic", class: "spelling", term: f.term, norm: f.norm, variant: f.variant, where: f.where,
-    })),
-    grants: sameFp(prev.grants, fpResult.fingerprint),
+    v: 1, stage, fingerprint: fpResult.fingerprint, inputs: fpResult.inputs, findings: next,
+    grants: sameFp(prev.grants, fpResult.fingerprint)
+      .concat(carriedGrants(prev, fpResult, "artifact", variantsOf, prev.findings, next)),
     ledger_grants: asArray(prev.ledger_grants),
   };
   return [annotation(STAGE_STEP[stage], RECORD_KEY, value, origin || "check-glossary-drift")];
 }
 
-// provenanceRecordEvents(current, fpResult, sessionSource, blocked, origin) -> [event].
-function provenanceRecordEvents(current, fpResult, sessionSource, blocked, origin) {
+// provenanceRecordEvents(current, fpResult, sessionSource, unmatched, origin) -> [event].
+// unmatched: every operation the intent does not cover, before grants ({ term, norm, operation,
+// category, reason, definition }). blocked is what no grant covers. A grant moves to the new
+// fingerprint when only ops changed and its norm's unmatched entries (definition included) did not
+// grow or change; a record written before #2770 has no unmatched, so its blocked stands in.
+function provenanceRecordEvents(current, fpResult, sessionSource, unmatched, origin) {
   const prev = current || {};
+  const all = asArray(unmatched);
+  const before = Array.isArray(prev.unmatched) ? prev.unmatched : prev.blocked;
+  const grants = sameFp(prev.grants, fpResult.fingerprint)
+    .concat(carriedGrants(prev, fpResult, "ops", entriesOf, before, all));
+  const blocked = all.filter((b) => !grants.some((g) =>
+    g && g.norm === b.norm && g.operation === b.operation && g.category === b.category));
   const value = {
     v: 1, fingerprint: fpResult.fingerprint, inputs: fpResult.inputs, session_source: sessionSource,
-    blocked: asArray(blocked), grants: sameFp(prev.grants, fpResult.fingerprint),
+    blocked, unmatched: all, grants,
   };
   return [annotation(PROVENANCE_STEP, PROVENANCE_KEY, value, origin || "check-glossary-provenance")];
 }

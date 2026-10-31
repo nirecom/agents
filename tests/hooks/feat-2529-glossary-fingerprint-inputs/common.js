@@ -1,8 +1,8 @@
 "use strict";
 // Shared steps of T7 (invariant I-FP): build a valid record + grant for one stage, change exactly
 // one input, then require (i) only that input's digest moved, (ii) evaluateGlossaryCheck says
-// glossary-check-stale naming only that component, (iii) the re-record drops the old grant, and
-// (iv) granting the re-record passes again.
+// glossary-check-stale naming only that component, (iii) the re-record drops the old grant —
+// except an artifact-only change, whose re-record carries it (#2770) — and (iv) granting passes.
 
 const F = require("../../lib/glossary-check-fixture");
 
@@ -78,6 +78,15 @@ function cycle(m, ctx, label, expect, mutate) {
     JSON.stringify(v));
   F.drift(ctx.sid, ctx.stage, ctx.cwd || ctx.repo);
   const rec = F.recordOf(ctx.sid, ctx.stage);
+  if (want.join(",") === "artifact") {
+    // #2770: an artifact-only change with the same variants carries the grant to the new fingerprint.
+    const moved = rec && (rec.grants || []).filter((g) => g.fingerprint === rec.fingerprint);
+    F.check(`${name}: the re-record carries the grant to the new fingerprint`,
+      !!rec && rec.fingerprint === after.fingerprint && moved.length > 0 && moved.length === rec.grants.length,
+      JSON.stringify(rec));
+    F.check(`${name}: the re-record with the carried grant passes`, passes(evaluate(m, ctx)), "not ok");
+    return;
+  }
   const kept = rec && (rec.grants || []).filter((g) => g.fingerprint !== rec.fingerprint);
   F.check(`${name}: the re-record is current and carries no grant of the old fingerprint`,
     !!rec && rec.fingerprint === after.fingerprint && (rec.grants || []).length === 0 && kept.length === 0,

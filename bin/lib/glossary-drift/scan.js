@@ -21,7 +21,8 @@ function findDrift(text, format, terms) {
 }
 
 // scanStageInputs(inputs) -> [{ term, norm, variant, path, line, where }] over the artifact files
-// of one loadStageInputs result; a file's lineMap maps a range line back to its file line. A
+// of one loadStageInputs result; a file's lineMap maps a range line back to its file line, and a
+// file's changedLines (staged files, #2770) keeps only the hits on those file lines. A
 // term an intent row deletes is no canonical term, even while the glossary file still lists it;
 // an add / redefine row of the same term (a category move) keeps it. A delete row matches its own
 // spelling only (case-insensitive), so deleting "workflows" leaves a distinct "workflow" heading.
@@ -39,8 +40,10 @@ function scanStageInputs(inputs) {
   const hits = [];
   for (const file of (inputs && inputs.artifact && inputs.artifact.files) || []) {
     if (typeof file.text !== "string" || file.text === "") continue;
+    const only = Array.isArray(file.changedLines) ? new Set(file.changedLines) : null;
     for (const v of driftWith(file.text, file.kind, index)) {
       const line = Array.isArray(file.lineMap) && file.lineMap[v.line - 1] ? file.lineMap[v.line - 1] : v.line;
+      if (only && !only.has(line)) continue;
       hits.push({ term: v.term, norm: normalizeTerm(v.term), variant: v.variant, path: file.path, line, where: `${file.path}:${line}` });
     }
   }

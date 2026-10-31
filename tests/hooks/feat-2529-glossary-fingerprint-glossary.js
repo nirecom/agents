@@ -2,7 +2,7 @@
 // Tests: hooks/workflow-state/glossary-check/scope.js, hooks/workflow-state/glossary-check/record.js, bin/check-glossary-drift
 // Tags: TL2, hooks, workflow-state, glossary, glossary-check, fingerprint, scope:issue-specific
 // #2529 T7-2 (invariant I-FP, input 2): an added heading surfaces DRIFT on rescan for all six
-// stages, a linked worktree reads the main worktree's glossary, and a repo with no glossary files
+// stages, a linked worktree reads its own glossary (#2770), and a repo with no glossary files
 // records an empty digest. To fit the 180s per-test budget, each combined glossary change staling
 // the record runs in feat-2529-glossary-fingerprint-glossary-ra.js (R-A stages) and
 // feat-2529-glossary-fingerprint-glossary-rs.js (R-S stages).
@@ -21,7 +21,7 @@ process.chdir(os.tmpdir());
 const F = require("../lib/glossary-check-fixture");
 const glossary = require("./feat-2529-glossary-fingerprint-inputs/glossary");
 
-caseBegin("each combined glossary change stales the record and the main worktree glossary is read", "hooks/workflow-state/glossary-check/scope.js");
+caseBegin("each combined glossary change stales the record and the session worktree glossary is read","hooks/workflow-state/glossary-check/scope.js");
 try {
   glossary.runHeading();
   glossary.runLinkedWorktree();
