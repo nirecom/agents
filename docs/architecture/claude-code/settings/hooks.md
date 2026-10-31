@@ -297,6 +297,12 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   commit (#2768, [plan-sync/turn-commit.md](../plan-sync/turn-commit.md)). It removes the previous
   file before writing, so a failed write leaves no id rather than the previous prompt's. No network.
   Fail-open throughout: a missing id only makes plan-sync append a commit instead of replacing one.
+- `user-prompt-submit-issue-title.js` (UserPromptSubmit) — names the session after its issues (#299):
+  emits `sessionTitle` "`#N [#M …] <first issue's title>`" for a typed `/workflow-init #N` or, once
+  `workflow_init` has begun, the intent's `## Issues`; an issue of another repo shows as `repo#N`.
+  Titles come from the forge tracker (`issueTitle`, GitHub and GitLab).
+  The chain record `<first_session_id>.control/issue-title.json` caches titles and failures and emits
+  each title once, so a later `/rename` stays. Fail-open throughout: any error emits `{}`.
 - `record-off-skill-invocation.js` (UserPromptSubmit) — records PROVENANCE for the EMERGENCY OFF
   escape hatch (#1780). `UserPromptSubmit` is an event the model cannot trigger, so a marker written
   from it is evidence the human acted: a prompt invoking `/enforce-workflow-off` writes

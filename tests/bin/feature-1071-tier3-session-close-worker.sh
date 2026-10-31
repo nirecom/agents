@@ -267,8 +267,8 @@ test_sc_skill_failed_stop() {
 }
 
 # ── Test 13: the GATE BLOCK has no fail-open path ────────────────────────────
-# Was a whole-file grep and therefore a false positive: SC-6a's unrelated
-# "Fail-open." about cc-session-title matched and the case could never pass.
+# Was a whole-file grep and therefore a false positive: an unrelated
+# "Fail-open." in a step after SC-6 matched and the case could never pass.
 # Scoped to the gate block, which is the only place the wording would be a defect.
 test_sc_skill_no_fail_open() {
     if [ ! -s "$GATE_BLOCK" ]; then
@@ -295,7 +295,7 @@ test_extractor_mutation_probe() {
         '## SC-4+SC-5 — gate' \
         'On failure: Fail-open and continue.' \
         '## SC-6 — after' \
-        'Fail-open. cc-session-title' > "$synth"
+        'Fail-open. unrelated postscript' > "$synth"
     extract_gate_block "$synth" > "$blk"
     inside=0
     grep -qiE 'fail.open|fail open' "$blk" && inside=1
@@ -306,7 +306,7 @@ test_extractor_mutation_probe() {
         '## SC-4+SC-5 — gate' \
         'On status failed: STOP. This path is fail-closed.' \
         '## SC-6 — after' \
-        'Fail-open. cc-session-title' > "$synth"
+        'Fail-open. unrelated postscript' > "$synth"
     extract_gate_block "$synth" > "$blk"
     outside=0
     grep -qiE 'fail.open|fail open' "$blk" && outside=1

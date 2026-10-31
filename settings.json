@@ -394,6 +394,11 @@
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/codegraph-context-inject.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/user-prompt-submit-issue-title.js\"",
+            "timeout": 5
           }
         ]
       }

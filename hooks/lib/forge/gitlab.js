@@ -18,6 +18,35 @@ const trackerGitlab = {
   vocabularyFor(argv) {
     return require("../glab-flag-vocab").vocabularyFor(argv);
   },
+  // issueTitle(remoteUrl, {number, repo?}, {timeoutMs, projectRoot, spawnSync?}) -> string | null;
+  // never throws. The host settings come from opts.projectRoot, as codehost resolution does.
+  issueTitle(remoteUrl, ref, opts) {
+    try {
+      const o = opts || {};
+      if (!ref || !Number.isInteger(ref.number) || ref.number <= 0) return null;
+      const fr = require("../forge-router");
+      const settings = glabSettings({ gitlabHost: fr.readGitlabHostConfig(o.projectRoot), gitlabSshHost: fr.readGitlabSshHostConfig(o.projectRoot) });
+      const t = require("../plan-sync/remote-url").resolveRemoteTarget(remoteUrl, settings);
+      if (t.type !== "gitlab" || !t.project) return null;
+      const hostArg = glabHostArg(t);
+      if (!hostArg) return null;
+      let project = t.project;
+      if (typeof ref.repo === "string" && ref.repo !== "") {
+        project = ref.repo.includes("/") ? ref.repo : project.split("/").slice(0, -1).concat(ref.repo).join("/");
+      }
+      if (project.split("/").some((s) => s === "" || s === "." || s === "..")) return null;
+      const spawnSync = o.spawnSync || require("../limited-child-process").spawnSync;
+      const r = spawnSync("glab", ["api", "--hostname", hostArg, `projects/${encodePath(project)}/issues/${ref.number}`],
+        { encoding: "utf8", timeout: o.timeoutMs, windowsHide: true });
+      if (!r || r.error || r.status !== 0) return null;
+      const body = JSON.parse(r.stdout || "");
+      if (!body || typeof body !== "object" || typeof body.title !== "string") return null;
+      const title = body.title.trim();
+      return title === "" ? null : title;
+    } catch (e) {
+      return null;
+    }
+  },
 };
 
 // glab api project endpoints take the URL-encoded project path (/ → %2F), so a
