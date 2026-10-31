@@ -73,7 +73,7 @@ The `flush` origin is retired: it had no caller left once the main conversation'
 
 ### Recording period
 
-A record is written only inside the recording period: the state file exists, `workflow_init` is complete, and no `TERMINAL_STEPS` member is complete. The check runs inside the state lock, on the projection `appendEvents` hands the builder.
+A record is written only inside the recording period: the state file exists, `workflow_init` is complete, and no `TERMINAL_STEPS` member is complete. The check runs inside the state lock, on the state view `appendEvents` hands the builder.
 
 The recording period deliberately ignores `NEXT_STEP_PAUSE` and the `WORKFLOW_OFF` marker (#2578): a long paused task is still workflow work whose blocks and outcomes a later session needs.
 

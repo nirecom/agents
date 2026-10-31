@@ -3,9 +3,11 @@
 //
 //   echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term>[ op=<op>][ cat=<cat>][ stage=<stage>] — <reason>>>"
 // Records the user's grant for one glossary term against what is pending for it: (a) an open
-// deterministic finding of the current stage, (b) a glossary provenance check block, (c) an open tagged
-// concern of the current stage's ledger. Never completes a step. The fingerprint and the
-// ledger list are computed before the lock; the decision and the write share one builder.
+// deterministic finding of every stage holding one (stage= narrows to that stage), (b) a glossary
+// provenance check block, (c) an open tagged concern of the ledger of a target stage or the current
+// stage. Never completes a step. The target stages, fingerprints and ledger lists are computed
+// before the lock; the builder reads neither the current step nor the profile, so a refusal never
+// depends on what step the in-lock view resolves to. A refusal names its reason in the notice.
 
 const path = require("path");
 const { spawnSync } = require("child_process");
@@ -63,16 +65,24 @@ function listDrift(sid, format) {
   }).filter((x) => x.discrim && x.norm);
 }
 
-// Pre-lock reads: the stage, (a)'s recomputed fingerprint and (c)'s ledger list.
+// The current stage joins the open-finding stages so its ledger concerns (c) count before it has a record.
+function targetStages(state, sid, norm, disc) {
+  if (disc.op || disc.cat) return [];
+  if (disc.stage) return [disc.stage];
+  const current = stageOf(state, sid);
+  return Object.keys(STAGE_STEP).filter((s) => s === current ||
+    openFindings(stepOf(state, STAGE_STEP[s])[RECORD_KEY], norm).length > 0);
+}
+
+// Pre-lock reads per target stage: (a)'s recomputed fingerprint and (c)'s ledger list.
 function prepare(sid, norm, disc) {
   const state = readState(sid);
-  const stage = stageOf(state, sid);
-  const scoped = stage && (!disc.stage || disc.stage === stage) && !disc.op && !disc.cat ? stage : null;
-  const pre = { stage: scoped, fp: null, ledger: null };
-  if (!scoped) return pre;
-  if (openFindings(stepOf(state, STAGE_STEP[scoped])[RECORD_KEY], norm).length > 0) pre.fp = stageFingerprint(sid, scoped);
-  if (STAGE_LEDGER_FORMAT[scoped]) pre.ledger = listDrift(sid, STAGE_LEDGER_FORMAT[scoped]);
-  return pre;
+  const targets = targetStages(state, sid, norm, disc).map((stage) => ({
+    stage,
+    fp: openFindings(stepOf(state, STAGE_STEP[stage])[RECORD_KEY], norm).length > 0 ? stageFingerprint(sid, stage) : null,
+    ledger: STAGE_LEDGER_FORMAT[stage] ? listDrift(sid, STAGE_LEDGER_FORMAT[stage]) : null,
+  }));
+  return { targets };
 }
 
 function annotation(step, key, value) {
@@ -94,6 +104,43 @@ function grantProvenance(prov, norm, disc, reason) {
   return out;
 }
 
+// grantStage(current, sid, norm, disc, reason, t, v) -> the stage's record annotation | null.
+// Runs in the lock against the record as it is now, so a record rewritten since prepare() is refused.
+function grantStage(current, sid, norm, disc, reason, t, v) {
+  const { stage } = t;
+  const step = STAGE_STEP[stage];
+  const rec = stepOf(current, step)[RECORD_KEY] || null;
+  const next = rec ? Object.assign({}, rec) : { v: 1, stage };
+  const rerun = `re-run check-glossary-drift --session ${sid} --stage ${stage} --record`;
+  const noted = v.notes.length;
+  let changed = false;
+  if (rec && openFindings(rec, norm).length > 0) {
+    if (t.fp && t.fp.ok && t.fp.fingerprint === rec.fingerprint) {
+      next.grants = asArray(rec.grants).concat([{ norm, fingerprint: rec.fingerprint, reason }]);
+      changed = true;
+      v.granted.push(`finding at ${stage}`);
+    } else if (t.fp && !t.fp.ok) {
+      v.notes.push(`the ${stage} glossary_check inputs could not be read (${t.fp.error}) — ${rerun}`);
+    } else {
+      v.notes.push(`the ${stage} glossary_check record is older than its inputs — ${rerun}`);
+    }
+  }
+  if (STAGE_LEDGER_FORMAT[stage] && t.ledger === null) v.notes.push(`the ${stage} concern ledger could not be listed`);
+  const have = asArray(next.ledger_grants);
+  const add = asArray(t.ledger).filter((c) => c.norm === norm && !have.some((g) => g && g.norm === norm && g.discrim === c.discrim))
+    .filter((c, i, all) => all.findIndex((x) => x.discrim === c.discrim) === i)
+    .map((c) => ({ norm, discrim: c.discrim, reason }));
+  if (add.length > 0) {
+    next.ledger_grants = have.concat(add);
+    changed = true;
+    v.granted.push(`ledger concern(s) ${add.map((g) => g.discrim).join(", ")} at ${stage}`);
+  }
+  if (disc.stage && !changed && v.notes.length === noted) {
+    v.notes.push(`stage=${stage} has no open finding and no open tagged concern for this term`);
+  }
+  return changed ? annotation(step, RECORD_KEY, next) : null;
+}
+
 function grant(sid, term, disc, reason) {
   const norm = normalizeTerm(term);
   const pre = prepare(sid, norm, disc);
@@ -102,33 +149,9 @@ function grant(sid, term, disc, reason) {
     v.granted = [];
     v.notes = [];
     const events = [];
-    const stage = pre.stage && stageOf(current, sid) === pre.stage ? pre.stage : null;
-    if (stage) {
-      const step = STAGE_STEP[stage];
-      const rec = stepOf(current, step)[RECORD_KEY] || null;
-      let next = rec ? Object.assign({}, rec) : { v: 1, stage };
-      let changed = false;
-      if (rec && openFindings(rec, norm).length > 0) {
-        if (pre.fp && pre.fp.ok && pre.fp.fingerprint === rec.fingerprint) {
-          next.grants = asArray(rec.grants).concat([{ norm, fingerprint: rec.fingerprint, reason }]);
-          changed = true;
-          v.granted.push(`finding at ${stage}`);
-        } else {
-          v.notes.push(`the ${stage} glossary_check record is older than its inputs — re-run ` +
-            `check-glossary-drift --session ${sid} --stage ${stage} --record`);
-        }
-      }
-      if (STAGE_LEDGER_FORMAT[stage] && pre.ledger === null) v.notes.push("the concern ledger could not be listed");
-      const have = asArray(next.ledger_grants);
-      const add = asArray(pre.ledger).filter((c) => c.norm === norm && !have.some((g) => g && g.norm === norm && g.discrim === c.discrim))
-        .filter((c, i, all) => all.findIndex((x) => x.discrim === c.discrim) === i)
-        .map((c) => ({ norm, discrim: c.discrim, reason }));
-      if (add.length > 0) {
-        next.ledger_grants = have.concat(add);
-        changed = true;
-        v.granted.push(`ledger concern(s) ${add.map((g) => g.discrim).join(", ")}`);
-      }
-      if (changed) events.push(annotation(step, RECORD_KEY, next));
+    for (const t of pre.targets) {
+      const ev = grantStage(current, sid, norm, disc, reason, t, v);
+      if (ev) events.push(ev);
     }
     const prov = stepOf(current, PROVENANCE_STEP)[PROVENANCE_KEY] || null;
     const pg = grantProvenance(prov, norm, disc, reason);
@@ -138,6 +161,11 @@ function grant(sid, term, disc, reason) {
     }
     return events;
   });
+  // Here, not in the builder: the builder empties `v` on every re-run.
+  if (v.granted.length === 0 && v.notes.length === 0) {
+    v.notes.push(disc.op || disc.cat ? "no glossary_provenance block matches this term with the given op= / cat="
+      : "no stage holds an open finding or an open tagged concern for this term, and no glossary_provenance block names it");
+  }
   return v;
 }
 

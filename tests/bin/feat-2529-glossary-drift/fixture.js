@@ -106,29 +106,32 @@ function approvalEvent(sid, step) {
   });
 }
 
-// seedAt(sid, step, cwd): a raw v2 state whose current step is `step` — every earlier
+// seedAt(sid, step, cwd, opts): a raw v2 state whose current step is `step` — every earlier
 // non-terminal step complete, the gated ones approved against their current artifact (a
 // minimal artifact is written when absent; intent.md always exists).
-function seedAt(sid, step, cwd) {
+// opts.firstSid: a resumed session whose plans belong to that upstream — the artifacts and the
+// approvals are the upstream's, and the top level carries the inheritance-copy ancestry fields.
+function seedAt(sid, step, cwd, opts) {
   const { VALID_STEPS, TERMINAL_STEPS } = require(path.join(ROOT, "hooks/workflow-state"));
-  if (!fs.existsSync(planPath(sid, "intent"))) writeIntent(sid);
+  const owner = (opts && opts.firstSid) || sid;
+  if (!fs.existsSync(planPath(owner, "intent"))) writeIntent(owner);
   const events = [];
   for (const s of VALID_STEPS) {
     if (s === step) break;
     if (TERMINAL_STEPS.includes(s)) continue;
     events.push(statusEvent(s, "complete"));
     if (GATED.includes(s)) {
-      if (!fs.existsSync(planPath(sid, PLAN_SUFFIX[s]))) writePlan(sid, PLAN_SUFFIX[s], `# ${s}\n\n## Body\n\nfixture\n`);
-      events.push(approvalEvent(sid, s));
+      if (!fs.existsSync(planPath(owner, PLAN_SUFFIX[s]))) writePlan(owner, PLAN_SUFFIX[s], `# ${s}\n\n## Body\n\nfixture\n`);
+      events.push(approvalEvent(owner, s));
     }
   }
   const at = new Date().toISOString();
   events.forEach((e, i) => { e.at = at; e.seq = i + 1; });
-  fs.writeFileSync(statePath(sid), JSON.stringify({
+  const ancestry = owner === sid ? {} : { upstream_session_id: owner, previous_session_ids: [owner], first_session_id: owner };
+  fs.writeFileSync(statePath(sid), JSON.stringify(Object.assign({
     version: 2, session_id: sid, created_at: at,
     session_start_context: { cwd: cwd || process.cwd(), git_branch: "feature/g2529d-fixture" },
-    workflow_type: "wf-code", deliverable_type: "wf-code", events,
-  }, null, 2));
+  }, ancestry, { workflow_type: "wf-code", deliverable_type: "wf-code", events }), null, 2));
 }
 
 // Appends events to the raw stream, bypassing appendEvents and its boundaries.
