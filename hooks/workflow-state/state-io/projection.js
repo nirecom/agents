@@ -331,6 +331,16 @@ function stripProjection(state) {
   return out;
 }
 
+// The one state view readState and an appendEvents builder both receive: the persisted record
+// with `current` and every PROJECTION_KEYS entry spliced in from `projection`. Guarding, legacy
+// v1 read defaults and `__projectionSnapshot` stay with the caller.
+function composeStateView(state, projection) {
+  const out = stripProjection(state);
+  out.current = projection;
+  for (const key of PROJECTION_KEYS) out[key] = projection[key];
+  return out;
+}
+
 // A caller that reassigns a top-level projection key on a state object handed
 // out by readState is writing to a derived view; the write would be silently
 // discarded, so refuse instead.
@@ -380,6 +390,7 @@ module.exports = {
   projectState,
   guardProjection,
   stripProjection,
+  composeStateView,
   assertProjectionUnmutated,
   serializeStateForPersist,
 };

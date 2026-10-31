@@ -14,6 +14,7 @@ const F = require("../bin/feat-2529-glossary-drift/fixture");
 const regex = require("./feat-2529-glossary-accept/regex");
 const grant = require("./feat-2529-glossary-accept/grant");
 const ledger = require("./feat-2529-glossary-accept/ledger");
+const cross = require("./feat-2529-glossary-accept/cross-stage");
 
 try {
 caseBegin("T4-1 GLOSSARY_ACCEPTED regex pair and sentinel registration", "hooks/lib/sentinel-patterns.js");
@@ -62,6 +63,18 @@ caseEnd();
 
 caseBegin("T4-2 check-glossary-ledger-grant exit codes", "bin/check-glossary-ledger-grant");
 ledger.cli(F, at);
+caseEnd();
+
+caseBegin("#2828 (a) resumed session: grant recorded against the upstream-bound record", "hooks/workflow-mark/glossary-accept-handler.js");
+cross.resumed(F);
+caseEnd();
+
+caseBegin("#2828 (b) finding at a stage other than the current step", "hooks/workflow-mark/glossary-accept-handler.js");
+cross.otherStage(F);
+caseEnd();
+
+caseBegin("#2828 (c) a refused grant names its reason", "hooks/workflow-mark/glossary-accept-handler.js");
+cross.reasons(F);
 caseEnd();
 } finally {
   F.finish();
