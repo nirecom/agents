@@ -5,8 +5,9 @@
 // WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED sentinel, #2597) and RESET_FROM's synthesised plan approvals (now refused).
 // TL3 gap: the real permissions.ask dialog is not exercised; settings.json is checked
 // statically and the sentinel is fed to the PostToolUse hook as if the user had allowed it.
-
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -23,17 +24,19 @@ fs.writeFileSync(path.join(CFG, ".env"), "");
 process.env.AGENTS_MAIN_ROOT = CFG;
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TRANSCRIPTS;
 for (const k of ["CONFIRM_INTENT", "CONFIRM_OUTLINE", "CONFIRM_DETAIL", "WORKFLOW_SESSION_ID"]) delete process.env[k];
-process.on("exit", () => { restore(); fs.rmSync(TMP, { recursive: true, force: true }); });
+after(() => { restore(); fs.rmSync(TMP, { recursive: true, force: true }); });
 
 const { make, mod, ROOT, FK, SENT } = require("./feature-2709-approval-bypass-closure/fixture");
 const CA = mod("hooks/workflow-state/completion-approval.js");
 
-let passed = 0;
 let failed = 0;
+// Each run() is its own node:test case; the cases share sid/config state, so they keep file order.
 function run(name, fn) {
-  let why = null;
-  try { const r = fn(); if (typeof r === "string") why = r; } catch (e) { why = e && e.message ? e.message : String(e); }
-  if (why === null) { passed += 1; console.log(`PASS: ${name}`); } else { failed += 1; console.log(`FAIL: ${name} — ${why}`); }
+  test(name, () => noNewFailures(() => failed, () => {
+    let why = null;
+    try { const r = fn(); if (typeof r === "string") why = r; } catch (e) { why = e && e.message ? e.message : String(e); }
+    if (why === null) console.log(`PASS: ${name}`); else { failed += 1; console.log(`FAIL: ${name} — ${why}`); }
+  }));
 }
 const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 function eq(got, want, what) {
@@ -495,6 +498,3 @@ run("B15 an approved RESET_FROM applies through the real hook and synthesises no
   eq(events(sid, "plan_approval").length, approvalsBefore, "no new plan_approval events");
 });
 caseEnd();
-
-console.log(`\nResults: ${passed} passed, ${failed} failed`);
-process.exitCode = failed === 0 ? 0 : 1;

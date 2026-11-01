@@ -13,7 +13,9 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -22,8 +24,13 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "f2631-scm-"));
 const IDX = ["--kind", "code", "--pre", "rev:HEAD", "--post", "index"];
 const UNDECIDABLE = "size-check: merge state undecidable (";
 const leftOut = (n) => `size-check: merge in progress; ${n} staged path(s) equal to MERGE_HEAD left out`;
+after(() => {
+  fs.rmSync(TMP, { recursive: true, force: true });
+  restore();
+});
 
 let failures = 0;
+const fails = () => failures;
 const clip = (s) => String(s).replace(/[\r\n]+/g, " ").slice(0, 400);
 function check(name, ok, detail) {
   if (ok) console.log(`PASS: ${name}`);
@@ -86,139 +93,159 @@ const show = (r) => `rc=${r.rc} targets=${r.targets} err=${r.err} out=${r.out}`;
 const verdict = (name, r, rc) => check(name, r.rc === rc && r.targets !== null, show(r));
 
 caseBegin("no-merge-head-judges-all", "bin/size-check");
-guarded("K1", () => {
-  const dir = plainRepo();
-  put(dir, "src/big.js", hard + 1, true);
-  const r = sizeCheck(dir, ["src/big.js"]);
-  verdict("K1 no MERGE_HEAD: a new HARD+1 file is rc 1", r, 1);
-  check("K1 no MERGE_HEAD: nothing is left out", !r.err.includes("left out"), show(r));
-});
+test("no-merge-head-judges-all", () => noNewFailures(fails, () => {
+  guarded("K1", () => {
+    const dir = plainRepo();
+    put(dir, "src/big.js", hard + 1, true);
+    const r = sizeCheck(dir, ["src/big.js"]);
+    verdict("K1 no MERGE_HEAD: a new HARD+1 file is rc 1", r, 1);
+    check("K1 no MERGE_HEAD: nothing is left out", !r.err.includes("left out"), show(r));
+  });
+}));
 caseEnd();
 
 caseBegin("merge-incoming-equal-blob-excluded", "bin/size-check");
-guarded("K2", () => {
-  const fx = mergeRepo(`src/big.js=${hard + 1}`, "src/small.js=3");
-  let r = sizeCheck(fx.dir, ["src/big.js", "src/small.js"]);
-  verdict("K2 blobs equal to MERGE_HEAD are left out (rc 0)", r, 0);
-  check("K2 TARGETS drops the left-out paths (2 -> 0)", r.targets === 0, show(r));
-  check("K2 stderr names the merge exclusion", r.err.includes(leftOut(2)), show(r));
-  put(fx.dir, "src/own.js", 4, true);
-  r = sizeCheck(fx.dir, ["src/big.js", "src/own.js"]);
-  check("K2 an own staged path is still judged (TARGETS 1)", r.rc === 0 && r.targets === 1, show(r));
-});
-// The exclusion is kind-independent: the prompt and docs kinds leave out the same way.
-for (const [kind, rel] of [["prompt", "rules/big.md"], ["docs", "docs/big.md"]]) {
-  guarded(`K2 ${kind}`, () => {
-    const h = Number(smf("smf_hard", kind));
-    const fx = mergeRepo(`${rel}=${h + 1}`);
-    const r = sizeCheck(fx.dir, [rel], ["--kind", kind, "--pre", "rev:HEAD", "--post", "index"]);
-    verdict(`K2 --kind ${kind}: a HARD+1 ${rel} equal to MERGE_HEAD is left out (rc 0)`, r, 0);
-    check(`K2 --kind ${kind}: stderr names the exclusion`, r.err.includes(leftOut(1)), show(r));
+test("merge-incoming-equal-blob-excluded", () => noNewFailures(fails, () => {
+  guarded("K2", () => {
+    const fx = mergeRepo(`src/big.js=${hard + 1}`, "src/small.js=3");
+    let r = sizeCheck(fx.dir, ["src/big.js", "src/small.js"]);
+    verdict("K2 blobs equal to MERGE_HEAD are left out (rc 0)", r, 0);
+    check("K2 TARGETS drops the left-out paths (2 -> 0)", r.targets === 0, show(r));
+    check("K2 stderr names the merge exclusion", r.err.includes(leftOut(2)), show(r));
+    put(fx.dir, "src/own.js", 4, true);
+    r = sizeCheck(fx.dir, ["src/big.js", "src/own.js"]);
+    check("K2 an own staged path is still judged (TARGETS 1)", r.rc === 0 && r.targets === 1, show(r));
   });
-}
+  // The exclusion is kind-independent: the prompt and docs kinds leave out the same way.
+  for (const [kind, rel] of [["prompt", "rules/big.md"], ["docs", "docs/big.md"]]) {
+    guarded(`K2 ${kind}`, () => {
+      const h = Number(smf("smf_hard", kind));
+      const fx = mergeRepo(`${rel}=${h + 1}`);
+      const r = sizeCheck(fx.dir, [rel], ["--kind", kind, "--pre", "rev:HEAD", "--post", "index"]);
+      verdict(`K2 --kind ${kind}: a HARD+1 ${rel} equal to MERGE_HEAD is left out (rc 0)`, r, 0);
+      check(`K2 --kind ${kind}: stderr names the exclusion`, r.err.includes(leftOut(1)), show(r));
+    });
+  }
+}));
 caseEnd();
 
 caseBegin("merge-incoming-differing-blob-judged", "bin/size-check");
-guarded("K3", () => {
-  const fx = mergeRepo(`src/big.js=${hard + 1}`);
-  smf("smf_grow", fx.dir, "src/big.js");
-  const r = sizeCheck(fx.dir, ["src/big.js"]);
-  verdict("K3 MERGE_HEAD content plus one line is judged (rc 1)", r, 1);
-  check("K3 the differing path stays a target", r.targets === 1, show(r));
-});
+test("merge-incoming-differing-blob-judged", () => noNewFailures(fails, () => {
+  guarded("K3", () => {
+    const fx = mergeRepo(`src/big.js=${hard + 1}`);
+    smf("smf_grow", fx.dir, "src/big.js");
+    const r = sizeCheck(fx.dir, ["src/big.js"]);
+    verdict("K3 MERGE_HEAD content plus one line is judged (rc 1)", r, 1);
+    check("K3 the differing path stays a target", r.targets === 1, show(r));
+  });
+}));
 caseEnd();
 
 // The index state is blob AND mode: an equal blob staged with another mode is not MERGE_HEAD's.
 caseBegin("merge-incoming-equal-blob-differing-mode-judged", "bin/size-check");
-guarded("K3m", () => {
-  const fx = mergeRepo(`src/big.js=${hard + 1}`, "src/twin.js=3");
-  git(fx.dir, ["update-index", "--chmod=+x", "--", "src/big.js"]);
-  const idx = git(fx.dir, ["ls-files", "-s", "--", "src/big.js"]).split(/\s+/);
-  const theirs = git(fx.dir, ["ls-tree", fx.mergeHead, "--", "src/big.js"]).split(/\s+/);
-  check("K3m premise: the index blob equals MERGE_HEAD's", idx[1] === theirs[2], `index=${idx.join(" ")} merge_head=${theirs.join(" ")}`);
-  check("K3m premise: the index mode (100755) differs from MERGE_HEAD's (100644)", idx[0] === "100755" && theirs[0] === "100644", `index=${idx[0]} merge_head=${theirs[0]}`);
-  const r = sizeCheck(fx.dir, ["src/big.js", "src/twin.js"]);
-  verdict("K3m the mode-changed HARD+1 path is judged (rc 1)", r, 1);
-  check("K3m only the mode-changed path stays a target (TARGETS 1)", r.targets === 1, show(r));
-  check("K3m the same-mode twin alone is left out", r.err.includes(leftOut(1)), show(r));
-});
+test("merge-incoming-equal-blob-differing-mode-judged", () => noNewFailures(fails, () => {
+  guarded("K3m", () => {
+    const fx = mergeRepo(`src/big.js=${hard + 1}`, "src/twin.js=3");
+    git(fx.dir, ["update-index", "--chmod=+x", "--", "src/big.js"]);
+    const idx = git(fx.dir, ["ls-files", "-s", "--", "src/big.js"]).split(/\s+/);
+    const theirs = git(fx.dir, ["ls-tree", fx.mergeHead, "--", "src/big.js"]).split(/\s+/);
+    check("K3m premise: the index blob equals MERGE_HEAD's", idx[1] === theirs[2], `index=${idx.join(" ")} merge_head=${theirs.join(" ")}`);
+    check("K3m premise: the index mode (100755) differs from MERGE_HEAD's (100644)", idx[0] === "100755" && theirs[0] === "100644", `index=${idx[0]} merge_head=${theirs[0]}`);
+    const r = sizeCheck(fx.dir, ["src/big.js", "src/twin.js"]);
+    verdict("K3m the mode-changed HARD+1 path is judged (rc 1)", r, 1);
+    check("K3m only the mode-changed path stays a target (TARGETS 1)", r.targets === 1, show(r));
+    check("K3m the same-mode twin alone is left out", r.err.includes(leftOut(1)), show(r));
+  });
+}));
 caseEnd();
 
 caseBegin("absent-in-merge-head-judged", "bin/size-check");
-guarded("K4", () => {
-  const fx = mergeRepo("src/small.js=3");
-  put(fx.dir, "src/new.js", hard + 1, true);
-  const r = sizeCheck(fx.dir, ["src/small.js", "src/new.js"]);
-  verdict("K4 a HARD+1 path absent from MERGE_HEAD is rc 1", r, 1);
-  check("K4 only the absent path is judged (TARGETS 1)", r.targets === 1, show(r));
-  check("K4 the equal path is still left out", r.err.includes(leftOut(1)), show(r));
-});
+test("absent-in-merge-head-judged", () => noNewFailures(fails, () => {
+  guarded("K4", () => {
+    const fx = mergeRepo("src/small.js=3");
+    put(fx.dir, "src/new.js", hard + 1, true);
+    const r = sizeCheck(fx.dir, ["src/small.js", "src/new.js"]);
+    verdict("K4 a HARD+1 path absent from MERGE_HEAD is rc 1", r, 1);
+    check("K4 only the absent path is judged (TARGETS 1)", r.targets === 1, show(r));
+    check("K4 the equal path is still left out", r.err.includes(leftOut(1)), show(r));
+  });
+}));
 caseEnd();
 
 caseBegin("forged-merge-head-not-a-commit", "bin/size-check");
-for (const kind of ["tree", "blob", "missing", "garbage"]) {
-  guarded(`K5 ${kind}`, () => {
-    const fx = mergeRepo(`src/big.js=${hard + 1}`);
-    const value = {
-      tree: () => git(fx.dir, ["rev-parse", `${fx.mergeHead}^{tree}`]),
-      blob: () => git(fx.dir, ["rev-parse", `${fx.mergeHead}:src/big.js`]),
-      missing: () => "0123456789abcdef0123456789abcdef01234567",
-      garbage: () => "not-an-object-id",
-    }[kind]();
-    fs.writeFileSync(fx.mergeHeadPath, `${value}\n`);
-    const r = sizeCheck(fx.dir, ["src/big.js"]);
-    verdict(`K5 MERGE_HEAD is a ${kind}: nothing left out (rc 1)`, r, 1);
-    check(`K5 MERGE_HEAD is a ${kind}: stderr says undecidable`, r.err.includes(UNDECIDABLE), show(r));
-    check(`K5 MERGE_HEAD is a ${kind}: no exclusion line`, !r.err.includes("left out"), show(r));
-  });
-}
+test("forged-merge-head-not-a-commit", () => noNewFailures(fails, () => {
+  for (const kind of ["tree", "blob", "missing", "garbage"]) {
+    guarded(`K5 ${kind}`, () => {
+      const fx = mergeRepo(`src/big.js=${hard + 1}`);
+      const value = {
+        tree: () => git(fx.dir, ["rev-parse", `${fx.mergeHead}^{tree}`]),
+        blob: () => git(fx.dir, ["rev-parse", `${fx.mergeHead}:src/big.js`]),
+        missing: () => "0123456789abcdef0123456789abcdef01234567",
+        garbage: () => "not-an-object-id",
+      }[kind]();
+      fs.writeFileSync(fx.mergeHeadPath, `${value}\n`);
+      const r = sizeCheck(fx.dir, ["src/big.js"]);
+      verdict(`K5 MERGE_HEAD is a ${kind}: nothing left out (rc 1)`, r, 1);
+      check(`K5 MERGE_HEAD is a ${kind}: stderr says undecidable`, r.err.includes(UNDECIDABLE), show(r));
+      check(`K5 MERGE_HEAD is a ${kind}: no exclusion line`, !r.err.includes("left out"), show(r));
+    });
+  }
+}));
 caseEnd();
 
 caseBegin("octopus-merge-head-judges-all", "bin/size-check");
-guarded("K6", () => {
-  const fx = mergeRepo(`src/big.js=${hard + 1}`);
-  fs.writeFileSync(fx.mergeHeadPath, `${fx.mergeHead}\n${git(fx.dir, ["rev-parse", "HEAD~1"])}\n`);
-  const r = sizeCheck(fx.dir, ["src/big.js"]);
-  verdict("K6 two MERGE_HEAD lines: nothing left out (rc 1)", r, 1);
-  check("K6 octopus is undecidable", r.err.includes(UNDECIDABLE), show(r));
-});
+test("octopus-merge-head-judges-all", () => noNewFailures(fails, () => {
+  guarded("K6", () => {
+    const fx = mergeRepo(`src/big.js=${hard + 1}`);
+    fs.writeFileSync(fx.mergeHeadPath, `${fx.mergeHead}\n${git(fx.dir, ["rev-parse", "HEAD~1"])}\n`);
+    const r = sizeCheck(fx.dir, ["src/big.js"]);
+    verdict("K6 two MERGE_HEAD lines: nothing left out (rc 1)", r, 1);
+    check("K6 octopus is undecidable", r.err.includes(UNDECIDABLE), show(r));
+  });
+}));
 caseEnd();
 
 caseBegin("commit-tree-forgery-is-the-accepted-residual", "bin/size-check");
-guarded("K7", () => {
-  const dir = plainRepo();
-  put(dir, "src/big.js", hard + 1, true);
-  const forged = git(dir, ["commit-tree", git(dir, ["write-tree"]), "-p", "HEAD", "-m", "forged"]);
-  fs.writeFileSync(smf("smf_merge_head_path", dir), `${forged}\n`);
-  const r = sizeCheck(dir, ["src/big.js"]);
-  // Accepted Tradeoff: a commit forged from the index cannot be told from a real MERGE_HEAD.
-  verdict("K7 commit-tree forgery is left out (accepted residual, rc 0)", r, 0);
-  check("K7 the forged MERGE_HEAD reads as a merge", r.err.includes(leftOut(1)), show(r));
-});
+test("commit-tree-forgery-is-the-accepted-residual", () => noNewFailures(fails, () => {
+  guarded("K7", () => {
+    const dir = plainRepo();
+    put(dir, "src/big.js", hard + 1, true);
+    const forged = git(dir, ["commit-tree", git(dir, ["write-tree"]), "-p", "HEAD", "-m", "forged"]);
+    fs.writeFileSync(smf("smf_merge_head_path", dir), `${forged}\n`);
+    const r = sizeCheck(dir, ["src/big.js"]);
+    // Accepted Tradeoff: a commit forged from the index cannot be told from a real MERGE_HEAD.
+    verdict("K7 commit-tree forgery is left out (accepted residual, rc 0)", r, 0);
+    check("K7 the forged MERGE_HEAD reads as a merge", r.err.includes(leftOut(1)), show(r));
+  });
+}));
 caseEnd();
 
 caseBegin("linked-worktree-merge-head", "bin/size-check");
-guarded("K8", () => {
-  const main = plainRepo();
-  git(main, ["branch", "-M", "main"]);
-  const wt = newDir("wt");
-  git(main, ["worktree", "add", "-q", "-b", "linked", wt, "main"]);
-  smf("smf_start_merge", wt, `src/big.js=${hard + 1}`);
-  const mh = smf("smf_merge_head_path", wt);
-  check("K8 premise: MERGE_HEAD is in the linked worktree's gitdir", /\/worktrees\//.test(mh.replace(/\\/g, "/")) && fs.existsSync(mh), mh);
-  const r = sizeCheck(wt, ["src/big.js"]);
-  verdict("K8 linked worktree: equal blob left out (rc 0)", r, 0);
-  check("K8 linked worktree: stderr names the exclusion", r.err.includes(leftOut(1)), show(r));
-});
+test("linked-worktree-merge-head", () => noNewFailures(fails, () => {
+  guarded("K8", () => {
+    const main = plainRepo();
+    git(main, ["branch", "-M", "main"]);
+    const wt = newDir("wt");
+    git(main, ["worktree", "add", "-q", "-b", "linked", wt, "main"]);
+    smf("smf_start_merge", wt, `src/big.js=${hard + 1}`);
+    const mh = smf("smf_merge_head_path", wt);
+    check("K8 premise: MERGE_HEAD is in the linked worktree's gitdir", /\/worktrees\//.test(mh.replace(/\\/g, "/")) && fs.existsSync(mh), mh);
+    const r = sizeCheck(wt, ["src/big.js"]);
+    verdict("K8 linked worktree: equal blob left out (rc 0)", r, 0);
+    check("K8 linked worktree: stderr names the exclusion", r.err.includes(leftOut(1)), show(r));
+  });
+}));
 caseEnd();
 
 caseBegin("worktree-post-not-excluded", "bin/size-check");
-guarded("K9", () => {
-  const fx = mergeRepo(`src/big.js=${hard + 1}`);
-  const r = sizeCheck(fx.dir, ["src/big.js"], ["--kind", "code", "--pre", "none", "--post", "worktree"]);
-  verdict("K9 --post worktree judges the merge-incoming file (rc 1)", r, 1);
-  check("K9 --post worktree: no exclusion line", !r.err.includes("left out"), show(r));
-});
+test("worktree-post-not-excluded", () => noNewFailures(fails, () => {
+  guarded("K9", () => {
+    const fx = mergeRepo(`src/big.js=${hard + 1}`);
+    const r = sizeCheck(fx.dir, ["src/big.js"], ["--kind", "code", "--pre", "none", "--post", "worktree"]);
+    verdict("K9 --post worktree judges the merge-incoming file (rc 1)", r, 1);
+    check("K9 --post worktree: no exclusion line", !r.err.includes("left out"), show(r));
+  });
+}));
 caseEnd();
 
 // K10-K11: `:<path>` reads `:0:small.js` as stage 0 of small.js, so a path named `0:small.js` must be
@@ -246,25 +273,25 @@ function stageAliasRepo(aliasLines) {
 const hardRecordFor = (r, p) => r.out.replace(/\r/g, "").split("\n").some((l) => l.startsWith("HARD\t") && l.endsWith(`\t${p}`));
 
 caseBegin("stage-alias-path-measures-its-own-blob", "bin/size-check");
-guarded("K10", () => {
-  const dir = stageAliasRepo(hard + 1);
-  const staged = git(dir, ["ls-files"]).split(/\r?\n/);
-  check("K10 premise: the index holds 0:small.js and small.js", staged.includes("0:small.js") && staged.includes("small.js"), staged.join(" "));
-  const r = sizeCheck(dir, ["0:small.js"]);
-  verdict("K10 a HARD+1 0:small.js is rc 1, not read as small.js's stage 0", r, 1);
-  check("K10 a HARD record names 0:small.js", hardRecordFor(r, "0:small.js"), show(r));
-});
+test("stage-alias-path-measures-its-own-blob", () => noNewFailures(fails, () => {
+  guarded("K10", () => {
+    const dir = stageAliasRepo(hard + 1);
+    const staged = git(dir, ["ls-files"]).split(/\r?\n/);
+    check("K10 premise: the index holds 0:small.js and small.js", staged.includes("0:small.js") && staged.includes("small.js"), staged.join(" "));
+    const r = sizeCheck(dir, ["0:small.js"]);
+    verdict("K10 a HARD+1 0:small.js is rc 1, not read as small.js's stage 0", r, 1);
+    check("K10 a HARD record names 0:small.js", hardRecordFor(r, "0:small.js"), show(r));
+  });
+}));
 caseEnd();
 
 caseBegin("stage-alias-path-under-hard-not-reported", "bin/size-check");
-guarded("K11", () => {
-  const dir = stageAliasRepo(hard);
-  const r = sizeCheck(dir, ["0:small.js"]);
-  verdict("K11 0:small.js at the HARD limit is rc 0", r, 0);
-  check("K11 no HARD record", !hardRecordFor(r, "0:small.js"), show(r));
-});
+test("stage-alias-path-under-hard-not-reported", () => noNewFailures(fails, () => {
+  guarded("K11", () => {
+    const dir = stageAliasRepo(hard);
+    const r = sizeCheck(dir, ["0:small.js"]);
+    verdict("K11 0:small.js at the HARD limit is rc 0", r, 0);
+    check("K11 no HARD record", !hardRecordFor(r, "0:small.js"), show(r));
+  });
+}));
 caseEnd();
-
-fs.rmSync(TMP, { recursive: true, force: true });
-restore();
-process.exitCode = failures ? 1 : 0;

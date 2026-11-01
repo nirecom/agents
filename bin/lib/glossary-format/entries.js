@@ -3,7 +3,16 @@
 // Entry form is owned by rules/docs/glossary.md.
 
 const { fenceStep } = require("../../../hooks/lib/markdown-fence");
-const { unsafeTermChars, describeTermChars } = require("../../../hooks/lib/glossary-term");
+const {
+  unsafeTermChars, describeTermChars, parseSpellingList, checkIdentifierSpelling, checkHomographSpelling,
+} = require("../../../hooks/lib/glossary-term");
+
+// The optional spelling fields (#2763): bullet key -> entryFields key and spelling check.
+const FIELDS = [
+  { key: "Identifier", name: "identifiers", check: checkIdentifierSpelling },
+  { key: "Homographs", name: "homographs", check: checkHomographSpelling },
+];
+const FIELD_KEYS = new Set(FIELDS.map((f) => f.key));
 
 const ENTRY_RE = /^###(?!#)\s+(.*\S)\s*$/;
 const H2_RE = /^##(?!#)/;
@@ -72,7 +81,8 @@ function checkEntry(e) {
   if (unsafe.length > 0) out.push(at + " heading has a forbidden character (" + describeTermChars(unsafe) + ")");
   const defs = e.bullets.filter((b) => b.key === "Definition");
   const rels = e.bullets.filter((b) => b.key === "Related");
-  const others = e.bullets.filter((b) => b.key !== "Definition" && b.key !== "Related");
+  const others = e.bullets.filter((b) => b.key !== "Definition" && b.key !== "Related" && !FIELD_KEYS.has(b.key));
+  out.push(...checkFields(e, at));
   if (defs.length !== 1) out.push(at + " needs exactly one '- **Definition**:' (found " + defs.length + ")");
   else if (defs[0].value.trim() === "") out.push(at + " Definition is empty");
   else if (defs[0].lines > MAX_DEFINITION_LINES) {
@@ -84,7 +94,39 @@ function checkEntry(e) {
     if (links !== 1) out.push(at + " Related must hold exactly one Markdown link (found " + links + ")");
   }
   for (const o of others) out.push("line " + o.lineNumber + ": '" + e.term + "' has a disallowed bullet '" + o.key + "'");
-  for (const n of e.stray) out.push("line " + n + ": '" + e.term + "' has a line that is not a Definition/Related bullet");
+  for (const n of e.stray) out.push("line " + n + ": '" + e.term + "' has a line that is not a Definition/Identifier/Homographs/Related bullet");
+  return out;
+}
+
+// The Identifier / Homographs bullets: at most one each, a non-empty backticked list, every
+// spelling passing its check.
+function checkFields(e, at) {
+  const out = [];
+  for (const f of FIELDS) {
+    const bullets = e.bullets.filter((b) => b.key === f.key);
+    if (bullets.length > 1) out.push(at + " has more than one '- **" + f.key + "**:' (found " + bullets.length + ")");
+    for (const b of bullets) {
+      const where = "line " + b.lineNumber + ": '" + e.term + "' " + f.key;
+      const list = parseSpellingList(b.value);
+      if (!Array.isArray(list)) { out.push(where + ": " + list.error); continue; }
+      if (list.length === 0) { out.push(where + " is empty"); continue; }
+      for (const s of list) {
+        const why = f.check(e.term, s);
+        if (why) out.push(where + ": " + why);
+      }
+    }
+  }
+  return out;
+}
+
+// entryFields(entry) -> { identifiers, homographs } of the first bullet of each ([] when absent or malformed).
+function entryFields(e) {
+  const out = {};
+  for (const f of FIELDS) {
+    const b = e.bullets.find((x) => x.key === f.key);
+    const list = b ? parseSpellingList(b.value) : [];
+    out[f.name] = Array.isArray(list) ? list : [];
+  }
   return out;
 }
 
@@ -156,6 +198,32 @@ function replaceDefinition(text, term, definition) {
   return lines.join(eol);
 }
 
+// fieldLines(fields) -> the Identifier / Homographs bullet lines of the non-empty fields.
+function fieldLines(fields) {
+  const f = fields || {};
+  return FIELDS.filter((x) => Array.isArray(f[x.name]) && f[x.name].length > 0)
+    .map((x) => "- **" + x.key + "**: " + f[x.name].map((s) => "`" + s + "`").join(", "));
+}
+
+// Replace the Identifier / Homographs bullets of `term` with `fields`, placed right after the
+// Definition bullet; an empty field removes its bullet. null when the term or its Definition is absent.
+function replaceFields(text, term, fields) {
+  const found = findEntry(text, term);
+  const def = found && found.entry.bullets.find((b) => b.key === "Definition");
+  if (!def) return null;
+  const drop = new Set();
+  for (const b of found.entry.bullets.filter((x) => FIELD_KEYS.has(x.key))) {
+    for (let k = 0; k < b.lines; k++) drop.add(b.lineNumber - 1 + k);
+  }
+  const defEnd = def.lineNumber - 1 + def.lines - 1;
+  const out = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    if (!drop.has(i)) out.push(line);
+    if (i === defEnd) out.push(...fieldLines(fields));
+  });
+  return out.join(eolOf(text));
+}
+
 module.exports = {
   compareTerms,
   parseGlossaryFile,
@@ -163,4 +231,7 @@ module.exports = {
   insertEntry,
   removeEntry,
   replaceDefinition,
+  entryFields,
+  fieldLines,
+  replaceFields,
 };

@@ -7,6 +7,8 @@
 // appended after the boundary in one write; the supervisor state is copied beside it.
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -14,7 +16,8 @@ const { spawnSync } = require("child_process");
 
 const restore = isolate();
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "f2304-"));
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
@@ -50,6 +53,7 @@ const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
+const failures = () => failed;
 function throwsIt(fn, what) {
   try { fn(); } catch (e) { return e; }
   throw new Error(`${what}: did not throw`);
@@ -60,7 +64,7 @@ const STEP_FIELDS = ["kind", "step", "status", "key", "value", "provenance", "or
 const pick = (e) => STEP_FIELDS.map((k) => (e[k] === undefined ? "" : JSON.stringify(e[k]))).join("|");
 
 caseBegin("verbatim-copy-up-to-the-boundary", "hooks/workflow-state/inheritance/apply.js");
-{
+test("verbatim-copy-up-to-the-boundary", () => noNewFailures(failures, () => {
   const up = F.seedUpstream("up-verbatim");
   const createdAt = F.seedDownstream("down-verbatim");
   let res = null;
@@ -91,11 +95,11 @@ caseBegin("verbatim-copy-up-to-the-boundary", "hooks/workflow-state/inheritance/
     F.mod("hooks/workflow-state/state-io/projection").assertStreamIntegrity(down.events);
   });
   check("C1: the upstream file is left untouched", () => eq(F.raw("up-verbatim"), up, "upstream state"));
-}
+}));
 caseEnd();
 
 caseBegin("session-start-context-same-and-different", "hooks/workflow-state/inheritance/apply.js");
-{
+test("session-start-context-same-and-different", () => noNewFailures(failures, () => {
   check("C2: a downstream context equal to the upstream's keeps the upstream value", () => {
     const up = F.seedUpstream("up-ctx-same");
     const createdAt = F.seedDownstream("down-ctx-same", F.UP_CTX);
@@ -110,11 +114,11 @@ caseBegin("session-start-context-same-and-different", "hooks/workflow-state/inhe
     apply().applyInheritance("down-ctx-diff", createdAt, "up-ctx-diff");
     eq(F.raw("down-ctx-diff").session_start_context, ctx, "session_start_context");
   });
-}
+}));
 caseEnd();
 
 caseBegin("supervisor-state-copied-or-absent", "hooks/lib/supervisor-state-writer/copy.js");
-{
+test("supervisor-state-copied-or-absent", () => noNewFailures(failures, () => {
   check("C3: the upstream supervisor state lands at <downstream>.control with only session_id rewritten", () => {
     F.seedUpstream("up-sup");
     const sup = F.seedSupervisor("up-sup");
@@ -185,11 +189,11 @@ caseBegin("supervisor-state-copied-or-absent", "hooks/lib/supervisor-state-write
     F.mod("hooks/lib/supervisor-state-writer/copy").copySupervisorState("up-done", "down-done");
     eq(JSON.parse(fs.readFileSync(F.supervisorPath("down-done"), "utf8")), Object.assign({}, sup, { session_id: "down-done" }), "downstream supervisor state");
   });
-}
+}));
 caseEnd();
 
 caseBegin("downstream-worktree-and-model-carry-forward", "hooks/workflow-state/inheritance/apply.js");
-{
+test("downstream-worktree-and-model-carry-forward", () => noNewFailures(failures, () => {
   check("C4: a downstream EnterWorktree recorded before the copy survives it and owns state.cwd", () => {
     F.seedUpstream("up-wt");
     const createdAt = F.seedDownstream("down-wt");
@@ -216,11 +220,11 @@ caseBegin("downstream-worktree-and-model-carry-forward", "hooks/workflow-state/i
     eq(F.S().readState("down-model2").session_model.id, "claude-up", "projected session_model");
     eq(F.raw("down-model2").upstream_copy_seq > 0, true, "boundary recorded");
   });
-}
+}));
 caseEnd();
 
 caseBegin("granularity-full-vs-degraded-reverts", "hooks/workflow-state/inheritance/apply.js");
-{
+test("granularity-full-vs-degraded-reverts", () => noNewFailures(failures, () => {
   check("C5: full — cleanup is force-skipped after the boundary (#772) and nothing is reverted", () => {
     F.seedUpstream("up-full");
     const createdAt = F.seedDownstream("down-full");
@@ -261,11 +265,11 @@ caseBegin("granularity-full-vs-degraded-reverts", "hooks/workflow-state/inherita
   check("C5: inherit_revert_reason is a known step annotation key", () => {
     eq(F.mod("hooks/workflow-state/state-io/events").STEP_ANNOTATION_KEYS.includes("inherit_revert_reason"), true, "STEP_ANNOTATION_KEYS");
   });
-}
+}));
 caseEnd();
 
 caseBegin("copied-events-are-not-this-sessions-own-action", "hooks/workflow-state/lifecycle.js");
-{
+test("copied-events-are-not-this-sessions-own-action", () => noNewFailures(failures, () => {
   check("C6: isWorkflowStarted is false right after the copy and true after a genuine mark-step", () => {
     F.seedUpstream("up-started");
     const createdAt = F.seedDownstream("down-started");
@@ -278,11 +282,11 @@ caseBegin("copied-events-are-not-this-sessions-own-action", "hooks/workflow-stat
     F.S().markStep("down-started", "outline", "skipped", { skip_reason: "trivial" });
     eq(lifecycle.isWorkflowStarted("down-started"), true, "started after a genuine mark-step");
   });
-}
+}));
 caseEnd();
 
 caseBegin("one-write-per-inheritance-and-throw-leaves-bytes", "hooks/workflow-state/inheritance/apply.js");
-{
+test("one-write-per-inheritance-and-throw-leaves-bytes", () => noNewFailures(failures, () => {
   check("C7: exactly one writeStateLocked call lands on the downstream per inheritance", () => {
     F.seedUpstream("up-once");
     const createdAt = F.seedDownstream("down-once");
@@ -308,11 +312,11 @@ caseBegin("one-write-per-inheritance-and-throw-leaves-bytes", "hooks/workflow-st
     apply().applyInheritance("down-throw", createdAt, "up-throw");
     eq(F.raw("down-throw").upstream_copy_seq > 0, true, "positive control: the same call succeeds once unpatched");
   });
-}
+}));
 caseEnd();
 
 caseBegin("upstream-missing-or-corrupt-refuses", "hooks/workflow-state/inheritance/apply.js");
-{
+test("upstream-missing-or-corrupt-refuses", () => noNewFailures(failures, () => {
   const refuses = (label, upSid, prep) => check(`C8: ${label} — throws and writes nothing to the downstream`, () => {
     if (prep) prep(upSid);
     const down = "down-" + upSid;
@@ -334,11 +338,11 @@ caseBegin("upstream-missing-or-corrupt-refuses", "hooks/workflow-state/inheritan
     eq([down.upstream_session_id, down.upstream_copy_seq], ["up-empty", 0], "boundary");
     eq(F.post(down).every((e) => e.origin === "session-inherit"), true, "only revert events follow");
   });
-}
+}));
 caseEnd();
 
 caseBegin("compose-appended-state-is-pure", "hooks/workflow-state/state-io/events.js");
-{
+test("compose-appended-state-is-pure", () => noNewFailures(failures, () => {
   check("C9: composeAppendedState is exported from events.js and the state-io barrel", () => {
     eq(typeof F.mod("hooks/workflow-state/state-io/events").composeAppendedState, "function", "events.js");
     eq(typeof F.S().composeAppendedState, "function", "state-io.js");
@@ -366,11 +370,11 @@ caseBegin("compose-appended-state-is-pure", "hooks/workflow-state/state-io/event
     throwsIt(() => F.S().composeAppendedState("compose-bad", base, () => { throw new Error("builder"); }), "builder throw");
     eq(fs.existsSync(F.statePath("compose-bad")), false, "file written");
   });
-}
+}));
 caseEnd();
 
 caseBegin("append-events-regression-after-extraction", "hooks/workflow-state/state-io/events.js");
-{
+test("append-events-regression-after-extraction", () => noNewFailures(failures, () => {
   const io = F.S();
   check("C10: appendEvents still stamps at, renumbers seq and returns the full stream", () => {
     io.writeState("append-reg", io.createInitialState("append-reg", F.UP_CTX));
@@ -394,11 +398,11 @@ caseBegin("append-events-regression-after-extraction", "hooks/workflow-state/sta
     io.appendEvents("append-reg", []);
     eq([F.bytes("append-reg") === before, writes.length], [true, 0], "unchanged / writes");
   });
-}
+}));
 caseEnd();
 
 caseBegin("adopt-state-carries-the-new-contract", "hooks/workflow-state/inheritance/adopt.js");
-{
+test("adopt-state-carries-the-new-contract", () => noNewFailures(failures, () => {
   check("C11: adoptState hands back the new contract under inheritance", () => {
     F.seedUpstream("up-adopt");
     F.seedDownstream("down-adopt");
@@ -407,11 +411,11 @@ caseBegin("adopt-state-carries-the-new-contract", "hooks/workflow-state/inherita
     eq(r.inheritance && [r.inheritance.upstream_session_id, r.inheritance.supervisor_state], ["up-adopt", "absent"], "inheritance");
     eq(F.raw("down-adopt").upstream_copy_seq, F.raw("up-adopt").events.length, "upstream_copy_seq");
   });
-}
+}));
 caseEnd();
 
 caseBegin("render-describes-reverts-supervisor-and-plan-names", "bin/lib/resume-session/render.js");
-{
+test("render-describes-reverts-supervisor-and-plan-names", () => noNewFailures(failures, () => {
   check("C12: renderUpstreamView names each reverted step, the supervisor outcome and the plan artifact owner", () => {
     const text = F.mod("bin/lib/resume-session/render").renderUpstreamView({
       upstream_session_id: "up-render", availability: "state-and-artifacts",
@@ -428,11 +432,11 @@ caseBegin("render-describes-reverts-supervisor-and-plan-names", "bin/lib/resume-
     eq(text.split("\n").some((l) => /supervisor/i.test(l) && l.includes("copied")), true, "supervisor line");
     eq(text.split("\n").some((l) => /plan artifact/i.test(l) && l.includes("up-render") && l !== "State file and plan artifacts are both present."), true, "plan artifact owner line");
   });
-}
+}));
 caseEnd();
 
 caseBegin("session-start-corrupt-upstream-unlinks-state", "hooks/session-start.js");
-{
+test("session-start-corrupt-upstream-unlinks-state", () => noNewFailures(failures, () => {
   check("C13: a corrupt upstream stream makes session-start delete the new state file and say so on stderr", () => {
     F.seedUpstream("up-ss");
     F.corruptSeq("up-ss");
@@ -450,8 +454,5 @@ caseBegin("session-start-corrupt-upstream-unlinks-state", "hooks/session-start.j
     eq(fs.existsSync(F.statePath("down-ss")), false, "downstream state file exists");
     eq(/inheritance failed for down-ss/.test(run.stderr || ""), true, "stderr names the failure (" + show(run.stderr) + ")");
   });
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

@@ -54,7 +54,7 @@ Top level: `schema` (1), `headerMaxLines` (10: how many leading lines carry `# T
 | `newFileNameShape` | What a new test file is called, with `<name>` as the free part (`<name>.Tests.ps1`, `test_<name>.py`). Required for a supported entry |
 | `notationDoc` | Repo-relative document that teaches the language's case-marker notation. Required for a supported entry; must exist |
 | `diagnostics` | `{nameLabel, flatRejectCode}` used in checker messages (`flatRejectCode` defaults to `FLAT_TEST_REJECTED`), plus the case-marker gate's wording: `markerName`, `markerWrapHint`, `markerMissingHint` (falls back to `markerWrapHint`), `markerUncertainHint`, `markerDoc` (falls back to `notationDoc`) |
-| `newEntrypointRunner` | `{rejectSkipReason, hint}`: the `caseEmbedRules` `skip-reason` word that refuses a NEW test entrypoint as not running under the language's required runner, and the hint shown with it ([case-marker-gate.md](case-marker-gate.md) "Required test runner"), or null. Needs `caseEmbedRules`; only js sets it |
+| `newEntrypointRunner` | `{rejectSkipReason, hint}`: the `caseEmbedRules` `skip-reason` word that refuses a test entrypoint, new or existing, as not running under the language's required runner, and the hint shown with it ([case-marker-gate.md](case-marker-gate.md) "Required test runner"), or null. Needs `caseEmbedRules`; only js sets it |
 | `note` | Why the entry is shaped this way (JSON has no comments) |
 
 `validate.js` demands the four supported-entry fields and the existence of their files only when the full table is checked (tests and the CLI).
@@ -176,7 +176,7 @@ The writing rules a test author follows live in each entry's `notationDoc`, not 
 ## Helper libraries
 
 Each supported entry's `helperLibrary.path` is `tests/lib/harness.<ext>`: fixture isolation, a hook-free fixture repo, the known-failure form and the TL3 switch, in that language's own idiom. `bin/check-test-frontmatter.sh` rejects a new test whose text does not match the entry's `sourceRegex`.
-Loading the library is not running under the required runner: an entry with `newEntrypointRunner` also refuses a new test whose `skip-reason` op returns its `rejectSkipReason` (`MISSING_TEST_RUNNER`).
+Loading the library is not running under the required runner: an entry with `newEntrypointRunner` also refuses any placed test, new or existing, whose `skip-reason` op returns its `rejectSkipReason` (`MISSING_TEST_RUNNER`).
 
 - **Load rule.** A test loads the library from its own location, one level up into `lib/` (`tests/<category>/<file>` → `../lib/harness.<ext>`); `sourceRegex` matches that spelling. bash is the exception: its expression wants a path ending in `tests/lib/harness.sh`, reached through the test's own checkout root.
 - **Line-based proof.** `sourceRegex` is a grep over lines, so the load must sit on a line of its own — the Pester expression wants the dot at the start of the line, so a one-line `BeforeAll { . … }` does not count.
@@ -266,7 +266,7 @@ Tools that select, run or audit tests fail closed (an exit code of their own or 
 
 1. Add one entry to the table: patterns, `status`, `nameStrip`, `header`, `launch`, `diagnostics.nameLabel`, and a `note`.
 2. Optionally write parts in `bin/lib/test-language-parts/<lang>.sh` and reference them (`tableDrivenDetector`, `caseEmbedRules`).
-3. To make its multi-path tests case-marker targets, add the reader and the helper library together — the validator rejects one without the other: a `caseMarkerReader` part (with a child reader when bash cannot read the syntax, following the contract above), `tests/lib/harness.<ext>` with its `sourceRegex`, a `notationDoc`, and the `diagnostics` marker wording (and `newEntrypointRunner` when new tests must use one runner).
+3. To make its multi-path tests case-marker targets, add the reader and the helper library together — the validator rejects one without the other: a `caseMarkerReader` part (with a child reader when bash cannot read the syntax, following the contract above), `tests/lib/harness.<ext>` with its `sourceRegex`, a `notationDoc`, and the `diagnostics` marker wording (and `newEntrypointRunner` when its tests must use one runner).
 4. For a `supported` entry, fill `codeLanguage` and `newFileNameShape` so `find-tests-for-source.sh --with-language` routes that language's code to it, and `envClearLine` so its test isolation lines pass the session-id tombstone check.
 5. No shared code changes. The residue check fails if shared code starts matching the new extension itself.
 

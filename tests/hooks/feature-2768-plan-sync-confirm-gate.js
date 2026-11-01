@@ -13,9 +13,17 @@
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
+after(() => {
+  F.finish();
+  restore();
+});
+// verdict(fn) -> the node:test body of one counter-style case: it fails when a check inside fn failed.
+const verdict = (fn) => () => noNewFailures(F.failureCount, fn);
 const { seedReceipt, receiptExists } = require("../lib/presentation-receipt-seed");
 // #2853: the intent CONFIRM echo needs the intent's pre-confirm audit settled on the current plan.
 const PCA = require("../lib/pre-confirm-audit-settle");
@@ -100,8 +108,8 @@ const unbackoff = () => {
   for (const k of ["plansync.remoteStateUrl", "plansync.authBackoffUntil"]) F.git(repo.dir, ["config", "--local", "--unset", k], true);
 };
 
-try {
 caseBegin("T25 same-turn replacement keeps the receipt and the CONFIRM gate", "hooks/lib/plan-sync/commit-push.js");
+test("T25 same-turn replacement keeps the receipt and the CONFIRM gate", verdict(() => {
   F.guard("T25", () => {
     const sid = F.newSid("t25");
     const turn = F.newTurn(sid);
@@ -139,8 +147,10 @@ caseBegin("T25 same-turn replacement keeps the receipt and the CONFIRM gate", "h
     F.check("T25off systemMessage and additionalContext show the blob URL", c.msg.includes(F.blobUrl(a)) && c.ctx.includes(F.blobUrl(a)),
       c.out);
   });
+}));
 caseEnd();
 caseBegin("auth backoff keeps a published plan confirmable and an unpublished one fail-closed", "hooks/confirm-checkpoint.js");
+test("auth backoff keeps a published plan confirmable and an unpublished one fail-closed", verdict(() => {
   // The changed-content guard edits the plan this guard published ("published" is its v1 on the bare).
   const c1 = { sid: F.newSid("cgb") };
   c1.a = F.planName(c1.sid, "intent");
@@ -172,10 +182,12 @@ caseBegin("auth backoff keeps a published plan confirmable and an unpublished on
       F.check("C1 confirm denies the unpublished plan", c.code === 0 && c.decision === "deny", c.out || c.err);
     } finally { unbackoff(); }
   });
+}));
 caseEnd();
 // P5 reuses P1's plan: its intent audit stays unsettled and its receipt kept after P1's deny.
 let p1 = null;
 caseBegin("P1 unsettled intent audit: deny, keep the receipt", "hooks/confirm-checkpoint.js");
+test("P1 unsettled intent audit: deny, keep the receipt", verdict(() => {
   F.guard("P1", () => {
     const { sid } = published("p1");
     const c = confirm(sid);
@@ -184,10 +196,12 @@ caseBegin("P1 unsettled intent audit: deny, keep the receipt", "hooks/confirm-ch
     F.check("P1 unsettled: reason says rerun next-step --gate", c.reason.includes("--gate"), c.reason);
     p1 = { sid };
   });
+}));
 caseEnd();
 // P3 accepts the run P2 denied on the same plan: P2's deny is P3's before-the-acceptance control.
 let p2 = null;
 caseBegin("P2 BLOCK verdict: deny", "hooks/confirm-checkpoint.js");
+test("P2 BLOCK verdict: deny", verdict(() => {
   F.guard("P2", () => {
     const { sid, a } = published("p2");
     const runId = PCA.settle(sid, "intent", "BLOCK");
@@ -197,8 +211,10 @@ caseBegin("P2 BLOCK verdict: deny", "hooks/confirm-checkpoint.js");
     F.check("P2 BLOCK: reason carries the acceptance guidance", c.reason.includes(ACCEPT_SENTINEL), c.reason);
     p2 = { sid, a, runId };
   });
+}));
 caseEnd();
 caseBegin("P3 accepted BLOCK: the receipt check runs", "hooks/confirm-checkpoint.js");
+test("P3 accepted BLOCK: the receipt check runs", verdict(() => {
   F.guard("P3", () => {
     const { sid, a, runId } = p2;
     const acc = accept(sid, runId) || {};
@@ -206,8 +222,10 @@ caseBegin("P3 accepted BLOCK: the receipt check runs", "hooks/confirm-checkpoint
     const c = confirm(sid);
     F.check("P3 accepted BLOCK: dialog with the blob URL", reached(c, a), c.out || c.err);
   });
+}));
 caseEnd();
 caseBegin("P4 WARN and CONTINUE: the receipt check runs as before", "hooks/confirm-checkpoint.js");
+test("P4 WARN and CONTINUE: the receipt check runs as before", verdict(() => {
   for (const v of ["WARN", "CONTINUE"]) {
     F.guard(`P4 ${v}`, () => {
       const { sid, a } = published(`p4${v.toLowerCase()}`);
@@ -233,8 +251,10 @@ caseBegin("P4 WARN and CONTINUE: the receipt check runs as before", "hooks/confi
       }
     });
   }
+}));
 caseEnd();
 caseBegin("P8 every plan stage: unsettled and BLOCK deny, settled or accepted pass", "hooks/confirm-checkpoint.js");
+test("P8 every plan stage: unsettled and BLOCK deny, settled or accepted pass", verdict(() => {
   for (const stage of STAGES) {
     const tag = `[${stage}]`;
     F.guard(`P8 ${stage} unsettled / BLOCK / accepted`, () => {
@@ -268,18 +288,22 @@ caseBegin("P8 every plan stage: unsettled and BLOCK deny, settled or accepted pa
       }
     });
   }
+}));
 caseEnd();
 caseBegin("P5 a non-plan CONFIRM echo is not gated by the audit", "hooks/confirm-checkpoint.js");
+test("P5 a non-plan CONFIRM echo is not gated by the audit", verdict(() => {
   F.guard("P5", () => {
     const { sid } = p1;
     const c = confirm(sid, "on", { command: 'echo "<<WORKFLOW_CONFIRM_DOCS>>"' });
     F.check("P5 CONFIRM_DOCS with an unsettled intent audit: not denied", c.code === 0 && c.decision !== "deny", c.out || c.err);
     F.check("P5 the intent receipt is untouched", receiptExists(sid, "intent"), "receipt consumed");
   });
+}));
 caseEnd();
 // P7 reuses P6's published plan (its receipt kept by P6's deny); P7 settles its own BLOCK run over P6's CONTINUE.
 let p6 = null;
 caseBegin("P6 judgment error without acceptance: deny, keep the receipt", "hooks/confirm-checkpoint.js");
+test("P6 judgment error without acceptance: deny, keep the receipt", verdict(() => {
   F.guard("P6", () => {
     const { sid, a } = published("p6");
     PCA.settle(sid, "intent", "CONTINUE");
@@ -289,8 +313,10 @@ caseBegin("P6 judgment error without acceptance: deny, keep the receipt", "hooks
     F.check("P6 error: reason carries the acceptance guidance", c.reason.includes(ACCEPT_SENTINEL), c.reason);
     p6 = { sid, a };
   });
+}));
 caseEnd();
 caseBegin("P7 judgment error with an accepted last run: the receipt check runs", "hooks/confirm-checkpoint.js");
+test("P7 judgment error with an accepted last run: the receipt check runs", verdict(() => {
   F.guard("P7", () => {
     const { sid, a } = p6;
     const runId = PCA.settle(sid, "intent", "BLOCK");
@@ -302,19 +328,23 @@ caseBegin("P7 judgment error with an accepted last run: the receipt check runs",
     const c = confirm(sid, "on", { throwKey: true });
     F.check("P7 error + accepted run: dialog with the blob URL", reached(c, a), c.out || c.err);
   });
+}));
 caseEnd();
 caseBegin("P9 no workflow state file: the audit check is skipped (it could never arm)", "hooks/confirm-checkpoint.js");
+test("P9 no workflow state file: the audit check is skipped (it could never arm)", verdict(() => {
   F.guard("P9", () => {
     const { sid, a } = published("p9", "intent", { noState: true });
     const c = confirm(sid);
     F.check("P9 unsettled audit, no state file: dialog with the blob URL", reached(c, a), c.out || c.err);
     F.check("P9 no [pre-confirm-audit] deny", !c.reason.includes("[pre-confirm-audit]"), c.reason);
   });
+}));
 caseEnd();
 // offMarker(sid) -> the WORKFLOW_OFF marker the hooks read through isWorkflowOff(sid).
 const offMarker = (sid) => require("node:fs").writeFileSync(
   path.join(require(path.join(F.ROOT, "hooks", "workflow-state")).getSessionStateDir(sid), `${sid}.workflow-off`), "fixture\n");
 caseBegin("P10 WORKFLOW_OFF waives only the audit: the receipt and the size check still deny", "hooks/confirm-checkpoint.js");
+test("P10 WORKFLOW_OFF waives only the audit: the receipt and the size check still deny", verdict(() => {
   let p10 = null;
   F.guard("P10 audit waived", () => {
     const { sid, a } = published("p10");
@@ -349,11 +379,13 @@ caseBegin("P10 WORKFLOW_OFF waives only the audit: the receipt and the size chec
         off ? !sized && reached(c, a) : sized, c.reason || c.out || c.err);
     }
   });
+}));
 caseEnd();
 // An unreadable state file is not an absent one: the absence exemption (P9) does not apply, so an
 // unsettled audit still denies. The supervisor state holding the audit fails closed the same way.
 // P11 runs last and reuses P1's plan (unsettled, receipt kept) and P6/P7's plan (re-seeded, then settled).
 caseBegin("P11 an unreadable state file keeps the audit deny, unlike an absent one", "hooks/confirm-checkpoint.js");
+test("P11 an unreadable state file keeps the audit deny, unlike an absent one", verdict(() => {
   F.guard("P11 workflow state", () => {
     const { sid } = p1;
     require("node:fs").writeFileSync(require(path.join(F.ROOT, "hooks", "workflow-state", "state-io")).getStatePath(sid), "{not json");
@@ -372,8 +404,5 @@ caseBegin("P11 an unreadable state file keeps the audit deny, unlike an absent o
       && c.reason.includes("[pre-confirm-audit]"), c.out || c.err);
     F.check("P11 corrupt supervisor state: receipt kept", receiptExists(sid, "intent"), "receipt consumed");
   });
+}));
 caseEnd();
-} finally {
-  F.finish();
-  restore();
-}

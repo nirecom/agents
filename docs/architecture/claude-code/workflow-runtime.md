@@ -482,19 +482,19 @@ verbatim into its reply, then runs `echo "<<WORKFLOW_MARK_STEP_final_report_comp
 in the transcript, or if any unsubstituted `<TOKEN>` remains. Exit 2 + `decision:
 block` re-prompts with the specific missing headings or residual tokens listed.
 
-The renderer (`bin/worktree-final-report.js`) was removed in #771. Prior to that,
-it emitted a canonical Markdown blob to a Bash tool-result which the LLM pasted
-verbatim — a two-step path that permitted LLM semantic rewrites (#626, #700, #765).
+The renderer (`bin/worktree-final-report.js`) was removed in #771: its paste-from-tool-result
+path permitted LLM semantic rewrites (#626, #700, #765).
+That guard (lane A) only runs once `/session-close` wrote the env file, so lane B blocks as
+"close procedure not run" when the env file is absent but `bin/workflow/next-step` reports
+`pre_final_report_gate`; reinstating the renderer would restore the rewrite path instead.
+Two exits shared by both lanes (`stop-final-report-guard/exits.js`, #1192) end every block and
+are named in every reason: `WORKFLOW_OFF` for the session, and a session-close gate artifact
+whose `gate_action` is `yield`. Lane B also fails open when next-step cannot be consulted;
+`stop-premature-stop-guard.js` yields to it so the two guards never both speak. Lane A's
+no-heading reason embeds the rendered Final Report for verbatim re-emission (#2337) and
+degrades to carrying no embed when the renderer fails.
 
-That guard is trigger-dependent: it only ran when `/session-close` had already
-written the Final Report env file, so a session that never ran the close procedure
-produced no report *and* no block. Re-verifying #771 against that gap confirmed the
-renderer stays removed (reinstating it would restore the paste-and-rewrite path it
-was deleted for); the fix belongs in the trigger instead. `stop-final-report-guard.js`
-therefore carries a second lane: when the env file is absent but `bin/workflow/next-step`
-reports the session has reached `pre_final_report_gate`, the turn is blocked as
-"close procedure not run". Three escape hatches keep it from trapping a session:
-`WORKFLOW_OFF` for the session, a session-close gate artifact whose `gate_action` is
-`yield` (the supervisor deliberately handed the turn back), and any failure to consult
-next-step at all (fail-open). `stop-premature-stop-guard.js` yields the same condition
-to this lane so the two guards never both speak.
+**Cycle boundary.** Re-running `/workflow-init` after a finished cycle closes it (#2875):
+`hooks/workflow-state/cycle-state.js` appends `cycle_boundary` (reason `reinit-entry` at init
+entry, `workflow-init-complete` at completion), resets every step to `pending`, archives control
+files under `cycle-archive/<N>/`, and the fold nulls the worktree fields (no carry-over).

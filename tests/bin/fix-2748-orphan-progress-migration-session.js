@@ -7,15 +7,18 @@
 // The session-close script's own behavior (forwarding, advisory exits, its markers) lives in tests/skills/fix-2748-migrate-own-session-chain.sh.
 
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { M, SCRATCH, planLines, writeOrphan, finish } = require("./fix-2748-orphan-progress-migration/shared");
+const { M, SCRATCH, planLines, writeOrphan, finish, failureCount } = require("./fix-2748-orphan-progress-migration/shared");
 const { F, PLANS, check, show, cli, why, progressOf, planOf, read, pinnedSid } = M;
 const { section, count, setup, adoptChain, settle } = M;
+after(finish);
 
 caseBegin("facts-text-before-first-subsection-survives", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("facts-text-before-first-subsection-survives", () => noNewFailures(failureCount, () => {
   const sids = setup("m24");
   const loose = ["m24 loose paragraph with no subsection heading", "- m24 loose bullet with no subsection heading"];
   writeOrphan(sids, M.downstreamText(sids.downstreamSid).replace("## Facts to carry over\n\n", () => `## Facts to carry over\n\n${loose.join("\n")}\n\n`));
@@ -28,13 +31,13 @@ caseBegin("facts-text-before-first-subsection-survives", "hooks/lib/temporary-mi
       return count(out, text) === 1 && facts.includes(text) ? undefined : `count=${count(out, text)} orphan present=${fs.existsSync(progressOf(sids.downstreamSid))} Facts=${show(facts)}`;
     });
   }
-}
+}));
 caseEnd();
 
 // M25: only a Plan files line whose link target is an existing regular file becomes a first_session_id plan line.
 // Every row has <downstream>-detail.md on disk, so a dropped row is dropped by its own link target alone.
 caseBegin("plan-files-line-link-forms", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("plan-files-line-link-forms", () => noNewFailures(failureCount, () => {
   const dirTarget = path.join(SCRATCH, "m25-directory-target");
   fs.mkdirSync(dirTarget, { recursive: true });
   const cases = [
@@ -61,7 +64,7 @@ caseBegin("plan-files-line-link-forms", "hooks/lib/temporary-migrations/orphan-p
     check(`M25 ${name}: ${show(line)} is ${want ? "carried as <first>-detail.md" : "dropped"}`, () => (r.status === 0 && (want ? carried : lines.length === 0)
       ? undefined : `${why(r)} detail lines=${show(lines)}`));
   }
-}
+}));
 caseEnd();
 
 const SCRIPT_REL = "skills/session-close/scripts/migrate-own-session-chain.sh";
@@ -83,7 +86,7 @@ function withOtherChain(prefix, opts) {
 }
 
 caseBegin("session-option-migrates-only-own-chain", "bin/migrate-orphan-progress-files");
-{
+test("session-option-migrates-only-own-chain", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid, otherFirstSid, otherDownstreamSid, otherUntouched } = withOtherChain("m19");
   const dry = cli(["--session", downstreamSid]);
   check("M19: a --session dry-run reports the own session chain and not the other one", () => {
@@ -95,22 +98,22 @@ caseBegin("session-option-migrates-only-own-chain", "bin/migrate-orphan-progress
     && pinnedSid(downstreamSid) === firstSid ? undefined : `${why(r)} root_sid=${show(pinnedSid(downstreamSid))}`));
   check("M19: the other session chain's orphan progress file, state and sidecar are untouched", otherUntouched);
   check("M19: the other session chain's first generation is not handed the own facts", () => (!String(read(progressOf(otherFirstSid))).includes("marker-cs-downstream") ? undefined : "merged"));
-}
+}));
 caseEnd();
 
 caseBegin("session-option-invalid-sid-exits-2", "bin/migrate-orphan-progress-files");
-{
+test("session-option-invalid-sid-exits-2", () => noNewFailures(failureCount, () => {
   for (const args of [["--apply", "--session", "../x"], ["--session", "a/b"], ["--session"]]) {
     const r = cli(args);
     check(`M20: ${args.join(" ")} exits 2`, () => (r.status === 2 ? undefined : why(r)));
   }
-}
+}));
 caseEnd();
 
 // M21 (end to end): the session-close script run against the real CLI migrates only the own, still-active chain.
 // Forwarding, advisory exits and the script's markers: tests/skills/fix-2748-migrate-own-session-chain.sh.
 caseBegin("session-close-script-migrates-own-active-chain", "bin/migrate-orphan-progress-files");
-{
+test("session-close-script-migrates-own-active-chain", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid, otherUntouched } = withOtherChain("m21", { settle: false });
   const env = Object.assign({}, process.env, { AGENTS_MAIN_ROOT: String(F.ROOT).replace(/\\/g, "/") });
   delete env.CLAUDE_CODE_SESSION_ID;
@@ -120,11 +123,11 @@ caseBegin("session-close-script-migrates-own-active-chain", "bin/migrate-orphan-
     && pinnedSid(downstreamSid) === firstSid && (section(read(progressOf(firstSid)), "### User decisions") || []).includes("- downstream decision")
     ? undefined : `${why(r)} orphan present=${fs.existsSync(progressOf(downstreamSid))}`));
   check("M21: the other session chain is untouched", otherUntouched);
-}
+}));
 caseEnd();
 
 caseBegin("temporary-migration-markers-in-cli", "bin/migrate-orphan-progress-files");
-{
+test("temporary-migration-markers-in-cli", () => noNewFailures(failureCount, () => {
   const desc = "orphan progress file -> first_session_id progress file migration";
   const markersInOrder = (rel, prefix) => {
     const text = read(path.join(F.ROOT, rel));
@@ -137,11 +140,11 @@ caseBegin("temporary-migration-markers-in-cli", "bin/migrate-orphan-progress-fil
     return end > begin + 1 ? undefined : `${rel}: END line missing or before BEGIN (begin=${begin} end=${end})`;
   };
   check("M22: the CLI has the // BEGIN, deletion-condition and END in this order", () => markersInOrder("bin/migrate-orphan-progress-files", "//"));
-}
+}));
 caseEnd();
 
 caseBegin("session-close-skill-wires-sc10", "skills/session-close/SKILL.md");
-{
+test("session-close-skill-wires-sc10", () => noNewFailures(failureCount, () => {
   const lines = String(read(path.join(F.ROOT, "skills/session-close/SKILL.md"))).split(/\r?\n/);
   const isHeading = (l) => /^#{1,6} /.test(l);
   const sc9 = lines.findIndex((l) => isHeading(l) && /\bSC-9\b/.test(l));
@@ -152,13 +155,13 @@ caseBegin("session-close-skill-wires-sc10", "skills/session-close/SKILL.md");
   check("M23: the SC-10 section runs the session-close script with \"<session-id>\"", () => (body.some((l) => l.includes(SCRIPT_REL) && l.includes("\"<session-id>\""))
     ? undefined : `SC-10 body=${show(body)}`));
   check("M23: the SC-10 heading comes after the SC-9 heading", () => (sc9 >= 0 && sc10 > sc9 ? undefined : `sc9=${sc9} sc10=${sc10}`));
-}
+}));
 caseEnd();
 
 // M29: a Plan files line is re-pointed to <first>-<stage>.md only when that plan exists after the renames;
 // an orphan line naming some other existing file leaves the first generation's line for that stage alone.
 caseBegin("plan-files-line-not-repointed-to-missing-first-plan", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("plan-files-line-not-repointed-to-missing-first-plan", () => noNewFailures(failureCount, () => {
   const elsewhere = path.join(SCRATCH, "m29-elsewhere-detail.md");
   fs.writeFileSync(elsewhere, "m29 elsewhere\n");
   for (const { name, firstPlans, want } of [
@@ -176,12 +179,12 @@ caseBegin("plan-files-line-not-repointed-to-missing-first-plan", "hooks/lib/temp
     check(`M29 ${name}: the first generation's detail line is ${want === "kept" ? "kept, not re-pointed to a missing <first>-detail.md" : "re-pointed to the existing <first>-detail.md"}`, () => (r.status === 0
       && lines.length === 1 && lines[0] === expected ? undefined : `${why(r)} detail lines=${show(lines)} first detail exists=${fs.existsSync(planOf(sids.firstSid, "detail"))}`));
   }
-}
+}));
 caseEnd();
 
 // M30: a Facts subsection body keeps its inner blank lines (paragraph breaks) and fenced code blocks when merged.
 caseBegin("facts-paragraphs-and-code-blocks-survive-merge", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("facts-paragraphs-and-code-blocks-survive-merge", () => noNewFailures(failureCount, () => {
   const sids = setup("m30");
   const body = ["- downstream deviation", "", "m30 paragraph one", "m30 paragraph one continued", "", "m30 paragraph two", "",
     "```text", "m30 code first", "", "m30 code after blank", "```"].join("\n");
@@ -191,13 +194,13 @@ caseBegin("facts-paragraphs-and-code-blocks-survive-merge", "hooks/lib/temporary
   check("M30: --apply exits 0", () => (r.status === 0 ? undefined : why(r)));
   check("M30: the Deviations body lands with its blank lines and code block intact, after the base fact", () => (count(out, `- first deviation\n${body}\n`) === 1
     ? undefined : `Deviations=${show(String(out).split("### Deviations")[1])}`));
-}
+}));
 caseEnd();
 
 // M31: dedupe is per block — a top-level list item with its nested items is one block, and a block is
 // skipped only when the identical block (indentation included) is already in the base subsection.
 caseBegin("facts-dedupe-per-block", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("facts-dedupe-per-block", () => noNewFailures(failureCount, () => {
   const firstBody = M.firstText("m31-first").replace("- shared bullet\n", "- shared bullet\n- m31 A\n  - m31 keep logs\n");
   const sids = setup("m31", { firstBody });
   writeOrphan(sids, M.downstreamText(sids.downstreamSid)
@@ -212,12 +215,12 @@ caseBegin("facts-dedupe-per-block", "hooks/lib/temporary-migrations/orphan-progr
     ? undefined : `Deviations=${show(String(out).split("### Deviations")[1])}`));
   check("M31 (c): an identical whole bullet is not duplicated", () => (count(out, "- first decision\n") === 1 && count(out, "- shared bullet") === 1
     ? undefined : `User decisions=${show(section(out, "### User decisions"))}`));
-}
+}));
 caseEnd();
 
 // M32: a markdown link with angle brackets [detail](<path>) counts as existing only when <path> is an existing plan.
 caseBegin("plan-files-line-angle-bracket-link", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("plan-files-line-angle-bracket-link", () => noNewFailures(failureCount, () => {
   for (const { name, want } of [{ name: "existing", want: true }, { name: "nonexistent", want: false }]) {
     const prefix = `m32-${name}`;
     const sids = setup(prefix, { downstreamPlans: { detail: `${name} detail\n` } });
@@ -230,13 +233,13 @@ caseBegin("plan-files-line-angle-bracket-link", "hooks/lib/temporary-migrations/
     check(`M32 ${name}: ${show(line)} is ${want ? "carried as <first>-detail.md" : "dropped"}`, () => (r.status === 0 && (want ? carried : lines.length === 0)
       ? undefined : `${why(r)} detail lines=${show(lines)}`));
   }
-}
+}));
 caseEnd();
 
 // M33: a missing plans dir holds nothing (exit 0); a missing first state root, or any other readdir failure
 // (here ENOTDIR: the directory is a regular file), is reported and the run exits 1 instead of "nothing to do".
 caseBegin("unreadable-dir-exits-1", "hooks/lib/temporary-migrations/orphan-progress-file/discover.js");
-{
+test("unreadable-dir-exits-1", () => noNewFailures(failureCount, () => {
   const base = path.join(SCRATCH, "m33");
   fs.mkdirSync(base, { recursive: true });
   const asFile = path.join(base, "regular-file");
@@ -257,7 +260,5 @@ caseBegin("unreadable-dir-exits-1", "hooks/lib/temporary-migrations/orphan-progr
     check(`M33 ${name}: the run exits ${exit}${exit === 1 ? " and reports it on stderr" : ""}`, () => (r.status === exit
       && (exit === 0 || String(r.stderr).includes("migrate-orphan-progress-files: cannot list the session chains: ")) ? undefined : why(r)));
   }
-}
+}));
 caseEnd();
-
-finish();

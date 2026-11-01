@@ -14,6 +14,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "user-instr-tpl-"));
@@ -59,11 +60,7 @@ function check(name, fn) {
 }
 const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 // verdict(fn) -> the node:test body of one case: it fails when a check inside fn failed.
-const verdict = (fn) => () => {
-  const before = failed;
-  fn();
-  if (failed > before) throw new Error(`${failed - before} check(s) failed`);
-};
+const verdict = (fn) => () => noNewFailures(() => failed, fn);
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }

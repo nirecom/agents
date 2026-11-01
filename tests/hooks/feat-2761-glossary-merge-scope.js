@@ -10,10 +10,12 @@
 // - #2507's pre-commit calling the module under a temporary GIT_INDEX_FILE.
 // Fixtures: tests/lib/glossary-check-fixture.js, ./feat-2761-glossary-merge/fixture.js.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2761-transcripts-"));
@@ -33,6 +35,12 @@ const UNDECIDABLE_RE = /check-glossary-drift: merge state undecidable \(([\w-]+)
 const ANY_MERGE_LINE = /check-glossary-drift: merge /;
 
 const guarded = (name, fn) => M.guarded(F.check, name, fn);
+// The case fails when any F.check inside it (or an exception, via guarded) adds a failure.
+const verdict = (label, fn) => () => noNewFailures(F.failureCount, () => guarded(label, fn));
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 // repoDir undefined: the session's linked worktree resolves the repo (B7); a main worktree needs it.
 function load(sid, stage, repoDir) {
@@ -72,20 +80,20 @@ function narrowed(label, s, viaSession) {
 require("./feat-2761-glossary-merge/incoming-cases").run();
 
 caseBegin("standard merge narrows every staged-file stage to the resolved file", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("B1", () => narrowed("B1", standardSession("b1"), false));
+test("B1: standard merge narrows every staged-file stage to the resolved file", verdict("B1", () => narrowed("B1", standardSession("b1"), false)));
 caseEnd();
 
 caseBegin("resolved conflict file still reports its drift", "bin/check-glossary-drift");
-guarded("B2", () => {
+test("B2: resolved conflict file still reports its drift", verdict("B2", () => {
   const s = standardSession("b2");
   const d = dry(s.sid, "docs", s.repo);
   F.check("B2 check-glossary-drift --stage docs exits 1", d.code === 1, `exit=${d.code} ${d.err}`);
   F.check("B2 exactly one DRIFT line, at docs/shared.md", JSON.stringify(driftFiles(d.out)) === '["docs/shared.md"]', d.out);
-});
+}));
 caseEnd();
 
 caseBegin("incoming file edited during the merge is scanned again", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("B3", () => {
+test("B3: incoming file edited during the merge is scanned again", verdict("B3", () => {
   const s = standardSession("b3");
   M.apply(s.repo, { "src/main-only.js": `"use strict";\n// each ${WORD} is checked, edited in the merge\nmodule.exports = 2;\n` });
   const code = load(s.sid, "code", s.repo);
@@ -94,11 +102,11 @@ guarded("B3", () => {
   F.check("B3 check-glossary-drift --stage code reports src/main-only.js", r.code === 1 && driftFiles(r.out).includes("src/main-only.js"), `exit=${r.code} ${r.out}`);
   const docs = pathsOf(load(s.sid, "docs", s.repo));
   F.check("B3 docs scope stays narrowed", JSON.stringify(docs) === '["docs/shared.md"]', JSON.stringify(docs));
-});
+}));
 caseEnd();
 
 caseBegin("staged edit is scanned although the worktree is back at MERGE_HEAD", "bin/check-glossary-drift");
-guarded("A12a-drift", () => {
+test("A12a-drift: staged edit is scanned although the worktree is back at MERGE_HEAD", verdict("A12a-drift", () => {
   const s = standardSession("a12-drift");
   const rel = "docs/main-only.md";
   const sides = M.stagedEditWorktreeAtMergeHead(s.repo, rel, WORD);
@@ -107,11 +115,11 @@ guarded("A12a-drift", () => {
   F.check(`A12a-drift docs scope keeps ${rel} (the staged blob differs from MERGE_HEAD)`, docs.includes(rel), JSON.stringify(docs));
   const d = dry(s.sid, "docs", s.repo);
   F.check(`A12a-drift check-glossary-drift --stage docs exits 1 with a DRIFT line at ${rel}`, d.code === 1 && driftFiles(d.out).includes(rel), `exit=${d.code} ${d.out}`);
-});
+}));
 caseEnd();
 
 caseBegin("outside a merge pairs and digest stay unchanged", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("B4", () => {
+test("B4: outside a merge pairs and digest stay unchanged", verdict("B4", () => {
   const repo = F.mkRepo("b4");
   M.commitAll(repo, { "docs/gone.md": "# Gone\n\nText.\n" }, "fixture: to delete");
   for (const stage of F.RS_STAGES) F.stageFile(repo, F.TARGET[stage], F.targetBody(stage, F.TERM));
@@ -131,11 +139,11 @@ guarded("B4", () => {
     F.check(`B4 ${stage} digest unchanged by a branch named MERGE_HEAD`, l.artifact.digest === before[stage], l.artifact.digest);
     F.check(`B4 ${stage} still not-merging with a branch named MERGE_HEAD`, !!mi(l) && mi(l).state === "not-merging", showMi(l));
   }
-});
+}));
 caseEnd();
 
 caseBegin("undecidable merge state falls back to every staged path", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("B5", () => {
+test("B5: undecidable merge state falls back to every staged path", verdict("B5", () => {
   const oct = F.mkRepo("b5-oct");
   const fx = M.octopusMerge(oct, WORD);
   F.check("B5 precondition: octopus MERGE_HEAD has two lines", fx.lines.length === 2, fx.lines.join("|"));
@@ -156,11 +164,11 @@ guarded("B5", () => {
     F.check(`B5 ${label}: stderr names the undecidable reason ${reason}`, !!m && m[1] === reason, d.err);
     F.check(`B5 ${label}: stdout carries no merge line`, !ANY_MERGE_LINE.test(d.out), d.out);
   }
-});
+}));
 caseEnd();
 
 caseBegin("stderr reports the excluded count and stays quiet otherwise", "bin/check-glossary-drift");
-guarded("B6", () => {
+test("B6: stderr reports the excluded count and stays quiet otherwise", verdict("B6", () => {
   const s = standardSession("b6");
   for (const [stage, n] of [["code", 1], ["tests", 1], ["docs", 2]]) {
     const l = load(s.sid, stage, s.repo);
@@ -180,16 +188,13 @@ guarded("B6", () => {
   const outline = load(plan, "outline", s.repo);
   F.check("B6 plan-file stage: artifact has no mergeIncoming field", !("mergeIncoming" in outline.artifact), showMi(outline));
   F.check("B6 plan-file stage during a merge: stderr has no merge line", !ANY_MERGE_LINE.test(dry(plan, "outline", s.repo).err), "merge line printed");
-});
+}));
 caseEnd();
 
 caseBegin("linked worktree merge narrows like the main worktree", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("B7", () => {
+test("B7: linked worktree merge narrows like the main worktree", verdict("B7", () => {
   const repo = F.mkRepo("b7");
   const wt = F.addWorktree(repo, `b7-${process.pid}`);
   narrowed("B7 worktree", standardSession("b7", wt), true);
-});
+}));
 caseEnd();
-
-restoreIsolation();
-F.finish();

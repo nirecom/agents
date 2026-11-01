@@ -1,5 +1,5 @@
 "use strict";
-// One file's required-runner verdict for a NEW test entrypoint (#2863). The entry's
+// One file's required-runner verdict for a test entrypoint, new or existing (#2863, #2865). The entry's
 // newEntrypointRunner names the caseEmbedRules skip-reason word that means "does not run under the
 // required runner"; the op itself decides, so no language rule lives here.
 // judge(file, name) -> { lines: [{ err, text }], high, infra }: file is a path or an in-memory file
@@ -30,7 +30,7 @@ function judge(file, name) {
   if (r.rc === 0) {
     const words = String(r.stdout).split(/\r?\n/).map((w) => w.trim());
     if (words.includes(want.rejectSkipReason)) {
-      res.lines.push({ err: false, text: `HIGH: ${name}: new test entrypoint does not run under its required runner (skip-reason ${want.rejectSkipReason}) code=MISSING_TEST_RUNNER` });
+      res.lines.push({ err: false, text: `HIGH: ${name}: test entrypoint does not run under its required runner (skip-reason ${want.rejectSkipReason}) code=MISSING_TEST_RUNNER` });
       res.high = true;
     }
   } else if (r.rc === 69) {
