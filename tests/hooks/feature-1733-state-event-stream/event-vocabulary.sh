@@ -38,6 +38,7 @@ const SAMPLE = {
   reset: { from_step: "detail", reason: "user asked" },
   // #2652: this kind's origin is a closed vocabulary (ORIGINS), so the row carries its own.
   state_handoff_record: { cls: "A", origin: "auto-record", at_step: "-", record_key: "voc:k1", summary: "s", pointer: "p" },
+  cycle_boundary: { closed_cycle: 1, reason: "reinit-entry" },
 };
 const KINDS = Object.keys(SAMPLE);
 const mk = (kind, over) => Object.assign({ kind: kind, provenance: "observed", origin: "vocab-test" }, SAMPLE[kind] || {}, over || {});
@@ -48,7 +49,7 @@ JS
 )
 
 case_begin "ev1-event-kinds-set-equality" "hooks/workflow-state/state-io/events.js"
-echo "== EV1: EVENT_KINDS is exactly the ten documented kinds, in both directions =="
+echo "== EV1: EVENT_KINDS is exactly the eleven documented kinds, in both directions =="
 if run_case "EV1/event-kinds-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
@@ -60,7 +61,7 @@ console.log([exported.length, missing.join(",") || "-", extra.join(",") || "-"].
 JS
 )
     nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
-    assert_eq "EV1/event-kinds-set-equality" "10 - -" "$NODE_OUT"
+    assert_eq "EV1/event-kinds-set-equality" "11 - -" "$NODE_OUT"
 fi
 case_end
 
