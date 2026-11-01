@@ -15,6 +15,7 @@ the glossary spells it. Every word is therefore matched in one of two contexts.
 
 - The contents of a markdown code span, matched as a layer of its own (`extractIdentifierText`).
 - A chunk without whitespace that holds `_`, `=`, `$`, `{` or `}`, such as `FOO_BAR=1`, `${FOO_DIR}`, or each element of `{A,B}`.
+- A spelling declared in a glossary entry's Identifier field, where it appears exactly (same case and separators) with no word character on either side (`declaredRanges` in `context.js`).
 - A fixed-format line, such as a `Tags:` line. `FIXED_FORMAT_LINE_RE` in `context.js` is the only list of these.
 - Fixed schema headings such as `## Steps`. The matcher keeps no list of them: they spell their words correctly, so the heading tolerance below gives the same result. Reviewers read them as `identifier context`.
 
@@ -60,6 +61,13 @@ capitals (`RTK`, `WF-CODE`) and written wholly in lower case with the same separ
 the lower-case form there is the command or value name. Markdown does not get this rule, because
 markdown marks an identifier with backticks and a bare lower-case word stays prose.
 
+**Homographs field.** A glossary entry's Homographs field lists spellings that are another word, not
+the term. It applies only to a window matched in prose mode, never in capital or identifier mode,
+and only to an exact match: case, separators and word form must be the same, so a plural or a
+sentence-initial capital is a separate spelling to declare. The gate rejects a spelling whose
+compact key, folded key or raw key equals the term's, so a separator, case or word-form variant of
+the term itself stays drift and goes through the accept path.
+
 ## Backticks in markdown prose
 
 Writers put every identifier in markdown prose in backticks, spelled exactly. Only the LLM reviewers
@@ -68,9 +76,16 @@ changes no meaning, and no deterministic rule can tell a command name from the E
 
 ## Term set
 
-`identifierSpellings(terms)` in `terms.js` is the one function that picks the terms matched as
-identifiers; today those are the terms holding `_`. A later Identifier field on a glossary entry is
-meant to feed it, without touching the matcher.
+`identifierSpellings(terms)` in `terms.js` is the one function that picks the spellings matched as
+identifiers: the terms holding `_`, and the spellings declared in an entry's Identifier field (or in
+a V3 intent glossary row), each reported under its owning term. The gate admits a declared spelling
+only when its raw key equals the term's.
+
+A declared spelling removes only its exact occurrences. A naming-convention variant (snake case, all
+capitals), a separator variant, a lower-case word split, or another word form stays drift. A term
+holding `_` keeps the naming-convention tolerance of the identifier context table, because its own
+spelling is the identifier and convention belongs to the language; a declared spelling is an alias
+beside a prose term, so tolerating convention there would hide real variants.
 
 Plurals are matched by suffix rules in `hooks/lib/glossary-term.js`: `-ies`, `-es` after `s` / `x` / `z` / `ch` / `sh`, `-s`, with `-us` / `-sis` / `-ss` singulars kept whole (`statuses` → `status`, `analyses` → `analysis`) and acronym plurals (`GPUs`) dropping their `s`. `-ves`, `-oes` (`echoes`), irregular plurals (`indices`) and `-us` plurals (`menus`) are not matched: a missed variant costs one review miss, while a looser stem match would flag derived words (`tester`, `gating`).
 
@@ -78,9 +93,8 @@ Terms that share a separator-stripped form (`workflow`, `work flow`) are all can
 
 ## Known false positives
 
-Resolve these through the accept path:
+Resolve these through the accept path, or through the entry's Homographs field:
 
 - A proper noun that capitalizes a term mid-sentence (`AWS Step Functions`), or put it in backticks.
 - Ordinary English that spells out an identifier term's words in order, such as the words foo, bars and dir against `FOO_BARS_DIR`.
 - A distinct identifier that differs from an identifier term only by a plural word.
-- A correctly spelled kebab-case identifier outside a fixed-format line, such as `allow-deny-hook` mid-line in a code comment against the term `allow-deny hook`. Only terms holding `_` are matched as identifiers, so the matcher cannot tell the identifier from a hyphenated rewording of the term. The planned Identifier field, fed through `identifierSpellings(terms)`, is meant to remove this case.

@@ -196,7 +196,7 @@ The glossary provenance check compares category-file term sets only, so the form
 |---|---|
 | none | `BLOCK: no-session` on stdout, nothing recorded, no ACCEPTED hint, exit 1 |
 | env | case B: every operation blocked as `session-unverified`, recorded on the env session, hint to re-run with `--session` |
-| explicit | `loadIntentGlossary` judges, in order: A `intent-missing`; P `intent-unapproved` (no confirm-sentinel approval, no sha, or another session's id); P `intent-modified` (sha differs); C `intent-unreadable`; else `matchOperations` reasons `not-in-intent`, `category-mismatch`, `session-term`, `definition-mismatch` |
+| explicit | `loadIntentGlossary` judges, in order: A `intent-missing`; P `intent-unapproved` (no confirm-sentinel approval, no sha, or another session's id); P `intent-modified` (sha differs); C `intent-unreadable`; else `matchOperations` reasons `not-in-intent`, `category-mismatch`, `session-term`, `definition-mismatch`, `fields-mismatch` (a V3 row whose Identifier or Homographs differ from the entry), `fields-unrecorded` (a V1 or V2 row on an operation that changes those fields) |
 
 An operation passes when a grant of the same fingerprint covers its `{norm, operation, category}`. A
 failed record write still exits 1 and prints the recovery. Each remaining block prints

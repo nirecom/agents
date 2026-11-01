@@ -6,7 +6,8 @@
 // T1-1: no tracked file still names the old paths (outside append-only records, the
 // migration blocks and the migration fixtures). T1-2: the three readers find the moved
 // files. T1-3: the path rule is repo-relative (docs/glossary/misc.md is a candidate that
-// BLOCKs; the docs/glossary.md index is not a candidate).
+// BLOCKs; the docs/glossary.md index is not a candidate). prompt-data-*: the
+// `glossary-format.js prompt-data` contract (bodies in feat-2529-glossary-old-paths/prompt-data.js).
 
 // TL3 gap: a real codex review run is not driven; codex_glossary_block is sourced and called.
 
@@ -15,6 +16,7 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const c = require("./feat-2529-glossary-provenance/common");
+const pd = require("./feat-2529-glossary-old-paths/prompt-data");
 
 const { check, eq, ok, ROOT, TMP, fwd, totals, mod } = c;
 const SELF = "tests/bin/feat-2529-glossary-old-paths.js";
@@ -157,6 +159,34 @@ caseEnd();
 
 caseBegin("t1-3-repo-relative-path-rule", "bin/lib/glossary-format.js");
 repoRelativePathRule();
+caseEnd();
+
+caseBegin("prompt-data-emits-terms-and-definitions", "bin/lib/glossary-format.js");
+pd.emitsTermsAndDefinitions();
+caseEnd();
+
+caseBegin("prompt-data-neutralizes-markers", "bin/lib/glossary-format.js");
+pd.neutralizesMarkers();
+caseEnd();
+
+caseBegin("prompt-data-truncates-on-max-lines", "bin/lib/glossary-format.js");
+pd.truncatesOnMaxLines();
+caseEnd();
+
+caseBegin("prompt-data-truncates-on-max-bytes", "bin/lib/glossary-format.js");
+pd.truncatesOnMaxBytes();
+caseEnd();
+
+caseBegin("prompt-data-tolerates-missing-path", "bin/lib/glossary-format.js");
+pd.toleratesMissingPath();
+caseEnd();
+
+caseBegin("prompt-data-usage-errors-exit-2", "bin/lib/glossary-format.js");
+pd.usageErrorsExit2();
+caseEnd();
+
+caseBegin("prompt-data-exact-fit-limits-not-truncated", "bin/lib/glossary-format.js");
+pd.exactFitLimitsNotTruncated();
 caseEnd();
 
 process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
