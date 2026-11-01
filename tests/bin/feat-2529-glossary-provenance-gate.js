@@ -8,25 +8,27 @@
 // TL3 gap: Claude Code itself does not deliver the PostToolUse call; the tests feed the real
 // workflow-mark hook its input JSON, and the commit gate is driven through checkReviewDocs.
 
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const { totals } = require("./feat-2529-glossary-provenance/common");
 const gate = require("./feat-2529-glossary-provenance/gate");
 
+const fails = () => totals.failed;
+after(() => process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`));
+
 caseBegin("t3-4-checker-forwards-the-session", "hooks/workflow-gate/review-docs-checker.js");
-gate.checkerForwardsSession();
+test("t3-4-checker-forwards-the-session", () => noNewFailures(fails, gate.checkerForwardsSession));
 caseEnd();
 
 caseBegin("t3-4-invalid-sid-falls-to-b", "hooks/workflow-gate/review-docs-checker.js");
-gate.invalidSidFallsToB();
+test("t3-4-invalid-sid-falls-to-b", () => noNewFailures(fails, gate.invalidSidFallsToB));
 caseEnd();
 
 caseBegin("t3-4-doc-gate-scripts-forward-the-session", "bin/review-doc-gates");
-gate.scriptsForwardSession();
+test("t3-4-doc-gate-scripts-forward-the-session", () => noNewFailures(fails, gate.scriptsForwardSession));
 caseEnd();
 
 caseBegin("t3-4-session-wiring-in-source", "hooks/workflow-gate/commit-gate-steps.js");
-gate.staticWiring();
+test("t3-4-session-wiring-in-source", () => noNewFailures(fails, gate.staticWiring));
 caseEnd();
-
-process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
-process.exitCode = totals.failed === 0 ? 0 : 1;

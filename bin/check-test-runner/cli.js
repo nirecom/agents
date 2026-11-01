@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 "use strict";
-// check-test-runner: a NEW test entrypoint must run under its language's required runner
-// (#2863; the verdict lives in hooks/lib/test-gates/test-runner.js).
-//   check-test-runner.sh [--rel <rel>] <file1> [file2 ...]
-// Exit 0 no HIGH, 1 a HIGH or no file, 2 a missing file, a skip-reason op failure or a bad --rel.
+// check-test-runner: a test entrypoint, new or existing, must run under its language's required runner
+// (#2863, #2865; the verdict lives in hooks/lib/test-gates/test-runner.js).
+//   check-test-runner.sh [--rel <rel> [--head <path>]] <file1> [file2 ...]
+// --head is accepted for the call form block-case-markers shares with every gate CLI and ignored:
+// the verdict reads only the post-edit file.
+// Exit 0 no HIGH, 1 a HIGH or no file, 2 a missing file, a skip-reason op failure, a bad --rel or a
+// --head without a value.
 
 const fs = require("fs");
 const path = require("path");
@@ -24,9 +27,16 @@ function main({ argv, cwd, stdout, stderr }) {
     }
     rel = args[1];
     args = args.slice(2);
+    if (args[0] === "--head") {
+      if (args.length < 2 || !args[1]) {
+        err(`${ME}: --head needs a value`);
+        return 2;
+      }
+      args = args.slice(2);
+    }
   }
   if (args.length === 0) {
-    err(`Usage: ${ME} [--rel <rel>] <file1> [file2 ...]`);
+    err(`Usage: ${ME} [--rel <rel> [--head <path>]] <file1> [file2 ...]`);
     return 1;
   }
   if (rel && args.length !== 1) {

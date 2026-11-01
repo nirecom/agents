@@ -11,6 +11,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -20,6 +22,10 @@ process.chdir(os.tmpdir());
 const F = require("../lib/glossary-check-fixture");
 const boundary = require("./feat-2529-glossary-completion/boundary");
 const sanctioned = require("./feat-2529-glossary-completion/sanctioned");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 // Every part reports through F.check; an exception in one part is one failure, not an abort.
 function guarded(name, fn) {
@@ -31,20 +37,21 @@ function guarded(name, fn) {
 }
 
 caseBegin("completion boundary refuses missing stale unresolved records and accepts current ones for all six stages", "hooks/workflow-state/glossary-check/record.js");
-guarded("boundary matrix", boundary.matrix);
+test("completion boundary refuses missing stale unresolved records and accepts current ones for all six stages", () =>
+  noNewFailures(F.failureCount, () => guarded("boundary matrix", boundary.matrix)));
 caseEnd();
 
 caseBegin("session-inherit and RESET_FROM completions are not judged by the glossary boundary", "hooks/workflow-state/glossary-check/record.js");
-guarded("sanctioned tokens", sanctioned.sanctioned);
+test("session-inherit and RESET_FROM completions are not judged by the glossary boundary", () =>
+  noNewFailures(F.failureCount, () => guarded("sanctioned tokens", sanctioned.sanctioned)));
 caseEnd();
 
 caseBegin("a step already recorded complete is not reverted for a missing glossary record", "hooks/workflow-state/effective-state.js");
-guarded("recorded complete", sanctioned.alreadyComplete);
+test("a step already recorded complete is not reverted for a missing glossary record", () =>
+  noNewFailures(F.failureCount, () => guarded("recorded complete", sanctioned.alreadyComplete)));
 caseEnd();
 
 caseBegin("early-gate snapshot resolves an approved clarify_intent only with a valid glossary record", "hooks/workflow-state/effective-state.js");
-guarded("self-repair", sanctioned.selfRepair);
+test("early-gate snapshot resolves an approved clarify_intent only with a valid glossary record", () =>
+  noNewFailures(F.failureCount, () => guarded("self-repair", sanctioned.selfRepair)));
 caseEnd();
-
-restoreIsolation();
-F.finish();

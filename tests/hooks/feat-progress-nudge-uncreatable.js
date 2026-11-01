@@ -16,6 +16,8 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pn-uncreatable-"));
@@ -27,7 +29,8 @@ for (const d of [T, CFG, TRANSCRIPTS]) fs.mkdirSync(d);
 fs.writeFileSync(path.join(CFG, ".env"), "CONFIRM_OUTLINE=off\nCONFIRM_DETAIL=off\n");
 process.env.AGENTS_MAIN_ROOT = CFG;
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TRANSCRIPTS;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -59,6 +62,7 @@ const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
+const failures = () => failed;
 
 const transcriptOf = (sid) => path.join(T, `${sid}.jsonl`);
 
@@ -102,7 +106,7 @@ const isRegular = (p) => { try { return fs.lstatSync(p).isFile(); } catch (_) { 
 const CANDIDATES = [["PostToolUse", "Bash"], ["PostToolUse", "Agent"], ["PostToolUse", "Task"], ["Stop", null]];
 
 caseBegin("fresh-session-uncreatable-consumes-nothing", "hooks/progress-nudge/evaluate.js");
-{
+test("fresh-session-uncreatable-consumes-nothing", () => noNewFailures(failures, () => {
   const sid = "pnu-fresh";
   seed(sid);
   S.markStep(sid, "research", "complete");
@@ -112,11 +116,11 @@ caseBegin("fresh-session-uncreatable-consumes-nothing", "hooks/progress-nudge/ev
     check(`U1: ${label} with session-progress.md uncreatable delivers no request`, () => eq(hook(sid, ev, tool), "", "additionalContext"));
     check(`U1: ${label} with session-progress.md uncreatable writes no pressure state (no cursor, baseline or request)`, () => eq(pressure(sid), null, "progress-pressure.json"));
   }
-}
+}));
 caseEnd();
 
 caseBegin("fresh-session-recovers-after-obstacle-removed", "hooks/progress-nudge/evaluate.js");
-{
+test("fresh-session-recovers-after-obstacle-removed", () => noNewFailures(failures, () => {
   const sid = "pnu-fresh";
   unblock(sid);
   const ctx = hook(sid, "PostToolUse", "Bash");
@@ -126,11 +130,11 @@ caseBegin("fresh-session-recovers-after-obstacle-removed", "hooks/progress-nudge
   check("U2: session-progress.md now exists as a regular file", () => eq(isRegular(PF.progressPathFor(sid)), true, "regular file"));
   check("U2: the cursor is now committed", () => eq(typeof (pressure(sid) || {}).event_cursor, "number", "typeof event_cursor"));
   check("U2: control — the next Bash does not repeat the complete", () => eq(hook(sid, "PostToolUse", "Bash").includes("research"), false, "repeated"));
-}
+}));
 caseEnd();
 
 caseBegin("primed-session-uncreatable-leaves-pressure-unchanged", "hooks/progress-nudge/evaluate.js");
-{
+test("primed-session-uncreatable-leaves-pressure-unchanged", () => noNewFailures(failures, () => {
   const sid = "pnu-primed";
   seed(sid);
   hook(sid, "PostToolUse", "Bash");
@@ -147,18 +151,18 @@ caseBegin("primed-session-uncreatable-leaves-pressure-unchanged", "hooks/progres
     check(`U3: ${label} delivers no request while session-progress.md is a directory`, () => eq(hook(sid, ev, tool), "", "additionalContext"));
     check(`U3: ${label} leaves event_cursor, baseline and requests_at exactly as they were`, () => eq(pressure(sid), before, "progress-pressure.json"));
   }
-}
+}));
 caseEnd();
 
 caseBegin("primed-session-recovers-after-obstacle-removed", "hooks/progress-nudge.js");
-{
+test("primed-session-recovers-after-obstacle-removed", () => noNewFailures(failures, () => {
   const sid = "pnu-primed";
   unblock(sid);
   const ctx = hook(sid, "PostToolUse", "Bash");
   check("U4: the next Bash after recovery delivers the held-back complete", () => (ctx.includes("step complete: research") ? undefined : `ctx=${show(ctx.slice(0, 300))}`));
   check("U4: session-progress.md is recreated as a regular file", () => eq(isRegular(PF.progressPathFor(sid)), true, "regular file"));
   check("U4: control — a second Bash is silent about it", () => eq(hook(sid, "PostToolUse", "Bash").includes("research"), false, "repeated"));
-}
+}));
 caseEnd();
 
 const { sidecarPath } = require(path.join(ROOT, "hooks", "lib", "control-sidecar"));
@@ -173,7 +177,7 @@ function prime(sid) {
 }
 
 caseBegin("symlinked-progress-file-left-alone-and-recovers", "hooks/progress-nudge/evaluate.js");
-{
+test("symlinked-progress-file-left-alone-and-recovers", (t) => noNewFailures(failures, () => {
   const sid = "pnu-symlink";
   seed(sid);
   S.markStep(sid, "research", "complete");
@@ -185,7 +189,8 @@ caseBegin("symlinked-progress-file-left-alone-and-recovers", "hooks/progress-nud
   let linkErr = null;
   try { fs.symlinkSync(target, link, "file"); } catch (e) { linkErr = e; }
   if (linkErr && linkErr.code === "EPERM") {
-    process.stdout.write(`SKIP: C1 symlinked session-progress.md — fs.symlinkSync threw EPERM (no symlink privilege on this host)\n`);
+    t.skip("C1 symlinked session-progress.md — fs.symlinkSync threw EPERM (no symlink privilege on this host)");
+    return;
   } else {
     check("C1: fixture — session-progress.md is a symlink", () => (linkErr ? `symlinkSync: ${linkErr.message}` : eq(fs.lstatSync(link).isSymbolicLink(), true, "isSymbolicLink")));
     for (const [ev, tool] of CANDIDATES) {
@@ -201,11 +206,11 @@ caseBegin("symlinked-progress-file-left-alone-and-recovers", "hooks/progress-nud
     check("C1: after the link is removed the next Bash delivers the pending complete", () => (ctx.includes("step complete: research") ? undefined : `ctx=${show(ctx.slice(0, 300))}`));
     check("C1: session-progress.md is now a regular file and the old target is still untouched", () => eq([isRegular(link), fs.readFileSync(target).equals(targetBytes)], [true, true], "[regular, target equal]"));
   }
-}
+}));
 caseEnd();
 
 caseBegin("cursor-phase-lock-held-keeps-complete-pending", "hooks/progress-nudge/evaluate.js");
-{
+test("cursor-phase-lock-held-keeps-complete-pending", () => noNewFailures(failures, () => {
   const sid = "pnu-lock-cursor";
   prime(sid);
   const before = pressure(sid);
@@ -222,11 +227,11 @@ caseBegin("cursor-phase-lock-held-keeps-complete-pending", "hooks/progress-nudge
   const ctx = hook(sid, "PostToolUse", "Bash");
   check("C2a: once the lock is free the next Bash delivers the held-back complete exactly once", () => eq(ctx.split("step complete: research").length - 1, 1, `occurrences in ctx=${show(ctx.slice(0, 300))}`));
   check("C2a: control — the Bash after that does not repeat it", () => eq(hook(sid, "PostToolUse", "Bash").includes("research"), false, "repeated"));
-}
+}));
 caseEnd();
 
 caseBegin("judge-phase-lock-timeout-delivers-committed-complete", "hooks/progress-nudge/evaluate.js");
-{
+test("judge-phase-lock-timeout-delivers-committed-complete", () => noNewFailures(failures, () => {
   const EV = require(path.join(ROOT, "hooks", "progress-nudge", "evaluate"));
   const original = PF.updatePressure;
   for (const [ev, tool] of [["Stop", null], ["PostToolUse", "Bash"]]) {
@@ -256,8 +261,5 @@ caseBegin("judge-phase-lock-timeout-delivers-committed-complete", "hooks/progres
     check(`C2b: ${label} the fallback still delivers the committed complete`, () => (typeof ctx === "string" && ctx.includes("step complete: research") ? undefined : `ctx=${show(ctx && ctx.slice(0, 300))}`));
     check(`C2b: ${label} control — the next Bash with the lock free does not repeat it`, () => eq(hook(sid, "PostToolUse", "Bash").includes("research"), false, "repeated"));
   }
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

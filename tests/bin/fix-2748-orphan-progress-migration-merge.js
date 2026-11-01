@@ -8,10 +8,13 @@
 // Each session chain is built with the real applyInheritance (fixture.js). Shared setup: fix-2748-orphan-progress-migration/shared.js.
 
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("fs");
-const { M, planLines, samePath, finish } = require("./fix-2748-orphan-progress-migration/shared");
+const { M, planLines, samePath, finish, failureCount } = require("./fix-2748-orphan-progress-migration/shared");
 const { F, PF, check, show, cli, why, progressOf, planOf, read, pinnedSid, pin } = M;
 const { section, count, setup, settle, snapshot, changedSince, adoptChain, resetAll, age, HOUR } = M;
+after(finish);
 
 // crashResume(label, prefix, pinTo) — M4 (crash after step 2, downstream still self-pinned) and M4b
 // (crash after step 5, downstream already pinned to first): the re-run neither duplicates nor
@@ -31,7 +34,7 @@ function crashResume(label, prefix, pinTo) {
 }
 
 caseBegin("dry-run-reports-and-changes-nothing", "bin/migrate-orphan-progress-files");
-{
+test("dry-run-reports-and-changes-nothing", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m1");
   const before = snapshot();
   const r = cli([]);
@@ -40,11 +43,11 @@ caseBegin("dry-run-reports-and-changes-nothing", "bin/migrate-orphan-progress-fi
     const diff = changedSince(before);
     return diff.length === 0 ? undefined : `changed=${show(diff)}`;
   });
-}
+}));
 caseEnd();
 
 caseBegin("apply-merges-repins-and-deletes-orphan", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("apply-merges-repins-and-deletes-orphan", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m2", { downstreamPlans: { intent: "m2 downstream intent\n", detail: "m2 downstream detail\n" } });
   const r = cli(["--apply"]);
   const out = read(progressOf(firstSid));
@@ -93,19 +96,19 @@ caseBegin("apply-merges-repins-and-deletes-orphan", "hooks/lib/temporary-migrati
     const diff = changedSince(before);
     return again.status === 0 && diff.length === 0 ? undefined : `${why(again)} changed=${show(diff)}`;
   });
-}
+}));
 caseEnd();
 
 caseBegin("resume-after-crash-before-repin", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-crashResume("M4", "m4", "downstream");
+test("resume-after-crash-before-repin", () => noNewFailures(failureCount, () => crashResume("M4", "m4", "downstream")));
 caseEnd();
 
 caseBegin("resume-after-crash-before-delete", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-crashResume("M4b", "m4b", "first");
+test("resume-after-crash-before-delete", () => noNewFailures(failureCount, () => crashResume("M4b", "m4b", "first")));
 caseEnd();
 
 caseBegin("skip-active-and-include-active", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("skip-active-and-include-active", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m6", { settle: false });
   const firstBefore = read(progressOf(firstSid));
   const statesBefore = [firstSid, downstreamSid].map((s) => read(F.statePath(s)));
@@ -125,11 +128,11 @@ caseBegin("skip-active-and-include-active", "hooks/lib/temporary-migrations/orph
   });
   const inc = cli(["--apply", "--include-active"]);
   check("M6: --include-active processes it (no orphan progress file left)", () => (inc.status === 0 && !fs.existsSync(progressOf(downstreamSid)) ? undefined : why(inc)));
-}
+}));
 caseEnd();
 
 caseBegin("no-state-is-unknown", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("no-state-is-unknown", () => noNewFailures(failureCount, () => {
   resetAll();
   const orphanSid = "m7-nostate";
   fs.writeFileSync(progressOf(orphanSid), M.downstreamText(orphanSid));
@@ -138,11 +141,11 @@ caseBegin("no-state-is-unknown", "hooks/lib/temporary-migrations/orphan-progress
   check("M7: a progress file with no state is reported unknown", () => (dry.status === 0 && String(dry.stdout).split("\n").some((l) => l.includes(orphanSid) && l.includes("(unknown)")) ? undefined : why(dry)));
   const r = cli(["--apply"]);
   check("M7: --apply skips it and keeps its file", () => (r.status === 0 && read(progressOf(orphanSid)) === M.downstreamText(orphanSid) ? undefined : why(r)));
-}
+}));
 caseEnd();
 
 caseBegin("missing-first-file-starts-from-template", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("missing-first-file-starts-from-template", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m8", { firstFile: false });
   const r = cli(["--apply"]);
   const out = read(progressOf(firstSid));
@@ -155,20 +158,20 @@ caseBegin("missing-first-file-starts-from-template", "hooks/lib/temporary-migrat
     const cs = section(out, "## Current state") || [];
     return cs.includes("marker-cs-downstream") && !cs.some((l) => l.startsWith("(In a few lines")) ? undefined : `Current state=${show(cs)}`;
   });
-}
+}));
 caseEnd();
 
 caseBegin("apply-creates-no-note-files", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("apply-creates-no-note-files", () => noNewFailures(failureCount, () => {
   setup("m9", { downstreamPlans: { detail: "m9 detail\n" } });
   const r = cli(["--apply"]);
   check("M9: --apply adds no -note- file to the plans dir", () => (r.status === 0 && M.noteFiles().length === 0 ? undefined : `${why(r)} notes=${show(M.noteFiles())}`));
-}
+}));
 caseEnd();
 
 // M11/M13: firstSid -> downstreamSid1 -> downstreamSid2, both downstreams carrying the pre-#2748 trace.
 caseBegin("three-generation-session-chain-folds-into-first", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("three-generation-session-chain-folds-into-first", () => noNewFailures(failureCount, () => {
   resetAll();
   const [firstSid, downstreamSid1, downstreamSid2] = ["m11-first", "m11-downstream1", "m11-downstream2"];
   const chain = [firstSid, downstreamSid1, downstreamSid2];
@@ -210,31 +213,31 @@ caseBegin("three-generation-session-chain-folds-into-first", "hooks/lib/temporar
     const diff = changedSince(before);
     return again.status === 0 && diff.length === 0 ? undefined : `${why(again)} changed=${show(diff)}`;
   });
-}
+}));
 caseEnd();
 
 caseBegin("plan-rename-to-first-session-name", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("plan-rename-to-first-session-name", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m12", { downstreamPlans: { detail: "m12 detail body\n" } });
   const r = cli(["--apply"]);
   check("M12: <downstream>-detail.md becomes <first>-detail.md with the same bytes", () => (r.status === 0 && read(planOf(firstSid, "detail")) === "m12 detail body\n"
     ? undefined : `${why(r)} first detail=${show(read(planOf(firstSid, "detail")))}`));
   check("M12: no file keeps the session-downstream's plan name", () => (fs.existsSync(planOf(downstreamSid, "detail")) ? "<downstream>-detail.md still exists" : undefined));
-}
+}));
 caseEnd();
 
 caseBegin("plan-collision-newer-wins", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("plan-collision-newer-wins", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m13", { firstPlans: { intent: "m13 first intent\n" }, downstreamPlans: { intent: "m13 downstream intent\n" } });
   const r = cli(["--apply"]);
   check("M13: <first>-intent.md holds the session-downstream's intent", () => (r.status === 0 && read(planOf(firstSid, "intent")) === "m13 downstream intent\n"
     ? undefined : `${why(r)} first intent=${show(read(planOf(firstSid, "intent")))}`));
   check("M13: <downstream>-intent.md is gone", () => (fs.existsSync(planOf(downstreamSid, "intent")) ? "still exists" : undefined));
-}
+}));
 caseEnd();
 
 caseBegin("approval-record-repointed-to-first-session", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("approval-record-repointed-to-first-session", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m14", { downstreamPlans: { detail: "# detail\n\nm14 body\n" } });
   const CA = F.mod("hooks/workflow-state/completion-approval");
   const sha = CA.shaOfArtifactBuffer(fs.readFileSync(planOf(downstreamSid, "detail")), "detail");
@@ -256,13 +259,13 @@ caseBegin("approval-record-repointed-to-first-session", "hooks/lib/temporary-mig
     const ev = (F.raw(downstreamSid).events || []).filter((e) => e.kind === "plan_approval" && e.step === "detail").pop() || {};
     return ev.provenance === "backfilled" && ev.origin === "migrate-orphan-progress-file" && ev.artifact_session_id === firstSid ? undefined : `event=${show(ev)}`;
   });
-}
+}));
 caseEnd();
 
 // M28: a plan collision where both plans carry an approval record — the newer (session-downstream) plan wins,
 // its realigned approval validates, and the replaced first_session_id plan's approval no longer does.
 caseBegin("plan-collision-realigns-approvals", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("plan-collision-realigns-approvals", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m28", { firstPlans: { detail: "# detail\n\nm28 first body\n" }, downstreamPlans: { detail: "# detail\n\nm28 downstream body\n" } });
   const CA = F.mod("hooks/workflow-state/completion-approval");
   const approve = (sid) => {
@@ -294,21 +297,21 @@ caseBegin("plan-collision-realigns-approvals", "hooks/lib/temporary-migrations/o
     const rec = ((F.S().readState(firstSid) || {}).plan_approvals || {}).detail || {};
     return v && v.approved !== true && rec.artifact_sha256 === firstSha ? undefined : `verdict=${show(v)} record=${show(rec)}`;
   });
-}
+}));
 caseEnd();
 
 caseBegin("downstream-without-orphan-file-still-renames-plans","hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-{
+test("downstream-without-orphan-file-still-renames-plans", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid } = setup("m15", { downstreamPlans: { outline: "m15 outline\n" } });
   fs.rmSync(progressOf(downstreamSid));
   const r = cli(["--apply"]);
   check("M15: the session-downstream with only an own-name plan is migrated", () => (r.status === 0 && read(planOf(firstSid, "outline")) === "m15 outline\n"
     && !fs.existsSync(planOf(downstreamSid, "outline")) ? undefined : `${why(r)} first outline=${show(read(planOf(firstSid, "outline")))}`));
-}
+}));
 caseEnd();
 
 caseBegin("current-state-from-newest-progress-file", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("current-state-from-newest-progress-file", () => noNewFailures(failureCount, () => {
   const older = setup("m16a", { downstreamNewer: false });
   const r1 = cli(["--apply"]);
   check("M16: a first-generation file newer than the orphan keeps its own Current state", () => {
@@ -321,16 +324,14 @@ caseBegin("current-state-from-newest-progress-file", "hooks/lib/temporary-migrat
     const cs = section(read(progressOf(newer.firstSid)), "## Current state") || [];
     return r2.status === 0 && cs.includes("marker-cs-downstream") && !cs.includes("marker-cs-first") ? undefined : `${why(r2)} Current state=${show(cs)}`;
   });
-}
+}));
 caseEnd();
 
 caseBegin("usage-error-exits-2", "bin/migrate-orphan-progress-files");
-{
+test("usage-error-exits-2", () => noNewFailures(failureCount, () => {
   for (const args of [["--bogus"], ["--apply", "extra"]]) {
     const r = cli(args);
     check(`M10: ${args.join(" ")} exits 2`, () => (r.status === 2 ? undefined : why(r)));
   }
-}
+}));
 caseEnd();
-
-finish();

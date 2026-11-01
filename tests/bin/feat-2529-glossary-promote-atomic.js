@@ -10,10 +10,14 @@
 
 const fs = require("fs");
 const path = require("path");
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const L = require("./feat-2529-glossary-promote/lib");
 
 const { check, eq, ok, mod, DEFS } = L;
+const fails = () => L.totals.failed;
+after(() => process.stdout.write(`Total: ${L.totals.passed} passed, ${L.totals.failed} failed\n`));
 const promoteMod = () => mod("bin/glossary-promote");
 const DIR = "docs/glossary";
 
@@ -45,39 +49,42 @@ function failureLeavesOriginals(label, io) {
 }
 
 caseBegin("promote-atomic-temp-write-failure-leaves-originals", "bin/glossary-promote");
-failureLeavesOriginals("second-temp-write", failingIo("writeFileSync", 2));
-failureLeavesOriginals("first-temp-write", failingIo("writeFileSync", 1));
+test("promote-atomic-temp-write-failure-leaves-originals", () => noNewFailures(fails, () => {
+  failureLeavesOriginals("second-temp-write", failingIo("writeFileSync", 2));
+  failureLeavesOriginals("first-temp-write", failingIo("writeFileSync", 1));
+}));
 caseEnd();
 
 caseBegin("promote-atomic-renames-only-after-every-temp-write", "bin/glossary-promote");
-check("writeAll writes no destination until every temp is written", () => {
-  const repo = L.mkRepo("atomic-order");
-  const before = L.snapshot(repo);
-  const seen = [];
-  const io = Object.assign({}, fs, {
-    writeFileSync: (p, t) => { seen.push(["write", L.snapshot(repo)]); return fs.writeFileSync(p, t); },
-    renameSync: (a, b) => { seen.push(["rename", null]); return fs.renameSync(a, b); },
+test("promote-atomic-renames-only-after-every-temp-write", () => noNewFailures(fails, () => {
+  check("writeAll writes no destination until every temp is written", () => {
+    const repo = L.mkRepo("atomic-order");
+    const before = L.snapshot(repo);
+    const seen = [];
+    const io = Object.assign({}, fs, {
+      writeFileSync: (p, t) => { seen.push(["write", L.snapshot(repo)]); return fs.writeFileSync(p, t); },
+      renameSync: (a, b) => { seen.push(["rename", null]); return fs.renameSync(a, b); },
+    });
+    promoteMod().writeAll(repo, L.FILES.slice(), newTexts(), io);
+    eq(seen.map((s) => s[0]), ["write", "write", "rename", "rename"], "call order");
+    for (const [kind, snap] of seen) if (kind === "write") eq(snap, before, "originals during the temp writes");
+    eq(L.snapshot(repo), ["# user NEW\n", "# internal NEW\n"], "files after writeAll");
+    eq(leftovers(repo), [], "temp files");
   });
-  promoteMod().writeAll(repo, L.FILES.slice(), newTexts(), io);
-  eq(seen.map((s) => s[0]), ["write", "write", "rename", "rename"], "call order");
-  for (const [kind, snap] of seen) if (kind === "write") eq(snap, before, "originals during the temp writes");
-  eq(L.snapshot(repo), ["# user NEW\n", "# internal NEW\n"], "files after writeAll");
-  eq(leftovers(repo), [], "temp files");
-});
-failureLeavesOriginals("first-rename", failingIo("renameSync", 1));
+  failureLeavesOriginals("first-rename", failingIo("renameSync", 1));
+}));
 caseEnd();
 
 caseBegin("promote-atomic-cli-two-file-promotion-leaves-no-temp", "bin/glossary-promote");
-check("a promotion changing user and internal writes both and leaves no temp", () => {
-  const s = L.session("atomic-cli", [["beta", "user", "add", "A fresh fixture term."], ["lima", "internal", "add", "A new internal term."]]);
-  const r = L.promote(s.intent, s.repo);
-  eq(r.code, 0, `exit (${r.all})`);
-  eq(L.userTerms(s.repo).beta, "A fresh fixture term.", "user beta");
-  eq(L.internalTerms(s.repo).lima, "A new internal term.", "internal lima");
-  eq(L.userTerms(s.repo).alpha, DEFS.alpha, "user alpha kept");
-  eq(leftovers(s.repo), [], "temp files");
-});
+test("promote-atomic-cli-two-file-promotion-leaves-no-temp", () => noNewFailures(fails, () => {
+  check("a promotion changing user and internal writes both and leaves no temp", () => {
+    const s = L.session("atomic-cli", [["beta", "user", "add", "A fresh fixture term."], ["lima", "internal", "add", "A new internal term."]]);
+    const r = L.promote(s.intent, s.repo);
+    eq(r.code, 0, `exit (${r.all})`);
+    eq(L.userTerms(s.repo).beta, "A fresh fixture term.", "user beta");
+    eq(L.internalTerms(s.repo).lima, "A new internal term.", "internal lima");
+    eq(L.userTerms(s.repo).alpha, DEFS.alpha, "user alpha kept");
+    eq(leftovers(s.repo), [], "temp files");
+  });
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${L.totals.passed} passed, ${L.totals.failed} failed\n`);
-process.exitCode = L.totals.failed === 0 ? 0 : 1;

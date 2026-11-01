@@ -276,14 +276,14 @@ function guard(name, fn) {
 }
 function finish() {
   console.log(failures === 0 ? `ALL PASS (${passes})` : `${failures} FAILED, ${passes} passed`);
-  process.exitCode = failures === 0 ? 0 : 1;
   try { process.chdir(os.tmpdir()); fs.rmSync(TMP, { recursive: true, force: true }); } catch (_) { /* best effort */ }
 }
+const failureCount = () => failures;
 
 module.exports = {
   ROOT, TMP, DIRS, ORIGIN_GH, ORIGIN_PLAIN, GH_WEB, blobUrl, commitUrl, compareUrl, slash, useSsh, sshCalls,
   git, gitTry, uniq, newSid, newTurn, planName, ps, allowLocal, project, makeRepo, useRepo, provision, cloneRepo,
   absOf, writePlan, record, sync, writeSync, bareCount, bareTip, parentsOf, authorOf, bodyOf, showAt, isAncestor,
   firstParentLog, config, trailersOf, tipTrailers, humanPush, handTrailer, controlPath, promptTurnPath,
-  writePromptTurnFile, readPromptTurnFile, iso, txPath, startTurn, renameFailPreload, runNode, hookWrite, mod, check, guard, finish, clip,
+  writePromptTurnFile, readPromptTurnFile, iso, txPath, startTurn, renameFailPreload, runNode, hookWrite, mod, check, guard, finish, failureCount, clip,
 };

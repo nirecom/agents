@@ -6,7 +6,9 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { test } = require("node:test");
 const { caseBegin, caseEnd } = require("../../lib/harness");
+const { noNewFailures } = require("../../lib/case-verdict");
 const F = require("../../lib/glossary-check-fixture");
 const M = require("./fixture");
 
@@ -43,6 +45,8 @@ function detect(label, repoDir, stagedPaths) {
 const show = (r) => JSON.stringify(r, (k, v) => (v instanceof Set ? [...v].sort() : v));
 const sameSet = (set, list) => set instanceof Set && set.size === list.length && list.every((p) => set.has(p));
 const guarded = (name, fn) => M.guarded(F.check, name, fn);
+// One node:test case: it fails when any F.check inside it (or an exception, via guarded) adds a failure.
+const caseTest = (name, fn) => test(name, () => noNewFailures(F.failureCount, () => guarded(name, fn)));
 
 function expectState(label, r, state, reason) {
   const ok = !!r && r.state === state && (reason === undefined || r.reason === reason);
@@ -53,7 +57,7 @@ const INCOMING = ["docs/main-only.md", "docs/old.md", "src/main-only.js", "tests
 
 function run() {
 caseBegin("exports the three frozen states", "hooks/lib/merge-incoming.js");
-guarded("A0", () => {
+caseTest("A0", () => {
   const m = modOrNull("A0 exports");
   const s = m && m.MERGE_INCOMING_STATE;
   F.check("A0 MERGE_INCOMING_STATE holds the three states, frozen",
@@ -62,7 +66,7 @@ guarded("A0", () => {
 caseEnd();
 
 caseBegin("not merging with staged changes", "hooks/lib/merge-incoming.js");
-guarded("A1", () => {
+caseTest("A1", () => {
   const repo = F.mkRepo("a1");
   F.stageFile(repo, "docs/guide.md", "# Guide\n\nText.\n");
   F.check("A1 precondition: no MERGE_HEAD file", !fs.existsSync(M.mergeHeadPathOf(repo)), M.mergeHeadPathOf(repo));
@@ -71,7 +75,7 @@ guarded("A1", () => {
 caseEnd();
 
 caseBegin("standard merge lists exactly the merge-incoming files", "hooks/lib/merge-incoming.js");
-guarded("A2", () => {
+caseTest("A2", () => {
   const repo = F.mkRepo("a2");
   const fx = M.standardMerge(repo, WORD);
   const staged = M.stagedNames(repo);
@@ -91,7 +95,7 @@ guarded("A2", () => {
 caseEnd();
 
 caseBegin("incoming file edited again during the merge leaves the set", "hooks/lib/merge-incoming.js");
-guarded("A3", () => {
+caseTest("A3", () => {
   const repo = F.mkRepo("a3");
   M.standardMerge(repo, WORD);
   M.apply(repo, { "docs/main-only.md": "# Main only\n\nEdited during the merge.\n" });
@@ -103,7 +107,7 @@ guarded("A3", () => {
 caseEnd();
 
 caseBegin("index-only path and resolution deletion stay in scope", "hooks/lib/merge-incoming.js");
-guarded("A4", () => {
+caseTest("A4", () => {
   const repo = F.mkRepo("a4");
   M.standardMerge(repo, WORD, { resolve: { "docs/shared.md": null, "docs/new-in-merge.md": "# New\n\nText.\n" } });
   const staged = M.stagedNames(repo);
@@ -118,7 +122,7 @@ guarded("A4", () => {
 caseEnd();
 
 caseBegin("paths is always a subset of stagedPaths", "hooks/lib/merge-incoming.js");
-guarded("A5", () => {
+caseTest("A5", () => {
   const repo = F.mkRepo("a5");
   M.standardMerge(repo, WORD);
   const part = detect("A5 part", repo, ["docs/main-only.md", "docs/shared.md"]);
@@ -134,7 +138,7 @@ guarded("A5", () => {
 caseEnd();
 
 caseBegin("octopus merge is undecidable", "hooks/lib/merge-incoming.js");
-guarded("A6", () => {
+caseTest("A6", () => {
   const repo = F.mkRepo("a6");
   const fx = M.octopusMerge(repo, WORD);
   F.check("A6 precondition: git wrote two MERGE_HEAD lines", fx.lines.length === 2, fx.lines.join("|"));
@@ -143,7 +147,7 @@ guarded("A6", () => {
 caseEnd();
 
 caseBegin("malformed or dangling MERGE_HEAD is undecidable", "hooks/lib/merge-incoming.js");
-guarded("A7", () => {
+caseTest("A7", () => {
   for (const [label, body] of [["not-an-oid", "not-an-oid\n"], ["empty file", ""], ["short hex", "abc123\n"]]) {
     const repo = F.mkRepo(`a7-${label.replace(/\W+/g, "")}`);
     fs.writeFileSync(M.mergeHeadPathOf(repo), body);
@@ -157,7 +161,7 @@ guarded("A7", () => {
 caseEnd();
 
 caseBegin("failures come back as undecidable without throwing", "hooks/lib/merge-incoming.js");
-guarded("A8", () => {
+caseTest("A8", () => {
   const plain = fs.mkdtempSync(path.join(os.tmpdir(), "g2761-nogit-"));
   expectState("A8 not a git repository", detect("A8 no repo", plain, ["a.md"]), "undecidable", "git-path-failed");
   expectState("A8 repoDir null", detect("A8 null", null, []), "undecidable", "invalid-argument");
@@ -169,7 +173,7 @@ guarded("A8", () => {
 caseEnd();
 
 caseBegin("linked worktree has its own MERGE_HEAD", "hooks/lib/merge-incoming.js");
-guarded("A9", () => {
+caseTest("A9", () => {
   const repo = F.mkRepo("a9");
   const wt = F.addWorktree(repo, `a9-${process.pid}`);
   M.standardMerge(wt, WORD);
@@ -180,22 +184,24 @@ guarded("A9", () => {
 caseEnd();
 
 caseBegin("Git Bash drive form of repoDir gives the same result", "hooks/lib/merge-incoming.js");
-guarded("A10", () => {
+test("A10", (t) => {
   if (process.platform !== "win32") {
-    console.log("SKIP A10 drive-letter form is Windows-only");
-    return;
+    t.skip("A10 drive-letter form is Windows-only");
+    return undefined;
   }
+  return noNewFailures(F.failureCount, () => guarded("A10", () => {
   const repo = F.mkRepo("a10");
   M.standardMerge(repo, WORD);
   const posix = M.toPosixDrive(repo);
   F.check("A10 precondition: the repoDir is in /c/... form", /^\/[a-z]\//.test(posix), posix);
   const r = detect("A10", posix, M.stagedNames(repo));
   if (expectState("A10 /c/... repoDir", r, "merging")) F.check("A10 paths match A2", sameSet(r.paths, INCOMING), show(r));
+}));
 });
 caseEnd();
 
 caseBegin("branch named MERGE_HEAD is not a merge", "hooks/lib/merge-incoming.js");
-guarded("A11", () => {
+caseTest("A11", () => {
   const repo = F.mkRepo("a11");
   F.stageFile(repo, "docs/guide.md", "# Guide\n\nText.\n");
   F.check("A11 precondition: git rev-parse -q --verify MERGE_HEAD succeeds through the branch", M.makeMergeHeadBranch(repo), "rev-parse failed");
@@ -205,7 +211,7 @@ guarded("A11", () => {
 caseEnd();
 
 caseBegin("the index, not the worktree, is compared with MERGE_HEAD", "hooks/lib/merge-incoming.js");
-guarded("A12", () => {
+caseTest("A12", () => {
   const rel = "docs/main-only.md";
   const a = F.mkRepo("a12-staged");
   M.standardMerge(a, WORD);
@@ -229,7 +235,7 @@ caseEnd();
 // #2631 stage 9: MERGE_HEAD must name a commit (`<oid>^{commit}`). A tree oid is a valid tree-ish
 // for `git diff --cached`, so without the peel it would pass as a merge and exclude files.
 caseBegin("MERGE_HEAD naming a tree or a blob is undecidable", "hooks/lib/merge-incoming.js");
-guarded("A13", () => {
+caseTest("A13", () => {
   for (const kind of ["tree", "blob"]) {
     const repo = F.mkRepo(`a13-${kind}`);
     const fx = M.standardMerge(repo, WORD);

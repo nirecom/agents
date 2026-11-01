@@ -11,19 +11,21 @@
 // - whether the model actually relays the breadcrumb (no live model is driven)
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
-const go = (name, fn) => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F));
-
-try {
-caseBegin("auth backoff", "hooks/lib/plan-sync/commit-push.js");
-  go("auth");
-caseEnd();
-caseBegin("A8b redactText masks scp-form userinfo", "hooks/lib/plan-sync/remote-url.js");
-  go("auth", "redact");
-caseEnd();
-} finally {
+after(() => {
   F.finish();
   restore();
-}
+});
+const go = (name, fn) => noNewFailures(F.failureCount,
+  () => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F)));
+
+caseBegin("auth backoff", "hooks/lib/plan-sync/commit-push.js");
+test("auth backoff", () => go("auth"));
+caseEnd();
+caseBegin("A8b redactText masks scp-form userinfo", "hooks/lib/plan-sync/remote-url.js");
+test("A8b redactText masks scp-form userinfo", () => go("auth", "redact"));
+caseEnd();

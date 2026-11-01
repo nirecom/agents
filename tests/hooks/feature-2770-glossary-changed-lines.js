@@ -9,10 +9,12 @@
 // - a real claude session committing through the commit gate with a partly edited file.
 // Fixtures: tests/lib/glossary-check-fixture.js, ./feat-2761-glossary-merge/fixture.js.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2770-transcripts-"));
@@ -28,6 +30,12 @@ const DRIFT_RE = /DRIFT: (\S+) "([^"]*)" -> "([^"]*)" at (.+):(\d+)\s*$/;
 const hits = (text) => String(text).split(/\r?\n/).map((l) => DRIFT_RE.exec(l)).filter(Boolean)
   .map((m) => `${F.slash(m[4])}:${m[5]}`);
 const guarded = (name, fn) => M.guarded(F.check, name, fn);
+// The case fails when any F.check inside it (or an exception, via guarded) adds a failure.
+const verdict = (label, fn) => () => noNewFailures(F.failureCount, () => guarded(label, fn));
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 const show = (r) => `exit=${r.code} ${r.out}${r.err}`;
 const APPEND = { tests: "echo unrelated\n", code: "module.exports.b = 2;\n", docs: "\nUnrelated text.\n" };
 
@@ -39,6 +47,7 @@ function committed(tag, stage) {
 }
 
 caseBegin("unchanged variant lines of a modified file are not scanned", "hooks/workflow-state/glossary-check/scope/artifact.js");
+test("B1: unchanged variant lines of a modified file are not scanned", () => noNewFailures(F.failureCount, () => {
 for (const stage of F.RS_STAGES) {
   guarded(`B1 ${stage}`, () => {
     const s = committed(`b1-${stage}`, stage);
@@ -48,29 +57,30 @@ for (const stage of F.RS_STAGES) {
       r.code === 0 && hits(r.out).length === 0, show(r));
   });
 }
+}));
 caseEnd();
 
 caseBegin("a variant on an added line is reported at its file line", "bin/check-glossary-drift");
-guarded("B2", () => {
+test("B2: a variant on an added line is reported at its file line", verdict("B2", () => {
   const s = committed("b2", "docs");
   F.stageFile(s.repo, F.TARGET.docs, `${F.targetBody("docs", W)}\nEach ${W} is new.\n`);
   const r = F.drift(s.sid, "docs", s.repo, false);
   F.check("B2 docs: the added variant line is reported at docs/guide.md:5", r.code === 1 && hits(r.out).includes("docs/guide.md:5"), show(r));
-});
+}));
 caseEnd();
 
 caseBegin("a new file is scanned whole", "bin/check-glossary-drift");
-guarded("B3", () => {
+test("B3: a new file is scanned whole", verdict("B3", () => {
   const repo = F.mkRepo("b3");
   F.stageFile(repo, "docs/new.md", `# New\n\nEach ${W} is checked.\n`);
   const sid = F.seedSession("b3", "docs", { cwd: repo });
   const r = F.drift(sid, "docs", repo, false);
   F.check("B3 docs: every line of a new file is scanned (docs/new.md:3 reported)", r.code === 1 && hits(r.out).includes("docs/new.md:3"), show(r));
-});
+}));
 caseEnd();
 
 caseBegin("merge: the line filter applies after the merge-incoming subtraction", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("B4", () => {
+test("B4: merge: the line filter applies after the merge-incoming subtraction", verdict("B4", () => {
   const repo = F.mkRepo("b4");
   const shared = (tail) => `# Shared\n\nEach ${W} is old.\n\nPlain text${tail}\n`;
   M.commitAll(repo, { "docs/shared.md": shared(".") }, "fixture: merge base");
@@ -83,19 +93,19 @@ guarded("B4", () => {
   const r = F.drift(sid, "docs", repo, false);
   F.check("B4 docs: only the added line of docs/shared.md is reported (docs/shared.md:7)",
     r.code === 1 && JSON.stringify(hits(r.out)) === '["docs/shared.md:7"]', show(r));
-});
+}));
 caseEnd();
 
 caseBegin("a plan-file stage still scans the whole plan", "bin/check-glossary-drift");
-guarded("B5", () => {
+test("B5: a plan-file stage still scans the whole plan", verdict("B5", () => {
   const s = F.setupStage("b5", "outline", W);
   const r = F.drift(s.sid, "outline", s.repo, false);
   F.check("B5 outline: the variant in the plan is reported (exit 1)", r.code === 1 && hits(r.out).length > 0, show(r));
-});
+}));
 caseEnd();
 
 caseBegin("a deletion-only change scans no line", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("B6", () => {
+test("B6: a deletion-only change scans no line", verdict("B6", () => {
   const s = committed("b6", "docs");
   F.stageFile(s.repo, F.TARGET.docs, F.targetBody("docs", W).replace("# Guide\n\n", ""));
   const r = F.drift(s.sid, "docs", s.repo, false);
@@ -105,11 +115,11 @@ guarded("B6", () => {
   F.git(d.repo, ["rm", "-q", "--", F.TARGET.docs]);
   const rm = F.drift(d.sid, "docs", d.repo, false);
   F.check("B6 docs: a staged whole-file deletion reports nothing (exit 0)", rm.code === 0 && hits(rm.out).length === 0, show(rm));
-});
+}));
 caseEnd();
 
 caseBegin("a modified committed line is reported at its file line, an unchanged variant line is not", "bin/check-glossary-drift");
-guarded("C1", () => {
+test("C1: a modified committed line is reported at its file line, an unchanged variant line is not", verdict("C1", () => {
   const repo = F.mkRepo("c1");
   const body = (mid) => `# Guide\n\n${mid}\n\nEach ${W} is checked.\n`;
   M.commitAll(repo, { [F.TARGET.docs]: body("Plain text here.") }, "fixture: a plain line above a variant line");
@@ -118,11 +128,11 @@ guarded("C1", () => {
   const r = F.drift(sid, "docs", repo, false);
   F.check("C1 docs: exactly the modified line is reported (docs/guide.md:3), the unchanged docs/guide.md:5 is not",
     r.code === 1 && JSON.stringify(hits(r.out)) === '["docs/guide.md:3"]', show(r));
-});
+}));
 caseEnd();
 
 caseBegin("record and commit gate agree under line narrowing", "hooks/workflow-gate/glossary-record-checker.js");
-guarded("C2", () => {
+test("C2: record and commit gate agree under line narrowing", verdict("C2", () => {
   const G = require("./feat-2529-glossary-commit-gate/gate");
   const { stageFingerprint } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope"));
   const repo = F.mkRepo("c2");
@@ -136,11 +146,11 @@ guarded("C2", () => {
   F.check("C2 stageFingerprint equals the recorded fingerprint", now.ok && !!rec && rec.fingerprint === now.fingerprint,
     `${JSON.stringify(now)} vs ${rec && rec.fingerprint}`);
   G.passes("C2 commit gate with the same staged content", G.scan(sid, repo), "review_docs");
-});
+}));
 caseEnd();
 
 caseBegin("undecidable merge keeps every path but reports only changed lines", "hooks/workflow-state/glossary-check/scope/artifact.js");
-guarded("C3", () => {
+test("C3: undecidable merge keeps every path but reports only changed lines", verdict("C3", () => {
   const repo = F.mkRepo("c3");
   const shared = (tail) => `# Shared\n\nEach ${W} is old.\n\nPlain text${tail}\n`;
   M.commitAll(repo, { "docs/shared.md": shared(".") }, "fixture: merge base");
@@ -154,11 +164,11 @@ guarded("C3", () => {
   const r = F.drift(sid, "docs", repo, false);
   F.check("C3 docs: the merge-incoming new file is kept whole and only the added line of docs/shared.md is reported",
     r.code === 1 && JSON.stringify(hits(r.out).sort()) === '["docs/main-only.md:3","docs/shared.md:7"]', show(r));
-});
+}));
 caseEnd();
 
 caseBegin("parseChangedLines reads hunk headers and quoted paths", "hooks/workflow-state/glossary-check/scope/changed-lines.js");
-guarded("C4", () => {
+test("C4: parseChangedLines reads hunk headers and quoted paths", verdict("C4", () => {
   const { parseChangedLines } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope/changed-lines.js"));
   const head = (b) => `diff --git a/${b} b/${b}\nindex 1..2 100644\n--- a/${b}\n+++ b/${b}\n`;
   const TABLE = [
@@ -180,11 +190,11 @@ guarded("C4", () => {
     const got = Object.fromEntries(parseChangedLines(patch));
     F.check(`C4 parseChangedLines: ${name}`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
   }
-});
+}));
 caseEnd();
 
 caseBegin("changedLinesOf maps a path with a space and a Japanese path to their changed lines", "hooks/workflow-state/glossary-check/scope/changed-lines.js");
-guarded("C5", () => {
+test("C5: changedLinesOf maps a path with a space and a Japanese path to their changed lines", verdict("C5", () => {
   const { spawnSync } = require("node:child_process");
   const { changedLinesOf } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope/changed-lines.js"));
   const run = (dir, args) => {
@@ -200,8 +210,5 @@ guarded("C5", () => {
   const got = Object.fromEntries(changedLinesOf(run, repo));
   const want = { "docs/my guide.md": [2], [ja]: [4] };
   F.check("C5 changedLinesOf: the spaced path -> [2] and the Japanese path -> [4]", JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
-});
+}));
 caseEnd();
-
-restoreIsolation();
-F.finish();

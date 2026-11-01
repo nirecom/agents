@@ -14,19 +14,25 @@
 
 const fs = require("fs");
 const path = require("path");
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const savedCwd = process.cwd();
 const F = require("./feature-2631-size-limits/fixture");
 process.chdir(F.work());
+after(() => {
+  process.chdir(savedCwd);
+  restore();
+});
 
 const SL = () => F.load("hooks/lib/size-limits.js");
 const SC = () => F.load("hooks/lib/size-classify.js");
 const EXTS = ["js", "sh", "py"];
 
 caseBegin("limits-table-is-the-ssot", "hooks/lib/size-limits.js");
-F.run("LIMITS", () => {
+test("LIMITS", () => noNewFailures(F.failureCount, () => F.run("LIMITS", () => {
   const { LIMITS } = SL();
   for (const [kind, [warn, hard, unit]] of Object.entries(F.EXPECTED)) {
     const l = LIMITS[kind] || {};
@@ -35,22 +41,22 @@ F.run("LIMITS", () => {
   F.check("LIMITS.history carries role rotation", (LIMITS.history || {}).role === "rotation", JSON.stringify(LIMITS.history));
   F.check("LIMITS has exactly the 8 kinds", Object.keys(LIMITS).sort().join(",") === Object.keys(F.EXPECTED).sort().join(","),
     Object.keys(LIMITS).join(","));
-});
+})));
 caseEnd();
 
 caseBegin("L1-count-lines", "hooks/lib/size-limits.js");
-F.run("countLines", () => {
+test("countLines", () => noNewFailures(F.failureCount, () => F.run("countLines", () => {
   const { countLines, measure } = SL();
   for (const [text, want] of [["", 0], ["a", 1], ["a\n", 1], ["a\nb", 2], ["a\nb\n", 2], ["a\r\nb\r\n", 2], ["a\r\nb", 2], ["\n", 1]]) {
     F.check(`countLines(${JSON.stringify(text)}) = ${want}`, countLines(text) === want, countLines(text));
   }
   F.check("measure(code) uses countLines", measure("code", "a\nb") === 2, measure("code", "a\nb"));
   F.check("measure(detail) uses countLines", measure("detail", F.proseLines(7)) === 7, measure("detail", F.proseLines(7)));
-});
+})));
 caseEnd();
 
 caseBegin("L2-current-state-chars", "hooks/lib/size-limits.js");
-F.run("currentStateChars", () => {
+test("currentStateChars", () => noNewFailures(F.failureCount, () => F.run("currentStateChars", () => {
   const { currentStateChars, measure } = SL();
   const cases = [
     ["next ## heading ends the section", "## Current state\n\nabc\n\n## Plan files\nzzzzzz\n", 3],
@@ -65,11 +71,11 @@ F.run("currentStateChars", () => {
     F.check(`currentStateChars: ${name}`, got === want, `want ${want} got ${got}`);
   }
   F.check("measure(progress) = currentStateChars", measure("progress", F.progressDoc(600)) === 600, measure("progress", F.progressDoc(600)));
-});
+})));
 caseEnd();
 
 caseBegin("L3-boundaries-all-kinds", "hooks/lib/size-limits.js");
-F.run("judge boundaries", () => {
+test("judge boundaries", () => noNewFailures(F.failureCount, () => F.run("judge boundaries", () => {
   const { judge } = SL();
   for (const [kind, [w, h]] of Object.entries(F.EXPECTED)) {
     const rows = [[w - 1, "ok"], [w, "ok"], [w + 1, "warn"], [h - 1, "warn"], [h, "warn"], [h + 1, "hard"]];
@@ -78,11 +84,11 @@ F.run("judge boundaries", () => {
       F.check(`judge(${kind}, 0, ${v}) = ${want}`, r.verdict === want, JSON.stringify(r));
     }
   }
-});
+})));
 caseEnd();
 
 caseBegin("L4-shrink-exception", "hooks/lib/size-limits.js");
-F.run("judge shrink", () => {
+test("judge shrink", () => noNewFailures(F.failureCount, () => F.run("judge shrink", () => {
   const { judge } = SL();
   for (const [kind, [, h]] of Object.entries(F.EXPECTED)) {
     const v = (pre, post) => (judge(kind, pre, post) || {}).verdict;
@@ -91,11 +97,11 @@ F.run("judge shrink", () => {
     F.check(`${kind}: pre HARD+1 -> post HARD+2 is hard`, v(h + 1, h + 2) === "hard", v(h + 1, h + 2));
     F.check(`${kind}: new file (pre 0) at HARD+1 is hard`, v(0, h + 1) === "hard", v(0, h + 1));
   }
-});
+})));
 caseEnd();
 
 caseBegin("L5-fragment-deltas", "hooks/lib/size-limits.js");
-F.run("deltas", () => {
+test("deltas", () => noNewFailures(F.failureCount, () => F.run("deltas", () => {
   const { newlineDelta, codePointDelta } = SL();
   const less = [{ old_string: "a\nb\nc\n", new_string: "a\n" }];
   const more = [{ old_string: "a\n", new_string: "a\nb\nc\n" }];
@@ -114,10 +120,11 @@ F.run("deltas", () => {
   F.check("codePointDelta: replace_all growth is not reported as a decrease", codePointDelta(mixedCp) >= 0, codePointDelta(mixedCp));
   F.check("newlineDelta: a pure replace_all removal is still a decrease",
     newlineDelta([{ old_string: "a\nb", new_string: "a", replace_all: true }]) < 0, "");
-});
+})));
 caseEnd();
 
 caseBegin("L6-classify-repo-path", "hooks/lib/size-classify.js");
+test("classifyRepoPath", () => noNewFailures(F.failureCount, () => {
 F.run("classifyRepoPath", () => {
   const { classifyRepoPath, matchesKind } = SC();
   const rows = [
@@ -146,10 +153,11 @@ F.run("isExemptRepoPath", () => {
     F.check(`not exempt: ${rel}`, isExemptRepoPath(rel) === false, "");
   }
 });
+}));
 caseEnd();
 
 caseBegin("L6-classify-plans-path", "hooks/lib/size-classify.js");
-F.run("classifyPlansPath", () => {
+test("classifyPlansPath", () => noNewFailures(F.failureCount, () => F.run("classifyPlansPath", () => {
   const { classifyPlansPath } = SC();
   const sid = F.newSid();
   const plans = process.env.WORKFLOW_PLANS_DIR;
@@ -159,11 +167,11 @@ F.run("classifyPlansPath", () => {
   }
   const outside = path.join(F.work(), "elsewhere", `${sid}-detail.md`);
   F.check("a <sid>-detail.md outside the plans dir is not a plan", classifyPlansPath(outside) == null, classifyPlansPath(outside));
-});
+})));
 caseEnd();
 
 caseBegin("size-session-gate", "hooks/lib/size-session-gate.js");
-F.run("sizeCheckActive", () => {
+test("sizeCheckActive", () => noNewFailures(F.failureCount, () => F.run("sizeCheckActive", () => {
   const { sizeCheckActive } = F.load("hooks/lib/size-session-gate.js");
   const started = F.newSid();
   F.writeStartedState(started);
@@ -182,14 +190,14 @@ F.run("sizeCheckActive", () => {
   const { commitSizeCheckActive } = F.load("hooks/lib/size-session-gate.js");
   F.check("WORKTREE_OFF is not honoured at pre-commit (the commit check stays active)", commitSizeCheckActive(wt) === true, "");
   F.check("control: WORKFLOW_OFF is honoured at pre-commit (the commit check is off)", commitSizeCheckActive(off) === false, "");
-});
+})));
 caseEnd();
 
 // Stage 9: a readable state file with no self-recorded settled step is "active" on the edit side,
 // matching the commit gate (the file exists). A sid with no state file is exempt on both sides.
 // The commit-route pair: precommit-size-gate.sh (session-markers-and-unresolved-sid).
 caseBegin("size-session-gate-commit-and-edit-agree", "hooks/lib/size-session-gate.js");
-F.run("commit-and-edit-agree", () => {
+test("commit-and-edit-agree", () => noNewFailures(F.failureCount, () => F.run("commit-and-edit-agree", () => {
   const gate = F.load("hooks/lib/size-session-gate.js");
   const lc = F.load("hooks/workflow-state/lifecycle.js");
   const state = (sid) => (typeof gate.sizeCheckState === "function" ? gate.sizeCheckState(sid) : "sizeCheckState is not exported");
@@ -218,14 +226,14 @@ F.run("commit-and-edit-agree", () => {
   F.writeStartedState(started);
   F.check("control: a started session is \"active\" and checked on both sides",
     state(started) === "active" && gate.sizeCheckActive(started) === true && gate.commitSizeCheckActive(started) === true, state(started));
-});
+})));
 caseEnd();
 
 // S1-S4 (stage 9): sizeCheckState is exempt / active / unknown, and sizeCheckActive is true only
 // for active. The no-state exempt and settled-less active rows, where edit time, CONFIRM and
 // pre-commit agree, are in the commit-and-edit-agree case above.
 caseBegin("size-check-state-exempt-active-unknown", "hooks/lib/size-session-gate.js");
-F.run("sizeCheckState", () => {
+test("sizeCheckState", () => noNewFailures(F.failureCount, () => F.run("sizeCheckState", () => {
   const gate = F.load("hooks/lib/size-session-gate.js");
   const state = (sid) => (typeof gate.sizeCheckState === "function" ? gate.sizeCheckState(sid) : "sizeCheckState is not exported");
   const { MAX_KNOWN_STATE_VERSION } = F.load("hooks/workflow-state/state-io/core.js");
@@ -262,11 +270,11 @@ F.run("sizeCheckState", () => {
     inject(/workflow-state[\\/]lifecycle(\.js)?$/);
     F.check("S3 lifecycle require throws: sizeCheckState stays \"active\"", state(started) === "active", state(started));
   } finally { Module._load = load; }
-});
+})));
 caseEnd();
 
 caseBegin("L7-generated-table-in-file-split", "bin/print-size-limits");
-F.run("print-size-limits", () => {
+test("print-size-limits", () => noNewFailures(F.failureCount, () => F.run("print-size-limits", () => {
   const name = "size-limits";
   const begin = "<!-- BEGIN GENERATED: " + name + " -->";
   const end = "<!-- END GENERATED: " + name + " -->";
@@ -292,18 +300,14 @@ F.run("print-size-limits", () => {
   }
   const bad = F.nodeCli("bin/print-size-limits", ["--get", "nosuchkind"]);
   F.check("--get with an unknown kind is a non-zero exit", bad.status !== 0 && bad.status !== null && !/Cannot find module/.test(bad.stderr), `${bad.status} ${bad.stderr}`);
-});
+})));
 caseEnd();
 
 caseBegin("L8-progress-template-within-warn", "templates/progress.md");
-F.run("template", () => {
+test("template", () => noNewFailures(F.failureCount, () => F.run("template", () => {
   const { currentStateChars, LIMITS } = SL();
   const text = fs.readFileSync(path.join(F.ROOT, "templates", "progress.md"), "utf8");
   const n = currentStateChars(text);
   F.check("template Current state placeholder is non-empty and <= progress WARN", n > 0 && n <= LIMITS.progress.warn, n);
-});
+})));
 caseEnd();
-
-process.chdir(savedCwd);
-restore();
-process.exitCode = F.failureCount() ? 1 : 0;

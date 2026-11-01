@@ -10,13 +10,16 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "lang-drift-"));
 const CFG = path.join(TMP, "cfg");
 fs.mkdirSync(CFG);
 process.env.AGENTS_MAIN_ROOT = CFG;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -44,6 +47,8 @@ function check(name, fn) {
   }
 }
 const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
+// verdict(fn) -> the node:test body of one case: it fails when a check inside fn failed.
+const verdict = (fn) => () => noNewFailures(() => failed, fn);
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
@@ -81,7 +86,7 @@ function triggerOf(file) {
 }
 
 caseBegin("template-shape", "hooks/lib/lang-directives.txt");
-{
+test("template-shape", verdict(() => {
   check("S1: lang-directives.txt exists", () => eq(fs.existsSync(TEMPLATE), true, "exists"));
   check("S2: the template defines exactly TERMS, CONV_LANG, PLAN_LANG, CODEX_FREE_TEXT", () => eq(Object.keys(templateEntries()).sort(), ["CODEX_FREE_TEXT", "CONV_LANG", "PLAN_LANG", "TERMS"], "keys"));
   check("S3: CONV_LANG, PLAN_LANG and CODEX_FREE_TEXT each reference {lang} and {terms}", () => {
@@ -96,11 +101,11 @@ caseBegin("template-shape", "hooks/lib/lang-directives.txt");
     const t = templateEntries();
     eq(Object.keys(t).filter((k) => t[k].length > (k === "TERMS" ? 300 : 600)), [], "keys over the limit");
   });
-}
+}));
 caseEnd();
 
 caseBegin("conv-lang-first-sentence-matches-fallback-trigger", "hooks/lib/lang-directives.txt");
-{
+test("conv-lang-first-sentence-matches-fallback-trigger", verdict(() => {
   const files = fallbackFiles();
   check("F1: fixture — at least the 14 known files carry the conv-lang-fallback:v1 line", () => eq(files.length >= 14, true, `count=${files.length}`));
   check("F2: CONV_LANG starts with 'Respond to the user in {lang}.'", () => eq((templateEntries().CONV_LANG || "").startsWith("Respond to the user in {lang}."), true, "starts with trigger sentence"));
@@ -112,11 +117,11 @@ caseBegin("conv-lang-first-sentence-matches-fallback-trigger", "hooks/lib/lang-d
       eq(conv.startsWith(trigger), true, `trigger=${show(trigger)} conv=${show(conv.slice(0, 60))}`);
     });
   }
-}
+}));
 caseEnd();
 
 caseBegin("rendered-conv-lang-still-fires-the-trigger", "hooks/lib/conv-lang.js");
-{
+test("rendered-conv-lang-still-fires-the-trigger", verdict(() => {
   process.env.CONV_LANG = "japanese";
   let rendered = null;
   try {
@@ -128,8 +133,5 @@ caseBegin("rendered-conv-lang-still-fires-the-trigger", "hooks/lib/conv-lang.js"
   check("R1: getConvLangInjection() for japanese starts with 'Respond to the user in japanese.'", () => eq(String(rendered).startsWith("Respond to the user in japanese."), true, `rendered=${show(rendered)}`));
   const files = fallbackFiles();
   check("R2: the rendered directive matches every fallback trigger with <language> filled in", () => eq(files.filter((f) => !String(rendered).startsWith(triggerOf(f).split("<language>").join("japanese"))).map((f) => path.relative(ROOT, f)), [], "files whose trigger misses"));
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;
