@@ -1,8 +1,9 @@
 "use strict";
 // hooks/lib/intent-glossary.js — structure check for the intent.md `## Glossary`
 // section (#2529): the heading must exist once, right after `## Issues`; an empty
-// body passes; a non-empty body must be a `| Term | Category | Operation | Definition |`
-// table (the legacy `| Term | Category | Definition |` table reads every row as add).
+// body passes; a non-empty body must be a `| Term | Category | Operation | Definition |
+// Identifier | Homographs |` table (V3, #2763), or a legacy V2 table without the two field
+// columns, or the V1 `| Term | Category | Definition |` table that reads every row as add.
 // Shared by the plan-artifact hooks, bin/check-intent-glossary and bin/glossary-promote.
 // Category values and their criteria are owned by rules/docs/glossary.md.
 
@@ -10,8 +11,17 @@ const CATEGORIES = Object.freeze(["user", "internal", "session"]);
 const OPERATIONS = Object.freeze(["add", "delete", "redefine"]);
 const HEADER_V1 = ["Term", "Category", "Definition"];
 const HEADER_V2 = ["Term", "Category", "Operation", "Definition"];
+// V3 (#2763): the optional spelling fields, each a backticked list or empty.
+const HEADER_V3 = ["Term", "Category", "Operation", "Definition", "Identifier", "Homographs"];
+const HEADER_TEXT = "| Term | Category | Operation | Definition | Identifier | Homographs |";
 const { fenceStep } = require("./markdown-fence");
-const { unsafeTermChars, describeTermChars } = require("./glossary-term");
+const {
+  unsafeTermChars, describeTermChars, parseSpellingList, checkIdentifierSpelling, checkHomographSpelling,
+} = require("./glossary-term");
+const FIELD_CELLS = [
+  { name: "identifiers", label: "Identifier", cell: 4, check: checkIdentifierSpelling },
+  { name: "homographs", label: "Homographs", cell: 5, check: checkHomographSpelling },
+];
 
 const H2_RE = /^##(?!#)/;
 const H1_OR_H2_RE = /^#{1,2}(?!#)/;
@@ -50,6 +60,19 @@ function stripComments(lines) {
   });
 }
 
+// The field arrays of a V3 row; a malformed cell reads as [] and is kept in fieldErrors.
+function fieldsOfCells(cells) {
+  const out = {};
+  const errors = [];
+  for (const f of FIELD_CELLS) {
+    const list = parseSpellingList(cells[f.cell] || "");
+    if (Array.isArray(list)) out[f.name] = list;
+    else { out[f.name] = []; errors.push(f.label + ": " + list.error); }
+  }
+  if (errors.length > 0) out.fieldErrors = errors;
+  return out;
+}
+
 function parseIntentGlossary(text) {
   const lines = typeof text === "string" ? text.split(/\r?\n/) : [];
   const result = { glossaryLines: [], issuesLine: null, h2: [], rows: [], body: [], table: [], stray: [] };
@@ -78,19 +101,23 @@ function parseIntentGlossary(text) {
     if (l.trim() !== "") result.body.push({ lineNumber: start + k + 1, text: l });
   });
   const table = result.body.filter((b) => b.text.trim().startsWith("|"));
-  const v2 = table.length > 0 && sameCells(splitRow(table[0].text), HEADER_V2);
-  result.header = v2 ? HEADER_V2 : HEADER_V1;
+  const headerCells = table.length > 0 ? splitRow(table[0].text) : [];
+  const v3 = sameCells(headerCells, HEADER_V3);
+  const v2 = v3 || sameCells(headerCells, HEADER_V2);
+  result.header = v3 ? HEADER_V3 : v2 ? HEADER_V2 : HEADER_V1;
   table.slice(2).forEach((b) => {
     const cells = splitRow(b.text);
-    result.rows.push({
+    const row = {
       term: cells[0] || "",
       category: cells[1] || "",
       operation: v2 ? (cells[2] || "") : "add",
-      definition: cells.slice(v2 ? 3 : 2).join(" | "),
+      definition: v3 ? (cells[3] || "") : cells.slice(v2 ? 3 : 2).join(" | "),
       cellCount: cells.length,
       lineNumber: b.lineNumber,
       legacy: !v2,
-    });
+    };
+    if (v3) Object.assign(row, fieldsOfCells(cells));
+    result.rows.push(row);
   });
   result.table = table;
   if (table.length > 0) {
@@ -119,7 +146,23 @@ function checkRow(r, raw, n) {
   } else if (r.category === "session" && r.operation !== "add" && OPERATIONS.includes(r.operation)) {
     at("a session term only takes Operation add (got '" + r.operation + "')");
   }
+  if (Array.isArray(r.identifiers)) checkFieldCells(r, at);
   return out;
+}
+
+// The V3 field cells: well-formed lists, empty on a delete row, every spelling passing its check.
+function checkFieldCells(r, at) {
+  for (const e of r.fieldErrors || []) at("Glossary row " + e);
+  if (r.operation === "delete") {
+    if (FIELD_CELLS.some((f) => r[f.name].length > 0)) at("a delete row takes no Identifier / Homographs");
+    return;
+  }
+  for (const f of FIELD_CELLS) {
+    for (const s of r[f.name]) {
+      const why = f.check(r.term, s);
+      if (why) at("Glossary row " + f.label + ": " + why);
+    }
+  }
 }
 
 // A same-term same-category delete + add cannot be matched to the approved operations
@@ -142,8 +185,8 @@ function checkTable(p) {
   const out = [];
   const [header, sep] = p.table;
   const headerCells = splitRow(header.text);
-  if (!sameCells(headerCells, HEADER_V2) && !sameCells(headerCells, HEADER_V1)) {
-    out.push(violation(header.lineNumber, header.text, "Glossary table header must be | Term | Category | Operation | Definition | (legacy: | Term | Category | Definition |)"));
+  if (![HEADER_V3, HEADER_V2, HEADER_V1].some((h) => sameCells(headerCells, h))) {
+    out.push(violation(header.lineNumber, header.text, "Glossary table header must be " + HEADER_TEXT + " (legacy: | Term | Category | Operation | Definition | or | Term | Category | Definition |)"));
   }
   const n = p.header.length;
   if (!sep || !splitRow(sep.text).every((c) => /^:?-+:?$/.test(c))) {
@@ -193,7 +236,7 @@ function checkIntentGlossary(text) {
   // Prose without a table is rejected: glossary promotion can only parse the table.
   if (p.table.length === 0) {
     const b = p.body[0];
-    out.push(violation(b.lineNumber, b.text, "Glossary body must be empty or a | Term | Category | Operation | Definition | table"));
+    out.push(violation(b.lineNumber, b.text, "Glossary body must be empty or a " + HEADER_TEXT + " table"));
     return out;
   }
   return out.concat(checkTable(p));

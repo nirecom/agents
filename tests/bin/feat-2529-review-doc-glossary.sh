@@ -205,6 +205,43 @@ run_gate "$REPO" --staged
 expect_rc "glossary-foo.md beside a valid user file is not checked" 0
 case_end
 
+# #2763 S2: the optional Identifier / Homographs bullets. The BLOCK cases are staged like the pass
+# case and must block on the field value, not as a disallowed bullet.
+expect_no_disallowed() {
+  if [[ "$GATE_OUT" != *"disallowed bullet"* ]]; then pass "$1 (not a disallowed bullet)"
+  else fail "$1" "blocked as a disallowed bullet: ${GATE_OUT:0:600}"; fi
+}
+
+case_begin "identifier-bullet-passes" "bin/review-doc-glossary"
+new_repo
+gloss_head "$REPO/docs/glossary/user.md"
+printf '### allow-deny hook\n- **Definition**: a fixture term.\n- **Identifier**: `allow-deny-hook`, `allow_deny_hook`\n- **Related**: [owner](architecture/owner.md)\n\n' >> "$REPO/docs/glossary/user.md"
+printf '### statusline\n- **Definition**: a fixture term.\n- **Homographs**: `statuses`\n- **Related**: [owner](architecture/owner.md)\n' >> "$REPO/docs/glossary/user.md"
+stage_as_prose_edit "$REPO" docs/glossary/user.md
+run_gate "$REPO" --staged
+expect_rc "valid Identifier and Homographs bullets" 0
+case_end
+
+case_begin "identifier-key-mismatch-blocks" "bin/review-doc-glossary"
+new_repo
+gloss_head "$REPO/docs/glossary/user.md"
+printf '### allow-deny hook\n- **Definition**: a fixture term.\n- **Identifier**: `allow-deny-hooks`\n- **Related**: [owner](architecture/owner.md)\n' >> "$REPO/docs/glossary/user.md"
+stage_as_prose_edit "$REPO" docs/glossary/user.md
+run_gate "$REPO" --staged
+expect_rc "Identifier whose identKey differs from the term" 1
+expect_no_disallowed "Identifier identKey mismatch"
+case_end
+
+case_begin "homographs-separator-plural-blocks" "bin/review-doc-glossary"
+new_repo
+gloss_head "$REPO/docs/glossary/user.md"
+printf '### statusline\n- **Definition**: a fixture term.\n- **Homographs**: `status-lines`\n- **Related**: [owner](architecture/owner.md)\n' >> "$REPO/docs/glossary/user.md"
+stage_as_prose_edit "$REPO" docs/glossary/user.md
+run_gate "$REPO" --staged
+expect_rc "Homographs holding a separator variant plural of the term" 1
+expect_no_disallowed "Homographs separator variant plural"
+case_end
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

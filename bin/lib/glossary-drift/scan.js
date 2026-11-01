@@ -5,7 +5,7 @@
 
 const { normalizeTerm } = require("../../../hooks/lib/glossary-term");
 const { extractLayers } = require("./extract");
-const { indexTerms } = require("./terms");
+const { indexTerms, termRecord } = require("./terms");
 const { findVariants } = require("./match");
 
 function driftWith(text, format, index) {
@@ -26,16 +26,23 @@ function findDrift(text, format, terms) {
 // term an intent row deletes is no canonical term, even while the glossary file still lists it;
 // an add / redefine row of the same term (a category move) keeps it. A delete row matches its own
 // spelling only (case-insensitive), so deleting "workflows" leaves a distinct "workflow" heading.
+// Term records: a V3 row (its fields are arrays) replaces the fields of the glossary record of the
+// same term; a V1 / V2 row declares nothing.
 const spellingKey = (s) => String(s == null ? "" : s).trim().toLowerCase();
+const declares = (r) => Array.isArray(r.identifiers) || Array.isArray(r.homographs);
+const fieldsOfRow = (r) => ({ identifiers: Array.isArray(r.identifiers) ? r.identifiers : [], homographs: Array.isArray(r.homographs) ? r.homographs : [] });
 function scanStageInputs(inputs) {
   const rows = (inputs && inputs.intentRows && inputs.intentRows.rows) || [];
   const kept = rows.filter((r) => r.operation !== "delete");
   const keptKeys = new Set(kept.map((r) => spellingKey(r.term)));
   const deleted = new Set(rows.filter((r) => r.operation === "delete").map((r) => spellingKey(r.term))
     .filter((k) => !keptKeys.has(k)));
-  const terms = [...((inputs && inputs.glossary && inputs.glossary.terms) || [])]
-    .concat(kept.map((r) => r.term))
-    .filter((t) => !deleted.has(spellingKey(t)));
+  const v3 = new Map(kept.filter(declares).map((r) => [String(r.term).trim(), fieldsOfRow(r)]));
+  const glossaryRecords = ((inputs && inputs.glossary && inputs.glossary.terms) || []).map(termRecord)
+    .map((rec) => (v3.has(rec.term) ? Object.assign({ term: rec.term }, v3.get(rec.term)) : rec));
+  const terms = glossaryRecords
+    .concat(kept.map((r) => Object.assign({ term: r.term }, fieldsOfRow(r))))
+    .filter((t) => !deleted.has(spellingKey(t.term)));
   const index = indexTerms(terms);
   const hits = [];
   for (const file of (inputs && inputs.artifact && inputs.artifact.files) || []) {
