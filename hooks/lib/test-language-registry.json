@@ -134,7 +134,11 @@
         "markerWrapHint": "Wrap each case in column-0 caseBegin(\"<name>\", \"<target>\") and caseEnd() calls",
         "markerUncertainHint": "a caseBegin/caseEnd-looking line sits inside a block comment or a multi-line template string; move it out so the cases can be read line by line"
       },
-      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs a node:test file under node --test with a case reporter, and any other file as a plain node script."
+      "newEntrypointRunner": {
+        "rejectSkipReason": "custom-runner",
+        "hint": "Require node:test and write each case as test(...): const { test } = require(\"node:test\"); keep the shared helpers from require(\"../lib/harness\")"
+      },
+      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs a node:test file under node --test with a case reporter, and any other file as a plain node script. A plain script is accepted only as an existing file; a new one must load node:test (newEntrypointRunner)."
     },
     {
       "id": "test-naming-convention",

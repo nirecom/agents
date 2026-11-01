@@ -112,7 +112,7 @@ caseEnd();
 const NO_EMBED = mkCheckout("checkout-no-js-embed", (dir) => {
   const file = path.join(dir, "hooks", "lib", "test-language-registry.json");
   const table = JSON.parse(fs.readFileSync(file, "utf8"));
-  for (const e of table.entries) if (e.id === "js") e.caseEmbedRules = null;
+  for (const e of table.entries) if (e.id === "js") { e.caseEmbedRules = null; delete e.newEntrypointRunner; }
   fs.writeFileSync(file, JSON.stringify(table, null, 2) + "\n");
 });
 const NO_EMBED_HOOK = path.join(NO_EMBED, "hooks", "block-case-markers.js");

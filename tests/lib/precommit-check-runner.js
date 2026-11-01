@@ -4,12 +4,15 @@
 // hooks/lib/precommit-*.sh). CLI: node precommit-check-runner.js [--cfg <dir>] [--markers] <check> [<gate>]
 // A <check> runs through the shipped orchestrator (agentsRepoOnly and failMode apply) and exits
 // with its rc; section markers are left out unless --markers. A <gate> (frontmatter, case-markers,
-// language-match) runs alone: exit 1 when it blocks, else 0. Any throw exits 3. --cfg defaults to
-// this checkout. Module: run({ cwd, cfgDir, env, check, gate, markers }) -> rc.
+// test-runner, language-match) runs alone: exit 1 when it blocks, else 0. Any throw exits 3. --cfg
+// defaults to this checkout. Module: run({ cwd, cfgDir, env, check, gate, markers }) -> rc.
 const path = require("path");
 
 const CHECKOUT = path.resolve(__dirname, "..", "..");
-const GATES = { frontmatter: "frontmatter-gate", "case-markers": "case-markers-gate", "language-match": "language-match-gate" };
+const GATES = {
+  frontmatter: "frontmatter-gate", "case-markers": "case-markers-gate",
+  "test-runner": "test-runner-gate", "language-match": "language-match-gate",
+};
 
 async function run({ cwd = process.cwd(), cfgDir = CHECKOUT, env = process.env, check, gate, markers = false }) {
   const cfg = path.resolve(cfgDir);

@@ -230,14 +230,14 @@ EOF
 cat > "$BODIES/js-missing" <<'EOF'
 // Tests: bin/a.js, bin/b.js
 // Tags: scope:common
-const harness = require("../lib/harness");
+const harness = require("../lib/harness"); require("node:test");
 
 console.log(typeof harness);
 EOF
 cat > "$BODIES/js-conforming" <<'EOF'
 // Tests: bin/a.js, bin/b.js
 // Tags: scope:common
-const { caseBegin, caseEnd } = require("../lib/harness");
+const { caseBegin, caseEnd } = require("../lib/harness"); require("node:test");
 
 caseBegin("a", "bin/a.js");
 caseEnd();
@@ -247,7 +247,7 @@ EOF
 cat > "$BODIES/js-malformed" <<'EOF'
 // Tests: bin/a.js, bin/b.js
 // Tags: scope:common
-const { caseBegin, caseEnd } = require("../lib/harness");
+const { caseBegin, caseEnd } = require("../lib/harness"); require("node:test");
 
 caseBegin("a", "bin/a.js");
 caseEnd();
@@ -257,7 +257,7 @@ EOF
 cat > "$BODIES/js-uncertain" <<'EOF'
 // Tests: bin/a.js, bin/b.js
 // Tags: scope:common
-const { caseBegin, caseEnd } = require("../lib/harness");
+const { caseBegin, caseEnd } = require("../lib/harness"); require("node:test");
 
 /*
 caseBegin("old", "bin/a.js");
@@ -304,6 +304,6 @@ printf '%s\n' '# Tests: bin/a.py, bin/b.py' '# Tags: scope:common' 'import sys' 
   'sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))' 'import harness' 'import pytest' > "$BODIES/pytest-dupname"
 dup_pytest bin/a.py >> "$BODIES/pytest-dupname"
 dup_pytest bin/b.py >> "$BODIES/pytest-dupname"
-printf '%s\n' '// Tests: bin/a.js, bin/b.js' '// Tags: scope:common' 'const { caseBegin, caseEnd } = require("../lib/harness");' '' > "$BODIES/js-dupname"
+printf '%s\n' '// Tests: bin/a.js, bin/b.js' '// Tags: scope:common' 'const { caseBegin, caseEnd } = require("../lib/harness"); require("node:test");' '' > "$BODIES/js-dupname"
 dup_js bin/a.js >> "$BODIES/js-dupname"
 dup_js bin/b.js >> "$BODIES/js-dupname"
