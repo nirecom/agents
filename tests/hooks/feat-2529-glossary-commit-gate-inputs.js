@@ -10,6 +10,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -20,6 +22,10 @@ process.chdir(os.tmpdir());
 const F = require("../lib/glossary-check-fixture");
 const inputs = require("./feat-2529-glossary-commit-gate/inputs");
 const unresolved = require("./feat-2529-glossary-commit-gate/unresolved");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 function guarded(name, fn) {
   try {
@@ -30,12 +36,11 @@ function guarded(name, fn) {
 }
 
 caseBegin("commit gate blocks a staged blob swap and a glossary-only change naming the changed component", "hooks/workflow-gate/glossary-record-checker.js");
-guarded("commit gate inputs", inputs.run);
+test("commit gate blocks a staged blob swap and a glossary-only change naming the changed component", () =>
+  noNewFailures(F.failureCount, () => guarded("commit gate inputs", inputs.run)));
 caseEnd();
 
 caseBegin("commit gate blocks a current record with an unresolved finding until the matching grant is recorded", "hooks/workflow-gate/commit-gate-steps.js");
-guarded("commit gate unresolved findings", unresolved.run);
+test("commit gate blocks a current record with an unresolved finding until the matching grant is recorded", () =>
+  noNewFailures(F.failureCount, () => guarded("commit gate unresolved findings", unresolved.run)));
 caseEnd();
-
-restoreIsolation();
-F.finish();

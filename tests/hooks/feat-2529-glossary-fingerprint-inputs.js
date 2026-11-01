@@ -12,6 +12,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -21,6 +23,10 @@ process.chdir(os.tmpdir());
 const F = require("../lib/glossary-check-fixture");
 const artifact = require("./feat-2529-glossary-fingerprint-inputs/artifact");
 const singleReader = require("./feat-2529-glossary-fingerprint-inputs/single-reader");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 // Every part reports through F.check; an exception in one part is one failure, not an abort.
 function guarded(name, fn) {
@@ -32,12 +38,11 @@ function guarded(name, fn) {
 }
 
 caseBegin("one changed artifact byte stales the record and the scanned range equals the approval range", "hooks/workflow-state/glossary-check/scope.js");
-guarded("artifact input", artifact.run);
+test("one changed artifact byte stales the record and the scanned range equals the approval range", () =>
+  noNewFailures(F.failureCount, () => guarded("artifact input", artifact.run)));
 caseEnd();
 
 caseBegin("only scope.js reads the glossary artifact and intent inputs", "hooks/workflow-state/glossary-check/record.js");
-guarded("single reader", singleReader.run);
+test("only scope.js reads the glossary artifact and intent inputs", () =>
+  noNewFailures(F.failureCount, () => guarded("single reader", singleReader.run)));
 caseEnd();
-
-restoreIsolation();
-F.finish();

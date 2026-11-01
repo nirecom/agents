@@ -11,6 +11,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -25,6 +27,10 @@ const effective = (s, step) => reconcileEffectiveState(F.readState(s.sid), s.sid
 const current = (s) => resolveCurrentStep(F.readState(s.sid), { sessionId: s.sid, repoDir: s.repo });
 const grantsOf = (sid, stage) => ((F.recordOf(sid, stage) || {}).grants || []).length;
 const { VALID_STEPS } = require(path.join(F.ROOT, "hooks/workflow-state/state-io"));
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 // The fixture seeds only the gated steps; settle every other step before `step` (research, …)
 // so the stage under test is the first candidate for the current step.
@@ -50,7 +56,7 @@ function guarded(name, fn) {
 }
 
 caseBegin("resolveCurrentStep returns a plan stage the glossary refusal reopened", "hooks/workflow-state/current-step.js");
-guarded("current step", () => {
+test("resolveCurrentStep returns a plan stage the glossary refusal reopened", () => noNewFailures(F.failureCount, () => guarded("current step", () => {
   for (const stage of F.RA_STAGES) {
     const step = F.STAGE_STEP[stage];
     const s = setup(`cur-${stage}`, stage, F.TERM);
@@ -59,11 +65,11 @@ guarded("current step", () => {
     F.touchGlossary(s.repo);
     F.check(`${stage}: a stale record makes ${step} the current step`, current(s) === step, String(current(s)));
   }
-});
+})));
 caseEnd();
 
 caseBegin("WORKFLOW_GLOSSARY_ACCEPTED grants the finding on the reopened plan stage", "hooks/workflow-mark/glossary-accept-handler.js");
-guarded("accept on reopened", () => {
+test("WORKFLOW_GLOSSARY_ACCEPTED grants the finding on the reopened plan stage", () => noNewFailures(F.failureCount, () => guarded("accept on reopened", () => {
   const s = setup("acc-outline", "outline", F.VARIANT);
   const r = F.drift(s.sid, "outline", s.repo);
   F.check("outline: --record reports the open finding (exit 1)", r.code === 1, `exit=${r.code} ${r.out}${r.err}`);
@@ -72,11 +78,11 @@ guarded("accept on reopened", () => {
   F.check("outline: the ACCEPTED grant lands on the outline record", grantsOf(s.sid, "outline") > 0, `${m.out}${m.err}`);
   const eff = effective(s, "outline");
   F.check("outline: the granted record restores outline complete", eff && eff.status === "complete", JSON.stringify(eff));
-});
+})));
 caseEnd();
 
 caseBegin("--advance complete on a glossary-reopened plan stage is refused, not already", "hooks/workflow-state/record-step-verdict.js");
-guarded("advance refused", () => {
+test("--advance complete on a glossary-reopened plan stage is refused, not already", () => noNewFailures(F.failureCount, () => guarded("advance refused", () => {
   const s = setup("adv-outline", "outline", F.VARIANT);
   F.drift(s.sid, "outline", s.repo);
   const r = F.advance(s.sid, "outline", s.repo);
@@ -87,8 +93,5 @@ guarded("advance refused", () => {
   F.grantFindings(s.sid, "outline");
   const again = F.advance(s.sid, "outline", s.repo);
   F.check("advance: after the grant the repeat is an idempotent success", again.code === 0, `exit=${again.code} ${again.out}${again.err}`);
-});
+})));
 caseEnd();
-
-restoreIsolation();
-F.finish();

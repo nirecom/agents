@@ -12,13 +12,17 @@
 // TL3 gap: a real codex review run is not driven; codex_glossary_block is sourced and called.
 
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { after, test } = require("node:test");
 const c = require("./feat-2529-glossary-provenance/common");
 const pd = require("./feat-2529-glossary-old-paths/prompt-data");
 
 const { check, eq, ok, ROOT, TMP, fwd, totals, mod } = c;
+const fails = () => totals.failed;
+after(() => process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`));
 const SELF = "tests/bin/feat-2529-glossary-old-paths.js";
 
 // --- T1-1 -------------------------------------------------------------------
@@ -150,44 +154,41 @@ function repoRelativePathRule() {
 }
 
 caseBegin("t1-1-no-old-glossary-paths", "bin/lib/glossary-format.js");
-noOldPaths();
+test("t1-1-no-old-glossary-paths", () => noNewFailures(fails, noOldPaths));
 caseEnd();
 
 caseBegin("t1-2-readers-find-moved-files", "bin/lib/codex-glossary.sh");
-readersFindMovedFiles();
+test("t1-2-readers-find-moved-files", () => noNewFailures(fails, readersFindMovedFiles));
 caseEnd();
 
 caseBegin("t1-3-repo-relative-path-rule", "bin/lib/glossary-format.js");
-repoRelativePathRule();
+test("t1-3-repo-relative-path-rule", () => noNewFailures(fails, repoRelativePathRule));
 caseEnd();
 
 caseBegin("prompt-data-emits-terms-and-definitions", "bin/lib/glossary-format.js");
-pd.emitsTermsAndDefinitions();
+test("prompt-data-emits-terms-and-definitions", () => noNewFailures(fails, pd.emitsTermsAndDefinitions));
 caseEnd();
 
 caseBegin("prompt-data-neutralizes-markers", "bin/lib/glossary-format.js");
-pd.neutralizesMarkers();
+test("prompt-data-neutralizes-markers", () => noNewFailures(fails, pd.neutralizesMarkers));
 caseEnd();
 
 caseBegin("prompt-data-truncates-on-max-lines", "bin/lib/glossary-format.js");
-pd.truncatesOnMaxLines();
+test("prompt-data-truncates-on-max-lines", () => noNewFailures(fails, pd.truncatesOnMaxLines));
 caseEnd();
 
 caseBegin("prompt-data-truncates-on-max-bytes", "bin/lib/glossary-format.js");
-pd.truncatesOnMaxBytes();
+test("prompt-data-truncates-on-max-bytes", () => noNewFailures(fails, pd.truncatesOnMaxBytes));
 caseEnd();
 
 caseBegin("prompt-data-tolerates-missing-path", "bin/lib/glossary-format.js");
-pd.toleratesMissingPath();
+test("prompt-data-tolerates-missing-path", () => noNewFailures(fails, pd.toleratesMissingPath));
 caseEnd();
 
 caseBegin("prompt-data-usage-errors-exit-2", "bin/lib/glossary-format.js");
-pd.usageErrorsExit2();
+test("prompt-data-usage-errors-exit-2", () => noNewFailures(fails, pd.usageErrorsExit2));
 caseEnd();
 
 caseBegin("prompt-data-exact-fit-limits-not-truncated", "bin/lib/glossary-format.js");
-pd.exactFitLimitsNotTruncated();
+test("prompt-data-exact-fit-limits-not-truncated", () => noNewFailures(fails, pd.exactFitLimitsNotTruncated));
 caseEnd();
-
-process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
-process.exitCode = totals.failed === 0 ? 0 : 1;

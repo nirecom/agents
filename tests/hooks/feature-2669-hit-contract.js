@@ -10,11 +10,14 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TRANSCRIPTS = fs.mkdtempSync(path.join(os.tmpdir(), "f2669-transcripts-"));
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TRANSCRIPTS;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(TRANSCRIPTS, { recursive: true, force: true });
 });
@@ -45,13 +48,14 @@ function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
 const mod = (rel) => require(path.join(ROOT, rel));
+const failures = () => failed;
 
 const LEGACY = "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1";
 const CURRENT = "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0";
 const WITH_HITS = "RUN_CONTRACT: PASS=0 FAIL=1 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0 HITS=2";
 
 caseBegin("run-contract-reads-and-writes-hits", "hooks/lib/run-contract.js");
-{
+test("run-contract-reads-and-writes-hits", () => noNewFailures(failures, () => {
   const rc = () => mod("hooks/lib/run-contract.js");
   check("T6: a 4-field line reads as legacy with hits=0", () => {
     const c = rc().parseContractLine(LEGACY);
@@ -84,13 +88,13 @@ caseBegin("run-contract-reads-and-writes-hits", "hooks/lib/run-contract.js");
     const c = rc().findSingleContract(["PASS: a", "HIT: worktree-change x", WITH_HITS]);
     eq(c && c.hits, 2, "hits");
   });
-}
+}));
 caseEnd();
 
 // HITS=0 is the absent field spelled out; malformed values follow the parser's existing rule for
 // every count (digits only, a safe integer, the line exactly once well-formed) and read as null.
 caseBegin("run-contract-hits-edge-values", "hooks/lib/run-contract.js");
-{
+test("run-contract-hits-edge-values", () => noNewFailures(failures, () => {
   const rc = () => mod("hooks/lib/run-contract.js");
   check("T6: an explicit HITS=0 reads the same as no HITS field", () => {
     eq(rc().parseContractLine(CURRENT + " HITS=0"), rc().parseContractLine(CURRENT), "parsed contract");
@@ -114,7 +118,7 @@ caseBegin("run-contract-hits-edge-values", "hooks/lib/run-contract.js");
   check("T6: control — findSingleContract calls a line with two HITS fields invalid", () => {
     eq(rc().findSingleContract(["PASS: a", CURRENT + " HITS=1 HITS=2"]), { reason: "invalid" }, "result");
   });
-}
+}));
 caseEnd();
 
 const SHA = "a".repeat(64);
@@ -131,7 +135,7 @@ function outcome(wr) {
 const CURRENT_RC = { pass: 0, fail: 1, skip: 0, executed: 1, unrunnable: 0, timeout: 0 };
 
 caseBegin("worker-outcome-validates-hits", "hooks/lib/worker-outcome-contract.js");
-{
+test("worker-outcome-validates-hits", () => noNewFailures(failures, () => {
   const v = (wr) => mod("hooks/lib/worker-outcome-contract.js").validateOutcome(outcome(wr));
   check("T6: run_contract.hits as a non-negative integer is valid and kept", () => {
     const r = v({ run_contract: Object.assign({}, CURRENT_RC, { hits: 2 }) });
@@ -158,11 +162,11 @@ caseBegin("worker-outcome-validates-hits", "hooks/lib/worker-outcome-contract.js
   });
   check("T6: worker_result.hits holding a number is rejected", () => eq(v({ hits: [1] }).ok, false, "ok"));
   check("T6: worker_result.hits as a string is rejected", () => eq(v({ hits: "x" }).ok, false, "ok"));
-}
+}));
 caseEnd();
 
 caseBegin("emit-renders-and-restores-hits", "bin/worker-dispatch/emit.js");
-{
+test("emit-renders-and-restores-hits", () => noNewFailures(failures, () => {
   const emit = () => mod("bin/worker-dispatch/emit.js");
   const HITS = ["command-guard (no test id) gh --version", "worktree-change tests/a.sh tree=/x kind=tracked paths=a.txt"];
   const result = (over) => Object.assign({
@@ -208,7 +212,7 @@ caseBegin("emit-renders-and-restores-hits", "bin/worker-dispatch/emit.js");
     eq(back.hits, HITS, "restored hits");
     eq(e.renderTestRunnerYaml(back), original, "re-render");
   });
-}
+}));
 caseEnd();
 
 // A pending failing entry as the hook records it; `over` replaces fields.
@@ -219,7 +223,7 @@ const evidence = () => mod("bin/workflow/lib/run-tests-baseline-evidence.js");
 const undeterminedCls = { base: "abc", entries: [{ path: "tests/a.sh", class: "undetermined", detail: "x" }] };
 
 caseBegin("evidence-refuses-a-run-with-hits", "bin/workflow/lib/run-tests-baseline-evidence.js");
-{
+test("evidence-refuses-a-run-with-hits", () => noNewFailures(failures, () => {
   check("T7: EXIT.HITS is 7", () => eq(evidence().EXIT.HITS, 7, "EXIT.HITS"));
   check("T7: control — a listless run without hits grants failing-list-unrecorded", () => {
     eq(evidence().grantKind(entry({})), "failing-list-unrecorded", "kind");
@@ -241,11 +245,11 @@ caseBegin("evidence-refuses-a-run-with-hits", "bin/workflow/lib/run-tests-baseli
       return undefined;
     });
   }
-}
+}));
 caseEnd();
 
 caseBegin("accept-handler-names-the-hits", "hooks/workflow-mark/run-tests-baseline-accept-handler.js");
-{
+test("accept-handler-names-the-hits", () => noNewFailures(failures, () => {
   const rejection = (e) => mod("hooks/workflow-mark/run-tests-baseline-accept-handler.js").rejection(e);
   check("T7: control — a listless run without hits is grantable", () => eq(rejection(entry({})), null, "rejection"));
   check("T7: a run with hit_count=1 is refused with the hits reason", () => {
@@ -255,13 +259,13 @@ caseBegin("accept-handler-names-the-hits", "hooks/workflow-mark/run-tests-baseli
     const e = entry({ hit_count: 3, failing_tests: ["tests/a.sh"], baseline_classification: undeterminedCls });
     eq(rejection(e), "3 unattributed hit(s) — a run with HITS>0 cannot be accepted", "rejection");
   });
-}
+}));
 caseEnd();
 
 const contract = (over) => Object.assign({ shape: "current", pass: 1, fail: 0, skip: 0, executed: 1, unrunnable: 0, timeout: 0 }, over);
 
 caseBegin("outcome-fails-a-run-with-hits", "hooks/workflow-run-tests/outcome.js");
-{
+test("outcome-fails-a-run-with-hits", () => noNewFailures(failures, () => {
   const resolve = (i) => mod("hooks/workflow-run-tests/outcome.js").resolveRunOutcome(Object.assign({ attributed: true }, i));
   check("T9: a passing contract with hits=1 resolves to fail", () => eq(resolve({ contract: contract({ hits: 1 }) }), "fail", "outcome"));
   check("T9: hits>0 wins over unrunnable>0", () => {
@@ -278,15 +282,15 @@ caseBegin("outcome-fails-a-run-with-hits", "hooks/workflow-run-tests/outcome.js"
   check("T9: control — an ambiguous contract with hits is still no observation", () => {
     eq(resolve({ ambiguous: true, contract: contract({ hits: 1 }) }), null, "outcome");
   });
-}
+}));
 caseEnd();
 
 caseBegin("demotion-is-not-unrunnable-only-with-hits", "hooks/workflow-run-tests/demotion.js");
-{
+test("demotion-is-not-unrunnable-only-with-hits", () => noNewFailures(failures, () => {
   const only = (c) => mod("hooks/workflow-run-tests/demotion.js").isUnrunnableOnly(c, false, null);
   check("T9: an unrunnable run with hits=1 is not UNRUNNABLE-only", () => eq(only(contract({ pass: 0, executed: 0, unrunnable: 2, hits: 1 })), false, "isUnrunnableOnly"));
   check("T9: control — an unrunnable run without hits is UNRUNNABLE-only", () => eq(only(contract({ pass: 0, executed: 0, unrunnable: 2 })), true, "isUnrunnableOnly"));
-}
+}));
 caseEnd();
 
 // seedPrefix(sid) — every step before run_tests complete, so a green run may complete run_tests.
@@ -313,7 +317,7 @@ function record(sid, exitCode, c, hitSummary) {
 }
 
 caseBegin("record-run-holds-a-green-run-with-hits", "hooks/workflow-run-tests/record-run.js");
-{
+test("record-run-holds-a-green-run-with-hits", () => noNewFailures(failures, () => {
   check("T9: control — an exit-0 green run without hits completes run_tests", () => {
     const e = record("f2669-green", 0, contract({}), []);
     eq([e.status, e.run_outcome], ["complete", "pass"], "status/run_outcome");
@@ -330,11 +334,11 @@ caseBegin("record-run-holds-a-green-run-with-hits", "hooks/workflow-run-tests/re
     const e = record("f2669-failed-hits", 1, contract({ pass: 1, executed: 1, hits: 2 }), SUMMARY);
     eq([e.hit_count, e.hit_summary], [2, SUMMARY], "hit_count/hit_summary");
   });
-}
+}));
 caseEnd();
 
 caseBegin("evidence-failing-reports-the-hits", "bin/workflow/lib/run-tests-baseline-evidence.js");
-{
+test("evidence-failing-reports-the-hits", () => noNewFailures(failures, () => {
   check("T7: failing() on a recorded run with hits exits HITS and prints HIT_COUNT then the summary", () => {
     try { record("f2669-evidence-hits", 1, contract({ pass: 1, executed: 1, hits: 2 }), SUMMARY); } catch (e) { return `seed: ${e.message}`; }
     const r = evidence().failing("f2669-evidence-hits");
@@ -351,14 +355,14 @@ caseBegin("evidence-failing-reports-the-hits", "bin/workflow/lib/run-tests-basel
   check("T7: the recorded entry with hits grants nothing", () => {
     eq(evidence().grantKind(runTests("f2669-evidence-hits")), null, "kind");
   });
-}
+}));
 caseEnd();
 
 // #2731 S3-5: demotionMessage splits into { head, detail }; done() shows only the fact line
 // [run_tests] pending (<reason>) and sends the detail to additionalContext via withConvLang.
 const SMC = require("../lib/system-message-contract");
 caseBegin("demotion-message-head-detail", "hooks/workflow-run-tests/demotion.js");
-{
+test("demotion-message-head-detail", () => noNewFailures(failures, () => {
   const D = mod("hooks/workflow-run-tests/demotion.js");
   const SHAPES = [
     ["contract-unrunnable", { unrunnable: 3 }, (d) => d.includes(D.UNRUNNABLE_ACCEPT_SENTINEL_FORM) && d.includes("3")],
@@ -374,11 +378,11 @@ caseBegin("demotion-message-head-detail", "hooks/workflow-run-tests/demotion.js"
       return detailOk(m.detail) ? undefined : `detail lacks the explanation: ${m.detail}`;
     });
   }
-}
+}));
 caseEnd();
 
 caseBegin("run-tests-done-fact-line", "hooks/workflow-run-tests/record-run.js");
-{
+test("run-tests-done-fact-line", () => noNewFailures(failures, () => {
   const { spawnSync } = require("child_process");
   const REPO = path.resolve(ROOT).replace(/\\/g, "/");
   const wf = mod("hooks/workflow-state");
@@ -407,8 +411,5 @@ caseBegin("run-tests-done-fact-line", "hooks/workflow-run-tests/record-run.js");
     eq(SMC.countDirective(r.ctx), 0, "directive count");
     return undefined;
   });
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

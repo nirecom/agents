@@ -14,6 +14,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -25,6 +27,10 @@ const { reconcileEffectiveState } = require(path.join(F.ROOT, "hooks/workflow-st
 const { glossaryRefusalOfComplete } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/record.js"));
 
 const effective = (s, step) => reconcileEffectiveState(F.readState(s.sid), s.sid, { repoDir: s.repo }).steps[step];
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 function guarded(name, fn) {
   try {
@@ -35,7 +41,7 @@ function guarded(name, fn) {
 }
 
 caseBegin("an already-complete plan stage with a stale glossary record reads pending until re-recorded", "hooks/workflow-state/effective-state.js");
-guarded("stale complete", () => {
+test("an already-complete plan stage with a stale glossary record reads pending until re-recorded", () => noNewFailures(F.failureCount, () => guarded("stale complete", () => {
   for (const stage of F.RA_STAGES) {
     const step = F.STAGE_STEP[stage];
     const s = F.setupStage(`stale-${stage}`, stage, F.TERM, { ownStatus: "complete" });
@@ -58,11 +64,11 @@ guarded("stale complete", () => {
     eff = effective(s, step);
     F.check(`${stage}: a fresh record restores ${step} complete`, eff && eff.status === "complete", JSON.stringify(eff));
   }
-});
+})));
 caseEnd();
 
 caseBegin("next-step routes a stale already-complete clarify_intent to the glossary recovery", "hooks/workflow-state/effective-state.js");
-guarded("next-step", () => {
+test("next-step routes a stale already-complete clarify_intent to the glossary recovery", () => noNewFailures(F.failureCount, () => guarded("next-step", () => {
   const s = F.setupStage("stale-next", "intent", F.TERM, { ownStatus: "complete" });
   F.drift(s.sid, "intent", s.repo);
   F.touchGlossary(s.repo);
@@ -70,11 +76,11 @@ guarded("next-step", () => {
   F.check("next-step: names glossary-check-stale for clarify_intent", /glossary-check-stale: clarify_intent/.test(r.out), `${r.out}${r.err}`);
   F.check("next-step: the hint names check-glossary-drift --stage intent --record", /check-glossary-drift --session \S+ --stage intent --record/.test(r.out), r.out);
   F.check("next-step: does not abort", !/ACTION=abort/.test(r.out), r.out);
-});
+})));
 caseEnd();
 
 caseBegin("an already-complete plan stage without a glossary record is not demoted", "hooks/workflow-state/effective-state.js");
-guarded("legacy complete", () => {
+test("an already-complete plan stage without a glossary record is not demoted", () => noNewFailures(F.failureCount, () => guarded("legacy complete", () => {
   for (const stage of F.RA_STAGES) {
     const step = F.STAGE_STEP[stage];
     const s = F.setupStage(`legacy-${stage}`, stage, F.TERM, { ownStatus: "complete" });
@@ -84,11 +90,11 @@ guarded("legacy complete", () => {
     const eff = effective(s, step);
     F.check(`${stage}: ${step} keeps reading complete`, eff && eff.status === "complete", JSON.stringify(eff));
   }
-});
+})));
 caseEnd();
 
 caseBegin("glossaryRefusalOfComplete leaves R-S stages to the commit gate", "hooks/workflow-state/glossary-check/record.js");
-guarded("rs stages", () => {
+test("glossaryRefusalOfComplete leaves R-S stages to the commit gate", () => noNewFailures(F.failureCount, () => guarded("rs stages", () => {
   for (const stage of F.RS_STAGES) {
     const step = F.STAGE_STEP[stage];
     const s = F.setupStage(`rs-${stage}`, stage, F.TERM, { ownStatus: "complete" });
@@ -97,11 +103,11 @@ guarded("rs stages", () => {
     const code = glossaryRefusalOfComplete(s.sid, step, F.readState(s.sid), { repoDir: s.repo });
     F.check(`${stage}: a stale record on ${step} is not a plan-stage demotion`, code === null, String(code));
   }
-});
+})));
 caseEnd();
 
 caseBegin("an already-complete plan stage with unresolved findings reads pending until granted", "hooks/workflow-state/effective-state.js");
-guarded("unresolved complete", () => {
+test("an already-complete plan stage with unresolved findings reads pending until granted", () => noNewFailures(F.failureCount, () => guarded("unresolved complete", () => {
   for (const stage of F.RA_STAGES) {
     const step = F.STAGE_STEP[stage];
     const s = F.setupStage(`unres-${stage}`, stage, F.VARIANT, { ownStatus: "complete" });
@@ -115,11 +121,11 @@ guarded("unresolved complete", () => {
     eff = effective(s, step);
     F.check(`${stage}: the granted record restores ${step} complete`, eff && eff.status === "complete", JSON.stringify(eff));
   }
-});
+})));
 caseEnd();
 
 caseBegin("next-step routes an unresolved already-complete clarify_intent to the accept-or-fix recovery", "bin/workflow/lib/next-step/approval-reason.js");
-guarded("next-step unresolved", () => {
+test("next-step routes an unresolved already-complete clarify_intent to the accept-or-fix recovery", () => noNewFailures(F.failureCount, () => guarded("next-step unresolved", () => {
   const s = F.setupStage("unres-next", "intent", F.VARIANT, { ownStatus: "complete" });
   F.drift(s.sid, "intent", s.repo);
   const r = F.runNode("bin/workflow/next-step", ["--session", s.sid], { cwd: s.repo, env: { CLAUDE_PROJECT_DIR: s.repo } });
@@ -130,11 +136,11 @@ guarded("next-step unresolved", () => {
   F.check("next-step: the hint says a recorded complete restores itself", /already recorded complete/.test(r.out), r.out);
   F.check("next-step: the NEXT_HINT line carries no inner single quote", /^NEXT_HINT='[^']*'$/m.test(r.out), r.out);
   F.check("next-step: does not abort", !/ACTION=abort/.test(r.out), r.out);
-});
+})));
 caseEnd();
 
 caseBegin("an already-complete plan stage whose glossary inputs became unreadable reads pending", "hooks/workflow-state/effective-state.js");
-guarded("unavailable complete", () => {
+test("an already-complete plan stage whose glossary inputs became unreadable reads pending", () => noNewFailures(F.failureCount, () => guarded("unavailable complete", () => {
   const MISC = "docs/glossary/misc.md";
   for (const stage of F.RA_STAGES) {
     const step = F.STAGE_STEP[stage];
@@ -159,8 +165,5 @@ guarded("unavailable complete", () => {
     eff = effective(s, step);
     F.check(`${stage}: readable inputs restore ${step} complete`, eff && eff.status === "complete", JSON.stringify(eff));
   }
-});
+})));
 caseEnd();
-
-restoreIsolation();
-F.finish();

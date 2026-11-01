@@ -9,6 +9,8 @@
 
 const { caseBegin, caseEnd } = require("../lib/harness");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 let failures = 0;
@@ -16,6 +18,8 @@ function check(name, ok, detail) {
   console.log(ok ? `PASS ${name}` : `FAIL ${name} :: ${detail}`);
   if (!ok) failures += 1;
 }
+const failureCount = () => failures;
+after(() => console.log(failures === 0 ? "ALL PASS" : `${failures} FAILED`));
 function load() {
   try {
     return require(path.join(ROOT, "hooks/lib/glossary-term.js")).normalizeTerm;
@@ -44,19 +48,21 @@ const ROWS = [
 ];
 
 caseBegin("normalizeTerm singular and acronym-plural table", "hooks/lib/glossary-term.js");
-const normalizeTerm = load();
-if (normalizeTerm) {
-  for (const [input, want] of ROWS) {
-    const got = normalizeTerm(input);
-    check(`normalizeTerm(${JSON.stringify(input)}) -> ${JSON.stringify(want)}`, got === want, JSON.stringify(got));
+test("normalizeTerm singular and acronym-plural table", () => noNewFailures(failureCount, () => {
+  const normalizeTerm = load();
+  if (normalizeTerm) {
+    for (const [input, want] of ROWS) {
+      const got = normalizeTerm(input);
+      check(`normalizeTerm(${JSON.stringify(input)}) -> ${JSON.stringify(want)}`, got === want, JSON.stringify(got));
+    }
+    // Symmetry: an all-caps word ending in S is singularized like any other word, so the glossary
+    // side and the text side meet the same form whatever their case.
+    for (const [a, b] of [["AWS", "aws"]]) {
+      const [ga, gb] = [normalizeTerm(a), normalizeTerm(b)];
+      check(`symmetry: normalizeTerm(${JSON.stringify(a)}) === normalizeTerm(${JSON.stringify(b)})`, ga === gb, `${JSON.stringify(ga)} vs ${JSON.stringify(gb)}`);
+    }
   }
-  // Symmetry: an all-caps word ending in S is singularized like any other word, so the glossary
-  // side and the text side meet the same form whatever their case.
-  for (const [a, b] of [["AWS", "aws"]]) {
-    const [ga, gb] = [normalizeTerm(a), normalizeTerm(b)];
-    check(`symmetry: normalizeTerm(${JSON.stringify(a)}) === normalizeTerm(${JSON.stringify(b)})`, ga === gb, `${JSON.stringify(ga)} vs ${JSON.stringify(gb)}`);
-  }
-}
+}));
 caseEnd();
 
 // unsafeTermChars(term) -> the distinct forbidden characters of `term` in first-appearance order
@@ -71,22 +77,21 @@ const unsafeCases = SAFE_TERMS.map((t) => ({ name: `safe ${JSON.stringify(t)}`, 
   .concat([{ name: "repeated and mixed forbidden characters", input: "a$(b)$c", want: ["$", "(", ")"] }]);
 
 caseBegin("unsafeTermChars forbidden-character table", "hooks/lib/glossary-term.js");
-let unsafeTermChars = null;
-try {
-  unsafeTermChars = require(path.join(ROOT, "hooks/lib/glossary-term.js")).unsafeTermChars;
-} catch (e) {
-  check("hooks/lib/glossary-term.js loads for unsafeTermChars", false, e.code || e.message);
-}
-if (typeof unsafeTermChars !== "function") {
-  check("unsafeTermChars is exported as a function", false, typeof unsafeTermChars);
-} else {
-  for (const c of unsafeCases) {
-    let got;
-    try { got = unsafeTermChars(c.input); } catch (e) { got = `threw ${e.message}`; }
-    check(`unsafeTermChars ${c.name} -> ${JSON.stringify(c.want)}`, JSON.stringify(got) === JSON.stringify(c.want), JSON.stringify(got));
+test("unsafeTermChars forbidden-character table", () => noNewFailures(failureCount, () => {
+  let unsafeTermChars = null;
+  try {
+    unsafeTermChars = require(path.join(ROOT, "hooks/lib/glossary-term.js")).unsafeTermChars;
+  } catch (e) {
+    check("hooks/lib/glossary-term.js loads for unsafeTermChars", false, e.code || e.message);
   }
-}
+  if (typeof unsafeTermChars !== "function") {
+    check("unsafeTermChars is exported as a function", false, typeof unsafeTermChars);
+  } else {
+    for (const c of unsafeCases) {
+      let got;
+      try { got = unsafeTermChars(c.input); } catch (e) { got = `threw ${e.message}`; }
+      check(`unsafeTermChars ${c.name} -> ${JSON.stringify(c.want)}`, JSON.stringify(got) === JSON.stringify(c.want), JSON.stringify(got));
+    }
+  }
+}));
 caseEnd();
-
-console.log(failures === 0 ? "ALL PASS" : `${failures} FAILED`);
-process.exitCode = failures === 0 ? 0 : 1;

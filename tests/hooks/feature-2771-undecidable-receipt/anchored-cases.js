@@ -3,7 +3,6 @@
 // the real final message presents a stage the anchored text entry did not. Requires the caller's isolate() pins first.
 const fs = require("fs");
 const path = require("path");
-const { caseBegin, caseEnd } = require("../../lib/harness");
 const R = require("../feature-2729-presentation-receipt/fixture");
 const { A, T } = R;
 const {
@@ -24,7 +23,6 @@ const outlineClose = (s) => closing(s, ["outline"]);
 const unpublishedLine = (s, stage) => `${stage}: \`${R.linesFor(s.sid, stage).fwd}\` (no URL: not-published)`;
 
 function r30(check) {
-caseBegin("r30-anchored-final-only-stage", "hooks/stop-confirm-plan-guard.js");
   {
     const s = atDetail(3001);
     const st = astop(s, ["detail"], outlineClose(s), relinked(closing(s, ["detail"])));
@@ -125,7 +123,6 @@ caseBegin("r30-anchored-final-only-stage", "hooks/stop-confirm-plan-guard.js");
     const e = R.echo(s.sid, "detail");
     check("r30 final-only write failure: the echo after it is denied (no-receipt)", e.denied && !e.dialog && e.reason.includes("(no-receipt)"), e.reason || e.json);
   }
-caseEnd();
 }
 
 module.exports = { r30 };

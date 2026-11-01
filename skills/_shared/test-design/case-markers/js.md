@@ -9,8 +9,8 @@
 - Skip a real-environment test with `{ skip: !tl3Enabled() }`.
 - Write a known failure as `xfail("<name>", fn)`.
 - The helper library also checks the pairing at run time: an unclosed or doubled marker fails the run.
-- In a new file, also require node:test (`const { test } = require("node:test");`) and write each case as `test(...)`.
-- A new plain script without node:test is refused with `MISSING_TEST_RUNNER`; an existing plain script may stay as it is.
+- Also require node:test (`const { test } = require("node:test");`) and write each case as `test(...)`.
+- A test file without node:test is refused with `MISSING_TEST_RUNNER`, new or existing.
 
 ## Notation
 

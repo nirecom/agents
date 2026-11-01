@@ -2,7 +2,6 @@
 // Private cases of tests/hooks/feature-2771-undecidable-receipt.js on the undecidable no-anchor (D3b)
 // path and the unpublished co-presented stage. Requires the caller's isolate() pins first.
 const fs = require("fs");
-const { caseBegin, caseEnd } = require("../../lib/harness");
 const R = require("../feature-2729-presentation-receipt/fixture");
 const { A, T } = R;
 const {
@@ -15,7 +14,6 @@ const d3b = (s, stages, last, o) =>
 const noDecision = (st) => st.rc === 0 && !("decision" in st.json);
 
 function r23(check) {
-caseBegin("r23-unflushed-final-text-last-assistant-message", "hooks/stop-confirm-plan-guard.js");
   STAGES.forEach((stage, i) => {
     const s = R.sessionAt(stage, { tag: 2301 + i });
     const st = d3b(s, [stage], closing(s, [stage]));
@@ -50,11 +48,9 @@ caseBegin("r23-unflushed-final-text-last-assistant-message", "hooks/stop-confirm
   const rc4 = R.readReceiptRaw(s4.sid, "outline");
   check("r23 stop_hook_active + marker: the receipt is recorded with anchorUuid \"\"", rc4 !== null && rc4.anchorUuid === "", rc4);
   check("r23 stop_hook_active + marker: the turn marker is kept (peek only)", R.turnMarkersLeft(s4.sid) > 0, "markers=0");
-caseEnd();
 }
 
 function r28(check) {
-caseBegin("r28-d3b-marker-less-re-present", "hooks/stop-confirm-plan-guard.js");
   STAGES.forEach((stage, i) => {
     const s = R.sessionAt(stage, { tag: 2801 + i });
     const st = d3b(s, [stage], closing(s, [stage]), { markers: false });
@@ -86,7 +82,6 @@ caseBegin("r28-d3b-marker-less-re-present", "hooks/stop-confirm-plan-guard.js");
   check("r28 stop_hook_active, no marker: the receipt is recorded with anchorUuid \"\" and nothing consumes it", rc !== null && rc.anchorUuid === "", rc);
   const e = R.echo(s.sid, "outline");
   check("r28 stop_hook_active, no marker: the echo after it reaches the dialog", e.dialog, e.json);
-caseEnd();
 }
 
 // r29 variants: [label, tag, run(s, close), anchorUuid the outline receipt is rewritten with].
@@ -97,7 +92,6 @@ const R29 = [
 ];
 
 function r29(check) {
-caseBegin("r29-undecidable-unpublished-keeps-receipt", "hooks/stop-confirm-plan-guard.js");
   for (const [label, tag, run, anchor] of R29) {
     // intent is edited after approval (unapproved) and left unpublished; outline is published and clean.
     const s = R.sessionAt("outline", { tag });
@@ -116,7 +110,6 @@ caseBegin("r29-undecidable-unpublished-keeps-receipt", "hooks/stop-confirm-plan-
     const msg = notice(st);
     check(`r29 ${label}: the notice names intent only`, names(msg, "intent") && !names(msg, "outline"), { rc: st.rc, out: st.out });
   }
-caseEnd();
 }
 
 module.exports = { r23, r28, r29 };

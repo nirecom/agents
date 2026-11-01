@@ -60,22 +60,22 @@ commit the baseline is the parent copy, or both parents and the merge-base
 
 ## Required test runner
 
-A new test entrypoint whose registry entry declares `newEntrypointRunner` must run under that
+A test entrypoint whose registry entry declares `newEntrypointRunner` must run under that
 language's required runner, else it is `MISSING_TEST_RUNNER` and blocks (#2863; for JavaScript,
-node:test, since a plain script cannot report cases or be split by retire). New means what it means
-for case markers: absent from `HEAD`, a rename target included, and in a merge commit absent from
-both parents. Existing plain scripts are left alone as a migration allowance. The verdict
+node:test, since a non-node:test test script cannot report cases or be split by retire). The rule
+covers every placed test file, new or existing (#2865 migrated the last non-node:test JS test
+scripts and removed the earlier new-only scope); the field name keeps its original wording. The verdict
 (`judge` in `hooks/lib/test-gates/test-runner.js`) asks the entry's `caseEmbedRules` `skip-reason`
 op and blocks only when it returns the entry's `rejectSkipReason`; the gate names no language,
 because each language's skip-reason words mean different things (a parametrized pytest case is not
 a missing runner). The hint comes from the entry (`runnerHint`). The edit-time layer runs
-`bin/check-test-runner.sh` on new files only; the commit layer is
-`hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js`, reusing the case-marker gate's
-`newTargets`. A missing runtime passes with `TEST_RUNNER_CHECK_RUNTIME_UNAVAILABLE`, and an op
-failure fails open with one stderr line. The user's exit is the emergency `git commit --no-verify`
-of [pre-commit-runner.md](pre-commit-runner.md); once committed the file is existing to both layers.
+`bin/check-test-runner.sh` on every edited test file; the commit layer is
+`hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js`, judging the case-marker gate's
+`placedTargets` (every staged placed test file, not only new ones). A missing runtime passes with
+`TEST_RUNNER_CHECK_RUNTIME_UNAVAILABLE`, and an op failure fails open with one stderr line. The
+user's exit is the emergency `git commit --no-verify` of [pre-commit-runner.md](pre-commit-runner.md).
 The edit-time layer reports this HIGH together with the others; the commit layer stops at the first
-blocking gate, so a new file blocked by the case-marker gate shows `MISSING_TEST_RUNNER` only on the
+blocking gate, so a file blocked by the case-marker gate shows `MISSING_TEST_RUNNER` only on the
 next commit.
 
 ## Test-language match

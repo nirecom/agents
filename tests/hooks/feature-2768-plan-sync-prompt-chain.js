@@ -10,12 +10,18 @@
 // - whether a real subagent PostToolUse input carries the parent's session_id
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
+after(() => {
+  F.finish();
+  restore();
+});
 
-try {
 caseBegin("real UserPromptSubmit hook chained to the real after-write hook", "hooks/user-prompt-submit-turn-id.js");
+test("real UserPromptSubmit hook chained to the real after-write hook", () => noNewFailures(F.failureCount, () => {
   F.guard("C3 prompt hook -> show-plan-link, end to end", () => {
     const repo = F.makeRepo("c3");
     const sid = F.newSid("c3");
@@ -53,8 +59,5 @@ caseBegin("real UserPromptSubmit hook chained to the real after-write hook", "ho
     F.check("C3 turn 2 trailer is the second turn id", Boolean(rec2.turn_id) && tr2.turn[0] === rec2.turn_id && tr2.turn[0] !== tr1.turn[0], JSON.stringify(tr2));
     F.check("C3 turn 1's commit stays in the history", F.isAncestor(repo, X1, X2), X1);
   });
+}));
 caseEnd();
-} finally {
-  F.finish();
-  restore();
-}

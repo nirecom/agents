@@ -15,6 +15,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pn-idle-write-"));
@@ -26,7 +28,8 @@ for (const d of [T, CFG, TRANSCRIPTS]) fs.mkdirSync(d);
 fs.writeFileSync(path.join(CFG, ".env"), "CONFIRM_OUTLINE=off\nCONFIRM_DETAIL=off\n");
 process.env.AGENTS_MAIN_ROOT = CFG;
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TRANSCRIPTS;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -59,6 +62,7 @@ const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
+const failures = () => failed;
 
 const transcriptOf = (sid) => path.join(T, `${sid}.jsonl`);
 const fileOf = (sid) => sidecarPath(sid, PF.PRESSURE_SUFFIX);
@@ -102,40 +106,40 @@ const ISO_B = "2026-10-18T00:30:00.000Z";
 const BASE_RECORD = { root_sid: "pn-root", progress_path: "/fixture/p.md", event_cursor: 3, requests_at: [ISO_A, ISO_B] };
 
 caseBegin("all-equal-patch-skips-write", "hooks/lib/progress-file.js");
-{
+test("all-equal-patch-skips-write", () => noNewFailures(failures, () => {
   const sid = "pnw-equal";
   const before = seed(sid, BASE_RECORD);
   const r = PF.updatePressure(sid, () => ({ patch: { root_sid: "pn-root", progress_path: "/fixture/p.md", event_cursor: 3 }, result: "R1" }));
   check("A1: an all-equal patch still returns out.result", () => eq(r, "R1", "result"));
   check("A1: an all-equal patch leaves the pressure file unrewritten (bytes and mtime)", () => unchanged(sid, before));
   check("A1: no tmp file is left in the sidecar dir", () => eq(tmpLeftovers(sid), [], "tmp files"));
-}
+}));
 caseEnd();
 
 caseBegin("changed-value-patch-writes", "hooks/lib/progress-file.js");
-{
+test("changed-value-patch-writes", () => noNewFailures(failures, () => {
   const sid = "pnw-changed";
   const before = seed(sid, BASE_RECORD);
   const r = PF.updatePressure(sid, () => ({ patch: { root_sid: "pn-root", event_cursor: 4 }, result: "R2" }));
   check("A2: a patch with one changed value returns out.result", () => eq(r, "R2", "result"));
   check("A2: that patch rewrites the pressure file", () => rewritten(sid, before));
   check("A2: the changed key is updated and the others are kept", () => eq(PF.readPressure(sid), Object.assign({}, BASE_RECORD, { event_cursor: 4 }), "record"));
-}
+}));
 caseEnd();
 
 caseBegin("new-key-patch-writes", "hooks/lib/progress-file.js");
-{
+test("new-key-patch-writes", () => noNewFailures(failures, () => {
   const sid = "pnw-newkey";
   const before = seed(sid, BASE_RECORD);
   const r = PF.updatePressure(sid, () => ({ patch: { root_sid: "pn-root", last_request_at: ISO_B }, result: "R3" }));
   check("A3: a patch adding a new key returns out.result", () => eq(r, "R3", "result"));
   check("A3: that patch rewrites the pressure file", () => rewritten(sid, before));
   check("A3: the new key is added and the existing keys are kept", () => eq(PF.readPressure(sid), Object.assign({}, BASE_RECORD, { last_request_at: ISO_B }), "record"));
-}
+}));
 caseEnd();
 
 caseBegin("content-equal-array-skips-write", "hooks/lib/progress-file.js");
-{
+test("content-equal-array-skips-write", () => noNewFailures(failures, () => {
   const sid = "pnw-array";
   const before = seed(sid, BASE_RECORD);
   const fresh = [ISO_A, ISO_B].map((s) => new Date(s).toISOString());
@@ -145,31 +149,31 @@ caseBegin("content-equal-array-skips-write", "hooks/lib/progress-file.js");
   });
   check("A4: a content-equal fresh array returns out.result", () => eq(r, "R4", "result"));
   check("A4: a content-equal fresh array leaves the pressure file unrewritten (bytes and mtime)", () => unchanged(sid, before));
-}
+}));
 caseEnd();
 
 caseBegin("empty-patch-skips-write", "hooks/lib/progress-file.js");
-{
+test("empty-patch-skips-write", () => noNewFailures(failures, () => {
   const sid = "pnw-empty";
   const before = seed(sid, BASE_RECORD);
   const r = PF.updatePressure(sid, () => ({ patch: {}, result: "R5" }));
   check("A5: an empty patch returns out.result", () => eq(r, "R5", "result"));
   check("A5: an empty patch leaves the pressure file unrewritten (bytes and mtime)", () => unchanged(sid, before));
-}
+}));
 caseEnd();
 
 caseBegin("null-fn-result-skips-write", "hooks/lib/progress-file.js");
-{
+test("null-fn-result-skips-write", () => noNewFailures(failures, () => {
   const sid = "pnw-null";
   const before = seed(sid, BASE_RECORD);
   const r = PF.updatePressure(sid, () => null);
   check("A6: fn returning null makes updatePressure return null", () => eq(r, null, "result"));
   check("A6: fn returning null leaves the pressure file unrewritten (bytes and mtime)", () => unchanged(sid, before));
-}
+}));
 caseEnd();
 
 caseBegin("idle-read-call-leaves-pressure-unwritten", "hooks/progress-nudge/evaluate.js");
-{
+test("idle-read-call-leaves-pressure-unwritten", () => noNewFailures(failures, () => {
   const sid = "pni-read";
   settled(sid);
   run(sid, "PostToolUse", "Read");
@@ -177,22 +181,22 @@ caseBegin("idle-read-call-leaves-pressure-unwritten", "hooks/progress-nudge/eval
   const ctx = run(sid, "PostToolUse", "Read");
   check("B1: an idle Read evaluation delivers no request", () => eq(ctx, null, "evaluate"));
   check("B1: an idle Read evaluation leaves the pressure file unrewritten (bytes and mtime)", () => unchanged(sid, before));
-}
+}));
 caseEnd();
 
 caseBegin("idle-bash-call-leaves-pressure-unwritten", "hooks/progress-nudge/evaluate.js");
-{
+test("idle-bash-call-leaves-pressure-unwritten", () => noNewFailures(failures, () => {
   const sid = "pni-bash";
   settled(sid);
   const before = backdate(sid);
   const ctx = run(sid, "PostToolUse", "Bash");
   check("B2: an idle Bash evaluation delivers no request", () => eq(ctx, null, "evaluate"));
   check("B2: an idle Bash evaluation leaves the pressure file unrewritten (bytes and mtime)", () => unchanged(sid, before));
-}
+}));
 caseEnd();
 
 caseBegin("new-complete-still-writes-pressure", "hooks/lib/progress-file.js");
-{
+test("new-complete-still-writes-pressure", () => noNewFailures(failures, () => {
   const sid = "pni-change";
   settled(sid);
   const cursorBefore = (PF.readPressure(sid) || {}).event_cursor;
@@ -203,7 +207,7 @@ caseBegin("new-complete-still-writes-pressure", "hooks/lib/progress-file.js");
   check("B3: a Bash evaluation after a new complete asks for an update naming it", () => (typeof ctx === "string" && ctx.includes("step complete: research") ? undefined : `ctx=${show(ctx)}`));
   check("B3: that evaluation rewrites the pressure file", () => (snap(sid).mtimeMs !== before.mtimeMs ? undefined : `mtimeMs still ${before.mtimeMs}`));
   check("B3: the event cursor advanced past the new complete", () => (typeof after.event_cursor === "number" && after.event_cursor > cursorBefore ? undefined : `before=${show(cursorBefore)} after=${show(after.event_cursor)}`));
-}
+}));
 caseEnd();
 
 // #2748: session chains come from the real applyInheritance; the cycle and cap cases use pre-#2311 legacy
@@ -253,12 +257,12 @@ function legacyChain(prefix, n) {
 }
 
 caseBegin("long-donor-chain-resolves-to-first-generation", "hooks/lib/progress-file.js");
-{
+test("long-donor-chain-resolves-to-first-generation", () => noNewFailures(failures, () => {
   const sids = realChain("prc-long", 11);
   check("E1: the fixture saved no root_sid anywhere in the chain", () => eq(sids.filter((s) => PF.readPressure(s)), [], "sids with a pressure record"));
   check("E1: an 11-generation donor chain resolves to its first generation", () => eq(PF.resolveRootSid(sids[10]), sids[0], "root sid"));
   check("E1: a 9-generation tail of the same chain still resolves to the first generation", () => eq(PF.resolveRootSid(sids[8]), sids[0], "root sid"));
-}
+}));
 caseEnd();
 
 // expectOneRoot(label, sids, want) — every sid resolves to want and shares one progress file, so a
@@ -272,7 +276,7 @@ function expectOneRoot(label, sids, want) {
 }
 
 caseBegin("donor-cycle-terminates", "hooks/lib/progress-file.js");
-{
+test("donor-cycle-terminates", () => noNewFailures(failures, () => {
   // Created out of sorted order so neither creation order nor the asking member picks the root.
   const b = "prc-cyc-b";
   const c = "prc-cyc-c";
@@ -304,7 +308,7 @@ caseBegin("donor-cycle-terminates", "hooks/lib/progress-file.js");
   legacy(sy, sx);
   check("E2: the saved-root fixture wrote its root_sid", () => eq(PF.mergePressure(sy, { root_sid: saved }), true, "mergePressure"));
   expectOneRoot("E2 saved root on a cycle member", [sx, sy], saved);
-}
+}));
 caseEnd();
 
 // countStateReads(fn) -> {result, reads}: the donor walk reads one workflow state per hop, so the
@@ -321,7 +325,7 @@ function countStateReads(fn) {
 }
 
 caseBegin("over-long-donor-chain-walk-is-bounded", "hooks/lib/progress-file.js");
-{
+test("over-long-donor-chain-walk-is-bounded", () => noNewFailures(failures, () => {
   const sids = legacyChain("prc-cap", 200);
   const first = countStateReads(() => PF.resolveRootSid(sids[199]));
   const second = PF.resolveRootSid(sids[199]);
@@ -332,11 +336,11 @@ caseBegin("over-long-donor-chain-walk-is-bounded", "hooks/lib/progress-file.js")
   // answer is pinned down here: a sid of this chain, short of the true root g1.
   check("F1: the capped answer is an older sid of this chain, short of the true root", () => (sids.includes(first.result) && first.result !== sids[0]
     && first.result !== sids[199] ? undefined : `root=${show(first.result)}`));
-}
+}));
 caseEnd();
 
 caseBegin("two-member-cycle-stays-deterministic", "hooks/lib/progress-file.js");
-{
+test("two-member-cycle-stays-deterministic", () => noNewFailures(failures, () => {
   const a = "prc-cap-cyc-a";
   const b = "prc-cap-cyc-b";
   legacy(a, b);
@@ -344,14 +348,14 @@ caseBegin("two-member-cycle-stays-deterministic", "hooks/lib/progress-file.js");
   const ra = countStateReads(() => PF.resolveRootSid(a));
   check("F2: an A->B->A cycle terminates within a few state reads", () => (ra.reads <= 4 ? undefined : `state reads=${ra.reads}`));
   check("F2: both members and a repeated call agree on one root", () => eq([PF.resolveRootSid(b), PF.resolveRootSid(a)], [ra.result, ra.result], "roots"));
-}
+}));
 caseEnd();
 
 caseBegin("short-donor-chain-still-reaches-root", "hooks/lib/progress-file.js");
-{
+test("short-donor-chain-still-reaches-root", () => noNewFailures(failures, () => {
   const sids = realChain("prc-short", 3);
   check("F3: a 3-generation chain resolves to its first generation", () => eq(PF.resolveRootSid(sids[2]), sids[0], "root sid"));
-}
+}));
 caseEnd();
 
 // templated(sid) -> {file, ref}: the progress file ensureProgressFile creates, and its full text.
@@ -365,13 +369,13 @@ function templated(sid) {
 // file — even a strict byte-prefix of the template, which may be a model edit — is kept byte-identical.
 
 caseBegin("empty-progress-file-gets-the-template", "hooks/lib/progress-file.js");
-{
+test("empty-progress-file-gets-the-template", () => noNewFailures(failures, () => {
   const { file, ref } = templated("pef-empty");
   fs.writeFileSync(file, "");
   const r = PF.ensureProgressFile("pef-empty");
   check("G1: a 0-byte progress file yields its path, created", () => eq([r.path, r.created], [file, true], "result"));
   check("G1: a 0-byte progress file is restored to the full template", () => eq(fs.readFileSync(file, "utf8"), ref, "content"));
-}
+}));
 caseEnd();
 
 // prefixKept(sid, label, cut) — a non-empty strict byte-prefix of the template (cut(len) bytes) is
@@ -388,26 +392,26 @@ function prefixKept(sid, label, cut) {
 }
 
 caseBegin("partial-progress-file-is-kept", "hooks/lib/progress-file.js");
-prefixKept("pef-partial", "G2", (n) => Math.floor(n / 2));
+test("partial-progress-file-is-kept", () => noNewFailures(failures, () => prefixKept("pef-partial", "G2", (n) => Math.floor(n / 2))));
 caseEnd();
 
 caseBegin("one-byte-prefix-progress-file-is-kept", "hooks/lib/progress-file.js");
-prefixKept("pef-onebyte", "G7", () => 1);
+test("one-byte-prefix-progress-file-is-kept", () => noNewFailures(failures, () => prefixKept("pef-onebyte", "G7", () => 1)));
 caseEnd();
 
 caseBegin("complete-progress-file-with-user-content-is-kept", "hooks/lib/progress-file.js");
-{
+test("complete-progress-file-with-user-content-is-kept", () => noNewFailures(failures, () => {
   const { file, ref } = templated("pef-full");
   const written = `${ref}\n## Notes\nuser-written-line pef-full\n`;
   fs.writeFileSync(file, written);
   const r = PF.ensureProgressFile("pef-full");
   check("G3: a complete file with appended user content yields its path, not created", () => eq([r.path, r.created], [file, false], "result"));
   check("G3: that file is left byte-identical", () => eq(fs.readFileSync(file, "utf8"), written, "content"));
-}
+}));
 caseEnd();
 
 caseBegin("model-filled-progress-file-is-kept", "hooks/lib/progress-file.js");
-{
+test("model-filled-progress-file-is-kept", () => noNewFailures(failures, () => {
   const { file, ref } = templated("pef-short");
   // The model's edit: every "(...)" placeholder line of the template becomes a short filled-in line.
   const refLines = ref.split("\n");
@@ -421,21 +425,21 @@ caseBegin("model-filled-progress-file-is-kept", "hooks/lib/progress-file.js");
   const r = PF.ensureProgressFile("pef-short");
   check("G5: a model-filled file yields its path, not created", () => eq([r.path, r.created], [file, false], "result"));
   check("G5: that file is left byte-identical", () => eq(fs.readFileSync(file, "utf8"), written, "content"));
-}
+}));
 caseEnd();
 
 caseBegin("exact-template-progress-file-is-kept", "hooks/lib/progress-file.js");
-{
+test("exact-template-progress-file-is-kept", () => noNewFailures(failures, () => {
   const { file, ref } = templated("pef-exact");
   const before = fs.readFileSync(file);
   const r = PF.ensureProgressFile("pef-exact");
   check("G6: a file equal to the full template yields its path, not created", () => eq([r.path, r.created], [file, false], "result"));
   check("G6: that file is left byte-identical to the template", () => (fs.readFileSync(file).equals(before) && before.toString("utf8") === ref ? undefined : "content changed"));
-}
+}));
 caseEnd();
 
 caseBegin("symlinked-progress-file-is-refused", "hooks/lib/progress-file.js");
-{
+test("symlinked-progress-file-is-refused", (t) => noNewFailures(failures, () => {
   const sid = "pef-link";
   firstGen(sid);
   const file = PF.progressPathFor(sid);
@@ -445,14 +449,12 @@ caseBegin("symlinked-progress-file-is-refused", "hooks/lib/progress-file.js");
   let linked = true;
   try { fs.symlinkSync(outside, file, "file"); } catch (_) { linked = false; }
   if (!linked) {
-    process.stdout.write("SKIP: G4: this host cannot create a file symlink (no privilege); the lstat refusal is unexercised here\n");
+    t.skip("G4: this host cannot create a file symlink (no privilege); the lstat refusal is unexercised here");
+    return;
   } else {
     const r = PF.ensureProgressFile(sid);
     check("G4: a symlink at the progress path yields no path", () => eq(r.path, null, "path"));
     check("G4: the symlink target is left untouched", () => eq(fs.readFileSync(outside, "utf8"), "outside-content\n", "target content"));
   }
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

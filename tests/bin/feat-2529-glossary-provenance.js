@@ -12,50 +12,52 @@
 // TL3 gap: Claude Code itself does not deliver the PostToolUse call; the tests feed the real
 // workflow-mark hook its input JSON, and the commit gate is driven through checkReviewDocs.
 
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const { totals } = require("./feat-2529-glossary-provenance/common");
 const ops = require("./feat-2529-glossary-provenance/ops");
 const split = require("./feat-2529-glossary-provenance/split");
 
+const fails = () => totals.failed;
+after(() => process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`));
+
 caseBegin("t3-1-term-sets-and-definition-normalization", "bin/lib/glossary-provenance.js");
-ops.readAndNormalize();
+test("t3-1-term-sets-and-definition-normalization", () => noNewFailures(fails, ops.readAndNormalize));
 caseEnd();
 
 caseBegin("t3-1-three-operations-by-category", "bin/lib/glossary-provenance.js");
-ops.threeOpsByCategory();
+test("t3-1-three-operations-by-category", () => noNewFailures(fails, ops.threeOpsByCategory));
 caseEnd();
 
 caseBegin("t3-1-rename-move-and-zero-operation-edits", "bin/lib/glossary-provenance.js");
-ops.pairsAndNoOps();
+test("t3-1-rename-move-and-zero-operation-edits", () => noNewFailures(fails, ops.pairsAndNoOps));
 caseEnd();
 
 caseBegin("t3-1-case-only-heading-rename-registers", "bin/lib/glossary-provenance.js");
-ops.caseOnlyRename();
+test("t3-1-case-only-heading-rename-registers", () => noNewFailures(fails, ops.caseOnlyRename));
 caseEnd();
 
 caseBegin("t3-1-operations-fingerprint", "bin/lib/glossary-provenance.js");
-ops.fingerprints();
+test("t3-1-operations-fingerprint", () => noNewFailures(fails, ops.fingerprints));
 caseEnd();
 
 caseBegin("t3-1-definition-matching-and-grants", "bin/lib/glossary-provenance.js");
-ops.definitionMatching();
+test("t3-1-definition-matching-and-grants", () => noNewFailures(fails, ops.definitionMatching));
 caseEnd();
 
 caseBegin("t3-1-intent-row-checks", "bin/lib/glossary-provenance.js");
-ops.intentRowChecks();
+test("t3-1-intent-row-checks", () => noNewFailures(fails, ops.intentRowChecks));
 caseEnd();
 
 caseBegin("t3-1-case-only-rename-intent-rows", "bin/lib/glossary-provenance.js");
-ops.caseOnlyRenameRows();
+test("t3-1-case-only-rename-intent-rows", () => noNewFailures(fails, ops.caseOnlyRenameRows));
 caseEnd();
 
 caseBegin("t3-2-range-split-is-zero-operations", "bin/check-glossary-provenance");
-split.rangeSplit();
+test("t3-2-range-split-is-zero-operations", () => noNewFailures(fails, split.rangeSplit));
 caseEnd();
 
 caseBegin("t3-2-legacy-directory-move-is-zero-operations", "bin/check-glossary-provenance");
-split.legacyMove();
+test("t3-2-legacy-directory-move-is-zero-operations", () => noNewFailures(fails, split.legacyMove));
 caseEnd();
-
-process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
-process.exitCode = totals.failed === 0 ? 0 : 1;
