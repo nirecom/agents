@@ -95,14 +95,14 @@ EOF
 cat > "$BODIES/js-missing" <<'EOF'
 // Tests: bin/a.js, bin/b.js
 // Tags: scope:common
-const harness = require("../lib/harness");
+const harness = require("../lib/harness"); require("node:test");
 
 console.log(typeof harness);
 EOF
 cat > "$BODIES/js-conforming" <<'EOF'
 // Tests: bin/a.js, bin/b.js
 // Tags: scope:common
-const { caseBegin, caseEnd } = require("../lib/harness");
+const { caseBegin, caseEnd } = require("../lib/harness"); require("node:test");
 
 caseBegin("a", "bin/a.js");
 caseEnd();

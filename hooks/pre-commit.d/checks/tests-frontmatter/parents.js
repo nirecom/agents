@@ -1,5 +1,5 @@
 "use strict";
-// The merge parents of the staged tests/ paths (#2812), shared by the three tests-frontmatter gates:
+// The merge parents of the staged tests/ paths (#2812), shared by the four tests-frontmatter gates:
 // one resolution per snapshot (one commit), and the HEAD-only fallback note at most once.
 //   parentsOf({ context, snapshot, files }) -> { state, record(rel), note() -> [message], blobs(oids) }
 
