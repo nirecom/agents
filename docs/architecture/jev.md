@@ -1,15 +1,17 @@
 # Jev Integration
 
 Jev is TypeSafe AI's typed classifier: it answers a fixed list of yes/no
-questions about a text and returns one probability per question. This
-repository uses it as the first judge at three judgment points — task
-complexity, whether the outline plan can be skipped, and whether the detail
-plan can be skipped. It is never a required dependency: with Jev off, down or
-unsure, a subagent judges instead.
+questions about a text and returns one probability per question. It is never a
+required dependency.
+
+- Three stage points make it the first judge of task complexity and of skipping
+  the outline or detail plan; with Jev off, down or unsure, a subagent judges.
+- Two conversation points read the current turn: `continuation`
+  (wait-on-invoke / continue-on-stop) and `askuser-answer`. Unsure or failing, they change nothing.
 
 ## Why it exists
 
-Each of those judgments used to be an LLM subagent call costing seconds and
+Each stage judgment used to be an LLM subagent call costing seconds and
 tokens on every workflow stage. A typed classifier answers the same rubric
 faster and cheaper, and it reports how sure it is. So Jev answers the keys it
 is confident about, and the subagent is dispatched only for the rest — often
@@ -112,6 +114,28 @@ with, and every decision record carries the ones actually applied.
   skip, the retired skip verifier and its scripts, and the replaced detail-skip
   criteria. Changing `mode` does not bring those back.
 
+## Conversation points
+
+A conversation point asks one Jev query about the current turn, with no backup
+subagent and no ticket; only a confident yes acts.
+
+- **`wait-on-invoke`**: on `ACTION=invoke`, next-step asks once per
+  step and turn (a child with a 3 s limit, cached in the control directory) and
+  adds `JEV_ADVICE=wait-on-invoke` with a fixed `JEV_ADVICE_REASON`. A step is
+  advised at most once, so the advice cannot loop. Hooks run next-step with
+  `--jev-cache-only` through `hooks/lib/next-step-spawn.js` and never query.
+- **`continue-on-stop`**: where the Stop guard would let a stop pass,
+  it asks whether work remains; a confident yes blocks the stop once per turn.
+  It never asks while a human or a delegated step is waited on.
+- **AskUserQuestion**: a PreToolUse hook answers only a dialog Claude marked
+  eligible (`metadata.source` = `jev-auto-skip-askuser`), and only when every
+  question has exactly one confident option. The marker is an allowlist: an
+  unmarked dialog reaches the user with no Jev call and no record; plan-approval
+  waits, `user_verification` and multi-select stay excluded even when marked.
+  `JEV_AUTO_SKIP_ASKUSER=off` turns it off alone.
+- An optional `user-instructions-jev.md` at the checkout root adds the user's
+  own rules to the input.
+
 ## Module map
 
 | Module | Responsibility |
@@ -126,6 +150,7 @@ with, and every decision record carries the ones actually applied.
 | `hooks/lib/jev/liveness.js` | Cached reachability probe |
 | `hooks/lib/jev/pending.js` | Hand-off files and tickets, atomic claim and takeover, orphan sweep |
 | `hooks/lib/jev/decision-record.js` | Builds the decision record; appends once per ticket and record type |
+| `hooks/lib/jev/conversation-point.js`, `conversation-record.js`, `adapters/` | Conversation points: one query about the turn, its record, the per-point adapters |
 | `hooks/lib/jev/retention.js` | Removes idle session state |
 | `hooks/lib/jev/state-paths.js` | State directory layout, id validation, versioned reads |
 | `hooks/lib/jev/sanitize.js` | Terminal-safe renderers for the report's values |
@@ -199,38 +224,12 @@ skip judgment. The judgment queried later owns the marker. A caller's
 downstream therefore uses the `SIGNALS_CSV` its own `finalize` printed, never
 the fixed file.
 
-Decisions are appended to `jev-decisions.log` as JSONL and rotated by size.
-This is analysis data, not production state: deleting it loses only evidence.
-
-Record version 2 (`version: 2`):
-
-| Field | Meaning |
-|---|---|
-| `record_type` | `decision`, or `settle` for a superseded ticket's outcome |
-| `ticket` | The CLI ticket; null on a hook record. (`ticket`, `record_type`) is appended at most once |
-| `mode`, `threshold`, `short_circuit_answer` | The policy frozen at query time; `threshold` holds both directions |
-| `adopted` | Whose answers made the result: `jev`, `llm`, `mixed`, or null |
-| `short_circuited`, `unjudged_keys` | Whether the gate short-circuited, and the keys nobody judged because of it |
-| `llm_needed` | `query` asked for a subagent dispatch |
-| `llm_answer_received` | The ticket's answer file existed at `finalize` |
-| `input.required` / `missing` / `exempt` | The stage's required sections and what became of them |
-| `input.sources_failed`, `sources_failed_reasons` | Sections with no whole copy, and why (`copy-failed`, `over-cap`) |
-| `deterministic` | Computed signals: status, values, overrides, and the sha256 of the list they were computed from |
-| `agreement_by_signal` | Per key, whether Jev and the subagent agreed — only where both answered |
-| `final.unjudged_signals` | Complexity: the signal ids left unjudged by a short circuit — never folded into `final.signals` as absent |
-| `fallback_reason` | Why Jev's answer was not used, when it was not; on the CLI finalize path, an unusable answer gives `answer-file-absent` / `answer-empty` / `answer-unparseable`; a source change at settle prints `FALLBACK=source-changed` but records no `fallback_reason` (vocabulary: [two-stage-broker.md](jev/two-stage-broker.md#failure-paths), Missing answer) |
-
-The CLI cannot observe an Agent dispatch, only the answer file it leaves — hence
-`llm_answer_received`, not a claim that the subagent was called. The report's
-**LLM call rate** is the share of decisions with `llm_needed`: how often the CLI
-asked for a dispatch. A short-circuited ticket counts in its denominator only.
-An orphan recorded as `finalize-absent` counts both as a missing answer and as
-an absent finalize.
-
-Version 1 records (`v: 1`) are the shadow period's hook records. The report
-keeps them in a separate legacy section with their original metrics and never
-mixes them into adoption or retune figures. A record with neither version key
-is counted as unknown.
+Every judgment appends one version 2 record to `jev-decisions.jsonl` (formerly
+`jev-decisions.log`, moved on first append), rotated by size. It is analysis
+data, not production state: deleting it loses only evidence. Each record names
+its `point`, where it was judged (`judged_in`), the probabilities, thresholds,
+whether Jev was adopted, and why not. Fields, the per-point `final` shapes, the
+rename and the report's reading of them: [jev/decision-record.md](jev/decision-record.md).
 
 `bin/jev-report` reads local files only and never contacts Jev. It drops a
 repeated (`ticket`, `record_type`) and reports the count, excludes superseded
@@ -281,6 +280,29 @@ report and acting on it: [ops.md](../ops.md#jev).
 - **Untrusted names**: a point name read from a file or a log row is matched
   against the registry's own keys only, and the report groups rows in
   prototype-less maps, so `constructor` is an ordinary unknown point.
+- **Untrusted transcript content**: only `User:` lines count as the user's
+  intent. Continuation lines are prefixed `  | ` so a body cannot forge a
+  `User:` line, and tool inputs and results are framed as untrusted data.
+- **Transcript path**: the path in `prompt-turn.json` is read only as a `.jsonl`
+  under `<CLAUDE_CONFIG_DIR or ~/.claude>/projects/`; any other reads as absent.
+
+### What is sent to Jev
+
+With `JEV=on`, data leaves the machine for `api.typesafe.ai`:
+
+| Point | Sent |
+|---|---|
+| `complexity-judge`, `outline-skip`, `detail-skip` | The stage's sources (issue body, plan sections), redacted and capped |
+| `continuation` (next-step invoke, Stop) | The current turn: user and assistant text, tool inputs and results, redacted, capped at `MAX_STATE_CHARS` |
+| `askuser-answer` (marked AskUserQuestion only) | The current turn's user and assistant text and tool names (no tool inputs or results), and the dialog's questions and options |
+
+Both conversation points also send the user prompt that opened the turn, in its own block that
+the turn's truncation never cuts: it is the user's own words, the evidence a judgment rests on.
+Meta injections (skill expansions, hook context), compaction summaries and sidechain entries are
+never sent as the user's words.
+`user-instructions-jev.md`, when present, goes with both conversation points.
+Redaction removes secret-shaped strings only; `JEV=off` stops every send and
+`JEV_AUTO_SKIP_ASKUSER=off` stops the dialog point's.
 
 ## Known limits
 
@@ -299,8 +321,6 @@ report and acting on it: [ops.md](../ops.md#jev).
 
 ## Rollout
 
-Jev is opt-in per machine, not per checkout: `JEV` is read from the process
-environment, else from the agents config directory's `.env`, and never from a
-project's `.env.local`. The flag ships off, so merging changes no judgment
-until that environment turns it on. Lowering a skip threshold is a separate,
-human decision that the report's retune section is meant to inform.
+Jev is opt-in per machine, not per checkout (see Enabling): the flag ships off,
+so merging changes no judgment until that environment turns it on. Lowering a
+skip threshold is a separate, human decision the report's retune section informs.
