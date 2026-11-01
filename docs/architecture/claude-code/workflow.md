@@ -100,7 +100,7 @@ fixed by `PROJECTION_KEYS`; an unknown key aborts the write before a byte is per
 | Field | Meaning |
 |---|---|
 | `seq` | 1-based, gap-free, strictly increasing. A break is corruption, not a repair opportunity — `appendEvents` refuses it and leaves the bytes untouched. |
-| `kind` | `step_status`, `step_annotation`, `step_annotations_cleared`, `worktree`, `session_model`, `complexity_evaluation`, `plan_approval`, `plan_approval_revoked`, `reset` |
+| `kind` | `step_status`, `step_annotation`, `step_annotations_cleared`, `worktree`, `session_model`, `complexity_evaluation`, `plan_approval`, `plan_approval_revoked`, `reset`, `cycle_boundary` (`closed_cycle`, `reason`: `reinit-entry` / `workflow-init-complete`; [workflow-runtime.md](workflow-runtime.md#final-report)) |
 | `at` | ISO-8601 UTC |
 | `provenance` | `observed` (the process saw it happen), `declared` (a caller asserted it), `backfilled` (reconstructed — schema migration or repair) |
 | `origin` | which component appended the event |
