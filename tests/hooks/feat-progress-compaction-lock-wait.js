@@ -7,12 +7,13 @@
 // the pressure state untouched, and the next compaction with the lock free records normally.
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { after, test } = require("node:test");
 
 const restore = isolate();
-process.on("exit", () => restore());
 
 const ROOT = path.join(__dirname, "..", "..");
 const PC = require(path.join(ROOT, "hooks", "lib", "progress-compaction"));
@@ -41,6 +42,11 @@ const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
+const failures = () => failed;
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
+  restore();
+});
 
 // The real lock updatePressure takes; a token naming a live pid with a fresh mtime is never stolen early.
 const lockPathOf = (sid) => `${sidecarPath(sid, PF.PRESSURE_SUFFIX, { forWrite: true })}.lock`;
@@ -59,7 +65,7 @@ const SID = "pcl-locked";
 const T0 = Date.UTC(2026, 9, 18, 12, 0, 0);
 
 caseBegin("live-lock-held-drops-record-within-bound", "hooks/lib/progress-compaction.js");
-{
+test("live-lock-held-drops-record-within-bound", () => noNewFailures(failures, () => {
   check("A1: fixture — a prior pressure record exists", () => eq(PF.mergePressure(SID, { event_cursor: 3 }), true, "mergePressure"));
   holdLock(SID);
   const before = pressure(SID);
@@ -69,34 +75,34 @@ caseBegin("live-lock-held-drops-record-within-bound", "hooks/lib/progress-compac
   check(`A1: the lock-blocked call returns in under 4000 ms (elapsed=${elapsed})`, () => eq(elapsed < 4000, true, "under 4000 ms"));
   check(`A1: the lock-blocked call waits the bound rather than failing instantly (elapsed=${elapsed})`, () => eq(elapsed >= 800, true, ">= 800 ms"));
   check("A1: the pressure state is unchanged (no compactions_at added)", () => eq(pressure(SID), before, "progress-pressure.json"));
-}
+}));
 caseEnd();
 
 caseBegin("lock-released-first-compaction-records-pending", "hooks/lib/progress-compaction.js");
-{
+test("lock-released-first-compaction-records-pending", () => noNewFailures(failures, () => {
   const out = PC.recordCompaction(SID, T0 + 1000);
   const cur = pressure(SID) || {};
   check("A2: after release the first compaction returns {pending:true, burst:false}", () => eq(out, { pending: true, burst: false }, "result"));
   check("A2: compactions_at has length 1", () => eq(compactions(SID), 1, "compactions_at length"));
   check("A2: compaction_pending is true", () => eq(cur.compaction_pending, true, "compaction_pending"));
-}
+}));
 caseEnd();
 
 caseBegin("second-compaction-not-pending-and-grows", "hooks/lib/progress-compaction.js");
-{
+test("second-compaction-not-pending-and-grows", () => noNewFailures(failures, () => {
   const out = PC.recordCompaction(SID, T0 + 2000);
   check("A3: the second compaction returns pending:false", () => eq(out && out.pending, false, "pending"));
   check("A3: compactions_at grows to 2", () => eq(compactions(SID), 2, "compactions_at length"));
-}
+}));
 caseEnd();
 
 caseBegin("no-lock-returns-promptly-and-records", "hooks/lib/progress-compaction.js");
-{
+test("no-lock-returns-promptly-and-records", () => noNewFailures(failures, () => {
   const sid = "pcl-free";
   const { out, elapsed } = timed(() => PC.recordCompaction(sid, T0));
   check(`A4: with no lock held recordCompaction returns in under 1000 ms (elapsed=${elapsed})`, () => eq(elapsed < 1000, true, "under 1000 ms"));
   check("A4: with no lock held the compaction is recorded", () => eq([out, compactions(sid)], [{ pending: true, burst: false }, 1], "[result, compactions_at length]"));
-}
+}));
 caseEnd();
 
 // A child process holds the live-holder lock and releases it mid-wait: the parent's wait is synchronous.
@@ -111,7 +117,7 @@ function waitForFile(p, maxMs) {
 }
 
 caseBegin("lock-released-mid-wait-records-once", "hooks/lib/progress-compaction.js");
-{
+test("lock-released-mid-wait-records-once", () => noNewFailures(failures, () => {
   const sid = "pcl-midwait";
   const lock = lockPathOf(sid);
   const child = spawn(process.execPath, ["-e", CHILD_SRC, lock], { stdio: "ignore" });
@@ -127,8 +133,5 @@ caseBegin("lock-released-mid-wait-records-once", "hooks/lib/progress-compaction.
     try { child.kill(); } catch (_) { /* already exited */ }
     freeLock(sid);
   }
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

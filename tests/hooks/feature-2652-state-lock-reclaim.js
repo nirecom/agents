@@ -6,7 +6,8 @@
 // The races are driven in-process by stubbing fs / process.platform around withStateLockAt.
 // TL3 gap: real Windows delete-pending EPERM is not reproduced here (EPERM is injected via a stubbed fs.openSync).
 
-const { isolate } = require("../lib/harness");
+const { after } = require("node:test");
+const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -14,7 +15,7 @@ const { spawnSync } = require("child_process");
 
 const restoreEnv = isolate();
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "f2652l-"));
-process.on("exit", () => {
+after(() => {
   restoreEnv();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
@@ -70,6 +71,7 @@ const errno = (code) => Object.assign(new Error(`${code}: injected`), { code });
 const ownPayloadIn = (lockPath) => () => JSON.parse(fs.readFileSync(lockPath, "utf8"));
 
 // --- 1. vanished between openSync EEXIST and the stat: no unlink, a successor's lock survives ---
+caseBegin("vanished-lock-is-not-unlinked", "hooks/workflow-state/state-io/state-lock.js");
 check("vanished: lock gone at stat -> no unlink, openSync retried, acquire succeeds", () => {
   const lock = freshLock();
   fs.mkdirSync(path.dirname(lock), { recursive: true });
@@ -98,8 +100,10 @@ check("vanished: a successor creates its lock right after the stat -> the waiter
   eq(e.unlinked.filter((p) => same(p, lock)), [], "unlinkSync calls on the lock");
   eq(fs.readFileSync(lock, "utf8"), successor, "successor lock");
 });
+caseEnd();
 
 // --- 2. stale on the judgment snapshot, replaced before the unlink: no unlink ---
+caseBegin("replaced-lock-is-not-unlinked", "hooks/workflow-state/state-io/state-lock.js");
 // replaceAtRecheck(lock, mutate): mutates the lock at the second stat (the re-check snapshot) only.
 function replaceAtRecheck(lock, mutate) {
   let stats = 0;
@@ -143,8 +147,10 @@ check("snapshot mismatch, then the new holder releases -> acquired without the w
   eq([result.pid, result.host, result.at === "replacement"], [process.pid, HOST, false], "payload after acquire");
   eq(unlinked.filter((p) => same(p, lock)).length, 1, "unlinks (only the release)");
 });
+caseEnd();
 
 // --- 3. reclaim success paths ---
+caseBegin("stale-lock-is-reclaimed", "hooks/workflow-state/state-io/state-lock.js");
 check("age: a lock older than STALE_MS (other host) is reclaimed; new payload is ours; released after", () => {
   const lock = freshLock();
   seed(lock, payload({ host: "other.example.invalid", pid: 1 }), L.STALE_MS + 5000);
@@ -163,8 +169,10 @@ check("dead-pid: same host, an exited child's pid -> reclaimed", () => {
   const got = L.withStateLockAt(lock, ownPayloadIn(lock), { timeoutMs: SHORT });
   eq([got.pid, got.host], [process.pid, HOST], "payload");
 });
+caseEnd();
 
 // --- 4. fresh mtime, no reclaim ---
+caseBegin("fresh-lock-is-kept", "hooks/workflow-state/state-io/state-lock.js");
 const keep = [
   ["unparsable payload", "{ not json"], ["empty file", ""], ["array payload", "[1]"], ["null payload", "null"],
   ["string pid", payload({ pid: "123" })], ["non-integer pid", payload({ pid: 1.5 })], ["pid 0", payload({ pid: 0 })],
@@ -181,8 +189,10 @@ for (const [label, text] of keep) {
     eq([fs.readFileSync(lock, "utf8"), fs.statSync(lock).mtimeMs], [text, before], "lock");
   });
 }
+caseEnd();
 
 // --- 5. win32 EPERM retry ---
+caseBegin("win32-eperm-retry", "hooks/workflow-state/state-io/state-lock.js");
 function epermThen(lock, times) {
   let calls = 0;
   return { open: (real, p, flags) => { if (same(p, lock) && ++calls <= times) throw errno("EPERM"); return real(p, flags); }, calls: () => calls };
@@ -206,8 +216,10 @@ check("non-win32: EPERM is thrown at once, no retry", () => {
   expectThrow(() => stub({ platform: "linux", "fs.openSync": ep.open }, () => L.withStateLockAt(lock, () => 1, { timeoutMs: 2000 })), (x) => x.code === "EPERM");
   eq(ep.calls(), 1, "openSync calls");
 });
+caseEnd();
 
 // --- 6. error paths and boundaries ---
+caseBegin("error-paths-and-boundaries", "hooks/workflow-state/state-io/state-lock.js");
 check("a non-EEXIST openSync error (EACCES) propagates at once", () => {
   const lock = freshLock();
   let calls = 0;
@@ -247,3 +259,4 @@ check("the timeout message names the waited ms and the lock path", () => {
   const e = expectThrow(() => L.withStateLockAt(lock, () => 1, { timeoutMs: SHORT }), isTimeout);
   eq([e.name, e.message.includes(`${SHORT}ms`), e.message.includes(lock)], ["StateLockTimeoutError", true, true], show(e.message));
 });
+caseEnd();

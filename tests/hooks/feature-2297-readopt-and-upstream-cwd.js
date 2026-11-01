@@ -12,12 +12,20 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 const F = require("./feature-2297-readopt-and-upstream-cwd/fixture");
 
 const restoreIsolation = isolate();
 const SB = F.makeSandbox();
 const HOME_CWD = process.cwd();
 process.chdir(SB.NEUTRAL);
+after(() => {
+  process.chdir(HOME_CWD);
+  restoreIsolation();
+  fs.rmSync(SB.base, { recursive: true, force: true });
+  console.log(`\n${PASS} passed, ${FAIL} failed`);
+});
 
 const FULL = "full";
 const DEGRADED = "context-independent-only";
@@ -41,9 +49,11 @@ function check(name, fn) {
     FAIL++;
   }
 }
+const failures = () => FAIL;
 const okAdopt = (r) => assert.ok(r && r.ok === true, `adopt refused: ${r && r.error}`);
 
 caseBegin("readopt-same-upstream-recovers-full", "hooks/workflow-state/inheritance/adopt.js");
+test("readopt-same-upstream-recovers-full", () => noNewFailures(failures, () => {
 check("degraded from main, EnterWorktree, then the same --from again recovers full", () => {
   F.seedUpstream("up-c1", SB.W1);
   F.seedDownstream("down-c1", SB.M);
@@ -59,9 +69,11 @@ check("degraded from main, EnterWorktree, then the same --from again recovers fu
   assert.strictEqual(F.statusOf("down-c1", "write_tests"), "complete");
   assert.strictEqual(F.io().readRawState("down-c1").upstream_session_id, "up-c1");
 });
+}));
 caseEnd();
 
 caseBegin("readopt-same-context-repeatedly-is-idempotent", "hooks/workflow-state/inheritance/adopt.js");
+test("readopt-same-context-repeatedly-is-idempotent", () => noNewFailures(failures, () => {
 check("re-adopting twice more with an unchanged context adds no events and no supervisor records", () => {
   F.seedUpstream("up-c1i", SB.W1);
   F.seedDownstream("down-c1i", SB.W1);
@@ -86,9 +98,11 @@ check("re-adopting twice more with an unchanged context adds no events and no su
     assert.strictEqual(supBytes(), baseSup, `re-adopt #${i} wrote supervisor records`);
   }
 });
+}));
 caseEnd();
 
 caseBegin("readopt-allowed-lookahead-and-environment-facts", "hooks/workflow-state/inheritance/adopt.js");
+test("readopt-allowed-lookahead-and-environment-facts", () => noNewFailures(failures, () => {
 check("a lookahead in_progress plus session_model / worktree events do not block a re-adopt", () => {
   F.seedUpstream("up-c2", SB.W1);
   F.seedDownstream("down-c2", SB.W1);
@@ -100,9 +114,11 @@ check("a lookahead in_progress plus session_model / worktree events do not block
   assert.strictEqual(verdict.ok, true, `checkOverwriteAllowed refused: ${verdict.error}`);
   okAdopt(F.adopt("down-c2", "up-c2"));
 });
+}));
 caseEnd();
 
 caseBegin("readopt-refused-after-reapproval", "hooks/workflow-state/inheritance/adopt.js");
+test("readopt-refused-after-reapproval", () => noNewFailures(failures, () => {
 check("a downstream CONFIRM_OUTLINE re-approval blocks the re-adopt; state bytes unchanged", () => {
   F.seedUpstream("up-c3", SB.W1);
   F.seedDownstream("down-c3", SB.W1);
@@ -124,9 +140,11 @@ check("a downstream CONFIRM_OUTLINE re-approval blocks the re-adopt; state bytes
   assert.ok(Array.isArray(v.retained) && v.retained.length > 0 && v.retained[0].kind === "plan_approval",
     `retained: ${JSON.stringify(v.retained)}`);
 });
+}));
 caseEnd();
 
 caseBegin("readopt-refused-after-annotation-or-complete", "hooks/workflow-state/inheritance/adopt.js");
+test("readopt-refused-after-annotation-or-complete", () => noNewFailures(failures, () => {
 for (const [label, record, kind] of [
   ["annotation", (sid) => F.io().appendEvents(sid, [{ kind: "step_annotation", step: "research", key: "warnings_summary", value: "own note", provenance: "declared", origin: "test-fixture" }]), "step_annotation"],
   ["complete", (sid) => F.io().markStep(sid, "run_tests", "complete"), "step_status"],
@@ -146,9 +164,11 @@ for (const [label, record, kind] of [
     assert.strictEqual(F.bytes(down), before);
   });
 }
+}));
 caseEnd();
 
 caseBegin("adopt-refused-from-different-upstream", "hooks/workflow-state/inheritance/adopt.js");
+test("adopt-refused-from-different-upstream", () => noNewFailures(failures, () => {
 check("a downstream adopted from A refuses B, and says it is a different upstream", () => {
   F.seedUpstream("up-c5a", SB.W1);
   F.seedUpstream("up-c5b", SB.W1);
@@ -168,9 +188,11 @@ check("a downstream with its own work and no upstream_session_id is refused (any
   assert.strictEqual(v.ok, false);
   assert.strictEqual(F.adopt("down-c5c", "up-c5c").ok, false);
 });
+}));
 caseEnd();
 
 caseBegin("all-pending-no-upstream-allowed-from-any", "hooks/workflow-state/inheritance/adopt.js");
+test("all-pending-no-upstream-allowed-from-any", () => noNewFailures(failures, () => {
 check("an untouched downstream may adopt from any upstream; isAllPending stays exported", () => {
   F.seedUpstream("up-c6", SB.W1);
   F.seedDownstream("down-c6", SB.W1);
@@ -181,9 +203,11 @@ check("an untouched downstream may adopt from any upstream; isAllPending stays e
   assert.strictEqual(typeof require(F.rel(ADOPT)).isAllPending, "function");
   okAdopt(F.adopt("down-c6", "up-c6"));
 });
+}));
 caseEnd();
 
 caseBegin("granularity-decided-from-where-downstream-runs", "hooks/workflow-state/inheritance/granularity.js");
+test("granularity-decided-from-where-downstream-runs", () => noNewFailures(failures, () => {
 check("fixture anchors: W1/W1 same, W1/W2 sibling, W1/other different, W1/main sibling", () => {
   const { compareRepoIdentity, VERDICTS } = require(F.rel("hooks/lib/repo-identity.js"));
   assert.strictEqual(compareRepoIdentity(SB.W1, SB.W1), VERDICTS.SAME);
@@ -201,9 +225,11 @@ check("SAME -> full, SIBLING with equal content -> degraded, other repo -> degra
   F.seedUpstream("up-c7-nocwd", null);
   assert.strictEqual(g(SB.W1, read("up-c7-nocwd")), DEGRADED);
 });
+}));
 caseEnd();
 
 caseBegin("adopt-sibling-equal-content-still-degraded", "hooks/workflow-state/inheritance/adopt.js");
+test("adopt-sibling-equal-content-still-degraded", () => noNewFailures(failures, () => {
 check("adoptState ignores verifiedEquivalent / granularity inputs and degrades a SIBLING", () => {
   F.seedUpstream("up-c8", SB.W1);
   F.seedDownstream("down-c8", SB.W2);
@@ -229,9 +255,11 @@ check("a missing intent artifact still forces degraded even in the SAME worktree
   okAdopt(r);
   assert.deepStrictEqual([r.granularity, r.degraded_reason], [DEGRADED, "intent-artifact-missing"]);
 });
+}));
 caseEnd();
 
 caseBegin("adopt-cli-granularity-flags-removed", "bin/workflow/adopt-session-state");
+test("adopt-cli-granularity-flags-removed", () => noNewFailures(failures, () => {
 for (const flags of [["--verified-equivalent"], ["--granularity", "full"]]) {
   check(`adopt-session-state ${flags[0]} exits 2 with the removal notice and adopts nothing`, () => {
     const tag = flags[0].replace(/^-+/, "");
@@ -245,9 +273,11 @@ for (const flags of [["--verified-equivalent"], ["--granularity", "full"]]) {
     assert.strictEqual(F.bytes(`down-c9-${tag}`), before);
   });
 }
+}));
 caseEnd();
 
 caseBegin("classify-upstream-cwd-four-classes", "bin/lib/resume-session/upstream-cwd.js");
+test("classify-upstream-cwd-four-classes", () => noNewFailures(failures, () => {
 check("live linked worktree / main only / path deleted / no state or no cwd", () => {
   const c = classify();
   F.seedUpstream("up-c10-live", SB.W1);
@@ -270,9 +300,11 @@ check("state.cwd on main falls through to a live session_worktree", () => {
   assert.strictEqual(F.classOf(r), "live-linked-worktree");
   assert.strictEqual(path.resolve(r.worktree_path), path.resolve(SB.W2));
 });
+}));
 caseEnd();
 
 caseBegin("classify-cwd-args", "bin/lib/resume-session/args.js");
+test("classify-cwd-args", () => noNewFailures(failures, () => {
 check("--classify-cwd <sid> parses to its own mode; a bare --classify-cwd is an error", () => {
   const { parseResumeArgs } = require(F.rel("bin/lib/resume-session/args.js"));
   const ok = parseResumeArgs(["--classify-cwd", "sid-x"]);
@@ -281,9 +313,11 @@ check("--classify-cwd <sid> parses to its own mode; a bare --classify-cwd is an 
   assert.ok(JSON.stringify(ok).includes("sid-x"));
   assert.strictEqual(parseResumeArgs(["--classify-cwd"]).mode, "error");
 });
+}));
 caseEnd();
 
 caseBegin("classify-cwd-cli-json", "bin/resume-session-detect");
+test("classify-cwd-cli-json", () => noNewFailures(failures, () => {
 check("resume-session-detect --classify-cwd prints the classification as JSON", () => {
   F.seedUpstream("up-c11", SB.W1);
   const r = F.runNode([F.rel("bin/resume-session-detect"), "--classify-cwd", "up-c11"],
@@ -302,9 +336,11 @@ check("a traversal sid is never classified as a live worktree", () => {
   assert.ok(r.rc !== 0 || cls === "cwd-unknown", `rc=${r.rc} out=${r.out}`);
   assert.doesNotMatch(r.err, /^\s+at /m, "stack trace leaked");
 });
+}));
 caseEnd();
 
 caseBegin("list-preview-agrees-with-overwrite-and-granularity", "bin/lib/resume-session/upstream-view.js");
+test("list-preview-agrees-with-overwrite-and-granularity", () => noNewFailures(failures, () => {
 check("--list preview = checkOverwriteAllowed + decideInheritanceGranularity", () => {
   const view = require(F.rel("bin/lib/resume-session/upstream-view.js"));
   F.seedUpstream("up-c12-same", SB.W1);
@@ -335,16 +371,20 @@ check("--from on a SIBLING reports degraded with no verified-equivalent claim", 
   assert.strictEqual(ir.granularity, DEGRADED);
   assert.notStrictEqual(ir.verified_equivalent, true);
 });
+}));
 caseEnd();
 
 caseBegin("session-start-uses-decide-granularity", "hooks/session-start.js");
+test("session-start-uses-decide-granularity", () => noNewFailures(failures, () => {
 check("the automatic inheritance path decides granularity through decideInheritanceGranularity", () => {
   const src = fs.readFileSync(F.rel("hooks/session-start.js"), "utf8");
   assert.match(src, /decideInheritanceGranularity/);
 });
+}));
 caseEnd();
 
 caseBegin("skill-rsm2-classify-before-from", "skills/resume-session/SKILL.md");
+test("skill-rsm2-classify-before-from", () => noNewFailures(failures, () => {
 check("RSM-2 classifies, enters the worktree, warns about cd, explains recovery; no --verified-equivalent", () => {
   const text = fs.readFileSync(F.rel("skills/resume-session/SKILL.md"), "utf8");
   const m = /### RSM-2[\s\S]*?(?=\n### )/.exec(text);
@@ -361,10 +401,12 @@ check("RSM-2 classifies, enters the worktree, warns about cd, explains recovery;
   assert.ok(lines.some((l) => /degraded/i.test(l) && /--from/.test(l) && /worktree/i.test(l)), "no recovery line");
   assert.doesNotMatch(text, /--verified-equivalent/);
 });
+}));
 caseEnd();
 
 // A corrupt state file is damage, not expiry: the ARTIFACTS_ONLY branch must say so as the NONE branch does.
 caseBegin("from-artifacts-only-distinguishes-unreadable-from-expired", "bin/lib/resume-session/upstream-view.js");
+test("from-artifacts-only-distinguishes-unreadable-from-expired", () => noNewFailures(failures, () => {
 const seedIntent = (sid) => fs.writeFileSync(path.join(process.env.WORKFLOW_PLANS_DIR, `${sid}-intent.md`), "**Title:** fixture\n");
 check("corrupt state + intent artifact -> artifacts-only, inherit_result reason state-unreadable", () => {
   const view = require(F.rel("bin/lib/resume-session/upstream-view.js"));
@@ -386,10 +428,5 @@ check("absent state + intent artifact -> artifacts-only, inherit_result reason s
   assert.strictEqual(v.availability, "artifacts-only");
   assert.strictEqual((v.inherit_result || {}).reason, "state_expired");
 });
+}));
 caseEnd();
-
-process.chdir(HOME_CWD);
-restoreIsolation();
-fs.rmSync(SB.base, { recursive: true, force: true });
-console.log(`\n${PASS} passed, ${FAIL} failed`);
-process.exitCode = FAIL === 0 ? 0 : 1;

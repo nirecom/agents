@@ -26,10 +26,10 @@ function writeOrphan(sids, text) {
   settle([sids.firstSid, sids.downstreamSid]);
 }
 
-// finish() — prints the pass/fail total and sets the exit code from it.
+// finish() — prints the pass/fail total; the verdict is each node:test case's (#2865).
 function finish() {
   process.stdout.write(`Total: ${M.counts.passed} passed, ${M.counts.failed} failed\n`);
-  process.exitCode = M.counts.failed === 0 ? 0 : 1;
 }
+const failureCount = () => M.counts.failed;
 
-module.exports = { M, SCRATCH, planLines, samePath, writeOrphan, finish, PF, check };
+module.exports = { M, SCRATCH, planLines, samePath, writeOrphan, finish, failureCount, PF, check };

@@ -10,9 +10,12 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
+after(() => restore());
 const ROOT = path.resolve(__dirname, "..", "..");
 const RECORD_CLI = path.join(ROOT, "bin", "workflow", "record-merge-base-baseline");
 const MBB = require(path.join(ROOT, "hooks", "workflow-state", "merge-base-baseline.js"));
@@ -28,6 +31,7 @@ function check(desc, ok, detail) {
     console.log(`FAIL: ${desc} -- ${detail}`);
   }
 }
+const failureCount = () => failures;
 
 function git(repo, args, allowFail) {
   const r = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8", timeout: 20000 });
@@ -84,7 +88,7 @@ const stored = (sid) => {
 const approve = (sid, f, base) => MBB.approveMergeBaseBaseline(sid, f.repo, base, "fixture approval during a merge");
 
 caseBegin("merge-in-progress-accepts-merge-head-itself", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("merge-in-progress-accepts-merge-head-itself", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const mh = startConflictingMerge(f);
   check("A1-fixture: the conflicting merge left MERGE_HEAD in the gitdir", fs.existsSync(mh), mh);
@@ -93,11 +97,11 @@ caseBegin("merge-in-progress-accepts-merge-head-itself", "hooks/workflow-state/m
   const rec = stored("sid-a1");
   check("A1-stored: the stored base is the MERGE_HEAD sha", rec && rec.base === f.otherTip, JSON.stringify(rec));
   check("A1-source: labelled user-approved", rec && rec.source === "user-approved", JSON.stringify(rec));
-}
+}));
 caseEnd();
 
 caseBegin("merge-in-progress-accepts-ancestor-of-merge-head-only", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("merge-in-progress-accepts-ancestor-of-merge-head-only", () => noNewFailures(failureCount, () => {
   const f = fixture();
   startConflictingMerge(f);
   const notOnHead = spawnSync("git", ["-C", f.repo, "merge-base", "--is-ancestor", f.otherMid, "HEAD"]).status === 1;
@@ -106,11 +110,11 @@ caseBegin("merge-in-progress-accepts-ancestor-of-merge-head-only", "hooks/workfl
   check("A2-recorded: an ancestor of MERGE_HEAD (not of HEAD) is accepted", r.recorded === true, JSON.stringify(r));
   const rec = stored("sid-a2");
   check("A2-stored: the stored base is that ancestor", rec && rec.base === f.otherMid, JSON.stringify(rec));
-}
+}));
 caseEnd();
 
 caseBegin("merge-in-progress-refuses-unrelated-commit-and-keeps-record", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("merge-in-progress-refuses-unrelated-commit-and-keeps-record", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const pre = approve("sid-a3", f, f.c0);
   check("A3-setup: a pre-existing baseline is recorded before the merge", pre.recorded === true, JSON.stringify(pre));
@@ -121,31 +125,31 @@ caseBegin("merge-in-progress-refuses-unrelated-commit-and-keeps-record", "hooks/
   check("A3-reason: the refusal names the ancestry check", /not an ancestor/.test(String(r.reason)), JSON.stringify(r));
   check("A3-intact: the state file is byte-identical after the refusal",
     Buffer.compare(before, fs.readFileSync(statePath("sid-a3"))) === 0, "state file changed");
-}
+}));
 caseEnd();
 
 caseBegin("no-merge-refuses-non-ancestor-of-head", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("no-merge-refuses-non-ancestor-of-head", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const r = approve("sid-a4", f, f.otherTip);
   check("A4-refused: without a merge, a base off HEAD's ancestry is refused", r.recorded === false, JSON.stringify(r));
   check("A4-reason: the refusal names the ancestry check", /not an ancestor/.test(String(r.reason)), JSON.stringify(r));
   check("A4-nothing-stored: no baseline is written", stored("sid-a4") === null, JSON.stringify(stored("sid-a4")));
-}
+}));
 caseEnd();
 
 caseBegin("no-merge-accepts-ancestor-of-head", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("no-merge-accepts-ancestor-of-head", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const r = approve("sid-a5", f, f.c0);
   check("A5-recorded: without a merge, an ancestor of HEAD is accepted", r.recorded === true, JSON.stringify(r));
   const rec = stored("sid-a5");
   check("A5-stored: the stored base is that ancestor", rec && rec.base === f.c0 && rec.source === "user-approved", JSON.stringify(rec));
-}
+}));
 caseEnd();
 
 caseBegin("garbage-merge-head-file-grants-nothing", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("garbage-merge-head-file-grants-nothing", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const gitDir = path.resolve(f.repo, git(f.repo, ["rev-parse", "--git-dir"]));
   const tree = git(f.repo, ["rev-parse", "HEAD^{tree}"]);
@@ -157,11 +161,11 @@ caseBegin("garbage-merge-head-file-grants-nothing", "hooks/workflow-state/merge-
   check("A6-nothing-stored: no baseline is written", stored("sid-a6") === null, JSON.stringify(stored("sid-a6")));
   const t = approve("sid-a6t", f, tree);
   check("A6-tree: a tree sha listed in MERGE_HEAD is never accepted as a base", t.recorded === false, JSON.stringify(t));
-}
+}));
 caseEnd();
 
 caseBegin("cli-records-merge-head-during-merge", "bin/workflow/record-merge-base-baseline");
-{
+test("cli-records-merge-head-during-merge", () => noNewFailures(failureCount, () => {
   const f = fixture();
   startConflictingMerge(f);
   const r = spawnSync(process.execPath, [RECORD_CLI, "--session", "sid-a7", "--base", f.otherTip,
@@ -172,7 +176,7 @@ caseBegin("cli-records-merge-head-during-merge", "bin/workflow/record-merge-base
     JSON.stringify(r.stdout));
   const rec = stored("sid-a7");
   check("A7-stored: the state file holds the MERGE_HEAD base", rec && rec.base === f.otherTip, JSON.stringify(rec));
-}
+}));
 caseEnd();
 
 // The fixture's work branch moves into a linked worktree and the conflicting merge runs there, so
@@ -188,7 +192,7 @@ function linkedWorktreeMerge() {
 }
 
 caseBegin("linked-worktree-merge-accepts-merge-head-side-ancestor", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("linked-worktree-merge-accepts-merge-head-side-ancestor", () => noNewFailures(failureCount, () => {
   const f = linkedWorktreeMerge();
   check("A8-fixture: MERGE_HEAD is in the linked worktree's own gitdir", fs.existsSync(f.mergeHead), f.mergeHead);
   check("A8-fixture: the main checkout's gitdir has no MERGE_HEAD", !fs.existsSync(path.join(f.repo, ".git", "MERGE_HEAD")), f.repo);
@@ -198,11 +202,11 @@ caseBegin("linked-worktree-merge-accepts-merge-head-side-ancestor", "hooks/workf
   check("A8-recorded: an ancestor of the linked worktree's MERGE_HEAD is accepted", r.recorded === true, JSON.stringify(r));
   const rec = stored("sid-a8");
   check("A8-stored: the stored base is that ancestor", rec && rec.base === f.otherMid, JSON.stringify(rec));
-}
+}));
 caseEnd();
 
 caseBegin("cli-records-merge-head-side-ancestor-in-linked-worktree", "bin/workflow/record-merge-base-baseline");
-{
+test("cli-records-merge-head-side-ancestor-in-linked-worktree", () => noNewFailures(failureCount, () => {
   const f = linkedWorktreeMerge();
   const r = spawnSync(process.execPath, [RECORD_CLI, "--session", "sid-a9", "--base", f.otherMid,
     "--reason", "user confirmed the MERGE_HEAD side in a linked worktree", "--repo", f.wt],
@@ -212,14 +216,14 @@ caseBegin("cli-records-merge-head-side-ancestor-in-linked-worktree", "bin/workfl
     JSON.stringify(r.stdout));
   const rec = stored("sid-a9");
   check("A9-stored: the state file holds the MERGE_HEAD-side base", rec && rec.base === f.otherMid, JSON.stringify(rec));
-}
+}));
 caseEnd();
 
 // MERGE_HEAD line selection, the same rows as resolver M7: blank and CR are skipped, an invalid
 // line does not stop the scan, every valid line counts, and only the first 8 valid entries count.
 // The base is other-mid, an ancestor of other-tip only; work-tip (HEAD) and third-tip are not.
 caseBegin("merge-head-line-selection-table", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("merge-head-line-selection-table", () => noNewFailures(failureCount, () => {
   const rows = [
     { name: "blank-lines-skipped", lines: ["", "", "TIP", ""], want: true },
     { name: "crlf-stripped", lines: ["TIP\r", ""], want: true },
@@ -237,13 +241,13 @@ caseBegin("merge-head-line-selection-table", "hooks/workflow-state/merge-base-ba
     const r = approve(`sid-a10-${i}`, f, f.otherMid);
     check(`A10-${name}: recorded=${want}`, r.recorded === want, JSON.stringify(r));
   });
-}
+}));
 caseEnd();
 
 // The path run-tests-baseline takes to its base: the user approves a MERGE_HEAD-side ancestor
 // through the CLI, then the resolver must hand that same sha back as the layer-1 base.
 caseBegin("approve-then-resolve-merge-head-side-base", "bin/workflow/record-merge-base-baseline");
-{
+test("approve-then-resolve-merge-head-side-base", () => noNewFailures(failureCount, () => {
   const f = fixture();
   startConflictingMerge(f);
   const env = Object.assign({}, process.env);
@@ -257,11 +261,11 @@ caseBegin("approve-then-resolve-merge-head-side-base", "bin/workflow/record-merg
   check("A11-resolve-rc: the resolver exits 0", res.status === 0, `status=${res.status} stderr=${res.stderr}`);
   check("A11-state: the approved base is adopted as RECORDED", kv("state") === "RECORDED", JSON.stringify(res.stdout));
   check("A11-base: and the resolver returns the approved sha", kv("base") === f.otherMid, `want=${f.otherMid} got=${kv("base")}`);
-}
+}));
 caseEnd();
 
 caseBegin("conflicted-merge-accepts-head-side-only-ancestor", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("conflicted-merge-accepts-head-side-only-ancestor", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const mh = startConflictingMerge(f);
   check("A12-fixture: the merge is in progress (MERGE_HEAD present)", fs.existsSync(mh), mh);
@@ -272,14 +276,14 @@ caseBegin("conflicted-merge-accepts-head-side-only-ancestor", "hooks/workflow-st
   check("A12-recorded: an ancestor of HEAD only is still accepted during a conflicted merge", r.recorded === true, JSON.stringify(r));
   const rec = stored("sid-a12");
   check("A12-stored: the stored base is that HEAD-side commit", rec && rec.base === f.workTip, JSON.stringify(rec));
-}
+}));
 caseEnd();
 
 // MERGE_HEAD line format: a line counts only when the line itself is a 40- or 64-hex object name.
 // A ref name or revision expression that resolves to other-tip grants nothing and is not counted
 // toward the cap of 8. The base is other-mid, an ancestor of other-tip only.
 caseBegin("merge-head-line-format-table", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("merge-head-line-format-table", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const mh = startConflictingMerge(f);
   const rows = [
@@ -317,11 +321,11 @@ caseBegin("merge-head-line-format-table", "hooks/workflow-state/merge-base-basel
         Buffer.compare(before, fs.readFileSync(statePath(sid))) === 0, "state file changed");
     }
   }
-}
+}));
 caseEnd();
 
 caseBegin("merge-head-symbolic-ref-refusal-keeps-record", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("merge-head-symbolic-ref-refusal-keeps-record", () => noNewFailures(failureCount, () => {
   const f = fixture();
   const pre = approve("sid-a14", f, f.c0);
   check("A14-setup: a pre-existing baseline is recorded before the merge", pre.recorded === true, JSON.stringify(pre));
@@ -332,18 +336,19 @@ caseBegin("merge-head-symbolic-ref-refusal-keeps-record", "hooks/workflow-state/
   check("A14-refused: a MERGE_HEAD holding only a branch name does not widen the ancestry check", r.recorded === false, JSON.stringify(r));
   check("A14-intact: the state file is byte-identical after the refusal",
     Buffer.compare(before, fs.readFileSync(statePath("sid-a14"))) === 0, "state file changed");
-}
+}));
 caseEnd();
 
 // The 64-hex half of the line format: a SHA-256 repository whose MERGE_HEAD holds a 64-hex tip.
 // Same shape as fixture() — mid is reachable only from MERGE_HEAD — built with only the commits needed.
 caseBegin("sha256-repo-merge-head-side-ancestor-accepted", "hooks/workflow-state/merge-base-baseline.js");
-{
+test("sha256-repo-merge-head-side-ancestor-accepted", (t) => noNewFailures(failureCount, () => {
   const repo = path.join(WORK, `repo-sha256-${++repoSeq}`);
   fs.mkdirSync(repo);
   const init = spawnSync("git", ["init", "-q", "--object-format=sha256", repo], { encoding: "utf8", timeout: 20000 });
   if (init.error || init.status !== 0) {
     console.log(`SKIP: A15 -- git init --object-format=sha256 is unsupported here: ${String(init.stderr || init.error).trim()}`);
+    t.skip("git init --object-format=sha256 is unsupported here");
   } else {
     for (const [k, v] of [["core.hooksPath", "/dev/null"], ["user.email", "test@example.com"], ["user.name", "test"],
       ["commit.gpgsign", "false"]]) {
@@ -369,9 +374,5 @@ caseBegin("sha256-repo-merge-head-side-ancestor-accepted", "hooks/workflow-state
     const rec = stored("sid-a15");
     check("A15-stored: the stored base is the resolved 64-hex sha", rec && rec.base === mid, JSON.stringify(rec));
   }
-}
+}));
 caseEnd();
-
-restore();
-console.log(failures === 0 ? "ALL PASS" : `${failures} FAILED`);
-process.exitCode = failures === 0 ? 0 : 1;

@@ -12,6 +12,8 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "lang-directive-"));
@@ -20,7 +22,8 @@ fs.mkdirSync(CFG);
 process.env.AGENTS_MAIN_ROOT = CFG;
 delete process.env.CONV_LANG;
 delete process.env.PLAN_LANG;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -56,6 +59,8 @@ function check(name, fn) {
   }
 }
 const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
+// verdict(fn) -> the node:test body of one case: it fails when a check inside fn failed.
+const verdict = (fn) => () => noNewFailures(() => failed, fn);
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
@@ -101,7 +106,7 @@ function pointAt(p) {
 const render = (key, l) => lib().renderDirective(key, l || "japanese");
 
 caseBegin("real-template-renders-lang-and-terms", "hooks/lib/lang-directive.js");
-{
+test("real-template-renders-lang-and-terms", verdict(() => {
   pointAt(REAL_TEMPLATE);
   check("N1: CONV_LANG renders {lang} and ends with the TERMS sentence", () => eq(render("CONV_LANG"), `${conv("japanese")} ${TERMS}`, "CONV_LANG"));
   check("N2: PLAN_LANG renders {lang} and ends with the TERMS sentence", () => eq(render("PLAN_LANG"), `${plan("japanese")} ${TERMS}`, "PLAN_LANG"));
@@ -109,20 +114,20 @@ caseBegin("real-template-renders-lang-and-terms", "hooks/lib/lang-directive.js")
   check("N4: every {lang} occurrence is replaced (multi-word language)", () => eq(render("CONV_LANG", "traditional-chinese"), `${conv("traditional-chinese")} ${TERMS}`, "CONV_LANG"));
   check("N5: renderTerms returns the TERMS line verbatim", () => eq(lib().renderTerms(), TERMS, "renderTerms"));
   check("N6: no rendered directive keeps a placeholder", () => eq(KEYS.filter((k) => /\{(lang|terms)\}/.test(render(k))), [], "keys with placeholders"));
-}
+}));
 caseEnd();
 
 caseBegin("fixture-template-parse-rules", "hooks/lib/lang-directive.js");
-{
+test("fixture-template-parse-rules", verdict(() => {
   useTemplate();
   check("P1: '#' comment lines are ignored and the value keeps any '=' after the first", () => eq(KEYS.map((k) => render(k)), KEYS.map((k) => FX[k]("japanese")), "rendered"));
   useTemplate(null, "\r\n");
   check("P2: a CRLF checkout renders exactly like LF (no carriage return, no fallback)", () => eq(KEYS.map((k) => render(k)), KEYS.map((k) => FX[k]("japanese")), "rendered"));
-}
+}));
 caseEnd();
 
 caseBegin("per-key-degradation-to-fixed-sentence", "hooks/lib/lang-directive.js");
-{
+test("per-key-degradation-to-fixed-sentence", verdict(() => {
   pointAt(path.join(TMP, "no-such-template.txt"));
   check("D1: missing template file -> every key falls back to its fixed sentence", () => eq(KEYS.map((k) => render(k)), KEYS.map((k) => FB[k]("japanese")), "rendered"));
   for (const key of KEYS) {
@@ -139,11 +144,11 @@ caseBegin("per-key-degradation-to-fixed-sentence", "hooks/lib/lang-directive.js"
   check("D5: control — PLAN_LANG and CODEX_FREE_TEXT keep the template", () => eq([render("PLAN_LANG"), render("CODEX_FREE_TEXT")], [FX.PLAN_LANG("japanese"), FX.CODEX_FREE_TEXT("japanese")], "rendered"));
   useTemplate({ PLAN_LANG: `PLAN_LANG=Fixture plan in {lang}. ${"y".repeat(570)} {terms}` });
   check("D6: boundary — a 600-character-or-less value with {lang} is still used", () => eq(render("PLAN_LANG").startsWith("Fixture plan in japanese."), true, "template used"));
-}
+}));
 caseEnd();
 
 caseBegin("broken-terms-drops-only-the-terms-sentence", "hooks/lib/lang-directive.js");
-{
+test("broken-terms-drops-only-the-terms-sentence", verdict(() => {
   const bare = { CONV_LANG: "Respond to the user in japanese. Fixture conv in japanese.", PLAN_LANG: "Fixture plan in japanese.", CODEX_FREE_TEXT: "Fixture codex in japanese." };
   const variants = [
     ["TERMS missing", null],
@@ -160,7 +165,7 @@ caseBegin("broken-terms-drops-only-the-terms-sentence", "hooks/lib/lang-directiv
   useTemplate({ TERMS: `TERMS=${"t".repeat(300)}` });
   check("B2: boundary — a TERMS of exactly 300 characters is kept", () => eq(lib().renderTerms(), "t".repeat(300), "renderTerms"));
   pointAt(REAL_TEMPLATE);
-}
+}));
 caseEnd();
 
 // cli(kind, env) -> { status, out } for one `node lang-directive.js --codex <kind>` run.
@@ -174,7 +179,7 @@ function cli(args, env) {
 }
 
 caseBegin("codex-cli-prints-the-free-text-line", "hooks/lib/lang-directive.js");
-{
+test("codex-cli-prints-the-free-text-line", verdict(() => {
   check("C1: --codex conv with CONV_LANG=japanese prints the rendered CODEX_FREE_TEXT line, exit 0", () => {
     const r = cli(["--codex", "conv"], { CONV_LANG: "japanese" });
     eq([r.status, r.out], [0, `${codex("japanese")} ${TERMS}`], "[exit, stdout]");
@@ -186,11 +191,11 @@ caseBegin("codex-cli-prints-the-free-text-line", "hooks/lib/lang-directive.js");
     const r = cli(["--codex", "conv"], { PLAN_LANG: "japanese" });
     eq([r.status, r.out], [0, ""], "[exit, stdout]");
   });
-}
+}));
 caseEnd();
 
 caseBegin("codex-cli-noop-and-fail-open", "hooks/lib/lang-directive.js");
-{
+test("codex-cli-noop-and-fail-open", verdict(() => {
   const quiet = [
     ["--codex conv, CONV_LANG=english", ["--codex", "conv"], { CONV_LANG: "english" }],
     ["--codex conv, CONV_LANG=any", ["--codex", "conv"], { CONV_LANG: "any" }],
@@ -208,8 +213,5 @@ caseBegin("codex-cli-noop-and-fail-open", "hooks/lib/lang-directive.js");
       eq([r.status, r.out], [0, ""], "[exit, stdout]");
     });
   }
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

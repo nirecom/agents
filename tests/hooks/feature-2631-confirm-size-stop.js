@@ -15,7 +15,9 @@
 
 const fs = require("fs");
 const path = require("path");
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const savedCwd = process.cwd();
@@ -24,9 +26,13 @@ const { F } = C;
 process.chdir(F.work());
 const X = require("./feature-2650-confirm-continuation/fixture");
 const CONT = "[confirm-plan] continue:";
+after(() => {
+  process.chdir(savedCwd);
+  restore();
+});
 
 caseBegin("C6-layer2-over-hard-blocks", "hooks/stop-confirm-plan-guard.js");
-F.run("C6 layer2", () => {
+test("C6 layer2", () => noNewFailures(F.failureCount, () => F.run("C6 layer2", () => {
   for (const stage of ["intent", "outline", "detail"]) {
     const h = C.HARD[stage];
     const ok = C.stop(C.session(stage, h), C.layer2Transcript(stage));
@@ -40,7 +46,7 @@ F.run("C6 layer2", () => {
   F.writeMarker(off, "workflow-off");
   const r = C.stop(off, C.layer2Transcript("detail"));
   F.check("WORKFLOW_OFF session: HARD+1 stops quietly", C.quiet(r), r.raw);
-});
+})));
 caseEnd();
 
 // present(s) -> the #2650 presentation turn: the plan is written, the turn closes on its plan-link line.
@@ -60,7 +66,7 @@ function markStarted(sid) {
 }
 
 caseBegin("C6-continuation-over-hard-blocks", "hooks/stop-confirm-plan-guard.js");
-F.run("C6 continuation", () => {
+test("C6 continuation", () => noNewFailures(F.failureCount, () => F.run("C6 continuation", () => {
   const h = C.HARD.detail;
   const ok = X.sessionAt("detail", { body: C.planOf(h) });
   markStarted(ok.sid);
@@ -72,11 +78,11 @@ F.run("C6 continuation", () => {
   const r = C.stop(s.sid, present(s));
   F.check("a presentation turn at HARD+1 blocks with the plan-size reason (no continuation)",
     C.blockedWith(r, C.SIZE_PREFIX, [path.basename(s.plan), h + 1]), r.raw);
-});
+})));
 caseEnd();
 
 caseBegin("C7-stop-resumed-session-reads-the-owner-file", "hooks/lib/plan-artifact-lang.js");
-F.run("C7 stop", () => {
+test("C7 stop", () => noNewFailures(F.failureCount, () => F.run("C7 stop", () => {
   const n = C.HARD.detail + 1;
   const U = F.newSid();
   C.writePlan(U, "detail", C.planOf(n));
@@ -116,14 +122,14 @@ F.run("C7 stop", () => {
   const D5 = C.session("detail", null, { top: { upstream_session_id: U5, upstream_copy_seq: 0 } });
   const r5 = C.stop(D5, C.layer2Transcript("detail"), { env: ja });
   F.check("a compliant upstream detail under PLAN_LANG=japanese stops quietly", C.quiet(r5), r5.raw);
-});
+})));
 caseEnd();
 
 // One SSOT for both gates: a copied checkout whose size-limits.js says another detail HARD moves
 // the CONFIRM deny and the Stop block together, for the same plan. Every number is read from the
 // module; the original checkout is the control with the opposite verdicts.
 caseBegin("C9-detail-limit-change-moves-confirm-and-stop-together", "hooks/lib/size-limits.js");
-F.run("C9 ssot", () => {
+test("C9 ssot", () => noNewFailures(F.failureCount, () => F.run("C9 ssot", () => {
   const { limitsTree } = require("./feature-2631-size-limits/mutate-limits");
   const base = F.load("hooks/lib/size-limits.js").LIMITS.detail;
   const dialog = (r) => r.decision !== "block" && /^\[detail\] (?!plan-file=none)\S/.test(r.msg);
@@ -151,7 +157,7 @@ F.run("C9 ssot", () => {
         blocks ? C.blockedWith(rs, C.SIZE_PREFIX, [path.basename(C.planPath(ss, "detail")), n, hard]) : C.quiet(rs), rs.raw);
     }
   }
-});
+})));
 caseEnd();
 
 // #2631 stage 9: an unknown session state (the size session gate cannot load the state reader, so
@@ -172,7 +178,7 @@ function corruptSession(n) {
 }
 
 caseBegin("T1-unknown-session-state-blocks-over-hard", "hooks/stop-confirm-plan-guard.js");
-F.run("T1", () => {
+test("T1", () => noNewFailures(F.failureCount, () => F.run("T1", () => {
   const n = C.HARD.detail + 1;
   const sid = C.session("detail", n);
   const g = gateStateUnder(sid, STATE_THROWS.env);
@@ -187,11 +193,11 @@ F.run("T1", () => {
   const b = C.stop(bad, C.layer2Transcript("detail"));
   F.check("corrupt state, own detail at HARD+1: blocks with the plan-size reason",
     C.blockedWith(b, C.SIZE_PREFIX, [path.basename(C.planPath(bad, "detail")), n]), b.raw);
-});
+})));
 caseEnd();
 
 caseBegin("T2-skipped-relint-never-blocks-for-size", "hooks/stop-confirm-plan-guard.js");
-F.run("T2", () => {
+test("T2", () => noNewFailures(F.failureCount, () => F.run("T2", () => {
   const dir = C.session("detail", null);
   fs.mkdirSync(C.planPath(dir, "detail"), { recursive: true });
   const d = C.stop(dir, C.layer2Transcript("detail"));
@@ -200,11 +206,5 @@ F.run("T2", () => {
   F.check("readState throws, no detail file (relint unreadable): no plan-size block", !none.reason.startsWith(C.SIZE_PREFIX), none.raw);
   const bad = C.stop(corruptSession(null), C.layer2Transcript("detail"));
   F.check("corrupt state, no detail file (relint unreadable): no plan-size block", !bad.reason.startsWith(C.SIZE_PREFIX), bad.raw);
-});
+})));
 caseEnd();
-
-process.chdir(savedCwd);
-restore();
-const failed = F.failureCount();
-console.log(failed === 0 ? "ALL PASS" : `${failed} FAILED`);
-process.exitCode = failed === 0 ? 0 : 1;

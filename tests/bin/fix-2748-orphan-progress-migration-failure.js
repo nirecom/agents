@@ -7,16 +7,19 @@
 // Shared setup: fix-2748-orphan-progress-migration/shared.js.
 
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("fs");
 const path = require("path");
-const { M, planLines, samePath, writeOrphan, finish } = require("./fix-2748-orphan-progress-migration/shared");
+const { M, planLines, samePath, writeOrphan, finish, failureCount } = require("./fix-2748-orphan-progress-migration/shared");
 const { PLANS, check, show, cli, why, runIndex, progressOf, planOf, read, pinnedSid } = M;
 const { section, count, setup, age, HOUR } = M;
+after(finish);
 
 // M34: in a loose list an indented child after a blank line stays in its item, so a child shared with
 // a base fact under another parent is not deduped away; the whole new item is added and the orphan deleted.
 caseBegin("facts-loose-list-child-kept-under-other-parent", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("facts-loose-list-child-kept-under-other-parent", () => noNewFailures(failureCount, () => {
   const firstBody = M.firstText("m34-first").replace("- shared bullet\n", "- shared bullet\n- m34 parent A\n\n  - m34 shared child\n");
   const sids = setup("m34", { firstBody });
   writeOrphan(sids, M.downstreamText(sids.downstreamSid).replace("- downstream decision\n", "- downstream decision\n- m34 parent B\n\n  - m34 shared child\n"));
@@ -26,12 +29,12 @@ caseBegin("facts-loose-list-child-kept-under-other-parent", "hooks/lib/temporary
   check("M34: the parent B item lands whole, its blank line and child included, beside the base parent A item", () => (count(out, "- m34 parent A\n\n  - m34 shared child\n") === 1
     && count(out, "- m34 parent B\n\n  - m34 shared child\n") === 1 && count(out, "  - m34 shared child\n") === 2 ? undefined : `User decisions=${show(String(out).split("### User decisions")[1])}`));
   check("M34: the orphan progress file is deleted", () => (!fs.existsSync(progressOf(sids.downstreamSid)) ? undefined : why(r)));
-}
+}));
 caseEnd();
 
 // M35: an identical whole loose item (blank lines and indented fenced code with an inner blank line) is deduped.
 caseBegin("facts-identical-loose-block-not-duplicated", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("facts-identical-loose-block-not-duplicated", () => noNewFailures(failureCount, () => {
   const loose = "- m35 parent\n\n  - m35 child\n\n  ```text\n  m35 code\n\n  m35 code after blank\n  ```\n";
   const sids = setup("m35", { firstBody: M.firstText("m35-first").replace("- shared bullet\n", () => `- shared bullet\n${loose}`) });
   writeOrphan(sids, M.downstreamText(sids.downstreamSid).replace("- downstream decision\n", () => `- downstream decision\n${loose}`));
@@ -41,12 +44,12 @@ caseBegin("facts-identical-loose-block-not-duplicated", "hooks/lib/temporary-mig
   check("M35: the identical loose item appears once and none of its lines is repeated", () => (count(out, loose) === 1 && count(out, "m35 child") === 1
     && count(out, "m35 code after blank") === 1 && count(out, "- downstream decision\n") === 1 ? undefined : `User decisions=${show(String(out).split("### User decisions")[1])}`));
   check("M35: the orphan progress file is deleted", () => (!fs.existsSync(progressOf(sids.downstreamSid)) ? undefined : why(r)));
-}
+}));
 caseEnd();
 
 // M36: a first_session_id progress file without a Plan files section gets one just before Facts to carry over.
 caseBegin("plan-files-section-created-before-facts", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("plan-files-section-created-before-facts", () => noNewFailures(failureCount, () => {
   const firstBody = M.firstText("m36-first").replace(`## Plan files\n\n- intent: ${planOf("m36-first", "intent")}\n\n`, "");
   const sids = setup("m36", { firstBody, downstreamPlans: { intent: "m36 downstream intent\n" } });
   const r = cli(["--apply"]);
@@ -64,7 +67,7 @@ caseBegin("plan-files-section-created-before-facts", "hooks/lib/temporary-migrat
     return pl.length === 1 && pl[0] === `- intent: ${planOf(sids.firstSid, "intent")}` && read(planOf(sids.firstSid, "intent")) === "m36 downstream intent\n"
       ? undefined : `Plan files=${show(pl)}`;
   });
-}
+}));
 caseEnd();
 
 // corruptState(prefix) — setup(prefix) plus a state file that exists but is not JSON, with its own progress file.
@@ -79,7 +82,7 @@ function corruptState(prefix) {
 
 // M37: in a full run an unreadable state is reported on stderr and makes the run exit 1; it is not listed as unknown.
 caseBegin("unreadable-state-full-run-exits-1", "hooks/lib/temporary-migrations/orphan-progress-file/discover.js");
-{
+test("unreadable-state-full-run-exits-1", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid, badSid, line } = corruptState("m37");
   for (const args of [[], ["--apply"]]) {
     const label = args.length ? "--apply" : "the dry-run";
@@ -92,12 +95,12 @@ caseBegin("unreadable-state-full-run-exits-1", "hooks/lib/temporary-migrations/o
   check("M37: --apply still migrates the valid session chain", () => (!fs.existsSync(progressOf(downstreamSid)) && pinnedSid(downstreamSid) === firstSid
     ? undefined : `orphan present=${fs.existsSync(progressOf(downstreamSid))} root_sid=${show(pinnedSid(downstreamSid))}`));
   check("M37: the unreadable state's progress file is kept", () => (read(progressOf(badSid)) === M.downstreamText(badSid) ? undefined : "changed or removed"));
-}
+}));
 caseEnd();
 
 // M38: a --session run of another, valid session chain does not report the unreadable state and exits 0.
 caseBegin("unreadable-state-not-reported-with-session", "hooks/lib/temporary-migrations/orphan-progress-file/discover.js");
-{
+test("unreadable-state-not-reported-with-session", () => noNewFailures(failureCount, () => {
   const { firstSid, downstreamSid, badSid } = corruptState("m38");
   for (const args of [["--session", downstreamSid], ["--apply", "--session", downstreamSid]]) {
     const r = cli(args);
@@ -105,12 +108,12 @@ caseBegin("unreadable-state-not-reported-with-session", "hooks/lib/temporary-mig
       && !String(r.stdout).includes(badSid) ? undefined : `exit=${r.status} stdout=${show(r.stdout)} stderr=${show(r.stderr)}`));
   }
   check("M38: the own session chain is migrated", () => (!fs.existsSync(progressOf(downstreamSid)) && pinnedSid(downstreamSid) === firstSid ? undefined : "not migrated"));
-}
+}));
 caseEnd();
 
 // M39: a --session run whose own sid has the unreadable state reports it on stderr and exits 1.
 caseBegin("unreadable-state-reported-for-own-session", "hooks/lib/temporary-migrations/orphan-progress-file/discover.js");
-{
+test("unreadable-state-reported-for-own-session", () => noNewFailures(failureCount, () => {
   const { badSid, line } = corruptState("m39");
   for (const args of [["--session", badSid], ["--apply", "--session", badSid]]) {
     const r = cli(args);
@@ -118,12 +121,12 @@ caseBegin("unreadable-state-reported-for-own-session", "hooks/lib/temporary-migr
       ? undefined : `exit=${r.status} stdout=${show(r.stdout)} stderr=${show(r.stderr)}`));
   }
   check("M39: the unreadable state's progress file is kept", () => (read(progressOf(badSid)) === M.downstreamText(badSid) ? undefined : "changed or removed"));
-}
+}));
 caseEnd();
 
 // M40: a bare angle-bracket Plan files value <path> counts as existing only when <path> is an existing plan.
 caseBegin("plan-files-line-bare-angle-bracket", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-{
+test("plan-files-line-bare-angle-bracket", () => noNewFailures(failureCount, () => {
   for (const { name, want } of [{ name: "existing", want: true }, { name: "nonexistent", want: false }]) {
     const prefix = `m40-${name}`;
     const sids = setup(prefix, { downstreamPlans: { detail: `${name} detail\n` } });
@@ -136,7 +139,7 @@ caseBegin("plan-files-line-bare-angle-bracket", "hooks/lib/temporary-migrations/
     check(`M40 ${name}: ${show(line)} is ${want ? "carried as <first>-detail.md" : "dropped"}`, () => (r.status === 0 && (want ? carried : lines.length === 0)
       ? undefined : `${why(r)} detail lines=${show(lines)}`));
   }
-}
+}));
 caseEnd();
 
 // M5/M17/M18 drive index.js in-process (run may return a Promise), so they run last.
@@ -269,23 +272,21 @@ async function m27() {
 }
 
 caseBegin("cas-aborts-on-concurrent-first-write", "hooks/lib/temporary-migrations/orphan-progress-file/merge.js");
-m5().catch((e) => check("M5: harness", () => String(e && e.message))).finally(() => {
+test("cas-aborts-on-concurrent-first-write", () => noNewFailures(failureCount, () => m5().catch((e) => check("M5: harness", () => String(e && e.message)))));
 caseEnd();
+
 caseBegin("resume-after-crash-before-rename", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-  return m17().catch((e) => check("M17: harness", () => String(e && e.message)));
-}).finally(() => {
+test("resume-after-crash-before-rename", () => noNewFailures(failureCount, () => m17().catch((e) => check("M17: harness", () => String(e && e.message)))));
 caseEnd();
+
 caseBegin("orphan-written-after-merge-is-kept", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-  return m18().catch((e) => check("M18: harness", () => String(e && e.message)));
-}).finally(() => {
+test("orphan-written-after-merge-is-kept", () => noNewFailures(failureCount, () => m18().catch((e) => check("M18: harness", () => String(e && e.message)))));
 caseEnd();
+
 caseBegin("io-failure-during-merge-keeps-orphan", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-  return m26().catch((e) => check("M26: harness", () => String(e && e.message)));
-}).finally(() => {
+test("io-failure-during-merge-keeps-orphan", () => noNewFailures(failureCount, () => m26().catch((e) => check("M26: harness", () => String(e && e.message)))));
 caseEnd();
+
 caseBegin("fs-layer-failure-during-merge-keeps-orphan", "hooks/lib/temporary-migrations/orphan-progress-file/index.js");
-  return m27().catch((e) => check("M27: harness", () => String(e && e.message)));
-}).finally(() => {
+test("fs-layer-failure-during-merge-keeps-orphan", () => noNewFailures(failureCount, () => m27().catch((e) => check("M27: harness", () => String(e && e.message)))));
 caseEnd();
-  finish();
-});

@@ -9,7 +9,8 @@
 // - hooks calling the entry from a real Claude Code session (gate-block, auto-record, post-compact);
 // - a real cleanup sweep at the race point: the deletion is injected by patching core.readRawState.
 
-const { isolate } = require("../lib/harness");
+const { after } = require("node:test");
+const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -17,7 +18,7 @@ const path = require("path");
 const restore = isolate();
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "f2652w-"));
 process.chdir(SCRATCH);
-process.on("exit", () => {
+after(() => {
   process.chdir(os.tmpdir());
   restore();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
@@ -53,6 +54,7 @@ function expectNoChange(sid, call, reason) {
 const ownTotal = (sid) => X.records(sid).reduce((s, e) => s + X.compactBytes(e), 0);
 
 // --- active period (the handoff-writer half of feat-2430-workflow-active-period.sh) ---
+caseBegin("active-period-and-invalid-sid", "hooks/lib/state-handoff-record.js");
 check("no state file -> no-state, and no file is created", () => {
   const r = append("w-none", input());
   eq([r.written, r.reason], [false, "no-state"], "result");
@@ -98,8 +100,10 @@ for (const sid of ["../escape", "", null, "a b"]) {
     eq([r && r.written, r && r.reason], [false, "invalid"], "result");
   });
 }
+caseEnd();
 
 // --- input refusal ---
+caseBegin("input-refusal", "hooks/lib/state-handoff-record.js");
 active("w-invalid");
 const refused = [
   ["cls H", { cls: "H" }], ["origin flush", { origin: "flush" }], ["step outside VALID_STEPS", { step: "nope" }],
@@ -109,8 +113,10 @@ const refused = [
 for (const [label, over] of refused) {
   check(`${label} -> invalid, file unchanged`, () => expectNoChange("w-invalid", () => append("w-invalid", input(over)), "invalid"));
 }
+caseEnd();
 
 // --- stored shape and provenance ---
+caseBegin("stored-shape-and-provenance", "hooks/lib/state-handoff-record.js");
 check("stored shape: at_step from step, provenance declared for procedure-point, observed otherwise, `at` set", () => {
   const sid = active("w-shape");
   written(append(sid, input({ cls: "A", step: "-", key: "p.point", origin: "procedure-point" })));
@@ -123,8 +129,10 @@ check("stored shape: at_step from step, provenance declared for procedure-point,
     ["D", "write_tests", "a.record", "auto-record", "observed", "string", false],
   ], "records");
 });
+caseEnd();
 
 // --- noop-identical ---
+caseBegin("noop-identical", "hooks/lib/state-handoff-record.js");
 check("the same record twice -> second is noop-identical", () => {
   const sid = active("w-noop-1");
   written(append(sid, input()));
@@ -143,8 +151,10 @@ check("X (cls C), Y (cls D), X (cls C) -> the third is noop-identical", () => {
   written(append(sid, input({ cls: "D", summary: "Y" })));
   expectNoChange(sid, () => append(sid, input({ summary: "X" })), "noop-identical");
 });
+caseEnd();
 
 // --- redaction ---
+caseBegin("redaction", "hooks/lib/state-handoff-record.js");
 check("secrets and sentinels in summary / pointer are redacted before storing", () => {
   const sid = active("w-redact");
   const aws = "AKIA" + "ABCDEFGHIJKLMNOP";
@@ -162,8 +172,10 @@ check("a secret-shaped record_key is stored as redacted-key and the state file t
   eq(X.records(sid).map((e) => e.record_key), ["redacted-key"], "stored keys");
   if (String(X.bytesOf(sid)).includes(gh)) throw new Error("the raw state file still carries the secret key");
 });
+caseEnd();
 
 // --- one-record limit and total budget ---
+caseBegin("record-limit-and-total-budget", "hooks/lib/state-handoff-record.js");
 const big = input({ key: "k".repeat(120), summary: "あ".repeat(400), pointer: "あ".repeat(300) });
 const full = X.storedBytes(X.storedShape(big));
 check("one record over 2048 bytes: summary cut at a character boundary with `...`, stored form <= 2048 bytes", () => {
@@ -256,8 +268,10 @@ check("records at or before upstream_copy_seq do not count toward the budget", (
   F.setTopLevel(sid, { upstream_session_id: "s2652-upstream", upstream_copy_seq: last });
   written(append(sid, input({ key: "after.copy" })));
 });
+caseEnd();
 
 // --- the lock: deleted state file, concurrent writers, a held lock ---
+caseBegin("lock-race-and-parallel-writers", "hooks/lib/state-handoff-record.js");
 check("state file deleted after the lock-free check -> no-state, no file recreated", () => {
   const sid = active("w-race");
   const c = X.runChild(["race", sid, JSON.stringify(input())]);
@@ -279,8 +293,10 @@ check("8 writers in parallel (#2446): all 40 records stored, seq contiguous", ()
   eq(state.events.map((e) => e.seq), state.events.map((_, i) => i + 1), "seq");
   require(path.join(ROOT, "hooks", "workflow-state", "state-io", "projection")).assertStreamIntegrity(state.events);
 });
+caseEnd();
 
 // --- `at` stamped inside the lock: ISO, never the build-time placeholder, never going backwards ---
+caseBegin("at-stamped-inside-the-lock", "hooks/lib/state-handoff-record.js");
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const PLACEHOLDER = "1970-01-01T00:00:00.000Z"; // write.js AT_PLACEHOLDER, by inspection
 const FUTURE = "2099-01-01T00:00:00.000Z";
@@ -335,6 +351,9 @@ check("AT-4: the overflow mark's `at` is stamped in the lock — ISO, not the pl
   expectStamped(over[0], "overflow mark");
   if (over[0].at < FUTURE) throw new Error(`overflow at ${over[0].at} < latest own at ${FUTURE}`);
 });
+caseEnd();
+
+caseBegin("lock-timeout-drops-the-record", "hooks/lib/state-handoff-record.js");
 check("a lock held past the 3000ms default -> lock-timeout and one `record dropped` stderr line", () => {
   const sid = active("w-locked");
   const lock = F.statePath(sid) + ".lock";
@@ -350,3 +369,4 @@ check("a lock held past the 3000ms default -> lock-timeout and one `record dropp
   eq(lines, ["[state-handoff] record dropped: lock-timeout cls=C key=gate:block"], "stderr lines");
   if (String(before) !== String(X.bytesOf(sid))) throw new Error("the state file changed");
 });
+caseEnd();

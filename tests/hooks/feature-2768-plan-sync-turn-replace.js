@@ -11,16 +11,18 @@
 // - a real forge's view of the replaced commit (a local bare repo stands in)
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
-const go = (name, fn) => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F));
-
-try {
-caseBegin("same-turn replacement R5-R7 and turnBaseOf", "hooks/lib/plan-sync/turn-commit.js");
-  go("replace", "runMore");
-caseEnd();
-} finally {
+after(() => {
   F.finish();
   restore();
-}
+});
+const go = (name, fn) => noNewFailures(F.failureCount,
+  () => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F)));
+
+caseBegin("same-turn replacement R5-R7 and turnBaseOf", "hooks/lib/plan-sync/turn-commit.js");
+test("same-turn replacement R5-R7 and turnBaseOf", () => go("replace", "runMore"));
+caseEnd();

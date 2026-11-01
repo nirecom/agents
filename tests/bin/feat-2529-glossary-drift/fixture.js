@@ -261,8 +261,8 @@ function check(name, ok, detail) {
 }
 function finish() {
   console.log(failures === 0 ? "ALL PASS" : `${failures} FAILED`);
-  process.exitCode = failures === 0 ? 0 : 1;
 }
+const failureCount = () => failures;
 
 module.exports = {
   ROOT, STATE_DIR, PLANS_DIR, STAGE_STEP, STAGES, RS_STAGES, LEDGER_FORMAT, TERM, TERM2, TERM_JA,
@@ -270,5 +270,5 @@ module.exports = {
   writePlan, writeIntent, statePath, statusEvent, annotationEvent, approvalEvent, seedAt, appendRaw, inject,
   reapprove, readState, ann, recordOf, rawState, currentStep, ledgerPath, writeLedger, tagged, runNode,
   reached, drift, ledgerGrant, mark, expectRejected, FP, findingRecord, provenanceRecord, accepted, driftLines,
-  mod, check, finish, clip,
+  mod, check, finish, failureCount, clip,
 };

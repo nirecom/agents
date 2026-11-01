@@ -8,25 +8,27 @@
 // TL3 gap: Claude Code itself does not deliver the PostToolUse call; the tests feed the real
 // workflow-mark hook its input JSON, and the commit gate is driven through checkReviewDocs.
 
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const { totals } = require("./feat-2529-glossary-provenance/common");
 const acc = require("./feat-2529-glossary-provenance/accepted");
 
+const fails = () => totals.failed;
+after(() => process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`));
+
 caseBegin("t3-6-block-record-and-grant", "hooks/workflow-mark/glossary-accept-handler.js");
-acc.blockRecordAndGrant();
+test("t3-6-block-record-and-grant", () => noNewFailures(fails, acc.blockRecordAndGrant));
 caseEnd();
 
 caseBegin("t3-6-narrow-grants-on-a-move", "hooks/workflow-mark/glossary-accept-handler.js");
-acc.narrowGrants();
+test("t3-6-narrow-grants-on-a-move", () => noNewFailures(fails, acc.narrowGrants));
 caseEnd();
 
 caseBegin("t3-6-b-grants-follow-the-same-rules", "bin/check-glossary-provenance");
-acc.bGrantSameRules();
+test("t3-6-b-grants-follow-the-same-rules", () => noNewFailures(fails, acc.bGrantSameRules));
 caseEnd();
 
 caseBegin("provenance-grant-carried-while-the-blocked-set-is-unchanged", "bin/check-glossary-provenance");
-acc.carryOnUnchangedBlocked();
+test("provenance-grant-carried-while-the-blocked-set-is-unchanged", () => noNewFailures(fails, acc.carryOnUnchangedBlocked));
 caseEnd();
-
-process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
-process.exitCode = totals.failed === 0 ? 0 : 1;

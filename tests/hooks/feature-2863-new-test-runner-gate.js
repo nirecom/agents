@@ -1,8 +1,8 @@
 "use strict";
 // Tests: hooks/block-case-markers.js, hooks/lib/test-gates/test-runner.js
 // Tags: TL2, hooks, edit-time, test-runner, scope:issue-specific
-// #2863 edit-time layer: a NEW JavaScript test entrypoint that does not load node:test is refused
-// with MISSING_TEST_RUNNER and the registry hint; existing files, other languages, repos without
+// #2863/#2865 edit-time layer: a JavaScript test entrypoint, new or already in HEAD, that does not load
+// node:test is refused with MISSING_TEST_RUNNER and the registry hint; other languages, repos without
 // the helper library and checkouts without the CLI are left alone.
 const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
 const assert = require("node:assert");
@@ -90,15 +90,101 @@ test("E4: node:test only inside a comment or a string literal does not count: ea
 caseEnd();
 
 caseBegin("e5-existing-plain-script-edit", "hooks/block-case-markers.js");
-test("E5: editing a plain script already in HEAD is not checked for the runner", () => {
+test("E5 (#2865): editing (Edit and Write) a plain script already in HEAD is refused with the HIGH line and the hint", () => {
   const repo = mkRepo({ ...si.SI_HEAD, [REL]: F.BODY.plain });
+  const abs = path.join(repo, ...REL.split("/"));
+  const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "isolate();", new_string: "isolate();\n// edited" } });
+  expectBlock(r, `code=${F.CODE}`, REL, "(skip-reason custom-runner)");
+  assert.ok(reasonOf(r).split("\n").includes(F.HINT), `the hint is not its own line: ${show(r)}`);
+  expectNoTempPath(r);
+  const w = siHook(writeInput(repo, REL, F.BODY.plain + "// rewritten\n"));
+  expectBlock(w, `code=${F.CODE}`, REL, "(skip-reason custom-runner)");
+  assert.ok(reasonOf(w).split("\n").includes(F.HINT), `the hint is not its own line: ${show(w)}`);
+  expectNoTempPath(w);
+});
+caseEnd();
+
+caseBegin("e5-existing-node-test-edit-allowed", "hooks/block-case-markers.js");
+test("E5 (#2865): editing (Edit and Write) a file already in HEAD that requires node:test is approved", () => {
+  const repo = mkRepo({ ...si.SI_HEAD, [REL]: F.BODY.nodeTest });
   const abs = path.join(repo, ...REL.split("/"));
   const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "isolate();", new_string: "isolate();\n// edited" } });
   expectApprove(r);
   noRunnerCode(r);
-  const w = siHook(writeInput(repo, REL, F.BODY.plain + "// rewritten\n"));
+  const w = siHook(writeInput(repo, REL, F.BODY.nodeTest + "// rewritten\n"));
   expectApprove(w);
   noRunnerCode(w);
+});
+caseEnd();
+
+caseBegin("e5-head-plain-post-node-test-approved", "hooks/block-case-markers.js");
+test("E5 (#2865): HEAD is a plain script and the edit adds node:test: the post-edit content is judged, so Edit and Write are approved", () => {
+  const repo = mkRepo({ ...si.SI_HEAD, [REL]: F.BODY.plain });
+  const abs = path.join(repo, ...REL.split("/"));
+  const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "isolate();", new_string: "const { test } = require(\"node:test\");\nisolate();" } });
+  expectApprove(r);
+  noRunnerCode(r);
+  const w = siHook(writeInput(repo, REL, F.BODY.nodeTest));
+  expectApprove(w);
+  noRunnerCode(w);
+});
+caseEnd();
+
+caseBegin("e5-head-node-test-post-plain-blocked", "hooks/block-case-markers.js");
+test("E5 (#2865): HEAD requires node:test and the edit removes it: Edit and Write are refused with the code", () => {
+  const repo = mkRepo({ ...si.SI_HEAD, [REL]: F.BODY.nodeTest });
+  const abs = path.join(repo, ...REL.split("/"));
+  const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "const { test } = require(\"node:test\");\n", new_string: "" } });
+  expectBlock(r, `code=${F.CODE}`, REL, "(skip-reason custom-runner)");
+  assert.ok(reasonOf(r).split("\n").includes(F.HINT), `the hint is not its own line: ${show(r)}`);
+  const w = siHook(writeInput(repo, REL, F.BODY.plain));
+  expectBlock(w, `code=${F.CODE}`, REL, "(skip-reason custom-runner)");
+  assert.ok(reasonOf(w).split("\n").includes(F.HINT), `the hint is not its own line: ${show(w)}`);
+});
+caseEnd();
+
+caseBegin("e5-non-placed-existing-plain-edit-allowed", "hooks/block-case-markers.js");
+test("E5 (#2865): Edit of a plain script already in HEAD under tests/lib/ or a sibling module folder is approved (not placed)", () => {
+  const files = ["tests/lib/x.js", "tests/bin/sib/helper.js"];
+  const repo = mkRepo({ ...si.SI_HEAD, "tests/bin/sib.js": F.BODY.nodeTest, [files[0]]: F.BODY.plain, [files[1]]: F.BODY.plain });
+  for (const rel of files) {
+    const abs = path.join(repo, ...rel.split("/"));
+    const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "isolate();", new_string: "isolate();\n// edited" } });
+    expectApprove(r);
+    noRunnerCode(r);
+  }
+});
+caseEnd();
+
+caseBegin("e5-untouched-legacy-plain-other-edit-allowed", "hooks/block-case-markers.js");
+test("E5 (#2865): editing a node:test file is approved although another placed plain script sits untouched in HEAD", () => {
+  const other = "tests/bin/other.js";
+  const repo = mkRepo({ ...si.SI_HEAD, "tests/bin/legacy.js": F.BODY.plain, [other]: F.BODY.nodeTest });
+  const abs = path.join(repo, ...other.split("/"));
+  const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "isolate();", new_string: "isolate();\n// edited" } });
+  expectApprove(r);
+  noRunnerCode(r);
+  assert.ok(!(reasonOf(r) + contextOf(r)).includes("legacy.js"), show(r));
+});
+caseEnd();
+
+caseBegin("e5-no-helper-library-existing-plain-edit-allowed", "hooks/block-case-markers.js");
+test("E5 (#2865): Edit of a plain script already in HEAD in a repo without the helper library is approved", () => {
+  const repo = mkRepo({ ...si.SI_HEAD, [REL]: F.BODY.plain }, { noHelpers: true });
+  const abs = path.join(repo, ...REL.split("/"));
+  const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "isolate();", new_string: "isolate();\n// edited" } });
+  expectApprove(r);
+  noRunnerCode(r);
+});
+caseEnd();
+
+caseBegin("e6-existing-bash-test-edit-untouched", "hooks/block-case-markers.js");
+test("E6: editing a bash test already in HEAD carries no runner code", () => {
+  const rel = "tests/bin/x.sh";
+  const repo = mkRepo({ ...si.SI_HEAD, [rel]: si.BODY.shClean });
+  const abs = path.join(repo, ...rel.split("/"));
+  const r = siHook({ tool_name: "Edit", cwd: repo, tool_input: { file_path: abs, old_string: "# Tests: bin/a.sh", new_string: "# Tests: bin/a.sh\n# edited" } });
+  noRunnerCode(r);
 });
 caseEnd();
 
@@ -132,6 +218,37 @@ test("E8: a checkout without bin/check-test-runner.sh skips that CLI only; the c
   const twoRun = siHook(writeInput(mkSiRepo(), REL, F.BODY.twoPathsPlain), { hook });
   expectBlock(twoRun, "code=MISSING_CASE_MARKERS", REL);
   assert.ok(!reasonOf(twoRun).includes(F.CODE), show(twoRun));
+});
+caseEnd();
+
+caseBegin("g3-no-placed-plain-script-in-repo", "hooks/lib/test-gates/test-runner.js");
+test("G3 (#2865): no placed JS test file under the real tests/ tree is a plain script (skip-reason custom-runner)", () => {
+  const REPO = path.resolve(__dirname, "..", "..");
+  const lib = (...p) => path.join(REPO, "hooks", "lib", ...p);
+  const R = require(lib("test-gates", "registry.js"));
+  const placement = require(lib("test-gates", "placement.js"));
+  const dirs = [""].concat(fs.readdirSync(path.join(REPO, "tests"), { withFileTypes: true })
+    .filter((d) => d.isDirectory()).map((d) => d.name));
+  const checked = [];
+  const offenders = [];
+  for (const dir of dirs) {
+    const base = path.join(REPO, "tests", dir);
+    for (const f of fs.readdirSync(base, { withFileTypes: true })) {
+      if (!f.isFile()) continue;
+      const rel = ["tests", dir, f.name].filter(Boolean).join("/");
+      const m = placement.placedMatch(rel);
+      const want = m && m.entry && m.entry.newEntrypointRunner;
+      if (!want) continue;
+      const analyze = R.loadPart(m.entry, "caseEmbedRules");
+      assert.strictEqual(typeof analyze, "function", "the js caseEmbedRules.node analyzer is reachable");
+      const res = analyze("skip-reason", path.join(base, f.name));
+      checked.push(rel);
+      const words = String(res.stdout).split(/\r?\n/).map((w) => w.trim());
+      if (res.rc !== 0 || words.includes(want.rejectSkipReason)) offenders.push(`${rel} (rc=${res.rc})`);
+    }
+  }
+  assert.ok(checked.length > 100, `the walk found the placed JS tests: ${checked.length}`);
+  assert.deepStrictEqual(offenders, [], `${offenders.length} placed JS test file(s) do not require node:test:\n${offenders.join("\n")}`);
 });
 caseEnd();
 

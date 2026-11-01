@@ -9,6 +9,7 @@
 // TL3 gap (what this test does NOT catch):
 // - the /resume-session --from CLI end to end; adoptState is called in-process here.
 
+const { after } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
 const os = require("os");
@@ -16,7 +17,7 @@ const path = require("path");
 
 const restore = isolate();
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "f2652c-"));
-process.on("exit", () => {
+after(() => {
   restore();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
@@ -174,7 +175,7 @@ caseBegin("upstream-records-stay-readable", "hooks/workflow-state/inheritance/ad
   check("S4: after adoption, readStateHandoff(upstream sid) still returns the upstream's records", () => {
     adopted();
     let read;
-    try { read = F.mod("hooks/lib/state-handoff-record").readStateHandoff; } catch (e) { throw new Error(`state handoff reader not loadable: ${e.message.split("\n")[0]}`); }
+    try { read = F.mod("hooks/lib/state-handoff-record").readStateHandoff; } catch (e) { throw new Error(`state handoff reader not loadable: ${e.message.split("\n")[0]}`, { cause: e }); }
     if (typeof read !== "function") throw new Error("readStateHandoff is not exported");
     const out = read("u-records");
     eq([out.entries.map((e) => e.summary), out.errors], [["UP-RECORD-1", "UP-RECORD-2", "UP-RECORD-3"], []], "readStateHandoff");

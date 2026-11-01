@@ -14,7 +14,9 @@
 
 const fs = require("fs");
 const path = require("path");
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const savedCwd = process.cwd();
@@ -22,31 +24,35 @@ const H = require("./feature-2631-edit-size-hook/fixture");
 const { F } = H;
 const C = H.setup();
 process.chdir(C.work);
+after(() => {
+  process.chdir(savedCwd);
+  restore();
+});
 const HARD = 500;
 
 caseBegin("E1-write-new-file", "hooks/block-post-edit-size/file-size.js");
-F.run("E1", () => {
+test("E1", () => noNewFailures(F.failureCount, () => F.run("E1", () => {
   H.advises("new file at exactly HARD approves with WARN advice", H.hook("Write", { file_path: H.repoPath("e1/at-hard.js"), content: F.codeLines(HARD) }), ["at-hard.js", "500"]);
   H.blocks("new file at HARD+1 blocks", H.hook("Write", { file_path: H.repoPath("e1/over.js"), content: F.codeLines(HARD + 1) }), ["over.js", "501", "500"]);
   H.silent("new file at WARN approves without advice", H.hook("Write", { file_path: H.repoPath("e1/warn.js"), content: F.codeLines(300) }));
   H.advises("new file at WARN+1 approves with advice", H.hook("Write", { file_path: H.repoPath("e1/warn1.js"), content: F.codeLines(301) }), ["301"]);
   H.blocks("relative file_path resolves against the repo", H.hook("Write", { file_path: "e1/rel-over.js", content: F.codeLines(HARD + 1) }), ["rel-over.js"]);
   H.approves("a non-code file is out of scope", H.hook("Write", { file_path: H.repoPath("e1/data.txt"), content: F.codeLines(900) }));
-});
+})));
 caseEnd();
 
 caseBegin("E2-write-overwrite", "hooks/block-post-edit-size/file-size.js");
-F.run("E2", () => {
+test("E2", () => noNewFailures(F.failureCount, () => F.run("E2", () => {
   const p = H.put(H.repoPath("e2/big.js"), F.codeLines(HARD + 10));
   H.approves("overwrite HARD+10 -> HARD+5 approves (shrink)", H.hook("Write", { file_path: p, content: F.codeLines(HARD + 5) }));
   const q = H.put(H.repoPath("e2/same.js"), F.codeLines(HARD + 1));
   H.blocks("overwrite HARD+1 -> HARD+1 blocks", H.hook("Write", { file_path: q, content: F.codeLines(HARD + 1, "z") }), ["same.js", "501"]);
   H.blocks("overwrite HARD+1 -> HARD+3 blocks", H.hook("Write", { file_path: q, content: F.codeLines(HARD + 3) }), ["same.js", "503"]);
-});
+})));
 caseEnd();
 
 caseBegin("E3-edit-and-multiedit-over-hard", "hooks/block-post-edit-size/file-size.js");
-F.run("E3", () => {
+test("E3", () => noNewFailures(F.failureCount, () => F.run("E3", () => {
   const p = H.put(H.repoPath("e3/big.js"), F.codeLines(HARD + 10));
   const grow = { old_string: "const a1 = 1;\n", new_string: "const a1 = 1;\nconst extra = 0;\n" };
   const same = { old_string: "const a1 = 1;\n", new_string: "const a1 = 99;\n" };
@@ -58,11 +64,11 @@ F.run("E3", () => {
   H.approves("MultiEdit whose net effect shrinks approves", H.hook("MultiEdit", { file_path: p, edits: [grow, { old_string: "const a4 = 4;\nconst a5 = 5;\nconst a6 = 6;\n", new_string: "" }] }));
   const small = H.put(H.repoPath("e3/small.js"), F.codeLines(HARD));
   H.blocks("Edit pushing a HARD file to HARD+1 blocks", H.hook("Edit", Object.assign({ file_path: small }, grow)), ["small.js", "501"]);
-});
+})));
 caseEnd();
 
 caseBegin("E4-unreadable-pre-over-1mb", "hooks/block-post-edit-size/file-size.js");
-F.run("E4", () => {
+test("E4", () => noNewFailures(F.failureCount, () => F.run("E4", () => {
   const p = H.put(H.repoPath("e4/huge.js"), H.bigLines(600));
   F.check("fixture premise: huge.js exceeds MAX_BYTES", fs.statSync(p).size > 1000000, fs.statSync(p).size);
   const first = H.bigLines(1);
@@ -72,21 +78,21 @@ F.run("E4", () => {
   H.blocks("Edit with a positive newline delta blocks", H.hook("Edit", { file_path: p, old_string: "const b1 =", new_string: "const z = 0;\nconst b1 =" }), ["huge.js"]);
   H.blocks("Write over an unreadable pre with post over HARD blocks", H.hook("Write", { file_path: p, content: F.codeLines(HARD + 1) }), ["huge.js"]);
   H.approves("Write over an unreadable pre with post within HARD approves", H.hook("Write", { file_path: p, content: F.codeLines(10) }));
-});
+})));
 caseEnd();
 
 caseBegin("E5-unrebuildable-and-foreign-tools", "hooks/block-post-edit-size.js");
-F.run("E5", () => {
+test("E5", () => noNewFailures(F.failureCount, () => F.run("E5", () => {
   const p = H.put(H.repoPath("e5/big.js"), F.codeLines(HARD + 10));
   H.approves("old_string not found approves", H.hook("Edit", { file_path: p, old_string: "no such text\n", new_string: "a\nb\nc\n" }));
   H.approves("NotebookEdit approves", H.hook("NotebookEdit", { notebook_path: p, new_source: F.codeLines(900) }));
   H.approves("editFiles approves", H.hook("editFiles", { file_path: p, content: F.codeLines(900) }));
   H.blocks("control: the same file grown by Edit blocks", H.hook("Edit", { file_path: p, old_string: "const a1 = 1;\n", new_string: "const a1 = 1;\nconst q = 1;\n" }), ["big.js"]);
-});
+})));
 caseEnd();
 
 caseBegin("E6-disabling-conditions", "hooks/block-post-edit-size/file-size.js");
-F.run("E6", () => {
+test("E6", () => noNewFailures(F.failureCount, () => F.run("E6", () => {
   const write = (rel) => ({ file_path: H.repoPath(rel), content: F.codeLines(HARD + 1) });
   const off = F.newSid();
   F.writeStartedState(off);
@@ -101,12 +107,12 @@ F.run("E6", () => {
   H.blocks("control: comment-block check on blocks the same small file", H.hook("Write", { file_path: H.repoPath("e6/cb-on.js"), content: both }), ["Comment-block size:"]);
   const unstarted = F.newSid();
   H.blocks("comment-block check ignores the session gate (no state)", H.hook("Write", { file_path: H.repoPath("e6/cb-nostate.js"), content: both }, { sid: unstarted }), ["Comment-block size:"]);
-});
+})));
 caseEnd();
 
 // A copied tree whose size-limits.js says code 50/100 (or 700/900): a hook keeping its own numbers disagrees.
 caseBegin("E11-ssot-limit-change-propagates", "hooks/block-post-edit-size/file-size.js");
-F.run("E11", () => {
+test("E11", () => noNewFailures(F.failureCount, () => F.run("E11", () => {
   const M = require("./feature-2631-size-limits/mutate-limits");
   const low = M.limitsTree(path.join(C.work, "tree-low"), "code", 50, 100);
   const high = M.limitsTree(path.join(C.work, "tree-high"), "code", 700, 900);
@@ -117,12 +123,12 @@ F.run("E11", () => {
   H.silent("control: the repo SSOT approves the same 150-line file", w("e11/low.js", 150));
   H.advises("raised HARD 900: a new 750-line file approves with WARN advice", w("e11/high.js", 750, high.hook), ["750"]);
   H.blocks("control: the repo SSOT blocks the same 750-line file", w("e11/high.js", 750), ["high.js", "750"]);
-});
+})));
 caseEnd();
 
 // The hook only judges: a block must leave the disk as it found it, and a repeated call is judged the same.
 caseBegin("E12-block-leaves-files-as-found-and-repeats-stably", "hooks/block-post-edit-size/file-size.js");
-F.run("E12", () => {
+test("E12", () => noNewFailures(F.failureCount, () => F.run("E12", () => {
   const fresh = H.repoPath("e12/never.js");
   const w = { file_path: fresh, content: F.codeLines(HARD + 1) };
   H.blocks("Write of a new HARD+1 file blocks", H.hook("Write", w), ["never.js", "501"]);
@@ -139,13 +145,13 @@ F.run("E12", () => {
   H.approves("Edit shrinking the over-HARD file approves", H.hook("Edit", shrink));
   H.approves("the same shrink Edit repeated approves again", H.hook("Edit", shrink));
   F.check("judging the shrink twice left the file byte-identical", fs.readFileSync(p).equals(before), p);
-});
+})));
 caseEnd();
 
 // CODE_FILE_EXTENSIONS in the config root's .env decides which files are code: a listed extension
 // is size-checked, an unlisted one is out of scope (classifyRepoPath -> null -> approve).
 caseBegin("E13-code-file-extensions-decide-code-scope", "hooks/block-post-edit-size/file-size.js");
-F.run("E13", () => {
+test("E13", () => noNewFailures(F.failureCount, () => F.run("E13", () => {
   const extra = H.F.configRoot("edit-ext-extra", ["COMMENT_BLOCK_ENFORCE=on", "COMMENT_BLOCK_MAX_LINES=10", "CODE_FILE_EXTENSIONS=js;sh;py;zzz"]);
   const noJs = H.F.configRoot("edit-ext-no-js", ["COMMENT_BLOCK_ENFORCE=on", "COMMENT_BLOCK_MAX_LINES=10", "CODE_FILE_EXTENSIONS=py;sh"]);
   const w = (rel, cfg) => H.hook("Write", { file_path: H.repoPath(rel), content: F.codeLines(HARD + 1) }, { cfg });
@@ -154,9 +160,5 @@ F.run("E13", () => {
   H.approves("js unlisted (py;sh): a new HARD+1 .js file is out of scope and approves", w("e13/nojs.js", noJs));
   H.blocks("control: py;sh still blocks a HARD+1 .py file", w("e13/nojs.py", noJs), ["nojs.py", "501"]);
   H.blocks("control: default list blocks the same HARD+1 .js file", w("e13/default.js"), ["default.js", "501"]);
-});
+})));
 caseEnd();
-
-process.chdir(savedCwd);
-restore();
-process.exitCode = F.failureCount() ? 1 : 0;

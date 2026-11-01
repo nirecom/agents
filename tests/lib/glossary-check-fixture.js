@@ -318,13 +318,13 @@ function check(name, ok, detail) {
 }
 function finish() {
   console.log(failures === 0 ? "ALL PASS" : `${failures} FAILED`);
-  process.exitCode = failures === 0 ? 0 : 1;
 }
+const failureCount = () => failures;
 
 module.exports = {
   ROOT, STATE_DIR, PLANS_DIR, STAGE_STEP, RA_STAGES, RS_STAGES, STAGES, GLOSSARY_CODES, TERM, VARIANT,
   GLOSSARY_FILES, TARGET, targetBody, planBody, newSid, slash, git, writeFile, stageFile, commit, mkRepo,
   addWorktree, planPath, writePlan, statePath, stepStatusEvent, annotationEvent, implSha, approvalEvent,
   writeState, appendRaw, readState, statusOf, recordOf, seedSession, runNode, drift, mark, advance,
-  completeInProcess, refusedWith, grantFindings, setupStage, touchGlossary, gateCheck, gatePasses, gateBlocks, mod, sha256, check, finish, clip,
+  completeInProcess, refusedWith, grantFindings, setupStage, touchGlossary, gateCheck, gatePasses, gateBlocks, mod, sha256, check, finish, failureCount, clip,
 };

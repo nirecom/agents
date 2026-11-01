@@ -2,8 +2,8 @@
 // Shared test helpers; load with `require("../lib/harness")` at the top of a test file.
 // caseBegin(name, target) / caseEnd() are written at column 0 around each case: the static
 // reader takes the target from the source text, and this module checks the pairing at run time.
-// The built-in test runner is loaded only inside xfail, so an existing plain script that requires
-// this file is still settled by its own exit code; a new test must load node:test itself (#2863).
+// The built-in test runner is loaded only inside xfail, so a fixture or child-process driver that
+// requires this file starts no runner; a test entrypoint loads node:test itself (#2863, #2865).
 
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -96,6 +96,7 @@ function gitInit(dir) {
 }
 
 // xfail(name, fn) — a known failure: passes while fn throws or rejects, fails once it stops.
+// node:test is required here, not at the top, for the reason in the file header.
 function xfail(name, fn) {
   require("node:test").test(name, async () => {
     try {

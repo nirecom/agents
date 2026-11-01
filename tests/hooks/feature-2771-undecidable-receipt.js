@@ -9,7 +9,9 @@
 // link lines (never blocks, never continues), and tells the user, per stage, what it could not record.
 "use strict";
 
+const { after: afterAll, test } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -20,7 +22,7 @@ fs.mkdirSync(path.join(SCRATCH, "no-transcripts"));
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = path.join(SCRATCH, "no-transcripts");process.env.PLAN_SYNC_REMOTE_URL = "";
 delete process.env.PLAN_LANG;
 process.chdir(SCRATCH);
-process.on("exit", () => {
+afterAll(() => {
   process.chdir(os.tmpdir());
   restore();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
@@ -36,8 +38,10 @@ const {
 const D3B = require("./feature-2771-undecidable-receipt/d3b-cases");
 // r30 (a stage only the final message presents, on the anchored path) lives in its own module.
 const ANCH = require("./feature-2771-undecidable-receipt/anchored-cases");
+const UNIT = require("./feature-2771-undecidable-receipt/unit-cases");
 
 let failed = 0;
+const failureCount = () => failed;
 function check(name, ok, detail) {
   if (ok) { process.stdout.write(`PASS: ${name}\n`); return; }
   failed += 1;
@@ -45,6 +49,7 @@ function check(name, ok, detail) {
 }
 
 caseBegin("r16-undecidable-tail-records-receipt-every-stage", "hooks/stop-confirm-plan-guard.js");
+test("r16-undecidable-tail-records-receipt-every-stage", () => noNewFailures(failureCount, () => {
 STAGES.forEach((stage, i) => {
   const s = R.sessionAt(stage, { tag: 1600 + i });
   const st = ustop(s, turn(s, [stage], [A("a-anchor", T(closing(s, [stage]))), THINK("a-think")]), linked(closing(s, [stage])));
@@ -69,9 +74,11 @@ STAGES.forEach((stage, i) => {
   const st2 = ustop(s2, turn(s2, ["outline"], [A("a-anchor", T(closing(s2, ["outline"]))), THINK("a-red", "redacted_thinking")]), linked(closing(s2, ["outline"])));
   check("r16 redacted_thinking after the link close: receipt recorded", silent(st2) && R.receiptExists(s2.sid, "outline"), { out: st2.out });
 }
+}));
 caseEnd();
 
 caseBegin("r17-unrecorded-stage-notice", "hooks/stop-confirm-plan-guard.js");
+test("r17-unrecorded-stage-notice", () => noNewFailures(failureCount, () => {
 {
   const s = R.sessionAt("outline", { tag: 1711 });
   const st = ustop(s, turn(s, ["outline"], [A("a-anchor", T(closing(s, ["outline"])), BASH("ls", "b1"))]));
@@ -133,9 +140,11 @@ caseBegin("r17-unrecorded-stage-notice", "hooks/stop-confirm-plan-guard.js");
   const st2 = R.stop(s2.sid, turn(s2, ["outline"], [STR("a-str", closing(s2, ["outline"]))], { markers: false }));
   check("r17 kind none without a marker: silent", silent(st2), { rc: st2.rc, out: st2.out });
 }
+}));
 caseEnd();
 
 caseBegin("r18-undecidable-tail-never-blocks", "hooks/stop-confirm-plan-guard.js");
+test("r18-undecidable-tail-never-blocks", () => noNewFailures(failureCount, () => {
 {
   const s = R.sessionAt("outline", { tag: 1801 });
   seedReceipts(s);
@@ -154,9 +163,11 @@ caseBegin("r18-undecidable-tail-never-blocks", "hooks/stop-confirm-plan-guard.js
   check("r18 layer2 condition, undecidable: every seeded receipt is kept unchanged", sameAs(before, s.sid), { before, after: snap(s.sid) });
   check("r18 layer2 condition, no marker, no artifact named: silent", silent(st), { rc: st.rc, out: st.out });
 }
+}));
 caseEnd();
 
 caseBegin("r19-stop-hook-active-undecidable", "hooks/stop-confirm-plan-guard.js");
+test("r19-stop-hook-active-undecidable", () => noNewFailures(failureCount, () => {
 {
   const s = R.sessionAt("outline", { tag: 1901 });
   const st = ustop(s, turn(s, ["outline"], [A("a-anchor", T(closing(s, ["outline"])))]), linked(closing(s, ["outline"]), { stop_hook_active: true }));
@@ -175,9 +186,11 @@ caseBegin("r19-stop-hook-active-undecidable", "hooks/stop-confirm-plan-guard.js"
   check("r19 active + D3b, final message not closing on the link line: notice names outline, rc 0, no decision", names(notice(st3), "outline"), { rc: st3.rc, out: st3.out });
   check("r19 active + D3b: the turn marker is kept (peek only)", R.turnMarkersLeft(s3.sid) > 0, "markers=0");
 }
+}));
 caseEnd();
 
 caseBegin("decidable-presentation-keeps-continue", "hooks/stop-confirm-plan-guard.js");
+test("decidable-presentation-keeps-continue", () => noNewFailures(failureCount, () => {
 {
   const s = R.sessionAt("outline", { tag: 1951 });
   const close = closing(s, ["outline"]);
@@ -185,55 +198,15 @@ caseBegin("decidable-presentation-keeps-continue", "hooks/stop-confirm-plan-guar
   check("decidable link close: the continue block is emitted", st.continued && st.reason.includes("WORKFLOW_CONFIRM_OUTLINE"), { rc: st.rc, out: st.out });
   check("decidable link close: the receipt is recorded and no systemMessage is added", R.receiptExists(s.sid, "outline") && !("systemMessage" in st.json), st.json);
 }
+}));
 caseEnd();
 
 caseBegin("undecidable-module-unit", "hooks/stop-confirm-plan-guard/undecidable.js");
-{
-  const UD = R.tryRequire("hooks/stop-confirm-plan-guard/undecidable.js");
-  if (UD.__missing) {
-    check("undecidable.js loads", false, UD.__missing);
-  } else {
-    const TRd = require(path.join(R.ROOT, "hooks/lib/transcript-reader"));
-    // tailFrom(entries) -> the tail readTail hands over: tailOf of one parse, entries of another.
-    const tailFrom = (entries) => {
-      const lines = entries.map((e) => JSON.stringify(e));
-      return Object.assign(TRd.tailOf(TRd.parseLines(lines)), { lines, entries: TRd.parseLines(lines) });
-    };
-    const head = [U("go", "u-p")];
-    const at = (entries) => { try { return UD.anchoredTailOf(tailFrom(head.concat(entries))); } catch (e) { return "threw:" + e.message; } };
-    const anchoredTo = (r, uuid) => r && typeof r === "object" && r.lastAssistantEntry && r.lastAssistantEntry.uuid === uuid && r.lastAssistantEntry === r.lastTextEntry;
-    check("anchoredTailOf: text entry last -> anchored to it", anchoredTo(at([A("a-t", T("x"))]), "a-t"), at([A("a-t", T("x"))]));
-    const thinkTail = tailFrom(head.concat([A("a-t", T("x")), THINK("a-k")]));
-    const got = UD.anchoredTailOf(thinkTail);
-    check("anchoredTailOf: thinking-only entries after it -> anchored to the text entry", anchoredTo(got, "a-t"), got);
-    check("anchoredTailOf returns a copy and leaves the tail as read", got !== thinkTail && thinkTail.lastAssistantEntry.uuid === "a-k", thinkTail.lastAssistantEntry);
-    check("anchoredTailOf: redacted_thinking after it -> anchored", anchoredTo(at([A("a-t", T("x")), THINK("a-r", "redacted_thinking")]), "a-t"), "not anchored");
-    check("anchoredTailOf: no text entry -> null", at([A("a-k", { type: "thinking", thinking: "x", signature: "s" })]) === null, "not null");
-    check("anchoredTailOf: text entry without uuid -> null", at([A(null, T("x"))]) === null, "not null");
-    check("anchoredTailOf: tool_use in the text entry -> null", at([A("a-t", T("x"), BASH("ls", "b1"))]) === null, "not null");
-    check("anchoredTailOf: a later entry with tool_use -> null", at([A("a-t", T("x")), A("a-b", BASH("ls", "b1"))]) === null, "not null");
-    check("anchoredTailOf: a later entry of an unknown content type -> null", at([A("a-t", T("x")), A("a-u", { type: "mystery" })]) === null, "not null");
-
-    const s = R.sessionAt("outline", { tag: 1990 });
-    const plansDir = process.env.WORKFLOW_PLANS_DIR;
-    const mh = (markers, input) => { try { return Array.from(UD.mayHavePresented({ sid: s.sid, markers, input, plansDir }) || []); } catch (e) { return ["threw:" + e.message]; } };
-    const byMarker = mh([{ session_id: s.sid, suffix: "outline", absPath: s.plan, ts: 1 }], {});
-    check("mayHavePresented: a plan stage marker -> that stage", byMarker.includes("outline") && !byMarker.includes("intent"), byMarker);
-    const byName = mh([], { last_assistant_message: `see ${s.sid}-intent.md` });
-    check("mayHavePresented: an existing <sid>-<stage>.md named in the message -> that stage", byName.includes("intent") && !byName.includes("outline"), byName);
-    check("mayHavePresented: a named artifact that does not exist -> nothing", mh([], { last_assistant_message: `see ${s.sid}-detail.md` }).length === 0, mh([], { last_assistant_message: `see ${s.sid}-detail.md` }));
-    check("mayHavePresented: no marker, no name -> nothing", mh([], {}).length === 0, mh([], {}));
-
-    const n1 = UD.noticeFor(["outline"]);
-    check("noticeFor names the stage and carries no URL", names(n1, "outline") && !/https?:\/\//i.test(n1), n1);
-    const n2 = UD.noticeFor(["intent", "detail"]);
-    check("noticeFor names every stage it is given", names(n2, "intent") && names(n2, "detail") && !names(n2, "outline"), n2);
-    check("noticeFor([]) is empty", !UD.noticeFor([]), UD.noticeFor([]));
-  }
-}
+test("undecidable-module-unit", () => noNewFailures(failureCount, () => UNIT.undecidableModuleUnit(check)));
 caseEnd();
 
 caseBegin("r20-undecidable-no-marker-records-receipt", "hooks/stop-confirm-plan-guard.js");
+test("r20-undecidable-no-marker-records-receipt", () => noNewFailures(failureCount, () => {
 STAGES.forEach((stage, i) => {
   const s = R.sessionAt(stage, { tag: 2001 + i });
   const st = ustop(s, turn(s, [stage], [A("a-anchor", T(closing(s, [stage])))], { markers: false }), linked(closing(s, [stage])));
@@ -243,9 +216,11 @@ STAGES.forEach((stage, i) => {
   const e = R.echo(s.sid, stage);
   check(`r20 ${stage} no marker: the echo after it reaches the dialog`, e.dialog, e.json);
 });
+}));
 caseEnd();
 
 caseBegin("r21-receipt-write-failure-notice", "hooks/stop-confirm-plan-guard.js");
+test("r21-receipt-write-failure-notice", () => noNewFailures(failureCount, () => {
 {
   const s = R.sessionAt("outline", { tag: 2101 });
   // A directory standing at the receipt path makes writeReceipt's final rename fail.
@@ -264,9 +239,11 @@ caseBegin("r21-receipt-write-failure-notice", "hooks/stop-confirm-plan-guard.js"
   const e = R.echo(s.sid, "outline");
   check("r21 write failure: the echo after it is denied (no-receipt)", e.denied && !e.dialog && e.reason.includes("(no-receipt)"), e.reason || e.json);
 }
+}));
 caseEnd();
 
 caseBegin("r22-gate-config-undecidable", "hooks/stop-confirm-plan-guard.js");
+test("r22-gate-config-undecidable", () => noNewFailures(failureCount, () => {
 for (const gate of ["on", "off"]) {
   const s = R.sessionAt("outline", { tag: gate === "on" ? 2201 : 2202 });
   const cfg = R.cfg({ CONFIRM_OUTLINE: gate });
@@ -282,11 +259,15 @@ for (const gate of ["on", "off"]) {
     check("r22 CONFIRM_OUTLINE=off: the echo is skipped", e.skipped, e.json);
   }
 }
+}));
 caseEnd();
 
-D3B.r23(check);
+caseBegin("r23-unflushed-final-text-last-assistant-message", "hooks/stop-confirm-plan-guard.js");
+test("r23-unflushed-final-text-last-assistant-message", () => noNewFailures(failureCount, () => D3B.r23(check)));
+caseEnd();
 
 caseBegin("r24-undecidable-path-link-receipt", "hooks/stop-confirm-plan-guard.js");
+test("r24-undecidable-path-link-receipt", () => noNewFailures(failureCount, () => {
 {
   // plan-sync off: the plan-link line names the local path, so the receipt binds a path link.
   const OFF = { mode: "plan-sync-off" };
@@ -309,9 +290,11 @@ caseBegin("r24-undecidable-path-link-receipt", "hooks/stop-confirm-plan-guard.js
   const e2 = R.echo(s2.sid, "outline", OFF);
   check("r24 path link, D3b record: the echo reaches the dialog", e2.dialog, e2.json);
 }
+}));
 caseEnd();
 
 caseBegin("r25-unrecordable-undecidable-keeps-seeded-receipt", "hooks/stop-confirm-plan-guard.js");
+test("r25-unrecordable-undecidable-keeps-seeded-receipt", () => noNewFailures(failureCount, () => {
 // mid: the last text is mid-turn and the final text closes on the link line then a question.
 // link: a text entry closing on the link line, a tool_use entry after it, an unmatched final message.
 for (const [label, tag, tailOf, last] of [
@@ -329,9 +312,11 @@ for (const [label, tag, tailOf, last] of [
   const e = R.echo(s.sid, "outline");
   check(`r25 ${label}: the echo still reaches the dialog on the seeded receipt`, e.dialog, e.json);
 }
+}));
 caseEnd();
 
 caseBegin("r26-anchored-tail-final-message-not-closing-on-link", "hooks/stop-confirm-plan-guard.js");
+test("r26-anchored-tail-final-message-not-closing-on-link", () => noNewFailures(failureCount, () => {
 // The anchored text entry closes on the link line, but the real final message (MISMATCH) does not.
 for (const [label, tailOf] of [
   ["thinking", (s, st) => [A("a-anchor", T(closing(s, [st]))), THINK("a-think")]],
@@ -368,9 +353,11 @@ STAGES.forEach((stage, i) => {
   check("r26 active + marker: notice names outline, rc 0, no decision", names(notice(st), "outline"), { rc: st.rc, out: st.out });
   check("r26 active: the turn marker is kept (peek only)", R.turnMarkersLeft(s.sid) > 0, "markers=0");
 }
+}));
 caseEnd();
 
 caseBegin("r27-undecidable-plan-lang-violation-no-receipt", "hooks/stop-confirm-plan-guard.js");
+test("r27-undecidable-plan-lang-violation-no-receipt", () => noNewFailures(failureCount, () => {
 // The undecidable path applies the decidable path's plan-lang check: a violating stage gets no receipt,
 // keeps an earlier one, and is named in the notice. Clean-plan controls: r16 (anchored), r23 (D3b).
 {
@@ -416,9 +403,11 @@ caseBegin("r27-undecidable-plan-lang-violation-no-receipt", "hooks/stop-confirm-
     check("r27 active: the turn marker is kept (peek only)", R.turnMarkersLeft(s.sid) > 0, "markers=0");
   }
 }
+}));
 caseEnd();
 
 caseBegin("r27-plan-lang-violation-intent-detail", "hooks/stop-confirm-plan-guard.js");
+test("r27-plan-lang-violation-intent-detail", () => noNewFailures(failureCount, () => {
 // CPR-ORTH: the plan-lang drop must hold for every stage, not only outline.
 ["intent", "detail"].forEach((stage, i) => {
   const jaAt = (tag) => R.sessionAt(stage, { tag, body: jaBody(stage) });
@@ -434,9 +423,11 @@ caseBegin("r27-plan-lang-violation-intent-detail", "hooks/stop-confirm-plan-guar
     check(`r27 ${stage} ${label}: stdout is one systemMessage JSON naming ${stage}`, names(notice(st), stage), { rc: st.rc, out: st.out });
   }
 });
+}));
 caseEnd();
 
 caseBegin("r27-plan-lang-violation-marker-less-anchored", "hooks/stop-confirm-plan-guard.js");
+test("r27-plan-lang-violation-marker-less-anchored", () => noNewFailures(failureCount, () => {
 {
   // Re-presenting an existing violating outline without a turn marker; the link line names <sid>-outline.md.
   const s = R.sessionAt("outline", { tag: 2761, body: jaBody("outline") });
@@ -445,9 +436,11 @@ caseBegin("r27-plan-lang-violation-marker-less-anchored", "hooks/stop-confirm-pl
   check("r27 marker-less anchored: no receipt for the PLAN_LANG-violating outline", noReceipt(s.sid), snap(s.sid));
   check("r27 marker-less anchored: the notice names outline (the link line names its plan file)", names(notice(st), "outline"), { rc: st.rc, out: st.out });
 }
+}));
 caseEnd();
 
 caseBegin("r27-plan-lang-allowed-records-receipt", "hooks/stop-confirm-plan-guard.js");
+test("r27-plan-lang-allowed-records-receipt", () => noNewFailures(failureCount, () => {
 // Positive controls: the same Japanese-prose outline is clean under PLAN_LANG=japanese (strict) and any (noop).
 ["japanese", "any"].forEach((lang, i) => {
   const s0 = R.sessionAt("outline", { tag: 2777 + i, body: jaBody("outline") });
@@ -462,11 +455,17 @@ caseBegin("r27-plan-lang-allowed-records-receipt", "hooks/stop-confirm-plan-guar
     check(`r27 PLAN_LANG=${lang} ${label}: the outline receipt is recorded`, R.receiptExists(s.sid, "outline"), snap(s.sid));
   }
 });
+}));
 caseEnd();
 
-D3B.r28(check);
-D3B.r29(check);
-ANCH.r30(check);
+caseBegin("r28-d3b-marker-less-re-present", "hooks/stop-confirm-plan-guard.js");
+test("r28-d3b-marker-less-re-present", () => noNewFailures(failureCount, () => D3B.r28(check)));
+caseEnd();
 
-process.stdout.write(`\n${failed === 0 ? "OK" : `${failed} failed`}\n`);
-process.exitCode = failed === 0 ? 0 : 1;
+caseBegin("r29-undecidable-unpublished-keeps-receipt", "hooks/stop-confirm-plan-guard.js");
+test("r29-undecidable-unpublished-keeps-receipt", () => noNewFailures(failureCount, () => D3B.r29(check)));
+caseEnd();
+
+caseBegin("r30-anchored-final-only-stage", "hooks/stop-confirm-plan-guard.js");
+test("r30-anchored-final-only-stage", () => noNewFailures(failureCount, () => ANCH.r30(check)));
+caseEnd();
