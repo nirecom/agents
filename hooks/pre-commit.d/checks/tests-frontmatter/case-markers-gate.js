@@ -82,4 +82,4 @@ function gate({ context, snapshot, files }) {
   return { block: true, messages: [...messages, ...high.map(out), out(""), out("Commit blocked: new test file(s) fail the case-marker gate."), ...missing.map(out), ...malformed.map(out)] };
 }
 
-module.exports = { gate };
+module.exports = { gate, newTargets };

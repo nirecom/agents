@@ -2,8 +2,8 @@
 // Shared test helpers; load with `require("../lib/harness")` at the top of a test file.
 // caseBegin(name, target) / caseEnd() are written at column 0 around each case: the static
 // reader takes the target from the source text, and this module checks the pairing at run time.
-// The built-in test runner is loaded only inside xfail, so a plain script that requires this
-// file is still settled by its own exit code.
+// The built-in test runner is loaded only inside xfail, so an existing plain script that requires
+// this file is still settled by its own exit code; a new test must load node:test itself (#2863).
 
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
