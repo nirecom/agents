@@ -3,7 +3,7 @@
 // (in a repo carrying its helperLibrary) with a self-implemented harness HEAD did not have
 // (#2502), a NEW one (absent from HEAD) with missing or malformed case markers (#2388), or any
 // tests/ file with a test-language mismatch HEAD did not have or an invalid test-lang-exception,
-// or a NEW one that does not run under its entry's required runner (#2863).
+// or one (new or existing) that does not run under its entry's required runner (#2863, #2865).
 // The verdicts are the bin/ CLIs run on temp copies of the rebuilt post-edit content (and the
 // HEAD blob); their WARN lines go out as additionalContext. The target file is never touched.
 // pre-commit is the backstop for what this cannot rebuild (editFiles, NotebookEdit).
@@ -197,14 +197,14 @@ function main() {
   if (clis.length === 0 && !lmCli) approve();
 
   // Two candidate sets: case-marker entrypoints — a new one for the case-marker, self-impl and
-  // test-runner CLIs, an existing one for the self-impl CLI only (with its HEAD copy; the case-marker check
-  // stays on new files, #2440); a new reader-less one for the case-marker CLI only (its WARN) —
-  // and every tests/ file (new or existing) for the language-match CLI.
+  // test-runner CLIs, an existing one for the self-impl and test-runner CLIs (with its HEAD copy; the
+  // case-marker check stays on new files, #2440); a new reader-less one for the case-marker CLI only
+  // (its WARN) — and every tests/ file (new or existing) for the language-match CLI.
   const runs = [];
   for (const c of (clis.length > 0 && collectCandidates(input, toolName, toolInput)) || []) {
     const cs = c.readerless
       ? clis.filter((cli) => cli !== SELF_IMPL_CHECKER && cli !== TEST_RUNNER_CHECKER)
-      : c.head === null ? clis : clis.filter((cli) => cli === SELF_IMPL_CHECKER);
+      : c.head === null ? clis : clis.filter((cli) => cli === SELF_IMPL_CHECKER || cli === TEST_RUNNER_CHECKER);
     if (cs.length > 0) runs.push({ ...c, clis: cs });
   }
   if (lmCli) {

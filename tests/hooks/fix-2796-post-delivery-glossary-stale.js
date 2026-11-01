@@ -9,10 +9,12 @@
 // - a real delivered session's state file, not the v2 fixture migration.
 // Closest-to-action mitigation: at WORKFLOW_USER_VERIFIED preflight, next-step reports ACTION=done.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "f2796-transcripts-"));
@@ -44,6 +46,12 @@ function guarded(name, fn) {
     F.check(`${name} ran to the end`, false, (e && e.stack) || e);
   }
 }
+// The case fails when any F.check inside it (or an exception, via guarded) adds a failure.
+const verdict = (label, fn) => () => noNewFailures(F.failureCount, () => guarded(label, fn));
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 // settleRest(sid, overrides): appends a raw step_status for every step the stream has not recorded
 // yet — "complete" by default, overrides[step] when given; overrides[step] === null leaves it out.
@@ -137,7 +145,7 @@ function expectDone(tag, s) {
 }
 
 caseBegin("A: final_report complete keeps every plan stage complete against a stale glossary", "hooks/workflow-state/effective-state.js");
-guarded("A", () => {
+test("A: final_report complete keeps every plan stage complete against a stale glossary", verdict("A", () => {
   const s = prepare("a-final", {});
   F.touchGlossary(s.repo);
   for (const step of RA_STEPS) {
@@ -149,11 +157,11 @@ guarded("A", () => {
   const cur = resolveCurrentStep(F.readState(s.sid), { sessionId: s.sid, repoDir: s.repo });
   F.check("A: resolveCurrentStep is null", cur === null, String(cur));
   expectDone("A", s);
-});
+}));
 caseEnd();
 
 caseBegin("B: control - before merge_to_main a stale glossary still demotes every plan stage", "hooks/workflow-state/effective-state.js");
-guarded("B", () => {
+test("B: control - before merge_to_main a stale glossary still demotes every plan stage", verdict("B", () => {
   const s = prepare("b-pre", PRE_DELIVERY);
   F.check("B: push_branch is recorded complete", F.statusOf(s.sid, "push_branch") === "complete", F.statusOf(s.sid, "push_branch"));
   F.touchGlossary(s.repo);
@@ -166,7 +174,7 @@ guarded("B", () => {
   F.check("B: resolveCurrentStep is clarify_intent", cur === "clarify_intent", String(cur));
   const r = nextStep(s);
   F.check("B: next-step reports ACTION=invoke (not done)", /^ACTION=invoke$/m.test(r.out) && !/^ACTION=done$/m.test(r.out), `${r.out}${r.err}`);
-});
+}));
 caseEnd();
 
 // merge_to_main settled but final_report pending: next-step routes to the remaining delivery step (not
@@ -182,18 +190,18 @@ function expectNotPlanStage(tag, s) {
 }
 
 caseBegin("C: merge_to_main complete without final_report keeps every plan stage complete", "hooks/workflow-state/effective-state.js");
-guarded("C", () => {
+test("C: merge_to_main complete without final_report keeps every plan stage complete", verdict("C", () => {
   const s = prepare("c-merged", { cleanup: null, pre_final_report_gate: null, final_report: null });
   F.touchGlossary(s.repo);
   expectKept("C", s, RA_STEPS);
   const cur = resolveCurrentStep(F.readState(s.sid), { sessionId: s.sid, repoDir: s.repo });
   F.check("C: resolveCurrentStep is cleanup, not a plan stage", cur === "cleanup", String(cur));
   expectNotPlanStage("C", s);
-});
+}));
 caseEnd();
 
 caseBegin("D: merge_to_main recorded skipped counts as post-delivery", "hooks/workflow-state/effective-state.js");
-guarded("D", () => {
+test("D: merge_to_main recorded skipped counts as post-delivery", verdict("D", () => {
   const s = prepare("d-skipped", Object.assign({}, PRE_DELIVERY, { merge_to_main: "skipped" }));
   F.check("D: merge_to_main is recorded skipped", F.statusOf(s.sid, "merge_to_main") === "skipped", F.statusOf(s.sid, "merge_to_main"));
   F.touchGlossary(s.repo);
@@ -201,11 +209,11 @@ guarded("D", () => {
   const cur = resolveCurrentStep(F.readState(s.sid), { sessionId: s.sid, repoDir: s.repo });
   F.check("D: resolveCurrentStep is cleanup, not a plan stage", cur === "cleanup", String(cur));
   expectNotPlanStage("D", s);
-});
+}));
 caseEnd();
 
 caseBegin("E: control - a WF-META session whose merge_to_main is only table-skipped is still demoted", "hooks/workflow-state/effective-state.js");
-guarded("E", () => {
+test("E: control - a WF-META session whose merge_to_main is only table-skipped is still demoted", verdict("E", () => {
   const s = prepareMeta("e-meta");
   const profile = resolveSessionProfile(F.readState(s.sid), s.sid, { repoDir: s.repo });
   F.check("E: the profile is wf-meta", profile.deliverableType === "wf-meta", JSON.stringify(profile));
@@ -220,22 +228,22 @@ guarded("E", () => {
     F.check(`E: ${step} reads pending (glossary-check-stale)`,
       eff[step] && eff[step].status === "pending" && eff[step].resolved_from === "glossary-check-stale", JSON.stringify(eff[step]));
   }
-});
+}));
 caseEnd();
 
 caseBegin("F: a WF-META session with final_report complete keeps outline complete", "hooks/workflow-state/effective-state.js");
-guarded("F", () => {
+test("F: a WF-META session with final_report complete keeps outline complete", verdict("F", () => {
   const s = prepareMeta("f-meta");
   F.appendRaw(s.sid, ["research", "pre_final_report_gate", "final_report"].map((step) => F.stepStatusEvent(step, "complete")));
   F.touchGlossary(s.repo);
   const profile = resolveSessionProfile(F.readState(s.sid), s.sid, { repoDir: s.repo });
   expectKept("F", s, ["clarify_intent", "outline"], profile);
   expectDone("F", s);
-});
+}));
 caseEnd();
 
 caseBegin("G: a plan artifact edited after delivery does not demote through the approval re-check", "hooks/workflow-state/effective-state.js");
-guarded("G", () => {
+test("G: a plan artifact edited after delivery does not demote through the approval re-check", verdict("G", () => {
   const edit = F.planBody("detail", F.TERM) + "\nfixture edit\n";
   const s = prepare("g-final", {});
   F.writePlan(s.sid, "detail", edit);
@@ -248,11 +256,11 @@ guarded("G", () => {
   const eff = snapshot(c);
   F.check("G control: before delivery the edit reads detail pending (unapproved-complete)",
     eff.detail && eff.detail.status === "pending" && eff.detail.resolved_from === "unapproved-complete", JSON.stringify(eff.detail));
-});
+}));
 caseEnd();
 
 caseBegin("H: a veto annotation on a complete outline after delivery still reports done", "hooks/workflow-state/effective-state.js");
-guarded("H", () => {
+test("H: a veto annotation on a complete outline after delivery still reports done", verdict("H", () => {
   const s = prepare("h-veto", {});
   F.appendRaw(s.sid, [F.annotationEvent("outline", "skip_verdict", { verdict: "veto", source: "fixture", recorded_at: new Date().toISOString() })]);
   F.touchGlossary(s.repo);
@@ -260,7 +268,7 @@ guarded("H", () => {
   F.check("H: the veto verdict is read on outline", eff.outline && eff.outline.skip_verdict_state === "veto", JSON.stringify(eff.outline));
   expectKept("H", s, ["outline", "detail"]);
   expectDone("H", s);
-});
+}));
 caseEnd();
 
 // Characterization, not a requirement: the veto de-skip / post-veto-reset path stays out of the
@@ -268,7 +276,7 @@ caseEnd();
 // and the guard sits only at gatedCompleteRefusal). A future decision to stop the veto path for a
 // post-delivery session too should flip these assertions to "outline stays skipped, ACTION=done".
 caseBegin("I: a vetoed skipped outline after delivery is still de-skipped (accepted tradeoff)", "hooks/workflow-state/effective-state.js");
-guarded("I", () => {
+test("I: a vetoed skipped outline after delivery is still de-skipped (accepted tradeoff)", verdict("I", () => {
   const s = prepare("i-veto-skip", {});
   F.appendRaw(s.sid, [F.stepStatusEvent("outline", "skipped"),
     F.annotationEvent("outline", "skip_verdict", { verdict: "veto", source: "fixture", recorded_at: new Date().toISOString() })]);
@@ -282,21 +290,21 @@ guarded("I", () => {
   const r = nextStep(s);
   F.check("I: next-step still reports ACTION=invoke make-outline-plan",
     /^ACTION=invoke$/m.test(r.out) && /^NEXT_SKILL=make-outline-plan$/m.test(r.out), `${r.out}${r.err}`);
-});
+}));
 caseEnd();
 
 caseBegin("J: merge_to_main recorded skipped also stops the approval re-check demote", "hooks/workflow-state/effective-state.js");
-guarded("J", () => {
+test("J: merge_to_main recorded skipped also stops the approval re-check demote", verdict("J", () => {
   const s = prepare("j-skipped", Object.assign({}, PRE_DELIVERY, { merge_to_main: "skipped" }));
   F.writePlan(s.sid, "detail", F.planBody("detail", F.TERM) + "\nfixture edit\n");
   F.check("J: isUnapprovedGatedComplete(detail) is true after the edit",
     ES.isUnapprovedGatedComplete("detail", "complete", F.readState(s.sid), s.sid) === true, "false");
   expectKept("J", s, ["detail"]);
-});
+}));
 caseEnd();
 
 caseBegin("K: recordedStatusOf and isPostDeliverySession judge the raw recorded status", "hooks/workflow-state/effective-state/post-delivery.js");
-guarded("K", () => {
+test("K: recordedStatusOf and isPostDeliverySession judge the raw recorded status", verdict("K", () => {
   const PD = F.mod("hooks/workflow-state/effective-state/post-delivery.js");
   if (!PD) return;
   const st = (steps) => ({ steps: Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, { status: v }])) });
@@ -322,14 +330,14 @@ guarded("K", () => {
   let got;
   try { got = PD.isPostDeliverySession(hostile); } catch (e) { got = `threw ${e && e.message}`; }
   F.check("K: isPostDeliverySession fails toward false on an unreadable state", got === false, String(got));
-});
+}));
 caseEnd();
 
 // No-behavior-change pin for evaluateResumability S1 (effective-state.js): only merge_to_main
 // recorded complete reads as delivered; skipped / unrecorded fall through S1 to S3, which keeps them
 // eligible here because clarify_intent's intent.md exists. Green before and after the S1 refactor.
 caseBegin("L: evaluateResumability S1 treats only merge_to_main complete as delivered", "hooks/workflow-state/effective-state.js");
-guarded("L", () => {
+test("L: evaluateResumability S1 treats only merge_to_main complete as delivered", verdict("L", () => {
   const rows = [
     ["merge_to_main complete", { merge_to_main: "complete", cleanup: null, pre_final_report_gate: null, final_report: null }, { eligible: false, reason: "delivered" }],
     ["merge_to_main skipped", { merge_to_main: "skipped", cleanup: null, pre_final_report_gate: null, final_report: null }, { eligible: true, reason: null }],
@@ -353,7 +361,7 @@ guarded("L", () => {
       got && got.eligible === want.eligible && got.reason === want.reason,
       `${JSON.stringify(got)} raw-events=${JSON.stringify((state.events || []).filter((e) => e.step === "merge_to_main"))} projected=${JSON.stringify(m2m)}`);
   });
-});
+}));
 caseEnd();
 
 // Main's glossary cannot be located after the record (the fixture repo loses its .git, so
@@ -364,7 +372,7 @@ function breakGlossary(repo) {
 }
 
 caseBegin("M: an unreadable glossary after delivery is kept, before delivery it still demotes", "hooks/workflow-state/effective-state.js");
-guarded("M", () => {
+test("M: an unreadable glossary after delivery is kept, before delivery it still demotes", verdict("M", () => {
   const pre = prepare("m-pre", PRE_DELIVERY);
   breakGlossary(pre.repo);
   const effPre = expectReadOnly("M", pre, RA_STEPS);
@@ -377,8 +385,5 @@ guarded("M", () => {
   breakGlossary(post.repo);
   expectKept("M", post, RA_STEPS);
   expectDone("M", post);
-});
+}));
 caseEnd();
-
-restoreIsolation();
-F.finish();

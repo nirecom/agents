@@ -11,6 +11,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -19,14 +21,17 @@ process.chdir(os.tmpdir());
 
 const F = require("../lib/glossary-check-fixture");
 const glossary = require("./feat-2529-glossary-fingerprint-inputs/glossary");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 caseBegin("each combined glossary change stales the record and the main worktree glossary is read", "hooks/workflow-state/glossary-check/scope.js");
-try {
-  glossary.runEachChange(F.RS_STAGES);
-} catch (e) {
-  F.check("glossary input ran to the end", false, (e && e.stack) || e);
-}
+test("each combined glossary change stales the record and the main worktree glossary is read", () => noNewFailures(F.failureCount, () => {
+  try {
+    glossary.runEachChange(F.RS_STAGES);
+  } catch (e) {
+    F.check("glossary input ran to the end", false, (e && e.stack) || e);
+  }
+}));
 caseEnd();
-
-restoreIsolation();
-F.finish();

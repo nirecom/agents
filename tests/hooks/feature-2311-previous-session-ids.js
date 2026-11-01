@@ -8,6 +8,8 @@
 // upstream.upstream_session_id, else it is empty.
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -15,7 +17,8 @@ const { spawnSync } = require("child_process");
 
 const restore = isolate();
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "f2311-"));
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
@@ -44,6 +47,7 @@ const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
+const failures = () => failed;
 const apply = () => F.mod("hooks/workflow-state/inheritance/apply");
 // inherit(down, up) — a fresh downstream adopting from up; returns the downstream's chain.
 function inherit(down, up) {
@@ -53,7 +57,7 @@ function inherit(down, up) {
 }
 
 caseBegin("persisted-key-allow-list", "hooks/workflow-state/state-io/projection.js");
-{
+test("persisted-key-allow-list", () => noNewFailures(failures, () => {
   check("A1: projection's PERSISTED_TOP_LEVEL_KEYS includes previous_session_ids", () => {
     const keys = Array.from(F.mod("hooks/workflow-state/state-io/projection").PERSISTED_TOP_LEVEL_KEYS || []);
     eq(keys.indexOf("previous_session_ids") !== -1, true, "in projection allow-list");
@@ -73,11 +77,11 @@ caseBegin("persisted-key-allow-list", "hooks/workflow-state/state-io/projection.
     io.writeState("f2311-allow", st);
     eq(F.raw("f2311-allow").previous_session_ids, ["f2311-a", "f2311-b"], "persisted value");
   });
-}
+}));
 caseEnd();
 
 caseBegin("lineage-chain-accumulates", "hooks/workflow-state/inheritance/apply.js");
-{
+test("lineage-chain-accumulates", () => noNewFailures(failures, () => {
   check("P5: an upstream with no lineage fields gives [upstreamSid]", () => {
     F.seedUpstream("p5-up");
     eq(inherit("p5-down", "p5-up"), ["p5-up"], "previous_session_ids");
@@ -102,11 +106,11 @@ caseBegin("lineage-chain-accumulates", "hooks/workflow-state/inheritance/apply.j
     F.writeRaw("p6-b", b);
     eq(inherit("p6-c", "p6-b"), ["p6-a", "p6-b"], "previous_session_ids");
   });
-}
+}));
 caseEnd();
 
 caseBegin("lineage-chain-sanitized", "hooks/workflow-state/inheritance/apply.js");
-{
+test("lineage-chain-sanitized", () => noNewFailures(failures, () => {
   check("P3: invalid elements of the upstream chain are dropped and duplicates keep the first", () => {
     F.seedUpstream("p3-up");
     const up = F.raw("p3-up");
@@ -137,11 +141,11 @@ caseBegin("lineage-chain-sanitized", "hooks/workflow-state/inheritance/apply.js"
     F.writeRaw("p8-up", up);
     eq(inherit("p8-down", "p8-up"), ["p8-up"], "previous_session_ids");
   });
-}
+}));
 caseEnd();
 
 caseBegin("persisted-key-allow-deny-table", "hooks/workflow-state/state-io/projection.js");
-{
+test("persisted-key-allow-deny-table", () => noNewFailures(failures, () => {
   const rows = [
     { key: "previous_session_ids", value: ["f2311-t-a"], verdict: "allow" },
     { key: "upstream_session_id", value: "f2311-t-a", verdict: "allow" },
@@ -166,11 +170,11 @@ caseBegin("persisted-key-allow-deny-table", "hooks/workflow-state/state-io/proje
       }
     });
   }
-}
+}));
 caseEnd();
 
 caseBegin("from-cli-chain-persists-lineage", "bin/resume-session-detect");
-{
+test("from-cli-chain-persists-lineage", () => noNewFailures(failures, () => {
   // Each hop is a real `resume-session-detect --from` run with the heir as the session id;
   // the assertion reads the heir's state file the CLI left on disk.
   const CLI = path.join(F.ROOT, "bin", "resume-session-detect");
@@ -207,11 +211,11 @@ caseBegin("from-cli-chain-persists-lineage", "bin/resume-session-detect");
     eq(c.upstream_session_id, "f2311-cli-b", "C upstream_session_id");
     eq(c.previous_session_ids, [a, "f2311-cli-b"], "C persisted previous_session_ids");
   });
-}
+}));
 caseEnd();
 
 caseBegin("session-start-writes-same-lineage", "hooks/session-start.js");
-{
+test("session-start-writes-same-lineage", () => noNewFailures(failures, () => {
   check("P4: the SessionStart inheritance writes the same chain as an explicit applyInheritance", () => {
     F.seedUpstream("p4-root");
     inherit("p4-up", "p4-root");
@@ -234,7 +238,7 @@ caseBegin("session-start-writes-same-lineage", "hooks/session-start.js");
     eq(viaHook.previous_session_ids, explicit, "hook chain vs explicit chain");
     eq(viaHook.previous_session_ids, ["p4-root", "p4-up"], "hook chain");
   });
-}
+}));
 caseEnd();
 
 // #2748: every inheritance writes first_session_id = resolveFirstSid(upstream) into the copy, so
@@ -250,17 +254,17 @@ function adopt(down, up) {
 }
 
 caseBegin("persisted-key-first-session-id", "hooks/workflow-state/state-io/projection.js");
-{
+test("persisted-key-first-session-id", () => noNewFailures(failures, () => {
   check("A7: PERSISTED_TOP_LEVEL_KEYS lists first_session_id right after previous_session_ids", () => {
     const keys = Array.from(F.mod("hooks/workflow-state/state-io/projection").PERSISTED_TOP_LEVEL_KEYS || []);
     eq(keys.indexOf("first_session_id") !== -1, true, "first_session_id in the allow-list");
     eq(keys.indexOf("first_session_id"), keys.indexOf("previous_session_ids") + 1, "position");
   });
-}
+}));
 caseEnd();
 
 caseBegin("build-copy-writes-first-session-id", "hooks/workflow-state/inheritance/apply.js");
-{
+test("build-copy-writes-first-session-id", () => noNewFailures(failures, () => {
   check("A7: A -> B writes B.first_session_id = A", () => {
     F.seedUpstream("a7-a");
     eq(adopt("a7-b", "a7-a").first_session_id, "a7-a", "B.first_session_id");
@@ -278,11 +282,11 @@ caseBegin("build-copy-writes-first-session-id", "hooks/workflow-state/inheritanc
     adopt("a8d-c", "a8d-b");
     eq(adopt("a8d-d", "a8d-c").first_session_id, "a8d-a", "D.first_session_id");
   });
-}
+}));
 caseEnd();
 
 caseBegin("build-copy-first-session-id-from-self-pinned-or-legacy-upstream", "hooks/workflow-state/inheritance/apply.js");
-{
+test("build-copy-first-session-id-from-self-pinned-or-legacy-upstream", () => noNewFailures(failures, () => {
   check("A9: a self-pinned upstream (no first_session_id field) still gives C.first_session_id = A", () => {
     F.seedUpstream("a9-a");
     const b = adopt("a9-b", "a9-a");
@@ -318,11 +322,11 @@ caseBegin("build-copy-first-session-id-from-self-pinned-or-legacy-upstream", "ho
     F.writeRaw("a9c-c", c);
     eq(adopt("a9c-d", "a9c-c").first_session_id, "a9c-a", "D.first_session_id");
   });
-}
+}));
 caseEnd();
 
 caseBegin("first-generation-has-no-first-session-id", "hooks/workflow-state/inheritance/apply.js");
-{
+test("first-generation-has-no-first-session-id", () => noNewFailures(failures, () => {
   check("A10: a first generation carries no first_session_id", () => {
     F.seedUpstream("a10-a");
     eq(Object.prototype.hasOwnProperty.call(F.raw("a10-a"), "first_session_id"), false, "first_session_id key on A");
@@ -333,8 +337,5 @@ caseBegin("first-generation-has-no-first-session-id", "hooks/workflow-state/inhe
     eq(Object.prototype.hasOwnProperty.call(F.raw("a10b-a"), "first_session_id"), false, "first_session_id key on A");
     eq(b.first_session_id, "a10b-a", "B.first_session_id");
   });
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

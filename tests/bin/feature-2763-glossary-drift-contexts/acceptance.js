@@ -75,4 +75,50 @@ function run(F) {
   docsStage(F);
 }
 
-module.exports = { run };
+// Plan S4-6: a spelling declared by the Identifier bullet of a glossary entry and one declared by
+// the Identifier cell of a V3 intent row are both left alone mid-line in a tests-stage comment.
+const V3_HEADER = "| Term | Category | Operation | Definition | Identifier | Homographs |\n|---|---|---|---|---|---|";
+function declaredStage(F) {
+  const files = glossaryFiles(F);
+  files["docs/glossary/internal.md"] = files["docs/glossary/internal.md"].replace(
+    /(### allow-deny hook\n\n- \*\*Definition\*\*: [^\n]*\n)/, "$1- **Identifier**: `allow-deny-hook`\n");
+  const repo = F.mkRepo("c-declared", files);
+  const sid = F.newSid("c-declared");
+  const intent = F.intentBody({ rows: [] }).replace(/## Glossary\n\n[\s\S]*?\n\n## Goal/,
+    `## Glossary\n\n${V3_HEADER}\n| fizz-buzz gate | internal | add | A fixture term. | \`fizz-buzz-gate\` |  |\n\n## Goal`);
+  // The V3 term exists only through this replace; without the row the "no DRIFT" below is vacuous.
+  F.check("acceptance declared spellings: the intent body carries the V3 fizz-buzz gate row",
+    intent.includes(V3_HEADER) && intent.includes("| fizz-buzz gate |"), intent);
+  F.writePlan(sid, "intent", intent);
+  // Line 4 is the live control: an undeclared spelling of the V3 term drifts, so the term is read.
+  const text = `"use strict";\n// a mid-line allow-deny-hook here\n// a mid-line fizz-buzz-gate here\n// the fizz buzz gate here\nmodule.exports = 1;\n`;
+  F.stageFile(repo, "tests/x.js", text);
+  F.seedAt(sid, F.STAGE_STEP.tests, repo);
+  const r = F.drift(sid, "tests", repo, false);
+  const found = F.driftLines(r.all);
+  F.check("acceptance declared spellings: glossary Identifier and V3 intent Identifier -> exit 1, only the control drifts",
+    F.reached(r) && r.code === 1 && found.length === 1 && found[0].term === "fizz-buzz gate" &&
+    found[0].variant === "fizz buzz gate" && found[0].line === lineOf(text, "the fizz buzz gate") &&
+    found[0].file.endsWith("tests/x.js"), `code=${r.code} ${r.all}`);
+}
+
+// Plan S4-6: a 100,000-character run on a staged line goes through the CLI within LIMIT_MS.
+const LIMIT_MS = 10000;
+function longLineStage(F) {
+  const repo = F.mkRepo("c-long", glossaryFiles(F));
+  const sid = F.newSid("c-long");
+  F.stageFile(repo, "tests/long.js", `"use strict";\n// ${"a".repeat(100000)}\nmodule.exports = 1;\n`);
+  F.seedAt(sid, F.STAGE_STEP.tests, repo);
+  const start = Date.now();
+  const r = F.drift(sid, "tests", repo, false);
+  const took = Date.now() - start;
+  F.check(`acceptance long line: exit 0 within ${LIMIT_MS} ms`,
+    F.reached(r) && r.code === 0 && took < LIMIT_MS, `code=${r.code} took=${took}ms ${String(r.all).slice(0, 400)}`);
+}
+
+function runDeclared(F) {
+  declaredStage(F);
+  longLineStage(F);
+}
+
+module.exports = { run, runDeclared };

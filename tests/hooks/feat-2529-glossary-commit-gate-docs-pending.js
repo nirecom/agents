@@ -10,6 +10,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -20,6 +22,10 @@ process.chdir(os.tmpdir());
 const F = require("../lib/glossary-check-fixture");
 const cases = require("./feat-2529-glossary-commit-gate/cases");
 const pending = require("./feat-2529-glossary-commit-gate/pending");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 function guarded(name, fn) {
   try {
@@ -30,12 +36,11 @@ function guarded(name, fn) {
 }
 
 caseBegin("commit gate blocks missing stale and unavailable glossary records for complete skipped and worktree steps", "hooks/workflow-gate/commit-gate-steps.js");
-guarded("commit gate cases docs stage", () => cases.runStages(["docs"]));
+test("commit gate blocks missing stale and unavailable glossary records for complete skipped and worktree steps", () =>
+  noNewFailures(F.failureCount, () => guarded("commit gate cases docs stage", () => cases.runStages(["docs"]))));
 caseEnd();
 
 caseBegin("commit gate blocks a missing glossary record for a pending step whose stage targets are staged", "hooks/workflow-gate/commit-gate-steps.js");
-guarded("commit gate pending", pending.run);
+test("commit gate blocks a missing glossary record for a pending step whose stage targets are staged", () =>
+  noNewFailures(F.failureCount, () => guarded("commit gate pending", pending.run)));
 caseEnd();
-
-restoreIsolation();
-F.finish();

@@ -12,6 +12,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -20,6 +22,10 @@ process.chdir(os.tmpdir());
 
 const F = require("../lib/glossary-check-fixture");
 const intentRows = require("./feat-2529-glossary-fingerprint-inputs/intent-rows");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 // Every section reports through F.check; an exception in one section is one failure, not an abort.
 function guarded(name, fn) {
@@ -31,11 +37,9 @@ function guarded(name, fn) {
 }
 
 caseBegin("each intent glossary row change stales the record and edits outside it do not", "hooks/workflow-state/glossary-check/scope.js");
-guarded("intent_rows input", () => {
-  intentRows.runRows(F.RA_STAGES);
-  intentRows.runProvenance();
-});
+test("each intent glossary row change stales the record and edits outside it do not", () =>
+  noNewFailures(F.failureCount, () => guarded("intent_rows input", () => {
+    intentRows.runRows(F.RA_STAGES);
+    intentRows.runProvenance();
+  })));
 caseEnd();
-
-restoreIsolation();
-F.finish();

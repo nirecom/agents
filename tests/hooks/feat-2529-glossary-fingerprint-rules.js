@@ -10,6 +10,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -18,14 +20,17 @@ process.chdir(os.tmpdir());
 
 const F = require("../lib/glossary-check-fixture");
 const rules = require("./feat-2529-glossary-fingerprint-inputs/rules");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 caseBegin("a changed rule module stales the record through the ruleModules seam", "hooks/workflow-state/glossary-check/scope.js");
-try {
-  rules.run();
-} catch (e) {
-  F.check("rules input ran to the end", false, (e && e.stack) || e);
-}
+test("a changed rule module stales the record through the ruleModules seam", () => noNewFailures(F.failureCount, () => {
+  try {
+    rules.run();
+  } catch (e) {
+    F.check("rules input ran to the end", false, (e && e.stack) || e);
+  }
+}));
 caseEnd();
-
-restoreIsolation();
-F.finish();

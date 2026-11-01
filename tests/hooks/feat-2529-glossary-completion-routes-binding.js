@@ -10,6 +10,8 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "g2529-transcripts-"));
@@ -20,6 +22,10 @@ const F = require("../lib/glossary-check-fixture");
 const boundary = require("./feat-2529-glossary-completion/boundary");
 const fingerprint = require("./feat-2529-glossary-completion/fingerprint");
 const lifecycle = require("./feat-2529-glossary-completion/lifecycle");
+after(() => {
+  restoreIsolation();
+  F.finish();
+});
 
 // Every part reports through F.check; an exception in one part is one failure, not an abort.
 function guarded(name, fn) {
@@ -31,16 +37,16 @@ function guarded(name, fn) {
 }
 
 caseBegin("each stage completion route refuses without a record and completes with a clean record", "hooks/workflow-state/state-io/events.js");
-guarded("completion routes", boundary.routes);
+test("each stage completion route refuses without a record and completes with a clean record", () =>
+  noNewFailures(F.failureCount, () => guarded("completion routes", boundary.routes)));
 caseEnd();
 
 caseBegin("artifact input binds to the approval range for plans and to staged blobs for commits", "hooks/workflow-state/glossary-check/scope.js");
-guarded("fingerprint binding", fingerprint.run);
+test("artifact input binds to the approval range for plans and to staged blobs for commits", () =>
+  noNewFailures(F.failureCount, () => guarded("fingerprint binding", fingerprint.run)));
 caseEnd();
 
 caseBegin("an R-S record is judged per commit across a multi-commit workflow", "hooks/workflow-gate/glossary-record-checker.js");
-guarded("multi-commit lifecycle", lifecycle.run);
+test("an R-S record is judged per commit across a multi-commit workflow", () =>
+  noNewFailures(F.failureCount, () => guarded("multi-commit lifecycle", lifecycle.run)));
 caseEnd();
-
-restoreIsolation();
-F.finish();

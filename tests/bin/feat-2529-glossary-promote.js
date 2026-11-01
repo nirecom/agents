@@ -11,47 +11,57 @@
 // Not expressible black-box: a layer-2 definition-mismatch (promote writes the intent row's
 // own definition, so the applied result always matches it); T3-1 covers matchOperations.
 
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const { totals } = require("./feat-2529-glossary-promote/lib");
 const apply = require("./feat-2529-glossary-promote/apply");
 const rows = require("./feat-2529-glossary-promote/rows");
 const pin = require("./feat-2529-glossary-promote/pin");
 
+const fails = () => totals.failed;
+after(() => process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`));
+
 caseBegin("t3-5-applies-add-delete-redefine-with-counters", "bin/glossary-promote");
-apply.appliesAllOperations();
+test("t3-5-applies-add-delete-redefine-with-counters", () => noNewFailures(fails, apply.appliesAllOperations));
 caseEnd();
 
 caseBegin("t3-5-same-category-add-is-skipped-existing", "bin/glossary-promote");
-apply.skippedExisting();
+test("t3-5-same-category-add-is-skipped-existing", () => noNewFailures(fails, apply.skippedExisting));
 caseEnd();
 
 caseBegin("t3-5-same-category-rewrite-needs-redefine", "bin/glossary-promote");
-apply.sameCategoryRewrite();
+test("t3-5-same-category-rewrite-needs-redefine", () => noNewFailures(fails, apply.sameCategoryRewrite));
 caseEnd();
 
 caseBegin("t3-5-case-only-rename-pair-applies", "bin/glossary-promote");
-apply.caseOnlyRename();
+test("t3-5-case-only-rename-pair-applies", () => noNewFailures(fails, apply.caseOnlyRename));
+caseEnd();
+
+caseBegin("t3-5-promote-writes-identifier-fields", "bin/glossary-promote");
+test("t3-5-promote-writes-identifier-fields", () => noNewFailures(fails, apply.writesIdentifierFields));
+caseEnd();
+
+caseBegin("t3-5-promote-empty-cells-write-no-fields", "bin/glossary-promote");
+test("t3-5-promote-empty-cells-write-no-fields", () => noNewFailures(fails, apply.emptyCellsWriteNoFields));
 caseEnd();
 
 caseBegin("t3-5-layer-1-row-blocks", "bin/glossary-promote");
-rows.layerOneBlocks();
+test("t3-5-layer-1-row-blocks", () => noNewFailures(fails, rows.layerOneBlocks));
 caseEnd();
 
 caseBegin("t3-5-category-move-pair", "bin/glossary-promote");
-rows.categoryMove();
+test("t3-5-category-move-pair", () => noNewFailures(fails, rows.categoryMove));
 caseEnd();
 
 caseBegin("t3-5-layer-0-approval-pin-and-accepted", "bin/glossary-promote");
-pin.unapprovedAndModified();
+test("t3-5-layer-0-approval-pin-and-accepted", () => noNewFailures(fails, pin.unapprovedAndModified));
 caseEnd();
 
 caseBegin("t3-5-layer-0-issues-only-edit", "bin/glossary-promote");
-pin.issuesOnlyEdit();
+test("t3-5-layer-0-issues-only-edit", () => noNewFailures(fails, pin.issuesOnlyEdit));
 caseEnd();
 
 caseBegin("t3-5-intent-basename-is-usage", "bin/glossary-promote");
-pin.basenameIsUsage();
+test("t3-5-intent-basename-is-usage", () => noNewFailures(fails, pin.basenameIsUsage));
 caseEnd();
-
-process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
-process.exitCode = totals.failed === 0 ? 0 : 1;

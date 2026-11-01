@@ -12,22 +12,24 @@
 // - which transcript a real subagent hook input points to (turn context is passed in-process here)
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
-const go = (name, fn) => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F));
-
-try {
-caseBegin("turn base: appended chains, the 200-commit limit, the previous turn", "hooks/lib/plan-sync/turn-commit.js");
-  go("range");
-caseEnd();
-caseBegin("fail closed: an unreadable log gives Turn-Base unknown and no turn range", "hooks/lib/plan-sync/turn-commit.js");
-  go("fail-closed");
-caseEnd();
-caseBegin("fail closed: the trailer parser accepts exactly unknown as a Turn-Base", "hooks/lib/plan-sync/turn-trailer.js");
-  go("fail-closed", "runTrailer");
-caseEnd();
-} finally {
+after(() => {
   F.finish();
   restore();
-}
+});
+const go = (name, fn) => noNewFailures(F.failureCount,
+  () => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F)));
+
+caseBegin("turn base: appended chains, the 200-commit limit, the previous turn", "hooks/lib/plan-sync/turn-commit.js");
+test("turn base: appended chains, the 200-commit limit, the previous turn", () => go("range"));
+caseEnd();
+caseBegin("fail closed: an unreadable log gives Turn-Base unknown and no turn range", "hooks/lib/plan-sync/turn-commit.js");
+test("fail closed: an unreadable log gives Turn-Base unknown and no turn range", () => go("fail-closed"));
+caseEnd();
+caseBegin("fail closed: the trailer parser accepts exactly unknown as a Turn-Base", "hooks/lib/plan-sync/turn-trailer.js");
+test("fail closed: the trailer parser accepts exactly unknown as a Turn-Base", () => go("fail-closed", "runTrailer"));
+caseEnd();

@@ -31,8 +31,8 @@ const DOC = "skills/_shared/test-design/case-markers/js.md";
 const HINT_TEXT = "Require node:test and write each case as test(...): const { test } = require(\"node:test\"); "
   + "keep the shared helpers from require(\"../lib/harness\")";
 const HINT = `${HINT_TEXT} — see ${DOC}.`;
-const COMMIT_HEADLINE = "Commit blocked: new test file(s) do not run under their language's required runner.";
-const highLine = (name) => `HIGH: ${name}: new test entrypoint does not run under its required runner (skip-reason custom-runner) code=${CODE}`;
+const COMMIT_HEADLINE = "Commit blocked: test file(s) do not run under their language's required runner.";
+const highLine = (name) => `HIGH: ${name}: test entrypoint does not run under its required runner (skip-reason custom-runner) code=${CODE}`;
 const SKIP_LINE = "pre-commit: test language registry not readable — test-runner check skipped (commit continues)";
 
 module.exports = { lines, plain, BODY, CODE, WARN_CODE, DOC, HINT_TEXT, HINT, COMMIT_HEADLINE, highLine, SKIP_LINE };

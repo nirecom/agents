@@ -86,6 +86,39 @@ test("U2: --rel to a node:test copy exits 0", () => {
   assert.strictEqual(r.rc, 0, r.show);
 });
 
+test("G4 (#2865): --rel x --head <path> <file>: a plain script exits 1, a node:test file exits 0", () => {
+  const head = put("head-copy.txt", F.BODY.plain);
+  const plain = cli("--rel", "tests/bin/x.js", "--head", head, put("g4-plain.txt", F.BODY.plain));
+  assert.strictEqual(plain.rc, 1, plain.show);
+  assert.strictEqual(plain.out, `${F.highLine("tests/bin/x.js")}\n`, plain.show);
+  const ok = cli("--rel", "tests/bin/x.js", "--head", head, put("g4-runner.txt", F.BODY.nodeTest));
+  assert.strictEqual(ok.rc, 0, ok.show);
+  assert.strictEqual(ok.out, "", ok.show);
+});
+
+test("G4 (#2865): --head is ignored: the verdict comes from the file, whatever the head copy holds", () => {
+  const plainHead = put("g4-head-plain.txt", F.BODY.plain);
+  const runnerHead = put("g4-head-runner.txt", F.BODY.nodeTest);
+  assert.strictEqual(cli("--rel", "tests/bin/x.js", "--head", runnerHead, put("g4-a.txt", F.BODY.plain)).rc, 1);
+  assert.strictEqual(cli("--rel", "tests/bin/x.js", "--head", plainHead, put("g4-b.txt", F.BODY.nodeTest)).rc, 0);
+});
+
+test("G4 (#2865): --head without a value exits 2", () => {
+  const file = put("g4-novalue.txt", F.BODY.plain);
+  const r = cli("--rel", "tests/bin/x.js", "--head");
+  assert.strictEqual(r.rc, 2, r.show);
+  assert.strictEqual(r.out, "", r.show);
+  const withFile = cli("--rel", "tests/bin/x.js", file, "--head");
+  assert.strictEqual(withFile.rc, 2, withFile.show);
+});
+
+test("G4 (#2865): with no --rel and no file the usage line goes to stderr and it exits 1, as before", () => {
+  const r = cli();
+  assert.strictEqual(r.rc, 1, r.show);
+  assert.strictEqual(r.out, "", r.show);
+  assert.ok(r.err.includes("Usage:"), r.show);
+});
+
 test("U1: the bash adapter passes the arguments and the exit code through", () => {
   const r = spawnSync("bash", [SH, "--rel", "tests/bin/x.js", put("adapter.txt", F.BODY.plain)], {
     cwd: ROOT, encoding: "utf8", env: process.env, timeout: 60000,

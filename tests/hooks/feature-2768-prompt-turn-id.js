@@ -13,9 +13,15 @@ const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
+after(() => {
+  F.finish();
+  restore();
+});
 const HOOK = "hooks/user-prompt-submit-turn-id.js";
 const HEX32 = /^[0-9a-f]{32}$/;
 const hookInput = (sid, prompt) => ({ session_id: sid, hook_event_name: "UserPromptSubmit",
@@ -45,8 +51,8 @@ const tmpLeftovers = (sid) => { const d = path.dirname(F.promptTurnPath(sid)); r
 // failingFs() -> an fs whose renameSync throws, every other call left to the real fs.
 const failingFs = () => Object.create(fs, { renameSync: { value: () => { throw Object.assign(new Error("EPERM rename (test)"), { code: "EPERM" }); } } });
 
-try {
 caseBegin("P1-P3, P9, P9b hook writes one turn id per prompt, fail-open", "hooks/user-prompt-submit-turn-id.js");
+test("P1-P3, P9, P9b hook writes one turn id per prompt, fail-open", () => noNewFailures(F.failureCount, () => {
   F.guard("P1 hook writes prompt-turn.json", () => {
     const sid = F.newSid("p1");
     const r = F.runNode(HOOK, hookInput(sid, "hello, plan this"));
@@ -162,9 +168,11 @@ caseBegin("P1-P3, P9, P9b hook writes one turn id per prompt, fail-open", "hooks
         tree.filter((p) => !tree0.includes(p)).concat(tree0.filter((p) => !tree.includes(p))).join(","));
     }
   });
+}));
 caseEnd();
 
 caseBegin("P4, P8, P9 writePromptTurn, readPromptTurn and resolveTurnContext", "hooks/lib/prompt-turn-id.js");
+test("P4, P8, P9 writePromptTurn, readPromptTurn and resolveTurnContext", () => noNewFailures(F.failureCount, () => {
   F.guard("P4 constants", () => {
     const L = lib();
     if (!L) return;
@@ -255,8 +263,5 @@ caseBegin("P4, P8, P9 writePromptTurn, readPromptTurn and resolveTurnContext", "
     F.check("P9 the file still holds the first id", (F.readPromptTurnFile(sid) || {}).turn_id === id1, JSON.stringify(F.readPromptTurnFile(sid)));
     F.check("P9 no temp file left behind", tmpLeftovers(sid).length === 0, tmpLeftovers(sid).join(","));
   });
+}));
 caseEnd();
-} finally {
-  F.finish();
-  restore();
-}

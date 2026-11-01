@@ -76,8 +76,9 @@ ex_lang() {
       EX_LINES=('# Tests: bin/a.ps1' '# Tags: scope:common' 'BeforeAll {' "    . (Join-Path \$PSScriptRoot '..' 'lib' 'harness.ps1')" '}' "Describe 'a' {" "    It 'runs' { 1 | Should -Be 1 }" '}')
       EX_ANCHOR="Describe 'a' {"; EX_CTR=$'$script:Passed = 0\nDescribe \'a\' {'; EX_OTHER="It 'runs'"; EX_OTHER_NEW="It 'still runs'" ;;
     js) EX_RT=""; EX_DETAIL="PASS=0"
-      EX_LINES=('// Tests: bin/a.js' '// Tags: scope:common' 'const harness = require("../lib/harness");' 'console.log("start");' 'console.log(typeof harness);')
-      EX_ANCHOR='console.log("start");'; EX_CTR=$'let PASS = 0;\nconsole.log("start");'; EX_OTHER='console.log(typeof harness);'; EX_OTHER_NEW='console.log(typeof harness, 1);' ;;
+      # node:test keeps the required-runner gate (#2865: existing files too) out of these self-impl rows.
+      EX_LINES=('// Tests: bin/a.js' '// Tags: scope:common' 'const { test } = require("node:test");' 'const harness = require("../lib/harness");' 'console.log("start");' 'test("a", () => console.log(typeof harness));')
+      EX_ANCHOR='console.log("start");'; EX_CTR=$'let PASS = 0;\nconsole.log("start");'; EX_OTHER='test("a", () => console.log(typeof harness));'; EX_OTHER_NEW='test("a", () => console.log(typeof harness, 1));' ;;
   esac
   case "$1" in
     bash) EX_EXT=sh; EX_REL() { printf 'tests/bin/%s.sh' "$1"; } ;;

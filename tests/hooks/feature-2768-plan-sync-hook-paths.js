@@ -11,19 +11,21 @@
 // - whether the model actually prints the TURN_DIFF_DUTY line (no live model is driven)
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
-const go = (name, fn) => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-hook-paths/${name}`)[fn || "run"](F));
-
-try {
-caseBegin("hook paths fold one turn into one commit", "hooks/show-plan-link.js");
-  go("fold");
-caseEnd();
-caseBegin("one PostToolUse writes several plans and session-progress.md", "hooks/show-plan-link.js");
-  go("fold", "runMulti");
-caseEnd();
-} finally {
+after(() => {
   F.finish();
   restore();
-}
+});
+const go = (name, fn) => noNewFailures(F.failureCount,
+  () => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-hook-paths/${name}`)[fn || "run"](F)));
+
+caseBegin("hook paths fold one turn into one commit", "hooks/show-plan-link.js");
+test("hook paths fold one turn into one commit", () => go("fold"));
+caseEnd();
+caseBegin("one PostToolUse writes several plans and session-progress.md", "hooks/show-plan-link.js");
+test("one PostToolUse writes several plans and session-progress.md", () => go("fold", "runMulti"));
+caseEnd();

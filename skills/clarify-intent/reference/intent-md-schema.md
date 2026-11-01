@@ -43,6 +43,8 @@ Immediately after `## Issues`. The intent glossary lists only the terms this ses
 - Rename: a `delete` row for the old term plus an `add` row for the new one. Category move: a `delete` row in the old category plus an `add` row in the new one.
 - A same-category redefinition is one `redefine` row; a `delete` + `add` pair for the same term and category is a BLOCK (`use-redefine`); terms that differ only in case are a heading rename, written as that `delete` + `add` pair.
 - A legacy 3-column table (`| Term | Category | Definition |`) is still accepted; every row reads as `add`.
+- The 6-column header `| Term | Category | Operation | Definition | Identifier | Homographs |` adds the entry's optional Identifier and Homographs fields; a cell may be empty, uses the glossary bullet's value form (`rules/docs/glossary.md`), and must be empty on a `delete` row.
+- The 4- and 3-column tables cannot record those fields: an operation that adds or changes them needs a 6-column row, else it is blocked as `fields-unrecorded`.
 - The `session` category allows `add` only.
 - Category values and how to pick one: `rules/docs/glossary.md`.
 - Term + Operation must be unique (case-insensitive term) within the table.

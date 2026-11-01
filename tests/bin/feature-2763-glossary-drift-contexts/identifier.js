@@ -109,6 +109,80 @@ function run(F) {
   runTable(F, "identifier", ROWS, TERMS);
 }
 
+// Plan S4-1 / S3-6: declared Identifier spellings, passed as term records { term, identifiers,
+// homographs }. Only the literal declared spelling is excluded; every other spelling stays drift.
+const FB = "fizz-buzz gate";
+const REC = { term: FB, identifiers: ["fizz-buzz-gate"], homographs: [] };
+const ALLOW = { term: "allow-deny hook", identifiers: ["allow-deny-hook", "allow_deny_hook"], homographs: [] };
+const ROOTS = [{ term: ROOT_ID, identifiers: [], homographs: [] }, { term: "TARGET_MAIN_ROOT", identifiers: [], homographs: [] }];
+const DECLARED_ROWS = [
+  ["declared kebab mid-line in a code comment", "code", code("// a mid-line fizz-buzz-gate here"), [], [REC]],
+  ["declared kebab mid-line in markdown prose", "markdown", "a mid-line fizz-buzz-gate here", [], [REC]],
+  ["declared kebab with another term inside it", "code", code("// a mid-line fizz-buzz-gate here"), [], [REC, "buzz gate"]],
+  ["undeclared kebab with another term inside it (control)", "code", code("// a mid-line fizz-buzz-gate here"),
+    [[FB, "fizz-buzz-gate"]], [FB, "buzz gate"]],
+  ["L42 sentence with allow-deny-hook declared", "code", code("// a mid-line allow-deny-hook here"), [], [ALLOW]],
+  ["two declared spellings sharing one key", "code", code("// a mid-line allow-deny-hook and allow_deny_hook here"), [], [ALLOW]],
+  ["two declared spellings sharing one key in prose", "markdown", "set allow_deny_hook and allow-deny-hook here", [], [ALLOW]],
+  ["snake form of a declared spelling stays drift", "markdown", "the fizz_buzz_gate here", [[FB, "fizz_buzz_gate"]], [REC]],
+  ["all-caps form of a declared spelling stays drift", "markdown", "the `FIZZ-BUZZ-GATE` here", [[FB, "FIZZ-BUZZ-GATE"]], [REC]],
+  ["plural of a declared spelling stays drift", "markdown", "the fizz-buzz-gates here", [[FB, "fizz-buzz-gates"]], [REC]],
+  ["space-split declared spelling stays drift", "markdown", "the fizz buzz gate here", [[FB, "fizz buzz gate"]], [REC]],
+  ["lower-case word split in a code comment stays drift", "code", code("// the fizz buzz gate here"), [[FB, "fizz buzz gate"]], [REC]],
+  // declaredRanges boundary (S3-2): only a whole-token occurrence is a declared range. The extra
+  // term is the kebab token itself: a wrongly marked partial occurrence would hide its drift.
+  ["declared spelling preceded by a word char is not a declared range", "code", code("// a mid-line xfizz-buzz-gate here"),
+    [["xfizz buzz gate", "xfizz-buzz-gate"]], [REC, "xfizz buzz gate"]],
+  ["declared spelling followed by a word char is not a declared range", "code", code("// a mid-line fizz-buzz-gatex here"),
+    [["fizz buzz gatex", "fizz-buzz-gatex"]], [REC, "fizz buzz gatex"]],
+  ["no declaration: preceded by a word char (control)", "code", code("// a mid-line xfizz-buzz-gate here"),
+    [["xfizz buzz gate", "xfizz-buzz-gate"]], ["xfizz buzz gate"]],
+  ["no declaration: followed by a word char (control)", "code", code("// a mid-line fizz-buzz-gatex here"),
+    [["fizz buzz gatex", "fizz-buzz-gatex"]], ["fizz buzz gatex"]],
+  // S3-1 termRecord: records (and a plain string) of one term are merged, so every declared spelling counts.
+  ["same term in two records: both declared spellings are excluded", "code",
+    code("// a mid-line fizz-buzz-gate and fizz_buzz_gate here"), [],
+    [REC, { term: FB, identifiers: ["fizz_buzz_gate"], homographs: [] }]],
+  ["same term as a string then a record: the record's spelling is excluded", "code",
+    code("// a mid-line fizz-buzz-gate here"), [], [FB, REC]],
+  ["same term as a record then a string: the record's spelling is excluded", "code",
+    code("// a mid-line fizz-buzz-gate here"), [], [REC, FB]],
+  ["identifier records: space-split drift is reported per term", "markdown", "set agents main root and TARGET MAIN ROOT here",
+    [[ROOT_ID, "agents main root"], ["TARGET_MAIN_ROOT", "TARGET MAIN ROOT"]], ROOTS],
+  ["identifier records: hyphen-split drift is reported per term", "markdown", "set agents-main-root and target-main-root here",
+    [[ROOT_ID, "agents-main-root"], ["TARGET_MAIN_ROOT", "target-main-root"]], ROOTS],
+];
+
+// The index keeps both declared spellings that share the raw key allowdenyhook (S3-1 addTo key).
+function runDeclaredIndex(F) {
+  const terms = F.mod("bin/lib/glossary-drift/terms.js");
+  if (!terms) return;
+  if (!F.check("bin/lib/glossary-drift/terms.js exports indexTerms", typeof terms.indexTerms === "function",
+    Object.keys(terms).join(","))) return;
+  let index;
+  try {
+    index = terms.indexTerms([ALLOW]);
+  } catch (e) {
+    F.check("indexTerms accepts a term record", false, `threw ${e && e.message}`);
+    return;
+  }
+  const entry = index.identRaw && index.identRaw.get("allowdenyhook");
+  const cands = entry ? entry.candidates.filter((c) => c.declared === true) : [];
+  const spellings = cands.map((c) => c.spelling).sort();
+  F.check("indexTerms keeps both declared spellings under one raw key",
+    JSON.stringify(spellings) === JSON.stringify(["allow-deny-hook", "allow_deny_hook"]), JSON.stringify(spellings));
+  F.check("indexTerms declared candidates belong to the owning term",
+    cands.length > 0 && cands.every((c) => c.term === "allow-deny hook"), JSON.stringify(cands.map((c) => c.term)));
+  const declared = Array.isArray(index.declared) ? [...index.declared].sort() : index.declared;
+  F.check("indexTerms lists the declared spellings in index.declared",
+    JSON.stringify(declared) === JSON.stringify(["allow-deny-hook", "allow_deny_hook"]), JSON.stringify(declared));
+}
+
+function runDeclared(F) {
+  runTable(F, "declared", DECLARED_ROWS, []);
+  runDeclaredIndex(F);
+}
+
 const SINGULAR_ROWS = [
   ["regular plural", "notes", "note"],
   ["-ies plural", "entries", "entry"],
@@ -126,4 +200,4 @@ function runSingular(F) {
   }
 }
 
-module.exports = { run, runSingular, runTable };
+module.exports = { run, runDeclared, runSingular, runTable };

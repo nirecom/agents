@@ -53,7 +53,8 @@ module inherits `GIT_DIR` / `GIT_INDEX_FILE` from the environment. It reads the 
 ([case-marker-gate.md](case-marker-gate.md#merge-commits)).
 
 Worktree resolution order: `opts.repoDir`, then `resolveSessionWorktreePath(sid)`, then the git root of
-the cwd. None resolving is the error `worktree-unresolved`.
+the cwd. The resolver accepts a candidate only when `isOwnedLinkedWorktree` proves it a live linked
+worktree from its gitlink alone, so a WE-11 leftover never resolves (#2875). None resolving is the error `worktree-unresolved`.
 
 ## Fingerprint (invariant I-FP)
 
@@ -196,7 +197,7 @@ The glossary provenance check compares category-file term sets only, so the form
 |---|---|
 | none | `BLOCK: no-session` on stdout, nothing recorded, no ACCEPTED hint, exit 1 |
 | env | case B: every operation blocked as `session-unverified`, recorded on the env session, hint to re-run with `--session` |
-| explicit | `loadIntentGlossary` judges, in order: A `intent-missing`; P `intent-unapproved` (no confirm-sentinel approval, no sha, or another session's id); P `intent-modified` (sha differs); C `intent-unreadable`; else `matchOperations` reasons `not-in-intent`, `category-mismatch`, `session-term`, `definition-mismatch` |
+| explicit | `loadIntentGlossary` judges, in order: A `intent-missing`; P `intent-unapproved` (no confirm-sentinel approval, no sha, or another session's id); P `intent-modified` (sha differs); C `intent-unreadable`; else `matchOperations` reasons `not-in-intent`, `category-mismatch`, `session-term`, `definition-mismatch`, `fields-mismatch` (a V3 row whose Identifier or Homographs differ from the entry), `fields-unrecorded` (a V1 or V2 row on an operation that changes those fields) |
 
 An operation passes when a grant of the same fingerprint covers its `{norm, operation, category}`. A
 failed record write still exits 1 and prints the recovery. Each remaining block prints

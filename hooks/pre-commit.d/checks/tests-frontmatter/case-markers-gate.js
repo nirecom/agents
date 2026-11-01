@@ -3,6 +3,7 @@
 // of hooks/lib/precommit-tests-frontmatter.sh). The staged blob of every new (no parent has it, #2812) case-marker
 // entrypoint, in a repo whose index carries its entry's helperLibrary, and of every new reader-less
 // one, is judged in memory. A checker infra error fails open with a stderr diagnostic.
+// placedTargets is the same selection without the "new" filter; the test-runner gate uses it (#2865).
 
 const R = require("../../../lib/test-gates/registry");
 const S = require("../../../lib/test-gates/source");
@@ -14,8 +15,8 @@ const { parentsOf } = require("./parents");
 
 const ACMR = new Set(["A", "C", "M", "R"]);
 
-// newTargets -> [{ rel, entry }] or null when the registry is unreadable.
-function newTargets({ context, snapshot, files }) {
+// placedTargets -> [{ rel, entry }] of every staged (ACMR) target, or null when the registry is unreadable.
+function placedTargets({ context, snapshot, files }) {
   const inIndex = new Map();
   const indexHas = (p) => {
     if (!inIndex.has(p)) inIndex.set(p, git(context.repoTop, ["cat-file", "-e", `:${p}`], { env: context.env }).ok);
@@ -32,9 +33,17 @@ function newTargets({ context, snapshot, files }) {
       if (!hl || !indexHas(hl)) continue;
     } else if (!placement.isReaderlessCaseMarkerTarget(rel)) continue;
     targets.asked = true;
-    if (parentsOf({ context, snapshot, files }).record(rel).in_parent === 1) continue;
     targets.push({ rel, entry: m.entry });
   }
+  return targets;
+}
+
+// newTargets -> the placedTargets no parent has (#2812), or null when the registry is unreadable.
+function newTargets(args) {
+  const placed = placedTargets(args);
+  if (!placed) return null;
+  const targets = placed.filter(({ rel }) => parentsOf(args).record(rel).in_parent !== 1);
+  if (placed.asked) targets.asked = true;
   return targets;
 }
 
@@ -82,4 +91,4 @@ function gate({ context, snapshot, files }) {
   return { block: true, messages: [...messages, ...high.map(out), out(""), out("Commit blocked: new test file(s) fail the case-marker gate."), ...missing.map(out), ...malformed.map(out)] };
 }
 
-module.exports = { gate, newTargets };
+module.exports = { gate, newTargets, placedTargets };

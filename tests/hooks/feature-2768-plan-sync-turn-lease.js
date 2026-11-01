@@ -11,19 +11,21 @@
 // - races against a second real machine (the foreign push is injected through the ssh stub)
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
-const go = (name, fn) => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F));
-
-try {
-caseBegin("leased replacement push", "hooks/lib/plan-sync/lease-push.js");
-  go("lease");
-caseEnd();
-caseBegin("a foreign push between tip read and replacement push misses the lease", "hooks/lib/plan-sync/lease-push.js");
-  go("lease", "runRace");
-caseEnd();
-} finally {
+after(() => {
   F.finish();
   restore();
-}
+});
+const go = (name, fn) => noNewFailures(F.failureCount,
+  () => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F)));
+
+caseBegin("leased replacement push", "hooks/lib/plan-sync/lease-push.js");
+test("leased replacement push", () => go("lease"));
+caseEnd();
+caseBegin("a foreign push between tip read and replacement push misses the lease", "hooks/lib/plan-sync/lease-push.js");
+test("a foreign push between tip read and replacement push misses the lease", () => go("lease", "runRace"));
+caseEnd();

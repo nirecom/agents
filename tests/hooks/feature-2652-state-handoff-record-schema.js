@@ -10,6 +10,7 @@
 // - a live hook writing records while next-step runs in a real session; here the records are appended
 //   through appendEvents in one batch and next-step is spawned against a fixture state.
 
+const { after } = require("node:test");
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const fs = require("fs");
 const os = require("os");
@@ -19,7 +20,7 @@ const { spawnSync } = require("child_process");
 const restore = isolate();
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "f2652s-"));
 process.chdir(SCRATCH);
-process.on("exit", () => {
+after(() => {
   process.chdir(os.tmpdir());
   restore();
   fs.rmSync(SCRATCH, { recursive: true, force: true });

@@ -3,11 +3,13 @@
 // Tests: hooks/lib/rtk-guard-audit.js
 // Tags: scope:issue-specific, rtk, guard-audit, hook, rotation
 // tests/hooks/feature-2326-rtk-guard-audit.js
-// No-framework Node tests for the NEW hooks/lib/rtk-guard-audit.js writer +
-// file-lock rotation. TEST-FIRST: the module does not exist yet, so require()
-// fails and every case reports RED (module not loaded). All log/lock paths are
+// node:test cases for the hooks/lib/rtk-guard-audit.js writer +
+// file-lock rotation. When the module fails to load, every case reports RED
+// (module not loaded). All log/lock paths are
 // injected under a temp dir — never the real $HOME. Spec: detail plan §3/§5.
 
+const { caseBegin, caseEnd } = require("../lib/harness");
+const { test } = require("node:test");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -19,12 +21,6 @@ let mod = null;
 let loadErr = null;
 try { mod = require(MODULE); } catch (e) { loadErr = e; }
 
-let pass = 0;
-let fail = 0;
-function check(name, fn) {
-  try { fn(); console.log(`PASS: ${name}`); pass++; }
-  catch (e) { console.log(`FAIL: ${name} — ${e.message}`); fail++; }
-}
 function requireMod() {
   if (!mod) throw new Error(`module not loaded: ${(loadErr && loadErr.code) || loadErr}`);
   return mod;
@@ -34,7 +30,8 @@ function mkTmp(prefix) {
 }
 
 // --- Writer: one JSONL line with v/ts/guard/action/command. ---
-check("writer: one JSONL line with fields v/ts/guard/action/command", () => {
+caseBegin("writer-one-jsonl-line", "hooks/lib/rtk-guard-audit.js");
+test("writer: one JSONL line with fields v/ts/guard/action/command", () => {
   const m = requireMod();
   const dir = mkTmp("rtkga-basic-");
   const logPath = path.join(dir, "guard.log");
@@ -51,16 +48,20 @@ check("writer: one JSONL line with fields v/ts/guard/action/command", () => {
   assert.strictEqual(rec.command, "git rev-parse HEAD");
   assert.strictEqual(rec.ts, new Date(NOW).toISOString(), "ts reflects injected now");
 });
+caseEnd();
 
 // --- resolveLogPath: injected logPath wins. ---
-check("resolveLogPath: opts.logPath injection wins", () => {
+caseBegin("resolve-log-path-injection", "hooks/lib/rtk-guard-audit.js");
+test("resolveLogPath: opts.logPath injection wins", () => {
   const m = requireMod();
   const p = path.join(os.tmpdir(), "explicit-rtkga", "guard.log");
   assert.strictEqual(m.resolveLogPath({ logPath: p }), p);
 });
+caseEnd();
 
 // --- Rotation: MAX_BYTES overflow renames base→.1, shifts, drops oldest. ---
-check("rotation: overflow rotates base→.1, shifts .1→.2/.2→.3, drops beyond MAX_ROTATED", () => {
+caseBegin("rotation-shifts-and-drops", "hooks/lib/rtk-guard-audit.js");
+test("rotation: overflow rotates base→.1, shifts .1→.2/.2→.3, drops beyond MAX_ROTATED", () => {
   const m = requireMod();
   assert.strictEqual(m.MAX_ROTATED, 3, "MAX_ROTATED is 3");
   const dir = mkTmp("rtkga-rot-");
@@ -80,9 +81,11 @@ check("rotation: overflow rotates base→.1, shifts .1→.2/.2→.3, drops beyon
   assert.strictEqual(fs.readFileSync(logPath + ".3", "utf8"), "R2\n", "old .2 shifted to .3");
   assert.ok(!fs.existsSync(logPath + ".4"), "no .4 (oldest beyond MAX_ROTATED dropped)");
 });
+caseEnd();
 
 // --- Fail-open: writer-internal exception is swallowed, never thrown. ---
-check("writer: internal exception is swallowed (never thrown to caller)", () => {
+caseBegin("writer-swallows-internal-exception", "hooks/lib/rtk-guard-audit.js");
+test("writer: internal exception is swallowed (never thrown to caller)", () => {
   const m = requireMod();
   const dir = mkTmp("rtkga-swallow-");
   const blocker = path.join(dir, "blocker");
@@ -93,9 +96,11 @@ check("writer: internal exception is swallowed (never thrown to caller)", () => 
   });
   assert.ok(!fs.existsSync(logPath), "no log created under an unwritable path");
 });
+caseEnd();
 
 // --- Lock: stale lock (old mtime) stolen quickly (C2-iii). ---
-check("lock: stale lock (old mtime) is stolen and the record is written", () => {
+caseBegin("lock-stale-stolen", "hooks/lib/rtk-guard-audit.js");
+test("lock: stale lock (old mtime) is stolen and the record is written", () => {
   const m = requireMod();
   const dir = mkTmp("rtkga-stale-");
   const logPath = path.join(dir, "guard.log");
@@ -111,9 +116,11 @@ check("lock: stale lock (old mtime) is stolen and the record is written", () => 
   assert.ok(dt < m.LOCK_STALE_MS, `stale steal is fast (dt=${dt} < ${m.LOCK_STALE_MS})`);
   assert.ok(!fs.existsSync(lockPath), "lock released after writing");
 });
+caseEnd();
 
 // --- Lock: fresh lock forces a bounded wait, then steal past LOCK_STALE_MS (C2-iv). ---
-check("lock: fresh lock → wait past LOCK_STALE_MS then steal and proceed", () => {
+caseBegin("lock-fresh-wait-then-steal", "hooks/lib/rtk-guard-audit.js");
+test("lock: fresh lock → wait past LOCK_STALE_MS then steal and proceed", () => {
   const m = requireMod();
   const dir = mkTmp("rtkga-wait-");
   const logPath = path.join(dir, "guard.log");
@@ -126,6 +133,7 @@ check("lock: fresh lock → wait past LOCK_STALE_MS then steal and proceed", () 
   assert.strictEqual(JSON.parse(fs.readFileSync(logPath, "utf8").trim()).command, "wait-steal");
   assert.ok(dt >= m.LOCK_STALE_MS - 250, `waited ~LOCK_STALE_MS before steal (dt=${dt})`);
 });
+caseEnd();
 
 // --- Concurrency (C2): N workers × M records cross a rotation boundary. ---
 function gatherIds(dir, baseName) {
@@ -144,52 +152,43 @@ function gatherIds(dir, baseName) {
   }
   return ids;
 }
-async function concurrencyTest() {
-  const name = "concurrency: N×M records cross rotation with zero loss/dup, no deadlock";
-  try {
-    requireMod(); // RED fast when the module is missing (no workers spawned)
-    const dir = mkTmp("rtkga-conc-");
-    const logPath = path.join(dir, "guard.log");
-    const lockPath = logPath + ".lock";
-    const N = 4;
-    const M = 150;
-    // 2 KB padding per record → N*M ≈ 1.2 MB > MAX_BYTES, forcing ≥1 rotation.
-    const code =
-      "const mod=require(process.argv[1]);const wid=process.argv[2];" +
-      "const count=Number(process.argv[3]);const logPath=process.argv[4];" +
-      "const lockPath=process.argv[5];const pad='x'.repeat(2000);" +
-      "for(let i=0;i<count;i++){mod.recordGuardReject('gConc','W'+wid+'#'+i+' '+pad," +
-      "{logPath:logPath,lockPath:lockPath});}";
-    const spawnWorker = (wid) => new Promise((resolve) => {
-      const child = spawn(process.execPath,
-        ["-e", code, MODULE, String(wid), String(M), logPath, lockPath],
-        { stdio: "ignore" });
-      child.on("exit", (c) => resolve(c === null ? -1 : c));
-      child.on("error", () => resolve(-1));
-    });
-    const deadline = new Promise((_res, rej) =>
-      setTimeout(() => rej(new Error("concurrency deadline exceeded (possible deadlock)")), 90000));
-    const codes = await Promise.race([
-      Promise.all(Array.from({ length: N }, (_v, i) => spawnWorker(i))),
-      deadline,
-    ]);
-    assert.ok(codes.every((c) => c === 0), `all workers exit 0 — no deadlock (got ${JSON.stringify(codes)})`);
-    const ids = gatherIds(dir, "guard.log").sort();
-    const expected = [];
-    for (let w = 0; w < N; w++) for (let i = 0; i < M; i++) expected.push("W" + w + "#" + i);
-    expected.sort();
-    assert.strictEqual(ids.length, expected.length, `record count ${ids.length} === ${expected.length}`);
-    assert.deepStrictEqual(ids, expected, "every submitted record present exactly once (no loss/dup)");
-    assert.ok(fs.existsSync(logPath + ".1"), "rotation boundary was crossed (.1 exists)");
-    console.log(`PASS: ${name}`); pass++;
-  } catch (e) {
-    console.log(`FAIL: ${name} — ${e.message}`); fail++;
-  }
-}
 
-(async () => {
-  await concurrencyTest();
-  console.log("----");
-  console.log(`PASS=${pass} FAIL=${fail}`);
-  process.exit(fail === 0 ? 0 : 1);
-})();
+caseBegin("concurrency-cross-rotation", "hooks/lib/rtk-guard-audit.js");
+test("concurrency: N×M records cross rotation with zero loss/dup, no deadlock", async () => {
+  requireMod(); // RED fast when the module is missing (no workers spawned)
+  const dir = mkTmp("rtkga-conc-");
+  const logPath = path.join(dir, "guard.log");
+  const lockPath = logPath + ".lock";
+  const N = 4;
+  const M = 150;
+  // 2 KB padding per record → N*M ≈ 1.2 MB > MAX_BYTES, forcing ≥1 rotation.
+  const code =
+    "const mod=require(process.argv[1]);const wid=process.argv[2];" +
+    "const count=Number(process.argv[3]);const logPath=process.argv[4];" +
+    "const lockPath=process.argv[5];const pad='x'.repeat(2000);" +
+    "for(let i=0;i<count;i++){mod.recordGuardReject('gConc','W'+wid+'#'+i+' '+pad," +
+    "{logPath:logPath,lockPath:lockPath});}";
+  const spawnWorker = (wid) => new Promise((resolve) => {
+    const child = spawn(process.execPath,
+      ["-e", code, MODULE, String(wid), String(M), logPath, lockPath],
+      { stdio: "ignore" });
+    child.on("exit", (c) => resolve(c === null ? -1 : c));
+    child.on("error", () => resolve(-1));
+  });
+  // unref: the deadline must not hold the process open once the workers finish.
+  const deadline = new Promise((_res, rej) =>
+    setTimeout(() => rej(new Error("concurrency deadline exceeded (possible deadlock)")), 90000).unref());
+  const codes = await Promise.race([
+    Promise.all(Array.from({ length: N }, (_v, i) => spawnWorker(i))),
+    deadline,
+  ]);
+  assert.ok(codes.every((c) => c === 0), `all workers exit 0 — no deadlock (got ${JSON.stringify(codes)})`);
+  const ids = gatherIds(dir, "guard.log").sort();
+  const expected = [];
+  for (let w = 0; w < N; w++) for (let i = 0; i < M; i++) expected.push("W" + w + "#" + i);
+  expected.sort();
+  assert.strictEqual(ids.length, expected.length, `record count ${ids.length} === ${expected.length}`);
+  assert.deepStrictEqual(ids, expected, "every submitted record present exactly once (no loss/dup)");
+  assert.ok(fs.existsSync(logPath + ".1"), "rotation boundary was crossed (.1 exists)");
+});
+caseEnd();

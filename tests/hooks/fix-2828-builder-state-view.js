@@ -9,6 +9,8 @@
 // - a real resumed session's state file produced by session inheritance, not the fixture copy.
 // Closest-to-action mitigation: tests/hooks/feat-2529-glossary-accept.js drives the real handler.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { test, after: afterAll } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -29,6 +31,10 @@ for (const k of CE.PLAN_KEYS) delete process.env[k];
 
 const F = require("../bin/feat-2529-glossary-drift/fixture");
 const SIO = require(path.join(F.ROOT, "hooks/workflow-state/state-io.js"));
+afterAll(() => {
+  F.finish();
+  restore();
+});
 
 const TOP = { first_session_id: "f2828-first", previous_session_ids: ["f2828-first"], upstream_session_id: "f2828-first", deliverable_type: "wf-code" };
 const note = (step, value) => ({ kind: "step_annotation", step, key: "reopen_reason", value, provenance: "observed", origin: "test-fixture" });
@@ -52,7 +58,7 @@ function seeded(tag) {
 }
 
 caseBegin("builder view carries the persisted top-level fields (d1)", "hooks/workflow-state/state-io/events.js");
-guarded("d1", () => {
+test("d1", () => noNewFailures(F.failureCount, () => guarded("d1", () => {
   const s = seeded("d1");
   F.check("d1: the builder received a view", !!s.view && typeof s.view === "object", String(s.view));
   for (const key of Object.keys(TOP).concat(["session_id"])) {
@@ -60,11 +66,11 @@ guarded("d1", () => {
       !!s.view && JSON.stringify(s.view[key]) === JSON.stringify(s.raw[key]) && s.raw[key] !== undefined,
       `view=${JSON.stringify(s.view && s.view[key])} persisted=${JSON.stringify(s.raw[key])}`);
   }
-});
+})));
 caseEnd();
 
 caseBegin("builder view projection keys and current equal projectState (d2)", "hooks/workflow-state/state-io/projection.js");
-guarded("d2", () => {
+test("d2", () => noNewFailures(F.failureCount, () => guarded("d2", () => {
   const s = seeded("d2");
   const want = SIO.projectState(s.raw);
   for (const key of SIO.PROJECTION_KEYS) {
@@ -75,11 +81,11 @@ guarded("d2", () => {
   let same = true;
   try { assert.deepStrictEqual(s.view && s.view.current, want); } catch (e) { same = false; }
   F.check("d2: view.current deep-equals projectState", same, String(JSON.stringify(s.view && s.view.current)));
-});
+})));
 caseEnd();
 
 caseBegin("builder writing to view.events cannot change the stream (d3)", "hooks/workflow-state/state-io/events.js");
-guarded("d3", () => {
+test("d3", () => noNewFailures(F.failureCount, () => guarded("d3", () => {
   const s = seeded("d3");
   const n = s.raw.events.length;
   let pushed = false;
@@ -91,21 +97,21 @@ guarded("d3", () => {
   const after = JSON.parse(F.rawState(s.sid)).events;
   F.check("d3: the persisted stream grew by exactly one event", after.length === n + 1, `before=${n} after=${after.length}`);
   F.check("d3: seq stays contiguous from 1", after.every((e, i) => e && e.seq === i + 1), JSON.stringify(after.map((e) => e && e.seq)));
-});
+})));
 caseEnd();
 
 caseBegin("builder view has the same key set as readState (d4)", "hooks/workflow-state/state-io/core.js");
-guarded("d4", () => {
+test("d4", () => noNewFailures(F.failureCount, () => guarded("d4", () => {
   const s = seeded("d4");
   const read = Object.keys(SIO.readState(s.sid) || {}).sort();
   const view = Object.keys(s.view || {}).sort();
   F.check("d4: enumerable keys of readState and of the builder view match", JSON.stringify(read) === JSON.stringify(view),
     `readState=${read.join(",")} view=${view.join(",")}`);
-});
+})));
 caseEnd();
 
 caseBegin("composeAppendedState hands the view on a bare base without I/O (d5)", "hooks/workflow-state/state-io/events.js");
-guarded("d5", () => {
+test("d5", () => noNewFailures(F.failureCount, () => guarded("d5", () => {
   const sid = F.newSid("d5");
   let view = null;
   const out = SIO.composeAppendedState(sid, SIO.createInitialState(sid, { cwd: os.tmpdir() }), (_events, v) => {
@@ -116,11 +122,11 @@ guarded("d5", () => {
     !!view && view.session_id === sid && !!view.current && typeof view.current === "object", JSON.stringify(view && Object.keys(view)));
   F.check("d5: one event appended", !!out && Array.isArray(out.appended) && out.appended.length === 1, JSON.stringify(out && out.appended));
   F.check("d5: no state file was written for the sid", !fs.existsSync(F.statePath(sid)), F.statePath(sid));
-});
+})));
 caseEnd();
 
 caseBegin("evaluator view accepts a resumed session's upstream-bound outline approval (d6)", "hooks/workflow-state/state-io/events.js");
-guarded("d6", () => {
+test("d6", () => noNewFailures(F.failureCount, () => guarded("d6", () => {
   const repo = F.mkRepo("d6");
   const up = F.newSid("d6-up");
   const sid = F.newSid("d6");
@@ -143,8 +149,5 @@ guarded("d6", () => {
   const { resolveCurrentStep } = require(path.join(F.ROOT, "hooks/workflow-state/current-step.js"));
   const cur = resolveCurrentStep(F.readState(sid), { sessionId: sid, repoDir: repo });
   F.check("d6: the current step moves on to detail", cur === "detail", String(cur));
-});
+})));
 caseEnd();
-
-F.finish();
-restore();

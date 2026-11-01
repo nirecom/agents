@@ -1,7 +1,8 @@
 "use strict";
 // #2853 — confirm-checkpoint's plan-stage audit check: a CONFIRM_{INTENT|OUTLINE|DETAIL} echo reaches
 // the receipt check only when the stage's pre-confirm audit (hooks/lib/pre-confirm-audit.js) is
-// settled CONTINUE / WARN or accepted. It runs before the receipt is consumed, so a deny keeps the
+// settled CONTINUE / WARN or accepted, or past its run cap with a terminal WARN / CONTINUE last run
+// (#2873: the Allow records that acceptance). It runs before the receipt is consumed, so a deny keeps the
 // receipt for the next attempt. The WORKFLOW_OFF marker skips it (ARP-EXBG user exit); the receipt
 // check after it never reads that marker.
 
@@ -65,6 +66,7 @@ function auditDenyReason(sid, stage) {
       return `[pre-confirm-audit] ${label} denied: audit ${j.runId} returned BLOCK for the current plan. ` +
         `Show its findings to the user and revise the plan. ${describeAcceptanceCommand(j.runId)}`;
     case "cap-reached":
+      if (PCA.isCapConfirmAcceptable(j)) return null;
       return `[pre-confirm-audit] ${label} denied: the ${step} audit reached its run cap without a settled ` +
         `verdict on the current plan (last run ${j.runId || "none"}). ${describeAcceptanceCommand(j.runId)}`;
     default:
