@@ -19,10 +19,11 @@ function stubs(o) {
     armStage: (...a) => { calls.arm += 1; return typeof o.arm === "function" ? o.arm(...a) : (o.arm || { ok: true, audit_run_id: "run-0009", run_id: "run-0009" }); },
     acceptedOnError: (...a) => { calls.onError += 1; return typeof o.onError === "function" ? o.onError(...a) : (o.onError || { accepted: false, runId: null }); },
   };
+  if (typeof o.isCap === "function") deps.isCapConfirmAcceptable = o.isCap;
   return { deps, calls };
 }
 
-// decide(action, o) -> {action, text, calls}; a missing export or a throw is reported as the action.
+// decide(action, o) -> {action, text, calls, obj}; a missing export or a throw is reported as the action.
 async function decide(action, o) {
   if (GM.__missing || typeof GM.decideAuditGate !== "function") {
     return { action: "MISSING:" + (GM.__missing || "no decideAuditGate export"), text: "", calls: {} };
@@ -32,7 +33,7 @@ async function decide(action, o) {
   try { r = await GM.decideAuditGate(ROW, action, deps); } catch (e) { return { action: "THROW:" + e.message, text: "", calls }; }
   if (typeof r === "string") return { action: r, text: r, calls };
   const obj = r || {};
-  return { action: obj.action || obj.gateAction || "", text: D.show(obj), calls };
+  return { action: obj.action || obj.gateAction || "", text: D.show(obj), calls, obj };
 }
 
 const boom = (what) => () => { throw new Error(`stub ${what} failed`); };
@@ -87,4 +88,29 @@ async function n(check) {
   }
 }
 
-module.exports = { k, l, m, n };
+// (v) #2873: cap-reached with a terminal WARN / CONTINUE last run asks at the CONFIRM (note style,
+// arms nothing); proceed (no Allow to record it) and every other cap-reached shape stay audit-block.
+async function v(check) {
+  const cap = (verdict, lastTerminal) => Object.assign(settled("cap-reached", verdict), { lastTerminal });
+  for (const verdict of ["WARN", "CONTINUE"]) {
+    const r = await decide("ask", { judge: cap(verdict, true) });
+    const o = r.obj || {};
+    check(`(v) ask ${verdict}: cap-reached -> ask, arms nothing`, r.action === "ask" && r.calls.arm === 0, r.action + " " + D.show(r.calls));
+    check(`(v) ask ${verdict}: REASON pre-confirm-audit:cap-reached`, r.text.includes("pre-confirm-audit:cap-reached"), r.text);
+    check(`(v) ask ${verdict}: note names the run and the Allow`, String(o.note || "").includes(RUN) && String(o.note || "").includes("Allow"), D.show(o.note));
+    check(`(v) ask ${verdict}: summary rides its own field`, o.summary === `stub ${verdict} summary`, D.show(o.summary));
+    check(`(v) ask ${verdict}: hint keeps the summary out`, !String(o.hint || "").includes(`stub ${verdict} summary`), D.show(o.hint));
+    check(`(v) ask ${verdict}: hint says the Allow records the acceptance`, /accept/i.test(String(o.hint || "")) && String(o.hint || "").includes("Allow") && String(o.hint || "").includes(RUN), D.show(o.hint));
+    const p = await decide("proceed", { judge: cap(verdict, true) });
+    check(`(v) proceed ${verdict}: no CONFIRM -> audit-block with VERDICT_ACCEPTED`, p.action === "audit-block" && p.text.includes(D.ACCEPT_SENTINEL), p.action + " " + p.text);
+    const inj = await decide("ask", { judge: cap(verdict, true), isCap: () => false });
+    check(`(v) ask ${verdict}: injected isCapConfirmAcceptable false -> audit-block`, inj.action === "audit-block", inj.action + " " + inj.text);
+  }
+  const closed = [["BLOCK", true], [null, true], ["WARN", false], ["CONTINUE", false]];
+  for (const [verdict, lastTerminal] of closed) {
+    const r = await decide("ask", { judge: cap(verdict, lastTerminal) });
+    check(`(v) ask ${verdict} lastTerminal=${lastTerminal}: audit-block with VERDICT_ACCEPTED`, r.action === "audit-block" && r.text.includes(D.ACCEPT_SENTINEL) && r.calls.arm === 0, r.action + " " + r.text);
+  }
+}
+
+module.exports = { k, l, m, n, v };

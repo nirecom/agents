@@ -205,6 +205,9 @@ caseEnd();
 caseBegin("step4 (n) every judgeStage state maps to its gate action", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (n) every judgeStage state maps to its gate action", checked(() => DC.n(check)));
 caseEnd();
+caseBegin("step4 (v) cap-reached terminal WARN or CONTINUE asks at the CONFIRM", "bin/workflow/lib/next-step/gate-mode.js");
+test("step4 (v) cap-reached terminal WARN or CONTINUE asks at the CONFIRM", checked(() => DC.v(check)));
+caseEnd();
 
 caseBegin("step4 (o) WORKFLOW_OFF skips only the audit judgment: original action, nothing armed or counted", "bin/workflow/lib/next-step/gate-mode.js");
 test("step4 (o) WORKFLOW_OFF skips only the audit judgment: original action, nothing armed or counted", checked(() => {

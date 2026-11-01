@@ -4,7 +4,8 @@
 // These sentinels are `permissions.ask` in settings.json — reaching this handler
 // means the user explicitly approved the plan stage. That approval is recorded as
 // a plan_approvals entry bound to the sha256 of the plan artifact, which is what
-// the completion-boundary invariant consults (#1133, #2277).
+// the completion-boundary invariant consults (#1133, #2277). Past the stage's audit run cap the same
+// Allow also records the audit acceptance (confirm-cap-acceptance.js, #2873).
 
 const {
   CONFIRM_INTENT_RE_DQ,
@@ -20,6 +21,7 @@ const {
 const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
 const { rowFor } = require("../workflow-state/plan-stage-table");
 const { readState } = require("../workflow-state/state-io");
+const { recordOnConfirm } = require("./confirm-cap-acceptance");
 
 const STAGE_PATTERNS = [
   { step: "clarify_intent", re: CONFIRM_INTENT_RE_DQ },
@@ -75,6 +77,13 @@ function handle(ctx) {
         `Completion of ${stage} will be refused. ` +
         `Re-run: echo "<<${confirmSentinelFor(stage)}: {summary}>>"`
     );
+    return true;
+  }
+  try {
+    recordOnConfirm({ sessionId, step: stage, summary: m[1], repoCwd: ctx.repoCwd, pushMessage });
+  } catch (e) {
+    pushMessage(`workflow-mark: pre-confirm audit acceptance NOT recorded — ${e.message}. ` +
+      `The ${stage} approval itself is recorded and the workflow continues; show this line to the user.`);
   }
   return true;
 }
