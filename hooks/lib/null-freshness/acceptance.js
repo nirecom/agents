@@ -94,6 +94,29 @@ function acceptanceReleasesNonNull({ tr5Run, overrides, currentFk } = {}) {
   return Boolean(acc) && acc.freshness_key === currentFk;
 }
 
+// #2853: a plan stage (TR1-3) also accepts an unsettled run, recorded as UNSETTLED. Kept apart from
+// ACCEPTABLE_VERDICTS so an UNSETTLED record can never release a TR5 gate.
+const STAGE_ACCEPTABLE_VERDICTS = Object.freeze(["WARN", "BLOCK", "UNSETTLED"]);
+
+// findStageAcceptance(audit, tr, runId) -> the newest acceptance record of runId, or null. The
+// ledger entry for runId must exist and carry tr; the record's verdict must be the entry's verdict,
+// or UNSETTLED for an entry that never became terminal.
+function findStageAcceptance(audit, tr, runId) {
+  if (!isPlainObject(audit) || !isNonEmptyString(tr) || typeof runId !== "string" || !RUN_ID_RE.test(runId)) return null;
+  const ledger = Array.isArray(audit.ledger) ? audit.ledger : [];
+  const entries = ledger.filter((e) => isPlainObject(e) && e.id === runId);
+  const entry = entries.length > 0 ? entries[entries.length - 1] : null;
+  if (!entry || !Array.isArray(entry.tr_ids) || !entry.tr_ids.includes(tr)) return null;
+  const overrides = Array.isArray(audit.block_overrides) ? audit.block_overrides : [];
+  for (let i = overrides.length - 1; i >= 0; i--) {
+    const rec = overrides[i];
+    if (!isPlainObject(rec) || rec.run_id !== runId || !STAGE_ACCEPTABLE_VERDICTS.includes(rec.verdict)) continue;
+    const unsettledOk = rec.verdict === "UNSETTLED" && entry.outcome !== "terminal";
+    if (rec.verdict === entry.verdict || unsettledOk) return rec;
+  }
+  return null;
+}
+
 function describeAcceptanceCommand(runId) {
   return "If the user has reviewed the findings and accepts this verdict, record the acceptance " +
     `from the main conversation: echo "<<${SENTINEL_NAME}: ${safeRunId(runId)} <reason>>>" ` +
@@ -114,5 +137,7 @@ module.exports = {
   acceptanceMatchesRun,
   findAcceptance,
   acceptanceReleasesNonNull,
+  STAGE_ACCEPTABLE_VERDICTS,
+  findStageAcceptance,
   describeAcceptanceCommand,
 };

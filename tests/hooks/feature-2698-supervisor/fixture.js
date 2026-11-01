@@ -46,15 +46,29 @@ function nodeEval(dir, code, args = [], lang) {
   return r.stdout;
 }
 
-// seedStarted(dir, sid) — workflow_init and clarify_intent complete (approved), so next-step's
-// current step is research and ACTION=invoke.
+// glossaryRepo(dir) -> a throwaway git repo inside the scene dir that the #2529 glossary_check
+// record of clarify_intent binds to (hooks disabled per fixture-isolation).
+function glossaryRepo(dir) {
+  const repo = path.join(dir, "glossary-repo");
+  if (fs.existsSync(path.join(repo, ".git"))) return repo;
+  fs.mkdirSync(repo, { recursive: true });
+  for (const args of [["init", "-q"], ["config", "core.hooksPath", "/dev/null"]]) {
+    const r = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${r.stderr}`);
+  }
+  return repo;
+}
+
+// seedStarted(dir, sid) — workflow_init and clarify_intent complete (approved, glossary_check
+// recorded), so next-step's current step is research and ACTION=invoke.
 function seedStarted(dir, sid) {
   nodeEval(dir, `
 const wf = require(${JSON.stringify(lib("hooks/workflow-state/state-io.js"))});
 const sid = process.argv[2];
 wf.markStep(sid, "workflow_init", "complete");
 require(${JSON.stringify(lib("tests/lib/plan-approval-fixture.js"))}).approveLive(sid, "clarify_intent");
-wf.markStep(sid, "clarify_intent", "complete");`, [sid]);
+require(${JSON.stringify(lib("tests/lib/glossary-check-record.js"))})
+  .completeWithRecord(sid, "clarify_intent", process.argv[3], wf.markStep);`, [sid, fwd(glossaryRepo(dir))]);
 }
 
 // markSteps(dir, sid, [[step, status], ...]) — real markStep calls, in order.

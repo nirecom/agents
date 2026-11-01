@@ -69,6 +69,25 @@ function assertPriorGatesApproved(sessionId, fromStep, state) {
   }
 }
 
+// #2795: a rollback to a plan step re-opens that stage and the later ones, so
+// their pre-confirm audit run counts start over. The step of each counted TR
+// comes from the trigger table (triggerById), never a hand-written map.
+function resetStageAuditRunCounts(sessionId, fromStep, pushMessage) {
+  try {
+    const { triggerById } = require("../lib/audit-triggers");
+    const { resetAuditRunCounts, AUDIT_DEFAULTS } = require("../lib/supervisor-state-writer/audit-run");
+    const fromIndex = VALID_STEPS.indexOf(fromStep);
+    const trIds = Object.keys(AUDIT_DEFAULTS.audit_run_counts).filter((tr) => {
+      const t = triggerById(tr);
+      return t && t.step && VALID_STEPS.indexOf(t.step) >= fromIndex;
+    });
+    if (trIds.length === 0) return;
+    if (!resetAuditRunCounts(sessionId, trIds)) throw new Error("state write refused");
+  } catch (e) {
+    pushMessage(`workflow-mark: warning — reset applied but the audit run counts were NOT reset: ${e.message}`);
+  }
+}
+
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;
 
@@ -160,6 +179,7 @@ function handle(ctx) {
       try {
         recordRiskSignal(sessionId, "reset-from");
       } catch (_e) { /* a lost stamp must not read as a failed reset */ }
+      resetStageAuditRunCounts(sessionId, fromStep, pushMessage);
     } catch (e) {
       pushMessage(`workflow-mark: reset-from failed — ${e.message}.`);
     }

@@ -95,13 +95,14 @@ if (st.alert.alert_armed_at !== null) { console.error('expected null armed_at, g
 console.log('OK');
 "
 
-# --- AC-B: collectAuditCandidates on notice-only state → shouldArm false -----
-run_node "AC-B: collectAuditCandidates([], state) → shouldArm === false" "
+# --- AC-B: collectAuditCandidates on notice-only state → no candidate -----
+# #2853: the transcript form is gone; an empty projection leaves only the severity trigger.
+run_node "AC-B: collectAuditCandidates({steps:{}}, state) → no candidate" "
 emit.reportBlock('some-hook', 'some-cmd', 'sid-acb');
 const st = w.readState('sid-acb');
 if (!st) { console.error('no state written'); process.exit(2); }
-const res = collect.collectAuditCandidates([], st);
-if (res.shouldArm !== false) { console.error('expected shouldArm false, got '+JSON.stringify(res)); process.exit(2); }
+const res = collect.collectAuditCandidates({ steps: {} }, st);
+if (!Array.isArray(res) || res.length !== 0) { console.error('expected no candidate, got '+JSON.stringify(res)); process.exit(2); }
 console.log('OK');
 "
 

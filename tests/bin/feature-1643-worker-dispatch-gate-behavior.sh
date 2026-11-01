@@ -76,7 +76,7 @@ printf '%s' '[{}]' > "$CANNED"
 
 NOW=1900000000000        # fixed clock, so no test depends on the wall time it ran at
 RECENT="$(node -e 'process.stdout.write(new Date(Number(process.argv[1])-60000).toISOString())' "$NOW")"
-STALE="$(node -e 'process.stdout.write(new Date(Number(process.argv[1])-1200000).toISOString())' "$NOW")"
+STALE="$(node -e 'process.stdout.write(new Date(Number(process.argv[1])-1200000).toISOString())' "$NOW")"; LATER="$(node -e 'process.stdout.write(new Date(Number(process.argv[1])-30000).toISOString())' "$NOW")" # #2515: LATER is strictly after RECENT
 
 # Group 1 (TL1) — severityFor / scanOutcome: what counts as an observation
 group_severity() {
@@ -142,7 +142,7 @@ group_phase_tables() {
     local kind desc state want got
     while IFS='@' read -r kind desc state want; do
         [ -z "${kind// }" ] && continue
-        state="${state//RECENT/$RECENT}"; state="${state//STALE/$STALE}"
+        state="${state//RECENT/$RECENT}"; state="${state//STALE/$STALE}"; state="${state//LATER/$LATER}"
         got="$(eval_phase "$kind" "$state")" || got="<crash>"
         assert_eq "$kind/$desc" "$want" "$got"
     done <<'TABLE'
@@ -152,13 +152,13 @@ alert@pending-armed-recent@{"alert":{"alert_phase":"pending","alert_armed_at":"R
 alert@pending-armed-stale@{"alert":{"alert_phase":"pending","alert_armed_at":"STALE"}}@proceed|pending|1|null
 alert@pending-armed-garbage@{"alert":{"alert_phase":"pending","alert_armed_at":"not-a-date"}}@proceed|pending|1|null
 alert@pending-armed-null@{"alert":{"alert_phase":"pending","alert_armed_at":null}}@proceed|pending|1|null
-alert@pending-but-already-ran@{"alert":{"alert_phase":"pending","alert_armed_at":"RECENT","last_run_at":"RECENT"}}@proceed|pending|1|alert
+alert@pending-but-already-ran@{"alert":{"alert_phase":"pending","alert_armed_at":"RECENT","last_run_at":"LATER"}}@proceed|pending|1|alert
 audit@absent-audit-object@{}@null|null|0|null
 audit@phase-done@{"audit":{"audit_phase":"done"}}@null|done|0|null
 audit@pending-armed-recent@{"audit":{"audit_phase":"pending","audit_armed_at":"RECENT"}}@yield|pending|0|null
 audit@pending-armed-stale@{"audit":{"audit_phase":"pending","audit_armed_at":"STALE"}}@null|pending|1|null
 audit@pending-armed-garbage@{"audit":{"audit_phase":"pending","audit_armed_at":"not-a-date"}}@null|pending|1|null
-audit@pending-but-already-ran@{"audit":{"audit_phase":"pending","audit_armed_at":"RECENT","audit_last_run_at":"RECENT"}}@null|pending|1|audit
+audit@pending-but-already-ran@{"audit":{"audit_phase":"pending","audit_armed_at":"RECENT","audit_last_run_at":"LATER"}}@null|pending|1|audit
 TABLE
 }
 
@@ -232,8 +232,8 @@ group_yield_audit_over_alert() {
 
 group_repair() {
     local ts
-    ts="$(node -e 'process.stdout.write(new Date().toISOString())')"
-    dispatch_gate sess-rep "{\"alert\":{\"alert_phase\":\"pending\",\"alert_armed_at\":\"$ts\",\"last_run_at\":\"$ts\"}}"
+    ts="$(node -e 'process.stdout.write(new Date(Date.now()-60000).toISOString())')"; local ran; ran="$(node -e 'process.stdout.write(new Date().toISOString())')"
+    dispatch_gate sess-rep "{\"alert\":{\"alert_phase\":\"pending\",\"alert_armed_at\":\"$ts\",\"last_run_at\":\"$ran\"}}"
     assert_has "repair/proceeds-instead-of-wedging" "gate_action=proceed" "$(field_of summary)"
     assert_eq "repair/gate-json-says-proceed" "proceed" \
         "$(gate_action_of "$WF_RAW/sess-rep.control/session-close-gate.json")"

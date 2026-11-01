@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-supervisor-atmost1.sh
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, hooks/supervisor-guard/collect-audit-triggers.js
-# Tags: supervisor, em-supervisor, at-most-1, dedup, audit-verdict, scope:issue-specific, pwsh-not-required
+# Tags: supervisor, em-supervisor, at-most-1, dedup, audit-verdict, scope:issue-specific, pwsh-not-required, pre-confirm-audit
 # L3 gap: no real session racing to arm alert, no audit_verdict durability across real Stop cycles.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, category hook-registration.
 # T8 at-most-1 invariants: (a) alert_armed_at is written once, (b) audit_phase=done never re-arms,
@@ -121,20 +121,16 @@ st.alert.cumulative_severity = 'warning';
 st.audit.audit_phase = 'done';
 st.audit.audit_verdict = 'CONTINUE';
 
-// Empty transcript (no CONFIRM sentinel)
-const result = collectAuditCandidates([], st);
-process.stdout.write(JSON.stringify(result));
+// Projection with no step complete (#2853: the transcript form is gone); only the level trigger can fire
+const result = collectAuditCandidates({ steps: {} }, st);
+process.stdout.write(Array.isArray(result) ? String(result.length > 0) : 'not-array');
 " 2>/dev/null)
 
     rm -rf "$tmp"
 
-    local should_arm
-    should_arm=$(echo "$out" | node -e "
-const r = JSON.parse(require('fs').readFileSync(0,'utf8'));
-process.stdout.write(String(r.shouldArm));
-" 2>/dev/null)
+    local should_arm="$out"
 
-    if [ "$should_arm" = "true" ]; then
+    if [ "$should_arm" != "false" ]; then
         fail "T8b: collect-audit-triggers must NOT re-arm when audit_phase=done (terminal state)"
         return
     fi
@@ -219,19 +215,17 @@ const st = s.createEmptyState('t8d-inner');
 st.alert.cumulative_severity = 'warning';
 st.audit.audit_phase = null;
 
-// Empty transcript (no CONFIRM sentinel) — tests trigger (b) only
-const result = collectAuditCandidates([], st);
-process.stdout.write(JSON.stringify(result));
+// Projection with no step complete (#2853: the transcript form is gone) — tests trigger (b) only
+const result = collectAuditCandidates({ steps: {} }, st);
+process.stdout.write(Array.isArray(result) ? String(result.length > 0) : 'not-array');
 " 2>/dev/null)
 
     rm -rf "$tmp"
 
-    local should_arm cause
-    should_arm=$(echo "$out" | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(r.shouldArm))" 2>/dev/null)
-    cause=$(echo "$out" | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(r.cause))" 2>/dev/null)
+    local should_arm="$out"
 
     # After Step 6: warning must NOT arm at Stop via trigger (b) — only error does
-    if [ "$should_arm" = "true" ]; then
+    if [ "$should_arm" != "false" ]; then
         fail "T8d: collect-audit-triggers must NOT arm for cumSev=warning at Stop (Step 6 suppression not yet implemented)"
         return
     fi
@@ -263,113 +257,9 @@ run_t8c
 run_t8d
 run_t8e
 
-# --- Additional-1: collect-audit-triggers fires on WORKFLOW_CONFIRM_INTENT sentinel ---
-# When a conversation transcript contains <<WORKFLOW_CONFIRM_INTENT: ...>>,
-# collectAuditCandidates() should return shouldArm=true with a step-complete cause (TR1).
-# This is trigger (a) in collect-audit-triggers.js.
-run_additional1_confirm_sentinel() {
-    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
-        skip "Additional-1: collect-audit-triggers.js not present"
-        return
-    fi
-    if ! command -v node >/dev/null 2>&1; then
-        skip "Additional-1: node not available"
-        return
-    fi
-
-    local out
-    out=$(run_with_timeout 10 node -e "
-const { collectAuditCandidates } = require('$COLLECT_NODE');
-const s = require('$SCHEMA_NODE');
-
-// Transcript: assistant turn with WORKFLOW_CONFIRM_INTENT sentinel in text content
-const transcript = [{
-    role: 'assistant',
-    content: [{ type: 'text', text: '<<WORKFLOW_CONFIRM_INTENT: reviewing scope>>' }]
-}];
-
-// Empty state (no audit running, phase null)
-const st = s.createEmptyState('add1-inner');
-const result = collectAuditCandidates(transcript, st);
-process.stdout.write(JSON.stringify(result));
-" 2>/dev/null)
-
-    local should_arm cause
-    should_arm=$(echo "$out" | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(r.shouldArm))" 2>/dev/null)
-    cause=$(echo "$out" | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8'));process.stdout.write(String(r.cause||'null'))" 2>/dev/null)
-
-    if [ "$should_arm" != "true" ]; then
-        fail "Additional-1: collectAuditCandidates must return shouldArm=true for WORKFLOW_CONFIRM_INTENT sentinel, got shouldArm=$should_arm"
-        return
-    fi
-    if ! echo "$cause" | grep -q "step-complete:clarify_intent"; then
-        fail "Additional-1: cause must contain 'step-complete:clarify_intent', got '$cause'"
-        return
-    fi
-    pass "Additional-1: WORKFLOW_CONFIRM_INTENT sentinel → collectAuditCandidates returns shouldArm=true, cause=$cause"
-}
-run_additional1_confirm_sentinel
-
-# --- C8: CONFIRM_RE handles all three stage sentinels + rejects non-sentinels ---
-# collect-audit-triggers.js CONFIRM_RE = /<<WORKFLOW_CONFIRM_(INTENT|OUTLINE|DETAIL):/
-# Table-driven: assistant-text | expected shouldArm | expected cause-prefix-substring
-# The colon is required by the regex — bare <<WORKFLOW_CONFIRM_INTENT>> must NOT arm.
-# eval_confirm <text> → prints "shouldArm|cause"
-eval_confirm() {
-    local text="$1"
-    run_with_timeout 10 node -e "
-const { collectAuditCandidates } = require('$COLLECT_NODE');
-const s = require('$SCHEMA_NODE');
-const transcript = [{ role: 'assistant', content: [{ type: 'text', text: process.argv[1] }] }];
-const st = s.createEmptyState('c8-inner');
-const r = collectAuditCandidates(transcript, st);
-process.stdout.write(String(r.shouldArm) + '|' + String(r.cause || 'null'));
-" -- "$text" 2>/dev/null
-}
-
-run_c8_confirm_table() {
-    if [ ! -f "$SCRIPT_CHECKOUT_ROOT/hooks/supervisor-guard/collect-audit-triggers.js" ]; then
-        skip "C8: collect-audit-triggers.js not present"
-        return
-    fi
-    if ! command -v node >/dev/null 2>&1; then
-        skip "C8: node not available"
-        return
-    fi
-    # name | assistant-text | want_arm | want_cause_substr
-    while IFS='|' read -r name text want_arm want_cause; do
-        [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
-        name="${name//[[:space:]]/}"
-        want_arm="${want_arm//[[:space:]]/}"
-        want_cause="${want_cause#"${want_cause%%[![:space:]]*}"}"
-        want_cause="${want_cause%"${want_cause##*[![:space:]]}"}"
-        text="${text#"${text%%[![:space:]]*}"}"
-        text="${text%"${text##*[![:space:]]}"}"
-        local got got_arm got_cause
-        got=$(eval_confirm "$text")
-        got_arm="${got%%|*}"
-        got_cause="${got#*|}"
-        if [ "$got_arm" != "$want_arm" ]; then
-            fail "C8/$name: want shouldArm=$want_arm got=$got_arm (cause=$got_cause)"
-            continue
-        fi
-        if [ -n "$want_cause" ]; then
-            if ! echo "$got_cause" | grep -q "$want_cause"; then
-                fail "C8/$name: cause must contain '$want_cause', got '$got_cause'"
-                continue
-            fi
-        fi
-        pass "C8/$name: shouldArm=$got_arm cause=$got_cause"
-    done <<'TABLE'
-confirm-intent   | <<WORKFLOW_CONFIRM_INTENT: reason>>   | true  | step-complete:clarify_intent
-confirm-outline  | <<WORKFLOW_CONFIRM_OUTLINE: reason>>  | true  | step-complete:outline
-confirm-detail   | <<WORKFLOW_CONFIRM_DETAIL: reason>>   | true  | step-complete:detail
-non-sentinel     | confirmation received for the intent | false |
-bare-no-reason   | <<WORKFLOW_CONFIRM_INTENT>>           | false |
-TABLE
-}
-run_c8_confirm_table
-
+# #2853: Additional-1 and C8 (the stage-sentinel transcript arm, CONFIRM_RE) were removed with
+# candidateFromTranscript; the plan-stage audit now arms from next-step --gate
+# (tests/hooks/feature-2853-pre-confirm-audit.js).
 # --- T8f: one Stop with several TRs coalesces into a single armed run (S6-c) ---
 AUDIT_NODE="$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/lib/supervisor-state-writer/audit.js"
 run_t8f_coalescing() {

@@ -11,6 +11,7 @@ const PC = require("./probe-count-preload");
 const PF = require("./probe-fault-preload");
 
 const X = require("./fixture");
+const PCAS = require("../../lib/pre-confirm-audit-settle");
 const { A, T, U, W, TR, show, check } = X;
 const KEY = { intent: "CONFIRM_INTENT", outline: "CONFIRM_OUTLINE", detail: "CONFIRM_DETAIL" };
 const PG = X.tryRequire("hooks/lib/confirm-gate/plan-gate.js");
@@ -38,7 +39,9 @@ function childEnv(over, fault) {
 // cli(sid, key, over, fault) -> {action, value, cause, out}: next-step --gate for the recorded step;
 // cause is the REASON's probe-<cause> suffix, null when the probe succeeded.
 function cli(sid, key, over, fault) {
-  const r = cp.spawnSync(process.execPath, [path.join(X.ROOT, "bin/workflow/next-step"), "--gate", "--session", sid], {
+  // #2853: settle the stage's pre-confirm audit on the plan as it is now; this driver tests the flag gate.
+  PCAS.trySettle(sid, key.replace(/^CONFIRM_/, "").toLowerCase(), "CONTINUE");
+  const r =cp.spawnSync(process.execPath, [path.join(X.ROOT, "bin/workflow/next-step"), "--gate", "--session", sid], {
     env: childEnv(over, fault), encoding: "utf8", timeout: 60000, cwd: X.TDIR,
   });
   const val = (k) => { const m = new RegExp("^" + k + "=(.*)$", "m").exec(r.stdout || ""); return m ? m[1].trim() : null; };
@@ -48,7 +51,8 @@ function cli(sid, key, over, fault) {
 // checkpoint(sid, stage, over, fault) -> parsed confirm-checkpoint output for the stage's echo.
 function checkpoint(sid, stage, over, fault) {
   const input = { tool_name: "Bash", tool_input: { command: X.echoOf(stage) }, session_id: sid, hook_event_name: "PreToolUse" };
-  const r = cp.spawnSync(process.execPath, [path.join(X.ROOT, "hooks/confirm-checkpoint.js")], {
+  PCAS.trySettle(sid, stage, "CONTINUE");
+  const r =cp.spawnSync(process.execPath, [path.join(X.ROOT, "hooks/confirm-checkpoint.js")], {
     input: JSON.stringify(input), env: childEnv(over, fault), encoding: "utf8", timeout: 60000, cwd: X.TDIR,
   });
   let json = {};

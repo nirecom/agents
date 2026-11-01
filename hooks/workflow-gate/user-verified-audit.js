@@ -50,9 +50,11 @@ function snapshotStale(audit, plansDir, planSessionId) {
   if (!snap || typeof snap !== "object") return { truncated: false, narrowed: false };
   const truncated = snap.truncated === true;
   let narrowed = false;
-  if (Array.isArray(snap.files) && snap.files.length > 0) {
+  // #2448: files is scoped to the diff, so a declared file dropped outside the diff shows only in plan_files.
+  const declared = Array.isArray(snap.plan_files) ? snap.plan_files : snap.files;
+  if (Array.isArray(declared) && declared.length > 0) {
     const current = parseDetailFilesToModify(plansDir, planSessionId) || [];
-    narrowed = snap.files.some((f) => !current.includes(f));
+    narrowed = declared.some((f) => !current.includes(f));
   }
   return { truncated, narrowed };
 }

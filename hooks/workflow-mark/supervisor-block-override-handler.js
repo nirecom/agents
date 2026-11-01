@@ -2,7 +2,8 @@
 // #2709 / #2597 — WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED.
 //
 //   echo "<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: <run-id> <reason>>>"
-// Records the user's reviewed acceptance of a TR5 BLOCK / WARN verdict. settings.json `ask` puts
+// Records the user's reviewed acceptance of a BLOCK / WARN audit verdict (TR5 or a TR1-3 plan
+// stage), or of an unsettled TR1-3 run (#2853). settings.json `ask` puts
 // every emission through the permission dialog; this handler is the only write path. The retired
 // WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED name records nothing: its ask row is gone, so honouring it
 // would let an un-dialogued emission write.
@@ -41,7 +42,9 @@ function handle(ctx) {
       pushMessage(`workflow-mark: ${LABEL} refused — ${(r && r.message) || "unknown error"} Acceptance NOT recorded.`);
       return true;
     }
-    pushMessage(`workflow-mark: ${LABEL} recorded — the TR5 verdict for ${runId} is accepted while the code and plan artifacts stay unchanged.`);
+    const trs = Array.isArray(r.tr_ids) && r.tr_ids.length > 0 ? r.tr_ids.join(", ") : "no trigger";
+    pushMessage(`workflow-mark: ${LABEL} recorded — the audit verdict of ${runId} (${trs}) accepted ` +
+      "while the plan artifacts (and, for TR5, the code) stay unchanged.");
     return true;
   }
   if (SUPERVISOR_VERDICT_ACCEPTED_LOOKSLIKE_RE.test(cmd)) {
