@@ -959,3 +959,7 @@ Changes: Sessions started with `/workflow-init #N` are now titled `#N <issue tit
 ### FEATURE: PR #2869 (2026-11-01)
 Background: feat(#2863): require node:test in new JS test entrypoints
 Changes: New JavaScript test files must use node:test: the edit-time and commit-time test gates now block a new `tests/<category>/*.js` entrypoint that does not load node:test (`MISSING_TEST_RUNNER`), with a hint pointing to node:test plus `tests/lib/harness.js`. Existing plain-script tests are unaffected.
+
+### FEATURE: PR #2870 (2026-11-01)
+Background: feat(#2853,#2448,#2515,#2795): run the supervisor audit before plan a...
+Changes: The EM Supervisor audit now reviews each plan (intent / outline / detail) before you approve it, not after, so a fix it asks for no longer forces you to approve the same plan twice.;The audit stops after 2+1 rounds per stage and hands the decision to you, instead of looping.;Closing a session no longer skips a supervisor audit that was re-armed.
