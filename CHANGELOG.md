@@ -971,3 +971,7 @@ Changes: Every JavaScript test file must now use node:test, not only new ones. T
 ### FEATURE: PR #2880 (2026-11-02)
 Background: feat(#2873): one CONFIRM Allow accepts a WARN or CONTINUE pre-confirm...
 Changes: Fixed: once the pre-confirm audit cap is reached, a single CONFIRM approval now accepts a WARN or CONTINUE audit finding instead of requiring a second approval or blocking approval.
+
+### FEATURE: PR #2882 (2026-11-02)
+Background: feat(#2875,#2337,#2696,#1192,#322): reset per-cycle state on re-init and reclaim finished worktree leftovers
+Changes: Fixed stale previous-cycle worktree references surviving a same-session re-init, and a guard block when the Final Report appears only in a tool result.;Worktree directories left behind by a partial Windows removal can now be reclaimed safely when their ownership is confirmed.
