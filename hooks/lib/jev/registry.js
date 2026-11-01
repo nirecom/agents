@@ -30,6 +30,8 @@ const freezeDeep = (o) => {
 };
 
 const SKIP_ADAPTER = path.join(LIB_DIR, "jev-skip-adapter.js");
+const ADAPTER_DIR = path.join(__dirname, "adapters");
+const CONVERSATION = "conversation";
 
 const REGISTRY = freezeDeep({
   "complexity-judge": {
@@ -80,6 +82,31 @@ const REGISTRY = freezeDeep({
     required_sections_by_stage: {
       outline: ["intent", "outline", "issue body"],
     },
+  },
+  // class "conversation": asked from the conversation itself (no stage sources, no backup
+  // subagent); where it is judged is the caller's, since one point serves several callers.
+  // The empty stages / sections keep code that walks every entry's stages working unchanged.
+  continuation: {
+    class: "conversation",
+    adapter: path.join(ADAPTER_DIR, "continuation.js"),
+    stages: [],
+    required_sections_by_stage: {},
+    mode: "production",
+    confidence_threshold_by_answer: { true: 0.9, false: null },
+    short_circuit_answer: null,
+    backup_subagent: null,
+    fallback: "no-intervention",
+  },
+  "askuser-answer": {
+    class: "conversation",
+    adapter: path.join(ADAPTER_DIR, "askuser-answer.js"),
+    stages: [],
+    required_sections_by_stage: {},
+    mode: "production",
+    confidence_threshold_by_answer: { true: 0.9, false: null },
+    short_circuit_answer: null,
+    backup_subagent: null,
+    fallback: "ask-user",
   },
 });
 
@@ -160,9 +187,40 @@ function sectionErrors(entry, sections) {
   return errors.concat(planSectionErrors(entry, sections));
 }
 
+// Checks every class shares: mode, thresholds, short_circuit_answer, retired keys.
+function commonErrors(entry) {
+  const errors = [];
+  if (!MODES.includes(entry.mode)) errors.push(`mode must be one of ${MODES.join("|")}`);
+  errors.push(...thresholdErrors(entry.confidence_threshold_by_answer));
+  for (const k of ["confidence_threshold", "required_sections", "sampling_rate"]) {
+    if (own(entry, k)) errors.push(`${k} is a retired key`);
+  }
+  return errors;
+}
+
+// A conversation entry needs adapter, fallback and thresholds; stages, sections and a backup
+// subagent do not apply (backup_subagent, when present, is null or a name).
+function conversationErrors(entry) {
+  const errors = [];
+  for (const k of ["adapter", "fallback"]) {
+    if (!isNonEmptyStr(entry[k])) errors.push(`${k} must be a non-empty string`);
+  }
+  if (own(entry, "backup_subagent") && entry.backup_subagent !== null && !isNonEmptyStr(entry.backup_subagent)) {
+    errors.push("backup_subagent must be null or a non-empty string when present");
+  }
+  if (own(entry, "short_circuit_answer") && ![true, false, null].includes(entry.short_circuit_answer)) {
+    errors.push("short_circuit_answer must be true, false or null");
+  }
+  return errors.concat(commonErrors(entry));
+}
+
 // The list of schema violations of one entry ([] = valid).
 function validateRegistry(entry) {
   if (!isObj(entry)) return ["entry must be an object"];
+  if (own(entry, "class")) {
+    if (entry.class !== CONVERSATION) return [`class must be "${CONVERSATION}" when present`];
+    return conversationErrors(entry);
+  }
   const sections = sourceSections();
   const errors = [];
   for (const k of ["adapter", "backup_subagent", "fallback"]) {
@@ -171,21 +229,16 @@ function validateRegistry(entry) {
   for (const k of ["target", "normalizer", "subagent_type"]) {
     if (own(entry, k) && !isNonEmptyStr(entry[k])) errors.push(`${k} must be a non-empty string when present`);
   }
-  if (!MODES.includes(entry.mode)) errors.push(`mode must be one of ${MODES.join("|")}`);
   if (!Array.isArray(entry.stages) || entry.stages.length === 0
     || !entry.stages.every((s) => typeof s === "string" && own(sections, s))
     || new Set(entry.stages).size !== entry.stages.length) {
     errors.push("stages must be a non-empty list of known stage names");
   }
-  errors.push(...thresholdErrors(entry.confidence_threshold_by_answer));
   if (!own(entry, "short_circuit_answer") || ![true, false, null].includes(entry.short_circuit_answer)) {
     errors.push("short_circuit_answer must be true, false or null");
   }
   errors.push(...sectionErrors(entry, sections));
-  for (const k of ["confidence_threshold", "required_sections", "sampling_rate"]) {
-    if (own(entry, k)) errors.push(`${k} is a retired key`);
-  }
-  return errors;
+  return errors.concat(commonErrors(entry));
 }
 
 // Validated once per point: the registry is frozen data, so the verdict cannot change.

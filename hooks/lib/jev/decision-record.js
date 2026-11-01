@@ -14,12 +14,19 @@ const { MODEL_RE, OUTAGE_STATUSES } = require("./provider-core");
 const DECISION_RECORD_VERSION = 2;
 // decision: one judgment; settle: a later CLI-path outcome (superseded) of the same ticket.
 const RECORD_TYPES = Object.freeze(["decision", "settle"]);
-const LOG_NAME = "jev-decisions.log";
-const EXECUTOR = "complexity-judge";
+const LOG_NAME = "jev-decisions.jsonl";
+const { JUDGED_IN, judgedInOr } = require("./judged-in");
 
 function decisionLogPath(opts = {}) {
   return opts.logPath || path.join(resolveLogDir({}), LOG_NAME);
 }
+
+// --- BEGIN temporary: jev-decisions.log -> jev-decisions.jsonl migration added 2026-11-01 ---
+// deletion-condition: no jev-decisions.log* remains under resolveLogDir() on any host
+function migrateFor(logPath) {
+  if (path.basename(logPath) === LOG_NAME) require("../temporary-migrations/jev-decision-log-rename").migrateOnce(path.dirname(logPath));
+}
+// --- END temporary: jev-decisions.log -> jev-decisions.jsonl migration ---
 
 function csvToSet(csv) {
   if (typeof csv !== "string" || csv.trim() === "") return new Set();
@@ -171,6 +178,14 @@ function entryFor(point, entry) {
   }
 }
 
+// The executor that answers when Jev cannot: the entry's backup_subagent (null allowed), else
+// the registry's for the point (an entry frozen before the field existed).
+function executorOf(point, e) {
+  if (isObj(e) && Object.prototype.hasOwnProperty.call(e, "backup_subagent")) return e.backup_subagent;
+  const reg = entryFor(point, null);
+  return reg && typeof reg.backup_subagent === "string" ? reg.backup_subagent : null;
+}
+
 // The hook-path input (size, hash, sources) widened to the v2 input; section bookkeeping
 // that only the CLI path fills (required, missing, exempt, sources_failed*) is empty here.
 function v2Input(input) {
@@ -188,14 +203,14 @@ function v2Input(input) {
 // The hook-path decision record. pending: the pre hook's hand-off (null when the post
 // arrived without one). llm: {status, answer, executor_model, latency_ms}. mode / adopted:
 // the values frozen at judgment time (the hand's), never re-read from the registry.
-function buildRecord({ point, sessionId, toolUseId, pending, step, stage, llm, now, mode, adopted, entry, llmAnswerReceived, ticket }) {
+function buildRecord({ point, sessionId, toolUseId, pending, step, stage, llm, now, mode, adopted, entry, llmAnswerReceived, ticket, judgedIn }) {
   const p = pending || {};
   const e = entryFor(point, entry);
   const jev = p.jev && typeof p.jev === "object" ? p.jev : notRunJev();
   const llmSide = {
     status: llm.status,
     answer: llm.answer === undefined ? null : llm.answer,
-    executor: EXECUTOR,
+    executor: executorOf(point, e),
     executor_model: llm.executor_model || p.executor_model || "unknown",
     latency_ms: llm.latency_ms === undefined ? null : llm.latency_ms,
   };
@@ -206,6 +221,7 @@ function buildRecord({ point, sessionId, toolUseId, pending, step, stage, llm, n
     record_type: "decision",
     ts: new Date(now || Date.now()).toISOString(),
     point,
+    judged_in: judgedInOr(judgedIn, null),
     mode: typeof mode === "string" ? mode : (e && e.mode) || null,
     adopted: adopted === undefined ? null : adopted,
     threshold: t ? { true: t.true, false: t.false } : null,
@@ -232,7 +248,9 @@ function buildRecord({ point, sessionId, toolUseId, pending, step, stage, llm, n
 
 // Best effort: an unwritable log never breaks the dispatch.
 function appendDecision(record, opts = {}) {
-  return appendJsonlRotating(decisionLogPath(opts), record);
+  const logPath = decisionLogPath(opts);
+  migrateFor(logPath);
+  return appendJsonlRotating(logPath, record);
 }
 
 // True when the log (or a rotated generation) already holds a parsed v2 line of this
@@ -258,6 +276,7 @@ function hasRecord(logPath, ticket, recordType) {
 // the append run under one lock so two finalizers of the same ticket cannot both append.
 function appendDecisionOnce(record, opts = {}) {
   const logPath = decisionLogPath(opts);
+  migrateFor(logPath);
   const ticket = isObj(record) ? record.ticket : null;
   if (typeof ticket !== "string") return Object.assign({ deduped: false }, appendDecision(record, opts));
   try {
@@ -272,7 +291,7 @@ function appendDecisionOnce(record, opts = {}) {
 }
 
 module.exports = {
-  DECISION_RECORD_VERSION, RECORD_TYPES, LOG_NAME, EXECUTOR,
+  DECISION_RECORD_VERSION, RECORD_TYPES, LOG_NAME, JUDGED_IN, judgedInOr, notRunJev, isObj, MAX_LATENCY_MS,
   decisionLogPath, agreeSets, csvToSet, compare, boundedLatency,
   observedLlm, observedJev, observedInput, observedPending, buildRecord, appendDecision, appendDecisionOnce,
 };

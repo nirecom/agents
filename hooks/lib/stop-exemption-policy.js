@@ -33,6 +33,9 @@ const EXEMPTION_MATRIX = Object.freeze({
   // c4/c2: neither Stop guard blocks it. nextStep:false — the recommendation is unchanged, only
   // the forced Stop nudge is silenced. promptNotify:false — the notifier has no turn-end view.
   "user-dialog-turn": { c4: true, c2: true, nextStep: false, promptNotify: false },
+  // #2461: next-step's JEV_ADVICE=wait-on-invoke — the turn ends so the user reads the advice.
+  // c2:false — the scheduled review still runs. nextStep:false — next-step emits the advice itself.
+  "jev-wait-on-invoke": { c4: true, c2: false, nextStep: false, promptNotify: false },
 });
 
 module.exports = { EXEMPTION_MATRIX };

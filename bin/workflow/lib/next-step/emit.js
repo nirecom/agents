@@ -25,6 +25,10 @@ function emit(action, skill, hint, reason, skipHint, gateLine, wait) {
   if (wait) out += "WAIT=" + wait + "\n";
   if (gateLine) out += gateLine + "\n";
   if (noteLine) out += noteLine + "\n";
+  // #2461: JEV_ADVICE / JEV_ADVICE_REASON (wait-on-invoke) only on invoke; ACTION itself never changes.
+  if (action === "invoke") {
+    try { out += require("./wait-on-invoke").adviceLines(); } catch (_e) { /* fail-open: no advice */ }
+  }
   process.stdout.write(out);
   process.exit(0);
 }

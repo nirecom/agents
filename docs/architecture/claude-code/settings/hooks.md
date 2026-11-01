@@ -74,11 +74,11 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   command is wrapped. RTK config is managed by the RTK binary itself (installers
   run `rtk config` / `rtk config --create`, no hardcoded schema); guard logic
   lives in `hooks/rtk-rewrite.js`.
-- `jev-shadow-pre.js` (PreToolUse, matcher: `Agent|Task`) and `jev-shadow-post.js`
-  (PostToolUse, matcher: `Agent|Task`) — when `JEV=on` in `.env`, query the Jev typed
-  classifier alongside a `complexity-judge` dispatch and record both answers for comparison.
-  Shadow mode: the LLM judge's result is always adopted, and both hooks always exit 0.
-  Default OFF (`JEV=off`). Contract and module map: [jev.md](../../jev.md).
+- `jev-shadow-pre.js` (PreToolUse) and `jev-shadow-post.js` (PostToolUse), matcher `Agent|Task` — when
+  `JEV=on`, record Jev's answer beside a shadow-mode point's subagent dispatch; the subagent's result is
+  adopted and both always exit 0. Default OFF (`JEV=off`). Contract and module map: [jev.md](../../jev.md).
+- `pre-tool-use-askuser-jev.js` (PreToolUse, matcher: `AskUserQuestion`) — with `JEV` and `JEV_AUTO_SKIP_ASKUSER` on, answers a dialog marked `metadata.source: "jev-auto-skip-askuser"` through `updatedInput` when Jev is confident of every answer; otherwise prints nothing.
+  `stop-premature-stop-guard.js` likewise asks Jev (continue-on-stop) only where it would let the stop pass. Contract: [jev.md](../../jev.md).
 - `subagent-dispatch-prompt.js` (PreToolUse, matcher: `Agent|Task`, own group) — backstop for the
   `rules/shell-commands.md` Subagent Dispatch Prompts canonical line: appends it (absolute rule path)
   unless one trimmed prompt line fully matches it; a JSON-object prompt gets it under `dispatch_directive`.
