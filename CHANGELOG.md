@@ -955,3 +955,7 @@ Changes: Fixed: `WORKFLOW_GLOSSARY_ACCEPTED` is no longer rejected as "nothing p
 ### FEATURE: PR #2867 (2026-11-01)
 Background: feat(#299,#1127): title workflow-init sessions with the issue title v...
 Changes: Sessions started with `/workflow-init #N` are now titled `#N <issue title>` in the VS Code session list and the Claude app, fetched from GitHub or GitLab. The old title markers (⏳, PR #M, ✓) and `bin/cc-session-title` are removed.
+
+### FEATURE: PR #2869 (2026-11-01)
+Background: feat(#2863): require node:test in new JS test entrypoints
+Changes: New JavaScript test files must use node:test: the edit-time and commit-time test gates now block a new `tests/<category>/*.js` entrypoint that does not load node:test (`MISSING_TEST_RUNNER`), with a hint pointing to node:test plus `tests/lib/harness.js`. Existing plain-script tests are unaffected.
