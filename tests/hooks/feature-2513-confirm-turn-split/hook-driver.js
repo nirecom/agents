@@ -11,6 +11,7 @@ const { spawnSync } = require("child_process");
 const CE = require("../../lib/confirm-env-fixture");
 const RS = require("../../lib/presentation-receipt-seed");
 const SMC = require("../../lib/system-message-contract");
+const PCAS = require("../../lib/pre-confirm-audit-settle");
 
 const out = [];
 const ok = (n, c, d) => out.push(c ? "PASS|" + n : "FAIL|" + n + "|" + String(d).replace(/\n/g, "\\n").slice(0, 240));
@@ -59,6 +60,8 @@ function runHook(s, entries, opts) {
   const rest = {};
   for (const [k, v] of Object.entries(o.env || {})) (CE.PLAN_KEYS.includes(k) ? flags : rest)[k] = v;
   const env = CE.childEnvWith(CE.confirmEnvRoot(CFG, flags), Object.assign({}, process.env, rest));
+  // #2853: settle the stage's pre-confirm audit on the plan as it is now; this driver tests the turn split.
+  PCAS.trySettle(s.sid, o.stage || STAGE, "CONTINUE");
   const r = spawnSync(process.execPath, [process.env.CC_HOOK], { input: JSON.stringify(input), env, encoding: "utf8", timeout: 30000 });
   const raw = r.stdout || "";
   let json = {};

@@ -26,6 +26,13 @@ if (process.argv[2] === "--inproc") {
 
 const R = require("../feature-2729-presentation-receipt/fixture");
 const { F, check, show } = R;
+const PCAS = require("../../lib/pre-confirm-audit-settle");
+const WS = require(path.join(R.ROOT, "hooks/workflow-state"));
+// currentStep(sid) -> the gated step left pending in the session's state.
+const currentStep = (sid) => {
+  const steps = (WS.readState(sid) || {}).steps || {};
+  return ["clarify_intent", "outline", "detail"].find((s) => (steps[s] && (steps[s].status || steps[s])) === "pending") || null;
+};
 
 const ORDER = ["workflow_init", "clarify_intent", "research", "outline", "detail"];
 const STAGE_OF = { clarify_intent: "intent", outline: "outline", detail: "detail" };
@@ -69,6 +76,8 @@ function parse(out) {
 // Spawned with childEnvWith alone: F.runNode merges process.env back in, and this process may
 // already carry a CONFIRM_* value a required module injected from the shell's config root.
 function nextStep(cfgDir, sid, extra) {
+  // #2853: --gate waits for the current stage's pre-confirm audit; this driver tests the off waiver, so settle it.
+  if ((extra || []).includes("--gate")) PCAS.trySettle(sid, currentStep(sid), "CONTINUE");
   const env = R.CE.childEnvWith(cfgDir);
   delete env.CLAUDE_CODE_SESSION_ID;
   const r = spawnSync(process.execPath, [path.join(R.ROOT, "bin/workflow/next-step")].concat(extra || [], ["--session", sid]), {

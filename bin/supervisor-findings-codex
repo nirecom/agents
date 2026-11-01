@@ -85,7 +85,7 @@ if [[ "$MODE" == "alert" ]]; then
   CODEX_PROMPT+='{"categories":[<category>, ...],"severity":"error"|"warning"|"notice","detail":"<one sentence>"}. '
   CODEX_PROMPT+='Emit zero lines if there is nothing to report.'
 else
-  CODEX_PROMPT+='Assess cross-stage coherence of the workflow below. '
+  CODEX_PROMPT+='First check that decisions made in the conversation and AskUserQuestion answers are reflected in the plan, then assess cross-stage coherence of the workflow below. '
   CODEX_PROMPT+='Output EXACTLY ONE verdict object first: {"verdict":"CONTINUE"|"WARN"|"BLOCK","summary":"<one sentence>"}, '
   CODEX_PROMPT+='then ZERO or more finding objects, one JSON object per line and nothing else: '
   CODEX_PROMPT+='{"categories":[<category>, ...],"severity":"error"|"warning"|"notice","detail":"<one sentence>"}.'

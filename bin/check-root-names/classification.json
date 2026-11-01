@@ -287,6 +287,7 @@
     {"file":"tests/hooks/feature-2411-gate-integration/edit.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
     {"file":"tests/hooks/feature-2403-readonly-judge.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-2460-jev-shadow/j-registration.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the hook command registered in settings.json, which names a hook of the agents main worktree"},
+    {"file":"tests/hooks/feature-2853-block-main-audit-verdict.js","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-assemble-cmd-parse.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-feat-928-supervisor-report-format/formatter-unit.sh","allow":[],"forms":["agents-root-subpath"],"reason":"asserts the command the formatter prints for the user, which names a tool of the agents main worktree"},
     {"file":"tests/hooks/feature-parallel-sessions-worktree-guard.sh","allow":[],"forms":["agents-root-subpath"],"reason":"feeds the hook the command text a user types, which names a tool of the agents main worktree"},

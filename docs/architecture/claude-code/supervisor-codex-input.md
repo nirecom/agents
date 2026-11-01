@@ -34,7 +34,7 @@ Alert and audit keep separate cursors because they review at different cadences;
 
 ## Plan artifacts per mode
 
-- Audit always receives intent, outline and detail: cross-stage coherence is its job.
+- Audit always receives intent, outline and detail: its job is to check that decisions made in the conversation and AskUserQuestion answers are reflected in the plan, then cross-stage coherence.
 - Alert receives all three while the session is active, and only the intent once the session is terminated (all `closes_issues` closed, per `bin/supervisor-check-session-active`). A finished session's outline and detail no longer steer the work, while the intent still states what the user asked for.
 - With no workflow session id (`UNAVAILABLE`), no plan artifact is read, matching the agents' UNAVAILABLE fallback.
 

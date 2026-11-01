@@ -200,7 +200,7 @@ silently disabling the gate:
 
 | Source | Recorded by | Hash-bound |
 |---|---|---|
-| `confirm-sentinel` | `<<WORKFLOW_CONFIRM_INTENT\|OUTLINE\|DETAIL: {summary}>>` | yes — a re-edited plan artifact invalidates the approval (intent's `## Issues` section is outside the hash) |
+| `confirm-sentinel` | `<<WORKFLOW_CONFIRM_INTENT\|OUTLINE\|DETAIL: {summary}>>`, accepted only once the stage's pre-confirm audit settled or was accepted ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)) | yes — a re-edited plan artifact invalidates the approval (intent's `## Issues` section is outside the hash) |
 | `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver, read from the global `.env` file only (an export or `.env.local` does not count); intent has none. It outranks a stale `confirm-sentinel` record. `checkPlanApproval` is the one entry that `--gate` and `evaluateCompletionApproval` share; `confirm-checkpoint` reads the same OFF verdict through `planGateState` (#2726, #2729) | no (audit record) |
 
 `reset-sentinel` and `session-inherit` are legacy read-only (`HASH_EXEMPT_SOURCES`): old records still

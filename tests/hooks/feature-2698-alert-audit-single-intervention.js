@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/supervisor-guard.js, hooks/supervisor-guard/audit-arm.js, hooks/supervisor-guard/collect-audit-triggers.js, hooks/lib/supervisor-state-writer/audit-run.js, hooks/lib/audit-ledger.js
-// Tags: TL2, hooks, supervisor, supervisor-guard, stop-hook, alert, audit, audit-arm, bundling, suppression, scope:issue-specific
+// Tags: TL2, hooks, supervisor, supervisor-guard, stop-hook, alert, audit, audit-arm, bundling, suppression, scope:issue-specific, pre-confirm-audit
 // #2698 change 3: an audit launch instruction never appears as its own intervention right after
 // an alert. 3-A bundles it into the alert block; 3-B arms without showing it while P (real user
 // prompts since alert.last_run_at) is 0 or 1; 3-C shows the deferred ("unshown") run at the first
@@ -92,8 +92,9 @@ for (const [source, sup] of [["l3", () => ({})], ["both", CUMSEV_ERROR]]) {
 }
 test("no candidate and no unshown run -> the alert reason is returned unchanged", () => {
   const s = S.scene(ROOT, "nocand", ARMED());
-  // Consume the TR1 edge with a finished run and clear the slot: no edge, no TR6 (cumSev unset), nothing unshown.
-  S.writer(s.dir, "armAuditRun", s.sid, { tr_ids: ["TR1"], transitions: [S.stepKey(s.dir, s.sid, "clarify_intent")], cause: "x", launch_shown: true });
+  // Consume the TR4 edge with a finished run and clear the slot: no edge, no TR6 (cumSev unset), nothing unshown.
+  // #2853: the complete clarify_intent left unconsumed here is no edge any more.
+  S.writer(s.dir, "armAuditRun", s.sid, { tr_ids: ["TR4"], transitions: [S.stepKey(s.dir, s.sid, "write_code")], cause: "x", launch_shown: true });
   S.writer(s.dir, "finalizeAuditRun", s.sid, { audit_run_id: "run-0001", verdict: "CONTINUE", verdict_summary: "ok" });
   S.writer(s.dir, "writeAuditState", s.sid, { audit_phase: null });
   const r = S.guard(s, S.turns(S.PROMPTS[0]));
@@ -129,7 +130,7 @@ test("P=0, edge candidate -> no block; armed as an unshown run", () => {
 });
 test("P=0, TR6-only candidate (edges consumed) -> no block; armed as an unshown run", () => {
   const s = S.scene(ROOT, "p0t6", REVIEWED("error"));
-  S.writer(s.dir, "armAuditRun", s.sid, { tr_ids: ["TR1"], transitions: [S.stepKey(s.dir, s.sid, "clarify_intent")], cause: "x" });
+  S.writer(s.dir, "armAuditRun", s.sid, { tr_ids: ["TR4"], transitions: [S.stepKey(s.dir, s.sid, "write_code")], cause: "x" });
   S.writer(s.dir, "finalizeAuditRun", s.sid, { audit_run_id: "run-0001", verdict: "CONTINUE", verdict_summary: "ok" });
   S.writer(s.dir, "writeAuditState", s.sid, { audit_phase: null });
   const r = S.guard(s, S.turns(S.PROMPTS[0]));
@@ -209,7 +210,7 @@ test("C2: P=2, unshown run + new edge -> one launch of a NEW run inheriting the 
   assert.strictEqual(typeof a.audit_dispatched_at, "string");
   const old = S.ledgerEntry(a, "run-0001");
   assert.ok(old && old.outcome === "superseded" && typeof old.terminal_at === "string", JSON.stringify(old));
-  for (const id of ["intent-internal", "detail-code"]) assert.ok(a.pending_sub_checks.includes(id), `union keeps ${id}`);
+  for (const id of S.TR4_SUB_CHECKS) assert.ok(a.pending_sub_checks.includes(id), `union keeps ${id}`);
 });
 test("C2: P=2, unshown run, no new candidate -> launch of the same run-id; marked shown", () => {
   const s = S.scene(ROOT, "c2n", REVIEWED());

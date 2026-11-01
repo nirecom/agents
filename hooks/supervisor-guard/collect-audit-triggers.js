@@ -1,39 +1,13 @@
 "use strict";
 
 // #2256 S3 — Audit mode trigger collector. Trigger table + cause labels: hooks/lib/audit-triggers.js.
-// TR1-TR5 are edge triggers on an unconsumed step transition `<step>#<updated_seq>`; TR6 is the
-// level trigger. Two call shapes: (projection, state) -> array (canonical, coalescing needs all
-// candidates); (transcript, state) -> { shouldArm, cause } for the stage-sentinel Stop path.
+// TR4-TR5 are edge triggers on an unconsumed step transition `<step>#<updated_seq>`; TR6 is the
+// level trigger. TR1-TR3 (kind "pre-confirm") never arm here: the plan-stage confirm gate arms
+// them through hooks/lib/pre-confirm-audit.js (#2853). One call shape: (projection, state) -> array.
 
 const { AUDIT_SEVERITY_THRESHOLD, SEVERITY_RANK, UNSETTLED_AUDIT_PHASES } = require("../lib/supervisor-state-schema");
 const triggers = require("../lib/audit-triggers");
 const { unshownRun } = require("../lib/audit-ledger");
-
-const CONFIRM_RE = /<<WORKFLOW_CONFIRM_(INTENT|OUTLINE|DETAIL):/;
-
-// Stage sentinel -> the workflow step whose completion it announces.
-const SENTINEL_STEP = {
-  INTENT: "clarify_intent",
-  OUTLINE: "outline",
-  DETAIL: "detail",
-};
-
-function extractAssistantText(transcript) {
-  if (!Array.isArray(transcript)) return "";
-  const parts = [];
-  for (const turn of transcript) {
-    if (!turn || turn.role !== "assistant") continue;
-    const c = turn.content;
-    if (typeof c === "string") {
-      parts.push(c);
-    } else if (Array.isArray(c)) {
-      for (const item of c) {
-        if (item && item.type === "text" && typeof item.text === "string") parts.push(item.text);
-      }
-    }
-  }
-  return parts.join("\n");
-}
 
 // In-flight (UNSETTLED_AUDIT_PHASES) and done audit states never (re)arm. An unshown run (#2698)
 // counts as quiescent: no agent runs it, and a newer arm may supersede it.
@@ -88,40 +62,16 @@ function candidatesFromProjection(projection, state) {
   return out;
 }
 
-// Transcript form: the stage sentinel stands in for the step completion the
-// projection has not yet recorded at Stop time.
-function candidateFromTranscript(transcript, state) {
-  const audit = (state && state.audit) || {};
-  if (!isQuiescent(audit)) return { shouldArm: false, cause: null };
-
-  const match = CONFIRM_RE.exec(extractAssistantText(transcript));
-  if (match) {
-    const step = SENTINEL_STEP[match[1]];
-    const trigger = triggers.triggerForStep(step);
-    return {
-      shouldArm: true,
-      cause: triggers.stepCompleteCause(step),
-      tr_ids: trigger ? [trigger.tr_id] : [],
-      sub_checks: trigger ? trigger.sub_checks.slice() : [],
-    };
-  }
-
-  const sev = severityCandidate(state);
-  if (sev) return { shouldArm: true, cause: sev.cause, tr_ids: ["TR6"], sub_checks: sev.sub_checks };
-
-  return { shouldArm: false, cause: null };
-}
-
+// A source that is not a projection yields no candidate.
 function collectAuditCandidates(source, state) {
   if (source && !Array.isArray(source) && typeof source === "object" && source.steps) {
     return candidatesFromProjection(source, state);
   }
-  return candidateFromTranscript(source, state);
+  return [];
 }
 
 module.exports = {
   collectAuditCandidates,
   candidatesFromProjection,
-  candidateFromTranscript,
   AUDIT_SEVERITY_THRESHOLD,
 };

@@ -15,6 +15,12 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   the authenticated account. Silence requires positive proof (login match or repo admin); an
   unreadable command shape is unresolved, not safe. Never blocks, never bypassed by WORKFLOW_OFF or
   WORKTREE_OFF. Reason codes: `hooks/confirm-forge-target-ownership/reasons.js` (issue #2053).
+- `block-main-audit-verdict.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands|PowerShell`) —
+  the reverse of `block-subagent-sentinels.js`: blocks the main conversation (no `agent_id`) from
+  writing a pre-confirm audit verdict through `bin/supervisor-write-audit-verdict` or
+  `bin/supervisor-write-audit --set-audit-verdict`, so the CONFIRM gate cannot be opened without
+  the supervisor-audit subagent or the ask-gated `WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED`. Unreadable
+  input blocks (issue #2853).
 - `block-subagent-sentinels.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — blocks a
   subagent from driving the workflow state machine through either door: a `WORKFLOW_*` sentinel
   echo, or an advance-class CLI invoked with a mutating flag (`--advance`/`--mark`/`--reset`) — the

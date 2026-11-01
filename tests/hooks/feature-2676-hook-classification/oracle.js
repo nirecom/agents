@@ -127,6 +127,12 @@ const ORACLE = {
     { label: "sentinel echo from the main conversation", want: "approve",
       input: bash('echo "<<WORKFLOW_RESET_FROM_detail: fixture>>"', { session_id: sidOf("block-subagent-sentinels") }) },
   ] },
+  "block-main-audit-verdict": { kind: "allow-deny", probes: [
+    { label: "audit verdict write from the main conversation", want: "deny",
+      input: bash("node bin/supervisor-write-audit-verdict --verdict CONTINUE", { session_id: sidOf("block-main-audit-verdict") }) },
+    { label: "the same write from a subagent", want: "approve",
+      input: bash("node bin/supervisor-write-audit-verdict --verdict CONTINUE", { agent_id: "agent-f2676", session_id: sidOf("block-main-audit-verdict") }) },
+  ] },
   "workflow-gate": { kind: "allow-deny", probes: [
     { label: "input that is not JSON", want: "deny", input: "{not json", env: { ENFORCE_WORKTREE: "on" } },
     { label: "Read without a session", want: "approve", setup: (context) => ({

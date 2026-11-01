@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feat-2490-next-step-gate/gate-mode.sh
 # Tests: bin/workflow/lib/next-step/gate-mode.js, bin/workflow/lib/next-step/cli.js, bin/workflow/next-step, bin/detect-scope-change.sh
-# Tags: tl2, workflow, confirm-gate, next-step, gate-mode, scope:issue-specific, pwsh-not-required
+# Tags: tl2, workflow, confirm-gate, next-step, gate-mode, scope:issue-specific, pwsh-not-required, pre-confirm-audit
 # #2490 (b): next-step --gate turns the recorded step + gate value (+ detail scope change) into one GATE_ACTION.
 
 # TL3 gap (what this test does NOT catch): whether a live model follows GATE_ACTION
@@ -32,6 +32,9 @@ for s in gm-sc gm-same gm-nodet; do
 done
 put_plan gm-sc detail "$(printf "## Adopted approach: B, don't reuse A\nReplace the helper.")"
 put_plan gm-same detail "$(printf '## Adopted approach: A\nKeep the helper.')"
+# #2853: a plan stage's gate first waits for that stage's pre-confirm audit on the current plan.
+# These cases test the CONFIRM flag, so they settle the audit with CONTINUE after the last put_plan.
+settle_stage gm-sc detail; settle_stage gm-same detail
 # Stub detectors: one prints a line carrying an apostrophe (exit 0), one fails (exit 2).
 CFG_APOS="$GT_BASE/cfg-apos"; mk_tree "$CFG_APOS"
 printf "#!/usr/bin/env bash\necho \"approach changed: don't reuse A\"\nexit 0\n" > "$CFG_APOS/bin/detect-scope-change.sh"
@@ -64,7 +67,8 @@ case_end
 case_begin "scope-change-approved-resume-stateless" "bin/workflow/lib/next-step/gate-mode.js"
 gate --session gm-sc --scope-change-approved
 check "approved: GATE_ACTION=proceed" "proceed" "$(val GATE_ACTION)"
-check "approved: REASON=scope-change-approved" "scope-change-approved" "$(reason)"
+# #2853: the approved rerun meets the settled audit, so its REASON is appended.
+check "approved: REASON=scope-change-approved + audit" "scope-change-approved, pre-confirm-audit:settled-continue" "$(reason)"
 gate --session gm-sc
 check "plain rerun: present-and-stop again (flag leaves no state)" "present-and-stop" "$(val GATE_ACTION)"
 case_end
@@ -91,7 +95,7 @@ OUT="$(run_next_step_in "$CFG_SLOW" --gate --session gm-sc --scope-change-approv
 ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
 check "slow OFF + change + flag: proceed" "proceed" "$(val GATE_ACTION)"
 check "slow OFF + change + flag: value line stays OFF" "OFF" "$(val GATE_CONFIRM_DETAIL)"
-check "slow OFF + change + flag: REASON" "scope-change-approved, probe-over-budget" "$(reason)"
+check "slow OFF + change + flag: REASON" "scope-change-approved, probe-over-budget, pre-confirm-audit:settled-continue" "$(reason)"
 set_gate CONFIRM_DETAIL on
 case_end
 
@@ -100,7 +104,9 @@ set_gate CONFIRM_DETAIL off
 gate --session gm-same
 check "OFF, no change: proceed" "proceed" "$(val GATE_ACTION)"
 gate --session gm-nodet
-check "OFF, detail.md absent: proceed" "proceed" "$(val GATE_ACTION)"
+# #2853: without detail.md the stage key is incomplete, so no terminal run matches: the gate arms and waits.
+check "OFF, detail.md absent: audit-wait" "audit-wait" "$(val GATE_ACTION)"
+check "OFF, detail.md absent: REASON pre-confirm-audit:unsettled" yes "$(has pre-confirm-audit:unsettled "$(reason)")"
 check "detail.md absent is not a check failure" no "$(has scope-change-check-failed "$(reason)")"
 OUT="$(run_next_step_in "$CFG_S2" --gate --session gm-sc 2>/dev/null || true)"
 ALL_GATE="$ALL_GATE"$'\n'"$OUT"; NCALL=$((NCALL + 1))
@@ -117,11 +123,12 @@ case_end
 
 echo "=== step comes from the recorded state ==="
 case_begin "gate-from-recorded-step" "bin/workflow/lib/next-step/gate-mode.js"
-write_state gm-ci "$(json_at clarify_intent)"; put_plan gm-ci intent "$INTENT_FULL"
+write_state gm-ci "$(json_at clarify_intent)"; put_plan gm-ci intent "$INTENT_FULL"; settle_stage gm-ci clarify_intent
 gate --session gm-ci
 check "recorded clarify_intent + intent.md: CONFIRM_INTENT" "ON" "$(val GATE_CONFIRM_INTENT)"
 set_gate CONFIRM_OUTLINE off
 write_state gm-ol "$(json_at outline)"; put_plan gm-ol intent "$INTENT_FULL"; put_plan gm-ol outline "## Adopted approach: A"
+settle_stage gm-ol outline
 gate --session gm-ol
 check "recorded outline (snapshot would advance): CONFIRM_OUTLINE" "OFF" "$(val GATE_CONFIRM_OUTLINE)"
 check "recorded outline: proceed" "proceed" "$(val GATE_ACTION)"
@@ -155,6 +162,11 @@ for step in $GATE_STEPS; do
   key="$(gate_key_of "$step")"; sid="gm-t-$step"
   [ "$step" = "detail" ] && sid="gm-same"
   [ "$step" = "detail" ] || write_state "$sid" "$(json_at "$step")"
+  # #2853: plan stages need their plans and a settled pre-confirm audit (gm-same is settled above).
+  case "$step" in
+    clarify_intent) put_plan "$sid" intent "$INTENT_FULL"; settle_stage "$sid" clarify_intent ;;
+    outline) put_plan "$sid" intent "$INTENT_FULL"; put_plan "$sid" outline "## Adopted approach: A"; settle_stage "$sid" outline ;;
+  esac
   # #2277: the intent stage has no off waiver, so CONFIRM_INTENT=off still asks.
   rows="off:proceed on:ask"
   [ "$step" = "clarify_intent" ] && rows="off:ask on:ask"
@@ -230,8 +242,8 @@ case_end
 
 case_begin "closed-vocabulary-and-no-single-quote" "bin/workflow/lib/next-step/gate-mode.js"
 check "every --gate call printed one GATE_ACTION line" "$NCALL" "$(count_re "$ALL_GATE" '^GATE_ACTION=')"
-check "GATE_ACTION is always one of the 4 values" "$NCALL" \
-  "$(count_re "$ALL_GATE" '^GATE_ACTION=(proceed|ask|present-and-stop|none)$')"
+check "GATE_ACTION is always one of the 6 values" "$NCALL" \
+  "$(count_re "$ALL_GATE" '^GATE_ACTION=(proceed|ask|present-and-stop|none|audit-wait|audit-block)$')"
 check "every --gate call printed GATE_HINT and REASON" "$((NCALL * 2))" "$(count_re "$ALL_GATE" '^(GATE_HINT|REASON)=')"
 check "no single quote on GATE_HINT= / REASON= lines" 0 "$(count_re "$ALL_GATE" "^(GATE_HINT|REASON)=.*'")"
 case_end

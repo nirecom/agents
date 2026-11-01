@@ -6,23 +6,33 @@
 
 const { withSessionStateLock } = require("./lock");
 const { getStatePath, readStateOrInit, writeAtomic, SESSION_ID_RE } = require("./shared");
-const { validate, validateFinding } = require("../supervisor-state-schema");
+const { validate, validateFinding, UNSETTLED_AUDIT_PHASES } = require("../supervisor-state-schema");
 const ledger = require("../audit-ledger");
 const triggers = require("../audit-triggers");
 const { computeFreshnessKey } = require("../diff-fingerprint");
-const { computeWorkingTreeDiff, computeScopeDrift, parseDetailFilesToModify } = require("../branch-diff");
+const { computeWorkingTreeDiff, computeScopeDrift } = require("../branch-diff");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
+const { snapshotDeclaredFiles, declaredFilesOf } = require("./declared-files");
 
 const AUDIT_DEFAULTS = {
   run_seq: 0, audit_run_id: null, audit_verdict_summary: null, audit_dispatched_at: null,
   ledger: [], consumed_transitions: [], last_terminal_run_id: null,
   declared_files: null, uv_attempt_seq: 0, block_overrides: [],
+  audit_run_counts: { TR1: 0, TR2: 0, TR3: 0 },
 };
 
+const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
+// Defaults are copied per state: a shared default object would carry one
+// session's counts into every other session read in the same process.
 function auditOf(state) {
-  if (!state.audit || typeof state.audit !== "object" || Array.isArray(state.audit)) state.audit = {};
+  if (!isPlainObject(state.audit)) state.audit = {};
   for (const [k, v] of Object.entries(AUDIT_DEFAULTS)) {
-    if (state.audit[k] === undefined) state.audit[k] = Array.isArray(v) ? [] : v;
+    if (state.audit[k] === undefined) state.audit[k] = Array.isArray(v) ? [] : isPlainObject(v) ? { ...v } : v;
+  }
+  if (!isPlainObject(state.audit.audit_run_counts)) state.audit.audit_run_counts = { ...AUDIT_DEFAULTS.audit_run_counts };
+  for (const tr of Object.keys(AUDIT_DEFAULTS.audit_run_counts)) {
+    if (state.audit.audit_run_counts[tr] === undefined) state.audit.audit_run_counts[tr] = 0;
   }
   return state.audit;
 }
@@ -95,30 +105,6 @@ function buildTriggerInputKeys(trIds, freshness, planSessionId, plansDir) {
   return keys;
 }
 
-function declaredFilesOf(audit, plansDir, planSessionId) {
-  const snapshot = audit.declared_files;
-  if (snapshot && Array.isArray(snapshot.files) && snapshot.files.length > 0) return snapshot.files;
-  return parseDetailFilesToModify(plansDir, planSessionId);
-}
-
-// S3-d: detail completion (TR3) snapshots detail.md's declared file set. The
-// detail artifact key travels with it because a later detail.md edit arms no
-// new run — only that key can reveal the snapshot has gone stale.
-function snapshotDeclaredFiles(audit, trIds, runId, plansDir, planSessionId, nowIso, narrowed) {
-  // TR3 seeds the snapshot; a later narrowing (declared_files_narrowed) refreshes
-  // it to the current detail.md set so scope drift is judged against what the
-  // plan now declares, not the wider set the first snapshot froze.
-  if (!trIds.includes("TR3") && narrowed !== true) return;
-  const { computeArtifactKey } = require("../diff-fingerprint");
-  const detailKey = computeArtifactKey(plansDir, planSessionId, ["intent", "outline", "detail"]);
-  audit.declared_files = ledger.capDeclaredFiles({
-    snapshot_at: nowIso,
-    run_id: runId,
-    detail_key: typeof detailKey === "string" && detailKey.length > 0 ? detailKey : null,
-    files: parseDetailFilesToModify(plansDir, planSessionId),
-  });
-}
-
 function armCore(sessionId, opts) {
   const state = readStateOrInit(sessionId);
   const audit = auditOf(state);
@@ -163,16 +149,19 @@ function armCore(sessionId, opts) {
     ? computeFreshnessKey(opts.cwd, plansDir, planSessionId)
     : { input_version: null, artifact_keys: { intent: null, outline: null, detail: null }, freshness_key: null };
 
-  snapshotDeclaredFiles(audit, trIds, runId, plansDir, planSessionId, nowIso, opts.declared_files_narrowed === true);
+  // #2448: one diff feeds both the snapshot's diff scoping and the scope drift.
+  const diff = opts.cwd ? computeWorkingTreeDiff(opts.cwd) : null;
+  snapshotDeclaredFiles(audit, {
+    trIds, runId, plansDir, planSessionId, nowIso,
+    narrowed: opts.declared_files_narrowed === true,
+    changedFiles: diff ? diff.changedFiles : null,
+  });
 
   let scopeDrift = null;
   let inputBase = null;
-  if (opts.cwd) {
-    const diff = computeWorkingTreeDiff(opts.cwd);
-    if (diff) {
-      inputBase = diff.mergeBase;
-      scopeDrift = computeScopeDrift(diff.changedFiles, declaredFilesOf(audit, plansDir, planSessionId));
-    }
+  if (diff) {
+    inputBase = diff.mergeBase;
+    scopeDrift = computeScopeDrift(diff.changedFiles, declaredFilesOf(audit, plansDir, planSessionId));
   }
 
   const entry = {
@@ -212,6 +201,11 @@ function armCore(sessionId, opts) {
   audit.audit_dispatched_at = opts.launch_shown === true ? nowIso : null;
   ledger.appendLedgerEntry(audit, entry);
   ledger.extendConsumedTransitions(audit, entry.transitions);
+  // #2795: only a newly minted run counts toward its stage's cap; the idempotent return above never does.
+  if (typeof opts.count_tr === "string" && ledger.TR_ID_RE.test(opts.count_tr)) {
+    const counts = audit.audit_run_counts;
+    counts[opts.count_tr] = (Number.isInteger(counts[opts.count_tr]) ? counts[opts.count_tr] : 0) + 1;
+  }
 
   const ok = commit(sessionId, state);
   const result = {
@@ -378,4 +372,46 @@ function recordBlockOverride(sessionId, opts = {}) {
   return result === true;
 }
 
-module.exports = { armAuditRun, markAuditLaunchShown, consumeTransitions, finalizeAuditRun, recordBlockOverride, auditOf, AUDIT_DEFAULTS, inputKeyForSubCheck };
+// #2795: RESET_FROM_<plan step> zeroes the audit run counts of that stage and
+// later ones. Writes nothing when every named count is already 0.
+function resetAuditRunCounts(sessionId, trIds) {
+  if (!sessionId || !SESSION_ID_RE.test(sessionId) || !Array.isArray(trIds)) return false;
+  const result = withSessionStateLock(sessionId, () => {
+    const state = readStateOrInit(sessionId);
+    const counts = auditOf(state).audit_run_counts;
+    const targets = trIds.filter((tr) => typeof tr === "string" && ledger.TR_ID_RE.test(tr) && counts[tr] !== 0);
+    if (targets.length === 0) return true;
+    for (const tr of targets) counts[tr] = 0;
+    return commit(sessionId, state);
+  });
+  return result === true;
+}
+
+// #2853: the user accepted an unsettled run (UNSETTLED), so it will never get a
+// verdict. Retire its ledger entry as discarded-stale and settle the phase to
+// done, so the Phase A arm and the session-close gate stop waiting on it.
+// Returns { released, reason }; only the currently armed, unsettled run is released.
+function releaseUnsettledRun(sessionId, runId) {
+  if (!sessionId || !SESSION_ID_RE.test(sessionId) || typeof runId !== "string") return { released: false, reason: "invalid-args" };
+  const result = withSessionStateLock(sessionId, () => {
+    const state = readStateOrInit(sessionId);
+    const audit = auditOf(state);
+    if (runId !== audit.audit_run_id) return { released: false, reason: "identity-mismatch" };
+    if (!UNSETTLED_AUDIT_PHASES.includes(audit.audit_phase)) return { released: false, reason: "not-unsettled" };
+    const nowIso = new Date().toISOString();
+    for (const entry of audit.ledger) {
+      if (entry && entry.id === runId && entry.outcome !== "terminal") {
+        entry.outcome = "discarded-stale";
+        entry.terminal_at = nowIso;
+      }
+    }
+    audit.audit_phase = "done";
+    return commit(sessionId, state) ? { released: true, reason: null } : { released: false, reason: "commit-failed" };
+  });
+  return result === undefined ? { released: false, reason: "lock-unavailable" } : result;
+}
+
+module.exports = {
+  armAuditRun, markAuditLaunchShown, consumeTransitions, finalizeAuditRun, recordBlockOverride,
+  resetAuditRunCounts, releaseUnsettledRun, auditOf, AUDIT_DEFAULTS, inputKeyForSubCheck,
+};

@@ -59,6 +59,8 @@ if (mode === "stop") {
       env.NODE_OPTIONS = `--require "${X.PUBLISH_STUB.replace(/\\/g, "/")}"`;
       env.PLAN_SYNC_REMOTE_URL = "https://example.invalid/test-owner/test-repo.git";
     }
+    // #2853: settle the stage's pre-confirm audit on the plan as it is now; this driver tests the receipt.
+    require("../../lib/pre-confirm-audit-settle").trySettle(s.sid, STAGE, "CONTINUE");
     const r = spawnSync(process.execPath, [path.join(X.ROOT, "hooks/confirm-checkpoint.js")], { input: JSON.stringify(input), env, encoding: "utf8", timeout: 30000, cwd: X.TDIR });
     let json = {};
     try { json = r.stdout ? JSON.parse(r.stdout) : {}; } catch (_) { json = { unparsed: r.stdout }; }

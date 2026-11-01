@@ -9,6 +9,7 @@ const { spawnSync } = require("child_process");
 const R = require("../../hooks/feature-2729-presentation-receipt/fixture");
 const { F, check, show } = R;
 const WS = require(path.join(R.ROOT, "hooks/workflow-state"));
+const PCAS = require("../../lib/pre-confirm-audit-settle");
 
 const ORDER = ["workflow_init", "clarify_intent", "research", "outline", "detail"];
 const STAGE_OF = { clarify_intent: "intent", outline: "outline", detail: "detail" };
@@ -42,6 +43,8 @@ function kv(out) {
 // nextStep(cfgDir, sid, args, exported) -> parsed KEY=VAL + {_rc, _d}. Spawned with childEnvWith
 // alone (never merged with this process's env), plus `exported` as real exports.
 function nextStep(cfgDir, sid, args, exported) {
+  // #2853: --gate waits for the detail stage's pre-confirm audit; this driver tests the OFF path, so settle it.
+  if ((args || []).includes("--gate")) PCAS.trySettle(sid, "detail", "CONTINUE");
   const env = Object.assign(R.CE.childEnvWith(cfgDir), exported || {});
   delete env.CLAUDE_CODE_SESSION_ID;
   const r = spawnSync(process.execPath, [path.join(R.ROOT, "bin/workflow/next-step")].concat(args || [], ["--session", sid]), {
