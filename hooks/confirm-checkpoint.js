@@ -213,6 +213,20 @@ function main() {
     process.exit(0);
   }
 
+  // #2853: a plan stage's dialog waits for its pre-confirm audit; a deny here keeps the receipt.
+  let auditDeny;
+  try {
+    auditDeny = require("./confirm-checkpoint/pre-confirm-audit-deny").auditDenyReason(sid, stage);
+  } catch (e) {
+    auditDeny = `[pre-confirm-audit] CONFIRM_${stage.toUpperCase()} denied: the audit check failed (${e && e.message ? e.message : String(e)}).`;
+  }
+  if (auditDeny) {
+    recordDenyFinding(sid, stage, "pre-confirm-audit");
+    let reason = auditDeny;
+    try { reason = CL.withConvLang(auditDeny); } catch (_) { /* the bare reason still denies */ }
+    emitSizeDeny(reason);
+  }
+
   let plansDir = null;
   try { plansDir = getWorkflowPlansDir(); } catch (_) { /* resolved from the session alone */ }
   const absPath = resolveArtifact(stage, sid, plansDir);

@@ -59,28 +59,33 @@ function turns(prompts, opts = {}) {
 const PROMPTS = { 0: [0], 1: [0, 2], 2: [0, 2, 3] };
 
 let seq = 0;
-// scene(root, tag, sup) -> {dir, sid}: workflow started (clarify_intent complete = an unconsumed
-// TR1 edge) and the supervisor state seeded with sup ({alert, audit, layer1}).
+// TR4's sub-checks (hooks/lib/audit-triggers.js), carried by the scene's base edge.
+const TR4_SUB_CHECKS = ["detail-code", "scope-drift", "systemic-risk"];
+
+// scene(root, tag, sup) -> {dir, sid}: workflow started plus write_code complete (an unconsumed
+// TR4 edge; #2853 turned clarify_intent/outline/detail into pre-confirm audits, so they are no
+// Stop-side edge) and the supervisor state seeded with sup ({alert, audit, layer1}).
 function scene(root, tag, sup = {}) {
   seq += 1;
   const dir = X.sceneDir(root, `${tag}-${seq}`);
   const sid = `a${tag.replace(/[^A-Za-z0-9]/g, "")}${seq}`;
   X.seedStarted(dir, sid);
+  X.markSteps(dir, sid, [["write_code", "complete"]]);
   X.seedSup(dir, sid, sup);
   return { dir, sid };
 }
 
-// armUnshown(s) -> the run armed by the real writer for the TR1 edge, without launch_shown
-// (an "unshown run": pending, audit_dispatched_at null). It consumes the TR1 transition.
+// armUnshown(s) -> the run armed by the real writer for the scene's TR4 edge, without launch_shown
+// (an "unshown run": pending, audit_dispatched_at null). It consumes that transition.
 function armUnshown(s) {
-  const key = stepKey(s.dir, s.sid, "clarify_intent");
+  const key = stepKey(s.dir, s.sid, "write_code");
   return writer(s.dir, "armAuditRun", s.sid, {
-    tr_ids: ["TR1"], sub_checks: ["intent-internal"], transitions: [key],
-    cause: "step-complete:clarify_intent", cwd: s.dir, plans_dir: s.dir,
+    tr_ids: ["TR4"], sub_checks: TR4_SUB_CHECKS, transitions: [key],
+    cause: "step-complete:write_code", cwd: s.dir, plans_dir: s.dir,
   });
 }
 
-// completeWriteCode(s) -> the new TR4 edge key (write_code complete, unconsumed).
+// completeWriteCode(s) -> a new TR4 edge key: write_code completes again, so its updated_seq moves.
 function completeWriteCode(s) {
   X.markSteps(s.dir, s.sid, [["write_code", "complete"]]);
   return stepKey(s.dir, s.sid, "write_code");
@@ -102,6 +107,6 @@ const finding = (severity, detail) => ({
 });
 
 module.exports = {
-  writer, stepKey, T0, iso, LAST_RUN_AT, turns, PROMPTS, scene, armUnshown, completeWriteCode,
+  writer, stepKey, TR4_SUB_CHECKS, T0, iso, LAST_RUN_AT, turns, PROMPTS, scene, armUnshown, completeWriteCode,
   guard, display, auditOf, ledgerEntry, stdoutLines, reasonOf, hasLaunch, ALERT_MARK, finding,
 };

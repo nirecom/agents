@@ -8,6 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const X = require("../feature-2650-confirm-continuation/fixture");
 const CE = require("../../lib/confirm-env-fixture");
+const PCAS = require("../../lib/pre-confirm-audit-settle");
 
 const ROOT = X.ROOT;
 const PRELOAD = path.join(__dirname, "publish-mode-preload.js");
@@ -57,6 +58,8 @@ function stop(sid, tpath, opts) {
 // the real hook receives (the judge must not depend on it, but a regression reading it is then caught).
 function echo(sid, stage, opts) {
   const o = opts || {};
+  // #2853: the stage's pre-confirm audit is settled on the plan as it is now; this fixture tests the receipt.
+  if (!o.noSid) PCAS.trySettle(sid, stage, "CONTINUE");
   const input = { tool_name: "Bash", tool_input: { command: X.echoOf(stage) }, hook_event_name: "PreToolUse" };
   if (!o.noSid) input.session_id = sid;
   if (o.transcriptPath) input.transcript_path = o.transcriptPath;
@@ -124,6 +127,7 @@ module.exports = Object.assign({}, X, {
 function echoAsync(sid, stage, opts) {
   const o = opts || {};
   const input = { tool_name: "Bash", tool_input: { command: X.echoOf(stage) }, hook_event_name: "PreToolUse", session_id: sid };
+  PCAS.trySettle(sid, stage, "CONTINUE");
   return new Promise((resolve) => {
     const child = require("child_process").spawn(process.execPath, [path.join(ROOT, "hooks/confirm-checkpoint.js")], {
       env: envFor(o), cwd: X.TDIR, stdio: ["pipe", "pipe", "pipe"],

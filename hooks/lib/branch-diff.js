@@ -143,10 +143,11 @@ function parseDetailFilesToModify(plansDir, wsid) {
       if (line.trim() === "## Files to modify") { inSection = true; continue; }
       if (inSection && /^## /.test(line)) break;
       if (!inSection || /^\s*#/.test(line)) continue;
-      // Every path-shaped backticked token on the line counts; a line without one falls back to
-      // a single-token dash/star bullet, so a prose bullet is never mistaken for a declared file.
+      // #2448: only the first path-shaped backticked token names the file; later ones are
+      // references in its description. A line without one falls back to a single-token
+      // dash/star bullet, so a prose bullet is never mistaken for a declared file.
       const tokens = [...line.matchAll(/`([^`]+)`/g)].map((m) => asDeclaredPath(m[1])).filter(Boolean);
-      if (tokens.length > 0) { tokens.forEach(add); continue; }
+      if (tokens.length > 0) { add(tokens[0]); continue; }
       if (line.includes("`")) continue;
       const bullet = line.match(/^\s*[-*]\s+(\S+)\s*$/);
       if (bullet) add(bullet[1].replace(/\\/g, "/"));

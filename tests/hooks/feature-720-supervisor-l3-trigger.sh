@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-720-supervisor-l3-trigger.sh
 # Tests: hooks/supervisor-guard/collect-audit-triggers.js
-# Tags: supervisor, em-supervisor, layer3, collect, unit, scope:issue-specific, unsettled-audit-phases
+# Tags: supervisor, em-supervisor, layer3, collect, unit, scope:issue-specific, unsettled-audit-phases, pre-confirm-audit
 # L3 gap (what this test does NOT catch):
 #   Pure function unit test against synthetic transcript+state inputs.
 #   Does not verify behavior under a real transcript read from disk by the
@@ -36,21 +36,21 @@ require_source() {
     return 0
 }
 
-# Invoke collectAuditCandidates with transcript+state JSON literals.
-# Asserts shouldArm matches expected, and (optionally) cause contains substring.
+# Invoke collectAuditCandidates with projection+state JSON literals (#2853: the transcript form is gone).
+# Asserts "arms" (a non-empty candidate array) matches expected, and (optionally) some cause contains substring.
 assert_collect() {
-    local label="$1" transcript_json="$2" state_json="$3" expect_arm="$4" cause_sub="$5"
+    local label="$1" projection_json="$2" state_json="$3" expect_arm="$4" cause_sub="$5"
     require_source "$SRC" "$label" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$SRC_NODE');
-const transcript = $transcript_json;
+const projection = $projection_json;
 const state = $state_json;
-const r = m.collectAuditCandidates(transcript, state);
-if (typeof r !== 'object' || r === null) { console.error('result not object'); process.exit(2); }
-if (r.shouldArm !== $expect_arm) { console.error('shouldArm='+r.shouldArm+' expected $expect_arm'); process.exit(3); }
+const r = m.collectAuditCandidates(projection, state);
+if (!Array.isArray(r)) { console.error('result not array: '+JSON.stringify(r)); process.exit(2); }
+if ((r.length > 0) !== $expect_arm) { console.error('candidates='+JSON.stringify(r)+' expected arm $expect_arm'); process.exit(3); }
 const cs = '$cause_sub';
-if (cs && (typeof r.cause !== 'string' || !r.cause.includes(cs))) { console.error('cause='+r.cause+' missing '+cs); process.exit(4); }
+if (cs && !r.some((c) => typeof c.cause === 'string' && c.cause.includes(cs))) { console.error('causes='+JSON.stringify(r.map((c) => c.cause))+' missing '+cs); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -63,65 +63,68 @@ console.log('OK');
 
 base_state='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": {}, "layer3": {} }'
 
+# Step-completion projections: write_code (TR4 edge), user_verification (TR5 edge), nothing complete.
+WC='{ "steps": { "write_code": { "status": "complete", "updated_seq": 4 } } }'
+NONE='{ "steps": { "write_code": { "status": "pending" } } }'
+
 run_t1() {
-    local tr='[{ "role": "assistant", "content": "going to <<WORKFLOW_CONFIRM_INTENT: scope>> now" }]'
-    assert_collect "T1: CONFIRM_INTENT sentinel → shouldArm=true, step-complete cause" "$tr" "$base_state" "true" "step-complete:clarify_intent"
+    assert_collect "T1: write_code complete → arms, step-complete cause" "$WC" "$base_state" "true" "step-complete:write_code"
 }
 
 run_t2() {
-    local tr='[{ "role": "assistant", "content": "now <<WORKFLOW_CONFIRM_OUTLINE: approach>>" }]'
-    assert_collect "T2: CONFIRM_OUTLINE sentinel → shouldArm=true" "$tr" "$base_state" "true" ""
+    local pr='{ "steps": { "user_verification": { "status": "complete", "updated_seq": 9 } } }'
+    assert_collect "T2: user_verification complete → arms" "$pr" "$base_state" "true" "step-complete:user_verification"
 }
 
 run_t3() {
-    local tr='[{ "role": "assistant", "content": "<<WORKFLOW_CONFIRM_DETAIL: plan>>" }]'
-    assert_collect "T3: CONFIRM_DETAIL sentinel → shouldArm=true" "$tr" "$base_state" "true" ""
+    local pr='{ "steps": { "write_code": { "status": "complete", "updated_seq": 4 } } }'
+    local st='{ "alert": {}, "audit": { "consumed_transitions": ["write_code#4"] } }'
+    assert_collect "T3: consumed transition → no re-arm" "$pr" "$st" "false" ""
 }
 
 run_t4() {
-    local tr='[{ "role": "assistant", "content": "no confirm sentinel here" }]'
-    assert_collect "T4: no CONFIRM sentinel → shouldArm=false" "$tr" "$base_state" "false" ""
+    assert_collect "T4: no step complete → no arm" "$NONE" "$base_state" "false" ""
 }
 
 run_t5() {
-    local tr='[]'
+    local tr="$NONE"
     local st='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": { "cumulative_severity": "error" }, "layer3": {} }'
     assert_collect "T5: cumulative_severity=error → shouldArm=true, severity-threshold cause" "$tr" "$st" "true" "severity-threshold:error"
 }
 
 run_t6() {
-    local tr='[]'
+    local tr="$NONE"
     local st='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": { "cumulative_severity": "warning" }, "layer3": {} }'
     assert_collect "T6: cumulative_severity=warning → shouldArm=false" "$tr" "$st" "false" ""
 }
 
 run_t7() {
-    local tr='[]'
+    local tr="$NONE"
     local st='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": { "cumulative_severity": null }, "layer3": {} }'
     assert_collect "T7: cumulative_severity=null → shouldArm=false" "$tr" "$st" "false" ""
 }
 
 run_t8() {
-    local tr='[{ "role": "assistant", "content": "<<WORKFLOW_CONFIRM_INTENT: x>>" }]'
+    local tr="$WC"
     local st='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": {}, "audit": { "audit_phase": "pending" } }'
     assert_collect "T8: audit_phase=pending (already armed) → shouldArm=false" "$tr" "$st" "false" ""
 }
 
 run_t9() {
-    local tr='[{ "role": "assistant", "content": "<<WORKFLOW_CONFIRM_INTENT: x>>" }]'
+    local tr="$WC"
     local st='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": { "cumulative_severity": "error" }, "audit": { "audit_phase": "frozen" } }'
     assert_collect "T9: audit_phase=frozen → shouldArm=false (no re-trigger)" "$tr" "$st" "false" ""
 }
 
 run_t10() {
-    local tr='[{ "role": "assistant", "content": "<<WORKFLOW_CONFIRM_INTENT: x>>" }]'
+    local tr="$WC"
     local st='{ "version": "1", "session_id": "t", "layer1": { "findings": [] }, "alert": { "cumulative_severity": "error" }, "audit": { "audit_phase": "in_progress" } }'
     assert_collect "T10: audit_phase=in_progress → shouldArm=false (no double-arm while running)" "$tr" "$st" "false" ""
 }
 
 # #2400 S17g — isQuiescent keeps the same 4-value deny set once it reads UNSETTLED_AUDIT_PHASES.
 run_t11() {
-    local tr='[{ "role": "assistant", "content": "<<WORKFLOW_CONFIRM_INTENT: x>>" }]'
+    local tr="$WC"
     local ph exp
     for ph in '"done":false' null:true '"weird":true'; do
         exp="${ph##*:}"

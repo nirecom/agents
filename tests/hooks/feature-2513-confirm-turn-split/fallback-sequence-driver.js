@@ -44,6 +44,8 @@ const before = X.receiptExists(s.sid, STAGE);
 
 // 3. Next turn: the user replies and the model emits the CONFIRM echo alone.
 grow(U("looks good, go ahead", "u-reply"), A("a-echo", ECHO(STAGE, "e1")));
+// #2853: settle the stage's pre-confirm audit on the plan as it is now; this driver tests the receipt.
+require("../../lib/pre-confirm-audit-settle").trySettle(s.sid, STAGE, "CONTINUE");
 const r = X.F.runNode("hooks/confirm-checkpoint.js", [], JSON.stringify({ session_id: s.sid, transcript_path: tp,
   hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "e1", tool_input: { command: X.echoOf(STAGE) } }), X.gateEnv());
 let json = {};

@@ -74,6 +74,8 @@ function createEmptyState(sessionId) {
       ledger: [], consumed_transitions: [], last_terminal_run_id: null,
       declared_files: null, uv_attempt_seq: 0, block_overrides: [],
       transcript_cursor: null,
+      // #2795: pre-confirm audit runs armed per plan stage; the 2+1 cap reads it.
+      audit_run_counts: { TR1: 0, TR2: 0, TR3: 0 },
     },
   };
 }
@@ -159,8 +161,19 @@ function validateAuditLedgerFields(au, errors) {
     const df = au.declared_files;
     if (!df || typeof df !== "object" || Array.isArray(df)) {
       errors.push("audit.declared_files must be null or an object");
-    } else if ("files" in df && !Array.isArray(df.files)) {
-      errors.push("audit.declared_files.files must be an array");
+    } else {
+      if ("files" in df && !Array.isArray(df.files)) errors.push("audit.declared_files.files must be an array");
+      if ("plan_files" in df && !Array.isArray(df.plan_files)) errors.push("audit.declared_files.plan_files must be an array");
+    }
+  }
+  if ("audit_run_counts" in au) {
+    const c = au.audit_run_counts;
+    if (!c || typeof c !== "object" || Array.isArray(c)) {
+      errors.push("audit.audit_run_counts must be an object");
+    } else {
+      for (const [k, v] of Object.entries(c)) {
+        if (!Number.isInteger(v) || v < 0) errors.push(`audit.audit_run_counts.${k} must be a non-negative integer`);
+      }
     }
   }
   if ("ledger" in au && Array.isArray(au.ledger)) {

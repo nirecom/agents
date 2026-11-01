@@ -1,16 +1,22 @@
 "use strict";
 
 // #2256 S1-c — SSOT for the audit trigger table and the sub-check registry.
-// TR1-TR5 are EDGE triggers on a step-completion transition; TR6 is the one
-// LEVEL trigger. Cause labels are unified here so no caller invents its own.
+// TR1-TR3 are PRE-CONFIRM triggers (#2853): the plan-stage confirm gate arms them before the
+// user is asked to approve the plan. TR4-TR5 are EDGE triggers on a step-completion transition;
+// TR6 is the one LEVEL trigger. Cause labels are unified here so no caller invents its own.
 
 const STEP_COMPLETE_PREFIX = "step-complete:";
+const PRE_CONFIRM_PREFIX = "pre-confirm:";
 const SEVERITY_THRESHOLD_PREFIX = "severity-threshold:";
 // The pre-merge gate no longer arms a cause of its own; it backstops freshness.
 const FRESHNESS_BACKSTOP_CAUSE = "freshness-backstop:pre-merge";
 
 function stepCompleteCause(step) {
   return `${STEP_COMPLETE_PREFIX}${step}`;
+}
+
+function preConfirmCause(step) {
+  return `${PRE_CONFIRM_PREFIX}${step}`;
 }
 
 // input: "artifact" keys off the named plan artifacts; "diff" keys off the
@@ -29,9 +35,9 @@ const SUB_CHECKS = {
 const ALL_SUB_CHECK_IDS = Object.keys(SUB_CHECKS);
 
 const TRIGGERS = [
-  { tr_id: "TR1", kind: "edge", step: "clarify_intent", cause: stepCompleteCause("clarify_intent"), sub_checks: ["intent-internal"] },
-  { tr_id: "TR2", kind: "edge", step: "outline", cause: stepCompleteCause("outline"), sub_checks: ["intent-outline"] },
-  { tr_id: "TR3", kind: "edge", step: "detail", cause: stepCompleteCause("detail"), sub_checks: ["outline-detail", "declared-files-snapshot"] },
+  { tr_id: "TR1", kind: "pre-confirm", step: "clarify_intent", cause: preConfirmCause("clarify_intent"), sub_checks: ["intent-internal"] },
+  { tr_id: "TR2", kind: "pre-confirm", step: "outline", cause: preConfirmCause("outline"), sub_checks: ["intent-outline"] },
+  { tr_id: "TR3", kind: "pre-confirm", step: "detail", cause: preConfirmCause("detail"), sub_checks: ["outline-detail", "declared-files-snapshot"] },
   { tr_id: "TR4", kind: "edge", step: "write_code", cause: stepCompleteCause("write_code"), sub_checks: ["detail-code", "scope-drift", "systemic-risk"] },
   { tr_id: "TR5", kind: "edge", step: "user_verification", cause: stepCompleteCause("user_verification"), sub_checks: ["recurrence-patterns", "detail-code", "scope-drift", "systemic-risk"] },
   { tr_id: "TR6", kind: "level", step: null, cause: `${SEVERITY_THRESHOLD_PREFIX}error`, sub_checks: ALL_SUB_CHECK_IDS.slice() },
@@ -66,12 +72,14 @@ function transitionKey(step, updatedSeq) {
 
 module.exports = {
   STEP_COMPLETE_PREFIX,
+  PRE_CONFIRM_PREFIX,
   SEVERITY_THRESHOLD_PREFIX,
   FRESHNESS_BACKSTOP_CAUSE,
   SUB_CHECKS,
   ALL_SUB_CHECK_IDS,
   TRIGGERS,
   stepCompleteCause,
+  preConfirmCause,
   triggerForStep,
   triggerById,
   subChecksForTriggers,
