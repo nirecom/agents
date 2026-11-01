@@ -15,6 +15,8 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "conv-reinject-"));
@@ -25,7 +27,8 @@ process.env.AGENTS_MAIN_ROOT = CFG;
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TRANSCRIPTS;
 delete process.env.CONV_LANG;
 delete process.env.PLAN_LANG;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -56,6 +59,8 @@ function check(name, fn) {
   }
 }
 const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
+// verdict(fn) -> the node:test body of one case: it fails when a check inside fn failed.
+const verdict = (fn) => () => noNewFailures(() => failed, fn);
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
@@ -78,16 +83,16 @@ const post = (sid, env, extra) => fire(payload(sid, "PostToolUse", extra), env);
 const isDirective = (out) => !!(out && out.hookSpecificOutput && out.hookSpecificOutput.hookEventName === "PostToolUse" && String(out.hookSpecificOutput.additionalContext).startsWith(CONV_HEAD));
 
 caseBegin("first-post-tool-use-writes-baseline", "hooks/conv-lang-reinject.js");
-{
+test("first-post-tool-use-writes-baseline", verdict(() => {
   const sid = "rj-first";
   grow(sid, 5000);
   check("B1: no baseline -> first PostToolUse emits {}", () => eq(post(sid), {}, "output"));
   check("B2: ... and writes the current transcript size as the baseline", () => eq(baseline(sid), 5000, "baselineBytes"));
-}
+}));
 caseEnd();
 
 caseBegin("growth-threshold", "hooks/conv-lang-reinject.js");
-{
+test("growth-threshold", verdict(() => {
   const sid = "rj-grow";
   grow(sid, 1000);
   let ok = true;
@@ -113,11 +118,11 @@ caseBegin("growth-threshold", "hooks/conv-lang-reinject.js");
   check("G5: the next small growth after an injection -> {} (emitted once)", () => eq(post(sid), {}, "output"));
   grow(sid, KB128 * 2);
   check("G6: a further 128KB+ stretch -> injected again", () => eq(isDirective(post(sid)), true, "directive"));
-}
+}));
 caseEnd();
 
 caseBegin("user-prompt-submit-resets-baseline", "hooks/conv-lang-reinject.js");
-{
+test("user-prompt-submit-resets-baseline", verdict(() => {
   const sid = "rj-ups";
   grow(sid, 1000);
   try { post(sid); } catch (_e) { /* G-cases already report a missing hook */ }
@@ -126,22 +131,22 @@ caseBegin("user-prompt-submit-resets-baseline", "hooks/conv-lang-reinject.js");
   check("U2: ... and the baseline is the current transcript size", () => eq(baseline(sid), size(sid), "baselineBytes"));
   grow(sid, 3000);
   check("U3: so the growth before the prompt no longer triggers -> {}", () => eq(post(sid), {}, "output"));
-}
+}));
 caseEnd();
 
 caseBegin("shrunk-transcript-resets-baseline", "hooks/conv-lang-reinject.js");
-{
+test("shrunk-transcript-resets-baseline", verdict(() => {
   const sid = "rj-shrink";
   grow(sid, 50000);
   try { post(sid); } catch (_e) { /* reported elsewhere */ }
   fs.writeFileSync(tpath(sid), "y".repeat(2000));
   check("S1: transcript smaller than the baseline -> {}", () => eq(post(sid), {}, "output"));
   check("S2: ... and the baseline is reset to the smaller size", () => eq(baseline(sid), 2000, "baselineBytes"));
-}
+}));
 caseEnd();
 
 caseBegin("no-op-conditions-emit-empty", "hooks/conv-lang-reinject.js");
-{
+test("no-op-conditions-emit-empty", verdict(() => {
   const sid = "rj-noop";
   grow(sid, 1000);
   try { post(sid); } catch (_e) { /* reported elsewhere */ }
@@ -155,11 +160,11 @@ caseBegin("no-op-conditions-emit-empty", "hooks/conv-lang-reinject.js");
   check("N7: no session_id -> {}", () => eq(fire({ transcript_path: tpath(sid), hook_event_name: "PostToolUse" }), {}, "output"));
   check("N8: transcript file missing -> {}", () => eq(post("rj-missing"), {}, "output"));
   check("N9: malformed stdin -> {}", () => eq(fire("{not json"), {}, "output"));
-}
+}));
 caseEnd();
 
 caseBegin("unregistered-event-emits-empty", "hooks/conv-lang-reinject.js");
-{
+test("unregistered-event-emits-empty", verdict(() => {
   const sid = "rj-other-event";
   grow(sid, 1000);
   try { post(sid); } catch (_e) { /* reported elsewhere */ }
@@ -170,11 +175,11 @@ caseBegin("unregistered-event-emits-empty", "hooks/conv-lang-reinject.js");
   check("E2: an unregistered event (Stop) over the threshold -> {}", () => eq(fire(payload(sid, "Stop")), {}, "output"));
   check("E3: ... and the baseline is unchanged", () => eq(baseline(sid), before, "baselineBytes"));
   check("E4: control — PostToolUse on the same session does inject", () => eq(isDirective(post(sid)), true, "directive"));
-}
+}));
 caseEnd();
 
 caseBegin("path-traversal-session-id", "hooks/conv-lang-reinject.js");
-{
+test("path-traversal-session-id", verdict(() => {
   const sid = "../rj-escape";
   const outside = [path.dirname(process.env.WORKFLOW_STATE_DIR), TMP];
   // Files carry their mtime; directories only their name (the state dir itself may legitimately change).
@@ -190,21 +195,21 @@ caseBegin("path-traversal-session-id", "hooks/conv-lang-reinject.js");
     eq(after[0], before[0], "state-dir parent listing");
     eq(after[1].filter((e) => !e.startsWith("rj-escape.jsonl@")), before[1].filter((e) => !e.startsWith("rj-escape.jsonl@")), "transcripts-dir parent listing");
   });
-}
+}));
 caseEnd();
 
 caseBegin("settings-registration", "hooks/conv-lang-reinject.js");
-{
+test("settings-registration", verdict(() => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, "settings.json"), "utf8"));
   const CMD = 'node "$AGENTS_MAIN_ROOT/hooks/conv-lang-reinject.js"';
   const matchersOf = (event) => ((settings.hooks || {})[event] || []).filter((g) => (g.hooks || []).some((h) => h.command === CMD)).map((g) => g.matcher);
   check("R1: the real settings.json registers the hook under UserPromptSubmit", () => eq(matchersOf("UserPromptSubmit").length, 1, "UserPromptSubmit groups"));
   check("R2: the real settings.json registers the hook under PostToolUse with matcher \"\"", () => eq(matchersOf("PostToolUse"), [""], "PostToolUse matchers"));
-}
+}));
 caseEnd();
 
 caseBegin("unwritable-sidecar-fails-open", "hooks/conv-lang-reinject.js");
-{
+test("unwritable-sidecar-fails-open", verdict(() => {
   const sid = "rj-locked";
   const stateDir = process.env.WORKFLOW_STATE_DIR;
   fs.mkdirSync(stateDir, { recursive: true });
@@ -215,14 +220,11 @@ caseBegin("unwritable-sidecar-fails-open", "hooks/conv-lang-reinject.js");
   check("W2: ... and a later 256KB growth still exits 0 without crashing", () => { const out = post(sid); eq(out !== null && typeof out === "object", true, `output ${show(out)}`); });
   check("W3: UserPromptSubmit with an unwritable sidecar -> {}", () => eq(fire(payload(sid, "UserPromptSubmit")), {}, "output"));
   check("W4: fixture — the blocking file is still a file (no control dir was forced)", () => eq(fs.statSync(path.join(stateDir, `${sid}.control`)).isFile(), true, "isFile"));
-}
+}));
 caseEnd();
 
 caseBegin("sidecar-location", "hooks/lib/control-sidecar.js");
-{
+test("sidecar-location", verdict(() => {
   check("P1: fixture — the baseline lives under <WORKFLOW_STATE_DIR>/<sid>.control/", () => eq(path.dirname(sidecarPath("rj-first", SUFFIX)), path.join(process.env.WORKFLOW_STATE_DIR, "rj-first.control"), "dir"));
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

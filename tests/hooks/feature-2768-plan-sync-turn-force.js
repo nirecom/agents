@@ -12,22 +12,24 @@
 // - whether the model actually prints the TURN_DIFF_DUTY line (no live model is driven)
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
-const go = (name, fn) => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F));
-
-try {
-caseBegin("force refusal is learned and turn links follow", "hooks/lib/plan-sync/remote-state.js");
-  go("force");
-caseEnd();
-caseBegin("compare and commit URL builders", "hooks/lib/plan-sync/remote-url.js");
-  go("force", "runUrls");
-caseEnd();
-caseBegin("re-provision and URL change invalidate the learned state", "hooks/lib/plan-sync/provision.js");
-  go("invalidate");
-caseEnd();
-} finally {
+after(() => {
   F.finish();
   restore();
-}
+});
+const go = (name, fn) => noNewFailures(F.failureCount,
+  () => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-turn-commit/${name}`)[fn || "run"](F)));
+
+caseBegin("force refusal is learned and turn links follow", "hooks/lib/plan-sync/remote-state.js");
+test("force refusal is learned and turn links follow", () => go("force"));
+caseEnd();
+caseBegin("compare and commit URL builders", "hooks/lib/plan-sync/remote-url.js");
+test("compare and commit URL builders", () => go("force", "runUrls"));
+caseEnd();
+caseBegin("re-provision and URL change invalidate the learned state", "hooks/lib/plan-sync/provision.js");
+test("re-provision and URL change invalidate the learned state", () => go("invalidate"));
+caseEnd();

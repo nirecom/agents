@@ -10,19 +10,21 @@
 // - a real forge's branch-protection refusal wording (receive.denyNonFastForwards stands in)
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const F = require("../lib/plan-sync-turn-fixture");
-const go = (name, fn) => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-hook-paths/${name}`)[fn || "run"](F));
-
-try {
-caseBegin("stale turn id and unusable session fall back to an append", "hooks/lib/plan-sync/commit-push.js");
-  go("fallback");
-caseEnd();
-caseBegin("a force-refusing remote is learned by real hook runs", "hooks/lib/plan-sync/commit-push.js");
-  go("fallback", "runForce");
-caseEnd();
-} finally {
+after(() => {
   F.finish();
   restore();
-}
+});
+const go = (name, fn) => noNewFailures(F.failureCount,
+  () => F.guard(`${name}.${fn || "run"}`, () => require(`./feature-2768-plan-sync-hook-paths/${name}`)[fn || "run"](F)));
+
+caseBegin("stale turn id and unusable session fall back to an append", "hooks/lib/plan-sync/commit-push.js");
+test("stale turn id and unusable session fall back to an append", () => go("fallback"));
+caseEnd();
+caseBegin("a force-refusing remote is learned by real hook runs", "hooks/lib/plan-sync/commit-push.js");
+test("a force-refusing remote is learned by real hook runs", () => go("fallback", "runForce"));
+caseEnd();

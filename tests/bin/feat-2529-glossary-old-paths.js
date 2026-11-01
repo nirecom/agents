@@ -11,12 +11,16 @@
 // TL3 gap: a real codex review run is not driven; codex_glossary_block is sourced and called.
 
 const { caseBegin, caseEnd } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { after, test } = require("node:test");
 const c = require("./feat-2529-glossary-provenance/common");
 
 const { check, eq, ok, ROOT, TMP, fwd, totals, mod } = c;
+const fails = () => totals.failed;
+after(() => process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`));
 const SELF = "tests/bin/feat-2529-glossary-old-paths.js";
 
 // --- T1-1 -------------------------------------------------------------------
@@ -148,16 +152,13 @@ function repoRelativePathRule() {
 }
 
 caseBegin("t1-1-no-old-glossary-paths", "bin/lib/glossary-format.js");
-noOldPaths();
+test("t1-1-no-old-glossary-paths", () => noNewFailures(fails, noOldPaths));
 caseEnd();
 
 caseBegin("t1-2-readers-find-moved-files", "bin/lib/codex-glossary.sh");
-readersFindMovedFiles();
+test("t1-2-readers-find-moved-files", () => noNewFailures(fails, readersFindMovedFiles));
 caseEnd();
 
 caseBegin("t1-3-repo-relative-path-rule", "bin/lib/glossary-format.js");
-repoRelativePathRule();
+test("t1-3-repo-relative-path-rule", () => noNewFailures(fails, repoRelativePathRule));
 caseEnd();
-
-process.stdout.write(`Total: ${totals.passed} passed, ${totals.failed} failed\n`);
-process.exitCode = totals.failed === 0 ? 0 : 1;

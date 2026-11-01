@@ -29,8 +29,8 @@ function check(name, ok, detail) {
 }
 function finish() {
   console.log(failures === 0 ? "ALL PASS" : `${failures} FAILED`);
-  process.exitCode = failures === 0 ? 0 : 1;
 }
+const failureCount = () => failures;
 const guarded = (name, fn) => M.guarded(check, name, fn);
 
 const cache = {};
@@ -182,6 +182,6 @@ function traced(fn) {
 const ranMergeBase = (trace) => /\bgit(?:\.exe)?\b[^\n]*\bmerge-base\b/.test(trace) || /built-in: git merge-base/.test(trace);
 
 module.exports = {
-  ROOT, M, slash, check, finish, guarded, mod, git, oid, mergeBase, mkRepo, allRules, identicalOnly, crissCross,
+  ROOT, M, slash, check, finish, failureCount, guarded, mod, git, oid, mergeBase, mkRepo, allRules, identicalOnly, crissCross,
   resolve, norm, show, cli, parseCli, traced, ranMergeBase,
 };

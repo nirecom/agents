@@ -91,13 +91,16 @@ test("C2: new files that load node:test (require or import) pass", () => {
 caseEnd();
 
 caseBegin("c3-existing-file-modified", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
-test("C3: a modified plain script already in HEAD passes", () => {
+test("C3 (#2865): a modified plain script already in HEAD is refused", () => {
   const rel = "tests/bin/x.js";
   const repo = mkRepo({ ...si.SI_HEAD, [rel]: F.BODY.plain });
   stage(repo, { [rel]: F.BODY.plain + "// modified\n" });
   const r = check(repo);
-  assert.strictEqual(r.rc, 0, r.show);
-  assert.ok(!r.text.includes(F.CODE), r.show);
+  assert.strictEqual(r.rc, 1, r.show);
+  assert.ok(r.text.includes(F.CODE), r.show);
+  assert.ok(r.text.includes(F.highLine(rel)), r.show);
+  assert.ok(r.text.includes(F.COMMIT_HEADLINE), r.show);
+  assert.ok(r.text.includes(F.HINT), r.show);
 });
 caseEnd();
 
@@ -113,7 +116,7 @@ test("C4: git mv of an existing plain script is a new file and is refused under 
 caseEnd();
 
 caseBegin("c5-merge-judged-by-parents", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
-test("C5: a merge taking a plain script from MERGE_HEAD passes; a file new to both parents is refused", () => {
+test("C5 (#2865): a merge taking a plain script from MERGE_HEAD is refused, and so is a file new to both parents", () => {
   const repo = mkRepo(si.SI_HEAD);
   const main = git(repo, "rev-parse", "--abbrev-ref", "HEAD").trim();
   git(repo, "checkout", "-q", "-b", "side");
@@ -124,13 +127,142 @@ test("C5: a merge taking a plain script from MERGE_HEAD passes; a file new to bo
   git(repo, "commit", "-q", "-m", "main");
   git(repo, "merge", "--no-ff", "--no-commit", "side");
   const r = check(repo);
-  assert.strictEqual(r.rc, 0, r.show);
-  assert.ok(!r.text.includes(F.CODE), r.show);
+  assert.strictEqual(r.rc, 1, r.show);
+  assert.ok(r.text.includes(F.highLine("tests/bin/side.js")), r.show);
   stage(repo, { "tests/bin/both.js": F.BODY.plain });
   const b = check(repo);
   assert.strictEqual(b.rc, 1, b.show);
   assert.ok(b.text.includes(F.highLine("tests/bin/both.js")), b.show);
-  assert.ok(!b.text.includes(F.highLine("tests/bin/side.js")), b.show);
+  assert.ok(b.text.includes(F.highLine("tests/bin/side.js")), b.show);
+});
+caseEnd();
+
+caseBegin("c4-rename-of-node-test-passes", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("C4 (#2865): git mv of an existing node:test entrypoint passes (the moved file still loads node:test)", () => {
+  const repo = mkRepo({ ...si.SI_HEAD, "tests/bin/old.js": F.BODY.nodeTest });
+  git(repo, "mv", "tests/bin/old.js", "tests/bin/new.js");
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes("TEST_RUNNER"), r.show);
+});
+caseEnd();
+
+caseBegin("c5-merge-takes-node-test-passes", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("C5 (#2865): a merge taking a node:test entrypoint from MERGE_HEAD passes", () => {
+  const repo = mkRepo(si.SI_HEAD);
+  const main = git(repo, "rev-parse", "--abbrev-ref", "HEAD").trim();
+  git(repo, "checkout", "-q", "-b", "side");
+  stage(repo, { "tests/bin/side.js": F.BODY.nodeTest });
+  git(repo, "commit", "-q", "-m", "side");
+  git(repo, "checkout", "-q", main);
+  stage(repo, { "notes.txt": "main\n" });
+  git(repo, "commit", "-q", "-m", "main");
+  git(repo, "merge", "--no-ff", "--no-commit", "side");
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes("TEST_RUNNER"), r.show);
+});
+caseEnd();
+
+caseBegin("g2-untouched-legacy-plain-script-passes", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): a plain placed script in HEAD that the change does not touch never blocks a change to another file", () => {
+  const legacy = "tests/bin/legacy.js";
+  const other = "tests/bin/other.js";
+  const repo = mkRepo({ ...si.SI_HEAD, [legacy]: F.BODY.plain, [other]: F.BODY.nodeTest });
+  stage(repo, { [other]: F.BODY.nodeTest + "// modified\n" });
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes("TEST_RUNNER") && !r.text.includes(legacy), r.show);
+  const g = check(repo, { gate: "test-runner" });
+  assert.strictEqual(g.rc, 0, g.show);
+  assert.ok(!g.text.includes(legacy), g.show);
+  stage(repo, { "notes.txt": "source change\n" });
+  const s = check(repo);
+  assert.strictEqual(s.rc, 0, s.show);
+  assert.ok(!s.text.includes(legacy), s.show);
+});
+caseEnd();
+
+caseBegin("g2-existing-node-test-modified-passes", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): a modified file already in HEAD that requires node:test passes (no over-blocking)", () => {
+  const rel = "tests/bin/x.js";
+  const repo = mkRepo({ ...si.SI_HEAD, [rel]: F.BODY.nodeTest });
+  stage(repo, { [rel]: F.BODY.nodeTest + "// modified\n" });
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes("TEST_RUNNER"), r.show);
+  assert.strictEqual(check(repo, { gate: "test-runner" }).rc, 0);
+});
+caseEnd();
+
+caseBegin("g2-repo-without-helper-library-passes", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): a repo without the helper library passes even with a modified and a new plain script staged", () => {
+  const rel = "tests/bin/x.js";
+  const repo = mkRepo({ ...si.SI_HEAD, [rel]: F.BODY.plain }, { noHelpers: true });
+  stage(repo, { [rel]: F.BODY.plain + "// modified\n", "tests/bin/y.js": F.BODY.plain });
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes(F.CODE), r.show);
+});
+caseEnd();
+
+caseBegin("g2-head-plain-staged-node-test-passes","hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): HEAD is a plain script and the staged change makes it a node:test file: the staged content is judged and passes", () => {
+  const rel = "tests/bin/x.js";
+  const repo = mkRepo({ ...si.SI_HEAD, [rel]: F.BODY.plain });
+  stage(repo, { [rel]: F.BODY.nodeTest });
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes("TEST_RUNNER"), r.show);
+});
+caseEnd();
+
+caseBegin("g2-head-node-test-staged-plain-blocked", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): HEAD requires node:test and the staged change drops it: the commit is refused", () => {
+  const rel = "tests/bin/x.js";
+  const repo = mkRepo({ ...si.SI_HEAD, [rel]: F.BODY.nodeTest });
+  stage(repo, { [rel]: F.BODY.plain });
+  const r = check(repo);
+  assert.strictEqual(r.rc, 1, r.show);
+  assert.ok(r.text.includes(F.highLine(rel)), r.show);
+  assert.ok(r.text.includes(F.COMMIT_HEADLINE), r.show);
+  assert.ok(r.text.includes(F.HINT), r.show);
+});
+caseEnd();
+
+caseBegin("g2-non-placed-existing-plain-passes", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): modified plain scripts in HEAD under tests/lib/ and a sibling module folder are not placed, so they pass", () => {
+  const files = ["tests/lib/x.js", "tests/bin/sib/helper.js"];
+  const repo = mkRepo({ ...si.SI_HEAD, "tests/bin/sib.js": F.BODY.nodeTest, [files[0]]: F.BODY.plain, [files[1]]: F.BODY.plain });
+  stage(repo, { [files[0]]: F.BODY.plain + "// modified\n", [files[1]]: F.BODY.plain + "// modified\n" });
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes("TEST_RUNNER"), r.show);
+  assert.strictEqual(check(repo, { gate: "test-runner" }).rc, 0);
+});
+caseEnd();
+
+caseBegin("g2-existing-bash-test-modified-no-runner-finding", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): a modified bash test already in HEAD gets no TEST_RUNNER finding", () => {
+  const rel = "tests/bin/x.sh";
+  const repo = mkRepo({ ...si.SI_HEAD, [rel]: si.BODY.shClean });
+  stage(repo, { [rel]: si.BODY.shClean + "echo extra\n" });
+  const r = check(repo);
+  assert.ok(!r.text.includes("TEST_RUNNER"), r.show);
+  const g = check(repo, { gate: "test-runner" });
+  assert.strictEqual(g.rc, 0, g.show);
+  assert.ok(!g.text.includes("TEST_RUNNER"), g.show);
+});
+caseEnd();
+
+caseBegin("g2-deleting-plain-script-passes", "hooks/pre-commit.d/checks/tests-frontmatter/test-runner-gate.js");
+test("G2 (#2865): deleting a plain script that is in HEAD passes (nothing is left to judge)", () => {
+  const rel = "tests/bin/x.js";
+  const repo = mkRepo({ ...si.SI_HEAD, [rel]: F.BODY.plain });
+  git(repo, "rm", "-q", "--", rel);
+  const r = check(repo);
+  assert.strictEqual(r.rc, 0, r.show);
+  assert.ok(!r.text.includes("TEST_RUNNER"), r.show);
 });
 caseEnd();
 

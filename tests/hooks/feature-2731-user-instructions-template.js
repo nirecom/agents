@@ -13,6 +13,8 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "user-instr-tpl-"));
@@ -23,7 +25,8 @@ process.env.AGENTS_MAIN_ROOT = CFG;
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TRANSCRIPTS;
 delete process.env.CONV_LANG;
 delete process.env.PLAN_LANG;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed, ${skipped} skipped\n`);
   restore();
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -55,6 +58,8 @@ function check(name, fn) {
   }
 }
 const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
+// verdict(fn) -> the node:test body of one case: it fails when a check inside fn failed.
+const verdict = (fn) => () => noNewFailures(() => failed, fn);
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
@@ -67,25 +72,25 @@ const stripComments = (s) => s.replace(/<!--[\s\S]*?-->/g, "");
 const gitignoreLines = () => fs.readFileSync(GITIGNORE, "utf8").split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "" && !l.startsWith("#"));
 
 caseBegin("template-is-comment-only", "user-instructions.example.md");
-{
+test("template-is-comment-only", verdict(() => {
   check("E1: user-instructions.example.md exists at the checkout root", () => eq(fs.existsSync(TEMPLATE) && fs.statSync(TEMPLATE).isFile(), true, "template is a file"));
   check("E2: with every <!-- --> stripped, the template is whitespace-only", () => { const t = readTemplate(); eq([comments(t).length > 0, stripComments(t).trim()], [true, ""], "[has a comment, remaining text]"); });
   check("E3: the comment text names user-instructions.md as the copy-to target", () => eq(comments(readTemplate()).some((c) => /(^|[^.\w-])user-instructions\.md\b/.test(c)), true, "user-instructions.md named in a comment"));
-}
+}));
 caseEnd();
 
 caseBegin("template-copy-injects-nothing", "hooks/lib/user-instructions.js");
-{
+test("template-copy-injects-nothing", verdict(() => {
   check("E4: the template copied verbatim as user-instructions.md -> getUserInstructionsInjection() is null", () => {
     fs.writeFileSync(path.join(COPY, "user-instructions.md"), readTemplate());
     delete require.cache[require.resolve(UI_LIB)];
     eq(require(UI_LIB).getUserInstructionsInjection(), null, "injection");
   });
-}
+}));
 caseEnd();
 
 caseBegin("gitignore-ignores-copy-not-template", ".gitignore");
-{
+test("gitignore-ignores-copy-not-template", verdict(() => {
   check("G1: .gitignore has the line user-instructions.md", () => eq(gitignoreLines().includes("user-instructions.md"), true, "line present"));
   check("G2: no .gitignore line ignores user-instructions.example.md (exact or user-instructions* glob)", () => eq(gitignoreLines().filter((l) => l === "user-instructions.example.md" || /^\/?user-instructions[^/]*\*/.test(l) || l === "*.example.md"), [], "matching lines"));
   check("G3: the old user-instructions.local.md line is gone", () => eq(gitignoreLines().includes("user-instructions.local.md"), false, "old line present"));
@@ -97,8 +102,5 @@ caseBegin("gitignore-ignores-copy-not-template", ".gitignore");
   } else {
     check("G4: git check-ignore — template not ignored (exit 1), copy ignored (exit 0)", () => eq([probe.status, ci("user-instructions.md").status], [1, 0], "[template exit, copy exit]"));
   }
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed, ${skipped} skipped\n`);
-process.exitCode = failed === 0 ? 0 : 1;

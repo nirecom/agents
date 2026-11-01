@@ -5,7 +5,9 @@
 // and every later non-pending step (cleanup included) to pending inside the one composed
 // write, with an inherit_revert_reason annotation, instead of refusing the whole inheritance.
 // The catch sites that still refuse a user's own completion name e.code and recoveryFor().
+const { after: afterAll, test } = require("node:test");
 const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -14,6 +16,7 @@ const { spawnSync } = require("node:child_process");
 const ROOT = path.resolve(__dirname, "..", "..");
 const restore = isolate();
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "f2633-revert-"));
+afterAll(() => { process.chdir(os.tmpdir()); restore(); fs.rmSync(SCRATCH, { recursive: true, force: true }); });
 fs.mkdirSync(path.join(SCRATCH, "no-transcripts"));
 fs.mkdirSync(path.join(SCRATCH, "repo"));
 gitInit(path.join(SCRATCH, "repo"));
@@ -35,7 +38,6 @@ function completeStep(sid, step) {
   completeWithRecord(sid, step, path.join(SCRATCH, "repo"), WS.markStep);
 }
 
-// ---- reporting -------------------------------------------------------------
 let failures = 0;
 function check(name, ok, detail) {
   if (ok) { console.log(`PASS: ${name}`); return; }
@@ -43,7 +45,6 @@ function check(name, ok, detail) {
   console.log(`FAIL: ${name} -- ${String(detail).replace(/\s+/g, " ").slice(0, 400)}`);
 }
 
-// ---- fixtures --------------------------------------------------------------
 const SUFFIX = { clarify_intent: "intent", outline: "outline", detail: "detail" };
 const BODY = {
   intent: "# Intent\n\n## Goal\n\nfixture goal\n\n## Issues\n\n- #1 fixture\n\n## Constraints\n\nnone\n",
@@ -167,9 +168,8 @@ function assertChain(label, D, r, trigger, code) {
     JSON.stringify(fmt(r.result)));
 }
 
-// ---- cases -----------------------------------------------------------------
-{
 caseBegin("stale-outline-reverts-outline-and-followers", "hooks/workflow-state/inheritance/apply.js");
+test("stale-outline-reverts-outline-and-followers", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("so", { stale: "outline" });
 const r = inherit(D, U);
 assertChain("stale outline", D, r, "outline", "artifact-hash-mismatch");
@@ -177,11 +177,11 @@ check("stale outline: clarify_intent stays complete", rawStatus(D, "clarify_inte
 const inh = (r.result && r.result.inherited_steps) || [];
 check("stale outline: inherited_steps = still non-pending steps only",
   inh.includes("clarify_intent") && !inh.includes("outline") && !inh.includes("cleanup"), JSON.stringify(inh));
+}));
 caseEnd();
-}
 
-{
 caseBegin("stale-outline-revert-events-shape", "hooks/workflow-state/inheritance/apply.js");
+test("stale-outline-revert-events-shape", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("se", { stale: "outline" });
 inherit(D, U);
 const app = appended(D);
@@ -201,27 +201,27 @@ check("revert events: no #772 cleanup skipped event when an approval revert happ
   JSON.stringify(app.filter((e) => e.step === "cleanup")));
 const ev = CA.evaluateCompletionApproval(D, "outline", WS.readState(D));
 check("revert events: the stale outline record no longer projects", ev.code === "no-approval-record", JSON.stringify(ev));
+}));
 caseEnd();
-}
 
-{
 caseBegin("stale-intent-reverts-everything-after", "hooks/workflow-state/inheritance/apply.js");
+test("stale-intent-reverts-everything-after", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("si", { stale: "clarify_intent" });
 assertChain("stale intent", D, inherit(D, U), "clarify_intent", "artifact-hash-mismatch");
 check("stale intent: workflow_init stays complete", rawStatus(D, "workflow_init") === "complete", rawStatus(D, "workflow_init"));
+}));
 caseEnd();
-}
 
-{
 caseBegin("stale-detail-reverts-detail-onward-only", "hooks/workflow-state/inheritance/apply.js");
+test("stale-detail-reverts-detail-onward-only", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("sd", { stale: "detail" });
 assertChain("stale detail", D, inherit(D, U), "detail", "artifact-hash-mismatch");
 check("stale detail: outline stays complete", rawStatus(D, "outline") === "complete", rawStatus(D, "outline"));
+}));
 caseEnd();
-}
 
-{
 caseBegin("reapproval-after-revert-completes-outline", "hooks/workflow-state/inheritance/apply.js");
+test("reapproval-after-revert-completes-outline", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("ra", { stale: "outline" });
 inherit(D, U);
 check("re-approve: outline reverted first", annot(D, "outline", "inherit_revert_reason") === "approval:artifact-hash-mismatch",
@@ -234,11 +234,11 @@ try {
 } catch (e) { threw = `${e.code || e.name}: ${e.message}`; }
 check("re-approve: CONFIRM_OUTLINE re-approval lets markStep complete outline", threw === null, threw);
 check("re-approve: outline complete on disk", rawStatus(D, "outline") === "complete", rawStatus(D, "outline"));
+}));
 caseEnd();
-}
 
-{
 caseBegin("confirm-outline-off-completes-after-revert", "hooks/workflow-state/inheritance/apply.js");
+test("confirm-outline-off-completes-after-revert", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("off", { stale: "outline", cfg: ["CONFIRM_INTENT=on", "CONFIRM_OUTLINE=off", "CONFIRM_DETAIL=on"] });
 inherit(D, U);
 check("off waiver: a stale confirm-sentinel record still reverts outline under CONFIRM_OUTLINE=off",
@@ -248,11 +248,11 @@ try { completeStep(D, "outline"); } catch (e) { threw = `${e.code || e.name}: ${
 check("off waiver: after the record is revoked, markStep outline completes", threw === null, threw);
 const last = evs(D).filter((e) => e.kind === "plan_approval" && e.step === "outline").pop();
 check("off waiver: completion stamped confirm-flag-off", !!last && last.source === "confirm-flag-off", JSON.stringify(last));
+}));
 caseEnd();
-}
 
-{
 caseBegin("single-write-never-exposes-stale-complete", "hooks/workflow-state/inheritance/apply.js");
+test("single-write-never-exposes-stale-complete", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("at", { stale: "outline" });
 const target = path.resolve(statePath(D)).toLowerCase();
 const snaps = [];
@@ -273,35 +273,35 @@ check("atomic: the one write already holds the copy (clarify_intent complete)", 
 check("atomic: no write ever shows the stale outline complete",
   snaps.length > 0 && snaps.every((s) => s && statusIn(s.events || [], "outline") === "pending"),
   JSON.stringify(snaps.map((s) => s && statusIn(s.events || [], "outline"))));
+}));
 caseEnd();
-}
 
-{
 caseBegin("no-record-confirm-on-reverts-with-no-approval-record", "hooks/workflow-state/inheritance/apply.js");
+test("no-record-confirm-on-reverts-with-no-approval-record", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("nr", { approved: ["clarify_intent", "detail"] });
 assertChain("no record (on)", D, inherit(D, U), "outline", "no-approval-record");
+}));
 caseEnd();
-}
 
-{
 caseBegin("no-record-confirm-off-keeps-outline-complete", "hooks/workflow-state/inheritance/apply.js");
+test("no-record-confirm-off-keeps-outline-complete", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("nf", { approved: ["clarify_intent", "detail"], cfg: ["CONFIRM_INTENT=on", "CONFIRM_OUTLINE=off", "CONFIRM_DETAIL=on"] });
 const r = inherit(D, U);
 check("no record (off): inheritance succeeds", r.error === null, r.error && r.error.message);
 check("no record (off): outline copied complete", rawStatus(D, "outline") === "complete", rawStatus(D, "outline"));
 check("no record (off): no approval revert", JSON.stringify(fmt(r.result)) === "[]", JSON.stringify(fmt(r.result)));
+}));
 caseEnd();
-}
 
-{
 caseBegin("intent-off-in-config-never-waives-clarify-intent", "hooks/workflow-state/inheritance/apply.js");
+test("intent-off-in-config-never-waives-clarify-intent", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("io", { approved: ["outline", "detail"], cfg: ["CONFIRM_INTENT=off", "CONFIRM_OUTLINE=on", "CONFIRM_DETAIL=on"] });
 assertChain("intent off", D, inherit(D, U), "clarify_intent", "no-approval-record");
+}));
 caseEnd();
-}
 
-{
 caseBegin("all-approved-reverts-nothing-and-keeps-772-cleanup", "hooks/workflow-state/inheritance/apply.js");
+test("all-approved-reverts-nothing-and-keeps-772-cleanup", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("ok");
 const r = inherit(D, U);
 check("all approved: inheritance succeeds", r.error === null, r.error && r.error.message);
@@ -315,11 +315,11 @@ check("all approved: no inherit_revert_reason anywhere",
   !evs(D).some((e) => e.kind === "step_annotation" && e.key === "inherit_revert_reason"), "found one");
 check("all approved: description says nothing was held back",
   INH.describeGranularInheritance(r.result || {}).includes("Nothing was held back"), INH.describeGranularInheritance(r.result || {}));
+}));
 caseEnd();
-}
 
-{
 caseBegin("record-without-artifact-session-id-resolves-to-upstream", "hooks/workflow-state/inheritance/apply.js");
+test("record-without-artifact-session-id-resolves-to-upstream", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("na", { omitAsid: true });
 const r = inherit(D, U);
 check("no artifact_session_id: inheritance succeeds", r.error === null, r.error && r.error.message);
@@ -329,21 +329,21 @@ const rec = (WS.readState(D).plan_approvals || {}).outline || {};
 check("no artifact_session_id: record keeps no artifact_session_id", !rec.artifact_session_id, JSON.stringify(rec));
 const ev = CA.evaluateCompletionApproval(D, "outline", WS.readState(D));
 check("no artifact_session_id: evaluation resolves to the upstream file", ev.approved === true, JSON.stringify(ev));
+}));
 caseEnd();
-}
 
-{
 caseBegin("unverifiable-upstream-artifact-reverts-with-retention-text", "hooks/workflow-state/inheritance/apply.js");
+test("unverifiable-upstream-artifact-reverts-with-retention-text", () => noNewFailures(() => failures, () => {
 const { U, D } = setup("uv", { deletePlan: "outline" });
 const r = inherit(D, U);
 assertChain("deleted outline", D, r, "outline", "artifact-hash-unverifiable");
 const text = r.result ? INH.describeGranularInheritance(r.result) : "";
 check("deleted outline: description names the retention cause", text.includes("aged out of retention"), text);
+}));
 caseEnd();
-}
 
-{
 caseBegin("describe-approval-revert-wording", "hooks/workflow-state/inheritance/apply.js");
+test("describe-approval-revert-wording", () => noNewFailures(() => failures, () => {
 const text = INH.describeGranularInheritance({
   upstream_session_id: "up-sid", granularity: "full", inherited_steps: ["workflow_init", "clarify_intent"],
   reverted_steps: [
@@ -362,11 +362,11 @@ const unv = INH.describeGranularInheritance({
 });
 check("describe unverifiable: retention note", unv.includes("aged out of retention"), unv);
 check("describe unverifiable: intent sentinel", unv.includes("<<WORKFLOW_CONFIRM_INTENT:"), unv);
+}));
 caseEnd();
-}
 
-{
 caseBegin("describe-context-and-empty-wording", "hooks/workflow-state/inheritance/apply.js");
+test("describe-context-and-empty-wording", () => noNewFailures(() => failures, () => {
 const ctx = INH.describeGranularInheritance({
   granularity: "context-independent-only", inherited_steps: ["clarify_intent"],
   reverted_steps: [{ step: "write_code", cause: "context", code: "worktree-dependent", trigger: null }],
@@ -375,11 +375,11 @@ check("describe context: keeps the evidence-does-not-travel wording", ctx.includ
 check("describe context: names the step, not an object", ctx.includes("write_code") && !ctx.includes("[object Object]"), ctx);
 const none = INH.describeGranularInheritance({ granularity: "full", inherited_steps: ["clarify_intent"], reverted_steps: [] });
 check("describe empty: Nothing was held back", none.includes("Nothing was held back"), none);
+}));
 caseEnd();
-}
 
-{
 caseBegin("session-inherit-token-rejected-as-unknown", "hooks/workflow-state/completion-approval.js");
+test("session-inherit-token-rejected-as-unknown", () => noNewFailures(() => failures, () => {
 let code = null;
 try { CA.assertSanctionedSource("session-inherit", "outline"); } catch (e) { code = e.code || e.name; }
 check("sanctioned set: session-inherit is no longer a sanctioned token", code === "unknown-sanctioned-token", String(code));
@@ -392,26 +392,26 @@ try {
   rec = "recorded";
 } catch (e) { rec = e.code || e.name; }
 check("sanctioned set: recordPlanApproval refuses a session-inherit source", rec === "unknown-sanctioned-token", String(rec));
+}));
 caseEnd();
-}
 
-{
 caseBegin("confirm-sentinel-token-still-sanctioned", "hooks/workflow-state/completion-approval.js");
+test("confirm-sentinel-token-still-sanctioned", () => noNewFailures(() => failures, () => {
 let threw = null;
 try { CA.assertSanctionedSource("confirm-sentinel", "outline"); } catch (e) { threw = e.code || e.name; }
 check("sanctioned set: confirm-sentinel still accepted", threw === null, String(threw));
+}));
 caseEnd();
-}
 
-{
 caseBegin("legacy-session-inherit-record-still-reads-approved", "hooks/workflow-state/completion-approval.js");
+test("legacy-session-inherit-record-still-reads-approved", () => noNewFailures(() => failures, () => {
 configRoot(CFG_ON);
 const sid = newSid("legacy");
 writeRawState(sid, { workflow_init: "complete", outline: "complete" }, [{ step: "outline", source: "session-inherit" }]);
 const ev = CA.evaluateCompletionApproval(sid, "outline", WS.readState(sid));
 check("read compat: an existing session-inherit record stays hash-exempt", ev.approved === true, JSON.stringify(ev));
+}));
 caseEnd();
-}
 
 // A downstream-like session whose <step> approval no longer matches its artifact.
 function staleApprovalSession(tag, step, prior) {
@@ -423,8 +423,8 @@ function staleApprovalSession(tag, step, prior) {
   return sid;
 }
 
-{
 caseBegin("record-step-verdict-refusal-names-code-and-recovery", "hooks/workflow-state/record-step-verdict.js");
+test("record-step-verdict-refusal-names-code-and-recovery", () => noNewFailures(() => failures, () => {
 const { recordStepVerdict } = req("hooks/workflow-state/record-step-verdict.js");
 const sid = staleApprovalSession("rsv", "outline", { workflow_init: "complete", clarify_intent: "complete", research: "complete" });
 let res;
@@ -434,8 +434,8 @@ check("record-step-verdict: still refused as unapproved", !!res && res.ok === fa
 check("record-step-verdict: message names e.code", msg.includes("artifact-hash-mismatch"), msg);
 check("record-step-verdict: message carries recoveryFor(outline)", msg.includes(CA.recoveryFor("outline")), msg);
 check("record-step-verdict: outline left pending", rawStatus(sid, "outline") === "pending", rawStatus(sid, "outline"));
+}));
 caseEnd();
-}
 
 function clarifyHandle(sid) {
   const { handle } = req("hooks/workflow-mark/clarify-intent-complete-handler.js");
@@ -445,19 +445,19 @@ function clarifyHandle(sid) {
   return msgs.join("\n");
 }
 
-{
 caseBegin("clarify-handler-hash-mismatch-message", "hooks/workflow-mark/clarify-intent-complete-handler.js");
+test("clarify-handler-hash-mismatch-message", () => noNewFailures(() => failures, () => {
 const sid = staleApprovalSession("chm", "clarify_intent", { workflow_init: "complete" });
 const msg = clarifyHandle(sid);
 check("clarify handler (mismatch): names e.code", msg.includes("artifact-hash-mismatch"), msg);
 check("clarify handler (mismatch): drops the false no-approval-on-record claim", !msg.includes("no approval is on record"), msg);
 check("clarify handler (mismatch): carries recoveryFor(clarify_intent)", msg.includes(CA.recoveryFor("clarify_intent")), msg);
 check("clarify handler (mismatch): clarify_intent left pending", rawStatus(sid, "clarify_intent") === "pending", rawStatus(sid, "clarify_intent"));
+}));
 caseEnd();
-}
 
-{
 caseBegin("clarify-handler-no-record-message", "hooks/workflow-mark/clarify-intent-complete-handler.js");
+test("clarify-handler-no-record-message", () => noNewFailures(() => failures, () => {
 configRoot(CFG_ON);
 const sid = newSid("cnr");
 fs.writeFileSync(planPath(sid, "clarify_intent"), BODY.intent);
@@ -465,8 +465,8 @@ writeRawState(sid, { workflow_init: "complete" }, []);
 const msg = clarifyHandle(sid);
 check("clarify handler (no record): names e.code", msg.includes("no-approval-record"), msg);
 check("clarify handler (no record): carries recoveryFor(clarify_intent)", msg.includes(CA.recoveryFor("clarify_intent")), msg);
+}));
 caseEnd();
-}
 
 // persistResolutions only fires when an evidence-resolved markStep throws, so the child
 // stubs markStep and the snapshot before verdict.js destructures them at load time.
@@ -482,8 +482,8 @@ const VERDICT_CHILD = [
   "require(path.join(root, 'bin/workflow/lib/next-step/verdict.js')).computeVerdict(sid);",
 ].join("\n");
 
-{
 caseBegin("next-step-persist-resolutions-names-code-and-recovery", "bin/workflow/lib/next-step/verdict.js");
+test("next-step-persist-resolutions-names-code-and-recovery", () => noNewFailures(() => failures, () => {
 configRoot(CFG_ON);
 const sid = newSid("nsv");
 const all = {};
@@ -494,11 +494,5 @@ const out = (r.stdout || "") + (r.stderr || "");
 check("next-step: the stubbed path reaches the unapproved-completion block", out.includes("unapproved-completion: outline"), out);
 check("next-step: blocked output names e.code", out.includes("artifact-hash-mismatch"), out);
 check("next-step: blocked output carries recoveryFor(outline)", out.includes(CA.recoveryFor("outline")), out);
+}));
 caseEnd();
-}
-
-process.chdir(os.tmpdir());
-restore();
-fs.rmSync(SCRATCH, { recursive: true, force: true });
-console.log(`\nResults: ${failures} failure(s)`);
-process.exitCode = failures === 0 ? 0 : 1;

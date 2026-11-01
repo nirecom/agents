@@ -13,7 +13,9 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { after, test } = require("node:test");
 const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const savedRoot = process.env.AGENTS_MAIN_ROOT;
@@ -24,6 +26,12 @@ process.chdir(work);
 const ON_ROOT = F.configRoot("on", ["CONFIRM_INTENT=on", "CONFIRM_OUTLINE=on", "CONFIRM_DETAIL=on"]);
 const OFF_ROOT = F.configRoot("off", ["CONFIRM_INTENT=off", "CONFIRM_OUTLINE=off", "CONFIRM_DETAIL=off"]);
 process.env.AGENTS_MAIN_ROOT = ON_ROOT;
+after(() => {
+  process.chdir(savedCwd === work ? os.tmpdir() : savedCwd);
+  if (savedRoot === undefined) delete process.env.AGENTS_MAIN_ROOT;
+  else process.env.AGENTS_MAIN_ROOT = savedRoot;
+  restore();
+});
 
 const OWNER = "hooks/workflow-state/plan-artifact-owner.js";
 const owner = () => F.load(OWNER);
@@ -74,7 +82,7 @@ const statusOf = (sid, step) => (((WS().readState(sid) || {}).steps || {})[step]
 // #2748: every plan is named after the first_session_id; the session-downstream's own sid name is
 // never read. downstream() seeds a legacy state (upstream_session_id only), whose first_session_id is U.
 caseBegin("owner-resolver-first-session-only-and-missing", "hooks/workflow-state/plan-artifact-owner.js");
-F.run("resolver basic", () => {
+test("resolver basic", () => noNewFailures(F.failureCount, () => F.run("resolver basic", () => {
   F.check("resolvePlanArtifactOwner is exported", typeof owner().resolvePlanArtifactOwner === "function", "missing export");
   const { U, D } = downstream(["outline"]);
   let r = owner().resolvePlanArtifactOwner(D, "outline");
@@ -92,11 +100,11 @@ F.run("resolver basic", () => {
   F.writeState(S, null, []);
   r = owner().resolvePlanArtifactOwner(S, "outline");
   F.check("a first generation reads its own file via own", r.via === "own" && r.ownerSid === S && r.exists === true, JSON.stringify(r));
-});
+})));
 caseEnd();
 
 caseBegin("owner-resolver-ignores-approval-record-sid", "hooks/workflow-state/plan-artifact-owner.js");
-F.run("resolver ignores approval records", () => {
+test("resolver ignores approval records", () => noNewFailures(F.failureCount, () => F.run("resolver ignores approval records", () => {
   const X = F.newSid();
   const xBody = F.body("outline", "X");
   F.writePlan(X, "outline", xBody);
@@ -112,11 +120,11 @@ F.run("resolver ignores approval records", () => {
   r = owner().resolvePlanArtifactOwner(D2, "outline");
   F.check("approval history names X -> path stays the first_session_id (U) path", r.ownerSid === U && r.via === "missing" &&
     F.samePath(r.path, F.planPath(U, "outline")), JSON.stringify(r));
-});
+})));
 caseEnd();
 
 caseBegin("inheritance-reverts-approval-when-first-session-file-edited", "hooks/workflow-state/completion-approval.js");
-F.run("chained adoption with a first_session_id-owned artifact", () => {
+test("chained adoption with a first_session_id-owned artifact", () => noNewFailures(F.failureCount, () => F.run("chained adoption with a first_session_id-owned artifact", () => {
   const apply = () => F.load("hooks/workflow-state/inheritance/apply.js");
   const at = new Date().toISOString();
   // X -> U -> D: U carries X's approval (outline complete); D adopts U. X is the first_session_id.
@@ -144,11 +152,11 @@ F.run("chained adoption with a first_session_id-owned artifact", () => {
   F.check("edited first_session_id file -> outline reverted to pending", statusOf(D, "outline") === "pending", statusOf(D, "outline"));
   F.check("revert names the approval mismatch", rv && rv.cause === "approval" && rv.code === "artifact-hash-mismatch",
     JSON.stringify(res.reverted_steps));
-});
+})));
 caseEnd();
 
 caseBegin("owner-resolver-rejects-traversal-and-honors-plans-dir", "hooks/workflow-state/plan-artifact-owner.js");
-F.run("resolver security", () => {
+test("resolver security", () => noNewFailures(F.failureCount, () => F.run("resolver security", () => {
   const D = F.newSid();
   const evil = "evil-" + F.newSid();
   fs.writeFileSync(path.join(work, `${evil}-outline.md`), "# planted\n");
@@ -160,11 +168,11 @@ F.run("resolver security", () => {
   F.writePlan(U, "intent", null, alt);
   const r2 = owner().resolvePlanArtifactOwner(D2, "intent", undefined, { plansDir: alt });
   F.check("opts.plansDir is honored", r2.via === "first-session" && F.samePath(r2.path, F.planPath(U, "intent", alt)), JSON.stringify(r2));
-});
+})));
 caseEnd();
 
 caseBegin("confirm-outline-in-downstream-hashes-upstream-and-completes", "hooks/workflow-mark/confirm-approval-handler.js");
-F.run("downstream outline re-approval", () => {
+test("downstream outline re-approval", () => noNewFailures(F.failureCount, () => F.run("downstream outline re-approval", () => {
   const { U, D } = downstream(["outline"]);
   const msg = confirm(D, "outline");
   const rec = approvalOf(D, "outline");
@@ -174,11 +182,11 @@ F.run("downstream outline re-approval", () => {
   F.check("evaluation approved", v.approved === true, JSON.stringify(v));
   complete(D, "outline");
   F.check("markStep(D, outline, complete) persists", statusOf(D, "outline") === "complete", statusOf(D, "outline"));
-});
+})));
 caseEnd();
 
 caseBegin("confirm-intent-and-detail-in-downstream-complete", "hooks/workflow-mark/confirm-approval-handler.js");
-F.run("downstream intent/detail re-approval", () => {
+test("downstream intent/detail re-approval", () => noNewFailures(F.failureCount, () => F.run("downstream intent/detail re-approval", () => {
   for (const step of ["clarify_intent", "detail"]) {
     const { U, D } = downstream([step]);
     const msg = confirm(D, step);
@@ -187,11 +195,11 @@ F.run("downstream intent/detail re-approval", () => {
     complete(D, step);
     F.check(`${step}: completes in D`, statusOf(D, step) === "complete", statusOf(D, step));
   }
-});
+})));
 caseEnd();
 
 caseBegin("confirm-outline-in-downstream-through-registered-hook", "hooks/workflow-mark.js");
-F.run("downstream outline re-approval via workflow-mark.js subprocess", () => {
+test("downstream outline re-approval via workflow-mark.js subprocess", () => noNewFailures(F.failureCount, () => F.run("downstream outline re-approval via workflow-mark.js subprocess", () => {
   const { U, D } = downstream(["outline"]);
   const msg = confirmViaHook(D, "outline");
   const rec = approvalOf(D, "outline");
@@ -199,22 +207,22 @@ F.run("downstream outline re-approval via workflow-mark.js subprocess", () => {
   F.check("hook: artifact_session_id (owner) is U", rec && rec.artifact_session_id === U && rec.artifact_hash_status === "recorded", msg + " " + JSON.stringify(rec));
   const v = CA().evaluateCompletionApproval(D, "outline", WS().readState(D));
   F.check("hook: evaluation approved", v.approved === true, JSON.stringify(v));
-});
+})));
 caseEnd();
 
 caseBegin("confirm-binds-to-first-session-artifact", "hooks/workflow-mark/confirm-approval-handler.js");
-F.run("approval bound to the first_session_id file", () => {
+test("approval bound to the first_session_id file", () => noNewFailures(F.failureCount, () => F.run("approval bound to the first_session_id file", () => {
   const { U, D } = downstream(["outline"]);
   F.writePlan(D, "outline", F.body("outline", "own-D"));
   const msg = confirm(D, "outline");
   const rec = approvalOf(D, "outline");
   F.check("artifact_session_id is the first_session_id (U), not D", rec && rec.artifact_session_id === U, msg + " " + JSON.stringify(rec));
   F.check("recorded hash is the first_session_id file's", rec && rec.artifact_sha256 === CA().computeArtifactSha(U, "outline"), JSON.stringify(rec));
-});
+})));
 caseEnd();
 
 caseBegin("first-session-file-edited-after-approval-needs-reapproval", "hooks/workflow-state/completion-approval.js");
-F.run("stale first_session_id-bound approval", () => {
+test("stale first_session_id-bound approval", () => noNewFailures(F.failureCount, () => F.run("stale first_session_id-bound approval", () => {
   const { U, D } = downstream(["outline"]);
   confirm(D, "outline");
   F.check("approval bound to U", (approvalOf(D, "outline") || {}).artifact_session_id === U, JSON.stringify(approvalOf(D, "outline")));
@@ -233,22 +241,22 @@ F.run("stale first_session_id-bound approval", () => {
   F.check("re-approval binds to the first_session_id (U)", (approvalOf(D, "outline") || {}).artifact_session_id === U, JSON.stringify(approvalOf(D, "outline")));
   complete(D, "outline");
   F.check("completes after re-approval", statusOf(D, "outline") === "complete", statusOf(D, "outline"));
-});
+})));
 caseEnd();
 
 caseBegin("approval-bound-to-non-first-session-sid-is-mismatch", "hooks/workflow-state/completion-approval.js");
-F.run("record naming a sid that is not read", () => {
+test("record naming a sid that is not read", () => noNewFailures(F.failureCount, () => F.run("record naming a sid that is not read", () => {
   const { U, D } = downstream(["outline"]);
   const text = F.body("outline", "D-named");
   F.writePlan(D, "outline", text);
   F.writeState(D, { upstream_session_id: U, upstream_copy_seq: 0 }, [F.approvalEvent("outline", D, F.sha(text))]);
   const v = CA().evaluateCompletionApproval(D, "outline", WS().readState(D));
   F.check("artifact_session_id != first_session_id -> artifact-hash-mismatch", v.approved === false && v.code === "artifact-hash-mismatch", JSON.stringify(v));
-});
+})));
 caseEnd();
 
 caseBegin("confirm-without-any-artifact-is-unverifiable", "hooks/workflow-mark/confirm-approval-handler.js");
-F.run("no artifact", () => {
+test("no artifact", () => noNewFailures(F.failureCount, () => F.run("no artifact", () => {
   const { D } = downstream([]);
   const msg = confirm(D, "outline");
   const rec = approvalOf(D, "outline");
@@ -262,11 +270,11 @@ F.run("no artifact", () => {
   const v2 = CA().evaluateCompletionApproval(S, "outline", WS().readState(S));
   F.check("regular session: unchanged unverifiable verdict", msg2.includes("uncomputable-at-record") &&
     v2.code === "artifact-hash-unverifiable", msg2 + " " + JSON.stringify(v2));
-});
+})));
 caseEnd();
 
 caseBegin("record-plan-approval-artifact-session-id-field", "hooks/workflow-state/completion-approval.js");
-F.run("artifactSessionId field", () => {
+test("artifactSessionId field", () => noNewFailures(F.failureCount, () => F.run("artifactSessionId field", () => {
   const S = F.newSid();
   F.writeState(S, null, []);
   const fields = (owner) => ({ source: "confirm-sentinel", reason: "r", artifactSha: "a".repeat(64), artifactHashStatus: "recorded", artifactSessionId: owner });
@@ -281,11 +289,11 @@ F.run("artifactSessionId field", () => {
   const U = F.newSid();
   const rec = CA().recordPlanApproval(S, "outline", fields(U));
   F.check("valid artifactSessionId is recorded", rec && rec.artifact_session_id === U, JSON.stringify(rec));
-});
+})));
 caseEnd();
 
 caseBegin("evaluate-backfills-owner-for-record-without-session", "hooks/workflow-state/completion-approval.js");
-F.run("evaluate backfill", () => {
+test("evaluate backfill", () => noNewFailures(F.failureCount, () => F.run("evaluate backfill", () => {
   const U = F.newSid();
   const D = F.newSid();
   const text = F.body("outline", "U-eval");
@@ -299,11 +307,11 @@ F.run("evaluate backfill", () => {
   F.writePlan(U, "outline", text + "\nedited after approval\n");
   const v2 = CA().evaluateCompletionApproval(D2, "outline", WS().readState(D2));
   F.check("edited upstream artifact -> artifact-hash-mismatch", v2.approved === false && v2.code === "artifact-hash-mismatch", JSON.stringify(v2));
-});
+})));
 caseEnd();
 
 caseBegin("regular-session-approval-unchanged", "hooks/workflow-mark/confirm-approval-handler.js");
-F.run("regular session regression", () => {
+test("regular session regression", () => noNewFailures(F.failureCount, () => F.run("regular session regression", () => {
   for (const step of STEPS) {
     const S = F.newSid();
     F.writePlan(S, F.SUFFIX[step]);
@@ -314,11 +322,11 @@ F.run("regular session regression", () => {
     complete(S, step);
     F.check(`${step}: completes`, statusOf(S, step) === "complete", statusOf(S, step));
   }
-});
+})));
 caseEnd();
 
 caseBegin("confirm-flag-off-waiver-is-config-file-only", "hooks/workflow-state/completion-approval.js");
-F.run("config-dependent branch", () => {
+test("config-dependent branch", () => noNewFailures(F.failureCount, () => F.run("config-dependent branch", () => {
   const S = F.newSid();
   F.writeState(S, null, []);
   const st = WS().readState(S);
@@ -329,11 +337,11 @@ F.run("config-dependent branch", () => {
   F.check("CONFIRM_OUTLINE=off waives outline", off.outline.approved === true && off.outline.source === "confirm-flag-off", JSON.stringify(off.outline));
   F.check("CONFIRM_INTENT=off never waives clarify_intent", off.intent.approved === false, JSON.stringify(off.intent));
   F.check("CONFIRM_OUTLINE=on -> no-approval-record", on.approved === false && on.code === "no-approval-record", JSON.stringify(on));
-});
+})));
 caseEnd();
 
 caseBegin("finish-path-readers-resolve-upstream-artifacts", "hooks/lib/plan-link.js");
-F.run("1b readers", () => {
+test("1b readers", () => noNewFailures(F.failureCount, () => F.run("1b readers", () => {
   const { U, D } = downstream(["clarify_intent", "outline", "detail"]);
   const plans = F.plansDir();
   const link = F.load("hooks/lib/plan-link.js").resolvePlanLink(D, "outline", { plansDir: plans });
@@ -351,11 +359,11 @@ F.run("1b readers", () => {
   F.check("detectScopeChange is exported", typeof gm.detectScopeChange === "function", Object.keys(gm).join(","));
   const sc = gm.detectScopeChange(D);
   F.check("detectScopeChange(D) reads U's plans (Phase split -> changed, not failed)", sc.failed === false && sc.changed === true, JSON.stringify(sc));
-});
+})));
 caseEnd();
 
 caseBegin("wf-target-repos-downstream-intent-worktrees", "hooks/lib/wf-target-repos.js");
-F.run("wf-target-repos", () => {
+test("wf-target-repos", () => noNewFailures(F.failureCount, () => F.run("wf-target-repos", () => {
   const repo = path.join(work, "repo-" + F.newSid());
   fs.mkdirSync(repo);
   gitInit(repo);
@@ -373,11 +381,11 @@ F.run("wf-target-repos", () => {
   const r2 = WT.readWfTargetRepos(S, { session_start_context: { cwd: repo },
     current: { plan_approvals: { outline: { artifact_session_id: X } } }, plan_approvals: { outline: { artifact_session_id: X } } });
   F.check("the resolver path is read, not the approval record's sid", JSON.stringify(declared(r2)) === JSON.stringify(["/nonexistent/wt-s"]), JSON.stringify(r2));
-});
+})));
 caseEnd();
 
 caseBegin("finish-path-readers-missing-everywhere-stay-missing", "hooks/lib/plan-link.js");
-F.run("missing regression", () => {
+test("missing regression", () => noNewFailures(F.failureCount, () => F.run("missing regression", () => {
   const { D } = downstream([]);
   const plans = F.plansDir();
   const link = F.load("hooks/lib/plan-link.js").resolvePlanLink(D, "outline", { plansDir: plans });
@@ -386,13 +394,13 @@ F.run("missing regression", () => {
   F.check("no completion evidence", F.load("hooks/workflow-state/evidence-resolver.js").hasCompletionEvidence("outline", D) === false, "true");
   F.check("artifact key null", F.load("hooks/lib/diff-fingerprint.js").computeArtifactKey(plans, D, ["outline"]) === null, "non-null");
   F.check("declared files null", F.load("hooks/lib/branch-diff.js").parseDetailFilesToModify(plans, D) === null, "non-null");
-});
+})));
 caseEnd();
 
 // #2748 R2-R5: a wsid that fails SESSION_ID_VALID_RE never reaches a path, so the catch fallback
 // of the owner resolution can no longer join "<dir>/../x-detail.md" and read outside the plans dir.
 caseBegin("branch-diff-rejects-invalid-wsid", "hooks/lib/branch-diff.js");
-F.run("parseDetailFilesToModify sid validation", () => {
+test("parseDetailFilesToModify sid validation", () => noNewFailures(F.failureCount, () => F.run("parseDetailFilesToModify sid validation", () => {
   const BD = F.load("hooks/lib/branch-diff.js");
   const tmp = path.join(work, "r2-plans");
   fs.mkdirSync(tmp, { recursive: true });
@@ -417,11 +425,11 @@ F.run("parseDetailFilesToModify sid validation", () => {
   F.writePlan(S, "detail", null, tmp);
   const r4 = BD.parseDetailFilesToModify(tmp, S);
   F.check("R4: a valid wsid still returns its Files to modify", JSON.stringify(r4) === JSON.stringify([`hooks/from-${S}.js`]), JSON.stringify(r4));
-});
+})));
 caseEnd();
 
 caseBegin("artifact-key-rejects-invalid-session-id", "hooks/lib/diff-fingerprint.js");
-F.run("computeArtifactKey sid validation", () => {
+test("computeArtifactKey sid validation", () => noNewFailures(F.failureCount, () => F.run("computeArtifactKey sid validation", () => {
   const DF = F.load("hooks/lib/diff-fingerprint.js");
   const tmp = path.join(work, "r5-plans");
   fs.mkdirSync(tmp, { recursive: true });
@@ -433,7 +441,7 @@ F.run("computeArtifactKey sid validation", () => {
   F.writePlan(S, "intent", null, tmp);
   const ok = DF.computeArtifactKey(tmp, S, ["intent"]);
   F.check("R5: a valid sessionId still yields a key", typeof ok === "string" && ok.length > 0, String(ok));
-});
+})));
 caseEnd();
 
 // #2748 O1-O4: the owner is the first_session_id, so a third generation reaches the first
@@ -453,7 +461,7 @@ function sessionChain(n) {
 }
 
 caseBegin("owner-resolver-reads-first-session-only", "hooks/workflow-state/plan-artifact-owner.js");
-F.run("first_session_id candidates", () => {
+test("first_session_id candidates", () => noNewFailures(F.failureCount, () => F.run("first_session_id candidates", () => {
   const [A, , C] = sessionChain(3);
   for (const k of ["intent", "outline", "detail"]) F.writePlan(A, k);
   const r1 = owner().resolvePlanArtifactOwner(C, "detail");
@@ -466,11 +474,11 @@ F.run("first_session_id candidates", () => {
   const r2 = owner().resolvePlanArtifactOwner(D2, "detail");
   F.check("O2: plans not named after the first_session_id are never read", r2.ownerSid === A2 && r2.via === "missing" &&
     r2.exists === false && F.samePath(r2.path, F.planPath(A2, "detail")), JSON.stringify(r2));
-});
+})));
 caseEnd();
 
 caseBegin("owner-resolver-skips-invalid-ancestors", "hooks/workflow-state/plan-artifact-owner.js");
-F.run("invalid ancestors", () => {
+test("invalid ancestors", () => noNewFailures(F.failureCount, () => F.run("invalid ancestors", () => {
   const A = F.newSid();
   const U = F.newSid();
   const D = F.newSid();
@@ -486,13 +494,5 @@ F.run("invalid ancestors", () => {
   const r4 = owner().resolvePlanArtifactOwner(C, "outline");
   F.check("O4: nothing written -> the first_session_id path, missing", r4.via === "missing" && r4.ownerSid === A4 &&
     r4.exists === false && F.samePath(r4.path, F.planPath(A4, "outline")), JSON.stringify(r4));
-});
+})));
 caseEnd();
-
-process.chdir(savedCwd === work ? os.tmpdir() : savedCwd);
-if (savedRoot === undefined) delete process.env.AGENTS_MAIN_ROOT;
-else process.env.AGENTS_MAIN_ROOT = savedRoot;
-restore();
-const n = F.failureCount();
-console.log(n === 0 ? "ALL PASS" : `${n} FAILED`);
-process.exitCode = n === 0 ? 0 : 1;

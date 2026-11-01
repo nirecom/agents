@@ -138,7 +138,7 @@
         "rejectSkipReason": "custom-runner",
         "hint": "Require node:test and write each case as test(...): const { test } = require(\"node:test\"); keep the shared helpers from require(\"../lib/harness\")"
       },
-      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs a node:test file under node --test with a case reporter, and any other file as a plain node script. A plain script is accepted only as an existing file; a new one must load node:test (newEntrypointRunner)."
+      "note": "Not selfIdentifying: a .js file is a test only directly under a tests/<category>/ directory. The wrapper runs each file once, without --test, under a guard and a case reporter; a run that loaded node:test is settled by the node:test exit table. Every placed test file must load node:test (newEntrypointRunner; the name predates its widening to existing files)."
     },
     {
       "id": "test-naming-convention",

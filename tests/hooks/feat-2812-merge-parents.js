@@ -8,10 +8,12 @@
 // - a real merge `git commit` through the installed pre-commit hook binary.
 // (sha256 repos: covered through the CLI and the bash reader by tests/bin/feat-2812-tests-gates-merge/nul-paths.sh.)
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { after, test } = require("node:test");
 
 const restoreIsolation = isolate();
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "mp2812-transcripts-"));
@@ -22,7 +24,12 @@ const X = require("./feat-2812-merge-parents/fixture");
 const R = require("./feat-2812-merge-parents/rule-cases");
 const K = require("./feat-2812-merge-parents/cli-contract-cases");
 const W = require("./feat-2812-merge-parents/worktree-cases");
-const g = X.guarded;
+// One test per case: it fails when any X.check inside it (or an exception, via guarded) adds a failure.
+const g = (label, fn) => test(label, () => noNewFailures(X.failureCount, () => X.guarded(label, fn)));
+after(() => {
+  restoreIsolation();
+  X.finish();
+});
 
 caseBegin("R1 staged blob equal to a parent is existing", "hooks/lib/merge-parents.js");
 g("R1", R.R1);
@@ -119,6 +126,3 @@ caseEnd();
 caseBegin("MERGE_INCOMING_STATE is the MERGE_STATE object", "hooks/lib/merge-incoming.js");
 g("contract-identity", K.contractIdentity);
 caseEnd();
-
-restoreIsolation();
-X.finish();

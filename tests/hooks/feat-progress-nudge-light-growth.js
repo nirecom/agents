@@ -15,6 +15,8 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { after, test } = require("node:test");
+const { noNewFailures } = require("../lib/case-verdict");
 
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "pn-light-growth-"));
@@ -25,7 +27,8 @@ for (const d of [T, CFG, TRANSCRIPTS]) fs.mkdirSync(d);
 fs.writeFileSync(path.join(CFG, ".env"), "CONFIRM_OUTLINE=off\nCONFIRM_DETAIL=off\n");
 process.env.AGENTS_MAIN_ROOT = CFG;
 process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TRANSCRIPTS;
-process.on("exit", () => {
+after(() => {
+  process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
   restore();
   fs.rmSync(TMP, { recursive: true, force: true });
 });
@@ -62,6 +65,7 @@ const show = (v) => (v === undefined ? "undefined" : JSON.stringify(v));
 function eq(got, want, what) {
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what || "value"}: want=${show(want)} got=${show(got)}`);
 }
+const failures = () => failed;
 
 const transcriptOf = (sid) => path.join(T, `${sid}.jsonl`);
 
@@ -74,7 +78,7 @@ function fixture(sid, size, pressure) {
 const iso = (ms) => new Date(ms).toISOString();
 
 caseBegin("old-baseline-escalates-only-with-growth", "hooks/progress-nudge/light.js");
-{
+test("old-baseline-escalates-only-with-growth", () => noNewFailures(failures, () => {
   const now = Date.now();
   const old = iso(now - LIGHT_MS - 60000);
   fixture("lg-idle", BASE, { baseline_bytes: BASE, baseline_at: old });
@@ -83,11 +87,11 @@ caseBegin("old-baseline-escalates-only-with-growth", "hooks/progress-nudge/light
   check("L2: same age, transcript one byte past the baseline -> full path (true)", () => eq(needsFullPath("lg-grown", transcriptOf("lg-grown"), now), true, "needsFullPath"));
   fixture("lg-far", BASE, { baseline_bytes: BASE, baseline_at: iso(now - 10 * ELAPSED_MS) });
   check("L3: a baseline ten elapsed limits old over an idle transcript -> still the light path", () => eq(needsFullPath("lg-far", transcriptOf("lg-far"), now), false, "needsFullPath"));
-}
+}));
 caseEnd();
 
 caseBegin("elapsed-boundary-and-baseline-controls", "hooks/progress-nudge/light.js");
-{
+test("elapsed-boundary-and-baseline-controls", () => noNewFailures(failures, () => {
   const now = Date.now();
   fixture("lg-nobase-at", BASE, { baseline_bytes: BASE });
   check("L4: baseline_at absent -> full path (true)", () => eq(needsFullPath("lg-nobase-at", transcriptOf("lg-nobase-at"), now), true, "needsFullPath"));
@@ -99,7 +103,7 @@ caseBegin("elapsed-boundary-and-baseline-controls", "hooks/progress-nudge/light.
   check("L6: growth and the baseline exactly at the halved elapsed limit -> full path (true)", () => eq(needsFullPath("lg-edge", transcriptOf("lg-edge"), now), true, "needsFullPath"));
   fixture("lg-shrunk", BASE - 1, { baseline_bytes: BASE, baseline_at: iso(now - LIGHT_MS - 60000) });
   check("L7: control — a transcript smaller than the baseline (rotated) -> full path (true)", () => eq(needsFullPath("lg-shrunk", transcriptOf("lg-shrunk"), now), true, "needsFullPath"));
-}
+}));
 caseEnd();
 
 // Hook-level: a --require preload records every call that reaches the full path (evaluate).
@@ -124,7 +128,7 @@ function hook(sid, event, tool) {
 const evaluateCalls = () => { try { return fs.readFileSync(MARK, "utf8").split("\n").filter(Boolean); } catch (_) { return []; } };
 
 caseBegin("hook-read-call-stays-light-on-idle-transcript", "hooks/progress-nudge.js");
-{
+test("hook-read-call-stays-light-on-idle-transcript", () => noNewFailures(failures, () => {
   const sid = "lg-hook";
   S.writeState(sid, S.createInitialState(sid, { cwd: "/x", git_branch: "feature/x" }));
   S.markStep(sid, "workflow_init", "complete");
@@ -143,7 +147,7 @@ caseBegin("hook-read-call-stays-light-on-idle-transcript", "hooks/progress-nudge
   fs.appendFileSync(transcriptOf(sid), Buffer.alloc(1, 121));
   hook(sid, "PostToolUse", "Read");
   check("L9: control — after one byte of growth the same Read call takes the full path", () => eq(evaluateCalls(), ["PostToolUse:Read"], "evaluate calls"));
-}
+}));
 caseEnd();
 
 // #2731 S3-7: the nudge reaches the model through withConvLang — the directive leads once.
@@ -159,7 +163,7 @@ function hookCtx(sid, lang) {
   return h && typeof h.additionalContext === "string" ? h.additionalContext : "";
 }
 caseBegin("nudge-additional-context-conv-lang", "hooks/progress-nudge.js");
-{
+test("nudge-additional-context-conv-lang", () => noNewFailures(failures, () => {
   const C = require("../lib/system-message-contract");
   const sid = "lg-lang";
   S.writeState(sid, S.createInitialState(sid, { cwd: "/x", git_branch: "feature/x" }));
@@ -170,8 +174,5 @@ caseBegin("nudge-additional-context-conv-lang", "hooks/progress-nudge.js");
   check("L10: CONV_LANG=japanese -> the directive leads additionalContext exactly once", () => (C.prefixedOnce(ja, "japanese") ? undefined : `got ${show(ja)}`));
   const en = hookCtx(sid, "english");
   check("L11: CONV_LANG=english -> no directive", () => eq(C.countDirective(en), 0, "directive count"));
-}
+}));
 caseEnd();
-
-process.stdout.write(`Total: ${passed} passed, ${failed} failed\n`);
-process.exitCode = failed === 0 ? 0 : 1;

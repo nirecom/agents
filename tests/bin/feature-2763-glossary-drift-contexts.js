@@ -8,27 +8,28 @@
 // bin/check-glossary-drift CLI against a fixture repo, so only a live session's commit-time hook
 // wiring is not driven here.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
+const { noNewFailures } = require("../lib/case-verdict");
+const { after, test } = require("node:test");
 
 const restore = isolate();
 const F = require("./feat-2529-glossary-drift/fixture");
+after(() => {
+  F.finish();
+  restore();
+});
 
-try {
 caseBegin("identifier-context-table", "bin/lib/glossary-drift.js");
-require("./feature-2763-glossary-drift-contexts/identifier").run(F);
+test("identifier-context-table", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/identifier").run(F)));
 caseEnd();
 
 caseBegin("singular-export", "hooks/lib/glossary-term.js");
-require("./feature-2763-glossary-drift-contexts/identifier").runSingular(F);
+test("singular-export", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/identifier").runSingular(F)));
 caseEnd();
 
 caseBegin("prose-context-table", "bin/lib/glossary-drift.js");
-require("./feature-2763-glossary-drift-contexts/prose").run(F);
+test("prose-context-table", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/prose").run(F)));
 caseEnd();
 
 caseBegin("acceptance-through-the-cli", "bin/check-glossary-drift");
-require("./feature-2763-glossary-drift-contexts/acceptance").run(F);
+test("acceptance-through-the-cli", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/acceptance").run(F)));
 caseEnd();
-} finally {
-  F.finish();
-  restore();
-}
