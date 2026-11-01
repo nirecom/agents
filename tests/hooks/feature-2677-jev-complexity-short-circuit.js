@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/lib/jev/two-stage/gate.js, hooks/lib/jev/two-stage/query.js, hooks/lib/jev/registry.js, bin/workflow/lib/jev-complexity-adapter.js
-// Tags: TL2, hooks, jev, two-stage, complexity-gate, short-circuit, decisive, threshold, routing, mock-server, scope:issue-specific
+// Tags: TL2, hooks, jev, two-stage, complexity-gate, short-circuit, decisive, threshold, routing, mock-server, conversation-class, scope:issue-specific
 // #2677: complexity-judge adopts a signal at p>=0.7, never adopts its absence (false: null),
 // and short-circuits on adopted-true signals only when they already decide "high" at every
 // routing stage the judgment feeds (the adapter's decidesAtStage, handed as hooks.decides).
@@ -276,4 +276,48 @@ for (const [label, t, ok] of THR_ROWS) {
     else assert.ok(errs.some((e) => e.startsWith("confidence_threshold_by_answer")), `errors: ${JSON.stringify(errs)}`);
   });
 }
+caseEnd();
+
+caseBegin("registry-conversation-class", "hooks/lib/jev/registry.js");
+// #2461 Step 2: the conversation class needs adapter, fallback and a threshold only.
+const CONV = ["continuation", "askuser-answer"];
+const plain = (o) => JSON.parse(JSON.stringify(o));
+// conv(patch, drop): a mutable copy of the continuation entry with patch merged and drop removed.
+const conv = (patch = {}, drop = []) => {
+  const e = Object.assign(plain(REGISTRY.continuation || {}), patch);
+  for (const k of drop) delete e[k];
+  return e;
+};
+test("continuation and askuser-answer: conversation, production, no backup subagent, {true:0.9,false:null}, valid", () => {
+  for (const p of CONV) {
+    const e = REGISTRY[p];
+    assert.ok(e, `${p} is registered`);
+    assert.strictEqual(e.class, "conversation", p);
+    assert.strictEqual(e.mode, "production", p);
+    assert.strictEqual(e.backup_subagent, null, p);
+    assert.deepStrictEqual(plain(e.confidence_threshold_by_answer), { true: 0.9, false: null }, p);
+    assert.deepStrictEqual(validateRegistry(e), [], p);
+    assert.strictEqual(registryEntry(p), e, `${p}: registryEntry returns it`);
+  }
+});
+test("a conversation entry needs no stages, required_sections_by_stage or backup_subagent", () => {
+  const errs = validateRegistry(conv({}, ["stages", "required_sections_by_stage", "backup_subagent"]));
+  assert.deepStrictEqual(errs, []);
+});
+for (const k of ["adapter", "fallback", "confidence_threshold_by_answer"]) {
+  test(`a conversation entry without ${k} is rejected`, () => {
+    const errs = validateRegistry(conv({}, [k]));
+    assert.ok(errs.some((e) => e.startsWith(k)), `errors: ${JSON.stringify(errs)}`);
+  });
+}
+test("a conversation entry with both threshold directions null is rejected", () => {
+  const errs = validateRegistry(conv({ confidence_threshold_by_answer: { true: null, false: null } }));
+  assert.ok(errs.some((e) => e.startsWith("confidence_threshold_by_answer")), `errors: ${JSON.stringify(errs)}`);
+});
+test("a non-conversation entry keeps the current checks (no stages, no backup_subagent: rejected)", () => {
+  const e = Object.assign(plain(CX), { stages: undefined, backup_subagent: undefined });
+  const errs = validateRegistry(e);
+  assert.ok(errs.some((x) => x.startsWith("stages")), `errors: ${JSON.stringify(errs)}`);
+  assert.ok(errs.some((x) => x.startsWith("backup_subagent")), `errors: ${JSON.stringify(errs)}`);
+});
 caseEnd();

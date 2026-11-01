@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { buildRecord } = require("../decision-record");
+const { JUDGED_IN, judgedInOr } = require("../judged-in");
 const { frozenEntry } = require("./paths");
 const { readCappedBytes } = require(path.join(__dirname, "..", "..", "..", "..", "bin", "workflow", "lib", "jev-request-common.js"));
 const { SIGNAL_IDS, JUDGED_SIGNAL_IDS, DETERMINISTIC_SIGNAL_IDS, UNDECIDABLE_SIGNAL } = require("../../../workflow-state/complexity-routing");
@@ -38,7 +39,7 @@ function ticketRecord(sid, tid, hand, parts) {
     point: hand.point, sessionId: sid, step: null, stage: hand.stage, ticket: tid,
     pending: { jev: hand.jev, stage: hand.stage, step: null, input: hand.input },
     llm: parts.llm, mode: hand.mode, adopted: parts.adopted, entry: frozenEntry(hand),
-    llmAnswerReceived: parts.received,
+    llmAnswerReceived: parts.received, judgedIn: judgedInOr(hand.judged_in, JUDGED_IN.jevJudge),
   });
   return Object.assign(rec, {
     short_circuited: hand.short_circuited === true, unjudged_keys: arr(hand.unjudged),
@@ -124,12 +125,10 @@ function judgeComplexity(sid, tid, hand, adapter, normalize) {
 function absentRecord(sid, tid, hand, adapter) {
   let received = false;
   try { received = fs.statSync(hand.answer_file).isFile(); } catch (_e) { received = false; }
-  const rec = ticketRecord(sid, tid, hand, {
+  return ticketRecord(sid, tid, hand, {
     llm: { status: "missing", answer: null, executor_model: adapter.resolveExecutorModel(undefined), latency_ms: null },
     adopted: null, received, deterministic: hand.deterministic || null, final: null, fallback: "finalize-absent",
   });
-  if (adapter.executor && rec.llm) rec.llm.executor = adapter.executor;
-  return rec;
 }
 
 module.exports = { MAX_ANSWER_BYTES, readAnswer, ticketRecord, adoptedOf, answerFallbackOf, judgeComplexity, absentRecord };

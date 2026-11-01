@@ -203,13 +203,10 @@ function buildWorkflowStatus(sessionId) {
   // Call next-step for next-action hint (fail-open).
   if (sessionId) {
     try {
-      const nextStepBin = path.join(__dirname, "..", "bin", "workflow", "next-step");
       const t = dl.sliceMs(3000, TAIL_RESERVE_MS);
-      if (t > 0 && fs.existsSync(nextStepBin)) {
-        const r = spawnSync(process.execPath, [nextStepBin, "--session", sessionId], {
-          encoding: "utf8", timeout: t, stdio: ["ignore", "pipe", "ignore"],
-        });
-        if (r.status === 0 && r.stdout) {
+      if (t > 0) {
+        const r = require("./lib/next-step-spawn").spawnNextStep(["--session", sessionId], { timeout: t });
+        if (r && r.status === 0 && r.stdout) {
           let nextStepAction = "";
           let nextStepHint = "";
           for (const line of r.stdout.split("\n")) {

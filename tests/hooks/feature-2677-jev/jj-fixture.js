@@ -67,7 +67,7 @@ function newFx(root, name, files = {}) {
   if (files.stateJson) fs.writeFileSync(path.join(fx, "wf", `${SID}.json`), files.stateJson);
   return {
     dir: fx, plans, wf: path.join(fx, "wf"), cwd: path.join(fx, "cwd"),
-    log: path.join(fx, "state", "logs", "jev-decisions.log"),
+    log: path.join(fx, "state", "logs", "jev-decisions.jsonl"),
     pins: {
       AGENTS_STATE_DIR: path.join(fx, "state"), WORKFLOW_STATE_DIR: path.join(fx, "wf"), WORKFLOW_PLANS_DIR: plans,
       AGENTS_MAIN_ROOT: path.join(fx, "cfg"), CLAUDE_PROJECT_DIR: path.join(fx, "proj"),
