@@ -95,4 +95,83 @@ function caseOnlyRename() {
   });
 }
 
-module.exports = { appliesAllOperations, skippedExisting, sameCategoryRewrite, caseOnlyRename };
+// blockOf(text, term) — the `### term` entry block, up to the next entry.
+function blockOf(text, term) {
+  const t = String(text || "");
+  const at = t.indexOf(`### ${term}\n`);
+  if (at < 0) return "";
+  const next = t.indexOf("\n### ", at + 1);
+  return t.slice(at, next < 0 ? undefined : next);
+}
+
+// #2763 S2-5: a V3 row writes its Identifier / Homographs bullets (order Definition, Identifier,
+// Homographs, Related); a V2 redefine row leaves the bullets already in the entry as they are.
+const V3_TABLE = "| Term | Category | Operation | Definition | Identifier | Homographs |\n|---|---|---|---|---|---|\n";
+function writesIdentifierFields() {
+  const NEW = "The first fixture term, declared.";
+  const v3 = V3_TABLE +
+    "| beta gate | user | add | A promoted gate. | `beta-gate` | `beta gating` |\n" +
+    `| alpha | user | redefine | ${NEW} | \`ALPHA\` |  |\n`;
+  const { repo, intent } = session("v3-fields", [], { glossary: v3 });
+  check("T3-5 V3 add + redefine rows: exit 0, ADDED=1 REDEFINED=1", () => {
+    const r = promote(intent, repo);
+    eq(r.code, 0, `exit (out: ${r.all})`);
+    const n = counters(r.out);
+    eq([n.ADDED, n.REDEFINED], [1, 1], "ADDED / REDEFINED");
+  });
+  check("T3-5 a V3 add writes the Identifier and Homographs bullets between Definition and Related", () => {
+    const block = blockOf(readFile(repo, "docs/glossary/user.md"), "beta gate");
+    ok(/- \*\*Definition\*\*: A promoted gate\.\n- \*\*Identifier\*\*: `beta-gate`\n- \*\*Homographs\*\*: `beta gating`\n- \*\*Related\*\*:/.test(block),
+      `beta gate entry: ${block}`);
+  });
+  check("T3-5 a V3 redefine writes the Identifier bullet after the new Definition", () => {
+    const block = blockOf(readFile(repo, "docs/glossary/user.md"), "alpha");
+    ok(new RegExp(`- \\*\\*Definition\\*\\*: ${NEW.replace(/\./g, "\\.")}\\n- \\*\\*Identifier\\*\\*: \`ALPHA\`\\n- \\*\\*Related\\*\\*:`).test(block),
+      `alpha entry: ${block}`);
+  });
+
+  const c = require("./lib");
+  const files = Object.assign({}, c.BASE || {});
+  const userKey = "docs/glossary/user.md";
+  const tagged = String(files[userKey] || "").replace(/(### alpha\n\n- \*\*Definition\*\*: [^\n]*\n)/, "$1- **Identifier**: `ALPHA`\n");
+  const repo2 = c.mkRepo("v2-keeps-fields", Object.assign(files, { [userKey]: tagged }));
+  const sid2 = c.approvedSession("v2-keeps-fields", [["alpha", "user", "redefine", NEW]], { cwd: repo2 });
+  check("T3-5 a V2 redefine row keeps the Identifier bullet already in the entry", () => {
+    ok(/Identifier/.test(tagged), `fixture alpha entry carries an Identifier: ${tagged}`);
+    const r = promote(c.intentPath(sid2), repo2);
+    eq(r.code, 0, `exit (out: ${r.all})`);
+    const block = blockOf(readFile(repo2, userKey), "alpha");
+    ok(block.includes(`- **Definition**: ${NEW}`) && block.includes("- **Identifier**: `ALPHA`"), `alpha entry: ${block}`);
+  });
+}
+
+// #2763 S2-5: an empty V3 cell writes no bullet; on a redefine it removes the bullet already there.
+function emptyCellsWriteNoFields() {
+  const NEW = "The first fixture term, cleared.";
+  const c = require("./lib");
+  const userKey = "docs/glossary/user.md";
+  const files = Object.assign({}, c.BASE || {});
+  const tagged = String(files[userKey] || "").replace(/(### alpha\n\n- \*\*Definition\*\*: [^\n]*\n)/, "$1- **Identifier**: `ALPHA`\n");
+  const repo = c.mkRepo("v3-empty-cells", Object.assign(files, { [userKey]: tagged }));
+  const v3 = V3_TABLE + "| gamma gate | user | add | A plain gate. |  |  |\n" + `| alpha | user | redefine | ${NEW} |  |  |\n`;
+  const sid = c.approvedSession("v3-empty-cells", [], { cwd: repo, glossary: v3 });
+  check("T3-5 V3 add + redefine rows with empty cells: exit 0, ADDED=1 REDEFINED=1", () => {
+    ok(/Identifier/.test(tagged), `fixture alpha entry carries an Identifier: ${tagged}`);
+    const r = promote(c.intentPath(sid), repo);
+    eq(r.code, 0, `exit (out: ${r.all})`);
+    const n = counters(r.out);
+    eq([n.ADDED, n.REDEFINED], [1, 1], "ADDED / REDEFINED");
+  });
+  check("T3-5 a V3 add with both cells empty writes no Identifier or Homographs bullet", () => {
+    const block = blockOf(readFile(repo, userKey), "gamma gate");
+    ok(/- \*\*Definition\*\*: A plain gate\.\n- \*\*Related\*\*:/.test(block) && !/Identifier|Homographs/.test(block),
+      `gamma gate entry: ${block}`);
+  });
+  check("T3-5 a V3 redefine with an empty Identifier cell removes the existing Identifier bullet", () => {
+    const block = blockOf(readFile(repo, userKey), "alpha");
+    ok(block.includes(`- **Definition**: ${NEW}`) && !/Identifier/.test(block), `alpha entry: ${block}`);
+  });
+}
+
+module.exports = { appliesAllOperations, skippedExisting, sameCategoryRewrite, caseOnlyRename, writesIdentifierFields,
+  emptyCellsWriteNoFields };

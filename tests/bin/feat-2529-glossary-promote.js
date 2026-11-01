@@ -33,6 +33,14 @@ caseBegin("t3-5-case-only-rename-pair-applies", "bin/glossary-promote");
 apply.caseOnlyRename();
 caseEnd();
 
+caseBegin("t3-5-promote-writes-identifier-fields", "bin/glossary-promote");
+apply.writesIdentifierFields();
+caseEnd();
+
+caseBegin("t3-5-promote-empty-cells-write-no-fields", "bin/glossary-promote");
+apply.emptyCellsWriteNoFields();
+caseEnd();
+
 caseBegin("t3-5-layer-1-row-blocks", "bin/glossary-promote");
 rows.layerOneBlocks();
 caseEnd();

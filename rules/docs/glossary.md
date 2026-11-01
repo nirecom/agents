@@ -38,6 +38,12 @@ Keep the definition to 1-2 lines; state what the term is and where the reader me
 Expand an abbreviation inside the definition; write no Full name or Level line.
 Never state file placement or storage paths in the definition.
 Give Related exactly one Markdown link, to the document that owns the term; never link an issue URL.
+Optionally add one `- **Identifier**:` line and one `- **Homographs**:` line, in that order between Definition and Related.
+Write each value as backticked spellings joined by `, `, such as `` `allow-deny-hook` ``.
+Declare in Identifier only identifier spellings of the term itself, matching the term once case and the `-`, `_`, and space separators are dropped.
+Declare in Homographs other words the matcher confuses with the term; each spelling matches exactly, so list every word form you need.
+Never put the term's own separator, case, or word-form variant in Homographs; matching rules: `docs/architecture/claude-code/glossary-check/matching-rules.md`.
+Add either line only after the field's false positive actually occurs.
 Sort all entries alphabetically, case-insensitive (lowercased, code-unit order).
 Put no section headings in a glossary file other than the H1.
 

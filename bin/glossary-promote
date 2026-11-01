@@ -75,7 +75,9 @@ function apply(texts, files, rows, changed) {
   }
   for (const r of rows.filter((x) => x.operation === "redefine")) {
     const f = locate(texts, files, r.category, r.term);
-    const next = f && fmt.replaceDefinition(texts.get(f), r.term, r.definition);
+    let next = f && fmt.replaceDefinition(texts.get(f), r.term, r.definition);
+    // A V3 row states the fields (an empty cell removes the bullet); a V1 / V2 row keeps them.
+    if (next && r.identifiers !== undefined) next = fmt.replaceFields(next, r.term, r);
     if (next !== null && next !== undefined && f) { set(f, next); counts.redefined += 1; }
   }
   for (const r of rows.filter((x) => x.operation === "add")) {
@@ -85,7 +87,7 @@ function apply(texts, files, rows, changed) {
       process.stderr.write("WARN: no " + r.category + " glossary file; '" + r.term + "' not promoted\n");
       continue;
     }
-    const entry = "### " + r.term + "\n- **Definition**: " + r.definition + "\n- **Related**: TODO\n";
+    const entry = ["### " + r.term, "- **Definition**: " + r.definition, ...fmt.fieldLines(r), "- **Related**: TODO", ""].join("\n");
     set(target, fmt.insertEntry(texts.get(target), r.term, entry));
     counts.added += 1;
   }
