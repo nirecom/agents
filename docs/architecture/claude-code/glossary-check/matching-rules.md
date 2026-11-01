@@ -93,7 +93,7 @@ Terms that share a separator-stripped form (`workflow`, `work flow`) are all can
 
 ## Known false positives
 
-Resolve these through the accept path, or through the entry's Homographs field:
+Resolve these through the accept path; the Homographs field cannot, because the gate rejects every spelling the matcher keys to the term:
 
 - A proper noun that capitalizes a term mid-sentence (`AWS Step Functions`), or put it in backticks.
 - Ordinary English that spells out an identifier term's words in order, such as the words foo, bars and dir against `FOO_BARS_DIR`.
