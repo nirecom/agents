@@ -2,7 +2,8 @@
 // PreToolUse hook: refuse a Write/Edit/MultiEdit that leaves a case-marker test entrypoint
 // (in a repo carrying its helperLibrary) with a self-implemented harness HEAD did not have
 // (#2502), a NEW one (absent from HEAD) with missing or malformed case markers (#2388), or any
-// tests/ file with a test-language mismatch HEAD did not have or an invalid test-lang-exception.
+// tests/ file with a test-language mismatch HEAD did not have or an invalid test-lang-exception,
+// or a NEW one that does not run under its entry's required runner (#2863).
 // The verdicts are the bin/ CLIs run on temp copies of the rebuilt post-edit content (and the
 // HEAD blob); their WARN lines go out as additionalContext. The target file is never touched.
 // pre-commit is the backstop for what this cannot rebuild (editFiles, NotebookEdit).
@@ -23,7 +24,8 @@ const EDIT_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);
 // A missing CLI file skips that CLI only.
 const binOf = (n) => path.resolve(__dirname, "..", "bin", n);
 const SELF_IMPL_CHECKER = binOf("check-self-impl.sh");
-const CHECKERS = [binOf("check-case-markers.sh"), SELF_IMPL_CHECKER];
+const TEST_RUNNER_CHECKER = binOf("check-test-runner.sh");
+const CHECKERS = [binOf("check-case-markers.sh"), SELF_IMPL_CHECKER, TEST_RUNNER_CHECKER];
 const LANGUAGE_MATCH_CHECKER = binOf("check-test-language-match.sh");
 
 // The case-marker placement lives in lib/test-gates/placement.js (shared with pre-commit).
@@ -34,7 +36,7 @@ function registry() {
   return require("./lib/test-language-registry");
 }
 
-// Each violation carries `high` (case-marker/self-impl CLIs) and `lmHigh` (language-match CLI);
+// Each violation carries `high` (case-marker/self-impl/test-runner CLIs) and `lmHigh` (language-match CLI);
 // each group gets its own heading. One marker-wrap hint per language among the case-marker
 // group, worded by its registry entry's diagnostics. warns: WARN lines added at the end.
 function buildReason(violations, warns = []) {
@@ -50,6 +52,8 @@ function buildReason(violations, warns = []) {
       const toCm = markerless && /code=CASE_ADDED_WITHOUT_MARKERS\b/.test(h);
       (toCm ? cm : lm).push(`  ${v.rel}: ${h}`);
     }
+    const rh = high.some((h) => /code=MISSING_TEST_RUNNER\b/.test(h)) && require("./lib/test-gates/test-runner").runnerHint(v.entry);
+    if (rh && !hints.includes(rh)) hints.push(rh);
     if (!markerless) continue;
     const d = (v.entry && v.entry.diagnostics) || {};
     const doc = d.markerDoc || (v.entry && v.entry.notationDoc);
@@ -192,14 +196,14 @@ function main() {
   const lmCli = fs.existsSync(LANGUAGE_MATCH_CHECKER) ? LANGUAGE_MATCH_CHECKER : null;
   if (clis.length === 0 && !lmCli) approve();
 
-  // Two candidate sets: case-marker entrypoints — a new one for the case-marker and self-impl
-  // CLIs, an existing one for the self-impl CLI only (with its HEAD copy; the case-marker check
+  // Two candidate sets: case-marker entrypoints — a new one for the case-marker, self-impl and
+  // test-runner CLIs, an existing one for the self-impl CLI only (with its HEAD copy; the case-marker check
   // stays on new files, #2440); a new reader-less one for the case-marker CLI only (its WARN) —
   // and every tests/ file (new or existing) for the language-match CLI.
   const runs = [];
   for (const c of (clis.length > 0 && collectCandidates(input, toolName, toolInput)) || []) {
     const cs = c.readerless
-      ? clis.filter((cli) => cli !== SELF_IMPL_CHECKER)
+      ? clis.filter((cli) => cli !== SELF_IMPL_CHECKER && cli !== TEST_RUNNER_CHECKER)
       : c.head === null ? clis : clis.filter((cli) => cli === SELF_IMPL_CHECKER);
     if (cs.length > 0) runs.push({ ...c, clis: cs });
   }

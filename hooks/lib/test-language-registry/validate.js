@@ -212,8 +212,19 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
   for (const k of MARKER_WORDING) {
     if (d[k] !== undefined && plain(d[k], `${where}.diagnostics.${k}`) === "") fail(`${where}.diagnostics.${k}`, "must not be empty");
   }
+  checkNewEntrypointRunner(e, `${where}.newEntrypointRunner`);
   if (!nullOr(e.note, isStr)) fail(`${where}.note`, "must be a string");
   checkRequired(e, where, opts);
+}
+
+// The skip-reason word of caseEmbedRules that refuses a new entrypoint, and the hint shown with it.
+function checkNewEntrypointRunner(e, where) {
+  const n = e.newEntrypointRunner;
+  if (absent(n)) return;
+  if (!isObj(n)) fail(where, "must be {rejectSkipReason, hint} or null");
+  if (!isStr(n.rejectSkipReason) || !ID_RE.test(n.rejectSkipReason)) fail(`${where}.rejectSkipReason`, "must be one [a-z0-9-]+ word");
+  if (!isStr(n.hint) || plain(n.hint, `${where}.hint`) === "") fail(`${where}.hint`, "must be a non-empty string");
+  if (!e.caseEmbedRules) fail(where, "needs caseEmbedRules, whose skip-reason op it reads");
 }
 
 // opts.repoFiles === false skips the existence of helperLibrary.path, notationDoc and
