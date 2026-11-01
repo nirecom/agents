@@ -5,7 +5,9 @@ Background: the Stop guard matches the headings literally and the compressed not
 
 ## Output scope
 
-Emit the renderer's stdout as-is: no preamble, no summarization, no section reordering or merging, no rewrapping.
+Write the renderer's stdout into your next assistant text; never leave it only in the tool result — the Stop guard reads assistant text, not tool output.
+Emit it as-is: no preamble, no summarization, no section reordering or merging, no rewrapping.
+When a Stop block reason embeds the rendered Final Report, emit that embed the same way.
 
 ## Verbatim — never translated
 

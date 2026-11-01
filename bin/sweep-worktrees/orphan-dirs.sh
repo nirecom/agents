@@ -38,6 +38,7 @@ sweep_orphan_dirs() {
 
   local current_repo_name wt_base_norm cand_dir cand_name cand_norm
   local notes_file recorded main_norm_fs rec_norm_fs node_out node_rc
+  local -a main_root_args
   current_repo_name="$(basename "$TARGET_MAIN_ROOT")"
   wt_base_norm="$(norm_path "$WORKTREE_BASE_DIR")"
 
@@ -57,10 +58,14 @@ sweep_orphan_dirs() {
       "$wt_base_norm"/*) ;;
       *) continue ;;
     esac
-    # Gate (2): no .git present (file, dir, or dangling symlink).
-    if [[ -e "$cand_dir/.git" || -L "$cand_dir/.git" ]]; then
+    # Gate (2): no .git directory or symlink. A gitlink file (a WE-11 leftover, #2875) goes to the
+    # CLI with --expect-main-root, which removes it only once its ownership is proven.
+    main_root_args=()
+    if [[ -L "$cand_dir/.git" || -d "$cand_dir/.git" ]]; then
       orphan_dirs_skipped_has_git=$((orphan_dirs_skipped_has_git + 1))
       continue
+    elif [[ -e "$cand_dir/.git" ]]; then
+      main_root_args=(--expect-main-root "$TARGET_MAIN_ROOT")
     fi
     # Gate (3): mtime check (older than --min-age-hours).
     if is_fresh "$cand_dir"; then
@@ -101,10 +106,10 @@ sweep_orphan_dirs() {
         node "$_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT/bin/codegraph-lifecycle.js" stop --path "$cand_dir" || true
       fi
 
+      node_rc=0
       node_out="$(WORKTREE_BASE_DIR="$WORKTREE_BASE_DIR" \
         node "$_ORPHAN_DIRS_SCRIPT_CHECKOUT_ROOT/hooks/cleanup-orphan-dir.js" \
-        --force-if-not-registered "$cand_dir" 2>&1)"
-      node_rc=$?
+        --force-if-not-registered ${main_root_args[@]+"${main_root_args[@]}"} "$cand_dir" 2>&1)" || node_rc=$?
       if [[ "$node_rc" -eq 0 ]]; then
         orphan_dirs_removed=$((orphan_dirs_removed + 1))
       else

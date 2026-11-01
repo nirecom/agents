@@ -10,6 +10,7 @@ function markWorkflowInitBegun(sid) {
   const { getStatePath, readState, markStep, LOOKAHEAD_ORIGIN } = require("../workflow-state");
 
   if (fs.existsSync(getStatePath(sid))) {
+    require("../workflow-state/cycle-state").closeCycleIfFinished(sid, "reinit-entry");
     const state = readState(sid);
     // Corrupt state is left untouched: the mechanism-failure reporter needs that evidence.
     if (state === null) return;

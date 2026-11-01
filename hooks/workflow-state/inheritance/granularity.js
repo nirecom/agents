@@ -22,7 +22,7 @@ function upstreamCwdOf(state) {
     if (typeof c !== "string" || !c.length) continue;
     try {
       const p = toWindowsPath(c);
-      if (require("fs").existsSync(p) && !require("../resolve-worktree-path").isMainWorktree(p)) return c;
+      if (require("../resolve-worktree-path").isOwnedLinkedWorktree(p)) return c;
     } catch (_) { /* try the next candidate */ }
   }
   if (typeof state.cwd === "string" && state.cwd.length) return state.cwd;
