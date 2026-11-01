@@ -53,7 +53,8 @@ module inherits `GIT_DIR` / `GIT_INDEX_FILE` from the environment. It reads the 
 ([case-marker-gate.md](case-marker-gate.md#merge-commits)).
 
 Worktree resolution order: `opts.repoDir`, then `resolveSessionWorktreePath(sid)`, then the git root of
-the cwd. None resolving is the error `worktree-unresolved`.
+the cwd. The resolver accepts a candidate only when `isOwnedLinkedWorktree` proves it a live linked
+worktree from its gitlink alone, so a WE-11 leftover never resolves (#2875). None resolving is the error `worktree-unresolved`.
 
 ## Fingerprint (invariant I-FP)
 

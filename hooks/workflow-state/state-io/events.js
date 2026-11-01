@@ -21,7 +21,10 @@ const EVENT_KINDS = [
   "plan_approval_revoked",
   "reset",
   "state_handoff_record",
+  "cycle_boundary",
 ];
+
+const CYCLE_BOUNDARY_REASONS = ["reinit-entry", "workflow-init-complete"];
 
 // How much the recorded `at` can be trusted:
 //   observed    — the process saw the fact happen and stamped it then
@@ -101,6 +104,7 @@ const REQUIRED_FIELDS = {
   plan_approval_revoked: ["step", "reason"],
   reset: ["from_step", "reason"],
   state_handoff_record: ["cls", "at_step", "record_key", "summary", "pointer"],
+  cycle_boundary: ["closed_cycle", "reason"],
 };
 
 class InvalidEventError extends Error {
@@ -154,6 +158,14 @@ function validateEvent(event) {
   if (event.kind === "state_handoff_record") {
     const recordError = require("./state-handoff-record-schema").stateHandoffRecordError(event);
     if (recordError) throw new InvalidEventError(recordError);
+  }
+  if (event.kind === "cycle_boundary") {
+    if (!Number.isInteger(event.closed_cycle) || event.closed_cycle < 1) {
+      throw new InvalidEventError("event.closed_cycle must be a positive integer");
+    }
+    if (!CYCLE_BOUNDARY_REASONS.includes(event.reason)) {
+      throw new InvalidEventError("event.reason must be one of: " + CYCLE_BOUNDARY_REASONS.join(", "));
+    }
   }
   if (event.kind === "worktree") {
     if (!WORKTREE_TRANSITIONS.includes(event.transition)) {
@@ -298,6 +310,7 @@ module.exports = {
   RESERVED_ANNOTATION_KEYS,
   WORKTREE_TRANSITIONS,
   PATH_SOURCES,
+  CYCLE_BOUNDARY_REASONS,
   REQUIRED_FIELDS,
   InvalidEventError,
   validateEvent,

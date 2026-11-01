@@ -440,6 +440,7 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
 
   if (status === "complete" && step === "workflow_init" && DECLARING_GATES.indexOf(gate) !== -1) {
     try {
+      require("./cycle-state").closeCycleIfFinished(sessionId, "workflow-init-complete");
       resetDownstreamOfWorkflowInit(sessionId);
     } catch (e) {
       // The status write already landed; only the reset failed. Report it as a
