@@ -38,6 +38,14 @@ caseBegin("t3-5-case-only-rename-pair-applies", "bin/glossary-promote");
 test("t3-5-case-only-rename-pair-applies", () => noNewFailures(fails, apply.caseOnlyRename));
 caseEnd();
 
+caseBegin("t3-5-promote-writes-identifier-fields", "bin/glossary-promote");
+test("t3-5-promote-writes-identifier-fields", () => noNewFailures(fails, apply.writesIdentifierFields));
+caseEnd();
+
+caseBegin("t3-5-promote-empty-cells-write-no-fields", "bin/glossary-promote");
+test("t3-5-promote-empty-cells-write-no-fields", () => noNewFailures(fails, apply.emptyCellsWriteNoFields));
+caseEnd();
+
 caseBegin("t3-5-layer-1-row-blocks", "bin/glossary-promote");
 test("t3-5-layer-1-row-blocks", () => noNewFailures(fails, rows.layerOneBlocks));
 caseEnd();

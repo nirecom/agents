@@ -7,7 +7,7 @@ const fs = require("fs");
 const { toWindowsPath } = require("../../../lib/branch-diff");
 const { parseIntentGlossary } = require("../../../lib/intent-glossary");
 const { listMainGlossaryFiles } = require("../../../../bin/lib/glossary-format/files");
-const { parseGlossaryFile } = require("../../../../bin/lib/glossary-format/entries");
+const { parseGlossaryFile, entryFields } = require("../../../../bin/lib/glossary-format/entries");
 const { normalizeDefinition } = require("../../../../bin/lib/glossary-provenance");
 const { sha256, git } = require("./artifact");
 
@@ -17,17 +17,28 @@ function worktreeRootOf(repoDir) {
   return toWindowsPath(top);
 }
 
-// combinedGlossary(opts) -> { ok, files: [{ label, category, sha }], terms, digest, legacy }.
+// One record per exact term: the entries of one term (in several files) pool their fields.
+function addRecord(records, e) {
+  const f = entryFields(e);
+  const prev = records.get(e.term);
+  if (!prev) { records.set(e.term, Object.assign({ term: e.term }, f)); return; }
+  prev.identifiers = [...new Set(prev.identifiers.concat(f.identifiers))];
+  prev.homographs = [...new Set(prev.homographs.concat(f.homographs))];
+}
+
+// combinedGlossary(opts) -> { ok, files: [{ label, category, sha }], terms, digest, legacy };
+// terms are the records { term, identifiers, homographs } (#2763), one per exact term.
 function combinedGlossary(opts) {
   try {
     const listed = listMainGlossaryFiles(worktreeRootOf(opts.repoDir));
     const files = [];
-    const terms = [];
+    const records = new Map();
     for (const f of listed.files) {
       const buf = fs.readFileSync(toWindowsPath(f.path));
       files.push({ label: f.label, category: f.category, sha: sha256(buf) });
-      for (const e of parseGlossaryFile(buf.toString("utf8")).entries) terms.push(e.term);
+      for (const e of parseGlossaryFile(buf.toString("utf8")).entries) addRecord(records, e);
     }
+    const terms = [...records.values()];
     files.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
     const legacy = listed.legacy === true;
     const digest = sha256(JSON.stringify([files.map((f) => [f.label, f.sha]), legacy]));
@@ -39,9 +50,13 @@ function combinedGlossary(opts) {
 
 // The term stays case-exact: the drift scan (glossary-drift.js indexTerms) treats the exact
 // spelling as the non-variant form, so a case-only change moves the scan and must move the digest.
+// A V3 row's fields feed the scan too; a V1 / V2 row keeps the four-value key.
 function rowsDigest(rows) {
-  const keys = rows.map((r) => JSON.stringify([String(r.term), r.category, r.operation,
-    normalizeDefinition(r.definition)])).sort();
+  const keys = rows.map((r) => {
+    const key = [String(r.term), r.category, r.operation, normalizeDefinition(r.definition)];
+    if (Array.isArray(r.identifiers)) key.push(r.identifiers, r.homographs);
+    return JSON.stringify(key);
+  }).sort();
   return sha256(JSON.stringify(keys));
 }
 

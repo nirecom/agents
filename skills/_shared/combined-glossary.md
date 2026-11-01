@@ -17,15 +17,18 @@ SSOT for how writers and reviewers use the combined glossary: the agreed terms o
 - Use every glossary term with its exact spelling, and only in the meaning its definition gives.
 - Never substitute a synonym, a rewording, or a spelling variant that the matching rules (`docs/architecture/claude-code/glossary-check.md#matching-rules`) count as drift.
 - In markdown prose, wrap every identifier in backticks and spell it exactly as the identifier is written.
+- Write an identifier that a glossary entry declares in its Identifier field with exactly that declared spelling.
 - When the work needs a concept the glossary lacks, name the new term explicitly as a glossary candidate instead of silently coining it.
 
 ## Reviewer directives
 
 - Check the artifact against each glossary term's definition, and raise a concern for every synonym, rewording, or spelling variant the matching rules (`docs/architecture/claude-code/glossary-check.md#matching-rules`) count as drift that stands in for a glossary term.
 - Tell `identifier context` from `prose context` by that section before raising a spelling-variant concern.
+- Treat a fixed schema heading (`## Steps`) as `identifier context`; raise no glossary-drift concern for it.
+- Raise no concern for a form the matching rules tolerate: a regular plural, a sentence-initial or heading capital, or a spelling declared in the entry's Identifier or Homographs field.
 - A generic word that is part of a multi-word term (a lone `step`) is no rewording of that term unless it names the term's concept.
 - Never map a Japanese expression to a glossary term.
 - In markdown prose, an identifier written without backticks (a term holding `_`, or a command name or value spelled like a term) gets an untagged LOW concern, with no `[glossary-drift ...]` tag.
-- Raise a misspelled identifier as a glossary-drift concern, backticked or not.
+- Raise a misspelled identifier as a glossary-drift concern, backticked or not, including one split at whitespace or hyphens, split into lower-case words, or with a missing or extra character.
 - Raise a concern for a glossary term used in a meaning its definition does not cover, and for a new term coined without being named as a glossary candidate.
 - Start the text of every such glossary-drift concern with the tag `[glossary-drift term=<term>]`, right after `[SEV]` (anchored form: at the start of the field after `ref|path#anchor|cat|`), never at line start, where the parser drops it.

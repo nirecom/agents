@@ -3,11 +3,10 @@
 // mode (identifier / caps / prose), the term lookup and the prose tolerance. Matching rules SSOT:
 // docs/architecture/claude-code/glossary-check.md#matching-rules.
 
-const { singular } = require("../../../hooks/lib/glossary-term");
-const { compactKey, identKey, identFoldedKey, closest, indexTerms, isAllCapsSpelling } = require("./terms");
-const { headingLines, identifierRanges, isCapsWord } = require("./context");
+const { singular, compactKey, identKey, identFoldedKey } = require("../../../hooks/lib/glossary-term");
+const { closest, indexTerms, isAllCapsSpelling } = require("./terms");
+const { BOUNDARY_RE, headingLines, identifierRanges, declaredRanges, isCapsWord } = require("./context");
 
-const BOUNDARY_RE = /[A-Za-z0-9_-]/;
 const SEPARATOR_RE = /^(?:[ \t]+|-)$/;
 const WORD_RE = /[A-Za-z0-9_]+/g;
 // Sentence start: line head (after a list / heading / quote marker), or after `. ` / `: `;
@@ -28,14 +27,27 @@ function wordsOf(line) {
   return words;
 }
 
-// The words of a line with their marks: ident (identifier chunk, or every word of the identifier
-// layer) and caps (a capital word).
-function markedWords(line, allIdent) {
-  const ranges = allIdent ? [] : identifierRanges(line);
-  return wordsOf(line).map((w) => Object.assign(w, {
-    ident: allIdent || ranges.some(([s, e]) => w.start >= s && w.end <= e),
-    caps: isCapsWord(w.text),
-  }));
+// The ranges sorted by start with the overlapping ones merged.
+function mergedRanges(ranges) {
+  const out = [];
+  for (const [s, e] of ranges.slice().sort((a, b) => a[0] - b[0])) {
+    const last = out[out.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else out.push([s, e]);
+  }
+  return out;
+}
+
+// The words of a line with their marks: ident (inside an identifier chunk or a declared spelling,
+// or every word of the identifier layer) and caps (a capital word). Words and ranges advance once.
+function markedWords(line, allIdent, declared) {
+  const ranges = allIdent ? [] : mergedRanges(identifierRanges(line).concat(declaredRanges(line, declared)));
+  let k = 0;
+  return wordsOf(line).map((w) => {
+    while (k < ranges.length && ranges[k][1] < w.end) k++;
+    const inside = k < ranges.length && w.start >= ranges[k][0] && w.end <= ranges[k][1];
+    return Object.assign(w, { ident: allIdent || inside, caps: isCapsWord(w.text) });
+  });
 }
 
 // -> { seq, breaks: { raw, folded }, spaced, caps, mode } — breaks are the key offsets of the
@@ -111,22 +123,27 @@ function tolerated(seq, spelling, { heading, sentenceStart, codeComment }) {
   });
 }
 
-// lookup(index, w, ctx) -> the drifted term, or null.
+// lookup(index, w, ctx) -> the drifted term, or null. The naming-convention shortcut (same raw key,
+// no whitespace) covers only the `_` terms; a declared spelling is excluded only where it is literal.
+// A prose window spelled exactly as a candidate's Homographs entry drops that candidate.
 function lookup(index, w, ctx) {
   if (w.mode !== "prose") {
     const fits = identFits(index, w);
     if (fits) {
       const same = fits.filter((c) => c.raw === identKey(w.seq));
-      if (same.length > 0 && !w.spaced) return null;
+      if (same.some((c) => !c.declared) && !w.spaced) return null;
       return closest(same.length > 0 ? same : fits, w.seq).term;
     }
     if (w.mode === "identifier") return null;
   }
-  const fits = plainFits(index, w).filter((c) => w.mode !== "caps" || capsAgree(c.term, w));
+  const notHomograph = (c) => w.mode !== "prose" || !c.homographs || !c.homographs.has(w.seq);
+  const all = plainFits(index, w).filter((c) => w.mode !== "caps" || capsAgree(c.term, w));
+  const fits = all.filter(notHomograph);
+  if (all.length > 0 && fits.length === 0) return null;
   if (fits.length > 0) return fits.some((c) => tolerated(w.seq, c.term, ctx)) ? null : closest(fits, w.seq).term;
   if (w.mode === "caps") return null;
-  const ids = identFits(index, w);
-  return ids ? closest(ids, w.seq).term : null;
+  const ids = (identFits(index, w) || []).filter(notHomograph);
+  return ids.length > 0 ? closest(ids, w.seq).term : null;
 }
 
 // findVariants(text, terms, opts) -> [{ term, variant, line, col }] over one layer. opts.layer
@@ -139,7 +156,7 @@ function findVariants(text, terms, opts) {
   const headings = headingLines(lines);
   const out = [];
   lines.forEach((line, idx) => {
-    const words = markedWords(line, o.layer === "ident");
+    const words = markedWords(line, o.layer === "ident", index.declared);
     const base = { heading: headings.has(idx), codeComment: !!(o.commentLines && o.commentLines.has(idx + 1)) };
     for (let i = 0; i < words.length; i++) {
       const ctx = Object.assign({ sentenceStart: SENTENCE_HEAD_RE.test(line.slice(0, words[i].start)) }, base);
