@@ -13,7 +13,7 @@ REPORT="$REPO_N/bin/jev-report"
 fx_new report
 # The seven ids a v1 record was written under; the legacy section reads them from the records.
 V1_SIGNAL_CSV="S1-multi-file,S1b-wide-change,S2-architecture,S3-security,S4-installer,S5-breaking,S6-long-plan"
-FIX_LOG="$FX/fixture/jev-decisions.log"
+FIX_LOG="$FX/fixture/jev-decisions.jsonl"
 mkdir -p "$FX/fixture"
 # Six complexity-judge records (R1,R2 in .1; R3-R6 + other-point + a broken line in the base).
 run_with_timeout 30 node -e '

@@ -21,6 +21,11 @@ const OTHER = "other";
 
 const zeroed = (keys) => Object.fromEntries(keys.map((k) => [k, 0]));
 const known = (list, v) => (typeof v === "string" && list.includes(v) ? v : OTHER);
+// A conversation point has no backup subagent: only Jev can be adopted, so any other value is no adoption.
+const isConversationPoint = (point) => {
+  const e = registryEntry(point);
+  return Boolean(e) && e.class === "conversation";
+};
 
 function summarize(recs, supersededCount) {
   const adopted = zeroed(ADOPTED);
@@ -35,7 +40,7 @@ function summarize(recs, supersededCount) {
   let finalizeAbsent = 0;
   let insufficient = 0;
   for (const r of recs) {
-    if (ADOPTED.includes(r.adopted)) adopted[r.adopted]++;
+    if (isConversationPoint(r.point) ? r.adopted === "jev" : ADOPTED.includes(r.adopted)) adopted[r.adopted]++;
     bump(byMode, known(MODES, r.mode));
     if (r.llm_needed === true) {
       needed++;
