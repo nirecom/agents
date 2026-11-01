@@ -539,6 +539,16 @@
         ]
       },
       {
+        "matcher": "Bash|runInTerminal|runCommands|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/block-main-audit-verdict.js\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Edit|Write|MultiEdit|editFiles|NotebookEdit|runInTerminal|runCommands",
         "hooks": [
           {

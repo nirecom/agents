@@ -55,7 +55,7 @@ set_gate() { # <KEY> <value>
 # shellcheck source=../../lib/script-checkout-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
 mk_tree() {
-  script_checkout_fixture_copy "$1" bin/workflow hooks bin/confirm-off bin/get-config-var bin/detect-scope-change.sh
+  script_checkout_fixture_copy "$1" bin/workflow bin/lib hooks bin/confirm-off bin/get-config-var bin/detect-scope-change.sh
   : > "$1/.env"
 }
 # sync_plan_pins <tree>: the tree's .env keeps its own lines, prefixed by the current plan pins.
@@ -98,6 +98,10 @@ json_at() {
 }
 # put_plan <sid> <kind> <text>: <PLANS>/<sid>-<kind>.md
 put_plan() { printf '%s\n' "$3" > "$PLANS/$1-$2.md"; }
+# settle_stage <sid> <step> (#2853): settle that stage's pre-confirm audit with CONTINUE on the current plan.
+settle_stage() {
+  local r; r="$(node "$SCRIPT_CHECKOUT_ROOT/tests/lib/pre-confirm-audit-settle.js" "$1" "$2" CONTINUE 2>&1)" || fail "settle $1 $2" "$r"
+}
 INTENT_FULL="Design a new confirm gate subsystem across several modules."
 
 OUT=""; RC=0

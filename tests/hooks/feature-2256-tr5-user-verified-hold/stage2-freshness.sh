@@ -117,7 +117,7 @@ write_plans i1 o1 '# detail
 out="$(gate "$SENTINEL_UV")"
 assert_ne "17: narrowing the declared files is not waved through" "$(decision_of "$out")" "approve"
 assert_eq "18: the declared-files snapshot is refreshed to the narrowed set" \
-    "$(state_field audit.declared_files.files)" '["seed.txt"]'
+    "$(state_field audit.declared_files.plan_files)" '["seed.txt"]'
 assert_eq "19: the narrowing is recorded on the armed run" \
     "$(state_field audit.ledger.1.declared_files_narrowed)" "true"
 assert_match "20: narrowing forces a full re-audit, not a partial one" \

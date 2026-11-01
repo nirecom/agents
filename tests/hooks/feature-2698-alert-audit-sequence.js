@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/supervisor-guard.js, hooks/supervisor-guard/audit-arm.js, hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-writer/audit-run.js, hooks/stop-l2-findings-display.js, hooks/workflow-gate/user-verified-audit.js, hooks/workflow-gate.js
-// Tags: TL2, hooks, supervisor, supervisor-guard, stop-hook, alert, audit, launch-shown, user-verification, scope:issue-specific, null-freshness, acceptance, newer-audit-unsettled
+// Tags: TL2, hooks, supervisor, supervisor-guard, stop-hook, alert, audit, launch-shown, user-verification, scope:issue-specific, null-freshness, acceptance, newer-audit-unsettled, pre-confirm-audit
 // #2698 change 3, across Stops: the launch instruction appears once per intervention window
 // (Stop 1 bundled, Stops 2-3 inside the P<=1 window silent, Stop 4 released); the writer's
 // markAuditLaunchShown matches on run-id; result display is not a launch; TR5 supersedes an unshown run.
@@ -75,10 +75,10 @@ test("markAuditLaunchShown is exported and marks only the matching unshown run",
 });
 test("armAuditRun launch_shown:true sets audit_dispatched_at in the arm commit", () => {
   const s = S.scene(ROOT, "armls", {});
-  const key = S.stepKey(s.dir, s.sid, "clarify_intent");
+  const key = S.stepKey(s.dir, s.sid, "write_code");
   S.writer(s.dir, "armAuditRun", s.sid, {
-    tr_ids: ["TR1"], sub_checks: ["intent-internal"], transitions: [key], launch_shown: true,
-    cause: "step-complete:clarify_intent", cwd: s.dir, plans_dir: s.dir,
+    tr_ids: ["TR4"], sub_checks: S.TR4_SUB_CHECKS, transitions: [key], launch_shown: true,
+    cause: "step-complete:write_code", cwd: s.dir, plans_dir: s.dir,
   });
   assert.strictEqual(typeof S.auditOf(s).audit_dispatched_at, "string");
 });

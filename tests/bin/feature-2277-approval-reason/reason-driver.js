@@ -145,6 +145,8 @@ function modeGate() {
     ["outline", ranAhead("gt-ol", "detail", { outline: "stale" })],
   ];
   for (const [step, sid] of cases) {
+    // #2853: --gate waits for the step's pre-confirm audit; this mode tests the approval reason, so settle it.
+    require("../../lib/pre-confirm-audit-settle").trySettle(sid, step, "CONTINUE");
     const kv = nextStep(sid, ["--gate"]);
     const detail = `exit=${kv._r.code} out=${kv._r.out} err=${kv._r.err}`;
     F.check(`--gate: unapproved ${step} is the gated step`, (kv.REASON || "").startsWith(step + ":"), detail);

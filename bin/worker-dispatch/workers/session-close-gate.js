@@ -100,6 +100,21 @@ function elapsedMs(armedAt, nowMs) {
   return Number.isNaN(t) ? null : nowMs - t;
 }
 
+// #2515: a run finished only when it ran strictly after the current arm; a
+// last_run_at left over from before a re-arm belongs to an earlier run.
+function ranAfterArm(lastRunAt, armedAt) {
+  if (typeof lastRunAt !== "string" || typeof armedAt !== "string") return false;
+  const ran = Date.parse(lastRunAt);
+  const armed = Date.parse(armedAt);
+  return !Number.isNaN(ran) && !Number.isNaN(armed) && ran > armed;
+}
+
+function armedRunTerminal(audit) {
+  const runId = audit.audit_run_id;
+  if (typeof runId !== "string" || !Array.isArray(audit.ledger)) return false;
+  return audit.ledger.some((e) => e && e.id === runId && e.outcome === "terminal");
+}
+
 // SC-5. Returns { gateAction, phase, findings, repair } — `repair` names the
 // CLI the caller must run to un-wedge a stale pending phase, or null.
 function evaluateAlert(state, nowMs) {
@@ -120,10 +135,10 @@ function evaluateAlert(state, nowMs) {
 
   // #961: a recorded last_run_at means the alert actually ran and only the phase
   // flag was left behind. Repair the flag rather than blocking the close.
-  if (alert.last_run_at !== null && alert.last_run_at !== undefined) {
+  if (ranAfterArm(alert.last_run_at, armedAt)) {
     findings.push({
       severity: "notice",
-      detail: "supervisor alert_phase=pending but last_run_at is set — repairing phase to done",
+      detail: "supervisor alert_phase=pending but last_run_at is after alert_armed_at — repairing phase to done",
     });
     return { gateAction: "proceed", phase, findings, repair: "alert" };
   }
@@ -152,10 +167,10 @@ function evaluateAudit(state, nowMs) {
 
   if (phase !== "pending") return { gateAction: null, phase, findings, repair: null };
 
-  if (audit.audit_last_run_at !== null && audit.audit_last_run_at !== undefined) {
+  if (ranAfterArm(audit.audit_last_run_at, audit.audit_armed_at) || armedRunTerminal(audit)) {
     findings.push({
       severity: "notice",
-      detail: "supervisor audit_phase=pending but audit_last_run_at is set — repairing phase to done",
+      detail: "supervisor audit_phase=pending but the armed run has finished — repairing phase to done",
     });
     return { gateAction: null, phase, findings, repair: "audit" };
   }
@@ -175,26 +190,31 @@ function evaluateAudit(state, nowMs) {
   return { gateAction: "yield", phase, findings, repair: null };
 }
 
-function applyRepair(ctx, sessionId, which) {
+// Returns a warning finding when the repair failed, else null. The audit repair
+// names the run it judged finished (--run-id), so a run re-armed meanwhile is
+// refused by the CLI's compare-and-set instead of being marked done.
+function applyRepair(ctx, sessionId, which, runId) {
   const script = which === "alert" ? "writeAlert" : "writeAudit";
   const setFlag = which === "alert" ? "--set-alert-phase" : "--set-audit-phase";
   const clearFlag = which === "alert" ? "--clear-alert-armed-at" : "--clear-audit-armed-at";
+  // --session-id is passed for the audit repair too. The CLI can auto-resolve
+  // it, but a worker has no session context of its own to resolve from.
+  const args = ["--session-id", sessionId, setFlag, "done", clearFlag];
+  if (which === "audit" && typeof runId === "string" && runId !== "") args.push("--run-id", runId);
+  let status;
+  let cause = "";
   try {
-    // --session-id is passed for the audit repair too. The CLI can auto-resolve
-    // it, but a worker has no session context of its own to resolve from, so the
-    // caller-supplied id is the only trustworthy source here.
-    const res = spawnRun(ctx.entry, {
-      anchors: ctx.anchors,
-      command: "node",
-      script,
-      args: ["--session-id", sessionId, setFlag, "done", clearFlag],
-      cwd: ctx.anchors.targetMainRoot,
-      timeoutMs: REPORT_TIMEOUT_MS,
-    });
-    return res.status === 0;
-  } catch (_e) {
-    return false;
+    const res = spawnRun(ctx.entry, { anchors: ctx.anchors, command: "node", script, args, cwd: ctx.anchors.targetMainRoot, timeoutMs: REPORT_TIMEOUT_MS });
+    status = res.status;
+  } catch (e) {
+    status = null;
+    cause = e && e.message ? `: ${e.message}` : "";
   }
+  if (status === 0) return null;
+  return {
+    severity: "warning",
+    detail: `supervisor ${which} phase repair via ${script} failed (exit ${status === null || status === undefined ? "n/a" : status})${cause} — phase left as is`,
+  };
 }
 
 // An unusable control dir (symlink, failed migration) cannot prove the state is
@@ -251,8 +271,12 @@ function run(payload, ctx) {
     auditPhase = audit.phase;
     findings.push(...alert.findings, ...audit.findings);
     gateAction = audit.gateAction === "yield" ? "yield" : alert.gateAction;
-    if (alert.repair !== null) applyRepair(ctx, sessionId, alert.repair);
-    if (audit.repair !== null) applyRepair(ctx, sessionId, audit.repair);
+    const auditRunId = state.audit && typeof state.audit === "object" ? state.audit.audit_run_id : null;
+    for (const [which, repair] of [["alert", alert.repair], ["audit", audit.repair]]) {
+      if (repair === null) continue;
+      const failed = applyRepair(ctx, sessionId, which, auditRunId);
+      if (failed) findings.push(failed);
+    }
   }
 
   for (const finding of findings) reportFinding(ctx, sessionId, finding);

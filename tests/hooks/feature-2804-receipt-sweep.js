@@ -60,6 +60,13 @@ const lastFinding = (sid) => { const f = R.findings(sid); return f.length ? f[f.
 const detailOf = (f) => (f && typeof f.detail === "string" ? f.detail : "");
 const ABSENT_RE = /absent|missing|not exist|exists[=:] ?false/i;
 const present = (s, stage, text) => R.stop(s.sid, R.presentTurn(s, [stage], (text || "Here is the plan.\n\n") + s.urlLine));
+// echo(sid, stage, opts): #2853 gates a plan CONFIRM on the stage's pre-confirm audit before the receipt
+// check this test is about, so the audit is settled CONTINUE on the current plan right before each echo.
+const PCAS = require("../lib/pre-confirm-audit-settle");
+function echo(sid, stage, opts) {
+  try { PCAS.settle(sid, stage, "CONTINUE"); } catch (_) { /* an unsettled audit denies with its own reason, which the checks report */ }
+  return R.echo(sid, stage, opts);
+}
 const sweep = () => { try { ZC.cleanupZombies(7); return null; } catch (e) { return String(e && e.message); } };
 
 caseBegin("sweep-keeps-written-receipt", "hooks/confirm-checkpoint.js");
@@ -68,7 +75,7 @@ caseBegin("sweep-keeps-written-receipt", "hooks/confirm-checkpoint.js");
   const b = R.sessionAt("outline", { tag: 2804 });
   const ag = { type: "tool_use", id: "ag1", name: "Agent", input: { description: "survey", prompt: "survey" } };
   const turn1 = [U("continue the outline", "u-prompt1"), A("a-agent", ag), TR("ag1", "u-ag1"), A("a-echo1", BASH(R.echoOf("outline"), "eb1"))];
-  const e1 = R.echo(b.sid, "outline", { transcriptPath: R.writeTranscript(b.sid, turn1) });
+  const e1 = echo(b.sid, "outline", { transcriptPath: R.writeTranscript(b.sid, turn1) });
   check("scenario: the echo before any presentation is denied", e1.denied && !e1.dialog, show(e1.json));
   const before = turn1.concat([
     { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "eb1", content: e1.reason || "denied", is_error: true }] }, uuid: "u-eb1" },
@@ -82,7 +89,7 @@ caseBegin("sweep-keeps-written-receipt", "hooks/confirm-checkpoint.js");
   check("scenario: the sweep does not throw", threw === null, threw);
   check("scenario: the owner state survives the sweep", fs.existsSync(statePath(b.sid)), "state removed");
   check("scenario: the receipt survives another session's sweep", R.receiptExists(b.sid, "outline"), "receipt removed by cleanupZombies(7)");
-  const e2 = R.echo(b.sid, "outline", { transcriptPath: tp });
+  const e2 = echo(b.sid, "outline", { transcriptPath: tp });
   check("scenario: the echo after the sweep reaches the dialog", e2.dialog, show({ rc: e2.rc, json: e2.json }));
 }
 caseEnd();
@@ -108,7 +115,7 @@ caseBegin("session-downstream-receipt-key", "hooks/confirm-checkpoint.js");
   check("downstream: <downSid>.json exists", fs.existsSync(statePath(downSid)), "no state");
   sweep();
   check("downstream: the receipt survives the sweep", R.receiptExists(downSid, "outline"), "receipt removed by cleanupZombies(7)");
-  const e = R.echo(downSid, "outline", { transcriptPath: tp });
+  const e = echo(downSid, "outline", { transcriptPath: tp });
   check("downstream: the echo after the sweep reaches the dialog", e.dialog, show({ rc: e.rc, json: e.json }));
 }
 caseEnd();
@@ -116,7 +123,7 @@ caseEnd();
 caseBegin("d1-no-write-record", "hooks/confirm-checkpoint.js");
 {
   const s = R.sessionAt("outline", { tag: 2811 });
-  const e = R.echo(s.sid, "outline");
+  const e = echo(s.sid, "outline");
   const f = lastFinding(s.sid);
   const d = detailOf(f);
   check("D1: the first echo with no presentation is denied (no-receipt)", e.denied && d.includes("(no-receipt)"), show({ json: e.json, d }));
@@ -134,7 +141,7 @@ caseBegin("d2-written-then-removed", "hooks/confirm-checkpoint.js");
   const st = present(s, "outline");
   check("D2 setup: Stop continues and writes the receipt", st.continued && R.receiptExists(s.sid, "outline"), show({ rc: st.rc, out: st.out }));
   try { fs.unlinkSync(R.receiptPath(s.sid, "outline")); } catch (_) { /* checked by the setup case */ }
-  const e = R.echo(s.sid, "outline");
+  const e = echo(s.sid, "outline");
   const d = detailOf(lastFinding(s.sid));
   const at = lastWriteAt(s.sid, "outline");
   check("D2: the echo is denied (no-receipt)", e.denied && d.includes("(no-receipt)"), show({ json: e.json, d }));
@@ -150,9 +157,9 @@ caseBegin("d3-consumed-then-echoed-again", "hooks/confirm-checkpoint.js");
 {
   const s = R.sessionAt("outline", { tag: 2813 });
   present(s, "outline");
-  const e1 = R.echo(s.sid, "outline");
+  const e1 = echo(s.sid, "outline");
   check("D3 setup: the first echo reaches the dialog and spends the receipt", e1.dialog && !R.receiptExists(s.sid, "outline"), show(e1.json));
-  const e2 = R.echo(s.sid, "outline");
+  const e2 = echo(s.sid, "outline");
   const d = detailOf(lastFinding(s.sid));
   const at = lastWriteAt(s.sid, "outline");
   check("D3: the second echo is denied (no-receipt)", e2.denied && d.includes("(no-receipt)"), show({ json: e2.json, d }));
@@ -166,7 +173,7 @@ caseBegin("d4-represented-then-removed", "hooks/confirm-checkpoint.js");
   // write -> consume -> re-presentation write -> the receipt vanishes: the diagnostic follows the latest write.
   const s = R.sessionAt("outline", { tag: 2818 });
   present(s, "outline");
-  const e1 = R.echo(s.sid, "outline");
+  const e1 = echo(s.sid, "outline");
   check("D4 setup: the first echo reaches the dialog and spends the receipt", e1.dialog && !R.receiptExists(s.sid, "outline"), show(e1.json));
   const at1 = lastWriteAt(s.sid, "outline");
   const st = present(s, "outline", "Here is the outline again.\n\n");
@@ -176,7 +183,7 @@ caseBegin("d4-represented-then-removed", "hooks/confirm-checkpoint.js");
   const at2 = lastWriteAt(s.sid, "outline");
   check("D4 setup: the two write records carry distinct times", typeof at1 === "string" && typeof at2 === "string" && at1 !== at2, { at1, at2 });
   try { fs.unlinkSync(R.receiptPath(s.sid, "outline")); } catch (_) { /* checked by the setup case */ }
-  const e2 = R.echo(s.sid, "outline");
+  const e2 = echo(s.sid, "outline");
   const d = detailOf(lastFinding(s.sid));
   check("D4: the echo is denied (no-receipt)", e2.denied && d.includes("(no-receipt)"), show({ json: e2.json, d }));
   check("D4: the finding detail says the receipt does not exist", ABSENT_RE.test(d), d);
@@ -191,7 +198,7 @@ caseBegin("deny-other-cause-no-diagnostic", "hooks/confirm-checkpoint.js");
   const s = R.sessionAt("outline", { tag: 2814 });
   present(s, "outline");
   fs.writeFileSync(s.plan, fs.readFileSync(s.plan, "utf8") + "\nedited after the presentation\n");
-  const e = R.echo(s.sid, "outline");
+  const e = echo(s.sid, "outline");
   const f = lastFinding(s.sid);
   const d = detailOf(f);
   check("content deny: the echo is denied (content)", e.denied && d.includes("(content)"), show({ json: e.json, d }));
@@ -211,7 +218,7 @@ caseBegin("d5-corrupt-log-line", "hooks/confirm-checkpoint.js");
   const valid = fs.existsSync(logPath(s.sid)) ? fs.readFileSync(logPath(s.sid), "utf8") : "";
   fs.writeFileSync(logPath(s.sid), "{ not json\n" + valid + "garbage {\n");
   try { fs.unlinkSync(R.receiptPath(s.sid, "outline")); } catch (_) { /* checked by the setup case */ }
-  const e = R.echo(s.sid, "outline");
+  const e = echo(s.sid, "outline");
   const d = detailOf(lastFinding(s.sid));
   check("D5: the echo is denied (no-receipt) despite a corrupt log line", e.denied && !e.dialog && d.includes("(no-receipt)"), show({ json: e.json, d }));
   check("D5: the deny finding names the receipt path and its absence", norm(d).includes(norm(R.receiptPath(s.sid, "outline"))) && ABSENT_RE.test(d), d);
@@ -229,7 +236,7 @@ caseBegin("d6-unreadable-log", "hooks/confirm-checkpoint.js");
   fs.rmSync(logPath(s.sid), { force: true });
   fs.mkdirSync(logPath(s.sid), { recursive: true });
   try { fs.unlinkSync(R.receiptPath(s.sid, "outline")); } catch (_) { /* checked by the setup case */ }
-  const e = R.echo(s.sid, "outline");
+  const e = echo(s.sid, "outline");
   const f = lastFinding(s.sid);
   const d = detailOf(f);
   check("D6: the echo is denied (no-receipt) when the log is a directory", e.denied && !e.dialog && d.includes("(no-receipt)"), show({ json: e.json, d }));

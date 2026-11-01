@@ -54,6 +54,8 @@ function transcript(s, presented) {
 // hostEcho(s, presented) -> {deny, pre, post}: PreToolUse, then PostToolUse only when not denied.
 function hostEcho(s, presented) {
   const tool_input = { command: ECHO };
+  // #2853: settle the stage's pre-confirm audit on the plan as it is now; this driver tests the Deny path.
+  require("../../lib/pre-confirm-audit-settle").trySettle(s.sid, STAGE, "CONTINUE");
   const pre = F.runNode("hooks/confirm-checkpoint.js", [], JSON.stringify({ session_id: s.sid,
     transcript_path: transcript(s, presented), hook_event_name: "PreToolUse", cwd: TDIR, tool_name: "Bash", tool_input }), ARMED);
   let j = {};

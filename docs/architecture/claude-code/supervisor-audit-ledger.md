@@ -17,7 +17,7 @@ merge` nor a protected-branch push, so its gate condition was never met and the
 audit was skipped entirely — an asymmetry between the two merge-approval paths.
 
 The fix moves the final decision point to just before `USER_VERIFIED`, which both
-paths always pass (since #2527 both are issued by `/get-release-approval`). Audits fire on **step-completion transitions**, and a
+paths always pass (since #2527 both are issued by `/get-release-approval`). Audits fire on **step-completion transitions** (the plan stages before their CONFIRM, see [Pre-confirm audit](#pre-confirm-audit-tr1tr3)), and a
 ledger records which step's audit judged which version of which artifact and when,
 so the final point re-uses settled judgments instead of re-running them. No new
 agent and no new state machine are introduced: the existing single-slot
@@ -28,24 +28,109 @@ to a read-only freshness backstop.
 ## Trigger table (SSOT: `hooks/lib/audit-triggers.js`)
 
 Cause labels are unified in the module; no caller invents its own. The
-`stage-boundary:` prefix is abolished — TR1–TR3 now use `step-complete:<step>`.
+`stage-boundary:` prefix is abolished — TR1–TR3 use `pre-confirm:<step>` (#2853).
 
 | ID | Step / condition | Cause | Kind | Input for `input_key` | Sub-checks |
 |---|---|---|---|---|---|
-| TR1 | `clarify_intent` complete | `step-complete:clarify_intent` | edge | intent.md | `intent-internal` |
-| TR2 | `outline` complete | `step-complete:outline` | edge | intent.md + outline.md | `intent-outline` |
-| TR3 | `detail` complete | `step-complete:detail` | edge | intent.md + outline.md + detail.md | `outline-detail`, `declared-files-snapshot` |
+| TR1 | `clarify_intent` confirm gate, before CONFIRM | `pre-confirm:clarify_intent` | pre-confirm | intent.md | `intent-internal` |
+| TR2 | `outline` confirm gate, before CONFIRM | `pre-confirm:outline` | pre-confirm | intent.md + outline.md | `intent-outline` |
+| TR3 | `detail` confirm gate, before CONFIRM | `pre-confirm:detail` | pre-confirm | intent.md + outline.md + detail.md | `outline-detail`, `declared-files-snapshot` |
 | TR4 | `write_code` complete | `step-complete:write_code` | edge | diff (`input_version`) | `detail-code`, `scope-drift`, `systemic-risk` |
 | TR5 | `USER_VERIFIED` issue attempt | `step-complete:user_verification` | edge | diff (`input_version`) | `recurrence-patterns` (+ on re-audit, TR4's sub-checks) |
 | TR6 | `cumulative_severity` = error | `severity-threshold:error` | level | diff (`input_version`) | all sub-checks |
 
-TR1–TR5 are **edge** triggers: they fire once on the "incomplete → complete"
+TR4–TR5 are **edge** triggers: they fire once on the "incomplete → complete"
 transition of their step, judged solely by whether the transition's identity is
 already in the ledger — never by the diff fingerprint. Making the fingerprint an
 arm condition would re-arm the same `write_code` audit on any later edit (a docs
 step, say), breaking the "5 step completions only" rule. TR6 is the one **level**
 trigger: its condition is a state, not a transition, so it is intentionally not
-edge-ified; dedup falls to cause matching plus ledger staleness.
+edge-ified; dedup falls to cause matching plus ledger staleness. TR1–TR3 are
+**pre-confirm** triggers: the Stop hook no longer arms them; the plan step's confirm
+gate does (next section).
+
+## Pre-confirm audit (TR1–TR3)
+
+Why: an edge trigger on a gated plan step can fire only after its CONFIRM, so a
+WARN or BLOCK arrived after the user approved, and fixing the plan broke the
+approval hash and forced a re-approval. Arming before the CONFIRM changes only the
+order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the judgment.
+
+- **Arm point.** `next-step --gate` on a plan step (intent / outline / detail) judges
+  the stage just before it would return `ask` or `proceed`, whether the stage's
+  CONFIRM is on or off. An already approved stage is not audited again. A detail
+  scope change still returns `present-and-stop` first.
+- **Gate outcome.** `REASON` carries `pre-confirm-audit:<state>`; the extra output
+  lines are `GATE_AUDIT_RUN_ID` and `GATE_AUDIT_VERDICT`.
+
+| State | `GATE_ACTION` |
+|---|---|
+| `settled-continue`, `accepted` | the original `ask` / `proceed` |
+| `settled-warn` | the original action; `GATE_HINT` carries the WARN summary and run id |
+| `unsettled` | `audit-wait` — the gate arms a run and prints the launch hint |
+| `settled-block`, `cap-reached`, `error` | `audit-block` — the hint gives the fix steps or the acceptance command |
+
+- **CONFIRM refusal.** `hooks/confirm-checkpoint.js` denies a plan-stage CONFIRM
+  echo, before spending the presentation receipt, unless the stage is
+  `settled-continue`, `settled-warn` or `accepted`.
+- **Stage verdict.** A stage is settled when every sub-check of its TR is settled
+  at the current `input_key`. When those sub-checks settled in different runs, the
+  stage verdict is the heaviest (BLOCK > WARN > CONTINUE) of each sub-check's
+  latest terminal verdict.
+- **Audit run count.** `audit.audit_run_counts` (`{ TR1, TR2, TR3 }`) rises by one
+  only when the gate mints a new run; an idempotent re-arm or a moved
+  `input_version` does not count. The cap is 2+1: at 3 the gate arms no more and
+  returns `audit-block` (`cap-reached`). A successful `RESET_FROM` to a plan step
+  resets that stage and every later stage to 0; a failed reset of the count keeps the
+  reset and only warns.
+- **Order.** Review finishes before the pre-confirm audit: CPA-3 runs `--gate`
+  only after the review loop approves (outline / detail). A BLOCK fix goes through
+  the planner revise and the review loop, then `--gate` again; intent has no
+  review loop and re-runs `--gate` directly. Both loops are capped, so the round
+  trip ends.
+- **Acceptance.** The ask-gated `WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED` sentinel
+  also accepts a TR1–TR3 run: a terminal WARN / BLOCK, or the current unsettled
+  run (pending / in_progress / frozen) recorded as `UNSETTLED`, which also
+  releases that run (outcome `discarded-stale`, `audit_phase` done). Before the
+  cap, an acceptance counts only while its `trigger_key` equals the stage's current
+  key. After the cap, the acceptance of the stage's last run counts whatever the
+  key, because past the cap the user takes over the judgment: a plan edited after
+  that acceptance passes the gate with no further audit. TR4 / TR5 runs are never
+  accepted as `UNSETTLED`, and the TR5 release rules below are unchanged.
+- **Fail-closed on an exception.** When judging or arming throws, the gate returns
+  `audit-block` (`pre-confirm-audit:error`) and the checkpoint denies; neither falls
+  back to the original action. The exit is the acceptance sentinel: when the
+  stage's last run carries an acceptance (read without computing `input_key`), both
+  pass. Two cases have no such exit — no run exists yet, or the supervisor state
+  is unreadable — and the hint asks to re-run `--gate`.
+- **Markers.** `WORKFLOW_OFF` (`/enforce-workflow-off`) is the user exit for the two
+  cases above: with `.workflow-off` present, `next-step --gate` skips the audit
+  judgment and returns the CONFIRM action (`pre-confirm-audit:skipped-workflow-off`),
+  and `hooks/confirm-checkpoint.js` skips its audit check. Nothing else is lifted:
+  the checkpoint's size and receipt checks never read the marker
+  ([marker-bypass-contract.md](marker-bypass-contract.md)).
+- **No workflow state.** The checkpoint skips the audit check for a session with no workflow state file, which cannot arm a run, and records a `notice` finding so the skip stays visible; a state file that exists but fails to read or judge stays fail-closed.
+- **Verdict summary is data.** A settled WARN / BLOCK's summary comes from untrusted plan and transcript text, so `--gate` prints it on its own `GATE_AUDIT_SUMMARY` line (quotes stripped, whitespace collapsed, 400 characters at most) and never inside the verbatim-followed `GATE_HINT`.
+- **Verdict writer.** Only a subagent may write a verdict: `hooks/block-main-audit-verdict.js` blocks the main conversation from calling `bin/supervisor-write-audit-verdict` or `--set-audit-verdict`, so the main conversation's only exit is the ask-gated acceptance sentinel.
+
+### Declared-files snapshot (#2448)
+
+TR3 records the declared files as two sets plus a scope tag:
+
+- `plan_files` — files named in detail.md's `## Files to modify`, one path per line:
+  only the first path token of a line counts, so a file merely referenced in the
+  description is not collected. Scope drift is judged against this set. Write one
+  file per line; a second file on the same line is dropped and later shows up as
+  scope drift.
+- `files` — the part of `plan_files` inside the working-tree diff (same path, or
+  under a declared directory).
+- `diff_scope` — `empty` (no diff yet, the normal case at the pre-confirm TR3),
+  `unavailable` (the diff could not be computed), or `scoped`. A later arm with a
+  non-empty diff recomputes `files` without re-parsing detail.md; `plan_files` and
+  `detail_key` are recomputed only by an arm that includes TR3 or follows a narrowing.
+
+A snapshot without `plan_files` (pre-#2448) is still read through `files`, then the
+detail parse. The TR5 narrowing check compares `plan_files` (else `files`).
 
 ### Sub-check registry
 
@@ -118,7 +203,7 @@ either being null is false, fail-closed).
 `ledger` is a 40-entry FIFO, `consumed_transitions` a 200-entry FIFO,
 `block_overrides` a 20-entry FIFO. The entry whose `id` equals
 `last_terminal_run_id` is never dropped (the backstop and TR5 stage 1 read it).
-`declared_files.files` is capped at 500 paths; past that a `truncated` flag is set
+`declared_files.files` and `declared_files.plan_files` are each capped at 500 paths; past that a `truncated` flag is set
 and TR5 falls to full re-audit.
 
 ## Judgment input version and the freshness key
@@ -211,7 +296,8 @@ its own (#2709). The workflow-mark handler
 (`hooks/workflow-mark/supervisor-block-override-handler.js`) delegates to
 `hooks/lib/supervisor-block-override.js`, which refuses a reason under 20
 characters before touching state, and a run id that is not the last terminal run
-or whose verdict is not WARN or BLOCK. It writes to the same supervisor state the
+or whose verdict is not WARN or BLOCK (except the TR1–TR3 `UNSETTLED` case of
+[Pre-confirm audit](#pre-confirm-audit-tr1tr3)). It writes to the same supervisor state the
 TR5 gate reads (`resolveSupervisorState().effectiveSid`), appends `{ run_id,
 verdict, freshness_key, artifact_keys, trigger_key, reason, actor, recorded_at }`
 to `audit.block_overrides`, and forces a `severity=warning` supervisor finding
@@ -244,7 +330,7 @@ cause; `pre-merge-warning-flush` and `scope-drift:pre-merge` are removed) and
 names which component moved (code diff / intent / outline / detail). No agent is
 launched. The former Path (i-b) BLOCK check stays as a double-check for the
 abnormal case where TR5 did not fire, recording a finding when reached.
-Consolidating the arm source onto the Stop hook (TR1–TR6) structurally removes the
+Consolidating the arm source onto the Stop hook (TR4–TR6) and the plan confirm gate (TR1–TR3) structurally removes the
 race where the gate and the Stop hook armed at the same time.
 
 When the composite key is null, the backstop applies the same null-freshness

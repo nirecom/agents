@@ -151,11 +151,11 @@ run_f3() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$COLLECT_L3_NODE');
-const transcript = [{ role: 'assistant', content: '<<WORKFLOW_CONFIRM_INTENT: scope>>' }];
+const projection = { steps: { write_code: { status: 'complete', updated_seq: 4 } } };
 const state = { version: '1', session_id: 't', layer1: { findings: [] },
   alert: { alert_phase: 'paused' }, audit: {} };
-const r = m.collectAuditCandidates(transcript, state);
-if (r.shouldArm !== true) { console.error('shouldArm='+r.shouldArm); process.exit(2); }
+const r = m.collectAuditCandidates(projection, state);
+if (!Array.isArray(r) || r.length === 0) { console.error('candidates='+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -206,11 +206,11 @@ run_f5() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$COLLECT_L3_NODE');
-const transcript = [{ role: 'assistant', content: '<<WORKFLOW_CONFIRM_INTENT: scope>>' }];
+const projection = { steps: { write_code: { status: 'complete', updated_seq: 4 } } };
 const state = { version: '1', session_id: 't', layer1: { findings: [] },
   alert: { alert_phase: 'paused' }, audit: { audit_phase: 'frozen' } };
-const r = m.collectAuditCandidates(transcript, state);
-if (r.shouldArm !== false) { console.error('expected shouldArm=false, got '+r.shouldArm); process.exit(2); }
+const r = m.collectAuditCandidates(projection, state);
+if (!Array.isArray(r) || r.length !== 0) { console.error('expected no candidate, got '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?

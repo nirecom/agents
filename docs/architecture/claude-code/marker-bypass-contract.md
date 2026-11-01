@@ -49,7 +49,7 @@ answering "which hooks does my marker bypass?" links here rather than restating 
 | `hooks/block-capture-echo.js` | PreToolUse | **No** | **No** |
 | `hooks/check-japanese-in-docs.js` | PreToolUse | **No** | **No** |
 | `hooks/show-user-verified-context.js` | PreToolUse | **No** | **No** |
-| `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
+| `hooks/confirm-checkpoint.js` (per check: the pre-confirm audit check honors WORKFLOW_OFF only; size and receipt checks honor neither) | PreToolUse | Partial (pre-confirm audit only) | **No** |
 | `hooks/gate-plan-skill-advance.js` | PreToolUse | **No** | **No** |
 | `hooks/block-send-user-file.js` | PreToolUse | **No** | **No** |
 | `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
@@ -115,8 +115,10 @@ to suspend. Their only switch is `JEV` — see [jev.md](../jev.md).
 `hooks/subagent-dispatch-prompt.js` (#2263) is **No/No** as well: it only rewrites a dispatch
 prompt through `updatedInput` and never blocks, so there is no marker for it to read.
 
-`hooks/confirm-checkpoint.js` and `hooks/gate-plan-skill-advance.js` (#2513 / #2277) read no
-marker. The checkpoint's plan-link deny is waived only by its own `CONFIRM_<STAGE>=off`, read
+`hooks/gate-plan-skill-advance.js` (#2513 / #2277) reads no marker, and `hooks/confirm-checkpoint.js`
+reads one only for its plan-stage pre-confirm audit check (#2853): `.workflow-off` skips that check
+alone, the user exit when the audit can neither settle nor be accepted (ARP-EXBG). `next-step --gate`
+skips the same judgment on the same marker and keeps its CONFIRM action. The checkpoint's plan-link deny is waived only by its own `CONFIRM_<STAGE>=off`, read
 through the shared plan gate (`hooks/lib/confirm-gate/plan-gate.js`), which never covers intent.
 The presentation receipt (#2729) is not a bypass marker either: it is the evidence that lets a CONFIRM echo reach the dialog, matched against today's plan and spent on use. The Skill gate denies only on an `unapproved` stage; a session with no
 state file reads as `not-applicable` and passes, so work outside the workflow is never stopped.

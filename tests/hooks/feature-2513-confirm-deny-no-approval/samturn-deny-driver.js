@@ -21,6 +21,8 @@ const sameTurn = (s) => [U("write the plan", "u-prompt"), A("a-write", W(s.plan)
 
 // preToolUse(s, tp) -> {deny, ask, rc, json}: confirm-checkpoint only; on Deny no PostToolUse follows.
 function preToolUse(s, tp) {
+  // #2853: settle the stage's pre-confirm audit on the plan as it is now; this driver tests the Deny path.
+  require("../../lib/pre-confirm-audit-settle").trySettle(s.sid, STAGE, "CONTINUE");
   const r = X.F.runNode("hooks/confirm-checkpoint.js", [], JSON.stringify({ session_id: s.sid, transcript_path: tp,
     hook_event_name: "PreToolUse", cwd: X.TDIR, tool_name: "Bash", tool_use_id: "e1",
     tool_input: { command: X.echoOf(STAGE) } }), ARMED);

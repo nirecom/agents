@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const X = require("../feature-2650-confirm-continuation/fixture");
+const PCAS = require("../../lib/pre-confirm-audit-settle");
 
 const { U, A, T, W, BASH, TR, STOPFB, ECHO, show, check: ok } = X;
 const STAGE = process.argv[2];
@@ -29,6 +30,8 @@ function runHook(s, entries, opts) {
     tool_use_id: o.toolUseId || "e1", tool_input: { command: X.echoOf(o.stage || STAGE) } };
   const env = Object.assign({}, process.env, X.gateEnv());
   delete env.CLAUDE_CODE_SESSION_ID;
+  // #2853: settle the stage's pre-confirm audit on the plan as it is now; this driver tests the receipt.
+  PCAS.trySettle(s.sid, o.stage || STAGE, "CONTINUE");
   const r = spawnSync(process.execPath, [path.join(X.ROOT, "hooks/confirm-checkpoint.js")], { input: JSON.stringify(input), env, encoding: "utf8", timeout: 30000, cwd: X.TDIR });
   let json = {};
   try { json = r.stdout ? JSON.parse(r.stdout) : {}; } catch (_) { json = { unparsed: r.stdout }; }

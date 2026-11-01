@@ -157,10 +157,17 @@ function appendBlockOverride(audit, override) {
 function capDeclaredFiles(declaredFiles) {
   if (!declaredFiles || typeof declaredFiles !== "object" || Array.isArray(declaredFiles)) return declaredFiles;
   const files = Array.isArray(declaredFiles.files) ? declaredFiles.files : [];
-  if (files.length <= DECLARED_FILES_CAP) {
-    return { ...declaredFiles, files, truncated: declaredFiles.truncated === true };
+  const out = { ...declaredFiles, files, truncated: declaredFiles.truncated === true };
+  if (files.length > DECLARED_FILES_CAP) {
+    out.files = files.slice(0, DECLARED_FILES_CAP);
+    out.truncated = true;
   }
-  return { ...declaredFiles, files: files.slice(0, DECLARED_FILES_CAP), truncated: true };
+  // #2448: plan_files is the scope-drift baseline and gets the same cap.
+  if (Array.isArray(declaredFiles.plan_files) && declaredFiles.plan_files.length > DECLARED_FILES_CAP) {
+    out.plan_files = declaredFiles.plan_files.slice(0, DECLARED_FILES_CAP);
+    out.truncated = true;
+  }
+  return out;
 }
 
 module.exports = {

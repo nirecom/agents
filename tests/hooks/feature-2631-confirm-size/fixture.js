@@ -78,9 +78,28 @@ function hookArgv(o, hook) {
 // confirm(sid, stage, opts) -> {decision, deny, reason, ctx, msg, raw}. Unless opts.present is
 // false, the plan is first "presented": present.js writes the #2729 receipt in the child env, so
 // a deny here comes from the size check, or from a plan file that cannot be found.
+// settleAudit(sid, stage): #2853 gates every plan CONFIRM on the stage's pre-confirm audit. This test's
+// subject is the size check, so the audit is settled CONTINUE on the current plan first. The audit key
+// spans the earlier stages' plans too: any the owner lacks gets a one-line placeholder. A session with
+// no workflow state file is skipped by the audit check itself and needs nothing here.
+const STAGES = ["intent", "outline", "detail"];
+function settleAudit(sid, stage) {
+  try {
+    if (!sid || !fs.existsSync(require(path.join(F.ROOT, "hooks/workflow-state/state-io")).getStatePath(sid))) return;
+    const plansDir = process.env.WORKFLOW_PLANS_DIR;
+    const own = require(path.join(F.ROOT, "hooks/workflow-state/plan-artifact-owner")).resolvePlanArtifactOwner;
+    for (const prev of STAGES.slice(0, STAGES.indexOf(stage))) {
+      const o = own(sid, prev, undefined, { plansDir }) || {};
+      if (o.path && !fs.existsSync(o.path)) fs.writeFileSync(o.path, planOf(1));
+    }
+    require("../../lib/pre-confirm-audit-settle").settle(sid, stage, "CONTINUE");
+  } catch (_) { /* an unsettled audit denies with its own reason, which the case's checks report */ }
+}
+
 function confirm(sid, stage, opts) {
   const o = opts || {};
   const env = childEnv(o.cfg || onCfg(), o.env);
+  if (o.audit !== false) settleAudit(sid, stage);
   if (o.present !== false) {
     spawnSync(process.execPath, [path.join(__dirname, "present.js"), sid, stage], { encoding: "utf8", timeout: 60000, cwd: F.work(), env });
   }

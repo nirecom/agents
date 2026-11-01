@@ -16,8 +16,8 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### GATE_ACTION
 
-- **Definition**: The closed-vocabulary confirm gate verdict `next-step --gate` prints: `proceed`, `ask`, `present-and-stop`, or `none`.
-  Skills follow it verbatim and never branch on the display-only `GATE_CONFIRM_<X>` line.
+- **Definition**: The closed-vocabulary confirm gate verdict `next-step --gate` prints: `proceed`, `ask`, `present-and-stop`, `audit-wait`, `audit-block`, or `none`.
+  Plan stages meet `audit-wait` and `audit-block` while the pre-confirm audit runs or blocks; skills follow it verbatim and never branch on the display-only `GATE_CONFIRM_<X>` line.
 - **Related**: [architecture/claude-code/workflow-runtime.md](../architecture/claude-code/workflow-runtime.md)
 
 ### identifier context
