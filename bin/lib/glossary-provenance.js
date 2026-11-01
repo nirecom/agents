@@ -9,7 +9,7 @@ const crypto = require("crypto");
 const { normalizeTerm } = require("../../hooks/lib/glossary-term");
 const { parseIntentGlossary, checkIntentGlossary } = require("../../hooks/lib/intent-glossary");
 const { parseGlossaryPath } = require("./glossary-format/files");
-const { parseGlossaryFile } = require("./glossary-format/entries");
+const { parseGlossaryFile, entryFields } = require("./glossary-format/entries");
 
 const CATEGORIES = ["user", "internal"];
 const other = (category) => (category === "user" ? "internal" : "user");
@@ -19,10 +19,22 @@ function normalizeDefinition(s) {
   return String(s == null ? "" : s).replace(/\s+/g, " ").trim();
 }
 
+// fieldsKey({ identifiers, homographs }) -> the order-free comparison key of the Identifier /
+// Homographs fields (#2763); "" when both are empty.
+function fieldsKey(f) {
+  const list = (v) => (Array.isArray(v) ? v.map(String).sort() : []);
+  const ids = list(f && f.identifiers);
+  const homs = list(f && f.homographs);
+  return ids.length === 0 && homs.length === 0 ? "" : JSON.stringify([ids, homs]);
+}
+const declaresFields = (r) => Array.isArray(r.identifiers) || Array.isArray(r.homographs);
+const fieldsOf = (set, key) => (set.fields && set.fields.get(key)) || "";
+
 let legacyCategoryOf = () => null;
 
 function termSet() {
-  return Object.defineProperty(new Map(), "headings", { value: new Map() });
+  const set = Object.defineProperty(new Map(), "headings", { value: new Map() });
+  return Object.defineProperty(set, "fields", { value: new Map() });
 }
 
 // headingOf(set, key) -> the heading exactly as written, or the lowercased key for a plain Map.
@@ -47,28 +59,33 @@ function readTermSets(readFile, paths) {
       const def = e.bullets.find((b) => b.key === "Definition");
       sets[category].set(lower(e.term), normalizeDefinition(def ? def.value : ""));
       sets[category].headings.set(lower(e.term), e.term);
+      sets[category].fields.set(lower(e.term), fieldsKey(entryFields(e)));
     }
   }
   return sets;
 }
 
-// computeOperations(base, next) -> [{ term, category, operation, definition }], sorted. A
-// case-only heading change is a delete of the old heading + an add of the new one.
+// computeOperations(base, next) -> [{ term, category, operation, definition, fields,
+// fieldsChanged }], sorted. A case-only heading change is a delete of the old heading + an add of
+// the new one; a change of the Definition or of the fields is a redefine.
 function computeOperations(base, next) {
   const ops = [];
+  const del = (term, category) => ({ term, category, operation: "delete", definition: "", fields: "", fieldsChanged: false });
   for (const category of CATEGORIES) {
     const b = base[category];
     const n = next[category];
     for (const [key, def] of n) {
       const term = headingOf(n, key);
-      if (!b.has(key)) ops.push({ term, category, operation: "add", definition: def });
-      else if (headingOf(b, key) !== term) {
-        ops.push({ term: headingOf(b, key), category, operation: "delete", definition: "" });
-        ops.push({ term, category, operation: "add", definition: def });
-      } else if (b.get(key) !== def) ops.push({ term, category, operation: "redefine", definition: def });
+      const fields = fieldsOf(n, key);
+      const add = { term, category, operation: "add", definition: def, fields, fieldsChanged: fields !== "" };
+      if (!b.has(key)) ops.push(add);
+      else if (headingOf(b, key) !== term) ops.push(del(headingOf(b, key), category), add);
+      else if (b.get(key) !== def || fieldsOf(b, key) !== fields) {
+        ops.push({ term, category, operation: "redefine", definition: def, fields, fieldsChanged: fieldsOf(b, key) !== fields });
+      }
     }
     for (const key of b.keys()) {
-      if (!n.has(key)) ops.push({ term: headingOf(b, key), category, operation: "delete", definition: "" });
+      if (!n.has(key)) ops.push(del(headingOf(b, key), category));
     }
   }
   const key = (o) => `${o.term}\u0000${o.category}\u0000${o.operation}`;
@@ -77,9 +94,13 @@ function computeOperations(base, next) {
 
 // The term is taken as written: computeOperations is case-sensitive, so `Alpha -> alpha` and
 // `alpha -> Alpha` are different operation sets and must not share a fingerprint (or a grant).
+// The fields join only an op that changes them, so an op without a fields change keeps its fingerprint.
 function opsFingerprint(ops) {
-  const lines = (ops || []).map((o) =>
-    [String(o.term), o.category, o.operation, normalizeDefinition(o.definition)].join("\u0000")).sort();
+  const lines = (ops || []).map((o) => {
+    const parts = [String(o.term), o.category, o.operation, normalizeDefinition(o.definition)];
+    if (o.fieldsChanged) parts.push("fields:" + (o.fields || ""));
+    return parts.join("\u0000");
+  }).sort();
   return crypto.createHash("sha256").update(lines.join("\n")).digest("hex");
 }
 
@@ -93,7 +114,10 @@ function reasonFor(op, rows) {
   const exact = same.find((r) => r.category === op.category);
   if (exact) {
     if (op.operation === "delete") return null;
-    return normalizeDefinition(exact.definition) === normalizeDefinition(op.definition) ? null : "definition-mismatch";
+    if (normalizeDefinition(exact.definition) !== normalizeDefinition(op.definition)) return "definition-mismatch";
+    // A V3 row states the fields; a V1 / V2 row cannot, so it cannot approve a fields change.
+    if (declaresFields(exact)) return fieldsKey(exact) === (op.fields || "") ? null : "fields-mismatch";
+    return op.fieldsChanged ? "fields-unrecorded" : null;
   }
   if (same.some((r) => r.category === "session")) return "session-term";
   if (same.length > 0) return "category-mismatch";
@@ -146,7 +170,8 @@ function checkIntentRows(termSets, rows) {
       if (!here.has(t) && there.has(t) && !removed.has(t + "\u0000" + other(r.category))) flag(r, "category-conflict");
     } else if (r.operation === "redefine") {
       if (here.has(t)) {
-        if (here.get(t) === normalizeDefinition(r.definition)) flag(r, "redefine-no-change");
+        const sameFields = !declaresFields(r) || fieldsKey(r) === fieldsOf(here, t);
+        if (here.get(t) === normalizeDefinition(r.definition) && sameFields) flag(r, "redefine-no-change");
       } else flag(r, there.has(t) ? "category-mismatch" : "redefine-absent");
     }
   }

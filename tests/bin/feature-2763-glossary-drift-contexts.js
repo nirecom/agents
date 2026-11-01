@@ -22,6 +22,22 @@ caseBegin("identifier-context-table", "bin/lib/glossary-drift.js");
 test("identifier-context-table", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/identifier").run(F)));
 caseEnd();
 
+caseBegin("declared-identifier-spellings", "bin/lib/glossary-drift.js");
+test("declared-identifier-spellings", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/identifier").runDeclared(F)));
+caseEnd();
+
+caseBegin("stage-inputs-intent-fields", "bin/lib/glossary-drift.js");
+test("stage-inputs-intent-fields", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/stage-inputs").run(F)));
+caseEnd();
+
+caseBegin("long-run-linear-time", "bin/lib/glossary-drift.js");
+test("long-run-linear-time", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/perf").run(F)));
+caseEnd();
+
+caseBegin("identifier-ranges-oracle", "bin/lib/glossary-drift.js");
+test("identifier-ranges-oracle", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/perf").runOracle(F)));
+caseEnd();
+
 caseBegin("singular-export", "hooks/lib/glossary-term.js");
 test("singular-export", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/identifier").runSingular(F)));
 caseEnd();
@@ -30,6 +46,14 @@ caseBegin("prose-context-table", "bin/lib/glossary-drift.js");
 test("prose-context-table", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/prose").run(F)));
 caseEnd();
 
+caseBegin("prose-homographs-and-background-words", "bin/lib/glossary-drift.js");
+test("prose-homographs-and-background-words", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/prose").runHomographs(F)));
+caseEnd();
+
 caseBegin("acceptance-through-the-cli", "bin/check-glossary-drift");
 test("acceptance-through-the-cli", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/acceptance").run(F)));
+caseEnd();
+
+caseBegin("acceptance-declared-and-long-line", "bin/check-glossary-drift");
+test("acceptance-declared-and-long-line", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/acceptance").runDeclared(F)));
 caseEnd();
