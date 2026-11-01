@@ -963,3 +963,7 @@ Changes: New JavaScript test files must use node:test: the edit-time and commit-
 ### FEATURE: PR #2870 (2026-11-01)
 Background: feat(#2853,#2448,#2515,#2795): run the supervisor audit before plan a...
 Changes: The EM Supervisor audit now reviews each plan (intent / outline / detail) before you approve it, not after, so a fix it asks for no longer forces you to approve the same plan twice.;The audit stops after 2+1 rounds per stage and hands the decision to you, instead of looping.;Closing a session no longer skips a supervisor audit that was re-armed.
+
+### FEATURE: PR #2876 (2026-11-01)
+Background: feat(#2865): migrate the remaining non-node:test JS tests to node:tes...
+Changes: Every JavaScript test file must now use node:test, not only new ones. The edit-time and commit-time test gates block any `tests/<category>/*.js` entrypoint that does not load node:test (`MISSING_TEST_RUNNER`). All existing plain-script tests in this repository were migrated, so nothing is blocked today.
