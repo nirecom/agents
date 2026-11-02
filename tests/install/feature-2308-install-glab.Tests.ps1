@@ -228,3 +228,66 @@ Describe 'glab-ps1-install-auth-and-reachability' -Skip:(-not $IsWindows) {
         $r.Output | Should -Not -MatchExactly 'glpat-test'
     }
 }
+
+# #2892: static checks of the winget upgrade branch (no child pwsh, runs on every OS).
+Describe 'glab-ps1-upgrade-branch-static' {
+    BeforeAll {
+        $src = Get-Content -LiteralPath $script:GlabPs1 -Raw
+        $m = [regex]::Match($src, '(?s)winget upgrade GLab\.GLab.*?(?=winget install GLab\.GLab)')
+        $script:UpgradeBranch = $m.Value
+    }
+
+    It 'U1: upgrade branch was located' {
+        $script:UpgradeBranch | Should -Not -BeNullOrEmpty
+    }
+
+    It 'U2: upgrade branch compares against the signed int32 -1978335189' {
+        $script:UpgradeBranch.Contains('-1978335189') | Should -BeTrue
+    }
+
+    It 'U3: "already up to date" is printed with Write-Host, not Write-Warning' {
+        $lines = @($script:UpgradeBranch -split "`n" | Where-Object { $_.Contains('already up to date') })
+        $lines.Count | Should -BeGreaterThan 0
+        foreach ($l in $lines) {
+            $l | Should -Match 'Write-Host'
+            $l | Should -Not -Match 'Write-Warning'
+        }
+    }
+
+    It 'U4: general non-zero branch keeps "upgrade failed"' {
+        $script:UpgradeBranch.Contains('upgrade failed') | Should -BeTrue
+    }
+
+    It 'U5: upgrade branch resets $global:LASTEXITCODE = 0 on both the up-to-date and failure paths' {
+        [regex]::Matches($script:UpgradeBranch, [regex]::Escape('$global:LASTEXITCODE = 0')).Count | Should -BeGreaterOrEqual 2
+    }
+
+    It 'U7: "upgrade failed" is not a Write-Warning' {
+        $lines = @($script:UpgradeBranch -split "`n" | Where-Object { $_.Contains('upgrade failed') })
+        $lines.Count | Should -BeGreaterThan 0
+        foreach ($l in $lines) { $l | Should -Not -Match 'Write-Warning' }
+    }
+
+    It 'U6: the retired "up to date or upgrade failed" wording is gone' {
+        (Get-Content -LiteralPath $script:GlabPs1 -Raw).Contains('up to date or upgrade failed') | Should -BeFalse
+    }
+}
+
+# #2892: run glab.ps1 against a winget stub that returns a chosen exit code (upgrade branch only).
+Describe 'glab-ps1-upgrade-exit-code-runtime' -Skip:(-not $IsWindows) {
+    It '<Id>: winget upgrade exit <Code> -> "<Expect>", exit 0' -ForEach @(
+        @{ Id = 'X1'; Code = '-1978335189'; Expect = 'already up to date'; Absent = 'upgrade failed'; AbsentB = '' }
+        @{ Id = 'X2'; Code = '1'; Expect = 'upgrade failed'; Absent = 'already up to date'; AbsentB = '' }
+        @{ Id = 'X3'; Code = '0'; Expect = 'glab updated.'; Absent = 'upgrade failed'; AbsentB = 'already up to date' }
+    ) {
+        $d = New-CaseDir $Id.ToLower()
+        New-CmdStub -Directory $d -Name 'winget' -Line @('@echo off', "exit /b $Code") | Out-Null
+        New-GlabStub -Dir $d
+        New-PlainDriver -Dir $d -HostName '' -Token ''
+        $r = Invoke-Driver $d
+        $r.ExitCode | Should -Be 0 -Because $r.Output
+        $r.Output.Contains($Expect) | Should -BeTrue -Because $r.Output
+        $r.Output.Contains($Absent) | Should -BeFalse -Because $r.Output
+        if ($AbsentB) { $r.Output.Contains($AbsentB) | Should -BeFalse -Because $r.Output }
+    }
+}
