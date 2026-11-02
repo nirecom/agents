@@ -295,8 +295,8 @@ case_begin "removed-terms-in-complexity-judge" "agents/complexity-judge.md"
 removed_in_owner agents/complexity-judge.md complexity-judge normalize-judge-signals
 case_end
 
-case_begin "removed-terms-in-nfr-severity-calibration" "agents/lib/nfr-severity-calibration.md"
-removed_in_owner agents/lib/nfr-severity-calibration.md nfr-severity-calibration project-nfr-block
+case_begin "removed-terms-in-nfr-severity-calibration" "skills/_shared/nfr-severity-calibration.md"
+removed_in_owner skills/_shared/nfr-severity-calibration.md nfr-severity-calibration project-nfr-block
 case_end
 
 case_begin "removed-terms-in-workflow-doc" "docs/architecture/claude-code/workflow.md"

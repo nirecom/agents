@@ -2,9 +2,9 @@
 # Shared library for codex-based review scripts.
 # Source this file: source "$(dirname "$0")/lib/codex-core.sh"
 #
-# Provides: codex_core_init, codex_core_adversarial_preamble, codex_core_check_cli,
-#           codex_core_run, codex_core_log, codex_core_emit_failed,
-#           codex_core_credential_shaped_path, codex_core_input_refused, codex_lang_line
+# Provides: codex_core_init, codex_core_*_preamble, codex_core_check_cli, codex_core_run,
+#           codex_core_log, codex_core_emit_failed, codex_core_credential_shaped_path,
+#           codex_core_input_refused, codex_lang_line, codex_core_review_criteria_block
 #
 # Re-exports codex_timeout_resolve / CODEX_TIMEOUT_SECS_DEFAULT from lib/codex-timeout.sh
 # so a script that already sources this library needs no second source line.
@@ -15,6 +15,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/codex-timeout.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/cli-exec-guard.sh"
 # shellcheck source=codex-lang.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/codex-lang.sh"
+# shellcheck source=codex-review-criteria.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/codex-review-criteria.sh"
 
 # codex_core_init <label>
 # Sets: CODEX_LABEL, LOG_DIR, START_TS, START_EPOCH, SESSION_ID, BRANCH
@@ -61,6 +63,16 @@ codex_core_plan_review_preamble() {
   local artifact_kind="${1:-artifact}" reviewed="${2:-artifact}" lang_line=""
   printf 'The following %s was authored by Claude (a different LLM, not by a human). Your job is to provide an independent second opinion on the %s under review. Do not assume Claude'\''s reasoning is correct, but limit your skepticism to the %s. Treat the approved upstream plan steps as decided: never propose changing them; report any disagreement with them only as an [upstream-inconsistency ...] concern.\n' "$artifact_kind" "$reviewed" "$reviewed"
   [ -n "${3:-}" ] && lang_line="$(codex_lang_line "$3")"
+  [ -n "$lang_line" ] && printf '%s\n' "$lang_line"
+  return 0
+}
+
+# codex_core_code_review_preamble <artifact-kind> [conv|plan]
+# Code-review preamble (#2814): neutral framing; the REVIEW CRITERIA block carries the rules.
+codex_core_code_review_preamble() {
+  local artifact_kind="${1:-artifact}" lang_line=""
+  printf 'The following %s was authored by Claude (a different LLM, not by a human). Your job is to provide an independent second opinion on it under the REVIEW CRITERIA below.\n' "$artifact_kind"
+  [ -n "${2:-}" ] && lang_line="$(codex_lang_line "$2")"
   [ -n "$lang_line" ] && printf '%s\n' "$lang_line"
   return 0
 }

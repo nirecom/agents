@@ -60,7 +60,7 @@ Resolution is by absence, and absence only counts when the round was complete �
 Tagged concern (TEXT holds `[glossary-drift ` or `[upstream-inconsistency `): `reject` always refuses with exit 4 and writes nothing.
 `accept --id C<N> --reason R` closes a tagged concern only — as `rejected`, reason prefixed `accepted(glossary-drift)` or `accepted(upstream-inconsistency)`; otherwise exit 4.
 - `[glossary-drift `: only when a `WORKFLOW_GLOSSARY_ACCEPTED` grant matches its term and DISCRIM. Rule owner: `bin/lib/concern-ledger/drift-tag.sh`.
-- `[upstream-inconsistency `: only when the user's C for that concern is recorded in the current return cycle by `bin/review-loop-upstream decide`. Rule owner: `bin/lib/concern-ledger/upstream-tag.sh`.
+- `[upstream-inconsistency `: only when the user's C or a course-correction record for that concern is recorded in the current return cycle by `bin/review-loop-upstream decide`. Rule owner: `bin/lib/concern-ledger/upstream-tag.sh`.
 
 ## Dual authority — ledger vs carrier, and durable identity
 

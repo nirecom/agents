@@ -5,5 +5,6 @@
     - `C<N>: resolved` — the planner's revision addresses the concern.
     - `C<N>: unresolved — <one-line reason>` — the concern still applies.
   Any line not matching `^C[0-9]+:` will be mechanically discarded by the orchestrator.
+- Round 2+ revision check: "Round split" of `skills/_shared/priority-hierarchy/core.md`.
 - The reviewer's `Cn: resolved` / `Cn: unresolved` statement is authoritative. The orchestrator computes the residual-severity tally from your Round 2+ output.
 - LOW residuals never block; MEDIUM residuals never block past Round 2; HIGH residuals at Round 2 escalate to the user.

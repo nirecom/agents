@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bin/lib/concern-ledger/upstream-tag.sh — the single owner of the [upstream-inconsistency …]
 # concern tag (#2814). A tagged concern is never rejected; the user decides it, and only a
-# recorded C (cycle + id + exact body hash) lets cl_accept close it. Tag format, causes and the
+# recorded C or course-correction (cycle + id + exact body hash) lets cl_accept close it. Tag format, causes and the
 # format table: skills/_shared/priority-hierarchy/core.md (read here, never copied).
 # Sourced by bin/lib/concern-ledger.sh; no `set -e` (a sourced library).
 
@@ -122,13 +122,20 @@ cl_upstream_cycle() {
     printf '%s' "$c"
 }
 
-# cl_upstream_prior_choice <ctl> <fmt> <cycle> <id> <hash> — "C" when the latest decision for
-# exactly this (cycle, id, hash) is C; nothing otherwise.
+# cl_upstream_prior_choice <ctl> <fmt> <cycle> <id> <hash> — "C" or "course-correction" when the
+# latest decision for exactly this (cycle, id, hash) is that choice; nothing otherwise.
 cl_upstream_prior_choice() {
     local f="$1/$2-upstream-decisions.tsv"
     [ -f "$f" ] || return 0
     awk -F'\t' -v c="$3" -v i="$4" -v h="$5" '{sub(/\r$/,"")} $1==c && $2==i && $3==h {ch=$4}
-        END{if (ch=="C") print "C"}' "$f"
+        END{if (ch=="C" || ch=="course-correction") print ch}' "$f"
+}
+
+# cl_upstream_is_resolved_choice <choice> — rc 0 for a choice that resolves the concern as is
+# (C, or a course-correction record); rc 1 otherwise.
+cl_upstream_is_resolved_choice() {
+    case "$1" in C|course-correction) return 0 ;; esac
+    return 1
 }
 
 # cl_upstream_is_listed <ctl> <fmt> <cycle> <id> <hash> — rc 0 when the pair is in the cycle's
@@ -263,7 +270,7 @@ cl_upstream_guard_reject() {
 }
 
 # cl_upstream_accept <ledger> <id> <reason> — close a tagged concern when decisions.tsv beside
-# the ledger holds a C for (current cycle, id, hash of the ledger body). 4 refused; 1 write failure.
+# the ledger holds a C or course-correction for (current cycle, id, hash of the ledger body). 4 refused; 1 write failure.
 cl_upstream_accept() {
     local ledger="$1" id="$2" reason="$3" row sev rest ctl fmt cyc h
     row="$(_cl_drift_row "$ledger" "$id")" || return 4
@@ -271,7 +278,7 @@ cl_upstream_accept() {
     ctl="$(dirname "$ledger")"; fmt="$(basename "$ledger")"; fmt="${fmt%-concern-ledger.txt}"
     cyc="$(cl_upstream_cycle "$ctl" "$fmt")" || return 4
     h="$(cl_upstream_text_hash "[$sev] $rest")"
-    [ "$(cl_upstream_prior_choice "$ctl" "$fmt" "$cyc" "$id" "$h")" = C ] || return 4
+    cl_upstream_is_resolved_choice "$(cl_upstream_prior_choice "$ctl" "$fmt" "$cyc" "$id" "$h")" || return 4
     _cl_dismiss_write "$ledger" "$id" "$reason" "$CL_UPSTREAM_ACCEPT_LABEL" "$CL_UPSTREAM_ACCEPT_LABEL" || return 1
     return 0
 }

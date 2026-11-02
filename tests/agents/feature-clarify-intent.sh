@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/agents/feature-clarify-intent.sh
-# Tests: agents/lib/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md, skills/_shared/judge-decomposition.md, skills/clarify-intent/scripts/precheck-companions.sh
+# Tests: skills/_shared/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md, skills/_shared/judge-decomposition.md, skills/clarify-intent/scripts/precheck-companions.sh
 # Tags: workflow, clarify-intent, planning, intent, plans, scope:common
 # L3 gap (what this test does NOT catch): whether clarify-intent behaves correctly in a live
 #   claude -p session (static content assertions + mocked script behavior only).

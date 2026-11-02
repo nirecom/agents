@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 # bin/review-loop-upstream — the upstream-inconsistency pause of the plan review loops (#2814).
-# list finds the tagged concerns of one review report; decide records the user's A/B/C/D;
-# pick-upstream merges B return steps; return clears the review work data at and after a step
-# and bumps the cycle; accepted prints this cycle's C. Tag owner: bin/lib/concern-ledger/upstream-tag.sh.
+# list finds the tagged concerns of one review report; decide records the user's A/B/C/D or a
+# course-correction record; pick-upstream merges B return steps; return clears the review work
+# data at and after a step and bumps the cycle; accepted prints this cycle's C and
+# course-correction rows. Tag owner: bin/lib/concern-ledger/upstream-tag.sh.
 # Procedure: skills/_shared/codex-review-loop/upstream-inconsistency-pause.md.
 #
 # Exit codes: 0 ok, 1 an unreadable ledger / state or a failed write, 2 usage, a control
-# character, an unknown step or format, or a pair the latest list did not print, 3 return
-# before the workflow reset set the --to step back to pending.
+# character, an unknown step or format, a pair the latest list did not print, or a foreign
+# course-correction --transcript, 3 return before the workflow reset set --to back to pending,
+# or a course-correction uuid that names no real user prompt of the transcript.
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/lib/concern-ledger.sh
 if ! . "$SELF_DIR/lib/concern-ledger.sh"; then
     printf 'review-loop-upstream: failed to load the concern-ledger library\n' >&2
+    exit 1
+fi
+# shellcheck source=bin/lib/review-loop-upstream/course-correction.sh
+if ! . "$SELF_DIR/lib/review-loop-upstream/course-correction.sh"; then
+    printf 'review-loop-upstream: failed to load the course-correction library\n' >&2
     exit 1
 fi
 FORMATS="outline-plan detail-plan security-plan test-review"
@@ -23,6 +30,8 @@ usage() {
 usage: review-loop-upstream <subcommand> [options]
   list          --session S --format F --round N --from-report FILE [--context-file FILE]...
   decide        --session S --format F --id C<N> --text-hash H --choice A|B|C|D --reason R
+  decide        --session S --format F --id C<N> --text-hash H --choice course-correction
+                --transcript P --uuid U --reason R
   pick-upstream <step>...
   return        --session S --to STEP --from-format F
   accepted      --session S --format F [--all-cycles]
@@ -33,15 +42,17 @@ die() { printf 'review-loop-upstream: %s\n' "$2" >&2; exit "$1"; }
 
 SUB="${1:-}"; [ -n "$SUB" ] || usage; shift
 SID=""; FMT=""; ROUND=""; REPORT=""; ID=""; HASH=""; CHOICE=""; REASON=""; TO=""; ALL=0
+TRANSCRIPT=""; UUID=""
 CTX=(); STEPS_ARG=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        --session|--format|--round|--from-report|--context-file|--id|--text-hash|--choice|--reason|--to|--from-format)
+        --session|--format|--round|--from-report|--context-file|--id|--text-hash|--choice|--reason|--to|--from-format|--transcript|--uuid)
             [ $# -ge 2 ] || die 2 "$1 needs a value"
             case "$1" in
                 --session) SID="$2" ;; --format|--from-format) FMT="$2" ;; --round) ROUND="$2" ;;
                 --from-report) REPORT="$2" ;; --context-file) CTX+=("$2") ;; --id) ID="$2" ;;
                 --text-hash) HASH="$2" ;; --choice) CHOICE="$2" ;; --reason) REASON="$2" ;; --to) TO="$2" ;;
+                --transcript) TRANSCRIPT="$2" ;; --uuid) UUID="$2" ;;
             esac
             shift 2 ;;
         --all-cycles) ALL=1; shift ;;
@@ -138,18 +149,23 @@ put_seen() {
 }
 
 # seen_prior <seen> <cycle> <hash> — rc 1 unless the hash was listed in an earlier round of the
-# cycle; prints C when an id of the latest such round carries a C for that hash (ids renumber).
+# cycle; prints the resolved choice (C or course-correction) an id of the latest such round
+# carries for that hash (ids renumber).
 seen_prior() {
-    local id r
+    local id r ch
     [ -f "$1" ] || return 1
     r="$(awk -F'\t' -v c="$2" -v h="$3" -v n="$ROUND" '{sub(/\r$/,"")} $1==c && $4==h && $3!="-" && $2+0<n+0 {if ($2+0>m) m=$2+0}
         END{if (m) print m}' "$1")"
     [ -n "$r" ] || return 1
     while IFS= read -r id; do
-        if [ "$(cl_upstream_prior_choice "$CTL" "$FMT" "$2" "$id" "$3")" = C ]; then printf 'C'; return 0; fi
+        ch="$(cl_upstream_prior_choice "$CTL" "$FMT" "$2" "$id" "$3")"
+        if cl_upstream_is_resolved_choice "$ch"; then printf '%s' "$ch"; return 0; fi
     done < <(awk -F'\t' -v c="$2" -v h="$3" -v r="$r" '{sub(/\r$/,"")} $1==c && $2+0==r+0 && $4==h {print $3}' "$1")
     return 0
 }
+
+# rm_given <path>... — remove each non-empty path.
+rm_given() { local p; for p in "$@"; do [ -z "$p" ] || rm -f -- "$p"; done; }
 
 # put_decision <file> <row> — append one row through a temp copy, then rename (atomic).
 put_decision() {
@@ -159,15 +175,22 @@ put_decision() {
     rm -f -- "$tmp"; return 1
 }
 
-# cmd_decide — cl_upstream_accept closes a tagged concern only against a C row in decisions.tsv,
-# so a ledger C is committed first, then accepted; a failed accept restores the prior file, so no
-# C row outlives an open concern (the drift-grant wait aside, where C is meant to stand alone).
+# cmd_decide — cl_upstream_accept closes a tagged concern only against a C or course-correction
+# row in decisions.tsv, so such a ledger row is committed first, then accepted; a failed accept
+# restores the prior file and removes the record, so no such row outlives an open concern (the
+# drift-grant wait aside, where it is meant to stand alone).
 cmd_decide() {
-    local v cyc ledger presence rc row f7 rest dec bak=""
-    for v in "$SID" "$FMT" "$ID" "$HASH" "$CHOICE" "$REASON"; do
+    local v cyc ledger presence rc row f7 rest dec own bak="" rec="" resolved=0
+    for v in "$SID" "$FMT" "$ID" "$HASH" "$CHOICE" "$REASON" "$TRANSCRIPT" "$UUID"; do
         cl_upstream_reject_control "$v" || die 2 "a control character (tab, CR, LF) is refused"
     done
-    case "$CHOICE" in A|B|C|D) ;; *) die 2 "--choice must be A, B, C or D" ;; esac
+    case "$CHOICE" in A|B|C|D|course-correction) ;; *) die 2 "--choice must be A, B, C, D or course-correction" ;; esac
+    if [ "$CHOICE" = course-correction ]; then
+        [ -n "$TRANSCRIPT" ] && [ -n "$UUID" ] || die 2 "--choice course-correction needs --transcript and --uuid"
+    else
+        [ -z "$TRANSCRIPT" ] && [ -z "$UUID" ] || die 2 "--transcript and --uuid apply only to --choice course-correction"
+    fi
+    cl_upstream_is_resolved_choice "$CHOICE" && resolved=1
     need_fmt
     case "$ID" in C[0-9]*|[0-9]*) ID="C${ID#C}" ;; esac
     case "${ID#C}" in ''|*[!0-9]*) die 2 "--id must be C<N>" ;; esac
@@ -180,22 +203,33 @@ cmd_decide() {
     presence=absent; [ -f "$ledger" ] && presence=present
     dec="$CTL/$FMT-upstream-decisions.tsv"
     row="$(printf '%s\t%s\t%s\t%s\t%s\tledger=%s' "$cyc" "$ID" "$HASH" "$CHOICE" "$(cl_upstream_tsv_field "$REASON")" "$presence")"
-    if [ "$CHOICE" = C ] && [ "$presence" = present ] && [ -e "$dec" ]; then
-        bak="$dec.bak.$$"; cp -- "$dec" "$bak" || { rm -f -- "$bak"; die 1 "decisions.tsv could not be backed up"; }
+    if [ "$CHOICE" = course-correction ]; then
+        rc=0; own="$(rlu_cc_own_transcript "$SID" "$TRANSCRIPT")" || rc=$?
+        [ "$rc" -ne 3 ] || die 2 "no transcript is located for session $SID; nothing is recorded"
+        [ "$rc" -ne 2 ] || die 2 "--transcript is not the transcript of session $SID; nothing is recorded"
+        [ "$rc" -eq 0 ] || die 1 "the transcript of session $SID could not be located; nothing is recorded"
+        rc=0; rec="$(rlu_cc_write_record "$CTL" "$FMT" "$cyc" "$ID" "$own" "$UUID")" || rc=$?
+        [ "$rc" -ne 3 ] || die 3 "no real user prompt with uuid $UUID in $own; nothing is recorded"
+        [ "$rc" -eq 0 ] || die 1 "the course-correction record could not be written; nothing is recorded"
+        row+=$'\t'"record=$rec"
     fi
-    put_decision "$dec" "$row" || { [ -z "$bak" ] || rm -f -- "$bak"; die 1 "decisions.tsv could not be written"; }
-    [ "$CHOICE" = C ] && [ "$presence" = present ] || return 0
+    if [ "$resolved" -eq 1 ] && [ "$presence" = present ] && [ -e "$dec" ]; then
+        bak="$dec.bak.$$"; cp -- "$dec" "$bak" || { rm_given "$bak" "$rec"; die 1 "decisions.tsv could not be backed up"; }
+    fi
+    put_decision "$dec" "$row" || { rm_given "$bak" "$rec"; die 1 "decisions.tsv could not be written"; }
+    [ "$resolved" -eq 1 ] && [ "$presence" = present ] || return 0
     rc=0; cl_accept "$ledger" "$ID" "$REASON" "$SID" "$FMT" || rc=$?
     if [ "$rc" -eq 4 ] && row="$(_cl_drift_row "$ledger" "$ID")" && cl_is_drift_tagged "$row" \
         && IFS='|' read -r _ _ _ _ _ _ f7 _ _ _ rest <<< "$row" && ! _cl_drift_granted "$rest" "$f7" "$SID" "$FMT"; then
         [ -z "$bak" ] || rm -f -- "$bak"
-        printf 'review-loop-upstream: C is recorded; %s also carries a glossary-drift tag and stays open until its WORKFLOW_GLOSSARY_ACCEPTED grant\n' "$ID" >&2
+        printf 'review-loop-upstream: %s is recorded; %s also carries a glossary-drift tag and stays open until its WORKFLOW_GLOSSARY_ACCEPTED grant\n' "$CHOICE" "$ID" >&2
         return 0
     fi
-    if [ "$rc" -eq 0 ]; then [ -z "$bak" ] || rm -f -- "$bak"; return 0; fi
+    if [ "$rc" -eq 0 ]; then rm_given "$bak"; return 0; fi
+    rm_given "$rec"
     if [ -n "$bak" ]; then mv -f -- "$bak" "$dec"; else rm -f -- "$dec"; fi \
-        || die 1 "the ledger accept of $ID failed (rc $rc), and its C row could not be removed from $dec"
-    die 1 "the ledger accept of $ID failed (rc $rc); no C is recorded"
+        || die 1 "the ledger accept of $ID failed (rc $rc), and its $CHOICE row could not be removed from $dec"
+    die 1 "the ledger accept of $ID failed (rc $rc); no $CHOICE is recorded"
 }
 
 cmd_pick() {
@@ -292,7 +326,7 @@ cmd_accepted() {
     cyc="$(cl_upstream_cycle "$CTL" "$FMT")" || die 1 "the review cycle could not be read"
     f="$CTL/$FMT-upstream-decisions.tsv"
     [ -f "$f" ] || return 0
-    awk -F'\t' -v c="$cyc" -v all="$ALL" '{sub(/\r$/,"")} $4=="C" && (all=="1" || $1==c)' "$f"
+    awk -F'\t' -v c="$cyc" -v all="$ALL" '{sub(/\r$/,"")} ($4=="C" || $4=="course-correction") && (all=="1" || $1==c)' "$f"
 }
 
 case "$SUB" in

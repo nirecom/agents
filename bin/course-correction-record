@@ -1,0 +1,36 @@
+#!/usr/bin/env node
+// bin/course-correction-record — the transcript side of a user course correction (#2814 R6).
+//   locate  --session <sid>                                  the session's transcript path, one line
+//   extract --transcript <path> --uuid <uuid> --out <file>   the record file of one real user prompt
+// Callers: bin/lib/review-loop-upstream/course-correction.sh (extract) and
+// skills/_shared/codex-review-loop/upstream-inconsistency-pause.md (locate).
+// Exit: 0 ok; 1 IO failure; 2 usage; 3 not found.
+"use strict";
+const path = require("path");
+
+const SUBS = {
+  locate: { mod: "locate.js", keys: ["--session"] },
+  extract: { mod: "extract.js", keys: ["--transcript", "--uuid", "--out"] },
+};
+
+function die(code, msg) {
+  process.stderr.write(`course-correction-record: ${msg}\n`);
+  process.exit(code);
+}
+
+const [sub, ...rest] = process.argv.slice(2);
+const spec = SUBS[sub];
+if (!spec) die(2, "usage: course-correction-record locate --session S | extract --transcript P --uuid U --out F");
+const opts = {};
+for (let i = 0; i < rest.length; i++) {
+  if (!spec.keys.includes(rest[i])) die(2, `unknown argument: ${rest[i]}`);
+  if (i + 1 >= rest.length || rest[i + 1].startsWith("--")) die(2, `${rest[i]} needs a value`);
+  opts[rest[i].slice(2)] = rest[++i];
+}
+for (const k of spec.keys) if (opts[k.slice(2)] === undefined) die(2, `${k} is required`);
+
+const { run } = require(path.join(__dirname, "lib", "course-correction-record", spec.mod));
+const res = run(opts);
+if (res.message) process.stderr.write(`course-correction-record: ${res.message}\n`);
+if (res.stdout) process.stdout.write(res.stdout);
+process.exitCode = res.code;

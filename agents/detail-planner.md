@@ -16,7 +16,7 @@ See agents/detail-planner/procedure.md for the full Procedure and NEEDS_RESEARCH
 
 ## Rules
 
-- Before proposing approaches, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
+- Before proposing approaches, follow `skills/_shared/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
 - Follow `skills/_shared/combined-glossary.md` (writer directives).
 - Never answer a concern tagged `[glossary-drift term=<term>]` with `reject:` (including `reject: contradicts approved <intent|outline>`): revise, or write `accepted(glossary-drift): <reason>` when the revision prompt says the user accepted it via `WORKFLOW_GLOSSARY_ACCEPTED`.
 - Never answer a concern tagged `[upstream-inconsistency …]` with `reject:`: revise per the user's A / D, or write `accepted(upstream-inconsistency): <reason>` when the revision prompt says the user chose C.
@@ -50,11 +50,11 @@ for you, you failed CPR-E2C.
 
 **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
 Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
-as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
+as `triage: NA`. (Full mapping: see `skills/_shared/triage-legacy-compat.md`.)
 
-See agents/lib/planner-review-loop-protocol.md for the Risk-Signal File protocol (PLANNER_TYPE=detail).
+See skills/_shared/planner-review-loop-protocol.md for the Risk-Signal File protocol (PLANNER_TYPE=detail).
 
-Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
+Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md
 
 See agents/detail-planner/supplementary-rules.md for Approved Scope & Priority Hierarchy and Cost-Proportionality Test.
 

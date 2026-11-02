@@ -89,7 +89,7 @@ rpc_load_context() {
 }
 
 # Settled design decisions (Accepted Tradeoffs + Class members triage); the triage semantics
-# codex must honour are spelled out in ACCEPTED_TRADEOFFS_BLOCK (agents/lib/triage-legacy-compat.md).
+# codex must honour are spelled out in ACCEPTED_TRADEOFFS_BLOCK (skills/_shared/triage-legacy-compat.md).
 # The two live in different files (#2228): Accepted Tradeoffs via --accepted-tradeoffs, Class
 # members via --class-members (intent.md, their SSOT). Each is extracted from its own source and
 # concatenated, so the block is unchanged from codex's perspective; an absent/empty source just
@@ -128,7 +128,7 @@ areas (including triage of class members marked 'NA' or 'OPTIONAL'). Triage
 semantics: NA = do not raise why this wasn't fixed; OPTIONAL = do not demand
 elevation to MUST; MUST = coverage required (HOW it is covered is still fair
 game). Backward compatibility: legacy disposition 'fix in scope' = MUST,
-'track separately' = NA. (Full mapping: see agents/lib/triage-legacy-compat.md.)
+'track separately' = NA. (Full mapping: see skills/_shared/triage-legacy-compat.md.)
 
 [ACCEPTED TRADEOFFS START]
 ${TRADEOFFS_CONTENT}
