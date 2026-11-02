@@ -4,13 +4,13 @@
 
 const { fenceStep } = require("../../../hooks/lib/markdown-fence");
 const {
-  unsafeTermChars, describeTermChars, parseSpellingList, checkIdentifierSpelling, checkHomographSpelling,
+  unsafeTermChars, describeTermChars, parseSpellingList, checkIdentifierSpelling, checkShortFormSpelling,
 } = require("../../../hooks/lib/glossary-term");
 
 // The optional spelling fields (#2763): bullet key -> entryFields key and spelling check.
 const FIELDS = [
   { key: "Identifier", name: "identifiers", check: checkIdentifierSpelling },
-  { key: "Homographs", name: "homographs", check: checkHomographSpelling },
+  { key: "Short forms", name: "shortForms", check: checkShortFormSpelling },
 ];
 const FIELD_KEYS = new Set(FIELDS.map((f) => f.key));
 
@@ -94,11 +94,11 @@ function checkEntry(e) {
     if (links !== 1) out.push(at + " Related must hold exactly one Markdown link (found " + links + ")");
   }
   for (const o of others) out.push("line " + o.lineNumber + ": '" + e.term + "' has a disallowed bullet '" + o.key + "'");
-  for (const n of e.stray) out.push("line " + n + ": '" + e.term + "' has a line that is not a Definition/Identifier/Homographs/Related bullet");
+  for (const n of e.stray) out.push("line " + n + ": '" + e.term + "' has a line that is not a Definition/Identifier/Short forms/Related bullet");
   return out;
 }
 
-// The Identifier / Homographs bullets: at most one each, a non-empty backticked list, every
+// The Identifier / Short forms bullets: at most one each, a non-empty backticked list, every
 // spelling passing its check.
 function checkFields(e, at) {
   const out = [];
@@ -119,7 +119,7 @@ function checkFields(e, at) {
   return out;
 }
 
-// entryFields(entry) -> { identifiers, homographs } of the first bullet of each ([] when absent or malformed).
+// entryFields(entry) -> { identifiers, shortForms } of the first bullet of each ([] when absent or malformed).
 function entryFields(e) {
   const out = {};
   for (const f of FIELDS) {
@@ -198,14 +198,14 @@ function replaceDefinition(text, term, definition) {
   return lines.join(eol);
 }
 
-// fieldLines(fields) -> the Identifier / Homographs bullet lines of the non-empty fields.
+// fieldLines(fields) -> the Identifier / Short forms bullet lines of the non-empty fields.
 function fieldLines(fields) {
   const f = fields || {};
   return FIELDS.filter((x) => Array.isArray(f[x.name]) && f[x.name].length > 0)
     .map((x) => "- **" + x.key + "**: " + f[x.name].map((s) => "`" + s + "`").join(", "));
 }
 
-// Replace the Identifier / Homographs bullets of `term` with `fields`, placed right after the
+// Replace the Identifier / Short forms bullets of `term` with `fields`, placed right after the
 // Definition bullet; an empty field removes its bullet. null when the term or its Definition is absent.
 function replaceFields(text, term, fields) {
   const found = findEntry(text, term);

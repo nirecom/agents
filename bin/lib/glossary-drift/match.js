@@ -125,7 +125,7 @@ function tolerated(seq, spelling, { heading, sentenceStart, codeComment }) {
 
 // lookup(index, w, ctx) -> the drifted term, or null. The naming-convention shortcut (same raw key,
 // no whitespace) covers only the `_` terms; a declared spelling is excluded only where it is literal.
-// A prose window spelled exactly as a candidate's Homographs entry drops that candidate.
+// Short forms never reach the index: whether a word is a general-language use is the reviewer's call.
 function lookup(index, w, ctx) {
   if (w.mode !== "prose") {
     const fits = identFits(index, w);
@@ -136,13 +136,10 @@ function lookup(index, w, ctx) {
     }
     if (w.mode === "identifier") return null;
   }
-  const notHomograph = (c) => w.mode !== "prose" || !c.homographs || !c.homographs.has(w.seq);
-  const all = plainFits(index, w).filter((c) => w.mode !== "caps" || capsAgree(c.term, w));
-  const fits = all.filter(notHomograph);
-  if (all.length > 0 && fits.length === 0) return null;
+  const fits = plainFits(index, w).filter((c) => w.mode !== "caps" || capsAgree(c.term, w));
   if (fits.length > 0) return fits.some((c) => tolerated(w.seq, c.term, ctx)) ? null : closest(fits, w.seq).term;
   if (w.mode === "caps") return null;
-  const ids = (identFits(index, w) || []).filter(notHomograph);
+  const ids = identFits(index, w) || [];
   return ids.length > 0 ? closest(ids, w.seq).term : null;
 }
 

@@ -1,9 +1,9 @@
 "use strict";
 // hooks/lib/intent-glossary.js — structure check for the intent.md `## Glossary`
 // section (#2529): the heading must exist once, right after `## Issues`; an empty
-// body passes; a non-empty body must be a `| Term | Category | Operation | Definition |
-// Identifier | Homographs |` table (V3, #2763), or a legacy V2 table without the two field
-// columns, or the V1 `| Term | Category | Definition |` table that reads every row as add.
+// body passes; a non-empty body must be a `| Term | Category | Operation | Definition |` table
+// (V2), the V3 table that adds the `| Identifier | Short forms |` field columns (#2763), or the
+// legacy V1 `| Term | Category | Definition |` table that reads every row as add.
 // Shared by the plan-artifact hooks, bin/check-intent-glossary and bin/glossary-promote.
 // Category values and their criteria are owned by rules/docs/glossary.md.
 
@@ -11,16 +11,18 @@ const CATEGORIES = Object.freeze(["user", "internal", "session"]);
 const OPERATIONS = Object.freeze(["add", "delete", "redefine"]);
 const HEADER_V1 = ["Term", "Category", "Definition"];
 const HEADER_V2 = ["Term", "Category", "Operation", "Definition"];
-// V3 (#2763): the optional spelling fields, each a backticked list or empty.
-const HEADER_V3 = ["Term", "Category", "Operation", "Definition", "Identifier", "Homographs"];
-const HEADER_TEXT = "| Term | Category | Operation | Definition | Identifier | Homographs |";
+// V3 (#2763): the optional Identifier / Short forms fields, each a backticked list or empty.
+const HEADER_V3 = ["Term", "Category", "Operation", "Definition", "Identifier", "Short forms"];
+const HEADER_TEXT = "`| Term | Category | Operation | Definition |` (add `| Identifier | Short forms |` " +
+  "for 6 columns when any row declares Identifier or Short forms)";
 const { fenceStep } = require("./markdown-fence");
 const {
-  unsafeTermChars, describeTermChars, parseSpellingList, checkIdentifierSpelling, checkHomographSpelling,
+  unsafeTermChars, describeTermChars, parseSpellingList, checkIdentifierSpelling, checkShortFormSpelling,
+  shortFormConflicts,
 } = require("./glossary-term");
 const FIELD_CELLS = [
   { name: "identifiers", label: "Identifier", cell: 4, check: checkIdentifierSpelling },
-  { name: "homographs", label: "Homographs", cell: 5, check: checkHomographSpelling },
+  { name: "shortForms", label: "Short forms", cell: 5, check: checkShortFormSpelling },
 ];
 
 const H2_RE = /^##(?!#)/;
@@ -154,7 +156,7 @@ function checkRow(r, raw, n) {
 function checkFieldCells(r, at) {
   for (const e of r.fieldErrors || []) at("Glossary row " + e);
   if (r.operation === "delete") {
-    if (FIELD_CELLS.some((f) => r[f.name].length > 0)) at("a delete row takes no Identifier / Homographs");
+    if (FIELD_CELLS.some((f) => r[f.name].length > 0)) at("a delete row takes no Identifier / Short forms");
     return;
   }
   for (const f of FIELD_CELLS) {
@@ -186,7 +188,7 @@ function checkTable(p) {
   const [header, sep] = p.table;
   const headerCells = splitRow(header.text);
   if (![HEADER_V3, HEADER_V2, HEADER_V1].some((h) => sameCells(headerCells, h))) {
-    out.push(violation(header.lineNumber, header.text, "Glossary table header must be " + HEADER_TEXT + " (legacy: | Term | Category | Operation | Definition | or | Term | Category | Definition |)"));
+    out.push(violation(header.lineNumber, header.text, "Glossary table header must be " + HEADER_TEXT + " (legacy: | Term | Category | Definition |)"));
   }
   const n = p.header.length;
   if (!sep || !splitRow(sep.text).every((c) => /^:?-+:?$/.test(c))) {
@@ -208,7 +210,18 @@ function checkTable(p) {
     if (r.term !== "" && seen.has(key)) out.push(violation(r.lineNumber, raw, "duplicate Term '" + r.term + "' with Operation '" + r.operation + "'"));
     seen.add(key);
   }
-  return out.concat(useRedefine(p));
+  return out.concat(shortFormOverlaps(p, n), useRedefine(p));
+}
+
+// Short forms overlaps among the well-formed non-delete V3 rows (headwords and short forms).
+function shortFormOverlaps(p, n) {
+  const rows = p.rows.filter((r) => Array.isArray(r.shortForms) && r.cellCount === n && r.operation !== "delete");
+  return shortFormConflicts(rows).map((c) => {
+    const r = rows.find((x) => x.term === c.term);
+    const raw = p.body.find((b) => b.lineNumber === r.lineNumber).text;
+    return violation(r.lineNumber, raw, "Glossary row Short forms '" + c.spelling + "' of '" + c.term +
+      "' overlaps '" + c.other + "' (a headword or another short form)");
+  });
 }
 
 function checkIntentGlossary(text) {
@@ -236,7 +249,7 @@ function checkIntentGlossary(text) {
   // Prose without a table is rejected: glossary promotion can only parse the table.
   if (p.table.length === 0) {
     const b = p.body[0];
-    out.push(violation(b.lineNumber, b.text, "Glossary body must be empty or a " + HEADER_TEXT + " table"));
+    out.push(violation(b.lineNumber, b.text, "Glossary body must be empty or a table with the header " + HEADER_TEXT));
     return out;
   }
   return out.concat(checkTable(p));

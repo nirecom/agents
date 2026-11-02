@@ -114,6 +114,31 @@ test("invalid-name-prompt-data-exits-2-with-the-message", () => noNewFailures(fa
 }));
 caseEnd();
 
+// #2763: checkFiles also blocks a Short forms spelling of one file equal to a headword of the
+// other file; each file alone is valid, so only the cross-file check can see it.
+caseBegin("check-files-short-forms-cross-file-overlap", "bin/lib/glossary-format/files.js");
+test("check-files-short-forms-cross-file-overlap", () => noNewFailures(fails, () => {
+  const dir = path.join(TMP, "short-forms-overlap");
+  fs.mkdirSync(dir, { recursive: true });
+  const user = path.join(dir, "user.md");
+  fs.writeFileSync(user, "# Glossary — user terms\n\n### alpha gate\n\n- **Definition**: A gated term.\n" +
+    "- **Short forms**: `gate`\n- **Related**: [README.md](../../README.md)\n");
+  const pairs = (internalTerm) => {
+    const internal = path.join(dir, `internal-${internalTerm}.md`);
+    fs.writeFileSync(internal, c.glossaryText("internal", [[internalTerm, "An internal term."]]));
+    return [{ label: "docs/glossary/user.md", file: user }, { label: "docs/glossary/internal.md", file: internal }];
+  };
+  check("a short form equal to the other file's headword is a BLOCK naming the entry", () => {
+    const blocks = files().checkFiles(pairs("gate"));
+    ok(blocks.length > 0 && blocks.every((b) => !/disallowed bullet/.test(b)), `blocks: ${JSON.stringify(blocks)}`);
+    ok(blocks.some((b) => /alpha gate/.test(b) && /internal\.md|'gate'|`gate`/.test(b)), `blocks: ${JSON.stringify(blocks)}`);
+  });
+  check("a short form disjoint from the other file's headwords is no BLOCK (control)", () => {
+    eq(files().checkFiles(pairs("kilo")), [], "blocks");
+  });
+}));
+caseEnd();
+
 caseBegin("invalid-name-codex-block-keeps-its-fail-open-shape", "bin/lib/codex-glossary.sh");
 test("invalid-name-codex-block-keeps-its-fail-open-shape", () => noNewFailures(fails, () => {
   check("codex_glossary_block: the instruction part only, no data block, no misc.md term", () => {

@@ -4,7 +4,7 @@ Two contracts govern exit codes. The internal contract (between `review-loop-ver
 
 ## Escalation by format {#escalation-by-format}
 
-| exit | outline-plan | detail-plan | security-plan / security-code / test-review |
+| exit | `outline-plan` | `detail-plan` | `security-plan` / `security-code` / `test-review` |
 |---|---|---|---|
 | 2 ESCALATE | Present the concern summary, stop the loop, confirm direction via AskUserQuestion, then re-clarify with `/clarify-intent` (MOP-6). No accept CLI. | Present the `review-loop-summarize-concerns` summary, stop the loop, wait for the user's decision. No accept CLI. | Not applicable (no risk signal). |
 | 6 HIGH_UNRESOLVED | Present the summary, stop, return to `/clarify-intent`. No accept CLI. | Present the summary, stop, AskUserQuestion: fix the plan and re-run / abort. No accept CLI. | Present the summary, stop, AskUserQuestion: fix and re-run / accept residual HIGH / abort. Accept → `node "$AGENTS_MAIN_ROOT/bin/accept-exit6-residual" --session <session-id> --format <security-plan\|security-code\|test-review> --reason "<text>"` (review-tests may use its sentinel instead). |
@@ -70,10 +70,10 @@ Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output
 
 | format | RAW_FILE pattern |
 |---|---|
-| detail-plan | `<session-id>-codex-round-<N>-raw.md` |
-| outline-plan | `<session-id>-outline-codex-round-<N>-raw.md` |
-| security-plan | `<session-id>-security-plan-codex-round-<N>-raw.md` |
-| test-review | `<session-id>-test-review-codex-round-<N>-raw.md` |
+| `detail-plan` | `<session-id>-codex-round-<N>-raw.md` |
+| `outline-plan` | `<session-id>-outline-codex-round-<N>-raw.md` |
+| `security-plan` | `<session-id>-security-plan-codex-round-<N>-raw.md` |
+| `test-review` | `<session-id>-test-review-codex-round-<N>-raw.md` |
 
 ### e. Symmetric round log + planner-response trailer
 

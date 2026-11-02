@@ -44,7 +44,7 @@ function describeTermChars(chars) {
   }).join(", ");
 }
 
-// The match keys of the drift matcher, shared with the Identifier / Homographs gate (#2763).
+// The match keys of the drift matcher, shared with the Identifier / Short forms gate (#2763).
 // compactKey: the normalized form without word separators; identKey: lowercased, every separator
 // stripped; identFoldedKey: identKey with each word singularized.
 const compactKey = (s) => normalizeTerm(s).replace(/ /g, "");
@@ -80,19 +80,52 @@ function checkIdentifierSpelling(term, spelling) {
   return null;
 }
 
-// checkHomographSpelling(term, spelling) -> the reason it is refused, or null.
-function checkHomographSpelling(term, spelling) {
+// checkShortFormSpelling(term, spelling) -> the reason it is refused, or null. A short form is a
+// proper subsequence of the headword's words (order kept, fewer words).
+function checkShortFormSpelling(term, spelling) {
   const s = String(spelling == null ? "" : spelling);
-  if (s.trim() === "") return "Homographs spelling is empty";
-  if (compactKey(s) === compactKey(term) || identFoldedKey(s) === identFoldedKey(term) || identKey(s) === identKey(term)) {
-    return "Homographs '" + s + "' is a separator / case variant or word form of the term '" + term +
-      "' itself; it cannot be a homograph";
-  }
-  return null;
+  if (s.trim() === "") return "Short forms spelling is empty";
+  const words = identWords(s);
+  const head = identWords(term == null ? "" : term);
+  let k = 0;
+  for (const w of head) if (k < words.length && words[k] === w) k++;
+  if (k === words.length && words.length < head.length) return null;
+  return "Short forms '" + s + "' must be some of the words of the term '" + term +
+    "' in the same order, fewer than all of them";
+}
+
+// shortFormConflicts(records) -> [{ term, spelling, other }]: a short form whose compactKey equals
+// another record's headword or short form, or repeats one of its own list. records: [{ term, shortForms }].
+function shortFormConflicts(records) {
+  const recs = (records || []).map((r) => ({
+    term: String(r && r.term != null ? r.term : ""),
+    forms: Array.isArray(r && r.shortForms) ? r.shortForms.map(String) : [],
+  }));
+  const owners = new Map();
+  const own = (key, idx, term) => {
+    if (!owners.has(key)) owners.set(key, []);
+    owners.get(key).push({ idx, term });
+  };
+  recs.forEach((r, idx) => {
+    own(compactKey(r.term), idx, r.term);
+    for (const key of new Set(r.forms.map(compactKey))) own(key, idx, r.term);
+  });
+  const out = [];
+  recs.forEach((r, idx) => {
+    const seen = new Set();
+    for (const s of r.forms) {
+      const key = compactKey(s);
+      if (seen.has(key)) out.push({ term: r.term, spelling: s, other: r.term });
+      seen.add(key);
+      const hit = owners.get(key).find((o) => o.idx !== idx);
+      if (hit) out.push({ term: r.term, spelling: s, other: hit.term });
+    }
+  });
+  return out;
 }
 
 module.exports = {
   normalizeTerm, singular, unsafeTermChars, describeTermChars,
   compactKey, identWords, identKey, identFoldedKey,
-  parseSpellingList, checkIdentifierSpelling, checkHomographSpelling,
+  parseSpellingList, checkIdentifierSpelling, checkShortFormSpelling, shortFormConflicts,
 };
