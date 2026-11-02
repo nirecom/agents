@@ -54,33 +54,36 @@ const BACKGROUND = [
   ["a one-word term turn is tolerated as a regular plural", "markdown", "the value turns it on", [], ["turn"]],
 ];
 
-// Plan S4-3: Homographs. A record the gate accepts (statuses for statusline) never changes the
-// candidates; the mechanism (prose only, literal match) is pinned with records the gate refuses.
-const homo = (term, homographs) => ({ term, identifiers: [], homographs });
-const STATUSES = homo("statusline", ["statuses"]);
-const PLAIN_RAW = homo("statusline", ["status-lines"]);
-const IDENT_RAW = homo("status_line", ["status-lines"]);
-const HOMOGRAPHS = [
-  ["gate-accepted homograph keeps separator drift", "markdown", "the status-lines here", [["statusline", "status-lines"]], [STATUSES]],
-  ["gate-accepted homograph control", "markdown", "the statuses here", [], [STATUSES]],
-  ["plain term: literal homograph in prose", "markdown", "the status-lines here", [], [PLAIN_RAW]],
-  ["plain term: sentence-start capital is not the literal homograph", "markdown", "Status-lines are here",
-    [["statusline", "Status-lines"]], [PLAIN_RAW]],
-  ["identifier term: literal homograph in prose", "markdown", "the status-lines here", [], [IDENT_RAW]],
-  ["identifier term: no homograph declared (control)", "markdown", "the status-lines here",
-    [["status_line", "status-lines"]], [homo("status_line", [])]],
-  ["identifier term: homograph inside a code span stays drift", "markdown", "the `status-lines` here",
-    [["status_line", "status-lines"]], [IDENT_RAW]],
-  ["identifier term: sentence-start capital stays drift", "markdown", "Status-lines are here",
-    [["status_line", "Status-lines"]], [IDENT_RAW]],
-  ["identifier term: another word form stays drift", "markdown", "the status lines here",
-    [["status_line", "status lines"]], [IDENT_RAW]],
-  // Plan S3-4(b): a capital-word window is caps mode, where Homographs are not consulted.
-  ["identifier term: literal homograph in prose (control for caps)", "markdown", "the status line here", [],
-    [homo("STATUS_LINE", ["status line"])]],
-  ["identifier term: caps-mode window ignores a literal homograph", "markdown", "the STATUS LINE here",
-    [["STATUS_LINE", "STATUS LINE"]], [homo("STATUS_LINE", ["STATUS LINE"])]],
+// Short forms are a write-time declaration (the entry gate); the drift check never matches them.
+// A record that carries them still indexes its headword only, so a word of a short form in prose
+// is no drift, and the headword itself keeps its usual drift.
+const short = (term, shortForms) => ({ term, identifiers: [], shortForms });
+const DETAIL_PLAN = short("detail plan", ["detail"]);
+const WORKFLOW_STEP = short("workflow step", ["step"]);
+const SHORT_RECS = [DETAIL_PLAN, WORKFLOW_STEP];
+const SHORT_FORMS = [
+  ["a short form used as an ordinary word", "markdown", "do it step by step here", [], SHORT_RECS],
+  ["a plural of a short form", "markdown", `the implementation ${DETAIL_PLURAL} here`, [], SHORT_RECS],
+  ["a capitalised short form mid-sentence", "markdown", "the Detail here", [], SHORT_RECS],
+  ["a common word next to a short-form record", "markdown", "GitHub workflows run here", [], SHORT_RECS.concat(["workflow"])],
+  ["an inflected form is not folded to the term", "markdown", "the job workflowed here", [], SHORT_RECS.concat(["workflow"])],
+  ["the headword itself (control)", "markdown", "the detail plan here", [], SHORT_RECS],
+  ["the headword keeps its separator drift", "markdown", "the detail-plan here", [["detail plan", "detail-plan"]], SHORT_RECS],
 ];
+
+// The term index holds the headword only: no key, exact spelling or record field for a short form.
+function runShortFormsIndex(F) {
+  const terms = F.mod("bin/lib/glossary-drift/terms.js");
+  if (!terms) return;
+  const index = terms.indexTerms(SHORT_RECS);
+  F.check("indexTerms: exact holds the headwords only",
+    JSON.stringify([...index.exact].sort()) === JSON.stringify(["detail plan", "workflow step"]), JSON.stringify([...index.exact]));
+  F.check("indexTerms: no plain key for a short form",
+    !index.plain.has("detail") && !index.plain.has("step") && index.plain.has("detailplan"), JSON.stringify([...index.plain.keys()]));
+  const rec = terms.termRecord(DETAIL_PLAN);
+  F.check("termRecord keeps { term, identifiers } and drops Short forms",
+    JSON.stringify(rec) === JSON.stringify({ term: "detail plan", identifiers: [] }), JSON.stringify(rec));
+}
 
 // Plan S4-4: the fixed detail-plan schema headings, matched against the terms of the real glossary.
 function glossaryTerms() {
@@ -95,12 +98,13 @@ function glossaryTerms() {
 const SCHEMA_DOC = ["Delivery plan", "Background", "Files to modify", "Steps", "Risks & edge cases", "Out of scope"]
   .map((h) => `## ${h}\n\nbody text here.\n`).join("\n");
 
-function runHomographs(F) {
+function runShortForms(F) {
   runTable(F, "prose background", BACKGROUND);
-  runTable(F, "prose homographs", HOMOGRAPHS);
+  runTable(F, "prose short forms", SHORT_FORMS);
+  runShortFormsIndex(F);
   const terms = glossaryTerms();
   F.check("real glossary has terms", terms.length > 10, String(terms.length));
   runTable(F, "prose schema", [["detail-plan schema headings", "markdown", SCHEMA_DOC, [], terms]]);
 }
 
-module.exports = { run, runHomographs };
+module.exports = { run, runShortForms };

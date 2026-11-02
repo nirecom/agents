@@ -9,10 +9,10 @@ const ADH = "allow-deny hook";
 // Line 3 drifts whenever the term is live, so a record the scan silently drops cannot pass a row.
 const TEXT = `"use strict";\n// a mid-line allow-deny-hook here\n// the Allow-deny hook here\nmodule.exports = 1;\n`;
 const LIVE = [ADH, "Allow-deny hook"];
-const rec = (identifiers) => ({ term: ADH, identifiers, homographs: [] });
-const row = (operation, identifiers) => (identifiers === undefined
+const rec = (identifiers) => ({ term: ADH, identifiers });
+const row = (operation, identifiers, shortForms) => (identifiers === undefined
   ? { term: ADH, category: "internal", operation, definition: "A hook." }
-  : { term: ADH, category: "internal", operation, definition: operation === "delete" ? "" : "A hook.", identifiers, homographs: [] });
+  : { term: ADH, category: "internal", operation, definition: operation === "delete" ? "" : "A hook.", identifiers, shortForms: shortForms || [] });
 
 const ROWS = [
   ["string term, nothing declared (baseline)", [ADH], [], [[ADH, "allow-deny-hook"], LIVE]],
@@ -21,6 +21,8 @@ const ROWS = [
   ["V3 row declares an Identifier the glossary lacks", [rec([])], [row("redefine", ["allow-deny-hook"])], [LIVE]],
   ["V2 row leaves the glossary field in place", [rec(["allow-deny-hook"])], [row("redefine")], [LIVE]],
   ["V3 delete row removes a term held as a record", [rec(["allow-deny-hook"]), "workflow step"], [row("delete", [])], []],
+  // Short forms never reach the drift index: a V3 row's Short forms change no finding.
+  ["V3 row with Short forms matches like the row without them", [rec([])], [row("redefine", ["allow-deny-hook"], ["hook"])], [LIVE]],
 ];
 
 function run(F) {

@@ -17,17 +17,17 @@ function worktreeRootOf(repoDir) {
   return toWindowsPath(top);
 }
 
-// One record per exact term: the entries of one term (in several files) pool their fields.
+// One record per exact term: the entries of one term (in several files) pool their Identifier
+// spellings. Short forms stay out: the drift matcher never matches them.
 function addRecord(records, e) {
-  const f = entryFields(e);
+  const { identifiers } = entryFields(e);
   const prev = records.get(e.term);
-  if (!prev) { records.set(e.term, Object.assign({ term: e.term }, f)); return; }
-  prev.identifiers = [...new Set(prev.identifiers.concat(f.identifiers))];
-  prev.homographs = [...new Set(prev.homographs.concat(f.homographs))];
+  if (!prev) { records.set(e.term, { term: e.term, identifiers }); return; }
+  prev.identifiers = [...new Set(prev.identifiers.concat(identifiers))];
 }
 
 // combinedGlossary(opts) -> { ok, files: [{ label, category, sha }], terms, digest, legacy };
-// terms are the records { term, identifiers, homographs } (#2763), one per exact term.
+// terms are the records { term, identifiers } (#2763), one per exact term.
 function combinedGlossary(opts) {
   try {
     const listed = listMainGlossaryFiles(worktreeRootOf(opts.repoDir));
@@ -50,11 +50,12 @@ function combinedGlossary(opts) {
 
 // The term stays case-exact: the drift scan (glossary-drift.js indexTerms) treats the exact
 // spelling as the non-variant form, so a case-only change moves the scan and must move the digest.
-// A V3 row's fields feed the scan too; a V1 / V2 row keeps the four-value key.
+// A V3 row's fields are part of the approved row (Identifier also feeds the scan); a V1 / V2 row
+// keeps the four-value key.
 function rowsDigest(rows) {
   const keys = rows.map((r) => {
     const key = [String(r.term), r.category, r.operation, normalizeDefinition(r.definition)];
-    if (Array.isArray(r.identifiers)) key.push(r.identifiers, r.homographs);
+    if (Array.isArray(r.identifiers)) key.push(r.identifiers, r.shortForms);
     return JSON.stringify(key);
   }).sort();
   return sha256(JSON.stringify(keys));

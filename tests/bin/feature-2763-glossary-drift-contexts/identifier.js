@@ -109,12 +109,12 @@ function run(F) {
   runTable(F, "identifier", ROWS, TERMS);
 }
 
-// Plan S4-1 / S3-6: declared Identifier spellings, passed as term records { term, identifiers,
-// homographs }. Only the literal declared spelling is excluded; every other spelling stays drift.
+// Plan S4-1 / S3-6: declared Identifier spellings, passed as term records { term, identifiers }.
+// Only the literal declared spelling is excluded; every other spelling stays drift.
 const FB = "fizz-buzz gate";
-const REC = { term: FB, identifiers: ["fizz-buzz-gate"], homographs: [] };
-const ALLOW = { term: "allow-deny hook", identifiers: ["allow-deny-hook", "allow_deny_hook"], homographs: [] };
-const ROOTS = [{ term: ROOT_ID, identifiers: [], homographs: [] }, { term: "TARGET_MAIN_ROOT", identifiers: [], homographs: [] }];
+const REC = { term: FB, identifiers: ["fizz-buzz-gate"] };
+const ALLOW = { term: "allow-deny hook", identifiers: ["allow-deny-hook", "allow_deny_hook"] };
+const ROOTS = [{ term: ROOT_ID, identifiers: [] }, { term: "TARGET_MAIN_ROOT", identifiers: [] }];
 const DECLARED_ROWS = [
   ["declared kebab mid-line in a code comment", "code", code("// a mid-line fizz-buzz-gate here"), [], [REC]],
   ["declared kebab mid-line in markdown prose", "markdown", "a mid-line fizz-buzz-gate here", [], [REC]],
@@ -142,7 +142,7 @@ const DECLARED_ROWS = [
   // S3-1 termRecord: records (and a plain string) of one term are merged, so every declared spelling counts.
   ["same term in two records: both declared spellings are excluded", "code",
     code("// a mid-line fizz-buzz-gate and fizz_buzz_gate here"), [],
-    [REC, { term: FB, identifiers: ["fizz_buzz_gate"], homographs: [] }]],
+    [REC, { term: FB, identifiers: ["fizz_buzz_gate"] }]],
   ["same term as a string then a record: the record's spelling is excluded", "code",
     code("// a mid-line fizz-buzz-gate here"), [], [FB, REC]],
   ["same term as a record then a string: the record's spelling is excluded", "code",

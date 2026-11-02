@@ -1,6 +1,6 @@
 "use strict";
 // Combined-glossary data for codex prompts (#2529): `### term` + Definition (+ Identifier /
-// Homographs, #2763) per entry.
+// Short forms, #2763) per entry.
 
 const fs = require("fs");
 const { parseGlossaryFile } = require("./entries");
@@ -13,10 +13,10 @@ function neutralize(s) {
     .replace(/-->/g, "--)");
 }
 
-const PROMPT_BULLETS = ["Definition", "Identifier", "Homographs"];
+const PROMPT_BULLETS = ["Definition", "Identifier", "Short forms"];
 
-// The `### term` line plus the Definition, Identifier and Homographs bullets as written
-// (continuation lines kept); Related stays out.
+// The `### term` line plus the Definition, Identifier and Short forms bullets as written
+// (continuation lines kept); Related stays out. The reviewer learns the short forms from here.
 function promptEntryLines(lines, e) {
   const out = [neutralize(lines[e.lineNumber - 1])];
   for (const key of PROMPT_BULLETS) {

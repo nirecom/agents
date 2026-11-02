@@ -91,6 +91,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: A marker string of the form `<<WORKFLOW_...>>` that hooks detect to drive workflow state — step-complete marks, skip declarations, OFF switches, and the like.
 - **Related**: [skills/enforce-workflow-off/SKILL.md](../../skills/enforce-workflow-off/SKILL.md)
 
+### short form
+
+- **Definition**: glossary エントリの `Short forms` 欄に宣言する、見出し語の短縮形。見出し語の語の一部からなり、文脈が見出し語の概念を指すときだけ見出し語として読む。
+- **Related**: [rules/docs/glossary.md](../../rules/docs/glossary.md)
+
 ### state handoff record
 
 - **Definition**: session の引き継ぎのために hook と skill の手順が workflow の state に追記する event。compaction、gate の block、supervisor の判定、手順の結果を持ち、`/resume-session` と supervisor codex engine が読む。main conversation 自身の事実は session-progress.md に書く。
@@ -117,6 +122,5 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### workflow step
 
-- **Definition**: One unit of `next-step --list` (`workflow_init` … `final_report`), abbreviated to step: a bare "step" always means a workflow step.
-  The planning steps (`clarify_intent`, `outline`, `detail`) are workflow steps too; prose never restates the size of the set.
+- **Definition**: `next-step --list` の 1 単位（`workflow_init` … `final_report`）。
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)

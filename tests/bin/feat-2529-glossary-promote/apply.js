@@ -104,13 +104,13 @@ function blockOf(text, term) {
   return t.slice(at, next < 0 ? undefined : next);
 }
 
-// #2763 S2-5: a V3 row writes its Identifier / Homographs bullets (order Definition, Identifier,
-// Homographs, Related); a V2 redefine row leaves the bullets already in the entry as they are.
-const V3_TABLE = "| Term | Category | Operation | Definition | Identifier | Homographs |\n|---|---|---|---|---|---|\n";
+// #2763 S2-5: a V3 row writes its Identifier / Short forms bullets (order Definition, Identifier,
+// Short forms, Related); a V2 redefine row leaves the bullets already in the entry as they are.
+const V3_TABLE = "| Term | Category | Operation | Definition | Identifier | Short forms |\n|---|---|---|---|---|---|\n";
 function writesIdentifierFields() {
   const NEW = "The first fixture term, declared.";
   const v3 = V3_TABLE +
-    "| beta gate | user | add | A promoted gate. | `beta-gate` | `beta gating` |\n" +
+    "| beta gate | user | add | A promoted gate. | `beta-gate` | `gate` |\n" +
     `| alpha | user | redefine | ${NEW} | \`ALPHA\` |  |\n`;
   const { repo, intent } = session("v3-fields", [], { glossary: v3 });
   check("T3-5 V3 add + redefine rows: exit 0, ADDED=1 REDEFINED=1", () => {
@@ -119,9 +119,9 @@ function writesIdentifierFields() {
     const n = counters(r.out);
     eq([n.ADDED, n.REDEFINED], [1, 1], "ADDED / REDEFINED");
   });
-  check("T3-5 a V3 add writes the Identifier and Homographs bullets between Definition and Related", () => {
+  check("T3-5 a V3 add writes the Identifier and Short forms bullets between Definition and Related", () => {
     const block = blockOf(readFile(repo, "docs/glossary/user.md"), "beta gate");
-    ok(/- \*\*Definition\*\*: A promoted gate\.\n- \*\*Identifier\*\*: `beta-gate`\n- \*\*Homographs\*\*: `beta gating`\n- \*\*Related\*\*:/.test(block),
+    ok(/- \*\*Definition\*\*: A promoted gate\.\n- \*\*Identifier\*\*: `beta-gate`\n- \*\*Short forms\*\*: `gate`\n- \*\*Related\*\*:/.test(block),
       `beta gate entry: ${block}`);
   });
   check("T3-5 a V3 redefine writes the Identifier bullet after the new Definition", () => {
@@ -151,25 +151,34 @@ function emptyCellsWriteNoFields() {
   const c = require("./lib");
   const userKey = "docs/glossary/user.md";
   const files = Object.assign({}, c.BASE || {});
-  const tagged = String(files[userKey] || "").replace(/(### alpha\n\n- \*\*Definition\*\*: [^\n]*\n)/, "$1- **Identifier**: `ALPHA`\n");
+  // alpha carries an Identifier; the added alpha gate entry carries a Short forms bullet.
+  const ALPHA_GATE = "### alpha gate\n\n- **Definition**: A gated term.\n- **Short forms**: `gate`\n- **Related**: [README.md](../../README.md)\n";
+  const tagged = String(files[userKey] || "").replace(/(### alpha\n\n- \*\*Definition\*\*: [^\n]*\n)/, "$1- **Identifier**: `ALPHA`\n")
+    .replace(/\n### omega\n/, `\n${ALPHA_GATE}\n### omega\n`);
   const repo = c.mkRepo("v3-empty-cells", Object.assign(files, { [userKey]: tagged }));
-  const v3 = V3_TABLE + "| gamma gate | user | add | A plain gate. |  |  |\n" + `| alpha | user | redefine | ${NEW} |  |  |\n`;
+  const v3 = V3_TABLE + "| gamma gate | user | add | A plain gate. |  |  |\n" + `| alpha | user | redefine | ${NEW} |  |  |\n` +
+    "| alpha gate | user | redefine | A gated term, cleared. |  |  |\n";
   const sid = c.approvedSession("v3-empty-cells", [], { cwd: repo, glossary: v3 });
-  check("T3-5 V3 add + redefine rows with empty cells: exit 0, ADDED=1 REDEFINED=1", () => {
+  check("T3-5 V3 add + redefine rows with empty cells: exit 0, ADDED=1 REDEFINED=2", () => {
     ok(/Identifier/.test(tagged), `fixture alpha entry carries an Identifier: ${tagged}`);
+    ok(/### alpha gate\n[\s\S]*- \*\*Short forms\*\*: `gate`/.test(tagged), `fixture alpha gate entry carries Short forms: ${tagged}`);
     const r = promote(c.intentPath(sid), repo);
     eq(r.code, 0, `exit (out: ${r.all})`);
     const n = counters(r.out);
-    eq([n.ADDED, n.REDEFINED], [1, 1], "ADDED / REDEFINED");
+    eq([n.ADDED, n.REDEFINED], [1, 2], "ADDED / REDEFINED");
   });
-  check("T3-5 a V3 add with both cells empty writes no Identifier or Homographs bullet", () => {
+  check("T3-5 a V3 add with both cells empty writes no Identifier or Short forms bullet", () => {
     const block = blockOf(readFile(repo, userKey), "gamma gate");
-    ok(/- \*\*Definition\*\*: A plain gate\.\n- \*\*Related\*\*:/.test(block) && !/Identifier|Homographs/.test(block),
+    ok(/- \*\*Definition\*\*: A plain gate\.\n- \*\*Related\*\*:/.test(block) && !/Identifier|Short forms/.test(block),
       `gamma gate entry: ${block}`);
   });
   check("T3-5 a V3 redefine with an empty Identifier cell removes the existing Identifier bullet", () => {
     const block = blockOf(readFile(repo, userKey), "alpha");
     ok(block.includes(`- **Definition**: ${NEW}`) && !/Identifier/.test(block), `alpha entry: ${block}`);
+  });
+  check("T3-5 a V3 redefine with an empty Short forms cell removes the existing Short forms bullet", () => {
+    const block = blockOf(readFile(repo, userKey), "alpha gate");
+    ok(block.includes("- **Definition**: A gated term, cleared.") && !/Short forms/.test(block), `alpha gate entry: ${block}`);
   });
 }
 

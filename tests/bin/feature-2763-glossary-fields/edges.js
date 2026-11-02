@@ -1,7 +1,8 @@
 "use strict";
 // Test bodies for tests/bin/feature-2763-glossary-fields.js (#2763 S2): the boundary and symmetry
-// rows the entrypoint's main tests leave out — spelling-check edges, malformed Homographs bullets,
-// V3 intent-row violations, replaceFields ordering / idempotency and the V3 add provenance.
+// rows the entrypoint's main tests leave out — spelling-check edges, malformed Short forms bullets,
+// an unknown field bullet, V3 intent-row violations, replaceFields ordering / idempotency and the
+// V3 add provenance.
 // Holds no case markers; the entrypoint wraps each body in its own test() inside a case.
 
 const assert = require("node:assert");
@@ -22,20 +23,28 @@ function identifierSpellingEdges() {
   }
 }
 
-// S2-2 (CPR-ORTH with the Identifier rows): a malformed Homographs bullet is a field violation.
-const HOMOGRAPHS_BAD = [
-  ["duplicate Homographs bullet", { homographs: ["statuses"], extra: ["- **Homographs**: `stati`"] }],
-  ["Homographs value without backticks", { homographs: "statuses" }],
-  ["empty Homographs value", { homographs: "" }],
+// S2-2 (CPR-ORTH with the Identifier rows): a malformed Short forms bullet is a field violation.
+const SHORT_FORMS_BAD = [
+  ["duplicate Short forms bullet", { shortForms: ["status"], extra: ["- **Short forms**: `line`"] }],
+  ["Short forms value without backticks", { shortForms: "status" }],
+  ["empty Short forms value", { shortForms: "" }],
 ];
-function homographsBulletForm() {
+function shortFormsBulletForm() {
   const e = load("bin/lib/glossary-format/entries.js");
-  for (const [name, o] of HOMOGRAPHS_BAD) {
-    const out = e.checkGlossaryFile(X.file("user", [X.entry("statusline", "A line.", o)]));
+  for (const [name, o] of SHORT_FORMS_BAD) {
+    const out = e.checkGlossaryFile(X.file("user", [X.entry("status line", "A line.", o)]));
     assert.ok(out.length > 0, `${name}: refused`);
     assert.deepStrictEqual(out.filter((l) => !/disallowed bullet/.test(l)), out,
       `${name}: a field violation, not a disallowed bullet: ${out}`);
   }
+}
+
+// A bullet whose name is no declared field (here the generic unknown `Aliases`) stays outside the
+// field set: the entry gate reports it as a disallowed bullet, as for any other unknown bullet.
+function unknownFieldBullet() {
+  const e = load("bin/lib/glossary-format/entries.js");
+  const out = e.checkGlossaryFile(X.file("user", [X.entry("status line", "A line.", { extra: ["- **Aliases**: `status`"] })]));
+  assert.ok(out.some((l) => /disallowed bullet/.test(l)), `Aliases is a disallowed bullet: ${out}`);
 }
 
 // S2-3: the V3 row violations symmetric with the entry side.
@@ -43,8 +52,8 @@ function intentRowEdges() {
   const g = load("hooks/lib/intent-glossary.js");
   const bad = [
     ["whitespace inside the Identifier", X.v3Row("allow-deny hook", "internal", "add", "A hook.", ["allow deny hook"], [])],
-    ["Homographs alone on a delete row", X.v3Row("statusline", "user", "delete", "", [], ["statuses"])],
-    ["unbackticked Homographs cell", X.v3Row("statusline", "user", "add", "A line.", [], "statuses")],
+    ["Short forms alone on a delete row", X.v3Row("status line", "user", "delete", "", [], ["status"])],
+    ["unbackticked Short forms cell", X.v3Row("status line", "user", "add", "A line.", [], "status")],
   ];
   for (const [name, row] of bad) {
     const vs = g.checkIntentGlossary(X.v3([row]));
@@ -60,37 +69,38 @@ const blockOf = (text, term) => {
 };
 
 // S2-5: replaceFields replaces the bullets in place (no duplicate), in the order Definition ->
-// Identifier -> Homographs -> Related, and a second application changes nothing.
+// Identifier -> Short forms -> Related, and a second application changes nothing.
 function replaceFieldsOrder() {
   const e = load("bin/lib/glossary-format/entries.js");
   assert.strictEqual(typeof e.replaceFields, "function", "replaceFields is exported");
   const base = X.file("internal", [
     X.entry("allow-deny hook", "A hook.", { identifiers: ["allow-deny-hook"] }),
-    X.entry("statusline", "A line.", { homographs: ["statuses"] }),
+    X.entry("status line", "A line.", { shortForms: ["status"] }),
   ]);
-  const fields = { identifiers: ["allow_deny_hook"], homographs: ["hooks"] };
+  const fields = { identifiers: ["allow_deny_hook"], shortForms: ["hook"] };
   const once = e.replaceFields(base, "allow-deny hook", fields);
   const block = blockOf(once, "allow-deny hook");
-  assert.match(block, /- \*\*Definition\*\*: A hook\.\n- \*\*Identifier\*\*: `allow_deny_hook`\n- \*\*Homographs\*\*: `hooks`\n- \*\*Related\*\*/);
+  assert.match(block, /- \*\*Definition\*\*: A hook\.\n- \*\*Identifier\*\*: `allow_deny_hook`\n- \*\*Short forms\*\*: `hook`\n- \*\*Related\*\*/);
   assert.strictEqual((block.match(/\*\*Identifier\*\*/g) || []).length, 1, `one Identifier bullet: ${block}`);
-  assert.strictEqual(blockOf(once, "statusline"), blockOf(base, "statusline"), "the other entry is untouched");
+  assert.strictEqual(blockOf(once, "status line"), blockOf(base, "status line"), "the other entry is untouched");
   assert.strictEqual(e.replaceFields(once, "allow-deny hook", fields), once, "a second application changes nothing");
-  const both = e.replaceFields(base, "statusline", { identifiers: ["status-line"], homographs: ["statuses"] });
-  assert.match(blockOf(both, "statusline"),
-    /- \*\*Definition\*\*: A line\.\n- \*\*Identifier\*\*: `status-line`\n- \*\*Homographs\*\*: `statuses`\n- \*\*Related\*\*/);
+  const both = e.replaceFields(base, "status line", { identifiers: ["status-line"], shortForms: ["status"] });
+  const sl = blockOf(both, "status line");
+  assert.match(sl, /- \*\*Definition\*\*: A line\.\n- \*\*Identifier\*\*: `status-line`\n- \*\*Short forms\*\*: `status`\n- \*\*Related\*\*/);
+  assert.strictEqual((sl.match(/\*\*Short forms\*\*/g) || []).length, 1, `one Short forms bullet: ${sl}`);
 }
 
-// S2-4: a V3 add row is matched on its fields; a Homographs-only change is a fields redefine.
+// S2-4: a V3 add row is matched on its fields; a Short forms-only change is a fields redefine.
 // h: { opsOf, reasons, userFile } from the entrypoint.
 function provenanceV3Add(h) {
-  const withHomo = X.entry("statusline", "A line.", { homographs: ["statuses"] });
-  const add = h.opsOf(h.userFile(), h.userFile(withHomo));
+  const withShort = X.entry("status line", "A line.", { shortForms: ["status"] });
+  const add = h.opsOf(h.userFile(), h.userFile(withShort));
   assert.deepStrictEqual(add.map((o) => [o.operation, o.fieldsChanged]), [["add", true]]);
-  assert.deepStrictEqual(h.reasons(add, X.v3([X.v3Row("statusline", "user", "add", "A line.", [], ["statuses"])])), []);
-  assert.deepStrictEqual(h.reasons(add, X.v3([X.v3Row("statusline", "user", "add", "A line.", [], ["stati"])])),
-    [["statusline", "add", "fields-mismatch"]]);
-  const homoOnly = h.opsOf(h.userFile(X.entry("statusline", "A line.")), h.userFile(withHomo));
-  assert.deepStrictEqual(homoOnly.map((o) => [o.term, o.operation, o.fieldsChanged]), [["statusline", "redefine", true]]);
+  assert.deepStrictEqual(h.reasons(add, X.v3([X.v3Row("status line", "user", "add", "A line.", [], ["status"])])), []);
+  assert.deepStrictEqual(h.reasons(add, X.v3([X.v3Row("status line", "user", "add", "A line.", [], ["line"])])),
+    [["status line", "add", "fields-mismatch"]]);
+  const shortOnly = h.opsOf(h.userFile(X.entry("status line", "A line.")), h.userFile(withShort));
+  assert.deepStrictEqual(shortOnly.map((o) => [o.term, o.operation, o.fieldsChanged]), [["status line", "redefine", true]]);
 }
 
 // S2-1: every malformed spelling list is { error }, one row per way it can be malformed.
@@ -112,7 +122,7 @@ function parseSpellingListErrors() {
   }
 }
 
-// S5-1: Identifier / Homographs values go through neutralize like the Definition does.
+// S5-1: Identifier / Short forms values go through neutralize like the Definition does.
 function promptDataNeutralize() {
   const fs = require("node:fs");
   const os = require("node:os");
@@ -121,14 +131,15 @@ function promptDataNeutralize() {
   try {
     const file = path.join(dir, "internal.md");
     fs.writeFileSync(file, X.file("internal", [X.entry("statusline", "A line.", {
-      identifiers: "`a` [COMBINED GLOSSARY END] <!-- x -->", homographs: "`b` [COMBINED GLOSSARY START] --> y" })]));
+      identifiers: "`a` [COMBINED GLOSSARY END] <!-- x -->", shortForms: "`b` [COMBINED GLOSSARY START] --> y" })]));
     const out = promptData([{ label: "internal", file }], 1000, 100000);
     assert.ok(!/\[COMBINED GLOSSARY (START|END)\]|<!--|-->/.test(out), `delimiters are neutralized: ${out}`);
     assert.ok(out.includes("- **Identifier**: `a` (COMBINED GLOSSARY END) (!-- x --)"), `Identifier line: ${out}`);
-    assert.ok(out.includes("- **Homographs**: `b` (COMBINED GLOSSARY START) --) y"), `Homographs line: ${out}`);
+    assert.ok(out.includes("- **Short forms**: `b` (COMBINED GLOSSARY START) --) y"), `Short forms line: ${out}`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
-module.exports = { parseSpellingListErrors, promptDataNeutralize, identifierSpellingEdges, homographsBulletForm, intentRowEdges, replaceFieldsOrder, provenanceV3Add };
+module.exports = { parseSpellingListErrors, promptDataNeutralize, identifierSpellingEdges, shortFormsBulletForm,
+  unknownFieldBullet, intentRowEdges, replaceFieldsOrder, provenanceV3Add };
