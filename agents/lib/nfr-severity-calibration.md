@@ -7,7 +7,7 @@ Retrieve and apply the project's NFR block before reviewing or planning; this sh
 1. Resolve the repo root (standalone Bash call): `git rev-parse --show-toplevel`
 2. Fetch the NFR block (second standalone Bash call — do NOT chain with `&&`): `bash "$AGENTS_MAIN_ROOT/bin/project-nfr-block" <ROOT>`
 
-Reviewers: in step 2 run `bash "$AGENTS_MAIN_ROOT/bin/review-criteria-block" <ROOT>` instead, and apply its output as the review criteria; never Read `agents/lib/review-criteria.md` or `skills/_shared/severity.md` directly.
+Reviewers: in step 2 run `bash "$AGENTS_MAIN_ROOT/bin/review-criteria-block" <ROOT>` instead, and apply its output as the review criteria; never Read `skills/_shared/review-criteria.md` or `skills/_shared/severity.md` directly.
 
 ## Handling the output
 

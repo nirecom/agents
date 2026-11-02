@@ -32,7 +32,7 @@ ck "calibration: names bin/review-criteria-block" "yes" "$(has "$CALIB" 'bin/rev
 ck "calibration: still names bin/project-nfr-block" "yes" "$(has "$CALIB" 'bin/project-nfr-block')"
 ck "calibration: no 'standard adversarial'" "no" "$(has "$CALIB" 'standard adversarial')"
 ck "calibration: reviewers never Read the two files directly" "yes" \
-  "$(has "$CALIB" 'never Read `agents/lib/review-criteria.md` or `skills/_shared/severity.md` directly')"
+  "$(has "$CALIB" 'never Read `skills/_shared/review-criteria.md` or `skills/_shared/severity.md` directly')"
 case_end
 
 case_begin "reviewer-thoroughness-words-removed" "agents/detail-reviewer.md"

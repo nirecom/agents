@@ -66,7 +66,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### review criteria
 - **Definition**: plan review の 4 format、code review、CC fallback reviewer が共通に参照する review 基準。範囲、網羅、報告の最低条件、severity の定義、NFR の遵守を 1 か所に置く。
-- **Related**: [agents/lib/review-criteria.md](../../agents/lib/review-criteria.md)
+- **Related**: [skills/_shared/review-criteria.md](../../skills/_shared/review-criteria.md)
 
 ### review round
 

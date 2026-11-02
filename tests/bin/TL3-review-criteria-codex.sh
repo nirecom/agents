@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/bin/TL3-review-criteria-codex.sh
-# Tests: bin/review-plan-codex, agents/lib/review-criteria.md
+# Tests: bin/review-plan-codex, skills/_shared/review-criteria.md
 # Tags: review-criteria, codex, bin, tl3, scope:common
 # T9 (#2814): real codex judges three detail fixtures against one intent/outline pair.
 

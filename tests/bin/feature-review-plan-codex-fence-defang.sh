@@ -277,8 +277,7 @@ mkdir -p "$TREE/skills/_shared"
 cp -r "$AGENTS_ROOT/skills/_shared/priority-hierarchy" "$TREE/skills/_shared/priority-hierarchy"
 # #2814: the review criteria block is read from the same tree (fail-closed when unreadable).
 cp "$AGENTS_ROOT/skills/_shared/severity.md" "$TREE/skills/_shared/severity.md"
-mkdir -p "$TREE/agents/lib"
-cp "$AGENTS_ROOT/agents/lib/review-criteria.md" "$TREE/agents/lib/review-criteria.md"
+cp "$AGENTS_ROOT/skills/_shared/review-criteria.md" "$TREE/skills/_shared/review-criteria.md"
 CAP_OK="$TMPDIR_BASE/prompt-tree-ok.txt"
 run_plan "$TREE/bin/review-plan-codex" detail-plan "$CAP_OK"
 assert_eq "fail-closed: the complete copied tree reviews normally (control)" \

@@ -39,7 +39,7 @@ _codex_core_criteria_body() {
 codex_core_review_criteria_block() {
   local root="${1:-}" _dir crit sev
   _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  crit="$(_codex_core_criteria_body "$_dir/../../agents/lib/review-criteria.md" && printf x)" || return 1
+  crit="$(_codex_core_criteria_body "$_dir/../../skills/_shared/review-criteria.md" && printf x)" || return 1
   sev="$(_codex_core_criteria_body "$_dir/../../skills/_shared/severity.md" && printf x)" || return 1
   printf '[REVIEW CRITERIA START]\n%s[REVIEW CRITERIA END]\n\n[SEVERITY DEFINITION START]\n%s[SEVERITY DEFINITION END]\n\n' "${crit%x}" "${sev%x}"
   if [[ -n "$root" ]]; then

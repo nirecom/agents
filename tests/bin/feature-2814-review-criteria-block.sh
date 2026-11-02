@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2814-review-criteria-block.sh
-# Tests: bin/lib/codex-review-criteria.sh, bin/review-criteria-block, bin/lib/codex-core.sh, agents/lib/review-criteria.md, skills/_shared/severity.md
+# Tests: bin/lib/codex-review-criteria.sh, bin/review-criteria-block, bin/lib/codex-core.sh, skills/_shared/review-criteria.md, skills/_shared/severity.md
 # Tags: TL2, codex, review, review-criteria, severity, nfr, prompt, fail-closed, issue-2814, scope:issue-specific, pwsh-not-required
 # #2814 reopen R1 (T2, T10): codex_core_review_criteria_block emits [REVIEW CRITERIA], then
 # [SEVERITY DEFINITION], then the PROJECT NFR block; example blocks are stripped before delivery
@@ -20,7 +20,7 @@ unset CLAUDE_CODE_SESSION_ID PROJECT_NFR
 cd "$RC_ROOT" || exit 1
 
 REAL="$SCRIPT_CHECKOUT_ROOT"
-CRIT_SRC="$REAL/agents/lib/review-criteria.md"
+CRIT_SRC="$REAL/skills/_shared/review-criteria.md"
 SEV_SRC="$REAL/skills/_shared/severity.md"
 ck() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$(printf '%q' "$2") got=$(printf '%q' "${3:0:300}")"; fi; }
 yn() { if "$@"; then printf yes; else printf no; fi; }
@@ -72,10 +72,10 @@ case_end
 
 # A copied tree whose two canonical files are fixtures; root stays empty (no NFR lookup).
 TREE="$RC_ROOT/tree"
-mkdir -p "$TREE/bin" "$TREE/agents/lib" "$TREE/skills/_shared"
+mkdir -p "$TREE/bin" "$TREE/skills/_shared"
 cp -r "$REAL/bin/lib" "$TREE/bin/lib"
 [ -f "$REAL/bin/review-criteria-block" ] && cp "$REAL/bin/review-criteria-block" "$TREE/bin/review-criteria-block"
-T_CRIT="$TREE/agents/lib/review-criteria.md"; T_SEV="$TREE/skills/_shared/severity.md"
+T_CRIT="$TREE/skills/_shared/review-criteria.md"; T_SEV="$TREE/skills/_shared/severity.md"
 printf '# Fixture criteria\n## Scope\nkeep-1\n<!-- example -->\nEXSECRET-A\n<!-- /example -->\nkeep-2\n<!-- example -->\r\nEXSECRET-B\r\n<!-- /example -->\r\nkeep-3\r\nInline <!-- example --> mention stays\n' > "$T_CRIT"
 printf '# Fixture severity\n- HIGH: fixture\n<!-- example -->\nEXSECRET-C\n<!-- /example -->\n' > "$T_SEV"
 WANT_CRIT="$RC_ROOT/want-crit.txt"
@@ -112,7 +112,7 @@ fn "$TREE" codex_core_review_criteria_block ""
 ck "malformed via block: rc 1" "1" "$FN_RC"
 ck "malformed via block: no stdout" "0" "$(wc -c < "$OUT" | tr -d ' ')"
 ck "malformed via block: one stderr line naming the function and the criteria path" "1" \
-  "$(grep -c -E '^codex_core_review_criteria_block: .+: .*agents/lib/review-criteria\.md' "$ERR")"
+  "$(grep -c -E '^codex_core_review_criteria_block: .+: .*skills/_shared/review-criteria\.md' "$ERR")"
 mv "$T_CRIT.good" "$T_CRIT"
 case_end
 
@@ -128,7 +128,7 @@ case_end
 
 case_begin "missing-file-fails-closed" "bin/review-criteria-block"
 for leg in crit sev; do
-  f="$T_CRIT"; want='agents/lib/review-criteria\.md'
+  f="$T_CRIT"; want='skills/_shared/review-criteria\.md'
   [ "$leg" = sev ] && f="$T_SEV" && want='skills/_shared/severity\.md'
   mv "$f" "$f.hidden"
   fn "$TREE" codex_core_review_criteria_block ""
@@ -155,7 +155,7 @@ for root in "" "$PROJ"; do
 done
 case_end
 
-case_begin "real-output-has-no-example" "agents/lib/review-criteria.md"
+case_begin "real-output-has-no-example" "skills/_shared/review-criteria.md"
 ck "real: the criteria source keeps its examples in example blocks" "yes" "$(yn grep -q -x -F '<!-- example -->' "$CRIT_SRC")"
 fn "$REAL" codex_core_review_criteria_block "$PROJ"
 ck "real: exits 0" "0" "$FN_RC"
@@ -164,7 +164,7 @@ ck "real: no '<!-- example' in the delivered block" "0" "$(grep -c -F '<!-- exam
 ck "real: no '<!-- /example' in the delivered block" "0" "$(grep -c -F '<!-- /example' "$OUT")"
 case_end
 
-case_begin "criteria-sections-no-distribution" "agents/lib/review-criteria.md"
+case_begin "criteria-sections-no-distribution" "skills/_shared/review-criteria.md"
 ck "criteria: the file exists" "yes" "$(yn [ -f "$CRIT_SRC" ])"
 for h in "Scope" "Coverage" "Reporting minimum" "Severity" "NFR compliance" "Neutral framing" "Copies of a canonical source" "Examples"; do
   ck "criteria: has the '## $h' section once" "1" "$(grep -c -x -F "## $h" "$CRIT_SRC" 2>/dev/null)"

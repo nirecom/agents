@@ -162,8 +162,6 @@ TREE="$PH_ROOT/tree"
 mkdir -p "$TREE/skills"
 cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$TREE/bin"
 cp -r "$SCRIPT_CHECKOUT_ROOT/skills/_shared" "$TREE/skills/_shared"
-mkdir -p "$TREE/agents/lib"
-cp "$SCRIPT_CHECKOUT_ROOT/agents/lib/review-criteria.md" "$TREE/agents/lib/review-criteria.md"
 TREE_CORE="$TREE/skills/_shared/priority-hierarchy/core.md"
 
 case_begin "core-md-missing-fails-closed" "skills/_shared/priority-hierarchy/core.md"

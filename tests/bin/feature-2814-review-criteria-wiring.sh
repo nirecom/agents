@@ -180,14 +180,14 @@ ck "lang code prompt: the plan language line follows the preamble line" "$PLAN_L
   "$(awk -v p='under the REVIEW CRITERIA below' 'f{print; exit} index($0, p){f=1}' "$cap" 2>/dev/null | tr -d '\r')"
 case_end
 
-# A copied tree without agents/lib/review-criteria.md: both scripts must fail closed.
+# A copied tree without skills/_shared/review-criteria.md: both scripts must fail closed.
 TREE="$WR_ROOT/tree"
 mkdir -p "$TREE/skills" "$TREE/agents" "$TREE/hooks"
 cp -r "$REAL/bin" "$TREE/bin"
 cp -r "$REAL/skills/_shared" "$TREE/skills/_shared"
 cp -r "$REAL/hooks/lib" "$TREE/hooks/lib"
 [ -d "$REAL/agents/lib" ] && cp -r "$REAL/agents/lib" "$TREE/agents/lib"
-rm -f "$TREE/agents/lib/review-criteria.md"
+rm -f "$TREE/skills/_shared/review-criteria.md"
 
 # A second copy that keeps the criteria but lacks skills/_shared/severity.md.
 TREE_SEV="$WR_ROOT/tree-sev"
@@ -216,13 +216,13 @@ fails_closed() {
 }
 
 case_begin "missing-criteria-fails-closed" "bin/lib/codex-review-criteria.sh"
-ck "tree: the criteria file is absent (precondition)" "absent" "$([ -e "$TREE/agents/lib/review-criteria.md" ] && printf present || printf absent)"
+ck "tree: the criteria file is absent (precondition)" "absent" "$([ -e "$TREE/skills/_shared/review-criteria.md" ] && printf present || printf absent)"
 fails_closed tree "$TREE"
 case_end
 
 case_begin "missing-severity-fails-closed" "bin/lib/codex-review-criteria.sh"
 ck "tree-sev: the criteria file is present and severity.md absent (precondition)" "present absent" \
-  "$([ -s "$TREE_SEV/agents/lib/review-criteria.md" ] && printf present || printf absent) $([ -e "$TREE_SEV/skills/_shared/severity.md" ] && printf present || printf absent)"
+  "$([ -s "$TREE_SEV/skills/_shared/review-criteria.md" ] && printf present || printf absent) $([ -e "$TREE_SEV/skills/_shared/severity.md" ] && printf present || printf absent)"
 fails_closed tree-sev "$TREE_SEV"
 case_end
 
