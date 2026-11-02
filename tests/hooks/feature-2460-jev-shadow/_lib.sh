@@ -64,7 +64,7 @@ fx_new() {
   export AGENTS_MAIN_ROOT="$(np "$FX/cfg")"
   export CLAUDE_PROJECT_DIR; CLAUDE_PROJECT_DIR="$(np "$FX/proj")"
   export CLAUDE_TRANSCRIPT_BASE_DIR; CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$FX/transcripts")"
-  LOG="$FX/state/logs/jev-decisions.log"
+  LOG="$FX/state/logs/jev-decisions.jsonl"
   JEVDIR="$FX/state/jev"
   OUT="$FX/io/out.txt"; ERR="$FX/io/err.txt"; ERR_ALL="$FX/io/err-all.txt"
   : > "$ERR_ALL"

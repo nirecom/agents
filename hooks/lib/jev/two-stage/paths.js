@@ -56,7 +56,8 @@ function crash(opts, at) {
 
 // The hand's frozen threshold as the decision record's entry shape.
 function frozenEntry(hand) {
-  return { confidence_threshold_by_answer: hand.threshold, short_circuit_answer: hand.short_circuit_answer };
+  const e = { confidence_threshold_by_answer: hand.threshold, short_circuit_answer: hand.short_circuit_answer };
+  return Object.prototype.hasOwnProperty.call(hand, "backup_subagent") ? Object.assign(e, { backup_subagent: hand.backup_subagent }) : e;
 }
 
 // The entry of a registered point whose stages include stage, else null (CLI argument check).

@@ -46,6 +46,8 @@ function printUsage() {
     "  --scope-change-approved\n" +
     "                    With --gate only (else exit 64): the user approved the detail\n" +
     "                    scope change, so an OFF detail gate resolves to proceed.\n" +
+    "  --jev-cache-only  On ACTION=invoke, print a JEV_ADVICE line only from the cache;\n" +
+    "                    never query Jev (hooks always pass it).\n" +
     "  -h, --help        Show this help.\n" +
     "\n" +
     "Deprecated but accepted: --status <status>, --mark <step> complete.\n"
@@ -55,7 +57,7 @@ function printUsage() {
 function parseArgs(argv) {
   const out = {
     list: false, session: undefined, reset: undefined, mark: undefined,
-    advance: false, next: false, gate: false, scopeChangeApproved: false,
+    advance: false, next: false, gate: false, scopeChangeApproved: false, jevCacheOnly: false,
     advanceStep: undefined, advanceStatus: undefined, skipReason: undefined,
     // Diagnostic only: the literal token the caller typed for the status, so a
     // refusal can name the spelling in front of them.
@@ -141,6 +143,8 @@ function parseArgs(argv) {
       out.advance = true;
     } else if (a === "--next") {
       out.next = true;
+    } else if (a === "--jev-cache-only") {
+      out.jevCacheOnly = true;
     } else if (a === "--step") {
       out.advanceStep = needValue(i, "--step");
       i++;
@@ -177,6 +181,9 @@ function parseArgs(argv) {
   }
   validateGateArgs(out);
   validateAdvanceArgs(out);
+  const advice = require("./wait-on-invoke");
+  advice.setCacheOnly(out.jevCacheOnly);
+  advice.setSessionArg(out.session);
   return out;
 }
 

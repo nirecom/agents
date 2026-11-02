@@ -343,6 +343,8 @@ resolves to the safe side (highest complexity level, or run the planning stage).
 
 A `FALLBACK=<reason>` line from `jev-judge finalize` names why the output was demoted, `source-changed` included; the reasons are listed under Missing answer in [two-stage-broker.md](architecture/jev/two-stage-broker.md#failure-paths).
 
+What each point sends to `api.typesafe.ai`: [jev.md](architecture/jev.md#what-is-sent-to-jev).
+
 ### Reading the report
 
 ```
@@ -399,7 +401,7 @@ queried finishes under the policy it started with (at most its one-hour lifetime
 ### Where things live
 
 - State: `$AGENTS_STATE_DIR/jev` (default `~/.agents/jev`), one directory per session.
-- Decision log: `jev-decisions.log` (JSONL), rotated by size. Deleting it loses only the evidence collected so far.
+- Decision log: `jev-decisions.jsonl`, rotated by size. Deleting it loses only the evidence collected so far.
 - Retention: session state idle for more than 7 days is removed by a sweep that runs at most once a day.
 
 Details: [architecture/jev.md](architecture/jev.md).
