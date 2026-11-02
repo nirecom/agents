@@ -284,6 +284,6 @@ The suite path itself is exercised with the fixture-only `fake-suite` entry (`te
 ## Residue check
 
 `tests/tests/test-language-registry-residue.sh` (via `scan.js`) derives its search words from the table: pattern fragments of 3+ characters (`.sh`, `.Tests.ps1`, `test_`, `.py`, `.js`, …) and ids of 4+ characters.
-It scans tracked `bin/**`, `hooks/**`, `tests/run-all.sh`, `tests/lib/**`, `skills/*/scripts/**` and the `paths:` headers of `rules/test*.md`, excluding the registry files and registered part files.
+It scans tracked `bin/**`, `hooks/**`, `tests/run-all.sh`, `tests/lib/**`, `skills/*/scripts/**` and the `paths:` headers of `rules/test*.md`, excluding the registry files and the per-language parts (`bin/lib/test-language-parts/<entry id>.sh`); the child readers beside them are scanned.
 It fails when (a) one file uses pattern words of two entries, or one line names two ids; (b) a file using a pattern word also names the test location (`tests`, `TESTS_DIR`); or (c) shared code compares an id string.
 `tests/tests/test-language-registry-residue/allowlist.tsv` (`path<TAB>substring<TAB>reason`) records legitimate exceptions; a row without a reason, or matching nothing, fails.
