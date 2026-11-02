@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: agents/survey-code.md, agents/detail-planner.md, agents/outline-planner.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/security-scanner.md, agents/test-reviewer.md, agents/plan-skip-judge.md, agents/plan-security-reviewer.md, agents/lib/codegraph-usage.md
+# Tests: agents/survey-code.md, agents/detail-planner.md, agents/outline-planner.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/security-scanner.md, agents/test-reviewer.md, agents/plan-skip-judge.md, agents/plan-security-reviewer.md, skills/_shared/codegraph-usage.md
 # Tags: codegraph, wiring, static, agent-frontmatter, mcp, table-driven, TL2, pwsh-not-required, scope:issue-specific
 # W7 — agent exposure. Claude Code has no shared base tool list for agent definitions,
 # so the nine allowlists are nine independent places to forget. A grep for the tool
@@ -15,7 +15,7 @@ const fs = require("fs");
 const path = require("path");
 const RE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 const TOOL = "mcp__codegraph__codegraph_explore";
-const PTR = "agents/lib/codegraph-usage.md";
+const PTR = "skills/_shared/codegraph-usage.md";
 const root = process.argv[1];
 const out = [];
 for (const rel of process.argv.slice(2)) {
@@ -101,7 +101,7 @@ for row in "${W7_ROWS[@]}"; do
     entries="$(printf '%s' "$line" | cut -d'|' -f5)"
     assert_eq "$name-a: $rel parses as frontmatter with exactly one tools: key" "OK" "${status:-NO_PARSER_OUTPUT}"
     assert_eq "$name-b: $rel lists mcp__codegraph__codegraph_explore exactly once as a discrete tools: entry (got: ${entries:-<none>})" "1" "${ntool:-0}"
-    assert_eq "$name-c: $rel points at agents/lib/codegraph-usage.md exactly once in its body" "1" "${nptr:-0}"
+    assert_eq "$name-c: $rel points at skills/_shared/codegraph-usage.md exactly once in its body" "1" "${nptr:-0}"
     assert_eq "$name-d: $rel keeps its whole pre-existing tools: list and appends only the CodeGraph tool" \
         "$want_tools" "${entries:-<none>}"
 done
@@ -120,9 +120,9 @@ assert_eq "W7-08b: agents/plan-skip-judge.md exposes Read only (no CodeGraph too
 # is spelled; a pointer at a file that does not exist, or at an empty stub, hands nine
 # agents a tool with no contract — and the projectPath caveat is the single prompt-level
 # defence against silently planning and reviewing against main instead of the worktree.
-echo "=== W10: agents/lib/codegraph-usage.md exists and carries its three requirements ==="
+echo "=== W10: skills/_shared/codegraph-usage.md exists and carries its three requirements ==="
 
-USAGE_REL="agents/lib/codegraph-usage.md"
+USAGE_REL="skills/_shared/codegraph-usage.md"
 USAGE_ABS="$SCRIPT_CHECKOUT_ROOT/$USAGE_REL"
 if [ ! -f "$USAGE_ABS" ]; then
     fail "W10-00: $USAGE_REL does not exist" "nine agents point at it; a dangling pointer is exposure without adoption"
@@ -184,3 +184,40 @@ assert_policy_section "W10-03" "$USAGE_REL" \
 assert_policy_section "W10-04" "$USAGE_REL" \
     "codegraph output is trusted as Read-equivalent; unless the policy says so AND names the flag that overrides it, agents either re-grep everything the index already answered or read nothing when the index is stale" \
     "(trust|already read)" "grep" "(flag|banner)" "(stale|fresh)"
+
+# W10-05 — the hook nudge and the agent bodies must name the same file. The hook source
+# is read and grepped for the same PTR the agents are held to; a nudge left at the old
+# path would hand every subagent a dangling pointer while all nine agent bodies pass.
+HOOK_ABS="$SCRIPT_CHECKOUT_ROOT/hooks/subagent-start.js"
+if [ ! -f "$HOOK_ABS" ]; then
+    fail "W10-05: hooks/subagent-start.js is absent" "the CODEGRAPH_NUDGE pointer cannot be verified"
+else
+    # Tie the pointer to the definition: take only the `const CODEGRAPH_NUDGE = ...;`
+    # statement (from its line to the first line ending in `;`), so a mention of the path
+    # elsewhere in the hook cannot satisfy the check.
+    NUDGE_DEF="$(awk '/^const CODEGRAPH_NUDGE[[:space:]]*=/ { on = 1 } on { print } on && /;[[:space:]]*$/ { exit }' "$HOOK_ABS" 2>/dev/null || true)"
+    if [ -z "$NUDGE_DEF" ]; then
+        fail "W10-05: hooks/subagent-start.js has no const CODEGRAPH_NUDGE definition" "the nudge pointer cannot be verified"
+    elif ! printf '%s' "$NUDGE_DEF" | grep -F -q -e "$USAGE_REL"; then
+        fail "W10-05: hooks/subagent-start.js CODEGRAPH_NUDGE literal does not contain $USAGE_REL" "agent bodies and the hook nudge must share one pointer"
+    elif grep -F -q -e "agents/lib/codegraph-usage.md" "$HOOK_ABS"; then
+        fail "W10-05: hooks/subagent-start.js still carries the legacy agents/lib/codegraph-usage.md path" "a stale path left in the hook is a dangling pointer"
+    else
+        pass "W10-05: hooks/subagent-start.js CODEGRAPH_NUDGE literal contains $USAGE_REL and no legacy path remains"
+    fi
+fi
+
+# W10-06 — the ops doc must follow the move too. Its relative links
+# (../../skills/_shared/codegraph-usage.md) contain USAGE_REL as a substring, so one
+# fixed-string check covers both the prose path and the link target; the legacy path
+# must be gone entirely, including inside link targets.
+OPS_DOC_ABS="$SCRIPT_CHECKOUT_ROOT/docs/ops/codegraph.md"
+if [ ! -f "$OPS_DOC_ABS" ]; then
+    fail "W10-06: docs/ops/codegraph.md is absent" "the ops doc pointer cannot be verified"
+elif ! grep -F -q -e "$USAGE_REL" "$OPS_DOC_ABS"; then
+    fail "W10-06: docs/ops/codegraph.md does not contain $USAGE_REL" "the ops doc must point at the relocated policy file"
+elif grep -F -q -e "agents/lib/codegraph-usage.md" "$OPS_DOC_ABS"; then
+    fail "W10-06: docs/ops/codegraph.md still carries the legacy agents/lib/codegraph-usage.md path" "a stale path (prose or relative link) is a dangling pointer"
+else
+    pass "W10-06: docs/ops/codegraph.md contains $USAGE_REL and no legacy path remains"
+fi

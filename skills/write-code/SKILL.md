@@ -35,7 +35,7 @@ WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model alia
    - The canonical line of the `rules/shell-commands.md` Subagent Dispatch Prompts section, verbatim as a standalone line, with `<AGENTS_MAIN_ROOT>` replaced by the literal absolute path.
    - Directive: "Read `rules/user-escalation.md` before any system-state-changing command — general-purpose dispatch does not inherit auto-injected rules."
    - Directive: "Read `rules/ops.md` before any destructive or system-state-changing command inside self-repair — general-purpose dispatch does not inherit auto-injected rules; on-demand-only, so it does not reach you otherwise."
-   - (Optional) Follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as an implementation constraint when relevant.
+   - (Optional) Follow `skills/_shared/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as an implementation constraint when relevant.
    - Lint/typecheck recipe table (see below).
    - Self-repair cap: 3 iterations; if still failing after 3, surface tool output verbatim.
    - Lint-tool absence policy: when a tool is unavailable, skip that check AND emit `<tool> not found — check skipped` in the final summary. Never omit this notice.
