@@ -112,13 +112,17 @@ function hasAdviceInTurn(sid, turnId) {
   }
 }
 
+// The reason carries the instruction itself, so the reader needs no standing rule to act on it.
+const instructionOf = (reason) => `do not invoke NEXT_SKILL: ${reason}; report this reason to the user and end the turn`
+  .replace(/[\r\n]+/g, " ").replace(/'/g, "");
+
 // The two advice lines emit() appends on ACTION=invoke, or "".
 function adviceLines() {
   let sid = null;
   try { sid = require(path.join(HOOKS, "workflow-state")).resolveSessionId({ sessionIdFromInput: sessionArg }); } catch (_e) { sid = null; }
   if (!sid) return "";
   const a = adviseOnInvoke({ sid });
-  return a ? `JEV_ADVICE=${a.advice}\nJEV_ADVICE_REASON='${a.reason.replace(/'/g, "")}'\n` : "";
+  return a ? `JEV_ADVICE=${a.advice}\nJEV_ADVICE_REASON='${instructionOf(a.reason)}'\n` : "";
 }
 
 module.exports = {

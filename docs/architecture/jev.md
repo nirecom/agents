@@ -121,7 +121,10 @@ subagent and no ticket; only a confident yes acts.
 
 - **`wait-on-invoke`**: on `ACTION=invoke`, next-step asks once per
   step and turn (a child with a 3 s limit, cached in the control directory) and
-  adds `JEV_ADVICE=wait-on-invoke` with a fixed `JEV_ADVICE_REASON`. A step is
+  adds `JEV_ADVICE=wait-on-invoke` with a `JEV_ADVICE_REASON` that carries the
+  instruction itself (do not invoke `NEXT_SKILL`, report the reason, end the
+  turn) around the fixed per-key text the Stop guard shares, so no standing
+  CLAUDE.md rule is needed to act on it. A step is
   advised at most once, so the advice cannot loop. Hooks run next-step with
   `--jev-cache-only` through `hooks/lib/next-step-spawn.js` and never query.
 - **`continue-on-stop`**: where the Stop guard would let a stop pass,
@@ -133,6 +136,16 @@ subagent and no ticket; only a confident yes acts.
   unmarked dialog reaches the user with no Jev call and no record; plan-approval
   waits, `user_verification` and multi-select stay excluded even when marked.
   `JEV_AUTO_SKIP_ASKUSER=off` turns it off alone.
+  - Marker policy: Claude marks only a choice it raises itself whose answer the
+    user's own conversation already settles; a dialog a skill or rule defines
+    for consent, approval, deletion, release, or a gate is never marked, so it
+    always reaches the user.
+  - Skill-in-turn guard: when a Skill ran since the last real user prompt (a
+    `Skill` tool call, or a `<command-name>` slash-command injection), the
+    dialog is the skill's own and reaches the user with no Jev call. Tool
+    results and meta, compaction-summary and sidechain entries do not open a
+    new prompt. A missing or unreadable transcript, or any unparsable line,
+    also sends the dialog to the user.
 - An optional `user-instructions-jev.md` at the checkout root adds the user's
   own rules to the input.
 

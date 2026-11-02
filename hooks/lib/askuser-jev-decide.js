@@ -3,6 +3,7 @@
 // Each stage that does not hold returns null, so the dialog reaches the user. Only a dialog the
 // model marked with metadata.source === AUTO_SKIP_MARKER is eligible (an allowlist): an unmarked
 // dialog never reaches Jev and leaves no record, whatever language its question is written in.
+// A dialog raised while a Skill runs in the current turn is the skill's own, so it never reaches Jev.
 
 const path = require("path");
 
@@ -41,6 +42,7 @@ async function decide(input = {}) {
   try { require(ADAPTER).keysFor({ extra: { questions } }); } catch (_e) { return null; }
   if (isApprovalWait(input.sid)) return null;
   if (questions.some((q) => q.multiSelect === true)) return null;
+  if (require("./askuser-jev-decide/skill-in-turn").skillInTurn(input.transcriptPath)) return null;
   const r = await require("./jev/conversation-point").judgeConversation({
     point: "askuser-answer",
     sessionId: input.sid,

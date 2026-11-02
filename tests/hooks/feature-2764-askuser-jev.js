@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // tests/hooks/feature-2764-askuser-jev.js
 // Tests: hooks/pre-tool-use-askuser-jev.js, hooks/lib/askuser-jev-decide.js, hooks/lib/jev/adapters/askuser-answer.js
-// Tags: TL2, hooks, pretooluse, askuserquestion, updated-input, jev, askuser-answer, mock-server, scope:issue-specific, pwsh-not-required, allowlist, auto-skip-marker, prompt-injection, record-minimization
+// Tags: TL2, hooks, pretooluse, askuserquestion, updated-input, jev, askuser-answer, mock-server, scope:issue-specific, pwsh-not-required, allowlist, auto-skip-marker, prompt-injection, record-minimization, skill-in-turn-guard, fail-closed-transcript
 // #2764 (#2461 Step 5): on an AskUserQuestion marked metadata.source "jev-auto-skip-askuser", with
 // JEV and JEV_AUTO_SKIP_ASKUSER on, the hook asks Jev one yes/no key q<i>o<j> per option and answers
 // only when every question has exactly one option over the threshold. Unmarked dialogs, a
@@ -51,13 +51,14 @@ const SEED = {
 };
 // ask(name, questions, {seed, extra, entries, toolInput}) -> {o, out (hookSpecificOutput|null), q, sc, sid}.
 // The default tool input carries the auto-skip marker; opt.toolInput replaces it whole.
+// opt.transcript(sc, toolInput) -> transcript path replaces the written transcript.
 function ask(name, questions, opt = {}) {
   const base = F.scene(ROOT, name);
   const sc = Object.assign({}, base, { cwd: base.proj });
   const sid = F.newSid();
   SEED[opt.seed || "started"](sc, sid);
   const toolInput = opt.toolInput || { questions, metadata: Object.assign({}, MARK) };
-  const tp = F.writeTranscript(sc, "t", opt.entries || [F.U("write the summary report"), F.A(F.T("One choice first."), F.TU("AskUserQuestion", toolInput))]);
+  const tp = opt.transcript ? opt.transcript(sc, toolInput) : F.writeTranscript(sc, "t", opt.entries || [F.U("write the summary report"), F.A(F.T("One choice first."), F.TU("AskUserQuestion", toolInput))]);
   const before = mock.count("systemone");
   const o = F.runHook(sc, mock, HOOK, {
     session_id: sid, transcript_path: tp, cwd: F.fwd(sc.cwd), hook_event_name: "PreToolUse",
@@ -254,5 +255,60 @@ test("settings.json registers the hook on AskUserQuestion with timeout 10", () =
   const hooks = groups.flatMap((g) => g.hooks).filter((h) => String(h.command).includes("pre-tool-use-askuser-jev.js"));
   assert.strictEqual(hooks.length, 1, "registered once");
   assert.strictEqual(hooks[0].timeout, 10);
+});
+caseEnd();
+
+caseBegin("skill-in-turn-guard", "hooks/lib/askuser-jev-decide.js");
+// A Skill invoked since the last real user prompt (a Skill tool_use or a <command-name> slash
+// injection) sends even a marked dialog to the user, and Jev is never asked. Every scene below
+// would be auto-answered (q0o1 -> HTML) without the guard.
+const AUQ = (ti) => F.A(F.T("One choice first."), F.TU("AskUserQuestion", ti));
+const SKILL = F.A(F.T("Running the skill."), F.TU("Skill", { skill: "make-outline-plan" }));
+const SLASH = F.U("<command-message>some-skill is running</command-message>\n<command-name>/some-skill</command-name>");
+const META = (text) => F.U(text, { isMeta: true });
+const rawTranscript = (lines) => (sc) => {
+  const p = path.join(F.transcriptDir(sc), "raw.jsonl");
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, lines.join("\n") + "\n");
+  return F.fwd(p);
+};
+const GUARDED = [
+  ["marked, a Skill tool_use after the last real user prompt", { entries: [F.U("write the summary report"), SKILL, F.R(), AUQ({ questions: ONE, metadata: MARK })] }],
+  ["marked, the last real user prompt is a /some-skill slash injection", { entries: [SLASH, META("Skill body: pick the report format."), AUQ({ questions: ONE, metadata: MARK })] }],
+  ["marked, a tool_result after the Skill is not a new user prompt", { entries: [F.U("go"), SKILL, F.R(), F.A(F.T("Reading."), F.TU("Read", { file_path: "x" })), F.R(), AUQ({ questions: ONE, metadata: MARK })] }],
+  ["marked, an isMeta user entry after the Skill is not a new user prompt", { entries: [F.U("go"), SKILL, F.R(), META("Base directory for this skill: x"), AUQ({ questions: ONE, metadata: MARK })] }],
+  ["marked, an isSidechain user entry after the Skill is not a new user prompt", { entries: [F.U("go"), SKILL, F.R(), F.U("sidechain prompt", { isSidechain: true }), AUQ({ questions: ONE, metadata: MARK })] }],
+  ["marked, an isCompactSummary user entry after the Skill is not a new user prompt", { entries: [F.U("go"), SKILL, F.R(), F.U("This session is being continued from a previous conversation.", { isCompactSummary: true }), AUQ({ questions: ONE, metadata: MARK })] }],
+  ["marked, transcript_path names a file that does not exist", { transcript: (sc) => F.fwd(path.join(F.transcriptDir(sc), "missing.jsonl")) }],
+  ["marked, the transcript holds a line that is not JSON", { transcript: (sc, ti) => rawTranscript([JSON.stringify(F.U("write the summary report")), "{not json", JSON.stringify(AUQ(ti))])(sc) }],
+  ["unmarked, a Skill tool_use in the turn", { toolInput: { questions: ONE }, entries: [F.U("go"), SKILL, F.R(), AUQ({ questions: ONE })] }],
+];
+for (const [name, opt] of GUARDED) {
+  test(`${name}: Jev is not asked and the dialog reaches the user`, () => {
+    mock.conv(0.02, { q0o1: 0.97 });
+    const r = ask(`sg-${name.replace(/[^a-z0-9]+/gi, "-").slice(0, 60)}`, ONE, opt);
+    assert.strictEqual(r.q, 0, `no query (stdout ${r.o.stdout.slice(0, 200)})`);
+    declined(r);
+  });
+}
+test("marked, a Skill only before the last real user prompt: Jev is asked and answers (the guard is turn-scoped)", () => {
+  mock.conv(0.02, { q0o1: 0.97 });
+  const entries = [F.U("run the outline"), SKILL, F.R(), F.A(F.T("Outline done.")), F.U("now write the summary report"), AUQ({ questions: ONE, metadata: MARK })];
+  const r = ask("sg-skill-earlier-turn", ONE, { entries });
+  assert.strictEqual(r.q, 1, `one query (stderr ${r.o.stderr.slice(0, 300)})`);
+  assert.ok(r.out && r.out.permissionDecision === "allow", r.o.stdout.slice(0, 300));
+  assert.deepStrictEqual(r.out.updatedInput.answers, { [ONE[0].question]: "HTML" });
+});
+test("decide() without a transcriptPath returns null and never asks Jev", () => {
+  mock.conv(0.02, { q0o1: 0.97 });
+  const sc0 = F.scene(ROOT, "sg-no-tp");
+  const sc = Object.assign({}, sc0, { cwd: sc0.proj });
+  const sid = F.newSid();
+  SEED.started(sc, sid);
+  const before = mock.count("systemone");
+  const o = F.nodeEval(sc, mock, `require(${JSON.stringify(F.lib("hooks/lib/askuser-jev-decide.js"))}).decide({ sid: process.argv[2], questions: ${JSON.stringify(ONE)}, metadata: { source: "jev-auto-skip-askuser" } }).then((d) => console.log(JSON.stringify({ d })));`, [sid]);
+  assert.strictEqual(o.status, 0, o.stderr.slice(0, 300));
+  assert.deepStrictEqual(o.json, { d: null });
+  assert.strictEqual(mock.count("systemone") - before, 0);
 });
 caseEnd();
