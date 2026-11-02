@@ -29,3 +29,7 @@ bin/lib/test-language-parts/bash-case-embed.sh	re_path='([^[:space:]"'\'']*/)?([
 bin/lib/test-language-parts/bash-case-embed.sh	[[ "$rel" == tests/lib/*harness*.sh	the bash part's own child reader deciding a helper is a narrow harness; per-language reader code, not test discovery
 bin/lib/test-language-parts/pytest-case-analyzer.py	if alias.name == "pytest" and alias.asname	the pytest part's own child analyzer resolving how a test imports pytest; per-language reader code, not a language dispatch
 bin/lib/test-language-parts/pytest_case_scan.py	and node.value.value.id == "pytest"	the pytest part's own child scanner recognizing the pytest.mark decorator; per-language reader code, not a language dispatch
+bin/check-root-names/line-scan.js	const PY_EXT = /\.py$/;	picks the comment and string stripper for a scanned source file by extension, for every tracked file; not test discovery
+hooks/lib/test-gates/parts/external-runtime.js	pester: { command: "pwsh"	the launch table of the external-runtime gate part (command and child reader per runtime), which the registry loader does not own; not test discovery
+tests/lib/precommit-check-runner.js	`${GATES[gate]}.js`	builds the require path of a pre-commit gate module from its name; a module file, not a test file
+tests/lib/precommit-check-runner.js	`${e.name}.js`	builds the require path of a pre-commit check module from its name; a module file, not a test file
