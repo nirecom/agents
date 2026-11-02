@@ -7,9 +7,7 @@
 # obsolete, non-zero on unparseable TOML; --create repairs and migrates).
 # Also the RTK upgrade step (#2862): static greps + rtk.sh against stub brew / rtk, both
 # unconditional and run before the skip-gated real-binary section.
-
 set -uo pipefail
-
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
@@ -18,6 +16,7 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # upgrade (#2347); async completion / variable install paths / silent failure (rules/test/installer.md)
 # TL2 gap (upgrade, #2862): static checks never run pwsh; Linux cases stub brew and rtk, so real
 # winget / brew "no update" exit codes and `brew upgrade` on a non-brew RTK are not exercised
+# TL2 gap (#2892): the -1978335189 dispatch is checked statically only for rtk.ps1 (glab.ps1 has a runtime Pester)
 # Closest-to-action mitigation: pwsh-required category fires at WORKFLOW_USER_VERIFIED preflight
 
 # --- Fixture isolation (rules/test/fixture-isolation.md) --------------------
@@ -176,8 +175,15 @@ assert_before "R-37 rtk.ps1 upgrade sits after the installed-branch opening" "$P
 assert_between_no_exit "R-31 rtk.ps1 no return/exit between upgrade and install" "$PS1_REL" '^[[:space:]]*winget upgrade ' "$END_RE" "$EXIT_RE"
 assert_between_no_exit "R-35 rtk.ps1 no return/exit in the winget-missing branch" "$PS1_REL" 'Get-Command winget' "$END_RE" "$EXIT_RE"
 assert_before "R-33 rtk.ps1 upgrade precedes config validation" "$PS1_REL" '^[[:space:]]*winget upgrade ' '^[[:space:]]*& \$rtkExe config \*> \$null'
+assert_line_has_both "R-38 rtk.ps1 compares the saved rc \$_rtkUpgradeRc against -1978335189" "$PS1_REL" "_rtkUpgradeRc" "-1978335189"
+assert_before "R-43 rtk.ps1 '-eq -1978335189' test precedes the 'already up to date' message" "$PS1_REL" '-eq -1978335189' 'already up to date'
+assert_before "R-44 rtk.ps1 'already up to date' precedes the general 'winget exit code' failure message" "$PS1_REL" 'already up to date' 'winget exit code'
+assert_ps1_section_has "R-45 rtk.ps1 winget branch reports 'RTK updated.' on exit 0" "$PS1_REL" "RTK updated."
+assert_absent "R-42 rtk.ps1 retired 'up to date or upgrade failed' wording is gone" "$PS1_REL" "up to date or upgrade failed"
+assert_line_has_both "R-39 rtk.ps1 'already up to date' is printed with Write-Host" "$PS1_REL" "already up to date" "Write-Host"
+assert_no_line_with_both "R-40 rtk.ps1 'already up to date' is not a Write-Warning" "$PS1_REL" "already up to date" "Write-Warning"
+assert_line_has_both "R-41 rtk.ps1 general non-zero branch keeps 'winget exit code' and 'upgrade failed'" "$PS1_REL" "winget exit code" "upgrade failed"
 case_end
-
 case_begin "rtk-sh-upgrade-static" "install/linux/rtk.sh"
 assert_contains "R-02 rtk.sh runs brew upgrade with stdin closed" "$SH_REL" "brew upgrade rtk-ai/tap/rtk </dev/null"
 assert_line_has_both "R-09 rtk.sh upgrade-failure message guides re-run" "$SH_REL" "upgrade failed" "Re-run to retry"
@@ -187,9 +193,7 @@ assert_count_re "R-24 rtk.sh keeps exactly one brew install line" "$SH_REL" '^[[
 assert_between_no_exit "R-32 rtk.sh no exit between upgrade and install" "$SH_REL" '^[[:space:]]*if (! )?brew upgrade ' "$END_RE" "$EXIT_RE"
 assert_before "R-34 rtk.sh upgrade precedes config validation" "$SH_REL" '^[[:space:]]*if (! )?brew upgrade ' '^[[:space:]]*if ! rtk config >/dev/null'
 case_end
-
-# --- Section S2: rtk.sh behavior with stub brew / rtk -----------------------
-# PATH without any real rtk / brew dirs; node stays reachable through a wrapper.
+# --- Section S2: rtk.sh behavior with stub brew / rtk (PATH without real rtk / brew; node via wrapper)
 REAL_NODE="$(command -v node 2>/dev/null || true)"
 CLEAN_PATH=""
 _old_ifs="$IFS"; IFS=':'
@@ -238,7 +242,6 @@ STUB
   export BREW_UPGRADE_RC=0 BREW_INSTALL_RC=0 RTK_CONFIG_RC=0
   CASE_DIR="$d"
 }
-
 # run_installer [<RTK value>]: rc in RC, output in $OUT / $ERR.
 run_installer() {
   : > "$CALL_LOG"

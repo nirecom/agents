@@ -34,9 +34,12 @@ if (Get-Command rtk -ErrorAction SilentlyContinue) {
             winget upgrade rtk-ai.rtk --accept-source-agreements --accept-package-agreements
             $_rtkUpgradeRc = $LASTEXITCODE
             $global:LASTEXITCODE = 0
-            if ($_rtkUpgradeRc -ne 0) {
-                # Non-zero covers both "no newer version" and a real failure; winget does not tell them apart.
-                Write-Host "RTK is up to date or upgrade failed (winget exit code: $_rtkUpgradeRc; non-fatal). Re-run to retry." -ForegroundColor DarkGray
+            if ($_rtkUpgradeRc -eq -1978335189) {
+                # 0x8A15002B UPDATE_NOT_APPLICABLE: already the latest version (not a failure).
+                Write-Host "RTK is already up to date." -ForegroundColor DarkGray
+            } elseif ($_rtkUpgradeRc -ne 0) {
+                # Any other non-zero code is not told apart from a real failure.
+                Write-Host "RTK upgrade failed (winget exit code: $_rtkUpgradeRc; non-fatal). Re-run to retry." -ForegroundColor DarkGray
             } else {
                 Write-Host "RTK updated." -ForegroundColor Green
             }
