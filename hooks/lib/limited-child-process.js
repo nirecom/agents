@@ -3,6 +3,7 @@
 // the decision time left (#2676). Unarmed, the call reaches child_process untouched.
 // Armed, the time left replaces the caller's timeout, so a hung child always ends in ask at the
 // limit: a caller's own short-timeout fallback could otherwise decide allow without asking (N1).
+// Only a caller declaring failOpenOnTimeout keeps its shorter timeout (#2781, code-size-gate).
 
 const path = require("path");
 // Called through the module object at call time, so a patched child_process is honoured.
@@ -32,23 +33,48 @@ const isTimedOut = (error) => Boolean(error) && error.code === "ETIMEDOUT";
 // timeout; a call that returns with no time left asks rather than let the hook decide late.
 const isOverLimit = () => limit.remainingDecisionMs() <= 0;
 
+// Options this wrapper reads and never hands to child_process: failOpenOnTimeout (the caller's
+// own timeout fails open) and limitMessage (the caller's wording of the ask at the limit).
+const WRAPPER_KEYS = ["failOpenOnTimeout", "limitMessage"];
+
+// withoutWrapperKeys(rest) -> rest whose options no longer carry the wrapper-only keys.
+function withoutWrapperKeys(rest) {
+  const given = rest.options;
+  if (!given || !WRAPPER_KEYS.some((key) => key in given)) return { ...rest, declared: false, message: undefined };
+  const { failOpenOnTimeout, limitMessage, ...options } = given;
+  const values = rest.values.map((value) => (value === given ? options : value));
+  return { ...rest, options, values, declared: failOpenOnTimeout === true, message: limitMessage };
+}
+
+// A declared caller timeout shorter than the time left is kept and owned by the caller (its own
+// fail-open); a tie or a longer one belongs to the limit, so the time left still ends in ask.
+function childTimeout(rest, cap) {
+  const own = rest.options && rest.options.timeout;
+  const callerOwns = rest.declared && Number.isFinite(own) && own > 0 && own < cap;
+  return { timeout: callerOwns ? own : cap, callerOwns };
+}
+
 // run(fnName, command, rest, checkName, returnsResult) — the shared body of the three wrappers.
-function run(fnName, command, rest, checkName, returnsResult) {
+function run(fnName, command, rawRest, checkName, returnsResult) {
+  const rest = withoutWrapperKeys(rawRest);
   if (!limit.isDecisionTimeLimitArmed()) return childProcess[fnName](command, ...rest.values);
+  const askNow = () => limit.askAndExit(checkName, rest.message);
   const cap = Math.floor(limit.remainingDecisionMs());
-  if (cap < MIN_SLICE_MS) return limit.askAndExit(checkName);
-  const options = { ...(rest.options || {}), timeout: cap };
+  if (cap < MIN_SLICE_MS) return askNow();
+  const { timeout, callerOwns } = childTimeout(rest, cap);
+  const options = { ...(rest.options || {}), timeout };
+  const limitTimedOut = (error) => isTimedOut(error) && !callerOwns;
   // File stdio, not pipes: a grandchild holding a pipe would keep the call from returning at the cap.
   // A failed stdio setup asks too: a hook that crashed here would let the call through undecided.
   try {
     const result = fileStdio[fnName](command, rest.args, options);
-    if (returnsResult && result && isTimedOut(result.error)) return limit.askAndExit(checkName);
-    if (isOverLimit()) return limit.askAndExit(checkName);
+    if (returnsResult && result && limitTimedOut(result.error)) return askNow();
+    if (isOverLimit()) return askNow();
     return result;
   } catch (error) {
-    if (error && error.stdioSetupFailed) return limit.askAndExit(checkName);
-    if (!returnsResult && isTimedOut(error)) return limit.askAndExit(checkName);
-    if (isOverLimit()) return limit.askAndExit(checkName);
+    if (error && error.stdioSetupFailed) return askNow();
+    if (!returnsResult && limitTimedOut(error)) return askNow();
+    if (isOverLimit()) return askNow();
     throw error;
   }
 }

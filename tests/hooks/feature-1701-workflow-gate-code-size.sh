@@ -283,8 +283,8 @@ case_end
 case_begin "unexpected-exit-blocks" "hooks/workflow-gate/code-size-gate.js"
 test_10_unexpected_exit_blocks
 case_end
-case_begin "hung-review-asks-at-decision-limit" "hooks/workflow-gate/code-size-gate.js"
-test_11_hung_review_asks
+case_begin "hung-review-fails-open-at-own-timeout" "hooks/workflow-gate/code-size-gate.js"
+test_11_hung_review_fails_open
 case_end
 case_begin "process-env-extensions-ignored" "hooks/workflow-gate/code-size-gate.js"
 test_12_env_var_ignored

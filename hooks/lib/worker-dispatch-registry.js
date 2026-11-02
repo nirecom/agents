@@ -362,6 +362,8 @@ const workers = {
       "WORKFLOW_SESSION_ID",   // supervisor-state resolution fallback
       "CLAUDE_PROJECT_DIR",    // getCurrentContext()'s cwd resolution
       "DEFAULT_BRANCHES",      // merge-detect.js's protected-branch set
+      // GATE_ENV_SCOPE's seventh: the gate child's decision time limit (#2849).
+      "WORKFLOW_DECISION_TIME_LIMIT_MS",
       // `git push` over SSH needs the parent's running agent, not a token —
       // without this the child has no signing oracle and every SSH push fails.
       "SSH_AUTH_SOCK",
