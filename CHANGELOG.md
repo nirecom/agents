@@ -967,3 +967,15 @@ Changes: The EM Supervisor audit now reviews each plan (intent / outline / detai
 ### FEATURE: PR #2876 (2026-11-01)
 Background: feat(#2865): migrate the remaining non-node:test JS tests to node:tes...
 Changes: Every JavaScript test file must now use node:test, not only new ones. The edit-time and commit-time test gates block any `tests/<category>/*.js` entrypoint that does not load node:test (`MISSING_TEST_RUNNER`). All existing plain-script tests in this repository were migrated, so nothing is blocked today.
+
+### FEATURE: PR #2880 (2026-11-02)
+Background: feat(#2873): one CONFIRM Allow accepts a WARN or CONTINUE pre-confirm...
+Changes: Fixed: once the pre-confirm audit cap is reached, a single CONFIRM approval now accepts a WARN or CONTINUE audit finding instead of requiring a second approval or blocking approval.
+
+### FEATURE: PR #2882 (2026-11-02)
+Background: feat(#2875,#2337,#2696,#1192,#322): reset per-cycle state on re-init and reclaim finished worktree leftovers
+Changes: Fixed stale previous-cycle worktree references surviving a same-session re-init, and a guard block when the Final Report appears only in a tool result.;Worktree directories left behind by a partial Windows removal can now be reclaimed safely when their ownership is confirmed.
+
+### FEATURE: PR #2884 (2026-11-02)
+Background: fix(#2646): refuse RUN_TESTS_UNRUNNABLE_ACCEPTED when UNRUNNABLE incl...
+Changes: Fixed: a run that named nonexistent test files could be accepted as "unrunnable" and mark the test step complete. Fix the test path and re-run; unrunnable runs caused only by missing runtimes can still be accepted as before.

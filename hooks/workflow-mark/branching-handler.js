@@ -9,7 +9,7 @@ const {
 } = require("../workflow-state");
 const { reconcileDeliveryPath } = require("./branching-reconcile");
 const { readAutoMergePr } = require("../lib/auto-merge-config");
-const { isMainWorktree } = require("../workflow-state/resolve-worktree-path");
+const { isOwnedLinkedWorktree } = require("../workflow-state/resolve-worktree-path");
 const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
 const { recoveryFor } = require("../workflow-state/completion-approval");
 const {
@@ -97,7 +97,7 @@ function handle(ctx) {
     try {
       const wtMatch = v.reason.match(/\bworktree:\s*([^\s|]+)/);
       const wtPath = wtMatch ? wtMatch[1] : null;
-      if (wtPath && fs.existsSync(wtPath) && !isMainWorktree(wtPath)) {
+      if (wtPath && isOwnedLinkedWorktree(wtPath)) {
         recordSessionWorktree(sessionId, wtPath);
       } else {
         recordSessionWorktree(sessionId, null);

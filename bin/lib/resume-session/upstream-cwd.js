@@ -5,7 +5,7 @@
 
 const fs = require("fs");
 const { readState } = require("../../../hooks/workflow-state/state-io");
-const { isMainWorktree } = require("../../../hooks/workflow-state/resolve-worktree-path");
+const { isMainWorktree, isOwnedLinkedWorktree, classifyWorktreeLeftover } = require("../../../hooks/workflow-state/resolve-worktree-path");
 const { toWindowsPath } = require("../../../hooks/lib/branch-diff");
 
 const CWD_CLASSES = Object.freeze({
@@ -35,8 +35,9 @@ function classifyUpstreamCwd(upstreamSid) {
   let sawMain = false;
   for (const candidate of candidates) {
     if (!fs.existsSync(candidate)) continue;
-    if (!isMainWorktree(candidate)) return result(CWD_CLASSES.LIVE_LINKED_WORKTREE, candidate);
-    sawMain = true;
+    if (isOwnedLinkedWorktree(candidate)) return result(CWD_CLASSES.LIVE_LINKED_WORKTREE, candidate);
+    if (classifyWorktreeLeftover(candidate).kind === "unregistered-leftover") continue;
+    if (isMainWorktree(candidate)) sawMain = true;
   }
   return result(sawMain ? CWD_CLASSES.MAIN_CHECKOUT : CWD_CLASSES.WORKTREE_GONE);
 }

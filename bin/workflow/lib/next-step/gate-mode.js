@@ -66,7 +66,8 @@ function auditError(action, deps, runId, why) {
 }
 
 // decideAuditGate(row, action, deps) -> {action, hint, reason, runId, verdict}: the plan stage's
-// pre-confirm audit branch, pure over deps {sid, step, ctx, judgeStage, armStage, acceptedOnError}.
+// pre-confirm audit branch, pure over deps {sid, step, ctx, judgeStage, armStage, acceptedOnError,
+// isCapConfirmAcceptable}.
 // Only an unsettled stage arms; every failure closes the gate unless the stage's last run is accepted.
 function decideAuditGate(row, action, deps) {
   const { describeAcceptanceCommand } = require("../../../../hooks/lib/null-freshness/acceptance");
@@ -99,9 +100,20 @@ function decideAuditGate(row, action, deps) {
       return Object.assign(base, { action: "audit-block", summary, hint: HINTS["audit-block"] + " Audit " + j.runId +
         " returned BLOCK." + summaryNote + " " + describeAcceptanceCommand(j.runId) });
     }
-    case "cap-reached":
+    case "cap-reached": {
+      const isCap = deps.isCapConfirmAcceptable || require("../../../../hooks/lib/pre-confirm-audit").isCapConfirmAcceptable;
+      // Only an ask has a CONFIRM dialog whose Allow can record the acceptance (#2873 D6).
+      if (action === "ask" && isCap(j)) {
+        const { summary, summaryNote } = summaryFields(j.summary);
+        const note = " This plan stage reached its audit run cap: the last run " + j.runId + " returned " + j.verdict +
+          " and no later plan was audited. Show its findings and where the plan addresses each with the approval " +
+          "request. The CONFIRM Allow approves the plan and also records the acceptance of this audit verdict " +
+          "(a Deny records neither)." + summaryNote;
+        return Object.assign(base, { action, note, summary, hint: HINTS[action] + note });
+      }
       return Object.assign(base, { action: "audit-block", hint: HINTS["audit-block"] + " This stage reached its " +
         "audit run cap, so no new audit is armed; the last run is " + (j.runId || "none") + ". " + describeAcceptanceCommand(j.runId) });
+    }
     case "unsettled": {
       let arm;
       try { arm = deps.armStage(sid, step, deps.ctx) || {}; } catch (e) { return auditError(action, deps, j.runId, e && e.message); }
@@ -219,6 +231,7 @@ function auditBranch(sid, step, row, action) {
     return decideAuditGate(Object.assign({ step }, row), action, {
       sid, step, ctx: { cwd: process.cwd() },
       judgeStage: PCA.judgeStage, armStage: PCA.armStage, acceptedOnError: PCA.acceptedOnError,
+      isCapConfirmAcceptable: PCA.isCapConfirmAcceptable,
     });
   } catch (e) {
     return auditError(action, null, null, e && e.message);

@@ -1,9 +1,9 @@
 #!/bin/bash
 # tests/bin/feature-sweep-worktrees/orphan.sh
-# Orphan-dir-sweep tests: T8, T8b, T8c, T9, T9b, T9c, T10, T11.
+# Orphan-dir-sweep tests: T8, T8b, T8c, T9, T9b, T9c, T9d, T9e, T9f, T10, T11.
 # Orphan-dir-sweep gates:
 #   1. dir not in `git worktree list --porcelain`
-#   2. no .git entry (file or directory) inside
+#   2. no .git directory or symlink inside (a gitlink file goes to the CLI with --expect-main-root)
 #   3. mtime older than --min-age-hours
 #   4. dir name matches the main repo's basename
 #   5. WORKTREE_NOTES.md `Main repo:` line matches current TARGET_MAIN_ROOT
@@ -153,8 +153,10 @@ T8c_orphan_dir_skipped_when_completely_empty() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T9 — orphan dir contains a .git FILE → gate 2 fails → skipped;
-#      directory still exists after --apply; orphan_dirs_removed == 0.
+# T9 — orphan dir whose .git is a (dangling) SYMLINK → gate 2 skips it;
+#      matching notes keep gates 3-5 from masking the skip, so the
+#      orphan_dirs_skipped_has_git counter is what proves gate 2 fired.
+#      A .git DIRECTORY is T9e; a .git FILE (gitlink) is T9d / T9f.
 # ─────────────────────────────────────────────────────────────────────────────
 
 T9_orphan_dir_skipped_when_has_git() {
@@ -165,7 +167,15 @@ T9_orphan_dir_skipped_when_has_git() {
     local wbase="$TMPDIR_BASE/t9-wbase"
     local orphan="$wbase/has-git-task/$repo_name"
     mkdir -p "$orphan"
-    printf 'gitdir: /nonexistent\n' > "$orphan/.git"
+    # Git for Windows copies instead of linking unless asked for a native symlink.
+    MSYS=winsymlinks:nativestrict ln -s "$TMPDIR_BASE/t9-nonexistent" "$orphan/.git" 2>/dev/null
+    if [[ ! -L "$orphan/.git" ]]; then
+        echo "SKIP: T9 orphan_dir_skipped_when_has_git: this host cannot create a symlink"
+        return
+    fi
+    local repo_fwd
+    repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
+    printf '# Worktree Notes\nMain repo: %s\n' "$repo_fwd" > "$orphan/WORKTREE_NOTES.md"
     make_stale "$orphan"
     make_stale "$wbase/has-git-task"
 
@@ -186,12 +196,55 @@ T9_orphan_dir_skipped_when_has_git() {
         fail "T9 orphan_dir_skipped_when_has_git: dir was removed despite .git presence"
         return
     fi
-    local n
+    local n has_git
     n="$(ci_field "$out" orphan_dirs_removed)"
-    if [ "$n" = "0" ]; then
-        pass "T9 orphan_dir_skipped_when_has_git (counter==0, dir kept)"
+    has_git="$(ci_field "$out" orphan_dirs_skipped_has_git)"
+    if [[ "$n" == "0" && "$has_git" == "1" ]]; then
+        pass "T9 orphan_dir_skipped_when_has_git (removed==0, skipped_has_git==1, dir kept)"
     else
-        fail "T9 orphan_dir_skipped_when_has_git: orphan_dirs_removed=$n, raw=$out"
+        fail "T9 orphan_dir_skipped_when_has_git: removed=$n skipped_has_git=$has_git, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T9f (#2875) — a gitlink FILE whose ownership cannot be proven (its gitdir
+#       points at no repository, so it is not an unregistered leftover) passes
+#       gates 2-5 with matching notes, but the CLI refuses it under
+#       --expect-main-root: removed==0, skipped_failed==1, dir kept.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T9f_unproven_gitlink_left_in_place() {
+    local repo="$TMPDIR_BASE/t9f-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t9f-wbase"
+    local orphan="$wbase/unproven-task/$repo_name"
+    mkdir -p "$orphan"
+    local absent_fwd repo_fwd
+    absent_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$TMPDIR_BASE/t9f-absent/.git/worktrees/x" 2>/dev/null)"
+    printf 'gitdir: %s\n' "$absent_fwd" > "$orphan/.git"
+    repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
+    printf '# Worktree Notes\nMain repo: %s\n' "$repo_fwd" > "$orphan/WORKTREE_NOTES.md"
+    make_stale "$orphan"
+    make_stale "$wbase/unproven-task"
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T9f unproven_gitlink_left_in_place: exit=$exit_code, out=$out"
+        return
+    fi
+    local removed failed has_git
+    removed="$(ci_field "$out" orphan_dirs_removed)"
+    failed="$(ci_field "$out" orphan_dirs_skipped_failed)"
+    has_git="$(ci_field "$out" orphan_dirs_skipped_has_git)"
+    if [[ -f "$orphan/.git" && "$removed" == "0" && "$failed" == "1" && "$has_git" == "0" ]]; then
+        pass "T9f unproven_gitlink_left_in_place (removed==0, skipped_failed==1, dir kept)"
+    else
+        fail "T9f unproven_gitlink_left_in_place: removed=$removed skipped_failed=$failed skipped_has_git=$has_git dir_kept=$([[ -f "$orphan/.git" ]] && echo yes || echo no), raw=$out"
     fi
 }
 
@@ -335,6 +388,92 @@ T10_orphan_dir_skipped_when_too_young() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T9d (#2875 / #322) — a WE-11 leftover: the dir keeps its `.git` gitlink but
+#       git no longer lists it (admin dir pruned). Gate (2) no longer skips a
+#       gitlink; the CLI gets --expect-main-root and removes the proven leftover.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T9d_gitlink_leftover_collected() {
+    local repo="$TMPDIR_BASE/t9d-repo"
+    init_repo "$repo"
+    git -C "$repo" config core.hooksPath /dev/null
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t9d-wbase"
+    local orphan="$wbase/leftover-task/$repo_name"
+    mkdir -p "$wbase/leftover-task"
+    add_worktree "$repo" "$orphan" "feature/t9d"
+    # WE-11 failure: the dir survives while `git worktree prune` drops its admin dir.
+    mv "$orphan" "$orphan.hidden"
+    git -C "$repo" worktree prune
+    mv "$orphan.hidden" "$orphan"
+    if [[ ! -f "$orphan/.git" ]]; then
+        fail "T9d gitlink_leftover_collected: fixture lost its gitlink"
+        return
+    fi
+    local repo_fwd
+    repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
+    printf '# Worktree Notes\nMain repo: %s\n' "$repo_fwd" > "$orphan/WORKTREE_NOTES.md"
+    make_stale "$orphan"
+    make_stale "$wbase/leftover-task"
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T9d gitlink_leftover_collected: exit=$exit_code, out=$out"
+        return
+    fi
+    local removed
+    removed="$(ci_field "$out" orphan_dirs_removed)"
+    if [[ "$removed" == "1" && ! -d "$orphan" ]]; then
+        pass "T9d gitlink_leftover_collected (removed==1, dir gone)"
+    else
+        fail "T9d gitlink_leftover_collected: removed=$removed dir_exists=$([[ -d "$orphan" ]] && echo yes || echo no), raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T9e (#2875) — a candidate whose `.git` is a DIRECTORY is its own repo, not a
+#       leftover: gate (2) still skips it even with a matching `Main repo:`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T9e_git_directory_still_skipped() {
+    local repo="$TMPDIR_BASE/t9e-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t9e-wbase"
+    local orphan="$wbase/repo-task/$repo_name"
+    mkdir -p "$orphan"
+    git init -q "$orphan"
+    git -C "$orphan" config core.hooksPath /dev/null
+    local repo_fwd
+    repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
+    printf '# Worktree Notes\nMain repo: %s\n' "$repo_fwd" > "$orphan/WORKTREE_NOTES.md"
+    make_stale "$orphan"
+    make_stale "$wbase/repo-task"
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T9e git_directory_still_skipped: exit=$exit_code, out=$out"
+        return
+    fi
+    local removed has_git
+    removed="$(ci_field "$out" orphan_dirs_removed)"
+    has_git="$(ci_field "$out" orphan_dirs_skipped_has_git)"
+    if [[ -d "$orphan/.git" && "$removed" == "0" && "$has_git" == "1" ]]; then
+        pass "T9e git_directory_still_skipped (removed==0, skipped_has_git==1)"
+    else
+        fail "T9e git_directory_still_skipped: removed=$removed skipped_has_git=$has_git, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests in this group
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -344,6 +483,9 @@ T8c_orphan_dir_skipped_when_completely_empty
 T9_orphan_dir_skipped_when_has_git
 T9b_orphan_dir_skipped_when_main_repo_mismatch
 T9c_orphan_dir_skipped_when_legacy_notes_missing_main_repo
+T9d_gitlink_leftover_collected
+T9e_git_directory_still_skipped
+T9f_unproven_gitlink_left_in_place
 T10_orphan_dir_skipped_when_too_young
 
 echo ""

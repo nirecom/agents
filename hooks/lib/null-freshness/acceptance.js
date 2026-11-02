@@ -94,9 +94,10 @@ function acceptanceReleasesNonNull({ tr5Run, overrides, currentFk } = {}) {
   return Boolean(acc) && acc.freshness_key === currentFk;
 }
 
-// #2853: a plan stage (TR1-3) also accepts an unsettled run, recorded as UNSETTLED. Kept apart from
-// ACCEPTABLE_VERDICTS so an UNSETTLED record can never release a TR5 gate.
-const STAGE_ACCEPTABLE_VERDICTS = Object.freeze(["WARN", "BLOCK", "UNSETTLED"]);
+// #2853: a plan stage (TR1-3) also accepts an unsettled run, recorded as UNSETTLED, and (#2873) a
+// CONTINUE run past its audit run cap. Kept apart from ACCEPTABLE_VERDICTS so neither record can
+// ever release a TR5 gate.
+const STAGE_ACCEPTABLE_VERDICTS = Object.freeze(["WARN", "BLOCK", "CONTINUE", "UNSETTLED"]);
 
 // findStageAcceptance(audit, tr, runId) -> the newest acceptance record of runId, or null. The
 // ledger entry for runId must exist and carry tr; the record's verdict must be the entry's verdict,

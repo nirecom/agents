@@ -19,6 +19,7 @@ const { applyDispatchOutcome } = require("./workflow-run-tests/dispatch-outcome"
 const { recordRun } = require("./workflow-run-tests/record-run");
 const { runAllHits, workerHits } = require("./workflow-run-tests/hit-summary");
 const { CONTRACT_PREFIX_RE, findSingleContract, runtimeLabels } = require("./lib/run-contract");
+const { WORKER_MISSING_RE, countMissingFileLines, readSummaryToken } = require("./lib/missing-test-files");
 const { sanitizeUntrustedField } = require("./lib/output-sanitize");
 const { normalizeCwd } = require("./lib/path-normalize");
 
@@ -110,7 +111,6 @@ function workerStatusOf(toolResponse, emitter) {
 // never stdout). run-all prints a line-anchored `Missing runtimes:` line (neutralized child
 // lines carry a prefix); the worker leads its header `summary:` with the same text.
 const RUNALL_MISSING_RE = /^Missing runtimes: ([^\r\n]+)$/gm;
-const WORKER_MISSING_RE = /^summary:[ \t]*'?Missing runtimes: ([^;'\r\n]+)/m;
 function missingRuntimes(toolResponse, emitter) {
   const header = responseHeader(toolResponse, emitter);
   if (emitter === "worker-dispatch") {
@@ -119,6 +119,17 @@ function missingRuntimes(toolResponse, emitter) {
   }
   const all = [...header.matchAll(RUNALL_MISSING_RE)];
   return all.length === 0 ? null : runtimeLabels(all[all.length - 1][1]);
+}
+
+// How many of a contract-unrunnable run's UNRUNNABLE tests are missing test files (#2646).
+const WORKER_SUMMARY_LEAD_RE = /^summary:[ \t]*'?(.*)$/m;
+function missingFileCount(toolResponse, emitter) {
+  const header = responseHeader(toolResponse, emitter);
+  if (emitter === "worker-dispatch") {
+    const m = WORKER_SUMMARY_LEAD_RE.exec(header);
+    return m === null ? 0 : readSummaryToken(m[1]);
+  }
+  return countMissingFileLines(header.split(/\r?\n/));
 }
 
 const UNTRUSTED = {
@@ -236,6 +247,7 @@ try {
     failingTests: stdoutFailingTests(t, toolResponse),
     hitSummary: stdoutHits(t, toolResponse),
     unrunnableRuntimes: reason === "contract-unrunnable" ? missingRuntimes(toolResponse, t.emitter) : null,
+    unrunnableMissingFiles: reason === "contract-unrunnable" ? missingFileCount(toolResponse, t.emitter) : null,
     contractAbsent: !t.hasProvenance || t.contract === null,
     reason,
     unsettledStem: dispatch.unsettledStem,
