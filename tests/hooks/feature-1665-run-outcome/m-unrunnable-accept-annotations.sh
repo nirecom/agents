@@ -52,6 +52,19 @@ _m_worker_unrunnable() {
     printf '  PASS: alpha\n'
 }
 
+# _m_worker_missing_files <summary> <unrunnable> — a worker payload whose summary leads with the
+# `Missing test files: N; ` token test-runner.js prefixes when a selected test file is gone (#2646).
+_m_worker_missing_files() {
+    printf '%s\n' "RUN_CONTRACT: PASS=3 FAIL=0 SKIP=0 EXECUTED=3 UNRUNNABLE=$2 TIMEOUT=0"
+    printf 'status: unrunnable\n'
+    printf 'exit_code: 0\n'
+    printf 'duration_seconds: 4\n'
+    printf "summary: '%s'\n" "$1"
+    printf 'failing_tests: []\n'
+    printf 'log_tail: |\n'
+    printf '  PASS: alpha\n'
+}
+
 # _m_seed_accepted <sid> — run_tests as the accept handler leaves it.
 _m_seed_accepted() {
     seed_step "$1" write_tests complete
@@ -83,12 +96,31 @@ run_m_unrunnable_accept_annotations_cases() {
     seed_step "$sid" write_tests complete
     drive_hook "$DISPATCH_CMD" 0 "$sid" "$(_m_worker_unrunnable)" >/dev/null
     assert_eq "M1c/worker-runtimes-from-summary" "Pester>=5.0" "$(step_field "$sid" run_tests unrunnable_runtimes)"
+    assert_eq "M1c/worker-no-token-missing-files-zero" "0" "$(step_field "$sid" run_tests unrunnable_missing_files)"
 
     # A green run has no runtimes to record.
     sid="f1665-m1d"
     seed_step "$sid" write_tests complete
     drive_hook "$RUNALL_CMD" 0 "$sid" "$M_GREEN6_STDOUT" >/dev/null
     assert_eq "M1d/green-no-runtimes" "(absent)" "$(step_field "$sid" run_tests unrunnable_runtimes)"
+
+    # #2646: the worker summary's leading `Missing test files: N; ` token is recorded as the
+    # count, and the runtimes after it are still read through the same capture group.
+    sid="f1665-m1e"
+    seed_step "$sid" write_tests complete
+    drive_hook "$DISPATCH_CMD" 0 "$sid" "$(_m_worker_missing_files \
+        'Missing test files: 2; Missing runtimes: Pester>=5.0 (1 file); PASS=3 FAIL=0 SKIP=0 UNRUNNABLE=3' 3)" >/dev/null
+    assert_eq "M1e/worker-token-status-pending" "pending" "$(step_field "$sid" run_tests status)"
+    assert_eq "M1e/worker-token-missing-files" "2" "$(step_field "$sid" run_tests unrunnable_missing_files)"
+    assert_eq "M1e/worker-token-runtimes-kept" "Pester>=5.0" "$(step_field "$sid" run_tests unrunnable_runtimes)"
+
+    # Every UNRUNNABLE is a missing file: the token alone carries the count, no runtimes recorded.
+    sid="f1665-m1f"
+    seed_step "$sid" write_tests complete
+    drive_hook "$DISPATCH_CMD" 0 "$sid" "$(_m_worker_missing_files \
+        'Missing test files: 2; PASS=3 FAIL=0 SKIP=0 UNRUNNABLE=2' 2)" >/dev/null
+    assert_eq "M1f/token-only-missing-files" "2" "$(step_field "$sid" run_tests unrunnable_missing_files)"
+    assert_eq "M1f/token-only-no-runtimes" "(absent)" "$(step_field "$sid" run_tests unrunnable_runtimes)"
 
     # --- M2: the next run clears an earlier accept, whatever its outcome ------
     sid="f1665-m2-seed"

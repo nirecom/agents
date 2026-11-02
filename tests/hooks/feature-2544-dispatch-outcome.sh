@@ -41,6 +41,8 @@ case_begin "dispatch-outcome-case-groups" "hooks/workflow-run-tests.js"
 . "$F2544_CASE_DIR/d-unsettled.sh"
 # shellcheck source=tests/hooks/feature-2544-dispatch-outcome/b-ingest.sh
 . "$F2544_CASE_DIR/b-ingest.sh"
+# shellcheck source=tests/hooks/feature-2544-dispatch-outcome/b2-missing-files.sh
+. "$F2544_CASE_DIR/b2-missing-files.sh"
 # shellcheck source=tests/hooks/feature-2544-dispatch-outcome/c-trust.sh
 . "$F2544_CASE_DIR/c-trust.sh"
 # shellcheck source=tests/hooks/feature-2544-dispatch-outcome/e-stdout-demote-only.sh

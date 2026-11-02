@@ -25,7 +25,14 @@ function rejection(entry) {
     return "the run reported FAIL>0 — a failing test is a code defect, not an unrunnable runtime";
   }
   if (entry.contract_absent === true) return "the run left no trusted RUN_CONTRACT — re-run /run-tests";
-  if (entry.run_outcome === "unrunnable" && Number.isInteger(entry.unrunnable_count) && entry.unrunnable_count > 0) {
+  const count = entry.unrunnable_count;
+  if (entry.run_outcome === "unrunnable" && Number.isInteger(count) && count > 0) {
+    // A state recorded before #2646 has no count: it reads as 0 missing files.
+    const m = entry.unrunnable_missing_files;
+    if (Number.isInteger(m) && m > 0) {
+      return `${m} of ${count} UNRUNNABLE test(s) are missing test files (not missing runtimes) — ` +
+        "fix the test path(s) and re-run /run-tests; only a missing-runtime run can be accepted";
+    }
     return null;
   }
   if (entry.run_outcome === null || entry.run_outcome === undefined) {

@@ -20,6 +20,7 @@ const RESULTS_LINE_RE = /^Results:[ \t]*(.+?)[ \t]*$/;
 // output so the renderer can put exactly one copy where the hook will look, and
 // the two would silently disagree if they recognised different strings.
 const { CONTRACT_PREFIX_RE, findSingleContract } = require("../../../hooks/lib/run-contract");
+const { countMissingFileLines, withSummaryToken } = require("../../../hooks/lib/missing-test-files");
 // run-all's whole-run exit for "nothing executed" (all SKIP, nothing selected, nothing launched).
 const EXIT_NOTHING_EXECUTED = 77;
 // Passing case lines would push the failing unit's context out of the tail window.
@@ -214,6 +215,7 @@ function run(payload, ctx) {
   const missing = lastMissingRuntimesLine(nonEmpty);
   // First, because the renderer cuts a long summary at its end and the runtimes are the remedy.
   if (missing !== null) summary = `${missing}; ${summary}`;
+  summary = withSummaryToken(summary, countMissingFileLines(nonEmpty));
   const hitCount = runContract !== null && runContract.hits > 0 ? runContract.hits : hits.length;
   if (hitCount > 0) summary = `${summary}; HITS=${hitCount} (unattributed hits)`;
 
