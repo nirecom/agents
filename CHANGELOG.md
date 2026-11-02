@@ -991,3 +991,7 @@ Changes: The RTK and glab installers now say "already up to date" when nothing n
 ### FEATURE: PR #2898 (2026-11-02)
 Background: fix(#2849,#2781): widen the commit-push gate decision limit and fail ...
 Changes: Committing a large change no longer fails because the documentation checks run out of time; the commit-push gate now waits up to 110 s for them.
+
+### FEATURE: PR #2887 (2026-11-02)
+Background: feat(#2814): share review criteria and severity across reviewers, rec...
+Changes: Reviewers (plan, code, security, tests) now share one set of review criteria and one severity definition, so findings below the reporting bar and inconsistent severities are cut.;When you correct the direction of an approved plan in conversation, the correction is recorded and honored by reviewers instead of being asked again as an upstream inconsistency.;Reviewers now flag a lower plan that copies or narrows a decision already settled in an upper plan.
