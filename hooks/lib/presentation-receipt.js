@@ -155,6 +155,7 @@ function writeReceipt(sid, step, fields) {
   }
   if (!writeBody(receiptPath(sid, step), body)) return false;
   // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove with the legacy receipt name block above once 30 days have passed since merge
   unlinkLegacyReceipt(sid, step); // the two names never coexist, so one receipt is spent once
   // --- END temporary: workflow stage -> workflow step migration ---
   appendReceiptLog(sid, "write", step);
@@ -176,6 +177,7 @@ function markContinued(sid, step) {
     };
     const written = writeBody(receiptPath(sid, step), body, verify);
     // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+    // deletion-condition: remove with the legacy receipt name block above once 30 days have passed since merge
     if (written) unlinkLegacyReceipt(sid, step);
     // --- END temporary: workflow stage -> workflow step migration ---
     return written;
@@ -216,6 +218,7 @@ function consumeReceipt(sid, step) {
   let removed = false;
   try { fs.unlinkSync(receiptPath(sid, step)); removed = true; } catch (_) { /* absent: try the legacy name */ }
   // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove with the legacy receipt name block above once 30 days have passed since merge
   // The legacy receipt is a cleanup, not a second spend: only the file readReceipt would read counts.
   const legacyRemoved = unlinkLegacyReceipt(sid, step);
   if (!removed && legacyRemoved) removed = true;
