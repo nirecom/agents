@@ -983,3 +983,7 @@ Changes: Fixed: a run that named nonexistent test files could be accepted as "un
 ### FEATURE: PR #2881 (2026-11-02)
 Background: docs(#2461,#2764): describe Jev continuation judgments and the AskUse...
 Changes: Jev can now advise next-step to pause before invoking the next skill, and can let the Stop guard continue a turn it would otherwise stop (#2461).;Jev can answer AskUserQuestion dialogs that Claude explicitly marks as already settled by the conversation; dialogs raised by a skill always reach the user (#2764). Turn it off alone with `JEV_AUTO_SKIP_ASKUSER=off`.
+
+### FEATURE: PR #2897 (2026-11-02)
+Background: fix(#2892): show "already up to date" for winget exit code -197833518...
+Changes: The RTK and glab installers now say "already up to date" when nothing needs upgrading, instead of the ambiguous "up to date or upgrade failed".
