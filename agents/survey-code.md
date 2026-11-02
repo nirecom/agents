@@ -45,4 +45,4 @@ Follow the procedure in `skills/survey-code/SKILL.md`. Produce a `<session-id>-s
 - You MUST NOT emit any `<<WORKFLOW_*>>` sentinels. Sentinel emission is handled
   exclusively by the orchestrator, not by this subagent.
 - gh CLI failures are non-fatal — log them in the artifact under `## Data gaps`.
-- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
+- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md

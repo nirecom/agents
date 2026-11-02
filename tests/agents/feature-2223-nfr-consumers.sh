@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/agents/feature-2223-nfr-consumers.sh
-# Tests: agents/outline-reviewer.md, agents/detail-reviewer.md, agents/plan-security-reviewer.md, agents/test-reviewer.md, agents/security-scanner.md, agents/outline-planner.md, agents/detail-planner.md, agents/lib/nfr-severity-calibration.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md
+# Tests: agents/outline-reviewer.md, agents/detail-reviewer.md, agents/plan-security-reviewer.md, agents/test-reviewer.md, agents/security-scanner.md, agents/outline-planner.md, agents/detail-planner.md, skills/_shared/nfr-severity-calibration.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md
 # Tags: scope:issue-specific, TL2, nfr, static, pwsh-not-required
 # Static/structural coverage for scope 2/3 consumers: the shared operational doc
 # exists and points at the primitive (not a restatement of it), and every symmetric
@@ -27,7 +27,7 @@ run_with_timeout() {
 # The operational doc must reference the primitive, never restate this rule (C4).
 GUIDANCE_SENTINEL="does not suppress"
 
-CALIB_DOC="$SCRIPT_CHECKOUT_ROOT/agents/lib/nfr-severity-calibration.md"
+CALIB_DOC="$SCRIPT_CHECKOUT_ROOT/skills/_shared/nfr-severity-calibration.md"
 
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -73,7 +73,7 @@ assert_tools_has() {
     fi
 }
 
-# --- The shared operational doc (agents/lib/nfr-severity-calibration.md) -------
+# --- The shared operational doc (skills/_shared/nfr-severity-calibration.md) -------
 assert_exists "T2223CO-1-calib-doc-exists" "$CALIB_DOC"
 assert_has "T2223CO-2-calib-doc-refs-git-rev-parse" "$CALIB_DOC" "git rev-parse --show-toplevel"
 assert_has "T2223CO-3-calib-doc-refs-cli" "$CALIB_DOC" "bin/project-nfr-block"
@@ -83,24 +83,24 @@ assert_lacks "T2223CO-4-calib-doc-does-not-restate-guidance" "$CALIB_DOC" "$GUID
 # --- Reviewers: reference + Bash (CPR-ORTH over the 4 read-only reviewers) ------
 for reviewer in outline-reviewer detail-reviewer plan-security-reviewer test-reviewer; do
     f="$SCRIPT_CHECKOUT_ROOT/agents/$reviewer.md"
-    assert_has        "T2223CO-5-$reviewer-refs-calib-doc" "$f" "nfr-severity-calibration.md"
+    assert_has        "T2223CO-5-$reviewer-refs-calib-doc" "$f" "skills/_shared/nfr-severity-calibration.md"
     assert_tools_has  "T2223CO-6-$reviewer-tools-has-bash" "$f" "Bash"
 done
 
 # --- security-scanner: reference added; Bash was already present (regression) ---
 SCANNER="$SCRIPT_CHECKOUT_ROOT/agents/security-scanner.md"
-assert_has       "T2223CO-7-security-scanner-refs-calib-doc" "$SCANNER" "nfr-severity-calibration.md"
+assert_has       "T2223CO-7-security-scanner-refs-calib-doc" "$SCANNER" "skills/_shared/nfr-severity-calibration.md"
 assert_tools_has "T2223CO-8-security-scanner-tools-has-bash" "$SCANNER" "Bash"
 
 # --- Planners: reference the shared doc -----------------------------------------
 for planner in outline-planner detail-planner; do
     f="$SCRIPT_CHECKOUT_ROOT/agents/$planner.md"
-    assert_has "T2223CO-9-$planner-refs-calib-doc" "$f" "nfr-severity-calibration.md"
+    assert_has "T2223CO-9-$planner-refs-calib-doc" "$f" "skills/_shared/nfr-severity-calibration.md"
 done
 
 # --- write-code / write-tests SKILLs: OPTIONAL NFR bullet -----------------------
-assert_has "T2223CO-10-write-code-optional-nfr" "$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md" "nfr-severity-calibration"
-assert_has "T2223CO-11-write-tests-optional-nfr" "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" "nfr-severity-calibration"
+assert_has "T2223CO-10-write-code-optional-nfr" "$SCRIPT_CHECKOUT_ROOT/skills/write-code/SKILL.md" "skills/_shared/nfr-severity-calibration.md"
+assert_has "T2223CO-11-write-tests-optional-nfr" "$SCRIPT_CHECKOUT_ROOT/skills/write-tests/SKILL.md" "skills/_shared/nfr-severity-calibration.md"
 
 # --- C5: the shared primitive every consumer depends on must be callable --------
 # The reference checks above prove each consumer POINTS at the doc; this proves the

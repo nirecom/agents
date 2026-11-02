@@ -9,7 +9,7 @@ const { codegraphEnabled } = require("./lib/codegraph-boundary");
 // The same nudge the nine adopting agents/*.md carry, extended to every
 // subagent — built-in Explore/general-purpose/Plan agents included.
 const CODEGRAPH_NUDGE =
-  "Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md";
+  "Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md";
 
 // Drain stdin so the parent never sees a closed pipe; only session_id is read from the payload,
 // for the VERBOSE_PROMPT flag of the (parent) session. A broken payload injects no VERBOSE_PROMPT.
