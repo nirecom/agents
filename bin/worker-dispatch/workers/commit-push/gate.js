@@ -14,6 +14,7 @@ const path = require("path");
 const { performance } = require("perf_hooks");
 
 const { readEnvFile } = require("../../../../hooks/lib/load-env");
+const { DECISION_LIMIT_ENV } = require("../../../../hooks/lib/decision-time-limit");
 const { getSessionStateDir } = require("../../../../hooks/workflow-state/state-io/state-root");
 const { run: spawnRun } = require("../../spawn");
 
@@ -23,11 +24,21 @@ const SCRIPT_TIMEOUT_MS = 120000;
 
 const DEFAULT_PROTECTED_BRANCHES = "main,master";
 
-// The ONLY decision hooks/workflow-gate.js emits that means "proceed".
+// The legacy decision hooks/workflow-gate.js emits that means "proceed".
 const GATE_APPROVE = "approve";
+// Both verdict shapes (legacy `decision`, hookSpecificOutput.permissionDecision).
+const GATE_ALLOW_DECISIONS = [GATE_APPROVE, "allow"];
+const GATE_REFUSE_DECISIONS = ["block", "deny"];
+const GATE_ASK = "ask";
 
-// The six workflow env vars the gate child is allowed to see, and the only
-// names extraEnv below may set.
+// The gate child's decision time limit (hooks/lib/decision-time-limit.js),
+// widened from the hook path's 10 s to fit inside GATE_TIMEOUT_MS with 10 s
+// left for node start, output and exit (#2849).
+const GATE_DECISION_LIMIT_ENV = DECISION_LIMIT_ENV;
+const GATE_DECISION_BUDGET_MS = GATE_TIMEOUT_MS - 10000;
+
+// The workflow env vars the gate child is allowed to see — the six resolved
+// below plus the decision time limit — and the only names extraEnv may set.
 const GATE_ENV_SCOPE = [
   "WORKFLOW_STATE_DIR",
   "WORKFLOW_PLANS_DIR",
@@ -35,6 +46,7 @@ const GATE_ENV_SCOPE = [
   "CLAUDE_PROJECT_DIR",
   "DEFAULT_BRANCHES",
   "ENFORCE_WORKTREE",
+  GATE_DECISION_LIMIT_ENV,
 ];
 
 function firstLine(text) {
@@ -143,7 +155,7 @@ function runScript(ctx, payload, scriptKey, args, log, envScope) {
 
 // D1. `gitArgs` is the SAME array the caller is about to spawn — the command
 // string the gate is asked about is derived from it rather than written twice.
-// Returns { ok } | { ok:false, reason, degraded }.
+// Returns { ok } | { ok:false, reason, degraded[, ask] }.
 function runGate(ctx, payload, gateEnv, gitArgs, log) {
   const command = ["git"].concat(gitArgs).join(" ");
   const input = JSON.stringify({
@@ -169,6 +181,7 @@ function runGate(ctx, payload, gateEnv, gitArgs, log) {
         CLAUDE_PROJECT_DIR: gateEnv.CLAUDE_PROJECT_DIR,
         DEFAULT_BRANCHES: gateEnv.DEFAULT_BRANCHES,
         ENFORCE_WORKTREE: gateEnv.ENFORCE_WORKTREE,
+        [GATE_DECISION_LIMIT_ENV]: String(GATE_DECISION_BUDGET_MS),
       },
       input,
     });
@@ -202,28 +215,59 @@ function runGate(ctx, payload, gateEnv, gitArgs, log) {
   } catch (_e) {
     verdict = null;
   }
-  if (verdict === null || typeof verdict !== "object" || typeof verdict.decision !== "string") {
+  return normalizeGateVerdict(verdict);
+}
+
+// readDecision(verdict) -> { decision, reason } | null. When both shapes are
+// present and disagree, the one that is not an allow wins (fail-closed).
+function readDecision(verdict) {
+  if (verdict === null || typeof verdict !== "object") return null;
+  const legacy = typeof verdict.decision === "string"
+    ? { decision: verdict.decision, reason: verdict.reason }
+    : null;
+  const hso = verdict.hookSpecificOutput;
+  const modern = hso !== null && typeof hso === "object" && typeof hso.permissionDecision === "string"
+    ? { decision: hso.permissionDecision, reason: hso.permissionDecisionReason }
+    : null;
+  if (legacy === null) return modern;
+  if (modern === null) return legacy;
+  return GATE_ALLOW_DECISIONS.includes(legacy.decision) ? modern : legacy;
+}
+
+// The one place both verdict shapes become the worker's verdict. Permission is
+// exactly two tokens (approve / allow); a typo or a decision this worker
+// predates is a degraded refusal, so the allowlist cannot be widened by
+// anything the gate learns to say later. An ask is a refusal, never a pass.
+function normalizeGateVerdict(verdict) {
+  const read = readDecision(verdict);
+  if (read === null) {
     return { ok: false, degraded: true, reason: "workflow-gate returned an unparsable verdict" };
   }
-  if (verdict.decision === "block") {
-    return { ok: false, degraded: false, reason: firstLine(verdict.reason) || "blocked by workflow-gate" };
+  const { decision, reason } = read;
+  if (GATE_ALLOW_DECISIONS.includes(decision)) return { ok: true };
+  if (GATE_REFUSE_DECISIONS.includes(decision)) {
+    return { ok: false, degraded: false, reason: firstLine(reason) || "blocked by workflow-gate" };
   }
-  // Permission is exactly one token. "deny", "ask", a typo, or a decision this
-  // worker predates are all treated as refusals: an allowlist of one cannot be
-  // widened by anything the gate learns to say later.
-  if (verdict.decision !== GATE_APPROVE) {
+  if (decision === GATE_ASK) {
+    const asked = firstLine(reason);
     return {
       ok: false,
-      degraded: true,
-      reason: `workflow-gate returned an unrecognized decision: ${firstLine(verdict.decision)}`,
+      degraded: false,
+      ask: true,
+      reason: asked ? `workflow-gate asked: ${asked}` : "workflow-gate asked for confirmation",
     };
   }
-  return { ok: true };
+  return {
+    ok: false,
+    degraded: true,
+    reason: `workflow-gate returned an unrecognized decision: ${firstLine(decision)}`,
+  };
 }
 
 module.exports = {
   firstLine,
   isProtectedBranch,
+  normalizeGateVerdict,
   readCheckoutEnv,
   resolveGateEnv,
   runGate,
@@ -231,6 +275,8 @@ module.exports = {
   runScript,
   DEFAULT_PROTECTED_BRANCHES,
   GATE_APPROVE,
+  GATE_DECISION_BUDGET_MS,
+  GATE_DECISION_LIMIT_ENV,
   GATE_TIMEOUT_MS,
   GIT_TIMEOUT_MS,
   SCRIPT_TIMEOUT_MS,
