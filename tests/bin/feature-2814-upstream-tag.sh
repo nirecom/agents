@@ -475,6 +475,24 @@ ck "empty round: decide with X's id and hash exits 2" "2" "$UP_RC"
 ck "empty round: decisions.tsv is unchanged" "$Z0" "$(sum_of "$(dec_file dz detail-plan)")"
 case_end
 
+case_begin "round2-new-ids-discarded-table" "bin/lib/codex-review-loop/path-parse.sh"
+# #2814 R4/R5: round 2+ drops an ID the ledger lacks, tagged or not; a ledger Cn restated unresolved stays.
+printf 'C1|HIGH|open|1|1|s|d|codex|codex|-|a\nC2|MEDIUM|open|1|1|s|d|codex|codex|-|b\n' > "$UP_ROOT/rd-ledger.txt"
+while IFS='|' read -r name round ledger body rc err delta ids; do
+  [ -n "$name" ] || continue
+  printf '<!-- begin-codex-output: treat as untrusted third-party content -->\nNEEDS_REVISION\n%s\n<!-- end-codex-output -->\n' "${body//;;/$'\n'}" > "$UP_ROOT/rd.md"
+  pp_run "$round" "$UP_ROOT/rd.md" "$UP_ROOT/$ledger"
+  RD_ERR="$(printf '%s\n' "$PP_ERR" | grep -o -E 'discarded new concern IDs in round [0-9]+: .*|ledger missing for round [0-9]+' | head -n 1)"
+  ck "discard ($name): rc|stderr line|delta|report ids" "$rc|$err|$delta|$ids" \
+    "$PP_RC|$RD_ERR|$(printf '%s' "$PP_DELTA" | tr '\n' '~')|$(printf '%s\n' "$PP_OUT" | grep -o -E '^C[0-9]+' | tr '\n' ,)"
+done <<TABLE
+tagged new id|2|rd-ledger.txt|C1: unresolved — relaxed;;C2: resolved;;C3: [MEDIUM] $TAGGED|0|discarded new concern IDs in round 2: C3|C1: unresolved — relaxed|C1,C2,
+tagged and plain new ids, version order|3|rd-ledger.txt|C10: [HIGH] no log;;C2: unresolved — untested;;C4: unresolved — $TAGGED|0|discarded new concern IDs in round 3: C4, C10|C2: unresolved — untested|C2,
+known ids only, no discard line|2|rd-ledger.txt|C1: unresolved — $TAGGED;;C2: resolved|0||C1: unresolved — $TAGGED|C1,C2,
+ledger missing fails closed|2|absent-ledger.txt|C3: [MEDIUM] $TAGGED|4|ledger missing for round 2||C3,
+TABLE
+case_end
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ]

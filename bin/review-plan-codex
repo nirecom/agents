@@ -253,7 +253,7 @@ rpc_plan_step_row "$FORMAT" || codex_core_emit_failed "plan step hierarchy unava
 rpc_build_hierarchy_block
 
 # Build prompt
-rpc_build_nfr_block
+rpc_build_criteria_block
 GLOSSARY_ROOT="${PROJECT_ROOT_ARG:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 GLOSSARY_TEXT="$(codex_glossary_block "$GLOSSARY_ROOT")"
 rpc_build_glossary_block
@@ -265,14 +265,17 @@ rpc_load_ledger_concerns
 case "$FORMAT" in
   detail-plan)
     PREAMBLE=$(codex_core_plan_review_preamble "implementation plan" detail plan)
+    rpc_append_round1_scope plan
     rpc_prompt_detail_plan
     ;;
   security-plan)
     PREAMBLE=$(codex_core_plan_review_preamble "implementation plan" detail plan)
+    rpc_append_round1_scope plan
     rpc_prompt_security_plan
     ;;
   test-review)
     PREAMBLE=$(codex_core_plan_review_preamble "test coverage review" "test files" plan)
+    rpc_append_round1_scope "test files"
     rpc_prompt_test_review
     ;;
   outline-plan)

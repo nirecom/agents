@@ -154,7 +154,7 @@ PP_GATE_DIR="$TMPDIR_BASE/pp-gates-agents"
 # resolver stub written per-iteration below then overlays bin/resolve-merge-base.sh on top of
 # this copy to drive the merge-base warn value.
 mkdir -p "$PP_GATE_DIR/rules"
-script_checkout_fixture_copy "$PP_GATE_DIR"
+script_checkout_fixture_copy "$PP_GATE_DIR" bin hooks skills "${RCC_REVIEW_CRITERIA_PATHS[@]}"
 # run-codex-review-loop pre-flight requires rules/core-principles.md in its script checkout as
 # mandatory context (bin/run-codex-review-loop:39-40); build-codex-context reads it too.
 cp "$AGENTS_ROOT/rules/core-principles.md" "$PP_GATE_DIR/rules/core-principles.md"

@@ -184,7 +184,7 @@ rm -rf "$F_BADCFG"
 mkdir -p "$F_BADCFG/bin"
 printf '#!/usr/bin/env bash\necho "get-config-var: exploded" >&2\nexit 1\n' > "$F_BADCFG/bin/get-config-var"
 chmod +x "$F_BADCFG/bin/get-config-var"
-script_checkout_fixture_copy "$F_BADCFG" bin hooks
+script_checkout_fixture_copy "$F_BADCFG" bin hooks "${RCC_REVIEW_CRITERIA_PATHS[@]}"
 PP_SCRIPT="$F_BADCFG/bin/review-code-codex"
 pp_exec "$F_FAIL" --base main --no-log
 if ! pp_has "$PP_OUT_TEXT" "^## Codex Review: PERFORMED"; then
@@ -213,7 +213,7 @@ for f_cfgmode in absent failing; do
     mkdir -p "$F_BADCFG2/bin"
     printf '#!/usr/bin/env bash\necho "get-config-var: exploded" >&2\nexit 1\n' > "$F_BADCFG2/bin/get-config-var"
     chmod +x "$F_BADCFG2/bin/get-config-var"
-    script_checkout_fixture_copy "$F_BADCFG2" bin hooks
+    script_checkout_fixture_copy "$F_BADCFG2" bin hooks "${RCC_REVIEW_CRITERIA_PATHS[@]}"
     # "absent": bin/ exists but get-config-var itself is deliberately removed from it.
     [ "$f_cfgmode" = "absent" ] && rm -f "$F_BADCFG2/bin/get-config-var"
     PP_SCRIPT="$F_BADCFG2/bin/review-code-codex"

@@ -17,11 +17,7 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 run_with_timeout() {
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 120 "$@"
-    else
-        perl -e 'alarm 120; exec @ARGV' -- "$@"
-    fi
+    if command -v timeout >/dev/null 2>&1; then timeout 120 "$@"; else perl -e 'alarm 120; exec @ARGV' -- "$@"; fi
 }
 
 # Windows-compatible tmpdir
@@ -34,6 +30,9 @@ if [[ "$_NODE_TMPDIR" =~ ^[A-Za-z]: ]]; then
 else
     TMPDIR_BASE=$(mktemp -d)
 fi
+readonly TMPDIR_BASE
+export WORKFLOW_STATE_DIR="$TMPDIR_BASE/state" WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$WORKFLOW_STATE_DIR" "$WORKFLOW_PLANS_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
 # ---------------------------------------------------------------------------
@@ -380,24 +379,25 @@ cmd15='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: r>x>>"'
 got15_strict="$(eval_is_strict "$cmd15")"
 assert_eq "T15.isStrictSentinel(reason-with->)" "NO" "$got15_strict"
 
-# Case 17 — mutation probe (SKIPPED): sentinel-patterns.js uses multi-line const forms;
-# bin/mutation-probe.sh instruments single-line only. L3 gap: [^>]+ constraint verified
-# by T15/T16a table-driven cases instead. Run via bin/run-with-timeout.sh.
+# Case 17 — mutation probe. The probe rewrites its target with `sed -i` in place, so probe and
+# target are copied under TMPDIR_BASE and the real checkout is never written (parallel run-all).
+# Oracle (--test-cmd): one positive sample per exported *_RE_DQ / *_LOOKSLIKE_RE, checked on the
+# regex and on isStrictSentinel / isSentinel; this file covers only a few regexes, so re-running
+# it per mutant would leave most mutants LIVE. --threshold 100: every mutant must be KILLED.
 MUTATION_PROBE="$SCRIPT_CHECKOUT_ROOT/bin/mutation-probe.sh"
-RWT17="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
-if [[ -f "$MUTATION_PROBE" ]]; then
-    probe_out=""
-    probe_rc=0
-    probe_out=$(bash "$RWT17" 60 bash "$MUTATION_PROBE" "$SENTINEL_PATTERNS" 2>&1) || probe_rc=$?
-    if [[ "$probe_rc" -eq 0 ]]; then
-        pass "T17.mutation-probe: sentinel-patterns.js passed mutation probe"
-    elif echo "$probe_out" | grep -q "no single-line const regex found\|multi-line constant forms"; then
-        echo "SKIP: T17.mutation-probe — sentinel-patterns.js uses multi-line const forms; probe has nothing to mutate (T1-E2/Stryker planned for full coverage)"
-    else
-        fail "T17.mutation-probe: sentinel-patterns.js failed mutation probe (rc=$probe_rc): $(echo "$probe_out" | head -3)"
-    fi
+T17_ROOT="$TMPDIR_BASE/t17-probe"
+mkdir -p "$T17_ROOT/bin" "$T17_ROOT/hooks/lib" && cp "$MUTATION_PROBE" "$T17_ROOT/bin/" && cp "$SENTINEL_PATTERNS" "$T17_ROOT/hooks/lib/"
+printf '%s\n' 'const sp=require(process.argv[2]),q=String.fromCharCode(34);let n=0,bad=0;for(const[k,re]of Object.entries(sp)){const m=/^(.+?)_(RE_DQ|LOOKSLIKE_RE)$/.exec(k);if(!m||!(re instanceof RegExp))continue;const dq=m[2]==="RE_DQ",st=m[1].replace(/_RETIRED$/,"").replace(/^RESET_FROM$/,"RESET_FROM_x").replace(/^MARKER$/,"MARK_STEP_x_complete"),p=!dq||/^(CLARIFY_INTENT_COMPLETE|MARK_STEP_)/.test(st)?"":st==="GLOSSARY_ACCEPTED"?": term=t — r":st.startsWith("SUPERVISOR_")?": run-1 r":": r",s="echo "+q+"<<WORKFLOW_"+st+p+">>"+q;n++;if(!re.test(s)||!(dq?sp.isStrictSentinel(s):sp.isSentinel(s))){bad++;console.error("MISS "+k);}}process.exit(n>0&&bad===0?0:1);' > "$T17_ROOT/oracle.js"
+t17_cmd="node $(printf '%q' "$T17_ROOT/oracle.js") $(printf '%q' "$T17_ROOT/hooks/lib/sentinel-patterns.js")"
+t17_real_before=$(cksum < "$SENTINEL_PATTERNS")
+oracle_out=$(bash -c "$t17_cmd" 2>&1); oracle_rc=$?
+probe_out=$(bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 120 bash "$T17_ROOT/bin/mutation-probe.sh" --threshold 100 --test-cmd "$t17_cmd" "$T17_ROOT/hooks/lib/sentinel-patterns.js" 2>&1); probe_rc=$?
+if [[ "$oracle_rc" -ne 0 ]]; then
+    fail "T17.mutation-probe: oracle rejects the unmutated copy, so a KILLED verdict would be meaningless: $oracle_out"
+elif [[ "$probe_rc" -eq 0 ]] && [[ "$(cksum < "$SENTINEL_PATTERNS")" == "$t17_real_before" ]] && [[ ! -e "$SENTINEL_PATTERNS.probe-backup" ]]; then
+    pass "T17.mutation-probe: every single-line regex mutant of a sentinel-patterns.js copy KILLED; real checkout untouched"
 else
-    echo "SKIP: T17.mutation-probe — bin/mutation-probe.sh not found"
+    fail "T17.mutation-probe: rc=$probe_rc real-file-unchanged=$([[ "$(cksum < "$SENTINEL_PATTERNS")" == "$t17_real_before" ]] && echo yes || echo no): $(printf '%s\n' "$probe_out" | grep -v '^KILLED' | head -5)"
 fi
 
 # ---------------------------------------------------------------------------

@@ -36,6 +36,9 @@ mkdir -p "$CLEAN_CFG"
 export AGENTS_MAIN_ROOT="$CLEAN_CFG"
 # shellcheck source=../../lib/script-checkout-fixture.sh
 source "$AGENTS_ROOT/tests/lib/script-checkout-fixture.sh"
+# #2814: review-code-codex reads these from its own script checkout and fails closed without them,
+# so every copied checkout that must reach a PERFORMED review carries them too.
+RCC_REVIEW_CRITERIA_PATHS=(skills/_shared/review-criteria.md skills/_shared/severity.md)
 
 # Built once (hooks disabled, one initial commit); each repo below is a copy of it.
 # shellcheck source=../../lib/fixture-template.sh

@@ -51,7 +51,7 @@ or, when a `## Review targets` path cannot be Read, only: `INPUT_ERROR <path>`
 
 ## Rules
 
-Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
+Fetch the review criteria block by the reviewer steps of `agents/lib/nfr-severity-calibration.md` and apply it.
 Apply `skills/_shared/combined-glossary.md` (reviewer directives) as a review criterion.
 Do not call Edit/Write.
 Read and follow `rules/shell-commands.md` before the first Bash command — dispatch does not inherit auto-injected rules.
