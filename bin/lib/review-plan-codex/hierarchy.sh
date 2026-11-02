@@ -110,5 +110,13 @@ rpc_round2_rules() {
     "- Each line MUST start with Cn: (capital C, digits, colon, space)." \
     "- Use only \"resolved\" or \"unresolved — <reason>\". No other forms." \
     "- Only confirm whether each previous-round concern is fixed." \
-    "- DO NOT introduce new concerns."
+    "- For each revision made for a previous-round concern, also confirm it stays consistent with the upstream plan steps; when it deviates, answer \"Cn: unresolved — <how it deviates>\"." \
+    "- DO NOT introduce new concerns, including [upstream-inconsistency] ones."
+}
+
+# rpc_append_round1_scope <reviewed noun> — in round 1 only, appends the active-scope line to PREAMBLE.
+rpc_append_round1_scope() {
+  [[ "$ROUND" -eq 1 ]] || return 0
+  PREAMBLE="${PREAMBLE}
+Round 1: actively look for gaps within the $1, limited to the targets under Review scope in the plan step hierarchy below; for outline and detail, also run its Per-decision check."
 }

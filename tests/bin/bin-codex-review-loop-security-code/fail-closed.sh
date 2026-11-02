@@ -25,6 +25,10 @@ cp -r "$AGENTS_ROOT/bin" "$FC_ROOT/bin"
 cp -r "$AGENTS_ROOT/hooks" "$FC_ROOT/hooks"
 cp "$AGENTS_ROOT/rules/core-principles.md" "$FC_ROOT/rules/core-principles.md" 2>/dev/null || \
     printf '# stub\n' > "$FC_ROOT/rules/core-principles.md"
+# review-code-codex fails closed without its review criteria block.
+mkdir -p "$FC_ROOT/skills/_shared"
+cp "$AGENTS_ROOT/skills/_shared/review-criteria.md" "$FC_ROOT/skills/_shared/review-criteria.md"
+cp "$AGENTS_ROOT/skills/_shared/severity.md" "$FC_ROOT/skills/_shared/severity.md"
 
 # fc_shim <subcommand|none> — install a CLI that fails exactly one subcommand.
 fc_shim() {

@@ -8,6 +8,7 @@
 # needs a real codex CLI. The scan guard fails on any unlisted call or a surface outside {conv,plan}.
 # #2814 6-1: the four plan-review formats call codex_core_plan_review_preamble <kind> <reviewed>
 # [surface] instead; the scan recognises both functions and pins which one each file calls.
+# #2814 S3: bin/review-code-codex calls codex_core_code_review_preamble <kind> [surface].
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,24 +19,25 @@ harness_isolate "$_ISOLATION_TMP_ROOT"
 trap 'rm -rf "$_ISOLATION_TMP_ROOT"' EXIT
 
 # Expected call sites: <relpath> | <function> | <call count> | <surface, `-` = no surface argument>.
-# <function> is `adversarial` (codex_core_adversarial_preamble) or `plan_review`
-# (codex_core_plan_review_preamble). The `-` row is the no-surface allowlist: the case-marker band
+# <function> is `adversarial` (codex_core_adversarial_preamble), `plan_review`
+# (codex_core_plan_review_preamble) or `code_review` (codex_core_code_review_preamble). The `-` row is the no-surface allowlist: the case-marker band
 # check is an internal tool prompt whose output is parsed by machine (CASE_BOUNDARY lines), so it
 # must stay language-neutral.
 CALLSITE_TABLE="$(cat <<'TABLE'
 bin/review-plan-codex                        | plan_review | 3 | plan
-bin/review-code-codex                        | adversarial | 1 | plan
-bin/lib/review-plan-codex/prompts.sh         | plan_review | 1 | plan
+bin/review-code-codex                        | code_review | 1 | plan
+bin/lib/review-plan-codex/prompts.sh        | plan_review | 1 | plan
 bin/supervisor-findings-codex                | adversarial | 1 | conv
 bin/lib/test-embed-cases/codex-band-check.sh | adversarial | 1 | -
 TABLE
 )"
 
-# adversarial: "<kind>" [surface]; plan_review: "<kind>" <reviewed, quoted or bare> [surface].
+# adversarial and code_review: "<kind>" [surface]; plan_review: "<kind>" <reviewed, quoted or bare> [surface].
 CALL_RE_ADV='codex_core_adversarial_preamble[[:space:]]+"[^"]*"([[:space:]]+([^)[:space:]]+))?[[:space:]]*\)'
+CALL_RE_CR='codex_core_code_review_preamble[[:space:]]+"[^"]*"([[:space:]]+([^)[:space:]]+))?[[:space:]]*\)'
 CALL_RE_PR='codex_core_plan_review_preamble[[:space:]]+"[^"]*"[[:space:]]+("[^"]*"|[^")[:space:]]+)([[:space:]]+([^)[:space:]]+))?[[:space:]]*\)'
-DEF_RE='codex_core_(adversarial|plan_review)_preamble[[:space:]]*\(\)'
-NAME_RE='codex_core_(adversarial|plan_review)_preamble'
+DEF_RE='codex_core_(adversarial|plan_review|code_review)_preamble[[:space:]]*\(\)'
+NAME_RE='codex_core_(adversarial|plan_review|code_review)_preamble'
 
 # list_calls <root> — one `<relpath>|<function>|<surface>` line per call under bin/ hooks/ skills/
 # (non-.md). Every non-comment, non-definition line naming either function counts as a call,
@@ -59,6 +61,8 @@ list_calls() {
             surface="?"
             if [[ "$fn" == adversarial ]]; then
                 [[ "$line" =~ $CALL_RE_ADV ]] && surface="${BASH_REMATCH[2]:--}"
+            elif [[ "$fn" == code_review ]]; then
+                [[ "$line" =~ $CALL_RE_CR ]] && surface="${BASH_REMATCH[2]:--}"
             else
                 [[ "$line" =~ $CALL_RE_PR ]] && surface="${BASH_REMATCH[3]:--}"
             fi
@@ -139,6 +143,11 @@ cat >"$FX/bin/lib/core.sh" <<'EOF'
 # codex_core_adversarial_preamble "doc example" plan)
 codex_core_adversarial_preamble() { :; }
 codex_core_plan_review_preamble() { :; }
+codex_core_code_review_preamble() { :; }
+EOF
+cat >"$FX/bin/cr-tool" <<'EOF'
+P=$(codex_core_code_review_preamble "code diff" plan)
+Q=$(codex_core_code_review_preamble "code diff")
 EOF
 cat >"$FX/bin/new-tool" <<'EOF'
 P=$(codex_core_adversarial_preamble "new tool")
@@ -166,7 +175,8 @@ cat >"$FX/bin/pr-tool" <<'EOF'
 P=$(codex_core_plan_review_preamble "outline plan proposal" outline plan)
 Q=$(codex_core_plan_review_preamble "outline plan proposal" "$REVIEWED")
 EOF
-want_calls="bin/multi-tool|adversarial|-"$'\n'"bin/new-tool|adversarial|-"$'\n'"bin/new-tool|adversarial|japanese"
+want_calls="bin/cr-tool|code_review|plan"$'\n'"bin/cr-tool|code_review|-"$'\n'
+want_calls+="bin/multi-tool|adversarial|-"$'\n'"bin/new-tool|adversarial|-"$'\n'"bin/new-tool|adversarial|japanese"
 want_calls+=$'\n'"bin/pr-tool|plan_review|plan"$'\n'"bin/pr-tool|plan_review|-"
 want_calls+=$'\n'"bin/review-code-codex|adversarial|plan"
 want_calls+=$'\n'"bin/review-plan-codex|plan_review|plan"$'\n'"bin/review-plan-codex|plan_review|conv"$'\n'"bin/review-plan-codex|adversarial|plan"
@@ -174,7 +184,7 @@ want_calls+=$'\n'"bin/unquoted-tool|adversarial|?"
 assert_eq "$(list_calls "$FX")" "$want_calls"
 fx_table="bin/review-plan-codex | plan_review | 3 | plan"$'\n'"bin/review-code-codex | adversarial | 1 | plan"
 drift="$(check_calls "$FX" "$fx_table")"
-for want in "unlisted: bin/new-tool adversarial" "bad-surface: bin/new-tool: japanese" "count: bin/review-plan-codex plan_review: want=3 got=2" "surface: bin/review-plan-codex plan_review: want=plan got=conv" "unlisted: bin/review-plan-codex adversarial" "unlisted: bin/multi-tool adversarial" "unlisted: bin/unquoted-tool adversarial" "bad-surface: bin/unquoted-tool: ?" "unlisted: bin/pr-tool plan_review"; do
+for want in "unlisted: bin/new-tool adversarial" "bad-surface: bin/new-tool: japanese" "count: bin/review-plan-codex plan_review: want=3 got=2" "surface: bin/review-plan-codex plan_review: want=plan got=conv" "unlisted: bin/review-plan-codex adversarial" "unlisted: bin/multi-tool adversarial" "unlisted: bin/unquoted-tool adversarial" "bad-surface: bin/unquoted-tool: ?" "unlisted: bin/pr-tool plan_review" "unlisted: bin/cr-tool code_review"; do
     if printf '%s\n' "$drift" | grep -qxF "$want"; then pass "drift reported: $want"; else fail "drift not reported: $want" "drift=$(printf '%q' "$drift")"; fi
 done
 assert_eq "$(printf '%s\n' "$drift" | grep -c 'core.sh')" "0"

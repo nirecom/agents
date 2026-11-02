@@ -85,7 +85,7 @@ At detail, `--gate` also folds in the outline→detail scope change, so it runs 
 Issue the standalone call `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG`; when its stdout `<CONV_LANG>` is non-empty, write both the `proceed` one-paragraph summary and the `ask` one-line `<<WORKFLOW_CONFIRM_DETAIL: ...>>` summary in that language.
 
 Apply the rest of the confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<DETAIL_MD>` artifact.
-- The approval presentation lists "Accepted upstream inconsistencies" per [`upstream-inconsistency-pause.md`](../_shared/codex-review-loop/upstream-inconsistency-pause.md); a re-run after B revises the existing detail as a diff per that procedure.
+- The approval presentation lists "Accepted upstream inconsistencies and user course corrections" per [`upstream-inconsistency-pause.md`](../_shared/codex-review-loop/upstream-inconsistency-pause.md); a re-run after B revises the existing detail as a diff per that procedure.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - Re-entering MDP-7 from a Revise loop: rerun the gate check from the trigger line, without `--scope-change-approved`.
 - `GATE_ACTION=proceed`: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol CPA-3) that carries the plan-link line (protocol CPA-2).

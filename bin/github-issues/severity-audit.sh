@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
 # severity-audit.sh — enumerate the current `severity:high` population (#1763 S15).
-#
-# WHAT THIS IS NOT: a classifier. The keyword scan that used to infer severity was
-# removed precisely because a machine cannot tell "primary feature unusable" from a
-# body that merely contains the word "crash". The three conditions in
-# skills/issue-create/SKILL.md's label policy are the SSOT, and they are applied by a
-# human plus Claude reading each issue — not here.
-#
-# WHAT THIS IS: a repeatable enumerator. It answers "which issues currently carry the
-# label, and when were they filed", so over-classification can be quantified and
-# re-checked after a cleanup pass instead of being estimated once and forgotten.
-#
+# Not a classifier: a machine cannot tell "primary feature unusable" from a body that
+# merely says "crash". HIGH in skills/_shared/severity.md is the SSOT, applied by a
+# human plus Claude reading each issue. This is a repeatable enumerator, so
+# over-classification can be quantified and re-checked after a cleanup pass.
 # Usage: severity-audit.sh [--label LABEL] [--state open|closed|all] [--limit N]
 # Stdout: a TSV header, one row per issue (number / state / createdAt / title), then a
-#         blank line and a count summary. Nothing else — the output is meant to be
-#         pasted into WORKTREE_NOTES.md or piped to sort/awk.
+#         blank line and a count summary — meant for WORKTREE_NOTES.md or sort/awk.
 
 set -euo pipefail
 

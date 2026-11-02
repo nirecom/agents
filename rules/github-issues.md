@@ -54,7 +54,7 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 - Incident issues: `gh issue create --label "type:incident"` directly (do not use this skill).
 - Non-GitHub remotes: skip the survey phase.
 - Projects v2 attach failure is non-fatal: issue created regardless; re-run `gh project item-add 1 --owner nirecom --url <issue-url>` to recover.
-- `severity:*` is judged only against the three conditions in the `/issue-create` label policy (SSOT) — no script infers it.
+- `severity:*` is judged only against HIGH in `skills/_shared/severity.md` (SSOT) — no script infers it.
 - `make-parent` creates TWO issues: the meta parent (generated body, `meta` label, no severity) and the proposal verbatim as its child. stdout is parent first, child last.
 - `sub-of` / `bulk-sub-of` verify the named parent at dispatch time via `bin/github-issues/lib/require-meta-parent.sh` — ineligible parent aborts before any issue is created.
 

@@ -118,7 +118,7 @@ MOP-7. On `APPROVED`:
 
    Do NOT write this prose to outline.md. MOP-8 handles the file write.
 
-   List "Accepted upstream inconsistencies" in this summary per `upstream-inconsistency-pause.md`; a re-run after B revises the existing outline as a diff per that procedure.
+   List "Accepted upstream inconsistencies and user course corrections" in this summary per `upstream-inconsistency-pause.md`; a re-run after B revises the existing outline as a diff per that procedure.
 
 MOP-8. Write the chosen approach to `<OUTLINE_MD>` per the Output Schema. Always execute confirm-plan CPA-1+CPA-2 (artifact write + plan-link line).
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.

@@ -350,21 +350,20 @@ ${PRIOR_TEXT}
 "
 fi
 
-PREAMBLE=$(codex_core_adversarial_preamble "code diff" plan)
+PREAMBLE=$(codex_core_code_review_preamble "code diff" plan)
 
-# Project non-functional requirements; empty unless --project-root names a
-# project that declares PROJECT_NFR (resolved from disk, never from the env).
-NFR_BLOCK=""
-if [[ -n "$PROJECT_ROOT_ARG" ]]; then
-  if [[ ! -d "$PROJECT_ROOT_ARG" ]]; then
-    echo "## ${CODEX_LABEL}: FAILED — PROJECT_ROOT_ARG is not a directory: $PROJECT_ROOT_ARG"
-    exit 0
-  fi
-  NFR_TEXT="$(codex_core_project_nfr_block "$PROJECT_ROOT_ARG")"
-  if [[ -n "$NFR_TEXT" ]]; then
-    NFR_BLOCK="${NFR_TEXT}"$'\n\n'
-  fi
+# Review criteria + severity definition, then the project NFR when --project-root
+# names a project that declares PROJECT_NFR (resolved from disk, never from the env).
+if [[ -n "$PROJECT_ROOT_ARG" && ! -d "$PROJECT_ROOT_ARG" ]]; then
+  echo "## ${CODEX_LABEL}: FAILED — PROJECT_ROOT_ARG is not a directory: $PROJECT_ROOT_ARG"
+  exit 0
 fi
+if ! CRITERIA_TEXT="$(codex_core_review_criteria_block "$PROJECT_ROOT_ARG")"; then
+  echo "## ${CODEX_LABEL}: FAILED — review criteria unavailable"
+  codex_core_log failed "review criteria unavailable" 0
+  exit 0
+fi
+CRITERIA_BLOCK="${CRITERIA_TEXT}"$'\n\n'
 
 # Combined glossary (#2529); PROJECT_ROOT_ARG already falls back to the git top level.
 GLOSSARY_BLOCK=""
@@ -383,7 +382,7 @@ fi
 
 CODEX_PROMPT="${SCOPE_WARNING}${PREAMBLE}
 
-${NFR_BLOCK}${GLOSSARY_BLOCK}${PRIOR_INSTRUCTIONS}## Concern Delta output format
+${CRITERIA_BLOCK}${GLOSSARY_BLOCK}${PRIOR_INSTRUCTIONS}## Concern Delta output format
 
 After your review bullets, emit a section headed exactly '## Concern Delta'.
 List one line per concern, in this form:
@@ -395,8 +394,8 @@ one of correctness, security, contract, performance, style, docs, test.
 Write '-' in the ID column for a concern you are raising for the first time.
 If the diff raises nothing at all, the section body must be exactly '(none)'.
 
-${CONTEXT_SECTION}You are doing an adversarial code review. Challenge design decisions, surface hidden assumptions, and question tradeoffs. Focus on:
-- Whether the chosen approach is the safest and simplest one (suggest alternatives if not)
+${CONTEXT_SECTION}Review the code diff against the requirements and constraints. Challenge design decisions, surface hidden assumptions, and question tradeoffs; a choice that can be justified is not a concern merely because an alternative exists. Focus on:
+- Whether the chosen approach is safe and simple enough for the requirements and constraints
 - Failure modes, rollback paths, and data loss risks
 - Concurrency, auth boundaries, and reliability issues
 - Whether the implementation matches stated intent
