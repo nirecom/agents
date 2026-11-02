@@ -23,6 +23,7 @@ Never `reject:` a concern tagged `[glossary-drift ` even when it contradicts ups
 Never `reject:` a concern tagged `[upstream-inconsistency `; the user decides it per `skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`.
 - On A or D, answer the upstream-inconsistency concern with `accept and revise`.
 - On C, answer it with `accepted(upstream-inconsistency): <reason>`.
+- Answer a concern resolved by a record with `accepted(upstream-inconsistency): course-correction <record path>`.
 - The `reject: contradicts approved` form applies only to untagged concerns.
 
 ## Reviewer: do not reopen upstream decisions

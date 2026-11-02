@@ -275,6 +275,9 @@ cp -r "$AGENTS_ROOT/bin" "$TREE/bin"
 # #2814: hierarchy.sh reads the format table from skills/_shared/priority-hierarchy/core.md (fail-closed).
 mkdir -p "$TREE/skills/_shared"
 cp -r "$AGENTS_ROOT/skills/_shared/priority-hierarchy" "$TREE/skills/_shared/priority-hierarchy"
+# #2814: the review criteria block is read from the same tree (fail-closed when unreadable).
+cp "$AGENTS_ROOT/skills/_shared/severity.md" "$TREE/skills/_shared/severity.md"
+cp "$AGENTS_ROOT/skills/_shared/review-criteria.md" "$TREE/skills/_shared/review-criteria.md"
 CAP_OK="$TMPDIR_BASE/prompt-tree-ok.txt"
 run_plan "$TREE/bin/review-plan-codex" detail-plan "$CAP_OK"
 assert_eq "fail-closed: the complete copied tree reviews normally (control)" \

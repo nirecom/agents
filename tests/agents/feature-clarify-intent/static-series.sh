@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/agents/feature-clarify-intent/static-series.sh
-# Tests: agents/lib/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md
+# Tests: skills/_shared/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md
 # Tags: workflow, clarify-intent, planning, intent, plans, scope:common
 # L3 gap (what this test does NOT catch):
 # - None: these are static SKILL.md content assertions; no real claude -p session needed.
@@ -224,9 +224,47 @@ assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/aggregate-clas
     "N15: aggregate-class-members.md contains dedup step"
 
 # N16: shared triage compat reference exists (SSOT for legacy disposition mapping)
-assert_contains "$LOCAL_REPO_ROOT/agents/lib/triage-legacy-compat.md" \
+assert_contains "$LOCAL_REPO_ROOT/skills/_shared/triage-legacy-compat.md" \
     "fix in scope" \
     "N16: triage-legacy-compat.md documents legacy disposition mapping"
+
+# N16b (#2896): table-driven — every referrer of triage-legacy-compat.md uses the new
+# skills/_shared/ path. The four agents used the prefix-less `lib/triage-legacy-compat.md`
+# form, which a grep for `agents/lib/` misses, so both old spellings are asserted absent.
+N16B_TABLE=(
+    "N16b-01|agents/outline-reviewer.md"
+    "N16b-02|agents/detail-reviewer.md"
+    "N16b-03|agents/outline-planner.md"
+    "N16b-04|agents/detail-planner.md"
+    "N16b-05|bin/lib/review-plan-codex/inputs.sh"
+)
+for row in "${N16B_TABLE[@]}"; do
+    cid="${row%%|*}"
+    rel="${row#*|}"
+    abs="$LOCAL_REPO_ROOT/$rel"
+    assert_contains "$abs" 'skills/_shared/triage-legacy-compat\.md' \
+        "$cid: $rel references skills/_shared/triage-legacy-compat.md"
+    assert_absent "$abs" 'agents/lib/triage-legacy-compat\.md' \
+        "$cid: $rel has no legacy agents/lib/triage-legacy-compat.md reference"
+    assert_absent "$abs" '(^|[^a-zA-Z0-9_-])lib/triage-legacy-compat\.md' \
+        "$cid: $rel has no prefix-less lib/triage-legacy-compat.md reference"
+done
+
+# N16c (#2896): table-driven — planner-review-loop-protocol.md lives in skills/_shared/
+# and both planners reference it by that path.
+assert_contains "$LOCAL_REPO_ROOT/skills/_shared/planner-review-loop-protocol.md" \
+    'Risk-Signal' \
+    "N16c-01: skills/_shared/planner-review-loop-protocol.md exists and contains Risk-Signal"
+N16C_TABLE=(
+    "N16c-02|agents/outline-planner.md"
+    "N16c-03|agents/detail-planner.md"
+)
+for row in "${N16C_TABLE[@]}"; do
+    cid="${row%%|*}"
+    rel="${row#*|}"
+    assert_contains "$LOCAL_REPO_ROOT/$rel" 'skills/_shared/planner-review-loop-protocol\.md' \
+        "$cid: $rel references skills/_shared/planner-review-loop-protocol.md"
+done
 
 # N17: Phase B / Phase C / Accept proposal / Round budget removed from class-members-proposal.md (#832)
 assert_absent "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" \

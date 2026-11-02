@@ -25,7 +25,7 @@ Fallback recovery: `/worktree-end` Step WE-7 promotes unconverted `WORKTREE_NOTE
 
 The CLI owns section routing, `- (none)` replacement, idempotency, and marker generation — do not hand-assemble an entry line.
 
-Severity: `--section BugsFound` requires `--severity`; every other section rejects it. Only `high` survives verbatim in the Final Report; `low` and `none` compress to a title line and produce identical output. Judge `high` by the three conditions in the `skills/issue-create/SKILL.md` "Label policy" (SSOT).
+Severity: `--section BugsFound` requires `--severity`; every other section rejects it. Only `high` survives verbatim in the Final Report; `low` and `none` compress to a title line and produce identical output. Judge `high` by HIGH in `skills/_shared/severity.md` (SSOT).
 
 Manual editing of `WORKTREE_NOTES.md` (gitignored; not subject to `enforce-worktree`) is the fallback when the CLI is unusable — a hand-written entry carries no severity tag, so it always compresses to a title line in the Final Report.
 

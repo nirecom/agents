@@ -66,7 +66,7 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model alias
    The subagent prompt MUST instruct: Read `rules/test.md` before writing or running tests — on-demand-only, so it does not reach you otherwise; general-purpose dispatch does not inherit auto-injected rules.
    Note: the Stop-guard silence during dispatch is automatic (PostToolUse marks the step `in_progress`). Do not emit `NEXT_STEP_PAUSE`.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
-   - (Optional) Follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as a test constraint when relevant.
+   - (Optional) Follow `skills/_shared/nfr-severity-calibration.md` to obtain the PROJECT NFR block and use it as a test constraint when relevant.
 
 While the subagent runs, the orchestrator MAY run the WT-8 `CONFIRM_TESTS` gate check (`next-step --gate`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
 

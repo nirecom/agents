@@ -164,7 +164,7 @@ if [ -n "$REPORTER_MODEL" ]; then
     [ -n "$_rm_label" ] && EXTRA_LABELS+=("$_rm_label")
 fi
 
-# severity is never inferred here (#1763). SSOT: the Label policy in skills/issue-create/SKILL.md.
+# severity is never inferred here (#1763). SSOT: skills/_shared/severity.md.
 
 GH_ARGS=(issue create --title "$TITLE" --label "type:task")
 if [ "$BODY_PROVIDED" -eq 1 ]; then

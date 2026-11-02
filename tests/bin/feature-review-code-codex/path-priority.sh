@@ -258,7 +258,7 @@ if [ -z "$PP_BIG" ] || [ ! -d "$PP_BIG" ]; then
 fi
 
 pp_write_resolver_stub "$PP_STUB_DIR" "post-session-head"
-script_checkout_fixture_copy "$PP_STUB_DIR" bin hooks
+script_checkout_fixture_copy "$PP_STUB_DIR" bin hooks "${RCC_REVIEW_CRITERIA_PATHS[@]}"
 PP_SCRIPT="$PP_STUB_DIR/bin/review-code-codex"
 PP_OUT="$(pp_run "$PP_BIG" --base main --base-state RECORDED --no-log)"
 if pp_has "$PP_OUT" "^## Codex Review Scope: PRIORITY-UNTRUSTED"; then

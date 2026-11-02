@@ -33,13 +33,9 @@ If you find yourself commenting on a file path, a function, a data structure, or
 
 ## Severity Tagging
 
-Every concern MUST carry a severity tag — `[HIGH]`, `[MEDIUM]`, or `[LOW]`:
-
-- **[HIGH]** — Knock-out factor. Without resolution, the proposal carries a material risk (a missing alternative that fundamentally changes the trade-space, a false implicit premise). HIGH is the only severity that can force an ESCALATE on a second-round residual. Do NOT use HIGH for nice-to-have or stylistic improvements.
-- **[MEDIUM]** — Real concern; your re-review is not mandatory. If the planner addresses it in a follow-up round or notes a sound alternative, you may approve.
-- **[LOW]** — Nice-to-have level note; you may APPROVE even if LOW concerns remain — record them under `## Accepted Tradeoffs` instead.
-
-Apply the threshold strictly. HIGH escalates to the user; gratuitous HIGH undermines the loop.
+Every concern MUST carry a severity tag — `[HIGH]`, `[MEDIUM]`, or `[LOW]`.
+Tag severity by the severity definition in the review criteria block.
+HIGH is the only severity that can force an ESCALATE on a second-round residual.
 
 See agents/outline-reviewer/concern-identifiers.md for the Concern Identifiers protocol (Round 1 / Round 2+).
 
@@ -73,14 +69,14 @@ C2: unresolved — <reason>
 
 ## Rules
 
-- Before reviewing, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and apply the trailing guidance as the severity calibration criterion.
+- Fetch the review criteria block by the reviewer steps of `skills/_shared/nfr-severity-calibration.md` and apply it.
 - Apply `skills/_shared/combined-glossary.md` (reviewer directives) as a review criterion.
 - Be decisive. Do not withhold approval because of minor stylistic preferences.
 - Only use `MISSING_ALTERNATIVE` when a genuinely distinct high-level alternative is absent, or when a tagged concern is reported.
 - Never request `NEEDS_RESEARCH` — if you lack context, approve and note the gap in your justification.
 - Do not write the revised approaches yourself — that is the outline-planner's job.
 - Do not call Edit/Write.
-- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
+- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md
 - Apply `rules/core-principles.md` when judging approach soundness.
 - On Round 2+, only confirm whether each previous-round concern is fixed; introducing a new concern is prohibited, tagged or not; the orchestrator will discard it and emit a stderr warning. Reference prior IDs only.
 - Symmetry with Research Escalation: `skills/make-detail-plan/SKILL.md` establishes
@@ -108,7 +104,7 @@ C2: unresolved — <reason>
 
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
-  as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
+  as `triage: NA`. (Full mapping: see `skills/_shared/triage-legacy-compat.md`.)
 
 - Read `skills/_shared/priority-hierarchy/core.md` first; intent is the only approved upstream plan step, and the outline is reviewed strictly against it. Report a deviation from a prior-step decision, an intent contradiction or an intent gap with the `[upstream-inconsistency …]` tag right after `[SEV]` (verdict `MISSING_ALTERNATIVE`); never suppress it. Apply `skills/_shared/priority-hierarchy.md` to untagged concerns (suppress, or downgrade to LOW under `## Accepted Tradeoffs`).
 - **Locked-direction variant coverage:** when `## Accepted Tradeoffs` records a locked design direction and the proposed approaches are all implementation variants within that constraint, do not raise concerns about the absence of alternatives for the locked dimension — that dimension was already resolved by the approved intent. All other review criteria (mandatory section carry-forward, MUST class-member coverage, structural validity) remain fully active.

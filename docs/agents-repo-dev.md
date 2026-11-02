@@ -111,3 +111,9 @@ changes wording is a case that silently stopped being the case it was.
 file that stays separate on purpose with `dup-group-keep:<reason>` (`cross-hook`,
 `distinct-layer`, `size-hard-limit`). Scope and tag vocabulary:
 `skills/_shared/test-design.md`.
+
+## Where shared on-demand md files live
+
+An md file read on demand by more than one skill, agent definition or script goes in `skills/_shared/`; `agents/` holds no md other than agent definitions (`agents/<name>.md`) and their private fragment folders (`agents/<name>/`).
+Reference a shared file by its repo-relative path `skills/_shared/<name>.md`, never by a bare `lib/<name>.md`; a subagent cannot expand `$VAR`, so an agent definition spells the path from the repository root.
+Line limits follow the prompt kind, whose numbers `hooks/lib/size-limits.js` owns.
