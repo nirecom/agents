@@ -3,12 +3,11 @@
 // Stop hook: C4 premature-stop guard — detects ACTION=invoke being ignored and auto-resumes Claude.
 // Fires when Claude stops despite next-step returning ACTION=invoke (workflow step pending).
 // Records a warning/workflow finding and outputs decision:block to trigger auto-resume.
+// Where the stop would pass, jev-continue-on-stop.js may ask Jev whether work remains (#2461).
 
+// Taken before anything loads load-env, as every Jev entrypoint does (test-overrides.js).
+const JEV_OVERRIDES = require("./lib/jev/test-overrides").captureTestOverrides(process.env);
 const fs = require("fs");
-const { spawnSync } = require("child_process");
-const path = require("path");
-
-const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
 
 // Steps whose ACTION=invoke is handled by a dedicated Stop hook. Emitting a
 // second generic block in the same turn would surface two competing messages,
@@ -49,6 +48,8 @@ const C4_EXEMPTIONS = [
   // #2698: next-step-output (not session) so the mechanism-failure lane above stays unchanged.
   { id: "user-dialog-turn", phase: "next-step-output",
     test: (c, d) => d.isUserDialogTurn(c.input) },
+  // #2461: next-step advised holding the next skill back this turn; the stop is that advice obeyed.
+  { id: "jev-wait-on-invoke", phase: "next-step-output", test: (c, _d) => c.jevAdvice === "wait-on-invoke" },
 ];
 
 // Per-finding exemptions that apply to the mechanism-failure lane only. The
@@ -157,7 +158,8 @@ function emitMechanismBlock(sid, stalls) {
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
-if (require.main === module) {
+// A function so an exit that consults Jev can return while the query is awaited.
+function main() {
   const r = readHookInput();
   if (r.kind !== "ok") {
     try {
@@ -194,8 +196,13 @@ if (require.main === module) {
 
     const degraded = [];
     const sessionExemption = firstExemption("session", { sid: sessionId }, deps, degraded);
+    const jevCtx = { sid: sessionId, transcriptPath: input.transcript_path, overrides: JEV_OVERRIDES };
+    const passStop = (route) => require("./lib/jev-continue-on-stop").exitAfterConsult(route, jevCtx);
     // Every session exemption except pre-workflow-init still silences both lanes.
-    if (sessionExemption !== null && sessionExemption !== "pre-workflow-init") process.exit(0);
+    if (sessionExemption !== null && sessionExemption !== "pre-workflow-init") {
+      const inFlightStep = sessionExemption === "step-in-flight" ? deps.anyStepInFlight(sessionId) : null;
+      return passStop({ sessionExemption, inFlightStep });
+    }
 
     // #1997: a stalled MECHANISM is fail-fast, and it is decided before
     // next-step runs — a session whose state is stuck often makes next-step
@@ -216,31 +223,24 @@ if (require.main === module) {
     // The premature-stop (ACTION=invoke) lane keeps its pre-workflow-init exemption.
     if (sessionExemption === "pre-workflow-init") process.exit(0);
 
-    // Locate next-step binary.
-    const nextStepPath = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "next-step");
-    if (!fs.existsSync(nextStepPath)) process.exit(0);
-
     // Run next-step with CC session ID to check current ACTION.
-    const result = spawnSync(process.execPath, [nextStepPath, "--session", sessionId], {
-      timeout: 5000,
-      encoding: "utf8",
-    });
-    if (result.status !== 0 || !result.stdout) process.exit(0);
+    const result = require("./lib/next-step-spawn").spawnNextStep(["--session", sessionId], { timeout: 5000, stderr: "pipe" });
+    if (!result || result.status !== 0 || !result.stdout) return passStop({ sessionExemption: null, action: null });
 
     // Parse ACTION from output.
     const lines = result.stdout.split("\n");
-    const actionLine = lines.find((l) => l.startsWith("ACTION="));
-    if (!actionLine || actionLine !== "ACTION=invoke") process.exit(0);
-
+    const valueOf = (key) => {
+      const line = lines.find((l) => l.startsWith(`${key}=`));
+      return line ? line.slice(key.length + 1).trim() : "";
+    };
+    const action = valueOf("ACTION") || null;
     // Delegate reasons owned by a dedicated Stop hook (REASON is single-quoted).
-    const reasonLine = lines.find((l) => l.startsWith("REASON="));
-    const reasonValue = reasonLine ? reasonLine.slice("REASON=".length).replace(/^'|'$/g, "") : "";
+    const reasonValue = valueOf("REASON").replace(/^'|'$/g, "");
     // #2527 4-4: WAIT names a wait on a human outside Claude (the web merge); unquoted value.
-    const waitLine = lines.find((l) => l.startsWith("WAIT="));
-    const waitValue = waitLine ? waitLine.slice("WAIT=".length).trim() : "";
-    if (firstExemption("next-step-output", { sid: sessionId, reason: reasonValue, wait: waitValue, input }, deps, degraded)) {
-      process.exit(0);
-    }
+    const outputExemption = firstExemption("next-step-output",
+      { sid: sessionId, reason: reasonValue, wait: valueOf("WAIT"), jevAdvice: valueOf("JEV_ADVICE"), input }, deps, degraded);
+    if (action !== "invoke") return passStop({ sessionExemption: null, action, outputExemption });
+    if (outputExemption) process.exit(0);
 
     // Extract NEXT_SKILL for the continuation message.
     const skillLine = lines.find((l) => l.startsWith("NEXT_SKILL="));
@@ -278,7 +278,10 @@ if (require.main === module) {
     // Fail-open: never block on own errors.
     process.exit(0);
   }
+  return undefined;
 }
+
+if (require.main === module) main();
 
 module.exports = {
   C4_EXEMPTIONS, C4_MECHANISM_EXEMPTIONS,

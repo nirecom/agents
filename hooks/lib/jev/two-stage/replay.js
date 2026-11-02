@@ -8,6 +8,7 @@
 
 const pending = require("../pending");
 const { appendDecisionOnce } = require("../decision-record");
+const { JUDGED_IN, judgedInOr } = require("../judged-in");
 const { settleComplexity } = require("./settle-complexity");
 const { settleSkip } = require("./settle-skip");
 const { sourcesChanged } = require("./source-fresh");
@@ -18,6 +19,7 @@ function settleRecord(sid, tid, hand, v) {
   return {
     version: 2, record_type: "settle", ts: new Date().toISOString(), point: hand.point,
     session_id: sid, stage: hand.stage, ticket: tid, settle: v.settle, detail: v.detail || null, owner: v.owner || null,
+    judged_in: judgedInOr(hand.judged_in, JUDGED_IN.jevJudge),
   };
 }
 

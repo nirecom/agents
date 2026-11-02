@@ -9,14 +9,11 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
 const schema = require("./lib/final-report-schema");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
 
 const { EXIT_HATCH_TEXT, shouldYieldOrBypass } = require("./stop-final-report-guard/exits");
-
-const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..");
 
 function controlFile(sid, name) {
   return require("./workflow-state/state-io/control-dir").controlPath(sid, name);
@@ -53,18 +50,8 @@ function runCloseProcedureLane(sid) {
   try {
     if (shouldYieldOrBypass(sid).exit) return;
 
-    const nextStepPath = path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "next-step");
-    if (!fs.existsSync(nextStepPath)) return;
-
-    // The current environment MUST be inherited: WORKFLOW_STATE_DIR decides
-    // where the workflow state lives. Passing a scrubbed env would lose it and
-    // silently fail open.
-    const { spawnSync } = require("child_process");
-    const result = spawnSync(process.execPath, [nextStepPath, "--session", sid], {
-      timeout: 3000,
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf8",
-    });
+    // The helper inherits the environment: WORKFLOW_STATE_DIR decides where the state lives.
+    const result = require("./lib/next-step-spawn").spawnNextStep(["--session", sid], { timeout: 3000 });
     if (!result || result.status !== 0 || !result.stdout) return;
 
     const lines = result.stdout.split("\n");

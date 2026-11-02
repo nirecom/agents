@@ -23,15 +23,18 @@ function resolveEndpoint(overrides) {
   return (overrides && overrides.baseUrl) || DEFAULT_BASE_URL;
 }
 
-function jevCoreInit({ sessionId, overrides } = {}) {
+// pointTimeouts: a point's own production budget ({queryTimeoutMs}); the test override still wins.
+function jevCoreInit({ sessionId, overrides, pointTimeouts } = {}) {
   const ov = overrides || {};
   // The timeout override is test-only: it must never stretch a production query past the hook budget.
   const timeoutOv = ov.baseUrl ? ov.httpTimeoutMs : null;
+  const pointQueryMs = pointTimeouts && Number.isSafeInteger(pointTimeouts.queryTimeoutMs) && pointTimeouts.queryTimeoutMs > 0
+    ? pointTimeouts.queryTimeoutMs : null;
   const ctx = {
     sessionId,
     baseUrl: resolveEndpoint(ov),
     probeTimeoutMs: timeoutOv || PROBE_TIMEOUT_MS,
-    queryTimeoutMs: timeoutOv || QUERY_TIMEOUT_MS,
+    queryTimeoutMs: timeoutOv || pointQueryMs || QUERY_TIMEOUT_MS,
     startMs: Date.now(),
   };
   Object.defineProperty(ctx, "apiKey", { value: "", writable: true, enumerable: false });

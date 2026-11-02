@@ -14,7 +14,7 @@ const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const { C4_EXEMPTIONS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js');
 const matrix = Object.keys(EXEMPTION_MATRIX);
 const table = C4_EXEMPTIONS.map((e) => e.id);
-const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','delegated-reason','awaiting-plan-approval','human-web-merge-wait','user-dialog-turn'];
+const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','delegated-reason','awaiting-plan-approval','human-web-merge-wait','user-dialog-turn','jev-wait-on-invoke'];
 const problems = [];
 if (matrix.join(',') !== table.join(',')) {
   problems.push('drift matrix=' + matrix.join(',') + ' table=' + table.join(','));
@@ -24,7 +24,7 @@ if (matrix.join(',') !== expected.join(',')) {
 }
 process.stdout.write(problems.length ? 'BAD ' + problems.join(' | ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids == the 8 expected rows (#2277 awaiting-plan-approval, #2527 human-web-merge-wait, #2698 user-dialog-turn) (same set, same order)"
+        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids == the 9 expected rows (#2277 awaiting-plan-approval, #2527 human-web-merge-wait, #2698 user-dialog-turn, #2461 jev-wait-on-invoke) (same set, same order)"
     else
         fail "M1-a: matrix/table drift; got '${out:-<err>}'"
     fi
