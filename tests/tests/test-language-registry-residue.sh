@@ -129,6 +129,8 @@ tool-compare-sh-2    | fail/tool-compare        | 1 | has   | c-id-compare bin/l
 tool-compare-sh-3    | fail/tool-compare        | 1 | has   | c-id-compare bin/lib/tool-pick.sh:3
 part-outside-a       | fail/part-outside-parts-dir | 1 | has | a-pattern bin/lib/test-retire-predicate/case-parser.sh:2
 part-outside-c       | fail/part-outside-parts-dir | 1 | has | c-id-compare bin/lib/test-retire-predicate/case-parser.sh:4
+part-child-reader-a  | fail/part-outside-parts-dir | 1 | has | a-pattern bin/lib/test-language-parts/bash-case-reader.sh:2
+part-child-reader-c  | fail/part-outside-parts-dir | 1 | has | c-id-compare bin/lib/test-language-parts/bash-case-reader.sh:4
 part-inside-dir      | fail/part-outside-parts-dir | 1 | lacks | bin/lib/test-language-parts/bash.sh
 allow-no-reason      | fail/allowlist-no-reason | 1 | has   | ALLOWLIST no-reason line 1
 allow-no-reason-row  | fail/allowlist-no-reason | 1 | lacks | b-location

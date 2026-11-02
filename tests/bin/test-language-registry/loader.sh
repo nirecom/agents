@@ -99,6 +99,34 @@ got="$(tlr_bash "$SCRIPT_CHECKOUT_ROOT" 'tlr_load || exit 96; tlr_list_dir "$1" 
 assert_eq "empty dir: [$got]" "empty dir: [rc=0]"
 case_end
 
+case_begin "loader-list-dir-winner" "bin/lib/test-language-registry.sh"
+# #2520: a file is listed only under the entry tlr_match picks as its winner (supported first, then
+# table order), so an earlier entry's condition decides, not any later entry that also globs it.
+FX_WIN="$TMPBASE/co-winner"
+fx_checkout "$FX_WIN" "$FIXTURES/winner.json"
+mkdir -p "$LD_DIR/win"
+for f in a.wn x1.wn b1.wb z.rt; do : >"$LD_DIR/win/$f"; done
+win_names() { tlr_bash "$FX_WIN" 'tlr_load || exit 96; tlr_list_dir "$1" "$2"' "$LD_DIR/win" "$1" | sed 's#.*/##' | tr '\n' ' '; }
+# x1.wn also matches win-b's x*.wn, but win-a (no case-marker reader) wins; b1.wb is the positive control.
+assert_eq "case-marker: $(win_names case-marker)" "case-marker: b1.wb "
+# z.rt matches rec-t (has a detector), but the later supported win-s (none) wins it.
+assert_eq "table-driven: $(win_names table-driven)" "table-driven: b1.wb "
+assert_eq "recognized-only: [$(win_names recognized-only)]" "recognized-only: []"
+assert_eq "supported: $(win_names supported)" "supported: a.wn x1.wn b1.wb z.rt "
+case_end
+
+case_begin "loader-list-dir-lf-name" "bin/lib/test-language-registry.sh"
+# A name holding LF stays one TLR_LIST element (separate dir, so the listing above is unchanged).
+mkdir -p "$LD_DIR/win-lf"
+LF_NAME="b"$'\n'"2.wb"
+if ! : >"$LD_DIR/win-lf/$LF_NAME" 2>/dev/null; then
+  skip "LF in a file name cannot be created on this filesystem"
+else
+  got="$(tlr_bash "$FX_WIN" 'tlr_load || exit 96; tlr_list_dir_into "$1" supported || exit 95; printf "%s|%s" "${#TLR_LIST[@]}" "${TLR_LIST[0]##*/}"' "$LD_DIR/win-lf")"
+  assert_eq "$got" "1|$LF_NAME"
+fi
+case_end
+
 case_begin "real-table-part-refs-resolve" "bin/lib/test-language-registry.sh"
 # Every part reference in the real table names a repo file that defines the function.
 drv parts "$READER" >"$LD_DIR/parts" 2>&1

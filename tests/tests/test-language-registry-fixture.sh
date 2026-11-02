@@ -68,6 +68,20 @@ case "$err" in
 esac
 case_end
 
+case_begin "unreadable-table-fails-loudly" "tests/lib/test-language-registry-fixture.sh"
+# #2520: a table whose "file"/"wrapper" keys read as nothing must stop the install, not copy a partial set.
+SRC3="$WORK/src-no-keys"
+install_test_language_registry "$SRC3" >/dev/null 2>&1
+sed -e 's/"file"/"fileX"/g' -e 's/"wrapper"/"wrapperX"/g' "$SRC3/hooks/lib/test-language-registry.json" >"$WORK/renamed.json"
+cp "$WORK/renamed.json" "$SRC3/hooks/lib/test-language-registry.json"
+rc=0; err="$(install_test_language_registry "$WORK/dst-no-keys" "$SRC3" 2>&1 >/dev/null)" || rc=$?
+assert_eq "$rc" "1"
+case "$err" in
+  *"no part files read from the table"*) pass "stderr reports the unreadable table" ;;
+  *) fail "stderr reports the unreadable table" "err=<<$err>>" ;;
+esac
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -46,6 +46,8 @@ const HEADER_ROWS = [
   ["tests/bin/test_a.py", "# Tests: bin/a.py\n# Tags: TL1\n", "# Tests: bin/a.py", "# Tags: TL1"],
   ["tests/bin/a.sh", `${SH}# Tags: TL1\n`, "", "# Tags: TL1"],
   ["tests/bin/a.sh", `${SH}# Tests: bin/a.sh\n${"x\n".repeat(8)}# Tags: late\n`, "# Tests: bin/a.sh", ""],
+  // Line 10 is the last line of the window: still read (pairs with the 11th-line row above).
+  ["tests/bin/a.sh", `${SH}# Tests: bin/a.sh\n${"x\n".repeat(7)}# Tags: last\n`, "# Tests: bin/a.sh", "# Tags: last"],
   ["tests/bin/a.sh", `${SH}# Tests: bin/a.sh\r\n# Tags: TL1\r\n`, "# Tests: bin/a.sh", "# Tags: TL1"],
   ["tests/bin/a.sh", `${SH}# Tests: one\n# Tests: two\n# Tags: TL1`, "# Tests: one", "# Tags: TL1"],
   ["tests/bin/a.sh", "", "", ""],
