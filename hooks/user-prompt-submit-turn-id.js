@@ -27,7 +27,7 @@ function main() {
   try {
     fs.unlinkSync(controlPath(sid, T.PROMPT_TURN_FILE));
   } catch (_) { /* a locked or missing file must not stop the write below, which replaces it */ }
-  T.writePromptTurn(sid);
+  T.writePromptTurn(sid, undefined, input.transcript_path);
 }
 
 if (require.main === module) {

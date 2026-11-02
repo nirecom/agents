@@ -39,7 +39,13 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### Jev
 
-- **Definition**: A third-party typed classifier that returns one probability per yes/no question; with `JEV=on` it is the first judge at the complexity and outline / detail skip judgments.
+- **Definition**: The third-party typed classifier from TypeSafe AI that returns one probability per yes/no question; with `JEV=on` it makes several automatic judgments in this repository.
+- **Related**: [architecture/jev.md](../architecture/jev.md)
+
+### JEV_AUTO_SKIP_ASKUSER
+
+- **Definition**: The `.env` switch that lets Jev answer, for the user, an AskUserQuestion dialog Claude marked as eligible with `metadata.source`.
+  With `off`, every AskUserQuestion dialog reaches the user while the other Jev judgments keep running.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
 ### meta
