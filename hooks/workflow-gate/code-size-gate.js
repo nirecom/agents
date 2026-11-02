@@ -78,6 +78,8 @@ function checkCodeSizeHardLimit(rawRepoDir) {
     cwd: repoDir,
     encoding: "utf8",
     timeout: 3000,
+    // The only declaration in the repo: a timeout here fails open by design (#2781).
+    failOpenOnTimeout: true,
   };
   // Only inject env when CODE_FILE_EXTENSIONS is truthy; otherwise inherit process.env as-is.
   if (codeExt) {

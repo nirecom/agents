@@ -3,7 +3,7 @@
 # Tests: hooks/workflow-gate.js, hooks/workflow-gate/code-size-gate.js, bin/review-code-size
 # Tags: workflow-gate, hook, gate2, code-size, file-split, scope:issue-specific
 # Fragment sourced by tests/hooks/feature-1701-workflow-gate-code-size.sh (not run directly): cases 8-14,
-# infrastructure failures (a hung child asks at the decision time limit) and CODE_FILE_EXTENSIONS resolution.
+# infrastructure failures (a hung child fails open at the gate's own 3 s timeout) and CODE_FILE_EXTENSIONS resolution.
 # Every helper it calls (run_hook, assert_*, setup_repo, glossary_check_record (#2529), ...) is defined by that parent.
 
 # 8. bash not on PATH -> block (infrastructure error, NOT fail-open).
@@ -83,8 +83,8 @@ test_10_unexpected_exit_blocks() {
     assert_block "10: unexpected exit code 2 -> block" "code-size"
 }
 
-# 11. A hung review-code-size -> ask at the decision time limit (#2676), not approve.
-test_11_hung_review_asks() {
+# 11. A hung review-code-size -> fail-open approve at the gate's own 3 s timeout (#2849/#2781).
+test_11_hung_review_fails_open() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="gate2011"
     local repo; repo="$(setup_repo "r11")"
@@ -100,15 +100,20 @@ test_11_hung_review_asks() {
     HOOK_TIMEOUT_RETRIES=0
     run_hook "$(build_commit_payload "$sid" "$repo")" "$wfdir" "$cfg"
     HOOK_TIMEOUT_RETRIES="$saved_retries"
-    # #2676 (N1): with the decision time limit armed, the time left replaces the gate's own 3 s
-    # timeout, so a hung review-code-size ends in ask at the limit — never a silent approve.
+    # #2849/#2781: code-size-gate declares failOpenOnTimeout, so the decision time limit never
+    # replaces its own 3 s timeout; a hung review-code-size fails open (approve) by design.
     if echo "$HOOK_OUT" | grep -q '"decision":"approve"'; then
-        fail "11: hung review-code-size must not approve" "$HOOK_OUT"
-    elif echo "$HOOK_OUT" | grep -q '"permissionDecision":"ask"' \
-        && echo "$HOOK_OUT" | grep -q 'decision time limit'; then
-        pass "11: hung review-code-size -> ask at the decision time limit"
+        pass "11: hung review-code-size -> fail-open approve at the gate's own 3 s timeout"
     else
-        fail "11: hung review-code-size -> expected ask at the decision time limit" "$HOOK_OUT"
+        fail "11: hung review-code-size -> expected fail-open approve" "$HOOK_OUT"
+    fi
+    # The 'failing open' message goes to stderr; assert it only when the captured output carries it.
+    if echo "$HOOK_OUT" | grep -q 'code-size-gate'; then
+        if echo "$HOOK_OUT" | grep -q 'failing open'; then
+            pass "11: output carries the code-size-gate 'failing open' message"
+        else
+            fail "11: code-size-gate output lacks the 'failing open' message" "$HOOK_OUT"
+        fi
     fi
 }
 
