@@ -26,8 +26,13 @@ if (-not $_glabOn) {
 if (Get-Command glab -ErrorAction SilentlyContinue) {
     Write-Host "Updating glab (GitLab CLI)..."
     winget upgrade GLab.GLab --accept-source-agreements --accept-package-agreements
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "glab is up to date or upgrade failed (non-fatal)." -ForegroundColor DarkGray
+    $_glabUpgradeRc = $LASTEXITCODE
+    if ($_glabUpgradeRc -eq -1978335189) {
+        # 0x8A15002B UPDATE_NOT_APPLICABLE: already the latest version (not a failure).
+        Write-Host "glab is already up to date." -ForegroundColor DarkGray
+        $global:LASTEXITCODE = 0
+    } elseif ($_glabUpgradeRc -ne 0) {
+        Write-Host "glab upgrade failed (winget exit code: $_glabUpgradeRc; non-fatal)." -ForegroundColor DarkGray
         $global:LASTEXITCODE = 0
     } else {
         Write-Host "glab updated." -ForegroundColor Green
