@@ -7,17 +7,17 @@ const RECORD = "hooks/workflow-state/glossary-check/record.js";
 const SRC = "src/a.js";
 const BODY = "\"use strict\";\n// a mid-line glossary-drift comment\nmodule.exports = 1;\n";
 
-// A code stage with one granted finding (variant glossary-drift in a new staged file).
+// A review_security step with one granted finding (variant glossary-drift in a new staged file).
 function granted(F, tag) {
   const repo = F.mkRepo(tag);
   const sid = F.newSid(tag);
   F.writeIntent(sid);
   F.stageFile(repo, SRC, BODY);
   F.seedAt(sid, "review_security", repo);
-  const r = F.drift(sid, "code", repo, true);
+  const r = F.drift(sid, "review_security", repo, true);
   F.check(`${tag} precondition: --record exits 1 with a finding`, F.reached(r) && r.code === 1, `code=${r.code} ${r.all}`);
-  const m = F.mark(sid, F.accepted(F.TERM, "stage=code"), repo);
-  const rec = F.recordOf(sid, "code");
+  const m = F.mark(sid, F.accepted(F.TERM, "step=review_security"), repo);
+  const rec = F.recordOf(sid, "review_security");
   F.check(`${tag} precondition: one grant on the record fingerprint`,
     !!rec && (rec.grants || []).length === 1 && rec.grants[0].fingerprint === rec.fingerprint, `${JSON.stringify(rec)} ${m.all}`);
   return { repo, sid, rec };
@@ -30,8 +30,8 @@ function evaluate(F, s) {
 
 // Re-records and reports { r, rec, carried } where carried counts grants on the new fingerprint.
 function rerecord(F, s) {
-  const r = F.drift(s.sid, "code", s.repo, true);
-  const rec = F.recordOf(s.sid, "code") || {};
+  const r = F.drift(s.sid, "review_security", s.repo, true);
+  const rec = F.recordOf(s.sid, "review_security") || {};
   const carried = (rec.grants || []).filter((g) => g.norm && g.fingerprint === rec.fingerprint).length;
   return { r, rec, carried, all: `code=${r.code} ${JSON.stringify(rec)} ${r.all}` };
 }
@@ -84,16 +84,16 @@ function unit(F) {
     grants: [{ norm: F.TERM, fingerprint: F.FP("a"), reason: "fixture" }], ledger_grants: [] };
   const valueOf = (evs) => (evs && evs[0] && (evs[0].value || evs[0])) || {};
   const at = (over) => ({ fingerprint: F.FP("b"), inputs: Object.assign({}, I, over) });
-  const a = valueOf(R.checkRecordEvents(prev, "code", at({ artifact: F.FP("9") }), [find("glossary-drift", 3)]));
+  const a = valueOf(R.checkRecordEvents(prev, "review_security", at({ artifact: F.FP("9") }), [find("glossary-drift", 3)]));
   F.check("checkRecordEvents: artifact-only change, same variants: the grant moves to the new fingerprint",
     (a.grants || []).length === 1 && a.grants[0].fingerprint === F.FP("b") && a.grants[0].norm === F.TERM, JSON.stringify(a));
-  const r = valueOf(R.checkRecordEvents(prev, "code", at({ rules: F.FP("9") }), [find("glossary-drift", 2)]));
+  const r = valueOf(R.checkRecordEvents(prev, "review_security", at({ rules: F.FP("9") }), [find("glossary-drift", 2)]));
   F.check("checkRecordEvents: rules-only change: the grant is not carried", (r.grants || []).length === 0, JSON.stringify(r));
-  const g = valueOf(R.checkRecordEvents(prev, "code", at({ artifact: F.FP("9") }),
+  const g = valueOf(R.checkRecordEvents(prev, "review_security", at({ artifact: F.FP("9") }),
     [find("glossary-drift", 2), find("glossarydrift", 4)]));
   F.check("checkRecordEvents: artifact-only change adding a variant: the grant is not carried",
     (g.grants || []).length === 0, JSON.stringify(g));
-  const ag = valueOf(R.checkRecordEvents(prev, "code", at({ artifact: F.FP("9"), glossary: F.FP("8") }),
+  const ag = valueOf(R.checkRecordEvents(prev, "review_security", at({ artifact: F.FP("9"), glossary: F.FP("8") }),
     [find("glossary-drift", 3)]));
   F.check("checkRecordEvents: artifact and glossary both change, same variants: the grant is not carried",
     (ag.grants || []).length === 0, JSON.stringify(ag));

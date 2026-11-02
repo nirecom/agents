@@ -190,7 +190,7 @@ if [ -z "$INTENT_PATH" ]; then
     SID="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/resolve-session-id" 2>/dev/null)" || SID=""
     # The intent of the session chain is named after first_session_id (#2748).
     if [ -n "$SID" ]; then
-        INTENT_PATH="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || INTENT_PATH=""
+        INTENT_PATH="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --step clarify_intent --session "$SID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || INTENT_PATH=""
     fi
 fi
 if [ -n "$INTENT_PATH" ] && [ -r "$INTENT_PATH" ]; then

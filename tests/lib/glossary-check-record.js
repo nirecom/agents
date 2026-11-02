@@ -1,7 +1,7 @@
 "use strict";
 // tests/lib/glossary-check-record.js — JS twin of glossary-check-record.sh (#2529).
 // recordGlossaryCheck(sid, step, cwd): runs the checkout's own
-// `bin/check-glossary-drift --session <sid> --stage <stage> --record` from `cwd` (the fixture
+// `bin/check-glossary-drift --session <sid> --step <step> --record` from `cwd` (the fixture
 // repo whose index and glossary the record binds to), as a session does before completing a
 // glossary-gated step. A failed record never throws: the completion that follows is the judge,
 // where a record that did not land shows as a glossary-check-missing refusal.
@@ -12,18 +12,20 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..", "..");
+const GLOSSARY_STEPS = ["clarify_intent", "outline", "detail", "review_tests", "review_security", "review_docs"];
+// Legacy stage name of each glossary step (pre-#2820 records and --stage); callers that only need
+// the set of glossary steps read its keys, which equal GLOSSARY_STEPS.
 const STAGE_OF_STEP = {
   clarify_intent: "intent", outline: "outline", detail: "detail",
   review_tests: "tests", review_security: "code", review_docs: "docs",
 };
 
-// -> { code, out, err } of the CLI run; code is null for a step without a glossary stage.
+// -> { code, out, err } of the CLI run; code is null for a step without a glossary check.
 function recordGlossaryCheck(sid, step, cwd) {
-  const stage = STAGE_OF_STEP[step];
-  if (!stage) return { code: null, out: "", err: `no glossary stage for ${step}` };
+  if (!GLOSSARY_STEPS.includes(step)) return { code: null, out: "", err: `no glossary check for ${step}` };
   const dir = cwd || os.tmpdir();
   const r = spawnSync(process.execPath, [path.join(ROOT, "bin", "check-glossary-drift"),
-    "--session", sid, "--stage", stage, "--record"], {
+    "--session", sid, "--step", step, "--record"], {
     cwd: dir, encoding: "utf8", timeout: 60000,
     env: Object.assign({}, process.env, { CLAUDE_PROJECT_DIR: dir }),
   });
@@ -51,4 +53,4 @@ function completeWithRecord(sid, step, repo, markStep) {
   }
 }
 
-module.exports = { STAGE_OF_STEP, recordGlossaryCheck, completeWithRecord };
+module.exports = { GLOSSARY_STEPS, STAGE_OF_STEP, recordGlossaryCheck, completeWithRecord };

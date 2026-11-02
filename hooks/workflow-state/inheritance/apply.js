@@ -15,7 +15,7 @@ const { assertStreamIntegrity, projectState } = require("../state-io/projection"
 const { composeAppendedState } = require("../state-io/events");
 const { isContextIndependentStep } = require("../state-io/step-context-class");
 const CA = require("../completion-approval");
-const { rowFor } = require("../plan-stage-table");
+const { rowFor } = require("../plan-step-table");
 const { stateAncestors, dedupKeepFirst, resolveFirstSid } = require("../state-ancestry");
 
 const INHERIT_ORIGIN = "session-inherit";

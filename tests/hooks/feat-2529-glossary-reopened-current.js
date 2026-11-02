@@ -25,7 +25,7 @@ const { reconcileEffectiveState } = require(path.join(F.ROOT, "hooks/workflow-st
 
 const effective = (s, step) => reconcileEffectiveState(F.readState(s.sid), s.sid, { repoDir: s.repo }).steps[step];
 const current = (s) => resolveCurrentStep(F.readState(s.sid), { sessionId: s.sid, repoDir: s.repo });
-const grantsOf = (sid, stage) => ((F.recordOf(sid, stage) || {}).grants || []).length;
+const grantsOf = (sid, step) => ((F.recordOf(sid, step) || {}).grants || []).length;
 const { VALID_STEPS } = require(path.join(F.ROOT, "hooks/workflow-state/state-io"));
 after(() => {
   restoreIsolation();
@@ -33,10 +33,9 @@ after(() => {
 });
 
 // The fixture seeds only the gated steps; settle every other step before `step` (research, …)
-// so the stage under test is the first candidate for the current step.
-function setup(tag, stage, word) {
-  const s = F.setupStage(tag, stage, word, { ownStatus: "complete" });
-  const own = F.STAGE_STEP[stage];
+// so the step under test is the first candidate for the current step.
+function setup(tag, own, word) {
+  const s = F.setupStep(tag, own, word, { ownStatus: "complete" });
   const st = F.readState(s.sid).steps || {};
   const settle = [];
   for (const step of VALID_STEPS) {
@@ -57,13 +56,12 @@ function guarded(name, fn) {
 
 caseBegin("resolveCurrentStep returns a plan stage the glossary refusal reopened", "hooks/workflow-state/current-step.js");
 test("resolveCurrentStep returns a plan stage the glossary refusal reopened", () => noNewFailures(F.failureCount, () => guarded("current step", () => {
-  for (const stage of F.RA_STAGES) {
-    const step = F.STAGE_STEP[stage];
-    const s = setup(`cur-${stage}`, stage, F.TERM);
-    F.drift(s.sid, stage, s.repo);
-    F.check(`${stage}: a current record leaves ${step} settled (current is later)`, current(s) !== step, String(current(s)));
+  for (const step of F.RA_STEPS) {
+    const s = setup(`cur-${step}`, step, F.TERM);
+    F.drift(s.sid, step, s.repo);
+    F.check(`${step}: a current record leaves ${step} settled (current is later)`, current(s) !== step, String(current(s)));
     F.touchGlossary(s.repo);
-    F.check(`${stage}: a stale record makes ${step} the current step`, current(s) === step, String(current(s)));
+    F.check(`${step}: a stale record makes ${step} the current step`, current(s) === step, String(current(s)));
   }
 })));
 caseEnd();

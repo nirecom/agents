@@ -129,7 +129,7 @@ async function queryShadow({ point, sessionId, toolUseId, toolInput, step, cwd, 
   if (!isEnabled()) return null;
   if (!registryEntry(point) || !isValidId(sessionId) || !isValidId(toolUseId)) return null;
   const adapter = adapterFor(point);
-  const stage = adapter.stageForStep(step);
+  const stage = adapter.jevTicketStageOfStep(step);
   let request = null;
   try {
     request = adapter.buildRequest({ toolInput, sessionId, stage, cwd });
@@ -175,7 +175,7 @@ function frozenMode(hand, entry) {
 
 function orphanRecord(point, sessionId, toolUseId, hand) {
   const entry = registryEntry(point);
-  const p = record.observedPending(hand, adapterFor(point).stageForStep) || {};
+  const p = record.observedPending(hand, adapterFor(point).jevTicketStageOfStep) || {};
   const observed = record.observedLlm(hand && hand.llm_observed);
   const ts = hand && hand.record_ts;
   return record.buildRecord({
@@ -257,10 +257,10 @@ function recordShadow({ point, sessionId, toolUseId, llmText, toolInput, step, e
   const parsed = raw === null ? null : normalizeViaParser(point, raw);
   let status = adapter.classifyLlm(raw, parsed);
   if (status !== "missing" && parsed === null) status = "parse-fallback";
-  const p = own ? record.observedPending(own, adapter.stageForStep) : null;
+  const p = own ? record.observedPending(own, adapter.jevTicketStageOfStep) : null;
   const dispatchTs = p ? p.llm_dispatch_ts : null;
   const rec = record.buildRecord({
-    point, sessionId, toolUseId, pending: p, step, stage: adapter.stageForStep(step), now,
+    point, sessionId, toolUseId, pending: p, step, stage: adapter.jevTicketStageOfStep(step), now,
     llm: {
       status,
       answer: status === "missing" ? null : parsed === null ? entry.fallback : parsed,

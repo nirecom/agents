@@ -29,7 +29,7 @@ after(() => {
 caseBegin("each combined glossary change stales the record and the main worktree glossary is read", "hooks/workflow-state/glossary-check/scope.js");
 test("each combined glossary change stales the record and the main worktree glossary is read", () => noNewFailures(F.failureCount, () => {
   try {
-    glossary.runEachChange(F.RA_STAGES);
+    glossary.runEachChange(F.RA_STEPS);
   } catch (e) {
     F.check("glossary input ran to the end", false, (e && e.stack) || e);
   }

@@ -19,8 +19,9 @@ rwc_resolve security-plan review-plan-security
 # Plans are named after first_session_id (#2748). Only the basename comes from
 # bin/plan-artifact-path, so the path keeps PLANS_DIR's own spelling; no own-sid fallback.
 owned_plan() {
-  local p
-  p="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || return 1
+  local p step="$1"
+  [[ "$step" == intent ]] && step=clarify_intent
+  p="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --step "$step" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || return 1
   p="${p##*[/\\]}"
   [[ "$p" == *"-$1.md" ]] || return 1
   printf '%s' "$PLANS_DIR/$p"

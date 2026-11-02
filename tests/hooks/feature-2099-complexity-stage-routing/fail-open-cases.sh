@@ -52,7 +52,7 @@ catch (e) { console.log("REQUIRE_THREW:" + (e && e.name)); process.exit(0); }
 const cr = require(require("path").join(require("path").dirname(process.env.ISO_BARREL), "workflow-state", "complexity-routing.js"));
 const out = ["REQUIRE_OK", "valid=" + cr.ROUTING_TABLE_VALID, "errors=" + (cr.ROUTING_TABLE_ERRORS.length > 0)];
 // (b) the error must fire only when a derivation is actually CALLED.
-try { loaded.deriveStageLevel("detail", []); out.push("derive=NO_THROW"); }
+try { loaded.deriveStepLevel("detail", []); out.push("derive=NO_THROW"); }
 catch (e) { out.push("derive=" + (e && e.name)); }
 try { loaded.deriveAggregateLevel([]); out.push("aggregate=NO_THROW"); }
 catch (e) { out.push("aggregate=" + (e && e.name)); }
@@ -66,12 +66,12 @@ console.log(out.join(" "));
 }
 
 # Seed a LEGACY-shaped record (level/signals but no `levels` map) via a raw
-# event, through the INTACT tree's barrel. resolveStageLevels() (complexity.js)
+# event, through the INTACT tree's barrel. resolveStepLevels() (complexity.js)
 # trusts a well-formed stored `levels` AS-IS without ever consulting the routing
 # table, so seeding through $BIN_RECORD — which always derives and persists a
 # full `levels` map — can never actually exercise the "table unusable, must
 # re-derive" path this file tests. A legacy record with no `levels` forces
-# resolveStageLevels() to call deriveLegacyStageLevels() for real, which is what
+# resolveStepLevels() to call deriveLegacyStepLevels() for real, which is what
 # reaches (and fails against) the corrupted table in $D2099_ISO.
 d2099_seed_legacy_record() {
     local tag="$1" level="$2" signals_json="$3"

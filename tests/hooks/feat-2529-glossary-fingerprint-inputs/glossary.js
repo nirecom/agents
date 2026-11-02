@@ -1,6 +1,6 @@
 "use strict";
 // T7-2 (input 2, combined glossary): each glossary change below stales the record for all six
-// stages; a newly added heading surfaces DRIFT on rescan; a linked worktree reads its own
+// glossary steps; a newly added heading surfaces DRIFT on rescan; a linked worktree reads its own
 // glossary, not the main worktree's (#2770); a repo with no glossary files records an empty
 // digest without error.
 
@@ -38,25 +38,25 @@ function mutations(repo) {
   ];
 }
 
-function eachChange(m, stages = F.STAGES) {
-  for (const stage of stages) {
-    const ctx = C.baseline(m, `t72-${stage}`, stage);
+function eachChange(m, steps = F.GLOSSARY_STEPS) {
+  for (const step of steps) {
+    const ctx = C.baseline(m, `t72-${step}`, step);
     for (const [label, mutate] of mutations(ctx.repo)) C.cycle(m, ctx, label, "glossary", mutate);
-    const inputs = m.scope.loadStageInputs(ctx.sid, stage, { repoDir: ctx.repo });
-    F.check(`${stage}: the legacy switch is reported as glossary.legacy`,
+    const inputs = m.scope.loadStepInputs(ctx.sid, step, { repoDir: ctx.repo });
+    F.check(`${step}: the legacy switch is reported as glossary.legacy`,
       !!inputs && inputs.ok && inputs.glossary.legacy === true, JSON.stringify(inputs && inputs.glossary));
   }
 }
 
-function headingSurfacesDrift(stages = F.STAGES) {
-  for (const stage of stages) {
-    const s = F.setupStage(`t72-head-${stage}`, stage, "release-gate");
-    const first = F.drift(s.sid, stage, s.repo, false);
-    F.check(`${stage}: release-gate is not DRIFT before its heading exists`,
+function headingSurfacesDrift(steps = F.GLOSSARY_STEPS) {
+  for (const step of steps) {
+    const s = F.setupStep(`t72-head-${step}`, step, "release-gate");
+    const first = F.drift(s.sid, step, s.repo, false);
+    F.check(`${step}: release-gate is not DRIFT before its heading exists`,
       first.code === 0 && !/DRIFT:/.test(first.out), `${first.code} ${first.out} ${first.err}`);
     F.writeFile(s.repo, INTERNAL, F.GLOSSARY_FILES[INTERNAL] + HEADING);
-    const again = F.drift(s.sid, stage, s.repo, false);
-    F.check(`${stage}: the added heading makes release-gate DRIFT on rescan`,
+    const again = F.drift(s.sid, step, s.repo, false);
+    F.check(`${step}: the added heading makes release-gate DRIFT on rescan`,
       again.code === 1 && /DRIFT: \S+ "/.test(again.out) && again.out.includes("release-gate"),
       `${again.code} ${again.out} ${again.err}`);
   }
@@ -68,8 +68,8 @@ function linkedWorktree(m) {
   const main = F.mkRepo("t72-main");
   const mainBranch = F.git(main, ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
   const wt = F.addWorktree(main, "t72");
-  F.stageFile(wt, F.TARGET.code, F.targetBody("code", F.VARIANT));
-  const ctx = { sid: F.seedSession("t72-wt", "code", { cwd: wt }), repo: wt, stage: "code" };
+  F.stageFile(wt, F.TARGET.review_security, F.targetBody("review_security", F.VARIANT));
+  const ctx = { sid: F.seedSession("t72-wt", "review_security", { cwd: wt }), repo: wt, step: "review_security" };
   C.recordAndGrant(m, ctx, "linked worktree baseline");
   C.unchanged(m, ctx, "a committed glossary edit in the main worktree (not read from the linked worktree)", () => {
     F.touchGlossary(main, "!");
@@ -85,14 +85,14 @@ function noGlossary(m) {
   const repo = F.mkRepo("t72-none");
   F.git(repo, ["rm", "-r", "-q", "--", "docs/glossary"]);
   F.commit(repo, "fixture: no glossary");
-  F.stageFile(repo, F.TARGET.code, F.targetBody("code", F.TERM));
-  const ctx = { sid: F.seedSession("t72-none", "code", { cwd: repo }), repo, stage: "code" };
-  const inputs = m.scope.loadStageInputs(ctx.sid, "code", { repoDir: repo });
-  F.check("no glossary files: loadStageInputs succeeds with no files and no terms",
+  F.stageFile(repo, F.TARGET.review_security, F.targetBody("review_security", F.TERM));
+  const ctx = { sid: F.seedSession("t72-none", "review_security", { cwd: repo }), repo, step: "review_security" };
+  const inputs = m.scope.loadStepInputs(ctx.sid, "review_security", { repoDir: repo });
+  F.check("no glossary files: loadStepInputs succeeds with no files and no terms",
     !!inputs && inputs.ok && inputs.glossary.files.length === 0 && [...(inputs.glossary.terms || [])].length === 0,
     JSON.stringify(inputs));
-  const r = F.drift(ctx.sid, "code", repo);
-  const rec = F.recordOf(ctx.sid, "code");
+  const r = F.drift(ctx.sid, "review_security", repo);
+  const rec = F.recordOf(ctx.sid, "review_security");
   F.check("no glossary files: --record succeeds", r.code === 0, `${r.code} ${r.out} ${r.err}`);
   F.check("no glossary files: the record carries a 64-hex glossary digest",
     !!rec && rec.inputs && /^[0-9a-f]{64}$/.test(rec.inputs.glossary || ""), JSON.stringify(rec));
@@ -102,7 +102,7 @@ function noGlossary(m) {
 // Section entry points, so entry files can split the sections across processes. Only the
 // heading section runs without scope.js/record.js, as run() always did.
 const runEachChange = C.withModules(eachChange);
-const runHeading = (stages) => headingSurfacesDrift(stages);
+const runHeading = (steps) => headingSurfacesDrift(steps);
 const runLinkedWorktree = C.withModules(linkedWorktree);
 const runNoGlossary = C.withModules(noGlossary);
 

@@ -123,7 +123,7 @@ C9-nonstring-only=low:high/high/high
 EOF
 }
 
-# L-5: readStageComplexityLevel is the consumer entry point — it must see the
+# L-5: readStepComplexityLevel is the consumer entry point — it must see the
 # same backfilled values, and reject an unknown stage.
 d2099_legacy_stage_reader() {
     local got
@@ -145,15 +145,15 @@ fs.mkdirSync(path.dirname(p), { recursive: true });
 fs.writeFileSync(p, JSON.stringify(s, null, 2));
 const seeded = b.readState(sid);
 const out = ["seeded=" + (seeded && seeded.complexity_evaluation ? "yes" : "no")];
-b.ROUTING_STAGES.forEach(function (st) { out.push(st + "=" + b.readStageComplexityLevel(sid, st)); });
+b.ROUTING_STEPS.forEach(function (st) { out.push(st + "=" + b.readStepComplexityLevel(sid, st)); });
 let bad;
-try { bad = "stage=" + b.readStageComplexityLevel(sid, "docs"); }
+try { bad = "stage=" + b.readStepComplexityLevel(sid, "docs"); }
 catch (e) { bad = "stage=" + (e && e.name); }
 out.push(bad);
-out.push("missing=" + b.readStageComplexityLevel("s2099-absent-" + process.pid, "detail"));
+out.push("missing=" + b.readStepComplexityLevel("s2099-absent-" + process.pid, "detail"));
 console.log(out.join(" "));
 ')
-    assert_eq "L-5 readStageComplexityLevel backfills legacy records and rejects an unknown stage" \
+    assert_eq "L-5 readStepComplexityLevel backfills legacy records and rejects an unknown stage" \
         "seeded=yes outline=low detail=low write_tests=low write_code=high stage=TypeError missing=null" "$got"
 }
 
@@ -217,7 +217,7 @@ JS
 }
 
 # L-7: the other half of L-6. detail.md item 6 says the v1 backfill adds
-# `levels: deriveLegacyStageLevels(...)` and OMITS it when derivation is
+# `levels: deriveLegacyStepLevels(...)` and OMITS it when derivation is
 # impossible — migration must still succeed. Run against the corrupted tree
 # fail-open-cases.sh builds (sourced earlier), which is the only way to make a
 # derivation genuinely unavailable without touching the real repo. Same

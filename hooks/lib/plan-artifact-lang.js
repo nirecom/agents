@@ -12,7 +12,7 @@ const { loadLangConfig, classifyPolicy } = require("./lang-config");
 const { lintPlanLang } = require("./lint-plan-lang");
 const { checkIntentGlossary } = require("./intent-glossary");
 
-const STAGES = new Set(["intent", "outline", "detail"]);
+const { PLAN_ARTIFACT_NAMES } = require("../workflow-state/plan-step-table");
 
 function isPlanArtifactPath(resolvedPath) {
   if (typeof resolvedPath !== "string" || resolvedPath.length === 0) return false;
@@ -27,7 +27,7 @@ function isPlanArtifactPath(resolvedPath) {
 // The plan is named after first_session_id (#2748). The joined basename must itself be a plan
 // artifact: this rejects separators, traversal and any sid outside the UUID / timestamp classes.
 function resolvePlanArtifactPath(sid, stage) {
-  if (typeof sid !== "string" || typeof stage !== "string" || !STAGES.has(stage)) return null;
+  if (typeof sid !== "string" || typeof stage !== "string" || !PLAN_ARTIFACT_NAMES.includes(stage)) return null;
   const firstSid = require("../workflow-state/state-ancestry").resolveFirstSid(sid);
   if (typeof firstSid !== "string") return null;
   const base = firstSid + "-" + stage + ".md";
@@ -42,7 +42,7 @@ function resolvePlanArtifactPath(sid, stage) {
 function stageOf(resolvedPath) {
   if (typeof resolvedPath !== "string" || resolvedPath.length === 0) return null;
   const base = path.basename(resolvedPath);
-  for (const stage of STAGES) {
+  for (const stage of PLAN_ARTIFACT_NAMES) {
     if (base.endsWith("-" + stage + ".md")) return stage;
   }
   return null;

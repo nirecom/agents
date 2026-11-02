@@ -200,7 +200,7 @@ silently disabling the gate:
 
 | Source | Recorded by | Hash-bound |
 |---|---|---|
-| `confirm-sentinel` | `<<WORKFLOW_CONFIRM_INTENT\|OUTLINE\|DETAIL: {summary}>>`, accepted only once the stage's pre-confirm audit settled or was accepted ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)) | yes — a re-edited plan artifact invalidates the approval (intent's `## Issues` section is outside the hash) |
+| `confirm-sentinel` | `<<WORKFLOW_CONFIRM_INTENT\|OUTLINE\|DETAIL: {summary}>>`, accepted only once the plan step's pre-confirm audit settled or was accepted ([supervisor-audit-ledger.md](supervisor-audit-ledger.md)) | yes — a re-edited plan artifact invalidates the approval (intent's `## Issues` section is outside the hash) |
 | `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver, read from the global `.env` file only (an export or `.env.local` does not count); intent has none. It outranks a stale `confirm-sentinel` record. `checkPlanApproval` is the one entry that `--gate` and `evaluateCompletionApproval` share; `confirm-checkpoint` reads the same OFF verdict through `planGateState` (#2726, #2729) | no (audit record) |
 
 `reset-sentinel` and `session-inherit` are legacy read-only (`HASH_EXEMPT_SOURCES`): old records still
@@ -213,7 +213,7 @@ never a downgrade to an existence-only check. A gated step leaving `complete` dr
 record, so a stale approval can never re-validate a later re-completion.
 
 The hash is computed on the plan artifact's **owner**, which after an inheritance is the upstream's
-`<upstream-sid>-<stage>.md`, not the current session's. `resolvePlanArtifactOwner`
+`<upstream-sid>-<plan artifact name>.md`, not the current session's. `resolvePlanArtifactOwner`
 (`plan-artifact-owner.js`, CLI `bin/plan-artifact-path`) is the SSOT: own file, recorded
 `artifact_session_id`, past approval events, then `upstream_session_id`. Re-approval records that owner.
 
@@ -222,7 +222,7 @@ The hash is computed on the plan artifact's **owner**, which after an inheritanc
 `/resume-session --from` copies the upstream's event stream verbatim (`inheritance/apply.js`) and sets
 `upstream_session_id` / `upstream_copy_seq`, in one `writeStateLocked` (a crash leaves it untouched
 or fully inherited); the supervisor state file is copied afterwards. Each approval-gated
-stage is re-verified in that write: the first stage that no longer verifies, and every later stage
+step is re-verified in that write: the first step that no longer verifies, and every later step
 including `cleanup`, returns to `pending` with an `inherit_revert_reason`; the downstream re-approves
 with `CONFIRM_*`. Events up to `upstream_copy_seq` are not the downstream's own work. `buildCopy`
 alone writes `previous_session_ids`, the upstream lineage oldest first (#2311); readers validate each
@@ -350,12 +350,12 @@ resolved by hand with `bin/workflow/record-skip-verdict`. Only a manual sentinel
 starts as `pending`; a skip judged through `bin/workflow/jev-judge` is recorded as a
 `skip_judgment` and needs no verdict.
 
-### `complexity_evaluation` (per-stage routing levels, #2099)
+### `complexity_evaluation` (per-step routing levels, #2099)
 
 Before #2099, one aggregate `level` (`high`/`low`) routed every model-selecting step alike —
 a single high-complexity signal sent `detail`, `write_tests`, and `write_code` to opus
 together, even when only one of the three actually warranted it. `levels` splits that
-verdict per stage so each step routes on its own evidence:
+verdict per step so each step routes on its own evidence:
 
 ```json
 {
@@ -369,10 +369,10 @@ verdict per stage so each step routes on its own evidence:
 ```
 
 - **`level`** stays the legacy aggregate (`high` if any signal fires, else `low`) — kept for
-  callers that never migrated to per-stage routing.
-- **`levels`** keys are exactly `ROUTING_STAGES` (`hooks/workflow-state/complexity-routing.js`:
+  callers that never migrated to per-step routing.
+- **`levels`** keys are exactly `ROUTING_STEPS` (`hooks/workflow-state/complexity-routing.js`:
   `outline`, `detail`, `write_tests`, `write_code`), each `"high"` or `"low"`. A stored map
-  missing a stage (e.g. a pre-#2100 three-key map without `outline`) is re-derived from `signals`. `recordComplexityEvaluation`
+  missing a step (e.g. a pre-#2100 three-key map without `outline`) is re-derived from `signals`. `recordComplexityEvaluation`
   (`state-io/session-fields.js`) derives both `level` and `levels` from the same `signals` input
   in one call, so they can never disagree with each other or be written out of sync.
 - **`signals` canonicalization (#2148).** `recordComplexityEvaluation` passes the raw judge
@@ -384,13 +384,13 @@ verdict per stage so each step routes on its own evidence:
   injecting into the WT/WCD prompt, so `UNRECOGNIZED(N)` markers never reach LLM context.
 - **Optional field, not a breaking change.** `REQUIRED_FIELDS.complexity_evaluation` in
   `state-io/events.js` stays `["level", "signals"]` — `levels` is validated only when present
-  (exact `ROUTING_STAGES` key set, each value `"high"`/`"low"`, or `InvalidEventError`), so
+  (exact `ROUTING_STEPS` key set, each value `"high"`/`"low"`, or `InvalidEventError`), so
   pre-#2099 events and migration-backfilled events with no `levels` still append cleanly.
 - **Read-side compatibility completion.** A missing or malformed `levels` map is not an error
-  at read time: `resolveStageLevels` (`skip-signal-resolver/complexity.js`) re-derives every
-  stage from the recorded `level`/`signals` via `deriveLegacyStageLevels`, never partially
+  at read time: `resolveStepLevels` (`skip-signal-resolver/complexity.js`) re-derives every
+  step from the recorded `level`/`signals` via `deriveLegacyStepLevels`, never partially
   trusting a malformed map. This keeps `readComplexityEvaluation` — the consumer-facing read used
-  by `write-tests`/`write-code`'s model-selection step — returning a usable per-stage view even
+  by `write-tests`/`write-code`'s model-selection step — returning a usable per-step view even
   for sessions recorded before this event carried `levels` at all.
 - **Verification read stays raw.** `readLastRawComplexityEvent` (`state-io/session-fields.js`) is
   read-back verification only — it returns the event's persisted fields with no folding and no

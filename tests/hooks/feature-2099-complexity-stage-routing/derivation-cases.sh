@@ -12,15 +12,15 @@ d2099_exports() {
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
 const EXPECTED = [
-  ["ROUTING_STAGES", "object"], ["SIGNAL_IDS", "object"],
+  ["ROUTING_STEPS", "object"], ["SIGNAL_IDS", "object"],
   ["JUDGED_SIGNAL_IDS", "object"], ["DETERMINISTIC_SIGNAL_IDS", "object"],
-  ["UNDECIDABLE_SIGNAL", "string"], ["STAGE_ROUTING", "object"],
+  ["UNDECIDABLE_SIGNAL", "string"], ["STEP_ROUTING", "object"],
   ["ROUTING_TABLE_VALID", "boolean"], ["ROUTING_TABLE_ERRORS", "object"],
   ["RoutingTableUnavailableError", "function"], ["validateRoutingTable", "function"],
-  ["deriveStageLevel", "function"], ["deriveStageLevels", "function"],
-  ["deriveAggregateLevel", "function"], ["deriveLegacyStageLevels", "function"],
-  ["canonicalizeSignalsForPersistence", "function"], ["describeStageRouting", "function"],
-  ["renderStageRoutingMarkdown", "function"], ["renderSignalIdsMarkdown", "function"],
+  ["deriveStepLevel", "function"], ["deriveStepLevels", "function"],
+  ["deriveAggregateLevel", "function"], ["deriveLegacyStepLevels", "function"],
+  ["canonicalizeSignalsForPersistence", "function"], ["describeStepRouting", "function"],
+  ["renderStepRoutingMarkdown", "function"], ["renderSignalIdsMarkdown", "function"],
 ];
 const missing = EXPECTED.filter(function (e) { return typeof m[e[0]] !== e[1]; })
   .map(function (e) { return e[0] + ":" + typeof m[e[0]]; });
@@ -31,7 +31,7 @@ console.log(missing.length ? missing.join(",") : "ALL_PRESENT");
     # S1-multi-file / S6-long-plan were retired (#2460): they are unknown tokens now.
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-console.log([m.ROUTING_STAGES.join("|"), m.UNDECIDABLE_SIGNAL, m.SIGNAL_IDS.join("|")].join(" "));
+console.log([m.ROUTING_STEPS.join("|"), m.UNDECIDABLE_SIGNAL, m.SIGNAL_IDS.join("|")].join(" "));
 ')
     assert_eq "D-2 stage keys, undecidable token and signal ids are the SSOT values" \
         "outline|detail|write_tests|write_code S0-undecidable S1b-wide-change|S2-architecture|S3-security|S4-installer|S5-breaking" \
@@ -41,10 +41,10 @@ console.log([m.ROUTING_STAGES.join("|"), m.UNDECIDABLE_SIGNAL, m.SIGNAL_IDS.join
 const m = require(process.env.CR_MOD_N);
 console.log(String(m.ROUTING_TABLE_VALID) + " " + m.ROUTING_TABLE_ERRORS.length);
 ')
-    assert_eq "D-3 the shipped STAGE_ROUTING self-validates clean at load time" "true 0" "$got"
+    assert_eq "D-3 the shipped STEP_ROUTING self-validates clean at load time" "true 0" "$got"
 }
 
-# D-4: full deriveStageLevel matrix (4 stages x every signal set below).
+# D-4: full deriveStepLevel matrix (4 stages x every signal set below).
 # S1-multi-file / S6-long-plan are retired tokens: alone they route to the
 # stage undecidable_level (high) like any other unknown token.
 d2099_matrix() {
@@ -80,13 +80,13 @@ const CASES = [
 for (const stage of ["outline", "detail", "write_tests", "write_code"]) {
   for (const c of CASES) {
     let out;
-    try { out = m.deriveStageLevel(stage, c[1]); }
+    try { out = m.deriveStepLevel(stage, c[1]); }
     catch (e) { out = "THREW:" + (e && e.name); }
     console.log(stage + " " + c[0] + " " + out);
   }
 }
 ')
-    assert_block "D-4 deriveStageLevel matrix matches the D2 routing table" "$got" <<'EOF'
+    assert_block "D-4 deriveStepLevel matrix matches the D2 routing table" "$got" <<'EOF'
 outline EMPTY low
 outline S1-multi-file high
 outline S1b-wide-change low
@@ -175,13 +175,13 @@ let aggHigh = 0;
 for (let mask = 0; mask < (1 << ids.length); mask++) {
   const sig = ids.filter(function (_, i) { return mask & (1 << i); });
   const agg = m.deriveAggregateLevel(sig);
-  const wc = m.deriveStageLevel("write_code", sig);
+  const wc = m.deriveStepLevel("write_code", sig);
   if (agg !== wc) mismatches.push(mask + ":" + agg + "/" + wc);
   if (agg === "high") aggHigh++;
 }
 console.log("subsets=" + (1 << ids.length) + " aggHigh=" + aggHigh + " mismatches=" + mismatches.length);
 ')
-    assert_eq "D-5 deriveStageLevel(write_code) === deriveAggregateLevel over the signal powerset" \
+    assert_eq "D-5 deriveStepLevel(write_code) === deriveAggregateLevel over the signal powerset" \
         "subsets=32 aggHigh=31 mismatches=0" "$got"
 
     got=$(run_node '
@@ -209,16 +209,16 @@ console.log(/write_code/.test(body) ? "COUPLED" : "INDEPENDENT");
         "INDEPENDENT" "$got"
 }
 
-# D-8: deriveStageLevels / determinism / input non-destruction / bad stage.
+# D-8: deriveStepLevels / determinism / input non-destruction / bad step.
 d2099_bulk_and_purity() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
 const sig = ["S2-architecture", "S1b-wide-change"];
 const before = JSON.stringify(sig);
-const a = m.deriveStageLevels(sig);
-const b = m.deriveStageLevels(sig);
-const perStage = m.ROUTING_STAGES.map(function (s) { return m.deriveStageLevel(s, sig); }).join(",");
+const a = m.deriveStepLevels(sig);
+const b = m.deriveStepLevels(sig);
+const perStage = m.ROUTING_STEPS.map(function (s) { return m.deriveStepLevel(s, sig); }).join(",");
 console.log([
   Object.keys(a).join("|"),
   a.detail + "," + a.write_tests + "," + a.write_code,
@@ -228,14 +228,14 @@ console.log([
   JSON.stringify(sig) === before ? "INPUT_INTACT" : "INPUT_MUTATED",
 ].join(" "));
 ')
-    assert_eq "D-8 deriveStageLevels agrees with per-stage derivation, is frozen, pure and deterministic" \
+    assert_eq "D-8 deriveStepLevels agrees with per-stage derivation, is frozen, pure and deterministic" \
         "outline|detail|write_tests|write_code high,high,high high,high,high,high DETERMINISTIC FROZEN INPUT_INTACT" "$got"
 
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
 const out = [];
 for (const bad of ["code", "", null, "DETAIL"]) {
-  try { m.deriveStageLevel(bad, []); out.push("NO_THROW"); }
+  try { m.deriveStepLevel(bad, []); out.push("NO_THROW"); }
   catch (e) { out.push(e && e.name); }
 }
 console.log(out.join(" "));
@@ -246,8 +246,8 @@ console.log(out.join(" "));
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
 console.log([
-  m.deriveStageLevel("detail", ["  S2-architecture  ", ""]),
-  m.deriveStageLevel("write_tests", ["", "  "]),
+  m.deriveStepLevel("detail", ["  S2-architecture  ", ""]),
+  m.deriveStepLevel("write_tests", ["", "  "]),
 ].join(" "));
 ')
     assert_eq "D-10 tokens are trimmed and empty tokens dropped before matching" "high low" "$got"
@@ -264,7 +264,7 @@ console.log(Object.prototype.hasOwnProperty.call(m, "isZeroSignalLow") ? "EXPORT
     assert_eq "D-11 isZeroSignalLow is no longer exported" "ABSENT" "$got"
 }
 
-# D-12: deriveLegacyStageLevels covers the L1/L2 rows of the Legacy table.
+# D-12: deriveLegacyStepLevels covers the L1/L2 rows of the Legacy table.
 # A legacy record that persisted a retired id (S1/S6) re-derives as undecidable.
 d2099_legacy_derivation() {
     local got
@@ -279,10 +279,10 @@ const CASES = [
   ["L2-low-empty", "low", []],
 ];
 console.log(CASES.map(function (c) {
-  return c[0] + "=" + fmt(m.deriveLegacyStageLevels(c[1], c[2]));
+  return c[0] + "=" + fmt(m.deriveLegacyStepLevels(c[1], c[2]));
 }).join(" "));
 ')
-    assert_block "D-12 deriveLegacyStageLevels applies L1 per-signal derivation and L2 high round-up" "$got" <<'EOF'
+    assert_block "D-12 deriveLegacyStepLevels applies L1 per-signal derivation and L2 high round-up" "$got" <<'EOF'
 L1-high-signals=low,low,high L1-low-signals=low,high,high L1-retired-signal=high,high,high L2-high-empty=high,high,high L2-low-empty=low,low,low
 EOF
 }
@@ -293,7 +293,7 @@ d2099_write_code_shape() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const r = m.STAGE_ROUTING.write_code;
+const r = m.STEP_ROUTING.write_code;
 const rows = r.legacy_equivalent_escalation;
 console.log([
   "solo=" + JSON.stringify(r.solo_escalation),

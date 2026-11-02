@@ -1,10 +1,10 @@
 "use strict";
 // hooks/workflow-state/glossary-check/record.js — the glossary-check record (#2529): the
-// step annotations `glossary_check` (per stage) and `glossary_provenance` (review_docs), the
+// step annotations `glossary_check` (per glossary step) and `glossary_provenance` (review_docs), the
 // completion predicate evaluateGlossaryCheck, and the completion-boundary guard over one batch.
 // Every input comes from scope.js (invariant I-FP); this module never reads an input itself.
 
-const { STAGE_STEP, RA_STAGES, RS_STAGES, stageOfStep, loadStageInputs, fingerprintOf } = require("./scope");
+const { GLOSSARY_STEPS, RA_STEPS, RS_STEPS, loadStepInputs, fingerprintOf } = require("./scope");
 
 const RECORD_KEY = "glossary_check";
 const PROVENANCE_KEY = "glossary_provenance";
@@ -17,16 +17,16 @@ const COMPONENTS = Object.freeze(["artifact", "glossary", "intent_rows", "rules"
 const asArray = (v) => (Array.isArray(v) ? v : []);
 const sameFp = (grants, fp) => asArray(grants).filter((g) => g && g.fingerprint === fp);
 
-// recoveryFor(sid, stage, code, detail): the one recovery text per refusal code, shown by the
+// recoveryFor(sid, step, code, detail): the one recovery text per refusal code, shown by the
 // completion refusal, the next-step hint and the effective view alike. No single quotes:
 // next-step wraps NEXT_HINT in them.
-function recoveryFor(sid, stage, code, detail) {
-  const run = `check-glossary-drift --session ${sid || "<sid>"} --stage ${stage} --record`;
+function recoveryFor(sid, step, code, detail) {
+  const run = `check-glossary-drift --session ${sid || "<sid>"} --step ${step} --record`;
   const d = detail || {};
   if (code === "glossary-findings-unresolved") {
     const terms = [...new Set(asArray(d.findings).map((f) => String(f && f.term)))].join(", ");
-    return `fix each open DRIFT finding (${terms}) in the ${stage} artifact and run: ${run}, ` +
-      `or accept it with: echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> stage=${stage} — <reason>>>"; ` +
+    return `fix each open DRIFT finding (${terms}) in the ${step} artifact and run: ${run}, ` +
+      `or accept it with: echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> step=${step} — <reason>>>"; ` +
       "then complete the step again.";
   }
   const generic = `run: ${run}, then fix each DRIFT finding or record an ACCEPTED grant, and complete the step again.`;
@@ -70,22 +70,22 @@ const variantsOf = (findings, norm) => asArray(findings).filter((f) => f && f.no
 const entriesOf = (blocked, norm) => asArray(blocked).filter((b) => b && b.norm === norm)
   .map((b) => JSON.stringify([b.term, b.operation, b.category, b.definition === undefined ? null : b.definition]));
 
-// checkRecordEvents(current, stage, fpResult, findings, origin) -> [step_annotation event].
-// current: the stage's previous glossary_check value (or null). Grants survive at the same
+// checkRecordEvents(current, step, fpResult, findings, origin) -> [step_annotation event].
+// current: the step's previous glossary_check value (or null). Grants survive at the same
 // fingerprint, or move to the new one when only the artifact changed and the granted norm shows
 // no variant it did not show before; ledger_grants are bound to a concern and always carry.
-function checkRecordEvents(current, stage, fpResult, findings, origin) {
+function checkRecordEvents(current, step, fpResult, findings, origin) {
   const prev = current || {};
   const next = asArray(findings).map((f) => ({
     source: "deterministic", class: "spelling", term: f.term, norm: f.norm, variant: f.variant, where: f.where,
   }));
   const value = {
-    v: 1, stage, fingerprint: fpResult.fingerprint, inputs: fpResult.inputs, findings: next,
+    v: 1, step, fingerprint: fpResult.fingerprint, inputs: fpResult.inputs, findings: next,
     grants: sameFp(prev.grants, fpResult.fingerprint)
       .concat(carriedGrants(prev, fpResult, "artifact", variantsOf, prev.findings, next)),
     ledger_grants: asArray(prev.ledger_grants),
   };
-  return [annotation(STAGE_STEP[stage], RECORD_KEY, value, origin || "check-glossary-drift")];
+  return [annotation(step, RECORD_KEY, value, origin || "check-glossary-drift")];
 }
 
 // provenanceRecordEvents(current, fpResult, sessionSource, unmatched, origin) -> [event].
@@ -122,18 +122,17 @@ function changedComponents(recorded, current) {
 // opts.mode: "boundary" (default) | "commit"; opts.repoDir / opts.ruleModules go to scope.js.
 function evaluateGlossaryCheck(sid, step, projection, opts) {
   const o = opts || {};
-  const stage = stageOfStep(step);
-  if (!stage) return { ok: true };
-  const fail = (code, detail) => ({ ok: false, code, detail: Object.assign({ recovery: recoveryFor(sid, stage, code, detail) }, detail) });
+  if (!GLOSSARY_STEPS.includes(step)) return { ok: true };
+  const fail = (code, detail) => ({ ok: false, code, detail: Object.assign({ recovery: recoveryFor(sid, step, code, detail) }, detail) });
   const scopeOpts = { repoDir: o.repoDir, ruleModules: o.ruleModules };
   let loaded = null;
-  if (o.mode === "commit" && RS_STAGES.includes(stage)) {
-    loaded = loadStageInputs(sid, stage, scopeOpts);
+  if (o.mode === "commit" && RS_STEPS.includes(step)) {
+    loaded = loadStepInputs(sid, step, scopeOpts);
     if (loaded.ok && loaded.artifact.empty) return { ok: true };
   }
   const rec = recordOf(projection, step);
   if (!rec || typeof rec.fingerprint !== "string" || rec.fingerprint === "") return fail("glossary-check-missing", {});
-  const now = fingerprintOf(loaded || loadStageInputs(sid, stage, scopeOpts));
+  const now = fingerprintOf(loaded || loadStepInputs(sid, step, scopeOpts));
   if (!now.ok) return fail("glossary-fingerprint-unavailable", { error: now.error, cause: now.detail || null });
   if (now.fingerprint !== rec.fingerprint) {
     return fail("glossary-check-stale", { changed: changedComponents(rec.inputs, now.inputs) });
@@ -150,9 +149,9 @@ const statusOf = (proj, step) => {
 };
 
 // glossaryRefusalOfComplete(sid, step, projection, opts) -> the evaluateGlossaryCheck refusal code
-// (stale / findings-unresolved / fingerprint-unavailable) of a plan stage (R-A) recorded complete
+// (stale / findings-unresolved / fingerprint-unavailable) of a plan step (R-A) recorded complete
 // with a glossary_check record, else null. A complete with no record, or a record without a
-// fingerprint (recorded before #2529), is legacy and left complete. R-S stages: the commit gate.
+// fingerprint (recorded before #2529), is legacy and left complete. R-S steps: the commit gate.
 function glossaryRefusalOfComplete(sid, step, projection, opts) {
   const err = glossaryRefusalErrorOfComplete(sid, step, projection, opts);
   return err ? err.code : null;
@@ -162,7 +161,7 @@ function glossaryRefusalOfComplete(sid, step, projection, opts) {
 // (code + recovery text), for a writer that must word it; null when the complete stands.
 function glossaryRefusalErrorOfComplete(sid, step, projection, opts) {
   const o = opts || {};
-  if (!RA_STAGES.includes(stageOfStep(step)) || statusOf(projection, step) !== "complete") return null;
+  if (!RA_STEPS.includes(step) || statusOf(projection, step) !== "complete") return null;
   const rec = recordOf(projection, step);
   if (!rec || typeof rec.fingerprint !== "string" || rec.fingerprint === "") return null;
   const v = evaluateGlossaryCheck(sid, step, projection, { mode: "boundary", repoDir: o.repoDir, ruleModules: o.ruleModules });
@@ -170,12 +169,11 @@ function glossaryRefusalErrorOfComplete(sid, step, projection, opts) {
 }
 
 // glossaryBoundaryForBatch(sid, prev, next, opts): throws GlossaryCheckIncompleteError when a
-// glossary stage step moves to complete in this batch without a valid record.
+// glossary step moves to complete in this batch without a valid record.
 function glossaryBoundaryForBatch(sid, prevProjection, nextProjection, opts) {
   const o = opts || {};
   if (SKIP_TOKENS.includes(o.sanctioned)) return;
-  for (const stage of Object.keys(STAGE_STEP)) {
-    const step = STAGE_STEP[stage];
+  for (const step of GLOSSARY_STEPS) {
     if (statusOf(prevProjection, step) === "complete" || statusOf(nextProjection, step) !== "complete") continue;
     const v = evaluateGlossaryCheck(sid, step, nextProjection, { mode: "boundary", repoDir: o.repoDir, ruleModules: o.ruleModules });
     if (!v.ok) throw new GlossaryCheckIncompleteError(step, v.code, v.detail && v.detail.recovery);

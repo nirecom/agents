@@ -12,7 +12,7 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const CA = () => require(path.join(ROOT, "hooks/workflow-state/completion-approval.js"));
-const TABLE = () => require(path.join(ROOT, "hooks/workflow-state/plan-stage-table.js"));
+const TABLE = () => require(path.join(ROOT, "hooks/workflow-state/plan-step-table.js"));
 
 function plansDir() {
   const d = process.env.WORKFLOW_PLANS_DIR;

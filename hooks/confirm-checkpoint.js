@@ -8,7 +8,7 @@
 // Fail-closed: anything it cannot verify denies with a present-again reason. The one exception is
 // an unreadable hook input, where not even the sentinel is known: that stays a no-op.
 // #2631: a plan over HARD, or one the size check cannot judge, is denied (uncounted) whatever
-// CONFIRM_<STAGE> says; over WARN adds advice. Only an exempt session (size-session-gate.js) skips it.
+// the step's CONFIRM_* flag says; over WARN adds advice. Only an exempt session (size-session-gate.js) skips it.
 "use strict";
 
 const fs = require("fs");
@@ -30,22 +30,35 @@ const PL = lazy("./lib/plan-link");
 const CL = lazy("./lib/conv-lang");
 
 const { readHookInput } = require("./lib/read-stdin");
+// The sentinel names a step; the plan file, link line and size check use its artifact name.
+// A table that cannot be loaded must not crash the hook (exit 1 is fail-open): the flag comes from
+// step-gate-map (no table dependency) and the artifact name is the step's, but for clarify_intent.
+function rowOf(step) {
+  try {
+    const row = require("./workflow-state/plan-step-table").rowFor(step);
+    if (row) return row;
+  } catch (_) { /* the fallback below keeps the gate and the deny working */ }
+  const suffix = step === "clarify_intent" ? "intent" : step;
+  let confirmFlag = `CONFIRM_${String(suffix).toUpperCase()}`; // last resort: the later gate lookup fails closed on its own
+  try { confirmFlag = require("./lib/confirm-gate/step-gate-map").confirmGateForStep(step) || confirmFlag; } catch (_) { /* name above */ }
+  return { suffix, confirmFlag };
+}
 
 function noopExit() { process.stdout.write(""); process.exit(0); }
 
-// Resolve absolute path to <stage>.md artifact for the current session: a marker of this turn
-// first, else <PLANS_DIR>/<first_session_id>-<stage>.md (the usual case: the Stop hook spent the markers).
-function resolveArtifact(stage, sid, plansDir) {
+// Resolve absolute path to the <artifact>.md plan for the current session: a marker of this turn
+// first, else <PLANS_DIR>/<first_session_id>-<artifact>.md (the usual case: the Stop hook spent the markers).
+function resolveArtifact(artifact, sid, plansDir) {
   if (sid) {
     try {
       for (const m of peekTurnMarkers(sid)) {
-        if (m && m.suffix === stage && typeof m.absPath === "string" && m.absPath.length > 0) return m.absPath;
+        if (m && m.suffix === artifact && typeof m.absPath === "string" && m.absPath.length > 0) return m.absPath;
       }
     } catch (_) { /* fall back to the plans dir */ }
   }
   if (sid && plansDir) {
     try {
-      const owner = require("./workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir });
+      const owner = require("./workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, artifact, undefined, { plansDir });
       if (owner.exists) return owner.path;
     } catch (_) { /* no artifact */ }
   }
@@ -53,16 +66,17 @@ function resolveArtifact(stage, sid, plansDir) {
 }
 
 // url: the published blob URL (hooks/lib/plan-link.js), shown together with the local path.
-function renderMessage(stage, absPath, url) {
-  if (absPath) return url ? `[${stage}] ${url} (${absPath})` : `[${stage}] ${absPath}`;
-  return `[${stage}] plan-file=none`;
+function renderMessage(artifact, absPath, url) {
+  if (absPath) return url ? `[${artifact}] ${url} (${absPath})` : `[${artifact}] ${absPath}`;
+  return `[${artifact}] plan-file=none`;
 }
 
-// judge(sid, stage, absPath, plansDir) -> {pass:true, link} | {pass:false, cause}. Every check
-// that cannot be completed denies: the dialog is reached only on a matching receipt.
-function judge(sid, stage, absPath, plansDir) {
+// judge(sid, step, artifact, absPath, plansDir) -> {pass:true, link} | {pass:false, cause}. Every
+// check that cannot be completed denies: the dialog is reached only on a matching receipt. The
+// receipt is keyed by the step, the plan file by its artifact name.
+function judge(sid, step, artifact, absPath, plansDir) {
   if (!sid) return { pass: false, cause: "unverifiable-session" };
-  if (!absPath || !fs.existsSync(absPath) || !PR.samePath(absPath, PR.approvalArtifactPath(sid, stage))) {
+  if (!absPath || !fs.existsSync(absPath) || !PR.samePath(absPath, PR.approvalArtifactPath(sid, artifact))) {
     return { pass: false, cause: "unverifiable-artifact" };
   }
   let link;
@@ -76,23 +90,23 @@ function judge(sid, stage, absPath, plansDir) {
   const { computeContentSha } = require("./workflow-state/completion-approval");
   const contentSha = computeContentSha(absPath);
   if (!contentSha) return { pass: false, cause: "unverifiable-content" };
-  const read = PR.readReceipt(sid, stage);
+  const read = PR.readReceipt(sid, step);
   if (!read.ok) {
     // A broken receipt is removed so the next presentation can write a fresh one.
-    if (read.reason === "unreadable") PR.discardReceipt(sid, stage);
+    if (read.reason === "unreadable") PR.discardReceipt(sid, step);
     return { pass: false, cause: read.reason === "unreadable" ? "unreadable-receipt" : "no-receipt" };
   }
   const m = PR.matchReceipt(read.receipt, { absPath, link: receiptLink, contentSha });
   return m.ok ? { pass: true, link } : { pass: false, cause: m.cause };
 }
 
-// receiptDiagnostic(sid, stage) -> the no-receipt detail suffix (#2804): the expected receipt, whether it
+// receiptDiagnostic(sid, step) -> the no-receipt detail suffix (#2804): the expected receipt, whether it
 // exists, and the presentation-receipt log's last write and any consume after it; "" when it cannot be built.
-function receiptDiagnostic(sid, stage) {
+function receiptDiagnostic(sid, step) {
   try {
-    const p = PR.receiptPath(sid, stage);
+    const p = PR.receiptPath(sid, step);
     const head = ` [receipt ${p} exists=${fs.existsSync(p)}`;
-    const lines = PR.readReceiptLog(sid).filter((l) => l && l.stage === stage);
+    const lines = PR.readReceiptLog(sid).filter((l) => l && l.step === step);
     let wi = -1;
     lines.forEach((l, i) => { if (l.event === "write") wi = i; });
     if (wi < 0) return `${head}; no write record]`;
@@ -109,31 +123,31 @@ function receiptDiagnostic(sid, stage) {
 // The Japanese "send back to the planner" is matched verbatim in plan text. lang-check: ignore
 const SEND_BACK = "planner に差し戻す";
 
-// #2631: the size verdict of the plan the approval would bind (<first_session_id>-<stage>.md), or
+// #2631: the size verdict of the plan the approval would bind (<first_session_id>-<artifact>.md), or
 // null for an exempt session. Fail-closed: no sid or an unmeasured plan denies; a throw denies in
 // main. Runs before the CONFIRM_*=off exit and records no deny finding.
-function planSizeDeny(sid, stage) {
+function planSizeDeny(sid, artifact) {
   if (!sid) {
-    return { deny: `[${stage}] plan-size could not be verified: session id unresolved — not confirmable; ` +
+    return { deny: `[${artifact}] plan-size could not be verified: session id unresolved — not confirmable; ` +
       "the session cannot be identified (check the transcript and the session id)." };
   }
   if (require("./lib/size-session-gate").sizeCheckState(sid) === "exempt") return null;
-  const relint = require("./lib/plan-artifact-lang").relintPlanArtifact(sid, stage);
+  const relint = require("./lib/plan-artifact-lang").relintPlanArtifact(sid, artifact);
   const size = relint.size;
   const artifactPath = relint.artifactPath;
   // A missing plan file is unjudgeable too: it denies here, before the judge and the OFF exit.
   if (!size) {
-    return { artifactPath, deny: `[${stage}] plan-size could not be judged (${relint.skipped || "unmeasured"}) — not confirmable; ` +
-      `make the plan readable again (the file exists and can be read: ${artifactPath || `the ${stage} plan`}), then present it again.` };
+    return { artifactPath, deny: `[${artifact}] plan-size could not be judged (${relint.skipped || "unmeasured"}) — not confirmable; ` +
+      `make the plan readable again (the file exists and can be read: ${artifactPath || `the ${artifact} plan`}), then present it again.` };
   }
   if (size.verdict !== "hard" && size.verdict !== "warn") return { artifactPath };
   // The full path, not the basename: a resumed session's plan is named after its first_session_id.
   const head = `${artifactPath} is ${size.value} ${size.unit}`;
   if (size.verdict === "hard") {
-    return { artifactPath, deny: `[${stage}] plan-size: ${head}, over HARD ${size.hard} — not confirmable; ${SEND_BACK} ` +
+    return { artifactPath, deny: `[${artifact}] plan-size: ${head}, over HARD ${size.hard} — not confirmable; ${SEND_BACK} ` +
       `(send it back to the planner to compress below HARD; limits: rules/coding/file-split.md).` };
   }
-  return { artifactPath, advice: `[${stage}] plan-size WARN: ${head}, over WARN ${size.warn} (HARD ${size.hard}) — consider compressing it.\n` };
+  return { artifactPath, advice: `[${artifact}] plan-size WARN: ${head}, over WARN ${size.warn} (HARD ${size.hard}) — consider compressing it.\n` };
 }
 
 function emitSizeDeny(reason) {
@@ -145,25 +159,26 @@ function emitSizeDeny(reason) {
   process.exit(0);
 }
 
-function recordDenyFinding(sid, stage, cause) {
+function recordDenyFinding(sid, step, cause) {
   if (!sid) return;
   try {
-    const diag = cause === "no-receipt" ? receiptDiagnostic(sid, stage) : "";
+    const diag = cause === "no-receipt" ? receiptDiagnostic(sid, step) : "";
     require("./lib/supervisor-state-writer").appendFinding(sid, {
       categories: ["workflow"],
       severity: "notice",
-      detail: `confirm-checkpoint: CONFIRM_${stage.toUpperCase()} denied (${cause}) — the plan must be presented again${diag}`,
+      detail: `confirm-checkpoint: ${rowOf(step).confirmFlag} denied (${cause}) — the plan must be presented again${diag}`,
       reporter: "confirm-checkpoint",
     });
   } catch (_) { /* the finding is advisory */ }
 }
 
-function emitDeny(stage, cause) {
+function emitDeny(step, cause) {
+  const row = rowOf(step);
   let reason;
   try {
-    reason = require("./lib/confirm-continuation").presentAgainReason(stage, cause);
+    reason = require("./lib/confirm-continuation").presentAgainReason(row.suffix, cause);
   } catch (_) {
-    reason = `[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (${cause}): present the plan again (plan-link --stage ${stage}) and close the turn; ` +
+    reason = `[confirm-plan] ${row.confirmFlag} denied (${cause}): present the plan again (plan-link --step ${step}) and close the turn; ` +
       `on a "[confirm-plan] continue:" prompt emit only the echo, otherwise echo after the user's reply.`;
     try { reason = CL.withConvLang(reason); } catch (_) { /* the bare reason still denies */ }
   }
@@ -185,7 +200,10 @@ function main() {
 
   const parsed = parseSentinel(commandTextOf(input.tool_name, input.tool_input));
   if (!parsed) noopExit();
-  const stage = parsed.stage;
+  const step = parsed.step;
+  const row = rowOf(step);
+  const artifact = row.suffix;
+  const flag = row.confirmFlag;
 
   let sid = null;
   try {
@@ -194,34 +212,34 @@ function main() {
 
   let sizeVerdict;
   try {
-    sizeVerdict = planSizeDeny(sid, stage);
+    sizeVerdict = planSizeDeny(sid, artifact);
   } catch (e) {
-    sizeVerdict = { deny: `[${stage}] plan-size check failed: ${e && e.message ? e.message : String(e)} — not confirmable; ` +
+    sizeVerdict = { deny: `[${artifact}] plan-size check failed: ${e && e.message ? e.message : String(e)} — not confirmable; ` +
       "make the plan readable again (the file exists and can be read), then present it again." };
   }
   if (sizeVerdict && sizeVerdict.deny) emitSizeDeny(sizeVerdict.deny);
   const sizeAdvice = sizeVerdict && sizeVerdict.advice ? sizeVerdict.advice : "";
 
   // The shared plan gate (plan-gate.js) owns the classification: OFF waives the dialog, never the
-  // size deny above; an error or an unloadable stage table shows the dialog path (the judge below).
+  // size deny above; an error or an unloadable step table shows the dialog path (the judge below).
   let gate = "ERROR";
-  try { gate = require("./lib/confirm-gate/plan-gate").planGateState(stage); } catch (_) { /* judged below */ }
+  try { gate = require("./lib/confirm-gate/plan-gate").planGateState(step); } catch (_) { /* judged below */ }
   if (gate === "OFF") {
-    const skipped = { systemMessage: `[confirm-skipped: CONFIRM_${stage.toUpperCase()}=off]` };
+    const skipped = { systemMessage: `[confirm-skipped: ${flag}=off]` };
     if (sizeAdvice) skipped.hookSpecificOutput = { hookEventName: "PreToolUse", additionalContext: sizeAdvice };
     process.stdout.write(JSON.stringify(skipped));
     process.exit(0);
   }
 
-  // #2853: a plan stage's dialog waits for its pre-confirm audit; a deny here keeps the receipt.
+  // #2853: a plan step's dialog waits for its pre-confirm audit; a deny here keeps the receipt.
   let auditDeny;
   try {
-    auditDeny = require("./confirm-checkpoint/pre-confirm-audit-deny").auditDenyReason(sid, stage);
+    auditDeny = require("./confirm-checkpoint/pre-confirm-audit-deny").auditDenyReason(sid, step);
   } catch (e) {
-    auditDeny = `[pre-confirm-audit] CONFIRM_${stage.toUpperCase()} denied: the audit check failed (${e && e.message ? e.message : String(e)}).`;
+    auditDeny = `[pre-confirm-audit] ${flag} denied: the audit check failed (${e && e.message ? e.message : String(e)}).`;
   }
   if (auditDeny) {
-    recordDenyFinding(sid, stage, "pre-confirm-audit");
+    recordDenyFinding(sid, step, "pre-confirm-audit");
     let reason = auditDeny;
     try { reason = CL.withConvLang(auditDeny); } catch (_) { /* the bare reason still denies */ }
     emitSizeDeny(reason);
@@ -229,29 +247,29 @@ function main() {
 
   let plansDir = null;
   try { plansDir = getWorkflowPlansDir(); } catch (_) { /* resolved from the session alone */ }
-  const absPath = resolveArtifact(stage, sid, plansDir);
+  const absPath = resolveArtifact(artifact, sid, plansDir);
 
   let verdict;
   try {
-    verdict = judge(sid, stage, absPath, plansDir);
+    verdict = judge(sid, step, artifact, absPath, plansDir);
   } catch (_) {
     verdict = { pass: false, cause: "check-threw" };
   }
   if (!verdict.pass) {
-    recordDenyFinding(sid, stage, verdict.cause);
-    emitDeny(stage, verdict.cause);
+    recordDenyFinding(sid, step, verdict.cause);
+    emitDeny(step, verdict.cause);
   }
 
   // The receipt admits one dialog: after a Deny there, the plan is presented again.
   let out = null;
   let failCause = null;
   try {
-    if (PR.consumeReceipt(sid, stage)) {
+    if (PR.consumeReceipt(sid, step)) {
       const link = verdict.link;
-      const entry = { stage, url: link.url, path: link.path, reason: link.reason };
+      const entry = { stage: artifact, url: link.url, path: link.path, reason: link.reason };
       const additionalContext = sizeAdvice + CL.withConvLang(PL.renderModelContext([entry], { when: "confirm" }));
       out = {
-        systemMessage: renderMessage(stage, absPath, link.url || null),
+        systemMessage: renderMessage(artifact, absPath, link.url || null),
         hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext },
       };
     } else {
@@ -261,8 +279,8 @@ function main() {
     failCause = "check-threw";
   }
   if (!out) {
-    recordDenyFinding(sid, stage, failCause);
-    emitDeny(stage, failCause);
+    recordDenyFinding(sid, step, failCause);
+    emitDeny(step, failCause);
   }
   process.stdout.write(JSON.stringify(out));
   process.exit(0);

@@ -1,11 +1,11 @@
 "use strict";
 // Issue #2529 — WORKFLOW_GLOSSARY_ACCEPTED.
 //
-//   echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term>[ op=<op>][ cat=<cat>][ stage=<stage>] — <reason>>>"
+//   echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term>[ op=<op>][ cat=<cat>][ step=<step>] — <reason>>>"
 // Records the user's grant for one glossary term against what is pending for it: (a) an open
-// deterministic finding of every stage holding one (stage= narrows to that stage), (b) a glossary
-// provenance check block, (c) an open tagged concern of the ledger of a target stage or the current
-// stage. Never completes a step. The target stages, fingerprints and ledger lists are computed
+// deterministic finding of every glossary step holding one (step= narrows to that step), (b) a glossary
+// provenance check block, (c) an open tagged concern of the ledger of a target step or the current
+// step. Never completes a step. The target steps, fingerprints and ledger lists are computed
 // before the lock; the builder reads neither the current step nor the profile, so a refusal never
 // depends on what step the in-lock view resolves to. A refusal names its reason in the notice.
 
@@ -19,13 +19,13 @@ const { sanitizeLine } = require("../lib/output-sanitize");
 const { normalizeTerm } = require("../lib/glossary-term");
 const { toWindowsPath } = require("../lib/branch-diff");
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
-const { STAGE_STEP, STAGE_LEDGER_FORMAT, stageOfStep, stageFingerprint } = require("../workflow-state/glossary-check/scope");
+const { GLOSSARY_STEPS, LEDGER_FORMAT_OF_STEP, stepFingerprint } = require("../workflow-state/glossary-check/scope");
 const { RECORD_KEY, PROVENANCE_KEY, PROVENANCE_STEP } = require("../workflow-state/glossary-check/record");
 
 const LABEL = "GLOSSARY_ACCEPTED";
 const ORIGIN = "workflow-mark-glossary-accept";
-const FORM = "echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> [op=<add|delete|redefine>] [cat=<user|internal>] [stage=<stage>] — <reason>>>\"";
-const DOMAIN = { op: ["add", "delete", "redefine"], cat: ["user", "internal"], stage: Object.keys(STAGE_STEP) };
+const FORM = "echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> [op=<add|delete|redefine>] [cat=<user|internal>] [step=<step>] — <reason>>>\"";
+const DOMAIN = { op: ["add", "delete", "redefine"], cat: ["user", "internal"], step: GLOSSARY_STEPS };
 const LEDGER_CLI = path.join(__dirname, "..", "..", "bin", "concern-ledger");
 
 const asArray = (v) => (Array.isArray(v) ? v : []);
@@ -35,18 +35,25 @@ const fwd = (p) => String(p).replace(/\\/g, "/");
 function parseDiscriminators(text) {
   const disc = {};
   for (const tok of String(text || "").trim().split(/\s+/).filter(Boolean)) {
-    const [name, value] = tok.split("=");
+    let [name, value] = tok.split("=");
+    // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+    // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+    if (name === "stage") [name, value] = ["step", require("../lib/temporary-migrations/stage-to-step").stepOfLegacyGlossaryStage(value) || `(invalid: ${value})`];
+    // --- END temporary: workflow stage -> workflow step migration ---
+    if (!Object.prototype.hasOwnProperty.call(DOMAIN, name)) return { error: `${tok} is outside the domain` };
     if (Object.prototype.hasOwnProperty.call(disc, name)) return { error: `duplicate ${name}=` };
-    if (!DOMAIN[name] || !DOMAIN[name].includes(value)) return { error: `${tok} is outside the domain` };
+    if (!DOMAIN[name].includes(value)) return { error: `${tok} is outside the domain` };
     disc[name] = value;
   }
-  if (disc.stage && (disc.op || disc.cat)) return { error: "op= / cat= cannot be combined with stage=" };
+  if (disc.step && (disc.op || disc.cat)) return { error: "op= / cat= cannot be combined with step=" };
   return { disc };
 }
 
-function stageOf(state, sid) {
+// The current step, when it is a glossary step.
+function currentGlossaryStep(state, sid) {
   if (!state || !state.steps) return null;
-  return stageOfStep(resolveCurrentStep(state, { profile: resolveSessionProfile(state, sid), sessionId: sid }));
+  const step = resolveCurrentStep(state, { profile: resolveSessionProfile(state, sid), sessionId: sid });
+  return GLOSSARY_STEPS.includes(step) ? step : null;
 }
 
 const stepOf = (state, step) => (state && state.steps && state.steps[step]) || {};
@@ -65,22 +72,22 @@ function listDrift(sid, format) {
   }).filter((x) => x.discrim && x.norm);
 }
 
-// The current stage joins the open-finding stages so its ledger concerns (c) count before it has a record.
-function targetStages(state, sid, norm, disc) {
+// The current step joins the open-finding steps so its ledger concerns (c) count before it has a record.
+function targetSteps(state, sid, norm, disc) {
   if (disc.op || disc.cat) return [];
-  if (disc.stage) return [disc.stage];
-  const current = stageOf(state, sid);
-  return Object.keys(STAGE_STEP).filter((s) => s === current ||
-    openFindings(stepOf(state, STAGE_STEP[s])[RECORD_KEY], norm).length > 0);
+  if (disc.step) return [disc.step];
+  const current = currentGlossaryStep(state, sid);
+  return GLOSSARY_STEPS.filter((s) => s === current ||
+    openFindings(stepOf(state, s)[RECORD_KEY], norm).length > 0);
 }
 
-// Pre-lock reads per target stage: (a)'s recomputed fingerprint and (c)'s ledger list.
+// Pre-lock reads per target step: (a)'s recomputed fingerprint and (c)'s ledger list.
 function prepare(sid, norm, disc) {
   const state = readState(sid);
-  const targets = targetStages(state, sid, norm, disc).map((stage) => ({
-    stage,
-    fp: openFindings(stepOf(state, STAGE_STEP[stage])[RECORD_KEY], norm).length > 0 ? stageFingerprint(sid, stage) : null,
-    ledger: STAGE_LEDGER_FORMAT[stage] ? listDrift(sid, STAGE_LEDGER_FORMAT[stage]) : null,
+  const targets = targetSteps(state, sid, norm, disc).map((step) => ({
+    step,
+    fp: openFindings(stepOf(state, step)[RECORD_KEY], norm).length > 0 ? stepFingerprint(sid, step) : null,
+    ledger: LEDGER_FORMAT_OF_STEP[step] ? listDrift(sid, LEDGER_FORMAT_OF_STEP[step]) : null,
   }));
   return { targets };
 }
@@ -91,7 +98,7 @@ function annotation(step, key, value) {
 
 // grantProvenance(prov, norm, disc, reason) -> new grants (b).
 function grantProvenance(prov, norm, disc, reason) {
-  if (!prov || disc.stage) return [];
+  if (!prov || disc.step) return [];
   const have = asArray(prov.grants);
   const out = [];
   for (const b of asArray(prov.blocked)) {
@@ -104,28 +111,31 @@ function grantProvenance(prov, norm, disc, reason) {
   return out;
 }
 
-// grantStage(current, sid, norm, disc, reason, t, v) -> the stage's record annotation | null.
+// grantStep(current, sid, norm, disc, reason, t, v) -> the step's record annotation | null.
 // Runs in the lock against the record as it is now, so a record rewritten since prepare() is refused.
-function grantStage(current, sid, norm, disc, reason, t, v) {
-  const { stage } = t;
-  const step = STAGE_STEP[stage];
-  const rec = stepOf(current, step)[RECORD_KEY] || null;
-  const next = rec ? Object.assign({}, rec) : { v: 1, stage };
-  const rerun = `re-run check-glossary-drift --session ${sid} --stage ${stage} --record`;
+function grantStep(current, sid, norm, disc, reason, t, v) {
+  const { step } = t;
+  let rec = stepOf(current, step)[RECORD_KEY] || null;
+  // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+  rec = require("../lib/temporary-migrations/stage-to-step").normalizeGlossaryRecord(rec);
+  // --- END temporary: workflow stage -> workflow step migration ---
+  const next = rec ? Object.assign({}, rec, { step }) : { v: 1, step };
+  const rerun = `re-run check-glossary-drift --session ${sid} --step ${step} --record`;
   const noted = v.notes.length;
   let changed = false;
   if (rec && openFindings(rec, norm).length > 0) {
     if (t.fp && t.fp.ok && t.fp.fingerprint === rec.fingerprint) {
       next.grants = asArray(rec.grants).concat([{ norm, fingerprint: rec.fingerprint, reason }]);
       changed = true;
-      v.granted.push(`finding at ${stage}`);
+      v.granted.push(`finding at ${step}`);
     } else if (t.fp && !t.fp.ok) {
-      v.notes.push(`the ${stage} glossary_check inputs could not be read (${t.fp.error}) — ${rerun}`);
+      v.notes.push(`the ${step} glossary_check inputs could not be read (${t.fp.error}) — ${rerun}`);
     } else {
-      v.notes.push(`the ${stage} glossary_check record is older than its inputs — ${rerun}`);
+      v.notes.push(`the ${step} glossary_check record is older than its inputs — ${rerun}`);
     }
   }
-  if (STAGE_LEDGER_FORMAT[stage] && t.ledger === null) v.notes.push(`the ${stage} concern ledger could not be listed`);
+  if (LEDGER_FORMAT_OF_STEP[step] && t.ledger === null) v.notes.push(`the ${step} concern ledger could not be listed`);
   const have = asArray(next.ledger_grants);
   const add = asArray(t.ledger).filter((c) => c.norm === norm && !have.some((g) => g && g.norm === norm && g.discrim === c.discrim))
     .filter((c, i, all) => all.findIndex((x) => x.discrim === c.discrim) === i)
@@ -133,10 +143,10 @@ function grantStage(current, sid, norm, disc, reason, t, v) {
   if (add.length > 0) {
     next.ledger_grants = have.concat(add);
     changed = true;
-    v.granted.push(`ledger concern(s) ${add.map((g) => g.discrim).join(", ")} at ${stage}`);
+    v.granted.push(`ledger concern(s) ${add.map((g) => g.discrim).join(", ")} at ${step}`);
   }
-  if (disc.stage && !changed && v.notes.length === noted) {
-    v.notes.push(`stage=${stage} has no open finding and no open tagged concern for this term`);
+  if (disc.step && !changed && v.notes.length === noted) {
+    v.notes.push(`step=${step} has no open finding and no open tagged concern for this term`);
   }
   return changed ? annotation(step, RECORD_KEY, next) : null;
 }
@@ -150,7 +160,7 @@ function grant(sid, term, disc, reason) {
     v.notes = [];
     const events = [];
     for (const t of pre.targets) {
-      const ev = grantStage(current, sid, norm, disc, reason, t, v);
+      const ev = grantStep(current, sid, norm, disc, reason, t, v);
       if (ev) events.push(ev);
     }
     const prov = stepOf(current, PROVENANCE_STEP)[PROVENANCE_KEY] || null;
@@ -164,7 +174,7 @@ function grant(sid, term, disc, reason) {
   // Here, not in the builder: the builder empties `v` on every re-run.
   if (v.granted.length === 0 && v.notes.length === 0) {
     v.notes.push(disc.op || disc.cat ? "no glossary_provenance block matches this term with the given op= / cat="
-      : "no stage holds an open finding or an open tagged concern for this term, and no glossary_provenance block names it");
+      : "no step holds an open finding or an open tagged concern for this term, and no glossary_provenance block names it");
   }
   return v;
 }

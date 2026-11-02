@@ -12,6 +12,8 @@ const PCAS = require("../../lib/pre-confirm-audit-settle");
 
 const { U, A, T, W, BASH, TR, STOPFB, ECHO, show, check: ok } = X;
 const STAGE = process.argv[2];
+// #2820: the deny wording names the workflow step, not the plan artifact.
+const STEP = { intent: "clarify_intent", outline: "outline", detail: "detail" }[STAGE];
 const FB = "[confirm-plan] continue: as your next message, emit only the CONFIRM echo";
 const seed = (sid, stage, over) => !!X.seedReceipt(sid, stage || STAGE, over ? { link: over } : undefined);
 const has = (sid, stage) => X.receiptExists(sid, stage || STAGE);
@@ -44,7 +46,7 @@ function expectDeny(label, r, s) {
   ok(label + " — deny", r.deny, show(r.json));
   if (!r.deny) return;
   const reason = String(r.json.hookSpecificOutput.permissionDecisionReason || "") + "\n" + String(r.json.reason || "");
-  ok(label + " — reason names bin/plan-link --stage " + STAGE, reason.includes("bin/plan-link") && reason.includes("--stage " + STAGE), reason);
+  ok(label + " — reason names bin/plan-link --step " + STEP, reason.includes("bin/plan-link") && reason.includes("--step " + STEP), reason);
   ok(label + " — reason carries no URL, plan path or sid", !/https?:\/\//.test(reason) && !reason.includes(s.fwd) && !reason.includes(s.plan) && !reason.includes(s.sid), reason);
   ok(label + " — reason never invites a same-turn retry", !/retry|try again/i.test(reason), reason);
 }

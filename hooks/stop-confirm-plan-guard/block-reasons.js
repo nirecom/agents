@@ -5,12 +5,10 @@
 const fs = require("fs");
 const path = require("path");
 const SP = require("../lib/sentinel-patterns");
+const { PLAN_ARTIFACT_NAMES, rowFor, stepForSuffix } = require("../workflow-state/plan-step-table");
 
-const PLAN_STAGES = ["intent", "outline", "detail"];
-
-// The table's next skill for a plan suffix; detail may also branch straight to BRANCHING_COMPLETE.
+// The table's next skill for a plan artifact name; detail may also branch straight to BRANCHING_COMPLETE.
 function nextSkillFor(stage) {
-  const { rowFor, stepForSuffix } = require("../workflow-state/plan-stage-table");
   const row = rowFor(stepForSuffix(stage));
   return row ? row.nextSkill : null;
 }
@@ -101,8 +99,9 @@ function planLinkReason(ctx) {
   // Stop judges only the stages this turn wrote; a CONFIRM turn is judged at PreToolUse.
   const stages = tc.stagesToCheck({ markers, includeConfirm: false });
   for (const stage of stages) {
-    // OFF needs the line once in the turn; ON and ERROR need it in the last text block.
-    const scope = gateFor(stage) === "OFF" ? "turn" : "last";
+    // OFF needs the line once in the turn; ON and ERROR need it in the last text block. The gate is
+    // keyed by the step, the stages here by the plan artifact name.
+    const scope = gateFor(stepForSuffix(stage)) === "OFF" ? "turn" : "last";
     for (const absPath of filesOf(sid, markers, plansDir, stage)) {
       const verdict = tc.checkPlanUrlInTurn({
         stages: [stage], turnText: tail.lastTextBlock || "", entries: tail.entries, scope,
@@ -121,10 +120,10 @@ function closeOnLinkReason(ctx) {
   const tc = require("../lib/plan-link-turn-check");
   const CC = require("../lib/confirm-continuation");
   const { checkPlanApproval } = require("../workflow-state/plan-approval-check");
-  const { stepForSuffix } = require("../workflow-state/plan-stage-table");
   const { approvalArtifactPath } = require("../lib/presentation-receipt");
   const lastText = tail.lastTextBlock || "";
-  for (const stage of PLAN_STAGES) {
+  for (const stage of PLAN_ARTIFACT_NAMES) {
+    const step = stepForSuffix(stage);
     const approved = approvalArtifactPath(sid, stage);
     const files = markers.some((m) => m && m.suffix === stage) || !approved
       ? filesOf(sid, markers, plansDir, stage) : [approved];
@@ -133,9 +132,9 @@ function closeOnLinkReason(ctx) {
       const link = linkFor(absPath);
       if (tc.shown(link, lastText) !== true) continue;
       if (tc.inTrailingLinkRun(lastText, Object.assign({ stage }, link))) continue;
-      const gate = gateFor(stage);
+      const gate = gateFor(step);
       if (gate === "OFF") continue;
-      if (checkPlanApproval(sid, stepForSuffix(stage), { gate }).verdict !== "unapproved") continue;
+      if (checkPlanApproval(sid, step, { gate }).verdict !== "unapproved") continue;
       return { kind: "not-last", reason: CC.presentAgainReason(stage, "not-last") };
     }
   }
@@ -170,4 +169,4 @@ function firstBlock(ctx, presented) {
   return null;
 }
 
-module.exports = { firstBlock, planRelintReason, PLAN_STAGES };
+module.exports = { firstBlock, planRelintReason };

@@ -69,7 +69,7 @@ run_forged_cases() {
   # written anything anywhere.
   check "C7-6a: the attacker repo is untouched as well" "$docs_before" "$(repo_fingerprint "$REPO_DOCS")"
   # CONFIRM_TESTS=off was in force for this call and did NOT help: run_tests is not
-  # in STAGE_FOR_STEP, so no CONFIRM_* key can ever authorize it.
+  # in CONFIRM_FLAG_OF_STEP, so no CONFIRM_* key can ever authorize it.
   check "C7-6a: CONFIRM_TESTS=off does not reach the run_tests door" '"pending"' "$(step_status r6a run_tests)"
 
   # The mirrored forgery: run from the attacker's docs-only repo while

@@ -39,7 +39,7 @@ API_READY_REPORT="$(node -e "
     return typeof require('$RESOLVER_N').hasComplexityEvaluation === 'function' ? 'callable' : 'missing';
   });
   probe('readStage', function () {
-    return typeof require('$RESOLVER_N').readStageComplexityLevel === 'function' ? 'callable' : 'missing';
+    return typeof require('$RESOLVER_N').readStepComplexityLevel === 'function' ? 'callable' : 'missing';
   });
   probe('rawEvent', function () {
     return typeof require('$STATEIO_N').readLastRawComplexityEvent === 'function' ? 'callable' : 'missing';

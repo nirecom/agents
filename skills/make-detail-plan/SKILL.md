@@ -15,7 +15,7 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 
 ### MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
-Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Set `<INTENT_MD>` / `<OUTLINE_MD>` / `<DETAIL_MD>` to the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` / `--stage outline` / `--stage detail` (every generation of the session chain shares the first_session_id names); substitute them for every `$INTENT_MD` / `$OUTLINE_MD` / `$DETAIL_MD` below. When the detail call fails, write no detail: halt and surface its stderr. Read intent and outline if present; otherwise proceed with task context alone.
+Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Set `<INTENT_MD>` / `<OUTLINE_MD>` / `<DETAIL_MD>` to the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --step clarify_intent` / `--step outline` / `--step detail` (every generation of the session chain shares the first_session_id names); substitute them for every `$INTENT_MD` / `$OUTLINE_MD` / `$DETAIL_MD` below. When the detail call fails, write no detail: halt and surface its stderr. Read intent and outline if present; otherwise proceed with task context alone.
 
 ### MDP-2 — Surface delivery plan
 

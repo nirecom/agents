@@ -7,7 +7,7 @@ const path = require("path");
 const D = require("./driver");
 
 const GM = D.X.tryRequire("bin/workflow/lib/next-step/gate-mode.js");
-const { rowFor } = require(path.join(D.ROOT, "hooks/workflow-state/plan-stage-table"));
+const { rowFor } = require(path.join(D.ROOT, "hooks/workflow-state/plan-step-table"));
 const ROW = Object.assign({ step: "outline" }, rowFor("outline"));
 const RUN = "run-0007";
 

@@ -7,15 +7,15 @@
 // classifyConfigFlag puts process.env back exactly as it found it on every path,
 // so a .env value it loads never leaks into the caller's later children (#2681).
 // load-env's own stderr (key names only, never values) passes through unchanged.
-// Named exception (#2726/#2729): the plan-stage CONFIRM keys are read from the global config
+// Named exception (#2726/#2729): the plan step CONFIRM keys are read from the global config
 // file only — an export, an inline env prefix or a project .env.local never decides them.
 
 const KINDS = ["off", "on", "unset", "unrecognized", "failed"];
 
-// isPlanStageConfirmKey(name) -> true only for a plan-stage-table confirmFlag (allowlist).
-function isPlanStageConfirmKey(name) {
-  const { PLAN_STAGE_TABLE } = require("../workflow-state/plan-stage-table");
-  return Object.values(PLAN_STAGE_TABLE).some((row) => row.confirmFlag === name);
+// isPlanStepConfirmKey(name) -> true only for a plan-step-table confirmFlag (allowlist).
+function isPlanStepConfirmKey(name) {
+  const { PLAN_STEP_TABLE } = require("../workflow-state/plan-step-table");
+  return Object.values(PLAN_STEP_TABLE).some((row) => row.confirmFlag === name);
 }
 
 function restoreEnv(before) {
@@ -54,7 +54,7 @@ function classifyFromConfigFile(name, dflt) {
 // -> { kind, value, cause }; cause is null, "load-failed" or "exception".
 function classifyConfigFlag(name, defaultValue, opts) {
   const dflt = defaultValue || "";
-  if (isPlanStageConfirmKey(name)) return classifyFromConfigFile(name, dflt);
+  if (isPlanStepConfirmKey(name)) return classifyFromConfigFile(name, dflt);
   const before = Object.assign({}, process.env);
   const exported = process.env[name];
   const fallback = exported && exported.length ? exported : dflt;
@@ -100,4 +100,4 @@ function runCli(args) {
   process.stdout.write(r.value);
 }
 
-module.exports = { KINDS, kindOfValue, isPlanStageConfirmKey, classifyConfigFlag, verdictOfKind, runCli };
+module.exports = { KINDS, kindOfValue, isPlanStepConfirmKey, classifyConfigFlag, verdictOfKind, runCli };

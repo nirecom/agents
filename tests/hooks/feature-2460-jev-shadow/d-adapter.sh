@@ -287,9 +287,10 @@ case_end
 
 echo "=== step -> stage ==="
 case_begin "d-stage-for-step" "bin/workflow/lib/jev-complexity-adapter.js"
-check "stageForStep over every relevant step, null and an unknown string" \
+check "jevTicketStageOfStep over every relevant step, null and an unknown string" \
   "cos1,cos1,unknown,outline,detail,unknown,write_tests,unknown,write_code,unknown,unknown,unknown" "$(row stage-table)"
-check "STEP_TO_STAGE is exported" "true" "$(row stage-table-export)"
+check "JEV_TICKET_STAGE_OF_STEP is exported" "true" "$(row stage-table-export)"
+check "the retired stageForStep / STEP_TO_STAGE are no longer exported" "absent" "$(row stage-table-retired)"
 case_end
 
 echo "=== LLM text extraction and status ==="

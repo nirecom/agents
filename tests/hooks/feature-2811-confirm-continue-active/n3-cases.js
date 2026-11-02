@@ -55,7 +55,7 @@ function noticeWithContinue(check) {
   const n = H.stopOf(s, d.tp, Object.assign({ last: d.close }, failIntent));
   check("n: intent fails, outline (current) recorded: exit 2 continue for outline", H.isContinue(n, "outline"), { rc: n.rc, out: n.out });
   check("n: the same JSON carries a systemMessage naming intent only", H.names(H.sysMsg(n), "intent") && !H.names(H.sysMsg(n), "outline"), n.json);
-  check("n: only the outline receipt exists, and it is marked", H.marked(s.sid, "outline") && !R.receiptExists(s.sid, "intent"), H.snap(s.sid));
+  check("n: only the outline receipt exists, and it is marked", H.marked(s.sid, "outline") && !R.receiptExists(s.sid, "clarify_intent"), H.snap(s.sid));
 
   const r = H.stopOf(s, H.decidable(s, ["intent", "outline"]).tp, Object.assign({ active: true, last: d.close }, failIntent));
   check("r: the cap (mark already set) emits no continue: exit 0, no decision", r.rc === 0 && H.noDecision(r), { rc: r.rc, out: r.out });

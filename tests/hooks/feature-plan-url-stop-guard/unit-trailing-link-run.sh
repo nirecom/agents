@@ -31,8 +31,10 @@ const earlier = "Plans:\n" + own(I) + "\n" + QUESTION + "\n" + own(O);
 ok("earlier link line followed by a question, then another link line -> the earlier is false", run(earlier, I) === false, show(run(earlier, I)));
 ok("earlier link line followed by a question, then another link line -> the trailing one is true", run(earlier, O) === true, show(run(earlier, O)));
 
-for (const stage of PL.STAGES) {
-  const [o1, o2] = PL.STAGES.filter((s) => s !== stage);
+// #2820: the plan artifact names live in plan-step-table.js (PLAN_ARTIFACT_NAMES), not in plan-link.js.
+const { PLAN_ARTIFACT_NAMES } = require(path.join(path.dirname(process.env.TC_LIB), "..", "workflow-state", "plan-step-table.js"));
+for (const stage of PLAN_ARTIFACT_NAMES) {
+  const [o1, o2] = PLAN_ARTIFACT_NAMES.filter((s) => s !== stage);
   const L = local(stage);
   const P = pub(stage);
   const urlLine = PL.entryLine({ stage: o1, url: urlOf(o1), path: nat(o1) });

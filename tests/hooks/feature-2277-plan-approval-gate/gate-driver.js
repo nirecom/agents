@@ -128,7 +128,7 @@ function expectDeny(name, r, step, sid) {
 // #2650: the deny reason words the same-turn continuation and the after-reply fallback like
 // its sibling recovery hint (bin/workflow/lib/next-step/approval-reason.js).
 function expectDenyWording(name, reason, step) {
-  const { rowFor } = require(path.join(F.ROOT, "hooks/workflow-state/plan-stage-table.js"));
+  const { rowFor } = require(path.join(F.ROOT, "hooks/workflow-state/plan-step-table.js"));
   const row = rowFor(step);
   F.check(name + " reason names the sentinel " + row.sentinel, reason.includes(row.sentinel), reason);
   F.check(name + " reason words the same-turn path", reason.includes("when the turn-end prompt asks for it"), reason);

@@ -1,6 +1,6 @@
 "use strict";
-// #2853 — confirm-checkpoint's plan-stage audit check: a CONFIRM_{INTENT|OUTLINE|DETAIL} echo reaches
-// the receipt check only when the stage's pre-confirm audit (hooks/lib/pre-confirm-audit.js) is
+// #2853 — confirm-checkpoint's plan step audit check: a CONFIRM_{INTENT|OUTLINE|DETAIL} echo reaches
+// the receipt check only when the step's pre-confirm audit (hooks/lib/pre-confirm-audit.js) is
 // settled CONTINUE / WARN or accepted. It runs before the receipt is consumed, so a deny keeps the
 // receipt for the next attempt. The WORKFLOW_OFF marker skips it (ARP-EXBG user exit); the receipt
 // check after it never reads that marker.
@@ -27,12 +27,18 @@ function recordStateless(sid, label) {
   return null;
 }
 
-// auditDenyReason(sid, stage) -> the deny reason, or null when the receipt check may run.
-function auditDenyReason(sid, stage) {
-  const { stepForSuffix } = require("../workflow-state/plan-stage-table");
-  const step = stepForSuffix(stage);
-  if (!step) return null; // not a plan stage (CONFIRM_DOCS and the like)
-  const label = `CONFIRM_${String(stage).toUpperCase()}`;
+// auditDenyReason(sid, step) -> the deny reason, or null when the receipt check may run.
+function auditDenyReason(sid, stepArg) {
+  const T = require("../workflow-state/plan-step-table");
+  let step = stepArg;
+  // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+  // Callers that still pass the plan artifact name ("intent") keep being judged, not silently passed.
+  if (!T.rowFor(step) && T.stepForSuffix(step)) step = T.stepForSuffix(step);
+  // --- END temporary: workflow stage -> workflow step migration ---
+  const row = T.rowFor(step);
+  if (!row) return null; // not a plan step (CONFIRM_DOCS and the like)
+  const label = row.confirmFlag;
   const { describeAcceptanceCommand } = require("../lib/null-freshness/acceptance");
   if (!sid) return `[pre-confirm-audit] ${label} denied: the session id is unresolved, so the ${step} audit cannot be judged.`;
   if (require("../lib/session-markers").isWorkflowOff(sid)) return null;

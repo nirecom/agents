@@ -125,8 +125,8 @@ function stagedNames(repo) {
   return git(repo, ["diff", "--cached", "--name-only", "-z", "--no-renames"]).stdout.split("\0").filter(Boolean);
 }
 
-function stagedPairsDigest(repo, stage, classify) {
-  const paths = stagedNames(repo).filter((p) => classify(p) === stage).sort();
+function stagedPairsDigest(repo, step, classify) {
+  const paths = stagedNames(repo).filter((p) => classify(p) === step).sort();
   const oids = new Map();
   for (const rec of git(repo, ["ls-files", "-s", "-z"]).stdout.split("\0").filter(Boolean)) {
     const tab = rec.indexOf("\t");

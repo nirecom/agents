@@ -26,7 +26,7 @@ TABLE
 fmt=outline-plan; sid="$(lt_sid tg "$fmt")"; led="$(lt_ledger "$sid" "$fmt")"
 tx="[glossary-drift cat=user term=foo] tagged but termless"
 printf '#concern-ledger-v2|%s|%s|cycle=1\n' "$fmt" "$sid" > "$led"; lt_row "$led" C1 HIGH open "$tx"
-lt_seed_grants "$sid" outline outline "$(lt_gj foo "$(lt cl_discrim "$tx")")"
+lt_seed_grants "$sid" outline "$(lt_gj foo "$(lt cl_discrim "$tx")")"
 before="$(lt_snap "$sid" "$fmt")"
 lt_accept "$sid" "$fmt" C1
 lt_eq "termless tag with a grant for foo: accept refuses (4)" 4 "$LT_RC"

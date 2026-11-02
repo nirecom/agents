@@ -67,12 +67,15 @@ const R = pl.REASONS ? Object.values(pl.REASONS) : [];
 for (const r of ["no-artifact", "plan-sync-off", "not-provisioned", "not-published", "unknown-forge", "host-mismatch", "no-project-host", "invalid-session"])
   ok("REASONS has " + r, R.includes(r), show(pl.REASONS));
 ok("REASONS no longer names the forge by exclusion", !R.some((r) => /github/i.test(String(r))), show(pl.REASONS));
-const S = Array.isArray(pl.STAGES) ? pl.STAGES : (pl.STAGES ? Object.values(pl.STAGES) : []);
-ok("STAGES are intent, outline, detail", show([...S].sort()) === show(["detail", "intent", "outline"]), show(pl.STAGES));
+// #2820: the artifact names come from plan-step-table.js (PLAN_ARTIFACT_NAMES); plan-link.js keeps no STAGES of its own.
+let S = null;
+try { S = require(require("path").join(require("path").dirname(process.env.PL_LIB), "..", "workflow-state", "plan-step-table.js")).PLAN_ARTIFACT_NAMES; } catch (e) { S = "not loadable: " + (e.code || e.message); }
+ok("PLAN_ARTIFACT_NAMES are intent, outline, detail", Array.isArray(S) && show([...S].sort()) === show(["detail", "intent", "outline"]), show(S));
+ok("plan-link.js no longer exports STAGES", typeof pl.STAGES === "undefined", show(pl.STAGES));
 const T = pl.REASON_TEXT || {};
 ok("REASON_TEXT explains every reason", R.length > 0 && R.every((r) => typeof T[r] === "string" && T[r].length > 0), show(T));
 const cmd = String(pl.PLAN_LINK_COMMAND || "");
-ok("PLAN_LINK_COMMAND runs bin/plan-link with --stage", /bin\/plan-link/.test(cmd) && /--stage/.test(cmd), show(cmd));
+ok("PLAN_LINK_COMMAND runs bin/plan-link with --step", /bin\/plan-link/.test(cmd) && /--step/.test(cmd) && !/--stage/.test(cmd), show(cmd));
 ok("PLAN_LINK_COMMAND names the agents main root, not a checkout path", /AGENTS_MAIN_ROOT/.test(cmd) && !/[A-Za-z]:[\\/]/.test(cmd), show(cmd));
 ')"
 case_end
@@ -284,7 +287,7 @@ ok("renderModelContext never backticks the URL", !String(ctx).includes(bt + url)
 ')"
 PL_CLI_PLAN="$WORKFLOW_PLANS_DIR/$PL_SID-intent.md"
 printf 'cli intent\n' > "$PL_CLI_PLAN"
-PL_CLI_OUT="$(PLAN_SYNC_REMOTE_URL="" psf_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/plan-link" --session "$PL_SID" --stage intent 2>&1)"
+PL_CLI_OUT="$(PLAN_SYNC_REMOTE_URL="" psf_timeout 60 node "$SCRIPT_CHECKOUT_ROOT/bin/plan-link" --session "$PL_SID" --step clarify_intent 2>&1)"
 PL_CLI_P="$(printf '%s' "$PL_CLI_OUT" | sed -n 's/^intent: `\(.*\)` (no URL: plan-sync-off)$/\1/p')"
 if [ -n "$PL_CLI_P" ] && [ "${PL_CLI_P%"$PL_SID-intent.md"}" != "$PL_CLI_P" ]; then
   pass "bin/plan-link prints the backticked local path"

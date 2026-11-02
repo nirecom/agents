@@ -157,7 +157,7 @@ reason, with a hint to run `bin/plan-sync-init`.
   URL exists only when `origin/main` holds byte-identical content to the local file.
 - **Presentation, then one approval.** The model ends the final body text of the presentation
   with the line as-is as its last line and closes the turn. The Stop hook continues that turn
-  once, even when it follows a Stop block (#2811), and the `CONFIRM_<STAGE>` echo comes alone right after, so the user approves in the
+  once, even when it follows a Stop block (#2811), and the `CONFIRM_{INTENT|OUTLINE|DETAIL}` echo comes alone right after, so the user approves in the
   dialog alone, with no reply first (#2650). When no continuation comes or the echo is denied,
   the earlier order applies: the echo comes alone in the turn after the user's reply. After
   Allow the next skill follows in that same turn (`skills/_shared/confirm-plan.md` CPA-2/CPA-3).
@@ -171,9 +171,10 @@ reason, with a hint to run `bin/plan-sync-init`.
 - **Breadcrumb `systemMessage`.** `show-plan-link.js` shows the user `[plan-file]` plus a
   `[plan-sync]` status line only when something needs attention: no URL for a reason other
   than the project-host verdict. A published plan or a held-back plan shows nothing extra.
-- **`bin/plan-link`.** `bin/plan-link [--session <id>] [--stage intent|outline|detail]` is a
+- **`bin/plan-link`.** `bin/plan-link [--session <id>] [--step clarify_intent|outline|detail]` is a
   read-only, network-free lookup that prints the same line; the session defaults to
-  `CLAUDE_CODE_SESSION_ID`. The model runs it when asked where a plan is. Reasons and their
+  `CLAUDE_CODE_SESSION_ID`. The step is turned into its plan artifact name at the CLI entry, so
+  the printed line keeps the artifact name. The model runs it when asked where a plan is. Reasons and their
   resolution live in `hooks/lib/plan-link.js`, shared by the hooks and the CLI.
 - **No file sends.** `hooks/block-send-user-file.js` denies `SendUserFile`, so a plan is
   never delivered as a file.

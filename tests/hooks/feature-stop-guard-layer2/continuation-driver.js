@@ -91,7 +91,7 @@ function expectQuiet(label, r, s, stage) {
 const same = (a, b) => path.resolve(String(a)).toLowerCase() === path.resolve(String(b)).toLowerCase();
 const sha256 = (p) => crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");
 const reasons = [];
-for (const stage of X.STAGES) {
+for (const stage of X.ARTIFACTS) {
   // N1 / N15 / N19: the continuation and the receipt's binding, per stage.
   const s = X.sessionAt(stage);
   const r = X.runStop(s.sid, present(s));

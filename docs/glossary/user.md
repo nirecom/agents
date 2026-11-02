@@ -52,6 +52,11 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The workflow step that proposes two or three mutually exclusive approaches and selects one; produced by `/make-outline-plan` between intent and detail.
 - **Related**: [skills/make-outline-plan/SKILL.md](../../skills/make-outline-plan/SKILL.md)
 
+### plan artifact name
+
+- **Definition**: The name of a plan step's file, `intent`, `outline`, or `detail`; the user meets it in plan file names and plan-link lines, while CLIs and gates take the step name.
+- **Related**: [architecture/claude-code/plan-sync.md](../architecture/claude-code/plan-sync.md)
+
 ### plan-sync
 
 - **Definition**: The mechanism that pushes each final plan file to a private GitHub or GitLab remote, so a response can carry a plan link readable from a phone or browser.
@@ -67,7 +72,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 ### presentation turn
 
 - **Definition**: The turn in which the model presents a plan (intent, outline, or detail) in a text block that ends with its plan-link line.
-  The `CONFIRM_<STAGE>` echo follows that text block in the same turn when the Stop hook prompts for it, or else after the user replies; it reaches the dialog only when a link-closed presentation was recorded.
+  The echo of the CONFIRM_* flag that the step's row holds follows that text block in the same turn when the Stop hook prompts for it, or else after the user replies; it reaches the dialog only when a link-closed presentation was recorded.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)
 
 ### RTK
@@ -107,5 +112,5 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 ### workflow step
 
 - **Definition**: One unit of `next-step --list` (`workflow_init` … `final_report`), abbreviated to step: a bare "step" always means a workflow step.
-  The planning stages (`clarify_intent`, `outline`, `detail`) are workflow steps too; prose never restates the size of the set.
+  The planning steps (`clarify_intent`, `outline`, `detail`) are workflow steps too; prose never restates the size of the set.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)

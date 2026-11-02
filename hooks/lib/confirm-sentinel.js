@@ -10,19 +10,20 @@ function unanchoredEcho(re) {
   return new RegExp(re.source.replace(/^\^echo "/, "").replace(/"\$$/, ""));
 }
 
-const CONFIRM_STAGE_PATTERNS = [
-  { stage: "intent", re: unanchoredEcho(sentinelPatterns.CONFIRM_INTENT_LOOKSLIKE_RE) },
-  { stage: "outline", re: unanchoredEcho(sentinelPatterns.CONFIRM_OUTLINE_LOOKSLIKE_RE) },
-  { stage: "detail", re: unanchoredEcho(sentinelPatterns.CONFIRM_DETAIL_LOOKSLIKE_RE) },
+// Keyed by the workflow step (#2820); a caller needing the plan artifact name uses rowFor(step).suffix.
+const CONFIRM_STEP_PATTERNS = [
+  { step: "clarify_intent", re: unanchoredEcho(sentinelPatterns.CONFIRM_INTENT_LOOKSLIKE_RE) },
+  { step: "outline", re: unanchoredEcho(sentinelPatterns.CONFIRM_OUTLINE_LOOKSLIKE_RE) },
+  { step: "detail", re: unanchoredEcho(sentinelPatterns.CONFIRM_DETAIL_LOOKSLIKE_RE) },
 ];
 
-// parseSentinel(command) -> { stage } or null when no CONFIRM sentinel matches.
+// parseSentinel(command) -> { step } or null when no CONFIRM sentinel matches.
 function parseSentinel(command) {
   if (typeof command !== "string" || command.length === 0) return null;
-  for (const entry of CONFIRM_STAGE_PATTERNS) {
-    if (entry.re.test(command)) return { stage: entry.stage };
+  for (const entry of CONFIRM_STEP_PATTERNS) {
+    if (entry.re.test(command)) return { step: entry.step };
   }
   return null;
 }
 
-module.exports = { CONFIRM_STAGE_PATTERNS, parseSentinel };
+module.exports = { CONFIRM_STEP_PATTERNS, parseSentinel };

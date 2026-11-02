@@ -39,7 +39,7 @@ run_confirm_cases() {
 
   echo ""
   echo "=== C7-3: value normalization by the loader (pinned as observed) ==="
-  # CASE-INSENSITIVITY: plan-confirm-flag.js isConfirmOffForStageFromFile compares
+  # CASE-INSENSITIVITY: plan-confirm-flag.js isConfirmFlagOffFromFile compares
   # String(raw).toLowerCase() against the exact literal "off", so an uppercase OFF
   # in the file IS accepted.
   at_write_tests w3a
@@ -59,7 +59,7 @@ run_confirm_cases() {
   check "C7-3b: write_tests is skipped" '"skipped"' "$(step_status w3b write_tests)"
 
   # WHITESPACE PADDING, QUOTED: the quotes protect the padding from the line trim,
-  # and isConfirmOffForStageFromFile does NOT .trim() before comparing (unlike the
+  # and isConfirmFlagOffFromFile does NOT .trim() before comparing (unlike the
   # sentinel-door read in plan-skip-allowance.js, which does). So `" off "` is
   # REFUSED. Pinned as the observed asymmetry between the two doors; it fails
   # SAFE (a padded value never opens the gate), so it is recorded, not filed.

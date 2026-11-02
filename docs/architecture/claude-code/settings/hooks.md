@@ -114,7 +114,7 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   applies to it alone. Limits: `hooks/lib/size-limits.js` (SSOT; the table in `rules/coding/file-split.md` is
   generated) — not restated here. Session gating: `hooks/lib/size-session-gate.js`.
 - Plan-size gates (#2631): `confirm-checkpoint.js` (PreToolUse) denies the CONFIRM of a plan artifact over HARD
-  whatever `CONFIRM_<STAGE>` says (the planner must compress it) and adds advice over WARN; the Stop-side
+  whatever `CONFIRM_{INTENT|OUTLINE|DETAIL}` says (the planner must compress it) and adds advice over WARN; the Stop-side
   counterpart is `stop-confirm-plan-guard.js` Layer 2 below. Both use the same session gate as `file-size`.
 - Pre-commit size gate (`hooks/pre-commit.d/checks/size-gate.js`, run after the agents-repo gates, #2631) — one
   `bin/size-check --staged-auto --session-gate` call judges every staged file against the same SSOT. HARD blocks the
@@ -135,7 +135,7 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
 - `stop-confirm-plan-guard.js` (Stop) — Layer 2 and the plan-link check, with distinct reason
   prefixes. The former Layer 1, which blocked any plans-directory path in the last message, is
   removed: the local path is now part of the plan-link line. Layer 2 runs on EVERY Stop (#2278 removed the marker precondition): when a
-  `CONFIRM_<STAGE>` sentinel appears in the last assistant turn, it first re-lints the confirmed
+  `CONFIRM_{INTENT|OUTLINE|DETAIL}` sentinel appears in the last assistant turn, it first re-lints the confirmed
   artifact against a strict `PLAN_LANG` (`[confirm-plan] Layer 2/plan-lang:`), blocks a plan over the
   HARD size limit (`[confirm-plan] Layer 2/plan-size:`, #2631), and then requires a
   stage-valid follow-up tool_use after the Allowed echo's result in the same turn (`[confirm-plan] Layer 2/follow-up:`);

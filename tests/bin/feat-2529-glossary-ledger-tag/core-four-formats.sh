@@ -7,7 +7,7 @@
 # entrypoint runs (split on the time budget); the two entrypoints cover LT_FORMATS.
 
 for fmt in $LT_CORE_FORMATS; do
-  stage="$(lt_stage_of "$fmt")"; step="$(lt_step_of "$stage")"
+  step="$(lt_step_of_format "$fmt")"
 
   # (a) reject refused.
   sid="$(lt_sid rj "$fmt")"; lt_build "$sid" "$fmt"; before="$(lt_snap "$sid" "$fmt")"
@@ -18,7 +18,7 @@ for fmt in $LT_CORE_FORMATS; do
   done
   lt_eq "$fmt: refused rejects leave ledger and carrier untouched" "$before" "$(lt_snap "$sid" "$fmt")"
   lt_eq "$fmt: C1 stays open after refused reject" open "$(lt_field "$sid" "$fmt" C1 3)"
-  lt_seed_grants "$sid" "$step" "$stage" "$(lt_gj "foo bar" "$LT_D1")"
+  lt_seed_grants "$sid" "$step" "$(lt_gj "foo bar" "$LT_D1")"
   lt_reject "$sid" "$fmt" C1
   lt_eq "$fmt: reject C1 still exits 4 with a matching grant" 4 "$LT_RC"
   lt_eq "$fmt: granted-but-rejected leaves files untouched" "$before" "$(lt_snap "$sid" "$fmt")"
@@ -32,9 +32,9 @@ for fmt in $LT_CORE_FORMATS; do
   done
   lt_eq "$fmt: refused accepts leave files untouched" "$before" "$(lt_snap "$sid" "$fmt")"
 
-  # (c1) seeded grants on the stage's own step.
+  # (c1) seeded grants on the format's own step.
   sid="$(lt_sid ga "$fmt")"; lt_build "$sid" "$fmt"
-  lt_seed_grants "$sid" "$step" "$stage" "$(lt_gj "foo bar" "$LT_D1")" "$(lt_gj "foo bar" "$LT_D3")" "$(lt_gj "baz qux" "$LT_D4")"
+  lt_seed_grants "$sid" "$step" "$(lt_gj "foo bar" "$LT_D1")" "$(lt_gj "foo bar" "$LT_D3")" "$(lt_gj "baz qux" "$LT_D4")"
   for id in C1 C3 C4; do
     lt_accept "$sid" "$fmt" "$id" "the user keeps this spelling"
     lt_eq "$fmt: accept $id with its grant exits 0" 0 "$LT_RC"
@@ -50,7 +50,7 @@ for fmt in $LT_CORE_FORMATS; do
   # (c2) the grant made by the real sentinel at the current step.
   sid="$(lt_sid se "$fmt")"; lt_build "$sid" "$fmt"
   lt_seed_current "$sid" "$step"
-  lt_mark "$sid" "$(lt_accepted "foo bar" "$stage")"
+  lt_mark "$sid" "$(lt_accepted "foo bar" "$step")"
   grants="$(lt_grants_of "$sid" "$step")"
   lt_has "$fmt: sentinel grants C1's discrim on $step" "$LT_D1" "$grants"
   lt_has "$fmt: sentinel grant carries the normalized term" '"norm":"foo bar"' "$grants"

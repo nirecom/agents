@@ -16,7 +16,7 @@ const MARKDOWN = [
   ["link URL", "See [the page](https://example.com/q?glossary-drift) for more."],
   ["link anchor", "See [the section](#glossary-drifts) below."],
   ["HTML comment", "Mid-line <!-- glossary-drift --> comment."],
-  ["sentinel notation", "Mid-line <<WORKFLOW_GLOSSARY_ACCEPTED: term=glossary-drift stage=outline — fixture>> here."],
+  ["sentinel notation", "Mid-line <<WORKFLOW_GLOSSARY_ACCEPTED: term=glossary-drift step=outline — fixture>> here."],
   ["path-shaped word", "Mid-line see hooks/glossary-drift.js for the path."],
   ["sentence start: line head", "Glossary drift starts this line."],
   ["sentence start: after a period", "Done here. Glossary drift follows a period."],
@@ -68,7 +68,7 @@ function codeContexts(F) {
   const { text, labelled } = layout(CODE);
   F.stageFile(repo, "bin/a.js", text);
   F.seedAt(sid, "review_security", repo);
-  assertLines(F, "code comments (code stage)", F.drift(sid, "code", repo, false), labelled, "bin/a.js");
+  assertLines(F, "code comments (review_security)", F.drift(sid, "review_security", repo, false), labelled, "bin/a.js");
 }
 
 // A sequence spelled exactly like another combined-glossary term (glossary file or intent row) is

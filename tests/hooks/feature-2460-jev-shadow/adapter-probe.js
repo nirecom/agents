@@ -142,8 +142,9 @@ const ctx = { repo, plansDir, sid, A, safe, prompt, redacted };
 require("./adapter-probe/redaction.js")(ctx);
 
 safe("stage-table", () => ["workflow_init", "clarify_intent", "research", "outline", "detail", "branching_complete",
-  "write_tests", "review_tests", "write_code", "run_tests", null, "bogus_step"].map((s) => A.stageForStep(s)).join(","));
-safe("stage-table-export", () => A.STEP_TO_STAGE && A.STEP_TO_STAGE.clarify_intent === "cos1" && A.STEP_TO_STAGE.write_code === "write_code");
+  "write_tests", "review_tests", "write_code", "run_tests", null, "bogus_step"].map((s) => A.jevTicketStageOfStep(s)).join(","));
+safe("stage-table-export", () => A.JEV_TICKET_STAGE_OF_STEP && A.JEV_TICKET_STAGE_OF_STEP.clarify_intent === "cos1" && A.JEV_TICKET_STAGE_OF_STEP.write_code === "write_code");
+safe("stage-table-retired", () => (["stageForStep", "STEP_TO_STAGE"].some((k) => k in A) ? "present" : "absent"));
 
 safe("extract-string", () => A.extractLlmText("SIGNALS: S2-architecture", {}));
 safe("extract-content-text-only", () => A.extractLlmText({ content: [{ type: "text", text: "SIGNALS: S3-security" },

@@ -12,7 +12,7 @@
 // Exits 0 in both cases; exits 1 on bad args.
 
 const path = require("path");
-const { readComplexityEvaluation, ROUTING_STAGES, STAGE_ROUTING, canonicalizeSignalsForPersistence } = require(
+const { readComplexityEvaluation, STEP_ROUTING, canonicalizeSignalsForPersistence } = require(
   path.join(__dirname, "..", "..", "hooks", "workflow-state")
 );
 const { modelForLevel } = require(path.join(__dirname, "..", "..", "hooks", "lib", "role-model.js"));
@@ -51,8 +51,8 @@ function main() {
     process.stderr.write("read-complexity-evaluation: --session is required and must match /^[A-Za-z0-9_-]+$/\n");
     process.exit(1);
   }
-  if (stage !== null && !Object.prototype.hasOwnProperty.call(STAGE_ROUTING, stage)) {
-    process.stderr.write("read-complexity-evaluation: --stage must be one of " + Object.keys(STAGE_ROUTING).join(", ") + "\n");
+  if (stage !== null && !Object.prototype.hasOwnProperty.call(STEP_ROUTING, stage)) {
+    process.stderr.write("read-complexity-evaluation: --stage must be one of " + Object.keys(STEP_ROUTING).join(", ") + "\n");
     process.exit(1);
   }
 

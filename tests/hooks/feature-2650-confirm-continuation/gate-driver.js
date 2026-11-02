@@ -15,10 +15,11 @@ const PCAS = require("../../lib/pre-confirm-audit-settle");
 const { A, T, U, W, TR, show, check } = X;
 const KEY = { intent: "CONFIRM_INTENT", outline: "CONFIRM_OUTLINE", detail: "CONFIRM_DETAIL" };
 const PG = X.tryRequire("hooks/lib/confirm-gate/plan-gate.js");
-const state = (stage, opts) => {
+// state(artifact, opts): planGateState is keyed by the workflow step (#2820), so the artifact is converted here.
+const state = (artifact, opts) => {
   if (PG.__missing) return "missing:" + PG.__missing;
   if (typeof PG.planGateState !== "function") return "planGateState is not exported";
-  try { return PG.planGateState(stage, opts); } catch (e) { return "threw:" + e.message; }
+  try { return PG.planGateState(X.STEP[artifact], opts); } catch (e) { return "threw:" + e.message; }
 };
 // withEnv(over, fn): run fn with the CONFIRM_* flags in a per-call .env (#2726/#2729: file-only;
 // a null value leaves the key out of the file), AGENTS_MAIN_ROOT pointed at it, then restore.
@@ -69,7 +70,7 @@ const mode = process.argv[2];
 if (mode === "G1") {
   // 3 stages x (on / off / unset / unrecognized): planGateState and the CLI action agree.
   const VALUES = [["on", "on"], ["off", "off"], ["unset", null], ["unrecognized", "maybe"]];
-  for (const stage of X.STAGES) {
+  for (const stage of X.ARTIFACTS) {
     const s = session(stage);
     for (const [label, v] of VALUES) {
       const want = v === "off" && stage !== "intent" ? "OFF" : "ON";

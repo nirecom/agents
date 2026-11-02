@@ -136,6 +136,7 @@ const m = require('$STATE_IO_NODE');
 const state = m.createInitialState(process.argv[1], {cwd: '.'});
 m.writeState(process.argv[1], state);
 " -- "$sid" 2>/dev/null
+    glossary_check_record "$sid" "." review_tests  # #2529: completing review_tests needs a current glossary_check
     run_with_timeout 10 node -e "
 const m = require('$STATE_IO_NODE');
 m.markReviewTestsComplete(process.argv[1], {v:1, files:{'tests/g6.sh':'abcdef1234567890'}}, {});
@@ -169,6 +170,10 @@ run_g3b() {
 const m = require('$STATE_IO_NODE');
 const state = m.createInitialState(process.argv[1], {cwd: '.'});
 m.writeState(process.argv[1], state);
+" -- "$sid" 2>/dev/null
+    glossary_check_record "$sid" "." review_tests  # #2529: completing review_tests needs a current glossary_check
+    run_with_timeout 10 node -e "
+const m = require('$STATE_IO_NODE');
 m.markReviewTestsComplete(process.argv[1], {v:1, files:{}}, {});
 " -- "$sid" 2>/dev/null
     result_wsid=$(run_with_timeout 5 node -e "

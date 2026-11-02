@@ -14,7 +14,7 @@ SID="g05-$$"
 write_state "$SID" "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete"}')"
 touch "$PLANS_DIR/${SID}-outline.md"
 
-# The waiver is read from the config FILE (isConfirmOffForStageFromFile), never
+# The waiver is read from the config FILE (isConfirmFlagOffFromFile), never
 # from process.env — see G14. CFG_ROOT_OFF is the scratch config whose
 # contents carry CONFIRM_OUTLINE=off.
 seed_glossary "$SID" outline

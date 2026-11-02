@@ -140,7 +140,7 @@ arm_terminal_guard() {
 }
 
 # The intent of the session chain is named after first_session_id (#2748); unresolvable = no intent.
-INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
+INTENT_FILE="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --step clarify_intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null || true)"
 if [[ "${INTENT_FILE##*[/\\]}" == *-intent.md ]]; then INTENT_FILE="$PLANS_DIR/${INTENT_FILE##*[/\\]}"; else INTENT_FILE=""; fi
 
 args=(

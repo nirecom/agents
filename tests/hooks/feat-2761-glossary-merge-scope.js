@@ -25,7 +25,7 @@ process.chdir(os.tmpdir());
 
 const F = require("../lib/glossary-check-fixture");
 const M = require("./feat-2761-glossary-merge/fixture");
-const { loadStageInputs, classifyStageFile } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope"));
+const { loadStepInputs, reviewStepOfFile } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope"));
 
 const WORD = F.VARIANT;
 const DRIFT_RE = /DRIFT: (\S+) "([^"]*)" -> "([^"]*)" at (.+):(\d+)\s*$/;
@@ -43,51 +43,51 @@ after(() => {
 });
 
 // repoDir undefined: the session's linked worktree resolves the repo (B7); a main worktree needs it.
-function load(sid, stage, repoDir) {
-  const r = loadStageInputs(sid, stage, repoDir ? { repoDir } : {});
-  if (!r.ok) throw new Error(`loadStageInputs(${stage}) failed: ${r.error} ${r.detail || ""}`);
+function load(sid, step, repoDir) {
+  const r = loadStepInputs(sid, step, repoDir ? { repoDir } : {});
+  if (!r.ok) throw new Error(`loadStepInputs(${step}) failed: ${r.error} ${r.detail || ""}`);
   return r;
 }
 const pathsOf = (loaded) => loaded.artifact.files.map((f) => f.path);
 const mi = (loaded) => loaded.artifact.mergeIncoming;
 const showMi = (loaded) => JSON.stringify(mi(loaded));
-const dry = (sid, stage, cwd) => F.drift(sid, stage, cwd, false);
+const dry = (sid, step, cwd) => F.drift(sid, step, cwd, false);
 
-// A standard merge in `dir` and a session at docs whose worktree is `dir`.
+// A standard merge in `dir` and a session at review_docs whose worktree is `dir`.
 function standardSession(tag, dir) {
   const repo = dir || F.mkRepo(tag);
   M.standardMerge(repo, WORD);
-  return { repo, sid: F.seedSession(tag, "docs", { cwd: repo }) };
+  return { repo, sid: F.seedSession(tag, "review_docs", { cwd: repo }) };
 }
 
 // B1 / B7 shared assertions.
 function narrowed(label, s, viaSession) {
   const at = viaSession ? undefined : s.repo;
-  const docs = load(s.sid, "docs", at);
-  F.check(`${label}: docs scope is exactly docs/shared.md`, JSON.stringify(pathsOf(docs)) === '["docs/shared.md"]', JSON.stringify(pathsOf(docs)));
-  for (const stage of ["code", "tests"]) {
-    const l = load(s.sid, stage, at);
-    F.check(`${label}: ${stage} scope is empty`, l.artifact.empty === true && pathsOf(l).length === 0, JSON.stringify(pathsOf(l)));
-    const r = dry(s.sid, stage, s.repo);
-    F.check(`${label}: check-glossary-drift --stage ${stage} exits 0 with no DRIFT line`, r.code === 0 && driftFiles(r.out).length === 0, `exit=${r.code} ${r.out}${r.err}`);
+  const docs = load(s.sid, "review_docs", at);
+  F.check(`${label}: review_docs scope is exactly docs/shared.md`, JSON.stringify(pathsOf(docs)) === '["docs/shared.md"]', JSON.stringify(pathsOf(docs)));
+  for (const step of ["review_security", "review_tests"]) {
+    const l = load(s.sid, step, at);
+    F.check(`${label}: ${step} scope is empty`, l.artifact.empty === true && pathsOf(l).length === 0, JSON.stringify(pathsOf(l)));
+    const r = dry(s.sid, step, s.repo);
+    F.check(`${label}: check-glossary-drift --step ${step} exits 0 with no DRIFT line`, r.code === 0 && driftFiles(r.out).length === 0, `exit=${r.code} ${r.out}${r.err}`);
   }
-  const d = dry(s.sid, "docs", s.repo);
-  F.check(`${label}: docs has no DRIFT line for docs/main-only.md`, !driftFiles(d.out).includes("docs/main-only.md"), d.out);
+  const d = dry(s.sid, "review_docs", s.repo);
+  F.check(`${label}: review_docs has no DRIFT line for docs/main-only.md`, !driftFiles(d.out).includes("docs/main-only.md"), d.out);
   return d;
 }
 
 // A0-A12 (detectMergeIncoming); their markers sit in the module.
 require("./feat-2761-glossary-merge/incoming-cases").run();
 
-caseBegin("standard merge narrows every staged-file stage to the resolved file", "hooks/workflow-state/glossary-check/scope/artifact.js");
-test("B1: standard merge narrows every staged-file stage to the resolved file", verdict("B1", () => narrowed("B1", standardSession("b1"), false)));
+caseBegin("standard merge narrows every staged-file step to the resolved file", "hooks/workflow-state/glossary-check/scope/artifact.js");
+test("B1: standard merge narrows every staged-file step to the resolved file", verdict("B1", () => narrowed("B1", standardSession("b1"), false)));
 caseEnd();
 
 caseBegin("resolved conflict file still reports its drift", "bin/check-glossary-drift");
 test("B2: resolved conflict file still reports its drift", verdict("B2", () => {
   const s = standardSession("b2");
-  const d = dry(s.sid, "docs", s.repo);
-  F.check("B2 check-glossary-drift --stage docs exits 1", d.code === 1, `exit=${d.code} ${d.err}`);
+  const d = dry(s.sid, "review_docs", s.repo);
+  F.check("B2 check-glossary-drift --step review_docs exits 1", d.code === 1, `exit=${d.code} ${d.err}`);
   F.check("B2 exactly one DRIFT line, at docs/shared.md", JSON.stringify(driftFiles(d.out)) === '["docs/shared.md"]', d.out);
 }));
 caseEnd();
@@ -96,12 +96,12 @@ caseBegin("incoming file edited during the merge is scanned again", "hooks/workf
 test("B3: incoming file edited during the merge is scanned again", verdict("B3", () => {
   const s = standardSession("b3");
   M.apply(s.repo, { "src/main-only.js": `"use strict";\n// each ${WORD} is checked, edited in the merge\nmodule.exports = 2;\n` });
-  const code = load(s.sid, "code", s.repo);
-  F.check("B3 code scope is exactly src/main-only.js", JSON.stringify(pathsOf(code)) === '["src/main-only.js"]', JSON.stringify(pathsOf(code)));
-  const r = dry(s.sid, "code", s.repo);
-  F.check("B3 check-glossary-drift --stage code reports src/main-only.js", r.code === 1 && driftFiles(r.out).includes("src/main-only.js"), `exit=${r.code} ${r.out}`);
-  const docs = pathsOf(load(s.sid, "docs", s.repo));
-  F.check("B3 docs scope stays narrowed", JSON.stringify(docs) === '["docs/shared.md"]', JSON.stringify(docs));
+  const code = load(s.sid, "review_security", s.repo);
+  F.check("B3 review_security scope is exactly src/main-only.js", JSON.stringify(pathsOf(code)) === '["src/main-only.js"]', JSON.stringify(pathsOf(code)));
+  const r = dry(s.sid, "review_security", s.repo);
+  F.check("B3 check-glossary-drift --step review_security reports src/main-only.js", r.code === 1 && driftFiles(r.out).includes("src/main-only.js"), `exit=${r.code} ${r.out}`);
+  const docs = pathsOf(load(s.sid, "review_docs", s.repo));
+  F.check("B3 review_docs scope stays narrowed", JSON.stringify(docs) === '["docs/shared.md"]', JSON.stringify(docs));
 }));
 caseEnd();
 
@@ -111,10 +111,10 @@ test("A12a-drift: staged edit is scanned although the worktree is back at MERGE_
   const rel = "docs/main-only.md";
   const sides = M.stagedEditWorktreeAtMergeHead(s.repo, rel, WORD);
   F.check("A12a-drift precondition: index differs from MERGE_HEAD, worktree equals it", !sides.indexIsMergeHead && sides.worktreeIsMergeHead, JSON.stringify(sides));
-  const docs = pathsOf(load(s.sid, "docs", s.repo));
-  F.check(`A12a-drift docs scope keeps ${rel} (the staged blob differs from MERGE_HEAD)`, docs.includes(rel), JSON.stringify(docs));
-  const d = dry(s.sid, "docs", s.repo);
-  F.check(`A12a-drift check-glossary-drift --stage docs exits 1 with a DRIFT line at ${rel}`, d.code === 1 && driftFiles(d.out).includes(rel), `exit=${d.code} ${d.out}`);
+  const docs = pathsOf(load(s.sid, "review_docs", s.repo));
+  F.check(`A12a-drift review_docs scope keeps ${rel} (the staged blob differs from MERGE_HEAD)`, docs.includes(rel), JSON.stringify(docs));
+  const d = dry(s.sid, "review_docs", s.repo);
+  F.check(`A12a-drift check-glossary-drift --step review_docs exits 1 with a DRIFT line at ${rel}`, d.code === 1 && driftFiles(d.out).includes(rel), `exit=${d.code} ${d.out}`);
 }));
 caseEnd();
 
@@ -122,22 +122,22 @@ caseBegin("outside a merge pairs and digest stay unchanged", "hooks/workflow-sta
 test("B4: outside a merge pairs and digest stay unchanged", verdict("B4", () => {
   const repo = F.mkRepo("b4");
   M.commitAll(repo, { "docs/gone.md": "# Gone\n\nText.\n" }, "fixture: to delete");
-  for (const stage of F.RS_STAGES) F.stageFile(repo, F.TARGET[stage], F.targetBody(stage, F.TERM));
+  for (const step of F.RS_STEPS) F.stageFile(repo, F.TARGET[step], F.targetBody(step, F.TERM));
   M.apply(repo, { "docs/gone.md": null });
-  const sid = F.seedSession("b4", "docs", { cwd: repo });
+  const sid = F.seedSession("b4", "review_docs", { cwd: repo });
   const before = {};
-  for (const stage of F.RS_STAGES) {
-    const l = load(sid, stage, repo);
-    before[stage] = l.artifact.digest;
-    F.check(`B4 ${stage} digest equals the unsubtracted formula`, l.artifact.digest === M.stagedPairsDigest(repo, stage, classifyStageFile), l.artifact.digest);
-    F.check(`B4 ${stage} mergeIncoming.state is not-merging`, !!mi(l) && mi(l).state === "not-merging" && mi(l).excluded === 0, showMi(l));
-    F.check(`B4 ${stage} check-glossary-drift prints no merge line`, !ANY_MERGE_LINE.test(dry(sid, stage, repo).err), "merge line printed");
+  for (const step of F.RS_STEPS) {
+    const l = load(sid, step, repo);
+    before[step] = l.artifact.digest;
+    F.check(`B4 ${step} digest equals the unsubtracted formula`, l.artifact.digest === M.stagedPairsDigest(repo, step, reviewStepOfFile), l.artifact.digest);
+    F.check(`B4 ${step} mergeIncoming.state is not-merging`, !!mi(l) && mi(l).state === "not-merging" && mi(l).excluded === 0, showMi(l));
+    F.check(`B4 ${step} check-glossary-drift prints no merge line`, !ANY_MERGE_LINE.test(dry(sid, step, repo).err), "merge line printed");
   }
   F.check("B4 precondition: a branch named MERGE_HEAD resolves", M.makeMergeHeadBranch(repo), "rev-parse failed");
-  for (const stage of F.RS_STAGES) {
-    const l = load(sid, stage, repo);
-    F.check(`B4 ${stage} digest unchanged by a branch named MERGE_HEAD`, l.artifact.digest === before[stage], l.artifact.digest);
-    F.check(`B4 ${stage} still not-merging with a branch named MERGE_HEAD`, !!mi(l) && mi(l).state === "not-merging", showMi(l));
+  for (const step of F.RS_STEPS) {
+    const l = load(sid, step, repo);
+    F.check(`B4 ${step} digest unchanged by a branch named MERGE_HEAD`, l.artifact.digest === before[step], l.artifact.digest);
+    F.check(`B4 ${step} still not-merging with a branch named MERGE_HEAD`, !!mi(l) && mi(l).state === "not-merging", showMi(l));
   }
 }));
 caseEnd();
@@ -151,14 +151,14 @@ test("B5: undecidable merge state falls back to every staged path", verdict("B5"
   M.standardMerge(bad, WORD);
   M.corruptMergeHead(bad);
   for (const [label, repo, reason] of [["octopus", oct, "octopus"], ["dangling MERGE_HEAD", bad, "diff-failed"]]) {
-    const sid = F.seedSession(`b5-${reason}`, "docs", { cwd: repo });
-    const docs = load(sid, "docs", repo);
-    const all = M.stagedNames(repo).filter((p) => classifyStageFile(p) === "docs").sort();
-    F.check(`B5 ${label}: docs scope is every staged docs path`, JSON.stringify(pathsOf(docs)) === JSON.stringify(all), JSON.stringify(pathsOf(docs)));
-    F.check(`B5 ${label}: digest equals the unsubtracted formula`, docs.artifact.digest === M.stagedPairsDigest(repo, "docs", classifyStageFile), docs.artifact.digest);
+    const sid = F.seedSession(`b5-${reason}`, "review_docs", { cwd: repo });
+    const docs = load(sid, "review_docs", repo);
+    const all = M.stagedNames(repo).filter((p) => reviewStepOfFile(p) === "review_docs").sort();
+    F.check(`B5 ${label}: review_docs scope is every staged docs path`, JSON.stringify(pathsOf(docs)) === JSON.stringify(all), JSON.stringify(pathsOf(docs)));
+    F.check(`B5 ${label}: digest equals the unsubtracted formula`, docs.artifact.digest === M.stagedPairsDigest(repo, "review_docs", reviewStepOfFile), docs.artifact.digest);
     F.check(`B5 ${label}: mergeIncoming is undecidable / ${reason}, nothing excluded`,
       !!mi(docs) && mi(docs).state === "undecidable" && mi(docs).reason === reason && mi(docs).excluded === 0, showMi(docs));
-    const d = dry(sid, "docs", repo);
+    const d = dry(sid, "review_docs", repo);
     F.check(`B5 ${label}: docs/main-only.md drift is reported`, d.code === 1 && driftFiles(d.out).includes("docs/main-only.md"), `exit=${d.code} ${d.out}`);
     const m = UNDECIDABLE_RE.exec(d.err);
     F.check(`B5 ${label}: stderr names the undecidable reason ${reason}`, !!m && m[1] === reason, d.err);
@@ -170,24 +170,24 @@ caseEnd();
 caseBegin("stderr reports the excluded count and stays quiet otherwise", "bin/check-glossary-drift");
 test("B6: stderr reports the excluded count and stays quiet otherwise", verdict("B6", () => {
   const s = standardSession("b6");
-  for (const [stage, n] of [["code", 1], ["tests", 1], ["docs", 2]]) {
-    const l = load(s.sid, stage, s.repo);
-    F.check(`B6 ${stage} mergeIncoming is merging / excluded ${n}`, !!mi(l) && mi(l).state === "merging" && mi(l).excluded === n && !("reason" in mi(l)), showMi(l));
-    const r = dry(s.sid, stage, s.repo);
+  for (const [step, n] of [["review_security", 1], ["review_tests", 1], ["review_docs", 2]]) {
+    const l = load(s.sid, step, s.repo);
+    F.check(`B6 ${step} mergeIncoming is merging / excluded ${n}`, !!mi(l) && mi(l).state === "merging" && mi(l).excluded === n && !("reason" in mi(l)), showMi(l));
+    const r = dry(s.sid, step, s.repo);
     const m = MERGING_RE.exec(r.err);
-    F.check(`B6 ${stage} stderr says ${n} path(s) left out of the ${stage} scan`, !!m && Number(m[1]) === n && m[2] === stage, r.err);
-    F.check(`B6 ${stage} stdout carries no merge line`, !ANY_MERGE_LINE.test(r.out), r.out);
+    F.check(`B6 ${step} stderr says ${n} path(s) left out of the ${step} scan`, !!m && Number(m[1]) === n && m[2] === step, r.err);
+    F.check(`B6 ${step} stdout carries no merge line`, !ANY_MERGE_LINE.test(r.out), r.out);
   }
   const repo = F.mkRepo("b6-skip");
-  F.stageFile(repo, F.TARGET.docs, F.targetBody("docs", F.TERM));
-  const sid = F.seedSession("b6-skip", "docs", { cwd: repo });
-  const tests = load(sid, "tests", repo);
+  F.stageFile(repo, F.TARGET.review_docs, F.targetBody("review_docs", F.TERM));
+  const sid = F.seedSession("b6-skip", "review_docs", { cwd: repo });
+  const tests = load(sid, "review_tests", repo);
   F.check("B6 no staged tests path: mergeIncoming is skipped / excluded 0", JSON.stringify(mi(tests)) === '{"state":"skipped","excluded":0}', showMi(tests));
-  F.check("B6 no staged tests path: stderr has no merge line", !ANY_MERGE_LINE.test(dry(sid, "tests", repo).err), "merge line printed");
+  F.check("B6 no staged tests path: stderr has no merge line", !ANY_MERGE_LINE.test(dry(sid, "review_tests", repo).err), "merge line printed");
   const plan = F.seedSession("b6-plan", "outline", { cwd: s.repo });
   const outline = load(plan, "outline", s.repo);
-  F.check("B6 plan-file stage: artifact has no mergeIncoming field", !("mergeIncoming" in outline.artifact), showMi(outline));
-  F.check("B6 plan-file stage during a merge: stderr has no merge line", !ANY_MERGE_LINE.test(dry(plan, "outline", s.repo).err), "merge line printed");
+  F.check("B6 plan-file step: artifact has no mergeIncoming field", !("mergeIncoming" in outline.artifact), showMi(outline));
+  F.check("B6 plan-file step during a merge: stderr has no merge line", !ANY_MERGE_LINE.test(dry(plan, "outline", s.repo).err), "merge line printed");
 }));
 caseEnd();
 

@@ -38,9 +38,9 @@ const FIXTURES = {
 // step is settled (approval-gated and glossary-gated ones skipped) and the result is verified.
 const S = require(process.env.AGENTS + '/hooks/workflow-state/state-io');
 const { APPROVAL_GATED_STEPS } = require(process.env.AGENTS + '/hooks/workflow-state/completion-approval');
-const { STAGE_STEP } = require(process.env.AGENTS + '/hooks/workflow-state/glossary-check/scope');
+const { GLOSSARY_STEPS } = require(process.env.AGENTS + '/hooks/workflow-state/glossary-check/scope');
 const { resolveCurrentEffectiveStep } = require(process.env.AGENTS + '/hooks/workflow-state/current-step');
-const GATED = APPROVAL_GATED_STEPS.concat(Object.values(STAGE_STEP));
+const GATED = APPROVAL_GATED_STEPS.concat(GLOSSARY_STEPS);
 const [sid, target] = process.argv.slice(2);
 S.writeState(sid, S.createInitialState(sid, { cwd: '/x', git_branch: 'feature/x' }));
 S.markStep(sid, 'workflow_init', 'complete');

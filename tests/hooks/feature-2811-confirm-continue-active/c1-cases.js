@@ -26,7 +26,7 @@ function chain(check) {
 
     const e = R.echo(s.sid, stage, { cfg });
     check(`${id} d: the CONFIRM echo reaches the approval dialog (ask)`, e.dialog && !e.denied && !e.skipped, { rc: e.rc, json: e.json, err: e.err });
-    check(`${id} d: the echo consumed the presentation receipt`, !R.receiptExists(s.sid, stage), H.snap(s.sid));
+    check(`${id} d: the echo consumed the presentation receipt`, !R.receiptExists(s.sid, H.stepOf(stage)), H.snap(s.sid));
 
     const e2 = R.echo(s.sid, stage, { cfg });
     check(`${id} d: a second echo has no receipt left and is denied`, e2.denied && !e2.dialog, { rc: e2.rc, json: e2.json });

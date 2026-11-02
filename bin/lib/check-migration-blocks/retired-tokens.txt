@@ -1,0 +1,61 @@
+Retired-token registry of check-migration-blocks (#2820). Only the marker range is read.
+Line forms (one per line, between the markers):
+  # migration <id> <desc-key>     a temporary block whose description holds <desc-key> belongs to <id>
+  # scope <id> <glob>             repo-relative path glob, anchored at both ends
+  # word <id> <identifier>[@<glob>]  matched on identifier boundaries; @<glob> narrows that token
+  # re <id> <regex>[@<glob>]      JavaScript regex, matched per line; @<glob> narrows that token
+  # except <id> <path> <reason>   skip <path> for <id>; the reason is mandatory (user-approved only)
+Globs: ** spans directories, * and ? stay within one segment, {a,b} is an alternation.
+A token is an error outside its migration's temporary block; a registered block needs added and deletion-condition.
+
+# retired-tokens:begin
+# migration stage-to-step workflow stage -> workflow step migration
+# scope stage-to-step bin/**
+# scope stage-to-step hooks/**
+# scope stage-to-step skills/**
+# scope stage-to-step agents/**
+# scope stage-to-step docs/architecture/**
+# scope stage-to-step docs/glossary/**
+# scope stage-to-step CLAUDE.md
+# scope stage-to-step rules/**
+# word stage-to-step STAGE_STEP
+# word stage-to-step STAGE_LEDGER_FORMAT
+# word stage-to-step RA_STAGES
+# word stage-to-step RS_STAGES
+# word stage-to-step stageOfStep
+# word stage-to-step stageOfLedgerFormat
+# word stage-to-step classifyStageFile
+# word stage-to-step loadStageInputs
+# word stage-to-step stageFingerprint
+# word stage-to-step STEP_TO_STAGE
+# word stage-to-step stageForStep
+# word stage-to-step STAGE_FOR_STEP
+# word stage-to-step PLAN_STAGES
+# word stage-to-step PLAN_STAGE_TABLE
+# word stage-to-step plan-stage-table
+# word stage-to-step ROUTING_STAGES
+# word stage-to-step STAGE_ROUTING
+# word stage-to-step deriveStageLevel
+# word stage-to-step deriveStageLevels
+# word stage-to-step deriveLegacyStageLevels
+# word stage-to-step describeStageRouting
+# word stage-to-step renderStageRoutingMarkdown
+# word stage-to-step isWellFormedStageLevels
+# word stage-to-step resolveStageLevels
+# word stage-to-step readStageComplexityLevel
+# word stage-to-step presentedStages
+# word stage-to-step presentedStagesOfText
+# word stage-to-step continuationStage
+# word stage-to-step markerStages
+# word stage-to-step CONFIRM_STAGE_PATTERNS
+# word stage-to-step isPlanStageConfirmKey
+# word stage-to-step isConfirmOffForStageFromFile
+# word stage-to-step stage-to-step
+# word stage-to-step STAGES@{hooks/lib/plan-link.js,hooks/lib/plan-link-turn-check.js,hooks/lib/presentation-receipt.js,hooks/lib/confirm-continuation.js,hooks/stop-confirm-plan-guard/undecidable.js,hooks/lib/plan-artifact-lang.js,bin/plan-artifact-path,bin/check-glossary-drift}
+# re stage-to-step --stage(?![\w-])@{bin/check-glossary-drift,bin/plan-artifact-path,bin/plan-link,bin/check-glossary-ledger-grant,hooks/lib/plan-link.js,hooks/workflow-state/glossary-check/**,hooks/workflow-mark/glossary-accept-handler.js,hooks/workflow-gate/glossary-record-checker.js,hooks/confirm-checkpoint.js,hooks/confirm-checkpoint/**}
+# re stage-to-step (plan-artifact-path|plan-link|check-glossary-drift)\b[^\n]*--stage(?![\w-])
+# re stage-to-step \bstage=@{hooks/workflow-mark/glossary-accept-handler.js,hooks/lib/sentinel-patterns.js,hooks/workflow-state/glossary-check/record.js,bin/check-glossary-drift}
+# re stage-to-step \|stage\)=@{hooks/workflow-mark/glossary-accept-handler.js,hooks/lib/sentinel-patterns.js,hooks/workflow-state/glossary-check/record.js,bin/check-glossary-drift}
+# re stage-to-step (===|!==|==|case)\s*["'](tests|code|docs)["']@{hooks/workflow-state/glossary-check/**,bin/check-glossary-drift,bin/check-glossary-ledger-grant,hooks/workflow-gate/glossary-record-checker.js,hooks/workflow-mark/glossary-accept-handler.js,bin/workflow/lib/jev-complexity-adapter.js,hooks/workflow-state/plan-skip-allowance.js,hooks/lib/plan-confirm-flag.js,hooks/confirm-checkpoint.js,hooks/lib/presentation-receipt.js}
+# re stage-to-step \b(tests|code|docs)\s*:\s*["'](review_|write_tests)@{hooks/workflow-state/glossary-check/**,bin/check-glossary-drift,bin/check-glossary-ledger-grant,hooks/workflow-gate/glossary-record-checker.js,hooks/workflow-mark/glossary-accept-handler.js,bin/workflow/lib/jev-complexity-adapter.js,hooks/workflow-state/plan-skip-allowance.js,hooks/lib/plan-confirm-flag.js,hooks/confirm-checkpoint.js,hooks/lib/presentation-receipt.js}
+# retired-tokens:end

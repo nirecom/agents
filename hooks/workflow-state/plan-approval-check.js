@@ -1,6 +1,6 @@
 "use strict";
-// hooks/workflow-state/plan-approval-check.js — the one approval lookup of the plan-stage gates
-// (#2277, #2729), used by next-step --gate, confirm-checkpoint and the Stop hook's presentedStages;
+// hooks/workflow-state/plan-approval-check.js — the one approval lookup of the plan step gates
+// (#2277, #2729), used by next-step --gate, confirm-checkpoint and the Stop hook's presentedArtifacts;
 // none reads the CONFIRM_* value or the approval record on its own. The gate classification is
 // planGateState's (hooks/lib/confirm-gate/plan-gate.js), the verdict evaluateCompletionApproval's.
 // checkPlanApproval(sid, step, opts?) -> { verdict, code, gate, waived }; verdict: approved | unapproved |
@@ -18,15 +18,14 @@ const GATES = ["ON", "OFF", "ERROR"];
 
 function gateOf(step) {
   try {
-    const { rowFor } = require("./plan-stage-table");
-    const row = rowFor(step);
-    return row ? require("../lib/confirm-gate/plan-gate").planGateState(row.suffix) : null;
+    const { rowFor } = require("./plan-step-table");
+    return rowFor(step) ? require("../lib/confirm-gate/plan-gate").planGateState(step) : null;
   } catch (_) {
     return "ERROR";
   }
 }
 
-// opts.gate: the stage's gate the caller already probed (the Stop hook, within its budget).
+// opts.gate: the step's gate the caller already probed (the Stop hook, within its budget).
 function checkPlanApproval(sessionId, step, opts) {
   let gate = null;
   try {

@@ -7,35 +7,36 @@ combined glossary is owned by [combined-glossary.md](../../../skills/_shared/com
 | Check | Question | Owner |
 |---|---|---|
 | glossary provenance check | did every glossary add / delete / redefine come from the approved intent glossary? | `bin/check-glossary-provenance`, `bin/lib/glossary-provenance.js` |
-| deterministic drift | does a stage's artifact spell a glossary term with a variant the [matching rules](#matching-rules) count as drift? | `bin/check-glossary-drift`, `bin/lib/glossary-drift.js` |
+| deterministic drift | does a step's artifact spell a glossary term with a variant the [matching rules](#matching-rules) count as drift? | `bin/check-glossary-drift`, `bin/lib/glossary-drift.js` |
 | tagged concern | did a reviewer raise a glossary-drift concern that is still open? | `bin/lib/concern-ledger/drift-tag.sh` |
 
 The user lifts any of the three, term by term, with one sentinel: `WORKFLOW_GLOSSARY_ACCEPTED`.
 
-## Stages
+## Steps
 
-Each glossary stage maps to the workflow step whose completion it gates (`STAGE_STEP`,
-`hooks/workflow-state/glossary-check/scope.js`):
+The check runs on the workflow steps whose completion it gates (`GLOSSARY_STEPS`,
+`hooks/workflow-state/glossary-check/scope.js`); every key, record and CLI value is the step name:
 
-| Stage | Step | Rule | Ledger format |
-|---|---|---|---|
-| `intent` | `clarify_intent` | R-A | — |
-| `outline` | `outline` | R-A | `outline-plan` |
-| `detail` | `detail` | R-A | `detail-plan` |
-| `tests` | `review_tests` | R-S | `test-review` |
-| `code` | `review_security` | R-S | `review-security-shared` |
-| `docs` | `review_docs` | R-S | — |
+| Step | Rule | Ledger format |
+|---|---|---|
+| `clarify_intent` | R-A | — |
+| `outline` | R-A | `outline-plan` |
+| `detail` | R-A | `detail-plan` |
+| `review_tests` | R-S | `test-review` |
+| `review_security` | R-S | `review-security-shared` |
+| `review_docs` | R-S | — |
 
-**R-A (plan artifact).** The stage reads `<PLANS_DIR>/<sid>-<stage>.md` once and cuts it with
+**R-A (plan artifact).** The step reads the file of its plan artifact name under `<PLANS_DIR>`
+(`rowFor(step).suffix` of `hooks/workflow-state/plan-step-table.js`) once and cuts it with
 `artifactRangeOfBuffer(buf, step)`, which drops the same `digestExcludes` ranges as the plan approval
 hash. The scan and the fingerprint read that one range. Intent's `## Issues` section is outside it:
 Path C backfill writes that section mechanically from GitHub issue titles, so including it would make
 every backfill stale the record, and the `CONFIRM_INTENT` approval sha already excludes it.
 
-**R-S (committed files).** The stage reads the staged paths (`git diff --cached --name-only -z
---no-renames`) that `classifyStageFile` assigns to it: `tests` takes a `tests/` or `test/` prefix,
-`docs` takes the `DOCS_ONLY_ALLOWLIST` of `hooks/workflow-gate/staged-evidence.js`, and `code` takes
-everything else. Content comes from the index blobs (`stagedOids`, read through `git cat-file --batch`),
+**R-S (committed files).** The step reads the staged paths (`git diff --cached --name-only -z
+--no-renames`) that `reviewStepOfFile` assigns to it: `review_tests` takes a `tests/` or `test/` prefix,
+`review_docs` takes the `DOCS_ONLY_ALLOWLIST` of `hooks/workflow-gate/staged-evidence.js`, and
+`review_security` takes everything else. Content comes from the index blobs (`stagedOids`, read through `git cat-file --batch`),
 never from the working tree. A staged deletion enters as the pair (path, `"deleted"`). The digest is the
 sha256 of `JSON.stringify(pairs)`; `empty` is true when no path matched.
 
@@ -45,7 +46,7 @@ equals the state of the same path in `MERGE_HEAD`. Such a file came in with the 
 branch, so scanning it would report drift the branch never introduced. `hooks/lib/merge-incoming.js`
 decides this by reading the `git rev-parse --git-path MERGE_HEAD` file once (a ref named `MERGE_HEAD`
 is never consulted) and asking git once for the index-versus-`MERGE_HEAD` diff. An octopus merge, a
-malformed `MERGE_HEAD`, or a git failure is undecidable, and the stage keeps every path (fail-safe).
+malformed `MERGE_HEAD`, or a git failure is undecidable, and the step keeps every path (fail-safe).
 Outside a merge the pairs and the digest are unchanged; inside one the digest covers the remaining
 pairs. `artifact.mergeIncoming` reports the outcome for diagnostics and is not part of the digest. The
 module inherits `GIT_DIR` / `GIT_INDEX_FILE` from the environment. It reads the merge state through
@@ -57,21 +58,21 @@ the cwd. None resolving is the error `worktree-unresolved`.
 
 ## Fingerprint (invariant I-FP)
 
-The fingerprint covers exactly the inputs the check reads, and `loadStageInputs` in `scope.js` is the
+The fingerprint covers exactly the inputs the check reads, and `loadStepInputs` in `scope.js` is the
 only reader of them. It is the sha256 of `JSON.stringify` of the four input digests:
 
 | Input | Digest |
 |---|---|
 | `artifact` | R-A range or R-S pairs, as above |
 | `glossary` | sha256 of `JSON.stringify([[label, sha]…], legacy)` over `listMainGlossaryFiles` of the session's own worktree (`git rev-parse --show-toplevel` of the resolved worktree, #2796), so a glossary change on main stales a branch's records only once the branch takes it in; a read failure is `glossary-unavailable` |
-| `intent_rows` | sha256 of the sorted JSON of `[term (case-exact, as the drift scan reads it), category, operation, normalizeDefinition(definition)]`; the intent stage builds rows from its own range, every other stage reads intent.md once, and a missing file means no rows |
+| `intent_rows` | sha256 of the sorted JSON of `[term (case-exact, as the drift scan reads it), category, operation, normalizeDefinition(definition)]`; the `clarify_intent` step builds rows from its own range, every other step reads intent.md once, and a missing file means no rows |
 | `rules` | sha256 over the path-sorted per-file sha256 of `RULE_MODULES`: `bin/lib/glossary-drift.js`, `hooks/lib/glossary-term.js`, `hooks/lib/comment-block-scan.js`, `hooks/lib/markdown-fence.js`, `bin/lib/glossary-provenance.js`, and the modules of `bin/lib/glossary-drift/` (`extract.js`, `terms.js`, `context.js`, `match.js`, `scan.js`), and `hooks/workflow-state/glossary-check/scope/changed-lines.js` |
 
 A changed matcher therefore stales every record, exactly as a changed artifact or glossary does.
 
 ## Deterministic drift check
 
-`bin/check-glossary-drift --session <sid> --stage <stage> [--record]` scans the stage inputs for
+`bin/check-glossary-drift --session <sid> --step <step> [--record]` scans the step inputs for
 spelling variants only — intent Accepted Tradeoff "the deterministic drift check covers spelling variants only".
 Which variants count is set by the [matching rules](#matching-rules).
 A term an intent row deletes is no longer canonical, so its variants are not checked, even while the worktree's glossary file still lists it; a delete paired with an add of the same term (a category move) keeps it. A delete row matches its own spelling only (case-insensitive, not singularized), so deleting `workflows` keeps a distinct `workflow`.
@@ -80,9 +81,11 @@ Meaning drift stays with the reviewers. It reads the current intent.md, not the 
 Exit codes: `0` no open finding, `1` open findings, `2` usage error, unreadable inputs, or fingerprint
 unavailable. Each open finding prints
 
-`  DRIFT: <stage> "<variant>" -> "<term>" at <file>:<line>`
+`  DRIFT: <step> "<variant>" -> "<term>" at <file>:<line>`
 
-followed by a narrow accept example (`term=<term> stage=<stage>`).
+followed by a narrow accept example (`term=<term> step=<step>`).
+The former flag name and its plan artifact name values stay accepted as a deprecated alias that warns
+on stderr, until its temporary migration under `hooks/lib/temporary-migrations/` is removed.
 
 ### Matching rules
 
@@ -95,14 +98,14 @@ space, and an identifier split into words stay drift. The full rules, with examp
 
 ### Scan scope
 
-The `tests`, `code` and `docs` stages report a hit only on a line the staged change adds or modifies
+The `review_tests`, `review_security` and `review_docs` steps report a hit only on a line the staged change adds or modifies
 against HEAD (#2770): `scope/changed-lines.js` reads one zero-context `git diff --cached` and gives each
 staged file its `changedLines`, the line numbers in the staged file. A new file counts every line; a
 deletion counts none. The file is still extracted whole, so context such as a comment block is read as
 before, and the reported line is the staged file's line. During a merge the filter applies to the paths
 left after the merge-incoming exclusion; when that exclusion is undecidable, every path stays and the
-filter still applies. The artifact digest stays over the staged pairs. The `intent`, `outline` and
-`detail` stages scan their whole range: a plan file has no HEAD to diff against.
+filter still applies. The artifact digest stays over the staged pairs. The `clarify_intent`, `outline`
+and `detail` steps scan their whole range: a plan file has no HEAD to diff against.
 
 ### Grant carry-over
 
@@ -120,11 +123,11 @@ unrelated edit stales the record once and the agent's re-record clears it withou
 
 ### `glossary_check` record
 
-`--record` writes a step annotation on the stage's step (provenance `observed`, origin
+`--record` writes a step annotation on its step (provenance `observed`, origin
 `check-glossary-drift`):
 
 ```json
-{ "v": 1, "stage": "docs", "fingerprint": "<sha256>",
+{ "v": 1, "step": "review_docs", "fingerprint": "<sha256>",
   "inputs": { "artifact": "…", "glossary": "…", "intent_rows": "…", "rules": "…" },
   "findings": [ { "source": "deterministic", "class": "spelling", "term": "…", "norm": "…", "variant": "…", "where": "…" } ],
   "grants": [ { "norm": "…", "fingerprint": "<sha256>", "reason": "…" } ],
@@ -133,13 +136,14 @@ unrelated edit stales the record once and the agent's re-record clears it withou
 
 On re-record `grants` with the new fingerprint carry over, plus those the [grant carry-over](#grant-carry-over) rule moves; `ledger_grants` always carry over. A
 record holding only `ledger_grants` (written by the sentinel before any `--record`) has no fingerprint
-and counts as missing.
+and counts as missing. A record written before #2820 names its plan artifact or review kind instead of
+the step; the sentinel's grant copy rewrites it to the `step` form.
 
 ### Evaluation
 
 `evaluateGlossaryCheck` (`record.js`) judges in this order:
 
-1. Commit mode, an R-S stage, and `artifact.empty` — ok (this commit stages nothing for the stage, including when every staged path of the stage is a merge-incoming file).
+1. Commit mode, an R-S step, and `artifact.empty` — ok (this commit stages nothing for the step, including when every staged path of the step is a merge-incoming file).
 2. No record, or no `fingerprint` in it — `glossary-check-missing`.
 3. The current fingerprint cannot be computed — `glossary-fingerprint-unavailable`.
 4. The fingerprints differ — `glossary-check-stale`, with `detail.changed` naming the changed inputs.
@@ -154,11 +158,11 @@ An inherited batch (`origin: "session-inherit"`) and a `RESET_FROM` batch (one c
 are not judged. On the read side, `canResolveFromEvidence` (`effective-state.js`) also
 requires `evaluateGlossaryCheck(...).ok` before it resolves an approval-gated step from pending to
 complete. The boundary requires a record even when the R-S file set is empty.
-A plan stage already recorded complete whose record no longer verifies reads as `pending`:
+A plan step already recorded complete whose record no longer verifies reads as `pending`:
 `gatedCompleteRefusal` (`effective-state.js`) is the one predicate the reconciled view, `current-step.js`
 and the `--advance` "already complete" answer share, so a re-issued `--advance` is refused, not `already`.
 A post-delivery session is exempt (#2796): once `final_report` is recorded complete or `merge_to_main` is
-recorded settled (complete or skipped), `gatedCompleteRefusal` returns null, so the delivered plan stages
+recorded settled (complete or skipped), `gatedCompleteRefusal` returns null, so the delivered plan steps
 stay complete when main's glossary changes and the stop guard stops demanding a re-plan.
 `isPostDeliverySession` (`effective-state/post-delivery.js`) judges the raw record, not the table-skip
 projection, so a WF-META session whose `merge_to_main` is only table-skipped stays pre-delivery.
@@ -168,12 +172,12 @@ projection, so a WF-META session whose `merge_to_main` is only table-skipped sta
 `hooks/workflow-gate/commit-gate-steps.js` runs `checkGlossaryRecord`
 (`hooks/workflow-gate/glossary-record-checker.js`) for `review_tests`, `review_security` and
 `review_docs` at every step status, `pending` included, before any other checker, bypass or status
-shortcut. A step whose stage has none of its targets staged passes; otherwise a missing record blocks
+shortcut. A step with none of its targets staged passes; otherwise a missing record blocks
 with `glossary-check-missing`. The record is re-verified against that commit's staged files, so its lifetime is one commit: a commit
-staging nothing for a stage passes that stage, and any other commit needs a fresh `--record` (the
+staging nothing for a step passes that step, and any other commit needs a fresh `--record` (the
 record keeps the latest value only). A block reads
 
-`<step>: <code>(detail) — run: check-glossary-drift --stage <stage> --record (session <sid>), then fix each DRIFT finding or record an ACCEPTED grant.`
+`<step>: <code>(detail) — run: check-glossary-drift --step <step> --record (session <sid>), then fix each DRIFT finding or record an ACCEPTED grant.`
 
 ## Glossary provenance check
 
@@ -239,29 +243,31 @@ Intent Accepted Tradeoff "two named exceptions to S1 (ACCEPTED lifts the block)"
 
 One sentinel lifts all three checks — intent Accepted Tradeoff "there is only one kind of ACCEPTED sentinel":
 
-`echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> [op=<add|delete|redefine>] [cat=<user|internal>] [stage=<stage>] — <reason>>>"`
+`echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> [op=<add|delete|redefine>] [cat=<user|internal>] [step=<step>] — <reason>>>"`
 
 `GLOSSARY_ACCEPTED_RE_DQ` (`hooks/lib/sentinel-patterns.js`) parses it; a `LOOKSLIKE` match that fails
-the strict form gets a malformed message. `hooks/workflow-mark/glossary-accept-handler.js` rejects a
-value outside the domain, a repeated discriminator, `op=` / `cat=` mixed with `stage=`, and a reason of
+the strict form gets a malformed message. The former discriminator key with a plan artifact name or
+review kind as its value stays accepted and is mapped to the step by a temporary migration.
+`hooks/workflow-mark/glossary-accept-handler.js` rejects a
+value outside the domain, a repeated discriminator, `op=` / `cat=` mixed with `step=`, and a reason of
 fewer than 3 non-space characters; a missing session id is fatal. The `ask` permission rule in
 `settings.json` makes every grant a user decision.
 
 Grant targets, all for the normalized term:
 
-- **(a) Finding.** An open deterministic finding of the current stage and of every other stage that
-  holds one, or only of `stage=` when given; skipped when `op=` or `cat=` is given. The handler
+- **(a) Finding.** An open deterministic finding of the current step and of every other step that
+  holds one, or only of `step=` when given; skipped when `op=` or `cat=` is given. The handler
   recomputes each fingerprint before the lock and grants only when it equals the record's; otherwise it
-  names the stage and answers that the record is older than its inputs and to re-run `--record`.
+  names the step and answers that the record is older than its inputs and to re-run `--record`.
 - **(b) Glossary provenance check block.** Entries of `glossary_provenance.blocked` with the same norm, narrowed by
-  `op=` / `cat=`; skipped when `stage=` is given. The grant is bound to the record's fingerprint;
+  `op=` / `cat=`; skipped when `step=` is given. The grant is bound to the record's fingerprint;
   freshness is checked on the next gate run.
-- **(c) Tagged concern.** On a stage with a ledger, the handler runs `bin/concern-ledger list-drift`
+- **(c) Tagged concern.** On a step with a ledger, the handler runs `bin/concern-ledger list-drift`
   and adds `{norm, discrim, reason}` to `ledger_grants` for each open or reopened tagged concern of the
   term. A failed listing adds nothing (fail-closed).
 
 When nothing matches, the handler answers "nothing pending" and the state is unchanged. A grant never
-completes a step. The current stage is read from the state view `composeStateView` builds, the same
+completes a step. The current step is read from the state view `composeStateView` builds, the same
 view `readState` returns, so a resumed session resolves it correctly.
 
 ## Tagged concerns
@@ -282,9 +288,9 @@ not by HIGH"; a reviewer forgetting the tag is accepted — "a forgotten tag is 
   success, an unreadable ledger rc 1.
 
 `bin/check-glossary-ledger-grant --session <sid> --format <format> --norm <norm> --discrim <D>` exits 0
-granted, 1 not granted (or a format that belongs to no stage), 2 usage or state error.
+granted, 1 not granted (or a format that belongs to no step), 2 usage or state error.
 
-Per stage — intent Accepted Tradeoff "in outline, detail, intent and docs nothing blocks mechanically; the user decides":
+Per step — intent Accepted Tradeoff "in outline, detail, intent and docs nothing blocks mechanically; the user decides":
 
 - **outline / detail.** The planner directive forbids `reject:` for a tagged concern and offers
   `accepted(glossary-drift): <reason>` after the user's ACCEPTED. The mid-round AskUserQuestion is the

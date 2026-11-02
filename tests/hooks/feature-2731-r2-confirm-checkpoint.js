@@ -179,7 +179,9 @@ for (const stage of STAGES) {
     assert.ok(r.deny, `fixture: no receipt -> deny: ${JSON.stringify(r.json)}`);
     const reason = r.json.reason || "";
     assert.ok(reason.startsWith(`[confirm-plan] CONFIRM_${stage.toUpperCase()} denied (no-receipt): present the plan again`), `fallback head:\n${reason}`);
-    assert.ok(reason.includes(`(plan-link --stage ${stage})`), `plan-link command:\n${reason}`);
+    // #2820: the fallback names the workflow step (clarify_intent for the intent artifact).
+    const step = stage === "intent" ? "clarify_intent" : stage;
+    assert.ok(reason.includes(`(plan-link --step ${step})`), `plan-link command:\n${reason}`);
     assert.ok(reason.includes("on a \"[confirm-plan] continue:\" prompt emit only the echo"), `continue prompt:\n${reason}`);
     assert.ok(!reason.includes(`present the ${stage} plan again (no-receipt)`), `the shared wording was not used:\n${reason}`);
     assert.strictEqual(r.json.hookSpecificOutput.permissionDecisionReason, reason, "permissionDecisionReason equals the block reason");

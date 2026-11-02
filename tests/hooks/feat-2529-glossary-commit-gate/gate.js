@@ -28,13 +28,13 @@ function scan(sid, repo, opts) {
 
 const reasonOf = (r, step) => String((r.incompleteReasons || {})[step] || "");
 
-function blocks(label, r, step, code, stage) {
+function blocks(label, r, step, code, namesRecovery) {
   const reason = reasonOf(r, step);
   F.check(`${label}: ${step} blocked with ${code}`, (r.incomplete || []).includes(step) && reason.includes(code),
     r.threw || JSON.stringify(r.incompleteReasons));
-  if (stage) {
+  if (namesRecovery) {
     F.check(`${label}: incompleteReasons.${step} names the recovery`,
-      reason.includes(`check-glossary-drift --stage ${stage} --record`), reason);
+      reason.includes(`check-glossary-drift --step ${step} --record`), reason);
   }
   return reason;
 }
@@ -59,10 +59,10 @@ function recordReviewScope(sid, repo) {
   F.appendRaw(sid, [F.annotationEvent("review_tests", "review_scope_manifest", { v: 1, files: m.ok ? m.files : {} })]);
 }
 
-// The stage's step settled `complete` (raw) with a fresh --record of the staged target.
-function completedStage(tag, stage, opts) {
-  const s = F.setupStage(tag, stage, F.TERM, Object.assign({ ownStatus: "complete" }, opts || {}));
-  if (stage === "tests") recordReviewScope(s.sid, s.repo);
+// The step settled `complete` (raw) with a fresh --record of the staged target.
+function completedStep(tag, step, opts) {
+  const s = F.setupStep(tag, step, F.TERM, Object.assign({ ownStatus: "complete" }, opts || {}));
+  if (step === "review_tests") recordReviewScope(s.sid, s.repo);
   return s;
 }
 
@@ -80,4 +80,4 @@ function skipStep(sid, step, repo) {
   return F.statusOf(sid, step) === "skipped";
 }
 
-module.exports = { scan, blocks, passes, recordOk, recordReviewScope, completedStage, skipStep, reasonOf };
+module.exports = { scan, blocks, passes, recordOk, recordReviewScope, completedStep, skipStep, reasonOf };

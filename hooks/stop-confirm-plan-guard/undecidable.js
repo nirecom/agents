@@ -1,11 +1,12 @@
 "use strict";
 // hooks/stop-confirm-plan-guard/undecidable.js — the Stop guard's view of a turn whose tail it
-// cannot confirm as final (#2771): where a presentation may be anchored, which stages the turn may
-// have presented, and the notice for the stages whose receipt went unrecorded.
+// cannot confirm as final (#2771): where a presentation may be anchored, which plan artifacts the
+// turn may have presented, and the notice for the plans whose receipt went unrecorded.
 
 const fs = require("fs");
 const path = require("path");
-const { STAGES, approvalArtifactPath } = require("../lib/presentation-receipt");
+const { approvalArtifactPath } = require("../lib/presentation-receipt");
+const { PLAN_ARTIFACT_NAMES } = require("../workflow-state/plan-step-table");
 
 const THINKING = new Set(["thinking", "redacted_thinking"]);
 
@@ -32,29 +33,30 @@ function anchoredTailOf(tail) {
   return Object.assign({}, t, { lastAssistantEntry: anchor });
 }
 
-// markerStages(markers) -> the plan stages this turn wrote, each once.
-function markerStages(markers) {
+// markerArtifacts(markers) -> the plan artifact names this turn wrote, each once.
+function markerArtifacts(markers) {
   const out = [];
   for (const m of Array.isArray(markers) ? markers : []) {
-    if (m && STAGES.includes(m.suffix) && !out.includes(m.suffix)) out.push(m.suffix);
+    if (m && PLAN_ARTIFACT_NAMES.includes(m.suffix) && !out.includes(m.suffix)) out.push(m.suffix);
   }
   return out;
 }
 
-// mayHavePresented({sid, markers, input}) -> the stages the turn may have presented: those it wrote,
-// and those whose existing <first_session_id>-<stage>.md the last assistant message names. No git or gate probe.
+// mayHavePresented({sid, markers, input}) -> the plan artifact names the turn may have presented:
+// those it wrote, and those whose existing <first_session_id>-<artifact>.md the last assistant
+// message names. No git or gate probe.
 function mayHavePresented({ sid, markers, input } = {}) {
-  const out = markerStages(markers);
+  const out = markerArtifacts(markers);
   const text = input && typeof input.last_assistant_message === "string" ? input.last_assistant_message : "";
-  for (const stage of STAGES) {
-    if (out.includes(stage) || !text) continue;
-    const absPath = approvalArtifactPath(sid, stage);
-    if (absPath && text.includes(path.basename(absPath)) && fs.existsSync(absPath)) out.push(stage);
+  for (const artifact of PLAN_ARTIFACT_NAMES) {
+    if (out.includes(artifact) || !text) continue;
+    const absPath = approvalArtifactPath(sid, artifact);
+    if (absPath && text.includes(path.basename(absPath)) && fs.existsSync(absPath)) out.push(artifact);
   }
   return out;
 }
 
-// noticeFor(stages) -> the user-facing notice, or "" when no stage is left unrecorded. No URL: the
+// noticeFor(artifacts) -> the user-facing notice, or "" when no plan is left unrecorded. No URL: the
 // plan repository is private.
 function noticeFor(stages) {
   if (!Array.isArray(stages) || stages.length === 0) return "";
@@ -62,4 +64,4 @@ function noticeFor(stages) {
     "so it may need to be presented again before approval.";
 }
 
-module.exports = { anchoredTailOf, markerStages, mayHavePresented, noticeFor };
+module.exports = { anchoredTailOf, markerArtifacts, mayHavePresented, noticeFor };

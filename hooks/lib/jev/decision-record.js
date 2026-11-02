@@ -146,13 +146,13 @@ function observedInput(v) {
 
 // A pending / claim hand-off rebuilt from validated fields only; stage is re-derived from
 // the validated step exactly as the pre hook derives it. Null when hand is not an object.
-function observedPending(hand, stageForStep) {
+function observedPending(hand, jevTicketStageOfStep) {
   if (!isObj(hand)) return null;
   const step = typeof hand.step === "string" && STEP_RE.test(hand.step) ? hand.step : null;
   const ts = hand.llm_dispatch_ts;
   return {
     step,
-    stage: stageForStep(step),
+    stage: jevTicketStageOfStep(step),
     input: observedInput(hand.input),
     jev: observedJev(hand.jev),
     executor_model: modelOrNull(hand.executor_model) || undefined,

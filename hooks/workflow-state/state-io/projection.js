@@ -116,14 +116,14 @@ function assertStreamIntegrity(events) {
 }
 
 // A `levels` map is carried into the read model only when its keys are exactly
-// ROUTING_STAGES with high|low values — same check as
+// ROUTING_STEPS with high|low values — same check as
 // events.js validateEvent. Anything else folds to null, so the read side
 // re-derives rather than partially trusting a malformed map.
-function isWellFormedStageLevels(levels) {
+function isWellFormedStepLevels(levels) {
   if (!levels || typeof levels !== "object" || Array.isArray(levels)) return false;
-  const { ROUTING_STAGES } = require("../complexity-routing");
-  if (Object.keys(levels).some((k) => !ROUTING_STAGES.includes(k))) return false;
-  return ROUTING_STAGES.every((s) => levels[s] === "high" || levels[s] === "low");
+  const { ROUTING_STEPS } = require("../complexity-routing");
+  if (Object.keys(levels).some((k) => !ROUTING_STEPS.includes(k))) return false;
+  return ROUTING_STEPS.every((s) => levels[s] === "high" || levels[s] === "low");
 }
 
 // Fold the event stream into the read model. Pure: never touches the filesystem
@@ -216,7 +216,7 @@ function projectState(state) {
       case "complexity_evaluation": {
         complexity_evaluation = {
           level: e.level,
-          levels: isWellFormedStageLevels(e.levels) ? Object.assign({}, e.levels) : null,
+          levels: isWellFormedStepLevels(e.levels) ? Object.assign({}, e.levels) : null,
           signals: Array.isArray(e.signals) ? e.signals.slice() : [],
           // `at` is the canonical event timestamp key. Events appended before the
           // key was unified carry `recorded_at` instead; no migration script ships

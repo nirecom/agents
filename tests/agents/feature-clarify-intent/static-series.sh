@@ -30,8 +30,8 @@ assert_contains "$LOCAL_SKILL_MD" "interactive|AskUserQuestion" \
 
 # N3: CI-4 names the intent output path: what bin/plan-artifact-path --stage intent prints,
 # keyed by first_session_id (#2748 replaced the hardcoded ~/.workflow-plans/ path).
-assert_contains "$LOCAL_SKILL_MD" '^CI-4\. Write the intent .*bin/plan-artifact-path" --stage intent` prints \(`<PLANS_DIR>/<first_session_id>-intent\.md`\)' \
-    "N3: CI-4 output path comes from bin/plan-artifact-path --stage intent (<first_session_id>-intent.md)"
+assert_contains "$LOCAL_SKILL_MD" '^CI-4\. Write the intent .*bin/plan-artifact-path" --step clarify_intent` prints \(`<PLANS_DIR>/<first_session_id>-intent\.md`\)' \
+    "N3: CI-4 output path comes from bin/plan-artifact-path --step clarify_intent (<first_session_id>-intent.md)"
 
 # N4: <session-id>-intent.md output filename mentioned
 assert_contains "$LOCAL_SKILL_MD" "session.id.*intent\.md|intent\.md" \

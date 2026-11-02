@@ -37,7 +37,7 @@ function main() {
   const input = r.input;
   if (!input || typeof input !== "object" || input.tool_name !== "Skill") return;
   const skill = input.tool_input && typeof input.tool_input === "object" ? input.tool_input.skill : null;
-  const { priorStepForSkill, rowFor } = require("./workflow-state/plan-stage-table");
+  const { priorStepForSkill, rowFor } = require("./workflow-state/plan-step-table");
   const step = priorStepForSkill(skill);
   if (!step || typeof input.session_id !== "string" || !input.session_id) return;
   const { checkPlanApproval } = require("./workflow-state/plan-approval-check");
