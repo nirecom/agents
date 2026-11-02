@@ -20,28 +20,24 @@ function getSuffix(filePath) {
   let plansDir;
   try { plansDir = getWorkflowPlansDir(); } catch { return null; }
   if (!isDirectChild(filePath, plansDir)) return null;
-  const m = /^.+-(intent|outline|detail)\.md$/.exec(getBasename(filePath));
+  const { PLAN_ARTIFACT_NAMES } = require("../workflow-state/plan-step-table");
+  const m = new RegExp(`^.+-(${PLAN_ARTIFACT_NAMES.join("|")})\\.md$`).exec(getBasename(filePath));
   return m ? m[1] : null;
 }
 
+// getConfirmFlagName(artifact) -> the CONFIRM_* flag of a plan artifact name, else null. A
+// non-plan flag such as CONFIRM_TESTS is named by plan-skip-allowance's CONFIRM_FLAG_OF_STEP.
 function getConfirmFlagName(suffix) {
-  if (suffix === "intent") return "CONFIRM_INTENT";
-  if (suffix === "outline") return "CONFIRM_OUTLINE";
-  if (suffix === "detail") return "CONFIRM_DETAIL";
-  // "tests" has no plan artifact, so getSuffix() never returns it and every
-  // existing caller is unaffected. It is admitted here purely so the skip
-  // allowance module (#1644) can read CONFIRM_TESTS through the same
-  // config-file-only door as the plan stages.
-  if (suffix === "tests") return "CONFIRM_TESTS";
-  return null;
+  const T = require("../workflow-state/plan-step-table");
+  const row = T.rowFor(T.stepForSuffix(suffix));
+  return row ? row.confirmFlag : null;
 }
 
-// Reads CONFIRM_<STAGE> from the parsed .env FILE only, never process.env, so an
+// Reads the named CONFIRM_* flag from the parsed .env FILE only, never process.env, so an
 // inline `CONFIRM_OUTLINE=off node bin/...` prefix on a model-issued command cannot waive the gate.
 // The value is classified by config-flag's kindOfValue, the one owner of what "off" means.
-function isConfirmOffForStageFromFile(stage) {
-  const flagName = getConfirmFlagName(stage);
-  if (!flagName) return false;
+function isConfirmFlagOffFromFile(flagName) {
+  if (typeof flagName !== "string" || !flagName) return false;
   let fileEnv;
   try {
     const { readDefaultEnvFile } = require("./load-env");
@@ -57,5 +53,5 @@ function isConfirmOffForStageFromFile(stage) {
 module.exports = {
   getSuffix,
   getConfirmFlagName,
-  isConfirmOffForStageFromFile,
+  isConfirmFlagOffFromFile,
 };

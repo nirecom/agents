@@ -6,7 +6,7 @@
 // (no dialog, so the echo is no Allow). A refusal is shown; the plan approval stands either way.
 
 const { sanitizeLine } = require("../lib/output-sanitize");
-const { rowFor } = require("../workflow-state/plan-stage-table");
+const { rowFor } = require("../workflow-state/plan-step-table");
 
 const REPORTER = "workflow-mark:confirm-cap-acceptance";
 const SUMMARY_MAX = 200;

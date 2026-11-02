@@ -52,8 +52,9 @@ function logLines(sid) {
   try { raw = fs.readFileSync(logPath(sid), "utf8"); } catch (_) { return []; }
   return raw.split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (_) { return { unparsed: l }; } });
 }
-const lastWriteAt = (sid, stage) => {
-  const w = logLines(sid).filter((l) => l.event === "write" && l.stage === stage);
+// Log lines carry the workflow step (#2820); outline is both the step and the artifact name.
+const lastWriteAt = (sid, step) => {
+  const w = logLines(sid).filter((l) => l.event === "write" && l.step === step);
   return w.length ? w[w.length - 1].at : null;
 };
 const lastFinding = (sid) => { const f = R.findings(sid); return f.length ? f[f.length - 1] : null; };
@@ -178,7 +179,7 @@ caseBegin("d4-represented-then-removed", "hooks/confirm-checkpoint.js");
   const at1 = lastWriteAt(s.sid, "outline");
   const st = present(s, "outline", "Here is the outline again.\n\n");
   check("D4 setup: the re-presentation writes a fresh receipt", st.continued && R.receiptExists(s.sid, "outline"), show({ rc: st.rc, out: st.out }));
-  const lines = logLines(s.sid).filter((l) => l.stage === "outline").map((l) => l.event);
+  const lines = logLines(s.sid).filter((l) => l.step === "outline").map((l) => l.event);
   check("D4 setup: the log reads write, consume, write", show(lines) === show(["write", "consume", "write"]), lines);
   const at2 = lastWriteAt(s.sid, "outline");
   check("D4 setup: the two write records carry distinct times", typeof at1 === "string" && typeof at2 === "string" && at1 !== at2, { at1, at2 });
@@ -258,21 +259,21 @@ caseBegin("receipt-log-lines", "hooks/lib/presentation-receipt.js");
   const l1 = logLines(sid);
   const wl = l1[0] || {};
   check("log: writeReceipt returns true", w === true, w);
-  check("log: a successful write appends one {event:write, stage, path, at} line",
-    l1.length === 1 && wl.event === "write" && wl.stage === "outline" && PR.samePath(wl.path, PR.receiptPath(sid, "outline")) && !Number.isNaN(Date.parse(wl.at)), l1);
+  check("log: a successful write appends one {event:write, step, path, at} line",
+    l1.length === 1 && wl.event === "write" && wl.step === "outline" && !("stage" in wl) && PR.samePath(wl.path, PR.receiptPath(sid, "outline")) && !Number.isNaN(Date.parse(wl.at)), l1);
   const c = PR.consumeReceipt(sid, "outline");
   const l2 = logLines(sid);
   const cl = l2[1] || {};
   check("log: consumeReceipt returns true", c === true, c);
-  check("log: a successful consume appends one {event:consume, stage, path, at} line",
-    l2.length === 2 && cl.event === "consume" && cl.stage === "outline" && PR.samePath(cl.path, PR.receiptPath(sid, "outline")) && !Number.isNaN(Date.parse(cl.at)), l2);
+  check("log: a successful consume appends one {event:consume, step, path, at} line",
+    l2.length === 2 && cl.event === "consume" && cl.step === "outline" && !("stage" in cl) && PR.samePath(cl.path, PR.receiptPath(sid, "outline")) && !Number.isNaN(Date.parse(cl.at)), l2);
   const c2 = PR.consumeReceipt(sid, "outline");
   check("log: a consume of an absent receipt returns false and appends nothing", c2 === false && logLines(sid).length === 2, { c2, lines: logLines(sid) });
   PR.writeReceipt(sid, "detail", FIELDS);
   PR.discardReceipt(sid, "detail");
   const l3 = logLines(sid);
   check("log: discardReceipt appends nothing (only the detail write is added)",
-    l3.length === 3 && l3[2].event === "write" && l3[2].stage === "detail" && !R.receiptExists(sid, "detail"), l3);
+    l3.length === 3 && l3[2].event === "write" && l3[2].step === "detail" && !R.receiptExists(sid, "detail"), l3);
   const bad = PR.writeReceipt(sid, "nonsense", FIELDS);
   check("log: an invalid writeReceipt returns false and appends nothing", bad === false && logLines(sid).length === 3, { bad, lines: logLines(sid) });
 }

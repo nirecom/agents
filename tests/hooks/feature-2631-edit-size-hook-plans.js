@@ -29,11 +29,11 @@ after(() => {
   process.chdir(savedCwd);
   restore();
 });
-const PLAN_STAGES = ["intent", "outline", "detail"].map((s) => [s, F.EXPECTED[s][0], F.EXPECTED[s][1]]);
+const PLAN_ARTIFACTS = ["intent", "outline", "detail"].map((s) => [s, F.EXPECTED[s][0], F.EXPECTED[s][1]]);
 
 caseBegin("E7-plan-artifacts", "hooks/block-post-edit-size/file-size.js");
 test("E7", () => noNewFailures(F.failureCount, () => F.run("E7", () => {
-  for (const [stage, w, h] of PLAN_STAGES) {
+  for (const [stage, w, h] of PLAN_ARTIFACTS) {
     const p = H.planPath(C.sid, stage);
     const base = path.basename(p);
     const w1 = (n) => H.hook("Write", { file_path: p, content: F.proseLines(n) });
@@ -52,7 +52,7 @@ caseBegin("E7-plan-artifacts-edit", "hooks/block-post-edit-size/file-size.js");
 test("E7-edit", () => noNewFailures(F.failureCount, () => F.run("E7-edit", () => {
   const add = { old_string: "Line 1 of the fixture text.\n", new_string: "Line 1 of the fixture text.\nAdded line of the fixture text.\n" };
   const cut2 = { old_string: "Line 2 of the fixture text.\nLine 3 of the fixture text.\n", new_string: "" };
-  for (const [stage, w, h] of PLAN_STAGES) {
+  for (const [stage, w, h] of PLAN_ARTIFACTS) {
     const p = H.planPath(C.sid, stage);
     const edit = (e) => H.hook("Edit", Object.assign({ file_path: p }, e));
     H.put(p, F.proseLines(w));

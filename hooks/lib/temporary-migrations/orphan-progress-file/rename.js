@@ -3,7 +3,7 @@
 // Steps 3-5 of one session chain: plan renames, approval records, sidecar pins.
 
 const fs = require("fs");
-const { PLAN_STAGE_TABLE } = require("../../../workflow-state/plan-stage-table");
+const { PLAN_STEP_TABLE } = require("../../../workflow-state/plan-step-table");
 const { mergePressure, readPressure } = require("../../progress-pressure-sidecar");
 
 const ORIGIN = "migrate-orphan-progress-file";
@@ -19,7 +19,7 @@ function renamePlans(renames) {
 function staleApprovals(state, chainSids, firstSid) {
   const recs = (state && state.plan_approvals) || {};
   const out = [];
-  for (const step of Object.keys(PLAN_STAGE_TABLE)) {
+  for (const step of Object.keys(PLAN_STEP_TABLE)) {
     const rec = recs[step];
     if (!rec || rec.artifact_session_id === firstSid || !chainSids.has(rec.artifact_session_id)) continue;
     out.push({ step, rec });

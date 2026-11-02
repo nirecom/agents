@@ -48,7 +48,7 @@ fi
 
 # Phase 3 — Parse closes_issues via hooks/lib/parse-closes-issues.js
 # The intent of the session chain is named after first_session_id (#2748); no own-sid fallback.
-INTENT_PATH="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || INTENT_PATH=""
+INTENT_PATH="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --step clarify_intent --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || INTENT_PATH=""
 if [[ -z "$INTENT_PATH" ]]; then
     echo "clarify-intent/run-completion: cannot resolve the intent path" >&2
     exit 1

@@ -128,7 +128,7 @@ async function main() {
     const a = broker.resolveStep("complexity-judge", hsid, cwd);
     const b = broker.resolveStep("complexity-judge", hsid, cwd);
     out([String(adapter.notesSessionId(cwd)), String(resolveCurrentEffectiveStep(hsid)), String(a), String(b),
-      adapter.stageForStep(a)].join("|"));
+      adapter.jevTicketStageOfStep(a)].join("|"));
   } else if (cmd === "drop-key") {
     const o = JSON.parse(fs.readFileSync(args[0], "utf8"));
     delete o[args[1]];

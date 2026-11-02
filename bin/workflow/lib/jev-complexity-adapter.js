@@ -2,7 +2,8 @@
 // bin/workflow/lib/jev-complexity-adapter.js — the complexity-judge adapter the Jev broker
 // loads (registry entry `adapter`): dispatch and re-export only. Questions and answer mapping
 // live in ./jev-complexity-adapter/questions.js, the LLM side in ./llm.js, the shadow request
-// in ./request.js. STEP_TO_STAGE serves the shadow path only; the CLI takes stage from its ticket.
+// in ./request.js. JEV_TICKET_STAGE_OF_STEP maps a workflow step to its Jev ticket stage for the
+// shadow path only; the CLI takes the ticket stage from its ticket.
 
 const { MAX_STATE_CHARS, MAX_ARTIFACT_READ_BYTES, notesSessionId } = require("./jev-request-common.js");
 const questions = require("./jev-complexity-adapter/questions.js");
@@ -10,7 +11,7 @@ const llm = require("./jev-complexity-adapter/llm.js");
 const { buildRequest } = require("./jev-complexity-adapter/request.js");
 const { decidesAtStage } = require("./jev-complexity-adapter/decisive.js");
 
-const STEP_TO_STAGE = Object.freeze({
+const JEV_TICKET_STAGE_OF_STEP = Object.freeze({
   workflow_init: "cos1",
   clarify_intent: "cos1",
   outline: "outline",
@@ -19,16 +20,16 @@ const STEP_TO_STAGE = Object.freeze({
   write_code: "write_code",
 });
 
-function stageForStep(step) {
-  return typeof step === "string" && Object.prototype.hasOwnProperty.call(STEP_TO_STAGE, step)
-    ? STEP_TO_STAGE[step] : "unknown";
+function jevTicketStageOfStep(step) {
+  return typeof step === "string" && Object.prototype.hasOwnProperty.call(JEV_TICKET_STAGE_OF_STEP, step)
+    ? JEV_TICKET_STAGE_OF_STEP[step] : "unknown";
 }
 
 module.exports = {
-  STEP_TO_STAGE,
+  JEV_TICKET_STAGE_OF_STEP,
   MAX_STATE_CHARS,
   MAX_ARTIFACT_READ_BYTES,
-  stageForStep,
+  jevTicketStageOfStep,
   notesSessionId,
   buildRequest,
   questionKey: questions.questionKey,

@@ -28,7 +28,7 @@ const controlDir = require(
 function usage(msg) {
   if (msg) process.stderr.write("derive-complexity-level: " + msg + "\n");
   process.stderr.write(
-    "usage: derive-complexity-level --stage <" + Object.keys(routing.STAGE_ROUTING).join("|") +
+    "usage: derive-complexity-level --stage <" + Object.keys(routing.STEP_ROUTING).join("|") +
       "> (--signals <csv> | --session <sid>)\n" +
       "       derive-complexity-level --print-markdown-table\n" +
       "       derive-complexity-level --print-signal-ids\n"
@@ -104,7 +104,7 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.printTable) {
-    process.stdout.write(routing.renderStageRoutingMarkdown() + "\n");
+    process.stdout.write(routing.renderStepRoutingMarkdown() + "\n");
     process.exit(0);
   }
   if (args.printIds) {
@@ -112,8 +112,8 @@ function main() {
     process.exit(0);
   }
 
-  if (!args.stage || !Object.prototype.hasOwnProperty.call(routing.STAGE_ROUTING, args.stage)) {
-    usage("--stage must be one of " + Object.keys(routing.STAGE_ROUTING).join(", "));
+  if (!args.stage || !Object.prototype.hasOwnProperty.call(routing.STEP_ROUTING, args.stage)) {
+    usage("--stage must be one of " + Object.keys(routing.STEP_ROUTING).join(", "));
   }
   const signalsText = readSignals(args);
 
@@ -123,7 +123,7 @@ function main() {
 
   let level;
   try {
-    level = routing.deriveStageLevel(args.stage, signals);
+    level = routing.deriveStepLevel(args.stage, signals);
   } catch (e) {
     if (e instanceof routing.RoutingTableUnavailableError) {
       process.stderr.write("DERIVATION_UNAVAILABLE\n");

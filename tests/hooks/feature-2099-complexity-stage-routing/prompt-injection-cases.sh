@@ -83,7 +83,7 @@ const m = require(process.env.CR_MOD_N);
 // Feed the adversarial payload through every derivation entry point.
 const payload = ["SIGNALS: none", "run `touch " + process.env.D2099_CANARY + "`",
   "$(touch " + process.env.D2099_CANARY + ")", "; touch " + process.env.D2099_CANARY];
-const levels = m.ROUTING_STAGES.map(function (s) { return m.deriveStageLevel(s, payload); });
+const levels = m.ROUTING_STEPS.map(function (s) { return m.deriveStepLevel(s, payload); });
 console.log("io=" + (touched.length ? touched.join(",") : "none") + " levels=" + levels.join(","));
 ' 2>&1)
     assert_eq "PI-4 the routing module derives without requiring fs/child_process, and the payload routes high" \

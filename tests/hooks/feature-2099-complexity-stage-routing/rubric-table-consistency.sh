@@ -42,7 +42,7 @@ d2099_rubric_layer1() {
     local generated doc_block
     generated=$(run_with_timeout node "$BIN_DERIVE" --print-markdown-table 2>&1)
     doc_block=$(d2099_extract_block "$RUBRIC" "stage-routing")
-    assert_eq "RB-1 the stage-routing block in the rubric is byte-identical to renderStageRoutingMarkdown()" \
+    assert_eq "RB-1 the stage-routing block in the rubric is byte-identical to renderStepRoutingMarkdown()" \
         "$generated" "$doc_block"
 
     generated=$(run_with_timeout node "$BIN_DERIVE" --print-signal-ids 2>&1)
@@ -54,7 +54,7 @@ d2099_rubric_layer1() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const t = m.renderStageRoutingMarkdown();
+const t = m.renderStepRoutingMarkdown();
 const s = m.renderSignalIdsMarkdown();
 console.log([
   /legacy_equivalent_escalation/.test(t) ? "HAS_LEGACY_COL" : "NO_LEGACY_COL",

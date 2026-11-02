@@ -4,7 +4,7 @@
 // entrypoint wraps each run function in one.
 // patterns(): GLOSSARY_ACCEPTED_RE_DQ / _LOOKSLIKE_RE over a table, and their isSentinel /
 // isStrictSentinel registration. format(): what the regex lets through but the handler must
-// still refuse as malformed (value outside the domain, duplicate, provenance + stage, short
+// still refuse as malformed (value outside the domain, duplicate, provenance + step, short
 // reason), the look-alike-only path, and a missing session id.
 
 const cmdOf = (body) => `echo "<<WORKFLOW_GLOSSARY_ACCEPTED${body}>>"`;
@@ -13,11 +13,20 @@ const BT = String.fromCharCode(96);
 // [label, body after the sentinel name, DQ matches, LOOKSLIKE matches]
 const TABLE = [
   ["no discriminator", ": term=glossary drift — user accepted", true, true],
-  ["stage only", ": term=glossary drift stage=outline — user accepted", true, true],
+  ["step only", ": term=glossary drift step=outline — user accepted", true, true],
+  ["step with an underscore (review_tests)", ": term=glossary drift step=review_tests — user accepted", true, true],
+  ["step with an underscore (clarify_intent)", ": term=glossary drift step=clarify_intent — user accepted", true, true],
+  // #2820 compat: the legacy stage= discriminator is still accepted by the regex pair.
+  ["legacy stage only", ": term=glossary drift stage=outline — user accepted", true, true],
+  ["legacy stage=tests", ": term=glossary drift stage=tests — user accepted", true, true],
   ["op + cat", ": term=glossary drift op=add cat=user — user accepted", true, true],
-  ["three discriminators (regex level)", ": term=glossary drift op=add cat=user stage=docs — user accepted", true, true],
+  // #2820: "_" is in the discriminator character set, so the regex passes op=add_x; the handler's DOMAIN refuses it (MALFORMED).
+  ["op with an underscore (regex level)", ": term=glossary drift op=add_x — user accepted", true, true],
+  ["three discriminators (regex level)", ": term=glossary drift op=add cat=user step=review_docs — user accepted", true, true],
+  ["three discriminators with legacy stage (regex level)", ": term=glossary drift op=add cat=user stage=docs — user accepted", true, true],
   ["Japanese term", ": term=用語揺れ — 上流の表記をそのまま引用", true, true],
-  ["four discriminators", ": term=glossary drift op=add cat=user stage=docs op=add — user accepted", false, true],
+  ["four discriminators", ": term=glossary drift op=add cat=user step=review_docs op=add — user accepted", false, true],
+  ["four discriminators with legacy stage", ": term=glossary drift op=add cat=user stage=docs op=add — user accepted", false, true],
   ["( in term", ": term=glossary (drift) — user accepted", false, true],
   [") in reason", ": term=glossary drift — user accepted (twice)", false, true],
   ["; in reason", ": term=glossary drift — user; accepted", false, true],
@@ -52,6 +61,9 @@ function patterns(F) {
     const m = dq.exec(cmdOf(": term=glossary drift op=add cat=user — user accepted"));
     F.check("T4-1 DQ groups: term / discriminator run / reason",
       !!m && m[1] === "glossary drift" && m[2] === " op=add cat=user" && m[3] === "user accepted", JSON.stringify(m));
+    const s = dq.exec(cmdOf(": term=glossary drift step=review_tests — user accepted"));
+    F.check("T4-1 DQ groups: an underscore step value stays whole in the discriminator run",
+      !!s && s[1] === "glossary drift" && s[2] === " step=review_tests" && s[3] === "user accepted", JSON.stringify(s));
   }
   const other = 'echo "<<WORKFLOW_GLOSSARY_ACCEPTEDX: term=a — reason>>"';
   F.check("T4-1 a longer sentinel name matches neither pattern",
@@ -62,11 +74,22 @@ function patterns(F) {
 const MALFORMED = [
   ["op outside the domain", "term=glossary drift op=remove — user accepted"],
   ["cat outside the domain", "term=glossary drift cat=session — user accepted"],
-  ["stage outside the domain", "term=glossary drift stage=foo — user accepted"],
+  ["step outside the domain", "term=glossary drift step=foo — user accepted"],
+  ["step outside the domain (write_code is not a glossary step)", "term=glossary drift step=write_code — user accepted"],
+  ["step given a legacy stage value (tests)", "term=glossary drift step=tests — user accepted"],
+  // #2820: "_" joins the discriminator character set; DOMAIN still refuses an op/cat value with it.
+  ["op with an underscore outside the domain (add_x)", "term=glossary drift op=add_x — user accepted"],
+  ["cat with an underscore outside the domain (user_x)", "term=glossary drift cat=user_x — user accepted"],
+  ["legacy stage outside the domain", "term=glossary drift stage=foo — user accepted"],
+  ["legacy stage given a step value (review_tests)", "term=glossary drift stage=review_tests — user accepted"],
   ["duplicate op", "term=glossary drift op=add op=add — user accepted"],
-  ["duplicate stage", "term=glossary drift stage=outline stage=outline — user accepted"],
-  ["op mixed with stage", "term=glossary drift op=add stage=outline — user accepted"],
-  ["cat mixed with stage", "term=glossary drift cat=user stage=outline — user accepted"],
+  ["duplicate step", "term=glossary drift step=outline step=outline — user accepted"],
+  ["duplicate legacy stage", "term=glossary drift stage=outline stage=outline — user accepted"],
+  ["step together with legacy stage", "term=glossary drift step=outline stage=outline — user accepted"],
+  ["op mixed with step", "term=glossary drift op=add step=outline — user accepted"],
+  ["cat mixed with step", "term=glossary drift cat=user step=review_tests — user accepted"],
+  ["op mixed with legacy stage", "term=glossary drift op=add stage=outline — user accepted"],
+  ["cat mixed with legacy stage", "term=glossary drift cat=user stage=outline — user accepted"],
   ["reason under 3 characters", "term=glossary drift — ab"],
   ["reason under 3 characters without whitespace", "term=glossary drift — a  b"],
   ["look-alike only (forbidden character)", "term=glossary (drift) — user accepted"],

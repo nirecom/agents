@@ -1,21 +1,21 @@
 # tests/bin/feat-2529-glossary-ledger-tag/format-names.sh
-# T8-12: STAGE_LEDGER_FORMAT names the four real ledger formats, stageOfLedgerFormat
-# inverts it (null for stage names and for security-plan), and the grant reader and
+# T8-12: LEDGER_FORMAT_OF_STEP names the four real ledger formats, stepOfLedgerFormat
+# inverts it (null for step names and for security-plan), and the grant reader and
 # list-drift both work under the format name the ledger header carries.
 
 LT_SCOPE="$LT_AGENTS_N/hooks/workflow-state/glossary-check/scope.js"
 map="$(run_with_timeout 30 node -e '
   const m = require(process.argv[1]);
-  const f = m.STAGE_LEDGER_FORMAT || {};
+  const f = m.LEDGER_FORMAT_OF_STEP || {};
   const keys = Object.keys(f).sort().map((k) => k + "=" + f[k]).join(",");
-  const inv = ["outline-plan","detail-plan","test-review","review-security-shared","outline","detail","security-plan"]
-    .map((x) => x + ">" + String(typeof m.stageOfLedgerFormat === "function" ? m.stageOfLedgerFormat(x) : "NOFN")).join(",");
+  const inv = ["outline-plan","detail-plan","test-review","review-security-shared","outline","detail","review_tests","security-plan"]
+    .map((x) => x + ">" + String(typeof m.stepOfLedgerFormat === "function" ? m.stepOfLedgerFormat(x) : "NOFN")).join(",");
   process.stdout.write(keys + "\n" + inv);
 ' "$LT_SCOPE" 2>&1 | tr -d '\r')"
-lt_eq "STAGE_LEDGER_FORMAT maps the four ledger stages" \
-  "code=review-security-shared,detail=detail-plan,outline=outline-plan,tests=test-review" "$(printf '%s\n' "$map" | sed -n 1p)"
-lt_eq "stageOfLedgerFormat inverts it and returns null otherwise" \
-  "outline-plan>outline,detail-plan>detail,test-review>tests,review-security-shared>code,outline>null,detail>null,security-plan>null" \
+lt_eq "LEDGER_FORMAT_OF_STEP maps the four ledger steps" \
+  "detail=detail-plan,outline=outline-plan,review_security=review-security-shared,review_tests=test-review" "$(printf '%s\n' "$map" | sed -n 1p)"
+lt_eq "stepOfLedgerFormat inverts it and returns null otherwise" \
+  "outline-plan>outline,detail-plan>detail,test-review>review_tests,review-security-shared>review_security,outline>null,detail>null,review_tests>null,security-plan>null" \
   "$(printf '%s\n' "$map" | sed -n 2p)"
 
 # The names are the ones the producers already use.
@@ -29,7 +29,7 @@ else fail "core.sh knows review-security-shared"; fi
 
 # Grant reader exit table.
 sid="$(lt_sid fn test-review)"
-lt_seed_grants "$sid" review_tests tests "$(lt_gj "foo bar" "$LT_D1")"
+lt_seed_grants "$sid" review_tests "$(lt_gj "foo bar" "$LT_D1")"
 # label ; want ; format ; norm ; discrim ("-" omits --discrim)
 while IFS=';' read -r label want f n d; do
   [ -z "$label" ] && continue

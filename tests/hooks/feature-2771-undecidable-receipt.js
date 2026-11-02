@@ -31,7 +31,7 @@ afterAll(() => {
 const R = require("./feature-2729-presentation-receipt/fixture");
 const { U, A, T, BASH, TR, show } = R;
 const {
-  STAGES, MISMATCH, QUESTION, THINK, STR, closing, turn, ustop, linked, notice, names, silent,
+  ARTIFACTS, stepOf, MISMATCH, QUESTION, THINK, STR, closing, turn, ustop, linked, notice, names, silent,
   noReceipt, appendTo, seedReceipts, snap, sameAs, rawReceipts, jaBody, pinLang, anchoredLangStop, d3bLangStop,
 } = require("./feature-2771-undecidable-receipt/helpers");
 // r23 / r28 (the no-anchor path) and r29 (an unpublished co-presented stage) live in the module.
@@ -50,11 +50,11 @@ function check(name, ok, detail) {
 
 caseBegin("r16-undecidable-tail-records-receipt-every-stage", "hooks/stop-confirm-plan-guard.js");
 test("r16-undecidable-tail-records-receipt-every-stage", () => noNewFailures(failureCount, () => {
-STAGES.forEach((stage, i) => {
+ARTIFACTS.forEach((stage, i) => {
   const s = R.sessionAt(stage, { tag: 1600 + i });
   const st = ustop(s, turn(s, [stage], [A("a-anchor", T(closing(s, [stage]))), THINK("a-think")]), linked(closing(s, [stage])));
   check(`r16 ${stage}: undecidable, link close then a thinking-only entry: rc 0, no block, no continue, no notice`, silent(st), { rc: st.rc, out: st.out });
-  const rc = R.readReceiptRaw(s.sid, stage);
+  const rc = R.readReceiptRaw(s.sid, stepOf(stage));
   check(`r16 ${stage}: the receipt is recorded against the text entry`, rc !== null && rc.anchorUuid === "a-anchor" && rc.link && rc.link.kind === "url", rc);
   check(`r16 ${stage}: the turn markers are spent`, R.turnMarkersLeft(s.sid) === 0, "markers=" + R.turnMarkersLeft(s.sid));
   const e = R.echo(s.sid, stage);
@@ -83,7 +83,7 @@ test("r17-unrecorded-stage-notice", () => noNewFailures(failureCount, () => {
   const s = R.sessionAt("outline", { tag: 1711 });
   const st = ustop(s, turn(s, ["outline"], [A("a-anchor", T(closing(s, ["outline"])), BASH("ls", "b1"))]));
   const msg = notice(st);
-  check("r17 tool_use in the link entry + marker: no receipt", noReceipt(s.sid), STAGES.map((x) => R.readReceiptRaw(s.sid, x)));
+  check("r17 tool_use in the link entry + marker: no receipt", noReceipt(s.sid), snap(s.sid));
   check("r17 tool_use in the link entry: stdout is one JSON object with systemMessage and no decision, rc 0", msg !== null, { rc: st.rc, out: st.out });
   check("r17 tool_use in the link entry: the notice names outline", names(msg, "outline"), msg);
   check("r17 the notice carries no URL", msg !== null && !/https?:\/\//i.test(msg), msg);
@@ -105,8 +105,8 @@ test("r17-unrecorded-stage-notice", () => noNewFailures(failureCount, () => {
   const st = ustop(s, turn(s, ["intent", "outline"], [A("a-anchor", T(close))]), Object.assign({ env: { CC_UNPUBLISHED_STAGE: "intent" } }, linked(close)));
   const msg = notice(st);
   check("r17 partial: no block", st.rc === 0 && !st.blocked, { rc: st.rc, out: st.out });
-  check("r17 partial: the outline receipt is recorded, the intent one is not", R.receiptExists(s.sid, "outline") && !R.receiptExists(s.sid, "intent"),
-    [R.readReceiptRaw(s.sid, "intent"), R.readReceiptRaw(s.sid, "outline")]);
+  check("r17 partial: the outline receipt is recorded, the intent one is not", R.receiptExists(s.sid, "outline") && !R.receiptExists(s.sid, "clarify_intent"),
+    [R.readReceiptRaw(s.sid, "clarify_intent"),R.readReceiptRaw(s.sid, "outline")]);
   check("r17 partial: the notice names intent only", names(msg, "intent") && !names(msg, "outline"), { out: st.out });
 }
 {
@@ -207,11 +207,11 @@ caseEnd();
 
 caseBegin("r20-undecidable-no-marker-records-receipt", "hooks/stop-confirm-plan-guard.js");
 test("r20-undecidable-no-marker-records-receipt", () => noNewFailures(failureCount, () => {
-STAGES.forEach((stage, i) => {
+ARTIFACTS.forEach((stage, i) => {
   const s = R.sessionAt(stage, { tag: 2001 + i });
   const st = ustop(s, turn(s, [stage], [A("a-anchor", T(closing(s, [stage])))], { markers: false }), linked(closing(s, [stage])));
   check(`r20 ${stage} no marker, undecidable link close: rc 0, stdout empty`, silent(st), { rc: st.rc, out: st.out });
-  const rc = R.readReceiptRaw(s.sid, stage);
+  const rc = R.readReceiptRaw(s.sid, stepOf(stage));
   check(`r20 ${stage} no marker: the receipt is recorded against the text entry`, rc !== null && rc.anchorUuid === "a-anchor", rc);
   const e = R.echo(s.sid, stage);
   check(`r20 ${stage} no marker: the echo after it reaches the dialog`, e.dialog, e.json);
@@ -303,7 +303,7 @@ for (const [label, tag, tailOf, last] of [
 ]) {
   const s = R.sessionAt("outline", { tag });
   seedReceipts(s);
-  const raw = () => STAGES.map((st) => { try { return fs.readFileSync(R.receiptPath(s.sid, st), "utf8"); } catch (_) { return null; } });
+  const raw = () => rawReceipts(s.sid);
   const before = raw();
   const st = ustop(s, turn(s, ["outline"], tailOf(s)), { input: { last_assistant_message: last(s) } });
   check(`r25 ${label}: unrecordable undecidable turn: rc 0, no decision`, st.rc === 0 && !("decision" in st.json), { rc: st.rc, out: st.out });
@@ -322,22 +322,22 @@ for (const [label, tailOf] of [
   ["thinking", (s, st) => [A("a-anchor", T(closing(s, [st]))), THINK("a-think")]],
   ["plain", (s, st) => [A("a-anchor", T(closing(s, [st])))]],
 ]) {
-  STAGES.forEach((stage, i) => {
-    const s = R.sessionAt(stage, { tag: 2600 + (label === "plain" ? 10 : 0) + i });
+  ARTIFACTS.forEach((stage, i) => {
+    const s = R.sessionAt(stage, { tag: 2600+ (label === "plain" ? 10 : 0) + i });
     const st = ustop(s, turn(s, [stage], tailOf(s, stage)));
     check(`r26 ${label} ${stage} + marker: rc 0, no block, no continue`, st.rc === 0 && !st.blocked && !st.continued && !("decision" in st.json), { rc: st.rc, out: st.out });
-    check(`r26 ${label} ${stage} + marker: no receipt for ${stage}`, !R.receiptExists(s.sid, stage), R.readReceiptRaw(s.sid, stage));
+    check(`r26 ${label} ${stage} + marker: no receipt for ${stage}`, !R.receiptExists(s.sid, stepOf(stage)), R.readReceiptRaw(s.sid, stepOf(stage)));
     check(`r26 ${label} ${stage} + marker: the notice names ${stage}`, names(notice(st), stage), { rc: st.rc, out: st.out });
     check(`r26 ${label} ${stage}: the turn markers are spent`, R.turnMarkersLeft(s.sid) === 0, "markers=" + R.turnMarkersLeft(s.sid));
   });
 }
-STAGES.forEach((stage, i) => {
+ARTIFACTS.forEach((stage, i) => {
   const s = R.sessionAt(stage, { tag: 2620 + i });
   const st = ustop(s, turn(s, [stage], [A("a-anchor", T(closing(s, [stage]))), THINK("a-think")], { markers: false }));
   check(`r26 ${stage} no marker, message lacking the file name: no receipt`, noReceipt(s.sid), snap(s.sid));
   check(`r26 ${stage} no marker, message lacking the file name: stdout empty, rc 0`, silent(st), { rc: st.rc, out: st.out });
 });
-STAGES.forEach((stage, i) => {
+ARTIFACTS.forEach((stage, i) => {
   // A stage not presented by the final message is never passed to recordReceipts: its seeded receipt stays.
   const s = R.sessionAt(stage, { tag: 2630 + i });
   seedReceipts(s);
@@ -390,7 +390,7 @@ test("r27-undecidable-plan-lang-violation-no-receipt", () => noNewFailures(failu
     fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
     const close = closing(s, ["intent", "outline"]);
     const st = ustop(s, turn(s, ["intent", "outline"], [A("a-anchor", T(close)), THINK("a-think")]), pin(linked(close)));
-    check("r27 co-presented: the clean intent gets its receipt", R.receiptExists(s.sid, "intent"), snap(s.sid));
+    check("r27 co-presented: the clean intent gets its receipt", R.receiptExists(s.sid, "clarify_intent"), snap(s.sid));
     check("r27 co-presented: the violating outline gets none", !R.receiptExists(s.sid, "outline"), snap(s.sid));
     const msg = notice(st);
     check("r27 co-presented: the notice names outline only", names(msg, "outline") && !names(msg, "intent"), { rc: st.rc, out: st.out });
@@ -419,7 +419,7 @@ test("r27-plan-lang-violation-intent-detail", () => noNewFailures(failureCount, 
     const s = jaAt(2741 + 10 * i + off);
     const st = run(s);
     check(`r27 ${stage} ${label}: rc 0, no decision`, st.rc === 0 && !("decision" in st.json), { rc: st.rc, out: st.out });
-    check(`r27 ${stage} ${label}: no receipt for the PLAN_LANG-violating ${stage}`, !R.receiptExists(s.sid, stage), R.readReceiptRaw(s.sid, stage));
+    check(`r27 ${stage} ${label}: no receipt for the PLAN_LANG-violating ${stage}`, !R.receiptExists(s.sid, stepOf(stage)), R.readReceiptRaw(s.sid, stepOf(stage)));
     check(`r27 ${stage} ${label}: stdout is one systemMessage JSON naming ${stage}`, names(notice(st), stage), { rc: st.rc, out: st.out });
   }
 });

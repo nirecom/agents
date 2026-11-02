@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-mark/glossary-accept-handler.js, bin/check-glossary-ledger-grant
-// Tags: TL2, hooks, glossary, glossary-drift, sentinel, workflow-mark, deterministic, scope:issue-specific
+// Tags: TL2, hooks, glossary, glossary-drift, sentinel, workflow-mark, deterministic, migration, compat, scope:issue-specific
 // #2529 T4 (the GLOSSARY_ACCEPTED sentinel): T4-1 the regex pair and the handler's malformed
 // refusals, T4-2 the grant targets (a) findings, (b) provenance blocks, (c) tagged ledger
 // concerns, and the ledger-grant CLI. T4-3 (the ask rule) lives in
@@ -17,6 +17,7 @@ const regex = require("./feat-2529-glossary-accept/regex");
 const grant = require("./feat-2529-glossary-accept/grant");
 const ledger = require("./feat-2529-glossary-accept/ledger");
 const cross = require("./feat-2529-glossary-accept/cross-stage");
+const compat = require("./feat-2529-glossary-accept/step-compat");
 after(() => {
   F.finish();
   restore();
@@ -83,4 +84,16 @@ caseEnd();
 
 caseBegin("#2828 (c) a refused grant names its reason", "hooks/workflow-mark/glossary-accept-handler.js");
 test("#2828 (c) a refused grant names its reason", verdict(() => cross.reasons(F)));
+caseEnd();
+
+caseBegin("#2820 step= discriminator and the legacy stage= alias grant alike", "hooks/workflow-mark/glossary-accept-handler.js");
+test("#2820 step= discriminator and the legacy stage= alias grant alike", verdict(() => compat.discriminator(F)));
+caseEnd();
+
+caseBegin("#2820 a legacy { stage } record is granted and rewritten as { step }", "hooks/workflow-mark/glossary-accept-handler.js");
+test("#2820 a legacy { stage } record is granted and rewritten as { step }", verdict(() => compat.legacyRecord(F)));
+caseEnd();
+
+caseBegin("#2820 clarify_intent is a grantable glossary step", "hooks/workflow-mark/glossary-accept-handler.js");
+test("#2820 clarify_intent is a grantable glossary step", verdict(() => compat.clarify(F)));
 caseEnd();

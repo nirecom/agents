@@ -41,7 +41,7 @@ function r30(check) {
     fs.writeFileSync(R.linesFor(s.sid, "intent").plan, R.EDITED_INTENT);
     const st = astop(s, ["intent", "outline"], closing(s, ["intent"]), relinked(closing(s, ["intent", "outline"])));
     check("r30 mixed: rc 0, stdout empty", silent(st), { rc: st.rc, out: st.out });
-    const ri = R.readReceiptRaw(s.sid, "intent");
+    const ri = R.readReceiptRaw(s.sid, "clarify_intent");
     check("r30 mixed: intent (in both) keeps the anchored entry's uuid", ri !== null && ri.anchorUuid === "a-anchor", ri);
     const ro = R.readReceiptRaw(s.sid, "outline");
     check("r30 mixed: outline (final message only) is recorded with anchorUuid \"\"", ro !== null && ro.anchorUuid === "" && ro.link && ro.link.kind === "url", ro);
@@ -99,7 +99,7 @@ function r30(check) {
     const st = astop(s, ["intent"], closing(s, ["outline"]), relinked(closing(s, ["intent"])));
     // outline has no marker and the final message does not name it, so it is not in mayHavePresented.
     check("r30 intent final-only: rc 0, stdout empty (no decision, no notice)", silent(st), { rc: st.rc, out: st.out });
-    const ri = R.readReceiptRaw(s.sid, "intent");
+    const ri = R.readReceiptRaw(s.sid, "clarify_intent");
     check("r30 intent final-only: the intent receipt is recorded with anchorUuid \"\" and a url link", ri !== null && ri.anchorUuid === "" && ri.link && ri.link.kind === "url", ri);
     check("r30 intent final-only: no outline receipt (anchored-only stays unrecorded)", !R.receiptExists(s.sid, "outline"), snap(s.sid));
     const e = R.echo(s.sid, "intent");

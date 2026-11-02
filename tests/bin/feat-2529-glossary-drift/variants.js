@@ -1,7 +1,7 @@
 "use strict";
 // T5-1 part of tests/bin/feat-2529-glossary-drift.js (#2529). Holds no case markers; the
 // entrypoint wraps run() in one.
-// Six stages × four variant kinds (case, hyphen, plural with a hyphen, merged) each give a DRIFT
+// Six glossary steps × four variant kinds (case, hyphen, plural with a hyphen, merged) each give a DRIFT
 // line, and a regular plural line gives none; the R-S stages read the staged blob, never the
 // working tree; an intent `## Issues` variant is not scanned.
 
@@ -11,15 +11,15 @@ const PLURAL = "glossary drifts";
 const line = (v) => `Mid-line the ${v} shows up here.`;
 const lineOf = (text, needle) => text.split("\n").findIndex((l) => l.includes(needle)) + 1;
 
-// Where each stage's artifact lives, and the text of each file it is made of.
-function artifactFor(F, stage, sid, lines) {
-  if (stage === "intent") return [{ suffix: "intent", text: F.intentBody({ goal: lines.join("\n\n") }) }];
-  if (stage === "outline" || stage === "detail") {
-    return [{ suffix: stage, text: `# Plan\n\n## Approach\n\n${lines.join("\n\n")}\n` }];
+// Where each glossary step's artifact lives, and the text of each file it is made of.
+function artifactFor(F, step, sid, lines) {
+  if (step === "clarify_intent") return [{ suffix: "intent", text: F.intentBody({ goal: lines.join("\n\n") }) }];
+  if (step === "outline" || step === "detail") {
+    return [{ suffix: step, text: `# Plan\n\n## Approach\n\n${lines.join("\n\n")}\n` }];
   }
   const js = (ls) => `"use strict";\n${ls.map((l) => `// ${l}`).join("\n")}\nmodule.exports = 1;\n`;
-  if (stage === "tests") return [{ rel: "tests/t.js", text: js(lines) }];
-  if (stage === "code") {
+  if (step === "review_tests") return [{ rel: "tests/t.js", text: js(lines) }];
+  if (step === "review_security") {
     return [{ rel: "skills/x/SKILL.md", text: `# Skill\n\n${lines[0]}\n` }, { rel: "bin/a.js", text: js(lines.slice(1)) }];
   }
   return [{ rel: "docs/guide.md", text: `# Guide\n\n${lines.join("\n\n")}\n` }];
@@ -32,62 +32,62 @@ function placeArtifact(F, repo, sid, files) {
   }
 }
 
-function perStage(F) {
-  for (const stage of F.STAGES) {
-    const repo = F.mkRepo(`v-${stage}`);
-    const sid = F.newSid(`v-${stage}`);
+function perStep(F) {
+  for (const step of F.GLOSSARY_STEPS) {
+    const repo = F.mkRepo(`v-${step}`);
+    const sid = F.newSid(`v-${step}`);
     const lines = VARIANTS.map(([, v]) => line(v)).concat([line(PLURAL)]);
-    const files = artifactFor(F, stage, sid, lines);
+    const files = artifactFor(F, step, sid, lines);
     placeArtifact(F, repo, sid, files);
-    F.seedAt(sid, F.STAGE_STEP[stage], repo);
-    const r = F.drift(sid, stage, repo, false);
-    F.check(`T5-1 ${stage}: check-glossary-drift runs and exits 1`, F.reached(r) && r.code === 1, `code=${r.code} ${r.all}`);
+    F.seedAt(sid, step, repo);
+    const r = F.drift(sid, step, repo, false);
+    F.check(`T5-1 ${step}: check-glossary-drift runs and exits 1`, F.reached(r) && r.code === 1, `code=${r.code} ${r.all}`);
     const found = F.driftLines(r.all);
     for (const [kind, v] of VARIANTS) {
       const f = files.find((x) => x.text.includes(line(v)));
-      const want = { stage, variant: v, term: F.TERM, line: lineOf(f.text, line(v)) };
+      const want = { step, variant: v, term: F.TERM, line: lineOf(f.text, line(v)) };
       const tail = f.suffix ? `${sid}-${f.suffix}.md` : f.rel;
-      const hit = found.find((d) => d.stage === stage && d.variant === v && d.term === F.TERM &&
+      const hit = found.find((d) => d.step === step && d.variant === v && d.term === F.TERM &&
         d.line === want.line && d.file.endsWith(tail));
-      F.check(`T5-1 ${stage} × ${kind}: DRIFT "${v}" -> "${F.TERM}" at ${tail}:${want.line}`, !!hit, r.all);
+      F.check(`T5-1 ${step} × ${kind}: DRIFT "${v}" -> "${F.TERM}" at ${tail}:${want.line}`, !!hit, r.all);
     }
     const pf = files.find((x) => x.text.includes(line(PLURAL)));
     const pTail = pf.suffix ? `${sid}-${pf.suffix}.md` : pf.rel;
     const pLine = lineOf(pf.text, line(PLURAL));
     const pHits = found.filter((d) => d.line === pLine && d.file.endsWith(pTail));
-    F.check(`T5-1 ${stage} × regular plural: no DRIFT at ${pTail}:${pLine}`, F.reached(r) && pHits.length === 0, JSON.stringify(pHits));
+    F.check(`T5-1 ${step} × regular plural: no DRIFT at ${pTail}:${pLine}`, F.reached(r) && pHits.length === 0, JSON.stringify(pHits));
   }
 }
 
 // R-S: the staged blob is the artifact. Working-tree-only variant → clean; staged-only → DRIFT.
 const RS_TARGET = {
-  tests: ["tests/t.js", (l) => `"use strict";\n// ${l}\nmodule.exports = 1;\n`],
-  code: ["bin/a.js", (l) => `"use strict";\n// ${l}\nmodule.exports = 1;\n`],
-  docs: ["docs/guide.md", (l) => `# Guide\n\n${l}\n`],
+  review_tests: ["tests/t.js", (l) => `"use strict";\n// ${l}\nmodule.exports = 1;\n`],
+  review_security: ["bin/a.js", (l) => `"use strict";\n// ${l}\nmodule.exports = 1;\n`],
+  review_docs: ["docs/guide.md", (l) => `# Guide\n\n${l}\n`],
 };
 function stagedBlob(F) {
-  for (const stage of F.RS_STAGES) {
-    const [rel, body] = RS_TARGET[stage];
+  for (const step of F.RS_STEPS) {
+    const [rel, body] = RS_TARGET[step];
     const clean = body(line(F.TERM));
     const dirty = body(line("glossary-drift"));
 
-    const repoA = F.mkRepo(`sw-${stage}`);
-    const sidA = F.newSid(`sw-${stage}`);
+    const repoA = F.mkRepo(`sw-${step}`);
+    const sidA = F.newSid(`sw-${step}`);
     F.stageFile(repoA, rel, clean);
     F.writeFile(repoA, rel, dirty);
-    F.seedAt(sidA, F.STAGE_STEP[stage], repoA);
-    const a = F.drift(sidA, stage, repoA, false);
-    F.check(`T5-1 ${stage}: variant only in the working tree → exit 0, no DRIFT`,
+    F.seedAt(sidA, step, repoA);
+    const a = F.drift(sidA, step, repoA, false);
+    F.check(`T5-1 ${step}: variant only in the working tree → exit 0, no DRIFT`,
       F.reached(a) && a.code === 0 && F.driftLines(a.all).length === 0, `code=${a.code} ${a.all}`);
 
-    const repoB = F.mkRepo(`ss-${stage}`);
-    const sidB = F.newSid(`ss-${stage}`);
+    const repoB = F.mkRepo(`ss-${step}`);
+    const sidB = F.newSid(`ss-${step}`);
     F.stageFile(repoB, rel, dirty);
     F.writeFile(repoB, rel, clean);
-    F.seedAt(sidB, F.STAGE_STEP[stage], repoB);
-    const b = F.drift(sidB, stage, repoB, false);
+    F.seedAt(sidB, step, repoB);
+    const b = F.drift(sidB, step, repoB, false);
     const hit = F.driftLines(b.all).find((d) => d.variant === "glossary-drift" && d.file.endsWith(rel));
-    F.check(`T5-1 ${stage}: variant only in the staged blob → exit 1 with DRIFT at ${rel}`,
+    F.check(`T5-1 ${step}: variant only in the staged blob → exit 1 with DRIFT at ${rel}`,
       F.reached(b) && b.code === 1 && !!hit, `code=${b.code} ${b.all}`);
   }
 }
@@ -97,8 +97,8 @@ function issuesOnly(F) {
   const sid = F.newSid("issues");
   F.writeIntent(sid, { goal: line(F.TERM), issues: `- #1 ${line("glossary-drift")}` });
   F.seedAt(sid, "clarify_intent", repo);
-  const r = F.drift(sid, "intent", repo, false);
-  F.check("T5-1 intent: a variant only under ## Issues → exit 0, no DRIFT",
+  const r = F.drift(sid, "clarify_intent", repo, false);
+  F.check("T5-1 clarify_intent: a variant only under ## Issues → exit 0, no DRIFT",
     F.reached(r) && r.code === 0 && F.driftLines(r.all).length === 0, `code=${r.code} ${r.all}`);
 }
 
@@ -278,7 +278,7 @@ function forbiddenAccept(F) {
 
 function run(F) {
   forbiddenAccept(F);
-  perStage(F);
+  perStep(F);
   stagedBlob(F);
   issuesOnly(F);
   table(F, "", SPLIT_MERGE);

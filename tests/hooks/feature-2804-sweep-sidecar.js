@@ -86,10 +86,13 @@ caseEnd();
 
 caseBegin("z11-orphan-sidecar-mtime-rule", "hooks/workflow-state/state-io/zombie-cleanup.js");
 {
+  // The receipt is named by the workflow step since #2820; a pre-#2820 artifact-named one (-intent) is reaped alike.
+  put("z11-gone.confirm-plan-receipt-clarify_intent.json", receiptBody(), 40);
   put("z11-gone.confirm-plan-receipt-intent.json", receiptBody(), 40);
   put("z11-gone.confirm-plan-receipt-outline.json", receiptBody(), 1);
   sweep();
-  check("Z11: an orphan sidecar (no z11-gone.json) with mtime 40 days is removed", !exists("z11-gone.confirm-plan-receipt-intent.json"), "40-day orphan kept");
+  check("Z11: an orphan sidecar (no z11-gone.json) with mtime 40 days is removed", !exists("z11-gone.confirm-plan-receipt-clarify_intent.json"), "40-day orphan kept");
+  check("Z11: a pre-#2820 artifact-named orphan sidecar with mtime 40 days is removed", !exists("z11-gone.confirm-plan-receipt-intent.json"), "40-day legacy orphan kept");
   check("Z11: an orphan sidecar with mtime 1 day is kept (not reaped at age 0)", exists("z11-gone.confirm-plan-receipt-outline.json"), "1-day orphan removed");
 }
 caseEnd();
@@ -98,11 +101,11 @@ caseBegin("z11b-orphan-sidecar-retention-boundary", "hooks/workflow-state/state-
 {
   // The rule is mtime < Date.now() - 30 days at sweep time; one hour each side keeps it free of clock jitter.
   const HOUR = 1 / 24;
-  put("z18-gone.confirm-plan-receipt-intent.json", receiptBody(), 30 - HOUR);
+  put("z18-gone.confirm-plan-receipt-clarify_intent.json", receiptBody(), 30 - HOUR);
   put("z18-gone.confirm-plan-receipt-outline.json", receiptBody(), 30 + HOUR);
   const threw = sweep();
   check("Z11b: the sweep does not throw", threw === null, threw);
-  check("Z11b: an orphan sidecar with mtime 30 days minus 1 hour is kept", exists("z18-gone.confirm-plan-receipt-intent.json"), "30d-1h orphan removed");
+  check("Z11b: an orphan sidecar with mtime 30 days minus 1 hour is kept", exists("z18-gone.confirm-plan-receipt-clarify_intent.json"), "30d-1h orphan removed");
   check("Z11b: an orphan sidecar with mtime 30 days plus 1 hour is removed", !exists("z18-gone.confirm-plan-receipt-outline.json"), "30d+1h orphan kept");
 }
 caseEnd();

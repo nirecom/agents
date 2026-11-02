@@ -112,7 +112,7 @@ node "$AGENTS_MAIN_ROOT/bin/issue-close-write-outcome.js" --session "<session-id
 Invoke `/issue-close-finalize --from-session`. The sub-skill writes
 `<CONTROL_DIR>/issue-close-outcome.json` in its ICF-K.
 
-If it terminates without writing that file, write a synthetic fallback; `<INTENT_MD>` is the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent --session "<session-id>"`:
+If it terminates without writing that file, write a synthetic fallback; `<INTENT_MD>` is the output of `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --step clarify_intent --session "<session-id>"`:
 
 ```bash
 node "$AGENTS_MAIN_ROOT/bin/issue-close-write-outcome.js" \

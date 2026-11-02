@@ -43,8 +43,9 @@ write_state_f() {
   "version": 1, "session_id": "$sid", "git_branch": "$branch",
   "created_at": "$NOW_ISO",
   "steps": {
+    "workflow_init":      {"status": "complete", "updated_at": "$NOW_ISO"},
     "clarify_intent":     {"status": "complete", "updated_at": "$NOW_ISO"},
-    "research":           {"status": "complete", "updated_at": "$NOW_ISO"},
+    "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
     "outline":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "detail":             {"status": "complete", "updated_at": "$NOW_ISO"},
     "branching_complete": {"status": "complete", "updated_at": "$NOW_ISO"},
@@ -102,6 +103,7 @@ stage_test_file "$WT_F11" "tests/example.sh" "echo test F11"
 MANIFEST_F11="$(compute_manifest "$WT_F11")"
 # Stored wsid is the STALE one (from a previous workflow session).
 write_state_f "$SID_F11" "feature/secF-wt11" "$MANIFEST_F11" "$WSID_F11_STALE" "$PLANS_F11"
+( export WORKFLOW_PLANS_DIR="$PLANS_F11"; glossary_check_record "$SID_F11" "$WT_F11" )  # #2529: a current glossary_check, so the wsid mismatch is what blocks
 RES_F11="$(run_gate_wsid "$PLANS_F11" "$WT_F11" "$(build_gate_json 'git commit -m wip' "$SID_F11" "$WT_F11")")"
 if is_block "$RES_F11" && echo "$RES_F11" | grep -qi "stale-wsid\|stale wsid\|wsid"; then
     pass "F11. wsid mismatch -> block with stale-wsid hint"

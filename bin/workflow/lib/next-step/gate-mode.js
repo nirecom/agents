@@ -15,7 +15,7 @@ const {
   probeConfirmGateWithCause, posixJoin,
 } = require("../../../../hooks/lib/confirm-gate/probe");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("./gate-line");
-const { rowFor } = require("../../../../hooks/workflow-state/plan-stage-table");
+const { rowFor } = require("../../../../hooks/workflow-state/plan-step-table");
 const { checkPlanApproval } = require("../../../../hooks/workflow-state/plan-approval-check");
 
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..", "..", "..");

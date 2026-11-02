@@ -39,7 +39,7 @@ function guarded(name, fn) {
 caseBegin("each intent glossary row change stales the record and edits outside it do not", "hooks/workflow-state/glossary-check/scope.js");
 test("each intent glossary row change stales the record and edits outside it do not", () =>
   noNewFailures(F.failureCount, () => guarded("intent_rows input", () => {
-    intentRows.runRows(F.RA_STAGES);
+    intentRows.runRows(F.RA_STEPS);
     intentRows.runProvenance();
   })));
 caseEnd();

@@ -6,18 +6,18 @@
 // fingerprint is neither counted nor carried, an artifact change drops the grants but keeps the
 // ledger_grants, and the record shape has no "resolved" field.
 
-const RECORD_KEYS = ["findings", "fingerprint", "grants", "inputs", "ledger_grants", "stage", "v"];
+const RECORD_KEYS = ["findings", "fingerprint", "grants", "inputs", "ledger_grants", "step", "v"];
 const INPUT_KEYS = ["artifact", "glossary", "intent_rows", "rules"];
 const FINDING_KEYS = ["class", "norm", "source", "term", "variant", "where"];
 const keys = (o) => Object.keys(o || {}).sort().join(",");
 const plan = (extra) => `# Outline\n\n## Approach\n\nMid-line the glossary-drift appears.\n${extra || ""}`;
 
 function shape(F, rec) {
-  F.check("T5-3 record: top-level keys are exactly v/stage/fingerprint/inputs/findings/grants/ledger_grants",
+  F.check("T5-3 record: top-level keys are exactly v/step/fingerprint/inputs/findings/grants/ledger_grants",
     keys(rec) === RECORD_KEYS.join(","), keys(rec));
   if (!rec) return;
-  F.check("T5-3 record: v=1, stage=outline, fingerprint is a non-empty string",
-    rec.v === 1 && rec.stage === "outline" && typeof rec.fingerprint === "string" && rec.fingerprint !== "", JSON.stringify(rec));
+  F.check("T5-3 record: v=1, step=outline, fingerprint is a non-empty string",
+    rec.v === 1 && rec.step === "outline" && typeof rec.fingerprint === "string" && rec.fingerprint !== "", JSON.stringify(rec));
   F.check("T5-3 record: inputs has exactly artifact/glossary/intent_rows/rules", keys(rec.inputs) === INPUT_KEYS.join(","), keys(rec.inputs));
   const fs = Array.isArray(rec.findings) ? rec.findings : [];
   F.check("T5-3 record: one finding for the variant", fs.length === 1, JSON.stringify(rec.findings));
@@ -44,8 +44,8 @@ function run(F) {
     F.reached(r1) && r1.code === 1 && F.driftLines(r1.all).length === 1, `code=${r1.code} ${r1.all}`);
   F.check("T5-3 without --record: no glossary_check is written", F.reached(r1) && F.recordOf(sid, "outline") === null,
     JSON.stringify(F.recordOf(sid, "outline")));
-  F.check("T5-3 DRIFT output names the narrow echo form term=<term> stage=outline",
-    /WORKFLOW_GLOSSARY_ACCEPTED: term=\S.* stage=outline/.test(r1.all), r1.all);
+  F.check("T5-3 DRIFT output names the narrow echo form term=<term> step=outline",
+    /WORKFLOW_GLOSSARY_ACCEPTED: term=\S.* step=outline/.test(r1.all), r1.all);
 
   const r2 = F.drift(sid, "outline", repo, true);
   F.check("T5-3 --record with an open finding exits 1", F.reached(r2) && r2.code === 1, `code=${r2.code} ${r2.all}`);

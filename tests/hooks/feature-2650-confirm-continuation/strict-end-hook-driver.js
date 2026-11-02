@@ -26,8 +26,8 @@ if (mode === "stop") {
     return { s, r: X.runStop(s.sid, tp, publish ? { publish: true } : {}) };
   };
   const continued = (r) => r.rc === 2 && r.json.decision === "block" && r.reason.startsWith("[confirm-plan] continue:");
-  // notLast: the Stop hook blocks with presentAgainReason(stage, "not-last") — names the plan-link command.
-  const notLast = (r) => r.json.decision === "block" && !continued(r) && r.reason.includes(`--stage ${STAGE}`);
+  // notLast: the Stop hook blocks with presentAgainReason(stage, "not-last") — names the plan-link command (--step, #2820).
+  const notLast = (r) => r.json.decision === "block" && !continued(r) && r.reason.includes(`--step ${X.STEP[STAGE]}`);
   for (const [kind, publish] of [["local", false], ["URL", true]]) {
     {
       const { s, r } = presentation("\n", publish);

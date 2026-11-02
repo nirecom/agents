@@ -163,14 +163,14 @@ console.log([
   ce && ce.levels && [ce.levels.detail, ce.levels.write_tests, ce.levels.write_code].join(","),
   ce && ce.signals.join(","),
   typeof b.readLastRawComplexityEvent,
-  typeof b.readStageComplexityLevel,
-  b.readStageComplexityLevel(sid, "detail"),
+  typeof b.readStepComplexityLevel,
+  b.readStepComplexityLevel(sid, "detail"),
 ].join(" "));
 JS
     got=$(run_node "$_script")
     # S3-security is a DIVERGENT row (detail.md D2): solo_escalation for write_tests
     # and write_code, but absent from detail's escalation
-    # sets — so the levels map is low/high/high and readStageComplexityLevel("detail")
+    # sets — so the levels map is low/high/high and readStepComplexityLevel("detail")
     # answers low while the aggregate `level` stays high (deriveAggregateLevel:
     # one signal is enough). A uniform high,high,high here would be a table the
     # routing rows do not produce.
@@ -213,7 +213,7 @@ const b = require(process.env.BARREL);
 const sid = process.env.SID;
 const raw = b.readLastRawComplexityEvent(sid);
 const compat = b.readComplexityEvaluation(sid);
-const intended = b.deriveStageLevels(raw.signals);
+const intended = b.deriveStepLevels(raw.signals);
 const readBackAgrees = JSON.stringify(raw.levels) === JSON.stringify(intended);
 console.log([
   "raw_levels=" + JSON.stringify(raw.levels),

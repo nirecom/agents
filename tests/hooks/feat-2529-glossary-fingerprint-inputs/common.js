@@ -1,6 +1,6 @@
 "use strict";
-// Shared steps of T7 (invariant I-FP): build a valid record + grant for one stage, change exactly
-// one input, then require (i) only that input's digest moved, (ii) evaluateGlossaryCheck says
+// Shared steps of T7 (invariant I-FP): build a valid record + grant for one glossary step, change
+// exactly one input, then require (i) only that input's digest moved, (ii) evaluateGlossaryCheck says
 // glossary-check-stale naming only that component, (iii) the re-record drops the old grant —
 // except an artifact-only change, whose re-record carries it (#2770) — and (iv) granting passes.
 
@@ -31,33 +31,33 @@ function named(detail) {
 }
 
 function fp(m, ctx, extra) {
-  const r = m.scope.stageFingerprint(ctx.sid, ctx.stage, Object.assign({ repoDir: ctx.repo }, extra || {}));
+  const r = m.scope.stepFingerprint(ctx.sid, ctx.step, Object.assign({ repoDir: ctx.repo }, extra || {}));
   return r && r.ok ? r : { ok: false, fingerprint: null, inputs: {}, error: r && r.error };
 }
 
 function evaluate(m, ctx, extra) {
-  return m.record.evaluateGlossaryCheck(ctx.sid, F.STAGE_STEP[ctx.stage], F.readState(ctx.sid),
+  return m.record.evaluateGlossaryCheck(ctx.sid, ctx.step, F.readState(ctx.sid),
     Object.assign({ repoDir: ctx.repo }, extra || {}));
 }
 
 const passes = (v) => !!v && v.ok === true;
 
-// Records the stage through the CLI, grants every finding, and checks the pair passes.
+// Records the step through the CLI, grants every finding, and checks the pair passes.
 function recordAndGrant(m, ctx, label) {
-  F.drift(ctx.sid, ctx.stage, ctx.cwd || ctx.repo);
-  const rec = F.recordOf(ctx.sid, ctx.stage);
-  F.grantFindings(ctx.sid, ctx.stage);
+  F.drift(ctx.sid, ctx.step, ctx.cwd || ctx.repo);
+  const rec = F.recordOf(ctx.sid, ctx.step);
+  F.grantFindings(ctx.sid, ctx.step);
   const v = evaluate(m, ctx);
-  F.check(`${ctx.stage} ${label}: recorded + granted record passes`, passes(v), JSON.stringify({ v, rec }));
+  F.check(`${ctx.step} ${label}: recorded + granted record passes`, passes(v), JSON.stringify({ v, rec }));
   return rec;
 }
 
-// A fresh stage whose artifact carries VARIANT (one spelling finding), recorded and granted.
-function baseline(m, tag, stage, opts) {
-  const s = F.setupStage(tag, stage, F.VARIANT, opts);
-  const ctx = { sid: s.sid, repo: s.repo, stage };
+// A fresh glossary step whose artifact carries VARIANT (one spelling finding), recorded and granted.
+function baseline(m, tag, step, opts) {
+  const s = F.setupStep(tag, step, F.VARIANT, opts);
+  const ctx = { sid: s.sid, repo: s.repo, step };
   const rec = recordAndGrant(m, ctx, "baseline");
-  F.check(`${stage} baseline: the record holds a finding to grant`,
+  F.check(`${step} baseline: the record holds a finding to grant`,
     !!rec && Array.isArray(rec.findings) && rec.findings.length > 0, JSON.stringify(rec));
   return ctx;
 }
@@ -65,7 +65,7 @@ function baseline(m, tag, stage, opts) {
 // One change of one input. `expect` is the component (or list) whose digest must move.
 function cycle(m, ctx, label, expect, mutate) {
   const want = [].concat(expect).sort();
-  const name = `${ctx.stage} ${label}`;
+  const name = `${ctx.step} ${label}`;
   const before = fp(m, ctx);
   mutate();
   const after = fp(m, ctx);
@@ -76,8 +76,8 @@ function cycle(m, ctx, label, expect, mutate) {
   F.check(`${name}: evaluateGlossaryCheck is glossary-check-stale naming only ${want.join("+")}`,
     !!v && v.ok === false && v.code === "glossary-check-stale" && named(v.detail).join(",") === want.join(","),
     JSON.stringify(v));
-  F.drift(ctx.sid, ctx.stage, ctx.cwd || ctx.repo);
-  const rec = F.recordOf(ctx.sid, ctx.stage);
+  F.drift(ctx.sid, ctx.step, ctx.cwd || ctx.repo);
+  const rec = F.recordOf(ctx.sid, ctx.step);
   if (want.join(",") === "artifact") {
     // #2770: an artifact-only change with the same variants carries the grant to the new fingerprint.
     const moved = rec && (rec.grants || []).filter((g) => g.fingerprint === rec.fingerprint);
@@ -94,7 +94,7 @@ function cycle(m, ctx, label, expect, mutate) {
   const u = evaluate(m, ctx);
   F.check(`${name}: the ungranted re-record is glossary-findings-unresolved`,
     !!u && u.ok === false && u.code === "glossary-findings-unresolved", JSON.stringify(u));
-  F.grantFindings(ctx.sid, ctx.stage);
+  F.grantFindings(ctx.sid, ctx.step);
   F.check(`${name}: granting the re-record passes`, passes(evaluate(m, ctx)), "not ok");
 }
 
@@ -103,9 +103,9 @@ function unchanged(m, ctx, label, mutate) {
   const before = fp(m, ctx);
   mutate();
   const after = fp(m, ctx);
-  F.check(`${ctx.stage} ${label}: the fingerprint does not move`,
+  F.check(`${ctx.step} ${label}: the fingerprint does not move`,
     before.ok && after.ok && before.fingerprint === after.fingerprint, JSON.stringify({ before, after }));
-  F.check(`${ctx.stage} ${label}: the record stays current`, passes(evaluate(m, ctx)), "not ok");
+  F.check(`${ctx.step} ${label}: the record stays current`, passes(evaluate(m, ctx)), "not ok");
 }
 
 // Wraps a part section so an entry file can run it alone; a no-op when scope.js/record.js are missing.

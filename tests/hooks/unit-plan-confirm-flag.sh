@@ -139,6 +139,10 @@ expect_result "T12 getConfirmFlagName null → null" "null" \
 expect_result "T13 getConfirmFlagName 'bogus' → null" "null" \
   "lib.getConfirmFlagName('bogus')"
 
+# T13b: "tests" is no plan artifact name (#2820: the CONFIRM_TESTS name lives in CONFIRM_FLAG_OF_STEP)
+expect_result "T13b getConfirmFlagName 'tests' → null" "null" \
+  "lib.getConfirmFlagName('tests')"
+
 # ══════════════════════════════════════════════════════════════════════════
 # export surface (isConfirmOff / isConfirmOffForStage removed in #2592)
 # ══════════════════════════════════════════════════════════════════════════
@@ -146,8 +150,8 @@ expect_result "T13 getConfirmFlagName 'bogus' → null" "null" \
 echo "=== export surface tests ==="
 
 # T14: exports are exactly the three surviving functions
-expect_result "T14 exports are exactly getSuffix, getConfirmFlagName, isConfirmOffForStageFromFile" \
-  "getConfirmFlagName,getSuffix,isConfirmOffForStageFromFile" \
+expect_result "T14 exports are exactly getSuffix, getConfirmFlagName, isConfirmFlagOffFromFile" \
+  "getConfirmFlagName,getSuffix,isConfirmFlagOffFromFile" \
   "Object.keys(lib).sort().join(',')"
 
 # ── Results ─────────────────────────────────────────────────────────────────

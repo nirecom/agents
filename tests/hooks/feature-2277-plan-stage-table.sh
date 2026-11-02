@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/workflow-state/plan-stage-table.js, hooks/workflow-state/completion-approval.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/clarify-intent-complete-handler.js, bin/workflow/next-step
+# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/clarify-intent-complete-handler.js, bin/workflow/next-step
 # Tags: plan-approval, completion-approval, plan-stage-table, confirm-intent, digest, confirm-off, TL2, scope:issue-specific
 # #2277: the stage table is the SSOT for the 3 approval-gated steps; clarify_intent joins
 # outline/detail at the completion boundary (sentinel and --advance), the intent digest skips
@@ -48,7 +48,7 @@ pst_run() {
   pst_report "$(run_with_timeout 120 node "$DRIVER" "$@" 2>&1 || printf 'FAIL|driver %s|exit=%s\n' "$*" "$?")"
 }
 
-case_begin "stage-table-rows-and-lookups" "hooks/workflow-state/plan-stage-table.js"
+case_begin "stage-table-rows-and-lookups" "hooks/workflow-state/plan-step-table.js"
 pst_run table
 case_end
 

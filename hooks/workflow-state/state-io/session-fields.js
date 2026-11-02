@@ -5,7 +5,7 @@
 const { SKIPPABLE_STEPS, readState, readRawState, normalizeStateVersion, updateTopLevel } = require("./core");
 const { appendEvents } = require("./events");
 const { withStateLock } = require("./state-lock");
-const { deriveAggregateLevel, deriveStageLevels, canonicalizeSignalsForPersistence } = require("../complexity-routing");
+const { deriveAggregateLevel, deriveStepLevels, canonicalizeSignalsForPersistence } = require("../complexity-routing");
 
 // recordComplexityEvaluation(sessionId, signals):
 // Session-scoped fact, recorded as its own event (#1733) — a re-evaluation
@@ -22,12 +22,12 @@ function recordComplexityEvaluation(sessionId, signals) {
     );
   }
   // Fed to derivation RAW (not pre-normalized): a non-array signals value must
-  // reach deriveAggregateLevel/deriveStageLevels as-is so their own
+  // reach deriveAggregateLevel/deriveStepLevels as-is so their own
   // !Array.isArray(...) fail-high branch (detail.md D1 step 3) actually fires.
   // Normalizing to [] here first would make every malformed input look like a
   // valid zero-signal call and silently route to low instead of high.
   const level = deriveAggregateLevel(signals);
-  const levels = Object.assign({}, deriveStageLevels(signals));
+  const levels = Object.assign({}, deriveStepLevels(signals));
   // The PERSISTED signals field is canonicalized independently of the
   // derivation outcome above (#2099 H-SIG/LI-3/LI-6) — see
   // canonicalizeSignalsForPersistence for the exact rule.

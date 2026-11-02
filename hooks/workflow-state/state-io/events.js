@@ -183,18 +183,18 @@ function validateEvent(event) {
     // `levels` stays OPTIONAL (REQUIRED_FIELDS is unchanged) so pre-#2099 and
     // migration-backfilled events still append; when present it must be exact.
     if (event.levels !== undefined) {
-      const { ROUTING_STAGES } = require("../complexity-routing");
+      const { ROUTING_STEPS } = require("../complexity-routing");
       const lv = event.levels;
       if (!lv || typeof lv !== "object" || Array.isArray(lv)) {
         throw new InvalidEventError("event.levels must be a plain object (kind=complexity_evaluation)");
       }
       const lvKeys = Object.keys(lv);
-      if (lvKeys.length !== ROUTING_STAGES.length || !ROUTING_STAGES.every((s) => lvKeys.includes(s))) {
-        throw new InvalidEventError("event.levels keys must be exactly ROUTING_STAGES (kind=complexity_evaluation)");
+      if (lvKeys.length !== ROUTING_STEPS.length || !ROUTING_STEPS.every((s) => lvKeys.includes(s))) {
+        throw new InvalidEventError("event.levels keys must be exactly ROUTING_STEPS (kind=complexity_evaluation)");
       }
-      for (const stage of ROUTING_STAGES) {
-        if (lv[stage] !== "high" && lv[stage] !== "low") {
-          throw new InvalidEventError(`event.levels.${stage} must be "high" or "low"`);
+      for (const step of ROUTING_STEPS) {
+        if (lv[step] !== "high" && lv[step] !== "low") {
+          throw new InvalidEventError(`event.levels.${step} must be "high" or "low"`);
         }
       }
     }

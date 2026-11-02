@@ -119,14 +119,23 @@ caseBegin("plan-artifact-path-prints-first-session-path-for-writers", "bin/plan-
 {
   const run = (args) => spawnSync(process.execPath, [path.join(F.ROOT, "bin", "plan-artifact-path")].concat(args),
     { cwd: neutral, env: childEnv(), encoding: "utf8", timeout: 60000 });
-  check("U2: --session <downstream> --stage outline (file missing) prints <first>-outline.md, exit 0", () => {
+  // #2820: the CLI takes --step <step>; --stage <artifact> stays accepted as the retired alias.
+  for (const [flag, value] of [["--step", "outline"], ["--stage", "outline"]]) {
+    check(`U2: --session <downstream> ${flag} ${value} (file missing) prints <first>-outline.md, exit 0`, () => {
+      const { firstSid, downstreamSid } = needChain();
+      const r = run(["--session", downstreamSid, flag, value]);
+      return r.status === 0 && samePath(String(r.stdout).trim(), planOf(firstSid, "outline"))
+        ? undefined : `exit=${r.status} stdout=${show(r.stdout)} stderr=${show(r.stderr)}`;
+    });
+  }
+  check("U2: --step clarify_intent prints the first session's <first>-intent.md, exit 0", () => {
     const { firstSid, downstreamSid } = needChain();
-    const r = run(["--session", downstreamSid, "--stage", "outline"]);
-    return r.status === 0 && samePath(String(r.stdout).trim(), planOf(firstSid, "outline"))
+    const r = run(["--session", downstreamSid, "--step", "clarify_intent"]);
+    return r.status === 0 && samePath(String(r.stdout).trim(), planOf(firstSid, "intent"))
       ? undefined : `exit=${r.status} stdout=${show(r.stdout)} stderr=${show(r.stderr)}`;
   });
   check("U2: an invalid session id exits 1 with nothing on stdout", () => {
-    const r = run(["--session", "bad.sid", "--stage", "intent"]);
+    const r = run(["--session", "bad.sid", "--step", "clarify_intent"]);
     return r.status === 1 && String(r.stdout).trim() === "" ? undefined : `exit=${r.status} stdout=${show(r.stdout)}`;
   });
 }

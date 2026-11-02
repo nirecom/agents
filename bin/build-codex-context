@@ -44,8 +44,9 @@ source "$MARKER_LIB" || { echo "build-codex-context: required library failed to 
 # Plans are named after first_session_id (#2748): only the basename comes from
 # bin/plan-artifact-path, so PLANS_DIR keeps its spelling. Unresolvable = absent.
 plan_name() {
-    local p
-    p="$(node "$(dirname "${BASH_SOURCE[0]}")/plan-artifact-path" --stage "$1" --session "$SID" 2>/dev/null)" || return 0
+    local p step="$1"
+    [[ "$step" == intent ]] && step=clarify_intent
+    p="$(node "$(dirname "${BASH_SOURCE[0]}")/plan-artifact-path" --step "$step" --session "$SID" 2>/dev/null)" || return 0
     p="${p##*[/\\]}"
     [[ "$p" == *"-$1.md" ]] && printf '%s' "$PLANS_DIR/$p"
     return 0

@@ -1,7 +1,7 @@
 "use strict";
 // T7-4 (input 4, rules): through the opts.ruleModules seam, one changed byte in a copy of each
 // RULE_MODULES file (inside a function body) moves rulesVersion() and stales the record for all
-// six stages; the stale record's grants are not carried over. A file outside RULE_MODULES does
+// six glossary steps; the stale record's grants are not carried over. A file outside RULE_MODULES does
 // not move the digest, and the real digest is computed from every rule module's bytes (no probes).
 
 const fs = require("node:fs");
@@ -64,30 +64,30 @@ function seam(m) {
   });
 }
 
-function staleness(m, stages = F.STAGES) {
+function staleness(m, steps = F.GLOSSARY_STEPS) {
   const changed = copies("stale");
   if (!changed) return;
   bump(changed.paths[1]);
   const opts = { ruleModules: changed.paths };
-  for (const stage of stages) {
-    const ctx = C.baseline(m, `t74-${stage}`, stage);
+  for (const step of steps) {
+    const ctx = C.baseline(m, `t74-${step}`, step);
     const before = C.fp(m, ctx);
     const after = C.fp(m, ctx, opts);
     const moved = before.ok && after.ok ? C.COMPONENTS.filter((k) => before.inputs[k] !== after.inputs[k]) : null;
-    F.check(`${stage} changed rule module: only rules moves`, !!moved && moved.join(",") === "rules", JSON.stringify(moved));
+    F.check(`${step} changed rule module: only rules moves`, !!moved && moved.join(",") === "rules", JSON.stringify(moved));
     const v = C.evaluate(m, ctx, opts);
-    F.check(`${stage} changed rule module: evaluateGlossaryCheck is glossary-check-stale naming only rules`,
+    F.check(`${step} changed rule module: evaluateGlossaryCheck is glossary-check-stale naming only rules`,
       !!v && v.ok === false && v.code === "glossary-check-stale" && C.named(v.detail).join(",") === "rules", JSON.stringify(v));
-    const rec = F.recordOf(ctx.sid, stage);
+    const rec = F.recordOf(ctx.sid, step);
     const grantsAfter = (fpr) => {
-      const evs = m.record.checkRecordEvents(rec, stage, fpr, rec ? rec.findings : []) || [];
+      const evs = m.record.checkRecordEvents(rec, step, fpr, rec ? rec.findings : []) || [];
       const ev = evs.find((e) => e && e.key === "glossary_check");
       return ev && ev.value ? ev.value.grants || [] : null;
     };
-    F.check(`${stage} changed rule module: a same-fingerprint re-record keeps the grant (control)`,
+    F.check(`${step} changed rule module: a same-fingerprint re-record keeps the grant (control)`,
       (grantsAfter(before) || []).length > 0, JSON.stringify(grantsAfter(before)));
     const g = grantsAfter(after);
-    F.check(`${stage} changed rule module: the re-record carries no grant of the old fingerprint`,
+    F.check(`${step} changed rule module: the re-record carries no grant of the old fingerprint`,
       Array.isArray(g) && g.length === 0, JSON.stringify(g));
   }
 }
