@@ -38,7 +38,7 @@ function marker(sid, rel, stage) {
   require(path.join(F.ROOT, "hooks", "lib", "turn-marker")).writeTurnMarker(sid, {
     absPath: path.resolve(F.absOf(repo, rel)), suffix: stage || "intent", ts: Date.now(), created_at: new Date().toISOString() });
 }
-const STAGES = ["intent", "outline", "detail"];
+const ARTIFACTS = ["intent", "outline", "detail"];
 const STEP_OF = { intent: "clarify_intent", outline: "outline", detail: "detail" };
 // The outline / detail flags are read from $AGENTS_MAIN_ROOT/.env only (#2729): a root with every plan stage ON.
 let onRoot = null;
@@ -76,7 +76,7 @@ function published(tag, stage, opts) {
   const st = stage || "intent";
   const sid = require("node:crypto").randomUUID();
   if (!(opts && opts.noState)) workflowState(sid);
-  for (const prev of STAGES.slice(0, STAGES.indexOf(st))) F.writePlan(repo, F.planName(sid, prev), `${tag} ${prev} body\n`);
+  for (const prev of ARTIFACTS.slice(0, ARTIFACTS.indexOf(st))) F.writePlan(repo, F.planName(sid, prev), `${tag} ${prev} body\n`);
   const a = F.planName(sid, st);
   const r = F.writeSync(repo, a, (opts && opts.body) || `${tag} body\n`);
   marker(sid, a, st);
@@ -90,7 +90,7 @@ function gateAt(sid, stage) {
   const D = require("./feature-2853-pre-confirm-audit/driver");
   const steps = { workflow_init: "complete", clarify_intent: "pending" };
   const approvals = [];
-  for (const prev of STAGES.slice(0, STAGES.indexOf(stage))) {
+  for (const prev of ARTIFACTS.slice(0, ARTIFACTS.indexOf(stage))) {
     Object.assign(steps, { [STEP_OF[prev]]: "complete", research: "complete", [STEP_OF[stage]]: "pending" });
     approvals.push({ step: STEP_OF[prev] });
   }
@@ -255,7 +255,7 @@ test("P4 WARN and CONTINUE: the receipt check runs as before", verdict(() => {
 caseEnd();
 caseBegin("P8 every plan stage: unsettled and BLOCK deny, settled or accepted pass", "hooks/confirm-checkpoint.js");
 test("P8 every plan stage: unsettled and BLOCK deny, settled or accepted pass", verdict(() => {
-  for (const stage of STAGES) {
+  for (const stage of ARTIFACTS) {
     const tag = `[${stage}]`;
     F.guard(`P8 ${stage} unsettled / BLOCK / accepted`, () => {
       const { sid, a } = published(`p8${stage}u`, stage);

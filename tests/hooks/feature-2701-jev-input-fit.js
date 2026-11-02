@@ -44,7 +44,7 @@ const common = () => require(COMMON_JS);
 const UNIT = "\\u8a2d\\u8a08\\u306e\\u8981\\u70b9\\u3068\\u5909\\u66f4\\u7bc4\\u56f2\\u3092\\u8aac\\u660e\\u3059\\u308b\\u77ed\\u3044\\u6587\\u7ae0\\u3067\\u3059\\u3002 Notes on scope here.\n";
 const text = (n) => UNIT.repeat(Math.ceil(n / UNIT.length) + 1).slice(0, n);
 const SIZES = { intent: 3700, outline: 4600, "issue body": 2500, detail: 17000 };
-const PLAN_STAGES = ["write-tests", "write-code"];
+const PLAN_TICKET_STAGES = ["write-tests", "write-code"];
 const PLAN_ORDER = ["detail", "outline", "intent"];
 
 const put = (name, body) => fs.writeFileSync(path.join(PLANS, `${SID}-${name}`), body);
@@ -83,7 +83,7 @@ const PAIRS = [];
 for (const [point, entry] of Object.entries(REGISTRY)) {
   for (const stage of entry.stages) PAIRS.push([point, stage, entry.required_sections_by_stage[stage]]);
 }
-const fixtureFor = (stage) => (PLAN_STAGES.includes(stage) ? SIZES
+const fixtureFor = (stage) => (PLAN_TICKET_STAGES.includes(stage) ? SIZES
   : { intent: SIZES.intent, outline: SIZES.outline, "issue body": SIZES["issue body"] });
 
 caseBegin("budget-decoupled", "hooks/lib/jev/two-stage/jev-input.js");
@@ -199,7 +199,7 @@ const bigDetail = (stepsHeading, n) => [
 ].join("\n");
 
 caseBegin("plan-sections-fallback-chain", "hooks/lib/jev/two-stage/jev-input.js");
-for (const stage of PLAN_STAGES) {
+for (const stage of PLAN_TICKET_STAGES) {
   test(`${stage}: shipped registry requires the issue body only, plan sections detail > outline > intent`, () => {
     assert.deepStrictEqual(requiredOf(stage), ["issue body"]);
     assert.deepStrictEqual(planOf(stage), PLAN_ORDER);
@@ -286,7 +286,7 @@ test("the shipped entries validate; only complexity-judge carries plan_sections_
   assert.ok(!("plan_sections_by_stage" in REGISTRY["outline-skip"]) && !("plan_sections_by_stage" in REGISTRY["detail-skip"]));
 });
 test("stages without plan sections still require intent and issue body", () => {
-  for (const [point, stage, required] of PAIRS.filter((p) => !PLAN_STAGES.includes(p[1]))) {
+  for (const [point, stage, required] of PAIRS.filter((p) => !PLAN_TICKET_STAGES.includes(p[1]))) {
     assert.ok(required.includes("intent") && required.includes("issue body"), `${point}/${stage}: ${required}`);
   }
 });

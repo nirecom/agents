@@ -30,7 +30,7 @@ function learn(F, repo) {
 function expectedHead(F, repo, rel) {
   const PL = require(path.join(F.ROOT, "hooks", "lib", "plan-link"));
   const { planGateState } = require(path.join(F.ROOT, "hooks", "lib", "confirm-gate", "plan-gate"));
-  const entry = { stage: "intent", url: F.blobUrl(rel), path: path.resolve(F.absOf(repo, rel)), gate: planGateState("intent", { timeoutMs: 5000 }) };
+  const entry = { stage: "intent", url: F.blobUrl(rel), path: path.resolve(F.absOf(repo, rel)), gate: planGateState("clarify_intent", { timeoutMs: 5000 }) };
   return PL.renderModelContext([entry], { when: "after-write" });
 }
 // multiWrite(F, repo, rels, {sid}) -> one editFiles call naming every rel (per-entry file_path in edits[]).

@@ -173,7 +173,7 @@ function modeReason() {
   const ok = ranAhead("ar-ok", "detail", {});
   // #2529: an approved gated step also waits on its glossary_check record; seed a current one
   // (from the fixture repo cwd) so this case keeps isolating the approval-only verdict.
-  const rec = F.runNode("bin/check-glossary-drift", ["--session", ok, "--stage", "detail", "--record"], "");
+  const rec = F.runNode("bin/check-glossary-drift", ["--session", ok, "--step", "detail", "--record"], "");
   F.check("approvalWaitFor: approved step -> no wait", !call(ok, "detail"),
     JSON.stringify(call(ok, "detail")) + ` record-exit=${rec.code} err=${rec.err}`);
   F.check("approvalWaitFor: non-gated step -> no wait", !call(ok, "write_tests"), JSON.stringify(call(ok, "write_tests")));

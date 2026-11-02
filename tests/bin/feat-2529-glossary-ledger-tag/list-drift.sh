@@ -43,10 +43,10 @@ else
 fi
 chmod 600 "$led" 2>/dev/null
 
-# The sentinel at a ledger stage with no ledger grants nothing, and accept stays refused.
+# The sentinel at a ledger step with no ledger grants nothing, and accept stays refused.
 sid="$(lt_sid lssn test-review)"
 lt_seed_current "$sid" review_tests
-lt_mark "$sid" "$(lt_accepted "foo bar" tests)"
+lt_mark "$sid" "$(lt_accepted "foo bar" review_tests)"
 lt_eq "sentinel with no ledger records no ledger_grants" "(absent)" "$(lt_grants_of "$sid" review_tests)"
 lt_build "$sid" test-review
 lt_accept "$sid" test-review C1

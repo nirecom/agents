@@ -10,7 +10,7 @@ const TAGGED_PAIR = (F) => [
   { id: "C2", discrim: "d2", text: F.tagged("Glossary-Drift", "second spelling of the same term") },
 ];
 
-// A repo + session sitting at `step`, no glossary_check record, with `rows` in the stage's ledger.
+// A repo + session sitting at `step`, no glossary_check record, with `rows` in the step's ledger.
 function atStep(F, tag, step, format, rows) {
   const repo = F.mkRepo(tag);
   const sid = F.newSid(tag);
@@ -19,27 +19,27 @@ function atStep(F, tag, step, format, rows) {
   if (format && rows) F.writeLedger(sid, format, rows);
   return { repo, sid };
 }
-const lgrants = (F, sid, stage) => { const r = F.recordOf(sid, stage); return (r && Array.isArray(r.ledger_grants)) ? r.ledger_grants : []; };
+const lgrants = (F, sid, step) => { const r = F.recordOf(sid, step); return (r && Array.isArray(r.ledger_grants)) ? r.ledger_grants : []; };
 
-// Granted at every ledger stage; the record has no fingerprint and the stage stays incomplete.
+// Granted at every ledger step; the record has no fingerprint and the step stays incomplete.
 function grants(F) {
   const R = F.mod("hooks/workflow-state/glossary-check/record.js");
   const out = {};
-  for (const [stage, format] of Object.entries(F.LEDGER_FORMAT)) {
-    const s = atStep(F, `lg-${stage}`, F.STAGE_STEP[stage], format, TAGGED_PAIR(F));
+  for (const [step, format] of Object.entries(F.LEDGER_FORMAT)) {
+    const s = atStep(F, `lg-${step}`, step, format, TAGGED_PAIR(F));
     const r = F.mark(s.sid, F.accepted("glossary drifts", "", REASON), s.repo);
-    const rec = F.recordOf(s.sid, stage);
-    const g = lgrants(F, s.sid, stage);
-    F.check(`T4-2 (c) ${stage}/${format}: one term-level sentinel grants both tagged concerns (d1, d2)`,
+    const rec = F.recordOf(s.sid, step);
+    const g = lgrants(F, s.sid, step);
+    F.check(`T4-2 (c) ${step}/${format}: one term-level sentinel grants both tagged concerns (d1, d2)`,
       g.map((x) => x.discrim).sort().join(",") === "d1,d2" && g.every((x) => x.reason === REASON && typeof x.norm === "string" && x.norm !== ""),
       `${JSON.stringify(rec)} ${r.all}`);
-    F.check(`T4-2 (c) ${stage}: the new record is { v: 1, stage, ledger_grants } with no fingerprint`,
-      !!rec && rec.v === 1 && rec.stage === stage && !("fingerprint" in rec), JSON.stringify(rec));
+    F.check(`T4-2 (c) ${step}: the new record is { v: 1, step, ledger_grants } with no fingerprint and no stage key`,
+      !!rec && rec.v === 1 && rec.step === step && !("stage" in rec) && !("fingerprint" in rec), JSON.stringify(rec));
     const ev = R && typeof R.evaluateGlossaryCheck === "function"
-      ? R.evaluateGlossaryCheck(s.sid, F.STAGE_STEP[stage], F.readState(s.sid), { repoDir: s.repo }) : null;
-    F.check(`T4-2 (c) ${stage}: evaluateGlossaryCheck stays glossary-check-missing`,
+      ? R.evaluateGlossaryCheck(s.sid, step, F.readState(s.sid), { repoDir: s.repo }) : null;
+    F.check(`T4-2 (c) ${step}: evaluateGlossaryCheck stays glossary-check-missing`,
       !!ev && ev.ok === false && ev.code === "glossary-check-missing", JSON.stringify(ev));
-    out[stage] = Object.assign({ norm: g[0] ? g[0].norm : F.TERM }, s);
+    out[step] = Object.assign({ norm: g[0] ? g[0].norm : F.TERM }, s);
   }
   return out;
 }
@@ -62,10 +62,10 @@ function pending(F) {
   F.check("T4-2 (c) detail: a reopened tagged concern is granted",
     lgrants(F, s.sid, "detail").map((x) => x.discrim).join(",") === "d7", JSON.stringify(F.recordOf(s.sid, "detail")));
 
-  for (const [stage, step] of [["intent", "clarify_intent"], ["docs", "review_docs"]]) {
-    const t = atStep(F, `lp-${stage}`, step, null, null);
+  for (const step of ["clarify_intent", "review_docs"]) {
+    const t = atStep(F, `lp-${step}`, step, null, null);
     for (const format of Object.values(F.LEDGER_FORMAT)) F.writeLedger(t.sid, format, TAGGED_PAIR(F));
-    F.expectRejected(`T4-2 (c) ${stage} stage has no ledger: tagged concerns elsewhere are not granted`,
+    F.expectRejected(`T4-2 (c) ${step} step has no ledger: tagged concerns elsewhere are not granted`,
       t.sid, F.accepted(F.TERM, "", REASON), t.repo);
   }
 }

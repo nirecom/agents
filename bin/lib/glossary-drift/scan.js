@@ -1,6 +1,6 @@
 "use strict";
 // bin/lib/glossary-drift/scan.js — the drift findings of one text (findDrift: the prose layer and
-// the identifier layer merged in line / column order) and of one loadStageInputs result.
+// the identifier layer merged in line / column order) and of one loadStepInputs result.
 // Matching rules SSOT: docs/architecture/claude-code/glossary-check.md#matching-rules.
 
 const { normalizeTerm } = require("../../../hooks/lib/glossary-term");
@@ -21,7 +21,7 @@ function findDrift(text, format, terms) {
 }
 
 // scanStageInputs(inputs) -> [{ term, norm, variant, path, line, where }] over the artifact files
-// of one loadStageInputs result; a file's lineMap maps a range line back to its file line, and a
+// of one loadStepInputs result; a file's lineMap maps a range line back to its file line, and a
 // file's changedLines (staged files, #2770) keeps only the hits on those file lines. A
 // term an intent row deletes is no canonical term, even while the glossary file still lists it;
 // an add / redefine row of the same term (a category move) keeps it. A delete row matches its own

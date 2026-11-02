@@ -4,7 +4,7 @@
 # (Sourced fragment of tests/hooks/fix-1133-1148-approval-gate.sh — not run standalone.)
 # G14 (F1): the CONFIRM_<STAGE>=off waiver is resolved from the .env FILE only — an inline
 # `CONFIRM_OUTLINE=off node bin/workflow/next-step` prefix is model-controlled, so
-# evaluateCompletionApproval must use isConfirmOffForStageFromFile, NEVER process.env.
+# evaluateCompletionApproval must use isConfirmFlagOffFromFile, NEVER process.env.
 # fail-before-fix: the pre-fix gate read process.env, so the inline prefix minted a
 # confirm-flag-off record. Both gated members (outline AND detail) are exercised — CPR-ORTH.
 

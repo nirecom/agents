@@ -14,7 +14,7 @@ d2099_validate_table() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const base = JSON.parse(JSON.stringify(m.STAGE_ROUTING));
+const base = JSON.parse(JSON.stringify(m.STEP_ROUTING));
 function mutate(fn) { const t = JSON.parse(JSON.stringify(base)); fn(t); return t; }
 
 const CASES = [
@@ -136,8 +136,8 @@ d2099_table_structure() {
     local got
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const t = m.STAGE_ROUTING;
-const soloSingletonLeak = m.ROUTING_STAGES.some(function (s) {
+const t = m.STEP_ROUTING;
+const soloSingletonLeak = m.ROUTING_STEPS.some(function (s) {
   return (t[s].combination_escalation || []).some(function (c) { return c.length < 2; });
 });
 console.log([
@@ -145,23 +145,23 @@ console.log([
   t.write_tests.solo_escalation.join(","),
   t.write_code.solo_escalation.join(","),
   (t.write_code.legacy_equivalent_escalation || []).map(function (c) { return c.join("+"); }).join(","),
-  "combination_rows=" + m.ROUTING_STAGES.map(function (s) { return (t[s].combination_escalation || []).length; }).join(","),
+  "combination_rows=" + m.ROUTING_STEPS.map(function (s) { return (t[s].combination_escalation || []).length; }).join(","),
   soloSingletonLeak ? "SINGLETON_LEAK" : "NO_SINGLETON_LEAK",
   Object.isFrozen(t) && Object.isFrozen(t.detail.solo_escalation) ? "DEEP_FROZEN" : "NOT_DEEP_FROZEN",
 ].join(" | "));
 ')
-    assert_eq "V-2 STAGE_ROUTING carries the D2 field split verbatim and its root/solo array are frozen" \
+    assert_eq "V-2 STEP_ROUTING carries the D2 field split verbatim and its root/solo array are frozen" \
         "S2-architecture,S5-breaking | S2-architecture,S3-security,S4-installer,S5-breaking | S3-security | S1b-wide-change,S2-architecture,S4-installer,S5-breaking | combination_rows=0,0,0,0 | NO_SINGLETON_LEAK | DEEP_FROZEN" \
         "$got"
 
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const d = m.ROUTING_STAGES.map(function (s) { return m.describeStageRouting(s); });
+const d = m.ROUTING_STEPS.map(function (s) { return m.describeStepRouting(s); });
 const allStrings = d.every(function (x) { return typeof x === "string" && x.length > 0; });
-const mentionsOwnStage = m.ROUTING_STAGES.every(function (s, i) { return d[i].indexOf(s) !== -1; });
+const mentionsOwnStage = m.ROUTING_STEPS.every(function (s, i) { return d[i].indexOf(s) !== -1; });
 console.log((allStrings ? "STRINGS" : "NOT_STRINGS") + " " + (mentionsOwnStage ? "NAMED" : "UNNAMED"));
 ')
-    assert_eq "V-3 describeStageRouting yields a non-empty description naming its own stage" \
+    assert_eq "V-3 describeStepRouting yields a non-empty description naming its own step" \
         "STRINGS NAMED" "$got"
 }
 
@@ -189,8 +189,8 @@ function walk(v, path) {
     Object.keys(v).forEach(function (k) { walk(v[k], path + "." + k); });
   }
 }
-walk(m.STAGE_ROUTING, "STAGE_ROUTING");
-walk(m.ROUTING_STAGES, "ROUTING_STAGES");
+walk(m.STEP_ROUTING, "STEP_ROUTING");
+walk(m.ROUTING_STEPS, "ROUTING_STEPS");
 walk(m.SIGNAL_IDS, "SIGNAL_IDS");
 walk(m.JUDGED_SIGNAL_IDS, "JUDGED_SIGNAL_IDS");
 walk(m.DETERMINISTIC_SIGNAL_IDS, "DETERMINISTIC_SIGNAL_IDS");
@@ -206,7 +206,7 @@ console.log(unfrozen.length ? unfrozen.sort().join(",") : "ALL_FROZEN");
     # caught here even if it never throws.
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const t = m.STAGE_ROUTING;
+const t = m.STEP_ROUTING;
 function snap(v) { return JSON.stringify(v); }
 const ATTEMPTS = [
   ["root-replace-entry", function () { t.detail = {}; }],
@@ -223,14 +223,14 @@ const ATTEMPTS = [
   ["legacy-push", function () { t.write_code.legacy_equivalent_escalation.push(["S9-injected"]); }],
   ["legacy-inner-push", function () { t.write_code.legacy_equivalent_escalation[0].push("S9-injected"); }],
   ["legacy-inner-element-assign", function () { t.write_code.legacy_equivalent_escalation[0][0] = "S9-injected"; }],
-  ["stages-push", function () { m.ROUTING_STAGES.push("docs"); }],
+  ["stages-push", function () { m.ROUTING_STEPS.push("docs"); }],
   ["signal-ids-push", function () { m.SIGNAL_IDS.push("S9-injected"); }],
 ];
 const mutated = [];
 for (const a of ATTEMPTS) {
-  const before = snap(t) + "|" + snap(m.ROUTING_STAGES) + "|" + snap(m.SIGNAL_IDS);
+  const before = snap(t) + "|" + snap(m.ROUTING_STEPS) + "|" + snap(m.SIGNAL_IDS);
   try { a[1](); } catch (e) { /* strict-mode TypeError is a pass, not a change */ }
-  const after = snap(t) + "|" + snap(m.ROUTING_STAGES) + "|" + snap(m.SIGNAL_IDS);
+  const after = snap(t) + "|" + snap(m.ROUTING_STEPS) + "|" + snap(m.SIGNAL_IDS);
   if (before !== after) { mutated.push(a[0]); }
 }
 console.log(mutated.length ? mutated.join(",") : "NO_MUTATION_TOOK_EFFECT");
@@ -243,7 +243,7 @@ console.log(mutated.length ? mutated.join(",") : "NO_MUTATION_TOOK_EFFECT");
     # load at all (every attempt throwing) would look identical to a frozen one.
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const t = JSON.parse(JSON.stringify(m.STAGE_ROUTING));
+const t = JSON.parse(JSON.stringify(m.STEP_ROUTING));
 let mutated = 0;
 try { t.detail.some_field = "x"; if (t.detail.some_field === "x") { mutated++; } } catch (e) {}
 try { t.detail.solo_escalation.push("S9-injected");
@@ -282,8 +282,8 @@ console.log([
 
     got=$(run_node '
 const m = require(process.env.CR_MOD_N);
-const ok = m.validateRoutingTable(JSON.parse(JSON.stringify(m.STAGE_ROUTING)));
-const bad = JSON.parse(JSON.stringify(m.STAGE_ROUTING));
+const ok = m.validateRoutingTable(JSON.parse(JSON.stringify(m.STEP_ROUTING)));
+const bad = JSON.parse(JSON.stringify(m.STEP_ROUTING));
 bad.detail.default_level = "medium";
 const r = m.validateRoutingTable(bad);
 const foreign = r.errors.filter(function (e) { return e.indexOf("detail.") !== 0; });

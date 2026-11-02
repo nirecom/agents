@@ -18,7 +18,8 @@ function stopOf(s, tp, o) {
   const input = Object.assign({ stop_hook_active: x.active === true }, x.last === undefined ? {} : { last_assistant_message: x.last });
   return R.stop(s.sid, tp, { cfg: x.cfg, env, input });
 }
-const faultEnv = (modes, stage) => Object.assign({ CC_MARK_FAULT: modes }, stage ? { CC_MARK_FAULT_STAGE: stage } : {});
+// faultEnv(modes, artifact): the preload matches the receipt file, which is named by the workflow step (#2820).
+const faultEnv = (modes, artifact) => Object.assign({ CC_MARK_FAULT: modes }, artifact ? { CC_MARK_FAULT_STEP: H.stepOf(artifact) } : {});
 
 // decidable(s, stages) -> {close, tp}: a turn whose last text entry closes on the stages' link lines.
 function decidable(s, stages) {
@@ -51,7 +52,7 @@ function rereadRun(s, stages, kind, variant) {
   return { msg, tp: oldTp, opts };
 }
 
-const rcpt = (sid, stage) => R.readReceiptRaw(sid, stage);
+const rcpt = (sid, artifact) => R.readReceiptRaw(sid, H.stepOf(artifact));
 const marked = (sid, stage) => { const r = rcpt(sid, stage); return r !== null && typeof r.continuedAt === "string" && r.continuedAt !== ""; };
 const sysMsg = (st) => (typeof st.json.systemMessage === "string" ? st.json.systemMessage : "");
 const noDecision = (st) => !("decision" in st.json);

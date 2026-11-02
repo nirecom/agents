@@ -3,7 +3,7 @@
 // hooks/lib/plan-link.js sees from ./plan-sync (no git, no network):
 //   published (default) | not-published | unknown-forge | host-mismatch | not-provisioned | plan-sync-off
 // CC_FAULT breaks one seam for real: link-throws (plan-link linkForFile throws) |
-// presented-throws (confirm-continuation presentedStages throws).
+// presented-throws (confirm-continuation presentedArtifacts throws).
 const Module = require("module");
 const path = require("path");
 
@@ -35,9 +35,9 @@ Module._load = function (request, parent, ...rest) {
       patched.add(mod);
       mod.linkForFile = () => { throw new Error("fault: linkForFile"); };
     }
-    if (FAULT === "presented-throws" && /(^|[\\/])confirm-continuation(\.js)?$/.test(req) && typeof mod.presentedStages === "function") {
+    if (FAULT === "presented-throws" && /(^|[\\/])confirm-continuation(\.js)?$/.test(req) && typeof mod.presentedArtifacts === "function") {
       patched.add(mod);
-      mod.presentedStages = () => { throw new Error("fault: presentedStages"); };
+      mod.presentedArtifacts = () => { throw new Error("fault: presentedArtifacts"); };
     }
   }
   return mod;

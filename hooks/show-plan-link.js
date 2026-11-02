@@ -217,21 +217,24 @@ function showsMessage(result) {
   return !(r.status === "skipped" && QUIET_SKIP_REASONS.has(r.reason));
 }
 
-// gateOf(stage, timeoutMs) -> the stage's own gate (#2729); never aggregated across stages, so a
-// mixed write gets one duty per stage. A spent budget or a throw is ERROR, which renders as ON.
-function gateOf(stage, timeoutMs) {
+// gateOf(step, timeoutMs) -> the step's own gate (#2729); never aggregated across steps, so a
+// mixed write gets one duty per step. A spent budget or a throw is ERROR, which renders as ON.
+function gateOf(step, timeoutMs) {
   try {
     const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../bin/workflow/lib/next-step/gate-line");
     const { planGateState } = require("./lib/confirm-gate/plan-gate");
-    return planGateState(stage, { timeoutMs: Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, timeoutMs) });
+    return planGateState(step, { timeoutMs: Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, timeoutMs) });
   } catch (_) {
     return "ERROR";
   }
 }
 
-// entryFor(run, gateTimeoutMs) -> {stage, gate, url?, path?, reason?} — the plan-link row of one written plan.
+// entryFor(run, gateTimeoutMs) -> {stage, gate, url?, path?, reason?} — the plan-link row of one
+// written plan. The row is keyed by the artifact name, the gate by its step.
 function entryFor(run, gateTimeoutMs) {
-  return { ...linkEntryFor(run), gate: gateOf(getSuffix(run.filePath), gateTimeoutMs) };
+  let step = null;
+  try { step = require("./workflow-state/plan-step-table").stepForSuffix(getSuffix(run.filePath)); } catch (_) { /* ERROR below */ }
+  return { ...linkEntryFor(run), gate: gateOf(step, gateTimeoutMs) };
 }
 
 function linkEntryFor(run) {

@@ -41,8 +41,8 @@ Regenerate: `node "$AGENTS_MAIN_ROOT/bin/workflow/derive-complexity-level" --pri
 ## Stage Routing (reference only — the code is authoritative)
 
 <!-- BEGIN GENERATED: stage-routing -->
-| Stage | Default | Solo escalation (`solo_escalation`) | Legacy-equivalent escalation (`legacy_equivalent_escalation`) | Combination escalation (`combination_escalation`) | Undecidable |
-|-------|---------|-----------------|------------------------------|------------------------|-------------|
+| Step | Default | Solo escalation (`solo_escalation`) | Legacy-equivalent escalation (`legacy_equivalent_escalation`) | Combination escalation (`combination_escalation`) | Undecidable |
+|------|---------|-----------------|------------------------------|------------------------|-------------|
 | `outline` | low | `S2-architecture`<br>`S5-breaking` | — | — | high |
 | `detail` | low | `S2-architecture`<br>`S5-breaking` | — | — | high |
 | `write_tests` | low | `S2-architecture`<br>`S3-security`<br>`S4-installer`<br>`S5-breaking` | — | — | high |

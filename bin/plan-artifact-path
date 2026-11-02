@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// bin/plan-artifact-path --stage <intent|outline|detail> [--session <sid>] [--plans-dir <dir>]
+// bin/plan-artifact-path --step <clarify_intent|outline|detail> [--session <sid>] [--plans-dir <dir>]
 // Prints the absolute path every generation of the session chain reads and writes the plan
-// artifact at, one line: <first_session_id>-<stage>.md (hooks/workflow-state/plan-artifact-owner.js,
+// artifact of that workflow step at, one line: <first_session_id>-<artifact>.md, where <artifact>
+// is the step's plan artifact name (hooks/workflow-state/plan-step-table.js, plan-artifact-owner.js,
 // #2748). The path is printed with exit 0 whether or not the file exists, so a writer writes there
 // and a reader decides "absent" itself. The session defaults to the current session
 // (hooks/workflow-state resolveSessionId). Read-only.
@@ -10,7 +11,8 @@
 const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
-const STAGES = ["intent", "outline", "detail"];
+const { PLAN_STEP_TABLE, rowFor } = require(path.join(ROOT, "hooks", "workflow-state", "plan-step-table.js"));
+const STEPS = Object.keys(PLAN_STEP_TABLE);
 
 function die(code, msg) {
   process.stderr.write(`plan-artifact-path: ${msg}\n`);
@@ -19,14 +21,23 @@ function die(code, msg) {
 
 function parseArgs(argv) {
   const out = {};
-  const keys = { "--stage": "stage", "--session": "session", "--plans-dir": "plansDir" };
+  const keys = { "--step": "step", "--session": "session", "--plans-dir": "plansDir" };
+  // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+  keys["--stage"] = "legacy";
+  // --- END temporary: workflow stage -> workflow step migration ---
   for (let i = 0; i < argv.length; i++) {
-    const key = keys[argv[i]];
+    const key = Object.prototype.hasOwnProperty.call(keys, argv[i]) ? keys[argv[i]] : null;
     if (!key) die(2, `unknown argument: ${argv[i]}`);
     if (i + 1 >= argv.length || argv[i + 1].startsWith("--")) die(2, `${argv[i]} needs a value`);
     out[key] = argv[++i];
   }
-  if (!STAGES.includes(out.stage)) die(2, `--stage must be one of ${STAGES.join(", ")}`);
+  if (out.step !== undefined && out.legacy !== undefined) die(2, "pass --step only once, without its deprecated alias");
+  // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+  if (out.legacy !== undefined) out.step = require(path.join(ROOT, "hooks", "lib", "temporary-migrations", "stage-to-step")).stepOfLegacyStageArg("plan-artifact-path", out.legacy) || `(invalid: ${out.legacy})`;
+  // --- END temporary: workflow stage -> workflow step migration ---
+  if (!STEPS.includes(out.step)) die(2, `--step <${STEPS.join("|")}>`);
   if (out.plansDir !== undefined && !path.isAbsolute(out.plansDir)) die(2, "--plans-dir must be an absolute path");
   // Git Bash callers hand over a POSIX drive-letter path; Node needs the Windows form (no-op on POSIX).
   if (out.plansDir !== undefined) out.plansDir = require(path.join(ROOT, "hooks", "lib", "branch-diff.js")).toWindowsPath(out.plansDir);
@@ -42,7 +53,7 @@ if (!WS.SESSION_ID_VALID_RE.test(sid)) die(1, "not a session id");
 let owner;
 try {
   const { resolvePlanArtifactOwner } = require(path.join(ROOT, "hooks", "workflow-state", "plan-artifact-owner.js"));
-  owner = resolvePlanArtifactOwner(sid, args.stage, undefined, args.plansDir ? { plansDir: args.plansDir } : undefined);
+  owner = resolvePlanArtifactOwner(sid, rowFor(args.step).suffix, undefined, args.plansDir ? { plansDir: args.plansDir } : undefined);
 } catch (e) {
   die(1, e.message);
 }

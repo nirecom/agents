@@ -13,7 +13,7 @@ const RS = require("../../lib/presentation-receipt-seed");
 
 const ROOT = F.ROOT;
 const STEP = { intent: "clarify_intent", outline: "outline", detail: "detail" };
-const STAGES = ["intent", "outline", "detail"];
+const ARTIFACTS = Object.keys(STEP);
 const PROBE_COUNT_PRELOAD = path.join(__dirname, "probe-count-preload.js");
 const PROBE_FAULT_PRELOAD = path.join(__dirname, "probe-fault-preload.js");
 const PUBLISH_STUB = path.join(ROOT, "tests", "hooks", "feature-2513-confirm-turn-split", "publish-stub.js");
@@ -168,7 +168,7 @@ function countLog(file) {
 const show = (x) => { try { return JSON.stringify(x); } catch (_) { return String(x); } };
 
 module.exports = {
-  F, ROOT, STEP, STAGES, BLOB, TDIR, PROBE_COUNT_PRELOAD, PROBE_FAULT_PRELOAD, PUBLISH_STUB,
+  F, ROOT, STEP, ARTIFACTS, BLOB, TDIR, PROBE_COUNT_PRELOAD, PROBE_FAULT_PRELOAD, PUBLISH_STUB,
   uuidSid, U, UMETA, STOPFB, A, T, W, BASH, TR, ECHO, echoOf,
   sessionAt, linesFor, turnMarker, stateDirOf, markPath, readMark, turnMarkersLeft,
   writeTranscript, tryRequire, gateEnv, nodeOptions, probeFaultEnv, countLog, runStop, show, check: F.check,

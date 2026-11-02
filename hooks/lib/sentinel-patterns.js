@@ -130,8 +130,14 @@ const RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_
 // prove pre-existing; bin/run-tests-baseline consumes the grant. Same reason charset.
 const RUN_TESTS_BASELINE_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: ([^>()\x60;|&]+)>>"$/;
 const RUN_TESTS_BASELINE_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED([: ].*)?>>"\s*$/;
-// Glossary grant (#2529): term (no `=`), up to 3 op=/cat=/stage= discriminators, reason.
-const GLOSSARY_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=([^>()\x60;|&=]+?)((?: (?:op|cat|stage)=[a-z-]+){0,3}) — ([^>()\x60;|&]+)>>"$/;
+// Glossary grant (#2529): term (no `=`), up to 3 op=/cat=/step= discriminators, reason.
+const GLOSSARY_DISCRIMINATOR_NAMES = ["op", "cat", "step"];
+// --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+// deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+GLOSSARY_DISCRIMINATOR_NAMES.push("stage");
+// --- END temporary: workflow stage -> workflow step migration ---
+const GLOSSARY_ACCEPTED_RE_DQ = new RegExp("^echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: term=([^>()\\x60;|&=]+?)((?: (?:" +
+  GLOSSARY_DISCRIMINATOR_NAMES.join("|") + ")=[a-z_-]+){0,3}) — ([^>()\\x60;|&]+)>>\"$");
 const GLOSSARY_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_GLOSSARY_ACCEPTED([: ].*)?>>"\s*$/;
 // Supervisor verdict acceptance (#2709, renamed in #2597): the user's reviewed acceptance of a
 // TR5 BLOCK / WARN verdict. Human-only via settings.json `ask`; the workflow-mark handler is its

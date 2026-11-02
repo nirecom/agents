@@ -21,9 +21,9 @@ function pendingOutline(F, tag) {
   return { repo, sid, rec, norm: rec && rec.findings && rec.findings[0] ? rec.findings[0].norm : F.TERM };
 }
 
-function grantsOf(F, sid, stage) { const r = F.recordOf(sid, stage); return (r && Array.isArray(r.grants)) ? r.grants : []; }
+function grantsOf(F, sid, step) { const r = F.recordOf(sid, step); return (r && Array.isArray(r.grants)) ? r.grants : []; }
 
-// (a): normalization, duplicate, preemptive, stage discriminator, provenance discriminator.
+// (a): normalization, duplicate, preemptive, step discriminator, provenance discriminator.
 function findings(F) {
   for (const spelling of ["glossary drift", "Glossary Drift", "glossary-drift", "GLOSSARY-DRIFTS", "glossary drifts"]) {
     const s = pendingOutline(F, `norm-${spelling.replace(/\W+/g, "")}`);
@@ -37,17 +37,17 @@ function findings(F) {
       F.expectRejected("T4-2 (a) a term with no finding (preemptive)", s.sid, F.accepted(F.TERM2, "", REASON), s.repo);
     }
   }
-  const st = pendingOutline(F, "stage-ok");
-  F.mark(st.sid, F.accepted(F.TERM, "stage=outline", REASON), st.repo);
-  F.check("T4-2 (a) stage=<current stage>: grant recorded", grantsOf(F, st.sid, "outline").length === 1,
+  const st = pendingOutline(F, "step-ok");
+  F.mark(st.sid, F.accepted(F.TERM, "step=outline", REASON), st.repo);
+  F.check("T4-2 (a) step=<current step>: grant recorded", grantsOf(F, st.sid, "outline").length === 1,
     JSON.stringify(F.recordOf(st.sid, "outline")));
-  const sm = pendingOutline(F, "stage-ng");
-  F.expectRejected("T4-2 (a) stage=detail while the current stage is outline", sm.sid, F.accepted(F.TERM, "stage=detail", REASON), sm.repo,
-    /stage=detail has no open finding/);
+  const sm = pendingOutline(F, "step-ng");
+  F.expectRejected("T4-2 (a) step=detail while the current step is outline", sm.sid, F.accepted(F.TERM, "step=detail", REASON), sm.repo,
+    /step=detail has no open finding/);
   F.expectRejected("T4-2 (a) op=add on a finding with no provenance block", sm.sid, F.accepted(F.TERM, "op=add", REASON), sm.repo);
   F.inject(sm.sid, "review_docs", "glossary_provenance", F.provenanceRecord(F.FP("b"),
     [{ term: F.TERM2, operation: "add", category: "internal", reason: "unmatched" }]));
-  F.expectRejected("T4-2 (b) stage=outline on a term with only a provenance block", sm.sid, F.accepted(F.TERM2, "stage=outline", REASON), sm.repo);
+  F.expectRejected("T4-2 (b) step=outline on a term with only a provenance block", sm.sid, F.accepted(F.TERM2, "step=outline", REASON), sm.repo);
 }
 
 // (a) refuses a record older than its inputs: artifact, combined glossary, intent rows.
@@ -105,9 +105,9 @@ function provenance(F) {
   F.check("T4-2 (b) grants total = 5 reasons + 2 zeta + 2 eta", pgrants().length === REASONS.length + 4, JSON.stringify(pgrants()));
   // The injected record is stale (FP("d")) and holds an open finding, so the read side refuses
   // outline's complete and the current step is outline again: (a) is refused with the --record
-  // reason. A current step with no stage is covered by cross-stage.js otherStage (R-S fixture).
+  // reason. A current step outside the glossary steps is covered by cross-stage.js otherStage (R-S fixture).
   F.expectRejected("T4-2 (a) an injected stale outline record reopens outline and is refused with the --record reason",
-    sid, F.accepted(F.TERM, "", REASON), repo, /--stage outline --record/);
+    sid, F.accepted(F.TERM, "", REASON), repo, /--step outline --record/);
 }
 
 // A grant is scoped to its stage and record: the next stage's record starts without it.

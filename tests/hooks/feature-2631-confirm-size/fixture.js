@@ -13,7 +13,7 @@ const F = require("../feature-2631-size-limits/fixture");
 const HARD = { intent: 200, outline: 200, detail: 500 };
 const WARN = { intent: 100, outline: 100, detail: 300 };
 const STEP = { intent: "clarify_intent", outline: "outline", detail: "detail" };
-// The stage-valid follow-up skill Layer 2 looks for (hooks/workflow-state/plan-stage-table.js).
+// The stage-valid follow-up skill Layer 2 looks for (hooks/workflow-state/plan-step-table.js).
 const FOLLOW = { intent: "make-outline-plan", outline: "make-detail-plan", detail: "write-tests" };
 // The Japanese "send back to the planner" and a Japanese plan line are fixtures. lang-check: ignore
 const SEND_BACK = "planner に差し戻す";
@@ -82,13 +82,13 @@ function hookArgv(o, hook) {
 // subject is the size check, so the audit is settled CONTINUE on the current plan first. The audit key
 // spans the earlier stages' plans too: any the owner lacks gets a one-line placeholder. A session with
 // no workflow state file is skipped by the audit check itself and needs nothing here.
-const STAGES = ["intent", "outline", "detail"];
+const ARTIFACTS = Object.keys(STEP);
 function settleAudit(sid, stage) {
   try {
     if (!sid || !fs.existsSync(require(path.join(F.ROOT, "hooks/workflow-state/state-io")).getStatePath(sid))) return;
     const plansDir = process.env.WORKFLOW_PLANS_DIR;
     const own = require(path.join(F.ROOT, "hooks/workflow-state/plan-artifact-owner")).resolvePlanArtifactOwner;
-    for (const prev of STAGES.slice(0, STAGES.indexOf(stage))) {
+    for (const prev of ARTIFACTS.slice(0, ARTIFACTS.indexOf(stage))) {
       const o = own(sid, prev, undefined, { plansDir }) || {};
       if (o.path && !fs.existsSync(o.path)) fs.writeFileSync(o.path, planOf(1));
     }

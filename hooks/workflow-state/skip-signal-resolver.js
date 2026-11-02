@@ -214,5 +214,5 @@ module.exports = {
   // already use stays valid.
   readComplexityEvaluation: complexity.readComplexityEvaluation,
   hasComplexityEvaluation: complexity.hasComplexityEvaluation,
-  readStageComplexityLevel: complexity.readStageComplexityLevel,
+  readStepComplexityLevel: complexity.readStepComplexityLevel,
 };

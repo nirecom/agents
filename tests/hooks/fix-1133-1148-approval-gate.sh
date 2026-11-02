@@ -46,7 +46,7 @@ export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 # waiver of the approval gate (evaluateCompletionApproval → source
 # "confirm-flag-off") and would silently mask every "must NOT complete without an
 # approval record" assertion below.
-# The gate decision is resolved from the CONFIG FILE only (isConfirmOffForStageFromFile),
+# The gate decision is resolved from the CONFIG FILE only (isConfirmFlagOffFromFile),
 # so process.env exports alone cannot isolate the suite: it must point
 # AGENTS_MAIN_ROOT at a scratch config whose contents are known. Both a gates-ON
 # and a gates-OFF scratch config are provided; cases that exercise the legitimate

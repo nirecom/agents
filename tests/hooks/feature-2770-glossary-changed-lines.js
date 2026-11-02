@@ -1,10 +1,10 @@
 "use strict";
 // Tests: bin/check-glossary-drift, hooks/workflow-state/glossary-check/scope/artifact.js, bin/lib/glossary-drift.js, hooks/workflow-state/glossary-check/scope/changed-lines.js, bin/lib/glossary-drift/scan.js
 // Tags: TL2, hooks, glossary, glossary-check, glossary-drift, merge, scope:issue-specific
-// #2770: the stages that scan staged files (tests / code / docs) scan only the lines a staged
-// change adds or modifies against HEAD; a new file is scanned whole; while merging, the line
-// filter applies to the paths left after the merge-incoming subtraction. The stages that scan a
-// plan file are unchanged.
+// #2770: the steps that scan staged files (review_tests / review_security / review_docs) scan
+// only the lines a staged change adds or modifies against HEAD; a new file is scanned whole;
+// while merging, the line filter applies to the paths left after the merge-incoming subtraction.
+// The steps that scan a plan file are unchanged.
 // TL3 gap (what this test does NOT catch):
 // - a real claude session committing through the commit gate with a partly edited file.
 // Fixtures: tests/lib/glossary-check-fixture.js, ./feat-2761-glossary-merge/fixture.js.
@@ -37,23 +37,23 @@ after(() => {
   F.finish();
 });
 const show = (r) => `exit=${r.code} ${r.out}${r.err}`;
-const APPEND = { tests: "echo unrelated\n", code: "module.exports.b = 2;\n", docs: "\nUnrelated text.\n" };
+const APPEND = { review_tests: "echo unrelated\n", review_security: "module.exports.b = 2;\n", review_docs: "\nUnrelated text.\n" };
 
-// A repo whose HEAD holds the stage's target file carrying the variant, and a session at that stage.
-function committed(tag, stage) {
+// A repo whose HEAD holds the step's target file carrying the variant, and a session at that step.
+function committed(tag, step) {
   const repo = F.mkRepo(tag);
-  M.commitAll(repo, { [F.TARGET[stage]]: F.targetBody(stage, W) }, "fixture: target with the variant");
-  return { repo, sid: F.seedSession(tag, stage, { cwd: repo }) };
+  M.commitAll(repo, { [F.TARGET[step]]: F.targetBody(step, W) }, "fixture: target with the variant");
+  return { repo, sid: F.seedSession(tag, step, { cwd: repo }) };
 }
 
 caseBegin("unchanged variant lines of a modified file are not scanned", "hooks/workflow-state/glossary-check/scope/artifact.js");
 test("B1: unchanged variant lines of a modified file are not scanned", () => noNewFailures(F.failureCount, () => {
-for (const stage of F.RS_STAGES) {
-  guarded(`B1 ${stage}`, () => {
-    const s = committed(`b1-${stage}`, stage);
-    F.stageFile(s.repo, F.TARGET[stage], F.targetBody(stage, W) + APPEND[stage]);
-    const r = F.drift(s.sid, stage, s.repo, false);
-    F.check(`B1 ${stage}: an unrelated added line leaves the old variant line unscanned (exit 0, no DRIFT)`,
+for (const step of F.RS_STEPS) {
+  guarded(`B1 ${step}`, () => {
+    const s = committed(`b1-${step}`, step);
+    F.stageFile(s.repo, F.TARGET[step], F.targetBody(step, W) + APPEND[step]);
+    const r = F.drift(s.sid, step, s.repo, false);
+    F.check(`B1 ${step}: an unrelated added line leaves the old variant line unscanned (exit 0, no DRIFT)`,
       r.code === 0 && hits(r.out).length === 0, show(r));
   });
 }
@@ -62,10 +62,10 @@ caseEnd();
 
 caseBegin("a variant on an added line is reported at its file line", "bin/check-glossary-drift");
 test("B2: a variant on an added line is reported at its file line", verdict("B2", () => {
-  const s = committed("b2", "docs");
-  F.stageFile(s.repo, F.TARGET.docs, `${F.targetBody("docs", W)}\nEach ${W} is new.\n`);
-  const r = F.drift(s.sid, "docs", s.repo, false);
-  F.check("B2 docs: the added variant line is reported at docs/guide.md:5", r.code === 1 && hits(r.out).includes("docs/guide.md:5"), show(r));
+  const s = committed("b2", "review_docs");
+  F.stageFile(s.repo, F.TARGET.review_docs, `${F.targetBody("review_docs", W)}\nEach ${W} is new.\n`);
+  const r = F.drift(s.sid, "review_docs", s.repo, false);
+  F.check("B2 review_docs: the added variant line is reported at docs/guide.md:5", r.code === 1 && hits(r.out).includes("docs/guide.md:5"), show(r));
 }));
 caseEnd();
 
@@ -73,9 +73,9 @@ caseBegin("a new file is scanned whole", "bin/check-glossary-drift");
 test("B3: a new file is scanned whole", verdict("B3", () => {
   const repo = F.mkRepo("b3");
   F.stageFile(repo, "docs/new.md", `# New\n\nEach ${W} is checked.\n`);
-  const sid = F.seedSession("b3", "docs", { cwd: repo });
-  const r = F.drift(sid, "docs", repo, false);
-  F.check("B3 docs: every line of a new file is scanned (docs/new.md:3 reported)", r.code === 1 && hits(r.out).includes("docs/new.md:3"), show(r));
+  const sid = F.seedSession("b3", "review_docs", { cwd: repo });
+  const r = F.drift(sid, "review_docs", repo, false);
+  F.check("B3 review_docs: every line of a new file is scanned (docs/new.md:3 reported)", r.code === 1 && hits(r.out).includes("docs/new.md:3"), show(r));
 }));
 caseEnd();
 
@@ -89,16 +89,16 @@ test("B4: merge: the line filter applies after the merge-incoming subtraction", 
     branch: { "docs/shared.md": shared(" (branch).") },
     resolve: { "docs/shared.md": `${shared(" (resolved).")}\nEach ${W} is new.\n` },
   });
-  const sid = F.seedSession("b4", "docs", { cwd: repo });
-  const r = F.drift(sid, "docs", repo, false);
-  F.check("B4 docs: only the added line of docs/shared.md is reported (docs/shared.md:7)",
+  const sid = F.seedSession("b4", "review_docs", { cwd: repo });
+  const r = F.drift(sid, "review_docs", repo, false);
+  F.check("B4 review_docs: only the added line of docs/shared.md is reported (docs/shared.md:7)",
     r.code === 1 && JSON.stringify(hits(r.out)) === '["docs/shared.md:7"]', show(r));
 }));
 caseEnd();
 
-caseBegin("a plan-file stage still scans the whole plan", "bin/check-glossary-drift");
-test("B5: a plan-file stage still scans the whole plan", verdict("B5", () => {
-  const s = F.setupStage("b5", "outline", W);
+caseBegin("a plan-file step still scans the whole plan", "bin/check-glossary-drift");
+test("B5: a plan-file step still scans the whole plan", verdict("B5", () => {
+  const s = F.setupStep("b5", "outline", W);
   const r = F.drift(s.sid, "outline", s.repo, false);
   F.check("B5 outline: the variant in the plan is reported (exit 1)", r.code === 1 && hits(r.out).length > 0, show(r));
 }));
@@ -106,15 +106,15 @@ caseEnd();
 
 caseBegin("a deletion-only change scans no line", "hooks/workflow-state/glossary-check/scope/artifact.js");
 test("B6: a deletion-only change scans no line", verdict("B6", () => {
-  const s = committed("b6", "docs");
-  F.stageFile(s.repo, F.TARGET.docs, F.targetBody("docs", W).replace("# Guide\n\n", ""));
-  const r = F.drift(s.sid, "docs", s.repo, false);
-  F.check("B6 docs: removing a line next to an unchanged variant line reports nothing (exit 0)",
+  const s = committed("b6", "review_docs");
+  F.stageFile(s.repo, F.TARGET.review_docs, F.targetBody("review_docs", W).replace("# Guide\n\n", ""));
+  const r = F.drift(s.sid, "review_docs", s.repo, false);
+  F.check("B6 review_docs: removing a line next to an unchanged variant line reports nothing (exit 0)",
     r.code === 0 && hits(r.out).length === 0, show(r));
-  const d = committed("b6-rm", "docs");
-  F.git(d.repo, ["rm", "-q", "--", F.TARGET.docs]);
-  const rm = F.drift(d.sid, "docs", d.repo, false);
-  F.check("B6 docs: a staged whole-file deletion reports nothing (exit 0)", rm.code === 0 && hits(rm.out).length === 0, show(rm));
+  const d = committed("b6-rm", "review_docs");
+  F.git(d.repo, ["rm", "-q", "--", F.TARGET.review_docs]);
+  const rm = F.drift(d.sid, "review_docs", d.repo, false);
+  F.check("B6 review_docs: a staged whole-file deletion reports nothing (exit 0)", rm.code === 0 && hits(rm.out).length === 0, show(rm));
 }));
 caseEnd();
 
@@ -122,11 +122,11 @@ caseBegin("a modified committed line is reported at its file line, an unchanged 
 test("C1: a modified committed line is reported at its file line, an unchanged variant line is not", verdict("C1", () => {
   const repo = F.mkRepo("c1");
   const body = (mid) => `# Guide\n\n${mid}\n\nEach ${W} is checked.\n`;
-  M.commitAll(repo, { [F.TARGET.docs]: body("Plain text here.") }, "fixture: a plain line above a variant line");
-  F.stageFile(repo, F.TARGET.docs, body(`Plain ${W} text here.`));
-  const sid = F.seedSession("c1", "docs", { cwd: repo });
-  const r = F.drift(sid, "docs", repo, false);
-  F.check("C1 docs: exactly the modified line is reported (docs/guide.md:3), the unchanged docs/guide.md:5 is not",
+  M.commitAll(repo, { [F.TARGET.review_docs]: body("Plain text here.") }, "fixture: a plain line above a variant line");
+  F.stageFile(repo, F.TARGET.review_docs, body(`Plain ${W} text here.`));
+  const sid = F.seedSession("c1", "review_docs", { cwd: repo });
+  const r = F.drift(sid, "review_docs", repo, false);
+  F.check("C1 review_docs: exactly the modified line is reported (docs/guide.md:3), the unchanged docs/guide.md:5 is not",
     r.code === 1 && JSON.stringify(hits(r.out)) === '["docs/guide.md:3"]', show(r));
 }));
 caseEnd();
@@ -134,16 +134,16 @@ caseEnd();
 caseBegin("record and commit gate agree under line narrowing", "hooks/workflow-gate/glossary-record-checker.js");
 test("C2: record and commit gate agree under line narrowing", verdict("C2", () => {
   const G = require("./feat-2529-glossary-commit-gate/gate");
-  const { stageFingerprint } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope"));
+  const { stepFingerprint } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope"));
   const repo = F.mkRepo("c2");
-  M.commitAll(repo, { [F.TARGET.docs]: F.targetBody("docs", W) }, "fixture: target with the variant");
-  F.stageFile(repo, F.TARGET.docs, F.targetBody("docs", W) + APPEND.docs);
-  const sid = F.seedSession("c2", "docs", { cwd: repo, ownStatus: "complete" });
-  G.recordOk("C2 docs (drift only on an unchanged line)", F.drift(sid, "docs", repo), 0);
-  const rec = F.recordOf(sid, "docs");
+  M.commitAll(repo, { [F.TARGET.review_docs]: F.targetBody("review_docs", W) }, "fixture: target with the variant");
+  F.stageFile(repo, F.TARGET.review_docs, F.targetBody("review_docs", W) + APPEND.review_docs);
+  const sid = F.seedSession("c2", "review_docs", { cwd: repo, ownStatus: "complete" });
+  G.recordOk("C2 review_docs (drift only on an unchanged line)", F.drift(sid, "review_docs", repo), 0);
+  const rec = F.recordOf(sid, "review_docs");
   F.check("C2 the record holds no finding", !!rec && Array.isArray(rec.findings) && rec.findings.length === 0, JSON.stringify(rec));
-  const now = stageFingerprint(sid, "docs", { repoDir: repo });
-  F.check("C2 stageFingerprint equals the recorded fingerprint", now.ok && !!rec && rec.fingerprint === now.fingerprint,
+  const now = stepFingerprint(sid, "review_docs", { repoDir: repo });
+  F.check("C2 stepFingerprint equals the recorded fingerprint", now.ok && !!rec && rec.fingerprint === now.fingerprint,
     `${JSON.stringify(now)} vs ${rec && rec.fingerprint}`);
   G.passes("C2 commit gate with the same staged content", G.scan(sid, repo), "review_docs");
 }));
@@ -160,9 +160,9 @@ test("C3: undecidable merge keeps every path but reports only changed lines", ve
     resolve: { "docs/shared.md": `${shared(" (resolved).")}\nEach ${W} is new.\n` },
   });
   M.corruptMergeHead(repo);
-  const sid = F.seedSession("c3", "docs", { cwd: repo });
-  const r = F.drift(sid, "docs", repo, false);
-  F.check("C3 docs: the merge-incoming new file is kept whole and only the added line of docs/shared.md is reported",
+  const sid = F.seedSession("c3", "review_docs", { cwd: repo });
+  const r = F.drift(sid, "review_docs", repo, false);
+  F.check("C3 review_docs: the merge-incoming new file is kept whole and only the added line of docs/shared.md is reported",
     r.code === 1 && JSON.stringify(hits(r.out).sort()) === '["docs/main-only.md:3","docs/shared.md:7"]', show(r));
 }));
 caseEnd();

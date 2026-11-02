@@ -28,8 +28,12 @@ if (process.argv[2] === "strict") {
   for (const fn of ["sameTurnContinuation", "anchorClosesOnLink", "markBindsArtifact", "sameTurnDenyReason", "pickContinuationStage"]) {
     check(`#2729 confirm-continuation no longer exports ${fn}`, typeof CC[fn] !== "function", `${fn} still exported`);
   }
-  for (const fn of ["presentedStages", "continuationStage", "presentAgainReason", "continueReason"]) {
+  for (const fn of ["presentedArtifacts", "continuationArtifact", "presentAgainReason", "continueReason"]) {
     check(`#2729 confirm-continuation exports ${fn}`, typeof CC[fn] === "function", `${fn} missing`);
+  }
+  // #2820: the stage-named exports are renamed to artifact names, not kept as aliases.
+  for (const fn of ["presentedStages", "presentedStagesOfText", "continuationStage"]) {
+    check(`#2820 confirm-continuation no longer exports ${fn}`, typeof CC[fn] !== "function", `${fn} still exported`);
   }
   process.exit(0);
 }
@@ -48,7 +52,7 @@ check("linkKey — else the path", pr("linkKey", { path: "/plans/x.md", reason: 
 check("linkKey — neither: falsy, no throw", !pr("linkKey", { reason: "no-artifact" }) && !pr("linkKey", null) && !(pr("linkKey", null) || {}).threw, show([pr("linkKey", {}), pr("linkKey", null)]));
 
 // Wording (S6).
-for (const stage of X.STAGES) {
+for (const stage of X.ARTIFACTS) {
   const S = stage.toUpperCase();
   const c = call("continueReason", stage);
   check(`continueReason(${stage}) — exact wording`,
@@ -57,8 +61,9 @@ for (const stage of X.STAGES) {
     typeof c === "string" && !/https?:\/\/|[\\/]\.workflow-plans|\.md\b/.test(c) && !c.includes(sid) && !/error|fail|missing/i.test(c), show(c));
   for (const cause of ["no-receipt", "not-last", "unpublished"]) {
     const d = call("presentAgainReason", stage, cause);
-    check(`presentAgainReason(${stage}, ${cause}) — names bin/plan-link --stage ${stage}, no <stage> placeholder`,
-      typeof d === "string" && d.includes("plan-link") && d.includes(`--stage ${stage}`) && !d.includes("<stage>"), show(d));
+    // #2820: plan-link takes the workflow step; the retired --stage flag and both placeholders are gone.
+    check(`presentAgainReason(${stage}, ${cause}) — names bin/plan-link --step ${X.STEP[stage]}, no placeholder`,
+      typeof d === "string" && d.includes("plan-link") && d.includes(`--step ${X.STEP[stage]}`) && !d.includes("--stage") && !d.includes("<stage>") && !d.includes("<step>"), show(d));
     check(`presentAgainReason(${stage}, ${cause}) — no URL, no sid, no retry/try again`,
       typeof d === "string" && !/https?:\/\//.test(d) && !d.includes(sid) && !/retry|try again/i.test(d), show(d));
   }

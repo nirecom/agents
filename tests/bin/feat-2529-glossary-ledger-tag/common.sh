@@ -45,16 +45,11 @@ LT_D1="$(lt cl_discrim "$LT_T1")"; LT_D2="$(lt cl_discrim "$LT_T2")"
 LT_D3="$(lt cl_discrim "$LT_T3")"; LT_D4="$(lt cl_discrim "$LT_T4")"
 [ -n "$LT_D1" ] && [ "$LT_D1" != "$LT_D3" ] || fail "fixture: C1 and C3 have distinct DISCRIMs" "d1=$LT_D1 d3=$LT_D3"
 
-lt_stage_of() {
+# lt_step_of_format <fmt> — the workflow step whose glossary record a ledger format's grants sit on.
+lt_step_of_format() {
   case "$1" in
     outline-plan) printf outline ;; detail-plan) printf detail ;;
-    test-review) printf tests ;; review-security-shared) printf code ;;
-  esac
-}
-lt_step_of() {
-  case "$1" in
-    intent) printf clarify_intent ;; outline) printf outline ;; detail) printf detail ;;
-    tests) printf review_tests ;; code) printf review_security ;; docs) printf review_docs ;;
+    test-review) printf review_tests ;; review-security-shared) printf review_security ;;
   esac
 }
 lt_sid() { printf 'lt-%s-%s-%s' "$1" "$2" "$$"; }
@@ -108,18 +103,18 @@ LT_MSG_ACCEPT="concern-ledger: accept refused"
 
 # lt_gj <norm> <discrim> — one ledger grant as JSON.
 lt_gj() { printf '{"norm":"%s","discrim":"%s","reason":"fixture grant"}' "$1" "$2"; }
-# lt_seed_grants <sid> <step> <stage> <grant-json>... — the annotation the ACCEPTED handler writes.
+# lt_seed_grants <sid> <step> <grant-json>... — the annotation the ACCEPTED handler writes.
 lt_seed_grants() {
-  local sid="$1" step="$2" stage="$3" list="" g out; shift 3
+  local sid="$1" step="$2" list="" g out; shift 2
   for g in "$@"; do list="${list:+$list,}$g"; done
   out="$(run_with_timeout 30 node "$LT_WST" "$LT_AGENTS_N" seed "$sid" \
-    "[{\"kind\":\"step_annotation\",\"step\":\"$step\",\"key\":\"glossary_check\",\"value\":{\"v\":1,\"stage\":\"$stage\",\"ledger_grants\":[$list]}}]" 2>&1)"
+    "[{\"kind\":\"step_annotation\",\"step\":\"$step\",\"key\":\"glossary_check\",\"value\":{\"v\":1,\"step\":\"$step\",\"ledger_grants\":[$list]}}]" 2>&1)"
   [ -z "$out" ] || fail "fixture: grant seeded for $sid/$step" "$out"
 }
 lt_grants_of() { run_with_timeout 30 node "$LT_WST" "$LT_AGENTS_N" path "$1" "$2" glossary_check ledger_grants 2>/dev/null; }
 
 # lt_seed_current <sid> <step> — settle every earlier step so <step> is the
-# session's current step (resolveCurrentStep), which is the stage the handler binds.
+# session's current step (resolveCurrentStep), which is the step the handler binds.
 LT_SKIPPABLE=" clarify_intent research outline detail write_tests review_tests run_tests review_security review_docs "
 lt_seed_current() {
   local s ev="" st out
@@ -137,4 +132,4 @@ lt_mark() {
   run_with_timeout 30 node "$LT_WST" "$LT_AGENTS_N" hookjson "$1" "$2" "$(np "$LT_ROOT")" > "$LT_ROOT/mark-in.json"
   LT_MARK_OUT="$(run_with_timeout 30 node "$LT_AGENTS_N/hooks/workflow-mark.js" < "$LT_ROOT/mark-in.json" 2>&1 | tr -d '\r')"
 }
-lt_accepted() { printf 'echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=%s%s — %s>>"' "$1" "${2:+ stage=$2}" "the user accepted this spelling"; }
+lt_accepted() { printf 'echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=%s%s — %s>>"' "$1" "${2:+ step=$2}" "the user accepted this spelling"; }

@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const RT = require("./check-migration-blocks/retired-tokens");
 
 const BEGIN_RE = /^\s*(#|\/\/)\s*---\s*BEGIN\s+temporary:\s+(.+?)\s*---\s*$/;
 const END_RE   = /^\s*(#|\/\/)\s*---\s*END\s+temporary:/;
@@ -29,8 +30,9 @@ function walkTree(dir, cb) {
   }
 }
 
+// `git show :<path>` needs `/`; a Windows backslash path made --staged skip the file silently.
 function readIndexContent(filePath, root, env) {
-  const rel = path.relative(root, filePath);
+  const rel = path.relative(root, filePath).replace(/\\/g, "/");
   try {
     return execFileSync("git", ["show", ":" + rel], { cwd: root, env: env || process.env, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 15000 });
   } catch (e) {
@@ -82,6 +84,7 @@ function parseBlocks(content, filePath) {
             `${filePath}:${openBlock.beginLine}: error: migration block description missing arrow (→ or ->) or 'migration' keyword: "${openBlock.desc}"`
           );
         }
+        openBlock.endLine = lineNum;
         blocks.push(openBlock);
         openBlock = null;
       }
@@ -156,7 +159,8 @@ function getGitRoot(io) {
   }
 }
 
-function verdict(violations, warnings, io) {
+function verdict(violations, warnings, io, notices = []) {
+  notices.forEach((n) => io.stdout.write(n + "\n"));
   if (violations.length > 0) {
     violations.forEach((v) => io.stdout.write(v + "\n"));
     return 1;
@@ -166,55 +170,96 @@ function verdict(violations, warnings, io) {
 }
 
 function usage(io) {
-  io.stderr.write("usage: check-migration-blocks.js --staged [<file>...]\n");
-  io.stderr.write("       check-migration-blocks.js --all [<root>]\n");
+  io.stderr.write("usage: check-migration-blocks.js [--retired-tokens-from <file>] --staged [<file>...]\n");
+  io.stderr.write("       check-migration-blocks.js [--retired-tokens-from <file>] --all [<root>]\n");
   io.stderr.write("       check-migration-blocks.js --stale-report [<root>]\n");
   return 2;
 }
 
 // run({ argv, cwd, env, stdout, stderr, readStaged }) -> rc: 0 clean, 1 violations, 2 usage /
 // unscannable. readStaged(rel) -> Buffer|null replaces the per-file `git show` of --staged.
+// The retired-token registry; a RegistryError (malformed registry, flag without a file) is rc 2.
+function loadRegistry(argv, root, staged, readOne, io) {
+  try {
+    return RT.resolveRegistry({ argv, cwd: io.cwd, root, staged, readStaged: readOne });
+  } catch (e) {
+    if (!(e instanceof RT.RegistryError)) throw e;
+    io.stderr.write(`check-migration-blocks.js: ${e.message}\n`);
+    return null;
+  }
+}
+
+function retiredAxis(rel, content, blocks, registry, out) {
+  const r = RT.checkRetiredTokens(rel, content, blocks, registry);
+  out.violations.push(...r.violations);
+  out.notices.push(...r.notices);
+}
+
+function runStaged(files, argv, io, readStaged) {
+  const root = getGitRoot(io);
+  const indexText = (rel) => {
+    const viaSnapshot = readStaged ? stagedText(readStaged, rel) : null;
+    return viaSnapshot != null ? viaSnapshot : readIndexContent(path.join(root, rel), root, io.env);
+  };
+  const registry = loadRegistry(argv, root, true, indexText, io);
+  if (!registry) return 2;
+  const out = { violations: [], notices: [] };
+  const warnings = [];
+  for (const f of files) {
+    const absPath = path.isAbsolute(f) ? f : path.join(root, f);
+    const rel = path.relative(root, absPath).replace(/\\/g, "/");
+    const content = readStaged ? stagedText(readStaged, rel) : readIndexContent(absPath, root, io.env);
+    if (content == null) continue;
+    const { blocks, violations: v } = parseBlocks(content, f);
+    out.violations.push(...v);
+    checkAxis3(blocks, f, "staged", warnings);
+    checkAxis4(blocks, f, warnings);
+    retiredAxis(rel, content, blocks, registry, out);
+  }
+  return verdict(out.violations, warnings, io, out.notices);
+}
+
+// EXCLUDE_RE holds back only the format axes; the retired-token axis follows the registry scope.
+function runAll(rootArg, argv, io) {
+  const root = rootArg ? path.resolve(io.cwd, rootArg) : io.cwd;
+  const registry = loadRegistry(argv, root, false, null, io);
+  if (!registry) return 2;
+  const out = { violations: [], notices: [] };
+  const warnings = [];
+  walkTree(root, (absPath) => {
+    const rel = path.relative(root, absPath).replace(/\\/g, "/");
+    const formatAxes = !EXCLUDE_RE.some((excl) => excl.test(rel));
+    if (!formatAxes && !RT.inspects(registry, rel)) return;
+    let content;
+    try { content = fs.readFileSync(absPath, "utf8"); } catch { return; }
+    const { blocks, violations: v } = parseBlocks(content, rel);
+    if (formatAxes) {
+      out.violations.push(...v);
+      checkAxis3(blocks, rel, "all", warnings);
+      checkAxis4(blocks, rel, warnings);
+    }
+    retiredAxis(rel, content, blocks, registry, out);
+  });
+  return verdict(out.violations, warnings, io, out.notices);
+}
+
 function run({ argv = [], cwd = process.cwd(), env = process.env, stdout = process.stdout, stderr = process.stderr, readStaged = null } = {}) {
   const io = { cwd, env, stdout, stderr };
-  const args = argv;
+  let args;
+  try {
+    args = RT.withoutRetiredFlag(argv).rest;
+  } catch (e) {
+    stderr.write(`check-migration-blocks.js: ${e.message}\n`);
+    return usage(io);
+  }
   if (args.length === 0) return usage(io);
 
   const mode = args[0];
 
   if (mode === "--staged") {
-    const files = args.slice(1);
-    const root = getGitRoot(io);
-    const violations = [];
-    const warnings = [];
-    for (const f of files) {
-      const absPath = path.isAbsolute(f) ? f : path.join(root, f);
-      const content = readStaged ? stagedText(readStaged, path.relative(root, absPath)) : readIndexContent(absPath, root, env);
-      if (content == null) continue;
-      const { blocks, violations: v } = parseBlocks(content, f);
-      violations.push(...v);
-      checkAxis3(blocks, f, "staged", warnings);
-      checkAxis4(blocks, f, warnings);
-    }
-    return verdict(violations, warnings, io);
-
+    return runStaged(args.slice(1), argv, io, readStaged);
   } else if (mode === "--all") {
-    const root = args[1] ? path.resolve(cwd, args[1]) : cwd;
-    const violations = [];
-    const warnings = [];
-    walkTree(root, (absPath) => {
-      const rel = path.relative(root, absPath);
-      for (const excl of EXCLUDE_RE) {
-        if (excl.test(rel)) return;
-      }
-      let content;
-      try { content = fs.readFileSync(absPath, "utf8"); } catch (e) { return; }
-      const { blocks, violations: v } = parseBlocks(content, rel);
-      violations.push(...v);
-      checkAxis3(blocks, rel, "all", warnings);
-      checkAxis4(blocks, rel, warnings);
-    });
-    return verdict(violations, warnings, io);
-
+    return runAll(args[1], argv, io);
   } else if (mode === "--stale-report") {
     return staleReport(args[1], io);
   }

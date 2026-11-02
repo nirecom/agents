@@ -85,12 +85,14 @@ canon_status() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "$PLANS_DIR" in /*|[A-Za-z]:*) ABS_PLANS_DIR="$PLANS_DIR" ;; *) ABS_PLANS_DIR="$PWD/$PLANS_DIR" ;; esac
 owned_name() {
-  local p name
+  local p name step="$1"
   if [[ ! "$SESSION_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
     printf '%s' "$SESSION_ID-$1.md"
     return 0
   fi
-  p="$(node "$SCRIPT_DIR/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$ABS_PLANS_DIR" 2>/dev/null)" || return 1
+  # The CLI takes the workflow step; only the intent plan's suffix differs from its step name.
+  [[ "$step" == intent ]] && step=clarify_intent
+  p="$(node "$SCRIPT_DIR/plan-artifact-path" --step "$step" --session "$SESSION_ID" --plans-dir "$ABS_PLANS_DIR" 2>/dev/null)" || return 1
   name="${p##*[/\\]}"
   [[ -n "$name" && "$name" == *"-$1.md" && "$name" != *..* ]] || return 1
   printf '%s' "$name"

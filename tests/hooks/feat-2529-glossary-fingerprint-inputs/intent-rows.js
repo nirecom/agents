@@ -1,7 +1,7 @@
 "use strict";
 // T7-3 (input 3, intent_rows): adding, deleting, or changing the term / category / operation /
-// definition of a row in intent.md ## Glossary (a case-only term change included) stales the record for all six stages (for the
-// intent stage the row lives in the artifact range too, so artifact moves with it). An edit
+// definition of a row in intent.md ## Glossary (a case-only term change included) stales the record for all six glossary steps (for
+// clarify_intent the row lives in the artifact range too, so artifact moves with it). An edit
 // outside ## Glossary never moves intent_rows. provenanceFingerprint binds the approval sha.
 
 const F = require("../../lib/glossary-check-fixture");
@@ -10,8 +10,8 @@ const C = require("./common");
 const HEAD = "## Glossary\n\n| Term | Category | Operation | Definition |\n|---|---|---|---|\n";
 const BASE_ROW = ["fixture term", "session", "add", "A term of the fixture session."];
 
-function intentBody(stage, rows, goal) {
-  const word = stage === "intent" ? F.VARIANT : F.TERM;
+function intentBody(step, rows, goal) {
+  const word = step === "clarify_intent" ? F.VARIANT : F.TERM;
   const g = goal || `Each ${word} is checked.`;
   return `# Intent\n\n## Goal\n\n${g}\n\n## Issues\n\n- #1 fixture\n\n${HEAD}` +
     rows.map((r) => `| ${r.join(" | ")} |\n`).join("");
@@ -31,19 +31,19 @@ function rowMutations() {
   ];
 }
 
-function rows(m, stages = F.STAGES) {
-  for (const stage of stages) {
-    const ctx = C.baseline(m, `t73-${stage}`, stage);
-    const want = stage === "intent" ? ["artifact", "intent_rows"] : "intent_rows";
+function rows(m, steps = F.GLOSSARY_STEPS) {
+  for (const step of steps) {
+    const ctx = C.baseline(m, `t73-${step}`, step);
+    const want = step === "clarify_intent" ? ["artifact", "intent_rows"] : "intent_rows";
     let cur = [BASE_ROW];
     for (const [label, next] of rowMutations()) {
       C.cycle(m, ctx, `intent ## Glossary: ${label}`, want, () => {
         cur = next(cur);
-        F.writePlan(ctx.sid, "intent", intentBody(stage, cur));
+        F.writePlan(ctx.sid, "intent", intentBody(step, cur));
       });
     }
-    const outside = () => F.writePlan(ctx.sid, "intent", intentBody(stage, cur, `Each ${F.VARIANT} goal is reworded.`));
-    if (stage === "intent") C.cycle(m, ctx, "an intent edit outside ## Glossary", "artifact", outside);
+    const outside = () => F.writePlan(ctx.sid, "intent", intentBody(step, cur, `Each ${F.VARIANT} goal is reworded.`));
+    if (step === "clarify_intent") C.cycle(m, ctx, "an intent edit outside ## Glossary", "artifact", outside);
     else C.unchanged(m, ctx, "an intent edit outside ## Glossary", outside);
   }
 }

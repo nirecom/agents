@@ -37,7 +37,7 @@ function guarded(name, fn) {
 
 caseBegin("commit gate blocks missing stale and unavailable glossary records for complete skipped and worktree steps", "hooks/workflow-gate/commit-gate-steps.js");
 test("commit gate blocks missing stale and unavailable glossary records for complete skipped and worktree steps", () =>
-  noNewFailures(F.failureCount, () => guarded("commit gate cases docs stage", () => cases.runStages(["docs"]))));
+  noNewFailures(F.failureCount, () => guarded("commit gate cases review_docs step", () => cases.runSteps(["review_docs"]))));
 caseEnd();
 
 caseBegin("commit gate blocks a missing glossary record for a pending step whose stage targets are staged", "hooks/workflow-gate/commit-gate-steps.js");

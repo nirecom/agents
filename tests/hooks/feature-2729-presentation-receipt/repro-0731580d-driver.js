@@ -46,7 +46,7 @@ const tp3 = R.writeTranscript(s.sid, turn3);
 const st3 = R.stop(s.sid, tp3);
 check("R1 second presentation: Stop does not block on a plan-link reason", !st3.blocked || st3.continued, show({ rc: st3.rc, out: st3.out }));
 check("R1 second presentation: an outline receipt is written", R.receiptExists(s.sid, "outline"), show(R.readReceiptRaw(s.sid, "outline")));
-check("R1 second presentation: an intent receipt is written (intent edited after approval is unapproved)", R.receiptExists(s.sid, "intent"), show(R.readReceiptRaw(s.sid, "intent")));
+check("R1 second presentation: an intent receipt is written (intent edited after approval is unapproved)", R.receiptExists(s.sid, "clarify_intent"), show(R.readReceiptRaw(s.sid, "clarify_intent")));
 
 // 7: the echo reaches the dialog.
 const e = R.echo(s.sid, "outline", { transcriptPath: tp3 });

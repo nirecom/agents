@@ -5,7 +5,9 @@
 // #2729: confirm-checkpoint reaches the dialog only through a presentation receipt the Stop hook
 // wrote. A test whose subject is the dialog itself seeds that receipt here, in the same env the
 // hook runs in (state dir, plans dir, publish stub), instead of relying on a fail-open path.
-// CLI: node presentation-receipt-seed.js <sid> <stage>  -> prints the receipt path, or NONE.
+// CLI: node presentation-receipt-seed.js <sid> <artifact>  -> prints the receipt path, or NONE.
+// Callers name the plan artifact (intent / outline / detail); the receipt itself is keyed by the
+// workflow step (#2820), so the artifact name is converted here, at the one boundary.
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -18,15 +20,19 @@ function stateDir(sid) {
   return require(path.join(ROOT, "hooks/workflow-state")).getSessionStateDir(sid);
 }
 
-function receiptPath(sid, stage) {
-  return path.join(stateDir(sid), `${sid}.confirm-plan-receipt-${stage}.json`);
+function stepOf(artifact) {
+  return require(path.join(ROOT, "hooks/workflow-state/plan-step-table")).stepForSuffix(artifact);
 }
 
-// canonicalPlan(sid, stage) -> <plans>/<sid>-<stage>.md, the only artifact the judge accepts.
-function canonicalPlan(sid, stage) {
+function receiptPath(sid, artifact) {
+  return path.join(stateDir(sid), `${sid}.confirm-plan-receipt-${stepOf(artifact)}.json`);
+}
+
+// canonicalPlan(sid, artifact) -> <plans>/<sid>-<artifact>.md, the only artifact the judge accepts.
+function canonicalPlan(sid, artifact) {
   const { toWindowsPath } = require(path.join(ROOT, "hooks/lib/branch-diff"));
   const dir = require(path.join(ROOT, "hooks/lib/workflow-plans-dir")).getWorkflowPlansDir();
-  return path.resolve(toWindowsPath(path.join(dir, `${sid}-${stage}.md`)));
+  return path.resolve(toWindowsPath(path.join(dir, `${sid}-${artifact}.md`)));
 }
 
 // receiptLinkFor(absPath) -> {kind, value} as the Stop hook records it, or null when the plan
@@ -38,9 +44,9 @@ function receiptLinkFor(absPath) {
   return null;
 }
 
-// seedReceipt(sid, stage, {link}) -> the receipt path, or null when the plan is missing or unpublished.
-function seedReceipt(sid, stage, opts) {
-  const absPath = canonicalPlan(sid, stage);
+// seedReceipt(sid, artifact, {link}) -> the receipt path, or null when the plan is missing or unpublished.
+function seedReceipt(sid, artifact, opts) {
+  const absPath = canonicalPlan(sid, artifact);
   if (!fs.existsSync(absPath)) return null;
   const link = (opts && opts.link) || receiptLinkFor(absPath);
   if (!link) return null;
@@ -49,19 +55,19 @@ function seedReceipt(sid, stage, opts) {
     contentSha: crypto.createHash("sha256").update(fs.readFileSync(absPath)).digest("hex"),
     anchorUuid: "a-seeded", writtenAt: new Date().toISOString(),
   };
-  const p = receiptPath(sid, stage);
+  const p = receiptPath(sid, artifact);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(body));
   return p;
 }
 
-const receiptExists = (sid, stage) => fs.existsSync(receiptPath(sid, stage));
+const receiptExists = (sid, artifact) => fs.existsSync(receiptPath(sid, artifact));
 
 module.exports = { UNPUBLISHABLE, receiptPath, canonicalPlan, receiptLinkFor, seedReceipt, receiptExists };
 
 if (require.main === module) {
-  const [sid, stage] = process.argv.slice(2);
+  const [sid, artifact] = process.argv.slice(2);
   let out = null;
-  try { out = seedReceipt(sid, stage); } catch (_) { out = null; }
+  try { out = seedReceipt(sid, artifact); } catch (_) { out = null; }
   process.stdout.write(out || "NONE");
 }

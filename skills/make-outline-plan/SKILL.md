@@ -21,7 +21,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 ## Procedure
 
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Reuse across steps.
-Run `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --stage intent` and `... --stage outline` once each; substitute the outputs for every `<INTENT_MD>` / `$INTENT_MD` and `<OUTLINE_MD>` / `$OUTLINE_MD` below. When the outline call fails, write no outline: halt and surface its stderr.
+Run `node "$AGENTS_MAIN_ROOT/bin/plan-artifact-path" --step clarify_intent` and `... --step outline` once each; substitute the outputs for every `<INTENT_MD>` / `$INTENT_MD` and `<OUTLINE_MD>` / `$OUTLINE_MD` below. When the outline call fails, write no outline: halt and surface its stderr.
 
 MOP-0. **Surface premise contradictions** from Research artifacts.
    MOP-0a. Determine session-id from `CLAUDE_CODE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).

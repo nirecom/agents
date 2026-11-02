@@ -103,7 +103,7 @@ function ownWsid(wsid, sid) {
 // glossary(sid, d) — the glossary_check record a restore-to-complete crosses (#2529).
 function glossary(sid, d) {
   const env = Object.assign({}, process.env, { CLAUDE_PROJECT_DIR: d });
-  spawnSync(process.execPath, [path.join(ROOT, "bin", "check-glossary-drift"), "--session", sid, "--stage", "tests", "--record"],
+  spawnSync(process.execPath, [path.join(ROOT, "bin", "check-glossary-drift"), "--session", sid, "--step", "review_tests", "--record"],
     { cwd: d, env, encoding: "utf8", timeout: 60000 });
 }
 // send(sid, d, wsid, opts) -> stdout+stderr of the real workflow-mark.js hook on opts.cmd (default: the

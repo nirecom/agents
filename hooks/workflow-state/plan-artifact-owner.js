@@ -9,7 +9,7 @@
 const fs = require("fs");
 const { getPlansArtifactPath } = require("../lib/plans-artifact-registry");
 const { SESSION_ID_VALID_RE } = require("./state-io/core");
-const { stepForSuffix } = require("./plan-stage-table");
+const { stepForSuffix } = require("./plan-step-table");
 const { resolveFirstSid } = require("./state-ancestry");
 
 const validSid = (sid) => typeof sid === "string" && SESSION_ID_VALID_RE.test(sid);

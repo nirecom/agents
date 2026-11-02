@@ -75,7 +75,7 @@ process.stdout.write(JSON.stringify(j));
 # #2529: review_tests reaches complete only with a current glossary_check record. With no
 # session worktree in the state, the record and the hook's boundary both resolve the worktree
 # from the cwd git root, so the hook runs inside the fixture repo and a case that expects
-# complete seeds `glossary_check_record <sid> <repo> tests` first.
+# complete seeds `glossary_check_record <sid> <repo> review_tests` first.
 # shellcheck source=tests/lib/glossary-check-record.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 
@@ -143,7 +143,7 @@ if [ -z "$FP_C1" ]; then
 else
     SID_C1="hc1-$$"
     write_state_json "$SID_C1"
-    glossary_check_record "$SID_C1" "$REPO_C1" tests
+    glossary_check_record "$SID_C1" "$REPO_C1" review_tests
     SENTINEL_C1="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$FP_C1>>\""
     run_mark "$REPO_C1" "$(build_mark_json "$SENTINEL_C1" "$SID_C1" "$REPO_C1_N")" >/dev/null
 
@@ -254,7 +254,7 @@ if [ -z "$FP_W1" ]; then
 else
     SID_W1="hw1-$$"
     write_state_json "$SID_W1"
-    glossary_check_record "$SID_W1" "$REPO_W1" tests
+    glossary_check_record "$SID_W1" "$REPO_W1" review_tests
     SENTINEL_W1="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=$FP_W1 warnings=2>>\""
     run_mark "$REPO_W1" "$(build_mark_json "$SENTINEL_W1" "$SID_W1" "$REPO_W1_N")" >/dev/null
 
@@ -404,7 +404,7 @@ try {
   var seeded = (S.readState(sid).steps || {}).review_tests || {};
   if(!('token' in seeded) || !('reopen_reason' in seeded)) { process.stdout.write('SEED_FAILED:' + JSON.stringify(seeded)); process.exit(0); }
   var rec = require('child_process').spawnSync(process.execPath,
-    ['$AGENTS_N/bin/check-glossary-drift', '--session', sid, '--stage', 'tests', '--record'],
+    ['$AGENTS_N/bin/check-glossary-drift', '--session', sid, '--step', 'review_tests', '--record'],
     { encoding: 'utf8', timeout: 20000, cwd: process.cwd(), env: Object.assign({}, process.env, { CLAUDE_PROJECT_DIR: process.cwd() }) });
   if(rec.status !== 0) { process.stdout.write('GLOSSARY_RECORD_FAILED:' + rec.status + ':' + rec.stderr); process.exit(0); }
   var files = $MANIFEST_ARG;

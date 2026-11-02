@@ -157,8 +157,8 @@ else fail "T24 precondition: an unpublished plan yields no receipt link — seed
 ccp_confirm_pub DETAIL
 ccp_expect_deny "T24 no record, absent: the path-only echo is denied (unpublished), no dialog"
 case "$(psf_sysmsg "$CCP_OUT")$CCP_OUT" in
-  *"--stage detail"*) pass "T24 deny reason points at bin/plan-link --stage detail" ;;
-  *) fail "T24 deny reason points at bin/plan-link --stage detail — got: $CCP_OUT" ;;
+  *"--step detail"*) pass "T24 deny reason points at bin/plan-link --step detail" ;;
+  *) fail "T24 deny reason points at bin/plan-link --step detail — got: $CCP_OUT" ;;
 esac
 clear_markers
 

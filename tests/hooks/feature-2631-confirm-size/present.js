@@ -18,4 +18,6 @@ let link = null;
 try { link = PL.receiptLinkOf(PL.linkForFile(absPath, { plansDir: getWorkflowPlansDir() })); } catch (_) { link = null; }
 const contentSha = computeContentSha(absPath);
 if (!link || !contentSha) { console.log("skipped:no-link-or-file"); process.exit(0); }
-console.log(PR.writeReceipt(sid, stage, { absPath, link, contentSha, anchorUuid: "fixture" }) ? "written" : "skipped:write");
+// The receipt is keyed by the workflow step (#2820); the plan path above stays keyed by the artifact.
+const STEP_OF = { intent: "clarify_intent", outline: "outline", detail: "detail" };
+console.log(PR.writeReceipt(sid, STEP_OF[stage], { absPath, link, contentSha, anchorUuid: "fixture" }) ? "written" : "skipped:write");

@@ -32,6 +32,8 @@ const W = (file_path) => ({ type: "tool_use", id: "w1", name: "Write", input: { 
 const ED = (file_path) => ({ type: "tool_use", id: "w1", name: "Edit", input: { file_path, old_string: "Synthetic", new_string: "Edited" } });
 const ME = (file_path) => ({ type: "tool_use", id: "w1", name: "MultiEdit", input: { file_path, edits: [{ old_string: "Synthetic", new_string: "Edited" }] } });
 const TR = { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "w1", content: "ok" }] } };
+// #2820: plan files and the echo name the artifact; the deny wording and parseSentinel name the step.
+const STEP_OF = { intent: "clarify_intent", outline: "outline", detail: "detail" };
 const echoOf = (stage) => `echo "<<WORKFLOW_CONFIRM_${stage.toUpperCase()}: approve the ${stage} plan>>"`;
 
 // newSession(stage) -> {sid, plan, fwd, line}: a fresh session with its plan file on disk.
@@ -107,7 +109,7 @@ function expectDeny(label, r, s, stage) {
   if (!r.deny) return;
   const reason = String(r.json.hookSpecificOutput.permissionDecisionReason || "") + "\n" + String(r.json.reason || "");
   ok(label + " — decision:block mirrors the deny", r.json.decision === "block", show(r.json));
-  ok(label + " — reason names bin/plan-link --stage " + stage, reason.includes("bin/plan-link") && reason.includes("--stage " + stage), reason);
+  ok(label + " — reason names bin/plan-link --step " + STEP_OF[stage], reason.includes("bin/plan-link") && reason.includes("--step " + STEP_OF[stage]), reason);
   ok(label + " — reason carries no URL and no plan path",
     !/https?:\/\//.test(reason) && !reason.includes(s.fwd) && !reason.includes(s.plan) && !reason.includes(s.sid), reason);
   ok(label + " — reason never invites a same-turn retry", !/retry|try again/i.test(reason), reason);
@@ -140,8 +142,8 @@ function planFor(s, stage) {
 
 if (mode === "sentinel") {
   const cases = [
-    { name: "bare intent sentinel", cmd: 'echo "<<WORKFLOW_CONFIRM_INTENT>>"', want: "intent" },
-    { name: "intent sentinel with a reason", cmd: 'echo "<<WORKFLOW_CONFIRM_INTENT: approve intent>>"', want: "intent" },
+    { name: "bare intent sentinel", cmd: 'echo "<<WORKFLOW_CONFIRM_INTENT>>"', want: "clarify_intent" },
+    { name: "intent sentinel with a reason", cmd: 'echo "<<WORKFLOW_CONFIRM_INTENT: approve intent>>"', want: "clarify_intent" },
     { name: "outline sentinel with a reason", cmd: 'echo "<<WORKFLOW_CONFIRM_OUTLINE: approve outline>>"', want: "outline" },
     { name: "detail sentinel with a reason", cmd: 'echo "<<WORKFLOW_CONFIRM_DETAIL: approve detail>>"', want: "detail" },
     { name: "detail sentinel inside a compound command", cmd: 'cd /tmp && echo "<<WORKFLOW_CONFIRM_DETAIL: in a compound>>"', want: "detail" },
@@ -156,9 +158,10 @@ if (mode === "sentinel") {
   const cc = require(process.env.CC_HOOK);
   const sources = [["confirm-checkpoint re-export", cc]];
   if (lib) {
-    ok("confirm-sentinel exports CONFIRM_STAGE_PATTERNS for the 3 stages",
-      Array.isArray(lib.CONFIRM_STAGE_PATTERNS) && show(lib.CONFIRM_STAGE_PATTERNS.map((p) => p.stage)) === show(["intent", "outline", "detail"]),
-      show(lib.CONFIRM_STAGE_PATTERNS));
+    ok("confirm-sentinel exports CONFIRM_STEP_PATTERNS for the 3 steps",
+      Array.isArray(lib.CONFIRM_STEP_PATTERNS) && show(lib.CONFIRM_STEP_PATTERNS.map((p) => p.step)) === show(["clarify_intent", "outline", "detail"]),
+      show(lib.CONFIRM_STEP_PATTERNS));
+    ok("confirm-sentinel no longer exports CONFIRM_STAGE_PATTERNS", !("CONFIRM_STAGE_PATTERNS" in lib), Object.keys(lib).join(","));
     ok("confirm-checkpoint re-exports the lib's parseSentinel", cc.parseSentinel === lib.parseSentinel, "different functions");
     sources.push(["confirm-sentinel", lib]);
   }
@@ -166,7 +169,7 @@ if (mode === "sentinel") {
     for (const { name: caseName, cmd, want } of cases) {
       let got;
       try { got = mod.parseSentinel(cmd); } catch (e) { got = { threw: e.message }; }
-      const g = got && got.stage ? got.stage : got;
+      const g = got && got.step ? got.step : got;
       ok(`${name}: ${caseName} — parseSentinel(${show(cmd)}) -> ${show(want)}`, g === want, show(got));
     }
   }

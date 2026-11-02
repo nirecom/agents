@@ -277,3 +277,21 @@ for (const [label, t, ok] of THR_ROWS) {
   });
 }
 caseEnd();
+
+caseBegin("adapter-jev-ticket-stage-of-step", "bin/workflow/lib/jev-complexity-adapter.js");
+// #2820: the step -> Jev ticket stage map is renamed; the ticket stage values it yields are unchanged.
+const TICKET_STAGE_ROWS = [["workflow_init", "cos1"], ["clarify_intent", "cos1"], ["outline", "outline"],
+  ["detail", "detail"], ["write_tests", "write_tests"], ["write_code", "write_code"], ["research", "unknown"], [null, "unknown"]];
+test("jevTicketStageOfStep maps each workflow step to its unchanged Jev ticket stage", () => {
+  assert.strictEqual(typeof adapter.jevTicketStageOfStep, "function");
+  for (const [step, want] of TICKET_STAGE_ROWS) assert.strictEqual(adapter.jevTicketStageOfStep(step), want, String(step));
+});
+test("JEV_TICKET_STAGE_OF_STEP is exported and agrees with jevTicketStageOfStep", () => {
+  const T = adapter.JEV_TICKET_STAGE_OF_STEP;
+  assert.ok(T && typeof T === "object", "the table is exported");
+  for (const [step, want] of TICKET_STAGE_ROWS.filter(([s, w]) => s && w !== "unknown")) assert.strictEqual(T[step], want, step);
+});
+test("the retired names stageForStep / STEP_TO_STAGE are not exported", () => {
+  for (const k of ["stageForStep", "STEP_TO_STAGE"]) assert.ok(!(k in adapter), `${k} must not be exported`);
+});
+caseEnd();

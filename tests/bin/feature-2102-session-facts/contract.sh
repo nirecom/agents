@@ -191,7 +191,7 @@ case_end
 
 echo ""
 case_begin "C4-static-key-names" "bin/workflow/lib/session-facts/keys.js"
-echo "=== C4: key names are static literals, not derived from ROUTING_STAGES ==="
+echo "=== C4: key names are static literals, not derived from ROUTING_STEPS ==="
 # Injected via --require so the CLI's own module graph sees the stub. If key names were
 # generated from the stage list, an extra fake stage would add an eleventh key.
 STUB="$TMPDIR_BASE/stub-stages.js"
@@ -201,15 +201,15 @@ printf '%s\n' \
   'const origLoad = Module._load;' \
   'Module._load = function (request, parent, isMain) {' \
   '  const m = origLoad.apply(this, arguments);' \
-  '  if (m && Array.isArray(m.ROUTING_STAGES) && m.ROUTING_STAGES.indexOf("fake_stage_2102") === -1) {' \
-  '    try { m.ROUTING_STAGES = Object.freeze(m.ROUTING_STAGES.concat(["fake_stage_2102"])); } catch (_) {}' \
+  '  if (m && Array.isArray(m.ROUTING_STEPS) && m.ROUTING_STEPS.indexOf("fake_stage_2102") === -1) {' \
+  '    try { m.ROUTING_STEPS = Object.freeze(m.ROUTING_STEPS.concat(["fake_stage_2102"])); } catch (_) {}' \
   '  }' \
   '  return m;' \
   '};' > "$STUB"
 WFS="$REPO_N/hooks/workflow-state"; export WFS
 STUB_PROOF="$(run_with_timeout node --require "$STUB" -e '
   const wf = require(process.env.WFS);
-  process.stdout.write(String(wf.ROUTING_STAGES.length));' 2>/dev/null || echo "STUB_FAILED")"
+  process.stdout.write(String(wf.ROUTING_STEPS.length));' 2>/dev/null || echo "STUB_FAILED")"
 check "C4a: the stub really adds a routing stage (non-vacuity)" 5 "$STUB_PROOF"
 RC=0
 AGENTS_MAIN_ROOT="$(nrm "$CFG_FULL")" run_with_timeout node --require "$STUB" "$RSF" \
