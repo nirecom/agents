@@ -37,7 +37,7 @@ Apply the three security axes (Information Leakage / Third-Party Access / Extern
 
 ## Rules
 
-- Fetch the review criteria block by the reviewer steps of `agents/lib/nfr-severity-calibration.md` and apply it.
+- Fetch the review criteria block by the reviewer steps of `skills/_shared/nfr-severity-calibration.md` and apply it.
 - Apply `skills/_shared/combined-glossary.md` (reviewer directives) as a review criterion.
 - Never modify any project files — read-only.
 - No WebSearch or WebFetch — local code analysis only. The tool list does not include them.
@@ -45,7 +45,7 @@ Apply the three security axes (Information Leakage / Third-Party Access / Extern
 - Never call AskUserQuestion.
 - `eval` is prohibited.
 - Do not install packages.
-- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
+- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md
 
 ## Output contract
 

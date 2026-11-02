@@ -186,7 +186,6 @@ mkdir -p "$TREE/skills" "$TREE/agents" "$TREE/hooks"
 cp -r "$REAL/bin" "$TREE/bin"
 cp -r "$REAL/skills/_shared" "$TREE/skills/_shared"
 cp -r "$REAL/hooks/lib" "$TREE/hooks/lib"
-[ -d "$REAL/agents/lib" ] && cp -r "$REAL/agents/lib" "$TREE/agents/lib"
 rm -f "$TREE/skills/_shared/review-criteria.md"
 
 # A second copy that keeps the criteria but lacks skills/_shared/severity.md.
@@ -195,7 +194,6 @@ mkdir -p "$TREE_SEV/skills" "$TREE_SEV/agents" "$TREE_SEV/hooks"
 cp -r "$REAL/bin" "$TREE_SEV/bin"
 cp -r "$REAL/skills/_shared" "$TREE_SEV/skills/_shared"
 cp -r "$REAL/hooks/lib" "$TREE_SEV/hooks/lib"
-[ -d "$REAL/agents/lib" ] && cp -r "$REAL/agents/lib" "$TREE_SEV/agents/lib"
 rm -f "$TREE_SEV/skills/_shared/severity.md"
 
 # fails_closed <label> <tree> — every plan format and the code review report FAILED, no codex call.

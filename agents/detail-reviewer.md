@@ -45,7 +45,7 @@ Critically review the plan produced by the **planner**. Report only concerns tha
 
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
-  as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
+  as `triage: NA`. (Full mapping: see `skills/_shared/triage-legacy-compat.md`.)
 - **Plan step hierarchy** — read `skills/_shared/priority-hierarchy/core.md` first; intent and outline are the approved upstream plan steps, and the detail is reviewed strictly against them. Report a deviation from a prior-step decision, an upstream contradiction or an upstream gap with the `[upstream-inconsistency …]` tag right after `[SEV]`; never suppress it. Apply `skills/_shared/priority-hierarchy.md` to untagged concerns (suppress, or downgrade to LOW under `## Accepted Tradeoffs`).
 
 ## Severity Tagging
@@ -87,11 +87,11 @@ See agents/detail-reviewer/concern-identifiers.md for the Concern Identifiers pr
 
 ## Rules
 
-- Fetch the review criteria block by the reviewer steps of `agents/lib/nfr-severity-calibration.md` and apply it.
+- Fetch the review criteria block by the reviewer steps of `skills/_shared/nfr-severity-calibration.md` and apply it.
 - Apply `skills/_shared/combined-glossary.md` (reviewer directives) as a review criterion.
 - Report only concerns that meet the Reporting minimum of the review criteria.
 - Do not write the revised plan yourself — that is the planner's job.
 - Do not call Edit/Write.
 - If the planner has already addressed a prior concern correctly, do not re-raise it.
 - In round 2+, only confirm whether each previous-round concern is fixed; raise no new concerns, tagged or not.
-- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
+- Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md

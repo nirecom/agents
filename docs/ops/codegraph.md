@@ -5,7 +5,7 @@ exposed to Claude Code as the `mcp__codegraph__codegraph_explore` MCP tool. It i
 off by default, and every part of the workflow degrades silently to Read/Grep when it is absent.
 
 Usage policy for the tool itself (when to call it, what `projectPath` must point at) lives in
-[`agents/lib/codegraph-usage.md`](../../agents/lib/codegraph-usage.md). This document covers
+[`skills/_shared/codegraph-usage.md`](../../skills/_shared/codegraph-usage.md). This document covers
 setup and day-to-day operation only.
 
 ## Enabling — three steps, in order
@@ -30,7 +30,7 @@ bash bin/get-config-var CODEGRAPH off      # prints: on
 The flag alone installs nothing. Re-run the installer so it picks up the new value:
 
 ```powershell
-C:\git\agents\install.ps1        # Windows
+.\install.ps1        # Windows, from the repository root
 ```
 
 ```bash
@@ -117,7 +117,7 @@ node "$AGENTS_MAIN_ROOT/bin/codegraph-lifecycle.js" init --path "$(git rev-parse
 Or with the path written out:
 
 ```bash
-node C:\git\agents\bin\codegraph-lifecycle.js init --path C:\git\worktrees\2153-env-example\agents
+node <repo-root>\bin\codegraph-lifecycle.js init --path <worktree-path>
 ```
 
 - `--path` takes the **worktree root** — the directory holding the `.git` file. Worktree paths in
@@ -161,7 +161,7 @@ Any warning on stderr is explained under [Troubleshooting](#troubleshooting).
 ### If you skip it
 
 Nothing breaks. `mcp__codegraph__codegraph_explore` degrades silently to Read/Grep when the index
-is missing, per [`agents/lib/codegraph-usage.md`](../../agents/lib/codegraph-usage.md). You simply
+is missing, per [`skills/_shared/codegraph-usage.md`](../../skills/_shared/codegraph-usage.md). You simply
 do not get the faster lookups in that worktree.
 
 ## What happens automatically
