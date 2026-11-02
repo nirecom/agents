@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: bin/worker-dispatch/workers/test-runner.js, hooks/workflow-run-tests.js, hooks/workflow-run-tests/dispatch-outcome.js, bin/run-tests-baseline, bin/lib/run-all-hits.sh, bin/lib/run-all-worktree-change-detect.sh
-// Tags: TL2, bin, hooks, worker-dispatch, run-tests, baseline, hit-attribution, root-decoy, worktree-change-detection, integration, scope:issue-specific
+// Tags: TL2, bin, hooks, worker-dispatch, run-tests, baseline, hit-attribution, root-decoy, worktree-change-detection, integration, missing-test-file, scope:issue-specific
 // #2669 end to end: the real dispatcher runs the real tests/run-all.sh over fixture tests that
 // reach the command guard; the real run_tests hook reads what it left (file and stdout routes),
 // and the real baseline CLI stops at the hit that run recorded. T10: the hook records the same
@@ -84,4 +84,8 @@ caseEnd();
 
 caseBegin("worker-collects-hits", "bin/worker-dispatch/workers/test-runner.js");
 test("worker-collects-hits", () => noNewFailures(fails, workerTail.workerCollectsHits));
+caseEnd();
+
+caseBegin("worker-emits-missing-file-token", "bin/worker-dispatch/workers/test-runner.js");
+test("worker-emits-missing-file-token", () => noNewFailures(fails, workerTail.workerEmitsMissingFileToken));
 caseEnd();
