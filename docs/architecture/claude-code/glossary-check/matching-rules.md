@@ -61,12 +61,19 @@ capitals (`RTK`, `WF-CODE`) and written wholly in lower case with the same separ
 the lower-case form there is the command or value name. Markdown does not get this rule, because
 markdown marks an identifier with backticks and a bare lower-case word stays prose.
 
-**Homographs field.** A glossary entry's Homographs field lists spellings that are another word, not
-the term. It applies only to a window matched in prose mode, never in capital or identifier mode,
-and only to an exact match: case, separators and word form must be the same, so a plural or a
-sentence-initial capital is a separate spelling to declare. The gate rejects a spelling whose
-compact key, folded key or raw key equals the term's, so a separator, case or word-form variant of
-the term itself stays drift and goes through the accept path.
+**`Short forms` field.** A glossary entry's `Short forms` field lists shorter spellings of the term,
+each a proper subsequence of its words. The matcher does not match them: a short form is neither
+drift nor a match. Whether a given use means the term is left to the semantic layer below; the
+reason is in the intent's Accepted Tradeoffs (#2763).
+
+## Two layers
+
+The spelling layer (this matcher) treats every spelling whose normalized key equals a term's as that
+term, and flags the variants the rules above count as drift. It never decides meaning.
+
+The semantic layer (the LLM reviewers, per `skills/_shared/combined-glossary.md`) decides whether a
+word is used in the term's meaning: a generic use of a word from a term or of a declared short form
+("step by step") is no rewording, and a short form used where the context is ambiguous is a concern.
 
 ## Backticks in markdown prose
 
@@ -93,7 +100,7 @@ Terms that share a separator-stripped form (`workflow`, `work flow`) are all can
 
 ## Known false positives
 
-Resolve these through the accept path; the Homographs field cannot, because the gate rejects every spelling the matcher keys to the term:
+Resolve these through the accept path, or by putting the spelling in backticks:
 
 - A proper noun that capitalizes a term mid-sentence (`AWS Step Functions`), or put it in backticks.
 - Ordinary English that spells out an identifier term's words in order, such as the words foo, bars and dir against `FOO_BARS_DIR`.

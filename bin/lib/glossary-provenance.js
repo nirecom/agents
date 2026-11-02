@@ -19,15 +19,15 @@ function normalizeDefinition(s) {
   return String(s == null ? "" : s).replace(/\s+/g, " ").trim();
 }
 
-// fieldsKey({ identifiers, homographs }) -> the order-free comparison key of the Identifier /
-// Homographs fields (#2763); "" when both are empty.
+// fieldsKey({ identifiers, shortForms }) -> the order-free comparison key of the Identifier /
+// Short forms fields (#2763); "" when both are empty.
 function fieldsKey(f) {
   const list = (v) => (Array.isArray(v) ? v.map(String).sort() : []);
   const ids = list(f && f.identifiers);
-  const homs = list(f && f.homographs);
-  return ids.length === 0 && homs.length === 0 ? "" : JSON.stringify([ids, homs]);
+  const shorts = list(f && f.shortForms);
+  return ids.length === 0 && shorts.length === 0 ? "" : JSON.stringify([ids, shorts]);
 }
-const declaresFields = (r) => Array.isArray(r.identifiers) || Array.isArray(r.homographs);
+const declaresFields = (r) => Array.isArray(r.identifiers) || Array.isArray(r.shortForms);
 const fieldsOf = (set, key) => (set.fields && set.fields.get(key)) || "";
 
 let legacyCategoryOf = () => null;
@@ -115,7 +115,8 @@ function reasonFor(op, rows) {
   if (exact) {
     if (op.operation === "delete") return null;
     if (normalizeDefinition(exact.definition) !== normalizeDefinition(op.definition)) return "definition-mismatch";
-    // A V3 row states the fields; a V1 / V2 row cannot, so it cannot approve a fields change.
+    // A V3 row states the Identifier / Short forms fields; a V1 / V2 row cannot, so it cannot
+    // approve a fields change.
     if (declaresFields(exact)) return fieldsKey(exact) === (op.fields || "") ? null : "fields-mismatch";
     return op.fieldsChanged ? "fields-unrecorded" : null;
   }

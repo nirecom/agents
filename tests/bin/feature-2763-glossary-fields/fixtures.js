@@ -1,14 +1,14 @@
 "use strict";
 // Text builders for tests/bin/feature-2763-glossary-fields.js (#2763 S2): glossary files with the
-// optional Identifier / Homographs bullets, and intent Glossary tables in the V2 and V3 forms.
+// optional Identifier / Short forms bullets, and intent Glossary tables in the V2 and V3 forms.
 
 const RELATED = "- **Related**: [README.md](../../README.md)";
 const V2_HEADER = "| Term | Category | Operation | Definition |\n|---|---|---|---|";
-const V3_HEADER = "| Term | Category | Operation | Definition | Identifier | Homographs |\n|---|---|---|---|---|---|";
+const V3_HEADER = "| Term | Category | Operation | Definition | Identifier | Short forms |\n|---|---|---|---|---|---|";
 
 const tick = (list) => list.map((s) => `\`${s}\``).join(", ");
 
-// entry(term, def, { identifiers, homographs, extra }) -> one `### term` block; a list becomes a
+// entry(term, def, { identifiers, shortForms, extra }) -> one `### term` block; a list becomes a
 // backticked value, a string is written as given (for the malformed-value rows).
 function entry(term, def, o) {
   const opt = o || {};
@@ -18,7 +18,7 @@ function entry(term, def, o) {
     lines.push(`- **${key}**: ${Array.isArray(v) ? tick(v) : v}`.replace(/\s+$/, ""));
   };
   field("Identifier", opt.identifiers);
-  field("Homographs", opt.homographs);
+  field("Short forms", opt.shortForms);
   for (const x of opt.extra || []) lines.push(x);
   lines.push(RELATED);
   return lines.join("\n") + "\n";
@@ -35,10 +35,10 @@ function intent(table) {
     `## Glossary\n\n${table}\n\n## Goal\n\nDeclare spellings.\n`;
 }
 
-// v3Row(term, category, operation, def, identifiers, homographs) -> one V3 table row.
-function v3Row(term, category, operation, def, identifiers, homographs) {
+// v3Row(term, category, operation, def, identifiers, shortForms) -> one V3 table row.
+function v3Row(term, category, operation, def, identifiers, shortForms) {
   const cell = (v) => (Array.isArray(v) ? tick(v) : (v || ""));
-  return `| ${term} | ${category} | ${operation} | ${def} | ${cell(identifiers)} | ${cell(homographs)} |`;
+  return `| ${term} | ${category} | ${operation} | ${def} | ${cell(identifiers)} | ${cell(shortForms)} |`;
 }
 const v2Row = (term, category, operation, def) => `| ${term} | ${category} | ${operation} | ${def} |`;
 

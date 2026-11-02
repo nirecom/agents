@@ -1,10 +1,10 @@
 "use strict";
 // Tests: hooks/lib/glossary-term.js, bin/lib/glossary-format/entries.js, hooks/lib/intent-glossary.js, bin/lib/glossary-provenance.js, hooks/workflow-state/glossary-check/scope/sources.js, bin/lib/glossary-format/prompt-data.js
 // Tags: TL2, glossary, glossary-fields, scope:issue-specific
-// #2763 S2: the optional Identifier and Homographs fields of a glossary entry and of a V3 intent
+// #2763 S2: the optional Identifier and Short forms fields of a glossary entry and of a V3 intent
 // Glossary row — the shared spelling checks, the entry-form gate, the intent table parser, the
 // provenance match (fields-mismatch / fields-unrecorded) and the term records of combinedGlossary.
-// Text builders: feature-2763-glossary-fields/fixtures.js.
+// Text builders: feature-2763-glossary-fields/fixtures.js; Short forms bodies: short-forms.js.
 // TL3 gap: the commit-time hooks that call these checks are driven by the review-doc-glossary and
 // check-glossary-provenance suites, not here.
 const { caseBegin, caseEnd, isolate, gitInit } = require("../lib/harness");
@@ -18,23 +18,13 @@ const { spawnSync } = require("node:child_process");
 const { after, test } = require("node:test");
 const X = require("./feature-2763-glossary-fields/fixtures");
 const E = require("./feature-2763-glossary-fields/edges");
+const S = require("./feature-2763-glossary-fields/short-forms");
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const load = (rel) => require(path.join(ROOT, rel));
 const restore = isolate();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "f2763gf-"));
 after(() => { restore(); fs.rmSync(TMP, { recursive: true, force: true }); });
-
-// Spellings a Homographs field must refuse: each shares a matcher key with its term.
-const BAD_HOMOGRAPHS = [
-  ["the term itself", "statusline", "statusline"],
-  ["case variant", "statusline", "Statusline"],
-  ["separator variant", "statusline", "status-line"],
-  ["plural of a separator variant (compactKey)", "statusline", "status-lines"],
-  ["space-split plural (compactKey)", "statusline", "status lines"],
-  ["identifier term, folded plural (identFoldedKey)", "foo_bar", "foo bars"],
-];
-const GOOD_HOMOGRAPH = ["statusline", "statuses"];
 
 caseBegin("glossary-term-spelling-checks", "hooks/lib/glossary-term.js");
 test("parseSpellingList: empty, backticked list, unbackticked value", () => {
@@ -62,23 +52,16 @@ test("checkIdentifierSpelling: same identKey passes; other key, whitespace and R
   assert.ok(typeof why === "string" && why !== "", "the ReDoS probe is refused");
   assert.ok(ms < 1000, `the ReDoS probe ends under 1000 ms (took ${ms} ms)`);
 });
-test("checkHomographSpelling: every spelling sharing a matcher key is refused; statuses passes", () => {
-  const t = load("hooks/lib/glossary-term.js");
-  assert.strictEqual(typeof t.checkHomographSpelling, "function", "checkHomographSpelling is exported");
-  for (const [name, term, s] of BAD_HOMOGRAPHS) {
-    const why = t.checkHomographSpelling(term, s);
-    assert.ok(typeof why === "string" && why !== "", `${name}: ${term} / ${s} is refused`);
-  }
-  assert.ok(!t.checkHomographSpelling(...GOOD_HOMOGRAPH), "statuses passes for statusline");
-  assert.ok(t.checkHomographSpelling("statusline", ""), "an empty spelling is refused");
-});
 test("checkIdentifierSpelling refuses leading / trailing separators and non-ASCII", E.identifierSpellingEdges);
 caseEnd();
 
-const VALID_FILE = X.file("internal", [
-  X.entry("allow-deny hook", "A hook.", { identifiers: ["allow-deny-hook", "allow_deny_hook"] }),
-  X.entry("statusline", "A line.", { homographs: ["statuses"] }),
-]);
+caseBegin("glossary-term-short-forms", "hooks/lib/glossary-term.js");
+test("checkShortFormSpelling: a proper word subsequence passes; order, headword, synonym, one-word term, empty fail", S.spellingCheck);
+test("shortFormConflicts: headword, other short form and in-list duplicate overlaps; disjoint is empty", S.conflicts);
+caseEnd();
+
+const ALLOW_DENY = X.entry("allow-deny hook", "A hook.", { identifiers: ["allow-deny-hook", "allow_deny_hook"] });
+const VALID_FILE = X.file("internal", [ALLOW_DENY, X.entry("status line", "A line.", { shortForms: ["status"] })]);
 const fieldsViolations = (out) => out.filter((l) => !/disallowed bullet/.test(l));
 const ENTRY_BAD = [
   ["duplicate Identifier bullet", { identifiers: ["allow-deny-hook"], extra: ["- **Identifier**: `allow_deny_hook`"] }],
@@ -89,7 +72,7 @@ const ENTRY_BAD = [
 ];
 
 caseBegin("glossary-entry-fields", "bin/lib/glossary-format/entries.js");
-test("checkGlossaryFile accepts the Identifier and Homographs bullets", () => {
+test("checkGlossaryFile accepts the Identifier and Short forms bullets", () => {
   const e = load("bin/lib/glossary-format/entries.js");
   assert.deepStrictEqual(e.checkGlossaryFile(VALID_FILE), []);
 });
@@ -101,30 +84,24 @@ test("checkGlossaryFile refuses malformed Identifier values (not as a disallowed
     assert.deepStrictEqual(fieldsViolations(out), out, `${name}: a field violation, not a disallowed bullet: ${out}`);
   }
 });
-test("checkGlossaryFile refuses Homographs sharing a matcher key; statuses passes", () => {
-  const e = load("bin/lib/glossary-format/entries.js");
-  for (const [name, term, s] of BAD_HOMOGRAPHS) {
-    const out = e.checkGlossaryFile(X.file("internal", [X.entry(term, "A term.", { homographs: [s] })]));
-    assert.ok(out.length > 0 && fieldsViolations(out).length === out.length, `${name}: ${s} refused as a field: ${out}`);
-  }
-  const ok = e.checkGlossaryFile(X.file("internal", [X.entry(GOOD_HOMOGRAPH[0], "A line.", { homographs: [GOOD_HOMOGRAPH[1]] })]));
-  assert.deepStrictEqual(ok, []);
-});
+test("checkGlossaryFile refuses Short forms that are no proper word subsequence of the headword", S.entryForm);
 test("entryFields and replaceFields", () => {
   const e = load("bin/lib/glossary-format/entries.js");
   assert.strictEqual(typeof e.entryFields, "function", "entryFields is exported");
   const [a, s] = e.parseGlossaryFile(VALID_FILE).entries;
-  assert.deepStrictEqual(e.entryFields(a), { identifiers: ["allow-deny-hook", "allow_deny_hook"], homographs: [] });
-  assert.deepStrictEqual(e.entryFields(s), { identifiers: [], homographs: ["statuses"] });
+  assert.deepStrictEqual(e.entryFields(a), { identifiers: ["allow-deny-hook", "allow_deny_hook"], shortForms: [] });
+  assert.deepStrictEqual(e.entryFields(s), { identifiers: [], shortForms: ["status"] });
   assert.strictEqual(typeof e.replaceFields, "function", "replaceFields is exported");
-  const set = e.replaceFields(VALID_FILE, "statusline", { identifiers: ["status-line"], homographs: [] });
-  const block = set.slice(set.indexOf("### statusline"));
+  const set = e.replaceFields(VALID_FILE, "status line", { identifiers: ["status-line"], shortForms: [] });
+  const block = set.slice(set.indexOf("### status line"));
   assert.match(block, /- \*\*Definition\*\*: A line\.\n- \*\*Identifier\*\*: `status-line`\n- \*\*Related\*\*/);
-  const cleared = e.replaceFields(VALID_FILE, "allow-deny hook", { identifiers: [], homographs: [] });
-  assert.doesNotMatch(cleared, /Identifier/, "empty fields remove the bullet");
+  assert.doesNotMatch(block, /Short forms/, "an empty Short forms field removes its bullet");
+  const cleared = e.replaceFields(VALID_FILE, "allow-deny hook", { identifiers: [], shortForms: [] });
+  assert.doesNotMatch(cleared.slice(0, cleared.indexOf("### status line")), /Identifier/, "empty fields remove the bullet");
   assert.deepStrictEqual(e.checkGlossaryFile(cleared), []);
 });
-test("checkGlossaryFile refuses malformed Homographs values (not as a disallowed bullet)", E.homographsBulletForm);
+test("checkGlossaryFile refuses malformed Short forms values (not as a disallowed bullet)", E.shortFormsBulletForm);
+test("checkGlossaryFile refuses an unknown field bullet as a disallowed bullet", E.unknownFieldBullet);
 test("replaceFields: no duplicate bullet, fixed order, idempotent", E.replaceFieldsOrder);
 caseEnd();
 
@@ -134,35 +111,37 @@ caseBegin("intent-glossary-v3", "hooks/lib/intent-glossary.js");
 test("V3 header is accepted and its rows carry the fields; V1 / V2 rows leave them undefined", () => {
   const g = load("hooks/lib/intent-glossary.js");
   const text = X.v3([X.v3Row("allow-deny hook", "internal", "add", "A hook.", ["allow-deny-hook"], []),
-    X.v3Row("statusline", "user", "redefine", "A line.", [], ["statuses"])]);
+    X.v3Row("status line", "user", "redefine", "A line.", [], ["status"])]);
   assert.deepStrictEqual(g.checkIntentGlossary(text), []);
   const rows = g.parseIntentGlossary(text).rows;
-  assert.deepStrictEqual(rows.map((r) => [r.term, r.definition, r.identifiers, r.homographs]), [
+  assert.deepStrictEqual(rows.map((r) => [r.term, r.definition, r.identifiers, r.shortForms]), [
     ["allow-deny hook", "A hook.", ["allow-deny-hook"], []],
-    ["statusline", "A line.", [], ["statuses"]],
+    ["status line", "A line.", [], ["status"]],
   ]);
   const legacy = [X.v2([X.v2Row("statusline", "user", "add", "A line.")]),
     X.intent("| Term | Category | Definition |\n|---|---|---|\n| statusline | user | A line. |")];
   for (const t of legacy) {
     const [r] = g.parseIntentGlossary(t).rows;
     assert.strictEqual(r.identifiers, undefined);
-    assert.strictEqual(r.homographs, undefined);
+    assert.strictEqual(r.shortForms, undefined);
   }
 });
-test("V3 rows: bad Identifier, bad Homographs and fields on a delete row are violations", () => {
+test("V3 rows: bad Identifier and fields on a delete row are violations", () => {
   const g = load("hooks/lib/intent-glossary.js");
   const bad = [
     ["identKey mismatch", X.v3Row("allow-deny hook", "internal", "add", "A hook.", ["allow-deny-hooks"], [])],
     ["unbackticked Identifier", X.v3Row("allow-deny hook", "internal", "add", "A hook.", "allow-deny-hook", [])],
     ["fields on a delete row", X.v3Row("allow-deny hook", "internal", "delete", "", ["allow-deny-hook"], [])],
-  ].concat(BAD_HOMOGRAPHS.map(([name, term, s]) => [`Homographs ${name}`, X.v3Row(term, "user", "add", "A term.", [], [s])]));
+  ];
   for (const [name, row] of bad) {
     const vs = g.checkIntentGlossary(X.v3([row]));
     assert.ok(notHeader(vs).length > 0 && notHeader(vs).length === vs.length, `${name}: ${JSON.stringify(vs)}`);
   }
-  assert.deepStrictEqual(g.checkIntentGlossary(X.v3([X.v3Row(GOOD_HOMOGRAPH[0], "user", "add", "A line.", [], [GOOD_HOMOGRAPH[1]])])), []);
 });
-test("V3 rows: whitespace in the Identifier and Homographs alone on a delete row are violations", E.intentRowEdges);
+test("V3 rows: Short forms that are no proper word subsequence are violations; good ones pass", S.intentRows);
+test("V3 rows: whitespace in the Identifier and Short forms alone on a delete row are violations", E.intentRowEdges);
+test("V3 table: a Short forms overlap between rows is a violation; an unknown sixth column is a header violation",
+  require("./feature-2763-glossary-fields/intent-rows").tableShortForms);
 caseEnd();
 
 const USER = "docs/glossary/user.md";
@@ -195,16 +174,18 @@ test("V3 redefine row: matching fields pass, other fields are fields-mismatch", 
   assert.deepStrictEqual(reasons(ops, X.v3([X.v3Row("statusline", "user", "redefine", "A line.", ["status_line"], [])])),
     [["statusline", "redefine", "fields-mismatch"]]);
 });
-test("V3 add row: matching fields pass, other fields are fields-mismatch; a Homographs-only change is a redefine",
+test("V3 add row: matching fields pass, other fields are fields-mismatch; a Short forms-only change is a redefine",
   () => E.provenanceV3Add({ opsOf, reasons, userFile }));
+test("Short forms provenance: redefine op, fields-unrecorded on V2, fields-mismatch on other V3 cells",
+  () => S.provenance({ opsOf, reasons, userFile }));
 test("V2 rows cannot carry a fields change: fields-unrecorded for redefine and add", () => {
   const redefine = opsOf(userFile(PLAIN), userFile(WITH_ID));
   assert.deepStrictEqual(reasons(redefine, X.v2([X.v2Row("statusline", "user", "redefine", "A line.")])),
     [["statusline", "redefine", "fields-unrecorded"]]);
-  const add = opsOf(userFile(), userFile(X.entry("statusline", "A line.", { homographs: ["statuses"] })));
+  const add = opsOf(userFile(), userFile(X.entry("status line", "A line.", { shortForms: ["status"] })));
   assert.deepStrictEqual(add.map((o) => [o.operation, o.fieldsChanged]), [["add", true]]);
-  assert.deepStrictEqual(reasons(add, X.v2([X.v2Row("statusline", "user", "add", "A line.")])),
-    [["statusline", "add", "fields-unrecorded"]]);
+  assert.deepStrictEqual(reasons(add, X.v2([X.v2Row("status line", "user", "add", "A line.")])),
+    [["status line", "add", "fields-unrecorded"]]);
 });
 test("V2 redefine of the Definition alone, fields untouched, still passes", () => {
   const ops = opsOf(userFile(WITH_ID), userFile(X.entry("statusline", "A new line.", { identifiers: ["status-line"] })));
@@ -238,22 +219,23 @@ test("combinedGlossary returns term records with the declared fields", () => {
   const repo = path.join(TMP, "repo").replace(/\\/g, "/");
   gitInit(repo);
   fs.mkdirSync(path.join(repo, "docs", "glossary"), { recursive: true });
-  fs.writeFileSync(path.join(repo, USER), userFile(X.entry("statusline", "A line.", { homographs: ["statuses"] })));
-  fs.writeFileSync(path.join(repo, INTERNAL), VALID_FILE);
+  fs.writeFileSync(path.join(repo, USER), userFile(X.entry("status line", "A line.", { shortForms: ["status"] })));
+  fs.writeFileSync(path.join(repo, INTERNAL), X.file("internal", [ALLOW_DENY]));
   const add = spawnSync("git", ["-C", repo, "add", "-A"], { encoding: "utf8" });
   assert.strictEqual(add.status, 0, add.stderr);
   const r = load("hooks/workflow-state/glossary-check/scope/sources.js").combinedGlossary({ repoDir: repo });
   assert.ok(r.ok, JSON.stringify(r));
   const byTerm = (t) => r.terms.filter((x) => x && x.term === t);
-  assert.deepStrictEqual(byTerm("allow-deny hook"), [{ term: "allow-deny hook", identifiers: ["allow-deny-hook", "allow_deny_hook"], homographs: [] }]);
-  assert.deepStrictEqual(byTerm("statusline"), [{ term: "statusline", identifiers: [], homographs: ["statuses"] }]);
+  // Short forms are a write-time declaration only: the drift records carry { term, identifiers }.
+  assert.deepStrictEqual(byTerm("allow-deny hook"), [{ term: "allow-deny hook", identifiers: ["allow-deny-hook", "allow_deny_hook"] }]);
+  assert.deepStrictEqual(byTerm("status line"), [{ term: "status line", identifiers: [] }]);
 });
 caseEnd();
 
 // Plan S5-1: the reviewer's glossary data carries the two bullets (Related stays out). Kept in this
 // JS entrypoint: a bash case may not target a .js file (block-case-markers language gate).
-caseBegin("prompt-data-emits-identifier-and-homographs", "bin/lib/glossary-format/prompt-data.js");
-test("promptData emits Identifier and Homographs as written, no Related; a plain entry is unchanged", () => {
+caseBegin("prompt-data-emits-identifier-and-short-forms", "bin/lib/glossary-format/prompt-data.js");
+test("promptData emits Identifier and Short forms as written, no Related; a plain entry is unchanged", () => {
   const { promptData } = load("bin/lib/glossary-format/prompt-data.js");
   const withFields = path.join(TMP, "pd-internal.md");
   const plain = path.join(TMP, "pd-user.md");
@@ -265,14 +247,14 @@ test("promptData emits Identifier and Homographs as written, no Related; a plain
     "### allow-deny hook",
     "- **Definition**: A hook.",
     "- **Identifier**: `allow-deny-hook`, `allow_deny_hook`",
-    "### statusline",
+    "### status line",
     "- **Definition**: A line.",
-    "- **Homographs**: `statuses`",
+    "- **Short forms**: `status`",
     USER,
     "### kilo",
     "- **Definition**: K.",
     "",
   ].join("\n"));
 });
-test("promptData neutralizes delimiters inside the Identifier and Homographs values", E.promptDataNeutralize);
+test("promptData neutralizes delimiters inside the Identifier and Short forms values", E.promptDataNeutralize);
 caseEnd();

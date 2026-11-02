@@ -77,7 +77,7 @@ function run(F) {
 
 // Plan S4-6: a spelling declared by the Identifier bullet of a glossary entry and one declared by
 // the Identifier cell of a V3 intent row are both left alone mid-line in a tests-stage comment.
-const V3_HEADER = "| Term | Category | Operation | Definition | Identifier | Homographs |\n|---|---|---|---|---|---|";
+const V3_HEADER = "| Term | Category | Operation | Definition | Identifier | Short forms |\n|---|---|---|---|---|---|";
 function declaredStage(F) {
   const files = glossaryFiles(F);
   files["docs/glossary/internal.md"] = files["docs/glossary/internal.md"].replace(

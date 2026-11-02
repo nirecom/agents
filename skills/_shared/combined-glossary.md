@@ -18,6 +18,7 @@ SSOT for how writers and reviewers use the combined glossary: the agreed terms o
 - Never substitute a synonym, a rewording, or a spelling variant that the matching rules (`docs/architecture/claude-code/glossary-check.md#matching-rules`) count as drift.
 - In markdown prose, wrap every identifier in backticks and spell it exactly as the identifier is written.
 - Write an identifier that a glossary entry declares in its Identifier field with exactly that declared spelling.
+- Write a short form only where the context points to the term's concept; when it is ambiguous, write the term.
 - When the work needs a concept the glossary lacks, name the new term explicitly as a glossary candidate instead of silently coining it.
 
 ## Reviewer directives
@@ -25,8 +26,8 @@ SSOT for how writers and reviewers use the combined glossary: the agreed terms o
 - Check the artifact against each glossary term's definition, and raise a concern for every synonym, rewording, or spelling variant the matching rules (`docs/architecture/claude-code/glossary-check.md#matching-rules`) count as drift that stands in for a glossary term.
 - Tell `identifier context` from `prose context` by that section before raising a spelling-variant concern.
 - Treat a fixed schema heading (`## Steps`) as `identifier context`; raise no glossary-drift concern for it.
-- Raise no concern for a form the matching rules tolerate: a regular plural, a sentence-initial or heading capital, or a spelling declared in the entry's Identifier or Homographs field.
-- A generic word that is part of a multi-word term (a lone `step`) is no rewording of that term unless it names the term's concept.
+- Raise no concern for a form the matching rules tolerate: a regular plural, a sentence-initial or heading capital, or a spelling declared in the entry's Identifier field.
+- A generic use ("step by step") of a word from a term, or of a short form declared in the entry's `Short forms` field, is no rewording of the term; its mere presence raises no concern.
 - Never map a Japanese expression to a glossary term.
 - In markdown prose, an identifier written without backticks (a term holding `_`, or a command name or value spelled like a term) gets an untagged LOW concern, with no `[glossary-drift ...]` tag.
 - Raise a misspelled identifier as a glossary-drift concern, backticked or not, including one split at whitespace or hyphens, split into lower-case words, or with a missing or extra character.

@@ -1,8 +1,8 @@
 # tests/bin/feat-2529-review-doc-glossary/common.sh
 # Shared fixture of the #2529 glossary gate tests: fixture repo, glossary builders,
 # the gate driver and its assertions. Sourced after the pins by
-# tests/bin/feat-2529-review-doc-glossary.sh, tests/bin/feat-2529-review-doc-glossary-ranges.sh and
-# tests/bin/feat-2529-review-doc-glossary-index.sh.
+# tests/bin/feat-2529-review-doc-glossary.sh, tests/bin/feat-2529-review-doc-glossary-ranges.sh,
+# and tests/bin/feat-2529-review-doc-glossary-index.sh.
 
 GATE="$SCRIPT_CHECKOUT_ROOT/bin/review-doc-glossary"
 REPO=""
@@ -91,4 +91,15 @@ expect_rc() {
 expect_out() {
   if [[ "$GATE_OUT" == *"$2"* ]]; then pass "$1 (output has [$2])"
   else fail "$1" "expected [$2] in output: ${GATE_OUT:0:600}"; fi
+}
+
+# expect_no_disallowed <name> — the gate blocked on a field value, not as a disallowed bullet.
+expect_no_disallowed() {
+  if [[ "$GATE_OUT" != *"disallowed bullet"* ]]; then pass "$1 (not a disallowed bullet)"
+  else fail "$1" "blocked as a disallowed bullet: ${GATE_OUT:0:600}"; fi
+}
+
+# sf_entry <term> <short form> — one entry block carrying a Short forms bullet (#2763).
+sf_entry() {
+  printf '### %s\n- **Definition**: a fixture term.\n- **Short forms**: `%s`\n- **Related**: [owner](architecture/owner.md)\n\n' "$1" "$2"
 }

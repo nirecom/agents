@@ -26,11 +26,11 @@ function findDrift(text, format, terms) {
 // term an intent row deletes is no canonical term, even while the glossary file still lists it;
 // an add / redefine row of the same term (a category move) keeps it. A delete row matches its own
 // spelling only (case-insensitive), so deleting "workflows" leaves a distinct "workflow" heading.
-// Term records: a V3 row (its fields are arrays) replaces the fields of the glossary record of the
-// same term; a V1 / V2 row declares nothing.
+// Term records: a V3 row (its Identifier cell is an array) replaces the Identifier spellings of the
+// glossary record of the same term; a V1 / V2 row declares nothing. Short forms are never matched.
 const spellingKey = (s) => String(s == null ? "" : s).trim().toLowerCase();
-const declares = (r) => Array.isArray(r.identifiers) || Array.isArray(r.homographs);
-const fieldsOfRow = (r) => ({ identifiers: Array.isArray(r.identifiers) ? r.identifiers : [], homographs: Array.isArray(r.homographs) ? r.homographs : [] });
+const declares = (r) => Array.isArray(r.identifiers);
+const fieldsOfRow = (r) => ({ identifiers: Array.isArray(r.identifiers) ? r.identifiers : [] });
 function scanStageInputs(inputs) {
   const rows = (inputs && inputs.intentRows && inputs.intentRows.rows) || [];
   const kept = rows.filter((r) => r.operation !== "delete");
