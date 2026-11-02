@@ -1,6 +1,7 @@
 "use strict";
 // SSOT: which CONFIRM_* gate guards each workflow step, and the default each gate
-// is probed with. Confirm gates only — unrelated to STAGE_FOR_STEP / APPROVAL_GATED_STEPS.
+// is probed with. Confirm gates only — unrelated to CONFIRM_FLAG_OF_STEP (plan-skip-allowance.js,
+// the OFF-waivable flags) and APPROVAL_GATED_STEPS.
 
 const CONFIRM_GATE_FOR_STEP = Object.freeze({
   clarify_intent: "CONFIRM_INTENT",

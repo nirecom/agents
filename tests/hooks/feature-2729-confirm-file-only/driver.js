@@ -16,7 +16,7 @@ if (process.argv[2] === "--inproc") {
   const tryIt = (k, fn) => { try { out[k] = fn(); } catch (e) { out[k] = "threw:" + e.message; } };
   tryIt("probe", () => require(path.join(ROOT, "hooks/lib/confirm-gate/probe.js")).probeConfirmGateWithCause("CONFIRM_DETAIL", 5000).value);
   tryIt("plan", () => require(path.join(ROOT, "hooks/lib/confirm-gate/plan-gate.js")).planGateState("detail"));
-  tryIt("fromFile", () => require(path.join(ROOT, "hooks/lib/plan-confirm-flag.js")).isConfirmOffForStageFromFile("detail"));
+  tryIt("fromFile", () => require(path.join(ROOT, "hooks/lib/plan-confirm-flag.js")).isConfirmFlagOffFromFile("CONFIRM_DETAIL"));
   tryIt("check", () => require(path.join(ROOT, "hooks/workflow-state/plan-approval-check.js")).checkPlanApproval(sid, "detail"));
   tryIt("eval", () => {
     const WS = require(path.join(ROOT, "hooks/workflow-state"));
@@ -66,7 +66,7 @@ function expectAll(label, env, want) {
   check(`${label}: bin/confirm-off -> ${want}`, confirmOff(env, "CONFIRM_DETAIL") === want, confirmOff(env, "CONFIRM_DETAIL"));
   check(`${label}: planGateState(detail) -> ${want}`, v.plan === want, show(v.plan));
   check(`${label}: checkPlanApproval gate -> ${want}`, gate === want, show(v.check));
-  check(`${label}: plan-confirm-flag isConfirmOffForStageFromFile -> ${want === "OFF"}`, v.fromFile === (want === "OFF"), show(v.fromFile));
+  check(`${label}: plan-confirm-flag isConfirmFlagOffFromFile -> ${want === "OFF"}`, v.fromFile === (want === "OFF"), show(v.fromFile));
   if (want === "OFF") {
     check(`${label}: evaluateCompletionApproval waives`, v.eval && v.eval.approved === true && v.eval.source === "confirm-flag-off", show(v.eval));
   } else {
@@ -102,11 +102,11 @@ const MODES = {
     check("local-env still applies CONFIRM_CODE from .env.local", LE.overlay({}, { CONFIRM_CODE: "off" }).applied.includes("CONFIRM_CODE"), "not applied");
     const CF = require(path.join(ROOT, "hooks/lib/config-flag.js"));
     check("config-flag exports kindOfValue", typeof CF.kindOfValue === "function", Object.keys(CF).join(","));
-    check("config-flag exports isPlanStageConfirmKey", typeof CF.isPlanStageConfirmKey === "function", Object.keys(CF).join(","));
-    if (typeof CF.isPlanStageConfirmKey === "function") {
-      check("isPlanStageConfirmKey: the three plan keys", CE.PLAN_KEYS.every((k) => CF.isPlanStageConfirmKey(k) === true), "a key missed");
-      check("isPlanStageConfirmKey: CONFIRM_CODE / CONFIRM_TESTS are not plan keys",
-        CF.isPlanStageConfirmKey("CONFIRM_CODE") === false && CF.isPlanStageConfirmKey("CONFIRM_TESTS") === false, "true");
+    check("config-flag exports isPlanStepConfirmKey", typeof CF.isPlanStepConfirmKey === "function", Object.keys(CF).join(","));
+    if (typeof CF.isPlanStepConfirmKey === "function") {
+      check("isPlanStepConfirmKey: the three plan keys", CE.PLAN_KEYS.every((k) => CF.isPlanStepConfirmKey(k) === true), "a key missed");
+      check("isPlanStepConfirmKey: CONFIRM_CODE / CONFIRM_TESTS are not plan keys",
+        CF.isPlanStepConfirmKey("CONFIRM_CODE") === false && CF.isPlanStepConfirmKey("CONFIRM_TESTS") === false, "true");
     }
   },
 };

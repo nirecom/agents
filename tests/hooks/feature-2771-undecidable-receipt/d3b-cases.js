@@ -5,7 +5,7 @@ const fs = require("fs");
 const R = require("../feature-2729-presentation-receipt/fixture");
 const { A, T } = R;
 const {
-  STAGES, QUESTION, THINK, closing, turn, ustop, linked, notice, names, silent, noReceipt, seedReceipts, snap, rawReceipts, MID,
+  ARTIFACTS, stepOf, QUESTION, THINK, closing, turn, ustop, linked, notice, names, silent, noReceipt, seedReceipts, snap, rawReceipts, MID,
 } = require("./helpers");
 
 // d3b: the final text never reached the transcript; its last text is mid-turn with a tool_use entry after it.
@@ -14,11 +14,11 @@ const d3b = (s, stages, last, o) =>
 const noDecision = (st) => st.rc === 0 && !("decision" in st.json);
 
 function r23(check) {
-  STAGES.forEach((stage, i) => {
+  ARTIFACTS.forEach((stage, i) => {
     const s = R.sessionAt(stage, { tag: 2301 + i });
     const st = d3b(s, [stage], closing(s, [stage]));
     check(`r23 ${stage} marker, final text only in last_assistant_message: rc 0, stdout empty (no block, continue, notice)`, silent(st), { rc: st.rc, out: st.out });
-    const rc = R.readReceiptRaw(s.sid, stage);
+    const rc = R.readReceiptRaw(s.sid, stepOf(stage));
     check(`r23 ${stage}: the receipt is recorded with anchorUuid ""`, rc !== null && rc.anchorUuid === "" && rc.link && rc.link.kind === "url", rc);
     check(`r23 ${stage}: the turn markers are spent`, R.turnMarkersLeft(s.sid) === 0, "markers=" + R.turnMarkersLeft(s.sid));
     const e = R.echo(s.sid, stage);
@@ -51,11 +51,11 @@ function r23(check) {
 }
 
 function r28(check) {
-  STAGES.forEach((stage, i) => {
+  ARTIFACTS.forEach((stage, i) => {
     const s = R.sessionAt(stage, { tag: 2801 + i });
     const st = d3b(s, [stage], closing(s, [stage]), { markers: false });
     check(`r28 ${stage} no marker, D3b link close: rc 0, stdout empty`, silent(st), { rc: st.rc, out: st.out });
-    const rc = R.readReceiptRaw(s.sid, stage);
+    const rc = R.readReceiptRaw(s.sid, stepOf(stage));
     check(`r28 ${stage} no marker: the receipt is recorded with anchorUuid ""`, rc !== null && rc.anchorUuid === "" && rc.link && rc.link.kind === "url", rc);
     const e = R.echo(s.sid, stage);
     check(`r28 ${stage} no marker: the echo after it reaches the dialog`, e.dialog, e.json);

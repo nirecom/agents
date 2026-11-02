@@ -77,14 +77,16 @@ function echo(sid, stage, opts) {
   };
 }
 
-const receiptPath = (sid, stage) => path.join(X.stateDirOf(sid), `${sid}.confirm-plan-receipt-${stage}.json`);
-function readReceiptRaw(sid, stage) {
-  try { return JSON.parse(fs.readFileSync(receiptPath(sid, stage), "utf8")); } catch (_) { return null; }
+// The raw receipt helpers take the workflow step (clarify_intent / outline / detail), the receipt's
+// key since #2820; stage-named helpers above (echo, presentTurn, sessionAt) take the plan artifact name.
+const receiptPath = (sid, step) => path.join(X.stateDirOf(sid), `${sid}.confirm-plan-receipt-${step}.json`);
+function readReceiptRaw(sid, step) {
+  try { return JSON.parse(fs.readFileSync(receiptPath(sid, step), "utf8")); } catch (_) { return null; }
 }
-const receiptExists = (sid, stage) => fs.existsSync(receiptPath(sid, stage));
-function writeReceiptRaw(sid, stage, body) {
-  fs.mkdirSync(path.dirname(receiptPath(sid, stage)), { recursive: true });
-  fs.writeFileSync(receiptPath(sid, stage), typeof body === "string" ? body : JSON.stringify(body));
+const receiptExists = (sid, step) => fs.existsSync(receiptPath(sid, step));
+function writeReceiptRaw(sid, step, body) {
+  fs.mkdirSync(path.dirname(receiptPath(sid, step)), { recursive: true });
+  fs.writeFileSync(receiptPath(sid, step), typeof body === "string" ? body : JSON.stringify(body));
 }
 
 // findings(sid) -> the supervisor layer1 findings recorded for the session ([] when none).

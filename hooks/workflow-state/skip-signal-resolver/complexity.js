@@ -2,7 +2,7 @@
 // Complexity-evaluation read side (#1350, restructured for #2099).
 //
 // Everything here is CONSUMER-FACING and therefore COMPATIBILITY-COMPLETING:
-// a missing or malformed per-stage `levels` map is re-derived from the recorded
+// a missing or malformed per-step `levels` map is re-derived from the recorded
 // signals. Read-back verification must NOT come through here — it uses
 // readLastRawComplexityEvent (state-io/session-fields.js), which never folds or
 // completes anything.
@@ -10,20 +10,20 @@
 // Legacy shim: pre-#1382 records stored a model name in `verdict`.
 const LEGACY_VERDICT_TO_LEVEL = Object.freeze({ opus: "high", sonnet: "low" });
 
-// resolveStageLevels(level, signals, stored): a well-formed stored map is used
+// resolveStepLevels(level, signals, stored): a well-formed stored map is used
 // as-is; a missing OR malformed one is re-derived in full (never partially
 // trusted); an unusable routing table yields null so callers fail open.
-function resolveStageLevels(level, signals, stored) {
-  const { ROUTING_STAGES, deriveLegacyStageLevels } = require("../complexity-routing");
+function resolveStepLevels(level, signals, stored) {
+  const { ROUTING_STEPS, deriveLegacyStepLevels } = require("../complexity-routing");
   if (stored && typeof stored === "object" && !Array.isArray(stored)) {
     const keys = Object.keys(stored);
     const wellFormed =
-      !keys.some((k) => !ROUTING_STAGES.includes(k)) &&
-      ROUTING_STAGES.every((s) => stored[s] === "high" || stored[s] === "low");
+      !keys.some((k) => !ROUTING_STEPS.includes(k)) &&
+      ROUTING_STEPS.every((s) => stored[s] === "high" || stored[s] === "low");
     if (wellFormed) return Object.assign({}, stored);
   }
   try {
-    return Object.assign({}, deriveLegacyStageLevels(level, signals));
+    return Object.assign({}, deriveLegacyStepLevels(level, signals));
   } catch (_) {
     return null;
   }
@@ -59,7 +59,7 @@ function readComplexityEvaluation(sessionId) {
     }
     return {
       level,
-      levels: resolveStageLevels(level, ce.signals, ce.levels),
+      levels: resolveStepLevels(level, ce.signals, ce.levels),
       signals: ce.signals,
       recorded_at: ce.recorded_at,
     };
@@ -77,26 +77,26 @@ function hasComplexityEvaluation(sessionId) {
   return ce.level === "high" || ce.level === "low";
 }
 
-// readStageComplexityLevel(sessionId, stage): the level for ONE stage, or null.
-// Consumers pass only their own stage key, so no consumer can reinterpret
-// another stage's threshold. Fail-open (null) on missing or underivable DATA —
-// but an unknown stage is a caller bug, not a data condition, so it throws a
-// TypeError exactly as deriveStageLevel() does (CPR-ORTH): silently answering
-// null would let a typo'd stage key read as "no evaluation recorded".
-function readStageComplexityLevel(sessionId, stage) {
-  let stages = null;
+// readStepComplexityLevel(sessionId, step): the level for ONE step, or null.
+// Consumers pass only their own step key, so no consumer can reinterpret
+// another step's threshold. Fail-open (null) on missing or underivable DATA —
+// but an unknown step is a caller bug, not a data condition, so it throws a
+// TypeError exactly as deriveStepLevel() does (CPR-ORTH): silently answering
+// null would let a typo'd step key read as "no evaluation recorded".
+function readStepComplexityLevel(sessionId, step) {
+  let steps = null;
   try {
-    stages = require("../complexity-routing").ROUTING_STAGES;
+    steps = require("../complexity-routing").ROUTING_STEPS;
   } catch (_) {
     return null; // routing table unusable — the data path fails open
   }
-  if (!stages.includes(stage)) {
-    throw new TypeError("readStageComplexityLevel: unknown stage " + String(stage));
+  if (!steps.includes(step)) {
+    throw new TypeError("readStepComplexityLevel: unknown step " + String(step));
   }
   try {
     const ce = readComplexityEvaluation(sessionId);
     if (!ce || !ce.levels) return null;
-    const level = ce.levels[stage];
+    const level = ce.levels[step];
     return level === "high" || level === "low" ? level : null;
   } catch (_) {
     return null;
@@ -104,8 +104,8 @@ function readStageComplexityLevel(sessionId, stage) {
 }
 
 module.exports = {
-  resolveStageLevels,
+  resolveStepLevels,
   readComplexityEvaluation,
   hasComplexityEvaluation,
-  readStageComplexityLevel,
+  readStepComplexityLevel,
 };

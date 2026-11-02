@@ -38,7 +38,7 @@ const CASES = [
 for (const stage of ["outline", "detail"]) {
   for (const c of CASES) {
     let out;
-    try { out = m.deriveStageLevel(stage, c[1]); }
+    try { out = m.deriveStepLevel(stage, c[1]); }
     catch (e) { out = "THREW:" + (e && e.name); }
     console.log(stage + " " + c[0] + " " + out + (out === c[2] ? "" : " WANT=" + c[2]));
   }
@@ -103,7 +103,7 @@ const SETS = [
 for (const stage of ["outline", "detail"]) {
   for (const s of SETS) {
     const perms = permutations(s[1]);
-    const levels = perms.map(function (p) { return m.deriveStageLevel(stage, p); });
+    const levels = perms.map(function (p) { return m.deriveStepLevel(stage, p); });
     const disagreeing = levels.filter(function (l) { return l !== s[2]; }).length;
     console.log(stage + " " + s[0] + " perms=" + perms.length + " want=" + s[2] + " disagreeing=" + disagreeing);
   }
@@ -153,8 +153,8 @@ d2099c_no_combination_rows() {
     got=$(run_with_timeout node - 2>&1 <<'JS'
 const m = require(process.env.CR_MOD_N);
 const rows = [];
-for (const s of m.ROUTING_STAGES) {
-  const combos = m.STAGE_ROUTING[s].combination_escalation;
+for (const s of m.ROUTING_STEPS) {
+  const combos = m.STEP_ROUTING[s].combination_escalation;
   rows.push(s + "=" + (!Array.isArray(combos) ? "NOT_ARRAY" : combos.length ? combos.length + "_rows" : "none"));
 }
 console.log(rows.join(" "));

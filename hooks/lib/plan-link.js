@@ -8,6 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const { toWindowsPath } = require("./branch-diff");
+const { PLAN_ARTIFACT_NAMES } = require("../workflow-state/plan-step-table");
 
 const REASONS = Object.freeze({
   NO_ARTIFACT: "no-artifact",
@@ -20,10 +21,8 @@ const REASONS = Object.freeze({
   INVALID_SESSION: "invalid-session",
 });
 
-const STAGES = Object.freeze(["intent", "outline", "detail"]);
-
 // The command the model runs to look a plan up later. Only this file spells it (CPR-SSOT).
-const PLAN_LINK_COMMAND = 'node "$AGENTS_MAIN_ROOT/bin/plan-link" --stage <stage>';
+const PLAN_LINK_COMMAND = 'node "$AGENTS_MAIN_ROOT/bin/plan-link" --step <step>';
 
 // A Claude Code session id is a UUID; clarify-intent falls back to YYYYMMDD-HHMMSS without one.
 const SESSION_ID_RE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{8}-\d{6})$/i;
@@ -86,18 +85,18 @@ function linkOf(plansDir, absPath) {
   }
 }
 
-// resolvePlanLink(sid, stage, {plansDir?, absPath?}) -> {url?, path?, reason?}.
-// Read-only and network-free. An existing plan file always yields its absolute path.
-function resolvePlanLink(sid, stage, opts) {
+// resolvePlanLink(sid, artifact, {plansDir?, absPath?}) -> {url?, path?, reason?}, keyed by the
+// plan artifact name. Read-only and network-free. An existing plan file always yields its absolute path.
+function resolvePlanLink(sid, artifact, opts) {
   if (!isSessionId(sid)) return { reason: REASONS.INVALID_SESSION };
-  if (!STAGES.includes(stage)) return { reason: REASONS.NO_ARTIFACT };
+  if (!PLAN_ARTIFACT_NAMES.includes(artifact)) return { reason: REASONS.NO_ARTIFACT };
   let plansDir;
   try {
     const o = opts || {};
     plansDir = toWindowsPath(o.plansDir || require("./workflow-plans-dir").getWorkflowPlansDir());
     // Owner-resolved: a downstream session's plan is its upstream's file (#2633).
     const abs = o.absPath ||
-      require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, stage, undefined, { plansDir }).path;
+      require("../workflow-state/plan-artifact-owner").resolvePlanArtifactOwner(sid, artifact, undefined, { plansDir }).path;
     return linkForFile(abs, { plansDir });
   } catch (_) {
     return { reason: REASONS.NO_ARTIFACT };
@@ -135,7 +134,7 @@ function receiptLinkOf(linkResult) {
 // mobile; the URL stays bare so the reply auto-links it.
 function entryLine(entry) {
   const e = entry || {};
-  const stage = STAGES.includes(e.stage) ? e.stage : "plan";
+  const stage = PLAN_ARTIFACT_NAMES.includes(e.stage) ? e.stage : "plan";
   const p = typeof e.path === "string" && e.path ? e.path : "";
   if (typeof e.url === "string" && /^https?:\/\//.test(e.url)) return p ? `${stage}: ${e.url} (\`${p}\`)` : `${stage}: ${e.url}`;
   const reason = REASON_VALUES.includes(e.reason) ? e.reason : REASONS.NOT_PUBLISHED;
@@ -177,7 +176,6 @@ function renderModelContext(entries, opts) {
 
 module.exports = {
   REASONS,
-  STAGES,
   REASON_TEXT,
   UNPUBLISHABLE_REASONS,
   PLAN_LINK_COMMAND,

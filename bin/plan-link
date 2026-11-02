@@ -1,15 +1,19 @@
 #!/usr/bin/env node
-// bin/plan-link [--session <sid>] [--stage intent|outline|detail]
-// Prints the plan-link line of each plan stage, one line per stage (hooks/lib/plan-link.js
+// bin/plan-link [--session <sid>] [--step clarify_intent|outline|detail]
+// Prints the plan-link line of each plan artifact, one line per artifact (hooks/lib/plan-link.js
 // entryLine): the blob URL with the local path, the local path with a reason word, or
-// "<stage>: (unavailable: <reason>)" when the plan file is absent. The session defaults to
+// "<artifact>: (unavailable: <reason>)" when the plan file is absent. --step picks the artifact of
+// one workflow step; without it every plan artifact is printed. The session defaults to
 // the current session (hooks/workflow-state resolveSessionId). Read-only and network-free: it never fetches, pushes or writes.
 // Exit: 0 at least one plan file resolved; 1 no plan file, or no usable session; 2 usage error.
 "use strict";
 const path = require("path");
 
 const PL = require(path.join(__dirname, "..", "hooks", "lib", "plan-link.js"));
+const { PLAN_STEP_TABLE, PLAN_ARTIFACT_NAMES, rowFor } = require(path.join(__dirname, "..", "hooks", "workflow-state", "plan-step-table.js"));
 const { resolveSessionId } = require(path.join(__dirname, "..", "hooks", "workflow-state"));
+
+const STEPS = Object.keys(PLAN_STEP_TABLE);
 
 function die(code, msg) {
   process.stderr.write(`plan-link: ${msg}\n`);
@@ -18,15 +22,23 @@ function die(code, msg) {
 
 function parseArgs(argv) {
   const out = {};
+  const keys = { "--session": "session", "--step": "step" };
+  // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+  keys["--stage"] = "legacy";
+  // --- END temporary: workflow stage -> workflow step migration ---
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a !== "--session" && a !== "--stage") die(2, `unknown argument: ${a}`);
-    if (i + 1 >= argv.length || argv[i + 1].startsWith("--")) die(2, `${a} needs a value`);
-    const v = argv[++i];
-    if (a === "--session") out.session = v;
-    else if (!PL.STAGES.includes(v)) die(2, `--stage must be one of ${PL.STAGES.join(", ")}`);
-    else out.stage = v;
+    const key = Object.prototype.hasOwnProperty.call(keys, argv[i]) ? keys[argv[i]] : null;
+    if (!key) die(2, `unknown argument: ${argv[i]}`);
+    if (i + 1 >= argv.length || argv[i + 1].startsWith("--")) die(2, `${argv[i]} needs a value`);
+    out[key] = argv[++i];
   }
+  if (out.step !== undefined && out.legacy !== undefined) die(2, "pass --step only once, without its deprecated alias");
+  // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
+  // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
+  if (out.legacy !== undefined) out.step = require(path.join(__dirname, "..", "hooks", "lib", "temporary-migrations", "stage-to-step")).stepOfLegacyStageArg("plan-link", out.legacy) || `(invalid: ${out.legacy})`;
+  // --- END temporary: workflow stage -> workflow step migration ---
+  if (out.step !== undefined && !STEPS.includes(out.step)) die(2, `--step <${STEPS.join("|")}>`);
   return out;
 }
 
@@ -42,6 +54,7 @@ try {
   die(1, "cannot resolve the plans dir");
 }
 
-const links = (args.stage ? [args.stage] : PL.STAGES).map((stage) => ({ stage, ...PL.resolvePlanLink(sid, stage, { plansDir }) }));
+const artifacts = args.step ? [rowFor(args.step).suffix] : PLAN_ARTIFACT_NAMES;
+const links = artifacts.map((stage) => ({ stage, ...PL.resolvePlanLink(sid, stage, { plansDir }) }));
 process.stdout.write(links.map(PL.entryLine).join("\n") + "\n");
 process.exit(links.some((l) => l.path) ? 0 : 1);

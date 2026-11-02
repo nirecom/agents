@@ -21,13 +21,15 @@ const STATE_DIR = process.env.WORKFLOW_STATE_DIR;
 const PLANS_DIR = process.env.WORKFLOW_PLANS_DIR;
 if (!STATE_DIR || !PLANS_DIR) throw new Error("feat-2529 fixture: call isolate() before requiring it");
 
-const STAGE_STEP = {
-  intent: "clarify_intent", outline: "outline", detail: "detail",
-  tests: "review_tests", code: "review_security", docs: "review_docs",
+// The workflow steps the glossary check runs at (#2820: keyed by step, never by the legacy stage).
+const GLOSSARY_STEPS = ["clarify_intent", "outline", "detail", "review_tests", "review_security", "review_docs"];
+const RS_STEPS = ["review_tests", "review_security", "review_docs"];
+const LEDGER_FORMAT = { outline: "outline-plan", detail: "detail-plan", review_tests: "test-review", review_security: "review-security-shared" };
+// The legacy glossary stage value of each step: only the compat cases (old --stage / stage= / record) use it.
+const LEGACY_STAGE_OF = {
+  clarify_intent: "intent", outline: "outline", detail: "detail",
+  review_tests: "tests", review_security: "code", review_docs: "docs",
 };
-const STAGES = Object.keys(STAGE_STEP);
-const RS_STAGES = ["tests", "code", "docs"];
-const LEDGER_FORMAT = { outline: "outline-plan", detail: "detail-plan", tests: "test-review", code: "review-security-shared" };
 const GATED = ["clarify_intent", "outline", "detail"];
 const PLAN_SUFFIX = { clarify_intent: "intent", outline: "outline", detail: "detail" };
 
@@ -151,7 +153,7 @@ function ann(sid, step, key) {
   const e = s && s.steps && s.steps[step];
   return e && e[key] !== undefined ? e[key] : null;
 }
-const recordOf = (sid, stage) => ann(sid, STAGE_STEP[stage], "glossary_check");
+const recordOf = (sid, step) => ann(sid, step, "glossary_check");
 // The raw file bytes: "state unchanged" compares these before and after a call.
 function rawState(sid) { return fs.existsSync(statePath(sid)) ? fs.readFileSync(statePath(sid), "utf8") : ""; }
 function currentStep(sid) { return require(path.join(ROOT, "hooks/workflow-state")).resolveCurrentStep(readState(sid), { sessionId: sid }); }
@@ -187,8 +189,13 @@ function runNode(file, args, opts) {
 // True when the run reached the code under test (the entrypoint file exists and loaded).
 const reached = (r) => !/Cannot find module|MODULE_NOT_FOUND/.test(r.all);
 
-function drift(sid, stage, cwd, record) {
-  const args = ["--session", sid, "--stage", stage].concat(record ? ["--record"] : []);
+function drift(sid, step, cwd, record) {
+  const args = ["--session", sid, "--step", step].concat(record ? ["--record"] : []);
+  return runNode("bin/check-glossary-drift", args, { cwd });
+}
+// The deprecated alias: the legacy stage value of `step` under the old flag (compat cases only).
+function driftLegacy(sid, step, cwd, record) {
+  const args = ["--session", sid, "--stage", LEGACY_STAGE_OF[step]].concat(record ? ["--record"] : []);
   return runNode("bin/check-glossary-drift", args, { cwd });
 }
 function ledgerGrant(args) { return runNode("bin/check-glossary-ledger-grant", args, {}); }
@@ -212,13 +219,19 @@ function expectRejected(title, sid, command, cwd, extra) {
 // Seeded records. A glossary_check with one open finding per term; a glossary_provenance with
 // the given blocked entries ({ term, operation, category, reason }).
 const FP = (c) => c.repeat(64);
-function findingRecord(stage, fingerprint, terms) {
+function findingRecord(step, fingerprint, terms) {
   return {
-    v: 1, stage, fingerprint, inputs: { artifact: FP("1"), glossary: FP("2"), intent_rows: FP("3"), rules: FP("4") },
+    v: 1, step, fingerprint, inputs: { artifact: FP("1"), glossary: FP("2"), intent_rows: FP("3"), rules: FP("4") },
     findings: (terms || [TERM]).map((t) => ({ source: "deterministic", class: "spelling", term: t, norm: t,
       variant: t.replace(/ /g, "-"), where: "fixture.md:1" })),
     grants: [], ledger_grants: [],
   };
+}
+// A record as written before #2820: `stage` (the legacy value) instead of `step`.
+function legacyFindingRecord(step, fingerprint, terms) {
+  const rec = findingRecord(step, fingerprint, terms);
+  delete rec.step;
+  return Object.assign({ v: 1, stage: LEGACY_STAGE_OF[step] }, rec);
 }
 function provenanceRecord(fingerprint, blocked) {
   return {
@@ -231,11 +244,11 @@ function accepted(term, ids, reason) {
   return `echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=${term}${ids ? " " + ids : ""} — ${reason || "user accepted this spelling"}>>"`;
 }
 
-// DRIFT lines: `  DRIFT: <stage> "<variant>" -> "<term>" at <file>:<line>`.
+// DRIFT lines: `  DRIFT: <step> "<variant>" -> "<term>" at <file>:<line>`.
 const DRIFT_RE = /DRIFT: (\S+) "([^"]*)" -> "([^"]*)" at (.+):(\d+)\s*$/;
 function driftLines(text) {
   return String(text).split(/\r?\n/).map((l) => DRIFT_RE.exec(l)).filter(Boolean)
-    .map((m) => ({ stage: m[1], variant: m[2], term: m[3], file: slash(m[4]), line: Number(m[5]) }));
+    .map((m) => ({ step: m[1], variant: m[2], term: m[3], file: slash(m[4]), line: Number(m[5]) }));
 }
 
 // The module under test, or null when it is not there yet (the red reason is then logged).
@@ -265,10 +278,11 @@ function finish() {
 const failureCount = () => failures;
 
 module.exports = {
-  ROOT, STATE_DIR, PLANS_DIR, STAGE_STEP, STAGES, RS_STAGES, LEDGER_FORMAT, TERM, TERM2, TERM_JA,
+  ROOT, STATE_DIR, PLANS_DIR, GLOSSARY_STEPS, RS_STEPS, LEDGER_FORMAT, LEGACY_STAGE_OF, TERM, TERM2, TERM_JA,
   GLOSSARY_FILES, entry, slash, newSid, git, writeFile, stageFile, commit, mkRepo, intentBody, planPath,
   writePlan, writeIntent, statePath, statusEvent, annotationEvent, approvalEvent, seedAt, appendRaw, inject,
   reapprove, readState, ann, recordOf, rawState, currentStep, ledgerPath, writeLedger, tagged, runNode,
-  reached, drift, ledgerGrant, mark, expectRejected, FP, findingRecord, provenanceRecord, accepted, driftLines,
+  reached, drift, driftLegacy, ledgerGrant, mark, expectRejected, FP, findingRecord, legacyFindingRecord,
+  provenanceRecord, accepted, driftLines,
   mod, check, finish, failureCount, clip,
 };

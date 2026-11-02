@@ -1,9 +1,9 @@
 "use strict";
-// Per-workflow-stage complexity routing table (#2099).
+// Per-workflow-step complexity routing table (#2099).
 //
-// Complexity used to be ONE high/low judgment shared by every stage, so
+// Complexity used to be ONE high/low judgment shared by every step, so
 // `write_tests` inherited `write_code`'s threshold. Routing authority now lives
-// here — one frozen table, one row per routed stage — so a stage's threshold moves alone.
+// here — one frozen table, one row per routed step — so a step's threshold moves alone.
 // The judging prompt emits SIGNALS only; level derivation is code-side.
 
 // require() must ALWAYS succeed: this module is reached through the
@@ -11,10 +11,10 @@
 // at load but only RECORDS its verdict; derivation throws at CALL time instead,
 // and each caller owns its own fail-open direction.
 
-const ROUTING_STAGES = Object.freeze(["outline", "detail", "write_tests", "write_code"]);
+const ROUTING_STEPS = Object.freeze(["outline", "detail", "write_tests", "write_code"]);
 
 // Signal vocabulary (#1350 spellings). #2460 partitions it: the judges answer
-// JUDGED_SIGNAL_IDS at every stage; DETERMINISTIC_SIGNAL_IDS are computed only at
+// JUDGED_SIGNAL_IDS at every step; DETERMINISTIC_SIGNAL_IDS are computed only at
 // write_code from the WCD-2 file list and never emitted before it.
 const SIGNAL_IDS = Object.freeze([
   "S1b-wide-change",
@@ -27,7 +27,7 @@ const JUDGED_SIGNAL_IDS = Object.freeze(["S2-architecture", "S3-security", "S5-b
 const DETERMINISTIC_SIGNAL_IDS = Object.freeze(["S1b-wide-change", "S4-installer"]);
 
 // Reserved token meaning "the judge could not decide". Never a member of
-// SIGNAL_IDS: its presence routes to the stage's undecidable_level rather than
+// SIGNAL_IDS: its presence routes to the step's undecidable_level rather than
 // participating in escalation matching.
 const UNDECIDABLE_SIGNAL = "S0-undecidable";
 
@@ -42,7 +42,7 @@ const LEVELS = Object.freeze(["high", "low"]);
 // Authoring convention (validator only requires "non-empty array"):
 // combination_escalation entries are always length >= 2; a length-1
 // solo-equivalent case belongs in legacy_equivalent_escalation.
-const STAGE_ROUTING = Object.freeze({
+const STEP_ROUTING = Object.freeze({
   outline: Object.freeze({
     default_level: "low",
     solo_escalation: Object.freeze(["S2-architecture", "S5-breaking"]),
@@ -89,7 +89,7 @@ const STAGE_ROUTING = Object.freeze({
 
 class RoutingTableUnavailableError extends Error {
   constructor(message) {
-    super(message || "STAGE_ROUTING failed validation; level derivation is unavailable");
+    super(message || "STEP_ROUTING failed validation; level derivation is unavailable");
     this.name = "RoutingTableUnavailableError";
   }
 }
@@ -99,7 +99,7 @@ const isLevel = (v) => typeof v === "string" && LEVELS.includes(v);
 
 // validateRoutingTable(table): PURE and TOTAL — accepts any value, never throws.
 // Returns { valid, errors }; `errors` names the failing field, never a value.
-function validateRoutingTable(table = STAGE_ROUTING) {
+function validateRoutingTable(table = STEP_ROUTING) {
   const errors = [];
   try {
     if (!isPlainObject(table)) {
@@ -110,27 +110,27 @@ function validateRoutingTable(table = STAGE_ROUTING) {
       errors.push("JUDGED_SIGNAL_IDS and DETERMINISTIC_SIGNAL_IDS must partition SIGNAL_IDS");
     }
     const keys = Object.keys(table);
-    const missing = ROUTING_STAGES.filter((s) => !keys.includes(s));
-    const extra = keys.filter((k) => !ROUTING_STAGES.includes(k));
-    if (missing.length) errors.push("table is missing stage(s): " + missing.join(", "));
-    if (extra.length) errors.push("table has unknown stage(s): " + extra.join(", "));
+    const missing = ROUTING_STEPS.filter((s) => !keys.includes(s));
+    const extra = keys.filter((k) => !ROUTING_STEPS.includes(k));
+    if (missing.length) errors.push("table is missing step(s): " + missing.join(", "));
+    if (extra.length) errors.push("table has unknown step(s): " + extra.join(", "));
 
-    for (const stage of keys.filter((k) => ROUTING_STAGES.includes(k))) {
-      const entry = table[stage];
+    for (const step of keys.filter((k) => ROUTING_STEPS.includes(k))) {
+      const entry = table[step];
       if (!isPlainObject(entry)) {
-        errors.push(`${stage}: entry must be a plain object (non-null, non-array)`);
+        errors.push(`${step}: entry must be a plain object (non-null, non-array)`);
         continue;
       }
       for (const field of ["default_level", "undecidable_level"]) {
-        if (!isLevel(entry[field])) errors.push(`${stage}.${field} must be "high" or "low"`);
+        if (!isLevel(entry[field])) errors.push(`${step}.${field} must be "high" or "low"`);
       }
 
-      // Flat array of signal IDs; empty is valid ("no solo signals for this stage").
+      // Flat array of signal IDs; empty is valid ("no solo signals for this step").
       if (!Array.isArray(entry.solo_escalation)) {
-        errors.push(`${stage}.solo_escalation must be an array`);
+        errors.push(`${step}.solo_escalation must be an array`);
       } else {
         for (const id of entry.solo_escalation) {
-          if (!SIGNAL_IDS.includes(id)) errors.push(`${stage}.solo_escalation contains a non-SIGNAL_IDS member`);
+          if (!SIGNAL_IDS.includes(id)) errors.push(`${step}.solo_escalation contains a non-SIGNAL_IDS member`);
         }
       }
 
@@ -139,25 +139,25 @@ function validateRoutingTable(table = STAGE_ROUTING) {
       for (const field of ["legacy_equivalent_escalation", "combination_escalation"]) {
         const value = entry[field];
         if (!Array.isArray(value)) {
-          errors.push(`${stage}.${field} must be an array`);
+          errors.push(`${step}.${field} must be an array`);
           continue;
         }
         const minLength = field === "combination_escalation" ? 2 : 1;
         for (const group of value) {
           if (!Array.isArray(group)) {
-            errors.push(`${stage}.${field} must contain only arrays`);
+            errors.push(`${step}.${field} must contain only arrays`);
             continue;
           }
           if (group.length < minLength) {
             errors.push(
               field === "combination_escalation"
-                ? `${stage}.${field} must contain at least 2 signal ids`
-                : `${stage}.${field} contains an empty inner array`
+                ? `${step}.${field} must contain at least 2 signal ids`
+                : `${step}.${field} contains an empty inner array`
             );
             continue;
           }
           for (const id of group) {
-            if (!SIGNAL_IDS.includes(id)) errors.push(`${stage}.${field} contains a non-SIGNAL_IDS member`);
+            if (!SIGNAL_IDS.includes(id)) errors.push(`${step}.${field} contains a non-SIGNAL_IDS member`);
           }
         }
       }
@@ -168,14 +168,14 @@ function validateRoutingTable(table = STAGE_ROUTING) {
   return { valid: errors.length === 0, errors };
 }
 
-const LOAD_VALIDATION = validateRoutingTable(STAGE_ROUTING);
+const LOAD_VALIDATION = validateRoutingTable(STEP_ROUTING);
 const ROUTING_TABLE_VALID = LOAD_VALIDATION.valid;
 const ROUTING_TABLE_ERRORS = Object.freeze(LOAD_VALIDATION.errors.slice());
 
 function assertTableUsable() {
   if (!ROUTING_TABLE_VALID) {
     throw new RoutingTableUnavailableError(
-      "STAGE_ROUTING failed validation: " + ROUTING_TABLE_ERRORS.join("; ")
+      "STEP_ROUTING failed validation: " + ROUTING_TABLE_ERRORS.join("; ")
     );
   }
 }
@@ -216,16 +216,16 @@ function canonicalizeSignalsForPersistence(signals) {
   return ["UNRECOGNIZED(" + unrecognizedCount + ")"];
 }
 
-// deriveStageLevel(stage, signals) -> "high" | "low". Decision order is FIXED
-// (pinned by tests): table health, stage validity, input shape, undecidable or
+// deriveStepLevel(step, signals) -> "high" | "low". Decision order is FIXED
+// (pinned by tests): table health, step validity, input shape, undecidable or
 // unknown tokens, solo, legacy-equivalent, combination, default.
-function deriveStageLevel(stage, signals) {
+function deriveStepLevel(step, signals) {
   assertTableUsable();
-  if (!ROUTING_STAGES.includes(stage)) {
+  if (!ROUTING_STEPS.includes(step)) {
     // A programming error, not a fail-open case: unrelated to table health.
-    throw new TypeError(`deriveStageLevel: stage must be one of ${ROUTING_STAGES.join(", ")}`);
+    throw new TypeError(`deriveStepLevel: step must be one of ${ROUTING_STEPS.join(", ")}`);
   }
-  const rule = STAGE_ROUTING[stage];
+  const rule = STEP_ROUTING[step];
   if (!Array.isArray(signals)) return rule.undecidable_level;
 
   const present = normalizeSignals(signals);
@@ -237,11 +237,11 @@ function deriveStageLevel(stage, signals) {
   return rule.default_level;
 }
 
-// deriveStageLevels(signals) -> frozen { <stage>: level } over ROUTING_STAGES.
-function deriveStageLevels(signals) {
+// deriveStepLevels(signals) -> frozen { <step>: level } over ROUTING_STEPS.
+function deriveStepLevels(signals) {
   assertTableUsable();
   const out = {};
-  for (const stage of ROUTING_STAGES) out[stage] = deriveStageLevel(stage, signals);
+  for (const step of ROUTING_STEPS) out[step] = deriveStepLevel(step, signals);
   return Object.freeze(out);
 }
 
@@ -256,28 +256,28 @@ function deriveAggregateLevel(signals) {
   return present.size > 0 ? "high" : "low";
 }
 
-// deriveLegacyStageLevels(level, signals) -> frozen levels object, for records
+// deriveLegacyStepLevels(level, signals) -> frozen levels object, for records
 // written before `levels` existed. Signals present -> derive normally (L1).
-// Signals empty but aggregate level high -> round ALL stages up to high (L2):
+// Signals empty but aggregate level high -> round ALL steps up to high (L2):
 // an old high record carries no signal detail, and silently downgrading an
 // in-flight session is worse than over-routing it.
-function deriveLegacyStageLevels(level, signals) {
+function deriveLegacyStepLevels(level, signals) {
   assertTableUsable();
   const list = Array.isArray(signals) ? signals : [];
   if (list.length === 0 && level === "high") {
     const out = {};
-    for (const stage of ROUTING_STAGES) out[stage] = "high";
+    for (const step of ROUTING_STEPS) out[step] = "high";
     return Object.freeze(out);
   }
-  return deriveStageLevels(list);
+  return deriveStepLevels(list);
 }
 
-// describeStageRouting(stage): human-readable diagnostic string (mirrors the
+// describeStepRouting(step): human-readable diagnostic string (mirrors the
 // single-joined-string shape of skip-signal-resolver.js describeSkipSignal).
-function describeStageRouting(stage) {
-  if (!ROUTING_STAGES.includes(stage)) return "";
-  const rule = STAGE_ROUTING[stage];
-  const parts = [`stage: ${stage}`, `default level = ${rule.default_level}`];
+function describeStepRouting(step) {
+  if (!ROUTING_STEPS.includes(step)) return "";
+  const rule = STEP_ROUTING[step];
+  const parts = [`step: ${step}`, `default level = ${rule.default_level}`];
   parts.push(
     rule.solo_escalation.length
       ? `any one of (${rule.solo_escalation.join(", ")}) alone ⇒ high`
@@ -300,16 +300,16 @@ function describeStageRouting(stage) {
 const NONE_CELL = "—";
 const cell = (list) => (list.length ? list.join("<br>") : NONE_CELL);
 
-// renderStageRoutingMarkdown(): generated block 1 for the rubric doc.
-function renderStageRoutingMarkdown() {
+// renderStepRoutingMarkdown(): generated block 1 for the rubric doc.
+function renderStepRoutingMarkdown() {
   const lines = [
-    "| Stage | Default | Solo escalation (`solo_escalation`) | Legacy-equivalent escalation (`legacy_equivalent_escalation`) | Combination escalation (`combination_escalation`) | Undecidable |",
-    "|-------|---------|-----------------|------------------------------|------------------------|-------------|",
+    "| Step | Default | Solo escalation (`solo_escalation`) | Legacy-equivalent escalation (`legacy_equivalent_escalation`) | Combination escalation (`combination_escalation`) | Undecidable |",
+    "|------|---------|-----------------|------------------------------|------------------------|-------------|",
   ];
-  for (const stage of ROUTING_STAGES) {
-    const rule = STAGE_ROUTING[stage];
+  for (const step of ROUTING_STEPS) {
+    const rule = STEP_ROUTING[step];
     lines.push(
-      "| `" + stage + "` | " + rule.default_level + " | " +
+      "| `" + step + "` | " + rule.default_level + " | " +
         cell(rule.solo_escalation.map((id) => "`" + id + "`")) + " | " +
         cell(rule.legacy_equivalent_escalation.map((g) => g.map((id) => "`" + id + "`").join(" + "))) + " | " +
         cell(rule.combination_escalation.map((g) => g.map((id) => "`" + id + "`").join(" + "))) + " | " +
@@ -327,22 +327,22 @@ function renderSignalIdsMarkdown() {
 }
 
 module.exports = {
-  ROUTING_STAGES,
+  ROUTING_STEPS,
   SIGNAL_IDS,
   JUDGED_SIGNAL_IDS,
   DETERMINISTIC_SIGNAL_IDS,
   UNDECIDABLE_SIGNAL,
-  STAGE_ROUTING,
+  STEP_ROUTING,
   ROUTING_TABLE_VALID,
   ROUTING_TABLE_ERRORS,
   RoutingTableUnavailableError,
   validateRoutingTable,
-  deriveStageLevel,
-  deriveStageLevels,
+  deriveStepLevel,
+  deriveStepLevels,
   deriveAggregateLevel,
   canonicalizeSignalsForPersistence,
-  deriveLegacyStageLevels,
-  describeStageRouting,
-  renderStageRoutingMarkdown,
+  deriveLegacyStepLevels,
+  describeStepRouting,
+  renderStepRoutingMarkdown,
   renderSignalIdsMarkdown,
 };

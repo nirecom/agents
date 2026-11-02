@@ -11,7 +11,7 @@ const { CONFIRM_GATE_DEFAULTS } = require("../../../../hooks/lib/confirm-gate/st
 // key means one more gate resolution (in-process, so no extra child process;
 // see gate-facts.js).
 // Static literals on purpose: never derive these names from VALID_STEPS or
-// ROUTING_STAGES, or a new workflow stage would silently grow the contract.
+// ROUTING_STEPS, or a new workflow step would silently grow the contract.
 const FACTS_KEYS = [
   "FACTS_VERSION",
   "SESSION_ID",

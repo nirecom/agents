@@ -25,7 +25,7 @@ RD-1. Run `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --all` for an advisory 
 RD-2. Run `bash "$AGENTS_MAIN_ROOT/bin/resolve-session-id"` as a standalone command, then `bash "$AGENTS_MAIN_ROOT/bin/review-doc-gates" --staged --session <its stdout>` to see exactly what the commit gate will block; exit 1 means a staged doc violates a HARD limit or the glossary provenance check blocks.
    When `resolve-session-id` exits 2 (no session), omit `--session`; on any other non-zero exit, HALT and surface its stderr.
 RD-3. Fix each HARD failure — split an oversized file per Pattern A/C, or reorder README sections per the SSOT block — then re-run RD-2 until it exits 0.
-   With the docs staged, run the `--record` of `skills/_shared/glossary-drift-check.md` with `--stage docs` and resolve its findings there.
+   With the docs staged, run the `--record` of `skills/_shared/glossary-drift-check.md` with `--step review_docs` and resolve its findings there.
 
 ## Completion
 

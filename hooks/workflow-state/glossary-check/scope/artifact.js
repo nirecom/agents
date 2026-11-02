@@ -1,6 +1,6 @@
 "use strict";
 // Input 1 (artifact) of the glossary-check fingerprint (#2529 I-FP): rule R-A reads a plan
-// artifact once and cuts its approval range; rule R-S reads the staged blobs of one stage.
+// artifact once and cuts its approval range; rule R-S reads the staged blobs of one review step.
 // During a merge, R-S leaves out the merge-incoming files (#2761); mergeIncoming is diagnostic only.
 // Each staged file carries changedLines (#2770): the scan reports only those lines; the digest
 // stays over the staged blobs.
@@ -10,7 +10,7 @@ const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 const { toWindowsPath } = require("../../../lib/branch-diff");
 const { artifactRangeOfBuffer } = require("../../completion-approval");
-const { rowFor } = require("../../plan-stage-table");
+const { rowFor } = require("../../plan-step-table");
 const { stagedOids } = require("../../../workflow-gate/staged-evidence");
 const { detectMergeIncoming, MERGE_INCOMING_STATE } = require("../../../lib/merge-incoming");
 const { changedLinesOf } = require("./changed-lines");
@@ -95,11 +95,11 @@ function readBlobs(repoDir, oids) {
   return blobs;
 }
 
-// artifactRS(repoDir, stage, classify) -> the staged paths classify() puts in `stage`.
-function artifactRS(repoDir, stage, classify) {
+// artifactRS(repoDir, step, classify) -> the staged paths classify() puts in the review `step`.
+function artifactRS(repoDir, step, classify) {
   try {
     const names = git(repoDir, ["diff", "--cached", "--name-only", "-z", "--no-renames"]).toString("utf8");
-    const listed = names.split("\0").filter(Boolean).filter((p) => classify(p) === stage).sort();
+    const listed = names.split("\0").filter(Boolean).filter((p) => classify(p) === step).sort();
     let paths = listed;
     let mergeIncoming = { state: "skipped", excluded: 0 };
     if (listed.length > 0) {

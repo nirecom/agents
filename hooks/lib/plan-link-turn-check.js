@@ -8,7 +8,8 @@ const os = require("os");
 const { isCommandTool, commandTextOf } = require("./tool-command-text");
 const { parseSentinel } = require("./confirm-sentinel");
 const { isRealUserPrompt } = require("./transcript-reader");
-const { STAGES, REASONS, REASON_TEXT, PLAN_LINK_COMMAND, entryLine } = require("./plan-link");
+const { REASONS, REASON_TEXT, PLAN_LINK_COMMAND, entryLine } = require("./plan-link");
+const { PLAN_ARTIFACT_NAMES, rowFor } = require("../workflow-state/plan-step-table");
 
 // A link ends where path characters stop; one trailing "." or ")" is prose, not the link.
 const CONTINUES_RE = /^\.?[A-Za-z0-9_~%/\\-]/;
@@ -65,12 +66,12 @@ function lastTextBlockOf(entries) {
   return texts.length > 0 ? texts[texts.length - 1] : null;
 }
 
-// stagesToCheck({ markers, turnEntries, includeConfirm }) -> deduplicated plan stages written
+// stagesToCheck({ markers, turnEntries, includeConfirm }) -> deduplicated plan artifact names written
 // (turn marker) or, unless includeConfirm is false, CONFIRMed this turn.
 function stagesToCheck({ markers, turnEntries, includeConfirm } = {}) {
   const found = new Set();
   for (const m of Array.isArray(markers) ? markers : []) {
-    if (m && STAGES.includes(m.suffix)) found.add(m.suffix);
+    if (m && PLAN_ARTIFACT_NAMES.includes(m.suffix)) found.add(m.suffix);
   }
   const entries = includeConfirm === false ? [] : Array.isArray(turnEntries) ? turnEntries : [];
   for (const entry of entries) {
@@ -78,10 +79,11 @@ function stagesToCheck({ markers, turnEntries, includeConfirm } = {}) {
       // Every command tool confirm-checkpoint recognizes, not only Bash.
       if (!item || item.type !== "tool_use" || !isCommandTool(item.name)) continue;
       const hit = parseSentinel(commandTextOf(item.name, item.input));
-      if (hit) found.add(hit.stage);
+      // parseSentinel answers the step; this set holds plan artifact names.
+      if (hit) found.add(rowFor(hit.step).suffix);
     }
   }
-  return STAGES.filter((s) => found.has(s));
+  return PLAN_ARTIFACT_NAMES.filter((s) => found.has(s));
 }
 
 // inlineCodeRanges(text) -> [start, end) ranges of CommonMark inline code spans: a backtick run
@@ -167,9 +169,9 @@ function shown(link, text) {
 
 // The entryLine shapes: a URL line (optionally with its inline-code path), and a no-URL line that
 // renderModelContext may follow with " — " plus the text of the reason that same line names.
-const STAGE_ALT = STAGES.join("|");
-const URL_LINE_RE = new RegExp(`^(?:${STAGE_ALT}): https?://\\S+(?: \\(\`[^\`]+\`\\))?$`);
-const NO_URL_LINE_RE = new RegExp(`^((?:${STAGE_ALT}): (?:\`[^\`]+\` \\(no URL|\\(unavailable): ` +
+const ARTIFACT_ALT = PLAN_ARTIFACT_NAMES.join("|");
+const URL_LINE_RE = new RegExp(`^(?:${ARTIFACT_ALT}): https?://\\S+(?: \\(\`[^\`]+\`\\))?$`);
+const NO_URL_LINE_RE = new RegExp(`^((?:${ARTIFACT_ALT}): (?:\`[^\`]+\` \\(no URL|\\(unavailable): ` +
   `(${Object.values(REASONS).join("|")})\\))(?: — (.*))?$`);
 
 // planLinkLineBare(line) -> the entryLine part of a plan-link output line, or null for anything else.
@@ -184,7 +186,7 @@ function planLinkLineBare(line) {
 // run of plan-link lines (blank lines between them allowed) that holds the line of link.stage
 // (any spelling of its local path). Several stages presented together close on one run.
 function inTrailingLinkRun(lastText, link) {
-  if (!link || typeof link !== "object" || !STAGES.includes(link.stage)) return false;
+  if (!link || typeof link !== "object" || !PLAN_ARTIFACT_NAMES.includes(link.stage)) return false;
   const raw = trimmedLines(typeof lastText === "string" ? lastText : "");
   const block = new Set();
   let last = raw.length - 1;
@@ -199,7 +201,16 @@ function inTrailingLinkRun(lastText, link) {
   const prose = trimmedLines(stripFencedCode(raw.join("\n"))).join("\n");
   if (!tail || !(prose === tail || prose.endsWith("\n" + tail))) return false;
   const { stage, url, reason } = link;
-  if (typeof url === "string" && url && block.has(entryLine({ stage, url }))) return true;
+  if (typeof url === "string" && url) {
+    // The URL names the published plan on its own; the inline-code path after it is optional, but when
+    // the link knows its path the path shown must be one of that path's spellings.
+    const bare = entryLine({ stage, url });
+    const knowsPath = typeof link.path === "string" && link.path !== "";
+    const pathOk = (b) => (knowsPath
+      ? localPathForms(link.path).some((form) => b === entryLine({ stage, url, path: form, reason }))
+      : b.startsWith(bare + " (`"));
+    if ([...block].some((b) => b === bare || pathOk(b))) return true;
+  }
   if (typeof link.path !== "string" || !link.path) return false;
   return localPathForms(link.path).some((form) => block.has(entryLine({ stage, url, path: form, reason })));
 }

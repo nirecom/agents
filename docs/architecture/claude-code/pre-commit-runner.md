@@ -101,6 +101,30 @@ having arrived by merge.
 blocks with the gate's report and `Commit blocked: <what> (checker rc=<rc>).`; a missing module, a
 throw or any other rc fails closed.
 
+## Retired tokens
+
+A rename that keeps a compatibility layer leaves the old names in the code for a while. The
+`check-migration-blocks` gate keeps them from spreading: a migration registered in
+`bin/lib/check-migration-blocks/retired-tokens.txt` lists its retired tokens (`word` on
+identifier boundaries, `re` per line, either narrowed by a trailing `@<glob>`) and the paths it
+covers (`scope`, globs anchored to the repository-relative path). A token is an error outside that
+migration's `BEGIN temporary` block, and the migration's own blocks must carry `added` and
+`deletion-condition` in both `--staged` and `--all` (unregistered blocks keep the warning).
+The line format is in the header of the registry file; the judgement is
+`bin/lib/check-migration-blocks/retired-tokens.js`.
+
+- Registry source, first found wins: `--retired-tokens-from <file>`, the target repository's
+  registry (the index for `--staged`, the tree for `--all`), then the checker's own copy. An
+  existing registry with no migration flags nothing. A malformed line is rc 2.
+- `rules/**` is judged by scope, unlike the format axes; the gate does not receive `rules/*.md`, so
+  the CI `--all` run judges them.
+- Exits: an `except <id> <path> <reason>` line, added only with the user's approval (no reason is
+  rc 2; the path prints `EXCEPTED <path>: <reason>`), and `git commit --no-verify`, run by the user.
+- The gate runs the main checkout's checker, so a change to the checker reaches the hook only from
+  the commits after its merge; the registry, read from the commit's index, takes effect in the same
+  commit once that checker is in place. The PR that introduces the axis is held instead by its own
+  self-application test and the CI `migration-blocks-audit` job, which run the PR's checker.
+
 ## code-lang
 
 `code-lang` applies `CODE_LANG` to the staged added, copied and modified files through

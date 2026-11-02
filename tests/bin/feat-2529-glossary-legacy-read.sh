@@ -93,10 +93,9 @@ seed_session() {
     node -e "$SEED_SESSION_JS" "$SCRIPT_CHECKOUT_ROOT" "$1" "$2"
 }
 
-# drift <sid> <cwd> <out> — check-glossary-drift for the intent stage; echoes the exit code.
+# drift <sid> <cwd> <out> — check-glossary-drift for the clarify_intent step; echoes the exit code.
 drift() {
-    (cd "$2" && run_with_timeout 60 env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" \
-        node "$SCRIPT_CHECKOUT_ROOT/bin/check-glossary-drift" --session "$1" --stage intent > "$3" 2>&1)
+    (cd "$2" && run_with_timeout 60 env AGENTS_MAIN_ROOT="$SCRIPT_CHECKOUT_ROOT" node "$SCRIPT_CHECKOUT_ROOT/bin/check-glossary-drift" --session "$1" --step clarify_intent > "$3" 2>&1)
     echo $?
 }
 

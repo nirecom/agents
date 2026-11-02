@@ -1,6 +1,6 @@
 "use strict";
 // S-C1: the glossary_check record is re-judged at every step status, pending included. A
-// pending R-S step whose stage targets are staged must not slip through the review_docs
+// pending R-S step whose own targets are staged must not slip through the review_docs
 // skip path, the review_tests evidence bypass, or a reason-less pending block.
 
 const path = require("node:path");
@@ -10,11 +10,11 @@ const G = require("./gate");
 // write_tests resolved from staged tests/ evidence: the review_tests symmetric bypass.
 const EVIDENCE_SNAPSHOT = { steps: { write_tests: { status: "complete", resolved_from: "evidence" } } };
 
-// A target of a different R-S stage, so the step's own stage has nothing staged.
-const FOREIGN = { tests: "docs", code: "tests", docs: "code" };
+// A target of a different R-S step, so the step itself has nothing staged.
+const FOREIGN = { review_tests: "review_docs", review_security: "review_tests", review_docs: "review_security" };
 
-function scanOf(stage, s) {
-  return G.scan(s.sid, s.repo, stage === "tests" ? { commitSnapshot: EVIDENCE_SNAPSHOT } : {});
+function scanOf(step, s) {
+  return G.scan(s.sid, s.repo, step === "review_tests" ? { commitSnapshot: EVIDENCE_SNAPSHOT } : {});
 }
 
 // The review_tests checker alone takes the evidence bypass, so only the glossary check can block.
@@ -25,29 +25,27 @@ function bypassActive(label, s) {
   F.check(`${label}: the review_tests checker alone takes the evidence bypass`, own.action === "skip", JSON.stringify(own));
 }
 
-function pendingStaged(stage) {
-  const step = F.STAGE_STEP[stage];
-  const label = `gate ${stage} pending`;
-  const s = F.setupStage(`gate-pend-${stage}`, stage, F.TERM);
+function pendingStaged(step) {
+  const label = `gate ${step} pending`;
+  const s = F.setupStep(`gate-pend-${step}`, step, F.TERM);
   F.check(`${label}: ${step} reads pending`, F.statusOf(s.sid, step) === "pending", F.statusOf(s.sid, step));
-  if (stage === "tests") bypassActive(label, s);
-  G.blocks(`${label} with a ${stage} target staged and no record`, scanOf(stage, s), step, "glossary-check-missing", stage);
-  G.recordOk(label, F.drift(s.sid, stage, s.repo), 0);
-  G.passes(`${label} after --record`, scanOf(stage, s), step);
+  if (step === "review_tests") bypassActive(label, s);
+  G.blocks(`${label} with a ${step} target staged and no record`, scanOf(step, s), step, "glossary-check-missing", true);
+  G.recordOk(label, F.drift(s.sid, step, s.repo), 0);
+  G.passes(`${label} after --record`, scanOf(step, s), step);
 }
 
-function pendingNotStaged(stage) {
-  const step = F.STAGE_STEP[stage];
-  const label = `gate ${stage} pending with only a ${FOREIGN[stage]} target staged`;
-  const s = F.setupStage(`gate-pend-none-${stage}`, stage, F.TERM, { stageTarget: false });
-  F.stageFile(s.repo, F.TARGET[FOREIGN[stage]], F.targetBody(FOREIGN[stage], F.TERM));
-  G.passes(label, scanOf(stage, s), step);
+function pendingNotStaged(step) {
+  const label = `gate ${step} pending with only a ${FOREIGN[step]} target staged`;
+  const s = F.setupStep(`gate-pend-none-${step}`, step, F.TERM, { stageTarget: false });
+  F.stageFile(s.repo, F.TARGET[FOREIGN[step]], F.targetBody(FOREIGN[step], F.TERM));
+  G.passes(label, scanOf(step, s), step);
 }
 
 function run() {
-  for (const stage of F.RS_STAGES) {
-    pendingStaged(stage);
-    pendingNotStaged(stage);
+  for (const step of F.RS_STEPS) {
+    pendingStaged(step);
+    pendingNotStaged(step);
   }
 }
 

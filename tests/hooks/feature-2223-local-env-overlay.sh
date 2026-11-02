@@ -126,7 +126,7 @@ if (cmd === "effective") {
 } else if (cmd === "global") {
   out(enc(loadEnvMod().readDefaultEnvFile()[a1]));
 } else if (cmd === "confirm-off") {
-  out(String(require(path.join(libDir, "plan-confirm-flag.js")).isConfirmOffForStageFromFile(a1)));
+  out(String(require(path.join(libDir, "plan-confirm-flag.js")).isConfirmFlagOffFromFile(a1)));
 } else if (cmd === "load-default") {
   loadEnvMod().loadDefaultEnv();
   out(enc(process.env[a1]));
@@ -270,7 +270,7 @@ assert_eq "T2223-door-readDefaultEnvFile" '"english"' "$(probe global CODE_LANG)
 # file, even now that CONFIRM_* is overridable in the effective map.
 new_case door-confirm 'CONFIRM_DETAIL=on' 'CONFIRM_DETAIL=off'
 export CLAUDE_PROJECT_DIR="$CASE_ROOT"
-assert_eq "T2223-door-plan-confirm-flag" "false" "$(probe confirm-off detail)"
+assert_eq "T2223-door-plan-confirm-flag" "false" "$(probe confirm-off CONFIRM_DETAIL)"
 
 # T2726-overlay-plan-key — #2726/#2729: overlay() refuses the three plan-stage
 # keys (reported in `ignored`); CONFIRM_CODE / CONFIRM_TESTS still apply.

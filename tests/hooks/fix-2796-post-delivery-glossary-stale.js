@@ -36,7 +36,7 @@ const { recordedCompleteRefusalOf } = require(path.join(F.ROOT, "hooks/workflow-
 const { resolveSessionProfile } = require(path.join(F.ROOT, "hooks/workflow-state/session-profile.js"));
 const { glossaryRefusalOfComplete } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/record.js"));
 
-const RA_STEPS = F.RA_STAGES.map((stage) => F.STAGE_STEP[stage]);
+const RA_STEPS = F.RA_STEPS;
 const PRE_DELIVERY = { merge_to_main: null, cleanup: null, pre_final_report_gate: null, final_report: null };
 
 function guarded(name, fn) {
@@ -70,10 +70,10 @@ function settleRest(sid, overrides) {
 
 // A WF-CODE session with intent / outline / detail complete, approved and glossary-recorded.
 function prepare(tag, rest) {
-  const s = F.setupStage(tag, "detail", F.TERM, { ownStatus: "complete" });
-  for (const stage of F.RA_STAGES) {
-    const r = F.drift(s.sid, stage, s.repo);
-    F.check(`${tag}: ${stage} check-glossary-drift --record exits 0`, r.code === 0, `exit=${r.code} ${r.out}${r.err}`);
+  const s = F.setupStep(tag, "detail", F.TERM, { ownStatus: "complete" });
+  for (const step of F.RA_STEPS) {
+    const r = F.drift(s.sid, step, s.repo);
+    F.check(`${tag}: ${step} check-glossary-drift --record exits 0`, r.code === 0, `exit=${r.code} ${r.out}${r.err}`);
   }
   settleRest(s.sid, rest);
   return s;
@@ -81,15 +81,15 @@ function prepare(tag, rest) {
 
 // A WF-META session with intent / outline complete, approved and glossary-recorded. The fixture
 // writes a v2 file whose workflow_type the v4->v5 migration renames onto deliverable_type, so the
-// type is set on workflow_type here (the setupStage option alone reads back as wf-code).
+// type is set on workflow_type here (the setupStep option alone reads back as wf-code).
 function prepareMeta(tag) {
-  const s = F.setupStage(tag, "outline", F.TERM, { ownStatus: "complete", deliverableType: "wf-meta" });
+  const s = F.setupStep(tag, "outline", F.TERM, { ownStatus: "complete", deliverableType: "wf-meta" });
   const raw = JSON.parse(fs.readFileSync(F.statePath(s.sid), "utf8"));
   raw.workflow_type = "wf-meta";
   fs.writeFileSync(F.statePath(s.sid), JSON.stringify(raw, null, 2));
-  for (const stage of ["intent", "outline"]) {
-    const r = F.drift(s.sid, stage, s.repo);
-    F.check(`${tag}: ${stage} check-glossary-drift --record exits 0`, r.code === 0, `exit=${r.code} ${r.out}${r.err}`);
+  for (const step of ["clarify_intent", "outline"]) {
+    const r = F.drift(s.sid, step, s.repo);
+    F.check(`${tag}: ${step} check-glossary-drift --record exits 0`, r.code === 0, `exit=${r.code} ${r.out}${r.err}`);
   }
   return s;
 }
@@ -347,7 +347,7 @@ test("L: evaluateResumability S1 treats only merge_to_main complete as delivered
     ["final_report complete alone", Object.assign({}, PRE_DELIVERY, { final_report: "complete" }), { eligible: false, reason: "delivered" }],
   ];
   rows.forEach(([name, rest, want], i) => {
-    const s = F.setupStage(`l-resume-${i}`, "detail", F.TERM, { ownStatus: "complete" });
+    const s = F.setupStep(`l-resume-${i}`, "detail", F.TERM, { ownStatus: "complete" });
     settleRest(s.sid, rest);
     const state = F.readState(s.sid);
     const got = ES.evaluateResumability(state);

@@ -16,7 +16,7 @@ const url = { kind: "url", value: s.url };
 const sha = R.sha256(p);
 const fields = { absPath: p, link: url, contentSha: sha, anchorUuid: "a-1" };
 
-check("receiptPath is <stateDir>/<sid>.confirm-plan-receipt-<stage>.json",
+check("receiptPath is <stateDir>/<sid>.confirm-plan-receipt-<step>.json",
   typeof PR.receiptPath === "function" && path.resolve(PR.receiptPath(s.sid, "outline")) === path.resolve(R.receiptPath(s.sid, "outline")),
   show(typeof PR.receiptPath === "function" ? PR.receiptPath(s.sid, "outline") : "missing"));
 
@@ -27,18 +27,18 @@ check("the written receipt carries absPath, link, contentSha, anchorUuid, writte
 const rr = PR.readReceipt(s.sid, "outline");
 check("readReceipt -> {ok:true, receipt}", rr && rr.ok === true && rr.receipt && rr.receipt.contentSha === sha, show(rr));
 
-check("writeReceipt refuses a url link that is not http(s)", PR.writeReceipt(s.sid, "intent", Object.assign({}, fields, { link: { kind: "url", value: "ftp://x" } })) === false, "true");
-check("writeReceipt refuses a path link that is not absPath", PR.writeReceipt(s.sid, "intent", Object.assign({}, fields, { link: { kind: "path", value: p + ".other" } })) === false, "true");
-check("a refused write leaves no file", !R.receiptExists(s.sid, "intent"), "file written");
+check("writeReceipt refuses a url link that is not http(s)", PR.writeReceipt(s.sid, "clarify_intent", Object.assign({}, fields, { link: { kind: "url", value: "ftp://x" } })) === false, "true");
+check("writeReceipt refuses a path link that is not absPath", PR.writeReceipt(s.sid, "clarify_intent", Object.assign({}, fields, { link: { kind: "path", value: p + ".other" } })) === false, "true");
+check("a refused write leaves no file", !R.receiptExists(s.sid, "clarify_intent"), "file written");
 check("writeReceipt accepts a path link equal to absPath", PR.writeReceipt(s.sid, "detail", Object.assign({}, fields, { link: { kind: "path", value: p } })) === true, "false");
 
-check("readReceipt of a missing file -> absent", show(PR.readReceipt(s.sid, "intent")) === show({ ok: false, reason: "absent" }), show(PR.readReceipt(s.sid, "intent")));
-R.writeReceiptRaw(s.sid, "intent", "{ not json");
-check("readReceipt of non-JSON -> unreadable", show(PR.readReceipt(s.sid, "intent")) === show({ ok: false, reason: "unreadable" }), show(PR.readReceipt(s.sid, "intent")));
-R.writeReceiptRaw(s.sid, "intent", { absPath: p, link: url, anchorUuid: "a" });
-check("readReceipt with a missing field -> unreadable", PR.readReceipt(s.sid, "intent").reason === "unreadable", show(PR.readReceipt(s.sid, "intent")));
-R.writeReceiptRaw(s.sid, "intent", Object.assign({}, fields, { writtenAt: "x", link: { kind: "blob", value: s.url } }));
-check("readReceipt with a link of neither shape -> unreadable", PR.readReceipt(s.sid, "intent").reason === "unreadable", show(PR.readReceipt(s.sid, "intent")));
+check("readReceipt of a missing file -> absent", show(PR.readReceipt(s.sid, "clarify_intent")) === show({ ok: false, reason: "absent" }), show(PR.readReceipt(s.sid, "clarify_intent")));
+R.writeReceiptRaw(s.sid, "clarify_intent", "{ not json");
+check("readReceipt of non-JSON -> unreadable", show(PR.readReceipt(s.sid, "clarify_intent")) === show({ ok: false, reason: "unreadable" }), show(PR.readReceipt(s.sid, "clarify_intent")));
+R.writeReceiptRaw(s.sid, "clarify_intent", { absPath: p, link: url, anchorUuid: "a" });
+check("readReceipt with a missing field -> unreadable", PR.readReceipt(s.sid, "clarify_intent").reason === "unreadable", show(PR.readReceipt(s.sid, "clarify_intent")));
+R.writeReceiptRaw(s.sid, "clarify_intent", Object.assign({}, fields, { writtenAt: "x", link: { kind: "blob", value: s.url } }));
+check("readReceipt with a link of neither shape -> unreadable", PR.readReceipt(s.sid, "clarify_intent").reason === "unreadable", show(PR.readReceipt(s.sid, "clarify_intent")));
 
 const rec = PR.readReceipt(s.sid, "outline").receipt;
 const m = (cur) => { try { return PR.matchReceipt(rec, cur); } catch (e) { return "threw:" + e.message; } };
@@ -55,6 +55,9 @@ try { PR.discardReceipt(s.sid, "outline"); } catch (e) { threw = e.message; }
 check("discardReceipt of a missing file does not throw", threw === null, threw);
 // #2771: nothing voids every receipt at once any more (a block or an exception keeps them).
 check("discardAllReceipts is no longer exported", typeof PR.discardAllReceipts === "undefined", typeof PR.discardAllReceipts);
+// #2820: the receipt is keyed by the workflow step; the artifact-named STAGES export is retired.
+check("RECEIPT_STEPS is clarify_intent, outline, detail", show(PR.RECEIPT_STEPS) === show(["clarify_intent", "outline", "detail"]), show(PR.RECEIPT_STEPS));
+check("the artifact-named STAGES export is retired", typeof PR.STAGES === "undefined", show(PR.STAGES));
 PR.discardReceipt(s.sid, "detail");
 
 // A failed write (fs error on the temp file or on the rename) is fail-closed: writeReceipt returns
@@ -82,7 +85,7 @@ const deniedAfterFail = R.echo(s.sid, "outline");
 check("the echo after a failed receipt write is denied (fail-closed)", deniedAfterFail.denied && !deniedAfterFail.dialog, show({ rc: deniedAfterFail.rc, json: deniedAfterFail.json }));
 // Same predicate as r-cases-driver.js presentAgain (that file is a script, not a module).
 const presentAgain = (reason, stage) => reason !== "" && !reason.startsWith("[confirm-plan] continue:") &&
-  reason.includes("plan-link") && reason.includes(`--stage ${stage}`);
+  reason.includes("plan-link") && reason.includes(`--step ${stage}`);
 check("the deny reason after a failed receipt write asks to present the plan again",
   presentAgain(deniedAfterFail.reason, "outline"), deniedAfterFail.reason);
 

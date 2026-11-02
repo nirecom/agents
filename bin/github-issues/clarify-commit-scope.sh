@@ -75,7 +75,7 @@ fi
 if [[ "$ISSUES_SET" -eq 1 && -z "$ISSUES_CSV" ]]; then
     # shellcheck source=lib/intent-to-issue.sh
     source "$SCRIPT_DIR/lib/intent-to-issue.sh"
-    INTENT_PATH="$(node "$SCRIPT_DIR/../plan-artifact-path" --stage intent --session "$SESSION_ID" --plans-dir "$REAL_PLANS_DIR" 2>/dev/null)" || INTENT_PATH=""
+    INTENT_PATH="$(node "$SCRIPT_DIR/../plan-artifact-path" --step clarify_intent --session "$SESSION_ID" --plans-dir "$REAL_PLANS_DIR" 2>/dev/null)" || INTENT_PATH=""
     if [[ -z "$INTENT_PATH" || ! -f "$INTENT_PATH" ]]; then
         echo "[clarify-commit-scope] intent.md not found: $INTENT_PATH" >&2
         exit 1

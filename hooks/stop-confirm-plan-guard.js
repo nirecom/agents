@@ -14,24 +14,26 @@
 const fs = require("fs");
 const path = require("path");
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
-const { firstBlock, planRelintReason, PLAN_STAGES } = require("./stop-confirm-plan-guard/block-reasons");
+const { firstBlock, planRelintReason } = require("./stop-confirm-plan-guard/block-reasons");
+const { PLAN_ARTIFACT_NAMES, stepForSuffix } = require("./workflow-state/plan-step-table");
 
 const STOP_BUDGET_MS = 4000;
 const PROBE_RESERVE_MS = 500;
 
-// probesFor(deadline) -> {plansDir, gateFor, linkFor}: one gate probe per stage within the budget (a
+// probesFor(deadline) -> {plansDir, gateFor, linkFor}: one gate probe per step within the budget (a
 // spent budget reads ERROR, treated as ON) and one git lookup per plan file, shared by every check.
+// gateFor takes the workflow step; a caller holding a plan artifact name converts it first.
 function probesFor(deadline) {
   const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
   const { planGateState } = require("./lib/confirm-gate/plan-gate");
   const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../bin/workflow/lib/next-step/gate-line");
   const gates = {};
-  const gateFor = (stage) => {
-    if (!(stage in gates)) {
+  const gateFor = (step) => {
+    if (!(step in gates)) {
       const timeoutMs = Math.min(NEXT_STEP_GATE_PROBE_TIMEOUT_MS, deadline - Date.now() - PROBE_RESERVE_MS);
-      gates[stage] = planGateState(stage, { timeoutMs });
+      gates[step] = planGateState(step, { timeoutMs });
     }
-    return gates[stage];
+    return gates[step];
   };
   const plansDir = getWorkflowPlansDir();
   const links = new Map();
@@ -44,19 +46,21 @@ function probesFor(deadline) {
 }
 
 // recordReceipts(sid, presented, anchorUuid, carryMark) -> {written, failed}: one receipt per presented
-// stage that has a receipt link; a stage that cannot be written loses its stale receipt.
+// plan that has a receipt link; a plan that cannot be written loses its stale receipt. presented and
+// failed hold plan artifact names; the receipt is keyed by the step.
 function recordReceipts(sid, presented, anchorUuid, carryMark) {
   const PR = require("./lib/presentation-receipt");
   const written = [];
   const failed = [];
   for (const p of presented) {
-    const ok = p.receiptLink && PR.writeReceipt(sid, p.stage, {
+    const step = stepForSuffix(p.stage);
+    const ok = p.receiptLink && PR.writeReceipt(sid, step, {
       absPath: p.absPath, link: p.receiptLink, contentSha: p.contentSha, anchorUuid, carryMark,
     });
     if (ok) {
       written.push(p);
     } else {
-      PR.discardReceipt(sid, p.stage);
+      PR.discardReceipt(sid, step);
       failed.push(p.stage);
     }
   }
@@ -66,7 +70,7 @@ function recordReceipts(sid, presented, anchorUuid, carryMark) {
 // judgeTurn(ctx) -> {block, written, failed}: a block leaves every receipt as it is.
 function judgeTurn(ctx) {
   const CC = require("./lib/confirm-continuation");
-  const presented = CC.presentedStages({ sid: ctx.sid, tail: ctx.tail, plansDir: ctx.plansDir, gateFor: ctx.gateFor, linkFor: ctx.linkFor });
+  const presented = CC.presentedArtifacts({ sid: ctx.sid, tail: ctx.tail, plansDir: ctx.plansDir, gateFor: ctx.gateFor, linkFor: ctx.linkFor });
   const block = firstBlock(ctx, presented);
   if (block) return { block, written: [], failed: [] };
   const anchorUuid = ctx.tail.lastTextEntry ? ctx.tail.lastTextEntry.uuid : "";
@@ -88,23 +92,24 @@ function recordUnblocked(sid, block) {
   appendNotice(sid, `${block.kind} presentation passed unblocked (stop_hook_active); no receipt recorded for this turn; earlier receipts kept`);
 }
 
-// recordUndecidable({sid, input, tail, markers, deadline, active}) -> {unrecorded, written}: unrecorded
-// is the failed writes plus every stage whose gate is not OFF that may have been presented but got no
-// receipt; written is the presented stages recorded. Only
-// a stage the real final message (last_assistant_message) closes on is recorded: with the anchored
+// recordUndecidable({sid, input, tail, markers, deadline, active, probes}) -> {unrecorded, written}:
+// unrecorded is the failed writes plus every plan whose step's gate is not OFF that may have been
+// presented but got no receipt; written is the presented plans recorded. Only
+// a plan the real final message (last_assistant_message) closes on is recorded: with the anchored
 // entry's uuid when an anchored text entry also presents it, otherwise with anchorUuid "" (no anchor,
-// or final-only). A stage only the anchored text presents stays unrecorded. A stage whose plan
+// or final-only). A plan only the anchored text presents stays unrecorded. A plan that
 // is over HARD, violates PLAN_LANG or is unpublished is left unrecorded with its earlier receipt
-// untouched, as the decidable path would block it.
-function recordUndecidable({ sid, input, tail, markers, deadline, active }) {
+// untouched, as the decidable path would block it. probes defaults to probesFor(deadline); a caller
+// may pass its own {plansDir, gateFor, linkFor} to observe the step keys gateFor receives.
+function recordUndecidable({ sid, input, tail, markers, deadline, active, probes: given }) {
   const UD = require("./stop-confirm-plan-guard/undecidable");
   const CC = require("./lib/confirm-continuation");
   const maybe = UD.mayHavePresented({ sid, markers, input });
   if (deadline - Date.now() < PROBE_RESERVE_MS) return { unrecorded: maybe, written: [] };
-  const probes = probesFor(deadline);
+  const probes = given || probesFor(deadline);
   const anchored = UD.anchoredTailOf(tail);
-  const inFinal = CC.presentedStagesOfText(Object.assign({ sid, lastText: input.last_assistant_message, stages: PLAN_STAGES }, probes));
-  const fromTail = anchored ? CC.presentedStages(Object.assign({ sid, tail: anchored }, probes)) : [];
+  const inFinal = CC.presentedArtifactsOfText(Object.assign({ sid, lastText: input.last_assistant_message, stages: PLAN_ARTIFACT_NAMES }, probes));
+  const fromTail = anchored ? CC.presentedArtifacts(Object.assign({ sid, tail: anchored }, probes)) : [];
   const finalStages = inFinal.map((p) => p.stage);
   const tailStages = fromTail.map((p) => p.stage);
   const presented = [...fromTail.filter((p) => finalStages.includes(p.stage)), ...inFinal.filter((p) => !tailStages.includes(p.stage))];
@@ -116,7 +121,8 @@ function recordUndecidable({ sid, input, tail, markers, deadline, active }) {
   const failed = [...both.failed, ...finalOnly.failed];
   const written = [...both.written, ...finalOnly.written];
   const writtenStages = written.map((p) => p.stage);
-  const unwritten = maybe.filter((stage) => !writtenStages.includes(stage) && probes.gateFor(stage) !== "OFF");
+  // mayHavePresented answers plan artifact names; the gate is keyed by the step.
+  const unwritten = maybe.filter((stage) => !writtenStages.includes(stage) && probes.gateFor(stepForSuffix(stage)) !== "OFF");
   return { unrecorded: [...new Set([...relintBlocked, ...unpublished, ...failed, ...unwritten])], written };
 }
 
@@ -143,10 +149,11 @@ function tailAllowsContinue(input, deadline) {
   }
 }
 
-// settleStop: notify on every Stop that leaves a stage unrecorded, spend the markers outside
-// stop_hook_active, then continue the current stage once (the receipt's continuedAt caps it). Order:
+// settleStop: notify on every Stop that leaves a plan unrecorded, spend the markers outside
+// stop_hook_active, then continue the current plan once (the receipt's continuedAt caps it). Order:
 // receipts written -> mark checked -> mark written -> continue with the notice. Every other exit is
-// finish(), which still carries the notice.
+// finish(), which still carries the notice. unrecorded / written / the continued plan are plan
+// artifact names; the receipt API takes stepForSuffix of them.
 function settleStop(sid, active, { unrecorded, written }, TM, undecidableInput, deadline) {
   const notice = unrecorded.length > 0 ? require("./stop-confirm-plan-guard/undecidable").noticeFor(unrecorded) : "";
   if (notice) appendNotice(sid, `presentation receipt not recorded for ${unrecorded.join(", ")}; the user was notified`);
@@ -159,28 +166,30 @@ function settleStop(sid, active, { unrecorded, written }, TM, undecidableInput, 
   if (!active) TM.readAndDeleteTurnMarkers(sid);
   const CC = require("./lib/confirm-continuation");
   const PR = require("./lib/presentation-receipt");
-  const current = currentStage(sid);
-  // A current stage that failed to record must not hand the continue to another written stage.
-  let stage = unrecorded.includes(current) ? null : CC.continuationStage(written, current);
-  if (stage && undecidableInput && !tailAllowsContinue(undecidableInput, deadline)) stage = null;
-  if (!stage) finish();
-  const receipt = PR.readReceipt(sid, stage);
+  const current = currentArtifact(sid);
+  // A current plan that failed to record must not hand the continue to another written plan.
+  let artifact = unrecorded.includes(current) ? null : CC.continuationArtifact(written, current);
+  if (artifact && undecidableInput && !tailAllowsContinue(undecidableInput, deadline)) artifact = null;
+  if (!artifact) finish();
+  const step = stepForSuffix(artifact);
+  const receipt = PR.readReceipt(sid, step);
   if (receipt.ok && PR.isContinued(receipt.receipt)) finish();
-  if (!PR.markContinued(sid, stage)) finish();
-  emitBlock(CC.continueReason(stage), notice);
+  if (!PR.markContinued(sid, step)) finish();
+  emitBlock(CC.continueReason(artifact), notice);
 }
 
-// The recorded step's stage: the first plan stage not settled. Unlike resolveCurrentEffectiveStep it
-// does not re-judge approvals, so a re-presented earlier plan neither moves it nor costs a gate probe.
-function currentStage(sid) {
+// The recorded step's plan artifact name: that of the first plan step not settled. Unlike
+// resolveCurrentEffectiveStep it does not re-judge approvals, so a re-presented earlier plan neither
+// moves it nor costs a gate probe.
+function currentArtifact(sid) {
   try {
     const { readState, isSettledStatus } = require("./workflow-state/state-io");
     const { effectiveStatus } = require("./workflow-state/effective-state");
-    const { PLAN_STAGE_TABLE } = require("./workflow-state/plan-stage-table");
+    const { PLAN_STEP_TABLE } = require("./workflow-state/plan-step-table");
     const state = readState(sid);
     if (!state || !state.steps) return null;
     const profile = require("./workflow-state/session-profile").resolveSessionProfile(state, sid);
-    for (const [step, row] of Object.entries(PLAN_STAGE_TABLE)) {
+    for (const [step, row] of Object.entries(PLAN_STEP_TABLE)) {
       const entry = state.steps[step];
       if (!isSettledStatus(effectiveStatus(step, (entry && entry.status) || "pending", profile))) return row.suffix;
     }
@@ -263,3 +272,5 @@ function main() {
 }
 
 if (require.main === module) main();
+
+module.exports = { recordUndecidable };

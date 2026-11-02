@@ -7,9 +7,11 @@ const path = require("path");
 const R = require("./fixture");
 const { A, TR, BASH, check, show } = R;
 
-const STAGES = ["intent", "outline", "detail"];
-const presentAgain = (reason, stage) => reason !== "" && !reason.startsWith("[confirm-plan] continue:") &&
-  reason.includes("plan-link") && reason.includes(`--stage ${stage}`);
+// The receipt is keyed by the workflow step (#2820); plans, links and echoes by the plan artifact name.
+const STEP_OF = { intent: "clarify_intent", outline: "outline", detail: "detail" };
+const ARTIFACTS = Object.keys(STEP_OF);
+const presentAgain = (reason, artifact) => reason !== "" && !reason.startsWith("[confirm-plan] continue:") &&
+  reason.includes("plan-link") && reason.includes(`--step ${STEP_OF[artifact]}`);
 const samePath = (a, b) => typeof a === "string" && path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 const pathLine = (s, stage, reason) => `${stage}: \`${R.linesFor(s.sid, stage).fwd}\` (no URL: ${reason})`;
 const urlLine = (s, stage) => R.linesFor(s.sid, stage).urlLine;
@@ -23,15 +25,15 @@ function present(s, stage, opts) {
 }
 // seedReceipts(s) -> raw, well-formed receipts for every stage (a prior presentation's leftovers).
 function seedReceipts(s) {
-  for (const st of STAGES) {
+  for (const st of ARTIFACTS) {
     const p = R.linesFor(s.sid, st);
     if (!fs.existsSync(p.plan)) R.F.writePlan(s.sid, st);
-    R.writeReceiptRaw(s.sid, st, { absPath: p.plan, link: { kind: "url", value: p.url }, contentSha: R.sha256(p.plan), anchorUuid: "a-old", writtenAt: new Date().toISOString() });
+    R.writeReceiptRaw(s.sid, STEP_OF[st], { absPath: p.plan, link: { kind: "url", value: p.url }, contentSha: R.sha256(p.plan), anchorUuid: "a-old", writtenAt: new Date().toISOString() });
   }
 }
-const allGone = (sid) => STAGES.every((st) => !R.receiptExists(sid, st));
-// snap(sid) -> every stage's raw receipt; keptAsIs(before, sid) -> each seeded one still there, byte-for-byte.
-const snap = (sid) => STAGES.map((st) => R.readReceiptRaw(sid, st));
+const allGone = (sid) => ARTIFACTS.every((st) => !R.receiptExists(sid, STEP_OF[st]));
+// snap(sid) -> every step's raw receipt; keptAsIs(before, sid) -> each seeded one still there, byte-for-byte.
+const snap = (sid) => ARTIFACTS.map((st) => R.readReceiptRaw(sid, STEP_OF[st]));
 const keptAsIs = (before, sid) => {
   const after = snap(sid);
   return before.every((b, i) => b === null ? after[i] === null : after[i] !== null && JSON.stringify(after[i]) === JSON.stringify(b));
@@ -113,7 +115,7 @@ if (mode === "R3") {
   const intent = R.linesFor(s.sid, "intent");
   fs.writeFileSync(intent.plan, R.EDITED_INTENT);
   const st = R.stop(s.sid, R.presentTurn(s, ["intent", "outline"], "Both plans.\n\n" + intent.urlLine + "\n" + s.urlLine));
-  check("R6 two stages presented: both receipts are written", R.receiptExists(s.sid, "intent") && R.receiptExists(s.sid, "outline"), show({ rc: st.rc, out: st.out }));
+  check("R6 two stages presented: both receipts are written", R.receiptExists(s.sid, "clarify_intent") &&R.receiptExists(s.sid, "outline"), show({ rc: st.rc, out: st.out }));
   check("R6 the continuation names only the current step's stage", st.continued && st.reason.includes("WORKFLOW_CONFIRM_OUTLINE") && !/\bintent\b|CONFIRM_INTENT/i.test(st.reason.replace(/[^\n]*plan-link[^\n]*/g, "")),st.reason || st.out);
   const eo = R.echo(s.sid, "outline");
   check("R6 the outline echo reaches the dialog", eo.dialog, show(eo.json));
@@ -230,7 +232,7 @@ if (mode === "R3") {
     const s = R.sessionAt("outline", { tag: 108 });
     const st = R.stop(s.sid, R.presentTurn(s, ["outline"], "Here is the plan.\n\n" + s.urlLine + "\n\n" + QUESTION));
     check("R10 closeOnLink block without a seed: Stop blocks", st.blocked && presentAgain(st.reason, "outline"), show({ rc: st.rc, out: st.out }));
-    check("R10 closeOnLink block without a seed: the blocked turn writes no receipt", allGone(s.sid), show(STAGES.map((x) => R.readReceiptRaw(s.sid, x))));
+    check("R10 closeOnLink block without a seed: the blocked turn writes no receipt", allGone(s.sid), show(snap(s.sid)));
   }
   {
     const s = R.sessionAt("outline", { tag: 102 });
@@ -262,7 +264,7 @@ if (mode === "R3") {
     const close = "Both plans are ready.\n\n" + pathLine(s, "intent", "not-published") + "\n" + s.urlLine;
     const st = R.stop(s.sid, R.presentTurn(s, ["intent", "outline"], close), { env: { CC_UNPUBLISHED_STAGE: "intent" } });
     check("R10 two stages, intent unpublished: Stop blocks (unpublished)", st.blocked && presentAgain(st.reason, "intent"), show({ rc: st.rc, out: st.out }));
-    check("R10 two stages, intent unpublished: no receipt is written for either stage", allGone(s.sid), show(STAGES.map((x) => R.readReceiptRaw(s.sid, x))));
+    check("R10 two stages, intent unpublished: no receipt is written for either stage", allGone(s.sid), show(snap(s.sid)));
   }
   {
     // Japanese prose built from code points so the file stays ASCII-only.
@@ -289,7 +291,7 @@ if (mode === "R3") {
       const s = R.sessionAt(stage, { tag: 111 });
       const st = present(s, stage, { mode: reason, line: pathLine(s, stage, reason) });
       check(`R11 ${reason} ${stage}: a path link-line close is not blocked by a plan-link reason`, !st.blocked || st.continued, show({ rc: st.rc, out: st.out }));
-      const rc = R.readReceiptRaw(s.sid, stage);
+      const rc = R.readReceiptRaw(s.sid, STEP_OF[stage]);
       check(`R11 ${reason} ${stage}: a path receipt with the whole-file contentSha is written`,
         rc !== null && rc.link && rc.link.kind === "path" && samePath(rc.link.value, s.plan) && rc.contentSha === R.sha256(s.plan), show(rc));
       const e = R.echo(s.sid, stage, { mode: reason });
@@ -323,7 +325,7 @@ if (mode === "R3") {
   check("R12 an exception inside the Stop evaluation exits 0", st.rc === 0, show({ rc: st.rc, out: st.out, err: st.err.slice(0, 200) }));
   const kept = R.readReceiptRaw(s.sid, "outline");
   check("R12 the existing receipt is kept", kept !== null && kept.anchorUuid === before.anchorUuid && kept.writtenAt === before.writtenAt, show({ before, kept }));
-  check("R12 no receipt is written for the other stages", !R.receiptExists(s.sid, "intent") && !R.receiptExists(s.sid, "detail"), "a receipt was written");
+  check("R12 no receipt is written for the other stages", !R.receiptExists(s.sid, "clarify_intent") && !R.receiptExists(s.sid, "detail"), "a receipt was written");
   // The turn carries an outline marker, so the unrecorded presentation is noticed on stdout.
   let notice = null;
   try { notice = JSON.parse(st.out.trim()); } catch (_) { notice = null; }

@@ -193,7 +193,8 @@ _cl_upstream_source_file() {
         for p in "$@"; do case "${p##*/}" in *test-design*) printf '%s' "$p"; return 0 ;; esac; done
         return 1
     fi
-    p="$(node "$CL_UPSTREAM_CHECKOUT/bin/plan-artifact-path" --stage "$src" --session "$sid" 2>/dev/null)" || return 1
+    [ "$src" = intent ] && src=clarify_intent
+    p="$(node "$CL_UPSTREAM_CHECKOUT/bin/plan-artifact-path" --step "$src" --session "$sid" 2>/dev/null)" || return 1
     [ -n "$p" ] || return 1
     printf '%s' "${p//\\//}"
 }

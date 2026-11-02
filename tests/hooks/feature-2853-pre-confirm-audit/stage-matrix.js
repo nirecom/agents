@@ -2,7 +2,7 @@
 // #2853 TR1-3 x CONFIRM_* ON/OFF table: on every plan stage the unaudited gate arms the stage's
 // pre-confirm audit (audit-wait) whatever the flag, and once the run settles CONTINUE the gate
 // answers the stage's original action. Called from ../feature-2853-pre-confirm-audit.js, which owns
-// the case markers. CONFIRM_INTENT has no OFF waiver (plan-stage-table offWaivable:false), so its
+// the case markers. CONFIRM_INTENT has no OFF waiver (plan-step-table offWaivable:false), so its
 // OFF row still settles to ask.
 const D = require("./driver");
 

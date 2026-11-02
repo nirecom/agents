@@ -295,9 +295,7 @@ run_gate() {
 
 run_mark() {
     local cwd="$1" json="$2"
-    echo "$json" | run_with_timeout 30 env CLAUDE_PROJECT_DIR="$cwd" \
-        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null
-}
+    echo "$json" | run_with_timeout 30 env CLAUDE_PROJECT_DIR="$cwd" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null; }
 
 is_block() { echo "$1" | grep -q '"block"' || echo "$1" | grep -q '"deny"'; }
 is_approve() { echo "$1" | grep -q '"approve"' || echo "$1" | grep -q '"allow"'; }
@@ -356,15 +354,11 @@ echo ""
 echo "=== Section B: REVIEW_TESTS_COMPLETE sentinel handling ==="
 
 # B3: REVIEW_TESTS_COMPLETE with fingerprint records review_tests=complete + review_scope_manifest
-SID_B3="b3-$$"
-PAIR_B3="$(setup_linked_worktree "secB-wt3")"
-WT_B3="${PAIR_B3#*|}"
-stage_test_file "$WT_B3" "tests/example.sh" "echo test B3"
-TOKEN_B3="$(compute_token "$WT_B3")"
+SID_B3="b3-$$"; PAIR_B3="$(setup_linked_worktree "secB-wt3")"; WT_B3="${PAIR_B3#*|}"
+stage_test_file "$WT_B3" "tests/example.sh" "echo test B3"; TOKEN_B3="$(compute_token "$WT_B3")"
 write_state "$SID_B3" "$(state_json_custom "$SID_B3" "feature/secB-wt3" review_tests pending)"
-SENTINEL_B3="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$TOKEN_B3>>\""
-run_mark "$WT_B3" "$(build_mark_json "$SENTINEL_B3" "$SID_B3" 0 "$WT_B3")" >/dev/null
-STATUS_B3="$(read_state_step "$SID_B3" review_tests)"
+glossary_check_record "$SID_B3" "." review_tests; SENTINEL_B3="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$TOKEN_B3>>\""
+run_mark "$WT_B3" "$(build_mark_json "$SENTINEL_B3" "$SID_B3" 0 "$WT_B3")"; STATUS_B3="$(read_state_step "$SID_B3" review_tests)"
 RECORDED_MANIFEST_B3="$(read_step_field "$SID_B3" review_tests review_scope_manifest)"
 if [ "$STATUS_B3" = "complete" ] && [ "$RECORDED_MANIFEST_B3" != "MISSING" ]; then
     pass "B3. REVIEW_TESTS_COMPLETE marks review_tests=complete + records review_scope_manifest"
@@ -373,12 +367,10 @@ else
 fi
 
 # B4: REVIEW_TESTS_WARNINGS sentinel marks complete and records warnings_summary
-SID_B4="b4-$$"
-PAIR_B4="$(setup_linked_worktree "secB-wt4")"
-WT_B4="${PAIR_B4#*|}"
-stage_test_file "$WT_B4" "tests/example.sh" "echo test B4"
-TOKEN_B4="$(compute_token "$WT_B4")"
+SID_B4="b4-$$"; PAIR_B4="$(setup_linked_worktree "secB-wt4")"; WT_B4="${PAIR_B4#*|}"
+stage_test_file "$WT_B4" "tests/example.sh" "echo test B4"; TOKEN_B4="$(compute_token "$WT_B4")"
 write_state "$SID_B4" "$(state_json_custom "$SID_B4" "feature/secB-wt4" review_tests pending)"
+glossary_check_record "$SID_B4" "." review_tests  # #2529: pinned to the hook's cwd (not the worktree) so the record is not stale
 SENTINEL_B4="echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=$TOKEN_B4 warnings=3>>\""
 run_mark "$WT_B4" "$(build_mark_json "$SENTINEL_B4" "$SID_B4" 0 "$WT_B4")" >/dev/null
 STATUS_B4="$(read_state_step "$SID_B4" review_tests)"

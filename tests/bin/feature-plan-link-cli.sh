@@ -2,7 +2,7 @@
 # tests/bin/feature-plan-link-cli.sh
 # Tests: bin/plan-link
 # Tags: plan-link, plan-sync, blob-url, cli, TL2, scope:common, path-leak, read-only, project-host, gitlab
-# bin/plan-link [--session <sid>] [--stage intent|outline|detail]: prints one line per stage on
+# bin/plan-link [--session <sid>] [--step clarify_intent|outline|detail]: prints one line per artifact on
 # stdout. An existing plan's line carries its local path, with the blob URL when one may be
 # shown or a reason word otherwise; an absent plan is "<stage>: (unavailable: <reason>)".
 # Exit 0 resolved, 1 no plan file, 2 usage error (messages on stderr). Never changes any file.
@@ -176,20 +176,24 @@ if [ "$PLC_RC" -ne 127 ] && [ -n "$SNAP_BEFORE" ] && [ "$SNAP_BEFORE" = "$SNAP_A
 case_end
 
 case_begin "single-stage" "bin/plan-link"
+plc_run -- --session "$PLC_SID" --step clarify_intent
+plc_one_line "--step clarify_intent prints one line"
+plc_expect_url "--step clarify_intent" intent "$PLC_BLOB/$PLC_SID-intent.md" "$PLANS" "$PLC_SID"
+plc_run -- --session "$PLC_SID" --step outline
+plc_one_line "--step outline prints one line"
+plc_expect_reason "--step outline" outline not-published "$PLANS" "$PLC_SID"
+plc_streams "single step: result on stdout, stderr empty" ok
 plc_run -- --session "$PLC_SID" --stage intent
-plc_one_line "--stage intent prints one line"
-plc_expect_url "--stage intent" intent "$PLC_BLOB/$PLC_SID-intent.md" "$PLANS" "$PLC_SID"
-plc_run -- --session "$PLC_SID" --stage outline
-plc_one_line "--stage outline prints one line"
-plc_expect_reason "--stage outline" outline not-published "$PLANS" "$PLC_SID"
-plc_streams "single stage: result on stdout, stderr empty" ok
+plc_one_line "deprecated --stage intent still prints one line"
+plc_expect_url "deprecated --stage intent" intent "$PLC_BLOB/$PLC_SID-intent.md" "$PLANS" "$PLC_SID"
+if printf '%s' "$PLC_ERR" | grep -qF "plan-link: --stage is deprecated; use --step clarify_intent"; then pass "deprecated --stage warns on stderr"; else fail "deprecated --stage warns on stderr" "stderr=[$PLC_ERR]"; fi
 case_end
 
 case_begin "session-from-env" "bin/plan-link"
-plc_run "CLAUDE_CODE_SESSION_ID=$PLC_SID" -- --stage intent
+plc_run "CLAUDE_CODE_SESSION_ID=$PLC_SID" -- --step clarify_intent
 plc_one_line "session from CLAUDE_CODE_SESSION_ID prints one line"
 plc_expect_url "session defaults to CLAUDE_CODE_SESSION_ID" intent "$PLC_BLOB/$PLC_SID-intent.md" "$PLANS" "$PLC_SID"
-plc_run "CLAUDE_CODE_SESSION_ID=$PLC_OTHER" -- --session "$PLC_SID" --stage intent
+plc_run "CLAUDE_CODE_SESSION_ID=$PLC_OTHER" -- --session "$PLC_SID" --step clarify_intent
 plc_expect_url "--session overrides CLAUDE_CODE_SESSION_ID" intent "$PLC_BLOB/$PLC_SID-intent.md" "$PLANS" "$PLC_SID"
 case_end
 
@@ -207,24 +211,24 @@ plc_expect_reason "no record, plan absent at the destination" outline not-publis
 case_end
 
 case_begin "sync-off-reason" "bin/plan-link"
-plc_run "PLAN_SYNC_REMOTE_URL=" -- --session "$PLC_SID" --stage intent
+plc_run "PLAN_SYNC_REMOTE_URL=" -- --session "$PLC_SID" --step clarify_intent
 plc_one_line "plan-sync off prints one line"
 plc_expect_reason "plan-sync off" intent plan-sync-off "$PLANS" "$PLC_SID"
 case_end
 
 case_begin "not-provisioned-reason" "bin/plan-link"
-plc_run "WORKFLOW_PLANS_DIR=$PLC_RAW" -- --session "$PLC_SID" --stage intent
+plc_run "WORKFLOW_PLANS_DIR=$PLC_RAW" -- --session "$PLC_SID" --step clarify_intent
 plc_expect_reason "unprovisioned plans dir" intent not-provisioned "$PLC_RAW" "$PLC_SID"
 case_end
 
 case_begin "forge-url-shapes" "bin/plan-link"
-plc_run "WORKFLOW_PLANS_DIR=$PLC_GL" "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_GL" -- --session "$PLC_SID" --stage intent
+plc_run "WORKFLOW_PLANS_DIR=$PLC_GL" "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_GL" -- --session "$PLC_SID" --step clarify_intent
 plc_expect_url "gitlab.com destination" intent "$PLC_BLOB_GL/$PLC_SID-intent.md" "$PLC_GL" "$PLC_SID"
-plc_run "WORKFLOW_PLANS_DIR=$PLC_GLS" "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_GL_SELF" "GITLAB_HOSTNAME=gitlab.example.com" -- --session "$PLC_SID" --stage intent
+plc_run "WORKFLOW_PLANS_DIR=$PLC_GLS" "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_GL_SELF" "GITLAB_HOSTNAME=gitlab.example.com" -- --session "$PLC_SID" --step clarify_intent
 plc_expect_url "self-hosted GitLab destination" intent "$PLC_BLOB_GLS/$PLC_SID-intent.md" "$PLC_GLS" "$PLC_SID"
-plc_run "WORKFLOW_PLANS_DIR=$PLC_SG" "PLAN_SYNC_REMOTE_URL=$PLC_ORIGIN_SSHGH" -- --session "$PLC_SID" --stage intent
+plc_run "WORKFLOW_PLANS_DIR=$PLC_SG" "PLAN_SYNC_REMOTE_URL=$PLC_ORIGIN_SSHGH" -- --session "$PLC_SID" --step clarify_intent
 plc_expect_url "ssh.github.com destination" intent "$PLC_BLOB/$PLC_SID-intent.md" "$PLC_SG" "$PLC_SID"
-plc_run "WORKFLOW_PLANS_DIR=$PLC_NG" "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_PLAIN" -- --session "$PLC_SID" --stage intent
+plc_run "WORKFLOW_PLANS_DIR=$PLC_NG" "PLAN_SYNC_REMOTE_URL=$PSF_ORIGIN_PLAIN" -- --session "$PLC_SID" --step clarify_intent
 plc_expect_reason "unknown-forge destination, plan published" intent unknown-forge "$PLC_NG" "$PLC_SID"
 case_end
 
@@ -250,9 +254,9 @@ for st in intent outline detail; do
   plc_expect_line "zero artifacts: $st unavailable: no-artifact" "$st: (unavailable: no-artifact)"
 done
 plc_no_leak "zero artifacts"
-plc_run -- --session "$PLC_SID" --stage detail
-if [ "$PLC_RC" -eq 1 ]; then pass "--stage of an absent plan exits 1"; else fail "--stage of an absent plan exits 1" "rc=$PLC_RC out=$PLC_OUT"; fi
-plc_expect_line "--stage of an absent plan: unavailable: no-artifact" "detail: (unavailable: no-artifact)"
+plc_run -- --session "$PLC_SID" --step detail
+if [ "$PLC_RC" -eq 1 ]; then pass "--step of an absent plan exits 1"; else fail "--step of an absent plan exits 1" "rc=$PLC_RC out=$PLC_OUT"; fi
+plc_expect_line "--step of an absent plan: unavailable: no-artifact" "detail: (unavailable: no-artifact)"
 case_end
 
 case_begin "executable-bit" "bin/plan-link"
@@ -265,7 +269,7 @@ esac
 case_end
 
 case_begin "usage-errors" "bin/plan-link"
-for args in "--stage bogus" "--bogus" "--session" "--stage"; do
+for args in "--step bogus" "--stage bogus" "--bogus" "--session" "--step" "--stage"; do
   # shellcheck disable=SC2086  # word-split the literal arg list on purpose
   plc_run -- --session "$PLC_SID" $args
   if [ "$PLC_RC" -eq 2 ]; then pass "usage '$args' exits 2"; else fail "usage '$args' exits 2" "rc=$PLC_RC out=$PLC_OUT"; fi

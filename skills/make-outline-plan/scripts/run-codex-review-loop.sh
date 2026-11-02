@@ -14,8 +14,9 @@ rwc_resolve outline-plan make-outline-plan
 # Plans are named after first_session_id (#2748); PLANS_DIR keeps its spelling, only the basename
 # comes from the CLI. An unresolvable plan path halts (4) instead of falling back to the own sid.
 plan_file() {
-  local p
-  p="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --stage "$1" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || return 1
+  local p step="$1"
+  [[ "$step" == intent ]] && step=clarify_intent
+  p="$(node "$SCRIPT_CHECKOUT_ROOT/bin/plan-artifact-path" --step "$step" --session "$SESSION_ID" --plans-dir "$PLANS_DIR" 2>/dev/null)" || return 1
   [[ "${p##*[/\\]}" == *"-$1.md" ]] || return 1
   printf '%s/%s' "$PLANS_DIR" "${p##*[/\\]}"
 }

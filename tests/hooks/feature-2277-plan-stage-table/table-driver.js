@@ -20,8 +20,8 @@ const NEXT_STEP = "bin/workflow/next-step";
 const MARK = "hooks/workflow-mark.js";
 
 function loadTable() {
-  try { return require(path.join(F.ROOT, "hooks/workflow-state/plan-stage-table.js")); } catch (e) {
-    F.check("plan-stage-table module loads", false, e.code || e.message);
+  try { return require(path.join(F.ROOT, "hooks/workflow-state/plan-step-table.js")); } catch (e) {
+    F.check("plan-step-table module loads", false, e.code || e.message);
     return null;
   }
 }
@@ -43,6 +43,10 @@ function modeTable() {
   if (!mod) return;
   const table = findTable(mod);
   F.check("an exported table is keyed by exactly the 3 gated steps", !!table, Object.keys(mod).join(","));
+  F.check("PLAN_STEP_TABLE is the exported table", !!table && mod.PLAN_STEP_TABLE === table, Object.keys(mod).join(","));
+  // #2820: the artifact-name set is derived from the rows' suffix, in row order.
+  F.check("PLAN_ARTIFACT_NAMES is the 3 suffixes", JSON.stringify(Array.from(mod.PLAN_ARTIFACT_NAMES || []))
+    === JSON.stringify(STEPS.map((s) => ROWS[s].suffix)), JSON.stringify(mod.PLAN_ARTIFACT_NAMES));
   for (const step of STEPS) {
     const row = table && table[step];
     for (const [k, v] of Object.entries(ROWS[step])) {
@@ -104,6 +108,8 @@ function advance(sid, step, env) {
 function prepare(step, variant) {
   const sid = atStage(step, variant);
   const row = ROWS[step];
+  // #2529: completing a step needs a current glossary check keyed by that step.
+  F.runNode("bin/check-glossary-drift", ["--session", sid, "--step", step, "--record"], "");
   if (variant === "approved" || variant === "stale") mark(sid, `echo "<<${row.sentinel}: approved in fixture>>"`);
   if (variant === "stale") F.writePlan(sid, row.suffix, F.PLAN_BODY[row.suffix].replace("fixture", "rewritten after approval"));
   return sid;

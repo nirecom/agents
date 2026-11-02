@@ -1,14 +1,14 @@
 # Glossary Drift Check — Shared Procedure
 
-SSOT for the glossary drift check every stage runs (intent, outline, detail, tests, code, docs): the deterministic check, reviewer-raised drift, and the approval list.
+SSOT for the glossary drift check every step below runs (`clarify_intent`, `outline`, `detail`, `review_tests`, `review_security`, `review_docs`): the deterministic check, reviewer-raised drift, and the approval list.
 
 ## Deterministic check
 
 - Get `<sid>` by running `bash "$AGENTS_MAIN_ROOT/bin/resolve-session-id"` as a standalone command.
-- Run `node "$AGENTS_MAIN_ROOT/bin/check-glossary-drift" --session <sid> --stage <stage> --record` as a standalone command.
-- Plan stages (intent / outline / detail): run it before the CPA-3 gate check of `skills/_shared/confirm-plan.md`.
-- Staged stages (tests / code / docs): stage the targets first, then run it; a record taken before staging fingerprints other content, and the commit gate blocks.
-- Rerun it on every later commit that stages targets of the same stage.
+- Run `node "$AGENTS_MAIN_ROOT/bin/check-glossary-drift" --session <sid> --step <step> --record` as a standalone command.
+- Plan steps (`clarify_intent` / `outline` / `detail`): run it before the CPA-3 gate check of `skills/_shared/confirm-plan.md`.
+- Review steps (`review_tests` / `review_security` / `review_docs`): stage the targets first, then run it; a record taken before staging fingerprints other content, and the commit gate blocks.
+- Rerun it on every later commit that stages targets of the same step.
 - Rerun it after any change to the artifact, the combined glossary, the intent glossary rows, or the check rules; an earlier grant never covers new inputs.
 - On a `DRIFT` line, fix the artifact and rerun, or add the term to the intent glossary (CONFIRM_INTENT is taken again).
 - Fix an `identifier context` finding by correcting the identifier's spelling.

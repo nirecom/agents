@@ -30,8 +30,8 @@ function testsStage(F) {
   const sid = F.newSid("c-tests");
   const text = `"use strict";\n${TESTS_LINES.join("\n")}\nmodule.exports = 1;\n`;
   F.stageFile(repo, "tests/x.js", text);
-  F.seedAt(sid, F.STAGE_STEP.tests, repo);
-  const r = F.drift(sid, "tests", repo, false);
+  F.seedAt(sid, "review_tests", repo);
+  const r = F.drift(sid, "review_tests", repo, false);
   F.check("acceptance tests stage: exit 1", F.reached(r) && r.code === 1, `code=${r.code} ${r.all}`);
   const found = F.driftLines(r.all);
   const want = [
@@ -49,7 +49,7 @@ function detailStage(F) {
   const repo = F.mkRepo("c-detail", glossaryFiles(F));
   const sid = F.newSid("c-detail");
   F.writePlan(sid, "detail", "# Plan\n\n## Steps\n\n- one\n\n## Details\n\nSet the `wf-code` value; skip with WORKFLOW_DETAIL_NOT_NEEDED.\n");
-  F.seedAt(sid, F.STAGE_STEP.detail, repo);
+  F.seedAt(sid, "detail", repo);
   const r = F.drift(sid, "detail", repo, false);
   F.check("acceptance detail stage: exit 0 and no DRIFT",
     F.reached(r) && r.code === 0 && F.driftLines(r.all).length === 0, `code=${r.code} ${r.all}`);
@@ -61,8 +61,8 @@ function docsStage(F) {
   // Lines 4-5 are blanked inside the code span (plan S3-1), so the control stays the only finding.
   F.stageFile(repo, "docs/guide.md", "# Guide\n\nSet the agents main root here.\n" +
     "Read `hooks/AGENT_MAIN_ROOT.js` first.\nEmit `<<AGENT_MAIN_ROOT: reason>>` once.\n");
-  F.seedAt(sid, F.STAGE_STEP.docs, repo);
-  const r = F.drift(sid, "docs", repo, false);
+  F.seedAt(sid, "review_docs", repo);
+  const r = F.drift(sid, "review_docs", repo, false);
   const found = F.driftLines(r.all);
   F.check("acceptance docs stage (control): exit 1 with one DRIFT at docs/guide.md:3",
     F.reached(r) && r.code === 1 && found.length === 1 && found[0].variant === "agents main root" &&
@@ -93,8 +93,8 @@ function declaredStage(F) {
   // Line 4 is the live control: an undeclared spelling of the V3 term drifts, so the term is read.
   const text = `"use strict";\n// a mid-line allow-deny-hook here\n// a mid-line fizz-buzz-gate here\n// the fizz buzz gate here\nmodule.exports = 1;\n`;
   F.stageFile(repo, "tests/x.js", text);
-  F.seedAt(sid, F.STAGE_STEP.tests, repo);
-  const r = F.drift(sid, "tests", repo, false);
+  F.seedAt(sid, "review_tests", repo);
+  const r = F.drift(sid, "review_tests", repo, false);
   const found = F.driftLines(r.all);
   F.check("acceptance declared spellings: glossary Identifier and V3 intent Identifier -> exit 1, only the control drifts",
     F.reached(r) && r.code === 1 && found.length === 1 && found[0].term === "fizz-buzz gate" &&
@@ -108,9 +108,9 @@ function longLineStage(F) {
   const repo = F.mkRepo("c-long", glossaryFiles(F));
   const sid = F.newSid("c-long");
   F.stageFile(repo, "tests/long.js", `"use strict";\n// ${"a".repeat(100000)}\nmodule.exports = 1;\n`);
-  F.seedAt(sid, F.STAGE_STEP.tests, repo);
+  F.seedAt(sid, "review_tests", repo);
   const start = Date.now();
-  const r = F.drift(sid, "tests", repo, false);
+  const r = F.drift(sid, "review_tests", repo, false);
   const took = Date.now() - start;
   F.check(`acceptance long line: exit 0 within ${LIMIT_MS} ms`,
     F.reached(r) && r.code === 0 && took < LIMIT_MS, `code=${r.code} took=${took}ms ${String(r.all).slice(0, 400)}`);

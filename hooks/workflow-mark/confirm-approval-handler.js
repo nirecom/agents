@@ -19,7 +19,7 @@ const {
   confirmSentinelFor,
 } = require("../workflow-state/completion-approval");
 const { resolvePlanArtifactOwner } = require("../workflow-state/plan-artifact-owner");
-const { rowFor } = require("../workflow-state/plan-stage-table");
+const { rowFor } = require("../workflow-state/plan-step-table");
 const { readState } = require("../workflow-state/state-io");
 const { recordOnConfirm } = require("./confirm-cap-acceptance");
 

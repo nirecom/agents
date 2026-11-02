@@ -19,13 +19,17 @@ const STATE_DIR = process.env.WORKFLOW_STATE_DIR;
 const PLANS_DIR = process.env.WORKFLOW_PLANS_DIR;
 if (!STATE_DIR || !PLANS_DIR) throw new Error("glossary-check-fixture: call isolate() before requiring it");
 
-const STAGE_STEP = {
-  intent: "clarify_intent", outline: "outline", detail: "detail",
-  tests: "review_tests", code: "review_security", docs: "review_docs",
+// The workflow steps the glossary check runs at (#2820: keyed by step, never by the legacy stage).
+const RA_STEPS = ["clarify_intent", "outline", "detail"];
+const RS_STEPS = ["review_tests", "review_security", "review_docs"];
+const GLOSSARY_STEPS = RA_STEPS.concat(RS_STEPS);
+// The plan artifact name (file suffix) of each R-A step.
+const ARTIFACT_OF = { clarify_intent: "intent", outline: "outline", detail: "detail" };
+// The legacy glossary stage value of each step: only the compat cases (old --stage / record) use it.
+const LEGACY_STAGE_OF = {
+  clarify_intent: "intent", outline: "outline", detail: "detail",
+  review_tests: "tests", review_security: "code", review_docs: "docs",
 };
-const RA_STAGES = ["intent", "outline", "detail"];
-const RS_STAGES = ["tests", "code", "docs"];
-const STAGES = RA_STAGES.concat(RS_STAGES);
 const GLOSSARY_CODES = /glossary-(check-missing|check-stale|findings-unresolved|fingerprint-unavailable)/;
 
 // The glossary term every fixture artifact uses, and its hyphen variant (a DRIFT finding).
@@ -41,12 +45,12 @@ const GLOSSARY_FILES = {
     "- **Related**: [README.md](../../README.md)\n",
 };
 
-// One staged target per R-S stage, classified by classifyStageFile (tests/ / docs / code).
-const TARGET = { tests: "tests/t.sh", code: "src/a.js", docs: "docs/guide.md" };
+// One staged target per R-S step, classified by reviewStepOfFile (tests/ / docs / code).
+const TARGET = { review_tests: "tests/t.sh", review_security: "src/a.js", review_docs: "docs/guide.md" };
 
-function targetBody(stage, word) {
-  if (stage === "tests") return `#!/usr/bin/env bash\n# each ${word} is checked\nexit 0\n`;
-  if (stage === "code") return `"use strict";\n// each ${word} is checked\nmodule.exports = 1;\n`;
+function targetBody(step, word) {
+  if (step === "review_tests") return `#!/usr/bin/env bash\n# each ${word} is checked\nexit 0\n`;
+  if (step === "review_security") return `"use strict";\n// each ${word} is checked\nmodule.exports = 1;\n`;
   return `# Guide\n\nEach ${word} is checked.\n`;
 }
 
@@ -54,11 +58,12 @@ const INTENT_GLOSSARY =
   "## Glossary\n\n| Term | Category | Operation | Definition |\n|---|---|---|---|\n" +
   "| fixture term | session | add | A term of the fixture session. |\n";
 
-function planBody(stage, word) {
-  if (stage === "intent") {
+// The body of the plan artifact `artifact` (intent / outline / detail).
+function planBody(artifact, word) {
+  if (artifact === "intent") {
     return `# Intent\n\n## Goal\n\nEach ${word} is checked.\n\n## Issues\n\n- #1 fixture\n\n${INTENT_GLOSSARY}`;
   }
-  const title = stage === "outline" ? "Outline" : "Detail";
+  const title = artifact === "outline" ? "Outline" : "Detail";
   return `# ${title}\n\n## Approach\n\nEach ${word} is checked.\n`;
 }
 
@@ -113,8 +118,8 @@ function addWorktree(repo, tag) {
 }
 
 function planPath(sid, suffix) { return path.join(PLANS_DIR, `${sid}-${suffix}.md`); }
-function writePlan(sid, stage, body) {
-  fs.writeFileSync(planPath(sid, stage), body == null ? planBody(stage, TERM) : body);
+function writePlan(sid, artifact, body) {
+  fs.writeFileSync(planPath(sid, artifact), body == null ? planBody(artifact, TERM) : body);
 }
 function statePath(sid) { return path.join(STATE_DIR, `${sid}.json`); }
 
@@ -170,48 +175,44 @@ function statusOf(sid, step) {
   const s = readState(sid);
   return (s && s.steps && s.steps[step] && s.steps[step].status) || "pending";
 }
-function recordOf(sid, stage) {
+function recordOf(sid, step) {
   const s = readState(sid);
-  const entry = s && s.steps && s.steps[STAGE_STEP[stage]];
+  const entry = s && s.steps && s.steps[step];
   return (entry && entry.glossary_check) || null;
 }
 
-// A session sitting at `stage`: an intent.md (every stage reads its ## Glossary rows), the
-// stage's plan artifact, every earlier gated stage complete and approved, and the stage's own
+// A session sitting at glossary step `own`: an intent.md (every step reads its ## Glossary rows),
+// the step's plan artifact, every earlier gated step complete and approved, and the step's own
 // gated approval when `approveOwn` is set.
-function seedSession(tag, stage, opts) {
+function seedSession(tag, own, opts) {
   const o = opts || {};
   const sid = newSid(tag);
   writePlan(sid, "intent", o.intentBody);
-  if (stage === "outline" || stage === "detail") writePlan(sid, stage, o.planBody);
+  if (own === "outline" || own === "detail") writePlan(sid, own, o.planBody);
   const steps = { workflow_init: "complete" };
   const approve = [];
-  const order = ["clarify_intent", "outline", "detail"];
-  const own = STAGE_STEP[stage];
-  for (const step of order) {
+  for (const step of RA_STEPS) {
     if (step === own) break;
-    if (step !== "clarify_intent" && !fs.existsSync(planPath(sid, step === "outline" ? "outline" : "detail"))) {
-      writePlan(sid, step === "outline" ? "outline" : "detail");
-    }
+    if (step !== "clarify_intent" && !fs.existsSync(planPath(sid, ARTIFACT_OF[step]))) writePlan(sid, ARTIFACT_OF[step]);
     steps[step] = "complete";
     approve.push(step);
   }
   steps[own] = o.ownStatus || "pending";
-  if (o.approveOwn !== false && order.includes(own)) approve.push(own);
+  if (o.approveOwn !== false && RA_STEPS.includes(own)) approve.push(own);
   writeState(sid, { steps, approve, cwd: o.cwd, deliverableType: o.deliverableType });
   return sid;
 }
 
-// A fresh repo + session at `stage` whose artifact uses `word`: the plan file for an R-A
-// stage, the staged TARGET file for an R-S stage (opts.stageTarget === false stages nothing).
-function setupStage(tag, stage, word, opts) {
+// A fresh repo + session at glossary step `step` whose artifact uses `word`: the plan file for
+// an R-A step, the staged TARGET file for an R-S step (opts.stageTarget === false stages nothing).
+function setupStep(tag, step, word, opts) {
   const repo = mkRepo(tag);
   const w = word || TERM;
   const o = Object.assign({ cwd: repo }, opts || {});
-  if (stage === "intent") o.intentBody = planBody("intent", w);
-  if (stage === "outline" || stage === "detail") o.planBody = planBody(stage, w);
-  if (RS_STAGES.includes(stage) && o.stageTarget !== false) stageFile(repo, TARGET[stage], targetBody(stage, w));
-  return { repo, sid: seedSession(tag, stage, o) };
+  if (step === "clarify_intent") o.intentBody = planBody("intent", w);
+  if (step === "outline" || step === "detail") o.planBody = planBody(step, w);
+  if (RS_STEPS.includes(step) && o.stageTarget !== false) stageFile(repo, TARGET[step], targetBody(step, w));
+  return { repo, sid: seedSession(tag, step, o) };
 }
 
 // Changes one character of the user glossary entry in the main worktree (input 2 only).
@@ -240,9 +241,15 @@ function runNode(file, args, opts) {
   return { code: r.status, out: r.stdout || "", err: (r.stderr || "") + (r.error ? String(r.error) : "") };
 }
 
-// bin/check-glossary-drift --session <sid> --stage <stage> [--record], run from `cwd`.
-function drift(sid, stage, cwd, record) {
-  const args = ["--session", sid, "--stage", stage];
+// bin/check-glossary-drift --session <sid> --step <step> [--record], run from `cwd`.
+function drift(sid, step, cwd, record) {
+  const args = ["--session", sid, "--step", step];
+  if (record !== false) args.push("--record");
+  return runNode("bin/check-glossary-drift", args, { cwd });
+}
+// The deprecated alias: the legacy stage value of `step` under the old flag (compat cases only).
+function driftLegacy(sid, step, cwd, record) {
+  const args = ["--session", sid, "--stage", LEGACY_STAGE_OF[step]];
   if (record !== false) args.push("--record");
   return runNode("bin/check-glossary-drift", args, { cwd });
 }
@@ -282,14 +289,14 @@ function refusedWith(res, code) {
   return !!res && res.ok === false && (res.code === code || String(res.message || "").includes(code));
 }
 
-// Adds an ACCEPTED-style grant for every finding of the stage's record, bound to `fingerprint`
+// Adds an ACCEPTED-style grant for every finding of the step's record, bound to `fingerprint`
 // (default: the record's own fingerprint).
-function grantFindings(sid, stage, fingerprint) {
-  const rec = recordOf(sid, stage);
+function grantFindings(sid, step, fingerprint) {
+  const rec = recordOf(sid, step);
   if (!rec) return false;
   const fp = fingerprint || rec.fingerprint;
   const grants = (rec.findings || []).map((f) => ({ norm: f.norm, fingerprint: fp, reason: "fixture grant" }));
-  appendRaw(sid, [annotationEvent(STAGE_STEP[stage], "glossary_check", Object.assign({}, rec, { grants }))]);
+  appendRaw(sid, [annotationEvent(step, "glossary_check", Object.assign({}, rec, { grants }))]);
   return true;
 }
 
@@ -322,9 +329,9 @@ function finish() {
 const failureCount = () => failures;
 
 module.exports = {
-  ROOT, STATE_DIR, PLANS_DIR, STAGE_STEP, RA_STAGES, RS_STAGES, STAGES, GLOSSARY_CODES, TERM, VARIANT,
+  ROOT, STATE_DIR, PLANS_DIR, RA_STEPS, RS_STEPS, GLOSSARY_STEPS, ARTIFACT_OF, LEGACY_STAGE_OF, GLOSSARY_CODES, TERM, VARIANT,
   GLOSSARY_FILES, TARGET, targetBody, planBody, newSid, slash, git, writeFile, stageFile, commit, mkRepo,
   addWorktree, planPath, writePlan, statePath, stepStatusEvent, annotationEvent, implSha, approvalEvent,
-  writeState, appendRaw, readState, statusOf, recordOf, seedSession, runNode, drift, mark, advance,
-  completeInProcess, refusedWith, grantFindings, setupStage, touchGlossary, gateCheck, gatePasses, gateBlocks, mod, sha256, check, finish, failureCount, clip,
+  writeState, appendRaw, readState, statusOf, recordOf, seedSession, runNode, drift, driftLegacy, mark, advance,
+  completeInProcess, refusedWith, grantFindings, setupStep, touchGlossary, gateCheck, gatePasses, gateBlocks, mod, sha256, check, finish, failureCount, clip,
 };

@@ -14,11 +14,11 @@ const crypto = require("crypto");
 const { getPlansArtifactPath } = require("../lib/plans-artifact-registry");
 const { planGateState } = require("../lib/confirm-gate/plan-gate");
 const { SESSION_ID_VALID_RE, readState } = require("./state-io");
-const { PLAN_STAGE_TABLE, rowFor } = require("./plan-stage-table");
+const { PLAN_STEP_TABLE, rowFor } = require("./plan-step-table");
 
 // The ONLY enumeration of the approval-gated step class, in workflow order. Every check iterates
-// this array; the per-stage values live in plan-stage-table.js (CPR-ORTH).
-const APPROVAL_GATED_STEPS = Object.freeze(Object.keys(PLAN_STAGE_TABLE));
+// this array; the per-step values live in plan-step-table.js (CPR-ORTH).
+const APPROVAL_GATED_STEPS = Object.freeze(Object.keys(PLAN_STEP_TABLE));
 
 // Frozen closed set of named exceptions. 1:1 with the sanctioned override
 // inventory. An unknown token is a caller bug and throws — a typo must never
@@ -244,9 +244,9 @@ function evaluateCompletionApproval(sessionId, step, state, opts) {
   }
 
   // #2726: an OFF gate waives whatever record is on file (a stale confirm-sentinel hash
-  // included). planGateState answers ON for a stage without an off waiver (intent).
+  // included). planGateState answers ON for a step without an off waiver (clarify_intent).
   const given = opts && opts.gate;
-  const gate = given === "ON" || given === "OFF" || given === "ERROR" ? given : planGateState(rowFor(step).suffix);
+  const gate = given === "ON" || given === "OFF" || given === "ERROR" ? given : planGateState(step);
   if (gate === "OFF") {
     return { approved: true, code: null, source: "confirm-flag-off" };
   }

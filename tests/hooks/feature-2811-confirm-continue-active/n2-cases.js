@@ -91,7 +91,7 @@ function otherStage(check) {
   const run = H.rereadRun(s, ["intent", "outline"], "both", "flushed");
   const st = H.stopOf(s, run.tp, run.opts(false, { pre: [H.MARK_FAULT], env: H.faultEnv("receipt", "outline") }));
   check("k: current stage (outline) fails to record, intent recorded: no continue, exit 0", st.rc === 0 && H.noDecision(st), { rc: st.rc, out: st.out });
-  check("k: only intent has a receipt", R.receiptExists(s.sid, "intent") && !R.receiptExists(s.sid, "outline"), H.snap(s.sid));
+  check("k: only intent has a receipt", R.receiptExists(s.sid, "clarify_intent") && !R.receiptExists(s.sid, "outline"), H.snap(s.sid));
   check("k: the notice names outline and not intent", H.names(H.notice(st), "outline") && !H.names(H.notice(st), "intent"), { rc: st.rc, out: st.out });
 }
 

@@ -4,7 +4,10 @@
 const fs = require("fs");
 const R = require("../feature-2729-presentation-receipt/fixture");
 const { U, A, T, W, TR, BASH } = R;
-const STAGES = ["intent", "outline", "detail"];
+// Plans, link lines and markers are named by the plan artifact; the receipt by the workflow step (#2820).
+const STEP_OF = { intent: "clarify_intent", outline: "outline", detail: "detail" };
+const ARTIFACTS = Object.keys(STEP_OF);
+const stepOf = (artifact) => STEP_OF[artifact];
 
 // A last_assistant_message the transcript never holds: readTurnTail waits, then reads undecidable.
 const MISMATCH = "zz unflushed final message that this transcript does not hold";
@@ -41,23 +44,23 @@ function notice(st) {
 }
 const names = (msg, stage) => typeof msg === "string" && new RegExp(`\\b${stage}\\b`, "i").test(msg);
 const silent = (st) => st.rc === 0 && st.out.trim() === "";
-const noReceipt = (sid) => STAGES.every((st) => !R.receiptExists(sid, st));
+const noReceipt = (sid) => ARTIFACTS.every((st) => !R.receiptExists(sid, stepOf(st)));
 const appendTo = (p, text) => fs.writeFileSync(p, fs.readFileSync(p, "utf8") + text);
 function seedReceipts(s) {
-  for (const st of STAGES) {
+  for (const st of ARTIFACTS) {
     const p = R.linesFor(s.sid, st);
     if (!fs.existsSync(p.plan)) R.F.writePlan(s.sid, st);
-    R.writeReceiptRaw(s.sid, st, { absPath: p.plan, link: { kind: "url", value: p.url }, contentSha: R.sha256(p.plan), anchorUuid: "a-old", writtenAt: new Date().toISOString() });
+    R.writeReceiptRaw(s.sid, stepOf(st), { absPath: p.plan, link: { kind: "url", value: p.url }, contentSha: R.sha256(p.plan), anchorUuid: "a-old", writtenAt: new Date().toISOString() });
   }
 }
-// snap(sid) -> every stage's raw receipt; sameAs(before, sid) -> each one still there, byte-for-byte as seeded.
-const snap = (sid) => STAGES.map((st) => R.readReceiptRaw(sid, st));
+// snap(sid) -> every step's raw receipt; sameAs(before, sid) -> each one still there, byte-for-byte as seeded.
+const snap = (sid) => ARTIFACTS.map((st) => R.readReceiptRaw(sid, stepOf(st)));
 const sameAs = (before, sid) => {
   const after = snap(sid);
   return before.every((b, i) => b !== null && after[i] !== null && JSON.stringify(after[i]) === JSON.stringify(b));
 };
-// rawReceipts(sid) -> every stage's receipt file text (null when absent), for byte-equality checks.
-const rawReceipts = (sid) => STAGES.map((st) => { try { return fs.readFileSync(R.receiptPath(sid, st), "utf8"); } catch (_) { return null; } });
+// rawReceipts(sid) -> every step's receipt file text (null when absent), for byte-equality checks.
+const rawReceipts = (sid) => ARTIFACTS.map((st) => { try { return fs.readFileSync(R.receiptPath(sid, stepOf(st)), "utf8"); } catch (_) { return null; } });
 
 // Japanese prose built from code points so the file stays ASCII-only; jaBody(stage) is the fixture's
 // default plan with only its prose line swapped, so the headings stay canonical and only PLAN_LANG fails.
@@ -72,6 +75,6 @@ const anchoredLangStop = (s, stage, input, turnOpts, lang) =>
 const d3bLangStop = (s, stage, lang) => ustop(s, turn(s, [stage], MID), pinLang({ input: { last_assistant_message: closing(s, [stage]) } }, lang));
 
 module.exports = {
-  STAGES, MISMATCH, QUESTION, THINK, STR, closing, turn, ustop, relinked, linked, notice, names, silent,
+  ARTIFACTS, STEP_OF, stepOf, MISMATCH, QUESTION, THINK, STR, closing, turn, ustop, relinked, linked, notice, names, silent,
   noReceipt, appendTo, seedReceipts, snap, sameAs, rawReceipts, JA, jaBody, pinLang, anchoredLangStop, d3bLangStop, MID,
 };

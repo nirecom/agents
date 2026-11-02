@@ -312,8 +312,8 @@ printf '%s\n' \
   'const origLoad = Module._load;' \
   'Module._load = function (request, parent, isMain) {' \
   '  const m = origLoad.apply(this, arguments);' \
-  '  if (m && typeof m.deriveLegacyStageLevels === "function" && !m.__stubbed2102) {' \
-  '    try { m.deriveLegacyStageLevels = function () { throw new Error("stub: routing table unavailable"); };' \
+  '  if (m && typeof m.deriveLegacyStepLevels === "function" && !m.__stubbed2102) {' \
+  '    try { m.deriveLegacyStepLevels = function () { throw new Error("stub: routing table unavailable"); };' \
   '          m.__stubbed2102 = true; } catch (_) {}' \
   '  }' \
   '  return m;' \
