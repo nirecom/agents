@@ -41,6 +41,8 @@ case_end
 . "$UA_CASES/accept.sh"
 # shellcheck source=feature-2501-run-tests-unrunnable-accept/reject.sh
 . "$UA_CASES/reject.sh"
+# shellcheck source=feature-2501-run-tests-unrunnable-accept/missing-file.sh
+. "$UA_CASES/missing-file.sh"
 
 echo ""
 echo "Results: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

@@ -60,6 +60,7 @@ const STEP_ANNOTATION_KEYS = [
   "failing_tests",
   "unrunnable_count",
   "unrunnable_runtimes",
+  "unrunnable_missing_files",
   "hit_count",
   "hit_summary",
   "unrunnable_accept_reason",

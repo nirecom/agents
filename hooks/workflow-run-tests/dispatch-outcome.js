@@ -18,6 +18,7 @@ const {
 } = require("../lib/worker-outcome-contract");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { parseContractLine, formatContract, runtimeLabels } = require("../lib/run-contract");
+const { SUMMARY_MISSING_RE, readSummaryToken } = require("../lib/missing-test-files");
 const { workerVerdictVetoes } = require("./outcome");
 const { validateFailingNames } = require("./failing-list");
 const { recordRun, recordUnsettled } = require("./record-run");
@@ -94,8 +95,8 @@ function parsedContract(value) {
   return parseContractLine(formatContract(Object.assign({}, value, { shape })));
 }
 
-// The worker leads its summary with the suite's `Missing runtimes:` text (D5-7).
-const SUMMARY_MISSING_RE = /^Missing runtimes: ([^;\r\n]+)/;
+// The worker leads its summary with the suite's `Missing runtimes:` text (D5-7), after the
+// optional `Missing test files: N; ` token (#2646).
 function summaryRuntimes(summary) {
   const m = SUMMARY_MISSING_RE.exec(typeof summary === "string" ? summary : "");
   return m === null ? null : runtimeLabels(m[1]);
@@ -120,6 +121,7 @@ function buildIngest(stem, trusted) {
     failingTests: trustedFailingList(o, contract),
     hitSummary: boundHits(o.worker_result.hits || []),
     unrunnableRuntimes: summaryRuntimes(o.worker_result.summary),
+    unrunnableMissingFiles: readSummaryToken(o.worker_result.summary),
   };
 }
 
@@ -184,6 +186,7 @@ function recordIngest(sessionId, ingest) {
       failingTests: ingest.failingTests,
       hitSummary: ingest.hitSummary,
       unrunnableRuntimes: ingest.unrunnableRuntimes,
+      unrunnableMissingFiles: ingest.unrunnableMissingFiles,
       source: { stem: ingest.stem, payload_sha256: ingest.payloadSha, outcome_sha256: ingest.outcomeSha },
     });
   }
