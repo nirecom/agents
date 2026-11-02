@@ -979,3 +979,7 @@ Changes: Fixed stale previous-cycle worktree references surviving a same-session
 ### FEATURE: PR #2884 (2026-11-02)
 Background: fix(#2646): refuse RUN_TESTS_UNRUNNABLE_ACCEPTED when UNRUNNABLE incl...
 Changes: Fixed: a run that named nonexistent test files could be accepted as "unrunnable" and mark the test step complete. Fix the test path and re-run; unrunnable runs caused only by missing runtimes can still be accepted as before.
+
+### FEATURE: PR #2881 (2026-11-02)
+Background: docs(#2461,#2764): describe Jev continuation judgments and the AskUse...
+Changes: Jev can now advise next-step to pause before invoking the next skill, and can let the Stop guard continue a turn it would otherwise stop (#2461).;Jev can answer AskUserQuestion dialogs that Claude explicitly marks as already settled by the conversation; dialogs raised by a skill always reach the user (#2764). Turn it off alone with `JEV_AUTO_SKIP_ASKUSER=off`.
