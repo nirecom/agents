@@ -59,7 +59,6 @@ function judgeSkip(sid, tid, hand, adapter) {
     const by = agreementBySignal(hand, parsed.answered);
     const vals = Object.values(by);
     Object.assign(record, {
-      llm: Object.assign({}, record.llm, { executor: adapter.executor }),
       agreement_by_signal: by, agreement: vals.length ? vals.every((v) => v === true) : null,
     });
   }

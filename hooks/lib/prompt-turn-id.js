@@ -1,6 +1,6 @@
 "use strict";
 // hooks/lib/prompt-turn-id.js — one turn id per user prompt (#2768). The UserPromptSubmit hook
-// removes the previous prompt-turn.json and writes a fresh {turn_id, created_at}; plan-sync reads it
+// removes the previous prompt-turn.json and writes a fresh {turn_id, created_at, transcript_path}; plan-sync reads it
 // back. No transcript is read: the removal before the write is what keeps a stale id from surviving.
 
 const fs = require("fs");
@@ -15,8 +15,9 @@ const TURN_ID_RE = /^[0-9a-f]{32}$/;
 
 const validSid = (sid) => typeof sid === "string" && SID_RE.test(sid);
 
-// writePromptTurn(sid, deps) -> the new turn id, or null when the write fails (deps.fs for tests).
-function writePromptTurn(sid, deps) {
+// writePromptTurn(sid, deps, transcriptPath) -> the new turn id, or null when the write fails
+// (deps.fs for tests). The transcript path rides along for the Jev continuation point (#2461).
+function writePromptTurn(sid, deps, transcriptPath) {
   const xfs = (deps && deps.fs) || fs;
   if (!validSid(sid)) return null;
   let tmp = null;
@@ -24,6 +25,7 @@ function writePromptTurn(sid, deps) {
     const dst = controlPath(sid, PROMPT_TURN_FILE, { forWrite: true });
     const turnId = crypto.randomBytes(16).toString("hex");
     const body = { turn_id: turnId, created_at: new Date().toISOString() };
+    if (typeof transcriptPath === "string" && transcriptPath !== "") body.transcript_path = transcriptPath;
     tmp = path.join(path.dirname(dst), `${PROMPT_TURN_FILE}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`);
     xfs.writeFileSync(tmp, JSON.stringify(body) + "\n", { flag: "wx" });
     xfs.renameSync(tmp, dst);

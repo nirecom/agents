@@ -151,7 +151,7 @@ async function queryShadow({ point, sessionId, toolUseId, toolInput, step, cwd, 
   // these values, never the registry's at that later time. pending.js stamps the version.
   const hand = {
     point, mode: entry.mode, recording_owner: recordingOwner(entry),
-    session_id: sessionId, tool_use_id: toolUseId, step: step === undefined ? null : step, stage,
+    session_id: sessionId, tool_use_id: toolUseId, step: step === undefined ? null : step, stage, judged_in: record.JUDGED_IN.shadowPre,
     input: request.input, jev, executor_model: adapter.resolveExecutorModel(toolInput),
     // Taken after the Jev round trip so the LLM latency never includes Jev's.
     llm_dispatch_ts: Date.now(),
@@ -182,7 +182,7 @@ function orphanRecord(point, sessionId, toolUseId, hand) {
     point, sessionId, toolUseId, pending: p, step: p.step, stage: p.stage,
     now: Number.isSafeInteger(ts) && ts > 0 && ts <= MAX_DATE_MS ? ts : undefined,
     llm: observed || { status: "missing", answer: null, executor_model: p.executor_model, latency_ms: null },
-    mode: frozenMode(hand, entry), adopted: "llm", entry,
+    mode: frozenMode(hand, entry), adopted: "llm", entry, judgedIn: record.judgedInOr(hand && hand.judged_in, record.JUDGED_IN.shadowPre),
     llmAnswerReceived: Boolean(observed && observed.status !== "missing"),
   });
 }
@@ -267,7 +267,7 @@ function recordShadow({ point, sessionId, toolUseId, llmText, toolInput, step, e
       executor_model: adapter.resolveExecutorModel(toolInput),
       latency_ms: dispatchTs === null ? null : record.boundedLatency(Math.max(0, Math.round(now - dispatchTs))),
     },
-    mode: frozenMode(own, entry), adopted: "llm", entry, llmAnswerReceived: status !== "missing",
+    mode: frozenMode(own, entry), adopted: "llm", entry, llmAnswerReceived: status !== "missing", judgedIn: record.JUDGED_IN.shadowPost,
   });
   const appended = record.appendDecision(rec);
   if (appended && appended.ok) {
@@ -279,7 +279,7 @@ function recordShadow({ point, sessionId, toolUseId, llmText, toolInput, step, e
     // No claim to keep (late or duplicate post): leave the LLM-only record for a sweep.
     pending.writeUnlogged(sessionId, toolUseId, {
       point, mode: rec.mode, recording_owner: "hook", step: rec.step, jev: rec.jev, input: rec.input, executor_model: rec.llm.executor_model,
-      llm_observed: rec.llm, record_ts: now,
+      llm_observed: rec.llm, record_ts: now, judged_in: record.JUDGED_IN.shadowPost,
     });
   }
   return rec;

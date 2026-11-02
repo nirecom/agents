@@ -15,6 +15,7 @@ const provider = require("../provider-core");
 const pending = require("../pending");
 const { registryEntry, recordingOwner } = require("../registry");
 const { isValidId } = require("../state-paths");
+const { JUDGED_IN } = require("../judged-in");
 const { applyGate } = require("./gate");
 const { takeSignalsOwnerAtQuery } = require("./settle-complexity");
 const { takeSkipOwnerAtQuery } = require("./settle-skip");
@@ -170,6 +171,7 @@ async function query(args, optsArg = {}) {
   const answerFile = answerPath(sid, tid);
   const ticket = Object.assign({
     kind: "cli-ticket", point: a.point, stage: a.stage, session_id: sid, ticket: tid, created_ms: createdMs,
+    judged_in: JUDGED_IN.jevJudge,
   }, entry.target ? { target: entry.target } : {}, frozen, {
     short_circuited: gate.short_circuited, unjudged: gate.unjudged, required, missing: req.missing, exempt: req.exempt,
     sources_failed: jevInput.sources_failed, sources_failed_reasons: jevInput.sources_failed_reasons,

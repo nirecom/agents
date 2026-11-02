@@ -75,8 +75,8 @@ check "aggregatePoint([]): fallback_rate, every low-confidence rate and agreemen
 case_end
 
 echo "=== an unreadable generation is reported, an absent one is not ==="
-UNR_LOG="$FX/fixture/unread/jev-decisions.log"
-ABS_LOG="$FX/fixture/absent/jev-decisions.log"
+UNR_LOG="$FX/fixture/unread/jev-decisions.jsonl"
+ABS_LOG="$FX/fixture/absent/jev-decisions.jsonl"
 mkdir -p "$UNR_LOG.2" "$UNR_LOG" "$(dirname "$ABS_LOG")"
 # unread: .2 and base are directories (EISDIR on every platform); .3 and .1 hold one record each.
 # absent: base only (one record and one broken line); .1/.2/.3 do not exist.

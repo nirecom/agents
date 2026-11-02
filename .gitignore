@@ -12,6 +12,7 @@ settings.local.json
 settings-extension.json
 CLAUDE.local.md
 user-instructions.md
+user-instructions-jev.md
 .env
 # The project-local override layer. A plain `.env` entry does not match it, and
 # it is meant to be per-checkout, so it needs its own line.
