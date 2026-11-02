@@ -987,3 +987,7 @@ Changes: Jev can now advise next-step to pause before invoking the next skill, a
 ### FEATURE: PR #2897 (2026-11-02)
 Background: fix(#2892): show "already up to date" for winget exit code -197833518...
 Changes: The RTK and glab installers now say "already up to date" when nothing needs upgrading, instead of the ambiguous "up to date or upgrade failed".
+
+### FEATURE: PR #2898 (2026-11-02)
+Background: fix(#2849,#2781): widen the commit-push gate decision limit and fail ...
+Changes: Committing a large change no longer fails because the documentation checks run out of time; the commit-push gate now waits up to 110 s for them.
