@@ -107,11 +107,15 @@ function sourceRootRe(files) {
   return new RegExp(`(?<![A-Za-z0-9_.-])(?:${[...roots].map(esc).join("|")})(?=[/\\s"']|$)`);
 }
 
-// Only bin/lib/test-language-parts/ holds pure per-language parts; a part registered from
-// anywhere else (a test case reader) is ordinary code and is scanned.
+// Only the per-language parts (bin/lib/test-language-parts/<entry id>.sh) are pure language
+// knowledge; any other file there (a child reader) is ordinary code and is scanned, as is a
+// part registered from anywhere else (a test case reader).
+let PART_IDS = new Set();
+const PARTS_DIR = "bin/lib/test-language-parts/";
 function inScope(p) {
   if (TABLE_FILES.has(p)) return false;
-  if (p.startsWith("bin/lib/test-language-parts/") || p.startsWith("skills/synced/")) return false;
+  if (p.startsWith(PARTS_DIR) && p.endsWith(".sh") && PART_IDS.has(p.slice(PARTS_DIR.length, -3))) return false;
+  if (p.startsWith("skills/synced/")) return false;
   if (p === "rules/test.md" || /^rules\/test\/[^/]+\.md$/.test(p)) return true;
   if (p.endsWith(".md")) return false;
   return p.startsWith("bin/") || p.startsWith("hooks/") || p === "tests/run-all.sh"
@@ -246,6 +250,7 @@ function main() {
   let table;
   try { table = JSON.parse(fs.readFileSync(a.table, "utf8")); } catch (e) { die(`table not readable: ${a.table}`); }
   const w = deriveWords(table);
+  PART_IDS = new Set(w.ids);
   if (a.printWords) {
     for (const [word, info] of w.patternWords) console.log(`pattern\t${word}\t${[...info.owners].join(",")}`);
     for (const n of w.nameWords) console.log(`name\t${n}`);

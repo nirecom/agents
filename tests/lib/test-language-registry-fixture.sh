@@ -33,10 +33,16 @@ install_test_language_registry() {
     [ -f "$part" ] && files+=("${part#"$src"/}")
   done
   # Files registered outside those dirs (parts, wrappers): read them from the table, not a copied list.
+  local listed=0
   while IFS= read -r rel; do
+    listed=$((listed + 1))
     case " ${files[*]} " in *" $rel "*) ;; *) files+=("$rel") ;; esac
   done < <(grep -oE '"(file|wrapper)"[[:space:]]*:[[:space:]]*"[^"]*"' "$src/hooks/lib/test-language-registry.json" 2>/dev/null \
     | sed 's/.*"\([^"]*\)"$/\1/')
+  if [ "$listed" -eq 0 ]; then
+    printf 'install_test_language_registry: no part files read from the table\n' >&2
+    return 1
+  fi
   for rel in "${files[@]}"; do
     if [ ! -f "$src/$rel" ]; then
       printf 'install_test_language_registry: missing source %s/%s\n' "$src" "$rel" >&2

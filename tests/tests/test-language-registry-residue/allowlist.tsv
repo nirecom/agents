@@ -25,3 +25,7 @@ tests/lib/root-decoy-build.js	if (ext === ".js" || ext === ".cjs") return "node"
 tests/lib/root-decoy-build.js	if (ext === ".sh" || ext === ".bash") return "bash";	maps a tracked file's extension to the stub body the decoy tree writes for it; every tracked file, not test discovery
 tests/lib/root-decoy-build.js	if (ext === ".py") return "python";	maps a tracked file's extension to the stub body the decoy tree writes for it; every tracked file, not test discovery
 tests/lib/root-decoy-build.js	if (kind === "bash") {	selects the stub body template for a decoy file already classified by stubKind; not a launch per test language
+bin/lib/test-language-parts/bash-case-embed.sh	re_path='([^[:space:]"'\'']*/)?([^/[:space:]"'\'']+\.sh)'	the bash part's own child reader matching the sourced helper path in a Bash test; per-language reader code, not test discovery
+bin/lib/test-language-parts/bash-case-embed.sh	[[ "$rel" == tests/lib/*harness*.sh	the bash part's own child reader deciding a helper is a narrow harness; per-language reader code, not test discovery
+bin/lib/test-language-parts/pytest-case-analyzer.py	if alias.name == "pytest" and alias.asname	the pytest part's own child analyzer resolving how a test imports pytest; per-language reader code, not a language dispatch
+bin/lib/test-language-parts/pytest_case_scan.py	and node.value.value.id == "pytest"	the pytest part's own child scanner recognizing the pytest.mark decorator; per-language reader code, not a language dispatch
