@@ -995,3 +995,7 @@ Changes: Committing a large change no longer fails because the documentation che
 ### FEATURE: PR #2887 (2026-11-02)
 Background: feat(#2814): share review criteria and severity across reviewers, rec...
 Changes: Reviewers (plan, code, security, tests) now share one set of review criteria and one severity definition, so findings below the reporting bar and inconsistent severities are cut.;When you correct the direction of an approved plan in conversation, the correction is recorded and honored by reviewers instead of being asked again as an upstream inconsistency.;Reviewers now flag a lower plan that copies or narrows a decision already settled in an upper plan.
+
+### FEATURE: PR #2905 (2026-11-02)
+Background: refactor(#2896): move shared md files from agents/lib/ to skills/_sha...
+Changes: Shared on-demand md files now live in skills/_shared/ only; agents/lib/ is removed.
