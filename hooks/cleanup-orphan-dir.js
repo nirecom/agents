@@ -1,42 +1,12 @@
 #!/usr/bin/env node
-// hooks/cleanup-orphan-dir.js
-//
-// Safely delete an orphan directory left behind by `git worktree remove`.
-// Replaces `rm -rf` / `Remove-Item -Recurse -Force` calls from worktree-end —
-// those commands are blocked by enforce-worktree.js + settings.json deny rules.
-//
-// Usage:
-//   node hooks/cleanup-orphan-dir.js <path>
-//   node hooks/cleanup-orphan-dir.js --force-if-not-registered <path>
-//
-// Default mode requires the target to be empty. With
-// `--force-if-not-registered`, a non-empty target is removed recursively as
-// long as it contains no `.git` entry anywhere in its subtree and is not a
-// registered worktree. This covers Windows CWD-lock cases where files were
-// recreated under the worktree after `git worktree remove` succeeded.
-//
-// Validation pipeline (fail-fast — refuse with exit 1 unless noted):
-//   1. Parse args: optional `--force-if-not-registered`, exactly one
-//      positional path; any other flag → refuse.
-//   2. WORKTREE_BASE_DIR env var must be set.
-//   3. Base dir floor check: ≥ 3 path segments from root.
-//   4. Resolution + strict containment under base (via path.relative).
-//   5. lstat: ENOENT → exit 0 (idempotent); symlink/junction/reparse → refuse;
-//      non-directory → refuse.
-//   6. Registered worktree check via `git worktree list --porcelain` from this
-//      script's own repo (__dirname/..); if resolved path is a registered
-//      worktree → refuse.
-//   7. No `.git` entry — immediate child (default mode) or anywhere in the
-//      subtree (force mode). `.git` as file (gitlink) also refused.
-//   8. Default mode only: empty (readdir length === 0); non-empty → refuse.
-//   9. Delete: rmdirSync (default) or fs.rmSync({recursive:true, force:true})
-//      under force mode.
-//
-// Failure modes (documented, intentional):
-//   - TOCTOU between step 8 and 9: rmdirSync on non-empty dir throws → safe.
-//   - TOCTOU between step 6 and 9: same risk as today's `rm -rf` workflow.
-//   - Corrupted repo (worktree list fails) → refuse (fail-closed).
-//   - Subtree exceeds MAX_GIT_SCAN_ENTRIES under force mode → refuse (fail-closed).
+// Safely delete an orphan dir under WORKTREE_BASE_DIR left by `git worktree remove` (worktree-end
+// WE-12), in place of the blocked `rm -rf`. Usage: [--force-if-not-registered [--expect-main-root
+// <main>]] <path>. Default: an empty dir only (rmdir). Force: recursive, when no `.git` sits anywhere
+// in the subtree (scan capped at MAX_GIT_SCAN_ENTRIES). Gitlink path (#322 / #2875): a target whose
+// `.git` is a gitlink file goes only in force mode with --expect-main-root, as an unregistered
+// leftover of that main checkout (cleanup-orphan-dir/leftover.js): uncapped walk, nested `.git` or
+// unreadable subdir refused, links never followed. Every other check fails closed with exit 1 and a
+// `cleanup-orphan-dir: ` line; the steps are numbered in main(). ENOENT is idempotent success.
 
 "use strict";
 
@@ -48,6 +18,15 @@ try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ 
 
 const { normalizeCwd } = require("./lib/path-normalize");
 const { getWorktreeBaseDirResolved } = require("./enforce-worktree");
+const { leftoverRefusal, subtreeRefusal } = require("./cleanup-orphan-dir/leftover");
+
+function isGitlinkFile(p) {
+  try {
+    return fs.lstatSync(p).isFile();
+  } catch (e) {
+    return false;
+  }
+}
 
 function refuse(msg, code) {
   process.stderr.write(`cleanup-orphan-dir: ${msg}\n`);
@@ -94,10 +73,17 @@ function containsAnyGitEntry(dir) {
 function main(argv) {
   // 1. Parse args: optional --force-if-not-registered + exactly one positional.
   let forceIfNotRegistered = false;
+  let expectMainRoot = null;
   const positionals = [];
-  for (const a of argv.slice(2)) {
+  const args = argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
     if (a === "--force-if-not-registered") {
       forceIfNotRegistered = true;
+    } else if (a === "--expect-main-root") {
+      const v = args[++i];
+      if (typeof v !== "string" || v === "" || v.startsWith("-")) refuse("--expect-main-root requires a path value");
+      expectMainRoot = normalizeCwd(v) || v;
     } else if (a.startsWith("-")) {
       refuse(`flags not accepted: ${a}`);
     } else {
@@ -122,7 +108,7 @@ function main(argv) {
 
   // 3. Floor check: ≥ 3 path segments from root.
   // Windows: C:\a\b ✓ (segments: C:, a, b after normalization)
-  // POSIX: /a/b/c ✓ (segments: a, b, c)
+  // POSIX: /var/wt/x ✓ (segments: var, wt, x)
   const baseSegments = base.split(/[\\/]/).filter(Boolean);
   if (baseSegments.length < 3) {
     refuse(`WORKTREE_BASE_DIR too shallow (< 3 segments): ${base}`);
@@ -186,11 +172,15 @@ function main(argv) {
   }
 
   // 7. No `.git` entry — immediate child (always), or anywhere in subtree
-  //    (force mode). `.git` as a file (gitlink) also counts.
-  if (fs.existsSync(path.join(resolved, ".git"))) {
+  //    (force mode). A gitlink file passes only on the proven-leftover path.
+  const gitlinkLeftover = isGitlinkFile(path.join(resolved, ".git"));
+  if (gitlinkLeftover && forceIfNotRegistered && expectMainRoot !== null) {
+    const why = leftoverRefusal(resolved, expectMainRoot) || subtreeRefusal(resolved);
+    if (why) refuse(why);
+  } else if (fs.existsSync(path.join(resolved, ".git"))) {
     refuse(`target contains a .git entry: ${resolved}`);
   }
-  if (forceIfNotRegistered) {
+  if (forceIfNotRegistered && !gitlinkLeftover) {
     const hit = containsAnyGitEntry(resolved);
     if (hit === null) {
       refuse(`subtree scan exceeded ${MAX_GIT_SCAN_ENTRIES} entries or hit unreadable subdir: ${resolved}`);

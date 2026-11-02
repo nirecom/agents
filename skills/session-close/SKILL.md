@@ -139,7 +139,7 @@ On `status: complete`:
 ## SC-6 — Emit Final Report directly into assistant text
 
 Run: node "$AGENTS_MAIN_ROOT/bin/render-final-report.js" --session "<session-id>"
-Emit the stdout per `skills/_shared/final-report-emission.md` — verbatim scope and CONV_LANG scope are defined there.
+Write the stdout into your next assistant text per `skills/_shared/final-report-emission.md` — emission, verbatim scope, and CONV_LANG scope are defined there.
 
 After emitting, mark completion with two separate Bash calls:
   bash "$AGENTS_MAIN_ROOT/skills/session-close/scripts/close-alert-phase.sh" "<session-id>" "<NOTES_BACKUP_PATH>"

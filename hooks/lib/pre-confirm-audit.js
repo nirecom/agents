@@ -7,6 +7,7 @@
 //
 // judgeStage(sid, step, ctx) -> { state, runId, verdict, summary }; state is one of
 //   settled-continue | settled-warn | settled-block | accepted | unsettled | cap-reached.
+// cap-reached also carries lastTerminal; isCapConfirmAcceptable marks the shape the CONFIRM Allow accepts (#2873).
 // It throws when a plan-artifact key computation fails: callers fail closed via acceptedOnError.
 
 const fp = require("./diff-fingerprint");
@@ -18,6 +19,9 @@ const { formatAgentModelLine } = require("./role-model");
 // A stage's audit runs at most this many times before the gate stops arming and asks the user.
 const AUDIT_RUN_CAP = 3;
 const VERDICT_RANK = { CONTINUE: 0, WARN: 1, BLOCK: 2 };
+// Past the cap, a terminal last run with one of these verdicts is accepted by the CONFIRM Allow;
+// BLOCK keeps the VERDICT_ACCEPTED sentinel as its only exit.
+const CAP_CONFIRM_VERDICTS = Object.freeze(["WARN", "CONTINUE"]);
 
 const STAGE_TRIGGER = new Map(
   triggers.TRIGGERS.filter((t) => t.kind === "pre-confirm").map((t) => [t.step, t])
@@ -154,8 +158,12 @@ function judgeStage(sid, step, ctx) {
 
   const inFlight = currentInFlightRun(audit, trigger, subKeys);
   if (inFlight) return out("unsettled", inFlight, null, { inFlight: true });
-  if (capped) return out("cap-reached", last, last && last.verdict);
+  if (capped) return out("cap-reached", last, last && last.verdict, { lastTerminal: Boolean(last) && last.outcome === "terminal" });
   return out("unsettled", null, null);
+}
+
+function isCapConfirmAcceptable(j) {
+  return Boolean(j) && j.state === "cap-reached" && j.lastTerminal === true && CAP_CONFIRM_VERDICTS.includes(j.verdict);
 }
 
 // armStage(sid, step, ctx) -> the armAuditRun result. Never arms past the cap, and returns the
@@ -199,5 +207,6 @@ function formatLaunch(runId, step) {
 }
 
 module.exports = {
-  AUDIT_RUN_CAP, triggerForPlanStep, judgeStage, armStage, acceptedOnError, formatLaunch,
+  AUDIT_RUN_CAP, CAP_CONFIRM_VERDICTS, triggerForPlanStep, judgeStage, armStage, acceptedOnError, formatLaunch,
+  lastStageRun, isCapConfirmAcceptable,
 };

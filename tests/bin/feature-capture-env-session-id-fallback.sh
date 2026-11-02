@@ -1,9 +1,9 @@
 #!/bin/bash
 # tests/bin/feature-capture-env-session-id-fallback.sh
 # Tests: skills/worktree-end/scripts/capture-env.sh
-# Tags: worktree, end, cleanup, skill, bin, scope:issue-specific
+# Tags: worktree, end, cleanup, skill, bin, feature-2696, plans-dir, scope:issue-specific
 #
-# Unit tests for the session-id fallback logic in:
+# Unit tests for the session-id fallback logic (and, P1-P3, the #2696 PLANS_DIR resolution) in:
 #   skills/worktree-end/scripts/capture-env.sh
 #
 # Uses PATH-prepend mocking to avoid real gh/git calls.
@@ -286,6 +286,100 @@ test_F4_invalid_session_id_in_notes_rejected() {
     fi
 }
 
+# ---- #2696: PLANS_DIR unset → resolved via bin/workflow-plans-dir ----
+# /worktree-end WE-8 never passes PLANS_DIR, so capture-env.sh aborted with
+# "PLANS_DIR must be set". It now resolves the dir itself; a resolver failure still aborts.
+# $1 = case tag, $2 = checkout root the copy treats as SCRIPT_CHECKOUT_ROOT. Prints the copy path.
+make_plans_dir_copy() {
+    local tag="$1" root="$2"
+    local envdir="$TMPDIR_BASE/mockenv_$tag"
+    setup_mock_env "$envdir"
+    local script_copy="$TMPDIR_BASE/capture-env-$tag.sh"
+    sed -e "s|LIB_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"|LIB_DIR=\"$envdir/scripts\"|" \
+        -e "s|^SCRIPT_CHECKOUT_ROOT=.*|SCRIPT_CHECKOUT_ROOT=\"$root\"|" \
+        "$SCRIPT" > "$script_copy"
+    chmod +x "$script_copy"
+    printf '%s' "$script_copy"
+}
+
+# $1 = case tag, $2 = "bootstrap" or "normal". Runs with PLANS_DIR unset and BACKUP_DIR '(none)',
+# so the notes backup lands in the resolved plans dir.
+run_plans_dir_unset() {
+    local tag="$1" branch="$2" sid="pd-$1"
+    local wt="$TMPDIR_BASE/$tag-wt"
+    mkdir -p "$wt"
+    printf 'Session-ID: %s\nBranch: fix/test\n' "$sid" > "$wt/WORKTREE_NOTES.md"
+    local script_copy plans="$TMPDIR_BASE/plans_$tag"
+    script_copy="$(make_plans_dir_copy "$tag" "$SCRIPT_CHECKOUT_ROOT")"
+    mkdir -p "$plans" "$TMPDIR_BASE/workflow"
+    local bootstrap=0
+    [[ "$branch" == "bootstrap" ]] && bootstrap=1
+    local output code
+    output="$(PATH="$TMPDIR_BASE/mockenv_$tag/bin:$PATH" run_with_timeout 30 env -u PLANS_DIR \
+        WORKFLOW_PLANS_DIR="$plans" WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
+        BOOTSTRAP_MODE="$bootstrap" BOOTSTRAP_COMMIT_SHA=abc \
+        bash "$script_copy" "$wt" "testowner/testrepo" "(none)" "" 2>&1)"
+    code=$?
+    local backup="$plans/$sid-notes-backup/WORKTREE_NOTES.md"
+    local env_json="$TMPDIR_BASE/workflow/$sid.control/final-report-env.json"
+    if [[ "$code" == "0" && -f "$backup" && -f "$env_json" ]]; then
+        pass "P-$tag: PLANS_DIR unset ($branch branch) → resolved; notes backup in WORKFLOW_PLANS_DIR, env JSON written"
+    else
+        fail "P-$tag: expected exit 0 + $backup + env JSON, got code=$code backup=$([[ -f "$backup" ]] && echo yes || echo no) env=$([[ -f "$env_json" ]] && echo yes || echo no) (output=$output)"
+    fi
+}
+
+test_P1_plans_dir_unset_bootstrap_branch() { run_plans_dir_unset unset-bootstrap bootstrap; }
+test_P2_plans_dir_unset_normal_branch() { run_plans_dir_unset unset-normal normal; }
+
+test_P3_plans_dir_resolver_failure_aborts() {
+    local tag="resolver-fail" sid="pd-resolver-fail"
+    local fake_root="$TMPDIR_BASE/fake-root"
+    mkdir -p "$fake_root/bin"
+    printf '#!/usr/bin/env bash\nexit 1\n' > "$fake_root/bin/workflow-plans-dir"
+    chmod +x "$fake_root/bin/workflow-plans-dir"
+    local wt="$TMPDIR_BASE/$tag-wt"
+    mkdir -p "$wt"
+    printf 'Session-ID: %s\n' "$sid" > "$wt/WORKTREE_NOTES.md"
+    local script_copy
+    script_copy="$(make_plans_dir_copy "$tag" "$fake_root")"
+    local stderr code
+    stderr="$(PATH="$TMPDIR_BASE/mockenv_$tag/bin:$PATH" run_with_timeout 30 env -u PLANS_DIR \
+        WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans_$tag" WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
+        bash "$script_copy" "$wt" "testowner/testrepo" "(none)" "" 2>&1 >/dev/null)"
+    code=$?
+    if [[ "$code" != "0" ]] && grep -q "capture-env: cannot resolve PLANS_DIR" <<< "$stderr"; then
+        pass "P3: PLANS_DIR unset + resolver CLI fails → exit non-zero + 'cannot resolve PLANS_DIR'"
+    else
+        fail "P3: expected exit non-zero + 'capture-env: cannot resolve PLANS_DIR', got code=$code stderr='$stderr'"
+    fi
+}
+
+# P4: the resolver exits 0 but prints nothing — an empty PLANS_DIR must abort too.
+test_P4_plans_dir_resolver_empty_output_aborts() {
+    local tag="resolver-empty" sid="pd-resolver-empty"
+    local fake_root="$TMPDIR_BASE/fake-root-empty"
+    mkdir -p "$fake_root/bin"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$fake_root/bin/workflow-plans-dir"
+    chmod +x "$fake_root/bin/workflow-plans-dir"
+    local wt="$TMPDIR_BASE/$tag-wt"
+    mkdir -p "$wt"
+    printf 'Session-ID: %s\n' "$sid" > "$wt/WORKTREE_NOTES.md"
+    local script_copy
+    script_copy="$(make_plans_dir_copy "$tag" "$fake_root")"
+    local stderr code
+    stderr="$(PATH="$TMPDIR_BASE/mockenv_$tag/bin:$PATH" run_with_timeout 30 env -u PLANS_DIR \
+        WORKFLOW_PLANS_DIR="$TMPDIR_BASE/plans_$tag" WORKFLOW_STATE_DIR="$TMPDIR_BASE/workflow" \
+        bash "$script_copy" "$wt" "testowner/testrepo" "(none)" "" 2>&1 >/dev/null)"
+    code=$?
+    local env_json="$TMPDIR_BASE/workflow/$sid.control/final-report-env.json"
+    if [[ "$code" != "0" && ! -f "$env_json" ]] && grep -q "capture-env: cannot resolve PLANS_DIR" <<< "$stderr"; then
+        pass "P4: PLANS_DIR unset + resolver exits 0 with empty output → exit non-zero + 'cannot resolve PLANS_DIR', no env JSON"
+    else
+        fail "P4: expected exit non-zero + 'capture-env: cannot resolve PLANS_DIR' + no env JSON, got code=$code env=$([[ -f "$env_json" ]] && echo yes || echo no) stderr='$stderr'"
+    fi
+}
+
 # ============ Run all ============
 
 test_F1_fallback_reads_session_id_from_notes
@@ -293,6 +387,10 @@ test_F2a_no_notes_no_arg_errors
 test_F2b_notes_without_session_id_errors
 test_F3_arg_takes_precedence
 test_F4_invalid_session_id_in_notes_rejected
+test_P1_plans_dir_unset_bootstrap_branch
+test_P2_plans_dir_unset_normal_branch
+test_P3_plans_dir_resolver_failure_aborts
+test_P4_plans_dir_resolver_empty_output_aborts
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

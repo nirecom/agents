@@ -41,7 +41,7 @@ if run_case "K0b/annotation-key-table"; then
 const E = require("./hooks/workflow-state/state-io/events");
 const WANT = ["baseline_accept", "baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests", "hit_count", "hit_summary",
               "inherit_revert_reason", "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
-              "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
+              "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_missing_files", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const got = [...E.STEP_ANNOTATION_KEYS].sort();
 console.log(JSON.stringify(got) === JSON.stringify(WANT) ? "MATCH" : "DIFFER got=" + JSON.stringify(got));
 '

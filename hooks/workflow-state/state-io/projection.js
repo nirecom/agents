@@ -206,6 +206,13 @@ function projectState(state) {
         }
         break;
       }
+      case "cycle_boundary": {
+        worktree_entered_at = null;
+        worktree_exited_at = null;
+        worktreeBranch = null;
+        worktreeCwd = null;
+        break;
+      }
       case "session_model": {
         // Write-once by contract: the first recording wins.
         if (!session_model) {

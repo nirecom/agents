@@ -13,7 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("../lib/limited-child-process");
-const { readState, writeState, createInitialState } = require("./state-io");
+const { readState, writeState, createInitialState, updateTopLevel } = require("./state-io");
 
 const FULL_OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
@@ -214,7 +214,18 @@ function readMergeBaseBaseline(sessionId) {
   }
 }
 
+// clearMergeBaseBaseline(sessionId): drops the record at a cycle boundary, so the next cycle's
+// BRANCHING_COMPLETE records its own base instead of inheriting the closed cycle's.
+function clearMergeBaseBaseline(sessionId) {
+  if (!readState(sessionId)) return false;
+  updateTopLevel(sessionId, (record) => {
+    record.merge_base_baseline = null;
+  });
+  return true;
+}
+
 module.exports = {
+  clearMergeBaseBaseline,
   resolveBaselineForRepo,
   recordMergeBaseBaseline,
   approveMergeBaseBaseline,

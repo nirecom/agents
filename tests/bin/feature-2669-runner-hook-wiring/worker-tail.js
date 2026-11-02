@@ -122,4 +122,38 @@ function workerCollectsHits() {
   });
 }
 
-module.exports = { init, logTailKeepsPriorityLines, workerCollectsHits };
+// #2646: the worker prefixes its summary with `Missing test files: N; ` counted from column-0
+// missing-file lines, so the hook can refuse an accept the runtimes line alone cannot explain.
+const GONE = (p) => `UNRUNNABLE: ${p} (missing: test file)`;
+const PESTER = "UNRUNNABLE: tests/p.Tests.ps1 (missing: Pester>=5.0)";
+const contract = (executed, unrunnable) => `RUN_CONTRACT: PASS=${executed} FAIL=0 SKIP=0 EXECUTED=${executed} UNRUNNABLE=${unrunnable} TIMEOUT=0`;
+const results = (pass, unrunnable) => `Results: PASS=${pass}  FAIL=0  SKIP=0  UNRUNNABLE=${unrunnable}  TIMEOUT=0`;
+const MISSING_TOKEN_ROWS = [
+  { name: "all-missing", exit: 77, status: "unrunnable", prefix: "Missing test files: 2; ",
+    out: [GONE("tests/gone.sh"), GONE("tests/hooks/gone2.js"), results(0, 2), contract(0, 2)] },
+  { name: "mixed", exit: 77, status: "unrunnable", prefix: "Missing test files: 1; Missing runtimes: Pester>=5.0 (1 file); ",
+    out: [PESTER, GONE("tests/gone.sh"), "Missing runtimes: Pester>=5.0 (1 file)", results(0, 2), contract(0, 2)] },
+  { name: "runtime-only", exit: 77, status: "unrunnable", prefix: "Missing runtimes: Pester>=5.0 (1 file); ",
+    out: [PESTER, "Missing runtimes: Pester>=5.0 (1 file)", results(0, 1), contract(0, 1)] },
+  { name: "neutralized-only", exit: 0, status: "pass", prefix: "PASS=1 ",
+    out: ["PASS: tests/a.sh", `[run-all:neutralized] ${GONE("tests/gone.sh")}`, `[run-all:neutralized] ${GONE("tests/x.sh")}`, results(1, 0), contract(1, 0)] },
+];
+
+function workerEmitsMissingFileToken() {
+  for (const row of MISSING_TOKEN_ROWS) {
+    check(`#2646 ${row.name}: status ${row.status}, summary starts with ${JSON.stringify(row.prefix)}`, () => {
+      const r = runWith(row.out.join("\n"), row.exit);
+      eq(r.status, row.status, `${row.name} status`);
+      if (!r.summary.startsWith(row.prefix)) return `${row.name} summary: ${r.summary}`;
+      if (!row.prefix.startsWith("Missing test files: ") && r.summary.includes("Missing test files:")) return `${row.name} has a token: ${r.summary}`;
+      return undefined;
+    });
+  }
+  check("#2646 round-trip: readSummaryToken reads 2 back from the all-missing summary", () => {
+    const { readSummaryToken } = require(path.join(ROOT, "hooks", "lib", "missing-test-files.js"));
+    const s = runWith(MISSING_TOKEN_ROWS[0].out.join("\n"), 77).summary;
+    eq(readSummaryToken(s), 2, `round-trip readSummaryToken(${JSON.stringify(s)})`);
+  });
+}
+
+module.exports = { init, logTailKeepsPriorityLines, workerCollectsHits, workerEmitsMissingFileToken };

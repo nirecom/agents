@@ -87,7 +87,33 @@ function assertRepoDirMatchesSession(sid, repoDir, opts) {
     return { ok: true, verdict, verifiedEquivalent: false, reason: "repo-context-worktree-deleted" };
   }
 
+  if (verdict === VERDICTS.INDETERMINATE && !isExplicitSessionOverride && isOwnedLeftoverOfRepo(sid, recordedCwd, repoDir)) {
+    // #2875: a WE-11 failure leaves the recorded worktree on disk with a pruned gitlink. Fail open
+    // only for a self-call on an unregistered leftover of THIS repo that the session owned.
+    process.stderr.write(
+      `repo-context-worktree-leftover: session ${sid} recorded cwd ${recordedCwd} is an unregistered worktree leftover; failing open\n`
+    );
+    return { ok: true, verdict, verifiedEquivalent: false, reason: "repo-context-worktree-leftover" };
+  }
+
   return { ok: false, verdict, verifiedEquivalent: false, reason: verdict };
+}
+
+function isOwnedLeftoverOfRepo(sid, recordedCwd, repoDir) {
+  try {
+    if (typeof recordedCwd !== "string" || !fs.existsSync(toWindowsPath(recordedCwd))) return false;
+    const { classifyWorktreeLeftover, gitCommonDirOf } = require("../../../../hooks/workflow-state/resolve-worktree-path");
+    const leftover = classifyWorktreeLeftover(recordedCwd);
+    if (leftover.kind !== "unregistered-leftover") return false;
+    const repoCommon = gitCommonDirOf(toWindowsPath(repoDir));
+    const same = (a, b) => normalizePathForCompare(a) !== null && normalizePathForCompare(a) === normalizePathForCompare(b);
+    if (!repoCommon || !same(leftover.commonDir, repoCommon)) return false;
+    const state = readState(sid);
+    if (!state) return false;
+    return same(state.session_worktree, recordedCwd) || !!state.worktree_entered_at;
+  } catch (_e) {
+    return false;
+  }
 }
 
 module.exports = {

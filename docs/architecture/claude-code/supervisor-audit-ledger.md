@@ -68,11 +68,13 @@ order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the
 | `settled-continue`, `accepted` | the original `ask` / `proceed` |
 | `settled-warn` | the original action; `GATE_HINT` carries the WARN summary and run id |
 | `unsettled` | `audit-wait` — the gate arms a run and prints the launch hint |
-| `settled-block`, `cap-reached`, `error` | `audit-block` — the hint gives the fix steps or the acceptance command |
+| `cap-reached` (terminal WARN / CONTINUE last run, action `ask`) | `ask`; `GATE_HINT` says the CONFIRM Allow also accepts that run |
+| `settled-block`, `cap-reached` (BLOCK / no verdict / non-terminal / CONFIRM off), `error` | `audit-block` — the hint gives the fix steps or the acceptance command |
 
 - **CONFIRM refusal.** `hooks/confirm-checkpoint.js` denies a plan-stage CONFIRM
   echo, before spending the presentation receipt, unless the stage is
-  `settled-continue`, `settled-warn` or `accepted`.
+  `settled-continue`, `settled-warn` or `accepted`, or `cap-reached` with a
+  terminal WARN / CONTINUE last run (`isCapConfirmAcceptable`, #2873).
 - **Stage verdict.** A stage is settled when every sub-check of its TR is settled
   at the current `input_key`. When those sub-checks settled in different runs, the
   stage verdict is the heaviest (BLOCK > WARN > CONTINUE) of each sub-check's
@@ -80,7 +82,8 @@ order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the
 - **Audit run count.** `audit.audit_run_counts` (`{ TR1, TR2, TR3 }`) rises by one
   only when the gate mints a new run; an idempotent re-arm or a moved
   `input_version` does not count. The cap is 2+1: at 3 the gate arms no more and
-  returns `audit-block` (`cap-reached`). A successful `RESET_FROM` to a plan step
+  returns `cap-reached`: `ask` when the last run is a terminal WARN / CONTINUE and
+  the action is `ask`, else `audit-block`. A successful `RESET_FROM` to a plan step
   resets that stage and every later stage to 0; a failed reset of the count keeps the
   reset and only warns.
 - **Order.** Review finishes before the pre-confirm audit: CPA-3 runs `--gate`
@@ -89,7 +92,7 @@ order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the
   review loop and re-runs `--gate` directly. Both loops are capped, so the round
   trip ends.
 - **Acceptance.** The ask-gated `WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED` sentinel
-  also accepts a TR1–TR3 run: a terminal WARN / BLOCK, or the current unsettled
+  also accepts a TR1–TR3 run: a terminal WARN / BLOCK / CONTINUE, or the current unsettled
   run (pending / in_progress / frozen) recorded as `UNSETTLED`, which also
   releases that run (outcome `discarded-stale`, `audit_phase` done). Before the
   cap, an acceptance counts only while its `trigger_key` equals the stage's current
@@ -97,6 +100,13 @@ order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the
   key, because past the cap the user takes over the judgment: a plan edited after
   that acceptance passes the gate with no further audit. TR4 / TR5 runs are never
   accepted as `UNSETTLED`, and the TR5 release rules below are unchanged.
+- **CONFIRM Allow acceptance.** Past the cap, with the stage's CONFIRM gate ON, the
+  CONFIRM Allow records the acceptance of the stage's last run when it is a terminal
+  WARN / CONTINUE (`hooks/workflow-mark/confirm-cap-acceptance.js` →
+  `recordStageCapAcceptance`). It matches the stage's own last run (`lastStageRun`,
+  the run `judgeStage` reads), not the last terminal run; actor `CONFIRM_<STAGE>`,
+  reporter `workflow-mark:confirm-cap-acceptance`. A refusal is shown in the Allow's
+  result and leaves the plan approval recorded (#2873).
 - **Fail-closed on an exception.** When judging or arming throws, the gate returns
   `audit-block` (`pre-confirm-audit:error`) and the checkpoint denies; neither falls
   back to the original action. The exit is the acceptance sentinel: when the
@@ -110,8 +120,8 @@ order; the approval hash is untouched. `hooks/lib/pre-confirm-audit.js` owns the
   the checkpoint's size and receipt checks never read the marker
   ([marker-bypass-contract.md](marker-bypass-contract.md)).
 - **No workflow state.** The checkpoint skips the audit check for a session with no workflow state file, which cannot arm a run, and records a `notice` finding so the skip stays visible; a state file that exists but fails to read or judge stays fail-closed.
-- **Verdict summary is data.** A settled WARN / BLOCK's summary comes from untrusted plan and transcript text, so `--gate` prints it on its own `GATE_AUDIT_SUMMARY` line (quotes stripped, whitespace collapsed, 400 characters at most) and never inside the verbatim-followed `GATE_HINT`.
-- **Verdict writer.** Only a subagent may write a verdict: `hooks/block-main-audit-verdict.js` blocks the main conversation from calling `bin/supervisor-write-audit-verdict` or `--set-audit-verdict`, so the main conversation's only exit is the ask-gated acceptance sentinel.
+- **Verdict summary is data.** A settled WARN / BLOCK's (or a cap-reached `ask`'s) summary comes from untrusted plan and transcript text, so `--gate` prints it on its own `GATE_AUDIT_SUMMARY` line (quotes stripped, whitespace collapsed, 400 characters at most) and never inside the verbatim-followed `GATE_HINT`.
+- **Verdict writer.** Only a subagent may write a verdict: `hooks/block-main-audit-verdict.js` blocks the main conversation from calling `bin/supervisor-write-audit-verdict` or `--set-audit-verdict`, so the main conversation's only exit is the ask-gated acceptance sentinel, or for a TR1–TR3 stage past its cap, the CONFIRM Allow.
 
 ### Declared-files snapshot (#2448)
 
@@ -288,8 +298,9 @@ extra arms. `uv_attempt_seq` is recorded only for tracing.
 Why: a WARN or BLOCK the user has reviewed must not hold `USER_VERIFIED` forever,
 and on a null key a WARN used to re-arm the audit on every emission (#2597).
 
-The only write path is the sentinel
-`echo "<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: <run-id> <reason>>>"`. A
+The write path is the sentinel
+`echo "<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: <run-id> <reason>>>"`, or for a
+TR1–TR3 stage past its cap, the CONFIRM Allow (see above). A
 `permissions.ask` rule in `settings.json` puts every emission through the user's
 approval dialog (ask outranks allow), so the model cannot record an acceptance on
 its own (#2709). The workflow-mark handler

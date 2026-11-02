@@ -1,10 +1,11 @@
 "use strict";
-// #2256 S5-d / #2709 / #2597 / #2853 — record a reviewed human acceptance of an audit verdict.
-// The only caller is the ask-gated WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED sentinel handler, so every
-// acceptance passes the user's permission dialog. Two shapes:
-//   - a BLOCK / WARN verdict of the last terminal run (TR5, or a TR1-3 plan-stage run);
+// #2256 S5-d / #2709 / #2597 / #2853 / #2873 — record a reviewed human acceptance of an audit verdict.
+// Callers: the ask-gated WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED sentinel handler and the CONFIRM_* Allow
+// handler, so every acceptance passes the user's permission dialog. Three shapes:
+//   - a BLOCK / WARN verdict of the last terminal run (TR5, or a TR1-3 run, which also takes CONTINUE);
 //   - an unsettled TR1-3 run (UNSETTLED): the run never got a verdict, so it is retired and the
-//     audit phase settles to done (#2853). TR4 / TR5 runs are never accepted unsettled.
+//     audit phase settles to done (#2853). TR4 / TR5 runs are never accepted unsettled;
+//   - recordStageCapAcceptance: a WARN / CONTINUE last run of a TR1-3 stage past its audit run cap.
 // The record pins the run's verdict and snapshot (freshness_key, artifact_keys, trigger key);
 // hooks/lib/null-freshness.js (TR5) and hooks/lib/pre-confirm-audit.js (TR1-3) decide when it releases.
 
@@ -12,7 +13,9 @@ const { recordBlockOverride } = require("./supervisor-state-writer");
 const { releaseUnsettledRun } = require("./supervisor-state-writer/audit-run");
 const { lastTerminalRun } = require("./audit-ledger");
 const { UNSETTLED_AUDIT_PHASES } = require("./supervisor-state-schema");
-const { ACCEPTABLE_VERDICTS, MIN_REASON_LEN, safeVerdict, safeRunId } = require("./null-freshness/acceptance");
+const {
+  ACCEPTABLE_VERDICTS, STAGE_ACCEPTABLE_VERDICTS, MIN_REASON_LEN, safeVerdict, safeRunId, describeAcceptanceCommand,
+} = require("./null-freshness/acceptance");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 const DEFAULT_REPORTER = "supervisor-block-override";
@@ -86,29 +89,42 @@ function record(effectiveSid, run, verdict, reason, actor, reporter) {
   return { written: written === true, snap };
 }
 
-// recordReviewedVerdictAcceptance(sessionId, { runId, reason, actor, reporter })
-//   -> { ok, code, message, verdict?, tr_ids? }
-function recordReviewedVerdictAcceptance(sessionId, opts = {}) {
-  const runId = opts.runId;
+const isStageRun = (run) => trIdsOf(run).length > 0 && trIdsOf(run).every((t) => STAGE_TRS.includes(t));
+
+function ledgerRun(audit, runId) {
+  const entries = (Array.isArray(audit.ledger) ? audit.ledger : []).filter((e) => e && e.id === runId);
+  return entries.length > 0 ? entries[entries.length - 1] : null;
+}
+
+// prepare(sessionId, opts) -> { refusal } or { reason, audit, effectiveSid, actor }: the shared
+// checks every recorder runs first. Reason gate first: a refused acceptance never touches state.
+function prepare(sessionId, opts) {
   const reason = typeof opts.reason === "string" ? opts.reason.trim() : "";
-  // Reason gate first: a refused acceptance never touches state.
   if (reason.length < MIN_REASON_LEN) {
-    return refuse("reason-too-short", `reason must be at least ${MIN_REASON_LEN} characters; got ${reason.length}.`);
+    return { refusal: refuse("reason-too-short", `reason must be at least ${MIN_REASON_LEN} characters; got ${reason.length}.`) };
   }
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) {
-    return refuse("invalid-session", "could not resolve a valid session id.");
+    return { refusal: refuse("invalid-session", "could not resolve a valid session id.") };
   }
-
   let resolved;
   try {
     resolved = resolveState(sessionId);
   } catch {
-    return refuse("state-unreadable", `could not read supervisor state for session ${sessionId}.`);
+    return { refusal: refuse("state-unreadable", `could not read supervisor state for session ${sessionId}.`) };
   }
   const { state, effectiveSid } = resolved || {};
-  if (!state) return refuse("no-state", `no supervisor state for session ${sessionId}.`);
-  const audit = state.audit || {};
+  if (!state) return { refusal: refuse("no-state", `no supervisor state for session ${sessionId}.`) };
   const actor = typeof opts.actor === "string" && opts.actor.length > 0 ? opts.actor : envActor();
+  return { reason, audit: state.audit || {}, effectiveSid, actor };
+}
+
+// recordReviewedVerdictAcceptance(sessionId, { runId, reason, actor, reporter })
+//   -> { ok, code, message, verdict?, tr_ids? }
+function recordReviewedVerdictAcceptance(sessionId, opts = {}) {
+  const runId = opts.runId;
+  const p = prepare(sessionId, opts);
+  if (p.refusal) return p.refusal;
+  const { reason, audit, effectiveSid, actor } = p;
 
   const unsettled = unsettledStageRun(audit, runId);
   if (unsettled) {
@@ -127,9 +143,18 @@ function recordReviewedVerdictAcceptance(sessionId, opts = {}) {
   const terminal = lastTerminalRun(audit);
   if (!terminal) return refuse("no-terminal-run", "no terminal audit run exists to accept.");
   if (terminal.id !== runId) {
-    return refuse("not-last-terminal-run", `run id ${safeRunId(runId)} is not the last terminal run (${terminal.id ? safeRunId(terminal.id) : "<none>"}).`);
+    const confirmExit = isStageRun(ledgerRun(audit, runId))
+      ? " A plan stage's WARN / CONTINUE past its audit run cap is accepted by the stage's CONFIRM Allow " +
+        "when its CONFIRM gate is ON: rerun next-step --gate and follow its GATE_ACTION."
+      : "";
+    return refuse("not-last-terminal-run",
+      `run id ${safeRunId(runId)} is not the last terminal run (${terminal.id ? safeRunId(terminal.id) : "<none>"}).${confirmExit}`);
   }
-  if (!ACCEPTABLE_VERDICTS.includes(terminal.verdict)) {
+  const acceptable = isStageRun(terminal) ? STAGE_ACCEPTABLE_VERDICTS : ACCEPTABLE_VERDICTS;
+  if (!acceptable.includes(terminal.verdict)) {
+    if (terminal.verdict === "CONTINUE") {
+      return refuse("verdict-not-acceptable", "the last terminal run's verdict is CONTINUE — CONTINUE needs no acceptance.");
+    }
     const shown = terminal.verdict === null || terminal.verdict === undefined ? "<none>" : safeVerdict(terminal.verdict);
     return refuse("verdict-not-acceptable",
       `the last terminal run's verdict is ${shown}, not ${ACCEPTABLE_VERDICTS.join(" or ")} — nothing to accept.`);
@@ -147,4 +172,37 @@ function recordReviewedVerdictAcceptance(sessionId, opts = {}) {
   };
 }
 
-module.exports = { recordReviewedVerdictAcceptance, MIN_REASON_LEN };
+// recordStageCapAcceptance(sessionId, { step, runId, reason, actor, reporter }) -> same shape as above.
+// Matches the stage's own last run (lastStageRun), the run judgeStage and acceptedOnError read.
+function recordStageCapAcceptance(sessionId, opts = {}) {
+  const PCA = require("./pre-confirm-audit");
+  const runId = opts.runId;
+  const p = prepare(sessionId, opts);
+  if (p.refusal) return p.refusal;
+  const { reason, audit, effectiveSid, actor } = p;
+  const trigger = PCA.triggerForPlanStep(opts.step);
+  if (!trigger) return refuse("not-a-plan-stage", `step ${String(opts.step)} has no plan-stage audit trigger.`);
+  const tr = trigger.tr_id;
+  const count = audit.audit_run_counts && audit.audit_run_counts[tr];
+  if (!Number.isInteger(count) || count < PCA.AUDIT_RUN_CAP) {
+    return refuse("not-capped", `${tr} has not reached its audit run cap (${PCA.AUDIT_RUN_CAP}).`);
+  }
+  const last = PCA.lastStageRun(audit, tr);
+  if (!last || last.id !== runId) {
+    return refuse("not-last-stage-run", `run id ${safeRunId(runId)} is not the last ${tr} run (${last && last.id ? safeRunId(last.id) : "<none>"}).`);
+  }
+  if (last.outcome !== "terminal") return refuse("run-not-terminal", `run ${safeRunId(runId)} is not terminal.`);
+  if (!PCA.CAP_CONFIRM_VERDICTS.includes(last.verdict)) {
+    const shown = last.verdict === null || last.verdict === undefined ? "<none>" : safeVerdict(last.verdict);
+    return refuse("verdict-not-acceptable",
+      `run ${safeRunId(runId)}'s verdict is ${shown}, not ${PCA.CAP_CONFIRM_VERDICTS.join(" or ")}. ${describeAcceptanceCommand(runId)}`);
+  }
+  const { written } = record(effectiveSid, last, last.verdict, reason, actor, opts.reporter);
+  if (!written) return refuse("write-failed", "failed to write the acceptance record.");
+  return {
+    ok: true, code: "recorded", verdict: last.verdict, tr_ids: trIdsOf(last),
+    message: `${last.verdict} acceptance recorded for ${runId} (${tr} past its audit run cap, actor ${actor}).`,
+  };
+}
+
+module.exports = { recordReviewedVerdictAcceptance, recordStageCapAcceptance, MIN_REASON_LEN };

@@ -147,20 +147,59 @@ test("(e) an UNSETTLED record is dropped by every TR5 classifier", () => {
 });
 caseEnd();
 
-caseBegin("stage-acceptance-takes-warn-block-and-unsettled", "hooks/lib/null-freshness/acceptance.js");
-test("findStageAcceptance accepts WARN, BLOCK and UNSETTLED for the named run only", () => {
+caseBegin("stage-acceptance-takes-warn-block-continue-and-unsettled", "hooks/lib/null-freshness/acceptance.js");
+test("findStageAcceptance accepts WARN, BLOCK, CONTINUE and UNSETTLED for the named run only", () => {
   assert.strictEqual(typeof ACC.findStageAcceptance, "function", "findStageAcceptance is exported");
   const cases = [
     { name: "warn", verdict: "WARN", want: true },
     { name: "block", verdict: "BLOCK", want: true },
     { name: "unsettled", verdict: "UNSETTLED", want: true },
-    { name: "continue", verdict: "CONTINUE", want: false },
+    { name: "continue", verdict: "CONTINUE", want: true },
   ];
   for (const { name, verdict, want } of cases) {
     const audit = { block_overrides: [{ run_id: "run-0031", verdict, trigger_key: "k-tr3" }],
       ledger: [{ id: "run-0031", tr_ids: ["TR3"], outcome: "terminal", verdict }] };
     assert.strictEqual(Boolean(ACC.findStageAcceptance(audit, "TR3", "run-0031")), want, `${name}: same run`);
     assert.strictEqual(Boolean(ACC.findStageAcceptance(audit, "TR3", "run-0032")), false, `${name}: other run`);
+  }
+  // A CONTINUE record does not stand for a run whose own verdict is WARN.
+  const mismatch = { block_overrides: [{ run_id: "run-0031", verdict: "CONTINUE", trigger_key: "k-tr3" }],
+    ledger: [{ id: "run-0031", tr_ids: ["TR3"], outcome: "terminal", verdict: "WARN" }] };
+  assert.strictEqual(Boolean(ACC.findStageAcceptance(mismatch, "TR3", "run-0031")), false, "CONTINUE record on a WARN run");
+});
+caseEnd();
+
+caseBegin("stage-continue-is-accepted-tr5-continue-is-not", "hooks/lib/supervisor-block-override.js");
+test("a plan-stage CONTINUE last terminal run is recorded; a TR5 CONTINUE needs no acceptance", () => {
+  const sid = F.nextSid("cont");
+  F.seedSup(sid, [stageRun("run-0041", "CONTINUE", "TR2", "k-tr2-cont")]);
+  const r = SBO.recordReviewedVerdictAcceptance(sid, { runId: "run-0041", reason: REASON, actor: "tester" });
+  assert.ok(r.ok, `stage CONTINUE refused: ${show(r)}`);
+  assert.strictEqual(F.overrides(sid).at(-1).verdict, "CONTINUE");
+  assert.strictEqual(F.overrides(sid).at(-1).trigger_key, "k-tr2-cont");
+  const sid5 = F.nextSid("cont5");
+  F.seedSup(sid5, [F.terminalRun("run-0042", "CONTINUE", "TR5")]);
+  const r5 = SBO.recordReviewedVerdictAcceptance(sid5, { runId: "run-0042", reason: REASON, actor: "tester" });
+  assert.strictEqual(r5.code, "verdict-not-acceptable", show(r5));
+  assert.ok(/needs no acceptance/.test(r5.message), `message: ${r5.message}`);
+  assert.deepStrictEqual(F.overrides(sid5), []);
+});
+caseEnd();
+
+caseBegin("stage-continue-record-never-releases-tr5", "hooks/lib/null-freshness/acceptance.js");
+test("a plan-stage CONTINUE record is dropped by every TR5 classifier", () => {
+  assert.deepStrictEqual([...ACC.ACCEPTABLE_VERDICTS], ["WARN", "BLOCK"], "TR5 set unchanged");
+  const sid = F.nextSid("cont-tr5");
+  F.seedSup(sid, [stageRun("run-0051", "CONTINUE", "TR2", "k-tr2")]);
+  SBO.recordReviewedVerdictAcceptance(sid, { runId: "run-0051", reason: REASON, actor: "tester" });
+  const real = F.overrides(sid).at(-1);
+  const literal = { run_id: "run-0051", verdict: "CONTINUE", freshness_key: "fk", artifact_keys: {}, trigger_key: "k-tr2" };
+  const tr5Run = { id: "run-0051", verdict: "CONTINUE", freshness_key: (real && real.freshness_key) || "fk" };
+  for (const [name, rec] of [["literal", literal], ["recorded", real]]) {
+    assert.ok(rec, `${name}: a CONTINUE record exists`);
+    assert.strictEqual(ACC.normalizeAcceptance(rec), null, `${name}: normalizeAcceptance`);
+    assert.strictEqual(ACC.findAcceptance([rec], tr5Run), null, `${name}: findAcceptance`);
+    assert.strictEqual(ACC.acceptanceReleasesNonNull({ tr5Run, overrides: [rec], currentFk: tr5Run.freshness_key }), false, `${name}: release`);
   }
 });
 caseEnd();

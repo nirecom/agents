@@ -72,7 +72,7 @@ Protocol: `skills/_shared/worktree-transition.md`
 ### WE-11..WE-18 — Cleanup cascade
 Read `rules/ops.md` before the first destructive step (it is on-demand-only and never auto-injected): it owns the recovery-options-first decision path every deletion here must pass through.
 Read `$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after the settled delivery and inventory.
-If WE-11 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-worktrees auto-reclaims; follow WE-12 and continue to WE-16.
+If WE-11 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — follow WE-12 (prune, then one leftover cleanup; /sweep-worktrees reclaims what it leaves).
 Cleanup-active marker (WE-10b create → WE-18a delete) brackets the window so the
 supervisor OFF-block adaptive message fires only during WE-11..WE-18 — see cleanup-cascade.md.
 WE-10c releases the CodeGraph index lock immediately before WE-11 — see cleanup-cascade.md.
@@ -82,7 +82,7 @@ WE-10c releases the CodeGraph index lock immediately before WE-11 — see cleanu
 - Never merge, push, or emit the release-approval sentinel here — `/get-release-approval` and `/merge-to-main` own them.
 - AUTO_MERGE_PR=off (pull_request only): the human merges on the web; /merge-to-main never merges.
 - `git worktree remove --force` is prohibited; blocked at the `bash-guard` and `settings.json` deny layers, not by prose in `rules/ops.md`.
-- The worktree/workflow escape-hatch sentinel must NOT be emitted to unblock WE-11; /sweep-worktrees reclaims — proceed to WE-16 (WE-12 fallback).
+- The worktree/workflow escape-hatch sentinel must NOT be emitted to unblock WE-11; follow WE-12 — its leftover cleanup runs once, and /sweep-worktrees reclaims the rest.
 - `ExitWorktree` is called only at WE-9a — never before the WE-9 `cd`.
 - `git branch -D` (WE-15 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
 - CWD must remain in the linked worktree through WE-8; switch to main worktree only at WE-9.

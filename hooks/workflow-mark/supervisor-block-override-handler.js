@@ -3,8 +3,9 @@
 //
 //   echo "<<WORKFLOW_SUPERVISOR_VERDICT_ACCEPTED: <run-id> <reason>>>"
 // Records the user's reviewed acceptance of a BLOCK / WARN audit verdict (TR5 or a TR1-3 plan
-// stage), or of an unsettled TR1-3 run (#2853). settings.json `ask` puts
-// every emission through the permission dialog; this handler is the only write path. The retired
+// stage, which also takes CONTINUE), or of an unsettled TR1-3 run (#2853). settings.json `ask` puts
+// every emission through the permission dialog; this handler is the only sentinel write path; a
+// TR1-3 run past the audit run cap is also accepted by the CONFIRM Allow (confirm-cap-acceptance.js). The retired
 // WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED name records nothing: its ask row is gone, so honouring it
 // would let an un-dialogued emission write.
 

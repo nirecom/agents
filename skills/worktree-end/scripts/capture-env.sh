@@ -26,7 +26,10 @@ fi
 [[ "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]] || { printf "ERROR: invalid SESSION_ID '%s'\n" "$SESSION_ID" >&2; exit 1; }
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-: "${PLANS_DIR:?PLANS_DIR must be set}"
+if [[ -z "${PLANS_DIR:-}" ]]; then
+  PLANS_DIR="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir")" || { echo "capture-env: cannot resolve PLANS_DIR" >&2; exit 1; }
+  [[ -n "$PLANS_DIR" ]] || { echo "capture-env: cannot resolve PLANS_DIR" >&2; exit 1; }
+fi
 if ! CONTROL_DIR="$(node "$SCRIPT_CHECKOUT_ROOT/bin/workflow-control-dir" --session "$SESSION_ID" --for-write)"; then
   printf "ERROR: session control directory unresolved for '%s'\n" "$SESSION_ID" >&2
   exit 1

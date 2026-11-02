@@ -88,6 +88,7 @@ guard refuse every model write there without touching the artifact workflow.
 | `codex-context.md`, `codex-context.<fmt>.built`, `plan.jsonl`, `changed-files.txt` | `build-codex-context`, `run-codex-review-loop`, `review-plan-codex` | Wrappers |
 | `{complexity,outline,detail,write-tests,write-code}-signals.txt` | `normalize-judge-signals` | `derive-complexity-level`, handoff-record |
 | `finalize-state-<N>.json`, `finalize-binding-<N>.json`, `issue-close-outcome.json`, `session-close-gate.json`, `final-report-env.json` | Workers, `issue-close-write-outcome.js`, `capture-env.sh` | Close-family skills, stop-final-report-guard, session-close-build-env |
+| `cycle-archive/<N>/` | `hooks/workflow-state/cycle-state.js` (`CONTROL_FILES` owns which files move) when a re-init closes cycle `<N>` | Nobody automatically; kept as the closed cycle's evidence |
 | `supervisor-state.json` | `hooks/lib/supervisor-state-writer/` | Supervisor agents, `bin/supervisor-*`, sweep-supervisor-state |
 | `wi-checkpoint.json`, `wt-cleanup-active`, `workflow-init-aborted-*.md` | checkpoint.js, worktree-cleanup-marker.js, path-a-label-and-board.sh | The same modules, workflow-init |
 | `risk-signal.json`, `progress-pressure.json` | control-sidecar.js (`recordRiskSignal`; the progress request, `recordCompaction`, `bin/progress-file`) | progress-pressure.js, risk-signal.js, progress-nudge.js ([progress-file.md](progress-file.md#state-file)) |

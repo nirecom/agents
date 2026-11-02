@@ -38,6 +38,7 @@ const SAMPLE = {
   reset: { from_step: "detail", reason: "user asked" },
   // #2652: this kind's origin is a closed vocabulary (ORIGINS), so the row carries its own.
   state_handoff_record: { cls: "A", origin: "auto-record", at_step: "-", record_key: "voc:k1", summary: "s", pointer: "p" },
+  cycle_boundary: { closed_cycle: 1, reason: "reinit-entry" },
 };
 const KINDS = Object.keys(SAMPLE);
 const mk = (kind, over) => Object.assign({ kind: kind, provenance: "observed", origin: "vocab-test" }, SAMPLE[kind] || {}, over || {});
@@ -48,7 +49,7 @@ JS
 )
 
 case_begin "ev1-event-kinds-set-equality" "hooks/workflow-state/state-io/events.js"
-echo "== EV1: EVENT_KINDS is exactly the ten documented kinds, in both directions =="
+echo "== EV1: EVENT_KINDS is exactly the eleven documented kinds, in both directions =="
 if run_case "EV1/event-kinds-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
@@ -60,7 +61,7 @@ console.log([exported.length, missing.join(",") || "-", extra.join(",") || "-"].
 JS
 )
     nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
-    assert_eq "EV1/event-kinds-set-equality" "10 - -" "$NODE_OUT"
+    assert_eq "EV1/event-kinds-set-equality" "11 - -" "$NODE_OUT"
 fi
 case_end
 
@@ -231,7 +232,7 @@ if run_case "EV8/annotation-keys"; then
 const bad = [];
 const want = ["baseline_accept", "baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests", "hit_count", "hit_summary",
   "inherit_revert_reason", "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
-  "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
+  "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_missing_files", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
 if (exported.join(",") !== want.join(",")) bad.push("STEP_ANNOTATION_KEYS=" + exported.join(","));
 want.forEach((k) => {

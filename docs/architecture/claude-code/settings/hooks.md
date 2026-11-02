@@ -231,13 +231,20 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   [rules-injection.md](../rules-injection.md)
 - `stop-final-report-guard.js` (Stop) — two independent trigger lanes, so a skipped
   session-close is caught even when the session never reached the lane-A precondition:
+  - **Shared exits (#1192)** — both lanes first ask `stop-final-report-guard/exits.js`:
+    `WORKFLOW_OFF` for the session, then a session-close gate artifact whose `gate_action` is
+    `yield`. Either one ends every block of both lanes, lane A's heading and token checks
+    included; every block reason names them through the same `EXIT_HATCH_TEXT`.
   - **Lane A (format validation)** — fires when the Final Report env file exists; blocks
-    the turn if any required heading is missing from the rendered report.
+    the turn if the `## Final Report — <sid>` heading, any required heading, or a token
+    substitution is missing. The no-heading reason (#2337) appends the rendered Final Report
+    (`stop-final-report-guard/render-embed.js`) to re-emit verbatim; when the renderer fails,
+    the block degrades to carrying no embed.
   - **Lane B (state-driven)** — fires when the env file is absent but the workflow state has
     reached `pre_final_report_gate` (asked via `bin/workflow/next-step`): the close procedure
-    was never run, so the turn is blocked unconditionally. Three escape hatches: `WORKFLOW_OFF`
-    for the session, a session-close gate artifact whose `gate_action` is `yield`, and any
-    failure to consult next-step (fail-open).
+    was never run, so the turn is blocked unconditionally. Besides the shared exits, it ends
+    when `pre_final_report_gate` is marked complete, and on any failure to consult next-step
+    (fail-open).
   `stop-premature-stop-guard.js` delegates to this hook rather than competing with it: when
   next-step reports `pre_final_report_gate`, it exits 0 and lets lane B own the message.
 - `check-cross-platform.js` (PreToolUse, matcher: `Bash`) — blocks `git commit` when

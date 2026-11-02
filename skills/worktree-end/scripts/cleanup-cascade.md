@@ -22,7 +22,10 @@ Run immediately before WE-11 — the daemon holds the index DB open, and on Wind
 `git -C <main> worktree remove <path>` (never `--force`). Try once only — do not retry, and do NOT emit WORKTREE_OFF; on failure follow WE-12.
 
 ## WE-12 — On WE-11 failure (conditional)
-If WE-11 (git worktree remove) exits non-zero (EPERM, busy, not-empty, any error): print stderr warning that /sweep-worktrees will reclaim automatically; skip WE-14 (orphan-dir cleanup) and WE-15 (branch -D); proceed to WE-16. (WE-14 skipped: dir occupied — self-resolves at next sweep. WE-15 skipped: git cascade rule blocks `branch -D` while worktree registered.) Never emit WORKTREE_OFF and never use `--force` to force removal — /sweep-worktrees salvages the leftover worktree on its next run.
+If WE-11 (git worktree remove) exits non-zero (EPERM, busy, not-empty, any error): run WE-13, then skip WE-14 and run once `node "$AGENTS_MAIN_ROOT/hooks/cleanup-orphan-dir.js" --force-if-not-registered --expect-main-root <main> <path>` — it removes the leftover only when its gitlink proves it an unregistered worktree of `<main>` (#2875).
+- On success: proceed to WE-15.
+- On refusal (CWD lock, nested `.git`, …): print a stderr warning that /sweep-worktrees will reclaim the leftover, skip WE-15 (`branch -D` stays blocked while git still sees the worktree), and proceed to WE-16.
+Never emit WORKTREE_OFF and never use `--force` to force removal — /sweep-worktrees and the next-step repo-dir guard remain the backstop.
 
 ## WE-13 — git worktree prune
 `git -C <main> worktree prune`
