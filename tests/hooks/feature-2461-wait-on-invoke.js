@@ -7,7 +7,7 @@
 // JEV_ADVICE=wait-on-invoke plus a fixed JEV_ADVICE_REASON only on a confident yes; a step
 // already advised in an earlier turn is never advised again; --jev-cache-only reads the cache.
 // TL3 gap: the main conversation reading JEV_ADVICE and ending its turn instead of invoking the
-// next skill. Mitigation: the CLAUDE.md workflow line; the real next-step CLI runs here.
+// next skill. Mitigation: the instruction JEV_ADVICE_REASON carries; the real next-step CLI runs here.
 "use strict";
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
@@ -277,5 +277,41 @@ test("an untrusted transcript path: next-step neither spawns the child nor asks 
   assert.deepStrictEqual(advice(o), NONE);
   assert.strictEqual(childCalls(s), 0);
   assert.strictEqual(mock.count("systemone"), 0);
+});
+caseEnd();
+
+caseBegin("reason-carries-instruction", "bin/workflow/lib/next-step/wait-on-invoke.js");
+// JEV_ADVICE_REASON itself tells the model not to invoke NEXT_SKILL, to report and to end the
+// turn, around the key's fixed text from continuation.reasonOf (shared with the stop guard).
+const reasonOf = require(F.lib("hooks/lib/jev/adapters/continuation.js")).reasonOf;
+for (const key of ["asked-user", "user-said-wait"]) {
+  test(`${key}: the reason holds the instruction and the key's fixed text, on one shell-safe line`, () => {
+    const s = started(`instr-${key}`);
+    mock.conv(0.02, { [key]: 0.97 });
+    const o = ns(s);
+    assert.strictEqual(o.status, 0, o.stderr);
+    assert.strictEqual(o.kv("JEV_ADVICE"), "wait-on-invoke", "premise: advice given");
+    const raw = o.kv("JEV_ADVICE_REASON");
+    assert.strictEqual(o.all("JEV_ADVICE_REASON").length, 1);
+    assert.ok(/^'[^'\r\n]+'$/.test(raw), `one single-quoted value with no inner quote (got ${raw})`);
+    const reason = raw.slice(1, -1);
+    assert.ok(reason.includes(reasonOf([key])), `contains the fixed text "${reasonOf([key])}" (got ${reason})`);
+    assert.ok(reason.includes("NEXT_SKILL"), `names NEXT_SKILL (got ${reason})`);
+    assert.ok(/end the turn/i.test(reason), `says to end the turn (got ${reason})`);
+    for (const other of ["asked-user", "reported-blocker", "user-said-wait"].filter((k) => k !== key)) {
+      assert.ok(!reason.includes(reasonOf([other])), `omits the fixed text of ${other}`);
+    }
+  });
+}
+test("ACTION and NEXT_SKILL are those of the JEV=off output when the advice is present", () => {
+  const s = started("instr-action");
+  mock.conv(0.02, { "asked-user": 0.97 });
+  const o = ns(s);
+  assert.strictEqual(o.kv("JEV_ADVICE"), "wait-on-invoke", "premise: advice given");
+  const off = ns(s, [], { JEV: "off" });
+  assert.strictEqual(o.kv("ACTION"), "invoke");
+  assert.strictEqual(o.kv("ACTION"), off.kv("ACTION"));
+  assert.strictEqual(o.kv("NEXT_SKILL"), off.kv("NEXT_SKILL"));
+  assert.notStrictEqual(o.kv("NEXT_SKILL"), "<none>");
 });
 caseEnd();
