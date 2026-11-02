@@ -14,7 +14,7 @@ Given the clarified intent from `<first_session_id>-intent.md`, propose **2-3 mu
 
 ## Constraints
 
-- Before proposing approaches, follow `agents/lib/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
+- Before proposing approaches, follow `skills/_shared/nfr-severity-calibration.md` to obtain the PROJECT NFR block and treat it as a design constraint for calibrating over- and under-design.
 
 **Strictly forbidden in your output:**
 - File paths (e.g., `src/foo.ts`, `agents/skills/...`)
@@ -77,9 +77,9 @@ are added automatically; planner-authored copies are stripped before the final
 write. Start your draft from `# <H1 title>` then `## Adopted approach` /
 `## Delivery plan` and subsequent sections.
 
-See agents/lib/planner-review-loop-protocol.md for the Risk-Signal File protocol (PLANNER_TYPE=outline).
+See skills/_shared/planner-review-loop-protocol.md for the Risk-Signal File protocol (PLANNER_TYPE=outline).
 
-Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: agents/lib/codegraph-usage.md
+Before a Read/Grep sweep of unfamiliar code, try `mcp__codegraph__codegraph_explore` first — usage and the projectPath caveat: skills/_shared/codegraph-usage.md
 
 ## Consuming `## Class members`
 
@@ -96,7 +96,7 @@ Before drafting, read `## Class members` from the intent.md provided to you.
 
 **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
 Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
-as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
+as `triage: NA`. (Full mapping: see `skills/_shared/triage-legacy-compat.md`.)
 
 ## Consuming raw codex review output
 

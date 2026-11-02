@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/agents/feature-2814-review-criteria-consumers.sh
-# Tests: agents/lib/nfr-severity-calibration.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/plan-security-reviewer.md, agents/test-reviewer.md, agents/security-scanner.md, skills/_shared/severity.md, skills/issue-create/SKILL.md, skills/_shared/test-design.md, skills/review-tests/SKILL.md, rules/mid-workflow-findings.md, rules/github-issues.md, .github/labels.yml, bin/github-issues/issue-create.sh, skills/_shared/codex-review-loop/upstream-inconsistency-pause.md, agents/supervisor-audit.md, agents/supervisor-audit/course-correction-lookup.md
+# Tests: skills/_shared/nfr-severity-calibration.md, agents/detail-reviewer.md, agents/outline-reviewer.md, agents/plan-security-reviewer.md, agents/test-reviewer.md, agents/security-scanner.md, skills/_shared/severity.md, skills/issue-create/SKILL.md, skills/_shared/test-design.md, skills/review-tests/SKILL.md, rules/mid-workflow-findings.md, rules/github-issues.md, .github/labels.yml, bin/github-issues/issue-create.sh, skills/_shared/codex-review-loop/upstream-inconsistency-pause.md, agents/supervisor-audit.md, agents/supervisor-audit/course-correction-lookup.md
 # Tags: TL1, static, review-criteria, severity, upstream-inconsistency, course-correction, issue-2814, scope:issue-specific, pwsh-not-required
 # #2814 reopen T1/T2/T7 (static part): the CC reviewers fetch the review criteria block through
 # the calibration doc; severity has one definition (skills/_shared/severity.md) that every former
@@ -17,16 +17,16 @@ unset CLAUDE_CODE_SESSION_ID
 cd "$CO_ROOT" || exit 1
 
 R="$SCRIPT_CHECKOUT_ROOT"
-CALIB="agents/lib/nfr-severity-calibration.md"
+CALIB="skills/_shared/nfr-severity-calibration.md"
 SEV_REF="skills/_shared/severity.md"
 ck() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1" "want=$(printf '%q' "$2") got=$(printf '%q' "${3:0:300}")"; fi; }
 # has <rel> <text> — yes / no / missing (a missing file never passes a "no" check).
 has() { if [ ! -f "$R/$1" ]; then printf missing; elif grep -q -F -- "$2" "$R/$1"; then printf yes; else printf no; fi; }
 
-case_begin "reviewers-fetch-criteria-via-calibration" "agents/lib/nfr-severity-calibration.md"
+case_begin "reviewers-fetch-criteria-via-calibration" "skills/_shared/nfr-severity-calibration.md"
 for a in detail-reviewer outline-reviewer plan-security-reviewer test-reviewer security-scanner; do
   ck "$a: fetches the review criteria block through the calibration doc" "yes" \
-    "$(has "agents/$a.md" 'Fetch the review criteria block by the reviewer steps of `agents/lib/nfr-severity-calibration.md` and apply it.')"
+    "$(has "agents/$a.md" 'Fetch the review criteria block by the reviewer steps of `skills/_shared/nfr-severity-calibration.md` and apply it.')"
 done
 ck "calibration: names bin/review-criteria-block" "yes" "$(has "$CALIB" 'bin/review-criteria-block')"
 ck "calibration: still names bin/project-nfr-block" "yes" "$(has "$CALIB" 'bin/project-nfr-block')"
