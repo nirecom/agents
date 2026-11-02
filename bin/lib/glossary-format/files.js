@@ -5,7 +5,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const { parseGlossaryFile, checkGlossaryFile } = require("./entries");
+const { parseGlossaryFile, checkGlossaryFile, entryFields } = require("./entries");
+const { shortFormConflicts } = require("../../../hooks/lib/glossary-term");
 
 const GLOSSARY_DIR = "docs/glossary";
 const NAME_RE = /^docs\/glossary\/(user|internal)(?:-([a-z])-([a-z]))?\.md$/;
@@ -134,10 +135,11 @@ function fileForTerm(paths, category, term) {
 }
 
 // check-files <label> <path> [<label> <path> ...]: per-file form, name and range
-// checks plus the cross-file duplicate and file-set checks. BLOCK lines on stdout.
+// checks plus the cross-file duplicate, Short forms overlap and file-set checks. BLOCK lines on stdout.
 function checkFiles(pairs) {
   const blocks = [];
   const seen = new Map();
+  const records = [];
   for (const { label, file } of pairs) {
     const text = fs.readFileSync(file, "utf8");
     for (const r of checkGlossaryFile(text)) blocks.push(label + ": " + r);
@@ -147,7 +149,13 @@ function checkFiles(pairs) {
       const key = e.term.toLowerCase();
       if (seen.has(key) && seen.get(key) !== label) blocks.push("term '" + e.term + "' is defined in both " + seen.get(key) + " and " + label);
       else seen.set(key, label);
+      records.push({ term: e.term, shortForms: entryFields(e).shortForms, label });
     }
+  }
+  for (const c of shortFormConflicts(records)) {
+    const at = records.find((r) => r.term === c.term);
+    blocks.push(at.label + ": '" + c.term + "' Short forms '" + c.spelling + "' overlaps '" + c.other +
+      "' (a headword or another short form)");
   }
   blocks.push(...checkFileSet(pairs.map((p) => p.label)));
   return blocks;

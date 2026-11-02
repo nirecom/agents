@@ -46,8 +46,8 @@ caseBegin("prose-context-table", "bin/lib/glossary-drift.js");
 test("prose-context-table", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/prose").run(F)));
 caseEnd();
 
-caseBegin("prose-homographs-and-background-words", "bin/lib/glossary-drift.js");
-test("prose-homographs-and-background-words", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/prose").runHomographs(F)));
+caseBegin("prose-short-forms-and-background-words", "bin/lib/glossary-drift.js");
+test("prose-short-forms-and-background-words", () => noNewFailures(F.failureCount, () => require("./feature-2763-glossary-drift-contexts/prose").runShortForms(F)));
 caseEnd();
 
 caseBegin("acceptance-through-the-cli", "bin/check-glossary-drift");

@@ -11,15 +11,15 @@ const ALL_CAPS_WORD_RE = /^[A-Z][A-Z0-9]*$/;
 
 const listOf = (v) => (Array.isArray(v) ? v.map((s) => String(s)).filter((s) => s !== "") : []);
 
-// termRecord(t) -> { term, identifiers, homographs }; a string is a record with no fields.
+// termRecord(t) -> { term, identifiers }; a string is a record with no Identifier spellings.
 function termRecord(t) {
   if (t !== null && typeof t === "object") {
-    return { term: String(t.term == null ? "" : t.term).trim(), identifiers: listOf(t.identifiers), homographs: listOf(t.homographs) };
+    return { term: String(t.term == null ? "" : t.term).trim(), identifiers: listOf(t.identifiers) };
   }
-  return { term: String(t == null ? "" : t).trim(), identifiers: [], homographs: [] };
+  return { term: String(t == null ? "" : t).trim(), identifiers: [] };
 }
 
-// mergeRecords(terms) -> Map term -> record; the records of one term pool their fields.
+// mergeRecords(terms) -> Map term -> record; the records of one term pool their Identifier spellings.
 function mergeRecords(terms) {
   const out = new Map();
   for (const t of terms || []) {
@@ -28,7 +28,6 @@ function mergeRecords(terms) {
     const prev = out.get(r.term);
     if (!prev) { out.set(r.term, r); continue; }
     prev.identifiers = [...new Set(prev.identifiers.concat(r.identifiers))];
-    prev.homographs = [...new Set(prev.homographs.concat(r.homographs))];
   }
   return out;
 }
@@ -79,8 +78,8 @@ function addTo(map, key, cand) {
 }
 
 // -> { exact, plain, identFolded, identRaw, declared, maxLen }: each map is key -> { spellings,
-// candidates }. A prose candidate is { term, bounds, seps, homographs }; an identifier candidate is
-// { term, raw, bounds: { raw, folded }, seps, declared, spelling, homographs }. Terms sharing a key
+// candidates }. A prose candidate is { term, bounds, seps }; an identifier candidate is
+// { term, raw, bounds: { raw, folded }, seps, declared, spelling }. Terms sharing a key
 // are all kept, sorted, for lookup to choose from. terms: strings or term records.
 function indexTerms(terms) {
   const records = mergeRecords(terms);
@@ -96,7 +95,7 @@ function indexTerms(terms) {
     const folded = words.map(singular);
     const cand = {
       term: owner.term, raw: words.join(""), bounds: { raw: boundsOf(words), folded: boundsOf(folded) },
-      seps: separatorsOf(spelling), declared: owner.declared, spelling, homographs: new Set(records.get(owner.term).homographs),
+      seps: separatorsOf(spelling), declared: owner.declared, spelling,
     };
     addTo(identRaw, cand.raw, cand);
     addTo(identFolded, folded.join(""), cand);
@@ -107,7 +106,7 @@ function indexTerms(terms) {
     if (r.term.includes("_")) continue;
     const parts = normalizeTerm(r.term).split(" ");
     if (!ASCII_NORM_RE.test(parts.join(" "))) continue;
-    addTo(plain, parts.join(""), { term: r.term, bounds: boundsOf(parts), seps: separatorsOf(r.term), homographs: new Set(r.homographs) });
+    addTo(plain, parts.join(""), { term: r.term, bounds: boundsOf(parts), seps: separatorsOf(r.term) });
     maxLen = Math.max(maxLen, parts.join("").length);
   }
   for (const map of [plain, identFolded, identRaw]) {
