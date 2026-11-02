@@ -68,16 +68,18 @@ st() { run_with_timeout 30 node "$T/st.js" "$AGENTS_N" "$@" 2>/dev/null | tr -d 
 
 # snap <sid> — the run_tests fields an accept writes; equal before/after means "state unchanged".
 snap() {
-  printf 'status=%s basis=%s reason=%s runtimes=%s' "$(st field "$1" run_tests status)" \
+  printf 'status=%s basis=%s reason=%s runtimes=%s missing=%s' "$(st field "$1" run_tests status)" \
     "$(st field "$1" run_tests completion_basis)" "$(st field "$1" run_tests unrunnable_accept_reason)" \
-    "$(st field "$1" run_tests unrunnable_runtimes)"
+    "$(st field "$1" run_tests unrunnable_runtimes)" "$(st field "$1" run_tests unrunnable_missing_files)"
 }
 
-# run_hook <sid> <exit> <stdout> — the real workflow-run-tests.js on a run-all PostToolUse.
+# run_hook <sid> <exit> <stdout> [command] — the real workflow-run-tests.js on a run-all
+# PostToolUse (or on [command], e.g. $WORKER_CMD for the worker-dispatch stdout route).
 run_hook() {
-  node "$T/payload.js" run "$RUNALL_CMD" "$2" "$3" "$1" "$AGENTS_N" >"$T/in-run.json"
+  node "$T/payload.js" run "${4:-$RUNALL_CMD}" "$2" "$3" "$1" "$AGENTS_N" >"$T/in-run.json"
   run_with_timeout 30 node "$RUN_HOOK" <"$T/in-run.json" >/dev/null 2>&1 || true
 }
+WORKER_CMD="node $AGENTS_N/bin/worker-dispatch.js test-runner $AGENTS_N $T/s-worker.json"
 
 # mark <sid-or-empty> <command> — the real workflow-mark.js; stdout and stderr together.
 mark() {
@@ -125,7 +127,33 @@ PASS: alpha
 Results: PASS=5  FAIL=0  SKIP=0  UNRUNNABLE=0  TIMEOUT=0
 RUN_CONTRACT: PASS=5 FAIL=0 SKIP=0 EXECUTED=5 UNRUNNABLE=0 TIMEOUT=0"
 
-# setup_run <sid> <unrun|legacy|fail|nocontract|green> — write_tests settled, then one real run.
+# #2646: every selected test is a file that no longer exists — run-all exits 77, nothing ran.
+OUT_ALL_MISSING="UNRUNNABLE: tests/gone.sh (missing: test file)
+UNRUNNABLE: tests/hooks/gone2.js (missing: test file)
+
+Results: PASS=0  FAIL=0  SKIP=0  UNRUNNABLE=2  TIMEOUT=0
+RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=2 TIMEOUT=0"
+
+# One missing runtime plus one missing test file; exit 77.
+OUT_MIXED="UNRUNNABLE: tests/p.Tests.ps1 (missing: Pester>=5.0)
+UNRUNNABLE: tests/gone.sh (missing: test file)
+Missing runtimes: Pester>=5.0 (1 file)
+
+Results: PASS=0  FAIL=0  SKIP=0  UNRUNNABLE=2  TIMEOUT=0
+RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=2 TIMEOUT=0"
+
+# The worker-dispatch rendering of a run with two missing files and one missing runtime.
+OUT_WORKER_MISSING="RUN_CONTRACT: PASS=0 FAIL=0 SKIP=0 EXECUTED=0 UNRUNNABLE=3 TIMEOUT=0
+status: unrunnable
+exit_code: 0
+duration_seconds: 4
+summary: 'Missing test files: 2; Missing runtimes: Pester>=5.0 (1 file); PASS=0 FAIL=0 SKIP=0 UNRUNNABLE=3'
+failing_tests: []
+log_tail: |
+  UNRUNNABLE: tests/gone.sh (missing: test file)"
+
+# setup_run <sid> <kind> — write_tests settled, then one real run. Kinds: unrun legacy fail
+# nocontract green allmissing mixed worker-missing.
 setup_run() {
   st seed "$1" write_tests complete >/dev/null
   case "$2" in
@@ -134,5 +162,8 @@ setup_run() {
     fail) run_hook "$1" 1 "$OUT_FAIL_UNRUN" ;;
     nocontract) run_hook "$1" 0 "$OUT_NOCONTRACT" ;;
     green) run_hook "$1" 0 "$OUT_GREEN" ;;
+    allmissing) run_hook "$1" 77 "$OUT_ALL_MISSING" ;;
+    mixed) run_hook "$1" 77 "$OUT_MIXED" ;;
+    worker-missing) run_hook "$1" 0 "$OUT_WORKER_MISSING" "$WORKER_CMD" ;;
   esac
 }

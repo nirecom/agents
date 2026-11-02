@@ -42,6 +42,7 @@ function demotionMessage(reason, contract) {
   if (reason === "contract-unrunnable") {
     return { head, detail: lead + `Selected tests marked UNRUNNABLE: ${contract.unrunnable}. ` +
       "Install the runtimes listed on the `Missing runtimes:` output line and run again. " +
+      "An `UNRUNNABLE: <path> (missing: test file)` line is a wrong test path and cannot be accepted: fix the path and run again. " +
       `If a runtime cannot be installed, accept this run only with ${UNRUNNABLE_ACCEPT_SENTINEL_FORM}.` };
   }
   if (reason === "contract-legacy-shape") {
