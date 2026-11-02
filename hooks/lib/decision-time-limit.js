@@ -18,6 +18,9 @@ const { ask } = require("./permission-decision-output");
 // Not longer: a check that never fits (a 750-file commit scan) makes the user wait this long for the ask.
 // Measurements: https://github.com/nirecom/agents/issues/2676#issuecomment-6288155952
 const DECISION_TIME_LIMIT_MS = 10000;
+// A caller with its own longer outer timeout (the commit-push worker's gate child, #2849) widens
+// the limit through this env; the hook path never sets it and keeps DECISION_TIME_LIMIT_MS.
+const DECISION_LIMIT_ENV = "WORKFLOW_DECISION_TIME_LIMIT_MS";
 const TIMING_LOG_NAME = "hook-decision-timing.jsonl";
 const TIMING_LOG_MAX_WAIT_MS = 200;
 
@@ -41,11 +44,21 @@ function writeTimingLog(timing) {
   } catch { /* the log is diagnostic only */ }
 }
 
-function armDecisionTimeLimit({ hookName, now = Date.now, uptimeSec = process.uptime, write, exit } = {}) {
+// Digits only and a safe integer; anything else keeps the default.
+function resolveDecisionLimitMs(env) {
+  const raw = env ? env[DECISION_LIMIT_ENV] : undefined;
+  if (typeof raw !== "string" || !/^[0-9]+$/.test(raw)) return DECISION_TIME_LIMIT_MS;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value > 0 ? value : DECISION_TIME_LIMIT_MS;
+}
+
+function armDecisionTimeLimit({ hookName, now = Date.now, uptimeSec = process.uptime, write, exit, env = process.env } = {}) {
   if (armed) return;
-  const deadline = createDeadline({ hookTimeoutMs: DECISION_TIME_LIMIT_MS, safetyMarginMs: 0, now, uptimeSec });
+  const limitMs = resolveDecisionLimitMs(env);
+  const deadline = createDeadline({ hookTimeoutMs: limitMs, safetyMarginMs: 0, now, uptimeSec });
   armed = {
     hookName: String(hookName || "hook"),
+    limitMs,
     deadline,
     asked: false,
     // A synchronous write: process.exit right after an asynchronous one could drop the ask.
@@ -62,15 +75,20 @@ const isDecisionTimeLimitArmed = () => armed !== null;
 // Infinity while unarmed: an unarmed process has no decision time limit.
 const remainingDecisionMs = () => (armed ? armed.deadline.remainingMs() : Infinity);
 
-function limitReason(checkName) {
+// message, when given, is the caller's own wording of what did not finish (#2849).
+function limitReason(checkName, message) {
   const hookName = armed ? armed.hookName : "hook";
-  return `${hookName}: decision time limit (${DECISION_TIME_LIMIT_MS} ms) reached before ${checkName} finished; asking instead of deciding`;
+  const limitMs = armed ? armed.limitMs : DECISION_TIME_LIMIT_MS;
+  if (typeof message === "string" && message !== "") {
+    return `${hookName}: ${message} (${limitMs} ms); asking instead of deciding`;
+  }
+  return `${hookName}: decision time limit (${limitMs} ms) reached before ${checkName} finished; asking instead of deciding`;
 }
 
 // Writes the ask and ends the process. Only reachable while armed.
-function askAndExit(checkName) {
+function askAndExit(checkName, message) {
   armed.asked = true;
-  armed.write(JSON.stringify(ask(limitReason(checkName))) + "\n");
+  armed.write(JSON.stringify(ask(limitReason(checkName, message))) + "\n");
   armed.exit(0);
 }
 
@@ -81,6 +99,8 @@ function checkDecisionTime(checkName) {
 
 module.exports = {
   DECISION_TIME_LIMIT_MS,
+  DECISION_LIMIT_ENV,
+  resolveDecisionLimitMs,
   armDecisionTimeLimit,
   isDecisionTimeLimitArmed,
   remainingDecisionMs,

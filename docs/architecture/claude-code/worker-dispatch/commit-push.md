@@ -86,11 +86,18 @@ because that is the case where continuing would have been irreversible.
 means it died before deciding — silence, not permission. Permission is exactly
 one token, `approve`: `deny`, `ask`, a typo, or a decision this worker predates
 are all refusals, because an allowlist of one cannot be widened by anything the
-gate learns to say later.
+gate learns to say later. (The gate's `allow` spelling is also accepted; an
+`ask` verdict is reported as a refusal that says the gate asked.) When the legacy
+`decision` and `hookSpecificOutput.permissionDecision` disagree, the non-allow
+one wins.
 
 ## Gate env resolution
 
-The six workflow env vars (`GATE_ENV_SCOPE` in `gate.js`) are resolved to
+The seven names of `GATE_ENV_SCOPE` in `gate.js` are the six workflow env vars
+below plus `WORKFLOW_DECISION_TIME_LIMIT_MS`, a fixed value (`GATE_TIMEOUT_MS`
+minus 10 s) that widens the gate child's decision time limit from the hook
+path's 10 s so a large staged set is not cut off
+([hook-timeout.md](../settings/hook-timeout.md#decision-time-limit)). The six are resolved to
 concrete values and passed EXPLICITLY through `extraEnv` — never read from
 `process.env`. They are also in the entry's `envPassthrough`, which permits
 silent inheritance, and an inherited `WORKFLOW_STATE_DIR` points the gate

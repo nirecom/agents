@@ -6,6 +6,8 @@ const { hasStagedDocChanges } = require("../lib/staged-doc-changes");
 const { SESSION_ID_VALID_RE } = require("../workflow-state/state-io");
 
 const GATES_SCRIPT = path.join(__dirname, "..", "..", "bin", "review-doc-gates");
+// The ask at the decision time limit names this gate, not the wrapper's generic "bash ..." (#2849).
+const GATES_TIMEOUT_MESSAGE = "review-doc-gates did not finish within the decision time limit";
 
 /**
  * Evaluate the review_docs step. Returns
@@ -28,6 +30,7 @@ function checkReviewDocs(step, stepState, opts) {
   const res = spawnSync("bash", args, {
     cwd: repoDir,
     encoding: "utf8",
+    limitMessage: GATES_TIMEOUT_MESSAGE,
   });
 
   // Infra failure (bash/git missing, spawn error): fail closed with a reason.

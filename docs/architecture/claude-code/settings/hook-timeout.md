@@ -39,6 +39,8 @@ The `timeout` value of each registration is in `settings.json`; `tests/hooks/fea
 - **Why ask**: the user sees one dialog naming the slow check, instead of a cancelled hook whose deny silently vanishes or whose allow silently becomes a prompt.
 - **Known limit**: while the limit is armed, a child's stdio goes through temporary files (a grandchild holding a pipe would keep the call from returning). Writing the input file and reading the output back run outside the child's `timeout`; the read is bounded by `maxBuffer`, and a call that comes back with no time left asks. A synchronous write or read that stalls on a slow disk is not interrupted; the hook `timeout` and the cancellation notice below cover that case.
 - **Known limit**: while the limit is armed, a caller's own short-timeout fallback (2-5 s, fail-open paths included) no longer fires; a hung child asks once the time left runs out instead. A fallback that decided allow on its own timeout would skip the ask (security finding N1).
+- **Fail-open exception**: a caller passes `failOpenOnTimeout` to `limited-child-process.js` to keep its own timeout while the limit is armed. Only `hooks/workflow-gate/code-size-gate.js` declares it: its review is advisory, so a hung `bin/review-code-size` fails open after 3 s instead of spending the decision budget (#2781). Every other caller keeps the ask.
+- **Override**: `WORKFLOW_DECISION_TIME_LIMIT_MS` replaces the 10 s value (`resolveDecisionLimitMs(env)`). The commit-push worker sets it for its gate child to `GATE_TIMEOUT_MS` minus 10 s, so a commit's doc and code-size checks are not cut at the hook path's limit (#2849). The hook path sets nothing; a hung check still asks there.
 
 ## Decision timing log
 
