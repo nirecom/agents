@@ -221,12 +221,7 @@ tlr_list_dir() {
   [ "${#TLR_LIST[@]}" -eq 0 ] || printf '%s\n' "${TLR_LIST[@]}"
 }
 tlr_list_dir_into() {
-  local dir="$1" e=0 i rc pat n f seen=$'\n' opts IFS=''
-  # A supported entry wins over a recognized-only one (as in tlr_match), so its files are not listed here.
-  if [ "$2" = recognized-only ]; then
-    tlr_list_dir_into "$dir" supported || return
-    for f in "${TLR_LIST[@]}"; do seen="$seen$f"$'\n'; done
-  fi
+  local dir="$1" e=0 i rc pat n f opts IFS='' TLR_ID TLR_STATUS
   TLR_LIST=()
   # A table `*` is one or more of any character, a leading dot included (a dot-prefixed test name still matches).
   opts="$(shopt -p extglob dotglob)" || true
@@ -245,8 +240,8 @@ tlr_list_dir_into() {
       [ "$n" -gt 1 ] && pat="@($pat)"
       for f in "$dir"/$pat; do
         [ -f "$f" ] || continue
-        case "$seen" in *$'\n'"$f"$'\n'*) continue ;; esac
-        seen="$seen$f"$'\n'
+        # Only the file's tlr_match winner lists it, so each file appears once, under the entry that owns it.
+        tlr_match "$f" && [ "$TLR_ID" = "${_TLR_E_ID[$e]}" ] || continue
         TLR_LIST+=("$f")
       done
     fi

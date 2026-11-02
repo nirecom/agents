@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "headerMaxLines": 10,
+  "tableDrivenFallbackEntry": "win-b",
+  "entries": [
+    {
+      "id": "win-a",
+      "status": "supported",
+      "patterns": ["*.wn"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".wn" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": "*.wn" },
+      "note": "first and supported: it wins x*.wn; it has no part, so the later entry's part must not list x*.wn"
+    },
+    {
+      "id": "win-b",
+      "status": "supported",
+      "patterns": ["x*.wn", "*.wb"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".wb" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": { "file": "bin/lib/test-retire-predicate/case-parser.sh", "function": "trp_parse_case_markers" },
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "tests/lib/harness\\.sh" },
+      "diagnostics": { "nameLabel": "*.wb" },
+      "note": "overlaps win-a on x*.wn but loses it; owns *.wb"
+    },
+    {
+      "id": "rec-t",
+      "status": "recognized-only",
+      "patterns": ["*.rt"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".rt" },
+      "siblingSuiteDir": false,
+      "header": null,
+      "launch": null,
+      "caseMarkerReader": null,
+      "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
+      "helperLibrary": null,
+      "diagnostics": {},
+      "note": "has a detector but loses *.rt to the later supported win-s"
+    },
+    {
+      "id": "win-s",
+      "status": "supported",
+      "patterns": ["*.rt"],
+      "selfIdentifying": false,
+      "nameStrip": { "prefix": "", "suffix": ".rt" },
+      "siblingSuiteDir": false,
+      "header": { "commentPrefix": "#" },
+      "launch": { "unit": "file", "requires": null, "prepare": null, "command": ["bash", "{path}"], "timeoutSeconds": null, "suiteRootMarker": null },
+      "caseMarkerReader": null,
+      "tableDrivenDetector": null,
+      "helperLibrary": null,
+      "diagnostics": { "nameLabel": "*.rt" },
+      "note": "supported, later than rec-t: wins *.rt, and has no part"
+    }
+  ]
+}
