@@ -64,6 +64,10 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: glossary drift check が identifier context 以外として扱う文脈。prose の見出し語と照合し、複数形と見出し行の大小だけを同じ語として許容する。
 - **Related**: [architecture/claude-code/glossary-check/matching-rules.md](../architecture/claude-code/glossary-check/matching-rules.md)
 
+### review criteria
+- **Definition**: plan review の 4 format、code review、CC fallback reviewer が共通に参照する review 基準。範囲、網羅、報告の最低条件、severity の定義、NFR の遵守を 1 か所に置く。
+- **Related**: [agents/lib/review-criteria.md](../../agents/lib/review-criteria.md)
+
 ### review round
 
 - **Definition**: One reviewer run of the shared codex review loop; CAP is the normal ceiling on rounds, and MAX_EXTENSIONS is the extra rounds allowed only while HIGH concerns remain.
@@ -117,3 +121,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 ### test case reader
 - **Definition**: The per-language part that reads one test file and returns one record per case (name, target, line range, malformed reason); the sweep, the checks, and the retire judgment get these records through the common window, which adds each case's deps.
 - **Related**: [architecture/claude-code/test-language-registry.md](../architecture/claude-code/test-language-registry.md)
+
+### user course correction
+- **Definition**: 承認済みの上位 plan に無い事実、または上位 plan と矛盾する事実をユーザーが述べて、作業の方向を修正させる発言。CLI が transcript から写して記録にする。記録は plan の本文の外に置き、承認の hash を変えない。
+- **Related**: [skills/_shared/priority-hierarchy/core.md](../../skills/_shared/priority-hierarchy/core.md)

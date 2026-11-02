@@ -9,8 +9,11 @@ CLI: `bin/review-loop-upstream` (`list` / `decide` / `pick-upstream` / `return` 
 - On every non-APPROVED round (exit 1 / exit 5, or a non-APPROVED fallback report), run `review-loop-upstream list --session <sid> --format <fmt> --round <N> --from-report <report>` before re-delegating to the planner and before appending to `CONCERNS_LOG`.
 - For `test-review`, add `--context-file "$AGENTS_MAIN_ROOT/skills/_shared/test-design.md"` (the test design the review read); without it a `source=test-design` B is downgraded to A. The plan formats need no flag: `list` resolves intent / outline / detail from the session.
 - On the codex path, run it after that round's `reduce`.
-- Pause when `list` prints a row whose `prior_choice` is empty.
-- A row with `prior_choice=C` is not asked again; treat it as accepted.
+- Before asking, look up course corrections:
+  1. When `list` prints a row whose `prior_choice` is empty, the main conversation runs `node "$AGENTS_MAIN_ROOT/bin/course-correction-record" locate --session <CC session id>`.
+  2. On exit 0, dispatch the supervisor-audit agent once in course-correction lookup mode; the prompt carries the printed transcript path, `--session`, `--format` and the `list` rows. On a non-zero exit, pause without dispatching.
+  3. When it returns, re-run `list` with the same arguments; pause only on the rows whose `prior_choice` is still empty.
+- A row with `prior_choice=C` or `prior_choice=course-correction` is not asked again; treat it as accepted.
 - The trigger is the tag itself, so the codex path and the fallback path pause the same way.
 
 ## Who asks
@@ -18,8 +21,16 @@ CLI: `bin/review-loop-upstream` (`list` / `decide` / `pick-upstream` / `return` 
 - make-outline-plan and make-detail-plan ask the user themselves, in the main conversation.
 - review-plan-security and review-tests run with `context: fork`, so they never ask:
   - stop without the completion sentinel;
-  - return the `list` output under an `## Upstream inconsistency` section to the main conversation;
-  - the main conversation then asks, following this procedure.
+  - return an `## Upstream inconsistency` section to the main conversation, holding:
+    - `list-args: --round <N> --from-report <report path>` (test-review appends `--context-file <path>`), the values the fork passed to `list`;
+    - the `list` output;
+    - `Other surviving concerns: <N>`, the count of untagged concerns left after triage;
+  - the main conversation runs the course-correction lookup of When to pause with `list-args`, then asks, following this procedure.
+- When every row ends C or course-correction after the decisions and N is 0, the main conversation does not re-run the skill:
+  - security-plan: summarize in the RPS-5 APPROVED form;
+  - test-review: emit `<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: upstream-resolved C<N>[,C<M>…]>>` (acceptance: exit-codes.md "Accepted-warning recovery");
+  - for either format, show the user each record body.
+- Otherwise it re-runs the skill, as for A / D.
 
 ## How to ask
 
@@ -81,3 +92,4 @@ B concerns are already recorded by `decide` (How to ask). Then:
 ## Approval screen
 
 - List "Accepted upstream inconsistencies" from `review-loop-upstream accepted --session <sid> --format <fmt>` (the current cycle only; never `--all-cycles`).
+- For each course-correction row of `accepted`, Read its `record=` file and output the body verbatim under the heading `User course corrections`.

@@ -162,6 +162,8 @@ TREE="$PH_ROOT/tree"
 mkdir -p "$TREE/skills"
 cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$TREE/bin"
 cp -r "$SCRIPT_CHECKOUT_ROOT/skills/_shared" "$TREE/skills/_shared"
+mkdir -p "$TREE/agents/lib"
+cp "$SCRIPT_CHECKOUT_ROOT/agents/lib/review-criteria.md" "$TREE/agents/lib/review-criteria.md"
 TREE_CORE="$TREE/skills/_shared/priority-hierarchy/core.md"
 
 case_begin "core-md-missing-fails-closed" "skills/_shared/priority-hierarchy/core.md"
@@ -242,6 +244,62 @@ WANT_ADV="The following code diff was authored by Claude (a different LLM, not b
 preamble codex_core_adversarial_preamble "code diff"
 ck "adversarial preamble: output unchanged" "$WANT_ADV" "$PRE_OUT"
 ck "adversarial preamble: exits 0" "0" "$PRE_RC"
+case_end
+
+# #2814 reopen (R2-R5): the round 1 scope line, the per-decision check, the round 2+ revision
+# check. These read the prompts the round1-* and round2-* cases above captured.
+R1_SCOPE="Round 1: actively look for gaps"
+# count_occ_ci <file> <phrase> — case-insensitive occurrence count (not line count).
+count_occ_ci() {
+  awk -v p="$2" 'BEGIN{p=tolower(p);n=0} {s=tolower($0); while ((i=index(s,p))>0) {n++; s=substr(s,i+length(p))}} END{print n}' "$1" 2>/dev/null || printf 'unreadable'
+}
+
+case_begin "round1-scope-line-four-formats" "bin/lib/review-plan-codex/hierarchy.sh"
+for f in $FORMATS; do
+  cap="$PH_ROOT/prompt-$f-r1.txt"
+  ck "$f r1: the round 1 prompt was captured (precondition)" "called" "$(called "$cap")"
+  ck "$f r1: '$R1_SCOPE' appears exactly once" "1" "$(count_occ_ci "$cap" "$R1_SCOPE")"
+  sl="$(first_line "$cap" "$R1_SCOPE")"
+  hl="$(first_line "$cap" '^\[PLAN STEP HIERARCHY')"
+  ck "$f r1: the scope line precedes the hierarchy block" "yes" \
+    "$([ "$sl" -gt 0 ] && [ "$hl" -gt "$sl" ] && printf yes || printf "no(scope=$sl hier=$hl)")"
+  ck "$f r1: the scope line names the review scope and the Per-decision check" "yes" \
+    "$(grep -m1 -F -- "$R1_SCOPE" "$cap" 2>/dev/null | grep -F 'limited to the targets under Review scope' | grep -qF 'Per-decision check' && printf yes || printf no)"
+  ck "$f r1: 'Do not/Never propose new behavior' appears once in total" "1" \
+    "$(( $(count_occ_ci "$cap" "Do not propose new behavior") + $(count_occ_ci "$cap" "Never propose new behavior") ))"
+done
+case_end
+
+case_begin "round1-hierarchy-four-targets-per-decision" "skills/_shared/priority-hierarchy/core.md"
+for f in $FORMATS; do
+  cap="$PH_ROOT/prompt-$f-r1.txt"
+  s="$(first_line "$cap" '^\[PLAN STEP HIERARCHY START\]$')"
+  e="$(first_line "$cap" '^\[PLAN STEP HIERARCHY END\]$')"
+  blk="$([ "$e" -gt "$s" ] && sed -n "${s},${e}p" "$cap")"
+  ck "$f r1: the hierarchy block says 'Review only four things'" "yes" "$([[ "$blk" == *"Review only four things"* ]] && printf yes || printf no)"
+  ck "$f r1: the hierarchy block carries '## Per-decision check'" "yes" \
+    "$(printf '%s\n' "$blk" | tr -d '\r' | grep -qx '## Per-decision check' && printf yes || printf no)"
+  ck "$f r1: the hierarchy block discards round 2+ new IDs, tagged or not" "yes" \
+    "$([[ "$blk" == *"every new concern ID is discarded, tagged or not"* ]] && printf yes || printf no)"
+done
+case_end
+
+case_begin "round2-revision-consistency-four-formats" "bin/lib/review-plan-codex/hierarchy.sh"
+for f in $FORMATS; do
+  cap="$PH_ROOT/prompt-$f-r2.txt"
+  ck "$f r2: the round 2 prompt was captured (precondition)" "called" "$(called "$cap")"
+  ck "$f r2: no round 1 scope line" "0" "$(count_occ_ci "$cap" "$R1_SCOPE")"
+  fixl="$(first_line "$cap" 'Only confirm whether each previous-round concern is fixed')"
+  conl="$(first_line "$cap" 'also confirm it stays consistent')"
+  newl="$(first_line "$cap" 'DO NOT introduce new concerns')"
+  ck "$f r2: the revision consistency check is present" "yes" "$([ "$conl" -gt 0 ] && printf yes || printf no)"
+  ck "$f r2: the consistency rule answers 'Cn: unresolved — <how it deviates>'" "yes" \
+    "$([ "$conl" -gt 0 ] && sed -n "${conl}p" "$cap" | grep -qF 'unresolved — <how it deviates>' && printf yes || printf no)"
+  ck "$f r2: order is Only confirm, consistency check, DO NOT" "yes" \
+    "$([ "$fixl" -gt 0 ] && [ "$conl" -gt "$fixl" ] && [ "$newl" -gt "$conl" ] && printf yes || printf "no($fixl/$conl/$newl)")"
+  ck "$f r2: DO NOT covers [upstream-inconsistency] concerns too" "yes" \
+    "$([ "$newl" -gt 0 ] && sed -n "${newl}p" "$cap" | grep -qF 'including [upstream-inconsistency] ones' && printf yes || printf no)"
+done
 case_end
 
 echo ""

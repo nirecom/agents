@@ -176,14 +176,9 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 - Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be
   passed via `--label`. `type:*` is rejected to avoid confusing
   `/issue-close-finalize` routing.
-- **severity label (auto-classify, Phase 1)**: These three conditions are the only definition of severity (SSOT) — no script under `bin/` infers severity from keywords or any other signal. After gathering the issue title and body in Phase 1, evaluate the content and classify severity. Add at most one `severity:*` label:
-  - Fatal or high-impact behavior → `--label severity:high`:
-    - Workflow interruption or abnormal behavior mid-execution (abort, hang, infinite loop, etc.)
-    - Security breach (confidential information leak, external attack vector, prompt injection)
-    - Primary feature rendered completely unusable
-    - The condition must be a confirmed instance, not a theoretical or deferred one — a hardening opportunity, a residual/follow-up finding explicitly deferred as non-blocking, or an unconfirmed "could happen" risk does not qualify.
-  - Cosmetic or safely deferrable (visual glitch, non-blocking inconvenience, low-impact improvement) → `--label severity:low`.
-  - All other cases → no severity label (no label = normal severity).
+- **severity label (auto-classify, Phase 1)**: after gathering the issue title and body, classify severity; add at most one `severity:*` label — no script under `bin/` infers severity from keywords or any other signal.
+  - Read `skills/_shared/severity.md` before judging severity; it is the only definition (SSOT).
+  - Apply the label that file maps the severity to (`--label severity:high`, `--label severity:low`, or no label).
 - **reporter-model label (auto-detect, Phase 4)**: the system prompt contains a self-report sentence — either the named form `"You are powered by the model named <name>. The exact model ID is <id>."` or the named-less short form `"You are powered by the model <name>."` (#1988) — pass it verbatim as `--reporter-model-text "<sentence>"` in the `--` passthrough args. The dispatch script extracts the identifier and resolves the label through the shared matcher.
   - No self-report sentence present → omit the flag; never add a `reporter-model:*` label by hand.
 

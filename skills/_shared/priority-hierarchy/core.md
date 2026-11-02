@@ -15,14 +15,25 @@ Shared core for every plan review (codex prompts and CC fallback reviewers). Rol
 
 ## Review scope
 
-- Review only three things: consistency with the upstream plan steps, whether what upstream delegated is made concrete soundly, and logical contradictions.
+- Review only four things in the reviewed artifact: consistency with the upstream plan steps, whether what upstream delegated is made concrete soundly, logical contradictions, and upstream content copied instead of referenced in one line.
+- What a copy excludes: the "Copies of a canonical source" section of the review criteria.
+- security-plan also reviews security risks; test-review also reviews test coverage gaps.
 - Never propose new behavior that no upstream plan step asks for.
+
+## Per-decision check
+
+- In outline and detail reviews, list each decision of the upstream plan steps and check one by one whether the reviewed artifact adds to, relaxes, removes or reinterprets it.
 
 ## Round split
 
-- Detect deviations in round 1.
-- In round 2+, only confirm whether each previous-round concern is fixed.
-- In round 2+, raise no new concerns, tagged or not.
+- Detect deviations in round 1; the `[upstream-inconsistency …]` tag is for round 1 only.
+- In round 2+, only confirm whether each previous-round concern is fixed, and check each revision made for it against the upstream plan steps.
+- Answer a revision that deviates from the upstream with `Cn: unresolved — <how it deviates>`, never with a new ID.
+- In round 2+, every new concern ID is discarded, tagged or not.
+
+## User course corrections
+
+- A deviation backed by a course-correction record (`review-loop-upstream decide --choice course-correction`) is not a deviation from the upstream plan step.
 
 ## Section roles
 
@@ -71,8 +82,6 @@ Shared core for every plan review (codex prompts and CC fallback reviewers). Rol
 
 ## Format table
 
-Columns: the reviewed artifact, whether it is a plan step, the upstream roles, and the B return step (a workflow step name) by source.
-
 | format | reviewed artifact | is plan step | upstream roles | B return step by source |
 |---|---|---|---|---|
 | `detail-plan` | detail | yes | intent, outline | intent→clarify_intent / outline→outline |
@@ -82,8 +91,7 @@ Columns: the reviewed artifact, whether it is a plan step, the upstream roles, a
 
 ## Merging B return steps
 
-- When one confirmation picks B on concerns with different return steps, reset once to the earliest of them in `VALID_STEPS` order.
-- That reset sets every later step back to pending, so one reset covers all of them.
+- When one confirmation picks B on concerns with different return steps, reset once to the earliest of them in `VALID_STEPS` order; that reset sets every later step back to pending.
 
 ## Downstream after B
 
