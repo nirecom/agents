@@ -14,7 +14,8 @@ const { resolveSessionId } = require("./workflow-state");
 const { isTestCommand, resolveTestProvenance } = require("./workflow-run-tests/exec-model");
 const { parseWorkerVerdict, workerVerdictVetoes } = require("./workflow-run-tests/outcome");
 const { demotionReason } = require("./workflow-run-tests/demotion");
-const { extractFailingTests, emitterRoot } = require("./workflow-run-tests/failing-list");
+const { extractFailingTests, extractFailingExits, emitterRoot } = require("./workflow-run-tests/failing-list");
+const { runAllArgs, resultPaths } = require("./workflow-run-tests/run-parts");
 const { applyDispatchOutcome } = require("./workflow-run-tests/dispatch-outcome");
 const { recordRun } = require("./workflow-run-tests/record-run");
 const { runAllHits, workerHits } = require("./workflow-run-tests/hit-summary");
@@ -181,6 +182,27 @@ function stdoutFailingTests(t, toolResponse) {
   }
 }
 
+// The {path: exit} map of the same FAIL lines; run-all only (the worker header carries no exits).
+function stdoutFailingExits(t, toolResponse, failingTests) {
+  try {
+    if (failingTests === null || t.emitter !== "run-all") return null;
+    return extractFailingExits({ stdout: responseStdout(toolResponse), worktreeRoot: t.failingRoot, contract: t.contract });
+  } catch {
+    return null;
+  }
+}
+
+// The run_parts input (#2688): the selection is the run-all arguments of the trigger command,
+// proven later against the result lines; any other emitter's selection is unknown.
+function stdoutPart(t, command, toolResponse) {
+  try {
+    const args = t.emitter === "run-all" && !t.ambiguous ? runAllArgs(command) : null;
+    return { args, root: t.failingRoot, cwd: t.failingRoot, results: resultPaths(responseStdout(toolResponse), t.failingRoot) };
+  } catch {
+    return { args: null, root: null, cwd: null, results: [] };
+  }
+}
+
 // The run's hit lines, read only from trusted, attributed emitter bytes (#2669); bounded by recordRun.
 function stdoutHits(t, toolResponse) {
   try {
@@ -232,6 +254,7 @@ try {
   if (dispatch.ingested) done(dispatch.message);
   const t = stdoutTrust(command, input.tool_input, toolResponse);
   const reason = demotionReason(t);
+  const failingTests = stdoutFailingTests(t, toolResponse);
   const message = recordRun({
     sessionId,
     exitCode,
@@ -244,7 +267,9 @@ try {
       contract: t.contract,
       workerStatus: t.workerStatus,
     },
-    failingTests: stdoutFailingTests(t, toolResponse),
+    failingTests,
+    failingExits: stdoutFailingExits(t, toolResponse, failingTests),
+    part: stdoutPart(t, command, toolResponse),
     hitSummary: stdoutHits(t, toolResponse),
     unrunnableRuntimes: reason === "contract-unrunnable" ? missingRuntimes(toolResponse, t.emitter) : null,
     unrunnableMissingFiles: reason === "contract-unrunnable" ? missingFileCount(toolResponse, t.emitter) : null,

@@ -107,6 +107,10 @@ case_begin "worktree-change-names-many-paths-up-to-five" "bin/lib/run-all-worktr
 ha_case_worktree_change_with_many_paths
 case_end
 
+case_begin "foreign-common-config-is-not-a-hit" "bin/lib/run-all-worktree-change-detect.sh"
+ha_case_foreign_config_is_not_a_hit
+case_end
+
 case_begin "parallel-hits-are-charged-to-their-own-tests" "tests/run-all.sh"
 ha_case_parallel_hits_are_charged_to_their_own_tests
 case_end

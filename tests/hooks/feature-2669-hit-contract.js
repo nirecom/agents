@@ -220,23 +220,14 @@ const entry = (over) => Object.assign({
   status: "pending", run_outcome: "fail", failing_tests: null, unrunnable_count: 0, updated_seq: 3,
 }, over);
 const evidence = () => mod("bin/workflow/lib/run-tests-baseline-evidence.js");
-const undeterminedCls = { base: "abc", entries: [{ path: "tests/a.sh", class: "undetermined", detail: "x" }] };
 
 caseBegin("evidence-refuses-a-run-with-hits", "bin/workflow/lib/run-tests-baseline-evidence.js");
 test("evidence-refuses-a-run-with-hits", () => noNewFailures(failures, () => {
   check("T7: EXIT.HITS is 7", () => eq(evidence().EXIT.HITS, 7, "EXIT.HITS"));
-  check("T7: control — a listless run without hits grants failing-list-unrecorded", () => {
-    eq(evidence().grantKind(entry({})), "failing-list-unrecorded", "kind");
-  });
-  check("T7: the listless grant is blocked when hit_count>0", () => {
-    eq(evidence().grantKind(entry({ hit_count: 1 })), null, "kind");
-  });
-  check("T7: control — an undetermined classification grants without hits", () => {
-    eq(evidence().grantKind(entry({ failing_tests: ["tests/a.sh"], baseline_classification: undeterminedCls })), "undetermined", "kind");
-  });
-  check("T7: the undetermined grant is blocked when hit_count>0", () => {
-    const e = entry({ failing_tests: ["tests/a.sh"], baseline_classification: undeterminedCls, hit_count: 2 });
-    eq(evidence().grantKind(e), null, "kind");
+  // #2688: the user grant is retired, so the grant judges (grantKind / acceptRefusal / accept) are gone.
+  check("T7: the retired grant judges are no longer exported", () => {
+    const left = ["grantKind", "acceptRefusal", "accept"].filter((k) => typeof evidence()[k] === "function");
+    eq(left, [], "still exported");
   });
   for (const [label, value, want] of [["3", 3, 3], ["0", 0, 0], ["the string 3", "3", 0], ["1.5", 1.5, 0], ["-1", -1, 0], ["absent", undefined, 0], ["null", null, 0]]) {
     check(`T7: hitCount reads ${label} as ${want}`, () => {
@@ -245,20 +236,6 @@ test("evidence-refuses-a-run-with-hits", () => noNewFailures(failures, () => {
       return undefined;
     });
   }
-}));
-caseEnd();
-
-caseBegin("accept-handler-names-the-hits", "hooks/workflow-mark/run-tests-baseline-accept-handler.js");
-test("accept-handler-names-the-hits", () => noNewFailures(failures, () => {
-  const rejection = (e) => mod("hooks/workflow-mark/run-tests-baseline-accept-handler.js").rejection(e);
-  check("T7: control — a listless run without hits is grantable", () => eq(rejection(entry({})), null, "rejection"));
-  check("T7: a run with hit_count=1 is refused with the hits reason", () => {
-    eq(rejection(entry({ hit_count: 1 })), "1 unattributed hit(s) — a run with HITS>0 cannot be accepted", "rejection");
-  });
-  check("T7: a run with hit_count=3 and a classification is refused with the hits reason", () => {
-    const e = entry({ hit_count: 3, failing_tests: ["tests/a.sh"], baseline_classification: undeterminedCls });
-    eq(rejection(e), "3 unattributed hit(s) — a run with HITS>0 cannot be accepted", "rejection");
-  });
 }));
 caseEnd();
 
@@ -351,9 +328,6 @@ test("evidence-failing-reports-the-hits", () => noNewFailures(failures, () => {
   check("T7: control — failing() on a listless run without hits is a state error", () => {
     record("f2669-evidence-nohits", 1, contract({ pass: 0, fail: 1, executed: 1 }), []);
     eq(evidence().failing("f2669-evidence-nohits").code, evidence().EXIT.STATE, "code");
-  });
-  check("T7: the recorded entry with hits grants nothing", () => {
-    eq(evidence().grantKind(runTests("f2669-evidence-hits")), null, "kind");
   });
 }));
 caseEnd();

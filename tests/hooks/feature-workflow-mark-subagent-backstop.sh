@@ -99,26 +99,29 @@ assert_status() {
 }
 
 # ===========================================================================
-# TC1 — subagent + sentinel → state UNCHANGED (run_tests stays pending)
+# The MARK_STEP rows use `research`: since #2472 run_tests is refused on a bare
+# declaration, so it can no longer show "the sentinel applied" vs "suppressed".
+# research completes on a declaration and starts pending in write_state.
+# TC1 — subagent + sentinel → state UNCHANGED (research stays pending)
 # ===========================================================================
 echo ""
 echo "=== TC1 — subagent sentinel suppressed ==="
 SID="mark-tc1"
 write_state "$SID" "pending" "pending"
-run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_run_tests_complete>>\""},"tool_response":{"exit_code":0,"stdout":""},"session_id":"'"$SID"'","agent_id":"a1"}'
-assert_status "TC1" "subagent + MARK_STEP sentinel → run_tests stays pending (backstop suppresses)" \
-    "$SID" "run_tests" "pending"
+run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_research_complete>>\""},"tool_response":{"exit_code":0,"stdout":""},"session_id":"'"$SID"'","agent_id":"a1"}'
+assert_status "TC1" "subagent + MARK_STEP sentinel → research stays pending (backstop suppresses)" \
+    "$SID" "research" "pending"
 
 # ===========================================================================
-# TC2 — main + sentinel → state MUTATES (run_tests=complete) [regression guard]
+# TC2 — main + sentinel → state MUTATES (research=complete) [regression guard]
 # ===========================================================================
 echo ""
 echo "=== TC2 — main sentinel applies (regression) ==="
 SID="mark-tc2"
 write_state "$SID" "pending" "pending"
-run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_run_tests_complete>>\""},"tool_response":{"exit_code":0,"stdout":""},"session_id":"'"$SID"'"}'
-assert_status "TC2" "main (no agent_id) + MARK_STEP sentinel → run_tests=complete" \
-    "$SID" "run_tests" "complete"
+run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_research_complete>>\""},"tool_response":{"exit_code":0,"stdout":""},"session_id":"'"$SID"'"}'
+assert_status "TC2" "main (no agent_id) + MARK_STEP sentinel → research=complete" \
+    "$SID" "research" "complete"
 
 # ===========================================================================
 # TC3 — C1 regression — subagent + git push origin main → user_verification reset
@@ -151,21 +154,21 @@ echo ""
 echo "=== TC5 — data gap (absent agent_id = main) ==="
 SID="mark-tc5"
 write_state "$SID" "pending" "pending"
-run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_run_tests_complete>>\""},"tool_response":{"exit_code":0,"stdout":""},"session_id":"'"$SID"'"}'
-assert_status "TC5" "no agent_id field + MARK_STEP sentinel → run_tests=complete (fail-safe: absent=main)" \
-    "$SID" "run_tests" "complete"
+run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_research_complete>>\""},"tool_response":{"exit_code":0,"stdout":""},"session_id":"'"$SID"'"}'
+assert_status "TC5" "no agent_id field + MARK_STEP sentinel → research=complete (fail-safe: absent=main)" \
+    "$SID" "research" "complete"
 
 # ===========================================================================
-# TC6 — error state — main + sentinel + exit_code 1 → run_tests stays pending
+# TC6 — error state — main + sentinel + exit_code 1 → research stays pending
 #        (workflow-mark.js exits early on non-zero exit_code without marking)
 # ===========================================================================
 echo ""
 echo "=== TC6 — non-zero exit_code suppresses MARK_STEP ==="
 SID="TC6_SID"
 write_state "$SID" "pending" "pending"
-run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_run_tests_complete>>\""},"tool_response":{"exit_code":1,"stdout":""},"session_id":"'"$SID"'"}'
-assert_status "TC6" "main + MARK_STEP sentinel + exit_code 1 → run_tests stays pending (early exit on error)" \
-    "$SID" "run_tests" "pending"
+run_hook '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_MARK_STEP_research_complete>>\""},"tool_response":{"exit_code":1,"stdout":""},"session_id":"'"$SID"'"}'
+assert_status "TC6" "main + MARK_STEP sentinel + exit_code 1 → research stays pending (early exit on error)" \
+    "$SID" "research" "pending"
 
 # ===========================================================================
 # TC7 — gh pr merge --squash → user_verification reset

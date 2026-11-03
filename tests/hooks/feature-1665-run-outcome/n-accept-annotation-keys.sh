@@ -39,4 +39,16 @@ run_n_accept_annotation_keys_cases() {
     assert_contains "N1/unrunnable-accept-reason-is-a-known-key" "unrunnable_accept_reason.known=true" "$got"
     assert_contains "N2/values-round-trip" "set=Pester>=5.0,uv|no Pester here" "$got"
     assert_contains "N3/null-tombstones-both" "tombstoned=absent|absent" "$got"
+
+    # #2688: the baseline user grant is retired, so baseline_accept leaves the table; the run's own
+    # evidence keys (failing_test_exits, run_parts) and the completion note (baseline_note) join it.
+    got="$(run_with_timeout 30 node -e '
+const E = require(process.argv[1] + "/hooks/workflow-state/state-io/events");
+const t = Array.from(E.STEP_ANNOTATION_KEYS || []);
+process.stdout.write(["baseline_accept", "failing_test_exits", "run_parts", "baseline_note"].map((k) => k + ".known=" + t.includes(k)).join(" "));
+' "$AGENTS_WIN" 2>/dev/null || echo "ERR:probe-crashed")"
+    assert_contains "N4/baseline-accept-is-no-longer-a-known-key" "baseline_accept.known=false" "$got"
+    assert_contains "N4/failing-test-exits-is-a-known-key" "failing_test_exits.known=true" "$got"
+    assert_contains "N4/run-parts-is-a-known-key" "run_parts.known=true" "$got"
+    assert_contains "N4/baseline-note-is-a-known-key" "baseline_note.known=true" "$got"
 }

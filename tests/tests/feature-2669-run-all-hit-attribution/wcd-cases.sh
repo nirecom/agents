@@ -76,6 +76,34 @@ FIXTURE
   expect_eq "wcd space: the contract has one hit" "$(last_nonempty "$WCD_OUT")" "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0 HITS=1"
 }
 
+# #2803: the shared common config is foreign (not this session's own change), so a run whose only
+# change is there has no HIT and passes; the checkout's own config.worktree stays a HIT.
+ha_case_foreign_config_is_not_a_hit() {
+  local co="$TMP_ROOT/fixture checkout foreign" fxc="$HA_FX/wcd-common-config.sh" fxw="$HA_FX/wcd-config-worktree.sh"
+  ha_wcd_checkout "$co" || { fail "wcd foreign: fixture checkout" "cannot build it"; return 0; }
+  ha_write_fixture "$fxc" <<'FIXTURE'
+printf '[wcd]\n\tn = %s\n' "$RANDOM" >>"$FX_TREE/.git/config"
+exit 0
+FIXTURE
+  ha_wcd_run foreign "$co" "$fxc"
+  expect_eq "wcd foreign: a common config change is no HIT line" "$(count_lines "$WCD_OUT" "HIT: ")" "0"
+  expect_eq "wcd foreign: the contract carries no HITS" "$(last_nonempty "$WCD_OUT")" "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0"
+  expect_eq "wcd foreign: run-all exits 0" "$WCD_RC" "0"
+  expect_eq "wcd foreign: no worktree change line on stderr" "$(count_lines "$WCD_ERR" "[run-all] worktree change: ")" "0"
+  expect_has "wcd foreign: stderr still shows the change as foreign" "$WCD_ERR" "worktree-change (foreign, not a hit) tree="
+  expect_has "wcd foreign: the foreign line names kind=config" "$(printf '%s\n' "$WCD_ERR" | grep -F '(foreign, not a hit)' || true)" "kind=config"
+
+  ha_write_fixture "$fxw" <<'FIXTURE'
+printf '[wcd]\n\tn = %s\n' "$RANDOM" >>"$FX_TREE/.git/config.worktree"
+exit 0
+FIXTURE
+  ha_wcd_run config-worktree "$co" "$fxw"
+  expect_eq "wcd config-worktree: the checkout's own config.worktree is one HIT" "$(count_lines "$WCD_OUT" "HIT: worktree-change ")" "1"
+  expect_has "wcd config-worktree: the HIT line names kind=config-worktree" "$WCD_HIT" "kind=config-worktree"
+  expect_eq "wcd config-worktree: the contract has one hit" "$(last_nonempty "$WCD_OUT")" "RUN_CONTRACT: PASS=1 FAIL=0 SKIP=0 EXECUTED=1 UNRUNNABLE=0 TIMEOUT=0 HITS=1"
+  expect_eq "wcd config-worktree: run-all exits 1" "$WCD_RC" "1"
+}
+
 ha_case_worktree_change_with_many_paths() {
   local co2="$TMP_ROOT/fixture checkout two" co7="$TMP_ROOT/fixture checkout seven" fx2="$HA_FX/wcd-two.sh"
   local fx7="$HA_FX/wcd-seven.sh" i named=0

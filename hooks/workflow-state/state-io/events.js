@@ -68,8 +68,10 @@ const STEP_ANNOTATION_KEYS = [
   "completion_basis",
   "outcome_source",
   "dispatch_unsettled",
-  "baseline_accept",
   "inherit_revert_reason",
+  "failing_test_exits",
+  "run_parts",
+  "baseline_note",
 ];
 
 // Step-entry fields that are STRUCTURE, never annotation. An annotation named

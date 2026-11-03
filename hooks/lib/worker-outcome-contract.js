@@ -57,6 +57,9 @@ function copyWorkerResult(value) {
     summary: orNull(value.summary),
   };
   if (value.hits !== undefined) out.hits = Array.isArray(value.hits) ? value.hits.slice() : value.hits;
+  if (value.failing_exits !== undefined) {
+    out.failing_exits = isPlainObject(value.failing_exits) ? Object.assign({}, value.failing_exits) : value.failing_exits;
+  }
   return out;
 }
 
@@ -101,6 +104,10 @@ function workerResultProblem(value) {
   if (!isStringList(value.failing_tests)) return "worker_result.failing_tests must be a list of strings";
   if (!isStringList(value.log_tail)) return "worker_result.log_tail must be a list of strings";
   if (value.hits !== undefined && !isStringList(value.hits)) return "worker_result.hits must be a list of strings";
+  if (value.failing_exits !== undefined
+    && !(isPlainObject(value.failing_exits) && Object.values(value.failing_exits).every(isCount))) {
+    return "worker_result.failing_exits must map each path to a non-negative integer exit";
+  }
   if (typeof value.summary !== "string") return "worker_result.summary must be a string";
   if (value.summary.length > MAX_OUTCOME_SUMMARY) {
     return `worker_result.summary must be at most ${MAX_OUTCOME_SUMMARY} characters`;

@@ -1,44 +1,40 @@
 #!/usr/bin/env bash
-# bin/run-tests-baseline — classify the failing tests of the last /run-tests run
-# against the merge base (#2431), and complete run_tests only when every failure
-# already existed there. The sole recovery path for pre-existing failures.
+# bin/run-tests-baseline — classify the failing tests of the last /run-tests run (#2431, #2688)
+# and complete run_tests when every failure pre-existed at the merge base or has an auto-accepted
+# cause. Stages: failing list -> solo re-run on the branch -> ledger -> rename source -> base.
 #
-# Usage: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <sec>]
+# Usage: bin/run-tests-baseline --session <sid> [--worktree <path>] [--per-test-timeout <sec>] [--note <text>]
 # Timeout: omitted -> derived from the duration ledger (2x measured, 300-540 s; unmeasured 300); any value is cut by one 600 s budget.
+# --note: what the user knows about the failures; kept as baseline_note and shown in the PR body.
 # Output: `BASELINE: <class> <path> [detail]` lines, then
 #         `BASELINE_SUMMARY: preexisting=N inherited=N broken=N undetermined=N`.
-# Exit:   0 all pre-existing (run_tests completed; also covers completion by the user's grant,
-#         `BASELINE_ACCEPTED: kind=<kind>`), 1 otherwise, 2 usage, 3 no hook-recorded failing
-#         list (or state moved), 4 merge base not trustworthy, 5 no baseline (base predates the root names),
-#         6 unattributed hits (HITS>0): `BASELINE_HITS: count=N` then `HIT: <line>` lines.
+# Exit:   0 run_tests completed (`RECORDED completion_basis=<basis>` on stderr), 1 otherwise,
+#   2 usage, 3 no hook-recorded failing list (or state moved), 4 merge base not trustworthy,
+#   5 no baseline (base predates the root names), 6 unattributed hits (HITS>0): `BASELINE_HITS: count=N`
+#   then `HIT: <line>` lines, 8 re-run requested (budget, worktree or setup left a failure unclassified).
 # Child test output goes to log files only, never to stdout.
 
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=bin/lib/run-tests-baseline-ledger.sh
-. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-ledger.sh"
-# shellcheck source=bin/lib/run-tests-baseline-timeout.sh
-. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-timeout.sh"
-# shellcheck source=bin/lib/run-tests-baseline-worktree.sh
-. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-worktree.sh"
-# shellcheck source=bin/lib/run-tests-baseline-exec.sh
-. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-exec.sh"
-# shellcheck source=bin/lib/run-tests-baseline-homeref.sh
-. "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-homeref.sh"
+for _lib in ledger timeout worktree exec homeref branch rename; do
+  # shellcheck source=/dev/null
+  . "$SCRIPT_CHECKOUT_ROOT/bin/lib/run-tests-baseline-$_lib.sh"
+done
 
 RTB_EVIDENCE="$SCRIPT_CHECKOUT_ROOT/bin/workflow/run-tests-baseline-evidence"
 RTB_RESOLVE="$SCRIPT_CHECKOUT_ROOT/bin/resolve-merge-base.sh"
 
 die() { printf 'run-tests-baseline: %s\n' "$2" >&2; exit "$1"; }
 
-SID="" WT_ARG="$PWD" PER_TEST_TIMEOUT="" PTT_EXPLICIT=0
+SID="" WT_ARG="$PWD" PER_TEST_TIMEOUT="" PTT_EXPLICIT=0 NOTE="" HAS_NOTE=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --session) [ "$#" -ge 2 ] || die 2 "--session needs a value"; SID="$2"; shift 2 ;;
     --worktree) [ "$#" -ge 2 ] || die 2 "--worktree needs a value"; WT_ARG="$2"; shift 2 ;;
     --per-test-timeout) [ "$#" -ge 2 ] || die 2 "--per-test-timeout needs a value"; PER_TEST_TIMEOUT="$2"; PTT_EXPLICIT=1; shift 2 ;;
-    -h|--help) sed -n '2,14p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --note) [ "$#" -ge 2 ] || die 2 "--note needs a value"; NOTE="$2"; HAS_NOTE=1; shift 2 ;;
+    -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die 2 "unknown argument: $1" ;;
   esac
 done
@@ -49,17 +45,7 @@ if [ "$PTT_EXPLICIT" = 1 ]; then
   PER_TEST_TIMEOUT=$((10#$PER_TEST_TIMEOUT))
 fi
 
-# 0. The user's grant (#2517): a valid one completes run_tests without re-running the base.
-#    No grant, or one that no longer fits the run, falls through to the classification below.
-ACC_OUT="$(node "$(rtb_wt_native "$RTB_EVIDENCE")" accept --session "$SID")"
-ACC_RC=$?
-[ -z "$ACC_OUT" ] || printf '%s\n' "$ACC_OUT"
-if [ "$ACC_RC" -eq 0 ]; then
-  printf 'BASELINE_ACCEPTED: kind=%s\n' "$(printf '%s\n' "$ACC_OUT" | sed -n 's/^RECORDED .* kind=//p' | head -n 1)"
-  exit 0
-fi
-
-# 1. The failing list the run-tests hook recorded, and its causal position.
+# 1. The failing list the run-tests hook recorded, its causal position and each test's exit.
 FAILING_OUT="$(node "$(rtb_wt_native "$RTB_EVIDENCE")" failing --session "$SID")"
 FAILING_RC=$?
 if [ "$FAILING_RC" -eq 7 ]; then
@@ -74,46 +60,68 @@ fi
   || die 3 "the run-tests hook recorded no failing-test list for this session (no trusted RUN_CONTRACT, count mismatch, or run_tests not failing); baseline classification is not possible"
 SEQ="$(printf '%s\n' "$FAILING_OUT" | sed -n '1s/^SEQ=//p')"
 TESTS=()
+declare -A BR_EXIT=()
+# shellcheck disable=SC2034  # BR_EXIT is read by rtb_branch_stage
 while IFS= read -r line; do
-  [ -n "$line" ] && TESTS+=("$line")
+  case "$line" in
+    '') ;;
+    EXIT$'\t'*) _rest="${line#EXIT$'\t'}"; BR_EXIT["${_rest#*$'\t'}"]="${_rest%%$'\t'*}" ;;
+    *) TESTS+=("$line") ;;
+  esac
 done < <(printf '%s\n' "$FAILING_OUT" | sed '1d')
 [ -n "$SEQ" ] && [ "${#TESTS[@]}" -gt 0 ] || die 3 "malformed failing-test list"
 
 ROOT="$(git -C "$WT_ARG" rev-parse --show-toplevel 2>/dev/null)" || die 2 "not a git checkout: $WT_ARG"
 ROOT="$(rtb_wt_native "$ROOT")"
 
-# 2. The merge base; anything short of a trustworthy answer goes back to the user.
-MB_ERR_FILE="$(mktemp)"
-MB_OUT="$(bash "$RTB_RESOLVE" -C "$ROOT" --session "$SID" --format kv --no-fetch 2>"$MB_ERR_FILE")"
-MB_RC=$?
-MB_ERR="$(cat "$MB_ERR_FILE" 2>/dev/null)"
-rm -f "$MB_ERR_FILE"
-MB_BASE="$(printf '%s\n' "$MB_OUT" | sed -n 's/^base=//p' | head -n 1)"
-MB_STATE="$(printf '%s\n' "$MB_OUT" | sed -n 's/^state=//p' | head -n 1)"
-case "$MB_STATE" in
-  RECORDED|RESOLVED) ;;
-  *)
-    [ -z "$MB_ERR" ] || printf '%s\n' "$MB_ERR" >&2
-    die 4 "merge base is ${MB_STATE:-UNRESOLVED} (resolve-merge-base exit $MB_RC); confirm the base (see /run-tests RNT-1) before classifying" ;;
-esac
-[ "$MB_RC" -eq 0 ] || die 4 "resolve-merge-base exited $MB_RC"
-B2="$(git -C "$ROOT" rev-parse --verify --quiet "$MB_BASE^{commit}")" || die 4 "merge base $MB_BASE is not a local commit"
-# Decided before the ledger: a cached verdict for such a base would be just as unusable.
-if rtb_base_predates_root_names "$ROOT" "$B2"; then
-  die 5 "no baseline, rebase needed: merge base $B2 predates the root names this checkout's tests run under"
-fi
-
 export RTB_LEDGER_REPO="$ROOT"
 run_all_dur_repo_id "$ROOT" >/dev/null
 run_all_dur_host_token >/dev/null
+TMP_BASE="$(run_all_cache_dir)/baseline/tmp"
+mkdir -p "$TMP_BASE" 2>/dev/null || TMP_BASE="$(mktemp -d)"
+find "$TMP_BASE" -mindepth 1 -maxdepth 1 -mmin +$((RTB_LEDGER_RETENTION_DAYS * 1440)) \
+  -exec rm -rf {} + 2>/dev/null || true
+LOGDIR="$TMP_BASE/logs-$(date +%s)-$$"
+if [ "$PTT_EXPLICIT" = 0 ]; then
+  ledger_args=()
+  for i in "${!TESTS[@]}"; do ledger_args+=("$i:${TESTS[$i]}"); done
+  rtb_timeout_load_ledger "$ROOT" "$TMP_BASE" "${ledger_args[@]}"
+fi
 
-# 3. Checkouts a crashed earlier run left behind.
-rtb_wt_sweep_stale "$ROOT"
+declare -a CLS=() DET=() RERUN=()
 
-# This checkout's test language registry; used only to normalize names (the base side's own
-# table launches the base side's tests).
-# shellcheck source=bin/lib/test-language-registry.sh
-{ . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
+# 2. Each failing test alone on the branch: one that passes there is no base question.
+rtb_branch_stage
+REST=0
+for i in "${!TESTS[@]}"; do [ -n "${CLS[i]:-}" ] || REST=$((REST + 1)); done
+
+# 3. The merge base, needed only for what the branch left; short of trustworthy goes to the user.
+B2=""
+if [ "$REST" -gt 0 ]; then
+  MB_ERR_FILE="$(mktemp)"
+  MB_OUT="$(bash "$RTB_RESOLVE" -C "$ROOT" --session "$SID" --format kv --no-fetch 2>"$MB_ERR_FILE")"
+  MB_RC=$?
+  MB_ERR="$(cat "$MB_ERR_FILE" 2>/dev/null)"
+  rm -f "$MB_ERR_FILE"
+  MB_BASE="$(printf '%s\n' "$MB_OUT" | sed -n 's/^base=//p' | head -n 1)"
+  MB_STATE="$(printf '%s\n' "$MB_OUT" | sed -n 's/^state=//p' | head -n 1)"
+  case "$MB_STATE" in
+    RECORDED|RESOLVED) ;;
+    *)
+      [ -z "$MB_ERR" ] || printf '%s\n' "$MB_ERR" >&2
+      die 4 "merge base is ${MB_STATE:-UNRESOLVED} (resolve-merge-base exit $MB_RC); confirm the base (see /run-tests RNT-1) before classifying" ;;
+  esac
+  [ "$MB_RC" -eq 0 ] || die 4 "resolve-merge-base exited $MB_RC"
+  B2="$(git -C "$ROOT" rev-parse --verify --quiet "$MB_BASE^{commit}")" || die 4 "merge base $MB_BASE is not a local commit"
+  # Decided before the ledger: a cached verdict for such a base would be just as unusable.
+  if rtb_base_predates_root_names "$ROOT" "$B2"; then
+    die 5 "no baseline, rebase needed: merge base $B2 predates the root names this checkout's tests run under"
+  fi
+  rtb_wt_sweep_stale "$ROOT"
+  # This checkout's registry; used only to normalize names (the base launches its own tests).
+  # shellcheck source=bin/lib/test-language-registry.sh
+  { . "$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh" && tlr_load; } || die 2 "test language registry not readable"
+fi
 
 # Entry point minus its language's nameStrip: the test's own data directory.
 test_dir_of() {
@@ -125,15 +133,15 @@ test_dir_of() {
   esac
 }
 
-declare -a CLS=() DET=() RERUN=()
-
 # 4. Ledger: (a) same base, then (b) inheritance from an ancestor base.
 for i in "${!TESTS[@]}"; do
+  [ -z "${CLS[i]:-}" ] || continue
   t="${TESTS[$i]}"
   same="$(rtb_ledger_lookup_same_base "$B2" "$t")"
   case "$same" in
     fail) CLS[i]="preexisting"; DET[i]="ledger-same-base"; continue ;;
     pass) CLS[i]="broken"; DET[i]="ledger-same-base"; continue ;;
+    und:*) CLS[i]="undetermined"; DET[i]="${same#und:}"; continue ;;
   esac
   d="$(test_dir_of "$t")"
   while IFS= read -r b1; do
@@ -147,39 +155,34 @@ for i in "${!TESTS[@]}"; do
   [ -n "${CLS[i]:-}" ] || RERUN+=("$i")
 done
 
-# 5. Re-run the rest in a marked, detached checkout of the merge base.
-TMP_BASE="$(run_all_cache_dir)/baseline/tmp"
-mkdir -p "$TMP_BASE" 2>/dev/null || TMP_BASE="$(mktemp -d)"
-find "$TMP_BASE" -mindepth 1 -maxdepth 1 -mmin +$((RTB_LEDGER_RETENTION_DAYS * 1440)) \
-  -exec rm -rf {} + 2>/dev/null || true
-LOGDIR="$TMP_BASE/logs-$(date +%s)-$$"
-
+# 5. Re-run the rest in a marked, detached checkout of the merge base; a test the base lacks
+#    runs under its rename source when git names one (detail gains `-via-rename:<old>`).
 if [ "${#RERUN[@]}" -gt 0 ]; then
   WT="$(rtb_wt_create "$ROOT" "$B2")" || WT=""
-  if [ "$PTT_EXPLICIT" = 0 ]; then
-    ledger_args=()
-    for i in "${RERUN[@]}"; do ledger_args+=("$i:${TESTS[$i]}"); done
-    rtb_timeout_load_ledger "$ROOT" "$TMP_BASE" "${ledger_args[@]}"
-  fi
   for i in "${RERUN[@]}"; do
-    t="${TESTS[$i]}"
-    d="$(test_dir_of "$t")"
+    t="${TESTS[$i]}" run="${TESTS[$i]}" via=""
     if [ -z "$WT" ]; then
       CLS[i]="undetermined"; DET[i]="worktree-create-failed"; continue
     fi
     if ! git -C "$ROOT" cat-file -e "$B2:$t" 2>/dev/null; then
-      CLS[i]="undetermined"; DET[i]="missing-at-base"; continue
+      rtb_rename_source_into "$ROOT" "$B2" "$t"
+      if [ -z "$RTB_RENAME_OUT" ]; then
+        CLS[i]="undetermined"; DET[i]="missing-at-base"; continue
+      fi
+      run="$RTB_RENAME_OUT" via="-via-rename:$RTB_RENAME_OUT"
     fi
-    targets=("$WT/$t")
+    d="$(test_dir_of "$run")"
+    targets=("$WT/$run")
     [ -d "$WT/$d" ] && targets+=("$WT/$d")
     if rtb_has_home_ref "${targets[@]}"; then
       CLS[i]="undetermined"; DET[i]="home-claude-ref"; continue
     fi
+    rtb_timeout_derive_into "${RTB_TIMEOUT_LEDGER[$i]:-}"
+    DERIVED="$RTB_TIMEOUT_DERIVED_OUT"
     if [ "$PTT_EXPLICIT" = 1 ]; then
       WANT="$PER_TEST_TIMEOUT" SRC="explicit"
     else
-      rtb_timeout_derive_into "${RTB_TIMEOUT_LEDGER[$i]:-}"
-      WANT="$RTB_TIMEOUT_DERIVED_OUT" SRC="default"
+      WANT="$DERIVED" SRC="default"
       [ -z "${RTB_TIMEOUT_LEDGER[$i]:-}" ] || SRC="derived"
     fi
     rtb_timeout_budget_into "$WANT" "$SECONDS"
@@ -189,13 +192,16 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
     T_USE="$RTB_TIMEOUT_SLICE_OUT"
     [ "$T_USE" -ge "$WANT" ] || SRC="$SRC, limited from ${WANT}s by budget"
     printf 'run-tests-baseline: timeout: %s %ss (%s)\n' "$t" "$T_USE" "$SRC" >&2
-    if ! rtb_exec_one "$WT" "$t" "$T_USE" "$LOGDIR"; then
+    if ! rtb_exec_one "$WT" "$run" "$T_USE" "$LOGDIR"; then
       CLS[i]="undetermined"; DET[i]="exec-setup-failed"; continue
     fi
     if [ "$RTB_EXEC_TIMEDOUT" = "1" ]; then
-      CLS[i]="undetermined"; DET[i]="timeout-at-base"
+      # A timeout cut short by the budget, or by an explicit value below the derived one, says
+      # nothing about the test: ask for a re-run.
+      if [ "$T_USE" -lt "$WANT" ] || [ "$WANT" -lt "$DERIVED" ]; then DET[i]="budget-exhausted"; else DET[i]="timeout-at-base"; fi
+      CLS[i]="undetermined"
     elif [ "$RTB_EXEC_UNSUPPORTED" = "1" ]; then
-      CLS[i]="undetermined"; DET[i]="unsupported-at-base"
+      CLS[i]="undetermined"; DET[i]="unsupported-at-base"; rtb_ledger_append "$B2" "$run" und:unsupported-at-base
     elif [ "$RTB_EXEC_DECOY" = "1" ]; then
       CLS[i]="undetermined"; DET[i]="root-decoy-hit-at-base"
     elif [ "$RTB_EXEC_UNRUNNABLE" = "1" ]; then
@@ -205,27 +211,29 @@ if [ "${#RERUN[@]}" -gt 0 ]; then
       # test's own failure; only a signal death (137/143) stays ambiguous.
       case "$RTB_EXEC_STATE:$RTB_EXEC_RC" in
         SKIP:*) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;
-        PASS:*) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$t" pass ;;
+        PASS:*) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$run" pass ;;
         FAIL:137|FAIL:143) CLS[i]="undetermined"; DET[i]="ambiguous-exit-$RTB_EXEC_RC" ;;
-        FAIL:*) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$t" fail ;;
+        FAIL:*) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$run" fail ;;
         *) CLS[i]="undetermined"; DET[i]="state-$RTB_EXEC_STATE-at-base" ;;
       esac
-    elif tlr_match "$t" && _tlr_get "$TLR_ID" launch.wrapper && [ -n "$_TLR_V" ]; then
+    elif tlr_match "$run" && _tlr_get "$TLR_ID" launch.wrapper && [ -n "$_TLR_V" ]; then
       # A base launcher that predates #2501 ran a wrapper language raw: its rc is no result.
       CLS[i]="undetermined"; DET[i]="base-launcher-predates-result-conversion"
+      rtb_ledger_append "$B2" "$run" und:base-launcher-predates-result-conversion
     else
       case "$RTB_EXEC_RC" in
         77) CLS[i]="undetermined"; DET[i]="skip-at-base" ;;
         124|137|142|143) CLS[i]="undetermined"; DET[i]="ambiguous-exit-$RTB_EXEC_RC" ;;
-        0) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$t" pass ;;
-        *) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$t" fail ;;
+        0) CLS[i]="broken"; DET[i]="passes-at-base"; rtb_ledger_append "$B2" "$run" pass ;;
+        *) CLS[i]="preexisting"; DET[i]="fails-at-base-exit-$RTB_EXEC_RC"; rtb_ledger_append "$B2" "$run" fail ;;
       esac
     fi
+    DET[i]="${DET[i]}$via"
   done
   # 6. Removal failure only warns; the classification stands.
   [ -z "$WT" ] || rtb_wt_remove "$ROOT" "$WT" || true
-  [ -d "$LOGDIR" ] && printf 'run-tests-baseline: base-run logs: %s\n' "$LOGDIR" >&2
 fi
+[ -d "$LOGDIR" ] && printf 'run-tests-baseline: base-run logs: %s\n' "$LOGDIR" >&2
 
 # 7. Hand the classification to the state side; it alone may complete run_tests. Its
 #    output goes to stderr so a refusal's reason reaches the user (stdout stays BASELINE lines).
@@ -241,8 +249,10 @@ for i in "${!TESTS[@]}"; do
     *) N_UND=$((N_UND + 1)) ;;
   esac
 done
-node "$(rtb_wt_native "$RTB_EVIDENCE")" record --session "$SID" --seq "$SEQ" \
-  --classification "$(rtb_wt_native "$CLS_FILE")" --base "$B2" >&2
+rec_args=(record --session "$SID" --seq "$SEQ" --classification "$(rtb_wt_native "$CLS_FILE")")
+[ -z "$B2" ] || rec_args+=(--base "$B2")
+[ "$HAS_NOTE" = 0 ] || rec_args+=(--note "$NOTE")
+node "$(rtb_wt_native "$RTB_EVIDENCE")" "${rec_args[@]}" >&2
 REC_RC=$?
 rm -f "$CLS_FILE"
 
@@ -252,12 +262,9 @@ done
 printf 'BASELINE_SUMMARY: preexisting=%s inherited=%s broken=%s undetermined=%s\n' \
   "$N_PRE" "$N_INH" "$N_BRK" "$N_UND"
 
-# 8. Exit 0 only when every failure pre-existed AND run_tests was completed.
-if [ $((N_BRK + N_UND)) -eq 0 ]; then
-  case "$REC_RC" in
-    0) exit 0 ;;
-    3) die 3 "run_tests changed while classifying; re-run /run-tests" ;;
-    *) die 1 "run_tests was not completed (evidence exit $REC_RC; its reason is above)" ;;
-  esac
-fi
-exit 1
+# 8. The state side's verdict is the exit: it alone applies the #2688 allow-list.
+case "$REC_RC" in
+  0|8) exit "$REC_RC" ;;
+  3) die 3 "run_tests changed while classifying; re-run /run-tests" ;;
+  *) die 1 "run_tests was not completed (evidence exit $REC_RC; its reason is above)" ;;
+esac

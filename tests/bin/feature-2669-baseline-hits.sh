@@ -5,7 +5,7 @@
 #
 # #2669: a failing test that also reached the command guard is that test's one FAIL, so the
 # hook keeps a failing list the baseline CLI can classify. A hit no test can own (HITS>0) gets
-# its own exit (6) and is never accepted through the user's sentinel.
+# its own exit (6) and is never accepted (#2688 retired the user's sentinel; no auto-accept either).
 
 set -uo pipefail
 
@@ -26,14 +26,12 @@ ISO_FIRST="$(make_tmp)"
 harness_isolate "$ISO_FIRST"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
-# The baseline fixtures (mk_fixture_repo, rtb_cli_run, read_step_field) and the sentinel driver
-# (ca_mark, ca_grant). helpers.sh re-pins both state dirs under its own TMPROOT and owns the trap.
+# The baseline fixtures (mk_fixture_repo, rtb_cli_run, read_step_field). helpers.sh re-pins both
+# state dirs under its own TMPROOT and owns the trap.
 SUB_2431="$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2431-run-tests-baseline"
 # shellcheck source=tests/bin/feature-2431-run-tests-baseline/helpers.sh
 source "$SUB_2431/helpers.sh"
 rm -rf "$ISO_FIRST"
-# shellcheck source=tests/bin/feature-2431-run-tests-baseline/cli-accept.sh
-source "$SUB_2431/cli-accept.sh"
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 
 T_PRE="tests/bin/test-preexisting.sh"
@@ -139,17 +137,11 @@ run_unattributed_hit_exit() {
   bh_ck "T5: run_tests stays pending" '"pending"' "$(read_step_field "$sid" run_tests status)"
 }
 
-run_hits_refuse_the_sentinel() {
-  local repo="$TMPROOT/repo-hits" sid="$BH_HITS_SID" out
-  # The listless path (failing-list-unrecorded) is what a FAIL=0 HITS=1 run would otherwise get.
-  out="$(ca_mark "$sid" "$repo" "these fail on main too")"
-  bh_ck "T7: the sentinel records no grant on a run with hits" "(absent)" \
-    "$(read_step_field "$sid" run_tests baseline_accept)"
-  bh_has "T7: the sentinel names the unattributed hits" "$out" 'unattributed hit'
-  # A grant that got there anyway (written directly) is still refused at accept time.
-  bh_ck "T7: fixture — a grant written directly" "ok" "$(ca_grant "$sid" failing-list-unrecorded)"
+# #2688: the user grant is retired; a run with unattributed hits is never auto-accepted either.
+run_hits_are_never_auto_accepted() {
+  local repo="$TMPROOT/repo-hits" sid="$BH_HITS_SID"
   rtb_cli_run "$(mkdir -p "$TMPROOT/cache-t7" && np "$TMPROOT/cache-t7")" "$repo" "$sid"
-  bh_lacks "T7: the CLI does not accept the grant" "$RTB_CLI_OUT" '^BASELINE_ACCEPTED'
+  bh_lacks "T7: the re-run CLI records nothing" "$RTB_CLI_OUT" '^RECORDED'
   bh_ck "T7: the CLI still exits 6" "6" "$RTB_CLI_RC"
   bh_ck "T7: run_tests stays pending" '"pending"' "$(read_step_field "$sid" run_tests status)"
   bh_ck "T7: no completion_basis" "(absent)" "$(read_step_field "$sid" run_tests completion_basis)"
@@ -184,10 +176,7 @@ run_real_run_with_list_and_hit() {
   bh_has "T10: the CLI prints the hit line" "$RTB_CLI_OUT" '^HIT: .*command-guard \(no test id\)'
   bh_lacks "T10: nothing is classified" "$RTB_CLI_OUT" '^BASELINE(_SUMMARY)?: '
   bh_ck "T10: run_tests stays pending" '"pending"' "$(read_step_field "$sid" run_tests status)"
-
-  out="$(ca_mark "$sid" "$repo" "these fail on main too")"
-  bh_has "T10: the sentinel names the unattributed hits" "$out" 'unattributed hit'
-  bh_ck "T10: the sentinel records no grant" "(absent)" "$(read_step_field "$sid" run_tests baseline_accept)"
+  bh_ck "T10: no completion_basis" "(absent)" "$(read_step_field "$sid" run_tests completion_basis)"
 }
 
 case_begin "real-run-with-a-failing-list-and-a-hit-exits-6" "bin/run-tests-baseline"
@@ -202,8 +191,8 @@ case_begin "unattributed-hits-exit-6-with-hit-lines" "bin/run-tests-baseline"
 run_unattributed_hit_exit
 case_end
 
-case_begin "hits-refuse-the-baseline-accept-sentinel" "hooks/workflow-mark/run-tests-baseline-accept-handler.js"
-run_hits_refuse_the_sentinel
+case_begin "hits-are-never-auto-accepted" "bin/run-tests-baseline"
+run_hits_are_never_auto_accepted
 case_end
 
 echo ""

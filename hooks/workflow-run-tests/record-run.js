@@ -9,16 +9,24 @@ const { isContractTrusted, resolveRunOutcome } = require("./outcome");
 const { demotionReason, demotionMessage } = require("./demotion");
 const { stampTestFailureRisk } = require("./test-failure-risk");
 const { boundHits } = require("./hit-summary");
+const { recordParts } = require("./run-parts");
 
 // Evidence that belongs to ONE observed run: baseline (#2431), an UNRUNNABLE accept
-// (#2501 D5-7) and a baseline accept grant (#2517). Any new run clears it, so a later state
-// never inherits an older verdict.
+// (#2501 D5-7) and a baseline note (#2688). Any new run clears it, so a later state never
+// inherits an older verdict. baseline_accept is the retired #2517 grant: never written now,
+// still cleared so a legacy state does not carry it past a new run.
 const RUN_TOMBSTONES = {
   baseline_classification: null,
   completion_basis: null,
   unrunnable_accept_reason: null,
   baseline_accept: null,
+  baseline_note: null,
 };
+
+// run_parts is written only by a settled run that computed it; otherwise left as it was.
+function partsField(r) {
+  return r.runParts === undefined ? {} : { run_parts: r.runParts };
+}
 
 // outcome_source names the outcome file a record came from (null on stdout);
 // dispatch_unsettled names a dispatch whose outcome has not arrived yet.
@@ -39,11 +47,13 @@ function recordFailedExit(r) {
     trigger_command: r.triggerCommand,
     run_outcome: r.runOutcome,
     failing_tests: r.failingTests,
+    failing_test_exits: r.failingExits,
     unrunnable_count: r.unrunnableCount,
     unrunnable_runtimes: null,
     unrunnable_missing_files: null,
     ...hitFields(r),
     ...RUN_TOMBSTONES,
+    ...partsField(r),
     ...sourceFields(r.source, r.unsettledStem),
   });
   // #2430: a red suite outside the red-expected steps is a handoff risk. Never throws.
@@ -61,11 +71,13 @@ function recordDemotion(r) {
     trigger_command: r.triggerCommand,
     run_outcome: r.runOutcome,
     failing_tests: r.failingTests,
+    failing_test_exits: r.failingExits === undefined ? null : r.failingExits,
     unrunnable_count: r.unrunnableCount,
     unrunnable_runtimes: r.reason === "contract-unrunnable" ? r.unrunnableRuntimes : null,
     unrunnable_missing_files: r.reason === "contract-unrunnable" ? r.unrunnableMissingFiles : null,
     ...hitFields(r),
     ...RUN_TOMBSTONES,
+    ...partsField(r),
     ...sourceFields(r.source, r.unsettledStem),
   });
   return demotionMessage(r.reason, r.contract);
@@ -84,12 +96,14 @@ function recordPass(r) {
     trigger_command: null,
     run_outcome: "pass",
     failing_tests: null,
+    failing_test_exits: null,
     unrunnable_count: null,
     unrunnable_runtimes: null,
     unrunnable_missing_files: null,
     hit_count: null,
     hit_summary: null,
     ...RUN_TOMBSTONES,
+    ...partsField(r),
     ...sourceFields(r.source, null),
   }, { origin: "workflow-run-tests-auto-detect" });
   return null;
@@ -135,6 +149,36 @@ function isGreen(input, contract) {
     && contract.fail === 0 && contract.unrunnable === 0 && !(contract.hits > 0);
 }
 
+// Adds this run to run_parts and, when it merges with earlier parts, replaces the run's own
+// failing / hit / unrunnable values with the merged ones. -> true when the merge is not clean.
+function applyRunParts(base, part, input) {
+  if (base.contract === null) return false;
+  const c = base.contract;
+  // A readable current-shape contract; a worker's failure word vetoes green, not the counts.
+  const trusted = base.hitCount !== null && c.shape === "current" && input.workerStatus !== "timeout";
+  try {
+    const { runParts, merged } = recordParts({
+      sessionId: base.sessionId,
+      part,
+      run: {
+        trusted,
+        contract: c,
+        failing: trusted && c.fail === 0 ? [] : base.failingTests,
+        exits: base.failingExits,
+        hitCount: base.hitCount,
+        hitSummary: base.hitSummary,
+        unrunnable: base.unrunnableCount,
+      },
+    });
+    base.runParts = runParts;
+    if (merged === null) return false;
+    Object.assign(base, merged);
+    return merged.failingTests.length > 0 || merged.hitCount > 0 || merged.unrunnableCount > 0;
+  } catch {
+    return false; // fail-open: the run is recorded alone, run_parts untouched
+  }
+}
+
 // -> the { head, detail } diagnostic to surface, or null. `unsettledStem` blocks completion:
 // while a dispatch is unsettled a run may take run_tests away, never grant it,
 // and records no observation that could stand for that dispatch.
@@ -160,8 +204,13 @@ function recordRun(r) {
     stampRisk: r.stampRisk === true,
     contractAbsent: r.contractAbsent === undefined ? contract === null : r.contractAbsent,
   };
+  base.failingExits = base.failingTests !== null && r.failingExits ? r.failingExits : null;
+  const open = settled && r.part ? applyRunParts(base, r.part, input) : false;
   if (r.exitCode !== 0 && r.exitCode !== 77) return recordFailedExit(base);
   if (!settled) return recordDemotion(Object.assign(base, { reason: "dispatch-unsettled" }));
+  if (r.exitCode === 0 && isGreen(input, contract) && open) {
+    return recordDemotion(Object.assign(base, { reason: "run-parts-open" }));
+  }
   if (r.exitCode !== 0 || !isGreen(input, contract)) {
     const reason = r.reason || demotionReason({
       hasProvenance: true,
