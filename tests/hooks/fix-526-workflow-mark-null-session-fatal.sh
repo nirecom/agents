@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # tests/hooks/fix-526-workflow-mark-null-session-fatal.sh
 # Tests: hooks/workflow-mark.js, hooks/workflow-mark
-# Tags: workflow-mark, null-session, signalFatal, exit-2, issue-526, scope:issue-specific
+# Tags: workflow-mark, null-session, strong-channel, not-applied, issue-526, issue-2824, scope:issue-specific
 #
-# After fix (#526), MUST handlers use signalFatal when sessionId unresolved → exit 2.
-# OPTIONAL handlers (RESET_FROM) remain exit 0 with pushMessage.
-# T2.1–T2.6: FAIL until write-code; T2.7/T2.8: PASS now.
+# #526: a MUST handler whose sessionId is unresolved is refused, not silently dropped.
+# #2824: the refusal is UNAPPLIED, told on the strong channel hooks/workflow-mark/emit.js
+# STRONG_CHANNEL names (exit2: stderr + exit 2; block-decision: {decision:"block"}), with the
+# "[NOT APPLIED]" prefix; tests/lib/workflow-mark-output.js judges the form. OPTIONAL handlers
+# (RESET_FROM) stay INFO on the normal channel, exit 0.
 
 set -u
 
@@ -73,31 +75,25 @@ run_mark_null() {
   MARK_ERR="$(cat "$err_file" 2>/dev/null)"
 }
 
-# Assert that a null-session MUST handler exits 2 with a recognizable fatal message.
-assert_must_fatal() {
-  local label="$1" sentinel_cmd="$2"
-  run_mark_null "$sentinel_cmd"
-  if [ "$MARK_RC" -eq 2 ]; then
-    # Also verify stderr contains a meaningful message (NOT recorded / session_id etc.)
-    if echo "$MARK_ERR" | grep -qiE "NOT (recorded|applied)|session_id|could not resolve"; then
-      pass "$label → exit 2 + fatal stderr (null session blocked as fatal)"
-    else
-      pass "$label → exit 2 (null session blocked as fatal; stderr: $MARK_ERR)"
-    fi
-  else
-    fail "$label → expected exit 2 (MUST handler fatal), got rc=$MARK_RC out=$MARK_OUT err=$MARK_ERR"
-  fi
+OUT_LIB="$SCRIPT_CHECKOUT_ROOT/tests/lib/workflow-mark-output.js"
+# check_output <kind unapplied|info> <ERE>: judge the last run's output with the shared helper.
+check_output() {
+  printf '%s' "$MARK_OUT" > "$TMPDIR_BASE/chk-out.txt"; printf '%s' "$MARK_ERR" > "$TMPDIR_BASE/chk-err.txt"
+  CHECK_WHY="$("$NODE_BIN" "$OUT_LIB" check "$1" "$2" "$MARK_RC" "$TMPDIR_BASE/chk-out.txt" "$TMPDIR_BASE/chk-err.txt")"
 }
 
-# Assert that a null-session OPTIONAL handler exits 0.
+# Assert that a null-session MUST handler is refused on the strong channel, naming why.
+assert_must_fatal() {
+  run_mark_null "$2"
+  if check_output unapplied "session|could not resolve"; then pass "$1 → refused on the strong channel (null session)"
+  else fail "$1 → expected an UNAPPLIED refusal on the strong channel: $CHECK_WHY"; fi
+}
+
+# Assert that a null-session OPTIONAL handler stays INFO on the normal channel (exit 0).
 assert_optional_nonfatal() {
-  local label="$1" sentinel_cmd="$2"
-  run_mark_null "$sentinel_cmd"
-  if [ "$MARK_RC" -eq 0 ]; then
-    pass "$label → exit 0 (OPTIONAL handler, non-fatal)"
-  else
-    fail "$label → expected exit 0 (OPTIONAL handler), got rc=$MARK_RC err=$MARK_ERR"
-  fi
+  run_mark_null "$2"
+  if check_output info "session|RESET"; then pass "$1 → INFO on the normal channel (OPTIONAL handler, non-fatal)"
+  else fail "$1 → expected INFO on the normal channel: $CHECK_WHY"; fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -186,7 +182,7 @@ test_t2_7_with_session_id() {
 }
 test_t2_7_with_session_id
 
-# T2.8: RESET_FROM — OPTIONAL handler — must remain exit 0 even after fix.
+# T2.8: RESET_FROM — OPTIONAL handler — stays INFO (exit 0), never the strong channel.
 assert_optional_nonfatal \
   "T2.8 RESET_FROM (optional)" \
   'echo "<<WORKFLOW_RESET_FROM_write_code: test reason>>"'

@@ -18,7 +18,8 @@ run_user_verified_tests() {
     expect_state_step "L4-a. WORKFLOW_USER_VERIFIED → user_verification=complete" \
         "$SID_4A" "user_verification" "complete"
 
-    # L4-b: MARK_STEP_user_verification_complete → (a) state unchanged (b) rejection msg (c) exit 0
+    # L4-b: MARK_STEP_user_verification_complete → (a) state unchanged (b) rejection msg
+    # (c) exit 2 — #2824 moved the refusal to the UNAPPLIED strong channel (stderr, exit 2)
     SID_4B="l4b-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_4B" "$(ALL_PENDING_JSON "$SID_4B")"
     L4B_CMD='echo "<<WORKFLOW_MARK_STEP_user_verification_complete>>"'
@@ -27,15 +28,15 @@ run_user_verified_tests() {
         "$L4B_ESC" "$SID_4B")
     L4B_EXIT=0
     L4B_OUT=$(echo "$L4B_JSON" | CLAUDE_PROJECT_DIR="$REPO_4" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
-        node "$MARK_HOOK" 2>/dev/null) || L4B_EXIT=$?
-    if [ "$L4B_EXIT" = "0" ]; then
-        pass "L4-b(exit). MARK_STEP_user_verification → exit 0"
+        node "$MARK_HOOK" 2>&1) || L4B_EXIT=$?
+    if [ "$L4B_EXIT" = "2" ]; then
+        pass "L4-b(exit). MARK_STEP_user_verification → exit 2 (UNAPPLIED)"
     else
-        fail "L4-b(exit). MARK_STEP_user_verification → expected exit 0, got $L4B_EXIT"
+        fail "L4-b(exit). MARK_STEP_user_verification → expected exit 2, got $L4B_EXIT"
     fi
     expect_no_state_change "L4-b(state). MARK_STEP_user_verification → user_verification stays pending" \
         "$SID_4B" "user_verification" "pending"
-    if echo "$L4B_OUT" | grep -qi "user_verification\|rejected\|additionalContext\|MARK_STEP"; then
+    if echo "$L4B_OUT" | grep -qi "\[NOT APPLIED\].*\(user_verification\|rejected\|MARK_STEP\)"; then
         pass "L4-b(msg). MARK_STEP_user_verification → rejection message in output"
     else
         fail "L4-b(msg). MARK_STEP_user_verification → no rejection in output: $L4B_OUT"

@@ -211,7 +211,7 @@ RC=0
 run_mark() {
     local project_dir="$1" json="$2" run_dir="${3:-$1}"
     echo "$json" | ( cd "$run_dir" && run_with_timeout 30 env CLAUDE_PROJECT_DIR="$project_dir" \
-        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" >/dev/null 2>&1 )
+        WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" >"$TMPDIR_BASE/mark.out" 2>"$TMPDIR_BASE/mark.err" )
     RC=$?
 }
 
@@ -375,10 +375,18 @@ FP_B6="$(compute_fingerprint "$WT_B6")"
 printf '{ this is not valid json' > "$WORKFLOW_DIR/${SID_B6}.json"
 SENTINEL_B6="echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=$FP_B6>>\""
 run_mark "$WT_B6" "$(build_mark_json "$SENTINEL_B6" "$SID_B6" 0 "$WT_B6")"
-if [ "$RC" -eq 0 ]; then
-    pass "B6. corrupt state JSON → process exits 0 (fail-open)"
+# #2824: an unreadable state is no crash but a refusal said aloud — UNAPPLIED on the strong channel.
+B6_WHY="$(node "$SCRIPT_CHECKOUT_ROOT/tests/lib/workflow-mark-output.js" check unapplied 'REVIEW_TESTS' \
+    "$RC" "$TMPDIR_BASE/mark.out" "$TMPDIR_BASE/mark.err")"
+if [ $? -eq 0 ]; then
+    pass "B6. corrupt state JSON → controlled UNAPPLIED refusal, no crash"
 else
-    fail "B6. expected exit 0 on corrupt state, got exit code: $RC"
+    fail "B6. expected an UNAPPLIED refusal on corrupt state: $B6_WHY"
+fi
+if grep -q -E 'TypeError|ReferenceError|SyntaxError|    at ' "$TMPDIR_BASE/mark.err"; then
+    fail "B6. corrupt state JSON crashed the hook: $(head -c 300 "$TMPDIR_BASE/mark.err")"
+else
+    pass "B6. corrupt state JSON → no stack trace on stderr"
 fi
 
 # ============================================================================

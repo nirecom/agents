@@ -116,7 +116,7 @@ run_gate() {
 
 run_mark() {
     local json="$1"
-    echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
+    echo "$json" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>&1 || true  # #2824: UNAPPLIED goes to stderr
 }
 
 build_mark_json() {

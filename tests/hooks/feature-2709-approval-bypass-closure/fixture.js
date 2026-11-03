@@ -11,6 +11,7 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..", "..", "..");
 const mod = (rel) => require(path.join(ROOT, rel));
+const WMO = require("../../lib/workflow-mark-output");
 
 const FK = "fk-2709";
 // #2597: renamed from WORKFLOW_SUPERVISOR_BLOCK_ACCEPTED (BLOCK and WARN share one acceptance).
@@ -48,9 +49,8 @@ function make({ TMP, CFG, eq, ok, show }) {
     const r = spawnSync(process.execPath, [path.join(ROOT, "hooks", "workflow-mark.js")],
       { input: JSON.stringify(input), encoding: "utf8", timeout: 60000, env, cwd: TMP });
     if (r.error) throw new Error(`hook did not run: ${r.error.message}`);
-    let out = {};
-    try { out = JSON.parse(String(r.stdout || "").trim().split("\n").pop() || "{}"); } catch (_) { out = {}; }
-    return String(out.additionalContext || "") + String(r.stderr || "");
+    // #2824: INFO lands in hookSpecificOutput.additionalContext; an UNAPPLIED refusal on stderr (exit 2).
+    return WMO.additionalContextOf(WMO.parseStdout(r.stdout)) + String(r.stderr || "");
   }
 
   // ── 3b: workflow state + RESET_FROM ──
@@ -72,7 +72,8 @@ function make({ TMP, CFG, eq, ok, show }) {
     const msgs = [];
     mod("hooks/workflow-mark/reset-handler.js").handle({
       cmd: resetCmd(step),
-      sessionId: sid, pushMessage: (m) => msgs.push(String(m)), signalFatal: (m) => msgs.push(String(m)), repoCwd: TMP,
+      sessionId: sid, pushMessage: (m) => msgs.push(String(m)), pushUnapplied: (m) => msgs.push(String(m)),
+      signalFatal: (m) => msgs.push(String(m)), repoCwd: TMP,
     });
     return msgs.join("\n");
   }

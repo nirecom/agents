@@ -75,13 +75,13 @@ For each rejected concern, record the verdict durably so it does not re-surface 
 RT-4a. Per `skills/_shared/glossary-drift-check.md`: count a concern whose text holds `[glossary-drift ` as a gap whatever `concern-ledger reject` returns, and run its `--record` with `--step review_tests`.
 - Never reject a concern tagged `[upstream-inconsistency …]`; follow the fork branch of [`skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`](../_shared/codex-review-loop/upstream-inconsistency-pause.md) (stop without the sentinel, return the three items of its fork section under `## Upstream inconsistency`); after A / D, the main conversation revises and re-stages the test files, then re-runs `/review-tests`.
 - On a round 2+ re-run that falls back to `test-reviewer`, pass it the previous round's findings verbatim (the raw report of that round); it only confirms whether each is fixed.
-RT-5. Emit workflow sentinel — two separate Bash calls, not chained:
+RT-5. Return the workflow sentinel to the main conversation — never echo it in the fork:
 RT-5a. Run `node "$AGENTS_MAIN_ROOT/bin/compute-review-scope-fingerprint.js" "<WORKTREE-or-empty>"` (Bash, single standalone command, `<WORKTREE-or-empty>` substituted with RT-0's resolved value); its stdout is `FINGERPRINT`. Non-zero exit → HALT, surface its stderr, emit no sentinel.
-- RT-5b. (adequate) `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=${FINGERPRINT}>>"`
-- RT-5c. (gaps/warnings) `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=${FINGERPRINT} warnings=N — blocking: /write-code stays blocked until the gaps are addressed and /review-tests is re-run>>"`
+- RT-5b. (adequate) end the final report with this last line, `${FINGERPRINT}` replaced by its value: `RUN-IN-MAIN (one standalone Bash call, then next-step): echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: fingerprint=${FINGERPRINT}>>"`
+- RT-5c. (gaps/warnings) end the final report with this last line, `${FINGERPRINT}` replaced by its value: `RUN-IN-MAIN (one standalone Bash call, then next-step): echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: fingerprint=${FINGERPRINT} warnings=N — blocking: /write-code stays blocked until the gaps are addressed and /review-tests is re-run>>"`
 - RT-5d. Skip when `WORKFLOW_WRITE_TESTS_NOT_NEEDED` was emitted (propagated skip).
 
-RT-6. Record the emitted sentinel as `--class E --step review_tests --key review-tests:sentinel`, per `skills/_shared/handoff-record.md`.
+RT-6. Record the returned sentinel line as `--class E --step review_tests --key review-tests:sentinel`, per `skills/_shared/handoff-record.md`.
   When write_code is already complete (second review), run next-step after completion and follow its ACTION; do not re-run /write-code.
 
 ## Rules
@@ -89,8 +89,8 @@ RT-6. Record the emitted sentinel as `--class E --step review_tests --key review
 The Test Case Categories checklist lives in `skills/_shared/test-design.md` — do not duplicate it here.
 The append-vs-new criteria live in `skills/_shared/test-design/append-vs-new.md` — do not restate them here.
 WARNINGS is BLOCKING: `hooks/workflow-gate/review-tests-checker.js` blocks `/write-code` while `warnings_summary` is recorded.
-Emit exactly one sentinel per run: COMPLETE on pass, WARNINGS on any gap or warning.
-Invariant: RT-5 emits exactly one of COMPLETE/WARNINGS; never both, never zero (except exit 4, exit 7, exit 8 and a stop before RT-3 — each HALTs with neither sentinel).
+Return exactly one RUN-IN-MAIN line per run: COMPLETE on pass, WARNINGS on any gap or warning.
+Invariant: RT-5 returns exactly one RUN-IN-MAIN line, COMPLETE or WARNINGS; never both, never zero (except exit 4, exit 7, exit 8 and a stop before RT-3 — each HALTs with neither sentinel).
 Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
 To accept documented gaps and unblock /write-code, or to stop after a write_code reopen (review_tests pending), emit the sentinel below.
 `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`

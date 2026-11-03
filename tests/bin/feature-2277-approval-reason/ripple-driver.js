@@ -5,6 +5,7 @@
 
 const path = require("path");
 const F = require("../../hooks/feature-2277-plan-approval-gate/fixture");
+const WMO = require("../../lib/workflow-mark-output");
 
 const TOP = { closes_issues: [1] };
 const MARK_HOOK = "hooks/workflow-mark.js";
@@ -36,8 +37,9 @@ function modeReset() {
     [{ step: "outline" }], TOP);
   const before = (F.rawEvents(sid) || []).length;
   const refused = markHook(sid, 'echo "<<WORKFLOW_RESET_FROM_outline: fixture rollback reason>>"');
-  F.check("reset from outline over unapproved clarify_intent: refused naming clarify_intent",
-    /RESET_FROM_outline refused/i.test(refused.out) && refused.out.includes("clarify_intent"), refused.out + refused.err);
+  const why = WMO.unappliedFailure({ code: refused.code, stdout: refused.out, stderr: refused.err },
+    /RESET_FROM_outline refused[\s\S]*clarify_intent/i);
+  F.check("reset from outline over unapproved clarify_intent: refused naming clarify_intent", why === null, why);
   F.check("reset from outline over unapproved clarify_intent: no events written",
     (F.rawEvents(sid) || []).length === before, `${before} -> ${(F.rawEvents(sid) || []).length}`);
   F.check("reset from outline over unapproved clarify_intent: outline stays complete",

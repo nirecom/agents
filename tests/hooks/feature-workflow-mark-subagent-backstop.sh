@@ -105,6 +105,7 @@ assert_status() {
 # TC1 — subagent + sentinel → state UNCHANGED (research stays pending)
 # ===========================================================================
 echo ""
+# TC1/TC6 refusal output (strong channel, reason named): feature-2824-sentinel-refusal-output/dispatch.js.
 echo "=== TC1 — subagent sentinel suppressed ==="
 SID="mark-tc1"
 write_state "$SID" "pending" "pending"

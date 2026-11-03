@@ -138,9 +138,11 @@ expect_block_gate_contains() {
 # workflow-mark.js helpers
 # ---------------------------------------------------------------------------
 
+# stdout + stderr: an UNAPPLIED refusal rides the strong channel (stderr when emit.js STRONG_CHANNEL
+# is exit2, a decision:"block" reason on stdout otherwise; #2824), so callers grep both.
 run_mark_hook() {
     local repo="$1" json="$2"
-    echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null || true
+    echo "$json" | CLAUDE_PROJECT_DIR="$repo" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>&1 || true
 }
 
 # Read the state file and extract steps.<step>.status using node.

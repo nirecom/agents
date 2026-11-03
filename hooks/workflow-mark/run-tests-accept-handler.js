@@ -64,22 +64,22 @@ function accept(sessionId, reason) {
 }
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
+  const { cmd, sessionId, pushMessage, pushUnapplied } = ctx;
   const m = cmd.match(RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ);
   if (m) {
     const reason = sanitizeLine(m[1].trim());
     if (reason.replace(/\s/g, "").length < 3) {
-      pushMessage(`workflow-mark: ${LABEL} rejected — reason too short; state unchanged. Re-emit: ${FORM}`);
+      pushUnapplied(`workflow-mark: ${LABEL} rejected — reason too short; state unchanged. Re-emit: ${FORM}`);
       return true;
     }
     if (!sessionId) {
-      signalFatal(`workflow-mark: could not resolve session_id — ${LABEL} NOT recorded.`);
+      pushUnapplied(`workflow-mark: could not resolve session_id — ${LABEL} NOT recorded.`);
       return true;
     }
     try {
       const v = accept(sessionId, reason);
       if (v.why !== null) {
-        pushMessage(`workflow-mark: ${LABEL} rejected — ${v.why}; state unchanged.`);
+        pushUnapplied(`workflow-mark: ${LABEL} rejected — ${v.why}; state unchanged.`);
         return true;
       }
       const runtimes = v.entry.unrunnable_runtimes || "unknown";
@@ -88,12 +88,12 @@ function handle(ctx) {
           `(missing runtimes: ${runtimes}). The Final Report and PR body must say so.`
       );
     } catch (e) {
-      pushMessage(`workflow-mark: failed to write state — ${e.message}. ${LABEL} NOT recorded.`);
+      pushUnapplied(`workflow-mark: failed to write state — ${e.message}. ${LABEL} NOT recorded.`);
     }
     return true;
   }
   if (RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKSLIKE_RE.test(cmd)) {
-    pushMessage(
+    pushUnapplied(
       `workflow-mark: malformed WORKFLOW_${LABEL} — expected: ${FORM} ` +
         "{reason} must not contain ( ) ; | & > or a backtick."
     );
