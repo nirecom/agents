@@ -3,13 +3,11 @@
 
 // CLI for appending an entry to WORKTREE_NOTES.md. Argument parsing and mode
 // resolution live in bin/worktree-notes-append/args.js.
-//
 // Mode A (--issue-number given): promotion pointer for an existing issue (#622)
 //   — routes to BugsFound for a type:incident label, else RelatedTasks; idempotent on (#N).
-// Mode B (--issue-number omitted): finding authoring (#1886) via --section/--title
-//   [--severity high|low|none]; severity required only for BugsFound, and `high`
-//   is kept verbatim in the Final Report; idempotent on the entry body.
-//
+// Mode B (--issue-number omitted): finding authoring (#1886) via --section/--title,
+//   [--severity] and [--user-acknowledged]; markers come from composeEntryMarkers;
+//   idempotent on the entry body.
 // Both modes: atomic write via tmp + rename, `- (none)` placeholder replacement,
 // missing-section append at EOF.
 
@@ -17,7 +15,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const {
-  parseSectionEntries,
+  parseSectionEntries, composeEntryMarkers,
 } = require("../hooks/lib/worktree-notes-sections");
 const { resolveArgs } = require("./worktree-notes-append/args");
 
@@ -198,7 +196,7 @@ function main() {
   const args = resolveArgs(process.argv.slice(2));
   if (!args) return 2;
 
-  const { mode, title, issueNumber, severity, skipIfMain } = args;
+  const { mode, title, issueNumber, severity, userAcknowledged, skipIfMain } = args;
 
   const resolved = validatePath(args.notesPath);
   if (!resolved) return 2;
@@ -240,7 +238,7 @@ function main() {
   const eol = detectEol(text);
   const newLine = mode === "A"
     ? `- ${title} (#${issueNumber}) <!-- promoted: #${issueNumber} -->`
-    : (severity === "high" ? `- ${title} <!-- severity: high -->` : `- ${title}`);
+    : `- ${title}${userAcknowledged === null ? "" : composeEntryMarkers({ severity, userAcknowledged })}`;
 
   let updated;
   if (text.length === 0) {

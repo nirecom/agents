@@ -4,7 +4,8 @@
 // bin/worktree-notes-append.js (split out per rules/coding/file-split.md).
 // Mode is discriminated by --issue-number: present = Mode A (existing-issue
 // promotion, section from --label); absent = Mode B (finding authoring,
-// section from --section, --severity mandatory for BugsFound only).
+// section from --section, --severity mandatory for BugsFound only,
+// --user-acknowledged mandatory for every section but ManualReminders).
 
 const { parseArgs } = require("util");
 
@@ -13,6 +14,8 @@ const { parseArgs } = require("util");
 // though a reminder is never promoted to an issue.
 const MODE_B_SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks", "ManualReminders"];
 const SEVERITY_VALUES = ["high", "low", "none"];
+const USER_ACK_SECTIONS = ["BugsFound", "RelatedTasks", "NextTasks"];
+const USER_ACK_VALUES = ["true", "false"];
 
 function err(msg) {
   process.stderr.write(`[worktree-notes-append] ${msg}\n`);
@@ -29,6 +32,7 @@ function parseCliArgs(argv) {
         label: { type: "string", multiple: true },
         section: { type: "string" },
         severity: { type: "string" },
+        "user-acknowledged": { type: "string" },
         "skip-if-main": { type: "boolean" },
       },
       strict: true,
@@ -60,7 +64,8 @@ function validateTitle(title) {
   return true;
 }
 
-// Returns { mode, notesPath, section, title, issueNumber, severity, skipIfMain }
+// Returns { mode, notesPath, section, title, issueNumber, severity,
+// userAcknowledged, skipIfMain }
 // or null after emitting the reason on stderr (caller exits 2).
 function resolveArgs(argv) {
   const args = parseCliArgs(argv);
@@ -70,6 +75,7 @@ function resolveArgs(argv) {
   const issueNumberRaw = args["issue-number"];
   const sectionRaw = args.section;
   const severityRaw = args.severity;
+  const userAckRaw = args["user-acknowledged"];
   const labels = Array.isArray(args.label) ? args.label : [];
   const skipIfMain = Boolean(args["skip-if-main"]);
   const title = args.title;
@@ -83,8 +89,8 @@ function resolveArgs(argv) {
   const modeA = issueNumberRaw !== undefined;
 
   if (modeA) {
-    if (severityRaw !== undefined || sectionRaw !== undefined) {
-      err("mode conflict: --severity/--section belong to the finding-authoring mode; drop --issue-number to use them");
+    if (severityRaw !== undefined || sectionRaw !== undefined || userAckRaw !== undefined) {
+      err("mode conflict: --severity/--section/--user-acknowledged belong to the finding-authoring mode; drop --issue-number to use them");
       return null;
     }
     if (!issueNumberRaw || !/^\d+$/.test(String(issueNumberRaw))) {
@@ -99,6 +105,7 @@ function resolveArgs(argv) {
       title,
       issueNumber: parseInt(issueNumberRaw, 10),
       severity: null,
+      userAcknowledged: null,
       skipIfMain,
     };
   }
@@ -130,6 +137,16 @@ function resolveArgs(argv) {
     err(`--severity applies only to --section BugsFound, not ${sectionRaw}`);
     return null;
   }
+  // Whether the user knows of the follow-up gates its issue filing (#2903).
+  if (USER_ACK_SECTIONS.includes(sectionRaw)) {
+    if (!USER_ACK_VALUES.includes(userAckRaw)) {
+      err(`--user-acknowledged is required for --section ${sectionRaw} (one of: ${USER_ACK_VALUES.join(", ")})`);
+      return null;
+    }
+  } else if (userAckRaw !== undefined) {
+    err(`--user-acknowledged does not apply to --section ${sectionRaw}`);
+    return null;
+  }
 
   return {
     mode: "B",
@@ -139,6 +156,7 @@ function resolveArgs(argv) {
     title,
     issueNumber: null,
     severity: severityRaw === undefined ? null : severityRaw,
+    userAcknowledged: userAckRaw === undefined ? null : userAckRaw === "true",
     skipIfMain,
   };
 }

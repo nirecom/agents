@@ -22,12 +22,46 @@ class GenError extends Error {
     }
 }
 
-const BASE_REL = 'settings.json';
-const EXT_REL = 'settings-extension.json';
-
 const bail = (msg) => {
     throw new GenError(msg);
 };
+
+// install/deployed-sources.txt owns which repo paths are the base and the extension (#2303).
+// Read module-relative so a copied install/ tree resolves its own declaration; no fallback.
+// A line with an absolute or ".." path, no path, or a kind other than required|optional bails.
+const DECL_REL = path.join('install', 'deployed-sources.txt');
+
+const readDeclaredRoles = () => {
+    let text;
+    try {
+        text = fs.readFileSync(path.join(DEFAULT_ROOT, DECL_REL), 'utf8');
+    } catch (e) {
+        bail(`${DECL_REL} could not be read (${e.code || e.message}) - fail-closed`);
+    }
+    const roles = Object.create(null);
+    for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line || line.startsWith('#')) continue;
+        const [role, rel, kind] = line.split(/\s+/);
+        if (!rel) bail(`${DECL_REL} line "${line}" has no path - fail-closed`);
+        if (path.isAbsolute(rel) || /^[\\/]/.test(rel) || /^[A-Za-z]:/.test(rel)
+            || rel.split(/[\\/]/).includes('..')) {
+            bail(`${DECL_REL} path "${rel}" must be repo-relative without ".." - fail-closed`);
+        }
+        if (kind !== 'required' && kind !== 'optional') {
+            bail(`${DECL_REL} line "${line}" needs a required|optional third column - fail-closed`);
+        }
+        roles[role] = { rel, required: kind === 'required' };
+    }
+    return roles;
+};
+
+const declaredRel = (roles, role) =>
+    (roles[role] && roles[role].rel) || bail(`${DECL_REL} declares no "${role}" entry - fail-closed`);
+
+const DECLARED_ROLES = readDeclaredRoles();
+const BASE_REL = declaredRel(DECLARED_ROLES, 'settings-base');
+const EXT_REL = declaredRel(DECLARED_ROLES, 'settings-extension');
 
 // Schema-aware merge (avoids prototype pollution from generic deep-merge):
 //   - hooks.*                          : arrays concatenated

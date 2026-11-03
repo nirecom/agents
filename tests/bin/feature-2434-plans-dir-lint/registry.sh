@@ -77,6 +77,7 @@ worker-commit-push.draft.json                       | artifact
 worker-x-1.draft.json                               | artifact
 issue-create-dispatch.txt                           | artifact
 issue-create-survey.json                            | artifact
+issue-create-confirm.log                            | artifact
 sweep-issues-survivors.tsv                          | artifact
 sweep-issues-decisions.tsv                          | artifact
 refactor-prompts-scan.json                          | artifact

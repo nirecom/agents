@@ -46,6 +46,7 @@ t37_seed() { # <dir>
     chmod +x "$d/hooks/post-merge" "$d/hooks/post-checkout" 2>/dev/null || true
     cp "$ASSEMBLE" "$d/install/assemble-settings.js"
     cp "$SCRIPT_CHECKOUT_ROOT"/install/lib/*.js "$d/install/lib/" 2>/dev/null || true
+    copy_deployed_sources "$d"
     printf '%s\n' '# fixture PATH-exposed list (never the real one)' > "$d/install/path-exposed-commands.txt"
     mk_tool "$d" bin/fx-tool env-bash
     write_ssot "$d" bin/fx-tool

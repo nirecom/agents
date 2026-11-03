@@ -2,8 +2,8 @@
 # review-survey-verdict-codex.sh — second opinion on the survey verdict (never calls `gh`).
 #   --artifact <survey.json> --out <final.json> [--no-log]; exit always 0.
 #   stdout line 1 "## Issue Verdict Review: PERFORMED|SKIPPED|FAILED — …";
-#   last line "review_result: replaced|upheld|invalid|skipped".
-# A structurally valid reviewer verdict REPLACES the survey's in either direction; agreement upholds it.
+#   last line "review_result: disputed|upheld|invalid|skipped".
+# The survey verdict always stays top-level; a disagreeing reviewer is recorded in review{} as disputed.
 # Failure fold: codex absent → skipped; every other failure → invalid; both hold the survey
 # verdict verbatim and force the confirm gate (G4). No failure may promote a verdict.
 # No on/off toggle; web search is opt-in (ISSUE_VERDICT_WEB_SEARCH, default off) — rationale:
@@ -95,9 +95,9 @@ write_log() {  # <status> <detail>
 }
 
 # write_final <status> <detail> <review-json|"">
-# Composes the final artifact: the survey artifact carried forward, its verdict fields
-# either held or replaced, `survey{}` preserving what the survey concluded, and
-# `review{}` recording which of the two the top-level fields came from and why.
+# Composes the final artifact: the survey artifact carried forward with its verdict fields
+# held, `survey{}` preserving what the survey concluded, and `review{}` recording what
+# the reviewer concluded and why.
 # Sets WRITE_OK=0 on failure — an unwritable --out must never be silent, because the
 # caller reads the artifact and would otherwise act on a stale or absent file.
 WRITE_OK=1
@@ -151,29 +151,22 @@ out.candidates = (Array.isArray(artifact.candidates) ? artifact.candidates : [])
   parent_is_meta: c.parent_is_meta === undefined ? false : c.parent_is_meta,
   has_sub_issues: c.has_sub_issues === undefined ? false : c.has_sub_issues,
 }));
-// Only a `replaced` fold moves the top-level fields; every other status holds the
-// survey verbatim, which is what makes the failure fold safe.
-if (status === "replaced" && review) {
-  out.verdict = review.verdict;
-  out.target = review.target;
-  out.children = review.children;
-  out.related = review.related;
-  out.reason = review.reason;
-  out.same_fix = review.same_fix;
-} else {
-  out.verdict = survey.verdict;
-  out.target = survey.target;
-  out.children = survey.children;
-  out.related = survey.related;
-  out.reason = survey.reason;
-  out.same_fix = survey.same_fix;
-}
+// The top-level fields always hold the survey: a reviewer with less evidence never
+// overrides it; a disagreement is settled by the user from review{} (#2225).
+out.verdict = survey.verdict;
+out.target = survey.target;
+out.children = survey.children;
+out.related = survey.related;
+out.reason = survey.reason;
+out.same_fix = survey.same_fix;
 out.survey = survey;
 out.review = {
   status: status,
   detail: process.env.REVIEW_DETAIL || "",
   verdict: review ? review.verdict : null,
   target: review ? review.target : null,
+  children: review && Array.isArray(review.children) ? review.children : null,
+  related: review && Array.isArray(review.related) ? review.related : null,
   reason: review ? review.reason : "",
   worth_filing: review ? review.worth_filing : null,
   same_fix: review && typeof review.same_fix === "boolean" ? review.same_fix : null,
@@ -431,9 +424,9 @@ if [[ "$SAME" == "yes" ]]; then
     RESULT="upheld"
     HEADER="## Issue Verdict Review: PERFORMED — the reviewer upheld the survey verdict ($SURVEY_VERDICT)"
 else
-    write_final "replaced" "the reviewer replaced the survey verdict" "$V_JSON"
-    RESULT="replaced"
-    HEADER="## Issue Verdict Review: PERFORMED — survey verdict $SURVEY_VERDICT replaced by $REVIEW_VERDICT"
+    write_final "disputed" "the reviewer disputed the survey verdict" "$V_JSON"
+    RESULT="disputed"
+    HEADER="## Issue Verdict Review: PERFORMED — survey verdict $SURVEY_VERDICT disputed by reviewer $REVIEW_VERDICT"
 fi
 
 finish_written "$HEADER" "$RESULT"

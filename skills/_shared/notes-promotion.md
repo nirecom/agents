@@ -16,13 +16,18 @@ SSOT for turning `WORKTREE_NOTES.md` findings into GitHub issues. Referenced by 
 
 **List the work, NP-5.** `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" list "<notesPath>"` — the output already excludes entries that carry a promotion marker.
 
-**Emit a one-line notice before creating anything, NP-6.** The number of entries about to become issues, and the reason they are filed at this moment (the notes are about to become unreachable).
+**Emit a one-line notice before creating anything, NP-6.** Give two counts — entries filed without asking (`userAcknowledged: true`) and entries confirmed with the user first (`userAcknowledged: false`) — and the reason they are handled at this moment (the notes are about to become unreachable).
 
-**Walk the listed entries in list order, NP-7.** Invoke `/issue-create` with the entry text and keep the issue number it returns.
+**Walk the listed entries in list order, branching on `userAcknowledged`, NP-7.**
+
+- `true`: invoke `/issue-create` with the entry text without asking, and keep the issue number it returns; when `review.worth_filing` is `true`, say so in the filing notice.
+- `false`: explain in 1–2 sentences how the finding arose, including `review.worth_filing` when known, then AskUserQuestion whether to file it; on approval, invoke `/issue-create` as for `true`.
+- Use severity only to order and display entries, never to decide whether to ask.
 
 **Annotate each entry as soon as its number is known, NP-8.** `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" annotate "<notesPath>" <lineNumber> <issueNumber>`; repeating an annotation is a byte-identical no-op, so an interrupted pass is safe to re-run.
 
-**Never defer the filing itself, NP-9.** The implementation of a finding is the only part that moves to a separate session.
+**Never defer the filing itself, NP-9.** For an acknowledged (`true`) entry or one the user approved, the implementation of a finding is the only part that moves to a separate session.
+When the user declines an entry, leave it unannotated; the Final Report shows it as `[issue-TBD]`.
 
 **Report failures without annotating, NP-10.** When a create fails, leave the entry unannotated and report the failure — an unmarked entry is picked up by the next callsite, a wrongly-marked one is lost.
 
