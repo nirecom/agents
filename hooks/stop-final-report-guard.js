@@ -88,6 +88,14 @@ function noHeadingReason(sid, h2Header) {
   return `${reason}\n\nOutput the following verbatim as your next assistant text:\n\n${rendered.trim()}`;
 }
 
+// excerptAround(line, token) -> at most 80 chars of the trimmed line around the token (#1169).
+function excerptAround(line, token) {
+  const t = line.trim();
+  if (t.length <= 80) return t;
+  const start = Math.max(0, Math.min(t.indexOf(token) - 40, t.length - 80));
+  return `${start > 0 ? "…" : ""}${t.slice(start, start + 80)}${start + 80 < t.length ? "…" : ""}`;
+}
+
 if (require.main === module) {
   const r = readHookInput();
   if (r.kind !== "ok") {
@@ -179,7 +187,8 @@ if (require.main === module) {
     block(
       `[final-report] Emit the Final Report with all 13 section headings present. ` +
       `The following headings were missing from your output: ${missing.join(", ")}. ` +
-      `Re-emit the Final Report verbatim — do not reformat, summarize, reorder, or merge sections. ` +
+      `Output only the corrected Final Report — no preamble, apology, or explanation. ` +
+      `Re-emit it verbatim — do not reformat, summarize, reorder, or merge sections. ` +
       `${EXIT_HATCH_TEXT} (Hook: stop-final-report-guard.js)\n\n` +
       schema.buildPostMergeLines(env).join("\n")
     );
@@ -189,10 +198,14 @@ if (require.main === module) {
   const tokens = finalReportBody.match(tokenRegex);
   if (tokens && tokens.length > 0) {
     const unique = Array.from(new Set(tokens));
+    const lines = finalReportBody.split(/\r?\n/);
+    const found = unique.map((t) => `${t} in "${excerptAround(lines.find((l) => l.includes(t)) || t, t)}"`);
     block(
       `[final-report] The Final Report contains unsubstituted placeholder tokens. ` +
       `Replace all \`<TOKEN>\` placeholders before emitting. ` +
-      `Found: ${unique.join(", ")}. ${EXIT_HATCH_TEXT} ` +
+      `Found: ${found.join("; ")}. ` +
+      `If every flagged token is in your own text after the report, do not re-emit the report; say so in one line. ` +
+      `${EXIT_HATCH_TEXT} ` +
       `(Hook: stop-final-report-guard.js)`
     );
   }

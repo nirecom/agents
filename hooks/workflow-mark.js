@@ -24,6 +24,7 @@ const { resolveRepoCwd } = require("./lib/path-normalize");
 // workflow-gate.js (SSOT: hooks/lib/tool-command-text.js, sentinel-command.js).
 const { isCommandTool, commandTextOf, commandListOf } = require("./lib/tool-command-text");
 const { analyzeSentinelCommand } = require("./lib/sentinel-command");
+const { hasLineSentinel } = require("./workflow-mark/line-sentinel");
 const { isSubagentCall } = require("./lib/subagent-detect");
 
 const notNeededHandlers = require("./workflow-mark/not-needed-handlers");
@@ -98,7 +99,10 @@ const analysis = analyzeSentinelCommand(input.tool_name, input.tool_input);
 // #2877: the receipt says the sentinel reached this hook; its outcome says the run finished.
 // The Stop backstop tells the user about a sentinel with neither.
 const toolUseId = input.tool_use_id;
-const receipted = analysis.sentinelPresent && !!sessionId && recordReceipt(sessionId, toolUseId, analysis.sentinelParts);
+// #1981: a sentinel statement inside a multi-statement script is refused aloud, never dropped.
+const lineSentinel = !analysis.sentinelPresent && hasLineSentinel(command);
+const receipted = (analysis.sentinelPresent || lineSentinel) && !!sessionId &&
+  recordReceipt(sessionId, toolUseId, lineSentinel ? [command] : analysis.sentinelParts);
 const applied = [];
 const unappliedParts = [];
 function finish() {
@@ -150,13 +154,19 @@ if (mergeResult.hit) {
 // sentinel is refused aloud so the fork returns it instead of believing it applied.
 // push/merge detection above still runs for subagents (C1 regression guard).
 if (isSubagentCall(input)) {
-  if (!analysis.sentinelPresent) done();
+  if (!analysis.sentinelPresent && !lineSentinel) done();
   refuseAll(
     "workflow-mark: a sentinel emitted inside a subagent / fork is NOT applied — it only takes effect " +
       "in the main conversation. Return the exact echo line to the main conversation and run it there."
   );
 }
 
+if (lineSentinel) {
+  refuseAll(
+    "workflow-mark: a sentinel inside a multi-statement script is NOT applied. " +
+      'Re-run it as its own standalone Bash call: echo "<<WORKFLOW_...>>"'
+  );
+}
 if (!analysis.sentinelPresent) done(); // no sentinel content — nothing to record
 if (!analysis.clean) {
   refuseAll(

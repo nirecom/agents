@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/stop-final-report-guard.js, hooks/stop-final-report-guard/render-embed.js, hooks/stop-final-report-guard/exits.js
-// Tags: feature-2337, stop-guard, final-report, render-embed, lane-a, scope:issue-specific, TL2, pwsh-not-required, feature-1192, lane-b, workflow-off, yield, exit-hatch
+// Tags: feature-2337, stop-guard, final-report, render-embed, lane-a, scope:issue-specific, TL2, pwsh-not-required, feature-1192, lane-b, workflow-off, yield, exit-hatch, fix-1169, block-reason-wording, excerpt-head
 // #2337: the renderer's stdout stayed in a tool result, so the Final Report heading never reached
 // the assistant text and lane A blocked with only "run /session-close". Lane A's no-heading block
 // now carries the rendered Final Report and the shared exit-hatch text; when the renderer fails,
@@ -159,5 +159,64 @@ test("lane-a-and-lane-b-name-the-same-exits", () => {
   }
   assert.ok(b.reason.includes(hatch), `lane B reason lacks EXIT_HATCH_TEXT:\n${b.reason}`);
   assert.ok(b.reason.includes("<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"), "lane B keeps its own exit");
+});
+caseEnd();
+
+// #1169: the block reasons tell the model what to output next, so a re-emit carries no preamble
+// and a token in the model's own trailing text does not trigger a duplicate report.
+function tokenBlock(sid, extra) {
+  G.writeEnv(sid);
+  const r = G.runGuard(sid, G.writeTranscript(TRANSCRIPTS, sid, G.reportText(sid, { extra })), SB);
+  assert.strictEqual(r.rc, 2, `fixture: the leftover token must block: ${r.out}`);
+  return r;
+}
+
+caseBegin("token-block-quotes-the-line-and-says-do-not-re-emit", "hooks/stop-final-report-guard.js");
+test("token-block-quotes-the-line-and-says-do-not-re-emit", () => {
+  const r = tokenBlock("w-token-line", "\nSee <PR_NUMBER> for the merge.");
+  assert.ok(r.reason.includes('<PR_NUMBER> in "See <PR_NUMBER> for the merge."'),
+    `the reason must quote the line holding the token:\n${r.reason}`);
+  assert.ok(/do not re-emit/i.test(r.reason), `the reason must say not to re-emit for own trailing text:\n${r.reason}`);
+
+  const long = `Trailing note ${"x".repeat(150)} <PR_NUMBER> end`;
+  const lr = tokenBlock("w-token-long", `\n${long}`);
+  const m = lr.reason.match(/<PR_NUMBER> in "([^"]*)"/);
+  assert.ok(m, `the reason must quote an excerpt for a long line:\n${lr.reason}`);
+  assert.ok(m[1].length <= 83, `the excerpt must be cut near 80 chars, got ${m[1].length}`);
+  assert.ok(!lr.reason.includes(long), "the full long line must not be pasted");
+});
+caseEnd();
+
+// A token at the start of a long line: the excerpt starts at the token, and only its tail is cut.
+caseBegin("token-at-line-start-excerpt-cuts-only-the-tail", "hooks/stop-final-report-guard.js");
+test("token-at-line-start-excerpt-cuts-only-the-tail", () => {
+  const long = `<PR_NUMBER> ${"y".repeat(150)}`;
+  const r = tokenBlock("w-token-head", `\n${long}`);
+  const m = r.reason.match(/<PR_NUMBER> in "([^"]*)"/);
+  assert.ok(m, `the reason must quote an excerpt for a long line:\n${r.reason}`);
+  assert.ok(m[1].startsWith("<PR_NUMBER>"), `the excerpt must start at the token, got ${JSON.stringify(m[1])}`);
+  assert.ok(m[1].endsWith("…"), `the cut tail must end with an ellipsis, got ${JSON.stringify(m[1])}`);
+  assert.strictEqual(m[1].indexOf("…"), m[1].length - 1, `only the tail carries an ellipsis: ${JSON.stringify(m[1])}`);
+  assert.strictEqual(m[1], `${long.slice(0, 80)}…`, "the excerpt is the first 80 chars plus the ellipsis");
+});
+caseEnd();
+
+caseBegin("missing-heading-block-asks-for-the-report-only", "hooks/stop-final-report-guard.js");
+test("missing-heading-block-asks-for-the-report-only", () => {
+  const r = laneA("w-missing", "missing-heading", null);
+  assert.strictEqual(r.rc, 2, `fixture: a missing heading must block: ${r.out}`);
+  assert.ok(r.reason.includes("Output only the corrected Final Report"), `reason:\n${r.reason}`);
+  assert.ok(/no preamble, apology, or explanation/i.test(r.reason), `reason:\n${r.reason}`);
+  assert.ok(r.reason.includes("Re-emit it verbatim"), `the verbatim instruction stays:\n${r.reason}`);
+});
+caseEnd();
+
+caseBegin("reworded-block-reasons-keep-the-exit-hatch", "hooks/stop-final-report-guard.js");
+test("reworded-block-reasons-keep-the-exit-hatch", () => {
+  const hatch = G.exitHatchText();
+  const token = tokenBlock("w-hatch-token", "\nSee <PR_NUMBER> for the merge.");
+  const missing = laneA("w-hatch-missing", "missing-heading", null);
+  assert.ok(token.reason.includes(hatch), `token reason lacks EXIT_HATCH_TEXT:\n${token.reason}`);
+  assert.ok(missing.reason.includes(hatch), `missing-heading reason lacks EXIT_HATCH_TEXT:\n${missing.reason}`);
 });
 caseEnd();
