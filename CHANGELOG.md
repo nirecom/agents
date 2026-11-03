@@ -124,3 +124,7 @@ Changes: Final Report: follow-up lines start with their issue number, entries th
 ### FEATURE: PR #2914 (2026-11-03)
 Background: feat(#2824): show why a refused workflow sentinel or grant was not applied
 Changes: A workflow sentinel or grant that is rejected now shows why and what to do next, and a Stop-time notice lists any sentinel that was never applied.
+
+### FEATURE: PR #2921 (2026-11-04)
+Background: fix(#2514, #2919, #1981, #1169): make session-close SC-7 show alert f...
+Changes: Session close now shows alert findings to the user at SC-7; findings the Stop hook only handed to the model no longer count as shown.;A workflow sentinel inside a multi-line shell script now produces a clear "not applied" message instead of being ignored silently.;The Final Report guard asks only for the corrected report and no longer triggers a duplicate full report.;Session close no longer emits a step sentinel that the workflow rejects, and a paused alert can now be closed at session end.
