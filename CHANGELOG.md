@@ -120,3 +120,7 @@ Changes: Glossary entries can declare a `Short forms` field (a shorter form of a
 ### FEATURE: PR #2913 (2026-11-03)
 Background: feat(#2903, #2904, #1926, #2225, #2303, #1076): fix the Final Report follow-up and Post-Merge sections
 Changes: Final Report: follow-up lines start with their issue number, entries the user already knows about are filed without a second question, and Post-Merge restart judgment reads the installers' declared deploy list (#2903, #2904, #1926, #2225, #2303, #1076).
+
+### FEATURE: PR #2914 (2026-11-03)
+Background: feat(#2824): show why a refused workflow sentinel or grant was not applied
+Changes: A workflow sentinel or grant that is rejected now shows why and what to do next, and a Stop-time notice lists any sentinel that was never applied.
