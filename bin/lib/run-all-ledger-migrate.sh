@@ -51,6 +51,12 @@ _ralm_sweep_temps() {
 
 _ralm_sum() { cksum <"$1" 2>/dev/null || printf 'none'; }
 
+# _ralm_current_seg <name> — 0 for a segment of a current format (v2 ledger, branch.v1 cache, #2688).
+_ralm_current_seg() {
+    case "$1" in v2.*|branch.*) return 0 ;; esac
+    return 1
+}
+
 # _ralm_may_delete <claim> <sum-before-read> — the claim is unchanged since it was read, so
 # no line a legacy writer appended after the rename can be lost by deleting it.
 _ralm_may_delete() {
@@ -66,7 +72,7 @@ _ralm_claim() {
     local f
     while IFS= read -r f; do
         [ -n "$f" ] || continue
-        case "$2" in '*.seg') case "${f##*/}" in v2.*) continue ;; esac ;; esac
+        case "$2" in *.seg) _ralm_current_seg "${f##*/}" && continue ;; esac
         [ -e "$f.migrating" ] && continue
         [ -n "${_RALM_SKIP_DEST:-}" ] && "$_RALM_SKIP_DEST" "$f" && continue
         mv "$f" "$f.migrating" 2>/dev/null || continue
@@ -146,7 +152,7 @@ run_all_ledger_migrate_baseline() {
     n=0
     for f in "$dir"/$pat "$dir"/$pat.migrating "$dir"/.migrate.tmp.*; do
         [ -e "$f" ] || continue
-        case "${f##*/}" in v2.*) continue ;; esac
+        _ralm_current_seg "${f##*/}" && continue
         n=1; break
     done
     [ "$n" = "1" ] || return 0
@@ -159,7 +165,7 @@ run_all_ledger_migrate_baseline() {
     for f in "$dir"/$pat.migrating; do
         [ -f "$f" ] || continue
         n="${f##*/}"; n="${n%.migrating}"
-        case "$n" in v2.*) continue ;; esac
+        _ralm_current_seg "$n" && continue
         _ralm_base_dest_foreign "$f" && continue
         dest="$dir/v2.$_RALM_TOK-${n#*-}"
         sum="$(_ralm_sum "$f")"

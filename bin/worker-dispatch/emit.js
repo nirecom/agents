@@ -247,7 +247,19 @@ function renderedFields(result) {
     },
   };
   if (hits.length > 0) fields.worker_result.hits = hits;
+  const exits = exitMap(result.failingExits, fields.worker_result.failing_tests);
+  if (exits !== null) fields.worker_result.failing_exits = exits;
   return fields;
+}
+
+// {path: exit} restricted to the rendered failing list and non-negative integer exits; null when empty.
+function exitMap(value, failing) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const out = {};
+  for (const [p, exit] of Object.entries(value)) {
+    if (failing.includes(p) && Number.isSafeInteger(exit) && exit >= 0) out[p] = exit;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 // Verdict fields of a test-runner result: status, exit_code, duration_ms, worker_result.
@@ -277,6 +289,7 @@ function resultFromOutcome(outcome) {
     runContract: wr.run_contract === undefined ? null : wr.run_contract,
   };
   if (Array.isArray(wr.hits)) result.hits = wr.hits;
+  if (wr.failing_exits !== undefined) result.failingExits = wr.failing_exits;
   return result;
 }
 

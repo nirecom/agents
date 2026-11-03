@@ -32,6 +32,5 @@ Only classes D and E have per-step schemas. Classes A–C, F, and G follow the c
 | `write_code` | E | `write-code:checks-skipped` | WCD-5 surfaced a `check skipped` note | which check was skipped and why | `-` |
 | `write_code` | D | `write-code:scope-expansion` | WCD-5 surfaced a scope-expansion note | the approved scope expansion | `<PLANS_DIR>/<sid>-detail.md` |
 | `run_tests` | D | `run-tests:flaky` | Re-running changed a test's result | target test + how it was stabilized | `-` |
-| `run_tests` | E | `run-tests:sentinel-recovery` | RNT-9 took the overwritten-sentinel recovery or the `NONE` route | which recovery route was taken | state file path |
 | `push_branch` (or `merge_to_main`) | D | `commit-push:blocked` | `skills/_shared/commit-push-dispatch.md` outcome is `gate_blocked` / `branch_mismatch` / `staging_incomplete` / `staging_check_failed` / `commit_timeout` / `push_failed` / `conflict` / `bootstrap_pending` | outcome name + the workaround that worked | `-` |
 | `push_branch` (or `merge_to_main`) | E | `commit-push:pushed` | `skills/_shared/commit-push-dispatch.md` outcome is `pushed` / `pr_created` / `pr_reused` / `up_to_date` | pushed branch (evidence no re-push is needed) | state `last_pushed_sha` |

@@ -16,6 +16,10 @@ const { formatReviewTestsReopenNotice } = require("../workflow-state/review-test
 // run_tests became skippable this door must verify the docs-only fact itself.
 // Single owner of the predicate — never restate the allowlist here.
 const { isDocsOnlyStaged } = require("../workflow-gate/staged-evidence");
+const { RUN_EVIDENCE_KINDS } = require("../workflow-state/record-step-verdict/run-tests-evidence");
+
+// Refusals whose wording record-step-verdict already owns: relayed as-is.
+const RELAYED_KINDS = ["no-release-evidence", "glossary-incomplete", ...RUN_EVIDENCE_KINDS];
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;
@@ -122,7 +126,7 @@ function handle(ctx) {
           `echo "<<${confirmSentinelFor(stepName)}: {summary}>>" ` +
           `(or verify CONFIRM_${stepName.toUpperCase()}=off in your config).`
       );
-    } else if (!res.ok && (res.kind === "no-release-evidence" || res.kind === "glossary-incomplete")) {
+    } else if (!res.ok && RELAYED_KINDS.includes(res.kind)) {
       pushMessage(`workflow-mark: ${res.message.replace(/^record-step-verdict: /, "")}`);
     } else if (!res.ok) {
       pushMessage(

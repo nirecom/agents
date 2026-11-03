@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feature-2517-pr-body-completion-note.sh
 # Tests: bin/worker-dispatch/workers/commit-push/pr.js, hooks/lib/run-tests-completion-note.js
-# Tags: TL2, commit-push, pr-body, run-tests, completion-note, baseline-accept, unrunnable, disclosure, idempotency, scope:issue-specific
+# Tags: TL2, commit-push, pr-body, run-tests, completion-note, baseline-accept, unrunnable, disclosure, idempotency, scope:issue-specific, auto-accept, legacy
 # A run_tests completed by a user accept (baseline or UNRUNNABLE) must leave its one-line
 # disclosure in the PR body (#2517). The commit-push worker's prBody(payload) appends
 # readCompletionNote(payload.session_id) itself, the same completion pattern as `Closes #N`,
@@ -49,7 +49,13 @@ const a = (key, value) => ev({ kind: "step_annotation", key, value });
 const st = (status) => ev({ kind: "step_status", status });
 const grant = (g) => Object.assign(a("baseline_accept", Object.assign({ run_seq: 1, outcome_source: null }, g)),
   { provenance: "declared", origin: "workflow-mark-run-tests-baseline-accept" });
+// #2688: `auto` is the live shape (auto-accepted, note in baseline_note). `undetermined` / `nolist`
+// are legacy states completed by a pre-#2688 user grant; they keep a fixed legacy line.
 const SHAPES = {
+  auto: [
+    a("baseline_classification", { base: "abc", entries: [{ path: "t/a.sh", class: "undetermined", detail: "skip-at-base" }] }),
+    a("baseline_note", "seen red on main"),
+    a("run_outcome", "pass"), a("completion_basis", "baseline-auto-accepted")],
   undetermined: [
     a("baseline_classification", { base: "abc", entries: [{ path: "t/a.sh", class: "undetermined", detail: "budget-exhausted" }] }),
     grant({ reason: "seen red on main", kind: "undetermined", accepted_run_outcome: "fail" }),
@@ -68,21 +74,22 @@ const TPL = "## Summary\n\nAdd the thing.\n";
 const out = {};
 const payload = { session_id: sid, branch: "feature/2517-x", commit_message: "feat(#2517): add the thing", pr_body_template: TPL };
 switch (name) {
+  case "auto": seed("auto", "complete"); break;
   case "undetermined": seed("undetermined", "complete"); break;
   case "nolist": seed("nolist", "complete"); break;
   case "unrunnable": seed("unrunnable", "complete"); break;
-  case "template-has-note": seed("undetermined", "complete"); payload.pr_body_template = `${TPL}\n${entryNote()}\n`; break;
-  case "empty-template": seed("undetermined", "complete"); payload.pr_body_template = ""; break;
-  case "absent-template": seed("undetermined", "complete"); delete payload.pr_body_template; break;
-  case "closes": seed("undetermined", "complete"); payload.closes_issues = [{ number: 2517 }]; break;
+  case "template-has-note": seed("auto", "complete"); payload.pr_body_template = `${TPL}\n${entryNote()}\n`; break;
+  case "empty-template": seed("auto", "complete"); payload.pr_body_template = ""; break;
+  case "absent-template": seed("auto", "complete"); delete payload.pr_body_template; break;
+  case "closes": seed("auto", "complete"); payload.closes_issues = [{ number: 2517 }]; break;
   case "neg-plain-pass": seed("plain", "complete"); break;
-  case "neg-pending": seed("undetermined", "pending"); break;
+  case "neg-pending": seed("auto", "pending"); break;
   case "neg-no-state": break;
   case "neg-no-session-id": delete payload.session_id; break;
   case "tombstone":
-    seed("undetermined", "complete");
+    seed("auto", "complete");
     out.pre_note = String(entryNote());
-    appendEvents(sid, [st("pending"), a("completion_basis", null), a("baseline_accept", null),
+    appendEvents(sid, [st("pending"), a("completion_basis", null), a("baseline_note", null),
       a("baseline_classification", null), a("run_outcome", "pass"), st("complete")]);
     break;
   default: throw new Error("unknown case " + name);
@@ -128,14 +135,20 @@ negative() {
   ck "$1: body equals prBody for the same payload with no state" "true" "$(field nostate_eq)"
 }
 
+# #2688: a state completed by a pre-#2688 user grant gets one fixed line (the grant is not re-read).
+LEGACY="$PRE failing tests accepted by the user before #2688 (legacy grant; details not re-read)"
+AUTO_LINE="$PRE 1 failing test(s) auto-accepted without baseline proof (causes: skip-at-base; note: \`seen red on main\`)"
+
 case_begin "baseline-accept-undetermined-note" "bin/worker-dispatch/workers/commit-push/pr.js"
 drive undetermined 01
-positive "baseline-accept undetermined"
+positive "legacy grant undetermined"
+ck "legacy grant undetermined: the note is the fixed legacy line" "$LEGACY" "$(field note)"
 case_end
 
 case_begin "baseline-accept-failing-list-unrecorded-note" "bin/worker-dispatch/workers/commit-push/pr.js"
 drive nolist 02
-positive "baseline-accept failing-list-unrecorded"
+positive "legacy grant failing-list-unrecorded"
+ck "legacy grant failing-list-unrecorded: the note is the fixed legacy line" "$LEGACY" "$(field note)"
 case_end
 
 case_begin "unrunnable-accepted-note" "bin/worker-dispatch/workers/commit-push/pr.js"
@@ -158,6 +171,7 @@ case_end
 case_begin "note-coexists-with-closes-and-marker" "bin/worker-dispatch/workers/commit-push/pr.js"
 drive closes 07
 positive "closes_issues + accept"
+ck "closes_issues + auto-accept: the note is the auto-accept line" "$AUTO_LINE" "$(field note)"
 ck "closes_issues + accept: 'Closes #2517' appears exactly once" "1" "$(field closes_count)"
 ck "closes_issues + accept: issue-close marker appears exactly once" "1" "$(field marker_count)"
 if [[ "$(field marker)" == "<!-- issue-close-pr-of: 2517 -->" ]]; then pass "closes_issues + accept: markerFor yields the repo-local marker"

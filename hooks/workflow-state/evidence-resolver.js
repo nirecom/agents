@@ -14,14 +14,15 @@ const { controlPath, diagnoseControlMigration } = require("./state-io/control-di
 const { SESSION_ID_VALID_RE } = require("./state-io");
 const { hasStagedDocChanges, hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const { hasWorktreeNotesDocEvidence } = require("../workflow-gate/worktree-context");
+const { isTestFilePath } = require("../lib/test-file-path");
 const {
   RELEASE_EVIDENCE_STEPS,
   hasReleaseEvidence,
   describeReleaseEvidence,
 } = require("./evidence-resolver/release-evidence");
 
-// Post-merge fallback: checks whether any committed file under tests/ or test/
-// differs from the default branch (origin/HEAD). Returns false on any failure
+// Post-merge fallback: checks whether any committed test file (isTestFilePath, the same
+// predicate as hasStagedTestChanges) differs from the default branch (origin/HEAD). Returns false on any failure
 // (fail-open: pending treatment preserved).
 function hasCommittedTestChanges(repoDir) {
   try {
@@ -34,9 +35,7 @@ function hasCommittedTestChanges(repoDir) {
       "git", ["diff", "--name-only", baseRef + "...HEAD"],
       { cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] }
     );
-    return diffOut.split("\n").some(
-      (line) => line.startsWith("tests/") || line.startsWith("test/")
-    );
+    return diffOut.split("\n").some((line) => isTestFilePath(line.trim()));
   } catch (e) {
     return false;
   }
@@ -154,9 +153,9 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
       if (!repoDir) return false;
       return hasReleaseEvidence(step, sessionId, Object.assign({}, opts, { repoDir }));
     }
-    // run_tests: sentinel-only — no evidence-based predicate here.
-    // Completion is owned by workflow-run-tests.js (run-all.sh contract-trust)
-    // or the run_tests sentinel — never by staged-test evidence.
+    // run_tests: no on-disk predicate here. Completion is recorded only by the run
+    // itself (record-run.js, the baseline record, the UNRUNNABLE accept); a declaration
+    // is checked by record-step-verdict/run-tests-evidence.js (#2472).
     return false;
   } catch (e) {
     diagnoseControlMigration(e, "evidence-resolver");
@@ -205,15 +204,17 @@ function describeEvidence(step) {
   }
   if (step === "write_tests") {
     return [
-      "a staged file is under tests/ or test/ (per hasStagedTestChanges)",
-      "a committed file under tests/ or test/ differs from the default branch (post-merge fallback)",
+      "a staged test file is under tests/ or test/: its basename matches a test-language "
+        + "registry entry (isTestFilePath; helpers count, .md / .json / .txt fixtures do not)",
+      "a committed test file (same predicate) differs from the default branch (post-merge fallback)",
     ];
   }
   if (step === "run_tests") {
     return [
       "NO completion evidence exists: hasCompletionEvidence(\"run_tests\") is always false — "
-        + "completion is owned by workflow-run-tests.js (tests/run-all.sh RUN_CONTRACT) "
-        + "or the MARK_STEP sentinel",
+        + "completion is recorded only by a run (workflow-run-tests.js on the RUN_CONTRACT, "
+        + "bin/run-tests-baseline, RUN_TESTS_UNRUNNABLE_ACCEPTED); a MARK_STEP / --advance / "
+        + "--mark complete answers already on a recorded complete and is refused otherwise",
       "SKIP only: when every staged file is human-facing docs (isDocsOnlyStaged), "
         + "echo \"<<WORKFLOW_RUN_TESTS_NOT_NEEDED: {reason}>>\" records it as skipped; "
         + "docs-only grants explicability, never completion authority",

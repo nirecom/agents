@@ -42,4 +42,12 @@ function boundHits(list) {
   return list.filter((h) => typeof h === "string").slice(0, MAX_HIT_SUMMARY).map((h) => sanitizeLine(h, MAX_HIT_LINE));
 }
 
-module.exports = { MAX_HIT_SUMMARY, runAllHits, workerHits, boundHits };
+// hitTestId(line) — the test a `worktree-change <id> tree=…` hit names; null for any other hit
+// and for `(no test id)`. Only such an id can be rerun alone (#2688, #2803).
+const WCD_ID_RE = /^worktree-change (.+?) tree=/;
+function hitTestId(line) {
+  const m = typeof line === "string" ? WCD_ID_RE.exec(line) : null;
+  return m === null || m[1] === "(no test id)" ? null : m[1];
+}
+
+module.exports = { MAX_HIT_SUMMARY, runAllHits, workerHits, boundHits, hitTestId };

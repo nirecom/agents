@@ -5,6 +5,7 @@
 const { execSync, execFileSync } = require("../lib/limited-child-process");
 const { checkDecisionTime, isDecisionTimeLimitArmed } = require("../lib/decision-time-limit");
 const path = require("path");
+const { isTestFilePath } = require("../lib/test-file-path");
 
 const readStagedNames = (dir) => execSync("git diff --cached --name-only", {
   cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
@@ -36,7 +37,7 @@ function checkedNames(out) {
   return names;
 }
 
-// Evidence-based check: staged files contain tests/ changes.
+// Evidence-based check: a staged file is a test file or helper (isTestFilePath, #2472).
 //
 // Symmetric-sibling note (#484): hasStagedDocChanges has a paired
 // hasWorktreeNotesDocEvidence() that recognizes the WORKTREE_NOTES.md
@@ -48,7 +49,7 @@ function checkedNames(out) {
 function hasStagedTestChanges(repoDir) {
   try {
     const out = stagedNameOutput(repoDir);
-    return checkedNames(out).some((f) => f.startsWith("tests/") || f.startsWith("test/"));
+    return checkedNames(out).some(isTestFilePath);
   } catch (e) {
     process.stderr.write(`workflow-gate: hasStagedTestChanges failed (cwd=${repoDir}): ${e.message}\n`);
     return false;

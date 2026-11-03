@@ -77,6 +77,10 @@ Changes: The EM Supervisor audit now reviews each plan (intent / outline / detai
 Background: feat(#2865): migrate the remaining non-node:test JS tests to node:tes...
 Changes: Every JavaScript test file must now use node:test, not only new ones. The edit-time and commit-time test gates block any `tests/<category>/*.js` entrypoint that does not load node:test (`MISSING_TEST_RUNNER`). All existing plain-script tests in this repository were migrated, so nothing is blocked today.
 
+### FEATURE: PR #2872 (2026-11-01)
+Background: feat(#2763): cut glossary drift false positives with an Identifier field (recorded late)
+Changes: The glossary drift check reports fewer false positives: an identifier written in code spans or declared in a glossary entry's new Identifier field is no longer flagged, and neither are inflected forms. A second new field for excluding a different word spelled like a term had no effect and was later replaced by `Short forms`.
+
 ### FEATURE: PR #2880 (2026-11-02)
 Background: feat(#2873): one CONFIRM Allow accepts a WARN or CONTINUE pre-confirm...
 Changes: Fixed: once the pre-confirm audit cap is reached, a single CONFIRM approval now accepts a WARN or CONTINUE audit finding instead of requiring a second approval or blocking approval.
@@ -100,10 +104,6 @@ Changes: The RTK and glab installers now say "already up to date" when nothing n
 ### FEATURE: PR #2898 (2026-11-02)
 Background: fix(#2849,#2781): widen the commit-push gate decision limit and fail ...
 Changes: Committing a large change no longer fails because the documentation checks run out of time; the commit-push gate now waits up to 110 s for them.
-### FEATURE: PR #2872 (2026-11-01)
-Background: feat(#2763): cut glossary drift false positives with an Identifier field (recorded late)
-Changes: The glossary drift check reports fewer false positives: an identifier written in code spans or declared in a glossary entry's new Identifier field is no longer flagged, and neither are inflected forms. A second new field for excluding a different word spelled like a term had no effect and was later replaced by `Short forms`.
-
 
 ### FEATURE: PR #2887 (2026-11-02)
 Background: feat(#2814): share review criteria and severity across reviewers, rec...
@@ -112,3 +112,7 @@ Changes: Reviewers (plan, code, security, tests) now share one set of review cri
 ### FEATURE: PR #2905 (2026-11-02)
 Background: refactor(#2896): move shared md files from agents/lib/ to skills/_sha...
 Changes: Shared on-demand md files now live in skills/_shared/ only; agents/lib/ is removed.
+
+### FEATURE: PR #2906 (2026-11-03)
+Background: feat(#2763): replace the glossary per-entry exclusion field with Shor...
+Changes: Glossary entries can declare a `Short forms` field (a shorter form of a multi-word term, e.g. `step` for `workflow step`); it replaces the exclusion field added in PR #2872, which had no effect.

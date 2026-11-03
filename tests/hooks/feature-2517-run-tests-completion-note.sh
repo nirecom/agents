@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-2517-run-tests-completion-note.sh
 # Tests: hooks/lib/run-tests-completion-note.js, bin/render-final-report.js, skills/_shared/commit-push-dispatch.md
-# Tags: TL1, TL2, run-tests, final-report, baseline, unrunnable, disclosure, table-driven, scope:issue-specific
-# A run_tests completed by a user grant instead of a proof must say so in the Final Report and the
-# PR body (#2517). The note module (renamed from run-tests-unrunnable-note, #2501) returns one line
-# for unrunnable-accepted (unchanged) and for baseline-user-accepted (two kinds), and null otherwise.
+# Tags: TL1, TL2, run-tests, final-report, baseline, unrunnable, disclosure, table-driven, scope:issue-specific, auto-accept, legacy
+# A run_tests completed without a baseline proof must say so in the Final Report and the PR body
+# (#2517, #2688). The note module returns one line for unrunnable-accepted (unchanged), for
+# baseline-auto-accepted (causes + note), and a fixed legacy line for pre-#2688 baseline-user-accepted.
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -28,6 +28,8 @@ ROOT="$(np "$SCRIPT_CHECKOUT_ROOT")"
 NOTE_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/run-tests-completion-note.js"
 OLD_JS="$SCRIPT_CHECKOUT_ROOT/hooks/lib/run-tests-unrunnable-note.js"
 PRE='- Unverified tests:'
+# #2688: a state completed by a pre-#2688 user grant gets this fixed line (the grant is not re-read).
+LEGACY="$PRE failing tests accepted by the user before #2688 (legacy grant; details not re-read)"
 
 # cases.js <root> — one `name|value` line per case; a missing module prints MODULE_MISSING for all.
 cat >"$T/cases.js" <<'EOF'
@@ -38,35 +40,40 @@ const cls = (...e) => ({ base: "abc", entries: e.map(([p, c, d]) => ({ path: p, 
 const done = (o) => Object.assign({ status: "complete", run_outcome: "pass" }, o);
 const UA = done({ completion_basis: "unrunnable-accepted", unrunnable_count: 2,
   unrunnable_runtimes: "Pester>=5.0", unrunnable_accept_reason: "no Pester here" });
-const UND = done({ completion_basis: "baseline-user-accepted",
+// #2688: the user grant is gone. AUTO is the auto-accepted shape; LEG/NOL are legacy states
+// completed by a pre-#2688 grant, which now get one fixed line whatever the grant held.
+const AUTO = done({ completion_basis: "baseline-auto-accepted", baseline_note: "fails on main too",
   baseline_classification: cls(["t/a.sh", "undetermined", "home-claude-ref"], ["t/b.sh", "undetermined", "timeout-at-base"],
-    ["t/c.sh", "preexisting", ""]),
-  baseline_accept: { reason: "fails on main too", kind: "undetermined", run_seq: 4, outcome_source: null, accepted_run_outcome: "fail" } });
-const DUP = Object.assign({}, UND, { baseline_classification: cls(["t/a.sh", "undetermined", "home-claude-ref"],
+    ["t/c.sh", "preexisting", ""]) });
+const DUP = Object.assign({}, AUTO, { baseline_classification: cls(["t/a.sh", "undetermined", "home-claude-ref"],
   ["t/b.sh", "undetermined", "home-claude-ref"]) });
+const LEG = done({ completion_basis: "baseline-user-accepted",
+  baseline_classification: cls(["t/a.sh", "undetermined", "home-claude-ref"]),
+  baseline_accept: { reason: "fails on main too", kind: "undetermined", run_seq: 4, outcome_source: null, accepted_run_outcome: "fail" } });
 const NOL = (aro) => done({ completion_basis: "baseline-user-accepted", failing_tests: null,
   baseline_accept: Object.assign({ reason: "flaky on main", kind: "failing-list-unrecorded", run_seq: 2, outcome_source: null },
     aro === undefined ? {} : { accepted_run_outcome: aro }) });
 const n = (e) => { const v = M.completionNote(e); return v === null ? "null" : v; };
 const C = {
-  "exports-bases": () => `${M.UNRUNNABLE_ACCEPT_BASIS}:${M.BASELINE_ACCEPT_BASIS}`,
+  "exports-bases": () => `${M.UNRUNNABLE_ACCEPT_BASIS}:${M.BASELINE_AUTO_BASIS}:${M.BASELINE_ACCEPT_BASIS}`,
   "unrunnable-line-unchanged": () => n(UA),
-  "undetermined-prefix": () => n(UND).startsWith("- Unverified tests: 2 failing test(s) accepted by the user as pre-existing without baseline proof (undetermined: "),
-  "undetermined-names-every-detail": () => ["home-claude-ref", "timeout-at-base"].every((d) => n(UND).includes(d)),
-  "undetermined-suffix": () => n(UND).endsWith("; reason: fails on main too)"),
-  "undetermined-detail-is-a-set": () => n(DUP).split("home-claude-ref").length - 1,
-  "undetermined-count-is-undetermined-only": () => n(DUP).startsWith("- Unverified tests: 2 failing test(s)"),
-  "nolist-fail": () => n(NOL("fail")),
-  "nolist-timeout-not-step-pass": () => n(NOL("timeout")),
-  "nolist-missing-outcome": () => n(NOL(undefined)),
-  "nolist-non-string-outcome": () => n(NOL(42)),
+  "auto-prefix": () => n(AUTO).startsWith("- Unverified tests: 2 failing test(s) auto-accepted without baseline proof (causes: "),
+  "auto-names-every-detail": () => ["home-claude-ref", "timeout-at-base"].every((d) => n(AUTO).includes(d)),
+  "auto-suffix": () => n(AUTO).endsWith("; note: `fails on main too`)"),
+  "auto-detail-is-a-set": () => n(DUP).split("home-claude-ref").length - 1,
+  "auto-count-is-auto-accepted-only": () => n(DUP).startsWith("- Unverified tests: 2 failing test(s)"),
+  "auto-without-note": () => n(Object.assign({}, AUTO, { baseline_note: undefined })).endsWith("; note: (none))"),
+  "legacy-undetermined": () => n(LEG),
+  "legacy-nolist-fail": () => n(NOL("fail")),
+  "legacy-nolist-timeout": () => n(NOL("timeout")),
+  "legacy-nolist-missing-outcome": () => n(NOL(undefined)),
   "one-line-and-capped": () => {
-    const v = n(Object.assign({}, UND, { baseline_accept: Object.assign({}, UND.baseline_accept, { reason: "r\n" + "x".repeat(400) }) }));
+    const v = n(Object.assign({}, AUTO, { baseline_note: "r\n" + "x".repeat(400) }));
     return `${/[\r\n]/.test(v)}:${v.length < 200 + 200 + 150}`;
   },
   "null-baseline-preexisting": () => n(done({ completion_basis: "baseline-preexisting" })),
   "null-plain-pass": () => n(done({})),
-  "null-pending-with-basis": () => n(Object.assign({}, UND, { status: "pending" })),
+  "null-pending-with-basis": () => n(Object.assign({}, AUTO, { status: "pending" })),
   "null-no-entry": () => `${n(null)}:${n(undefined)}`,
   "read-fail-open": () => String(M.readCompletionNote("no-such-session-2517")),
 };
@@ -78,7 +85,7 @@ for (const [k, f] of Object.entries(C)) {
 }
 EOF
 
-# seed.js <root> <sid> — a session whose run_tests was completed by an undetermined grant.
+# seed.js <root> <sid> — a session whose run_tests was completed by an auto-accepted baseline (#2688).
 cat >"$T/seed.js" <<'EOF'
 "use strict";
 const [root, sid] = process.argv.slice(2);
@@ -87,10 +94,9 @@ const a = (key, value) => ev({ kind: "step_annotation", key, value });
 const { appendEvents } = require(root + "/hooks/workflow-state/state-io/events");
 appendEvents(sid, [
   ev({ kind: "step_status", status: "pending" }),
-  a("baseline_classification", { base: "abc", entries: [{ path: "t/a.sh", class: "undetermined", detail: "budget-exhausted" }] }),
-  Object.assign(a("baseline_accept", { reason: "seen red on main", kind: "undetermined", run_seq: 1, outcome_source: null,
-    accepted_run_outcome: "fail" }), { provenance: "declared", origin: "workflow-mark-run-tests-baseline-accept" }),
-  a("run_outcome", "pass"), a("completion_basis", "baseline-user-accepted"),
+  a("baseline_classification", { base: "abc", entries: [{ path: "t/a.sh", class: "undetermined", detail: "skip-at-base" }] }),
+  a("baseline_note", "seen red on main"),
+  a("run_outcome", "pass"), a("completion_basis", "baseline-auto-accepted"),
   ev({ kind: "step_status", status: "complete" }),
 ]);
 process.stdout.write("ok");
@@ -114,17 +120,18 @@ while IFS='|' read -r name want; do
   got="$(printf '%s\n' "$OUT" | grep -m1 "^$name|" | cut -d'|' -f2-)"
   ck "$name" "$want" "$got"
 done <<TABLE
-exports-bases|unrunnable-accepted:baseline-user-accepted
+exports-bases|unrunnable-accepted:baseline-auto-accepted:undefined
 unrunnable-line-unchanged|$PRE 2 UNRUNNABLE accepted (missing runtimes: Pester>=5.0; reason: no Pester here)
-undetermined-prefix|true
-undetermined-names-every-detail|true
-undetermined-suffix|true
-undetermined-detail-is-a-set|1
-undetermined-count-is-undetermined-only|true
-nolist-fail|$PRE failing tests accepted by the user with no recorded failing list (run_outcome=fail; reason: flaky on main)
-nolist-timeout-not-step-pass|$PRE failing tests accepted by the user with no recorded failing list (run_outcome=timeout; reason: flaky on main)
-nolist-missing-outcome|$PRE failing tests accepted by the user with no recorded failing list (run_outcome=unknown; reason: flaky on main)
-nolist-non-string-outcome|$PRE failing tests accepted by the user with no recorded failing list (run_outcome=unknown; reason: flaky on main)
+auto-prefix|true
+auto-names-every-detail|true
+auto-suffix|true
+auto-detail-is-a-set|1
+auto-count-is-auto-accepted-only|true
+auto-without-note|true
+legacy-undetermined|$LEGACY
+legacy-nolist-fail|$LEGACY
+legacy-nolist-timeout|$LEGACY
+legacy-nolist-missing-outcome|$LEGACY
 one-line-and-capped|false:true
 null-baseline-preexisting|null
 null-plain-pass|null
@@ -136,16 +143,16 @@ case_end
 
 case_begin "final-report-carries-the-line" "bin/render-final-report.js"
 SID="cn2517-$$"
-ck "fixture: completed-by-grant session seeded" "ok" \
+ck "fixture: auto-accepted session seeded" "ok" \
   "$(run_with_timeout 20 node "$(np "$T/seed.js")" "$ROOT" "$SID" 2>/dev/null)"
-WANT="$PRE 1 failing test(s) accepted by the user as pre-existing without baseline proof (undetermined: budget-exhausted; reason: seen red on main)"
+WANT="$PRE 1 failing test(s) auto-accepted without baseline proof (causes: skip-at-base; note: \`seen red on main\`)"
 mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
 printf '{}' >"$WORKFLOW_STATE_DIR/$SID.control/final-report-env.json"
 REPORT="$(run_with_timeout 30 node "$(np "$SCRIPT_CHECKOUT_ROOT/bin/render-final-report.js")" --session "$SID" 2>&1)"
 if printf '%s\n' "$REPORT" | grep -qE '^- URL: '; then pass "control: the report has the Merged PR URL line"
 else fail "control: the report has the Merged PR URL line" "$(printf '%s' "$REPORT" | head -5)"; fi
 NEXT="$(printf '%s\n' "$REPORT" | grep -A1 -E '^- URL: ' | sed -n 2p)"
-ck "the grant line follows the URL line (#2904)" "$WANT" "$NEXT"
+ck "the auto-accept line follows the URL line (#2904)" "$WANT" "$NEXT"
 case_end
 
 case_begin "pr-body-disclosure" "skills/_shared/commit-push-dispatch.md"
