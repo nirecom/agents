@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/hooks/feature-1027-state-writer-eligibility.sh
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js
-# Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
+# Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific, fix-2919
 # Tests for issue #1027 / #997 — writer accepts new fields and ensureAlertScheduled
 # implements the anchor-vs-eligibility split.
 #
@@ -63,17 +63,17 @@ run_w1() {
     tmp="$(mktemp -d)"
     WORKFLOW_PLANS_DIR="$tmp" WORKFLOW_STATE_DIR="$tmp/workflow" run_with_timeout 10 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeAlertState('w1-sid', { findings_surfaced_at: '2026-06-21T02:00:00Z', alert_eligible_phase: 'post_final_report_window' });
+const ok = w.writeAlertState('w1-sid', { findings_surfaced_at: '2026-06-21T02:00:00Z', findings_sent_to_model_at: '2026-06-21T01:59:00Z', alert_eligible_phase: 'post_final_report_window' });
 if (!ok) { console.error('write returned false'); process.exit(2); }
 const st = w.readState('w1-sid');
 if (!st) { console.error('state not readable'); process.exit(3); }
-if (st.alert.findings_surfaced_at !== '2026-06-21T02:00:00Z') { console.error('findings_surfaced_at not persisted'); process.exit(4); }
+if (st.alert.findings_surfaced_at !== '2026-06-21T02:00:00Z') { console.error('findings_surfaced_at not persisted'); process.exit(4); } if (st.alert.findings_sent_to_model_at !== '2026-06-21T01:59:00Z') { console.error('findings_sent_to_model_at (#2919) not persisted'); process.exit(6); }
 if (st.alert.alert_eligible_phase !== 'post_final_report_window') { console.error('alert_eligible_phase not persisted'); process.exit(5); }
 " >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ "$rc" = "0" ]; then
-        pass "W1: writeAlertState persists findings_surfaced_at + alert_eligible_phase"
+        pass "W1: writeAlertState persists findings_surfaced_at + findings_sent_to_model_at + alert_eligible_phase"
     else
         fail "W1: writeAlertState persists new keys (rc=$rc)"
     fi

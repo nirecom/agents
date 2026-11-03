@@ -57,7 +57,7 @@ UD-7. **Commit separately**: If docs are in a separate repo, commit each repo in
 
 ## Completion
 
-After the `docs_complete` sentinel, next-step advances to `review_docs` — run `/review-docs` to verify doc line limits and README section order before commit.
+Once the docs step records itself (staged `docs/` or WORKTREE_NOTES bullets), next-step advances to `review_docs` — run `/review-docs` to verify doc line limits and README section order before commit.
 
 After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`.
 
@@ -71,9 +71,9 @@ UD-8a. Append history bullets to `<worktree>/WORKTREE_NOTES.md` `## History Note
 UD-8b. For public repos: append user-facing bullets to `## Changelog Notes`. Replace `- (none)` on first append.
 UD-8c. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` WE-17 (single canonical writer for both files).
 UD-8d. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
-   - A no-op `git add docs/` is expected on this path — history and changelog content sits in `WORKTREE_NOTES.md`, not under `docs/`; the `docs_complete` sentinel alone satisfies the gate.
+   - A no-op `git add docs/` is expected on this path — history and changelog content sits in `WORKTREE_NOTES.md`, not under `docs/`; the `## History Notes` / `## Changelog Notes` bullets in `WORKTREE_NOTES.md` alone satisfy the gate.
 UD-8e. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
-UD-8f. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; `user_verification` is owned by `/get-release-approval`.
+UD-8f. The docs step records itself from staged `docs/` or WORKTREE_NOTES History/Changelog Notes bullets; emit no MARK_STEP. Do NOT emit `WORKFLOW_USER_VERIFIED` here; `user_verification` is owned by `/get-release-approval`.
 
 ### Path B — ENFORCE_WORKTREE=off
 
@@ -83,4 +83,4 @@ UD-9a. History entry — dispatch the `doc-append` worker per `skills/_shared/wo
 UD-9b. For public repos — changelog entry: same dispatch with `mode: "changelog"` and no `commits` (payload sequence suffix `-2`).
    On `failed` status: surface `summary` + `artifact_path` to the user and stop.
 UD-9c. `git add docs/ README.md CHANGELOG.md`
-UD-9d. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; `user_verification` is owned by `/get-release-approval`.
+UD-9d. The docs step records itself from staged `docs/` or WORKTREE_NOTES History/Changelog Notes bullets; emit no MARK_STEP. Do NOT emit `WORKFLOW_USER_VERIFIED` here; `user_verification` is owned by `/get-release-approval`.

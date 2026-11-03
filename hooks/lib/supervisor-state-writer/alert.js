@@ -27,6 +27,7 @@ function writeAlertStateCore(sessionId, patch) {
   if ("alert_phase" in patch && !ALERT_PHASE_VALUES.includes(patch.alert_phase)) return false;
   if ("alert_cause" in patch && patch.alert_cause !== null && typeof patch.alert_cause !== "string") return false;
   if ("findings_surfaced_at" in patch && patch.findings_surfaced_at !== null && typeof patch.findings_surfaced_at !== "string") return false;
+  if ("findings_sent_to_model_at" in patch && patch.findings_sent_to_model_at !== null && typeof patch.findings_sent_to_model_at !== "string") return false;
   if ("alert_eligible_phase" in patch && !ALERT_ELIGIBLE_PHASE_VALUES.includes(patch.alert_eligible_phase)) return false;
   if ("transcript_cursor" in patch && !validateTranscriptCursor(patch.transcript_cursor).ok) return false;
 
@@ -67,6 +68,7 @@ function writeAlertStateCore(sessionId, patch) {
     alert_cause: null,
     alert_retry_count: 0,
     findings_surfaced_at: null,
+    findings_sent_to_model_at: null,
     alert_eligible_phase: null,
     transcript_cursor: null,
     ...existing,
@@ -84,7 +86,10 @@ function writeAlertStateCore(sessionId, patch) {
     alert.alert_cause = null;
   }
   if ("alert_retry_count" in patch) alert.alert_retry_count = patch.alert_retry_count;
-  if ("findings_surfaced_at" in patch) alert.findings_surfaced_at = patch.findings_surfaced_at;
+  // The findings markers keep their first time; only an explicit null clears them.
+  for (const k of ["findings_surfaced_at", "findings_sent_to_model_at"]) {
+    if (k in patch && (patch[k] === null || alert[k] == null)) alert[k] = patch[k];
+  }
   if ("alert_eligible_phase" in patch) alert.alert_eligible_phase = patch.alert_eligible_phase;
   if ("transcript_cursor" in patch) alert.transcript_cursor = patch.transcript_cursor;
 

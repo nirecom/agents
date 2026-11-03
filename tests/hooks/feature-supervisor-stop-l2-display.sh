@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-supervisor-stop-l2-display.sh
 # Tests: hooks/stop-l2-findings-display.js, hooks/lib/supervisor-findings-render.js
-# Tags: supervisor, stop-hook, scope:issue-specific, pwsh-not-required, hook-registration
+# Tags: supervisor, stop-hook, scope:issue-specific, pwsh-not-required, hook-registration, fix-2919
 # L3 gap: stop-l2-findings-display.js firing as a real Stop hook (settings.json registration, live claude -p only); real transcript JSONL shape.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight, bin/check-verification-gate.sh category: hook-registration.
 # Cases: T1 findings surfaced + marked; T2 already surfaced → silent; T3 alert not completed → silent;
@@ -69,12 +69,12 @@ if (!ok) { console.error('seed writeAlertState failed'); process.exit(3); }
 " >/dev/null 2>&1
 }
 
-read_surfaced() {
+read_markers() {
     local tmp_node="$1" sid="$2"
     WORKFLOW_STATE_DIR="$tmp_node" WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const st = w.readState('$sid');
-process.stdout.write(String((st && st.alert && st.alert.findings_surfaced_at) || 'null'));
+const a = (w.readState('$sid') || {}).alert || {};
+process.stdout.write('surfaced=' + String(a.findings_surfaced_at || 'null') + ' sent=' + String(a.findings_sent_to_model_at || 'null'));
 " 2>/dev/null
 }
 
@@ -95,7 +95,7 @@ run_t1_normal() {
         run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
     local rc=$?
 
-    surfaced=$(read_surfaced "$tmp_node" "$sid")
+    surfaced=$(read_markers "$tmp_node" "$sid")
     rm -rf "$tmp"
 
     if [ $rc -ne 0 ]; then
@@ -107,10 +107,10 @@ run_t1_normal() {
     if ! echo "$out" | grep -q "\[EM Supervisor\]"; then
         fail "T1: stdout must contain [EM Supervisor], got: $(printf '%q' "${out:0:120}")"; return
     fi
-    if [ "$surfaced" = "null" ]; then
-        fail "T1: findings_surfaced_at must be set after hook runs, got 'null'"; return
+    if [ "${surfaced%% *}" != "surfaced=null" ] || ! echo "$surfaced" | grep -q ' sent=20'; then
+        fail "T1: hook must set findings_sent_to_model_at and leave findings_surfaced_at null (#2919), got '$surfaced'"; return
     fi
-    pass "T1: done + findings + not-surfaced → additionalContext emitted, findings_surfaced_at marked"
+    pass "T1: done + findings + not-surfaced → additionalContext emitted, findings_sent_to_model_at marked, findings_surfaced_at null"
 }
 
 # --- T2: findings_surfaced_at already set → no additionalContext ---

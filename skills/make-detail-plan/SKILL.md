@@ -106,7 +106,7 @@ Re-prompt template: run `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts
 
 Subagent prompts may contain verbatim research (summarize-to-user applies to user-facing chat only). Double-emit of `<<WORKFLOW_MARK_STEP_research_complete>>` is harmless (`markStep` idempotent).
 
-On cap: tell user which budget exhausted, how many times research ran, the pending question. Ask: "Approve further research, provide the answer directly, or adjust scope?" Do not emit `WORKFLOW_MARK_STEP_plan_complete` on escalation.
+On cap: tell user which budget exhausted, how many times research ran, the pending question. Ask: "Approve further research, provide the answer directly, or adjust scope?" On escalation, do not mark the plan step complete.
 
 ## Skip Conditions / Skipping This Stage
 
