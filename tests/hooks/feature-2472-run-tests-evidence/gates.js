@@ -114,6 +114,7 @@ function alreadyOnRecordedComplete() {
 // The sentinel route end to end: mark-step-handler relays the refusal as its own message.
 function markStepHandlerRelaysRefusal() {
   const msgs = [];
+  let unapplied = 0;
   let sid = null;
   let before = 0;
   let error = null;
@@ -123,7 +124,7 @@ function markStepHandlerRelaysRefusal() {
     before = eventCount(sid);
     mod("hooks/workflow-mark/mark-step-handler.js").handle({
       cmd: 'echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"', sessionId: sid, repoCwd: F.tmp(),
-      pushMessage: (m) => msgs.push(m), signalFatal: (m) => msgs.push(`FATAL ${m}`),
+      pushMessage: (m) => msgs.push(m), pushUnapplied: (m) => { unapplied += 1; msgs.push(m); },
     });
   } catch (e) {
     error = errText(e);
@@ -140,6 +141,7 @@ function markStepHandlerRelaysRefusal() {
     if (!msgs.some((x) => x.startsWith("workflow-mark: "))) return `no workflow-mark message: ${show(msgs)}`;
     if (/failed to write state/.test(m)) return `relayed as a write failure: ${m}`;
     if (!/run-tests/.test(m)) return `no /run-tests guidance: ${m}`;
+    if (unapplied === 0) return `the refusal is not reported as UNAPPLIED (#2824): ${m}`;
     return undefined;
   });
 }

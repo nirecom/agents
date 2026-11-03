@@ -25,7 +25,7 @@ Only classes D and E have per-step schemas. Classes A–C, F, and G follow the c
 
 | step | class | key | Trigger | summary | pointer |
 |---|---|---|---|---|---|
-| `review_tests` | E | `review-tests:sentinel` | RT-5b / RT-5c emitted a sentinel | which sentinel + `token=` value + warnings count | `<CONTROL_DIR>/test-review-unresolved-concerns.json` |
+| `review_tests` | E | `review-tests:sentinel` | RT-5b / RT-5c returned a sentinel line | which sentinel + `token=` value + warnings count | `<CONTROL_DIR>/test-review-unresolved-concerns.json` |
 | `review_tests` | D | `review-tests:codex-exit` | `run-codex-review-loop.sh` is about to exit 4 / 7 / 8 (written by that script) | exit code + route taken | `<PLANS_DIR>/<sid>-test-review-codex-round-<N>-raw.md` |
 | `write_tests` | E | `write-tests:not-needed` | `WORKFLOW_WRITE_TESTS_NOT_NEEDED` was emitted | why tests are not needed | `-` |
 | `write_tests` | D | `write-tests:model-fallback` | WT-6 took the `NONE` fallback | how the level was derived without a persisted evaluation | `<CONTROL_DIR>/write-tests-signals.txt` |

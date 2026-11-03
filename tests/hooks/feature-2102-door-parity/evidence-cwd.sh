@@ -270,19 +270,19 @@ at_write_tests e3a
 run_sentinel_with e3a "$LINKED_N"
 check "E3a: input.cwd=linked exits 0" 0 "$RC"
 check "E3a: write_tests is complete (the accepted contrast case)" '"complete"' "$(step_status e3a write_tests)"
-check_not_contains "E3a: no rejection message" "$REJECT_SENTINEL" "$OUT"
+check_not_contains "E3a: no rejection message" "$REJECT_SENTINEL" "$OUT$ERR"
 check_not_contains "E3a: no staged-evidence diagnostic on the success path" "(cwd=" "$ERR"
 
 at_write_tests e3b
 run_sentinel_with e3b "$MAIN_N"
-check "E3b: input.cwd=main exits 0 (the hook never fails the tool call)" 0 "$RC"
-check_contains "E3b: it rejects with the MARK_STEP guidance" "$REJECT_SENTINEL" "$OUT"
+check "E3b: input.cwd=main exits 2 (#2824: the refusal goes on the strong channel)" 2 "$RC"
+check_contains "E3b: it rejects with the MARK_STEP guidance" "[NOT APPLIED] $REJECT_SENTINEL" "$ERR"
 check "E3b: write_tests stays pending" '"pending"' "$(step_status e3b write_tests)"
 
 at_write_tests e3c
 run_sentinel_with e3c "$NOGIT_N"
-check "E3c: input.cwd outside any repo exits 0" 0 "$RC"
-check_contains "E3c: it rejects with the MARK_STEP guidance" "$REJECT_SENTINEL" "$OUT"
+check "E3c: input.cwd outside any repo exits 2 (strong channel)" 2 "$RC"
+check_contains "E3c: it rejects with the MARK_STEP guidance" "[NOT APPLIED] $REJECT_SENTINEL" "$ERR"
 check "E3c: write_tests stays pending" '"pending"' "$(step_status e3c write_tests)"
 # hasStagedTestChanges prints `(cwd=<dir>)` only on the git-failure path, so this is
 # the one cell where the diagnostic names the directory the door actually resolved.
@@ -311,8 +311,8 @@ check "E3d: write_tests completes from CLAUDE_PROJECT_DIR alone (pinned gap)" \
 # input.cwd, so the door must still refuse on the unstaged directory.
 at_write_tests e3e
 run_sentinel_with e3e "$MAIN_N"
-check "E3e: input.cwd=unstaged, CLAUDE_PROJECT_DIR=staged exits 0 (hook never fails the tool call)" 0 "$RC"
-check_contains "E3e: it still rejects -- priority 0 picks input.cwd, not the env var" "$REJECT_SENTINEL" "$OUT"
+check "E3e: input.cwd=unstaged, CLAUDE_PROJECT_DIR=staged exits 2 (strong channel)" 2 "$RC"
+check_contains "E3e: it still rejects -- priority 0 picks input.cwd, not the env var" "[NOT APPLIED] $REJECT_SENTINEL" "$ERR"
 check "E3e: write_tests stays pending" '"pending"' "$(step_status e3e write_tests)"
 
 export CLAUDE_PROJECT_DIR="$MAIN_N"

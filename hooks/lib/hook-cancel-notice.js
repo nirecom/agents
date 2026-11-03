@@ -21,17 +21,20 @@ function hookNameOf(command) {
   return group ? `${script[1]} --matcher-group ${group[1]}` : script[1];
 }
 
-function cancelOf(line) {
+// cancelOf(line, event) -> {hook, tool, toolUseId} of a timed-out hook_cancelled record of `event`, or null.
+function cancelOf(line, event = "PreToolUse") {
   let record = null;
   try { record = JSON.parse(line); } catch (_e) { return null; }
   const attachment = record && record.type === "attachment" ? record.attachment : null;
-  if (!attachment || attachment.type !== "hook_cancelled" || attachment.hookEvent !== "PreToolUse") return null;
+  if (!attachment || attachment.type !== "hook_cancelled" || attachment.hookEvent !== event) return null;
   if (typeof attachment.command !== "string" || attachment.command === "") return null;
   // A cancel the record marks as not a timeout (the user's interrupt) lost no decision to the limit.
   if (attachment.timedOut === false) return null;
   const label = typeof attachment.hookName === "string" ? attachment.hookName : "";
-  const tool = label.startsWith(TOOL_PREFIX) && label.length > TOOL_PREFIX.length ? label.slice(TOOL_PREFIX.length) : "(unknown tool)";
-  return { hook: hookNameOf(attachment.command), tool };
+  const prefix = event === "PreToolUse" ? TOOL_PREFIX : `${event}:`;
+  const tool = label.startsWith(prefix) && label.length > prefix.length ? label.slice(prefix.length) : "(unknown tool)";
+  const toolUseId = typeof attachment.toolUseID === "string" ? attachment.toolUseID : null;
+  return { hook: hookNameOf(attachment.command), tool, toolUseId };
 }
 
 // detectCancels(lines, cursor) -> [{hook, tool}] for the PreToolUse cancels at line index >= cursor.
@@ -123,4 +126,4 @@ function newCancelNotice(sid, transcriptPath) {
   return buildCancelNotice(detectCancels(chunk.lines, 0));
 }
 
-module.exports = { detectCancels, buildCancelNotice, newCancelNotice, hookNameOf };
+module.exports = { cancelOf, detectCancels, buildCancelNotice, newCancelNotice, hookNameOf };

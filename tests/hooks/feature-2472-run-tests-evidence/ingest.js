@@ -82,7 +82,7 @@ function markStep(sid) {
   const msgs = [];
   mod("hooks/workflow-mark/mark-step-handler.js").handle({
     cmd: 'echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"', sessionId: sid, repoCwd: F.tmp(),
-    pushMessage: (m) => msgs.push(m), signalFatal: (m) => msgs.push(`FATAL ${m}`),
+    pushMessage: (m) => msgs.push(m), pushUnapplied: (m) => msgs.push(`FATAL ${m}`),
   });
   return msgs.join("\n");
 }

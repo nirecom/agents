@@ -18,6 +18,7 @@ const {
   recoveryFor,
 } = require("../workflow-state/completion-approval");
 const { recordRiskSignal } = require("../lib/risk-signal");
+const { NETWORK_EVIDENCE_STEPS } = require("../workflow-state/effective-state");
 
 const ORIGIN = "reset-sentinel";
 
@@ -88,14 +89,23 @@ function resetStageAuditRunCounts(sessionId, fromStep, pushMessage) {
   }
 }
 
+// The applied-reset notice. A network-evidence step (push_branch and later) reads complete again
+// at read time while the PR head equals HEAD (effective-state stage 4), so say what re-opens it.
+function appliedNotice(fromStep) {
+  const base = `[workflow] reset-from ${fromStep}: ${fromStep} and later steps reset to pending.`;
+  if (!NETWORK_EVIDENCE_STEPS.includes(fromStep)) return base;
+  return `${base} While the PR head equals HEAD, network evidence still reads ${fromStep} as complete; ` +
+    "a re-push needs a new commit.";
+}
+
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage } = ctx;
+  const { cmd, sessionId, pushMessage, pushUnapplied } = ctx;
 
   const resetMatch = cmd.match(RESET_FROM_RE_DQ);
 
   // --- LOOKSLIKE early intercept: catches bare/malformed RESET_FROM forms ---
   if (!resetMatch && RESET_FROM_LOOKSLIKE_RE.test(cmd)) {
-    pushMessage(
+    pushUnapplied(
       `workflow-mark: malformed RESET_FROM — ` +
         `expected: echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>" ` +
         `(reason must be >=3 non-space chars, no '>')`
@@ -109,7 +119,7 @@ function handle(ctx) {
 
     const v = validateSkipReason(rawReason);
     if (!v.ok) {
-      pushMessage(
+      pushUnapplied(
         `workflow-mark: RESET_FROM rejected — ${v.msg} ` +
           `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}: {better reason}>>"`
       );
@@ -117,14 +127,15 @@ function handle(ctx) {
     }
 
     if (!VALID_STEPS.includes(fromStep)) {
-      pushMessage(
+      pushUnapplied(
         `workflow-mark: ERROR — unknown step "${fromStep}" for RESET_FROM; ` +
         `state NOT changed. Valid steps: ${VALID_STEPS.join(", ")}.`
       );
       return true;
     }
 
-    // #526: pushMessage retained (not signalFatal) — recovery UX must not hard-fail on null sessionId.
+    // #526: INFO on purpose, not pushUnapplied — the strong channel would hard-fail the recovery
+    // the user is attempting; the text still says NOT applied, and the Stop backstop notices it too.
     if (!sessionId) {
       pushMessage(
         `workflow-mark: could not resolve session_id — reset-from "${fromStep}" NOT applied. ` +
@@ -139,7 +150,7 @@ function handle(ctx) {
       // session whose whole history is a reset — or overwrite a corrupt file that
       // is the only remaining evidence of what went wrong. Fail closed in both.
       if (!readState(sessionId)) {
-        pushMessage(
+        pushUnapplied(
           `workflow-mark: reset-from "${fromStep}" NOT applied — no readable workflow state ` +
             `for this session.`
         );
@@ -158,12 +169,13 @@ function handle(ctx) {
         });
       } catch (e) {
         if (!(e instanceof UnapprovedCompletionError)) throw e;
-        pushMessage(
+        pushUnapplied(
           `workflow-mark: RESET_FROM_${fromStep} refused — ${e.step} has no verified approval ` +
             `(${e.code}). ${e.recovery}`
         );
         return true;
       }
+      pushMessage(appliedNotice(fromStep));
       // #2527 judgment D: re-opening branching_complete re-opens the delivery decision,
       // so the pinned profile is cleared for the re-completion to record afresh. A
       // reset from a later step keeps it.
@@ -181,7 +193,7 @@ function handle(ctx) {
       } catch (_e) { /* a lost stamp must not read as a failed reset */ }
       resetStageAuditRunCounts(sessionId, fromStep, pushMessage);
     } catch (e) {
-      pushMessage(`workflow-mark: reset-from failed — ${e.message}.`);
+      pushUnapplied(`workflow-mark: reset-from failed — ${e.message}.`);
     }
     return true;
   }

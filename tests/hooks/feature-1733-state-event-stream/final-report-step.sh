@@ -74,7 +74,7 @@ const before = rd().events.length;
 const msgs = [];
 mh.handle({
   cmd: "echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\"",
-  sessionId: sid, pushMessage: (m) => msgs.push(m), signalFatal: () => {}, repoCwd: process.cwd(),
+  sessionId: sid, pushMessage: (m) => msgs.push(m), pushUnapplied: (m) => msgs.push(m), signalFatal: () => {}, repoCwd: process.cwd(),
 });
 const ev = rd().events.filter((e) => e.kind === "step_status" && e.step === "final_report");
 console.log("appended=" + (rd().events.length - before) +
@@ -126,7 +126,7 @@ const mh = require("./hooks/workflow-mark/mark-step-handler");
 const msgs = [];
 mh.handle({
   cmd: "echo \"<<WORKFLOW_MARK_STEP_final_reporting_complete>>\"",
-  sessionId: sid, pushMessage: (m) => msgs.push(m), signalFatal: () => {}, repoCwd: process.cwd(),
+  sessionId: sid, pushMessage: (m) => msgs.push(m), pushUnapplied: (m) => msgs.push(m), signalFatal: () => {}, repoCwd: process.cwd(),
 });
 const exists = fs.existsSync(sp());
 const bogus = exists ? rd().events.filter((e) => /final_report/.test(String(e.step))).length : 0;

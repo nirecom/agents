@@ -285,6 +285,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-sentinel-unapplied-notice.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/stop-final-report-guard.js\"",
             "timeout": 10
           },
@@ -770,7 +775,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_MAIN_ROOT/hooks/workflow-mark.js\"",
-            "timeout": 5
+            "timeout": 30
           },
           {
             "type": "command",
