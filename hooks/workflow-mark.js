@@ -34,7 +34,6 @@ const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const runTestsAcceptHandler = require("./workflow-mark/run-tests-accept-handler");
-const runTestsBaselineAcceptHandler = require("./workflow-mark/run-tests-baseline-accept-handler");
 const glossaryAcceptHandler = require("./workflow-mark/glossary-accept-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const supervisorBlockOverrideHandler = require("./workflow-mark/supervisor-block-override-handler");
@@ -163,7 +162,6 @@ for (const cmd of sentinelParts) {
   // (mark-step-handler would otherwise process a manual MARK_STEP form here).
   if (reviewTestsHandler.handle({ ...ctx, cmd })) continue;
   if (runTestsAcceptHandler.handle({ ...ctx, cmd })) continue;
-  if (runTestsBaselineAcceptHandler.handle({ ...ctx, cmd })) continue;
   if (glossaryAcceptHandler.handle({ ...ctx, cmd })) continue;
   if (markStepHandler.handle({ ...ctx, cmd })) continue;
   if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;

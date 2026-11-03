@@ -331,8 +331,8 @@ else
   fail "S2431-j: SKILL.md is $SKILL_LINES lines — stage-8 must keep it under 100"
 fi
 
-# ---- #2517: the user grant for failures the baseline cannot prove pre-existing ----
-expect_match "S2517-a" "RNT-9 names the baseline accept sentinel" \
+# ---- #2517 entry, #2688: the user grant is retired (rest: tests/skills/feature-2544-run-tests-background-procedure.sh) ----
+expect_no_match "S2517-a" "RNT-9 no longer names the retired baseline accept sentinel" \
   'WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED' "$RNT9"
 expect_no_match "S2517-b" "RNT-9 no longer gates the baseline entry on a listed failing_tests" \
   'lists `failing_tests`' "$RNT9"

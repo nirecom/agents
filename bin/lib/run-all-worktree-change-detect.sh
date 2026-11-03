@@ -2,7 +2,9 @@
 # Worktree change detection for tests/run-all.sh (#2590); sourced by bin/lib/run-all-launch.sh.
 # Each test runs between two fingerprints of the protected trees (the main worktree and the
 # checkout the launcher was loaded from); a difference is logged as "<tree>\t<test id>\t<kind>[\t<paths>]",
-# kind one of tracked | content | head | index | config. Untracked files are not watched (-uno).
+# kind one of tracked | content | head | index | config | config-worktree. Untracked files are not
+# watched (-uno). A foreign change (kind=config, or head of a tree other than this checkout; #2803)
+# goes to <log>.foreign instead and is never a hit.
 # Design: docs/architecture/claude-code/test-command-guard.md
 
 _RUN_ALL_WCD_LOG=""
@@ -62,7 +64,7 @@ run_all_pin_worktree_change_detect() {
   case "$log" in */*) mkdir -p "${log%/*}" 2>/dev/null ;; esac
   : >"$log" 2>/dev/null || return 1
   : >"$log.span" 2>/dev/null || return 1
-  rm -f "$log.skipped"
+  rm -f "$log.skipped" "$log.foreign"
   _RUN_ALL_WCD_LOG="$log"
   _RUN_ALL_WCD_SLOT_FILE="$log.slot-before"
   _RUN_ALL_WCD_TREES=() _RUN_ALL_WCD_GITDIRS=() _RUN_ALL_WCD_COMMONS=()
@@ -167,7 +169,7 @@ _run_all_wcd_kinds() {
     $0 == "@@AFTER@@" { side = 1; next }
     { tag = substr($0, 1, 1); $0 = substr($0, 3) }
     tag == "H" { h[side] = h[side] $0 "\n"; next }
-    tag == "C" { c[side] = c[side] $0 "\n"; next }
+    tag == "C" { k = ($1 ~ /\/config\.worktree$/) ? "w" : "c"; c[side, k] = c[side, k] $0 "\n"; next }
     tag == "X" { skip = 1; next }
     tag == "S" { seen[$1] = 1; has[side, $1] = 1; xy[side, $1] = $2; ln[side, $1] = $3; next }
     tag == "W" { w[side, $1] = $2 }
@@ -181,15 +183,26 @@ _run_all_wcd_kinds() {
       out("content")
       if (h[0] != h[1]) print "head"
       out("index")
-      if (c[0] != c[1]) print "config"
+      if (c[0, "c"] != c[1, "c"]) print "config"
+      if (c[0, "w"] != c[1, "w"]) print "config-worktree"
       if (skip) print "skipped"
     }'
 }
 
+# _run_all_wcd_foreign <tree index> <kind> — 0 when the change is not this checkout's own:
+# the shared common config, or the head of another tree. config-worktree is always own.
+_run_all_wcd_foreign() {
+  case "$2" in
+    config) return 0 ;;
+    head) [ "$1" -ne 0 ] ;;
+    *) return 1 ;;
+  esac
+}
+
 # run_all_worktree_change_check <test id> — compares against the before fingerprints and appends
-# one "<tree>\t<test id>\t<kind>[\t<paths>]" line per changed kind to the log.
+# one "<tree>\t<test id>\t<kind>[\t<paths>]" line per changed kind to the log (<log>.foreign when foreign).
 run_all_worktree_change_check() {
-  local id="$1" i after kind paths
+  local id="$1" i after kind paths dest
   local -a afters=()
   [ -n "$_RUN_ALL_WCD_LOG" ] && [ "${#_RUN_ALL_WCD_BEFORE[@]}" -gt 0 ] || return 0
   for i in "${!_RUN_ALL_WCD_TREES[@]}"; do
@@ -202,7 +215,10 @@ run_all_worktree_change_check() {
       case "$kind" in
         '') ;;
         skipped) printf '%s\n' "${_RUN_ALL_WCD_TREES[$i]}" >>"$_RUN_ALL_WCD_LOG.skipped" ;;
-        *) printf '%s\t%s\t%s%s\n' "${_RUN_ALL_WCD_TREES[$i]}" "$id" "$kind" "${paths:+$'\t'$paths}" >>"$_RUN_ALL_WCD_LOG" ;;
+        *)
+          dest="$_RUN_ALL_WCD_LOG"
+          _run_all_wcd_foreign "$i" "$kind" && dest="$_RUN_ALL_WCD_LOG.foreign"
+          printf '%s\t%s\t%s%s\n' "${_RUN_ALL_WCD_TREES[$i]}" "$id" "$kind" "${paths:+$'\t'$paths}" >>"$dest" ;;
       esac
     done <<<"$(printf '%s\n@@AFTER@@\n%s\n' "${_RUN_ALL_WCD_BEFORE[$i]}" "$after" | _run_all_wcd_kinds)"
   done
@@ -216,12 +232,19 @@ run_all_worktree_change_check() {
 
 # run_all_worktree_change_report — one stderr line per logged change, a note naming the tests
 # that ran alongside a named one (each is then only a candidate), and a note per tree whose
-# content comparison was skipped. Non-zero when a change was logged; runs once.
+# content comparison was skipped. Foreign changes are shown but not counted. Non-zero when a
+# change was logged; runs once.
 run_all_worktree_change_report() {
-  local log="$_RUN_ALL_WCD_LOG" tree line n=0
+  local log="$_RUN_ALL_WCD_LOG" tree line n=0 ftree fid fkind
   [ "$_RUN_ALL_WCD_REPORTED" -eq 0 ] || return 0
   _RUN_ALL_WCD_REPORTED=1
   [ -n "$log" ] || return 0
+  if [ -s "$log.foreign" ]; then
+    while IFS=$'\t' read -r ftree fid fkind _ || [ -n "$ftree" ]; do
+      [ -n "$ftree" ] || continue
+      printf '[run-all] worktree-change (foreign, not a hit) tree=%s kind=%s test=%s\n' "$ftree" "$fkind" "$fid" >&2
+    done <"$log.foreign"
+  fi
   if [ -s "$log.skipped" ]; then
     while IFS= read -r tree; do
       printf '[run-all] worktree change detection: content comparison skipped for %s (more than %s dirty tracked paths)\n' "$tree" "$RUN_ALL_WCD_MAX_PATHS" >&2

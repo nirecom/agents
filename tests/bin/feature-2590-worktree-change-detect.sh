@@ -31,7 +31,9 @@ expect_eq "a changed tracked file is named" "$(changes "$KINDS_OUT" "main checko
 expect_eq "a further edit of a dirty file is named" "$(changes "$KINDS_OUT" "main checkout" content.sh content)" "1"
 expect_eq "a moved HEAD is named" "$(changes "$KINDS_OUT" "main checkout" head.sh head)" "1"
 expect_eq "a changed staged object is named" "$(changes "$KINDS_OUT" "main checkout" index.sh index)" "1"
-expect_eq "a changed core.hooksPath is named" "$(changes "$KINDS_OUT" "main checkout" config.sh config)" "1"
+# #2803: core.hooksPath lives in the shared common config, so its change is foreign, never a hit.
+expect_eq "a changed core.hooksPath (common config) is not a hit" "$(changes "$KINDS_OUT" "main checkout" config.sh config)" "0"
+expect_eq "a changed core.hooksPath is named as foreign" "$(foreign_lines "$KINDS_OUT" "main checkout" config)" "1"
 expect_eq "the report returns non-zero after a change" "$([[ "$(field "$KINDS_OUT" REPORT_RC)" =~ ^[1-9][0-9]*$ ]] && [[ "$(field "$KINDS_OUT" REPORT_RC)" != 127 ]] && echo nonzero)" "nonzero"
 case_end
 
@@ -118,6 +120,22 @@ expect_has "the root decoy report is still included" "$FULL_OUT" "root decoy hit
 expect_eq "the rejected git write is a command guard line" "$(printf '%s\n' "$FULL_OUT" | grep -c "^\[run-all\] command guard hit: git$TAB[^$TAB]*reporter.sh$TAB." || true)" "1"
 expect_eq "the tracked change is a worktree change line" "$(changes "$FULL_OUT" "main checkout" reporter.sh tracked)" "1"
 expect_ne "the guard refused the commit outside the run root" "$(git -C "$MAIN_CO" log -1 --format=%s)" "guarded"
+case_end
+
+# #2803: foreign changes (common config, another tree's head) are no hit; own changes stay hits.
+. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2590-worktree-change-detect/foreign.sh"
+if fg_setup; then FG_READY=1; else FG_READY=0; fi
+
+case_begin "foreign-changes-are-not-hits-own-changes-are" "bin/lib/run-all-worktree-change-detect.sh"
+if [[ "$FG_READY" == 1 ]]; then fg_detect_case; else fail "foreign: fixture setup"; fi
+case_end
+
+case_begin "a-run-with-only-foreign-changes-reports-no-hit" "bin/lib/run-all-worktree-change-detect.sh"
+if [[ "$FG_READY" == 1 ]]; then fg_only_foreign_case; else fail "only foreign: fixture setup"; fi
+case_end
+
+case_begin "the-base-side-run-judges-foreign-the-same-way" "bin/lib/run-all-worktree-change-detect.sh"
+if [[ "$FG_READY" == 1 ]]; then fg_base_case; else fail "base: fixture setup"; fi
 case_end
 
 echo ""
