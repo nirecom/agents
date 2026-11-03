@@ -40,24 +40,27 @@ rtb_timeout_num_into() {
 # rtb_timeout_load_ledger <root> <workdir> <idx>:<rel>... — RTB_TIMEOUT_LEDGER[idx] = measured
 # seconds; unmeasured, empty or non-numeric entries stay unset.
 rtb_timeout_load_ledger() {
-    local root="${1:-}" wd="${2:-}" item id s
+    local root="${1:-}" wd="${2:-}" item id s keys secs
     RTB_TIMEOUT_LEDGER=()
     [ -n "$root" ] && [ -n "$wd" ] && shift 2 || return 0
-    : >"$wd/timeout.keys" 2>/dev/null || return 0
+    # Per-process names: concurrent baseline runs may share the work directory.
+    keys="$wd/timeout.$$.keys" secs="$wd/timeout.$$.secs"
+    rm -f "$secs"
+    : >"$keys" 2>/dev/null || return 0
     for item in "$@"; do
         run_all_dur_key_into "$root/${item#*:}" "$root" || continue
         if [ -n "$RUN_ALL_DUR_KEY_OUT" ]; then
             printf '%s\t%s\n' "${item%%:*}" "$RUN_ALL_DUR_KEY_OUT"
         fi
-    done >"$wd/timeout.keys"
-    run_all_dur_lookup "$root" "$wd/timeout.keys" "$wd/timeout.secs"
-    [ -f "$wd/timeout.secs" ] || return 0
+    done >"$keys"
+    run_all_dur_lookup "$root" "$keys" "$secs"
+    [ -f "$secs" ] || return 0
     while IFS="$(printf '\t')" read -r id s; do
         case "$id" in ''|*[!0-9]*) continue ;; esac
         case "$s" in ''|*[!0-9]*) continue ;; esac
         # shellcheck disable=SC2034  # outputs read by the sourcing caller
         RTB_TIMEOUT_LEDGER[id]="$s"
-    done <"$wd/timeout.secs"
+    done <"$secs"
     return 0
 }
 

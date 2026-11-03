@@ -5,8 +5,6 @@
 // emitter ran the suite. Contract shapes: hooks/lib/run-contract.js.
 
 const UNRUNNABLE_ACCEPT_SENTINEL_FORM = "echo \"<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: {reason}>>\"";
-// Not used in demotion messages: a failing run never demotes; the baseline evidence CLI guides it.
-const BASELINE_ACCEPT_SENTINEL_FORM = "echo \"<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: {reason}>>\"";
 
 // The run's only defect is a missing runtime: a current-shape contract with no failure, and
 // either no veto or the worker's own `unrunnable` word (the pass-only allowlist vetoes it too).
@@ -45,6 +43,11 @@ function demotionMessage(reason, contract) {
       "An `UNRUNNABLE: <path> (missing: test file)` line is a wrong test path and cannot be accepted: fix the path and run again. " +
       `If a runtime cannot be installed, accept this run only with ${UNRUNNABLE_ACCEPT_SENTINEL_FORM}.` };
   }
+  if (reason === "run-parts-open") {
+    return { head, detail: lead + "This rerun passed, but merged with the earlier runs (run_tests.run_parts) " +
+      "some failing test, HIT or UNRUNNABLE test is still open. Rerun the paths that " +
+      "`run-tests-baseline-evidence rerun-list` prints, or the full suite." };
+  }
   if (reason === "contract-legacy-shape") {
     return { head, detail: lead + "RUN_CONTRACT has the legacy 4-field form: the worktree's tests/run-all.sh predates this change, " +
       "so rebase onto main and run again." };
@@ -55,5 +58,5 @@ function demotionMessage(reason, contract) {
 
 module.exports = {
   demotionReason, demotionMessage, isUnrunnableOnly,
-  UNRUNNABLE_ACCEPT_SENTINEL_FORM, BASELINE_ACCEPT_SENTINEL_FORM,
+  UNRUNNABLE_ACCEPT_SENTINEL_FORM,
 };

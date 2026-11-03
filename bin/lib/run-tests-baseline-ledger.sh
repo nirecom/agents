@@ -2,8 +2,9 @@
 # Baseline result ledger for bin/run-tests-baseline (#2431). Source-only.
 # One append-only segment per process at
 #   $(run_all_cache_dir)/baseline/<repo_id>/v2.<host>-<epoch>-<pid>.seg
-# with lines `v2\t<base-sha>\t<host>\t<rel-path>\t<fail|pass>\t<epoch>\t<os-attr>`.
-# The format sits in the file name so legacy segments are told apart unread (#2079 S7).
+# with lines `v2\t<base-sha>\t<host>\t<rel-path>\t<fail|pass|und:<detail>>\t<epoch>\t<os-attr>`.
+# The format sits in the file name so legacy segments are told apart unread (#2079 S7);
+# rtb_ledger_seg_open / rtb_ledger_seg_list take that prefix, so other caches (branch.v1) share them.
 # Time-limited carry-over of legacy segments lives in run-all-ledger-migrate.sh: every old
 # token on Windows, only a same-token format rewrite elsewhere.
 # Identity helpers are reused from the duration ledger; reads are capped and
@@ -25,6 +26,10 @@ RTB_LEDGER_MAX_RECORDS=60000
 RTB_LEDGER_MAX_LINE_BYTES=1024
 RTB_LEDGER_SEGMENT=""
 RTB_LEDGER_WRITE_OK=0
+RTB_LEDGER_OPENED=""
+RTB_LEDGER_SEGS=()
+# und: results the same base reproduces every time; any other und: is never reused.
+RTB_LEDGER_UND_CACHEABLE_RE='^und:(unsupported-at-base|base-launcher-predates-result-conversion)$'
 
 # The repository the ledger is keyed on: RTB_LEDGER_REPO when set, else the cwd.
 rtb_ledger_dir() {
@@ -69,36 +74,71 @@ rtb_ledger_migrate() {
     return 0
 }
 
-# Idempotent per process; on failure leaves RTB_LEDGER_WRITE_OK=0 after one warning.
-rtb_ledger_writer_init() {
-    local dir seg
-    [ -n "$RTB_LEDGER_SEGMENT" ] && return 0
-    RTB_LEDGER_WRITE_OK=0
+# rtb_ledger_seg_open <prefix> — creates this process's <prefix>.<host>-<epoch>-<pid>.seg and
+# sets RTB_LEDGER_OPENED to its path; returns 1 after one warning when it cannot.
+rtb_ledger_seg_open() {
+    local prefix="${1:-}" dir seg
+    RTB_LEDGER_OPENED=""
+    [[ "$prefix" =~ ^[a-z][a-z0-9.]*$ ]] || { rtb_ledger_warn "bad segment prefix '$prefix'"; return 1; }
     run_all_dur_host_token >/dev/null
     dir="$(rtb_ledger_dir)"
-    if ! mkdir -p "$dir" 2>/dev/null || [ ! -d "$dir" ]; then
+    if ! mkdir -p "$dir" 2>/dev/null || [[ ! -d "$dir" ]]; then
         rtb_ledger_warn "cannot create $dir; results not recorded"
-        RTB_LEDGER_SEGMENT="-"
-        return 0
+        return 1
     fi
     rtb_ledger_migrate "$dir"
-    [ -n "$RUN_ALL_DUR_OS_ATTR" ] || RUN_ALL_DUR_OS_ATTR="$(run_all_os_attr)"
-    seg="$dir/$RTB_LEDGER_SCHEMA.$RUN_ALL_DUR_HOST_TOKEN-$(date +%s)-$$.seg"
+    seg="$dir/$prefix.$RUN_ALL_DUR_HOST_TOKEN-$(date +%s)-$$.seg"
     if ! : >>"$seg" 2>/dev/null; then
         rtb_ledger_warn "cannot write $seg; results not recorded"
-        RTB_LEDGER_SEGMENT="-"
-        return 0
+        return 1
     fi
-    RTB_LEDGER_SEGMENT="$seg"
-    RTB_LEDGER_WRITE_OK=1
+    RTB_LEDGER_OPENED="$seg"
     rtb_ledger_sweep
     return 0
 }
 
-# rtb_ledger_append <base-sha> <rel-path> <fail|pass> — always returns 0.
+# rtb_ledger_seg_list <prefix> — sets RTB_LEDGER_SEGS to this host's <prefix> segments,
+# newest first, capped at RTB_LEDGER_MAX_SEGMENTS_READ.
+rtb_ledger_seg_list() {
+    local prefix="${1:-}" dir f i
+    local -a all=()
+    RTB_LEDGER_SEGS=()
+    [[ "$prefix" =~ ^[a-z][a-z0-9.]*$ ]] || return 0
+    dir="$(rtb_ledger_dir)"
+    [[ -d "$dir" ]] || return 0
+    run_all_dur_host_token >/dev/null
+    rtb_ledger_migrate "$dir"
+    for f in "$dir"/"$prefix.$RUN_ALL_DUR_HOST_TOKEN"-*.seg; do
+        [[ -f "$f" ]] || continue
+        all+=("$f")
+    done
+    # Names embed the 10-digit creation epoch, so glob order is oldest-first; read
+    # newest-first so both caps drop the oldest records, never the latest verdict.
+    for ((i = ${#all[@]} - 1; i >= 0 && ${#RTB_LEDGER_SEGS[@]} < RTB_LEDGER_MAX_SEGMENTS_READ; i--)); do
+        RTB_LEDGER_SEGS+=("${all[i]}")
+    done
+    return 0
+}
+
+# Idempotent per process; on failure leaves RTB_LEDGER_WRITE_OK=0 after one warning.
+rtb_ledger_writer_init() {
+    [ -n "$RTB_LEDGER_SEGMENT" ] && return 0
+    RTB_LEDGER_WRITE_OK=0
+    if ! rtb_ledger_seg_open "$RTB_LEDGER_SCHEMA"; then
+        RTB_LEDGER_SEGMENT="-"
+        return 0
+    fi
+    [ -n "$RUN_ALL_DUR_OS_ATTR" ] || RUN_ALL_DUR_OS_ATTR="$(run_all_os_attr)"
+    RTB_LEDGER_SEGMENT="$RTB_LEDGER_OPENED"
+    RTB_LEDGER_WRITE_OK=1
+    return 0
+}
+
+# rtb_ledger_append <base-sha> <rel-path> <fail|pass|und:<detail>> — always returns 0.
 rtb_ledger_append() {
     local sha="${1:-}" rel="${2:-}" res="${3:-}"
-    case "$res" in fail|pass) ;; *) rtb_ledger_warn "bad result '$res'"; return 0 ;; esac
+    [[ "$res" =~ ^(fail|pass|und:[a-z0-9][a-z0-9-]*)$ && "${#res}" -le 80 ]] \
+        || { rtb_ledger_warn "bad result '$res'"; return 0; }
     rtb_ledger_valid_sha "$sha" || { rtb_ledger_warn "bad sha"; return 0; }
     rtb_ledger_valid_path "$rel" || { rtb_ledger_warn "bad path"; return 0; }
     rtb_ledger_writer_init
@@ -112,26 +152,15 @@ rtb_ledger_append() {
 # rtb_ledger_scan <sha-or-empty> <rel-path> <min-epoch> — prints valid records for this
 # host and path as `<epoch>\t<sha>\t<result>`; only fixed-shape fields enter awk.
 rtb_ledger_scan() {
-    local want_sha="${1:-}" rel="${2:-}" min_epoch="${3:-0}" dir f i
-    local -a all=() segs=()
-    dir="$(rtb_ledger_dir)"
-    [ -d "$dir" ] || return 0
-    run_all_dur_host_token >/dev/null
-    rtb_ledger_migrate "$dir"
-    for f in "$dir"/"$RTB_LEDGER_SCHEMA.$RUN_ALL_DUR_HOST_TOKEN"-*.seg; do
-        [ -f "$f" ] || continue
-        all+=("$f")
-    done
-    # Names embed the 10-digit creation epoch, so glob order is oldest-first; read
-    # newest-first so both caps drop the oldest records, never the latest verdict.
-    for ((i = ${#all[@]} - 1; i >= 0 && ${#segs[@]} < RTB_LEDGER_MAX_SEGMENTS_READ; i--)); do
-        segs+=("${all[i]}")
-    done
-    [ "${#segs[@]}" -gt 0 ] || return 0
-    LC_ALL=C awk -F '\t' -v HOST="$RUN_ALL_DUR_HOST_TOKEN" -v REL="$rel" -v SHA="$want_sha" \
+    local want_sha="${1:-}" rel="${2:-}" min_epoch="${3:-0}"
+    rtb_ledger_seg_list "$RTB_LEDGER_SCHEMA"
+    [ "${#RTB_LEDGER_SEGS[@]}" -gt 0 ] || return 0
+    # REL travels through the environment: awk -v would interpret backslash escapes in it.
+    RTB_AWK_REL="$rel" LC_ALL=C awk -F '\t' -v HOST="$RUN_ALL_DUR_HOST_TOKEN" -v SHA="$want_sha" \
         -v MIN="$min_epoch" -v MAXREC="$RTB_LEDGER_MAX_RECORDS" \
         -v MAXLEN="$RTB_LEDGER_MAX_LINE_BYTES" -v SCHEMA="$RTB_LEDGER_SCHEMA" \
         -v ATTRRE="$RUN_ALL_OS_ATTR_CLASS" '
+BEGIN { REL = ENVIRON["RTB_AWK_REL"] }
 {
     if (++n > MAXREC) exit
     if (length($0) > MAXLEN || NF != 7) next
@@ -140,18 +169,21 @@ rtb_ledger_scan() {
     if (s < 2 || s > 33 || length($7) - s < 1 || length($7) - s > 64) next
     if ($7 !~ ATTRRE) next
     if ($2 !~ /^[0-9a-f]+$/ || length($2) < 7 || length($2) > 64) next
-    if ($5 != "fail" && $5 != "pass") next
+    if ($5 != "fail" && $5 != "pass" && $5 !~ /^und:[a-z0-9][a-z0-9-]*$/) next
     if ($6 !~ /^[0-9]+$/ || ($6 + 0) < (MIN + 0)) next
     if (SHA != "" && $2 != SHA) next
     print $6 "\t" $2 "\t" $5
-}' "${segs[@]}" 2>/dev/null || true
+}' "${RTB_LEDGER_SEGS[@]}" 2>/dev/null || true
 }
 
-# rtb_ledger_lookup_same_base <sha> <rel-path> — prints the newest result (fail|pass) or nothing.
+# rtb_ledger_lookup_same_base <sha> <rel-path> — prints the newest reusable result (fail|pass,
+# or a deterministic und:<detail>) or nothing.
 rtb_ledger_lookup_same_base() {
     rtb_ledger_valid_sha "${1:-}" || return 0
     rtb_ledger_valid_path "${2:-}" || return 0
-    rtb_ledger_scan "$1" "$2" 0 | sort -t "$(printf '\t')" -k1,1n | tail -n 1 | cut -f3
+    rtb_ledger_scan "$1" "$2" 0 | awk -F '\t' -v UND="$RTB_LEDGER_UND_CACHEABLE_RE" \
+        '$3 == "fail" || $3 == "pass" || $3 ~ UND' \
+        | sort -t "$(printf '\t')" -k1,1n | tail -n 1 | cut -f3
 }
 
 # rtb_ledger_lookup_inheritable <rel-path> — base SHAs with a `fail` record for this host

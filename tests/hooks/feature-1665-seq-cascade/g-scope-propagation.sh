@@ -92,7 +92,8 @@ assert_contains "G5 gate names write_code as incomplete" "write_code" "$GATE_FAI
 assert_not_contains "G6 control: passing run leaves write_code out of the block list" "write_code" "$GATE_PASS"
 
 # ------------------------------------------------------ G7: advance-shared.js
-ADV="$("$RWT" 120 node "$NEXT_STEP" --advance --step run_tests --complete --next --session "$SID_ADV" 2>&1)"
+# Advances review_security, not run_tests: #2472 refuses a run_tests complete with no run evidence.
+ADV="$("$RWT" 120 node "$NEXT_STEP" --advance --step review_security --complete --next --session "$SID_ADV" 2>&1)"
 assert_contains "G7 advance-shared resolves the current step through the cascade" "ADVANCE_SCOPE=not-current-step" "$ADV"
 
 finish

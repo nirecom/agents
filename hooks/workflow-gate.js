@@ -176,9 +176,9 @@ if (require.main === module) {
   const command = scannableCommandListOf(toolName, toolInput).join("\n");
   if (!command) approve();
 
-  // Internal-only doors (#2431, #2517): owner and rationale in lib/workflow-driver-commands.js.
+  // Internal-only door (#2431): owner and rationale in lib/workflow-driver-commands.js.
   if (commandListOf(toolName, toolInput).some(isBaselineEvidenceInternalCommand)) {
-    block("workflow-gate: `run-tests-baseline-evidence record` / `accept` are internal to bin/run-tests-baseline — run bin/run-tests-baseline instead.");
+    block("workflow-gate: `run-tests-baseline-evidence record` is internal to bin/run-tests-baseline — run bin/run-tests-baseline instead.");
   }
 
   // SENTINEL GUARD (#382): block exactly what workflow-mark.js (PostToolUse) would
