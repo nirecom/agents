@@ -26,6 +26,7 @@ const { validateSkipReason } = require("../workflow-mark/skip-reason");
 const { CONDITION_SCHEMAS } = require("./skip-signal-resolver/condition-schemas");
 const { resolveTrustedRepoDir } = require("./record-step-verdict/trusted-repo-dir");
 const { checkReleaseCompletion } = require("./record-step-verdict/release-steps");
+const { checkRunTestsCompletion } = require("./record-step-verdict/run-tests-evidence");
 
 // ---- exported discriminators ----------------------------------------------
 
@@ -282,6 +283,14 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
     return fail(1, "record-step-verdict: --status in_progress is not a forward operation.");
   }
 
+  // #2472: on every gate a run_tests completion is answered from run evidence alone.
+  if (step === "run_tests" && status === "complete") {
+    let st = null;
+    try { st = readState(sessionId); } catch (_) { st = null; }
+    const ev = checkRunTestsCompletion(sessionId, st);
+    return ev.ok ? { ok: true, code: 0, message: "", already: true } : fail(2, `record-step-verdict: ${ev.message}`, ev.kind);
+  }
+
   // Idempotent repeat — ADVANCE GATE ONLY. Returning before the write is what
   // keeps a re-issued --advance from re-firing the workflow_init downstream reset
   // or overwriting an A-4 verdict that record-skip-verdict has since resolved.
@@ -369,21 +378,13 @@ function recordStepVerdict(sessionId, step, status, opts = {}) {
   // the very evidence the re-open rests on, and RNT-9's
   // WORKFLOW_MARK_STEP_run_tests_pending is a status-only idempotent
   // re-affirmation that must not erase what the hook observed.
-  let declaredOutcome = false;
-  if (DECLARED_OUTCOME_STEPS.indexOf(step) !== -1) {
-    if (status === "complete") {
-      // A claim, not a measurement — hence the pinned `declared` provenance,
-      // which stays inside GENUINE_PROVENANCE so completion audits are unchanged.
-      extraFields.run_outcome = "pass";
-      declaredOutcome = true;
-    } else if (status === "skipped") {
-      extraFields.run_outcome = null;  // tombstone: no run, so no outcome
-    }
+  // A complete never reaches here for run_tests (#2472: checked above).
+  if (DECLARED_OUTCOME_STEPS.indexOf(step) !== -1 && status === "skipped") {
+    extraFields.run_outcome = null;  // tombstone: no run, so no outcome
   }
 
   const writeOpts = {};
   if (typeof opts.provenance === "string") writeOpts.provenance = opts.provenance;
-  if (declaredOutcome) writeOpts.provenance = "declared";
   if (typeof opts.origin === "string") writeOpts.origin = opts.origin;
 
   // #2527: release steps complete only on evidence; merge_to_main settles via settleMergeToMain.

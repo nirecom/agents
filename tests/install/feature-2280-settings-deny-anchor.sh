@@ -254,8 +254,8 @@ t_unrunnable_accept_ask() {
 }
 t_unrunnable_accept_ask
 
-# #2517: the baseline accept sentinel grants the completion of a failing run_tests, so it is
-# the same class as UA above -- ask always, never allow, never deny (the user must be able to run it).
+# #2688: the baseline accept sentinel (#2517) is retired -- run_tests completes from the recorded
+# baseline evidence alone, so settings.json carries no ask row for it and no allow rule either.
 BA_RULE='Bash(echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: *>>")'
 BA_CMD='echo "<<WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED: fails on main too>>"'
 t_baseline_accept_ask() {
@@ -268,21 +268,17 @@ t_baseline_accept_ask() {
         echo "FAIL: harness -- baseline-accept split returned [${ba[*]}]"; exit 1
     fi
     ROWS=$((ROWS + 1))
-    assert_eq "BA1: permissions.ask carries the exact BASELINE_ACCEPTED sentinel rule" "true" "${ba[0]}"
+    assert_eq "BA1: permissions.ask no longer carries the retired BASELINE_ACCEPTED sentinel rule" "false" "${ba[0]}"
     dp_req ba-allow "$tmp_np/ua-allow-as-deny.json" "$BA_CMD"
     dp_req ba-ask "$tmp_np/ua-ask-as-deny.json" "$BA_CMD"
-    dp_req ba-deny "$SETTINGS" "$BA_CMD"
     dp_run "baseline-accept"
     ROWS=$((ROWS + 1))
     dp_get ba-allow
-    assert_eq "BA2: no permissions.allow Bash rule auto-approves the baseline accept sentinel (hits: ${DENY_HITS:-none})" \
+    assert_eq "BA2: no permissions.allow Bash rule auto-approves the retired baseline accept sentinel (hits: ${DENY_HITS:-none})" \
         "NO-MATCH" "$DENY_VERDICT"
     ROWS=$((ROWS + 1))
     dp_get ba-ask
-    assert_eq "BA3: the permissions.ask rule matches the baseline accept sentinel command" "MATCHED" "$DENY_VERDICT"
-    ROWS=$((ROWS + 1))
-    dp_get ba-deny
-    assert_eq "BA4: no permissions.deny rule blocks the baseline accept sentinel (hits: ${DENY_HITS:-none})" \
+    assert_eq "BA3: no permissions.ask rule is left for the retired baseline accept sentinel (hits: ${DENY_HITS:-none})" \
         "NO-MATCH" "$DENY_VERDICT"
 }
 t_baseline_accept_ask
@@ -327,8 +323,8 @@ t_glossary_accept_ask
 # refspec compound tail) + launch-form completeness 80 (20 triggers x 4 launch forms -- #2617
 # covers every retained push floor row, incl. the positional `*-f` / `*-f *`; PEND under ANCHORED=0) +
 # bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501) +
-# baseline-accept ask 4 (#2517) + glossary-accept ask 4 (#2529) + 2617 over-match 49 (#2617; OV7 adds 4 positional `*-f *` MATCHED rows).
-ROWS_EXPECTED=258
+# baseline-accept retired 3 (#2688) + glossary-accept ask 4 (#2529) + 2617 over-match 49 (#2617; OV7 adds 4 positional `*-f *` MATCHED rows).
+ROWS_EXPECTED=257
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

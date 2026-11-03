@@ -14,7 +14,7 @@ const { run: spawnRun, scriptExists } = require("../spawn");
 
 // Separators are ASCII blanks only: each one is in run-all-report.sh _RAR_REPORT_RE's set, so a line
 // matched here is one the runner's neutralizer prefixes when a child prints it.
-const FAIL_LINE_RE = /^FAIL:[ \t]+(.+?)[ \t]+\(exit[ \t]+-?\d+\)[ \t]*$/;
+const FAIL_LINE_RE = /^FAIL:[ \t]+(.+?)[ \t]+\(exit[ \t]+(-?\d+)\)[ \t]*$/;
 const RESULTS_LINE_RE = /^Results:[ \t]*(.+?)[ \t]*$/;
 // The hook's own parser (hooks/lib/run-contract.js): this worker lifts the line OUT of the
 // output so the renderer can put exactly one copy where the hook will look, and
@@ -45,6 +45,17 @@ function parseFailingTests(lines) {
   for (const line of lines) {
     const m = FAIL_LINE_RE.exec(line);
     if (m !== null) out.push(m[1]);
+  }
+  return out;
+}
+
+// {path: exit} from the same FAIL lines; a negative exit carries no value.
+function parseFailingExits(lines) {
+  const out = {};
+  for (const line of lines) {
+    const m = FAIL_LINE_RE.exec(line);
+    const exit = m === null ? -1 : Number(m[2]);
+    if (Number.isSafeInteger(exit) && exit >= 0) out[m[1]] = exit;
   }
   return out;
 }
@@ -233,10 +244,11 @@ function run(payload, ctx) {
     durationSeconds: duration,
     summary,
     failingTests: status === "pass" ? [] : failingTests,
+    failingExits: status === "pass" ? {} : parseFailingExits(nonEmpty),
     logTail,
     runContract,
     hits,
   };
 }
 
-module.exports = { run, parseFailingTests, parseResults, parseRunContract, tailWithPriority };
+module.exports = { run, parseFailingTests, parseFailingExits, parseResults, parseRunContract, tailWithPriority };

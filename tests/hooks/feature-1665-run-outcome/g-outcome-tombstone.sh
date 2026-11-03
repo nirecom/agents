@@ -2,38 +2,18 @@
 # tests/hooks/feature-1665-run-outcome/g-outcome-tombstone.sh
 # Tests: hooks/workflow-state/record-step-verdict.js, hooks/workflow-state/state-io/events.js
 # Tags: workflow, run-outcome, record-step-verdict, tombstone, symmetry, TL1, scope:issue-specific
-#
-# TL1 — the state layer called directly, no hook subprocess.
-#
-# WHY (CPR-WPH): hooks/workflow-run-tests.js is not the only writer of run_tests.
-# A human or a skill can settle the step through recordStepVerdict() — /run-tests
-# advancing it, a skip judgment waiving it. If only the hook maintained the outcome
-# axis, a declared `complete` would leave a stale run_outcome:"fail" behind it and
-# the resume cascade would keep firing against a step the user has already settled.
-#
-# The rule (R4) is a symmetry, not a special case: a SETTLED transition must settle
-# the outcome too, and an UNSETTLED one must leave it strictly alone.
-#
-#   complete    -> run_outcome "pass", provenance "declared" (a claim, not an
-#                  observation — the distinction is why provenance exists)
-#   skipped     -> run_outcome tombstoned to null (there is no outcome to have)
-#   pending     -> untouched: the step is being re-opened, and the last observed
-#   in_progress    outcome is exactly the evidence the re-open is based on
-#
-# `declared` vs `observed` matters downstream: a consumer that trusts only measured
-# evidence can filter on provenance, which it cannot do if every writer claims
-# "observed".
+# TL1 — the state layer called directly. R4: a skip tombstones run_outcome to null, an
+# unsettled transition (pending / in_progress) leaves it alone, and since #2472 a
+# complete with no run evidence is refused, so it mints no declared "pass".
 
-# _verdict <sid> <step> <status> — drive recordStepVerdict with gate "mark".
-# gate "mark" is deliberate: it is not a DECLARING_GATE, so checkSkippableConstraint
-# does not run and the `skipped` row below is reachable without staging a skip
-# judgment. run_tests is absent from MANUAL_MARK_FORBIDDEN, so the call is legal.
+# _verdict <sid> <step> <status> — recordStepVerdict with gate "mark" (no skip judgment
+# needed; run_tests is absent from MANUAL_MARK_FORBIDDEN). Prints ok / refused.
 _verdict() {
     run_with_timeout 30 node -e '
 const m = require(process.argv[1] + "/hooks/workflow-state/record-step-verdict");
 const fn = typeof m === "function" ? m : m.recordStepVerdict;
 if (typeof fn !== "function") { process.stdout.write("ERR:no-recordStepVerdict"); process.exit(0); }
-try { fn(process.argv[2], process.argv[3], process.argv[4], { gate: "mark" }); process.stdout.write("ok"); }
+try { const r = fn(process.argv[2], process.argv[3], process.argv[4], { gate: "mark" }); process.stdout.write(r && r.ok === false ? "refused" : "ok"); }
 catch (e) { process.stdout.write("ERR:" + e.message); }
 ' "$AGENTS_WIN" "$1" "$2" "$3" 2>/dev/null || echo "ERR:crashed"
 }
@@ -45,10 +25,7 @@ run_g_outcome_tombstone_cases() {
     local rc
 
     # --- G0: run_outcome must be a sanctioned annotation key ---------------
-    # validateEvent() rejects any step_annotation key outside STEP_ANNOTATION_KEYS,
-    # so without this registration every write below fails at the storage layer.
-    # Asserting it separately keeps a G1 failure readable: "not registered" and
-    # "registered but not written" are different bugs (CPR-SC).
+    # A separate assert keeps "not registered" apart from "not written" (CPR-SC).
     local keys
     keys="$(run_with_timeout 30 node -e '
 const { STEP_ANNOTATION_KEYS } = require(process.argv[1] + "/hooks/workflow-state/state-io/events");
@@ -56,24 +33,24 @@ process.stdout.write(Array.isArray(STEP_ANNOTATION_KEYS) ? STEP_ANNOTATION_KEYS.
 ' "$AGENTS_WIN" 2>/dev/null || echo "(absent)")"
     assert_contains "G0/run_outcome-is-a-registered-annotation" "run_outcome" "$keys"
 
-    # --- G1: complete -> declared pass -------------------------------------
+    # --- G1: complete with no run evidence -> refused, nothing written ------
+    # #2472: a declared complete with no run behind it no longer mints "pass".
     local sid="f1665-g1"
     seed_step "$sid" write_tests complete
+    seed_step "$sid" run_tests pending
     rc="$(_verdict "$sid" run_tests complete)"
-    assert_eq "G1/call-succeeded" "ok" "$rc"
-    assert_eq "G1/status-complete" "complete" "$(step_field "$sid" run_tests status)"
-    assert_eq "G1/outcome-pass" "pass" "$(step_field "$sid" run_tests run_outcome)"
-    assert_eq "G1/provenance-declared" "declared" \
-        "$(annotation_provenance "$sid" run_tests run_outcome)"
+    assert_eq "G1/call-refused" "refused" "$rc"
+    assert_eq "G1/status-stays-pending" "pending" "$(step_field "$sid" run_tests status)"
+    assert_eq "G1/no-outcome-minted" "(absent)" "$(step_field "$sid" run_tests run_outcome)"
 
-    # --- G2: complete OVERWRITES a stale fail ------------------------------
-    # The interesting direction: the user declaring the step done must win over an
-    # older observation, otherwise the declaration cannot clear the cascade.
+    # --- G2: a refused complete leaves a stale fail in place ---------------
+    # The declaration no longer clears the cascade; only a real run does (#2472).
     local sid2="f1665-g2"
     seed_step "$sid2" write_tests complete
     seed_step "$sid2" run_tests pending run_outcome fail
     _verdict "$sid2" run_tests complete >/dev/null
-    assert_eq "G2/stale-fail-overwritten" "pass" "$(step_field "$sid2" run_tests run_outcome)"
+    assert_eq "G2/stale-fail-kept" "fail" "$(step_field "$sid2" run_tests run_outcome)"
+    assert_eq "G2/status-stays-pending" "pending" "$(step_field "$sid2" run_tests status)"
 
     # --- G3: skipped -> tombstoned to null ---------------------------------
     # A skipped step has no outcome at all — "pass" would be a lie and "fail" would

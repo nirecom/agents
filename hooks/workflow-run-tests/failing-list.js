@@ -10,7 +10,7 @@ const { tryLoadRegistry, matchBasename } = require("../lib/test-language-registr
 
 // The file-level FAIL: line is the SSOT (a TIMEOUT unit prints one too); case lines,
 // TIMEOUT: and UNRUNNABLE: lines never match, so the names count equals contract.fail.
-const RUN_ALL_FAIL_RE = /^FAIL: (.+) \(exit -?\d+\)$/;
+const RUN_ALL_FAIL_RE = /^FAIL: (.+) \(exit (-?\d+)\)$/;
 const LOG_TAIL_RE = /^log_tail:[ \t]*\|/;
 const WORKER_ITEM_RE = /^ {2}- '((?:[^']|'')*)'\s*$/;
 
@@ -103,4 +103,34 @@ function extractFailingTests({ stdout, isWorker, worktreeRoot, contract } = {}) 
   return validateFailingNames(names, worktreeRoot, contract);
 }
 
-module.exports = { extractFailingTests, validateFailingNames, classifyTestKind, normalizeTestPath, emitterRoot };
+// {path: exit} from run-all's FAIL lines; null whenever the failing list itself is withheld.
+// A negative exit (a signal, or no exit at all) carries no value.
+function extractFailingExits({ stdout, worktreeRoot, contract } = {}) {
+  if (typeof stdout !== "string") return null;
+  if (validateFailingNames(runAllNames(stdout), worktreeRoot, contract) === null) return null;
+  const out = {};
+  for (const line of stdout.replace(/\r\n/g, "\n").split("\n")) {
+    const m = RUN_ALL_FAIL_RE.exec(line);
+    if (m === null) continue;
+    const exit = Number(m[2]);
+    const rel = normalizeTestPath(m[1], worktreeRoot);
+    if (rel !== null && Number.isSafeInteger(exit) && exit >= 0) out[rel] = exit;
+  }
+  return out;
+}
+
+// Worker-route exits: only non-negative integers for paths in the trusted failing list.
+function filterFailingExits(exits, failingTests, root) {
+  if (!Array.isArray(failingTests) || exits === null || typeof exits !== "object" || Array.isArray(exits)) return null;
+  const out = {};
+  for (const [p, exit] of Object.entries(exits)) {
+    const rel = normalizeTestPath(p, root);
+    if (rel !== null && failingTests.includes(rel) && Number.isSafeInteger(exit) && exit >= 0) out[rel] = exit;
+  }
+  return out;
+}
+
+module.exports = {
+  extractFailingTests, extractFailingExits, filterFailingExits, validateFailingNames, classifyTestKind,
+  normalizeTestPath, emitterRoot,
+};

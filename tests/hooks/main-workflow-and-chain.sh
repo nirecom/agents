@@ -337,33 +337,32 @@ MARK_OUT=$(run_mark "$MARK_JSON")
 expect_state_step "WS-AND-H3b. cd-prefix chain rejected → research stays pending" "$SID" "research" "pending"
 
 echo ""
-echo "=== WS-AND-H4: MARK_STEP_run_tests_complete && MARK_STEP_review_security_complete ==="
+echo "=== WS-AND-H4: MARK_STEP_research_complete && MARK_STEP_review_security_complete ==="
 
 SID="and-h4-$$"
-# run_tests AND review_security both pending (others complete)
+# research AND review_security pending; not run_tests: #2472 refuses a bare MARK_STEP for it
 cat > "$WORKFLOW_DIR/${SID}.json" <<H4_EOF
 {
   "version": 1,
   "session_id": "$SID",
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
-    "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
+    "research":          {"status": "pending",  "updated_at": null},
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
-    "run_tests":         {"status": "pending",  "updated_at": null},
+    "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "pending",  "updated_at": null},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
     "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
   }
 }
 H4_EOF
-
-MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>" && echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"' "$SID")
+MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_research_complete>>" && echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"' "$SID")
 MARK_OUT=$(run_mark "$MARK_JSON")
 
-expect_state_step "WS-AND-H4a. run_tests=complete after chain" "$SID" "run_tests" "complete"
+expect_state_step "WS-AND-H4a. research=complete after chain" "$SID" "research" "complete"
 expect_state_step "WS-AND-H4b. review_security=complete after chain" "$SID" "review_security" "complete"
 
 echo ""

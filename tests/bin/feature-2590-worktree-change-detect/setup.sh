@@ -28,6 +28,21 @@ changes() {
 }
 change_lines() { printf '%s\n' "$1" | grep -c '^\[run-all\] worktree change: ' || true; }
 
+# foreign_lines <report> <tree basename> <kind> — how many "worktree-change (foreign, not a hit)
+# tree=<tree> kind=<kind>" lines name that tree and that kind (#2803).
+foreign_lines() {
+  local line n=0 pre="worktree-change (foreign, not a hit) tree="
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    case "$line" in
+      *"$pre"*"/$2 kind=$3"|*"$pre"*"/$2 kind=$3 "*|*"$pre"*"/$2 kind=$3$TAB"*) n=$((n + 1)) ;;
+    esac
+  done <<<"$1"
+  printf '%s' "$n"
+}
+# log_kinds <log file> — the kind column of every line of a worktree change log, one per line.
+log_kinds() { [ -f "$1" ] && cut -f3 "$1" | tr -d '\r'; return 0; }
+
 # wcd_checkout <dir> — a committed copy of what the launcher needs, plus three data files.
 wcd_checkout() {
   local d="$1"

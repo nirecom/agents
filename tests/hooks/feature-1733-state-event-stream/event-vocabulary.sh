@@ -230,8 +230,9 @@ if run_case "EV8/annotation-keys"; then
     next_sid
     _ev_script=$(cat <<'JS'
 const bad = [];
-const want = ["baseline_accept", "baseline_classification", "completion_basis", "dispatch_unsettled", "failing_tests", "hit_count", "hit_summary",
-  "inherit_revert_reason", "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "skip_judgment", "skip_reason",
+// #2688: baseline_accept (the retired user grant) is gone; failing_test_exits, run_parts and baseline_note are new.
+const want = ["baseline_classification", "baseline_note", "completion_basis", "dispatch_unsettled", "failing_test_exits", "failing_tests", "hit_count", "hit_summary",
+  "inherit_revert_reason", "outcome_source", "reopen_reason", "reset_reason", "review_scope_manifest", "run_outcome", "run_parts", "skip_judgment", "skip_reason",
   "skip_verdict", "unrunnable_accept_reason", "unrunnable_count", "unrunnable_missing_files", "unrunnable_runtimes", "warnings_accepted_reason", "warnings_summary", "write_code_scope_manifest", "wsid"];
 const exported = Array.from(E.STEP_ANNOTATION_KEYS || []).slice().sort();
 if (exported.join(",") !== want.join(",")) bad.push("STEP_ANNOTATION_KEYS=" + exported.join(","));

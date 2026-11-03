@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/skills/feature-2544-run-tests-background-procedure.sh
 # Tests: skills/run-tests/scripts/show-dispatch-outcome.sh, skills/_shared/worker-dispatch.md, skills/run-tests/SKILL.md
-# Tags: skills, run-tests, dispatch, background, TL1, TL2, scope:issue-specific, pwsh-not-required
-#
+# Tags: skills, run-tests, dispatch, background, TL1, TL2, scope:issue-specific, pwsh-not-required, prompt-contract, baseline, recovery
 # #2544: a long test-runner dispatch runs in the background; its result is read back from
 # the outcome file the dispatcher wrote, rendered as the same YAML a foreground dispatch prints.
-# TL3 gap (what this test does NOT catch):
+# #2688 (last cases): RNT-9 drops the user grant and re-runs on exit 8 / 9 / ingest-pending.
+# TL3 gap (what this test does NOT catch; #2688 checks only the prompt's tokens):
 # - the real run_in_background completion notice reaching the model
 # - the model actually following WD-BG instead of the foreground WD-3/WD-4 path
 
@@ -151,6 +151,36 @@ lacks "untrusted: no pass status leaks" "$OUT" "status: pass"
 RC=0
 (cd "$TMPROOT" && run_with_timeout 60 bash "$SHOW_SCRIPT" --session "bad/sid" >/dev/null 2>&1) || RC=$?
 ck "malformed session id: exit 2" "2" "$RC"
+case_end
+
+# ---- #2688: RNT-9 without the user grant ----
+RNT9="$(md_block "$LOCAL_SKILL_MD" RNT-9)"
+RNT10="$(md_block "$LOCAL_SKILL_MD" RNT-10)"
+RULES="$(awk '/^## Rules/ { on = 1; next } on && /^## / { on = 0 } on' "$LOCAL_SKILL_MD")"
+# rx_has / rx_lacks <name> <ere> <text> — case-insensitive regex presence / absence.
+rx_has() { if printf '%s' "$3" | grep -qiE -- "$2"; then pass "$1"; else fail "$1" "nothing matches /$2/"; fi; }
+rx_lacks() { if printf '%s' "$3" | grep -qiE -- "$2"; then fail "$1" "/$2/ is still present"; else pass "$1"; fi; }
+
+case_begin "rnt9-has-no-user-grant" "skills/run-tests/SKILL.md"
+# An empty section would make every rx_lacks below pass for free.
+for _pair in "RNT-9:$RNT9" "RNT-10:$RNT10" "Rules:$RULES"; do
+  if [ -n "${_pair#*:}" ]; then pass "#2688: ${_pair%%:*} section is found"; else fail "#2688: ${_pair%%:*} section is found" "empty"; fi
+done
+rx_lacks "#2688: RNT-9 no longer names the retired baseline accept sentinel" 'WORKFLOW_RUN_TESTS_BASELINE_ACCEPTED' "$RNT9"
+rx_lacks "#2688: RNT-9 asks the user nothing for a grant (no AskUserQuestion)" 'AskUserQuestion' "$RNT9"
+rx_lacks "#2688: the Overwritten-sentinel recovery is gone from RNT-9" 'Overwritten-sentinel|read-step-status|Re-emit' "$RNT9"
+rx_lacks "#2688: Rules no longer offers the user's baseline accept sentinel" 'baseline accept sentinel|BASELINE_ACCEPTED' "$RULES"
+rx_lacks "#2688: RNT-10 no longer records the sentinel-recovery handoff key" 'run-tests:sentinel-recovery' "$RNT10"
+case_end
+
+case_begin "rnt9-reruns-on-exit-8-9-and-ingest-pending" "skills/run-tests/SKILL.md"
+rx_has "#2688: RNT-9 handles exit 8 (re-run request from the baseline CLI)" 'exit 8' "$RNT9"
+rx_has "#2688: RNT-9 handles exit 9 (an id-less hit asks for the full run)" 'exit 9' "$RNT9"
+rx_has "#2688: RNT-9 re-runs the tests on exit 8 / exit 9" 'exit [89][^.]*(re-?run|/run-tests)' "$RNT9"
+rx_has "#2688: RNT-9 names run-evidence-ingest-pending" 'ingest-pending' "$RNT9"
+rx_has "#2688: RNT-9 runs show-dispatch-outcome.sh before retrying on ingest-pending" 'show-dispatch-outcome\.sh' "$RNT9"
+rx_has "#2688: RNT-9 re-runs /run-tests when a reported pass stays pending" \
+  'pending[^.]*(re-?run|/run-tests)|(re-?run|/run-tests)[^.]*pending' "$RNT9"
 case_end
 
 echo ""

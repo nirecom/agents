@@ -77,9 +77,13 @@ done
 case_end
 
 case_begin "advance-next-non-gate-step-no-value-line" "bin/workflow/lib/next-step/verdict.js"
-for row in "clarify_intent|research" "run_tests|review_security"; do
+# Not run_tests: #2472 refuses a run_tests complete with no run evidence, so research
+# (declarable) is advanced with every step between it and review_security already complete.
+for row in "clarify_intent|research" "research|review_security"; do
   from="${row%%|*}"; to="${row#*|}"; sid="mx-adv-ng-$from"
-  write_state "$sid" "$(json_at "$from")"
+  if [ "$from" = "clarify_intent" ]; then st="$(json_at "$from")"; else
+    st="$(json_at "$to")"; was="\"$from\":{\"status\":\"complete\"}"; st="${st/"$was"/"\"$from\":{\"status\":\"pending\"}"}"; fi
+  write_state "$sid" "$st"
   put_plan "$sid" intent "$INTENT_FULL"
   # #2277: completing clarify_intent requires an approval bound to the intent artifact.
   [ "$from" = "clarify_intent" ] && node "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" approve "$sid" clarify_intent >/dev/null 2>&1

@@ -450,9 +450,8 @@ bos_ck "fixture: outcome removed" "ok" "$(bos_tool ctlrm "$SID" "worker-test-run
 bos_refused "missing-outcome" "$SID"
 case_end
 
-# #2517 — `accept` completes a failing run only on the user's grant bound to that run.
-# shellcheck source=tests/bin/feature-2431-baseline-evidence/accept.sh
-. "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2431-baseline-evidence/accept.sh"
+# #2688 — the user-grant `accept` subcommand is gone; its removal, exit 8, --note and the
+# allow-list are covered by tests/bin/feature-2688-disposition.js and feature-2688-baseline-note.js.
 
 echo ""
 echo "Total: $PASS passed, $FAIL failed"

@@ -20,7 +20,7 @@ const { normalizeCwd } = require("../lib/path-normalize");
 const { parseContractLine, formatContract, runtimeLabels } = require("../lib/run-contract");
 const { SUMMARY_MISSING_RE, readSummaryToken } = require("../lib/missing-test-files");
 const { workerVerdictVetoes } = require("./outcome");
-const { validateFailingNames } = require("./failing-list");
+const { validateFailingNames, filterFailingExits } = require("./failing-list");
 const { recordRun, recordUnsettled } = require("./record-run");
 const { boundHits } = require("./hit-summary");
 
@@ -75,7 +75,7 @@ function readTrustedOutcome({ sessionId, stem } = {}) {
   if (o.cwd !== (typeof p.cwd === "string" ? p.cwd : "")) return refuse("cwd-mismatch");
   if (p.session_id !== undefined && p.session_id !== sessionId) return refuse("payload-session-mismatch");
   if (!fs.existsSync(path.join(dir, `${stem}.dispatched`))) return refuse("not-dispatched");
-  return { outcome: o, outcomeSha: payloadDigest(file.bytes), payloadSha, reason: null };
+  return { outcome: o, outcomeSha: payloadDigest(file.bytes), payloadSha, payload: p, reason: null };
 }
 
 // The list only when every name also exists under the run's cwd; else null whole.
@@ -105,6 +105,8 @@ function summaryRuntimes(summary) {
 function buildIngest(stem, trusted) {
   const o = trusted.outcome;
   const contract = parsedContract(o.worker_result.run_contract);
+  const failingTests = trustedFailingList(o, contract);
+  const args = trusted.payload ? trusted.payload.test_args : undefined;
   return {
     stem,
     outcome: o,
@@ -118,7 +120,10 @@ function buildIngest(stem, trusted) {
       contract,
       workerStatus: o.status,
     },
-    failingTests: trustedFailingList(o, contract),
+    failingTests,
+    failingExits: filterFailingExits(o.worker_result.failing_exits, failingTests, o.cwd),
+    // The selection comes from the payload the dispatcher ran, never from the outcome's words.
+    part: { args: args === undefined ? [] : args, root: o.cwd, cwd: o.cwd, results: null },
     hitSummary: boundHits(o.worker_result.hits || []),
     unrunnableRuntimes: summaryRuntimes(o.worker_result.summary),
     unrunnableMissingFiles: readSummaryToken(o.worker_result.summary),
@@ -184,6 +189,8 @@ function recordIngest(sessionId, ingest) {
       triggerCommand: `worker-dispatch outcome ${ingest.stem}`,
       outcomeInput: ingest.outcomeInput,
       failingTests: ingest.failingTests,
+      failingExits: ingest.failingExits,
+      part: ingest.part,
       hitSummary: ingest.hitSummary,
       unrunnableRuntimes: ingest.unrunnableRuntimes,
       unrunnableMissingFiles: ingest.unrunnableMissingFiles,
