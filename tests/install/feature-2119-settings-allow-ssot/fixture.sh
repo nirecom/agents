@@ -16,8 +16,19 @@ mk_fixture() { # <name> -> fixture dir
     mkdir -p "$dir/install/lib" "$dir/bin" "$dir/home/.claude"
     if [ -f "$ASSEMBLE" ]; then cp "$ASSEMBLE" "$dir/install/assemble-settings.js"; fi
     cp "$SCRIPT_CHECKOUT_ROOT"/install/lib/*.js "$dir/install/lib/" 2>/dev/null || true
+    copy_deployed_sources "$dir"
     printf '# fixture PATH-exposed list (never the real one)\n' > "$dir/install/path-exposed-commands.txt"
     printf '%s\n' "$dir"
+}
+
+# #2303: settings-assembly.js reads its settings paths from install/deployed-sources.txt relative to
+# its own copy and fails closed without it, so every tree that carries a copied install/lib needs
+# the declaration too. Copied only when the checkout has one, so trees built before it exists still work.
+copy_deployed_sources() { # <fixture-root>
+    if [ -f "$SCRIPT_CHECKOUT_ROOT/install/deployed-sources.txt" ]; then
+        mkdir -p "$1/install"
+        cp "$SCRIPT_CHECKOUT_ROOT/install/deployed-sources.txt" "$1/install/"
+    fi
 }
 
 # The deployed file: what the deploy actually produces. Every result assertion reads here.

@@ -4,19 +4,15 @@
 - (none)
 
 ### Merged PR
-- PR #(none): (none)
+- PR #(none): (none) ((none))
 - URL: (none)
-- State: (none)
 
 ### Worktree
-- Branch: (none)
-- Path: (none)
+- Branch: (none) ((none))
 - Created: (none)
-- Removed: ✓
 
 ### Backup
-- Manifest: (none)
-- Branches deleted: (none)
+- Manifest: (none) / branches deleted: (none)
 
 ### Closed Issue Outcomes
 - (none)
@@ -28,12 +24,12 @@
 - OS reboot: not_required
 
 ### Bugs Found
-- extractSection drops empty lines between bullets
+- [issue-TBD] extractSection drops empty lines between bullets
 
 ### Related Tasks
-- Update ops.md with new CLI usage
+- [issue-TBD] Update ops.md with new CLI usage
 
 ### Next Tasks
-- Add integration test for non-interactive mode
+- [issue-TBD] Add integration test for non-interactive mode
 
 <<WORKFLOW_MARK_STEP_final_report_complete>>

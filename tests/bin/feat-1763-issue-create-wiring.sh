@@ -2,28 +2,12 @@
 # tests/bin/feat-1763-issue-create-wiring.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, skills/issue-create/scripts/eval-confirm-gate.sh, skills/issue-create/SKILL.md
 # Tags: issue-create, verdict, review, worth-filing, confirm-gate, wiring, cross-module, integration, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - The skill body actually executing these steps in a live Claude Code turn, and
-#   AskUserQuestion actually being raised when the gate says "confirm: yes".
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Every sibling test pins ONE seam. This file pins the seam between them, with real
-# components on both sides and a mock only at the external boundaries (codex, gh):
-#
-#   survey artifact
-#     → review-survey-verdict-codex.sh   → the --out artifact (review.worth_filing)
-#       → eval-confirm-gate.sh           → confirm: yes|no
-#
-# The property no single-seam test can establish: the reviewer's `worth_filing` answer
-# is the same answer the gate reads. Before #1763 the gate's third input arrived
-# out-of-band (a provenance token minted by a hook and replayed from session state),
-# so the two ends could disagree while every isolated test passed. Now both ends read
-# the same field of the same artifact — and this file is what holds them to it. A
-# reviewer that dropped the field, or a gate that read a different key, would leave
-# every other test green.
-
+# TL3 gap: the skill body executing these steps in a live turn, and AskUserQuestion being raised
+# on "confirm: yes". Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 set -u
+
+# Pins the seam survey artifact → review-survey-verdict-codex.sh → --out artifact → eval-confirm-gate.sh
+# with real components and mocks only at codex/gh: what the reviewer writes is what the gate reads.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
@@ -102,10 +86,10 @@ fs.writeFileSync(process.argv[1], JSON.stringify({
 }, null, 2));" "$(node_path "$1")"
 }
 
-# run_chain <name> <survey-verdict> <survey-target> <codex-stdout> <severity> [nocodex]
-# Returns: FINAL / CONFIRM / REASONS / GATE_RC
+# run_chain <name> <survey-verdict> <survey-target> <codex-stdout> [nocodex]
+# Returns: FINAL / CONFIRM / REASONS / WORTH_INFO / GATE_RC
 run_chain() {
-    local name="$1" sv="$2" st="$3" cx="$4" sev="$5" nocodex="${6:-}"
+    local name="$1" sv="$2" st="$3" cx="$4" nocodex="${5:-}"
     local B="$WORK/$name"; mkdir -p "$B"
     CHAIN_BASE="$B"
     make_survey "$B/survey.json" "$sv" "$st"
@@ -121,12 +105,12 @@ run_chain() {
             >"$B/review-stdout.txt" 2>&1
     fi
     local out
-    # Two arguments, no session environment: everything the gate needs now lives in
-    # the artifact the previous step just wrote.
-    out=$("$RWT" 20 bash "$GATE" "$FINAL" "$sev" 2>/dev/null)
+    # One argument, no session environment (#1926): everything the gate needs lives in the artifact.
+    out=$("$RWT" 20 bash "$GATE" "$FINAL" 2>/dev/null)
     GATE_RC=$?
     CONFIRM=$(printf '%s\n' "$out" | sed -n 's/^confirm: *//p' | head -n 1 | tr -d '[:space:]')
     REASONS=$(printf '%s\n' "$out" | sed -n 's/^reasons: *//p' | head -n 1 | tr -d '[:space:]')
+    WORTH_INFO=$(printf '%s\n' "$out" | sed -n 's/^worth_filing: *//p' | head -n 1 | tr -d '[:space:]')
 }
 
 final_q() {  # <node-expr over `d`>
@@ -143,7 +127,7 @@ echo "=== A: the reviewer affirms the issue is worth filing — nothing fires ==
 if [ "$CHAIN_READY" != "yes" ]; then
     for t in A1-review-upheld A2-artifact-carries-worth-filing A3-gate-no A4-no-provenance-in-artifact; do redchain "$t"; done
 else
-    run_chain a none null "$WORTH" "severity:low"
+    run_chain a none null "$WORTH"
     S=$(final_q "d.review.status"); [ "$S" = "upheld" ] && pass "A1-review-upheld" \
         || fail "A1-review-upheld" "want review.status upheld (got: $S)"
     W=$(final_q "d.review.worth_filing"); [ "$W" = "true" ] && pass "A2-artifact-carries-worth-filing" \
@@ -158,75 +142,52 @@ else
 fi
 
 echo ""
-echo "=== B: the reviewer declines to affirm — G3, at every severity ==="
-# The case this feature exists for: the reviewer, having searched, concludes the issue
-# is not worth filing (already fixed upstream, working as intended, duplicate of a known
-# limitation). That judgement has to survive to the gate or it changes nothing.
+echo "=== B: the reviewer declines to affirm — reported on the info line, never a gate reason (#1926) ==="
+# The reviewer's "not worth filing" must survive to the gate's output so CC's agreement call
+# sees it, but whether to file is that call's job, not the gate's.
 if [ "$CHAIN_READY" != "yes" ]; then
-    for t in B1-artifact-carries-false B2-gate-yes-G3 B3-high-severity-does-not-suppress-G3 B4-false-survived-the-chain; do redchain "$t"; done
+    for t in B1-artifact-carries-false B2-gate-no-reason-from-worth B3-info-line-reports-false; do redchain "$t"; done
 else
-    run_chain b none null "$NOT_WORTH" "severity:low"
+    run_chain b none null "$NOT_WORTH"
     W=$(final_q "d.review.worth_filing"); [ "$W" = "false" ] && pass "B1-artifact-carries-false" \
         || fail "B1-artifact-carries-false" "a negative answer must survive as boolean false, not be dropped as falsy (got: $W)"
-    if [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G3'; then
-        pass "B2-gate-yes-G3"
-    else
-        fail "B2-gate-yes-G3" "an unaffirmed issue at non-high severity must confirm via G3 (confirm=$CONFIRM reasons=$REASONS)"
-    fi
-    # B3 differs from B2 in exactly one input: the severity label. The severity carve-out
-    # only stands in for an answer the gate never received, so an EXPLICIT false is not
-    # exempted by it — the reviewer read the evidence and said no, and a high severity
-    # label cannot know better. B4 pins that B3 is answering the explicit-false case and
-    # not a chain that quietly lost the `false` on its way to the artifact.
-    run_chain b2 none null "$NOT_WORTH" "severity:high"
-    if [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G3'; then
-        pass "B3-high-severity-does-not-suppress-G3"
-    else
-        fail "B3-high-severity-does-not-suppress-G3" "an explicit worth_filing:false fires G3 at every severity (confirm=$CONFIRM reasons=$REASONS)"
-    fi
-    W=$(final_q "d.review.worth_filing"); [ "$W" = "false" ] && pass "B4-false-survived-the-chain" \
-        || fail "B4-false-survived-the-chain" "B3 must be answering an explicit false, not a value lost in transit (got: $W)"
+    [ "$GATE_RC|$CONFIRM|$REASONS" = "0|no|" ] && pass "B2-gate-no-reason-from-worth" \
+        || fail "B2-gate-no-reason-from-worth" "worth_filing:false alone must not confirm (rc=$GATE_RC confirm=$CONFIRM reasons=$REASONS)"
+    [ "$WORTH_INFO" = "false" ] && pass "B3-info-line-reports-false" \
+        || fail "B3-info-line-reports-false" "want worth_filing: false on the gate's info line (got: '$WORTH_INFO')"
 fi
 
 echo ""
 echo "=== C: a reviewer that omits worth_filing is not a completed review ==="
-# The field is required, so an answer without it is rejected at the validator rather
-# than defaulted. Defaulting it either way would be worse than rejecting: to true it
-# silences the gate on a review that never answered, to false it fires G3 on a reviewer
-# that simply used an older prompt.
+# The field is required, so an answer without it is rejected at the validator rather than
+# defaulted; the gate then sees an unverified review (G4) and reports worth_filing unknown.
 if [ "$CHAIN_READY" != "yes" ]; then
-    for t in C1-review-invalid C2-worth-filing-null C3-gate-G3-G4; do redchain "$t"; done
+    for t in C1-review-invalid C2-worth-filing-null C3-gate-G4-only; do redchain "$t"; done
 else
-    run_chain c none null '{"verdict":"none","target":null,"children":[],"related":[],"reason":"looks new"}' "severity:low"
+    run_chain c none null '{"verdict":"none","target":null,"children":[],"related":[],"reason":"looks new"}'
     S=$(final_q "d.review.status"); [ "$S" = "invalid" ] && pass "C1-review-invalid" \
         || fail "C1-review-invalid" "a review answer missing worth_filing is not usable (got: $S)"
     W=$(final_q "d.review.worth_filing === null"); [ "$W" = "true" ] && pass "C2-worth-filing-null" \
         || fail "C2-worth-filing-null" "an unusable review must record worth_filing as null, never as a default (got: $W)"
-    if [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G3' && printf '%s' "$REASONS" | grep -q 'G4'; then
-        pass "C3-gate-G3-G4"
-    else
-        fail "C3-gate-G3-G4" "no verdict verification and no affirmation must fire both (confirm=$CONFIRM reasons=$REASONS)"
-    fi
+    [ "$CONFIRM|$REASONS|$WORTH_INFO" = "yes|G4|unknown" ] && pass "C3-gate-G4-only" \
+        || fail "C3-gate-G4-only" "an unverified review fires G4 alone and reports worth unknown (confirm=$CONFIRM reasons=$REASONS worth=$WORTH_INFO)"
 fi
 
 echo ""
-echo "=== D: the review stage's replacement reaches the gate as G2 ==="
-# Two joins at once: codex replaces the verdict, the artifact preserves the survey's,
-# and the gate reads the difference. Any join that flattened the artifact breaks here.
+echo "=== D: a disagreeing reviewer reaches the gate as G2, without overwriting the survey (#2225) ==="
+# codex says reopen, the survey said none: the artifact keeps the survey's verdict at top
+# level, records the reviewer's under review.*, and the gate reads the dispute.
 if [ "$CHAIN_READY" != "yes" ]; then
-    for t in D1-review-replaced D2-survey-preserved D3-gate-G1-and-G2; do redchain "$t"; done
+    for t in D1-review-disputed D2-survey-kept-at-top-level D3-gate-G2-not-G1; do redchain "$t"; done
 else
     run_chain d none null \
-        '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect as #10","worth_filing":true,"same_fix":true}' "severity:high"
-    S=$(final_q "d.review.status"); [ "$S" = "replaced" ] && pass "D1-review-replaced" \
-        || fail "D1-review-replaced" "want review.status replaced (got: $S)"
-    SV=$(final_q "d.survey.verdict"); [ "$SV" = "none" ] && pass "D2-survey-preserved" \
-        || fail "D2-survey-preserved" "the survey verdict must be preserved for G2 (got: $SV)"
-    if [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G1' && printf '%s' "$REASONS" | grep -q 'G2'; then
-        pass "D3-gate-G1-and-G2"
-    else
-        fail "D3-gate-G1-and-G2" "a reopen produced by replacement must fire both G1 and G2 (confirm=$CONFIRM reasons=$REASONS)"
-    fi
+        '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect as #10","worth_filing":true,"same_fix":true}'
+    S=$(final_q "d.review.status + '/' + d.review.verdict + '/' + d.review.target"); [ "$S" = "disputed/reopen/10" ] && pass "D1-review-disputed" \
+        || fail "D1-review-disputed" "want review status/verdict/target disputed/reopen/10 (got: $S)"
+    SV=$(final_q "d.survey.verdict + '/' + d.verdict + '/' + d.target"); [ "$SV" = "none/none/null" ] && pass "D2-survey-kept-at-top-level" \
+        || fail "D2-survey-kept-at-top-level" "want survey/top-level verdict/target none/none/null (got: $SV)"
+    [ "$CONFIRM|$REASONS" = "yes|G2" ] && pass "D3-gate-G2-not-G1" \
+        || fail "D3-gate-G2-not-G1" "a disputed reopen keeps the non-destructive survey verdict, so only G2 fires (confirm=$CONFIRM reasons=$REASONS)"
 fi
 
 echo ""
@@ -234,7 +195,7 @@ echo "=== E: a broken review stage cannot silently disable the gate ==="
 if [ "$CHAIN_READY" != "yes" ]; then
     for t in E1-review-invalid E2-gate-G4; do redchain "$t"; done
 else
-    run_chain e none null 'not json at all' "severity:high"
+    run_chain e none null 'not json at all'
     S=$(final_q "d.review.status"); [ "$S" = "invalid" ] && pass "E1-review-invalid" \
         || fail "E1-review-invalid" "want review.status invalid (got: $S)"
     if [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G4'; then
@@ -246,23 +207,18 @@ fi
 
 echo ""
 echo "=== F: no reviewer on the machine — skipped, not silently affirmed ==="
-# With the ISSUE_VERDICT_REVIEW switch removed, a missing codex binary is the only way
-# the review does not run. It must land on the same side as a failed one: an issue that
-# no second opinion ever saw is exactly what G4 is for, and there is no worth_filing to
-# read, so G3 fires too.
+# A missing codex binary is the only way the review does not run. It lands on the same side
+# as a failed one: G4, with no worth_filing to report.
 if [ "$CHAIN_READY" != "yes" ]; then
-    for t in F1-review-skipped F2-worth-filing-null F3-gate-G3-G4 F4-exit-zero; do redchain "$t"; done
+    for t in F1-review-skipped F2-worth-filing-null F3-gate-G4-only F4-exit-zero; do redchain "$t"; done
 else
-    run_chain f none null "$WORTH" "severity:low" nocodex
+    run_chain f none null "$WORTH" nocodex
     S=$(final_q "d.review.status"); [ "$S" = "skipped" ] && pass "F1-review-skipped" \
         || fail "F1-review-skipped" "want review.status skipped when codex is unavailable (got: $S)"
     W=$(final_q "d.review.worth_filing === null"); [ "$W" = "true" ] && pass "F2-worth-filing-null" \
         || fail "F2-worth-filing-null" "a review that never ran has no opinion to record (got: $W)"
-    if [ "$CONFIRM" = "yes" ] && printf '%s' "$REASONS" | grep -q 'G3' && printf '%s' "$REASONS" | grep -q 'G4'; then
-        pass "F3-gate-G3-G4"
-    else
-        fail "F3-gate-G3-G4" "a skipped review must confirm via both G3 and G4 (confirm=$CONFIRM reasons=$REASONS)"
-    fi
+    [ "$CONFIRM|$REASONS|$WORTH_INFO" = "yes|G4|unknown" ] && pass "F3-gate-G4-only" \
+        || fail "F3-gate-G4-only" "a skipped review confirms via G4 and reports worth unknown (confirm=$CONFIRM reasons=$REASONS worth=$WORTH_INFO)"
     [ "$GATE_RC" -eq 0 ] && pass "F4-exit-zero" \
         || fail "F4-exit-zero" "the gate classifies rather than fails; want exit 0 (got: $GATE_RC)"
 fi

@@ -99,6 +99,7 @@ function cmdList(rawPath) {
         raw: entry.raw,
         lineNumber: entry.lineNumber,
         hasMarker: entry.hasMarker,
+        userAcknowledged: entry.userAcknowledged,
       });
     }
   }

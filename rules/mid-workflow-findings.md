@@ -21,7 +21,10 @@ Do not write agents-repo improvements or findings to `~/.claude/projects/<projec
 
 Fallback recovery: `/worktree-end` Step WE-7 promotes unconverted `WORKTREE_NOTES.md` entries to issues, per `skills/_shared/notes-promotion.md`. **Cutoff: Step WE-6** — findings after that go directly to `/issue-create`.
 
-**Append via the CLI** (primary path for every `WORKTREE_NOTES.md` write): `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-append.js" --notes-path "<worktree>/WORKTREE_NOTES.md" --section <Section> --title "<one-line finding>" [--severity high|low|none]`.
+**Append via the CLI** (primary path for every `WORKTREE_NOTES.md` write): `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-append.js" --notes-path "<worktree>/WORKTREE_NOTES.md" --section <Section> --title "<one-line finding>" [--severity high|low|none] [--user-acknowledged true|false]`.
+
+User-acknowledged: every section but `ManualReminders` requires `--user-acknowledged`; pass `true` when the user requested the follow-up or knowingly accepted your proposal of it, `false` when you found it alone.
+An entry without the user-acknowledged marker (hand-written or older) counts as `false`: ask the user before filing it.
 
 The CLI owns section routing, `- (none)` replacement, idempotency, and marker generation — do not hand-assemble an entry line.
 

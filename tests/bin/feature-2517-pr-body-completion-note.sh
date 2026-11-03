@@ -137,7 +137,7 @@ negative() {
 
 # #2688: a state completed by a pre-#2688 user grant gets one fixed line (the grant is not re-read).
 LEGACY="$PRE failing tests accepted by the user before #2688 (legacy grant; details not re-read)"
-AUTO_LINE="$PRE 1 failing test(s) auto-accepted without baseline proof (causes: skip-at-base; note: seen red on main)"
+AUTO_LINE="$PRE 1 failing test(s) auto-accepted without baseline proof (causes: skip-at-base; note: \`seen red on main\`)"
 
 case_begin "baseline-accept-undetermined-note" "bin/worker-dispatch/workers/commit-push/pr.js"
 drive undetermined 01

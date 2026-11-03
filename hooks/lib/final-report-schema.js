@@ -24,9 +24,8 @@ const SECTIONS = [
     id: "merged_pr",
     heading: () => "### Merged PR",
     renderLines: (envBag, sid, ctx) => [
-      `- PR #${ctx.safeEnv("PR_NUMBER")}: ${ctx.safeEnv("PR_TITLE")}`,
+      `- PR #${ctx.safeEnv("PR_NUMBER")}: ${ctx.safeEnv("PR_TITLE")} (${ctx.safeEnv("PR_STATE")})`,
       `- URL: ${ctx.safeEnv("PR_URL")}`,
-      `- State: ${ctx.safeEnv("PR_STATE")}`,
     ],
     probes: [],
   },
@@ -34,10 +33,8 @@ const SECTIONS = [
     id: "worktree",
     heading: () => "### Worktree",
     renderLines: (envBag, sid, ctx) => [
-      `- Branch: ${ctx.safeEnv("BRANCH")}`,
-      `- Path: ${ctx.safeEnv("WORKTREE_PATH")}`,
+      `- Branch: ${ctx.safeEnv("BRANCH")} (${ctx.safeEnv("WORKTREE_PATH")})`,
       `- Created: ${ctx.safeEnv("CREATED_DATE")}`,
-      "- Removed: ✓",
     ],
     probes: [],
   },
@@ -45,8 +42,7 @@ const SECTIONS = [
     id: "backup",
     heading: () => "### Backup",
     renderLines: (envBag, sid, ctx) => [
-      `- Manifest: ${ctx.safeEnv("BACKUP_MANIFEST_PATH")}`,
-      `- Branches deleted: ${ctx.safeEnv("BRANCH_DELETED")}`,
+      `- Manifest: ${ctx.safeEnv("BACKUP_MANIFEST_PATH")} / branches deleted: ${ctx.safeEnv("BRANCH_DELETED")}`,
     ],
     probes: [],
   },
@@ -159,20 +155,14 @@ function renderSkeleton(sessionId) {
   const placeholders = {
     closed_issues: ["<CLOSED_ISSUES_LIST>"],
     merged_pr: [
-      "- PR #<PR_NUMBER>: <PR_TITLE>",
+      "- PR #<PR_NUMBER>: <PR_TITLE> (<PR_STATE>)",
       "- URL: <PR_URL>",
-      "- State: <PR_STATE>",
     ],
     worktree: [
-      "- Branch: <BRANCH>",
-      "- Path: <WORKTREE_PATH>",
+      "- Branch: <BRANCH> (<WORKTREE_PATH>)",
       "- Created: <CREATED_DATE>",
-      "- Removed: ✓",
     ],
-    backup: [
-      "- Manifest: <BACKUP_MANIFEST_PATH>",
-      "- Branches deleted: <BRANCH_DELETED>",
-    ],
+    backup: ["- Manifest: <BACKUP_MANIFEST_PATH> / branches deleted: <BRANCH_DELETED>"],
     closed_issue_outcomes: ["<CLOSED_ISSUE_OUTCOMES>"],
     post_merge: CATEGORIES.map((c) => `- ${c.label}: <${c.newKey}_DECISION>`),
     bugs_found: ["<BUGS_FOUND>"],
@@ -290,7 +280,7 @@ function renderFinalReport(sessionId, inputs) {
   const note = typeof inputs.runTestsNote === "string" ? inputs.runTestsNote.replace(/[\r\n]/g, " ") : "";
   if (note !== "") {
     const escaped = note.replace(/<([A-Z][A-Z0-9_]+)>/g, "&lt;$1&gt;");
-    out = out.replace(/^(- State: .*)$/m, (line) => `${line}\n${escaped}`);
+    out = out.replace(/^(- URL: .*)$/m, (line) => `${line}\n${escaped}`);
   }
   return out;
 }

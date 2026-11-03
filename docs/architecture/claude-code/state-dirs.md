@@ -68,6 +68,7 @@ guard refuse every model write there without touching the artifact workflow.
 | `worker-<name>[-<seq>].draft.json` | Model (WD-2) | `bin/worker-dispatch-payload` only; deleted on publish |
 | `notes-backup/` | `capture-env.sh` | worktree-end |
 | `issue-create-dispatch.txt`, `issue-create-survey.json`, `sweep-issues-{survivors,decisions}.tsv`, `refactor-prompts-scan.json`, `sweep-plans-approved-sessions.txt` | Model, subagents, scratchpad scripts | Owning skill |
+| `issue-create-confirm.log` | `skills/issue-create/scripts/record-confirm-decision.sh` (Phase 3 confirm decision, auto or asked) | Human (traces a filing CC decided without asking) |
 | `note-<topic>.{md,txt,json,tsv}` | Model scratch notes | Human |
 | `user-requested-<topic>.{md,txt,json,tsv}` | Model, only when the user explicitly asks for a separate file (the model's own scratch stays `note-`) | Human |
 

@@ -59,7 +59,7 @@ const C = {
   "unrunnable-line-unchanged": () => n(UA),
   "auto-prefix": () => n(AUTO).startsWith("- Unverified tests: 2 failing test(s) auto-accepted without baseline proof (causes: "),
   "auto-names-every-detail": () => ["home-claude-ref", "timeout-at-base"].every((d) => n(AUTO).includes(d)),
-  "auto-suffix": () => n(AUTO).endsWith("; note: fails on main too)"),
+  "auto-suffix": () => n(AUTO).endsWith("; note: `fails on main too`)"),
   "auto-detail-is-a-set": () => n(DUP).split("home-claude-ref").length - 1,
   "auto-count-is-auto-accepted-only": () => n(DUP).startsWith("- Unverified tests: 2 failing test(s)"),
   "auto-without-note": () => n(Object.assign({}, AUTO, { baseline_note: undefined })).endsWith("; note: (none))"),
@@ -145,14 +145,14 @@ case_begin "final-report-carries-the-line" "bin/render-final-report.js"
 SID="cn2517-$$"
 ck "fixture: auto-accepted session seeded" "ok" \
   "$(run_with_timeout 20 node "$(np "$T/seed.js")" "$ROOT" "$SID" 2>/dev/null)"
-WANT="$PRE 1 failing test(s) auto-accepted without baseline proof (causes: skip-at-base; note: seen red on main)"
+WANT="$PRE 1 failing test(s) auto-accepted without baseline proof (causes: skip-at-base; note: \`seen red on main\`)"
 mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
 printf '{}' >"$WORKFLOW_STATE_DIR/$SID.control/final-report-env.json"
 REPORT="$(run_with_timeout 30 node "$(np "$SCRIPT_CHECKOUT_ROOT/bin/render-final-report.js")" --session "$SID" 2>&1)"
-if printf '%s\n' "$REPORT" | grep -qE '^- State: '; then pass "control: the report has the Merged PR State line"
-else fail "control: the report has the Merged PR State line" "$(printf '%s' "$REPORT" | head -5)"; fi
-NEXT="$(printf '%s\n' "$REPORT" | grep -A1 -E '^- State: ' | sed -n 2p)"
-ck "the auto-accept line follows the State line" "$WANT" "$NEXT"
+if printf '%s\n' "$REPORT" | grep -qE '^- URL: '; then pass "control: the report has the Merged PR URL line"
+else fail "control: the report has the Merged PR URL line" "$(printf '%s' "$REPORT" | head -5)"; fi
+NEXT="$(printf '%s\n' "$REPORT" | grep -A1 -E '^- URL: ' | sed -n 2p)"
+ck "the auto-accept line follows the URL line (#2904)" "$WANT" "$NEXT"
 case_end
 
 case_begin "pr-body-disclosure" "skills/_shared/commit-push-dispatch.md"

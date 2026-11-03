@@ -2,10 +2,10 @@
 # tests/bin/feature-1886-final-report-notes-compression.sh
 # Tests: bin/render-final-report.js, bin/render-final-report/notes.js, skills/session-close/SKILL.md, skills/_shared/final-report-emission.md, rules/mid-workflow-findings.md, skills/worktree-end/SKILL.md
 # Tags: final-report, notes-compression, severity, render-cli, prompt-contract, TL2, scope:issue-specific
-# #1886: Final Report notes compress to title lines except `<!-- severity: high -->` entries, plus one
-# summary line (counts + `full text: <backup path>`). Pins under-compression (constant bounds from
-# COMPRESSED_LIST_MAX / TITLE_MAX_CHARS on 30- and 300-entry fixtures) and over-compression (high kept).
-# The summary line is exempt from the per-line bound (embeds an absolute path); it has a path-relative bound.
+# #1886: Final Report notes compress to title lines except `<!-- severity: high -->` entries; #2904 drops the
+# `compressed:` summary and keeps one pointer line (`full text: <backup path>`) only when something is omitted.
+# Pins under-compression (constant bounds from COMPRESSED_LIST_MAX / TITLE_MAX_CHARS on 30/300 entries) and
+# over-compression (high kept). The pointer line is exempt from the per-line bound; it has a path-relative bound.
 # Prompt half greps the WORKTREE copies (LOCAL_*): session-close SC-6 emission scope, worktree-end WE-10 wiring.
 # TL3 gap: real /session-close, /worktree-end and Stop-hook runs are not exercised; mitigated at
 # WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: skill-orchestration).
@@ -102,8 +102,9 @@ EOF
 
 # Run the real CLI from a neutral CWD so hooks/libs cannot resolve the real repo.
 render() { # render <env-path>
-    (cd "${TMPD}/neutral" && "$RWT" 120 node "$RENDER_JS" "$SID" \
-        "$(node_path "$1")" "$(node_path "$OUTCOME_JSON")" "$(node_path "$INTENT_MD")")
+    local cd_="${TMPD}/workflow-state/${SID}.control"; mkdir -p "$cd_"; cp "$OUTCOME_JSON" "${cd_}/issue-close-outcome.json"
+    (cp "$1" "${cd_}/final-report-env.json" && cp "$1" "${TMPD}/${SID}-final-report-env.json" && cd "${TMPD}/neutral" && "$RWT" 120 node "$RENDER_JS" "$SID" \
+        "$(node_path "${TMPD}/${SID}-final-report-env.json")" "$(node_path "$OUTCOME_JSON")" "$(node_path "$INTENT_MD")")
 }
 
 # Lines between "### <name>" and the next "### " heading, blanks dropped.
@@ -115,7 +116,7 @@ block_of() { # block_of <stdout> <heading>
 # NOTE: the prefix starts with "-", so every grep below must pass it via -e.
 # NOTE: this repo runs on msys grep 3.0, where "-i" combined with "-F" aborts
 # (SIGABRT). Case-insensitive greps here use -i with a literal pattern instead.
-SUMMARY_PREFIX='- (compressed: '
+SUMMARY_PREFIX='full text: '
 
 # ============================================================================
 # A. Compression upper bounds — constant in the input size
@@ -145,10 +146,10 @@ assert_bounds() {
     local lines; lines="$(printf '%s\n' "$block" | grep -c .)"
     [ "$lines" -le 11 ] || problems="${problems} line-count=${lines}>11"
 
-    # (b) every NON-summary line <= TITLE_MAX_CHARS + 8 (= 128)
+    # (b) every NON-pointer line <= TITLE_MAX_CHARS + 20 (= 140; `- [issue-TBD] ` head, #2904)
     local over
     over="$(printf '%s\n' "$block" | grep -v -F -e "$SUMMARY_PREFIX" \
-        | awk 'length($0) > 128 {print length($0)}' | head -3 | tr '\n' ',')"
+        | awk 'length($0) > 140 {print length($0)}' | head -3 | tr '\n' ',')"
     [ -z "$over" ] || problems="${problems} entry-line-too-long=[${over}]"
 
     # (c) exactly one summary line
@@ -163,10 +164,9 @@ assert_bounds() {
         slen="${#sline}"
         bound=$((110 + ${#notes_node} + 32))
         [ "$slen" -le "$bound" ] || problems="${problems} summary-len=${slen}>${bound}"
-        # the pointer must actually point somewhere
-        case "$sline" in *"full text: ${notes_node})") : ;; *)
-            problems="${problems} summary-missing-backup-path" ;;
-        esac
+        # the pointer must actually point somewhere, and the #1886 count summary is gone (#2904)
+        case "$sline" in *"full text: ${notes_node}"*) : ;; *) problems="${problems} summary-missing-backup-path" ;; esac
+        case "$block" in *"compressed:"*) problems="${problems} legacy-compressed-summary" ;; esac
     fi
 
     # the raw 300-char body must not survive anywhere in the report

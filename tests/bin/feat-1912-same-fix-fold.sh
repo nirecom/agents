@@ -1,21 +1,13 @@
 #!/usr/bin/env bash
 # tests/bin/feat-1912-same-fix-fold.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, bin/github-issues/lib/validate-review-verdict.js
-# Tags: issue-create, verdict, review, same-fix, fold, artifact, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - Whether a real `codex exec` emits a FINAL_VERDICT_JSON block in the shape the mock
-#   emits, and whether a real reviewer's same_fix agrees with its own verdict. The mock
-#   is scripted; only a real-model run exercises the reviewer's judgment.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
-#
-# `same_fix` appears three times in the FINAL artifact:
-#   survey.same_fix  — what the survey concluded, always preserved
-#   review.same_fix  — what the reviewer answered, or null when there was no usable review
-#   .same_fix        — the operative value downstream reads, folded from one of the two
-# The fold has two branches (`replaced` takes the review's fields, every other status holds
-# the survey's); both are exercised with a survey value of `true` AND `false`, since a
-# single-polarity test passes against a fold that hard-codes the tested constant.
+# Tags: issue-create, verdict, review, same-fix, fold, artifact, scope:issue-specific, pwsh-not-required, TL2, verdict-disputed, issue-2225
+# TL3 gap: a real `codex exec` block shape and a real reviewer's same_fix judgment (the mock is scripted).
+# Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
+
+# same_fix lives in survey{} (always preserved), review{} (the reviewer's, null without a usable
+# review) and the top level. Since #2225 every status — disputed included — holds the survey's
+# value at top level; both survey polarities are exercised so a hard-coded constant cannot pass.
 
 set -u
 
@@ -120,10 +112,10 @@ assert_field() {
 REVIEW_REOPEN_TRUE='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"one fix covers both","worth_filing":true,"same_fix":true}'
 REVIEW_NONE_FALSE='{"verdict":"none","target":null,"children":[],"related":[],"reason":"nothing matches","worth_filing":true,"same_fix":false}'
 
-echo "=== F1: replaced — the top level takes the REVIEW's same_fix ==="
+echo "=== F1: disputed — the top level HOLDS the survey's same_fix (#2225) ==="
 
-# Survey none/false vs reviewer reopen/true: the verdict changed, so the fold is
-# `replaced` and every top-level field must come from the review.
+# Survey none/false vs reviewer reopen/true: the verdict differs, so the fold is
+# `disputed`; the reviewer's answer lives under review{} and the top level stays the survey's.
 ART="$WORK/a1.json"; OUT="$WORK/o1.json"
 write_artifact "$ART" none false
 write_mock_codex ok "$REVIEW_REOPEN_TRUE"
@@ -133,13 +125,13 @@ if [ -f "$OUT" ]; then
 else
     fail "F1-final-artifact-written" "no artifact at $OUT — every assertion below is unreachable"
 fi
-assert_field F1a-status-replaced          "$OUT" review.status  '"replaced"'
-assert_field F1b-top-level-from-review    "$OUT" same_fix       'true'
+assert_field F1a-status-disputed          "$OUT" review.status  '"disputed"'
+assert_field F1b-top-level-holds-survey   "$OUT" same_fix       'false'
 assert_field F1c-review-object-records-it "$OUT" review.same_fix 'true'
 # The survey's own answer is not overwritten — that is why `survey{}` exists.
 assert_field F1d-survey-object-preserved  "$OUT" survey.same_fix 'false'
-# Sanity: the verdict moved too, so F1b cannot be passing on an un-run fold.
-assert_field F1e-verdict-also-replaced    "$OUT" verdict        '"reopen"'
+# The top-level verdict stays the survey's too — a disputed fold never adopts the review's.
+assert_field F1e-verdict-survey-kept      "$OUT" verdict        '"none"'
 
 echo ""
 echo "=== F2: upheld — the top level HOLDS the survey's same_fix ==="
@@ -215,7 +207,7 @@ assert_field F5b-top-level-not-truthy-string  "$OUT" same_fix        'null'
 echo ""
 echo "=== F6: a self-contradictory SURVEY artifact cannot be upheld ==="
 
-# The upheld/replaced decision compares verdict/target/children/related, not same_fix —
+# The upheld/disputed decision compares verdict/target/children/related, not same_fix —
 # so a same_fix-only disagreement would fold as `upheld`. It cannot: such a disagreement
 # requires a contradictory SURVEY pair, which the validator rejects before the comparison
 # (a guarantee that lives in another file). If that cross-check is ever relaxed, F6a
@@ -233,14 +225,10 @@ assert_field F6d-survey-object-keeps-true        "$OUT" survey.same_fix 'true'
 
 # --- Paired gaps (Pattern 3, skills/_shared/test-design/protection-fix-tests.md) ---------
 # SKIPPED: the `skipped` fold status (codex absent from PATH).
-# Because: removing codex from PATH at TL2 means emptying PATH, which removes node and
-#          bash with it — the degraded no-node copy path would run instead, and it writes
-#          no `review` object at all, so nothing about same_fix could be asserted.
-# L3 gap:  only a host genuinely without codex exercises that branch; it shares the
-#          `else` arm with `invalid`, which F3/F4 cover.
-#
-# SKIPPED: whether the confirm gate and the issue body actually read the top-level
-#          same_fix this file pins.
+# Because: removing codex from PATH at TL2 empties PATH (node and bash go too), so the
+#          no-node copy path runs and writes no `review` object to assert on.
+# L3 gap:  only a host without codex exercises it; it shares the `else` arm with `invalid` (F3/F4).
+# SKIPPED: whether the confirm gate and the issue body read the top-level same_fix.
 # Because: those consumers live in the skill prompt, not in a callable script.
 # L3 gap:  only a full /issue-create run shows the folded value reaching a human decision.
 

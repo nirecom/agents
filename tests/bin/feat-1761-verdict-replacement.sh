@@ -2,24 +2,13 @@
 # tests/bin/feat-1761-verdict-replacement.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh, bin/github-issues/lib/validate-review-verdict.js, bin/lib/last-json-object.js
 # Tags: issue-create, verdict, review, codex, replacement, gh-mock, scope:issue-specific, pwsh-not-required, TL2
-# TL3 gap (what this test does NOT catch):
-# - Real `codex exec` latency, prompt-size limits and non-deterministic output.
-# - The /issue-create skill actually invoking this script at Phase 2.5.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# S13 — the highest-priority behaviour of this PR: a valid review verdict REPLACES the
-# survey verdict in BOTH directions (escalation and de-escalation), and every failure
-# mode folds into "upheld survey verdict + a gate-forcing review_result".
-#
-# Output contract asserted here:
-#   stdout line 1  = "## Issue Verdict Review: PERFORMED|SKIPPED — …|FAILED — …"
-#   stdout last ln = "review_result: replaced|upheld|invalid|skipped"
-#   exit           = 0 always
-#   --out          = schema-v2 final artifact with verdict/target/children/related/reason
-#                    + survey{} + review{status,…}
-
+# TL3 gap: real `codex exec` latency/limits/non-determinism, and /issue-create invoking this at Phase 2.5.
+# Mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 set -u
+
+# #2225: a disagreeing review is recorded as `disputed` under review{} in BOTH directions and
+# the top level keeps the survey's verdict; every failure folds into "survey verdict + a
+# gate-forcing review_result". Last stdout line: review_result: disputed|upheld|invalid|skipped.
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
@@ -134,29 +123,29 @@ REVIEW_REOPEN_11='{"verdict":"reopen","target":11,"children":[],"related":[],"re
 REVIEW_NONE='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true,"same_fix":false}'
 REVIEW_BAD='{"verdict":"reopen","target":4242,"children":[],"related":[],"reason":"a number that is not a candidate","worth_filing":true,"same_fix":true}'
 
-echo "=== (a) escalation: survey none → review reopen → replaced ==="
+echo "=== (a) escalation: survey none → review reopen → disputed ==="
 run_review a "$ART_NONE" "$REVIEW_REOPEN"
-assert_case "A-escalation" "replaced" "reopen"
+assert_case "A-escalation" "disputed" "none"
 if [ "$RS_PRESENT" = "yes" ]; then
-    T=$(final_q "d.target"); [ "$T" = "10" ] && pass "A-escalation-target-carried" \
-        || fail "A-escalation-target-carried" "review target must land in the final artifact (got: $T)"
+    T=$(final_q "d.target + '/' + d.review.target"); [ "$T" = "null/10" ] && pass "A-escalation-target-split" \
+        || fail "A-escalation-target-split" "want top-level target null (survey) and review.target 10 (got: $T)"
     T=$(final_q "d.survey && d.survey.verdict"); [ "$T" = "none" ] && pass "A-escalation-survey-preserved" \
         || fail "A-escalation-survey-preserved" "the original survey verdict must be preserved under survey{} (got: $T)"
-    T=$(final_q "d.review && d.review.status"); [ "$T" = "replaced" ] && pass "A-escalation-review-status" \
-        || fail "A-escalation-review-status" "review.status must record the fold (got: $T)"
+    T=$(final_q "d.review && d.review.status"); [ "$T" = "disputed" ] && pass "A-escalation-review-status" \
+        || fail "A-escalation-review-status" "review.status must record the dispute (got: $T)"
 else
-    red "A-escalation-target-carried"; red "A-escalation-survey-preserved"; red "A-escalation-review-status"
+    red "A-escalation-target-split"; red "A-escalation-survey-preserved"; red "A-escalation-review-status"
 fi
 
 echo ""
-echo "=== (b) de-escalation: survey reopen → review none → replaced ==="
+echo "=== (b) de-escalation: survey reopen → review none → disputed ==="
 run_review b "$ART_REOPEN" "$REVIEW_NONE"
-assert_case "B-deescalation" "replaced" "none"
+assert_case "B-deescalation" "disputed" "reopen"
 if [ "$RS_PRESENT" = "yes" ]; then
-    T=$(final_q "d.target"); [ "$T" = "null" ] && pass "B-deescalation-target-cleared" \
-        || fail "B-deescalation-target-cleared" "a 'none' verdict must clear target (got: $T)"
+    T=$(final_q "d.target + '/' + d.review.verdict + '/' + d.review.target"); [ "$T" = "10/none/null" ] && pass "B-deescalation-target-kept" \
+        || fail "B-deescalation-target-kept" "want survey target 10 kept and review none/null recorded (got: $T)"
 else
-    red "B-deescalation-target-cleared"
+    red "B-deescalation-target-kept"
 fi
 
 echo ""
@@ -257,14 +246,14 @@ echo "=== (h) uppercase gh state → the review actually runs ==="
 # it fails the whole wrapper ("FAILED — candidate #10: state must be open or
 # closed") and folds every review to invalid, whatever the reviewer said.
 run_review h1 "$ART_NONE_UPPER" "$REVIEW_REOPEN_11"
-assert_case "H1-uppercase-escalation" "replaced" "reopen"
+assert_case "H1-uppercase-escalation" "disputed" "none"
 if [ "$RS_PRESENT" = "yes" ]; then
     # #11 is the CLOSED candidate: it surviving the allowlist and landing as the
-    # reopen target is the whole point of the fix.
-    T=$(final_q "d.target"); [ "$T" = "11" ] && pass "H1-uppercase-target-carried" \
-        || fail "H1-uppercase-target-carried" "an uppercase-CLOSED candidate must be usable as the reopen target (got: $T)"
-    T=$(final_q "d.review && d.review.status"); [ "$T" = "replaced" ] && pass "H1-uppercase-review-status" \
-        || fail "H1-uppercase-review-status" "review.status must record the fold (got: $T)"
+    # reviewer's reopen target is the whole point of the fix.
+    T=$(final_q "d.review && d.review.target"); [ "$T" = "11" ] && pass "H1-uppercase-target-carried" \
+        || fail "H1-uppercase-target-carried" "an uppercase-CLOSED candidate must be usable as the review's reopen target (got: $T)"
+    T=$(final_q "d.review && d.review.status"); [ "$T" = "disputed" ] && pass "H1-uppercase-review-status" \
+        || fail "H1-uppercase-review-status" "review.status must record the dispute (got: $T)"
     printf '%s' "$FIRST" | grep -q '^## Issue Verdict Review: PERFORMED' && pass "H1-uppercase-first-line-performed" \
         || fail "H1-uppercase-first-line-performed" "the review must actually run, not fail on state casing (got: '$FIRST')"
 else

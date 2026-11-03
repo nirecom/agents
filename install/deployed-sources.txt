@@ -1,0 +1,12 @@
+# deployed-sources.txt
+# Single source of truth (CPR-SSOT) for the repo sources outside install/ that the installers
+# deploy by copy or assemble. Read by install/lib/settings-assembly.js (the only copy/assemble
+# path both installers share) and by skills/worktree-end/scripts/detect-restart.sh (Stage C).
+#
+# Format: `<role> <repo-relative-path> <required|optional>`; `#` starts a comment line.
+# `optional` marks a source the checkout may lack, e.g. a .gitignore'd developer overlay.
+# Do NOT list symlink-deployed targets (CLAUDE.md, rules/, skills/, agents/).
+# When an installer gains a new copy/assemble target, add it here in the same change.
+
+settings-base settings.json required
+settings-extension settings-extension.json optional

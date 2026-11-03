@@ -3,7 +3,8 @@
 // Compresses WORKTREE_NOTES.md finding sections for the Final Report (#1886).
 // Verbatim dumping used to emit thousands of chars into the reply (CPR-UO);
 // now every entry collapses to a title line except `<!-- severity: high -->`
-// entries, which stay verbatim. One summary line carries counts + backup pointer.
+// entries, which stay verbatim. Every line leads with `#N ` or `[issue-TBD] `
+// (#2904); one backup pointer line appears only when something was omitted.
 //
 // Pure functions only (Stop hook critical path) — no file access, subprocess, network, or model calls.
 
@@ -31,6 +32,23 @@ function titleLine(body) {
   return `${points.slice(0, TITLE_MAX_CHARS).join("")}…`;
 }
 
+function isTitleTruncated(body) {
+  return Array.from(String(body).replace(/\s+/g, " ").trim()).length > TITLE_MAX_CHARS;
+}
+
+// The issue column of an entry line: `#N ` once promoted, else `[issue-TBD] `.
+function entryHead(entry) {
+  return entry.promotedNumber ? `#${entry.promotedNumber} ` : "[issue-TBD] ";
+}
+
+// A Mode A line already ends its body with ` (#N)`; drop it so `#N` is not shown twice.
+function displayBody(entry) {
+  const dup = ` (#${entry.promotedNumber})`;
+  return entry.promotedNumber && entry.body.endsWith(dup)
+    ? entry.body.slice(0, -dup.length)
+    : entry.body;
+}
+
 // Returns { BugsFound, RelatedTasks, NextTasks }, each a ready-to-emit string
 // ("(none)" when the section yields nothing).
 function compressNotesSections(text, options) {
@@ -44,29 +62,28 @@ function compressNotesSections(text, options) {
     const rest = entries.filter((e) => e.severity !== "high");
 
     const lines = [];
-    for (const entry of high) lines.push(`- ${sanitizeTokens(entry.body)}`);
+    for (const entry of high) {
+      lines.push(`- ${entryHead(entry)}${sanitizeTokens(displayBody(entry))}`);
+    }
+    let truncatedCount = 0;
     for (const entry of rest.slice(0, COMPRESSED_LIST_MAX)) {
-      lines.push(`- ${sanitizeTokens(titleLine(entry.body))}`);
+      const body = displayBody(entry);
+      if (isTitleTruncated(body)) truncatedCount += 1;
+      lines.push(`- ${entryHead(entry)}${sanitizeTokens(titleLine(body))}`);
     }
 
-    if (rest.length > 0 || strayCount > 0 || stoppedAtSubHeading) {
-      const parts = [];
-      if (rest.length > 0) {
-        parts.push(`compressed: ${rest.length} entries — title line only`);
-      }
-      if (rest.length > COMPRESSED_LIST_MAX) {
-        parts.push(`${rest.length - COMPRESSED_LIST_MAX} not listed above`);
-      }
-      if (strayCount > 0) {
-        parts.push(`${strayCount} non-entry line(s) omitted`);
-      }
-      if (stoppedAtSubHeading) {
-        parts.push(`section truncated at "${sanitizeTokens(titleLine(subHeading))}"`);
-      }
-      // Exempt from the length cap: the backup path is the only pointer to the
-      // full text, so truncating it would defeat the whole mechanism.
-      lines.push(`- (${parts.join("; ")}; full text: ${backupPath})`);
+    const parts = [];
+    if (truncatedCount > 0) parts.push(`${truncatedCount} title(s) shortened`);
+    if (rest.length > COMPRESSED_LIST_MAX) {
+      parts.push(`${rest.length - COMPRESSED_LIST_MAX} not listed above`);
     }
+    if (strayCount > 0) parts.push(`${strayCount} non-entry line(s) omitted`);
+    if (stoppedAtSubHeading) {
+      parts.push(`section truncated at "${sanitizeTokens(titleLine(subHeading))}"`);
+    }
+    // Exempt from the length cap: the backup path is the only pointer to the
+    // full text, so truncating it would defeat the whole mechanism.
+    if (parts.length > 0) lines.push(`- (${parts.join("; ")}; full text: ${backupPath})`);
 
     result[section] = lines.length === 0 ? "(none)" : lines.join("\n");
   }

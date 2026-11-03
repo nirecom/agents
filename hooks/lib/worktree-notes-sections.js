@@ -1,20 +1,25 @@
 "use strict";
 
-// Shared helpers for parsing and annotating WORKTREE_NOTES.md.
-// Consumed by:
-//   - bin/worktree-notes-triage.js (parseSectionEntries, markEntryPromoted)
-//   - bin/worktree-notes-append.js (parseSectionEntries)
-//   - bin/render-final-report/notes.js (scanSection)
+// Shared helpers for parsing and annotating WORKTREE_NOTES.md, consumed by
+// bin/worktree-notes-triage.js, bin/worktree-notes-append.js and
+// bin/render-final-report/notes.js.
 //
 // Marker convention on an entry line (canonical, fixed order):
-//   - <body> <!-- severity: high --> <!-- promoted: #N -->
-// Recognition is strict (canonical form only, so a malformed severity tag
-// fails safe to "compress"); stripping is lenient (any trailing comment, any
+//   - <body> <!-- severity: high --> <!-- user-acknowledged: true|false --> <!-- promoted: #N -->
+// Recognition is strict (a malformed severity / user-acknowledged tag fails
+// safe to "compress" / false); stripping is lenient (any trailing comment, any
 // order), so no raw marker ever leaks into rendered output.
 
 const PROMOTED_MARKER_RE = / <!-- promoted: #(\d+) -->$/;
-const SEVERITY_MARKER_RE = /^- (?:(?!<!--).)*<!-- severity: (high) -->(?: <!-- promoted: #\d+ -->)?$/;
+const SEVERITY_MARKER_RE = /^- (?:(?!<!--).)*<!-- severity: (high) -->(?: <!-- user-acknowledged: (?:true|false) -->)?(?: <!-- promoted: #\d+ -->)?$/;
+const USER_ACK_MARKER_RE = / <!-- user-acknowledged: (true|false) -->(?: <!-- promoted: #\d+ -->)?$/;
 const TRAILING_MARKER_RE = / <!--[^<>]*-->$/;
+
+// Owns the canonical order severity -> user-acknowledged for a Mode B line tail.
+function composeEntryMarkers({ severity, userAcknowledged }) {
+  const sev = severity === "high" ? " <!-- severity: high -->" : "";
+  return `${sev} <!-- user-acknowledged: ${userAcknowledged === true} -->`;
+}
 
 function extractSection(text, heading) {
   const lines = text.split(/\r?\n/);
@@ -43,7 +48,8 @@ function entryBody(rawLine) {
 
 // Single-pass section scan. Returns exactly:
 //   { entries, strayCount, stoppedAtSubHeading, subHeading }
-// entries: Array<{raw, lineNumber, hasMarker, severity, body}> — lineNumber is
+// entries: Array<{raw, lineNumber, hasMarker, severity, userAcknowledged,
+//   promotedNumber, body}> — lineNumber is
 //   1-indexed against the full document; "- (none)" placeholders are skipped.
 // strayCount: non-blank lines inside the section that are not "- " bullets.
 // stoppedAtSubHeading / subHeading: a "### " line cut the scan short, so the
@@ -72,11 +78,15 @@ function scanSection(text, heading) {
       continue;
     }
     if (line === "- (none)") continue;
+    const promoted = PROMOTED_MARKER_RE.exec(line);
+    const ack = USER_ACK_MARKER_RE.exec(line);
     entries.push({
       raw: line,
       lineNumber: i + 1,
-      hasMarker: PROMOTED_MARKER_RE.test(line),
+      hasMarker: promoted !== null,
       severity: SEVERITY_MARKER_RE.test(line) ? "high" : null,
+      userAcknowledged: ack !== null && ack[1] === "true",
+      promotedNumber: promoted ? parseInt(promoted[1], 10) : null,
       body: entryBody(line),
     });
   }
@@ -109,7 +119,9 @@ function markEntryPromoted(text, lineNumber, issueNumber) {
 module.exports = {
   PROMOTED_MARKER_RE,
   SEVERITY_MARKER_RE,
+  USER_ACK_MARKER_RE,
   TRAILING_MARKER_RE,
+  composeEntryMarkers,
   extractSection,
   entryBody,
   scanSection,

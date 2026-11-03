@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # tests/bin/feat-1763-review-codex-launch.sh
 # Tests: bin/github-issues/review-survey-verdict-codex.sh
-# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2, input-size-guard, exit-127
+# Tags: issue-create, verdict, review, codex, web-search, toggle-removal, prompt-contract, scope:issue-specific, pwsh-not-required, TL2, input-size-guard, exit-127, verdict-disputed, issue-2225
 # TL3 gap: real `codex exec` + `-c tools.web_search=true` reaching the network (codex is a
 #   recording mock); whether real search queries obey the leak-prevention instruction.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 #   bin/check-verification-gate.sh category: skill-orchestration.
 # W1/W2 web search opt-in (default off; when on, no repo identifiers in queries); W3/W4
 #   removed ISSUE_VERDICT_REVIEW switch + CODEX_TIMEOUT_SECS; G1-G3 #2475 codex guard.
+# lang-check: ignore -- grep patterns match Japanese wording in the prompt under test.
 
 set -u
 
@@ -57,7 +58,7 @@ REVIEW_OK='{"verdict":"none","target":null,"children":[],"related":[],"reason":"
 run_review() {
     local name="$1"; shift
     CASE_DIR="$WORK/$name"; mkdir -p "$CASE_DIR"
-    printf '%s' "$REVIEW_OK" > "$CASE_DIR/codex-out.txt"
+    printf '%s' "${REVIEW_OUT:-$REVIEW_OK}" > "$CASE_DIR/codex-out.txt"
     ARGV="$CASE_DIR/argv.txt"; PROMPT="$CASE_DIR/prompt.txt"; FINAL="$CASE_DIR/final.json"
     [ "$RS_PRESENT" = "yes" ] || { RC=127; OUT=''; LAST=''; return 0; }
     OUT=$(env "$@" \
@@ -250,6 +251,36 @@ else
     else
         fail "G3-sources-cli-exec-guard" "the script must source bin/lib/cli-exec-guard.sh and call both guard functions"
     fi
+fi
+
+echo ""
+echo "=== D1-D4 (#2225): a disagreeing reviewer is recorded as disputed, never applied ==="
+top_field() { node -e 'try { const a = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(String(a[process.argv[2]])); } catch (e) { process.stdout.write("UNREADABLE"); }' "$(node_path "$1")" "$2" 2>/dev/null; }
+# dispute_case <name> <reviewer-json> — survey says none; the reviewer says otherwise.
+dispute_case() { REVIEW_OUT="$2" run_review "$1"
+    local got="$LAST|$(review_field "$FINAL" status)|$(top_field "$FINAL" verdict)|$(top_field "$FINAL" target)"
+    [ "$got" = "review_result: disputed|disputed|none|null" ] && pass "$1-disputed-survey-kept" \
+        || fail "$1-disputed-survey-kept" "want last|status|verdict|target = review_result: disputed|disputed|none|null (got: $got)"; }
+if [ "$RS_PRESENT" != "yes" ]; then
+    red "D1-disputed-survey-kept"; red "D2-disputed-survey-kept"; red "D3-upheld-unchanged"; red "D4-no-review-nulls"
+else
+    dispute_case D1 '{"verdict":"make-parent","target":null,"children":[10,11],"related":[],"reason":"umbrella","worth_filing":true,"same_fix":false}'
+    got="$(review_field "$FINAL" verdict)|$(review_field "$FINAL" children)|$(review_field "$FINAL" related)|$(top_field "$FINAL" children)"
+    [ "$got" = "make-parent|10,11||" ] && pass "D1-review-carries-make-parent-children" \
+        || fail "D1-review-carries-make-parent-children" "want review verdict|children|related|top children = make-parent|10,11|| (got: $got)"
+    dispute_case D2 '{"verdict":"sibling","target":null,"children":[],"related":[11],"reason":"neighbour","worth_filing":true,"same_fix":false}'
+    got="$(review_field "$FINAL" verdict)|$(review_field "$FINAL" target)|$(review_field "$FINAL" children)|$(review_field "$FINAL" related)|$(top_field "$FINAL" related)"
+    [ "$got" = "sibling|null||11|" ] && pass "D2-review-carries-sibling-related" \
+        || fail "D2-review-carries-sibling-related" "want review verdict|target|children|related|top related = sibling|null||11| (got: $got)"
+    run_review D3
+    got="$LAST|$(review_field "$FINAL" status)|$(top_field "$FINAL" verdict)|$(review_field "$FINAL" children)|$(review_field "$FINAL" related)"
+    [ "$got" = "review_result: upheld|upheld|none||" ] && pass "D3-upheld-unchanged" \
+        || fail "D3-upheld-unchanged" "want review_result: upheld|upheld|none|| (got: $got)"
+    run_review D4 CODEX_MOCK_RC=1
+    got="$(review_field "$FINAL" children)|$(review_field "$FINAL" related)"
+    [ "$got" = "null|null" ] && pass "D4-no-review-nulls" \
+        || fail "D4-no-review-nulls" "a failed review leaves review.children/related null (got: $got, status=$(review_field "$FINAL" status))"
 fi
 
 echo ""

@@ -14,6 +14,7 @@ t50_setup() {
     T50_DIR="$TMPROOT/t50"
     mkdir -p "$T50_DIR/install/lib" "$T50_DIR/home/.claude"
     cp "$LIB_DIR/settings-assembly.js" "$LIB_DIR/settings-deploy.js" "$T50_DIR/install/lib/"
+    copy_deployed_sources "$T50_DIR"
     printf '%s\n' '{ "permissions": { "allow": ["Bash(t50-base *)"], "deny": [] } }' > "$T50_DIR/settings.json"
     printf '%s\n' '{ "permissions": { "allow": ["Bash(t50-ext *)"] } }' > "$T50_DIR/settings-extension.json"
 }
