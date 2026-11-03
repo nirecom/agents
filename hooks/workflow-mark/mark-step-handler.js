@@ -1,7 +1,7 @@
 "use strict";
 // Handles WORKFLOW_MARK_STEP_<step>_complete sentinels. Validates the step name
-// against VALID_STEPS and marks it complete. Rejects forbidden manual-mark steps
-// (user_verification, write_tests, docs) that must be emitted via their own paths.
+// against VALID_STEPS and marks it complete. Always refuses the REFUSED_MARK_STEPS
+// table's steps; write_tests and the run_tests skip are refused only without evidence.
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
 const { VALID_STEPS } = require("../workflow-state");
@@ -21,6 +21,29 @@ const { RUN_EVIDENCE_KINDS } = require("../workflow-state/record-step-verdict/ru
 // Refusals whose wording record-step-verdict already owns: relayed as-is.
 const RELAYED_KINDS = ["no-release-evidence", "glossary-incomplete", ...RUN_EVIDENCE_KINDS];
 
+// Steps MARK_STEP never records, whatever the status: each has its own door.
+// user_verification: the USER_VERIFIED echo. review_tests: the fingerprinted
+// review-tests sentinel (MARK_STEP would bypass the stale-fingerprint guard).
+// docs: staged docs/ or WORKTREE_NOTES bullets.
+const REFUSED_MARK_STEPS = Object.freeze({
+  user_verification:
+    `workflow-mark: user_verification NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
+    `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" ` +
+    `(reason: >=3 non-space chars, no '>', not a placeholder)`,
+  review_tests:
+    `workflow-mark: review_tests NOT recorded — MARK_STEP not accepted for this step. ` +
+    `Invoke /review-tests skill (which auto-computes the review-scope fingerprint) ` +
+    `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`,
+  docs:
+    `workflow-mark: docs NOT recorded — MARK_STEP not accepted for this step. ` +
+    `Run /update-docs, then satisfy either route: ` +
+    `(a) stage docs/ or *.md files (git add docs/ ...); or ` +
+    `(b) inside a linked worktree, ensure WORKTREE_NOTES.md ` +
+    `## History Notes / ## Changelog Notes contain real bullets ` +
+    `(not just "- (none)") — staging path introduced by #436 / #484. ` +
+    `No MARK_STEP skip path.`,
+});
+
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, pushUnapplied, repoCwd } = ctx;
 
@@ -30,25 +53,8 @@ function handle(ctx) {
   if (markMatch) {
     const [, stepName, status] = markMatch;
 
-    // user_verification must go through the WORKFLOW_USER_VERIFIED echo path
-    if (stepName === "user_verification") {
-      pushUnapplied(
-        `workflow-mark: user_verification NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
-          `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" ` +
-          `(reason: >=3 non-space chars, no '>', not a placeholder)`
-      );
-      return true;
-    }
-
-    // review_tests must go through the dedicated REVIEW_TESTS_COMPLETE / WARNINGS
-    // sentinel path (which carries the review-scope fingerprint). Manual
-    // MARK_STEP would bypass the stale-fingerprint anti-bypass guard.
-    if (stepName === "review_tests") {
-      pushUnapplied(
-        `workflow-mark: review_tests NOT recorded — MARK_STEP not accepted for this step. ` +
-          `Invoke /review-tests skill (which auto-computes the review-scope fingerprint) ` +
-          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`
-      );
+    if (Object.prototype.hasOwnProperty.call(REFUSED_MARK_STEPS, stepName)) {
+      pushUnapplied(REFUSED_MARK_STEPS[stepName]);
       return true;
     }
 
@@ -80,19 +86,6 @@ function handle(ctx) {
         return true;
       }
     }
-    if (stepName === "docs") {
-      pushUnapplied(
-        `workflow-mark: docs NOT recorded — MARK_STEP not accepted for this step. ` +
-          `Run /update-docs, then satisfy either route: ` +
-          `(a) stage docs/ or *.md files (git add docs/ ...); or ` +
-          `(b) inside a linked worktree, ensure WORKTREE_NOTES.md ` +
-          `## History Notes / ## Changelog Notes contain real bullets ` +
-          `(not just "- (none)") — staging path introduced by #436 / #484. ` +
-          `No MARK_STEP skip path.`
-      );
-      return true;
-    }
-
     // Validate step name (regex already constrains status values)
     if (!VALID_STEPS.includes(stepName)) {
       pushUnapplied(`workflow-mark: unknown step "${stepName}" in marker — ignored.`);
@@ -145,4 +138,4 @@ function handle(ctx) {
   return false;
 }
 
-module.exports = { handle };
+module.exports = { handle, REFUSED_MARK_STEPS };

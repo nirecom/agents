@@ -227,7 +227,7 @@ case_end
 # ============ P11: stop-l2-findings-display — pause → no re-surface + surfaced_at not written ============
 case_begin "P11-findings-display-quiet" "hooks/stop-l2-findings-display.js"
 run_P11() {
-    local tmp tn ctrl outp surfaced
+    local tmp tn ctrl outp surfaced sent
     tmp=${TMPD[P11]}; tn=${TND[P11]}   # pre-seeded (sup_alertdone) by seed_batch
     # control: WITHOUT pause marker, confirm the hook actually surfaces (else skip)
     ctrl=$(WORKFLOW_PLANS_DIR="$tn" WORKFLOW_STATE_DIR="$tn" \
@@ -244,9 +244,9 @@ run_P11() {
         "$RWT" 15 node "$SCRIPT_CHECKOUT_ROOT/hooks/stop-l2-findings-display.js" <<< '{"session_id":"n11sid","transcript_path":""}' 2>/dev/null)
     if ! echo "$outp" | grep -q 'additionalContext'; then pass "P11a: stop-l2-findings-display does not re-surface findings during pause"
     else fail "P11a: RED-EXPECTED: findings still surfaced during pause; out=$outp"; fi
-    surfaced=$(grep -o '"findings_surfaced_at":[^,}]*' "$tmp"/n11sid.control/supervisor-state.json 2>/dev/null | head -1)
-    if echo "$surfaced" | grep -q 'null'; then pass "P11b: findings_surfaced_at left null during pause (findings not consumed)"
-    else fail "P11b: RED-EXPECTED: findings_surfaced_at written during pause (findings wrongly consumed); got $surfaced"; fi
+    surfaced=$(grep -o '"findings_surfaced_at":[^,}]*' "$tmp"/n11sid.control/supervisor-state.json 2>/dev/null | head -1); sent=$(grep -o '"findings_sent_to_model_at":[^,}]*' "$tmp"/n11sid.control/supervisor-state.json 2>/dev/null | head -1)
+    if echo "$surfaced" | grep -q 'null' && echo "$sent" | grep -q 'null'; then pass "P11b: findings_surfaced_at and findings_sent_to_model_at (#2919, present) left null during pause"
+    else fail "P11b: a findings marker written (or findings_sent_to_model_at absent) during pause; got surfaced='$surfaced' sent='$sent'"; fi
     rm -rf "$tmp" 2>/dev/null || true
 }
 run_P11

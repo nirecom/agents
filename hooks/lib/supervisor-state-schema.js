@@ -60,7 +60,7 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0, findings_surfaced_at: null, alert_eligible_phase: null, transcript_cursor: null },
+    alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0, findings_surfaced_at: null, findings_sent_to_model_at: null, alert_eligible_phase: null, transcript_cursor: null },
     audit: {
       audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null,
       audit_cause: null, audit_retry_count: 0, findings: [],
@@ -259,6 +259,9 @@ function validate(obj) {
     if ("alert_retry_count" in al && (!Number.isInteger(al.alert_retry_count) || al.alert_retry_count < 0)) errors.push("alert.alert_retry_count must be a non-negative integer");
     if ("findings_surfaced_at" in al && al.findings_surfaced_at !== null && typeof al.findings_surfaced_at !== "string") {
       errors.push("alert.findings_surfaced_at must be null or a string");
+    }
+    if ("findings_sent_to_model_at" in al && al.findings_sent_to_model_at !== null && typeof al.findings_sent_to_model_at !== "string") {
+      errors.push("alert.findings_sent_to_model_at must be null or a string");
     }
     if ("alert_eligible_phase" in al && !ALERT_ELIGIBLE_PHASE_VALUES.includes(al.alert_eligible_phase)) {
       errors.push(`alert.alert_eligible_phase must be null or "post_final_report_window"`);
