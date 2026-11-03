@@ -172,6 +172,31 @@ caseBegin("cli-overflow-record-is-declared", "bin/workflow/handoff-append");
   test("OV-CLI: exactly one overflow record, origin procedure-point and provenance declared", () => {
     assert.deepStrictEqual(over.map((e) => [e.cls, e.origin, e.provenance]), [["B", "procedure-point", "declared"]]);
   });
+  test("OV-CLI: stderr is exactly one line naming overflow (#2824: every not-recorded reason is told)", () => {
+    assert.deepStrictEqual(stderrLines(r), ["handoff-append: not recorded — overflow"]);
+  });
+}
+caseEnd();
+
+// stderrLines(r) — the non-empty stderr lines of one CLI run.
+function stderrLines(r) { return r.err.split(/\r?\n/).filter((l) => l.trim() !== ""); }
+
+caseBegin("noop-identical-is-told-on-stderr", "bin/workflow/handoff-append");
+{
+  // #2824 Step 4: a repeated identical record is not recorded, and the CLI says so on one stderr line.
+  const sid = "h2652-noop";
+  fx.makeState(sid);
+  const first = append(sid, "k-noop", "procedure-point");
+  const again = append(sid, "k-noop", "procedure-point");
+  test("NOOP: the first call records (non-vacuity)", () => assert.match(first.out, /WRITTEN=1/, first.err));
+  test("NOOP: the identical repeat exits 0 and reports WRITTEN=0 REASON=noop-identical", () => {
+    assert.strictEqual(again.rc, 0, again.err);
+    assert.match(again.out, /WRITTEN=0 REASON=noop-identical/);
+  });
+  test("NOOP: stderr is exactly one line naming noop-identical", () => {
+    assert.deepStrictEqual(stderrLines(again), ["handoff-append: not recorded — noop-identical"]);
+  });
+  test("NOOP: still exactly one record for the key", () => assert.strictEqual(records(sid, "k-noop").length, 1));
 }
 caseEnd();
 

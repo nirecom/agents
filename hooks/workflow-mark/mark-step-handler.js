@@ -22,7 +22,7 @@ const { RUN_EVIDENCE_KINDS } = require("../workflow-state/record-step-verdict/ru
 const RELAYED_KINDS = ["no-release-evidence", "glossary-incomplete", ...RUN_EVIDENCE_KINDS];
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;
+  const { cmd, sessionId, pushMessage, pushUnapplied, repoCwd } = ctx;
 
   const markMatch = cmd.match(MARKER_RE_DQ) || cmd.match(MARKER_RE_SQ);
 
@@ -32,7 +32,7 @@ function handle(ctx) {
 
     // user_verification must go through the WORKFLOW_USER_VERIFIED echo path
     if (stepName === "user_verification") {
-      pushMessage(
+      pushUnapplied(
         `workflow-mark: user_verification NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
           `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" ` +
           `(reason: >=3 non-space chars, no '>', not a placeholder)`
@@ -44,7 +44,7 @@ function handle(ctx) {
     // sentinel path (which carries the review-scope fingerprint). Manual
     // MARK_STEP would bypass the stale-fingerprint anti-bypass guard.
     if (stepName === "review_tests") {
-      pushMessage(
+      pushUnapplied(
         `workflow-mark: review_tests NOT recorded — MARK_STEP not accepted for this step. ` +
           `Invoke /review-tests skill (which auto-computes the review-scope fingerprint) ` +
           `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"`
@@ -56,7 +56,7 @@ function handle(ctx) {
     // MARK_STEP is accepted only when evidence exists; otherwise reject with guidance.
     if (stepName === "write_tests") {
       if (!hasCompletionEvidence("write_tests", sessionId, { repoDir: repoCwd })) {
-        pushMessage(
+        pushUnapplied(
           `workflow-mark: write_tests NOT recorded — MARK_STEP not accepted for this step. ` +
             `Stage tests/ changes (run /write-tests then git add tests/) ` +
             `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"` +
@@ -71,7 +71,7 @@ function handle(ctx) {
     // through to the common markStep path when it holds.
     if (stepName === "run_tests" && status === "skipped") {
       if (!isDocsOnlyStaged(repoCwd)) {
-        pushMessage(
+        pushUnapplied(
           `workflow-mark: run_tests NOT skipped — MARK_STEP skip is accepted only when ` +
             `every staged file is human-facing docs. Run the tests (/run-tests), ` +
             `or stage a docs-only set and emit: ` +
@@ -81,7 +81,7 @@ function handle(ctx) {
       }
     }
     if (stepName === "docs") {
-      pushMessage(
+      pushUnapplied(
         `workflow-mark: docs NOT recorded — MARK_STEP not accepted for this step. ` +
           `Run /update-docs, then satisfy either route: ` +
           `(a) stage docs/ or *.md files (git add docs/ ...); or ` +
@@ -95,12 +95,12 @@ function handle(ctx) {
 
     // Validate step name (regex already constrains status values)
     if (!VALID_STEPS.includes(stepName)) {
-      pushMessage(`workflow-mark: unknown step "${stepName}" in marker — ignored.`);
+      pushUnapplied(`workflow-mark: unknown step "${stepName}" in marker — ignored.`);
       return true;
     }
 
     if (!sessionId) {
-      signalFatal(
+      pushUnapplied(
         `workflow-mark: could not resolve session_id — step "${stepName}" NOT recorded. ` +
           `Commit gate will block. Re-run: ` +
           `echo "<<WORKFLOW_MARK_STEP_${stepName}_${status}>>"`
@@ -119,7 +119,7 @@ function handle(ctx) {
       repoDir: repoCwd,
     });
     if (!res.ok && res.kind === "unapproved") {
-      pushMessage(
+      pushUnapplied(
         `workflow-mark: ${stepName} NOT recorded — no user approval on record ` +
           `(${res.detail}). MARK_STEP cannot approve a plan stage. ` +
           `Ask the user to approve, then emit: ` +
@@ -127,13 +127,13 @@ function handle(ctx) {
           `(or verify CONFIRM_${stepName.toUpperCase()}=off in your config).`
       );
     } else if (!res.ok && RELAYED_KINDS.includes(res.kind)) {
-      pushMessage(`workflow-mark: ${res.message.replace(/^record-step-verdict: /, "")}`);
+      pushUnapplied(`workflow-mark: ${res.message.replace(/^record-step-verdict: /, "")}`);
     } else if (!res.ok) {
-      pushMessage(
+      pushUnapplied(
         `workflow-mark: failed to write state — ${res.detail || res.message}. Step "${stepName}" NOT recorded.`
       );
     } else if (res.kind === "downstream-reset-failed") {
-      pushMessage(`workflow-mark: failed to reset downstream steps after workflow_init — ${res.detail}`);
+      pushUnapplied(`workflow-mark: failed to reset downstream steps after workflow_init — ${res.detail}`);
     } else if (res.kind) {
       const notice = formatReviewTestsReopenNotice(res);
       if (notice) pushMessage(`workflow-mark: ${notice}`);

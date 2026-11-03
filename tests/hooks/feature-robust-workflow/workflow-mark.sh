@@ -6,6 +6,7 @@
 # implemented. Each test asserts state changes (or lack thereof) via the state
 # file rather than hook stdout so the failure mode is always a node error from
 # the missing hook, surfaced as state==MISSING on our side.
+# lang-check: ignore — some strings below match the Japanese output of the hook under test.
 
 echo ""
 echo "=== workflow-mark: New hook — Normal cases ==="
@@ -137,24 +138,20 @@ run_mark_hook "$REPO" "$E4_JSON" >/dev/null
 expect_no_state_change "E4. user_verification_skipped via marker → REJECTED" "test-session" "user_verification" "pending"
 
 # Test E5: session_id not in stdin AND CLAUDE_CODE_SESSION_ID unset →
-#   state unchanged, hook stdout JSON contains "systemMessage", exit 0
+#   state unchanged, the refusal reaches the strong channel per emit.STRONG_CHANNEL (#2824):
+#   exit 2 + stderr, or exit 0 + {decision:"block"}; tests/lib/workflow-mark-output.js judges the form.
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_PENDING_JSON test-session)"
 E5_CMD='echo "<<WORKFLOW_MARK_STEP_research_complete>>"'
 E5_ESC=${E5_CMD//\"/\\\"}
 E5_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"%s\\n","stderr":""}}' "$E5_ESC" "$E5_ESC")
-E5_OUT=$(echo "$E5_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env node "$MARK_HOOK" 2>/dev/null || true)
-E5_EXIT=$?
+E5_RC=0
+echo "$E5_JSON" | WORKFLOW_STATE_DIR="$WORKFLOW_DIR" env -u CLAUDE_CODE_SESSION_ID node "$MARK_HOOK" >"$TMPDIR_BASE/e5-out.txt" 2>"$TMPDIR_BASE/e5-err.txt" || E5_RC=$?
 expect_no_state_change "E5a. no session_id → research unchanged" "test-session" "research" "pending"
-if echo "$E5_OUT" | grep -q "additionalContext"; then
-    pass "E5b. no session_id → stdout JSON contains additionalContext"
+if E5_WHY=$(node "$DOTFILES_DIR/tests/lib/workflow-mark-output.js" check unapplied "session|could not resolve" "$E5_RC" "$TMPDIR_BASE/e5-out.txt" "$TMPDIR_BASE/e5-err.txt"); then
+    pass "E5b. no session_id → refused on the strong channel ([NOT APPLIED], rc=$E5_RC)"
 else
-    fail "E5b. no session_id → expected additionalContext in stdout, got: $E5_OUT"
-fi
-if [ "$E5_EXIT" = "0" ]; then
-    pass "E5c. no session_id → hook exit 0"
-else
-    fail "E5c. no session_id → expected exit 0, got: $E5_EXIT"
+    fail "E5b. no session_id → expected an UNAPPLIED refusal on the strong channel (#2824): $E5_WHY"
 fi
 
 # Test E6: private repo test deferred — hard to fake without network.
@@ -287,11 +284,10 @@ RE1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_foo: test reason>>"')
 RE1_OUT=$(run_mark_hook "$REPO" "$RE1_JSON")
 expect_no_state_change "RE1. unknown step 'foo' → research unchanged (complete)" "test-session" "research" "complete"
 # RE1b: error message should list valid steps (#1083 fix)
-# Soft assertion: if "Valid steps:" not yet in message, pre-fix pass
 if echo "$RE1_OUT" | grep -qF "Valid steps:"; then
-  pass "RE1b. unknown step 'foo' → additionalContext contains 'Valid steps:'"
+  pass "RE1b. unknown step 'foo' → the refusal (strong channel, #2824) contains 'Valid steps:'"
 else
-  echo "PASS: RE1b. Valid steps: not yet in message (pre-#1083-fix; will verify after write_code)"
+  fail "RE1b. unknown step 'foo' → expected 'Valid steps:' in the refusal, got: $RE1_OUT"
 fi
 
 # Test RE2: missing session_id → state unchanged, hook exit 0, stdout has additionalContext
@@ -363,10 +359,10 @@ while IFS='|' read -r _case_id _cmd _expect_msg; do
     _json=$(build_reset_json "$_cmd")
     _out=$(run_mark_hook "$REPO" "$_json")
     expect_no_state_change "${_case_id}. ${_cmd} → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
-    if echo "$_out" | grep -qF "$_expect_msg"; then
-        pass "${_case_id}(msg). → additionalContext contains '${_expect_msg}'"
+    if echo "$_out" | grep -qF "$_expect_msg" && echo "$_out" | grep -qF "[NOT APPLIED]"; then
+        pass "${_case_id}(msg). → refusal on the strong channel contains '${_expect_msg}'"
     else
-        fail "${_case_id}(msg). → expected '${_expect_msg}' in output, got: $_out"
+        fail "${_case_id}(msg). → expected '[NOT APPLIED]' and '${_expect_msg}' in output (#2824), got: $_out"
     fi
 done <<'TABLE'
 # case_id | sentinel_cmd                                                      | expect_msg

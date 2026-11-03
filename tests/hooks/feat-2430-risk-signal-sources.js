@@ -72,7 +72,8 @@ if (what === 'gate') r = require(A + '/hooks/workflow-gate/handoff-record.js').r
 if (what === 'finding') r = require(A + '/hooks/lib/supervisor-state-writer').appendFinding(sid, { categories: ['workflow'], severity: arg, detail: 'fixture finding', reporter: 'write-tests' });
 if (what === 'reset') {
   const msgs = [];
-  require(A + '/hooks/workflow-mark/reset-handler').handle({ cmd: arg, sessionId: sid, pushMessage: (m) => msgs.push(m), signalFatal: (m) => msgs.push(m), repoCwd: process.cwd() });
+  const unapplied = (m) => msgs.push('UNAPPLIED: ' + m);
+  require(A + '/hooks/workflow-mark/reset-handler').handle({ cmd: arg, sessionId: sid, pushMessage: (m) => msgs.push(m), pushUnapplied: unapplied, signalFatal: unapplied, repoCwd: process.cwd() });
   r = msgs.join(' ');
 }
 process.stdout.write(typeof r === 'string' ? r : JSON.stringify(r));
@@ -158,6 +159,8 @@ function runTestsHook(sid, exit, contract) {
 const injected = (s) => (s.includes('"additionalContext"') ? "yes" : `no:${s.slice(0, 120)}`);
 const blockRiskFile = (sid) => fs.mkdirSync(path.join(WF, `${sid}.control`, "risk-signal.json"), { recursive: true });
 const RESET_OK = 'echo "<<WORKFLOW_RESET_FROM_clarify_intent: redo the intent check>>"';
+// #2824: an applied reset emits exactly its INFO notice and no UNAPPLIED message.
+const RESET_APPLIED = "[workflow] reset-from clarify_intent: clarify_intent and later steps reset to pending.";
 
 caseBegin("risk-module-contract", "hooks/lib/risk-signal.js");
 expect("U1: RISK_SOURCES is the six-source list; unknown sources and invalid sids write nothing and read back null; the stamp reads back as ms", nj("unit.js"), "OK");
@@ -185,7 +188,7 @@ caseBegin("reset-from-stamps-risk-only-on-success", "hooks/workflow-mark/reset-h
 {
   seed("rk-reset");
   const t = Date.now();
-  expect("RS3: the reset is applied", nj("call.js", "reset", "rk-reset", RESET_OK), "");
+  expect("RS3: the reset is applied", nj("call.js", "reset", "rk-reset", RESET_OK), RESET_APPLIED);
   expect("RS3: a successful RESET_FROM stamps source reset-from", risk("rk-reset", t), "reset-from");
   seed("rk-reset-rej");
   nj("call.js", "reset", "rk-reset-rej", 'echo "<<WORKFLOW_RESET_FROM_no_such_step: a valid reason>>"');
@@ -259,7 +262,7 @@ caseBegin("risk_write_failure_changes_no_producer", "bin/supervisor-write-audit-
   }
   expect("I1: PostCompact still re-injects", injected(compact("rk-io-compact")), "yes");
   expect("I1: recordGateBlock still writes its entry", nj("call.js", "gate", "rk-io-gate"), '{"written":true,"reason":"ok"}');
-  expect("I1: the reset is still applied", nj("call.js", "reset", "rk-io-reset", RESET_OK), "");
+  expect("I1: the reset is still applied", nj("call.js", "reset", "rk-io-reset", RESET_OK), RESET_APPLIED);
   const v = verdictCli("rk-io-verdict", "WARN");
   expect("I1: the verdict CLI keeps exit 0", v.rc, "0");
   expect("I1: the verdict CLI keeps its stdout", v.out, '{"accepted":true,"audit_run_id":null}');

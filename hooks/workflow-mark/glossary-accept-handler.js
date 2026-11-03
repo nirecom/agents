@@ -180,11 +180,11 @@ function grant(sid, term, disc, reason) {
 }
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
+  const { cmd, sessionId, pushMessage, pushUnapplied } = ctx;
   const m = cmd.match(GLOSSARY_ACCEPTED_RE_DQ);
   if (!m) {
     if (!GLOSSARY_ACCEPTED_LOOKSLIKE_RE.test(cmd)) return false;
-    pushMessage(`workflow-mark: malformed WORKFLOW_${LABEL} — expected: ${FORM} ` +
+    pushUnapplied(`workflow-mark: malformed WORKFLOW_${LABEL} — expected: ${FORM} ` +
       "<term> must not contain = ( ) ; | & > or a backtick; <reason> must not contain ( ) ; | & > or a backtick.");
     return true;
   }
@@ -193,23 +193,23 @@ function handle(ctx) {
   const p = parseDiscriminators(m[2]);
   const why = p.error || (reason.replace(/\s/g, "").length < 3 ? "reason too short" : null);
   if (why) {
-    pushMessage(`workflow-mark: malformed WORKFLOW_${LABEL} — ${why}; state unchanged. Expected: ${FORM}`);
+    pushUnapplied(`workflow-mark: malformed WORKFLOW_${LABEL} — ${why}; state unchanged. Expected: ${FORM}`);
     return true;
   }
   if (!sessionId) {
-    signalFatal(`workflow-mark: could not resolve session_id — ${LABEL} NOT recorded.`);
+    pushUnapplied(`workflow-mark: could not resolve session_id — ${LABEL} NOT recorded.`);
     return true;
   }
   try {
     const v = grant(sessionId, term, p.disc, reason);
     const notes = v.notes.length > 0 ? ` (${v.notes.join("; ")})` : "";
     if (v.granted.length === 0) {
-      pushMessage(`workflow-mark: ${LABEL} rejected — nothing pending for term "${term}"${notes}; state unchanged.`);
+      pushUnapplied(`workflow-mark: ${LABEL} rejected — nothing pending for term "${term}"${notes}; state unchanged.`);
       return true;
     }
     pushMessage(`[workflow] ${LABEL}: grant recorded for "${term}" — ${v.granted.join("; ")}${notes}.`);
   } catch (e) {
-    pushMessage(`workflow-mark: failed to write state — ${e.message}. ${LABEL} NOT recorded.`);
+    pushUnapplied(`workflow-mark: failed to write state — ${e.message}. ${LABEL} NOT recorded for "${term}".`);
   }
   return true;
 }
