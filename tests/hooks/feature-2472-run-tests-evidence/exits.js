@@ -49,7 +49,7 @@ function docsOnlyNotNeededAfterRefusal() {
     F.git(repo, ["add", "docs/guide.md"]);
     mod("hooks/workflow-mark/not-needed-handlers.js").handle({
       cmd: 'echo "<<WORKFLOW_RUN_TESTS_NOT_NEEDED: docs only change here>>"', sessionId: sid, repoCwd: repo,
-      pushMessage: (m) => msgs.push(m), signalFatal: (m) => msgs.push(`FATAL ${m}`),
+      pushMessage: (m) => msgs.push(m), pushUnapplied: (m) => msgs.push(`FATAL ${m}`), signalFatal: (m) => msgs.push(`FATAL ${m}`),
     });
     entry = runTests(sid);
   } catch (e) {
@@ -132,7 +132,7 @@ function unrunnableAcceptedAfterRefusal() {
     seen.first = refuse(sid);
     mod("hooks/workflow-mark/run-tests-accept-handler.js").handle({
       cmd: 'echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: pwsh is not installed on this host>>"', sessionId: sid, repoCwd: F.tmp(),
-      pushMessage: (m) => msgs.push(m), signalFatal: (m) => msgs.push(`FATAL ${m}`),
+      pushMessage: (m) => msgs.push(m), pushUnapplied: (m) => msgs.push(`FATAL ${m}`), signalFatal: (m) => msgs.push(`FATAL ${m}`),
     });
     seen.accepted = runTests(sid);
     seen.beforeLater = F.eventCount(sid);
@@ -141,7 +141,7 @@ function unrunnableAcceptedAfterRefusal() {
     const markMsgs = [];
     mod("hooks/workflow-mark/mark-step-handler.js").handle({
       cmd: 'echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"', sessionId: sid, repoCwd: F.tmp(),
-      pushMessage: (m) => markMsgs.push(m), signalFatal: (m) => markMsgs.push(`FATAL ${m}`),
+      pushMessage: (m) => markMsgs.push(m), pushUnapplied: (m) => markMsgs.push(`FATAL ${m}`), signalFatal: (m) => markMsgs.push(`FATAL ${m}`),
     });
     seen.markMsgs = markMsgs;
     seen.mark = verdict().recordStepVerdict(sid, "run_tests", "complete", gateOptsMark());

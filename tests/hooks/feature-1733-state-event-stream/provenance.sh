@@ -145,7 +145,7 @@ const NN = require("./hooks/workflow-mark/not-needed-handlers");
 const msgs = [];
 NN.handle({
   cmd: "echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: nothing to survey>>\"",
-  sessionId: sid, pushMessage: (m) => msgs.push(m), signalFatal: () => {}, repoCwd: process.cwd(),
+  sessionId: sid, pushMessage: (m) => msgs.push(m), pushUnapplied: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
 });
 const ev = rd().events.filter((e) => e.kind === "step_status" && e.step === "research").pop();
 console.log("status=" + (ev && ev.status) + " provenance=" + (ev && ev.provenance) +

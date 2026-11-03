@@ -230,18 +230,18 @@ if [ -f "$SKILL" ]; then
   fi
 fi
 
-# P4: RT-5b/5c payload uses fingerprint= not token=
+# P4: the RT-5b/5c returned line (#2824) uses fingerprint= not token=
 if [ -f "$SKILL" ]; then
   SENTINEL_LINES=$(grep -E "WORKFLOW_REVIEW_TESTS_(COMPLETE|WARNINGS)" "$SKILL")
   if echo "$SENTINEL_LINES" | grep -qE "fingerprint=\\\$\{FINGERPRINT\}|fingerprint=\${FINGERPRINT}"; then
-    pass "P4a RT-5b/5c payload uses fingerprint=\${FINGERPRINT}"
+    pass "P4a RT-5b/5c returned line uses fingerprint=\${FINGERPRINT}"
   else
-    fail "P4a RT-5b/5c payload does not use fingerprint=\${FINGERPRINT}"
+    fail "P4a RT-5b/5c returned line does not use fingerprint=\${FINGERPRINT}"
   fi
   if echo "$SENTINEL_LINES" | grep -qF "token="; then
-    fail "P4b RT-5b/5c sentinel still uses token= (must use fingerprint=)"
+    fail "P4b RT-5b/5c returned line still uses token= (must use fingerprint=)"
   else
-    pass "P4b RT-5b/5c sentinel does not use token="
+    pass "P4b RT-5b/5c returned line does not use token="
   fi
 fi
 

@@ -71,7 +71,8 @@ cat > "$TMP/reset.js" <<'JS'
 const { handle } = require(process.env.AGENTS + '/hooks/workflow-mark/reset-handler');
 const sid = process.argv[2] === '-' ? null : process.argv[2];
 const msgs = [];
-handle({ cmd: process.argv[3], sessionId: sid, pushMessage: (m) => msgs.push(m), signalFatal: (m) => msgs.push('FATAL:' + m), repoCwd: process.cwd() });
+const unapplied = (m) => msgs.push('FATAL:' + m);
+handle({ cmd: process.argv[3], sessionId: sid, pushMessage: (m) => msgs.push(m), pushUnapplied: unapplied, signalFatal: unapplied, repoCwd: process.cwd() });
 process.stdout.write(msgs.join('\n'));
 JS
 cat > "$TMP/arm.js" <<'JS'
@@ -125,6 +126,15 @@ rejected() {
     case "$1" in *malformed*|*rejected*|*unknown*|*"NOT applied"*) printf 'yes' ;; *) printf 'no:%s' "${1:0:120}" ;; esac
 }
 
+# applied <reset.js output> <step> — #2824: an applied reset emits its INFO notice and no FATAL (UNAPPLIED) line.
+applied() {
+    case "$1" in
+        *FATAL:*) printf 'no:%s' "${1:0:120}" ;;
+        "[workflow] reset-from $2: $2 and later steps reset to pending."*) printf 'yes' ;;
+        *) printf 'no:%s' "${1:0:120}" ;;
+    esac
+}
+
 # ---- post-compact
 
 case_begin "post-compact-active-records" "hooks/post-compact.js"
@@ -152,7 +162,7 @@ case_begin "reset-from-success-leaves-one-reset-event" "hooks/workflow-mark/rese
 seed rs-ok active
 CMD='echo "<<WORKFLOW_RESET_FROM_clarify_intent: redo the intent check>>"'
 OUT="$(nj reset.js rs-ok "$CMD")"
-expect "R1: the reset itself is applied (no rejection message)" "$OUT" ""
+expect "R1: the reset itself is applied (no rejection message)" "$(applied "$OUT" clarify_intent)" "yes"
 expect "R1: one reset event from clarify_intent, and no reset-from state_handoff_record" "$(resets rs-ok)" "1:clarify_intent:0"
 case_end
 
@@ -177,7 +187,7 @@ case_begin "reset-from-workflow-init-leaves-one-reset-event" "hooks/workflow-mar
 seed rs-init active
 CMD='echo "<<WORKFLOW_RESET_FROM_workflow_init: restart the whole session>>"'
 OUT="$(nj reset.js rs-init "$CMD")"
-expect "R3: RESET_FROM_workflow_init is applied (no rejection message)" "$OUT" ""
+expect "R3: RESET_FROM_workflow_init is applied (no rejection message)" "$(applied "$OUT" workflow_init)" "yes"
 expect "R3: the reset rolled workflow_init back to pending" "$(status rs-init workflow_init)" "pending"
 expect "R3: one reset event from workflow_init, and no reset-from state_handoff_record" "$(resets rs-init)" "1:workflow_init:0"
 case_end
@@ -187,7 +197,7 @@ seed rs-mid active
 approve_gates rs-mid
 CMD='echo "<<WORKFLOW_RESET_FROM_run_tests: rerun the suite>>"'
 OUT="$(nj reset.js rs-mid "$CMD")"
-expect "R4: RESET_FROM_run_tests is applied" "$OUT" ""
+expect "R4: RESET_FROM_run_tests is applied" "$(applied "$OUT" run_tests)" "yes"
 expect "R4: one reset event from run_tests, and no reset-from state_handoff_record" "$(resets rs-mid)" "1:run_tests:0"
 case_end
 
@@ -195,7 +205,7 @@ case_begin "reset-from-never-active-records-nothing" "hooks/workflow-mark/reset-
 seed rs-never init-only
 CMD='echo "<<WORKFLOW_RESET_FROM_workflow_init: restart the whole session>>"'
 OUT="$(nj reset.js rs-never "$CMD")"
-expect "R5: a reset on a never-initialised session is still applied" "$OUT" ""
+expect "R5: a reset on a never-initialised session is still applied" "$(applied "$OUT" workflow_init)" "yes"
 expect "R5: workflow_init stays pending" "$(status rs-never workflow_init)" "pending"
 expect "R5: one reset event, and no reset-from state_handoff_record" "$(resets rs-never)" "1:workflow_init:0"
 case_end
@@ -206,7 +216,7 @@ approve_gates rs-off
 : >"$TMP/wf/rs-off.workflow-off"
 CMD='echo "<<WORKFLOW_RESET_FROM_run_tests: rerun the suite>>"'
 OUT="$(nj reset.js rs-off "$CMD")"
-expect "R6: a reset under WORKFLOW_OFF is still applied" "$OUT" ""
+expect "R6: a reset under WORKFLOW_OFF is still applied" "$(applied "$OUT" run_tests)" "yes"
 expect "R6: run_tests is pending after the reset" "$(status rs-off run_tests)" "pending"
 expect "R6: one reset event, and no reset-from state_handoff_record" "$(resets rs-off)" "1:run_tests:0"
 case_end
@@ -216,7 +226,7 @@ seed rs-revive final
 approve_gates rs-revive
 CMD='echo "<<WORKFLOW_RESET_FROM_run_tests: reopen after the final report>>"'
 OUT="$(nj reset.js rs-revive "$CMD")"
-expect "R7: a reset after final_report is applied" "$OUT" ""
+expect "R7: a reset after final_report is applied" "$(applied "$OUT" run_tests)" "yes"
 expect "R7: final_report is pending again" "$(status rs-revive final_report)" "pending"
 expect "R7: one reset event from run_tests, and no reset-from state_handoff_record" "$(resets rs-revive)" "1:run_tests:0"
 case_end

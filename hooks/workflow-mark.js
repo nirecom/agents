@@ -40,12 +40,27 @@ const supervisorBlockOverrideHandler = require("./workflow-mark/supervisor-block
 const resetHandler = require("./workflow-mark/reset-handler");
 
 const { readHookInput, readFailOpenDiagnostic } = require("./lib/read-stdin");
+const { createSink, flush } = require("./workflow-mark/emit");
+const { recordReceipt, recordOutcome } = require("./lib/sentinel-receipt");
 
-function done(additionalContext) {
-  const out = additionalContext ? { additionalContext } : {};
-  console.log(JSON.stringify(out));
-  process.exit(0);
-}
+// Every message carries its severity (emit.js): INFO on the normal channel, UNAPPLIED on the strong one.
+const sink = createSink();
+const { pushMessage, pushUnapplied } = sink;
+const done = () => flush(sink.messages);
+
+const HANDLERS = [
+  // Dispatch order matters: USER_VERIFIED must precede MARK_STEP to prevent
+  // bypass via WORKFLOW_MARK_STEP_user_verification.
+  notNeededHandlers, clarifyIntentCompleteHandler, branchingHandler,
+  // CONFIRM_INTENT / _OUTLINE / _DETAIL record the plan approval that the
+  // completion-boundary invariant requires; must precede mark-step-handler so a
+  // chained "CONFIRM && MARK_STEP" records the approval before the completion.
+  confirmApprovalHandler, userVerifiedHandler,
+  // review-tests-handler must run BEFORE mark-step-handler so the dedicated
+  // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner.
+  reviewTestsHandler, runTestsAcceptHandler, glossaryAcceptHandler, markStepHandler,
+  enforceOverrideHandlers, supervisorBlockOverrideHandler, resetHandler,
+];
 
 if (require.main === module) {
 
@@ -75,6 +90,26 @@ const sessionId = resolveSessionId({
   sessionIdFromInput: input.session_id,
   transcriptPath: input.transcript_path,
 });
+
+// Decompose into sentinel sub-commands (SSOT: sentinel-command.js). Bash/
+// runInTerminal `&&` chains stay order-independent all-or-nothing; the runCommands
+// array additionally rejects a non-sentinel element that follows a sentinel.
+const analysis = analyzeSentinelCommand(input.tool_name, input.tool_input);
+// #2877: the receipt says the sentinel reached this hook; its outcome says the run finished.
+// The Stop backstop tells the user about a sentinel with neither.
+const toolUseId = input.tool_use_id;
+const receipted = analysis.sentinelPresent && !!sessionId && recordReceipt(sessionId, toolUseId, analysis.sentinelParts);
+const applied = [];
+const unappliedParts = [];
+function finish() {
+  if (receipted) recordOutcome(sessionId, toolUseId, { applied, unapplied: unappliedParts });
+  done();
+}
+function refuseAll(text) {
+  pushUnapplied(text);
+  unappliedParts.push(...(analysis.sentinelParts.length > 0 ? analysis.sentinelParts : [command]));
+  finish();
+}
 
 // Reset user_verification only after a successful merge-class operation
 // (push to a protected branch / gh pr merge / glab mr merge). Feature-branch
@@ -106,73 +141,53 @@ if (mergeResult.hit) {
       } catch (e) { /* Fail-open */ }
     }
     // gh / glab merge records no sha: no local push happened in this command.
-    done(msg);
+    if (msg) pushMessage(msg);
   }
-  done();
+  finish();
 }
 
-// Backstop: subagent calls must not drive the workflow state machine.
+// Backstop: subagent calls must not drive the workflow state machine; a subagent's
+// sentinel is refused aloud so the fork returns it instead of believing it applied.
 // push/merge detection above still runs for subagents (C1 regression guard).
-if (isSubagentCall(input)) done();
-
-// Decompose into sentinel sub-commands (SSOT: sentinel-command.js). Bash/
-// runInTerminal `&&` chains stay order-independent all-or-nothing; the runCommands
-// array additionally rejects a non-sentinel element that follows a sentinel.
-const analysis = analyzeSentinelCommand(input.tool_name, input.tool_input);
-if (!analysis.sentinelPresent) done(); // no sentinel content — nothing to record
-if (!analysis.clean) done(); // impure chain or trailing non-sentinel — reject whole
-const sentinelParts = analysis.sentinelParts;
-if (sentinelParts.length === 0) done();
-
-if (exitCode !== 0) {
-  done(
-    `workflow-mark: echo exited ${exitCode} — ${sentinelParts.length} sentinel operation(s) NOT applied.`
+if (isSubagentCall(input)) {
+  if (!analysis.sentinelPresent) done();
+  refuseAll(
+    "workflow-mark: a sentinel emitted inside a subagent / fork is NOT applied — it only takes effect " +
+      "in the main conversation. Return the exact echo line to the main conversation and run it there."
   );
 }
 
-// Accumulate per-part messages; emit them together at end.
-const messages = [];
-// When set, the loop tail flushes messages to stderr and exits with code 2 so
-// the harness surfaces the failure instead of silently swallowing it.
-let fatalError = false;
+if (!analysis.sentinelPresent) done(); // no sentinel content — nothing to record
+if (!analysis.clean) {
+  refuseAll(
+    "workflow-mark: a sentinel mixed with other commands is NOT applied (the whole command is rejected). " +
+      'Re-run each sentinel as its own standalone Bash call: echo "<<WORKFLOW_...>>"'
+  );
+}
+const sentinelParts = analysis.sentinelParts;
+if (sentinelParts.length === 0) refuseAll("workflow-mark: no sentinel could be extracted from the command — NOT applied.");
+
+if (exitCode !== 0) {
+  refuseAll(
+    `workflow-mark: echo exited ${exitCode} — ${sentinelParts.length} sentinel operation(s) NOT applied. ` +
+      "Re-run the sentinel as one standalone Bash call."
+  );
+}
 
 const state = readState(sessionId);
 const repoCwd = resolveRepoCwd({ command, input, stateCwd: state && state.cwd });
 
-const ctx = {
-  sessionId,
-  pushMessage: (m) => messages.push(m),
-  signalFatal: (m) => { messages.push(m); fatalError = true; },
-  repoCwd,
-};
+// signalFatal is the pre-#2824 name of pushUnapplied, kept for the handlers not yet renamed.
+const ctx = { sessionId, pushMessage, pushUnapplied, signalFatal: pushUnapplied, repoCwd };
 
+const isUnapplied = (m) => m.severity === "unapplied";
 for (const cmd of sentinelParts) {
-  // Dispatch order matters: USER_VERIFIED must precede MARK_STEP to prevent
-  // bypass via WORKFLOW_MARK_STEP_user_verification.
-  if (notNeededHandlers.handle({ ...ctx, cmd })) continue;
-  if (clarifyIntentCompleteHandler.handle({ ...ctx, cmd })) continue;
-  if (branchingHandler.handle({ ...ctx, cmd })) continue;
-  // CONFIRM_INTENT / _OUTLINE / _DETAIL record the plan approval that the
-  // completion-boundary invariant requires; must precede mark-step-handler so a
-  // chained "CONFIRM && MARK_STEP" records the approval before the completion.
-  if (confirmApprovalHandler.handle({ ...ctx, cmd })) continue;
-  if (userVerifiedHandler.handle({ ...ctx, cmd })) continue;
-  // review-tests-handler must run BEFORE mark-step-handler so the dedicated
-  // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner
-  // (mark-step-handler would otherwise process a manual MARK_STEP form here).
-  if (reviewTestsHandler.handle({ ...ctx, cmd })) continue;
-  if (runTestsAcceptHandler.handle({ ...ctx, cmd })) continue;
-  if (glossaryAcceptHandler.handle({ ...ctx, cmd })) continue;
-  if (markStepHandler.handle({ ...ctx, cmd })) continue;
-  if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;
-  if (supervisorBlockOverrideHandler.handle({ ...ctx, cmd })) continue;
-  if (resetHandler.handle({ ...ctx, cmd })) continue;
+  const before = sink.messages.filter(isUnapplied).length;
+  const handler = HANDLERS.find((h) => h.handle({ ...ctx, cmd }));
+  if (!handler) pushUnapplied(`workflow-mark: no handler for this sentinel — NOT applied: ${cmd}`);
+  (sink.messages.filter(isUnapplied).length > before ? unappliedParts : applied).push(cmd);
 }
 
-if (fatalError) {
-  process.stderr.write(messages.join("\n") + "\n");
-  process.exit(2);
-}
-done(messages.length > 0 ? messages.join("\n") : undefined);
+finish();
 
 } // end if (require.main === module)

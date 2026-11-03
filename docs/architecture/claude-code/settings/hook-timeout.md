@@ -60,6 +60,10 @@ Because a cancel is visible only in the transcript, `hooks/lib/hook-cancel-notic
 - A record marked `timedOut: false` (an interrupt, not the timeout) is not reported.
 - **Known limit**: the cursor is saved before the hook prints the notice, so a hook killed between the two loses that notice instead of repeating it.
 
+## `workflow-mark` PostToolUse timeout
+
+`workflow-mark.js` is a PostToolUse hook and carries no decision time limit; its `timeout` is 30 s (was 5 s, #2824). Its handlers shell out to `next-step`, `check-glossary-drift` and evidence readers, and a 5 s cancel dropped the sentinel and its refusal reason together, so the model and the user saw nothing. The 30 s value is a ceiling, not a measured one: no handler timing was taken, and the raise is unverified against a live cancel. A cancel is still reported by the cancellation notice above.
+
 ## Merged allow-deny hook
 
 `hooks/merged-allow-deny.js` runs `bash-guard`, `preuse-auto-approve`, `block-dotenv`, `block-credentials` and `block-capture-echo` in one process. It is registered once per matcher group (`--matcher-group primary` and `--matcher-group monitor-worktree`); `hooks/merged-allow-deny/members.js` owns which tools route to which member.

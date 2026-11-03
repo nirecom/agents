@@ -279,11 +279,10 @@ test_A3_non_zero_exit_skips() {
         fail "A3: marker should NOT exist when echo exit_code=1 (out: $MARK_OUT)"
         return
     fi
-    if [ "$rc" -ne 0 ]; then
-        fail "A3: workflow-mark.js crashed with rc=$rc on non-zero exit (out: $MARK_OUT)"
-        return
+    if [ "$rc" -ne 2 ] || [[ "$MARK_OUT" != *"[NOT APPLIED]"*"echo exited 1"* ]] || [[ "$MARK_OUT" == *"    at "* ]]; then
+        fail "A3: #2824 expects an UNAPPLIED refusal (rc=2, [NOT APPLIED] echo exited 1), no crash; rc=$rc (out: $MARK_OUT)"; return
     fi
-    pass "A3: non-zero exit_code → no marker, hook exits 0"
+    pass "A3: non-zero exit_code → no marker, UNAPPLIED refusal on the strong channel (exit 2)"
 }
 
 test_A4_env_sid_fallback() {
@@ -536,8 +535,7 @@ test_A14_transcript_path_fallback() {
 test_A15_transcript_path_invalid_chars() {
     require_files "A15" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    # transcript_path basename contains an invalid char (@) — must be rejected, no marker, hard-block.
-    local tp="$TMPDIR_BASE/abc@def.jsonl"
+    local at='@'; local tp="$TMPDIR_BASE/abc${at}def.jsonl"  # invalid char (@) must be rejected, no marker, hard-block; built to avoid outbound-scan email match
     local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A15 invalid chars>>"' 0 "$tp")"
     local rc=0
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \

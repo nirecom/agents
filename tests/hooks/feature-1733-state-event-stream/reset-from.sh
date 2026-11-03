@@ -32,7 +32,7 @@ RESET_JS='{
   const rh = require("./hooks/workflow-mark/reset-handler");
   rh.handle({
     cmd: "echo \"<<WORKFLOW_RESET_FROM_detail: rework the plan>>\"",
-    sessionId: sid, pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
+    sessionId: sid, pushMessage: () => {}, pushUnapplied: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
   });
 }
 '
@@ -172,7 +172,7 @@ const mh = require("./hooks/workflow-mark/mark-step-handler");
 const before = rd().events.length;
 mh.handle({
   cmd: "echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\"",
-  sessionId: sid, pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
+  sessionId: sid, pushMessage: () => {}, pushUnapplied: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
 });
 const st = S.readState(sid);
 const ev = rd().events;
@@ -214,7 +214,7 @@ reset_to() { # <target-step> <reason>
   let fatal = null;
   rh.handle({
     cmd: "echo \"<<WORKFLOW_RESET_FROM_'"$1"': '"$2"'>>\"",
-    sessionId: sid, pushMessage: (m) => msgs.push(String(m)), signalFatal: (m) => { fatal = String(m); },
+    sessionId: sid, pushMessage: (m) => msgs.push(String(m)), pushUnapplied: (m) => { fatal = String(m); }, signalFatal: (m) => { fatal = String(m); },
     repoCwd: process.cwd(),
   });
   globalThis.__msgs = msgs; globalThis.__fatal = fatal;
@@ -302,7 +302,7 @@ const results = [];
   const msgs = [];
   rh.handle({
     cmd: "echo \"<<WORKFLOW_RESET_FROM_" + target + ": reason here>>\"",
-    sessionId: sid, pushMessage: (m) => msgs.push(String(m)), signalFatal: (m) => { fatal = String(m); },
+    sessionId: sid, pushMessage: (m) => msgs.push(String(m)), pushUnapplied: (m) => { fatal = String(m); }, signalFatal: (m) => { fatal = String(m); },
     repoCwd: process.cwd(),
   });
   const resets = rd().events.filter((e) => e.kind === "reset").length;
@@ -328,7 +328,7 @@ const results = [];
 ["<<WORKFLOW_RESET_FROM_detail>>", "<<WORKFLOW_RESET_FROM_detail: >>", "<<WORKFLOW_RESET_FROM_detail:>>"].forEach((s, i) => {
   rh.handle({
     cmd: "echo \"" + s + "\"", sessionId: sid,
-    pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
+    pushMessage: () => {}, pushUnapplied: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
   });
   results.push(i + ":resets=" + rd().events.filter((e) => e.kind === "reset").length);
 });
@@ -349,7 +349,7 @@ const existedBefore = fs.existsSync(sp());
 let fatal = null;
 rh.handle({
   cmd: "echo \"<<WORKFLOW_RESET_FROM_detail: no session yet>>\"",
-  sessionId: sid, pushMessage: () => {}, signalFatal: (m) => { fatal = String(m); }, repoCwd: process.cwd(),
+  sessionId: sid, pushMessage: () => {}, pushUnapplied: (m) => { fatal = String(m); }, signalFatal: (m) => { fatal = String(m); }, repoCwd: process.cwd(),
 });
 const existsAfter = fs.existsSync(sp());
 const events = existsAfter ? rd().events.length : 0;
@@ -367,7 +367,7 @@ const rh = require("./hooks/workflow-mark/reset-handler");
 const before = raw();
 rh.handle({
   cmd: "echo \"<<WORKFLOW_RESET_FROM_detail: on corrupt state>>\"",
-  sessionId: sid, pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
+  sessionId: sid, pushMessage: () => {}, pushUnapplied: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
 });
 // Rewriting here would destroy the only copy of whatever the file was going to be
 // recovered from. Fail closed, leave the bytes.
@@ -391,7 +391,7 @@ if run_case "R17/concurrent-reset"; then
 const rh = require("./hooks/workflow-mark/reset-handler");
 rh.handle({
   cmd: "echo \"<<WORKFLOW_RESET_FROM_detail: " + process.env.REASON + ">>\"",
-  sessionId: sid, pushMessage: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
+  sessionId: sid, pushMessage: () => {}, pushUnapplied: () => {}, signalFatal: () => {}, repoCwd: process.cwd(),
 });
 console.log("DONE");
 '

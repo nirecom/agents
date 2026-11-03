@@ -136,10 +136,10 @@ run_gate_and_mark_tests() {
     MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_write_tests_complete>>"' "$SID")
     # Pass CLAUDE_PROJECT_DIR so resolveRepoCwd finds the isolated test repo (no staged tests),
     # not process.cwd() which is the agents worktree and may have staged test files.
-    MARK_OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null <<< "$MARK_JSON" || true)
+    MARK_OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>&1 <<< "$MARK_JSON" || true)
 
-    if echo "$MARK_OUT" | grep -q "NOT recorded"; then
-        pass "WS-EV-6a. MARK_STEP write_tests_complete → additionalContext contains 'NOT recorded'"
+    if echo "$MARK_OUT" | grep -q "\[NOT APPLIED\].*NOT recorded"; then
+        pass "WS-EV-6a. MARK_STEP write_tests_complete → UNAPPLIED refusal contains 'NOT recorded'"
     else
         fail "WS-EV-6a. expected 'NOT recorded' in output, got: $MARK_OUT"
     fi
@@ -165,7 +165,7 @@ run_gate_and_mark_tests() {
 
     MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_write_tests_complete>>"' "$SID")
     # Call node directly with CLAUDE_PROJECT_DIR so resolveRepoCwd finds the staged tests
-    MARK_OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null <<< "$MARK_JSON" || true)
+    MARK_OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" WORKFLOW_STATE_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>&1 <<< "$MARK_JSON" || true)
 
     if echo "$MARK_OUT" | grep -q "NOT recorded"; then
         fail "WS-EV-6c. expected MARK_STEP accepted (no 'NOT recorded') when staged tests present, got: $MARK_OUT"
@@ -190,8 +190,8 @@ run_gate_and_mark_tests() {
     MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_docs_complete>>"' "$SID")
     MARK_OUT=$(run_mark "$MARK_JSON")
 
-    if echo "$MARK_OUT" | grep -q "NOT recorded"; then
-        pass "WS-EV-7a. MARK_STEP docs_complete → additionalContext contains 'NOT recorded'"
+    if echo "$MARK_OUT" | grep -q "\[NOT APPLIED\].*NOT recorded"; then
+        pass "WS-EV-7a. MARK_STEP docs_complete → UNAPPLIED refusal contains 'NOT recorded'"
     else
         fail "WS-EV-7a. expected 'NOT recorded' in output, got: $MARK_OUT"
     fi
