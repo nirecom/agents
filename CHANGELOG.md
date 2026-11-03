@@ -116,3 +116,7 @@ Changes: Shared on-demand md files now live in skills/_shared/ only; agents/lib/
 ### FEATURE: PR #2906 (2026-11-03)
 Background: feat(#2763): replace the glossary per-entry exclusion field with Shor...
 Changes: Glossary entries can declare a `Short forms` field (a shorter form of a multi-word term, e.g. `step` for `workflow step`); it replaces the exclusion field added in PR #2872, which had no effect.
+
+### FEATURE: PR #2913 (2026-11-03)
+Background: feat(#2903, #2904, #1926, #2225, #2303, #1076): fix the Final Report follow-up and Post-Merge sections
+Changes: Final Report: follow-up lines start with their issue number, entries the user already knows about are filed without a second question, and Post-Merge restart judgment reads the installers' declared deploy list (#2903, #2904, #1926, #2225, #2303, #1076).
