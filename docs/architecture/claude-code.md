@@ -89,13 +89,14 @@ The file is directly inspectable for debugging.
 
 | Field | Type | Description |
 |---|---|---|
-| `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings are recorded but never re-arm alert mode; only an explicit `--set-alert-phase pending` resumes, and that `paused→pending` transition resets `alert_retry_count`), closed=permanent session-close terminal (re-arm forbidden) |
+| `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings are recorded but never re-arm alert mode; only an explicit `--set-alert-phase pending` resumes, and that `paused→pending` transition resets `alert_retry_count`; session close may also move it to closed), closed=permanent session-close terminal (re-arm forbidden) |
 | `alert_armed_at` | ISO string or null | Timestamp when alert was armed; null when phase is done/paused/closed |
 | `alert_cause` | string or null | Trigger label (non-numeric slug): `"sentinel-hang"`, `"scheduled-review"`, `"worktree-off proposal"`, or `"workflow-off proposal"`; co-cleared when `alert_armed_at` is nulled |
 | `last_run_at` | ISO string or null | Timestamp of last alert execution |
 | `cumulative_severity` | string or null | Highest severity across alert findings |
 | `alert_retry_count` | integer | Consecutive failure count; paused after `ALERT_RETRY_THRESHOLD` (2) |
-| `findings_surfaced_at` | ISO string or null | When findings were surfaced in Final Report |
+| `findings_surfaced_at` | ISO string or null | When findings were shown to the user (SC-7); first value kept |
+| `findings_sent_to_model_at` | ISO string or null | When the Stop hook handed findings to the model; stops repeat Stop firing only and never suppresses the SC-7 render; first value kept |
 | `alert_eligible_phase` | string or null | `"post_final_report_window"` when late-phase eligibility set (#997) |
 | `findings[]` | Finding[] | Alert findings; each finding carries an optional `status` field (`"draft"` / `"confirmed"`); `idx` is a stable integer key |
 
@@ -114,7 +115,7 @@ The file is directly inspectable for debugging.
 
 The audit ledger, run identity, freshness key, TR5 two-stage hold, and the pre-merge freshness backstop extend this `audit` block; their schema and rationale are the SSOT in [claude-code/supervisor-audit-ledger.md](claude-code/supervisor-audit-ledger.md).
 
-**Alert lifecycle and gate-yield:** `writeAlertState()` refuses to set `alert_armed_at` when `alert_phase` is `done`, `paused`, or `closed` (at-most-1 guarantee). `ensureAlertScheduled()` short-circuits when `alert_phase` is `done` or `closed` — `paused` is a resumable suspended state and re-arms on the next finding with severity >= warning (resetting `alert_phase=pending` and `alert_retry_count=0`), while `closed` is a permanent session-close terminal that never re-arms. When alert is pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete` and yields so the Stop hook can fire alert first.
+**Alert lifecycle and gate-yield:** `writeAlertState()` refuses to set `alert_armed_at` when `alert_phase` is `done`, `paused`, or `closed` (at-most-1 guarantee). `ensureAlertScheduled()` short-circuits when `alert_phase` is `done` or `closed` — `paused` is a resumable suspended state and re-arms on the next finding with severity >= warning (resetting `alert_phase=pending` and `alert_retry_count=0`), while `closed` is a permanent session-close terminal that never re-arms; session close moves any phase, `paused` included, to `closed`. When alert is pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete` and yields so the Stop hook can fire alert first.
 
 **Alert output protocol (#929, Codex-primary single pass):**
 

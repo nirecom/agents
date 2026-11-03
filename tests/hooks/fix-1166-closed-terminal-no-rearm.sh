@@ -154,21 +154,21 @@ console.log('OK');
     fi
 }
 
-# T4b: validateAlertPhaseTransition('paused','pending') -> allowed (re-arm)
+# T4b: validateAlertPhaseTransition('paused','pending') -> allowed (re-arm); ('paused','closed') -> allowed (session close, #2766)
 run_t4b() {
-    require_writer "T4b: validateAlertPhaseTransition paused->pending allowed" || return
+    require_writer "T4b: validateAlertPhaseTransition paused->pending and paused->closed allowed" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.validateAlertPhaseTransition('paused', 'pending');
-if (!r || r.ok !== true) { console.error('not allowed: '+JSON.stringify(r)); process.exit(2); }
+const r = w.validateAlertPhaseTransition('paused', 'pending'), rc2 = w.validateAlertPhaseTransition('paused', 'closed');
+if (!r || r.ok !== true) { console.error('not allowed: '+JSON.stringify(r)); process.exit(2); } if (!rc2 || rc2.ok !== true) { console.error('paused->closed (session close, #2766) not allowed: '+JSON.stringify(rc2)); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "T4b: validateAlertPhaseTransition paused->pending allowed"
+        pass "T4b: validateAlertPhaseTransition paused->pending and paused->closed allowed"
     else
-        fail "T4b: validateAlertPhaseTransition paused->pending allowed (rc=$rc, out=$out)"
+        fail "T4b: validateAlertPhaseTransition paused->pending and paused->closed allowed (rc=$rc, out=$out)"
     fi
 }
 

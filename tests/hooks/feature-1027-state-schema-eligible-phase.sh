@@ -1,15 +1,9 @@
 #!/bin/bash
 # tests/hooks/feature-1027-state-schema-eligible-phase.sh
 # Tests: hooks/lib/supervisor-state-schema.js
-# Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
-# Tests for issue #1027 — schema fields findings_surfaced_at + alert_eligible_phase.
-#
-# RED on unmodified codebase: schema does not yet expose the new fields or
-# the ALERT_ELIGIBLE_PHASE_VALUES export.
-#
-# # L3 gap
-# This is L1 (pure schema unit). No L3 gap — schema is a deterministic
-# JavaScript module with no host/IO dependencies; full coverage at L1.
+# Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific, fix-2919
+# #1027 / #2919 — alert schema fields findings_surfaced_at, findings_sent_to_model_at, alert_eligible_phase.
+# L3 gap: none — L1 pure schema unit (deterministic module, no host/IO dependencies).
 
 set -u
 
@@ -49,13 +43,13 @@ run_e1() {
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-e1');
 if (!('findings_surfaced_at' in st.alert)) { console.error('missing findings_surfaced_at'); process.exit(2); }
-if (st.alert.findings_surfaced_at !== null) { console.error('findings_surfaced_at not null'); process.exit(3); }
+if (st.alert.findings_surfaced_at !== null) { console.error('findings_surfaced_at not null'); process.exit(3); } if (!('findings_sent_to_model_at' in st.alert) || st.alert.findings_sent_to_model_at !== null) { console.error('findings_sent_to_model_at (#2919) missing or not null'); process.exit(6); }
 if (!('alert_eligible_phase' in st.alert)) { console.error('missing alert_eligible_phase'); process.exit(4); }
 if (st.alert.alert_eligible_phase !== null) { console.error('alert_eligible_phase not null'); process.exit(5); }
 " >/dev/null 2>&1
     rc=$?
     if [ "$rc" = "0" ]; then
-        pass "E1: createEmptyState exposes findings_surfaced_at + alert_eligible_phase (both null)"
+        pass "E1: createEmptyState exposes findings_surfaced_at + findings_sent_to_model_at + alert_eligible_phase (all null)"
     else
         fail "E1: createEmptyState exposes findings_surfaced_at + alert_eligible_phase (rc=$rc)"
     fi
@@ -114,19 +108,19 @@ run_e4() {
     local rc
     run_with_timeout 10 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
-function check(val) {
+function check(val, key) {
   const st = s.createEmptyState('sid-e4');
-  st.alert.findings_surfaced_at = val;
+  st.alert[key || 'findings_surfaced_at'] = val;
   return s.validate(st).ok;
 }
-if (!check(null)) { console.error('null rejected'); process.exit(2); }
-if (!check('2026-06-21T12:00:00Z')) { console.error('ISO string rejected'); process.exit(3); }
-if (check(123456)) { console.error('number accepted'); process.exit(4); }
-if (check([])) { console.error('array accepted'); process.exit(5); }
+if (!check(null)) { console.error('null rejected'); process.exit(2); } if (!check(null, 'findings_sent_to_model_at')) { console.error('sent_to_model null rejected'); process.exit(6); }
+if (!check('2026-06-21T12:00:00Z')) { console.error('ISO string rejected'); process.exit(3); } if (!check('2026-06-21T12:00:00Z', 'findings_sent_to_model_at')) { console.error('sent_to_model ISO rejected'); process.exit(7); }
+if (check(123456)) { console.error('number accepted'); process.exit(4); } if (check(123456, 'findings_sent_to_model_at')) { console.error('sent_to_model number accepted'); process.exit(8); }
+if (check([])) { console.error('array accepted'); process.exit(5); } if (check([], 'findings_sent_to_model_at')) { console.error('sent_to_model array accepted'); process.exit(9); }
 " >/dev/null 2>&1
     rc=$?
     if [ "$rc" = "0" ]; then
-        pass "E4: findings_surfaced_at accepts null/string, rejects number/array"
+        pass "E4: findings_surfaced_at and findings_sent_to_model_at accept null/string, reject number/array"
     else
         fail "E4: findings_surfaced_at type validation (rc=$rc)"
     fi
@@ -159,11 +153,11 @@ run_e6() {
     run_with_timeout 10 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-e6');
-st.alert.findings_surfaced_at = '2026-06-21T01:23:45Z';
+st.alert.findings_surfaced_at = '2026-06-21T01:23:45Z'; st.alert.findings_sent_to_model_at = '2026-06-21T01:20:00Z';
 st.alert.alert_eligible_phase = 'post_final_report_window';
 const raw = JSON.stringify(st);
 const parsed = JSON.parse(raw);
-if (parsed.alert.findings_surfaced_at !== '2026-06-21T01:23:45Z') { console.error('roundtrip findings_surfaced_at'); process.exit(2); }
+if (parsed.alert.findings_surfaced_at !== '2026-06-21T01:23:45Z') { console.error('roundtrip findings_surfaced_at'); process.exit(2); } if (parsed.alert.findings_sent_to_model_at !== '2026-06-21T01:20:00Z') { console.error('roundtrip findings_sent_to_model_at'); process.exit(5); }
 if (parsed.alert.alert_eligible_phase !== 'post_final_report_window') { console.error('roundtrip alert_eligible_phase'); process.exit(3); }
 const r = s.validate(parsed);
 if (!r.ok) { console.error('validate failed: ' + r.errors.join(';')); process.exit(4); }

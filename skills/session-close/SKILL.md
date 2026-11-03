@@ -149,16 +149,15 @@ After emitting, mark completion with two separate Bash calls:
 
 ## SC-7 — Surface alert findings (post-Final-Report)
 
-Read `<CONTROL_DIR>/supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to the sentinel and return.
+Read `<CONTROL_DIR>/supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, return.
 
 Run:
   node "$AGENTS_MAIN_ROOT/bin/session-close-render-sc7.js" --session "<session-id>"
 
 When the render is non-empty: emit the text verbatim into the assistant reply (no preamble, no wrapping).
 
-Mark surfaced and complete:
+Mark surfaced:
   node "$AGENTS_MAIN_ROOT/bin/supervisor-write-alert" --session-id "<session-id>" --mark-findings-surfaced
-  echo "<<WORKFLOW_MARK_STEP_l2_findings_surfaced_complete>>"
 
 ## SC-8 — Promote residual WORKTREE_NOTES entries (post-Final-Report)
 

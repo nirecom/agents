@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { controlPath, diagnoseControlMigration } = require("../../workflow-state/state-io/control-dir");
 
-const ALERT_PATCH_KEYS = new Set(["alert_armed_at", "last_run_at", "cumulative_severity", "findings", "alert_phase", "alert_cause", "alert_retry_count", "findings_surfaced_at", "alert_eligible_phase", "transcript_cursor"]);
+const ALERT_PATCH_KEYS = new Set(["alert_armed_at", "last_run_at", "cumulative_severity", "findings", "alert_phase", "alert_cause", "alert_retry_count", "findings_surfaced_at", "findings_sent_to_model_at", "alert_eligible_phase", "transcript_cursor"]);
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -119,7 +119,7 @@ function writeAtomic(filePath, state) {
 function validateAlertPhaseTransition(currentPhase, nextPhase) {
   if (currentPhase === nextPhase) return { ok: true, errors: [] };
   if (currentPhase === "closed") return { ok: false, errors: ["cannot transition from closed: closed is a permanent terminal state"] };
-  if (currentPhase === "paused" && nextPhase !== "pending") return { ok: false, errors: ["cannot transition from paused: only paused→pending (re-arm) is allowed"] };
+  if (currentPhase === "paused" && nextPhase !== "pending" && nextPhase !== "closed") return { ok: false, errors: ["cannot transition from paused: only paused→pending (re-arm) or paused→closed (session close) is allowed"] };
   if (currentPhase === "done" && nextPhase === "pending") return { ok: false, errors: ["cannot re-schedule alert after done"] };
   if (currentPhase === "done" && nextPhase === null) return { ok: false, errors: ["cannot revert done to null"] };
   return { ok: true, errors: [] };

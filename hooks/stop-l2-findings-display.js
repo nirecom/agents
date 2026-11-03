@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 "use strict";
-// Stop hook: surface alert mode supervisor findings after session completion
+// Stop hook: hand alert mode supervisor findings to the model after session completion
 // when SC-7 did not run (or when the hook fires before session-close).
-// Fires only when findings_surfaced_at is null and alert mode has completed (or is
-// in the #961 stale-pending state). Emits additionalContext only — never blocks.
+// Fires only when neither findings_surfaced_at nor findings_sent_to_model_at is set and
+// alert mode has completed (or is in the #961 stale-pending state). Emits
+// additionalContext only (model-facing) — never blocks — so it records
+// findings_sent_to_model_at, never findings_surfaced_at, which SC-7 owns (#2919).
 
 const path = require("path");
 const { readHookInput } = require("./lib/read-stdin");
@@ -38,7 +40,7 @@ if (require.main === module) {
     } catch (_) {}
     if (!sessionId) process.exit(0);
 
-    // Quiet layer (#1607): exit BEFORE findings_surfaced_at is written, so the
+    // Quiet layer (#1607): exit BEFORE findings_sent_to_model_at is written, so the
     // findings are not consumed and resurface once the session resumes. fail-open.
     try {
       const { isNextStepPaused, isWorkflowOff } = require("./lib/session-markers");
@@ -53,8 +55,8 @@ if (require.main === module) {
     const al = state.alert;
     if (!al || !Array.isArray(al.findings) || al.findings.length === 0) process.exit(0);
 
-    // Gate 1: not yet surfaced
-    if (al.findings_surfaced_at != null) process.exit(0);
+    // Gate 1: not yet shown to the user nor handed to the model
+    if (al.findings_surfaced_at != null || al.findings_sent_to_model_at != null) process.exit(0);
 
     // Gate 2: alert mode has completed or is in #961 stale-pending state
     const phase = al.alert_phase;
@@ -81,9 +83,9 @@ if (require.main === module) {
     // Emit first so stdout delivery is proven before marking state
     process.stdout.write(JSON.stringify({ additionalContext: rendered }) + "\n");
 
-    // Mark surfaced (best effort — fail-open; hook may re-surface on next Stop if write fails)
+    // Mark sent to the model (best effort — fail-open; hook may re-send on next Stop if write fails)
     try {
-      const ok = writeAlertState(effectiveSid, { findings_surfaced_at: new Date().toISOString() });
+      const ok = writeAlertState(effectiveSid, { findings_sent_to_model_at: new Date().toISOString() });
       void ok; // fail-open: acceptable if state write fails
     } catch (_) {}
 

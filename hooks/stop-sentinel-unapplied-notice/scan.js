@@ -6,6 +6,7 @@
 
 const { parseLines, splitTurns } = require("../lib/transcript-reader");
 const { analyzeSentinelCommand } = require("../lib/sentinel-command");
+const { hasLineSentinel } = require("../workflow-mark/line-sentinel");
 const { cancelOf } = require("../lib/hook-cancel-notice");
 
 const KIND = Object.freeze({ TIMEOUT: "timeout", UNREACHED: "unreached", MIDWAY: "midway" });
@@ -22,8 +23,10 @@ function sentinelCallsOf(entries) {
     if (e.type !== "assistant") continue;
     for (const it of contentOf(e)) {
       if (it.type !== "tool_use" || typeof it.id !== "string" || !it.input) continue;
-      if (!analyzeSentinelCommand(it.name, it.input).sentinelPresent) continue;
-      calls.push({ id: it.id, command: String(it.input.command || "").trim() });
+      const command = String(it.input.command || "").trim();
+      // #1981: a sentinel statement of a multi-statement script counts too (CPR-ORTH with workflow-mark).
+      if (!analyzeSentinelCommand(it.name, it.input).sentinelPresent && !hasLineSentinel(command)) continue;
+      calls.push({ id: it.id, command });
     }
   }
   return calls;
