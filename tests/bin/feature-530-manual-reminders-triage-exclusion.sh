@@ -2,37 +2,11 @@
 # tests/bin/feature-530-manual-reminders-triage-exclusion.sh
 # Tests: bin/worktree-notes-triage.js, hooks/lib/worktree-notes.js, hooks/lib/worktree-notes-sections.js
 # Tags: notes-promotion, worktree-notes, triage, manual-reminders, bin, TL2, scope:issue-specific
-#
-# Issue #530 — WORKTREE_NOTES.md gains a `## ManualReminders` section for things
-# the user must do by hand. Unlike BugsFound / RelatedTasks / NextTasks it is
-# NOT a triage section: auto-promoting a reminder into a GitHub issue is exactly
-# the wrong outcome, because the reminder is addressed to the person closing the
-# session, not to a future implementer.
-#
-# M1  a reminder is invisible to `list`
-# M2  a notes file predating the section still parses (3 entries, no crash)
-# M3  the list/annotate contract WE-11 depends on does not drift when the new
-#     `resolve` subcommand lands alongside it
-#
-# Split out of tests/bin/feature-worktree-end-step55-promotion.sh, which crossed the
-# 500-line HARD limit; that file keeps the F/R promotion-flow cases.
-#
-# TL2: spawns the real CLI against real fixture files.
-#
-# TL3 gap (what this test does NOT catch):
-# - Whether the live protocol reads `## ManualReminders` aloud to the user
-#   (NP-11). The CLI proves only that the section is never promoted; a reminder
-#   that is neither filed nor surfaced is silently lost, and only a real session
-#   can show which of the two happened.
-# - Whether the model, seeing a reminder in the notes it just read, files it as
-#   an issue anyway despite the CLI omitting it from `list`.
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: skill-orchestration.
-#
-# Status at write-tests time: M1/M2 already hold — bin/worktree-notes-triage.js
-# has a fixed SECTIONS list that ManualReminders is not in — so these are
-# regression guards, not RED specs. They fail the moment someone "helpfully"
-# adds ManualReminders to that list.
+# #530: `## ManualReminders` is not a triage section (a reminder is for the session closer, not an issue).
+# M1 a reminder is invisible to `list`; M2 a pre-section notes file still parses; M3 the list/annotate
+# contract WE-11 depends on does not drift (list keys gain userAcknowledged in #2903). TL2: real CLI.
+# TL3 gap: whether the live protocol surfaces reminders (NP-11) or files them anyway; checked at
+# WORKFLOW_USER_VERIFIED preflight (bin/check-verification-gate.sh category: skill-orchestration).
 
 set -u
 
@@ -241,7 +215,7 @@ test_M3_list_annotate_contract_unchanged() {
             else { process.stdout.write(Object.keys(j[0]).sort().join(',')); }
         } catch (e) { process.stdout.write('ERR'); }
     " -- "$out" 2>/dev/null)"
-    [ "$keys" = "hasMarker,lineNumber,raw,section" ] || failures="$failures keys=$keys"
+    [ "$keys" = "hasMarker,lineNumber,raw,section,userAcknowledged" ] || failures="$failures keys=$keys"
 
     # (b) `annotate <path> <line> <issue>` — 3 positional args, exit 0.
     local target_line

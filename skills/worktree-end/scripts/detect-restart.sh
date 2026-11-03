@@ -8,6 +8,9 @@
 # os_reboot is always not_required at this layer (env override lives in SKILL.md).
 set -euo pipefail
 
+SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 emit_all_not_required() {
   printf 'cc_restart=not_required|\n'
   printf 'vscode_reload=not_required|\n'
@@ -31,22 +34,33 @@ if [[ -z "$CC_FILES" ]]; then
   exit 0
 fi
 
-# Stage A: cc_restart
-# Top-level CLAUDE*.md or anything under rules/ → unconditional required.
+# skill_md_changed — yes when a SKILL.md in the PR is added, removed or has its frontmatter
+# changed (#1076). gh pr diff works after squash-merge; captured first to avoid SIGPIPE.
+skill_md_changed() {
+  local pr_diff verdict
+  pr_diff="$(gh pr diff "$PR_NUMBER" 2>/dev/null)" || return 1
+  verdict="$(printf '%s\n' "$pr_diff" | node "$SCRIPT_DIR/detect-restart-skill-md.js" 2>/dev/null)" || return 1
+  [[ "$verdict" == "yes" ]]
+}
+
+# Stage A: cc_restart — classification table <pattern> TAB <check> TAB <fixed reason>;
+# the first row whose pattern matches (and whose check passes) wins.
+CC_RESTART_TABLE=(
+  $'^(CLAUDE\\.md|CLAUDE\\.local\\.md)$\tnone\tCLAUDE.md modified in PR'
+  $'^rules/.+$\tnone\trules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)'
+  $'^settings(-extension)?\\.json$\tnone\tsettings.json or settings-extension.json modified in PR'
+  $'(^|/)SKILL\\.md$\tskill_md\tSKILL.md added, removed or frontmatter changed'
+)
 CC_RESTART_LINE="cc_restart=not_required|"
-if printf '%s\n' "$CC_FILES" | grep -qE '^(CLAUDE\.md|CLAUDE\.local\.md)$'; then
-  CC_RESTART_LINE="cc_restart=required|CLAUDE.md modified in PR"
-elif printf '%s\n' "$CC_FILES" | grep -qE '^rules/.+$'; then
-  CC_RESTART_LINE="cc_restart=required|rules/ modified in PR (rules/ content loads into the effective CLAUDE.md ruleset)"
-elif printf '%s\n' "$CC_FILES" | grep -qE '^settings(-extension)?\.json$'; then
-  # gh pr diff retrieves the diff via GitHub API; works after squash-merge.
-  # Capture to variable first to avoid grep -q early-exit triggering SIGPIPE on
-  # gh pr diff under set -o pipefail.
-  CC_DIFF="$(gh pr diff "$PR_NUMBER" 2>/dev/null || true)"
-  if printf '%s\n' "$CC_DIFF" | grep -qE '^[+-][[:space:]]*"(model|outputStyle)"[[:space:]]*:'; then
-    CC_RESTART_LINE="cc_restart=required|settings.json model field changed"
+for row in "${CC_RESTART_TABLE[@]}"; do
+  IFS=$'\t' read -r cc_pattern cc_check cc_reason <<< "$row"
+  printf '%s\n' "$CC_FILES" | grep -qE "$cc_pattern" || continue
+  if [[ "$cc_check" == "skill_md" ]] && ! skill_md_changed; then
+    continue
   fi
-fi
+  CC_RESTART_LINE="cc_restart=required|$cc_reason"
+  break
+done
 
 # Stage B: vscode_reload
 # Detect any keybindings.json (any path) OR .vscode/{extensions,settings}.json
@@ -57,8 +71,20 @@ elif printf '%s\n' "$CC_FILES" | grep -qE '^\.vscode/(extensions|settings)\.json
   VSCODE_LINE="vscode_reload=required|vscode settings modified"
 fi
 
+# declared_source_changed — any path in column 2 of install/deployed-sources.txt (required and
+# optional alike) is in the PR (#2303). An unreadable declaration skips only this row.
+declared_source_changed() {
+  local decl="$SCRIPT_CHECKOUT_ROOT/install/deployed-sources.txt" role rel _kind
+  [[ -f "$decl" && -r "$decl" ]] || return 1
+  while read -r role rel _kind; do
+    [[ -z "$role" || "$role" == \#* || -z "$rel" ]] && continue
+    printf '%s\n' "$CC_FILES" | grep -qxF -- "${rel%$'\r'}" && return 0
+  done < "$decl"
+  return 1
+}
+
 # Stage C: installer_rerun
-# Priority: install.ps1 > install.sh > install/ subtree
+# Priority: install.ps1 > install.sh > install/ subtree > declared deployed source
 INSTALLER_LINE="installer_rerun=not_required|"
 if printf '%s\n' "$CC_FILES" | grep -qE '(^|/)install\.ps1$'; then
   INSTALLER_LINE="installer_rerun=required|install.ps1 modified in PR"
@@ -66,6 +92,8 @@ elif printf '%s\n' "$CC_FILES" | grep -qE '(^|/)install\.sh$'; then
   INSTALLER_LINE="installer_rerun=required|install.sh modified in PR"
 elif printf '%s\n' "$CC_FILES" | grep -qE '^install/'; then
   INSTALLER_LINE="installer_rerun=required|installer script modified in PR"
+elif declared_source_changed; then
+  INSTALLER_LINE="installer_rerun=required|installer-deployed source modified in PR"
 fi
 
 # Stage D: os_reboot

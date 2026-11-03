@@ -2,20 +2,10 @@
 # tests/bin/unit-render-final-report-notes.sh
 # Tests: bin/render-final-report/notes.js, hooks/stop-final-report-guard.js
 # Tags: final-report, worktree-notes, compression, severity, table-driven, TL1, scope:common
-#
-# bin/render-final-report/notes.js decides how much of WORKTREE_NOTES.md reaches
-# the Final Report (#1886). Two failure directions, both silent:
-#   - under-compression → the Final Report is a full dump again (CPR-UO), and
-#   - over-compression / mis-recognition → a severity:high entry with its repro
-#     steps and grep evidence is reduced to a title line and the evidence is gone.
-# Both are pinned here as exact strings, plus a hard cap on output line length
-# that holds for any input length.
-#
-# A third failure mode is operational: sanitizeTokens is the only thing standing
-# between an entry body containing `<SOMETHING>` and hooks/stop-final-report-guard.js
-# refusing to let the session close. Its pattern is a subordinate copy of the
-# guard's tokenRegex, so drift between the two is asserted mechanically below.
-#
+# notes.js decides how much of WORKTREE_NOTES.md reaches the Final Report (#1886): under-compression
+# dumps everything (CPR-UO); over-compression drops a severity:high entry's evidence. Entry lines are
+# pinned exactly, with the `[issue-TBD] ` / `#N ` head (#2904); the backup pointer is pinned by count only.
+# sanitizeTokens keeps `<TOKEN>` bodies from tripping stop-final-report-guard.js; drift asserted below.
 # TL1: the module is pure (no fs / no child_process), required in-process by node.
 
 set -u
@@ -51,33 +41,31 @@ const doc = (body) => `# Worktree Notes\n\n## BugsFound\n${body}\n`;
 const bugs = (body, opts) =>
   compressNotesSections(doc(body), opts === undefined ? { backupPath: P } : opts).BugsFound;
 const repeat = (s, n) => new Array(n + 1).join(s);
+const first = (out) => { const l0 = out.split("\n")[0]; return `${Array.from(l0).length}:${l0.endsWith("…")}`; };
+// view(out): entry lines, then `#ptr=<backup pointer line count>`; `#compressed` flags a legacy summary (#2904).
+const isPtr = (l) => l.includes("full text: ");
+const view = (out) => `${out.split("\n").filter((l) => !isPtr(l)).join("\n")}#ptr=${out.split("\n").filter(isPtr).length}${out.includes("compressed:") ? "#compressed" : ""}`;
 
 const CASES = {
   // --- severity:high is preserved verbatim -------------------------------
   "high-only": () => bugs("- boom <!-- severity: high -->"),
 
-  "no-truncate-high": () => {
-    const l0 = bugs(`- ${repeat("x", 200)} <!-- severity: high -->`).split("\n")[0];
-    return `${Array.from(l0).length}:${l0.endsWith("…")}`;
-  },
+  "no-truncate-high": () => first(bugs(`- ${repeat("x", 200)} <!-- severity: high -->`)),
 
   // --- untagged entries compress to a title line + one summary line ------
-  "untagged-three": () => bugs("- a\n- b\n- c"),
+  "untagged-three": () => view(bugs("- a\n- b\n- c")),
 
-  "mixed-order": () => bugs("- u1\n- h1 <!-- severity: high -->\n- u2"),
+  "mixed-order": () => view(bugs("- u1\n- h1 <!-- severity: high -->\n- u2")),
 
   // The point of the whole change: output line length is bounded by a constant,
   // not by input length.
-  "truncate-untagged": () => {
-    const l0 = bugs(`- ${repeat("x", 200)}`).split("\n")[0];
-    return `${Array.from(l0).length}:${l0.endsWith("…")}`;
-  },
+  "truncate-untagged": () => first(bugs(`- ${repeat("x", 200)}`)),
 
   "cap-ten-of-fifteen": () => {
     const body = [];
     for (let i = 1; i <= 15; i += 1) body.push(`- entry ${i}`);
     const lines = bugs(body.join("\n")).split("\n");
-    return `${lines.length}:${lines[lines.length - 1].includes("; 5 not listed above")}`;
+    return `${lines.length}:${isPtr(lines[lines.length - 1])}:${view(lines.join("\n")).endsWith("#ptr=1")}`;
   },
 
   // Truncation is code-point safe: never split a surrogate pair in half.
@@ -102,7 +90,7 @@ const CASES = {
       "- d <!-- severity: HIGH -->",
       "- e <!-- severity: medium -->",
     ].join("\n")).split("\n");
-    return `${lines.length}:${lines[lines.length - 1].includes("compressed: 5 entries")}`;
+    return `${lines.length}:${lines.some(isPtr)}:${lines.some((l) => l.includes("<!--"))}`;
   },
 
   // --- empty / missing --------------------------------------------------
@@ -117,15 +105,15 @@ const CASES = {
       .BugsFound.split("\n").length,
 
   // --- summary-line parts ------------------------------------------------
-  "stray-lines": () => bugs("- e1\nprose one\nprose two"),
+  "stray-lines": () => view(bugs("- e1\nprose one\nprose two")),
 
   // `### ` truncates the section: the entries after it are LOST, not merely
   // compressed, so the summary line must fire even with zero compressed entries.
-  "sub-heading-truncation": () => bugs("### Repro\n- after <!-- severity: high -->"),
+  "sub-heading-truncation": () => view(bugs("### Repro\n- after <!-- severity: high -->")),
   "sub-heading-after-entry": () =>
-    bugs("- e1 <!-- severity: high -->\n### Repro\n- lost <!-- severity: high -->"),
+    view(bugs("- e1 <!-- severity: high -->\n### Repro\n- lost <!-- severity: high -->")),
 
-  "backup-path-missing": () => bugs("- a", {}),
+  "backup-path-missing": () => { const o = bugs("- a\nprose", {}); return `${view(o)}:${o.split("\n").filter(isPtr).every((l) => l.includes("full text: (none)"))}`; },
 
   // --- token sanitization (Stop-hook survival) ---------------------------
   "sanitize-high": () => bugs("- boom <BUGS_FOUND> here <!-- severity: high -->"),
@@ -133,7 +121,7 @@ const CASES = {
     const out = bugs("- x <PR_NUMBER> y");
     return `${/<[A-Z][A-Z0-9_]+>/.test(out)}:${out.split("\n")[0]}`;
   },
-  "sanitize-sub-heading": () => bugs("### Repro <BUGS_FOUND>"),
+  "sanitize-sub-heading": () => { const o = bugs("### Repro <BUGS_FOUND>"); return `${/<[A-Z][A-Z0-9_]+>/.test(o)}:${view(o)}`; },
   // Both ends escaped, and no over-escaping of non-token angle brackets.
   "sanitize-tokens-direct": () => sanitizeTokens("<Foo> <AB> <A> <A_B1>"),
 
@@ -193,29 +181,29 @@ check_table() {
             fail "$name" "got=[$got] want=[$want]"
         fi
     done <<'TABLE'
-high-only|- boom
-no-truncate-high|202:false
-untagged-three|- a~- b~- c~- (compressed: 3 entries — title line only; full text: /bk/notes.md)
-mixed-order|- h1~- u1~- u2~- (compressed: 2 entries — title line only; full text: /bk/notes.md)
-truncate-untagged|123:true
-cap-ten-of-fifteen|11:true
-surrogate-safe|123:false
-reversed-marker-compressed|false:- boom
-malformed-all-compressed|6:true
+high-only|- [issue-TBD] boom
+no-truncate-high|214:false
+untagged-three|- [issue-TBD] a~- [issue-TBD] b~- [issue-TBD] c#ptr=0
+mixed-order|- [issue-TBD] h1~- [issue-TBD] u1~- [issue-TBD] u2#ptr=0
+truncate-untagged|135:true
+cap-ten-of-fifteen|11:true:true
+surrogate-safe|135:false
+reversed-marker-compressed|false:- [issue-TBD] boom
+malformed-all-compressed|5:false:false
 section-missing|(none)
 section-placeholder-only|(none)
 section-empty|(none)
-heading-trailing-space|4
-stray-lines|- e1~- (compressed: 1 entries — title line only; 2 non-entry line(s) omitted; full text: /bk/notes.md)
-sub-heading-truncation|- (section truncated at "### Repro"; full text: /bk/notes.md)
-sub-heading-after-entry|- e1~- (section truncated at "### Repro"; full text: /bk/notes.md)
-backup-path-missing|- a~- (compressed: 1 entries — title line only; full text: (none))
-sanitize-high|- boom &lt;BUGS_FOUND&gt; here
-sanitize-compressed|false:- x &lt;PR_NUMBER&gt; y
-sanitize-sub-heading|- (section truncated at "### Repro &lt;BUGS_FOUND&gt;"; full text: /bk/notes.md)
+heading-trailing-space|3
+stray-lines|- [issue-TBD] e1#ptr=1
+sub-heading-truncation|#ptr=1
+sub-heading-after-entry|- [issue-TBD] e1#ptr=1
+backup-path-missing|- [issue-TBD] a#ptr=1:true
+sanitize-high|- [issue-TBD] boom &lt;BUGS_FOUND&gt; here
+sanitize-compressed|false:- [issue-TBD] x &lt;PR_NUMBER&gt; y
+sanitize-sub-heading|false:#ptr=1
 sanitize-tokens-direct|<Foo> &lt;AB&gt; <A> &lt;A_B1&gt;
 section-keys|BugsFound,NextTasks,RelatedTasks
-other-sections-compressed|3:2
+other-sections-compressed|2:1
 crlf-equals-lf|true
 titleline-collapse|a b
 titleline-boundary|120:false:121:true

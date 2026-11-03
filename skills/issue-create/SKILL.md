@@ -78,6 +78,7 @@ Four phases: **Gather → Survey → Confirm → Dispatch**.
 ### Phase 1 — Gather
 
 Collect title and canonical-schema body from the user.
+Treat a direct `/issue-create` invocation as user-acknowledged (`true`); never ask whether to file it.
 
 Required body schema for `type:task` (enforced by `bin/github-issues/issue-create.sh` exit 3):
 
@@ -97,7 +98,7 @@ The survey follows an ordered cascade that considers `reopen` first; the criteri
 
 Every route below produces the same schema-v2 artifact. The worker-bypassing routes write it with `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/make-empty-verdict.sh" <out-path> <verdict> --title T --background B --changes C [--parent N]`.
 
-Of that artifact the main conversation reads only `verdict` / `target` / `children` / `related` / `reason` / `review_result` / `review.worth_filing`. Never read `proposal` or `candidates[].body` into the main context.
+Of that artifact the main conversation reads only `verdict` / `target` / `children` / `related` / `reason` / `review_result` / `review.worth_filing` / `review.verdict` / `review.target` / `review.children` / `review.related`. Never read `proposal` or `candidates[].body` into the main context.
 
 If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and supplies an explicit `--verdict bulk-sub-of --parent N --manifest FILE`): skip Phase 2 entirely, write the artifact with `make-empty-verdict.sh <out> bulk-sub-of --parent N`, and proceed to Phase 3 with the caller-supplied verdict.
 
@@ -113,25 +114,24 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 ### Phase 3 — Review and confirm
 
 3a. Review the survey verdict: `bash "$AGENTS_MAIN_ROOT/bin/github-issues/review-survey-verdict-codex.sh" --artifact <survey-artifact> --out <final-artifact>`.
-3b. Of `<final-artifact>` read only `verdict` / `target` / `children` / `related` / `reason` / `review.status` / `review.worth_filing`. Phase 4 dispatches on these, not on the Phase 2 values.
+3b. Of `<final-artifact>` read only `verdict` / `target` / `children` / `related` / `reason` / `review.status` / `review.worth_filing` / `review.verdict` / `review.target` / `review.children` / `review.related`. Phase 4 dispatches on these, not on the Phase 2 values.
 3c. Delete the Phase 2 survey artifact (`rm -f <survey-artifact>`) — it is the only file holding full candidate bodies, and the final artifact has superseded it. Skip silently if absent.
-3d. Classify the gate: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> <severity-label>` — stdout is `confirm: yes|no` then `reasons: <G-list>`.
-3e. `confirm: yes` → AskUserQuestion before Phase 4, naming the fired conditions. `confirm: no` → proceed to Phase 4 without asking.
+3d. Classify the gate: `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact>` — stdout is `confirm: yes|no`, `reasons: <G-list>`, then the info line `worth_filing: true|false|unknown`.
+3e. `confirm: no` → proceed to Phase 4 without asking.
+3f. Applies only when `confirm: yes`, `review.status` is not `disputed`, and G3 did not fire → check the fired conditions against the verdict and placement yourself.
+When you agree, first record with `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/record-confirm-decision.sh" '<PLANS_DIR>' '<session-id>' auto '<reasons>' '<rationale>'`; proceed to Phase 4 without asking only when that exits 0, and tell the main conversation why in 1–2 sentences.
+Single-quote every argument of record-confirm-decision.sh and drop any `'` from the text you substitute (rationale is free text; double quotes would expand `$(...)`).
+3g. Otherwise (`disputed`, G3 fired, you disagree or are unsure, or the 3f record exited non-zero) → AskUserQuestion before Phase 4, naming the fired conditions (for `disputed`, both verdicts), and record it the same way with `asked`.
 
-The gate is the logical OR of five conditions; the script owns the decision, this list only supplies the question text:
-- G1 — final verdict is `reopen`, `make-parent`, `sub-of` or `bulk-sub-of` (mutates existing state)
-- G2 — the review stage replaced the survey verdict
-- G3 — the review did not confirm filing is worthwhile (`review.worth_filing` is not `true`)
-- G4 — review status is anything other than `upheld` or `replaced` (verdict unverified)
-- G5 — severity is not `severity:high`
+The gate is the logical OR of four conditions; the script owns the decision, this list only supplies the question text:
+- G1 — final verdict is `reopen`, `make-parent`, `sub-of` or `bulk-sub-of` (mutates existing state; `sub-of` / `bulk-sub-of` may reopen closed ancestors of the parent chain)
+- G2 — `review.status` is `disputed`, or the survey and final verdicts differ
+- G3 — the final JSON is missing or unreadable (no readable verdict to agree with, so G3 always goes to 3g)
+- G4 — review status is anything other than `upheld` or `disputed` (verdict unverified)
 
-Unattended filing therefore requires G1–G5 all clear: a `severity:high` finding that the codex review independently affirmed. `severity:low` and no-label findings always ask the user first — the inflow brake for #1973.
-
-Note: `sub-of` and `bulk-sub-of` are G1 because they may trigger ancestor reopen when the parent chain contains closed issues.
 Note: the artifact's `same_fix` is a different axis and is never a gate input — G1 asks how destructive the action is, `same_fix` asks whether one fix covers both.
 
-After a `reopen`: continue the workflow using the existing issue number. Follow
-the same routing as `/workflow-init`:
+After a `reopen`: continue the workflow using the existing issue number. Follow the same routing as `/workflow-init`:
 - If the existing issue has `intent:clarified` → Path A (skip interview).
 - Otherwise → Path B (pre-fill interview from issue body).
 
@@ -146,7 +146,8 @@ bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-dispatch.sh" \
     [--label "<extra-label>" ...] [--assignee "<user>"] [--milestone "<name>"]
 ```
 
-`--note` applies to `reopen` only, and only when `review.status` is `replaced`: build it with `node "$AGENTS_MAIN_ROOT/bin/github-issues/lib/validate-review-verdict.js" --format-note --from <final-artifact>` — never retype the fields, the note is a public record of what the artifact says.
+When `review.status` is `disputed` and the user chose the reviewer's verdict, dispatch on `review.verdict` / `review.target` / `review.children` / `review.related` instead.
+`--note` applies to `reopen` only, and only when `review.status` is `disputed` and the user chose the reviewer's verdict: build it with `node "$AGENTS_MAIN_ROOT/bin/github-issues/lib/validate-review-verdict.js" --format-note --from <final-artifact>` — never retype the fields, the note is a public record of what the artifact says.
 
 `make-parent` creates TWO issues:
 - a `meta`-labeled, `Group: `-titled parent with a generated body

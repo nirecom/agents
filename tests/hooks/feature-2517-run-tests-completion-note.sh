@@ -142,10 +142,10 @@ WANT="$PRE 1 failing test(s) accepted by the user as pre-existing without baseli
 mkdir -p "$WORKFLOW_STATE_DIR/$SID.control"
 printf '{}' >"$WORKFLOW_STATE_DIR/$SID.control/final-report-env.json"
 REPORT="$(run_with_timeout 30 node "$(np "$SCRIPT_CHECKOUT_ROOT/bin/render-final-report.js")" --session "$SID" 2>&1)"
-if printf '%s\n' "$REPORT" | grep -qE '^- State: '; then pass "control: the report has the Merged PR State line"
-else fail "control: the report has the Merged PR State line" "$(printf '%s' "$REPORT" | head -5)"; fi
-NEXT="$(printf '%s\n' "$REPORT" | grep -A1 -E '^- State: ' | sed -n 2p)"
-ck "the grant line follows the State line" "$WANT" "$NEXT"
+if printf '%s\n' "$REPORT" | grep -qE '^- URL: '; then pass "control: the report has the Merged PR URL line"
+else fail "control: the report has the Merged PR URL line" "$(printf '%s' "$REPORT" | head -5)"; fi
+NEXT="$(printf '%s\n' "$REPORT" | grep -A1 -E '^- URL: ' | sed -n 2p)"
+ck "the grant line follows the URL line (#2904)" "$WANT" "$NEXT"
 case_end
 
 case_begin "pr-body-disclosure" "skills/_shared/commit-push-dispatch.md"

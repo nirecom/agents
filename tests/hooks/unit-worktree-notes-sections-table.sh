@@ -1,30 +1,14 @@
 #!/usr/bin/env bash
 # tests/hooks/unit-worktree-notes-sections-table.sh
 # Tests: hooks/lib/worktree-notes-sections.js
-# Tags: worktree-notes, parser, marker-regex, severity-marker, scan-section, table-driven, mutation-probe, TL1, scope:common
+# Tags: worktree-notes, parser, marker-regex, severity-marker, scan-section, table-driven, mutation-probe, user-acknowledged, TL1, scope:common
 #
-# hooks/lib/worktree-notes-sections.js is a parser: a section scanner plus
-# THREE regex constants, each guarding a different failure mode. Everything
-# downstream trusts their verdicts, and every one of these failures is
-# invisible at the point it happens:
-#   - PROMOTED_MARKER_RE — "has this entry already become a GitHub issue?"
-#     A false negative files the same finding twice; a false positive silently
-#     drops a finding on the floor (bin/worktree-notes-triage.js).
-#   - SEVERITY_MARKER_RE — "is this entry severity:high?" Strict, canonical-form
-#     only. A false positive dumps a full-text entry into the Final Report and
-#     re-opens the CPR-UO blow-up of #1886; a false negative merely compresses
-#     (fail-safe), which is why the non-canonical spellings are pinned as null.
-#   - TRAILING_MARKER_RE — body stripping. Lenient by design (any kind, any
-#     order). A miss leaks a raw `<!-- ... -->` marker into the Final Report and
-#     into GitHub issue titles created from entry text.
-#
-# The table is then handed to bin/mutation-probe.sh as its test command: the
-# probe breaks each regex constant in the module in turn and requires this file
-# to fail for every one of them. A table that still passes against a broken
-# constant is a table that is not testing that regex, and the probe says so with
-# an explicit mutation score checked against MP_THRESHOLD below.
-#
-# TL1: pure in-process parsing, no subprocess under test beyond the node host.
+# hooks/lib/worktree-notes-sections.js: a section scanner plus FOUR regex
+# constants, each guarding a silent downstream failure mode: PROMOTED_MARKER_RE
+# (already filed?), SEVERITY_MARKER_RE (strict, fail-safe to compress),
+# USER_ACK_MARKER_RE (strict, fail-safe to false), TRAILING_MARKER_RE (lenient
+# body stripping). bin/mutation-probe.sh breaks each constant in turn and
+# requires this table to fail for every one. TL1: pure in-process parsing.
 
 set -u
 
@@ -62,6 +46,7 @@ const {
   entryBody,
   scanSection,
   PROMOTED_MARKER_RE,
+  composeEntryMarkers,
 } = lib;
 
 const CRLF = (s) => s.replace(/\n/g, "\r\n");
@@ -104,6 +89,8 @@ function scanOf(s) {
 const S = (body) => `# Worktree Notes\nBranch: t\n\n${body}\n`;
 const B = (body) => S(`## BugsFound\n${body}`);
 const sev = (line) => sevOf(parseSectionEntries(B(line), "BugsFound"));
+const ackOf = (entries) => (entries.length === 0 ? "0" : String(entries[0].userAcknowledged));
+const ack = (line) => ackOf(parseSectionEntries(B(line), "BugsFound"));
 
 const CASES = {
   // --- section boundaries ------------------------------------------------
@@ -226,6 +213,23 @@ const CASES = {
   "sev-absent": () => sev("- body"),
   "sev-canonical-crlf": () =>
     sevOf(parseSectionEntries(CRLF(B("- body <!-- severity: high -->")), "BugsFound")),
+
+  // --- USER_ACK_MARKER_RE (strict: anything non-canonical reads as false) --
+  "ack-true": () => ack("- body <!-- user-acknowledged: true -->"),
+  "ack-false": () => ack("- body <!-- user-acknowledged: false -->"),
+  "ack-absent": () => ack("- body"),
+  "ack-true-with-promoted": () =>
+    ack("- body <!-- user-acknowledged: true --> <!-- promoted: #5 -->"),
+  "ack-true-crlf": () =>
+    ackOf(parseSectionEntries(CRLF(B("- body <!-- user-acknowledged: true -->")), "BugsFound")),
+  "ack-uppercase-value": () => ack("- body <!-- user-acknowledged: TRUE -->"),
+  "ack-no-leading-space": () => ack("- body<!-- user-acknowledged: true -->"),
+  "ack-mid-line": () => ack("- a <!-- user-acknowledged: true --> b"),
+  "ack-unknown-value": () => ack("- body <!-- user-acknowledged: yes -->"),
+  "ack-compose-roundtrip-true": () =>
+    ack("- body" + composeEntryMarkers({ severity: "high", userAcknowledged: true })),
+  "ack-compose-roundtrip-false": () =>
+    ack("- body" + composeEntryMarkers({ severity: null, userAcknowledged: false })),
 
   // --- PROMOTED_MARKER_RE capture group ----------------------------------
   "promoted-capture": () => {
@@ -376,6 +380,17 @@ sev-unknown-value-low|null:F:body
 sev-preceded-by-comment|null:F:a <!-- x --> b
 sev-absent|null:F:body
 sev-canonical-crlf|high:F:body
+ack-true|true
+ack-false|false
+ack-absent|false
+ack-true-with-promoted|true
+ack-true-crlf|true
+ack-uppercase-value|false
+ack-no-leading-space|false
+ack-mid-line|false
+ack-unknown-value|false
+ack-compose-roundtrip-true|true
+ack-compose-roundtrip-false|false
 promoted-capture|77
 eb-both-markers|x
 eb-promoted-only|x
@@ -404,23 +419,12 @@ mark-line-zero|true
 TABLE
 }
 
-# ---------------------------------------------------------------------------
-# Mutation probe (required): the repo's own bin/mutation-probe.sh, not a local
-# re-implementation of it (CPR-SSOT — one owner for "how a mutation is applied").
-# It rewrites each single-line `const NAME = /regex/;` in the target to a
-# never-matching regex and requires the test command to FAIL for each one.
-#
-# --test-cmd is mandatory here: the probe's auto-detect resolves the test file
-# from the `# Tests:` header, which is THIS file, and the child would run the
-# probe again. MP_CHILD=1 makes the child run the table only.
-#
-# Threshold is 100, not the tool's default 80: the target declares exactly three
-# regex constants (PROMOTED_MARKER_RE / SEVERITY_MARKER_RE / TRAILING_MARKER_RE),
-# and 80% would let one of the three survive unkilled — which is exactly the
-# state "we renamed/added a constant and forgot to test it" produces. Each
-# constant owns a distinct, silent failure mode (see the header), so partial
-# credit is not acceptable here. Adding a fourth constant to the module means
-# adding both a case for it and a `^KILLED:` line below.
+# Mutation probe: the repo's own bin/mutation-probe.sh breaks each single-line
+# `const NAME = /regex/;` in the target; the test command must FAIL for each.
+# --test-cmd is mandatory (auto-detect would re-run this probe); MP_CHILD=1
+# makes the child run the table only. Threshold 100: every constant owns a
+# distinct silent failure mode, so a new constant needs a case and a KILLED
+# name below.
 MP_THRESHOLD=100
 
 mutation_probe() {
@@ -442,7 +446,7 @@ mutation_probe() {
     # Named individually (not just via the score) so a rename shows up as the
     # specific constant that lost coverage rather than as an opaque -33%.
     local rc_name
-    for rc_name in PROMOTED_MARKER_RE SEVERITY_MARKER_RE TRAILING_MARKER_RE; do
+    for rc_name in PROMOTED_MARKER_RE SEVERITY_MARKER_RE USER_ACK_MARKER_RE TRAILING_MARKER_RE; do
         printf '%s\n' "$out" | grep -q "^KILLED: $rc_name" \
             || missing="$missing $rc_name-not-killed"
     done
