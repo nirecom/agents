@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1733-state-event-stream/event-vocabulary.sh
 # Tests: hooks/workflow-state/state-io/events.js, hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js
-# Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, regression-2748, pwsh-not-required, TL2
+# Tags: workflow-state, event-stream, allowlist, vocabulary, table-driven, scope:issue-specific, regression-2748, regression-2920, workflow-abort, pwsh-not-required, TL2
 #
 # EVENT_KINDS and PERSISTED_TOP_LEVEL_KEYS are covered by ITERATION over the exported
 # constants, never by a hand-picked sample: a new member with no table row fails the
@@ -39,6 +39,10 @@ const SAMPLE = {
   // #2652: this kind's origin is a closed vocabulary (ORIGINS), so the row carries its own.
   state_handoff_record: { cls: "A", origin: "auto-record", at_step: "-", record_key: "voc:k1", summary: "s", pointer: "p" },
   cycle_boundary: { closed_cycle: 1, reason: "reinit-entry" },
+  // #2920: origin is a closed vocabulary (ABORT_ORIGINS); abort-sentinel carries no heir_session_id.
+  workflow_aborted: { reason: "user stopped", origin: "abort-sentinel" },
+  // #2920: only the heir-naming origins (adopt-auto / abort-cli) may record a handover.
+  workflow_abort_handover: { heir_session_id: "heir-fixture", origin: "adopt-auto" },
 };
 const KINDS = Object.keys(SAMPLE);
 const mk = (kind, over) => Object.assign({ kind: kind, provenance: "observed", origin: "vocab-test" }, SAMPLE[kind] || {}, over || {});
@@ -49,7 +53,7 @@ JS
 )
 
 case_begin "ev1-event-kinds-set-equality" "hooks/workflow-state/state-io/events.js"
-echo "== EV1: EVENT_KINDS is exactly the eleven documented kinds, in both directions =="
+echo "== EV1: EVENT_KINDS is exactly the thirteen documented kinds, in both directions =="
 if run_case "EV1/event-kinds-set-equality"; then
     next_sid
     _ev_script=$(cat <<'JS'
@@ -61,7 +65,7 @@ console.log([exported.length, missing.join(",") || "-", extra.join(",") || "-"].
 JS
 )
     nodejs "$SID" "$PRE$VOCAB_JS$_ev_script"
-    assert_eq "EV1/event-kinds-set-equality" "11 - -" "$NODE_OUT"
+    assert_eq "EV1/event-kinds-set-equality" "13 - -" "$NODE_OUT"
 fi
 case_end
 
@@ -366,7 +370,7 @@ if run_case "EV12/projection-keys-never-persisted"; then
 const P = require("./hooks/workflow-state/state-io/projection");
 const bad = [];
 const want = ["complexity_evaluation", "cwd", "git_branch", "is_bugfix", "plan_approvals",
-  "session_model", "skip_judgment", "steps", "worktree_entered_at", "worktree_exited_at"].sort();
+  "session_model", "skip_judgment", "steps", "workflow_aborted", "worktree_entered_at", "worktree_exited_at"].sort();
 const got = Array.from(P.PROJECTION_KEYS || []).slice().sort();
 if (got.join(",") !== want.join(",")) bad.push("PROJECTION_KEYS=" + got.join(","));
 S.markStep(sid, "research", "complete");

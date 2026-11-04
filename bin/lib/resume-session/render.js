@@ -32,12 +32,27 @@ function inheritanceSideLines(inheritance, fallbackUpstreamSid) {
   return lines;
 }
 
+// An upstream the adoption could not record as aborted keeps its stop-guard alive; say so,
+// since the adoption itself reads as a plain success (#2920).
+function upstreamAbortLines(aborts) {
+  const lines = [];
+  for (const a of Array.isArray(aborts) ? aborts : []) {
+    if (a && a.recorded === false) {
+      lines.push(`Warning: upstream ${a.sid} could not be recorded as aborted (${a.reason || "unknown"}); retry with adopt-session-state --abort-upstreams.`);
+    }
+  }
+  return lines;
+}
+
 function renderUpstreamView(view) {
   if (!view || view.availability === "none") {
     return `No upstream evidence for ${(view && view.upstream_session_id) || "(unknown)"}.`;
   }
+  // The abort shares the header line: the sid itself may read as "aborted", so one line carries both.
+  const w = view.workflow_aborted;
+  const abortNote = w ? ` Aborted (${w.origin}${w.heir_session_id ? `, downstream ${w.heir_session_id}` : ""}): ${w.reason}` : "";
   const lines = [
-    `Upstream ${view.upstream_session_id}: ${view.availability}.`,
+    `Upstream ${view.upstream_session_id}: ${view.availability}.${abortNote}`,
     AVAILABILITY_NOTE[view.availability] || "",
   ];
   const r = view.inherit_result || {};
@@ -46,6 +61,7 @@ function renderUpstreamView(view) {
   } else if (r.ok === true) {
     lines.push(describeGranularInheritance(r.inheritance));
     lines.push(...inheritanceSideLines(r.inheritance, view.upstream_session_id));
+    lines.push(...upstreamAbortLines(r.upstream_aborts));
   } else {
     lines.push(`Adoption was refused: ${r.error}`);
   }
@@ -71,4 +87,4 @@ function renderCandidateList(records) {
     .join("\n");
 }
 
-module.exports = { AVAILABILITY_NOTE, inheritanceSideLines, renderUpstreamView, renderCandidateList };
+module.exports = { AVAILABILITY_NOTE, inheritanceSideLines, upstreamAbortLines, renderUpstreamView, renderCandidateList };

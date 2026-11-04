@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
-// Tests: hooks/lib/state-handoff-record/legacy-handoff-md.js, bin/lib/resume-session/upstream-view.js, bin/resume-session-detect
-// Tags: TL2, session, resume, handoff, state-handoff-record, input-validation, path-traversal, security, symlink, regression-2576, regression-2302, regression-2652, scope:issue-specific, pwsh-not-required
+// Tests: hooks/lib/state-handoff-record/legacy-handoff-md.js, bin/lib/resume-session/upstream-view.js, bin/resume-session-detect, bin/lib/resume-session/render.js
+// Tags: TL2, session, resume, handoff, state-handoff-record, input-validation, path-traversal, security, symlink, regression-2576, regression-2302, regression-2652, regression-2920, workflow-abort, scope:issue-specific, pwsh-not-required
 // #2576/#2652: `--from` shows the session-upstream's state handoff records (and, during the
 // migration, its pre-#2652 <sid>.control/handoff.md) through the state handoff reader, not an
 // artifact. #2302: an id failing SESSION_ID_VALID_RE resolves nothing — unknown-session, exit 3.
@@ -15,6 +15,7 @@ const fromView = require("./feature-2576-from-handoff/from-view");
 const validation = require("./feature-2576-from-handoff/validation");
 const handoffFile = require("./feature-2576-from-handoff/handoff-file");
 const errors = require("./feature-2576-from-handoff/errors");
+const workflowAborted = require("./feature-2576-from-handoff/workflow-aborted");
 
 const { totals } = C;
 const fails = () => totals.failed;
@@ -78,4 +79,12 @@ caseEnd();
 
 caseBegin("from-error-and-no-error-views", "bin/lib/resume-session/upstream-view.js");
 test("from-error-and-no-error-views", () => noNewFailures(fails, errors.errorAndNoErrorViews));
+caseEnd();
+
+caseBegin("from-marks-an-aborted-upstream", "bin/lib/resume-session/upstream-view.js");
+test("from-marks-an-aborted-upstream", () => noNewFailures(fails, workflowAborted.abortedMarker));
+caseEnd();
+
+caseBegin("from-warns-on-unrecorded-upstream-abort", "bin/lib/resume-session/render.js");
+test("from-warns-on-unrecorded-upstream-abort", () => noNewFailures(fails, workflowAborted.abortWarnings));
 caseEnd();

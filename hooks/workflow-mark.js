@@ -36,6 +36,7 @@ const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const runTestsAcceptHandler = require("./workflow-mark/run-tests-accept-handler");
 const glossaryAcceptHandler = require("./workflow-mark/glossary-accept-handler");
+const workflowAbortHandler = require("./workflow-mark/workflow-abort-handler");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const supervisorBlockOverrideHandler = require("./workflow-mark/supervisor-block-override-handler");
 const resetHandler = require("./workflow-mark/reset-handler");
@@ -59,7 +60,7 @@ const HANDLERS = [
   confirmApprovalHandler, userVerifiedHandler,
   // review-tests-handler must run BEFORE mark-step-handler so the dedicated
   // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner.
-  reviewTestsHandler, runTestsAcceptHandler, glossaryAcceptHandler, markStepHandler,
+  reviewTestsHandler, runTestsAcceptHandler, glossaryAcceptHandler, workflowAbortHandler, markStepHandler,
   enforceOverrideHandlers, supervisorBlockOverrideHandler, resetHandler,
 ];
 

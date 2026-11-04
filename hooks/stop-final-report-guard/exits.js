@@ -7,7 +7,8 @@ const fs = require("fs");
 const EXIT_HATCH_TEXT =
   "Exits that end this block: turn workflow enforcement off for this session " +
   "(the workflow-off marker), or let /session-close yield to the supervisor " +
-  "(session-close gate `yield`).";
+  "(session-close gate `yield`). A session aborted with /workflow-abort-verified " +
+  "is not enforced at all.";
 
 function readGateAction(sid) {
   const controlDir = require("../workflow-state/state-io/control-dir");
@@ -28,6 +29,7 @@ function shouldYieldOrBypass(sid) {
   } catch (_) {
     return { exit: true, reason: "workflow-off-unreadable" };
   }
+  if (require("../workflow-state/workflow-abort").isWorkflowAborted(sid)) return { exit: true, reason: "workflow-aborted" };
   if (readGateAction(sid) === "yield") return { exit: true, reason: "session-close-yield" };
   return { exit: false, reason: null };
 }

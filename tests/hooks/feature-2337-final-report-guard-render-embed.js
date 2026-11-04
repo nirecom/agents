@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/stop-final-report-guard.js, hooks/stop-final-report-guard/render-embed.js, hooks/stop-final-report-guard/exits.js
-// Tags: feature-2337, stop-guard, final-report, render-embed, lane-a, scope:issue-specific, TL2, pwsh-not-required, feature-1192, lane-b, workflow-off, yield, exit-hatch, fix-1169, block-reason-wording, excerpt-head
+// Tags: feature-2337, stop-guard, final-report, render-embed, lane-a, scope:issue-specific, TL2, pwsh-not-required, feature-1192, lane-b, workflow-off, yield, exit-hatch, fix-1169, block-reason-wording, excerpt-head, regression-2920, workflow-abort
 // #2337: the renderer's stdout stayed in a tool result, so the Final Report heading never reached
 // the assistant text and lane A blocked with only "run /session-close". Lane A's no-heading block
 // now carries the rendered Final Report and the shared exit-hatch text; when the renderer fails,
@@ -198,6 +198,53 @@ test("token-at-line-start-excerpt-cuts-only-the-tail", () => {
   assert.ok(m[1].endsWith("…"), `the cut tail must end with an ellipsis, got ${JSON.stringify(m[1])}`);
   assert.strictEqual(m[1].indexOf("…"), m[1].length - 1, `only the tail carries an ellipsis: ${JSON.stringify(m[1])}`);
   assert.strictEqual(m[1], `${long.slice(0, 80)}…`, "the excerpt is the first 80 chars plus the ellipsis");
+});
+caseEnd();
+
+// #2920 S5-3: an aborted session (a workflow_aborted event in its stream) is an exit for both lanes,
+// checked right after the workflow-off marker. The abort is pushed as a raw event so the guard is
+// tested apart from the writer.
+const X = require("./feature-2920-workflow-abort/fixture");
+function abortState(sid, origin) {
+  if (!require("node:fs").existsSync(X.statePath(sid))) X.seedPlain(sid);
+  const st = X.raw(sid);
+  if (!Array.isArray(st.events)) X.io().writeState(sid, X.io().readState(sid));
+  X.rawAbort(sid, origin || "abort-sentinel");
+}
+
+caseBegin("exits-module-workflow-aborted", "hooks/stop-final-report-guard/exits.js");
+test("#2920 S5-3: shouldYieldOrBypass exits an aborted session after workflow-off and before the yield gate", () => {
+  const shouldYieldOrBypass = F.need("hooks/stop-final-report-guard/exits.js", "shouldYieldOrBypass");
+  X.seedPlain("x-ab-live");
+  assert.deepStrictEqual(shouldYieldOrBypass("x-ab-live"), { exit: false, reason: null }, "control: a live started session");
+  abortState("x-ab-sentinel", "abort-sentinel");
+  assert.deepStrictEqual(shouldYieldOrBypass("x-ab-sentinel"), { exit: true, reason: "workflow-aborted" });
+  abortState("x-ab-adopt", "adopt-auto");
+  assert.deepStrictEqual(shouldYieldOrBypass("x-ab-adopt"), { exit: true, reason: "workflow-aborted" });
+  abortState("x-ab-off");
+  G.writeWorkflowOff("x-ab-off");
+  assert.deepStrictEqual(shouldYieldOrBypass("x-ab-off"), { exit: true, reason: "workflow-off" }, "workflow-off wins");
+  abortState("x-ab-yield");
+  G.writeYield("x-ab-yield");
+  assert.deepStrictEqual(shouldYieldOrBypass("x-ab-yield"), { exit: true, reason: "workflow-aborted" }, "the abort wins over yield");
+  assert.ok(G.exitHatchText().includes("/workflow-abort-verified"), `EXIT_HATCH_TEXT must name the abort exit: ${G.exitHatchText()}`);
+});
+caseEnd();
+
+caseBegin("aborted-session-exits-both-lanes", "hooks/stop-final-report-guard.js");
+test("#2920 S5-3: lane A does not block an aborted session", () => {
+  for (const shape of Object.keys(SHAPES)) {
+    const r = laneA(`x-ab-a-${shape}`, shape, (sid) => abortState(sid));
+    assert.strictEqual(r.rc, 0, `${shape} must not block an aborted session: ${r.out}`);
+  }
+});
+test("#2920 S5-3: lane B does not block an aborted session (the same state blocks without the abort)", () => {
+  const sid = "x-ab-lane-b";
+  G.writeLaneBState(sid);
+  abortState(sid);
+  assert.strictEqual(X.io().readState(sid).steps.pre_final_report_gate.status, "pending", "fixture: lane B state readable");
+  const r = G.runGuard(sid, G.writeTranscript(TRANSCRIPTS, sid, "Wrapping up."), SB);
+  assert.strictEqual(r.rc, 0, `lane B must not block an aborted session: ${r.out}`);
 });
 caseEnd();
 
