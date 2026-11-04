@@ -128,3 +128,7 @@ Changes: A workflow sentinel or grant that is rejected now shows why and what to
 ### FEATURE: PR #2921 (2026-11-04)
 Background: fix(#2514, #2919, #1981, #1169): make session-close SC-7 show alert f...
 Changes: Session close now shows alert findings to the user at SC-7; findings the Stop hook only handed to the model no longer count as shown.;A workflow sentinel inside a multi-line shell script now produces a clear "not applied" message instead of being ignored silently.;The Final Report guard asks only for the corrected report and no longer triggers a duplicate full report.;Session close no longer emits a step sentinel that the workflow rejects, and a paused alert can now be closed at session end.
+
+### FEATURE: PR #2922 (2026-11-04)
+Background: fix(#2909): keep glossary grants across rules digest changes and show...
+Changes: A main merge or a rule module update alone no longer expires an accepted glossary grant; when a grant does lapse, the output names the cause and the re-accept command.
