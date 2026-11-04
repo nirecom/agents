@@ -44,10 +44,26 @@ function glossaryOnly(step) {
   G.passes(`${label}: after re-record`, G.scan(s.sid, s.repo), step);
 }
 
+// #2909: with a granted finding, the glossary-only stale reason names the term whose grant lapses.
+function glossaryOnlyGranted(step) {
+  const label = `glossary input ${step} with a grant`;
+  const s = F.setupStep(`ginput-g-${step}`, step, F.VARIANT, { ownStatus: "complete" });
+  if (step === "review_tests") G.recordReviewScope(s.sid, s.repo);
+  G.recordOk(label, F.drift(s.sid, step, s.repo), 1);
+  F.check(`${label}: grant written`, F.grantFindings(s.sid, step), "no record to grant");
+  G.passes(`${label}: record current and granted`, G.scan(s.sid, s.repo), step);
+  F.touchGlossary(s.repo);
+  const reason = G.blocks(`${label}: main glossary changed`, G.scan(s.sid, s.repo), step, "glossary-check-stale", true);
+  F.check(`${label}: the reason names the term whose grant lapses`,
+    reason.includes(`the grants for ${F.TERM} lapse`) && reason.includes(`term=${F.TERM} step=${step}`), reason);
+  F.check(`${label}: the reason does not name the artifact component`, !/\bartifact\b/.test(componentText(reason)), reason);
+}
+
 function run() {
   for (const step of F.RS_STEPS) {
     blobSwap(step);
     glossaryOnly(step);
+    glossaryOnlyGranted(step);
   }
 }
 

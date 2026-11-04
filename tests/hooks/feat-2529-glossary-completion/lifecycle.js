@@ -33,7 +33,7 @@ function forStep(checker, step) {
   F.stageFile(s.repo, SECOND[step], F.targetBody(step, F.TERM));
   g = F.gateCheck(checker, s.sid, step, s.repo);
   F.check(`${label}: commit 3 with a new target blocks glossary-check-stale`, F.gateBlocks(g, "glossary-check-stale"), JSON.stringify(g));
-  F.check(`${label}: commit 3 block names the recovery`, !!g && String(g.reason).includes(`check-glossary-drift --step ${step} --record`),
+  F.check(`${label}: commit 3 block names the recovery`, !!g && String(g.reason).includes("check-glossary-drift --session ") && String(g.reason).includes(`--step ${step} --record`),
     JSON.stringify(g));
   F.drift(s.sid, step, s.repo);
   g = F.gateCheck(checker, s.sid, step, s.repo);

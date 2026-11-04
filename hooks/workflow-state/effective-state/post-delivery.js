@@ -24,4 +24,14 @@ function isPostDeliverySession(state) {
   }
 }
 
-module.exports = { recordedStatusOf, isPostDeliverySession };
+// isBranchPushedSession(state) → true when push_branch is recorded complete (the PR is open, #2909):
+// a stale glossary then only warns. Independent of TERMINAL_STEPS; a push_branch reset reads false.
+function isBranchPushedSession(state) {
+  try {
+    return recordedStatusOf(state, "push_branch") === "complete";
+  } catch (_) {
+    return false;
+  }
+}
+
+module.exports = { recordedStatusOf, isPostDeliverySession, isBranchPushedSession };

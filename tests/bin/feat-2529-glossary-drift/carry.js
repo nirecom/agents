@@ -1,6 +1,6 @@
 "use strict";
 // #2770 grant carry-over: a re-record moves a grant to the new fingerprint only when the artifact
-// is the one component that changed and the granted norm's variant set did not grow or change.
+// (since #2909 also the rules) changed and the granted norm's variant set did not grow or change.
 // The same rule holds for the provenance record (ops in the artifact's role, blocked as the set).
 
 const RECORD = "hooks/workflow-state/glossary-check/record.js";
@@ -88,7 +88,8 @@ function unit(F) {
   F.check("checkRecordEvents: artifact-only change, same variants: the grant moves to the new fingerprint",
     (a.grants || []).length === 1 && a.grants[0].fingerprint === F.FP("b") && a.grants[0].norm === F.TERM, JSON.stringify(a));
   const r = valueOf(R.checkRecordEvents(prev, "review_security", at({ rules: F.FP("9") }), [find("glossary-drift", 2)]));
-  F.check("checkRecordEvents: rules-only change: the grant is not carried", (r.grants || []).length === 0, JSON.stringify(r));
+  F.check("checkRecordEvents: rules-only change, same variants: the grant moves to the new fingerprint (#2909)",
+    (r.grants || []).length === 1 && r.grants[0].fingerprint === F.FP("b") && r.grants[0].norm === F.TERM, JSON.stringify(r));
   const g = valueOf(R.checkRecordEvents(prev, "review_security", at({ artifact: F.FP("9") }),
     [find("glossary-drift", 2), find("glossarydrift", 4)]));
   F.check("checkRecordEvents: artifact-only change adding a variant: the grant is not carried",
@@ -107,7 +108,8 @@ function unit(F) {
   F.check("provenanceRecordEvents: ops-only change, same blocked set: the grant moves to the new fingerprint",
     (po.grants || []).length === 1 && po.grants[0].fingerprint === F.FP("d"), JSON.stringify(po));
   const pr = valueOf(R.provenanceRecordEvents(pprev, pat({ rules: F.FP("8") }), "explicit", blocked));
-  F.check("provenanceRecordEvents: rules-only change: the grant is not carried", (pr.grants || []).length === 0, JSON.stringify(pr));
+  F.check("provenanceRecordEvents: rules-only change, same blocked set: the grant moves to the new fingerprint (#2909)",
+    (pr.grants || []).length === 1 && pr.grants[0].fingerprint === F.FP("d"), JSON.stringify(pr));
   const more = blocked.concat([{ term: "beta", norm: "beta", operation: "add", category: "internal", reason: "not-in-intent" }]);
   const pb = valueOf(R.provenanceRecordEvents(pprev, pat({ ops: F.FP("8") }), "explicit", more));
   F.check("provenanceRecordEvents: ops-only change with a grown blocked set: the grant is not carried",
