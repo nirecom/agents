@@ -1,6 +1,6 @@
 <!--
 Abort branch spec for worktree-end: the cleanup of a session aborted with
-`/workflow-abort-verified` (next-step `REASON=workflow-aborted-cleanup`).
+`/workflow-abort-accepted` (next-step `REASON=workflow-aborted-cleanup`).
 Read it (do not `bash` it); issue each command separately, as with
 cleanup-cascade.md. `<main>`, `<branch>`, `<sid>` are placeholders the
 orchestrator substitutes at issue time. Design: docs/architecture/claude-code/workflow-abort.md.

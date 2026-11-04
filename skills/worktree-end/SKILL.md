@@ -85,7 +85,7 @@ supervisor OFF-block adaptive message fires only during WE-11..WE-18 — see cle
 WE-10c releases the CodeGraph index lock immediately before WE-11 — see cleanup-cascade.md.
 
 ## Rules
-- Cleanup runs only after `merge_to_main` is settled, or in a session aborted with `/workflow-abort-verified` (Precondition). No destructive steps on wait/abort/error paths.
+- Cleanup runs only after `merge_to_main` is settled, or in a session aborted with `/workflow-abort-accepted` (Precondition). No destructive steps on wait/abort/error paths.
 - Never merge, push, or emit the release-approval sentinel here — `/get-release-approval` and `/merge-to-main` own them.
 - AUTO_MERGE_PR=off (pull_request only): the human merges on the web; /merge-to-main never merges.
 - `git worktree remove --force` is prohibited; blocked at the `bash-guard` and `settings.json` deny layers, not by prose in `rules/ops.md`.

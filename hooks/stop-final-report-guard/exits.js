@@ -7,7 +7,7 @@ const fs = require("fs");
 const EXIT_HATCH_TEXT =
   "Exits that end this block: turn workflow enforcement off for this session " +
   "(the workflow-off marker), or let /session-close yield to the supervisor " +
-  "(session-close gate `yield`). A session aborted with /workflow-abort-verified " +
+  "(session-close gate `yield`). A session aborted with /workflow-abort-accepted " +
   "is not enforced at all.";
 
 function readGateAction(sid) {

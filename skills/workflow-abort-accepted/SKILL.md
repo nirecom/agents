@@ -1,6 +1,6 @@
 ---
-name: workflow-abort-verified
-description: Abort a started workflow without a deliverable — record the user's abort with the WORKFLOW_ABORT_VERIFIED sentinel, then hand the worktree to /worktree-end's abort branch.
+name: workflow-abort-accepted
+description: Abort a started workflow without a deliverable — record the user's abort with the WORKFLOW_ABORT_ACCEPTED sentinel, then hand the worktree to /worktree-end's abort branch.
 user-invocable: true
 ---
 
@@ -20,11 +20,11 @@ Delivered already (`merge_to_main` complete), or the workflow never started? The
 ## Procedure
 
 ### WAV-1 — Show what stays behind
-Run `bash "$AGENTS_MAIN_ROOT/skills/workflow-abort-verified/scripts/show-worktree-state.sh"` in the session worktree and show its output to the user.
+Run `bash "$AGENTS_MAIN_ROOT/skills/workflow-abort-accepted/scripts/show-worktree-state.sh"` in the session worktree and show its output to the user.
 Uncommitted changes block the later cleanup (WE-3) and unpushed commits keep the branch alive (`branch -d`); let the user commit, push or drop them first.
 
 ### WAV-2 — Record the abort
-Confirm the one-line reason with the user, then emit `echo "<<WORKFLOW_ABORT_VERIFIED: {reason}>>"` as its own Bash call.
+Confirm the one-line reason with the user, then emit `echo "<<WORKFLOW_ABORT_ACCEPTED: {reason}>>"` as its own Bash call.
 Permission is **ask**, so the user is prompted; a declined prompt records nothing — stop.
 An `UNAPPLIED` notice (not started, delivered, already aborted, reason refused) means nothing was recorded; report it and stop.
 
