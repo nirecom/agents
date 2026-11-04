@@ -30,3 +30,7 @@ caseEnd();
 caseBegin("grant carried to the new fingerprint on an artifact-only change", "hooks/workflow-state/glossary-check/record.js");
 test("grant carried to the new fingerprint on an artifact-only change", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/carry").run(F)));
 caseEnd();
+
+caseBegin("grant carried over its role inputs, expired with a shown cause otherwise", "hooks/workflow-state/glossary-check/record.js");
+test("grant carried over its role inputs, expired with a shown cause otherwise", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/expiry").run(F)));
+caseEnd();

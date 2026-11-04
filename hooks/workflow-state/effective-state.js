@@ -15,7 +15,7 @@ const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver"
 const { readSkipVerdict } = require("./skip-verdict");
 const { applyWriteCodeResume } = require("./effective-state/write-code-resume");
 const { navigateBoundaryStatus } = require("./effective-state/delivery-boundary");
-const { recordedStatusOf, isPostDeliverySession } = require("./effective-state/post-delivery");
+const { recordedStatusOf, isPostDeliverySession, isBranchPushedSession } = require("./effective-state/post-delivery");
 const { isStepRequired, canonicalStepName } = require("./step-table");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const {
@@ -100,10 +100,11 @@ function glossaryRefusalOfGatedComplete(step, raw, state, sessionId, opts) {
 // does not read as complete ("unapproved-complete" or a glossary-check code), else null. The one
 // predicate every reader that picks the current step or answers "already complete" shares (#2529).
 // A post-delivery session is never refused: a delivered change is not re-approved against a
-// moving main glossary (#2796).
+// moving main glossary (#2796). Once pushed, a glossary refusal only warns in next-step (#2909).
 function gatedCompleteRefusal(step, raw, state, sessionId, opts) {
   if (isPostDeliverySession(state)) return null;
   if (isUnapprovedGatedComplete(step, raw, state, sessionId)) return "unapproved-complete";
+  if (isBranchPushedSession(state)) return null;
   return glossaryRefusalOfGatedComplete(step, raw, state, sessionId, opts);
 }
 

@@ -1,7 +1,7 @@
 "use strict";
 // T7-4 (input 4, rules): through the opts.ruleModules seam, one changed byte in a copy of each
 // RULE_MODULES file (inside a function body) moves rulesVersion() and stales the record for all
-// six glossary steps; the stale record's grants are not carried over. A file outside RULE_MODULES does
+// six glossary steps; a re-record carries the stale record's grants (#2909). A file outside RULE_MODULES does
 // not move the digest, and the real digest is computed from every rule module's bytes (no probes).
 
 const fs = require("node:fs");
@@ -78,17 +78,26 @@ function staleness(m, steps = F.GLOSSARY_STEPS) {
     const v = C.evaluate(m, ctx, opts);
     F.check(`${step} changed rule module: evaluateGlossaryCheck is glossary-check-stale naming only rules`,
       !!v && v.ok === false && v.code === "glossary-check-stale" && C.named(v.detail).join(",") === "rules", JSON.stringify(v));
+    F.check(`${step} changed rule module: the stale detail says the grant can carry and names its term (#2909)`,
+      !!v && !!v.detail && v.detail.carry === "possible" && (v.detail.granted_terms || []).includes(F.TERM), JSON.stringify(v));
     const rec = F.recordOf(ctx.sid, step);
-    const grantsAfter = (fpr) => {
+    const valueAfter = (fpr) => {
       const evs = m.record.checkRecordEvents(rec, step, fpr, rec ? rec.findings : []) || [];
       const ev = evs.find((e) => e && e.key === "glossary_check");
-      return ev && ev.value ? ev.value.grants || [] : null;
+      return ev && ev.value ? ev.value : null;
     };
+    const grantsOf = (val) => (val ? val.grants || [] : null);
     F.check(`${step} changed rule module: a same-fingerprint re-record keeps the grant (control)`,
-      (grantsAfter(before) || []).length > 0, JSON.stringify(grantsAfter(before)));
-    const g = grantsAfter(after);
-    F.check(`${step} changed rule module: the re-record carries no grant of the old fingerprint`,
-      Array.isArray(g) && g.length === 0, JSON.stringify(g));
+      (grantsOf(valueAfter(before)) || []).length > 0, JSON.stringify(valueAfter(before)));
+    const val = valueAfter(after);
+    const g = grantsOf(val);
+    F.check(`${step} changed rule module: the re-record carries the grant to the new fingerprint (#2909)`,
+      Array.isArray(g) && g.length > 0 && g.every((x) => x.fingerprint === after.fingerprint), JSON.stringify(val));
+    if (!val) continue;
+    F.appendRaw(ctx.sid, [F.annotationEvent(step, "glossary_check", val)]);
+    const p = C.evaluate(m, ctx, opts);
+    F.check(`${step} changed rule module: the re-record with the carried grant passes under the same rule modules`,
+      C.passes(p), JSON.stringify(p));
   }
 }
 
@@ -104,4 +113,4 @@ function run() {
   runStaleness();
 }
 
-module.exports = { run, runDigest, runStaleness };
+module.exports = { run, runDigest, runStaleness, copies, bump };

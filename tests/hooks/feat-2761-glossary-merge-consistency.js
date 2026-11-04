@@ -146,3 +146,35 @@ test("C5: undecidable merge state agrees between record and gate", verdict("C5",
   G.passes("C5 review_docs after the grant", G.scan(sid, repo), "review_docs");
 }));
 caseEnd();
+
+// #2909 scenario 1: a merge moves the artifact and a pulled rule module moves the rules digest
+// together; with the same variants the re-record keeps the grant and the step passes.
+caseBegin("merge moving artifact and rules together keeps the grant on re-record", "bin/check-glossary-drift");
+test("C6: merge moving artifact and rules together keeps the grant on re-record", verdict("C6", () => {
+  const rules = require("./feat-2529-glossary-fingerprint-inputs/rules");
+  const R = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/record"));
+  const { loadStepInputs } = require(path.join(F.ROOT, "hooks/workflow-state/glossary-check/scope"));
+  const { scanStageInputs } = require(path.join(F.ROOT, "bin/lib/glossary-drift"));
+  const repo = F.mkRepo("c6");
+  M.standardMerge(repo, WORD);
+  const sid = F.seedSession("c6", "review_docs", { cwd: repo });
+  F.drift(sid, "review_docs", repo);
+  F.check("C6 precondition: a review_docs record with a finding is granted", F.grantFindings(sid, "review_docs"), "no record to grant");
+  const rec = F.recordOf(sid, "review_docs");
+  M.apply(repo, { "docs/shared.md": `# Shared (resolved)\n\nPlain text, edited after the merge.\n\nEach ${WORD} is checked.\n` });
+  const c = rules.copies("c6");
+  if (!c) return;
+  rules.bump(c.paths[1]);
+  const opts = { repoDir: repo, ruleModules: c.paths };
+  const now = stepFingerprint(sid, "review_docs", opts);
+  F.check("C6 artifact and rules both moved", now.ok && !!rec && now.inputs.artifact !== rec.inputs.artifact &&
+    now.inputs.rules !== rec.inputs.rules && now.inputs.glossary === rec.inputs.glossary, JSON.stringify({ now, rec }));
+  const findings = scanStageInputs(loadStepInputs(sid, "review_docs", opts));
+  const value = R.checkRecordEvents(rec, "review_docs", now, findings)[0].value;
+  F.check("C6 the re-record keeps the grant on the new fingerprint",
+    (value.grants || []).length > 0 && value.grants.every((g) => g.fingerprint === now.fingerprint), JSON.stringify(value));
+  F.appendRaw(sid, [F.annotationEvent("review_docs", "glossary_check", value)]);
+  const v = R.evaluateGlossaryCheck(sid, "review_docs", F.readState(sid), opts);
+  F.check("C6 evaluateGlossaryCheck passes under the same rule modules", !!v && v.ok === true, JSON.stringify(v));
+}));
+caseEnd();

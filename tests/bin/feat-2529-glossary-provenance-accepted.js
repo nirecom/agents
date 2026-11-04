@@ -33,6 +33,14 @@ caseBegin("provenance-grant-carried-while-the-blocked-set-is-unchanged", "bin/ch
 test("provenance-grant-carried-while-the-blocked-set-is-unchanged", () => noNewFailures(fails, acc.carryOnUnchangedBlocked));
 caseEnd();
 
+caseBegin("provenance-lapsed-grant-shown-on-the-block-line", "bin/check-glossary-provenance");
+test("provenance-lapsed-grant-shown-on-the-block-line", () => noNewFailures(fails, acc.lapsedGrantShown));
+caseEnd();
+
+caseBegin("provenance-expired-grants-kept-per-norm-operation-category", "bin/check-glossary-provenance");
+test("provenance-expired-grants-kept-per-norm-operation-category", () => noNewFailures(fails, acc.expiredKeptPerKey));
+caseEnd();
+
 // #2849 / #2781: checkReviewDocs under the decision time limit. bin/review-doc-gates is swapped
 // for a stub (in process) or a hung node child (decision-limit-driver.js); git runs for real.
 const assert = require("node:assert");

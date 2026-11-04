@@ -111,13 +111,18 @@ and `detail` steps scan their whole range: a plan file has no HEAD to diff again
 ### Grant carry-over
 
 A re-record keeps the grants of the new fingerprint, and also moves a grant of the previous fingerprint
-to the new one (#2770) when both hold: the artifact is the only input whose digest changed (glossary,
-intent rows and rules are the same), and every variant the new findings show for the granted norm was
-already among the previous findings' variants for it. A glossary definition change, an intent row
-change, a rules change, or a new variant of the granted norm lets the grant lapse. The provenance record
-follows the same rule with `ops` in the artifact's role and the unmatched entries of the granted norm
-(term spelling, operation, category and definition) as the compared set, so a spelling or definition
-change lapses its grant.
+to the new one (#2770, #2909) when both hold: every input whose digest changed is in the record's role
+set (`CARRY_ROLES` in `glossary-check/grant-carry.js`: artifact and rules), and every variant the new
+findings show for the granted norm was already among the previous findings' variants for it. So a main
+merge or a rule module update alone keeps the grant. A glossary definition change or an intent row
+change lapses the grant with cause `inputs`; a new variant of the granted norm lapses it with cause
+`variants`. The provenance record follows the same rule with the role set ops and rules and the
+unmatched entries of the granted norm (term spelling, operation, category and definition) as the
+compared set, so a spelling or definition change lapses its grant.
+A lapsed grant is kept in `expired_grants` (`{norm, term, cause, changed, fingerprint}`, provenance adds
+operation and category) while its finding stays open, and the record output names it: a `carried`
+line, an `EXPIRED` line per lapsed term with its cause and the re-accept command, and a
+`(the grant lapsed: …)` note on the provenance BLOCK line.
 The carry-over is decided at record time; the commit gate still compares fingerprints exactly, so an
 unrelated edit stales the record once and the agent's re-record clears it without a new
 `WORKFLOW_GLOSSARY_ACCEPTED`.
@@ -132,7 +137,8 @@ unrelated edit stales the record once and the agent's re-record clears it withou
   "inputs": { "artifact": "…", "glossary": "…", "intent_rows": "…", "rules": "…" },
   "findings": [ { "source": "deterministic", "class": "spelling", "term": "…", "norm": "…", "variant": "…", "where": "…" } ],
   "grants": [ { "norm": "…", "fingerprint": "<sha256>", "reason": "…" } ],
-  "ledger_grants": [ { "norm": "…", "discrim": "…", "reason": "…" } ] }
+  "ledger_grants": [ { "norm": "…", "discrim": "…", "reason": "…" } ],
+  "expired_grants": [ { "norm": "…", "term": "…", "cause": "inputs", "changed": ["glossary"], "fingerprint": "<sha256>" } ] }
 ```
 
 On re-record `grants` with the new fingerprint carry over, plus those the [grant carry-over](#grant-carry-over) rule moves; `ledger_grants` always carry over. A
@@ -147,8 +153,8 @@ the step; the sentinel's grant copy rewrites it to the `step` form.
 1. Commit mode, an R-S step, and `artifact.empty` — ok (this commit stages nothing for the step, including when every staged path of the step is a merge-incoming file).
 2. No record, or no `fingerprint` in it — `glossary-check-missing`.
 3. The current fingerprint cannot be computed — `glossary-fingerprint-unavailable`.
-4. The fingerprints differ — `glossary-check-stale`, with `detail.changed` naming the changed inputs.
-5. A finding without a grant of the same fingerprint and norm — `glossary-findings-unresolved`.
+4. The fingerprints differ — `glossary-check-stale`, with `detail.changed` naming the changed inputs, `detail.carry` (`possible` when they all sit in the role set, else `none`) and `detail.granted_terms`, read from the record alone (no scan).
+5. A finding without a grant of the same fingerprint and norm — `glossary-findings-unresolved`, with `detail.expired` holding its open `expired_grants` entries.
 
 ### Completion boundary
 
@@ -167,6 +173,10 @@ recorded settled (complete or skipped), `gatedCompleteRefusal` returns null, so 
 stay complete when main's glossary changes and the stop guard stops demanding a re-plan.
 `isPostDeliverySession` (`effective-state/post-delivery.js`) judges the raw record, not the table-skip
 projection, so a WF-META session whose `merge_to_main` is only table-skipped stays pre-delivery.
+Once `push_branch` is recorded complete (`isBranchPushedSession`), a glossary refusal no longer demotes a
+complete plan step; next-step prints a warn-only `GLOSSARY_AFTER_PUSH=` line naming each step and code
+instead (#2909). The approval re-check (`unapproved-complete`) still demotes, and a `push_branch` reset
+restores the refusal.
 
 ### Commit gate
 
@@ -178,7 +188,7 @@ with `glossary-check-missing`. The record is re-verified against that commit's s
 staging nothing for a step passes that step, and any other commit needs a fresh `--record` (the
 record keeps the latest value only). A block reads
 
-`<step>: <code>(detail) — run: check-glossary-drift --step <step> --record (session <sid>), then fix each DRIFT finding or record an ACCEPTED grant.`
+`<step>: <code> — <recovery>`, where `<recovery>` is the shared `recoveryFor` text (it names `check-glossary-drift --session <sid> --step <step> --record`).
 
 ## Glossary provenance check
 

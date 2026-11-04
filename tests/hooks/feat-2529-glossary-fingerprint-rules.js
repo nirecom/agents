@@ -2,7 +2,7 @@
 // Tests: hooks/workflow-state/glossary-check/scope.js, hooks/workflow-state/glossary-check/record.js, bin/check-glossary-drift, hooks/workflow-mark/glossary-accept-handler.js, hooks/workflow-gate/glossary-record-checker.js
 // Tags: TL2, hooks, workflow-state, glossary, glossary-check, fingerprint, scope:issue-specific
 // #2529 T7-4 (invariant I-FP, input 4): a changed rule module alone stales a valid record + grant
-// for all six stages through the ruleModules seam, and the old grant is not inherited. Split from
+// for all six stages through the ruleModules seam, and a re-record carries the grant (#2909). Split from
 // feat-2529-glossary-fingerprint-inputs.js to fit the 180s per-test budget.
 // Fixture: tests/lib/glossary-check-fixture.js; part: ./feat-2529-glossary-fingerprint-inputs/rules.js.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
