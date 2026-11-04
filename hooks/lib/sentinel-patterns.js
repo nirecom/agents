@@ -160,6 +160,10 @@ const ISSUE_CLOSE_VERIFIED_END_RE_DQ =
   /^echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: ([^>]+)>>"$/;
 const ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END([: ].*)?>>"/;
+// Workflow abort (#2920): ends a started workflow without a deliverable. Human-only via
+// settings.json `ask`; irreversible, so it has no END form.
+const RE_WORKFLOW_ABORT_VERIFIED_DQ = /^echo "<<WORKFLOW_ABORT_VERIFIED: ([^>]+)>>"$/;
+const LOOKSLIKE_WORKFLOW_ABORT_VERIFIED = /^echo "<<WORKFLOW_ABORT_VERIFIED([: ].*)?>>"\s*$/;
 
 function isSentinel(cmd) {
   return (
@@ -229,7 +233,9 @@ function isSentinel(cmd) {
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
-    ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE.test(cmd)
+    ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE.test(cmd) ||
+    RE_WORKFLOW_ABORT_VERIFIED_DQ.test(cmd) ||
+    LOOKSLIKE_WORKFLOW_ABORT_VERIFIED.test(cmd)
   );
 }
 
@@ -272,7 +278,8 @@ function isStrictSentinel(cmd) {
     SUPERVISOR_VERDICT_ACCEPTED_RE_DQ.test(cmd) ||
     SUPERVISOR_BLOCK_ACCEPTED_RETIRED_RE_DQ.test(cmd) ||
     ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
-    ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd)
+    ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
+    RE_WORKFLOW_ABORT_VERIFIED_DQ.test(cmd)
   );
 }
 
@@ -340,4 +347,6 @@ module.exports = {
   ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_END_RE_DQ,
   ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE,
+  RE_WORKFLOW_ABORT_VERIFIED_DQ,
+  LOOKSLIKE_WORKFLOW_ABORT_VERIFIED,
 };

@@ -8,7 +8,8 @@ const { readState, readRawState, normalizeStateVersion, VALID_STEPS } = require(
 const { projectState } = require("../state-io/projection");
 const { isEffectivelyPendingStep, LOOKAHEAD_ORIGIN } = require("../lifecycle");
 const { listRecentContextCandidates } = require("./candidates");
-const { applyInheritance, INHERIT_ORIGIN, GRANULARITY_CONTEXT_INDEPENDENT_ONLY } = require("./apply");
+const { applyInheritance, INHERIT_ORIGIN, GRANULARITY_CONTEXT_INDEPENDENT_ONLY, CARRIED_DOWNSTREAM_KINDS } = require("./apply");
+const { abortUpstreamsFor } = require("../workflow-abort");
 const { judgeInheritanceGranularity } = require("./granularity");
 const repoIdentity = require("../../lib/repo-identity");
 
@@ -23,7 +24,7 @@ const DEGRADABLE_RESUMABILITY_REASONS = Object.freeze(["intent-artifact-missing"
 // re-carried by the copy, and a pending or lookahead-only mark claims no finished work.
 const ENVIRONMENT_KINDS = Object.freeze(["worktree", "session_model"]);
 // The copy carries the downstream's own state handoff records too, so they replace nothing (#2652).
-const CARRIED_RECORD_KINDS = Object.freeze(["state_handoff_record"]);
+const CARRIED_RECORD_KINDS = CARRIED_DOWNSTREAM_KINDS;
 
 class AdoptionRefusedError extends Error {
   constructor(message) {
@@ -215,7 +216,21 @@ function adoptState(opts) {
     repo_verdict: judged.repo_verdict,
     degraded_reason: degradedReason,
     inheritance: result || null,
+    upstream_aborts: abortAdoptedUpstreams(heirSid),
   };
 }
 
-module.exports = { adoptState, checkOverwriteAllowed, listAdoptCandidates, heirContextOf, isAllPending };
+// The heir now owns the work, so every live upstream in its chain is aborted and every
+// abort-sentinel-aborted one is handed over to it (#2920 S8-(1)).
+// A failure is reported per upstream and never undoes the adoption.
+function abortAdoptedUpstreams(heirSid) {
+  try {
+    return abortUpstreamsFor(heirSid, "adopt-auto", `adopted by ${heirSid}`);
+  } catch (e) {
+    return [{ sid: null, recorded: false, reason: `select failed: ${(e && e.message) || String(e)}` }];
+  }
+}
+
+module.exports = {
+  adoptState, checkOverwriteAllowed, listAdoptCandidates, heirContextOf, isAllPending, CARRIED_RECORD_KINDS,
+};

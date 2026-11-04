@@ -14,7 +14,7 @@ const { EXEMPTION_MATRIX } = require('$POLICY_NODE');
 const { C4_EXEMPTIONS } = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js');
 const matrix = Object.keys(EXEMPTION_MATRIX);
 const table = C4_EXEMPTIONS.map((e) => e.id);
-const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','delegated-reason','awaiting-plan-approval','human-web-merge-wait','user-dialog-turn','jev-wait-on-invoke'];
+const expected = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','workflow-aborted','delegated-reason','awaiting-plan-approval','human-web-merge-wait','user-dialog-turn','jev-wait-on-invoke','workflow-aborted-reason'];
 const problems = [];
 if (matrix.join(',') !== table.join(',')) {
   problems.push('drift matrix=' + matrix.join(',') + ' table=' + table.join(','));
@@ -24,7 +24,7 @@ if (matrix.join(',') !== expected.join(',')) {
 }
 process.stdout.write(problems.length ? 'BAD ' + problems.join(' | ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids == the 9 expected rows (#2277 awaiting-plan-approval, #2527 human-web-merge-wait, #2698 user-dialog-turn, #2461 jev-wait-on-invoke) (same set, same order)"
+        pass "M1-a: EXEMPTION_MATRIX keys == C4_EXEMPTIONS ids == the 11 expected rows (#2277 awaiting-plan-approval, #2527 human-web-merge-wait, #2698 user-dialog-turn, #2461 jev-wait-on-invoke, #2920 workflow-aborted + workflow-aborted-reason) (same set, same order)"
     else
         fail "M1-a: matrix/table drift; got '${out:-<err>}'"
     fi
@@ -146,7 +146,7 @@ run_M1d() {
 const g = require('$_SCRIPT_CHECKOUT_ROOT_NODE/hooks/stop-premature-stop-guard.js');
 const byId = Object.fromEntries(g.C4_EXEMPTIONS.map((e) => [e.id, e]));
 const problems = [];
-const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight'];
+const sessionRows = ['workflow-off','next-step-paused','pre-workflow-init','step-in-flight','workflow-aborted'];
 for (const id of sessionRows) {
   if (!byId[id] || byId[id].phase !== 'session') problems.push(id + ':phase');
 }
@@ -164,9 +164,21 @@ if (g.firstExemption('next-step-output', { sid: 'x', reason: 'pre_final_report_g
 if (g.firstExemption('next-step-output', { sid: 'x', reason: 'research' }, deps) !== null) {
   problems.push('delegated-reason:over-matched');
 }
+// #2920: workflow-aborted-reason is the late next-step-output backstop for a REASON=workflow-aborted*.
+if (!byId['workflow-aborted-reason'] || byId['workflow-aborted-reason'].phase !== 'next-step-output') {
+  problems.push('workflow-aborted-reason:phase');
+}
+for (const reason of ['workflow-aborted', 'workflow-aborted-cleanup']) {
+  if (g.firstExemption('next-step-output', { sid: 'x', reason }, deps) !== 'workflow-aborted-reason') {
+    problems.push('workflow-aborted-reason:not-matched:' + reason);
+  }
+}
+if (g.firstExemption('next-step-output', { sid: 'x', reason: 'cleanup' }, deps) !== null) {
+  problems.push('workflow-aborted-reason:over-matched');
+}
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' ') : 'OK');" 2>/dev/null)
     if [ "$out" = "OK" ]; then
-        pass "M1-d: pre-workflow-init is phase=session; delegated-reason (matches only pre_final_report_gate) and user-dialog-turn are phase=next-step-output"
+        pass "M1-d: pre-workflow-init and workflow-aborted are phase=session; delegated-reason (matches only pre_final_report_gate), user-dialog-turn and workflow-aborted-reason (matches only workflow-aborted*) are phase=next-step-output"
     else
         fail "M1-d: phase wiring wrong; got '${out:-<err>}'"
     fi

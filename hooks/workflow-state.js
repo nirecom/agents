@@ -13,11 +13,12 @@ const skipVerdict = require("./workflow-state/skip-verdict");
 const mergeBaseBaseline = require("./workflow-state/merge-base-baseline");
 const lifecycle = require("./workflow-state/lifecycle");
 const currentStep = require("./workflow-state/current-step");
+const workflowAbort = require("./workflow-state/workflow-abort");
 
 // Spread order carries no meaning here: since #1305 removed state-io's duplicate
 // findLatestStateForContext, no two submodules export the same name.
 module.exports = {
   ...sessionId, ...stateIo, ...evidenceResolver, ...skipSignalResolver, ...complexityRouting,
   ...completionApproval, ...effectiveState, ...inheritance, ...skipVerdict,
-  ...mergeBaseBaseline, ...lifecycle, ...currentStep,
+  ...mergeBaseBaseline, ...lifecycle, ...currentStep, ...workflowAbort,
 };

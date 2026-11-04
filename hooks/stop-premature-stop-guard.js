@@ -37,6 +37,8 @@ const C4_EXEMPTIONS = [
     test: (c, d) => d.isNextStepPaused(c.sid, currentStepOf(c.sid)) },
   { id: "pre-workflow-init", phase: "session", test: (c, d) => !d.isWorkflowStarted(c.sid) },
   { id: "step-in-flight",    phase: "session", test: (c, d) => !!d.anyStepInFlight(c.sid) },
+  // #2920: an aborted session has no pending work to nudge toward; quiets both lanes.
+  { id: "workflow-aborted",  phase: "session", test: (c, d) => d.isWorkflowAborted(c.sid) === true },
   { id: "delegated-reason",  phase: "next-step-output",
     test: (c, _d) => DELEGATED_REASONS.has(c.reason) },
   // #2277/#2650: a presentation turn with no CONFIRM echo from its continuation, or after a Deny, waits for approval.
@@ -50,6 +52,9 @@ const C4_EXEMPTIONS = [
     test: (c, d) => d.isUserDialogTurn(c.input) },
   // #2461: next-step advised holding the next skill back this turn; the stop is that advice obeyed.
   { id: "jev-wait-on-invoke", phase: "next-step-output", test: (c, _d) => c.jevAdvice === "wait-on-invoke" },
+  // #2920: late backstop for the session row — next-step's REASON=workflow-aborted*.
+  { id: "workflow-aborted-reason", phase: "next-step-output",
+    test: (c, _d) => typeof c.reason === "string" && c.reason.startsWith("workflow-aborted") },
 ];
 
 // Per-finding exemptions that apply to the mechanism-failure lane only. The
@@ -86,12 +91,12 @@ function isFindingExemptFromC4(sid, finding, deps) {
 function buildExemptionDeps() {
   const { isWorkflowOff, isNextStepPaused } =
     require("./lib/session-markers");
-  const { isWorkflowStarted, anyStepInFlight, isLookaheadOnlyInFlight } =
+  const { isWorkflowStarted, anyStepInFlight, isLookaheadOnlyInFlight, isWorkflowAborted } =
     require("./workflow-state");
   const { isUserDialogTurn } = require("./lib/user-dialog-turn");
   return {
     isWorkflowOff, isNextStepPaused, isWorkflowStarted,
-    anyStepInFlight, isLookaheadOnlyInFlight, isUserDialogTurn,
+    anyStepInFlight, isLookaheadOnlyInFlight, isUserDialogTurn, isWorkflowAborted,
   };
 }
 
