@@ -22,7 +22,7 @@ A started workflow can end without a deliverable (#2920). Before the abort exist
 
 | Scenario | Trigger | `origin` | next-step answer |
 |---|---|---|---|
-| A — the user drops the work | `/workflow-abort-verified` emits `<<WORKFLOW_ABORT_VERIFIED: {reason}>>` (settings `ask`) | `abort-sentinel` | `invoke worktree-end`, `REASON=workflow-aborted-cleanup`, until `cleanup` is settled; then `done`, `REASON=workflow-aborted` |
+| A — the user drops the work | `/workflow-abort-accepted` emits `<<WORKFLOW_ABORT_ACCEPTED: {reason}>>` (settings `ask`) | `abort-sentinel` | `invoke worktree-end`, `REASON=workflow-aborted-cleanup`, until `cleanup` is settled; then `done`, `REASON=workflow-aborted` |
 | B — another session took over | `adoptState` after a successful `/resume-session --from`, or `bin/workflow/adopt-session-state --abort-upstreams` | `adopt-auto` / `abort-cli` | `done`, `REASON=workflow-aborted` at once; the worktree and branch belong to the heir |
 
 ### A taken over by a downstream

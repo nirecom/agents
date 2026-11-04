@@ -227,7 +227,7 @@ test("#2920 S5-3: shouldYieldOrBypass exits an aborted session after workflow-of
   abortState("x-ab-yield");
   G.writeYield("x-ab-yield");
   assert.deepStrictEqual(shouldYieldOrBypass("x-ab-yield"), { exit: true, reason: "workflow-aborted" }, "the abort wins over yield");
-  assert.ok(G.exitHatchText().includes("/workflow-abort-verified"), `EXIT_HATCH_TEXT must name the abort exit: ${G.exitHatchText()}`);
+  assert.ok(G.exitHatchText().includes("/workflow-abort-accepted"), `EXIT_HATCH_TEXT must name the abort exit: ${G.exitHatchText()}`);
 });
 caseEnd();
 

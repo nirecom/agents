@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: skills/worktree-end/scripts/abort-branch.sh, skills/worktree-end/scripts/abort-branch.md, skills/worktree-end/SKILL.md, skills/issue-close-verified/scripts/check-wip-owner.sh
+# Tests: skills/worktree-end/scripts/abort-branch.sh, skills/worktree-end/scripts/abort-branch.md, skills/worktree-end/SKILL.md, skills/issue-close-verified/scripts/check-wip-owner.sh, skills/workflow-abort-accepted/scripts/show-worktree-state.sh, skills/workflow-abort-accepted/SKILL.md
 # Tags: TL1, workflow-abort, worktree-end, issue-close-verified, wip-state, regression-2920, scope:issue-specific
 # lang-check: ignore -- grep patterns intentionally accept English/Japanese wording for the same doc needle.
 # #2920 S7/S9: abort-branch.sh refuses a worktree with uncommitted changes (WE-3 kept) and, on a
@@ -241,11 +241,27 @@ else
     seed_state "f2920-skip" "[51]"
     : > "$STUB_LOG"
     export STUB_ANSWERS="check@51:0:same"
-    OUT="$(cd "$CLEAN_WT" && run_with_timeout 60 bash "$ABORT_BRANCH" --session f2920-skip 2>&1 </dev/null)"
+    # A copy of the script under a fake root: its REPO_ROOT (from SCRIPT_DIR) then holds logging stubs for the
+    # skipped steps, so a call to one of them is observable. read-abort-issues.js is a shim onto the real one.
+    FAKE_ROOT="$_ISOLATION_TMP_ROOT/fake-root"; FAKE_SCRIPTS="$FAKE_ROOT/skills/worktree-end/scripts"
+    SKIP_LOG="$_ISOLATION_TMP_ROOT/skipped-step-calls.log"; : > "$SKIP_LOG"; export SKIP_LOG
+    mkdir -p "$FAKE_SCRIPTS" "$FAKE_ROOT/bin/workflow" "$FAKE_ROOT/bin/github-issues"
+    cp "$ABORT_BRANCH" "$FAKE_SCRIPTS/abort-branch.sh"
+    printf 'require("%s");\n' "$(np "$WE_DIR/scripts/read-abort-issues.js")" > "$FAKE_SCRIPTS/read-abort-issues.js"
+    for stub in "$FAKE_SCRIPTS/capture-env.sh" "$FAKE_ROOT/bin/workflow/pr-state" "$FAKE_ROOT/bin/compose-doc-append-entry" "$FAKE_ROOT/bin/github-issues/wip-state.sh"; do
+        printf '#!/usr/bin/env bash\necho "%s $*" >> "$SKIP_LOG"\n' "$(basename "$stub")" > "$stub"; chmod +x "$stub"
+    done
+    OUT="$(cd "$CLEAN_WT" && run_with_timeout 60 bash "$FAKE_SCRIPTS/abort-branch.sh" --session f2920-skip 2>&1 </dev/null)"
     RC=$?
     if [ "$RC" -eq 0 ] && [ "$(calls)" = "check 51,abandon 51," ]; then
         pass "abort-branch: a full run exits 0 and its only external calls are wip-state check/abandon"
     else fail "abort-branch: a full run exits 0 and its only external calls are wip-state check/abandon" "rc=$RC wip=$(calls) out=$OUT"; fi
+    if [ "$(wc -c < "$SKIP_LOG")" -eq 0 ]; then pass "abort-branch: pr-state / capture-env / compose-doc-append-entry stubs under its REPO_ROOT are never called"
+    else fail "abort-branch: pr-state / capture-env / compose-doc-append-entry stubs under its REPO_ROOT are never called" "called: $(tr '\n' ',' < "$SKIP_LOG")"; fi
+    # Control: the stubs are reachable from that REPO_ROOT, so an empty log above means "not called", not "unreachable".
+    bash "$FAKE_ROOT/bin/workflow/pr-state" probe; RC=$?
+    if [ "$RC" -eq 0 ] && grep -q '^pr-state probe' "$SKIP_LOG"; then pass "abort-branch: control — a pr-state stub at the fake REPO_ROOT records its call"
+    else fail "abort-branch: control — a pr-state stub at the fake REPO_ROOT records its call" "rc=$RC log=$(cat "$SKIP_LOG")"; fi
 fi
 case_end
 
@@ -297,7 +313,7 @@ else
 fi
 case_end
 
-SHOW_STATE="$SCRIPT_CHECKOUT_ROOT/skills/workflow-abort-verified/scripts/show-worktree-state.sh"
+SHOW_STATE="$SCRIPT_CHECKOUT_ROOT/skills/workflow-abort-accepted/scripts/show-worktree-state.sh"
 # mk_pushed <dir> — a fixture repo whose HEAD is pushed to a local bare remote (upstream set).
 mk_pushed() {
     mk_worktree "$1"
@@ -305,7 +321,7 @@ mk_pushed() {
     git -C "$1" remote add origin "$(np "$1.git")"
     git -C "$1" push -q -u origin HEAD
 }
-case_begin "show-worktree-state-three-outputs" "skills/workflow-abort-verified/scripts/show-worktree-state.sh"
+case_begin "show-worktree-state-three-outputs" "skills/workflow-abort-accepted/scripts/show-worktree-state.sh"
 if [ ! -f "$SHOW_STATE" ]; then
     fail "show-worktree-state: script exists" "$SHOW_STATE is missing"
 else
@@ -330,6 +346,24 @@ else
     if [ "$RC" -eq 0 ] && printf '%s' "$UNPUSHED_SEC" | grep -q 'unpushed-commit' && [ "$(printf '%s\n' "$OUT" | grep -c '^(none)$')" -eq 1 ]; then
         pass "show-worktree-state: an unpushed commit is listed; no uncommitted changes"
     else fail "show-worktree-state: an unpushed commit is listed; no uncommitted changes" "rc=$RC out=$OUT"; fi
+fi
+case_end
+
+WAV_SKILL="$SCRIPT_CHECKOUT_ROOT/skills/workflow-abort-accepted/SKILL.md"
+case_begin "wav-skill-step-order" "skills/workflow-abort-accepted/SKILL.md"
+if [ ! -f "$WAV_SKILL" ]; then
+    fail "workflow-abort-accepted SKILL.md exists" "$WAV_SKILL is missing"
+else
+    WAV1_LN="$(grep -nE '^### WAV-1( |$)' "$WAV_SKILL" | head -n 1 | cut -d: -f1)"
+    WAV2_LN="$(grep -nE '^### WAV-2( |$)' "$WAV_SKILL" | head -n 1 | cut -d: -f1)"
+    SENT_LN="$(grep -n 'WORKFLOW_ABORT_ACCEPTED' "$WAV_SKILL" | grep -E 'echo' | head -n 1 | cut -d: -f1)"
+    SHOW_LN="$(grep -n 'show-worktree-state\.sh' "$WAV_SKILL" | head -n 1 | cut -d: -f1)"
+    if [ -n "$WAV1_LN" ] && [ -n "$WAV2_LN" ] && [ "$WAV1_LN" -lt "$WAV2_LN" ]; then pass "SKILL.md: WAV-1 precedes WAV-2"
+    else fail "SKILL.md: WAV-1 precedes WAV-2" "wav1=$WAV1_LN wav2=$WAV2_LN"; fi
+    if [ -n "$SHOW_LN" ] && [ -n "$SENT_LN" ] && [ -n "$WAV1_LN" ] && [ "$SHOW_LN" -gt "$WAV1_LN" ] && [ "$SHOW_LN" -lt "$SENT_LN" ]; then pass "SKILL.md: the show-worktree-state call sits in WAV-1, before the sentinel is emitted"
+    else fail "SKILL.md: the show-worktree-state call sits in WAV-1, before the sentinel is emitted" "wav1=$WAV1_LN show=$SHOW_LN sentinel=$SENT_LN"; fi
+    if grep -qE 'Never emit the sentinel on your own initiative — only when the user invoked this skill' "$WAV_SKILL"; then pass "SKILL.md: the sentinel is emitted only when the user invoked the skill"
+    else fail "SKILL.md: the sentinel is emitted only when the user invoked the skill" "user-invocation-only condition wording is missing in $WAV_SKILL"; fi
 fi
 case_end
 

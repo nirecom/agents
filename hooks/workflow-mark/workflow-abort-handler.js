@@ -1,20 +1,20 @@
 "use strict";
-// Issue #2920 — WORKFLOW_ABORT_VERIFIED.
+// Issue #2920 — WORKFLOW_ABORT_ACCEPTED.
 //
-//   echo "<<WORKFLOW_ABORT_VERIFIED: <reason>>>"
+//   echo "<<WORKFLOW_ABORT_ACCEPTED: <reason>>>"
 // Records that the user ended this started workflow without a deliverable (origin abort-sentinel).
 // Irreversible; no external writes (gh, wip-state) happen here. The delivered / already-aborted
 // refusals are decided inside the state lock by recordWorkflowAborted. Design:
 // docs/architecture/claude-code/workflow-abort.md.
 
-const { RE_WORKFLOW_ABORT_VERIFIED_DQ, LOOKSLIKE_WORKFLOW_ABORT_VERIFIED } = require("../lib/sentinel-patterns");
+const { RE_WORKFLOW_ABORT_ACCEPTED_DQ, LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED } = require("../lib/sentinel-patterns");
 const { isWorkflowStarted } = require("../workflow-state/lifecycle");
 const { recordWorkflowAborted } = require("../workflow-state/workflow-abort");
 const { sanitizeLine } = require("../lib/output-sanitize");
 const { validateSkipReason } = require("./skip-reason");
 
-const LABEL = "WORKFLOW_ABORT_VERIFIED";
-const FORM = "echo \"<<WORKFLOW_ABORT_VERIFIED: <reason>>>\" (<reason> must not contain >)";
+const LABEL = "WORKFLOW_ABORT_ACCEPTED";
+const FORM = "echo \"<<WORKFLOW_ABORT_ACCEPTED: <reason>>>\" (<reason> must not contain >)";
 
 const REFUSAL = {
   "no-state": "this session has no workflow state",
@@ -24,9 +24,9 @@ const REFUSAL = {
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, pushUnapplied } = ctx;
-  const m = cmd.match(RE_WORKFLOW_ABORT_VERIFIED_DQ);
+  const m = cmd.match(RE_WORKFLOW_ABORT_ACCEPTED_DQ);
   if (!m) {
-    if (!LOOKSLIKE_WORKFLOW_ABORT_VERIFIED.test(cmd)) return false;
+    if (!LOOKSLIKE_WORKFLOW_ABORT_ACCEPTED.test(cmd)) return false;
     pushUnapplied(`workflow-mark: malformed ${LABEL} — a reason is required. Expected: ${FORM}; state unchanged.`);
     return true;
   }
