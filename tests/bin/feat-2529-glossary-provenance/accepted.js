@@ -6,7 +6,8 @@
 // covered, a staged definition change blocks again, and stale grants are dropped on rewrite.
 
 const { caseBegin, caseEnd } = require("../../lib/harness");
-const { check, eq, ok, DEFS, mkRepo, stageUser, stageInternal, approvedSession, provRecord, blockedOf, prov, accept, has } = require("./common");
+const { check, eq, ok, DEFS, mkRepo, stageUser, stageInternal, approvedSession, provRecord, blockedOf, prov, accept, has,
+  writeIntent, reapprove, mod } = require("./common");
 
 const BETA = "An accepted fixture term.";
 const OTHER_ROW = [["gamma", "user", "add", "Unrelated term."]];
@@ -147,4 +148,62 @@ function carryOnUnchangedBlocked() {
   });
 }
 
-module.exports = { blockRecordAndGrant, narrowGrants, bGrantSameRules, carryOnUnchangedBlocked };
+// #2909: an intent change re-approved after the grant moves intent_rows, outside the provenance
+// role set (ops, rules): the grant lapses, the record keeps it in expired_grants and BLOCK says why.
+function lapsedGrantShown() {
+  let lapsed = null;
+  check("#2909 a re-approved intent change after the grant: BLOCK names the lapsed grant and its cause", () => {
+    const { repo, sid } = grantedBeta("lapse");
+    lapsed = { repo, sid };
+    writeIntent(sid, GAMMA_ROW.concat([["delta", "user", "add", "Another unrelated term."]]));
+    reapprove(sid);
+    const r = prov(repo, sid);
+    eq(r.code, 1, `exit (out: ${r.all})`);
+    const line = r.all.split(/\r?\n/).find((l) => /BLOCK: beta add user: /.test(l)) || "";
+    ok(line.includes(" (the grant lapsed: intent_rows changed)"), `BLOCK line: ${r.all}`);
+    ok(/WORKFLOW_GLOSSARY_ACCEPTED: term=beta op=add cat=user — /.test(line), `the re-accept echo stays: ${line}`);
+    const rec = provRecord(sid) || {};
+    const e = (rec.expired_grants || []).find((x) => x.norm === "beta");
+    ok(!!e && e.cause === "inputs" && (e.changed || []).includes("intent_rows"), `expired_grants: ${JSON.stringify(rec)}`);
+  });
+  check("#2909 a re-accept after the lapse: the gate passes and the record drops the expired_grants entry", () => {
+    ok(!!lapsed, "precondition: the lapse scenario ran");
+    const { repo, sid } = lapsed;
+    ok(((provRecord(sid) || {}).expired_grants || []).some((x) => x.norm === "beta"), "precondition: the lapsed beta entry is recorded");
+    eq(accept(sid, repo, "beta", "op=add cat=user").code, 0, "hook exit");
+    const r = prov(repo, sid);
+    eq(r.code, 0, `exit (out: ${r.all})`);
+    ok(!/the grant lapsed/.test(r.all), `no lapse note after the re-accept: ${r.all}`);
+    const rec = provRecord(sid) || {};
+    eq((rec.expired_grants || []).filter((x) => x.norm === "beta"), [], "expired_grants for beta");
+  });
+}
+
+// #2909: provenance expired_grants are keyed by norm + operation + category, so three grants of one
+// norm that lapse together stay three entries, and a re-record at the same fingerprint keeps them.
+const RECORD = "hooks/workflow-state/glossary-check/record.js";
+function expiredKeptPerKey() {
+  const fp = (c) => c.repeat(64);
+  const P = { ops: fp("5"), intent_rows: fp("3"), rules: fp("4") };
+  const keys = [["add", "user"], ["delete", "user"], ["add", "internal"]];
+  const blocked = keys.map(([operation, category]) => ({ term: "beta", norm: "beta", operation, category, reason: "not-in-intent" }));
+  const prev = { fingerprint: fp("c"), inputs: P, blocked,
+    grants: keys.map(([operation, category]) => ({ norm: "beta", operation, category, fingerprint: fp("c"), reason: "fixture" })) };
+  const at = { fingerprint: fp("d"), inputs: Object.assign({}, P, { intent_rows: fp("7") }) };
+  const valueOf = (evs) => (evs && evs[0] && (evs[0].value || evs[0])) || {};
+  const keyOf = (x) => `${x.norm}/${x.operation}/${x.category}`;
+  const sorted = (list) => (list || []).map(keyOf).sort();
+  let first;
+  check("#2909 three grants of one norm lapse together: expired_grants keeps one entry per norm, operation and category", () => {
+    first = valueOf(mod(RECORD).provenanceRecordEvents(prev, at, "explicit", blocked));
+    eq(sorted(first.expired_grants), ["beta/add/internal", "beta/add/user", "beta/delete/user"], "expired keys");
+    ok((first.expired_grants || []).every((x) => x.cause === "inputs"), `causes: ${JSON.stringify(first.expired_grants)}`);
+  });
+  check("#2909 a re-record at the same fingerprint keeps the three entries apart (no merge by norm)", () => {
+    ok(!!first, "precondition: the first record ran");
+    const again = valueOf(mod(RECORD).provenanceRecordEvents(first, at, "explicit", blocked));
+    eq(sorted(again.expired_grants), sorted(first.expired_grants), "expired keys after the re-record");
+  });
+}
+
+module.exports = { blockRecordAndGrant, narrowGrants, bGrantSameRules, carryOnUnchangedBlocked, lapsedGrantShown, expiredKeptPerKey };

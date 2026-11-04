@@ -162,8 +162,9 @@ caseEnd();
 
 caseBegin("B: control - before merge_to_main a stale glossary still demotes every plan stage", "hooks/workflow-state/effective-state.js");
 test("B: control - before merge_to_main a stale glossary still demotes every plan stage", verdict("B", () => {
-  const s = prepare("b-pre", PRE_DELIVERY);
-  F.check("B: push_branch is recorded complete", F.statusOf(s.sid, "push_branch") === "complete", F.statusOf(s.sid, "push_branch"));
+  // #2909: a pushed branch only warns, so the demote control is a session before push_branch.
+  const s = prepare("b-pre", Object.assign({}, PRE_DELIVERY, { push_branch: null, user_verification: null }));
+  F.check("B: push_branch is not recorded (pending)", F.statusOf(s.sid, "push_branch") === "pending", F.statusOf(s.sid, "push_branch"));
   F.touchGlossary(s.repo);
   const eff = expectReadOnly("B", s, RA_STEPS);
   for (const step of RA_STEPS) {
@@ -373,7 +374,7 @@ function breakGlossary(repo) {
 
 caseBegin("M: an unreadable glossary after delivery is kept, before delivery it still demotes", "hooks/workflow-state/effective-state.js");
 test("M: an unreadable glossary after delivery is kept, before delivery it still demotes", verdict("M", () => {
-  const pre = prepare("m-pre", PRE_DELIVERY);
+  const pre = prepare("m-pre", Object.assign({}, PRE_DELIVERY, { push_branch: null, user_verification: null }));
   breakGlossary(pre.repo);
   const effPre = expectReadOnly("M", pre, RA_STEPS);
   for (const step of RA_STEPS) {

@@ -34,7 +34,7 @@ function blocks(label, r, step, code, namesRecovery) {
     r.threw || JSON.stringify(r.incompleteReasons));
   if (namesRecovery) {
     F.check(`${label}: incompleteReasons.${step} names the recovery`,
-      reason.includes(`check-glossary-drift --step ${step} --record`), reason);
+      reason.includes("check-glossary-drift --session ") && reason.includes(`--step ${step} --record`), reason);
   }
   return reason;
 }
