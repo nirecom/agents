@@ -43,7 +43,7 @@ const { REVIEW_TESTS_REOPEN_REASONS } = require("../../../../hooks/workflow-stat
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
 const { resolveGateLine } = require("./gate-line");
-const { deliveryPathNoteLine } = require("./delivery-path-note");
+const { noteLinesOf } = require("./note-lines");
 const { settleMergeToMain, deliveryKindFor } = require("../../../../hooks/workflow-state/delivery-settle");
 
 const { emit, setNoteLine } = require("./emit");
@@ -103,7 +103,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
 
   const repoDir = resolveRepoDir();
   const profile = resolveSessionProfile(state, sid, { repoDir });
-  setNoteLine(deliveryPathNoteLine(profile, sid, repoDir));
+  setNoteLine(noteLinesOf(profile, sid, repoDir, state));
 
   // repoDir belongs to THIS process, not to `sid`. A presence check on
   // `--session` would mislabel hooks/session-start.js, which passes

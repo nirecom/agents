@@ -6,29 +6,14 @@ const { evaluateGlossaryCheck } = require("../workflow-state/glossary-check/reco
 
 const GATED_STEPS = Object.freeze(["review_tests", "review_security", "review_docs"]);
 
-function detailText(v) {
-  const d = v.detail || {};
-  if (v.code === "glossary-check-stale" && Array.isArray(d.changed) && d.changed.length > 0) {
-    return ` (changed: ${d.changed.join(", ")})`;
-  }
-  if (v.code === "glossary-findings-unresolved" && Array.isArray(d.findings)) {
-    return ` (${d.findings.length} unresolved finding(s))`;
-  }
-  if (v.code === "glossary-fingerprint-unavailable" && d.error) return ` (${d.error})`;
-  return "";
-}
-
 // checkGlossaryRecord(step, { state, sessionId, repoDir }) -> { action: "pass" } | { action: "block", reason }
+// The reason carries the shared recovery text of record.js (CPR-SSOT, #2909).
 function checkGlossaryRecord(step, ctx) {
   if (!GATED_STEPS.includes(step)) return { action: "pass" };
   const c = ctx || {};
   const v = evaluateGlossaryCheck(c.sessionId, step, c.state, { repoDir: c.repoDir, mode: "commit" });
   if (v.ok) return { action: "pass" };
-  return {
-    action: "block",
-    reason: `${step}: ${v.code}${detailText(v)} — run: check-glossary-drift --step ${step} --record ` +
-      `(session ${c.sessionId || "<sid>"}), then fix each DRIFT finding or record an ACCEPTED grant.`,
-  };
+  return { action: "block", reason: `${step}: ${v.code} — ${v.detail.recovery}` };
 }
 
 module.exports = { checkGlossaryRecord, GATED_STEPS };

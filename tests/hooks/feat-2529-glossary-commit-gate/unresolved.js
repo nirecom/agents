@@ -24,7 +24,7 @@ function unresolved(step) {
   F.check(`${label}: the current record holds a finding`, !!rec && (rec.findings || []).length > 0, JSON.stringify(rec));
 
   const reason = G.blocks(`${label}, record current`, G.scan(s.sid, s.repo), step, "glossary-findings-unresolved", true);
-  F.check(`${label}: the reason counts the unresolved finding`, /\(1 unresolved finding\(s\)\)/.test(reason), reason);
+  F.check(`${label}: the reason names the unresolved term`, reason.includes(`(${F.TERM})`), reason);
 
   setGrants(s.sid, step, [{ norm: OTHER_NORM, fingerprint: rec.fingerprint, reason: "fixture grant" }]);
   G.blocks(`${label}, grant of another term`, G.scan(s.sid, s.repo), step, "glossary-findings-unresolved", true);

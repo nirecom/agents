@@ -10,6 +10,7 @@ const path = require("path");
 const ROOT = path.join(__dirname, "..");
 const { GLOSSARY_STEPS, loadStepInputs, fingerprintOf } = require(path.join(ROOT, "hooks/workflow-state/glossary-check/scope"));
 const { RECORD_KEY, checkRecordEvents } = require(path.join(ROOT, "hooks/workflow-state/glossary-check/record"));
+const { carryReportOf, causeText, reacceptText } = require(path.join(ROOT, "hooks/workflow-state/glossary-check/grant-carry"));
 const { scanStageInputs } = require(path.join(ROOT, "bin/lib/glossary-drift"));
 const { unsafeTermChars, describeTermChars } = require(path.join(ROOT, "hooks/lib/glossary-term"));
 
@@ -69,10 +70,12 @@ function main() {
   const findings = scanStageInputs(loaded);
 
   let value;
+  let prev = null;
   if (args.record) {
     try {
       ws.appendEvents(sid, (_events, current) => {
-        const evs = checkRecordEvents(recordIn(current, step), step, fp, findings);
+        prev = recordIn(current, step);
+        const evs = checkRecordEvents(prev, step, fp, findings);
         value = evs[0].value;
         return evs;
       });
@@ -80,7 +83,16 @@ function main() {
       fail(2, `failed to write the glossary_check record — ${e && e.message ? e.message : e}`);
     }
   } else {
-    value = checkRecordEvents(recordIn(ws.readState(sid), step), step, fp, findings)[0].value;
+    prev = recordIn(ws.readState(sid), step);
+    value = checkRecordEvents(prev, step, fp, findings)[0].value;
+  }
+
+  const report = carryReportOf(prev, value);
+  if (report.carried.length > 0) {
+    process.stdout.write(`check-glossary-drift: carried ${report.carried.length} grant(s) (changed: ${report.changed.join(", ")}): ${report.carried.join(", ")}\n`);
+  }
+  for (const e of report.expired) {
+    process.stdout.write(`  EXPIRED: grant for "${e.term}" — ${causeText(e)}; ${reacceptText(e.term, step, "cli")}\n`);
   }
 
   const granted = new Set(value.grants.map((g) => g.norm));
