@@ -1,7 +1,7 @@
 #!/bin/bash
 # bin/github-issues/wip-state.sh — WIP signaling for issues via GitHub Projects v2.
 # Verbs: set <N> | check <N> | clear <N> | abandon <N> | setup
-# Fingerprint: sha256(sid+":"+N)[:8]; collision at N=1000: <0.001%.
+# Fingerprint: sha256(sid+":"+N)[:8]; collision at N=1000: ≈0.012% (n(n-1)/2 ÷ 2^32).
 # GraphQL: writes via gh project item-edit; reads via gh api graphql.
 # Run from the target repo's worktree.
 

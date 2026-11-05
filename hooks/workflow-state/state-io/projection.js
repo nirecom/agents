@@ -17,6 +17,7 @@ const PROJECTION_KEYS = [
   "session_model",
   "skip_judgment",
   "steps",
+  "workflow_aborted",
   "worktree_entered_at",
   "worktree_exited_at",
 ];
@@ -155,6 +156,8 @@ function projectState(state) {
   let worktree_exited_at = null;
   let session_model = null;
   let complexity_evaluation = null;
+  let workflow_aborted = null;
+  const copySeq = state && Number.isInteger(state.upstream_copy_seq) ? state.upstream_copy_seq : 0;
   let worktreeBranch = null;
   let worktreeCwd = null;
 
@@ -247,6 +250,28 @@ function projectState(state) {
         delete plan_approvals[e.step];
         break;
       }
+      case "workflow_aborted": {
+        // First-wins and never cleared; an event inside the upstream copy is the upstream's, not ours.
+        const seq = Number.isInteger(e.seq) ? e.seq : i + 1;
+        if (!workflow_aborted && seq > copySeq) {
+          workflow_aborted = {
+            origin: e.origin,
+            reason: e.reason,
+            heir_session_id: e.heir_session_id !== undefined ? e.heir_session_id : null,
+            recorded_at: e.at !== undefined ? e.at : null,
+            seq,
+          };
+        }
+        break;
+      }
+      case "workflow_abort_handover": {
+        // Names the downstream of an abort-sentinel abort once; origin and reason stay first-wins.
+        const seq = Number.isInteger(e.seq) ? e.seq : i + 1;
+        if (workflow_aborted && workflow_aborted.heir_session_id === null && seq > copySeq) {
+          workflow_aborted = Object.assign({}, workflow_aborted, { heir_session_id: e.heir_session_id });
+        }
+        break;
+      }
       default:
         break;
     }
@@ -275,6 +300,7 @@ function projectState(state) {
     session_model,
     skip_judgment,
     steps,
+    workflow_aborted,
     worktree_entered_at,
     worktree_exited_at,
   };

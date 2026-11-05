@@ -59,35 +59,13 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
-  // Quiet layer (#1607): when the session is deliberately outside the workflow,
-  // next-step reports ACTION=paused instead of nagging with the next step.
-  // Since #1624 a pause is SCOPED to a step, so the marker is evaluated against
-  // the step the session is actually on. fail-open on a marker-read failure.
-  try {
-    const { isNextStepPaused, isWorkflowOff } = require("../../../../hooks/lib/session-markers");
-    const { resolveCurrentEffectiveStep } = require("../../../../hooks/workflow-state/current-step");
-    if (isNextStepPaused(sid, resolveCurrentEffectiveStep(sid))) {
-      emit(
-        "paused",
-        "",
-        "next-step is quiet. Take no workflow action; continue the out-of-workflow work. " +
-          "Resume with: echo \"<<WORKFLOW_NEXT_STEP_RESUME: {reason}>>\"",
-        "next-step-paused"
-      );
-      return;
-    }
-    if (isWorkflowOff(sid)) {
-      emit(
-        "paused",
-        "",
-        "workflow enforcement is OFF, so next-step is quiet. Take no workflow action. " +
-          "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\" " +
-          "(a next-step resume sentinel does NOT clear workflow-OFF)",
-        "workflow-off-quiet"
-      );
-      return;
-    }
-  } catch (_e) { /* fail-open */ }
+  // Quiet layer (#1607, #2920): paused, workflow-off, then aborted (./quiet-exits.js).
+  // The abort-cleanup invoke targets a worktree, so it waits for the repo-dir guard below.
+  const quiet = require("./quiet-exits").resolveQuietExit(sid, null);
+  if (quiet && quiet.reason !== "workflow-aborted-cleanup") {
+    emit(quiet.action, quiet.skill, quiet.hint, quiet.reason);
+    return;
+  }
 
   const statePath = getStatePath(sid);
   if (!fs.existsSync(statePath)) {
@@ -124,6 +102,10 @@ function computeVerdict(rawSid, _didAutoRepair) {
       );
       return;
     }
+  }
+  if (quiet) {
+    emit(quiet.action, quiet.skill, quiet.hint, quiet.reason);
+    return;
   }
 
   // Precondition preserved ahead of the snapshot: clarify_intent requires a

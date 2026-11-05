@@ -193,7 +193,7 @@ A session can inherit from an upstream session it has no transcript lineage to, 
   the plan artifacts and, during the migration, a legacy `handoff.md` expire independently, so
   availability degrades through `state-and-artifacts` → `state-only` → `artifacts-only` → `none`
   rather than failing outright. The upstream's state handoff records are read through the state
-  handoff reader: [state-handoff-record.md](state-handoff-record.md).
+  handoff reader: [state-handoff-record.md](state-handoff-record.md); aborts: [workflow-abort.md](workflow-abort.md).
 
 ## Fail-safe behavior
 
