@@ -126,7 +126,7 @@ Only the session's own records past the copy boundary (`upstream_copy_seq`) coun
 
 ## Not carried by adoption
 
-`/resume-session --from` copies the session-upstream state into the session-downstream (`hooks/workflow-state/inheritance/apply.js`, `buildCopy`). `excludeGenerationLocalKinds` drops every `state_handoff_record` from the copied events, and `upstream_copy_seq` is the last `seq` after that filter. The session-downstream's own records written before a re-adoption travel with it.
+`/resume-session --from` copies the session-upstream state into the session-downstream (`hooks/workflow-state/inheritance/apply.js`, `buildCopy`). `excludeGenerationLocalKinds` drops every generation-local kind (`GENERATION_LOCAL_KINDS` in `apply.js`: `state_handoff_record`, `workflow_aborted` and `workflow_abort_handover`, see [workflow-abort.md](workflow-abort.md)) from the copied events, and `upstream_copy_seq` is the last `seq` after that filter. The session-downstream's own records written before a re-adoption travel with it (`CARRIED_DOWNSTREAM_KINDS`); its own `workflow_aborted` never does.
 
 Because no generation inherits another's records, one state file holds at most one generation's budget whatever the depth of the chain. The session-upstream records stay readable in the session-upstream file: the state handoff reader is given that sid.
 

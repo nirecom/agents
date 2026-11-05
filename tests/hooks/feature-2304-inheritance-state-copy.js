@@ -166,7 +166,8 @@ test("supervisor-state-copied-or-absent", () => noNewFailures(failures, () => {
     eq(again && again.ok, true, "re-adopt ok (" + show(again && again.error) + ")");
     eq(again.inheritance.supervisor_state, "absent", "supervisor_state");
     eq(JSON.parse(fs.readFileSync(F.supervisorPath("down-supgone"), "utf8")), Object.assign({}, sup, { session_id: "down-supgone" }), "earlier downstream copy");
-    eq(F.raw("down-supgone").upstream_copy_seq, F.raw("up-supgone").events.length, "upstream_copy_seq");
+    // #2920: the upstream gains an adopt-auto workflow_aborted event after the copy; the boundary covers only the events before it.
+    eq(F.raw("down-supgone").upstream_copy_seq, F.raw("up-supgone").events.filter((e) => e.kind !== "workflow_aborted").length, "upstream_copy_seq");
   });
   const withAudit = (sid, phase, extra) => {
     F.seedSupervisor(sid);
@@ -409,7 +410,8 @@ test("adopt-state-carries-the-new-contract", () => noNewFailures(failures, () =>
     const r = F.mod("hooks/workflow-state/inheritance/adopt").adoptState({ heirSid: "down-adopt", donorSid: "up-adopt" });
     eq(r && r.ok, true, "ok (" + show(r && r.error) + ")");
     eq(r.inheritance && [r.inheritance.upstream_session_id, r.inheritance.supervisor_state], ["up-adopt", "absent"], "inheritance");
-    eq(F.raw("down-adopt").upstream_copy_seq, F.raw("up-adopt").events.length, "upstream_copy_seq");
+    // #2920: the upstream gains an adopt-auto workflow_aborted event after the copy; the boundary covers only the events before it.
+    eq(F.raw("down-adopt").upstream_copy_seq, F.raw("up-adopt").events.filter((e) => e.kind !== "workflow_aborted").length, "upstream_copy_seq");
   });
 }));
 caseEnd();
