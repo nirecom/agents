@@ -39,8 +39,9 @@ setup_mock() {
     touch "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
     RUN_TARGET="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts/run-issue-setup.sh"
     cp "$TARGET" "$RUN_TARGET"
-    cp "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh" \
-       "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
+    # Whole lib/ (resolve-project.sh sources its sub-modules); the EPR mock below overwrites its lib.
+    cp -R "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/." \
+       "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/"
 
     cat > "$TMP/mock-bin/sync-labels-dispatch" <<'SYNC_EOF'
 #!/bin/bash
@@ -94,7 +95,9 @@ ensure_project_ready() {
     EPR_TODO_OPTION_ID="opt_mock_todo"
     EPR_IN_PROGRESS_OPTION_ID="opt_mock_inprog"
     EPR_DONE_OPTION_ID="opt_mock_done"
-    EPR_FINGERPRINT_FIELD_ID="PVTF_mock_finger"
+    EPR_PROJECT_OWNER="myorg"
+    EPR_PROJECT_NUM="7"
+    EPR_SESSION_ID_FIELD_ID="PVTF_mock_sid"
     return "${GH_MOCK_EPR_RC:-0}"
 }
 EPR_EOF
@@ -129,6 +132,8 @@ GH_MOCK_EOF
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
+    # The ensure-project step writes the project-resolve cache under WORKFLOW_STATE_DIR.
+    export WORKFLOW_STATE_DIR="$TMP/workflow"
 }
 
 teardown_mock() {
@@ -136,7 +141,7 @@ teardown_mock() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR FAKE_SCRIPT_CHECKOUT_ROOT RUN_TARGET \
+    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR FAKE_SCRIPT_CHECKOUT_ROOT RUN_TARGET \
           GH_MOCK_SYNC_FAIL GH_MOCK_PROJECT_RC GH_MOCK_LABELS_RC \
           GH_MOCK_EPR_RC 2>/dev/null || true
 }
@@ -200,6 +205,15 @@ if [ "$RC" = "0" ] && [ "$EPR_CALLED" = "1" ]; then
     pass "TRIS-4 (L2): --step ensure-project → ensure_project_ready called"
 else
     fail "TRIS-4 (L2): rc=$RC epr_called=$EPR_CALLED log=$(cat "$MOCK_LOG" 2>/dev/null)"
+fi
+# TRIS-4d (#2925): the cache row is 11 columns — col 10 = EPR_SESSION_ID_FIELD_ID, col 11 = sid1.
+ROW="$(awk -F'\t' '$1=="myorg/myrepo"' "$WORKFLOW_STATE_DIR/cache/project-resolve.tsv" 2>/dev/null | head -1)"
+NF_ROW="$(printf '%s' "$ROW" | awk -F'\t' '{print NF}')"
+C10="$(printf '%s' "$ROW" | cut -f10)"; C11="$(printf '%s' "$ROW" | cut -f11)"
+if [ "$NF_ROW" = "11" ] && [ "$C10" = "PVTF_mock_sid" ] && [ "$C11" = "sid1" ]; then
+    pass "TRIS-4d (L2): ensure-project cache row → 11 cols, col10=session-id field, col11=sid1"
+else
+    fail "TRIS-4d (L2): nf=$NF_ROW c10=$C10 c11=$C11 row='$ROW'"
 fi
 teardown_mock
 

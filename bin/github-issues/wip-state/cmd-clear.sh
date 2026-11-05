@@ -7,7 +7,7 @@
 
 # ---------------------------------------------------------------------------
 # Verb: clear <N>
-#   Status=Done + clear fingerprint + delete lock. Uniformly warn-and-continue
+#   Status=Done + clear the session-id value + delete lock. Uniformly warn-and-continue
 #   on gh failures (canonical close already happened upstream).
 # ---------------------------------------------------------------------------
 cmd_clear() {
@@ -53,23 +53,9 @@ cmd_clear() {
         echo "[wip-state: Status=Done set failed for #$n (continuing)]" >&2
     fi
 
-    # When the fingerprint field is already empty, gh project item-edit
-    # --text "" returns rc=1 with stderr "no changes to make for the
-    # item-edit". That is the expected no-op outcome — suppress the warning.
-    # Success path (rc=0) is the normal case (field had a fingerprint to
-    # clear) and falls through silently.
-    local fp_clear_err
-    fp_clear_err=$(gh project item-edit --id "$item_id" \
-            --field-id "$WIP_STATE_FINGERPRINT_FIELD_ID" \
-            --project-id "$PROJECT_ID" \
-            --text "" 2>&1 >/dev/null)
-    local fp_clear_rc=$?
-    if [ "$fp_clear_rc" -eq 0 ]; then
-        : # fingerprint cleared successfully (normal path)
-    elif printf '%s' "$fp_clear_err" | grep -q "no changes to make"; then
-        : # field was already empty — canonical gh no-op signal
-    else
-        echo "[wip-state: fingerprint clear failed for #$n (continuing)]" >&2
+    # Empty the session-id value (skipped when no field exists; one re-resolved retry).
+    if ! wip_clear_session_id_text "$item_id"; then
+        echo "[wip-state: session-id clear failed for #$n (continuing)]" >&2
     fi
 
     delete_lock_file "$n"

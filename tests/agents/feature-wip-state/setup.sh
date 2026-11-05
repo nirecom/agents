@@ -3,14 +3,16 @@
 # Inline gh mock factory (per test: own log + env). Mocks project item-edit/item-add,
 # issue view --json url, and api graphql. Env knobs:
 #   GH_MOCK_PROJECT_ITEM_ID / GH_MOCK_ITEM_ADD_ID (default PVTI_added)  item ids
-#   GH_MOCK_STATUS / GH_MOCK_FINGERPRINT   values returned by check graphql
-#   GH_MOCK_FAIL   one of: item-edit-status|item-edit-fp|graphql|item-add|issue-view
-#   GH_MOCK_ISSUE_URL   URL returned by `gh issue view --json url`
-#   GH_MOCK_PAGINATED_PAGES   "1" = check returns two graphql pages (status p1, fp p2)
-#   GH_MOCK_ARGS_LOG   append-only call log (one line per gh invocation)
+#   GH_MOCK_STATUS / GH_MOCK_FINGERPRINT   Status name / session-id text (GH_MOCK_FP_BY_FIELD "id=text;id=text": per field id)
+#   GH_MOCK_FAIL   item-edit-status|item-edit-fp|item-edit-sid-once|graphql|item-add|issue-view
+#   GH_MOCK_STRICT_TEXT_FIELD=1   --text edit fails unless --field-id is a modelled TEXT field
+#   GH_MOCK_ARGS_LOG / GH_MOCK_FIELDS_LOG   gh call log / field-model op log
+# Field lists, field/view mutations: tests/lib/gh-projectv2-fields-mock.sh.
 # ---------------------------------------------------------------------------
 
 TMP=""
+GH_FIELDS_MOCK="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)/gh-projectv2-fields-mock.sh"
+export GH_FIELDS_MOCK
 
 setup_mock() {
     TMP="$(mktemp -d)"
@@ -48,8 +50,23 @@ case "$ARGS" in
     exit 0 ;;
   project\ item-edit\ *--text*)
     if [ "${GH_MOCK_FAIL:-}" = "item-edit-fp" ]; then
-        echo "error: fingerprint item-edit failed" >&2
+        echo "error: session-id item-edit failed" >&2
         exit 1
+    fi
+    if [ "${GH_MOCK_FAIL:-}" = "item-edit-sid-once" ] && [ ! -f "$GH_MOCK_COUNTER_DIR/sid-edit-failed" ]; then
+        : > "$GH_MOCK_COUNTER_DIR/sid-edit-failed"
+        echo "error: session-id item-edit failed (once)" >&2
+        exit 1
+    fi
+    if [ "${GH_MOCK_STRICT_TEXT_FIELD:-}" = "1" ]; then
+        fid=""; prev=""
+        for a in "$@"; do [ "$prev" = "--field-id" ] && fid="$a"; prev="$a"; done
+        known=$(GH_MOCK_FIELDS_LOG="" GH_MOCK_FIELD_LIST_FAIL="" bash "$GH_FIELDS_MOCK" api graphql --paginate \
+            -f query='fields(' --jq '.data.node.fields.nodes[] | select(.dataType == "TEXT") | .id')
+        if ! printf '%s\n' "$known" | grep -qxF -- "$fid"; then
+            echo "error: field $fid not found" >&2
+            exit 1
+        fi
     fi
     exit 0 ;;
   issue\ view\ *--json\ state*)
@@ -62,21 +79,9 @@ case "$ARGS" in
     fi
     echo "${GH_MOCK_ISSUE_URL:-https://github.com/nirecom/agents/issues/42}"
     exit 0 ;;
-  api\ graphql\ *createProjectV2Field*)
-    missing=""
-    case "$ARGS" in *"-F projectId="*) ;; *) missing="$missing projectId" ;; esac
-    case "$ARGS" in *"-F name=session-fingerprint"*) ;; *) missing="$missing name" ;; esac
-    case "$ARGS" in *"-F dataType=TEXT"*) ;; *) missing="$missing dataType" ;; esac
-    if [ -n "$missing" ]; then
-        echo "MOCK GH: malformed createProjectV2Field call — missing:$missing" >&2
-        exit 1
-    fi
-    if [ "${GH_MOCK_FAIL:-}" = "create-field" ]; then
-        echo "error: createProjectV2Field denied" >&2
-        exit 1
-    fi
-    echo "${GH_MOCK_NEW_FIELD_ID:-PVTF_fp_new}"
-    exit 0
+  api\ graphql\ *createProjectV2Field*|api\ graphql\ *updateProjectV2Field*|api\ graphql\ *updateProjectV2View*|api\ graphql\ *"views("*|api\ graphql\ *"fields("*)
+    # Field/view lists and field/view mutations: the JSON model (tests/lib/gh-projectv2-fields-mock.sh).
+    exec bash "$GH_FIELDS_MOCK" "$@"
     ;;
   api\ graphql\ *projectsV2*)
     # resolve-project.sh Query A: linked Projects v2 count + first-node.
@@ -103,45 +108,9 @@ case "$ARGS" in
     # Source uses `gh --jq` so mock emits the pre-filtered value.
     # Distinguish by --jq filter content (each query has a unique key token).
     case "$ARGS" in
-      *"pageInfo.endCursor"*|*hasNextPage*)
-        # resolve-project.sh Query B: field-page cursor. Single page (empty cursor).
-        echo ""
-        exit 0
-        ;;
-      *"Content Date"*)
-        # resolve-project.sh Query B: Content Date field id lookup (none by default).
-        printf '%s\n' "${GH_MOCK_RESOLVED_CONTENT_DATE_ID:-}"
-        exit 0
-        ;;
       *projectItems*)
         # resolve_item_id query — print just the item id (or empty if no membership).
         printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-}"
-        exit 0
-        ;;
-      *".name == \"Status\""*)
-        # cmd_setup: STATUS-related --jq filter.
-        case "$ARGS" in
-          *"select(.__typename == \"ProjectV2SingleSelectField\""*) echo "PVTSSF_status" ;;
-          *"select(.name == \"Todo\")"*)         echo "OPT_todo" ;;
-          *"select(.name == \"In Progress\")"*)  echo "OPT_inprog" ;;
-          *"select(.name == \"Done\")"*)         echo "OPT_done" ;;
-          *) echo "" ;;
-        esac
-        exit 0
-        ;;
-      *".name == \"session-fingerprint\""*)
-        # cmd_setup: fingerprint field id.
-        if [ -n "${GH_MOCK_FP_DISCOVERY_COUNTER:-}" ]; then
-            N=$(cat "$GH_MOCK_FP_DISCOVERY_COUNTER" 2>/dev/null || echo 0)
-            N=$((N + 1)); echo "$N" > "$GH_MOCK_FP_DISCOVERY_COUNTER"
-            if [ "$N" -le 1 ] && [ "${GH_MOCK_FP_INITIALLY_MISSING:-}" = "1" ]; then
-                echo ""
-            else
-                echo "${GH_MOCK_FP_REDISCOVERED_ID-PVTF_fp_rediscovered}"
-            fi
-            exit 0
-        fi
-        echo "PVTF_fp"
         exit 0
         ;;
       *"select(.field.id"*".name"*|*".field.id"*"\")"*"| .name"*)
@@ -158,6 +127,17 @@ case "$ARGS" in
         if [ "${GH_MOCK_FAIL:-}" = "graphql" ]; then
             echo "error: graphql failed" >&2
             exit 1
+        fi
+        if [ -n "${GH_MOCK_FP_BY_FIELD:-}" ]; then
+            # Per-field values ("id=value;id=value"): answer only for the field id the --jq filter selects.
+            qfid=$(printf '%s' "$ARGS" | sed -nE 's/.*select\(\.field\.id == "([^"]+)"\).*/\1/p')
+            val=""
+            IFS=';' read -r -a pairs <<<"$GH_MOCK_FP_BY_FIELD"
+            for pr in "${pairs[@]}"; do
+                [ "${pr%%=*}" = "$qfid" ] && val="${pr#*=}"
+            done
+            printf '%s\n' "$val"
+            exit 0
         fi
         printf '%s\n' "${GH_MOCK_FINGERPRINT:-}"
         exit 0
@@ -188,6 +168,10 @@ MOCK_EOF
     export PATH="$TMP/mock-bin:$PATH"
     export GH_MOCK_ARGS_LOG="$TMP/gh-args.log"
     : > "$GH_MOCK_ARGS_LOG"
+    export GH_MOCK_FIELDS_LOG="$TMP/gh-fields.log"
+    : > "$GH_MOCK_FIELDS_LOG"
+    export GH_MOCK_FIELDS_STATE="$TMP/gh-fields.state"
+    export GH_MOCK_COUNTER_DIR="$TMP"
 
     # Required env vars for the helper.
     export AGENTS_MAIN_ROOT="$TMP/agents-config"
@@ -207,15 +191,15 @@ MOCK_EOF
     # Deterministic session id via the CLAUDE_CODE_SESSION_ID env tier.
     # Overriding it also stops a runner inside a live Claude Code session from
     # leaking its own sid into the helper, which would break any test that
-    # expects the "test-sid-fixture" fingerprint.
+    # expects the "test-sid-fixture" session-id value.
     export CLAUDE_CODE_SESSION_ID="test-sid-fixture"
 
-    # WIP_STATE_* env vars (preflight-required).
+    # WIP_STATE_* env vars (Status ones are preflight-required; the session-id field is not).
     export WIP_STATE_STATUS_FIELD_ID="PVTSSF_status"
     export WIP_STATE_IN_PROGRESS_OPTION_ID="OPT_inprog"
     export WIP_STATE_DONE_OPTION_ID="OPT_done"
     export WIP_STATE_TODO_OPTION_ID="OPT_todo"
-    export WIP_STATE_FINGERPRINT_FIELD_ID="PVTF_fp"
+    export WIP_STATE_SESSION_ID_FIELD_ID="PVTF_fp"
 
     # Reuse from issue-create.sh convention.
     export ISSUE_CREATE_PROJECT_ID="PVT_kwHOAMF_jc4BXf9E"
@@ -229,19 +213,22 @@ teardown_mock() {
     fi
     TMP=""
     unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_ITEM_ID GH_MOCK_ITEM_ADD_ID \
-          GH_MOCK_STATUS GH_MOCK_FINGERPRINT GH_MOCK_FAIL GH_MOCK_ISSUE_URL \
+          GH_MOCK_STATUS GH_MOCK_FINGERPRINT GH_MOCK_FP_BY_FIELD GH_MOCK_FAIL GH_MOCK_ISSUE_URL \
           GH_MOCK_PAGINATED_PAGES GH_MOCK_MISSING_PROJECT_SCOPE \
-          GH_MOCK_STATE_CHECK_FAIL GH_MOCK_FP_NO_CHANGES \
-          GH_MOCK_FP_INITIALLY_MISSING GH_MOCK_FP_REDISCOVERED_ID \
-          GH_MOCK_FP_DISCOVERY_COUNTER GH_MOCK_NEW_FIELD_ID \
+          GH_MOCK_STATE_CHECK_FAIL GH_MOCK_FP_NO_CHANGES GH_MOCK_NEW_FIELD_ID \
           GH_MOCK_LINKED_COUNT GH_MOCK_RESOLVED_PROJECT_ID \
           GH_MOCK_RESOLVED_PROJECT_NUM GH_MOCK_RESOLVED_OWNER \
-          GH_MOCK_RESOLVED_CONTENT_DATE_ID GH_MOCK_OWNER_REPO 2>/dev/null || true
+          GH_MOCK_RESOLVED_CONTENT_DATE_ID GH_MOCK_OWNER_REPO \
+          GH_MOCK_FIELDS_LOG GH_MOCK_FIELDS_STATE GH_MOCK_COUNTER_DIR GH_MOCK_STRICT_TEXT_FIELD \
+          GH_MOCK_SID_FIELD GH_MOCK_SID_FIELD_ID GH_MOCK_LEGACY_FIELD_ID GH_MOCK_CREATE_NO_ID \
+          GH_MOCK_FIELD_PAGES GH_MOCK_STATUS_FIELD GH_MOCK_FIELD_LIST_FAIL \
+          GH_MOCK_VIEWS GH_MOCK_VIEW_PAGES GH_MOCK_VIEW_LIST_FAIL 2>/dev/null || true
     unset AGENTS_MAIN_ROOT CLAUDE_CODE_SESSION_ID PLANS_DIR WORKFLOW_PLANS_DIR \
           WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
           WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID \
-          WIP_STATE_FINGERPRINT_FIELD_ID \
+          WIP_STATE_SESSION_ID_FIELD_ID WIP_STATE_FINGERPRINT_FIELD_ID \
           ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER \
           _ISSUE_CREATE_INTERNAL_OWNER _ISSUE_CREATE_INTERNAL_PROJECT_NUM \
-          _ISSUE_CREATE_INTERNAL_PROJECT_ID _ISSUE_CREATE_INTERNAL_FIELD_ID 2>/dev/null || true
+          _ISSUE_CREATE_INTERNAL_PROJECT_ID _ISSUE_CREATE_INTERNAL_FIELD_ID \
+          _ISSUE_CREATE_INTERNAL_SESSION_ID_FIELD_ID 2>/dev/null || true
 }

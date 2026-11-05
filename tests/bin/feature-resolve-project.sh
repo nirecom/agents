@@ -2,18 +2,9 @@
 # tests/bin/feature-resolve-project.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: workflow, github, issues, plans, bin, scope:issue-specific
-#
-# Dispatch + aggregate entrypoint for the feature-resolve-project split suite.
-# All logic lives in tests/bin/feature-resolve-project/ per rules/coding/file-split.md.
-# Each split group also runs standalone.
-#
-# L3 gap (what this test does NOT catch):
-# - Whether resolve_project_for_repo works against a live GitHub GraphQL API
-#   with real tokens and real Projects v2 data.
-# - Whether cache persistence works across concurrent resolve calls in a real
-#   multi-session environment.
-# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
-# bin/check-verification-gate.sh category: skill-orchestration.
+# Dispatch + aggregate entrypoint; logic lives in tests/bin/feature-resolve-project/ (file-split.md), each group runs standalone.
+# L3 gap: live GraphQL with real Projects v2 data, and cache persistence across concurrent resolves.
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
 
@@ -22,6 +13,7 @@ SPLIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-resolve-project
 SPLIT_GROUPS=(
     "resolver-core.sh"
     "cache.sh"
+    "cache-sid1.sh"
     "errors.sh"
 )
 

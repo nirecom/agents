@@ -1,34 +1,10 @@
 # Sourced by tests/agents/feature-wip-state/abandon.sh — not executed directly (no shebang).
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-state/cmd-abandon.sh
 # Tags: wip-state, github, scope:issue-specific
-#
-# Verb: abandon <N> — inverse of clear. OPEN-only.
-#   OPEN  → Status=Todo (HARD) + fingerprint="" (HARD) + delete lock (only after both writes succeed).
-#   CLOSED / gh-error → warn + exit 1, NO mutations.
-#   --session-id blocked → exit 2 (verb does not consume a session id).
-#   WIP_STATE_TODO_OPTION_ID is used for Status (NOT WIP_STATE_DONE_OPTION_ID).
-#
-# L3 gap: these cases stub `gh` entirely. The real GitHub Projects v2 item-edit
-# API (single-select option write + text-field clear), the auto-close semantics
-# of Status transitions on OPEN issues, and real `gh auth` project-scope
-# behaviour are NOT exercised here. Only an L3 run against a live project board
-# (real `gh`, real issue #N, real Status field) can confirm that Status=Todo on
-# an OPEN issue does not trigger GitHub's auto-close/auto-archive workflow and
-# that the TODO option id resolves to the correct column. Mock-level assertions
-# only prove the helper's control flow and the arguments it passes to `gh`.
-# OS-level lock deletion failure (e.g. EACCES on the plans directory) is
-# also an L3 gap — it requires real filesystem permission manipulation and
-# cannot be reliably reproduced in a mock-only harness.
-
-# ---------------------------------------------------------------------------
-# Shared inline mock for abandon state-dependent cases. Emits $GH_MOCK_STATE
-# for `issue view --json state`, honors GH_MOCK_FAIL for item-edit writes.
-#   GH_MOCK_STATE               OPEN | CLOSED   (state returned by issue view)
-#   GH_MOCK_STATE_CHECK_FAIL=1  issue-state-check gh call exits 1
-#   GH_MOCK_FAIL                item-edit-status | item-edit-fp
-#   GH_MOCK_FP_NO_CHANGES=1     --text clear returns "no changes to make" (rc=1)
-#   GH_MOCK_PROJECT_ITEM_ID     item id from resolve_item_id (empty ⇒ not in project)
-# ---------------------------------------------------------------------------
+# abandon <N>: OPEN → Status=Todo + session-id="" + delete lock; CLOSED/gh-error → exit 1.
+# L3 gap: `gh` is stubbed — the live item-edit API and auto-close semantics need a real board.
+# Knobs: GH_MOCK_STATE, GH_MOCK_STATE_CHECK_FAIL, GH_MOCK_FAIL=item-edit-status|item-edit-fp,
+#   GH_MOCK_FP_NO_CHANGES, GH_MOCK_PROJECT_ITEM_ID; field lists/mutations → $GH_FIELDS_MOCK.
 mint_abandon_mock() {
     cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
 #!/bin/bash
@@ -57,6 +33,8 @@ case "$ARGS" in
       *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
     esac
     ;;
+  api\ graphql\ *createProjectV2Field*|api\ graphql\ *updateProjectV2Field*|api\ graphql\ *updateProjectV2View*|api\ graphql\ *"views("*|api\ graphql\ *"fields("*)
+    exec bash "$GH_FIELDS_MOCK" "$@" ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID-PVTI_existing}"; exit 0 ;;
   project\ item-edit\ *--single-select-option-id*)
     if [ "${GH_MOCK_FAIL:-}" = "item-edit-status" ]; then
@@ -72,6 +50,13 @@ case "$ARGS" in
     if [ "${GH_MOCK_FAIL:-}" = "item-edit-fp" ]; then
         echo "error: fingerprint item-edit failed" >&2
         exit 1
+    fi
+    if [ "${GH_MOCK_STRICT_TEXT_FIELD:-}" = "1" ]; then
+        fid=""; prev=""
+        for a in "$@"; do [ "$prev" = "--field-id" ] && fid="$a"; prev="$a"; done
+        known=$(GH_MOCK_FIELDS_LOG="" GH_MOCK_FIELD_LIST_FAIL="" bash "$GH_FIELDS_MOCK" api graphql --paginate \
+            -f query='fields(' --jq '.data.node.fields.nodes[] | select(.dataType == "TEXT") | .id')
+        printf '%s\n' "$known" | grep -qxF -- "$fid" || { echo "error: field $fid not found" >&2; exit 1; }
     fi
     exit 0 ;;
   *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
