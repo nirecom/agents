@@ -1,32 +1,11 @@
-# ensure-project-ready.sh — reuse-or-create a Projects v2 board for a repo and
-# ensure the fields /issue-setup needs (Content Date, Status + Todo/In Progress/
-# Done options, session-fingerprint). Extracted from migration/create-project.sh
-# with all .migration-state.json dependencies removed.
-#
-# Sourced (not executed): . "/path/to/lib/ensure-project-ready.sh"
-# Entry point: ensure_project_ready <owner/repo>   (e.g. nirecom/ds4-ops)
-#
-# Requires: gh CLI with `project` scope; network access.
-#
-# On success (rc=0) sets caller-scope variables:
-#   EPR_PROJECT_ID              project GraphQL node id
-#   EPR_PROJECT_NUM             project number (integer)
-#   EPR_PROJECT_OWNER           project owner login (owner half of owner/repo)
-#   EPR_CONTENT_DATE_FIELD_ID   Content Date field id (may be empty)
-#   EPR_STATUS_FIELD_ID         Status single-select field id
-#   EPR_TODO_OPTION_ID          Status "Todo" option id
-#   EPR_IN_PROGRESS_OPTION_ID   Status "In Progress" option id
-#   EPR_DONE_OPTION_ID          Status "Done" option id
-#   EPR_FINGERPRINT_FIELD_ID    session-fingerprint text field id
-#
-# On failure (rc=1) prints an `error:`-prefixed line to stderr; the caller
-# decides fatality. Hard-fail conditions: gh lacks `project` scope, generic
-# graphql API error, or gh project list failure. Malformed/injection owner/repo
-# is rejected before any gh call. Failing to link the board to the repository is
-# explicitly NOT a hard-fail condition — it only warns (see link_project_to_repo).
-#
-# Never writes .env or the TSV cache — cache writes are the caller's job
-# (run-issue-setup.sh --step ensure-project).
+# ensure-project-ready.sh — reuse-or-create a repo's Projects v2 board and the fields /issue-setup needs
+# (Content Date, Status + Todo/In Progress/Done, the WIP session-id field). Sourced, not executed.
+# ensure_project_ready <owner/repo> (gh with `project` scope) sets on rc 0: EPR_PROJECT_{ID,NUM,OWNER},
+#   EPR_CONTENT_DATE_FIELD_ID (may be empty), EPR_STATUS_FIELD_ID, EPR_{TODO,IN_PROGRESS,DONE}_OPTION_ID,
+#   EPR_SESSION_ID_FIELD_ID (lib/session-id-field.sh; also shown in board views, best-effort).
+# rc 1 + an `error:` line: bad owner/repo (checked before any gh call), missing scope, a graphql or
+#   project-list failure. An unlinked board only warns (link_project_to_repo).
+# Never writes .env or the TSV cache: run-issue-setup.sh --step ensure-project does.
 
 # Idempotent — guard against double-sourcing.
 if [ -n "${_ENSURE_PROJECT_READY_SOURCED:-}" ]; then
@@ -39,6 +18,8 @@ _ENSURE_PROJECT_READY_SOURCED=1
 _EPR_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../migration/link-project.sh
 . "$_EPR_LIB_DIR/../migration/link-project.sh"
+# shellcheck source=session-id-field.sh
+. "$_EPR_LIB_DIR/session-id-field.sh"
 
 # Strip a trailing CR and keep the first line of gh/jq output.
 _epr_clean() { printf '%s' "$1" | tr -d '\r' | head -1; }
@@ -52,7 +33,7 @@ ensure_project_ready() {
     EPR_TODO_OPTION_ID=""
     EPR_IN_PROGRESS_OPTION_ID=""
     EPR_DONE_OPTION_ID=""
-    EPR_FINGERPRINT_FIELD_ID=""
+    EPR_SESSION_ID_FIELD_ID=""
 
     local owner_repo="${1:-}"
     # Reject malformed/injection input before any gh call. Exactly two segments,
@@ -148,9 +129,12 @@ ensure_project_ready() {
     if ! _epr_ensure_status_field "$pid"; then
         return 1
     fi
-    if ! _epr_ensure_fingerprint_field "$pid"; then
+    # Only the session-id name is consulted; a legacy field is left for the `set` recover.
+    if ! session_id_field_create_if_absent "$pid"; then
         return 1
     fi
+    EPR_SESSION_ID_FIELD_ID="$SESSION_ID_FIELD_ENSURED_ID"
+    session_id_field_show_in_views "$pid" "$EPR_SESSION_ID_FIELD_ID" || true
 
     return 0
 }
@@ -258,46 +242,4 @@ _epr_extract_status_options_from_update() {
     EPR_TODO_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r '[.data.updateProjectV2Field.projectV2Field.options[]? | select(.name == "Todo") | .id] | first // ""' 2>/dev/null)")
     EPR_IN_PROGRESS_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r '[.data.updateProjectV2Field.projectV2Field.options[]? | select(.name == "In Progress") | .id] | first // ""' 2>/dev/null)")
     EPR_DONE_OPTION_ID=$(_epr_clean "$(printf '%s' "$json" | jq -r '[.data.updateProjectV2Field.projectV2Field.options[]? | select(.name == "Done") | .id] | first // ""' 2>/dev/null)")
-}
-
-# Ensure the session-fingerprint TEXT field (create-if-missing).
-_epr_ensure_fingerprint_field() {
-    local pid="$1"
-    local fields_json
-    if ! fields_json=$(gh api graphql -F projectId="$pid" -f query="$_epr_field_query" 2>/dev/null); then
-        echo "error: ensure-project-ready: fingerprint discovery query failed" >&2
-        return 1
-    fi
-    local fp_id
-    fp_id=$(printf '%s' "$fields_json" \
-        | jq -r '[.data.node.fields.nodes[]? | select(.name == "session-fingerprint") | .id] | first // ""' 2>/dev/null)
-    fp_id=$(_epr_clean "$fp_id")
-    if [ -n "$fp_id" ]; then
-        EPR_FINGERPRINT_FIELD_ID="$fp_id"
-        return 0
-    fi
-
-    local create_json created
-    if ! create_json=$(gh api graphql \
-            -F projectId="$pid" -F name="session-fingerprint" \
-            -f query='mutation($projectId:ID!,$name:String!){createProjectV2Field(input:{projectId:$projectId,name:$name,dataType:TEXT}){projectV2Field{...on ProjectV2FieldCommon{id name}}}}' \
-            2>/dev/null); then
-        echo "error: ensure-project-ready: createProjectV2Field (session-fingerprint TEXT) failed" >&2
-        return 1
-    fi
-    created=$(printf '%s' "$create_json" | jq -r '.data.createProjectV2Field.projectV2Field.id // empty' 2>/dev/null)
-    created=$(_epr_clean "$created")
-    if [ -z "$created" ]; then
-        # Re-discover in case the mutation id was not returned directly.
-        local redis
-        redis=$(gh api graphql -F projectId="$pid" -f query="$_epr_field_query" 2>/dev/null) || redis=""
-        redis=$(printf '%s' "$redis" | jq -r '[.data.node.fields.nodes[]? | select(.name == "session-fingerprint") | .id] | first // ""' 2>/dev/null)
-        created=$(_epr_clean "$redis")
-    fi
-    if [ -z "$created" ]; then
-        echo "error: ensure-project-ready: session-fingerprint field id unresolved after create" >&2
-        return 1
-    fi
-    EPR_FINGERPRINT_FIELD_ID="$created"
-    return 0
 }

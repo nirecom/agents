@@ -15,7 +15,7 @@ HAS_EMPTY_TEXT=$(grep -cE -- '--text *$' "$GH_MOCK_ARGS_LOG" 2>/dev/null || echo
 LOCK_DELETED=0
 [ ! -f "$LOCKFILE" ] && LOCK_DELETED=1
 if [ "$RC" -eq 0 ] && [ "$HAS_DONE" -ge 1 ] && [ "$HAS_EMPTY_TEXT" -ge 1 ] && [ "$LOCK_DELETED" -eq 1 ]; then
-    pass "T21: clear <N> sets DONE + clears fingerprint + deletes lock"
+    pass "T21: clear <N> sets DONE + clears session-id field + deletes lock"
 else
     fail "T21: rc=$RC done=$HAS_DONE empty_text=$HAS_EMPTY_TEXT lock_deleted=$LOCK_DELETED log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi

@@ -1,4 +1,5 @@
-# T-abandon-26: WIP_STATE_FINGERPRINT_FIELD_ID missing → preflight exit 2, no mutations, lock retained
+# T-abandon-26 (#2925): session-id field id missing is no preflight error — abandon
+# sets Status=Todo only (no --text edit) and exits 0.
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATE="OPEN"
@@ -8,19 +9,19 @@ export _ISSUE_CREATE_INTERNAL_PROJECT_NUM="1"
 export _ISSUE_CREATE_INTERNAL_PROJECT_ID="PVT_resolved"
 export _ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID="PVTSSF_status"
 export _ISSUE_CREATE_INTERNAL_TODO_OPTION_ID="OPT_todo"
-export _ISSUE_CREATE_INTERNAL_FINGERPRINT_FIELD_ID=""
-unset WIP_STATE_FINGERPRINT_FIELD_ID
+export _ISSUE_CREATE_INTERNAL_SESSION_ID_FIELD_ID=""
+unset WIP_STATE_SESSION_ID_FIELD_ID
 LOCKFILE="$PLANS_DIR/wip-lock-42.md"
 echo "stale lock" > "$LOCKFILE"
 run_with_timeout 60 bash "$TARGET" abandon 42 >/dev/null 2>&1
 RC=$?
-HAS_ITEM_EDIT=0; grep -q -- "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_EDIT=1
-LOCK_RETAINED=0; [ -f "$LOCKFILE" ] && LOCK_RETAINED=1
-unset _ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID _ISSUE_CREATE_INTERNAL_TODO_OPTION_ID _ISSUE_CREATE_INTERNAL_FINGERPRINT_FIELD_ID
-if [ "$RC" -eq 2 ] && [ "$HAS_ITEM_EDIT" -eq 0 ] && [ "$LOCK_RETAINED" -eq 1 ]; then
-    pass "T-abandon-26: FINGERPRINT_FIELD_ID missing → preflight exit 2, no mutations, lock retained"
+HAS_TODO=0; grep -- "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null | grep -q "OPT_todo" && HAS_TODO=1
+HAS_TEXT=0; grep -- "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null | grep -q -- "--text" && HAS_TEXT=1
+unset _ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID _ISSUE_CREATE_INTERNAL_TODO_OPTION_ID _ISSUE_CREATE_INTERNAL_SESSION_ID_FIELD_ID
+if [ "$RC" -eq 0 ] && [ "$HAS_TODO" -eq 1 ] && [ "$HAS_TEXT" -eq 0 ]; then
+    pass "T-abandon-26: SESSION_ID_FIELD_ID missing → Status=Todo only, no --text edit, exit 0"
 else
-    fail "T-abandon-26: rc=$RC item_edit=$HAS_ITEM_EDIT lock_retained=$LOCK_RETAINED"
+    fail "T-abandon-26: rc=$RC todo=$HAS_TODO text_edit=$HAS_TEXT"
 fi
 teardown_mock
 
@@ -237,7 +238,7 @@ else
 fi
 teardown_mock
 
-# T-abandon-38: item-edit argument assertions — status uses STATUS_FIELD_ID+TODO_OPTION_ID; fp uses FINGERPRINT_FIELD_ID+item-id
+# T-abandon-38: item-edit argument assertions — status uses STATUS_FIELD_ID+TODO_OPTION_ID; text clear uses SESSION_ID_FIELD_ID+item-id
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATE="OPEN"
@@ -251,7 +252,7 @@ HAS_STATUS_FIELD=0; echo "$STATUS_EDIT" | grep -q "PVTSSF_status" && HAS_STATUS_
 HAS_FP_FIELD=0; echo "$FP_EDIT" | grep -q "PVTF_fp" && HAS_FP_FIELD=1
 HAS_ITEM_ID_STATUS=0; echo "$STATUS_EDIT" | grep -q "PVTI_existing" && HAS_ITEM_ID_STATUS=1
 if [ "$RC" -eq 0 ] && [ "$HAS_TODO_OPT" -eq 1 ] && [ "$HAS_STATUS_FIELD" -eq 1 ] && [ "$HAS_FP_FIELD" -eq 1 ] && [ "$HAS_ITEM_ID_STATUS" -eq 1 ]; then
-    pass "T-abandon-38: item-edit uses correct field IDs (STATUS_FIELD_ID, TODO_OPTION_ID, FINGERPRINT_FIELD_ID, item-id)"
+    pass "T-abandon-38: item-edit uses correct field IDs (STATUS_FIELD_ID, TODO_OPTION_ID, SESSION_ID_FIELD_ID, item-id)"
 else
     fail "T-abandon-38: rc=$RC todo_opt=$HAS_TODO_OPT status_field=$HAS_STATUS_FIELD fp_field=$HAS_FP_FIELD item_id=$HAS_ITEM_ID_STATUS"
 fi

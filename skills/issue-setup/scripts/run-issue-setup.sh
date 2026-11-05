@@ -3,7 +3,7 @@
 # Usage: run-issue-setup.sh --step labels|check-project|ensure-project --repo OWNER/REPO
 #   labels         : sync-labels.sh --repo REPO; its exit code verbatim.
 #   check-project  : issue-create-preflight.sh --check-project; rc=0 present, rc=1 absent.
-#   ensure-project : ensure_project_ready REPO, then the 10-column project-resolve cache row
+#   ensure-project : ensure_project_ready REPO, then the 11-column project-resolve cache row
 #                    (cache dir from resolve-project.sh). Propagates ensure failure.
 # --repo is required and format-validated (OWNER/REPO) before any dispatch, so
 # an injection payload never reaches a downstream command.
@@ -81,7 +81,7 @@ case "$STEP" in
             "${EPR_PROJECT_OWNER:-}" "${EPR_PROJECT_NUM:-}" "${EPR_PROJECT_ID:-}" \
             "${EPR_CONTENT_DATE_FIELD_ID:-}" "${EPR_STATUS_FIELD_ID:-}" \
             "${EPR_TODO_OPTION_ID:-}" "${EPR_IN_PROGRESS_OPTION_ID:-}" \
-            "${EPR_DONE_OPTION_ID:-}" "${EPR_FINGERPRINT_FIELD_ID:-}" || \
+            "${EPR_DONE_OPTION_ID:-}" "${EPR_SESSION_ID_FIELD_ID:-}" || \
             echo "warn: cache write failed for $REPO (continuing)" >&2
         exit 0
         ;;
