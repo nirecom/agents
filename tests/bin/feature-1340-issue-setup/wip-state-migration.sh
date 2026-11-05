@@ -82,7 +82,7 @@ case "$ARGS" in
   api\ graphql\ *fieldValues*)
     # `check` read query — makes TWO fieldValues queries against one item:
     #   1. Status read  → --jq extracts `.name` (filtered by WIP_STATE_STATUS_FIELD_ID)
-    #   2. Fingerprint  → --jq extracts `.text` (filtered by WIP_STATE_FINGERPRINT_FIELD_ID)
+    #   2. Session id   → --jq extracts `.text` (filtered by WIP_STATE_SESSION_ID_FIELD_ID)
     # cmd-check exits early ("none") unless the Status read returns "In Progress",
     # so the mock must return "In Progress" for the status read (the query whose
     # --jq extracts `.name`) to let the verb proceed to the fingerprint read.
@@ -93,7 +93,7 @@ case "$ARGS" in
       *)            printf '{"data":{"node":{"fieldValues":{"nodes":[]}}}}\n'; exit 0 ;;
     esac
     ;;
-  api\ graphql\ *fields*|api\ graphql\ *Content\ Date*|api\ graphql\ *projectId*|api\ graphql\ *Status*|api\ graphql\ *session-fingerprint*)
+  api\ graphql\ *fields*|api\ graphql\ *Content\ Date*|api\ graphql\ *projectId*|api\ graphql\ *Status*|api\ graphql\ *session-id*)
     if [ "${GH_MOCK_RESOLVER_FAIL:-0}" = "1" ]; then
         echo "error: graphql failed" >&2; exit 1
     fi
@@ -105,7 +105,7 @@ case "$ARGS" in
       *'"Todo")'*)        echo "${GH_MOCK_RESOLVED_TODO:-RES_TODO}"; exit 0 ;;
       *'"Done")'*)        echo "${GH_MOCK_RESOLVED_DONE:-RES_DONE}"; exit 0 ;;
       *'"Status")'*|*'== "Status"'*) echo "${GH_MOCK_RESOLVED_STATUS:-RES_STATUS}"; exit 0 ;;
-      *'session-fingerprint'*) echo "${GH_MOCK_RESOLVED_FINGER:-RES_FINGER}"; exit 0 ;;
+      *'"session-id"'*) echo "${GH_MOCK_RESOLVED_FINGER:-RES_FINGER}"; exit 0 ;;
       *"Content Date"*) echo "${GH_MOCK_CONTENT_DATE_FIELD_ID-PVTF_content}"; exit 0 ;;
       *)
         echo "${GH_MOCK_RESOLVED_STATUS:-RES_STATUS}"; exit 0
@@ -148,7 +148,7 @@ teardown_mock() {
           GH_MOCK_RESOLVED_DONE GH_MOCK_RESOLVED_FINGER GH_MOCK_CONTENT_DATE_FIELD_ID \
           GH_MOCK_CHECK_FINGERPRINT_TEXT \
           WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
-          WIP_STATE_DONE_OPTION_ID WIP_STATE_FINGERPRINT_FIELD_ID \
+          WIP_STATE_DONE_OPTION_ID WIP_STATE_SESSION_ID_FIELD_ID \
           WIP_STATE_TODO_OPTION_ID 2>/dev/null || true
 }
 
@@ -279,7 +279,7 @@ ARGS="$*"
 case "$ARGS" in
   auth\ status*) echo "Logged in to github.com"; echo "Token scopes: 'repo', 'project'"; exit 0 ;;
   repo\ view\ *--json\ owner,name*) echo "nirecom/agents"; exit 0 ;;
-  api\ graphql\ *projectsV2*) echo '{"id":"PVT_semi1","number":1,"ownerLogin":"nirecom"}'; exit 0 ;;
+  api\ graphql\ *projectsV2*) echo '{"id":"PVT_semi1","number":1,"ownerLogin":"example-owner"}'; exit 0 ;;
   api\ graphql\ *projectItems*) exit 0 ;;
   api\ graphql\ *)
     case "$ARGS" in
@@ -289,7 +289,7 @@ case "$ARGS" in
       *'"Todo")'*) echo "SEMI_TODO"; exit 0 ;;
       *'"Done")'*) echo "SEMI_DONE"; exit 0 ;;
       *'"Status")'*|*'== "Status"'*) echo "SEMI_STATUS"; exit 0 ;;
-      *'session-fingerprint'*) echo "SEMI_FINGER"; exit 0 ;;
+      *'"session-id"'*) echo "SEMI_FINGER"; exit 0 ;;
       *"Content Date"*) echo "PVTF_semi"; exit 0 ;;
       *) echo "SEMI_STATUS"; exit 0 ;;
     esac ;;

@@ -10,15 +10,52 @@
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
-# Compute expected fingerprint locally (sha256(sid:N)[:8]).
-EXPECTED_FP=$(printf '%s:%s' "test-sid-fixture" "42" | sha256sum | cut -c1-8)
+# #2925: the stored value is the raw session id, not a hash.
+EXPECTED_FP="test-sid-fixture"
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
 RC=$?
 if [ "$RC" -eq 0 ] && [ "$OUT" = "same" ]; then
-    pass "T14: check <N> with matching fingerprint + In Progress → 'same'"
+    pass "T14: check <N> with matching raw session id + In Progress → 'same'"
 else
     fail "T14: rc=$RC out='$OUT' expected_fp=$EXPECTED_FP"
+fi
+teardown_mock
+
+# T14b (#2925): the legacy sha256(sid:N)[:8] value is no longer recognised as own.
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+export GH_MOCK_STATUS="In Progress"
+export GH_MOCK_FINGERPRINT="$(printf '%s:%s' "test-sid-fixture" "42" | sha256sum | cut -c1-8)"
+OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "other" ]; then
+    pass "T14b: check <N> with legacy 8-hex hash value → 'other' (no compatibility)"
+else
+    fail "T14b: rc=$RC out='$OUT' (expected other)"
+fi
+teardown_mock
+
+# T14c (#2925): values are per field id. Own sid only in the legacy field (PVTF_legacy), another sid
+# in session-id (PVTF_fp) → 'other'; the mirrored fixture → 'same' (proves the mock tells fields apart).
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+export GH_MOCK_STATUS="In Progress"
+export GH_MOCK_FP_BY_FIELD="PVTF_legacy=test-sid-fixture;PVTF_fp=other-sid"
+OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "other" ]; then
+    pass "T14c: own sid in legacy field, other sid in session-id → 'other'"
+else
+    fail "T14c: rc=$RC out='$OUT' (expected other)"
+fi
+export GH_MOCK_FP_BY_FIELD="PVTF_legacy=other-sid;PVTF_fp=test-sid-fixture"
+OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "same" ]; then
+    pass "T14c(mirror): other sid in legacy field, own sid in session-id → 'same'"
+else
+    fail "T14c(mirror): rc=$RC out='$OUT' (expected same)"
 fi
 teardown_mock
 
@@ -106,17 +143,17 @@ fi
 teardown_mock
 
 # ===========================================================================
-# Test 20: check <N> graphql query references $WIP_STATE_STATUS_FIELD_ID and $WIP_STATE_FINGERPRINT_FIELD_ID.
+# Test 20: check <N> graphql query references $WIP_STATE_STATUS_FIELD_ID and $WIP_STATE_SESSION_ID_FIELD_ID.
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
-EXPECTED_FP=$(printf '%s:%s' "test-sid-fixture" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="test-sid-fixture"
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 run_with_timeout 60 bash "$TARGET" check 42 >/dev/null 2>&1
 # Look for both field IDs anywhere in the args log of the graphql calls.
 if grep -q "$WIP_STATE_STATUS_FIELD_ID" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-   && grep -q "$WIP_STATE_FINGERPRINT_FIELD_ID" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+   && grep -q "$WIP_STATE_SESSION_ID_FIELD_ID" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
     pass "T20: check <N> graphql references both WIP_STATE_*_FIELD_ID env vars (ID-based filter)"
 else
     fail "T20: expected both field IDs in gh args log; log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -20)"

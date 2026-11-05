@@ -3,7 +3,7 @@
 # Sourced by ../wip-state.sh; not executable standalone.
 # Globals consumed: PROJECT_ID, WIP_STATE_* (env).
 # Functions consumed: validate_n, preflight_field_ids, ensure_resolved,
-#   effective_session_id, compute_fingerprint, resolve_item_id.
+#   effective_session_id, resolve_item_id. Value compared: the raw session id.
 
 # ---------------------------------------------------------------------------
 # Verb: check <N>
@@ -72,18 +72,24 @@ cmd_check() {
         exit 0
     fi
 
-    local fingerprint
-    if ! fingerprint=$(gh api graphql \
+    # In Progress without a session-id field: the holder cannot be shown to be us → other.
+    # Never creates or renames the field (only `set` recovers it).
+    if [ -z "${WIP_STATE_SESSION_ID_FIELD_ID:-}" ]; then
+        echo other
+        exit 0
+    fi
+
+    local holder
+    if ! holder=$(gh api graphql \
             -F itemId="$item_id" \
-            --jq "[.data.node.fieldValues.nodes[]? | select(.field.id == \"$WIP_STATE_FINGERPRINT_FIELD_ID\") | .text] | first // \"\"" \
+            --jq "[.data.node.fieldValues.nodes[]? | select(.field.id == \"$WIP_STATE_SESSION_ID_FIELD_ID\") | .text] | first // \"\"" \
             -f query="$query" 2>/dev/null); then
-        echo "warn: gh api graphql failed for #$n fingerprint read" >&2
+        echo "warn: gh api graphql failed for #$n session-id read" >&2
         exit 1
     fi
 
-    local expected
-    expected=$(compute_fingerprint "$sid" "$n")
-    if [ "$fingerprint" = "$expected" ]; then
+    holder=$(printf '%s' "$holder" | tr -d '\r' | head -1)
+    if [ -n "$holder" ] && [ "$holder" = "$sid" ]; then
         echo same
     else
         echo other

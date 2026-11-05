@@ -23,7 +23,7 @@ mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD"
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/foreign-sid-1082.jsonl"
 touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/foreign-sid-1082.jsonl"
 # Expected fingerprint uses own-sid-1082, not foreign-sid-1082.
-EXPECTED_FP=$(printf '%s:%s' "own-sid-1082" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="own-sid-1082"
 ( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1 )
 RC=$?
 if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
@@ -43,7 +43,7 @@ export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
 export CLAUDE_CODE_SESSION_ID="own-sid-1082-check"
 # The stored fingerprint matches own-sid-1082-check, not any foreign sid.
-EXPECTED_FP=$(printf '%s:%s' "own-sid-1082-check" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="own-sid-1082-check"
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-1082-check"
 # #1899: git repo + github.com origin so repo resolution succeeds from this CWD.
