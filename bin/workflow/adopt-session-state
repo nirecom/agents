@@ -12,10 +12,12 @@ const { adoptState, listAdoptCandidates } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "inheritance", "adopt.js"));
 const { describeGranularInheritance } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "inheritance", "apply.js"));
-const { inheritanceSideLines } =
+const { inheritanceSideLines, upstreamAbortLines } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "bin", "lib", "resume-session", "render.js"));
 const { resolveSessionId } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "session-id.js"));
+const abortUpstreams =
+  require(path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "lib", "adopt-session-state", "abort-upstreams.js"));
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 // #2297: kept recognized so an old command line fails loudly instead of as "unrecognized".
@@ -24,18 +26,20 @@ const REMOVED_FLAGS = ["--granularity", "--verified-equivalent"];
 function usage() {
   process.stdout.write(
     "Usage: adopt-session-state [--session <downstream-sid>] --list\n" +
-    "       adopt-session-state [--session <downstream-sid>] --from <upstream-sid>\n"
+    "       adopt-session-state [--session <downstream-sid>] --from <upstream-sid>\n" +
+    "       adopt-session-state [--session <downstream-sid>] --abort-upstreams\n"
   );
 }
 
 function parseArgs(argv) {
-  const out = { session: null, from: null, list: false, help: false, error: null, removed: null };
+  const out = { session: null, from: null, list: false, abortUpstreams: false, help: false, error: null, removed: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (REMOVED_FLAGS.indexOf(a) !== -1) {
       if (out.removed === null) out.removed = a;
     } else if (a === "--help" || a === "-h") out.help = true;
     else if (a === "--list") out.list = true;
+    else if (a === abortUpstreams.FLAG) out.abortUpstreams = true;
     else if (a === "--session" && i + 1 < argv.length) out.session = argv[++i];
     else if (a === "--from" && i + 1 < argv.length) out.from = argv[++i];
     else out.error = `unrecognized argument: ${a}`;
@@ -70,6 +74,11 @@ function main() {
   }
   if (!heirSid) fail("could not resolve this session's id; pass --session <sid>");
 
+  if (args.abortUpstreams) {
+    process.exitCode = abortUpstreams.runAbortUpstreams(heirSid, (s) => process.stdout.write(s));
+    return;
+  }
+
   if (args.list) {
     const r = listAdoptCandidates(heirSid);
     if (!r.ok) fail(r.error);
@@ -87,7 +96,7 @@ function main() {
     return;
   }
 
-  if (!args.from) { usage(); fail("nothing to do — pass --list or --from <upstream-sid>"); }
+  if (!args.from) { usage(); fail("nothing to do — pass --list, --from <upstream-sid> or --abort-upstreams"); }
 
   const result = adoptState({ heirSid, donorSid: args.from });
   if (!result.ok) fail(result.error);
@@ -96,6 +105,9 @@ function main() {
   );
   process.stdout.write(describeGranularInheritance(result.inheritance) + "\n");
   for (const line of inheritanceSideLines(result.inheritance, result.donorSessionId)) {
+    process.stdout.write(line + "\n");
+  }
+  for (const line of upstreamAbortLines(result.upstream_aborts)) {
     process.stdout.write(line + "\n");
   }
   if (result.degraded_reason) {

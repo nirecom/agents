@@ -22,6 +22,9 @@ Neither case fits? Stop and take the standard path.
 ## Procedure
 
 ICV-1. List the target issue numbers, one line each, with the reason the standard path does not apply to that number. A number you cannot justify in one line is not an admin close — route it to `/issue-close-stage` + `/issue-close-finalize` and drop it from this run. If no number survives, stop here.
+Then run `bash "$AGENTS_MAIN_ROOT/skills/issue-close-verified/scripts/check-wip-owner.sh" <N>...` with the surviving numbers.
+A `warn:` line means another session holds that issue's WIP mark, or the owner could not be read (the line says which): show it to the user and drop the number unless the user confirms the close.
+The check never blocks ICV-2; silence means no other owner.
 
 ICV-2. Open the window: `echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED: {reason}>>"`. Permission is **ask**, so the user is prompted. If the prompt is declined, stop: no marker was created, so there is nothing to restore and ICV-3 must not run.
 

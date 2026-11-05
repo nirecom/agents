@@ -22,9 +22,14 @@ const EVENT_KINDS = [
   "reset",
   "state_handoff_record",
   "cycle_boundary",
+  "workflow_aborted",
+  "workflow_abort_handover",
 ];
 
 const CYCLE_BOUNDARY_REASONS = ["reinit-entry", "workflow-init-complete"];
+
+// The closed origin vocabulary of workflow_aborted; adopt-auto / abort-cli name the heir session.
+const ABORT_ORIGINS = Object.freeze(["abort-sentinel", "adopt-auto", "abort-cli"]);
 
 // How much the recorded `at` can be trusted:
 //   observed    — the process saw the fact happen and stamped it then
@@ -108,6 +113,8 @@ const REQUIRED_FIELDS = {
   reset: ["from_step", "reason"],
   state_handoff_record: ["cls", "at_step", "record_key", "summary", "pointer"],
   cycle_boundary: ["closed_cycle", "reason"],
+  workflow_aborted: ["reason"],
+  workflow_abort_handover: ["heir_session_id"],
 };
 
 class InvalidEventError extends Error {
@@ -118,6 +125,38 @@ class InvalidEventError extends Error {
 }
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+
+function validateWorkflowAborted(event) {
+  if (typeof event.reason !== "string" || event.reason.trim().length === 0) {
+    throw new InvalidEventError("event.reason must be a non-empty string (kind=workflow_aborted)");
+  }
+  if (!ABORT_ORIGINS.includes(event.origin)) {
+    throw new InvalidEventError("event.origin must be one of: " + ABORT_ORIGINS.join(", "));
+  }
+  if (event.origin === "abort-sentinel") {
+    if (hasOwn(event, "heir_session_id")) {
+      throw new InvalidEventError("event.heir_session_id is not allowed for origin=abort-sentinel");
+    }
+    return;
+  }
+  validateHeirSessionId(event);
+}
+
+function validateHeirSessionId(event) {
+  const { SESSION_ID_VALID_RE } = require("./core");
+  if (typeof event.heir_session_id !== "string" || !SESSION_ID_VALID_RE.test(event.heir_session_id)) {
+    throw new InvalidEventError(`event.heir_session_id is missing or invalid (origin=${event.origin})`);
+  }
+}
+
+// workflow_abort_handover: a downstream adopted a session aborted by abort-sentinel, so the
+// worktree is the downstream's; only the heir-naming origins can record it.
+function validateWorkflowAbortHandover(event) {
+  if (event.origin === "abort-sentinel" || !ABORT_ORIGINS.includes(event.origin)) {
+    throw new InvalidEventError("event.origin must be adopt-auto or abort-cli (kind=workflow_abort_handover)");
+  }
+  validateHeirSessionId(event);
+}
 
 // Throws InvalidEventError when `event` is not a well-formed stream record.
 // Error messages name FIELDS, never values — values carry session content.
@@ -170,6 +209,8 @@ function validateEvent(event) {
       throw new InvalidEventError("event.reason must be one of: " + CYCLE_BOUNDARY_REASONS.join(", "));
     }
   }
+  if (event.kind === "workflow_aborted") validateWorkflowAborted(event);
+  if (event.kind === "workflow_abort_handover") validateWorkflowAbortHandover(event);
   if (event.kind === "worktree") {
     if (!WORKTREE_TRANSITIONS.includes(event.transition)) {
       throw new InvalidEventError("event.transition must be one of: " + WORKTREE_TRANSITIONS.join(", "));
@@ -314,6 +355,7 @@ module.exports = {
   WORKTREE_TRANSITIONS,
   PATH_SOURCES,
   CYCLE_BOUNDARY_REASONS,
+  ABORT_ORIGINS,
   REQUIRED_FIELDS,
   InvalidEventError,
   validateEvent,

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/hooks/feature-1733-state-event-stream/projection-contract.sh
 # Tests: hooks/workflow-state/state-io/projection.js, hooks/workflow-state/state-io/core.js, hooks/workflow-state/is-bugfix-session.js
-# Tags: workflow-state, event-stream, projection, deep-freeze, single-source-of-truth, scope:issue-specific, pwsh-not-required, TL2
+# Tags: workflow-state, event-stream, projection, deep-freeze, single-source-of-truth, regression-2920, workflow-abort, scope:issue-specific, pwsh-not-required, TL2
 # readState PASTES a projection (#1733): it must equal projectState(raw) (CPR-SSOT) and be
 # deep-frozen so a legacy write fails loudly. TL3 gap: real readers under the deep-freeze
 # are not driven here; mitigation: bin/check-verification-gate.sh category: hook-registration.
@@ -43,7 +43,7 @@ if run_case "P2/projection-key-coverage"; then
 const PJ = require("./hooks/workflow-state/state-io/projection");
 const WANT = ["steps", "plan_approvals", "worktree_entered_at", "worktree_exited_at",
               "git_branch", "cwd", "is_bugfix", "session_model",
-              "complexity_evaluation", "skip_judgment"];
+              "complexity_evaluation", "skip_judgment", "workflow_aborted"];
 const missing = WANT.filter((k) => !PJ.PROJECTION_KEYS.includes(k));
 const extra = PJ.PROJECTION_KEYS.filter((k) => !WANT.includes(k));
 S.markStep(sid, "run_tests", "complete");
