@@ -73,12 +73,15 @@ token never reaches `git commit` or other steps), and allowlists `GLAB_CONFIG_DI
 ## 6. Label-based WIP
 
 GitLab Free has no Projects v2 board, so WIP state lives in issue labels:
-`status:wip` / `status:done` replace the board Status field, and `wip-fp:<hash>`
-replaces the fingerprint field that protects one session's WIP from another's.
+`status:wip` / `status:done` replace the board Status field, and `wip-fp:<session-id>`
+(the raw session id) replaces the `session-id` field that protects one session's WIP
+from another's. `set` removes every other `wip-fp:*` label, including old 8-hex ones,
+in the same edit; the label definitions themselves stay.
 `status:*` labels are defined in `.github/labels.yml` (so `sync-labels.sh` keeps
 them), and `wip-fp:` is guarded by that script's `protected_prefixes` so a sync
-never deletes a live fingerprint. The verbs (`set`/`check`/`clear`/`abandon`/
+never deletes a live holder label. The verbs (`set`/`check`/`clear`/`abandon`/
 `setup`) preserve the GitHub exit-code contract and the cross-session protection.
+Why the raw id and how the holder value behaves: [wip-signaling.md](wip-signaling.md).
 
 ## 7. Accepted tradeoffs
 

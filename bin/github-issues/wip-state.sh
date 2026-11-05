@@ -1,7 +1,7 @@
 #!/bin/bash
 # bin/github-issues/wip-state.sh — WIP signaling for issues via GitHub Projects v2.
 # Verbs: set <N> | check <N> | clear <N> | abandon <N> | setup
-# Fingerprint: sha256(sid+":"+N)[:8]; collision at N=1000: ≈0.012% (n(n-1)/2 ÷ 2^32).
+# Value: raw session id in the session-id field (docs/architecture/wip-signaling.md).
 # GraphQL: writes via gh project item-edit; reads via gh api graphql.
 # Run from the target repo's worktree.
 
@@ -131,43 +131,41 @@ ensure_wip_field_ids() {
             echo "warn: gh auth lacks 'project' scope — field-id resolve may fail." >&2
         fi
     fi
-    if resolve_project_for_repo; then
+    # --require-wip-fields: a cached row missing any WIP column is refetched.
+    if resolve_project_for_repo --require-wip-fields; then
         [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && WIP_STATE_STATUS_FIELD_ID="$RESOLVED_STATUS_FIELD_ID"
         [ -z "${WIP_STATE_TODO_OPTION_ID:-}" ]       && WIP_STATE_TODO_OPTION_ID="$RESOLVED_TODO_OPTION_ID"
         [ -z "${WIP_STATE_IN_PROGRESS_OPTION_ID:-}" ] && WIP_STATE_IN_PROGRESS_OPTION_ID="$RESOLVED_IN_PROGRESS_OPTION_ID"
         [ -z "${WIP_STATE_DONE_OPTION_ID:-}" ]       && WIP_STATE_DONE_OPTION_ID="$RESOLVED_DONE_OPTION_ID"
-        [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && WIP_STATE_FINGERPRINT_FIELD_ID="$RESOLVED_FINGERPRINT_FIELD_ID"
+        [ -z "${WIP_STATE_SESSION_ID_FIELD_ID:-}" ]  && WIP_STATE_SESSION_ID_FIELD_ID="$RESOLVED_SESSION_ID_FIELD_ID"
     fi
     return 0
 }
 
-# Per-verb preflight: only required env vars actually consumed by the verb.
+# Per-verb preflight: the Status field and the options the verb consumes. The session-id field
+# is not required here: each verb handles its absence (wip-state/field-recover.sh).
 preflight_field_ids() {
     local missing=()
     case "$CMD" in
         set)
             [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && missing+=("WIP_STATE_STATUS_FIELD_ID")
             [ -z "${WIP_STATE_IN_PROGRESS_OPTION_ID:-}" ] && missing+=("WIP_STATE_IN_PROGRESS_OPTION_ID")
-            [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && missing+=("WIP_STATE_FINGERPRINT_FIELD_ID")
             ;;
         check)
             [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && missing+=("WIP_STATE_STATUS_FIELD_ID")
-            [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && missing+=("WIP_STATE_FINGERPRINT_FIELD_ID")
             ;;
         clear)
             [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && missing+=("WIP_STATE_STATUS_FIELD_ID")
             [ -z "${WIP_STATE_DONE_OPTION_ID:-}" ]       && missing+=("WIP_STATE_DONE_OPTION_ID")
-            [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && missing+=("WIP_STATE_FINGERPRINT_FIELD_ID")
             ;;
         abandon)
             [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && missing+=("WIP_STATE_STATUS_FIELD_ID")
             [ -z "${WIP_STATE_TODO_OPTION_ID:-}" ]       && missing+=("WIP_STATE_TODO_OPTION_ID")
-            [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && missing+=("WIP_STATE_FINGERPRINT_FIELD_ID")
             ;;
     esac
     if [ "${#missing[@]}" -gt 0 ]; then
         echo "Error: missing required env vars for '$CMD': ${missing[*]}" >&2
-        echo "Hint: run 'bash $0 setup' to discover and cache the required project field IDs" >&2
+        echo "Hint: run /issue-setup for this repo (creates Status and its options), and ensure 'gh auth refresh -s project'" >&2
         exit 2
     fi
 }
@@ -183,10 +181,6 @@ resolve_plans_dir() {
     else
         printf '%s' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
     fi
-}
-
-compute_fingerprint() {
-    printf '%s:%s' "$1" "$2" | sha256sum | cut -c1-8
 }
 
 # resolve_owner_repo and resolve_item_id are sourced from lib/board-card.sh.
@@ -225,6 +219,8 @@ delete_lock_file() {
 _WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/wip-state"
 # shellcheck source=wip-state/session-id.sh
 . "$_WS_DIR/session-id.sh"
+# shellcheck source=wip-state/field-recover.sh
+. "$_WS_DIR/field-recover.sh"
 # shellcheck source=wip-state/cmd-set.sh
 . "$_WS_DIR/cmd-set.sh"
 # shellcheck source=wip-state/cmd-check.sh

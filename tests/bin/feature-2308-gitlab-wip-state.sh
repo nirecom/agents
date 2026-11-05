@@ -35,7 +35,7 @@ unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # Drop any inherited WIP_STATE_* so D5's "missing required env vars" path is real.
 unset WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
       WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID \
-      WIP_STATE_FINGERPRINT_FIELD_ID 2>/dev/null || true
+      WIP_STATE_SESSION_ID_FIELD_ID 2>/dev/null || true
 
 SID="sid-2308-fixture"
 

@@ -50,7 +50,7 @@ MOCK_EOF
     export WIP_STATE_IN_PROGRESS_OPTION_ID="OPT_inprog"
     export WIP_STATE_DONE_OPTION_ID="OPT_done"
     export WIP_STATE_TODO_OPTION_ID="OPT_todo"
-    export WIP_STATE_FINGERPRINT_FIELD_ID="PVTF_fp"
+    export WIP_STATE_SESSION_ID_FIELD_ID="PVTF_fp"
 
     export ISSUE_CREATE_PROJECT_ID="PVT_kwHOAMF_jc4BXf9E"
     export ISSUE_CREATE_PROJECT_NUM="1"
@@ -68,21 +68,24 @@ teardown_wip_mock() {
     unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_ITEM_ID GH_MOCK_STATUS GH_MOCK_FINGERPRINT \
           WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
           WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID \
-          WIP_STATE_FINGERPRINT_FIELD_ID \
+          WIP_STATE_SESSION_ID_FIELD_ID \
           ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER \
           CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
+# #2925: the WIP value is the raw session id (no sha256 digest); arg 2 kept for call-site symmetry.
 expected_fp() {
-    printf '%s:%s' "$1" "$2" | sha256sum | cut -c1-8
+    printf '%s' "$1"
 }
+# has_text <value> — the gh log holds an item-edit whose --text is exactly <value>.
+has_text() { grep -qE -- "--text $1( |\$)" "$GH_MOCK_ARGS_LOG" 2>/dev/null; }
 
 # C1
 setup_wip_mock
 EXP_FP=$(expected_fp "testSID" "42")
 run_with_timeout 30 bash "$WIP_STATE" set 42 --session-id testSID >/dev/null 2>&1
 RC=$?
-if [ "$RC" -eq 0 ] && grep -q -- "--text $EXP_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+if [ "$RC" -eq 0 ] && has_text "$EXP_FP"; then
     pass "C1: set <N> --session-id testSID writes fingerprint computed from testSID"
 else
     fail "C1: rc=$RC exp_fp=$EXP_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
@@ -130,7 +133,7 @@ setup_wip_mock
 EXP_FP=$(expected_fp "testSID" "42")
 run_with_timeout 30 bash "$WIP_STATE" set --session-id testSID 42 >/dev/null 2>&1
 RC=$?
-if [ "$RC" -eq 0 ] && grep -q -- "--text $EXP_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+if [ "$RC" -eq 0 ] && has_text "$EXP_FP"; then
     pass "C5: --session-id can appear before <N> (position independence)"
 else
     fail "C5: rc=$RC exp_fp=$EXP_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"

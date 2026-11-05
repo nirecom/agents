@@ -62,7 +62,7 @@ case "$ARGS" in
         ;;
     esac
     ;;
-  api\ graphql\ *fields*|api\ graphql\ *Content\ Date*|api\ graphql\ *projectId*|api\ graphql\ *Status*|api\ graphql\ *SINGLE_SELECT*|api\ graphql\ *fingerprint*|api\ graphql\ *PVTF*)
+  api\ graphql\ *fields*|api\ graphql\ *Content\ Date*|api\ graphql\ *projectId*|api\ graphql\ *Status*|api\ graphql\ *SINGLE_SELECT*|api\ graphql\ *session-id*|api\ graphql\ *PVTF*)
     if [ "${GH_MOCK_GRAPHQL_FAIL:-0}" = "1" ]; then
         echo "error: graphql failed" >&2; exit 1
     fi
@@ -84,8 +84,9 @@ case "$ARGS" in
       *'"Status")'*|*'"Status" '*|*'== "Status"'*)
         echo "${GH_MOCK_STATUS_FIELD_ID:-PVTF_mock_status}"; exit 0
         ;;
-      *'"session-fingerprint")'*|*'session-fingerprint'*)
-        echo "${GH_MOCK_FINGERPRINT_FIELD_ID:-PVTF_mock_finger}"; exit 0
+      *'"session-id")'*|*'== "session-id"'*)
+        # #2925: Query C selects the session-id field; the legacy name gets no answer here.
+        echo "${GH_MOCK_SESSION_ID_FIELD_ID:-PVTF_mock_sid}"; exit 0
         ;;
       *"Content Date"*|*"name == \"Content Date\""*)
         FIELD_ID="${GH_MOCK_CONTENT_DATE_FIELD_ID-PVTF_mock_content_date}"
@@ -125,13 +126,13 @@ teardown_mock() {
           GH_MOCK_PROJECT_NUM GH_MOCK_PROJECT_ID GH_MOCK_CONTENT_DATE_FIELD_ID \
           GH_MOCK_STATUS_FIELD_ID GH_MOCK_TODO_OPTION_ID \
           GH_MOCK_IN_PROGRESS_OPTION_ID GH_MOCK_DONE_OPTION_ID \
-          GH_MOCK_FINGERPRINT_FIELD_ID GH_MOCK_GRAPHQL_FAIL \
+          GH_MOCK_SESSION_ID_FIELD_ID GH_MOCK_GRAPHQL_FAIL \
           _ISSUE_CREATE_INTERNAL_OWNER _ISSUE_CREATE_INTERNAL_PROJECT_NUM \
           _ISSUE_CREATE_INTERNAL_PROJECT_ID _ISSUE_CREATE_INTERNAL_FIELD_ID \
           RESOLVED_OWNER RESOLVED_PROJECT_NUM RESOLVED_PROJECT_ID \
           RESOLVED_CONTENT_DATE_FIELD_ID RESOLVED_STATUS_FIELD_ID \
           RESOLVED_TODO_OPTION_ID RESOLVED_IN_PROGRESS_OPTION_ID \
-          RESOLVED_DONE_OPTION_ID RESOLVED_FINGERPRINT_FIELD_ID 2>/dev/null || true
+          RESOLVED_DONE_OPTION_ID RESOLVED_SESSION_ID_FIELD_ID 2>/dev/null || true
 }
 
 # Helper: run resolver in a subshell and capture RESOLVED_* + RC
@@ -148,7 +149,7 @@ run_resolver() {
         printf 'RESOLVED_TODO_OPTION_ID=%s\n'              \"\${RESOLVED_TODO_OPTION_ID:-}\"
         printf 'RESOLVED_IN_PROGRESS_OPTION_ID=%s\n'       \"\${RESOLVED_IN_PROGRESS_OPTION_ID:-}\"
         printf 'RESOLVED_DONE_OPTION_ID=%s\n'              \"\${RESOLVED_DONE_OPTION_ID:-}\"
-        printf 'RESOLVED_FINGERPRINT_FIELD_ID=%s\n'        \"\${RESOLVED_FINGERPRINT_FIELD_ID:-}\"
+        printf 'RESOLVED_SESSION_ID_FIELD_ID=%s\n'        \"\${RESOLVED_SESSION_ID_FIELD_ID:-}\"
         printf 'RC=%s\n' \"\$RC\"
     " 2>"$stderr_file"
 }
@@ -157,7 +158,7 @@ run_resolver() {
 
 # TSV parser / schema-guard table (C7, table-driven). Row: name | setup_kind (cache row for "nirecom/agents") | expect.
 # expect: miss → graphql called; hit:<ID> → no graphql, PROJECT_ID==<ID>; hit-emptystatus:<ID> → also STATUS empty.
-# Contract: lookup is awk '$1==key {print; exit}' (first match wins); guard = exactly 10 fields AND non-empty
+# Contract: lookup is awk '$1==key {print; exit}' (first match wins); guard = exactly 11 fields, col 11 = sid1, AND non-empty
 # cols 2/3/4 via `[ -n ]` only — no numeric/whitespace validation, so nonnumeric-num and wsonly-owner are HITs
 # (asserting MISS would be a forever-RED fabricated contract). An EMPTY required field IS a miss (emptyid-required-miss).
 write_cache_case() {
@@ -175,26 +176,29 @@ write_cache_case() {
         : > "$CACHE_FILE" ;;
       blank-lines)
         printf '\n\n\n' > "$CACHE_FILE" ;;
-      10col-trailingblank)
-        printf 'nirecom/agents\towner\t7\tPVT_hit\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n\n' > "$CACHE_FILE" ;;
-      10col-dup)
-        printf 'nirecom/agents\towner\t1\tPVT_first\tc\ts\tt\ti\td\tf\n'  > "$CACHE_FILE"
-        printf 'nirecom/agents\towner\t2\tPVT_second\tc\ts\tt\ti\td\tf\n' >> "$CACHE_FILE" ;;
-      10col-emptystatus)
-        printf 'nirecom/agents\towner\t3\tPVT_emptystatus\tcontent\t\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE" ;;
-      10col-emptyid)
-        printf 'nirecom/agents\towner\t3\t\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE" ;;
-      10col-nonnumeric-num)
+      11col-trailingblank)
+        printf 'nirecom/agents\towner\t7\tPVT_hit\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tsid_f\tsid1\n\n' > "$CACHE_FILE" ;;
+      11col-dup)
+        printf 'nirecom/agents\towner\t1\tPVT_first\tc\ts\tt\ti\td\tf\tsid1\n'  > "$CACHE_FILE"
+        printf 'nirecom/agents\towner\t2\tPVT_second\tc\ts\tt\ti\td\tf\tsid1\n' >> "$CACHE_FILE" ;;
+      10col-legacy)
+        # #2925: a pre-sid1 10-column row (col 10 = old fingerprint field) is a miss.
+        printf 'nirecom/agents\towner\t7\tPVT_legacy\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE" ;;
+      11col-emptystatus)
+        printf 'nirecom/agents\towner\t3\tPVT_emptystatus\tcontent\t\ttodo_f\tinprog_f\tdone_f\tsid_f\tsid1\n' > "$CACHE_FILE" ;;
+      11col-emptyid)
+        printf 'nirecom/agents\towner\t3\t\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tsid_f\tsid1\n' > "$CACHE_FILE" ;;
+      11col-nonnumeric-num)
         # col3 (project_num) is non-numeric. The guard checks NON-EMPTINESS only
         # (no numeric validation), so this is a HIT — matches the real guard.
-        printf 'nirecom/agents\towner\tabc\tPVT_nonnum\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE" ;;
-      10col-wsonly-owner)
+        printf 'nirecom/agents\towner\tabc\tPVT_nonnum\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tsid_f\tsid1\n' > "$CACHE_FILE" ;;
+      11col-wsonly-owner)
         # col2 (project_owner, required) is whitespace-only (a single space).
         # `[ -n " " ]` is TRUE in bash, so the non-empty guard treats it as a
         # HIT — matches the real guard (no whitespace trimming/validation).
-        printf 'nirecom/agents\t \t5\tPVT_wsowner\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE" ;;
+        printf 'nirecom/agents\t \t5\tPVT_wsowner\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tsid_f\tsid1\n' > "$CACHE_FILE" ;;
       col7-retain)
-        printf 'nirecom/agents\towner\t1\tPVT_id\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE" ;;
+        printf 'nirecom/agents\towner\t1\tPVT_id\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tsid_f\tsid1\n' > "$CACHE_FILE" ;;
       *) echo "unknown setup_kind: $kind" >&2; return 1 ;;
     esac
 }
@@ -245,24 +249,25 @@ done <<'TABLE'
 3col-miss              | 3col                  | miss
 empty-file-miss        | empty-file            | miss
 blank-lines-miss       | blank-lines           | miss
-trailingblank-hit      | 10col-trailingblank   | hit:PVT_hit
-duplicate-first-wins   | 10col-dup             | hit:PVT_first
-emptystatus-hit        | 10col-emptystatus     | hit-emptystatus:PVT_emptystatus
-emptyid-required-miss  | 10col-emptyid         | miss
+trailingblank-hit      | 11col-trailingblank   | hit:PVT_hit
+duplicate-first-wins   | 11col-dup             | hit:PVT_first
+emptystatus-hit        | 11col-emptystatus     | hit-emptystatus:PVT_emptystatus
+emptyid-required-miss  | 11col-emptyid         | miss
 col7-retention-hit     | col7-retain           | hit:PVT_id
-nonnumeric-num-hit     | 10col-nonnumeric-num  | hit:PVT_nonnum
-wsonly-owner-hit       | 10col-wsonly-owner    | hit:PVT_wsowner
+nonnumeric-num-hit     | 11col-nonnumeric-num  | hit:PVT_nonnum
+wsonly-owner-hit       | 11col-wsonly-owner    | hit:PVT_wsowner
+legacy-10col-miss      | 10col-legacy          | miss
 TABLE
 
 # ===========================================================================
-# TS-4: 10-column cache row → hit; all 5 new RESOLVED_* set; NO graphql call
+# TS-4: 11-column sid1 cache row → hit; all 5 new RESOLVED_* set; NO graphql call
 # ===========================================================================
 setup_mock
 CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-# Exactly 10 columns
-printf 'nirecom/agents\tcached-owner\t99\tPVT_cached\tPVTF_content\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_finger\n' > "$CACHE_FILE"
+# Exactly 11 columns (col 11 = sid1 schema tag)
+printf 'nirecom/agents\tcached-owner\t99\tPVT_cached\tPVTF_content\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_sid\tsid1\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/ts4-stderr.log"
 OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -272,7 +277,7 @@ R_STATUS=$(get_field "$OUT" RESOLVED_STATUS_FIELD_ID)
 R_TODO=$(get_field "$OUT" RESOLVED_TODO_OPTION_ID)
 R_INPROG=$(get_field "$OUT" RESOLVED_IN_PROGRESS_OPTION_ID)
 R_DONE=$(get_field "$OUT" RESOLVED_DONE_OPTION_ID)
-R_FINGER=$(get_field "$OUT" RESOLVED_FINGERPRINT_FIELD_ID)
+R_FINGER=$(get_field "$OUT" RESOLVED_SESSION_ID_FIELD_ID)
 GRAPHQL_CALLED=0
 grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
 if [ "$RC" = "0" ] \
@@ -282,9 +287,9 @@ if [ "$RC" = "0" ] \
    && [ "$R_TODO" = "PVTF_todo" ] \
    && [ "$R_INPROG" = "PVTF_inprog" ] \
    && [ "$R_DONE" = "PVTF_done" ] \
-   && [ "$R_FINGER" = "PVTF_finger" ] \
+   && [ "$R_FINGER" = "PVTF_sid" ] \
    && [ "$GRAPHQL_CALLED" = "0" ]; then
-    pass "TS-4: 10-col cache hit → all 5 new RESOLVED_* set, NO graphql call"
+    pass "TS-4: 11-col sid1 cache hit → all 5 new RESOLVED_* set, NO graphql call"
 else
     fail "TS-4: rc=$RC owner=$R_OWNER num=$R_NUM status=$R_STATUS todo=$R_TODO inprog=$R_INPROG done=$R_DONE finger=$R_FINGER graphql=$GRAPHQL_CALLED"
 fi
@@ -304,7 +309,7 @@ export GH_MOCK_STATUS_FIELD_ID="PVTF_cold_status"
 export GH_MOCK_TODO_OPTION_ID="opt_cold_todo"
 export GH_MOCK_IN_PROGRESS_OPTION_ID="opt_cold_inprog"
 export GH_MOCK_DONE_OPTION_ID="opt_cold_done"
-export GH_MOCK_FINGERPRINT_FIELD_ID="PVTF_cold_finger"
+export GH_MOCK_SESSION_ID_FIELD_ID="PVTF_cold_finger"
 STDERR_FILE="$TMP/ts5-stderr.log"
 OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -312,7 +317,7 @@ R_STATUS=$(get_field "$OUT" RESOLVED_STATUS_FIELD_ID)
 R_TODO=$(get_field "$OUT" RESOLVED_TODO_OPTION_ID)
 R_INPROG=$(get_field "$OUT" RESOLVED_IN_PROGRESS_OPTION_ID)
 R_DONE=$(get_field "$OUT" RESOLVED_DONE_OPTION_ID)
-R_FINGER=$(get_field "$OUT" RESOLVED_FINGERPRINT_FIELD_ID)
+R_FINGER=$(get_field "$OUT" RESOLVED_SESSION_ID_FIELD_ID)
 if [ "$RC" = "0" ] \
    && [ "$R_STATUS" = "PVTF_cold_status" ] \
    && [ "$R_TODO" = "opt_cold_todo" ] \
@@ -326,7 +331,7 @@ fi
 teardown_mock
 
 # ===========================================================================
-# TS-6: cache write after cold fetch → exactly 10 cols, cols 1-5 known,
+# TS-6: cache write after cold fetch → exactly 11 cols (col 11 = sid1), cols 1-5 known,
 # cols 6-10 = the EXACT field/option IDs the mock returned (C1: no vacuous
 # column-count-only pass). RED now: source writes 5-col rows without new IDs.
 # ===========================================================================
@@ -339,7 +344,7 @@ export GH_MOCK_STATUS_FIELD_ID="PVTF_w_status"
 export GH_MOCK_TODO_OPTION_ID="opt_w_todo"
 export GH_MOCK_IN_PROGRESS_OPTION_ID="opt_w_inprog"
 export GH_MOCK_DONE_OPTION_ID="opt_w_done"
-export GH_MOCK_FINGERPRINT_FIELD_ID="PVTF_w_finger"
+export GH_MOCK_SESSION_ID_FIELD_ID="PVTF_w_finger"
 CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 STDERR_FILE="$TMP/ts6-stderr.log"
 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'" >/dev/null
@@ -351,16 +356,17 @@ if [ -f "$CACHE_FILE" ]; then
     C5=$(printf '%s' "$ROW" | cut -f5);  C6=$(printf '%s' "$ROW" | cut -f6)
     C7=$(printf '%s' "$ROW" | cut -f7);  C8=$(printf '%s' "$ROW" | cut -f8)
     C9=$(printf '%s' "$ROW" | cut -f9);  C10=$(printf '%s' "$ROW" | cut -f10)
-    if [ "$COL_COUNT" = "10" ] \
+    C11=$(printf '%s' "$ROW" | cut -f11)
+    if [ "$COL_COUNT" = "11" ] && [ "$C11" = "sid1" ] \
        && [ "$C1" = "nirecom/agents" ] && [ "$C2" = "nirecom" ] \
        && [ "$C3" = "1" ] && [ "$C4" = "PVT_mock123" ] \
        && [ "$C5" = "PVTF_mock_content_date" ] \
        && [ "$C6" = "PVTF_w_status" ] && [ "$C7" = "opt_w_todo" ] \
        && [ "$C8" = "opt_w_inprog" ] && [ "$C9" = "opt_w_done" ] \
        && [ "$C10" = "PVTF_w_finger" ]; then
-        pass "TS-6: cache write → 10 cols, cols 6-10 = exact field/option IDs"
+        pass "TS-6: cache write → 11 cols (sid1), cols 6-10 = exact field/option IDs"
     else
-        fail "TS-6: cols=$COL_COUNT c6=$C6 c7=$C7 c8=$C8 c9=$C9 c10=$C10 (expected exact w-* IDs) row='$ROW'"
+        fail "TS-6: cols=$COL_COUNT c6=$C6 c7=$C7 c8=$C8 c9=$C9 c10=$C10 c11=$C11 (expected exact w-* IDs) row='$ROW'"
     fi
 else
     fail "TS-6: cache file not created after cold fetch"
@@ -375,7 +381,7 @@ teardown_mock
 setup_mock
 CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 mkdir -p "$(dirname "$CACHE_FILE")"
-printf 'nirecom/agents\towner\t1\tPVT_id\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE"
+printf 'nirecom/agents\towner\t1\tPVT_id\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tsid_f\tsid1\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/ts7-stderr.log"
 OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -383,7 +389,7 @@ R_TODO=$(get_field "$OUT" RESOLVED_TODO_OPTION_ID)
 GRAPHQL_CALLED=0
 grep -q "api graphql" "$MOCK_LOG" 2>/dev/null && GRAPHQL_CALLED=1
 if [ "$RC" = "0" ] && [ "$R_TODO" = "todo_f" ] && [ "$GRAPHQL_CALLED" = "0" ]; then
-    pass "TS-7: RESOLVED_TODO_OPTION_ID = todo_f from 10-col cache (col7 retained)"
+    pass "TS-7: RESOLVED_TODO_OPTION_ID = todo_f from 11-col cache (col7 retained)"
 else
     fail "TS-7: rc=$RC todo=$R_TODO graphql=$GRAPHQL_CALLED (expected rc=0, todo=todo_f, no graphql)"
 fi

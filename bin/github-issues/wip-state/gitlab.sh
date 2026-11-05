@@ -1,10 +1,9 @@
 #!/bin/bash
 # bin/github-issues/wip-state/gitlab.sh — GitLab label-based WIP verbs (#2308).
 # Sourced by ../wip-state.sh when FORGE=gitlab. Uses status:wip / status:done
-# labels + wip-fp:<hash> fingerprint label (defined in labels.yml / sync-labels).
+# labels + a wip-fp:<session-id> holder label (docs/architecture/wip-signaling.md).
 # Globals: GL_ENC, GL_PROJECT, SID_SET, INJECTED_SID.
-# Functions: validate_n, compute_fingerprint, effective_session_id,
-#   write_lock_file, delete_lock_file.
+# Functions: validate_n, effective_session_id, write_lock_file, delete_lock_file.
 
 # Read an issue's labels, one per line. Uses glab issue view --json labels.
 _gl_read_labels() {
@@ -19,12 +18,24 @@ _gl_read_state() {
 }
 
 # Comma-join the existing wip-fp:* labels of an issue (for clear/abandon, which
-# do not receive --session-id and so must discover the fingerprint label).
+# do not receive --session-id and so must discover the holder label).
 _gl_existing_wip_fp() {
     _gl_read_labels "$1" | tr -d '\r' | grep '^wip-fp:' | paste -sd, - 2>/dev/null
 }
 
-# Verb: set <N> — status:wip + wip-fp:<fp>, drop status:done. Hard-fail exit 1.
+# _gl_require_label_safe_sid <sid> <n> — a label is comma-separated on the glab CLI, so the sid
+# must stay within [A-Za-z0-9_-]. Exit 1 (no label change) otherwise.
+_gl_require_label_safe_sid() {
+    case "$1" in
+        ''|*[!A-Za-z0-9_-]*)
+            echo "[wip-state: invalid session id for label (#$2)]" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# Verb: set <N> — status:wip + wip-fp:<sid>; drops status:done and every other wip-fp:* in the
+# same single edit (glab sends add and remove in one request). Hard-fail exit 1.
 gl_cmd_set() {
     local n="$1"
     validate_n "$n"
@@ -32,10 +43,24 @@ gl_cmd_set() {
     if ! sid=$(effective_session_id); then
         exit 2
     fi
-    local fp
-    fp=$(compute_fingerprint "$sid" "$n")
-    if ! glab issue edit "$n" --label "status:wip,wip-fp:$fp" \
-            --remove-label "status:done" >/dev/null 2>&1; then
+    _gl_require_label_safe_sid "$sid" "$n"
+    local labels
+    if ! labels=$(_gl_read_labels "$n"); then
+        echo "[wip-state: label read failed for #$n]" >&2
+        exit 1
+    fi
+    local remove="status:done" label
+    while IFS= read -r label; do
+        label="${label%$'\r'}"
+        case "$label" in
+            "wip-fp:$sid") ;;
+            wip-fp:*) remove="$remove,$label" ;;
+        esac
+    done <<EOF
+$labels
+EOF
+    if ! glab issue edit "$n" --label "status:wip,wip-fp:$sid" \
+            --remove-label "$remove" >/dev/null 2>&1; then
         echo "[wip-state: label set failed for #$n]" >&2
         exit 1
     fi
@@ -45,7 +70,8 @@ gl_cmd_set() {
     exit 0
 }
 
-# Verb: check <N> — prints same|other|none. Exit 1 on read failure, 2 on sid.
+# Verb: check <N> — prints same|other|none. Exit 1 on read failure or a label-unsafe sid, 2 on sid.
+# same only when exactly one wip-fp:* label exists and it carries our raw sid.
 gl_cmd_check() {
     local n="$1"
     validate_n "$n"
@@ -53,6 +79,7 @@ gl_cmd_check() {
     if ! sid=$(effective_session_id); then
         exit 2
     fi
+    _gl_require_label_safe_sid "$sid" "$n"
     local labels
     if ! labels=$(_gl_read_labels "$n"); then
         echo "warn: glab api failed for #$n check" >&2
@@ -63,9 +90,9 @@ gl_cmd_check() {
         echo none
         exit 0
     fi
-    local expected
-    expected=$(compute_fingerprint "$sid" "$n")
-    if printf '%s\n' "$labels" | grep -qx "wip-fp:$expected"; then
+    local n_fp
+    n_fp=$(printf '%s\n' "$labels" | grep -c '^wip-fp:')
+    if [ "$n_fp" -eq 1 ] && printf '%s\n' "$labels" | grep -qxF "wip-fp:$sid"; then
         echo "same"
     else
         echo "other"

@@ -13,7 +13,7 @@ export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export CLAUDE_CODE_SESSION_ID="env-sid-fixture"
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
 RC=$?
-EXPECTED_FP=$(printf '%s:%s' "env-sid-fixture" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="env-sid-fixture"
 if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
     pass "T-new-6: set <N> with CLAUDE_CODE_SESSION_ID env → exit 0"
 else
@@ -28,7 +28,7 @@ setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
 export CLAUDE_CODE_SESSION_ID="env-sid-fixture"
-EXPECTED_FP=$(printf '%s:%s' "env-sid-fixture" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="env-sid-fixture"
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
 RC=$?
@@ -239,7 +239,7 @@ touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/newer-session-id
 # a git repo with a github.com origin (no WORKTREE_NOTES.md — SID isolation).
 FAKE_CWD="$TMP/fake-cwd"
 make_origin_fixture "$FAKE_CWD"
-EXPECTED_FP=$(printf '%s:%s' "newer-session-id" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="newer-session-id"
 ( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1 )
 RC=$?
 if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
@@ -292,7 +292,7 @@ touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/win-session-
 # #1899: git repo + github.com origin so repo resolution succeeds from this CWD.
 FAKE_CWD="$TMP/other-cwd-projdir"
 make_origin_fixture "$FAKE_CWD"
-EXPECTED_FP=$(printf '%s:%s' "win-session-id" "99" | sha256sum | cut -c1-8)
+EXPECTED_FP="win-session-id"
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 ( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 99 >/dev/null 2>&1 )
 RC=$?

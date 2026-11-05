@@ -1,23 +1,14 @@
 
-# ===========================================================================
-# #1340: the `setup` verb is DEPRECATED. It no longer discovers field/option
-# IDs via createProjectV2Field mutations, no longer writes $AGENTS_MAIN_ROOT/.env,
-# and always exits 0 after emitting deprecation warnings to stderr. Field IDs are
-# resolved on demand by resolve-project.sh. The T-new-1..5 cases below now assert
-# the deprecation contract instead of the retired discovery/mutation behavior.
-# ===========================================================================
+# #1340: `setup` is DEPRECATED — no mutations, no .env write, warn + exit 0;
+# field IDs resolve on demand (resolve-project.sh). T-new-1..5 assert that contract.
 
-# ===========================================================================
-# T-new-1: setup prints deprecation warnings, never mutates, never writes .env,
-#          and (when a project resolves) reports the resolver-discovered IDs on
-#          stdout. exit 0 unconditionally.
-# ===========================================================================
+# T-new-1: setup warns, never mutates or writes .env, and reports resolver IDs on stdout.
 setup_mock
 ENV_FILE="$AGENTS_MAIN_ROOT/.env"
 : > "$ENV_FILE"
 # Ensure no .env WIP_STATE_* migration noise: setup must derive IDs from resolver.
 unset WIP_STATE_STATUS_FIELD_ID WIP_STATE_IN_PROGRESS_OPTION_ID \
-      WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID WIP_STATE_FINGERPRINT_FIELD_ID
+      WIP_STATE_DONE_OPTION_ID WIP_STATE_TODO_OPTION_ID WIP_STATE_SESSION_ID_FIELD_ID
 OUT=$(run_with_timeout 60 bash "$TARGET" setup 2>"$TMP/setup-err")
 RC=$?
 MUT_COUNT=$(grep -c "createProjectV2Field" "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 || echo 0)
@@ -25,9 +16,9 @@ ENV_UNCHANGED=1
 [ -s "$ENV_FILE" ] && ENV_UNCHANGED=0
 WARN_DEPRECATED=0
 grep -qi "deprecated" "$TMP/setup-err" 2>/dev/null && WARN_DEPRECATED=1
-# Resolver populates the fingerprint field id from Query C (PVTF_fp) → stdout KV.
+# Resolver populates the session-id field id from Query C (PVTF_fp) → stdout KV.
 KV_HAS_FP=0
-printf '%s' "$OUT" | grep -q "WIP_STATE_FINGERPRINT_FIELD_ID=PVTF_fp" && KV_HAS_FP=1
+printf '%s' "$OUT" | grep -q "WIP_STATE_SESSION_ID_FIELD_ID=PVTF_fp" && KV_HAS_FP=1
 if [ "$RC" -eq 0 ] && [ "$MUT_COUNT" -eq 0 ] && [ "$ENV_UNCHANGED" -eq 1 ] \
    && [ "$WARN_DEPRECATED" -eq 1 ] && [ "$KV_HAS_FP" -eq 1 ]; then
     pass "T-new-1: setup deprecated — warn + exit 0, no mutation, no .env write, resolver IDs on stdout"
@@ -84,7 +75,7 @@ MUT1=$(grep -c "createProjectV2Field" "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 
 : > "$GH_MOCK_ARGS_LOG"
 run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>&1; RC2=$?
 MUT2=$(grep -c "createProjectV2Field" "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 || echo 0)
-ENV_LINES=$(grep -c "WIP_STATE_FINGERPRINT_FIELD_ID=" "$ENV_FILE" 2>/dev/null | head -1 || echo 0)
+ENV_LINES=$(grep -c "WIP_STATE_SESSION_ID_FIELD_ID=" "$ENV_FILE" 2>/dev/null | head -1 || echo 0)
 if [ "$RC1" -eq 0 ] && [ "$RC2" -eq 0 ] && [ "$MUT1" -eq 0 ] && [ "$MUT2" -eq 0 ] && [ "$ENV_LINES" -eq 0 ]; then
     pass "T-new-4: setup idempotent — no mutation on either run, .env never written"
 else

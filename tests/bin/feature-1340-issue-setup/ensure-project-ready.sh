@@ -6,7 +6,7 @@
 # N/A (C5 option-repair): Status-exists-but-options-missing/malformed — plan defines create-if-missing only, not option repair; out of scope.
 # N/A (C1/C5 failure perms): deep per-mutation failure matrix (createProjectV2 board-create + updateProjectV2Field option-update permutations) deferred — core create + idempotency + partial-retry covered by TEP-1/6/7; one project-list hard-fail representative kept (TEP-9).
 # L2: Status field missing → create + update mutations; present → none (idempotent);
-#     fingerprint missing → TEXT create; partial-failure retry; no project scope → rc=1 + hint.
+#     session-id missing → TEXT create; partial-failure retry; no project scope → rc=1 + hint.
 # L3 gap: live Projects API field/option creation and option-ID stability.
 
 # shellcheck source=_lib.sh
@@ -35,7 +35,7 @@ setup_mock() {
     : "${GH_MOCK_AUTH_HAS_PROJECT:=1}"
     : "${GH_MOCK_PROJECT_EXISTS:=1}"
     : "${GH_MOCK_STATUS_FIELD_EXISTS:=0}"
-    : "${GH_MOCK_FINGERPRINT_FIELD_EXISTS:=0}"
+    : "${GH_MOCK_SESSION_ID_FIELD_EXISTS:=0}"
 
     # File-specific gh mock (defined in _mock-ensure-project-ready.sh).
     write_epr_gh_mock "$TMP/mock-bin/gh"
@@ -52,11 +52,11 @@ teardown_mock() {
     TMP=""
     unset MOCK_LOG WORKFLOW_PLANS_DIR \
           GH_MOCK_AUTH_HAS_PROJECT GH_MOCK_PROJECT_EXISTS GH_MOCK_PROJECT_LIST_FAIL \
-          GH_MOCK_STATUS_FIELD_EXISTS GH_MOCK_FINGERPRINT_FIELD_EXISTS \
-          GH_MOCK_FINGERPRINT_CREATE_FAIL \
+          GH_MOCK_STATUS_FIELD_EXISTS GH_MOCK_SESSION_ID_FIELD_EXISTS \
+          GH_MOCK_SESSION_ID_CREATE_FAIL \
           EPR_PROJECT_ID EPR_PROJECT_NUM EPR_PROJECT_OWNER \
           EPR_STATUS_FIELD_ID EPR_TODO_OPTION_ID EPR_IN_PROGRESS_OPTION_ID \
-          EPR_DONE_OPTION_ID EPR_FINGERPRINT_FIELD_ID 2>/dev/null || true
+          EPR_DONE_OPTION_ID EPR_SESSION_ID_FIELD_ID 2>/dev/null || true
 }
 
 # Helper: run ensure_project_ready in a subshell and capture EPR_* + RC.
@@ -76,7 +76,7 @@ run_ensure() {
         printf 'EPR_TODO_OPTION_ID=%s\n'        \"\${EPR_TODO_OPTION_ID:-}\"
         printf 'EPR_IN_PROGRESS_OPTION_ID=%s\n' \"\${EPR_IN_PROGRESS_OPTION_ID:-}\"
         printf 'EPR_DONE_OPTION_ID=%s\n'        \"\${EPR_DONE_OPTION_ID:-}\"
-        printf 'EPR_FINGERPRINT_FIELD_ID=%s\n'  \"\${EPR_FINGERPRINT_FIELD_ID:-}\"
+        printf 'EPR_SESSION_ID_FIELD_ID=%s\n'  \"\${EPR_SESSION_ID_FIELD_ID:-}\"
         printf 'RC=%s\n' \"\$RC\"
     " 2>"$stderr_file"
 }
@@ -90,7 +90,7 @@ setup_mock
 export GH_MOCK_AUTH_HAS_PROJECT=1
 export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=0
-export GH_MOCK_FINGERPRINT_FIELD_EXISTS=0
+export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
 STDERR_FILE="$TMP/tep1-stderr.log"
 OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -122,7 +122,7 @@ setup_mock
 export GH_MOCK_AUTH_HAS_PROJECT=1
 export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=1
-export GH_MOCK_FINGERPRINT_FIELD_EXISTS=1
+export GH_MOCK_SESSION_ID_FIELD_EXISTS=1
 STDERR_FILE="$TMP/tep2-stderr.log"
 OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -139,23 +139,23 @@ fi
 teardown_mock
 
 # ===========================================================================
-# TEP-3: fingerprint field MISSING → createProjectV2Field (TEXT) called; EPR_FINGERPRINT_FIELD_ID set
+# TEP-3: fingerprint field MISSING → createProjectV2Field (TEXT) called; EPR_SESSION_ID_FIELD_ID set
 # ===========================================================================
 setup_mock
 export GH_MOCK_AUTH_HAS_PROJECT=1
 export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=1
-export GH_MOCK_FINGERPRINT_FIELD_EXISTS=0
+export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
 STDERR_FILE="$TMP/tep3-stderr.log"
 OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
-R_FINGER=$(get_field "$OUT" EPR_FINGERPRINT_FIELD_ID)
+R_FINGER=$(get_field "$OUT" EPR_SESSION_ID_FIELD_ID)
 CREATE_TEXT=0
 grep -E "createProjectV2Field.*TEXT|TEXT.*createProjectV2Field" "$MOCK_LOG" 2>/dev/null && CREATE_TEXT=1
 if [ "$RC" = "0" ] \
-   && [ -n "$R_FINGER" ] \
+   && [ "$R_FINGER" = "PVTF_new_sid" ] \
    && [ "$CREATE_TEXT" = "1" ]; then
-    pass "TEP-3: fingerprint field missing → createProjectV2Field (TEXT) called; EPR_FINGERPRINT_FIELD_ID set"
+    pass "TEP-3: session-id field missing → createProjectV2Field (TEXT) called; EPR_SESSION_ID_FIELD_ID set"
 else
     fail "TEP-3: rc=$RC finger=$R_FINGER create_text=$CREATE_TEXT log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
@@ -189,7 +189,7 @@ setup_mock
 export GH_MOCK_AUTH_HAS_PROJECT=1
 export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=1
-export GH_MOCK_FINGERPRINT_FIELD_EXISTS=1
+export GH_MOCK_SESSION_ID_FIELD_EXISTS=1
 STDERR_FILE="$TMP/tep5-stderr.log"
 OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -257,7 +257,7 @@ run_epr_case() {
     export GH_MOCK_AUTH_HAS_PROJECT=1
     export GH_MOCK_PROJECT_EXISTS=1
     export GH_MOCK_STATUS_FIELD_EXISTS=1
-    export GH_MOCK_FINGERPRINT_FIELD_EXISTS=1
+    export GH_MOCK_SESSION_ID_FIELD_EXISTS=1
     local out
     out=$(bash -c "$(declare -f run_ensure get_field); run_ensure '$owner_repo' '/dev/null'")
     EPR_RC=$(printf '%s\n' "$out" | grep "^RC=" | head -1 | cut -d= -f2-)
@@ -323,20 +323,20 @@ export GH_MOCK_PROJECT_EXISTS=1
 
 # --- Run 1: Status absent, fingerprint absent, TEXT creation fails ---
 export GH_MOCK_STATUS_FIELD_EXISTS=0
-export GH_MOCK_FINGERPRINT_FIELD_EXISTS=0
-export GH_MOCK_FINGERPRINT_CREATE_FAIL=1
+export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
+export GH_MOCK_SESSION_ID_CREATE_FAIL=1
 STDERR_FILE="$TMP/tep6-run1-stderr.log"
 OUT1=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
 RC1=$(get_field "$OUT1" RC)
 
 # --- Run 2: Status now exists, fingerprint still missing, TEXT now succeeds ---
 export GH_MOCK_STATUS_FIELD_EXISTS=1
-export GH_MOCK_FINGERPRINT_FIELD_EXISTS=0
-export GH_MOCK_FINGERPRINT_CREATE_FAIL=0
+export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
+export GH_MOCK_SESSION_ID_CREATE_FAIL=0
 STDERR_FILE2="$TMP/tep6-run2-stderr.log"
 OUT2=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE2'")
 RC2=$(get_field "$OUT2" RC)
-R2_FINGER=$(get_field "$OUT2" EPR_FINGERPRINT_FIELD_ID)
+R2_FINGER=$(get_field "$OUT2" EPR_SESSION_ID_FIELD_ID)
 
 # Count Status SINGLE_SELECT creations across BOTH runs — must be exactly 1
 # (created in run 1, NOT re-created in run 2).
@@ -365,8 +365,8 @@ setup_mock
 export GH_MOCK_AUTH_HAS_PROJECT=1
 export GH_MOCK_PROJECT_EXISTS=0        # no board exists → must be created
 export GH_MOCK_STATUS_FIELD_EXISTS=0
-export GH_MOCK_FINGERPRINT_FIELD_EXISTS=0
-export GH_MOCK_FINGERPRINT_CREATE_FAIL=0
+export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
+export GH_MOCK_SESSION_ID_CREATE_FAIL=0
 STDERR_FILE="$TMP/tep7-stderr.log"
 OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -374,7 +374,7 @@ R_PID=$(get_field "$OUT" EPR_PROJECT_ID)
 R_PNUM=$(get_field "$OUT" EPR_PROJECT_NUM)
 R_POWNER=$(get_field "$OUT" EPR_PROJECT_OWNER)
 R_STATUS=$(get_field "$OUT" EPR_STATUS_FIELD_ID)
-R_FINGER=$(get_field "$OUT" EPR_FINGERPRINT_FIELD_ID)
+R_FINGER=$(get_field "$OUT" EPR_SESSION_ID_FIELD_ID)
 BOARD_CREATE=0
 grep -qE "createProjectV2\(input" "$MOCK_LOG" 2>/dev/null && BOARD_CREATE=1
 STATUS_CREATE=0

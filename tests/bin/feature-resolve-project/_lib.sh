@@ -165,7 +165,8 @@ teardown_mock() {
           RESOLVED_OWNER RESOLVED_PROJECT_NUM RESOLVED_PROJECT_ID \
           RESOLVED_CONTENT_DATE_FIELD_ID RESOLVED_STATUS_FIELD_ID \
           RESOLVED_TODO_OPTION_ID RESOLVED_IN_PROGRESS_OPTION_ID \
-          RESOLVED_DONE_OPTION_ID RESOLVED_FINGERPRINT_FIELD_ID 2>/dev/null || true
+          RESOLVED_DONE_OPTION_ID RESOLVED_SESSION_ID_FIELD_ID RESOLVED_CACHE_KEY \
+          _ISSUE_CREATE_INTERNAL_SESSION_ID_FIELD_ID 2>/dev/null || true
 }
 
 # Helper: run resolver in a subshell and capture state via env-export round-trip.
@@ -221,7 +222,8 @@ run_resolver() {
         printf 'RESOLVED_TODO_OPTION_ID=%s\n'         \"\${RESOLVED_TODO_OPTION_ID:-}\"
         printf 'RESOLVED_IN_PROGRESS_OPTION_ID=%s\n'  \"\${RESOLVED_IN_PROGRESS_OPTION_ID:-}\"
         printf 'RESOLVED_DONE_OPTION_ID=%s\n'         \"\${RESOLVED_DONE_OPTION_ID:-}\"
-        printf 'RESOLVED_FINGERPRINT_FIELD_ID=%s\n'   \"\${RESOLVED_FINGERPRINT_FIELD_ID:-}\"
+        printf 'RESOLVED_SESSION_ID_FIELD_ID=%s\n'    \"\${RESOLVED_SESSION_ID_FIELD_ID:-}\"
+        printf 'RESOLVED_CACHE_KEY=%s\n'              \"\${RESOLVED_CACHE_KEY:-}\"
         printf 'RC=%s\n' \"\$RC\"
     " 2>"$stderr_file"
 }
