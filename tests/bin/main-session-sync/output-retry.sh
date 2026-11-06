@@ -77,12 +77,13 @@ fi
 echo ""
 echo "=== push retry loop tests ==="
 
-# --- Static: Push script contains retry loop ---
-echo "[retry] Push script contains retry loop"
-if grep -q 'for _retry' "$DOTFILES_DIR/bin/session-sync.sh"; then
-    pass "session-sync.sh contains retry loop"
+# --- Static (#2658): the entry delegates integration (and its retry) to the engine ---
+echo "[retry] Push integration is delegated to session-sync-engine"
+if grep -q 'session-sync-engine' "$DOTFILES_DIR/bin/session-sync.sh" \
+    && ! grep -Eq '^[^#]*git[^#]*(rebase|reset --hard)' "$DOTFILES_DIR/bin/session-sync.sh"; then
+    pass "session-sync.sh delegates to session-sync-engine and carries no rebase / reset --hard"
 else
-    fail "session-sync.sh missing retry loop"
+    fail "session-sync.sh must delegate to bin/session-sync-engine and keep no rebase / reset --hard of its own"
 fi
 
 # --- Normal: Push recovers from pre-diverged state with unstaged changes ---
@@ -154,30 +155,44 @@ fi
 echo "[quiet-push] Quiet push failure is completely silent (stdout and stderr both empty)"
 git -C "$FAKE_PROJECTS" remote set-url origin /nonexistent/path
 echo '{"test":"quiet-stdout-failure"}' > "$FAKE_PROJECTS/quiet-stdout-failure.jsonl"
-stdout=$("$DOTFILES_DIR/bin/session-sync.sh" push --quiet --claude-dir "$FAKE_CLAUDE" 2>"$TMPDIR_BASE/stderr_tmp") || true
+quiet_fail_exit=0
+stdout=$("$DOTFILES_DIR/bin/session-sync.sh" push --quiet --claude-dir "$FAKE_CLAUDE" 2>"$TMPDIR_BASE/stderr_tmp") || quiet_fail_exit=$?
 stderr=$(cat "$TMPDIR_BASE/stderr_tmp")
+# --- #2658: a non-quiet failure exits 1 and explains itself on stderr ---
+loud_fail_exit=0
+"$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$FAKE_CLAUDE" >/dev/null 2>"$TMPDIR_BASE/stderr_loud" || loud_fail_exit=$?
 git -C "$FAKE_PROJECTS" remote set-url origin "$FAKE_REMOTE"
 if [ -z "$stdout" ]; then
     pass "quiet push failure: stdout is empty"
 else
     fail "quiet push failure: stdout is not empty (got: $stdout)"
 fi
-if hostname -s >/dev/null 2>&1; then
-    if [ -z "$stderr" ]; then
-        pass "quiet push failure: stderr is empty (quiet mode suppresses error output)"
-    else
-        fail "quiet push failure: stderr is not empty (got: $stderr)"
-    fi
+# #2658: the host name comes from the engine (os.hostname), so no shell
+# `hostname -s` diagnostic can leak; silence is asserted on every platform.
+if [ -z "$stderr" ] && [ "$quiet_fail_exit" -eq 0 ]; then
+    pass "quiet push failure: stderr is empty and exit is 0"
 else
-    # bin/session-sync.sh builds its commit message with `hostname -s`, which
-    # MSYS / Git Bash `hostname` rejects; the shell's own diagnostic reaches
-    # stderr even under --quiet. That is a production portability gap, out of
-    # scope for this test-only change — assert everything else stays silent.
-    stderr_rest=$(printf '%s\n' "$stderr" | grep -v -e '^hostname:' -e "^Try 'hostname" || true)
-    if [ -z "$stderr_rest" ]; then
-        pass "quiet push failure: stderr carries nothing beyond the platform hostname warning"
-    else
-        fail "quiet push failure: stderr is not empty (got: $stderr_rest)"
-    fi
-    pending "quiet push failure: full stderr silence ('hostname -s' unsupported here, so bin/session-sync.sh leaks the shell warning)"
+    fail "quiet push failure: exit=$quiet_fail_exit (want 0), stderr: $stderr"
+fi
+if [ "$loud_fail_exit" -eq 1 ] && [ -s "$TMPDIR_BASE/stderr_loud" ]; then
+    pass "non-quiet push failure: exit 1 with a message on stderr"
+else
+    fail "non-quiet push failure: exit=$loud_fail_exit (want 1), stderr: $(cat "$TMPDIR_BASE/stderr_loud")"
+fi
+
+# --- #2658: the entry validates arguments before calling the engine ---
+echo "[args] Unknown action exits 1, unknown option exits 2"
+bad_action_exit=0
+bad_action_out=$("$DOTFILES_DIR/bin/session-sync.sh" frobnicate --claude-dir "$FAKE_CLAUDE" 2>&1) || bad_action_exit=$?
+bad_opt_exit=0
+"$DOTFILES_DIR/bin/session-sync.sh" push --no-such-option --claude-dir "$FAKE_CLAUDE" >/dev/null 2>&1 || bad_opt_exit=$?
+if [ "$bad_action_exit" -eq 1 ] && echo "$bad_action_out" | grep -qi "usage"; then
+    pass "unknown action prints usage and exits 1"
+else
+    fail "unknown action: exit=$bad_action_exit (want 1), output: $bad_action_out"
+fi
+if [ "$bad_opt_exit" -eq 2 ]; then
+    pass "unknown option exits 2"
+else
+    fail "unknown option: exit=$bad_opt_exit (want 2)"
 fi

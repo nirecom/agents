@@ -110,28 +110,31 @@ if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
             # git answers 0 with an empty line for `key =`, and exporting an empty
             # GIT_SSH_COMMAND breaks git's ssh launch.
             _ss_sshcmd="$(git -C "$_session_dir" config --get core.sshCommand 2>/dev/null || true)"
+            # Startup deadline: a positive integer, else 3000; above 60000 is capped.
+            _ss_deadline_ms="$("$_agents_root/bin/get-config-var" SESSION_SYNC_STARTUP_DEADLINE_MS 2>/dev/null || true)"
+            case "$_ss_deadline_ms" in
+                ''|*[!0-9]*) _ss_deadline_ms=3000 ;;
+                *)
+                    _ss_deadline_ms="${_ss_deadline_ms#"${_ss_deadline_ms%%[!0]*}"}"
+                    if [ -z "$_ss_deadline_ms" ]; then _ss_deadline_ms=3000
+                    elif [ "${#_ss_deadline_ms}" -gt 5 ] || [ "$_ss_deadline_ms" -gt 60000 ]; then _ss_deadline_ms=60000; fi
+                    ;;
+            esac
+            # The engine bounds the fetch by the deadline, kills its whole process tree on
+            # timeout, and integrates in a detached child; stdout stays empty (#2658).
+            # --claude-dir is explicit: node's home on Windows is USERPROFILE, not this $HOME.
             _session_sync_fetch() {
                 if [ -n "${ZSH_VERSION-}" ]; then setopt LOCAL_OPTIONS NO_MONITOR; fi
                 echo "$AGENTS_SESSION_SYNC_FETCH_MARKER" >&2
                 if [ -n "$_ss_sshcmd" ]; then
-                    ( GIT_TERMINAL_PROMPT=0 git -C "$_session_dir" fetch >/dev/null 2>&1 ) &
+                    GIT_TERMINAL_PROMPT=0 node "$_agents_root/bin/session-sync-engine" startup --quiet --deadline-ms "$_ss_deadline_ms" --claude-dir "$HOME/.claude" >/dev/null || true
                 else
-                    ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch >/dev/null 2>&1 ) &
+                    GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' node "$_agents_root/bin/session-sync-engine" startup --quiet --deadline-ms "$_ss_deadline_ms" --claude-dir "$HOME/.claude" >/dev/null || true
                 fi
-                _pid_ss=$!
-                _ss_deadline=$(( $(date +%s) + 3 ))
-                while kill -0 "$_pid_ss" 2>/dev/null; do
-                    if [ "$(date +%s)" -ge "$_ss_deadline" ]; then kill "$_pid_ss" 2>/dev/null || true; break; fi
-                    sleep 0.2
-                done
-                _rc_ss=0
-                wait "$_pid_ss" 2>/dev/null || _rc_ss=$?
             }
-            _session_sync_fetch
+            if type node >/dev/null 2>&1; then _session_sync_fetch; fi
             unset -f _session_sync_fetch 2>/dev/null
-            # `merge --ff-only` prints "Updating .../Fast-forward" on stdout.
-            if [ "${_rc_ss:-1}" -eq 0 ]; then git -C "$_session_dir" merge --ff-only FETCH_HEAD >/dev/null 2>&1 || true; fi
-            unset _pid_ss _ss_deadline _rc_ss _ss_sshcmd
+            unset _ss_sshcmd _ss_deadline_ms
         fi
         unset _ss_stamp _ss_due _ss_mtime _ss_now
     fi

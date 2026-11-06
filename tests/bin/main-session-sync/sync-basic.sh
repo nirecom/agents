@@ -98,24 +98,13 @@ echo "[sync] Commit message format"
 echo '{"test":"format"}' > "$FAKE_PROJECTS/test-format.jsonl"
 "$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$FAKE_CLAUDE" >/dev/null 2>&1
 last_msg=$(git -C "$FAKE_PROJECTS" log -1 --format=%s)
-# Always assertable: prefix + ISO date, independent of the host field.
-if echo "$last_msg" | grep -qE "^sync: .*[0-9]{4}-[0-9]{2}-[0-9]{2}"; then
-    pass "commit message carries the sync: prefix and an ISO date"
+# #2658: the engine names the host by the first label of os.hostname() on every
+# platform, so the host field is assertable everywhere (no `hostname -s`).
+_sb_host=$(node -e 'process.stdout.write(require("os").hostname().split(".")[0])')
+if echo "$last_msg" | grep -qE "^sync: ${_sb_host} [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$"; then
+    pass "commit message matches format (sync: <host> <UTC ISO>)"
 else
-    fail "commit message format unexpected ($last_msg)"
-fi
-# The host field itself is only assertable where `hostname -s` exists.
-if hostname -s >/dev/null 2>&1; then
-    if echo "$last_msg" | grep -qE "^sync: .+ [0-9]{4}-[0-9]{2}-[0-9]{2}"; then
-        pass "commit message matches format (sync: hostname date)"
-    else
-        fail "commit message format unexpected ($last_msg)"
-    fi
-else
-    # bin/session-sync.sh builds the message with `hostname -s`, which MSYS /
-    # Git Bash `hostname` does not support; the host field comes out empty there.
-    # Production portability gap — out of scope for this test-only change.
-    pending "commit message host field ('hostname -s' unsupported on this platform; got: $last_msg)"
+    fail "commit message format unexpected (want 'sync: ${_sb_host} <UTC ISO>', got: $last_msg)"
 fi
 
 # --- Edge: Push with diverged remote (pull --rebase) ---
@@ -128,7 +117,8 @@ echo '{"other":"machine"}' > "$SECOND_CLONE/other-session.jsonl"
 git -C "$SECOND_CLONE" add . >/dev/null 2>&1
 git -C "$SECOND_CLONE" commit -m "sync: other-machine 2026-01-01 00:00" >/dev/null 2>&1
 git -C "$SECOND_CLONE" push >/dev/null 2>&1
-# Now push from original — should rebase over the diverged commit
+_sb_other_tip=$(git -C "$SECOND_CLONE" rev-parse HEAD)
+# Now push from original — #2658: integrates on top of the remote tip, no rebase.
 echo '{"local":"new"}' > "$FAKE_PROJECTS/local-new.jsonl"
 output=$("$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$FAKE_CLAUDE" 2>&1)
 if echo "$output" | grep -qi "pushed"; then
@@ -137,9 +127,48 @@ else
     fail "push failed after remote diverged (output: $output)"
 fi
 if [ -f "$FAKE_PROJECTS/other-session.jsonl" ]; then
-    pass "diverged remote file present after rebase"
+    pass "diverged remote file present after push"
 else
-    fail "diverged remote file missing after rebase"
+    fail "diverged remote file missing after push"
+fi
+_sb_parent=$(git -C "$FAKE_REMOTE" rev-list --parents -n 1 main 2>/dev/null | cut -d' ' -f2-)
+if [ "$_sb_parent" = "$_sb_other_tip" ] && [ ! -d "$FAKE_PROJECTS/.git/rebase-merge" ] \
+    && git -C "$FAKE_REMOTE" cat-file -e main:local-new.jsonl 2>/dev/null; then
+    pass "diverged push commits on top of the remote tip with a single parent, no rebase state"
+else
+    fail "diverged push: remote tip parents='$_sb_parent' (want $_sb_other_tip), rebase-merge=$([ -d "$FAKE_PROJECTS/.git/rebase-merge" ] && echo yes || echo no)"
+fi
+
+# --- #2658: a pull where only the remote advanced makes no new commit ---
+echo "[sync] Remote-only pull fast-forwards main"
+echo '{"other":"remote-only"}' > "$SECOND_CLONE/remote-only.jsonl"
+git -C "$SECOND_CLONE" pull -q >/dev/null 2>&1 || true
+git -C "$SECOND_CLONE" add . >/dev/null 2>&1
+git -C "$SECOND_CLONE" commit -m "sync: other-machine remote-only" >/dev/null 2>&1
+git -C "$SECOND_CLONE" push >/dev/null 2>&1
+"$DOTFILES_DIR/bin/session-sync.sh" pull --claude-dir "$FAKE_CLAUDE" >/dev/null 2>&1 || true
+_sb_local_main=$(git -C "$FAKE_PROJECTS" rev-parse main 2>/dev/null || echo none)
+_sb_remote_main=$(git -C "$FAKE_REMOTE" rev-parse main 2>/dev/null || echo none)
+if [ "$_sb_local_main" = "$_sb_remote_main" ] && [ -f "$FAKE_PROJECTS/remote-only.jsonl" ]; then
+    pass "remote-only pull leaves main == origin/main with no integration commit"
+else
+    fail "remote-only pull: local main=$_sb_local_main remote main=$_sb_remote_main file=$([ -f "$FAKE_PROJECTS/remote-only.jsonl" ] && echo yes || echo no)"
+fi
+
+# --- #2658: a local deletion does not propagate and is not undone by pull ---
+echo "[sync] Local deletion is not propagated"
+echo '{"del":"me"}' > "$FAKE_PROJECTS/delete-me.jsonl"
+"$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$FAKE_CLAUDE" >/dev/null 2>&1 || true
+rm -f "$FAKE_PROJECTS/delete-me.jsonl"
+echo '{"after":"delete"}' > "$FAKE_PROJECTS/after-delete.jsonl"
+"$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$FAKE_CLAUDE" >/dev/null 2>&1 || true
+"$DOTFILES_DIR/bin/session-sync.sh" pull --claude-dir "$FAKE_CLAUDE" >/dev/null 2>&1 || true
+if git -C "$FAKE_REMOTE" cat-file -e main:delete-me.jsonl 2>/dev/null \
+    && git -C "$FAKE_REMOTE" cat-file -e main:after-delete.jsonl 2>/dev/null \
+    && [ ! -f "$FAKE_PROJECTS/delete-me.jsonl" ]; then
+    pass "local deletion stays local: remote keeps the file, pull does not restore it"
+else
+    fail "local deletion: remote has delete-me=$(git -C "$FAKE_REMOTE" cat-file -e main:delete-me.jsonl 2>/dev/null && echo yes || echo no) after-delete=$(git -C "$FAKE_REMOTE" cat-file -e main:after-delete.jsonl 2>/dev/null && echo yes || echo no) restored-locally=$([ -f "$FAKE_PROJECTS/delete-me.jsonl" ] && echo yes || echo no)"
 fi
 
 # --- Edge: Pull idempotent (already up-to-date) ---
