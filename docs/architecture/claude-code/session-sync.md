@@ -14,7 +14,7 @@ and sync history via a private GitHub repo.
 | Path | Purpose |
 |---|---|
 | (drive-root LLM dir) | LLM infrastructure (immovable — tightly coupled with NSSM services, TLS certs, GGUF model paths) |
-| `C:\git\` | All other git repositories (Windows) |
+| (drive-root git dir) | All other git repositories (Windows) |
 
 **Sync method**: Initialize `~/.claude/projects/` as a git repo, syncing to
 `nirecom/agent-sessions` (private). Init fetches existing remote history
@@ -170,9 +170,45 @@ only because installer bootstrap (above) always runs: without it, a fresh instal
 the default (off) toggle would leave `~/.claude/projects/` uninitialized as a git repo,
 and manual commands would fail.
 
-**Known behavior**: `session-sync push` uses `git add .` to stage all working tree changes.
-In 2026-04, a format migration (`UUID.jsonl` → `UUID/subagents/`) caused 35 files to be
-bulk-deleted; most had directory versions with no data loss. One-time event.
+**Known behavior**: before the engine below, `session-sync push` used `git add .` to stage all
+working tree changes. In 2026-04, a format migration (`UUID.jsonl` → `UUID/subagents/`) caused 35
+files to be bulk-deleted; most had directory versions with no data loss. One-time event.
+
+## Sync engine (#2658)
+
+`push`, `pull`, `reset`, the shell-startup fetch and `restore-mtime` all call one node engine,
+`bin/session-sync-engine`, with its modules in `bin/lib/session-sync/`; `session-sync.{sh,ps1}`
+keep only argument handling, the toggle check and notifications.
+
+**Why**: the old `fetch` + `rebase` / `merge` flow left a half-finished rebase on machines that
+sync rarely, and every later run failed until `session-sync reset`. The engine never enters a
+rebase or merge, so that state cannot arise.
+
+**Integration**: each run builds a commit from the remote tip's tree, re-adds files that exist
+only locally, and merges a transcript present on both sides line by line (union, file order kept;
+lines without a uuid compare as whole lines). History stays fast-forward. A non-fast-forward
+push rebuilds from the new remote tip and retries up to 3 times. Concurrent runs are serialised
+by a lock; a run that finds a leftover rebase or merge state discards it, keeping the working
+tree, which also migrates already-stuck machines.
+
+**Non-jsonl files changed on both sides** keep the newer one by mtime; edits within a 120 s
+clock-skew window keep both, the loser as a `.conflict-<host>-<time>` sibling. Pulled transcripts
+get their last entry's timestamp as mtime so that session lists sort correctly.
+
+**Excluded from sync**: `workflow/`, `*.tmp`, `*.bak.*`, temp directories and `plans/*` other than
+`*.md` (SSOT `bin/lib/session-sync/exclude.js`). Already-tracked excluded files leave the index
+and the remote but stay on disk. Plans (`*.md`) travel in both directions on push and pull; a local
+plan edited since the last sync is never overwritten.
+
+**Shell-startup fetch**: runs in the background and never blocks the shell. Its deadline is
+`SESSION_SYNC_STARTUP_DEADLINE_MS` in `.env` (default 3000; empty, non-numeric, 0 or negative
+fall back to 3000; above 60000 is clamped to 60000), so a slow machine is tuned without a release.
+
+**Known limits** (accepted at review): a transcript line present only in the last-synced commit
+but absent from the working tree is not restored; an append can join a line Claude Code is still
+writing; a whole-file write deferred because the file changed mid-sync can lose the remote
+version on the next run; a non-jsonl real rebase conflict keeps the local version only inside the
+marker-bearing sibling. Same-uuid lines differing between machines resolve local-wins.
 
 **Symlink structure** (managed by `install/{linux,win}/dotfileslink.{sh,ps1}`):
 - `CLAUDE.md` → `~/.claude/CLAUDE.md`

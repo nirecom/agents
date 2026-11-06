@@ -1,4 +1,6 @@
 #Requires -Version 5.1
+# Restore the mtime of Claude Code session JSONL files from their last timestamp entry.
+# The rule lives in `session-sync-engine restore-mtime` (#2658), shared with bin/cc-session-mtime.
 [CmdletBinding()]
 param(
     [switch]$DryRun,
@@ -7,27 +9,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ProjectsDir = Join-Path $ClaudeDir "projects"
-if (-not (Test-Path $ProjectsDir)) {
-    Write-Warning "projects dir not found: $ProjectsDir"
-    exit 0
-}
-
-Get-ChildItem -Path $ProjectsDir -Recurse -Filter "*.jsonl" |
-    Where-Object { $_.Name -ne ".history.jsonl" } |
-    ForEach-Object {
-        $tsLine = Get-Content $_.FullName -ErrorAction SilentlyContinue |
-            Where-Object { $_ -match '"timestamp":"([^"]+)"' } | Select-Object -Last 1
-        if ($tsLine -match '"timestamp":"([^"]+)"') {
-            $ts = $Matches[1]
-            if ($DryRun) {
-                Write-Host "would set $($_.FullName) mtime to $ts"
-            } else {
-                try { $_.LastWriteTime = [datetime]::Parse($ts).ToLocalTime() } catch {
-                    Write-Warning "failed to set mtime on $($_.FullName): $_"
-                }
-            }
-        } else {
-            Write-Warning "no timestamp in $($_.FullName)"
-        }
-    }
+$engineArgs = @('restore-mtime', '--claude-dir', $ClaudeDir)
+if ($DryRun) { $engineArgs += @('--dry-run', '--dry-run-style', 'set') }
+$ErrorActionPreference = 'Continue'
+& node (Join-Path $PSScriptRoot 'session-sync-engine') @engineArgs
+exit 0
