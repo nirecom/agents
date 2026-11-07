@@ -40,6 +40,7 @@ function findingKey(finding) {
 function detectStalledSteps(sid) {
   try {
     if (!isSafeSid(sid)) return [];
+    if (require("../workflow-state/workflow-abort").isWorkflowAborted(sid)) return [];
     const statePath = getStatePath(sid);
     if (!fs.existsSync(statePath)) return [{ step: STATE_PSEUDO_STEP, kind: "state-absent" }];
     const state = readState(sid);

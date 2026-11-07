@@ -58,7 +58,9 @@ function lastOfKind(events, kind) {
 
 // A state handoff record belongs to the generation that wrote it: the upstream's stay in the
 // upstream's file (the reader finds them there), the downstream's own travel with it (#2652).
-const GENERATION_LOCAL_KINDS = Object.freeze(["state_handoff_record"]);
+// An abort is generation-local and never travels, not even the downstream's own (#2920).
+const GENERATION_LOCAL_KINDS = Object.freeze(["state_handoff_record", "workflow_aborted", "workflow_abort_handover"]);
+const CARRIED_DOWNSTREAM_KINDS = Object.freeze(["state_handoff_record"]);
 
 function excludeGenerationLocalKinds(events) {
   return events.filter((e) => !(e && GENERATION_LOCAL_KINDS.includes(e.kind)));
@@ -81,7 +83,7 @@ function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) 
   const downOwn = {};
   for (const kind of ["worktree", "session_model"]) downOwn[kind] = lastOfKind(downEvents, kind);
 
-  const downRecords = downEvents.filter((e) => GENERATION_LOCAL_KINDS.includes(e.kind));
+  const downRecords = downEvents.filter((e) => CARRIED_DOWNSTREAM_KINDS.includes(e.kind));
 
   // Renumbered below to 1..n, so the boundary is the filtered count.
   clone.events = excludeGenerationLocalKinds(clone.events);
@@ -265,6 +267,8 @@ module.exports = {
   INHERIT_ORIGIN,
   GRANULARITY_FULL,
   GRANULARITY_CONTEXT_INDEPENDENT_ONLY,
+  GENERATION_LOCAL_KINDS,
+  CARRIED_DOWNSTREAM_KINDS,
   UpstreamStateUnavailableError,
   applyInheritance,
   describeGranularInheritance,

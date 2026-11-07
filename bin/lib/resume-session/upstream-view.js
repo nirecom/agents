@@ -13,6 +13,7 @@ const repoIdentity = () => require("../../../hooks/lib/repo-identity");
 const { captureTranscriptTail } = require("./transcript-fallback");
 const { readStateHandoff, renderStateHandoffForResume } = require("../../../hooks/lib/state-handoff-record");
 const { progressPathFor, isRegularFile, CURRENT_STATE_SECTION: PROGRESS_FIRST_SECTION } = require("../../../hooks/lib/progress-file");
+const { readWorkflowAbort } = require("../../../hooks/workflow-state/workflow-abort");
 
 const AVAILABILITY = Object.freeze({
   STATE_AND_ARTIFACTS: "state-and-artifacts",
@@ -181,6 +182,7 @@ function attemptInherit(heirSid, upstreamSid, upstreamState, heirState) {
     granularity: r.ok === true ? r.granularity : plan.granularity,
     degraded_reason: r.ok === true ? r.degraded_reason || null : null,
     inheritance: r.ok === true ? r.inheritance || null : null,
+    upstream_aborts: r.ok === true && Array.isArray(r.upstream_aborts) ? r.upstream_aborts : [],
   };
 }
 
@@ -280,6 +282,7 @@ function buildUpstreamView(input) {
     reason: availability === AVAILABILITY.STATE_ONLY ? "intent-artifact-missing" : null,
     artifacts,
     inherit_result: inherit,
+    workflow_aborted: readWorkflowAbort(upstreamState),
     handoff_rendered: renderedHandoffFor(handoff.entries),
     state_handoff_errors: handoff.errors,
     ...progressFileFor(upstreamSid),

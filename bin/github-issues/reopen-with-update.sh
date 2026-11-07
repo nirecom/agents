@@ -81,14 +81,16 @@ if ! printf '%s' "$REPO_SLUG" | grep -qE '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'; th
     exit 1
 fi
 
-# H1: session hash — never write raw CLAUDE_CODE_SESSION_ID to issue body
-if command -v sha256sum >/dev/null 2>&1; then
-    SESSION_HASH=$(printf '%s' "${CLAUDE_CODE_SESSION_ID:-unknown}" | sha256sum | cut -c1-8)
-else
-    SESSION_HASH=$(printf '%s' "${CLAUDE_CODE_SESSION_ID:-unknown}" | shasum -a 256 | cut -c1-8)
+# H1: the raw session id is resolved through bin/resolve-session-id, as the WIP holder value is
+# (docs/architecture/wip-signaling.md); any bridge rc other than 0, or a value outside
+# [A-Za-z0-9_-], becomes "unknown" so no free text reaches the issue body.
+if ! SESSION_ID_VALUE="$(bash "$(dirname "$0")/../resolve-session-id" 2>/dev/null)"; then
+    SESSION_ID_VALUE="unknown"
 fi
-# fallback if still empty (e.g., both commands absent)
-SESSION_HASH="${SESSION_HASH:-unknown}"
+SESSION_ID_VALUE="${SESSION_ID_VALUE%$'\r'}"
+case "$SESSION_ID_VALUE" in
+    ''|*[!A-Za-z0-9_-]*) SESSION_ID_VALUE="unknown" ;;
+esac
 
 # Step 1 — gh issue reopen (fatal)
 if ! MSYS_NO_PATHCONV=1 gh issue reopen "$ISSUE_NUMBER" >/dev/null; then
@@ -109,7 +111,7 @@ REOPEN_COUNT=$(( REOPEN_COUNT + 1 ))
 DATETIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)" || DATETIME="unknown"
 
 # Build banner block content
-BANNER_CONTENT="**Reopened** (count: ${REOPEN_COUNT}) — ${DATETIME} — session: ${SESSION_HASH}"
+BANNER_CONTENT="**Reopened** (count: ${REOPEN_COUNT}) — ${DATETIME} — session: ${SESSION_ID_VALUE}"
 BANNER_BLOCK="<!-- BEGIN reopen-banner -->
 ${BANNER_CONTENT}
 <!-- END reopen-banner -->"
@@ -160,7 +162,7 @@ if [ -n "$COMMENT_ID" ] && ! printf '%s' "$COMMENT_ID" | grep -qE '^[0-9]+$'; th
     COMMENT_ID=""
 fi
 
-LOG_ENTRY="- (count ${REOPEN_COUNT}) ${DATETIME} — session: ${SESSION_HASH}"
+LOG_ENTRY="- (count ${REOPEN_COUNT}) ${DATETIME} — session: ${SESSION_ID_VALUE}"
 if [[ -n "$NOTE" ]]; then
     LOG_ENTRY="${LOG_ENTRY} — ${NOTE}"
 fi

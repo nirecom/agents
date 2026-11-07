@@ -2,7 +2,7 @@
 # tests/bin/feature-resolve-project/cache.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
 # Tags: workflow, github, issues, plans, bin, scope:issue-specific
-# Cache tests: hit (10-col), dot-in-key fixed-string match, row replace, malformed row = miss, miss writes row, no dup.
+# Cache tests: hit (11-col + sid1 tag, #2925), dot-in-key fixed-string match, row replace, malformed row = miss, miss writes row, no dup.
 # L3 gap: cache persistence across real processes / concurrent resolves / FS contention.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: skill-orchestration.
 
@@ -21,13 +21,13 @@ fi
 
 # ===========================================================================
 # T7: cache hit — pre-populate TSV, resolver returns cached values without graphql
-# Updated for #1340: 10-column cache schema (cols 6-10: status, todo, inprog, done, finger).
+# #2925: 11-column cache schema (cols 6-10: status, todo, inprog, done, session-id; col 11: tag sid1).
 # ===========================================================================
 setup_mock
 CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-printf 'mock-owner/mock-repo\tcached-owner\t99\tPVT_cached\tPVTF_cached_field\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_finger\n' > "$CACHE_FILE"
+printf 'mock-owner/mock-repo\tcached-owner\t99\tPVT_cached\tPVTF_cached_field\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_sid\tsid1\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/t7-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -43,7 +43,7 @@ if [ "$RC" = "0" ] \
    && [ "$R_ID" = "PVT_cached" ] \
    && [ "$R_FIELD" = "PVTF_cached_field" ] \
    && [ "$GRAPHQL_CALLED" -eq 0 ]; then
-    pass "T7: cache hit — values from TSV (10-col schema), no graphql call"
+    pass "T7: cache hit — values from TSV (11-col sid1 schema), no graphql call"
 else
     fail "T7: rc=$RC owner=$R_OWNER num=$R_NUM id=$R_ID field=$R_FIELD graphql=$GRAPHQL_CALLED log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
@@ -51,7 +51,7 @@ teardown_mock
 
 # ===========================================================================
 # T7b: cache lookup with a "." in the key (regex metachar safety).
-# 10-column rows (#1340). The "." lives in the REPO half only — #1899's
+# 11-column sid1 rows (#2925). The "." lives in the REPO half only — #1899's
 # origin-repo.sh rejects dotted owners before the cache lookup, since GitHub
 # logins can't contain one. The decoy row differs at exactly that
 # metacharacter position, so only a fixed-string match picks the right row.
@@ -61,8 +61,8 @@ export GH_MOCK_OWNER_REPO="mock-owner/my.repo"
 CACHE_DIR="$WORKFLOW_STATE_DIR/cache"
 CACHE_FILE="$CACHE_DIR/project-resolve.tsv"
 mkdir -p "$CACHE_DIR"
-printf 'mock-owner/myXrepo\tWRONG-owner\t100\tPVT_WRONG\tPVTF_WRONG\tst\ttd\tip\tdn\tfg\n' > "$CACHE_FILE"
-printf 'mock-owner/my.repo\tcorrect-owner\t5\tPVT_correct\tPVTF_correct\tst\ttd\tip\tdn\tfg\n' >> "$CACHE_FILE"
+printf 'mock-owner/myXrepo\tWRONG-owner\t100\tPVT_WRONG\tPVTF_WRONG\tst\ttd\tip\tdn\tfg\tsid1\n' > "$CACHE_FILE"
+printf 'mock-owner/my.repo\tcorrect-owner\t5\tPVT_correct\tPVTF_correct\tst\ttd\tip\tdn\tfg\tsid1\n' >> "$CACHE_FILE"
 STDERR_FILE="$TMP/t7b-stderr.log"
 OUT=$(run_with_timeout 30 bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
 RC=$(get_field "$OUT" RC)
@@ -151,13 +151,14 @@ if [ "$RC" = "0" ] && [ -f "$CACHE_FILE" ]; then
     COL3=$(printf '%s' "$ROW" | cut -f3)
     COL4=$(printf '%s' "$ROW" | cut -f4)
     COL5=$(printf '%s' "$ROW" | cut -f5)
-    if [ "$COL_COUNT" = "10" ] \
+    COL11=$(printf '%s' "$ROW" | cut -f11)
+    if [ "$COL_COUNT" = "11" ] && [ "$COL11" = "sid1" ] \
        && [ "$COL1" = "mock-owner/mock-repo" ] \
        && [ "$COL2" = "mock-owner" ] \
        && [ "$COL3" = "1" ] \
        && [ "$COL4" = "PVT_mock123" ] \
        && [ "$COL5" = "PVTF_mock_content_date" ]; then
-        pass "T8: cache miss → fetch → 10-column TSV row written correctly"
+        pass "T8: cache miss → fetch → 11-column sid1 TSV row written correctly"
     else
         fail "T8: row mismatch — cols=$COL_COUNT col1=$COL1 col2=$COL2 col3=$COL3 col4=$COL4 col5=$COL5 row='$ROW'"
     fi

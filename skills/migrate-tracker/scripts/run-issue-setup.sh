@@ -179,7 +179,7 @@ case "$STEP" in
             "${EPR_PROJECT_OWNER:-}" "${EPR_PROJECT_NUM:-}" "${EPR_PROJECT_ID:-}" \
             "${EPR_CONTENT_DATE_FIELD_ID:-}" "${EPR_STATUS_FIELD_ID:-}" \
             "${EPR_TODO_OPTION_ID:-}" "${EPR_IN_PROGRESS_OPTION_ID:-}" \
-            "${EPR_DONE_OPTION_ID:-}" "${EPR_FINGERPRINT_FIELD_ID:-}" || \
+            "${EPR_DONE_OPTION_ID:-}" "${EPR_SESSION_ID_FIELD_ID:-}" || \
             echo "warn: cache write failed for $REPO (continuing)" >&2
         exit 0
         ;;

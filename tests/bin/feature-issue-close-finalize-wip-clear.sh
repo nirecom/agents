@@ -4,7 +4,7 @@
 # Static-text contract tests for issue #362 Step K in skills/issue-close-finalize/SKILL.md.
 #
 # Step K calls `bash "$AGENTS_MAIN_ROOT/bin/github-issues/wip-state.sh" clear <N>`
-# to set Projects v2 Status=Done, clear the session-fingerprint text field, and
+# to set Projects v2 Status=Done, clear the session-id text field, and
 # delete the local $PLANS_DIR/wip-lock-<N>.md registry artifact. Step K is the
 # last step in the finalize chain (runs after Step J).
 # RED: fails until issue-close-finalize/SKILL.md gains the Step K section.

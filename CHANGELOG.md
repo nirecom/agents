@@ -132,3 +132,7 @@ Changes: Session close now shows alert findings to the user at SC-7; findings th
 ### FEATURE: PR #2922 (2026-11-04)
 Background: fix(#2909): keep glossary grants across rules digest changes and show...
 Changes: A main merge or a rule module update alone no longer expires an accepted glossary grant; when a grant does lapse, the output names the cause and the re-accept command.
+
+### FEATURE: PR #2933 (2026-11-05)
+Background: feat(#2925, #2161): record the raw session id as the WIP holder and r...
+Changes: WIP markers on issues now show the raw Claude Code session id (board field `session-id`, GitLab label `wip-fp:<session-id>`), so you can see in the web UI which session holds an issue. Old 8-hex markers are ignored; a session that spans the switch sees its own issue as held by another session and continues via the wip_conflict choice.;`wip-state.sh set` repairs a project whose WIP field is missing or still has the old name, and recovers from a cached field that was deleted on the board, instead of failing until `/issue-setup` is re-run.

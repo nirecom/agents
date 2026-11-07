@@ -62,18 +62,32 @@ fi
 teardown_mock
 
 # ===========================================================================
-# Test 4: set <N> with missing WIP_STATE_FINGERPRINT_FIELD_ID exits 2 (required)
+# Test 4 (#2925): a missing session-id field id is no longer a preflight error —
+# set tries to recover; with the resolver missing too, it exits 1 (warn-continue), not 2.
 # ===========================================================================
 setup_mock
-unset WIP_STATE_FINGERPRINT_FIELD_ID
-# #1340: force resolver miss so the missing FINGERPRINT id cannot be backfilled.
+unset WIP_STATE_SESSION_ID_FIELD_ID
 export GH_MOCK_LINKED_COUNT=0
+ERR=$(run_with_timeout 60 bash "$TARGET" set 42 2>&1 >/dev/null)
+RC=$?
+if [ "$RC" -eq 1 ] && ! printf '%s' "$ERR" | grep -q "missing required env" \
+   && printf '%s' "$ERR" | grep -q "session-id field unavailable" \
+   && ! grep -q -- "--single-select-option-id" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+    pass "T4: set <N> with missing WIP_STATE_SESSION_ID_FIELD_ID (resolver miss) → exit 1, no preflight error"
+else
+    fail "T4: expected exit 1 + 'session-id field unavailable', got rc=$RC err=$ERR"
+fi
+teardown_mock
+
+# T4b (#2925): set writes the raw session id (no sha256 fingerprint).
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
 RC=$?
-if [ "$RC" -eq 2 ]; then
-    pass "T4: set <N> with missing WIP_STATE_FINGERPRINT_FIELD_ID (resolver miss) → exit 2"
+if [ "$RC" -eq 0 ] && grep -q -- "--field-id PVTF_fp.*--text test-sid-fixture\|--text test-sid-fixture.*--field-id PVTF_fp" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+    pass "T4b: set <N> writes --text <raw session id> to the session-id field"
 else
-    fail "T4: expected exit 2, got rc=$RC"
+    fail "T4b: rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi
 teardown_mock
 

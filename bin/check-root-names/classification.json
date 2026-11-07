@@ -230,6 +230,7 @@
     {"file":"skills/sweep-tests/embed-rules/bash.md","allow":["SCRIPT_CHECKOUT_ROOT"],"forms":[],"reason":"convention text for test files, which spell this name"},
     {"file":"rules/test/claude-e2e.md","allow":["SCRIPT_CHECKOUT_ROOT"],"forms":[],"reason":"convention text for test files, which spell this name"},
     {"file":"skills/worktree-end/scripts/cleanup-cascade.md","allow":["AGENTS_MAIN_ROOT","TARGET_MAIN_ROOT"],"forms":[],"reason":"procedure text kept next to the scripts; spells user-facing commands and the dispatch argument"},
+    {"file":"skills/worktree-end/scripts/abort-branch.md","allow":["AGENTS_MAIN_ROOT"],"forms":[],"reason":"procedure text kept next to the scripts; spells the user-facing abort-branch and next-step commands"},
     {"file":"skills/issue-close-finalize/SKILL.md","allow":["TARGET_MAIN_ROOT"],"forms":[],"reason":"handles the main worktree of the repository it works on"},
     {"file":"skills/issue-close-finalize/scripts/run-initial.sh","allow":["TARGET_MAIN_ROOT"],"forms":[],"reason":"handles the main worktree of the repository it works on"},
     {"file":"skills/get-release-approval/scripts/preflight.sh","allow":["TARGET_CHECKOUT_ROOT"],"forms":[],"reason":"works on a checkout the caller names, which need not be its own"},
