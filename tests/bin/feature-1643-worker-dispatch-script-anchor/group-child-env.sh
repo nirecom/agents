@@ -116,7 +116,7 @@ const arms = [
   {
     arm: "real-test-runner",
     entry: workers["test-runner"],
-    opts: { command: "bash", script: "runAll", args: CHILD_ARGS },
+    opts: { command: "bash", script: "runAllSelf", args: CHILD_ARGS },
   },
   {
     arm: "synth-plain",

@@ -81,18 +81,20 @@ resolve_project_for_repo() {
         if [ -n "$cache_row" ]; then
             # Require exactly 10 fields. NF check rejects malformed rows and old
             # 5/9-col schemas (self-healing: they fall through to refetch).
-            local n_fields
-            n_fields=$(printf '%s' "$cache_row" | awk -F'\t' '{print NF}')
-            if [ "$n_fields" = "10" ]; then
-                RESOLVED_OWNER=$(printf '%s' "$cache_row"   | cut -f2)
-                RESOLVED_PROJECT_NUM=$(printf '%s' "$cache_row" | cut -f3)
-                RESOLVED_PROJECT_ID=$(printf '%s' "$cache_row"  | cut -f4)
-                RESOLVED_CONTENT_DATE_FIELD_ID=$(printf '%s' "$cache_row" | cut -f5)
-                RESOLVED_STATUS_FIELD_ID=$(printf '%s' "$cache_row" | cut -f6)
-                RESOLVED_TODO_OPTION_ID=$(printf '%s' "$cache_row" | cut -f7)
-                RESOLVED_IN_PROGRESS_OPTION_ID=$(printf '%s' "$cache_row" | cut -f8)
-                RESOLVED_DONE_OPTION_ID=$(printf '%s' "$cache_row" | cut -f9)
-                RESOLVED_FINGERPRINT_FIELD_ID=$(printf '%s' "$cache_row" | cut -f10)
+            # Split in-shell (no fork). Tab is IFS whitespace and would merge empty columns, so swap it
+            # for US (0x1f); the appended US keeps a trailing empty column countable.
+            local cols=()
+            IFS=$'\x1f' read -r -a cols <<< "${cache_row//$'\t'/$'\x1f'}"$'\x1f'
+            if [ "${#cols[@]}" = "10" ]; then
+                RESOLVED_OWNER="${cols[1]}"
+                RESOLVED_PROJECT_NUM="${cols[2]}"
+                RESOLVED_PROJECT_ID="${cols[3]}"
+                RESOLVED_CONTENT_DATE_FIELD_ID="${cols[4]}"
+                RESOLVED_STATUS_FIELD_ID="${cols[5]}"
+                RESOLVED_TODO_OPTION_ID="${cols[6]}"
+                RESOLVED_IN_PROGRESS_OPTION_ID="${cols[7]}"
+                RESOLVED_DONE_OPTION_ID="${cols[8]}"
+                RESOLVED_FINGERPRINT_FIELD_ID="${cols[9]}"
                 # Sanity-check required fields: malformed row → fall through to fetch.
                 # status/fingerprint may be empty (new project — fields not yet created).
                 if [ -n "$RESOLVED_OWNER" ] && [ -n "$RESOLVED_PROJECT_NUM" ] \
@@ -246,7 +248,7 @@ resolve_project_for_repo() {
     # ---- Query C: Status field + options + session-fingerprint field ids ----
     # Same query shape as wip-state/cmd-setup.sh. Failure is warn-only: a new
     # project may not have these fields yet (create-if-missing runs elsewhere in
-    # /issue-setup). Missing ids are cached as empty columns.
+    # /migrate-tracker). Missing ids are cached as empty columns.
     local field_query
     field_query='query($projectId: ID!) {
   node(id: $projectId) {

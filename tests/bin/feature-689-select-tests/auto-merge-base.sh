@@ -15,22 +15,16 @@ FAKE=""
 
 # One fake agents tree, reused by every S row. `bin/` and `hooks/` are copied whole because
 # select-tests.sh resolves its siblings from its OWN location, so a fake tree is the only way
-# to put a controllable merge-base resolver in front of it. `tests/` is built by hand rather
-# than copied: the real one has hundreds of files and the count assertions below need a set
-# small enough to state exactly.
+# to put a controllable merge-base resolver in front of it. No `tests/` here: the selector lists
+# the TARGET repo's tests (#2473), so each row's repo carries the small exact set the count
+# assertions need via seed_target_tests — including #1779's second stem
+# feature-1779-zero-commit.sh (non-TL3, so a stem match is not confused with the tier append)
+# and the two TL3-fake-* files the append rows count.
 make_fake_agents() {
     FAKE="$TMPDIR_BASE/fake-agents"
     mkdir -p "$FAKE"
     cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$FAKE/bin"
     cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$FAKE/hooks"
-    mkdir -p "$FAKE/tests/bin"
-    : > "$FAKE/tests/bin/feature-689-select-tests.sh"
-    # #1779's second stem. A non-TL3 name is required: the zero-commit rows below assert on a
-    # stem match with RUN_TL3=off, and a TL3-* name could not tell a stem match apart from the
-    # tier append.
-    : > "$FAKE/tests/bin/feature-1779-zero-commit.sh"
-    : > "$FAKE/tests/bin/TL3-fake-alpha.sh"
-    : > "$FAKE/tests/bin/TL3-fake-beta.sh"
     # The resolver is replaced by a stub driven from the environment, so a row states the
     # state it wants instead of building a repository that happens to produce it.
     cat > "$FAKE/bin/resolve-merge-base.sh" <<'STUB'

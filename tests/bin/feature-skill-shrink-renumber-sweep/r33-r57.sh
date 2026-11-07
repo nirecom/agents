@@ -48,8 +48,8 @@ check_literal "R39" "DR-1" "skills/deep-research/SKILL.md"
 # R41: issue-create → IC
 check_literal "R41" "IC-1" "skills/issue-create/SKILL.md"
 
-# R42: migrate-repo → MR
-check_literal "R42" "MR-1" "skills/migrate-repo/SKILL.md"
+# R42: migrate-issues → MI (renamed from migrate-repo / MR in #2473)
+check_literal "R42" "MI-1" "skills/migrate-issues/SKILL.md"
 
 # R43: review-code-security → RCS
 check_literal "R43" "RCS-1" "skills/review-code-security/SKILL.md"

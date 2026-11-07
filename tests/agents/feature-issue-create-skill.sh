@@ -7,8 +7,15 @@
 # Tests the /issue-create skill: bin/github-issues/issue-create.sh (gh issue create wrapper),
 # skills/issue-create/SKILL.md frontmatter, rules/github-issues.md "Issue creation", CLAUDE.md mention.
 # RED: fails clean while bin/github-issues/issue-create.sh is missing.
+# Cases run in parallel subshells (feature-issue-create-skill/case-runner.sh); output keeps definition order.
 
-set -u
+set -euo pipefail
+
+# Pin both state dirs before anything runs; the cleanup trap targets the readonly root only.
+IC_TMP_ROOT="$(mktemp -d)"; readonly IC_TMP_ROOT
+trap 'cd /; rm -rf "${IC_TMP_ROOT:?}"' EXIT
+export WORKFLOW_STATE_DIR="$IC_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$IC_TMP_ROOT/plans"
+unset CLAUDE_CODE_SESSION_ID
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TARGET="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create.sh"
@@ -18,23 +25,8 @@ WORKFLOW_INIT_MD="$SCRIPT_CHECKOUT_ROOT/skills/workflow-init/SKILL.md"
 RULES_GH="$SCRIPT_CHECKOUT_ROOT/rules/github-issues.md"
 CLAUDE_MD="$SCRIPT_CHECKOUT_ROOT/CLAUDE.md"
 
-PASS=0
-FAIL=0
-
-pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
-fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
-
-run_with_timeout() {
-    local secs="$1"; shift
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "$secs" "$@"
-    else
-        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
-    fi
-}
-
 # Early-exit: if the implementation is missing, report cleanly and exit.
-if [ ! -f "$TARGET" ]; then
+if [[ ! -f "$TARGET" ]]; then
     echo "FAIL: bin/github-issues/issue-create.sh not found (implementation missing)"
     echo ""
     echo "Results: 0 passed, 30 failed"
@@ -44,6 +36,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUB_DIR="$SCRIPT_DIR/feature-issue-create-skill"
 
+# case-runner.sh owns PASS/FAIL, pass/fail, run_with_timeout and the parallel runner.
+# shellcheck source=/dev/null
+. "$SUB_DIR/case-runner.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/section-mock.sh"
 # shellcheck source=/dev/null
@@ -58,10 +53,11 @@ SUB_DIR="$SCRIPT_DIR/feature-issue-create-skill"
 . "$SUB_DIR/section-phase5-resolver.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/section-scripts-existence.sh"
+collect_cases
 
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
-[ "$FAIL" -eq 0 ]
+[[ "$FAIL" -eq 0 ]]

@@ -1,32 +1,10 @@
-# ensure-project-ready.sh — reuse-or-create a Projects v2 board for a repo and
-# ensure the fields /issue-setup needs (Content Date, Status + Todo/In Progress/
-# Done options, session-fingerprint). Extracted from migration/create-project.sh
-# with all .migration-state.json dependencies removed.
-#
-# Sourced (not executed): . "/path/to/lib/ensure-project-ready.sh"
-# Entry point: ensure_project_ready <owner/repo>   (e.g. nirecom/ds4-ops)
-#
-# Requires: gh CLI with `project` scope; network access.
-#
-# On success (rc=0) sets caller-scope variables:
-#   EPR_PROJECT_ID              project GraphQL node id
-#   EPR_PROJECT_NUM             project number (integer)
-#   EPR_PROJECT_OWNER           project owner login (owner half of owner/repo)
-#   EPR_CONTENT_DATE_FIELD_ID   Content Date field id (may be empty)
-#   EPR_STATUS_FIELD_ID         Status single-select field id
-#   EPR_TODO_OPTION_ID          Status "Todo" option id
-#   EPR_IN_PROGRESS_OPTION_ID   Status "In Progress" option id
-#   EPR_DONE_OPTION_ID          Status "Done" option id
-#   EPR_FINGERPRINT_FIELD_ID    session-fingerprint text field id
-#
-# On failure (rc=1) prints an `error:`-prefixed line to stderr; the caller
-# decides fatality. Hard-fail conditions: gh lacks `project` scope, generic
-# graphql API error, or gh project list failure. Malformed/injection owner/repo
-# is rejected before any gh call. Failing to link the board to the repository is
-# explicitly NOT a hard-fail condition — it only warns (see link_project_to_repo).
-#
-# Never writes .env or the TSV cache — cache writes are the caller's job
-# (run-issue-setup.sh --step ensure-project).
+# ensure-project-ready.sh — sourced; ensure_project_ready <owner/repo> reuses or creates the GitHub
+# Projects v2 board and the fields /migrate-tracker needs (Content Date, Status + Todo/In Progress/
+# Done, session-fingerprint). Needs gh with the `project` scope.
+# rc=0 sets EPR_PROJECT_ID / _NUM / _OWNER, EPR_CONTENT_DATE_FIELD_ID (may be empty),
+# EPR_STATUS_FIELD_ID, EPR_TODO / _IN_PROGRESS / _DONE_OPTION_ID, EPR_FINGERPRINT_FIELD_ID.
+# rc=1 prints an `error:` line (no project scope, graphql or project-list failure, bad owner/repo);
+# a failed repo link only warns. Writes no cache: run-issue-setup.sh --step ensure-project does.
 
 # Idempotent — guard against double-sourcing.
 if [ -n "${_ENSURE_PROJECT_READY_SOURCED:-}" ]; then
@@ -138,7 +116,7 @@ ensure_project_ready() {
     # Unconditional on both the create and reuse paths: this function keeps no
     # state across runs, and the mutation is idempotent server-side, so a repeat
     # link is harmless. Non-fatal because an unlinked board must not sink the
-    # rest of /issue-setup — the helper already warns on stderr.
+    # rest of /migrate-tracker — the helper already warns on stderr.
     link_project_to_repo "$pid" "$owner" "$repo" || true
 
     # ---- Content Date field (best-effort ensure) ----

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/skills/feat-migrate-repo-preview-capture.sh
-# Tests: skills/migrate-repo/scripts/preview-and-capture.sh
+# Tests: skills/migrate-issues/scripts/preview-and-capture.sh
 # Tags: migration, repo, preview, identity-guard, scope:issue-specific
 #
 # L3 gap (what this test does NOT catch): real gh / real GitHub self-repo
@@ -13,7 +13,7 @@
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PREVIEW_REL="skills/migrate-repo/scripts/preview-and-capture.sh"
+PREVIEW_REL="skills/migrate-issues/scripts/preview-and-capture.sh"
 PREVIEW_SCRIPT="$SCRIPT_CHECKOUT_ROOT/$PREVIEW_REL"
 ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
 FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
@@ -36,7 +36,7 @@ run_with_timeout() {
 
 # --- Existence gate ---------------------------------------------------------
 missing=()
-[ -f "$PREVIEW_SCRIPT" ] || missing+=("skills/migrate-repo/scripts/preview-and-capture.sh")
+[ -f "$PREVIEW_SCRIPT" ] || missing+=("skills/migrate-issues/scripts/preview-and-capture.sh")
 [ -f "$ORCH_SCRIPT" ] || missing+=("bin/github-issues/migration/orchestrate.sh")
 [ -f "$FIXTURE_DIR/gh-mock.sh" ] || missing+=("tests/fixtures/migration/gh-mock.sh")
 if [ "${#missing[@]}" -gt 0 ]; then
@@ -99,6 +99,8 @@ EOF
 # (and of orchestrate.sh's siblings) inside the repo under test.
 script_checkout_fixture_copy "$SELF_PC1" bin "${PREVIEW_REL%/*}" \
     || fail "PF-PC1: fixture copy failed"
+git init -q "$SELF_PC1"
+git -C "$SELF_PC1" config core.hooksPath /dev/null
 SELF_PC1="$(cd "$SELF_PC1" && pwd)"
 
 run_with_timeout 30 bash "$SELF_PC1/$PREVIEW_REL" "$SELF_PC1" > "$TMP/stdout" 2> "$TMP/stderr"
@@ -133,6 +135,8 @@ unset MOCK_HAS_ISSUES
 # Build a minimal non-self fixture repo (distinct from AGENTS_MAIN_ROOT)
 REPO_NORMAL="$TMP/repo"
 mkdir -p "$REPO_NORMAL/docs"
+git init -q "$REPO_NORMAL"
+git -C "$REPO_NORMAL" config core.hooksPath /dev/null
 cat > "$REPO_NORMAL/docs/history.md" <<'HISTEOF'
 ### Entry 1 (2024-01-01)
 Background: test entry 1

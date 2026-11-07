@@ -18,6 +18,9 @@ Read `rules/github-issues.md` before WI-2 — on-demand-only, never auto-injecte
 
 Canonical: `skills/_shared/resolve-plans-dir.md`. Substitute the resolved absolute path for every `<PLANS_DIR>` placeholder below. Subagent prompts must receive literals — they cannot expand `$VAR`.
 
+### WI-1a — Repo migration
+Invoke `/migrate` via the Skill tool on every run with `ROOT` = `git rev-parse --show-toplevel` of the CWD; it owns the judgment. `MIGRATE_RESULT=ok` or `MIGRATE_RESULT=skipped` → WI-2; `MIGRATE_RESULT=failed` → show the `/migrate` output and stop.
+
 ### WI-2 — Driver loop
 
 The driver (`bin/workflow/workflow-init-driver`) handles WI-3..WI-9: token detection, `gh issue view` fetch for each N in `ISSUES`, CLOSED detection, label extraction, meta classification (meta strip / open sub-issue guard), Aggregate WIP check (all N: all_same / all_none / any_other), route decision, and context.md write. The driver writes the checkpoint and `<SID>-context.md` directly under PLANS_DIR (outside git repos → ENFORCE_WORKTREE does not apply).

@@ -2,25 +2,12 @@
 # tests/bin/feature-1693-migrate-skipped-step-warning.sh
 # Tests: bin/github-issues/migration/orchestrate.sh
 # Tags: migration, repo, github, issues, bin, resume, warning, TL2, scope:issue-specific
-#
-# `--from-step N` jumps straight to step N. When the recorded current_step is far
-# behind N, every step in between is silently never run — and Step 4 (Projects v2
-# board + Content Date backfill) is the expensive one to discover missing, since
-# by then the issues exist but none of them are on a board or carry a date.
-#
-# The orchestrator must warn on stderr, naming each skipped step, and must offer
-# an explicit acknowledgement flag so a deliberate jump is not noisy.
-#
-# TL2: spawns the real orchestrate.sh against a real fixture repo with a mocked
-# `gh` on PATH. Not TL1 — the warning depends on argument parsing plus reading
-# the on-disk .migration-state.json.
-#
-# TL3 gap (what this test does NOT catch): whether the /migrate-repo skill
-# surfaces the warning to the user rather than swallowing stderr, and whether a
-# real Projects v2 board is actually missing after such a jump.
-#
-# RED before write-code: no skipped-step warning exists, and
-# `--ack-skipped-steps` is rejected as an unknown arg.
+# `--from-step N` far ahead of the recorded current_step silently skips steps (Step 4 = board + Content Date);
+# the orchestrator must warn on stderr naming each skipped step, and `--ack-skipped-steps` silences a deliberate jump.
+# TL2: real orchestrate.sh against a fixture repo with a mocked `gh` on PATH, reading .migration-state.json.
+# TL3 gap (what this test does NOT catch): whether the /migrate-issues skill surfaces the
+# warning to the user, and whether a real Projects v2 board is missing after such a jump.
+# lang-check: ignore — Japanese literals match real localized output
 
 set -u
 
@@ -179,7 +166,7 @@ case3_no_jump_no_warning() {
     [ "$RC" = "0" ] || missing="$missing rc=$RC"
     # Control: without proof the orchestrator actually ran, "no warning" would
     # pass just as well on a crash.
-    has "$OUT" '/migrate-repo orchestrator' || missing="$missing orchestrator-did-not-run"
+    has "$OUT" '/migrate-issues orchestrator' || missing="$missing orchestrator-did-not-run"
     hasE "$ERR" 'WARNING.*[Ss]kip|[Ss]kipped step' && missing="$missing spurious-warning"
 
     if [ -z "$missing" ]; then
@@ -192,13 +179,8 @@ case3_no_jump_no_warning() {
 # ===========================================================================
 # Case 4 — the boundary: warn iff at least one step is genuinely skipped
 # ===========================================================================
-# The set of skipped steps is (current_step, from_step) exclusive, i.e.
-# current_step+1 .. from_step-1. It is empty exactly when
-# from_step <= current_step + 1, so that is the whole no-warning condition:
-# resuming at the next step, re-running the current one, or jumping backwards
-# all skip nothing. An off-by-one in either direction shows up here as a
-# spurious warning on a sanctioned resume — the noise that trains operators to
-# ignore the warning that matters.
+# Skipped steps are current_step+1 .. from_step-1, empty exactly when from_step <= current_step + 1
+# (resume next, re-run current, jump back); an off-by-one shows up as a spurious warning on a sanctioned resume.
 
 # assert_no_warning <label> <fixture> <current_step> <from_step>
 assert_no_warning() {
@@ -208,7 +190,7 @@ assert_no_warning() {
     orchestrate "$repo" --from-step "$from" --dry-run
 
     [ "$RC" = "0" ] || missing="$missing rc=$RC"
-    has "$OUT" '/migrate-repo orchestrator' || missing="$missing orchestrator-did-not-run"
+    has "$OUT" '/migrate-issues orchestrator' || missing="$missing orchestrator-did-not-run"
     hasE "$ERR" 'WARNING.*[Ss]kip|[Ss]kipped step' && missing="$missing spurious-warning"
     has "$ERR" 'Projects v2' && missing="$missing spurious-step4-detail"
 

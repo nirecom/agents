@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/resolve-project-schema.sh
 # Tests: bin/github-issues/lib/resolve-project.sh
-# Tags: issue-setup, resolve-project, github-issues, scope:issue-specific
+# Tags: migrate-tracker, resolve-project, github-issues, scope:issue-specific
 # N/A: secret-leakage — cached field IDs are project-structure identifiers, not secrets; gh owns token handling.
 # resolve-project.sh 10-col TSV schema guard (#1340 step 3): table-driven parser cases, 10-col full hit,
 # cold fetch → exact mock IDs, cache write → 10 cols with exact field/option IDs.
@@ -11,8 +11,14 @@
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
+set -euo pipefail
 TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh"
 export TARGET
+
+# Top-level dual pin (rules/test/fixture-isolation.md); the gh mock is built once.
+FIXTURE_ROOT="$(mktemp -d)"; readonly FIXTURE_ROOT
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
 
 # Early-exit: if the helper is missing, report cleanly and exit.
 if [ ! -f "$TARGET" ]; then
@@ -23,12 +29,8 @@ if [ ! -f "$TARGET" ]; then
 fi
 
 TMP=""
-
-setup_mock() {
-    TMP="$(mktemp -d)"
-    mkdir -p "$TMP/mock-bin"
-
-    cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+mkdir -p "$FIXTURE_ROOT/mock-bin"
+cat > "$FIXTURE_ROOT/mock-bin/gh" <<'MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${MOCK_LOG:-}" ]; then
@@ -106,8 +108,11 @@ case "$ARGS" in
     ;;
 esac
 MOCK_EOF
-    chmod +x "$TMP/mock-bin/gh"
-    export PATH="$TMP/mock-bin:$PATH"
+chmod +x "$FIXTURE_ROOT/mock-bin/gh"
+export PATH="$FIXTURE_ROOT/mock-bin:$PATH"
+
+setup_mock() {
+    fixture_case_new
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
@@ -116,11 +121,9 @@ MOCK_EOF
 }
 
 teardown_mock() {
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
-        rm -rf "$TMP" 2>/dev/null || true
-    fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR \
+    export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
+    unset MOCK_LOG \
           GH_MOCK_OWNER_REPO GH_MOCK_PROJECTS_NODE_COUNT GH_MOCK_PROJECT_OWNER \
           GH_MOCK_PROJECT_NUM GH_MOCK_PROJECT_ID GH_MOCK_CONTENT_DATE_FIELD_ID \
           GH_MOCK_STATUS_FIELD_ID GH_MOCK_TODO_OPTION_ID \
@@ -206,7 +209,7 @@ while IFS='|' read -r name setup_kind expect; do
     CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
     write_cache_case "$setup_kind"
     STDERR_FILE="$TMP/tst-$name.log"
-    OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
+    OUT=$(run_resolver "$STDERR_FILE") || true
     RC=$(get_field "$OUT" RC)
     R_ID=$(get_field "$OUT" RESOLVED_PROJECT_ID)
     R_STATUS=$(get_field "$OUT" RESOLVED_STATUS_FIELD_ID)
@@ -264,7 +267,7 @@ mkdir -p "$CACHE_DIR"
 # Exactly 10 columns
 printf 'nirecom/agents\tcached-owner\t99\tPVT_cached\tPVTF_content\tPVTF_status\tPVTF_todo\tPVTF_inprog\tPVTF_done\tPVTF_finger\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/ts4-stderr.log"
-OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
+OUT=$(run_resolver "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_OWNER=$(get_field "$OUT" RESOLVED_OWNER)
 R_NUM=$(get_field "$OUT" RESOLVED_PROJECT_NUM)
@@ -306,7 +309,7 @@ export GH_MOCK_IN_PROGRESS_OPTION_ID="opt_cold_inprog"
 export GH_MOCK_DONE_OPTION_ID="opt_cold_done"
 export GH_MOCK_FINGERPRINT_FIELD_ID="PVTF_cold_finger"
 STDERR_FILE="$TMP/ts5-stderr.log"
-OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
+OUT=$(run_resolver "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_STATUS=$(get_field "$OUT" RESOLVED_STATUS_FIELD_ID)
 R_TODO=$(get_field "$OUT" RESOLVED_TODO_OPTION_ID)
@@ -342,7 +345,7 @@ export GH_MOCK_DONE_OPTION_ID="opt_w_done"
 export GH_MOCK_FINGERPRINT_FIELD_ID="PVTF_w_finger"
 CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 STDERR_FILE="$TMP/ts6-stderr.log"
-bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'" >/dev/null
+run_resolver "$STDERR_FILE" >/dev/null || true
 if [ -f "$CACHE_FILE" ]; then
     ROW=$(awk -F'\t' '$1=="nirecom/agents"' "$CACHE_FILE" | head -1)
     COL_COUNT=$(printf '%s' "$ROW" | awk -F'\t' '{print NF}')
@@ -377,7 +380,7 @@ CACHE_FILE="$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
 mkdir -p "$(dirname "$CACHE_FILE")"
 printf 'nirecom/agents\towner\t1\tPVT_id\tcontent\tstatus_f\ttodo_f\tinprog_f\tdone_f\tfinger_f\n' > "$CACHE_FILE"
 STDERR_FILE="$TMP/ts7-stderr.log"
-OUT=$(bash -c "$(declare -f run_resolver get_field); run_resolver '$STDERR_FILE'")
+OUT=$(run_resolver "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_TODO=$(get_field "$OUT" RESOLVED_TODO_OPTION_ID)
 GRAPHQL_CALLED=0

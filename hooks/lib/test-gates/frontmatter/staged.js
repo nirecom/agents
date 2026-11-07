@@ -10,7 +10,7 @@ const R = require("../registry");
 const S = require("../source");
 const { readHeaders } = require("../headers");
 const { judge } = require("../self-impl-judge");
-const { isSupportedTest, isTestEntrypoint, isFlatTest } = require("./rules");
+const { isSupportedTest, isTestEntrypoint, isFlatTest, coversMismatch } = require("./rules");
 const { normalizeContent, checkContent, harnessSourced } = require("./content");
 
 const ARCHIVE = /(^|\/)tests\/_archive\//;
@@ -29,10 +29,23 @@ function selected(files, io) {
 // captured(buf) — the text `$(...)` captures: NULs dropped, trailing LFs cut.
 const captured = (buf) => buf.toString("utf8").replace(/\0/g, "").replace(/\n+$/, "");
 
-function flatLine(f, m) {
+function flatLine(f, m, root) {
   const code = R.fieldValue(m.entry, "diagnostics.flatRejectCode") || "";
   const label = R.fieldValue(m.entry, "diagnostics.nameLabel") || "";
-  return `${code}: ${f} (new ${label} tests must live under tests/<category>/; categories: ${R.CATEGORIES.join(" ")})`;
+  return `${code}: ${f} (new ${label} tests must live under ${R.layoutFor(root).dir}/<category>/; categories: ${R.categoriesFor(root).join(" ")})`;
+}
+
+// harnessMode(io) — "on" / "off" from the repo's .agents.json testHarness (#2473), "legacy" for an
+// uninitialized repo: the harness source is required only when the helper file exists, as before.
+function harnessMode(io) {
+  const l = R.layoutFor(io.repoRoot || null);
+  return l.initialized ? l.testHarness : "legacy";
+}
+
+function missingHarness(io, mode, ep, text) {
+  if (!ep || mode === "off") return false;
+  if (mode === "legacy" && !(io.repoRoot && io.isFile(path.posix.join(io.repoRoot, ep.hlPath)))) return false;
+  return !harnessSourced(text, ep.hlRe) && !(ep.hlShared && harnessSourced(text, ep.hlShared));
 }
 
 // parentsOf(io, rel) — { inParent, same, heads, base } (#2812); an io without parents() has HEAD alone.
@@ -46,12 +59,14 @@ function stagedCheck(files, io) {
   const lines = [];
   const queue = [];
   let fail = false;
+  const root = io.repoRoot || null;
+  const mode = harnessMode(io);
   for (const { f, rel } of selected(files, io)) {
     const p = parentsOf(io, rel);
     const head = p.inParent;
-    const flat = isFlatTest(rel);
+    const flat = isFlatTest(rel, root);
     if (flat && !head) {
-      lines.push(flatLine(f, flat));
+      lines.push(flatLine(f, flat, root));
       fail = true;
       continue;
     }
@@ -60,14 +75,13 @@ function stagedCheck(files, io) {
     const text = captured(buf);
     const h = readHeaders(text, f);
     const bad = checkContent(f, h.tests, h.tags);
-    const ep = isTestEntrypoint(rel);
-    if (ep && io.repoRoot && io.isFile(path.posix.join(io.repoRoot, ep.hlPath)) && !head && !harnessSourced(text, ep.hlRe)) {
-      bad.push(`MISSING_HARNESS_SOURCE: ${f}`);
-    }
+    if (!head && missingHarness(io, mode, isTestEntrypoint(rel, root), text)) bad.push(`MISSING_HARNESS_SOURCE: ${f}`);
     lines.push(...bad);
     if (bad.length) fail = true;
-    // Equal to a parent's blob: nothing the parents lack, so nothing is queued.
-    if (p.same) continue;
+    const warn = head ? null : coversMismatch(f, rel, root, h.tests);
+    if (warn) lines.push(warn);
+    // Equal to a parent's blob, or testHarness off: nothing to judge for a self-implemented harness.
+    if (p.same || mode === "off") continue;
     const copy = Buffer.from(normalizeContent(text), "utf8");
     if (p.heads.some((b) => b.equals(copy))) continue;
     const heads = p.heads.map((b) => S.mem(rel, b));

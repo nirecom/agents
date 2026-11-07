@@ -1,10 +1,12 @@
 "use strict";
-// --all of the frontmatter check (#2507 D7): the supported tests directly in tests/<category>/
-// for the six categories, listed per registry entry as tlr_list_dir_into lists them.
+// --all of the frontmatter check (#2507 D7): the supported tests directly in each test dir of the
+// repo's .agents.json tests section (#2473; uninitialized: the legacy categories), listed per
+// registry entry as tlr_list_dir_into lists them.
 
 const fs = require("fs");
 const path = require("path");
 const R = require("../registry");
+const RS = require("../../repo-settings");
 const { readHeaders } = require("../headers");
 const { checkContent } = require("./content");
 const { toWindowsPath } = require("../../branch-diff");
@@ -41,10 +43,10 @@ function listSupported(dir) {
 // allCheck(root) -> { rc, lines }: every listed file's header diagnostics, named root-relative.
 function allCheck(root) {
   const lines = [];
-  for (const cat of R.CATEGORIES) {
-    const dir = `${root}/tests/${cat}`;
+  for (const testDir of RS.testDirsIn(R.layoutFor(root))) {
+    const dir = `${root}/${testDir}`;
     for (const n of listSupported(dir)) {
-      const rel = `tests/${cat}/${n}`;
+      const rel = `${testDir}/${n}`;
       let text = "";
       try {
         text = fs.readFileSync(path.join(toWindowsPath(dir), n), "utf8");

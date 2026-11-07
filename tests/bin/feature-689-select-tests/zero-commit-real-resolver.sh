@@ -20,6 +20,8 @@ make_real_zero_commit_repo() { # <repo>
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
     git -C "$repo" config commit.gpgsign false
+    # The selector lists the target's tests (#2473): settings plus the two tests S20/S28 expect.
+    seed_target_tests "$repo" feature-1638-resolve-merge-base.sh
     printf 'original\n' > "$repo/bin/select-tests.sh"
     git -C "$repo" add -A
     git -C "$repo" commit -q -m "base"
@@ -65,8 +67,8 @@ test_S20_real_resolver_end_to_end() {
     out="$(cat "$o")"; err="$(cat "$e")"
     rm -f "$o" "$e"
 
-    # The real selector searches the real tests/ directory, so the expected hit is this suite's
-    # own file: bin/select-tests.sh changed, and its stem is `select-tests`.
+    # The real selector searches the fixture repo's tests/ (seed_target_tests), so the expected hit
+    # is its feature-689-select-tests.sh: bin/select-tests.sh changed, and its stem is `select-tests`.
     if [ "$rc" != "0" ]; then
         fail "S20_real_resolver_end_to_end: expected exit 0, got rc=$rc
 --- stderr ---
@@ -108,7 +110,7 @@ test_S28_real_resolver_recorded_state_end_to_end() {
     make_real_zero_commit_repo "$repo"
     # The untracked half. `bin/resolve-merge-base.sh` never existed in this fixture's base commit
     # and is never added, so it appears only through `git ls-files --others`; its stem selects
-    # this repository's own tests/bin/feature-1638-resolve-merge-base.sh.
+    # the fixture's tests/bin/feature-1638-resolve-merge-base.sh.
     printf 'brand new\n' > "$repo/bin/resolve-merge-base.sh"
 
     local head
