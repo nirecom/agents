@@ -14,8 +14,15 @@ Read `rules/github-issues.md` before WE-4 — on-demand-only, never auto-injecte
 Read `rules/mid-workflow-findings.md` before WE-6 — on-demand-only, never auto-injected; WE-6 depends on its append CLI and severity tagging.
 Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its Public GitHub Rules govern the issue comments and history entries written from here on.
 
-### Precondition — delivery settled
-Run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"`. `REASON=` other than `cleanup` (merge_to_main not settled) → stop and follow its `ACTION`; never merge or push from this skill.
+### Precondition — delivery settled or workflow aborted
+Run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"`. `REASON=cleanup` → continue; `REASON=workflow-aborted-cleanup` → take the Abort branch below.
+`REASON=workflow-aborted` → stop and tell the user the worktree and branch belong to the heir session; this session cleans nothing.
+Any other `REASON=` (merge_to_main not settled) → stop and follow its `ACTION`; never merge or push from this skill.
+
+### Abort branch — REASON=workflow-aborted-cleanup
+Follow `$AGENTS_MAIN_ROOT/skills/worktree-end/scripts/abort-branch.md` in place of the steps below.
+Keep: WE-1, WE-2, WE-3, WE-5, WE-6, WE-7, WE-9, WE-9a and the cleanup cascade (WE-11..WE-18), with WE-15 deleting by `branch -d`.
+Skip: WE-4, WE-8, WE-17 and the issue close.
 
 ### WE-1 — Resolve <PLANS_DIR>
 Run `bash "$AGENTS_MAIN_ROOT/bin/workflow-plans-dir"` once as one bare command and reuse its printed path — never assign it to a shell variable, which does not survive to the next Bash call. Canonical: `skills/_shared/resolve-plans-dir.md`.
@@ -78,7 +85,7 @@ supervisor OFF-block adaptive message fires only during WE-11..WE-18 — see cle
 WE-10c releases the CodeGraph index lock immediately before WE-11 — see cleanup-cascade.md.
 
 ## Rules
-- Cleanup runs only after `merge_to_main` is settled (Precondition). No destructive steps on wait/abort/error paths.
+- Cleanup runs only after `merge_to_main` is settled, or in a session aborted with `/workflow-abort-accepted` (Precondition). No destructive steps on wait/abort/error paths.
 - Never merge, push, or emit the release-approval sentinel here — `/get-release-approval` and `/merge-to-main` own them.
 - AUTO_MERGE_PR=off (pull_request only): the human merges on the web; /merge-to-main never merges.
 - `git worktree remove --force` is prohibited; blocked at the `bash-guard` and `settings.json` deny layers, not by prose in `rules/ops.md`.

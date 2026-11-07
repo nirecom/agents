@@ -20,6 +20,11 @@ const EXEMPTION_MATRIX = Object.freeze({
   // promptNotify:false — out of #2169's scope: a started session's allowlisted
   // step overrunning its TTL still gets notified every prompt, unchanged.
   "step-in-flight": { c4: true, c2: false, nextStep: false, promptNotify: false },
+  // #2920: an aborted session (hooks/workflow-state/workflow-abort.js). c2:false — supervisor-guard
+  // exits early as a blanket quiet layer, not per row. nextStep:false — next-step answers invoke
+  // (workflow-aborted-cleanup) or done, never paused. promptNotify:false — detectStalledSteps
+  // returns [] for an aborted session, so the notifier has nothing to say.
+  "workflow-aborted": { c4: true, c2: false, nextStep: false, promptNotify: false },
   // promptNotify:false — this primitive only exists once next-step has spoken;
   // the UserPromptSubmit notifier never invokes next-step, so it can't occur.
   "delegated-reason":  { c4: true,  c2: false, nextStep: false, promptNotify: false },
@@ -36,6 +41,8 @@ const EXEMPTION_MATRIX = Object.freeze({
   // #2461: next-step's JEV_ADVICE=wait-on-invoke — the turn ends so the user reads the advice.
   // c2:false — the scheduled review still runs. nextStep:false — next-step emits the advice itself.
   "jev-wait-on-invoke": { c4: true, c2: false, nextStep: false, promptNotify: false },
+  // #2920: next-step's REASON=workflow-aborted* — the late backstop of the workflow-aborted row.
+  "workflow-aborted-reason": { c4: true, c2: false, nextStep: false, promptNotify: false },
 });
 
 module.exports = { EXEMPTION_MATRIX };

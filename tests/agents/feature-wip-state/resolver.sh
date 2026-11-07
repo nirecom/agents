@@ -93,7 +93,7 @@ unset ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER 2>/dev
 mint_resolver_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
-EXPECTED_FP=$(printf '%s:%s' "test-sid-fixture" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="test-sid-fixture"
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 export WORKFLOW_PLANS_DIR="$TMP/resolver-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"

@@ -52,7 +52,7 @@ c_r23_project_cache() {
   mkdir -p "$stub" "$NEW/cache" "$LEG/cache"
   printf '%s\n' '#!/usr/bin/env bash' 'exit 1' >"$stub/gh"
   chmod +x "$stub/gh"
-  row() { printf 'acme/demo\tacme\t7\t%s\t\t\t\t\t\t\n' "$1"; }
+  row() { printf 'acme/demo\tacme\t7\t%s\t\t\t\t\t\t\tsid1\n' "$1"; }
   row PVT_new >"$NEW/cache/project-resolve.tsv"
   row PVT_old >"$LEG/cache/project-resolve.tsv"
   out="$(cd "$T/cwd" && PATH="$stub:$PATH" BOARD_CARD_REPO_OVERRIDE=acme/demo run_with_timeout 30 \

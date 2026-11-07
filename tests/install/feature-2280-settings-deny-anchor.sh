@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/install/feature-2280-settings-deny-anchor.sh
 # Tests: settings.json
-# Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2, ask, unrunnable, sentinel, glossary
+# Tags: settings, permissions, deny, ssot, scope:issue-specific, pwsh-not-required, TL2, ask, unrunnable, sentinel, glossary, workflow-abort, regression-2920
 #
 # Run wrapped: bin/run-with-timeout.sh 120 bash tests/install/feature-2280-settings-deny-anchor.sh
 #
@@ -316,6 +316,39 @@ t_glossary_accept_ask() {
 }
 t_glossary_accept_ask
 
+# #2920: the abort sentinel ends a workflow without a deliverable, so it is the GA class too --
+# ask always, never allow, never deny.
+AV_RULE='Bash(echo "<<WORKFLOW_ABORT_ACCEPTED: *>>")'
+AV_CMD='echo "<<WORKFLOW_ABORT_ACCEPTED: user stopped — direction changed>>"'
+t_abort_accepted_ask() {
+    local av=() tmp_np
+    dp_node_path "$TMPROOT"; tmp_np="$DP_NODE_PATH/av"
+    mkdir -p "$TMPROOT/av"
+    dp_node_path "$SETTINGS"
+    mapfile -d '' -t av < <(node -e "$UA_SPLIT_JS" "$DP_NODE_PATH" "$tmp_np" "$AV_RULE")
+    if (( ${#av[@]} != 1 )) || [[ "${av[0]}" == ERROR:* ]]; then
+        echo "FAIL: harness -- abort-accepted split returned [${av[*]}]"; exit 1
+    fi
+    ROWS=$((ROWS + 1))
+    assert_eq "AV1: permissions.ask carries the exact WORKFLOW_ABORT_ACCEPTED sentinel rule" "true" "${av[0]}"
+    dp_req av-allow "$tmp_np/ua-allow-as-deny.json" "$AV_CMD"
+    dp_req av-ask "$tmp_np/ua-ask-as-deny.json" "$AV_CMD"
+    dp_req av-deny "$SETTINGS" "$AV_CMD"
+    dp_run "abort-accepted"
+    ROWS=$((ROWS + 1))
+    dp_get av-allow
+    assert_eq "AV2: no permissions.allow Bash rule auto-approves the abort sentinel (hits: ${DENY_HITS:-none})" \
+        "NO-MATCH" "$DENY_VERDICT"
+    ROWS=$((ROWS + 1))
+    dp_get av-ask
+    assert_eq "AV3: the permissions.ask rule matches the abort sentinel command" "MATCHED" "$DENY_VERDICT"
+    ROWS=$((ROWS + 1))
+    dp_get av-deny
+    assert_eq "AV4: no permissions.deny rule blocks the abort sentinel (hits: ${DENY_HITS:-none})" \
+        "NO-MATCH" "$DENY_VERDICT"
+}
+t_abort_accepted_ask
+
 # EXECUTED-ROW BUDGET. Every table increments ROWS; a drifted delimiter or an early return
 # in front of a loop would otherwise leave a file that counts only its failures reporting green.
 # crosscheck 14 (one verdict row each; the allow-module agreement row retired with #2264) + robustness 13 (12 + E4b shape pin) + regression table 80 (61 prior +
@@ -323,8 +356,9 @@ t_glossary_accept_ask
 # refspec compound tail) + launch-form completeness 80 (20 triggers x 4 launch forms -- #2617
 # covers every retained push floor row, incl. the positional `*-f` / `*-f *`; PEND under ANCHORED=0) +
 # bug-reproduction-evidence 1 + row_is_well_formed selftest 4 + retired read-only allow 5 (#2403) + unrunnable-accept ask 3 (#2501) +
-# baseline-accept retired 3 (#2688) + glossary-accept ask 4 (#2529) + 2617 over-match 49 (#2617; OV7 adds 4 positional `*-f *` MATCHED rows).
-ROWS_EXPECTED=257
+# baseline-accept retired 3 (#2688) + glossary-accept ask 4 (#2529) + 2617 over-match 49 (#2617; OV7 adds 4 positional `*-f *` MATCHED rows)
+# + abort-accepted ask 4 (#2920).
+ROWS_EXPECTED=261
 assert_eq "T-budget: every table executed its full row count" "$ROWS_EXPECTED" "$ROWS"
 
 echo ""

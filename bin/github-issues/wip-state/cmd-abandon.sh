@@ -7,7 +7,7 @@
 
 # ---------------------------------------------------------------------------
 # Verb: abandon <N>
-#   Status=Todo + clear fingerprint + delete lock. HARD failure on gh errors.
+#   Status=Todo + clear the session-id value + delete lock. HARD failure on gh errors.
 #   Only operates on OPEN issues; closed/error state exits 1.
 # ---------------------------------------------------------------------------
 cmd_abandon() {
@@ -50,18 +50,9 @@ cmd_abandon() {
         echo "[wip-state: Status=Todo set failed for #$n]" >&2
         exit 1
     fi
-    local fp_clear_err
-    fp_clear_err=$(gh project item-edit --id "$item_id" \
-            --field-id "$WIP_STATE_FINGERPRINT_FIELD_ID" \
-            --project-id "$PROJECT_ID" \
-            --text "" 2>&1 >/dev/null)
-    local fp_clear_rc=$?
-    if [ "$fp_clear_rc" -eq 0 ]; then
-        :
-    elif printf '%s' "$fp_clear_err" | grep -q "no changes to make"; then
-        :
-    else
-        echo "[wip-state: fingerprint clear failed for #$n]" >&2
+    # Empty the session-id value (no field → success; one re-resolved retry; failure → exit 1).
+    if ! wip_clear_session_id_text "$item_id"; then
+        echo "[wip-state: session-id clear failed for #$n]" >&2
         exit 1
     fi
     delete_lock_file "$n"

@@ -27,22 +27,19 @@ fi
 teardown_mock
 
 # ===========================================================================
-# Test 25: fingerprint determinism: same (session-id, N) → same 8-char hex.
-# This is verified indirectly through check matching — but we also assert the
-# helper accepts a query and a repeated call yields the same fingerprint in
-# the args log.
+# Test 25 (#2925): the written value is the raw session id on every run (no hashing).
 # ===========================================================================
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
-FP1=$(grep -- "--text " "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 | sed -nE 's/.*--text ([0-9a-f]+).*/\1/p')
+FP1=$(grep -- "--text " "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 | sed -nE 's/.*--text ([A-Za-z0-9_-]+).*/\1/p')
 : > "$GH_MOCK_ARGS_LOG"
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
-FP2=$(grep -- "--text " "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 | sed -nE 's/.*--text ([0-9a-f]+).*/\1/p')
-if [ -n "$FP1" ] && [ "$FP1" = "$FP2" ] && [ "${#FP1}" -eq 8 ]; then
-    pass "T25: fingerprint determinism: same (sid,N) → same 8-char hex (fp=$FP1)"
+FP2=$(grep -- "--text " "$GH_MOCK_ARGS_LOG" 2>/dev/null | head -1 | sed -nE 's/.*--text ([A-Za-z0-9_-]+).*/\1/p')
+if [ "$FP1" = "test-sid-fixture" ] && [ "$FP1" = "$FP2" ]; then
+    pass "T25: written value = raw session id on repeated runs (value=$FP1)"
 else
-    fail "T25: fp1='$FP1' fp2='$FP2' len(fp1)=${#FP1}"
+    fail "T25: fp1='$FP1' fp2='$FP2' (expected test-sid-fixture)"
 fi
 teardown_mock
 
@@ -132,7 +129,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
 export GH_MOCK_STATUS="In Progress"
-EXPECTED_FP=$(printf '%s:%s' "test-sid-fixture" "42" | sha256sum | cut -c1-8)
+EXPECTED_FP="test-sid-fixture"
 export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
 export GH_MOCK_PAGINATED_PAGES=1
 OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)

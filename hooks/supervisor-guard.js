@@ -83,6 +83,10 @@ if (require.main === module) {
     const { isNextStepPaused } = require("./lib/session-markers");
     if (isNextStepPaused(sessionId)) process.exit(0);
   } catch (_) { /* fail-open */ }
+  // #2920: an aborted session is quiet the same way; the alert state is left untouched.
+  try {
+    if (require("./workflow-state/workflow-abort").isWorkflowAborted(sessionId)) process.exit(0);
+  } catch (_) { /* fail-open */ }
 
   let state = null;
   try {
