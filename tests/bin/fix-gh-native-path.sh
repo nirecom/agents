@@ -202,6 +202,180 @@ else
 fi
 case_end
 
+# ---------------------------------------------------------------- #2473 gitlab origin
+# /migrate-issues creates and closes issues through host-adapter.sh (hia_issue_create /
+# hia_issue_close), so a gitlab origin reaches glab and gh is never started: gh is a stub that
+# exits 97 and logs to forbidden.log; the glab mock answers issue create with GitLab issue 42,
+# records each call's argv one element per line after an @@call line in glab.argv, and fails the
+# subcommand GNP_GL_FAIL names (create or close).
+# TL3 gap: a real GitLab project; the labels and the close reason glab really accepts.
+GL_BIN="$GNP_TMP/gitlab-bin"
+mkdir -p "$GL_BIN"
+export GNP_GL_DIR="$GNP_TMP"
+cat >"$GL_BIN/glab" <<'GLAB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GNP_GL_DIR/glab.log"
+printf '@@call\n' >>"$GNP_GL_DIR/glab.argv"
+printf '%s\n' "$@" >>"$GNP_GL_DIR/glab.argv"
+case "$*" in
+  *"issue create"*) [ "${GNP_GL_FAIL:-}" = create ] && exit 1; echo "https://gitlab.com/grp/proj/-/issues/42" ;;
+  *"issue close"*) [ "${GNP_GL_FAIL:-}" = close ] && exit 1 ;;
+esac
+exit 0
+GLAB
+printf '#!/usr/bin/env bash\nprintf "gh %%s\\n" "$*" >>"%s/forbidden.log"\necho "gh must not be started for a gitlab origin" >&2\nexit 97\n' "$GNP_TMP" >"$GL_BIN/gh"
+chmod +x "$GL_BIN/glab" "$GL_BIN/gh"
+MIG="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration"
+HAVE_JQ=0
+command -v jq >/dev/null 2>&1 && HAVE_JQ=1
+# gl_repo <name> <docs file> <text> — a repo whose origin is the gitlab project grp/<name>, holding one docs file.
+gl_repo() {
+  local d="$GNP_TMP/$1"
+  mkdir -p "$d/docs"
+  harness_git_init "$d"
+  git -C "$d" remote add origin "git@gitlab.com:grp/$1.git"
+  printf '%b' "$3" >"$d/docs/$2"
+  printf '%s' "$d"
+}
+# gl_migrate <script> <repo> [fail] — one canary run of 1 from a neutral cwd with fresh logs, glab
+# failing the [fail] subcommand; sets GL_RC.
+gl_migrate() {
+  rm -f "$GNP_TMP/glab.log" "$GNP_TMP/glab.argv" "$GNP_TMP/forbidden.log"
+  (cd "$GNP_TMP" && GNP_GL_FAIL="${3:-}" PATH="$GL_BIN:$PATH" run_with_timeout 60 bash "$MIG/$1" "$2" --canary 1) >"$GNP_TMP/gl.out" 2>&1
+  GL_RC=$?
+}
+gl_log() { cat "$GNP_TMP/$1.log" 2>/dev/null; }
+# gl_call <subcommand> — the argv lines of the first recorded `glab issue <subcommand>` call.
+gl_call() {
+  awk -v want="$1" '
+    /^@@call$/ { n = 0; inblk = 0; next }
+    { n++ }
+    n == 1 { a1 = $0; next }
+    n == 2 { inblk = (a1 == "issue" && $0 == want && !done); if (inblk) { done = 1; print a1; print }; next }
+    inblk { print }
+  ' "$GNP_TMP/glab.argv" 2>/dev/null
+}
+# flag_vals <short> <long> — on stdin argv lines, the value of each <short> / <long> / <long>=v.
+flag_vals() {
+  awk -v s="$1" -v l="$2" 'take { print; take = 0; next } $0 == s || $0 == l { take = 1; next } index($0, l "=") == 1 { print substr($0, length(l) + 2) }'
+}
+# gl_labels — the sorted label set of the first glab issue create (repeated and comma-joined flags).
+gl_labels() { gl_call create | flag_vals -l --label | tr ',' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//'; }
+# gl_state <repo> <jq filter> — the filter over the repo's migration state, compact, CR-free.
+gl_state() { jq -c "$2" "$1/.migration-state.json" 2>/dev/null | tr -d '\r'; }
+# gl_create_ok <repo> <title> <body first line> <labels> — the create call names origin's project,
+# the title, the body and exactly the labels.
+gl_create_ok() {
+  local proj="grp/$(basename "$1")"
+  [ "$(gl_call create | flag_vals -R --repo)" = "$proj" ] &&
+    [ "$(gl_call create | flag_vals -t --title)" = "$2" ] &&
+    [ "$(gl_call create | flag_vals -d --description | head -1)" = "$3" ] &&
+    gl_call create | grep -qx 'body line' &&
+    [ "$(gl_labels)" = "$4" ]
+}
+gl_detail() { echo "rc=$GL_RC create=[$(gl_call create | tr '\n' '|')] close=[$(gl_call close | tr '\n' '|')] forbidden=[$(gl_log forbidden)] state=[$(gl_state "$1" '{todo:.todo.migrated,history:.history.migrated}')] out=$(tail -c 300 "$GNP_TMP/gl.out")"; }
+# routes_through <script> <fn...> — every fn is called, and no live line runs gh issue create/close/comment
+# (comments and the dry-run echo lines are not calls).
+routes_through() {
+  local f="$MIG/$1" fn
+  shift
+  for fn in "$@"; do grep -q "$fn" "$f" || return 1; done
+  ! grep -E '^[^#]*gh issue (create|close|comment)' "$f" | grep -vq 'echo '
+}
+
+case_begin "migrate-todo-gitlab-goes-to-glab" "bin/github-issues/migration/migrate-todo.sh"
+if routes_through migrate-todo.sh hia_issue_create; then
+  pass "migrate-todo.sh creates issues through hia_issue_create, never gh issue create"
+else
+  fail "migrate-todo.sh routing" "hia_issue_create missing or a direct gh issue call remains"
+fi
+if [ "$HAVE_JQ" -eq 0 ]; then
+  skip "migrate-todo on a gitlab origin: jq not on PATH (the migration state needs it)"
+else
+  R_TODO="$(gl_repo todo-gitlab todo.md '# Tasks\n\n## Port the parser\n\nbody line\n')"
+  gl_migrate migrate-todo.sh "$R_TODO"
+  if [ "$GL_RC" -eq 0 ] && gl_log glab | grep -q 'issue create' && [ -z "$(gl_log forbidden)" ] && grep -q 'created #42' "$GNP_TMP/gl.out"; then
+    pass "migrate-todo on a gitlab origin creates the issue with glab only"
+  else
+    fail "migrate-todo on a gitlab origin" "$(gl_detail "$R_TODO")"
+  fi
+  if gl_create_ok "$R_TODO" "Port the parser" "## Port the parser" "type:task"; then
+    pass "migrate-todo on a gitlab origin: glab issue create gets origin's project, the title, the body and type:task"
+  else
+    fail "migrate-todo glab issue create argv" "$(gl_detail "$R_TODO")"
+  fi
+  if [ "$(gl_state "$R_TODO" '.todo.migrated')" = '[{"entry_id":"t-0001","issue_number":42,"title":"Port the parser"}]' ]; then
+    pass "migrate-todo on a gitlab origin: the state records t-0001 as GitLab issue 42"
+  else
+    fail "migrate-todo state" "$(gl_detail "$R_TODO")"
+  fi
+fi
+case_end
+
+case_begin "migrate-todo-gitlab-create-fails" "bin/github-issues/migration/migrate-todo.sh"
+if [ "$HAVE_JQ" -eq 0 ]; then
+  skip "migrate-todo create failure on a gitlab origin: jq not on PATH"
+else
+  R_TODO_F="$(gl_repo todo-gitlab-fail todo.md '# Tasks\n\n## Port the parser\n\nbody line\n')"
+  gl_migrate migrate-todo.sh "$R_TODO_F" create
+  if [ "$GL_RC" -ne 0 ] && gl_log glab | grep -q 'issue create' && [ -z "$(gl_log forbidden)" ] && [ "$(gl_state "$R_TODO_F" '.todo.migrated | length')" != 1 ]; then
+    pass "migrate-todo: a failing glab issue create exits non-zero and records nothing as migrated"
+  else
+    fail "migrate-todo glab create failure" "$(gl_detail "$R_TODO_F")"
+  fi
+fi
+case_end
+
+case_begin "migrate-history-gitlab-goes-to-glab" "bin/github-issues/migration/migrate-history.sh"
+if routes_through migrate-history.sh hia_issue_create hia_issue_close; then
+  pass "migrate-history.sh creates and closes through hia_issue_create / hia_issue_close, never gh issue"
+else
+  fail "migrate-history.sh routing" "hia_issue_create / hia_issue_close missing or a direct gh issue call remains"
+fi
+if [ "$HAVE_JQ" -eq 0 ]; then
+  skip "migrate-history on a gitlab origin: jq not on PATH (the migration state needs it)"
+else
+  R_HIST="$(gl_repo history-gitlab history.md '# History\n\n### FEATURE: port the parser (2026-01-02, a1a1a1a, #1)\n\nbody line\n')"
+  gl_migrate migrate-history.sh "$R_HIST"
+  if [ "$GL_RC" -eq 0 ] && gl_log glab | grep -q 'issue create' && gl_log glab | grep -q 'issue close' && [ -z "$(gl_log forbidden)" ]; then
+    pass "migrate-history on a gitlab origin creates and closes the issue with glab only"
+  else
+    fail "migrate-history on a gitlab origin" "$(gl_detail "$R_HIST")"
+  fi
+  if gl_create_ok "$R_HIST" "port the parser" "### FEATURE: port the parser (2026-01-02, a1a1a1a, #1)" "status:migrated type:task"; then
+    pass "migrate-history on a gitlab origin: glab issue create gets origin's project, the title, the body and both labels"
+  else
+    fail "migrate-history glab issue create argv" "$(gl_detail "$R_HIST")"
+  fi
+  if [ "$(gl_call close | flag_vals -R --repo)" = "grp/history-gitlab" ] && gl_call close | sed '1,2d' | grep -qx '42'; then
+    pass "migrate-history on a gitlab origin: glab issue close closes issue 42 in origin's project"
+  else
+    fail "migrate-history glab issue close argv" "$(gl_detail "$R_HIST")"
+  fi
+  if [ "$(gl_state "$R_HIST" '.history.migrated')" = '[{"entry_id":"h-0001","issue_number":42,"title":"port the parser"}]' ]; then
+    pass "migrate-history on a gitlab origin: the state records h-0001 as GitLab issue 42"
+  else
+    fail "migrate-history state" "$(gl_detail "$R_HIST")"
+  fi
+fi
+case_end
+
+case_begin "migrate-history-gitlab-api-fails" "bin/github-issues/migration/migrate-history.sh"
+if [ "$HAVE_JQ" -eq 0 ]; then
+  skip "migrate-history glab failures: jq not on PATH"
+else
+  for sub in create close; do
+    R_HF="$(gl_repo "history-gitlab-$sub-fails" history.md '# History\n\n### FEATURE: port the parser (2026-01-02, a1a1a1a, #1)\n\nbody line\n')"
+    gl_migrate migrate-history.sh "$R_HF" "$sub"
+    if [ "$GL_RC" -ne 0 ] && gl_log glab | grep -q "issue $sub" && [ -z "$(gl_log forbidden)" ] && [ "$(gl_state "$R_HF" '.history.migrated | length')" != 1 ]; then
+      pass "migrate-history: a failing glab issue $sub exits non-zero and records nothing as migrated"
+    else
+      fail "migrate-history glab $sub failure" "$(gl_detail "$R_HF")"
+    fi
+  done
+fi
+case_end
+
 echo ""
 echo "fix-gh-native-path: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 [ "$FAIL" -eq 0 ]

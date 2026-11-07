@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/backfill-content-date.sh, bin/github-issues/migration/state.sh
 # Tags: migration, repo, github, issues, bin, scope:issue-specific
-# Tests for CRLF defense in migrate-repo's state/jq pipeline (Windows jq.exe).
+# Tests for CRLF defense in migrate-issues' state/jq pipeline (Windows jq.exe).
 # RED before jq_text() exists in state.sh — expected before write-code step.
 #
 # CRLF shim note: only injects \r when jq is invoked with -r/--raw-output.

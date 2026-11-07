@@ -29,7 +29,8 @@ harness_git_init "$FIXTURE_REPO"
 git -C "$FIXTURE_REPO" config user.email test@example.com
 git -C "$FIXTURE_REPO" config user.name "Test"
 mkdir -p "$FIXTURE_REPO/tests"
-cp "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" "$FIXTURE_REPO/tests/run-all.sh"
+# #2473: an initialized target carries its tests section next to its runner copy.
+cp "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" "$FIXTURE_REPO/tests/run-all.sh" && printf '%s\n' '{"tests":{"dir":"tests","categorization":"flat","testHarness":"off","caseMarker":"off"}}' > "$FIXTURE_REPO/.agents.json"
 FIXTURE_WIN="$(np "$FIXTURE_REPO")"
 
 step_field() {

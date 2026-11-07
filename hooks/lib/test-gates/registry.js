@@ -6,9 +6,42 @@ const fs = require("fs");
 const path = require("path");
 const TLR = require("../test-language-registry");
 
+const RS = require("../repo-settings");
+
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
-const CATEGORIES = ["hooks", "bin", "skills", "agents", "install", "tests"];
 const DEFAULT_FLAT_REJECT_CODE = "FLAT_TEST_REJECTED";
+
+// Named exception (#2473): a repo whose .agents.json tests section is missing or malformed keeps
+// the placement the gates used before the repo settings file existed, plus one WARN per process.
+const UNINITIALIZED_FALLBACK = Object.freeze({
+  dir: "tests",
+  categorization: "by-target",
+  categories: ["hooks", "bin", "skills", "agents", "install", "tests"].map((dir) => ({ dir, covers: [dir] })),
+  supportDirs: ["_archive", "lib"],
+  testHarness: null,
+  caseMarker: null,
+});
+
+// layoutFor(repoRoot) — the tests section the gates place files by: { ...value, initialized }.
+// No repoRoot (a path-only predicate call) means the legacy layout, never the cwd's file.
+function layoutFor(repoRoot) {
+  if (!repoRoot) return { ...UNINITIALIZED_FALLBACK, initialized: false, state: "unknown" };
+  const t = RS.load(repoRoot).tests;
+  return t.state === "ok" ? { ...t.value, initialized: true } : { ...UNINITIALIZED_FALLBACK, initialized: false, state: t.state };
+}
+
+const categoriesFor = (repoRoot) => (layoutFor(repoRoot).categories || []).map((c) => c.dir);
+const placementOf = (repoRoot, rel) => RS.placementIn(layoutFor(repoRoot), rel);
+
+let uninitWarned = false;
+// uninitializedWarn(repoRoot) — the REPO_SETTINGS_UNINITIALIZED WARN line, at most once per process.
+function uninitializedWarn(repoRoot) {
+  const l = layoutFor(repoRoot);
+  if (l.initialized || uninitWarned) return null;
+  uninitWarned = true;
+  // Repo-relative on purpose: gate stderr must not leak the absolute (temp) root path.
+  return `WARN: .agents.json: tests section ${l.state}; the test gates fall back to the pre-#2473 placement — run /migrate code=REPO_SETTINGS_UNINITIALIZED`;
+}
 
 const reg = () => TLR.loadRegistry();
 
@@ -105,4 +138,4 @@ function which(tool, e = env()) {
   return null;
 }
 
-module.exports = { REPO_ROOT, CATEGORIES, reg, tryReg, match, entryById, fieldValue, commentPrefix, partOf, loadPart, which, pathKey, env, withEnv };
+module.exports = { REPO_ROOT, layoutFor, categoriesFor, placementOf, uninitializedWarn, reg, tryReg, match, entryById, fieldValue, commentPrefix, partOf, loadPart, which, pathKey, env, withEnv };

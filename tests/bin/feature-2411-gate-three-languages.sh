@@ -168,7 +168,9 @@ if command -v cygpath >/dev/null 2>&1; then
   PC_NATIVE_GIT_DIR="$(type -P git.exe)"
   PC_NATIVE_GIT_DIR="${PC_NATIVE_GIT_DIR%/*}"
 fi
-PC_RC=0; PC_OUT=""; PC_ERR=""
+# Fixture repos carry no .agents.json, so the gate keeps today's verdicts and its only stderr is
+# the one designed uninitialized WARN per process (#2473, repo-settings-file.md).
+PC_RC=0; PC_OUT=""; PC_ERR=""; PC_UNINIT_WARN="WARN: .agents.json: tests section missing; the test gates fall back to the pre-#2473 placement — run /migrate code=REPO_SETTINGS_UNINITIALIZED"
 PC_PATH=""
 pc_run() {
   PC_RC=0

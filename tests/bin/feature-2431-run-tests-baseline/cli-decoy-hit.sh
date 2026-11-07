@@ -4,8 +4,8 @@
 # Tags: run-tests, baseline, cli, exec, root-names, scope:issue-specific, pwsh-not-required, TL2
 # Sourced by the dispatcher after root-names.sh (uses its _RN_NEW_NAME); never run standalone.
 # #2561: a base run that reached the root decoy gives no verdict, whatever it exits with:
-# undetermined root-decoy-hit-at-base, no ledger record. A base failure without a hit in the
-# same run is still preexisting and recorded.
+# undetermined root-decoy-hit-at-base, no ledger record, auto-accepted since #2688. A base
+# failure without a hit in the same run is still preexisting and recorded.
 
 run_cli_decoy_hit_cases() {
   local repo="$TMPROOT/repo-decoy-hit" sid="dhit-$$" t_pre="tests/bin/test-preexisting.sh"
@@ -23,6 +23,8 @@ run_cli_decoy_hit_cases() {
   base="$(git -C "$repo" rev-parse main)"
   git -C "$repo" checkout -q feature
   git -C "$repo" merge -q --no-edit main
+  # The hits must come from the base copies: the branch stage runs the branch copies first.
+  feat_commit_failing "$repo" "${hits[@]}"
 
   # A decoy of this case's own: the hits must not land in the tree the running suite watches.
   decoy="$(np "$TMPROOT/decoy-cli-hit")"
@@ -44,7 +46,7 @@ run_cli_decoy_hit_cases() {
     got="$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t" 2>/dev/null)"
     [ -z "$got" ] && pass "C3-root-decoy-hit: no ledger record for $t" \
       || fail "C3-root-decoy-hit: $t was written to the ledger as [$got]"
-    cli_assert_not_completed "C3-root-decoy-hit" "$sid" "$t"
+    cli_assert_auto_accepted "C3-root-decoy-hit" "$sid" "$t"
   done
 
   # Control: the same run still judges and records a base failure that reached no decoy.
@@ -56,8 +58,8 @@ run_cli_decoy_hit_cases() {
     fail "C3-root-decoy-hit-control: expected preexisting + ledger fail for $t_pre; ledger=[$got] ($(cli_baseline_lines))"
   fi
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=2$' \
-    && [ "$RTB_CLI_RC" -eq 1 ]; then
-    pass "C3-root-decoy-hit: summary preexisting=1 undetermined=2 and exit 1"
+    && [ "$RTB_CLI_RC" -eq 0 ]; then
+    pass "C3-root-decoy-hit: summary preexisting=1 undetermined=2 and exit 0 (auto + proof)"
   else
     fail "C3-root-decoy-hit: summary/exit mismatch; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi

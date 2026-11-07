@@ -13,7 +13,10 @@ S1_CLEAN_BEFORE="$(git -C "$S1_REPO" hash-object tests/bin/t-clean.sh)"
 ec_stage1 "$S1_REPO" "$AUDIT" --band-size 5
 S1_OUT="$OUT"
 S1_DIAG="rc=$RC err=${ERR:0:200}"
-S1_PLANS_ROOT="$WORKFLOW_PLANS_DIR/sweep-tests-embed/"
+# The CLI prints EMBED_WORKDIR in mixed form (C:/...) on Windows; compare in that same form.
+S1_PLANS_ROOT="$WORKFLOW_PLANS_DIR"
+if command -v cygpath >/dev/null 2>&1; then S1_PLANS_ROOT="$(cygpath -m "$S1_PLANS_ROOT")"; fi
+S1_PLANS_ROOT="${S1_PLANS_ROOT%/}/sweep-tests-embed/"
 
 case_begin "stage1-workdir-location" "bin/lib/test-embed-cases/stage-plan.sh"
 check_eq "S1-1 stage 1 exits 0 ($S1_DIAG)" "0" "$RC"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# state.sh — .migration-state.json helpers for migrate-repo workflow.
+# state.sh — .migration-state.json helpers for migrate-issues workflow.
 # Source this file: source "$(dirname "$0")/state.sh"
 # NOTE: do NOT `set -e` here — this file is sourced. Functions return non-zero
 # as part of normal semantics (state_is_migrated, state_should_resume).

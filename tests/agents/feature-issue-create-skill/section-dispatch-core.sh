@@ -1,21 +1,24 @@
 # DV1-DV12, DV2-b, DV2-c, DV-graphql-fail, DV7-DV9, D5-D6: dispatch core tests
 # Tests: bin/github-issues/reopen-with-update.sh, bin/github-issues/issue-create-dispatch.sh
 # Tags: scope:issue-specific
+# Each case is a function; run_case backgrounds it, run_case_sync runs a static check in-process.
 
-# ---------------------------------------------------------------------------
+REOPEN_SCRIPT="$(dirname "$DISPATCH")/reopen-with-update.sh"
+
 # DV1: verdict=none → exactly one `gh issue create`, no extra API calls
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV1: dispatch script missing — RED until implementation"
-else
+case_dv1() {
+    local RC=0 STDOUT_OUT CREATE_COUNT LAST_LINE
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV1: dispatch script missing — RED until implementation"; return 0
+    fi
     setup_mock
     STDOUT_OUT="$TMP/dv1-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict none -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
-    RC=$?
-    CREATE_COUNT=$(grep -c "issue create" "$GH_MOCK_ARGS_LOG" 2>/dev/null || echo 0)
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    if [ "$RC" -eq 0 ] \
-       && [ "$CREATE_COUNT" -eq 1 ] \
+    run_with_timeout 30 bash "$DISPATCH" --verdict none -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null || RC=$?
+    CREATE_COUNT="$(grep -c "issue create" "$GH_MOCK_ARGS_LOG" 2>/dev/null)" || true
+    CREATE_COUNT="${CREATE_COUNT:-0}"
+    LAST_LINE="$(tail -1 "$STDOUT_OUT" 2>/dev/null)" || true
+    if [[ "$RC" -eq 0 ]] \
+       && [[ "$CREATE_COUNT" -eq 1 ]] \
        && ! grep -q "issue reopen" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && ! grep -q "sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && echo "$LAST_LINE" | grep -qE "https://github.com/.+/issues/[0-9]+"; then
@@ -24,103 +27,98 @@ else
         fail "DV1: verdict=none behavior incorrect (rc=$RC create_count=$CREATE_COUNT stdout='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
     teardown_mock
-fi
+}
+run_case case_dv1
 
-# ---------------------------------------------------------------------------
 # DV2: verdict=reopen --target 42 → `gh issue reopen 42`, `gh issue edit` (body+label), URL on stdout
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV2: dispatch script missing — RED until implementation"
-else
+case_dv2() {
+    local RC=0 STDOUT_OUT LAST_LINE
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV2: dispatch script missing — RED until implementation"; return 0
+    fi
     setup_mock
     STDOUT_OUT="$TMP/dv2-stdout.txt"
-    REOPEN_SCRIPT="$(dirname "$DISPATCH")/reopen-with-update.sh"
-    run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >"$STDOUT_OUT" 2>/dev/null
-    RC=$?
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    if [ ! -x "$REOPEN_SCRIPT" ]; then
+    run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >"$STDOUT_OUT" 2>/dev/null || RC=$?
+    LAST_LINE="$(tail -1 "$STDOUT_OUT" 2>/dev/null)" || true
+    if [[ ! -x "$REOPEN_SCRIPT" ]]; then
         fail "DV2: reopen-with-update.sh missing — RED until implementation"
-    elif [ "$RC" -eq 0 ] \
+    elif [[ "$RC" -eq 0 ]] \
        && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && ! grep -q "issue create" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "issue view.*--json body" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "issue edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "issue edit.*--add-label" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "issue comment" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && [ "$LAST_LINE" = "https://github.com/nirecom/agents/issues/42" ]; then
+       && [[ "$LAST_LINE" == "https://github.com/nirecom/agents/issues/42" ]]; then
         pass "DV2: verdict=reopen --target 42 → reopen + body-read + body edit + label added + new comment, stdout=URL of #42"
     else
         fail "DV2: verdict=reopen behavior incorrect (rc=$RC stdout='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
     teardown_mock
-fi
+}
+run_case case_dv2
 
-# ---------------------------------------------------------------------------
 # DV2-b: verdict=reopen --target 42 + GH_MOCK_REOPEN_LOG_COMMENT_BODY set →
 #         api PATCH recorded (updates existing log comment), no new comment posted
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV2-b: dispatch script missing — RED until implementation"
-else
-    REOPEN_SCRIPT="$(dirname "$DISPATCH")/reopen-with-update.sh"
-    if [ ! -x "$REOPEN_SCRIPT" ]; then
-        fail "DV2-b: reopen-with-update.sh missing — RED until implementation"
-    else
-        setup_mock
-        export GH_MOCK_REOPEN_LOG_COMMENT_BODY="<!-- reopen-log -->"
-        STDOUT_OUT="$TMP/dv2b-stdout.txt"
-        run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >"$STDOUT_OUT" 2>/dev/null
-        RC=$?
-        if [ "$RC" -eq 0 ] \
-           && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-           && grep -qE "api.*-X PATCH.*repos/.*issues/comments/" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-           && ! grep -q "issue comment" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
-            pass "DV2-b: reopen-log comment exists → PATCH used to update it, no new comment posted"
-        else
-            fail "DV2-b: expected PATCH update of existing log comment (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
-        fi
-        teardown_mock
+case_dv2b() {
+    local RC=0 STDOUT_OUT
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV2-b: dispatch script missing — RED until implementation"; return 0
     fi
-fi
+    if [[ ! -x "$REOPEN_SCRIPT" ]]; then
+        fail "DV2-b: reopen-with-update.sh missing — RED until implementation"; return 0
+    fi
+    setup_mock
+    export GH_MOCK_REOPEN_LOG_COMMENT_BODY="<!-- reopen-log -->"
+    STDOUT_OUT="$TMP/dv2b-stdout.txt"
+    run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >"$STDOUT_OUT" 2>/dev/null || RC=$?
+    if [[ "$RC" -eq 0 ]] \
+       && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -qE "api.*-X PATCH.*repos/.*issues/comments/" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && ! grep -q "issue comment" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+        pass "DV2-b: reopen-log comment exists → PATCH used to update it, no new comment posted"
+    else
+        fail "DV2-b: expected PATCH update of existing log comment (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+    fi
+    teardown_mock
+}
+run_case case_dv2b
 
-# ---------------------------------------------------------------------------
 # DV2-c: verdict=reopen --target 42 + GH_MOCK_LABEL_FAIL=1 →
 #         exit 0 (label failure is non-fatal), issue reopen 42 is still recorded
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV2-c: dispatch script missing — RED until implementation"
-else
-    REOPEN_SCRIPT="$(dirname "$DISPATCH")/reopen-with-update.sh"
-    if [ ! -x "$REOPEN_SCRIPT" ]; then
-        fail "DV2-c: reopen-with-update.sh missing — RED until implementation"
-    else
-        setup_mock
-        export GH_MOCK_LABEL_FAIL=1
-        run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >/dev/null 2>/dev/null
-        RC=$?
-        if [ "$RC" -eq 0 ] \
-           && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
-            pass "DV2-c: GH_MOCK_LABEL_FAIL=1 → exit 0 (label failure non-fatal), reopen still recorded"
-        else
-            fail "DV2-c: label failure should be non-fatal (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
-        fi
-        teardown_mock
+case_dv2c() {
+    local RC=0
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV2-c: dispatch script missing — RED until implementation"; return 0
     fi
-fi
+    if [[ ! -x "$REOPEN_SCRIPT" ]]; then
+        fail "DV2-c: reopen-with-update.sh missing — RED until implementation"; return 0
+    fi
+    setup_mock
+    export GH_MOCK_LABEL_FAIL=1
+    run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >/dev/null 2>/dev/null || RC=$?
+    if [[ "$RC" -eq 0 ]] \
+       && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+        pass "DV2-c: GH_MOCK_LABEL_FAIL=1 → exit 0 (label failure non-fatal), reopen still recorded"
+    else
+        fail "DV2-c: label failure should be non-fatal (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+    fi
+    teardown_mock
+}
+run_case case_dv2c
 
-# ---------------------------------------------------------------------------
 # DV3: verdict=sibling --related 42 → body contains `Related to #42`
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV3: dispatch script missing — RED until implementation"
-else
+case_dv3() {
+    local RC=0 STDOUT_OUT LAST_LINE
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV3: dispatch script missing — RED until implementation"; return 0
+    fi
     setup_mock
     STDOUT_OUT="$TMP/dv3-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sibling --related 42 -- --title "T" --body "$(printf 'Background: Original\nChanges: test')" >"$STDOUT_OUT" 2>/dev/null
-    RC=$?
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
+    run_with_timeout 30 bash "$DISPATCH" --verdict sibling --related 42 -- --title "T" --body "$(printf 'Background: Original\nChanges: test')" >"$STDOUT_OUT" 2>/dev/null || RC=$?
+    LAST_LINE="$(tail -1 "$STDOUT_OUT" 2>/dev/null)" || true
     # Body suffix is injected with a real newline, so check the whole args log (multi-line).
-    if [ "$RC" -eq 0 ] \
+    if [[ "$RC" -eq 0 ]] \
        && grep -q "issue create" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "Original" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "Related to #42" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
@@ -130,21 +128,26 @@ else
         fail "DV3: verdict=sibling behavior incorrect (rc=$RC stdout='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
     teardown_mock
-fi
+}
+run_case case_dv3
 
-# ---------------------------------------------------------------------------
-# DV4: verdict=sub-of --parent 100 → fetches CHILD id (not parent), attaches via API
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV4: dispatch script missing — RED until implementation"
-else
+# DV4 + DV8 (same input, one run): verdict=sub-of --parent 100, new issue 200.
+# DV4: fetches CHILD id (not parent), attaches via API.
+# DV8: Sub-issue API call shape — `api -X POST` + sub_issues path + -F sub_issue_id=<integer>
+# Fix #432: sub_issue_id must be passed via -F (numeric) using the child's
+# databaseId integer, not -f (string) with the GraphQL node id.
+case_dv4_dv8() {
+    local RC=0 STDOUT_OUT LAST_LINE
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV4: dispatch script missing — RED until implementation"
+        fail "DV8: dispatch script missing — RED until implementation"; return 0
+    fi
     setup_mock
     export GH_MOCK_NEW_ISSUE_NUM=200
     STDOUT_OUT="$TMP/dv4-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
-    RC=$?
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    if [ "$RC" -eq 0 ] \
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null || RC=$?
+    LAST_LINE="$(tail -1 "$STDOUT_OUT" 2>/dev/null)" || true
+    if [[ "$RC" -eq 0 ]] \
        && grep -q "api graphql" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "issue(number: 200)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "repos/nirecom/agents/issues/100/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
@@ -154,106 +157,7 @@ else
     else
         fail "DV4: verdict=sub-of behavior incorrect (rc=$RC stdout='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
-    teardown_mock
-fi
-
-# ---------------------------------------------------------------------------
-# DV5: verdict=make-parent --children 42,43 → fetches BOTH child ids and attaches each
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV5: dispatch script missing — RED until implementation"
-else
-    setup_mock
-    # #1699: make-parent now creates TWO issues — the meta parent first (201),
-    # then the unmodified proposal as a child (202). stdout ends with the child
-    # URL so `tail -n 1` still yields the proposal.
-    export GH_MOCK_ISSUE_NUMS="201,202"
-    export GH_MOCK_CREATE_CURSOR="$TMP/dv5-create-cursor"
-    STDOUT_OUT="$TMP/dv5-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict make-parent --children 42,43 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
-    RC=$?
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    ATTACH_201_COUNT=$(grep -c "repos/nirecom/agents/issues/201/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null || echo 0)
-    # Fix #713: make-parent fetches databaseId via GraphQL (api graphql) instead of
-    # gh issue view --json databaseId. Mock returns "${NUM}000" for issue(number: N),
-    # so child 42 → 42000 and child 43 → 43000.
-    if [ "$RC" -eq 0 ] \
-       && grep -q "issue(number: 42)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q "issue(number: 43)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q -- "-F sub_issue_id=42000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q -- "-F sub_issue_id=43000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && [ "$ATTACH_201_COUNT" -ge 2 ] \
-       && [ "$LAST_LINE" = "https://github.com/nirecom/agents/issues/202" ]; then
-        pass "DV5: verdict=make-parent --children 42,43 → both children attached under new meta parent 201 with -F sub_issue_id=<integer>, proposal URL last"
-    else
-        fail "DV5: verdict=make-parent behavior incorrect (rc=$RC stdout='$LAST_LINE' attach_201_count=$ATTACH_201_COUNT log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
-    fi
-    teardown_mock
-fi
-
-# ---------------------------------------------------------------------------
-# DV6: sub-of with sub-issue API failure → non-zero exit (structural failure)
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV6: dispatch script missing — RED until implementation"
-else
-    setup_mock
-    export GH_MOCK_SUBISSUE_API_FAIL=1
-    export GH_MOCK_NEW_ISSUE_NUM=202
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null
-    RC=$?
-    if [ "$RC" -ne 0 ]; then
-        pass "DV6: sub-of + sub-issue API failure → non-zero exit"
-    else
-        fail "DV6: sub-of + sub-issue API failure should exit non-zero, got rc=$RC"
-    fi
-    teardown_mock
-fi
-
-# ---------------------------------------------------------------------------
-# DV-graphql-fail: GH_MOCK_GRAPHQL_DBID_FAIL=1 → gh api graphql returns non-zero → dispatch exits non-zero
-# Fix #713: get_child_database_id() uses api graphql; a GraphQL failure must propagate as a non-zero exit.
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV-graphql-fail: dispatch script missing — RED until implementation"
-else
-    setup_mock
-    export GH_MOCK_GRAPHQL_DBID_FAIL=1
-    export GH_MOCK_NEW_ISSUE_NUM=200
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null
-    RC=$?
-    if [ "$RC" -ne 0 ]; then
-        pass "DV-graphql-fail: gh api graphql databaseId failure → dispatch exits non-zero"
-    else
-        fail "DV-graphql-fail: gh api graphql failure should propagate as non-zero exit, got rc=$RC"
-    fi
-    teardown_mock
-fi
-
-# ---------------------------------------------------------------------------
-# DV7: SKILL.md references `is-github-dotcom-remote`
-# ---------------------------------------------------------------------------
-if [ ! -f "$SKILL_MD" ]; then
-    fail "DV7: skills/issue-create/SKILL.md missing — RED until implementation"
-elif grep -q "is-github-dotcom-remote" "$SKILL_MD"; then
-    pass "DV7: SKILL.md references is-github-dotcom-remote"
-else
-    fail "DV7: SKILL.md does not reference is-github-dotcom-remote — RED until implementation"
-fi
-
-# ---------------------------------------------------------------------------
-# DV8: Sub-issue API call shape — `api -X POST` + sub_issues path + -F sub_issue_id=<integer>
-# Fix #432: sub_issue_id must be passed via -F (numeric) using the child's
-# databaseId integer, not -f (string) with the GraphQL node id.
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV8: dispatch script missing — RED until implementation"
-else
-    setup_mock
-    export GH_MOCK_NEW_ISSUE_NUM=200
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null
-    RC=$?
-    if [ "$RC" -eq 0 ] \
+    if [[ "$RC" -eq 0 ]] \
        && grep -q "api .*-X POST" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "repos/nirecom/agents/issues/100/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "api graphql" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
@@ -264,62 +168,157 @@ else
         fail "DV8: sub-issue API call shape incorrect (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
     teardown_mock
-fi
+}
+run_case case_dv4_dv8
 
-# ---------------------------------------------------------------------------
-# DV9: verdict=reopen without --target → exit 2
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV9: dispatch script missing — RED until implementation"
-else
+# DV5: verdict=make-parent --children 42,43 → fetches BOTH child ids and attaches each
+case_dv5() {
+    local RC=0 STDOUT_OUT LAST_LINE ATTACH_201_COUNT
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV5: dispatch script missing — RED until implementation"; return 0
+    fi
     setup_mock
-    run_with_timeout 30 bash "$DISPATCH" --verdict reopen >/dev/null 2>/dev/null
-    RC=$?
-    if [ "$RC" -eq 2 ]; then
+    # #1699: make-parent now creates TWO issues — the meta parent first (201),
+    # then the unmodified proposal as a child (202). stdout ends with the child
+    # URL so `tail -n 1` still yields the proposal.
+    export GH_MOCK_ISSUE_NUMS="201,202"
+    export GH_MOCK_CREATE_CURSOR="$TMP/dv5-create-cursor"
+    STDOUT_OUT="$TMP/dv5-stdout.txt"
+    run_with_timeout 30 bash "$DISPATCH" --verdict make-parent --children 42,43 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null || RC=$?
+    LAST_LINE="$(tail -1 "$STDOUT_OUT" 2>/dev/null)" || true
+    ATTACH_201_COUNT="$(grep -c "repos/nirecom/agents/issues/201/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null)" || true
+    ATTACH_201_COUNT="${ATTACH_201_COUNT:-0}"
+    # Fix #713: make-parent fetches databaseId via GraphQL (api graphql) instead of
+    # gh issue view --json databaseId. Mock returns "${NUM}000" for issue(number: N),
+    # so child 42 → 42000 and child 43 → 43000.
+    if [[ "$RC" -eq 0 ]] \
+       && grep -q "issue(number: 42)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue(number: 43)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q -- "-F sub_issue_id=42000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q -- "-F sub_issue_id=43000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && [[ "$ATTACH_201_COUNT" -ge 2 ]] \
+       && [[ "$LAST_LINE" == "https://github.com/nirecom/agents/issues/202" ]]; then
+        pass "DV5: verdict=make-parent --children 42,43 → both children attached under new meta parent 201 with -F sub_issue_id=<integer>, proposal URL last"
+    else
+        fail "DV5: verdict=make-parent behavior incorrect (rc=$RC stdout='$LAST_LINE' attach_201_count=$ATTACH_201_COUNT log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+    fi
+    teardown_mock
+}
+run_case case_dv5
+
+# DV6: sub-of with sub-issue API failure → non-zero exit (structural failure)
+case_dv6() {
+    local RC=0
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV6: dispatch script missing — RED until implementation"; return 0
+    fi
+    setup_mock
+    export GH_MOCK_SUBISSUE_API_FAIL=1
+    export GH_MOCK_NEW_ISSUE_NUM=202
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null || RC=$?
+    if [[ "$RC" -ne 0 ]]; then
+        pass "DV6: sub-of + sub-issue API failure → non-zero exit"
+    else
+        fail "DV6: sub-of + sub-issue API failure should exit non-zero, got rc=$RC"
+    fi
+    teardown_mock
+}
+run_case case_dv6
+
+# DV-graphql-fail: GH_MOCK_GRAPHQL_DBID_FAIL=1 → gh api graphql returns non-zero → dispatch exits non-zero
+# Fix #713: get_child_database_id() uses api graphql; a GraphQL failure must propagate as a non-zero exit.
+case_dv_graphql_fail() {
+    local RC=0
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV-graphql-fail: dispatch script missing — RED until implementation"; return 0
+    fi
+    setup_mock
+    export GH_MOCK_GRAPHQL_DBID_FAIL=1
+    export GH_MOCK_NEW_ISSUE_NUM=200
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null || RC=$?
+    if [[ "$RC" -ne 0 ]]; then
+        pass "DV-graphql-fail: gh api graphql databaseId failure → dispatch exits non-zero"
+    else
+        fail "DV-graphql-fail: gh api graphql failure should propagate as non-zero exit, got rc=$RC"
+    fi
+    teardown_mock
+}
+run_case case_dv_graphql_fail
+
+# DV7: SKILL.md references `is-github-dotcom-remote`
+case_dv7() {
+    if [[ ! -f "$SKILL_MD" ]]; then
+        fail "DV7: skills/issue-create/SKILL.md missing — RED until implementation"
+    elif grep -q "is-github-dotcom-remote" "$SKILL_MD"; then
+        pass "DV7: SKILL.md references is-github-dotcom-remote"
+    else
+        fail "DV7: SKILL.md does not reference is-github-dotcom-remote — RED until implementation"
+    fi
+}
+run_case_sync case_dv7
+
+# DV9: verdict=reopen without --target → exit 2
+case_dv9() {
+    local RC=0
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV9: dispatch script missing — RED until implementation"; return 0
+    fi
+    setup_mock
+    run_with_timeout 30 bash "$DISPATCH" --verdict reopen >/dev/null 2>/dev/null || RC=$?
+    if [[ "$RC" -eq 2 ]]; then
         pass "DV9: verdict=reopen without --target → exit 2"
     else
         fail "DV9: verdict=reopen without --target should exit 2, got rc=$RC"
     fi
     teardown_mock
-fi
+}
+run_case case_dv9
 
-# ---------------------------------------------------------------------------
 # D5: SKILL.md references bin/github-issues/issue-create-dispatch.sh
-# ---------------------------------------------------------------------------
-if [ ! -f "$SKILL_MD" ]; then
-    fail "D5: skills/issue-create/SKILL.md missing — RED until implementation"
-elif grep -q "issue-create-dispatch.sh" "$SKILL_MD"; then
-    pass "D5: SKILL.md references bin/github-issues/issue-create-dispatch.sh"
-else
-    fail "D5: SKILL.md does not reference issue-create-dispatch.sh — RED until implementation"
-fi
-
-# ---------------------------------------------------------------------------
 # D6: SKILL.md contains "Survey", "Verdict", AND "Confirm" (case-insensitive)
-# ---------------------------------------------------------------------------
-if [ ! -f "$SKILL_MD" ]; then
-    fail "D6: skills/issue-create/SKILL.md missing — RED until implementation"
-elif grep -qi "survey" "$SKILL_MD" && grep -qi "verdict" "$SKILL_MD" && grep -qi "confirm" "$SKILL_MD"; then
-    pass "D6: SKILL.md contains Survey, Verdict, and Confirm (case-insensitive)"
-else
-    fail "D6: SKILL.md missing one of Survey/Verdict/Confirm — RED until implementation"
-fi
+case_d5_d6() {
+    if [[ ! -f "$SKILL_MD" ]]; then
+        fail "D5: skills/issue-create/SKILL.md missing — RED until implementation"
+    elif grep -q "issue-create-dispatch.sh" "$SKILL_MD"; then
+        pass "D5: SKILL.md references bin/github-issues/issue-create-dispatch.sh"
+    else
+        fail "D5: SKILL.md does not reference issue-create-dispatch.sh — RED until implementation"
+    fi
+    if [[ ! -f "$SKILL_MD" ]]; then
+        fail "D6: skills/issue-create/SKILL.md missing — RED until implementation"
+    elif grep -qi "survey" "$SKILL_MD" && grep -qi "verdict" "$SKILL_MD" && grep -qi "confirm" "$SKILL_MD"; then
+        pass "D6: SKILL.md contains Survey, Verdict, and Confirm (case-insensitive)"
+    else
+        fail "D6: SKILL.md missing one of Survey/Verdict/Confirm — RED until implementation"
+    fi
+}
+run_case_sync case_d5_d6
 
-# ---------------------------------------------------------------------------
+# DV10-DV12 share one body: sub-of --parent 100 with parent state / reopen-failure knobs.
 # DV10: sub-of + parent CLOSED → ancestor reopen called, stdout last line = URL
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV10: dispatch script missing — RED until implementation"
-else
+# DV11: sub-of + parent OPEN → reopen NOT called, stdout last line = URL
+# DV12: sub-of + REOPEN_FAIL_100 → dispatch exit 0, WARN to stderr, stdout last line = URL
+_dv_parent_state_run() {
+    local id="$1" state="$2" reopen_fail="$3"
+    RC=0
     setup_mock
     export GH_MOCK_NEW_ISSUE_NUM=200
     export GH_MOCK_PARENT_NUM_200=100
-    export GH_MOCK_ISSUE_STATE_100=CLOSED
-    STDOUT_OUT="$TMP/dv10-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
-    RC=$?
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    if [ "$RC" -eq 0 ] \
+    export GH_MOCK_ISSUE_STATE_100="$state"
+    [[ -z "$reopen_fail" ]] || export GH_MOCK_REOPEN_FAIL_100=1
+    STDOUT_OUT="$TMP/$id-stdout.txt"
+    STDERR_OUT="$TMP/$id-stderr.txt"
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>"$STDERR_OUT" || RC=$?
+    LAST_LINE="$(tail -1 "$STDOUT_OUT" 2>/dev/null)" || true
+}
+
+case_dv10() {
+    local RC STDOUT_OUT STDERR_OUT LAST_LINE
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV10: dispatch script missing — RED until implementation"; return 0
+    fi
+    _dv_parent_state_run dv10 CLOSED ""
+    if [[ "$RC" -eq 0 ]] \
        && grep -q "issue reopen 100" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && echo "$LAST_LINE" | grep -q "/issues/200$"; then
         pass "DV10: sub-of parent CLOSED → ancestor reopen called, stdout last line = URL"
@@ -327,23 +326,16 @@ else
         fail "DV10: sub-of parent CLOSED expected reopen + URL (rc=$RC last='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
     teardown_mock
-fi
+}
+run_case case_dv10
 
-# ---------------------------------------------------------------------------
-# DV11: sub-of + parent OPEN → reopen NOT called, stdout last line = URL
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV11: dispatch script missing — RED until implementation"
-else
-    setup_mock
-    export GH_MOCK_NEW_ISSUE_NUM=200
-    export GH_MOCK_PARENT_NUM_200=100
-    export GH_MOCK_ISSUE_STATE_100=OPEN
-    STDOUT_OUT="$TMP/dv11-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
-    RC=$?
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    if [ "$RC" -eq 0 ] \
+case_dv11() {
+    local RC STDOUT_OUT STDERR_OUT LAST_LINE
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV11: dispatch script missing — RED until implementation"; return 0
+    fi
+    _dv_parent_state_run dv11 OPEN ""
+    if [[ "$RC" -eq 0 ]] \
        && ! grep -q "issue reopen" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && echo "$LAST_LINE" | grep -q "/issues/200$"; then
         pass "DV11: sub-of parent OPEN → no reopen, stdout last line = URL"
@@ -351,25 +343,16 @@ else
         fail "DV11: sub-of parent OPEN should skip reopen (rc=$RC last='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
     teardown_mock
-fi
+}
+run_case case_dv11
 
-# ---------------------------------------------------------------------------
-# DV12: sub-of + REOPEN_FAIL_100 → dispatch exit 0, WARN to stderr, stdout last line = URL
-# ---------------------------------------------------------------------------
-if [ ! -x "$DISPATCH" ]; then
-    fail "DV12: dispatch script missing — RED until implementation"
-else
-    setup_mock
-    export GH_MOCK_NEW_ISSUE_NUM=200
-    export GH_MOCK_PARENT_NUM_200=100
-    export GH_MOCK_ISSUE_STATE_100=CLOSED
-    export GH_MOCK_REOPEN_FAIL_100=1
-    STDOUT_OUT="$TMP/dv12-stdout.txt"
-    STDERR_OUT="$TMP/dv12-stderr.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>"$STDERR_OUT"
-    RC=$?
-    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    if [ "$RC" -eq 0 ] \
+case_dv12() {
+    local RC STDOUT_OUT STDERR_OUT LAST_LINE
+    if [[ ! -x "$DISPATCH" ]]; then
+        fail "DV12: dispatch script missing — RED until implementation"; return 0
+    fi
+    _dv_parent_state_run dv12 CLOSED 1
+    if [[ "$RC" -eq 0 ]] \
        && grep -qi "warn" "$STDERR_OUT" 2>/dev/null \
        && echo "$LAST_LINE" | grep -q "/issues/200$"; then
         pass "DV12: reopen failure non-fatal → exit 0, WARN to stderr, URL on stdout"
@@ -377,4 +360,5 @@ else
         fail "DV12: reopen failure should be non-fatal (rc=$RC last='$LAST_LINE' stderr=$(cat "$STDERR_OUT" 2>/dev/null))"
     fi
     teardown_mock
-fi
+}
+run_case case_dv12

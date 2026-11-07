@@ -1,10 +1,10 @@
 # Tests: bin/lib/test-embed-cases/stage-apply.sh
 # Tags: TL2, scope:common, audit-tests, embed-cases, stage-protocol, input-validation, security
-# Sourced by tests/bin/bin-audit-tests-embed-cases.sh — stage 3 hardening: a leftover
+# Sourced by tests/bin/bin-audit-tests-embed-cases-harden.sh — stage 3 hardening: a leftover
 # backup that is not the original is never restored (exit 2), symlinks inside items/<idx>/
 # are rejected, duplicate or out-of-band codex verdict lines fail closed, and a tampered
 # rules_doc column is rejected instead of echoed. Reuses v_ready / v_rejected from
-# stage3-validation-cases.sh and s3_* from stage3-apply-cases.sh.
+# stage3-validation-cases.sh and s3_* from stage3-helpers.sh.
 
 # h_link <target> <link> — rc 0 when a real symlink was created (Git Bash may copy instead).
 h_link() { ln -s "$1" "$2" 2>/dev/null && [[ -L "$2" ]]; }

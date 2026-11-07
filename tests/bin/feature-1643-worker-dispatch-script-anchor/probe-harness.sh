@@ -55,7 +55,8 @@ if (mode === "registry") {
   }
   out("scanned", scanned);
   out("unknown", bad.join(";"));
-  out("tr_runall_anchor", trEntry.binaries.scripts.runAll.anchor);
+  out("tr_runall_anchor", trEntry.binaries.scripts.runAllSelf.anchor);
+  out("tr_runallshared_anchor", trEntry.binaries.scripts.runAllShared.anchor);
   process.exit(0);
 }
 
@@ -75,14 +76,14 @@ if (mode === "resolve") {
 }
 
 if (mode === "contain") {
-  const ex = (cwd) => { const r = spawnMod.scriptExists(trEntry, "runAll", anchors, cwd); return r === null ? "NULL" : "PATH"; };
+  const ex = (cwd) => { const r = spawnMod.scriptExists(trEntry, "runAllSelf", anchors, cwd); return r === null ? "NULL" : "PATH"; };
   out("exists_family", ex(linked));
   out("exists_mainroot", ex(targetMainRoot));
   out("exists_outside", ex(outside));
   out("exists_alt", ex(alt));
   out("exists_relative", ex("tests"));
   const runErr = (cwd) => errOf(() => spawnMod.run(trEntry, {
-    anchors, command: "bash", script: "runAll", args: [], cwd, timeoutMs: 5000,
+    anchors, command: "bash", script: "runAllSelf", args: [], cwd, timeoutMs: 5000,
   }));
   out("run_outside_err", runErr(outside));
   out("run_alt_err", runErr(alt));

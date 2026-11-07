@@ -43,12 +43,12 @@ STEP_RE='(^|[^-A-Za-z_])[Ss]teps? [0-9]+[a-z]?([^A-Za-z0-9_]|$)'
 # Occurrences that are not in-skill step references. file|occurrence substring|reason
 # A row covers only the occurrences lying inside its substring, never the rest of the line.
 ALLOWLIST="$(cat <<'ALLOW'
-skills/migrate-repo/SKILL.md|Step 1 label setup|bin/migrate-repo tool stage numbering
-skills/migrate-repo/SKILL.md|Steps 4–6|bin/migrate-repo tool stage numbering (--from-step table)
-skills/migrate-repo/SKILL.md|Step 6 stages the allowlist|bin/migrate-repo tool stage numbering
-skills/migrate-repo/SKILL.md|apply /migrate-repo Step 1/3 artifacts|bin/migrate-repo tool stage numbering in its quoted commit message
-skills/migrate-repo/SKILL.md|Step 2 skipped (idempotency)|bin/migrate-repo tool stage numbering (sample output)
-skills/migrate-repo/SKILL.md|Steps 3–6 run|bin/migrate-repo tool stage numbering (sample output)
+skills/migrate-issues/SKILL.md|Step 1 label setup|bin/migrate-issues tool stage numbering
+skills/migrate-issues/SKILL.md|Steps 4–6|bin/migrate-issues tool stage numbering (--from-step table)
+skills/migrate-issues/SKILL.md|Step 6 marks|bin/migrate-issues tool stage numbering
+skills/migrate-issues/SKILL.md|apply /migrate-issues Step 1/3 artifacts|bin/migrate-issues tool stage numbering in its quoted commit message
+skills/migrate-issues/SKILL.md|Step 2 skipped (idempotency)|bin/migrate-issues tool stage numbering (sample output)
+skills/migrate-issues/SKILL.md|Steps 3–6 run|bin/migrate-issues tool stage numbering (sample output)
 skills/session-close/SKILL.md|legacy "Step 7"|historical quote of the retired label
 ALLOW
 )"
@@ -141,10 +141,10 @@ while IFS='|' read -r name file content want; do
 done <<'TABLE'
 listed-file-and-text|skills/session-close/SKILL.md|Replaces the legacy "Step 7" emit|yes
 same-text-other-file|skills/resume-session/SKILL.md|Replaces the legacy "Step 7" emit|no
-listed-file-other-text|skills/migrate-repo/SKILL.md|see Step 3 below|no
-allowlisted-plus-forbidden-same-line|skills/migrate-repo/SKILL.md|MR-10 note: Step 6 stages the allowlist, then see Step 3 below|no
+listed-file-other-text|skills/migrate-issues/SKILL.md|see Step 3 below|no
+allowlisted-plus-forbidden-same-line|skills/migrate-issues/SKILL.md|MI-10 note: Step 6 marks the state, then see Step 3 below|no
 forbidden-before-allowlisted-same-line|skills/session-close/SKILL.md|After Step 2, replaces the legacy "Step 7" emit|no
-two-allowlisted-occurrences-same-line|skills/migrate-repo/SKILL.md|→ Step 2 skipped (idempotency). Steps 3–6 run.|yes
+two-allowlisted-occurrences-same-line|skills/migrate-issues/SKILL.md|→ Step 2 skipped (idempotency). Steps 3–6 run.|yes
 TABLE
 
 echo ""

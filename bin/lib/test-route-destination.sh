@@ -109,28 +109,20 @@ trd_set_key() {
 }
 
 # trd_is_in_corpus <root-relative path> — is the path inside the corpus range
-# contract: tests/<canonical-category>/<name>.sh (3 components only).
-# Uses _TDG_CANONICAL_CATEGORIES (CPR-SSOT) — available because this file
-# sources test-dup-group.sh above. Non-canonical directories (split-test
-# fragments, _archive, lib) are rejected. Flat tests/<name>.sh (2 components)
-# are NOT in the corpus range.
+# contract: a direct file of one of _TDG_TEST_DIRS (CPR-SSOT, from test-dup-group.sh sourced
+# above; its last tdg_use_root root decides them, #2473) — <dir>/<category>/<name>, or
+# <dir>/<name> for flat minus the runner. Deeper paths (split-test fragments, _archive, lib)
+# and, for a categorized layout, files directly under <dir> are rejected.
 trd_is_in_corpus() {
-  local p="${1-}"
-  [[ -n "$p" ]] || return 1
-  local -a parts=()
-  IFS='/' read -r -a parts <<< "$p"
-  [[ "${parts[0]}" == "tests" ]] || return 1
-  if [[ "${#parts[@]}" -eq 3 ]]; then
-    local _cat _found=0
-    for _cat in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
-      [[ "${parts[1]}" == "$_cat" ]] && { _found=1; break; }
-    done
-    [[ "$_found" -eq 1 ]] || return 1
-    # A supported test language whose cases the registry can read.
-    tlr_match "${parts[2]}" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 1
-  else
-    return 1
-  fi
+  local p="${1-}" d _found=0
+  [[ -n "$p" && "$p" == */* ]] || return 1
+  for d in ${_TDG_TEST_DIRS[@]+"${_TDG_TEST_DIRS[@]}"}; do
+    [[ "${p%/*}" == "$d" ]] && { _found=1; break; }
+  done
+  [[ "$_found" -eq 1 ]] || return 1
+  ! tdg_is_runner "$p" || return 1
+  # A supported test language whose cases the registry can read.
+  tlr_match "${p##*/}" && [[ "$TLR_STATUS" == supported ]] && _tlr_get "$TLR_ID" caseMarkerReader.file || return 1
   return 0
 }
 

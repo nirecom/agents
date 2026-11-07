@@ -1,0 +1,134 @@
+#!/usr/bin/env node
+"use strict";
+// bin/repo-settings — read or write the repo settings file (<root>/.agents.json) for non-Node callers.
+//
+// Read: --format shell (tab-separated, what bin/lib/repo-settings.sh reads without eval) or json.
+// Write: --set-migrate <tracker|issues|tests> marks that migrate key done; --write-tests <json>
+// replaces the tests section. A write lands only when the written section passes the reader's
+// validation, and never on a file that is not JSON or not an object. Repair: --reset-malformed
+// (only with --root) copies such a file byte for byte to .agents.json.malformed and leaves `{}`.
+// Nothing is ever committed. Exit: 0 ok (read: the tests section is ok), 1 missing or malformed
+// (or a refused write), 2 bad arguments. Schema: docs/architecture/claude-code/repo-settings-file.md.
+
+const fs = require("fs");
+const path = require("path");
+const RS = require(path.join(__dirname, "..", "hooks", "lib", "repo-settings.js"));
+
+const USAGE = "usage: repo-settings [--root <dir>] [--format shell|json] [--set-migrate <tracker|issues|tests> | --write-tests <json>] | [--root <dir>] --reset-malformed";
+const VALUED = new Set(["--root", "--format", "--set-migrate", "--write-tests"]);
+
+function parseArgs(argv) {
+  const o = { root: process.cwd(), format: "shell", resetMalformed: false };
+  const seen = new Set();
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    seen.add(a);
+    if (a === "--reset-malformed") {
+      o.resetMalformed = true;
+      continue;
+    }
+    if (!VALUED.has(a)) return null;
+    const v = argv[i + 1];
+    if (v === undefined || v === "") return null;
+    i++;
+    if (a === "--root") o.root = v;
+    else if (a === "--format") o.format = v;
+    else if (a === "--set-migrate") o.setMigrate = v;
+    else o.writeTests = v;
+  }
+  if (o.resetMalformed && [...seen].some((a) => a !== "--root" && a !== "--reset-malformed")) return null;
+  if (o.format !== "shell" && o.format !== "json") return null;
+  if (o.setMigrate !== undefined && o.writeTests !== undefined) return null;
+  if (o.setMigrate !== undefined && !RS.MIGRATE_KEYS.includes(o.setMigrate)) return null;
+  return o;
+}
+
+const clean = (s) => String(s).replace(/[\t\r\n]+/g, " ");
+
+function toShell(s) {
+  const out = [`tests_state\t${s.tests.state}`];
+  if (s.tests.state === "ok") {
+    const t = s.tests.value;
+    out.push(`tests_dir\t${t.dir}`, `categorization\t${t.categorization}`, `testHarness\t${t.testHarness}`, `caseMarker\t${t.caseMarker}`);
+    for (const c of t.categories || []) out.push(`category\t${c.dir}\t${(c.covers || []).join(",")}`);
+    for (const d of t.supportDirs) out.push(`support\t${d}`);
+  }
+  out.push(`migrate_state\t${s.migrate.state}`);
+  if (s.migrate.state === "ok") for (const [k, v] of Object.entries(s.migrate.value)) out.push(`migrate\t${k}\t${v}`);
+  for (const sec of ["tests", "migrate"]) for (const e of s[sec].errors || []) out.push(`error\t${sec}\t${clean(e)}`);
+  return out.join("\n") + "\n";
+}
+
+function read(o) {
+  const s = RS.load(o.root);
+  const view = { root: s.root, tests: s.tests, migrate: s.migrate };
+  process.stdout.write(o.format === "json" ? JSON.stringify(view, null, 2) + "\n" : toShell(view));
+  return s.tests.state === "ok" ? 0 : 1;
+}
+
+const firstLine = (e) => String(e.message).split("\n")[0];
+const isObject = (d) => d !== null && typeof d === "object" && !Array.isArray(d);
+
+// malformedWhy — null when the file is absent (readDoc gives {}) or holds an object, else why not.
+function malformedWhy(root) {
+  try {
+    return isObject(RS.readDoc(root)) ? null : "does not hold an object";
+  } catch (e) {
+    return `is not JSON (${firstLine(e)})`;
+  }
+}
+
+function resetMalformed(o) {
+  const why = malformedWhy(o.root);
+  if (why === null) return 0;
+  const file = RS.fileOf(o.root);
+  fs.copyFileSync(file, file + ".malformed");
+  fs.writeFileSync(file, "{}\n");
+  process.stderr.write(`repo-settings: ${file} ${why}; reset to {} with the original saved to ${file}.malformed\n`);
+  return 0;
+}
+
+function applyAndValidate(o, doc) {
+  if (o.setMigrate !== undefined) {
+    doc.migrate = Object.assign({}, doc.migrate, { [o.setMigrate]: "done" });
+  } else {
+    try {
+      doc.tests = JSON.parse(o.writeTests);
+    } catch (e) {
+      process.stderr.write(`repo-settings: --write-tests is not JSON; nothing written (${firstLine(e)})\n`);
+      return 1;
+    }
+  }
+  const sec = o.setMigrate !== undefined ? "migrate" : "tests";
+  const v = RS.validateDoc(doc)[sec];
+  if (v.state !== "ok") {
+    process.stderr.write(`repo-settings: the ${sec} section would be malformed; nothing written: ${(v.errors || []).join("; ")}\n`);
+    return 1;
+  }
+  return 0;
+}
+
+function write(o) {
+  const why = malformedWhy(o.root);
+  if (why !== null) {
+    process.stderr.write(`repo-settings: ${RS.fileOf(o.root)} ${why}; nothing written; repair it with --root <dir> --reset-malformed (the original is saved to ${RS.FILE_NAME}.malformed)\n`);
+    return 1;
+  }
+  const doc = RS.readDoc(o.root);
+  const rc = applyAndValidate(o, doc);
+  if (rc !== 0) return rc;
+  fs.writeFileSync(RS.fileOf(o.root), JSON.stringify(doc, null, 2) + "\n");
+  return 0;
+}
+
+function main(argv) {
+  const o = parseArgs(argv);
+  if (!o) {
+    process.stderr.write(USAGE + "\n");
+    return 2;
+  }
+  if (o.resetMalformed) return resetMalformed(o);
+  return o.setMigrate !== undefined || o.writeTests !== undefined ? write(o) : read(o);
+}
+
+process.exitCode = main(process.argv.slice(2));

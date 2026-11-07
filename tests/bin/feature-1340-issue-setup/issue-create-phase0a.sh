@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/issue-create-phase0a.sh
 # Tests: bin/github-issues/issue-create.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/sync-labels.sh
-# Tags: issue-setup, issue-create, github-issues, scope:issue-specific
+# Tags: migrate-tracker, issue-create, github-issues, scope:issue-specific
 # issue-create.sh Phase 0a label auto-repair (#1340 step 6). L2: --check-labels rc=1 + sync ok → create proceeds;
 # sync failure → exit 1; --check-labels rc=0 → sync NOT called; no root env var at all → Phase 0a still runs.
 # L3 gap: live GitHub API call chain (real network, real label 422 errors).
@@ -10,38 +10,32 @@
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
+set -euo pipefail
 # Top-level dual pin (rules/test/fixture-isolation.md): covers every line that runs
 # outside a case; setup_mock re-points both under its own $TMP, teardown_mock restores.
-_PHASE0A_TMP_ROOT="$(mktemp -d)"; readonly _PHASE0A_TMP_ROOT
-trap 'rm -rf "$_PHASE0A_TMP_ROOT"' EXIT
-mkdir -p "$_PHASE0A_TMP_ROOT/workflow-state" "$_PHASE0A_TMP_ROOT/plans"
-export WORKFLOW_STATE_DIR="$_PHASE0A_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_PHASE0A_TMP_ROOT/plans"
+FIXTURE_ROOT="$(mktemp -d)"; readonly FIXTURE_ROOT
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT
+mkdir -p "$FIXTURE_ROOT/workflow-state" "$FIXTURE_ROOT/plans"
+export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
 
-# pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+# pass / fail / fixture_case_new / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
 # shellcheck source=../../lib/script-checkout-fixture.sh
 . "$__LIB_SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
-TARGET_IC_REL="bin/github-issues/issue-create.sh"
 
-TMP=""
+# Fake checkout, mocks and fake main root are built ONCE (the bin+hooks copy dominated
+# the run time); every mock reads its behaviour from env knobs, and issue-create.sh only
+# reads the checkout, so cases share it. issue-create.sh resolves the preflight,
+# sync-labels and scanner from its own checkout, hence the copy holding the mocks.
+FAKE_SCRIPT_CHECKOUT_ROOT="$FIXTURE_ROOT/fake-script-checkout-root"
+TARGET_IC="$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create.sh"
+SHARED_MOCK_BIN="$FIXTURE_ROOT/mock-bin"
+FAKE_MAIN_ROOT="$FIXTURE_ROOT/fake-main-root"
+mkdir -p "$SHARED_MOCK_BIN" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" "$FAKE_SCRIPT_CHECKOUT_ROOT/.github" "$FAKE_MAIN_ROOT"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
 
-setup_mock() {
-    TMP="$(mktemp -d)"
-    # issue-create.sh resolves the preflight, sync-labels and scanner from its
-    # own checkout, so it runs as a copy inside a fake checkout holding the mocks.
-    FAKE_SCRIPT_CHECKOUT_ROOT="$TMP/fake-script-checkout-root"
-    TARGET_IC="$FAKE_SCRIPT_CHECKOUT_ROOT/$TARGET_IC_REL"
-    mkdir -p "$TMP/mock-bin" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues" \
-             "$FAKE_SCRIPT_CHECKOUT_ROOT/.github"
-    touch "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
-
-    # Default mock knobs
-    : "${GH_MOCK_LABELS_HAVE_TASK:=1}"
-    : "${GH_MOCK_SYNC_LABELS_FAIL:=0}"
-    : "${GH_MOCK_CREATE_ISSUE_FAIL:=0}"
-
-    # Create mock issue-create-preflight.sh — logs its invocation so tests can
-    # assert POSITIVE evidence that Phase 0a actually ran the preflight.
-    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
+# Mock issue-create-preflight.sh — logs its invocation so tests can
+# assert POSITIVE evidence that Phase 0a actually ran the preflight.
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${MOCK_LOG:-}" ]; then
@@ -69,10 +63,10 @@ case "$ARGS" in
     ;;
 esac
 PREFLIGHT_EOF
-    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
 
-    # Create mock sync-labels.sh
-    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" <<'SYNC_EOF'
+# Mock sync-labels.sh
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" <<'SYNC_EOF'
 #!/bin/bash
 if [ -n "${MOCK_LOG:-}" ]; then
     printf 'sync-labels called: %s\n' "$*" >> "$MOCK_LOG"
@@ -84,12 +78,12 @@ fi
 echo "labels synced"
 exit 0
 SYNC_EOF
-    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
-    # Copy the real tree around the two mocks (existing files are never overwritten).
-    script_checkout_fixture_copy "$FAKE_SCRIPT_CHECKOUT_ROOT" bin hooks
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
+# Copy the real tree around the two mocks (existing files are never overwritten).
+script_checkout_fixture_copy "$FAKE_SCRIPT_CHECKOUT_ROOT" bin hooks
 
-    # Create mock gh
-    cat > "$TMP/mock-bin/gh" <<'GH_MOCK_EOF'
+# Mock gh
+cat > "$SHARED_MOCK_BIN/gh" <<'GH_MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${MOCK_LOG:-}" ]; then
@@ -124,43 +118,50 @@ case "$ARGS" in
     ;;
 esac
 GH_MOCK_EOF
-    chmod +x "$TMP/mock-bin/gh"
+chmod +x "$SHARED_MOCK_BIN/gh"
 
-    # Mock is-github-dotcom-remote
-    cat > "$TMP/mock-bin/bin" <<'REMOTE_EOF'
+# Mock is-github-dotcom-remote
+cat > "$SHARED_MOCK_BIN/bin" <<'REMOTE_EOF'
 #!/bin/bash
 # Placeholder — is-github-dotcom-remote is at <script checkout>/bin/is-github-dotcom-remote
 exit 0
 REMOTE_EOF
-    # The actual is-github-dotcom-remote check in issue-create.sh uses the agents bin
-    # We create a mock in mock-bin that returns rc=0 (is GitHub)
-    cat > "$TMP/mock-bin/is-github-dotcom-remote" <<'REMOTE_EOF'
+# The actual is-github-dotcom-remote check in issue-create.sh uses the agents bin
+# We create a mock in mock-bin that returns rc=0 (is GitHub)
+cat > "$SHARED_MOCK_BIN/is-github-dotcom-remote" <<'REMOTE_EOF'
 #!/bin/bash
 exit "${GH_MOCK_IS_GITHUB_REMOTE:-0}"
 REMOTE_EOF
-    chmod +x "$TMP/mock-bin/is-github-dotcom-remote"
+chmod +x "$SHARED_MOCK_BIN/is-github-dotcom-remote"
+export PATH="$SHARED_MOCK_BIN:$PATH"
 
-    export PATH="$TMP/mock-bin:$PATH"
+# gh_outbound_guard (sourced by issue-create.sh before the real gh call)
+# runs the scanner copied into the fake checkout, which reads its allow/block
+# lists from $AGENTS_MAIN_ROOT and fails CLOSED when the blocklist is missing.
+# Empty lists let it scan the clean placeholder title/body and return rc=0.
+: > "$FAKE_MAIN_ROOT/.private-info-allowlist"
+: > "$FAKE_MAIN_ROOT/.private-info-blocklist"
+
+TMP=""
+
+setup_mock() {
+    fixture_case_new
+    # Default mock knobs
+    : "${GH_MOCK_LABELS_HAVE_TASK:=1}"
+    : "${GH_MOCK_SYNC_LABELS_FAIL:=0}"
+    : "${GH_MOCK_CREATE_ISSUE_FAIL:=0}"
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
     export WORKFLOW_STATE_DIR="$TMP/workflow"
-    # gh_outbound_guard (sourced by issue-create.sh before the real gh call)
-    # runs the scanner copied into the fake checkout, which reads its allow/block
-    # lists from $AGENTS_MAIN_ROOT and fails CLOSED when the blocklist is missing.
-    # Empty lists let it scan the clean placeholder title/body and return rc=0.
-    export AGENTS_MAIN_ROOT="$TMP/fake-main-root"
-    mkdir -p "$AGENTS_MAIN_ROOT"
-    : > "$AGENTS_MAIN_ROOT/.private-info-allowlist"
-    : > "$AGENTS_MAIN_ROOT/.private-info-blocklist"
+    export AGENTS_MAIN_ROOT="$FAKE_MAIN_ROOT"
 }
 
 teardown_mock() {
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
-        rm -rf "$TMP" 2>/dev/null || true
-    fi
     TMP=""
-    export WORKFLOW_STATE_DIR="$_PHASE0A_TMP_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$_PHASE0A_TMP_ROOT/plans"
+    # TICA-4 places allow/block lists in the shared checkout; later cases must not see them.
+    rm -f "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-allowlist" "$FAKE_SCRIPT_CHECKOUT_ROOT/.private-info-blocklist"
+    export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
     unset MOCK_LOG AGENTS_MAIN_ROOT \
           GH_MOCK_LABELS_HAVE_TASK GH_MOCK_SYNC_LABELS_FAIL \
           GH_MOCK_CREATE_ISSUE_FAIL GH_MOCK_OWNER_REPO \
@@ -330,8 +331,8 @@ export GH_MOCK_LABELS_HAVE_TASK=1
 RC2=0
 ISSUE_CREATE_SKIP_SCHEMA=1 bash "$TARGET_IC" --title "Run two" --body "$VALID_BODY" >/dev/null 2>&1 || RC2=$?
 
-SYNC_COUNT=$(grep -c "sync-labels called" "$MOCK_LOG" 2>/dev/null); SYNC_COUNT="${SYNC_COUNT:-0}"
-CREATE_COUNT=$(grep -c "issue create" "$MOCK_LOG" 2>/dev/null); CREATE_COUNT="${CREATE_COUNT:-0}"
+SYNC_COUNT=$(grep -c "sync-labels called" "$MOCK_LOG" 2>/dev/null || true); SYNC_COUNT="${SYNC_COUNT:-0}"
+CREATE_COUNT=$(grep -c "issue create" "$MOCK_LOG" 2>/dev/null || true); CREATE_COUNT="${CREATE_COUNT:-0}"
 if [ "$RC1" = "0" ] && [ "$RC2" = "0" ] \
    && [ "$SYNC_COUNT" = "1" ] && [ "$CREATE_COUNT" = "2" ]; then
     pass "TICA-5 (C2): two-run — sync-labels once (run1 only), issue create twice"

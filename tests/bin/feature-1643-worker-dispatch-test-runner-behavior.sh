@@ -83,10 +83,11 @@ mk_repo() {
     git -C "$d" commit -q --no-verify -m initial >/dev/null 2>&1
 }
 
-MAIN_RAW="$TMPD/mainrepo"; mk_repo "$MAIN_RAW"
-mkdir -p "$MAIN_RAW/tests"
+MAIN_RAW="$TMPD/mainrepo"; mk_repo "$MAIN_RAW"; mkdir -p "$MAIN_RAW/tests"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$MAIN_RAW/tests/run-all.sh"
-# Second repo deliberately WITHOUT tests/run-all.sh — the runner-error branch.
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"flat","testHarness":"off","caseMarker":"off"}}' > "$MAIN_RAW/.agents.json"
+# Second repo deliberately WITHOUT .agents.json — the runner-error branch (#2473: an
+# uninitialized target stops before any script lookup or spawn).
 BARE_RAW="$TMPD/barerepo"; mk_repo "$BARE_RAW"
 
 PLANS_RAW="$TMPD/plans"; mkdir -p "$PLANS_RAW"
@@ -188,8 +189,8 @@ group_runner_error() {
     assert_eq "runnererr/exit0" "0" "$DRC"
     assert_eq "runnererr/status" "runner-error" "$(field_of status)"
     assert_eq "runnererr/exit-code-is-minus-one" "-1" "$(field_of exit_code)"
-    assert_has "runnererr/summary-names-the-missing-script" "tests/run-all.sh" "$(field_of summary)"
-    # Nothing may be spawned when the script does not exist.
+    assert_has "runnererr/summary-names-the-missing-settings" ".agents.json tests section missing — run /migrate" "$(field_of summary)"
+    # Nothing may be spawned when the target has no tests section.
     assert_eq "runnererr/no-process-started" "0" "$(grep -c '' "$CALLLOG" | tr -d ' ')"
 }
 
@@ -246,7 +247,7 @@ group_test_args() {
     # max(30, 30 - 5) — the floor wins here, which is the point of having one.
     assert_eq "args/passed-through-verbatim" "--deadline 30 tests/one.sh tests/two.sh" \
         "$(argv_of)"
-    assert_eq "args/script-is-run-all" "runAll" \
+    assert_eq "args/script-is-run-all-shared" "runAllShared" \
         "$(node -e '
 const fs=require("fs");
 const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8").trim().split("\n")[0]);

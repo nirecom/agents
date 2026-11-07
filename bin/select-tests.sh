@@ -2,13 +2,13 @@
 # bin/select-tests.sh
 # Tests: bin/select-tests.sh
 # Tags: test-selection, pr-scoped, stem-match
-# Tier 1 test selector: mechanical stem-based selection only (never reads
-# frontmatter — that is Tier 2 — and never returns tests/_archive/ entries).
-# Usage: --auto (resolve via bin/resolve-merge-base.sh) | <merge-base-ref>.
-# Output: newline test paths (may be empty), exit 0; exit 1 missing arg/git error;
-# exit 4 (--auto) merge-base untrustworthy, or test-language registry unreadable → nothing
-# selected (an empty list reads as all-green, so we stop). No-own-commits branch: base IS HEAD (#1779) → rebuild
-# from working tree (git diff HEAD ∪ ls-files --others), stderr note; errors exit 1.
+# Tier 1 test selector: stem-based only (no frontmatter — Tier 2 — and no tests/_archive/ entries).
+# Usage: --auto (bin/resolve-merge-base.sh) | <merge-base-ref>, cwd in the target repo: the diff and
+# the test dirs come from its git toplevel and .agents.json (#2473); only library code is this checkout's.
+# Output: absolute test paths under that toplevel (may be empty), exit 0. Exit 1 missing arg/git error;
+# 4 (--auto) merge-base untrustworthy, or registry/settings reader unreadable; 6 the target's tests
+# section missing or malformed (/migrate guidance, as tests/run-all.sh). 4 and 6 select nothing: empty
+# reads as all-green. base IS HEAD (#1779) → select from the working tree, stderr note; errors exit 1.
 
 set -euo pipefail
 
@@ -18,7 +18,29 @@ if [[ $# -lt 1 ]]; then
 fi
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_DIR="${SCRIPT_CHECKOUT_ROOT}/tests"
+
+# Settings are judged before any merge-base path, so a repo without a usable .agents.json is told
+# to /migrate instead of getting an empty (all-green) selection — never the legacy categories.
+if ! target_top="$(git rev-parse --show-toplevel 2>/dev/null)" || [[ -z "$target_top" ]]; then
+  echo "[select-tests] not inside a git work tree; test selection aborted." >&2
+  exit 1
+fi
+# `cd && pwd` keeps the path spelling the selector has always printed (the MSYS drive form on Git Bash).
+TARGET_ROOT="$(cd "$target_top" && pwd)"
+# shellcheck source=bin/lib/repo-settings.sh
+. "${SCRIPT_CHECKOUT_ROOT}/bin/lib/repo-settings.sh"
+if ! rsf_load "${TARGET_ROOT}"; then
+  echo "[select-tests] the repo settings reader could not run (bin/repo-settings); test selection aborted." >&2
+  exit 4
+fi
+if [[ "${RSF_TESTS_STATE}" != ok ]]; then
+  echo "[select-tests] ${TARGET_ROOT##*/} has no valid .agents.json tests section (${RSF_TESTS_STATE}); run /migrate to initialize it." >&2
+  exit 6
+fi
+TEST_DIRS=()
+while IFS= read -r _d; do
+  [[ -n "${_d}" ]] && TEST_DIRS+=("${TARGET_ROOT}/${_d}")
+done < <(rsf_test_dirs)
 
 # Initialised for BOTH invocation forms: the positional form is defined as "the caller already
 # resolved the range", so it never degrades, but it reaches the same reference below under `set -u`.
@@ -168,7 +190,7 @@ _emit_if_new() {
 }
 
 # Test files are what the test-language registry's supported entries match, directly under the
-# six category dirs. Loaded lazily, so a docs-only diff never needs node. Unreadable is exit 4:
+# test dirs. Loaded lazily, so a docs-only diff never loads the registry. Unreadable is exit 4:
 # an empty selection would read as all-green.
 _REGISTRY_LOADED=0
 _load_registry() {
@@ -181,10 +203,13 @@ _load_registry() {
   fi
   _REGISTRY_LOADED=1
 }
+# A settings file may list thousands of categories with no dir yet: the builtin test skips them
+# without a glob or subprocess each.
 _list_tests() {
-  local cat
-  for cat in hooks bin skills agents install tests; do
-    tlr_list_dir "${TESTS_DIR}/${cat}" supported
+  local d
+  for d in ${TEST_DIRS[@]+"${TEST_DIRS[@]}"}; do
+    [[ -d "${d}" ]] || continue
+    tlr_list_dir "${d}" supported
   done | sort
 }
 

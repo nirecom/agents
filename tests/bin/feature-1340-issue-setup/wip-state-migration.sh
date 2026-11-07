@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/wip-state-migration.sh
 # Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-state/cmd-set.sh, bin/github-issues/wip-state/cmd-check.sh, bin/github-issues/wip-state/cmd-clear.sh
-# Tags: issue-setup, wip-state, github-issues, scope:issue-specific
+# Tags: migrate-tracker, wip-state, github-issues, scope:issue-specific
 # C6: a `;`-valued .env line must never execute commands — SEMI-1 (#2408).
 # L2: resolver → each WIP_STATE_* = exact resolver ID across set/check/clear
 #     (ensure_wip_field_ids, #1340). TWM-1/3/4 (.env sourcing) retired by #2408.
@@ -279,7 +279,8 @@ ARGS="$*"
 case "$ARGS" in
   auth\ status*) echo "Logged in to github.com"; echo "Token scopes: 'repo', 'project'"; exit 0 ;;
   repo\ view\ *--json\ owner,name*) echo "nirecom/agents"; exit 0 ;;
-  api\ graphql\ *projectsV2*) echo '{"id":"PVT_semi1","number":1,"ownerLogin":"nirecom"}'; exit 0 ;;
+  api\ graphql\ *projectsV2*)
+    echo '{"id":"PVT_semi1","number":1,"ownerLogin":"nirecom"}'; exit 0 ;;
   api\ graphql\ *projectItems*) exit 0 ;;
   api\ graphql\ *)
     case "$ARGS" in
