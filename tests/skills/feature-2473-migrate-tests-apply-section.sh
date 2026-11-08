@@ -27,7 +27,8 @@ SUT_MISSING=0
 TEMPLATE="$TMPBASE/stub-template"
 mkdir -p "$TEMPLATE/bin/github-issues/migration" "$TEMPLATE/skills/migrate-tests/scripts" "$TEMPLATE/.calls"
 
-# Stores each argument raw in .calls/rs.arg.<i>; exit code from .calls/rs.rc (default 0).
+# Call <n> (0-based) stores each argument raw in .calls/rs.<n>.arg.<i> and appends one line to
+# .calls/rs.log; exit code from .calls/rs.rc (default 0).
 cat >"$TEMPLATE/bin/repo-settings" <<'JS'
 #!/usr/bin/env node
 "use strict";
@@ -35,8 +36,11 @@ const fs = require("fs");
 const path = require("path");
 const calls = path.join(__dirname, "..", ".calls");
 const args = process.argv.slice(2);
-fs.writeFileSync(path.join(calls, "rs.argc"), String(args.length));
-args.forEach((a, i) => fs.writeFileSync(path.join(calls, `rs.arg.${i}`), a));
+const log = path.join(calls, "rs.log");
+const n = fs.existsSync(log) ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean).length : 0;
+fs.writeFileSync(path.join(calls, `rs.${n}.argc`), String(args.length));
+args.forEach((a, i) => fs.writeFileSync(path.join(calls, `rs.${n}.arg.${i}`), a));
+fs.appendFileSync(log, args.join("\x1f").replace(/\n/g, " ") + "\n");
 const rcFile = path.join(calls, "rs.rc");
 const rc = fs.existsSync(rcFile) ? Number(fs.readFileSync(rcFile, "utf8").trim()) : 0;
 if (rc !== 0) process.stderr.write("repo-settings stub: nothing written, refused\n");
@@ -102,19 +106,27 @@ reads() { if [[ -f "$STUB/.calls/needs.log" ]]; then grep -c '' "$STUB/.calls/ne
 commits() { if [[ -f "$STUB/.calls/commit.log" ]]; then grep -c '' "$STUB/.calls/commit.log"; else echo 0; fi; }
 expect_no_commit() { check "no commit call" '[[ "$(commits)" -eq 0 ]]'; }
 expect_nothing_called() {
-  check "repo-settings not called" '[[ ! -e "$STUB/.calls/rs.argc" ]]'
+  check "repo-settings not called" '[[ "$(rs_calls)" -eq 0 ]]'
   check "migrate-needs not called" '[[ "$(reads)" -eq 0 ]]'
   expect_no_commit
 }
-rs_arg() { cat "$STUB/.calls/rs.arg.$1" 2>/dev/null || true; }
-# expect_write <root> <json> — one call of exactly: --root <root> --write-tests <json>, bytes intact.
+rs_calls() { if [[ -f "$STUB/.calls/rs.log" ]]; then grep -c '' "$STUB/.calls/rs.log"; else echo 0; fi; }
+# rs_arg <i> [<n>] — argument i of repo-settings call n (default 0, the --write-tests call).
+rs_arg() { cat "$STUB/.calls/rs.${2:-0}.arg.$1" 2>/dev/null || true; }
+# expect_write <root> <json> — the first call is exactly: --root <root> --write-tests <json>, bytes intact.
 expect_write() {
   local root="$1" json="$2"
-  check "repo-settings gets four arguments" '[[ "$(cat "$STUB/.calls/rs.argc" 2>/dev/null)" == 4 ]]'
+  check "repo-settings gets four arguments" '[[ "$(cat "$STUB/.calls/rs.0.argc" 2>/dev/null)" == 4 ]]'
   check "repo-settings gets --root ROOT" '[[ "$(rs_arg 0)" == --root && "$(rs_arg 1)" == "$root" ]]' "got=$(rs_arg 0) $(rs_arg 1)"
   check "repo-settings gets --write-tests" '[[ "$(rs_arg 2)" == --write-tests ]]' "got=$(rs_arg 2)"
   printf '%s' "$json" >"$STUB/.calls/rs.want"
-  check "the JSON reaches repo-settings byte-identically" 'cmp -s "$STUB/.calls/rs.want" "$STUB/.calls/rs.arg.3"' "want=$json got=$(rs_arg 3)"
+  check "the JSON reaches repo-settings byte-identically" 'cmp -s "$STUB/.calls/rs.want" "$STUB/.calls/rs.0.arg.3"' "want=$json got=$(rs_arg 3)"
+}
+# expect_set_migrate <root> — the second and last call is exactly: --root <root> --set-migrate tests.
+expect_set_migrate() {
+  local root="$1"
+  check "repo-settings is called twice" '[[ "$(rs_calls)" -eq 2 ]]' "calls=$(rs_calls)"
+  check "--root ROOT --set-migrate tests follows --write-tests" '[[ "$(cat "$STUB/.calls/rs.1.argc" 2>/dev/null)" == 4 && "$(rs_arg 0 1)" == --root && "$(rs_arg 1 1)" == "$root" && "$(rs_arg 2 1)" == --set-migrate && "$(rs_arg 3 1)" == tests ]]' "got=$(tr '\037' ' ' <"$STUB/.calls/rs.log" 2>/dev/null || true)"
 }
 # expect_commit <root> <flag>... — exactly one call, ROOT first, then --skill migrate-tests plus these flags.
 expect_commit() {
@@ -137,6 +149,7 @@ new_stub ok
 run_apply "$ROOT" "$JSON"
 expect_rc 0
 expect_write "$ROOT" "$JSON"
+expect_set_migrate "$ROOT"
 expect_commit "$ROOT"
 check "a successful write needs no migrate-needs read" '[[ "$(reads)" -eq 0 ]]'
 case_end
@@ -168,6 +181,7 @@ run_apply "$ROOT" "$JSON"
 expect_rc 1
 expect_no_commit
 check "the refusal is shown on stderr" 'grep -q "nothing written, refused" "$ERR_FILE"'
+check "a refused write records no --set-migrate" '[[ "$(rs_calls)" -eq 1 ]] && ! grep -q -- "--set-migrate" "$STUB/.calls/rs.log"' "got=$(tr '\037' ' ' <"$STUB/.calls/rs.log" 2>/dev/null || true)"
 new_stub refused-rc2
 set_calls rs.rc 2
 set_calls needs.malformed 0
@@ -296,6 +310,7 @@ new_fixture real-ok
 run_real_apply "$JSON" --no-push
 expect_rc 0
 check "real tools: HEAD holds the section" 'git -C "$FIXTURE" show HEAD:.agents.json 2>/dev/null | grep -q "\"categorization\": \"flat\""'
+check "real tools: HEAD records migrate.tests done" 'git -C "$FIXTURE" show HEAD:.agents.json 2>/dev/null | grep -q "\"tests\": \"done\""'
 check "real tools: only .agents.json is in the commit" '[[ "$(git -C "$FIXTURE" show --name-only --format= HEAD | tr -d "\r" | sed "/^$/d")" == ".agents.json" ]]'
 case_end
 

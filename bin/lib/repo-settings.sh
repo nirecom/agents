@@ -17,7 +17,7 @@ fi
 
 _rsf_err() { printf '[repo-settings] %s\n' "$1" >&2; }
 
-# rsf_load <root> — sets RSF_TESTS_STATE (ok|missing|malformed), RSF_TESTS_DIR, RSF_CATEGORIZATION,
+# rsf_load <root> — sets RSF_TESTS_STATE (ok|missing|malformed|unsupported), RSF_TESTS_DIR, RSF_CATEGORIZATION,
 # RSF_TEST_HARNESS, RSF_CASE_MARKER, RSF_MIGRATE_STATE; a no-op when this CLI already read this root.
 # rc 0 when the file was judged (any state), 2 when the CLI could not run.
 rsf_load() {

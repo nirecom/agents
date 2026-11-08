@@ -1,7 +1,12 @@
 "use strict";
 // Schema rules of the repo settings file (.agents.json). Each validator returns
-// { state: "ok", value } with the defaults applied, or { state: "malformed", errors }.
+// { state: "ok", value } with the defaults applied, or { state: "malformed" | "unsupported", errors }.
 // Schema and state meanings: docs/architecture/claude-code/repo-settings-file.md.
+
+// Top-level `version`, the same model as the workflow state file (hooks/workflow-state/state-io/core.js):
+// absent reads as 1; above MAX_KNOWN the file was written by a newer release and is opaque here.
+const CURRENT_SETTINGS_VERSION = 1;
+const MAX_KNOWN_SETTINGS_VERSION = CURRENT_SETTINGS_VERSION;
 
 const CATEGORIZATIONS = ["flat", "by-target", "by-type"];
 const SWITCHES = ["on", "off"];
@@ -81,16 +86,27 @@ function validateMigrate(m) {
   return errors.length ? { state: "malformed", errors } : { state: "ok", value: { ...m } };
 }
 
+// versionVerdict(v) — null when this release reads the file (absent = v1), else the state of every section.
+function versionVerdict(v) {
+  if (v === undefined || (Number.isInteger(v) && v >= 1 && v <= MAX_KNOWN_SETTINGS_VERSION)) return null;
+  if (Number.isInteger(v) && v > MAX_KNOWN_SETTINGS_VERSION) {
+    return { state: "unsupported", errors: [`schema version ${v} newer than this release understands (max known ${MAX_KNOWN_SETTINGS_VERSION})`] };
+  }
+  return { state: "malformed", errors: [`version: must be an integer from 1 (got ${JSON.stringify(v)})`] };
+}
+
 // validateDoc(doc) — { tests, migrate } section results of a parsed file; unknown sections are ignored.
 function validateDoc(doc) {
   if (!isObj(doc)) {
     const bad = { state: "malformed", errors: ["the file must hold a JSON object"] };
     return { tests: bad, migrate: bad };
   }
+  const bad = versionVerdict(doc.version);
+  if (bad) return { tests: bad, migrate: bad };
   return {
     tests: doc.tests === undefined ? { state: "missing" } : validateTests(doc.tests),
     migrate: doc.migrate === undefined ? { state: "missing" } : validateMigrate(doc.migrate),
   };
 }
 
-module.exports = { CATEGORIZATIONS, MIGRATE_KEYS, isObj, validateTests, validateMigrate, validateDoc };
+module.exports = { CURRENT_SETTINGS_VERSION, MAX_KNOWN_SETTINGS_VERSION, CATEGORIZATIONS, MIGRATE_KEYS, isObj, validateTests, validateMigrate, validateDoc };
