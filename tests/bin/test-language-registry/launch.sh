@@ -51,6 +51,8 @@ case_begin "suite-dedupe-through-run-all" "tests/run-all.sh"
 FX_RR="$TMPBASE/co-fake-suite-run-all"
 fx_checkout "$FX_RR" "$FIXTURES/fake-suite.json"
 cp "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" "$FX_RR/tests/run-all.sh"
+# #2473: an initialized target carries its tests section (suites live in tests/suites).
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-type","categories":[{"dir":"suites"}],"supportDirs":["lib"],"testHarness":"off","caseMarker":"off"}}' >"$FX_RR/.agents.json"
 RR="$FX_RR/tests/suites"
 for s in s1 s2; do
   mkdir -p "$RR/$s"

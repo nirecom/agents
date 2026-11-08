@@ -55,51 +55,12 @@ if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not found" >&2; exit 1
 fi
 
-# Soft preflight: a missing `project` scope only fails the (non-fatal) Projects v2 attach.
-if ! gh auth status 2>&1 | grep -q "'project'"; then
-    echo "warn: gh auth lacks 'project' scope — Projects v2 attach will fail." >&2
-    echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
+if [[ -n "${REPO_OVERRIDE:-}" && ! "$REPO_OVERRIDE" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    echo "Error: REPO_OVERRIDE must be owner/repo, got: $REPO_OVERRIDE" >&2
+    exit 2
 fi
 
-if [ -n "${REPO_OVERRIDE:-}" ]; then
-    if [[ ! "$REPO_OVERRIDE" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-        echo "Error: REPO_OVERRIDE must be owner/repo, got: $REPO_OVERRIDE" >&2
-        exit 2
-    fi
-    echo "note: REPO_OVERRIDE targets $REPO_OVERRIDE" >&2
-fi
-
-# Phase 0a — label auto-repair, GitHub remotes only (skills/issue-create/SKILL.md).
-# Only this checkout's copy decides; a PATH copy may belong to another checkout.
-_ic_is_github=1
-if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" ]; then
-    bash "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1 || _ic_is_github=0
-else
-    echo "warn: $SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote not found; assuming a GitHub remote" >&2
-fi
-if [ "$_ic_is_github" -eq 1 ]; then
-    _ic_preflight_rc=0
-    bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" --check-labels \
-        ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} || _ic_preflight_rc=$?
-    if [ "$_ic_preflight_rc" -eq 1 ]; then
-        # type:task absent → sync labels; --no-delete keeps the repo's other labels.
-        if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" --no-delete \
-                ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} \
-                "$SCRIPT_CHECKOUT_ROOT/.github/labels.yml"; then
-            echo "Error: label sync failed — aborting issue creation" >&2
-            exit 1
-        fi
-        echo "note: labels synced (type:task was missing)" >&2
-    elif [ "$_ic_preflight_rc" -ge 2 ]; then
-        # Preflight HARD failure (gh error) — fail closed, do NOT sync.
-        echo "Error: label preflight hard-failed (rc=$_ic_preflight_rc) — aborting" >&2
-        exit 1
-    fi
-    # rc=0 → type:task present; nothing to repair.
-else
-    echo "warn: Phase 0a skipping label auto-repair (non-GitHub remote)" >&2
-fi
-
+# Fail fast: argument and schema validation run before any gh / git call.
 if [ -z "$TITLE" ]; then
     echo "Error: --title required" >&2; exit 2
 fi
@@ -134,6 +95,47 @@ if [ "${ISSUE_CREATE_SKIP_SCHEMA:-0}" != "1" ]; then
         echo "Hint: ISSUE_CREATE_SKIP_SCHEMA=1 bypasses (emergency only)." >&2
         exit 3
     fi
+fi
+
+# Soft preflight: a missing `project` scope only fails the (non-fatal) Projects v2 attach.
+if ! gh auth status 2>&1 | grep -q "'project'"; then
+    echo "warn: gh auth lacks 'project' scope — Projects v2 attach will fail." >&2
+    echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
+fi
+
+if [ -n "${REPO_OVERRIDE:-}" ]; then
+    echo "note: REPO_OVERRIDE targets $REPO_OVERRIDE" >&2
+fi
+
+# Phase 0a — label auto-repair, GitHub remotes only (skills/issue-create/SKILL.md).
+# Only this checkout's copy decides; a PATH copy may belong to another checkout.
+_ic_is_github=1
+if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" ]; then
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote" >/dev/null 2>&1 || _ic_is_github=0
+else
+    echo "warn: $SCRIPT_CHECKOUT_ROOT/bin/is-github-dotcom-remote not found; assuming a GitHub remote" >&2
+fi
+if [ "$_ic_is_github" -eq 1 ]; then
+    _ic_preflight_rc=0
+    bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" --check-labels \
+        ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} || _ic_preflight_rc=$?
+    if [ "$_ic_preflight_rc" -eq 1 ]; then
+        # type:task absent → sync labels; --no-delete keeps the repo's other labels.
+        if ! bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" --no-delete \
+                ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} \
+                "$SCRIPT_CHECKOUT_ROOT/.github/labels.yml"; then
+            echo "Error: label sync failed — aborting issue creation" >&2
+            exit 1
+        fi
+        echo "note: labels synced (type:task was missing)" >&2
+    elif [ "$_ic_preflight_rc" -ge 2 ]; then
+        # Preflight HARD failure (gh error) — fail closed, do NOT sync.
+        echo "Error: label preflight hard-failed (rc=$_ic_preflight_rc) — aborting" >&2
+        exit 1
+    fi
+    # rc=0 → type:task present; nothing to repair.
+else
+    echo "warn: Phase 0a skipping label auto-repair (non-GitHub remote)" >&2
 fi
 
 # Outbound scan guard (#1591): title and body content are scanned as one stream.

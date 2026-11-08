@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/ensure-project-ready.sh
 # Tests: bin/github-issues/lib/ensure-project-ready.sh
-# Tags: issue-setup, ensure-project-ready, github-issues, scope:issue-specific
+# Tags: migrate-tracker, ensure-project-ready, github-issues, scope:issue-specific
 # N/A: secret-leakage — created field IDs are project-structure identifiers, not secrets; gh owns token handling.
 # N/A (C5 option-repair): Status-exists-but-options-missing/malformed — plan defines create-if-missing only, not option repair; out of scope.
 # N/A (C1/C5 failure perms): deep per-mutation failure matrix (createProjectV2 board-create + updateProjectV2Field option-update permutations) deferred — core create + idempotency + partial-retry covered by TEP-1/6/7; one project-list hard-fail representative kept (TEP-9).
@@ -14,8 +14,14 @@
 # shellcheck source=_mock-ensure-project-ready.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_mock-ensure-project-ready.sh"
 
+set -euo pipefail
 TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/ensure-project-ready.sh"
 export TARGET
+
+# Top-level dual pin (rules/test/fixture-isolation.md); the gh mock is written once.
+FIXTURE_ROOT="$(mktemp -d)"; readonly FIXTURE_ROOT
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
 
 # Early-exit: file does not exist yet (RED-clean)
 if [ ! -f "$TARGET" ]; then
@@ -26,31 +32,27 @@ if [ ! -f "$TARGET" ]; then
 fi
 
 TMP=""
+mkdir -p "$FIXTURE_ROOT/mock-bin"
+# File-specific gh mock (defined in _mock-ensure-project-ready.sh); behaviour comes from env knobs.
+write_epr_gh_mock "$FIXTURE_ROOT/mock-bin/gh"
+export PATH="$FIXTURE_ROOT/mock-bin:$PATH"
 
 setup_mock() {
-    TMP="$(mktemp -d)"
-    mkdir -p "$TMP/mock-bin"
-
+    fixture_case_new
     # Default mock knobs
     : "${GH_MOCK_AUTH_HAS_PROJECT:=1}"
     : "${GH_MOCK_PROJECT_EXISTS:=1}"
     : "${GH_MOCK_STATUS_FIELD_EXISTS:=0}"
     : "${GH_MOCK_SESSION_ID_FIELD_EXISTS:=0}"
-
-    # File-specific gh mock (defined in _mock-ensure-project-ready.sh).
-    write_epr_gh_mock "$TMP/mock-bin/gh"
-    export PATH="$TMP/mock-bin:$PATH"
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
 }
 
 teardown_mock() {
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
-        rm -rf "$TMP" 2>/dev/null || true
-    fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR \
+    export WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
+    unset MOCK_LOG \
           GH_MOCK_AUTH_HAS_PROJECT GH_MOCK_PROJECT_EXISTS GH_MOCK_PROJECT_LIST_FAIL \
           GH_MOCK_STATUS_FIELD_EXISTS GH_MOCK_SESSION_ID_FIELD_EXISTS \
           GH_MOCK_SESSION_ID_CREATE_FAIL \
@@ -92,7 +94,7 @@ export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=0
 export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
 STDERR_FILE="$TMP/tep1-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_STATUS=$(get_field "$OUT" EPR_STATUS_FIELD_ID)
 R_TODO=$(get_field "$OUT" EPR_TODO_OPTION_ID)
@@ -124,7 +126,7 @@ export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=1
 export GH_MOCK_SESSION_ID_FIELD_EXISTS=1
 STDERR_FILE="$TMP/tep2-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_STATUS=$(get_field "$OUT" EPR_STATUS_FIELD_ID)
 CREATE_CALLED=0
@@ -147,7 +149,7 @@ export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=1
 export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
 STDERR_FILE="$TMP/tep3-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_FINGER=$(get_field "$OUT" EPR_SESSION_ID_FIELD_ID)
 CREATE_TEXT=0
@@ -167,7 +169,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_AUTH_HAS_PROJECT=0
 STDERR_FILE="$TMP/tep4-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null)
 HAS_HINT=0
@@ -191,7 +193,7 @@ export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_STATUS_FIELD_EXISTS=1
 export GH_MOCK_SESSION_ID_FIELD_EXISTS=1
 STDERR_FILE="$TMP/tep5-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_PID=$(get_field "$OUT" EPR_PROJECT_ID)
 R_PNUM=$(get_field "$OUT" EPR_PROJECT_NUM)
@@ -212,7 +214,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_AUTH_HAS_PROJECT=1
 STDERR_FILE="$TMP/tep8-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'noslash' '$STDERR_FILE'")
+OUT=$(run_ensure 'noslash' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 LIST_CALLED=0
 grep -q "project list" "$MOCK_LOG" 2>/dev/null && LIST_CALLED=1
@@ -234,7 +236,7 @@ export GH_MOCK_AUTH_HAS_PROJECT=1
 export GH_MOCK_PROJECT_EXISTS=1
 export GH_MOCK_PROJECT_LIST_FAIL=1
 STDERR_FILE="$TMP/tep9-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 FIELD_CREATE=0
 grep -qE "createProjectV2Field" "$MOCK_LOG" 2>/dev/null && FIELD_CREATE=1
@@ -259,8 +261,8 @@ run_epr_case() {
     export GH_MOCK_STATUS_FIELD_EXISTS=1
     export GH_MOCK_SESSION_ID_FIELD_EXISTS=1
     local out
-    out=$(bash -c "$(declare -f run_ensure get_field); run_ensure '$owner_repo' '/dev/null'")
-    EPR_RC=$(printf '%s\n' "$out" | grep "^RC=" | head -1 | cut -d= -f2-)
+    out=$(run_ensure "$owner_repo" /dev/null) || true
+    EPR_RC=$(get_field "$out" RC)
     GH_REACHED=0
     grep -qE "project list|api graphql" "$MOCK_LOG" 2>/dev/null && GH_REACHED=1
     PAYLOAD_REACHED=0
@@ -326,7 +328,7 @@ export GH_MOCK_STATUS_FIELD_EXISTS=0
 export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
 export GH_MOCK_SESSION_ID_CREATE_FAIL=1
 STDERR_FILE="$TMP/tep6-run1-stderr.log"
-OUT1=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT1=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC1=$(get_field "$OUT1" RC)
 
 # --- Run 2: Status now exists, fingerprint still missing, TEXT now succeeds ---
@@ -334,7 +336,7 @@ export GH_MOCK_STATUS_FIELD_EXISTS=1
 export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
 export GH_MOCK_SESSION_ID_CREATE_FAIL=0
 STDERR_FILE2="$TMP/tep6-run2-stderr.log"
-OUT2=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE2'")
+OUT2=$(run_ensure 'testowner/testrepo' "$STDERR_FILE2") || true
 RC2=$(get_field "$OUT2" RC)
 R2_FINGER=$(get_field "$OUT2" EPR_SESSION_ID_FIELD_ID)
 
@@ -368,7 +370,7 @@ export GH_MOCK_STATUS_FIELD_EXISTS=0
 export GH_MOCK_SESSION_ID_FIELD_EXISTS=0
 export GH_MOCK_SESSION_ID_CREATE_FAIL=0
 STDERR_FILE="$TMP/tep7-stderr.log"
-OUT=$(bash -c "$(declare -f run_ensure get_field); run_ensure 'testowner/testrepo' '$STDERR_FILE'")
+OUT=$(run_ensure 'testowner/testrepo' "$STDERR_FILE") || true
 RC=$(get_field "$OUT" RC)
 R_PID=$(get_field "$OUT" EPR_PROJECT_ID)
 R_PNUM=$(get_field "$OUT" EPR_PROJECT_NUM)

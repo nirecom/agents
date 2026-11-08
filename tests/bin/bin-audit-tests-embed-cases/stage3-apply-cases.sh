@@ -1,28 +1,10 @@
 # Tests: bin/lib/test-embed-cases/stage-apply.sh, bin/lib/test-embed-cases/codex-band-check.sh
 # Tags: TL2, scope:common, audit-tests, embed-cases, stage-protocol, stage-3
-# Sourced by tests/bin/bin-audit-tests-embed-cases.sh — stage 3 (apply): the
+# Sourced by tests/bin/bin-audit-tests-embed-cases-apply.sh — stage 3 (apply): the
 # verifier + codex gate, atomic replace with mode kept, verifier / codex NG and
 # missing-line fail-closed, codex unavailable (tool-failed, not counted), and the
 # re-run of a workdir. Stage 2 is simulated by writing the item outputs directly.
-
-# s3_plan <name>... — fresh repo with tests/bin/t-<name>.sh (header bin/<name>.sh),
-# then stage 1 over all of them. Sets S3_REPO and EC_WORKDIR.
-s3_plan() {
-  local n
-  S3_REPO="$(ec_make_repo)"
-  for n in "$@"; do ec_add_test "$S3_REPO" "tests/bin/t-$n.sh" "bin/$n.sh"; done
-  ec_commit "$S3_REPO" init
-  ec_stage1 "$S3_REPO" "$AUDIT" --band-size 5
-}
-
-# s3_good <name> — a verifier-passing output for tests/bin/t-<name>.sh.
-s3_good() { ec_write_embedded "$(ec_item_output "tests/bin/t-$1.sh")" "bin/$1.sh" "bin/$1.sh"; }
-
-# s3_hash <name> — current git hash-object of tests/bin/t-<name>.sh in S3_REPO.
-s3_hash() { git -C "$S3_REPO" hash-object "tests/bin/t-$1.sh"; }
-
-# s3_untouched <label> <name> <hash-before> — the original stayed byte-identical.
-s3_untouched() { check_eq "$1 tests/bin/t-$2.sh is left as it was" "$3" "$(s3_hash "$2")"; }
+# Uses s3_plan / s3_good / s3_hash / s3_untouched from stage3-helpers.sh.
 
 case_begin "apply-pass-replaces-and-keeps-mode" "bin/lib/test-embed-cases/stage-apply.sh"
 s3_plan alpha

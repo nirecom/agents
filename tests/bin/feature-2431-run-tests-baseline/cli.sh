@@ -76,8 +76,9 @@ appendEvents(process.argv[2], [
     pass "C6: no RUN_CONTRACT:/FAIL: lines in CLI output"
   fi
 
-  # ---- C7/C8: passes at base → broken, exit 1 ----
+  # ---- C7/C8: fails alone on the branch, passes at base → broken, exit 1 ----
   local t_brk="tests/bin/test-broken.sh"
+  feat_commit_failing "$repo" "$t_brk"
   seed_failing "c7-$$" "$t_brk"
   rtb_cli_run "$(cli_case_cache c7)" "$repo" "c7-$$"
   [ "$RTB_CLI_RC" -eq 1 ] && pass "C7: exit 1 when a test is broken" \
@@ -86,16 +87,18 @@ appendEvents(process.argv[2], [
     && pass "C8: BASELINE: line shows broken" \
     || fail "C8: broken classification missing ($(cli_baseline_lines))"
 
-  # ---- C9: per-test timeout → undetermined (timeout-at-base), never preexisting ----
+  # ---- C9: a timeout at base is never preexisting. An explicit timeout below the derived one
+  # (#2688) says nothing about the test, so it is budget-exhausted: a re-run request (exit 8). ----
   local t_slp="tests/bin/test-sleep.sh"
   seed_failing "c9-$$" "$t_slp"
   rtb_cli_run "$(cli_case_cache c9)" "$repo" "c9-$$" --per-test-timeout 1
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t_slp.*timeout-at-base" \
-    && [ "$RTB_CLI_RC" -eq 1 ]; then
-    pass "C9: timeout-at-base → undetermined, exit 1"
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$t_slp.*budget-exhausted" \
+    && [ "$RTB_CLI_RC" -eq 8 ]; then
+    pass "C9: timeout under an explicit short limit → undetermined budget-exhausted, exit 8"
   else
-    fail "C9: expected undetermined timeout-at-base + exit 1, rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+    fail "C9: expected undetermined budget-exhausted + exit 8, rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
+  cli_assert_not_completed "C9" "c9-$$" "$t_slp"
 
   # ---- C10: FALLBACK merge-base (no main, HEAD~1 only) → exit 4 passed through ----
   local repo_c10="$TMPROOT/repo-c10" i
@@ -183,9 +186,11 @@ cli_assert_not_completed() {
   fi
 }
 
-# cli_assert_undetermined_only <label> <path> — the single failing test is undetermined:
-# never preexisting, summary counts it as undetermined, overall exit exactly 1.
+# cli_assert_undetermined_only <label> <path> [rc] — the single failing test is undetermined:
+# never preexisting, summary counts it as undetermined, overall exit exactly <rc> (default 1;
+# 0 for an auto-accepted detail, 8 for a re-run request — disposition.js, #2688).
 cli_assert_undetermined_only() {
+  local want="${3:-1}"
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[^ ]*[[:space:]]+$2"; then
     fail "$1: $2 must not be classified preexisting ($(cli_baseline_lines))"
   else
@@ -193,15 +198,36 @@ cli_assert_undetermined_only() {
   fi
   if printf '%s\n' "$RTB_CLI_OUT" \
       | grep -qE '^BASELINE_SUMMARY: preexisting=0 inherited=0 broken=0 undetermined=1$' \
-    && [ "$RTB_CLI_RC" -eq 1 ]; then
-    pass "$1: summary undetermined=1 and exit 1"
+    && [ "$RTB_CLI_RC" -eq "$want" ]; then
+    pass "$1: summary undetermined=1 and exit $want"
   else
-    fail "$1: expected summary undetermined=1 + exit 1; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+    fail "$1: expected summary undetermined=1 + exit $want; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
 }
 
-# Plan step 5 fail-closed classes: exit 77 at base (skip-at-base) and a home-.claude
-# reference (home-claude-ref, detected by text and never executed) are undetermined.
+# cli_assert_auto_accepted <label> <sid> <path> — an allow-listed undetermined detail (#2688)
+# completes run_tests on the auto basis, and the record still names the path as undetermined,
+# so the cause stays disclosed rather than passing as proof.
+cli_assert_auto_accepted() {
+  local st basis bc
+  st="$(read_step_field "$2" run_tests status)"
+  basis="$(read_step_field "$2" run_tests completion_basis)"
+  bc="$(read_step_field "$2" run_tests baseline_classification)"
+  if [ "$st" = '"complete"' ] && [ "$basis" = '"baseline-auto-accepted"' ] && [ "$RTB_CLI_RC" -eq 0 ]; then
+    pass "$1: run_tests completes on baseline-auto-accepted, exit 0"
+  else
+    fail "$1: expected auto-accepted completion; status=$st basis=$basis rc=$RTB_CLI_RC"
+  fi
+  if printf '%s' "$bc" | grep -qF "$3" && printf '%s' "$bc" | grep -qF 'undetermined'; then
+    pass "$1: baseline_classification records $3 as undetermined"
+  else
+    fail "$1: baseline_classification missing or not undetermined for $3; got=$bc"
+  fi
+}
+
+# Plan step 5 classes: exit 77 at base (skip-at-base) and a home-.claude reference
+# (home-claude-ref, detected by text and never executed) are undetermined, never preexisting;
+# both are on the #2688 allow-list, so run_tests completes on the auto basis.
 run_cli_undetermined_cases() {
   if [ ! -f "$BASELINE_CLI" ]; then
     fail "C3-skip-at-base: bin/run-tests-baseline not found (impl pending)"
@@ -219,6 +245,8 @@ run_cli_undetermined_cases() {
   git -C "$repo" commit -q -m "homeref sentinel"
   git -C "$repo" checkout -q feature
   git -C "$repo" merge -q --no-edit main
+  # Only the base copy carries the sentinel: the branch stage runs the branch copy first.
+  feat_commit_failing "$repo" "$t_home"
 
   seed_failing "skp-$$" "$t_skip"
   rtb_cli_run "$(cli_case_cache skp)" "$repo" "skp-$$"
@@ -227,8 +255,8 @@ run_cli_undetermined_cases() {
   else
     fail "C3-skip-at-base: expected undetermined skip-at-base; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
-  cli_assert_undetermined_only "C3-skip-at-base" "$t_skip"
-  cli_assert_not_completed "C3-skip-at-base" "skp-$$" "$t_skip"
+  cli_assert_undetermined_only "C3-skip-at-base" "$t_skip" 0
+  cli_assert_auto_accepted "C3-skip-at-base" "skp-$$" "$t_skip"
 
   rm -f "$ran"
   seed_failing "hom-$$" "$t_home"
@@ -243,14 +271,15 @@ run_cli_undetermined_cases() {
   else
     fail "C3-home-claude-ref: test body ran at base (sentinel $ran exists)"
   fi
-  cli_assert_undetermined_only "C3-home-claude-ref" "$t_home"
-  cli_assert_not_completed "C3-home-claude-ref" "hom-$$" "$t_home"
+  cli_assert_undetermined_only "C3-home-claude-ref" "$t_home" 0
+  cli_assert_auto_accepted "C3-home-claude-ref" "hom-$$" "$t_home"
 }
 
 # Exit codes 124/137/142/143 at base: cli-state.sh (state-aware since #2501).
 
 # A base checkout whose bin/lib/run-all-launch.sh cannot be sourced gives no verdict at all:
-# rtb_exec_one returns 2 and the CLI must say undetermined exec-setup-failed, never preexisting.
+# rtb_exec_one returns 2 and the CLI must say undetermined exec-setup-failed, never preexisting;
+# the classification did not finish, so it is a re-run request (exit 8, run_tests pending).
 run_cli_exec_setup_failed_cases() {
   local repo="$TMPROOT/repo-nolaunch" t="tests/bin/test-preexisting.sh"
   mk_fixture_repo "$repo" >/dev/null
@@ -268,7 +297,7 @@ run_cli_exec_setup_failed_cases() {
   else
     fail "C3-exec-setup-failed: expected undetermined exec-setup-failed; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
-  cli_assert_undetermined_only "C3-exec-setup-failed" "$t"
+  cli_assert_undetermined_only "C3-exec-setup-failed" "$t" 8
   cli_assert_not_completed "C3-exec-setup-failed" "nol-$$" "$t"
 }
 
@@ -286,6 +315,8 @@ run_cli_same_base_pass_cases() {
   base="$(git -C "$repo" rev-parse main)"
   git -C "$repo" checkout -q feature
   git -C "$repo" merge -q --no-edit main
+  # The sentinel must mean a base run, so the branch copy the branch stage runs has none.
+  feat_commit_failing "$repo" "$t"
 
   # Control: with an empty ledger the test really is re-run at base and fails there.
   seed_failing "sbp0-$$" "$t"

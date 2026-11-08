@@ -1,140 +1,42 @@
-# Migration: docs/history.md + docs/todo.md → GitHub Issues
+# Migration: docs/history.md + docs/todo.md → GitHub / GitLab Issues
 
-One-time migration recipe for moving a repo from `docs/history.md` + `docs/todo.md` to GitHub Issues. Run Steps 1–5 in order — Step 2 must finish before Step 3 so chronological history occupies the early issue numbers and active TODOs land in later numbers.
+Run `/migrate` — `/workflow-init` starts it on every session. It finds which of `/migrate-tracker`, `/migrate-issues` and `/migrate-tests` the target repo still needs, runs them, and records each one in the repo's `.agents.json`.
+The canary-gated issue migration itself is `/migrate-issues` (`skills/migrate-issues/SKILL.md`); the label and board setup is `/migrate-tracker`.
 
-> **Recommended:** Use `/migrate-repo` skill for automated canary-gated execution.
-> The commands below document individual steps for manual recovery only.
+This page keeps only the commands for manual recovery, when a run stopped part-way and the skills cannot be re-run as they are.
 
-Each section is labeled:
-- *Setup* — once per repo, idempotent
-- *Migration (one-time)* — bulk one-shot operation; re-running creates duplicates
-- *Migration (catch-up)* — safe to re-run (idempotent or range-scoped)
+## Orchestrator steps
 
-## Step 1 — Label + Projects v2 setup — *Setup*
+`bin/github-issues/migration/orchestrate.sh <repo_dir>` runs these steps in order. Step 2 must finish before Step 3, so history takes the early issue numbers and active TODOs the later ones.
 
-Run `/issue-setup` to initialize the target repo's labels and Projects v2 board. It handles label sync and project creation/linking in one pass.
-
-To sync labels manually only (e.g. when the project already exists): `bash "$AGENTS_MAIN_ROOT/bin/github-issues/sync-labels.sh"`, or add `--repo OWNER/REPO` for a different target.
-
-Creates all labels defined in `.github/labels.yml` (the canonical set) from that file. Safe to re-run (uses `--force`).
-
-## Step 2 — Migrate docs/history.md → closed issues — *Migration (one-time)*
-
-Each `--stage` invocation runs ONE canary unit and exits. Inspect the created
-issues on GitHub between stages. Confirm with the user before the next command.
-
-```bash
-bash bin/github-issues/migration/preview-history.sh <repo_dir>                            # review titles + counts
-bash bin/github-issues/migration/orchestrate.sh <repo_dir> --dry-run                      # final check, no API calls
-bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage canary-1
-#   → inspect GitHub. Confirm with user.
-```
-
-> Note: the `/migrate-repo` skill invokes canary-1 with `--from-step 1` (not `--from-step 2`) so the idempotent Step 1 label sync runs before issue creation, guaranteeing labels exist. This ops document is for manual recovery and assumes Step 1 was already completed separately.
-
-```bash
-bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage canary-2
-#   → inspect GitHub. Confirm with user.
-bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage full
-```
-
-Each `### entry` in `docs/history.md` and `docs/history/*.md` becomes one **closed** issue with:
-- `type:task` or `type:incident` (auto-detected by the `INCIDENT:` prefix)
-- `status:migrated`
-
-These get the **early issue numbers** (#1 onward) so the chronological record sits at the start of the issue list.
-
-⚠️ **Re-running creates duplicates.** Safe to dry-run, but only execute the bulk-create once. Verify counts against `preview-history.sh` output before running.
-
-## Step 3 — Migrate docs/todo.md → open issues — *Migration (one-time)*
-
-Same stage-by-stage structure as Step 2.
-
-```bash
-bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 3 --stage canary-1
-#   → inspect GitHub. Confirm with user.
-bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 3 --stage canary-2
-#   → inspect GitHub. Confirm with user.
-bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 3 --stage full
-```
-
-Each `## section` in `docs/todo.md` becomes one **open** issue with `type:task`.
-After `--stage full` completes (all sections done), `docs/todo.md` is rewritten as a thin ID index pointing to the issues.
-
-These get the **later issue numbers** (continuing after Step 2 completes).
-
-⚠️ **Run only after Step 2 completes**, so the numbering cleanly separates history (early) from active work (later). Re-running creates duplicate issues AND overwrites `todo.md` — commit the rewritten `todo.md` before considering whether to re-run.
-
-## Step 4 — Backfill Projects v2 Content Date — *Migration (catch-up)*
-
-```bash
-MIGRATE_PROJECT_NUM=<n> MIGRATE_PROJECT_ID=<PVT_…> MIGRATE_FIELD_ID=<PVTF_…> \
-  bash bin/github-issues/migration/backfill-content-date.sh <repo_dir>
-```
-
-Extracts `YYYY-MM-DD` from each migrated issue's first body line and sets the Projects v2 "Content Date" field. Iterates over the issue numbers recorded in `.migration-state.json` (`.history.migrated[].issue_number`) — `/migrate-repo` wires the env vars from `create-project.sh` automatically.
-
-Run for all repos by default. Skip only when Projects v2 is explicitly not used.
-
-Starting the orchestrator with `--from-step N` where N > 4 does not run this step. To skip it deliberately, pass `--ack-skipped-steps` — otherwise the orchestrator warns that the Projects v2 board and Content Date backfill were never created. Recover by re-running with `--from-step 4`.
-
-## Step 5 — Backfill J-1/J-2 sentinel comments — *Migration (catch-up)*
-
-Use this when closed issues are missing the "Resolved by commit" comment (J-1) and/or
-the machine-readable sentinel (J-2) that `/issue-close-finalize` normally posts.
-Triggers: completing Step 2 (migrated issues have neither comment), `closes #N` PR
-auto-close, web UI / mobile / out-of-band close.
-
-**What the script posts:**
-
-| Class | J-1 (human-readable) | J-2 (sentinel) |
+| Step | What it does | Re-run |
 |---|---|---|
-| `hash-from-history` | `Resolved by commit \`HASH\`.` | `<!-- issue-close-sentinel: appended (resolved-by: backfill, commit=HASH) -->` |
-| `hash-from-gitlog` | `Resolved by commit \`HASH\`.` | `<!-- issue-close-sentinel: appended (resolved-by: backfill-gitlog, commit=HASH) -->` |
-| `no-hash` | _(not posted)_ | `<!-- issue-close-sentinel: appended (resolved-by: backfill-no-hash) -->` |
+| 1 | Label sync + `.github/ISSUE_TEMPLATE` copy | safe (idempotent) |
+| 2 | Each `### entry` of `docs/history.md` and `docs/history/*.md` → one closed issue (`type:task` or `type:incident`, plus `status:migrated`) | skips entries recorded in `.migration-state.json` |
+| 3 | Each non-empty `## section` of `docs/todo.md` → one open `type:task` issue; after the full stage `docs/todo.md` becomes an ID index | skips recorded entries |
+| 4 | Projects v2 board + Content Date backfill (GitLab: skipped, no counterpart field) | safe |
+| 5 | J-1 / J-2 sentinel comments on closed issues (GitLab: issue notes) | safe (skips issues that have the sentinel) |
+| 6 | Mark `migrate.issues` done in `.agents.json`, commit the artifacts, push | safe |
 
-**Hash discovery order (per issue):**
-1. `docs/history.md` and `docs/history/*.md` heading bracket — e.g. `(2026-05-10, abc1234, #42)` → `abc1234`
-2. `git log --all --grep="#N([^0-9]|$)"` — boundary-safe to prevent `#42` matching `#420`
-3. No hash found → no-hash class (J-2 only)
+Issue numbers are never reused: a create that ran cannot be undone. Always run `--dry-run` first and inspect the created issues between stages.
 
-**Prerequisites:**
-- `gh auth status` is authenticated
-- Pass `--target-checkout-root /path/to/repo`; the script changes into that directory itself, so the current directory does not select the repo. Without the flag, the script works on the agents main root (`AGENTS_MAIN_ROOT`)
+A fresh run stops with `WARNING: UNCOMMITTED_ALLOWLIST` when an allowlist file has uncommitted edits; commit or revert them first. Known limits: a resumed run (state file present) skips this check, and `.agents.json` is outside it, so Step 6 commits any pending `.agents.json` edit together with the migration.
 
-**Migration procedure:**
+## Manual recovery commands
 
-```bash
-# 5a — Dry-run: see what will be posted without touching GitHub
-bash bin/github-issues/backfill-commit-comments.sh --target-checkout-root /path/to/repo --dry-run
-```
+| Situation | Command |
+|---|---|
+| Preview the history entries | `bash bin/github-issues/migration/preview-history.sh <repo_dir>` |
+| Dry-run the whole migration | `bash bin/github-issues/migration/orchestrate.sh <repo_dir> --dry-run` |
+| Resume a history stage | `bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage canary-1\|canary-2\|full` |
+| Resume a todo stage | `bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 3 --stage canary-1\|canary-2\|full` |
+| Resume Steps 4–6 | `bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 4` |
+| Content Date backfill alone | `MIGRATE_PROJECT_NUM=<n> MIGRATE_PROJECT_ID=<PVT_…> MIGRATE_FIELD_ID=<PVTF_…> bash bin/github-issues/migration/backfill-content-date.sh <repo_dir>` |
+| Commit comments (sentinel) alone | `bash bin/github-issues/backfill-commit-comments.sh --target-checkout-root <repo_dir> [--dry-run\|--canary]` |
+| Commit the `/migrate-issues` artifacts | `bash bin/github-issues/migration/commit-migration-artifacts.sh <repo_dir> --skill migrate-issues [--no-push]` |
+| Commit `.agents.json` after `/migrate-tracker`, `/migrate-tests` or a `/migrate` recovery | `bash bin/github-issues/migration/commit-migration-artifacts.sh <repo_dir> --skill migrate-tracker\|migrate-tests\|migrate [--no-push]` |
+| Record one migration done by hand | `node bin/repo-settings --root <repo_dir> --set-migrate tracker\|issues\|tests` |
+| Repair a `.agents.json` that is not a JSON object (`MALFORMED=1`) | `node bin/repo-settings --root <repo_dir> --reset-malformed` (the original is kept as `.agents.json.malformed`) |
 
-Output format: `[dry-run class=CLASS] #N hash=HASH_OR_none`
-
-Read the classification summary. Confirm the hashes look correct for `hash-from-history`
-and `hash-from-gitlog` entries (spot-check a few against the actual history.md entries or
-git log). `no-hash` issues will get a sentinel-only comment — acceptable.
-
-```bash
-# 5b — Canary: post to 1 issue per class (max 6 total)
-bash bin/github-issues/backfill-commit-comments.sh --target-checkout-root /path/to/repo --canary
-```
-
-After this runs, open each posted comment on GitHub and verify:
-- `hash-from-history` / `hash-from-gitlog` issues: both a "Resolved by commit" comment
-  and a sentinel comment appear, with the correct hash.
-- `no-hash` issues: only the sentinel comment appears (no "Resolved by" line).
-
-Once satisfied, proceed to the full run.
-
-```bash
-# 5c — Full run: process all remaining closed issues
-bash bin/github-issues/backfill-commit-comments.sh --target-checkout-root /path/to/repo
-```
-
-The canary issues are automatically skipped (idempotency check on the sentinel comment).
-Final output: `Backfilled: N, Skipped: M`
-
-**Re-running is safe** — issues that already have an appended sentinel are skipped.
-
-> **Note on jq regex:** The idempotency check uses `(^|\\n)<!-- issue-close-sentinel: appended` (no `"m"` flag). jq's `m` flag is Oniguruma's multi-line dot mode — it does **not** make `^` match line starts. The `(^|\\n)` prefix handles both line-1 and line-2+ sentinels (the merged J-1+J-2 format places the sentinel on line 2).
+Starting the orchestrator with `--from-step N` warns about every earlier step that never ran; pass `--ack-skipped-steps` to skip them on purpose.
+The live stages also need the dry-run snapshot variables that `skills/migrate-issues/scripts/preview-and-capture.sh` prints; `/migrate-issues` explains them.

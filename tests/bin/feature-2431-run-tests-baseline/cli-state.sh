@@ -28,7 +28,8 @@ amb_repo() {
 }
 
 # amb_expect_ambiguous <label> <repo> <rc> <sid-prefix> — the test exiting <rc> is undetermined
-# ambiguous-exit-<rc>, never preexisting, and run_tests does not complete.
+# ambiguous-exit-<rc>, never preexisting. A signal death (137/143) is on the #2688 allow-list and
+# completes on the auto basis; 124/142 stay off it, so run_tests does not complete.
 amb_expect_ambiguous() {
   local t="tests/bin/test-exit-$3.sh"
   seed_failing "$4$3-$$" "$t"
@@ -39,8 +40,14 @@ amb_expect_ambiguous() {
   else
     fail "$1-$3: expected undetermined ambiguous-exit-$3; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
-  cli_assert_undetermined_only "$1-$3" "$t"
-  cli_assert_not_completed "$1-$3" "$4$3-$$" "$t"
+  case "$3" in
+    137|143)
+      cli_assert_undetermined_only "$1-$3" "$t" 0
+      cli_assert_auto_accepted "$1-$3" "$4$3-$$" "$t" ;;
+    *)
+      cli_assert_undetermined_only "$1-$3" "$t"
+      cli_assert_not_completed "$1-$3" "$4$3-$$" "$t" ;;
+  esac
 }
 
 # With a state (the current launcher, used because the base has none of its own): the test
@@ -77,7 +84,8 @@ run_cli_legacy_launcher_cases() {
 }
 
 # A base launcher whose own setup failed (state FAIL, rc 2, not launched) never ran the test: the
-# CLI says undetermined exec-setup-failed, never preexisting. A launched test exiting 2 is preexisting.
+# CLI says undetermined exec-setup-failed, never preexisting, and asks for a re-run (exit 8).
+# A launched test exiting 2 is preexisting.
 run_cli_launcher_setup_failed_cases() {
   local repo stub="$TMPROOT/setup-failed-launch.sh" t="tests/bin/test-preexisting.sh" launched
   for launched in 0 1; do
@@ -93,7 +101,7 @@ run_cli_launcher_setup_failed_cases() {
       else
         fail "C3-launcher-setup-failed: expected undetermined exec-setup-failed; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
       fi
-      cli_assert_undetermined_only "C3-launcher-setup-failed" "$t"
+      cli_assert_undetermined_only "C3-launcher-setup-failed" "$t" 8
       cli_assert_not_completed "C3-launcher-setup-failed" "lsf$launched-$$" "$t"
     elif printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: preexisting[[:space:]]+$t([[:space:]]|\$)"; then
       pass "C3-launched-exit-2: a launched test exiting 2 at base is preexisting"
@@ -129,7 +137,8 @@ run_cli_unrunnable_at_base_cases() {
 }
 
 # A legacy base launcher (no state) whose failing file's CURRENT registry entry has a
-# launch.wrapper: the old rc is not a converted result, so undetermined, never preexisting.
+# launch.wrapper: the old rc is not a converted result, so undetermined, never preexisting;
+# the detail is on the #2688 allow-list, so run_tests completes on the auto basis.
 run_cli_legacy_launcher_wrapper_cases() {
   local repo="$TMPROOT/repo-legwrap" stub="$TMPROOT/legacy-wrap-launch.sh" t="tests/bin/legacy-wrap.Tests.ps1"
   printf '%s\n' 'run_all_exec() { RUN_ALL_EXEC_LAUNCHED=1; bash "$1" >"$2" 2>"$3" </dev/null; }' > "$stub"
@@ -148,8 +157,8 @@ run_cli_legacy_launcher_wrapper_cases() {
   else
     fail "C3-legacy-launcher-wrapper: expected undetermined base-launcher-predates-result-conversion; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
-  cli_assert_undetermined_only "C3-legacy-launcher-wrapper" "$t"
-  cli_assert_not_completed "C3-legacy-launcher-wrapper" "lwr-$$" "$t"
+  cli_assert_undetermined_only "C3-legacy-launcher-wrapper" "$t" 0
+  cli_assert_auto_accepted "C3-legacy-launcher-wrapper" "lwr-$$" "$t"
 }
 
 # Every failure pre-existed, but the run left a test unrun (unrunnable_count 1): the evidence

@@ -4,7 +4,8 @@
 # Tags: run-tests, baseline, cli, exec, test-language-registry, scope:issue-specific, pwsh-not-required, TL2
 # Sourced by the dispatcher; never run standalone.
 # A base launcher that declines (rc 78, RUN_ALL_EXEC_LAUNCHED=0) gives no verdict: undetermined
-# unsupported-at-base, no ledger record. A launched test exiting 78 itself is an ordinary failure.
+# unsupported-at-base, recorded in the ledger as `und:unsupported-at-base` (never pass/fail) and
+# auto-accepted (#2688). A launched test exiting 78 itself is an ordinary failure.
 
 run_cli_unsupported_at_base_cases() {
   local repo="$TMPROOT/repo-unsup" t_uns="tests/bin/test-unsup.test.ts" t_78="tests/bin/test-exit78.sh"
@@ -42,18 +43,18 @@ run_cli_unsupported_at_base_cases() {
     fail "C3-exit-78-launched: expected preexisting fails-at-base-exit-78; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE_SUMMARY: preexisting=1 inherited=0 broken=0 undetermined=1$' \
-    && [ "$RTB_CLI_RC" -eq 1 ]; then
-    pass "C3-unsupported-at-base: summary preexisting=1 undetermined=1 and exit 1"
+    && [ "$RTB_CLI_RC" -eq 0 ]; then
+    pass "C3-unsupported-at-base: summary preexisting=1 undetermined=1 and exit 0 (auto + proof)"
   else
     fail "C3-unsupported-at-base: summary/exit mismatch; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
 
-  # Ledger: only the launched verdict is recorded; the unsupported one leaves no record.
+  # Ledger: the unsupported test is recorded only as undetermined, never as a pass/fail verdict.
   local got_uns got_78
   got_uns="$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t_uns" 2>/dev/null)"
   got_78="$(ledger_call "$cache" "$repo" rtb_ledger_lookup_same_base "$base" "$t_78" 2>/dev/null)"
-  if [ -z "$got_uns" ] && [ "$got_78" = "fail" ]; then
-    pass "C3-unsupported-at-base: no ledger record for the unsupported test; exit-78 test recorded fail"
+  if [ "$got_uns" = "und:unsupported-at-base" ] && [ "$got_78" = "fail" ]; then
+    pass "C3-unsupported-at-base: unsupported test recorded und:unsupported-at-base; exit-78 test recorded fail"
   else
     fail "C3-unsupported-at-base: ledger mismatch; unsupported=[$got_uns] exit78=[$got_78]"
   fi
@@ -73,5 +74,5 @@ run_cli_unsupported_at_base_cases() {
   else
     fail "C3-unsupported-at-base: expected one .unsupported marker for $t_uns; logdir=[$logdir] count=$n_uns"
   fi
-  cli_assert_not_completed "C3-unsupported-at-base" "uns-$$" "$t_uns"
+  cli_assert_auto_accepted "C3-unsupported-at-base" "uns-$$" "$t_uns"
 }

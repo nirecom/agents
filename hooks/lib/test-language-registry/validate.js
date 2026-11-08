@@ -193,6 +193,11 @@ function checkEntry(e, i, seen, repoRoot, seenSources, opts) {
   if (e.helperLibrary) {
     checkRepoFile(e.helperLibrary.path, `${where}.helperLibrary.path`, repoRoot, opts);
     plain(e.helperLibrary.sourceRegex, `${where}.helperLibrary.sourceRegex`);
+    // sharedSourceRegex (#2473): the load form of the agents checkout's shared harness in another repo.
+    const shared = e.helperLibrary.sharedSourceRegex;
+    if (shared !== undefined && !plain(shared, `${where}.helperLibrary.sharedSourceRegex`).includes("AGENTS_TEST_HARNESS_DIR")) {
+      fail(`${where}.helperLibrary.sharedSourceRegex`, "must reach the harness through AGENTS_TEST_HARNESS_DIR");
+    }
   }
   if (!e.caseMarkerReader !== !e.helperLibrary) {
     fail(`${where}.caseMarkerReader`, "caseMarkerReader and helperLibrary come as a pair: set both or neither");

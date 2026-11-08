@@ -84,9 +84,26 @@ rtb_cli_run() {
     || RTB_CLI_RC=$?
 }
 
-# mk_fixture_repo — git repo with main@base + feature@HEAD, so merge-base resolves
+# mk_fixture_repo <dest> — git repo with main@base + feature@HEAD, so merge-base resolves
 # RESOLVED against `main` (bin/resolve-merge-base.sh layer 2). Prints the base SHA.
+# The repo is built once per process (_mk_fixture_template) and copied, since every git
+# launch costs seconds on Windows; the template carries core.hooksPath, so every copy does.
+# Its state lives on disk because callers run this inside $(...), where variables do not persist.
+FIXTURE_TPL_DIR="$TMPROOT/.fixture-tpl-2431"
+readonly FIXTURE_TPL_DIR
 mk_fixture_repo() {
+  local repo="${1:?mk_fixture_repo: destination required}"
+  if [[ ! -s "$FIXTURE_TPL_DIR.sha" ]]; then
+    rm -rf "$FIXTURE_TPL_DIR"
+    _mk_fixture_template "$FIXTURE_TPL_DIR" >"$FIXTURE_TPL_DIR.sha.tmp" || return 1
+    mv "$FIXTURE_TPL_DIR.sha.tmp" "$FIXTURE_TPL_DIR.sha" || return 1
+  fi
+  mkdir -p "$repo" || return 1
+  cp -a "$FIXTURE_TPL_DIR/." "$repo/" || return 1
+  cat "$FIXTURE_TPL_DIR.sha"
+}
+
+_mk_fixture_template() {
   local repo="$1"
   git init -q "$repo"
   git -C "$repo" config core.hooksPath /dev/null
@@ -122,6 +139,16 @@ mk_fixture_repo() {
   git -C "$repo" commit -q -m "head"
 
   printf '%s\n' "$base_sha"
+}
+
+# feat_commit_failing <repo> <test-path...> — on the checked-out feature branch, each test becomes
+# a plain `exit 1` (no sentinel, no home reference). The branch stage (#2688) re-runs a failing test
+# in this checkout first, so a case about the base copy needs a branch copy that fails alone there.
+feat_commit_failing() {
+  local repo="$1" p; shift
+  for p in "$@"; do printf '#!/usr/bin/env bash\nexit 1\n' > "$repo/$p"; done
+  git -C "$repo" add -- "$@"
+  git -C "$repo" commit -q -m "branch copy fails alone"
 }
 
 # seed_failing <sid> <test-path...>

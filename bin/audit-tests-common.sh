@@ -90,8 +90,9 @@ if ! REPO_ROOT="$(trp_require_repo_root)"; then
   exit 2
 fi
 cd "$REPO_ROOT"
-if [[ ! -d tests ]]; then
-  echo "ERROR: tests/ directory not found under $REPO_ROOT" >&2
+tdg_use_root "$REPO_ROOT"
+if [[ ! -d "$_TDG_TESTS_DIR" ]]; then
+  echo "ERROR: ${_TDG_TESTS_DIR}/ directory not found under $REPO_ROOT" >&2
   exit 2
 fi
 
@@ -113,16 +114,19 @@ TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
 in_common_scope() {
   local rel="$1"
   case "$rel" in
-    tests/_archive/*) return 1 ;;
+    "$_TDG_TESTS_DIR"/_archive/*) return 1 ;;
   esac
   trp_name_axes "$rel"
   [[ "$TRP_SCOPE" == "common" ]]
 }
 
-# Top-level files of a supported test language per category; scope is filtered per file below.
+# Direct files of a supported test language per entrypoint dir (.agents.json, #2473); scope is filtered per file below.
 TESTFILES=()
-for _cat in hooks bin skills agents install tests; do
-  tlr_list_dir_into "tests/$_cat" supported && TESTFILES+=(${TLR_LIST[@]+"${TLR_LIST[@]}"})
+for _dir in ${_TDG_TEST_DIRS[@]+"${_TDG_TEST_DIRS[@]}"}; do
+  tlr_list_dir_into "$_dir" supported || continue
+  for _f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
+    tdg_is_runner "$_f" || TESTFILES+=("$_f")
+  done
 done
 
 if [[ "$FIX_HEADERS" -eq 1 ]]; then

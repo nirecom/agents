@@ -1,24 +1,30 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/run-issue-setup.sh
-# Tests: skills/issue-setup/scripts/run-issue-setup.sh
-# Tags: issue-setup, run-issue-setup, github-issues, scope:issue-specific
+# Tests: skills/migrate-tracker/scripts/run-issue-setup.sh
+# Tags: migrate-tracker, run-issue-setup, github-issues, scope:issue-specific
 # N/A: prompt-injection/AskUserQuestion — repo-confirm prompt is interactive (SKILL.md orchestration), covered by the skill-orchestration verification-gate at user_verification, not L2-testable.
 # L2: --step labels → sync-labels (--repo threaded); --step check-project → preflight
 #     --check-project; --step ensure-project → ensure-project-ready; --repo injection matrix.
 # L1: arg parse (--step value validation, --repo format).
-# L3 gap: the live /issue-setup skill invocation and its repo-confirm AskUserQuestion.
+# L3 gap: the live /migrate-tracker skill invocation and its repo-confirm AskUserQuestion.
 # Mitigation: WORKFLOW_USER_VERIFIED preflight (category: skill-orchestration).
 
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
-TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts/run-issue-setup.sh"
+# pass / fail / fixture_case_new / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+set -euo pipefail
+TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/skills/migrate-tracker/scripts/run-issue-setup.sh"
 export TARGET
+
+# Top-level dual pin (rules/test/fixture-isolation.md).
+FIXTURE_ROOT="$(mktemp -d)"; readonly FIXTURE_ROOT
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
 
 # Early-exit: file does not exist yet (RED-clean)
 if [ ! -f "$TARGET" ]; then
-    echo "FAIL: skills/issue-setup/scripts/run-issue-setup.sh not found (implementation missing — expected RED)"
+    echo "FAIL: skills/migrate-tracker/scripts/run-issue-setup.sh not found (implementation missing — expected RED)"
     echo ""
     echo "Results: 0 passed, 25 failed"
     exit 1
@@ -26,44 +32,43 @@ fi
 
 TMP=""
 
-setup_mock() {
-    TMP="$(mktemp -d)"
-    mkdir -p "$TMP/mock-bin"
+# Fake checkout + mocks are built ONCE: every mock reads its behaviour from env knobs and
+# run-issue-setup.sh never writes into the checkout, so cases share it.
+# run-issue-setup.sh resolves its siblings from its own location, so the
+# script under test runs as a copy inside a fake checkout holding the mocks.
+FAKE_SCRIPT_CHECKOUT_ROOT="$FIXTURE_ROOT/fake-script-checkout-root"
+SHARED_MOCK_BIN="$FIXTURE_ROOT/mock-bin"
+mkdir -p "$SHARED_MOCK_BIN" "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib" \
+         "$FAKE_SCRIPT_CHECKOUT_ROOT/skills/migrate-tracker/scripts" \
+         "$FAKE_SCRIPT_CHECKOUT_ROOT/.github"
+touch "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
+RUN_TARGET="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/migrate-tracker/scripts/run-issue-setup.sh"
+cp "$TARGET" "$RUN_TARGET"
+# Whole lib/ (resolve-project.sh sources its sub-modules); the EPR mock below overwrites its lib.
+cp -R "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/." \
+   "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/"
 
-    # run-issue-setup.sh resolves its siblings from its own location, so the
-    # script under test runs as a copy inside a fake checkout holding the mocks.
-    FAKE_SCRIPT_CHECKOUT_ROOT="$TMP/fake-script-checkout-root"
-    mkdir -p "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib" \
-             "$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts" \
-             "$FAKE_SCRIPT_CHECKOUT_ROOT/.github"
-    touch "$FAKE_SCRIPT_CHECKOUT_ROOT/.github/labels.yml"
-    RUN_TARGET="$FAKE_SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts/run-issue-setup.sh"
-    cp "$TARGET" "$RUN_TARGET"
-    # Whole lib/ (resolve-project.sh sources its sub-modules); the EPR mock below overwrites its lib.
-    cp -R "$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/." \
-       "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/"
-
-    cat > "$TMP/mock-bin/sync-labels-dispatch" <<'SYNC_EOF'
+cat > "$SHARED_MOCK_BIN/sync-labels-dispatch" <<'SYNC_EOF'
 #!/bin/bash
 if [ -n "${MOCK_LOG:-}" ]; then
     printf 'sync-labels: %s\n' "$*" >> "$MOCK_LOG"
 fi
 exit "${GH_MOCK_SYNC_FAIL:-0}"
 SYNC_EOF
-    chmod +x "$TMP/mock-bin/sync-labels-dispatch"
+chmod +x "$SHARED_MOCK_BIN/sync-labels-dispatch"
 
-    # Create mock sync-labels.sh at the expected location
-    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" <<'SYNC_EOF'
+# Mock sync-labels.sh at the expected location
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh" <<'SYNC_EOF'
 #!/bin/bash
 if [ -n "${MOCK_LOG:-}" ]; then
     printf 'sync-labels: %s\n' "$*" >> "$MOCK_LOG"
 fi
 exit "${GH_MOCK_SYNC_FAIL:-0}"
 SYNC_EOF
-    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
 
-    # Create mock issue-create-preflight.sh
-    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
+# Mock issue-create-preflight.sh
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh" <<'PREFLIGHT_EOF'
 #!/bin/bash
 if [ -n "${MOCK_LOG:-}" ]; then
     printf 'preflight: %s\n' "$*" >> "$MOCK_LOG"
@@ -80,10 +85,10 @@ case "$*" in
     ;;
 esac
 PREFLIGHT_EOF
-    chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
+chmod +x "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
 
-    # Create mock ensure-project-ready.sh lib
-    cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/ensure-project-ready.sh" <<'EPR_EOF'
+# Mock ensure-project-ready.sh lib
+cat > "$FAKE_SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/ensure-project-ready.sh" <<'EPR_EOF'
 #!/bin/bash
 # Sourced lib — define ensure_project_ready function
 ensure_project_ready() {
@@ -102,8 +107,8 @@ ensure_project_ready() {
 }
 EPR_EOF
 
-    # Mock gh
-    cat > "$TMP/mock-bin/gh" <<'GH_MOCK_EOF'
+# Mock gh
+cat > "$SHARED_MOCK_BIN/gh" <<'GH_MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${MOCK_LOG:-}" ]; then
@@ -126,9 +131,11 @@ case "$ARGS" in
     ;;
 esac
 GH_MOCK_EOF
-    chmod +x "$TMP/mock-bin/gh"
+chmod +x "$SHARED_MOCK_BIN/gh"
+export PATH="$SHARED_MOCK_BIN:$PATH"
 
-    export PATH="$TMP/mock-bin:$PATH"
+setup_mock() {
+    fixture_case_new
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
@@ -137,11 +144,9 @@ GH_MOCK_EOF
 }
 
 teardown_mock() {
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
-        rm -rf "$TMP" 2>/dev/null || true
-    fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR FAKE_SCRIPT_CHECKOUT_ROOT RUN_TARGET \
+    export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
+    unset MOCK_LOG \
           GH_MOCK_SYNC_FAIL GH_MOCK_PROJECT_RC GH_MOCK_LABELS_RC \
           GH_MOCK_EPR_RC 2>/dev/null || true
 }
@@ -415,6 +420,21 @@ if [ "$RC" = "0" ] && [ "$DISPATCHED" = "1" ] && [ "$PAYLOAD_IN_LOG" = "1" ]; th
     pass "TRIS-inj[valid]: owner/repo accepted and threaded to sync-labels"
 else
     fail "TRIS-inj[valid]: rc=$RC dispatched=$DISPATCHED payload_in_log=$PAYLOAD_IN_LOG — expected valid --repo threaded"
+fi
+teardown_mock
+
+# ===========================================================================
+# TRIS-root (L1, #2473): --root with no value → exit 2, no dispatch (fail-closed).
+# ===========================================================================
+setup_mock
+RC=0
+bash "$RUN_TARGET" --step labels --repo "myorg/myrepo" --root 2>/dev/null || RC=$?
+DISPATCHED=0
+[ -s "$MOCK_LOG" ] && grep -qE "^sync-labels:|^preflight:|^ensure-project-ready:" "$MOCK_LOG" 2>/dev/null && DISPATCHED=1
+if [ "$RC" = "2" ] && [ "$DISPATCHED" = "0" ]; then
+    pass "TRIS-root (L1): --root with no value → exit 2, no dispatch"
+else
+    fail "TRIS-root (L1): rc=$RC dispatched=$DISPATCHED (expect rc=2 + no dispatch)"
 fi
 teardown_mock
 

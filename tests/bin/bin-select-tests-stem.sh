@@ -10,6 +10,7 @@ set -uo pipefail
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/repo-settings-fixture.sh"
 
 ROOT="$(make_tmp)"
 trap 'rm -rf "$ROOT"' EXIT
@@ -128,20 +129,25 @@ ROWS
 fi
 case_end
 
-# The selector end to end: one fixture commit per changed path, against a fixed fake tests/bin.
+# The selector end to end: one fixture commit per changed path, against a fixed tests/bin in the
+# target repo, listed through its .agents.json (#2473). The selector's own checkout holds a
+# same-stem decoy that no row may select.
 FAKE="$ROOT/fake"
 FREPO="$ROOT/frepo"
-mkdir -p "$FAKE/bin/lib" "$FAKE/tests/bin"
+mkdir -p "$FAKE/bin/lib" "$FAKE/tests/bin" "$FREPO/tests/bin"
 cp "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh" "$FAKE/bin/select-tests.sh"
 [ -f "$SCRIPT_CHECKOUT_ROOT/$STS_REL" ] && cp "$SCRIPT_CHECKOUT_ROOT/$STS_REL" "$FAKE/$STS_REL"
+install_repo_settings "$FAKE" "$SCRIPT_CHECKOUT_ROOT" || fail "fixture" "repo settings install failed"
 install_test_language_registry "$FAKE" "$SCRIPT_CHECKOUT_ROOT" || fail "fixture" "registry install failed"
+: >"$FAKE/tests/bin/select-tests-checkout-decoy.sh"
 for n in feature-run-tests-a.sh bin-sweep-tests-b.sh lab-z.sh hook-block-case-markers-d.sh \
   survey-code-e.sh select-tests-f.sh ab-short.sh runner-h.sh unrelated-g.sh; do
-  : >"$FAKE/tests/bin/$n"
+  : >"$FREPO/tests/bin/$n"
 done
 harness_git_init "$FREPO"
 git -C "$FREPO" config user.email t@example.com
 git -C "$FREPO" config user.name T
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"bin","covers":["bin"]}],"testHarness":"on","caseMarker":"on"}}' >"$FREPO/.agents.json"
 : >"$FREPO/README.md"
 git -C "$FREPO" add -A
 git -C "$FREPO" commit -q -m base

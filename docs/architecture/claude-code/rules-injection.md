@@ -192,7 +192,7 @@ Eight rules are on demand. The table below is the declaration's own content
 | `rules/branch.md` | `/make-detail-plan`, `/worktree-start` |
 | `rules/coding.md` | `/write-code`, `/issue-create`, `/commit-push`, `/update-docs`, `/worktree-end`, `/issue-close-stage`, `/issue-close-finalize`, `/write-tests` |
 | `rules/docs.md` | `/update-docs` |
-| `rules/github-issues.md` | `/issue-create`, `/issue-close-stage`, `/issue-close-finalize`, `/issue-reconcile`, `/issue-close-migrated`, `/clarify-intent`, `/commit-push`, `/worktree-end`, `/workflow-init`, `/sweep-issues`, `/issue-setup` |
+| `rules/github-issues.md` | `/issue-create`, `/issue-close-stage`, `/issue-close-finalize`, `/issue-reconcile`, `/issue-close-migrated`, `/clarify-intent`, `/commit-push`, `/worktree-end`, `/workflow-init`, `/sweep-issues`, `/migrate-tracker` |
 | `rules/mid-workflow-findings.md` | `/issue-create`, `/worktree-end` |
 | `rules/ops.md` | `/worktree-end`, `/write-code`, `/worktree-start` |
 | `rules/test.md` | `/write-tests`, `/review-tests`, `/run-tests` |

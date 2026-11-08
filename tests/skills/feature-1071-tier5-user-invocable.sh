@@ -2,16 +2,9 @@
 # tests/skills/feature-1071-tier5-user-invocable.sh
 # Tests: skills/issue-close-migrated/SKILL.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, skills/issue-reconcile/SKILL.md
 # Tags: static, skill, user-invocable, frontmatter, scope:issue-specific
-#
-# Tier 5 static contract test for issue #1071 (skill/agent fork+worker audit).
-# Asserts that non-user-facing skills declare 'user-invocable: false', and that
-# legitimately user-invocable skills still declare 'user-invocable: true'
-# (no false-positive regressions from the audit sweep).
-# Expected RED until #1071 adds user-invocable: false to the four target skills.
-#
-# L3 gap (what this test does NOT catch):
-# - whether the Claude Code skill list actually hides non-user-invocable skills
-#   at runtime (requires real claude -p session to confirm UI behavior)
+# Tier 5 (#1071): non-user-facing skills declare 'user-invocable: false'; user-invocable ones keep 'true'.
+# TL3 gap (what this test does NOT catch):
+# - whether the Claude Code skill list actually hides non-user-invocable skills at runtime
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 
@@ -76,7 +69,7 @@ assert_user_invocable_true "sweep-branches"
 assert_user_invocable_true "sweep-worktrees"
 assert_user_invocable_true "sweep-plans"
 assert_user_invocable_true "sweep"
-assert_user_invocable_true "migrate-repo"
+assert_user_invocable_true "migrate-issues"
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

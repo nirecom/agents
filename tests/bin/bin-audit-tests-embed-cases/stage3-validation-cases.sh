@@ -1,6 +1,6 @@
 # Tests: bin/lib/test-embed-cases/stage-apply.sh
 # Tags: TL2, scope:common, audit-tests, embed-cases, stage-protocol, input-validation
-# Sourced by tests/bin/bin-audit-tests-embed-cases.sh — stage 3 input validation
+# Sourced by tests/bin/bin-audit-tests-embed-cases-harden.sh — stage 3 input validation
 # is fail-closed (exit 2, nothing written): a workdir outside the embed root, a
 # relpath with "..", a relpath outside the candidate set, an item path outside
 # items/<idx>/. Each case tampers with a fresh, otherwise apply-ready workdir.

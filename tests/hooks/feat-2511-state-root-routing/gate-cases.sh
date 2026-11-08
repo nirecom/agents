@@ -61,7 +61,7 @@ c_r23_project_cache() {
     "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh" 2>/dev/null || true)"
   eq "R23 resolve-project reads the new-root cache/" "$out" "PVT_new"
   eq "R23 run-issue-setup no longer defaults the cache to the legacy dir" \
-    "$(grep -c 'projects/workflow' "$SCRIPT_CHECKOUT_ROOT/skills/issue-setup/scripts/run-issue-setup.sh" || true)" "0"
+    "$(grep -c 'projects/workflow' "$SCRIPT_CHECKOUT_ROOT/skills/migrate-tracker/scripts/run-issue-setup.sh" || true)" "0"
   eq "R23 resolve-project no longer defaults the cache to the legacy dir" \
     "$(grep -c 'projects/workflow' "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/resolve-project.sh" || true)" "0"
 }
