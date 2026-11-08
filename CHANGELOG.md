@@ -140,3 +140,7 @@ Changes: WIP markers on issues now show the raw Claude Code session id (board fi
 ### FEATURE: PR #2934 (2026-11-08)
 Background: feat(#2658, #2291, #2293, #1770, #2415): replace session-sync's rebas...
 Changes: session-sync no longer gets stuck needing `session-sync reset`: a leftover rebase state heals on the next push or pull, and two machines' transcripts are merged line by line.;The shell-startup fetch deadline is configurable with `SESSION_SYNC_STARTUP_DEADLINE_MS` in `.env` (default 3000 ms, max 60000).
+
+### FEATURE: PR #2950 (2026-11-08)
+Background: feat(#2473): run the test workflow in any repo through .agents.json a...
+Changes: The test workflow works in any repo through .agents.json, and /migrate sets a repo up by running the tracker, issues and tests migrations it still needs.
