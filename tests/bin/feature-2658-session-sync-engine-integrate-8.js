@@ -1,9 +1,10 @@
 "use strict";
 // Tests: bin/session-sync-engine, bin/lib/session-sync/cli.js, bin/lib/session-sync/git.js, bin/lib/session-sync/proc.js, bin/lib/session-sync/lock.js, bin/lib/session-sync/selfheal.js, bin/lib/session-sync/classify.js, bin/lib/session-sync/jsonl.js, bin/lib/session-sync/history.js, bin/lib/session-sync/conflict.js, bin/lib/session-sync/exclude.js, bin/lib/session-sync/mtime.js, bin/lib/session-sync/apply.js, bin/lib/session-sync/state.js, bin/lib/session-sync/integrate.js
-// Tags: TL1, TL2, session-sync, session-sync-engine, real-git, two-clone, scope:issue-specific, jsonl-union, conflict-sibling
+// Tags: TL1, TL2, session-sync, session-sync-engine, real-git, two-clone, scope:issue-specific, jsonl-union, conflict-sibling, self-heal
 // #2658: ninth part of the session-sync engine suite (split from feature-2658-session-sync-engine-integrate-4.js
 // so each entrypoint stays under the per-file runner timeout). Covers the two-clone conflict-sibling
-// cases: the losing line of a same-uuid conflict survives on both clones, whichever pushes first.
+// cases: the losing line of a same-uuid conflict survives on both clones, whichever pushes first;
+// plus the in-process case of a line appended to an unmerged transcript during resolveUnmerged.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const { makeFixtures } = require("./feature-2658-session-sync-engine/fixtures");
 
@@ -28,4 +29,10 @@ caseEnd();
 
 caseBegin("integrate-loser-pushes-first-keeps-losing-line", "bin/lib/session-sync/classify.js");
 sibling.loserPushesFirst(F);
+caseEnd();
+
+const unmergedHistory = require("./feature-2658-session-sync-engine/unmerged-history");
+
+caseBegin("unmerged-jsonl-concurrent-append", "bin/lib/session-sync/selfheal.js");
+unmergedHistory.unmergedJsonlRace(F);
 caseEnd();

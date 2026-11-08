@@ -1,15 +1,15 @@
 "use strict";
 // Deadline-bounded child process (#2658): on timeout the whole process tree is killed.
 
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
-// killTree — on Windows taskkill /T needs about a second to walk the tree, so it runs
-// detached and the deadline returns at once; elsewhere the process group dies synchronously.
+// killTree — on Windows the deadline waits for taskkill /T to walk the tree, capped at 5 s;
+// elsewhere the process group dies synchronously.
 function killTree(child) {
   if (process.platform === "win32") {
     try {
-      spawn("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore", windowsHide: true, detached: true }).unref();
-    } catch (_) { /* taskkill missing: nothing more to do */ }
+      spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore", windowsHide: true, timeout: 5000 });
+    } catch (_) { /* taskkill missing or failed: nothing more to do */ }
     return;
   }
   try {
@@ -24,7 +24,7 @@ function run(cmd, args, { deadlineMs, env, cwd } = {}) {
     const child = spawn(cmd, args, {
       env: env || process.env, cwd, windowsHide: true,
       // detached everywhere: a process group on POSIX; on Windows it keeps the tree out of
-      // node's kill-on-exit job, so the background taskkill can still walk it.
+      // node's kill-on-exit job, so taskkill /T can still walk it.
       detached: true, stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";

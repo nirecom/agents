@@ -197,6 +197,14 @@ line whose uuid matches on both sides but whose content differs keeps one versio
 moves the other into the same kind of sibling, also when a stuck clone is recovered. Pulled
 transcripts get their last entry's timestamp as mtime so that session lists sort correctly.
 
+**File/directory collisions** (one side has `a`, the other `a/x`): the directory wins and the
+file is kept as `a.sync-conflict-<blob12>`. When that name is already taken by another blob or a
+directory, the copy takes `-2`, `-3`, …; a numbered copy that already holds the same blob is
+reused, so repeated syncs converge instead of adding copies.
+
+**Timeouts**: a git child that overruns is killed with its process tree (`taskkill /T` on
+Windows, waited for at most 5 s), so the lock is always released.
+
 **Excluded from sync**: `workflow/`, `*.tmp`, `*.bak.*`, temp directories and `plans/*` other than
 `*.md` (SSOT `bin/lib/session-sync/exclude.js`). Already-tracked excluded files leave the index
 and the remote but stay on disk. Plans (`*.md`) travel in both directions on push and pull; a local
@@ -210,7 +218,10 @@ fall back to 3000; above 60000 is clamped to 60000), so a slow machine is tuned 
 but absent from the working tree is not restored; an append can join a line Claude Code is still
 writing; a whole-file write deferred because the file changed mid-sync can lose the remote
 version on the next run; a non-jsonl real rebase conflict keeps the local version only inside the
-marker-bearing sibling.
+marker-bearing sibling; a failed or timed-out `taskkill` is not checked, so a grandchild can
+outlive the run; an old unsorted `history.jsonl` keeps its file order until a merge adds a line;
+deleting `.gitignore` in an unpushed local commit also deletes it on the remote (the managed
+block rewrites it locally).
 
 **Symlink structure** (managed by `install/{linux,win}/dotfileslink.{sh,ps1}`):
 - `CLAUDE.md` → `~/.claude/CLAUDE.md`

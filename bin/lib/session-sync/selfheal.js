@@ -8,7 +8,7 @@ const path = require("node:path");
 const G = require("./git");
 const { union, joinLines } = require("./jsonl");
 const { siblingName } = require("./conflict");
-const { writeAtomic } = require("./apply");
+const { writeAtomic, statSig } = require("./apply");
 
 const STATE_ENTRIES = ["rebase-merge", "rebase-apply", "MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE",
   "CHERRY_PICK_HEAD", "REVERT_HEAD"];
@@ -43,6 +43,28 @@ function blobText(dir, rev, rel) {
   return sha ? G.catBlob(dir, sha) : null;
 }
 
+const sigKey = (s) => (s ? `${s.size}:${s.mtimeMs}` : "absent");
+
+// writeUnion(abs, otherText) -> the union written at abs. Claude Code appends to the transcript at any
+// time: a change seen just before the rename rebuilds the union once (as writeHistoryLocal does).
+function writeUnion(abs, otherText) {
+  const build = () => ({ sig: statSig(abs), u: union(fs.readFileSync(abs, "utf8"), otherText) });
+  let b = build();
+  if (b.u.deferred) return b.u;
+  const tmp = path.join(path.dirname(abs), `.${path.basename(abs)}.session-sync-${process.pid}.tmp`);
+  fs.writeFileSync(tmp, b.u.text);
+  if (sigKey(statSig(abs)) !== sigKey(b.sig)) {
+    b = build();
+    if (b.u.deferred) {
+      fs.rmSync(tmp, { force: true });
+      return b.u;
+    }
+    fs.writeFileSync(tmp, b.u.text);
+  }
+  fs.renameSync(tmp, abs);
+  return b.u;
+}
+
 // resolveUnmerged(dir, paths, otherRev, stats) — a transcript becomes the marker-free union and the
 // lines it drops go to a conflict sibling; any other file moves to a conflict sibling and the other
 // side's version takes the path.
@@ -54,10 +76,9 @@ function resolveUnmerged(dir, paths, otherRev, stats) {
     if (!fs.existsSync(abs)) continue;
     const other = blobText(dir, otherRev, rel);
     if (rel.endsWith(".jsonl")) {
-      const u = union(fs.readFileSync(abs, "utf8"), other ? other.toString("utf8") : "");
+      const u = writeUnion(abs, other ? other.toString("utf8") : "");
       stats.droppedMarkerLines += u.droppedMarkerLines;
       if (u.deferred) continue;
-      writeAtomic(abs, u.text);
       const lost = [...new Set(u.lostLocal.concat(u.lostRemote))];
       if (lost.length === 0) continue;
       const copy = siblingName(rel, host, new Date(), taken);

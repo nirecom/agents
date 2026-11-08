@@ -185,6 +185,21 @@ function resetPath(c, rel, out) {
 
 // resolvePathCollisions — M cannot hold both a file and a directory at one path, and writeTree would
 // silently drop one side. The directory side stays; the file moves to a copy named from its blob.
+// A copy slot already holding other content, deleted this round, or a directory in the final tree is
+// never used: the file takes the first free numbered name instead, so its blob never leaves M unrecorded.
+// A numbered slot already holding the same blob is reused, so repeated syncs converge on one copy.
+// suffixedSlot returns that slot's name, or null when the delta already holds the same blob there.
+function suffixedSlot(c, out, base, ancestors, f, e) {
+  for (let n = 2; ; n++) {
+    const r = collisionCopyName(f, e.blob, n);
+    const d = out.delta.get(r);
+    if (d && d.blob === e.blob) return null;
+    const held = base.get(r);
+    if (!out.delta.has(r) && held && held.blob === e.blob && !ancestors.has(r)) return r;
+    if (!out.delta.has(r) && !base.has(r) && !ancestors.has(r) && !fs.existsSync(c.abs(r))) return r;
+  }
+}
+
 function resolvePathCollisions(c, out) {
   const base = c.mode === "reset" ? c.rMap : c.lMap;
   const paths = new Set(base.keys());
@@ -201,12 +216,19 @@ function resolvePathCollisions(c, out) {
     const e = out.delta.get(f) || base.get(f);
     out.delta.set(f, null);
     out.ops = out.ops.filter((op) => op.rel !== f);
-    const copy = collisionCopyName(f, e.blob);
-    if (out.delta.has(copy)) continue;
+    const plain = collisionCopyName(f, e.blob);
+    const d = out.delta.get(plain);
+    if (d && d.blob === e.blob) continue;
+    const held = base.get(plain);
+    let copy = plain;
+    if (out.delta.has(plain) || (held && held.blob !== e.blob) || ancestors.has(plain)) {
+      copy = suffixedSlot(c, out, base, ancestors, f, e);
+      if (copy === null) continue;
+    }
     out.delta.set(copy, { mode: e.mode, blob: e.blob });
     if (REGULAR.has(e.mode) && !fs.existsSync(c.abs(copy))) out.ops.push({ rel: copy, kind: "blob", blob: e.blob });
-    const held = base.get(copy);
-    if (!held || held.blob !== e.blob) c.stats.conflicts.push({ path: f, copy, localMtime: null, remoteTime: null });
+    const kept = base.get(copy);
+    if (!kept || kept.blob !== e.blob) c.stats.conflicts.push({ path: f, copy, localMtime: null, remoteTime: null });
   }
 }
 
