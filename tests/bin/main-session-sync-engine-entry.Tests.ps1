@@ -28,7 +28,8 @@ Describe 'session-sync entries over the engine' -Tag 'target:bin/session-sync.ps
         New-Item -ItemType Directory -Path (Join-Path $script:Tmp 'plans') -Force | Out-Null
         $gc = Join-Path $script:Tmp 'gitconfig'
         Set-Content -Path $gc -Value @('[user]', '  name = Entry Test', '  email = entry@example.com',
-            '[init]', '  defaultBranch = main', '[commit]', '  gpgSign = false', '[core]', '  hooksPath = NUL', '  autocrlf = false')
+            '[init]', '  defaultBranch = main', '[commit]', '  gpgSign = false', '[core]', '  hooksPath = NUL', '  autocrlf = false',
+            '[maintenance]', '  auto = false', '[gc]', '  auto = 0')
         $env:GIT_CONFIG_NOSYSTEM = '1'; $env:GIT_CONFIG_GLOBAL = $gc
         $env:WORKFLOW_PLANS_DIR = Join-Path $script:Tmp 'plans'
         # session-sync-init.ps1 refuses a -ClaudeDir outside USERPROFILE (#1773).

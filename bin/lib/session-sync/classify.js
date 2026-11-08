@@ -1,13 +1,13 @@
 "use strict";
 // Per-path integration rules (#2658). Each rule adds the path's M entry to out.delta (null removes
 // it) and queues the working-tree writes in out.ops; nothing here writes a ref or the working tree.
-// Each whole-file op carries `pre`, the target's stat at classification, for applyOps to recheck.
+// Each op carries `pre`, the target's stat at classification, for applyOps to recheck.
 
 const fs = require("node:fs");
 const path = require("node:path");
 const G = require("./git");
-const { union } = require("./jsonl");
-const { decide, siblingName } = require("./conflict");
+const { union, joinLines } = require("./jsonl");
+const { decide, siblingName, collisionCopyName } = require("./conflict");
 const { isExcluded } = require("./exclude");
 const { statSig } = require("./apply");
 
@@ -33,6 +33,25 @@ function tally(c, u) {
   c.stats.droppedMarkerLines += u.droppedMarkerLines;
 }
 
+// addSibling — keeps the local content that lost a both-changed conflict as a new conflict copy
+// next to rel, in M and in W, and returns the copy's path.
+function addSibling(c, out, rel, mode, blob) {
+  const inRemote = (r) => (c.rMap && c.rMap.has(r)) || (c.rDiff && c.rDiff.has(r));
+  const inLocalDiff = (r) => c.lDiff && c.lDiff.has(r);
+  const taken = (r) => out.delta.has(r) || c.lMap.has(r) || inRemote(r) || inLocalDiff(r) || fs.existsSync(c.abs(r));
+  const copy = siblingName(rel, c.host, c.now, taken);
+  out.delta.set(copy, { mode, blob });
+  out.ops.push({ rel: copy, kind: "blob", blob });
+  return copy;
+}
+
+// queueJsonl — makes W hold u.text, the transcript M records: an append when W + appendText already
+// equals it, else a full rewrite (dropped markers, a replaced local line, or the remote line order).
+function queueJsonl(out, rel, wText, u, flags = {}) {
+  if (wText + u.appendText !== u.text) out.ops.push(Object.assign({ rel, kind: "text", text: u.text }, flags));
+  else if (u.appendText) out.ops.push(Object.assign({ rel, kind: "append", text: u.appendText }, flags));
+}
+
 function localOf(c, rel) {
   const lE = c.lMap.get(rel);
   const w = c.w.get(rel);
@@ -41,18 +60,24 @@ function localOf(c, rel) {
   return { lE, w, blob, mode };
 }
 
-// jsonlBoth — union of the working-tree transcript and the remote one; W only ever grows by the
-// remote-only lines, except that leftover conflict markers force one full rewrite.
+// jsonlBoth — union of the working-tree transcript and the remote one; W and M hold the same text.
+// Lines the union drops from either side (a lost same-uuid conflict, a duplicate) go to a conflict
+// copy, since both sides changed and neither is known to be the newer edit. Keeping the remote side's
+// too means the copy exists whichever machine pushed first: the other one only sees W unchanged.
 function jsonlBoth(c, rel, loc, rBlob, out) {
-  const u = union(c.wText(rel) || "", c.blobText(rBlob));
+  const wText = c.wText(rel) || "";
+  const u = union(wText, c.blobText(rBlob));
   tally(c, u);
   if (u.deferred) {
     out.delta.set(rel, { mode: loc.mode, blob: rBlob });
     return;
   }
   out.delta.set(rel, { mode: loc.mode, blob: c.blobFor(u.text, [rBlob, loc.blob]) });
-  if (u.droppedMarkerLines > 0) out.ops.push({ rel, kind: "text", text: u.text, mtime: true });
-  else if (u.appendText) out.ops.push({ rel, kind: "append", text: u.appendText, mtime: true });
+  queueJsonl(out, rel, wText, u, { mtime: true });
+  const lost = [...new Set(u.lostLocal.concat(u.lostRemote))];
+  if (lost.length === 0) return;
+  const copy = addSibling(c, out, rel, loc.mode, c.blobFor(joinLines(lost), []));
+  c.stats.conflicts.push({ path: rel, copy, localMtime: null, remoteTime: null, lostLines: lost.length });
 }
 
 function fileBoth(c, rel, loc, rE, out) {
@@ -65,10 +90,7 @@ function fileBoth(c, rel, loc, rE, out) {
   }
   out.delta.set(rel, rE);
   if (choice === "both") {
-    const taken = (r) => out.delta.has(r) || c.lMap.has(r) || fs.existsSync(c.abs(r));
-    const copy = siblingName(rel, c.host, c.now, taken);
-    out.delta.set(copy, { mode: loc.mode, blob: loc.blob });
-    out.ops.push({ rel: copy, kind: "blob", blob: loc.blob });
+    const copy = addSibling(c, out, rel, loc.mode, loc.blob);
     c.stats.conflicts.push({
       path: rel, copy, localMtime: new Date(localMtime).toISOString(), remoteTime: new Date(remoteTime).toISOString(),
     });
@@ -88,16 +110,23 @@ function syncPath(c, rel, out) {
   const r = c.rDiff.get(rel);
   const jsonl = rel.endsWith(".jsonl");
   if (!r) {
+    // M starts from L's tree, so a path only L deleted goes back in or the push deletes it from R; W stays without it.
+    const lChange = c.lDiff.get(rel);
+    if (loc.blob === null && lChange && !lChange.newBlob) {
+      out.delta.set(rel, { mode: lChange.oldMode, blob: lChange.oldBlob });
+      return;
+    }
     if (!loc.w || loc.w.kind === "del") return;
     if (!jsonl || !loc.lE) {
       out.delta.set(rel, { mode: loc.mode, blob: loc.blob });
       return;
     }
-    const u = union(c.wText(rel) || "", c.blobText(loc.lE.blob));
+    const wText = c.wText(rel) || "";
+    const u = union(wText, c.blobText(loc.lE.blob), { prefer: "local" });
     tally(c, u);
     if (u.deferred) return;
     out.delta.set(rel, { mode: loc.mode, blob: c.blobFor(u.text, [loc.lE.blob, loc.blob]) });
-    if (u.droppedMarkerLines > 0) out.ops.push({ rel, kind: "text", text: u.text });
+    queueJsonl(out, rel, wText, u);
     return;
   }
   const bBlob = c.lDiff.has(rel) ? c.lDiff.get(rel).oldBlob : (loc.lE ? loc.lE.blob : null);
@@ -126,11 +155,13 @@ function syncPath(c, rel, out) {
       out.ops.push({ rel, kind: "blob", blob: r.newBlob });
       return;
     }
-    const u = union(c.wText(rel) || "", c.blobText(r.newBlob));
+    // W is unchanged since B, so the remote line is the newer edit on every same-uuid conflict.
+    const wText = c.wText(rel) || "";
+    const u = union(wText, c.blobText(r.newBlob), { prefer: "remote" });
     tally(c, u);
     if (u.deferred) return;
-    if (u.droppedMarkerLines > 0) out.ops.push({ rel, kind: "text", text: u.text, mtime: true });
-    else if (u.appendText) out.ops.push({ rel, kind: "append", text: u.appendText, mtime: true });
+    out.delta.set(rel, { mode: r.mode, blob: c.blobFor(u.text, [r.newBlob, loc.blob]) });
+    queueJsonl(out, rel, wText, u, { mtime: true });
     return;
   }
   both(c, rel, loc, rE, out);
@@ -152,6 +183,33 @@ function resetPath(c, rel, out) {
   both(c, rel, loc, rE, out);
 }
 
+// resolvePathCollisions — M cannot hold both a file and a directory at one path, and writeTree would
+// silently drop one side. The directory side stays; the file moves to a copy named from its blob.
+function resolvePathCollisions(c, out) {
+  const base = c.mode === "reset" ? c.rMap : c.lMap;
+  const paths = new Set(base.keys());
+  for (const [rel, e] of out.delta) {
+    if (e) paths.add(rel);
+    else paths.delete(rel);
+  }
+  const ancestors = new Set();
+  for (const rel of paths) {
+    for (let i = rel.indexOf("/"); i >= 0; i = rel.indexOf("/", i + 1)) ancestors.add(rel.slice(0, i));
+  }
+  for (const f of paths) {
+    if (!ancestors.has(f) || SPECIAL.has(f)) continue;
+    const e = out.delta.get(f) || base.get(f);
+    out.delta.set(f, null);
+    out.ops = out.ops.filter((op) => op.rel !== f);
+    const copy = collisionCopyName(f, e.blob);
+    if (out.delta.has(copy)) continue;
+    out.delta.set(copy, { mode: e.mode, blob: e.blob });
+    if (REGULAR.has(e.mode) && !fs.existsSync(c.abs(copy))) out.ops.push({ rel: copy, kind: "blob", blob: e.blob });
+    const held = base.get(copy);
+    if (!held || held.blob !== e.blob) c.stats.conflicts.push({ path: f, copy, localMtime: null, remoteTime: null });
+  }
+}
+
 // classify(base) -> {delta, ops}. base: {mode: "sync"|"reset", dir, host, now, R, lMap, w,
 // rDiff, lDiff, rMap, stats}. Excluded paths leave M; special paths are handled by the caller.
 function classify(base) {
@@ -159,6 +217,9 @@ function classify(base) {
   const out = { delta: new Map(), ops: [] };
   const rels = new Set([...c.w.keys(), ...c.lMap.keys()]);
   for (const rel of (c.mode === "reset" ? c.rMap : c.rDiff).keys()) rels.add(rel);
+  if (c.mode !== "reset") {
+    for (const [rel, d] of c.lDiff) if (!d.newBlob) rels.add(rel);
+  }
   for (const rel of rels) {
     if (SPECIAL.has(rel)) continue;
     if (isExcluded(rel)) {
@@ -166,10 +227,11 @@ function classify(base) {
       continue;
     }
     if (c.mode === "reset") resetPath(c, rel, out);
-    else if (c.w.has(rel) || c.rDiff.has(rel)) syncPath(c, rel, out);
+    else if (!c.lMap.has(rel) || c.w.has(rel) || c.rDiff.has(rel)) syncPath(c, rel, out);
   }
+  resolvePathCollisions(c, out);
   for (const op of out.ops) {
-    if (op.kind !== "append") op.pre = c.w.has(op.rel) ? c.w.get(op.rel).sig : statSig(c.abs(op.rel));
+    op.pre = c.w.has(op.rel) ? c.w.get(op.rel).sig : statSig(c.abs(op.rel));
   }
   return { out, ctx: c };
 }

@@ -72,12 +72,32 @@ function history(c, out, claudeDir) {
   return { file, localText, final };
 }
 
+function readHistoryMerge(h) {
+  const sig = statSig(h.file);
+  const now = readOrNull(h.file);
+  return { sig, now, text: now === h.localText ? h.final : mergeHistory(now, h.final).text };
+}
+
+const sigKey = (s) => (s ? `${s.size}:${s.mtimeMs}` : "absent");
+
+// Claude Code appends to history.jsonl at any time: a change seen just before the rename rebuilds
+// the text once; the window left after that re-check is accepted.
 function writeHistoryLocal(h) {
   if (!h || h.final === h.localText) return false;
-  const now = readOrNull(h.file);
-  const text = now === h.localText ? h.final : mergeHistory(now, h.final).text;
-  if (text === now) return false;
-  writeAtomic(h.file, text);
+  let m = readHistoryMerge(h);
+  if (m.text === m.now) return false;
+  fs.mkdirSync(path.dirname(h.file), { recursive: true });
+  const tmp = path.join(path.dirname(h.file), `.${path.basename(h.file)}.session-sync-${process.pid}.tmp`);
+  fs.writeFileSync(tmp, m.text);
+  if (sigKey(statSig(h.file)) !== sigKey(m.sig)) {
+    m = readHistoryMerge(h);
+    if (m.text === m.now) {
+      fs.rmSync(tmp, { force: true });
+      return false;
+    }
+    fs.writeFileSync(tmp, m.text);
+  }
+  fs.renameSync(tmp, h.file);
   return true;
 }
 
@@ -150,6 +170,7 @@ async function integrate(o, stats) {
   const L = healed.main;
   const lMap = G.lsTree(dir, L);
   const w = workingChanges(dir, L, lMap);
+  const mark = { conflicts: stats.conflicts.length, uuidMismatch: stats.uuidMismatch, droppedMarkerLines: stats.droppedMarkerLines };
   for (let attempt = 1; ; attempt += 1) {
     if (!o.skipFetch || attempt > 1 || o.action === "reset") {
       const bad = fetchOnce(dir);
@@ -162,6 +183,10 @@ async function integrate(o, stats) {
     if (o.action === "push" && b.newMain && b.newMain !== R) {
       const p = G.push(dir, b.newMain);
       if (p.status !== 0) {
+        // This attempt's copies are never written, so its classification must not be reported.
+        stats.conflicts.length = mark.conflicts;
+        stats.uuidMismatch = mark.uuidMismatch;
+        stats.droppedMarkerLines = mark.droppedMarkerLines;
         if (G.isNonFastForward(p) && attempt < MAX_ATTEMPTS) continue;
         return { result: G.failureKind(p) === "offline" ? "offline" : "failed", error: (p.stderr || "git push failed").trim(), attempts: attempt };
       }

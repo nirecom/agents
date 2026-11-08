@@ -5,7 +5,8 @@
 // file, never through rebase or merge state, so a clone cannot get stuck. Unit cases pin the pure
 // rules; two-clone cases drive the real engine CLI against a bare remote under an isolated
 // GIT_CONFIG_GLOBAL. The integrate-basic module lives in feature-2658-session-sync-engine-integrate-4.js
-// and the integrate-rules module in feature-2658-session-sync-engine-integrate*.js (split to stay under
+// and -integrate-5.js, the integrate-rules module in feature-2658-session-sync-engine-integrate*.js, and
+// the state-results case of the integrate-state module in -integrate-3.js and its reset case in -integrate-9.js (split to stay under
 // the per-file runner timeout). Each module is loaded inside each test, so a missing module fails per case.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const { makeFixtures } = require("./feature-2658-session-sync-engine/fixtures");
@@ -26,9 +27,18 @@ const F = makeFixtures(TMP);
 const pure = require("./feature-2658-session-sync-engine/pure");
 const runtime = require("./feature-2658-session-sync-engine/runtime");
 const cli = require("./feature-2658-session-sync-engine/integrate-state");
+const conflict = require("./feature-2658-session-sync-engine/jsonl-conflict");
 
 caseBegin("jsonl-entry-union", "bin/lib/session-sync/jsonl.js");
 pure.jsonl(F);
+caseEnd();
+
+caseBegin("jsonl-same-uuid-conflict-symmetric-winner", "bin/lib/session-sync/jsonl.js");
+conflict.union(F);
+caseEnd();
+
+caseBegin("classify-same-uuid-conflict-rewrite", "bin/lib/session-sync/classify.js");
+conflict.classify(F);
 caseEnd();
 
 caseBegin("history-union-time-sort", "bin/lib/session-sync/history.js");
@@ -63,14 +73,6 @@ caseBegin("cli-exit-codes", "bin/lib/session-sync/cli.js");
 cli.exitCodes(F);
 caseEnd();
 
-caseBegin("state-results-and-status", "bin/lib/session-sync/state.js");
-cli.stateResults(F);
-caseEnd();
-
 caseBegin("startup-silent-deadline-busy", "bin/session-sync-engine");
 cli.startup(F);
-caseEnd();
-
-caseBegin("reset-keeps-local", "bin/lib/session-sync/integrate.js");
-cli.reset(F);
 caseEnd();

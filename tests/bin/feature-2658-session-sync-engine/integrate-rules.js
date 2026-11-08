@@ -37,6 +37,7 @@ function excluded(F) {
 }
 
 function jsonlBoth(F) {
+  const h = (ts) => JSON.stringify({ display: `d${ts}`, timestamp: ts, project: "p" });
   test("a transcript appended on both machines converges to the union on both", () => {
     const base = jline("base") + "\n";
     const w = F.world({ seed: { "p1/shared.jsonl": base } });
@@ -49,14 +50,13 @@ function jsonlBoth(F) {
     assert.strictEqual(read(w.b.projects, "p1", "shared.jsonl"), base + jline("fromB") + "\n" + jline("fromA") + "\n");
     okRun(F.engine(w.a, "pull"), "A pull");
     const a = read(w.a.projects, "p1", "shared.jsonl");
-    assert.strictEqual(a, base + jline("fromA") + "\n" + jline("fromB") + "\n");
+    assert.strictEqual(a, remote, "A adopts the remote line order after the pull");
     assert.ok(!/^(<{7}|={7}|>{7})/m.test(a + remote), "no conflict markers");
     const again = F.engine(w.a, "push");
     okRun(again, "A push after converging");
     assert.strictEqual(again.stdout.trim(), "No changes to push.", "the union must converge, not ping-pong");
   });
   test("history.jsonl from two machines is unioned and time-sorted on both", () => {
-    const h = (ts) => JSON.stringify({ display: `d${ts}`, timestamp: ts, project: "p" });
     const w = F.world();
     F.write(path.join(w.a.claude, "history.jsonl"), [h(10), h(30)].join("\n") + "\n");
     F.write(path.join(w.b.claude, "history.jsonl"), [h(20)].join("\n") + "\n");
@@ -67,6 +67,28 @@ function jsonlBoth(F) {
     assert.strictEqual(read(w.a.claude, "history.jsonl"), want);
     assert.strictEqual(read(w.b.claude, "history.jsonl"), want);
     assert.strictEqual(F.show(w.remote, "main", ".history.jsonl"), want);
+  });
+  test("reset unions another machine's history.jsonl time-sorted, is idempotent, and keeps the union local", () => {
+    const w = F.world();
+    const pushedByA = [h(10), h(30)].join("\n") + "\n";
+    F.write(path.join(w.a.claude, "history.jsonl"), pushedByA);
+    F.write(path.join(w.b.claude, "history.jsonl"), [h(20)].join("\n") + "\n");
+    okRun(F.engine(w.a, "push"), "A push");
+    const tip = F.git(w.remote, ["rev-parse", "main"]);
+    const want = [h(10), h(20), h(30)].join("\n") + "\n";
+    const assertUnionKeptLocal = () => {
+      assert.strictEqual(read(w.b.claude, "history.jsonl"), want);
+      assert.strictEqual(read(w.b.projects, ".history.jsonl"), want);
+      assert.strictEqual(F.show(w.b.projects, "main", ".history.jsonl"), want);
+      assert.strictEqual(F.git(w.remote, ["rev-parse", "main"]), tip, "reset does not push");
+      assert.strictEqual(F.show(w.remote, "main", ".history.jsonl"), pushedByA);
+    };
+    okRun(F.engine(w.b, "reset"), "B reset");
+    assertUnionKeptLocal();
+    const mainAfterFirst = F.git(w.b.projects, ["rev-parse", "main"]);
+    okRun(F.engine(w.b, "reset"), "B second reset");
+    assertUnionKeptLocal();
+    assert.strictEqual(F.git(w.b.projects, ["rev-parse", "main"]), mainAfterFirst, "a second reset leaves main alone");
   });
 }
 

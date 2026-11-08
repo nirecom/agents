@@ -77,7 +77,7 @@ function lsTree(dir, commit) {
   return map;
 }
 
-// diffTree(dir, a, b) -> Map rel -> {status, oldBlob, newBlob, mode}
+// diffTree(dir, a, b) -> Map rel -> {status, oldBlob, newBlob, mode, oldMode}
 function diffTree(dir, a, b) {
   const map = new Map();
   const raw = gitOut(dir, ["diff-tree", "-r", "-z", "--no-renames", "--no-abbrev", a, b]);
@@ -88,7 +88,7 @@ function diffTree(dir, a, b) {
     if (!m) continue;
     const zero = /^0+$/;
     map.set(parts[i + 1], {
-      status: m[5], mode: m[2],
+      status: m[5], mode: m[2], oldMode: m[1],
       oldBlob: zero.test(m[3]) ? null : m[3], newBlob: zero.test(m[4]) ? null : m[4],
     });
   }

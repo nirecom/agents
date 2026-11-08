@@ -26,15 +26,7 @@ _fkd_native_path() {
 # and seeds ~/.claude/projects as a real clone of a bare origin.
 _fkd_real_origin() {
     local sb="$1"
-    rm -f "$sb/bin/git"
-    mkdir -p "$sb/agents/bin/lib" "$sb/agents/hooks/workflow-state"
-    # get-config-var -> hooks/lib/config-flag.js requires ../workflow-state/plan-step-table
-    # (#2820); without it SESSION_SYNC reads as off and the fetch never starts.
-    cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/plan-step-table.js" "$sb/agents/hooks/workflow-state/" 2>/dev/null || true
-    cp "$SCRIPT_CHECKOUT_ROOT/bin/session-sync-engine" "$sb/agents/bin/session-sync-engine" 2>/dev/null || true
-    if [ -d "$SCRIPT_CHECKOUT_ROOT/bin/lib/session-sync" ]; then
-        cp -R "$SCRIPT_CHECKOUT_ROOT/bin/lib/session-sync" "$sb/agents/bin/lib/session-sync"
-    fi
+    mirror_install_real_engine "$sb"
     local proj="$sb/home/.claude/projects" origin="$sb/origin.git"
     rm -rf "$proj"
     git init -q --bare "$origin"

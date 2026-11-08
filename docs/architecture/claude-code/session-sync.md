@@ -192,8 +192,10 @@ by a lock; a run that finds a leftover rebase or merge state discards it, keepin
 tree, which also migrates already-stuck machines.
 
 **Non-jsonl files changed on both sides** keep the newer one by mtime; edits within a 120 s
-clock-skew window keep both, the loser as a `.conflict-<host>-<time>` sibling. Pulled transcripts
-get their last entry's timestamp as mtime so that session lists sort correctly.
+clock-skew window keep both, the loser as a `.sync-conflict-<host>-<time>` sibling. A transcript
+line whose uuid matches on both sides but whose content differs keeps one version in place and
+moves the other into the same kind of sibling, also when a stuck clone is recovered. Pulled
+transcripts get their last entry's timestamp as mtime so that session lists sort correctly.
 
 **Excluded from sync**: `workflow/`, `*.tmp`, `*.bak.*`, temp directories and `plans/*` other than
 `*.md` (SSOT `bin/lib/session-sync/exclude.js`). Already-tracked excluded files leave the index
@@ -208,7 +210,7 @@ fall back to 3000; above 60000 is clamped to 60000), so a slow machine is tuned 
 but absent from the working tree is not restored; an append can join a line Claude Code is still
 writing; a whole-file write deferred because the file changed mid-sync can lose the remote
 version on the next run; a non-jsonl real rebase conflict keeps the local version only inside the
-marker-bearing sibling. Same-uuid lines differing between machines resolve local-wins.
+marker-bearing sibling.
 
 **Symlink structure** (managed by `install/{linux,win}/dotfileslink.{sh,ps1}`):
 - `CLAUDE.md` → `~/.claude/CLAUDE.md`

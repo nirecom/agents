@@ -36,10 +36,9 @@ function jsonl(F) {
     const r = F.lib("jsonl").union(lines(s1, jline("a")), lines(s1, s2));
     assert.strictEqual(r.text, lines(s1, jline("a"), s2));
   });
-  test("jsonl.union keeps the local line on a uuid content mismatch and counts it", () => {
+  test("jsonl.union counts a uuid content mismatch", () => {
     const local = jline("a", { message: "local" });
     const r = F.lib("jsonl").union(lines(local), lines(jline("a", { message: "remote" }), jline("b")));
-    assert.strictEqual(r.text, lines(local, jline("b")));
     assert.strictEqual(r.uuidMismatch, 1);
   });
   test("jsonl.union drops rebase conflict-marker lines and counts them", () => {

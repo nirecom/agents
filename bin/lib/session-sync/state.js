@@ -12,7 +12,7 @@ function blank() {
   return {
     schema: 1, last: null, lastSuccess: { push: null, pull: null }, consecutiveFailures: 0,
     conflicts: [], droppedMarkerLines: 0, uuidMismatch: 0, mtimeRejected: { count: 0, path: null },
-    writeDeferred: { count: 0, path: null },
+    writeDeferred: { count: 0, path: null }, writeBlocked: { count: 0, path: null },
   };
 }
 
@@ -58,6 +58,9 @@ function record(gitDir, run) {
     if (s.writeDeferred && s.writeDeferred.count) {
       st.writeDeferred = { count: st.writeDeferred.count + s.writeDeferred.count, path: s.writeDeferred.path };
     }
+    if (s.writeBlocked && s.writeBlocked.count) {
+      st.writeBlocked = { count: st.writeBlocked.count + s.writeBlocked.count, path: s.writeBlocked.path };
+    }
     save(gitDir, st);
     return st;
   } catch (_) {
@@ -68,7 +71,7 @@ function record(gitDir, run) {
 function newStats() {
   return {
     conflicts: [], droppedMarkerLines: 0, uuidMismatch: 0, mtimeRejected: { count: 0, path: null },
-    writeDeferred: { count: 0, path: null },
+    writeDeferred: { count: 0, path: null }, writeBlocked: { count: 0, path: null },
   };
 }
 

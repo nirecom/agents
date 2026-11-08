@@ -27,10 +27,13 @@ run_mirror_driver_split() {
     local -a assigns=()
     if [ "$ss" = "UNSET" ]; then unsets+=(-u SESSION_SYNC); else assigns+=("SESSION_SYNC=$ss"); fi
     if [ "$cc_mode" = "cc-set" ]; then assigns+=("CLAUDECODE=1"); else unsets+=(-u CLAUDECODE); fi
+    (
+    pin_home_and_userprofile "$sb/home"
     env "${unsets[@]}" ${assigns[@]+"${assigns[@]}"} \
-        HOME="$sb/home" PATH="$path_val" \
+        HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$path_val" \
         SNIPPET="$sb/agents/profile-snippet.sh" \
         bash "$RUN_TIMEOUT" 30 "$shell" "$driver" >"$sb/stdout.out" 2>"$sb/stderr.out"
+    )
 }
 
 # _sss_run <sandbox> — fires both the symlink-repair path and the fetch path in
@@ -162,7 +165,7 @@ EOF
 # TC-SPLIT4 — the literal #2160 reproduction condition. Claude Code's own shell-
 # snapshot capture sources this file with CLAUDECODE set AND stdout redirected
 # into the snapshot file (non-TTY). That exact pair is the snippet's session-sync
-# skip gate (profile-snippet.sh:48) — but the symlink-repair block above it sits
+# skip gate (_agents_is_cc_shell) — but the symlink-repair block above it sits
 # OUTSIDE that gate and still runs, so the corrupting `echo` is reachable in
 # precisely the state the issue reports. Every other case in this suite unsets
 # CLAUDECODE to keep the fetch-path assertions non-vacuous, which left the state
@@ -236,7 +239,7 @@ EOF
 }
 
 # TC-SPLIT6 — branch-selection anchor for core.sshCommand CONFIGURED: the fetch
-# must take the line-107 branch and honour the value by leaving GIT_SSH_COMMAND
+# must take the configured-value branch and honour the value by leaving GIT_SSH_COMMAND
 # unset (TC-SSH2 pins the same behaviour from the ssh angle).
 # It does NOT pin the fetch branch's stream contract: its probe
 # `_ss_sshcmd="$(git config --get ...)"` is a command substitution, which
@@ -291,51 +294,10 @@ tc_split_wait_cc_result_in_cc_shell() {
 }
 
 # --- Leaky-fetch fixture (TC-SPLIT7 / TC-SPLIT8) -----------------------------
-# The shipped fake `git fetch` writes nothing to real stdout, so reverting
-# either fetch branch's `>/dev/null 2>&1` back to `2>/dev/null` leaves every
-# purity case green. This variant prints a real progress line on real stdout as
-# its FIRST statement — the same deliberate noisiness make_sandbox gives `merge`
-# — so the redirect on profile-snippet.sh:108 / :110 becomes observable.
+# The default stub engine writes nothing to real stdout, so dropping either engine
+# call's `>/dev/null` leaves every purity case green. This variant has the stub print
+# a real progress line on real stdout, so that redirect becomes observable.
 _SSS_FETCH_LEAK_LINE='remote: Enumerating objects: 12, done.'
-_sss_leaky_fetch_git() {
-    local sb="$1"
-    cat > "$sb/bin/git" <<EOF
-#!/bin/bash
-# fake git with a stdout-leaking fetch (TC-SPLIT7 / TC-SPLIT8)
-cmd=""; repo="\$PWD"; prev=""
-for a in "\$@"; do
-    if [ "\$prev" = "-C" ]; then repo="\$a"; fi
-    case "\$a" in
-        fetch|merge|config) if [ -z "\$cmd" ]; then cmd="\$a"; fi ;;
-    esac
-    prev="\$a"
-done
-case "\$cmd" in
-    fetch)
-        printf '%s\n' '$_SSS_FETCH_LEAK_LINE'
-        printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"
-        printf '%s' "\${GIT_SSH_COMMAND-UNSET}" > "$sb/sshcmd.out"
-        exit 0
-        ;;
-    merge)
-        printf 'merged' > "$sb/merged.out"
-        printf 'Updating abc1234..def5678\nFast-forward\n'
-        exit 0
-        ;;
-    config)
-        case "\$*" in
-            *"--get core.sshCommand"*)
-                if [ -f "\$repo/core-sshcommand" ]; then cat "\$repo/core-sshcommand"; exit 0; fi
-                exit 1
-                ;;
-        esac
-        exit 0
-        ;;
-    *) exit 0 ;;
-esac
-EOF
-    chmod +x "$sb/bin/git"
-}
 
 # _sss_leaky_case <label> <core.sshCommand value|-> <expected GIT_SSH_COMMAND> <why>
 # One body for the two symmetric fetch branches: seed (or omit) core.sshCommand,
@@ -345,7 +307,7 @@ EOF
 _sss_leaky_case() {
     local label="$1" core_val="$2" expected_sshcmd="$3" why="$4"
     local sb; sb="$(make_mirror_sandbox 1)"
-    _sss_leaky_fetch_git "$sb"
+    printf '%s\n' "$_SSS_FETCH_LEAK_LINE" > "$sb/engine-stdout.txt"
     [ "$core_val" = "-" ] || printf '%s\n' "$core_val" > "$sb/home/.claude/projects/core-sshcommand"
     _sss_run "$sb"
     local stdout_body; stdout_body="$(cat "$sb/stdout.out" 2>/dev/null)"
@@ -375,6 +337,42 @@ tc_split_wait_cc_result_in_cc_shell   # TC-SPLIT9
 # TC-SPLIT7 / TC-SPLIT8 — the two fetch branches are symmetric, so both carry the
 # same stream contract; a fix applied to one only is what this pair catches.
 _sss_leaky_case "TC-SPLIT7" "-" "ssh -o BatchMode=yes" \
-    "core.sshCommand unset (profile-snippet.sh:110, BatchMode fallback branch)"
+    "core.sshCommand unset (BatchMode fallback branch)"
 _sss_leaky_case "TC-SPLIT8" "$_SSS_CORE_SSHCOMMAND" "UNSET" \
-    "core.sshCommand configured (profile-snippet.sh:108, configured-value branch)"
+    "core.sshCommand configured (configured-value branch)"
+
+# TC-ENGINE-MISSING / TC-ENGINE-FAIL — a missing or failing engine must cost the login
+# shell nothing, even under `set -eu`: exit 0, SURVIVED reached, stdout empty. The node
+# shim records each engine launch, so the green cannot come from a skipped call.
+# _sss_engine_broken_case <label> <missing|fail> <why>
+_sss_engine_broken_case() {
+    local label="$1" mode="$2" why="$3"
+    local sb real_node; sb="$(make_mirror_sandbox 1)"
+    real_node="$(command -v node)"
+    cat > "$sb/bin/node" <<EOF
+#!/bin/bash
+for a in "\$@"; do
+    case "\$a" in */session-sync-engine) printf 'launched\n' >> "$sb/engine-attempt.out" ;; esac
+done
+exec "$real_node" "\$@"
+EOF
+    chmod +x "$sb/bin/node"
+    if [ "$mode" = "missing" ]; then rm -f "$sb/agents/bin/session-sync-engine"; else printf '3' > "$sb/engine-exit-code.txt"; fi
+    local drv="$sb/drv_engine_broken.sh"
+    printf 'set -eu\n. "$SNIPPET"\necho SURVIVED >&2\n' > "$drv"
+    run_mirror_driver_split bash "$sb" "$drv" on
+    local rc=$?
+    local stdout_body err; stdout_body="$(cat "$sb/stdout.out" 2>/dev/null)"; err="$(cat "$sb/stderr.out" 2>/dev/null)"
+    local survived=0 marker=0 attempted=0
+    printf '%s\n' "$err" | grep -q '^SURVIVED$' && survived=1
+    printf '%s\n' "$err" | grep -qF "$_SSS_FETCH_MARKER" && marker=1
+    [ -s "$sb/engine-attempt.out" ] && attempted=1
+    if [ "$rc" -eq 0 ] && [ -z "$stdout_body" ] && [ "$survived" = "1" ] && [ "$marker" = "1" ] && [ "$attempted" = "1" ]; then
+        pass "$label: $why — exit 0, stdout empty, the shell carries on after the attempted engine launch"
+    else
+        fail "$label: $why — rc=$rc survived=$survived marker=$marker attempted=$attempted stdout=[$stdout_body] stderr=[$err]"
+    fi
+    rm -rf "$sb"
+}
+_sss_engine_broken_case "TC-ENGINE-MISSING" missing "bin/session-sync-engine absent"
+_sss_engine_broken_case "TC-ENGINE-FAIL" fail "bin/session-sync-engine exits 3"
