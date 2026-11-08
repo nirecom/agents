@@ -150,7 +150,7 @@ function runnerError(summary, durationSeconds) {
 function settingsError(cwd) {
   const t = loadRepoSettings(cwd).tests;
   if (t.state === "ok") return null;
-  const why = t.state === "malformed" ? ` (${(t.errors || []).join("; ")})` : "";
+  const why = t.state === "malformed" || t.state === "unsupported" ?` (${(t.errors || []).join("; ")})` : "";
   return `.agents.json tests section ${t.state}${why} — run /migrate in the target repo first`;
 }
 

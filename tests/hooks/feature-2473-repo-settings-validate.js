@@ -178,6 +178,54 @@ test("RS-placement-flat: a flat repo with a custom dir places files at its top l
 });
 caseEnd();
 
+caseBegin("RS-version-constants", "hooks/lib/repo-settings.js");
+test("RS-version-constants: CURRENT_SETTINGS_VERSION is 1 and MAX_KNOWN_SETTINGS_VERSION equals it", () => {
+  assert.equal(rs().CURRENT_SETTINGS_VERSION, 1);
+  assert.equal(rs().MAX_KNOWN_SETTINGS_VERSION, rs().CURRENT_SETTINGS_VERSION);
+});
+caseEnd();
+
+const NEWER = /newer than this release understands \(max known 1\)/;
+// One row per schema version verdict, fed to validateDoc directly; want is the state of both sections
+// unless want.tests / want.migrate differ.
+const VERSION_CASES = [
+  { name: "no version is v1", doc: { tests: FLAT }, want: { tests: "ok", migrate: "missing" } },
+  { name: "version 1 with tests", doc: { version: 1, tests: FLAT }, want: { tests: "ok", migrate: "missing" } },
+  { name: "version 1 alone", doc: { version: 1 }, want: { tests: "missing", migrate: "missing" } },
+  { name: "version 2 alone", doc: { version: 2 }, want: { tests: "unsupported", migrate: "unsupported" } },
+  { name: "version 2 with valid sections", doc: { version: 2, tests: FLAT, migrate: { tracker: "done" } }, want: { tests: "unsupported", migrate: "unsupported" } },
+  { name: "version 99", doc: { version: 99, tests: FLAT }, want: { tests: "unsupported", migrate: "unsupported" } },
+  { name: "version string \"1\"", doc: { version: "1", tests: FLAT }, want: { tests: "malformed", migrate: "malformed" } },
+  { name: "version 1.5", doc: { version: 1.5, tests: FLAT }, want: { tests: "malformed", migrate: "malformed" } },
+  { name: "version 0", doc: { version: 0, tests: FLAT }, want: { tests: "malformed", migrate: "malformed" } },
+  { name: "version -1", doc: { version: -1, tests: FLAT }, want: { tests: "malformed", migrate: "malformed" } },
+  { name: "version null", doc: { version: null, tests: FLAT }, want: { tests: "malformed", migrate: "malformed" } },
+  { name: "version true", doc: { version: true, tests: FLAT }, want: { tests: "malformed", migrate: "malformed" } },
+];
+
+caseBegin("RS-version-table", "hooks/lib/repo-settings.js");
+test("RS-version-table: absent or 1 is v1, a newer integer is unsupported, any other value is malformed", () => {
+  for (const { name, doc, want } of VERSION_CASES) {
+    const got = rs().validateDoc(doc);
+    assert.equal(got.tests.state, want.tests, `${name}: tests state`);
+    assert.equal(got.migrate.state, want.migrate, `${name}: migrate state`);
+    for (const sec of ["tests", "migrate"]) {
+      if (want[sec] === "unsupported") assert.match((got[sec].errors || []).join("\n"), NEWER, `${name}: ${sec} error`);
+    }
+  }
+});
+caseEnd();
+
+caseBegin("RS-version-load", "hooks/lib/repo-settings.js");
+test("RS-version-load: load(root) on a version 2 file reports both sections unsupported with the newer-version error", () => {
+  const got = rs().load(fixture({ version: 2, tests: FLAT, migrate: { tracker: "done" } }));
+  assert.equal(got.tests.state, "unsupported");
+  assert.equal(got.migrate.state, "unsupported");
+  assert.match((got.tests.errors || []).join("\n"), NEWER);
+  assert.equal(rs().load(fixture({ version: 1, tests: FLAT })).tests.state, "ok", "version 1 through load");
+});
+caseEnd();
+
 caseBegin("RS-agents-own", ".agents.json");
 test("RS-agents-own: the agents repo carries by-target with 6 categories, _archive/lib support, all migrate done", () => {
   const got = rs().load(ROOT);

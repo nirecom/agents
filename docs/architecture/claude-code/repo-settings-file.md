@@ -16,6 +16,10 @@ Each target repo carries one `.agents.json` at its root. It tells the test workf
 
 The file holds a JSON object. Each top-level section is validated on its own, and unknown sections are ignored.
 
+### `version`
+
+A top-level integer schema version, the same model as the workflow state file (`hooks/workflow-state/state-io/core.js`). The current version is 1 (`CURRENT_SETTINGS_VERSION`), and an absent `version` reads as 1. A file with a higher integer was written by a newer release: every section is `unsupported`, and no writer or `--reset-malformed` touches it. Any other value makes every section `malformed`. Every write puts `version` first.
+
 ### `tests`
 
 | Key | Required | Value |
@@ -40,6 +44,7 @@ Keys are `tracker`, `issues` and `tests`, and the only value is `done`. `/migrat
 | `ok` | Present and valid; the defaults are applied. |
 | `missing` | The file or the section is absent. |
 | `malformed` | The file is not JSON, or the section breaks the schema (`errors` lists why). |
+| `unsupported` | The file's `version` is newer than this release understands; read like `malformed`, but never reset. |
 
 ## Placement
 

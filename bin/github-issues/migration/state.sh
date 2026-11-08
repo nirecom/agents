@@ -71,6 +71,34 @@ state_record_migrated() {
   mv "$tmp" "$STATE_FILE"
 }
 
+# pending_close[entry_id] = issue number created but not yet closed; a re-run retries the close
+# instead of creating a duplicate. The key is optional (absent in older state files).
+state_record_pending_close() {
+  local kind="$1" entry_id="$2" issue_num="$3"
+  : "${STATE_FILE:?call state_load first}"
+  local tmp; tmp="${STATE_FILE}.tmp"
+  jq --arg k "$kind" --arg id "$entry_id" --argjson n "$issue_num" \
+    '.[$k].pending_close = ((.[$k].pending_close // {}) + {($id): $n})' \
+    "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+
+state_pending_close_issue() {
+  local kind="$1" entry_id="$2"
+  : "${STATE_FILE:?call state_load first}"
+  jq_text --arg k "$kind" --arg id "$entry_id" '.[$k].pending_close[$id] // empty' "$STATE_FILE"
+}
+
+state_clear_pending_close() {
+  local kind="$1" entry_id="$2"
+  : "${STATE_FILE:?call state_load first}"
+  local tmp; tmp="${STATE_FILE}.tmp"
+  jq --arg k "$kind" --arg id "$entry_id" \
+    'if .[$k].pending_close then .[$k].pending_close |= del(.[$id]) else . end' \
+    "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+
 state_count_migrated() {
   local kind="$1"
   : "${STATE_FILE:?call state_load first}"

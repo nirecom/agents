@@ -334,6 +334,66 @@ replace-removed-write    | --root ROOT --write-tests TESTS --replace-malformed  
 TABLE
 case_end
 
+# Schema version (same contract as the workflow state file): a version above MAX_KNOWN (1) is
+# unsupported — read exits non-zero, every write and --reset-malformed leave the file alone.
+V2_JSON='{"version":2,"tests":{"categorization":"flat","testHarness":"off","caseMarker":"off"},"migrate":{"tracker":"done"}}'
+
+case_begin "CLI-version-newer-read" "bin/repo-settings"
+R_V2R="$(fx v2-read "$V2_JSON")"
+cli --root "$R_V2R" --format shell
+assert_eq "v2 read rc!=0: $([[ "$CLI_RC" -ne 0 ]] && echo yes || echo no)" "v2 read rc!=0: yes"
+assert_eq "v2 tests_state=$(printf '%s\n' "$CLI_OUT" | grep -c $'^tests_state\tunsupported$')" "v2 tests_state=1"
+assert_eq "v2 migrate_state=$(printf '%s\n' "$CLI_OUT" | grep -c $'^migrate_state\tunsupported$')" "v2 migrate_state=1"
+assert_eq "v2 error line=$(printf '%s\n' "$CLI_OUT" | grep -c $'^error\ttests\t.*newer than this release understands (max known 1)')" "v2 error line=1"
+case_end
+
+case_begin "CLI-version-newer-write-refused" "bin/repo-settings"
+while IFS='|' read -r name flag value; do
+  [[ -z "$name" ]] && continue
+  root="$(fx "v2-write-$name" "$V2_JSON")"
+  snap "$root"
+  cli_split --root "$root" "$flag" "$value"
+  assert_eq "$name refused: $([[ "$CLI_RC" -ne 0 ]] && echo yes || echo no)" "$name refused: yes"
+  assert_eq "$name file unchanged: $(same_bytes "$SNAP" "$root/.agents.json")" "$name file unchanged: yes"
+done <<TABLE
+write-tests|--write-tests|$FLAT_TESTS
+set-migrate|--set-migrate|issues
+TABLE
+case_end
+
+case_begin "CLI-version-newer-not-reset" "bin/repo-settings"
+R_V2X="$(fx v2-reset "$V2_JSON")"
+snap "$R_V2X"
+cli --root "$R_V2X" --reset-malformed
+assert_eq "v2 reset file unchanged: $(same_bytes "$SNAP" "$R_V2X/.agents.json")" "v2 reset file unchanged: yes"
+assert_eq "v2 reset no backup: $(exists "$R_V2X/.agents.json.malformed")" "v2 reset no backup: absent"
+case_end
+
+# first_key <root> — "<first top-level key>|<version>" of <root>/.agents.json.
+first_key() { json_field "$(cat "$1/.agents.json" 2>/dev/null)" 'Object.keys(d)[0] + "|" + d.version'; }
+
+case_begin "CLI-version-written-first" "bin/repo-settings"
+R_V1A="$(fx v1-add '{"migrate":{"tracker":"done"},"other":1}')"
+cli --root "$R_V1A" --write-tests "$FLAT_TESTS"
+assert_eq "write-tests rc=$CLI_RC" "write-tests rc=0"
+assert_eq "write-tests first key: $(first_key "$R_V1A")" "write-tests first key: version|1"
+got="$(json_field "$(cat "$R_V1A/.agents.json")" 'd.migrate.tracker + "|" + d.other + "|" + d.tests.categorization')"
+assert_eq "other content kept: $got" "other content kept: done|1|flat"
+R_V1B="$(fx v1-setmig '{"tests":{"categorization":"flat","testHarness":"off","caseMarker":"off"}}')"
+cli --root "$R_V1B" --set-migrate tracker
+assert_eq "set-migrate rc=$CLI_RC" "set-migrate rc=0"
+assert_eq "set-migrate first key: $(first_key "$R_V1B")" "set-migrate first key: version|1"
+R_V1C="$(fx v1-new)"
+cli --root "$R_V1C" --set-migrate issues
+assert_eq "new file rc=$CLI_RC" "new file rc=0"
+assert_eq "new file first key: $(first_key "$R_V1C")" "new file first key: version|1"
+case_end
+
+case_begin "LOADER-version-newer" "bin/lib/repo-settings.sh"
+got="$(rsf "$R_V2R" 'rsf_load "$2"; printf "%s|%s" "$RSF_TESTS_STATE" "$RSF_MIGRATE_STATE"')"
+assert_eq "loader v2: $got" "loader v2: unsupported|unsupported"
+case_end
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" -gt 0 ]; then

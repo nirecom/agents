@@ -376,6 +376,29 @@ else
 fi
 case_end
 
+# A close that fails after the create leaves the issue number in pending_close; the re-run closes that
+# issue instead of creating a duplicate.
+case_begin "migrate-history-close-retry-reuses-issue" "bin/github-issues/migration/migrate-history.sh"
+if [[ "$HAVE_JQ" -eq 0 ]]; then
+  skip "migrate-history close retry: jq not on PATH"
+else
+  R_RETRY="$(gl_repo history-gitlab-close-retry history.md '# History\n\n### FEATURE: port the parser (2026-01-02, a1a1a1a, #1)\n\nbody line\n')"
+  gl_migrate migrate-history.sh "$R_RETRY" close
+  if [[ "$GL_RC" -ne 0 && "$(gl_state "$R_RETRY" '.history.pending_close')" == '{"h-0001":42}' && "$(gl_state "$R_RETRY" '[.history.migrated[]? | select(.entry_id == "h-0001")] | length')" == 0 ]]; then
+    pass "migrate-history: a failed close records issue 42 as pending_close and h-0001 not as migrated"
+  else
+    fail "migrate-history close failure pending_close" "$(gl_detail "$R_RETRY") pending=[$(gl_state "$R_RETRY" '.history.pending_close')]"
+  fi
+  gl_migrate migrate-history.sh "$R_RETRY"
+  if [[ "$GL_RC" -eq 0 ]] && ! gl_log glab | grep -q 'issue create' && gl_call close | sed '1,2d' | grep -qx '42' &&
+    [[ "$(gl_state "$R_RETRY" '.history.migrated')" == '[{"entry_id":"h-0001","issue_number":42,"title":"port the parser"}]' && "$(gl_state "$R_RETRY" '.history.pending_close["h-0001"]')" == null ]]; then
+    pass "migrate-history: the re-run closes pending issue 42 without a second create, records it migrated and clears pending_close"
+  else
+    fail "migrate-history close retry" "$(gl_detail "$R_RETRY") pending=[$(gl_state "$R_RETRY" '.history.pending_close')]"
+  fi
+fi
+case_end
+
 echo ""
 echo "fix-gh-native-path: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 [ "$FAIL" -eq 0 ]

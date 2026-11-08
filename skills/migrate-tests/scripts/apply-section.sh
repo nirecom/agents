@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# apply-section.sh <ROOT> <json> [--no-push] — /migrate-tests MTS-3: write the tests section, then commit it
-# (only .agents.json is staged). A refused write commits nothing and leaves its reason on stderr.
+# apply-section.sh <ROOT> <json> [--no-push] — /migrate-tests MTS-3: write the tests section, record
+# migrate.tests done, then commit them (only .agents.json is staged). A refused write commits nothing and leaves its reason on stderr.
 # Exit: 0 written and committed, 1 write refused or commit failed, 2 bad arguments, 3 write refused because
 # the settings file is malformed (the caller decides on bin/repo-settings --reset-malformed).
 set -euo pipefail
@@ -32,5 +32,6 @@ if ! node "$SCRIPT_CHECKOUT_ROOT/bin/repo-settings" --root "$MIGRATE_TARGET" --w
   fi
   exit 1
 fi
+node "$SCRIPT_CHECKOUT_ROOT/bin/repo-settings" --root "$MIGRATE_TARGET" --set-migrate tests || exit 1
 
 bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/commit-migration-artifacts.sh" "$MIGRATE_TARGET" --skill migrate-tests ${COMMIT_FLAGS[@]+"${COMMIT_FLAGS[@]}"} || exit 1

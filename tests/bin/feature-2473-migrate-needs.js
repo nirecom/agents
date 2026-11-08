@@ -36,7 +36,7 @@ const commitAll = (d) => {
 };
 
 const TESTS_OK = { dir: "tests", categorization: "flat", testHarness: "off", caseMarker: "off" };
-const DONE = { tracker: "done", issues: "done" };
+const DONE = { tracker: "done", issues: "done", tests: "done" };
 
 // repo(name, settings, origin) — committed repo; settings null = no file, a string = raw text.
 function repo(name, settings, origin = "https://github.com/o/r.git") {
@@ -55,7 +55,8 @@ function repo(name, settings, origin = "https://github.com/o/r.git") {
 const R = {
   missing: repo("missing", null),
   malformed: repo("malformed", "{ not json\n"),
-  trackerDone: repo("tracker-done", { tests: TESTS_OK, migrate: { tracker: "done" } }),
+  trackerDone: repo("tracker-done", { tests: TESTS_OK, migrate: { tracker: "done", tests: "done" } }),
+  testsNoMigrate: repo("tests-no-migrate", { tests: TESTS_OK, migrate: { tracker: "done", issues: "done" } }),
   testsOnly: repo("tests-only", { migrate: DONE }),
   allDone: repo("all-done", { tests: TESTS_OK, migrate: DONE }),
   gitlab: repo("gitlab", null, "git@gitlab.com:o/r.git"),
@@ -64,7 +65,7 @@ const R = {
 // UNCOMMITTED fixtures: an untracked .agents.json, and one changed after its commit.
 const UNTRACKED = repo("untracked", null);
 fs.writeFileSync(path.join(UNTRACKED, ".agents.json"), `${JSON.stringify({ tests: TESTS_OK, migrate: DONE })}\n`);
-const MODIFIED = repo("modified", { tests: TESTS_OK, migrate: { tracker: "done" } });
+const MODIFIED = repo("modified", { tests: TESTS_OK, migrate: { tracker: "done", tests: "done" } });
 fs.writeFileSync(path.join(MODIFIED, ".agents.json"), `${JSON.stringify({ tests: TESTS_OK, migrate: DONE })}\n`);
 
 const NEEDS = ["tracker", "issues", "tests"].map((k) => ({
@@ -105,6 +106,8 @@ test("MN-needs-js-each: key + needs(root) and CLI exit 0/10 for missing, malform
     malformed: { tracker: true, issues: true, tests: true },
     trackerDone: { tracker: false, issues: true, tests: false },
     testsOnly: { tracker: false, issues: false, tests: true },
+    // A valid tests section stays needed until migrate.tests records done.
+    testsNoMigrate: { tracker: false, issues: false, tests: true },
     allDone: { tracker: false, issues: false, tests: false },
   };
   for (const n of NEEDS) {
@@ -235,178 +238,3 @@ function tracked(name, settings = { tests: TESTS_OK, migrate: DONE }) {
   git(d, "push", "-q", "-u", "origin", "HEAD");
   return d;
 }
-// reformat(d) — commit .agents.json rewritten compact: same content (all done), a new commit of the file.
-const reformat = (d) => {
-  fs.writeFileSync(path.join(d, ".agents.json"), `${JSON.stringify({ tests: TESTS_OK, migrate: DONE })}\n`);
-  commitAll(d);
-};
-
-caseBegin("MN-unpushed", "bin/migrate-needs");
-test("MN-unpushed: 1 only when a commit ahead of the upstream touches .agents.json; 0 after the push", () => {
-  const d = tracked("unpushed");
-  const synced = cli(d);
-  assert.equal(synced.kv.UNPUSHED, "0", `in sync with the upstream: ${synced.text}`);
-  reformat(d);
-  const ahead = cli(d);
-  assert.equal(ahead.kv.UNPUSHED, "1", `one .agents.json commit ahead: ${ahead.text}`);
-  assert.equal(ahead.kv.UNCOMMITTED, "0", "UNPUSHED is apart from UNCOMMITTED");
-  git(d, "push", "-q", "origin", "HEAD");
-  assert.equal(cli(d).kv.UNPUSHED, "0", "after the push");
-});
-caseEnd();
-
-caseBegin("MN-unpushed-boundaries", "bin/lib/migrate-needs.js");
-test("MN-unpushed-boundaries: an ahead commit without .agents.json gives 0", () => {
-  const other = tracked("ahead-readme");
-  fs.writeFileSync(path.join(other, "README"), "changed\n");
-  commitAll(other);
-  assert.equal(cli(other).kv.UNPUSHED, "0", "ahead by a commit that does not touch .agents.json");
-});
-caseEnd();
-
-// pushedNoUpstream(name) — origin is a local bare repo; the branch is pushed with a plain
-// `git push origin <b>` (no -u), so refs/remotes/origin/<b> exists but no upstream is set.
-function pushedNoUpstream(name) {
-  const d = repo(name, { tests: TESTS_OK, migrate: DONE });
-  const bare = `${d}.git`;
-  ORIG.spawnSync("git", ["init", "-q", "--bare", bare], { encoding: "utf8" });
-  git(d, "config", "remote.origin.pushurl", bare);
-  const b = git(d, "rev-parse", "--abbrev-ref", "HEAD").trim();
-  git(d, "push", "-q", "origin", b);
-  assert.throws(() => git(d, "rev-parse", "--abbrev-ref", "@{upstream}"), /git rev-parse/, `${name}: no upstream`);
-  return d;
-}
-const touchReadme = (d) => {
-  fs.writeFileSync(path.join(d, "README"), "changed\n");
-  commitAll(d);
-};
-
-caseBegin("MN-unpushed-table", "bin/lib/migrate-needs.js");
-test("MN-unpushed-table: UNPUSHED with and without an upstream, without origin, and for a non-.agents.json commit", () => {
-  const rows = [
-    { id: "a upstream, .agents.json commit pushed", make: () => { const d = tracked("t-a"); reformat(d); git(d, "push", "-q", "origin", "HEAD"); return d; }, want: "0" },
-    { id: "b upstream, .agents.json commit unpushed", make: () => { const d = tracked("t-b"); reformat(d); return d; }, want: "1" },
-    { id: "c no upstream, .agents.json commit unpushed", make: () => { const d = pushedNoUpstream("t-c"); reformat(d); return d; }, want: "1" },
-    { id: "d no upstream, everything on origin", make: () => pushedNoUpstream("t-d"), want: "0" },
-    { id: "e no origin remote", make: () => { const d = repo("t-e", { tests: TESTS_OK, migrate: DONE }, null); reformat(d); return d; }, want: "0" },
-    { id: "f unpushed commit not touching .agents.json", make: () => { const d = pushedNoUpstream("t-f"); touchReadme(d); return d; }, want: "0" },
-  ];
-  const { collect } = require(LIB);
-  for (const row of rows) {
-    const d = row.make();
-    const r = cli(d);
-    assert.equal(r.rc, 0, `${row.id}: rc ${r.text}`);
-    assert.equal(r.kv.UNPUSHED, row.want, `${row.id}: CLI UNPUSHED ${r.text}`);
-    assert.equal(r.kv.UNCOMMITTED, "0", `${row.id}: UNPUSHED is apart from UNCOMMITTED`);
-    assert.equal(String(collect(d).unpushed), row.want, `${row.id}: collect().unpushed`);
-  }
-});
-caseEnd();
-
-// cutBranch(name, b) — main pushed to origin, then branch b cut from it (not pushed).
-function cutBranch(name, b = "feature") {
-  const d = repo(name, { tests: TESTS_OK, migrate: DONE });
-  ORIG.spawnSync("git", ["init", "-q", "--bare", `${d}.git`], { encoding: "utf8" });
-  git(d, "config", "remote.origin.pushurl", `${d}.git`);
-  git(d, "branch", "-M", "main");
-  git(d, "push", "-q", "origin", "main");
-  git(d, "checkout", "-q", "-b", b);
-  return d;
-}
-const pushTo = (d, ref) => git(d, "push", "-q", "origin", `HEAD:refs/heads/${ref}`);
-const upstreamMain = (d) => git(d, "branch", "--set-upstream-to=origin/main");
-// behindWithCommitOnMain(name, b) — origin/<b> at the base; a commit of .agents.json only on origin/main.
-function behindWithCommitOnMain(name, b = "feature", commit = reformat) {
-  const d = cutBranch(name, b);
-  pushTo(d, b);
-  commit(d);
-  pushTo(d, "main");
-  return d;
-}
-
-// One test per row, so a failure in one does not hide the others.
-const PUSH_TARGET_ROWS = [
-  { id: "upstream origin/main, origin/<b> behind, commit reachable from the upstream", make: () => { const d = behindWithCommitOnMain("pt-e"); upstreamMain(d); return d; }, want: "1" },
-  { id: "the same on a branch name with a slash", make: () => { const d = behindWithCommitOnMain("pt-e-slash", "feat/x"); upstreamMain(d); return d; }, want: "1" },
-  { id: "no upstream, origin/<b> behind, commit on another origin ref", make: () => behindWithCommitOnMain("pt-f"), want: "1" },
-  { id: "upstream origin/main, origin/<b> behind, the reachable commit does not touch .agents.json", make: () => { const d = behindWithCommitOnMain("pt-readme", "feature", touchReadme); upstreamMain(d); return d; }, want: "0" },
-  { id: "no origin/<b>, commit on another origin ref", make: () => { const d = cutBranch("pt-g"); reformat(d); pushTo(d, "main"); return d; }, want: "0" },
-  { id: "no origin/<b>, upstream origin/main, commit on it (a freshly cut branch)", make: () => { const d = cutBranch("pt-g-up"); reformat(d); pushTo(d, "main"); upstreamMain(d); return d; }, want: "0" },
-  { id: "no origin/<b>, commit on no origin ref", make: () => { const d = cutBranch("pt-g-none"); reformat(d); return d; }, want: "1" },
-  { id: "upstream origin/main behind, origin/<b> in sync", make: () => { const d = cutBranch("pt-h"); reformat(d); pushTo(d, "feature"); upstreamMain(d); return d; }, want: "0" },
-  { id: "upstream origin/<b> gone, commit on no origin ref", make: () => { const d = tracked("pt-gone"); git(d, "update-ref", "-d", `refs/remotes/origin/${git(d, "rev-parse", "--abbrev-ref", "HEAD").trim()}`); reformat(d); return d; }, want: "1" },
-  { id: "detached HEAD, commit on an origin ref", make: () => { const d = cutBranch("pt-i"); reformat(d); pushTo(d, "main"); git(d, "checkout", "-q", "--detach"); return d; }, want: "0" },
-  { id: "detached HEAD, commit on no origin ref", make: () => { const d = cutBranch("pt-i-none"); reformat(d); git(d, "checkout", "-q", "--detach"); return d; }, want: "1" },
-];
-
-caseBegin("MN-unpushed-push-target", "bin/lib/migrate-needs.js");
-for (const row of PUSH_TARGET_ROWS) {
-  test(`MN-unpushed-push-target: ${row.id} gives ${row.want}`, () => {
-    const { collect } = require(LIB);
-    const d = row.make();
-    const r = cli(d);
-    assert.equal(r.rc, 0, `rc ${r.text}`);
-    assert.equal(r.kv.UNPUSHED, row.want, `CLI UNPUSHED ${r.text}`);
-    assert.equal(String(collect(d).unpushed), row.want, "collect().unpushed");
-  });
-}
-caseEnd();
-
-caseBegin("MN-unpushed-git-budget-no-upstream", "bin/lib/migrate-needs.js");
-test("MN-unpushed-git-budget-no-upstream: all done, no upstream, origin/<b> exists: exactly 3 git starts (status, rev-parse, rev-list)", () => {
-  const { collect } = require(LIB);
-  const d = pushedNoUpstream("budget-no-upstream");
-  const { seen } = spy(() => collect(d));
-  assert.deepEqual(seen, ["git", "git", "git"], JSON.stringify(seen));
-});
-caseEnd();
-
-caseBegin("MN-unpushed-git-budget", "bin/lib/migrate-needs.js");
-test("MN-unpushed-git-budget: in sync starts git once; ahead adds one rev-list; neither starts gh or glab", () => {
-  const { collect } = require(LIB);
-  const d = tracked("budget");
-  const inSync = spy(() => collect(d));
-  assert.deepEqual(inSync.seen, ["git"], `in sync with an upstream: ${JSON.stringify(inSync.seen)}`);
-  assert.equal(inSync.value.unpushed, 0);
-  reformat(d);
-  const ahead = spy(() => collect(d));
-  assert.deepEqual(ahead.seen, ["git", "git"], `ahead: status + rev-list only: ${JSON.stringify(ahead.seen)}`);
-  assert.equal(ahead.value.unpushed, 1);
-  assert.deepEqual(ahead.value.needed, [], "the content judgment is unchanged");
-});
-caseEnd();
-
-// MALFORMED: 1 when .agents.json exists and is not a JSON object (unparsable or non-object), else 0.
-const MALFORMED_ROWS = [
-  { id: "not JSON", settings: "{ not json\n", want: "1" },
-  { id: "JSON array", settings: "[]\n", want: "1" },
-  { id: "absent", settings: null, want: "0" },
-  { id: "valid object", settings: { tests: TESTS_OK, migrate: DONE }, want: "0" },
-];
-
-caseBegin("MN-malformed-table", "bin/migrate-needs");
-test("MN-malformed-table: MALFORMED through collect() and the bin/migrate-needs stdout", () => {
-  const { collect } = require(LIB);
-  MALFORMED_ROWS.forEach((row, i) => {
-    const d = repo(`malformed-row-${i}`, row.settings);
-    const r = cli(d);
-    assert.equal(r.rc, 0, `${row.id}: rc ${r.text}`);
-    assert.ok("MALFORMED" in r.kv, `${row.id}: MALFORMED line is printed: ${r.text}`);
-    assert.equal(r.kv.MALFORMED, row.want, `${row.id}: CLI MALFORMED ${r.text}`);
-    assert.equal(String(collect(d).malformed), row.want, `${row.id}: collect().malformed`);
-  });
-});
-caseEnd();
-
-caseBegin("MN-malformed-no-extra-process", "bin/lib/migrate-needs.js");
-test("MN-malformed-no-extra-process: MALFORMED is a pure fs read and adds no git, gh or glab launch", () => {
-  const { collect } = require(LIB);
-  const valid = spy(() => collect(tracked("malformed-budget-valid")));
-  assert.deepEqual(valid.seen, ["git"], `valid object, in sync: status only: ${JSON.stringify(valid.seen)}`);
-  assert.equal(String(valid.value.malformed), "0");
-  // Unparsable: every key is needed, so the host lookup adds one git remote get-url; nothing else.
-  const bad = spy(() => collect(tracked("malformed-budget-bad", "{ not json\n")));
-  assert.deepEqual(bad.seen, ["git", "git"], `malformed, in sync: status + host lookup only: ${JSON.stringify(bad.seen)}`);
-  assert.equal(String(bad.value.malformed), "1");
-});
-caseEnd();
