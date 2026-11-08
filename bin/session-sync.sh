@@ -1,10 +1,12 @@
 #!/bin/bash
 # session-sync.sh - Sync Claude Code session history across machines
 # Usage:
-#   session-sync.sh push    # Commit and push session data
-#   session-sync.sh pull    # Pull latest session data
+#   session-sync.sh push    # Integrate local session data and publish it
+#   session-sync.sh pull    # Integrate remote session data into this machine
 #   session-sync.sh status  # Show sync status
-#   session-sync.sh reset   # Force-sync local to remote (for initial setup or recovery)
+#   session-sync.sh reset   # Integrate onto the remote state without pushing (setup / recovery)
+# Integration lives in bin/session-sync-engine (#2658); this entry validates arguments,
+# warns about a running Claude Code, and turns a quiet result into an optional toast.
 
 set -euo pipefail
 
@@ -14,12 +16,15 @@ if [ -L "${BASH_SOURCE[0]}" ] && _ss_real="$(readlink -f -- "${BASH_SOURCE[0]}" 
 fi
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+_usage() {
+    echo "Usage: session-sync.sh {push|pull|status|reset} [--claude-dir DIR] [--quiet] [--toast]" >&2
+}
+
 ACTION="${1:-}"
 CLAUDE_DIR="$HOME/.claude"
 _QUIET=0
 _TOAST=0
 
-# Parse options
 shift || true
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -30,6 +35,11 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+case "$ACTION" in
+    push|pull|status|reset) ;;
+    *) _usage; exit 1 ;;
+esac
+
 PROJECTS_DIR="$CLAUDE_DIR/projects"
 PLANS_DIR=""
 if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" ]; then
@@ -37,7 +47,7 @@ if [ -x "$SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir" ]; then
 fi
 if [ -z "$PLANS_DIR" ]; then
     PLANS_DIR="$HOME/.workflow-plans"
-    echo "session-sync: $SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir unavailable; using $PLANS_DIR" >&2
+    [ "$_QUIET" = "1" ] || echo "session-sync: $SCRIPT_CHECKOUT_ROOT/bin/workflow-plans-dir unavailable; using $PLANS_DIR" >&2
 fi
 
 if [ ! -d "$PROJECTS_DIR/.git" ]; then
@@ -48,154 +58,34 @@ fi
 _toast() {
     local msg="$1"
     if command -v powershell.exe >/dev/null 2>&1; then
-        powershell.exe -NoProfile -Command "[void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime];[void][Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom.XmlDocument,ContentType=WindowsRuntime];\$x=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent(1);\$t=\$x.GetElementsByTagName('text');\$t.Item(0).AppendChild(\$x.CreateTextNode('session-sync'))|Out-Null;\$t.Item(1).AppendChild(\$x.CreateTextNode('$msg'))|Out-Null;[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('PowerShell').Show([Windows.UI.Notifications.ToastNotification]::new(\$x))" 2>/dev/null
+        powershell.exe -NoProfile -Command "[void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime];[void][Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom.XmlDocument,ContentType=WindowsRuntime];\$x=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent(1);\$t=\$x.GetElementsByTagName('text');\$t.Item(0).AppendChild(\$x.CreateTextNode('session-sync'))|Out-Null;\$t.Item(1).AppendChild(\$x.CreateTextNode('$msg'))|Out-Null;[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('PowerShell').Show([Windows.UI.Notifications.ToastNotification]::new(\$x))" 2>/dev/null || true
     elif command -v osascript >/dev/null 2>&1; then
-        osascript -e "display notification \"$msg\" with title \"session-sync\""
+        osascript -e "display notification \"$msg\" with title \"session-sync\"" || true
     elif command -v notify-send >/dev/null 2>&1; then
-        notify-send "session-sync" "$msg"
+        notify-send "session-sync" "$msg" || true
     fi
 }
 
+if [ "$ACTION" = "push" ]; then
+    # Transcripts still being written by a live session may be pushed half-flushed.
+    if [ "$_QUIET" = "0" ] && pgrep -x "claude" >/dev/null 2>&1; then
+        echo "WARNING: Claude Code is running. Close all sessions before push to ensure latest data is saved." >&2
+    fi
+fi
 
-case "$ACTION" in
-    push)
-        # Warn if Claude Code is running
-        if [ "$_QUIET" = "0" ] && pgrep -x "claude" >/dev/null 2>&1; then
-            echo "WARNING: Claude Code is running. Close all sessions before push to ensure latest data is saved." >&2
-        fi
-        # Abort any interrupted rebase before proceeding
-        if [ -d "$PROJECTS_DIR/.git/rebase-merge" ] || [ -d "$PROJECTS_DIR/.git/rebase-apply" ]; then
-            git -C "$PROJECTS_DIR" rebase --abort 2>/dev/null || \
-                rm -rf "$PROJECTS_DIR/.git/rebase-merge" "$PROJECTS_DIR/.git/rebase-apply" 2>/dev/null || true
-        fi
-        # Copy history.jsonl into sync area
-        cp "$CLAUDE_DIR/history.jsonl" "$PROJECTS_DIR/.history.jsonl" 2>/dev/null || true
-        # Copy plans into sync area
-        if [ -d "$PLANS_DIR" ]; then
-            mkdir -p "$PROJECTS_DIR/plans"
-            cp "$PLANS_DIR/"*.md "$PROJECTS_DIR/plans/" 2>/dev/null || true
-        fi
-        git -C "$PROJECTS_DIR" add .
-        _local_changes=$(git -C "$PROJECTS_DIR" status --porcelain)
-        _unpushed=$(git -C "$PROJECTS_DIR" log origin/main..HEAD --oneline 2>/dev/null || true)
-        if [ -z "$_local_changes" ] && [ -z "$_unpushed" ]; then
-            echo "No changes to push."
-            exit 0
-        fi
-        if [ -n "$_local_changes" ]; then
-            timestamp=$(date "+%Y-%m-%d %H:%M")
-            git -C "$PROJECTS_DIR" commit -q -m "sync: $(hostname -s) $timestamp" >/dev/null
-        fi
-        # Retry loop: handles simultaneous push race (e.g. Windows + macOS committing at the same time)
-        _push_ok=0
-        for _retry in 1 2 3; do
-            # Commit any new session files written since the last commit
-            git -C "$PROJECTS_DIR" add . 2>/dev/null || true
-            if [ -n "$(git -C "$PROJECTS_DIR" status --porcelain 2>/dev/null)" ]; then
-                _ts2=$(date "+%Y-%m-%d %H:%M")
-                git -C "$PROJECTS_DIR" commit -q -m "sync: $(hostname -s) $_ts2" 2>/dev/null || true
-            fi
-            if ! git -C "$PROJECTS_DIR" pull --rebase origin main >/dev/null 2>&1; then
-                # Auto-resolve conflicts: non-JSONL (deleted by them) → git rm; JSONL → dedup
-                _conflicts=$(git -C "$PROJECTS_DIR" diff --name-only --diff-filter=U 2>/dev/null || true)
-                _resolved=0
-                for _f in $_conflicts; do
-                    case "$_f" in
-                        *.jsonl)
-                            grep -v -e '^<<<<<<<' -e '^=======' -e '^>>>>>>>' \
-                                "$PROJECTS_DIR/$_f" | awk '!seen[$0]++' \
-                                > "$PROJECTS_DIR/$_f.tmp" && \
-                            mv "$PROJECTS_DIR/$_f.tmp" "$PROJECTS_DIR/$_f"
-                            git -C "$PROJECTS_DIR" add "$_f" 2>/dev/null || true
-                            _resolved=1
-                            ;;
-                        *)
-                            git -C "$PROJECTS_DIR" rm "$_f" 2>/dev/null || true
-                            _resolved=1
-                            ;;
-                    esac
-                done
-                if [ "$_resolved" = "1" ]; then
-                    GIT_EDITOR=true git -C "$PROJECTS_DIR" rebase --continue >/dev/null 2>&1 \
-                        || git -C "$PROJECTS_DIR" rebase --abort 2>/dev/null || true
-                else
-                    git -C "$PROJECTS_DIR" rebase --abort 2>/dev/null || true
-                fi
-            fi
-            if git -C "$PROJECTS_DIR" push -u origin main 2>/dev/null; then
-                _push_ok=1
-                break
-            fi
-        done
-        if [ "$_push_ok" = "1" ]; then
-            if [ "$_QUIET" = "1" ]; then
-                [ "$_TOAST" = "1" ] && _toast "push complete"
-                :
-            else
-                echo "Pushed session data."
-            fi
+_engine_args=("$ACTION" --claude-dir "$CLAUDE_DIR" --plans-dir "$PLANS_DIR")
+[ "$_QUIET" = "1" ] && _engine_args+=(--quiet)
+_rc=0
+node "$SCRIPT_CHECKOUT_ROOT/bin/session-sync-engine" "${_engine_args[@]}" || _rc=$?
+
+if [ "$_QUIET" = "1" ]; then
+    if [ "$ACTION" = "push" ]; then
+        if [ "$_rc" -eq 0 ]; then
+            [ "$_TOAST" = "1" ] && _toast "push complete"
         else
-            if [ "$_QUIET" = "1" ]; then
-                [ "$_TOAST" = "1" ] && _toast "push failed"
-                :
-            else
-                echo "git push failed after 3 retries" >&2
-                exit 1
-            fi
+            [ "$_TOAST" = "1" ] && _toast "push failed (exit code $_rc)"
         fi
-        ;;
-    pull)
-        git -C "$PROJECTS_DIR" pull --rebase 2>&1 | grep -Ev '^[[:space:]]*(create|delete) mode '; [ "${PIPESTATUS[0]}" -eq 0 ]
-        # Merge remote history with local (dedup, preserve order)
-        if [ -f "$PROJECTS_DIR/.history.jsonl" ]; then
-            if [ -f "$CLAUDE_DIR/history.jsonl" ]; then
-                cat "$PROJECTS_DIR/.history.jsonl" "$CLAUDE_DIR/history.jsonl"
-            else
-                cat "$PROJECTS_DIR/.history.jsonl"
-            fi | awk '!seen[$0]++' > "$CLAUDE_DIR/history.jsonl.tmp"
-            mv "$CLAUDE_DIR/history.jsonl.tmp" "$CLAUDE_DIR/history.jsonl"
-        fi
-        # Merge plans from remote into local
-        if [ -d "$PROJECTS_DIR/plans" ]; then
-            mkdir -p "$PLANS_DIR"
-            cp "$PROJECTS_DIR/plans/"*.md "$PLANS_DIR/" 2>/dev/null || true
-        fi
-        echo "Pulled session data."
-        ;;
-    status)
-        git -C "$PROJECTS_DIR" status
-        ;;
-    reset)
-        git -C "$PROJECTS_DIR" fetch origin main
-        git -C "$PROJECTS_DIR" reset --hard origin/main
-        # Restore mtime from JSONL timestamps (git doesn't preserve mtime)
-        find "$PROJECTS_DIR" -name "*.jsonl" ! -name ".history.jsonl" | while read -r f; do
-            ts=$(grep -o '"timestamp":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4) || true
-            # $ts comes from untrusted JSONL content. Reject option-looking values before
-            # they reach touch's argv (same check as cc-session-mtime, kept symmetric).
-            case "$ts" in
-                -*) echo "warn: rejecting option-like timestamp in $f" >&2; continue ;;
-            esac
-            if [ -n "$ts" ]; then touch -d "$ts" -- "$f" 2>/dev/null || true; fi
-        done
-        # Merge remote history with local (dedup, preserve order)
-        if [ -f "$PROJECTS_DIR/.history.jsonl" ]; then
-            if [ -f "$CLAUDE_DIR/history.jsonl" ]; then
-                cat "$PROJECTS_DIR/.history.jsonl" "$CLAUDE_DIR/history.jsonl"
-            else
-                cat "$PROJECTS_DIR/.history.jsonl"
-            fi | awk '!seen[$0]++' > "$CLAUDE_DIR/history.jsonl.tmp"
-            mv "$CLAUDE_DIR/history.jsonl.tmp" "$CLAUDE_DIR/history.jsonl"
-        fi
-        # Merge plans from remote into local
-        if [ -d "$PROJECTS_DIR/plans" ]; then
-            mkdir -p "$PLANS_DIR"
-            cp "$PROJECTS_DIR/plans/"*.md "$PLANS_DIR/" 2>/dev/null || true
-        fi
-        echo "Reset to remote state."
-        ;;
-    *)
-        echo "Usage: session-sync.sh {push|pull|status|reset}" >&2
-        exit 1
-        ;;
-esac
+    fi
+    exit 0
+fi
+[ "$_rc" -eq 0 ] || exit 1

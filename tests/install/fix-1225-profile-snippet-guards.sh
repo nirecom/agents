@@ -3,19 +3,20 @@
 # Tests: profile-snippet.sh, bin/lib/session-sync-markers.sh
 # Tags: installer, profile-snippet, idempotency, job-control, ssh, stdout-stderr, scope:issue-specific
 #
-# Issue #1225 guards (idempotency, _session_sync_fetch + NO_MONITOR,
-# GIT_TERMINAL_PROMPT=0, unset -f cleanup) and issue #2160 (progress output moved
-# to stderr, core.sshCommand-aware GIT_SSH_COMMAND, fetch frequency stamp guard).
-# TL2 broad integration: sources the real profile-snippet.sh in real bash and real
-# zsh with a stubbed HOME and a fake git on PATH.
+# Issue #1225 guards (idempotency, _session_sync_fetch + NO_MONITOR, GIT_TERMINAL_PROMPT=0,
+# unset -f cleanup), #2160 (progress on stderr, core.sshCommand-aware GIT_SSH_COMMAND, fetch
+# frequency stamp) and #2658 (the startup fetch is `session-sync-engine startup`).
+# TL2 broad integration: sources a mirrored snippet in real bash and zsh with a stubbed HOME,
+# a fake git on PATH and a recording stub engine; TC16d-i and TC-DEADLINE use the real engine.
 
 set -u
 
 # TL3 gap (what this test does NOT catch):
 # - real SSH passphrase prompting on `git fetch` against a passphrase-protected key
 # - real iTerm/interactive-shell job-control rendering of "[N] + suspended"
-# - real network fetch/merge against the live session-sync remote
-# - the snippet running from its real install location (gate cases source a copy)
+# - real network fetch against the live session-sync remote; the stub-engine cases never fetch
+# - the snippet running from its real install location (every case sources a byte-identical copy)
+# - the real dotfileslink.sh and its wait for a live Claude Code (the mirror stubs it)
 # - the value actually shipped in the real .env (the mirror has none on purpose)
 # - Claude Code's own shell-snapshot capture of a real login shell's stdout
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
@@ -27,6 +28,15 @@ MARKERS_LIB="${SCRIPT_CHECKOUT_ROOT}/bin/lib/session-sync-markers.sh"
 RUN_TIMEOUT="${SCRIPT_CHECKOUT_ROOT}/bin/run-with-timeout.sh"
 # shellcheck source=/dev/null
 . "${SCRIPT_CHECKOUT_ROOT}/tests/lib/home-userprofile-pin.sh"
+# shellcheck source=tests/install/fix-1225-profile-snippet-guards/sandbox.sh
+. "${SCRIPT_CHECKOUT_ROOT}/tests/install/fix-1225-profile-snippet-guards/sandbox.sh"
+
+# The real engine resolves its plans dir from these pins (rules/test/fixture-isolation.md).
+_FIX1225_TMP="$(mktemp -d "${TMPDIR:-/tmp}/fix1225-pins.XXXXXX")"
+readonly _FIX1225_TMP
+trap 'rm -rf "$_FIX1225_TMP"' EXIT
+export WORKFLOW_STATE_DIR="$(mirror_native_path "$_FIX1225_TMP/state")" WORKFLOW_PLANS_DIR="$(mirror_native_path "$_FIX1225_TMP/plans")"
+unset CLAUDE_CODE_SESSION_ID
 
 PASS=0
 FAIL=0
@@ -36,212 +46,20 @@ fail() { FAIL=$((FAIL + 1)); printf 'FAIL: %s\n' "$1"; }
 HAVE_ZSH=0
 command -v zsh >/dev/null 2>&1 && HAVE_ZSH=1
 
-# --- Shared sandbox builder -------------------------------------------------
-# Builds a temp HOME with valid symlinks (so the repair block is a no-op) and a
-# fake git on PATH. Optionally seeds ~/.claude/projects/.git so the fetch block runs.
-# Echoes the sandbox root dir. The fake-git GIT_TERMINAL_PROMPT capture file is at
-# <sandbox>/gtp.out and the merge-marker file at <sandbox>/merged.out.
-make_sandbox() {
-    local with_git_repo="$1"   # 1 = seed .claude/projects/.git, 0 = no repo
-    local sb
-    sb="$(mktemp -d "${TMPDIR:-/tmp}/fix1225.XXXXXX")"
-
-    mkdir -p "$sb/home/.claude"
-    # Real targets for the four repair-checked slots, then valid symlinks.
-    : > "$sb/real_CLAUDE.md"
-    mkdir -p "$sb/real_skills" "$sb/real_rules" "$sb/real_agents"
-    ln -s "$sb/real_CLAUDE.md" "$sb/home/.claude/CLAUDE.md"
-    ln -s "$sb/real_skills"    "$sb/home/.claude/skills"
-    ln -s "$sb/real_rules"     "$sb/home/.claude/rules"
-    ln -s "$sb/real_agents"    "$sb/home/.claude/agents"
-
-    if [ "$with_git_repo" = "1" ]; then
-        mkdir -p "$sb/home/.claude/projects/.git"
-    fi
-
-    # Fake git: `fetch` records GIT_TERMINAL_PROMPT/GIT_SSH_COMMAND; `merge` drops a
-    # marker AND prints "Updating ../Fast-forward" as real `merge --ff-only` does —
-    # a silent fake would let an unredirected merge pass the TC-SPLIT purity cases;
-    # `config --get core.sshCommand` answers from <-C argument>/core-sshcommand
-    # (absent = unset, exit 1). `-C` is honoured as real git honours it (config from
-    # the named repo, not the CWD) and each subcommand's -C argument is recorded to
-    # <sandbox>/dashc-<cmd>.out, so TC-SSH2b reads the `config` probe's own scope
-    # and cannot be satisfied by the `fetch` call's -C.
-    mkdir -p "$sb/bin"
-    cat > "$sb/bin/git" <<EOF
-#!/bin/bash
-# fake git for fix-1225 test
-cmd=""; repo="\$PWD"; prev=""; seen_c=""
-for a in "\$@"; do
-    if [ "\$prev" = "-C" ]; then repo="\$a"; seen_c="\$a"; fi
-    case "\$a" in
-        fetch|merge|config) if [ -z "\$cmd" ]; then cmd="\$a"; fi ;;
-    esac
-    prev="\$a"
-done
-if [ -n "\$cmd" ]; then printf '%s' "\$seen_c" > "$sb/dashc-\$cmd.out"; fi
-case "\$cmd" in
-    fetch)
-        printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"
-        printf '%s' "\${GIT_SSH_COMMAND-UNSET}" > "$sb/sshcmd.out"
-        sleep 0.1
-        exit 0
-        ;;
-    merge)
-        printf 'merged' > "$sb/merged.out"
-        printf 'Updating abc1234..def5678\nFast-forward\n'
-        exit 0
-        ;;
-    config)
-        case "\$*" in
-            *"--get core.sshCommand"*)
-                if [ -f "\$repo/core-sshcommand" ]; then cat "\$repo/core-sshcommand"; exit 0; fi
-                exit 1
-                ;;
-        esac
-        exit 0
-        ;;
-    *)
-        exit 0
-        ;;
-esac
-EOF
-    chmod +x "$sb/bin/git"
-    echo "$sb"
-}
-
-# Runs a snippet driver under a given shell with the sandbox HOME + fake git PATH.
-# Args: <shell: bash|zsh> <sandbox> <driver> [<SESSION_SYNC value|UNSET>]. Four
-# ambient vars are dropped so no assertion reads the developer's environment:
-# SESSION_SYNC (off would vacate TC5/TC8-TC12), CLAUDECODE (set whenever this
-# suite runs inside Claude Code — with captured stdout that is exactly the
-# snippet's own skip condition), GIT_SSH_COMMAND and GIT_TERMINAL_PROMPT.
-run_driver() {
-    local shell="$1" sb="$2" driver="$3" ss="${4:-UNSET}"
-    # The real snippet can start the real install/linux/dotfileslink.sh (symlink
-    # repair), so HOME and USERPROFILE are pinned together; the subshell scopes the pin.
-    (
-    pin_home_and_userprofile "$sb/home"
-    if [ "$ss" = "UNSET" ]; then
-        env -u SESSION_SYNC -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
-            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
-    else
-        env -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            SESSION_SYNC="$ss" HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
-            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
-    fi
-    )
-}
-
-# --- Mirror sandbox (SESSION_SYNC gate cases) -------------------------------
-# profile-snippet.sh re-exports AGENTS_MAIN_ROOT / SCRIPT_CHECKOUT_ROOT to *its own* parent
-# directory, so sourcing it from the real checkout would resolve the real .env and
-# the real session-sync CLI — pushing the developer's actual session repo. The
-# mirror copies the snippet into a throwaway tree carrying just enough of the repo
-# around it (bin/lib/session-sync-markers.sh included) plus recording stubs.
-make_mirror_sandbox() {
-    local with_git_repo="$1"
-    local sb; sb="$(make_sandbox "$with_git_repo")"
-
-    mkdir -p "$sb/agents/bin/lib" "$sb/agents/hooks" "$sb/agents/install/linux"
-    cp "$SNIPPET" "$sb/agents/profile-snippet.sh"
-    cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/agents/bin/get-config-var"
-    chmod +x "$sb/agents/bin/get-config-var"
-    # codes() delegates to bin/codes-launch.sh (re-read from disk on every call,
-    # unlike a sourced function) — mirror it too, or codes() would fail to find it.
-    # No vscode-cc-repair stub: codes-launch.sh's own -e guard skips the repair
-    # call cleanly when the directory is absent, as it is in this mirror.
-    cp "$SCRIPT_CHECKOUT_ROOT/bin/codes-launch.sh" "$sb/agents/bin/codes-launch.sh"
-    chmod +x "$sb/agents/bin/codes-launch.sh"
-    # The marker SSOT lib ships beside the snippet; copying it here keeps the
-    # mirror on the `source the lib` path rather than the inline fallback.
-    if [ -f "$MARKERS_LIB" ]; then
-        cp "$MARKERS_LIB" "$sb/agents/bin/lib/session-sync-markers.sh"
-    fi
-    # get-config-var resolves hooks/lib/load-env.js under AGENTS_MAIN_ROOT.
-    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/agents/hooks/lib"
-    # No .env in the mirror on purpose: loadDefaultEnv short-circuits on
-    # AGENTS_MAIN_ROOT and never falls back, so SESSION_SYNC can only come from
-    # the process environment. That makes each case decide its own value.
-
-    # Recording stub for the manual sync CLI — never touches a real repo.
-    cat > "$sb/agents/bin/session-sync.sh" <<EOF
-#!/bin/bash
-printf 'was-called %s\n' "\$*" >> "$sb/session-sync.calls"
-exit 0
-EOF
-    chmod +x "$sb/agents/bin/session-sync.sh"
-    cat > "$sb/agents/bin/wait-vscode-window.sh" <<'EOF'
-#!/bin/bash
-exit 0
-EOF
-    chmod +x "$sb/agents/bin/wait-vscode-window.sh"
-    # Prints on stdout like the real dotfileslink.sh, so the caller-side
-    # redirection in profile-snippet.sh is observable (issue #2160).
-    cat > "$sb/agents/install/linux/dotfileslink.sh" <<'EOF'
-#!/bin/bash
-printf 'Symlinks created in ~/.claude/\n'
-printf '%s\n' "${WAIT_CC_RESULT-UNSET}" > "$HOME/wait-cc.env"
-exit 0
-EOF
-    chmod +x "$sb/agents/install/linux/dotfileslink.sh"
-
-    # Recording stub for the editor launch, so a case can tell "codes() did
-    # nothing" apart from "codes() ran but skipped the push".
-    cat > "$sb/bin/code" <<EOF
-#!/bin/bash
-printf 'was-called %s\n' "\$*" >> "$sb/code.calls"
-exit 0
-EOF
-    chmod +x "$sb/bin/code"
-    # Broken-node stub for the fail-safe cases — a stub rather than an empty
-    # PATH, since the snippet still needs date/sleep/dirname.
-    mkdir -p "$sb/nonode"
-    cat > "$sb/nonode/node" <<'EOF'
-#!/bin/bash
-echo "node: simulated failure" >&2
-exit 127
-EOF
-    chmod +x "$sb/nonode/node"
-    echo "$sb"
-}
-
-# Runs a driver against the MIRRORED snippet.
-# Args: <shell> <sandbox> <driver> <SESSION_SYNC value|UNSET> [<with-node|no-node>]
-run_mirror_driver() {
-    local shell="$1" sb="$2" driver="$3" ss="${4:-UNSET}" node_mode="${5:-with-node}"
-    local path_val="$sb/bin:$PATH"
-    [ "$node_mode" = "no-node" ] && path_val="$sb/nonode:$sb/bin:$PATH"
-    (
-    pin_home_and_userprofile "$sb/home"
-    if [ "$ss" = "UNSET" ]; then
-        env -u SESSION_SYNC -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$path_val" \
-            SNIPPET="$sb/agents/profile-snippet.sh" \
-            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
-    else
-        env -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-            SESSION_SYNC="$ss" HOME="$HOME" USERPROFILE="$USERPROFILE" PATH="$path_val" \
-            SNIPPET="$sb/agents/profile-snippet.sh" \
-            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
-    fi
-    )
-}
-
 # ---------------------------------------------------------------------------
 # TC1 / TC2 — Normal source: guard + AGENTS_MAIN_ROOT set, no errors
 # ---------------------------------------------------------------------------
 tc_normal() {
     local shell="$1" label="$2"
-    local sb; sb="$(make_sandbox 0)"
+    local sb; sb="$(make_mirror_sandbox 0)"
     local drv="$sb/drv_normal.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
 echo "CFGDIR=${AGENTS_MAIN_ROOT-MISSING}"
 EOF
-    local out; out="$(run_driver "$shell" "$sb" "$drv")"
-    if echo "$out" | grep -q "CFGDIR=${SCRIPT_CHECKOUT_ROOT}" \
+    local want; want="$(cd "$sb/agents" && pwd)"
+    local out; out="$(run_mirror_driver "$shell" "$sb" "$drv")"
+    if echo "$out" | grep -qF "CFGDIR=$want" \
         && ! echo "$out" | grep -qi "error\|command not found"; then
         pass "$label: source sets AGENTS_MAIN_ROOT, no errors"
     else
@@ -255,13 +73,13 @@ EOF
 # ---------------------------------------------------------------------------
 tc_codes_defined() {
     local shell="$1" label="$2"
-    local sb; sb="$(make_sandbox 0)"
+    local sb; sb="$(make_mirror_sandbox 0)"
     local drv="$sb/drv_codes.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
 if type codes >/dev/null 2>&1; then echo "CODES=function"; else echo "CODES=missing"; fi
 EOF
-    local out; out="$(run_driver "$shell" "$sb" "$drv")"
+    local out; out="$(run_mirror_driver "$shell" "$sb" "$drv")"
     if echo "$out" | grep -q "CODES=function"; then
         pass "$label: codes is a defined function after source"
     else
@@ -272,25 +90,29 @@ EOF
 
 # ---------------------------------------------------------------------------
 # TC5 / TC6 — Idempotency: the 2nd source returns before the fetch block, so the
-#   fetch marker is printed once. FAIL-BEFORE-FIX: no guard → printed twice.
+#   engine starts once. The driver removes the stamp between the two sources, or
+#   the frequency guard alone would hide a missing idempotency guard.
 # ---------------------------------------------------------------------------
 tc_idempotent() {
     local shell="$1" label="$2"
-    local sb; sb="$(make_sandbox 1)"   # need git repo so fetch block emits its marker
+    local sb; sb="$(make_mirror_sandbox 1)"   # need git repo so fetch block emits its marker
     local drv="$sb/drv_idem.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
+rm -f "$HOME/.claude/projects/.git/agents-last-fetch"
 . "$SNIPPET"
 echo "LOADED=${_AGENTS_PROFILE_LOADED-MISSING}"
 EOF
     # SESSION_SYNC=on: this case counts fetch-block emissions, so the automatic
     # path must be enabled regardless of the machine's own toggle value.
-    local out; out="$(run_driver "$shell" "$sb" "$drv" on)"
-    local n; n="$(echo "$out" | grep -c "git fetch Claude session sync")"
-    if [ "$n" -eq 1 ]; then
-        pass "$label: second source short-circuits (fetch marker printed once)"
+    local out; out="$(run_mirror_driver "$shell" "$sb" "$drv" on)"
+    local n calls=0
+    n="$(echo "$out" | grep -c "git fetch Claude session sync")"
+    [ -f "$sb/engine.calls" ] && calls="$(grep -c called "$sb/engine.calls")"
+    if [ "$n" -eq 1 ] && [ "$calls" -eq 1 ]; then
+        pass "$label: second source short-circuits (fetch marker printed once, engine started once)"
     else
-        fail "$label: idempotency guard absent — fetch marker printed $n times (expected 1). Output: $out"
+        fail "$label: idempotency guard absent — marker printed $n times, engine started $calls times (expected 1/1). Output: $out"
     fi
     rm -rf "$sb"
 }
@@ -301,13 +123,13 @@ EOF
 # ---------------------------------------------------------------------------
 tc_helper_cleaned() {
     local shell="$1" label="$2"
-    local sb; sb="$(make_sandbox 1)"
+    local sb; sb="$(make_mirror_sandbox 1)"
     local drv="$sb/drv_helper.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
 if type _session_sync_fetch >/dev/null 2>&1; then echo "HELPER=present"; else echo "HELPER=absent"; fi
 EOF
-    local out; out="$(run_driver "$shell" "$sb" "$drv" on)"
+    local out; out="$(run_mirror_driver "$shell" "$sb" "$drv" on)"
     local runtime_absent=0
     echo "$out" | grep -q "HELPER=absent" && runtime_absent=1
 
@@ -326,26 +148,31 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# TC10 — GIT_TERMINAL_PROMPT: fake git fetch receives GIT_TERMINAL_PROMPT=0
-#   (fake git records "UNSET" when the snippet never exports it).
+# TC10 — the engine receives GIT_TERMINAL_PROMPT=0 (the stub records "UNSET" when the
+#   snippet never sets it) and its startup arguments, --claude-dir naming the pinned home.
 # ---------------------------------------------------------------------------
 tc_git_terminal_prompt() {
-    local sb; sb="$(make_sandbox 1)"
+    local sb; sb="$(make_mirror_sandbox 1)"
     local drv="$sb/drv_gtp.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
 echo "DONE"
 EOF
-    local out; out="$(run_driver bash "$sb" "$drv" on)"
+    local out; out="$(run_mirror_driver bash "$sb" "$drv" on)"
     if [ -f "$sb/gtp.out" ]; then
-        local gtp; gtp="$(cat "$sb/gtp.out")"
-        if [ "$gtp" = "0" ]; then
-            pass "GIT_TERMINAL_PROMPT=0 passed to git fetch subshell"
+        local gtp action quiet claude_dir want_dir
+        gtp="$(cat "$sb/gtp.out")"
+        action="$(head -1 "$sb/engine-argv.out")"
+        quiet="$(grep -c -x -e '--quiet' "$sb/engine-argv.out")"
+        claude_dir="$(awk 'prev == "--claude-dir" { print; exit } { prev = $0 }' "$sb/engine-argv.out")"
+        want_dir="$(mirror_native_path "$sb/home/.claude")"
+        if [ "$gtp" = "0" ] && [ "$action" = "startup" ] && [ "$quiet" = "1" ] && [ "$(mirror_native_path "$claude_dir")" = "$want_dir" ]; then
+            pass "GIT_TERMINAL_PROMPT=0 and 'startup --quiet --claude-dir <home>/.claude' reach the engine"
         else
-            fail "GIT_TERMINAL_PROMPT not set to 0 in fetch (got: '$gtp')"
+            fail "engine contract: GIT_TERMINAL_PROMPT='$gtp' action='$action' quiet=$quiet claude-dir='$claude_dir' (want '$want_dir')"
         fi
     else
-        fail "fetch never ran — gtp.out missing. Output: $out"
+        fail "engine never ran — gtp.out missing. Output: $out"
     fi
     rm -rf "$sb"
 }
@@ -354,7 +181,7 @@ EOF
 # TC11 — Edge: no ~/.claude/projects/.git → fetch block skipped, no error
 # ---------------------------------------------------------------------------
 tc_no_git_repo() {
-    local sb; sb="$(make_sandbox 0)"   # no projects/.git
+    local sb; sb="$(make_mirror_sandbox 0)"   # no projects/.git
     local drv="$sb/drv_norepo.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
@@ -362,7 +189,7 @@ echo "DONE"
 EOF
     # SESSION_SYNC=on so the only possible reason for skipping the fetch block is
     # the missing repo — otherwise the assertion would pass vacuously.
-    local out; out="$(run_driver bash "$sb" "$drv" on)"
+    local out; out="$(run_mirror_driver bash "$sb" "$drv" on)"
     if echo "$out" | grep -q "DONE" \
         && ! echo "$out" | grep -q "git fetch Claude session sync" \
         && [ ! -f "$sb/gtp.out" ] \
@@ -375,45 +202,24 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# TC12 — git fetch exits nonzero → merge is skipped (error-handling path).
-#   The fix gates the merge on [ "${_rc_ss:-1}" -eq 0 ], so a failed fetch must
-#   not call git merge. Fake git (independent copy) is patched to exit 1.
+# TC12 — the engine exits nonzero → the shell carries on (error-handling path).
+#   Whether a failed fetch skips the integration is the engine's own contract.
 # ---------------------------------------------------------------------------
-tc_fetch_failure_skips_merge() {
-    local sb; sb="$(make_sandbox 1)"
-    # Patch fake git: fetch exits 1, merge records merged.out
-    cat > "$sb/bin/git" <<EOF
-#!/bin/bash
-cmd=""
-for a in "\$@"; do case "\$a" in fetch|merge|config) cmd="\$a"; break ;; esac; done
-case "\$cmd" in
-    fetch) printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"; printf '%s' "\${GIT_SSH_COMMAND-UNSET}" > "$sb/sshcmd.out"; sleep 0.1; exit 1 ;;
-    merge) printf 'merged' > "$sb/merged.out"; printf 'Updating abc1234..def5678\nFast-forward\n'; exit 0 ;;
-    config)
-        case "\$*" in
-            *"--get core.sshCommand"*)
-                if [ -f "$sb/core-sshcommand" ]; then cat "$sb/core-sshcommand"; exit 0; fi
-                exit 1
-                ;;
-        esac
-        exit 0
-        ;;
-    *) exit 0 ;;
-esac
-EOF
-    chmod +x "$sb/bin/git"
+tc_engine_failure_keeps_shell() {
+    local sb; sb="$(make_mirror_sandbox 1)"
+    printf '1' > "$sb/engine-exit-code.txt"
     local drv="$sb/drv_fetchfail.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"
 echo "DONE"
 EOF
-    local out; out="$(run_driver bash "$sb" "$drv" on)"
+    local out; out="$(run_mirror_driver bash "$sb" "$drv" on)"
     if echo "$out" | grep -q "DONE" \
-        && [ ! -f "$sb/merged.out" ] \
+        && [ -f "$sb/gtp.out" ] \
         && ! echo "$out" | grep -qi "error\|command not found"; then
-        pass "TC12: fetch failure → merge skipped, no crash"
+        pass "TC12: engine failure → the shell finishes, no crash"
     else
-        fail "TC12: fetch failure handling. merged=$([ -f "$sb/merged.out" ] && echo yes || echo no). Output: $out"
+        fail "TC12: engine failure handling. engine_ran=$([ -f "$sb/gtp.out" ] && echo yes || echo no). Output: $out"
     fi
     rm -rf "$sb"
 }
@@ -449,7 +255,7 @@ tc_idempotent bash "TC5"
 tc_helper_cleaned bash "TC7"
 tc_git_terminal_prompt             # TC10
 tc_no_git_repo                     # TC11
-tc_fetch_failure_skips_merge       # TC12
+tc_engine_failure_keeps_shell      # TC12
 tc_marker_fallback_matches_lib     # TC-SSOT
 
 if [ "$HAVE_ZSH" = "1" ]; then

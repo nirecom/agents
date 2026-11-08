@@ -109,6 +109,25 @@ else
     fail ".gitattributes missing eol=lf"
 fi
 
+# --- Normal (#2658): a fresh init seeds .gitignore; a re-run never overwrites it ---
+# The engine owns the managed block, so init only seeds the file when it is absent.
+echo "[init] .gitignore seeded once, then left to the engine"
+if grep -qxF '/workflow/*.tmp' "$NOREMOTE_CLAUDE/projects/.gitignore" 2>/dev/null; then
+    pass "fresh init seeds .gitignore with /workflow/*.tmp"
+else
+    fail "fresh init did not seed .gitignore (content: $(cat "$NOREMOTE_CLAUDE/projects/.gitignore" 2>/dev/null || echo missing))"
+fi
+printf '%s\n' '# BEGIN agents session-sync (managed)' '/workflow/' '# END agents session-sync (managed)' 'my-custom-ignore' \
+    > "$NOREMOTE_CLAUDE/projects/.gitignore"
+_init_ignore_before=$(cat "$NOREMOTE_CLAUDE/projects/.gitignore")
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" --claude-dir "$NOREMOTE_CLAUDE" --no-remote >/dev/null 2>&1
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" --claude-dir "$NOREMOTE_CLAUDE" --no-remote >/dev/null 2>&1
+if [ "$(cat "$NOREMOTE_CLAUDE/projects/.gitignore" 2>/dev/null)" = "$_init_ignore_before" ]; then
+    pass "two init re-runs keep the managed block and the custom line"
+else
+    fail "init overwrote .gitignore (now: $(cat "$NOREMOTE_CLAUDE/projects/.gitignore" 2>/dev/null))"
+fi
+
 # --- Normal: core.hooksPath disabled ---
 echo "[init] core.hooksPath disabled"
 hooks_path=$(git -C "$FAKE_PROJECTS" config core.hooksPath 2>/dev/null || true)

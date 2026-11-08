@@ -415,10 +415,11 @@ if [ ! -f "$_attrs_path" ] || [ "$(cat "$_attrs_path")" != "$_attrs_content" ]; 
     _changed=true
 fi
 
+# Seed only: the engine owns a managed block inside this file, so an existing one is never rewritten.
 _ignore_content='/workflow/*.tmp
 '
 _ignore_path="$PROJECTS_DIR/.gitignore"
-if [ ! -f "$_ignore_path" ] || [ "$(cat "$_ignore_path")" != "$_ignore_content" ]; then
+if [ ! -f "$_ignore_path" ]; then
     printf '%s' "$_ignore_content" > "$_ignore_path"
     _changed=true
 fi

@@ -81,20 +81,23 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir
             $_ssOn = $false
         }
     }
-    $global:LASTEXITCODE = $_preLastExitCode
     if ($_ssOn) {
         Write-Host "git fetch Claude session sync ..."
-        # -RedirectStandardError keeps stderr (SSH/git diagnostics) out of the console,
-        # matching the bash sibling's `2>/dev/null` — Start-Process has no null-redirect
-        # shorthand, so a discarded temp file is the idiomatic equivalent.
-        $_fetchErrFile = [System.IO.Path]::GetTempFileName()
+        # Startup deadline: a positive integer, else 3000; above 60000 is capped (bash sibling has the same rule).
+        $_ssDeadline = $null
+        try { $_ssDeadline = & $_getCfg SESSION_SYNC_STARTUP_DEADLINE_MS 2> $null } catch { $_ssDeadline = $null }
+        $_ssDeadlineMs = 3000
+        if ("$_ssDeadline" -match '^\d+$') {
+            $_ssTrim = "$_ssDeadline".TrimStart('0')
+            if ($_ssTrim.Length -gt 5) { $_ssDeadlineMs = 60000 }
+            elseif ($_ssTrim) { $_ssDeadlineMs = [Math]::Min([int]$_ssTrim, 60000) }
+        }
         # Batch mode mirrors the bash sibling: an auth-required or misconfigured remote
-        # fails fast instead of hanging on a credential/host-key prompt. The child inherits
+        # fails fast instead of hanging on a credential/host-key prompt. The engine inherits
         # $env: from this scope, so prior values are restored in finally — this snippet is
         # sourced into an interactive shell and must not leave the overrides behind.
         $_gitPromptPrev = $env:GIT_TERMINAL_PROMPT
         $_gitSshPrev = $env:GIT_SSH_COMMAND
-        $_fetchKilled = $false
         try {
             $env:GIT_TERMINAL_PROMPT = '0'
             # Bare "ssh" resolves via PATH, which on Windows finds Git's bundled MSYS2
@@ -103,27 +106,19 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir
             # publickey auth outright instead of just skipping the interactive prompt.
             # The Windows-native path keeps agent access while still enforcing BatchMode.
             $env:GIT_SSH_COMMAND = '"C:\Windows\System32\OpenSSH\ssh.exe" -o BatchMode=yes'
-            # Quoted so a space-containing $SessionDir stays one git argv entry
-            # (Start-Process -ArgumentList doesn't quote array elements itself).
-            $_fetchSs = Start-Process -FilePath git -ArgumentList @('-C', "`"$SessionDir`"", 'fetch') -NoNewWindow -PassThru -RedirectStandardError $_fetchErrFile
+            # The engine bounds the fetch by the deadline, kills its whole process tree on
+            # timeout, and integrates in a detached child; its stdout stays empty (#2658).
+            # --claude-dir is explicit so the engine follows this $HOME, not node's USERPROFILE.
+            & node (Join-Path $_agentsRoot 'bin\session-sync-engine') startup --quiet --deadline-ms $_ssDeadlineMs --claude-dir "$HOME\.claude" | Out-Null
+        } catch {
+            # A profile must never abort shell startup.
         } finally {
             $env:GIT_TERMINAL_PROMPT = $_gitPromptPrev
             $env:GIT_SSH_COMMAND = $_gitSshPrev
         }
-        if (-not $_fetchSs.WaitForExit(3000)) {
-            $_fetchSs.Kill()
-            # Block until the killed process exits, so it no longer holds the stderr temp file.
-            $_fetchSs.WaitForExit()
-            $_fetchKilled = $true
-        }
-        elseif ($_fetchSs.ExitCode -eq 0) { git -C $SessionDir merge --ff-only --no-summary FETCH_HEAD 2>$null }
-        if (-not $_fetchKilled -and $_fetchSs.ExitCode -ne 0) {
-            # One-line hint only — raw git/SSH stderr is too noisy for shell startup.
-            Write-Host "git fetch failed (exit $($_fetchSs.ExitCode)) — run 'git -C $SessionDir fetch' manually to see why" -ForegroundColor DarkGray
-        }
-        Remove-Item $_fetchErrFile -ErrorAction SilentlyContinue
-        Remove-Variable _fetchSs, _fetchErrFile, _fetchKilled, _gitPromptPrev, _gitSshPrev -ErrorAction SilentlyContinue
+        Remove-Variable _ssDeadline, _ssDeadlineMs, _ssTrim, _gitPromptPrev, _gitSshPrev -ErrorAction SilentlyContinue
     }
+    $global:LASTEXITCODE = $_preLastExitCode
     Remove-Variable _ssOn, _getCfg, _preLastExitCode -ErrorAction SilentlyContinue
 }
 }
