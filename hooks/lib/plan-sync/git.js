@@ -270,6 +270,7 @@ module.exports = {
   MAIN_REF,
   ORIGIN_MAIN_REF,
   COMMIT_IDENTITY,
+  buildEnv,
   runGit,
   transferOpts,
   gitOut,

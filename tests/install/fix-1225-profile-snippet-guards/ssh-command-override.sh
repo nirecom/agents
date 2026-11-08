@@ -78,8 +78,8 @@ EOF
 # snippet passes -C, not that real git's repo scoping is what the snippet relies
 # on. These two cases hand `config` to the REAL git binary against real `git
 # init` repositories and put a DIFFERENT core.sshCommand in the process CWD's
-# repo — the value a CWD-scoped lookup would find. fetch/merge stay faked, so
-# nothing touches a network.
+# repo — the value a CWD-scoped lookup would find. The engine stays the recording
+# stub, so nothing touches a network.
 
 # _ssh_realgit_sandbox <session-value|-> <cwd-value|-> — echoes a sandbox whose
 # git stub delegates `config` to real git; seeds the session repo and a separate
@@ -102,25 +102,17 @@ _ssh_realgit_sandbox() {
     cat > "$sb/bin/git" <<EOF
 #!/bin/bash
 # fake git with real \`config\` delegation (TC-SSH3/TC-SSH4)
-repo=""; prev=""; cmd=""
+repo=""; prev=""; is_config=""
 for a in "\$@"; do
     if [ "\$prev" = "-C" ]; then repo="\$a"; fi
-    case "\$a" in
-        fetch|merge|config) if [ -z "\$cmd" ]; then cmd="\$a"; fi ;;
-    esac
+    if [ "\$a" = "config" ]; then is_config=1; fi
     prev="\$a"
 done
-if [ -n "\$cmd" ]; then printf '%s' "\$repo" > "$sb/dashc-\$cmd.out"; fi
-case "\$cmd" in
-    fetch)
-        printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"
-        printf '%s' "\${GIT_SSH_COMMAND-UNSET}" > "$sb/sshcmd.out"
-        exit 0
-        ;;
-    merge) printf 'merged' > "$sb/merged.out"; exit 0 ;;
-    config) exec "$rg" "\$@" ;;
-    *) exit 0 ;;
-esac
+if [ -n "\$is_config" ]; then
+    printf '%s' "\$repo" > "$sb/dashc-config.out"
+    exec "$rg" "\$@"
+fi
+exit 0
 EOF
     chmod +x "$sb/bin/git"
     printf '%s' "$sb"
@@ -134,14 +126,15 @@ _ssh_run_in_cwdrepo() {
     local sb="$1" drv="$2" ambient="${3-}"
     (
         cd "$sb/cwdrepo" || exit 1
+        pin_home_and_userprofile "$sb/home"
         if [ -n "$ambient" ]; then
             env -u CLAUDECODE -u GIT_TERMINAL_PROMPT \
-                GIT_SSH_COMMAND="$ambient" SESSION_SYNC=on HOME="$sb/home" \
+                GIT_SSH_COMMAND="$ambient" SESSION_SYNC=on HOME="$HOME" USERPROFILE="$USERPROFILE" \
                 PATH="$sb/bin:$PATH" SNIPPET="$sb/agents/profile-snippet.sh" \
                 bash "$RUN_TIMEOUT" 30 bash "$drv" 2>&1
         else
             env -u CLAUDECODE -u GIT_SSH_COMMAND -u GIT_TERMINAL_PROMPT \
-                SESSION_SYNC=on HOME="$sb/home" \
+                SESSION_SYNC=on HOME="$HOME" USERPROFILE="$USERPROFILE" \
                 PATH="$sb/bin:$PATH" SNIPPET="$sb/agents/profile-snippet.sh" \
                 bash "$RUN_TIMEOUT" 30 bash "$drv" 2>&1
         fi
@@ -201,7 +194,8 @@ tc_ssh_realgit_cwd_scope_ignored() {
 # precedence puts the environment variable above core.sshCommand: with the
 # config present the snippet must not touch the variable (TC-SSH5, the operator
 # keeps their own transport), and with it absent the fallback must still take
-# effect for the fetch (TC-SSH6, no passphrase prompt at login).
+# effect for the fetch (TC-SSH6, no passphrase prompt at login). The ambient value
+# has no leading slash: MSYS rewrites one on its way to a native node.
 tc_ssh_ambient_preserved_when_core_set() {
     local sb; sb="$(_ssh_realgit_sandbox '/session/ssh -F sess' '-')"
     if [ -z "$sb" ]; then
@@ -209,12 +203,12 @@ tc_ssh_ambient_preserved_when_core_set() {
         return
     fi
     local drv="$sb/drv_ssh_ambient_set.sh"; _ssh_write_driver "$drv"
-    local out; out="$(_ssh_run_in_cwdrepo "$sb" "$drv" '/ambient/ssh -F amb')"
+    local out; out="$(_ssh_run_in_cwdrepo "$sb" "$drv" 'ambient-ssh -F amb')"
     local got; got="$(cat "$sb/sshcmd.out" 2>/dev/null || true)"
-    if [ "$got" = "/ambient/ssh -F amb" ]; then
+    if [ "$got" = "ambient-ssh -F amb" ]; then
         pass "TC-SSH5: ambient GIT_SSH_COMMAND survives when core.sshCommand is configured"
     else
-        fail "TC-SSH5: the fetch saw '$got' (expected the ambient '/ambient/ssh -F amb') — the snippet overwrote the operator's own transport. Output: $out"
+        fail "TC-SSH5: the fetch saw '$got' (expected the ambient 'ambient-ssh -F amb') — the snippet overwrote the operator's own transport. Output: $out"
     fi
     rm -rf "$sb"
 }
@@ -226,7 +220,7 @@ tc_ssh_ambient_overridden_when_core_unset() {
         return
     fi
     local drv="$sb/drv_ssh_ambient_unset.sh"; _ssh_write_driver "$drv"
-    local out; out="$(_ssh_run_in_cwdrepo "$sb" "$drv" '/ambient/ssh -F amb')"
+    local out; out="$(_ssh_run_in_cwdrepo "$sb" "$drv" 'ambient-ssh -F amb')"
     local got; got="$(cat "$sb/sshcmd.out" 2>/dev/null || true)"
     if [ "$got" = "ssh -o BatchMode=yes" ]; then
         pass "TC-SSH6: no core.sshCommand → the BatchMode fallback overrides an ambient GIT_SSH_COMMAND"

@@ -12,6 +12,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 
 static class CommandGuardLauncher
 {
@@ -189,6 +190,17 @@ static class CommandGuardLauncher
     {
         var psi = new ProcessStartInfo(file, args);
         psi.UseShellExecute = false;
+        // A detached caller leaves this launcher with no console: the child would open a visible one and
+        // lose the inherited stdout and stderr, so it gets no window and its output is relayed.
+        // GetConsoleCP, not GetConsoleWindow: the latter is also 0 under a windowsHide caller, whose
+        // console the child must keep sharing for its output and Ctrl-C.
+        bool relay = GetConsoleCP() == 0;
+        if (relay)
+        {
+            psi.CreateNoWindow = true;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+        }
         if (conf != null)
         {
             // main.js must not load a test's NODE_OPTIONS preload; it restores the value for git.
@@ -204,7 +216,18 @@ static class CommandGuardLauncher
         try { child = Process.Start(psi); }
         catch (Exception e) { return Hit(guardDir, tool, tail, "cannot start " + file + ": " + e.Message); }
         KillWithMe(child);
+        Task output = null, error = null;
+        if (relay)
+        {
+            output = child.StandardOutput.BaseStream.CopyToAsync(Console.OpenStandardOutput());
+            error = child.StandardError.BaseStream.CopyToAsync(Console.OpenStandardError());
+        }
         child.WaitForExit();
+        if (relay)
+        {
+            try { Task.WaitAll(output, error); }
+            catch (AggregateException) { }
+        }
         return child.ExitCode;
     }
 
@@ -257,6 +280,8 @@ static class CommandGuardLauncher
     static extern bool SetInformationJobObject(IntPtr job, int infoClass, ref ExtendedLimit info, uint size);
     [DllImport("kernel32.dll")]
     static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    [DllImport("kernel32.dll")]
+    static extern uint GetConsoleCP();
 
     static IntPtr job = IntPtr.Zero;
 

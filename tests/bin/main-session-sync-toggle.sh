@@ -40,8 +40,9 @@ make_config_sandbox() {
     local env_body="${1:-}"
     local sb
     sb="$(mktemp -d "$TMPDIR_BASE/cfg.XXXXXX")"
-    mkdir -p "$sb/hooks" "$sb/bin" "$sb/nonode"
-    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/hooks/lib"
+    mkdir -p "$sb/hooks/workflow-state" "$sb/bin" "$sb/nonode"
+    # config-flag.js requires ../workflow-state/plan-step-table (#2820).
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/hooks/lib" && cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/plan-step-table.js" "$sb/hooks/workflow-state/"
     cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/bin/get-config-var"
     if [ -n "$env_body" ]; then
         printf '%s\n' "$env_body" > "$sb/.env"

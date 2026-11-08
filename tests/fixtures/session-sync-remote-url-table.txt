@@ -5,8 +5,8 @@
 #
 # Single source of truth for both language suites so the two regexes can never
 # drift apart. Four consumers enumerate it, each covering one engine x one layer:
-#   tests/main-session-sync/security.sh              bash ERE, pattern + installer
-#   tests/main-session-sync-security.Tests.ps1       .NET regex, pattern + installer
+#   tests/bin/main-session-sync/security.sh              bash ERE, pattern + installer
+#   tests/install/main-session-sync-security.Tests.ps1   .NET regex, pattern + installer
 # The patterns themselves live in session-sync-remote-url-patterns.txt.
 #
 # Contract: only https / ssh / git schemes with a non-empty host body, plus the
@@ -72,7 +72,7 @@ DENY	https://user@/repo
 # Empty userinfo.
 DENY	https://@host
 # Two userinfo separators: the real host is not the one a reader sees first.
-DENY	https://user@host@evil.com/repo
+DENY	https://user@host@example.com/repo
 # Host body absent, port only.
 DENY	ssh://user@:22/repo
 # Malformed IPv6 literal: no hex group at all inside the brackets.

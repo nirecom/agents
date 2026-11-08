@@ -1,0 +1,24 @@
+# SESSION_SYNC_STARTUP_DEADLINE_MS normalization table for profile-snippet.sh / profile-snippet.ps1 (#2658).
+#
+# One entry per line, `|`-separated: <label>|<unset|set>|<value>|<expected --deadline-ms>.
+# Lines starting with `#` and blank lines are ignored. `unset` removes the variable from the
+# environment; `set` exports <value> verbatim (it may be empty). The mirror has no .env, so
+# the environment is the only source each case sees.
+#
+# Single source of truth for both shells, so the two snippets can never disagree on the
+# value they hand to `session-sync-engine startup --deadline-ms`. Consumers:
+#   tests/install/fix-1225-profile-snippet-guards/fetch-kill-deadline.sh   bash snippet
+#   tests/install/feature-697-dotfileslink-link-one.Tests.ps1             pwsh snippet
+#
+# Contract: only a positive integer is valid; anything else is the default 3000;
+# a value above 60000 is clamped to 60000.
+unset|unset||3000
+positive|set|7000|7000
+one|set|1|1
+at-cap|set|60000|60000
+over-cap|set|90000|60000
+zero|set|0|3000
+negative|set|-5|3000
+non-numeric|set|abc|3000
+decimal|set|2.5|3000
+empty|set||3000
