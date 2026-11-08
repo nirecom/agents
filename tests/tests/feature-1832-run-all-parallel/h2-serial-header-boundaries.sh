@@ -94,6 +94,12 @@ mk_row_root() {
     local root="$1" pos="$2" hdr="$3" i
     mkdir -p "$root/bin" "$root/tests/bin" "$root/inflight"
     cp "$REAL_RUNNER" "$root/bin/run-all.sh"
+    # #2473: the sweep reads its categories from the target's .agents.json (loader copied when present).
+    printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"bin","covers":["bin"]}],"supportDirs":["_archive","lib"],"testHarness":"on","caseMarker":"on"}}' > "$root/.agents.json"
+    mkdir -p "$root/bin/lib" "$root/hooks/lib"
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/repo-settings.sh" "$root/bin/lib/" 2>/dev/null || true
+    cp "$SCRIPT_CHECKOUT_ROOT/bin/repo-settings" "$root/bin/" 2>/dev/null || true
+    cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib/repo-settings" "$SCRIPT_CHECKOUT_ROOT/hooks/lib/repo-settings.js" "$root/hooks/lib/" 2>/dev/null || true
     for i in 1 2; do
         {
             printf '#!/usr/bin/env bash\n'

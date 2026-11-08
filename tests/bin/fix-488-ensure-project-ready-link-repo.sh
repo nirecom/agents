@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # tests/bin/fix-488-ensure-project-ready-link-repo.sh
 # Tests: bin/github-issues/lib/ensure-project-ready.sh, bin/github-issues/migration/link-project.sh
-# Tags: github-issues, issue-setup, ensure-project-ready, link-project, scope:issue-specific, projects-v2, session-id
+# Tags: github-issues, migrate-tracker, ensure-project-ready, link-project, scope:issue-specific, projects-v2, session-id
 #
-# Regression test for #488 (reopened): /issue-setup path never linked its
+# Regression test for #488 (reopened): /migrate-tracker path never linked its
 # Projects v2 board to the repo. Mirrors tests/bin/fix-488-create-project-link-repo.sh
 # (LNK-1..LNK-4); no dry-run case (ensure_project_ready() has none).
 # #2925 epr-session-id-* cases (E1-E6) below. TL3 gap: mocked gh CLI — real link mutation, idempotency, view config unverified.
-# Closer: RUN_TL4=on, or manually confirm the board on github.com after /issue-setup.
+# Closer: RUN_TL4=on, or manually confirm the board on github.com after /migrate-tracker.
 
 # shellcheck source=feature-1340-issue-setup/_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/feature-1340-issue-setup/_lib.sh"

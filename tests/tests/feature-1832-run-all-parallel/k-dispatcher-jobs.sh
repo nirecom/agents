@@ -62,7 +62,9 @@ git -C "$MAIN_RAW" config user.email "test@example.com"
 git -C "$MAIN_RAW" config user.name "Test"
 git -C "$MAIN_RAW" config core.hooksPath /dev/null
 echo init > "$MAIN_RAW/README.md"
-git -C "$MAIN_RAW" add README.md >/dev/null 2>&1
+# #2473: the worker refuses a target without a tests section, so the family commits one (dummies sit in tests/ -> flat).
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"flat","testHarness":"off","caseMarker":"off"}}' > "$MAIN_RAW/.agents.json"
+git -C "$MAIN_RAW" add README.md .agents.json >/dev/null 2>&1
 git -C "$MAIN_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
 git -C "$MAIN_RAW" worktree add -q -b feature/jobs-probe "$LINKED_RAW" >/dev/null 2>&1
 if [ ! -d "$LINKED_RAW" ]; then
@@ -77,8 +79,10 @@ PLANS="$(nodepath "$WORKFLOW_PLANS_DIR")"
 # A faithful `cp` of the real runner, reached through a one-line wrapper that
 # records the argv the worker chose. The real tests/run-all.sh is never edited,
 # and the wrapper adds no behaviour of its own beyond the log line.
-ARGV_LOG="$TMPD/argv.log"
-RUN_LOG="$TMPD/run.log"
+# #2473: only the agents repo itself (runAllSelf) runs its own worktree's runner, so the
+# dispatcher is a copy inside MAIN: the family is then the script checkout's own repo.
+cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$SCRIPT_CHECKOUT_ROOT/hooks" "$MAIN_RAW/"; DISPATCH_JS="$MAIN_RAW/bin/worker-dispatch.js"
+ARGV_LOG="$TMPD/argv.log"; RUN_LOG="$TMPD/run.log"
 : > "$ARGV_LOG"
 : > "$RUN_LOG"
 mkdir -p "$LINKED_RAW/tests" "$LINKED_RAW/bin/lib"

@@ -41,6 +41,11 @@ fi
 if [ "$DRY_RUN" -eq 0 ]; then
   state_init "$TARGET_CHECKOUT_ROOT"
   state_load "$TARGET_CHECKOUT_ROOT"
+  # shellcheck source=../lib/host-adapter.sh
+  source "$SCRIPT_DIR/../lib/host-adapter.sh"
+  export HIA_ROOT="$TARGET_CHECKOUT_ROOT"
+  # No origin: an empty slug leaves the project to the CLI's own resolution in the checkout.
+  TARGET_REPO_SLUG="$(hia_repo_slug)" || TARGET_REPO_SLUG=""
 fi
 
 TMPDIR_ENTRIES=$(mktemp -d)
@@ -120,10 +125,10 @@ for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
     continue
   fi
 
-  issue_url=$(cd "$TARGET_CHECKOUT_ROOT" && gh issue create \
-    --title "$title" \
-    --label "type:task" \
-    --body-file "$(native_path "$body_file")")
+  if ! issue_url=$(hia_issue_create "$TARGET_REPO_SLUG" "$title" --body-file "$(native_path "$body_file")" "type:task"); then
+    echo "ERROR: issue create failed for $entry_id; nothing recorded" >&2
+    exit 1
+  fi
   issue_num="${issue_url##*/}"
   if [ -z "$issue_num" ]; then
     echo "ERROR: could not parse issue number from: $issue_url" >&2

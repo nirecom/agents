@@ -24,12 +24,12 @@ Apply the TERMS line of hooks/lib/lang-directives.txt and the Writer directives 
 
 ## Phase 0b — Project preflight
 
-Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/issue-setup`. Independent of Phase 0a (label auto-repair in `issue-create.sh`) — one's result never affects the other.
+Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/migrate-tracker`. Independent of Phase 0a (label auto-repair in `issue-create.sh`) — one's result never affects the other.
 
 - Skip Phase 0b and proceed to Pre-flight when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote).
 - Run `bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-preflight.sh" --check-project` (add `--repo OWNER/REPO` when targeting another repo).
 - On rc=1 (no board), AskUserQuestion:
-  - `run-issue-setup`: run `/issue-setup` against the target repo, then re-check Phase 0b.
+  - `run-issue-setup`: run `/migrate-tracker` against the target repo, then re-check Phase 0b.
   - `skip-this-time`: proceed to Pre-flight; the attach step remains warn-only.
 - `skip-this-time` is NOT persisted — Phase 0b re-checks on every `issue-create` run (no suppression state file).
 
@@ -39,7 +39,7 @@ Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/
 - `gh` must be authenticated against the current repository.
 - `gh` must have the `project` scope for Projects v2 attach. Add with
   `gh auth refresh -s project`.
-- The `type:task` label must exist. `issue-create.sh` Phase 0a auto-syncs it when missing (run `/issue-setup` to initialize a fresh repo).
+- The `type:task` label must exist. `issue-create.sh` Phase 0a auto-syncs it when missing (run `/migrate-tracker` to initialize a fresh repo).
 
 ## Mid-workflow gate
 

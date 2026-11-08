@@ -52,6 +52,7 @@ run_ledger_inherit_reject_cases() {
     printf 'feat2\n' > "$repo/feat2.txt"
     git -C "$repo" add feat2.txt
     git -C "$repo" commit -q -m "feature on sibling base"
+    drop_branch_flag "$repo"
     if git -C "$repo" merge-base --is-ancestor "$b1" "$b2" \
       || ! git -C "$repo" diff --quiet "$b1" "$b2" -- "$t"; then
       fail "L8-non-descendant: fixture error — B2 must be unrelated to B1 with $t unchanged"
@@ -74,6 +75,7 @@ run_ledger_inherit_reject_cases() {
     git -C "$repo" commit -q -m "B2 subdir change"
     git -C "$repo" checkout -q feature
     git -C "$repo" merge -q --no-edit main
+    drop_branch_flag "$repo"
     b2="$(git -C "$repo" rev-parse main)"
     if git -C "$repo" diff --quiet "$b1" "$b2" -- "$t" \
       && git -C "$repo" merge-base --is-ancestor "$b1" "$b2"; then
@@ -157,6 +159,7 @@ run_ledger_inherit_glob_cases() {
     git -C "$repo" commit -q -m "B2 $variant change"
     git -C "$repo" checkout -q feature
     git -C "$repo" merge -q --no-edit main >/dev/null
+    drop_branch_flag "$repo"
     b2="$(git -C "$repo" rev-parse main)"
     seed_failing "irg${variant}b-$$" "$t"
     rtb_cli_run "$cache" "$repo" "irg${variant}b-$$"

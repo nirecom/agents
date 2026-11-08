@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/sync-labels-repo-flag.sh
 # Tests: bin/github-issues/sync-labels.sh
-# Tags: issue-setup, sync-labels, github-issues, scope:issue-specific
+# Tags: migrate-tracker, sync-labels, github-issues, scope:issue-specific
 # N/A: secret-leakage — label names/colors are public repo metadata, not secrets; gh owns token handling.
 # N/A (C8): adversarial labels.yml names/descriptions — .github/labels.yml is trusted committed config (not attacker input) and its YAML parse is unchanged by #1340 (only --repo added).
 # N/A (C5): --repo=VALUE GNU-equals form + flexible flag ordering — the script uses space-separated flags; equals-form is not a supported surface.
@@ -13,17 +13,26 @@
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 # pass / fail / assert_eq / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+set -euo pipefail
+
 TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/sync-labels.sh"
 
-TMP=""
+# Fixture built once (rules/test/fixture-isolation.md dual pin at top level);
+# each case only gets a fresh dir + MOCK_LOG from fixture_case_new.
+FIXTURE_ROOT="$(mktemp -d)"; readonly FIXTURE_ROOT
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
+mkdir -p "$FIXTURE_ROOT/mock-bin" "$FIXTURE_ROOT/github"
 
-setup_mock() {
-    TMP="$(mktemp -d)"
-    mkdir -p "$TMP/mock-bin"
-
-    # Create a minimal labels.yml fixture
-    mkdir -p "$TMP/github"
-    cat > "$TMP/github/labels.yml" <<'LABELS_EOF'
+# CREATE-path cases need one label; the UPDATE case (T-repo-3) keeps two.
+LABELS_ONE="$FIXTURE_ROOT/github/labels-one.yml"
+LABELS_TWO="$FIXTURE_ROOT/github/labels-two.yml"
+cat > "$LABELS_ONE" <<'LABELS_EOF'
+- name: "type:task"
+  color: "0e8a16"
+  description: "Normal task"
+LABELS_EOF
+cat > "$LABELS_TWO" <<'LABELS_EOF'
 - name: "type:task"
   color: "0e8a16"
   description: "Normal task"
@@ -32,8 +41,7 @@ setup_mock() {
   description: "Incident"
 LABELS_EOF
 
-    # Create mock gh
-    cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+cat > "$FIXTURE_ROOT/mock-bin/gh" <<'MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${MOCK_LOG:-}" ]; then
@@ -64,20 +72,26 @@ case "$ARGS" in
     ;;
 esac
 MOCK_EOF
-    chmod +x "$TMP/mock-bin/gh"
+chmod +x "$FIXTURE_ROOT/mock-bin/gh"
+export PATH="$FIXTURE_ROOT/mock-bin:$PATH"
+BASE_PATH="$PATH"
 
-    export PATH="$TMP/mock-bin:$PATH"
+TMP=""
+
+# A case that overrides gh writes $TMP/mock-bin/gh; it shadows the shared mock.
+setup_mock() {
+    fixture_case_new
+    export PATH="$TMP/mock-bin:$BASE_PATH"
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
 }
 
 teardown_mock() {
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
-        rm -rf "$TMP" 2>/dev/null || true
-    fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR GH_MOCK_EXISTING_LABELS 2>/dev/null || true
+    export PATH="$BASE_PATH"
+    export WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
+    unset MOCK_LOG GH_MOCK_EXISTING_LABELS 2>/dev/null || true
 }
 
 # ===========================================================================
@@ -86,8 +100,8 @@ teardown_mock() {
 setup_mock
 # No existing labels → all will be CREATE
 export GH_MOCK_EXISTING_LABELS='[]'
-bash "$TARGET" --repo "testowner/testrepo" "$TMP/github/labels.yml" >/dev/null 2>&1
-RC=$?
+RC=0
+bash "$TARGET" --repo "testowner/testrepo" "$LABELS_ONE" >/dev/null 2>&1 || RC=$?
 # Verify --repo testowner/testrepo appears in gh label list call
 LABEL_LIST_WITH_REPO=0
 grep -E "^gh label list.*--repo testowner/testrepo" "$MOCK_LOG" 2>/dev/null && LABEL_LIST_WITH_REPO=1
@@ -102,10 +116,10 @@ teardown_mock
 # T-repo-2: --repo flag is passed to gh label create (CREATE path)
 # ===========================================================================
 setup_mock
-# No existing labels → type:task and type:incident will be CREATEd
+# No existing labels → type:task will be CREATEd
 export GH_MOCK_EXISTING_LABELS='[]'
-bash "$TARGET" --repo "myorg/myrepo" "$TMP/github/labels.yml" >/dev/null 2>&1
-RC=$?
+RC=0
+bash "$TARGET" --repo "myorg/myrepo" "$LABELS_ONE" >/dev/null 2>&1 || RC=$?
 CREATE_WITH_REPO=0
 grep -E "^gh label create.*--repo myorg/myrepo" "$MOCK_LOG" 2>/dev/null | grep -v -- "--force" && CREATE_WITH_REPO=1
 if [ "$RC" = "0" ] && [ "$CREATE_WITH_REPO" = "1" ]; then
@@ -149,8 +163,8 @@ esac
 MOCK_EOF
 chmod +x "$TMP/mock-bin/gh"
 : > "$MOCK_LOG"
-bash "$TARGET" --repo "orgname/repname" "$TMP/github/labels.yml" >/dev/null 2>&1
-RC=$?
+RC=0
+bash "$TARGET" --repo "orgname/repname" "$LABELS_TWO" >/dev/null 2>&1 || RC=$?
 UPDATE_WITH_REPO=0
 grep -E "^gh label create.*--force.*--repo orgname/repname|^gh label create.*--repo orgname/repname.*--force" "$MOCK_LOG" 2>/dev/null && UPDATE_WITH_REPO=1
 if [ "$RC" = "0" ] && [ "$UPDATE_WITH_REPO" = "1" ]; then
@@ -190,8 +204,8 @@ esac
 MOCK_EOF
 chmod +x "$TMP/mock-bin/gh"
 : > "$MOCK_LOG"
-bash "$TARGET" "$TMP/github/labels.yml" >/dev/null 2>&1
-RC=$?
+RC=0
+bash "$TARGET" "$LABELS_ONE" >/dev/null 2>&1 || RC=$?
 # Should NOT have --repo in label list call
 LABEL_LIST_WITHOUT_REPO=0
 grep -E "^gh label list" "$MOCK_LOG" 2>/dev/null | grep -v -- "--repo" && LABEL_LIST_WITHOUT_REPO=1
@@ -210,7 +224,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_EXISTING_LABELS='[]'
 RC=0
-bash "$TARGET" --repo "validowner/validrepo" "$TMP/github/labels.yml" >/dev/null 2>&1 || RC=$?
+bash "$TARGET" --repo "validowner/validrepo" "$LABELS_ONE" >/dev/null 2>&1 || RC=$?
 # After implementation: gh label list is called (mock_log is non-empty)
 GH_CALLED=0
 [ -s "$MOCK_LOG" ] && grep -q "gh label" "$MOCK_LOG" 2>/dev/null && GH_CALLED=1
@@ -252,7 +266,7 @@ run_repo_case() {
     # $1=payload  → sets globals: RC, GH_CALLED, PAYLOAD_IN_LOG
     local payload="$1"
     RC=0
-    bash "$TARGET" --repo "$payload" "$TMP/github/labels.yml" >/dev/null 2>&1 || RC=$?
+    bash "$TARGET" --repo "$payload" "$LABELS_ONE" >/dev/null 2>&1 || RC=$?
     GH_CALLED=0
     [ -s "$MOCK_LOG" ] && grep -q "gh label" "$MOCK_LOG" 2>/dev/null && GH_CALLED=1
     # Did the attacker payload literally reach a gh invocation?
@@ -309,7 +323,7 @@ teardown_mock
 setup_mock
 export GH_MOCK_EXISTING_LABELS='[]'
 RC=0
-bash "$TARGET" --repo "" "$TMP/github/labels.yml" >/dev/null 2>&1 || RC=$?
+bash "$TARGET" --repo "" "$LABELS_ONE" >/dev/null 2>&1 || RC=$?
 GH_CALLED=0
 [ -s "$MOCK_LOG" ] && grep -q "gh label" "$MOCK_LOG" 2>/dev/null && GH_CALLED=1
 if [ "$RC" != "0" ] && [ "$GH_CALLED" = "0" ]; then

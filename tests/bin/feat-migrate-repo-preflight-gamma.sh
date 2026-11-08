@@ -1,10 +1,8 @@
 #!/bin/bash
-# Tests: bin/github-issues/migration/orchestrate.sh, skills/migrate-repo/scripts/preview-and-capture.sh
+# Tests: bin/github-issues/migration/orchestrate.sh, skills/migrate-issues/scripts/preview-and-capture.sh
 # Tags: migration, repo, github, issues, bin, toctou, preflight-gamma, scope:issue-specific
-# Option γ pre-flight tests (PF5-PF12) — added for issue #834 TOCTOU fix.
-
+# Option γ pre-flight tests (PF5-PF12) — added for issue #834 TOCTOU fix. lang-check: ignore
 set -u
-
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ORCH_REL="bin/github-issues/migration/orchestrate.sh"
 ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/$ORCH_REL"
@@ -46,13 +44,12 @@ fi
 setup_fixture() {
     TMP="$(mktemp -d)"
     REPO="$TMP/repo"
-    mkdir -p "$REPO/docs"
+    mkdir -p "$REPO/docs"; git init -q "$REPO"; git -C "$REPO" config core.hooksPath /dev/null
     cat > "$REPO/docs/history.md" <<'EOF'
 ### Entry 1 (2024-01-01)
 Background: test entry 1
 Changes: change 1
 EOF
-
     # gh mock from fixtures (supports MOCK_HAS_ISSUES).
     MOCK_DIR="$TMP/mock"
     mkdir -p "$MOCK_DIR"
@@ -396,7 +393,6 @@ teardown_fixture
 #       launched from a copy placed inside the target), dry-run must detect the
 #       self-repo condition (emit SELF_REPO_DETECTED) yet still complete (rc==0)
 #       and emit the dry-run highest-issue sentinel.
-#       FAIL-BEFORE-FIX: guard not implemented → no SELF_REPO_DETECTED.
 # ---------------------------------------------------------------------------
 setup_fixture
 unset MOCK_HAS_ISSUES
@@ -408,7 +404,7 @@ Background: test entry 1
 Changes: change 1
 EOF
 script_checkout_fixture_copy "$SELF" bin hooks .github
-SELF="$(cd "$SELF" && pwd)"
+SELF="$(cd "$SELF" && pwd)"; git init -q "$SELF"; git -C "$SELF" config core.hooksPath /dev/null
 OUT_PF13=$(run_with_timeout 30 bash "$SELF/$ORCH_REL" "$SELF" --dry-run 2>&1)
 RC_PF13=$?
 HAS_SELF_PF13=$(echo "$OUT_PF13" | grep -c "SELF_REPO_DETECTED" 2>/dev/null) || HAS_SELF_PF13=0
@@ -424,7 +420,6 @@ teardown_fixture
 # PF14: self-repo live --from-step 1 (#1234 identity guard).
 #       Live migration targeting the orchestrator's own checkout must abort because
 #       it would corrupt the agents repo's own issues (misidentification).
-#       FAIL-BEFORE-FIX: guard absent → no abort referencing the self-repo.
 # ---------------------------------------------------------------------------
 setup_fixture
 unset MOCK_HAS_ISSUES MIGRATE_ACK_EXISTING_ISSUES
@@ -436,7 +431,7 @@ Background: test entry 1
 Changes: change 1
 EOF
 script_checkout_fixture_copy "$SELF" bin hooks .github
-SELF="$(cd "$SELF" && pwd)"
+SELF="$(cd "$SELF" && pwd)"; git init -q "$SELF"; git -C "$SELF" config core.hooksPath /dev/null
 OUT_PF14=$(run_with_timeout 30 bash "$SELF/$ORCH_REL" "$SELF" --from-step 1 2>&1)
 RC_PF14=$?
 HAS_SELF_MSG_PF14=$(echo "$OUT_PF14" | grep -c "equals this agents checkout\|取り違え\|misidentification" 2>/dev/null) || HAS_SELF_MSG_PF14=0
@@ -455,7 +450,6 @@ teardown_fixture
 #        and Layer P/C satisfied, a self-repo live invocation must NOT be
 #        blocked by the identity guard — it proceeds to Step 1. Pins it so an
 #        unconditional guard (blocking even with ACK=1) would break here.
-#        PASS both before and after the fix (pure characterization).
 # ---------------------------------------------------------------------------
 setup_fixture
 SELF="$TMP/selfrepo"
@@ -466,7 +460,7 @@ Background: test entry 1
 Changes: change 1
 EOF
 script_checkout_fixture_copy "$SELF" bin hooks .github
-SELF="$(cd "$SELF" && pwd)"
+SELF="$(cd "$SELF" && pwd)"; git init -q "$SELF"; git -C "$SELF" config core.hooksPath /dev/null; git -C "$SELF" config core.autocrlf false; git -C "$SELF" add -A; git -C "$SELF" -c user.name=fixture -c user.email=fixture@example.invalid commit -q -m fixture
 export MOCK_HAS_ISSUES=1
 # MOCK_HIGHEST_ISSUE_N defaults to 5 in the mock when unset.
 # Layer P/C: MIGRATE_ACK_UP_TO_ISSUE_N=5 matches the mock's highest issue N;

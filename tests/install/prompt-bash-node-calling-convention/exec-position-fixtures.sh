@@ -107,7 +107,7 @@ fx_exclusion_assets() { # <fixture-root>
 }
 
 # THE FOURTH EXCLUSION CLASS -- a documentary path CITATION (label, colon, a backtick span
-# holding the bare entry path alone), real instance at skills/issue-setup/SKILL.md:38, plus its
+# holding the bare entry path alone), real instance at skills/migrate-tracker/SKILL.md:41, plus its
 # boundary companion, which keeps the $AGENTS_MAIN_ROOT/ prefix and so stays deviant. Its own
 # tree: the pair's occurrences would move FX_MAIN's offender roster. Rationale: T52 rows in
 # exec-position-sweep.sh.

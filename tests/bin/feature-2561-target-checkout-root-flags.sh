@@ -110,6 +110,49 @@ while IFS='|' read -r name kind text; do
 done <<<"$BACKFILL_REFUSE_ROWS"
 case_end
 
+# #2473: the sentinel comments of /migrate-issues go through host-adapter.sh, so a gitlab origin
+# gets a glab note; no live line may call gh issue comment directly (comments are not calls).
+case_begin "backfill-comments-through-the-host-adapter" "bin/github-issues/backfill-commit-comments.sh"
+calls="$(grep -cE '^[^#]*hia_issue_comment ' "$BACKFILL")"
+expect_eq "the comment call goes through hia_issue_comment" "$([[ "${calls:-0}" -ge 1 ]] && echo yes)" "yes"
+direct="$(grep -nE '^[^#]*gh issue comment' "$BACKFILL")"
+expect_eq "no direct gh issue comment remains" "$direct" ""
+case_end
+
+# #2473: a read through the host adapter that fails stops the run with a non-zero exit and posts
+# nothing. A gh wrapper ahead of the shared mock fails the call BCC_FAIL names, else delegates.
+mkdir -p "$TMP_ROOT/failgh"
+printf '#!/bin/bash\ncase "$*" in\n  "issue list "*) [ "${BCC_FAIL:-}" = list ] && { echo "gh: list failed" >&2; exit 1; } ;;\n  "issue view "*"--json comments"*) [ "${BCC_FAIL:-}" = comments ] && { echo "gh: comments failed" >&2; exit 1; } ;;\nesac\nexec "%s/gh" "$@"\n' "$GH_MOCK_DIR" >"$TMP_ROOT/failgh/gh"
+chmod +x "$TMP_ROOT/failgh/gh"
+# PATH splits on ':', so the np()'d `C:/...` form of TMP_ROOT would cut the dir in two on Windows.
+FAILGH_DIR="$TMP_ROOT/failgh"
+command -v cygpath >/dev/null 2>&1 && FAILGH_DIR="$(cygpath -u "$FAILGH_DIR")"
+readonly FAIL_PATH="$FAILGH_DIR:$MOCK_PATH"
+[[ "$(PATH="$FAIL_PATH" command -v gh)" == "$FAILGH_DIR/gh" ]] || fail "setup: gh does not resolve to the failing wrapper"
+
+# Columns: case | BCC_FAIL | dry-run (dry|-) | exit code | output text | comments posted.
+readonly READ_FAIL_ROWS='no-read-fails-and-the-comment-is-posted|none|-|0|Backfilled: 1, Skipped: 0|1
+listing-fails|list|-|1|Error: cannot list the closed issues; nothing was posted|0
+listing-fails-in-a-dry-run|list|dry|1|Error: cannot list the closed issues; nothing was posted|0
+comment-read-fails|comments|-|1|Error: cannot read the comments of #42; nothing more is posted|0
+comment-read-fails-in-a-dry-run|comments|dry|1|Error: cannot read the comments of #42; nothing more is posted|0'
+
+case_begin "backfill-stops-when-a-read-fails" "bin/github-issues/backfill-commit-comments.sh"
+while IFS='|' read -r name mode dry rc text posted; do
+  dry_flag=()
+  [[ "$dry" == dry ]] && dry_flag=(--dry-run)
+  : >"$GH_MOCK_COMMENT_LOG"
+  with_roots main env "PATH=$FAIL_PATH" "BCC_FAIL=$mode" bash "$RWT" 60 bash "$BACKFILL" --target-checkout-root "$TMP_ROOT/target" ${dry_flag[@]+"${dry_flag[@]}"}
+  expect_eq "$name: exit code" "$RC" "$rc"
+  expect_has "$name: output" "$OUT" "$text"
+  expect_eq "$name: comments posted" "$(grep -c '^---COMMENT---$' "$GH_MOCK_COMMENT_LOG")" "$posted"
+  if [[ "$rc" != 0 ]]; then
+    expect_lacks "$name: no success summary" "$OUT" "Backfilled:"
+    expect_lacks "$name: no issue is classified" "$OUT" "class="
+  fi
+done <<<"$READ_FAIL_ROWS"
+case_end
+
 readonly TARGET_NAMES="tgt-agent,tgt-hook,tgt-rule,tgt-skill,tgt-tool"
 # Columns: case | root argument | agents main root | identifier set, comma-joined.
 readonly IDENT_ROWS="the-argument-wins-over-the-agents-main-root|target|main|$TARGET_NAMES

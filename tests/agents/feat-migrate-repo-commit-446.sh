@@ -11,6 +11,7 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMMIT_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/commit-migration-artifacts.sh"
 ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
 FIXTURE_DIR="$SCRIPT_CHECKOUT_ROOT/tests/fixtures/migration"
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
 
 PASS=0
 FAIL=0
@@ -43,17 +44,12 @@ fi
 TMP="$(mktemp -d)"
 
 cleanup() {
-    # Restore commit script if C12 overwrote it with a failing stub (cp-based, trap-safe).
-    if [ -f "${COMMIT_SCRIPT}.c12bak" ]; then
-        cp "${COMMIT_SCRIPT}.c12bak" "$COMMIT_SCRIPT" 2>/dev/null || true
-        rm -f "${COMMIT_SCRIPT}.c12bak" 2>/dev/null || true
-    fi
-    [ -f "$COMMIT_SCRIPT" ] && chmod +x "$COMMIT_SCRIPT" 2>/dev/null || true
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
+harness_isolate "$TMP/iso"
 
 # Common mock gh / env setup.
 MOCK_DIR="$TMP/mock"
@@ -71,7 +67,7 @@ make_fixture() {
     local repo="$1"
     local remote_mode="${2:-}"
     mkdir -p "$repo"
-    git -C "$repo" init -b main >/dev/null 2>&1
+    git -C "$repo" init -b main >/dev/null 2>&1; git -C "$repo" config core.hooksPath /dev/null
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     echo "init" > "$repo/README.md"
@@ -104,8 +100,8 @@ description: Production incident.
 EOF
     echo ".migration-state.json" > "$repo/.gitignore"
     mkdir -p "$repo/docs"
-    echo "# Todo" > "$repo/docs/todo.md"
-    # /migrate-repo Step 1.3 (issue #283) label-bootstrap artifacts.
+    echo "# Todo" > "$repo/docs/todo.md"; printf '{"migrate": {"issues": "done"}}\n' > "$repo/.agents.json"  # #2473: .agents.json joins the allowlist
+    # /migrate-issues Step 1.3 (issue #283) label-bootstrap artifacts.
     mkdir -p "$repo/bin/github-issues"
     cat > "$repo/bin/github-issues/sync-labels.sh" <<'STUB'
 #!/usr/bin/env bash
@@ -128,7 +124,7 @@ STUB
 REPO_DRY="$TMP/repo-dry"
 make_fixture "$REPO_DRY"
 INITIAL_COUNT_DRY=$(git -C "$REPO_DRY" rev-list --count HEAD 2>/dev/null || echo 0)
-OUT_DRY=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO_DRY" --dry-run 2>&1)
+OUT_DRY=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO_DRY" --skill migrate-issues --dry-run 2>&1)
 POST_COUNT_DRY=$(git -C "$REPO_DRY" rev-list --count HEAD 2>/dev/null || echo 0)
 if [ "$INITIAL_COUNT_DRY" = "$POST_COUNT_DRY" ] && \
    echo "$OUT_DRY" | grep -Eq '\[dry-run\] would (stage|commit):'; then
@@ -142,11 +138,11 @@ fi
 REPO="$TMP/repo"
 make_fixture "$REPO" "with-remote"
 
-# C1: commit subject
-SUBJ_EXPECTED="chore(migration): apply /migrate-repo Step 1/3 artifacts"
-run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO" --no-push >/dev/null 2>&1
+# C1: commit subject names the calling skill (#2473: --skill replaced the fixed /migrate-repo text)
+SUBJ_EXPECTED="chore(migration): ... /migrate-issues ..."
+run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO" --skill migrate-issues --no-push >/dev/null 2>&1
 SUBJ_ACTUAL=$(git -C "$REPO" log -1 --format=%s 2>/dev/null)
-if [ "$SUBJ_ACTUAL" = "$SUBJ_EXPECTED" ]; then
+if [[ "$SUBJ_ACTUAL" == "chore(migration): "*"/migrate-issues"* ]] && [[ "$SUBJ_ACTUAL" != *"/migrate-repo"* ]]; then
     pass "C1: commit subject = '$SUBJ_EXPECTED'"
 else
     fail "C1: subject='$SUBJ_ACTUAL' expected='$SUBJ_EXPECTED'"
@@ -159,11 +155,11 @@ FILES_IN_COMMIT=$(git -C "$REPO" show --name-only --format= HEAD 2>/dev/null | g
 c2_missing=()
 for f in ".github/labels.yml" ".github/ISSUE_TEMPLATE/task.yml" \
          ".github/ISSUE_TEMPLATE/incident.yml" ".gitignore" "docs/todo.md" \
-         "bin/github-issues/sync-labels.sh" ".github/workflows/sync-labels.yml"; do
+         "bin/github-issues/sync-labels.sh" ".github/workflows/sync-labels.yml" ".agents.json"; do
     echo "$FILES_IN_COMMIT" | grep -Fxq "$f" || c2_missing+=("$f")
 done
 if [ "${#c2_missing[@]}" -eq 0 ]; then
-    pass "C2/C10: all 7 allowlist files in commit (incl. both ISSUE_TEMPLATE + sync-labels artifacts)"
+    pass "C2/C10: all 8 allowlist files in commit (incl. both ISSUE_TEMPLATE + sync-labels artifacts + .agents.json)"
 else
     fail "C2/C10: missing from commit: ${c2_missing[*]}"
 fi
@@ -199,7 +195,7 @@ fi
 
 # C4: idempotent skip — second run does not advance HEAD.
 SHA1=$(git -C "$REPO" rev-parse HEAD)
-OUT_C4=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO" --no-push 2>&1)
+OUT_C4=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO" --skill migrate-issues --no-push 2>&1)
 SHA2=$(git -C "$REPO" rev-parse HEAD)
 if [ "$SHA1" = "$SHA2" ] && echo "$OUT_C4" | grep -Fq 'nothing to commit'; then
     pass "C4: second commit run is no-op ('nothing to commit')"
@@ -218,7 +214,7 @@ cat > "$REPO2/.migration-state.json" <<'EOF'
   "todo": {"migrated": [{"issue_number": 7}, {"issue_number": 8}]}
 }
 EOF
-run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO2" --no-push >/dev/null 2>&1
+run_with_timeout 30 bash "$COMMIT_SCRIPT" "$REPO2" --skill migrate-issues --no-push >/dev/null 2>&1
 BODY2=$(git -C "$REPO2" log -1 --format=%b 2>/dev/null)
 if echo "$BODY2" | grep -Fq 'history #1-#6' && echo "$BODY2" | grep -Fq 'todo #7-#8'; then
     pass "C6b: commit body includes 'history #1-#6' and 'todo #7-#8'"
@@ -308,15 +304,13 @@ make_fixture "$REPO12" "with-remote"
 cat > "$REPO12/.migration-state.json" <<'EOF'
 {"current_step": 5, "history": {"migrated": []}, "todo": {"migrated": []}}
 EOF
-# Overwrite script with a failing stub — cp-based, so .c12bak always holds the real script.
-# If SIGKILL prevents cleanup, the real script survives in .c12bak for manual recovery.
-cp "$COMMIT_SCRIPT" "${COMMIT_SCRIPT}.c12bak"
-printf '#!/usr/bin/env bash\nexit 1\n' > "$COMMIT_SCRIPT"
-chmod +x "$COMMIT_SCRIPT"
-run_with_timeout 60 bash "$ORCH_SCRIPT" "$REPO12" --from-step 6 >/dev/null 2>&1
+# orchestrate.sh finds its child via its own dir ($SCRIPT_DIR): run a bin/ copy under $TMP with a failing stub; the checkout is never written.
+source "$SCRIPT_CHECKOUT_ROOT/tests/lib/script-checkout-fixture.sh"
+C12_MIG="$TMP/c12-checkout/bin/github-issues/migration"
+mkdir -p "$C12_MIG"; printf '#!/usr/bin/env bash\nexit 1\n' > "$C12_MIG/commit-migration-artifacts.sh"; chmod +x "$C12_MIG/commit-migration-artifacts.sh"
+script_checkout_fixture_copy "$TMP/c12-checkout" bin
+run_with_timeout 60 bash "$C12_MIG/orchestrate.sh" "$REPO12" --from-step 6 >/dev/null 2>&1
 RC=$?
-cp "${COMMIT_SCRIPT}.c12bak" "$COMMIT_SCRIPT"
-rm -f "${COMMIT_SCRIPT}.c12bak"
 state_present=0
 [ -f "$REPO12/.migration-state.json" ] && state_present=1
 if [ "$RC" -ne 0 ] && [ "$state_present" = "1" ]; then
@@ -400,7 +394,7 @@ EOF
     C13_PRIMARY_SHA_BEFORE=$(git -C "$C13_PRIMARY" rev-parse HEAD 2>/dev/null)
     C13_DOCS_SHA_BEFORE=$(git -C "$C13_DOCS" rev-parse HEAD 2>/dev/null)
 
-    C13_OUT=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$C13_PRIMARY" --no-push 2>&1)
+    C13_OUT=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$C13_PRIMARY" --skill migrate-issues --no-push 2>&1)
     C13_RC=$?
 
     C13_PRIMARY_SHA_AFTER=$(git -C "$C13_PRIMARY" rev-parse HEAD 2>/dev/null)
@@ -430,6 +424,73 @@ EOF
     fi
     fi  # end real-symlink guard
 fi
+
+# #2473: what is staged before a run, and a direct --dry-run. The helpers set R and BARE (the push target).
+check() { if eval "$2"; then pass "$1"; else fail "$1: ${3:-}"; fi; }
+# unrel_fx <name> <skill> — a fixture whose allowlist for <skill> is already committed and pushed.
+unrel_fx() {
+    R="$TMP/$1"; BARE="$R-remote.git"
+    make_fixture "$R" "with-remote"
+    git -C "$R" config core.excludesFile "$R/.git/info/exclude"
+    run_with_timeout 30 bash "$COMMIT_SCRIPT" "$R" --skill "$2" >/dev/null 2>&1 || fail "unrel_fx $1: seed commit failed"
+}
+# stage_unrelated <skill> — stages a tracked-file edit, a new file and allowlist prefix neighbours (EXTRA).
+stage_unrelated() {
+    EXTRA=(unrelated-new.txt .agents.json.bak)
+    [ "$1" = migrate-issues ] && EXTRA+=(.github/ISSUE_TEMPLATE-old)
+    for f in "${EXTRA[@]}"; do echo unrelated > "$R/$f"; done
+    echo tracked-edit >> "$R/README.md"
+    git -C "$R" add -f -- "${EXTRA[@]}" README.md
+}
+unrel_left() {
+    local f
+    check "$1: the tracked edit stays staged, in no commit" '[ "$(git -C "$R" status --porcelain -- README.md | tr -d "\r")" = "M  README.md" ]' "$(git -C "$R" status --porcelain)"
+    check "$1: the push target keeps the old README.md" '[ "$(git -C "$BARE" show main:README.md | tr -d "\r")" = init ]'
+    for f in "${EXTRA[@]}"; do
+        check "$1: $f stays staged, not in HEAD or the push target" '[ "$(git -C "$R" status --porcelain -- "$f" | tr -d "\r")" = "A  $f" ] && [ -z "$(git -C "$R" ls-tree -r --name-only HEAD | grep -Fx -- "$f")" ] && [ -z "$(git -C "$BARE" ls-tree -r --name-only main | grep -Fx -- "$f")" ]' "$(git -C "$R" status --porcelain)"
+    done
+}
+
+case_begin "staged-unrelated-excluded" "bin/github-issues/migration/commit-migration-artifacts.sh"
+for skill in migrate-tests migrate-issues; do
+    unrel_fx "unrel-$skill" "$skill"
+    stage_unrelated "$skill"
+    printf '{"migrate":{"tests":"changed"}}\n' > "$R/.agents.json"
+    want=".agents.json"
+    [ "$skill" = migrate-issues ] && { printf 'name: Extra\n' > "$R/.github/ISSUE_TEMPLATE/extra.yml"; want=".agents.json .github/ISSUE_TEMPLATE/extra.yml"; }
+    OUT=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$R" --skill "$skill" 2>&1); RC=$?
+    got="$(git -C "$R" show --name-only --format= HEAD | tr -d '\r' | sed '/^$/d' | tr '\n' ' ' | sed 's/ $//')"
+    check "$skill unrelated staged: exit 0, the commit holds only [$want]" '[ "$RC" -eq 0 ] && [ "$got" = "$want" ]' "rc=$RC got=[$got] out=$OUT"
+    check "$skill unrelated staged: the commit reached the push target" '[ "$(git -C "$BARE" rev-parse main)" = "$(git -C "$R" rev-parse HEAD)" ]'
+    unrel_left "$skill unrelated staged"
+done
+case_end
+
+case_begin "staged-unrelated-only-no-commit" "bin/github-issues/migration/commit-migration-artifacts.sh"
+for skill in migrate-tests migrate-issues; do
+    unrel_fx "only-$skill" "$skill"
+    stage_unrelated "$skill"
+    head0="$(git -C "$R" rev-parse HEAD)"
+    OUT=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$R" --skill "$skill" 2>&1); RC=$?
+    check "$skill only unrelated staged: exit 0, nothing to commit, no commit, no push" '[ "$RC" -eq 0 ] && grep -Fq "nothing to commit" <<<"$OUT" && [ "$(git -C "$R" rev-parse HEAD)" = "$head0" ] && [ "$(git -C "$BARE" rev-parse main)" = "$head0" ]' "rc=$RC out=$OUT"
+    unrel_left "$skill only unrelated staged"
+done
+case_end
+
+case_begin "dry-run-direct-plan-only" "bin/github-issues/migration/commit-migration-artifacts.sh"
+for spec in "migrate-tests|1|chore(migration): record /migrate-tests in .agents.json" "migrate-issues|6|chore(migration): apply /migrate-issues Step 1/3 artifacts"; do
+    IFS='|' read -r skill listed subj <<<"$spec"
+    R="$TMP/dry-$skill"; BARE="$R-remote.git"
+    make_fixture "$R" "with-remote"
+    rm -f "$R/docs/todo.md"
+    head0="$(git -C "$R" rev-parse HEAD)"
+    OUT=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$R" --skill "$skill" --dry-run --no-push 2>&1); RC=$?
+    check "$skill --dry-run: exit 0, the stage and commit plan lines" '[ "$RC" -eq 0 ] && grep -Fxq "[dry-run] would stage:" <<<"$OUT" && grep -Fxq "  - .agents.json" <<<"$OUT" && grep -Fxq "[dry-run] would commit: $subj" <<<"$OUT"' "rc=$RC out=$OUT"
+    check "$skill --dry-run: lists $listed existing allowlist path(s), not an absent one" '[ "$(grep -c "^  - " <<<"$OUT")" -eq "$listed" ] && ! grep -Fq "docs/todo.md" <<<"$OUT"' "$OUT"
+    check "$skill --dry-run: HEAD and the push target unchanged" '[ "$(git -C "$R" rev-parse HEAD)" = "$head0" ] && [ "$(git -C "$BARE" rev-parse main)" = "$head0" ]'
+    check "$skill --dry-run: nothing staged, .agents.json uncommitted" 'git -C "$R" diff --cached --quiet && [ "$(git -C "$R" status --porcelain -- .agents.json | tr -d "\r")" = "?? .agents.json" ]' "$(git -C "$R" status --porcelain)"
+done
+case_end
 
 # ----------------------------------------------------------------------------
 echo ""

@@ -206,8 +206,8 @@ resolve_project_for_repo() {
     done
 
     # ---- Query C: Status field + options + session-id field ids ----
-    # Warn-only: a new project may not have these fields yet; missing ids are cached as empty
-    # columns. First 50 fields only: a later session-id is picked up by the `set` recover.
+    # Warn-only: a new project may not have these fields yet (/migrate-tracker creates them); missing
+    # ids are cached as empty columns. First 50 fields only: a later session-id is picked up by `set`.
     local field_query
     field_query='query($projectId: ID!) {
   node(id: $projectId) {

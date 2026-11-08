@@ -1,7 +1,8 @@
 "use strict";
 // Case-marker gate of the tests-frontmatter check (#2507 D7; ports _precommit_check_tests_case_markers
 // of hooks/lib/precommit-tests-frontmatter.sh). The staged blob of every new (no parent has it, #2812) case-marker
-// entrypoint, in a repo whose index carries its entry's helperLibrary, and of every new reader-less
+// entrypoint, in a repo whose .agents.json has caseMarker on (uninitialized: whose index carries its
+// entry's helperLibrary, #2473), and of every new reader-less
 // one, is judged in memory. A checker infra error fails open with a stderr diagnostic.
 // placedTargets is the same selection without the "new" filter; the test-runner gate uses it (#2865).
 
@@ -15,23 +16,36 @@ const { parentsOf } = require("./parents");
 
 const ACMR = new Set(["A", "C", "M", "R"]);
 
+const rootOf = (context) => String(context.repoTop).replace(/\\/g, "/");
+
+// stagedTests — the staged (ACMR) files under the repo's tests dir.
+function stagedTests({ context, snapshot, files }) {
+  const prefix = `${R.layoutFor(rootOf(context)).dir}/`;
+  return files.filter((f) => f.startsWith(prefix) && ACMR.has(snapshot.status(f)));
+}
+
 // placedTargets -> [{ rel, entry }] of every staged (ACMR) target, or null when the registry is unreadable.
+// A repo with a valid .agents.json tests section takes caseMarker as the switch (#2473); an
+// uninitialized one keeps the legacy test: the entry's helperLibrary is in the index.
 function placedTargets({ context, snapshot, files }) {
+  const root = rootOf(context);
+  const legacy = !R.layoutFor(root).initialized;
   const inIndex = new Map();
   const indexHas = (p) => {
     if (!inIndex.has(p)) inIndex.set(p, git(context.repoTop, ["cat-file", "-e", `:${p}`], { env: context.env }).ok);
     return inIndex.get(p);
   };
-  const rels = files.filter((f) => f.startsWith("tests/") && ACMR.has(snapshot.status(f)));
+  const rels = stagedTests({ context, snapshot, files });
   if (rels.length && !R.tryReg()) return null;
   const targets = [];
   for (const rel of rels) {
-    const m = placement.placedMatch(rel);
+    const m = placement.placedMatch(rel, undefined, root);
     if (!m) continue;
-    if (placement.isCaseMarkerTarget(rel)) {
+    // A placed match without a caseMarkerReader is a reader-less target as it stands.
+    if (placement.readerEntry(rel, undefined, root)) {
       const hl = R.fieldValue(m.entry, "helperLibrary.path");
-      if (!hl || !indexHas(hl)) continue;
-    } else if (!placement.isReaderlessCaseMarkerTarget(rel)) continue;
+      if (legacy && (!hl || !indexHas(hl))) continue;
+    }
     targets.asked = true;
     targets.push({ rel, entry: m.entry });
   }
@@ -52,9 +66,14 @@ function addOnce(list, hint) {
 }
 
 function gate({ context, snapshot, files }) {
-  const targets = newTargets({ context, snapshot, files });
-  if (!targets) return { block: false, messages: [err("pre-commit: test language registry not readable — case-marker check skipped (commit continues)")] };
+  const found = newTargets({ context, snapshot, files });
+  if (!found) return { block: false, messages: [err("pre-commit: test language registry not readable — case-marker check skipped (commit continues)")] };
+  // caseMarker off (#2473): the test-runner gate still takes placedTargets; this gate judges none.
+  const targets = placement.caseMarkerOff(rootOf(context)) ? [] : found;
+  if (found.asked) targets.asked = true;
   const messages = targets.asked ? parentsOf({ context, snapshot, files }).note() : [];
+  const uninit = stagedTests({ context, snapshot, files }).length ? R.uninitializedWarn(rootOf(context)) : null;
+  if (uninit) messages.push(err(uninit));
   const high = [];
   const missing = [];
   const malformed = [];

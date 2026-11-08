@@ -29,7 +29,8 @@ run_with_timeout 60 pwsh -NoProfile -NonInteractive -Command \
   >/dev/null 2>&1 || PESTER_RC=$?
 [ "$PESTER_RC" -eq 0 ] || { echo "SKIP: Pester 5 not available to pwsh (rc=$PESTER_RC)"; exit 77; }
 
-DISPATCH_JS="$SCRIPT_CHECKOUT_ROOT/bin/worker-dispatch.js"
+# #2473: the dispatcher is the fixture's own copy (set below), so the fixture is the agents
+# repo itself (runAllSelf) and its tests/run-all.sh wrapper is the runner that starts.
 TMPD="$(make_tmp)"
 trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD/isolate"
@@ -44,7 +45,7 @@ FIX="$TMPD/fixrepo"
 mkdir -p "$FIX/tests/bin"
 harness_git_init "$FIX"
 cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$FIX/bin"
-cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$FIX/hooks"
+cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$FIX/hooks"; DISPATCH_JS="$FIX/bin/worker-dispatch.js"
 cp -r "$SCRIPT_CHECKOUT_ROOT/tests/lib" "$FIX/tests/lib"
 # The runner's root decoy reads the retired names from this file; it is not run here.
 cp "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2561-root-names-residue.sh" "$FIX/tests/bin/"
@@ -80,6 +81,8 @@ const test = require("node:test");
 const assert = require("node:assert");
 test("mixed js adds", () => { assert.strictEqual(1 + 1, 2); });
 JSFIX
+# #2473: the worker refuses a target without a tests section, so the fixture commits one.
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"bin","covers":["bin"]}],"supportDirs":["_archive","lib"],"testHarness":"on","caseMarker":"on"}}' >"$FIX/.agents.json"
 git -C "$FIX" add -A >/dev/null 2>&1
 git -C "$FIX" -c user.name=t -c user.email=t@example.com commit -q --no-verify -m fixture >/dev/null 2>&1
 FIXN="$(np "$FIX")"
@@ -157,6 +160,70 @@ if [ "$STRIP_OK" = "1" ]; then
 else
   skip "missing-pwsh-reports-unrunnable — pwsh cannot be removed from PATH without losing node/bash/git"
 fi
+case_end
+
+# --- #2473: a target repo that holds no copy of the runner --------------------------
+# The worker serves a repo other than the agents checkout with this checkout's own
+# tests/run-all.sh (`runAllShared`), pointed at the target through `RUN_ALL_TARGET_ROOT`;
+# no spy here: the real dispatcher starts the real bash child. HOME is redirected for
+# these calls because the shared runner keeps its host lanes and duration ledger under
+# HOME, which the allowlisted child env takes from the dispatcher's own env.
+# The cases name tests/run-all.sh as target: the language gate pairs a bash file with bash code.
+# TL3 gap: a target on another host or drive, and a target whose own tests need pwsh/node.
+TGT_HOME="$TMPD/target-home"
+mkdir -p "$TGT_HOME"
+TGT_MARK="$(np "$TMPD")/target-only.ran"
+TGT_SETTINGS='{"tests":{"dir":"tests","categorization":"flat","testHarness":"off","caseMarker":"off"}}'
+# tgt_repo <name> <settings json|-> — a committed repo whose one plain bash test drops TGT_MARK.
+tgt_repo() {
+  local d="$TMPD/$1"
+  mkdir -p "$d/tests"
+  harness_git_init "$d"
+  printf '#!/usr/bin/env bash\n# %s: README\n# %s: fixture, scope:issue-specific\nprintf ran > "%s"\nexit 0\n' Tests Tags "$TGT_MARK" > "$d/tests/target-only.sh"
+  printf 'fixture\n' > "$d/README"
+  [ "$2" = "-" ] || printf '%s\n' "$2" > "$d/.agents.json"
+  git -C "$d" add -A >/dev/null 2>&1
+  git -C "$d" -c user.name=t -c user.email=t@example.com commit -q --no-verify -m fixture >/dev/null 2>&1
+  np "$d"
+}
+# dispatch_at <name> <cwd> — one worker call against <cwd> with no selection (the --all path).
+dispatch_at() {
+  local name="$1" cwd="$2" pfile
+  pfile="$WORKFLOW_PLANS_DIR/$name.json"
+  printf '{"cwd":"%s","test_args":[],"timeout_seconds":180,"jobs":1}' "$cwd" > "$pfile"
+  rm -f "$TGT_MARK"
+  DRC=0
+  DOUT="$(run_with_timeout 200 env "PATH=$PATH" "HOME=$TGT_HOME" "USERPROFILE=$TGT_HOME" "WORKFLOW_PLANS_DIR=$PLANS" \
+    node "$(np "$DISPATCH_JS")" test-runner "$cwd" "$(np "$pfile")" 2>&1)" || DRC=$?
+}
+marker_seen() { [ -f "$TGT_MARK" ] && echo 1 || echo 0; }
+TGT_OK="$(tgt_repo target-no-runner "$TGT_SETTINGS")"
+TGT_NONE="$(tgt_repo target-no-settings -)"
+
+case_begin "target-without-runner-copy-runs-its-own-tests" "tests/run-all.sh"
+if [ -e "$TGT_OK/tests/run-all.sh" ]; then
+  fail "target-without-runner-copy/premise" "the fixture target holds a runner copy"
+else
+  dispatch_at target-ok "$TGT_OK"
+  assert_eq "target-status=$(yaml_field status) rc=$DRC" "target-status=pass rc=0"
+  assert_eq "target-test-ran=$(marker_seen)" "target-test-ran=1"
+  # Exactly the target's one file: the agents suite itself running here would show more.
+  CL="$(contract_line)"
+  OK_CL=0
+  printf '%s\n' "$CL" | grep -qE ' FAIL=0 .*EXECUTED=1 ' && OK_CL=1
+  assert_eq "target-contract-one-file=$OK_CL ($CL)" "target-contract-one-file=1 ($CL)"
+  [ "$(yaml_field status)" = "pass" ] || show_out "$DOUT"
+fi
+case_end
+
+case_begin "target-without-tests-section-is-runner-error" "tests/run-all.sh"
+dispatch_at target-none "$TGT_NONE"
+assert_eq "nosettings-status=$(yaml_field status)" "nosettings-status=runner-error"
+MG=0
+printf '%s\n' "$(yaml_field summary)" | grep -q '/migrate' && MG=1
+assert_eq "nosettings-summary-names-migrate=$MG" "nosettings-summary-names-migrate=1"
+assert_eq "nosettings-test-ran=$(marker_seen)" "nosettings-test-ran=0"
+[ "$MG" = "1" ] || show_out "$DOUT"
 case_end
 
 echo ""
