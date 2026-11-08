@@ -3,7 +3,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { writeAtomic } = require("./apply");
+const { writeAtomic, pathBlocked } = require("./apply");
 const { blobIdOf } = require("./git");
 
 function mdFiles(dir) {
@@ -27,6 +27,7 @@ function toProjects(plansDir, projects) {
   if (!plansDir) return 0;
   let n = 0;
   for (const name of mdFiles(plansDir)) {
+    if (pathBlocked(projects, `plans/${name}`)) continue;
     const src = fs.readFileSync(path.join(plansDir, name));
     const dest = path.join(projects, "plans", name);
     const cur = readOrNull(dest);
@@ -43,6 +44,7 @@ function fromProjects(plansDir, projects, lMap) {
   if (!plansDir) return 0;
   let n = 0;
   for (const name of mdFiles(path.join(projects, "plans"))) {
+    if (pathBlocked(plansDir, name)) continue;
     const src = fs.readFileSync(path.join(projects, "plans", name));
     const dest = path.join(plansDir, name);
     const cur = readOrNull(dest);

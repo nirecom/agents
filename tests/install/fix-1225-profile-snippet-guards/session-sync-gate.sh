@@ -1,30 +1,12 @@
 # Tests: profile-snippet.sh, bin/get-config-var
 # Tags: installer, profile-snippet, session-sync, toggle, scope:issue-specific
-# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher,
-# not run alone. Uses its make_mirror_sandbox / run_mirror_driver helpers.
-#
-# Contract under test — the SESSION_SYNC toggle gates the two *automatic*
-# profile-snippet.sh call sites:
-#   1. the startup auto-fetch block (~/.claude/projects fetch + ff-only merge)
-#   2. the codes() auto-push (bin/session-sync.sh push --quiet)
-# Shipped default is off, and the resolution is fail-safe OFF: automatic sync
-# runs only on an explicit, readable `on`. Every other outcome — unset,
-# unrecognized value, or an unreadable config (broken node) — must leave the
-# automatic path silent. The manual CLI is not gated; that contract lives in
-# tests/bin/main-session-sync/session-sync-independence.sh.
-#
-# The `codes` command itself is NOT gated — only its sync side effect (TC21).
+# Part of tests/install/fix-1225-profile-snippet-guards.sh — sourced by that dispatcher, not run alone.
+# SESSION_SYNC gates the two automatic call sites: `session-sync-engine startup` and the codes()
+# auto-push. Fail-safe OFF: only an explicit, readable `on` enables them. The manual CLI is not
+# gated (tests/bin/main-session-sync/session-sync-independence.sh), nor is `codes` itself (TC21).
 
-# _ssg_wait_marker <file> <max-tenths> — poll for a marker file. Emitted into
-# the generated drivers, kept here as the single definition of the wait budget.
-
-# ---------------------------------------------------------------------------
-# Startup auto-fetch matrix
-#
-# Table-driven over the whole value domain of SESSION_SYNC: the shipped default
-# (unset), both recognized values, an unrecognized value, and a case-variant of
-# the recognized "on". Only an explicit on may enable the automatic fetch.
-# ---------------------------------------------------------------------------
+# Startup auto-fetch matrix, over the whole value domain of SESSION_SYNC: the shipped
+# default (unset), both recognized values, an unrecognized value, and a case-variant of "on".
 tc_gate_startup_fetch() {
     local label="$1" ss_value="$2" node_mode="$3" expect="$4" why="$5"
     local sb; sb="$(make_mirror_sandbox 1)"   # seed projects/.git so the block can run
@@ -34,38 +16,24 @@ tc_gate_startup_fetch() {
 echo "DONE"
 EOF
     local out; out="$(run_mirror_driver bash "$sb" "$drv" "$ss_value" "$node_mode")"
-    local ran=0
-    if echo "$out" | grep -q "git fetch Claude session sync" || [ -f "$sb/gtp.out" ]; then
-        ran=1
-    fi
-    if [ "$ran" = "$expect" ]; then
+    local marker=0 engine=0
+    echo "$out" | grep -q "git fetch Claude session sync" && marker=1
+    [ -f "$sb/gtp.out" ] && engine=1
+    if [ "$marker" = "$expect" ] && [ "$engine" = "$expect" ]; then
         pass "$label: startup auto-fetch $([ "$expect" = "1" ] && echo runs || echo stays silent) ($why)"
     else
-        fail "$label: startup auto-fetch ran=$ran expected=$expect ($why). Output: $out"
+        fail "$label: startup auto-fetch marker=$marker engine=$engine expected=$expect ($why). Output: $out"
     fi
     rm -rf "$sb"
 }
 
-# ---------------------------------------------------------------------------
-# Startup auto-fetch matrix — REAL git.
-#
-# tc_gate_startup_fetch above observes the block through a fake `git` on PATH,
-# so it can only report "the fetch command was reached". The guarded block is
-# two operations, not one:
-#
-#     _session_sync_fetch                                   # git fetch
-#     [ "${_rc_ss:-1}" -eq 0 ] && git ... merge --ff-only FETCH_HEAD
-#
-# A gate placed around the fetch alone would leave the ff-only merge running on
-# every shell start — the working tree would still be mutated with the toggle
-# off. Making ~/.claude/projects a real clone of a real (local) remote turns
-# both halves into observable facts: FETCH_HEAD appears only if the fetch ran,
-# and HEAD advances to the remote tip only if the merge ran.
-# ---------------------------------------------------------------------------
+# Startup auto-fetch matrix — REAL engine and REAL git against a local remote. The stub cases
+# only report "the engine was started". Here both halves of its startup are observable:
+# refs/remotes/origin/main reaches the remote tip only if the fetch ran, and b.jsonl reaches
+# the working tree only if the detached pull ran.
 make_real_git_sandbox() {
     local sb; sb="$(make_mirror_sandbox 0)"
-    # Drop the fake recorder so the snippet drives the real git binary.
-    rm -f "$sb/bin/git"
+    mirror_install_real_engine "$sb"
 
     cat > "$sb/gitconfig" <<'GITCONFIG'
 [user]
@@ -75,8 +43,9 @@ make_real_git_sandbox() {
 	defaultBranch = main
 [commit]
 	gpgSign = false
-[advice]
-	detachedHead = false
+[advice] detachedHead = false
+[maintenance] auto = false
+[gc] auto = 0
 GITCONFIG
     # The developer's global config may point core.hooksPath at this repo's own
     # hooks, which would fire (and abort) inside the fixture repos.
@@ -84,18 +53,16 @@ GITCONFIG
     export GIT_CONFIG_GLOBAL="$sb/gitconfig"
 
     git init --bare "$sb/remote.git" >/dev/null 2>&1
-    git clone "$sb/remote.git" "$sb/seed" >/dev/null 2>&1
+    git -C "$sb/remote.git" config core.hooksPath /dev/null
+    git clone -c core.hooksPath=/dev/null "$sb/remote.git" "$sb/seed" >/dev/null 2>&1
     printf '{"a":1}\n' > "$sb/seed/a.jsonl"
     git -C "$sb/seed" add -A >/dev/null 2>&1
     git -C "$sb/seed" commit -m "base" >/dev/null 2>&1
     git -C "$sb/seed" push -u origin main >/dev/null 2>&1
 
-    git clone "$sb/remote.git" "$sb/home/.claude/projects" >/dev/null 2>&1
-    # A fresh clone leaves no FETCH_HEAD; remove any the git version wrote so
-    # its presence after the run means "this run fetched".
-    rm -f "$sb/home/.claude/projects/.git/FETCH_HEAD"
+    git clone -c core.hooksPath=/dev/null "$sb/remote.git" "$sb/home/.claude/projects" >/dev/null 2>&1
 
-    # Advance the remote so a successful ff-only merge is observable as a moved HEAD.
+    # Advance the remote so a run's fetch and pull are observable against the clone's base.
     printf '{"b":2}\n' > "$sb/seed/b.jsonl"
     git -C "$sb/seed" add -A >/dev/null 2>&1
     git -C "$sb/seed" commit -m "advance" >/dev/null 2>&1
@@ -105,7 +72,7 @@ GITCONFIG
 }
 
 # tc_gate_fetch_merge_real <label> <SESSION_SYNC|UNSET> <with-node|no-node> <expect> <why>
-# expect: 1 = fetch AND merge must both happen, 0 = neither may happen.
+# expect: 1 = fetch AND integration must both happen, 0 = neither may happen.
 tc_gate_fetch_merge_real() {
     local label="$1" ss_value="$2" node_mode="$3" expect="$4" why="$5"
     local sb; sb="$(make_real_git_sandbox)"
@@ -117,27 +84,47 @@ tc_gate_fetch_merge_real() {
     local drv="$sb/drv_real_git.sh"
     cat > "$drv" <<EOF
 export GIT_CONFIG_NOSYSTEM=1
-export GIT_CONFIG_GLOBAL="$sb/gitconfig"
+export GIT_CONFIG_GLOBAL="$(mirror_native_path "$sb/gitconfig")"
+export WORKFLOW_STATE_DIR="$(mirror_native_path "$sb/state")"
+export WORKFLOW_PLANS_DIR="$(mirror_native_path "$sb/plans")"
 . "\$SNIPPET"
 echo "DONE"
 EOF
     local out; out="$(run_mirror_driver bash "$sb" "$drv" "$ss_value" "$node_mode")"
 
-    local fetched=0 merged=0 head_after
-    [ -f "$proj/.git/FETCH_HEAD" ] && fetched=1
+    # The pull is a detached child of the engine: wait for its own record, on a bounded budget,
+    # both to observe it and so `rm -rf "$sb"` cannot race it.
+    local state="$proj/.git/agents-session-sync-state.json" i=0
+    if [ "$expect" = "1" ]; then
+        while ! grep -q '"action": *"pull"' "$state" 2>/dev/null && [ "$i" -lt 100 ]; do
+            sleep 0.2
+            i=$((i + 1))
+        done
+    fi
+
+    local fetched=0 integrated=0 origin_after head_after
+    origin_after="$(git -C "$proj" rev-parse refs/remotes/origin/main 2>/dev/null)"
     head_after="$(git -C "$proj" rev-parse HEAD 2>/dev/null)"
-    [ -n "$head_after" ] && [ "$head_after" = "$remote_head" ] && merged=1
+    [ "$origin_after" = "$remote_head" ] && fetched=1
+    [ -f "$proj/b.jsonl" ] && integrated=1
 
     if [ "$fetched" = "$expect" ]; then
-        pass "$label: real git fetch $([ "$expect" = "1" ] && echo runs || echo stays silent) ($why)"
+        pass "$label: real engine fetch $([ "$expect" = "1" ] && echo runs || echo stays silent) ($why)"
     else
-        fail "$label: real git fetch ran=$fetched expected=$expect ($why). Output: $out"
+        fail "$label: real engine fetch ran=$fetched expected=$expect ($why). origin/main base=$base_head after=$origin_after remote=$remote_head. Output: $out"
     fi
-    # The merge is the half a fetch-only gate would leave unguarded.
-    if [ "$merged" = "$expect" ]; then
-        pass "$label: ff-only merge $([ "$expect" = "1" ] && echo reached || echo stays silent) ($why)"
+    # The pull is the half a fetch-only gate would leave unguarded.
+    if [ "$integrated" = "$expect" ]; then
+        pass "$label: detached pull $([ "$expect" = "1" ] && echo "brings b.jsonl in" || echo stays silent) ($why)"
     else
-        fail "$label: ff-only merge ran=$merged expected=$expect ($why). HEAD base=$base_head after=$head_after remote=$remote_head. Output: $out"
+        fail "$label: detached pull ran=$integrated expected=$expect ($why). HEAD base=$base_head after=$head_after. state=[$(cat "$state" 2>/dev/null)]. Output: $out"
+    fi
+    if [ "$expect" = "0" ]; then
+        if [ "$head_after" = "$base_head" ] && [ ! -f "$state" ]; then
+            pass "$label: gate off leaves HEAD and the engine state file untouched ($why)"
+        else
+            fail "$label: gate off moved HEAD or wrote engine state (HEAD base=$base_head after=$head_after, state=$([ -f "$state" ] && echo present || echo absent)). Output: $out"
+        fi
     fi
     rm -rf "$sb"
 }
@@ -250,8 +237,8 @@ tc_gate_startup_fetch "TC16" on       with-node 1 "explicit on"
 tc_gate_startup_fetch "TC16b" ON      with-node 1 "value match is case-insensitive"
 tc_gate_startup_fetch "TC16c" maybe   with-node 0 "unrecognized value, fail-safe off"
 
-# Same rows again, but against a real clone of a real remote so the ff-only
-# merge — not just the fetch — is pinned on both sides of the gate.
+# Same rows again with the real engine against a real clone of a real remote, so the
+# detached pull — not just the fetch — is pinned on both sides of the gate.
 tc_gate_fetch_merge_real "TC16d" off   with-node 0 "explicit off"
 tc_gate_fetch_merge_real "TC16e" UNSET with-node 0 "unset — shipped default is off"
 tc_gate_fetch_merge_real "TC16f" maybe no-node   0 "unreadable config, fail-safe off"

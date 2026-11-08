@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const G = require("./git");
-const { union } = require("./jsonl");
+const { union, joinLines } = require("./jsonl");
 const { siblingName } = require("./conflict");
 const { writeAtomic } = require("./apply");
 
@@ -43,10 +43,12 @@ function blobText(dir, rev, rel) {
   return sha ? G.catBlob(dir, sha) : null;
 }
 
-// resolveUnmerged(dir, paths, otherRev, stats) — a transcript becomes the marker-free union; any
-// other file moves to a conflict sibling and the other side's version takes the path.
+// resolveUnmerged(dir, paths, otherRev, stats) — a transcript becomes the marker-free union and the
+// lines it drops go to a conflict sibling; any other file moves to a conflict sibling and the other
+// side's version takes the path.
 function resolveUnmerged(dir, paths, otherRev, stats) {
   const host = os.hostname().split(".")[0];
+  const taken = (r) => fs.existsSync(path.join(dir, ...r.split("/")));
   for (const rel of paths) {
     const abs = path.join(dir, ...rel.split("/"));
     if (!fs.existsSync(abs)) continue;
@@ -54,11 +56,17 @@ function resolveUnmerged(dir, paths, otherRev, stats) {
     if (rel.endsWith(".jsonl")) {
       const u = union(fs.readFileSync(abs, "utf8"), other ? other.toString("utf8") : "");
       stats.droppedMarkerLines += u.droppedMarkerLines;
-      if (!u.deferred) writeAtomic(abs, u.text);
+      if (u.deferred) continue;
+      writeAtomic(abs, u.text);
+      const lost = [...new Set(u.lostLocal.concat(u.lostRemote))];
+      if (lost.length === 0) continue;
+      const copy = siblingName(rel, host, new Date(), taken);
+      writeAtomic(path.join(dir, ...copy.split("/")), joinLines(lost));
+      stats.conflicts.push({ path: rel, copy, localMtime: null, remoteTime: null, lostLines: lost.length });
       continue;
     }
     if (!other) continue;
-    const copy = siblingName(rel, host, new Date(), (r) => fs.existsSync(path.join(dir, ...r.split("/"))));
+    const copy = siblingName(rel, host, new Date(), taken);
     fs.renameSync(abs, path.join(dir, ...copy.split("/")));
     writeAtomic(abs, other);
     stats.conflicts.push({ path: rel, copy, localMtime: null, remoteTime: null });

@@ -60,7 +60,7 @@ function proc(F) {
     const pids = path.join(dir, "pids.txt");
     const done = path.join(dir, "grandchild-done.txt");
     const grand = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(done)}, "x"), 3000)`;
-    const childSrc = `const c = require("child_process").spawn(process.execPath, ["-e", ${JSON.stringify(grand)}], { stdio: "ignore" });`
+    const childSrc = `const c = require("child_process").spawn(process.execPath, ["-e", ${JSON.stringify(grand)}], { stdio: "ignore", windowsHide: true });`
       + `require("fs").writeFileSync(${JSON.stringify(pids)}, process.pid + " " + c.pid); setTimeout(() => {}, 20000);`;
     const t0 = Date.now();
     const r = await F.lib("proc").run(process.execPath, ["-e", childSrc], { deadlineMs: 1500 });

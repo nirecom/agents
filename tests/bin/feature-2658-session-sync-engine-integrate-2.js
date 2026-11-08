@@ -3,7 +3,9 @@
 // Tags: TL1, TL2, session-sync, session-sync-engine, real-git, two-clone, self-heal, scope:issue-specific
 // #2658: third part of the session-sync engine suite (split from feature-2658-session-sync-engine-integrate.js
 // so each entrypoint stays well under the per-file runner timeout). Covers non-jsonl conflict siblings
-// and the real rebase-conflict self-heal of the integrate-rules module.
+// and the real rebase-conflict self-heal of the integrate-rules module, and the local-delete module.
+// The slow two-clone local-delete cases moved by runtime: kept-in-remote and recreated-in-W to
+// feature-2658-session-sync-engine-integrate-6.js, with-remote-change to -integrate-7.js.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const { makeFixtures } = require("./feature-2658-session-sync-engine/fixtures");
 
@@ -21,6 +23,8 @@ after(() => {
 const F = makeFixtures(TMP);
 
 const rules = require("./feature-2658-session-sync-engine/integrate-rules");
+const localDelete = require("./feature-2658-session-sync-engine/local-delete");
+const diffTree = require("./feature-2658-session-sync-engine/diff-tree");
 
 caseBegin("integrate-non-jsonl-conflict", "bin/lib/session-sync/conflict.js");
 rules.conflicts(F);
@@ -28,4 +32,20 @@ caseEnd();
 
 caseBegin("selfheal-real-rebase-conflict", "bin/lib/session-sync/selfheal.js");
 rules.selfhealRealConflict(F);
+caseEnd();
+
+caseBegin("add-sibling-avoids-local-deleted-name", "bin/lib/session-sync/classify.js");
+localDelete.siblingAvoidsLDeleted(F);
+caseEnd();
+
+caseBegin("local-delete-classifier-verdicts", "bin/lib/session-sync/classify.js");
+localDelete.classifierVerdicts(F);
+caseEnd();
+
+caseBegin("diff-tree-old-mode", "bin/lib/session-sync/git.js");
+diffTree.diffTreeModes(F);
+caseEnd();
+
+caseBegin("reset-with-local-deleted-path", "bin/lib/session-sync/integrate.js");
+localDelete.resetWithLDeleted(F);
 caseEnd();

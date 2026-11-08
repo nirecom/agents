@@ -79,6 +79,7 @@ function status(o) {
   for (const n of names) lines.push(`  ${n}`);
   lines.push(`mtimeRejected: ${st.mtimeRejected.count}${st.mtimeRejected.path ? ` (last: ${st.mtimeRejected.path})` : ""}`);
   lines.push(`writeDeferred: ${st.writeDeferred.count}${st.writeDeferred.path ? ` (last: ${st.writeDeferred.path})` : ""}`);
+  lines.push(`writeBlocked: ${st.writeBlocked.count}${st.writeBlocked.path ? ` (last: ${st.writeBlocked.path})` : ""}`);
   const porcelain = G.gitOut(o.dir, ["status", "--porcelain", "-z", "--untracked-files=all"]);
   lines.push(`uncommitted: ${porcelain === null ? "unknown" : porcelain.split("\0").filter(Boolean).length}`);
   process.stdout.write(lines.join("\n") + "\n");

@@ -22,7 +22,8 @@ function makeFixtures(TMP) {
     "[init]", "  defaultBranch = main", "[commit]", "  gpgSign = false",
     "[core]", "  hooksPath = /dev/null", "  autocrlf = false",
     `  excludesFile = ${emptyIgnore.replace(/\\/g, "/")}`,
-    "[advice]", "  detachedHead = false", "",
+    "[advice]", "  detachedHead = false",
+    "[maintenance]", "  auto = false", "[gc]", "  auto = 0", "",
   ].join("\n"));
 
   function gitEnv(extra) {
