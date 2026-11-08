@@ -1,7 +1,8 @@
 "use strict";
-// In-process parts of tests/bin/feature-2658-session-sync-engine-integrate-6.js (#2658): resolveUnmerged
-// keeps the lines a transcript union drops in a conflict sibling, and writeHistoryLocal keeps a line
-// appended to ~/.claude/history.jsonl during its own write. Holds no case markers.
+// In-process parts of tests/bin/feature-2658-session-sync-engine-integrate-6.js and -integrate-8.js (#2658):
+// resolveUnmerged keeps the lines a transcript union drops in a conflict sibling and a line appended to
+// the transcript during its own write, and writeHistoryLocal keeps a line appended to
+// ~/.claude/history.jsonl during its own write. Holds no case markers.
 const assert = require("node:assert");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -89,6 +90,70 @@ function unmergedJsonl(F) {
   }));
 }
 
+// resolveWatched(F, local, remote, onTmpWrite) — resolve() with REL's tmp writes and renames counted;
+// onTmpWrite(abs, n) runs after the n-th write of REL's tmp file.
+function resolveWatched(F, local, remote, onTmpWrite) {
+  const { dir, rev } = initRepo(F, { [REL]: remote });
+  const abs = path.join(dir, ...REL.split("/"));
+  F.write(abs, local);
+  const stats = F.lib("state").newStats();
+  const isTmp = (p) => path.dirname(String(p)) === path.dirname(abs) && path.basename(String(p)).startsWith(".t.jsonl.session-sync-");
+  const realWrite = fs.writeFileSync;
+  const realRename = fs.renameSync;
+  const seen = { tmpWrites: 0, renames: 0 };
+  fs.writeFileSync = function (p, ...rest) {
+    const out = realWrite.call(fs, p, ...rest);
+    if (isTmp(p)) {
+      seen.tmpWrites += 1;
+      if (onTmpWrite) onTmpWrite(abs, seen.tmpWrites);
+    }
+    return out;
+  };
+  fs.renameSync = function (from, to) {
+    if (path.resolve(String(to)) === path.resolve(abs)) seen.renames += 1;
+    return realRename.call(fs, from, to);
+  };
+  try {
+    F.lib("selfheal").resolveUnmerged(dir, [REL], rev, stats);
+  } finally {
+    fs.writeFileSync = realWrite;
+    fs.renameSync = realRename;
+  }
+  const read = (rel) => fs.readFileSync(path.join(dir, ...rel.split("/")), "utf8");
+  const names = fs.readdirSync(path.join(dir, "p1"));
+  const siblings = names.filter((n) => n.includes(".sync-conflict-")).sort();
+  const leftovers = names.filter((n) => n.endsWith(".tmp"));
+  return { stats, read, siblings, leftovers, seen };
+}
+
+function unmergedJsonlRace(F) {
+  const lose = jline("x", { v: "a" });
+  const win = jline("x", { v: "b" });
+  const added = jline("n");
+  const count = (text, line) => text.split("\n").filter((l) => l === line).length;
+  test("a line appended to an unmerged transcript between the read and the rename survives at the path", () => withFixtureEnv(F, () => {
+    const r = resolveWatched(F, lines(win), lines(lose), (abs, n) => { if (n === 1) fs.appendFileSync(abs, lines(added)); });
+    assert.strictEqual(r.read(REL), lines(win, added), "the union is rebuilt from the grown transcript");
+    assert.strictEqual(r.seen.renames, 1, "the path is replaced once");
+    assert.deepStrictEqual(r.leftovers, []);
+  }));
+  test("the appended line sits once at the path and never in the conflict sibling", () => withFixtureEnv(F, () => {
+    const r = resolveWatched(F, lines(win), lines(lose), (abs, n) => { if (n === 1) fs.appendFileSync(abs, lines(added)); });
+    assert.strictEqual(count(r.read(REL), added), 1, "the appended line appears exactly once at the path");
+    assert.deepStrictEqual(r.siblings, [path.basename(FIRST_COPY)]);
+    assert.strictEqual(r.read(FIRST_COPY), lines(lose), "the sibling holds only the losing line");
+    assert.deepStrictEqual(r.stats.conflicts, [{ path: REL, copy: FIRST_COPY, localMtime: null, remoteTime: null, lostLines: 1 }]);
+  }));
+  test("without a concurrent change the unmerged transcript is written once with its losing line in the sibling", () => withFixtureEnv(F, () => {
+    const r = resolveWatched(F, lines(win), lines(lose), null);
+    assert.strictEqual(r.read(REL), lines(win));
+    assert.deepStrictEqual(r.seen, { tmpWrites: 1, renames: 1 }, "no rebuild when nothing changed");
+    assert.strictEqual(r.read(FIRST_COPY), lines(lose));
+    assert.deepStrictEqual(r.stats.conflicts, [{ path: REL, copy: FIRST_COPY, localMtime: null, remoteTime: null, lostLines: 1 }]);
+    assert.deepStrictEqual(r.leftovers, []);
+  }));
+}
+
 const hline = (display, timestamp) => JSON.stringify({ display, timestamp });
 const A = hline("a", 1);
 const B = hline("b", 2);
@@ -153,4 +218,4 @@ function historyRace(F) {
   });
 }
 
-module.exports = { unmergedJsonl, historyRace };
+module.exports = { unmergedJsonl, unmergedJsonlRace, historyRace };

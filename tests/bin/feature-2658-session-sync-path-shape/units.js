@@ -182,13 +182,14 @@ const COLLISION_ROWS = [
     delta: { a: null, [A_COPY]: entry(BLOB) }, ops: [A_COPY], conflicts: [],
   },
   {
-    why: "a copy path the delta already holds (the user edited the copy) is left as is",
+    why: "a copy path the delta already holds with another blob: the edited copy is kept and the original blob moves to the -2 name",
     input: {
       onDisk: [A_COPY],
       lMap: { "a/b": entry(NESTED_BLOB), [A_COPY]: entry(BLOB) },
       w: { a: mod(BLOB), [A_COPY]: mod(OTHER) },
     },
-    delta: { a: null, [A_COPY]: entry(OTHER) }, ops: [], conflicts: [],
+    delta: { a: null, [A_COPY]: entry(OTHER), [`${A_COPY}-2`]: entry(BLOB) }, ops: [`${A_COPY}-2`], conflicts: ["a"],
+    copies: [`${A_COPY}-2`],
   },
   {
     why: "a non-regular 120000 entry moves in M with no W op",
@@ -230,6 +231,7 @@ function classifyPostPass(F) {
       assert.deepStrictEqual(Object.fromEntries(out.delta), row.delta);
       assert.deepStrictEqual(out.ops.map((op) => op.rel).sort(), [...row.ops].sort());
       assert.deepStrictEqual(stats.conflicts.map((c) => c.path), row.conflicts);
+      if (row.copies) assert.deepStrictEqual(stats.conflicts.map((c) => c.copy), row.copies);
     });
   }
   for (const special of [".gitignore", ".gitattributes", ".history.jsonl"]) {

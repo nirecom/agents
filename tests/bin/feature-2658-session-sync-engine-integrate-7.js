@@ -3,8 +3,8 @@
 // Tags: TL1, TL2, session-sync, session-sync-engine, real-git, two-clone, self-heal, jsonl-union, scope:issue-specific
 // #2658: eighth part of the session-sync engine suite (split from feature-2658-session-sync-engine-integrate-2.js
 // and -integrate-3.js so each entrypoint stays under the per-file runner timeout). Covers the local
-// delete with a remote change of the local-delete module, and the two-clone convergence of a
-// same-uuid jsonl conflict.
+// delete with a remote change of the local-delete module, the two-clone convergence of a
+// same-uuid jsonl conflict, and the deadline tree kill that waits for taskkill on win32.
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const { makeFixtures } = require("./feature-2658-session-sync-engine/fixtures");
 
@@ -30,4 +30,10 @@ caseEnd();
 
 caseBegin("integrate-same-uuid-conflict-converges", "bin/lib/session-sync/jsonl.js");
 conflict.twoClone(F);
+caseEnd();
+
+const runtime = require("./feature-2658-session-sync-engine/runtime");
+
+caseBegin("proc-kill-tree-waits-for-taskkill", "bin/lib/session-sync/proc.js");
+runtime.procKillWait(F);
 caseEnd();

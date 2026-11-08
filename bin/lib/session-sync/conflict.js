@@ -30,9 +30,9 @@ function siblingName(rel, host, date, existsFn) {
 }
 
 // Deterministic in rel and blob, so every machine and every repeated run converge on one copy.
-function collisionCopyName(rel, blob) {
+function collisionCopyName(rel, blob, n) {
   const { head, ext } = splitName(rel);
-  return `${head}.sync-conflict-${blob.slice(0, 12)}${ext}`;
+  return `${head}.sync-conflict-${blob.slice(0, 12)}${n ? `-${n}` : ""}${ext}`;
 }
 
 module.exports = { SKEW_MS, decide, siblingName, collisionCopyName };
