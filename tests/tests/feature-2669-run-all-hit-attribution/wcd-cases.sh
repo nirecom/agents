@@ -21,6 +21,11 @@ ha_wcd_checkout() {
   cp -R "$ROOT_N/tests/lib" "$d/tests/" || return 1
   cp "$ROOT_N/tests/run-all.sh" "$d/tests/" || return 1
   cp "$ROOT_N/tests/bin/feature-2561-root-names-residue.sh" "$d/tests/bin/" || return 1
+  # #2473: the launcher reads the target's .agents.json tests section (CLI and reader copied when present).
+  printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"hooks","covers":["hooks"]},{"dir":"bin","covers":["bin"]},{"dir":"skills","covers":["skills"]},{"dir":"agents","covers":["agents"]},{"dir":"install","covers":["install"]},{"dir":"tests","covers":["tests"]}],"supportDirs":["_archive","lib"],"testHarness":"on","caseMarker":"on"}}' >"$d/.agents.json"
+  if [ -f "$ROOT_N/bin/repo-settings" ]; then cp "$ROOT_N/bin/repo-settings" "$d/bin/" || return 1; fi
+  if [ -d "$ROOT_N/hooks/lib/repo-settings" ]; then cp -R "$ROOT_N/hooks/lib/repo-settings" "$d/hooks/lib/" || return 1; fi
+  if [ -f "$ROOT_N/hooks/lib/repo-settings.js" ]; then cp "$ROOT_N/hooks/lib/repo-settings.js" "$d/hooks/lib/" || return 1; fi
   printf 'clean\n' >"$d/clean.txt"
   for f in "$@"; do
     mkdir -p "$(dirname "$d/$f")" || return 1

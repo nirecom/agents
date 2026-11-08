@@ -15,10 +15,10 @@ make_zero_commit_repo() { # <repo> <mode> [ [+]path... ]
     local f p
     mkdir -p "$repo/tests/_archive" "$repo/tests/bin" "$repo/bin" "$repo/skills/run-tests" "$repo/docs"
     git -C "$repo" init -q
+    git -C "$repo" config core.hooksPath /dev/null
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
-    : > "$repo/tests/bin/run-tests.sh"
-    : > "$repo/tests/bin/feature-689-select-tests.sh"
+    seed_target_tests "$repo"
     # Pre-create the tracked files so a later edit to them is a MODIFICATION rather than an
     # addition; the `+` ones are deliberately left out of this commit.
     for f in "$@"; do

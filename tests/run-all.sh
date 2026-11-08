@@ -5,13 +5,18 @@
 # Usage: tests/run-all.sh [-j N|auto] [--deadline SECS] [--print-plan] [--all | <glob-or-file> ...]
 # Env:   FEATURE_644_PHASE, TEST_MAX_JOBS_PER_RUN, RUN_ALL_DEADLINE, RUN_ALL_PROGRESS, RUN_ALL_REAP
 # Exit:  0 pass / 1 fail / 77 nothing passed / 2 argument error / 3 deadline abort / 4 no test lane
-#        5 registry or report lib unreadable / 130 interrupted
+#        5 registry, report or settings lib unreadable / 6 target's .agents.json tests section not ok / 130 interrupted
 # See docs/architecture/claude-code/test-runner-parallelism.md for the full contract.
 
 set -uo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TESTS_DIR="${TESTS_DIR:-$SCRIPT_CHECKOUT_ROOT/tests}"
+# --all / no argument sweeps RUN_ALL_TARGET_ROOT (#2473; default this checkout) per its .agents.json;
+# a non-empty TESTS_DIR overrides it and skips the settings file. Target tests reach this checkout's helpers via AGENTS_TEST_HARNESS_DIR.
+TARGET_ROOT="${RUN_ALL_TARGET_ROOT:-$SCRIPT_CHECKOUT_ROOT}" TESTS_DIR_OVERRIDE="${TESTS_DIR:-}"; unset RUN_ALL_TARGET_ROOT # never inherited by the tests
+command -v cygpath >/dev/null 2>&1 && TARGET_ROOT="$(cygpath -u "$TARGET_ROOT")"
+TESTS_DIR="${TESTS_DIR:-$TARGET_ROOT/tests}"
+export AGENTS_TEST_HARNESS_DIR="$SCRIPT_CHECKOUT_ROOT/tests/lib"
 REGISTRY_LIB="${RUN_ALL_REGISTRY_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/test-language-registry.sh}"
 # shellcheck source=/dev/null
 { [ -f "$REGISTRY_LIB" ] && . "$REGISTRY_LIB" && tlr_load; } || { echo "[run-all] test language registry not readable: $REGISTRY_LIB (RUN_ALL_REGISTRY_LIB)" >&2; exit 5; }
@@ -117,10 +122,17 @@ expand_pattern() {
 }
 
 if [ "$WANT_ALL" -eq 1 ] || [ $# -eq 0 ]; then
-  # The six categories' direct files only (sub-dirs, lib, fixtures, tests/ top level excluded).
-  for cat in hooks bin skills agents install tests; do
-    tlr_list_dir_into "$TESTS_DIR/$cat" supported && for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do add_work "$f"; done
-    tlr_list_dir_into "$TESTS_DIR/$cat" recognized-only && for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do tlr_match "$f" && [ "$TLR_STATUS" != supported ] && UNSUP+=("$f"); done
+  RSF_LIB="${RUN_ALL_SETTINGS_LIB:-$SCRIPT_CHECKOUT_ROOT/bin/lib/repo-settings.sh}"
+  [ -n "${RUN_ALL_SETTINGS_LIB:-}" ] || [ -f "$RSF_LIB" ] || RSF_LIB="${REGISTRY_LIB%/*}/repo-settings.sh"
+  # shellcheck source=/dev/null
+  { [ -f "$RSF_LIB" ] && . "$RSF_LIB"; } || { echo "[run-all] repo settings library not readable: $RSF_LIB (RUN_ALL_SETTINGS_LIB)" >&2; exit 5; }
+  # Direct files of each entrypoint dir only (sub-dirs, support dirs, fixtures excluded).
+  rsf_sweep_dirs_into "$TARGET_ROOT" "$TESTS_DIR_OVERRIDE"; rc=$?; [ "$rc" -ne 2 ] || exit 5
+  [ "$rc" -eq 0 ] || { echo "[run-all] $TARGET_ROOT/.agents.json: tests section $RSF_TESTS_STATE; run /migrate in that repo first" >&2; exit 6; }
+  TESTS_DIR="$RSF_SWEEP_TESTS_DIR"
+  for d in ${RSF_SWEEP_DIRS[@]+"${RSF_SWEEP_DIRS[@]}"}; do
+    tlr_list_dir_into "$d" supported && for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do [ "${f##*/}" = run-all.sh ] || add_work "$f"; done
+    tlr_list_dir_into "$d" recognized-only && for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do tlr_match "$f" && [ "$TLR_STATUS" != supported ] && UNSUP+=("$f"); done
   done
 else
   for pattern in "$@"; do expand_pattern "$pattern"; done
@@ -277,15 +289,9 @@ sort_work_lpt() {
       j="${ordered[$k]}"
       k=$((k + 1))
     fi
-    nw[$i]="${WORK[$j]}"
-    nl[$i]="${LANE[$j]}"
-    nt[$i]="${TIER[$j]}"
-    nk[$i]="${KEY[$j]:-}"
+    nw[$i]="${WORK[$j]}" nl[$i]="${LANE[$j]}" nt[$i]="${TIER[$j]}" nk[$i]="${KEY[$j]:-}"
   done
-  WORK=("${nw[@]}")
-  LANE=("${nl[@]}")
-  TIER=("${nt[@]}")
-  KEY=("${nk[@]}")
+  WORK=("${nw[@]}"); LANE=("${nl[@]}"); TIER=("${nt[@]}"); KEY=("${nk[@]}")
   return 0
 }
 sort_work_lpt
@@ -342,12 +348,8 @@ case "$REAP" in
   *) case "${RUN_ALL_WAITN_PROBE-}" in
        0) REAP=fifo ;;
        1) REAP=waitn ;;
-       *) if [ "${BASH_VERSINFO[0]}" -gt 4 ] ||
-            { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -ge 3 ]; }; then
-            REAP=waitn
-          else
-            REAP=fifo
-          fi ;;
+       *) REAP=fifo
+          { [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -ge 3 ]; }; } && REAP=waitn ;;
      esac ;;
 esac
 say "reap: $REAP"

@@ -11,14 +11,19 @@ const { headerTokens } = require("./exception");
 const { cases, pair } = require("./pairing");
 const { caseAddition } = require("./case-addition");
 
-// A test entrypoint the case-marker gate also judges: exactly tests/<category>/<name>, an entry
-// with a caseMarkerReader, and its helperLibrary present under root.
+// A test entrypoint the case-marker gate also judges: a category file (a flat one in a flat repo)
+// of root's .agents.json tests section and an entry with a caseMarkerReader, in a repo whose
+// caseMarker is on (#2473). Uninitialized: <tests>/<legacy category>/<name> with the entry's
+// helperLibrary present under root, as before.
 function isEntrypoint(match, entry, root) {
-  const m = /^tests\/([^/]*)\/([^/]+)$/.exec(match);
-  if (!m || !R.CATEGORIES.includes(m[1])) return false;
+  const r = root || ".";
+  const l = R.layoutFor(r);
+  const kind = R.placementOf(r, match).kind;
+  if (kind !== "category" && !(kind === "flat" && l.initialized && l.categorization === "flat")) return false;
+  if (!R.fieldValue(entry, "caseMarkerReader.file")) return false;
+  if (l.initialized) return l.caseMarker === "on";
   const hl = R.fieldValue(entry, "helperLibrary.path");
-  if (!R.fieldValue(entry, "caseMarkerReader.file") || !hl) return false;
-  return S.isFile(`${root || "."}/${hl}`);
+  return Boolean(hl) && S.isFile(`${r}/${hl}`);
 }
 
 const dropDot = (t) => (t.startsWith("./") ? t.slice(2) : t);

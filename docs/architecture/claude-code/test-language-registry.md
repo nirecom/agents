@@ -4,8 +4,8 @@ One declarative table owns every rule that depends on a test's language: which f
 Before #2500 these rules were spread over about 30 extension checks that disagreed on which languages they covered.
 Every tool now asks the table, so adding a language is one table entry plus, optionally, that language's parts.
 
-The six placement categories (`hooks bin skills agents install tests`) and the "is this an entrypoint" placement rules are not language rules; each tool keeps them (#2473 owns their consolidation).
-A tool decides with two inputs: placement (its own) × language (the table).
+Placement categories and the "is this an entrypoint" placement rules are not language rules; the repo's `.agents.json` owns them ([repo-settings-file.md](repo-settings-file.md)).
+A tool decides with two inputs: placement (`.agents.json`) × language (the table).
 
 ## Files
 

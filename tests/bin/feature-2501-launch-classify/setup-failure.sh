@@ -93,6 +93,8 @@ case_end
 # ra_e2e <tag> [<launcher>] — the checkout's tests/run-all.sh on m-env.sh alone; its exit code goes
 # to RA_RC and its report to $TMPBASE/ra-<tag>.out (kept in a file: the lines are report-shaped).
 cp "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" "$CO/tests/run-all.sh"
+# #2473: an initialized target carries its tests section (m-env.sh lives in tests/bin).
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"bin","covers":["bin"]}],"supportDirs":["_archive","lib"],"testHarness":"on","caseMarker":"on"}}' >"$CO/.agents.json"
 ra_e2e() {
   RA_RC=0
   (

@@ -4,9 +4,9 @@
 # Tags: worker-dispatch, test-runner, test-language-registry, node-test, mixed-language, integration, TL2, scope:issue-specific
 #
 # #2501 D7 main path in the default run (no RUN_TL3 gate): the real dispatcher drives the real
-# tests/run-all.sh over one bash + one node:test file in a fixture repo whose language table
-# holds only the runtimes this host is sure to have. Pester joins only in the TL3 sibling,
-# tests/bin/TL3-worker-dispatch-mixed-language-run.sh.
+# tests/run-all.sh over one bash + one node:test file in a fixture repo. The fixture is not the
+# agents repo, so the worker runs this checkout's shared runner with RUN_ALL_TARGET_ROOT=<fixture>
+# (#2473). Pester joins only in the TL3 sibling, tests/bin/TL3-worker-dispatch-mixed-language-run.sh.
 
 set -u
 
@@ -23,29 +23,14 @@ trap 'rm -rf "$TMPD"' EXIT
 harness_isolate "$TMPD/isolate"
 unset CLAUDE_CODE_SESSION_ID
 
-# --- fixture repo: the branch's runner + libraries, a bash/js-only language table -------
+# --- fixture repo: test files + the harness they source; no runner copy (the shared one runs) ---
 FIX="$TMPD/fixrepo"
 mkdir -p "$FIX/tests/bin"
 harness_git_init "$FIX"
-cp -r "$SCRIPT_CHECKOUT_ROOT/bin" "$FIX/bin"
-cp -r "$SCRIPT_CHECKOUT_ROOT/hooks" "$FIX/hooks"
 cp -r "$SCRIPT_CHECKOUT_ROOT/tests/lib" "$FIX/tests/lib"
-# The runner's root decoy reads the retired names from this file; it is not run here.
+# The harness copy's root decoy reads the retired names from this file; it is not run here.
 cp "$SCRIPT_CHECKOUT_ROOT/tests/bin/feature-2561-root-names-residue.sh" "$FIX/tests/bin/"
-cp "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" "$FIX/tests/.real-run-all.sh"
-# Host lanes and the duration ledger key on the real HOME; the fixture runs without them.
-rm -f "$FIX/bin/lib/test-host-lanes.sh" "$FIX/bin/lib/run-all-durations.sh"
-node -e '
-const fs = require("fs");
-const f = process.argv[1];
-const t = JSON.parse(fs.readFileSync(f, "utf8"));
-t.entries = t.entries.filter((e) => e.id !== "pester" && e.id !== "pytest");
-fs.writeFileSync(f, JSON.stringify(t, null, 2));
-' "$(np "$FIX/hooks/lib/test-language-registry.json")"
-# A wrapper keeps the real runner's full stdout: log_tail drops PASS case lines by contract.
 RUNNER_LOG="$TMPD/runner.out"
-printf '#!/usr/bin/env bash\nbash "%s" "$@" >"%s" 2>&1\nrc=$?\ncat "%s"\nexit "$rc"\n' \
-  "$FIX/tests/.real-run-all.sh" "$RUNNER_LOG" "$RUNNER_LOG" >"$FIX/tests/run-all.sh"
 
 # The fixture's own frontmatter is printed, not spelled at line start (one header per file).
 printf '#!/usr/bin/env bash\n# %s: tests/lib/harness.sh\n# %s: fixture, scope:issue-specific\n' Tests Tags >"$FIX/tests/bin/mixed-bash.sh"
@@ -66,6 +51,8 @@ const test = require("node:test");
 const assert = require("node:assert");
 test("mixed js breaks", () => { assert.strictEqual(1 + 1, 3); });
 JSFIX
+# #2473: the worker refuses a target without a tests section, so the fixture commits one.
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"bin","covers":["bin"]}],"supportDirs":["_archive","lib"],"testHarness":"on","caseMarker":"on"}}' >"$FIX/.agents.json"
 git -C "$FIX" add -A >/dev/null 2>&1
 git -C "$FIX" -c user.name=t -c user.email=t@example.com commit -q --no-verify -m fixture >/dev/null 2>&1
 FIXN="$(np "$FIX")"
@@ -76,9 +63,13 @@ DRC=0
 dispatch() {
   local pfile="$WORKFLOW_PLANS_DIR/$1.json"
   printf '{"cwd":"%s","test_args":[%s],"timeout_seconds":180,"jobs":1}' "$FIXN" "$2" >"$pfile"
-  : >"$RUNNER_LOG"
   DRC=0
   DOUT="$(run_with_timeout 200 node "$(np "$DISPATCH_JS")" test-runner "$FIXN" "$(np "$pfile")" 2>&1)" || DRC=$?
+}
+# run_shared <file>... — the shared runner as the worker starts it (cwd and RUN_ALL_TARGET_ROOT =
+# fixture); its full stdout goes to RUNNER_LOG, since log_tail drops PASS case lines by contract.
+run_shared() {
+  (cd "$FIX" && RUN_ALL_TARGET_ROOT="$FIXN" run_with_timeout 200 bash "$SCRIPT_CHECKOUT_ROOT/tests/run-all.sh" -j 1 "$@") >"$RUNNER_LOG" 2>&1
 }
 yaml_field() { printf '%s\n' "$DOUT" | sed -n "s/^$1: //p" | head -1; }
 # Only the value is read back: a raw contract line in this file's stdout would be read by run-all.
@@ -94,6 +85,7 @@ assert_eq "contract=$(contract_value)" "contract=PASS=2 FAIL=0 SKIP=0 EXECUTED=2
 [ "$(yaml_field status)" = "pass" ] || show_out "$DOUT"
 case_end
 
+run_shared tests/bin/mixed-bash.sh tests/bin/mixed.test.js
 case_begin "node-file-runs-through-its-wrapper" "bin/lib/test-wrappers/node.js"
 assert_eq "js-case-line=$(has_line "$RUNNER_LOG" '^PASS [^ ]*mixed\.test\.js::.*mixed js adds')" "js-case-line=1"
 case_end
