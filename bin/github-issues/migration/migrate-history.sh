@@ -43,6 +43,11 @@ fi
 if [ "$DRY_RUN" -eq 0 ]; then
   state_init "$TARGET_CHECKOUT_ROOT"
   state_load "$TARGET_CHECKOUT_ROOT"
+  # shellcheck source=../lib/host-adapter.sh
+  source "$SCRIPT_DIR/../lib/host-adapter.sh"
+  export HIA_ROOT="$TARGET_CHECKOUT_ROOT"
+  # No origin: an empty slug leaves the project to the CLI's own resolution in the checkout.
+  TARGET_REPO_SLUG="$(hia_repo_slug)" || TARGET_REPO_SLUG=""
 fi
 
 TMPDIR_ENTRIES=$(mktemp -d)
@@ -153,22 +158,32 @@ for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
     continue
   fi
 
-  issue_url=$(cd "$TARGET_CHECKOUT_ROOT" && gh issue create \
-    --title "$title" \
-    --label "$label" \
-    --label "status:migrated" \
-    --body-file "$(native_path "$body_file")")
-  issue_num=$(echo "$issue_url" | sed 's|.*/issues/||' | grep -oE '^[0-9]+')
-  if [ -z "$issue_num" ]; then
-    echo "ERROR: could not parse issue number from: $issue_url" >&2
+  issue_num="$(state_pending_close_issue history "$entry_id")"
+  if [ -n "$issue_num" ]; then
+    echo "  -> reusing #$issue_num (created earlier, close pending)"
+  else
+    if ! issue_url=$(hia_issue_create "$TARGET_REPO_SLUG" "$title" --body-file "$(native_path "$body_file")" "$label" "status:migrated"); then
+      echo "ERROR: issue create failed for $entry_id; nothing recorded" >&2
+      exit 1
+    fi
+    issue_num=$(echo "$issue_url" | sed 's|.*/issues/||' | grep -oE '^[0-9]+')
+    if [ -z "$issue_num" ]; then
+      echo "ERROR: could not parse issue number from: $issue_url" >&2
+      exit 1
+    fi
+    echo "  -> created #$issue_num"
+    state_record_pending_close history "$entry_id" "$issue_num"
+  fi
+
+  # A failed close stops the run with the entry still pending: an open "migrated" issue must not pass as done.
+  if ! ISSUE_CLOSE_SKILL=1 hia_issue_close "$TARGET_REPO_SLUG" "$issue_num"; then
+    echo "ERROR: could not close #$issue_num — re-run to retry the close (no new issue is created)" >&2
     exit 1
   fi
-  echo "  -> created #$issue_num"
-
-  (cd "$TARGET_CHECKOUT_ROOT" && ISSUE_CLOSE_SKILL=1 gh issue close "$issue_num" --reason completed) || true
   echo "  -> closed  #$issue_num"
 
   state_record_migrated history "$entry_id" "$issue_num" "$title"
+  state_clear_pending_close history "$entry_id"
   created_this_run=$((created_this_run + 1))
 done
 

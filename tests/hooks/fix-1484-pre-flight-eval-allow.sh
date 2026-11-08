@@ -215,7 +215,7 @@ test_F1484_3_block_eval_non_sanctioned() {
     assert_block "F1484-3: eval-wrapped non-sanctioned script → BLOCK (identity gate, GREEN always)" "$rc"
 }
 
-# F1484-4: eval-wrapped + args (migrate-repo style, out of scope) → BLOCK
+# F1484-4: eval-wrapped + args (migrate-issues style, out of scope) → BLOCK
 # GREEN always: the eval-unwrap branch accepts NO args to the inner bash call.
 # A trailing argument makes this out-of-scope and must be rejected.
 test_F1484_4_block_eval_with_args() {

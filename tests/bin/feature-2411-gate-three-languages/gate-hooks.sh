@@ -148,7 +148,7 @@ fi
 _staged="$(git -C "$REPO_OLD" diff --cached --name-only | grep -c .)"
 assert_eq "staged edits=$_staged" "staged edits=${#OLD_RELS[@]}"
 pc_run "$REPO_OLD"
-assert_eq "commit-time rc=$PC_RC out=$PC_OUT err=$PC_ERR" "commit-time rc=0 out= err="
+assert_eq "commit-time rc=$PC_RC out=$PC_OUT err=$PC_ERR" "commit-time rc=0 out= err=$PC_UNINIT_WARN"
 case_end
 
 # The edit-time half — one hook run per existing file — is in

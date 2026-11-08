@@ -20,7 +20,7 @@ _tcc_bad_chars() {
     return 1
 }
 
-# tcc_key_into <root> — TCC_DIGEST from (a) HEAD:tests, (b) the corpus-path
+# tcc_key_into <root> — TCC_DIGEST from (a) HEAD:<tests dir>, (b) the corpus-path
 # status records plus the content hash of each dirty file, (c) the parser libs,
 # (d) the registry table and reader, (e) TCC_SCHEMA. At most 4 git calls; 1 = not cacheable.
 tcc_key_into() {
@@ -29,9 +29,12 @@ tcc_key_into() {
     TCC_DIGEST=""
     [ -e "$root/.git" ] || return 1
     globs="$(tlr_globs case-marker)" && [ -n "$globs" ] || return 1
-    for c in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
-        while IFS= read -r g; do specs+=(":(glob)tests/$c/$g"); done <<< "$globs"
+    # The scan range follows root's .agents.json entrypoint dirs (#2473); they enter the key below.
+    ! declare -F tdg_use_root >/dev/null || tdg_use_root "$root"
+    for c in ${_TDG_TEST_DIRS[@]+"${_TDG_TEST_DIRS[@]}"}; do
+        while IFS= read -r g; do specs+=(":(glob)$c/$g"); done <<< "$globs"
     done
+    [ "${#specs[@]}" -gt 0 ] || return 1
     while IFS= read -r -d '' r; do
         case "$r" in
             '#tcc-rc='*) rc="${r#'#tcc-rc='}"; continue ;;
@@ -49,7 +52,7 @@ tcc_key_into() {
         --ignored=matching --no-renames -- "${specs[@]}" 2>/dev/null; printf '#tcc-rc=%s\0' "$?")
     [ "$rc" = 0 ] || return 1
     if [ "$has_head" -eq 1 ]; then
-        tree="$(git -C "$root" rev-parse -q --verify HEAD:tests 2>/dev/null)"
+        tree="$(git -C "$root" rev-parse -q --verify "HEAD:${_TDG_TESTS_DIR:-tests}" 2>/dev/null)"
         case "$?" in
             0) ;;
             1) tree=none ;;
@@ -66,7 +69,9 @@ tcc_key_into() {
     reg="${TCC_REGISTRY_DIR:-$TLR_REGISTRY_DIR}"
     logic="$(git -C "${TCC_LOGIC_DIR:-$_TRD_DIR}" hash-object --no-filters -- $TCC_LOGIC_LIBS \
         "$reg/test-language-registry.json" "$reg/test-language-registry.js" 2>/dev/null)" || return 1
-    TCC_DIGEST="$(run_all_id_digest "schema=$TCC_SCHEMA|tree=$tree|status=$rec|dirty=$hashes|logic=$logic")"
+    # A tests dir other than the legacy `tests` enters the key too; `tests` keeps the pre-#2473 key.
+    [ "${_TDG_TESTS_DIR:-tests}" = tests ] || tree="${_TDG_TESTS_DIR}:$tree"
+    TCC_DIGEST="$(run_all_id_digest "schema=$TCC_SCHEMA|tree=$tree|status=$rec|dirty=$hashes|logic=$logic|cats=${_TDG_CANONICAL_CATEGORIES[*]-}")"
     [ -n "$TCC_DIGEST" ] && [ "$TCC_DIGEST" != nodigest ]
 }
 

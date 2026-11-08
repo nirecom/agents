@@ -1,25 +1,31 @@
 # Mock factory: setup_mock, CANONICAL_BODY, teardown_mock
 # Tests: bin/github-issues/issue-create-dispatch.sh
 # Tags: scope:issue-specific
-# ---------------------------------------------------------------------------
-# Inline gh mock factory — creates a self-contained mock in $TMP/mock-bin/gh
-# per test so each test gets its own args log and env vars.
-# ---------------------------------------------------------------------------
+# The gh mock is written ONCE under IC_TMP_ROOT and put on PATH once; each case gets its
+# own args log via setup_mock. Cases run in subshells (case-runner.sh), so env never leaks.
 
 # Settings root: a fixture with empty private-info lists, so the outbound scan reaches its verdict.
-SETTINGS_FIXTURE="$(mktemp -d)"; readonly SETTINGS_FIXTURE
-trap 'rm -rf "$SETTINGS_FIXTURE"' EXIT
-mkdir -p "$SETTINGS_FIXTURE/agents-main"
-: > "$SETTINGS_FIXTURE/agents-main/.private-info-blocklist"
-: > "$SETTINGS_FIXTURE/agents-main/.private-info-allowlist"
-export AGENTS_MAIN_ROOT="$SETTINGS_FIXTURE/agents-main"
+mkdir -p "$IC_TMP_ROOT/agents-main" "$IC_TMP_ROOT/mock-bin" "$IC_TMP_ROOT/results" "$IC_TMP_ROOT/cwd"
+: > "$IC_TMP_ROOT/agents-main/.private-info-blocklist"
+: > "$IC_TMP_ROOT/agents-main/.private-info-allowlist"
+export AGENTS_MAIN_ROOT="$IC_TMP_ROOT/agents-main"
 
-TMP=""
+# Neutral CWD: a github.com-origin fixture repo, so Phase 0a and the origin resolver see the
+# same remote on every host instead of whatever repo the runner was launched from.
+git init -q "$IC_TMP_ROOT/cwd"
+git -C "$IC_TMP_ROOT/cwd" config core.hooksPath /dev/null
+git -C "$IC_TMP_ROOT/cwd" remote add origin https://github.com/nirecom/agents.git
+cd "$IC_TMP_ROOT/cwd"
 
-setup_mock() {
-    TMP="$(mktemp -d)"
-    mkdir -p "$TMP/mock-bin"
-    cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+# Resolver cache pre-seeded with exactly the row the default mock's GraphQL path writes, so
+# cases never race on a cache write. R1/R3 re-point WORKFLOW_STATE_DIR to exercise the miss.
+mkdir -p "$WORKFLOW_STATE_DIR/cache" "$WORKFLOW_PLANS_DIR"
+IC_FIELD="PVTF_lAHOAMF_jc4BXf9EzhSsYwA"
+printf 'nirecom/agents\tnirecom\t1\tPVT_kwHOAMF_jc4BXf9E\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$IC_FIELD" "$IC_FIELD" "$IC_FIELD" "$IC_FIELD" "$IC_FIELD" "$IC_FIELD" \
+    > "$WORKFLOW_STATE_DIR/cache/project-resolve.tsv"
+
+cat > "$IC_TMP_ROOT/mock-bin/gh" <<'MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
@@ -229,8 +235,14 @@ case "$ARGS" in
     exit 2 ;;
 esac
 MOCK_EOF
-    chmod +x "$TMP/mock-bin/gh"
-    export PATH="$TMP/mock-bin:$PATH"
+chmod +x "$IC_TMP_ROOT/mock-bin/gh"
+export PATH="$IC_TMP_ROOT/mock-bin:$PATH"
+
+TMP=""
+
+# setup_mock — per-case scratch dir and args log; the mock itself is shared (written above).
+setup_mock() {
+    TMP="$(mktemp -d "$IC_TMP_ROOT/case.XXXXXX")"
     export GH_MOCK_ARGS_LOG="$TMP/gh-args.log"
     : > "$GH_MOCK_ARGS_LOG"
 }
@@ -240,14 +252,10 @@ MOCK_EOF
 # before validation (S3/S7-S11) don't need this.
 CANONICAL_BODY="Background: test\nChanges: test"
 
+# teardown_mock — the case runs in its own subshell, so env needs no unset; only the dir goes.
 teardown_mock() {
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
-        rm -rf "$TMP"
+    if [[ -n "${TMP:-}" && -d "$TMP" ]]; then
+        rm -rf "${TMP:?}"
     fi
     TMP=""
-    unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_FAIL GH_MOCK_CREATEDAT_EMPTY GH_MOCK_ITEM_EDIT_FAIL 2>/dev/null || true
-    unset GH_MOCK_SUBISSUE_API_FAIL GH_MOCK_NEW_ISSUE_NUM GH_MOCK_ISSUE_STATE_42 GH_MOCK_ISSUE_STATE_43 GH_MOCK_ISSUE_STATE_100 2>/dev/null || true
-    unset GH_MOCK_PARENT_NUM_200 GH_MOCK_PARENT_ABSENT_100 GH_MOCK_REOPEN_FAIL_100 GH_MOCK_GRAPHQL_DBID_FAIL 2>/dev/null || true
-    unset GH_MOCK_ISSUE_NUMS GH_MOCK_CREATE_CURSOR GH_MOCK_SUBISSUE_FAIL_FROM GH_MOCK_SUBISSUE_CURSOR 2>/dev/null || true
-    unset GH_MOCK_ISSUE_BODY GH_MOCK_REOPEN_LOG_COMMENT_BODY GH_MOCK_LABEL_FAIL 2>/dev/null || true
 }

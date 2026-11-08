@@ -1,10 +1,10 @@
 # Tests: bin/lib/test-embed-cases/retry-record.sh
 # Tags: TL2, scope:common, audit-tests, embed-cases, retry
-# Sourced by tests/bin/bin-audit-tests-embed-cases.sh — the narrowing of an
+# Sourced by tests/bin/bin-audit-tests-embed-cases-apply.sh — the narrowing of an
 # embed-retry.tsv row beyond its hash: the relpath must match, and a reason
 # ending in " (repo <toplevel>)" scopes the row to that repo only. Also pins
 # that the apply path writes that suffix. Reuses s3_plan / s3_hash from
-# stage3-apply-cases.sh.
+# stage3-helpers.sh.
 
 # rs_toplevel <root> — the repo root as tec_main sees it after its cd.
 rs_toplevel() { (cd "$1" && cd "$(git rev-parse --show-toplevel)" && pwd); }

@@ -2,9 +2,8 @@
 # tests/tests/feature-1834-2level-consumer-updates.sh
 # Tests: tests/run-all.sh, bin/select-tests.sh, bin/audit-tests.sh, bin/audit-tests-common.sh
 # Tags: scope:issue-specific
-# TL2 (#1834): post-migration enumeration of tests/<category>/<name>.sh across
-# hooks/bin/skills/agents/install/tests. Whole file SKIPs (77) until the
-# migration lands (tests/hooks/ present); PASSes once consumers are updated.
+# TL2 (#1834): post-migration enumeration of tests/<category>/<name>.sh across the categories of
+# .agents.json (#2473). SKIPs (77) until tests/hooks/ exists; PASSes once consumers are updated.
 # TL3 gap: live run-tests/pre-commit corpus enumeration is covered by the
 # day-to-day run-all invocation, not here.
 
@@ -29,7 +28,7 @@ AUDIT_TESTS_COMMON="$SCRIPT_CHECKOUT_ROOT/bin/audit-tests-common.sh"
 TMP_ROOT="$(make_tmp)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-CATEGORIES=(hooks bin skills agents install tests)
+read -r -a CATEGORIES <<<"$(node -e 'try{const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(j.tests.categories.map((c)=>c.dir).join(" "))}catch(e){process.stdout.write("hooks bin skills agents install tests")}' "$(np "$SCRIPT_CHECKOUT_ROOT/.agents.json")")"
 
 # write_min <path> — a minimal, runnable test-shaped file.
 # Single-redirect body: no `} >file` brace-group idiom, so the static case
@@ -46,6 +45,15 @@ write_min() {
 write_notests() {
   mkdir -p "$(dirname "$1")"
   printf '#!/usr/bin/env bash\n# Tags: scope:%s\necho hi\n' "$2" > "$1"
+}
+
+init_repo() {
+  mkdir -p "$1/bin"
+  git -C "$1" init -q
+  git -C "$1" config core.hooksPath /dev/null
+  git -C "$1" config core.autocrlf false
+  git -C "$1" config user.email "t@example.com"
+  git -C "$1" config user.name "t"
 }
 
 source "$SCRIPT_CHECKOUT_ROOT/tests/tests/feature-1834-2level-consumer-updates/_install-selector.sh"
@@ -141,12 +149,7 @@ case_begin "select-stem" "bin/select-tests.sh"
 # 1d — select-tests.sh stem-match into tests/hooks/ subdir
 # =====================================================================
 ST_REPO="$TMP_ROOT/select-repo"
-mkdir -p "$ST_REPO/bin"
-git -C "$ST_REPO" init -q
-git -C "$ST_REPO" config core.hooksPath /dev/null
-git -C "$ST_REPO" config core.autocrlf false
-git -C "$ST_REPO" config user.email "t@example.com"
-git -C "$ST_REPO" config user.name "t"
+init_repo "$ST_REPO"
 # Copy the real (post-migration) selector so TESTS_DIR resolves inside the fixture.
 install_selector "$ST_REPO"
 printf 'init\n' > "$ST_REPO/README.md"
@@ -173,12 +176,7 @@ fi
 #      split dispatcher's <name>/ children.
 # =====================================================================
 ST6_REPO="$TMP_ROOT/select-repo-6cat"
-mkdir -p "$ST6_REPO/bin"
-git -C "$ST6_REPO" init -q
-git -C "$ST6_REPO" config core.hooksPath /dev/null
-git -C "$ST6_REPO" config core.autocrlf false
-git -C "$ST6_REPO" config user.email "t@example.com"
-git -C "$ST6_REPO" config user.name "t"
+init_repo "$ST6_REPO"
 install_selector "$ST6_REPO"
 printf 'init\n' > "$ST6_REPO/README.md"
 git -C "$ST6_REPO" add -A >/dev/null 2>&1
@@ -261,12 +259,7 @@ case_begin "tl3-discovery" "bin/select-tests.sh"
 #      Post-fix: find without -maxdepth 1 reaches tests/hooks/ → PASSES.
 # =====================================================================
 TL3_REPO="$TMP_ROOT/tl3-repo"
-mkdir -p "$TL3_REPO/bin"
-git -C "$TL3_REPO" init -q
-git -C "$TL3_REPO" config core.hooksPath /dev/null
-git -C "$TL3_REPO" config core.autocrlf false
-git -C "$TL3_REPO" config user.email "t@example.com"
-git -C "$TL3_REPO" config user.name "t"
+init_repo "$TL3_REPO"
 # Stub: get-config-var returns exit 1 so RUN_TL3 = ON (not-off).
 printf '#!/usr/bin/env bash\nexit 1\n' > "$TL3_REPO/bin/get-config-var"
 chmod +x "$TL3_REPO/bin/get-config-var"
@@ -295,12 +288,7 @@ case_begin "audit-scan" "bin/audit-tests.sh"
 # 1e — audit-tests.sh scans feature-NNN-*.sh inside category subdirs
 # =====================================================================
 AT_REPO="$TMP_ROOT/audit-repo"
-mkdir -p "$AT_REPO/tests/hooks" "$AT_REPO/bin"
-git -C "$AT_REPO" init -q
-git -C "$AT_REPO" config core.hooksPath /dev/null
-git -C "$AT_REPO" config core.autocrlf false
-git -C "$AT_REPO" config user.email "t@example.com"
-git -C "$AT_REPO" config user.name "t"
+init_repo "$AT_REPO"
 # A feature-numbered file in a category subdir, deliberately missing # Tests:
 # so a scanned file surfaces a NO_TESTS_HEADER diagnostic naming its path.
 write_notests "$AT_REPO/tests/hooks/feature-9999-cat-subdir.sh" issue-specific
@@ -321,12 +309,7 @@ fi
 #      diagnostic naming its path — proof the scanner reached it.
 # =====================================================================
 AT6_REPO="$TMP_ROOT/audit-repo-6cat"
-mkdir -p "$AT6_REPO/bin"
-git -C "$AT6_REPO" init -q
-git -C "$AT6_REPO" config core.hooksPath /dev/null
-git -C "$AT6_REPO" config core.autocrlf false
-git -C "$AT6_REPO" config user.email "t@example.com"
-git -C "$AT6_REPO" config user.name "t"
+init_repo "$AT6_REPO"
 printf 'init\n' > "$AT6_REPO/README.md"
 for cat in "${CATEGORIES[@]}"; do
   write_notests "$AT6_REPO/tests/$cat/feature-9001-$cat-scan.sh" issue-specific
@@ -375,12 +358,7 @@ fi
 #      not reached → no output → FAILS. Post-fix: scans tests/<cat>/feature-*.
 # =====================================================================
 FH_REPO="$TMP_ROOT/fix-headers-repo"
-mkdir -p "$FH_REPO/bin"
-git -C "$FH_REPO" init -q
-git -C "$FH_REPO" config core.hooksPath /dev/null
-git -C "$FH_REPO" config core.autocrlf false
-git -C "$FH_REPO" config user.email "t@example.com"
-git -C "$FH_REPO" config user.name "t"
+init_repo "$FH_REPO"
 printf 'init\n' > "$FH_REPO/README.md"
 for cat in "${CATEGORIES[@]}"; do
   mkdir -p "$FH_REPO/tests/$cat"
@@ -412,6 +390,24 @@ if [[ -z "$leaked_fh_scope" ]]; then
   pass "1l_scope audit-tests --fix-headers excludes common-widget files (scope exclusion)"
 else
   fail "1l_scope audit-tests --fix-headers must not pick up common-widget files" "leaked:$leaked_fh_scope out=[$FH_OUT]"
+fi
+
+# 1n — the scan follows the repo's .agents.json categories (#2473): custom e2e in, omitted legacy install out.
+CFG_REPO="$TMP_ROOT/audit-repo-config-cats"
+init_repo "$CFG_REPO"
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-type","categories":[{"dir":"e2e"},{"dir":"bin"}],"supportDirs":["lib"],"testHarness":"off","caseMarker":"off"}}' > "$CFG_REPO/.agents.json"
+for cat in e2e bin install; do
+  write_notests "$CFG_REPO/tests/$cat/feature-9002-$cat-cfg.sh" issue-specific
+  write_notests "$CFG_REPO/tests/$cat/common-widget-cfg-$cat.sh" common
+done
+git -C "$CFG_REPO" add -A >/dev/null 2>&1
+git -C "$CFG_REPO" commit -q -m "fixture" >/dev/null 2>&1
+CFG_OUT="$(cd "$CFG_REPO" && bash "$AUDIT_TESTS" --dry-run --offline 2>&1 || true)"
+out_has() { printf '%s\n' "$1" | grep -q -- "$2"; }
+if out_has "$CFG_OUT" feature-9002-e2e-cfg.sh && out_has "$CFG_OUT" feature-9002-bin-cfg.sh && ! out_has "$CFG_OUT" feature-9002-install-cfg.sh; then
+  pass "1n audit-tests scans the .agents.json categories (custom e2e in, omitted legacy install out)"
+else
+  fail "1n audit-tests scans the .agents.json categories (custom e2e in, omitted legacy install out)" "out=[$CFG_OUT]"
 fi
 case_end
 
@@ -455,12 +451,7 @@ fi
 #      Post-fix: scans tests/<cat>/*.sh; file found + reported.
 # =====================================================================
 FHC_REPO="$TMP_ROOT/fix-headers-common-repo"
-mkdir -p "$FHC_REPO/bin"
-git -C "$FHC_REPO" init -q
-git -C "$FHC_REPO" config core.hooksPath /dev/null
-git -C "$FHC_REPO" config core.autocrlf false
-git -C "$FHC_REPO" config user.email "t@example.com"
-git -C "$FHC_REPO" config user.name "t"
+init_repo "$FHC_REPO"
 printf 'init\n' > "$FHC_REPO/README.md"
 for cat in "${CATEGORIES[@]}"; do
   mkdir -p "$FHC_REPO/tests/$cat"
@@ -492,6 +483,14 @@ if [[ -z "$leaked_fhc_scope" ]]; then
   pass "1m_scope audit-tests-common --fix-headers excludes feature-NNN files (scope exclusion)"
 else
   fail "1m_scope audit-tests-common --fix-headers must not pick up feature-NNN files" "leaked:$leaked_fhc_scope out=[$FHC_OUT]"
+fi
+
+# 1o — audit-tests-common follows the same .agents.json categories (CFG_REPO from 1n).
+CFGC_OUT="$(cd "$CFG_REPO" && bash "$AUDIT_TESTS_COMMON" --dry-run --offline 2>&1 || true)"
+if out_has "$CFGC_OUT" common-widget-cfg-e2e.sh && out_has "$CFGC_OUT" common-widget-cfg-bin.sh && ! out_has "$CFGC_OUT" common-widget-cfg-install.sh; then
+  pass "1o audit-tests-common scans the .agents.json categories (custom e2e in, omitted legacy install out)"
+else
+  fail "1o audit-tests-common scans the .agents.json categories (custom e2e in, omitted legacy install out)" "out=[$CFGC_OUT]"
 fi
 case_end
 

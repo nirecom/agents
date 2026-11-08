@@ -4,9 +4,7 @@
 # TL2 test of bin/check-test-frontmatter.sh: validates the `# Tests:` header
 # (presence + per-token FRONTMATTER_TOKEN_VALID_RE) and the `# Tags:` scope tag
 # in --staged (staged-blob via git show) and --all (working-tree scan) modes.
-# TL3 gap: real pre-commit hook firing and live gh API timeouts are not covered;
-# gap checked at WORKFLOW_USER_VERIFIED preflight (check-verification-gate.sh,
-# category hook-registration).
+# TL3 gap: real pre-commit firing and live gh API timeouts (checked at the WORKFLOW_USER_VERIFIED preflight).
 
 set -euo pipefail
 
@@ -39,16 +37,15 @@ write_test_body() {
   } > "$path"
 }
 
-DEFAULT_TAGS='# Tags: TL2, scope:issue-specific'
+DEFAULT_TAGS='# Tags: TL2, scope:issue-specific'; CATS_RAW="$(node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(j.tests.categories.map((c)=>c.dir).join(" "))' "$REPO_ROOT/.agents.json" 2>&1)" || { fail "read .agents.json categories (#2473: no default list)" "cannot read tests.categories of $REPO_ROOT/.agents.json: $CATS_RAW"; echo "1..1"; echo "# PASS=$PASS FAIL=$FAIL"; exit 1; }; read -r -a CATS <<<"$CATS_RAW"
 
-# make_git_fixture -> echoes a fresh git repo root
+# make_git_fixture [testHarness=off] -> a fresh git repo root carrying the same tests section (#2473)
 make_git_fixture() {
-  local root; root="$(mktemp -d)"
+  local root harness="${1:-off}"; root="$(mktemp -d)"
   git -C "$root" init -q
   git -C "$root" config core.hooksPath /dev/null 2>/dev/null || true
-  git -C "$root" config user.email "t@example.com"
-  git -C "$root" config user.name "t"
-  mkdir -p "$root/tests" "$root/bin"
+  git -C "$root" config user.email "t@example.com"; git -C "$root" config user.name "t"
+  mkdir -p "$root/tests" "$root/bin" && node -e 'const c=process.argv.slice(3).map((d)=>({dir:d,covers:[d]}));require("fs").writeFileSync(process.argv[1],JSON.stringify({tests:{dir:"tests",categorization:"by-target",categories:c,supportDirs:["_archive","lib"],testHarness:process.argv[2],caseMarker:"on"}}))' "$root/.agents.json" "$harness" "${CATS[@]}"
   # Provide a real path so valid tokens resolve where the script checks existence.
   echo '#!/usr/bin/env bash' > "$root/bin/foo.sh"
   echo '#!/usr/bin/env bash' > "$root/bin/bar.sh"
@@ -235,9 +232,8 @@ case_begin "two-level-layout" "bin/lib/test-frontmatter-constants.sh"
 # --staged (2e, passes now).
 
 # 2a: --staged over a VALID tests/hooks/ file => exit 0, no error token
-R="$(make_git_fixture)"
-write_test_body "$R/tests/hooks/valid.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
-run_staged "$R" "tests/hooks/valid.sh"
+R="$(make_git_fixture)"; mkdir -p "$R/hooks" && echo '// foo' > "$R/hooks/foo.js"
+write_test_body "$R/tests/hooks/valid.sh" '# Tests: hooks/foo.js' "$DEFAULT_TAGS"; run_staged "$R" "tests/hooks/valid.sh"
 if [[ $RC -eq 0 && -z "$ERR" ]]; then
   pass "2a --staged validates a valid tests/hooks/ file (exit 0)"
 else
@@ -297,13 +293,11 @@ rm -rf "$R"
 
 # 2f: --all scans ALL six category subdirs, not just tests/hooks/. The 2d gate
 # ensures the C4 fix is applied before this case runs.
-CATS_R="$(make_git_fixture)"
-for cat in hooks bin skills agents install tests; do
+CATS_R="$(make_git_fixture)"; for cat in "${CATS[@]}"; do
   write_test_body "$CATS_R/tests/$cat/malformed-$cat.sh" '# Tests: bin/foo.sh (bad annotation)' "$DEFAULT_TAGS"
 done
 run_all "$CATS_R"
-missing_cats=""
-for cat in hooks bin skills agents install tests; do
+missing_cats=""; for cat in "${CATS[@]}"; do
   if [[ "$ERR" == *"malformed-$cat.sh"* || "$OUT" == *"malformed-$cat.sh"* ]]; then
     :
   else
@@ -344,8 +338,7 @@ case_begin "harness-source-check" "bin/check-test-frontmatter.sh"
 # 6a: NEW staged tests/hooks/bad-test.sh WITHOUT sourcing harness.sh
 #     => MISSING_HARNESS_SOURCE (post-fix). The outer skip guard confirmed
 #     tests/hooks/ exists, so a missing check is a failure, not a skip.
-R="$(make_git_fixture)"
-mkdir -p "$R/tests/lib"
+R="$(make_git_fixture on)"; mkdir -p "$R/tests/lib"
 echo '# harness stub' > "$R/tests/lib/harness.sh"
 write_test_body "$R/tests/hooks/bad-test.sh" '# Tests: bin/foo.sh' "$DEFAULT_TAGS"
 run_staged "$R" "tests/hooks/bad-test.sh"
@@ -360,8 +353,7 @@ rm -rf "$R"
 
 # 6b: NEW staged tests/hooks/good-test.sh WITH harness source => no
 #     MISSING_HARNESS_SOURCE and exit 0 (positive case).
-R="$(make_git_fixture)"
-mkdir -p "$R/tests/lib" "$R/tests/hooks"
+R="$(make_git_fixture on)"; mkdir -p "$R/tests/lib" "$R/tests/hooks"
 echo '# harness stub' > "$R/tests/lib/harness.sh"
 {
   echo '#!/usr/bin/env bash'

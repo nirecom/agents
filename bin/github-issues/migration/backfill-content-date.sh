@@ -18,6 +18,13 @@ source "$SCRIPT_DIR/state.sh"
 TARGET_CHECKOUT_ROOT="${1:?usage: backfill-content-date.sh <repo_dir>}"
 TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
 
+# shellcheck source=../lib/host-adapter.sh
+source "$SCRIPT_DIR/../lib/host-adapter.sh"
+if [ "$(hia_host "$TARGET_CHECKOUT_ROOT")" = gitlab ]; then
+  echo "Content Date: GitLab has no counterpart field — skip"
+  exit 0
+fi
+
 : "${MIGRATE_PROJECT_ID:?MIGRATE_PROJECT_ID must be set (Projects v2 node id)}"
 : "${MIGRATE_FIELD_ID:?MIGRATE_FIELD_ID must be set (Content Date field id)}"
 : "${MIGRATE_PROJECT_NUM:?MIGRATE_PROJECT_NUM must be set (project number)}"

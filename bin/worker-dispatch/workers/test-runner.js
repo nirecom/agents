@@ -11,6 +11,8 @@
 // emit.js (this module never touches stdout).
 
 const { run: spawnRun, scriptExists } = require("../spawn");
+const { load: loadRepoSettings } = require("../../../hooks/lib/repo-settings");
+const { sameRepo } = require("../../../hooks/lib/same-repo");
 
 // Separators are ASCII blanks only: each one is in run-all-report.sh _RAR_REPORT_RE's set, so a line
 // matched here is one the runner's neutralizer prefixes when a child prints it.
@@ -138,23 +140,34 @@ function stripContractLines(lines) {
   return lines.filter((l) => !CONTRACT_PREFIX_RE.test(String(l)));
 }
 
+// runnerError(summary, durationSeconds) — the nothing-ran outcome.
+function runnerError(summary, durationSeconds) {
+  return { status: "runner-error", exitCode: -1, durationSeconds, summary, failingTests: [], logTail: [], runContract: null };
+}
+
+// The target's tests section, read before anything spawns (#2473): without it the runner cannot
+// know where the tests live, so the remedy (/migrate) is the summary.
+function settingsError(cwd) {
+  const t = loadRepoSettings(cwd).tests;
+  if (t.state === "ok") return null;
+  const why = t.state === "malformed" || t.state === "unsupported" ?` (${(t.errors || []).join("; ")})` : "";
+  return `.agents.json tests section ${t.state}${why} — run /migrate in the target repo first`;
+}
+
+// runAllSelf only when the target IS the agents repo of this checkout (a linked worktree counts);
+// any other repo gets the checkout's shared runner.
+const scriptKeyFor = (anchors, cwd) => (sameRepo(anchors.scriptCheckoutRoot, cwd, process.env) ? "runAllSelf" : "runAllShared");
+
 function run(payload, ctx) {
   const { anchors, entry } = ctx;
   const started = Date.now();
   const elapsed = () => Math.max(0, Math.round((Date.now() - started) / 1000));
 
-  const script = scriptExists(entry, "runAll", anchors, payload.cwd);
-  if (script === null) {
-    return {
-      status: "runner-error",
-      exitCode: -1,
-      durationSeconds: elapsed(),
-      summary: "tests/run-all.sh was not found under the target worktree",
-      failingTests: [],
-      logTail: [],
-      runContract: null,
-    };
-  }
+  const unset = settingsError(payload.cwd);
+  if (unset !== null) return runnerError(unset, elapsed());
+  const key = scriptKeyFor(anchors, payload.cwd);
+  const script = scriptExists(entry, key, anchors, payload.cwd);
+  if (script === null) return runnerError(`tests/run-all.sh (${key}) was not found`, elapsed());
 
   // Deadline lets the suite exit cleanly before the worker's own timeout (#1832).
   // Lead args are derived/validated ints — never caller argv text.
@@ -167,9 +180,10 @@ function run(payload, ctx) {
     res = spawnRun(entry, {
       anchors,
       command: "bash",
-      script: "runAll",
+      script: key,
       args: lead.concat(payload.test_args || []),
       cwd: payload.cwd,
+      extraEnv: { RUN_ALL_TARGET_ROOT: payload.cwd },
       timeoutMs: (payload.timeout_seconds || 120) * 1000,
     });
   } catch (e) {

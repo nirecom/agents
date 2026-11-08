@@ -33,7 +33,7 @@ dt_case() {
   DT_T="tests/bin/test-dt-$label.sh" DT_RAN="$TMPROOT/dt-$label-executed" DT_SID="dt-$label-$$"
   ch_repo_begin "$repo"
   ch_mk_test "$repo" "$DT_T" "$DT_RAN"
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$DT_T"
   cache="$(cli_case_cache "dt-$label")"
   [ -z "$secs" ] || dt_seed_dur "$cache" "$repo" "$DT_T" "$secs" || fail "$label: could not seed the duration ledger"
   seed_failing "$DT_SID" "$DT_T"
@@ -61,7 +61,8 @@ dt_assert_budget_exhausted() {
   else
     fail "$1: the test body ran despite an exhausted budget (sentinel exists)"
   fi
-  cli_assert_undetermined_only "$1" "$DT_T"
+  # budget-exhausted is a re-run request (#2688): exit 8, run_tests stays open.
+  cli_assert_undetermined_only "$1" "$DT_T" 8
   cli_assert_not_completed "$1" "$DT_SID" "$DT_T"
 }
 
@@ -75,7 +76,7 @@ dt_shared_budget_cases() {
   ch_repo_begin "$repo"
   ch_mk_test "$repo" "$t1" "$ran1" 'sleep 25'
   ch_mk_test "$repo" "$t2" "$ran2"
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t1" "$t2"
   cache="$(cli_case_cache dt-shared)"
   seed_failing "$sid" "$t1" "$t2"
   dt_cli_run "$cache" "$repo" "$sid" RTB_BUDGET_TOTAL=100
@@ -134,15 +135,17 @@ run_timeout_cli_cases() {
   # ---- (d) an explicit --per-test-timeout beats a derived 540 (ledger says 400s) ----
   repo="$TMPROOT/repo-dt-explicit"
   mk_fixture_repo "$repo" >/dev/null
+  feat_commit_failing "$repo" tests/bin/test-sleep.sh
   cache="$(cli_case_cache dt-explicit)"
   dt_seed_dur "$cache" "$repo" tests/bin/test-sleep.sh 400 || fail "D1: could not seed the duration ledger"
   seed_failing "dt-d-$$" tests/bin/test-sleep.sh
   dt_cli_run "$cache" "$repo" "dt-d-$$" -- --per-test-timeout 1
-  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE: undetermined[[:space:]]+tests/bin/test-sleep.sh.*timeout-at-base' \
-    && [ "$RTB_CLI_RC" -eq 1 ]; then
-    pass "D1: explicit 1s timed the sleeping test out (timeout-at-base), exit 1"
+  # An explicit value below the derived one says nothing about the test (#2688): budget-exhausted, exit 8.
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE '^BASELINE: undetermined[[:space:]]+tests/bin/test-sleep.sh[[:space:]]+budget-exhausted' \
+    && [ "$RTB_CLI_RC" -eq 8 ]; then
+    pass "D1: explicit 1s (below the derived 540s) timed the sleeping test out as budget-exhausted, exit 8"
   else
-    fail "D1: expected timeout-at-base + exit 1; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
+    fail "D1: expected budget-exhausted + exit 8; rc=$RTB_CLI_RC ($(cli_baseline_lines))"
   fi
   dt_assert_timeout_line "D2" tests/bin/test-sleep.sh "1s (explicit)"
 
@@ -152,9 +155,28 @@ run_timeout_cli_cases() {
   dt_case e-explicit "" RTB_BUDGET_TOTAL=50 -- --per-test-timeout 10
   dt_assert_budget_exhausted "E-CLI2 (explicit path, TOTAL=50)"
 
+  dt_huge_explicit_case
+  dt_shared_budget_cases
+}
+
+# (f), (g), x590 and H6/H7 run in their own entrypoint (feature-2431-run-tests-baseline-timeout-derived.sh),
+# so the two halves of the CLI timeout group run in parallel.
+run_timeout_cli_derived_cases() {
+  if [ ! -f "$BASELINE_CLI" ]; then
+    fail "DT-derived: bin/run-tests-baseline not found (impl pending)"
+    return
+  fi
+  local slice
+
   # ---- (f) the derived value reaches the diagnostic line; the test still runs and completes ----
   dt_case f-long 400
-  dt_assert_timeout_line "F1" "$DT_T" "540s (derived)"
+  # 540 fits the 555 s deadline only while start-up plus the branch stage (#2688) stay under ~13 s;
+  # on a slow host the same derived 540 shows as budget-limited. Either line proves 540 was derived.
+  if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^run-tests-baseline: timeout: ${DT_T//./\\.} (540s \(derived\)|[0-9]+s \(derived, limited from 540s by budget\))\$"; then
+    pass "F1: diagnostic line shows the derived 540s (whole or budget-limited)"
+  else
+    fail "F1: no derived-540s diagnostic line; rc=$RTB_CLI_RC ($(printf '%s\n' "$RTB_CLI_OUT" | grep 'timeout:' | tr '\n' '|'))"
+  fi
   ch_assert_preexisting "F1" "$DT_T" "$DT_RAN" "$DT_SID"
   dt_case f-short 5
   dt_assert_timeout_line "F2" "$DT_T" "300s (derived)"
@@ -183,9 +205,6 @@ run_timeout_cli_cases() {
     fail "X1: no 'explicit, limited from 590s by budget' diagnostic; rc=$RTB_CLI_RC ($(printf '%s\n' "$RTB_CLI_OUT" | grep 'timeout:' | tr '\n' '|'))"
   fi
   ch_assert_preexisting "X1" "$DT_T" "$DT_RAN" "$DT_SID"
-
-  dt_huge_explicit_case
-  dt_shared_budget_cases
 
   # ---- (h'') the value shown is the value handed to rtb_exec_one ----
   if grep -qE 'rtb_exec_one[^#]*"\$T_USE"' "$BASELINE_CLI"; then

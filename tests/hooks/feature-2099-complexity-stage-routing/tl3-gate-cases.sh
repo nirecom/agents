@@ -8,6 +8,8 @@
 # coverage). Nothing below spends a token: it drives the gate, never the judge.
 
 D2099G_LANE="$SCRIPT_CHECKOUT_ROOT/tests/skills/TL3-complexity-stage-routing-live-judge.sh"
+# shellcheck source=../../lib/repo-settings-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/repo-settings-fixture.sh"
 
 # GATE-1: with RUN_TL3 off the lane must SKIP the runner's way — exit 77, which
 # tests/run-all.sh counts as SKIP. Exit 0 would be the false green: a lane that
@@ -211,10 +213,14 @@ d2099g_select_emits_lane() {
     printf '#!/bin/bash\nexit 1\n' > "$fake/bin/get-config-var"
     chmod +x "$fake/bin/get-config-var"
 
-    # Real select-tests.sh + stem lib; the script resolves SCRIPT_CHECKOUT_ROOT
-    # from its own dirname, so it finds the stub get-config-var automatically.
+    # Real select-tests.sh + stem lib + repo settings reader (#2473: the category dirs); the script
+    # resolves SCRIPT_CHECKOUT_ROOT from its own dirname, so it finds the stub get-config-var too.
     cp "$SCRIPT_CHECKOUT_ROOT/bin/select-tests.sh" "$fake/bin/"
     cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/select-tests-stem.sh" "$fake/bin/lib/"
+    if ! install_repo_settings "$fake" "$SCRIPT_CHECKOUT_ROOT"; then
+        fail "GATE-3b could not install the repo settings reader into the fake tree"
+        return
+    fi
 
     # Stub test-language-registry.sh: tlr_load is a no-op; tlr_list_dir lists
     # .sh files from the given dir directly (avoids running node against a fake tree).
