@@ -144,3 +144,7 @@ Changes: session-sync no longer gets stuck needing `session-sync reset`: a lefto
 ### FEATURE: PR #2950 (2026-11-08)
 Background: feat(#2473): run the test workflow in any repo through .agents.json a...
 Changes: The test workflow works in any repo through .agents.json, and /migrate sets a repo up by running the tracker, issues and tests migrations it still needs.
+
+### FEATURE: PR #2954 (2026-11-09)
+Background: fix(#2951): detect staged test renames in run-tests-baseline rename s...
+Changes: Fixed `run-tests-baseline` missing a test rename that was only staged, which left run_tests unable to complete.
