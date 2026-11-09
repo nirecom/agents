@@ -160,3 +160,7 @@ Changes: Jev auto-answers only clarification dialogs whose dialog ID is listed a
 ### FEATURE: PR #2963 (2026-11-09)
 Background: feat(#2668): resolve a peer session's SendMessage destination from an...
 Changes: Added `find-peer`, which resolves the SendMessage destination of the session working on an issue (or of the session that filed it), and an ack convention so a sender can confirm a message arrived.;Issues created through any issue-create path now record the originating session, and session names carry the first 8 characters of the session id so peers can be addressed by name.
+
+### FEATURE: PR #2977 (2026-11-10)
+Background: test(#2968): fix 8 run-tests / workflow tests failing on main
+Changes: The 8 run-tests / workflow tests that were failing on main pass again (test-side fixes only; no behavior change).
