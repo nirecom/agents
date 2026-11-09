@@ -28,7 +28,7 @@ Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/
 
 - Skip Phase 0b and proceed to Pre-flight when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote).
 - Run `bash "$AGENTS_MAIN_ROOT/bin/github-issues/issue-create-preflight.sh" --check-project` (add `--repo OWNER/REPO` when targeting another repo).
-- On rc=1 (no board), AskUserQuestion:
+- On rc=1 (no board), AskUserQuestion (`metadata.source=issue-create.no-board`):
   - `run-issue-setup`: run `/migrate-tracker` against the target repo, then re-check Phase 0b.
   - `skip-this-time`: proceed to Pre-flight; the attach step remains warn-only.
 - `skip-this-time` is NOT persisted — Phase 0b re-checks on every `issue-create` run (no suppression state file).
@@ -87,7 +87,7 @@ Required body schema for `type:task` (enforced by `bin/github-issues/issue-creat
 | `Background` | `Background: <text>` / `## Background` / `### Background` |
 | `Changes`    | `Changes: <text>` / `## Changes` / `### Changes` |
 
-When the user-provided body is missing one or both required fields, use `AskUserQuestion` with these branches:
+When the user-provided body is missing one or both required fields, use `AskUserQuestion` (`metadata.source=issue-create.body-missing`) with these branches:
 - `fix-now`: re-author the body inline with the missing field(s) added.
 - `template`: prefill the 2-section template `## Background\n<TBD>\n\n## Changes\n<TBD>` and ask the user to fill it.
 - `bypass`: set `ISSUE_CREATE_SKIP_SCHEMA=1` for this invocation — emergency escape hatch; sanctioned path is always to add the missing fields.
@@ -121,7 +121,7 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 3f. Applies only when `confirm: yes`, `review.status` is not `disputed`, and G3 did not fire → check the fired conditions against the verdict and placement yourself.
 When you agree, first record with `bash "$AGENTS_MAIN_ROOT/skills/issue-create/scripts/record-confirm-decision.sh" '<PLANS_DIR>' '<session-id>' auto '<reasons>' '<rationale>'`; proceed to Phase 4 without asking only when that exits 0, and tell the main conversation why in 1–2 sentences.
 Single-quote every argument of record-confirm-decision.sh and drop any `'` from the text you substitute (rationale is free text; double quotes would expand `$(...)`).
-3g. Otherwise (`disputed`, G3 fired, you disagree or are unsure, or the 3f record exited non-zero) → AskUserQuestion before Phase 4, naming the fired conditions (for `disputed`, both verdicts), and record it the same way with `asked`.
+3g. Otherwise (`disputed`, G3 fired, you disagree or are unsure, or the 3f record exited non-zero) → AskUserQuestion (`metadata.source=issue-create.confirm-gate`) before Phase 4, naming the fired conditions (for `disputed`, both verdicts), and record it the same way with `asked`.
 
 The gate is the logical OR of four conditions; the script owns the decision, this list only supplies the question text:
 - G1 — final verdict is `reopen`, `make-parent`, `sub-of` or `bulk-sub-of` (mutates existing state; `sub-of` / `bulk-sub-of` may reopen closed ancestors of the parent chain)

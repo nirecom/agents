@@ -18,8 +18,8 @@ It ends with `PREFLIGHT=` and `PREFLIGHT_REASON=` for the PR mergeability check.
 
 ### RUN_TL4 gate (precedes all modes)
 
-- `OFF` (RUN_TL4 off — the default; unset counts as off) → TL4 verification is not enabled; do not raise any `AskUserQuestion`; log each `CATEGORY:` line to `WORKTREE_NOTES.md ## Unverified Categories` with the annotation `skipped: RUN_TL4=off (TL4 verification not enabled)`; then proceed to Protocol, skipping the Interactive / Non-interactive / Failure branches below.
-- In this off path, if `GATE_RC` is 2 or 3 (classifier failed): still raise no `AskUserQuestion`; emit one stderr warning and skip the category trace; then proceed to Protocol. No ask can ever occur when RUN_TL4=off.
+- `OFF` (RUN_TL4 off — the default; unset counts as off) → TL4 verification is not enabled; do not raise any `AskUserQuestion`; log each `CATEGORY:` line to `WORKTREE_NOTES.md ## Unverified Categories` with the annotation `skipped: RUN_TL4=off (TL4 verification not enabled)`; then proceed to Protocol, skipping the Interactive / Non-interactive / Failure branches below. <!-- askuser-none -->
+- In this off path, if `GATE_RC` is 2 or 3 (classifier failed): still raise no `AskUserQuestion`; emit one stderr warning and skip the category trace; then proceed to Protocol. No ask can ever occur when RUN_TL4=off. <!-- askuser-none -->
 - `ON` (RUN_TL4 on) → run the preflight branches below unchanged.
 - `ERROR` (config read failed) → fail-safe to the on path; run the preflight branches below unchanged; never silence the gate on an ambiguous read.
 
@@ -27,20 +27,20 @@ It ends with `PREFLIGHT=` and `PREFLIGHT_REASON=` for the PR mergeability check.
 
 Count matched categories:
 - **Zero matches** → no risk category. Skip the gate; proceed to Protocol.
-- **One match** → single-choice AskUserQuestion using the `QUESTION:` text. Options: `Yes — verified` / `No — skip verification this time`. `Yes`: proceed. `No`: proceed but log the unverified category to `WORKTREE_NOTES.md ## Unverified Categories`.
-- **Multiple matches** → single multi-select AskUserQuestion with one option per category (label = `QUESTION:` text), plus `Skip all — proceed without verification`. Selected categories are verified. Unselected categories are logged to `WORKTREE_NOTES.md ## Unverified Categories`. Emission proceeds regardless.
+- **One match** → single-choice AskUserQuestion (`metadata.source=user-verified.tl4-single`) using the `QUESTION:` text. Options: `Yes — verified` / `No — skip verification this time`. `Yes`: proceed. `No`: proceed but log the unverified category to `WORKTREE_NOTES.md ## Unverified Categories`.
+- **Multiple matches** → single multi-select AskUserQuestion (`metadata.source=user-verified.tl4-multi`) with one option per category (label = `QUESTION:` text), plus `Skip all — proceed without verification`. Selected categories are verified. Unselected categories are logged to `WORKTREE_NOTES.md ## Unverified Categories`. Emission proceeds regardless.
 
 ### Non-interactive mode
 
 When `$CI` or `$CLAUDE_NON_INTERACTIVE` is set:
-- Skip AskUserQuestion.
+- Skip AskUserQuestion. <!-- askuser-none -->
 - Emit one stderr warning per matched category: `WARNING: verification-gate category <token> not interactively confirmed (non-interactive mode).`
 - Log each matched category to `WORKTREE_NOTES.md ## Unverified Categories`.
 - Proceed with sentinel emission.
 
 ### Web-merge channel
 
-`PREFLIGHT=web_merge_*` (pull_request + `AUTO_MERGE_PR=off`) → raise no `AskUserQuestion` in any mode and never emit the sentinel; log matched categories as in Non-interactive mode.
+`PREFLIGHT=web_merge_*` (pull_request + `AUTO_MERGE_PR=off`) → raise no `AskUserQuestion` in any mode and never emit the sentinel; log matched categories as in Non-interactive mode. <!-- askuser-none -->
 The human's merge on the web is the only approval; `/get-release-approval` owns the wait.
 
 ### Failure mode

@@ -21,7 +21,7 @@ Initialize a target repo's issue tracker: sync its label set, create/link its bo
 
 ## Procedure
 
-MT-1. Resolve the target. Called from `/migrate`: take `ROOT` / `HOST` as given and ask nothing. Otherwise AskUserQuestion:
+MT-1. Resolve the target. Called from `/migrate`: take `ROOT` / `HOST` as given and ask nothing. Otherwise AskUserQuestion (`metadata.source=migrate-tracker.target-select`):
 - `current`: `ROOT` = `git rev-parse --show-toplevel` of the CWD; `TARGET_REPO` from its origin.
 - `other`: ask for `OWNER/REPO` and its local checkout path, or "no local checkout" (then `ROOT` stays unset).
 - When `ROOT` is set, run `node "$AGENTS_MAIN_ROOT/skills/migrate-tracker/scripts/needs.js" --root "<ROOT>"`; exit 0 means already done — report success and end.
@@ -30,7 +30,7 @@ MT-2. Sync labels (no confirmation — automatic): run `run-issue-setup.sh --ste
 
 MT-3. Check the board: run `run-issue-setup.sh --step check-project --repo "$TARGET_REPO"` → rc=0 present / rc=1 absent or incomplete (GitLab: a status:* list missing).
 
-MT-4. When the board is absent or incomplete, AskUserQuestion:
+MT-4. When the board is absent or incomplete, AskUserQuestion (`metadata.source=migrate-tracker.board-create`):
 - `create`: run `run-issue-setup.sh --step ensure-project --repo "$TARGET_REPO"`; on a non-zero exit, show its stderr and end without MT-5 (the next `/migrate` asks again).
 - `skip`: tell the user a manual link is required and that the next session's `/migrate` asks again; end without MT-5.
 
@@ -41,7 +41,7 @@ MT-6. Report the outcome. A skip or "no local checkout" is not done: say the nex
 ## Dry run
 
 - With `--dry-run`, pass `--dry-run` to every `run-issue-setup.sh` call; labels, ensure-project and record-done then only print their plan lines.
-- With `--dry-run`, run MT-4 without AskUserQuestion: an absent board shows the ensure-project plan line.
+- With `--dry-run`, run MT-4 without AskUserQuestion: an absent board shows the ensure-project plan line. <!-- askuser-none -->
 - Report the plan lines as what a real run would do; nothing is synced, created, written or committed.
 
 Backend script path: `$AGENTS_MAIN_ROOT/skills/migrate-tracker/scripts/run-issue-setup.sh`.

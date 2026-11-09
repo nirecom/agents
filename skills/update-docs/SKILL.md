@@ -39,8 +39,8 @@ UD-4. **Propose updates**: For each file that needs updating, present:
 UD-4a. **Glossary self-review**: apply the reviewer directives of `skills/_shared/combined-glossary.md` to the UD-4 proposal text, and raise each drift as a tagged concern per `skills/_shared/glossary-drift-check.md`.
 UD-5. **CONFIRM_DOCS gate**:
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
-   - Both branches: include the approval list of `skills/_shared/glossary-drift-check.md` in the shown proposal (the `ask` AskUserQuestion body, the `proceed` display).
-   - `GATE_ACTION=ask`: present the UD-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
+   - Both branches: include the approval list of `skills/_shared/glossary-drift-check.md` in the shown proposal (the `ask` AskUserQuestion body, `metadata.source=update-docs.proposal-approve`; the `proceed` display).
+   - `GATE_ACTION=ask`: present the UD-4 proposal via `AskUserQuestion` (`metadata.source=update-docs.proposal-approve`) and wait for approval before applying edits.
    - `GATE_ACTION=proceed`: apply the edits and continue to UD-6 without waiting.
    - When applying, run `node "$AGENTS_MAIN_ROOT/bin/glossary-promote" "<INTENT_MD>" "<project-root>"` first, then replace each promoted entry's `Related: TODO` with a link to the doc that owns the term.
 UD-6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
@@ -52,7 +52,7 @@ UD-7. **Commit separately**: If docs are in a separate repo, commit each repo in
 - Follow the structure and content rules defined in `rules/docs.md`
 - Follow `skills/_shared/combined-glossary.md` (writer directives).
 - Follow `DOCS_LANG_PUBLIC` / `DOCS_LANG_PRIVATE` settings in `.env` for History/Changelog entry language
-- Follow the gather → propose → confirm → apply cycle; the confirmation step is gated by `CONFIRM_DOCS` via the UD-5 gate check — on `GATE_ACTION=proceed`, the proposal is shown but no AskUserQuestion is raised
+- Follow the gather → propose → confirm → apply cycle; the confirmation step is gated by `CONFIRM_DOCS` via the UD-5 gate check — on `GATE_ACTION=proceed`, the proposal is shown but no AskUserQuestion is raised <!-- askuser-none -->
 - Compare git log against current docs to identify gaps
 
 ## Completion

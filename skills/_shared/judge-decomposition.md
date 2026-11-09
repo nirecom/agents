@@ -50,5 +50,5 @@ Routing rule for companion-driven verdicts: when ≥2 signals triggered but all 
 - Evaluate ALL signals before emitting the verdict — do not short-circuit on the first match
 - A large but unified task (single deliverable, single risk profile) scores 0 signals and stays wf-code
 - When wf-meta is proposed, present concrete named sub-deliverables (not an abstract "is this big?" question)
-- NEVER switch to wf-meta without user confirmation via AskUserQuestion
+- NEVER switch to wf-meta without user confirmation via AskUserQuestion (`metadata.source=clarify-intent.wf-meta-confirm`)
 - When zero PR history is available, evaluate signals from interview content alone — do not hang or error

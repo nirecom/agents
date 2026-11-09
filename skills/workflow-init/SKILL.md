@@ -37,7 +37,7 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 | `invoke` | Next skill ready | Run `NEXT_SKILL` via Skill tool |
 | `done` | Driver complete | Proceed to WI-10; follow `PATH_DECISION=` at WI-12 (Path C still runs WI-10 onward — no jump) |
 | `blocked` | Unrecoverable | Show `REASON=` + `NEXT_HINT=` and stop |
-| `ask_user` | User decision needed | Percent-decode `OPTIONS_DISPLAY=` (encoded like `QUESTION=`), present via `AskUserQuestion`; re-invoke with `--resume <CHECKPOINT> --answer '<token>'` |
+| `ask_user` | User decision needed | Percent-decode `OPTIONS_DISPLAY=` (encoded like `QUESTION=`), present via `AskUserQuestion` with `metadata.source=workflow-init.<ASK_ID>` (`ASK_ID=` without a trailing `_<N>`); re-invoke with `--resume <CHECKPOINT> --answer '<token>'` |
 | `emit_sentinel` | Driver requests sentinel | Emit `SENTINEL=` via separate Bash call |
 
 `ask_user` interruptions and their options:

@@ -16,7 +16,7 @@ RNT-0. **Read `rules/test.md`.** It is on-demand-only and never auto-injected, s
 
 RNT-1. **Resolve merge-base.**
    `bash "$AGENTS_MAIN_ROOT/bin/select-tests.sh" --auto` resolves it via `bin/resolve-merge-base.sh` -- this skill does not reimplement the chain.
-   exit 4 (SUSPECT / FALLBACK / helper missing) -> stop, show `bash "$AGENTS_MAIN_ROOT/bin/resolve-merge-base.sh" --explain`’s stderr output verbatim, and let the user choose the base (a candidate sha / an arbitrary sha / the safe fallback `HEAD` / abort).
+   exit 4 (SUSPECT / FALLBACK / helper missing) -> stop, show `bash "$AGENTS_MAIN_ROOT/bin/resolve-merge-base.sh" --explain`’s stderr output verbatim, and let the user choose the base via `AskUserQuestion` (`metadata.source=run-tests.merge-base-choice`) (a candidate sha / an arbitrary sha / the safe fallback `HEAD` / abort).
    Once the user confirms a base, record it with `node "$AGENTS_MAIN_ROOT/bin/workflow/record-merge-base-baseline" --session <sid> --base <sha> --reason "<confirmation detail>"` and re-run RNT-1 (it now passes as RECORDED).
    If the user chooses abort, emit RNT-9’s pending sentinel and stop.
    exit 0 with empty stdout -> treat as an empty selection and follow the RNT-5 policy.
@@ -43,7 +43,7 @@ RNT-4. **Tier 3 — default skip.**
 RNT-5. **Empty-selection policy (no silent `--all` fallback).**
    If Tier 1 + Tier 2 = 0 tests:
    - Docs-only change (all changed files match the docs allowlist): log `[run-tests] docs-only change; skipping tests`, then run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --advance --step run_tests --skipped --skip-reason "<reason>" --next` and follow the returned `ACTION`/`NEXT_SKILL`/`NEXT_HINT` per `CLAUDE.md`, then stop.
-   - Otherwise: log `[run-tests] no tests matched; user judgment required` and ask the user: skip / `--all` (explicit opt-in) / specify tests. Never auto-fallback to `--all` — that recreates the #673 hang.
+   - Otherwise: log `[run-tests] no tests matched; user judgment required` and ask the user via `AskUserQuestion` (`metadata.source=run-tests.empty-selection`): skip / `--all` (explicit opt-in) / specify tests. Never auto-fallback to `--all` — that recreates the #673 hang.
 
 RNT-6. **Run tests.**
    Pass the final list as positional args to `tests/run-all.sh`. Use `tests/run-all.sh --all` only when the user explicitly opts in. Never pass `auto-detect`.
@@ -51,9 +51,9 @@ RNT-6. **Run tests.**
 RNT-6a. **Calibration offer.**
    - Run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/probe-calibration.sh" --cwd <cwd> --session <sid>` and read `decision=`.
    - `none` -> go to RNT-7.
-   - `notice`, or `ask` when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> convey the `notice=` content in CONV_LANG, keeping commands and paths verbatim, write no record, go to RNT-7.
+   - `notice`, or `ask` when AskUserQuestion is unavailable (non-interactive: `claude -p`, `/loop`, subagents) -> convey the `notice=` content in CONV_LANG, keeping commands and paths verbatim, write no record, go to RNT-7. <!-- askuser-none -->
    - `ask` -> first run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/mark-calibration-asked.sh" --session <sid>`; if it fails or prints `first=no`, treat as `notice`.
-   - Then convey the `notice=` content in CONV_LANG, keeping commands and paths verbatim, and ask with AskUserQuestion: calibrate now (long-running) / not now.
+   - Then convey the `notice=` content in CONV_LANG, keeping commands and paths verbatim, and ask with AskUserQuestion (`metadata.source=run-tests.calibrate`): calibrate now (long-running) / not now.
    - not now or no answer -> run `bash "$AGENTS_MAIN_ROOT/skills/run-tests/scripts/answer-calibration.sh" defer --cwd <cwd> --session <sid>`, then go to RNT-7.
    - calibrate now -> run Bash `echo "<<WORKFLOW_NEXT_STEP_PAUSE: [for=run_tests] run-tests calibration>>"`.
    - Then show, in the conversation language, "Calibrating max jobs per host (about <estimate> min). Measuring now; please wait." with <estimate> from the probe's `estimate=`; when it is empty, omit the parenthesized estimate.

@@ -6,9 +6,11 @@
 //   ./jev-report-aggregate/legacy.js    v1 records (shadow period): Jev compared with the LLM
 //   ./jev-report-aggregate/adoption.js  v2 decisions: who decided, LLM call and short-circuit rates
 //   ./jev-report-aggregate/retune.js    v2 decisions of the skip points: agreement and RETUNE_POLICY
+//   ./jev-report-aggregate/askuser-dialogs.js  the AskUserQuestion route log, per dialog ID
 // docs/architecture/jev.md owns the report semantics.
 
 const fs = require("fs");
+const { readRoutes, aggregateDialogs, formatDialogs } = require("./jev-report-aggregate/askuser-dialogs");
 const { routeByVersion, selectV2Decisions } = require("./jev-report-aggregate/select");
 const { percentile, aggregatePoint, formatLegacy } = require("./jev-report-aggregate/legacy");
 const { aggregateAdoption, formatAdoption } = require("./jev-report-aggregate/adoption");
@@ -80,4 +82,17 @@ function formatText(result) {
   return out.join("\n") + "\n";
 }
 
-module.exports = { readLog, percentile, aggregatePoint, aggregate, formatText, GENERATIONS, RETUNE_POLICY };
+// The AskUserQuestion section: {dialogs, broken_lines} from the route log.
+function aggregateAskuserDialogs(routesLogPath) {
+  const { records, broken } = readRoutes(routesLogPath);
+  return { dialogs: aggregateDialogs(records), broken_lines: broken };
+}
+
+function formatAskuserDialogs(section) {
+  return formatDialogs(section.dialogs) + `askuser route broken lines: ${section.broken_lines}\n`;
+}
+
+module.exports = {
+  readLog, percentile, aggregatePoint, aggregate, formatText, GENERATIONS, RETUNE_POLICY,
+  aggregateAskuserDialogs, formatAskuserDialogs,
+};
