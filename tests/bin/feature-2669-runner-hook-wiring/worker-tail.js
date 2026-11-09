@@ -5,8 +5,11 @@
 // noisy the suite is, collects every column-0 HIT line into `hits`, and names them in its summary.
 // The stub is installed by init(), which the dispatcher calls only after the real runs.
 
+const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { ROOT, check, eq } = require("./common");
+const { installRepoSettings } = require("../../lib/repo-settings-fixture");
 
 const WORKER = path.join(ROOT, "bin", "worker-dispatch", "workers", "test-runner.js");
 const SPAWN = path.join(ROOT, "bin", "worker-dispatch", "spawn.js");
@@ -33,9 +36,20 @@ function tail(lines) {
   if (typeof worker.tailWithPriority !== "function") throw new Error("tailWithPriority is not exported");
   return worker.tailWithPriority(lines, 40, 30);
 }
+// The worker reads the target's .agents.json tests section before it spawns, so the stubbed run
+// still needs a cwd that carries one.
+let settingsCwd = null;
+function fixtureCwd() {
+  if (!settingsCwd) {
+    settingsCwd = fs.mkdtempSync(path.join(os.tmpdir(), "worker-tail-2968-"));
+    installRepoSettings(settingsCwd, ROOT);
+    process.on("exit", () => fs.rmSync(settingsCwd, { recursive: true, force: true }));
+  }
+  return settingsCwd;
+}
 function runWith(stdout, status) {
   stubbed = { stdout, stderr: "", status, timedOut: false, spawnError: null };
-  return worker.run({ cwd: "/fixture", timeout_seconds: 120 }, { anchors: {}, entry: { name: "test-runner" } });
+  return worker.run({ cwd: fixtureCwd(), timeout_seconds: 120 }, { anchors: {}, entry: { name: "test-runner" } });
 }
 
 const OMIT_NOTE = "… (+21 earlier FAIL/HIT lines omitted — full list in failing_tests / hits)";

@@ -32,25 +32,30 @@ has_line "budget: budget-exhausted line" "budget-exhausted"
 ck "budget: run_tests stays pending" "pending" "$(field "$S" status)"
 case_end
 
-# Budget boundary: slice = total - 45 (SAFETY) - 2 (KILL_GRACE) - elapsed is 0 when below 30 (MIN_SLICE).
-# 76 is always 0 (29 even at elapsed=0). 107 gives slice>0 when elapsed is within 30 s (set high to absorb elapsed jitter).
-case_begin "budget-boundary-76-skips-the-rerun" "bin/lib/run-tests-baseline-branch.sh"
-R="$TMPROOT/bud76"; mk_repo "$R" 0; S="br-bud76-$$"; mkdir -p "$R.cache"
+# Budget boundary: the branch stage passes elapsed = SECONDS + 150 (RTB_BRANCH_BASE_RESERVE) to the budget clamp, so
+# remaining = total - 45 (SAFETY) - 2 (KILL_GRACE) - 150 - SECONDS, and the slice is 0 when remaining < 30 (MIN_SLICE).
+# slice>0 needs total >= 227 + SECONDS. 197 = 227 - 30 is the lower side: with the reserve the slice is always 0, but if the
+# reserve fell back to 0 the remaining would be 150 - SECONDS >= 30 and the branch copy would run (a reserve regression is caught).
+# The base stage carries no reserve, so at 197 it still runs after the branch stage skips.
+# 257 = 227 + 30 s of SECONDS jitter margin (the upper side).
+case_begin "budget-boundary-197-skips-the-rerun" "bin/lib/run-tests-baseline-branch.sh"
+R="$TMPROOT/bud197"; mk_repo "$R" 0; S="br-bud197-$$"; mkdir -p "$R.cache"
 seed "$S" '{"tests/bin/t.sh":124}' tests/bin/t.sh
-rtb "$R.cache" "$R" "$S" RTB_BUDGET_TOTAL=76
-ck "bud76: exit 8 (re-run requested)" 8 "$RTB_RC"
-absent "bud76: no branch re-run on a zero slice" "$R.marks/branch"
-has_line "bud76: budget-exhausted line" "budget-exhausted"
+rtb "$R.cache" "$R" "$S" RTB_BUDGET_TOTAL=197
+ck "bud197: exit 0 (the base stage has no reserve and still fits)" 0 "$RTB_RC"
+absent "bud197: no branch re-run on a zero slice" "$R.marks/branch"
+lacks_line "bud197: not classified flaky" "flaky-timeout-on-branch"
+has_line "bud197: goes on to base (preexisting)" "BASELINE: preexisting tests/bin/t.sh"
 case_end
 
-case_begin "budget-boundary-107-still-reruns" "bin/lib/run-tests-baseline-branch.sh"
-R="$TMPROOT/bud107"; mk_repo "$R" 0; S="br-bud107-$$"; mkdir -p "$R.cache"
+case_begin "budget-boundary-257-still-reruns" "bin/lib/run-tests-baseline-branch.sh"
+R="$TMPROOT/bud257"; mk_repo "$R" 0; S="br-bud257-$$"; mkdir -p "$R.cache"
 seed "$S" '{"tests/bin/t.sh":124}' tests/bin/t.sh
-rtb "$R.cache" "$R" "$S" RTB_BUDGET_TOTAL=107
-ck "bud107: exit 0 (flaky recorded)" 0 "$RTB_RC"
-present "bud107: the branch copy ran on a positive slice" "$R.marks/branch"
-has_line "bud107: flaky line" "BASELINE: flaky-timeout-on-branch tests/bin/t.sh"
-lacks_line "bud107: no budget-exhausted line" "budget-exhausted"
+rtb "$R.cache" "$R" "$S" RTB_BUDGET_TOTAL=257
+ck "bud257: exit 0 (flaky recorded)" 0 "$RTB_RC"
+present "bud257: the branch copy ran on a positive slice" "$R.marks/branch"
+has_line "bud257: flaky line" "BASELINE: flaky-timeout-on-branch tests/bin/t.sh"
+lacks_line "bud257: no budget-exhausted line" "budget-exhausted"
 case_end
 
 case_begin "same-input-version-reuses-the-rerun" "bin/lib/run-tests-baseline-branch.sh"

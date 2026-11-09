@@ -47,7 +47,9 @@ build_repo() {
     git -C "$REPO_RAW" config user.name "Test"
     printf '#!/usr/bin/env bash\necho "Results: PASS=2 FAIL=0 SKIP=0"\n' > "$REPO_RAW/tests/run-all.sh"
     echo init > "$REPO_RAW/README.md"
-    git -C "$REPO_RAW" add README.md tests/run-all.sh >/dev/null 2>&1
+    . "$SCRIPT_CHECKOUT_ROOT/tests/lib/repo-settings-fixture.sh"
+    install_repo_settings "$REPO_RAW" "$SCRIPT_CHECKOUT_ROOT" || return 1
+    git -C "$REPO_RAW" add README.md tests/run-all.sh .agents.json bin hooks >/dev/null 2>&1
     git -C "$REPO_RAW" commit -q --no-verify -m initial >/dev/null 2>&1
     MAIN="$(np "$REPO_RAW")"; OUTSIDE="$(np "$OUTSIDE_RAW")"
     git -C "$REPO_RAW" rev-parse -q --verify HEAD >/dev/null 2>&1

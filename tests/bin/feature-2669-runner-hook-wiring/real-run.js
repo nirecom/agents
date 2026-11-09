@@ -6,6 +6,7 @@
 // real bin/run-tests-baseline reads the state that hook recorded. Nothing on the way is hand-made.
 
 const { gitInit } = require("../../lib/harness");
+const { installRepoSettings } = require("../../lib/repo-settings-fixture");
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -13,7 +14,10 @@ const { TMP, ROOT, fwd, mod, check, show, eq, seedPrefix, hook, runTests, errTex
 
 const FIX = path.join(TMP, "fixrepo");
 const FIX_FWD = fwd(FIX);
-const DISPATCH = path.join(ROOT, "bin", "worker-dispatch.js");
+// The fixture's own copy of the dispatcher: the worker runs the fixture's tests/run-all.sh (and
+// watches the fixture checkout for worktree changes) only when the dispatcher itself lives in the
+// target repo (#2473); the ROOT copy would send every run through the shared runner.
+const DISPATCH = path.join(FIX, "bin", "worker-dispatch.js");
 
 function git(args) {
   const r = spawnSync("git", ["-C", FIX].concat(args), { encoding: "utf8" });
@@ -27,6 +31,7 @@ function buildFixture() {
   fs.cpSync(path.join(ROOT, "bin"), path.join(FIX, "bin"), { recursive: true });
   fs.cpSync(path.join(ROOT, "hooks"), path.join(FIX, "hooks"), { recursive: true });
   fs.cpSync(path.join(ROOT, "tests", "lib"), path.join(FIX, "tests", "lib"), { recursive: true });
+  installRepoSettings(FIX, ROOT);
   // The runner's root decoy reads the retired names from this file; it is not run here.
   fs.copyFileSync(path.join(ROOT, "tests", "bin", "feature-2561-root-names-residue.sh"), path.join(FIX, "tests", "bin", "feature-2561-root-names-residue.sh"));
   fs.copyFileSync(path.join(ROOT, "tests", "run-all.sh"), path.join(FIX, "tests", "run-all.sh"));
@@ -59,7 +64,8 @@ function dispatch(sid, tests, seq = 1) {
   let outcome = null;
   try { outcome = JSON.parse(fs.readFileSync(path.join(dir, `${stem}.outcome.json`), "utf8")); } catch (_) { /* checked below */ }
   return {
-    command: `node "${fwd(DISPATCH)}" test-runner "${FIX_FWD}" "${fwd(payload)}"`,
+    // The command text the hook sees names the real dispatcher it recognizes, not the fixture copy.
+    command: `node "${fwd(path.join(ROOT, "bin", "worker-dispatch.js"))}" test-runner "${FIX_FWD}" "${fwd(payload)}"`,
     stdout: r.stdout || "", status: r.status, error: r.error ? r.error.message : null, outcome,
   };
 }
@@ -93,8 +99,13 @@ function sequence() {
   const first = dispatch(sid, HIT_TESTS, 1);
   hook(sid, "git status", 0, "");
   const afterHit = runTests(sid);
-  const d = dispatch(sid, CLEAN_TESTS, 2);
+  // The run record keeps one part per dispatch and a failing test stays failing until a run
+  // selects it again, so the clean run reruns the same selection after the tests are fixed.
+  const fixed = ["tests/bin/hit-guard.sh", "tests/bin/hit-noid.sh"];
+  for (const f of fixed) fs.writeFileSync(path.join(FIX, f), "#!/usr/bin/env bash\n# " + "Tests" + ": none\n:\nexit 0\n");
+  const d = dispatch(sid, HIT_TESTS, 2);
   hook(sid, "git status", 0, "");
+  git(["checkout", "--"].concat(fixed));
   return { d: first.error !== null ? first : d, afterHit, afterClean: runTests(sid) };
 }
 
