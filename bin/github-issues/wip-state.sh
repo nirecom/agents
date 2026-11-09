@@ -1,6 +1,6 @@
 #!/bin/bash
 # bin/github-issues/wip-state.sh — WIP signaling for issues via GitHub Projects v2.
-# Verbs: set <N> | check <N> | clear <N> | abandon <N> | setup
+# Verbs: set <N> | check <N> | clear <N> | abandon <N> | setup | holder <N>
 # Value: raw session id in the session-id field (docs/architecture/wip-signaling.md).
 # GraphQL: writes via gh project item-edit; reads via gh api graphql.
 # Run from the target repo's worktree.
@@ -63,9 +63,14 @@ while [ $# -gt 0 ]; do
 done
 
 case "$CMD" in
-    set|check|clear|abandon|setup) ;;
-    *) echo "Error: usage: wip-state.sh {set|check|clear|abandon|setup} [<N>] [--session-id <SID>]" >&2; exit 2 ;;
+    set|check|clear|abandon|setup|holder) ;;
+    *) echo "Error: usage: wip-state.sh {set|check|clear|abandon|setup|holder} [<N>] [--session-id <SID>]" >&2; exit 2 ;;
 esac
+
+if [ "$CMD" = "holder" ] && [ "$SID_SET" -eq 1 ]; then
+    echo "Error: 'holder' does not accept --session-id (verb does not consume session id)" >&2
+    exit 2
+fi
 
 if [ "$CMD" = "clear" ] && [ "$SID_SET" -eq 1 ]; then
     echo "Error: 'clear' does not accept --session-id (verb does not consume session id)" >&2
@@ -151,7 +156,7 @@ preflight_field_ids() {
             [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && missing+=("WIP_STATE_STATUS_FIELD_ID")
             [ -z "${WIP_STATE_IN_PROGRESS_OPTION_ID:-}" ] && missing+=("WIP_STATE_IN_PROGRESS_OPTION_ID")
             ;;
-        check)
+        check|holder)
             [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && missing+=("WIP_STATE_STATUS_FIELD_ID")
             ;;
         clear)
@@ -231,6 +236,8 @@ _WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/wip-state"
 . "$_WS_DIR/cmd-setup.sh"
 # shellcheck source=wip-state/cmd-abandon.sh
 . "$_WS_DIR/cmd-abandon.sh"
+# shellcheck source=wip-state/cmd-holder.sh
+. "$_WS_DIR/cmd-holder.sh"
 
 # GitLab dispatch (#2308). Skip the Projects v2 path (resolve-project.sh is sourced
 # above but never executed here) and route to the label-based verbs in gitlab.sh.
@@ -256,6 +263,7 @@ if [ "$FORGE" = "gitlab" ]; then
         clear)   gl_cmd_clear   "$N" ;;
         setup)   gl_cmd_setup ;;
         abandon) gl_cmd_abandon "$N" ;;
+        holder)  gl_cmd_holder  "$N" ;;
     esac
     exit 0
 fi
@@ -272,4 +280,5 @@ case "$CMD" in
     clear) cmd_clear "$N" ;;
     setup) cmd_setup ;;
     abandon) cmd_abandon "$N" ;;
+    holder) cmd_holder "$N" ;;
 esac

@@ -54,7 +54,8 @@ case_t1() {
     local RC=0 STDERR_OUT
     setup_mock
     STDERR_OUT="$TMP/t1-stderr.txt"
-    run_with_timeout 30 bash "$TARGET" --title "Date test" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>"$STDERR_OUT" || RC=$?
+    # An explicit origin session keeps the #2668 "origin-session unresolved" warning out of the no-warn check.
+    run_with_timeout 30 bash "$TARGET" --title "Date test" --body "$(printf "$CANONICAL_BODY")" --origin-session "t1-origin-session" >/dev/null 2>"$STDERR_OUT" || RC=$?
     if [[ "$RC" -eq 0 ]] \
        && grep -qE "issue view 9999" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -qE "project item-add.*--format json.*--jq|project item-add.*--jq.*--format json" "$GH_MOCK_ARGS_LOG" 2>/dev/null \

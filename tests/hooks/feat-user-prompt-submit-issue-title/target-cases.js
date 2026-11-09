@@ -20,12 +20,14 @@ function promptForms(F) {
       assert.strictEqual((F.readRecord(sid) || {}).last_emitted, want, JSON.stringify(F.readRecord(sid)));
     });
   }
+  // #2668: a session without refs now gets the "none" name (cwd basename "neutral" when git fails;
+  // a non-UUID sid carries no [xxxxxxxx] suffix) instead of nothing.
   for (const [label, prompt] of [["/wf-init on line 2", "hello\n/wf-init #12"], ["/wf-init without a token", "/wf-init please start"]]) {
-    test(`H1 ${label} emits nothing, fetches nothing`, () => {
+    test(`H1 ${label} emits the none name, fetches nothing`, () => {
       const sid = F.newSid("h1n"); F.seed(sid);
       const d = F.deps();
       const r = F.call(sid, prompt, d);
-      assert.ok(F.quiet(r), JSON.stringify(r));
+      assert.strictEqual(r, "neutral", JSON.stringify(r));
       assert.strictEqual(d.fetchCalls.length, 0);
     });
   }
@@ -46,13 +48,14 @@ function begunMark(F) {
     ["begun mark with an empty ## Issues", (sid) => { F.seed(sid, { status: "in_progress" }); F.writeIntent(sid, []); }],
   ];
   for (const [label, make] of silent) {
-    test(`H2 ${label}: emits nothing, 0 fetch, 0 spawn`, () => {
+    // #2668: no refs -> the none name; only git (origin lookup) may be spawned, never gh / glab.
+    test(`H2 ${label}: emits the none name, 0 fetch, 0 gh/glab spawn`, () => {
       const sid = F.newSid("h2n"); make(sid);
       const d = F.deps();
       const r = F.call(sid, "continue please", d);
-      assert.ok(F.quiet(r), JSON.stringify(r));
+      assert.strictEqual(r, "neutral", JSON.stringify(r));
       assert.strictEqual(d.fetchCalls.length, 0, JSON.stringify(d.fetchCalls));
-      assert.strictEqual(d.spawnCalls.length, 0, F.cmds(d));
+      assert.strictEqual(F.spawned(d, "gh").length + F.spawned(d, "glab").length, 0, F.cmds(d));
     });
   }
 }
@@ -70,12 +73,12 @@ function cacheAndNonTarget(F) {
     assert.ok(F.LOADED, "the hook entry is not loadable");
     assert.strictEqual(real.spawnCalls.length, 0, `no originUrl, no tracker: ${F.cmds(real)}`);
   });
-  test("H3 non-target session: nothing, 0 spawn", () => {
+  test("H3 session without refs: the none name, 0 gh/glab spawn", () => {
     const off = F.deps(); delete off.fetchTitle;
     const other = F.newSid("h3n"); F.seed(other);
     const r = F.call(other, "plain question", off);
-    assert.ok(F.quiet(r), JSON.stringify(r));
-    assert.strictEqual(off.spawnCalls.length, 0, F.cmds(off));
+    assert.strictEqual(r, "neutral", JSON.stringify(r));
+    assert.strictEqual(F.spawned(off, "gh").length + F.spawned(off, "glab").length, 0, F.cmds(off));
   });
 }
 

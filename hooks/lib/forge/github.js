@@ -185,31 +185,43 @@ const trackerGithub = {
   // issueTitle(remoteUrl, {number, repo?}, {timeoutMs, spawnSync?}) -> string | null; never throws.
   // A short ref.repo takes the origin's owner; an invalid owner/repo never reaches gh.
   issueTitle(remoteUrl, ref, opts) {
-    try {
-      const { parseOriginOwnerRepo, isValidOwner, isValidRepo } = require("../parse-remote-url");
-      const o = opts || {};
-      if (!ref || !Number.isInteger(ref.number) || ref.number <= 0) return null;
-      const origin = parseOriginOwnerRepo(remoteUrl);
-      if (!origin.ok) return null;
-      let owner = origin.owner;
-      let repo = origin.repo;
-      if (typeof ref.repo === "string" && ref.repo !== "") {
-        const parts = ref.repo.split("/");
-        if (parts.length > 2) return null;
-        if (parts.length === 2) [owner, repo] = parts;
-        else repo = parts[0];
-      }
-      if (!isValidOwner(owner) || !isValidRepo(repo)) return null;
-      const spawnSync = o.spawnSync || require("../limited-child-process").spawnSync;
-      const r = spawnSync("gh", ["issue", "view", String(ref.number), "-R", `${owner}/${repo}`, "--json", "title", "--jq", ".title"],
-        { encoding: "utf8", timeout: o.timeoutMs, windowsHide: true });
-      if (!r || r.error || r.status !== 0) return null;
-      const title = String(r.stdout || "").trim();
-      return title === "" ? null : title;
-    } catch (e) {
-      return null;
-    }
+    const out = ghIssueField(remoteUrl, ref, opts, "title");
+    const title = out === null ? "" : out.trim();
+    return title === "" ? null : title;
+  },
+  // issueBody(remoteUrl, {number, repo?}, {timeoutMs, spawnSync?}) -> string (may be "") | null on
+  // failure; never throws. Same ref and owner/repo rules as issueTitle.
+  issueBody(remoteUrl, ref, opts) {
+    const out = ghIssueField(remoteUrl, ref, opts, "body");
+    return out === null ? null : out.replace(/\r?\n$/, "");
   },
 };
+
+// ghIssueField(remoteUrl, ref, opts, field) -> the raw `gh issue view --json <field>` value, or null.
+function ghIssueField(remoteUrl, ref, opts, field) {
+  try {
+    const { parseOriginOwnerRepo, isValidOwner, isValidRepo } = require("../parse-remote-url");
+    const o = opts || {};
+    if (!ref || !Number.isInteger(ref.number) || ref.number <= 0) return null;
+    const origin = parseOriginOwnerRepo(remoteUrl);
+    if (!origin.ok) return null;
+    let owner = origin.owner;
+    let repo = origin.repo;
+    if (typeof ref.repo === "string" && ref.repo !== "") {
+      const parts = ref.repo.split("/");
+      if (parts.length > 2) return null;
+      if (parts.length === 2) [owner, repo] = parts;
+      else repo = parts[0];
+    }
+    if (!isValidOwner(owner) || !isValidRepo(repo)) return null;
+    const spawnSync = o.spawnSync || require("../limited-child-process").spawnSync;
+    const r = spawnSync("gh", ["issue", "view", String(ref.number), "-R", `${owner}/${repo}`, "--json", field, "--jq", `.${field}`],
+      { encoding: "utf8", timeout: o.timeoutMs, windowsHide: true });
+    if (!r || r.error || r.status !== 0) return null;
+    return String(r.stdout || "");
+  } catch (e) {
+    return null;
+  }
+}
 
 module.exports = { codehostGithub, trackerGithub, GH_API_WRITE_REGEX, GH_REPO_WRITE_REGEX };

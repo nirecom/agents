@@ -150,6 +150,17 @@ if (sessionId && !stateWriteError) {
   } catch (e) { /* fail-open */ }
 }
 
+// #2668: whether SessionStart output may carry sessionTitle is unverified, so a resume only arms the
+// mark; the first UserPromptSubmit gives the name again (user-prompt-submit-issue-title/title.js).
+if (sessionId && sessionSource === "resume" && !stateWriteError) {
+  try {
+    const { SESSION_ID_VALID_RE } = require("./workflow-state");
+    if (typeof sessionId === "string" && SESSION_ID_VALID_RE.test(sessionId)) {
+      require("./lib/session-name").armResumeMark(sessionId);
+    }
+  } catch (e) { /* fail-open */ }
+}
+
 // --- BEGIN temporary: plans-dir control files -> workflow control dir migration added 2026-09-28 ---
 // deletion-condition: remove after 2026-12-28 (release + 3 months) together with hooks/lib/temporary-migrations/control-dir-split/, bin/migrate-control-dir and the legacy-argument shims; keep guard (c) until then
 try {
