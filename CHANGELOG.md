@@ -164,3 +164,7 @@ Changes: Added `find-peer`, which resolves the SendMessage destination of the se
 ### FEATURE: PR #2977 (2026-11-10)
 Background: test(#2968): fix 8 run-tests / workflow tests failing on main
 Changes: The 8 run-tests / workflow tests that were failing on main pass again (test-side fixes only; no behavior change).
+
+### FEATURE: PR #2980 (2026-11-10)
+Background: feat(#2962): carry glossary grants across glossary-only edits
+Changes: Editing a glossary Definition or Related no longer asks you to re-approve `WORKFLOW_GLOSSARY_ACCEPTED` at every workflow step; one `term=* batch=definition-only` grant covers all definition-only redefines (#2962).;`/update-docs` now passes each new glossary term's Related link to `glossary-promote` with `--related`, instead of leaving `Related: TODO` (#2962).
