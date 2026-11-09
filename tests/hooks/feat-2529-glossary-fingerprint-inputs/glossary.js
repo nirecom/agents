@@ -1,6 +1,6 @@
 "use strict";
-// T7-2 (input 2, combined glossary): each glossary change below stales the record for all six
-// glossary steps; a newly added heading surfaces DRIFT on rescan; a linked worktree reads its own
+// T7-2 (input 2, combined glossary): each glossary change below moves the glossary digest for all
+// six glossary steps, and only a matching-field change stales the granted record (#2962); a newly added heading surfaces DRIFT on rescan; a linked worktree reads its own
 // glossary, not the main worktree's (#2770); a repo with no glossary files records an empty
 // digest without error.
 
@@ -16,32 +16,36 @@ const read = (repo, rel) => fs.readFileSync(abs(repo, rel), "utf8");
 const HEADING = "\n### release gate\n\n- **Definition**: A fixture gate.\n";
 
 // Applied in order to one repo; every state keeps the "workflow step" heading, so the finding
-// (and its grant cycle) survives each step.
+// (and its grant cycle) survives each step. #2962: the third column is the cycle option — only the
+// change of a matching field (`Short forms`) of the finding's term stales the granted record; every
+// other glossary change moves the digest but neither a finding nor a matching field.
+const KEEPS = { stale: false };
 function mutations(repo) {
   let internal = F.GLOSSARY_FILES[INTERNAL];
   return [
-    ["one user definition character", () => F.touchGlossary(repo, "!")],
+    ["one user definition character", () => F.touchGlossary(repo, "!"), KEEPS],
+    ["a Short forms line on the finding's entry", () => F.touchGlossaryMatch(repo)],
     ["one internal definition character", () => {
       internal = internal.replace("review covers.", "review covers!");
       F.writeFile(repo, INTERNAL, internal);
-    }],
-    ["an added heading", () => { internal += HEADING; F.writeFile(repo, INTERNAL, internal); }],
-    ["a removed glossary file", () => fs.rmSync(abs(repo, INTERNAL))],
-    ["an added glossary file", () => F.writeFile(repo, INTERNAL, internal)],
+    }, KEEPS],
+    ["an added heading", () => { internal += HEADING; F.writeFile(repo, INTERNAL, internal); }, KEEPS],
+    ["a removed glossary file", () => fs.rmSync(abs(repo, INTERNAL)), KEEPS],
+    ["an added glossary file", () => F.writeFile(repo, INTERNAL, internal), KEEPS],
     ["a range-split move of the user file", () =>
-      fs.renameSync(abs(repo, USER), abs(repo, "docs/glossary/user-a-z.md"))],
+      fs.renameSync(abs(repo, USER), abs(repo, "docs/glossary/user-a-z.md")), KEEPS],
     ["a switch to the legacy paths", () => {
       F.writeFile(repo, "docs/glossary-user.md", read(repo, "docs/glossary/user-a-z.md"));
       F.writeFile(repo, "docs/glossary-internal.md", internal);
       fs.rmSync(abs(repo, "docs/glossary"), { recursive: true, force: true });
-    }],
+    }, KEEPS],
   ];
 }
 
 function eachChange(m, steps = F.GLOSSARY_STEPS) {
   for (const step of steps) {
     const ctx = C.baseline(m, `t72-${step}`, step);
-    for (const [label, mutate] of mutations(ctx.repo)) C.cycle(m, ctx, label, "glossary", mutate);
+    for (const [label, mutate, opts] of mutations(ctx.repo)) C.cycle(m, ctx, label, "glossary", mutate, opts);
     const inputs = m.scope.loadStepInputs(ctx.sid, step, { repoDir: ctx.repo });
     F.check(`${step}: the legacy switch is reported as glossary.legacy`,
       !!inputs && inputs.ok && inputs.glossary.legacy === true, JSON.stringify(inputs && inputs.glossary));
@@ -77,8 +81,9 @@ function linkedWorktree(m) {
     F.commit(main, "fixture: main glossary edit");
   });
   C.cycle(m, ctx, "the main glossary edit merged into the linked worktree", "glossary",
-    () => F.git(wt, ["merge", "-q", "--ff-only", mainBranch]));
-  C.cycle(m, ctx, "an unstaged glossary edit in the linked worktree", "glossary", () => F.touchGlossary(wt, "?"));
+    () => F.git(wt, ["merge", "-q", "--ff-only", mainBranch]), KEEPS);
+  C.cycle(m, ctx, "an unstaged glossary edit in the linked worktree", "glossary", () => F.touchGlossary(wt, "?"), KEEPS);
+  C.cycle(m, ctx, "an unstaged matching-field edit in the linked worktree", "glossary", () => F.touchGlossaryMatch(wt));
 }
 
 function noGlossary(m) {

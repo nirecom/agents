@@ -42,7 +42,7 @@ UD-5. **CONFIRM_DOCS gate**:
    - Both branches: include the approval list of `skills/_shared/glossary-drift-check.md` in the shown proposal (the `ask` AskUserQuestion body, `metadata.source=update-docs.proposal-approve`; the `proceed` display).
    - `GATE_ACTION=ask`: present the UD-4 proposal via `AskUserQuestion` (`metadata.source=update-docs.proposal-approve`) and wait for approval before applying edits.
    - `GATE_ACTION=proceed`: apply the edits and continue to UD-6 without waiting.
-   - When applying, run `node "$AGENTS_MAIN_ROOT/bin/glossary-promote" "<INTENT_MD>" "<project-root>"` first, then replace each promoted entry's `Related: TODO` with a link to the doc that owns the term.
+   - When applying, run `node "$AGENTS_MAIN_ROOT/bin/glossary-promote" "<INTENT_MD>" "<project-root>" --related "<term>=<link>"` first, one `--related` per add row, `<link>` a Markdown link to the doc that owns the term.
 UD-6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
    - Skip `infrastructure.md` — delegate to `/update-infrastructure` instead.
 UD-7. **Commit separately**: If docs are in a separate repo, commit each repo independently

@@ -76,7 +76,7 @@ function selfRepair() {
   F.check("self-repair: approved intent.md with a valid record resolves complete from evidence",
     snap && snap.status === "complete" && snap.resolved_from === "evidence", JSON.stringify(snap));
 
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   snap = snapshot(s);
   F.check("self-repair: a stale record no longer resolves clarify_intent", snap && snap.status === "pending", JSON.stringify(snap));
 }

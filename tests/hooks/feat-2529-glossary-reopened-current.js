@@ -60,7 +60,7 @@ test("resolveCurrentStep returns a plan stage the glossary refusal reopened", ()
     const s = setup(`cur-${step}`, step, F.TERM);
     F.drift(s.sid, step, s.repo);
     F.check(`${step}: a current record leaves ${step} settled (current is later)`, current(s) !== step, String(current(s)));
-    F.touchGlossary(s.repo);
+    F.addDriftingEntry(s.repo);
     F.check(`${step}: a stale record makes ${step} the current step`, current(s) === step, String(current(s)));
   }
 })));

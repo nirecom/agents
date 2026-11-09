@@ -110,22 +110,21 @@ and `detail` steps scan their whole range: a plan file has no HEAD to diff again
 
 ### Grant carry-over
 
-A re-record keeps the grants of the new fingerprint, and also moves a grant of the previous fingerprint
-to the new one (#2770, #2909) when both hold: every input whose digest changed is in the record's role
-set (`CARRY_ROLES` in `glossary-check/grant-carry.js`: artifact and rules), and every variant the new
-findings show for the granted norm was already among the previous findings' variants for it. So a main
-merge or a rule module update alone keeps the grant. A glossary definition change or an intent row
-change lapses the grant with cause `inputs`; a new variant of the granted norm lapses it with cause
-`variants`. The provenance record follows the same rule with the role set ops and rules and the
-unmatched entries of the granted norm (term spelling, operation, category and definition) as the
-compared set, so a spelling or definition change lapses its grant.
+A re-record keeps the grants of the new fingerprint and moves a grant of the previous one to the new
+one (#2770, #2909, #2962) when no new variant of the granted norm appeared and either every changed input
+is in the role set (`CARRY_ROLES` in `glossary-check/grant-carry.js`: artifact and rules) or only the
+glossary changed and the norm's `term_fields` sha is unchanged. So a main merge, a rule module update or
+a Definition / Related edit alone keeps the grant. Otherwise the grant lapses: cause `fields` (the norm's
+heading, `Identifier` or `Short forms` changed), `variants` (a new variant), or `inputs` (an intent row
+change, a mix with the glossary, or a record written before #2962, which has no `term_fields`). The
+provenance record uses the role set ops and rules and compares the granted norm's unmatched entries
+(term spelling, operation, category, definition), so a spelling or definition change lapses its grant.
 A lapsed grant is kept in `expired_grants` (`{norm, term, cause, changed, fingerprint}`, provenance adds
 operation and category) while its finding stays open, and the record output names it: a `carried`
 line, an `EXPIRED` line per lapsed term with its cause and the re-accept command, and a
 `(the grant lapsed: …)` note on the provenance BLOCK line.
-The carry-over is decided at record time; the commit gate still compares fingerprints exactly, so an
-unrelated edit stales the record once and the agent's re-record clears it without a new
-`WORKFLOW_GLOSSARY_ACCEPTED`.
+The carry-over is decided at record time, so an unrelated edit stales the record at most once and the
+agent's re-record clears it without a new `WORKFLOW_GLOSSARY_ACCEPTED`.
 
 ### `glossary_check` record
 
@@ -137,14 +136,15 @@ unrelated edit stales the record once and the agent's re-record clears it withou
   "inputs": { "artifact": "…", "glossary": "…", "intent_rows": "…", "rules": "…" },
   "findings": [ { "source": "deterministic", "class": "spelling", "term": "…", "norm": "…", "variant": "…", "where": "…" } ],
   "grants": [ { "norm": "…", "fingerprint": "<sha256>", "reason": "…" } ],
-  "ledger_grants": [ { "norm": "…", "discrim": "…", "reason": "…" } ],
+  "ledger_grants": [ { "norm": "…", "discrim": "…", "reason": "…" } ], "term_fields": { "<norm>": "<sha256>" },
   "expired_grants": [ { "norm": "…", "term": "…", "cause": "inputs", "changed": ["glossary"], "fingerprint": "<sha256>" } ] }
 ```
 
-On re-record `grants` with the new fingerprint carry over, plus those the [grant carry-over](#grant-carry-over) rule moves; `ledger_grants` always carry over. A
-record holding only `ledger_grants` (written by the sentinel before any `--record`) has no fingerprint
-and counts as missing. A record written before #2820 names its plan artifact or review kind instead of
-the step; the sentinel's grant copy rewrites it to the `step` form.
+On re-record `grants` with the new fingerprint carry over, plus those the [grant carry-over](#grant-carry-over) rule moves; `ledger_grants` always carry over.
+`term_fields` maps each norm of the findings and grants to the sha of its entry's matching fields
+([Term set](glossary-check/matching-rules.md#term-set)), null when no entry has it; it stays out of the fingerprint.
+A record holding only `ledger_grants` has no fingerprint and counts as missing. A record written before
+#2820 names its plan artifact or review kind instead of the step; the sentinel's grant copy rewrites it.
 
 ### Evaluation
 
@@ -153,7 +153,7 @@ the step; the sentinel's grant copy rewrites it to the `step` form.
 1. Commit mode, an R-S step, and `artifact.empty` — ok (this commit stages nothing for the step, including when every staged path of the step is a merge-incoming file).
 2. No record, or no `fingerprint` in it — `glossary-check-missing`.
 3. The current fingerprint cannot be computed — `glossary-fingerprint-unavailable`.
-4. The fingerprints differ — `glossary-check-stale`, with `detail.changed` naming the changed inputs, `detail.carry` (`possible` when they all sit in the role set, else `none`) and `detail.granted_terms`, read from the record alone (no scan).
+4. The fingerprints differ — when only the glossary changed and the record has `term_fields`, `glossary-check/rescan.js` scans the step inputs again: the same findings (`[norm, variant, where]`) and `term_fields` keep the record current (go on to 5), and a failed scan is `glossary-fingerprint-unavailable` (`error: rescan-failed`). Otherwise `glossary-check-stale`, with `detail.changed` (the changed inputs), `detail.terms` (the terms the re-scan saw move), `detail.carry` (`possible` when the carry-over rule would keep every grant, else `none`) and `detail.granted_terms`.
 5. A finding without a grant of the same fingerprint and norm — `glossary-findings-unresolved`, with `detail.expired` holding its open `expired_grants` entries.
 
 ### Completion boundary
@@ -230,13 +230,14 @@ Written on `review_docs` (origin `check-glossary-provenance`):
 { "v": 1, "fingerprint": "<sha256>",
   "inputs": { "ops": "…", "intent_rows": "<approval sha or null>", "rules": "…" },
   "session_source": "explicit",
-  "blocked": [ { "term": "…", "norm": "…", "operation": "add", "category": "user", "reason": "…", "definition": "…" } ],
-  "unmatched": [ { "term": "…", "norm": "…", "operation": "add", "category": "user", "reason": "…", "definition": "…" } ],
-  "grants": [ { "norm": "…", "operation": "add", "category": "user", "fingerprint": "<sha256>", "reason": "…" } ] }
+  "blocked": [ { "term": "…", "norm": "…", "operation": "redefine", "category": "user", "reason": "…", "definition": "…", "fields_changed": false } ],
+  "unmatched": [ "…the same entry shape as blocked…" ],
+  "grants": [ { "norm": "…", "operation": "redefine", "category": "user", "basis": "definition-only", "fingerprint": "<sha256>", "reason": "…" } ] }
 ```
 
 `unmatched` lists every operation the intent does not cover, before grants; `blocked` is the part no
 grant covers. A record written before #2770 has no `unmatched`, and its `blocked` stands in for it.
+`fields_changed`: the operation changes the `Identifier` / `Short forms` fields (a `definition-only` grant needs false).
 
 `provenanceFingerprint` binds `ops` (`opsFingerprint`), the approval sha (null for cases B / A / P / C)
 and `rulesVersion`. `session_source` is `explicit` or `env`.
@@ -246,9 +247,10 @@ and `rulesVersion`. `session_source` is `explicit` or `env`.
 Intent Accepted Tradeoff "two named exceptions to S1 (ACCEPTED lifts the block)" — ACCEPTED cannot lift:
 
 - `no-session`: there is no session to record a grant on.
-- The `bin/glossary-promote` pre-write block: layer 0 pins the approved intent (A / P / C), layer 1 is
-  `checkIntentRows`, layer 2 is `computeOperations` + `matchOperations`. Promotion writes only what the
-  approved intent glossary says.
+- The `bin/glossary-promote` pre-write block: layer 0 pins the approved intent (A / P / C), layer 1 is `checkIntentRows`,
+  layer 2 is `computeOperations` + `matchOperations`. Promotion writes only what the approved intent glossary says.
+  Each add entry takes its Related from `--related "<term>=<link>"` (#2962): a missing value, or one that is not exactly one
+  Markdown link on one line (`relatedErrors`), stops promotion before the write; a redefine keeps the entry's Related.
 
 ## `WORKFLOW_GLOSSARY_ACCEPTED`
 
@@ -259,10 +261,10 @@ One sentinel lifts all three checks — intent Accepted Tradeoff "there is only 
 `GLOSSARY_ACCEPTED_RE_DQ` (`hooks/lib/sentinel-patterns.js`) parses it; a `LOOKSLIKE` match that fails
 the strict form gets a malformed message. The former discriminator key with a plan artifact name or
 review kind as its value stays accepted and is mapped to the step by a temporary migration.
-`hooks/workflow-mark/glossary-accept-handler.js` rejects a
-value outside the domain, a repeated discriminator, `op=` / `cat=` mixed with `step=`, and a reason of
-fewer than 3 non-space characters; a missing session id is fatal. The `ask` permission rule in
-`settings.json` makes every grant a user decision.
+`hooks/workflow-mark/glossary-accept-handler.js` rejects a value outside the domain, a repeated
+discriminator, `op=` / `cat=` mixed with `step=`, `batch=` mixed with `step=` / `op=` or without `term=*`,
+and a reason of fewer than 3 non-space characters; a missing session id is fatal. The `ask` permission
+rule in `settings.json` makes every grant a user decision.
 
 Grant targets, all for the normalized term:
 
@@ -271,15 +273,15 @@ Grant targets, all for the normalized term:
   recomputes each fingerprint before the lock and grants only when it equals the record's; otherwise it
   names the step and answers that the record is older than its inputs and to re-run `--record`.
 - **(b) Glossary provenance check block.** Entries of `glossary_provenance.blocked` with the same norm, narrowed by
-  `op=` / `cat=`; skipped when `step=` is given. The grant is bound to the record's fingerprint;
-  freshness is checked on the next gate run.
+  `op=` / `cat=`; skipped when `step=` is given. `term=* batch=definition-only [cat=…]` (#2962) instead grants
+  every redefine with `fields_changed` false, with `basis: "definition-only"`. The grant is bound to the
+  record's fingerprint; freshness is checked on the next gate run.
 - **(c) Tagged concern.** On a step with a ledger, the handler runs `bin/concern-ledger list-drift`
   and adds `{norm, discrim, reason}` to `ledger_grants` for each open or reopened tagged concern of the
   term. A failed listing adds nothing (fail-closed).
 
-When nothing matches, the handler answers "nothing pending" and the state is unchanged. A grant never
-completes a step. The current step is read from the state view `composeStateView` builds, the same
-view `readState` returns, so a resumed session resolves it correctly.
+When nothing matches, the handler answers "nothing pending" and the state is unchanged. A grant never completes a
+step. The current step is read from the `composeStateView` view `readState` returns, so a resumed session resolves it.
 
 ## Tagged concerns
 

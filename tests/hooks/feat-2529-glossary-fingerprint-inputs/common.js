@@ -63,9 +63,13 @@ function baseline(m, tag, step, opts) {
 }
 
 // One change of one input. `expect` is the component (or list) whose digest must move.
-function cycle(m, ctx, label, expect, mutate) {
+// opts.stale === false (#2962): a glossary-only change that moves no finding and no matching field
+// (`Identifier` / `Short forms` / heading) of a recorded term — the record stays usable and the
+// re-record carries the grant, as an artifact-only change does.
+function cycle(m, ctx, label, expect, mutate, opts) {
   const want = [].concat(expect).sort();
   const name = `${ctx.step} ${label}`;
+  const stale = !(opts && opts.stale === false);
   const before = fp(m, ctx);
   mutate();
   const after = fp(m, ctx);
@@ -73,12 +77,17 @@ function cycle(m, ctx, label, expect, mutate) {
   F.check(`${name}: only ${want.join("+")} moves`, !!moved && moved.join(",") === want.join(","),
     JSON.stringify({ moved, before: before.error, after: after.error }));
   const v = evaluate(m, ctx);
-  F.check(`${name}: evaluateGlossaryCheck is glossary-check-stale naming only ${want.join("+")}`,
-    !!v && v.ok === false && v.code === "glossary-check-stale" && named(v.detail).join(",") === want.join(","),
-    JSON.stringify(v));
+  if (stale) {
+    F.check(`${name}: evaluateGlossaryCheck is glossary-check-stale naming only ${want.join("+")}`,
+      !!v && v.ok === false && v.code === "glossary-check-stale" && named(v.detail).join(",") === want.join(","),
+      JSON.stringify(v));
+  } else {
+    F.check(`${name}: evaluateGlossaryCheck does not stale the granted record (no finding or matching field moved)`,
+      passes(v), JSON.stringify(v));
+  }
   F.drift(ctx.sid, ctx.step, ctx.cwd || ctx.repo);
   const rec = F.recordOf(ctx.sid, ctx.step);
-  if (want.join(",") === "artifact") {
+  if (want.join(",") === "artifact" || !stale) {
     // #2770: an artifact-only change with the same variants carries the grant to the new fingerprint.
     const moved = rec && (rec.grants || []).filter((g) => g.fingerprint === rec.fingerprint);
     F.check(`${name}: the re-record carries the grant to the new fingerprint`,

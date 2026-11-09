@@ -65,3 +65,11 @@ caseEnd();
 caseBegin("t3-5-intent-basename-is-usage", "bin/glossary-promote");
 test("t3-5-intent-basename-is-usage", () => noNewFailures(fails, pin.basenameIsUsage));
 caseEnd();
+
+caseBegin("#2962 unmatched provenance entries carry fields_changed", "bin/check-glossary-provenance");
+test("#2962 unmatched provenance entries carry fields_changed", () => noNewFailures(fails, require("./feat-2529-glossary-promote/provenance-fields").unmatchedCarriesFieldsChanged));
+caseEnd();
+
+caseBegin("#2962 a definition-only redefine BLOCK line carries (definition-only), others do not", "bin/check-glossary-provenance");
+test("#2962 a definition-only redefine BLOCK line carries (definition-only), others do not", () => noNewFailures(fails, require("./feat-2529-glossary-promote/provenance-fields").blockLineMarksDefinitionOnly));
+caseEnd();

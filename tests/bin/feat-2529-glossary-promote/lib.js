@@ -9,9 +9,23 @@ const c = require("../feat-2529-glossary-provenance/common");
 
 const FILES = ["docs/glossary/user.md", "docs/glossary/internal.md"];
 
-// promote(intent, repo) — node bin/glossary-promote <intent.md> <repo-root>.
-function promote(intent, repo) {
-  return c.runNode("bin/glossary-promote", [c.fwd(intent), repo], { cwd: repo });
+// The Related link promote is given for a new entry in the fixture repos (README.md exists there).
+const LINK = "[README.md](../../README.md)";
+
+// promote(intent, repo, related) — node bin/glossary-promote <intent.md> <repo-root>
+// [--related "<term>=<link>"]... (#2962). `related`: { term: link } (each pair becomes one
+// --related "term=link"), or an array of raw --related values (for the malformed-value cases).
+function promote(intent, repo, related) {
+  const values = Array.isArray(related) ? related : Object.entries(related || {}).map(([t, l]) => `${t}=${l}`);
+  const extra = [];
+  for (const v of values) extra.push("--related", v);
+  return c.runNode("bin/glossary-promote", [c.fwd(intent), repo].concat(extra), { cwd: repo });
+}
+// relatedFor(rows) — { term: LINK } for every add row, the pairs a promotion with add rows needs.
+function relatedFor(rows) {
+  const out = {};
+  for (const r of rows) if (r[2] === "add") out[r[0]] = LINK;
+  return out;
 }
 
 // snapshot(repo) — the bytes of both category files (null when absent).
@@ -59,4 +73,4 @@ function session(tag, rows, opts) {
   return { repo, sid, intent: c.intentPath(sid) };
 }
 
-module.exports = Object.assign({}, c, { FILES, promote, snapshot, unchanged, termsOf, userTerms, internalTerms, counters, blockLine, session });
+module.exports = Object.assign({}, c, { FILES, LINK, promote, relatedFor, snapshot, unchanged, termsOf, userTerms, internalTerms, counters, blockLine, session });

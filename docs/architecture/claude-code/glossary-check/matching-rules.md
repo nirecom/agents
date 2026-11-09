@@ -88,6 +88,10 @@ identifiers: the terms holding `_`, and the spellings declared in an entry's Ide
 a V3 intent glossary row), each reported under its owning term. The gate admits a declared spelling
 only when its raw key equals the term's.
 
+The matching fields of an entry are its heading, `Identifier` and `Short forms`; a change to them
+concerns the entry's findings and grants, while a Definition or Related change does not (#2962).
+`termFieldsOf` (`glossary-check/scope/sources.js`) hashes those fields per norm into the record's `term_fields`.
+
 A declared spelling removes only its exact occurrences. A naming-convention variant (snake case, all
 capitals), a separator variant, a lower-case word split, or another word form stays drift. A term
 holding `_` keeps the naming-convention tolerance of the identifier context table, because its own
