@@ -16,7 +16,7 @@ Read `rules/coding.md` before WE-4 — on-demand-only, never auto-injected; its 
 
 ### Precondition — delivery settled or workflow aborted
 Run `node "$AGENTS_MAIN_ROOT/bin/workflow/next-step" --session "<session-id>"`. `REASON=cleanup` → continue; `REASON=workflow-aborted-cleanup` → take the Abort branch below.
-`REASON=workflow-aborted` → stop and tell the user the worktree and branch belong to the heir session; this session cleans nothing.
+`REASON=workflow-aborted` → stop and tell the user the worktree and branch belong to the session-downstream; this session cleans nothing.
 Any other `REASON=` (merge_to_main not settled) → stop and follow its `ACTION`; never merge or push from this skill.
 
 ### Abort branch — REASON=workflow-aborted-cleanup

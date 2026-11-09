@@ -124,7 +124,7 @@ function issuesOf(body) {
 
 // Only 108 of 667 real intent.md files carry a `**Title:**` line, so its
 // absence is normal and never removes a session from the search.
-// A donor's title is written by another session: it reaches `--list` sanitized (#2301).
+// A session-upstream's title is written by another session: it reaches `--list` sanitized (#2301).
 function titleOf(body) {
   const m = TITLE_RE.exec(body);
   return m ? sanitizeUntrustedField(m[1]) : null;
@@ -225,12 +225,12 @@ function contextRecord(candidate, searchRec) {
 // Fills in each record's adoptability from the SAME overwrite and granularity
 // judgements the `--from` path runs (CPR-SSOT). Called only on the page being returned, so
 // the readState/git cost is bounded by displayed records, not by candidates.
-// The require is lazy: upstream-view.js reaches back into this tree, and a
+// The require is lazy: session-upstream-view.js reaches back into this tree, and a
 // top-level require would close the cycle.
 function enrichAdoptability(records, input) {
   let previewer = null;
   try {
-    const { createAdoptabilityPreviewer } = require("../../bin/lib/resume-session/upstream-view");
+    const { createAdoptabilityPreviewer } = require("../../bin/lib/resume-session/session-upstream-view");
     previewer = createAdoptabilityPreviewer(input || {});
   } catch (e) {
     previewer = null;
@@ -266,7 +266,7 @@ function stateHandoffCountOf(sid) {
   }
 }
 
-// listUpstreamCandidates({heirSid, ctx, query, limit}) → [record, ...]
+// listUpstreamCandidates({downstreamSid, ctx, query, limit}) → [record, ...]
 // The presentation layer for /resume-session --list: it merges the two
 // generators and re-implements neither.
 function listUpstreamCandidates(input) {
@@ -295,7 +295,7 @@ function listUpstreamCandidates(input) {
 
   const limit = Number.isInteger(opts.limit) && opts.limit > 0 ? opts.limit : null;
   const page = limit === null ? out : out.slice(0, limit);
-  return enrichAdoptability(page, { heirSid: opts.heirSid, ctx: opts.ctx });
+  return enrichAdoptability(page, { downstreamSid: opts.downstreamSid, ctx: opts.ctx });
 }
 
 module.exports = {

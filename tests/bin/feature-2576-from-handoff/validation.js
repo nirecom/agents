@@ -41,10 +41,10 @@ function invalidSidIsUnknownSession() {
       return undefined;
     });
   }
-  const view = mod("bin/lib/resume-session/upstream-view");
+  const view = mod("bin/lib/resume-session/session-upstream-view");
   for (const bad of ["", "../x", "a/b", "a.b", ".."]) {
     check(`I2: buildUpstreamView with upstreamSid ${show(bad)} is unknown-session with no artifact`, () => {
-      const v = view.buildUpstreamView({ heirSid: null, upstreamSid: bad });
+      const v = view.buildUpstreamView({ downstreamSid: null, upstreamSid: bad });
       eq(v && v.availability, "none", "availability");
       eq(v && v.reason, "unknown-session", "reason");
       const arts = (v && v.artifacts) || {};
@@ -61,7 +61,7 @@ function entryValidation() {
   // state file, handoff (control dir and plans dir), session-progress.md and a transcript.
   // Any of them surfacing in the view means a lookup ran past the entry check.
   process.env.CLAUDE_TRANSCRIPT_BASE_DIR = TBASE;
-  const view = mod("bin/lib/resume-session/upstream-view");
+  const view = mod("bin/lib/resume-session/session-upstream-view");
   const SENT = "F2576-C3-LEAK";
   for (const bad of ["../x", "a/b", "a.b", "", ".."]) {
     plant(path.join(STATE_DIR, `${bad}.json`), JSON.stringify({
@@ -76,7 +76,7 @@ function entryValidation() {
   const leaks = [slash(STATE_DIR), slash(PLANS_DIR), slash(TBASE), slash(path.dirname(PLANS_DIR))];
   for (const bad of ["../x", "a/b", "a.b", "", ".."]) {
     check(`I3: buildUpstreamView(${show(bad)}) is the unknown-session NONE view and resolves no seeded store`, () => {
-      const v = view.buildUpstreamView({ heirSid: null, upstreamSid: bad });
+      const v = view.buildUpstreamView({ downstreamSid: null, upstreamSid: bad });
       eq(v && v.type, "upstream", "type");
       eq(v && v.availability, "none", "availability");
       eq(v && v.reason, "unknown-session", "reason");
@@ -99,7 +99,7 @@ function entryValidation() {
 
 // artifactsFor is module-private, so each kind's resolver is probed through buildUpstreamView.
 function artifactsPerKind() {
-  const view = mod("bin/lib/resume-session/upstream-view");
+  const view = mod("bin/lib/resume-session/session-upstream-view");
   const targetsOf = (sid) => ({
     intent: path.join(PLANS_DIR, `${sid}-intent.md`),
     outline: path.join(PLANS_DIR, `${sid}-outline.md`),
@@ -112,7 +112,7 @@ function artifactsPerKind() {
     const t = targetsOf(bad);
     for (const k of Object.keys(t)) plant(t[k], "**Title:** F2576-A1-PLANTED\n");
     check(`A1: buildUpstreamView(${show(bad)}) resolves every kind to null without throwing, traversal targets planted`, () => {
-      const v = view.buildUpstreamView({ heirSid: null, upstreamSid: bad });
+      const v = view.buildUpstreamView({ downstreamSid: null, upstreamSid: bad });
       const arts = (v && v.artifacts) || {};
       for (const k of Object.keys(arts)) if (arts[k] != null) return `artifact ${k} resolved: ${show(arts[k])}`;
       eq(v.availability, "none", "availability");
@@ -124,7 +124,7 @@ function artifactsPerKind() {
     const t = targetsOf(sid);
     for (const k of Object.keys(t)) plant(t[k], "**Title:** F2576-A2\n");
     fx.writeLegacyHandoff(sid, [{ cls: "A", at: fx.isoAt(1), step: "-", key: "a2", summary: "F2576-A2-LEGACY" }]);
-    const v = view.buildUpstreamView({ heirSid: null, upstreamSid: sid });
+    const v = view.buildUpstreamView({ downstreamSid: null, upstreamSid: sid });
     eq(v.availability, "artifacts-only", "availability");
     eq(Object.keys(v.artifacts).sort(), ["detail", "intent", "outline"], "artifact kinds");
     for (const k of Object.keys(t)) {

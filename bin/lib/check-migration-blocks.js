@@ -16,6 +16,9 @@ const EXCLUDE_RE = [
   /(?:^|[/\\])\.claude[/\\]worktrees[/\\]/,
 ];
 
+// EXCLUDE_RE holds back only the format axes; the retired-token axis follows the registry scope.
+const formatAxesApply = (rel) => !EXCLUDE_RE.some((excl) => excl.test(rel));
+
 function walkTree(dir, cb) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
@@ -140,7 +143,7 @@ function staleReport(rootArg, io) {
   const lines = [];
   walkTree(root, (absPath) => {
     const rel = path.relative(root, absPath).replace(/\\/g, "/");
-    if (EXCLUDE_RE.some((excl) => excl.test(rel))) return;
+    if (!formatAxesApply(rel)) return;
     let content;
     try { content = fs.readFileSync(absPath, "utf8"); } catch (e) { return; }
     for (const { block: b } of staleBlocks(parseBlocks(content, rel).blocks)) {
@@ -189,7 +192,9 @@ function loadRegistry(argv, root, staged, readOne, io) {
   }
 }
 
+// A NUL byte marks a binary file (e.g. a local index database under a `**` scope): it holds no source line to judge.
 function retiredAxis(rel, content, blocks, registry, out) {
+  if (content.includes("\0")) return;
   const r = RT.checkRetiredTokens(rel, content, blocks, registry);
   out.violations.push(...r.violations);
   out.notices.push(...r.notices);
@@ -208,18 +213,21 @@ function runStaged(files, argv, io, readStaged) {
   for (const f of files) {
     const absPath = path.isAbsolute(f) ? f : path.join(root, f);
     const rel = path.relative(root, absPath).replace(/\\/g, "/");
+    const formatAxes = formatAxesApply(rel);
+    if (!formatAxes && !RT.inspects(registry, rel)) continue;
     const content = readStaged ? stagedText(readStaged, rel) : readIndexContent(absPath, root, io.env);
     if (content == null) continue;
     const { blocks, violations: v } = parseBlocks(content, f);
-    out.violations.push(...v);
-    checkAxis3(blocks, f, "staged", warnings);
-    checkAxis4(blocks, f, warnings);
+    if (formatAxes) {
+      out.violations.push(...v);
+      checkAxis3(blocks, f, "staged", warnings);
+      checkAxis4(blocks, f, warnings);
+    }
     retiredAxis(rel, content, blocks, registry, out);
   }
   return verdict(out.violations, warnings, io, out.notices);
 }
 
-// EXCLUDE_RE holds back only the format axes; the retired-token axis follows the registry scope.
 function runAll(rootArg, argv, io) {
   const root = rootArg ? path.resolve(io.cwd, rootArg) : io.cwd;
   const registry = loadRegistry(argv, root, false, null, io);
@@ -228,7 +236,7 @@ function runAll(rootArg, argv, io) {
   const warnings = [];
   walkTree(root, (absPath) => {
     const rel = path.relative(root, absPath).replace(/\\/g, "/");
-    const formatAxes = !EXCLUDE_RE.some((excl) => excl.test(rel));
+    const formatAxes = formatAxesApply(rel);
     if (!formatAxes && !RT.inspects(registry, rel)) return;
     let content;
     try { content = fs.readFileSync(absPath, "utf8"); } catch { return; }

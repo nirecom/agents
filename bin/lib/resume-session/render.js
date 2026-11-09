@@ -14,13 +14,13 @@ const AVAILABILITY_NOTE = Object.freeze({
 });
 
 const SUPERVISOR_NOTE = Object.freeze({
-  copied: "Supervisor state copied from the session upstream (findings and audit verdicts carry over).",
-  absent: "Supervisor state absent upstream — nothing to copy.",
-  failed: "Supervisor state copy failed — this session starts without the upstream audit record; expect a fresh audit.",
+  copied: "Supervisor state copied from the session-upstream (findings and audit verdicts carry over).",
+  absent: "Supervisor state absent in the session-upstream — nothing to copy.",
+  failed: "Supervisor state copy failed — this session starts without the session-upstream audit record; expect a fresh audit.",
 });
 
 // The two facts the inheritance sentence does not carry: the supervisor copy outcome and
-// that plan artifacts stay named after the session upstream (#2304).
+// that plan artifacts stay named after the session-upstream (#2304).
 function inheritanceSideLines(inheritance, fallbackUpstreamSid) {
   const inh = inheritance || {};
   const upstreamSid = inh.upstream_session_id || fallbackUpstreamSid || "(unknown)";
@@ -28,17 +28,17 @@ function inheritanceSideLines(inheritance, fallbackUpstreamSid) {
   if (typeof inh.supervisor_state === "string") {
     lines.push(SUPERVISOR_NOTE[inh.supervisor_state] || `Supervisor state: ${inh.supervisor_state}.`);
   }
-  lines.push(`Each plan artifact is still named after upstream ${upstreamSid}; it is read from there, not renamed.`);
+  lines.push(`Each plan artifact is still named after session-upstream ${upstreamSid}; it is read from there, not renamed.`);
   return lines;
 }
 
-// An upstream the adoption could not record as aborted keeps its stop-guard alive; say so,
+// A session-upstream the adoption could not record as aborted keeps its stop-guard alive; say so,
 // since the adoption itself reads as a plain success (#2920).
 function upstreamAbortLines(aborts) {
   const lines = [];
   for (const a of Array.isArray(aborts) ? aborts : []) {
     if (a && a.recorded === false) {
-      lines.push(`Warning: upstream ${a.sid} could not be recorded as aborted (${a.reason || "unknown"}); retry with adopt-session-state --abort-upstreams.`);
+      lines.push(`Warning: session-upstream ${a.sid} could not be recorded as aborted (${a.reason || "unknown"}); retry with adopt-session-state --abort-session-upstreams.`);
     }
   }
   return lines;
@@ -46,13 +46,13 @@ function upstreamAbortLines(aborts) {
 
 function renderUpstreamView(view) {
   if (!view || view.availability === "none") {
-    return `No upstream evidence for ${(view && view.upstream_session_id) || "(unknown)"}.`;
+    return `No session-upstream evidence for ${(view && view.upstream_session_id) || "(unknown)"}.`;
   }
   // The abort shares the header line: the sid itself may read as "aborted", so one line carries both.
   const w = view.workflow_aborted;
-  const abortNote = w ? ` Aborted (${w.origin}${w.heir_session_id ? `, downstream ${w.heir_session_id}` : ""}): ${w.reason}` : "";
+  const abortNote = w ? ` Aborted (${w.origin}${w.downstream_session_id ? `, session-downstream ${w.downstream_session_id}` : ""}): ${w.reason}` : "";
   const lines = [
-    `Upstream ${view.upstream_session_id}: ${view.availability}.${abortNote}`,
+    `Session-upstream ${view.upstream_session_id}: ${view.availability}.${abortNote}`,
     AVAILABILITY_NOTE[view.availability] || "",
   ];
   const r = view.inherit_result || {};
@@ -61,7 +61,7 @@ function renderUpstreamView(view) {
   } else if (r.ok === true) {
     lines.push(describeGranularInheritance(r.inheritance));
     lines.push(...inheritanceSideLines(r.inheritance, view.upstream_session_id));
-    lines.push(...upstreamAbortLines(r.upstream_aborts));
+    lines.push(...upstreamAbortLines(r.session_upstream_aborts));
   } else {
     lines.push(`Adoption was refused: ${r.error}`);
   }
@@ -76,7 +76,7 @@ function renderUpstreamView(view) {
 
 function renderCandidateList(records) {
   const rows = Array.isArray(records) ? records : [];
-  if (rows.length === 0) return "No upstream sessions found.";
+  if (rows.length === 0) return "No session-upstreams found.";
   return rows
     .map((r) => {
       const mark = r.adoptable ? "adoptable" : "reference-only";

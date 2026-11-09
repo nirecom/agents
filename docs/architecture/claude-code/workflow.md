@@ -212,22 +212,22 @@ Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rej
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its
 record, so a stale approval can never re-validate a later re-completion.
 
-The hash is computed on the plan artifact's **owner**, which after an inheritance is the upstream's
-`<upstream-sid>-<plan artifact name>.md`, not the current session's. `resolvePlanArtifactOwner`
+The hash is computed on the plan artifact's **owner**, which after an inheritance is the session-upstream's
+`<session-upstream-sid>-<plan artifact name>.md`, not the current session's. `resolvePlanArtifactOwner`
 (`plan-artifact-owner.js`, CLI `bin/plan-artifact-path`) is the SSOT: own file, recorded
 `artifact_session_id`, past approval events, then `upstream_session_id`. Re-approval records that owner.
 
 ### Inheritance is a state copy (#2304, #2633)
 
-`/resume-session --from` copies the upstream's event stream verbatim (`inheritance/apply.js`) and sets
+`/resume-session --from` copies the session-upstream's event stream verbatim (`inheritance/apply.js`) and sets
 `upstream_session_id` / `upstream_copy_seq`, in one `writeStateLocked` (a crash leaves it untouched
 or fully inherited); the supervisor state file is copied afterwards. Each approval-gated
 step is re-verified in that write: the first step that no longer verifies, and every later step
-including `cleanup`, returns to `pending` with an `inherit_revert_reason`; the downstream re-approves
-with `CONFIRM_*`. Events up to `upstream_copy_seq` are not the downstream's own work. `buildCopy`
-alone writes `previous_session_ids`, the upstream lineage oldest first (#2311); readers validate each
-element as a session id. Granularity: `full` in the upstream's worktree, else `context-independent-only`
-(`decideInheritanceGranularity`). `checkOverwriteAllowed` permits adoption into an untouched downstream, or a same-upstream re-adopt only while the downstream holds no records of its own.
+including `cleanup`, returns to `pending` with an `inherit_revert_reason`; the session-downstream re-approves
+with `CONFIRM_*`. Events up to `upstream_copy_seq` are not the session-downstream's own work. `buildCopy`
+alone writes `previous_session_ids`, the session-upstream lineage oldest first (#2311); readers validate each
+element as a session id. Granularity: `full` in the session-upstream's worktree, else `context-independent-only`
+(`decideInheritanceGranularity`). `checkOverwriteAllowed` permits adoption into an untouched session-downstream, or a same-session-upstream re-adopt only while the session-downstream holds no records of its own.
 
 Recovery: a gated step recorded `complete` without a valid approval (no record, or a hash
 mismatch) reads as `pending` in the effective state. `next-step` answers it with

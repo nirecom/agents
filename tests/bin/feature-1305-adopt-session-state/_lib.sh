@@ -34,7 +34,7 @@ setup_repo() {
 # write_state_v2 <sid> <cwd> <branch> <steps-json>
 # v2 with an explicit event stream: contiguous 1-based seq + valid provenance,
 # so assertStreamIntegrity accepts it. An empty steps object yields the
-# all-pending heir shape the CLI requires before it will overwrite anything.
+# all-pending downstream shape the CLI requires before it will overwrite anything.
 write_state_v2() {
     run_with_timeout node -e '
       const fs = require("fs"), path = require("path");
@@ -52,34 +52,34 @@ write_state_v2() {
     ' "$WORKFLOW_DIR_NODE" "$1" "$2" "$3" "$4" "$NOW_ISO"
 }
 
-# approve_donor <sid> <step...> — appends valid confirm-sentinel plan_approval events (and
+# approve_upstream <sid> <step...> — appends valid confirm-sentinel plan_approval events (and
 # the plan artifacts they hash) so the #2633 copy keeps those gated completions.
-approve_donor() {
+approve_upstream() {
     local sid="$1"; shift
     local out
     out="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" run_with_timeout node \
         "$SCRIPT_CHECKOUT_ROOT/tests/lib/plan-approval-fixture.js" inject "$WORKFLOW_DIR_NODE/$sid.json" "$@")"
-    [ "$out" = "ok" ] || fail "approve_donor $sid: $out"
+    [ "$out" = "ok" ] || fail "approve_upstream $sid: $out"
 }
 
-# announce_donor <donor-sid> <resolved-cwd>
+# announce_upstream <upstream-sid> <resolved-cwd>
 # The breadcrumb listRecentContextCandidates follows. The announce string is a
 # byte-for-byte SSOT contract — do not reword it.
-announce_donor() {
+announce_upstream() {
     local dir="$TBASE/$(encode_cwd "$2")"
     mkdir -p "$dir"
     printf '{"type":"attachment","attachment":{"type":"hook_success","hookEvent":"SessionStart","exitCode":0,"stdout":"{\\"additionalContext\\": \\"Current workflow session_id: %s\\"}","command":"node session-start.js"}}\n' \
         "$1" > "$dir/$1.jsonl"
 }
 
-# adopt <heir-sid> <cwd> <args...> → stdout+stderr; ADOPT_RC holds the exit code
+# adopt <downstream-sid> <cwd> <args...> → stdout+stderr; ADOPT_RC holds the exit code
 adopt() {
-    local heir="$1" cwd="$2"; shift 2
+    local downstream="$1" cwd="$2"; shift 2
     set +e
     ADOPT_OUT="$( (cd "$TMPDIR_BASE" && WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" \
         WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" \
         CLAUDE_PROJECT_DIR="$cwd" \
-        run_with_timeout node "$ADOPT_CLI" --session "$heir" "$@" 2>&1) )"
+        run_with_timeout node "$ADOPT_CLI" --session "$downstream" "$@" 2>&1) )"
     ADOPT_RC=$?
     set -e
     # A CLI that does not exist yet exits non-zero and mutates nothing — which
@@ -90,13 +90,13 @@ adopt() {
     case "$ADOPT_OUT" in *"Cannot find module"*|*MODULE_NOT_FOUND*) ADOPT_MISSING=1 ;; esac
 }
 
-# run_driver <heir-sid> <cwd> <args...> → stdout+stderr; DRIVER_RC holds the code
+# run_driver <downstream-sid> <cwd> <args...> → stdout+stderr; DRIVER_RC holds the code
 # CLAUDE_CODE_SESSION_ID is set per invocation (never inherited) so the driver keys
-# its checkpoint on the fixture heir, not on the live session.
+# its checkpoint on the fixture downstream, not on the live session.
 run_driver() {
-    local heir="$1" cwd="$2"; shift 2
+    local downstream="$1" cwd="$2"; shift 2
     set +e
-    DRIVER_OUT="$( (cd "$TMPDIR_BASE" && CLAUDE_CODE_SESSION_ID="$heir" \
+    DRIVER_OUT="$( (cd "$TMPDIR_BASE" && CLAUDE_CODE_SESSION_ID="$downstream" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR_NODE" WORKFLOW_PLANS_DIR="$PLANS_DIR_NODE" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$TBASE_NODE" CLAUDE_PROJECT_DIR="$cwd" \
         run_with_timeout node "$DRIVER" "$@" 2>&1) )"

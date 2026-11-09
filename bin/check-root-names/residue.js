@@ -64,11 +64,11 @@ function stemHit(text, stem) {
   return false;
 }
 
-// hitIn(text, list) → "<kind> <spelling>" of the first retired entry in the text, or null.
-function hitIn(text, list) {
+// hitIn(text, list, useKeep) → "<kind> <spelling>" of the first retired entry in the text, or null.
+function hitIn(text, list, useKeep = true) {
   if (!list.quick.test(text)) return null;
   let rest = text;
-  for (const keep of list.keep) {
+  for (const keep of useKeep ? list.keep : []) {
     if (rest.includes(keep)) rest = rest.split(keep).join(" ".repeat(keep.length));
   }
   for (const e of list.exact) if (e.re.test(rest)) return `${e.kind} "${e.spelling}"`;
@@ -81,21 +81,29 @@ function isExempt(rel, list) {
   return rel === "docs/history.md" || rel.startsWith("docs/history/") || rel === "CHANGELOG.md" || rel.startsWith("changelog/") || rel === list.listRel;
 }
 
-function check(ctx) {
-  const list = ctx.list();
+// scanFiles(files, list, checkName, lineFilter) → violation lines of one retired list.
+// lineFilter(rel) → null, or a per-file (line) → line that may blank an allowed phrase.
+// keepInPaths false: `keep` spares content only — a list whose kept spellings are allowed
+// solely by another content check (session-terms, #2759) must still flag them in paths.
+function scanFiles(files, list, checkName, lineFilter, { keepInPaths = true } = {}) {
   const out = [];
-  for (const file of ctx.files) {
+  for (const file of files) {
     if (isExempt(file.rel, list)) continue;
-    const pathHit = hitIn(file.rel, list);
-    if (pathHit) out.push(`${file.rel}: residue: the path carries the retired ${pathHit}`);
+    const pathHit = hitIn(file.rel, list, keepInPaths);
+    if (pathHit) out.push(`${file.rel}: ${checkName}: the path carries the retired ${pathHit}`);
     if (file.text === null || !list.quick.test(file.text)) continue;
+    const filter = lineFilter ? lineFilter(file.rel) : null;
     const lines = file.text.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
-      const hit = hitIn(lines[i], list);
-      if (hit) out.push(`${file.rel}:${i + 1}: residue: retired ${hit}`);
+      const hit = hitIn(filter ? filter(lines[i]) : lines[i], list);
+      if (hit) out.push(`${file.rel}:${i + 1}: ${checkName}: retired ${hit}`);
     }
   }
   return out;
 }
 
-module.exports = { check, parseList, ListError };
+function check(ctx) {
+  return scanFiles(ctx.files, ctx.list(), "residue", null);
+}
+
+module.exports = { check, scanFiles, parseList, ListError };

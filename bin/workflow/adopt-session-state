@@ -17,26 +17,33 @@ const { inheritanceSideLines, upstreamAbortLines } =
 const { resolveSessionId } =
   require(path.join(SCRIPT_CHECKOUT_ROOT, "hooks", "workflow-state", "session-id.js"));
 const abortUpstreams =
-  require(path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "lib", "adopt-session-state", "abort-upstreams.js"));
+  require(path.join(SCRIPT_CHECKOUT_ROOT, "bin", "workflow", "lib", "adopt-session-state", "session-upstream-abort.js"));
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 // #2297: kept recognized so an old command line fails loudly instead of as "unrecognized".
 const REMOVED_FLAGS = ["--granularity", "--verified-equivalent"];
+// --- BEGIN temporary: --abort-upstreams -> --abort-session-upstreams flag migration added 2026-11-08 ---
+// deletion-condition: remove after 2026-12-08, once no live session still holds skill text that names the old flag
+// A session that loaded the old skill text fails with the new name instead of "unrecognized argument".
+const RENAMED_FLAGS = { "--abort-upstreams": abortUpstreams.FLAG };
+// --- END temporary: --abort-upstreams -> --abort-session-upstreams flag migration ---
 
 function usage() {
   process.stdout.write(
-    "Usage: adopt-session-state [--session <downstream-sid>] --list\n" +
-    "       adopt-session-state [--session <downstream-sid>] --from <upstream-sid>\n" +
-    "       adopt-session-state [--session <downstream-sid>] --abort-upstreams\n"
+    "Usage: adopt-session-state [--session <session-downstream-sid>] --list\n" +
+    "       adopt-session-state [--session <session-downstream-sid>] --from <session-upstream-sid>\n" +
+    "       adopt-session-state [--session <session-downstream-sid>] " + abortUpstreams.FLAG + "\n"
   );
 }
 
 function parseArgs(argv) {
-  const out = { session: null, from: null, list: false, abortUpstreams: false, help: false, error: null, removed: null };
+  const out = { session: null, from: null, list: false, abortUpstreams: false, help: false, error: null, removed: null, renamed: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (REMOVED_FLAGS.indexOf(a) !== -1) {
       if (out.removed === null) out.removed = a;
+    } else if (Object.prototype.hasOwnProperty.call(RENAMED_FLAGS, a)) {
+      if (out.renamed === null) out.renamed = a;
     } else if (a === "--help" || a === "-h") out.help = true;
     else if (a === "--list") out.list = true;
     else if (a === abortUpstreams.FLAG) out.abortUpstreams = true;
@@ -59,6 +66,10 @@ function main() {
     process.stderr.write(`adopt-session-state: ${args.removed} removed: granularity is decided from where this session runs\n`);
     process.exit(2);
   }
+  if (args.renamed !== null) {
+    process.stderr.write(`adopt-session-state: ${args.renamed} was renamed: pass ${RENAMED_FLAGS[args.renamed]}\n`);
+    process.exit(2);
+  }
   if (args.help) { usage(); return; }
   if (args.error) { usage(); fail(args.error); }
 
@@ -68,19 +79,19 @@ function main() {
     if (value !== null && !SID_RE.test(value)) fail(`${label} value is not a valid session id`);
   }
 
-  let heirSid = args.session;
-  if (!heirSid) {
-    try { heirSid = resolveSessionId(); } catch (e) { heirSid = null; }
+  let downstreamSid = args.session;
+  if (!downstreamSid) {
+    try { downstreamSid = resolveSessionId(); } catch (e) { downstreamSid = null; }
   }
-  if (!heirSid) fail("could not resolve this session's id; pass --session <sid>");
+  if (!downstreamSid) fail("could not resolve this session's id; pass --session <sid>");
 
   if (args.abortUpstreams) {
-    process.exitCode = abortUpstreams.runAbortUpstreams(heirSid, (s) => process.stdout.write(s));
+    process.exitCode = abortUpstreams.runAbortUpstreams(downstreamSid, (s) => process.stdout.write(s));
     return;
   }
 
   if (args.list) {
-    const r = listAdoptCandidates(heirSid);
+    const r = listAdoptCandidates(downstreamSid);
     if (!r.ok) fail(r.error);
     if (r.candidates.length === 0) {
       process.stdout.write("No adoptable prior session found for this cwd+branch.\n");
@@ -91,27 +102,27 @@ function main() {
       process.stdout.write(`  ${c.sessionId}\t${c.git_branch || "(no branch)"}\t${c.last_activity || "(unknown)"}\n`);
     }
     process.stdout.write(
-      `\nAdopt with: node bin/workflow/adopt-session-state --session ${heirSid} --from <sid>\n`
+      `\nAdopt with: node bin/workflow/adopt-session-state --session ${downstreamSid} --from <sid>\n`
     );
     return;
   }
 
-  if (!args.from) { usage(); fail("nothing to do — pass --list, --from <upstream-sid> or --abort-upstreams"); }
+  if (!args.from) { usage(); fail(`nothing to do — pass --list, --from <session-upstream-sid> or ${abortUpstreams.FLAG}`); }
 
-  const result = adoptState({ heirSid, donorSid: args.from });
+  const result = adoptState({ downstreamSid, upstreamSid: args.from });
   if (!result.ok) fail(result.error);
   process.stdout.write(
-    `Adopted workflow state from session ${result.donorSessionId} into ${heirSid}.\n`
+    `Adopted workflow state from session ${result.upstreamSessionId} into ${downstreamSid}.\n`
   );
   process.stdout.write(describeGranularInheritance(result.inheritance) + "\n");
-  for (const line of inheritanceSideLines(result.inheritance, result.donorSessionId)) {
+  for (const line of inheritanceSideLines(result.inheritance, result.upstreamSessionId)) {
     process.stdout.write(line + "\n");
   }
-  for (const line of upstreamAbortLines(result.upstream_aborts)) {
+  for (const line of upstreamAbortLines(result.session_upstream_aborts)) {
     process.stdout.write(line + "\n");
   }
   if (result.degraded_reason) {
-    process.stdout.write(`Session upstream evidence was incomplete (${result.degraded_reason}).\n`);
+    process.stdout.write(`Session-upstream evidence was incomplete (${result.degraded_reason}).\n`);
   }
 }
 

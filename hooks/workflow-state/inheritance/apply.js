@@ -4,7 +4,7 @@
 // path in the SessionStart hook and the explicit bin/workflow/adopt-session-state CLI
 // — so both produce byte-identical state only because there is one implementation.
 //
-// Since #2304 the downstream receives a VERBATIM copy of the upstream state (events
+// Since #2304 the session-downstream receives a VERBATIM copy of the session-upstream state (events
 // keep their seq/at/origin/provenance; only session_id and created_at change), bounded
 // by `upstream_copy_seq`. What must not travel is then reverted by events appended
 // AFTER that boundary, and the whole result is written exactly once.
@@ -36,12 +36,12 @@ const statusOf = (projection, step) => {
   return (entry && entry.status) || "pending";
 };
 
-// Read the upstream state for copying. Missing, unparseable or seq-broken input throws:
+// Read the session-upstream state for copying. Missing, unparseable or seq-broken input throws:
 // a copy of a stream that could not have come from appendEvents would be a lie.
 function readUpstreamForCopy(upstreamSid) {
   const raw = core.readRawState(upstreamSid);
   if (!isPlainObject(raw)) {
-    throw new UpstreamStateUnavailableError(`no state file for session upstream ${upstreamSid}`);
+    throw new UpstreamStateUnavailableError(`no state file for session-upstream ${upstreamSid}`);
   }
   const state = JSON.parse(JSON.stringify(core.normalizeStateVersion(raw)));
   state.events = Array.isArray(state.events) ? state.events : [];
@@ -56,9 +56,9 @@ function lastOfKind(events, kind) {
   return null;
 }
 
-// A state handoff record belongs to the generation that wrote it: the upstream's stay in the
-// upstream's file (the reader finds them there), the downstream's own travel with it (#2652).
-// An abort is generation-local and never travels, not even the downstream's own (#2920).
+// A state handoff record belongs to the generation that wrote it: the session-upstream's stay in the
+// session-upstream's file (the reader finds them there), the session-downstream's own travel with it (#2652).
+// An abort is generation-local and never travels, not even the session-downstream's own (#2920).
 const GENERATION_LOCAL_KINDS = Object.freeze(["state_handoff_record", "workflow_aborted", "workflow_abort_handover"]);
 const CARRIED_DOWNSTREAM_KINDS = Object.freeze(["state_handoff_record"]);
 
@@ -66,17 +66,17 @@ function excludeGenerationLocalKinds(events) {
   return events.filter((e) => !(e && GENERATION_LOCAL_KINDS.includes(e.kind)));
 }
 
-// Steps (3)-(6) of the copy: identity, boundary, and the downstream's own location facts.
+// Steps (3)-(6) of the copy: identity, boundary, and the session-downstream's own location facts.
 function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) {
   const clone = upstream;
-  // Read before upstream_session_id is overwritten below: clone IS the upstream object.
+  // Read before upstream_session_id is overwritten below: clone IS the session-upstream object.
   const firstSid = resolveFirstSid(upstreamSid, upstream);
   clone.previous_session_ids = dedupKeepFirst([...stateAncestors(upstream), upstreamSid]);
   clone.first_session_id = firstSid;
   clone.session_id = downstreamSid;
   clone.created_at = createdAt;
   clone.upstream_session_id = upstreamSid;
-  // Events at or below an earlier adoption's boundary are that upstream's copy, not the downstream's own.
+  // Events at or below an earlier adoption's boundary are that session-upstream's copy, not the session-downstream's own.
   const downBoundary = downstream && downstream.upstream_session_id ? Number(downstream.upstream_copy_seq) || 0 : 0;
   const downEvents = (downstream && Array.isArray(downstream.events) ? downstream.events : [])
     .filter((e) => e && Number(e.seq) > downBoundary);
@@ -94,8 +94,8 @@ function buildCopy(downstreamSid, createdAt, upstreamSid, upstream, downstream) 
     clone.session_start_context = JSON.parse(JSON.stringify(downCtx));
   }
 
-  // Where this process runs and on which model are downstream facts; dropping them
-  // in the copy would make state.cwd / session_model describe the upstream.
+  // Where this process runs and on which model are session-downstream facts; dropping them
+  // in the copy would make state.cwd / session_model describe the session-upstream.
   for (const kind of ["worktree", "session_model"]) {
     const ev = downOwn[kind];
     if (ev) clone.events.push(JSON.parse(JSON.stringify(ev)));
@@ -149,9 +149,9 @@ function planReverts(downstreamSid, copy, projection, degraded) {
     events.push(stamp({ kind: "step_annotation", step: r.step, key: "inherit_revert_reason", value: reason }));
   }
 
-  // #772: cleanup never inherits as already done. Not when degraded (the downstream's
+  // #772: cleanup never inherits as already done. Not when degraded (the session-downstream's
   // own worktree still needs tearing down) and not after an approval revert (the
-  // downstream redoes the work, then runs its own cleanup).
+  // session-downstream redoes the work, then runs its own cleanup).
   if (!degraded && !approvalRevert) {
     events.push(stamp({ kind: "step_annotations_cleared", step: "cleanup" }));
     events.push(stamp({ kind: "step_status", step: "cleanup", status: "skipped" }));
@@ -165,8 +165,8 @@ function planReverts(downstreamSid, copy, projection, degraded) {
 // applyInheritance(downstreamSid, createdAt, upstreamSid, opts) ->
 //   { upstream_session_id, granularity, inherited_steps, reverted_steps, supervisor_state }.
 // opts.granularity: "full" (default) | "context-independent-only".
-// opts.precheck(downstreamState): optional; throwing refuses before anything is read upstream.
-// Throws (writing nothing) when the upstream state is missing or corrupt.
+// opts.precheck(downstreamState): optional; throwing refuses before anything is read from the session-upstream.
+// Throws (writing nothing) when the session-upstream state is missing or corrupt.
 function applyInheritance(downstreamSid, createdAt, upstreamSid, opts) {
   const o = opts || {};
   const granularity = o.granularity === GRANULARITY_CONTEXT_INDEPENDENT_ONLY
@@ -189,7 +189,7 @@ function applyInheritance(downstreamSid, createdAt, upstreamSid, opts) {
       return planned.events;
     }, { origin: INHERIT_ORIGIN, provenance: "backfilled", now: createdAt });
 
-    // The single write: the downstream is either untouched or fully copied-and-reverted.
+    // The single write: the session-downstream is either untouched or fully copied-and-reverted.
     core.writeStateLocked(downstreamSid, next);
     return next;
   });
@@ -198,7 +198,7 @@ function applyInheritance(downstreamSid, createdAt, upstreamSid, opts) {
   const inherited = core.VALID_STEPS.filter((s) => s !== "cleanup" && statusOf(projection, s) !== "pending");
 
   // A separate file, copied only after the workflow state landed; a failure here is
-  // reported, never fatal — the downstream merely starts without the audit record.
+  // reported, never fatal — the session-downstream merely starts without the audit record.
   let supervisorState = "failed";
   try {
     supervisorState = require("../../lib/supervisor-state-writer/copy").copySupervisorState(upstreamSid, downstreamSid);
@@ -239,17 +239,17 @@ function describeGranularInheritance(result) {
   const approval = reverted.filter((r) => r.cause === "approval");
   const context = reverted.filter((r) => r.cause === "context");
   if (approval.length === 0 && context.length === 0) {
-    parts.push("Nothing was held back — the session upstream record carried over whole.");
+    parts.push("Nothing was held back — the session-upstream record carried over whole.");
     return parts.join(" ");
   }
 
   const triggers = approval.filter((r) => r.step === r.trigger);
   for (const t of triggers) {
     const followers = approval.filter((r) => r.trigger === t.step && r.step !== t.step).map((r) => r.step);
-    let line = "Reverted to pending because the session upstream approval no longer verifies: " +
+    let line = "Reverted to pending because the session-upstream approval no longer verifies: " +
       `${t.step} (${t.code})`;
     if (t.code === "artifact-hash-unverifiable") {
-      line += " (the session upstream plan file is missing or unreadable — it may have aged out of retention)";
+      line += " (the session-upstream plan file is missing or unreadable — it may have aged out of retention)";
     }
     if (followers.length) line += `; also reset: ${followers.join(", ")}`;
     line += `. Re-present ${planPathHint(upstreamSid, t.step)} and re-approve with ` +

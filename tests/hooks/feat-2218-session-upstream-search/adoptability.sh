@@ -1,7 +1,7 @@
 # adoptability.sh — U7-U13: what a listed record CLAIMS about adoptability vs
-# what `--from` would actually manage. Sourced by feat-2218-upstream-search.sh.
-# Tests: hooks/workflow-state/upstream-search.js, bin/lib/resume-session/upstream-view.js
-# Tags: session-upstream, upstream-search, resume-session, adoptability, cost-cap, regression-2279, scope:issue-specific, pwsh-not-required, TL2, regression-2297
+# what `--from` would actually manage. Sourced by feat-2218-session-upstream-search.sh.
+# Tests: hooks/workflow-state/session-upstream-search.js, bin/lib/resume-session/session-upstream-view.js
+# Tags: session-upstream, upstream-search, resume-session, adoptability, cost-cap, regression-2279, scope:issue-specific, pwsh-not-required, TL2, regression-2297, test-lang-exception:e2e
 
 # #2279's secondary finding: `--list` answers adoptable yes/no, but `--from`
 # answers at a finer grain and silently degrades, so a user picks from the list
@@ -16,7 +16,7 @@ run_U7() {
     out="$(run_case "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' } }));
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' } }));
 if (merged.length === 0) problems.push('fixture-produced-no-records');
 for (const rec of merged) {
   if (!Object.prototype.hasOwnProperty.call(rec, 'adoptable_granularity')) {
@@ -37,7 +37,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     fi
 }
 
-# U8 — the positive claim. The context candidate ran in the heir's own cwd, so
+# U8 — the positive claim. The context candidate ran in the downstream's own cwd, so
 # decideGranularity would return `full`; anything less understates the offer.
 run_U8() {
     require_module "$TARGET" || return 0
@@ -45,8 +45,8 @@ run_U8() {
     out="$(run_case "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' } }));
-const rec = merged.find((x) => x.sid === 'ctxdonor-sess-04');
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' } }));
+const rec = merged.find((x) => x.sid === 'ctxupstream-sess-04');
 if (!rec) problems.push('context-candidate-missing');
 else {
   if (rec.adoptable !== true) problems.push('context-candidate-not-adoptable');
@@ -70,7 +70,7 @@ run_U9() {
     out="$(run_case "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' } }));
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' } }));
 const searchOnly = merged.filter((x) => x.adoptable === false);
 if (searchOnly.length === 0) problems.push('no-search-only-records-in-fixture');
 for (const rec of searchOnly) {
@@ -88,7 +88,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     fi
 }
 
-# U10 — no context, no claim. Called without an heir context there is nothing to
+# U10 — no context, no claim. Called without an downstream context there is nothing to
 # judge adoptability against, so every record must fall back to search-only.
 run_U10() {
     require_module "$TARGET" || return 0
@@ -96,7 +96,7 @@ run_U10() {
     out="$(run_case "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: null }));
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: null }));
 for (const rec of merged) {
   if (rec.adoptable === true) problems.push('adoptable-claimed-without-context:' + rec.sid);
 }
@@ -118,7 +118,7 @@ run_U11() {
     out="$(run_case "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }, query: 'sess' }));
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' }, query: 'sess' }));
 const searchOnly = merged.filter((x) => x.adoptable === false);
 if (searchOnly.length > search.SEARCH_ONLY_CAP) {
   problems.push('query-listing-uncapped:' + searchOnly.length + '>' + search.SEARCH_ONLY_CAP);
@@ -153,10 +153,10 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 
 # U13 — the MIDDLE value. U8 pins `full` and U9 pins `null`, so a constant
 # expression (`adoptable ? 'full' : null`) satisfies both while never once
-# reaching decideGranularity. The donor here is adoptable — its recorded branch
+# reaching decideGranularity. The upstream here is adoptable — its recorded branch
 # matches, so the context guard admits it — but it records no cwd, which is the
 # input that makes decideGranularity degrade. The listing must say so, because
-# `--from` on this donor really will hand over less than the whole state.
+# `--from` on this upstream really will hand over less than the whole state.
 #
 # Its own store: adding a second context candidate to the shared fixture would
 # move U5/U6's leading record.
@@ -176,19 +176,19 @@ const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_R
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u13/wf';
 fs.mkdirSync(dir, { recursive: true });
-fs.writeFileSync(path.join(dir, 'legacydonor-sess-13-intent.md'), '**Title:** Legacy donor' + NL + 'Granularity, #2218.' + NL);
-writeState('legacydonor-sess-13', createInitialState('legacydonor-sess-13', { cwd: null, git_branch: 'feature/donor' }));
-markStep('legacydonor-sess-13', 'workflow_init', 'complete');
-require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('legacydonor-sess-13', 'clarify_intent'); // #2277
-markStep('legacydonor-sess-13', 'clarify_intent', 'complete');
-const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
+fs.writeFileSync(path.join(dir, 'legacyupstream-sess-13-intent.md'), '**Title:** Legacy upstream' + NL + 'Granularity, #2218.' + NL);
+writeState('legacyupstream-sess-13', createInitialState('legacyupstream-sess-13', { cwd: null, git_branch: 'feature/upstream' }));
+markStep('legacyupstream-sess-13', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('legacyupstream-sess-13', 'clarify_intent'); // #2277
+markStep('legacyupstream-sess-13', 'clarify_intent', 'complete');
+const encoded = String('$DOWNSTREAM_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 const tdir = path.join('$TMP_NODE/u13/transcripts', encoded);
 fs.mkdirSync(tdir, { recursive: true });
 const rows = [
-  JSON.stringify({ sessionId: 'heir-sess-99', type: 'user' }),
-  JSON.stringify({ sessionId: 'heir-sess-99', attachment: { exitCode: 0, hookEvent: 'SessionStart', stdout: 'Current workflow session_id: legacydonor-sess-13' } }),
+  JSON.stringify({ sessionId: 'downstream-sess-99', type: 'user' }),
+  JSON.stringify({ sessionId: 'downstream-sess-99', attachment: { exitCode: 0, hookEvent: 'SessionStart', stdout: 'Current workflow session_id: legacyupstream-sess-13' } }),
 ];
-fs.writeFileSync(path.join(tdir, 'heir-sess-99.jsonl'), rows.join(NL) + NL);
+fs.writeFileSync(path.join(tdir, 'downstream-sess-99.jsonl'), rows.join(NL) + NL);
 " >/dev/null 2>&1
 }
 
@@ -199,11 +199,11 @@ run_U13() {
     out="$(_u13_run "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' } }));
-const rec = merged.find((x) => x.sid === 'legacydonor-sess-13');
-if (!rec) problems.push('cwd-less-donor-not-listed:' + JSON.stringify(merged.map((x) => x.sid)));
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' } }));
+const rec = merged.find((x) => x.sid === 'legacyupstream-sess-13');
+if (!rec) problems.push('cwd-less-upstream-not-listed:' + JSON.stringify(merged.map((x) => x.sid)));
 else {
-  if (rec.adoptable !== true) problems.push('donor-not-adoptable:' + String(rec.adoptable));
+  if (rec.adoptable !== true) problems.push('upstream-not-adoptable:' + String(rec.adoptable));
   if (rec.adoptable_granularity !== 'context-independent-only') {
     problems.push('granularity:' + JSON.stringify(rec.adoptable_granularity));
   }
@@ -211,7 +211,7 @@ else {
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
-        pass "U13: an adoptable donor whose recorded context would degrade the adoption is listed as context-independent-only, not as full"
+        pass "U13: an adoptable upstream whose recorded context would degrade the adoption is listed as context-independent-only, not as full"
     else
         fail "U13: expected 'OK', got '${out:-<err>}'"
     fi
@@ -219,12 +219,12 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 
 # U17 — the DEGRADABLE resumability reason, the one rung U8/U9/U13 never reach.
 # `intent-artifact-missing` is the single member of adopt.js's
-# DEGRADABLE_RESUMABILITY_REASONS: `--from` does not refuse such a donor, it
-# hands it over at context-independent-only. The listing asks the same donor a
+# DEGRADABLE_RESUMABILITY_REASONS: `--from` does not refuse such a upstream, it
+# hands it over at context-independent-only. The listing asks the same upstream a
 # coarser question (eligible yes/no) through candidates.js, so the two paths can
-# disagree about whether the donor may be adopted at all — and SKILL.md Step 2
+# disagree about whether the upstream may be adopted at all — and SKILL.md Step 2
 # tells the user "only records with adoptable: true can carry state", which is
-# then false for this donor. Asserted as a biconditional: whichever way the two
+# then false for this upstream. Asserted as a biconditional: whichever way the two
 # paths are made to agree, they must agree.
 _u17_run() {
     env -u CLAUDE_CODE_SESSION_ID \
@@ -236,7 +236,7 @@ _u17_run() {
 
 # clarify_intent genuinely settled but no <sid>-intent.md on disk — the exact
 # input evaluateResumability answers `intent-artifact-missing` for. An
-# outline.md is written so the donor is still reachable by the search generator,
+# outline.md is written so the upstream is still reachable by the search generator,
 # which keeps "did the listing drop it?" distinguishable from "was it ever
 # indexed at all?".
 _u17_fixture() {
@@ -247,23 +247,23 @@ const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_R
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u17/wf';
 fs.mkdirSync(dir, { recursive: true });
-fs.writeFileSync(path.join(dir, 'iamdonor-sess-17-outline.md'), '**Title:** Intent-artifact-missing donor' + NL + 'Degradable resumability reason, #2279.' + NL);
-writeState('iamdonor-sess-17', createInitialState('iamdonor-sess-17', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
-markStep('iamdonor-sess-17', 'workflow_init', 'complete');
+fs.writeFileSync(path.join(dir, 'iamupstream-sess-17-outline.md'), '**Title:** Intent-artifact-missing upstream' + NL + 'Degradable resumability reason, #2279.' + NL);
+writeState('iamupstream-sess-17', createInitialState('iamupstream-sess-17', { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' }));
+markStep('iamupstream-sess-17', 'workflow_init', 'complete');
 // #2277: completing clarify_intent needs an approval bound to a real intent.md, so the
 // fixture approves against a transient one and then removes it to reach the S3 shape.
-require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('iamdonor-sess-17', 'clarify_intent');
-markStep('iamdonor-sess-17', 'clarify_intent', 'complete');
-fs.unlinkSync(path.join(dir, 'iamdonor-sess-17-intent.md'));
-writeState('iamheir-sess-17', createInitialState('iamheir-sess-17', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
-const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('iamupstream-sess-17', 'clarify_intent');
+markStep('iamupstream-sess-17', 'clarify_intent', 'complete');
+fs.unlinkSync(path.join(dir, 'iamupstream-sess-17-intent.md'));
+writeState('iamdownstream-sess-17', createInitialState('iamdownstream-sess-17', { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' }));
+const encoded = String('$DOWNSTREAM_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 const tdir = path.join('$TMP_NODE/u17/transcripts', encoded);
 fs.mkdirSync(tdir, { recursive: true });
 const trows = [
-  JSON.stringify({ sessionId: 'iamheir-sess-17', type: 'user' }),
-  JSON.stringify({ sessionId: 'iamheir-sess-17', attachment: { exitCode: 0, hookEvent: 'SessionStart', stdout: 'Current workflow session_id: iamdonor-sess-17' } }),
+  JSON.stringify({ sessionId: 'iamdownstream-sess-17', type: 'user' }),
+  JSON.stringify({ sessionId: 'iamdownstream-sess-17', attachment: { exitCode: 0, hookEvent: 'SessionStart', stdout: 'Current workflow session_id: iamupstream-sess-17' } }),
 ];
-fs.writeFileSync(path.join(tdir, 'iamheir-sess-17.jsonl'), trows.join(NL) + NL);
+fs.writeFileSync(path.join(tdir, 'iamdownstream-sess-17.jsonl'), trows.join(NL) + NL);
 " >/dev/null 2>&1
 }
 
@@ -273,21 +273,21 @@ run_U17() {
     _u17_fixture
     out="$(_u17_run "
 $PRELUDE
-const view = require('$SCRIPT_CHECKOUT_ROOT_NODE/bin/lib/resume-session/upstream-view.js');
+const view = require('$SCRIPT_CHECKOUT_ROOT_NODE/bin/lib/resume-session/session-upstream-view.js');
 const { readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { evaluateResumability } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/effective-state.js');
 const problems = [];
-// Fixture anchor: without it a passing verdict could be about any other donor
+// Fixture anchor: without it a passing verdict could be about any other upstream
 // shape, and the degradable reason would never have been exercised.
-const verdict = evaluateResumability(readState('iamdonor-sess-17'));
+const verdict = evaluateResumability(readState('iamupstream-sess-17'));
 if (!verdict || verdict.reason !== 'intent-artifact-missing') {
   problems.push('fixture-is-not-the-intent-artifact-missing-condition:' + JSON.stringify(verdict));
 }
-const ctx = view.heirContextOf({ heirSid: 'iamheir-sess-17' });
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'iamheir-sess-17', ctx }));
-const rec = merged.find((x) => x.sid === 'iamdonor-sess-17') || null;
+const ctx = view.downstreamContextOf({ downstreamSid: 'iamdownstream-sess-17' });
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'iamdownstream-sess-17', ctx }));
+const rec = merged.find((x) => x.sid === 'iamupstream-sess-17') || null;
 const listOffers = !!rec && rec.adoptable === true;
-const v = view.buildUpstreamView({ heirSid: 'iamheir-sess-17', upstreamSid: 'iamdonor-sess-17' });
+const v = view.buildUpstreamView({ downstreamSid: 'iamdownstream-sess-17', upstreamSid: 'iamupstream-sess-17' });
 const ir = (v && v.inherit_result) || {};
 const fromAdopts = ir.attempted === true && ir.ok === true;
 if (listOffers !== fromAdopts) {
@@ -307,17 +307,17 @@ if (listOffers && rec.adoptable_granularity !== 'context-independent-only') {
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
-        pass "U17: a donor whose only defect is a missing intent artifact is offered by --list exactly when --from adopts it, and at the degraded grain --from actually hands over"
+        pass "U17: a upstream whose only defect is a missing intent artifact is offered by --list exactly when --from adopts it, and at the degraded grain --from actually hands over"
     else
         fail "U17: expected 'OK', got '${out:-<err>}'"
     fi
 }
 
-# U18 — the SEARCH-ONLY donor `--from` would nonetheless adopt. U9 pins every
-# search-only record at adoptable:false and U14-U16 cross-check only donors the
+# U18 — the SEARCH-ONLY upstream `--from` would nonetheless adopt. U9 pins every
+# search-only record at adoptable:false and U14-U16 cross-check only upstreams the
 # CONTEXT route already found, so the one population where the paths can disagree
 # is untested: reachable by artifact search alone (nothing announces it), yet its
-# state records this heir's cwd/branch and is resumable. upstream-search.js's
+# state records this downstream's cwd/branch and is resumable. session-upstream-search.js's
 # header fixes the direction — a search hit may never invite an adoption the
 # workflow then refuses — so through the real CLI: never over-promise, explain
 # the conservative refusal, and keep `--from` an escape hatch at a stated grain.
@@ -342,7 +342,7 @@ _u18_cli() {
 }
 
 # The transcript directory is created EMPTY on purpose: that is what removes the
-# donor from the lineage/context generator while leaving its intent.md indexed.
+# upstream from the lineage/context generator while leaving its intent.md indexed.
 _u18_fixture() {
     _u18_run "
 const fs = require('fs');
@@ -351,13 +351,13 @@ const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_R
 const NL = String.fromCharCode(10);
 const dir = '$TMP_NODE/u18/wf';
 fs.mkdirSync(dir, { recursive: true });
-fs.writeFileSync(path.join(dir, 'searchonly-sess-18-intent.md'), '**Title:** Search-only donor' + NL + 'Adoptable but unannounced, #2279.' + NL);
-writeState('searchonly-sess-18', createInitialState('searchonly-sess-18', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
+fs.writeFileSync(path.join(dir, 'searchonly-sess-18-intent.md'), '**Title:** Search-only upstream' + NL + 'Adoptable but unannounced, #2279.' + NL);
+writeState('searchonly-sess-18', createInitialState('searchonly-sess-18', { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' }));
 markStep('searchonly-sess-18', 'workflow_init', 'complete');
 require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('searchonly-sess-18', 'clarify_intent'); // #2277
 markStep('searchonly-sess-18', 'clarify_intent', 'complete');
-writeState('soheir-sess-18', createInitialState('soheir-sess-18', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
-const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
+writeState('sodownstream-sess-18', createInitialState('sodownstream-sess-18', { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' }));
+const encoded = String('$DOWNSTREAM_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 fs.mkdirSync(path.join('$TMP_NODE/u18/transcripts', encoded), { recursive: true });
 " >/dev/null 2>&1
 }
@@ -366,10 +366,10 @@ run_U18() {
     require_module "$TARGET" || return 0
     local out
     _u18_fixture
-    # --list first: --from ADOPTS into the heir, so the listing must be taken
-    # while the heir is still the untouched shell the listing describes.
-    _u18_cli soheir-sess-18 --list > "$TMP/u18/list.json"
-    _u18_cli soheir-sess-18 --from searchonly-sess-18 > "$TMP/u18/from.json"
+    # --list first: --from ADOPTS into the downstream, so the listing must be taken
+    # while the downstream is still the untouched shell the listing describes.
+    _u18_cli sodownstream-sess-18 --list > "$TMP/u18/list.json"
+    _u18_cli sodownstream-sess-18 --from searchonly-sess-18 > "$TMP/u18/from.json"
     local from_rc=$?
     out="$(_u18_run "
 const fs = require('fs');
@@ -381,16 +381,16 @@ catch (e) { problems.push('cli-list-emitted-no-json:' + e.message); }
 try { from = JSON.parse(fs.readFileSync('$TMP_NODE/u18/from.json', 'utf8')); }
 catch (e) { problems.push('cli-from-emitted-no-json:' + e.message); }
 const rec = list ? (list.candidates || []).find((x) => x.sid === 'searchonly-sess-18') : null;
-if (list && !rec) problems.push('donor-not-listed-at-all:' + JSON.stringify((list.candidates || []).map((x) => x.sid)));
-// Fixture anchor: the donor must be reachable by the SEARCH generator only, or
+if (list && !rec) problems.push('upstream-not-listed-at-all:' + JSON.stringify((list.candidates || []).map((x) => x.sid)));
+// Fixture anchor: the upstream must be reachable by the SEARCH generator only, or
 // this is just another restatement of U16.
 if (rec && (rec.sources || []).join(',') !== 'search') {
-  problems.push('donor-was-found-by-the-context-route-too:' + JSON.stringify(rec.sources));
+  problems.push('upstream-was-found-by-the-context-route-too:' + JSON.stringify(rec.sources));
 }
 const ir = (from && from.inherit_result) || {};
 const fromAdopts = ir.attempted === true && ir.ok === true;
-// The escape hatch: --from must really adopt this donor, at a stated grain.
-if (!fromAdopts) problems.push('from-refused-the-search-only-donor:' + JSON.stringify(ir.error || ir.reason));
+// The escape hatch: --from must really adopt this upstream, at a stated grain.
+if (!fromAdopts) problems.push('from-refused-the-search-only-upstream:' + JSON.stringify(ir.error || ir.reason));
 else if (ir.granularity !== 'full') problems.push('from-granularity:' + JSON.stringify(ir.granularity));
 if (rec) {
   // Never over-promise: a listing may only claim adoptable when --from delivers.
@@ -399,7 +399,7 @@ if (rec) {
     problems.push('list-over-promised-grain:list=' + JSON.stringify(rec.adoptable_granularity) + ':from=' + JSON.stringify(ir.granularity));
   }
   // The deliberate under-promise must be EXPLAINED and carry no grain it did
-  // not earn (upstream-search.js SEARCH_ONLY_REASON).
+  // not earn (session-upstream-search.js SEARCH_ONLY_REASON).
   if (rec.adoptable === false) {
     if (String(rec.adoptable_reason || '').indexOf('search-result-only') === -1) {
       problems.push('unexplained-refusal:' + JSON.stringify(rec.adoptable_reason));
@@ -410,7 +410,7 @@ if (rec) {
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ] && [ "$from_rc" -eq 0 ]; then
-        pass "U18: a donor reachable by artifact search alone is never advertised as more adoptable than --from delivers, states the search-only reason for the gap, and is still adopted at full granularity when --from is asked directly"
+        pass "U18: a upstream reachable by artifact search alone is never advertised as more adoptable than --from delivers, states the search-only reason for the gap, and is still adopted at full granularity when --from is asked directly"
     else
         fail "U18: expected 'OK' and --from exit 0, got '${out:-<err>}' (--from exit $from_rc)"
     fi

@@ -28,7 +28,7 @@ function makeInitialState() {
     label_sets: {},
     force_path_b: false,
     path_decision: null,
-    // #1305 adopt-prior-state: the offered donor and the user's answer.
+    // #1305 adopt-prior-state: the offered session-upstream and the user's answer.
     adopt_candidate: null,
     adopt_decision: null,
     // #2087: {number, ownerRepo} offered by the pending meta_select ask.

@@ -5,7 +5,7 @@
 // progress file and the plan artifacts of every generation. Order: the state's first_session_id,
 // then previous_session_ids[0], then a legacy sidecar root_sid (a self pin is ignored once the
 // state has ancestors: a pre-#2748 session-downstream pinned itself), then — for a legacy state
-// carrying upstream_session_id only — a bounded walk upstream. Nothing here writes.
+// carrying upstream_session_id only — a bounded walk through the session-upstreams. Nothing here writes.
 
 const { SESSION_ID_VALID_RE } = require("./state-io/core");
 const { readPressure } = require("../lib/progress-pressure-sidecar");
