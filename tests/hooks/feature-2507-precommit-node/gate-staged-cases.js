@@ -10,6 +10,8 @@ const { test } = require("node:test");
 const { stubCfg } = require("./gate-cases");
 
 const MIGRATION = "bin/lib/check-migration-blocks.js";
+const RETIRED_TOKENS = "bin/lib/check-migration-blocks/retired-tokens.js";
+const REGISTRY = "bin/lib/check-migration-blocks/retired-tokens.txt";
 // Marker lines are assembled so this file never holds a block line itself. Synthetic description.
 const BAD = `// --- ${"BEGIN"} temporary: fixture shim ---\nconst x = 1;\n// --- ${"END"} temporary: fixture shim ---\n`;
 const GOOD = "const x = 1;\n";
@@ -18,6 +20,9 @@ const GIT_RE = /(^|\/)git(\.exe)?( |$)/;
 function realMigrationCfg(F) {
   const cfg = stubCfg(F);
   fs.copyFileSync(path.join(F.REPO, MIGRATION), path.join(cfg.dir, MIGRATION));
+  const tokensDir = path.join(cfg.dir, path.dirname(RETIRED_TOKENS));
+  fs.mkdirSync(tokensDir, { recursive: true });
+  fs.copyFileSync(path.join(F.REPO, RETIRED_TOKENS), path.join(cfg.dir, RETIRED_TOKENS));
   return cfg.dir;
 }
 
@@ -79,10 +84,34 @@ function gateStagedReads(F) {
       F.stage(dir, ...rels);
       const { result, gitLines } = runGates(F, dir, cfgDir);
       assert.strictEqual(result.verdict, "pass", JSON.stringify(result));
-      assert.deepStrictEqual(gitLines.filter((l) => / show :/.test(l)), [], `N=${n}: no per-file git show`);
+      // The one registry read is per run, not per file; only a staged file's own show counts.
+      assert.deepStrictEqual(gitLines.filter((l) => / show :/.test(l) && !l.includes(REGISTRY)), [], `N=${n}: no per-file git show`);
       return gitLines.length;
     });
     assert.strictEqual(counts[1], counts[0], `N=12 starts ${counts[1]} git processes, N=1 starts ${counts[0]}`);
+  });
+  // #2759: a demo registry, so the fixture needs no real retired spelling.
+  const registry = (...extra) => ["# retired-tokens:begin", "# migration demo-tok demo old -> demo new migration", "# scope demo-tok tests/**", "# scope demo-tok rules/**", "# word demo-tok OLD_TOKEN", ...extra, "# retired-tokens:end", ""].join("\n");
+  const stagedVerdict = (name, files) => {
+    const dir = F.repo(name);
+    const rels = Object.keys(files);
+    for (const rel of rels) F.write(dir, rel, files[rel]);
+    F.stage(dir, ...rels);
+    return runGates(F, dir, realMigrationCfg(F)).result;
+  };
+  for (const rel of ["tests/x.js", "rules/x.md"]) {
+    test(`a registered token in ${rel} blocks the commit, and an except entry for that path lets it through`, () => {
+      const token = "const value = OLD_TOKEN;\n";
+      const blocked = stagedVerdict(`gate-token-${path.basename(path.dirname(rel))}`, { [REGISTRY]: registry(), [rel]: token });
+      assert.strictEqual(blocked.verdict, "block", JSON.stringify(blocked));
+      assert.ok(stdoutOf(blocked).includes("Commit blocked: migration block format violations (checker rc=1)."), JSON.stringify(blocked));
+      const excepted = stagedVerdict(`gate-except-${path.basename(path.dirname(rel))}`, { [REGISTRY]: registry(`# except demo-tok ${rel} fixture reason`), [rel]: token });
+      assert.strictEqual(excepted.verdict, "pass", JSON.stringify(excepted));
+    });
+  }
+  test("a malformed block alone in tests/ passes: the format axes stay held back there", () => {
+    const passed = stagedVerdict("gate-format-tests", { [REGISTRY]: registry(), "tests/x.js": BAD });
+    assert.strictEqual(passed.verdict, "pass", JSON.stringify(passed));
   });
 }
 

@@ -38,7 +38,7 @@ function main() {
   const policy = require("./lib/step-in-flight-policy");
   if (!policy.isDispatchTool(input.tool_name)) return;
   // A meta-operation dispatch acts ON the workflow record; claiming a step for it
-  // is what made /resume-session disqualify its own heir (#2279). Claude Code
+  // is what made /resume-session disqualify its own session-downstream (#2279). Claude Code
   // delivers the dispatched skill's name at `tool_input.skill` — the payload seam
   // TL3-hook-skill-dispatch-payload.sh probes against the real CLI; the policy
   // owns only which names count as meta-operations.

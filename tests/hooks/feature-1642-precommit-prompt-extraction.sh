@@ -81,7 +81,7 @@ init_repo() {
 # agents-like repo carries its own copy of the checkout and its own hook is run.
 # shellcheck source=tests/lib/session-repo-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/session-repo-fixture.sh"
-# The root-names gate reads this list from the index of its own repo (bin/check-root-names/main.js).
+# The root-names gate reads this list and the session-term list from the index of its own repo (bin/check-root-names/main.js).
 ROOT_NAMES_LIST="tests/bin/feature-2561-root-names-residue.sh"
 
 # An "agents-like" repo: the repo under commit IS the checkout the hook runs from, so
@@ -97,7 +97,7 @@ make_agents_like_repo() {
     local name="$1" allowlist="$2" engine="$3"
     local dir="$TMPDIR_BASE/$name"
     init_repo "$dir"
-    session_repo_fixture_create "$dir" hooks bin rules skills "$ROOT_NAMES_LIST" || return 1
+    session_repo_fixture_create "$dir" hooks bin rules skills "$ROOT_NAMES_LIST" tests/bin/feature-2759-session-terms-residue.sh || return 1
     local stub="$dir/bin/check-prompt-extraction"
 
     case "$engine" in

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // Tests: hooks/lib/progress-file.js, hooks/progress-nudge/evaluate.js
-// Tags: TL2, hooks, progress-nudge, progress-pressure, idle, no-op-write, regression, regression-2748, scope:common, progress-file, sidecar, root-sid, donor-chain
+// Tags: TL2, hooks, progress-nudge, progress-pressure, idle, no-op-write, regression, regression-2748, scope:common, progress-file, sidecar, root-sid, upstream-chain
 // #2594 (A): updatePressure skips the sidecar write when every patch value JSON-equals the current
 // record, still returning out.result; a differing or new key writes the merged record.
 // #2594 (B): an idle evaluation (no new complete, no transcript growth, session-progress.md untouched)
@@ -256,11 +256,11 @@ function legacyChain(prefix, n) {
   return sids;
 }
 
-caseBegin("long-donor-chain-resolves-to-first-generation", "hooks/lib/progress-file.js");
-test("long-donor-chain-resolves-to-first-generation", () => noNewFailures(failures, () => {
+caseBegin("long-upstream-chain-resolves-to-first-generation", "hooks/lib/progress-file.js");
+test("long-upstream-chain-resolves-to-first-generation", () => noNewFailures(failures, () => {
   const sids = realChain("prc-long", 11);
   check("E1: the fixture saved no root_sid anywhere in the chain", () => eq(sids.filter((s) => PF.readPressure(s)), [], "sids with a pressure record"));
-  check("E1: an 11-generation donor chain resolves to its first generation", () => eq(PF.resolveRootSid(sids[10]), sids[0], "root sid"));
+  check("E1: an 11-generation upstream chain resolves to its first generation", () => eq(PF.resolveRootSid(sids[10]), sids[0], "root sid"));
   check("E1: a 9-generation tail of the same chain still resolves to the first generation", () => eq(PF.resolveRootSid(sids[8]), sids[0], "root sid"));
 }));
 caseEnd();
@@ -275,8 +275,8 @@ function expectOneRoot(label, sids, want) {
   check(`${label}: every member shares one progress file path`, () => (new Set(paths).size === 1 && typeof paths[0] === "string" ? undefined : `paths=${show(paths)}`));
 }
 
-caseBegin("donor-cycle-terminates", "hooks/lib/progress-file.js");
-test("donor-cycle-terminates", () => noNewFailures(failures, () => {
+caseBegin("upstream-cycle-terminates", "hooks/lib/progress-file.js");
+test("upstream-cycle-terminates", () => noNewFailures(failures, () => {
   // Created out of sorted order so neither creation order nor the asking member picks the root.
   const b = "prc-cyc-b";
   const c = "prc-cyc-c";
@@ -298,7 +298,7 @@ test("donor-cycle-terminates", () => noNewFailures(failures, () => {
 
   const self = "prc-cyc-self";
   legacy(self, self);
-  check("E2: a session naming itself as donor resolves to itself", () => eq(PF.resolveRootSid(self), self, "root sid"));
+  check("E2: a session naming itself as upstream resolves to itself", () => eq(PF.resolveRootSid(self), self, "root sid"));
 
   // A saved root_sid on any member still wins over the cycle's smallest member.
   const sx = "prc-sav-x";
@@ -311,7 +311,7 @@ test("donor-cycle-terminates", () => noNewFailures(failures, () => {
 }));
 caseEnd();
 
-// countStateReads(fn) -> {result, reads}: the donor walk reads one workflow state per hop, so the
+// countStateReads(fn) -> {result, reads}: the upstream walk reads one workflow state per hop, so the
 // readState count during one resolveRootSid call is the number of hops it took.
 function countStateReads(fn) {
   const orig = S.readState;
@@ -324,8 +324,8 @@ function countStateReads(fn) {
   }
 }
 
-caseBegin("over-long-donor-chain-walk-is-bounded", "hooks/lib/progress-file.js");
-test("over-long-donor-chain-walk-is-bounded", () => noNewFailures(failures, () => {
+caseBegin("over-long-upstream-chain-walk-is-bounded", "hooks/lib/progress-file.js");
+test("over-long-upstream-chain-walk-is-bounded", () => noNewFailures(failures, () => {
   const sids = legacyChain("prc-cap", 200);
   const first = countStateReads(() => PF.resolveRootSid(sids[199]));
   const second = PF.resolveRootSid(sids[199]);
@@ -351,8 +351,8 @@ test("two-member-cycle-stays-deterministic", () => noNewFailures(failures, () =>
 }));
 caseEnd();
 
-caseBegin("short-donor-chain-still-reaches-root", "hooks/lib/progress-file.js");
-test("short-donor-chain-still-reaches-root", () => noNewFailures(failures, () => {
+caseBegin("short-upstream-chain-still-reaches-root", "hooks/lib/progress-file.js");
+test("short-upstream-chain-still-reaches-root", () => noNewFailures(failures, () => {
   const sids = realChain("prc-short", 3);
   check("F3: a 3-generation chain resolves to its first generation", () => eq(PF.resolveRootSid(sids[2]), sids[0], "root sid"));
 }));

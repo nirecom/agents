@@ -4,7 +4,7 @@
 // Tags: TL2, next-step, workflow-abort, quiet-layer, regression-2920, scope:issue-specific, pwsh-not-required
 // #2920 S5-5: next-step answers an aborted session from its quiet layer — scenario A (abort-sentinel)
 // sends it to /worktree-end until cleanup settles or a downstream adopts it, scenario B (adopt-auto / abort-cli) is done at
-// once and names the heir. paused and workflow-off still win over the abort (order paused -> off -> abort).
+// once and names the downstream. paused and workflow-off still win over the abort (order paused -> off -> abort).
 // TL3 gap (what this test does NOT catch):
 // - /worktree-end reading REASON=workflow-aborted-cleanup in a live session (skill prose).
 
@@ -89,7 +89,7 @@ test("S5-5: abort-sentinel then adopted by a downstream -> done / workflow-abort
   F.seedUpstream("ns-a-adopted");
   X.rawAbort("ns-a-adopted", "abort-sentinel");
   F.seedDownstream("ns-a-adopted-down");
-  const a = X.mod("hooks/workflow-state/inheritance/adopt").adoptState({ heirSid: "ns-a-adopted-down", donorSid: "ns-a-adopted" });
+  const a = X.mod("hooks/workflow-state/inheritance/adopt").adoptState({ downstreamSid: "ns-a-adopted-down", upstreamSid: "ns-a-adopted" });
   assert.strictEqual(a && a.ok, true, `adoptState: ${JSON.stringify(a)}`);
   const r = nextStep("ns-a-adopted");
   assert.deepStrictEqual([r.kv.ACTION, r.kv.REASON], ["done", "workflow-aborted"], r.out);
@@ -98,14 +98,14 @@ test("S5-5: abort-sentinel then adopted by a downstream -> done / workflow-abort
 });
 caseEnd();
 
-caseBegin("scenario-b-heir-owns-cleanup", "bin/workflow/next-step");
+caseBegin("scenario-b-downstream-owns-cleanup", "bin/workflow/next-step");
 for (const origin of ["adopt-auto", "abort-cli"]) {
-  test(`S5-5: ${origin} -> done / workflow-aborted at once, naming the heir`, () => {
+  test(`S5-5: ${origin} -> done / workflow-aborted at once, naming the downstream`, () => {
     const sid = `ns-b-${origin}`;
-    seedAborted(sid, origin,{ heir_session_id: `heir-of-${origin}` });
+    seedAborted(sid, origin,{ downstream_session_id: `downstream-of-${origin}` });
     const r = nextStep(sid);
     assert.deepStrictEqual([r.kv.ACTION, r.kv.REASON], ["done", "workflow-aborted"], r.out);
-    assert.ok((r.kv.NEXT_HINT || "").includes(`heir-of-${origin}`), `NEXT_HINT must name the heir: ${r.out}`);
+    assert.ok((r.kv.NEXT_HINT || "").includes(`downstream-of-${origin}`), `NEXT_HINT must name the downstream: ${r.out}`);
   });
 }
 caseEnd();

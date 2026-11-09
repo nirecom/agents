@@ -116,8 +116,8 @@ The line format is in the header of the registry file; the judgement is
 - Registry source, first found wins: `--retired-tokens-from <file>`, the target repository's
   registry (the index for `--staged`, the tree for `--all`), then the checker's own copy. An
   existing registry with no migration flags nothing. A malformed line is rc 2.
-- `rules/**` is judged by scope, unlike the format axes; the gate does not receive `rules/*.md`, so
-  the CI `--all` run judges them.
+- `rules/**` and `tests/**` are judged by scope, unlike the format axes: the gate passes every
+  staged file, and `--staged` and `--all` both hold back only the format axes for them.
 - Exits: an `except <id> <path> <reason>` line, added only with the user's approval (no reason is
   rc 2; the path prints `EXCEPTED <path>: <reason>`), and `git commit --no-verify`, run by the user.
 - The gate runs the main checkout's checker, so a change to the checker reaches the hook only from

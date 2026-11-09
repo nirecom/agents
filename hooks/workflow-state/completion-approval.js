@@ -26,7 +26,7 @@ const APPROVAL_GATED_STEPS = Object.freeze(Object.keys(PLAN_STEP_TABLE));
 const SANCTIONED_SOURCES = Object.freeze([
   "confirm-sentinel",
   "confirm-flag-off",
-  // "session-inherit" was a member until #2633-1: inheritance now copies the upstream
+  // "session-inherit" was a member until #2633-1: inheritance now copies the session-upstream
   // stream verbatim and reverts any stage whose approval no longer verifies, so it never
   // crosses the boundary on a token. Existing records stay readable via HASH_EXEMPT_SOURCES.
 ]);
@@ -185,8 +185,8 @@ function recordPlanApproval(sessionId, step, fields = {}) {
       artifact_sha256: fields.artifactSha || null,
       // Session whose artifact the recorded hash was taken from. Artifacts are
       // named <sid>-<suffix>.md, so a record inherited by a LATER session must keep
-      // pointing at the session that owns the approved artifact (#1133). A downstream
-      // session hashes its upstream's file, so the caller names that owner (#2633).
+      // pointing at the session that owns the approved artifact (#1133). A session-downstream
+      // hashes its session-upstream's file, so the caller names that owner (#2633).
       artifact_session_id: fields.artifactSha ? (owner || sessionId) : null,
       artifact_hash_status: fields.artifactHashStatus || "unknown",
       provenance: "declared",

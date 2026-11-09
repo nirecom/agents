@@ -37,7 +37,7 @@ RT-1. Identify staged test file(s) and source file(s):
   - Run `bash "$AGENTS_MAIN_ROOT/skills/review-tests/scripts/select-staged-files.sh"` (Bash, single standalone command); its stdout is `STAGED`.
   - If exit 3 (linked worktree unresolvable): do NOT fall back to cwd;
     present "Could not identify the linked worktree. Re-run `/review-tests` from the linked worktree, or specify the test and source files manually."
-    and ask the user for the files.
+    and ask the user for the files via `AskUserQuestion` (`metadata.source=review-tests.manual-files`).
   - If exit 4 (`bin/resolve-session-id` faulted): HALT, surface the script's stderr, and do NOT ask for a manual file.
   - Select test file(s) and source file(s) from `$STAGED` or from the user's manual input.
 RT-1a. Check each newly added test file for a missed append target:

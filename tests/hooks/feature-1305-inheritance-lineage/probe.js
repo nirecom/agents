@@ -1,21 +1,10 @@
 "use strict";
 
-// Test probe for the #1305 inheritance API (test asset — not production code).
-//
-// CONTRACT the implementation must honour (see the confirmed detail plan §2b/§2d):
-//
-//   resolveInheritanceDonor({ sessionId, source, transcriptPath, ctx, agentId })
-//     -> { donor, decision, candidateSessionId, ancestors }
-//   decision ∈ "inherited" | "subagent" | "source-gated" | "startup-no-lineage"
-//            | "no-lineage" | "unreadable-transcript" | "context-mismatch"
-//            | "not-resumable:<reason>"
-//
-//   readLineageAncestors(transcriptPath) -> { readable, ancestors }
-//     ancestors: nearest-first, de-duplicated, self excluded.
-//
-//   listRecentContextCandidates(ctx) -> [{ session_id, ... }, ...]
-//
-// Emits flat `key=value` lines so the bash side needs no extra node process.
+// Test probe for the #1305 inheritance API (test asset — not production code). It drives
+// resolveInheritanceUpstream({ sessionId, source, transcriptPath, ctx, agentId }) ->
+// { upstream, decision, candidateSessionId, ancestors }, readLineageAncestors(transcriptPath) ->
+// { readable, ancestors } (nearest-first, deduplicated, self excluded) and
+// listRecentContextCandidates(ctx). Emits flat `key=value` lines so the bash side needs no extra node.
 
 const path = require("path");
 
@@ -45,7 +34,7 @@ function loadFn(name) {
   return null;
 }
 
-const fnName = args.fn || "resolveInheritanceDonor";
+const fnName = args.fn || "resolveInheritanceUpstream";
 const fn = loadFn(fnName);
 if (!fn) {
   out({ error: "MISSING_EXPORT:" + fnName });
@@ -53,7 +42,7 @@ if (!fn) {
 }
 
 try {
-  if (fnName === "resolveInheritanceDonor") {
+  if (fnName === "resolveInheritanceUpstream") {
     const r = fn({
       sessionId: args.sessionId,
       source: args.source,
@@ -63,7 +52,7 @@ try {
     });
     out({
       decision: r && r.decision != null ? r.decision : "NONE",
-      donor: r && r.donor && r.donor.session_id ? r.donor.session_id : "NONE",
+      upstream: r && r.upstream && r.upstream.session_id ? r.upstream.session_id : "NONE",
       candidate: r && r.candidateSessionId != null ? r.candidateSessionId : "NONE",
       ancestors: r && Array.isArray(r.ancestors) ? r.ancestors.join(",") : "NONE",
     });

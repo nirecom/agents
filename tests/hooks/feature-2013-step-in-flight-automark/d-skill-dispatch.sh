@@ -11,7 +11,7 @@
 
 # _skill_setup_none / _skill_setup_all_pending / _skill_setup_review_tests.
 _skill_setup_none() { : ; }   # deliberately no state file at all
-# the crash-resume heir shell: a state file that EXISTS and records only pending
+# the crash-resume downstream shell: a state file that EXISTS and records only pending
 _skill_setup_all_pending() { seed_step "$2" "$3" research pending; }
 _skill_setup_review_tests() {
     settle_through "$2" "$3" workflow_init clarify_intent research outline detail \
@@ -199,10 +199,10 @@ run_B20() {
 }
 
 # B21: the shape #2279 actually reports. B13 covers "no state file at all", but
-#      the heir a crash-resume lands in normally HAS one — an all-pending shell.
+#      the downstream a crash-resume lands in normally HAS one — an all-pending shell.
 #      The hook's own no-state branch cannot help there, so a fix keyed on file
 #      absence passes B13 and still promotes `research` here, which is exactly
-#      what disqualifies the heir from the adoption the resume was asking for.
+#      what disqualifies the downstream from the adoption the resume was asking for.
 run_B21() {
     _expect_unchanged_skill B21 \
         "Skill dispatch of 'resume-session' against an EXISTING all-pending state file leaves research pending" \

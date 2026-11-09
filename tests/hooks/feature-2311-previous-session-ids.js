@@ -175,26 +175,26 @@ caseEnd();
 
 caseBegin("from-cli-chain-persists-lineage", "bin/resume-session-detect");
 test("from-cli-chain-persists-lineage", () => noNewFailures(failures, () => {
-  // Each hop is a real `resume-session-detect --from` run with the heir as the session id;
-  // the assertion reads the heir's state file the CLI left on disk.
+  // Each hop is a real `resume-session-detect --from` run with the downstream as the session id;
+  // the assertion reads the downstream's state file the CLI left on disk.
   const CLI = path.join(F.ROOT, "bin", "resume-session-detect");
   const CTX = { cwd: "/fixture/f2311-cli/repo", git_branch: "feature/f2311-cli" };
   const home = fs.mkdtempSync(path.join(SCRATCH, "cli-home-"));
   const tbase = fs.mkdtempSync(path.join(SCRATCH, "cli-transcripts-"));
-  function adoptViaCli(heir, up) {
+  function adoptViaCli(downstream, up) {
     const io = F.S();
-    io.writeState(heir, io.createInitialState(heir, CTX));
+    io.writeState(downstream, io.createInitialState(downstream, CTX));
     const env = Object.assign({}, process.env, {
-      HOME: home, USERPROFILE: home, CLAUDE_TRANSCRIPT_BASE_DIR: tbase, CLAUDE_CODE_SESSION_ID: heir,
+      HOME: home, USERPROFILE: home, CLAUDE_TRANSCRIPT_BASE_DIR: tbase, CLAUDE_CODE_SESSION_ID: downstream,
     });
     const run = spawnSync(process.execPath, [CLI, "--from", up], { cwd: home, env, encoding: "utf8", timeout: 60000 });
     let d = null;
     try { d = JSON.parse(run.stdout); } catch (e) { d = null; }
     const ir = d && d.inherit_result;
     if (run.status !== 0 || !ir || ir.ok !== true) {
-      throw new Error(`--from ${up} as ${heir} did not adopt: exit=${run.status} inherit_result=${show(ir)} stderr=${show(run.stderr)}`);
+      throw new Error(`--from ${up} as ${downstream} did not adopt: exit=${run.status} inherit_result=${show(ir)} stderr=${show(run.stderr)}`);
     }
-    return F.raw(heir);
+    return F.raw(downstream);
   }
   check("C1: A -> B -> C through the --from CLI persists [A] on B and [A, B] on C", () => {
     const a = "f2311-cli-a";
@@ -222,7 +222,7 @@ test("session-start-writes-same-lineage", () => noNewFailures(failures, () => {
     const explicit = inherit("p4-explicit", "p4-up");
     const preload = path.join(SCRATCH, "force-upstream.js");
     fs.writeFileSync(preload, `const b = require(${JSON.stringify(path.join(F.ROOT, "hooks/workflow-state"))});\n` +
-      "b.resolveInheritanceDonor = () => ({ donor: { session_id: 'p4-up' }, decision: 'inherited', candidateSessionId: 'p4-up', ancestors: [] });\n");
+      "b.resolveInheritanceUpstream = () => ({ upstream: { session_id: 'p4-up' }, decision: 'inherited', candidateSessionId: 'p4-up', ancestors: [] });\n");
     const home = fs.mkdtempSync(path.join(SCRATCH, "home-"));
     const tbase = fs.mkdtempSync(path.join(SCRATCH, "transcripts-"));
     const env = Object.assign({}, process.env, { HOME: home, USERPROFILE: home, CLAUDE_TRANSCRIPT_BASE_DIR: tbase });

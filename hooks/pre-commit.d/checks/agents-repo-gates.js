@@ -15,7 +15,8 @@ const RULES_POLICY = "hooks/lib/rules-injection-policy.js";
 
 function extraArgs(gate, files) {
   if (gate.module === "bin/lib/check-on-demand-rules.js") return files.filter((f) => RULES_MD.test(f) || f === RULES_POLICY);
-  if (gate.module === "bin/lib/check-migration-blocks.js") return files.filter((f) => !RULES_MD.test(f) && !/^tests\//.test(f));
+  // The checker itself holds back the format axes for rules/*.md and tests/; the retired-token axis needs them.
+  if (gate.module === "bin/lib/check-migration-blocks.js") return files;
   return [];
 }
 

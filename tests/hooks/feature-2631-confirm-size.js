@@ -207,7 +207,7 @@ test("C9", () => noNewFailures(F.failureCount, () => F.run("C9", () => {
   const S = C.session("intent", 12, { top: { upstream_session_id: U, upstream_copy_seq: 0 } });
   const r = C.confirm(S, "intent");
   F.check("both exist: the dialog shows U's intent, not S's own", dialog(r) && r.msg.includes(`${U}-intent.md`) && !r.msg.includes(`${S}-intent.md`), r.raw);
-  F.check("the dialog carries no upstream-owner note", !/owned by session upstream/.test(r.msg + r.ctx), r.raw);
+  F.check("the dialog carries no upstream-owner note", !/owned by the session-upstream/.test(r.msg + r.ctx), r.raw);
   const L = C.session("intent", 12, { top: { upstream_session_id: F.newSid(), upstream_copy_seq: 0 } });
   const l = C.confirm(L, "intent");
   F.check("upstream without a file -> denied (plan-size could not be judged), never L's own intent", l.deny && l.reason.includes(UNJUDGED) && !(l.msg + l.reason).includes(`${L}-intent.md`), l.raw);

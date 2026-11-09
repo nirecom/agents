@@ -140,3 +140,19 @@ Changes: WIP markers on issues now show the raw Claude Code session id (board fi
 ### FEATURE: PR #2934 (2026-11-08)
 Background: feat(#2658, #2291, #2293, #1770, #2415): replace session-sync's rebas...
 Changes: session-sync no longer gets stuck needing `session-sync reset`: a leftover rebase state heals on the next push or pull, and two machines' transcripts are merged line by line.;The shell-startup fetch deadline is configurable with `SESSION_SYNC_STARTUP_DEADLINE_MS` in `.env` (default 3000 ms, max 60000).
+
+### FEATURE: PR #2950 (2026-11-08)
+Background: feat(#2473): run the test workflow in any repo through .agents.json a...
+Changes: The test workflow works in any repo through .agents.json, and /migrate sets a repo up by running the tracker, issues and tests migrations it still needs.
+
+### FEATURE: PR #2954 (2026-11-09)
+Background: fix(#2951): detect staged test renames in run-tests-baseline rename s...
+Changes: Fixed `run-tests-baseline` missing a test rename that was only staged, which left run_tests unable to complete.
+
+### FEATURE: PR #2964 (2026-11-09)
+Background: feat(#2759): unify session-inheritance terms on session-upstream / session-downstream
+Changes: Session-inheritance terms are now session-upstream / session-downstream everywhere; donor / heir are retired.
+
+### FEATURE: PR #2965 (2026-11-09)
+Background: feat(#2764): route AskUserQuestion dialogs to Jev only by a fixed dia...
+Changes: Jev auto-answers only clarification dialogs whose dialog ID is listed as `low` in `hooks/lib/askuser-dialog-levels.json`; approval and publishing dialogs always reach you.;Renamed `JEV_AUTO_SKIP_ASKUSER` to `JEV_AUTO_CLARIFICATIONS` (migrated automatically).;Added `bin/check-askuser-dialog-ids` and per-dialog routing counts in `jev-report`.

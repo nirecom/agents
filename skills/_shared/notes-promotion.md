@@ -21,7 +21,7 @@ SSOT for turning `WORKTREE_NOTES.md` findings into GitHub issues. Referenced by 
 **Walk the listed entries in list order, branching on `userAcknowledged`, NP-7.**
 
 - `true`: invoke `/issue-create` with the entry text without asking, and keep the issue number it returns; when `review.worth_filing` is `true`, say so in the filing notice.
-- `false`: explain in 1–2 sentences how the finding arose, including `review.worth_filing` when known, then AskUserQuestion whether to file it; on approval, invoke `/issue-create` as for `true`.
+- `false`: explain in 1–2 sentences how the finding arose, including `review.worth_filing` when known, then AskUserQuestion (`metadata.source=notes-promotion.file-issue`) whether to file it; on approval, invoke `/issue-create` as for `true`.
 - Use severity only to order and display entries, never to decide whether to ask.
 
 **Annotate each entry as soon as its number is known, NP-8.** `node "$AGENTS_MAIN_ROOT/bin/worktree-notes-triage.js" annotate "<notesPath>" <lineNumber> <issueNumber>`; repeating an annotation is a byte-identical no-op, so an interrupted pass is safe to re-run.

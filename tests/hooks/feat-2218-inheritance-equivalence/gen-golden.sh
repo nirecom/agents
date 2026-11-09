@@ -33,23 +33,23 @@ out=$(cd "$tmp" && env -u CLAUDE_CODE_SESSION_ID \
 const fs = require('fs'), path = require('path');
 const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
-const donorSid = 'donor-2218-eq';
-writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-markStep(donorSid, 'workflow_init', 'complete');
-require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(donorSid, 'clarify_intent');
-markStep(donorSid, 'clarify_intent', 'complete');
-markStep(donorSid, 'outline', 'skipped', { skip_reason: 'trivial' });
-markStep(donorSid, 'detail', 'complete');
-markStep(donorSid, 'branching_complete', 'complete');
-markStep(donorSid, 'write_tests', 'complete');
-markStep(donorSid, 'review_tests', 'complete');
-markStep(donorSid, 'run_tests', 'pending', { reset_reason: 'flaky-rerun' });
-const heirSid = 'heir-2218-eq';
-writeState(heirSid, createInitialState(heirSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-applyInheritance(heirSid, '2026-03-01T00:00:00.000Z', donorSid);
-const heir = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, heirSid + '.json'), 'utf8'));
-const b = heir.upstream_copy_seq;
-const post = heir.events.filter((e) => !(e.seq <= b)).map((e) => [
+const upstreamSid = 'upstream-2218-eq';
+writeState(upstreamSid, createInitialState(upstreamSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+markStep(upstreamSid, 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(upstreamSid, 'clarify_intent');
+markStep(upstreamSid, 'clarify_intent', 'complete');
+markStep(upstreamSid, 'outline', 'skipped', { skip_reason: 'trivial' });
+markStep(upstreamSid, 'detail', 'complete');
+markStep(upstreamSid, 'branching_complete', 'complete');
+markStep(upstreamSid, 'write_tests', 'complete');
+markStep(upstreamSid, 'review_tests', 'complete');
+markStep(upstreamSid, 'run_tests', 'pending', { reset_reason: 'flaky-rerun' });
+const downstreamSid = 'downstream-2218-eq';
+writeState(downstreamSid, createInitialState(downstreamSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+applyInheritance(downstreamSid, '2026-03-01T00:00:00.000Z', upstreamSid);
+const downstream = JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, downstreamSid + '.json'), 'utf8'));
+const b = downstream.upstream_copy_seq;
+const post = downstream.events.filter((e) => !(e.seq <= b)).map((e) => [
   e.kind, e.step, e.status || '', e.key || '',
   e.value === undefined ? '' : (typeof e.value === 'string' ? e.value : JSON.stringify(e.value)),
   e.origin, e.provenance,

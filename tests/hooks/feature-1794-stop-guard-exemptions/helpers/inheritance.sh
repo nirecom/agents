@@ -6,8 +6,8 @@
 # Session-inheritance fixtures for the #1794 adoption (I) cases, split out of helpers.sh
 # under the 300-line WARN. Expects SCRIPT_CHECKOUT_ROOT, RWT, STATEIO_NODE, make_tmp, node_path.
 
-# These build a REAL inherited session — donor state, announcing transcript, and an
-# heir created by launching hooks/session-start.js itself — so the heir holds the donor's
+# These build a REAL inherited session — upstream state, announcing transcript, and an
+# downstream created by launching hooks/session-start.js itself — so the downstream holds the upstream's
 # events verbatim up to upstream_copy_seq, plus backfilled revert events, as a live SessionStart writes.
 # Layout under <tmp>: wf/ (workflow+plans, dual-pinned), repo/, tr/, home/, cfg/.
 
@@ -58,17 +58,17 @@ inh_node() {
         "$RWT" 60 node -e "$js" 2>&1)
 }
 
-# seed_donor_and_inherit <tmp> <donor> <heir> <ci-mode>
-# Builds the whole inheritance fixture and creates <heir> through the REAL
+# seed_upstream_and_inherit <tmp> <upstream> <downstream> <ci-mode>
+# Builds the whole inheritance fixture and creates <downstream> through the REAL
 # SessionStart hook (which also spawns bin/workflow/next-step as a child — the
 # path I8 targets). <ci-mode>:
-#   complete — donor finished clarify_intent; its <donor>-intent.md MUST exist, or
-#              evaluateInheritance's S3 rule stops the donor scan entirely.
-#   pending  — donor left clarify_intent pending, <heir>-intent.md planted up front so
-#              the heir's own next-step resolves it from evidence (the C1 path).
+#   complete — upstream finished clarify_intent; its <upstream>-intent.md MUST exist, or
+#              evaluateInheritance's S3 rule stops the upstream scan entirely.
+#   pending  — upstream left clarify_intent pending, <downstream>-intent.md planted up front so
+#              the downstream's own next-step resolves it from evidence (the C1 path).
 # Sets INH_OUT (session-start stdout+stderr).
-seed_donor_and_inherit() {
-    local tmp="$1" donor="$2" heir="$3" mode="$4" enc
+seed_upstream_and_inherit() {
+    local tmp="$1" upstream="$2" downstream="$3" mode="$4" enc
     mkdir -p "$tmp/wf" "$tmp/tr" "$tmp/home" "$tmp/cfg"
     printf '# fixture config for tests/feature-1794-stop-guard-exemptions\nAGENT_FIXTURE=1\n' > "$tmp/cfg/.env"
     mk_fixture_repo "$tmp/repo" || return 1
@@ -76,12 +76,12 @@ seed_donor_and_inherit() {
     [ -n "$enc" ] || return 1
     mkdir -p "$tmp/tr/$enc"
     printf '{"type":"attachment","attachment":{"hookEvent":"SessionStart","exitCode":0,"stdout":"Current workflow session_id: %s"}}\n' \
-        "$donor" > "$tmp/tr/$enc/$donor.jsonl"
-    if [ "$mode" = "complete" ]; then printf '# fixture intent\n' > "$tmp/wf/$donor-intent.md"
-    else printf '# fixture intent\n\n## Issues\n- #1794\n' > "$tmp/wf/$heir-intent.md"; fi
+        "$upstream" > "$tmp/tr/$enc/$upstream.jsonl"
+    if [ "$mode" = "complete" ]; then printf '# fixture intent\n' > "$tmp/wf/$upstream-intent.md"
+    else printf '# fixture intent\n\n## Issues\n- #1794\n' > "$tmp/wf/$downstream-intent.md"; fi
     inh_node "$tmp" "
 const S = require('$STATEIO_NODE');
-const sid = '$donor';
+const sid = '$upstream';
 S.writeState(sid, S.createInitialState(sid, S.getCurrentContext()));
 S.markStep(sid, 'workflow_init', 'complete');
 if ('$mode' === 'complete') {
@@ -90,19 +90,19 @@ if ('$mode' === 'complete') {
   S.markStep(sid, 'clarify_intent', 'complete');
 }
 " || return 1
-    inh_node "$tmp" --hook "$heir"
+    inh_node "$tmp" --hook "$downstream"
     [ "$mode" = "complete" ] && return 0
 
-    # This donor records no closes_issues, and next-step blocks clarify_intent on an empty
-    # set (REASON=closes_issues-empty), so the heir's intent.md above names #1794 —
+    # This upstream records no closes_issues, and next-step blocks clarify_intent on an empty
+    # set (REASON=closes_issues-empty), so the downstream's intent.md above names #1794 —
     # the source the gate reads since #2654. The state stamp below serves only the
     # pre-#2654 reader (state.closes_issues); it settles no step and appends no
     # step_status event, and is dead once the gate reads intent.md. The SECOND
     # SessionStart (state exists, buildWorkflowStatus still spawns the real
     # next-step) then reaches the evidence resolution with zero user action.
     inh_node "$tmp" "
-require('$STATEIO_NODE').updateTopLevel('$heir', (r) => { r.closes_issues = [1794]; });" || return 1
-    inh_node "$tmp" --hook "$heir"
+require('$STATEIO_NODE').updateTopLevel('$downstream', (r) => { r.closes_issues = [1794]; });" || return 1
+    inh_node "$tmp" --hook "$downstream"
 }
 
 # ── shared drivers for the I cases ──────────────────────────────────────────
@@ -131,7 +131,7 @@ inh_guard() {
     unset CLAUDE_PROJECT_DIR
 }
 
-# inh_probe <tmp> <sid> <js-body> — evaluates <js-body> against the heir with the
+# inh_probe <tmp> <sid> <js-body> — evaluates <js-body> against the downstream with the
 # worktree-local lifecycle module in scope as `L` and the raw state as `st`.
 # Echoes whatever the body prints. Uses the WORKTREE copy on purpose: assertions
 # about this branch's predicate must not read the deployed ~/.claude/ one.
@@ -147,7 +147,7 @@ $3"
 }
 
 # inh_anchor <tmp> <sid> — POSITIVE ANCHOR for the inherited-only shape. Echoes
-# ANCHOR_OK only when the heir really did inherit: workflow_init projects
+# ANCHOR_OK only when the downstream really did inherit: workflow_init projects
 # `complete`, upstream_copy_seq bounds at least one copied step_status event, and
 # every step_status event after the boundary is backfilled/session-inherit (#2304).
 # Without this a silently-broken fixture would make C4/C2 silent for the WRONG reason.

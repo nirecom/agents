@@ -7,7 +7,7 @@ triage priority: MUST → OPTIONAL → NA. Within the same triage, preserve the
 upstream order from aggregation.
 
 Present the sorted list to the user as plain text in the main conversation
-(NOT inside AskUserQuestion):
+(NOT inside AskUserQuestion): <!-- askuser-none -->
 
     ## Proposed class members triage
 

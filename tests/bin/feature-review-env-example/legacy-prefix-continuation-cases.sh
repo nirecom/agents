@@ -122,7 +122,7 @@ fi
 # ---------------------------------------------------------------------------
 lpc_probe() {
     local line="$1" repo out probe_exit=0 legacy=no cont=no
-    repo=$(make_repo)
+    repo=$(make_repo) || { echo "make_repo-failed"; return 1; }
     git -C "$repo" checkout -q -b lpc-probe
     printf '%s\n' "$line" '# Format: 0 (off) | 1 (on). Default: 0.' 'MYVAR=0' > "$repo/.env.example"
     git -C "$repo" add ".env.example"

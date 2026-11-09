@@ -1,34 +1,12 @@
 #!/bin/bash
 # Tests: hooks/workflow-state/inheritance.js, hooks/workflow-state/inheritance/lineage.js, hooks/workflow-state/inheritance/context-match.js, hooks/session-start.js
 # Tags: workflow-state, session-inherit, lineage, regression-1305, scope:issue-specific, pwsh-not-required, TL2
-# ===========================================================================
-# #1305 — a NEW session must not inherit workflow state from an ABANDONED
-# prior session that merely shared the same cwd + git branch.
-#
-# WHY (CPR-WPH): the pre-fix donor search was `findLatestStateForContext(ctx)`,
-# a pure cwd+branch scan over recent transcripts. Two sessions started in the
-# same worktree are indistinguishable to it, so a fresh `startup` session
-# silently adopted the steps of a session the user had walked away from — and
-# then the workflow gate let a commit through on completions nobody performed.
-#
-# The fix replaces "same context" with "provable descent": the heir must be a
-# fork/resume/compact continuation of the donor, evidenced by the transcript
-# (`forkedFrom` rows, or the copied SessionStart/PostCompact announce line).
-# cwd+branch is demoted from *selector* to *guard*.
-#
-# fail-before-fix: every case below is written against
-# `resolveInheritanceDonor()`, which does not exist yet. They fail with
-# MISSING_EXPORT until hooks/workflow-state/inheritance/{lineage,context-match}.js
-# land. That failure mode is the point — see the per-case comments for the
-# behaviour each one pins.
-#
-# TL2 rationale: resolveInheritanceDonor is pure over (payload, ctx, on-disk
-# state + transcripts), so real files + a real node process exercise it fully.
-# # TL3 gap: only a real `claude -p` SessionStart can prove that Claude Code
-# actually sends `source` and `transcript_path` in the payload, and that a real
-# fork writes real `forkedFrom` rows. That single seam is covered by the
-# `source=startup` assertion added to tests/hooks/TL3-hook-session-start/main.sh.
-# ===========================================================================
+# #1305 — a NEW session must not inherit state from an ABANDONED prior session that merely shared
+# cwd + branch: the session-downstream must be a provable fork/resume/compact continuation of the
+# session-upstream (transcript `forkedFrom` rows or the copied announce line); cwd+branch is only a guard.
+# TL2 rationale: resolveInheritanceUpstream is pure over (payload, ctx, on-disk state + transcripts).
+# TL3 gap: only a real `claude -p` SessionStart proves the real `source`/`transcript_path` payload and
+# real `forkedFrom` rows; covered by the source=startup case in tests/hooks/TL3-hook-session-start/main.sh.
 set -euo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
