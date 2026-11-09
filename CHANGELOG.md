@@ -136,3 +136,15 @@ Changes: A main merge or a rule module update alone no longer expires an accepte
 ### FEATURE: PR #2933 (2026-11-05)
 Background: feat(#2925, #2161): record the raw session id as the WIP holder and r...
 Changes: WIP markers on issues now show the raw Claude Code session id (board field `session-id`, GitLab label `wip-fp:<session-id>`), so you can see in the web UI which session holds an issue. Old 8-hex markers are ignored; a session that spans the switch sees its own issue as held by another session and continues via the wip_conflict choice.;`wip-state.sh set` repairs a project whose WIP field is missing or still has the old name, and recovers from a cached field that was deleted on the board, instead of failing until `/issue-setup` is re-run.
+
+### FEATURE: PR #2934 (2026-11-08)
+Background: feat(#2658, #2291, #2293, #1770, #2415): replace session-sync's rebas...
+Changes: session-sync no longer gets stuck needing `session-sync reset`: a leftover rebase state heals on the next push or pull, and two machines' transcripts are merged line by line.;The shell-startup fetch deadline is configurable with `SESSION_SYNC_STARTUP_DEADLINE_MS` in `.env` (default 3000 ms, max 60000).
+
+### FEATURE: PR #2950 (2026-11-08)
+Background: feat(#2473): run the test workflow in any repo through .agents.json a...
+Changes: The test workflow works in any repo through .agents.json, and /migrate sets a repo up by running the tracker, issues and tests migrations it still needs.
+
+### FEATURE: PR #2954 (2026-11-09)
+Background: fix(#2951): detect staged test renames in run-tests-baseline rename s...
+Changes: Fixed `run-tests-baseline` missing a test rename that was only staged, which left run_tests unable to complete.

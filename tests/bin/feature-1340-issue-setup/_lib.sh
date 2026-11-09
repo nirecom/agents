@@ -3,7 +3,7 @@
 # Sourced by each of the 7 split files (via a BASH_SOURCE-relative path) so they
 # can also run standalone. Provides: __LIB_SCRIPT_CHECKOUT_ROOT, PASS / FAIL
 # counters and pass / fail helpers, assert_eq (table-driven equality),
-# run_with_timeout, get_field (KEY=value from a RESOLVED_*/EPR_* block).
+# run_with_timeout, get_field (KEY=value from a RESOLVED_*/EPR_* block), fixture_case_new.
 # Each split file keeps its OWN gh mock factory, setup_mock/teardown_mock and env
 # knobs — those differ per source-under-test and are intentionally NOT shared.
 # NOT a test file: no # Tests:/# Tags: frontmatter; excluded from the
@@ -40,8 +40,23 @@ run_with_timeout() {
     else "$@"; fi
 }
 
-# Extract a `KEY=value` field from a resolver/ensure round-trip stdout block.
+# Extract the first `KEY=value` field from a resolver/ensure round-trip stdout block
+# (pure bash: process spawns dominate the run time on Windows Git Bash).
 get_field() {
-    local out="$1" key="$2"
-    printf '%s\n' "$out" | grep -E "^${key}=" | head -1 | cut -d= -f2-
+    local out="$1" key="$2" line
+    while IFS= read -r line; do
+        if [[ "$line" == "$key="* ]]; then
+            printf '%s\n' "${line#*=}"
+            return 0
+        fi
+    done <<<"$out"
+    return 0
+}
+
+# fixture_case_new — fresh per-case dir (sets TMP) under the caller's top-level FIXTURE_ROOT.
+# Shared mocks live once under FIXTURE_ROOT; the EXIT trap on FIXTURE_ROOT cleans every case.
+fixture_case_new() {
+    _FIXTURE_CASE_SEQ=$((${_FIXTURE_CASE_SEQ:-0} + 1))
+    TMP="${FIXTURE_ROOT:?}/case-$_FIXTURE_CASE_SEQ"
+    mkdir -p "$TMP/mock-bin"
 }

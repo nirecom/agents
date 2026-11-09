@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/glossary-accept-handler.js, hooks/workflow-mark/run-tests-accept-handler.js, hooks/workflow-mark/reset-handler.js
-// Tags: TL2, hooks, workflow-mark, sentinel, output-channel, scope:issue-specific
+// Tags: TL2, hooks, workflow-mark, sentinel, output-channel, migrate, scope:issue-specific
 // #2824 Steps 1-2: a refused sentinel always reaches the main conversation on the strong channel
 // (exit 2 or {decision:"block"}, per emit.STRONG_CHANNEL) with a [NOT APPLIED] line and the state
 // unchanged; INFO stays on the normal channel. The real hooks/workflow-mark.js is spawned per case.
@@ -61,6 +61,10 @@ caseEnd();
 
 caseBegin("run-tests-accept-success-uses-the-normal-channel", "hooks/workflow-mark/run-tests-accept-handler.js");
 test("run-tests-accept: an accepted UNRUNNABLE run stays INFO and completes run_tests", () => runTests.applied(X));
+caseEnd();
+
+caseBegin("run-tests-accept-refuses-uninitialized-runner-error", "hooks/workflow-mark/run-tests-accept-handler.js");
+test("run-tests-accept: #2473 runner-error of a repo with no tests section -> refused, run_tests stays pending", () => runTests.uninitializedRunnerError(X));
 caseEnd();
 
 caseBegin("reset-refusals-use-the-strong-channel", "hooks/workflow-mark/reset-handler.js");

@@ -76,19 +76,20 @@ mk_repo() {
 }
 
 # Fixtures: a real main worktree + a real linked worktree (the family), an
-# unrelated repo, and a plain directory. Main and linked carry tests/run-all.sh
-# with DIFFERENT marker text — that difference is the whole discriminator.
-MAIN_RAW="$TMPD/mainrepo"; mk_repo "$MAIN_RAW"
-mkdir -p "$MAIN_RAW/tests"
-printf '#!/usr/bin/env bash\necho "Results: MAIN-SUITE 1 passed"\nexit 0\n' > "$MAIN_RAW/tests/run-all.sh"
-chmod +x "$MAIN_RAW/tests/run-all.sh"
-git -C "$MAIN_RAW" add tests/run-all.sh 2>/dev/null
+# unrelated repo, and a plain directory. Main and linked carry tests/run-all.sh (the
+# runAllSelf script) and tests/suite.sh (run by the shared runner, #2473) with DIFFERENT
+# marker text — that difference is the whole discriminator. .agents.json is committed in
+# main so the linked worktree is initialized too.
+MAIN_RAW="$TMPD/mainrepo"; mk_repo "$MAIN_RAW"; mkdir -p "$MAIN_RAW/tests"
+printf '#!/usr/bin/env bash\necho "Results: MAIN-SUITE 1 passed"\nexit 0\n' > "$MAIN_RAW/tests/run-all.sh"; printf '#!/usr/bin/env bash\necho "MAIN-SUITE ran"\nexit 0\n' > "$MAIN_RAW/tests/suite.sh"
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"flat","testHarness":"off","caseMarker":"off"}}' > "$MAIN_RAW/.agents.json"
+git -C "$MAIN_RAW" add .agents.json tests/run-all.sh tests/suite.sh 2>/dev/null
 git -C "$MAIN_RAW" commit -q --no-verify -m "add run-all" 2>/dev/null
 
 LINKED_RAW="$TMPD/linked-wt"
 git -C "$MAIN_RAW" worktree add -q -b feature/script-anchor-probe "$LINKED_RAW" >/dev/null 2>&1
-printf '#!/usr/bin/env bash\necho "Results: LINKED-SUITE 1 passed"\nexit 0\n' > "$LINKED_RAW/tests/run-all.sh"
-chmod +x "$LINKED_RAW/tests/run-all.sh"
+printf '#!/usr/bin/env bash\necho "Results: LINKED-SUITE 1 passed"\nexit 0\n' > "$LINKED_RAW/tests/run-all.sh"; printf '#!/usr/bin/env bash\necho "LINKED-SUITE ran"\nexit 0\n' > "$LINKED_RAW/tests/suite.sh"
+chmod +x "$MAIN_RAW/tests/run-all.sh" "$LINKED_RAW/tests/run-all.sh" "$LINKED_RAW/tests/suite.sh"
 
 ALT_RAW="$TMPD/altrepo"; mk_repo "$ALT_RAW"
 mkdir -p "$ALT_RAW/tests"

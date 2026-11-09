@@ -407,10 +407,10 @@ if ($_existingAttrs -ne $_attrsNormalized) {
     $_changed = $true
 }
 
+# Seed only: the engine owns a managed block inside this file, so an existing one is never rewritten.
 $gitignoreContent = "/workflow/*.tmp`n"
 $_ignorePath = Join-Path $ProjectsDir ".gitignore"
-$_existingIgnore = if (Test-Path $_ignorePath) { [System.IO.File]::ReadAllText($_ignorePath) } else { $null }
-if ($_existingIgnore -ne $gitignoreContent) {
+if (-not (Test-Path $_ignorePath)) {
     [System.IO.File]::WriteAllText($_ignorePath, $gitignoreContent)
     $_changed = $true
 }

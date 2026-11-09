@@ -16,7 +16,7 @@ _winpath() { cygpath -w "$1" 2>/dev/null || printf '%s' "$1"; }
 
 # Every install/ step the two installers invoke, minus the session-sync init step
 # (which is asserted separately) and codex (only reached with --develop/-Develop).
-INSTALL_STEPS="dotfileslink claude-code vscode-settings global-gitignore gh jq codegraph"
+INSTALL_STEPS="dotfileslink claude-code vscode-settings global-gitignore gh glab jq shellcheck pwsh codegraph rtk"
 
 # ---------------------------------------------------------------------------
 # install.sh sandbox. install.sh runs under `set -euo pipefail`, shells out to
@@ -32,12 +32,14 @@ make_install_sh_sandbox() {
     local resolver="${1:-present}"
     local sb
     sb="$(mktemp -d "$TMPDIR_BASE/inst-sh.XXXXXX")"
-    mkdir -p "$sb/agents/install/linux" "$sb/agents/bin" "$sb/agents/hooks" \
+    mkdir -p "$sb/agents/install/linux" "$sb/agents/bin" "$sb/agents/hooks/workflow-state" \
              "$sb/bin" "$sb/nonode" "$sb/home" "$sb/calls" "$sb/nvm"
 
     cp "$SCRIPT_CHECKOUT_ROOT/install.sh" "$sb/agents/install.sh"
     cp "$SCRIPT_CHECKOUT_ROOT/profile-snippet.sh" "$sb/agents/profile-snippet.sh"
     cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/agents/hooks/lib"
+    # config-flag.js requires ../workflow-state/plan-step-table (#2820).
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/plan-step-table.js" "$sb/agents/hooks/workflow-state/"
     if [ "$resolver" = "present" ]; then
         cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/agents/bin/get-config-var"
         chmod +x "$sb/agents/bin/get-config-var"
@@ -47,7 +49,7 @@ make_install_sh_sandbox() {
     # so one unstubbed name aborts the whole run at exit 127.
     local s
     for s in dotfileslink claude-code codex session-sync-init vscode-settings \
-             global-gitignore gh jq codegraph; do
+             global-gitignore gh glab jq shellcheck pwsh codegraph rtk; do
         cat > "$sb/agents/install/linux/$s.sh" <<EOF
 #!/bin/bash
 printf 'was-called %s\n' "\$*" >> "$sb/calls/$s"
@@ -75,6 +77,7 @@ run_install_sh() {
     # Subshell: the pin (HOME + USERPROFILE, inherited by env) must not outlive this run.
     (
     pin_home_and_userprofile "$sb/home"
+    export GIT_CONFIG_GLOBAL="$sb/home/.gitconfig" GIT_CONFIG_NOSYSTEM=1
     if [ "$ss" = "UNSET" ]; then
         env -u SESSION_SYNC SHELL=/bin/bash NVM_DIR="$sb/nvm" \
             AGENTS_MAIN_ROOT="$sb/agents" PATH="$path" \
@@ -129,12 +132,13 @@ make_install_ps1_sandbox() {
     local resolver="${1:-present}"
     local sb
     sb="$(mktemp -d "$TMPDIR_BASE/inst-ps.XXXXXX")"
-    mkdir -p "$sb/agents/install/win" "$sb/agents/bin" "$sb/agents/hooks" \
-             "$sb/winbin" "$sb/nonode" "$sb/calls" "$sb/profile"
+    mkdir -p "$sb/agents/install/win" "$sb/agents/bin" "$sb/agents/hooks/workflow-state" \
+             "$sb/winbin" "$sb/nonode" "$sb/calls" "$sb/profile" "$sb/home"
 
     cp "$SCRIPT_CHECKOUT_ROOT/install.ps1" "$sb/agents/install.ps1"
     cp "$SCRIPT_CHECKOUT_ROOT/profile-snippet.ps1" "$sb/agents/profile-snippet.ps1"
     cp -R "$SCRIPT_CHECKOUT_ROOT/hooks/lib" "$sb/agents/hooks/lib"
+    cp "$SCRIPT_CHECKOUT_ROOT/hooks/workflow-state/plan-step-table.js" "$sb/agents/hooks/workflow-state/"
     if [ "$resolver" = "present" ]; then
         cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var.ps1" "$sb/agents/bin/get-config-var.ps1"
         cp "$SCRIPT_CHECKOUT_ROOT/bin/get-config-var" "$sb/agents/bin/get-config-var"
@@ -143,10 +147,10 @@ make_install_ps1_sandbox() {
 
     local calls_win; calls_win="$(_winpath "$sb/calls")"
     # Same step list as the Linux sandbox (CPR-ORTH): install.ps1 invokes the
-    # same nine steps, so an unstubbed name short-circuits it the same way.
+    # same steps (plus its plan-sync-init wrapper), so an unstubbed name fails it the same way.
     local s
-    for s in dotfileslink claude-code codex session-sync-init vscode-settings \
-             global-gitignore gh jq codegraph; do
+    for s in dotfileslink claude-code codex session-sync-init plan-sync-init vscode-settings \
+             global-gitignore gh glab jq shellcheck pwsh codegraph rtk; do
         printf 'Add-Content -Path "%s\\%s" -Value ("was-called " + ($args -join " "))\n' \
             "$calls_win" "$s" > "$sb/agents/install/win/$s.ps1"
     done
@@ -168,6 +172,11 @@ run_install_ps1() {
     [ "$node_mode" = "no-node" ] && path="$sb/nonode:$sb/winbin:$PATH"
     local drv; drv="$(_winpath "$sb/driver.ps1")"
     local cfg; cfg="$(_winpath "$sb/agents")"
+    # install.ps1 runs `git config --global core.longpaths true`; keep it off the real ~/.gitconfig.
+    (
+    pin_home_and_userprofile "$sb/home"
+    export GIT_CONFIG_GLOBAL; GIT_CONFIG_GLOBAL="$(_winpath "$sb/home/.gitconfig")"
+    export GIT_CONFIG_NOSYSTEM=1
     if [ "$ss" = "UNSET" ]; then
         env -u SESSION_SYNC AGENTS_MAIN_ROOT="$cfg" PATH="$path" \
             bash "$RUN_TIMEOUT" 180 pwsh -NoProfile -NonInteractive -File "$drv" 2>&1
@@ -175,6 +184,7 @@ run_install_ps1() {
         env SESSION_SYNC="$ss" AGENTS_MAIN_ROOT="$cfg" PATH="$path" \
             bash "$RUN_TIMEOUT" 180 pwsh -NoProfile -NonInteractive -File "$drv" 2>&1
     fi
+    )
 }
 
 # tc_install_ps1_gate <label> <SESSION_SYNC|UNSET> <with-node|no-node> <present|removed> <expect> <why>

@@ -202,6 +202,20 @@ fx_ledger_headers() {
 
 fx_ledger_lines() { fx_ledger_cat | grep -c '' || true; }
 
+# fx_add_repo_settings <root> — #2473: the sweep reads its categories from <root>/.agents.json
+# (dummies live in tests/bin; _archive stays a support dir). The loader is copied when present.
+fx_add_repo_settings() {
+    printf '%s\n' '{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"bin","covers":["bin"]}],"supportDirs":["_archive","lib"],"testHarness":"on","caseMarker":"on"}}' > "$1/.agents.json"
+    cp "$FX_REPO_ROOT/bin/lib/repo-settings.sh" "$1/bin/lib/repo-settings.sh" 2>/dev/null || true
+    cp "$FX_REPO_ROOT/bin/repo-settings" "$1/bin/repo-settings" 2>/dev/null || true
+    if [ -d "$FX_REPO_ROOT/hooks/lib/repo-settings" ]; then
+        mkdir -p "$1/hooks/lib"
+        cp -R "$FX_REPO_ROOT/hooks/lib/repo-settings" "$1/hooks/lib/" 2>/dev/null || true
+        cp "$FX_REPO_ROOT/hooks/lib/repo-settings.js" "$1/hooks/lib/" 2>/dev/null || true
+    fi
+    return 0
+}
+
 # Each call MUST yield a distinct directory even though callers invoke it as
 # `root="$(fx_new_root)"` — a counter would only ever advance in the subshell.
 fx_new_root() {
@@ -222,6 +236,7 @@ fx_new_root() {
     cp "$FX_REPO_ROOT/bin/lib/run-all-ledger-migrate.sh" "$root/bin/lib/run-all-ledger-migrate.sh" 2>/dev/null || true
     # ... and for #2079 S7b consolidation: without it the fixture silently never consolidates.
     cp "$FX_REPO_ROOT/bin/lib/run-all-durations-consolidate.sh" "$root/bin/lib/run-all-durations-consolidate.sh" 2>/dev/null || true
+    fx_add_repo_settings "$root"
     # Lanes are opt-in (#2455) so every pre-existing fixture keeps its unleased -j.
     if [ "${FX_WITH_LANES:-0}" = "1" ]; then
         cp "$FX_REPO_ROOT/bin/lib/test-host-lanes.sh" "$root/bin/lib/test-host-lanes.sh" 2>/dev/null || true

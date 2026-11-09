@@ -21,6 +21,8 @@ SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SELECT_SH="${SCRIPT_CHECKOUT_ROOT}/bin/select-tests.sh"
 # shellcheck source=../lib/test-language-registry-fixture.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/test-language-registry-fixture.sh"
+# shellcheck source=../lib/repo-settings-fixture.sh
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/repo-settings-fixture.sh"
 
 PASS=0
 FAIL=0
@@ -53,17 +55,32 @@ TMPDIR_BASE="$(mktemp -d 2>/dev/null || echo "/tmp/f689-$$")"
 mkdir -p "$TMPDIR_BASE"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# The selector lists tests from the target repo's .agents.json (#2473); a fixture without one exits 6.
+F689_JSON='{"tests":{"dir":"tests","categorization":"by-target","categories":[{"dir":"bin","covers":["bin","skills"]}],"supportDirs":["lib"],"testHarness":"on","caseMarker":"on"}}'
+F689_FLAT_JSON='{"tests":{"dir":"tests","categorization":"flat","testHarness":"on","caseMarker":"on"}}'
+
+# seed_target_tests <repo> [<name>...] — <repo>/.agents.json (F689_JSON) and the empty tests/bin
+# files every C/S/C12 row selects from: the stems they assert, two TL3-* for the tier append, <name>s.
+seed_target_tests() {
+    local repo="$1" n; shift
+    mkdir -p "$repo/tests/bin"
+    printf '%s\n' "$F689_JSON" > "$repo/.agents.json"
+    for n in run-tests.sh feature-689-select-tests.sh feature-1779-zero-commit.sh \
+        TL3-fake-alpha.sh TL3-fake-beta.sh "$@"; do
+        : > "$repo/tests/bin/$n"
+    done
+}
+
 # Build a temp git repo with a base commit + a HEAD commit that touches
 # given file paths. Echoes the repo path.
 make_repo() {
     local repo="$1"; shift
     mkdir -p "$repo/tests/_archive" "$repo/tests/bin" "$repo/bin" "$repo/skills/run-tests" "$repo/docs"
     git -C "$repo" init -q
+    git -C "$repo" config core.hooksPath /dev/null
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
-    # Seed: create empty test files so stem-matching has targets.
-    : > "$repo/tests/bin/run-tests.sh"
-    : > "$repo/tests/bin/feature-689-select-tests.sh"
+    seed_target_tests "$repo"
     : > "$repo/tests/run-tests-archived.sh"
     mv "$repo/tests/run-tests-archived.sh" "$repo/tests/_archive/run-tests-archived.sh"
     git -C "$repo" add -A
@@ -135,32 +152,50 @@ test_C4_no_args() {
     fi
 }
 
-# C5: tests/_archive/ entries NEVER returned, even when stem matches.
+# C5: tests/_archive/ entries NEVER returned, even when stem matches. A flat target makes tests/
+# itself the test dir, so _archive sits right under it; the same-stem live test is the control.
 test_C5_archive_excluded() {
-    local repo="$TMPDIR_BASE/c5"
-    # Stage a repo where the ONLY stem match would be in _archive.
-    mkdir -p "$repo/tests/_archive" "$repo/bin"
-    git -C "$repo" init -q
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name  "Test"
-    : > "$repo/tests/_archive/run-tests-archived.sh"
-    : > "$repo/bin/unrelated.sh"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "base"
-    git -C "$repo" branch -f base HEAD
-    echo "change" >> "$repo/bin/run-tests-archived.sh"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "head"
-
-    local out
-    out="$(cd "$repo" && run_with_timeout 120 bash "$SELECT_SH" base HEAD 2>/dev/null)"
-    if echo "$out" | grep -q "_archive/"; then
-        fail "C5_archive_excluded: _archive entry leaked into output
+    local repo="$TMPDIR_BASE/c5" out code=0
+    make_target "$repo" "$F689_FLAT_JSON" bin/run-tests-archived.sh \
+        tests/_archive/run-tests-archived.sh tests/run-tests-archived-live.sh
+    out="$(cd "$repo" && run_with_timeout 120 bash "$SELECT_SH" base HEAD 2>/dev/null)" || code=$?
+    if [ "$code" = "0" ] && ! echo "$out" | grep -q "_archive/" && has_suffix_line "$out" "/tests/run-tests-archived-live.sh"; then
+        pass "C5_archive_excluded: tests/_archive/* never returned, same-stem live test is"
+    else
+        fail "C5_archive_excluded: code=$code
 --- output ---
 $out"
-    else
-        pass "C5_archive_excluded: tests/_archive/* never returned"
     fi
+}
+
+# make_target <repo> <agents-json> <changed-path> [<test-rel>...] — a target repo carrying
+# <agents-json> and the empty <test-rel> files at base, then a HEAD commit touching <changed-path>.
+make_target() {
+    local repo="$1" json="$2" changed="$3" rel
+    shift 3
+    mkdir -p "$repo"
+    git -C "$repo" init -q
+    git -C "$repo" config core.hooksPath /dev/null
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name  "Test"
+    printf '%s\n' "$json" > "$repo/.agents.json"
+    for rel in "$@"; do
+        mkdir -p "$repo/$(dirname "$rel")"
+        : > "$repo/$rel"
+    done
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m "base"
+    git -C "$repo" branch -f base HEAD
+    mkdir -p "$repo/$(dirname "$changed")"
+    echo "change" > "$repo/$changed"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m "head"
+}
+
+# sel_fake <fake> <repo> — <fake>'s selector run in <repo>; sets SEL_OUT (stdout) and SEL_RC.
+sel_fake() {
+    SEL_RC=0
+    SEL_OUT="$(cd "$2" && run_with_timeout 120 bash "$1/bin/select-tests.sh" base HEAD 2>/dev/null)" || SEL_RC=$?
 }
 
 # C6: docs-only change (docs/history.md) → empty stems → empty stdout
@@ -177,14 +212,16 @@ test_C6_docs_only_empty() {
     fi
 }
 
-# make_fake_selector <dir> — the selector plus the test-language registry it reads (#2500); the
-# registry lib resolves its CLI and table from its own location. bin/get-config-var is not
-# copied, so the TL3 append is absent and cannot add noise.
+# make_fake_selector <dir> — the selector plus the test-language registry (#2500) and the repo
+# settings reader (#2473); both libs resolve their CLI from their own location. Tests and settings
+# come from the target repo (make_target); <dir>/tests/bin holds only checkout decoys.
+# bin/get-config-var is not copied, so the TL3 append cannot add noise.
 make_fake_selector() {
     local fake="$1"
     mkdir -p "$fake/bin/lib" "$fake/hooks/lib" "$fake/tests/bin"
     cp "$SELECT_SH" "$fake/bin/select-tests.sh"
     cp "$SCRIPT_CHECKOUT_ROOT/bin/lib/select-tests-stem.sh" "$fake/bin/lib/select-tests-stem.sh"
+    install_repo_settings "$fake" "$SCRIPT_CHECKOUT_ROOT"
     install_test_language_registry "$fake" "$SCRIPT_CHECKOUT_ROOT"
 }
 
@@ -209,70 +246,50 @@ supported_names() {
         "$(native_path "$1")" "$2"
 }
 
-# C7 (#2392, #2500): every supported registry pattern is stem-matched — the expected names come
-# from the registry, not a literal extension list; a sub-folder file stays out (maxdepth 1).
-# A fake tree is needed because the selector reads the tests/ dir next to its OWN location.
+# C7 (#2392, #2500, #2473): every supported registry pattern is stem-matched in the TARGET repo's
+# category dir — names come from the registry, not a literal extension list; a sub-folder file stays
+# out (maxdepth 1); a same-stem test in the selector's own checkout is never listed.
 test_C7_nonsh_stem_match() {
-    local fake="$TMPDIR_BASE/c7-agents" repo="$TMPDIR_BASE/c7-repo" out miss="" names n
+    local fake="$TMPDIR_BASE/c7-agents" repo="$TMPDIR_BASE/c7-repo" miss="" names n
+    local -a rels=()
     make_fake_selector "$fake"
-    mkdir -p "$fake/tests/bin/sub" "$repo/bin"
     names="$(supported_names "$fake/hooks/lib/test-language-registry.json" widget-probe)"
     if [ -z "$names" ]; then fail "C7_nonsh_stem_match: registry yielded no supported patterns"; return; fi
+    while IFS= read -r n; do rels+=("tests/bin/$n" "tests/bin/sub/$n"); done <<< "$names"
+    : > "$fake/tests/bin/widget-probe-checkout-decoy.sh"
+    make_target "$repo" "$F689_JSON" bin/widget-probe.sh "${rels[@]}"
+    sel_fake "$fake" "$repo"
+    [ "$SEL_RC" = "0" ] || miss="$miss rc=$SEL_RC"
     while IFS= read -r n; do
-        : > "$fake/tests/bin/$n"
-        : > "$fake/tests/bin/sub/$n"
+        has_suffix_line "$SEL_OUT" "/tests/bin/$n" || miss="$miss $n"
     done <<< "$names"
-    git -C "$repo" init -q
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name  "Test"
-    : > "$repo/README.md"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "base"
-    git -C "$repo" branch -f base HEAD
-    echo "change" > "$repo/bin/widget-probe.sh"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "head"
-    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
-    while IFS= read -r n; do
-        has_suffix_line "$out" "/tests/bin/$n" || miss="$miss $n"
-    done <<< "$names"
-    echo "$out" | grep -q "tests/bin/sub/" && miss="$miss sub-folder-leaked"
+    echo "$SEL_OUT" | grep -q "tests/bin/sub/" && miss="$miss sub-folder-leaked"
+    has_suffix_line "$SEL_OUT" "/widget-probe-checkout-decoy.sh" && miss="$miss checkout-test-listed"
     if [ -z "$miss" ]; then
-        pass "C7_nonsh_stem_match: tests/bin/<stem> for every supported pattern selected ($(echo $names)), sub/ excluded"
+        pass "C7_nonsh_stem_match: tests/bin/<stem> for every supported pattern selected ($(echo $names)), sub/ and checkout excluded"
     else
         fail "C7_nonsh_stem_match: problems:$miss
 --- output ---
-$out"
+$SEL_OUT"
     fi
 }
 
 # C8 (#2392): non-matching stems for .Tests.ps1 and test_*.py are NOT selected.
 # Changed path has stem "foo"; test tree has "bar.*" — those files must not appear.
 test_C8_nonsh_stem_no_match() {
-    local fake="$TMPDIR_BASE/c8-agents" repo="$TMPDIR_BASE/c8-repo" out extra=""
+    local fake="$TMPDIR_BASE/c8-agents" repo="$TMPDIR_BASE/c8-repo" extra=""
     make_fake_selector "$fake"
-    mkdir -p "$repo/bin"
-    : > "$fake/tests/bin/bar.Tests.ps1"
-    : > "$fake/tests/bin/test_bar.py"
-    git -C "$repo" init -q
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name  "Test"
-    : > "$repo/README.md"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "base"
-    git -C "$repo" branch -f base HEAD
-    echo "change" > "$repo/bin/foo.sh"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "head"
-    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
-    echo "$out" | grep -q "tests/bin/bar\.Tests\.ps1" && extra="$extra bar.Tests.ps1"
-    echo "$out" | grep -q "tests/bin/test_bar\.py"    && extra="$extra test_bar.py"
+    make_target "$repo" "$F689_JSON" bin/foo.sh tests/bin/bar.Tests.ps1 tests/bin/test_bar.py
+    sel_fake "$fake" "$repo"
+    [ "$SEL_RC" = "0" ] || extra="$extra rc=$SEL_RC"
+    echo "$SEL_OUT" | grep -q "tests/bin/bar\.Tests\.ps1" && extra="$extra bar.Tests.ps1"
+    echo "$SEL_OUT" | grep -q "tests/bin/test_bar\.py"    && extra="$extra test_bar.py"
     if [ -z "$extra" ]; then
-        pass "C8_nonsh_stem_no_match: non-matching .Tests.ps1 and test_*.py not selected"
+        pass "C8_nonsh_stem_no_match: non-matching .Tests.ps1 and test_*.py not selected (exit 0)"
     else
-        fail "C8_nonsh_stem_no_match: unexpected files in output:$extra
+        fail "C8_nonsh_stem_no_match: unexpected result:$extra
 --- output ---
-$out"
+$SEL_OUT"
     fi
 }
 
@@ -280,39 +297,27 @@ $out"
 # tests/bin/helper.ps1 does not match *.Tests.ps1, and tests/bin/helper.py does not
 # match test_*.py — neither must appear in output even when the changed stem matches.
 test_C9_non_entrypoint_ignored() {
-    local fake="$TMPDIR_BASE/c9-agents" repo="$TMPDIR_BASE/c9-repo" out extra=""
+    local fake="$TMPDIR_BASE/c9-agents" repo="$TMPDIR_BASE/c9-repo" extra=""
     make_fake_selector "$fake"
-    mkdir -p "$repo/bin"
-    : > "$fake/tests/bin/helper.ps1"
-    : > "$fake/tests/bin/helper.py"
-    git -C "$repo" init -q
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name  "Test"
-    : > "$repo/README.md"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "base"
-    git -C "$repo" branch -f base HEAD
-    echo "change" > "$repo/bin/helper.sh"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "head"
-    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
-    echo "$out" | grep -q "tests/bin/helper\.ps1" && extra="$extra helper.ps1"
-    echo "$out" | grep -q "tests/bin/helper\.py"  && extra="$extra helper.py"
+    make_target "$repo" "$F689_JSON" bin/helper.sh tests/bin/helper.ps1 tests/bin/helper.py
+    sel_fake "$fake" "$repo"
+    [ "$SEL_RC" = "0" ] || extra="$extra rc=$SEL_RC"
+    echo "$SEL_OUT" | grep -q "tests/bin/helper\.ps1" && extra="$extra helper.ps1"
+    echo "$SEL_OUT" | grep -q "tests/bin/helper\.py"  && extra="$extra helper.py"
     if [ -z "$extra" ]; then
-        pass "C9_non_entrypoint_ignored: helper.ps1 and helper.py not selected (not *.Tests.ps1 / test_*.py)"
+        pass "C9_non_entrypoint_ignored: helper.ps1 and helper.py not selected (not *.Tests.ps1 / test_*.py), exit 0"
     else
-        fail "C9_non_entrypoint_ignored: non-entrypoint files leaked into selection:$extra
+        fail "C9_non_entrypoint_ignored: non-entrypoint files leaked into selection or bad exit:$extra
 --- output ---
-$out"
+$SEL_OUT"
     fi
 }
 
 # C10 (#2500): the selector's test patterns come from the registry. The fake tree's pester entry
 # is re-patterned to *.Pester.ps1: <stem>.Pester.ps1 is then selected, <stem>.Tests.ps1 is not.
 test_C10_registry_patterns_drive_selection() {
-    local fake="$TMPDIR_BASE/c10-agents" repo="$TMPDIR_BASE/c10-repo" out problems="" tbl
+    local fake="$TMPDIR_BASE/c10-agents" repo="$TMPDIR_BASE/c10-repo" problems="" tbl
     make_fake_selector "$fake"
-    mkdir -p "$repo/bin"
     tbl="$fake/hooks/lib/test-language-registry.json"
     node -e 'const f=require("fs");const t=JSON.parse(f.readFileSync(process.argv[1],"utf8"));
       const e=t.entries.find((x)=>x.patterns.includes("*.Tests.ps1"));
@@ -323,27 +328,16 @@ test_C10_registry_patterns_drive_selection() {
         fail "C10_registry_patterns_drive_selection: re-patterned fixture registry does not validate"
         return
     fi
-    : > "$fake/tests/bin/widget-probe.Pester.ps1"
-    : > "$fake/tests/bin/widget-probe.Tests.ps1"
-    git -C "$repo" init -q
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name  "Test"
-    : > "$repo/README.md"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "base"
-    git -C "$repo" branch -f base HEAD
-    echo "change" > "$repo/bin/widget-probe.sh"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "head"
-    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
-    has_suffix_line "$out" "/tests/bin/widget-probe.Pester.ps1" || problems="$problems registry-pattern-not-selected"
-    has_suffix_line "$out" "/tests/bin/widget-probe.Tests.ps1" && problems="$problems literal-pattern-still-selected"
+    make_target "$repo" "$F689_JSON" bin/widget-probe.sh tests/bin/widget-probe.Pester.ps1 tests/bin/widget-probe.Tests.ps1
+    sel_fake "$fake" "$repo"
+    has_suffix_line "$SEL_OUT" "/tests/bin/widget-probe.Pester.ps1" || problems="$problems registry-pattern-not-selected(rc=$SEL_RC)"
+    has_suffix_line "$SEL_OUT" "/tests/bin/widget-probe.Tests.ps1" && problems="$problems literal-pattern-still-selected"
     if [ -z "$problems" ]; then
         pass "C10_registry_patterns_drive_selection: a re-patterned registry entry changes what is selected"
     else
         fail "C10_registry_patterns_drive_selection:$problems
 --- output ---
-$out"
+$SEL_OUT"
     fi
 }
 
@@ -351,33 +345,21 @@ $out"
 # *_test.*; js is supported since #2501) are never selected; the same-stem supported
 # widget-probe.sh is, so the run is not vacuous.
 test_C11_recognized_only_not_selected() {
-    local fake="$TMPDIR_BASE/c11-agents" repo="$TMPDIR_BASE/c11-repo" out problems="" n
+    local fake="$TMPDIR_BASE/c11-agents" repo="$TMPDIR_BASE/c11-repo" problems="" n
     make_fake_selector "$fake"
-    mkdir -p "$repo/bin"
-    : > "$fake/tests/bin/widget-probe.sh"
-    : > "$fake/tests/bin/widget-probe.test.ts"
-    : > "$fake/tests/bin/widget-probe_test.rb"
-    git -C "$repo" init -q
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name  "Test"
-    : > "$repo/README.md"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "base"
-    git -C "$repo" branch -f base HEAD
-    echo "change" > "$repo/bin/widget-probe.sh"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "head"
-    out="$(cd "$repo" && run_with_timeout 120 bash "$fake/bin/select-tests.sh" base HEAD 2>/dev/null)"
-    has_suffix_line "$out" "/tests/bin/widget-probe.sh" || problems="$problems supported-control-not-selected"
+    make_target "$repo" "$F689_JSON" bin/widget-probe.sh \
+        tests/bin/widget-probe.sh tests/bin/widget-probe.test.ts tests/bin/widget-probe_test.rb
+    sel_fake "$fake" "$repo"
+    has_suffix_line "$SEL_OUT" "/tests/bin/widget-probe.sh" || problems="$problems supported-control-not-selected(rc=$SEL_RC)"
     for n in widget-probe.test.ts widget-probe_test.rb; do
-        has_suffix_line "$out" "/tests/bin/$n" && problems="$problems $n-selected"
+        has_suffix_line "$SEL_OUT" "/tests/bin/$n" && problems="$problems $n-selected"
     done
     if [ -z "$problems" ]; then
         pass "C11_recognized_only_not_selected: widget-probe.test.ts / widget-probe_test.rb not selected, widget-probe.sh is"
     else
         fail "C11_recognized_only_not_selected:$problems
 --- output ---
-$out"
+$SEL_OUT"
     fi
 }
 
@@ -455,6 +437,7 @@ test_S25_zero_commit_recorded_state_degrades
 test_S26a_zero_commit_untracked_half_failure_is_exit_1
 test_S26b_zero_commit_tracked_half_failure_is_exit_1
 test_S27_zero_commit_hostile_filenames
+test_S27b_zero_commit_untracked_hostile_filename
 
 # S28 (#1779): the RECORDED trust state with NOTHING stubbed — the recovery RNT-1 documents,
 # replayed through the real baseline CLI, the real resolver and the real selector.

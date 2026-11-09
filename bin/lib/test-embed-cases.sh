@@ -7,8 +7,36 @@
 
 _TEC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEC_TOOL="$(cd "$_TEC_DIR/../.." && pwd)"
-# Category list kept per tool, like test-dup-group.sh (consolidation: #2473).
+# Category list, entrypoint dirs (root-relative) and tests dir: the legacy default until
+# tec_use_root reads the repo's .agents.json (#2473).
 TEC_CATEGORIES="hooks bin skills agents install tests"
+TEC_TEST_DIRS=(tests/hooks tests/bin tests/skills tests/agents tests/install tests/tests)
+TEC_TESTS_DIR=tests
+
+# tec_use_root <root> — the TEC_* layout from <root>'s .agents.json via test-dup-group.sh's
+# tdg_use_root when the caller sourced it; otherwise the legacy default stays.
+tec_use_root() {
+  declare -F tdg_use_root >/dev/null || return 0
+  tdg_use_root "$1"
+  TEC_CATEGORIES="${_TDG_CANONICAL_CATEGORIES[*]-}"
+  TEC_TEST_DIRS=(${_TDG_TEST_DIRS[@]+"${_TDG_TEST_DIRS[@]}"})
+  TEC_TESTS_DIR="$_TDG_TESTS_DIR"
+}
+
+# tec_list_into <kind> — TEC_LIST: <kind> files directly in TEC_TEST_DIRS, the runner
+# <tests dir>/run-all.sh excluded.
+tec_list_into() {
+  local d f
+  TEC_LIST=()
+  for d in ${TEC_TEST_DIRS[@]+"${TEC_TEST_DIRS[@]}"}; do
+    tlr_list_dir_into "$d" "$1" || continue
+    # shellcheck disable=SC2153 # TLR_LIST is set by tlr_list_dir_into (test-language-registry lib)
+    for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
+      [[ "$f" == "$TEC_TESTS_DIR/run-all.sh" ]] || TEC_LIST+=("$f")
+    done
+  done
+  return 0
+}
 
 tec_usage() {
   printf '%s\n' \
@@ -93,7 +121,8 @@ tec_main() {
 
   root="$(trp_require_repo_root)" || { tec_die "not inside a git repository"; return 2; }
   cd "$root" || return 2
-  [[ -d tests ]] || { tec_die "tests/ directory not found under $root"; return 2; }
+  tec_use_root "$root"
+  [[ -d "$TEC_TESTS_DIR" ]] || { tec_die "${TEC_TESTS_DIR}/ directory not found under $root"; return 2; }
   tec_load_modules || { tec_die "embed-cases modules unreadable"; return 2; }
 
   TEC_TMP="$(mktemp -d "${TMPDIR:-/tmp}/tec.XXXXXX")"

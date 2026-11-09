@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# orchestrate.sh — main driver for the /migrate-repo workflow: migrates a repo from
+# orchestrate.sh — main driver for the /migrate-issues workflow: migrates a repo from
 # docs/history.md + docs/todo.md to GitHub Issues with canary gates
 # (1 → confirm → 2 → confirm → full). The five steps: docs/ops/migration-from-todo.md.
 #
@@ -55,12 +55,12 @@ if same_repository "$TARGET_CHECKOUT_ROOT" "$SCRIPT_CHECKOUT_ROOT"; then
     echo "ERROR: TARGET_CHECKOUT_ROOT equals this agents checkout ($SCRIPT_CHECKOUT_ROOT)." >&2
     echo "       Refusing live migration into the agents repo itself." >&2
     echo "       This is likely a misidentification." >&2
-    echo "       Re-run via the /migrate-repo skill (sets MIGRATE_ACK_EXISTING_ISSUES=1) if this is an intentional Phase 3 self-migration." >&2
+    echo "       Re-run via the /migrate-issues skill (sets MIGRATE_ACK_EXISTING_ISSUES=1) if this is an intentional Phase 3 self-migration." >&2
     exit 1
   fi
 fi
 
-echo "=== /migrate-repo orchestrator ==="
+echo "=== /migrate-issues orchestrator ==="
 echo "Repo:      $TARGET_CHECKOUT_ROOT"
 echo "From-step: $FROM_STEP"
 [ "$DRY_RUN" -eq 1 ] && echo "Mode:      DRY RUN"
@@ -130,19 +130,29 @@ _print_next_stage() {
   echo ""
 }
 
+# First run only: uncommitted allowlist files stop a live run before gh and state_init (#2473).
+if [ "$DRY_RUN" -eq 1 ]; then
+  bash "$SCRIPT_DIR/orchestrate/allowlist-preflight.sh" "$TARGET_CHECKOUT_ROOT" --dry-run
+else
+  bash "$SCRIPT_DIR/orchestrate/allowlist-preflight.sh" "$TARGET_CHECKOUT_ROOT"
+fi
+
 # Pre-flight: check existing issues + require explicit ack in live mode.
 # Runs on EVERY invocation BEFORE state mutation. No stdin read — cannot be
 # bypassed by `yes y |` piping (Incident #2 / #415). Live mode requires
-# MIGRATE_ACK_EXISTING_ISSUES=1 env var. The /migrate-repo skill sets this
+# MIGRATE_ACK_EXISTING_ISSUES=1 env var. The /migrate-issues skill sets this
 # after the user acknowledges via AskUserQuestion (#679).
 # #834 Option γ: Layer P (presence + format) + Layer C (snapshot comparison)
 # additionally require MIGRATE_ACK_UP_TO_ISSUE_N + MIGRATE_ACK_SELF_COUNT_AT_ACK
 # from a fresh dry-run snapshot to defeat the TOCTOU window.
-_existing_n=$(cd "$TARGET_CHECKOUT_ROOT" && gh issue list --state all --limit 1 \
-  --search "sort:created-desc" --json number --jq '.[0].number // 0' 2>/dev/null)
-_existing_rc=$?
+# shellcheck source=../lib/host-adapter.sh
+source "$SCRIPT_DIR/../lib/host-adapter.sh"
+export HIA_ROOT="$TARGET_CHECKOUT_ROOT"
+HOST="$(hia_host)"
+_existing_rc=0
+_existing_n=$(hia_issue_latest_number 2>/dev/null) || _existing_rc=$?
 if [ "$_existing_rc" -ne 0 ]; then
-  echo "ERROR: pre-flight check failed: 'gh issue list' exited rc=$_existing_rc." >&2
+  echo "ERROR: pre-flight check failed: the $HOST issue list exited rc=$_existing_rc." >&2
   echo "       Cannot confirm whether existing issues are present." >&2
   echo "       Likely cause: not authenticated ('gh auth login'), network error, or wrong repo." >&2
   echo "       Aborting to prevent accidental loss of the early-number invariant." >&2
@@ -191,7 +201,7 @@ if [ "$_existing_n" -gt 0 ]; then
     echo "ERROR: live mode requires explicit acknowledgement of the existing-issues" >&2
     echo "       invariant loss. Re-run with MIGRATE_ACK_EXISTING_ISSUES=1 prefix:" >&2
     echo "         MIGRATE_ACK_EXISTING_ISSUES=1 bash $0 $TARGET_CHECKOUT_ROOT [...]" >&2
-    echo "       The /migrate-repo skill sets this automatically after the user" >&2
+    echo "       The /migrate-issues skill sets this automatically after the user" >&2
     echo "       acknowledges via AskUserQuestion. Direct shell callers must set" >&2
     echo "       it themselves. This gate is tty-bypass-resistant (no stdin)." >&2
     exit 1
@@ -204,7 +214,7 @@ if [ "$_existing_n" -gt 0 ]; then
       echo "" >&2
       echo "ERROR: MIGRATE_ACK_UP_TO_ISSUE_N required when MIGRATE_ACK_EXISTING_ISSUES=1 (#834 Option γ Layer P)." >&2
       echo "       Re-run dry-run via preview-and-capture.sh and re-export both env vars:" >&2
-      echo "         eval \"\$(bash \"\$AGENTS_MAIN_ROOT/skills/migrate-repo/scripts/preview-and-capture.sh\" \"$TARGET_CHECKOUT_ROOT\")\"" >&2
+      echo "         eval \"\$(bash \"\$AGENTS_MAIN_ROOT/skills/migrate-issues/scripts/preview-and-capture.sh\" \"$TARGET_CHECKOUT_ROOT\")\"" >&2
       exit 1
     fi
     if [ -z "$_ack_self_at_ack" ]; then
@@ -241,7 +251,7 @@ if [ "$_existing_n" -gt 0 ]; then
       echo "       Acked up to #${_ack_up_to}, +${_self_delta} self issues created since, expected max #${_expected_max}." >&2
       echo "       Current highest is #${_existing_n} — issues from external actor detected." >&2
       echo "       Re-run dry-run via preview-and-capture.sh to refresh the snapshot:" >&2
-      echo "         eval \"\$(bash \"\$AGENTS_MAIN_ROOT/skills/migrate-repo/scripts/preview-and-capture.sh\" \"$TARGET_CHECKOUT_ROOT\")\"" >&2
+      echo "         eval \"\$(bash \"\$AGENTS_MAIN_ROOT/skills/migrate-issues/scripts/preview-and-capture.sh\" \"$TARGET_CHECKOUT_ROOT\")\"" >&2
       exit 1
     fi
 
@@ -255,20 +265,11 @@ fi
 if [ "$FROM_STEP" -le 1 ]; then
   echo "--- Step 1: label sync + .github/ templates ---"
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry-run] would run: bash $SCRIPT_CHECKOUT_ROOT/bin/github-issues/bootstrap-labels.sh $TARGET_CHECKOUT_ROOT"
-    echo "[dry-run] would copy $SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE → $TARGET_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE"
+    bash "$SCRIPT_DIR/orchestrate/label-setup.sh" "$TARGET_CHECKOUT_ROOT" "$HOST" --dry-run
   else
-    mkdir -p "$TARGET_CHECKOUT_ROOT/.github"
-    bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/bootstrap-labels.sh" "$TARGET_CHECKOUT_ROOT" || {
-        echo "WARNING: bootstrap-labels.sh failed (continuing)" >&2
-      }
-    if [ -d "$SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE" ]; then
-      mkdir -p "$TARGET_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE"
-      # cp -n per file (POSIX: cp -rn behaves differently across platforms).
-      for f in "$SCRIPT_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE"/*; do
-        [ -e "$f" ] || continue
-        cp -n "$f" "$TARGET_CHECKOUT_ROOT/.github/ISSUE_TEMPLATE/" || true
-      done
+    if ! bash "$SCRIPT_DIR/orchestrate/label-setup.sh" "$TARGET_CHECKOUT_ROOT" "$HOST"; then
+      echo "ERROR: Step 1 (label sync) failed — not recorded; re-run with --from-step 1 after fixing" >&2
+      exit 1
     fi
     state_set_step 1
   fi
@@ -426,7 +427,9 @@ fi
 # -----------------------------------------------------------------------------
 if [ "$FROM_STEP" -le 4 ]; then
   echo "--- Step 4: Projects v2 + Content Date backfill ---"
-  if [ "$DRY_RUN" -eq 1 ]; then
+  if [ "$HOST" = gitlab ]; then
+    echo "Content Date: GitLab has no Projects v2 counterpart — Step 4 skipped (board: /migrate-tracker)"
+  elif [ "$DRY_RUN" -eq 1 ]; then
     bash "$SCRIPT_DIR/create-project.sh" "$TARGET_CHECKOUT_ROOT" --dry-run
     echo "[dry-run] would backfill Content Date for migrated history issues"
   else
@@ -439,9 +442,7 @@ if [ "$FROM_STEP" -le 4 ]; then
       echo "ERROR: project ids missing from state — Step 4 cannot proceed" >&2
       exit 1
     fi
-    if ! MIGRATE_PROJECT_NUM="$proj_num" \
-         MIGRATE_PROJECT_ID="$proj_id" \
-         MIGRATE_FIELD_ID="$field_id" \
+    if ! MIGRATE_PROJECT_NUM="$proj_num" MIGRATE_PROJECT_ID="$proj_id" MIGRATE_FIELD_ID="$field_id" \
            bash "$SCRIPT_DIR/backfill-content-date.sh" "$TARGET_CHECKOUT_ROOT"; then
       echo "ERROR: backfill-content-date.sh failed — re-run with --from-step 4 after fixing" >&2
       exit 1
@@ -474,13 +475,16 @@ fi
 if [ "$FROM_STEP" -le 6 ]; then
   echo "--- Step 6: commit + push migration artifacts ---"
   if [ "$DRY_RUN" -eq 1 ]; then
-    bash "$SCRIPT_DIR/commit-migration-artifacts.sh" "$TARGET_CHECKOUT_ROOT" --dry-run
+    bash "$SCRIPT_DIR/commit-migration-artifacts.sh" "$TARGET_CHECKOUT_ROOT" --skill migrate-issues --dry-run
+    echo "[dry-run] would mark migrate.issues done in .agents.json"
     echo "[dry-run] would clean up .migration-state.json on success"
   else
-    echo "<<WORKFLOW_USER_VERIFIED: migration cleanup commit (Step 1/3 artifacts) approved as part of /migrate-repo run>>"
-    echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: migrate-repo artifact commit>>"
-    ENFORCE_WORKTREE=off "$SCRIPT_DIR/commit-migration-artifacts.sh" "$TARGET_CHECKOUT_ROOT"
-    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: migrate-repo artifact commit complete>>"
+    # Steps 1-5 succeeded, so migrate.issues is done; it rides the same commit (#2473).
+    node "$SCRIPT_CHECKOUT_ROOT/bin/repo-settings" --root "$TARGET_CHECKOUT_ROOT" --set-migrate issues
+    echo "<<WORKFLOW_USER_VERIFIED: migration cleanup commit (Step 1/3 artifacts) approved as part of /migrate-issues run>>"
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: migrate-issues artifact commit>>"
+    ENFORCE_WORKTREE=off "$SCRIPT_DIR/commit-migration-artifacts.sh" "$TARGET_CHECKOUT_ROOT" --skill migrate-issues
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: migrate-issues artifact commit complete>>"
     state_set_step 6
     state_cleanup "$TARGET_CHECKOUT_ROOT"
     echo "  state file removed (migration complete)"
@@ -488,4 +492,4 @@ if [ "$FROM_STEP" -le 6 ]; then
   echo ""
 fi
 
-echo "=== /migrate-repo orchestrator complete ==="
+echo "=== /migrate-issues orchestrator complete ==="

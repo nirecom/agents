@@ -30,4 +30,16 @@ function applied(X) {
   X.check();
 }
 
-module.exports = { refusals, applied, seedUnrunnable };
+// #2473: the runner-error the worker returns for a repo with no usable tests section (/migrate) is
+// not an unrunnable-runtime run, so the accept sentinel must not complete run_tests over it.
+function uninitializedRunnerError(X) {
+  const sid = X.seedInit("rta-uninit");
+  X.F.S.markStep(sid, "run_tests", "pending", { run_outcome: "runner-error" });
+  X.expectUnapplied("uninitialized runner-error", sid, A(": the repo has no tests section yet"),
+    /not pending on contract-unrunnable \(run_outcome=runner-error\)/);
+  const st = ((X.F.S.readState(sid) || {}).steps || {}).run_tests || {};
+  if (st.status !== "pending") X.record("uninitialized runner-error", `run_tests is ${st.status}, expected pending`);
+  X.check();
+}
+
+module.exports = { refusals, applied, seedUnrunnable, uninitializedRunnerError };

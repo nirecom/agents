@@ -71,43 +71,13 @@ _fgc_boundary_case "TC-FREQ10" 1801 1 "1801 > 1800 → window elapsed"
 
 # TC-FREQ11 — overlapping startups. The guard's only defence against a second
 # shell duplicating the fetch is statement ORDER: the stamp is touched BEFORE
-# the fetch is launched. With a 2s fetch and a second shell starting 1s in, a
-# stamp written after the fetch leaves shell B looking at an absent stamp.
+# the engine is started. Shell B starts once shell A's engine is observably running
+# (5s sleep), so a stamp written after the engine leaves B looking at an absent stamp.
 # TL3 gap: a truly simultaneous pair (both between the stat and the touch) needs
 # a lock file, which the approved design does not take; this pins the ordering.
-_fgc_counting_git() {
-    local sb="$1"
-    cat > "$sb/bin/git" <<EOF
-#!/bin/bash
-cmd=""; repo="\$PWD"; prev=""
-for a in "\$@"; do
-    if [ "\$prev" = "-C" ]; then repo="\$a"; fi
-    case "\$a" in
-        fetch|merge|config) if [ -z "\$cmd" ]; then cmd="\$a"; fi ;;
-    esac
-    prev="\$a"
-done
-case "\$cmd" in
-    fetch) printf 'fetch\n' >> "$sb/fetch.count"; sleep 2; exit 0 ;;
-    merge) printf 'merged\n' >> "$sb/merged.out"; exit 0 ;;
-    config)
-        case "\$*" in
-            *"--get core.sshCommand"*)
-                if [ -f "\$repo/core-sshcommand" ]; then cat "\$repo/core-sshcommand"; exit 0; fi
-                exit 1
-                ;;
-        esac
-        exit 0
-        ;;
-    *) exit 0 ;;
-esac
-EOF
-    chmod +x "$sb/bin/git"
-}
-
 tc_freq_overlapping_startups_fetch_once() {
     local sb; sb="$(make_mirror_sandbox 1)"
-    _fgc_counting_git "$sb"
+    printf '5000' > "$sb/engine-sleep-ms.txt"
     _ffg_stamp "$sb" >/dev/null
     local drv="$sb/drv_fgc_concurrent.sh"
     cat > "$drv" <<'EOF'
@@ -115,17 +85,19 @@ tc_freq_overlapping_startups_fetch_once() {
 echo "DONE"
 EOF
     run_mirror_driver bash "$sb" "$drv" on >"$sb/run_a.out" 2>&1 &
-    local pid_a=$!
-    sleep 1
+    local pid_a=$! i=0
+    while [ ! -f "$sb/engine.calls" ] && [ "$i" -lt 150 ]; do
+        sleep 0.1
+        i=$((i + 1))
+    done
     local out_b; out_b="$(run_mirror_driver bash "$sb" "$drv" on)"
     wait "$pid_a" 2>/dev/null
-    sleep 3
     local n=0
-    [ -f "$sb/fetch.count" ] && n="$(grep -c fetch "$sb/fetch.count")"
+    [ -f "$sb/engine.calls" ] && n="$(grep -c called "$sb/engine.calls")"
     if [ "$n" -eq 1 ]; then
-        pass "TC-FREQ11: a shell starting during an in-flight fetch does not fetch again (1 fetch total)"
+        pass "TC-FREQ11: a shell starting during an in-flight engine run does not start it again (1 run total)"
     else
-        fail "TC-FREQ11: $n fetches for two overlapping startups (expected 1) — the stamp is written after the fetch instead of before it. RunA: $(cat "$sb/run_a.out" 2>/dev/null) RunB: $out_b"
+        fail "TC-FREQ11: $n engine runs for two overlapping startups (expected 1) — the stamp is written after the engine instead of before it. RunA: $(cat "$sb/run_a.out" 2>/dev/null) RunB: $out_b"
     fi
     rm -rf "$sb"
 }

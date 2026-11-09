@@ -54,6 +54,8 @@ _rn_cli_repo() {
     git -C "$1" add -A
     git -C "$1" commit -q -m "head shape $3"
   fi
+  # The branch stage (#2688) runs the branch copy first; only the base copy may leave <sentinel>.
+  feat_commit_failing "$1" tests/bin/test-preexisting.sh
 }
 
 # _rn_cli <cache> <repo> <sid> — sets _RN_RC; stdout / stderr land in $TMPROOT/rn-out|err.txt.
@@ -93,7 +95,7 @@ run_root_names_cli_cases() {
   else
     fail "RN-cli-old: expected exit 5 with no BASELINE lines; rc=$_RN_RC out=$(tr '\n' '|' < "$TMPROOT/rn-out.txt")"
   fi
-  [ "$_RN_RC" -eq 5 ] && [ ! -e "$ran" ] && pass "RN-cli-old: no fixture test was launched" \
+  [ "$_RN_RC" -eq 5 ] && [ ! -e "$ran" ] && pass "RN-cli-old: no base copy of the fixture test was launched" \
     || fail "RN-cli-old: rc=$_RN_RC, the failing test ran at base=$([ -e "$ran" ] && echo yes || echo no)"
   [ "$_RN_RC" -eq 5 ] && [ "$(_rn_worktree_count "$repo")" = "1" ] \
     && pass "RN-cli-old: no merge-base worktree was created" \

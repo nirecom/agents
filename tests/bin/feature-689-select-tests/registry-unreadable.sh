@@ -3,21 +3,11 @@
 # lazily, so a docs-only diff stays an empty exit-0 selection even then. A valid table is the
 # control. Sourced by tests/bin/feature-689-select-tests.sh (make_fake_selector, has_suffix_line).
 
-# c12_repo <repo> <changed-path> — base commit + one HEAD commit that touches <changed-path>.
+# c12_repo <repo> <changed-path> — base commit + one HEAD commit that touches <changed-path>. The
+# target carries a valid .agents.json and its own tests/bin/widget-probe.sh (#2473), so the only
+# thing a mode varies is the registry and exit 6 (no settings) cannot mask the outcome.
 c12_repo() {
-    local repo="$1"
-    mkdir -p "$repo"
-    git -C "$repo" init -q
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name  "Test"
-    : > "$repo/README.md"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "base"
-    git -C "$repo" branch -f base HEAD
-    mkdir -p "$repo/$(dirname "$2")"
-    echo "change" > "$repo/$2"
-    git -C "$repo" add -A
-    git -C "$repo" -c core.hooksPath= commit -q -m "head"
+    make_target "$1" "$F689_JSON" "$2" README.md tests/bin/widget-probe.sh
 }
 
 # c12_run <mode:valid|invalid-json|missing> <changed-path> — sets C12_OUT / C12_ERR / C12_RC.
@@ -26,7 +16,6 @@ c12_run() {
     tag="$mode-${changed//\//_}"
     local fake="$TMPDIR_BASE/c12-agents-$tag" repo="$TMPDIR_BASE/c12-repo-$tag"
     make_fake_selector "$fake"
-    : > "$fake/tests/bin/widget-probe.sh"
     case "$mode" in
         invalid-json) printf '%s\n' '{ "schema": 1, "entries": [' > "$fake/hooks/lib/test-language-registry.json" ;;
         missing) rm -f "$fake/hooks/lib/test-language-registry.json" ;;

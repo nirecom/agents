@@ -139,7 +139,8 @@ mk_inherit_repo() {
 }
 
 # advance_base <repo> <touch-test:0|1> — main gains B2 (descendant of B1) where the
-# test would PASS on re-run; feature merges main so the merge-base becomes B2.
+# test would PASS on re-run; feature merges main so the merge-base becomes B2, then drops
+# flag-pass again so the branch stage's solo re-run (#2688) still fails on the branch.
 advance_base() {
   local repo="$1" touch_test="$2"
   git -C "$repo" checkout -q main
@@ -152,6 +153,14 @@ advance_base() {
   git -C "$repo" commit -q -m "B2"
   git -C "$repo" checkout -q feature
   git -C "$repo" merge -q --no-edit main
+  drop_branch_flag "$repo"
+}
+
+# drop_branch_flag <repo> — on the checked-out feature branch, remove flag-pass, so the test
+# passes only in the base checkout and fails in the branch stage's solo re-run (#2688).
+drop_branch_flag() {
+  git -C "$1" rm -q flag-pass
+  git -C "$1" commit -q -m "branch lacks the pass flag"
 }
 
 run_ledger_inherit_cases() {

@@ -24,6 +24,13 @@ while [ $# -gt 0 ]; do
 done
 TARGET_CHECKOUT_ROOT="$(cd "$TARGET_CHECKOUT_ROOT" && pwd)"
 
+# shellcheck source=../lib/host-adapter.sh
+source "$SCRIPT_DIR/../lib/host-adapter.sh"
+if [ "$(hia_host "$TARGET_CHECKOUT_ROOT")" = gitlab ]; then
+  echo "GitLab origin: no Projects v2 board to create — skipped (the issue board is /migrate-tracker's)"
+  exit 0
+fi
+
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] would create Projects v2 board for target repo"
   exit 0

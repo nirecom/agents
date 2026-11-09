@@ -1,10 +1,10 @@
 # Tests: bin/lib/test-embed-cases/stage-apply.sh, bin/lib/test-embed-cases/retry-record.sh
 # Tags: TL2, scope:common, audit-tests, embed-cases, stage-protocol, retry
-# Sourced by tests/bin/bin-audit-tests-embed-cases.sh — the 2-try retry rule
+# Sourced by tests/bin/bin-audit-tests-embed-cases-apply.sh — the 2-try retry rule
 # (RETRY gate row + failure.txt, then CAPPED + embed-retry.tsv), APPLIED never
 # turning STALE on a re-run, STALE on a changed original, the leftover-backup
 # recovery, and the MERGED_TARGET / EXEMPT report passthrough.
-# Reuses s3_plan / s3_good / s3_hash / s3_untouched from stage3-apply-cases.sh.
+# Reuses s3_plan / s3_good / s3_hash / s3_untouched from stage3-helpers.sh.
 
 case_begin "retry-first-ng-emits-retry-row" "bin/lib/test-embed-cases/stage-apply.sh"
 s3_plan alpha

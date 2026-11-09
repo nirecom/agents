@@ -5,7 +5,7 @@
 # get-config-var --is-off, used as the canonical call-site for plan-confirm
 # skip checks in skills/.
 # L3 gap: the real ~/.local/bin/confirm-off symlink reading the actual user .env, and
-# the pwsh variant (tests/feature-confirm-off.Tests.ps1); checked at
+# the pwsh variant (tests/bin/feature-confirm-off.Tests.ps1); checked at
 # WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (pwsh-required).
 
 set -u
@@ -52,6 +52,11 @@ cp "$REPO_ROOT/hooks/lib/local-env.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot
 # T01/T02 red (every answer becomes ERROR), so the guard cannot hide a broken fixture.
 if [ -f "$REPO_ROOT/hooks/lib/config-flag.js" ]; then
     cp "$REPO_ROOT/hooks/lib/config-flag.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy config-flag.js"; exit 1; }
+fi
+# config-flag.js requires ../workflow-state/plan-step-table (#2820); without it every answer is ERROR.
+if [ -f "$REPO_ROOT/hooks/workflow-state/plan-step-table.js" ]; then
+    mkdir -p "$FIX/hooks/workflow-state"
+    cp "$REPO_ROOT/hooks/workflow-state/plan-step-table.js" "$FIX/hooks/workflow-state/" || { echo "FAIL: cannot copy plan-step-table.js"; exit 1; }
 fi
 
 chmod +x "$FIX/bin/get-config-var" "$FIX/bin/confirm-off" 2>/dev/null || true

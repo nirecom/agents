@@ -1,28 +1,44 @@
 # Tests: bin/lib/test-embed-cases.sh
 # Tags: TL2, scope:common, audit-tests, embed-cases, fixture
-# Sourced by tests/bin/bin-audit-tests-embed-cases.sh — fixture builders and runners
-# shared by every case file. Holds no cases. All runners set OUT / ERR / RC.
-# Depends on the dispatcher for AGENTS_ROOT, AUDIT, EC_TMP, GROUP_DIR, check_eq.
+# Sourced by every tests/bin/bin-audit-tests-embed-cases*.sh entrypoint — fixture
+# builders and runners shared by every case file. Holds no cases. All runners set
+# OUT / ERR / RC. Depends on the entrypoint for AGENTS_ROOT, AUDIT, EC_TMP, GROUP_DIR,
+# check_eq.
 
 cp "$GROUP_DIR/fixtures/fake-codex" "$EC_TMP/fakebin/codex"
 chmod +x "$EC_TMP/fakebin/codex"
 
+# GNU timeout called directly saves the run-with-timeout.sh bash per run (~90 runs a
+# file); Windows' own timeout.exe is not GNU, so anything else takes the wrapper.
+EC_GNU_TIMEOUT=""
+if [[ "$(timeout --version 2>/dev/null)" == *GNU* ]]; then EC_GNU_TIMEOUT=1; fi
+
 # ec_make_repo — git repo with the shared harness, two helper libs and five
 # targets bin/{alpha,bravo,charlie,delta,echo}.sh. Echoes its root; not committed.
+# The first call builds $EC_TMP/repo-template (once per process: callers run it in
+# $(...), so only the directory remembers it); every call returns a fresh copy.
+# A copy keeps the template's core.hooksPath and its core.excludesFile, which names
+# the template's own default exclude file — kept until the EXIT trap.
 ec_make_repo() {
-  local root t
+  local root tpl="$EC_TMP/repo-template" t
+  if [[ ! -d "$tpl" ]]; then
+    root="$(mktemp -d -p "$EC_TMP")"
+    harness_git_init "$root"
+    git -C "$root" config core.autocrlf false
+    git -C "$root" config user.email t@example.com
+    git -C "$root" config user.name t
+    mkdir -p "$root/tests/bin" "$root/tests/lib" "$root/bin"
+    cp "$AGENTS_ROOT/tests/lib/harness.sh" "$root/tests/lib/harness.sh"
+    cp "$AGENTS_ROOT/tests/lib/section-runner.sh" "$root/tests/lib/section-runner.sh"
+    cp "$AGENTS_ROOT/tests/lib/clearance-hook-harness.sh" "$root/tests/lib/clearance-hook-harness.sh"
+    for t in alpha bravo charlie delta echo; do
+      printf '#!/usr/bin/env bash\necho %s\n' "$t" >"$root/bin/$t.sh"
+    done
+    git -C "$root" config core.excludesFile "$tpl/.git/info/exclude"
+    mv "$root" "$tpl"
+  fi
   root="$(mktemp -d -p "$EC_TMP")"
-  harness_git_init "$root"
-  git -C "$root" config core.autocrlf false
-  git -C "$root" config user.email t@example.com
-  git -C "$root" config user.name t
-  mkdir -p "$root/tests/bin" "$root/tests/lib" "$root/bin"
-  cp "$AGENTS_ROOT/tests/lib/harness.sh" "$root/tests/lib/harness.sh"
-  cp "$AGENTS_ROOT/tests/lib/section-runner.sh" "$root/tests/lib/section-runner.sh"
-  cp "$AGENTS_ROOT/tests/lib/clearance-hook-harness.sh" "$root/tests/lib/clearance-hook-harness.sh"
-  for t in alpha bravo charlie delta echo; do
-    printf '#!/usr/bin/env bash\necho %s\n' "$t" >"$root/bin/$t.sh"
-  done
+  cp -Rp "$tpl/." "$root/"
   printf '%s\n' "$root"
 }
 
@@ -83,16 +99,18 @@ EOF
 }
 
 # ec_run <root> <script> [args...] — runs one entrypoint with CWD = <root>.
+# Runs are sequential within a process, so one fixed out / err pair is enough.
 ec_run() {
-  local root="$1" script="$2" outf errf
+  local root="${1:?}" script="${2:?}" outf="$EC_TMP/ec-run.out" errf="$EC_TMP/ec-run.err"
   shift 2
-  outf="$(mktemp -p "$EC_TMP")"
-  errf="$(mktemp -p "$EC_TMP")"
-  (cd "$root" && bash "$AGENTS_ROOT/bin/run-with-timeout.sh" 600 bash "$script" "$@") >"$outf" 2>"$errf"
+  if [[ -n "$EC_GNU_TIMEOUT" ]]; then
+    (cd "$root" && timeout -k 2 600 bash "$script" "$@") >"$outf" 2>"$errf"
+  else
+    (cd "$root" && bash "$AGENTS_ROOT/bin/run-with-timeout.sh" 600 bash "$script" "$@") >"$outf" 2>"$errf"
+  fi
   RC=$?
-  OUT="$(cat "$outf")"
-  ERR="$(cat "$errf")"
-  rm -f "$outf" "$errf"
+  OUT="$(<"$outf")"
+  ERR="$(<"$errf")"
 }
 
 # ec_band_paths — relpath column of the BAND lines in $OUT, in emitted order.

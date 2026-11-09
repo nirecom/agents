@@ -18,7 +18,7 @@ zc_check() { # <row> <desc> <want> <got>
 
 # S21: an ordinary branch, with commits, carrying an uncommitted decoy that is NOT in the
 # committed range — and with the resolver too old to report base_is_head, so the selector has to
-# settle the question itself. The decoy's stem has a test file of its own in the fake tree, so if
+# settle the question itself. The decoy's stem has a test file of its own in the target repo, so if
 # the local check answered "zero commit" the decoy would appear in stdout and be visible here.
 #
 # This is the CPR-ORTH counterpart of S16: the same absent field, the same local observation, and
@@ -74,6 +74,7 @@ make_zc_ignoring() { # <repo> <ignored-path> [tracked-path...]
     git -C "$repo" config core.hooksPath "$repo/.git/no-such-hooks"
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name  "Test"
+    seed_target_tests "$repo"
     printf '%s\n' "$ignored" > "$repo/.gitignore"
     for f in "$@"; do
         mkdir -p "$repo/$(dirname "$f")"
