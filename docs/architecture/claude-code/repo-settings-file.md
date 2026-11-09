@@ -10,7 +10,7 @@ Each target repo carries one `.agents.json` at its root. It tells the test workf
 |---|---|
 | Node (hooks, gates) | `hooks/lib/repo-settings.js` (`load`, `validateDoc`, `testDirsIn`); `hooks/lib/test-gates/registry.js` (`layoutFor`, `categoriesFor`, `placementOf`) |
 | Bash | `bin/lib/repo-settings.sh` (`rsf_load`, `rsf_categories_into`), which wraps `bin/repo-settings --format shell` |
-| Writes | `bin/repo-settings --set-migrate <key>` / `--write-tests <json>`; both refuse a file that is not JSON or not an object. A write lands only when the written section validates, and the tool never commits. Repair: `--reset-malformed` (only with `--root`) copies such a file to `.agents.json.malformed` and leaves `{}`; a valid or absent file is left alone. `/migrate` MG-1 runs it once when `bin/migrate-needs` prints `MALFORMED=1`. |
+| Writes | `bin/repo-settings --set-migrate <key>` / `--write-tests <json>`; both refuse a file that is not JSON or not an object. A write lands only when the written section validates, and the tool never commits. Repair: `--reset-malformed` (only with `--root`) copies such a file to `.agents.json.malformed` and leaves `{}`; a valid or absent file is left alone. It also resets a file whose `version` or a section is `malformed`, the same set as `MALFORMED=1`; an `unsupported` file is not reset. `/migrate` MG-1 runs it once when `bin/migrate-needs` prints `MALFORMED=1`. |
 
 ## Schema
 

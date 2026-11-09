@@ -17,7 +17,7 @@ It is the only place that decides from `bin/migrate-needs` what to run; the sub-
 
 MG-1. Read: run `node "$AGENTS_MAIN_ROOT/bin/migrate-needs" --root "<ROOT>"` as one standalone call; keep `NEEDED`, `UNCOMMITTED`, `UNPUSHED`, `HOST` and `MALFORMED` from its stdout.
    A non-zero exit goes to "On failure".
-   When `MALFORMED=1` (the settings file is not a JSON object), ask once through AskUserQuestion (`metadata.source=migrate.reset-malformed`) before MG-2:
+   When `MALFORMED=1` (the settings file is unparsable, not an object, or fails the reader's validation), ask once through AskUserQuestion (`metadata.source=migrate.reset-malformed`) before MG-2:
    - "Reset (recommended)": run `node "$AGENTS_MAIN_ROOT/bin/repo-settings" --root "<ROOT>" --reset-malformed` as one standalone call, then re-run MG-1; the original is kept as `.agents.json.malformed`.
    - "Skip for this session": write nothing, print `MIGRATE_RESULT=skipped` and end.
    With `--dry-run`, do not reset and ask nothing: report that it would run `--reset-malformed`, then go on to MG-2.

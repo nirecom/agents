@@ -109,4 +109,10 @@ function validateDoc(doc) {
   };
 }
 
-module.exports = { CURRENT_SETTINGS_VERSION, MAX_KNOWN_SETTINGS_VERSION, CATEGORIZATIONS, MIGRATE_KEYS, isObj, validateTests, validateMigrate, validateDoc };
+// isMalformedDoc(doc) — true when validateDoc reports either section malformed; unsupported is not malformed.
+function isMalformedDoc(doc) {
+  const v = validateDoc(doc);
+  return v.tests.state === "malformed" || v.migrate.state === "malformed";
+}
+
+module.exports = { CURRENT_SETTINGS_VERSION, MAX_KNOWN_SETTINGS_VERSION, CATEGORIZATIONS, MIGRATE_KEYS, isObj, validateTests, validateMigrate, validateDoc, isMalformedDoc };
