@@ -9,7 +9,7 @@
 _gl_read_labels() {
     local raw
     raw=$(glab issue view "$1" --json labels 2>/dev/null) || return 1
-    printf '%s' "$raw" | tr ',' '\n' | sed -n 's/.*"name":"\([^"]*\)".*/\1/p'
+    printf '%s' "$raw" | tr ',' '\n' | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
 
 # Read an issue's state ("opened" | "closed" | "" on failure).
@@ -97,6 +97,29 @@ gl_cmd_check() {
     else
         echo "other"
     fi
+    exit 0
+}
+
+# Verb: holder <N> (#2668) — print the id of the only wip-fp:* label of a status:wip issue (empty
+# when there is none). Exit 1 on a read failure or on two or more wip-fp:* labels.
+gl_cmd_holder() {
+    local n="$1"
+    validate_n "$n"
+    local labels
+    if ! labels=$(_gl_read_labels "$n"); then
+        echo "warn: glab api failed for #$n holder" >&2
+        exit 1
+    fi
+    labels=$(printf '%s' "$labels" | tr -d '\r')
+    printf '%s\n' "$labels" | grep -qx 'status:wip' || exit 0
+    local fps
+    fps=$(printf '%s\n' "$labels" | grep '^wip-fp:')
+    [ -z "$fps" ] && exit 0
+    if [ "$(printf '%s\n' "$fps" | wc -l)" -ne 1 ]; then
+        echo "[wip-state: #$n carries more than one wip-fp label]" >&2
+        exit 1
+    fi
+    printf '%s\n' "${fps#wip-fp:}"
     exit 0
 }
 

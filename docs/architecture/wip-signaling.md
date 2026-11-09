@@ -15,6 +15,11 @@ Claude Code session id (#2925, with the narrowed field recovery of #2161).
   id, so every place that tells sessions apart uses one value. Both resolve the id through
   `bin/resolve-session-id`; reopen takes no `--session-id` argument and records `unknown` when
   the id cannot be resolved (nothing reads that line back).
+- `holder <N>` is read-only: it prints the raw holder id (empty when none) and exits 1 when the
+  read fails. GitHub reuses the `check` query (`wip-state/cmd-holder.sh`); GitLab returns the id
+  only when exactly one `wip-fp:*` label is present and exits 1 for two or more. `bin/find-peer`
+  reads the working session through it
+  ([cross-session-messaging.md](cross-session-messaging.md#4-find-peer-contract)).
 
 ## 2. Why the raw id, not a digest
 
@@ -47,8 +52,8 @@ filed or commented on an issue.
 - `/issue-setup` (ensure-project-ready) only creates `session-id` when absent. On a project that
   still has the legacy field, both fields then sit side by side; the legacy one is ignored.
 - Only the `set` verb recovers: when no `session-id` field resolves, it renames the legacy field
-  in place (the field id is kept), or creates `session-id` when neither exists. `check`, `clear`
-  and `abandon` never create or rename — a project in an abnormal state should not be changed
+  in place (the field id is kept), or creates `session-id` when neither exists. `check`, `holder`,
+  `clear` and `abandon` never create or rename — a project in an abnormal state should not be changed
   by a read or a cleanup.
 - When neither recovery succeeds, `set` exits 1 with a hint (project scope or `/issue-setup`); the
   WIP for that issue is skipped and the workflow continues.

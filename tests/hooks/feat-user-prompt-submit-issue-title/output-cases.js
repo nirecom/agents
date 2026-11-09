@@ -19,7 +19,14 @@ function failOpen(F) {
     const r = F.call(sid, "/wf-init #12", F.deps());
     assert.ok(F.quiet(r), JSON.stringify(r));
   });
-  for (const [label, stdin] of [["garbage stdin", () => "not json"], ["empty stdin", () => ""], ["non-target prompt", () => JSON.stringify(F.input(F.newSid("h9t"), "hello"))]]) {
+  // #2668: a prompt without refs now gets the none name (cwd basename "neutral", no suffix for a
+  // non-UUID sid); garbage and empty stdin still answer {}.
+  test("H9 TL2 prompt without refs: exit 0 and the none name as sessionTitle", () => {
+    const r = F.runHook(JSON.stringify(F.input(F.newSid("h9t"), "hello")));
+    assert.strictEqual(r.code, 0, `out=${r.out} err=${r.err}`);
+    assert.strictEqual(r.out, JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", sessionTitle: "neutral" } }), r.err);
+  });
+  for (const [label, stdin] of [["garbage stdin", () => "not json"], ["empty stdin", () => ""]]) {
     test(`H9 TL2 ${label}: exit 0 and {}`, () => {
       const r = F.runHook(stdin());
       assert.strictEqual(r.code, 0, `out=${r.out} err=${r.err}`);

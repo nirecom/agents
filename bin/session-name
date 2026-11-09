@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+"use strict";
+// bin/session-name — print the session name for a manual /rename (#2668).
+//
+// Usage:
+//   session-name --kind work|pm|none [--session <sid>] -- <args>
+//
+//   work  <args> are issue refs (#A #B …); the title of #A is fetched.
+//   pm    <args> are /pm-init arguments: issue refs, then an optional objective. The objective is
+//         the title when given; otherwise the title of the first ref only is fetched.
+//   none  <args> are ignored; the repo name comes from the origin of the cwd (else its basename).
+// --session adds the " [xxxxxxxx]" suffix of a UUID session id. Keep the suffix on a /rename:
+// find-peer matches the name by it.
+//
+// Prints the name on one line and exits 0. Exits 2 on a malformed request, 1 when no name can be
+// made (no ref, or the title cannot be fetched); the reason goes to stderr.
+
+const path = require("path");
+const HOOKS = path.join(__dirname, "..", "hooks");
+const SN = require(path.join(HOOKS, "lib", "session-name"));
+const TOOL = "session-name";
+
+function fail(code, message) {
+  process.stderr.write(`${TOOL}: ${message}\n`);
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const o = { kind: null, session: null, rest: [] };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--") { o.rest = argv.slice(i + 1); break; }
+    if (a === "--kind") o.kind = argv[++i] || null;
+    else if (a === "--session") o.session = argv[++i] || null;
+    else fail(2, `unknown argument: ${a}`);
+  }
+  if (!SN.KINDS.includes(o.kind)) fail(2, `--kind must be one of ${SN.KINDS.join("|")}`);
+  if (o.session !== null && !/^[A-Za-z0-9_-]+$/.test(o.session)) fail(2, "--session must match /^[A-Za-z0-9_-]+$/");
+  return o;
+}
+
+function main() {
+  const o = parseArgs(process.argv.slice(2));
+  const { toWindowsPath } = require(path.join(HOOKS, "lib", "branch-diff"));
+  const T = require(path.join(HOOKS, "user-prompt-submit-issue-title", "title"));
+  const cwd = toWindowsPath(process.cwd());
+  if (o.kind === "none") {
+    const repo = T.repoFor(cwd);
+    if (!repo) fail(1, "no repo name: neither an origin nor a cwd basename");
+    process.stdout.write(`${SN.composeSessionName({ kind: "none", repo, sessionId: o.session })}\n`);
+    return;
+  }
+  const parsed = o.kind === "pm" ? SN.parsePmInitArgs(o.rest) : { refs: SN.parsePmInitArgs(o.rest).refs, objective: null };
+  if (parsed.refs.length === 0) fail(1, "no issue ref in the arguments");
+  let title = parsed.objective;
+  if (!title) {
+    const rec = { v: 1, last_emitted: null, titles: {}, failures: {} };
+    title = T.titleFor(parsed.refs[0], rec, {}, cwd, Date.now());
+  }
+  if (!title) fail(1, `the title of ${SN.refLabel(parsed.refs[0])} could not be fetched`);
+  process.stdout.write(`${SN.composeSessionName({ kind: o.kind, refs: parsed.refs, title, sessionId: o.session })}\n`);
+}
+
+main();

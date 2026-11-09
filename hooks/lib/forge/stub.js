@@ -18,6 +18,7 @@ const trackerStub = {
   isForgeScanTarget(_command) { return false; },
   vocabularyFor(_argv) { return { longValue: new Set(), longBool: new Set(), shortValue: new Set(), shortBool: new Set() }; },
   issueTitle(_remoteUrl, _ref, _opts) { return null; },
+  issueBody(_remoteUrl, _ref, _opts) { return null; },
 };
 
 module.exports = { codehostStub, trackerStub };

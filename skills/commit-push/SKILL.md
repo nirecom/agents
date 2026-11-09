@@ -47,6 +47,8 @@ Read `rules/coding.md` before CP-2 — on-demand-only, never auto-injected; its 
 
 CP-1. **Stage changes** per `skills/_shared/commit-push-dispatch.md` "Stage".
 
+CP-1b. **Contact the assigned PM** per `skills/_shared/pm-pre-pr-contact.md` before the PR is created.
+
 CP-2. **Dispatch commit/push/PR to the `commit-push` worker** per `skills/_shared/commit-push-dispatch.md` "Dispatch" and "Outcomes", with handoff step `push_branch`.
    On `bootstrap_pending`: surface "Remote has no default branch yet (new repo) — `/merge-to-main` pushes the first commit as `main`." and go to CP-2c; the advance gate records the bootstrap decision itself.
    On `up_to_date`, `pushed`, `pr_created`, or `pr_reused`: continue to CP-2b.
