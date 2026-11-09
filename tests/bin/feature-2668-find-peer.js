@@ -15,7 +15,7 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const path = require("node:path");
 const cp = require("node:child_process");
-const { agentsListText, realAgentsListText, uuid, parseKv, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
+const { agentsListText, realAgentsListText, REAL_OWN_LINE, REAL_OWN_LINE_NO_SUFFIX, uuid, parseKv, makeFixtures, load, tmpRoot } = require("./feature-2668-find-peer/fixtures");
 
 // TL3 gap: the real ListAgents dump and a real SendMessage delivery to the returned destination
 // are not exercised (ListAgents and SendMessage are model tools; FP10 feeds a hand-built dump in the
@@ -233,5 +233,46 @@ test("FP10 real format: --session self resolves from the header line (name polic
 });
 test("FP10 real format: --session self on a ref policy -> 5 not-in-list (no row carries a session id)", () => {
   failed(run(["--session", "self"], { policy: "ref", self: U, list: realAgentsListText([peer], own) }), 5, "not-in-list");
+});
+
+// Own-session line forms (real, legacy quoted, malformed). Each row: [id, label, text, code, reason|null, want?, self?].
+const REAL_SID = uuid("4f6187e3");
+const REAL_NAME = "[PM] #2728 #2927 PM infra / sentinel issues [4f6187e3]";
+const dumpWith = (o) => realAgentsListText([peer], o);
+const base = { name: `#42 Self${sfx(U)}`, ref: "c0ffee" };
+const CASES = [
+  ["N1 verbatim real own line", `${REAL_OWN_LINE}\nPeer sessions (1):\n  #7 Other${sfx(OTHER)} [9f9f9f]  ·  interactive  ·  busy  ·  started 7h ago\n`, 0, null, `${REAL_NAME} [42d2bd]`, REAL_SID],
+  ["N2 real format, default shape", dumpWith(base), 0, null, `${base.name} [c0ffee]`],
+  ["N3 legacy quoted format", dumpWith({ ...base, quoted: true }), 0, null, `${base.name} [c0ffee]`],
+  ["N4 legacy quoted format without the trailing period", dumpWith({ raw: `This session is "${base.name}" [c0ffee]` }), 0, null, `${base.name} [c0ffee]`],
+  ["N5 name with [WIP] and [a] brackets", dumpWith({ name: `#42 [WIP] fix [a] b${sfx(U)}`, ref: "c0ffee" }), 0, null, `#42 [WIP] fix [a] b${sfx(U)} [c0ffee]`],
+  ["N6 name containing ' [abcdef] — '", dumpWith({ name: `#42 fix [abcdef] — x${sfx(U)}`, ref: "c0ffee" }), 0, null, `#42 fix [abcdef] — x${sfx(U)} [c0ffee]`],
+  ["N7 CRLF line ends", dumpWith(base).replace(/\n/g, "\r\n"), 0, null, `${base.name} [c0ffee]`],
+  ["N8 name with an inner double quote (only a leading quote is refused)", dumpWith({ name: `#42 "q" 'x'${sfx(U)}`, ref: "c0ffee" }), 0, null, `#42 "q" 'x'${sfx(U)} [c0ffee]`],
+  ["N9 empty clause is accepted ([^\\[\\]]* matches nothing)", `This session is ${base.name} [c0ffee] — \nPeer sessions (0):\n`, 0, null, `${base.name} [c0ffee]`],
+  ["A1 own line and a peer row share the 8-digit suffix -> ambiguous", realAgentsListText([{ ref: "a1b2c3", name: `#43 Twin${sfx(U)}` }], base), 6, "ambiguous"],
+  ["A2 two readable own lines with the same suffix -> both listed -> ambiguous", `${realAgentsListText([], base)}${realAgentsListText([], { name: `#44 Again${sfx(U)}`, ref: "d4e5f6" })}`, 6, "ambiguous"],
+  ["A3 two own lines, only one carries this session's suffix -> that one", `${realAgentsListText([], base)}${realAgentsListText([], { name: `#44 Again${sfx(OTHER)}`, ref: "d4e5f6" })}`, 0, null, `${base.name} [c0ffee]`],
+  ["A4 a readable own line plus an unreadable one -> unparsable", `${realAgentsListText([], base)}This session is [PM] x [42d2bd]\n`, 2, "agents-list-unparsable"],
+  ["X8 upper-case hex ref is refused", dumpWith({ raw: `This session is ${base.name} [C0FFEE] — clause` }), 2, "agents-list-unparsable"],
+  ["E1 real own line without the 8-digit suffix stays not-in-list", dumpWith({ raw: REAL_OWN_LINE_NO_SUFFIX }), 5, "not-in-list", null, REAL_SID],
+  ["E3 zero peers with a real own line", `This session is ${base.name} [c0ffee] — clause.\nPeer sessions (0):\n`, 0, null, `${base.name} [c0ffee]`],
+  ["X1 no clause, no quotes", dumpWith({ raw: "This session is [PM] x [42d2bd]" }), 2, "agents-list-unparsable"],
+  ["X2 clause with brackets", dumpWith({ raw: "This session is [PM] x [42d2bd] — the name (see [ref])." }), 2, "agents-list-unparsable"],
+  ["X3 quoted name plus clause", dumpWith({ raw: 'This session is "x" [42d2bd] — clause' }), 2, "agents-list-unparsable"],
+  ["X4 5-digit ref", dumpWith({ raw: "This session is [PM] x [42d2b] — clause" }), 2, "agents-list-unparsable"],
+  ["X5 no body", dumpWith({ raw: "This session is" }), 2, "agents-list-unparsable"],
+  ["X6 ASCII hyphen instead of em dash", dumpWith({ raw: "This session is [PM] x [42d2bd] - clause" }), 2, "agents-list-unparsable"],
+  ["X7 control character", dumpWith({ raw: REAL_OWN_LINE.replace("PM infra", "PM \u0007infra") }), 2, "agents-list-unparsable"],
+];
+for (const [name, list, code, reason, want, self] of CASES) {
+  test(`FP10 real format: ${name} -> ${code}${reason ? ` ${reason}` : ""}`, () => {
+    const r = run(["--session", "self"], { policy: "name", self: self || U, list });
+    if (code === 0) ok(r, { ROLE: "self", SESSION_ID: self || U, DESTINATION: want, DESTINATION_KIND: "name" });
+    else failed(r, code, reason);
+  });
+}
+test("FP10 real format: E2 a real own line on a ref policy -> 5 not-in-list", () => {
+  failed(run(["--session", "self"], { policy: "ref", self: U, list: dumpWith(base) }), 5, "not-in-list");
 });
 caseEnd();
