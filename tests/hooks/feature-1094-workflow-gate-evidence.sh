@@ -165,9 +165,17 @@ SID="wge1-$$"
 write_state "$SID" "$(CI_PENDING_STATE $SID)"
 touch "$PLANS_DIR/${SID}-intent.md"
 approve_intent "$SID"
+# evidence resolution of a gated step also needs its glossary_check record, bound to the repo the gate runs in
+GLOSSARY_REPO="$TMPDIR_BASE/glossary-repo"
+mkdir -p "$GLOSSARY_REPO"
+git init -q "$GLOSSARY_REPO"
+git -C "$GLOSSARY_REPO" config core.hooksPath /dev/null
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
+WORKFLOW_STATE_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" glossary_check_record "$SID" "$GLOSSARY_REPO" intent
 
 GATE_INPUT=$(printf '{"tool_name":"Write","tool_input":{"file_path":"/tmp/test.txt","content":"x"},"session_id":"%s"}' "$SID")
-GATE_OUT=$(run_gate "$GATE_INPUT")
+GATE_OUT=$(cd "$GLOSSARY_REPO" && CLAUDE_PROJECT_DIR="$GLOSSARY_REPO" run_gate "$GATE_INPUT")
 
 if echo "$GATE_OUT" | grep -q '"approve"' || ! echo "$GATE_OUT" | grep -q 'clarify_intent'; then
   echo "PASS: WGE-1. intent.md present + clarify_intent=pending → gate does not block on clarify_intent"

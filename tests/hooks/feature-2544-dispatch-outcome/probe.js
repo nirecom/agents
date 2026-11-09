@@ -174,11 +174,22 @@ const MODES = {
   seed() { wf().markStep(a[0], a[1], a[2], a[3] ? JSON.parse(a[3]) : undefined); },
   prefix() {
     const approval = require(path.join(ROOT, "hooks/workflow-state/completion-approval.js"));
+    const rec = require(path.join(ROOT, "tests/lib/glossary-check-record"));
+    let repo = null;
     for (const s of PRE_RUN_TESTS) {
       if (approval.isApprovalGatedStep(s)) {
         require(path.join(ROOT, "tests/lib/plan-approval-fixture.js")).approveLive(a[0], s);
       }
-      wf().markStep(a[0], s, "complete");
+      if (!rec.GLOSSARY_STEPS.includes(s)) {
+        wf().markStep(a[0], s, "complete");
+        continue;
+      }
+      if (!repo) {
+        repo = path.join(path.dirname(STATE_DIR), "glossary-repo");
+        fs.mkdirSync(repo, { recursive: true });
+        require(path.join(ROOT, "tests/lib/harness")).gitInit(repo);
+      }
+      rec.completeWithRecord(a[0], s, repo, wf().markStep);
     }
   },
   "hook-input"() {
