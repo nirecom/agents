@@ -156,3 +156,7 @@ Changes: Session-inheritance terms are now session-upstream / session-downstream
 ### FEATURE: PR #2965 (2026-11-09)
 Background: feat(#2764): route AskUserQuestion dialogs to Jev only by a fixed dia...
 Changes: Jev auto-answers only clarification dialogs whose dialog ID is listed as `low` in `hooks/lib/askuser-dialog-levels.json`; approval and publishing dialogs always reach you.;Renamed `JEV_AUTO_SKIP_ASKUSER` to `JEV_AUTO_CLARIFICATIONS` (migrated automatically).;Added `bin/check-askuser-dialog-ids` and per-dialog routing counts in `jev-report`.
+
+### FEATURE: PR #2963 (2026-11-09)
+Background: feat(#2668): resolve a peer session's SendMessage destination from an...
+Changes: Added `find-peer`, which resolves the SendMessage destination of the session working on an issue (or of the session that filed it), and an ack convention so a sender can confirm a message arrived.;Issues created through any issue-create path now record the originating session, and session names carry the first 8 characters of the session id so peers can be addressed by name.
