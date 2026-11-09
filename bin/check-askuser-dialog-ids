@@ -1,0 +1,46 @@
+#!/usr/bin/env node
+"use strict";
+// bin/check-askuser-dialog-ids — every AskUserQuestion line of skills/ carries a dialog ID or an
+// askuser-none note, and the IDs agree with hooks/lib/askuser-dialog-levels.json (#2764).
+// Usage: check-askuser-dialog-ids [--root <dir>] [--base <ref>] [--json]
+// Exit: 0 no violation, 1 violations, 2 usage error or unreadable classification table.
+// --base <ref> adds a REVIEW line per table row added or changed since <ref>.
+
+const path = require("path");
+const { check, formatText, TableUnreadable } = require("./lib/check-askuser-dialog-ids");
+
+const USAGE = "usage: check-askuser-dialog-ids [--root <dir>] [--base <ref>] [--json]\n";
+
+function parseArgs(argv) {
+  const opts = { root: path.resolve(__dirname, ".."), base: null, json: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--json") opts.json = true;
+    else if ((a === "--root" || a === "--base") && i + 1 < argv.length) opts[a.slice(2)] = argv[++i];
+    else if (a === "-h" || a === "--help") return { help: true };
+    else return { error: `check-askuser-dialog-ids: unknown or incomplete argument: ${a}` };
+  }
+  opts.root = path.resolve(opts.root);
+  return opts;
+}
+
+function main(argv) {
+  const opts = parseArgs(argv);
+  if (opts.help) { process.stdout.write(USAGE); return 0; }
+  if (opts.error) { process.stderr.write(opts.error + "\n" + USAGE); return 2; }
+  let result;
+  try {
+    result = check({ root: opts.root, base: opts.base });
+  } catch (e) {
+    if (!(e instanceof TableUnreadable)) throw e;
+    process.stderr.write(`check-askuser-dialog-ids: the classification table cannot be read: ${e.message}\n`);
+    return 2;
+  }
+  if (opts.json) process.stdout.write(JSON.stringify({ violations: result.violations, reviews: result.reviews, notes: result.notes }, null, 2) + "\n");
+  else process.stdout.write(formatText(result));
+  return result.violations.length ? 1 : 0;
+}
+
+if (require.main === module) process.exit(main(process.argv.slice(2)));
+
+module.exports = { main, parseArgs };

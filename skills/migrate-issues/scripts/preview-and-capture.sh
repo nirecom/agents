@@ -17,7 +17,7 @@ if same_repository "$REPO_PATH" "$SCRIPT_CHECKOUT_ROOT"; then
   _self_repo_detected=1
   echo "WARNING: SELF_REPO_DETECTED: REPO_PATH equals SCRIPT_CHECKOUT_ROOT ($SCRIPT_CHECKOUT_ROOT)." >&2
   echo "         Continuing dry-run to emit sentinels." >&2
-  echo "         The /migrate-issues skill (MI-2) confirms with the user via AskUserQuestion." >&2
+  echo "         The /migrate-issues skill (MI-2) confirms with the user via AskUserQuestion." >&2 # askuser-none
 fi
 
 DRY_RUN_OUT=$(bash "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --dry-run) || _dry_rc=$?

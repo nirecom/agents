@@ -67,7 +67,7 @@ Apply only when the per-stage wrapper script (MDP-5) returns a non-zero non-one 
 
 **exit 6 (HIGH_UNRESOLVED):** run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/detail-plan-concern-ledger.txt --raw <RAW_FILE> --label detail-plan`; confirm artifact via `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format detail-plan`; stop loop, do not proceed to MDP-7.
 
-`<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/detail-plan-last-round.txt`. Exit 8: AskUserQuestion per exit-codes.md "Escalation by format".
+`<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/detail-plan-last-round.txt`. Exit 8: AskUserQuestion (`metadata.source=codex-review-loop.unchanged-rerun`) per exit-codes.md "Escalation by format".
 
 Research/malformed-retry cap escalation: see `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts/cap-escalation-message.sh"` for message order.
 
@@ -119,9 +119,9 @@ See `bash "$AGENTS_MAIN_ROOT/skills/make-detail-plan/scripts/skip-conditions.sh"
 - Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) the plan-link line (protocol CPA-2); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by the MDP-6 ESCALATE/HIGH_UNRESOLVED path when exit 2 or exit 6 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
 - Write the MDP-7 orchestrator-authored detail.md body in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - Follow `rules/core-principles.md`.
-- **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`.
+- **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion (`metadata.source=glossary-drift.accept-unfixed`) whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`.
 - Second exception: a `[upstream-inconsistency ` concern pauses the round for the user's decision, per `skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`.
-- Deliver user-facing analysis summaries (approach comparison, risk assessment, trade-off rationale) as turn-final assistant text or via AskUserQuestion preview/description — not as mid-turn text between tool calls, which is invisible in VS Code.
+- Deliver user-facing analysis summaries (approach comparison, risk assessment, trade-off rationale) as turn-final assistant text or via AskUserQuestion preview/description — not as mid-turn text between tool calls, which is invisible in VS Code. <!-- askuser-none -->
 - Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
