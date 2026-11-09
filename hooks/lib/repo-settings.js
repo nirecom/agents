@@ -20,6 +20,7 @@ module.exports = {
   migrateDone: L.migrateDone,
   validateTests: V.validateTests,
   validateDoc: V.validateDoc,
+  isMalformedDoc: V.isMalformedDoc,
   placementIn: P.placementIn,
   placementOf: P.placementOf,
   testDirsIn: P.testDirs,

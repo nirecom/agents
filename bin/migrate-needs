@@ -4,7 +4,8 @@
 // Prints NEEDED=<comma-separated migrate-* skills, in run order>, UNCOMMITTED=0|1 (.agents.json is
 // untracked or changed), UNPUSHED=0|1 (a commit of .agents.json is ahead of origin/<branch>) and
 // HOST=github|gitlab|unknown (empty unless tracker or issues is needed) and MALFORMED=0|1
-// (.agents.json exists but is not a JSON object; bin/repo-settings --reset-malformed repairs it).
+// (.agents.json is unparsable, not an object, or fails the reader's validation; a newer version is 0;
+// bin/repo-settings --reset-malformed repairs it).
 // Exit: 0 printed, 1 the target is not a git checkout, 2 bad arguments. Judgments: bin/lib/migrate-needs.js.
 
 const path = require("path");
