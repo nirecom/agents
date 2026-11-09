@@ -29,33 +29,8 @@ _ffg_backdate_minutes() {
     return 1
 }
 
-# _ffg_break_fetch <sandbox> — repoints the fake git so `fetch` exits 1 while
-# still recording gtp.out (per-run proof the fetch was attempted). Same
-# failure-injection convention as TC12 in the parent file.
-_ffg_break_fetch() {
-    local sb="$1"
-    cat > "$sb/bin/git" <<EOF
-#!/bin/bash
-cmd=""
-for a in "\$@"; do case "\$a" in fetch|merge|config) cmd="\$a"; break ;; esac; done
-case "\$cmd" in
-    fetch) printf '%s' "\${GIT_TERMINAL_PROMPT-UNSET}" > "$sb/gtp.out"; exit 1 ;;
-    merge) printf 'merged' > "$sb/merged.out"; printf 'Updating abc1234..def5678\nFast-forward\n'; exit 0 ;;
-    config)
-        case "\$*" in
-            *"--get core.sshCommand"*) exit 1 ;;
-        esac
-        exit 0
-        ;;
-    *) exit 0 ;;
-esac
-EOF
-    chmod +x "$sb/bin/git"
-}
-
-# TC-FREQ1 — a stamp younger than the interval suppresses the fetch entirely,
-# and with it the downstream ff-only merge: the guard sits above both, so a guard
-# wired around the fetch alone would still mutate the working tree every startup.
+# TC-FREQ1 — a stamp younger than the interval suppresses the engine start entirely:
+# no fetch marker and no engine run.
 tc_freq_fresh_stamp_skips_fetch() {
     local sb; sb="$(make_mirror_sandbox 1)"
     local stamp; stamp="$(_ffg_stamp "$sb")"
@@ -68,11 +43,10 @@ EOF
     local out; out="$(run_mirror_driver bash "$sb" "$drv" on)"
     if echo "$out" | grep -q "DONE" \
         && [ ! -f "$sb/gtp.out" ] \
-        && [ ! -f "$sb/merged.out" ] \
         && ! echo "$out" | grep -q "git fetch Claude session sync"; then
-        pass "TC-FREQ1: fresh stamp → startup fetch AND ff-only merge both skipped"
+        pass "TC-FREQ1: fresh stamp → fetch marker and engine start both skipped"
     else
-        fail "TC-FREQ1: fetch/merge ran despite a fresh stamp (gtp=$([ -f "$sb/gtp.out" ] && echo yes || echo no) merged=$([ -f "$sb/merged.out" ] && echo yes || echo no)). Output: $out"
+        fail "TC-FREQ1: the engine ran despite a fresh stamp (gtp=$([ -f "$sb/gtp.out" ] && echo yes || echo no)). Output: $out"
     fi
     rm -rf "$sb"
 }
@@ -149,7 +123,7 @@ EOF
 tc_freq_stamp_written_despite_fetch_failure() {
     local sb; sb="$(make_mirror_sandbox 1)"
     local stamp="$sb/home/.claude/projects/.git/agents-last-fetch"
-    _ffg_break_fetch "$sb"
+    printf '1' > "$sb/engine-exit-code.txt"
     local drv="$sb/drv_freq_fetchfail.sh"
     cat > "$drv" <<'EOF'
 . "$SNIPPET"

@@ -13,6 +13,12 @@ set -u
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ORCH_SCRIPT="$SCRIPT_CHECKOUT_ROOT/bin/github-issues/migration/orchestrate.sh"
 
+# Keep workflow state and plans writes out of the real $HOME (rules/test/fixture-isolation.md).
+ISOLATION_ROOT="$(mktemp -d)"
+readonly ISOLATION_ROOT
+trap 'rm -rf "$ISOLATION_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$ISOLATION_ROOT/state" WORKFLOW_PLANS_DIR="$ISOLATION_ROOT/plans"
+
 PASS=0
 FAIL=0
 
@@ -44,6 +50,8 @@ setup_fixture() {
     TMP="$(mktemp -d)"
     FIXTURE="$TMP/repo"
     mkdir -p "$FIXTURE/docs"
+    git init -q "$FIXTURE"
+    git -C "$FIXTURE" config core.hooksPath /dev/null
     cat > "$FIXTURE/docs/history.md" <<'EOF'
 ### Entry 1 (2024-01-01)
 Background: test entry 1
@@ -166,6 +174,174 @@ if [ "$pair_ok" -eq 1 ]; then
 else
     fail "D7: worktree pair fixture could not be built"
 fi
+teardown_fixture
+
+# --- D8-D12: the first run stops on an allowlist file the user has not committed (#2473 run-0021).
+commit_fixture() {
+    git -C "$FIXTURE" config core.autocrlf false
+    git -C "$FIXTURE" config core.excludesFile "$FIXTURE/.git/info/exclude"
+    git -C "$FIXTURE" add -A
+    git -C "$FIXTURE" -c user.name=fixture -c user.email=fixture@example.invalid commit -q -m fixture
+}
+
+# run_orch <args...> — sets RC, STDOUT_TXT and STDERR_TXT. The check runs before the gh pre-flight, so a logged gh call proves the run passed it.
+run_orch() {
+    env -u MIGRATE_ACK_EXISTING_ISSUES -u MIGRATE_ACK_UP_TO_ISSUE_N -u MIGRATE_ACK_SELF_COUNT_AT_ACK \
+        bash "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 60 bash "$ORCH_SCRIPT" "$FIXTURE" "$@" \
+        > "$TMP/stdout" 2> "$TMP/stderr"
+    RC=$?
+    STDOUT_TXT="$(cat "$TMP/stdout")"
+    STDERR_TXT="$(cat "$TMP/stderr")"
+}
+
+# --- D8: live, no state file, dirty allowlist file → stop before gh and state_init.
+setup_fixture
+printf 'node_modules\n' > "$FIXTURE/.gitignore"
+commit_fixture
+printf 'node_modules\nmine\n' > "$FIXTURE/.gitignore"
+GITIGNORE_BEFORE="$(cat "$FIXTURE/.gitignore")"
+run_orch
+if [ "$RC" -eq 1 ] && printf '%s\n' "$STDERR_TXT" | grep -qF ".gitignore"; then
+    pass "D8a: live first run on a dirty allowlist file exits 1 naming the path on stderr"
+else
+    fail "D8a: rc=$RC stderr=$STDERR_TXT"
+fi
+if [ "$RC" -eq 1 ] && [ ! -s "$MOCK_LOG" ]; then
+    pass "D8b: gh is never called"
+else
+    fail "D8b: rc=$RC gh log: $(head -3 "$MOCK_LOG")"
+fi
+if [ "$RC" -eq 1 ] && [ ! -e "$FIXTURE/.migration-state.json" ] && [ "$(cat "$FIXTURE/.gitignore")" = "$GITIGNORE_BEFORE" ]; then
+    pass "D8c: no state file, and .gitignore keeps the user's content"
+else
+    fail "D8c: rc=$RC state file present=$([ -e "$FIXTURE/.migration-state.json" ] && echo yes || echo no) .gitignore=$(cat "$FIXTURE/.gitignore")"
+fi
+teardown_fixture
+
+# --- D9: live, state file present → the check does not run. Later steps are not asserted.
+setup_fixture
+printf 'node_modules\n' > "$FIXTURE/.gitignore"
+printf '.migration-state.json\n' >> "$FIXTURE/.gitignore"
+commit_fixture
+printf '{"schema_version":2,"current_step":1}\n' > "$FIXTURE/.migration-state.json"
+printf 'mine\n' >> "$FIXTURE/.gitignore"
+run_orch --from-step 2 --ack-skipped-steps
+if grep -q '^gh issue list' "$MOCK_LOG"; then
+    pass "D9: a run with a state file passes the check and reaches the gh pre-flight"
+else
+    fail "D9: rc=$RC gh log empty, stderr=$STDERR_TXT"
+fi
+teardown_fixture
+
+# --- D9d-D9e: --dry-run, state file present, dirty → no warning (D10 warns on the same dirty file without one).
+setup_fixture
+printf 'node_modules\n.migration-state.json\n' > "$FIXTURE/.gitignore"
+commit_fixture
+printf '{"schema_version":2,"current_step":1}\n' > "$FIXTURE/.migration-state.json"
+printf 'mine\n' >> "$FIXTURE/.gitignore"
+run_orch --dry-run
+if [[ "$RC" -eq 0 ]] && ! printf '%s\n%s\n' "$STDOUT_TXT" "$STDERR_TXT" | grep -qF "UNCOMMITTED_ALLOWLIST"; then
+    pass "D9d: --dry-run with a state file exits 0 with neither UNCOMMITTED_ALLOWLIST warning"
+else
+    fail "D9d: rc=$RC stdout=$(printf '%s\n' "$STDOUT_TXT" | grep -F UNCOMMITTED_ALLOWLIST) stderr=$STDERR_TXT"
+fi
+if printf '%s\n' "$STDOUT_TXT" | grep -qi "Step 3 ordering gate.*SKIPPED"; then
+    pass "D9e: --dry-run with a state file continues through the steps"
+else
+    fail "D9e: dry-run did not reach Step 3 (rc=$RC) stderr=$STDERR_TXT"
+fi
+teardown_fixture
+
+# --- D10: --dry-run, no state file, dirty → WARNING names the path and the run continues.
+setup_fixture
+printf 'node_modules\n' > "$FIXTURE/.gitignore"
+commit_fixture
+printf 'mine\n' >> "$FIXTURE/.gitignore"
+run_orch --dry-run
+if [ "$RC" -eq 0 ] && printf '%s\n%s\n' "$STDOUT_TXT" "$STDERR_TXT" | tr -d '\r' | grep -qxF "WARNING: UNCOMMITTED_ALLOWLIST: .gitignore"; then
+    pass "D10a: --dry-run warns with UNCOMMITTED_ALLOWLIST and exits 0"
+else
+    fail "D10a: rc=$RC stdout=$(printf '%s\n' "$STDOUT_TXT" | head -5) stderr=$STDERR_TXT"
+fi
+if printf '%s\n' "$STDOUT_TXT" | grep -qi "Step 3 ordering gate.*SKIPPED"; then
+    pass "D10b: --dry-run continues through the steps after the warning"
+else
+    fail "D10b: dry-run did not reach Step 3 (rc=$RC)"
+fi
+if [ "$RC" -eq 0 ] && [ ! -e "$FIXTURE/.migration-state.json" ]; then
+    pass "D10c: a dirty --dry-run leaves no state file"
+else
+    fail "D10c: rc=$RC state file present=$([ -e "$FIXTURE/.migration-state.json" ] && echo yes || echo no)"
+fi
+teardown_fixture
+
+# --- D11: --dry-run, clean → no WARNING.
+setup_fixture
+commit_fixture
+run_orch --dry-run
+if [ "$RC" -eq 0 ] && ! printf '%s\n%s\n' "$STDOUT_TXT" "$STDERR_TXT" | grep -qF "UNCOMMITTED_ALLOWLIST"; then
+    pass "D11: --dry-run on a clean allowlist gives no warning"
+else
+    fail "D11: rc=$RC stdout=$(printf '%s\n' "$STDOUT_TXT" | grep -F UNCOMMITTED_ALLOWLIST)"
+fi
+teardown_fixture
+
+# --- D12: live, no state file, clean → the check lets the run through to the --stage gate.
+setup_fixture
+commit_fixture
+run_orch --from-step 2 --ack-skipped-steps
+if grep -q '^gh issue list' "$MOCK_LOG" && printf '%s\n' "$STDERR_TXT" | grep -q -- "requires --stage"; then
+    pass "D12: a clean first run passes the check and reaches the --stage gate"
+else
+    fail "D12: rc=$RC stderr=$STDERR_TXT"
+fi
+teardown_fixture
+
+# --- D13-D14: a target that is no git checkout makes the check itself fail (exit 1).
+setup_non_git_fixture() {
+    setup_fixture
+    rm -rf "$FIXTURE/.git"
+    export GIT_CEILING_DIRECTORIES="$TMP"
+    if git -C "$FIXTURE" rev-parse --git-dir >/dev/null 2>&1; then
+        fail "D13-D14 precondition: the fixture still resolves to a git repository"
+    fi
+}
+
+# --- D13: live → stop before gh and state_init.
+setup_non_git_fixture
+run_orch
+if [ "$RC" -eq 1 ] && [ ! -s "$MOCK_LOG" ]; then
+    pass "D13a: live on a target that is no git checkout exits 1 and never calls gh"
+else
+    fail "D13a: rc=$RC gh log: $(head -3 "$MOCK_LOG") stderr=$STDERR_TXT"
+fi
+if [ "$RC" -eq 1 ] && [ ! -e "$FIXTURE/.migration-state.json" ] && [ ! -e "$FIXTURE/.gitignore" ]; then
+    pass "D13b: no state file and no .gitignore are written"
+else
+    fail "D13b: rc=$RC state file present=$([ -e "$FIXTURE/.migration-state.json" ] && echo yes || echo no) .gitignore present=$([ -e "$FIXTURE/.gitignore" ] && echo yes || echo no)"
+fi
+unset GIT_CEILING_DIRECTORIES
+teardown_fixture
+
+# --- D14: --dry-run → WARNING and the run continues.
+setup_non_git_fixture
+run_orch --dry-run
+if [ "$RC" -eq 0 ] && printf '%s\n%s\n' "$STDOUT_TXT" "$STDERR_TXT" | grep -qF "WARNING: UNCOMMITTED_ALLOWLIST_CHECK_FAILED"; then
+    pass "D14a: --dry-run warns with UNCOMMITTED_ALLOWLIST_CHECK_FAILED and exits 0"
+else
+    fail "D14a: rc=$RC stdout=$(printf '%s\n' "$STDOUT_TXT" | head -5) stderr=$STDERR_TXT"
+fi
+if printf '%s\n' "$STDOUT_TXT" | grep -qi "Step 3 ordering gate.*SKIPPED"; then
+    pass "D14b: --dry-run continues through the steps after the warning"
+else
+    fail "D14b: dry-run did not reach Step 3 (rc=$RC) stderr=$STDERR_TXT"
+fi
+if [ "$RC" -eq 0 ] && [ ! -e "$FIXTURE/.migration-state.json" ]; then
+    pass "D14c: the --dry-run leaves no state file"
+else
+    fail "D14c: rc=$RC state file present=$([ -e "$FIXTURE/.migration-state.json" ] && echo yes || echo no)"
+fi
+unset GIT_CEILING_DIRECTORIES
 teardown_fixture
 
 echo ""

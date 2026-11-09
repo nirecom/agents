@@ -54,7 +54,7 @@ pin_text "commit-time text, no markers" "$PC_OUT" "HIGH: tests/hooks/new-missing
 
 Commit blocked: new test file(s) fail the case-marker gate.
 Wrap each case in case_begin/case_end (tests/lib/harness.sh)."
-pin_text "commit-time stderr, no markers" "$PC_ERR" ""
+pin_text "commit-time stderr, no markers" "$PC_ERR" "$PC_UNINIT_WARN"
 
 REPO_PC2="$TMPBASE/repo-pc-grammar"
 mkrepo "$REPO_PC2"
@@ -65,7 +65,7 @@ pin_text "commit-time text, malformed marker" "$PC_OUT" "HIGH: tests/hooks/new-g
 
 Commit blocked: new test file(s) fail the case-marker gate.
 Fix marker placement — see $PIN_DOC."
-pin_text "commit-time stderr, malformed marker" "$PC_ERR" ""
+pin_text "commit-time stderr, malformed marker" "$PC_ERR" "$PC_UNINIT_WARN"
 
 stage "$REPO_PC2" tests/bin/new-missing.sh sh-missing
 pc_run "$REPO_PC2"
@@ -134,5 +134,5 @@ stage "$REPO_PC3" tests/hooks/new-conforming.sh sh-conforming
 pc_run "$REPO_PC3"
 assert_eq "$PC_RC" "0"
 pin_text "commit-time stdout on pass" "$PC_OUT" ""
-pin_text "commit-time stderr on pass" "$PC_ERR" ""
+pin_text "commit-time stderr on pass" "$PC_ERR" "$PC_UNINIT_WARN"
 case_end

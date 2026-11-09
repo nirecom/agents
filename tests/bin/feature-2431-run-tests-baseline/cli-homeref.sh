@@ -20,12 +20,16 @@ ch_repo_begin() {
   git -C "$1" checkout -q main
 }
 
-# ch_repo_end <repo> — commit the base-side files, return to feature with main merged in.
+# ch_repo_end <repo> <test...> — commit the base-side files, return to feature with main merged in,
+# then give each <test> a branch copy without sentinel or reference: the branch stage (#2688) runs
+# it first, so the sentinel can only come from the base copy.
 ch_repo_end() {
-  git -C "$1" add tests/
-  git -C "$1" commit -q -m "homeref fixtures at base"
-  git -C "$1" checkout -q feature
-  git -C "$1" merge -q --no-edit main
+  local repo="$1"; shift
+  git -C "$repo" add tests/
+  git -C "$repo" commit -q -m "homeref fixtures at base"
+  git -C "$repo" checkout -q feature
+  git -C "$repo" merge -q --no-edit main
+  feat_commit_failing "$repo" "$@"
 }
 
 # ch_mk_test <repo> <rel-path> <sentinel> <body-line...> — a failing bash test that leaves a
@@ -78,7 +82,8 @@ ch_assert_preexisting() {
 }
 
 # ch_assert_undetermined <label> <test> <sentinel> <sid> — the fail-closed verdict: home-claude-ref,
-# never executed, run_tests left pending.
+# never executed at base, never preexisting; the detail is on the #2688 allow-list, so run_tests
+# completes on the auto basis with the test still recorded undetermined.
 ch_assert_undetermined() {
   if printf '%s\n' "$RTB_CLI_OUT" | grep -qE "^BASELINE: undetermined[[:space:]]+$2[[:space:]]+home-claude-ref"; then
     pass "$1: classified undetermined home-claude-ref"
@@ -90,8 +95,8 @@ ch_assert_undetermined() {
   else
     fail "$1: the test body ran at base (sentinel $3 exists)"
   fi
-  cli_assert_undetermined_only "$1" "$2"
-  cli_assert_not_completed "$1" "$4" "$2"
+  cli_assert_undetermined_only "$1" "$2" 0
+  cli_assert_auto_accepted "$1" "$4" "$2"
 }
 
 # ch_lang_case <id> <rel-file-in-datadir> <expect: preexisting|undetermined> <content-line...>
@@ -103,7 +108,7 @@ ch_lang_case() {
   ch_mk_test "$repo" "$t" "$ran"
   mkdir -p "$repo/tests/bin/test-$id"
   printf '%s\n' "$@" > "$repo/tests/bin/test-$id/$rel"
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t"
   ch_run "$id" "$repo" "$t"
   if [ "$want" = preexisting ]; then
     ch_assert_preexisting "$id" "$t" "$ran" "$id-$$"
@@ -115,7 +120,7 @@ ch_lang_case() {
 run_cli_homeref_cases() {
   if [ ! -f "$BASELINE_CLI" ]; then
     local id
-    for id in CH1 CH3 CH4 CH5 CH6 CH7 CH8 CH9; do
+    for id in CH1 CH3 CH4 CH5; do
       fail "$id: bin/run-tests-baseline not found (impl pending)"
     done
     return
@@ -127,7 +132,7 @@ run_cli_homeref_cases() {
   ch_repo_begin "$repo"
   # shellcheck disable=SC2016  # literal reference text inside the fixture
   ch_mk_test "$repo" "$t" "$ran" '# ~/.claude is only mentioned here' '  # $HOME/.claude too'
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t"
   ch_run ch1 "$repo" "$t"
   ch_assert_preexisting "CH1" "$t" "$ran" "ch1-$$"
 
@@ -136,7 +141,7 @@ run_cli_homeref_cases() {
   ch_repo_begin "$repo"
   # shellcheck disable=SC2016
   ch_mk_test "$repo" "$t" "$ran" '# ~/.claude is only mentioned here' 'ls "$HOME/.claude" >/dev/null 2>&1'
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t"
   ch_run ch3 "$repo" "$t"
   ch_assert_undetermined "CH3" "$t" "$ran" "ch3-$$"
 
@@ -144,7 +149,7 @@ run_cli_homeref_cases() {
   repo="$TMPROOT/repo-ch4" t="tests/bin/test-homeeol.sh" ran="$TMPROOT/ch4-executed"
   ch_repo_begin "$repo"
   ch_mk_test "$repo" "$t" "$ran" 'ls x >/dev/null 2>&1 # ~/.claude'
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t"
   ch_run ch4 "$repo" "$t"
   ch_assert_undetermined "CH4" "$t" "$ran" "ch4-$$"
 
@@ -154,9 +159,22 @@ run_cli_homeref_cases() {
   ch_mk_test "$repo" "$t" "$ran"
   mkdir -p "$repo/tests/bin/test-homedata"
   printf '%s\n' '# ~/.claude is only mentioned here' 'true' > "$repo/tests/bin/test-homedata/lib.sh"
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t"
   ch_run ch5 "$repo" "$t"
   ch_assert_preexisting "CH5" "$t" "$ran" "ch5-$$"
+}
+
+# CH6-CH9 run in their own entrypoint (feature-2431-run-tests-baseline-homeref-lang.sh), so the two
+# halves of the CLI home-reference group run in parallel.
+run_cli_homeref_lang_cases() {
+  if [ ! -f "$BASELINE_CLI" ]; then
+    local id
+    for id in CH6 CH7 CH8 CH9; do
+      fail "$id: bin/run-tests-baseline not found (impl pending)"
+    done
+    return
+  fi
+  local repo t ran d
 
   # ---- CH6: per-language comment syntax inside the data directory ----
   ch_lang_case ch6a m.js preexisting '// ~/.claude'
@@ -178,7 +196,7 @@ run_cli_homeref_cases() {
   chmod +x "$d/awk"
   ch_repo_begin "$repo"
   ch_mk_test "$repo" "$t" "$ran" '# ~/.claude is only mentioned here'
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t"
   PATH="$d:$PATH" ch_run ch8 "$repo" "$t"
   ch_assert_undetermined "CH8" "$t" "$ran" "ch8-$$"
   if [ -s "$d/awk.log" ]; then
@@ -202,7 +220,7 @@ run_cli_homeref_cases() {
   mkdir -p "$repo/tests/bin/test-homefind"
   printf '%s\n' '# ~/.claude is only mentioned here' > "$repo/tests/bin/test-homefind/ok.sh"
   printf '%s\n' 'ls ~/.claude' > "$repo/tests/bin/test-homefind/bad.sh"
-  ch_repo_end "$repo"
+  ch_repo_end "$repo" "$t"
   PATH="$d:$PATH" ch_run ch9 "$repo" "$t"
   ch_assert_undetermined "CH9" "$t" "$ran" "ch9-$$"
 }

@@ -51,6 +51,8 @@ setup_fixture() {
     TMP="$(mktemp -d)"
     REPO="$TMP/repo"
     mkdir -p "$REPO/docs"
+    git init -q "$REPO"
+    git -C "$REPO" config core.hooksPath /dev/null
     cat > "$REPO/docs/history.md" <<'EOF'
 ### Entry 1 (2024-01-01)
 Background: test entry 1

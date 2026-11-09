@@ -50,11 +50,11 @@ WT-7. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model alias
    - `planned_cases`: list of planned test cases from WT-4 — each entry states the source set it protects
    - `test_destinations`: one entry per case group, keyed by that group's complete source set — `append <path>` or `new`.
      Each source set's `new` verdict generates its own independent new file — one new file per source set.
-     A `new` test file's path MUST be `tests/<category>/<file>` (category = first path segment of the source it protects; valid categories: hooks bin skills agents install tests) — never a flat `tests/<file>`; the commit gate rejects a newly-added flat test (#1834, #2392).
+     Place a `new` file per the target repo's `tests` section (`node "$AGENTS_MAIN_ROOT/bin/repo-settings" --root <repo> --format json`): flat → `<dir>/<file>`; by-target → `<dir>/<category dir>/<file>`, the category whose `covers` holds the protected source; by-type → `<dir>/<category dir>/<file>`, the category naming the test's kind. The commit gate checks placement (#1834, #2392).
      Name a `new` file by a `supported` entry's `patterns` in `hooks/lib/test-language-registry.json`.
-     Follow the language column of the WT-5 output: a new test file MUST load that registry entry's `helperLibrary` — `bin/check-test-frontmatter.sh` rejects new files without it.
+     Follow the language column of the WT-5 output; when `testHarness` is on, a new test file MUST load that registry entry's `helperLibrary` — `bin/check-test-frontmatter.sh` rejects new files without it.
      If that entry declares `newEntrypointRunner`, every test file (new or appended) MUST run under that runner, written per the entry's `notationDoc`; the edit-time and commit-time gates refuse it otherwise.
-     If the `Tests:` header lists 2 or more paths, every case MUST carry a case marker written per that entry's `notationDoc`; `bin/check-case-markers.sh` flags multi-path files without markers as HIGH.
+     When `caseMarker` is on and the `Tests:` header lists 2 or more paths, every case MUST carry a case marker written per that entry's `notationDoc`; `bin/check-case-markers.sh` flags multi-path files without markers as HIGH.
      On `append`: never rewrite the target's `# Tests:` line; `# Tags:` may only be added to.
      `append` is mandatory when the verdict is `append`; `skills/_shared/test-design/append-vs-new.md` is the SSOT for when a new file is warranted instead.
    The subagent prompt MUST instruct: edit only test files, never modify source code.

@@ -70,7 +70,8 @@ Describe "SESSION_SYNC gate in a real child process (profile-snippet.ps1)" -Skip
             Set-Content -Path $sb.GitConfig -Value @(
                 '[user]', '  name = Session Sync Test', '  email = session-sync-test@example.com'
                 '[init]', '  defaultBranch = main', '[commit]', '  gpgSign = false'
-                '[advice]', '  detachedHead = false')
+                '[advice]', '  detachedHead = false'
+                '[maintenance]', '  auto = false', '[gc]', '  auto = 0')
 
             if ($WithGitRepo) { Initialize-SandboxRepo -Sandbox $sb }
             $sb

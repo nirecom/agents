@@ -37,6 +37,8 @@ Set-Content -Path $script:SuiteGitConfig -Value @(
     "`tdefaultBranch = main"
     '[commit]'
     "`tgpgSign = false"
+    '[maintenance] auto = false'
+    '[gc] auto = 0'
 )
 $env:GIT_CONFIG_NOSYSTEM = "1"
 $env:GIT_CONFIG_GLOBAL = $script:SuiteGitConfig

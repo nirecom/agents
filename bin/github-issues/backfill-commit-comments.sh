@@ -7,9 +7,10 @@
 # 1 history heading bracket, 1.5 git log -S "<title>", 2 git log --grep "#N", 3 no hash (J-2 only).
 # --canary: post at most 1 issue per class (max 6 total), then run without it for the full batch.
 # --target-checkout-root: the repository to work on; omitted, the agents main root.
-# -e (errexit) is intentionally omitted so that a `grep` no-match exit does not
-# abort the script; failing commands are guarded individually. Uses `gh --jq`, no jq.
+# -e (errexit) is omitted so a `grep` no-match exit does not abort; failing commands are guarded
+# individually. Forge reads go through lib/host-adapter.sh (github: gh --jq; gitlab: glab + jq).
 set -uo pipefail
+BCC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DRY_RUN=0
 CANARY=0
@@ -31,6 +32,10 @@ HISTORY_FILE="${TARGET_CHECKOUT_ROOT}/docs/history.md"
 HISTORY_DIR="${TARGET_CHECKOUT_ROOT}/docs/history"
 # Ensure gh CLI targets the correct repo via the working directory's remote.
 cd "$TARGET_CHECKOUT_ROOT"
+# Listing, comment lookup and posting go through the host adapter (gitlab origin → glab).
+# shellcheck source=lib/host-adapter.sh
+source "$BCC_DIR/lib/host-adapter.sh"
+export HIA_ROOT="$TARGET_CHECKOUT_ROOT"
 
 # Tier 1.5: auto-detect bulk-import commits by counting +### headings added to
 # docs/history.md in a single commit. When the count meets the threshold,
@@ -46,13 +51,11 @@ is_bulk_history_commit() {
     [ "$added" -ge "$TIER15_BULK_THRESHOLD" ]
 }
 
-# Tier 0a: closedByPullRequestsReferences → first merged PR's mergeCommit.oid.
-# Closed-unmerged PRs have mergeCommit=null and are filtered out by --jq.
+# Tier 0a: the first merged PR / MR that closed the issue → its merge commit.
+# An unreadable issue counts as "no hash here" like every tier: the next tier is tried.
 discover_hash_from_pr_link() {
     local n="$1" oid
-    oid=$(gh issue view "$n" --json closedByPullRequestsReferences \
-        --jq '[.closedByPullRequestsReferences[] | select(.mergeCommit != null) | .mergeCommit.oid] | first // ""' \
-        2>/dev/null || true)
+    oid=$(hia_issue_closing_merge_shas "$n" 2>/dev/null | head -n 1 || true)
     [ -z "$oid" ] && return 1
     printf '%s' "$oid" | grep -qE '^[0-9a-f]{7,40}$' || return 1
     printf '%s' "$oid"
@@ -62,7 +65,7 @@ discover_hash_from_pr_link() {
 # (not truncated) — a 41-char run is suspicious and not a valid SHA-1 prefix.
 discover_hash_from_issue_body() {
     local n="$1" body candidate
-    body=$(gh issue view "$n" --json body --jq '.body // ""' 2>/dev/null || true)
+    body=$(hia_issue_field "$n" body 2>/dev/null || true)
     [ -z "$body" ] && return 1
     while IFS= read -r candidate; do
         [ -z "$candidate" ] && continue
@@ -98,7 +101,7 @@ discover_hash_from_history() {
 # string; --reverse | head -n 1 picks the oldest such commit (the introducer).
 discover_hash_from_history_introducer() {
     local n="$1" title line hash
-    title=$(gh issue view "$n" --json title --jq '.title // ""' 2>/dev/null || true)
+    title=$(hia_issue_field "$n" title 2>/dev/null || true)
     [ -z "$title" ] && return 1
     [ "${#title}" -lt 8 ] && return 1
     line=$(git -C "$TARGET_CHECKOUT_ROOT" log --all --reverse --oneline \
@@ -138,13 +141,20 @@ classify_issue() {
     CLASS="no-hash"; HASH=""
 }
 
+# has_comment_matching <n> <regex> — true when a comment matches. An unreadable comment list exits
+# the script: treating it as "absent" would post duplicates, and a silent skip would fake success.
+has_comment_matching() {
+    local n="$1" re="$2" hit
+    hit=$(hia_issue_comment_first_match "$n" "$re" 2>/dev/null) || {
+        echo "Error: cannot read the comments of #${n}; nothing more is posted — re-run after fixing" >&2
+        exit 1
+    }
+    [ -n "$hit" ]
+}
+
 # J-1 idempotency: check for existing <!-- resolved-by: HASH --> comment.
 has_resolved_by() {
-    local n="$1" hash="$2" hit
-    hit=$(gh issue view "$n" --json comments \
-        --jq "[.comments[].body | select(test(\"^<!-- resolved-by: ${hash} -->\"))] | first // \"\"" \
-        2>/dev/null) || hit=""
-    [ -n "$hit" ]
+    has_comment_matching "$1" "^<!-- resolved-by: $2 -->"
 }
 
 # J-2 idempotency: check for existing appended sentinel.
@@ -152,11 +162,7 @@ has_resolved_by() {
 # multi-line dot mode (not PCRE line-anchor mode), so ^ still anchors to
 # string start. The (^|\n) prefix matches both line-1 and line-2+ sentinels.
 has_appended_sentinel() {
-    local n="$1" hit
-    hit=$(gh issue view "$n" --json comments \
-        --jq '[.comments[].body | select(test("(^|\\n)<!-- issue-close-sentinel: appended"))] | first // ""' \
-        2>/dev/null) || hit=""
-    [ -n "$hit" ]
+    has_comment_matching "$1" "(^|\\n)<!-- issue-close-sentinel: appended"
 }
 
 POSTED=0
@@ -169,8 +175,10 @@ CANARY_DONE_HISTINTRO=0
 CANARY_DONE_GITLOG=0
 CANARY_DONE_NOHASH=0
 
-ALL_NUMBERS=$(gh issue list --state closed --limit 1000 \
-    --json number --jq '.[].number' 2>/dev/null || true)
+ALL_NUMBERS=$(hia_issue_closed_numbers 1000) || {
+    echo "Error: cannot list the closed issues; nothing was posted" >&2
+    exit 1
+}
 
 while IFS= read -r N; do
     [ -z "$N" ] && continue
@@ -226,16 +234,16 @@ while IFS= read -r N; do
     if [ -n "$HASH" ]; then
         if has_resolved_by "$N" "$HASH"; then
             echo "[skip-j1 class=${CLASS}] #${N} resolved-by:${HASH} already present — posting sentinel only"
-            ISSUE_CLOSE_SKILL=1 gh issue comment "$N" --body "$SENTINEL_BODY"
+            ISSUE_CLOSE_SKILL=1 hia_issue_comment "" "$N" "$SENTINEL_BODY"
         else
             echo "[post class=${CLASS}] #${N} commit=${HASH}"
-            ISSUE_CLOSE_SKILL=1 gh issue comment "$N" --body "<!-- resolved-by: ${HASH} -->
+            ISSUE_CLOSE_SKILL=1 hia_issue_comment "" "$N" "<!-- resolved-by: ${HASH} -->
 ${SENTINEL_BODY}
 Resolved by commit \`${HASH}\`."
         fi
     else
         echo "[post class=${CLASS}] #${N}"
-        ISSUE_CLOSE_SKILL=1 gh issue comment "$N" --body "$SENTINEL_BODY"
+        ISSUE_CLOSE_SKILL=1 hia_issue_comment "" "$N" "$SENTINEL_BODY"
     fi
 
     POSTED=$((POSTED + 1))

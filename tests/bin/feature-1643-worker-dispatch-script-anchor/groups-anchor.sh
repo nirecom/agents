@@ -25,10 +25,14 @@ group_a() {
     else
         fail "registry/anchor-scan-non-vacuous — scanned=$(pv scanned)"
     fi
+    # #2473: runAllSelf (the agents repo testing its own branch) keeps the family anchor;
+    # every other target runs the checkout's shared runner.
     assert_eq "registry/test-runner-runall-family-anchored" "family-worktree" "$(pv tr_runall_anchor)"
+    assert_eq "registry/test-runner-runallshared-checkout-anchored" "script-checkout-root" "$(pv tr_runallshared_anchor)"
     # Regression fence: "target-main-root" is the value that made a linked-worktree
     # dispatch run MAIN's tests/run-all.sh while reporting success.
     assert_ne "registry/test-runner-runall-not-target-main-root" "target-main-root" "$(pv tr_runall_anchor)"
+    assert_ne "registry/test-runner-runallshared-not-target-main-root" "target-main-root" "$(pv tr_runallshared_anchor)"
 }
 
 # Group B / D — resolveScript anchoring and anchorRoot's null verdict
@@ -77,7 +81,7 @@ group_c() {
         *not\ a\ worktree\ of\ the\ target-main-root\ family*) pass "contain/run-rejects-alt-repo" ;;
         *) fail "contain/run-rejects-alt-repo — got: $(pv run_alt_err)" ;;
     esac
-    # Ordering: runAll is family-anchored, so if run() resolved the script before
+    # Ordering: runAllSelf is family-anchored, so if run() resolved the script before
     # validating cwd the failure would be an anchor/resolution error instead.
     case "$(pv run_outside_err)" in
         *anchor*|*could\ not\ be\ resolved*)
@@ -102,9 +106,10 @@ group_e() {
 }
 
 # Group F — end-to-end: a dispatch targeting the LINKED worktree must run the
-# LINKED tests/run-all.sh. Main prints MAIN-SUITE, linked prints LINKED-SUITE;
-# under the pre-fix target-main-root anchor this run reported success while
-# executing MAIN's suite.
+# LINKED worktree's tests. The fixture is not the agents repo, so the shared runner
+# runs with RUN_ALL_TARGET_ROOT=<linked> (#2473) and executes the linked tests/*.sh:
+# main prints MAIN-SUITE, linked prints LINKED-SUITE. Under the pre-fix anchor (the
+# target's main worktree) this run reported success while executing MAIN's suite.
 group_f() {
     if impl_missing "e2e/runs-linked-suite" "$DISPATCH_JS" "bin/worker-dispatch.js"; then
         fail "e2e/does-not-run-main-suite — implementation missing: bin/worker-dispatch.js"

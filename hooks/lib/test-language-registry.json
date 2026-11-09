@@ -18,7 +18,7 @@
       "caseEmbedRules": { "file": "bin/lib/test-language-parts/bash-case-embed.sh", "function": "bash_case_embed", "node": { "file": "hooks/lib/test-gates/parts/bash-case-embed.js", "function": "run" } },
       "tableDrivenDetector": { "file": "bin/lib/test-language-parts/bash.sh", "function": "has_table_driven_sh" },
       "envClearLine": { "file": "hooks/lib/test-gates/parts/env-clear/bash.js", "function": "envClearLine" },
-      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "^[[:space:]]*(source|\\.)[[:space:]]+([^#]*/)?tests/lib/harness\\.sh" },
+      "helperLibrary": { "path": "tests/lib/harness.sh", "sourceRegex": "^[[:space:]]*(source|\\.)[[:space:]]+([^#]*/)?tests/lib/harness\\.sh", "sharedSourceRegex": "^[[:space:]]*(source|\\.)[[:space:]]+[^#]*AGENTS_TEST_HARNESS_DIR[^#]*/harness\\.sh" },
       "codeLanguage": { "sourcePatterns": ["*.sh"], "shebangInterpreters": ["bash", "sh"] },
       "newFileNameShape": "<name>.sh",
       "notationDoc": "skills/_shared/test-design/case-markers/bash.md",

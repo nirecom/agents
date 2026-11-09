@@ -12,6 +12,8 @@
 _TDG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=test-frontmatter-fix.sh
 source "$_TDG_DIR/test-frontmatter-fix.sh" || return 1
+# shellcheck source=repo-settings.sh
+[[ ! -f "$_TDG_DIR/repo-settings.sh" ]] || source "$_TDG_DIR/repo-settings.sh"
 
 # Output globals (set by tdg_classify; readable after a non-subshell call).
 TDG_VERDICT=""
@@ -137,19 +139,34 @@ tdg_classify_parsed() {
   fi
 }
 
-# tdg_scan_corpus <repo-root> — emits `axis<TAB>key<TAB>escaped-file` per
-# membership. The scan range is the six canonical test categories (#1834):
-# direct files of tests/{hooks,bin,skills,agents,install,tests} in a case-marker language
-# of the test language registry. Non-canonical directories (split-test fragments,
-# _archive, lib, fixtures) are excluded by allowlist. That range is a contract.
+# tdg_scan_corpus <repo-root> — emits `axis<TAB>key<TAB>escaped-file` per membership. The scan
+# range (a contract) is the direct case-marker-language files of the root's entrypoint dirs
+# (#2473: <dir> for flat minus its run-all.sh, <dir>/<category> otherwise; legacy: tests/<six>).
 _TDG_CANONICAL_CATEGORIES=(hooks bin skills agents install tests)
+_TDG_TEST_DIRS=(tests/hooks tests/bin tests/skills tests/agents tests/install tests/tests)
+_TDG_TESTS_DIR=tests
+# tdg_use_root <root> — the three above from root's tests section (bin/lib/repo-settings.sh);
+# a copy of this lib without that loader keeps the legacy six.
+tdg_use_root() {
+  declare -F rsf_categories_into >/dev/null || return 0
+  rsf_categories_into "${1:?tdg_use_root: root required}"
+  _TDG_CANONICAL_CATEGORIES=(${RSF_CATS[@]+"${RSF_CATS[@]}"})
+  _TDG_TEST_DIRS=(${RSF_TEST_DIRS[@]+"${RSF_TEST_DIRS[@]}"})
+  _TDG_TESTS_DIR=tests
+  [[ "$RSF_CATS_LEGACY" -eq 1 ]] || _TDG_TESTS_DIR="$RSF_TESTS_DIR"
+}
+# tdg_is_runner <rel-path> — rc 0 for the suite runner <tests dir>/run-all.sh (never a test).
+tdg_is_runner() { [[ "$1" == "$_TDG_TESTS_DIR/run-all.sh" ]]; }
 tdg_scan_corpus() {
   local root="${1:?tdg_scan_corpus: repo root required}"
-  local f cat i
+  local f d i
   local -a files=()
-  for cat in "${_TDG_CANONICAL_CATEGORIES[@]}"; do
-    tlr_list_dir_into "$root/tests/$cat" case-marker || continue
-    for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do files+=("$f"); done
+  tdg_use_root "$root"
+  for d in ${_TDG_TEST_DIRS[@]+"${_TDG_TEST_DIRS[@]}"}; do
+    tlr_list_dir_into "$root/$d" case-marker || continue
+    for f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
+      tdg_is_runner "${f#"$root"/}" || files+=("$f")
+    done
   done
   [[ "${#files[@]}" -gt 0 ]] || return 0
   _tdg_batch_matches "${files[@]}"

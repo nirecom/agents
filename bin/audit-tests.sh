@@ -90,8 +90,9 @@ if ! REPO_ROOT="$(trp_require_repo_root)"; then
   exit 2
 fi
 cd "$REPO_ROOT"
-if [[ ! -d tests ]]; then
-  echo "ERROR: tests/ directory not found under $REPO_ROOT" >&2
+tdg_use_root "$REPO_ROOT"
+if [[ ! -d "$_TDG_TESTS_DIR" ]]; then
+  echo "ERROR: ${_TDG_TESTS_DIR}/ directory not found under $REPO_ROOT" >&2
   exit 2
 fi
 
@@ -109,11 +110,12 @@ trp_compute_cutoff "$STALE_MONTHS" >/dev/null
 CUTOFF_DATE="$TRP_CUTOFF_DATE"
 TRP_GH_TIMEOUT="${GH_TIMEOUT:-30}"
 
-# Issue-specific dispatchers: top-level files of a supported test language per category.
+# Issue-specific dispatchers: direct files of a supported test language per entrypoint dir (.agents.json, #2473).
 DISPATCHERS=()
-for _cat in hooks bin skills agents install tests; do
-  tlr_list_dir_into "tests/$_cat" supported || continue
+for _dir in ${_TDG_TEST_DIRS[@]+"${_TDG_TEST_DIRS[@]}"}; do
+  tlr_list_dir_into "$_dir" supported || continue
   for _f in ${TLR_LIST[@]+"${TLR_LIST[@]}"}; do
+    tdg_is_runner "$_f" && continue
     trp_name_axes "$_f"
     [[ "$TRP_SCOPE" == issue-specific ]] && DISPATCHERS+=("$_f")
   done

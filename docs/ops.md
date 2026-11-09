@@ -433,7 +433,9 @@ cc-session-mtime.ps1              # apply
 
 Use `session-sync reset` when you also want to sync with the remote git repository
 (it restores mtime as part of the reset). Use `cc-session-mtime` when you only need
-mtime repair without a full git sync.
+mtime repair without a full git sync. Since #2658 stuck rebase states heal on the next `push` / `pull`;
+`reset` is only for deliberate alignment. On a slow machine raise `SESSION_SYNC_STARTUP_DEADLINE_MS`
+(default 3000, max 60000) when the startup fetch records `timeout`. Design: [session-sync.md](architecture/claude-code/session-sync.md).
 
 ## Windows: every Bash command exits 127
 

@@ -129,12 +129,16 @@ const workers = {
       // Boolean only: adds the test-language registry's runtimes (launch.requires and
       // launch.command[0]) via bin/worker-dispatch/registry.js effectiveExternal().
       externalFromTestLanguages: true,
-      // family-worktree, not target-main-root: run-all.sh derives its test directory from
-      // its own location, so a target-main-root anchor would run main's suite regardless
-      // of `cwd` — verifying the wrong tree while reporting success.
-      scripts: { runAll: { anchor: "family-worktree", rel: "tests/run-all.sh" } },
+      // `runAllSelf` (`family-worktree`, not `target-main-root`): when the target IS the agents repo,
+      // the branch under review runs its own runner — a `target-main-root` anchor would run main's
+      // suite regardless of `cwd`. `runAllShared`: any other repo runs the agents checkout's runner,
+      // pointed at the target through RUN_ALL_TARGET_ROOT (#2473).
+      scripts: {
+        runAllSelf: { anchor: "family-worktree", rel: "tests/run-all.sh" },
+        runAllShared: { anchor: "script-checkout-root", rel: "tests/run-all.sh" },
+      },
     },
-    envPassthrough: [],
+    envPassthrough: ["RUN_ALL_TARGET_ROOT"],
     writeScopes: [OUTCOME_SCOPE],
     renderer: "test-runner-yaml",
   },

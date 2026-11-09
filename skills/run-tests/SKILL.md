@@ -80,6 +80,7 @@ RNT-9. **Settle the step** as a separate Bash call:
    - `status: unrunnable` → install the runtimes the summary's `Missing runtimes:` names and re-run; only when the user decides they cannot, run `echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: {reason}>>"` (a `settings.json` ask rule).
 
 RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tail`.
+   A `runner-error` summary `.agents.json tests section <state> … run /migrate` means the target repo has no valid tests section and nothing ran: tell the user to run `/migrate` in that repo, then re-run from RNT-6.
    Record a result that changed on re-run as `--class D --step run_tests --key run-tests:flaky`, per `skills/_shared/handoff-record.md`.
 
 ## Rules

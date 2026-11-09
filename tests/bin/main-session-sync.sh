@@ -66,12 +66,11 @@ cat > "$GIT_CONFIG_GLOBAL" <<'GITCONFIG'
 [user]
 	name = Session Sync Test
 	email = session-sync-test@example.com
-[init]
-	defaultBranch = main
-[commit]
-	gpgSign = false
-[advice]
-	detachedHead = false
+[init] defaultBranch = main
+[commit] gpgSign = false
+[advice] detachedHead = false
+[maintenance] auto = false
+[gc] auto = 0
 GITCONFIG
 
 # _git_prepare_repo <dir> — make a freshly created/cloned fixture repo safe to

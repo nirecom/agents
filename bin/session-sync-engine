@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+"use strict";
+// session-sync engine entry (#2658); all logic lives in bin/lib/session-sync/.
+require("./lib/session-sync/cli.js").runMain();

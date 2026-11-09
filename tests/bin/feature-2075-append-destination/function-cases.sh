@@ -18,7 +18,7 @@ fi
 f2075_join() { local IFS=","; printf '%s' "$*"; }
 
 if [[ ! -f "$ROUTE_LIB" ]]; then
-    for _fid in F1 F2 F3 F4 F5 F6 F7 F8 F9 F10; do
+    for _fid in F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11; do
         case_ran "$_fid"
         fail "$_fid bin/lib/test-route-destination.sh is missing — function-level cases cannot run"
     done
@@ -227,6 +227,44 @@ else
         assert_eq "F8 tdg_scan_corpus called once despite 3 trd_candidates calls" "1" "$TDG_SCAN_COUNT"
         cd "$F8_OLD_PWD" || true
     fi
+
+    # ── F11 (#2473) corpus and trd_is_in_corpus follow the root's .agents.json ─
+    # flat: the files directly under tests.dir minus run-all.sh; by-target with
+    # tests.dir "spec": spec/<category>/ only. tdg_scan_corpus runs inside trd_load_corpus's
+    # process substitution, so the parent picks the root up through tdg_use_root itself.
+    case_ran F11
+    f11_settings() { printf '%s\n' "$2" > "$1/.agents.json"; }
+    f11_corpus() { trd_load_corpus "$1"; printf '%s\n' "${TRD_CORPUS_FILES[@]+"${TRD_CORPUS_FILES[@]}"}" | LC_ALL=C sort | tr '\n' ' '; }
+    f11_in() { if trd_is_in_corpus "$1"; then printf '0'; else printf '1'; fi; }
+    F11FLAT="$(make_repo)"
+    f11_settings "$F11FLAT" '{"tests":{"dir":"tests","categorization":"flat","supportDirs":["lib"],"testHarness":"off","caseMarker":"off"}}'
+    add_test_file "$F11FLAT" "a.sh" "src/a.sh"
+    add_test_file "$F11FLAT" "b.sh" "src/b.sh"
+    add_test_file "$F11FLAT" "run-all.sh" "src/a.sh"
+    add_test_file "$F11FLAT" "lib/h.sh" "src/a.sh"
+    F11SPEC="$(make_repo)"
+    f11_settings "$F11SPEC" '{"tests":{"dir":"spec","categorization":"by-target","categories":[{"dir":"src","covers":["src"]}],"supportDirs":["lib"],"testHarness":"off","caseMarker":"off"}}'
+    mkdir -p "$F11SPEC/spec/src" "$F11SPEC/src"
+    printf '#!/usr/bin/env bash\n# Tests: src/x.sh\n# Tags: scope:common\necho x\n' > "$F11SPEC/spec/src/x.sh"
+    printf '#!/usr/bin/env bash\n# Tests: src/x.sh\n# Tags: scope:common\necho top\n' > "$F11SPEC/spec/top.sh"
+    add_test_file "$F11SPEC" "bin/y.sh" "src/x.sh"
+    F11_OLDPWD="$PWD"
+    while IFS='|' read -r f11name f11root f11want f11paths; do
+        [[ -n "$f11name" ]] || continue
+        f11dir="$F11FLAT"; [[ "$f11root" == spec ]] && f11dir="$F11SPEC"
+        cd "$f11dir" || fail "F11 $f11name could not enter the fixture repo"
+        assert_eq "F11 $f11name corpus" "$f11want" "$(f11_corpus "$f11dir")"
+        tdg_use_root "$f11dir"
+        for f11pair in $f11paths; do
+            assert_eq "F11 $f11name trd_is_in_corpus ${f11pair%%:*}" "${f11pair#*:}" "$(f11_in "${f11pair%%:*}")"
+        done
+    done <<'TABLE'
+flat|flat|tests/a.sh tests/b.sh |tests/a.sh:0 tests/b.sh:0 tests/run-all.sh:1 tests/lib/h.sh:1 spec/src/x.sh:1 other/a.sh:1
+by-target-spec|spec|spec/src/x.sh |spec/src/x.sh:0 spec/top.sh:1 spec/run-all.sh:1 tests/bin/y.sh:1 tests/a.sh:1
+TABLE
+    # Back to the legacy six for every later case file (a root without .agents.json).
+    tdg_use_root "$(make_repo)"
+    cd "$F11_OLDPWD" || true
 fi
 
 grp_done "function-cases.sh"

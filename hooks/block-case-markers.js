@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // PreToolUse hook: refuse a Write/Edit/MultiEdit that leaves a case-marker test entrypoint
-// (in a repo carrying its helperLibrary) with a self-implemented harness HEAD did not have
+// (switched by the repo's .agents.json caseMarker / testHarness, #2473; an uninitialized repo:
+// one carrying its helperLibrary) with a self-implemented harness HEAD did not have
 // (#2502), a NEW one (absent from HEAD) with missing or malformed case markers (#2388), or any
 // tests/ file with a test-language mismatch HEAD did not have or an invalid test-lang-exception,
 // or one (new or existing) that does not run under its entry's required runner (#2863, #2865).
@@ -29,7 +30,20 @@ const CHECKERS = [binOf("check-case-markers.sh"), SELF_IMPL_CHECKER, TEST_RUNNER
 const LANGUAGE_MATCH_CHECKER = binOf("check-test-language-match.sh");
 
 // The case-marker placement lives in lib/test-gates/placement.js (shared with pre-commit).
-const { caseMarkerEntry, isCaseMarkerTarget, isReaderlessCaseMarkerTarget } = require("./lib/test-gates/placement");
+const { readerEntry, isCaseMarkerTarget, isReaderlessCaseMarkerTarget } = require("./lib/test-gates/placement");
+const TR = require("./lib/test-gates/registry");
+const CASE_MARKER_CHECKER = CHECKERS[0];
+
+// The CLIs .agents.json switches off for root (#2473): caseMarker off drops the case-marker CLI,
+// testHarness off the self-impl CLI. An uninitialized repo keeps all of them.
+function switchedOff(root) {
+  const l = TR.layoutFor(root);
+  if (!l.initialized) return new Set();
+  const off = new Set();
+  if (l.caseMarker === "off") off.add(CASE_MARKER_CHECKER);
+  if (l.testHarness === "off") off.add(SELF_IMPL_CHECKER);
+  return off;
+}
 
 // The reader loads only once a target under tests/ is seen.
 function registry() {
@@ -137,7 +151,9 @@ function postContentOf(group, absPath) {
 // when the registry is unreadable (the caller then
 // fails open). An existing one whose HEAD blob git cannot give is left out, as in
 // collectLanguageMatchCandidates: judging it as new could block a self-impl HEAD already had.
-function collectCandidates(input, toolName, toolInput) {
+// notes collects the REPO_SETTINGS_UNINITIALIZED WARN when a candidate is dropped only because an
+// uninitialized repo lacks the helper library (#2473).
+function collectCandidates(input, toolName, toolInput, notes = []) {
   const out = [];
   let reg;
   for (const group of groupEditTargets(toolName, toolInput, input)) {
@@ -153,16 +169,20 @@ function collectCandidates(input, toolName, toolInput) {
         return null;
       }
     }
-    const entry = caseMarkerEntry(loc.rel, reg);
+    const entry = readerEntry(loc.rel, reg, loc.top);
     if (!entry) {
       // A new reader-less one goes to the case-marker CLI for its WARN, helper library or not.
-      if (!isReaderlessCaseMarkerTarget(loc.rel, reg) || isInHead(loc.top, loc.rel)) continue;
+      if (!isReaderlessCaseMarkerTarget(loc.rel, reg, loc.top) || isInHead(loc.top, loc.rel)) continue;
       const post = postContentOf(group, absPath);
       if (typeof post === "string") out.push({ rel: loc.rel, top: loc.top, post, entry: null, head: null, readerless: true });
       continue;
     }
     if (!entry.helperLibrary) continue;
-    if (!fs.existsSync(path.join(loc.top, ...entry.helperLibrary.path.split("/")))) continue;
+    if (!TR.layoutFor(loc.top).initialized && !fs.existsSync(path.join(loc.top, ...entry.helperLibrary.path.split("/")))) {
+      const w = TR.uninitializedWarn(loc.top);
+      if (w) notes.push(w);
+      continue;
+    }
     let head = null;
     if (isInHead(loc.top, loc.rel)) {
       head = headBlobOf(loc.top, loc.rel);
@@ -201,10 +221,12 @@ function main() {
   // case-marker check stays on new files, #2440); a new reader-less one for the case-marker CLI only
   // (its WARN) — and every tests/ file (new or existing) for the language-match CLI.
   const runs = [];
-  for (const c of (clis.length > 0 && collectCandidates(input, toolName, toolInput)) || []) {
-    const cs = c.readerless
+  const notes = [];
+  for (const c of (clis.length > 0 && collectCandidates(input, toolName, toolInput, notes)) || []) {
+    const off = switchedOff(c.top);
+    const cs = (c.readerless
       ? clis.filter((cli) => cli !== SELF_IMPL_CHECKER && cli !== TEST_RUNNER_CHECKER)
-      : c.head === null ? clis : clis.filter((cli) => cli === SELF_IMPL_CHECKER || cli === TEST_RUNNER_CHECKER);
+      : c.head === null ? clis : clis.filter((cli) => cli === SELF_IMPL_CHECKER || cli === TEST_RUNNER_CHECKER)).filter((cli) => !off.has(cli));
     if (cs.length > 0) runs.push({ ...c, clis: cs });
   }
   if (lmCli) {
@@ -213,10 +235,10 @@ function main() {
       runs.push({ ...c, entry: null, clis: [lmCli] });
     }
   }
-  if (runs.length === 0) approve();
+  if (runs.length === 0) approve(notes);
 
   const byRel = new Map();
-  const warns = [];
+  const warns = [...notes];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "case-markers-"));
   try {
     runs.forEach((c, i) => {

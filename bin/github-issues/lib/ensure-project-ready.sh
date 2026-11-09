@@ -1,4 +1,4 @@
-# ensure-project-ready.sh — reuse-or-create a repo's Projects v2 board and the fields /issue-setup needs
+# ensure-project-ready.sh — reuse-or-create a repo's Projects v2 board and the fields /migrate-tracker needs
 # (Content Date, Status + Todo/In Progress/Done, the WIP session-id field). Sourced, not executed.
 # ensure_project_ready <owner/repo> (gh with `project` scope) sets on rc 0: EPR_PROJECT_{ID,NUM,OWNER},
 #   EPR_CONTENT_DATE_FIELD_ID (may be empty), EPR_STATUS_FIELD_ID, EPR_{TODO,IN_PROGRESS,DONE}_OPTION_ID,
@@ -119,7 +119,7 @@ ensure_project_ready() {
     # Unconditional on both the create and reuse paths: this function keeps no
     # state across runs, and the mutation is idempotent server-side, so a repeat
     # link is harmless. Non-fatal because an unlinked board must not sink the
-    # rest of /issue-setup — the helper already warns on stderr.
+    # rest of /migrate-tracker — the helper already warns on stderr.
     link_project_to_repo "$pid" "$owner" "$repo" || true
 
     # ---- Content Date field (best-effort ensure) ----

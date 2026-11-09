@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/bin/feature-1340-issue-setup/issue-create-preflight.sh
 # Tests: bin/github-issues/issue-create-preflight.sh
-# Tags: issue-setup, issue-create-preflight, github-issues, scope:issue-specific
+# Tags: migrate-tracker, issue-create-preflight, github-issues, scope:issue-specific
 # N/A: secret-leakage — checks read public label/project structure, not secrets; gh owns tokens.
 # N/A (C5): --repo=VALUE GNU-equals form + flexible flag ordering — the script uses space-separated flags; equals-form is not a supported surface.
 # issue-create-preflight.sh (#1340 step 6). L2: --check-labels type:task present/absent → rc 0/1; --check-project
@@ -12,9 +12,16 @@
 # shellcheck source=_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-# pass / fail / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+# pass / fail / fixture_case_new / __LIB_SCRIPT_CHECKOUT_ROOT provided by _lib.sh.
+set -euo pipefail
 TARGET="$__LIB_SCRIPT_CHECKOUT_ROOT/bin/github-issues/issue-create-preflight.sh"
 export TARGET
+
+# Top-level dual pin (rules/test/fixture-isolation.md); the gh mock is built once and
+# every case only gets a fresh dir + MOCK_LOG + state/plans pin from setup_mock.
+FIXTURE_ROOT="$(mktemp -d)"; readonly FIXTURE_ROOT
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT
+export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
 
 # Early-exit: file does not exist yet (RED-clean)
 if [ ! -f "$TARGET" ]; then
@@ -25,12 +32,8 @@ if [ ! -f "$TARGET" ]; then
 fi
 
 TMP=""
-
-setup_mock() {
-    TMP="$(mktemp -d)"
-    mkdir -p "$TMP/mock-bin"
-
-    cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+mkdir -p "$FIXTURE_ROOT/mock-bin"
+cat > "$FIXTURE_ROOT/mock-bin/gh" <<'MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
 if [ -n "${MOCK_LOG:-}" ]; then
@@ -85,9 +88,11 @@ case "$ARGS" in
     ;;
 esac
 MOCK_EOF
-    chmod +x "$TMP/mock-bin/gh"
+chmod +x "$FIXTURE_ROOT/mock-bin/gh"
+export PATH="$FIXTURE_ROOT/mock-bin:$PATH"
 
-    export PATH="$TMP/mock-bin:$PATH"
+setup_mock() {
+    fixture_case_new
     export MOCK_LOG="$TMP/mock.log"
     : > "$MOCK_LOG"
     export WORKFLOW_PLANS_DIR="$TMP/plans"
@@ -95,11 +100,9 @@ MOCK_EOF
 }
 
 teardown_mock() {
-    if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
-        rm -rf "$TMP" 2>/dev/null || true
-    fi
     TMP=""
-    unset MOCK_LOG WORKFLOW_PLANS_DIR WORKFLOW_STATE_DIR \
+    export WORKFLOW_STATE_DIR="$FIXTURE_ROOT/workflow-state" WORKFLOW_PLANS_DIR="$FIXTURE_ROOT/plans"
+    unset MOCK_LOG \
           GH_MOCK_LABELS_HAVE_TASK GH_MOCK_RESOLVER_FAIL \
           GH_MOCK_LABEL_LIST_FAIL GH_MOCK_OWNER_REPO 2>/dev/null || true
 }

@@ -18,13 +18,13 @@ ZC_HOSTILE_NAMES=(
 
 test_S27_zero_commit_hostile_filenames() {
     local repo="$TMPDIR_BASE/s27"
-    local n src want created=() wants=() faketests=()
+    local n src want created=() wants=()
     make_zero_commit_repo "$repo" staged "bin/select-tests.sh" || return
     assert_zero_commit "S27_zero_commit_hostile_filenames" "$repo" || return
 
     # Each hostile file gets a test file whose name CONTAINS the stem, so a correct selector has
-    # something to print. They are added to the shared fake tree and removed again at the end;
-    # leaving them behind would change what every later row can select.
+    # something to print. They live in this row's own target repo (the selector lists the target's
+    # tests, #2473), so no shared tree is touched; a path under tests/ yields no stem of its own.
     for n in "${ZC_HOSTILE_NAMES[@]}"; do
         src="$repo/bin/${n}.sh"
         want="tests/bin/feature-1779-${n}.sh"
@@ -32,15 +32,14 @@ test_S27_zero_commit_hostile_filenames() {
             skip "S27_zero_commit_hostile_filenames[$n]: this filesystem will not hold the name"
             continue
         fi
-        : > "$FAKE/${want}" 2>/dev/null || true
-        if [ ! -e "$FAKE/${want}" ]; then
+        : > "$repo/${want}" 2>/dev/null || true
+        if [ ! -e "$repo/${want}" ]; then
             skip "S27_zero_commit_hostile_filenames[$n]: the matching test file could not be created"
             rm -f -- "$src"
             continue
         fi
         created+=("$n")
         wants+=("$want")
-        faketests+=("$FAKE/${want}")
     done
 
     # Half staged, half untracked: the union has two halves and a quoting defect in either one
@@ -64,10 +63,6 @@ test_S27_zero_commit_hostile_filenames() {
     run_auto "$repo" RESOLVED 0 BASE_IS_HEAD=true RUN_TL3=off
 
     local rc="$SA_RC" out="$SA_OUT" err="$SA_ERR"
-    # Cleanup first: every assertion below reports rather than returns, and a fake tree left
-    # dirty would silently change S28+ and the docs-only rows that run after this one.
-    local f
-    for f in ${faketests[@]+"${faketests[@]}"}; do rm -f -- "$f"; done
 
     if [ "$rc" != "0" ]; then
         fail "S27_zero_commit_hostile_filenames: expected exit 0, got rc=$rc — a hostile path broke the pipeline outright
@@ -108,7 +103,7 @@ $err"
         # fragment like `nl` or a quoted half — and the visible symptom of that is a selection
         # larger than the set of files that actually changed. So the assertion is exactness: the
         # output is the control plus the hostile names, and nothing else.
-        # The selector emits the path it found the test at, which is rooted at the fake tree, so
+        # The selector emits the path it found the test at, which is rooted at the target repo, so
         # every comparison here is a SUFFIX match rather than an equality.
         local line extra=""
         while IFS= read -r line; do
@@ -129,5 +124,40 @@ $out"
         fi
     else
         skip "S27_zero_commit_hostile_filenames[newline]: this filesystem rejects control characters in filenames"
+    fi
+}
+
+# S27b — S27 stages every word-hostile name, so only the newline case reaches `git ls-files --others`.
+# Here the hostile source is the sole change and untracked; its test is committed in base, so only
+# the untracked half can produce the selection.
+ZC_UNTRACKED_NAME="zcu odd \$x;&'(y)"
+
+test_S27b_zero_commit_untracked_hostile_filename() {
+    local row="S27b_zero_commit_untracked_hostile_filename" repo="$TMPDIR_BASE/s27b"
+    local src="bin/${ZC_UNTRACKED_NAME}.sh" want="tests/bin/feature-1779-${ZC_UNTRACKED_NAME}.sh"
+    mkdir -p "$repo/tests/bin"
+    if ! : > "$repo/$want" 2>/dev/null || [ ! -e "$repo/$want" ]; then
+        skip "$row: this filesystem will not hold the name"
+        return
+    fi
+    make_zero_commit_repo "$repo" untracked "+$src" || return
+    assert_zero_commit "$row" "$repo" || return
+    if [ ! -e "$repo/$src" ] || [ -n "$(git -C "$repo" diff --name-only HEAD)" ]; then
+        fail "$row: fixture premise broken — the hostile source is absent or git diff HEAD is non-empty, so the untracked half alone is not exercised"
+        return
+    fi
+    run_auto "$repo" RESOLVED 0 BASE_IS_HEAD=true RUN_TL3=off
+    if [ "$SA_RC" != "0" ]; then
+        fail "$row: expected exit 0, got rc=$SA_RC — the untracked hostile path broke the pipeline
+--- stderr ---
+$SA_ERR"
+    elif printf '%s\n' "$SA_OUT" | grep -qF -- "$want"; then
+        pass "$row: an untracked path with spaces and shell metacharacters survives the ls-files half"
+    else
+        fail "$row: the untracked hostile path was dropped or mangled by the ls-files half
+--- output ---
+$SA_OUT
+--- stderr ---
+$SA_ERR"
     fi
 }

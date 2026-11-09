@@ -3,7 +3,7 @@
 # Tags: bin, shell, env, config, tests, scope:common
 # Tests for bin/get-config-var helper used by confirm-flags feature.
 # L3 gap: the real ~/.local/bin symlink reading the actual user .env, and the pwsh
-# variant (tests/fix-get-config-var-hardening.Tests.ps1); checked at
+# variant (tests/bin/fix-get-config-var-hardening.Tests.ps1); checked at
 # WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh (pwsh-required).
 # Categories: Unit (--is-off matrix, missing arg); Narrow (tmpdir .env via
 # AGENTS_MAIN_ROOT, process.env precedence, default fallback, clean-PATH lookup);

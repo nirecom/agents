@@ -123,6 +123,14 @@ fi
 # case-name | timestamp value written into the JSONL row; @MARKER@ expands to
 # $DASHY_MARKER, a pre-existing file assertion (4) proves untouched.
 echo "[reset] Dash-leading timestamp payload matrix (#1218 hardening guard)"
+# _rs_mtime_rejected — the engine's mtimeRejected counter (number or {count}), 0 when absent.
+_rs_mtime_rejected() {
+    node -e 'try{const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const v=s.mtimeRejected;process.stdout.write(String(typeof v==="number"?v:(v&&v.count)||0))}catch(e){process.stdout.write("0")}' \
+        "$RESET_PROJECTS/.git/agents-session-sync-state.json"
+}
+DASHY_SEED="$TMPDIR_BASE/dashy-seed"
+git clone -q "$RESET_REMOTE" "$DASHY_SEED" >/dev/null 2>&1
+_git_prepare_repo "$DASHY_SEED"
 DASHY_MARKER="$TMPDIR_BASE/dashy-marker"
 printf 'dashy-marker-sentinel\n' > "$DASHY_MARKER"
 touch -d "1999-12-31T00:00:00Z" "$DASHY_MARKER" 2>/dev/null || true
@@ -133,46 +141,51 @@ while IFS='|' read -r dashy_label dashy_value; do
     dashy_value="$(printf '%s' "$dashy_value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     dashy_value="${dashy_value//@MARKER@/$DASHY_MARKER}"
 
+    # #2658: the engine's apply path is the sink now. Seed the row through the
+    # remote so reset writes the file itself; a rejected value leaves the write
+    # time as the mtime, stays silent, and is counted in the state file.
+    git -C "$DASHY_SEED" fetch -q origin >/dev/null 2>&1
+    git -C "$DASHY_SEED" reset -q --hard origin/main >/dev/null 2>&1
+    printf '{"timestamp":"%s","type":"user"}\n' "$dashy_value" > "$DASHY_SEED/dash-$dashy_label.jsonl"
+    git -C "$DASHY_SEED" add . >/dev/null 2>&1
+    git -C "$DASHY_SEED" commit -qm "seed dash $dashy_label" >/dev/null 2>&1
+    git -C "$DASHY_SEED" push -q origin HEAD:main >/dev/null 2>&1
     DASHY_FILE="$RESET_PROJECTS/dash-$dashy_label.jsonl"
-    printf '{"timestamp":"%s","type":"user"}\n' "$dashy_value" > "$DASHY_FILE"
-    # Pin a known mtime so any change is detectable (untracked files survive
-    # `git reset --hard`, so the file is still there when the sweep reaches it).
-    touch -d "2024-06-01T00:00:00Z" "$DASHY_FILE" 2>/dev/null || true
-    dashy_before=$(_mtime_of "$DASHY_FILE")
+    rm -f "$DASHY_FILE"
+    rejected_before=$(_rs_mtime_rejected)
     marker_mtime_before=$(_mtime_of "$DASHY_MARKER")
     marker_body_before=$(cat "$DASHY_MARKER")
+    dashy_start=$(date +%s)
 
     dashy_err="$TMPDIR_BASE/dashy-stderr-$dashy_label.txt"
     exit_code=0
     output=$("$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" 2>"$dashy_err") || exit_code=$?
     dashy_after=$(_mtime_of "$DASHY_FILE")
+    rejected_after=$(_rs_mtime_rejected)
     marker_mtime_after=$(_mtime_of "$DASHY_MARKER")
     marker_body_after=$(cat "$DASHY_MARKER")
 
     # (1) The sweep must complete — a rejected timestamp is not a fatal error and
-    #     must not abort the reset loop before the remaining files are handled.
-    if [ "$exit_code" -eq 0 ] && echo "$output" | grep -qi "reset to remote"; then
-        pass "dash timestamp [$dashy_label]: reset completes"
+    #     must not abort the reset before the remaining files are handled.
+    if [ "$exit_code" -eq 0 ] && echo "$output" | grep -qi "reset to remote" && [ -f "$DASHY_FILE" ]; then
+        pass "dash timestamp [$dashy_label]: reset completes and writes the file"
     else
-        fail "dash timestamp [$dashy_label]: reset aborted (exit=$exit_code, output: $output)"
+        fail "dash timestamp [$dashy_label]: reset aborted or file missing (exit=$exit_code, output: $output)"
     fi
 
-    # (2) Regression guard for the new explicit rejection: the guard must announce
-    #     that it dropped the value, so a future refactor cannot silently remove
-    #     it. RED until the `case "$ts" in -*)` guard + warning land in
-    #     bin/session-sync.sh — this is a guard against losing a new rejection
-    #     behavior, not a demonstration of a blocked exploit.
-    if grep -qiE "warn|skip|ignor|reject|invalid" "$dashy_err" 2>/dev/null; then
-        pass "dash timestamp [$dashy_label]: warns on stderr"
+    # (2) The apply path rejects silently and counts the rejection (#2658). Git's own
+    #     fetch progress may reach stderr; a report about this row may not.
+    if ! grep -qiE "warn:|touch:|dash-$dashy_label" "$dashy_err" && [ "$rejected_after" -gt "$rejected_before" ]; then
+        pass "dash timestamp [$dashy_label]: silent rejection counted in mtimeRejected"
     else
-        fail "dash timestamp [$dashy_label]: no stderr warning (stderr: $(cat "$dashy_err"))"
+        fail "dash timestamp [$dashy_label]: mtimeRejected $rejected_before -> $rejected_after, stderr: $(cat "$dashy_err")"
     fi
 
-    # (3) The value must never become the target file's mtime.
-    if [ "$dashy_before" = "$dashy_after" ]; then
-        pass "dash timestamp [$dashy_label]: target mtime unchanged"
+    # (3) The value must never become the target file's mtime: it keeps the write time.
+    if [ "$dashy_after" -ge $((dashy_start - 5)) ]; then
+        pass "dash timestamp [$dashy_label]: target mtime is the write time"
     else
-        fail "dash timestamp [$dashy_label]: target mtime changed ($dashy_before -> $dashy_after)"
+        fail "dash timestamp [$dashy_label]: target mtime moved to $dashy_after (reset started at $dashy_start)"
     fi
 
     # (4) No OTHER file may be disturbed — in particular the file the payload
@@ -182,8 +195,6 @@ while IFS='|' read -r dashy_label dashy_value; do
     else
         fail "dash timestamp [$dashy_label]: unrelated file changed (mtime $marker_mtime_before -> $marker_mtime_after, body changed=$([ "$marker_body_before" = "$marker_body_after" ] && echo no || echo yes))"
     fi
-
-    rm -f "$DASHY_FILE"
 done <<'TABLE'
 long-option-with-value | --reference=@MARKER@
 short-option-attached  | -r@MARKER@
@@ -193,16 +204,81 @@ bare-dash              | -
 double-dash-terminator | --
 TABLE
 
-# --- Edge: Reset discards diverged local commits ---
-echo "[reset] Reset discards diverged local"
+# --- Edge (#2658): Reset keeps diverged local data and does not push ---
+echo "[reset] Reset keeps diverged local data"
 echo '{"diverged":"data"}' > "$RESET_PROJECTS/diverged.jsonl"
 git -C "$RESET_PROJECTS" add . >/dev/null 2>&1
 git -C "$RESET_PROJECTS" commit -m "local diverged commit" >/dev/null 2>&1
+echo '{"untracked":"local-only"}' > "$RESET_PROJECTS/reset-local-only.jsonl"
 output=$("$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" 2>&1) || true
-if [ ! -f "$RESET_PROJECTS/diverged.jsonl" ]; then
-    pass "reset discards diverged local file"
+if [ -f "$RESET_PROJECTS/diverged.jsonl" ] && [ -f "$RESET_PROJECTS/reset-local-only.jsonl" ]; then
+    pass "reset keeps the locally committed and the untracked local-only file"
 else
-    fail "reset did not discard diverged local file"
+    fail "reset dropped local data (diverged=$([ -f "$RESET_PROJECTS/diverged.jsonl" ] && echo kept || echo LOST), local-only=$([ -f "$RESET_PROJECTS/reset-local-only.jsonl" ] && echo kept || echo LOST), output: $output)"
+fi
+if git -C "$RESET_REMOTE" cat-file -e main:diverged.jsonl 2>/dev/null \
+    || git -C "$RESET_REMOTE" cat-file -e main:reset-local-only.jsonl 2>/dev/null; then
+    fail "reset pushed local data to the remote (reset must never push)"
+else
+    pass "reset does not push"
+fi
+
+# --- Edge (#2658): Reset restores a locally deleted file that the remote has ---
+echo "[reset] Reset restores a locally deleted remote file"
+rm -f "$RESET_PROJECTS/seed-session.jsonl"
+"$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" >/dev/null 2>&1 || true
+if [ -f "$RESET_PROJECTS/seed-session.jsonl" ] && grep -q '"seed"' "$RESET_PROJECTS/seed-session.jsonl"; then
+    pass "reset restores the remote copy of a locally deleted file"
+else
+    fail "reset did not restore seed-session.jsonl"
+fi
+
+# --- Edge (#2658): a non-jsonl file differing from the remote keeps both versions ---
+echo "[reset] Reset puts remote at the path and local into a sync-conflict sibling"
+git -C "$DASHY_SEED" fetch -q origin >/dev/null 2>&1
+git -C "$DASHY_SEED" reset -q --hard origin/main >/dev/null 2>&1
+printf 'remote\n' > "$DASHY_SEED/reset-note.md"
+git -C "$DASHY_SEED" add . >/dev/null 2>&1
+git -C "$DASHY_SEED" commit -qm "seed reset-note" >/dev/null 2>&1
+git -C "$DASHY_SEED" push -q origin HEAD:main >/dev/null 2>&1
+printf 'local\n' > "$RESET_PROJECTS/reset-note.md"
+"$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" >/dev/null 2>&1 || true
+rs_siblings=$(find "$RESET_PROJECTS" -maxdepth 1 -name 'reset-note.sync-conflict-*.md' 2>/dev/null)
+rs_sibling_count=$(printf '%s' "$rs_siblings" | grep -c . || true)
+if [ "$(cat "$RESET_PROJECTS/reset-note.md" 2>/dev/null)" = "remote" ] && [ "$rs_sibling_count" -eq 1 ] \
+    && [ "$(cat "$rs_siblings" 2>/dev/null)" = "local" ]; then
+    pass "reset keeps remote at the path and local content in one sync-conflict sibling"
+else
+    fail "reset conflict: path=$(cat "$RESET_PROJECTS/reset-note.md" 2>/dev/null), siblings=$rs_sibling_count ($rs_siblings)"
+fi
+
+# --- Edge (#2658): pull / reset never overwrite a locally edited plan ---
+# Lives here, not in plans.sh: that file is a multi-path part the marker gate freezes.
+echo "[plans] Pull and reset keep a locally edited plan"
+RS_PLANS_LOCAL="$TMPDIR_BASE/reset-plans-local"
+mkdir -p "$RS_PLANS_LOCAL"
+git -C "$DASHY_SEED" fetch -q origin >/dev/null 2>&1
+git -C "$DASHY_SEED" reset -q --hard origin/main >/dev/null 2>&1
+mkdir -p "$DASHY_SEED/plans"
+printf 'synced plan\n' > "$DASHY_SEED/plans/rs-edited.md"
+git -C "$DASHY_SEED" add . >/dev/null 2>&1
+git -C "$DASHY_SEED" commit -qm "seed plan" >/dev/null 2>&1
+git -C "$DASHY_SEED" push -q origin HEAD:main >/dev/null 2>&1
+WORKFLOW_PLANS_DIR="$RS_PLANS_LOCAL" "$DOTFILES_DIR/bin/session-sync.sh" pull --claude-dir "$RESET_CLAUDE" >/dev/null 2>&1 || true
+if [ "$(cat "$RS_PLANS_LOCAL/rs-edited.md" 2>/dev/null)" = "synced plan" ]; then
+    pass "pull copies a plan that PLANS_DIR lacks"
+else
+    fail "pull did not copy plans/rs-edited.md into PLANS_DIR"
+fi
+printf 'edited locally\n' > "$RS_PLANS_LOCAL/rs-edited.md"
+WORKFLOW_PLANS_DIR="$RS_PLANS_LOCAL" "$DOTFILES_DIR/bin/session-sync.sh" pull --claude-dir "$RESET_CLAUDE" >/dev/null 2>&1 || true
+rs_after_pull=$(cat "$RS_PLANS_LOCAL/rs-edited.md" 2>/dev/null)
+WORKFLOW_PLANS_DIR="$RS_PLANS_LOCAL" "$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" >/dev/null 2>&1 || true
+rs_after_reset=$(cat "$RS_PLANS_LOCAL/rs-edited.md" 2>/dev/null)
+if [ "$rs_after_pull" = "edited locally" ] && [ "$rs_after_reset" = "edited locally" ]; then
+    pass "pull and reset keep the locally edited plan"
+else
+    fail "local plan edit overwritten (after pull: $rs_after_pull, after reset: $rs_after_reset)"
 fi
 
 # --- Normal: Push copies history.jsonl into sync area ---

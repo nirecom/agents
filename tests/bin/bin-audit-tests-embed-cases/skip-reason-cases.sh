@@ -1,6 +1,6 @@
 # Tests: bin/lib/test-embed-cases/select.sh, bin/lib/test-embed-cases/retry-record.sh, bin/audit-tests-common.sh
 # Tags: TL2, scope:common, audit-tests, embed-cases, skip-reasons
-# Sourced by tests/bin/bin-audit-tests-embed-cases.sh — every tec_skip_reason
+# Sourced by tests/bin/bin-audit-tests-embed-cases-skip.sh — every tec_skip_reason
 # token in its documented order, the helper-lib non-skip, the retry-capped hash
 # key and its invalidation, the no-embed-rules registry fixture, malformed /
 # uncertain marker states as candidates, and the discovery exclusions.
@@ -188,12 +188,13 @@ ec_add_test "$EX_REPO" tests/_archive/old-archived.sh "bin/bravo.sh"
 ec_add_test "$EX_REPO" tests/bin/suite-x/part.sh "bin/charlie.sh"
 ec_add_test "$EX_REPO" tests/bin/suite-x.sh "bin/charlie.sh"
 sed -i 's|^source "\$ROOT/tests/lib/harness.sh"$|&\n. "$ROOT/tests/bin/suite-x/part.sh"|' "$EX_REPO/tests/bin/suite-x.sh"
-printf '%s\n' '# Tests: bin/delta.sh' '# Tags: TL2, scope:common' 'def test_x():' '    assert True' >"$EX_REPO/tests/bin/test_noreader.py"
-printf '%s\n' '# Tests: bin/echo.sh' '# Tags: TL2, scope:common' 'Describe "x" { It "y" { $true | Should -Be $true } }' >"$EX_REPO/tests/bin/noreader.Tests.ps1"
+# pytest and pester gained readers; only the recognized-only test-naming-convention entry has none.
+printf '%s\n' '# Tests: bin/delta.sh' '# Tags: TL2, scope:common' 'def test_x' '  true' 'end' >"$EX_REPO/tests/bin/test_noreader.rb"
+printf '%s\n' '// Tests: bin/echo.sh' 'it("y", () => {});' >"$EX_REPO/tests/bin/noreader.spec.ts"
 printf '%s\n' 'not a test' >"$EX_REPO/tests/bin/notes.txt"
 printf '%s\n' '// Tests: bin/echo.sh' 'package x' >"$EX_REPO/tests/bin/noreader_test.go"
 ec_commit "$EX_REPO" init
-EX_EXCLUDED="tests/_archive/old-archived.sh tests/bin/suite-x/part.sh tests/bin/test_noreader.py tests/bin/noreader.Tests.ps1"
+EX_EXCLUDED="tests/_archive/old-archived.sh tests/bin/suite-x/part.sh tests/bin/test_noreader.rb tests/bin/noreader.spec.ts tests/bin/noreader_test.go"
 
 # ex_assert_excluded <label> — none of EX_EXCLUDED is on a BAND or SKIP line of $OUT.
 ex_assert_excluded() {

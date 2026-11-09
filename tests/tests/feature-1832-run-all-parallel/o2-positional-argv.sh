@@ -68,6 +68,8 @@ if [ ! -f "$REAL_RUNNER" ] || ! command -v node >/dev/null 2>&1; then
     exit 1
 fi
 cp "$REAL_RUNNER" "$ROOT/bin/run-all.sh"
+# #2473: the target root carries its repo settings file (recorders sit directly under tests/ -> flat).
+printf '%s\n' '{"tests":{"dir":"tests","categorization":"flat","testHarness":"off","caseMarker":"off"}}' > "$ROOT/.agents.json"
 
 # mk_recorder <path> — a fixture test that records its own argv, byte for byte.
 mk_recorder() {
