@@ -4,9 +4,9 @@
 // Output: { systemMessage } with facts only for the user plus additionalContext with the plan-link
 // line for the model (hooks/lib/plan-link.js). Sentinel patterns: hooks/lib/confirm-sentinel.js.
 // #2729: the echo reaches the dialog only on a presentation receipt the Stop hook wrote for this
-// very plan, link and content (hooks/lib/presentation-receipt.js); the receipt is spent here.
-// Fail-closed: anything it cannot verify denies with a present-again reason. The one exception is
-// an unreadable hook input, where not even the sentinel is known: that stays a no-op.
+// very plan, link and content (hooks/lib/presentation-receipt.js); the receipt is spent here. With
+// none, confirm-checkpoint/receipt-recovery.js may record it from the previous turn (#2936).
+// Fail-closed: what it cannot verify denies (present again), but an unreadable hook input is a no-op.
 // #2631: a plan over HARD, or one the size check cannot judge, is denied (uncounted) whatever
 // the step's CONFIRM_* flag says; over WARN adds advice. Only an exempt session (size-session-gate.js) skips it.
 "use strict";
@@ -71,10 +71,11 @@ function renderMessage(artifact, absPath, url) {
   return `[${artifact}] plan-file=none`;
 }
 
-// judge(sid, step, artifact, absPath, plansDir) -> {pass:true, link} | {pass:false, cause}. Every
+// judge(sid, step, artifact, absPath, plansDir, recover) -> {pass:true, link} | {pass:false, cause}. Every
 // check that cannot be completed denies: the dialog is reached only on a matching receipt. The
-// receipt is keyed by the step, the plan file by its artifact name.
-function judge(sid, step, artifact, absPath, plansDir) {
+// receipt is keyed by the step, the plan file by its artifact name. An absent receipt is read
+// again once recover() reports it wrote one (#2936); the match and the spend are unchanged.
+function judge(sid, step, artifact, absPath, plansDir, recover) {
   if (!sid) return { pass: false, cause: "unverifiable-session" };
   if (!absPath || !fs.existsSync(absPath) || !PR.samePath(absPath, PR.approvalArtifactPath(sid, artifact))) {
     return { pass: false, cause: "unverifiable-artifact" };
@@ -90,7 +91,8 @@ function judge(sid, step, artifact, absPath, plansDir) {
   const { computeContentSha } = require("./workflow-state/completion-approval");
   const contentSha = computeContentSha(absPath);
   if (!contentSha) return { pass: false, cause: "unverifiable-content" };
-  const read = PR.readReceipt(sid, step);
+  let read = PR.readReceipt(sid, step);
+  if (!read.ok && read.reason === "absent" && recover && recover()) read = PR.readReceipt(sid, step);
   if (!read.ok) {
     // A broken receipt is removed so the next presentation can write a fresh one.
     if (read.reason === "unreadable") PR.discardReceipt(sid, step);
@@ -98,26 +100,6 @@ function judge(sid, step, artifact, absPath, plansDir) {
   }
   const m = PR.matchReceipt(read.receipt, { absPath, link: receiptLink, contentSha });
   return m.ok ? { pass: true, link } : { pass: false, cause: m.cause };
-}
-
-// receiptDiagnostic(sid, step) -> the no-receipt detail suffix (#2804): the expected receipt, whether it
-// exists, and the presentation-receipt log's last write and any consume after it; "" when it cannot be built.
-function receiptDiagnostic(sid, step) {
-  try {
-    const p = PR.receiptPath(sid, step);
-    const head = ` [receipt ${p} exists=${fs.existsSync(p)}`;
-    const lines = PR.readReceiptLog(sid).filter((l) => l && l.step === step);
-    let wi = -1;
-    lines.forEach((l, i) => { if (l.event === "write") wi = i; });
-    if (wi < 0) return `${head}; no write record]`;
-    const at = lines[wi].at;
-    const ms = Date.now() - Date.parse(at);
-    const elapsed = Number.isNaN(ms) ? "elapsed unknown" : `elapsed ${ms}ms`;
-    const consumed = lines.slice(wi + 1).some((l) => l.event === "consume");
-    return `${head}; last write at ${at} (${elapsed}); ${consumed ? "a consume record follows it" : "no consume record follows it"}]`;
-  } catch (_) {
-    return "";
-  }
 }
 
 // The Japanese "send back to the planner" is matched verbatim in plan text. lang-check: ignore
@@ -162,7 +144,7 @@ function emitSizeDeny(reason) {
 function recordDenyFinding(sid, step, cause) {
   if (!sid) return;
   try {
-    const diag = cause === "no-receipt" ? receiptDiagnostic(sid, step) : "";
+    const diag = cause === "no-receipt" ? require("./confirm-checkpoint/receipt-diagnostic").receiptDiagnostic(sid, step) : "";
     require("./lib/supervisor-state-writer").appendFinding(sid, {
       categories: ["workflow"],
       severity: "notice",
@@ -178,7 +160,11 @@ function emitDeny(step, cause) {
   try {
     reason = require("./lib/confirm-continuation").presentAgainReason(row.suffix, cause);
   } catch (_) {
-    reason = `[confirm-plan] ${row.confirmFlag} denied (${cause}): present the plan again (plan-link --step ${step}) and close the turn; ` +
+    let hint = "";
+    if (cause === "no-receipt") {
+      try { hint = ` (${require("./lib/no-receipt-hint").NO_RECEIPT_HINT})`; } catch (_) { /* the bare reason still denies */ }
+    }
+    reason = `[confirm-plan] ${row.confirmFlag} denied (${cause})${hint}: present the plan again (plan-link --step ${step}) and close the turn; ` +
       `on a "[confirm-plan] continue:" prompt emit only the echo, otherwise echo after the user's reply.`;
     try { reason = CL.withConvLang(reason); } catch (_) { /* the bare reason still denies */ }
   }
@@ -249,9 +235,15 @@ function main() {
   try { plansDir = getWorkflowPlansDir(); } catch (_) { /* resolved from the session alone */ }
   const absPath = resolveArtifact(artifact, sid, plansDir);
 
+  // A recovery that cannot load or run reads as nothing written: today's no-receipt deny (fail-closed).
+  const recover = () => {
+    try {
+      return require("./confirm-checkpoint/receipt-recovery").recoverReceipt({ sid, step, artifact, input, plansDir, gate }).written === true;
+    } catch (_) { return false; }
+  };
   let verdict;
   try {
-    verdict = judge(sid, step, artifact, absPath, plansDir);
+    verdict = judge(sid, step, artifact, absPath, plansDir, recover);
   } catch (_) {
     verdict = { pass: false, cause: "check-threw" };
   }
