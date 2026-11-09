@@ -1,10 +1,10 @@
 "use strict";
 // Last-resort evidence for /resume-session: when neither the state file nor the
-// plan artifacts survived, the upstream transcript still holds the last turns.
+// plan artifacts survived, the session-upstream transcript still holds the last turns.
 //
 // Two hard contracts (#2218 Step 11): the address is COMPOSED from the encoded
 // cwd rather than taken from the hook input's transcript_path — that points at
-// the DOWNSTREAM session's own file, so following it would summarize the wrong
+// the SESSION-DOWNSTREAM's own file, so following it would summarize the wrong
 // session — and the raw text never enters this process's stdout. Only a path to
 // a capped scratch file is returned; a subagent reads it (see
 // skills/resume-session/scripts/summarize-transcript-tail.md).
@@ -21,7 +21,7 @@ function unavailable(sid, reason) {
   return { available: false, path: null, upstreamSid: sid || null, reason };
 }
 
-// The upstream transcript address, composed — never taken from the environment.
+// The session-upstream transcript address, composed — never taken from the environment.
 function locateUpstreamTranscript(sid, cwd) {
   if (typeof sid !== "string" || !SESSION_ID_VALID_RE.test(sid)) return null;
   if (typeof cwd !== "string" || cwd.length === 0) return null;

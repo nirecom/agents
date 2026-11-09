@@ -19,7 +19,7 @@ The `session-` part keeps the name apart from topic names that end in `-progress
 1. The state's `first_session_id`.
 2. Else `previous_session_ids[0]`.
 3. Else a legacy `root_sid` in `progress-pressure.json`; a self pin is ignored once the state has ancestors, since a pre-#2748 session-downstream pinned itself.
-4. Else, for a legacy state carrying only `upstream_session_id`, a bounded walk upstream (64 hops, cycle-guarded: a cycle answers its smallest sid).
+4. Else, for a legacy state carrying only `upstream_session_id`, a bounded walk through the session-upstreams (64 hops, cycle-guarded: a cycle answers its smallest sid).
 5. Else the sid itself.
 
 `resolveRootSid` stays exported from `hooks/lib/progress-file.js` as an alias of `resolveFirstSid` for existing callers.
@@ -47,7 +47,7 @@ Before #2748 a session-downstream could write its own `<sid>-session-progress.md
 | Main conversation (model) | The body, with Edit, per `rules/progress-update.md` |
 | `hooks/progress-nudge.js`, `bin/progress-file ensure` | Creation from the template only |
 | `hooks/post-compact.js` | Reads nothing; adds the path line `session-progress.md: <path> (read "Current state" first)` to its context |
-| `bin/lib/resume-session/upstream-view.js` | `progress_file: {path, section: "Current state"}` when the upstream's root file exists |
+| `bin/lib/resume-session/session-upstream-view.js` | `progress_file: {path, section: "Current state"}` when the session-upstream's root file exists |
 | `hooks/lib/supervisor-codex-input/assemble.js` | The `PROGRESS` block, headed as the model's own record and not evidence ([supervisor-codex-input.md](supervisor-codex-input.md)) |
 
 Subagents never write the file: only the main conversation holds the context the file preserves.

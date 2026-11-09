@@ -1,7 +1,7 @@
 "use strict";
 // Recent same-context session listing (#1305).
 //
-// WHY this still exists after the cwd+branch SCAN was removed as the donor key:
+// WHY this still exists after the cwd+branch SCAN was removed as the session-upstream key:
 // a true crash-resume — the process died and came back without its session id —
 // has no lineage to prove descent with. It is the one case automatic resolution
 // cannot serve, so the same walk survives here as an EXPLICIT DISCOVERY surface:
@@ -56,7 +56,7 @@ function lastActivityOf(state) {
 // The `.jsonl` files under the cwd's transcript directory are read newest-first;
 // each announced session id is resolved to its state file and kept only when it
 // would ALSO satisfy the automatic path's own guards — context match plus
-// resumability. Offering a candidate resolveInheritanceDonor would refuse would
+// resumability. Offering a candidate resolveInheritanceUpstream would refuse would
 // invite the user to adopt state the workflow then rejects (CPR-E2E).
 function listRecentContextCandidates(ctx, opts) {
   const limit = (opts && typeof opts.limit === "number") ? opts.limit : 10;

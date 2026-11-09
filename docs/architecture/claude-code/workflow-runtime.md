@@ -10,7 +10,7 @@ exemptions. The persisted state data model and the step catalog live in
 ```
 Session start → session-start.js (SessionStart hook)
   if state file does not exist:
-    resolveInheritanceDonor({sessionId, source, transcriptPath, ctx, agentId}) (#1305):
+    resolveInheritanceUpstream({sessionId, source, transcriptPath, ctx, agentId}) (#1305):
       Gate A (subagent exclusion): agentId present → no auto-inherit
       Gate B (source gate): source must be "resume" or "compact" to auto-inherit;
         "startup" → non-blocking "startup-no-lineage" outcome (no scan, no candidate offer);
@@ -25,9 +25,9 @@ Session start → session-start.js (SessionStart hook)
         nearest one is ineligible (this fixes the original ancestor-passthrough bug;
         under the old cwd+branch scan, skipping an ineligible candidate and trying
         the next one let evidence-free sessions inherit through it)
-      Gate E (contextMatches): the donor's cwd/branch must match the heir's —
+      Gate E (contextMatches): the session-upstream's cwd/branch must match the session-downstream's —
         necessary-condition sanity check, not the primary key
-      Gate F (evaluateResumability): all-pending donor → not resumable
+      Gate F (evaluateResumability): all-pending session-upstream → not resumable
         (a session whose every step is pending was abandoned before doing any
          real work — inheriting it would overwrite a genuine in-progress
          session's state); merge_to_main=complete → not resumable (change
@@ -83,8 +83,8 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     - begun (hooks/lib/workflow-begun.js): workflow_init is no longer pending. Not begun →
       approve; unreadable state → gated (fail-closed).
     - target repo set (hooks/lib/wf-target-repos.js): the repo at session_start_context.cwd
-      plus the intent's `## worktrees` entries, matched by git common dir. An heir session
-      reads the donor's intent named by its plan approvals.
+      plus the intent's `## worktrees` entries, matched by git common dir. A session-downstream
+      reads the session-upstream's intent named by its plan approvals.
     - each commit is placed separately (its own `-C`, a preceding `cd`, else a payload
       default named by the payload cwd or project dir); an unplaceable commit is ambiguous.
     - no in-set commit and no ambiguous commit → approve; commits in ≥ 2 in-set repos →
@@ -136,11 +136,11 @@ ancestor is treated as not-resumable so the new session starts fresh.
 A session that loses its own id outright (a true process crash, with no `forkedFrom` /
 announce-line evidence to prove descent) cannot auto-inherit — nothing in its fresh transcript
 can prove where it came from. That case is served by explicit, user-approved adoption instead:
-`bin/workflow/adopt-session-state --session <heir-sid> --from <donor-sid>` (or the
+`bin/workflow/adopt-session-state --session <session-downstream-sid> --from <session-upstream-sid>` (or the
 `/workflow-init` `adopt-prior-state` phase, same underlying implementation in
 `hooks/workflow-state/inheritance/adopt.js` — CPR-SSOT, one execution point for both routes).
-Adoption re-runs the same guards as automatic inheritance (heir must be untouched/all-pending,
-donor context must match, donor must be resumable) — being named on a command line is not
+Adoption re-runs the same guards as automatic inheritance (session-downstream must be untouched/all-pending,
+session-upstream context must match, session-upstream must be resumable) — being named on a command line is not
 itself evidence.
 
 ### Bash/CLI-side resolution
@@ -163,7 +163,7 @@ resolver implementations diverged over time and produced concurrent-session misa
 a time.
 
 `resolveSessionId()` answers "which session am *I*?" and nothing else — never repurpose it to
-name an upstream session a cross-session command was pointed at. `/resume-session --from` passes
+name a session-upstream a cross-session command was pointed at. `/resume-session --from` passes
 that id explicitly, and `bin/workflow/lib/next-step/repo-dir-guard.js` distinguishes the two by
 value (`sid !== resolveSessionId({})`), not by whether a `--session` flag was present. That
 distinction gates the guard's INDETERMINATE verdict at the worktree-end → session-close boundary:
@@ -177,22 +177,22 @@ rc contract, and the static guard against bypassing the resolver:
 
 ## Cross-session resume
 
-A session can inherit from an upstream session it has no transcript lineage to, via
+A session can inherit from a session-upstream it has no transcript lineage to, via
 `/resume-session --from <sid>` (`bin/lib/resume-session/`). Two facts govern what survives:
 
 - **Step context-dependence** — whether a step's completion evidence lives in the worktree or in
   the session's own record. `hooks/workflow-state/state-io/step-context-class.js` owns the
   classification for every step; `granularity: "context-independent-only"` keeps only the
-  latter set, `"full"` keeps everything. It is decided internally from whether the downstream runs
-  in the upstream's worktree; `--granularity` / `--verified-equivalent` are removed (exit 2).
-  Before `--from`, `--classify-cwd` (`upstream-cwd.js`) sorts the upstream's recorded cwd into
+  latter set, `"full"` keeps everything. It is decided internally from whether the session-downstream runs
+  in the session-upstream's worktree; `--granularity` / `--verified-equivalent` are removed (exit 2).
+  Before `--from`, `--classify-cwd` (`session-upstream-cwd.js`) sorts the session-upstream's recorded cwd into
   `live-linked-worktree` / `main-worktree` / `worktree-gone` / `cwd-unknown`, so the skill can
   enter the worktree first. State copy, per-stage approval revert, and overwrite protection:
   [workflow.md](workflow.md).
-- **Evidence class** — what the upstream actually left behind. The state file (30-day retention),
+- **Evidence class** — what the session-upstream actually left behind. The state file (30-day retention),
   the plan artifacts and, during the migration, a legacy `handoff.md` expire independently, so
   availability degrades through `state-and-artifacts` → `state-only` → `artifacts-only` → `none`
-  rather than failing outright. The upstream's state handoff records are read through the state
+  rather than failing outright. The session-upstream's state handoff records are read through the state
   handoff reader: [state-handoff-record.md](state-handoff-record.md); aborts: [workflow-abort.md](workflow-abort.md).
 
 ## Fail-safe behavior

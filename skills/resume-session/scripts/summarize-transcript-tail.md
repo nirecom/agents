@@ -1,4 +1,4 @@
-# Summarize an upstream transcript tail
+# Summarize a session-upstream transcript tail
 
 Subagent brief used by `/resume-session` RSM-2 when `transcript_tail.available` is `true`.
 

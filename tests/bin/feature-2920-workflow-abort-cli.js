@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 "use strict";
-// Tests: bin/workflow/adopt-session-state, bin/lib/resume-session/render.js, bin/workflow/lib/adopt-session-state/abort-upstreams.js
+// Tests: bin/workflow/adopt-session-state, bin/lib/resume-session/render.js, bin/workflow/lib/adopt-session-state/session-upstream-abort.js
 // Tags: TL2, workflow-abort, adopt-session-state, cli, regression-2920, scope:issue-specific, pwsh-not-required
-// #2920 S8-(2): `adopt-session-state --session <heir> --abort-upstreams` aborts every upstream
-// selectAbortTargets picks for the running heir (origin abort-cli), prints one line per target,
+// #2920 S8-(2): `adopt-session-state --session <downstream> --abort-session-upstreams` aborts every upstream
+// selectAbortTargets picks for the running downstream (origin abort-cli), prints one line per target,
 // and adopts nothing. Neither it nor --from adoption touches the WIP mark (no wip-state / gh).
 // TL3 gap (what this test does NOT catch):
 // - the /resume-session SKILL.md line that points the user at this CLI.
@@ -25,7 +25,7 @@ after(() => {
 
 const X = require("../hooks/feature-2920-workflow-abort/fixture");
 const CLI = path.join(X.ROOT, "bin", "workflow", "adopt-session-state");
-const MODULE = path.join(X.ROOT, "bin", "workflow", "lib", "adopt-session-state", "abort-upstreams.js");
+const MODULE = path.join(X.ROOT, "bin", "workflow", "lib", "adopt-session-state", "session-upstream-abort.js");
 
 function runCli(args) {
   const env = Object.assign({}, process.env);
@@ -35,7 +35,7 @@ function runCli(args) {
   return { code: r.status, stdout: r.stdout || "", stderr: r.stderr || "",
     show: `rc=${r.status} stdout=${String(r.stdout).slice(0, 500)} stderr=${String(r.stderr).slice(0, 300)}` };
 }
-// chain(prefix) — heir C with live upstreams A (oldest) and B.
+// chain(prefix) — downstream C with live upstreams A (oldest) and B.
 function chain(prefix) {
   const [a, b, c] = [`${prefix}-a`, `${prefix}-b`, `${prefix}-c`];
   X.seedPlain(a);
@@ -47,43 +47,47 @@ function chain(prefix) {
   return { a, b, c };
 }
 const linesNaming = (out, sid) => out.split(/\r?\n/).filter((l) => l.includes(sid));
+const escapeRe = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const headerRe = (sid, n) => new RegExp(`^Session-upstreams to abort for ${escapeRe(sid)}: ${n}\\r?$`, "m");
+const ANY_HEADER = /^Session-upstreams to abort for /m;
 
-caseBegin("abort-upstreams-records-each-target", "bin/workflow/adopt-session-state");
-test("S8-(2): every live upstream gets one abort-cli abort naming the heir, one output line each", () => {
+caseBegin("abort-session-upstreams-records-each-target", "bin/workflow/adopt-session-state");
+test("S8-(2): every live upstream gets one abort-cli abort naming the downstream, one output line each", () => {
   const { a, b, c } = chain("cli1");
-  const heirBefore = X.bytes(c);
-  const r = runCli(["--session", c, "--abort-upstreams"]);
+  const downstreamBefore = X.bytes(c);
+  const r = runCli(["--session", c, "--abort-session-upstreams"]);
   assert.strictEqual(r.code, 0, r.show);
+  assert.ok(headerRe(c, 2).test(r.stdout), `the header must count 2 session-upstreams: ${r.show}`);
   for (const t of [a, b]) {
     assert.strictEqual(linesNaming(r.stdout, t).length, 1, `one line for ${t}: ${r.show}`);
-    assert.deepStrictEqual(X.abortEventsOf(t).map((e) => [e.origin, e.heir_session_id]), [["abort-cli", c]], t);
+    assert.deepStrictEqual(X.abortEventsOf(t).map((e) => [e.origin, e.downstream_session_id]), [["abort-cli", c]], t);
   }
-  assert.strictEqual(X.bytes(c), heirBefore, "the heir state changed: --abort-upstreams must not adopt");
+  assert.strictEqual(X.bytes(c), downstreamBefore, "the downstream state changed: --abort-session-upstreams must not adopt");
 });
 test("S8-(2) idempotency: a second run aborts nothing new", () => {
   const { a, b, c } = chain("cli2");
-  assert.strictEqual(runCli(["--session", c, "--abort-upstreams"]).code, 0, "first run");
-  const r = runCli(["--session", c, "--abort-upstreams"]);
+  assert.strictEqual(runCli(["--session", c, "--abort-session-upstreams"]).code, 0, "first run");
+  const r = runCli(["--session", c, "--abort-session-upstreams"]);
   assert.strictEqual(r.code, 0, r.show);
   assert.deepStrictEqual([a, b].map((t) => X.abortEventsOf(t).length), [1, 1], "abort events after the second run");
 });
 caseEnd();
 
-caseBegin("abort-upstreams-zero-targets", "bin/workflow/adopt-session-state");
-test("S8-(2): a heir without upstreams reports 0 targets and exits 0", () => {
+caseBegin("abort-session-upstreams-zero-targets", "bin/workflow/adopt-session-state");
+test("S8-(2): a downstream without upstreams reports 0 targets and exits 0", () => {
   X.seedPlain("cli-alone");
   const before = X.bytes("cli-alone");
-  const r = runCli(["--session", "cli-alone", "--abort-upstreams"]);
+  const r = runCli(["--session", "cli-alone", "--abort-session-upstreams"]);
   assert.strictEqual(r.code, 0, r.show);
-  assert.ok(/\b0\b/.test(r.stdout), `the output must say 0 targets: ${r.show}`);
-  assert.strictEqual(X.bytes("cli-alone"), before, "the heir state changed");
+  assert.ok(headerRe("cli-alone", 0).test(r.stdout), `the header must count 0 session-upstreams: ${r.show}`);
+  assert.strictEqual(X.bytes("cli-alone"), before, "the downstream state changed");
 });
 caseEnd();
 
-caseBegin("abort-upstreams-rejects-bad-sid", "bin/workflow/adopt-session-state");
+caseBegin("abort-session-upstreams-rejects-bad-sid", "bin/workflow/adopt-session-state");
 test("S8-(2) security: a traversal-shaped --session exits non-zero and writes nothing", () => {
   const before = fs.readdirSync(process.env.WORKFLOW_STATE_DIR).sort();
-  const r = runCli(["--session", "../escape", "--abort-upstreams"]);
+  const r = runCli(["--session", "../escape", "--abort-session-upstreams"]);
   assert.notStrictEqual(r.code, 0, r.show);
   assert.deepStrictEqual(fs.readdirSync(process.env.WORKFLOW_STATE_DIR).sort(), before, "the state dir changed");
   assert.strictEqual(fs.existsSync(path.join(path.dirname(process.env.WORKFLOW_STATE_DIR), "escape.json")), false, "escaped write");
@@ -121,11 +125,11 @@ test("control: the gh stub on PATH is what a bash child resolves, and it logs", 
   assert.strictEqual(r.status, 1, `stub exit: ${r.stderr}`);
   assert.strictEqual(ghCalls(), "gh probe 2920", "the stub did not log");
 });
-test("S8-(2) negative: --abort-upstreams records the aborts but never calls wip-state / gh", () => {
+test("S8-(2) negative: --abort-session-upstreams records the aborts but never calls wip-state / gh", () => {
   const { a, b, c } = chain("cliwip");
   withIssues(a, [2920]);
   withIssues(b, [2921]);
-  const r = runStubbed(["--session", c, "--abort-upstreams"]);
+  const r = runStubbed(["--session", c, "--abort-session-upstreams"]);
   assert.strictEqual(r.code, 0, r.show);
   assert.deepStrictEqual([a, b].map((t) => X.abortEventsOf(t).length), [1, 1], `the aborts were recorded: ${r.show}`);
   assert.strictEqual(ghCalls(), "", "the abort CLI touched the WIP mark");
@@ -133,14 +137,14 @@ test("S8-(2) negative: --abort-upstreams records the aborts but never calls wip-
 test("S8-(1) negative: adopting with --from aborts the upstream but never calls wip-state / gh", () => {
   const F = require("../hooks/feature-2304-inheritance-state-copy/fixture");
   F.seedUpstream("cliwip-up");
-  F.seedDownstream("cliwip-heir");
-  const r = runStubbed(["--session", "cliwip-heir", "--from", "cliwip-up"]);
+  F.seedDownstream("cliwip-downstream");
+  const r = runStubbed(["--session", "cliwip-downstream", "--from", "cliwip-up"]);
   assert.strictEqual(r.code, 0, r.show);
   assert.deepStrictEqual(X.abortEventsOf("cliwip-up").map((e) => e.origin), ["adopt-auto"], `the upstream was aborted: ${r.show}`);
   assert.strictEqual(ghCalls(), "", "adopt touched the WIP mark");
 });
 test("negative: the abort / adopt modules carry no wip-state call site", () => {
-  const files = ["bin/workflow/lib/adopt-session-state/abort-upstreams.js", "hooks/workflow-state/workflow-abort.js",
+  const files = ["bin/workflow/lib/adopt-session-state/session-upstream-abort.js", "hooks/workflow-state/workflow-abort.js",
     "hooks/workflow-state/inheritance/adopt.js", "bin/workflow/adopt-session-state"];
   for (const f of files) {
     const p = path.join(X.ROOT, f);
@@ -165,40 +169,61 @@ caseBegin("from-prints-unrecorded-abort-warning", "bin/workflow/adopt-session-st
 test("S8-(1) error: a failed upstream abort still adopts and prints the Warning on stdout", () => {
   const F = require("../hooks/feature-2304-inheritance-state-copy/fixture");
   F.seedUpstream("cliwf-up");
-  F.seedDownstream("cliwf-heir");
+  F.seedDownstream("cliwf-downstream");
   const env = Object.assign({}, process.env, { FAIL_SID: "cliwf-up" });
   delete env.CLAUDE_CODE_SESSION_ID;
-  const r = spawnSync(process.execPath, ["--require", PRELOAD, CLI, "--session", "cliwf-heir", "--from", "cliwf-up"],
+  const r = spawnSync(process.execPath, ["--require", PRELOAD, CLI, "--session", "cliwf-downstream", "--from", "cliwf-up"],
     { cwd: NEUTRAL, env, encoding: "utf8", timeout: 60000 });
   assert.strictEqual(r.status, 0, `rc=${r.status} stdout=${r.stdout} stderr=${r.stderr}`);
   assert.ok(/Adopted workflow state from session cliwf-up/.test(r.stdout), `adoption line: ${r.stdout}`);
-  assert.ok(/^Warning: upstream cliwf-up could not be recorded as aborted \(.+\)/m.test(r.stdout), `Warning line: ${r.stdout}`);
+  assert.ok(/^Warning: session-upstream cliwf-up could not be recorded as aborted \(.+\)/m.test(r.stdout), `Warning line: ${r.stdout}`);
   assert.strictEqual(X.abortEventsOf("cliwf-up").length, 0, "the injected failure did not hit the upstream write");
 });
 test("S8-(1): a recorded upstream abort prints no Warning", () => {
   const F = require("../hooks/feature-2304-inheritance-state-copy/fixture");
   F.seedUpstream("cliwf-up2");
-  F.seedDownstream("cliwf-heir2");
-  const r = runCli(["--session", "cliwf-heir2", "--from", "cliwf-up2"]);
+  F.seedDownstream("cliwf-downstream2");
+  const r = runCli(["--session", "cliwf-downstream2", "--from", "cliwf-up2"]);
   assert.strictEqual(r.code, 0, r.show);
   assert.ok(!/Warning/.test(r.stdout), `unexpected Warning: ${r.stdout}`);
 });
 caseEnd();
 
-caseBegin("abort-upstreams-unreadable-heir", "bin/workflow/adopt-session-state");
+caseBegin("abort-session-upstreams-unreadable-downstream", "bin/workflow/adopt-session-state");
 test("S8-(2) error: a --session with no readable state exits non-zero and says Could not select", () => {
   const before = fs.readdirSync(process.env.WORKFLOW_STATE_DIR).sort();
-  const r = runCli(["--session", "cli-no-state-file", "--abort-upstreams"]);
+  const r = runCli(["--session", "cli-no-state-file", "--abort-session-upstreams"]);
   assert.notStrictEqual(r.code, 0, r.show);
-  assert.ok(/Could not select/.test(r.stderr + r.stdout), `the output must say Could not select: ${r.show}`);
-  assert.ok(!/Upstreams to abort: 0/.test(r.stdout), `must not report 0 targets: ${r.show}`);
+  assert.ok(/^Could not select the session-upstreams of cli-no-state-file: .+/m.test(r.stderr + r.stdout),
+    `the output must say Could not select the session-upstreams of: ${r.show}`);
+  assert.ok(!ANY_HEADER.test(r.stdout + r.stderr), `must print no target-count header (not even 0): ${r.show}`);
   assert.deepStrictEqual(fs.readdirSync(process.env.WORKFLOW_STATE_DIR).sort(), before, "the state dir changed");
 });
 caseEnd();
 
-caseBegin("abort-upstreams-module","bin/workflow/lib/adopt-session-state/abort-upstreams.js");
-test("S8-(2): argument handling and output live in abort-upstreams.js", () => {
+caseBegin("abort-upstreams-renamed-flag", "bin/workflow/adopt-session-state");
+test("rename: the old --abort-upstreams exits 2 with the rename message and aborts nothing", () => {
+  const { a, b, c } = chain("clirn1");
+  const downstreamBefore = X.bytes(c);
+  const r = runCli(["--session", c, "--abort-upstreams"]);
+  assert.strictEqual(r.code, 2, r.show);
+  assert.ok(r.stderr.includes("--abort-upstreams was renamed"), `rename message: ${r.show}`);
+  assert.ok(r.stderr.includes("pass --abort-session-upstreams"), `new flag named: ${r.show}`);
+  assert.ok(!r.stdout.includes("Session-upstreams to abort"), `no abort header: ${r.show}`);
+  assert.deepStrictEqual([a, b].map((t) => X.abortEventsOf(t).length), [0, 0], "an abort was recorded");
+  assert.strictEqual(X.bytes(c), downstreamBefore, "the downstream state changed");
+});
+test("rename: --abort-upstreams --help still exits 2 with the rename message (rename wins over --help)", () => {
+  const r = runCli(["--abort-upstreams", "--help"]);
+  assert.strictEqual(r.code, 2, r.show);
+  assert.ok(r.stderr.includes("--abort-upstreams was renamed"), `rename message: ${r.show}`);
+  assert.ok(r.stderr.includes("pass --abort-session-upstreams"), `new flag named: ${r.show}`);
+});
+caseEnd();
+
+caseBegin("abort-session-upstreams-module","bin/workflow/lib/adopt-session-state/session-upstream-abort.js");
+test("S8-(2): argument handling and output live in session-upstream-abort.js", () => {
   assert.ok(fs.existsSync(MODULE), `${MODULE} is missing`);
-  assert.doesNotThrow(() => require(MODULE), "abort-upstreams.js must load");
+  assert.doesNotThrow(() => require(MODULE), "session-upstream-abort.js must load");
 });
 caseEnd();

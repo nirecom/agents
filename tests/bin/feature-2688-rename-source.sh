@@ -146,6 +146,54 @@ lacks_line "mid: no rename detail" "-via-rename:"
 ck "mid: run_tests stays pending" "pending" "$(field "$S" status)"
 case_end
 
+# --- #2951: staged (uncommitted) renames are consulted too ---
+case_begin "staged-only-rename-runs-its-old-path-at-base" "bin/lib/run-tests-baseline-rename.sh"
+R="$TMPROOT/stg"; repo_init "$R"; mkdir -p "$R.cache"
+body "$(np "$R.marks")/old-at-base" > "$R/tests/bin/old-t.sh"; chmod +x "$R/tests/bin/old-t.sh"
+commit_all "$R" base
+git -C "$R" checkout -q -b feature
+git -C "$R" mv tests/bin/old-t.sh tests/bin/new-t.sh
+body "$(np "$R.marks")/new-on-branch" > "$R/tests/bin/new-t.sh"
+git -C "$R" add -A
+S="rn-stg-$$"
+run_with_timeout 30 node "$(np "$SEED_JS")" "$AGENTS_WIN" "$S" tests/bin/new-t.sh >/dev/null 2>&1 || fail "fixture: seed $S"
+rtb "$R" "$S"
+ck "staged: exit 0 (preexisting via the old path)" 0 "$RTB_RC"
+present "staged: the old path ran at base" "$R.marks/old-at-base"
+has_line "staged: detail names the old path" "-via-rename:tests/bin/old-t.sh"
+lacks_line "staged: not missing-at-base" "missing-at-base"
+case_end
+
+case_begin "committed-rename-then-heavy-staged-rewrite-keeps-source" "bin/lib/run-tests-baseline-rename.sh"
+R="$TMPROOT/stg2"; repo_init "$R"; mkdir -p "$R.cache"
+body "$(np "$R.marks")/old-at-base" > "$R/tests/bin/old-t.sh"; chmod +x "$R/tests/bin/old-t.sh"
+commit_all "$R" base
+git -C "$R" checkout -q -b feature
+git -C "$R" mv tests/bin/old-t.sh tests/bin/new-t.sh
+commit_all "$R" rename
+printf '#!/usr/bin/env bash\n# totally different\necho x1\necho x2\necho x3\necho x4\necho x5\necho x6\ntouch "%s"\nexit 1\n' "$(np "$R.marks")/new-on-branch" > "$R/tests/bin/new-t.sh"
+git -C "$R" add -A
+S="rn-stg2-$$"
+run_with_timeout 30 node "$(np "$SEED_JS")" "$AGENTS_WIN" "$S" tests/bin/new-t.sh >/dev/null 2>&1 || fail "fixture: seed $S"
+rtb "$R" "$S"
+ck "committed+staged: exit 0" 0 "$RTB_RC"
+has_line "committed+staged: detail names the old path" "-via-rename:tests/bin/old-t.sh"
+case_end
+
+case_begin "same-rename-seen-by-both-comparisons-is-one-source" "bin/lib/run-tests-baseline-rename.sh"
+R="$TMPROOT/dup"; repo_init "$R"
+body "$(np "$R.marks")/dup-old" > "$R/tests/bin/old-t.sh"
+commit_all "$R" base
+DUP_BASE="$(git -C "$R" rev-parse HEAD)"
+git -C "$R" checkout -q -b feature
+git -C "$R" mv tests/bin/old-t.sh tests/bin/new-t.sh
+commit_all "$R" rename
+# shellcheck disable=SC1090
+. "$RENAME_LIB"
+rtb_rename_source_into "$(np "$R")" "$DUP_BASE" tests/bin/new-t.sh
+ck "dup: committed rename (also in index vs base) is not ambiguous" "tests/bin/old-t.sh" "$RTB_RENAME_OUT"
+case_end
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

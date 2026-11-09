@@ -33,7 +33,7 @@ transcript_dir_for() {
 # Writes the prior session's state file, the JSONL announce breadcrumb that maps
 # its session id back to that state file, and — since #1305 — the NEW session's
 # own transcript carrying the `forkedFrom` row that makes the prior session its
-# ancestor. Without that lineage row there is no donor to inherit from at all,
+# ancestor. Without that lineage row there is no upstream to inherit from at all,
 # no matter how well the cwd and branch line up.
 seed_prior_session() {
   local old_sid="$1" proj="$2" tbase="$3" json="$4" new_sid="$5"
@@ -198,7 +198,7 @@ check "G15f1. tampered artifact: outline carries the mismatch revert reason" \
 check "G15f1b. tampered artifact: clarify_intent before it stays complete" \
   "complete" "$(read_state_status "$NEW_BAD" clarify_intent)"
 check_contains "G15f2. the revert reason is printed" \
-  "Reverted to pending because the session upstream approval no longer verifies" "$SS_OUT"
+  "Reverted to pending because the session-upstream approval no longer verifies" "$SS_OUT"
 check_not_contains "G15f2b. inheritance is not refused" \
   "workflow state file could NOT be created" "$SS_OUT"
 check_contains "G15f3. printed reason names the artifact hash mismatch" \

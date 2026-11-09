@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/bin/feat-2218-resume-from-degradation.sh
-# Tests: bin/resume-session-detect, bin/lib/resume-session/upstream-view.js, bin/lib/resume-session/transcript-fallback.js, hooks/workflow-state/inheritance/candidates.js
-# Tags: resume-session, session-upstream, degradation, transcript-tail, granularity, regression-2218, scope:issue-specific, pwsh-not-required, TL2
+# Tests: bin/resume-session-detect, bin/lib/resume-session/session-upstream-view.js, bin/lib/resume-session/transcript-fallback.js, hooks/workflow-state/inheritance/candidates.js
+# Tags: resume-session, session-upstream, degradation, transcript-tail, granularity, regression-2218, scope:issue-specific, pwsh-not-required, TL2, test-lang-exception:e2e
 
 # Issue #2218 Step 5 / Step 11 — `--from <sid>` must degrade rather than refuse: a 7-day-expired state file still has readable plan artifacts, and a transcript still has the last few turns. Each degradation level has its own honest message, and none of them may fabricate a `not-resumable` verdict for what is really a TTL deletion.
 
@@ -37,7 +37,7 @@ printf 'CONFIRM_DETAIL=off\n' > "$CFG_FIXTURE/.env"
 CFG_FIXTURE_NODE="$(node_path "$CFG_FIXTURE")"
 export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
 
-VIEW="bin/lib/resume-session/upstream-view.js"
+VIEW="bin/lib/resume-session/session-upstream-view.js"
 TAIL="bin/lib/resume-session/transcript-fallback.js"
 
 require_module() {
@@ -110,7 +110,7 @@ run_F2() {
     require_module "$VIEW" || return 0
     local tmp out rc problems
     tmp="$(make_tmp)"; problems=""
-    env CLAUDE_CODE_SESSION_ID="heir-f2" \
+    env CLAUDE_CODE_SESSION_ID="downstream-f2" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -119,17 +119,17 @@ const path = require('path');
 const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
-writeState('heir-f2', createInitialState('heir-f2', { cwd: '/heir', git_branch: 'main' }));
-writeState('full-f2', createInitialState('full-f2', { cwd: '/heir', git_branch: 'main' }));
+writeState('downstream-f2', createInitialState('downstream-f2', { cwd: '/downstream', git_branch: 'main' }));
+writeState('full-f2', createInitialState('full-f2', { cwd: '/downstream', git_branch: 'main' }));
 markStep('full-f2', 'workflow_init', 'complete');
 fs.writeFileSync(path.join(dir, 'full-f2-intent.md'), 'intent body' + String.fromCharCode(10));
 fs.writeFileSync(path.join(dir, 'expired-f2-intent.md'), 'intent body' + String.fromCharCode(10));
 fs.writeFileSync(path.join(dir, 'expired-f2-detail.md'), 'detail body' + String.fromCharCode(10));
-writeState('stateonly-f2', createInitialState('stateonly-f2', { cwd: '/heir', git_branch: 'main' }));
+writeState('stateonly-f2', createInitialState('stateonly-f2', { cwd: '/downstream', git_branch: 'main' }));
 markStep('stateonly-f2', 'workflow_init', 'complete');
 " >/dev/null 2>&1
     from() {
-        env CLAUDE_CODE_SESSION_ID="heir-f2" \
+        env CLAUDE_CODE_SESSION_ID="downstream-f2" \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
             "$RWT" 60 node "$CLI" --from "$1" 2>&1
@@ -157,7 +157,7 @@ markStep('stateonly-f2', 'workflow_init', 'complete');
 }
 
 # F3 — granularity actually reaches adopt-session-state. The observable
-# difference is in the heir's state: a proven-equivalent sibling worktree keeps
+# difference is in the downstream's state: a proven-equivalent sibling worktree keeps
 # the worktree-dependent steps, a divergent one reverts them.
 run_F3() {
     require_module "$VIEW" || return 0
@@ -184,7 +184,7 @@ const path = require('path');
 const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
-writeState('$1', createInitialState('$1', { cwd: '$2', git_branch: 'feature/heir' }));
+writeState('$1', createInitialState('$1', { cwd: '$2', git_branch: 'feature/downstream' }));
 writeState('$3', createInitialState('$3', { cwd: '$(node_path "$tmp")/base', git_branch: 'feature/base' }));
 fs.writeFileSync(path.join(dir, '$3' + '-intent.md'), 'intent body' + String.fromCharCode(10));
 // Since #2277/#2513 clarify_intent completes only with an approval record over the intent.md just written.
@@ -202,21 +202,21 @@ const s = readState('$1') || {};
 process.stdout.write(String(((s.steps || {})['$2'] || {}).status || 'pending'));
 " 2>/dev/null
     }
-    seed_pair heir-twin "$(node_path "$tmp/twin")" donor-twin
-    env CLAUDE_CODE_SESSION_ID="heir-twin" \
+    seed_pair downstream-twin "$(node_path "$tmp/twin")" upstream-twin
+    env CLAUDE_CODE_SESSION_ID="downstream-twin" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 90 node "$CLI" --from donor-twin >/dev/null 2>&1
-    out="$(read_step heir-twin write_tests)"
+        "$RWT" 90 node "$CLI" --from upstream-twin >/dev/null 2>&1
+    out="$(read_step downstream-twin write_tests)"
     [ "$out" = "complete" ] || problems="$problems equivalent-sibling-did-not-inherit-full:write_tests=$out"
-    seed_pair heir-drift "$(node_path "$tmp/drift")" donor-drift
-    env CLAUDE_CODE_SESSION_ID="heir-drift" \
+    seed_pair downstream-drift "$(node_path "$tmp/drift")" upstream-drift
+    env CLAUDE_CODE_SESSION_ID="downstream-drift" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
-        "$RWT" 90 node "$CLI" --from donor-drift >/dev/null 2>&1
-    out="$(read_step heir-drift write_tests)"
+        "$RWT" 90 node "$CLI" --from upstream-drift >/dev/null 2>&1
+    out="$(read_step downstream-drift write_tests)"
     [ "$out" = "pending" ] || problems="$problems divergent-sibling-inherited-a-worktree-step:write_tests=$out"
-    out="$(read_step heir-drift detail)"
+    out="$(read_step downstream-drift detail)"
     [ "$out" = "complete" ] || problems="$problems divergent-sibling-lost-the-plan-steps:detail=$out"
     rm -rf "$tmp" 2>/dev/null || true
     if [ -z "$problems" ]; then
@@ -258,7 +258,7 @@ process.stdout.write(encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
     cp "$FIXTURE" "$tmp/transcripts/$encoded/up-f4.jsonl"
-    env CLAUDE_CODE_SESSION_ID="heir-f4" \
+    env CLAUDE_CODE_SESSION_ID="downstream-f4" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -267,12 +267,12 @@ const path = require('path');
 const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
-writeState('heir-f4', createInitialState('heir-f4', { cwd: '$upcwd', git_branch: 'main' }));
+writeState('downstream-f4', createInitialState('downstream-f4', { cwd: '$upcwd', git_branch: 'main' }));
 fs.writeFileSync(path.join(dir, 'up-f4-intent.md'), 'intent body' + String.fromCharCode(10));
 writeState('up-f4', createInitialState('up-f4', { cwd: '$upcwd', git_branch: 'main' }));
 markStep('up-f4', 'workflow_init', 'complete');
 " >/dev/null 2>&1
-    out=$(env CLAUDE_CODE_SESSION_ID="heir-f4" \
+    out=$(env CLAUDE_CODE_SESSION_ID="downstream-f4" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -320,7 +320,7 @@ const lines = [];
 for (let i = 0; i < 3000; i++) lines.push(filler);
 fs.writeFileSync('$(node_path "$tmp")/transcripts/$encoded/up-f5.jsonl', lines.join(String.fromCharCode(10)) + String.fromCharCode(10) + fs.readFileSync('$(node_path "$FIXTURE")', 'utf8'));
 " >/dev/null 2>&1
-    env CLAUDE_CODE_SESSION_ID="heir-f5" \
+    env CLAUDE_CODE_SESSION_ID="downstream-f5" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -329,12 +329,12 @@ const path = require('path');
 const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
-writeState('heir-f5', createInitialState('heir-f5', { cwd: '$upcwd', git_branch: 'main' }));
+writeState('downstream-f5', createInitialState('downstream-f5', { cwd: '$upcwd', git_branch: 'main' }));
 fs.writeFileSync(path.join(dir, 'up-f5-intent.md'), 'intent body' + String.fromCharCode(10));
 writeState('up-f5', createInitialState('up-f5', { cwd: '$upcwd', git_branch: 'main' }));
 markStep('up-f5', 'workflow_init', 'complete');
 " >/dev/null 2>&1
-    out=$(env CLAUDE_CODE_SESSION_ID="heir-f5" \
+    out=$(env CLAUDE_CODE_SESSION_ID="downstream-f5" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -390,7 +390,7 @@ process.stdout.write(encodeCwd('$upcwd'));
 " 2>/dev/null)
     mkdir -p "$tmp/transcripts/$encoded"
     cp "$FIXTURE" "$tmp/transcripts/$encoded/up-f6.jsonl"
-    env CLAUDE_CODE_SESSION_ID="heir-f6" \
+    env CLAUDE_CODE_SESSION_ID="downstream-f6" \
         WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
         HOME="$tmp/home" USERPROFILE="$tmp/home" \
         "$RWT" 30 node -e "
@@ -399,7 +399,7 @@ const path = require('path');
 const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const dir = '$(node_path "$tmp")/wf';
 fs.mkdirSync(dir, { recursive: true });
-writeState('heir-f6', createInitialState('heir-f6', { cwd: '$upcwd', git_branch: 'main' }));
+writeState('downstream-f6', createInitialState('downstream-f6', { cwd: '$upcwd', git_branch: 'main' }));
 for (const sid of ['up-f6', 'nocwd-f6']) {
   fs.writeFileSync(path.join(dir, sid + '-intent.md'), 'intent body' + String.fromCharCode(10));
 }
@@ -409,7 +409,7 @@ writeState('nocwd-f6', createInitialState('nocwd-f6', {}));
 markStep('nocwd-f6', 'workflow_init', 'complete');
 " >/dev/null 2>&1
     from() {
-        env CLAUDE_CODE_SESSION_ID="heir-f6" \
+        env CLAUDE_CODE_SESSION_ID="downstream-f6" \
             WORKFLOW_STATE_DIR="$tmp/wf" WORKFLOW_PLANS_DIR="$tmp/wf" \
             CLAUDE_TRANSCRIPT_BASE_DIR="$tmp/transcripts" \
             HOME="$tmp/home" USERPROFILE="$tmp/home" \
@@ -448,7 +448,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 }
 
 # F7 — finding 8 (round 3): F4-F6 build fixtures with transcript-paths.js's
-# encodeCwd (which resolves cwd first), while upstream-search.sh's fixture and
+# encodeCwd (which resolves cwd first), while feat-2218-session-upstream-search.sh's fixture and
 # candidates.js's transcriptDirFor encode the raw string with no resolve step.
 # On a Windows POSIX drive-letter cwd the two disagree, so `--from` and `--list`
 # would resolve to different transcript directories for the same session. This

@@ -1,5 +1,5 @@
 "use strict";
-// Tests: hooks/workflow-state/resolve-worktree-path.js, bin/lib/resume-session/upstream-cwd.js, hooks/workflow-state/inheritance/granularity.js, hooks/workflow-mark/branching-handler.js, hooks/workflow-state/review-tests-reopen.js
+// Tests: hooks/workflow-state/resolve-worktree-path.js, bin/lib/resume-session/session-upstream-cwd.js, hooks/workflow-state/inheritance/granularity.js, hooks/workflow-mark/branching-handler.js, hooks/workflow-state/review-tests-reopen.js
 // Tags: feature-2875, worktree, ownership, leftover, gitlink, resolve-worktree-path, scope:issue-specific, TL2, pwsh-not-required
 // #2875 root cause 2: a directory WE-11 failed to remove keeps a `.git` gitlink, so "exists and is
 // not main" called it a live worktree. The fs-only ownership predicate (gitlink -> admin dir ->
@@ -161,9 +161,9 @@ test("resolver-skips-leftover-candidates", () => {
 });
 caseEnd();
 
-caseBegin("upstream-cwd-does-not-call-leftover-live", "bin/lib/resume-session/upstream-cwd.js");
+caseBegin("upstream-cwd-does-not-call-leftover-live", "bin/lib/resume-session/session-upstream-cwd.js");
 test("upstream-cwd-does-not-call-leftover-live", () => {
-  const { classifyUpstreamCwd, CWD_CLASSES } = require(F.rel("bin/lib/resume-session/upstream-cwd.js"));
+  const { classifyUpstreamCwd, CWD_CLASSES } = require(F.rel("bin/lib/resume-session/session-upstream-cwd.js"));
   F.seedState("up-leftover", R);
   const r = classifyUpstreamCwd("up-leftover");
   assert.strictEqual(r.classification, CWD_CLASSES.WORKTREE_GONE);
@@ -175,9 +175,9 @@ caseEnd();
 
 // The common WE-11 shape: prune removed the admin dir, so git fails inside the leftover and
 // isMainWorktree's fail-open answer would call it main unless the leftover is skipped first.
-caseBegin("upstream-cwd-pruned-leftover-is-gone-not-main", "bin/lib/resume-session/upstream-cwd.js");
+caseBegin("upstream-cwd-pruned-leftover-is-gone-not-main", "bin/lib/resume-session/session-upstream-cwd.js");
 test("upstream-cwd-pruned-leftover-is-gone-not-main", () => {
-  const { classifyUpstreamCwd, CWD_CLASSES } = require(F.rel("bin/lib/resume-session/upstream-cwd.js"));
+  const { classifyUpstreamCwd, CWD_CLASSES } = require(F.rel("bin/lib/resume-session/session-upstream-cwd.js"));
   assert.ok(!fs.existsSync(F.gitlinkTarget(L)), "fixture: prune must have removed the admin dir");
   F.seedState("up-pruned", L);
   const r = classifyUpstreamCwd("up-pruned");

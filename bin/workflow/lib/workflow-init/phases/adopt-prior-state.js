@@ -1,22 +1,11 @@
 "use strict";
 
-/**
- * Phase: adopt-prior-state (#1305)
- *
- * WHY it runs first: since inheritance became lineage-keyed, a session that
- * crash-restarted (new id, no ancestry) starts empty even though its work is
- * sitting in a prior state file for the same cwd+branch. /workflow-init is the
- * first thing such a session runs, so it is where the offer belongs — before any
- * issue detection has written anything.
- *
- * This phase is a ROUTE, never a second implementation: the decision is applied
- * by hooks/workflow-state/inheritance/adopt.js, the same function the
- * bin/workflow/adopt-session-state CLI calls (CPR-SSOT).
- *
- * Default is always `fresh`. Adoption is opt-IN, so a non-interactive run
- * (CLAUDE_NON_INTERACTIVE / CI) must not hard-fail — it takes the default and
- * prints the exact recovery command instead.
- */
+// Phase: adopt-prior-state (#1305). It runs first because a crash-restarted session
+// (new id, no ancestry) starts empty while its work sits in a prior state file for the
+// same cwd+branch, and /workflow-init is the first thing it runs. A ROUTE only: the
+// decision is applied by hooks/workflow-state/inheritance/adopt.js, as for the
+// bin/workflow/adopt-session-state CLI (CPR-SSOT). Default is `fresh`; adoption is
+// opt-IN, so a non-interactive run takes the default and prints the recovery command.
 
 const path = require("path");
 
@@ -49,9 +38,9 @@ function adoptPriorState(state, sessionId) {
   }
 
   if (state.adopt_decision === "adopt") {
-    const donor = state.adopt_candidate;
-    if (!donor) return;
-    const r = adopt.adoptState({ heirSid: sessionId, donorSid: donor });
+    const upstreamSid = state.adopt_candidate;
+    if (!upstreamSid) return;
+    const r = adopt.adoptState({ downstreamSid: sessionId, upstreamSid });
     if (!r.ok) {
       process.stderr.write(`[workflow-init] NOTICE: adoption refused — ${r.error}\n`);
     }

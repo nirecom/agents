@@ -1,28 +1,11 @@
 #!/bin/bash
 # Tests: bin/workflow/adopt-session-state, bin/workflow/lib/workflow-init/phases/adopt-prior-state.js
 # Tags: workflow-state, session-inherit, adopt, regression-1305, scope:issue-specific, pwsh-not-required, TL2
-# ===========================================================================
-# #1305 SD-4 — the EXPLICIT adoption path.
-#
-# WHY (CPR-WPH): once automatic cwd+branch inheritance is removed, a genuine
-# crash-resume has no way back to its own work. The replacement is explicit and
-# has exactly ONE execution point (CPR-SSOT): the `adopt-session-state` CLI.
-# `/workflow-init`'s new `adopt-prior-state` phase is merely a *route to* that
-# CLI for interactive sessions — it must never grow a second copy of the
-# adoption logic, and non-interactive sessions must reach the same CLI by hand.
-#
-# fail-before-fix: neither bin/workflow/adopt-session-state nor
-# bin/workflow/lib/workflow-init/phases/adopt-prior-state.js exists yet, so
-# every case below fails until SD-4 lands. That is the intended red phase.
-#
-# TL2 rationale: the CLI and the driver phase are both plain node processes over
-# real fixture files, so a real spawn exercises them end to end.
-# # TL3 gap: only a real interactive Claude Code session can prove that the
-# emitted ACTION=ask_user directive actually reaches AskUserQuestion and that a
-# real `$CI` host suppresses it. AD-9/AD-10 pin the env contract by exporting
-# and unsetting CI / CLAUDE_NON_INTERACTIVE explicitly, so the assertion never
-# depends on the CI setting of whatever machine runs the suite.
-# ===========================================================================
+# #1305 SD-4 — the EXPLICIT adoption path: the `adopt-session-state` CLI is its one execution
+# point (CPR-SSOT); `/workflow-init`'s `adopt-prior-state` phase only routes interactive sessions to it.
+# TL2 rationale: the CLI and the driver phase are plain node processes over real fixture files.
+# TL3 gap: only a real interactive session proves ACTION=ask_user reaches AskUserQuestion and a real
+# `$CI` host suppresses it; AD-9/AD-10 pin the env contract (CI / CLAUDE_NON_INTERACTIVE) explicitly.
 set -euo pipefail
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -48,7 +31,7 @@ mkdir -p "$WORKFLOW_DIR" "$PLANS_DIR" "$TBASE"
 export WORKFLOW_STATE_DIR="$WORKFLOW_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
-# Never resolve the live session: each case passes its own heir sid explicitly.
+# Never resolve the live session: each case passes its own session-downstream sid explicitly.
 unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 # AD-9/AD-10 own these; neutralise whatever the host runner set.
 unset CI 2>/dev/null || true
