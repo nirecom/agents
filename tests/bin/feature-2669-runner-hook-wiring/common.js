@@ -49,12 +49,25 @@ function eq(got, want, what) {
 }
 
 // seedPrefix(sid) — every step before run_tests complete, as a real session reaches run_tests.
-function seedPrefix(sid) {
+let glossaryRepo = null;
+// completeSeedStep(sid, step) — a glossary step records its glossary_check from one throwaway repo first.
+function completeSeedStep(sid, step) {
   const wf = mod("hooks/workflow-state");
+  const { GLOSSARY_STEPS, completeWithRecord } = require("../../lib/glossary-check-record");
+  if (!GLOSSARY_STEPS.includes(step)) return wf.markStep(sid, step, "complete");
+  if (!glossaryRepo) {
+    glossaryRepo = path.join(TMP, "glossary-repo");
+    fs.mkdirSync(glossaryRepo, { recursive: true });
+    require("../../lib/harness").gitInit(glossaryRepo);
+  }
+  completeWithRecord(sid, step, glossaryRepo, wf.markStep);
+}
+
+function seedPrefix(sid) {
   const approval = mod("hooks/workflow-state/completion-approval.js");
   for (const s of ["workflow_init", "clarify_intent", "research", "outline", "detail", "branching_complete", "write_tests", "review_tests", "write_code"]) {
     if (approval.isApprovalGatedStep(s)) mod("tests/lib/plan-approval-fixture.js").approveLive(sid, s);
-    wf.markStep(sid, s, "complete");
+    completeSeedStep(sid, s);
   }
 }
 

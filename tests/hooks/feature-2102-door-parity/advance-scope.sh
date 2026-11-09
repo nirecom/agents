@@ -18,6 +18,8 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=/dev/null
+. "$SCRIPT_CHECKOUT_ROOT/tests/lib/glossary-check-record.sh"
 nrm() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 SCRIPT_CHECKOUT_ROOT_N="$(nrm "$SCRIPT_CHECKOUT_ROOT")"
 NS="$SCRIPT_CHECKOUT_ROOT_N/bin/workflow/next-step"
@@ -229,6 +231,8 @@ make_state_hole a6 $IDX_WRITE_TESTS $IDX_CLARIFY
 printf '# fixture intent\n' > "$PLANS_DIR/a6-intent.md"
 # #2277: the artifact is necessary, not sufficient -- the evidence also needs the approval.
 run_with_timeout node "$SCRIPT_CHECKOUT_ROOT_N/tests/lib/plan-approval-fixture.js" approve a6 clarify_intent >/dev/null
+# and the glossary_check record that evidence resolution of a gated step requires, bound to the repo the advance runs in
+glossary_check_record a6 "$LINKED_N" intent
 if [ -f "$PLANS_DIR/a6-intent.md" ]; then pass "A6a: the clarify_intent evidence artifact exists"
 else fail "A6a: the clarify_intent evidence artifact was not written"; fi
 run_advance "$LINKED_N" --session a6 --advance --step "$S_WRITE_TESTS" --complete --next

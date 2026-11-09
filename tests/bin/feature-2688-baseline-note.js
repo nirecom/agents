@@ -32,8 +32,9 @@ const NOTE = require(path.join(ROOT, "hooks", "lib", "run-tests-completion-note.
 
 const PRE = "- Unverified tests:";
 const LEGACY = `${PRE} failing tests accepted by the user before #2688 (legacy grant; details not re-read)`;
+// The body renders a non-empty note as a code span and an empty one as a bare (none).
 const autoLine = (n, causes, note) =>
-  `${PRE} ${n} failing test(s) auto-accepted without baseline proof (causes: ${causes}; note: ${note})`;
+  `${PRE} ${n} failing test(s) auto-accepted without baseline proof (causes: ${causes}; note: ${note === "(none)" ? note : `\`${note}\``})`;
 
 let serial = 0;
 const sid = (label) => `bn-${label}-${process.pid}-${++serial}`;
