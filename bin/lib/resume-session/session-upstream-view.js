@@ -1,12 +1,12 @@
 "use strict";
-// What is still knowable about an upstream session, and how much of it may be adopted here (#2218).
+// What is still knowable about a session-upstream, and how much of it may be adopted here (#2218).
 // The three evidence stores expire independently (state file 30-day TTL < plan artifacts < transcript);
 // adoptState on an expired state file would report "not resumable" about work that plainly happened,
 // so each rung degrades with its own honest reason instead.
 
 const { readState, readRawState, SESSION_ID_VALID_RE } = require("../../../hooks/workflow-state/state-io");
 const { resolvePlanArtifactOwner } = require("../../../hooks/workflow-state/plan-artifact-owner");
-const { adoptState, checkOverwriteAllowed, heirContextOf: adoptHeirContextOf } =require("../../../hooks/workflow-state/inheritance/adopt");
+const { adoptState, checkOverwriteAllowed, downstreamContextOf: adoptDownstreamContextOf } =require("../../../hooks/workflow-state/inheritance/adopt");
 const { judgeInheritanceGranularity } = require("../../../hooks/workflow-state/inheritance/granularity");
 // Per call, so a swapped owner cache entry is honored.
 const repoIdentity = () => require("../../../hooks/lib/repo-identity");
@@ -29,7 +29,7 @@ function isValidSid(sid) {
   return typeof sid === "string" && SESSION_ID_VALID_RE.test(sid);
 }
 
-// The plan the upstream's session chain reads: <first_session_id>-<kind>.md (#2748), when present.
+// The plan the session-upstream's session chain reads: <first_session_id>-<kind>.md (#2748), when present.
 function existingPlansArtifact(sid, kind) {
   try {
     const owner = resolvePlanArtifactOwner(sid, kind);
@@ -76,48 +76,48 @@ function classify(state, artifacts, hasHandoffEntries) {
 
 // Cwd-pair form of judgeInheritanceGranularity (#2297): only the same checkout
 // keeps full; a sibling worktree degrades even with identical content.
-function decideGranularity(upstreamCwd, heirCwd) {
-  return judgeInheritanceGranularity(heirCwd, { cwd: upstreamCwd }, repoIdentity());
+function decideGranularity(upstreamCwd, downstreamCwd) {
+  return judgeInheritanceGranularity(downstreamCwd, { cwd: upstreamCwd }, repoIdentity());
 }
 
-// The ONE resolver for "which cwd/branch is the heir working in?" (#2279 C3).
+// The ONE resolver for "which cwd/branch is the session-downstream working in?" (#2279 C3).
 // `--from` read state.cwd with a session_start_context fallback while `--list`
-// read only the top-level field, so the two paths disagreed about the same heir.
-function heirContextOf(input) {
+// read only the top-level field, so the two paths disagreed about the same session-downstream.
+function downstreamContextOf(input) {
   const opts = input || {};
   const ctx = opts.ctx;
   if (ctx && typeof ctx.cwd === "string" && ctx.cwd.length) {
     return { cwd: ctx.cwd, git_branch: ctx.git_branch ?? null };
   }
-  let state = opts.heirState || null;
-  if (!state && opts.heirSid) {
+  let state = opts.downstreamState || null;
+  if (!state && opts.downstreamSid) {
     try {
-      state = readState(opts.heirSid);
+      state = readState(opts.downstreamSid);
     } catch (e) {
       state = null;
     }
   }
   // adopt.js owns the state-derived context (it discounts copied worktree events), so
-  // the listing judges the heir exactly as `--from` does.
-  return state ? adoptHeirContextOf(state) : null;
+  // the listing judges the session-downstream exactly as `--from` does.
+  return state ? adoptDownstreamContextOf(state) : null;
 }
 
-// createAdoptabilityPreviewer({heirState|heirSid|ctx}) → { heir_cwd, preview(record) }
+// createAdoptabilityPreviewer({downstreamState|downstreamSid|ctx}) → { downstream_session_cwd, preview(record) }
 //
 // The previewer runs the SAME two judgements adoptState runs — checkOverwriteAllowed
 // and judgeInheritanceGranularity — so a listing cannot promise more than `--from`
-// would hand over (#2279 CPR-E2E, #2297). Granularity is memoized per upstream sid
-// because a listing evaluates many candidates against one heir.
+// would hand over (#2279 CPR-E2E, #2297). Granularity is memoized per session-upstream sid
+// because a listing evaluates many candidates against one session-downstream.
 function createAdoptabilityPreviewer(input) {
   const opts = input || {};
-  const heirCtx = heirContextOf(opts);
-  const heirCwd = heirCtx && heirCtx.cwd;
-  let heirRecord = opts.heirState || null;
-  if (!heirRecord && opts.heirSid) {
+  const downstreamCtx = downstreamContextOf(opts);
+  const downstreamCwd = downstreamCtx && downstreamCtx.cwd;
+  let downstreamRecord = opts.downstreamState || null;
+  if (!downstreamRecord && opts.downstreamSid) {
     try {
-      heirRecord = readRawState(opts.heirSid);
+      downstreamRecord = readRawState(opts.downstreamSid);
     } catch (e) {
-      heirRecord = null;
+      downstreamRecord = null;
     }
   }
   const granularityBySid = new Map();
@@ -131,21 +131,21 @@ function createAdoptabilityPreviewer(input) {
     } catch (e) {
       upstream = null;
     }
-    const decided = judgeInheritanceGranularity(heirCwd, upstream || { cwd: record.cwd || null }, repoIdentity()).granularity;
+    const decided = judgeInheritanceGranularity(downstreamCwd, upstream || { cwd: record.cwd || null }, repoIdentity()).granularity;
     if (key !== null) granularityBySid.set(key, decided);
     return decided;
   }
 
   return {
-    heir_cwd: heirCwd || null,
+    downstream_session_cwd: downstreamCwd || null,
     // A record that may not be adopted has no granularity to state — null is the
     // honest answer, never a guess the caller would have to interpret.
     preview(record) {
       let adoptable = !!record && record.adoptable === true;
       let reason = (record && record.adoptable_reason) || null;
-      // No heir record to judge (a ctx-only listing) leaves overwrite protection to `--from`.
-      if (adoptable && heirRecord) {
-        const ow = checkOverwriteAllowed(heirRecord, record.sid);
+      // No session-downstream record to judge (a ctx-only listing) leaves overwrite protection to `--from`.
+      if (adoptable && downstreamRecord) {
+        const ow = checkOverwriteAllowed(downstreamRecord, record.sid);
         if (!ow.ok) {
           adoptable = false;
           reason = ow.error;
@@ -168,12 +168,12 @@ function previewAdoptability(input, record) {
   return createAdoptabilityPreviewer(input).preview(record);
 }
 
-function attemptInherit(heirSid, upstreamSid, upstreamState, heirState) {
-  if (!heirSid || !heirState) {
-    return { attempted: false, reason: "no-heir-state" };
+function attemptInherit(downstreamSid, upstreamSid, upstreamState, downstreamState) {
+  if (!downstreamSid || !downstreamState) {
+    return { attempted: false, reason: "no-session-downstream-state" };
   }
-  const r = adoptState({ heirSid, donorSid: upstreamSid });
-  const plan = r.ok === true ? null : decideGranularity(cwdOf(upstreamState), (adoptHeirContextOf(heirState) || {}).cwd);
+  const r = adoptState({ downstreamSid, upstreamSid });
+  const plan = r.ok === true ? null : decideGranularity(cwdOf(upstreamState), (adoptDownstreamContextOf(downstreamState) || {}).cwd);
   return {
     attempted: true,
     ok: r.ok === true,
@@ -182,7 +182,7 @@ function attemptInherit(heirSid, upstreamSid, upstreamState, heirState) {
     granularity: r.ok === true ? r.granularity : plan.granularity,
     degraded_reason: r.ok === true ? r.degraded_reason || null : null,
     inheritance: r.ok === true ? r.inheritance || null : null,
-    upstream_aborts: r.ok === true && Array.isArray(r.upstream_aborts) ? r.upstream_aborts : [],
+    session_upstream_aborts: r.ok === true && Array.isArray(r.session_upstream_aborts) ? r.session_upstream_aborts : [],
   };
 }
 
@@ -208,7 +208,7 @@ function readHandoffFor(upstreamSid) {
   }
 }
 
-// session-progress.md of the upstream's first generation (#2594): the path and the section a resumed
+// session-progress.md of the session-upstream's first generation (#2594): the path and the section a resumed
 // session reads first. Absent file → no field, so a caller never points at nothing.
 function progressFileFor(upstreamSid) {
   try {
@@ -220,11 +220,11 @@ function progressFileFor(upstreamSid) {
   }
 }
 
-// buildUpstreamView({ heirSid, upstreamSid }) → view | { availability: "none" }
+// buildUpstreamView({ downstreamSid, upstreamSid }) → view | { availability: "none" }
 function buildUpstreamView(input) {
   const opts = input || {};
   const upstreamSid = opts.upstreamSid;
-  const heirSid = opts.heirSid || null;
+  const downstreamSid = opts.downstreamSid || null;
   // A malformed id must not reach any path join (#2302, CWE-22): no store is looked up.
   if (!isValidSid(upstreamSid)) {
     return {
@@ -262,18 +262,18 @@ function buildUpstreamView(input) {
     };
   }
 
-  let heirState = null;
+  let downstreamState = null;
   try {
-    heirState = heirSid ? readState(heirSid) : null;
+    downstreamState = downstreamSid ? readState(downstreamSid) : null;
   } catch (e) {
-    heirState = null;
+    downstreamState = null;
   }
 
   // No readable state: adopting is impossible, but nothing here failed a resumability
   // judgement. A state file that exists but cannot be read is damage, not expiry.
   const inherit = availability === AVAILABILITY.ARTIFACTS_ONLY
     ? { attempted: false, reason: handoff.errors.includes("state") ? "state-unreadable" : "state_expired" }
-    : attemptInherit(heirSid, upstreamSid, upstreamState, heirState);
+    : attemptInherit(downstreamSid, upstreamSid, upstreamState, downstreamState);
 
   return {
     type: "upstream",
@@ -294,7 +294,7 @@ module.exports = {
   AVAILABILITY,
   ARTIFACT_KINDS,
   decideGranularity,
-  heirContextOf,
+  downstreamContextOf,
   createAdoptabilityPreviewer,
   previewAdoptability,
   buildUpstreamView,

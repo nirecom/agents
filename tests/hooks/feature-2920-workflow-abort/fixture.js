@@ -28,7 +28,7 @@ const writeRaw = (sid, obj) => fs.writeFileSync(statePath(sid), JSON.stringify(o
 // abortEvent(origin, extra) — a well-formed workflow_aborted event (no seq / at).
 function abortEvent(origin, extra) {
   const e = { kind: "workflow_aborted", reason: "test abort", origin, provenance: "declared" };
-  if (origin !== "abort-sentinel") e.heir_session_id = "heir-2920";
+  if (origin !== "abort-sentinel") e.downstream_session_id = "downstream-2920";
   return Object.assign(e, extra || {});
 }
 
@@ -71,9 +71,9 @@ function seedAborted(sid, origin, extra) {
 
 const abortEventsOf = (sid) => raw(sid).events.filter((e) => e && e.kind === "workflow_aborted");
 
-// handoverEvent(heirSid, extra) — a well-formed workflow_abort_handover event (no seq / at).
-function handoverEvent(heirSid, extra) {
-  return Object.assign({ kind: "workflow_abort_handover", heir_session_id: heirSid, origin: "adopt-auto", provenance: "declared" }, extra || {});
+// handoverEvent(downstreamSid, extra) — a well-formed workflow_abort_handover event (no seq / at).
+function handoverEvent(downstreamSid, extra) {
+  return Object.assign({ kind: "workflow_abort_handover", downstream_session_id: downstreamSid, origin: "adopt-auto", provenance: "declared" }, extra || {});
 }
 const handoverEventsOf = (sid) => raw(sid).events.filter((e) => e && e.kind === "workflow_abort_handover");
 

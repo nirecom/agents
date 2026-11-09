@@ -33,7 +33,7 @@ const LOOKAHEAD_DISPATCH_TOOLS = Object.freeze(["Agent", "Task"]);
 const LOOKAHEAD_PREINIT_STEP = "research";
 
 // Skills that OPERATE ON the workflow record instead of advancing it. A dispatch
-// of one must leave the state untouched — /resume-session marking the heir busy
+// of one must leave the state untouched — /resume-session marking the session-downstream busy
 // is what disqualifies it from the adoption it was invoked to perform (#2279).
 const META_OP_SKILLS = Object.freeze(["resume-session"]);
 

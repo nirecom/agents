@@ -18,19 +18,19 @@ const A = require(process.env.M_INH);
 const { reconcileEffectiveState } = require(process.env.M_ES);
 
 function inherit(tag, outcome) {
-  const donor = "seq1665-f" + tag + "d";
-  const heir = "seq1665-f" + tag + "h";
-  require(process.env.M_FIX).approveLive(donor, "clarify_intent"); // #2277 gated complete
+  const upstream = "seq1665-f" + tag + "d";
+  const downstream = "seq1665-f" + tag + "h";
+  require(process.env.M_FIX).approveLive(upstream, "clarify_intent"); // #2277 gated complete
   for (const [s, st] of [
     ["workflow_init", "complete"], ["clarify_intent", "complete"],
     ["research", "skipped"], ["outline", "skipped"], ["detail", "skipped"],
     ["branching_complete", "complete"], ["write_tests", "complete"],
     ["review_tests", "complete"], ["write_code", "complete"],
-  ]) S.markStep(donor, s, st);
-  S.markStep(donor, "run_tests", "pending", { run_outcome: outcome });
-  A.applyInheritance(heir, "2026-02-01T00:00:00.000Z", S.readState(donor));
-  const st = S.readState(heir);
-  return { heir, st, eff: reconcileEffectiveState(st, heir, { resolveAll: true }) };
+  ]) S.markStep(upstream, s, st);
+  S.markStep(upstream, "run_tests", "pending", { run_outcome: outcome });
+  A.applyInheritance(downstream, "2026-02-01T00:00:00.000Z", S.readState(upstream));
+  const st = S.readState(downstream);
+  return { downstream, st, eff: reconcileEffectiveState(st, downstream, { resolveAll: true }) };
 }
 
 const f1 = inherit("1", "fail");

@@ -20,7 +20,7 @@ require_sut
 # plain detect-issues restart (C14a/C14b) throws the user's answer away and re-offers
 # the same question — or, non-interactively, never offers it again. The
 # version_mismatch branch must instead re-enter at adopt-prior-state carrying both the
-# answer and the donor the stale checkpoint recorded.
+# answer and the upstream the stale checkpoint recorded.
 c17_stale() {  # <ckpt-path> <sid> — v1 checkpoint pending on the adopt offer
     node -e '
 const fs = require("fs"), path = require("path");
@@ -31,7 +31,7 @@ fs.writeFileSync(p, JSON.stringify({
   ask_id: "adopt_prior_state",
   state: { issues: [695], repo_map: {}, sid_pass: null, issue_json_cache: {},
     wip_results: {}, label_sets: {}, force_path_b: false, path_decision: null,
-    adopt_candidate: "donor-sid-c17", adopt_decision: null }
+    adopt_candidate: "upstream-sid-c17", adopt_decision: null }
 }));
 ' "$1" "$2"
 }
@@ -47,7 +47,7 @@ run_driver --resume "$PLANS/wid-c17a-wi-checkpoint.json" --answer adopt
 assert_kv "C17a: adopt answer on a stale checkpoint → ACTION=done" ACTION done
 CKPT2="$(get_kv CHECKPOINT)" || true
 assert_ckpt "C17a: the answer is carried onto the fresh state" "$CKPT2" state.adopt_decision adopt
-assert_ckpt "C17a: the stale donor is preserved onto the fresh state" "$CKPT2" state.adopt_candidate donor-sid-c17
+assert_ckpt "C17a: the stale upstream is preserved onto the fresh state" "$CKPT2" state.adopt_candidate upstream-sid-c17
 assert_ckpt "C17a: the stale issue set is still recovered (C14a's contract holds)" "$CKPT2" state.issues "[695]"
 teardown_case
 
@@ -63,15 +63,15 @@ cat > "$INH/adopt.js" <<'ADOPTJS'
 const fs = require("fs"), path = require("path");
 const LOG = path.join(__dirname, "adopt-calls.log");
 module.exports = {
-  adoptState: (o) => { fs.appendFileSync(LOG, "adopt heir=" + o.heirSid + " donor=" + o.donorSid + "\n"); return { ok: true }; },
+  adoptState: (o) => { fs.appendFileSync(LOG, "adopt downstream=" + o.downstreamSid + " upstream=" + o.upstreamSid + "\n"); return { ok: true }; },
   listAdoptCandidates: () => ({ ok: true, candidates: [] }),
 };
 ADOPTJS
 c17_stale "$PLANS/wid-c17b-wi-checkpoint.json" wid-c17b
 run_driver --resume "$PLANS/wid-c17b-wi-checkpoint.json" --answer adopt
 assert_kv "C17b: adopt answer completes the restarted pipeline → ACTION=done" ACTION done
-if [ -f "$INH/adopt-calls.log" ] && grep -q '^adopt heir=wid-c17b donor=donor-sid-c17$' "$INH/adopt-calls.log"; then
-    pass "C17b: restart re-entered at adopt-prior-state and adopted the recorded donor"
+if [ -f "$INH/adopt-calls.log" ] && grep -q '^adopt downstream=wid-c17b upstream=upstream-sid-c17$' "$INH/adopt-calls.log"; then
+    pass "C17b: restart re-entered at adopt-prior-state and adopted the recorded upstream"
 else
     fail "C17b: adopt-prior-state never ran on the restart; log=[$(cat "$INH/adopt-calls.log" 2>/dev/null | tr '\n' ';')]"
 fi
@@ -89,7 +89,7 @@ cat > "$INH/adopt.js" <<'ADOPTJS'
 const fs = require("fs"), path = require("path");
 const LOG = path.join(__dirname, "adopt-calls.log");
 module.exports = {
-  adoptState: (o) => { fs.appendFileSync(LOG, "adopt heir=" + o.heirSid + " donor=" + o.donorSid + "\n"); return { ok: true }; },
+  adoptState: (o) => { fs.appendFileSync(LOG, "adopt downstream=" + o.downstreamSid + " upstream=" + o.upstreamSid + "\n"); return { ok: true }; },
   listAdoptCandidates: () => { fs.appendFileSync(LOG, "list\n"); return { ok: true, candidates: [] }; },
 };
 ADOPTJS

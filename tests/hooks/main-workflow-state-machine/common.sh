@@ -211,43 +211,43 @@ write_postcompact_line() {
 
 # Lineage evidence: the rows Claude Code stamps with `forkedFrom` when a session
 # is forked / resumed / compacted out of an earlier one. Since #1305 this — not
-# a cwd+branch scan — is what makes an earlier session a legitimate donor.
+# a cwd+branch scan — is what makes an earlier session a legitimate upstream.
 write_forked_transcript_line() {
-    local jsonl_file="$1" heir="$2" donor="$3"
+    local jsonl_file="$1" downstream="$2" upstream="$3"
     printf '{"type":"user","uuid":"u1-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m1"}}\n' \
-        "$heir" "$heir" "$donor" >> "$jsonl_file"
+        "$downstream" "$downstream" "$upstream" >> "$jsonl_file"
 }
 
-# call_resolve_donor <cwd> <branch> <fake_home> <heir_sid> [source]
-# Prints the resolved donor state as JSON, or "null" when nothing is inherited.
-# Replaces call_find_latest (#1305): the donor is now reached through the heir's
-# own transcript, so the heir sid and its startup `source` are both required.
+# call_resolve_upstream <cwd> <branch> <fake_home> <downstream_sid> [source]
+# Prints the resolved upstream state as JSON, or "null" when nothing is inherited.
+# Replaces call_find_latest (#1305): the upstream is now reached through the downstream's
+# own transcript, so the downstream sid and its startup `source` are both required.
 #
 # A thrown error prints ERROR:<msg> rather than "null" — swallowing it would let
 # every "must NOT inherit" case pass while the module is simply broken.
-call_resolve_donor() {
-    local cwd="$1" branch="$2" fake_home="$3" heir="$4" source="${5:-resume}"
+call_resolve_upstream() {
+    local cwd="$1" branch="$2" fake_home="$3" downstream="$4" source="${5:-resume}"
     local branch_js
     if [ "$branch" = "null" ]; then branch_js="null"; else branch_js="'$branch'"; fi
     local enc transcript_base_node workflow_dir_node tpath
     enc="$(encode_path "$cwd")"
     transcript_base_node="$(to_node_path "$fake_home/.claude/projects")"
     workflow_dir_node="$(to_node_path "$WORKFLOW_DIR")"
-    tpath="$(to_node_path "$fake_home/.claude/projects/$enc/${heir}.jsonl")"
+    tpath="$(to_node_path "$fake_home/.claude/projects/$enc/${downstream}.jsonl")"
     HOME="$fake_home" \
         WORKFLOW_STATE_DIR="$workflow_dir_node" \
         WORKFLOW_PLANS_DIR="$(to_node_path "$TEST_PLANS_DIR")" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_base_node" \
         run_with_timeout node -e "
 try {
-  const { resolveInheritanceDonor } = require('$WORKFLOW_STATE_LIB_NODE');
-  if (typeof resolveInheritanceDonor !== 'function') { console.log('ERROR:MISSING_EXPORT'); }
+  const { resolveInheritanceUpstream } = require('$WORKFLOW_STATE_LIB_NODE');
+  if (typeof resolveInheritanceUpstream !== 'function') { console.log('ERROR:MISSING_EXPORT'); }
   else {
-    const r = resolveInheritanceDonor({
-      sessionId: '$heir', source: '$source', transcriptPath: '$tpath',
+    const r = resolveInheritanceUpstream({
+      sessionId: '$downstream', source: '$source', transcriptPath: '$tpath',
       ctx: { cwd: '$cwd', git_branch: $branch_js },
     });
-    console.log(r && r.donor ? JSON.stringify(r.donor) : 'null');
+    console.log(r && r.upstream ? JSON.stringify(r.upstream) : 'null');
   }
 } catch (e) { console.log('ERROR:' + (e && e.message)); }
 " 2>/dev/null || echo "ERROR:SPAWN_FAILED"

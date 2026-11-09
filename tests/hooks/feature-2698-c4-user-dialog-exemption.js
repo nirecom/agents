@@ -197,7 +197,7 @@ function pushAbort(dir, sid, origin) {
   const p = require("node:path").join(dir, `${sid}.json`);
   const s = JSON.parse(fs.readFileSync(p, "utf8"));
   const ev = { kind: "workflow_aborted", reason: "test abort", origin, provenance: "declared", at: new Date().toISOString(), seq: s.events.length + 1 };
-  if (origin !== "abort-sentinel") ev.heir_session_id = "heir-2920";
+  if (origin !== "abort-sentinel") ev.downstream_session_id = "downstream-2920";
   s.events.push(ev);
   fs.writeFileSync(p, JSON.stringify(s));
 }

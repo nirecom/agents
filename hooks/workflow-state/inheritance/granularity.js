@@ -1,6 +1,6 @@
 "use strict";
-// How much of a session upstream's record may travel is a fact about WHERE the
-// session downstream runs (#2297), never a caller's choice: only the very same
+// How much of a session-upstream's record may travel is a fact about WHERE the
+// session-downstream runs (#2297), never a caller's choice: only the very same
 // checkout keeps the worktree-dependent evidence true. A sibling worktree with
 // matching content, another repo, or an unknown cwd all adopt degraded.
 
@@ -16,8 +16,8 @@ const repoIdentity = () => require("../../lib/repo-identity");
 function upstreamCwdOf(state) {
   if (!state || typeof state !== "object") return null;
   // state.cwd stays on main when the worktree was started mid-session; /resume-session sends the
-  // downstream into the live linked session_worktree, so that is the checkout compared against.
-  // Same candidate order as bin/lib/resume-session/upstream-cwd.js: cwd first, then session_worktree.
+  // session-downstream into the live linked session_worktree, so that is the checkout compared against.
+  // Same candidate order as bin/lib/resume-session/session-upstream-cwd.js: cwd first, then session_worktree.
   for (const c of [state.cwd, state.session_worktree]) {
     if (typeof c !== "string" || !c.length) continue;
     try {

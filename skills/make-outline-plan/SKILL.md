@@ -32,7 +32,7 @@ MOP-0. **Surface premise contradictions** from Research artifacts.
    MOP-0d. Emit `<<WORKFLOW_MARK_STEP_research_complete>>` to mark Research complete (aggregating survey-code and survey-history, which no longer emit it individually; deep-research's emit, if any, is idempotent).
 
 MOP-1. Locate the intent file:
-   a. `<INTENT_MD>` exists → use it (it already follows a resumed session's upstream).
+   a. `<INTENT_MD>` exists → use it (it already follows a resumed session's session-upstream).
    b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
    c. After (b) only, rerun the outline CLI with `--session <the chosen file's session-id>` and use its output as `<OUTLINE_MD>`. After (a), keep `<OUTLINE_MD>`: it already names the session chain's first_session_id.
    d. Judge the outline skip: follow `skills/_shared/jev-two-stage-judge.md` with point=`outline-skip` stage=`outline`; on `SKIP=true` (outline already settled skipped by finalize) skip to Completion.

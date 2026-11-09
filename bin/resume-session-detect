@@ -56,18 +56,18 @@ function emit(result) {
   process.stdout.write(JSON.stringify(result) + "\n");
 }
 
-// Exit 3 — not 1 — for an unknown upstream id: the caller must distinguish
+// Exit 3 — not 1 — for an unknown session-upstream id: the caller must distinguish
 // "that session left nothing behind" from "this command was called wrongly".
 function runFrom(from) {
-  const { buildUpstreamView } = require("./lib/resume-session/upstream-view");
-  const view = buildUpstreamView({ heirSid: resolveSessionId(), upstreamSid: from });
+  const { buildUpstreamView } = require("./lib/resume-session/session-upstream-view");
+  const view = buildUpstreamView({ downstreamSid: resolveSessionId(), upstreamSid: from });
   emit(view);
   process.exit(view.availability === "none" ? 3 : 0);
 }
 
 // An out-of-charset id is answered as cwd-unknown before it can reach a path join (CWE-22).
 function runClassifyCwd(sid) {
-  const { classifyUpstreamCwd, CWD_CLASSES } = require("./lib/resume-session/upstream-cwd");
+  const { classifyUpstreamCwd, CWD_CLASSES } = require("./lib/resume-session/session-upstream-cwd");
   const valid = /^[A-Za-z0-9_-]+$/.test(sid);
   emit(valid ? classifyUpstreamCwd(sid) : { classification: CWD_CLASSES.CWD_UNKNOWN, worktree_path: null });
   process.exit(0);
@@ -75,12 +75,12 @@ function runClassifyCwd(sid) {
 
 function runList(query, limit) {
   const { listUpstreamCandidates } =
-    require("../hooks/workflow-state/upstream-search");
-  const { heirContextOf } = require("./lib/resume-session/upstream-view");
+    require("../hooks/workflow-state/session-upstream-search");
+  const { downstreamContextOf } = require("./lib/resume-session/session-upstream-view");
   const sid = resolveSessionId();
-  // Same resolver as the `--from` path, so both agree on the heir's cwd/branch.
-  const ctx = heirContextOf({ heirSid: sid });
-  const candidates = listUpstreamCandidates({ heirSid: sid, ctx, query, limit });
+  // Same resolver as the `--from` path, so both agree on the session-downstream's cwd/branch.
+  const ctx = downstreamContextOf({ downstreamSid: sid });
+  const candidates = listUpstreamCandidates({ downstreamSid: sid, ctx, query, limit });
   emit({ type: "list", query: query || "", candidates });
   process.exit(0);
 }

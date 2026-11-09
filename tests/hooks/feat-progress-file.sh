@@ -3,7 +3,7 @@
 # Tests: hooks/lib/progress-file.js, bin/progress-file
 # Tags: progress-file, root-sid, inheritance, template, idempotent, cli, regression-2748, scope:issue-specific, pwsh-not-required, TL1
 
-# Issue #2594 stage 1 — one session-progress.md is written across every generation of a handed-off session, so its name carries the first generation's sid. Each generation copies the root sid its donor saved (so neither chain length nor an expired middle state can split the file); chain walking is only the fallback. ensure must never overwrite what the model already wrote.
+# Issue #2594 stage 1 — one session-progress.md is written across every generation of a handed-off session, so its name carries the first generation's sid. Each generation copies the root sid its upstream saved (so neither chain length nor an expired middle state can split the file); chain walking is only the fallback. ensure must never overwrite what the model already wrote.
 
 # Assumed contract (named here so a different spelling fails loudly, not silently): the saved root sid is the `root_sid` key of <sid>.control/progress-pressure.json; the update-progress count is a numeric key of that file whose name matches /update.?progress/i; the template's "Plan files" section carries the real absolute paths that ensureProgressFile fills in from the plans dir and the sid — `<plans dir>/<sid>-intent.md`, `-outline.md`, `-detail.md`, never a `<sid>` placeholder (user decision) — and says the step list is in `next-step --list`. For a later generation the sid in those paths is the one whose plan files exist: the root sid (the fixture plants them under it).
 
@@ -114,7 +114,7 @@ for (const p of planPaths) fs.writeFileSync(p, '# plan\n');
 P.ensureProgressFile('g2');
 let body = '';
 try { body = fs.readFileSync(want, 'utf8'); } catch (e) { bad.push('not-created-at-root-path:' + want); }
-if (fs.existsSync(path.join(process.env.WORKFLOW_PLANS_DIR, 'g2-session-progress.md'))) bad.push('created-under-heir-sid');
+if (fs.existsSync(path.join(process.env.WORKFLOW_PLANS_DIR, 'g2-session-progress.md'))) bad.push('created-under-downstream-sid');
 // Unconditional: an empty or missing body fails every template check below, never skips them.
 if (!body.trim()) bad.push('generated-body-empty');
 const need = {

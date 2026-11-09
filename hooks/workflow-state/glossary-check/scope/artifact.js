@@ -41,7 +41,7 @@ function readPlanRange(sid, step) {
   let file;
   let buf;
   try {
-    // Owner-resolved like every plan reader (#2633): an adopted session reads its upstream's file.
+    // Owner-resolved like every plan reader (#2633): an adopted session reads its session-upstream's file.
     file = require("../../plan-artifact-owner").resolvePlanArtifactOwner(sid, rowFor(step).suffix).path;
     buf = fs.readFileSync(toWindowsPath(file));
   } catch (e) {
