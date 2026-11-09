@@ -189,7 +189,9 @@ PreToolUse hook classification (allow-deny hook or not), the hook `timeout` and 
   re-judges the previous turn with that same function and, only if the Stop would have recorded it
   and nothing was written, consumed or edited since, writes the receipt for that one step. Any
   check it cannot finish denies as `no-receipt` (fail-closed); the deny wording names a possible
-  Stop timeout and how to check the receipt log.
+  Stop timeout and how to check the receipt log. After a successful write it consumes the per-turn
+  markers created before the judged turn's opener (`consumeTurnMarkersBefore`), so the plan-link
+  check does not block the already-recovered turn again at the next Stop.
 - `hooks/lib/transcript-reader.js` — the one transcript reader of the Stop and PreToolUse hooks (#2610); `readTurnTail` (#2936, window logic in `transcript-reader/tail-window.js`) reads from the end in a growing window until the caller's turn boundary and keeps the old full-read contract only for callers that need it. At Stop it waits until the transcript's last text block agrees with `last_assistant_message`, which only confirms the flush and is never judged as the body; a flush that never agrees reads as `undecidable` and the caller fails open. `splitTurns` and `isRealUserPrompt` give the turn boundaries that `lib/user-dialog-turn.js` and `lib/plan-link-turn-check.js` read.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
