@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/repo-identity.js, bin/workflow/lib/next-step/repo-dir-guard.js, hooks/workflow-state/inheritance/adopt.js, bin/lib/resume-session/upstream-view.js
-# Tags: workflow, gate, hook, bin, git, repo-identity, scope:issue-specific, progress-file, regression-2748
+# Tests: hooks/lib/repo-identity.js, bin/workflow/lib/next-step/repo-dir-guard.js, hooks/workflow-state/inheritance/adopt.js, bin/lib/resume-session/session-upstream-view.js
+# Tags: workflow, gate, hook, bin, git, repo-identity, scope:issue-specific, progress-file, regression-2748, test-lang-exception:e2e
 # fix-1633 (TL1/TL2): the repo-identity comparator moves from the bin-side
 # repo-dir-guard into hooks/lib so the workflow gate can use it without a
 # hooks -> bin dependency. repo-dir-guard keeps re-exporting the SAME objects,
@@ -102,7 +102,7 @@ if (group === "exports") {
       compareRepoIdentity: (...args) => { calls++; return ri.compareRepoIdentity(...args); },
     });
     try {
-      const r = require(agents + "/bin/lib/resume-session/upstream-view").decideGranularity(main, other);
+      const r = require(agents + "/bin/lib/resume-session/session-upstream-view").decideGranularity(main, other);
       const ok = calls > 0 && r.repo_verdict === ri.VERDICTS.DIFFERENT;
       rows.push((ok ? "OK " : "NG ") + "upstream-view-calls-owner calls=" + calls + " got=" + JSON.stringify(r));
     } catch (e) { rows.push("NG upstream-view-calls-owner threw:" + e.message); }
@@ -170,11 +170,11 @@ case_begin "adopt-requires-hooks-lib" "hooks/workflow-state/inheritance/adopt.js
 requires_owner "hooks/workflow-state/inheritance/adopt.js" "adopt.js"
 case_end
 
-case_begin "upstream-view-requires-hooks-lib" "bin/lib/resume-session/upstream-view.js"
-requires_owner "bin/lib/resume-session/upstream-view.js" "upstream-view.js"
+case_begin "upstream-view-requires-hooks-lib" "bin/lib/resume-session/session-upstream-view.js"
+requires_owner "bin/lib/resume-session/session-upstream-view.js" "session-upstream-view.js"
 case_end
 
-case_begin "consumers-use-owner-at-runtime" "bin/lib/resume-session/upstream-view.js"
+case_begin "consumers-use-owner-at-runtime" "bin/lib/resume-session/session-upstream-view.js"
 run_group consumers
 case_end
 
@@ -199,19 +199,19 @@ fs.mkdirSync(plans, { recursive: true });
 fs.writeFileSync(path.join(plans, "pf-up-intent.md"), "# intent\n");
 fs.writeFileSync(path.join(plans, "pf-root-session-progress.md"), "## Current state\nroot-body\n");
 fs.writeFileSync(path.join(plans, "pf-none-intent.md"), "# intent\n");
-const { buildUpstreamView } = require(agents + "/bin/lib/resume-session/upstream-view");
-const v = buildUpstreamView({ upstreamSid: "pf-up", heirSid: null });
+const { buildUpstreamView } = require(agents + "/bin/lib/resume-session/session-upstream-view");
+const v = buildUpstreamView({ upstreamSid: "pf-up", downstreamSid: null });
 const pf = v && v.progress_file;
 const p = pf && typeof pf === "object" ? String(pf.path || "") : "";
 rows.push((path.basename(p) === "pf-root-session-progress.md" ? "OK " : "NG ") + "progress-file-root-path got=" + JSON.stringify(pf));
 rows.push((pf && pf.section === "Current state" ? "OK " : "NG ") + "progress-file-first-section got=" + JSON.stringify(pf));
-const none = buildUpstreamView({ upstreamSid: "pf-none", heirSid: null });
+const none = buildUpstreamView({ upstreamSid: "pf-none", downstreamSid: null });
 const absent = none && none.availability !== "none" && (none.progress_file === undefined || none.progress_file === null);
 rows.push((absent ? "OK " : "NG ") + "progress-file-absent-without-file got=" + JSON.stringify(none && none.progress_file) + " availability=" + (none && none.availability));
 process.stdout.write(rows.join("\n") + "\n");
 JS
 
-case_begin "upstream-view-progress-file" "bin/lib/resume-session/upstream-view.js"
+case_begin "upstream-view-progress-file" "bin/lib/resume-session/session-upstream-view.js"
 PF_OUT="$(run_with_timeout 60 node "$(np "$PF_HELPER")" "$AGENTS_NODE" 2>&1)" || true
 [ -n "$PF_OUT" ] || fail "progress-file: helper printed nothing"
 while IFS=' ' read -r verdict name rest; do
@@ -226,7 +226,7 @@ case_end
 
 # #2594: the real `bin/resume-session-detect --from` CLI carries progress_file into its JSON, so a
 # CLI that dropped the field fails here even while buildUpstreamView keeps it. Reuses the pf-* fixture.
-# No heir: the parent session's id and the live transcripts must never be resolved.
+# No downstream: the parent session's id and the live transcripts must never be resolved.
 unset CLAUDE_CODE_SESSION_ID
 mkdir -p "$TMP_ROOT/transcripts" "$TMP_ROOT/neutral"
 export CLAUDE_TRANSCRIPT_BASE_DIR="$(np "$TMP_ROOT/transcripts")"
@@ -273,11 +273,11 @@ detect_from() {
   done <<<"$rows"
 }
 
-case_begin "resume-session-detect-from-progress-file" "bin/lib/resume-session/upstream-view.js"
+case_begin "resume-session-detect-from-progress-file" "bin/lib/resume-session/session-upstream-view.js"
 detect_from "handed-off" pf-up 0 "$(np "$WORKFLOW_PLANS_DIR")/pf-root-session-progress.md"
 case_end
 
-case_begin "resume-session-detect-from-without-progress-file" "bin/lib/resume-session/upstream-view.js"
+case_begin "resume-session-detect-from-without-progress-file" "bin/lib/resume-session/session-upstream-view.js"
 detect_from "no-progress-file" pf-none 0 none
 detect_from "unknown-session" pf-never-existed 3 none
 case_end

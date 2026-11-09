@@ -48,7 +48,7 @@ SS_STATE_FILE="$SS_WORKFLOW_DIR/$SS_SID.json"
 # "startup", no lineage to anything) silently picking up whatever session last
 # ran in this directory. Only a real launch produces a real `source`, so this is
 # the one place the gate can be observed end-to-end.
-SS_DONOR="e2292100-0000-0000-0000-0000000000d0"
+SS_UPSTREAM="e2292100-0000-0000-0000-0000000000d0"
 SS_TBASE="$SS_BASE/transcripts"
 SS_ENC="$(cd "$SS_REPO" && node -e 'console.log(require("path").resolve(process.cwd()).toLowerCase().replace(/[^a-zA-Z0-9]/g,"-"))')"
 mkdir -p "$SS_TBASE/$SS_ENC"
@@ -62,12 +62,12 @@ node -e '
   fs.writeFileSync(path.join(dir, sid + ".json"), JSON.stringify({
     version: 1, session_id: sid, cwd, git_branch: branch, created_at: now, steps,
   }, null, 2));
-' "$(node_path "$SS_WORKFLOW_DIR")" "$SS_DONOR" \
+' "$(node_path "$SS_WORKFLOW_DIR")" "$SS_UPSTREAM" \
   "$(cd "$SS_REPO" && node -e 'console.log(require("path").resolve(process.cwd()))')" \
   "$(git -C "$SS_REPO" rev-parse --abbrev-ref HEAD)" \
   "$(node -e 'console.log(new Date().toISOString())')"
 printf '{"type":"attachment","attachment":{"hookEvent":"SessionStart","exitCode":0,"stdout":"Current workflow session_id: %s"}}\n' \
-    "$SS_DONOR" > "$SS_TBASE/$SS_ENC/$SS_DONOR.jsonl"
+    "$SS_UPSTREAM" > "$SS_TBASE/$SS_ENC/$SS_UPSTREAM.jsonl"
 
 # CRITICAL: do NOT pre-create the state file — session-start.js only runs
 # createInitialState when no existing state is found for the session.
@@ -107,10 +107,10 @@ fi
 
 # SS-E3 (#1305): a real `source=startup` must NOT adopt the prior session's
 # steps, even though that session shares this exact cwd and branch. The fixture
-# is only meaningful if the donor was actually there to be found, so its
+# is only meaningful if the upstream was actually there to be found, so its
 # presence is asserted first rather than assumed.
-if [ ! -f "$SS_WORKFLOW_DIR/$SS_DONOR.json" ] || [ ! -f "$SS_TBASE/$SS_ENC/$SS_DONOR.jsonl" ]; then
-    fail "SS-E3. fixture broken: the prior-session donor was never seeded (nothing could have been inherited)"
+if [ ! -f "$SS_WORKFLOW_DIR/$SS_UPSTREAM.json" ] || [ ! -f "$SS_TBASE/$SS_ENC/$SS_UPSTREAM.jsonl" ]; then
+    fail "SS-E3. fixture broken: the prior-session upstream was never seeded (nothing could have been inherited)"
 elif [ ! -f "$SS_STATE_FILE" ]; then
     fail "SS-E3. no state file for the new session; the startup gate is unproven. claude rc=$SS_RC"
 else

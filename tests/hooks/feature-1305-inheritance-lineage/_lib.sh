@@ -15,7 +15,7 @@ TBASE_NODE="$(to_node_path "$TBASE")"
 PROBE_JS_NODE="$(to_node_path "$PROBE_JS")"
 
 # path.resolve() form — the shape getCurrentContext() stores in a state file,
-# so fixture cwds and heir ctx cwds compare byte-for-byte on every platform.
+# so fixture cwds and downstream ctx cwds compare byte-for-byte on every platform.
 resolve_path() { run_with_timeout node -e "console.log(require('path').resolve(process.argv[1]))" "$1"; }
 
 # The transcript directory name Claude Code derives from a resolved cwd.
@@ -85,26 +85,26 @@ transcript_dir() {
     echo "$d"
 }
 
-# write_forked_transcript <path> <heir-sid> <donor-sid>
+# write_forked_transcript <path> <downstream-sid> <upstream-sid>
 # Fork evidence: Claude Code stamps `forkedFrom` on the rows carried over from
 # the parent session when a session is forked / resumed / compacted.
 write_forked_transcript() {
-    local file="$1" heir="$2" donor="$3"
+    local file="$1" downstream="$2" upstream="$3"
     {
-        printf '{"type":"user","uuid":"u1-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m1"}}\n' "$heir" "$heir" "$donor"
-        printf '{"type":"assistant","uuid":"u2-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m2"}}\n' "$heir" "$heir" "$donor"
-        printf '{"type":"user","uuid":"u3-%s","sessionId":"%s"}\n' "$heir" "$heir"
+        printf '{"type":"user","uuid":"u1-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m1"}}\n' "$downstream" "$downstream" "$upstream"
+        printf '{"type":"assistant","uuid":"u2-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m2"}}\n' "$downstream" "$downstream" "$upstream"
+        printf '{"type":"user","uuid":"u3-%s","sessionId":"%s"}\n' "$downstream" "$downstream"
     } > "$file"
 }
 
-# write_announce_transcript <path> <donor-sid> [hookEvent]
-# The other lineage evidence: the donor's SessionStart/PostCompact announce line
-# is COPIED into the heir's transcript. The contract string is SSOT — byte-for-
+# write_announce_transcript <path> <upstream-sid> [hookEvent]
+# The other lineage evidence: the upstream's SessionStart/PostCompact announce line
+# is COPIED into the downstream's transcript. The contract string is SSOT — byte-for-
 # byte "Current workflow session_id: <sid>".
 write_announce_transcript() {
-    local file="$1" donor="$2" ev="${3:-SessionStart}"
+    local file="$1" upstream="$2" ev="${3:-SessionStart}"
     printf '{"type":"attachment","attachment":{"type":"hook_success","hookEvent":"%s","exitCode":0,"stdout":"{\\"additionalContext\\": \\"Current workflow session_id: %s\\\\nState file: /tmp/%s.json\\"}","command":"node session-start.js"}}\n' \
-        "$ev" "$donor" "$donor" > "$file"
+        "$ev" "$upstream" "$upstream" > "$file"
 }
 
 # probe '<json-args>' → key=value lines (neutral CWD; fixture-pinned env only)
@@ -116,11 +116,11 @@ probe() {
         run_with_timeout node "$PROBE_JS_NODE" "$1" 2>&1) || echo "error=PROBE_CRASHED"
 }
 
-# resolve_donor <heir-sid> <source|NONE> <transcript-path> <cwd> <branch> [agent-id]
-resolve_donor() {
+# resolve_upstream <downstream-sid> <source|NONE> <transcript-path> <cwd> <branch> [agent-id]
+resolve_upstream() {
     run_with_timeout node -e '
       const [sid, source, tp, cwd, branch, agentId] = process.argv.slice(1);
-      const a = { fn: "resolveInheritanceDonor", sessionId: sid,
+      const a = { fn: "resolveInheritanceUpstream", sessionId: sid,
         transcriptPath: tp === "NONE" ? undefined : tp,
         ctx: { cwd, git_branch: branch === "null" ? null : branch } };
       if (source !== "NONE") a.source = source;

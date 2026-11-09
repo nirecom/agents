@@ -1,0 +1,22 @@
+{
+  "tests": {
+    "dir": "tests",
+    "categorization": "by-target",
+    "categories": [
+      { "dir": "hooks", "covers": ["hooks"] },
+      { "dir": "bin", "covers": ["bin"] },
+      { "dir": "skills", "covers": ["skills"] },
+      { "dir": "agents", "covers": ["agents"] },
+      { "dir": "install", "covers": ["install", "install.sh", "install.ps1"] },
+      { "dir": "tests", "covers": ["tests"] }
+    ],
+    "supportDirs": ["_archive", "lib"],
+    "testHarness": "on",
+    "caseMarker": "on"
+  },
+  "migrate": {
+    "tracker": "done",
+    "issues": "done",
+    "tests": "done"
+  }
+}

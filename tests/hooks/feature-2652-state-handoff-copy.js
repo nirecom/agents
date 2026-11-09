@@ -6,7 +6,7 @@
 // records stay generation-local (not copied), the downstream's own records survive (re-)adoption
 // and never trip the overwrite guard, and the upstream's records stay readable by sid.
 // #2920 S4 / S8-(1): a workflow_aborted event is generation-local too, and adoptState aborts the
-// upstream it adopts from (origin adopt-auto), reporting it in upstream_aborts.
+// upstream it adopts from (origin adopt-auto), reporting it in session_upstream_aborts.
 // New file rather than an append: feature-2304-inheritance-state-copy.js is at 457 lines.
 // TL3 gap (what this test does NOT catch):
 // - the /resume-session --from CLI end to end; adoptState is called in-process here.
@@ -38,9 +38,9 @@ const upRecords = [
   R.record({ cls: "D", at_step: "review_tests", record_key: "up.auto", summary: "UP-RECORD-3", origin: "auto-record" }),
 ];
 const own = (summary) => R.record({ cls: "E", at_step: "-", record_key: "down.own", summary, origin: "procedure-point", provenance: "declared" });
-function adoptOk(heir, donor) {
-  const r = adopt.adoptState({ heirSid: heir, donorSid: donor });
-  if (!r || r.ok !== true) throw new Error(`adoptState(${heir} <- ${donor}) refused: ${show(r && r.error)}`);
+function adoptOk(downstream, upstream) {
+  const r = adopt.adoptState({ downstreamSid: downstream, upstreamSid: upstream });
+  if (!r || r.ok !== true) throw new Error(`adoptState(${downstream} <- ${upstream}) refused: ${show(r && r.error)}`);
   return r;
 }
 
@@ -78,9 +78,9 @@ caseEnd();
 
 caseBegin("judgments-unchanged-by-exclusion", "hooks/workflow-state/inheritance/adopt.js");
 {
-  check("S4: hasSelfRecordedStepSettlement and heirContextOf match the record-free adoption", () => {
+  check("S4: hasSelfRecordedStepSettlement and downstreamContextOf match the record-free adoption", () => {
     const [d1, d2] = adopted();
-    eq([hasSelfRecordedStepSettlement(d2), adopt.heirContextOf(d2)], [hasSelfRecordedStepSettlement(d1), adopt.heirContextOf(d1)], "judgments");
+    eq([hasSelfRecordedStepSettlement(d2), adopt.downstreamContextOf(d2)], [hasSelfRecordedStepSettlement(d1), adopt.downstreamContextOf(d1)], "judgments");
   });
 }
 caseEnd();
@@ -209,19 +209,19 @@ caseBegin("aborted-upstream-copy-contract", "hooks/workflow-state/inheritance/ap
   check("#2920 fixed 2: the abort does not reach the downstream", () => {
     if (firstErr) throw new Error(firstErr);
     eq(abortsIn("d-from-aborted").length, 0, "workflow_aborted events in the downstream");
-    eq(X.abortModule().isWorkflowAborted("d-from-aborted"), false, "isWorkflowAborted(heir)");
+    eq(X.abortModule().isWorkflowAborted("d-from-aborted"), false, "isWorkflowAborted(downstream)");
     assertStreamIntegrity(F.raw("d-from-aborted").events);
   });
   check("#2920 fixed 3: re-adopting from the same upstream is ok and leaves the downstream live", () => {
     adoptOk("d-from-aborted", "u-aborted");
     eq(abortsIn("d-from-aborted").length, 0, "workflow_aborted events after re-adoption");
-    eq(X.abortModule().isWorkflowAborted("d-from-aborted"), false, "isWorkflowAborted(heir) after re-adoption");
+    eq(X.abortModule().isWorkflowAborted("d-from-aborted"), false, "isWorkflowAborted(downstream) after re-adoption");
   });
   check("#2920 handover: the sentinel-aborted upstream names the downstream once; the handover is not copied", () => {
     if (firstErr) throw new Error(firstErr);
-    eq(first.upstream_aborts.map((a) => [a.sid, !!a.handover, a.recorded]), [["u-aborted", true, true]], "upstream_aborts");
-    eq(X.handoverEventsOf("u-aborted").map((e) => [e.origin, e.heir_session_id]), [["adopt-auto", "d-from-aborted"]], "upstream handover events");
-    eq(X.abortModule().readWorkflowAbort("u-aborted").heir_session_id, "d-from-aborted", "projected heir of the upstream");
+    eq(first.session_upstream_aborts.map((a) => [a.sid, !!a.handover, a.recorded]), [["u-aborted", true, true]], "session_upstream_aborts");
+    eq(X.handoverEventsOf("u-aborted").map((e) => [e.origin, e.downstream_session_id]), [["adopt-auto", "d-from-aborted"]], "upstream handover events");
+    eq(X.abortModule().readWorkflowAbort("u-aborted").downstream_session_id, "d-from-aborted", "projected downstream of the upstream");
     eq(X.handoverEventsOf("d-from-aborted").length, 0, "handover events in the downstream");
   });
 }
@@ -238,30 +238,30 @@ caseBegin("carried-kinds-single-source", "hooks/workflow-state/inheritance/adopt
 }
 caseEnd();
 
-// adoptSoft(heir, donor) — adoptState's result, or {error} when it throws or refuses.
-function adoptSoft(heir, donor) {
-  try { return adoptOk(heir, donor); } catch (e) { return { error: e.message }; }
+// adoptSoft(downstream, upstream) — adoptState's result, or {error} when it throws or refuses.
+function adoptSoft(downstream, upstream) {
+  try { return adoptOk(downstream, upstream); } catch (e) { return { error: e.message }; }
 }
-const recordedTrue = (r) => (Array.isArray(r.upstream_aborts) ? r.upstream_aborts.filter((a) => a && a.recorded === true).map((a) => a.sid) : null);
+const recordedTrue = (r) => (Array.isArray(r.session_upstream_aborts) ? r.session_upstream_aborts.filter((a) => a && a.recorded === true).map((a) => a.sid) : null);
 
 caseBegin("adopt-aborts-the-upstream", "hooks/workflow-state/inheritance/adopt.js");
 {
   F.seedUpstream("u-auto");
   F.seedDownstream("d-auto");
   const r1 = adoptSoft("d-auto", "u-auto");
-  check("S8-(1): adoptState reports the recorded upstream abort in upstream_aborts", () => {
+  check("S8-(1): adoptState reports the recorded upstream abort in session_upstream_aborts", () => {
     if (r1.error) throw new Error(r1.error);
-    if (!Array.isArray(r1.upstream_aborts)) throw new Error(`upstream_aborts is not an array: ${show(r1.upstream_aborts)}`);
-    eq(r1.upstream_aborts.map((a) => [a.sid, a.recorded]), [["u-auto", true]], "upstream_aborts");
+    if (!Array.isArray(r1.session_upstream_aborts)) throw new Error(`session_upstream_aborts is not an array: ${show(r1.session_upstream_aborts)}`);
+    eq(r1.session_upstream_aborts.map((a) => [a.sid, a.recorded]), [["u-auto", true]], "session_upstream_aborts");
   });
-  check("S8-(1): the upstream carries one adopt-auto abort naming the heir", () => {
-    eq(abortsIn("u-auto").map((e) => [e.origin, e.heir_session_id, e.reason]), [["adopt-auto", "d-auto", "adopted by d-auto"]], "upstream abort");
-    eq(X.abortModule().isWorkflowAborted("d-auto"), false, "isWorkflowAborted(heir)");
+  check("S8-(1): the upstream carries one adopt-auto abort naming the downstream", () => {
+    eq(abortsIn("u-auto").map((e) => [e.origin, e.downstream_session_id, e.reason]), [["adopt-auto", "d-auto", "adopted by d-auto"]], "upstream abort");
+    eq(X.abortModule().isWorkflowAborted("d-auto"), false, "isWorkflowAborted(downstream)");
   });
   const r2 = adoptSoft("d-auto", "u-auto");
   check("S8-(1) idempotency: a second adopt records no second abort", () => {
     if (r2.error) throw new Error(r2.error);
-    eq(recordedTrue(r2), [], "upstream_aborts recorded:true on the second adopt");
+    eq(recordedTrue(r2), [], "session_upstream_aborts recorded:true on the second adopt");
     eq(abortsIn("u-auto").length, 1, "abort events in the upstream after the second adopt");
   });
   F.seedUpstream("u-delivered");
@@ -300,13 +300,13 @@ caseBegin("adopt-upstream-record-failure", "hooks/workflow-state/inheritance/ado
   const [r, fired] = failUpstreamWrites("u-wfail", () => adoptSoft("d-wfail", "u-wfail"));
   check("S8-(1) error: an upstream write failure leaves adoptState ok", () => {
     if (r.error) throw new Error(r.error);
-    eq(F.raw("d-wfail").upstream_session_id, "u-wfail", "the heir adopted the upstream");
+    eq(F.raw("d-wfail").upstream_session_id, "u-wfail", "the downstream adopted the upstream");
   });
-  check("S8-(1) error: upstream_aborts reports recorded:false with a reason", () => {
-    if (!Array.isArray(r.upstream_aborts)) throw new Error(`upstream_aborts is not an array: ${show(r.upstream_aborts)}`);
-    eq(r.upstream_aborts.map((a) => [a.sid, a.recorded]), [["u-wfail", false]], "upstream_aborts");
-    const reason = r.upstream_aborts[0].reason;
-    if (typeof reason !== "string" || reason.trim() === "") throw new Error(`no reason: ${show(r.upstream_aborts[0])}`);
+  check("S8-(1) error: session_upstream_aborts reports recorded:false with a reason", () => {
+    if (!Array.isArray(r.session_upstream_aborts)) throw new Error(`session_upstream_aborts is not an array: ${show(r.session_upstream_aborts)}`);
+    eq(r.session_upstream_aborts.map((a) => [a.sid, a.recorded]), [["u-wfail", false]], "session_upstream_aborts");
+    const reason = r.session_upstream_aborts[0].reason;
+    if (typeof reason !== "string" || reason.trim() === "") throw new Error(`no reason: ${show(r.session_upstream_aborts[0])}`);
   });
   check("S8-(1) error: the injection really hit the upstream write, which stays unchanged", () => {
     if (fired === 0) throw new Error("no write onto u-wfail.json was attempted: the failure was never injected");

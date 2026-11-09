@@ -46,7 +46,7 @@ const BLOCKS = [
     return {};
   }, ["Commit blocked: new test entrypoint placed directly under tests/."], "tests-frontmatter"],
   ["agents-repo gate", () => ({ F2507_GATE_FAIL: "check-root-names:2" }),
-    ["gate-out check-root-names", "Commit blocked: root-name violations (checker rc=2).", "See docs/architecture/claude-code/root-names.md."],
+    ["gate-out check-root-names", "Commit blocked: root-name and session-term violations (checker rc=2).", "See docs/architecture/claude-code/root-names.md."],
     GATE_MARKERS[5]],
   ["comment-block-size", (X, dir) => {
     X.write(dir, "lib-fixture.js", commentRun(14));

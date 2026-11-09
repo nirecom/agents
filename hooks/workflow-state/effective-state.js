@@ -112,7 +112,7 @@ function gatedCompleteRefusal(step, raw, state, sessionId, opts) {
 // null when none can be read. Shared by every predicate answering about what
 // was RECORDED, not what the projection derived (CPR-SSOT). The stream is read
 // off the state object the caller holds, never re-read by state.session_id — a
-// migrated fixture or transcript-recovered donor has a file name that is the
+// migrated fixture or transcript-recovered session-upstream has a file name that is the
 // canonical id but a different in-memory stream. Related: hasGenuineRecorded
 // Complete (below) treats only the latest step_status=complete with a non-
 // backfilled provenance as genuine (observed/declared stay genuine), a RECORDED
@@ -164,11 +164,11 @@ function hasGenuineRecordedComplete(state, step) {
 
 // evaluateResumability(state) → { eligible, reason }. SSOT for "is this state
 // usable by a session that continues it?" (#1305). Pre-#1305 it also returned
-// scan:"stop"/"continue" to steer a directory walk for donor selection; that is
+// scan:"stop"/"continue" to steer a directory walk for session-upstream selection; that is
 // now keyed on lineage (hooks/workflow-state/inheritance.js) with the nearest
 // state-holding ancestor as sole decider, so the field is gone. S2
 // (review_security complete) was likewise REMOVED: it guarded against an
-// unrelated session grabbing late-stage work, but with descent proven the heir
+// unrelated session grabbing late-stage work, but with descent proven the session-downstream
 // IS this session's continuation. Fail-open: any unexpected error yields
 // eligible (inheritance is a convenience, never a safety gate).
 function evaluateResumability(state) {
@@ -178,7 +178,7 @@ function evaluateResumability(state) {
     // Judged on the RECORDED stream, not on `state.steps`: readState() runs
     // applyLegacyV1ReadDefaults, which synthesizes workflow_init /
     // clarify_intent / branching_complete as complete for every v1 file. A
-    // genuinely empty v1 donor therefore never looks all-pending in the
+    // genuinely empty v1 session-upstream therefore never looks all-pending in the
     // projection, and would be offered as an inheritance source that carries
     // nothing but those three synthetic completions.
     if (!hasRecordedProgress(state)) return { eligible: false, reason: "all-pending" };
@@ -208,7 +208,7 @@ function evaluateResumability(state) {
 
 // Back-compat shim for the pre-#1305 name and shape.
 //
-// `scan` steered the directory walk that used to pick a donor; nothing walks
+// `scan` steered the directory walk that used to pick a session-upstream; nothing walks
 // anymore, so the field is derived rather than decided — "stop" is simply the
 // restatement of "not eligible". Kept because the #1733 event-stream suite
 // observes hasGenuineRecordedComplete (module-private, deliberately) through

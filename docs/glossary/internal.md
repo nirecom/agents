@@ -90,13 +90,13 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### session-downstream
 
-- **Definition**: 引き継ぎ先のセッション。--from で再開した側の世代。
-- **Related**: [skills/resume-session/SKILL.md](../../skills/resume-session/SKILL.md)
+- **Definition**: 引き継ぎ先のセッション。`--from` で再開した側の世代。不採用の同義語は heir。
+- **Related**: [architecture/claude-code/session-id-resolution.md](../architecture/claude-code/session-id-resolution.md#session-inheritance-identifiers)
 
 ### session-upstream
 
-- **Definition**: 引き継ぎ元のセッション。--from で再開されるときの、再開元の世代。
-- **Related**: [skills/resume-session/SKILL.md](../../skills/resume-session/SKILL.md)
+- **Definition**: 引き継ぎ元のセッション。`--from` で再開されるときの、再開元の世代。不採用の同義語は donor。
+- **Related**: [architecture/claude-code/session-id-resolution.md](../architecture/claude-code/session-id-resolution.md#session-inheritance-identifiers)
 
 ### state handoff reader
 

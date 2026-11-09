@@ -159,10 +159,10 @@ test("supervisor-state-copied-or-absent", () => noNewFailures(failures, () => {
     F.seedUpstream("up-supgone");
     const sup = F.seedSupervisor("up-supgone");
     F.seedDownstream("down-supgone");
-    const first = adopt.adoptState({ heirSid: "down-supgone", donorSid: "up-supgone" });
+    const first = adopt.adoptState({ downstreamSid: "down-supgone", upstreamSid: "up-supgone" });
     eq(first && first.ok && first.inheritance.supervisor_state, "copied", "first adopt (" + show(first && first.error) + ")");
     fs.rmSync(F.supervisorPath("up-supgone"));
-    const again = adopt.adoptState({ heirSid: "down-supgone", donorSid: "up-supgone" });
+    const again = adopt.adoptState({ downstreamSid: "down-supgone", upstreamSid: "up-supgone" });
     eq(again && again.ok, true, "re-adopt ok (" + show(again && again.error) + ")");
     eq(again.inheritance.supervisor_state, "absent", "supervisor_state");
     eq(JSON.parse(fs.readFileSync(F.supervisorPath("down-supgone"), "utf8")), Object.assign({}, sup, { session_id: "down-supgone" }), "earlier downstream copy");
@@ -407,7 +407,7 @@ test("adopt-state-carries-the-new-contract", () => noNewFailures(failures, () =>
   check("C11: adoptState hands back the new contract under inheritance", () => {
     F.seedUpstream("up-adopt");
     F.seedDownstream("down-adopt");
-    const r = F.mod("hooks/workflow-state/inheritance/adopt").adoptState({ heirSid: "down-adopt", donorSid: "up-adopt" });
+    const r = F.mod("hooks/workflow-state/inheritance/adopt").adoptState({ downstreamSid: "down-adopt", upstreamSid: "up-adopt" });
     eq(r && r.ok, true, "ok (" + show(r && r.error) + ")");
     eq(r.inheritance && [r.inheritance.upstream_session_id, r.inheritance.supervisor_state], ["up-adopt", "absent"], "inheritance");
     // #2920: the upstream gains an adopt-auto workflow_aborted event after the copy; the boundary covers only the events before it.
@@ -444,7 +444,7 @@ test("session-start-corrupt-upstream-unlinks-state", () => noNewFailures(failure
     F.corruptSeq("up-ss");
     const preload = path.join(SCRATCH, "force-upstream.js");
     fs.writeFileSync(preload, `const b = require(${JSON.stringify(path.join(F.ROOT, "hooks/workflow-state"))});\n` +
-      "b.resolveInheritanceDonor = () => ({ donor: { session_id: 'up-ss' }, decision: 'inherited', candidateSessionId: 'up-ss', ancestors: [] });\n");
+      "b.resolveInheritanceUpstream = () => ({ upstream: { session_id: 'up-ss' }, decision: 'inherited', candidateSessionId: 'up-ss', ancestors: [] });\n");
     const home = fs.mkdtempSync(path.join(SCRATCH, "home-"));
     const tbase = fs.mkdtempSync(path.join(SCRATCH, "transcripts-"));
     const env = Object.assign({}, process.env, { HOME: home, USERPROFILE: home, CLAUDE_TRANSCRIPT_BASE_DIR: tbase });

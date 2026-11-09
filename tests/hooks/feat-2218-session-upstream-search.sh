@@ -1,30 +1,29 @@
 #!/usr/bin/env bash
-# tests/hooks/feat-2218-upstream-search.sh
-# Tests: hooks/workflow-state/upstream-search.js, hooks/workflow-state/inheritance/candidates.js
-# Tags: session-upstream, upstream-search, resume-session, plans-dir, dedup, regression-2218, scope:issue-specific, pwsh-not-required, TL2
+# tests/hooks/feat-2218-session-upstream-search.sh
+# Tests: hooks/workflow-state/session-upstream-search.js, hooks/workflow-state/inheritance/candidates.js
+# Tags: session-upstream, upstream-search, resume-session, plans-dir, dedup, regression-2218, scope:issue-specific, pwsh-not-required, TL2, test-lang-exception:e2e
 
 # Issue #2218 Step 7 — two generators answer two different questions. Generator 1 ("can I adopt this here?") is left untouched and keeps owning the eligibility claim; generator 2 ("which sid was that?") reaches across PLANS_DIR with no cwd and no state file. The merge layer presents both and re-implements neither, so a record can never claim adoptable on generator 2's evidence.
 
 # TL3 gap: the /resume-session --list rendering, and the skill-side LLM re-ranking of the shortlist, are not exercised here; neither is search latency against a real 667-file PLANS_DIR. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: workflow-state.
 
-# TDD (write_code has not run): every case is expected to FAIL with "MODULE NOT FOUND: hooks/workflow-state/upstream-search.js".
+# TDD (write_code has not run): every case is expected to FAIL with "MODULE NOT FOUND: hooks/workflow-state/session-upstream-search.js".
 
 set -u
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RWT="$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh"
 
-# pass/fail and the case markers list-injection.sh uses. Loaded before $TMP is
+# pass/fail, make_tmp and the case markers. Loaded before $TMP is
 # assigned: the harness pins TMP/TEMP/TMPDIR into its run root.
 # shellcheck source=tests/lib/harness.sh
 . "$SCRIPT_CHECKOUT_ROOT/tests/lib/harness.sh"
-make_tmp() { mktemp -d 2>/dev/null || mktemp -d -t 'wf2218'; }
 node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 SCRIPT_CHECKOUT_ROOT_NODE="$(node_path "$SCRIPT_CHECKOUT_ROOT")"
 
-TARGET="hooks/workflow-state/upstream-search.js"
-HEIR_CWD="/fixture/heir/repo"
+TARGET="hooks/workflow-state/session-upstream-search.js"
+DOWNSTREAM_CWD="/fixture/downstream/repo"
 
 require_module() {
     if [ -f "$SCRIPT_CHECKOUT_ROOT/$1" ]; then return 0; fi
@@ -67,23 +66,23 @@ w('gamma-sess-03-intent.md', '**Title:** Gamma' + String.fromCharCode(10) + 'Unr
 w('gamma-sess-03-outline.md', 'outline body' + String.fromCharCode(10), 40);
 w('gamma-sess-03-detail.md', 'detail body' + String.fromCharCode(10), 40);
 w('gamma-sess-03-handoff.md', 'handoff_schema_version: 1' + String.fromCharCode(10), 40);
-w('ctxdonor-sess-04-intent.md', '**Title:** Donor' + String.fromCharCode(10) + 'Also about inheritance granularity, #2218.' + String.fromCharCode(10), 10);
+w('ctxupstream-sess-04-intent.md', '**Title:** Upstream' + String.fromCharCode(10) + 'Also about inheritance granularity, #2218.' + String.fromCharCode(10), 10);
 for (let i = 0; i < 12; i++) {
   const n = String(100 + i);
   w('pad-sess-' + n + '-intent.md', 'padding session about granularity number ' + n + String.fromCharCode(10), 60 + i);
 }
-writeState('ctxdonor-sess-04', createInitialState('ctxdonor-sess-04', { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }));
-markStep('ctxdonor-sess-04', 'workflow_init', 'complete');
-require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('ctxdonor-sess-04', 'clarify_intent'); // #2277
-markStep('ctxdonor-sess-04', 'clarify_intent', 'complete');
-const encoded = String('$HEIR_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
+writeState('ctxupstream-sess-04', createInitialState('ctxupstream-sess-04', { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' }));
+markStep('ctxupstream-sess-04', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('ctxupstream-sess-04', 'clarify_intent'); // #2277
+markStep('ctxupstream-sess-04', 'clarify_intent', 'complete');
+const encoded = String('$DOWNSTREAM_CWD').toLowerCase().replace(/[^a-zA-Z0-9]/g, '-');
 const tdir = path.join('$TMP_NODE/transcripts', encoded);
 fs.mkdirSync(tdir, { recursive: true });
 const rows = [
-  JSON.stringify({ sessionId: 'heir-sess-99', type: 'user' }),
-  JSON.stringify({ sessionId: 'heir-sess-99', attachment: { exitCode: 0, hookEvent: 'SessionStart', stdout: 'Current workflow session_id: ctxdonor-sess-04' } }),
+  JSON.stringify({ sessionId: 'downstream-sess-99', type: 'user' }),
+  JSON.stringify({ sessionId: 'downstream-sess-99', attachment: { exitCode: 0, hookEvent: 'SessionStart', stdout: 'Current workflow session_id: ctxupstream-sess-04' } }),
 ];
-fs.writeFileSync(path.join(tdir, 'heir-sess-99.jsonl'), rows.join(String.fromCharCode(10)) + String.fromCharCode(10));
+fs.writeFileSync(path.join(tdir, 'downstream-sess-99.jsonl'), rows.join(String.fromCharCode(10)) + String.fromCharCode(10));
 " >/dev/null 2>&1
 }
 
@@ -218,7 +217,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
     fi
 }
 
-# U5 — merge. ctxdonor-sess-04 is reachable by BOTH generators; it must appear
+# U5 — merge. ctxupstream-sess-04 is reachable by BOTH generators; it must appear
 # once, carry both sources, and sort ahead of the search-only hits because it is
 # the only one the workflow would actually let you adopt.
 run_U5() {
@@ -227,16 +226,16 @@ run_U5() {
     out="$(run_case "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' }, query: 'granularity', limit: 20 }));
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' }, query: 'granularity', limit: 20 }));
 const ids = merged.map((x) => x.sid);
 const dupes = ids.filter((s, i) => ids.indexOf(s) !== i);
 if (dupes.length) problems.push('duplicate-sids:' + dupes.join(','));
-const donor = merged.find((x) => x.sid === 'ctxdonor-sess-04');
-if (!donor) problems.push('donor-absent:' + JSON.stringify(ids));
+const upstream = merged.find((x) => x.sid === 'ctxupstream-sess-04');
+if (!upstream) problems.push('upstream-absent:' + JSON.stringify(ids));
 else {
-  if (donor.sources.slice().sort().join(',') !== 'context,search') problems.push('sources:' + JSON.stringify(donor.sources));
-  if (donor.adoptable !== true) problems.push('context-candidate-not-adoptable:' + String(donor.adoptable));
-  if (ids[0] !== 'ctxdonor-sess-04') problems.push('adoptable-not-first:' + JSON.stringify(ids.slice(0, 3)));
+  if (upstream.sources.slice().sort().join(',') !== 'context,search') problems.push('sources:' + JSON.stringify(upstream.sources));
+  if (upstream.adoptable !== true) problems.push('context-candidate-not-adoptable:' + String(upstream.adoptable));
+  if (ids[0] !== 'ctxupstream-sess-04') problems.push('adoptable-not-first:' + JSON.stringify(ids.slice(0, 3)));
 }
 const searchOnly = merged.filter((x) => x.adoptable === false).map((x) => x.last_activity);
 for (let i = 1; i < searchOnly.length; i++) {
@@ -260,10 +259,10 @@ run_U6() {
     out="$(run_case "
 $PRELUDE
 const problems = [];
-const merged = rows(search.listUpstreamCandidates({ heirSid: 'heir-sess-99', ctx: { cwd: '$HEIR_CWD', git_branch: 'feature/donor' } }));
+const merged = rows(search.listUpstreamCandidates({ downstreamSid: 'downstream-sess-99', ctx: { cwd: '$DOWNSTREAM_CWD', git_branch: 'feature/upstream' } }));
 const ids = merged.map((x) => x.sid);
-if (ids.indexOf('ctxdonor-sess-04') === -1) problems.push('context-candidate-missing:' + JSON.stringify(ids));
-if (ids[0] !== 'ctxdonor-sess-04') problems.push('context-candidate-not-leading:' + JSON.stringify(ids.slice(0, 3)));
+if (ids.indexOf('ctxupstream-sess-04') === -1) problems.push('context-candidate-missing:' + JSON.stringify(ids));
+if (ids[0] !== 'ctxupstream-sess-04') problems.push('context-candidate-not-leading:' + JSON.stringify(ids.slice(0, 3)));
 const reachable = merged.filter((x) => x.adoptable === false);
 if (reachable.length !== 10) problems.push('reachable-section-not-capped-at-10:' + reachable.length);
 for (const rec of reachable) {
@@ -279,35 +278,71 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 }
 
 # U7-U17 live in sibling fragments (rules/coding/file-split.md Pattern A); they
-# need $PRELUDE, run_case, require_module and $HEIR_CWD, so they are sourced here
+# need $PRELUDE, run_case, require_module and $DOWNSTREAM_CWD, so they are sourced here
 # rather than at the top of the file.
 # shellcheck source=/dev/null
-. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-upstream-search/adoptability.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-session-upstream-search/adoptability.sh"
 # shellcheck source=/dev/null
-. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-upstream-search/list-vs-from.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-session-upstream-search/list-vs-from.sh"
 
 build_fixture
+case_begin "search-by-partial-sid" "hooks/workflow-state/session-upstream-search.js"
 run_U1
+case_end
+case_begin "search-by-issue-number" "hooks/workflow-state/session-upstream-search.js"
 run_U2
+case_end
+case_begin "search-by-keyword-without-title" "hooks/workflow-state/session-upstream-search.js"
 run_U3
+case_end
+case_begin "record-shape-never-claims-adoptable" "hooks/workflow-state/session-upstream-search.js"
 run_U4
+case_end
+case_begin "merge-collapses-both-generators" "hooks/workflow-state/session-upstream-search.js"
 run_U5
+case_end
+case_begin "query-less-listing-caps-search-only" "hooks/workflow-state/session-upstream-search.js"
 run_U6
+case_end
+case_begin "every-record-states-granularity" "hooks/workflow-state/session-upstream-search.js"
 run_U7
+case_end
+case_begin "same-cwd-candidate-offered-full" "hooks/workflow-state/inheritance/candidates.js"
 run_U8
+case_end
+case_begin "search-only-record-null-granularity" "hooks/workflow-state/session-upstream-search.js"
 run_U9
+case_end
+case_begin "context-less-listing-claims-nothing" "hooks/workflow-state/session-upstream-search.js"
 run_U10
+case_end
+case_begin "query-listing-caps-search-only" "hooks/workflow-state/session-upstream-search.js"
 run_U11
+case_end
+case_begin "search-only-cap-exported" "hooks/workflow-state/session-upstream-search.js"
 run_U12
+case_end
+case_begin "degrading-context-listed-degraded" "hooks/workflow-state/inheritance/candidates.js"
 run_U13
+case_end
+case_begin "list-granularity-matches-from-ladder" "hooks/workflow-state/session-upstream-search.js"
 run_U14
+case_end
+case_begin "start-context-only-downstream-same-on-both-paths" "hooks/workflow-state/session-upstream-search.js"
 run_U15
+case_end
+case_begin "cli-list-and-from-agree-on-start-context" "hooks/workflow-state/session-upstream-search.js"
 run_U16
+case_end
+case_begin "missing-intent-offered-when-from-adopts" "hooks/workflow-state/session-upstream-search.js"
 run_U17
+case_end
+case_begin "search-only-never-overadvertised" "hooks/workflow-state/session-upstream-search.js"
 run_U18
+case_end
 # U19/U20 run as the fragment is sourced: its case markers must wrap the runs, not just the definitions.
 # shellcheck source=/dev/null
-. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-upstream-search/list-injection.sh"
+. "$SCRIPT_CHECKOUT_ROOT/tests/hooks/feat-2218-session-upstream-search/list-injection.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

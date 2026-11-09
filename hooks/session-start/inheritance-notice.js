@@ -6,12 +6,12 @@
 // crash-resume with no lineage at all, both now have `/resume-session --from`
 // as an answer instead of an unexplained silence.
 
-function adoptCommands(sessionId, donorSid) {
+function adoptCommands(sessionId, upstreamSid) {
   return [
     "It is NOT inherited automatically. If this session continues that work:",
     "  interactive     : run /workflow-init and choose \"adopt\"",
-    `  non-interactive : node bin/workflow/adopt-session-state --session ${sessionId} --from ${donorSid}`,
-    `  across worktrees: /resume-session --from ${donorSid}`,
+    `  non-interactive : node bin/workflow/adopt-session-state --session ${sessionId} --from ${upstreamSid}`,
+    `  across worktrees: /resume-session --from ${upstreamSid}`,
   ];
 }
 

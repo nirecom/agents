@@ -1,7 +1,7 @@
 "use strict";
 
-// CLI for bin/check-root-names.sh (#2561): the root-name gate.
-// Exit 0 = clean, 1 = violation, 2 = usage error or unreadable input (never "clean").
+// CLI for bin/check-root-names.sh (#2561): the root-name gate, which also runs the
+// session-terms check (#2759) over its own list. Exit 0 = clean, 1 = violation, 2 = usage error or unreadable input (never "clean").
 //   (no args)      every check over the tracked files of this checkout
 //   --staged       the staged files (ACMRT) of the cwd repository; list and table from its index
 //   --root <dir>   the tracked files of <dir> (working-tree content)
@@ -9,7 +9,7 @@
 //   --repo agents|dotfiles   which rule set classifies the files (default agents)
 //   --only <check>           one of the checks below
 //   --scope <prefix>         keep the files at or below a repo-relative prefix
-//   --retired-names-from <file>   read the retired-name list from another file
+//   --retired-names-from <file>   read the retired root-name list from another file (not the session-term list)
 
 const fs = require("fs");
 const path = require("path");
@@ -20,9 +20,11 @@ const tableMatch = require("./table-match");
 // The module set may be copied into a throwaway repo, so the checkout is located from here.
 const SCRIPT_CHECKOUT_ROOT = path.resolve(__dirname, "..", "..");
 const LIST_REL = "tests/bin/feature-2561-root-names-residue.sh";
+const SESSION_TERM_LIST_REL = "tests/bin/feature-2759-session-terms-residue.sh";
 const TABLE_REL = "bin/check-root-names/classification.json";
 const CHECKS = {
   residue,
+  "session-terms": require("./session-terms"),
   "table-match": tableMatch,
   structural: require("./structural"),
   "script-root-form": require("./script-root-form"),
@@ -196,6 +198,7 @@ function collect(opts, cwd, only) {
   // An empty index is a real answer; an empty tree or scope means the gate looked at nothing.
   if (!opts.staged && files.length === 0) throw new UsageError("no file to check");
   let list = null;
+  let termList = null;
   let table = null;
   const ctx = {
     files,
@@ -206,6 +209,11 @@ function collect(opts, cwd, only) {
         list = residue.parseList(text, LIST_REL);
       }
       return list;
+    },
+    // A missing list or section throws, so the run exits 2 (fail closed).
+    sessionTermList: () => {
+      if (termList === null) termList = residue.parseList(ownInput(SESSION_TERM_LIST_REL, indexRoot), SESSION_TERM_LIST_REL);
+      return termList;
     },
     table: () => {
       if (table === null) table = tableMatch.parseTable(ownInput(TABLE_REL, indexRoot));

@@ -176,17 +176,17 @@ if (mode === "R3") {
     check("R8 the plan file cannot be read: denied", e.denied && !e.dialog, show(e.json));
   }
   {
-    // Handover: the donor holds the receipt and the artifact; the heir holds neither.
-    const donor = R.sessionAt("outline", { tag: 89 });
-    present(donor, "outline");
-    const heir = R.sessionAt("outline", { tag: 90 });
-    fs.unlinkSync(heir.plan);
-    const e1 = R.echo(heir.sid, "outline");
-    check("R8 heir without its own artifact and receipt: denied", R.receiptExists(donor.sid, "outline") && e1.denied && !e1.dialog, show(e1.json));
-    R.F.writePlan(heir.sid, "outline");
-    present(heir, "outline");
-    const e2 = R.echo(heir.sid, "outline");
-    check("R8 heir after presenting again: the echo reaches the dialog", e2.dialog, show(e2.json));
+    // Handover: the upstream holds the receipt and the artifact; the downstream holds neither.
+    const upstream = R.sessionAt("outline", { tag: 89 });
+    present(upstream, "outline");
+    const downstream = R.sessionAt("outline", { tag: 90 });
+    fs.unlinkSync(downstream.plan);
+    const e1 = R.echo(downstream.sid, "outline");
+    check("R8 downstream without its own artifact and receipt: denied", R.receiptExists(upstream.sid, "outline") && e1.denied && !e1.dialog, show(e1.json));
+    R.F.writePlan(downstream.sid, "outline");
+    present(downstream, "outline");
+    const e2 = R.echo(downstream.sid, "outline");
+    check("R8 downstream after presenting again: the echo reaches the dialog", e2.dialog, show(e2.json));
   }
 } else if (mode === "R9") {
   const off = R.cfg({ CONFIRM_OUTLINE: "off" });

@@ -6,7 +6,7 @@
 # asserted here; C6 is the TL2 runner (live firing: docs/architecture/claude-code/e2e-testing.md).
 # #772 regression: an inheriting session must not copy `cleanup` verbatim; it marks
 # cleanup=skipped with skip_reason="inherited-from-prior-session".
-# #2527: a donor with cleanup=complete is a delivered session (the v4-to-v5 migration
+# #2527: a upstream with cleanup=complete is a delivered session (the v4-to-v5 migration
 # backfills merge_to_main=complete), so it is not inherited at all (C1); the #772 invariant
 # still holds: cleanup never inherits as complete.
 
@@ -86,7 +86,7 @@ write_state_file() {
 # `steps` map and falling back to `.current.steps`. #1733 made the event stream
 # authoritative and `steps` a key of the derived projection; both shapes are
 # accepted so this file keeps asserting the INHERITANCE contract rather than the
-# storage layout. The heir's stream shape itself is covered in
+# storage layout. The downstream's stream shape itself is covered in
 # tests/hooks/feature-1733-state-event-stream/session-inherit.sh.
 read_step_field() {
     local sid="$1" step="$2" field="$3"
@@ -137,7 +137,7 @@ prior_state_json() {
 EOF
 }
 
-# The donor's own SessionStart announce line — the breadcrumb that maps an
+# The upstream's own SessionStart announce line — the breadcrumb that maps an
 # ancestor session id back to its state file.
 write_transcript_line() {
     local jsonl_file="$1" sid="$2" state_path="$3"
@@ -145,12 +145,12 @@ write_transcript_line() {
     printf '%s\n' "{\"type\": \"attachment\", \"attachment\": {\"type\": \"hook_success\", \"hookEvent\": \"SessionStart\", \"stdout\": \"{\\\"additionalContext\\\": \\\"Current workflow session_id: $sid\\\\nState file: $state_path\\\"}\", \"exitCode\": 0, \"command\": \"node session-start.js\"}}" >> "$jsonl_file"
 }
 
-# Lineage evidence (#1305): a `forkedFrom` row naming the donor session.
+# Lineage evidence (#1305): a `forkedFrom` row naming the upstream session.
 write_forked_line() {
-    local jsonl_file="$1" heir="$2" donor="$3"
+    local jsonl_file="$1" downstream="$2" upstream="$3"
     mkdir -p "$(dirname "$jsonl_file")"
     printf '{"type":"user","uuid":"u1-%s","sessionId":"%s","forkedFrom":{"sessionId":"%s","messageUuid":"m1"}}\n' \
-        "$heir" "$heir" "$donor" >> "$jsonl_file"
+        "$downstream" "$downstream" "$upstream" >> "$jsonl_file"
 }
 
 # Drive: simulate a NEW session starting (with NEW_SID) in a repo that has a
@@ -158,13 +158,13 @@ write_forked_line() {
 # the new session's state file should exist.
 run_session_start_new() {
     local repo="$1" new_sid="$2" fake_home="$3"
-    # Since #1305 the donor is reached through the heir's own transcript, so the
+    # Since #1305 the upstream is reached through the downstream's own transcript, so the
     # payload must carry the two fields that make lineage resolvable at all:
     # `source` (only a continuation may inherit) and `transcript_path`.
-    local cwd_enc heir_tp
+    local cwd_enc downstream_tp
     cwd_enc=$(encode_path "$(to_node_path "$repo")")
-    heir_tp="$(to_node_path "$fake_home/.claude/projects/$cwd_enc/${new_sid}.jsonl")"
-    echo "{\"session_id\":\"$new_sid\",\"source\":\"resume\",\"transcript_path\":\"$heir_tp\"}" | \
+    downstream_tp="$(to_node_path "$fake_home/.claude/projects/$cwd_enc/${new_sid}.jsonl")"
+    echo "{\"session_id\":\"$new_sid\",\"source\":\"resume\",\"transcript_path\":\"$downstream_tp\"}" | \
         HOME="$fake_home" \
         CLAUDE_PROJECT_DIR="$repo" \
         WORKFLOW_STATE_DIR="$WORKFLOW_DIR" \
@@ -189,7 +189,7 @@ setup_prior_and_new() {
     write_transcript_line "$FAKE_HOME/.claude/projects/$cwd_enc/${PRIOR_SID}.jsonl" \
         "$PRIOR_SID" "$(to_node_path "$WORKFLOW_DIR/${PRIOR_SID}.json")"
     # #1305: the new session must be able to prove the prior one is its own
-    # ancestor. Without this forkedFrom row there is no donor to inherit from.
+    # ancestor. Without this forkedFrom row there is no upstream to inherit from.
     write_forked_line "$FAKE_HOME/.claude/projects/$cwd_enc/${NEW_SID}.jsonl" \
         "$NEW_SID" "$PRIOR_SID"
 }
@@ -249,8 +249,8 @@ else
     fail "C4: expected research=outline=detail=complete, got research=$RESEARCH outline=$OUTLINE detail=$DETAIL"
 fi
 
-# C7 (#2304): the C4 heir names its upstream and bounds the copied stream; the cleanup
-# reset sits after the boundary, so the copy itself still holds the donor's cleanup record.
+# C7 (#2304): the C4 downstream names its upstream and bounds the copied stream; the cleanup
+# reset sits after the boundary, so the copy itself still holds the upstream's cleanup record.
 C7_OUT=$(node -e "
 const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
 const b = s.upstream_copy_seq;
@@ -258,7 +258,7 @@ const post = (s.events || []).filter((e) => e.seq > b && e.step === 'cleanup').m
 console.log('upstream=' + (s.upstream_session_id === process.argv[2]) + ' boundary=' + (typeof b === 'number' && b > 0) + ' post_cleanup=' + post);
 " "$(to_node_path "$WORKFLOW_DIR/${NEW_SID}.json")" "$PRIOR_SID" 2>&1)
 if [ "$C7_OUT" = "upstream=true boundary=true post_cleanup=step_annotations_cleared+step_status+step_annotation" ]; then
-    pass "C7: heir records upstream_session_id and upstream_copy_seq; the #772 cleanup triple follows the boundary"
+    pass "C7: downstream records upstream_session_id and upstream_copy_seq; the #772 cleanup triple follows the boundary"
 else
     fail "C7: expected 'upstream=true boundary=true post_cleanup=step_annotations_cleared+step_status+step_annotation', got '$C7_OUT'"
 fi

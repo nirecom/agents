@@ -14,11 +14,11 @@ const ORIGIN = "migration-v1-to-v2";
 
 // Fields of a v1 step entry that are structure, not annotation. `started_at`
 // (retired with #1640) is deliberately in this list: it is dropped, not carried.
-// `updated_seq` likewise — a donor projection legitimately carries it, and the
-// heir must RE-DERIVE its own fold position rather than inherit the donor's.
+// `updated_seq` likewise — a session-upstream projection legitimately carries it, and the
+// session-downstream must RE-DERIVE its own fold position rather than inherit the session-upstream's.
 // This list DROPS rather than throws (unlike events.js RESERVED_ANNOTATION_KEYS,
 // which it mirrors): an exception on the inheritance path aborts the whole batch
-// and leaves the heir session with no state file at all.
+// and leaves the session-downstream with no state file at all.
 const ENTRY_META_KEYS = ["status", "updated_at", "started_at", "updated_seq"];
 
 // Deterministic annotation order for one step entry: known keys in

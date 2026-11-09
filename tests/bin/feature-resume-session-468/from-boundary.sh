@@ -41,7 +41,7 @@ assert_field "T24b. availability=none for an id with nothing left to resume" "av
 assert_field "T24c. reason=unknown-session names WHY nothing is available" "reason" "unknown-session"
 assert_exit "T24d. exit 3 — the documented 'nothing survives for that id' code, not the exit 1 of a bad flag" "3"
 
-# T25 — the --from value is attacker-influenced (it arrives from a donor list,
+# T25 — the --from value is attacker-influenced (it arrives from a upstream list,
 # a pasted id, or a delegating agent). Since #2302 `buildUpstreamView()` and
 # `artifactsFor()` validate it against SESSION_ID_VALID_RE before any path is
 # built, so a malformed id is refused as unknown-session without ever touching
@@ -134,7 +134,7 @@ while IFS= read -r T25B_FORM; do
     esac
 done <<< "$T25B_ADJ_FORMS"
 printf '%s' "$LAST_OUT" | grep -qF '"attempted":true' &&
-    T25B_PROBLEMS="$T25B_PROBLEMS [state adoption was attempted for a donor conjured from outside the plans dir]"
+    T25B_PROBLEMS="$T25B_PROBLEMS [state adoption was attempted for a upstream conjured from outside the plans dir]"
 if [ -z "$T25B_PROBLEMS" ]; then
     pass "T25b. a ../ id planted against real files outside the plans dir is refused by sid validation (exit 3, unknown-session) and discloses no file content, artifact name or outside path"
 else

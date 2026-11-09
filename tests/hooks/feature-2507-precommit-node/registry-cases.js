@@ -26,7 +26,7 @@ const GATES = [
   ["bin/check-migration-blocks.sh", "bin/lib/check-migration-blocks.js", "migration block format violations", "", "snapshot", "--staged"],
   ["bin/check-plans-artifacts", "bin/check-plans-artifacts", "plans-dir names that are not registered artifacts", "docs/architecture/claude-code/state-dirs.md", "working-tree-whole", "--source"],
   ["bin/check-plans-dir-isolation.sh", "bin/check-plans-dir-isolation/main.js", "test fixture isolation violations", "rules/test/fixture-isolation.md", "snapshot", "--staged"],
-  ["bin/check-root-names.sh", "bin/check-root-names/main.js", "root-name violations", "docs/architecture/claude-code/root-names.md", "snapshot", "--staged"],
+  ["bin/check-root-names.sh", "bin/check-root-names/main.js", "root-name and session-term violations", "docs/architecture/claude-code/root-names.md", "snapshot", "--staged"],
 ];
 
 const reg = (F) => F.fresh("registry.js");

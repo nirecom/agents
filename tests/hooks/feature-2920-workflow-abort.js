@@ -70,19 +70,19 @@ test("S1: an empty or blank reason is refused", () => {
 test("S1: an origin outside ABORT_ORIGINS is refused", () => {
   rejects(valid["abort-sentinel"](), { origin: "session-inherit" }, "foreign origin");
 });
-test("S1: adopt-auto / abort-cli need a valid heir_session_id", () => {
+test("S1: adopt-auto / abort-cli need a valid downstream_session_id", () => {
   for (const o of ["adopt-auto", "abort-cli"]) {
-    rejects(valid[o](), { heir_session_id: undefined }, `${o} without heir`);
-    rejects(valid[o](), { heir_session_id: "../escape" }, `${o} traversal heir`);
-    rejects(valid[o](), { heir_session_id: "" }, `${o} empty heir`);
+    rejects(valid[o](), { downstream_session_id: undefined }, `${o} without downstream`);
+    rejects(valid[o](), { downstream_session_id: "../escape" }, `${o} traversal downstream`);
+    rejects(valid[o](), { downstream_session_id: "" }, `${o} empty downstream`);
   }
 });
-test("S1: abort-sentinel must not carry heir_session_id", () => {
-  rejects(valid["abort-sentinel"](), { heir_session_id: "heir-2920" }, "sentinel with heir");
+test("S1: abort-sentinel must not carry downstream_session_id", () => {
+  rejects(valid["abort-sentinel"](), { downstream_session_id: "downstream-2920" }, "sentinel with downstream");
 });
 test("S1 security: the refusal names fields, never the injected value", () => {
   const payload = "x$(touch /tmp/pwn)`id`\n\u0007" + "A".repeat(5000);
-  const bad = rejects(valid["adopt-auto"](), { heir_session_id: payload }, "injected heir");
+  const bad = rejects(valid["adopt-auto"](), { downstream_session_id: payload }, "injected downstream");
   try { ev().validateEvent(bad); } catch (e) {
     assert.ok(!String(e.message).includes("$(touch"), "message carries the value");
     assert.ok(String(e.message).length < 500, "message length");
@@ -95,10 +95,10 @@ test("S2: PROJECTION_KEYS lists workflow_aborted and a fresh state projects null
   assert.ok(proj().PROJECTION_KEYS.includes("workflow_aborted"), "PROJECTION_KEYS");
   assert.strictEqual(proj().projectState(streamOf([stepEv("workflow_init", "complete")])).workflow_aborted, null);
 });
-test("S2: an abort projects {origin, reason, heir_session_id, recorded_at, seq}", () => {
+test("S2: an abort projects {origin, reason, downstream_session_id, recorded_at, seq}", () => {
   const p = proj().projectState(streamOf([stepEv("workflow_init", "complete"), X.abortEvent("adopt-auto")])).workflow_aborted;
   assert.ok(p && typeof p === "object", `projection: ${JSON.stringify(p)}`);
-  assert.deepStrictEqual([p.origin, p.reason, p.heir_session_id, p.recorded_at, p.seq], ["adopt-auto", "test abort", "heir-2920", at, 2]);
+  assert.deepStrictEqual([p.origin, p.reason, p.downstream_session_id, p.recorded_at, p.seq], ["adopt-auto", "test abort", "downstream-2920", at, 2]);
 });
 test("S2: first-wins — a second abort does not replace the first", () => {
   const s = streamOf([X.abortEvent("abort-sentinel", { reason: "first" }), X.abortEvent("abort-cli", { reason: "second" })]);
@@ -154,7 +154,7 @@ test("compat: a projection without the workflow_aborted case reads an aborted st
   // Control: the current projection does read the same stream as aborted.
   assert.strictEqual((proj().projectState(s).workflow_aborted || {}).origin, "abort-sentinel", "current projection");
 });
-test("compat: the copy also reads an adopt-auto abort (with heir_session_id) without throwing", () => {
+test("compat: the copy also reads an adopt-auto abort (with downstream_session_id) without throwing", () => {
   assert.ok(ev().EVENT_KINDS.includes("workflow_aborted"), "the current EVENT_KINDS must list the kind the copy drops");
   const old = oldReleaseProjection();
   const s = streamOf([stepEv("workflow_init", "complete"), X.abortEvent("adopt-auto"), stepEv("research", "skipped")]);
@@ -198,14 +198,14 @@ test("S3: recording on a started state appends one declared event", () => {
   const r = A().recordWorkflowAborted("rec-ok", { reason: "user stopped", origin: "abort-sentinel" });
   assert.strictEqual(r && r.recorded, true, JSON.stringify(r));
   const evs = X.abortEventsOf("rec-ok");
-  assert.deepStrictEqual(evs.map((e) => [e.origin, e.reason, e.provenance, "heir_session_id" in e]), [["abort-sentinel", "user stopped", "declared", false]]);
+  assert.deepStrictEqual(evs.map((e) => [e.origin, e.reason, e.provenance, "downstream_session_id" in e]), [["abort-sentinel", "user stopped", "declared", false]]);
   assert.strictEqual(A().isWorkflowAborted("rec-ok"), true);
 });
-test("S3: an adopt-auto record carries the heir sid", () => {
-  X.seedPlain("rec-heir");
-  const r = A().recordWorkflowAborted("rec-heir", { reason: "adopted by heir-1", origin: "adopt-auto", heirSid: "heir-1" });
+test("S3: an adopt-auto record carries the downstream sid", () => {
+  X.seedPlain("rec-downstream");
+  const r = A().recordWorkflowAborted("rec-downstream", { reason: "adopted by downstream-1", origin: "adopt-auto", downstreamSid: "downstream-1" });
   assert.strictEqual(r && r.recorded, true, JSON.stringify(r));
-  assert.deepStrictEqual(X.abortEventsOf("rec-heir").map((e) => e.heir_session_id), ["heir-1"]);
+  assert.deepStrictEqual(X.abortEventsOf("rec-downstream").map((e) => e.downstream_session_id), ["downstream-1"]);
 });
 test("S3: no state -> no-state, and no file is created", () => {
   const r = A().recordWorkflowAborted("rec-none", { reason: "x", origin: "abort-sentinel" });
@@ -215,7 +215,7 @@ test("S3: no state -> no-state, and no file is created", () => {
 test("S3 idempotency: a second abort is already-aborted and the first wins", () => {
   X.seedPlain("rec-twice");
   A().recordWorkflowAborted("rec-twice", { reason: "first", origin: "abort-sentinel" });
-  const r = A().recordWorkflowAborted("rec-twice", { reason: "second", origin: "abort-cli", heirSid: "heir-2" });
+  const r = A().recordWorkflowAborted("rec-twice", { reason: "second", origin: "abort-cli", downstreamSid: "downstream-2" });
   assert.deepStrictEqual(r && [r.recorded, r.reason], [false, "already-aborted"]);
   assert.deepStrictEqual(X.abortEventsOf("rec-twice").map((e) => e.reason), ["first"]);
 });
@@ -301,31 +301,31 @@ test("S3: a state without ancestors selects nothing", () => {
 caseEnd();
 
 // A downstream adopting an abort-sentinel-aborted session takes over its worktree: the
-// workflow_abort_handover event names it, and the projection fills heir_session_id from it.
+// workflow_abort_handover event names it, and the projection fills downstream_session_id from it.
 caseBegin("handover-event", "hooks/workflow-state/state-io/events.js");
-test("handover: the kind is listed, requires heir_session_id, and only heir-naming origins pass", () => {
+test("handover: the kind is listed, requires downstream_session_id, and only downstream-naming origins pass", () => {
   assert.ok(ev().EVENT_KINDS.includes("workflow_abort_handover"), "EVENT_KINDS");
-  assert.deepStrictEqual(ev().REQUIRED_FIELDS.workflow_abort_handover, ["heir_session_id"]);
-  for (const origin of ["adopt-auto", "abort-cli"]) ev().validateEvent(withAt(X.handoverEvent("heir-1", { origin })));
-  const base = withAt(X.handoverEvent("heir-1"));
+  assert.deepStrictEqual(ev().REQUIRED_FIELDS.workflow_abort_handover, ["downstream_session_id"]);
+  for (const origin of ["adopt-auto", "abort-cli"]) ev().validateEvent(withAt(X.handoverEvent("downstream-1", { origin })));
+  const base = withAt(X.handoverEvent("downstream-1"));
   rejects(base, { origin: "abort-sentinel" }, "sentinel origin");
   rejects(base, { origin: "session-inherit" }, "foreign origin");
-  rejects(base, { heir_session_id: undefined }, "no heir");
-  rejects(base, { heir_session_id: "../escape" }, "traversal heir");
+  rejects(base, { downstream_session_id: undefined }, "no downstream");
+  rejects(base, { downstream_session_id: "../escape" }, "traversal downstream");
 });
 caseEnd();
 
 caseBegin("handover-projection", "hooks/workflow-state/state-io/projection.js");
-test("handover: fills heir_session_id of a sentinel abort; origin/reason/seq stay first-wins", () => {
+test("handover: fills downstream_session_id of a sentinel abort; origin/reason/seq stay first-wins", () => {
   const p = proj().projectState(streamOf([X.abortEvent("abort-sentinel", { reason: "first" }), X.handoverEvent("down-1")])).workflow_aborted;
-  assert.deepStrictEqual(p && [p.origin, p.reason, p.seq, p.heir_session_id], ["abort-sentinel", "first", 1, "down-1"]);
+  assert.deepStrictEqual(p && [p.origin, p.reason, p.seq, p.downstream_session_id], ["abort-sentinel", "first", 1, "down-1"]);
 });
-test("handover: ignored without an abort, after a heir is named, and at or below upstream_copy_seq", () => {
+test("handover: ignored without an abort, after a downstream is named, and at or below upstream_copy_seq", () => {
   assert.strictEqual(proj().projectState(streamOf([X.handoverEvent("down-1")])).workflow_aborted, null, "no abort");
   const twice = proj().projectState(streamOf([X.abortEvent("abort-sentinel"), X.handoverEvent("down-1"), X.handoverEvent("down-2")])).workflow_aborted;
-  assert.strictEqual(twice && twice.heir_session_id, "down-1", "first handover wins");
+  assert.strictEqual(twice && twice.downstream_session_id, "down-1", "first handover wins");
   const b = proj().projectState(streamOf([X.abortEvent("adopt-auto"), X.handoverEvent("down-1")])).workflow_aborted;
-  assert.strictEqual(b && b.heir_session_id, "heir-2920", "an adopt-auto heir is kept");
+  assert.strictEqual(b && b.downstream_session_id, "downstream-2920", "an adopt-auto downstream is kept");
   const copied = streamOf([stepEv("workflow_init", "complete"), X.abortEvent("abort-sentinel"), X.handoverEvent("down-1")], { upstream_copy_seq: 3 });
   assert.strictEqual(proj().projectState(copied).workflow_aborted, null, "copied abort and handover");
 });
@@ -334,10 +334,10 @@ caseEnd();
 caseBegin("handover-record-and-select", "hooks/workflow-state/workflow-abort.js");
 test("handover: recordAbortHandover names the downstream once on a sentinel abort", () => {
   X.seedAborted("ho-ok", "abort-sentinel");
-  const r = A().recordAbortHandover("ho-ok", { origin: "adopt-auto", heirSid: "down-ok" });
+  const r = A().recordAbortHandover("ho-ok", { origin: "adopt-auto", downstreamSid: "down-ok" });
   assert.deepStrictEqual(r && [r.recorded, r.reason], [true, null], JSON.stringify(r));
-  assert.strictEqual(A().readWorkflowAbort("ho-ok").heir_session_id, "down-ok");
-  const again = A().recordAbortHandover("ho-ok", { origin: "adopt-auto", heirSid: "down-2" });
+  assert.strictEqual(A().readWorkflowAbort("ho-ok").downstream_session_id, "down-ok");
+  const again = A().recordAbortHandover("ho-ok", { origin: "adopt-auto", downstreamSid: "down-2" });
   assert.deepStrictEqual(again && [again.recorded, again.reason], [false, "already-handed-over"]);
   assert.strictEqual(X.handoverEventsOf("ho-ok").length, 1, "handover events");
 });
@@ -345,23 +345,23 @@ test("handover: refused on a live, a scenario-B, and an absent session; nothing 
   X.seedPlain("ho-live");
   X.seedAborted("ho-b", "adopt-auto");
   const before = ["ho-live", "ho-b"].map(X.bytes);
-  assert.strictEqual(A().recordAbortHandover("ho-live", { origin: "adopt-auto", heirSid: "d" }).reason, "not-aborted");
-  assert.strictEqual(A().recordAbortHandover("ho-b", { origin: "adopt-auto", heirSid: "d" }).reason, "already-handed-over");
+  assert.strictEqual(A().recordAbortHandover("ho-live", { origin: "adopt-auto", downstreamSid: "d" }).reason, "not-aborted");
+  assert.strictEqual(A().recordAbortHandover("ho-b", { origin: "adopt-auto", downstreamSid: "d" }).reason, "already-handed-over");
   assert.deepStrictEqual(["ho-live", "ho-b"].map(X.bytes), before, "state bytes changed");
-  assert.strictEqual(A().recordAbortHandover("ho-none", { origin: "adopt-auto", heirSid: "d" }).reason, "no-state");
+  assert.strictEqual(A().recordAbortHandover("ho-none", { origin: "adopt-auto", downstreamSid: "d" }).reason, "no-state");
   assert.strictEqual(fs.existsSync(X.statePath("ho-none")), false, "state file created");
 });
 test("handover: selectHandoverTargets picks only unclaimed sentinel-aborted ancestors", () => {
   const { b, c } = chain("ho-sel", { bAborted: true });
   assert.deepStrictEqual(sids(A().selectHandoverTargets(X.io().readState(c))), [b]);
-  A().recordAbortHandover(b, { origin: "adopt-auto", heirSid: c });
+  A().recordAbortHandover(b, { origin: "adopt-auto", downstreamSid: c });
   assert.deepStrictEqual(sids(A().selectHandoverTargets(X.io().readState(c))), [], "after the handover");
 });
 test("handover: abortUpstreamsFor aborts the live ancestor and hands over the sentinel-aborted one", () => {
   const { a, b, c } = chain("ho-all", { bAborted: true });
   const got = A().abortUpstreamsFor(c, "abort-cli", "fixture");
   assert.deepStrictEqual(got.map((r) => [r.sid, !!r.handover, r.recorded]), [[a, false, true], [b, true, true]], JSON.stringify(got));
-  assert.deepStrictEqual([a, b].map((s) => A().readWorkflowAbort(s).heir_session_id), [c, c]);
+  assert.deepStrictEqual([a, b].map((s) => A().readWorkflowAbort(s).downstream_session_id), [c, c]);
   assert.strictEqual(A().readWorkflowAbort(b).origin, "abort-sentinel", "origin stays first-wins");
 });
 caseEnd();

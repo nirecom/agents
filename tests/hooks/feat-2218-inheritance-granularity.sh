@@ -77,18 +77,18 @@ require_decide() {
 # Upstream fixture shared by the cases: completions on BOTH sides of the
 # classification boundary, an annotation on a context-independent step (outline
 # skip_reason) and a pending worktree-dependent step carrying a reset_reason.
-DONOR_JS="
-writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-markStep(donorSid, 'workflow_init', 'complete');
-require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(donorSid, 'clarify_intent');
-markStep(donorSid, 'clarify_intent', 'complete');
-markStep(donorSid, 'research', 'complete');
-markStep(donorSid, 'outline', 'skipped', { skip_reason: 'trivial' });
-markStep(donorSid, 'detail', 'complete');
-markStep(donorSid, 'branching_complete', 'complete');
-markStep(donorSid, 'write_tests', 'complete');
-markStep(donorSid, 'review_tests', 'complete');
-markStep(donorSid, 'run_tests', 'pending', { reset_reason: 'flaky-rerun' });
+UPSTREAM_JS="
+writeState(upstreamSid, createInitialState(upstreamSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+markStep(upstreamSid, 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(upstreamSid, 'clarify_intent');
+markStep(upstreamSid, 'clarify_intent', 'complete');
+markStep(upstreamSid, 'research', 'complete');
+markStep(upstreamSid, 'outline', 'skipped', { skip_reason: 'trivial' });
+markStep(upstreamSid, 'detail', 'complete');
+markStep(upstreamSid, 'branching_complete', 'complete');
+markStep(upstreamSid, 'write_tests', 'complete');
+markStep(upstreamSid, 'review_tests', 'complete');
+markStep(upstreamSid, 'run_tests', 'pending', { reset_reason: 'flaky-rerun' });
 "
 
 run_node() {
@@ -112,19 +112,19 @@ run_G1() {
 const { writeState, createInitialState, markStep, readState, readRawState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 const { isContextIndependentStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io/step-context-class');
-const donorSid = 'donor-g1';
-$DONOR_JS
-const heirSid = 'heir-g1';
-writeState(heirSid, createInitialState(heirSid, { cwd: '/other/repo', git_branch: 'main' }));
+const upstreamSid = 'upstream-g1';
+$UPSTREAM_JS
+const downstreamSid = 'downstream-g1';
+writeState(downstreamSid, createInitialState(downstreamSid, { cwd: '/other/repo', git_branch: 'main' }));
 const problems = [];
 let res = null;
-try { res = applyInheritance(heirSid, '2026-03-01T00:00:00.000Z', donorSid, { granularity: 'context-independent-only' }); }
+try { res = applyInheritance(downstreamSid, '2026-03-01T00:00:00.000Z', upstreamSid, { granularity: 'context-independent-only' }); }
 catch (e) { problems.push('threw:' + String(e && e.message).split('\n')[0]); }
 if (!res || res.granularity !== 'context-independent-only') problems.push('granularity:' + JSON.stringify(res && res.granularity));
-const heir = readState(heirSid) || {};
-const raw = readRawState(heirSid) || {};
-const st = (s) => ((heir.steps && heir.steps[s]) || {});
-if (raw.upstream_session_id !== donorSid) problems.push('upstream_session_id:' + String(raw.upstream_session_id));
+const downstream = readState(downstreamSid) || {};
+const raw = readRawState(downstreamSid) || {};
+const st = (s) => ((downstream.steps && downstream.steps[s]) || {});
+if (raw.upstream_session_id !== upstreamSid) problems.push('upstream_session_id:' + String(raw.upstream_session_id));
 if ((raw.events || []).some((e) => 'inherited_from' in e)) problems.push('inherited_from-still-stamped');
 for (const s of ['workflow_init', 'clarify_intent', 'research', 'detail']) {
   if (st(s).status !== 'complete') problems.push('ci-step-lost:' + s + '=' + st(s).status);
@@ -168,21 +168,21 @@ run_G2() {
     out="$(run_node "
 const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
-const donorSid = 'donor-g2';
-$DONOR_JS
+const upstreamSid = 'upstream-g2';
+$UPSTREAM_JS
 const problems = [];
 try {
-  writeState('heir-g2-full', createInitialState('heir-g2-full', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-  applyInheritance('heir-g2-full', '2026-03-01T00:00:00.000Z', donorSid, { granularity: 'full' });
-  writeState('heir-g2-cio', createInitialState('heir-g2-cio', { cwd: '/other/repo', git_branch: 'main' }));
-  applyInheritance('heir-g2-cio', '2026-03-01T00:00:00.000Z', donorSid, { granularity: 'context-independent-only' });
+  writeState('downstream-g2-full', createInitialState('downstream-g2-full', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+  applyInheritance('downstream-g2-full', '2026-03-01T00:00:00.000Z', upstreamSid, { granularity: 'full' });
+  writeState('downstream-g2-cio', createInitialState('downstream-g2-cio', { cwd: '/other/repo', git_branch: 'main' }));
+  applyInheritance('downstream-g2-cio', '2026-03-01T00:00:00.000Z', upstreamSid, { granularity: 'context-independent-only' });
 } catch (e) { problems.push('threw:' + String(e && e.message).split('\n')[0]); }
-const full = readState('heir-g2-full') || {};
+const full = readState('downstream-g2-full') || {};
 const fullCleanup = (full.steps && full.steps.cleanup) || {};
 if (fullCleanup.status !== 'skipped') problems.push('full-cleanup-status:' + String(fullCleanup.status));
 if (fullCleanup.skip_reason !== 'inherited-from-prior-session') problems.push('full-cleanup-skip_reason:' + String(fullCleanup.skip_reason));
 if (((full.steps && full.steps.write_tests) || {}).status !== 'complete') problems.push('full-write_tests-not-carried');
-const cio = readState('heir-g2-cio') || {};
+const cio = readState('downstream-g2-cio') || {};
 const cioCleanup = (cio.steps && cio.steps.cleanup) || {};
 if ((cioCleanup.status || 'pending') !== 'pending') problems.push('cio-cleanup-status:' + String(cioCleanup.status));
 if (cioCleanup.skip_reason !== undefined) problems.push('cio-cleanup-skip_reason-leaked:' + String(cioCleanup.skip_reason));
@@ -207,24 +207,24 @@ run_G3() {
 const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
-const donorSid = 'donor-g3';
-$DONOR_JS
-writeState('heir-g3a', createInitialState('heir-g3a', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-markStep('heir-g3a', 'workflow_init', 'complete');
-const a = adoptState({ heirSid: 'heir-g3a', donorSid });
+const upstreamSid = 'upstream-g3';
+$UPSTREAM_JS
+writeState('downstream-g3a', createInitialState('downstream-g3a', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+markStep('downstream-g3a', 'workflow_init', 'complete');
+const a = adoptState({ downstreamSid: 'downstream-g3a', upstreamSid });
 if (a.ok !== false) problems.push('overwrite-protection-bypassed:' + JSON.stringify(a));
 // #2527: merge_to_main, not approval, ends a session.
-const donor2 = 'donor-g3b';
-writeState(donor2, createInitialState(donor2, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-markStep(donor2, 'workflow_init', 'complete');
-markStep(donor2, 'user_verification', 'complete');
-markStep(donor2, 'merge_to_main', 'complete');
-writeState('heir-g3b', createInitialState('heir-g3b', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-const b = adoptState({ heirSid: 'heir-g3b', donorSid: donor2 });
+const upstream2 = 'upstream-g3b';
+writeState(upstream2, createInitialState(upstream2, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+markStep(upstream2, 'workflow_init', 'complete');
+markStep(upstream2, 'user_verification', 'complete');
+markStep(upstream2, 'merge_to_main', 'complete');
+writeState('downstream-g3b', createInitialState('downstream-g3b', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+const b = adoptState({ downstreamSid: 'downstream-g3b', upstreamSid: upstream2 });
 if (b.ok !== false) problems.push('evaluateResumability-bypassed:' + JSON.stringify(b));
 else if (String(b.error).indexOf('not resumable') === -1) problems.push('wrong-reason-b:' + b.error);
-const heirB = readState('heir-g3b');
-if ((heirB.events || []).some((e) => e.origin === 'session-inherit')) problems.push('events-written-despite-rejection');
+const downstreamB = readState('downstream-g3b');
+if ((downstreamB.events || []).some((e) => e.origin === 'session-inherit')) problems.push('events-written-despite-rejection');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     if [ "$out" = "OK" ]; then
@@ -244,15 +244,15 @@ run_G4() {
 const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
-const donorSid = 'donor-g4';
-$DONOR_JS
-writeState('heir-g4', createInitialState('heir-g4', { cwd: '/somewhere/else', git_branch: 'main' }));
-const r = adoptState({ heirSid: 'heir-g4', donorSid });
+const upstreamSid = 'upstream-g4';
+$UPSTREAM_JS
+writeState('downstream-g4', createInitialState('downstream-g4', { cwd: '/somewhere/else', git_branch: 'main' }));
+const r = adoptState({ downstreamSid: 'downstream-g4', upstreamSid });
 if (r.ok !== true) problems.push('rejected:' + JSON.stringify(r));
 if (r.granularity !== 'context-independent-only') problems.push('granularity:' + String(r.granularity));
-const heir = readState('heir-g4') || {};
-if (((heir.steps && heir.steps.detail) || {}).status !== 'complete') problems.push('detail-not-inherited');
-const wt = (heir.steps && heir.steps.write_tests) || {};
+const downstream = readState('downstream-g4') || {};
+if (((downstream.steps && downstream.steps.detail) || {}).status !== 'complete') problems.push('detail-not-inherited');
+const wt = (downstream.steps && downstream.steps.write_tests) || {};
 if ((wt.status || 'pending') !== 'pending') problems.push('write_tests-kept-across-worktrees');
 if (wt.inherit_revert_reason !== 'context:worktree-dependent') problems.push('write_tests-revert-reason:' + String(wt.inherit_revert_reason));
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
@@ -270,7 +270,7 @@ process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 run_G5() {
     require_granularity || return 0
     require_decide "G5" || return 0
-    local out fixture_tmp main wt main_n wt_n donor_js_g5
+    local out fixture_tmp main wt main_n wt_n upstream_js_g5
     fixture_tmp="$(make_tmp)"
     main="$fixture_tmp/main"; wt="$fixture_tmp/linked"
     init_repo "$main"
@@ -281,27 +281,27 @@ run_G5() {
         return 0
     fi
     main_n="$(node_path "$main")"; wt_n="$(node_path "$wt")"
-    donor_js_g5="${DONOR_JS//\/fixture\/repo/$main_n}"
+    upstream_js_g5="${UPSTREAM_JS//\/fixture\/repo/$main_n}"
     out="$(run_node "
 const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
-const donorSid = 'donor-g5';
-$donor_js_g5
-writeState('heir-g5a', createInitialState('heir-g5a', { cwd: '$main_n', git_branch: 'feature/x' }));
-const same = adoptState({ heirSid: 'heir-g5a', donorSid });
+const upstreamSid = 'upstream-g5';
+$upstream_js_g5
+writeState('downstream-g5a', createInitialState('downstream-g5a', { cwd: '$main_n', git_branch: 'feature/x' }));
+const same = adoptState({ downstreamSid: 'downstream-g5a', upstreamSid });
 if (same.ok !== true) problems.push('same-rejected:' + JSON.stringify(same));
 else if (same.granularity !== 'full') problems.push('same-granularity:' + String(same.granularity));
-const heirA = readState('heir-g5a') || {};
+const downstreamA = readState('downstream-g5a') || {};
 for (const s of ['detail', 'branching_complete', 'write_tests', 'review_tests']) {
-  if (((heirA.steps && heirA.steps[s]) || {}).status !== 'complete') problems.push('same-not-full:' + s);
+  if (((downstreamA.steps && downstreamA.steps[s]) || {}).status !== 'complete') problems.push('same-not-full:' + s);
 }
-writeState('heir-g5b', createInitialState('heir-g5b', { cwd: '$wt_n', git_branch: 'feature/g5' }));
-const sib = adoptState({ heirSid: 'heir-g5b', donorSid, granularity: 'full', verifiedEquivalent: true });
+writeState('downstream-g5b', createInitialState('downstream-g5b', { cwd: '$wt_n', git_branch: 'feature/g5' }));
+const sib = adoptState({ downstreamSid: 'downstream-g5b', upstreamSid, granularity: 'full', verifiedEquivalent: true });
 if (sib.ok !== true) problems.push('sibling-rejected:' + JSON.stringify(sib));
 else if (sib.granularity !== 'context-independent-only') problems.push('sibling-granularity:' + String(sib.granularity));
-const heirB = readState('heir-g5b') || {};
-if ((((heirB.steps && heirB.steps.write_tests) || {}).status || 'pending') !== 'pending') problems.push('sibling-write_tests-kept');
+const downstreamB = readState('downstream-g5b') || {};
+if ((((downstreamB.steps && downstreamB.steps.write_tests) || {}).status || 'pending') !== 'pending') problems.push('sibling-write_tests-kept');
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 ")"
     rm -rf "$fixture_tmp" 2>/dev/null || true

@@ -28,7 +28,7 @@ const EVENT_KINDS = [
 
 const CYCLE_BOUNDARY_REASONS = ["reinit-entry", "workflow-init-complete"];
 
-// The closed origin vocabulary of workflow_aborted; adopt-auto / abort-cli name the heir session.
+// The closed origin vocabulary of workflow_aborted; adopt-auto / abort-cli name the session-downstream.
 const ABORT_ORIGINS = Object.freeze(["abort-sentinel", "adopt-auto", "abort-cli"]);
 
 // How much the recorded `at` can be trusted:
@@ -114,7 +114,7 @@ const REQUIRED_FIELDS = {
   state_handoff_record: ["cls", "at_step", "record_key", "summary", "pointer"],
   cycle_boundary: ["closed_cycle", "reason"],
   workflow_aborted: ["reason"],
-  workflow_abort_handover: ["heir_session_id"],
+  workflow_abort_handover: ["downstream_session_id"],
 };
 
 class InvalidEventError extends Error {
@@ -134,28 +134,28 @@ function validateWorkflowAborted(event) {
     throw new InvalidEventError("event.origin must be one of: " + ABORT_ORIGINS.join(", "));
   }
   if (event.origin === "abort-sentinel") {
-    if (hasOwn(event, "heir_session_id")) {
-      throw new InvalidEventError("event.heir_session_id is not allowed for origin=abort-sentinel");
+    if (hasOwn(event, "downstream_session_id")) {
+      throw new InvalidEventError("event.downstream_session_id is not allowed for origin=abort-sentinel");
     }
     return;
   }
-  validateHeirSessionId(event);
+  validateDownstreamSessionId(event);
 }
 
-function validateHeirSessionId(event) {
+function validateDownstreamSessionId(event) {
   const { SESSION_ID_VALID_RE } = require("./core");
-  if (typeof event.heir_session_id !== "string" || !SESSION_ID_VALID_RE.test(event.heir_session_id)) {
-    throw new InvalidEventError(`event.heir_session_id is missing or invalid (origin=${event.origin})`);
+  if (typeof event.downstream_session_id !== "string" || !SESSION_ID_VALID_RE.test(event.downstream_session_id)) {
+    throw new InvalidEventError(`event.downstream_session_id is missing or invalid (origin=${event.origin})`);
   }
 }
 
-// workflow_abort_handover: a downstream adopted a session aborted by abort-sentinel, so the
-// worktree is the downstream's; only the heir-naming origins can record it.
+// workflow_abort_handover: a session-downstream adopted a session aborted by abort-sentinel, so the
+// worktree is the session-downstream's; only the origins that name a session-downstream can record it.
 function validateWorkflowAbortHandover(event) {
   if (event.origin === "abort-sentinel" || !ABORT_ORIGINS.includes(event.origin)) {
     throw new InvalidEventError("event.origin must be adopt-auto or abort-cli (kind=workflow_abort_handover)");
   }
-  validateHeirSessionId(event);
+  validateDownstreamSessionId(event);
 }
 
 // Throws InvalidEventError when `event` is not a well-formed stream record.
@@ -164,6 +164,12 @@ function validateEvent(event) {
   if (!event || typeof event !== "object" || Array.isArray(event)) {
     throw new InvalidEventError("event must be a plain object");
   }
+  // --- BEGIN temporary: retired-downstream-field -> downstream_session_id migration added 2026-11-07 ---
+  // deletion-condition: remove once 30 days (STATE_RETENTION_DAYS) have passed since merge and a grep of *.json under the state root and the old state dir for LEGACY_DOWNSTREAM_FIELD's value finds nothing; review by 2027-02-05
+  if (require("./projection").eventCarriesRetiredDownstreamField(event)) {
+    throw new InvalidEventError("event carries the retired session-downstream field; write downstream_session_id instead");
+  }
+  // --- END temporary: retired-downstream-field -> downstream_session_id migration ---
   if (typeof event.kind !== "string" || !EVENT_KINDS.includes(event.kind)) {
     throw new InvalidEventError("event.kind is missing or outside EVENT_KINDS");
   }
@@ -302,7 +308,7 @@ function composeAppendedState(sessionId, baseState, eventsOrBuilder, opts = {}) 
   }
   // Glossary-check boundary (#2529): a glossary stage step reaching `complete` without a
   // current, resolved glossary_check record throws here, before any byte is written.
-  // An inheritance copy carries completions the upstream's own boundary already judged; a
+  // An inheritance copy carries completions the session-upstream's own boundary already judged; a
   // RESET_FROM batch (its `reset` anchor) re-completes prior steps whose approvals the reset
   // handler has already verified (#2709), so neither is re-judged for a glossary record.
   const glossarySkip = opts.origin === "session-inherit" ? "session-inherit"
