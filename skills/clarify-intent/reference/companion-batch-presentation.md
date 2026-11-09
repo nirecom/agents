@@ -2,17 +2,17 @@
 
 Before presenting, read the snapshot at the path printed by `node "$AGENTS_MAIN_ROOT/bin/workflow-control-dir" --session "<session-id>" --file companion-precheck.json`.
 
-## Main-conversation display (before AskUserQuestion)
+## Main-conversation display (before AskUserQuestion) <!-- askuser-none -->
 
-Present the following in the MAIN CONVERSATION (not inside AskUserQuestion):
+Present the following in the MAIN CONVERSATION (not inside AskUserQuestion): <!-- askuser-none -->
 - Baseline decomposition verdict (seed-only scope).
 - Per-candidate decomposition impact: verdict change and triggering signals.
 - `(companion-driven)` annotation on signals that only fire due to the companion candidate.
 - If a candidate would trigger `wf-meta`: note "adding #N would propose session decomposition."
 
-## Batch AskUserQuestion
+## Batch AskUserQuestion <!-- askuser-none -->
 
-Present all candidates in ONE multiSelect AskUserQuestion batch.
+Present all candidates in ONE multiSelect AskUserQuestion batch (`metadata.source=clarify-intent.companion-batch`).
 - Maximum 4 options per question; 5+ candidates split into 4+1, 4+4+4... pages.
 - Pre-announce page count in main conversation ("X candidates across Y question(s)").
 - `low-purity` candidates shown with a "(low-confidence match)" note.
@@ -22,5 +22,5 @@ Present all candidates in ONE multiSelect AskUserQuestion batch.
 
 If the selected candidate subset produces a `wf-meta` verdict:
 - Announce the sub-deliverable list in the MAIN CONVERSATION first.
-- Ask at most ONE wf-meta confirmation AskUserQuestion (pre-announced above).
+- Ask at most ONE wf-meta confirmation AskUserQuestion (`metadata.source=clarify-intent.wf-meta-confirm`, pre-announced above).
 - Never auto-switch to wf-meta without this confirmation.

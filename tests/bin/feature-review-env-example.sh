@@ -28,7 +28,17 @@ run_with_timeout() {
 }
 
 TMPDIR_BASE=$(mktemp -d)
+[[ -n "$TMPDIR_BASE" && -d "$TMPDIR_BASE" ]] || { echo "FAIL: mktemp -d gave no directory" >&2; exit 2; }
+readonly TMPDIR_BASE
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+# A fixture git call must never reach the real checkout: an inherited GIT_DIR (e.g. from a
+# git hook) redirects `git -C <fixture>`, and an empty repo path makes `git -C ""` act on the
+# CWD. So drop the GIT_* redirects, leave the checkout, and stop discovery above the temp root.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_PREFIX
+export GIT_CEILING_DIRECTORIES
+GIT_CEILING_DIRECTORIES="$(dirname "$TMPDIR_BASE")"
+cd "$TMPDIR_BASE"
 
 # ---------------------------------------------------------------------------
 # Helper: create a fresh isolated temp git repo with a main branch + initial commit
@@ -39,19 +49,23 @@ mkdir -p "$EMPTY_HOOKS_DIR"
 EMPTY_EXCLUDES="$TMPDIR_BASE/empty-excludes"
 : > "$EMPTY_EXCLUDES"
 
+# Runs inside $(...), where set -e does not apply: every step checks itself and the
+# function returns non-zero, so the caller's `REPO=$(make_repo)` stops the script instead
+# of handing an empty path to `git -C`.
 make_repo() {
     local repo
-    repo=$(mktemp -d -p "$TMPDIR_BASE")
-    git -C "$repo" init -q
-    git -C "$repo" config core.hooksPath "$EMPTY_HOOKS_DIR"
-    git -C "$repo" config core.excludesFile "$EMPTY_EXCLUDES"
-    git -C "$repo" config core.autocrlf false
-    git -C "$repo" checkout -q -b main
-    git -C "$repo" config user.email "test@example.com"
-    git -C "$repo" config user.name "Test"
-    echo "init" > "$repo/README.md"
-    git -C "$repo" add README.md
-    git -C "$repo" commit -q -m "initial"
+    repo=$(mktemp -d -p "$TMPDIR_BASE") || return 1
+    [[ -n "$repo" && -d "$repo" && "$repo" == "$TMPDIR_BASE"/* ]] || return 1
+    git -C "$repo" init -q || return 1
+    git -C "$repo" config core.hooksPath "$EMPTY_HOOKS_DIR" || return 1
+    git -C "$repo" config core.excludesFile "$EMPTY_EXCLUDES" || return 1
+    git -C "$repo" config core.autocrlf false || return 1
+    git -C "$repo" checkout -q -b main || return 1
+    git -C "$repo" config user.email "test@example.com" || return 1
+    git -C "$repo" config user.name "Test" || return 1
+    echo "init" > "$repo/README.md" || return 1
+    git -C "$repo" add README.md || return 1
+    git -C "$repo" commit -q -m "initial" || return 1
     echo "$repo"
 }
 
@@ -66,7 +80,7 @@ MYVAR=default
 EOF
 }
 
-CASE_DIR="$(dirname "$0")/feature-review-env-example"
+CASE_DIR="$AGENTS_ROOT/tests/bin/feature-review-env-example"
 
 # shellcheck source=./feature-review-env-example/hard-violation-cases.sh
 . "$CASE_DIR/hard-violation-cases.sh"

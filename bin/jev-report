@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 "use strict";
 // bin/jev-report — aggregate the Jev decision log (#2460): the legacy (v1, shadow period)
-// comparison, the v2 adoption figures, and the skip points' retune conditions.
-// Usage: jev-report [--log <path>] [--point <name>] [--json] [--no-sweep]
+// comparison, the v2 adoption figures, the skip points' retune conditions, and (#2764) the
+// AskUserQuestion routes per dialog ID (with no --point or --point askuser-answer).
+// Usage: jev-report [--log <path>] [--point <name>] [--json] [--no-sweep] [--routes-log <path>]
 // By default it first turns stale pending hand-offs of every session into llm-missing
 // records and runs the 7-day state retention, so the figures include abandoned dispatches;
 // --no-sweep reads the log as it is. Local files only: never talks to Jev.
@@ -15,18 +16,22 @@ const { loadDefaultEnv } = require("../hooks/lib/load-env");
 const broker = require("../hooks/lib/jev/broker");
 const { registryEntry } = require("../hooks/lib/jev/registry");
 const { decisionLogPath } = require("../hooks/lib/jev/decision-record");
-const { readLog, aggregate, formatText } = require("./lib/jev-report-aggregate");
+const { routeLogPath } = require("../hooks/lib/askuser-route-log");
+const { resolveClarificationsFlag } = require("../hooks/lib/temporary-migrations/jev-auto-clarifications-rename");
+const { readLog, aggregate, formatText, aggregateAskuserDialogs, formatAskuserDialogs } = require("./lib/jev-report-aggregate");
 
 const DEFAULT_THRESHOLD = 0.75;
-const USAGE = "usage: jev-report [--log <path>] [--point <name>] [--json] [--no-sweep]\n";
+const ASKUSER_POINT = "askuser-answer";
+const USAGE = "usage: jev-report [--log <path>] [--point <name>] [--json] [--no-sweep] [--routes-log <path>]\n";
+const VALUE_FLAGS = { "--log": "log", "--point": "point", "--routes-log": "routesLog" };
 
 function parseArgs(argv) {
-  const opts = { log: null, point: null, json: false, sweep: true };
+  const opts = { log: null, routesLog: null, point: null, json: false, sweep: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") opts.json = true;
     else if (a === "--no-sweep") opts.sweep = false;
-    else if ((a === "--log" || a === "--point") && i + 1 < argv.length) opts[a.slice(2)] = argv[++i];
+    else if (Object.prototype.hasOwnProperty.call(VALUE_FLAGS, a) && i + 1 < argv.length) opts[VALUE_FLAGS[a]] = argv[++i];
     else if (a === "-h" || a === "--help") return { help: true };
     else return { error: `jev-report: unknown or incomplete argument: ${a}` };
   }
@@ -44,6 +49,8 @@ function main(argv) {
   if (opts.help) { process.stdout.write(USAGE); return 0; }
   if (opts.error) { process.stderr.write(opts.error + "\n" + USAGE); return 2; }
   try { loadDefaultEnv(); } catch (_e) { /* defaults apply */ }
+  // Run for its warning: an old flag name still in effect is reported here, where it is read.
+  try { resolveClarificationsFlag(); } catch (_e) { /* the report goes on */ }
   if (opts.sweep) {
     try { broker.sweepAllSessions(OVERRIDES); } catch (_e) { /* report what is there */ }
     try { broker.runRetention(); } catch (_e) { /* report what is there */ }
@@ -52,7 +59,13 @@ function main(argv) {
   if (result.unreadable_generations.length) {
     process.stderr.write(`jev-report: warning: unreadable log generations skipped: ${result.unreadable_generations.join(" ")}\n`);
   }
-  process.stdout.write(opts.json ? JSON.stringify(result, null, 2) + "\n" : formatText(result));
+  const dialogs = !opts.point || opts.point === ASKUSER_POINT ? aggregateAskuserDialogs(opts.routesLog || routeLogPath()) : null;
+  if (opts.json) {
+    if (dialogs) result.askuser_dialogs = dialogs;
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  } else {
+    process.stdout.write(formatText(result) + (dialogs ? formatAskuserDialogs(dialogs) : ""));
+  }
   return 0;
 }
 
