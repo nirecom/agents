@@ -9,43 +9,43 @@ run_state_inheritance_tests() {
     # Section 1: State Inheritance
     # (Smoke — full gate matrix in tests/hooks/feature-1305-inheritance-lineage.sh)
     #
-    # Since #1305 a donor is reached through the heir's OWN transcript lineage,
-    # never through a cwd+branch scan, so every case here seeds a heir sid with
-    # `forkedFrom` (or a copied announce line) pointing at the donor.
+    # Since #1305 a upstream is reached through the downstream's OWN transcript lineage,
+    # never through a cwd+branch scan, so every case here seeds a downstream sid with
+    # `forkedFrom` (or a copied announce line) pointing at the upstream.
     # ---------------------------------------------------------------------------
     echo ""
     echo "=== Section 1: State Inheritance ==="
 
-    # L1-a: donor with research=complete + fork lineage → resolveInheritanceDonor returns it
+    # L1-a: upstream with research=complete + fork lineage → resolveInheritanceUpstream returns it
     CWD_1A="/users/test/repo-l1a-$$"
     ENC_1A=$(encode_path "$CWD_1A")
     HOME_1A="$TMPDIR_BASE/home-1a"
     mkdir -p "$HOME_1A/.claude/projects/$ENC_1A"
     SID_1A="l1a-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    HEIR_1A="l1aheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    DOWNSTREAM_1A="l1adownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_1A" "$(INHERIT_STATE_JSON "$SID_1A" "main")"
-    write_forked_transcript_line "$HOME_1A/.claude/projects/$ENC_1A/${HEIR_1A}.jsonl" \
-        "$HEIR_1A" "$SID_1A"
-    RESULT_1A=$(call_resolve_donor "$CWD_1A" "main" "$HOME_1A" "$HEIR_1A")
+    write_forked_transcript_line "$HOME_1A/.claude/projects/$ENC_1A/${DOWNSTREAM_1A}.jsonl" \
+        "$DOWNSTREAM_1A" "$SID_1A"
+    RESULT_1A=$(call_resolve_upstream "$CWD_1A" "main" "$HOME_1A" "$DOWNSTREAM_1A")
     RESEARCH_1A=$(get_json_step_status "$RESULT_1A" "research")
     if [ "$RESEARCH_1A" = "complete" ]; then
-        pass "L1-a. fork lineage + research=complete donor → inherited research=complete"
+        pass "L1-a. fork lineage + research=complete upstream → inherited research=complete"
     else
         fail "L1-a. inheritance smoke — expected research=complete, got: $RESEARCH_1A (result: $RESULT_1A)"
     fi
 
-    # L1-b: donor with user_verification=complete → NOT inherited (S1 boundary),
+    # L1-b: upstream with user_verification=complete → NOT inherited (S1 boundary),
     # even though the lineage evidence itself is impeccable.
     HOME_1B="$TMPDIR_BASE/home-1b"
     CWD_1B="/users/test/repo-l1b-$$"
     ENC_1B=$(encode_path "$CWD_1B")
     mkdir -p "$HOME_1B/.claude/projects/$ENC_1B"
     SID_1B="l1b-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    HEIR_1B="l1bheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    DOWNSTREAM_1B="l1bdownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_1B" "$(ALL_COMPLETE_JSON "$SID_1B" "main")"
-    write_forked_transcript_line "$HOME_1B/.claude/projects/$ENC_1B/${HEIR_1B}.jsonl" \
-        "$HEIR_1B" "$SID_1B"
-    RESULT_1B=$(call_resolve_donor "$CWD_1B" "main" "$HOME_1B" "$HEIR_1B")
+    write_forked_transcript_line "$HOME_1B/.claude/projects/$ENC_1B/${DOWNSTREAM_1B}.jsonl" \
+        "$DOWNSTREAM_1B" "$SID_1B"
+    RESULT_1B=$(call_resolve_upstream "$CWD_1B" "main" "$HOME_1B" "$DOWNSTREAM_1B")
     expect_not_inherited "L1-b. user_verification=complete → not inherited (returns null)" "$RESULT_1B"
 
     # L1-c: session-start called twice on same session ID → state not overwritten (idempotency)
@@ -60,16 +60,16 @@ run_state_inheritance_tests() {
     expect_state_step "L1-c. session-start 2 runs → research remains complete (idempotent)" \
         "$SID_1C" "research" "complete"
 
-    # L1-d: the second lineage evidence shape. A compact copies the donor's
-    # PostCompact announce line into the heir's transcript; that must be honoured
+    # L1-d: the second lineage evidence shape. A compact copies the upstream's
+    # PostCompact announce line into the downstream's transcript; that must be honoured
     # exactly like a `forkedFrom` row (#1305 / CPR-ORTH). This replaces the old
-    # "newest transcript mtime wins" case — mtime no longer selects a donor.
+    # "newest transcript mtime wins" case — mtime no longer selects a upstream.
     HOME_1D="$TMPDIR_BASE/home-1d"
     CWD_1D="/users/test/repo-l1d-$$"
     ENC_1D=$(encode_path "$CWD_1D")
     mkdir -p "$HOME_1D/.claude/projects/$ENC_1D"
-    SID_1D_PC="l1d-pc-$(printf '%04x%04x' $RANDOM $RANDOM)"   # donor: research+outline+detail=complete
-    HEIR_1D="l1dheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    SID_1D_PC="l1d-pc-$(printf '%04x%04x' $RANDOM $RANDOM)"   # upstream: research+outline+detail=complete
+    DOWNSTREAM_1D="l1ddownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_1D_PC" "$(cat <<EOF
 {
   "version": 1, "session_id": "$SID_1D_PC", "git_branch": "main",
@@ -88,11 +88,11 @@ run_state_inheritance_tests() {
 }
 EOF
 )"
-    # The heir's transcript carries ONLY the copied PostCompact announce line —
+    # The downstream's transcript carries ONLY the copied PostCompact announce line —
     # no forkedFrom row — so this isolates the announce-line evidence path.
-    write_postcompact_line "$HOME_1D/.claude/projects/$ENC_1D/${HEIR_1D}.jsonl" \
+    write_postcompact_line "$HOME_1D/.claude/projects/$ENC_1D/${DOWNSTREAM_1D}.jsonl" \
         "$SID_1D_PC" "$(to_node_path "$WORKFLOW_DIR/${SID_1D_PC}.json")"
-    RESULT_1D=$(call_resolve_donor "$CWD_1D" "main" "$HOME_1D" "$HEIR_1D" compact)
+    RESULT_1D=$(call_resolve_upstream "$CWD_1D" "main" "$HOME_1D" "$DOWNSTREAM_1D" compact)
     PLAN_1D=$(get_json_step_status "$RESULT_1D" "detail")
     if [ "$PLAN_1D" = "complete" ]; then
         pass "L1-d. copied PostCompact announce line is lineage evidence → detail=complete"
@@ -105,7 +105,7 @@ EOF
 
 # ---------------------------------------------------------------------------
 # #1305 / #1681: read-time derivation of the RESUMABILITY verdict. Lineage (a
-# donor is only the heir's own ancestor) replaced the verification-tier boundary
+# upstream is only the downstream's own ancestor) replaced the verification-tier boundary
 # (S2 removed); what survives are states unusable to their OWN continuation:
 # finished (S1), fresh with nothing to give (S0), intent without intent.md (S3).
 # ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ derivation_ctx() {
     mkdir -p "$D_HOME/.claude/projects/$D_ENC"
 }
 
-# An ERROR: result means resolveInheritanceDonor threw or is missing — that
+# An ERROR: result means resolveInheritanceUpstream threw or is missing — that
 # must never be reported as "correctly declined to inherit" (false green).
 expect_not_inherited() {
     local desc="$1" result="$2"
@@ -154,7 +154,7 @@ expect_not_inherited() {
     fi
 }
 
-# seed_lineage <tag-sid> <heir-sid> — heir transcript forked from the donor,
+# seed_lineage <tag-sid> <downstream-sid> — downstream transcript forked from the upstream,
 # written into the derivation_ctx transcript dir.
 seed_lineage() {
     write_forked_transcript_line "$D_HOME/.claude/projects/$D_ENC/${2}.jsonl" "$2" "$1"
@@ -165,20 +165,20 @@ run_state_inheritance_derivation_tests() {
     echo "=== Section 1b: State Inheritance — read-time derivation (#1305/#1681) ==="
 
     # L1-e: S2 REMOVED (#1305). review_security=complete no longer blocks: with
-    # lineage proving the heir IS this session's continuation, stopping it from
+    # lineage proving the downstream IS this session's continuation, stopping it from
     # resuming its own verified work has no protective value left.
     derivation_ctx "l1e"
     SID_1E="l1e-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    HEIR_1E="l1eheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    DOWNSTREAM_1E="l1edownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_1E" "$(DERIVATION_STATE_JSON "$SID_1E" \
         '"review_security":   {"status": "complete", "updated_at": "'"$NOW_ISO"'"},')"
-    seed_lineage "$SID_1E" "$HEIR_1E"
-    RESULT_1E=$(call_resolve_donor "$D_CWD" "main" "$D_HOME" "$HEIR_1E")
+    seed_lineage "$SID_1E" "$DOWNSTREAM_1E"
+    RESULT_1E=$(call_resolve_upstream "$D_CWD" "main" "$D_HOME" "$DOWNSTREAM_1E")
     RESEARCH_1E=$(get_json_step_status "$RESULT_1E" "research")
     if [ "$RESEARCH_1E" = "complete" ]; then
         pass "L1-e. review_security=complete no longer blocks inheritance (S2 removed)"
     else
-        fail "L1-e. S2 removal — expected the donor to be returned, got: $RESULT_1E"
+        fail "L1-e. S2 removal — expected the upstream to be returned, got: $RESULT_1E"
     fi
 
     # L1-f: clarify_intent literally recorded complete but no intent.md artifact.
@@ -189,9 +189,9 @@ run_state_inheritance_derivation_tests() {
         '"clarify_intent":    {"status": "complete", "updated_at": "'"$NOW_ISO"'"},
     "review_security":   {"status": "pending",  "updated_at": null},')"
     rm -f "$TEST_PLANS_DIR/${SID_1F}-intent.md"
-    HEIR_1F="l1fheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    seed_lineage "$SID_1F" "$HEIR_1F"
-    RESULT_1F=$(call_resolve_donor "$D_CWD" "main" "$D_HOME" "$HEIR_1F")
+    DOWNSTREAM_1F="l1fdownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    seed_lineage "$SID_1F" "$DOWNSTREAM_1F"
+    RESULT_1F=$(call_resolve_upstream "$D_CWD" "main" "$D_HOME" "$DOWNSTREAM_1F")
     expect_not_inherited \
         "L1-f. clarify_intent recorded complete without intent.md → not inherited" \
         "$RESULT_1F"
@@ -206,9 +206,9 @@ run_state_inheritance_derivation_tests() {
         '"plan":              {"status": "complete", "updated_at": "'"$NOW_ISO"'"},
     "review_security":   {"status": "pending",  "updated_at": null},')"
     rm -f "$TEST_PLANS_DIR/${SID_1G}-outline.md" "$TEST_PLANS_DIR/${SID_1G}-detail.md"
-    HEIR_1G="l1gheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    seed_lineage "$SID_1G" "$HEIR_1G"
-    RESULT_1G=$(call_resolve_donor "$D_CWD" "main" "$D_HOME" "$HEIR_1G")
+    DOWNSTREAM_1G="l1gdownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    seed_lineage "$SID_1G" "$DOWNSTREAM_1G"
+    RESULT_1G=$(call_resolve_upstream "$D_CWD" "main" "$D_HOME" "$DOWNSTREAM_1G")
     DETAIL_1G=$(get_json_step_status "$RESULT_1G" "detail")
     if [ "$DETAIL_1G" = "complete" ]; then
         pass "L1-g. synthesized outline/detail complete without artifacts → still inherited"
@@ -228,9 +228,9 @@ run_state_inheritance_derivation_tests() {
     printf 'intent\n'  > "$TEST_PLANS_DIR/${SID_1H}-intent.md"
     printf 'outline\n' > "$TEST_PLANS_DIR/${SID_1H}-outline.md"
     printf '2\n'       > "$TEST_PLANS_DIR/${SID_1H}-outline-plan-round-number.txt"
-    HEIR_1H="l1hheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
-    seed_lineage "$SID_1H" "$HEIR_1H"
-    RESULT_1H=$(call_resolve_donor "$D_CWD" "main" "$D_HOME" "$HEIR_1H")
+    DOWNSTREAM_1H="l1hdownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    seed_lineage "$SID_1H" "$DOWNSTREAM_1H"
+    RESULT_1H=$(call_resolve_upstream "$D_CWD" "main" "$D_HOME" "$DOWNSTREAM_1H")
     OUTLINE_1H=$(get_json_step_status "$RESULT_1H" "outline")
     if [ "$OUTLINE_1H" = "complete" ]; then
         pass "L1-h. outline.md present + in-flight review round → still inherited"
@@ -245,22 +245,22 @@ run_state_inheritance_derivation_tests() {
     derivation_ctx "l1i"
     SID_1I_OLD="l1iold-$(printf '%04x%04x' $RANDOM $RANDOM)"   # grandparent
     SID_1I_NEW="l1inew-$(printf '%04x%04x' $RANDOM $RANDOM)"   # nearest ancestor
-    HEIR_1I="l1iheir-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    DOWNSTREAM_1I="l1idownstream-$(printf '%04x%04x' $RANDOM $RANDOM)"
     write_state "$SID_1I_OLD" "$(INHERIT_STATE_JSON "$SID_1I_OLD" "main")"
     write_state "$SID_1I_NEW" "$(DERIVATION_STATE_JSON "$SID_1I_NEW" \
         '"review_security":   {"status": "complete", "updated_at": "'"$NOW_ISO"'"},')"
-    # heir → NEW → OLD
-    seed_lineage "$SID_1I_NEW" "$HEIR_1I"
+    # downstream → NEW → OLD
+    seed_lineage "$SID_1I_NEW" "$DOWNSTREAM_1I"
     write_forked_transcript_line \
         "$D_HOME/.claude/projects/$D_ENC/${SID_1I_NEW}.jsonl" "$SID_1I_NEW" "$SID_1I_OLD"
-    RESULT_1I=$(call_resolve_donor "$D_CWD" "main" "$D_HOME" "$HEIR_1I")
+    RESULT_1I=$(call_resolve_upstream "$D_CWD" "main" "$D_HOME" "$DOWNSTREAM_1I")
     case "$RESULT_1I" in
         ERROR:*) fail "L1-i. the resolver did not run: $RESULT_1I" ;;
         *)
             if echo "$RESULT_1I" | grep -qF "$SID_1I_OLD"; then
                 fail "L1-i. the walk went past the nearest ancestor to the grandparent ($SID_1I_OLD)"
             elif echo "$RESULT_1I" | grep -qF "$SID_1I_NEW"; then
-                pass "L1-i. the nearest ancestor with state is the donor (grandparent never consulted)"
+                pass "L1-i. the nearest ancestor with state is the upstream (grandparent never consulted)"
             else
                 fail "L1-i. expected the nearest ancestor $SID_1I_NEW, got: $RESULT_1I"
             fi

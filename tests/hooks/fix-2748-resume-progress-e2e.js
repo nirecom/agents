@@ -6,7 +6,7 @@
 // the progress-nudge hook runs for B at Stop. The progress file stays the first generation's
 // (<A>-session-progress.md); no split <B>-session-progress.md appears and B's sidecar carries no
 // root_sid pin. E2E2: a later step completion in B is nudged with A's file named. Every child runs from a neutral temp HOME with CLAUDE_CODE_SESSION_ID set only
-// where the CLI needs the heir's id.
+// where the CLI needs the downstream's id.
 
 const { caseBegin, caseEnd, isolate } = require("../lib/harness");
 const assert = require("node:assert");

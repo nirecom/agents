@@ -10,7 +10,7 @@ Always run `--dry-run` first.
 
 - Issue creation consumes monotonically increasing global issue numbers; they can never be reused, freed, or reassigned. Every canary stage is irreversible.
 - Each stage MUST run as its own process: never chain stages, never pipe `yes` into the orchestrator, never run two stages in one command.
-- `AskUserQuestion` is the only gate between stages — never invoke `orchestrate.sh` inside a pipeline that supplies stdin.
+- `AskUserQuestion` is the only gate between stages — never invoke `orchestrate.sh` inside a pipeline that supplies stdin. <!-- askuser-none -->
 
 ## Pre-flight
 
@@ -22,7 +22,7 @@ Always run `--dry-run` first.
 
 MI-1. Get the migration target path. Called from `/migrate`: use its `ROOT` as `REPO_PATH` and skip the confirmation below. Otherwise ask the user.
    - Never infer `REPO_PATH` from a path mentioned only as documentation / reference / context — accept only the path the user explicitly designates as the target.
-   - Resolve `REPO_PATH` to an absolute path, then **AskUserQuestion**: "Migration target = `<abs path>` — correct? (confirm this is NOT the agents repo itself)"
+   - Resolve `REPO_PATH` to an absolute path, then **AskUserQuestion** (`metadata.source=migrate-issues.target-confirm`): "Migration target = `<abs path>` — correct? (confirm this is NOT the agents repo itself)"
      - "Yes, proceed with this path" → MI-2
      - "No, re-enter the correct path" → re-collect `REPO_PATH`, repeat MI-1
    - Run `node "$AGENTS_MAIN_ROOT/skills/migrate-issues/scripts/needs.js" --root "<REPO_PATH>"`; exit 0 means already migrated — report done and end.
@@ -31,13 +31,13 @@ MI-2. Preview + capture the snapshot.
    - Run `bash "$AGENTS_MAIN_ROOT/skills/migrate-issues/scripts/preview-and-capture.sh" "<REPO_PATH>"` as one standalone call — it runs the dry-run, mirrors it to stderr, and prints `export NAME=value` lines on stdout for `MIGRATE_ACK_UP_TO_ISSUE_N`, `MIGRATE_ACK_SELF_COUNT_AT_ACK` and `MIGRATE_SELF_REPO_DETECTED`.
    - Read those values from stdout and substitute them literally wherever the steps below name them.
    - Inspect `MIGRATE_SELF_REPO_DETECTED`:
-     - `=1` → **AskUserQuestion**: "WARNING: target (`<REPO_PATH>`) is the agents repo itself. Proceed ONLY for an intentional agents-repo Phase 3 self-migration."
+     - `=1` → **AskUserQuestion** (`metadata.source=migrate-issues.self-migration`): "WARNING: target (`<REPO_PATH>`) is the agents repo itself. Proceed ONLY for an intentional agents-repo Phase 3 self-migration."
        - "Proceed as agents-repo Phase 3" → MI-3
        - "Abort and fix the path" → stop the skill
      - `=0` → MI-3
 
 MI-3. Dry-run review gate. Called with `--dry-run` (e.g. from `/migrate --dry-run`): report the MI-2 preview and end the skill here — never enter MI-4.
-   Otherwise **AskUserQuestion**: "Dry-run reviewed — proceed to History canary 1, or abort?"
+   Otherwise **AskUserQuestion** (`metadata.source=migrate-issues.dry-run-gate`): "Dry-run reviewed — proceed to History canary 1, or abort?"
    - Note in the question: if an existing-issues WARNING was shown, migrated issues permanently lose the "early issue numbers = history chronology" invariant.
    - "proceed" → MI-4
    - "abort" → stop the skill (no irreversible mutation yet)
@@ -48,7 +48,7 @@ Each stage below runs as its own command, formed as `<ACK> <BASE> <stage args>`:
 - `<ACK>` = `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK"`
 - `<BASE>` = `bash "$AGENTS_MAIN_ROOT/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH"`
 
-**Gate** (only where the table says "gate"): after the stage's issues appear at the printed URL, **AskUserQuestion** "proceed / abort".
+**Gate** (only where the table says "gate"): after the stage's issues appear at the printed URL, **AskUserQuestion** (`metadata.source=migrate-issues.stage-gate`) "proceed / abort".
 - "proceed" → run the next stage's command.
 - "abort" → stop the skill; resume later (see Resume) from a new session.
 

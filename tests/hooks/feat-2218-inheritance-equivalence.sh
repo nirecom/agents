@@ -3,7 +3,7 @@
 # Tests: hooks/workflow-state/inheritance/apply.js, hooks/workflow-state/inheritance/adopt.js, hooks/workflow-state/inheritance.js
 # Tags: session-inherit, inheritance-granularity, equivalence-pin, regression-1305, regression-2218, scope:issue-specific, pwsh-not-required, TL2, regression-2304, feature-2297, sibling-degraded
 
-# Issue #2218 Step 4 / Risks #1 — granularity is added to the SAME applyInheritance the automatic (lineage-keyed) path uses. Since #2304 the pin is structural: with `opts` omitted the heir holds the donor's stream verbatim up to upstream_copy_seq plus only the #772 cleanup triple, and every default spelling yields the same stream.
+# Issue #2218 Step 4 / Risks #1 — granularity is added to the SAME applyInheritance the automatic (lineage-keyed) path uses. Since #2304 the pin is structural: with `opts` omitted the downstream holds the upstream's stream verbatim up to upstream_copy_seq plus only the #772 cleanup triple, and every default spelling yields the same stream.
 
 # TL3 gap: a real SessionStart-driven inheritance inside a live Claude Code session is not exercised here — only the shared applyInheritance/adoptState seam that hook path calls. Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: workflow-state.
 
@@ -35,7 +35,7 @@ printf 'CONFIRM_DETAIL=off\n' > "$CFG_FIXTURE/.env"
 CFG_FIXTURE_NODE="$(node_path "$CFG_FIXTURE")"
 export AGENTS_MAIN_ROOT="$CFG_FIXTURE_NODE"
 
-# #2304: the heir stream is the donor's verbatim, then only the #772 cleanup triple.
+# #2304: the downstream stream is the upstream's verbatim, then only the #772 cleanup triple.
 EXPECTED_POST="step_annotations_cleared|cleanup||||session-inherit|backfilled
 step_status|cleanup|skipped|||session-inherit|backfilled
 step_annotation|cleanup||skip_reason|inherited-from-prior-session|session-inherit|backfilled"
@@ -47,7 +47,7 @@ require_granularity() {
     out=$(env -u CLAUDE_CODE_SESSION_ID "$RWT" 30 node -e "
 const apply = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/apply');
 const missing = [];
-if (typeof apply.applyInheritance !== 'function' || apply.applyInheritance.length < 4) missing.push('applyInheritance(sessionId,createdAt,donor,opts)');
+if (typeof apply.applyInheritance !== 'function' || apply.applyInheritance.length < 4) missing.push('applyInheritance(sessionId,createdAt,upstream,opts)');
 if (typeof apply.describeGranularInheritance !== 'function') missing.push('describeGranularInheritance');
 process.stdout.write(missing.join(','));
 " 2>&1)
@@ -56,7 +56,7 @@ process.stdout.write(missing.join(','));
     return 1
 }
 
-# Builds the fixture donor + heir and prints the verbatim-copy verdict plus the
+# Builds the fixture upstream + downstream and prints the verbatim-copy verdict plus the
 # normalized post-boundary events for the given `opts` literal ('OMIT' = no 4th arg).
 project_stream() {
     local tmp tn out
@@ -67,43 +67,43 @@ project_stream() {
         "$RWT" 60 node -e "
 const { writeState, createInitialState, markStep } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
-const donorSid = 'donor-2218-eq';
-writeState(donorSid, createInitialState(donorSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-markStep(donorSid, 'workflow_init', 'complete');
-require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(donorSid, 'clarify_intent');
-markStep(donorSid, 'clarify_intent', 'complete');
-markStep(donorSid, 'outline', 'skipped', { skip_reason: 'trivial' });
-markStep(donorSid, 'detail', 'complete');
-markStep(donorSid, 'branching_complete', 'complete');
-markStep(donorSid, 'write_tests', 'complete');
-markStep(donorSid, 'review_tests', 'complete');
-markStep(donorSid, 'run_tests', 'pending', { reset_reason: 'flaky-rerun' });
+const upstreamSid = 'upstream-2218-eq';
+writeState(upstreamSid, createInitialState(upstreamSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+markStep(upstreamSid, 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive(upstreamSid, 'clarify_intent');
+markStep(upstreamSid, 'clarify_intent', 'complete');
+markStep(upstreamSid, 'outline', 'skipped', { skip_reason: 'trivial' });
+markStep(upstreamSid, 'detail', 'complete');
+markStep(upstreamSid, 'branching_complete', 'complete');
+markStep(upstreamSid, 'write_tests', 'complete');
+markStep(upstreamSid, 'review_tests', 'complete');
+markStep(upstreamSid, 'run_tests', 'pending', { reset_reason: 'flaky-rerun' });
 const fs = require('fs'), path = require('path');
 const rawOf = (sid) => JSON.parse(fs.readFileSync(path.join(process.env.WORKFLOW_STATE_DIR, sid + '.json'), 'utf8'));
-const donorEvents = rawOf(donorSid).events;
-const heirSid = 'heir-2218-eq';
-const heirCreatedAt = '2026-03-01T00:00:00.000Z';
-writeState(heirSid, createInitialState(heirSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+const upstreamEvents = rawOf(upstreamSid).events;
+const downstreamSid = 'downstream-2218-eq';
+const downstreamCreatedAt = '2026-03-01T00:00:00.000Z';
+writeState(downstreamSid, createInitialState(downstreamSid, { cwd: '/fixture/repo', git_branch: 'feature/x' }));
 const mode = '$1';
-if (mode === 'OMIT') applyInheritance(heirSid, heirCreatedAt, donorSid);
-else applyInheritance(heirSid, heirCreatedAt, donorSid, JSON.parse(mode));
-const heir = rawOf(heirSid);
-const b = heir.upstream_copy_seq;
-const pre = heir.events.filter((e) => e.seq <= b);
-const post = heir.events.filter((e) => !(e.seq <= b)).map((e) => [
+if (mode === 'OMIT') applyInheritance(downstreamSid, downstreamCreatedAt, upstreamSid);
+else applyInheritance(downstreamSid, downstreamCreatedAt, upstreamSid, JSON.parse(mode));
+const downstream = rawOf(downstreamSid);
+const b = downstream.upstream_copy_seq;
+const pre = downstream.events.filter((e) => e.seq <= b);
+const post = downstream.events.filter((e) => !(e.seq <= b)).map((e) => [
   e.kind, e.step, e.status || '', e.key || '',
   e.value === undefined ? '' : (typeof e.value === 'string' ? e.value : JSON.stringify(e.value)),
   e.origin, e.provenance,
 ].join('|'));
-process.stdout.write('VERBATIM=' + (typeof b === 'number' && b === donorEvents.length && JSON.stringify(pre) === JSON.stringify(donorEvents)) + '\n');
-process.stdout.write('INHERITED_FROM=' + heir.events.filter((e) => 'inherited_from' in e).length + '\n');
+process.stdout.write('VERBATIM=' + (typeof b === 'number' && b === upstreamEvents.length && JSON.stringify(pre) === JSON.stringify(upstreamEvents)) + '\n');
+process.stdout.write('INHERITED_FROM=' + downstream.events.filter((e) => 'inherited_from' in e).length + '\n');
 process.stdout.write(post.join('\n'));
 " 2>&1)
     rm -rf "$tmp" 2>/dev/null || true
     printf '%s' "$out"
 }
 
-# E1 — the structural pin (#2304). With `opts` omitted the heir holds the donor's
+# E1 — the structural pin (#2304). With `opts` omitted the downstream holds the upstream's
 # events verbatim up to upstream_copy_seq and only the #772 cleanup triple after
 # it. On mismatch the actual output is printed so the diff is readable.
 run_E1() {
@@ -113,7 +113,7 @@ run_E1() {
 INHERITED_FROM=0
 $EXPECTED_POST"
     if [ "$out" = "$want" ]; then
-        pass "E1: opts-omitted inheritance copies the donor stream verbatim and appends only the cleanup triple"
+        pass "E1: opts-omitted inheritance copies the upstream stream verbatim and appends only the cleanup triple"
     else
         fail "E1: event stream drifted from verbatim copy + cleanup triple"
         echo "----- actual stream -----"
@@ -180,27 +180,27 @@ run_E3() {
 const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { adoptState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance/adopt');
 const problems = [];
-writeState('donor-e3', createInitialState('donor-e3', { cwd: '$main_n', git_branch: 'master' }));
-markStep('donor-e3', 'workflow_init', 'complete');
-require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('donor-e3', 'clarify_intent');
-markStep('donor-e3', 'clarify_intent', 'complete');
-markStep('donor-e3', 'branching_complete', 'complete');
-markStep('donor-e3', 'write_tests', 'complete');
+writeState('upstream-e3', createInitialState('upstream-e3', { cwd: '$main_n', git_branch: 'master' }));
+markStep('upstream-e3', 'workflow_init', 'complete');
+require('$SCRIPT_CHECKOUT_ROOT_NODE/tests/lib/plan-approval-fixture').approveLive('upstream-e3', 'clarify_intent');
+markStep('upstream-e3', 'clarify_intent', 'complete');
+markStep('upstream-e3', 'branching_complete', 'complete');
+markStep('upstream-e3', 'write_tests', 'complete');
 const cases = [
-  ['heir-e3-sib', '$wt_n', {}],
-  ['heir-e3-sib-claim', '$wt_n', { verifiedEquivalent: true, granularity: 'full' }],
-  ['heir-e3-other', '$other_n', {}],
+  ['downstream-e3-sib', '$wt_n', {}],
+  ['downstream-e3-sib-claim', '$wt_n', { verifiedEquivalent: true, granularity: 'full' }],
+  ['downstream-e3-other', '$other_n', {}],
 ];
-for (const [heir, cwd, extra] of cases) {
-  writeState(heir, createInitialState(heir, { cwd, git_branch: 'feature/e3' }));
-  const r = adoptState(Object.assign({ heirSid: heir, donorSid: 'donor-e3' }, extra));
-  if (r.ok !== true) { problems.push(heir + ':refused:' + r.error); continue; }
-  if (r.granularity !== 'context-independent-only') problems.push(heir + ':granularity=' + String(r.granularity));
-  const st = readState(heir) || {};
+for (const [downstream, cwd, extra] of cases) {
+  writeState(downstream, createInitialState(downstream, { cwd, git_branch: 'feature/e3' }));
+  const r = adoptState(Object.assign({ downstreamSid: downstream, upstreamSid: 'upstream-e3' }, extra));
+  if (r.ok !== true) { problems.push(downstream + ':refused:' + r.error); continue; }
+  if (r.granularity !== 'context-independent-only') problems.push(downstream + ':granularity=' + String(r.granularity));
+  const st = readState(downstream) || {};
   const s = (k) => ((st.steps && st.steps[k]) || {});
-  if (s('clarify_intent').status !== 'complete') problems.push(heir + ':clarify_intent-lost');
+  if (s('clarify_intent').status !== 'complete') problems.push(downstream + ':clarify_intent-lost');
   for (const k of ['branching_complete', 'write_tests']) {
-    if ((s(k).status || 'pending') !== 'pending') problems.push(heir + ':' + k + '=' + s(k).status);
+    if ((s(k).status || 'pending') !== 'pending') problems.push(downstream + ':' + k + '=' + s(k).status);
   }
 }
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
@@ -228,16 +228,16 @@ run_E4() {
 const { writeState, createInitialState, markStep, readState } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/state-io');
 const { applyInheritance } = require('$SCRIPT_CHECKOUT_ROOT_NODE/hooks/workflow-state/inheritance');
 const problems = [];
-writeState('donor-e4', createInitialState('donor-e4', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-markStep('donor-e4', 'workflow_init', 'complete');
-markStep('donor-e4', 'detail', 'complete');
-markStep('donor-e4', 'write_tests', 'complete');
-writeState('heir-e4', createInitialState('heir-e4', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
-const res = applyInheritance('heir-e4', '2026-03-01T00:00:00.000Z', 'donor-e4');
+writeState('upstream-e4', createInitialState('upstream-e4', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+markStep('upstream-e4', 'workflow_init', 'complete');
+markStep('upstream-e4', 'detail', 'complete');
+markStep('upstream-e4', 'write_tests', 'complete');
+writeState('downstream-e4', createInitialState('downstream-e4', { cwd: '/fixture/repo', git_branch: 'feature/x' }));
+const res = applyInheritance('downstream-e4', '2026-03-01T00:00:00.000Z', 'upstream-e4');
 if (!res || typeof res !== 'object') problems.push('no-return-value:' + JSON.stringify(res));
 else {
   if (res.granularity !== 'full') problems.push('granularity:' + String(res.granularity));
-  if (res.upstream_session_id !== 'donor-e4') problems.push('upstream_session_id:' + String(res.upstream_session_id));
+  if (res.upstream_session_id !== 'upstream-e4') problems.push('upstream_session_id:' + String(res.upstream_session_id));
   if (['copied', 'absent', 'failed'].indexOf(res.supervisor_state) === -1) problems.push('supervisor_state:' + String(res.supervisor_state));
   if (!Array.isArray(res.inherited_steps)) problems.push('inherited_steps-not-array');
   else {
@@ -248,8 +248,8 @@ else {
   if (!Array.isArray(res.reverted_steps)) problems.push('reverted_steps-not-array');
   else if (res.reverted_steps.length !== 0) problems.push('full-mode-reverted:' + JSON.stringify(res.reverted_steps));
 }
-const heir = readState('heir-e4');
-const cleanup = heir.steps && heir.steps.cleanup;
+const downstream = readState('downstream-e4');
+const cleanup = downstream.steps && downstream.steps.cleanup;
 if (!cleanup || cleanup.status !== 'skipped') problems.push('full-mode-cleanup-not-force-skipped:' + JSON.stringify(cleanup));
 process.stdout.write(problems.length ? 'BAD:' + problems.join(' | ') : 'OK');
 " 2>&1)

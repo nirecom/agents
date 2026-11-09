@@ -352,7 +352,7 @@ const text = INH.describeGranularInheritance({
   ],
 });
 check("describe approval: names the trigger and code",
-  text.includes("Reverted to pending because the session upstream approval no longer verifies: outline (artifact-hash-mismatch)"), text);
+  text.includes("Reverted to pending because the session-upstream approval no longer verifies: outline (artifact-hash-mismatch)"), text);
 check("describe approval: lists the followers", text.includes("also reset: detail"), text);
 check("describe approval: gives the re-approval sentinel", text.includes("<<WORKFLOW_CONFIRM_OUTLINE:"), text);
 check("describe approval: mismatch carries no retention note", !text.includes("aged out of retention"), text);

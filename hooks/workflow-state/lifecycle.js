@@ -45,8 +45,8 @@ function isAdoptionEvent(event) {
 // at least one adoption-worthy event (see isAdoptionEvent). Total function —
 // never throws. Fail-CLOSED: any malformed/missing input reads as false, same
 // direction as the old isWorkflowStarted contract.
-// Events at or below `upstream_copy_seq` were copied verbatim from the session
-// upstream (#2304), so they are that session's actions, never this one's.
+// Events at or below `upstream_copy_seq` were copied verbatim from the
+// session-upstream (#2304), so they are that session's actions, never this one's.
 function hasSelfRecordedStepSettlement(state) {
   try {
     if (!state || typeof state !== "object") return false;

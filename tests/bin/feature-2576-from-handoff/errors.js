@@ -6,7 +6,7 @@ const path = require("path");
 const fs = require("fs");
 const { ROOT, mod, fx, STATE_DIR, check, show, eq, fromView, seedActive } = require("./common");
 
-const viewOf = (sid) => mod("bin/lib/resume-session/upstream-view").buildUpstreamView({ heirSid: null, upstreamSid: sid });
+const viewOf = (sid) => mod("bin/lib/resume-session/session-upstream-view").buildUpstreamView({ downstreamSid: null, upstreamSid: sid });
 const controlDirOf = (sid) => path.dirname(fx.legacyHandoffPath(sid));
 const corruptState = (sid) => fs.writeFileSync(path.join(STATE_DIR, `${sid}.json`), "{ not json", "utf8");
 const hasMarker = (v, m) => eq(typeof v.handoff_rendered === "string" && v.handoff_rendered.indexOf(m) !== -1, true, "marker in " + show(v.handoff_rendered));
@@ -35,10 +35,10 @@ function readerExceptionIsReaderError() {
     const barrel = require(require.resolve(path.join(ROOT, "hooks", "lib", "state-handoff-record")));
     const real = barrel.readStateHandoff;
     barrel.readStateHandoff = () => { throw new Error("F2576-E2 forced reader failure"); };
-    const viewPath = require.resolve(path.join(ROOT, "bin", "lib", "resume-session", "upstream-view"));
+    const viewPath = require.resolve(path.join(ROOT, "bin", "lib", "resume-session", "session-upstream-view"));
     delete require.cache[viewPath];
     let v;
-    try { v = require(viewPath).buildUpstreamView({ heirSid: null, upstreamSid: up }); } finally { barrel.readStateHandoff = real; delete require.cache[viewPath]; }
+    try { v = require(viewPath).buildUpstreamView({ downstreamSid: null, upstreamSid: up }); } finally { barrel.readStateHandoff = real; delete require.cache[viewPath]; }
     eq([!!v && v.type, v.state_handoff_errors, v.handoff_rendered], ["upstream", ["reader"], null], "type/state_handoff_errors/handoff_rendered");
   });
 }

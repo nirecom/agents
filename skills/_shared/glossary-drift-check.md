@@ -13,7 +13,7 @@ SSOT for the glossary drift check every step below runs (`clarify_intent`, `outl
 - On a `DRIFT` line, fix the artifact and rerun, or add the term to the intent glossary (CONFIRM_INTENT is taken again).
 - Fix an `identifier context` finding by correcting the identifier's spelling.
 - Fix a split identifier in prose by writing it as the identifier is spelled, inside backticks.
-- To accept a finding unfixed, confirm with the user via AskUserQuestion, then emit the narrow `WORKFLOW_GLOSSARY_ACCEPTED` form the CLI prints.
+- To accept a finding unfixed, confirm with the user via AskUserQuestion (`metadata.source=glossary-drift.accept-unfixed`), then emit the narrow `WORKFLOW_GLOSSARY_ACCEPTED` form the CLI prints.
 - Use the term-only form (no identifiers) only when the user accepts every pending finding of that term.
 
 ## Reviewer-raised drift
@@ -22,8 +22,8 @@ SSOT for the glossary drift check every step below runs (`clarify_intent`, `outl
 - Resolve a tagged concern only by fixing the artifact, recording the term in the intent glossary, or a user-confirmed `WORKFLOW_GLOSSARY_ACCEPTED`.
 - tests / code: never count a concern whose text holds `[glossary-drift ` as rejected, whatever `concern-ledger reject` returns (exit 1 after the ledger is gone included); count it as a gap / unresolved.
 - review-tests puts such a concern in the RT-5c warnings; review-code-security keeps it out of the all-rejected path.
-- tests / code acceptance: confirm via AskUserQuestion, emit `WORKFLOW_GLOSSARY_ACCEPTED`, then close the concern with `concern-ledger accept --id C<N> --reason R` while the ledger still exists.
-- outline / detail: before the exit-1 re-delegation to the planner, confirm each tagged concern left unfixed via AskUserQuestion; on acceptance emit `WORKFLOW_GLOSSARY_ACCEPTED`.
+- tests / code acceptance: confirm via AskUserQuestion (`metadata.source=glossary-drift.accept-unfixed`), emit `WORKFLOW_GLOSSARY_ACCEPTED`, then close the concern with `concern-ledger accept --id C<N> --reason R` while the ledger still exists.
+- outline / detail: before the exit-1 re-delegation to the planner, confirm each tagged concern left unfixed via AskUserQuestion (`metadata.source=glossary-drift.accept-unfixed`); on acceptance emit `WORKFLOW_GLOSSARY_ACCEPTED`.
 - outline / detail: tell the planner in the re-delegation prompt which tagged concerns the user accepted, so it writes `accepted(glossary-drift): <reason>`.
 - intent / docs: never emit `WORKFLOW_GLOSSARY_ACCEPTED` for a tagged concern; the user decides from the approval list.
 

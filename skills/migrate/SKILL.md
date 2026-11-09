@@ -17,14 +17,14 @@ It is the only place that decides from `bin/migrate-needs` what to run; the sub-
 
 MG-1. Read: run `node "$AGENTS_MAIN_ROOT/bin/migrate-needs" --root "<ROOT>"` as one standalone call; keep `NEEDED`, `UNCOMMITTED`, `UNPUSHED`, `HOST` and `MALFORMED` from its stdout.
    A non-zero exit goes to "On failure".
-   When `MALFORMED=1` (the settings file is not a JSON object), ask once through AskUserQuestion before MG-2:
+   When `MALFORMED=1` (the settings file is not a JSON object), ask once through AskUserQuestion (`metadata.source=migrate.reset-malformed`) before MG-2:
    - "Reset (recommended)": run `node "$AGENTS_MAIN_ROOT/bin/repo-settings" --root "<ROOT>" --reset-malformed` as one standalone call, then re-run MG-1; the original is kept as `.agents.json.malformed`.
    - "Skip for this session": write nothing, print `MIGRATE_RESULT=skipped` and end.
    With `--dry-run`, do not reset and ask nothing: report that it would run `--reset-malformed`, then go on to MG-2.
    "Settled" (judged in MG-3) means `UNCOMMITTED=0` and either `UNPUSHED=0` or `--no-push` was given.
 
 MG-2. Run: when `NEEDED` is empty, go to MG-3 asking nothing.
-   When `NEEDED` lists a skill, ask through AskUserQuestion with two choices:
+   When `NEEDED` lists a skill, ask through AskUserQuestion (`metadata.source=migrate.run-needed`) with two choices:
    - "Run now (recommended)": invoke each skill in `NEEDED` in its order with `ROOT` / `HOST` / options; stop at the first failure and go to "On failure". Then go to MG-3.
    - "Skip for this session": write no state, print `MIGRATE_RESULT=skipped` and end.
    The skip choice's description names what silently fails until the migration runs: the label step in clarify_intent, the WIP record, the Projects v2 registration of an in-progress issue, and the session close board update.
@@ -35,7 +35,7 @@ MG-3. Settle: run `bash "$AGENTS_MAIN_ROOT/skills/migrate/scripts/settle.sh" "<R
 
 ## On failure
 
-Show the failing output (`bin/migrate-needs`, sub-skill, or settle.sh), then ask through AskUserQuestion:
+Show the failing output (`bin/migrate-needs`, sub-skill, or settle.sh), then ask through AskUserQuestion (`metadata.source=migrate.on-failure`):
 - "Skip for this session": print `MIGRATE_RESULT=skipped`; its description names the impacts by pointing at MG-2.
 - "Stop": print `MIGRATE_RESULT=failed`.
 

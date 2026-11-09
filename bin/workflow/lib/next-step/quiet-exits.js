@@ -35,11 +35,11 @@ function aborted(sid, state) {
   const view = state || readState(sid);
   const abort = readWorkflowAbort(view || sid);
   if (!abort) return null;
-  if (abort.heir_session_id) {
+  if (abort.downstream_session_id) {
     return {
       action: "done", skill: "", reason: "workflow-aborted",
-      hint: "This session was aborted (" + abort.origin + "); the worktree and branch belong to the downstream " +
-        abort.heir_session_id + " and are not cleaned up here. Take no workflow action here.",
+      hint: "This session was aborted (" + abort.origin + "); the worktree and branch belong to the session-downstream " +
+        abort.downstream_session_id + " and are not cleaned up here. Take no workflow action here.",
     };
   }
   const cleanup = view && view.steps && view.steps.cleanup;

@@ -1,6 +1,6 @@
 "use strict";
 
-// #2304 — copy a session upstream's supervisor state beside the downstream's
+// #2304 — copy a session-upstream's supervisor state beside the session-downstream's
 // copied workflow state, so findings and audit verdicts travel with the session.
 // Only `session_id` is rewritten, plus one settlement: an audit run still unsettled
 // upstream (pending / in_progress / frozen) belongs to the upstream's triggers, and

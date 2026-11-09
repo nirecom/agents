@@ -170,7 +170,7 @@ fi
 
 # The codex security reviewer is NO LONGER a gate here: it is owned solely by
 # bin/run-codex-review-loop --format security-code (#2276 S8-c), which owns the round
-# counter this advisory pass must not touch. The seven lint gates below each receive the
+# counter this advisory pass must not touch. The eight lint gates below each receive the
 # resolved base and stay advisory (non-zero is a warning, not a blocker).
 _run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-prompt-size" --base "$MERGE_BASE"
 _run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/check-inline-procedures" --base "$MERGE_BASE"
@@ -179,6 +179,7 @@ _run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-env-example" --base "$MERGE_BASE"
 _run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-step-numbers" --base "$MERGE_BASE"
 _run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-e2e-coverage" --base "$MERGE_BASE"
 _run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/review-bare-python" --base "$MERGE_BASE"
+_run_gate "${SCRIPT_CHECKOUT_ROOT}/bin/check-askuser-dialog-ids" --base "$MERGE_BASE"
 
 # The last line, and printed even when nothing is missing: a total that appears only when
 # something is wrong cannot be relied on to be there, and one NOT FOUND line among the

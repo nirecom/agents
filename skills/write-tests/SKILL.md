@@ -31,7 +31,7 @@ WT-5. Decide the destination of each planned case — append to an existing test
    - For each planned case, state its complete source set S (the `# Tests:` tokens the case protects).
    - Run `bash "$AGENTS_MAIN_ROOT/bin/find-tests-for-source.sh" --with-language --sources <comma-joined S>` with every distinct S in one call, repeating `--sources` (Bash, standalone command with timeout 600000; split rule and language columns in `skills/_shared/test-design/append-vs-new.md`; rows come back in query order; read-only, so `hooks/block-tests-direct.js` does not apply). On exit 4 or a tool timeout, HALT and surface the stderr.
    - Record each row's verdict/reason/target as the case group's destination. `append` is mandatory; the sole permitted new file when a target exists is the `size-hard-limit` case, per `skills/_shared/test-design/append-vs-new.md` — do not decide by eye.
-   - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations and wait for user confirmation before WT-6.
+   - If `GATE_CONFIRM_TESTS` is `ON` or `ERROR`, present the planned cases together with their destinations via `AskUserQuestion` (`metadata.source=write-tests.case-plan-approve`) and wait for user confirmation before WT-6.
 WT-6. **Determine the subagent's model**:
    - If `COMPLEXITY_LEVEL_write_tests` from WT-0 is not `NONE`, use `COMPLEXITY_MODEL_write_tests` as the model and `COMPLEXITY_SIGNALS` directly; skip the fallback below.
    - If `NONE` (fail-open for sessions without persisted evaluation): follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`write-tests`; use its `model=` and `SIGNALS_CSV` — never judge the level inline.

@@ -1,5 +1,5 @@
 "use strict";
-// Fixture for tests/hooks/feature-2297-readopt-and-upstream-cwd.js — not a test on its own.
+// Fixture for tests/hooks/feature-2297-readopt-and-session-upstream-cwd.js — not a test on its own.
 // Builds one main repo with two linked worktrees (W1, W2 at the same commit, so a W1/W2 pair is a
 // SIBLING with equal content) plus an unrelated repo, and seeds upstream/downstream state files.
 // A module the change has not landed yet is reported as NOT YET IMPLEMENTED, never as a crash.
@@ -104,7 +104,7 @@ function enterWorktree(sid, wt) {
 
 function adopt(down, up) {
   const { adoptState } = require(rel("hooks/workflow-state/inheritance/adopt"));
-  return adoptState({ heirSid: down, donorSid: up });
+  return adoptState({ downstreamSid: down, upstreamSid: up });
 }
 
 const statePath = (sid) => io().getStatePath(sid);

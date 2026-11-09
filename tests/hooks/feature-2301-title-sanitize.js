@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
-// Tests: hooks/lib/output-sanitize.js, hooks/workflow-state/upstream-search.js
+// Tests: hooks/lib/output-sanitize.js, hooks/workflow-state/session-upstream-search.js
 // Tags: TL2, session-upstream, upstream-search, resume-session, prompt-injection, security, output-sanitize, regression-2301, regression-2748, state-handoff-record, state-handoff-reader, regression-2652, scope:issue-specific, pwsh-not-required
-// #2301: a donor's `**Title:**` line is written by another session, so the title a
+// #2301: a upstream's `**Title:**` line is written by another session, so the title a
 // search record carries goes through sanitizeUntrustedField — control bytes collapsed,
 // credential shapes redacted, each workflow sentinel redacted, length capped.
 // #2652 S3-6: each `--list` candidate carries `state_handoff_records`, the entry count the state
@@ -119,9 +119,9 @@ test("sanitize-untrusted-field-unit", () => noNewFailures(failures, () => {
 }));
 caseEnd();
 
-caseBegin("title-of-sanitizes-search-records", "hooks/workflow-state/upstream-search.js");
+caseBegin("title-of-sanitizes-search-records", "hooks/workflow-state/session-upstream-search.js");
 test("title-of-sanitizes-search-records", () => noNewFailures(failures, () => {
-  const search = mod("hooks/workflow-state/upstream-search");
+  const search = mod("hooks/workflow-state/session-upstream-search");
   const writeIntent = (sid, body) => fs.writeFileSync(path.join(PLANS_DIR, `${sid}-intent.md`), body);
   const titleFor = (sid) => {
     const rows = search.searchUpstreamSessions(sid, { plansDir: PLANS_DIR });
@@ -163,9 +163,9 @@ caseEnd();
 
 // #2748 R1: a plan file whose name carries a sid outside SESSION_ID_VALID_RE is no session;
 // the index must not offer it as an upstream candidate, nor read or stat the file (fs is spied in-process).
-caseBegin("index-plans-dir-skips-invalid-sid", "hooks/workflow-state/upstream-search.js");
+caseBegin("index-plans-dir-skips-invalid-sid", "hooks/workflow-state/session-upstream-search.js");
 test("index-plans-dir-skips-invalid-sid", () => noNewFailures(failures, () => {
-  const search = mod("hooks/workflow-state/upstream-search");
+  const search = mod("hooks/workflow-state/session-upstream-search");
   const cases = [
     { name: "hyphen", sid: "f2748-good", valid: true },
     { name: "underscore", sid: "f2748_good_under", valid: true },
@@ -212,9 +212,9 @@ caseEnd();
 
 // --- #2652 S3-6: the state handoff record count on each --list candidate ---
 const fx = require("../lib/state-handoff-record-fixture");
-const SEARCH = path.join(fx.REPO, "hooks", "workflow-state", "upstream-search.js");
+const SEARCH = path.join(fx.REPO, "hooks", "workflow-state", "session-upstream-search.js");
 const BARREL = path.join(fx.REPO, "hooks", "lib", "state-handoff-record");
-const SHC_INPUT = { heirSid: "shc-heir", ctx: { cwd: "/fixture/shc-heir", git_branch: "x" }, query: "shcount" };
+const SHC_INPUT = { downstreamSid: "shc-downstream", ctx: { cwd: "/fixture/shc-downstream", git_branch: "x" }, query: "shcount" };
 const shcLegacy = (key, n) => ({ cls: "A", at: fx.isoAt(n), step: "-", key, summary: `legacy ${key}` });
 // Every candidate's intent.md carries the query word, so one query lists them all.
 const SHC_SIDS = ["shc-state-only", "shc-legacy-nostate", "shc-legacy-withstate", "shc-both", "shc-nothing", "shc-reset", "shc-broken"];
@@ -250,7 +250,7 @@ function countOf(rows, sid) {
   return rec.state_handoff_records;
 }
 
-caseBegin("list-counts-state-handoff-records", "hooks/workflow-state/upstream-search.js");
+caseBegin("list-counts-state-handoff-records", "hooks/workflow-state/session-upstream-search.js");
 test("list-counts-state-handoff-records", () => noNewFailures(failures, () => {
   const want = [
     ["C1: a state-records-only candidate counts its records plus its reset event", "shc-state-only", 3],
@@ -266,7 +266,7 @@ test("list-counts-state-handoff-records", () => noNewFailures(failures, () => {
 }));
 caseEnd();
 
-caseBegin("list-count-is-the-reader-count", "hooks/workflow-state/upstream-search.js");
+caseBegin("list-count-is-the-reader-count", "hooks/workflow-state/session-upstream-search.js");
 test("list-count-is-the-reader-count", () => noNewFailures(failures, () => {
   check("C7: every listed count equals the state handoff reader's answer for that sid", () => {
     const reader = require(BARREL);
@@ -305,9 +305,9 @@ test("list-count-is-the-reader-count", () => noNewFailures(failures, () => {
 caseEnd();
 
 // The real `--list` entry: bin/resume-session-detect spawned as a child, its one JSON line read back.
-caseBegin("list-cli-prints-state-handoff-count", "hooks/workflow-state/upstream-search.js");
+caseBegin("list-cli-prints-state-handoff-count", "hooks/workflow-state/session-upstream-search.js");
 test("list-cli-prints-state-handoff-count", () => noNewFailures(failures, () => {
-  const env = Object.assign({}, process.env, { CLAUDE_CODE_SESSION_ID: "shc-heir", CLAUDE_TRANSCRIPT_BASE_DIR: TBASE });
+  const env = Object.assign({}, process.env, { CLAUDE_CODE_SESSION_ID: "shc-downstream", CLAUDE_TRANSCRIPT_BASE_DIR: TBASE });
   const r = spawnSync(process.execPath, [path.join(fx.REPO, "bin", "resume-session-detect"), "--list", "shcount", "--limit", "20"],
     { cwd: TBASE, env, encoding: "utf8", timeout: 60000 });
   let out = null;
@@ -340,12 +340,12 @@ function lhDir(files) {
   }
   return dir;
 }
-const lhSearch = (dir, query) => mod("hooks/workflow-state/upstream-search").searchUpstreamSessions(query, { plansDir: dir });
+const lhSearch = (dir, query) => mod("hooks/workflow-state/session-upstream-search").searchUpstreamSessions(query, { plansDir: dir });
 const isoOf = (sec) => new Date(sec * 1000).toISOString();
 const T_OLD = 1700000000;
 const T_NEW = 1700000600;
 
-caseBegin("legacy-handoff-md-indexes-session", "hooks/workflow-state/upstream-search.js");
+caseBegin("legacy-handoff-md-indexes-session", "hooks/workflow-state/session-upstream-search.js");
 test("legacy-handoff-md-indexes-session", () => noNewFailures(failures, () => {
   const sid = "f2652-legacy-only";
   const rows = lhSearch(lhDir([[`${sid}-handoff.md`, "legacy body\n", T_OLD]]), "");
@@ -357,7 +357,7 @@ test("legacy-handoff-md-indexes-session", () => noNewFailures(failures, () => {
 }));
 caseEnd();
 
-caseBegin("legacy-handoff-md-body-not-read", "hooks/workflow-state/upstream-search.js");
+caseBegin("legacy-handoff-md-body-not-read", "hooks/workflow-state/session-upstream-search.js");
 test("legacy-handoff-md-body-not-read", () => noNewFailures(failures, () => {
   const dir = lhDir([
     ["f2652-legacy-body-handoff.md", "**Title:** zebracanary\n#9876 zebracanary\n", T_OLD],
@@ -372,7 +372,7 @@ test("legacy-handoff-md-body-not-read", () => noNewFailures(failures, () => {
 }));
 caseEnd();
 
-caseBegin("legacy-handoff-md-invalid-sid-skipped", "hooks/workflow-state/upstream-search.js");
+caseBegin("legacy-handoff-md-invalid-sid-skipped", "hooks/workflow-state/session-upstream-search.js");
 test("legacy-handoff-md-invalid-sid-skipped", () => noNewFailures(failures, () => {
   const cases = [
     { name: "space", sid: "f2652 bad" },
@@ -386,7 +386,7 @@ test("legacy-handoff-md-invalid-sid-skipped", () => noNewFailures(failures, () =
 }));
 caseEnd();
 
-caseBegin("legacy-handoff-md-merges-with-intent", "hooks/workflow-state/upstream-search.js");
+caseBegin("legacy-handoff-md-merges-with-intent", "hooks/workflow-state/session-upstream-search.js");
 test("legacy-handoff-md-merges-with-intent", () => noNewFailures(failures, () => {
   const sid = "f2652-merge";
   const cases = [
@@ -405,7 +405,7 @@ test("legacy-handoff-md-merges-with-intent", () => noNewFailures(failures, () =>
 caseEnd();
 
 // Positive and negative file names for LEGACY_HANDOFF_RE `^(.+?)-handoff\.md$` (behaviour pinned as observed).
-caseBegin("legacy-handoff-md-name-table", "hooks/workflow-state/upstream-search.js");
+caseBegin("legacy-handoff-md-name-table", "hooks/workflow-state/session-upstream-search.js");
 test("legacy-handoff-md-name-table", () => noNewFailures(failures, () => {
   const sid = "f2652-name";
   const cases = [
@@ -427,7 +427,7 @@ caseEnd();
 
 // isLegacyRegularFile: only a regular <sid>-handoff.md indexes a session; a directory or a symlink
 // never does, and a symlink's target mtime never becomes the session's last_activity.
-caseBegin("legacy-handoff-md-regular-file-only", "hooks/workflow-state/upstream-search.js");
+caseBegin("legacy-handoff-md-regular-file-only", "hooks/workflow-state/session-upstream-search.js");
 test("legacy-handoff-md-regular-file-only", () => noNewFailures(failures, () => {
   const sid = "f2652-kind";
   const target = path.join(LH_ROOT, "symlink-target.md");

@@ -58,4 +58,12 @@ A token is an error outside its migration's temporary block; a registered block 
 # re stage-to-step \|stage\)=@{hooks/workflow-mark/glossary-accept-handler.js,hooks/lib/sentinel-patterns.js,hooks/workflow-state/glossary-check/record.js,bin/check-glossary-drift}
 # re stage-to-step (===|!==|==|case)\s*["'](tests|code|docs)["']@{hooks/workflow-state/glossary-check/**,bin/check-glossary-drift,bin/check-glossary-ledger-grant,hooks/workflow-gate/glossary-record-checker.js,hooks/workflow-mark/glossary-accept-handler.js,bin/workflow/lib/jev-complexity-adapter.js,hooks/workflow-state/plan-skip-allowance.js,hooks/lib/plan-confirm-flag.js,hooks/confirm-checkpoint.js,hooks/lib/presentation-receipt.js}
 # re stage-to-step \b(tests|code|docs)\s*:\s*["'](review_|write_tests)@{hooks/workflow-state/glossary-check/**,bin/check-glossary-drift,bin/check-glossary-ledger-grant,hooks/workflow-gate/glossary-record-checker.js,hooks/workflow-mark/glossary-accept-handler.js,bin/workflow/lib/jev-complexity-adapter.js,hooks/workflow-state/plan-skip-allowance.js,hooks/lib/plan-confirm-flag.js,hooks/confirm-checkpoint.js,hooks/lib/presentation-receipt.js}
+# migration retired-downstream-field retired-downstream-field
+# scope retired-downstream-field **
+# re retired-downstream-field (?<![A-Za-z0-9])heir_session_id(?![A-Za-z0-9])
+# except retired-downstream-field docs/history.md append-only record
+# except retired-downstream-field docs/history/** append-only record
+# except retired-downstream-field CHANGELOG.md append-only record
+# except retired-downstream-field changelog/** append-only record
+# except retired-downstream-field tests/bin/feature-2759-session-terms-residue.sh the session-term list holds the keep entry
 # retired-tokens:end

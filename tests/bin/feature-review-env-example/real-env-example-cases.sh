@@ -27,7 +27,7 @@ else
     pass "real-env-example-clean: no HARD finding for .env.example"
 fi
 
-if echo "$OUTPUT" | grep -qE '^## Env-example Review: [0-9]+ HARD'; then
+if echo "$OUTPUT" | grep -qE '^## Env-example Review: [1-9][0-9]* HARD'; then
     fail "real-env-example-clean: summary reports HARD findings. Output: $OUTPUT"
 else
     pass "real-env-example-clean: summary reports 0 HARD findings"

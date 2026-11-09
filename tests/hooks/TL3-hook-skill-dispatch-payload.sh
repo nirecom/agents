@@ -146,7 +146,7 @@ run_R2
 # composed itself, so the exclusion could hinge on some incidental property of
 # that synthetic shape and stay green forever. Take the captured payload
 # byte-for-byte, swap ONLY `tool_input.skill` to `resume-session`, and drive the
-# REAL registered hook with it: the heir's state must come back untouched, so a
+# REAL registered hook with it: the downstream's state must come back untouched, so a
 # meta-op name cannot claim a step even when it rides a genuine host payload.
 p3_node_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
@@ -201,7 +201,7 @@ run_P3() {
     fi
 
     mkdir -p "$P3_WF" "$P3_TRANSCRIPTS"
-    # A heir whose current effective step IS an in-flight candidate (`research`,
+    # A downstream whose current effective step IS an in-flight candidate (`research`,
     # reached once workflow_init and clarify_intent are complete). Without it both
     # replays below exit at the pre-init lookahead guard and prove nothing.
     P3_SID="$sid" p3_env node -e "
@@ -211,7 +211,7 @@ markStep(process.env.P3_SID, 'clarify_intent', 'complete');" >/dev/null 2>&1
 
     before=$(p3_digest "$sid")
     if [ "$before" = "<no-state>" ] || [ -z "$before" ]; then
-        skip "P3: could not seed the heir fixture state (digest '$before')"
+        skip "P3: could not seed the downstream fixture state (digest '$before')"
         return
     fi
 
@@ -223,7 +223,7 @@ markStep(process.env.P3_SID, 'clarify_intent', 'complete');" >/dev/null 2>&1
     fi
     p3_replay "$P3_DIR/swapped.json"
     after=$(p3_digest "$sid")
-    [ "$after" = "$before" ] || problems="$problems [replaying the host payload as Skill(resume-session) changed the heir state: '$before' -> '$after']"
+    [ "$after" = "$before" ] || problems="$problems [replaying the host payload as Skill(resume-session) changed the downstream state: '$before' -> '$after']"
 
     # Non-vacuity control: the SAME payload, unswapped, must still mark. If it
     # does not, the replay never reached the marking path and the assertion above
@@ -237,7 +237,7 @@ markStep(process.env.P3_SID, 'clarify_intent', 'complete');" >/dev/null 2>&1
     esac
 
     if [ -z "$problems" ]; then
-        pass "P3: replaying the REAL captured payload with tool_input.skill swapped to resume-session leaves the heir's workflow state untouched, while the same payload unswapped still marks — the meta-op exclusion holds on the host's own payload shape"
+        pass "P3: replaying the REAL captured payload with tool_input.skill swapped to resume-session leaves the downstream's workflow state untouched, while the same payload unswapped still marks — the meta-op exclusion holds on the host's own payload shape"
     else
         fail "P3: the replay of a host-produced payload did not behave like the synthetic cases;$problems"
     fi
@@ -259,8 +259,8 @@ R4_STORE="$R4_DIR/store"
 R4_REPO="$R4_DIR/repo"
 R4_RECORD="$R4_DIR/dispatch.jsonl"
 R4_SETTINGS="$R4_DIR/settings.json"
-R4_HEIR="7c4e5b62-2279-4f18-9a3c-1b2d3e4f5a6b"
-R4_DONOR="tl3donor2279"
+R4_DOWNSTREAM="7c4e5b62-2279-4f18-9a3c-1b2d3e4f5a6b"
+R4_UPSTREAM="tl3upstream2279"
 AGENTS_NODE="$(p3_node_path "$SCRIPT_CHECKOUT_ROOT")"
 R4_STORE_NODE=""
 
@@ -315,8 +315,8 @@ process.stdout.write(Object.keys(steps).sort().map((k) => k + '=' + steps[k].sta
 }
 
 # r4_build_fixture — a throwaway repo, a fresh store, and the two sessions the
-# #2279 scenario needs: a donor that genuinely got as far as `research`, and an
-# untouched heir shell for the live session to land in.
+# #2279 scenario needs: a upstream that genuinely got as far as `research`, and an
+# untouched downstream shell for the live session to land in.
 r4_build_fixture() {
     mkdir -p "$R4_STORE" "$R4_REPO"
     R4_STORE_NODE="$(p3_node_path "$R4_STORE")"
@@ -324,14 +324,14 @@ r4_build_fixture() {
     git -C "$R4_REPO" config core.hooksPath /dev/null >/dev/null 2>&1
     git -C "$R4_REPO" config user.email t@example.com >/dev/null 2>&1
     git -C "$R4_REPO" config user.name t >/dev/null 2>&1
-    R4_SID="$R4_DONOR" r4_env "
+    R4_SID="$R4_UPSTREAM" r4_env "
 const io = require('$STATEIO_NODE');
 io.markStep(process.env.R4_SID, 'workflow_init', 'complete');
 io.markStep(process.env.R4_SID, 'clarify_intent', 'complete');
 io.markStep(process.env.R4_SID, 'research', 'in_progress');" >/dev/null
-    R4_SID="$R4_HEIR" r4_env "
+    R4_SID="$R4_DOWNSTREAM" r4_env "
 require('$STATEIO_NODE').markStep(process.env.R4_SID, 'research', 'pending');" >/dev/null
-    : > "$R4_STORE/$R4_DONOR-intent.md"
+    : > "$R4_STORE/$R4_UPSTREAM-intent.md"
 }
 
 # r4_write_settings <matcher> <command> — the fixture settings.json, built with
@@ -362,13 +362,13 @@ run_R4() {
     local matcher cmd problems="" dispatched after adopted ok
 
     r4_build_fixture
-    if [ "$(r4_digest "$R4_DONOR")" = "<no-state>" ] || [ "$(r4_digest "$R4_HEIR")" = "<no-state>" ]; then
-        fail "R4: fixture — the donor/heir state files were not seeded (donor='$(r4_digest "$R4_DONOR")', heir='$(r4_digest "$R4_HEIR")'), so no live run could prove anything"
+    if [ "$(r4_digest "$R4_UPSTREAM")" = "<no-state>" ] || [ "$(r4_digest "$R4_DOWNSTREAM")" = "<no-state>" ]; then
+        fail "R4: fixture — the upstream/downstream state files were not seeded (upstream='$(r4_digest "$R4_UPSTREAM")', downstream='$(r4_digest "$R4_DOWNSTREAM")'), so no live run could prove anything"
         return
     fi
-    case "$(r4_digest "$R4_HEIR")" in
+    case "$(r4_digest "$R4_DOWNSTREAM")" in
         *=complete*|*=in_progress*)
-            fail "R4: fixture — the heir is not an untouched shell before the dispatch: '$(r4_digest "$R4_HEIR")'"
+            fail "R4: fixture — the downstream is not an untouched shell before the dispatch: '$(r4_digest "$R4_DOWNSTREAM")'"
             return ;;
     esac
 
@@ -389,9 +389,9 @@ run_R4() {
             WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
             TL3_RECORD_FILE="$R4_RECORD" \
             "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 180 claude -p \
-            "Invoke the resume-session skill with the argument --from $R4_DONOR. It will refuse because this is a non-interactive session; that refusal is expected. Do not retry it, do not use any other tool, and stop." \
+            "Invoke the resume-session skill with the argument --from $R4_UPSTREAM. It will refuse because this is a non-interactive session; that refusal is expected. Do not retry it, do not use any other tool, and stop." \
             --output-format json \
-            --session-id "$R4_HEIR" \
+            --session-id "$R4_DOWNSTREAM" \
             --settings "$R4_SETTINGS" \
             > "$R4_DIR/response.json" 2>"$R4_DIR/claude.err" ); then
         skip "R4: claude -p invocation failed or timed out (stderr: $(head -c 200 "$R4_DIR/claude.err" 2>/dev/null))"
@@ -407,31 +407,31 @@ run_R4() {
     [ "$dispatched" = "resume-session" ] ||
         problems="$problems [the recorded dispatch names '$dispatched', not resume-session — the live run exercised some other Skill]"
 
-    # (b) the registered hook left the heir unclaimed: a meta-op dispatch must not
+    # (b) the registered hook left the downstream unclaimed: a meta-op dispatch must not
     #     record a step of its own (the #2279 root cause).
-    after="$(r4_digest "$R4_HEIR")"
+    after="$(r4_digest "$R4_DOWNSTREAM")"
     case "$after" in
         *=in_progress*)
-            problems="$problems [after the live Skill(resume-session) dispatch the heir records '$after' — the registered hook claimed a step for the resume itself, which is exactly what disqualifies the heir from adopting (#2279)]" ;;
+            problems="$problems [after the live Skill(resume-session) dispatch the downstream records '$after' — the registered hook claimed a step for the resume itself, which is exactly what disqualifies the downstream from adopting (#2279)]" ;;
     esac
 
     # (c) the adoption /resume-session --from was invoked FOR still lands, driven
     #     through the real CLI (the S1-S10 assertion, on the live-host path).
     ok=$( ( cd "$R4_REPO" && env \
         WORKFLOW_STATE_DIR="$R4_STORE_NODE" WORKFLOW_PLANS_DIR="$R4_STORE_NODE" \
-        CLAUDE_CODE_SESSION_ID="$R4_HEIR" \
-        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect" --from "$R4_DONOR" ) 2>/dev/null \
+        CLAUDE_CODE_SESSION_ID="$R4_DOWNSTREAM" \
+        "$SCRIPT_CHECKOUT_ROOT/bin/run-with-timeout.sh" 30 node "$SCRIPT_CHECKOUT_ROOT/bin/resume-session-detect" --from "$R4_UPSTREAM" ) 2>/dev/null \
         | jq -r '.inherit_result.ok // empty' 2>/dev/null )
     [ "$ok" = "true" ] ||
         problems="$problems [--from returned inherit_result.ok='${ok:-<none>}' after the live dispatch — the resume is a no-op for the user]"
-    adopted="$(r4_digest "$R4_HEIR")"
+    adopted="$(r4_digest "$R4_DOWNSTREAM")"
     case "$adopted" in
         *workflow_init=complete*) : ;;
-        *) problems="$problems [the heir recorded '$adopted' after the adoption — the donor's progress never arrived]" ;;
+        *) problems="$problems [the downstream recorded '$adopted' after the adoption — the upstream's progress never arrived]" ;;
     esac
 
     if [ -z "$problems" ]; then
-        pass "R4: a real claude -p session dispatches Skill(resume-session), the settings.json-registered PostToolUse hook fires for it, no step is claimed for the meta-op, and --from still adopts the donor into the fresh heir (the whole #2279 sentence on a live host)"
+        pass "R4: a real claude -p session dispatches Skill(resume-session), the settings.json-registered PostToolUse hook fires for it, no step is claimed for the meta-op, and --from still adopts the upstream into the fresh downstream (the whole #2279 sentence on a live host)"
     else
         fail "R4: the live-host dispatch of Skill(resume-session) does not behave like the TL2 replay cases;$problems"
     fi

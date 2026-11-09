@@ -36,7 +36,7 @@ CLI: `bin/review-loop-upstream` (`list` / `decide` / `pick-upstream` / `return` 
 
 - Show each concern's quote, defect and downgrade reason verbatim, as body text before the dialog.
 - For a `source=test-design` concern, state that B revises the shared `skills/_shared/test-design.md` in write_tests, as a change of this PR that goes through review.
-- Issue one AskUserQuestion: one question per concern, with the choices A / B / C / D for every format.
+- Issue one AskUserQuestion (`metadata.source=codex-review-loop.upstream-inconsistency`): one question per concern, with the choices A / B / C / D for every format.
 - Mark the `effective_recommend` choice `(recommended)`.
 - Record every answer with `review-loop-upstream decide --session <sid> --format <fmt> --id <id> --text-hash <hash> --choice <A|B|C|D> --reason <reason>`.
 

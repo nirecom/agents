@@ -20,7 +20,7 @@ WCD-1. Read `rules/core-principles.md`, `rules/coding.md` and `rules/architectur
 WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent).
    - Write every file you plan to edit, one path per line (repo-relative, nothing else on the line), to `<PLANS_DIR>/<session-id>-write-code-files.txt` with the Write tool.
    - Keep that list complete: it is the sole input of the S1b and S4 signals judged in WCD-3.
-   - Then branch on `GATE_CONFIRM_CODE` from WCD-0 — `OFF`: proceed to WCD-3; `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
+   - Then branch on `GATE_CONFIRM_CODE` from WCD-0 — `OFF`: proceed to WCD-3; `ON` or `ERROR`: present the planned edits via `AskUserQuestion` (`metadata.source=write-code.edit-plan-approve`) and wait for approval before continuing.
 
 WCD-3. Always follow `skills/_shared/jev-two-stage-judge.md` with point=`complexity-judge` stage=`write-code` (S1b and S4 come only from the WCD-2 list, so no stored evaluation is reused); use its `model=` and `SIGNALS_CSV` — never judge the level inline.
    Emit in Claude text output (NOT Bash echo): `> Model selected: **<model alias>** (signals: [comma-separated triggered signal IDs, or "none"])`

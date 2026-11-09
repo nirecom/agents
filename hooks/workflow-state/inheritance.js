@@ -1,8 +1,8 @@
 "use strict";
-// Cross-session workflow-state inheritance — donor resolution (#1305).
+// Cross-session workflow-state inheritance — session-upstream resolution (#1305).
 //
-// The key is PROVABLE DESCENT, not cwd+branch: the heir must be a fork / resume
-// / compact continuation of the donor, evidenced by its own transcript, and
+// The key is PROVABLE DESCENT, not cwd+branch: the session-downstream must be a fork / resume
+// / compact continuation of the session-upstream, evidenced by its own transcript, and
 // cwd+branch is only a guard. Gate order (A subagent, B source, C lineage,
 // D nearest stateful ancestor, E context, F resumability), the decision-string
 // vocabulary, and the "no active-concurrent-session detection needed"
@@ -52,16 +52,16 @@ function resolveTranscriptPath(transcriptPath, sessionId, ctx) {
   }
 }
 
-// resolveInheritanceDonor({ sessionId, source, transcriptPath, ctx, agentId })
-//   → { donor, decision, candidateSessionId, ancestors }
+// resolveInheritanceUpstream({ sessionId, source, transcriptPath, ctx, agentId })
+//   → { upstream, decision, candidateSessionId, ancestors }
 //
 // decision ∈ "inherited" | "subagent" | "source-gated" | "startup-no-lineage"
 //          | "no-lineage" | "unreadable-transcript" | "context-mismatch"
 //          | "not-resumable:<reason>"
-function resolveInheritanceDonor(opts) {
+function resolveInheritanceUpstream(opts) {
   const { sessionId, source, transcriptPath, ctx, agentId } = opts || {};
   const none = (decision, extra) =>
-    Object.assign({ donor: null, decision, candidateSessionId: null, ancestors: [] }, extra || {});
+    Object.assign({ upstream: null, decision, candidateSessionId: null, ancestors: [] }, extra || {});
 
   // Gate A — a subagent runs inside its parent's transcript, so every later gate
   // would happily hand it the parent's state. It must never own workflow state.
@@ -83,7 +83,7 @@ function resolveInheritanceDonor(opts) {
   const queue = ancestors.slice();
   const visited = new Set(queue);
   let candidateSessionId = null;
-  let donorState = null;
+  let upstreamState = null;
   while (queue.length > 0) {
     const id = queue.shift();
     let state = null;
@@ -95,7 +95,7 @@ function resolveInheritanceDonor(opts) {
       // The canonical session ID is the one the lineage named, not
       // state.session_id — a migrated or compacted record may carry a stale or
       // placeholder value, and callers key plan artifacts off this id.
-      donorState = state.session_id !== id
+      upstreamState = state.session_id !== id
         ? Object.assign({}, state, { session_id: id })
         : state;
       break;
@@ -110,14 +110,14 @@ function resolveInheritanceDonor(opts) {
     }
   }
 
-  if (!donorState) return none("no-lineage", { ancestors });
+  if (!upstreamState) return none("no-lineage", { ancestors });
 
   const rejected = (decision) => ({
-    donor: null, decision, candidateSessionId, ancestors,
+    upstream: null, decision, candidateSessionId, ancestors,
   });
 
   // Gate E — context guard.
-  if (!contextMatches(ctx, donorState)) return rejected("context-mismatch");
+  if (!contextMatches(ctx, upstreamState)) return rejected("context-mismatch");
 
   // Gate F — resumability (SSOT: effective-state).
   // Lazy require keeps the load order acyclic (effective-state →
@@ -125,7 +125,7 @@ function resolveInheritanceDonor(opts) {
   const { evaluateResumability } = require("./effective-state");
   let verdict;
   try {
-    verdict = evaluateResumability(donorState);
+    verdict = evaluateResumability(upstreamState);
   } catch (e) {
     verdict = { eligible: true, reason: null };
   }
@@ -133,11 +133,11 @@ function resolveInheritanceDonor(opts) {
     return rejected("not-resumable:" + ((verdict && verdict.reason) || "unknown"));
   }
 
-  return { donor: donorState, decision: "inherited", candidateSessionId, ancestors };
+  return { upstream: upstreamState, decision: "inherited", candidateSessionId, ancestors };
 }
 
 module.exports = {
-  resolveInheritanceDonor,
+  resolveInheritanceUpstream,
   listRecentContextCandidates,
   applyInheritance,
   describeGranularInheritance,

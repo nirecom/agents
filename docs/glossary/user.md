@@ -42,10 +42,14 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The third-party typed classifier from TypeSafe AI that returns one probability per yes/no question; with `JEV=on` it makes several automatic judgments in this repository.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
-### JEV_AUTO_SKIP_ASKUSER
+### JEV_AUTO_CLARIFICATIONS
+- **Definition**: The `.env` switch that lets Jev answer clarifications, the AskUserQuestion dialogs, on the user's behalf; Jev answers only a dialog whose auto user-input risk level is `low`, so approval dialogs (`high`) always reach the user.
+  With `off`, every AskUserQuestion reaches the user while other Jev judgments keep running; tool approvals are covered by `JEV_AUTO_TOOL_APPROVALS` instead.
+- **Related**: [architecture/jev.md](../architecture/jev.md)
 
-- **Definition**: The `.env` switch that lets Jev answer, for the user, an AskUserQuestion dialog Claude marked as eligible with `metadata.source`.
-  With `off`, every AskUserQuestion dialog reaches the user while the other Jev judgments keep running.
+### JEV_AUTO_TOOL_APPROVALS
+- **Definition**: The `.env` switch that lets Jev answer tool approvals, the permission prompts for tool calls no permission rule or mode allows, on the user's behalf; Jev answers only a call whose auto user-input risk level is `low`.
+  With `off`, every tool approval reaches the user; the switch is not implemented yet.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
 ### meta
@@ -93,12 +97,13 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### short form
 
-- **Definition**: glossary エントリの `Short forms` 欄に宣言する、見出し語の短縮形。見出し語の語の一部からなり、文脈が見出し語の概念を指すときだけ見出し語として読む。
+- **Definition**: A shortened spelling of a glossary term, declared in the entry's `Short forms` line and made of some of the term's words; it is read as the term only where the context means the term's concept.
 - **Related**: [rules/docs/glossary.md](../../rules/docs/glossary.md)
 
 ### state handoff record
 
-- **Definition**: session の引き継ぎのために hook と skill の手順が workflow の state に追記する event。compaction、gate の block、supervisor の判定、手順の結果を持ち、`/resume-session` と supervisor codex engine が読む。main conversation 自身の事実は session-progress.md に書く。
+- **Definition**: An event that hooks and skill procedures append to the workflow state for session hand-over — a compaction, a gate block, a supervisor verdict, or a procedure result; `/resume-session` and the supervisor codex engine read it.
+  The main conversation's own facts go to session-progress.md instead.
 - **Related**: [architecture/claude-code/state-handoff-record.md](../architecture/claude-code/state-handoff-record.md)
 
 ### test-lang-exception
@@ -122,5 +127,5 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### workflow step
 
-- **Definition**: `next-step --list` の 1 単位（`workflow_init` … `final_report`）。
+- **Definition**: One unit of `next-step --list`, from `workflow_init` to `final_report`.
 - **Related**: [architecture/claude-code/workflow.md](../architecture/claude-code/workflow.md)

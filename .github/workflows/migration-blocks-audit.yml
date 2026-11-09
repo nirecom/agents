@@ -29,7 +29,7 @@ jobs:
           AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/check-plans-dir-isolation.sh
 
-      - name: Check root names (retired names + classification table + derivation form)
+      - name: Check root names (retired names + classification table + derivation form + session terms)
         env:
           AGENTS_MAIN_ROOT: ${{ github.workspace }}
         run: bash bin/check-root-names.sh

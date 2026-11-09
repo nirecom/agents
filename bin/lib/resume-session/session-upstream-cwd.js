@@ -1,7 +1,7 @@
 "use strict";
-// Where did the session upstream run, and can this session go there before
-// adopting (#2297)? Granularity is decided from where the downstream runs, so
-// /resume-session enters a live upstream worktree first and only then adopts.
+// Where did the session-upstream run, and can this session go there before
+// adopting (#2297)? Granularity is decided from where the session-downstream runs, so
+// /resume-session enters a live session-upstream worktree first and only then adopts.
 
 const fs = require("fs");
 const { readState } = require("../../../hooks/workflow-state/state-io");
