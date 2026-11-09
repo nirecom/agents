@@ -5,7 +5,7 @@
 #
 # Usage:
 #   issue-create.sh --title "<title>" (--body "<body>" | --body-file <path>)
-#                   [--label <label>] [--assignee <user>] [--milestone <name>]
+#                   [--label <label>] [--assignee <user>] [--milestone <name>] [--origin-session <sid>]
 #
 # Stdout: created issue URL (one line).
 # Stderr: progress and warnings.
@@ -22,6 +22,8 @@ ASSIGNEE=""
 MILESTONE=""
 REPORTER_MODEL=""
 REPORTER_MODEL_TEXT=""
+ORIGIN_SID=""
+ORIGIN_SID_SET=0
 
 SCRIPT_CHECKOUT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -44,6 +46,9 @@ while [ $# -gt 0 ]; do
         --milestone)  MILESTONE="${2:?--milestone requires value}"; shift 2 ;;
         --reporter-model) REPORTER_MODEL="${2:?--reporter-model requires value}"; shift 2 ;;
         --reporter-model-text) REPORTER_MODEL_TEXT="${2:?--reporter-model-text requires value}"; shift 2 ;;
+        --origin-session)
+            [ $# -lt 2 ] && { echo "--origin-session requires value" >&2; exit 2; }
+            ORIGIN_SID="$2"; ORIGIN_SID_SET=1; shift 2 ;;
         -h|--help)
             sed -n '2,12p' "$0" >&2; exit 0 ;;
         *)
@@ -72,6 +77,11 @@ if [ "$BODY_PROVIDED" -eq 1 ] && [ -n "$BODY_FILE" ]; then
 fi
 if [ -n "$BODY_FILE" ] && [ ! -f "$BODY_FILE" ]; then
     echo "Error: --body-file not found: $BODY_FILE" >&2; exit 1
+fi
+# shellcheck source=lib/origin-session.sh
+. "$SCRIPT_CHECKOUT_ROOT/bin/github-issues/lib/origin-session.sh"
+if [ "$ORIGIN_SID_SET" -eq 1 ] && ! origin_session_marker "$ORIGIN_SID" >/dev/null; then
+    echo "Error: --origin-session must match [A-Za-z0-9_-]+" >&2; exit 2
 fi
 
 # Schema validation (#443): Background + Changes required; ISSUE_CREATE_SKIP_SCHEMA=1 is emergency-only.
@@ -136,6 +146,28 @@ if [ "$_ic_is_github" -eq 1 ]; then
     # rc=0 → type:task present; nothing to repair.
 else
     echo "warn: Phase 0a skipping label auto-repair (non-GitHub remote)" >&2
+fi
+
+# Origin-session marker (#2668): appended before the scan so the scanned and posted bodies match.
+# An unresolvable session warns and creates the issue without a marker.
+if [ "$ORIGIN_SID_SET" -eq 0 ]; then
+    _ic_rsi_rc=0
+    ORIGIN_SID="$(bash "$SCRIPT_CHECKOUT_ROOT/bin/resolve-session-id" 2>/dev/null)" || _ic_rsi_rc=$?
+    [ "$_ic_rsi_rc" -eq 0 ] || ORIGIN_SID=""
+fi
+_ic_marker=""
+if [ -n "$ORIGIN_SID" ]; then
+    _ic_marker="$(origin_session_marker "$ORIGIN_SID")" || _ic_marker=""
+fi
+if [ -z "$_ic_marker" ]; then
+    echo "warn: origin-session unresolved — creating the issue without the origin-session marker" >&2
+elif [ "$BODY_PROVIDED" -eq 1 ]; then
+    BODY="$BODY"$'\n\n'"$_ic_marker"
+else
+    _ic_marked_body=$(mktemp)
+    trap 'rm -f "$_ic_marked_body"' EXIT
+    { cat "$BODY_FILE"; printf '\n\n%s\n' "$_ic_marker"; } > "$_ic_marked_body"
+    BODY_FILE="$_ic_marked_body"
 fi
 
 # Outbound scan guard (#1591): title and body content are scanned as one stream.

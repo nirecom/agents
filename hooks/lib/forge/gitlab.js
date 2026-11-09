@@ -21,33 +21,46 @@ const trackerGitlab = {
   // issueTitle(remoteUrl, {number, repo?}, {timeoutMs, projectRoot, spawnSync?}) -> string | null;
   // never throws. The host settings come from opts.projectRoot, as codehost resolution does.
   issueTitle(remoteUrl, ref, opts) {
-    try {
-      const o = opts || {};
-      if (!ref || !Number.isInteger(ref.number) || ref.number <= 0) return null;
-      const fr = require("../forge-router");
-      const settings = glabSettings({ gitlabHost: fr.readGitlabHostConfig(o.projectRoot), gitlabSshHost: fr.readGitlabSshHostConfig(o.projectRoot) });
-      const t = require("../plan-sync/remote-url").resolveRemoteTarget(remoteUrl, settings);
-      if (t.type !== "gitlab" || !t.project) return null;
-      const hostArg = glabHostArg(t);
-      if (!hostArg) return null;
-      let project = t.project;
-      if (typeof ref.repo === "string" && ref.repo !== "") {
-        project = ref.repo.includes("/") ? ref.repo : project.split("/").slice(0, -1).concat(ref.repo).join("/");
-      }
-      if (project.split("/").some((s) => s === "" || s === "." || s === "..")) return null;
-      const spawnSync = o.spawnSync || require("../limited-child-process").spawnSync;
-      const r = spawnSync("glab", ["api", "--hostname", hostArg, `projects/${encodePath(project)}/issues/${ref.number}`],
-        { encoding: "utf8", timeout: o.timeoutMs, windowsHide: true });
-      if (!r || r.error || r.status !== 0) return null;
-      const body = JSON.parse(r.stdout || "");
-      if (!body || typeof body !== "object" || typeof body.title !== "string") return null;
-      const title = body.title.trim();
-      return title === "" ? null : title;
-    } catch (e) {
-      return null;
-    }
+    const issue = glabIssue(remoteUrl, ref, opts);
+    if (!issue || typeof issue.title !== "string") return null;
+    const title = issue.title.trim();
+    return title === "" ? null : title;
+  },
+  // issueBody(remoteUrl, {number, repo?}, {timeoutMs, projectRoot, spawnSync?}) -> the issue
+  // description (an absent one is "") | null on failure; never throws.
+  issueBody(remoteUrl, ref, opts) {
+    const issue = glabIssue(remoteUrl, ref, opts);
+    if (!issue) return null;
+    return typeof issue.description === "string" ? issue.description : "";
   },
 };
+
+// glabIssue(remoteUrl, ref, opts) -> the parsed `glab api projects/<enc>/issues/N` object, or null.
+function glabIssue(remoteUrl, ref, opts) {
+  try {
+    const o = opts || {};
+    if (!ref || !Number.isInteger(ref.number) || ref.number <= 0) return null;
+    const fr = require("../forge-router");
+    const settings = glabSettings({ gitlabHost: fr.readGitlabHostConfig(o.projectRoot), gitlabSshHost: fr.readGitlabSshHostConfig(o.projectRoot) });
+    const t = require("../plan-sync/remote-url").resolveRemoteTarget(remoteUrl, settings);
+    if (t.type !== "gitlab" || !t.project) return null;
+    const hostArg = glabHostArg(t);
+    if (!hostArg) return null;
+    let project = t.project;
+    if (typeof ref.repo === "string" && ref.repo !== "") {
+      project = ref.repo.includes("/") ? ref.repo : project.split("/").slice(0, -1).concat(ref.repo).join("/");
+    }
+    if (project.split("/").some((s) => s === "" || s === "." || s === "..")) return null;
+    const spawnSync = o.spawnSync || require("../limited-child-process").spawnSync;
+    const r = spawnSync("glab", ["api", "--hostname", hostArg, `projects/${encodePath(project)}/issues/${ref.number}`],
+      { encoding: "utf8", timeout: o.timeoutMs, windowsHide: true });
+    if (!r || r.error || r.status !== 0) return null;
+    const issue = JSON.parse(r.stdout || "");
+    return issue && typeof issue === "object" && !Array.isArray(issue) ? issue : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // glab api project endpoints take the URL-encoded project path (/ → %2F), so a
 // nested namespace (group/subgroup/project) survives interpolation intact.

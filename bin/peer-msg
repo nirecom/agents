@@ -1,0 +1,104 @@
+#!/usr/bin/env node
+"use strict";
+// bin/peer-msg — the header / verify / timer verbs of cross-session messages (#2668). Formats:
+// hooks/lib/peer-msg.js; design: docs/architecture/cross-session-messaging.md.
+//   peer-msg header [--agents-file <path>] [--role pm --pm-issues <#A,#B>]  -> the header line
+//   peer-msg verify --msg-id <id> --expect-session <id> --ack-file <path>   -> 0 match | 3 no ack | 4 mismatch
+//   peer-msg timer --msg-id <id> --seconds <N>                              -> waits N s, names the msg-id
+// Usage errors exit 2. header exits 8 with REASON=agents-list-required when no reply destination exists.
+
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+const HOOKS = path.join(__dirname, "..", "hooks");
+const PM = require(path.join(HOOKS, "lib", "peer-msg"));
+const { toWindowsPath } = require(path.join(HOOKS, "lib", "branch-diff"));
+
+const MSG_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const SID_RE = /^[A-Za-z0-9_-]+$/;
+const TIMER_MAX_SECONDS = 86400;
+
+function usage(message) {
+  process.stdout.write(`REASON=usage\n`);
+  process.stderr.write(`peer-msg: ${message}\n`);
+  return 2;
+}
+
+// flags(argv, allowed) -> {flag: value} | string (the usage message).
+function flags(argv, allowed) {
+  const o = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    if (!allowed.includes(argv[i])) return `unknown argument: ${argv[i]}`;
+    if (i + 1 >= argv.length) return `${argv[i]} needs a value`;
+    o[argv[i]] = argv[i + 1];
+  }
+  return o;
+}
+
+function header(argv) {
+  const o = flags(argv, ["--agents-file", "--role", "--pm-issues"]);
+  if (typeof o === "string") return usage(o);
+  if (o["--role"] !== undefined && o["--role"] !== "pm") return usage("--role must be pm");
+  if ((o["--role"] === undefined) !== (o["--pm-issues"] === undefined)) return usage("--role pm and --pm-issues go together");
+  if (o["--pm-issues"] !== undefined && !PM.PM_ISSUES_RE.test(o["--pm-issues"])) return usage("--pm-issues must be refs like #1,#2");
+  const findPeer = require(path.join(__dirname, "find-peer.d", "main"));
+  const args = ["--session", "self"];
+  if (o["--agents-file"] !== undefined) args.push("--agents-file", o["--agents-file"]);
+  const r = findPeer.run(args);
+  const kv = Object.fromEntries(r.stdout.split("\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  let replyTo = kv.DESTINATION;
+  let replyKind = kv.DESTINATION_KIND;
+  if (r.code === 8 && require(path.join(__dirname, "find-peer.d", "destination-policy")).FROM_REPLY_VERIFIED === true) {
+    replyTo = "from";
+    replyKind = "from";
+  } else if (r.code !== 0) {
+    process.stdout.write(r.stdout);
+    return r.code;
+  }
+  // kv.SESSION_ID is unset on the from path; the self id is resolved the same way find-peer does.
+  const fromSession = kv.SESSION_ID || require(path.join(HOOKS, "workflow-state")).resolveSessionId();
+  if (!SID_RE.test(String(fromSession))) return usage("this session id cannot be resolved");
+  const h = { fromSession, msgId: crypto.randomUUID(), replyTo, replyKind };
+  if (o["--role"]) Object.assign(h, { role: "pm", pmIssues: o["--pm-issues"] });
+  process.stdout.write(`${PM.formatHeader(h)}\n`);
+  return 0;
+}
+
+function verify(argv) {
+  const o = flags(argv, ["--msg-id", "--expect-session", "--ack-file"]);
+  if (typeof o === "string") return usage(o);
+  if (!MSG_ID_RE.test(o["--msg-id"] || "")) return usage("--msg-id must be a UUID");
+  if (!SID_RE.test(o["--expect-session"] || "")) return usage("--expect-session must match [A-Za-z0-9_-]+");
+  if (!o["--ack-file"]) return usage("--ack-file is required");
+  let text;
+  try {
+    text = fs.readFileSync(toWindowsPath(o["--ack-file"]), "utf8");
+  } catch (e) {
+    text = "";
+  }
+  const acks = text.split("\n").map((l) => PM.parseAck(l)).filter((a) => a && a.ackOf === o["--msg-id"]);
+  if (acks.length === 0) {
+    process.stdout.write("RESULT=no-ack\n");
+    return 3;
+  }
+  if (acks.some((a) => a.session === o["--expect-session"])) {
+    process.stdout.write("RESULT=match\n");
+    return 0;
+  }
+  process.stdout.write("RESULT=mismatch\n");
+  return 4;
+}
+
+function timer(argv) {
+  const o = flags(argv, ["--msg-id", "--seconds"]);
+  if (typeof o === "string") return usage(o);
+  if (!MSG_ID_RE.test(o["--msg-id"] || "")) return usage("--msg-id must be a UUID");
+  const s = o["--seconds"] || "";
+  if (!/^[1-9][0-9]*$/.test(s) || Number(s) > TIMER_MAX_SECONDS) return usage(`--seconds must be 1..${TIMER_MAX_SECONDS}`);
+  setTimeout(() => process.stdout.write(`PEER_MSG_TIMER_EXPIRED msg-id=${o["--msg-id"]} seconds=${s}\n`), Number(s) * 1000);
+  return 0;
+}
+
+const VERBS = { header, verify, timer };
+const verb = Object.prototype.hasOwnProperty.call(VERBS, process.argv[2]) ? VERBS[process.argv[2]] : null;
+process.exitCode = verb ? verb(process.argv.slice(3)) : usage("usage: peer-msg header|verify|timer ...");
