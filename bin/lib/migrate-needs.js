@@ -7,11 +7,12 @@
 // `git rev-list HEAD --not --remotes=origin`. The origin lookup is shared with the host lookup.
 // UNCOMMITTED / UNPUSHED are the git state of .agents.json, kept apart from the content judgment
 // (CPR-SC): a worktree made later sees only the committed file, and a peer only the pushed one.
-// MALFORMED (1: .agents.json exists but is not a JSON object) is a plain fs read, no process.
+// MALFORMED (1: .agents.json is unparsable, not an object, or fails the reader's validation in version
+// or the tests / migrate section; a newer version (unsupported) is 0) is a plain fs read, no process.
 
 const cp = require("child_process");
 const path = require("path");
-const { nativePath, readDoc } = require(path.join(__dirname, "..", "..", "hooks", "lib", "repo-settings"));
+const { nativePath, readDoc, isMalformedDoc } = require(path.join(__dirname, "..", "..", "hooks", "lib", "repo-settings"));
 
 const SKILLS_DIR = path.join(__dirname, "..", "..", "skills");
 const ORDER = ["tracker", "issues", "tests"];
@@ -52,8 +53,7 @@ function collect(rootArg) {
 
 function malformedOf(root) {
   try {
-    const doc = readDoc(root);
-    return doc !== null && typeof doc === "object" && !Array.isArray(doc) ? 0 : 1;
+    return isMalformedDoc(readDoc(root)) ? 1 : 0;
   } catch {
     return 1;
   }
