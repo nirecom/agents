@@ -167,12 +167,27 @@ ListAgents names a session by its title. A session never titled shows its defaul
 
 ### Verification (b) — accepted destination shape
 
-`SendMessage` `to` takes the bare name. Appending ` [ref]` is for disambiguation only: addressing
-one's own session as `name [ref]` was refused as "also addresses this session". The destination
-kind is therefore `name`, and a session id resolves only through the ` [xxxxxxxx]` name suffix.
+Observed 2026-11-09 (Claude Code 2.1.319): sending the bare title `PROBE-2668 [4845aca2]` to a peer
+was refused as unreachable, because the trailing bracket is read as a `[ref]`. Sending
+`PROBE-2668 [4845aca2] [ba91da]` (title plus the ListAgents `[ref]`) was delivered. Addressing one's own
+session that way is refused ("also addresses this session"). The destination kind is therefore `name`,
+the destination is `<title> [<ref6>]`, and a session id resolves through the ` [xxxxxxxx]` title suffix.
 
 ### Verification (b) — reply to `from` and ListAgents output format
 
 A ListAgents row reads `<name> [<ref 6 hex>]  ·  <kind>  ·  <state>  ·  …`; no session id is listed.
-A reply addressed to an incoming message's `from` attribute is not verified end to end
-(`FROM_REPLY_VERIFIED` stays false).
+A reply addressed to an incoming message's `from` attribute arrived end to end: a peer answered a ping
+with `pong`, and this session replied to that message's `from` (`uds:\\.\pipe\LOCAL\cc-msg-…`) with
+no name involved (`FROM_REPLY_VERIFIED` is true). Whether the peer then read that reply is not observed.
+
+The dump opens with `This session is "<name>" [<ref6>].` followed by `Peer sessions (N):` and the rows.
+The own session appears only on that header line, never as a row, so `agents-list.js` reads the header
+line to resolve a `--session self` lookup. A line that is neither a row nor one of these headers makes the
+parse fail instead of being skipped.
+
+### Title reflection: minimal hook and known upstream bugs
+
+A minimal `sessionTitle` hook changed the shown title, while the repo's real hook did not visibly do so;
+the repo-side cause is still unidentified. Related open reports in anthropics/claude-code: #99335, #107722,
+#104749, #104362, #104154, #108052 (closed: #48868, #86607). Because titles are not reliable, the design
+never depends on the title being applied (§5).

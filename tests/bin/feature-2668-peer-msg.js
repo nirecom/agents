@@ -42,6 +42,8 @@ for (const [label, h] of [
   ["reply-kind session-id", { fromSession: SELF, msgId: MSG, replyTo: SELF, replyKind: "session-id" }],
   ["reply-kind ref", { fromSession: SELF, msgId: MSG, replyTo: "r7", replyKind: "ref" }],
   ["reply-kind from", { fromSession: SELF, msgId: MSG, replyTo: "from", replyKind: "from" }],
+  ["reply-kind name with a multi-bracket reply-to", { fromSession: SELF, msgId: MSG, replyTo: "#1 T [12345678] [r7]", replyKind: "name" }],
+  ["a PM header with a name reply-to", { fromSession: SELF, msgId: MSG, replyTo: "#1 T [12345678] [r7]", replyKind: "name", role: "pm", pmIssues: "#1,#2" }],
   ["a PM header", { fromSession: SELF, msgId: MSG, replyTo: SELF, replyKind: "session-id", role: "pm", pmIssues: "#1,#2" }],
 ]) {
   test(`PM1 header ${label}: format then parse gives the fields back`, () => {
@@ -97,13 +99,15 @@ const HEADER_RE = /^\[peer-msg v1\] from-session=(\S+) msg-id=(\S+) reply-to=(.*
 for (const [kind, fromVerified, withList, code, replyTo, replyKind] of [
   ["session-id", false, true, 0, SELF, "session-id"],
   ["ref", false, true, 0, "r7", "ref"],
-  ["name", false, true, 0, SELF_NAME, "name"],
+  ["name", false, true, 0, `${SELF_NAME} [r7]`, "name"],
   ["session-id", false, false, 0, SELF, "session-id"],
   ["session-id", true, false, 0, SELF, "session-id"],
   ["ref", false, false, 8, null, null],
   ["name", false, false, 8, null, null],
   ["ref", true, false, 0, "from", "from"],
   ["name", true, false, 0, "from", "from"],
+  ["name", true, true, 0, `${SELF_NAME} [r7]`, "name"],
+  ["ref", true, true, 0, "r7", "ref"],
 ]) {
   const label = `branch ${kind}, from-replies ${fromVerified ? "verified" : "unverified"}, ${withList ? "with" : "without"} a list`;
   test(`PM2 header on ${label} -> exit ${code}${replyKind ? ` reply-to=${replyTo} reply-kind=${replyKind}` : ", REASON=agents-list-required, no header"}`, () => {
@@ -124,6 +128,24 @@ for (const [kind, fromVerified, withList, code, replyTo, replyKind] of [
     assert.strictEqual(m[4], replyKind);
   });
 }
+test("PM2 header on a verified name policy with the own session missing from the list -> 5 not-in-list, no header", () => {
+  withPolicy("name", true);
+  const other = P.writeFile("agents-other.txt", agentsListText([{ ref: "r8", name: `#1 Other [${PEER.slice(0, 8)}]`, sessionId: PEER }]));
+  const r = headerAt(["--agents-file", other]);
+  assert.strictEqual(r.code, 5, `${r.out}${r.err}`);
+  assert.ok(/^REASON=not-in-list$/m.test(r.out), r.out);
+  assert.strictEqual(headerLine(r.out), null, r.out);
+});
+test("PM2 header on the production policy and a real ListAgents dump (own session only on the header line) -> name destination", () => {
+  withPolicy("name", true);
+  const dump = P.writeFile("agents-real.txt", `This session is "${SELF_NAME}" [c0ffee].\nPeer sessions (1):\n  #1 Other [${PEER.slice(0, 8)}] [d4e5f6]  ·  interactive  ·  idle  ·  started 7h ago\n`);
+  const r = headerAt(["--agents-file", dump]);
+  assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
+  const m = (headerLine(r.out) || "").match(HEADER_RE);
+  assert.ok(m, r.out);
+  assert.strictEqual(m[3], `${SELF_NAME} [c0ffee]`);
+  assert.strictEqual(m[4], "name");
+});
 test("PM2 header --role pm --pm-issues adds the PM suffix", () => {
   const r = P.runBin("bin/peer-msg", ["header", "--agents-file", selfList(), "--role", "pm", "--pm-issues", "#1,#2"], { env: asSelf });
   assert.strictEqual(r.code, 0, `${r.out}${r.err}`);
