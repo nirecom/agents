@@ -180,10 +180,16 @@ A reply addressed to an incoming message's `from` attribute arrived end to end: 
 with `pong`, and this session replied to that message's `from` (`uds:\\.\pipe\LOCAL\cc-msg-…`) with
 no name involved (`FROM_REPLY_VERIFIED` is true). Whether the peer then read that reply is not observed.
 
-The dump opens with `This session is "<name>" [<ref6>].` followed by `Peer sessions (N):` and the rows.
-The own session appears only on that header line, never as a row, so `agents-list.js` reads the header
-line to resolve a `--session self` lookup. A line that is neither a row nor one of these headers makes the
-parse fail instead of being skipped.
+The dump opens with the own-session line `This session is <name> [<ref6>] — <clause>`, followed by
+`Peer sessions (N):` and the rows. The name is unquoted (it never starts with `"`) and may contain spaces,
+brackets and the 8-digit suffix `[xxxxxxxx]`; the separator is the last ` [<ref6>] — `, because the clause
+holds no `[…]`. The older form `This session is "<name>" [<ref6>].` is still accepted. The real line was
+captured in a PM session.
+The own session appears only on that first line, never as a row, so `agents-list.js` reads it to resolve a
+`--session self` lookup. A `This session is` line matching neither form is not skipped: the parse fails
+with `agents-list-unparsable` (exit 2), so a format change surfaces at its cause instead of as
+`not-in-list`. Only `Peer sessions (N):` is skipped as a header. A name without the 8-digit suffix stays
+`not-in-list`; hooks adding the suffix to the PM name (#2941) resolves that.
 
 ### Title reflection: minimal hook and known upstream bugs
 
