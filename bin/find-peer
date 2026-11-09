@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+"use strict";
+// bin/find-peer — dispatch to bin/find-peer.d/main.js (contract in its header).
+require("./find-peer.d/main").cli();

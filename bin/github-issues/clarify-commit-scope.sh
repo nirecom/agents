@@ -82,6 +82,14 @@ if [[ "$ISSUES_SET" -eq 1 && -z "$ISSUES_CSV" ]]; then
     fi
     TITLE_LINE="$(intent_extract_title "$INTENT_PATH")"
     BODY_TEXT="$(intent_extract_body "$INTENT_PATH")"
+    # Origin-session marker (#2668), appended before the scan so the scanned and posted bodies match.
+    # shellcheck source=lib/origin-session.sh
+    source "$SCRIPT_DIR/lib/origin-session.sh"
+    if ORIGIN_MARKER="$(origin_session_marker "$SESSION_ID")"; then
+        BODY_TEXT="$BODY_TEXT"$'\n\n'"$ORIGIN_MARKER"
+    else
+        echo "[clarify-commit-scope] warn: origin-session marker skipped (session id not [A-Za-z0-9_-]+)" >&2
+    fi
 
     # Guard runs in THIS shell via redirection (never a pipe) so
     # GH_OUTBOUND_GUARD_MESSAGE survives for the sidecar write below.

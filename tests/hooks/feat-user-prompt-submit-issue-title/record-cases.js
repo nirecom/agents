@@ -20,11 +20,22 @@ function chainRecord(F) {
   });
 }
 
-// H7 — every path that cannot confirm a root: nothing, no record, 0 fetch, 0 spawn.
+// H7 — #2668: a session whose state cannot be read is its own root (its own control dir) and
+// gets the work name; a readable state that cannot confirm a root still stays quiet.
 function unconfirmedRoots(F) {
   for (const [label, make] of [
     ["no state", () => {}],
     ["corrupt state", (sid) => { fs.mkdirSync(path.dirname(F.WS.getStatePath(sid)), { recursive: true }); fs.writeFileSync(F.WS.getStatePath(sid), "{broken"); }],
+  ]) {
+    test(`H7 ${label}: /wf-init #12 emits the work name and records it in its own control dir`, () => {
+      const sid = F.newSid("h7s"); make(sid);
+      const d = F.deps();
+      const r = F.call(sid, "/wf-init #12", d);
+      assert.strictEqual(r, "#12 Title12", JSON.stringify(r));
+      assert.strictEqual((F.readRecord(sid) || {}).last_emitted, "#12 Title12", JSON.stringify(F.readRecord(sid)));
+    });
+  }
+  for (const [label, make] of [
     ["no ancestry and transcript_path null", (sid) => F.seed(sid, { transcript: null })],
     ["transcript_path null via a begun mark + ## Issues", (sid) => { F.seed(sid, { transcript: null, status: "in_progress" }); F.writeIntent(sid, ["- #12"]); }],
   ]) {
