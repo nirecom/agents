@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 "use strict";
-// bin/glossary-promote <intent.md> <repo-root> — glossary promotion (#2529): apply the approved
-// intent glossary's user / internal rows (add / delete / redefine) to
-// <repo-root>/docs/glossary/<category>*.md. New entries get `Related: TODO` (update-docs fills
-// it; the gate blocks a leftover TODO); a redefine keeps the Related line. Three layers run
-// before the first write: 0 the CONFIRM_INTENT-approved intent only, 1 the rows against the
-// glossary files, 2 the applied result against the rows. GLOSSARY_ACCEPTED never unblocks
-// promote (named exception). Never creates a glossary file.
-// Exit: 0 ok, 1 blocked / invalid glossary file set, 2 usage / unreadable.
+// bin/glossary-promote <intent.md> <repo-root> [--related "<term>=<link>"]... — glossary promotion
+// (#2529): apply the approved intent glossary's user / internal rows (add / delete / redefine) to
+// <repo-root>/docs/glossary/<category>*.md. Each new entry takes its Related link from --related
+// (#2962); a written add without one, or a link that is not exactly one Markdown link, stops promote
+// before any write. A redefine keeps the Related line. Three layers run before the first write:
+// 0 the CONFIRM_INTENT-approved intent only, 1 the rows against the glossary files, 2 the applied
+// result against the rows. GLOSSARY_ACCEPTED never unblocks promote. Never creates a glossary file.
+// Exit: 0 ok, 1 blocked / invalid glossary file set / Related missing or malformed, 2 usage / unreadable.
 
 const fs = require("fs");
 const path = require("path");
@@ -17,7 +17,8 @@ const { SESSION_ID_VALID_RE } = require(path.join(__dirname, "..", "hooks", "wor
 const { resolvePlanArtifactOwner } = require(path.join(__dirname, "..", "hooks", "workflow-state", "plan-artifact-owner"));
 const { toWindowsPath } = require(path.join(__dirname, "..", "hooks", "lib", "branch-diff"));
 
-const USAGE = "usage: glossary-promote <plans-dir>/<sid>-intent.md <repo-root>";
+const USAGE = "usage: glossary-promote <plans-dir>/<sid>-intent.md <repo-root> [--related \"<term>=<markdown link>\"]...";
+const RELATED_EXIT = "or edit the glossary by hand and clear the commit-time glossary provenance check block with GLOSSARY_ACCEPTED";
 const RECOVERY = "fix the intent `## Glossary` rows (on intent-unapproved / intent-modified, take " +
   "CONFIRM_INTENT again), or edit the glossary by hand and clear the commit-time glossary provenance check block " +
   "with GLOSSARY_ACCEPTED; GLOSSARY_ACCEPTED does not unblock promote.";
@@ -65,8 +66,41 @@ function locate(texts, files, category, term) {
   return null;
 }
 
-// apply(texts, files, rows) -> counts; edits `texts` in place (delete -> redefine -> add).
-function apply(texts, files, rows, changed) {
+const termKey = (t) => String(t).toLowerCase();
+
+// parseArgs(argv) -> { positional, related: Map<termKey, { term, link }> }; exit 2 on a value
+// without `=`, an empty term, or a term given twice.
+function parseArgs(argv) {
+  const positional = [];
+  const related = new Map();
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] !== "--related") { positional.push(argv[i]); continue; }
+    const v = argv[i + 1];
+    i += 1;
+    const at = typeof v === "string" ? v.indexOf("=") : -1;
+    if (at <= 0) fail(2, USAGE + " (--related needs <term>=<link>: " + v + ")");
+    const term = v.slice(0, at).trim();
+    if (term === "" || related.has(termKey(term))) fail(2, USAGE + " (--related " + (term || v) + " is empty or given twice)");
+    related.set(termKey(term), { term, link: v.slice(at + 1).trim() });
+  }
+  if (positional.length !== 2) fail(2, USAGE);
+  return { positional, related };
+}
+
+// checkRelated(related, rows) — exit 2 for a pair whose term has no add row, exit 1 for a link
+// that is not exactly one Markdown link (the glossary-format rule); both before any write.
+function checkRelated(related, rows) {
+  const adds = new Set(rows.filter((r) => r.operation === "add").map((r) => termKey(r.term)));
+  for (const [k, p] of related) if (!adds.has(k)) fail(2, USAGE + " (--related " + p.term + ": no add row of the intent glossary)");
+  const bad = [...related.values()].map((p) => [p, fmt.relatedErrors(p.link)]).filter(([, e]) => e.length > 0);
+  if (bad.length === 0) return;
+  for (const [p, e] of bad) process.stderr.write("  BLOCK: --related " + p.term + ": " + e.join("; ") + "\n");
+  fail(1, "nothing promoted — pass one Markdown link per term, " + RELATED_EXIT + ".");
+}
+
+// apply(texts, files, rows, changed, related, missing) -> counts; edits `texts` in place
+// (delete -> redefine -> add); an add written without a --related pair goes to `missing`.
+function apply(texts, files, rows, changed, related, missing) {
   const counts = { added: 0, deleted: 0, redefined: 0, existing: 0 };
   const set = (f, t) => { texts.set(f, t); changed.add(f); };
   for (const r of rows.filter((x) => x.operation === "delete")) {
@@ -87,7 +121,10 @@ function apply(texts, files, rows, changed) {
       process.stderr.write("WARN: no " + r.category + " glossary file; '" + r.term + "' not promoted\n");
       continue;
     }
-    const entry = ["### " + r.term, "- **Definition**: " + r.definition, ...fmt.fieldLines(r), "- **Related**: TODO", ""].join("\n");
+    const pair = related.get(termKey(r.term));
+    if (!pair) missing.push(r.term);
+    const entry = ["### " + r.term, "- **Definition**: " + r.definition, ...fmt.fieldLines(r),
+      "- **Related**: " + (pair ? pair.link : "TODO"), ""].join("\n");
     set(target, fmt.insertEntry(texts.get(target), r.term, entry));
     counts.added += 1;
   }
@@ -118,12 +155,13 @@ function writeAll(repoRoot, files, texts, io) {
 }
 
 function main(argv) {
-  if (argv.length !== 2) fail(2, USAGE);
-  const [intentPath, repoRoot] = argv;
+  const { positional, related } = parseArgs(argv);
+  const [intentPath, repoRoot] = positional;
   const sid = sessionOf(intentPath);
 
   const loaded = prov.loadIntentGlossary(sid);
   if (!loaded.ok) block([loaded.case + " " + loaded.reason + (loaded.detail ? " (" + [].concat(loaded.detail).join("; ") + ")" : "")]);
+  checkRelated(related, loaded.rows.filter((r) => r.category !== "session"));
 
   let files;
   try { files = fmt.listGlossaryFiles(repoRoot); } catch (e) { fail(2, "cannot list " + path.join(repoRoot, fmt.GLOSSARY_DIR) + ": " + (e.code || e.message)); }
@@ -141,7 +179,12 @@ function main(argv) {
   if (rowBlocks.length > 0) block(rowBlocks.map(opLine));
 
   const changed = new Set();
-  const counts = apply(texts, files, rows, changed);
+  const missing = [];
+  const counts = apply(texts, files, rows, changed, related, missing);
+  if (missing.length > 0) {
+    process.stderr.write("  BLOCK: no --related link for the new entr" + (missing.length === 1 ? "y " : "ies ") + missing.join(", ") + "\n");
+    fail(1, "nothing promoted — pass --related \"<term>=<markdown link>\" for each, " + RELATED_EXIT + ".");
+  }
   const after = prov.readTermSets((p) => texts.get(p), files);
   const { unmatched } = prov.matchOperations(prov.computeOperations(before, after), rows, []);
   if (unmatched.length > 0) block(unmatched.map(opLine));

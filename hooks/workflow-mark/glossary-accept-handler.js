@@ -1,7 +1,6 @@
 "use strict";
-// Issue #2529 — WORKFLOW_GLOSSARY_ACCEPTED.
-//
-//   echo "<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term>[ op=<op>][ cat=<cat>][ step=<step>] — <reason>>>"
+// Issue #2529 — WORKFLOW_GLOSSARY_ACCEPTED: term=<term>[ op=<op>][ cat=<cat>][ step=<step>] — <reason>.
+// term=* batch=definition-only [cat=<cat>] (#2962) grants every redefine block with fields_changed false.
 // Records the user's grant for one glossary term against what is pending for it: (a) an open
 // deterministic finding of every glossary step holding one (step= narrows to that step), (b) a glossary
 // provenance check block, (c) an open tagged concern of the ledger of a target step or the current
@@ -24,8 +23,11 @@ const { RECORD_KEY, PROVENANCE_KEY, PROVENANCE_STEP } = require("../workflow-sta
 
 const LABEL = "GLOSSARY_ACCEPTED";
 const ORIGIN = "workflow-mark-glossary-accept";
-const FORM = "echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> [op=<add|delete|redefine>] [cat=<user|internal>] [step=<step>] — <reason>>>\"";
-const DOMAIN = { op: ["add", "delete", "redefine"], cat: ["user", "internal"], step: GLOSSARY_STEPS };
+const FORM = "echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: term=<term> [op=<add|delete|redefine>] [cat=<user|internal>] [step=<step>] — <reason>>>\"" +
+  " or echo \"<<WORKFLOW_GLOSSARY_ACCEPTED: term=* batch=definition-only [cat=<user|internal>] — <reason>>>\"";
+const BATCH_TERM = "*";
+const DEFINITION_ONLY = "definition-only";
+const DOMAIN = { op: ["add", "delete", "redefine"], cat: ["user", "internal"], step: GLOSSARY_STEPS, batch: [DEFINITION_ONLY] };
 const LEDGER_CLI = path.join(__dirname, "..", "..", "bin", "concern-ledger");
 
 const asArray = (v) => (Array.isArray(v) ? v : []);
@@ -46,6 +48,7 @@ function parseDiscriminators(text) {
     disc[name] = value;
   }
   if (disc.step && (disc.op || disc.cat)) return { error: "op= / cat= cannot be combined with step=" };
+  if (disc.batch && (disc.step || disc.op)) return { error: "batch= cannot be combined with step= or op=" };
   return { disc };
 }
 
@@ -74,7 +77,7 @@ function listDrift(sid, format) {
 
 // The current step joins the open-finding steps so its ledger concerns (c) count before it has a record.
 function targetSteps(state, sid, norm, disc) {
-  if (disc.op || disc.cat) return [];
+  if (disc.op || disc.cat || disc.batch) return [];
   if (disc.step) return [disc.step];
   const current = currentGlossaryStep(state, sid);
   return GLOSSARY_STEPS.filter((s) => s === current ||
@@ -96,6 +99,12 @@ function annotation(step, key, value) {
   return { kind: "step_annotation", step, key, value, provenance: "declared", origin: ORIGIN };
 }
 
+// The blocks one grant covers: the term's (op= / cat= narrow), or under batch= every
+// definition-only redefine (cat= narrows).
+const coveredBy = (b, bn, norm, disc) => (disc.batch
+  ? b.operation === "redefine" && b.fields_changed === false && (!disc.cat || b.category === disc.cat)
+  : bn === norm && (!disc.op || b.operation === disc.op) && (!disc.cat || b.category === disc.cat));
+
 // grantProvenance(prov, norm, disc, reason) -> new grants (b).
 function grantProvenance(prov, norm, disc, reason) {
   if (!prov || disc.step) return [];
@@ -103,9 +112,11 @@ function grantProvenance(prov, norm, disc, reason) {
   const out = [];
   for (const b of asArray(prov.blocked)) {
     const bn = b && (b.norm || normalizeTerm(b.term));
-    if (bn !== norm || (disc.op && b.operation !== disc.op) || (disc.cat && b.category !== disc.cat)) continue;
-    const g = { norm: bn, operation: b.operation, category: b.category, fingerprint: prov.fingerprint, reason };
-    const dup = (x) => x && x.norm === g.norm && x.operation === g.operation && x.category === g.category && x.fingerprint === g.fingerprint;
+    if (!b || !coveredBy(b, bn, norm, disc)) continue;
+    const g = Object.assign({ norm: bn, operation: b.operation, category: b.category },
+      disc.batch ? { basis: DEFINITION_ONLY } : {}, { fingerprint: prov.fingerprint, reason });
+    const dup = (x) => x && x.norm === g.norm && x.operation === g.operation && x.category === g.category &&
+      x.fingerprint === g.fingerprint && x.basis === g.basis;
     if (!have.some(dup) && !out.some(dup)) out.push(g);
   }
   return out;
@@ -167,14 +178,21 @@ function grant(sid, term, disc, reason) {
     const pg = grantProvenance(prov, norm, disc, reason);
     if (pg.length > 0) {
       events.push(annotation(PROVENANCE_STEP, PROVENANCE_KEY, Object.assign({}, prov, { grants: asArray(prov.grants).concat(pg) })));
-      v.granted.push(pg.map((g) => `provenance ${g.operation} ${g.category}`).join(", "));
+      const nameOf = (g) => {
+        const b = asArray(prov.blocked).find((x) => x && (x.norm || normalizeTerm(x.term)) === g.norm &&
+          x.operation === g.operation && x.category === g.category);
+        return (b && b.term) || g.norm;
+      };
+      v.granted.push(pg.map((g) => `provenance ${g.operation} ${g.category} (${nameOf(g)})`).join(", "));
     }
     return events;
   });
   // Here, not in the builder: the builder empties `v` on every re-run.
   if (v.granted.length === 0 && v.notes.length === 0) {
-    v.notes.push(disc.op || disc.cat ? "no glossary_provenance block matches this term with the given op= / cat="
-      : "no step holds an open finding or an open tagged concern for this term, and no glossary_provenance block names it");
+    v.notes.push(disc.batch ? "no glossary_provenance block is a definition-only redefine (batch=definition-only) — " +
+      "grant each other block by its term"
+      : disc.op || disc.cat ? "no glossary_provenance block matches this term with the given op= / cat="
+        : "no step holds an open finding or an open tagged concern for this term, and no glossary_provenance block names it");
   }
   return v;
 }
@@ -191,7 +209,9 @@ function handle(ctx) {
   const term = sanitizeLine(m[1].trim());
   const reason = sanitizeLine(m[3].trim());
   const p = parseDiscriminators(m[2]);
-  const why = p.error || (reason.replace(/\s/g, "").length < 3 ? "reason too short" : null);
+  const batchTerm = !p.error && (term === BATCH_TERM) !== !!p.disc.batch;
+  const why = p.error || (batchTerm ? "batch= needs term=* and term=* needs batch=definition-only" : null) ||
+    (reason.replace(/\s/g, "").length < 3 ? "reason too short" : null);
   if (why) {
     pushUnapplied(`workflow-mark: malformed WORKFLOW_${LABEL} — ${why}; state unchanged. Expected: ${FORM}`);
     return true;

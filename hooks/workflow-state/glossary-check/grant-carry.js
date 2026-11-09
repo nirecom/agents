@@ -1,7 +1,8 @@
 "use strict";
 // hooks/workflow-state/glossary-check/grant-carry.js — the grant carry-over and expiry of a re-record
 // (#2770, #2909), private to record.js. A grant moves to the new fingerprint when every changed input
-// is in its record's role set and its keys did not grow; otherwise it expires into expired_grants with
+// is in its record's role set (or only the glossary changed and the guard passes it, #2962) and its
+// keys did not grow; otherwise it expires into expired_grants with
 // a cause. Also the text parts every refusal shares: no part shown in a hint may hold a single quote.
 
 const { unsafeTermChars, describeTermChars } = require("../../lib/glossary-term");
@@ -27,22 +28,35 @@ function expiryOf(g, termOf, cause, changed, fingerprint) {
   return Object.assign({ norm: g.norm, term: termOf(g.norm) }, scope, { cause, changed, fingerprint });
 }
 
-// grantCarry(prev, fpResult, roles, keysOf, prevList, nextList, termOf) -> { carried, expired }.
-function grantCarry(prev, fpResult, roles, keysOf, prevList, nextList, termOf) {
+const glossaryOnly = (changed) => changed.length === 1 && changed[0] === "glossary";
+
+// sameTermFields(prevFields, nowFields, norm) -> whether the norm's matching-field sha is unchanged;
+// false for a record written before #2962 (no term_fields), so it never carries (fail-safe).
+function sameTermFields(prevFields, nowFields, norm) {
+  if (!prevFields || typeof prevFields !== "object" || !Object.prototype.hasOwnProperty.call(prevFields, norm)) return false;
+  const now = nowFields && Object.prototype.hasOwnProperty.call(nowFields, norm) ? nowFields[norm] : null;
+  return prevFields[norm] === now;
+}
+
+// grantCarry(prev, fpResult, roles, keysOf, prevList, nextList, termOf, guard) -> { carried, expired }.
+// guard(g) (#2962, optional): a glossary-only change carries the grants it passes; the rest lapse
+// with cause "fields". Without a guard a glossary change lapses every grant with cause "inputs".
+function grantCarry(prev, fpResult, roles, keysOf, prevList, nextList, termOf, guard) {
   const p = prev || {};
   const fp = fpResult.fingerprint;
   if (typeof p.fingerprint !== "string" || p.fingerprint === fp) return { carried: [], expired: [] };
   const changed = changedInputs(p.inputs, fpResult.inputs);
   const grants = asArray(p.grants).filter((g) => g && g.fingerprint === p.fingerprint);
   const out = { carried: [], expired: [] };
-  const inRoles = changed.length > 0 && changed.every((k) => roles.includes(k));
+  const byGuard = typeof guard === "function" && glossaryOnly(changed);
+  const inRoles = byGuard || (changed.length > 0 && changed.every((k) => roles.includes(k)));
   for (const g of grants) {
-    const before = new Set(keysOf(prevList, g.norm));
-    if (inRoles && keysOf(nextList, g.norm).every((k) => before.has(k))) {
-      out.carried.push(Object.assign({}, g, { fingerprint: fp }));
-    } else {
-      out.expired.push(expiryOf(g, termOf, inRoles ? "variants" : "inputs", changed, fp));
-    }
+    const before = new Set(keysOf(prevList, g.norm, g));
+    let cause = inRoles ? null : "inputs";
+    if (!cause && byGuard && !guard(g)) cause = "fields";
+    if (!cause && !keysOf(nextList, g.norm, g).every((k) => before.has(k))) cause = "variants";
+    if (cause) out.expired.push(expiryOf(g, termOf, cause, changed, fp));
+    else out.carried.push(Object.assign({}, g, { fingerprint: fp }));
   }
   return out;
 }
@@ -62,12 +76,16 @@ const termIn = (list, norm) => {
   return hit ? String(hit.term) : String(norm);
 };
 
-// staleOutlook(rec, changed, roles) -> { carry: "possible" | "none", granted_terms }, from the record only.
-function staleOutlook(rec, changed, roles) {
+// staleOutlook(rec, changed, roles, termFields) -> { carry: "possible" | "none", granted_terms }.
+// A glossary-only change carries only when every granted norm keeps its termFields (#2962).
+function staleOutlook(rec, changed, roles, termFields) {
   const r = rec || {};
   const c = asArray(changed);
-  const carry = c.length > 0 && c.every((k) => roles.includes(k)) ? "possible" : "none";
   const granted = asArray(r.grants).filter((g) => g && g.fingerprint === r.fingerprint);
+  const possible = glossaryOnly(c) && termFields
+    ? !!r.term_fields && granted.every((g) => sameTermFields(r.term_fields, termFields, g.norm))
+    : c.length > 0 && c.every((k) => roles.includes(k));
+  const carry = possible ? "possible" : "none";
   return { carry, granted_terms: [...new Set(granted.map((g) => termIn(r.findings, g.norm)))] };
 }
 
@@ -89,7 +107,8 @@ const termsText = (terms) => [...new Set(asArray(terms).map((t) => noQuote(t)))]
 
 // causeText(e) -> why an expired grant lapsed.
 const causeText = (e) => (e && e.cause === "variants" ? "a new variant appeared"
-  : `${asArray(e && e.changed).map(noQuote).join(", ")} changed`);
+  : e && e.cause === "fields" ? "its `Identifier` / `Short forms` / heading changed"
+    : `${asArray(e && e.changed).map(noQuote).join(", ")} changed`);
 
 const codePoints = (chars) => chars.map((c) => "U+" + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")).join(", ");
 
@@ -109,6 +128,6 @@ function reacceptText(term, step, target) {
 }
 
 module.exports = {
-  CARRY_ROLES, changedInputs, grantCarry, retainedExpired, staleOutlook, carryReportOf,
+  CARRY_ROLES, changedInputs, grantCarry, sameTermFields, retainedExpired, staleOutlook, carryReportOf,
   termsText, causeText, reacceptText, termIn,
 };

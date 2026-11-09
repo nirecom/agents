@@ -49,7 +49,8 @@ test("an already-complete plan step with a stale glossary record reads pending u
     let eff = effective(s, step);
     F.check(`${step}: a current record keeps ${step} complete`, eff && eff.status === "complete", JSON.stringify(eff));
 
-    F.touchGlossary(s.repo);
+    // #2962: a glossary-only change stales a clean record only through a new finding.
+    F.addDriftingEntry(s.repo);
     const code = glossaryRefusalOfComplete(s.sid, step, F.readState(s.sid), { repoDir: s.repo });
     F.check(`${step}: glossaryRefusalOfComplete is glossary-check-stale after the glossary changed`,
       code === "glossary-check-stale", String(code));
@@ -59,9 +60,11 @@ test("an already-complete plan step with a stale glossary record reads pending u
     F.check(`${step}: the recorded status stays complete (read-time only)`, F.statusOf(s.sid, step) === "complete", F.statusOf(s.sid, step));
 
     const again = F.drift(s.sid, step, s.repo);
-    F.check(`${step}: re-record exits 0`, again.code === 0, `exit=${again.code} ${again.out}${again.err}`);
+    F.check(`${step}: re-record reports the new finding (exit 1)`, again.code === 1 && again.out.includes(F.DRIFTING_TERM),
+      `exit=${again.code} ${again.out}${again.err}`);
+    F.check(`${step}: a grant is recorded for the new finding`, F.grantFindings(s.sid, step) === true, "no record");
     eff = effective(s, step);
-    F.check(`${step}: a fresh record restores ${step} complete`, eff && eff.status === "complete", JSON.stringify(eff));
+    F.check(`${step}: a fresh granted record restores ${step} complete`, eff && eff.status === "complete", JSON.stringify(eff));
   }
 })));
 caseEnd();
@@ -70,7 +73,7 @@ caseBegin("next-step routes a stale already-complete clarify_intent to the gloss
 test("next-step routes a stale already-complete clarify_intent to the glossary recovery", () => noNewFailures(F.failureCount, () => guarded("next-step", () => {
   const s = F.setupStep("stale-next", "clarify_intent", F.TERM, { ownStatus: "complete" });
   F.drift(s.sid, "clarify_intent", s.repo);
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   const r = F.runNode("bin/workflow/next-step", ["--session", s.sid], { cwd: s.repo, env: { CLAUDE_PROJECT_DIR: s.repo } });
   F.check("next-step: names glossary-check-stale for clarify_intent", /glossary-check-stale: clarify_intent/.test(r.out), `${r.out}${r.err}`);
   F.check("next-step: the hint names check-glossary-drift --step clarify_intent --record", /check-glossary-drift --session \S+ --step clarify_intent --record/.test(r.out), r.out);

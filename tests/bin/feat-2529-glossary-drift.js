@@ -34,3 +34,23 @@ caseEnd();
 caseBegin("grant carried over its role inputs, expired with a shown cause otherwise", "hooks/workflow-state/glossary-check/record.js");
 test("grant carried over its role inputs, expired with a shown cause otherwise", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/expiry").run(F)));
 caseEnd();
+
+caseBegin("glossary-only change stales a record only through its findings or matching fields", "hooks/workflow-state/glossary-check/record.js");
+test("glossary-only change stales a record only through its findings or matching fields", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/fields").run(F)));
+caseEnd();
+
+caseBegin("clean record stays current over a glossary-only change", "hooks/workflow-state/glossary-check/record.js");
+test("clean record stays current over a glossary-only change", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/fields").cleanRecord(F)));
+caseEnd();
+
+caseBegin("glossary-only change with a new variant lapses the grant with cause variants", "hooks/workflow-state/glossary-check/record.js");
+test("glossary-only change with a new variant lapses the grant with cause variants", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/fields").variantGrowth(F)));
+caseEnd();
+
+caseBegin("definition-only provenance grant survives a later Definition edit", "hooks/workflow-state/glossary-check/record.js");
+test("definition-only provenance grant survives a later Definition edit", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/fields").provenanceBasis(F)));
+caseEnd();
+
+caseBegin("glossary-only change that removes the finding stales the record and the re-record clears it", "hooks/workflow-state/glossary-check/record.js");
+test("glossary-only change that removes the finding stales the record and the re-record clears it", () => noNewFailures(F.failureCount, () => require("./feat-2529-glossary-drift/fields").vanishingFinding(F)));
+caseEnd();

@@ -43,6 +43,17 @@ const GLOSSARY_FILES = {
   "docs/glossary/internal.md": `# Glossary — internal terms\n\n${entry(TERM2, "The per-round list of review concerns.")}`,
 };
 
+// #2962: the two kinds of glossary-only edit of the TERM entry. touchDefinition changes the
+// Definition text only (a grant carries); touchMatch adds a `Short forms` line, a matching field
+// (a grant lapses with cause "fields").
+const USER_MD = "docs/glossary/user.md";
+function touchDefinition(repo) {
+  writeFile(repo, USER_MD, GLOSSARY_FILES[USER_MD].replace("differs from", "deviates from"));
+}
+function touchMatch(repo) {
+  writeFile(repo, USER_MD, GLOSSARY_FILES[USER_MD].replace("the glossary term.\n", "the glossary term.\n- **Short forms**: `drift`\n"));
+}
+
 const slash = (p) => String(p).replace(/\\/g, "/");
 let counter = 0;
 function newSid(tag) {
@@ -283,6 +294,6 @@ module.exports = {
   writePlan, writeIntent, statePath, statusEvent, annotationEvent, approvalEvent, seedAt, appendRaw, inject,
   reapprove, readState, ann, recordOf, rawState, currentStep, ledgerPath, writeLedger, tagged, runNode,
   reached, drift, driftLegacy, ledgerGrant, mark, expectRejected, FP, findingRecord, legacyFindingRecord,
-  provenanceRecord, accepted, driftLines,
+  provenanceRecord, accepted, driftLines, touchDefinition, touchMatch,
   mod, check, finish, failureCount, clip,
 };

@@ -35,3 +35,29 @@ test("each combined glossary change stales the record and the main worktree glos
   }
 }));
 caseEnd();
+
+// #2962: fingerprintOf returns termFields beside the fingerprint; termFields stays out of the
+// fingerprint, so a Definition edit still moves the fingerprint while termFields stays the same.
+caseBegin("fingerprintOf returns termFields outside the fingerprint", "hooks/workflow-state/glossary-check/scope.js");
+test("fingerprintOf returns termFields outside the fingerprint", () => noNewFailures(F.failureCount, () => {
+  const scope = F.mod("hooks/workflow-state/glossary-check/scope.js");
+  if (!scope) return;
+  const step = "review_security";
+  const s = F.setupStep("t2962-tf", step);
+  const fp = () => scope.fingerprintOf(scope.loadStepInputs(s.sid, step, { repoDir: s.repo }));
+  const a = fp();
+  F.check("fingerprintOf: the result carries a termFields map with a 64-hex value per term",
+    !!a && a.ok === true && !!a.termFields && typeof a.termFields === "object" &&
+    Object.keys(a.termFields).length > 0 && Object.values(a.termFields).every((v) => /^[0-9a-f]{64}$/.test(String(v))),
+    JSON.stringify(a));
+  F.touchGlossary(s.repo, "!");
+  const b = fp();
+  F.check("fingerprintOf: a Definition edit still moves the fingerprint", !!b && b.ok && b.fingerprint !== a.fingerprint, JSON.stringify(b));
+  F.check("fingerprintOf: a Definition edit leaves termFields unchanged",
+    !!b && !!b.termFields && JSON.stringify(b.termFields) === JSON.stringify(a.termFields), `${JSON.stringify(a.termFields)} ${JSON.stringify(b && b.termFields)}`);
+  F.touchGlossaryMatch(s.repo);
+  const c = fp();
+  F.check("fingerprintOf: a Short forms edit moves termFields",
+    !!c && !!c.termFields && JSON.stringify(c.termFields) !== JSON.stringify(a.termFields), JSON.stringify(c && c.termFields));
+}));
+caseEnd();

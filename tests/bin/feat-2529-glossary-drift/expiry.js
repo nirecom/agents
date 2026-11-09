@@ -130,6 +130,9 @@ function texts(F) {
     C.causeText({ cause: "inputs", changed: ["glossary", "rules"] }) === "glossary, rules changed", C.causeText({ cause: "inputs", changed: ["glossary", "rules"] }));
   F.check("causeText of a variants expiry", C.causeText({ cause: "variants", changed: ["rules"] }) === "a new variant appeared",
     C.causeText({ cause: "variants", changed: ["rules"] }));
+  F.check("causeText of a fields expiry (#2962)",
+    C.causeText({ cause: "fields", changed: ["glossary"] }) === "its `Identifier` / `Short forms` / heading changed",
+    C.causeText({ cause: "fields", changed: ["glossary"] }));
   const rec = { fingerprint: F.FP("a"), findings: [{ term: F.TERM, norm: F.TERM, variant: "glossary-drift" }],
     grants: [{ norm: F.TERM, fingerprint: F.FP("a") }] };
   const pos = C.staleOutlook(rec, ["rules"], C.CARRY_ROLES.check);
@@ -249,16 +252,29 @@ function cli(F) {
   F.check("--record: the carried line is printed and the grant sits on the new fingerprint",
     r.code === 0 && r.out.includes(carried) && ((F.recordOf(c.sid, STEP) || {}).grants || []).length === 1, `${r.all} ${JSON.stringify(F.recordOf(c.sid, STEP))}`);
 
-  for (const [tag, term, want, bad] of [
-    ["exp-dollar", "a$b", `  EXPIRED: grant for "a$b" — glossary changed; the term has a forbidden character ('$'), so it ${FORBIDDEN}`, ECHO],
-    ["exp-quote", "user's guide", `  EXPIRED: grant for "user's guide" — glossary changed; re-accept with: echo "<<${ECHO}user's guide step=${STEP} — <reason>>>"`, null],
+  // #2962: a glossary-only change no longer expires with cause inputs, so the inputs cause is
+  // driven by glossary + rules; FIELDS is the cause of a glossary-only change whose term moved.
+  const GR = { glossary: F.FP("8"), rules: F.FP("9") };
+  const FIELDS = "its `Identifier` / `Short forms` / heading changed";
+  for (const [tag, term, over, extra, want, bad] of [
+    ["exp-dollar", "a$b", GR, null, `  EXPIRED: grant for "a$b" — glossary, rules changed; the term has a forbidden character ('$'), so it ${FORBIDDEN}`, ECHO],
+    ["exp-quote", "user's guide", GR, null, `  EXPIRED: grant for "user's guide" — glossary, rules changed; re-accept with: echo "<<${ECHO}user's guide step=${STEP} — <reason>>>"`, null],
+    ["exp-fields", F.TERM, { glossary: F.FP("8") }, { term_fields: { [F.TERM]: F.FP("0") } },
+      `  EXPIRED: grant for "${F.TERM}" — ${FIELDS}; re-accept with: echo "<<${ECHO}${F.TERM} step=${STEP} — <reason>>>"`, null],
   ]) {
     const s = session(F, tag, "module.exports = 1;\n");
-    F.inject(s.sid, STEP, "glossary_check", staleRecord(F, s, term, { glossary: F.FP("8") }));
+    F.inject(s.sid, STEP, "glossary_check", staleRecord(F, s, term, over, extra));
     const x = F.drift(s.sid, STEP, s.repo, true);
     const line = expiredLine(x.out, term);
-    F.check(`EXPIRED line for ${term}`, line.startsWith(want) && (!bad || !line.includes(bad)), x.all);
+    F.check(`EXPIRED line for ${term} (${tag})`, line.startsWith(want) && (!bad || !line.includes(bad)), x.all);
   }
+
+  // An old record (no term_fields) never carries over a glossary-only change; only the lapse is pinned.
+  const o = session(F, "exp-old", "module.exports = 1;\n");
+  F.inject(o.sid, STEP, "glossary_check", staleRecord(F, o, F.TERM, { glossary: F.FP("8") }));
+  const ox = F.drift(o.sid, STEP, o.repo, true);
+  F.check("an old record without term_fields: a glossary-only change expires the grant",
+    expiredLine(ox.out, F.TERM) !== "" && ((F.recordOf(o.sid, STEP) || {}).grants || []).length === 0, ox.all);
 }
 
 // The same mix through the CLI: the staged file adds a new variant of TERM2 only.
@@ -291,14 +307,15 @@ function lapseShown(F) {
   F.drift(s.sid, STEP, s.repo, true);
   F.mark(s.sid, F.accepted(F.TERM, `step=${STEP}`), s.repo);
   F.check("exp-glo precondition: one grant", ((F.recordOf(s.sid, STEP) || {}).grants || []).length === 1, JSON.stringify(F.recordOf(s.sid, STEP)));
-  F.writeFile(s.repo, "docs/glossary/user.md", F.GLOSSARY_FILES["docs/glossary/user.md"].replace("differs from", "deviates from"));
+  // #2962: a matching-field edit (`Short forms`) of the granted term; a Definition-only edit carries.
+  F.touchMatch(s.repo);
   const r = F.drift(s.sid, STEP, s.repo, true);
   const line = expiredLine(r.out, F.TERM);
-  F.check("a glossary edit: the re-record prints an EXPIRED line naming glossary and the re-accept echo",
-    r.code === 1 && line.includes("glossary") && line.includes(`${ECHO}${F.TERM} step=${STEP}`), r.all);
+  F.check("a glossary matching-field edit: the re-record prints an EXPIRED line naming the fields cause and the re-accept echo",
+    r.code === 1 && line.includes("its `Identifier` / `Short forms` / heading changed") && line.includes(`${ECHO}${F.TERM} step=${STEP}`), r.all);
   const first = F.recordOf(s.sid, STEP) || {};
-  F.check("the record keeps the expired grant with cause inputs",
-    expiredOf(first).length === 1 && expiredOf(first)[0].cause === "inputs" && (expiredOf(first)[0].changed || []).includes("glossary"), JSON.stringify(first));
+  F.check("the record keeps the expired grant with cause fields and glossary among the changed inputs",
+    expiredOf(first).length === 1 && expiredOf(first)[0].cause === "fields" && (expiredOf(first)[0].changed || []).includes("glossary"), JSON.stringify(first));
   F.drift(s.sid, STEP, s.repo, true);
   F.check("a second re-record at the same fingerprint leaves expired_grants unchanged",
     JSON.stringify(expiredOf(F.recordOf(s.sid, STEP) || {})) === JSON.stringify(expiredOf(first)), JSON.stringify(F.recordOf(s.sid, STEP)));

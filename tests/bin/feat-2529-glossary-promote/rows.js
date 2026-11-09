@@ -5,7 +5,7 @@
 // (`  BLOCK: <term> <operation> <category>: <reason>`, files unchanged). A category move is a
 // delete (old category) + add (new category) pair and passes in either row order.
 
-const { check, eq, ok, DEFS, promote, snapshot, unchanged, userTerms, internalTerms, counters, blockLine, session } = require("./lib");
+const { check, eq, ok, DEFS, promote, snapshot, unchanged, userTerms, internalTerms, counters, blockLine, session, relatedFor } = require("./lib");
 
 // Fixture glossary: user = alpha, omega; internal = kilo.
 const BLOCKS = [
@@ -23,7 +23,7 @@ function layerOneBlocks() {
     const { repo, intent } = session("l1", [row]);
     const before = snapshot(repo);
     check(`T3-5 layer 1: ${name} -> ${reason}, exit 1, files unchanged`, () => {
-      const r = promote(intent, repo);
+      const r = promote(intent, repo, relatedFor([row]));
       eq(r.code, 1, `exit (out: ${r.all})`);
       ok(blockLine(row[0], row[2], row[1], reason).test(r.err), `stderr: ${r.err}`);
       unchanged(repo, before);
@@ -41,7 +41,7 @@ function categoryMove() {
   for (const order of ["delete-first", "add-first"]) {
     const { repo, intent } = session(`move-${order}`, moveRows(order));
     check(`T3-5 a category move pair (${order}) passes: DELETED=1 ADDED=1, omega leaves user and enters internal`, () => {
-      const r = promote(intent, repo);
+      const r = promote(intent, repo, relatedFor(moveRows(order)));
       eq(r.code, 0, `exit (out: ${r.all})`);
       const n = counters(r.out);
       eq([n.DELETED, n.ADDED], [1, 1], "DELETED / ADDED");
@@ -53,7 +53,7 @@ function categoryMove() {
   const wrong = session("move-wrong-cat", [["omega", "internal", "delete", ""], ["omega", "internal", "add", DEFS.omega]]);
   const wrongBefore = snapshot(wrong.repo);
   check("T3-5 a move pair whose delete names the wrong old category is blocked, files unchanged", () => {
-    const r = promote(wrong.intent, wrong.repo);
+    const r = promote(wrong.intent, wrong.repo, { omega: "[README.md](../../README.md)" });
     eq(r.code, 1, `exit (out: ${r.all})`);
     // With two categories the wrong old category equals the add's, so the row check's
     // use-redefine (reported inside intent-unreadable) can fire before the per-op reason.
@@ -72,7 +72,7 @@ function categoryMove() {
   const addOnly = session("move-add-only", [["omega", "internal", "add", DEFS.omega]]);
   const addBefore = snapshot(addOnly.repo);
   check("T3-5 the add half alone is category-conflict, files unchanged", () => {
-    const r = promote(addOnly.intent, addOnly.repo);
+    const r = promote(addOnly.intent, addOnly.repo, { omega: "[README.md](../../README.md)" });
     eq(r.code, 1, `exit (out: ${r.all})`);
     ok(blockLine("omega", "add", "internal", "category-conflict").test(r.err), `stderr: ${r.err}`);
     unchanged(addOnly.repo, addBefore);

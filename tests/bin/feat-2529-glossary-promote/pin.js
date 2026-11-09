@@ -61,7 +61,7 @@ function issuesOnlyEdit() {
   const s = session("p0-issues", ROWS);
   writeIntent(s.sid, ROWS, { issues: "- #1 fixture\n- #2 back-filled after approval" });
   check("T3-5 layer 0: an `## Issues`-only edit after approval still promotes (ADDED=1)", () => {
-    const r = promote(s.intent, s.repo);
+    const r = promote(s.intent, s.repo, { beta: "[README.md](../../README.md)" });
     eq(r.code, 0, `exit (out: ${r.all})`);
     eq(counters(r.out).ADDED, 1, "ADDED");
     eq(userTerms(s.repo).beta, "A pinned promote term.", "beta definition");
