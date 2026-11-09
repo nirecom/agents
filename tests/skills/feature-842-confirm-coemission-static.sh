@@ -1,6 +1,6 @@
 #!/bin/bash
-# Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md, hooks/stop-confirm-plan-guard/block-reasons.js, hooks/stop-confirm-plan-guard/undecidable.js
-# Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard, scope:common
+# Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md, hooks/lib/presentation-turn/block-reasons.js, hooks/stop-confirm-plan-guard/undecidable.js
+# Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard, scope:common, test-lang-exception:text-only
 # Static wiring: outline/detail mark-step emission order, the shared confirm-plan.md
 # protocol, CONFIRM_<STAGE>_RE_DQ for all three stages across stop-confirm-plan-guard.js
 # and its private modules (hooks/stop-confirm-plan-guard/*.js),
@@ -111,13 +111,14 @@ done
 # ---------------------------------------------------------------------------
 # 7. stop-confirm-plan-guard.js Layer 2: references all CONFIRM_<STAGE>_RE_DQ
 #    constants so it can dispatch follow-up checks per stage. The guard set is
-#    the entrypoint plus its private modules (rules/coding/file-split.md).
+#    the entrypoint plus its private modules (rules/coding/file-split.md) and
+#    the shared presentation-turn lib its block reasons moved to (#2936).
 # ---------------------------------------------------------------------------
 echo "=== 7. stop-confirm-plan-guard.js + private modules: CONFIRM_<STAGE>_RE_DQ references ==="
 STOP_GUARD="$REPO_ROOT/hooks/stop-confirm-plan-guard.js"
 STOP_GUARD_DIR="$REPO_ROOT/hooks/stop-confirm-plan-guard"
 STOP_GUARD_SET=("$STOP_GUARD")
-for guard_module in "$STOP_GUARD_DIR"/*.js; do
+for guard_module in "$STOP_GUARD_DIR"/*.js "$REPO_ROOT/hooks/lib/presentation-turn.js" "$REPO_ROOT/hooks/lib/presentation-turn"/*.js; do
     if [ -f "$guard_module" ]; then
         STOP_GUARD_SET+=("$guard_module")
     fi

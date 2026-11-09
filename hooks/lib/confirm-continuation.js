@@ -4,7 +4,8 @@
 // A plan is presented when the turn's last assistant entry is text only and its last text block
 // closes on a run of plan-link lines holding the plan's line, while its step is unapproved and the
 // step's gate is not OFF. The Stop hook turns a presentation into a receipt
-// (hooks/lib/presentation-receipt.js); confirm-checkpoint never reads the transcript.
+// (hooks/lib/presentation-receipt.js); confirm-checkpoint reads the transcript only to recover a
+// receipt a killed Stop left unwritten (confirm-checkpoint/receipt-recovery.js, #2936).
 // The presented list and the wording are keyed by the plan artifact name; the gate lookup is keyed
 // by the step (#2820), so each artifact is converted once with stepForSuffix.
 
@@ -16,6 +17,7 @@ const { planGateState } = require("./confirm-gate/plan-gate");
 const { PLAN_ARTIFACT_NAMES, stepForSuffix } = require("../workflow-state/plan-step-table");
 const { NEXT_STEP_GATE_PROBE_TIMEOUT_MS } = require("../../bin/workflow/lib/next-step/gate-line");
 const { withConvLang } = require("./conv-lang");
+const { NO_RECEIPT_HINT } = require("./no-receipt-hint");
 
 function textOnlyAnchor(tail) {
   const t = tail || {};
@@ -83,13 +85,13 @@ function continuationArtifact(presented, currentArtifact) {
 
 function continueReason(artifact) {
   const S = String(artifact).toUpperCase();
-  return withConvLang(`[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the approval dialog follows.`);
+  return withConvLang(`[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the presentation is recorded, so the approval dialog follows.`);
 }
 
 const CAUSE_TEXT = {
   "not-last": "its plan-link line is followed by other text, so the line did not close the turn",
   unpublished: "it is not published yet although this environment can publish it — rewrite it through the plan-sync path (the Write or Edit tool on the plan file) and present it only once its URL line is available",
-  "no-receipt": "no presentation of it is on record",
+  "no-receipt": "no presentation of it is on record and the previous turn does not show one; " + NO_RECEIPT_HINT,
   "unreadable-receipt": "its presentation receipt cannot be read",
   path: "the presented file is not the plan being approved",
   link: "the link shown then differs from the plan's link now",

@@ -127,7 +127,7 @@ caseEnd();
 // the turn, then the echo alone when Stop returns "[confirm-plan] continue:", else after the user's reply.
 // The plan-link command names the workflow step that owns the artifact (#2820).
 const STEP_OF = { intent: "clarify_intent", outline: "outline", detail: "detail" };
-const CONTINUE_CORE =(S) => `[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the approval dialog follows.`;
+const CONTINUE_CORE =(S) => `[confirm-plan] continue: as your next message, emit only echo "<<WORKFLOW_CONFIRM_${S}: {one-line summary}>>" — the presentation is recorded, so the approval dialog follows.`;
 // againOf(stage, cause) -> the reason from "[confirm-plan] present" on (a CONV_LANG prefix is cut off), or {threw}.
 function againOf(stage, cause) {
   if (CC.__missing || typeof CC.presentAgainReason !== "function") return { threw: "presentAgainReason is not available" };

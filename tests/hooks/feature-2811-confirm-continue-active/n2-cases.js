@@ -14,6 +14,7 @@ function reread(check) {
     const run = H.rereadRun(s, ["outline"], kind, "flushed");
     const st = H.stopOf(s, run.tp, run.opts(false));
     check(`i ${kind}: undecidable tail, re-read flushed without tool_use: exit 2 with the continue reason`, H.isContinue(st, "outline"), { rc: st.rc, out: st.out });
+    check(`i ${kind}: the final entry was appended only after an undecidable first read (late flush)`, H.lateFlushed(run.mark), { rc: st.rc, err: st.err });
     const rc = H.rcpt(s.sid, "outline");
     check(`i ${kind}: the receipt is recorded with the continuedAt mark`, rc !== null && H.marked(s.sid, "outline"), rc);
     check(`i ${kind}: the receipt anchor is ${kind === "both" ? "the text entry" : "empty (final message only)"}`, rc !== null && rc.anchorUuid === (kind === "both" ? "a-anchor" : ""), rc);
@@ -29,6 +30,7 @@ function reread(check) {
       check(`${label} (${kind}): no continue, exit 0, stdout empty`, H.silent(st3), { rc: st3.rc, out: st3.out });
       const rc2 = H.rcpt(s2.sid, "outline");
       check(`${label} (${kind}): the receipt is still recorded, without a mark`, rc2 !== null && !H.marked(s2.sid, "outline"), rc2);
+      if (variant === "tooluse") check(`${label} (${kind}): the tool_use entry did reach the transcript before the re-read`, H.lateFlushed(r2.mark), { rc: st3.rc, err: st3.err });
     }
   }
 }
@@ -53,6 +55,7 @@ function rereadTrailing(check) {
     const r2 = H.rereadRun(s2, ["outline"], kind, "toolthink");
     const st2 = H.stopOf(s2, r2.tp, r2.opts(false));
     check(`r ${kind}: re-read text, tool_use entry, thinking-only entry: no continue (exit 0, no decision:block, no continue reason)`, st2.rc === 0 && H.noDecision(st2) && !st2.continued && !/\[confirm-plan\] continue/.test(st2.out || ""), { rc: st2.rc, out: st2.out });
+    check(`r ${kind}: the late entries did reach the transcript before the re-read`, H.lateFlushed(r2.mark), { rc: st2.rc, err: st2.err });
     const rc2 = H.rcpt(s2.sid, "outline");
     check(`r ${kind}: the receipt is recorded without a continuedAt mark`, rc2 !== null && !H.marked(s2.sid, "outline"), rc2);
   }
@@ -62,11 +65,12 @@ function rereadTrailing(check) {
 function notContinued(check) {
   const s = R.sessionAt("outline", { tag: 8251 });
   const close = H.closing(s, ["outline"]);
-  const fresh = H.turn(s, ["outline"], [A("a-final", T(H.MISMATCH))]);
   const old = H.turn(s, ["outline"], [A("a-anchor", T(close)), H.THINK("a-think")]);
-  const st = H.stopOf(s, old, { last: H.MISMATCH, pre: [H.REREAD], env: { CC_REREAD_OLD: old, CC_REREAD_NEW: fresh } });
+  const late = H.lateRun(s, old, [A("a-final", T(H.MISMATCH))]);
+  const st = H.stopOf(s, old, { last: H.MISMATCH, pre: [H.REREAD], env: late.env });
   check("j: only the anchored text presents the stage, re-read flushed: no continue, no receipt", st.rc === 0 && H.noDecision(st) && H.noReceipt(s.sid), { rc: st.rc, out: st.out });
   check("j: the notice names outline", H.names(H.notice(st), "outline"), { rc: st.rc, out: st.out });
+  check("j: the final entry did reach the transcript before the re-read", H.lateFlushed(late.mark), { rc: st.rc, err: st.err });
 
   const ja = R.sessionAt("outline", { tag: 8261, body: H.jaBody("outline") });
   const rl = H.rereadRun(ja, ["outline"], "both", "flushed");
@@ -78,9 +82,10 @@ function notContinued(check) {
   const line = `outline: \`${R.linesFor(up.sid, "outline").fwd}\` (no URL: not-published)`;
   const upMsg = "A different preface the transcript lacks.\n\n" + line;
   const upOld = H.turn(up, ["outline"], [A("a-anchor", T("Here is the plan.\n\n" + line))]);
-  const upNew = H.turn(up, ["outline"], [A("a-final", T(upMsg))]);
-  const stu = H.stopOf(up, upOld, { last: upMsg, pre: [H.REREAD], env: { CC_UNPUBLISHED_STAGE: "outline", CC_REREAD_OLD: upOld, CC_REREAD_NEW: upNew } });
+  const upLate = H.lateRun(up, upOld, [A("a-final", T(upMsg))]);
+  const stu = H.stopOf(up, upOld, { last: upMsg, pre: [H.REREAD], env: Object.assign({ CC_UNPUBLISHED_STAGE: "outline" }, upLate.env) });
   check("l: unpublished stage, re-read flushed: no continue, no receipt", stu.rc === 0 && H.noDecision(stu) && H.noReceipt(up.sid), { rc: stu.rc, out: stu.out });
+  check("l: unpublished: the final entry did reach the transcript before the re-read", H.lateFlushed(upLate.mark), { rc: stu.rc, err: stu.err });
   check("l: the notice names outline", H.names(H.notice(stu), "outline"), { rc: stu.rc, out: stu.out });
 }
 

@@ -3,9 +3,11 @@
 // At Stop the final assistant line may not be flushed yet, so readTurnTail waits until the
 // transcript's last text block agrees with the hook input's last_assistant_message; that field
 // only confirms the flush and is never judged as the body, since it may join several text blocks.
+// readTurnTail reads a bounded tail (#2936, transcript-reader/tail-window.js), not the whole file.
 // Never throws: an unreadable transcript reads as no lines; callers fail open on `undecidable`.
 
 const fs = require("fs");
+const TW = require("./transcript-reader/tail-window");
 
 const FLUSH_STEP_MS = 50;
 const FLUSH_STEPS = 10;
@@ -78,17 +80,70 @@ function flushed(lastTextBlock, message) {
   return want.endsWith(got) || got.endsWith(want);
 }
 
-// readTurnTail({input}) -> {lines, lastAssistantEntry, lastTextBlock, undecidable}.
-// Without last_assistant_message (older Claude Code) the transcript is read once, no wait.
-function readTurnTail({ input } = {}) {
+const EMPTY_WINDOW = Object.freeze({ lines: [], entries: [], span: { start: 0, end: null, pending: false }, complete: true });
+
+// boundaryOf(turns, reachedBy) -> the window's boundary factory: `turns` real prompts and, when
+// given, one entry satisfying reachedBy.
+function boundaryOf(turns, reachedBy) {
+  const want = Number.isInteger(turns) && turns > 0 ? turns : 1;
+  return () => {
+    let prompts = 0;
+    let hit = typeof reachedBy !== "function";
+    return (batch) => {
+      for (const e of batch) {
+        if (isRealUserPrompt(e)) prompts += 1;
+        if (!hit) {
+          try { hit = !!reachedBy(e); } catch (_) { /* a throwing predicate reads as not reached */ }
+        }
+      }
+      return prompts >= want && hit;
+    };
+  };
+}
+
+const spent = (deadlineAt) => Number.isFinite(deadlineAt) && Date.now() >= deadlineAt;
+const messageOf = (i) => (typeof i.last_assistant_message === "string" ? i.last_assistant_message : null);
+
+// A window that misses a boundary (complete false) or whose last text is not yet the final message
+// is undecidable.
+function tailFrom(win, message) {
+  const tail = tailOf(win.entries);
+  const undecidable = !win.complete || (message !== null && !flushed(tail.lastTextBlock, message));
+  return { lines: win.lines, entries: win.entries, ...tail, undecidable, complete: win.complete, span: win.span };
+}
+
+// readTurnTail({input, turns, reachedBy, deadlineAt}) -> {lines, entries, lastAssistantEntry,
+// lastTextBlock, lastTextEntry, undecidable, complete, span}. lines / entries are the transcript's
+// end holding `turns` real prompts (default 1: the current turn) and an entry satisfying reachedBy,
+// or all of it. A new caller that needs more than the current turn passes that boundary. Without
+// last_assistant_message (older Claude Code) there is no wait; deadlineAt (epoch ms) stops growth
+// and the wait, which reads as undecidable.
+function readTurnTail({ input, turns = 1, reachedBy, deadlineAt } = {}) {
   const i = input && typeof input === "object" ? input : {};
-  const message = typeof i.last_assistant_message === "string" ? i.last_assistant_message : null;
+  const message = messageOf(i);
+  const want = { deadlineAt, boundary: boundaryOf(turns, reachedBy) };
+  let win = TW.readWindow(i.transcript_path, want) || EMPTY_WINDOW;
   for (let attempt = 0; ; attempt++) {
-    const lines = readTranscriptLines(i.transcript_path);
-    const tail = tailOf(parseLines(lines));
-    if (message === null || flushed(tail.lastTextBlock, message)) return { lines, ...tail, undecidable: false };
-    if (attempt >= FLUSH_STEPS) return { lines, ...tail, undecidable: true };
+    const tail = tailFrom(win, message);
+    if (!tail.undecidable || !win.complete || attempt >= FLUSH_STEPS || spent(deadlineAt)) return tail;
     sleep(FLUSH_STEP_MS);
+    win = TW.appendWindow(i.transcript_path, win, want) || win;
+  }
+}
+
+// refreshTurnTail(tail, {input, deadlineAt}) -> tail extended by what was appended after it (a
+// rewritten transcript is read again), with no wait. Never throws: a spent deadline or an
+// unreadable transcript returns tail marked undecidable.
+function refreshTurnTail(tail, { input, deadlineAt } = {}) {
+  const t = tail && typeof tail === "object" ? tail : {};
+  try {
+    const i = input && typeof input === "object" ? input : {};
+    if (spent(deadlineAt) || !Array.isArray(t.lines) || !Array.isArray(t.entries)) return Object.assign({}, t, { undecidable: true });
+    const win = TW.appendWindow(i.transcript_path, t, { deadlineAt, boundary: boundaryOf(1) });
+    if (!win) return Object.assign({}, t, { undecidable: true });
+    return tailFrom(win, messageOf(i));
+  } catch (_) {
+    return Object.assign({}, t, { undecidable: true });
   }
 }
 
@@ -103,4 +158,4 @@ function splitTurns(entries) {
   return { prevTurnEntries: entries.slice(prompts[prompts.length - 2] + 1, last), currentTurnEntries, hasPriorPrompt: true };
 }
 
-module.exports = { readTranscriptLines, readTurnTail, parseLines, isRealUserPrompt, textItemsOf, splitTurns, tailOf, flushed };
+module.exports = { readTranscriptLines, readTurnTail, refreshTurnTail, parseLines, isRealUserPrompt, textItemsOf, splitTurns, tailOf, flushed };
