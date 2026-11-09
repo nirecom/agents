@@ -5,7 +5,8 @@ Terms the user never sees but many components reference as design concepts.
 Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
 ### auto user-input risk level
-- **Definition**: Jev がユーザーに代わって user input（公式の総称で、clarifications と tool approvals の 2 場面を指す）に回答した場合のリスクの段階。2 場面で 1 つの尺度を共有する。`low` と `high` の 2 段階で、`high` は人の承認、同意、破壊的操作または外部への公開、gate、recovery の選択が目的の場面である。段階と回答者の対応は別に定め、現在は `low` を Jev、`high` を必ずユーザーとする。段階が分からない場面は `high` と同じに扱う。
+- **Definition**: The risk of Jev answering a user input (clarifications or tool approvals, one shared scale) on the user's behalf: `high` when the input asks for approval, consent, a destructive or publishing act, a gate, or a recovery choice, else `low`; an unknown level counts as `high`.
+  Which answerer each level gets is set separately; today `low` may go to Jev and `high` always goes to the user.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
 ### delivery operation
@@ -14,12 +15,12 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [skills/merge-to-main/SKILL.md](../../skills/merge-to-main/SKILL.md)
 
 ### dialog ID
-- **Definition**: SKILL.md の手順の行に書き、AskUserQuestion の `metadata.source` に入れる、言語に依存しない dialog の識別子。hook 側の分類表で、各 dialog ID に auto user-input risk level を 1 つ割り当てる。
+- **Definition**: A language-independent identifier of a dialog, written on its SKILL.md procedure line and passed as the AskUserQuestion `metadata.source`; the hook-side classification table assigns each dialog ID one auto user-input risk level.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
 ### first_session_id
 
-- **Definition**: session chain の第一世代の session id。session-progress.md と plan の名前はこれで決まる。
+- **Definition**: The session id of the first generation of a session chain; it names session-progress.md and the plans.
 - **Related**: [architecture/claude-code/progress-file.md](../architecture/claude-code/progress-file.md)
 
 ### GATE_ACTION
@@ -29,7 +30,7 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/claude-code/workflow-runtime.md](../architecture/claude-code/workflow-runtime.md)
 
 ### identifier context
-- **Definition**: glossary drift check が識別子として扱う文脈 (コードスパン、`_ = $ { }` に隣接する語、大文字語の連続、Tags 行などの固定形式行と固定スキーマ見出し)。識別子の綴りとだけ照合する。
+- **Definition**: A context the glossary drift check treats as an identifier — a code span, a word next to `_ = $ { }`, a run of uppercase words, or a fixed-form line or fixed-schema heading such as a Tags line; it is matched against identifier spellings only.
 - **Related**: [architecture/claude-code/glossary-check/matching-rules.md](../architecture/claude-code/glossary-check/matching-rules.md)
 
 ### in-skill step
@@ -50,12 +51,12 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/jev/two-stage-broker.md](../architecture/jev/two-stage-broker.md)
 
 ### plan step
-- **Definition**: intent / outline / detail の 3 つの workflow step。前の plan step ほど優先順位が高い。
+- **Definition**: One of the three workflow steps intent, outline, and detail; an earlier plan step takes priority over a later one.
 - **Related**: [skills/_shared/priority-hierarchy.md](../../skills/_shared/priority-hierarchy.md)
 
 ### pre-commit section marker
 
-- **Definition**: pre-commit が点検の区切りに入ったことを示す、決まった形式の 1 行の出力
+- **Definition**: A fixed-form output line by which pre-commit marks entering a section of its checks.
 - **Related**: [architecture/claude-code/worker-dispatch/commit-push.md](../architecture/claude-code/worker-dispatch/commit-push.md)
 
 ### presentation receipt
@@ -65,15 +66,15 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/claude-code/settings/hooks.md](../architecture/claude-code/settings/hooks.md)
 
 ### prior-step decision
-- **Definition**: 前の plan step で決めたこと。後の plan step は、これを足す・緩める・削る・読み替えることができない。
+- **Definition**: A decision made in an earlier plan step; a later plan step may not add to, relax, remove, or reinterpret it.
 - **Related**: [skills/_shared/priority-hierarchy.md](../../skills/_shared/priority-hierarchy.md)
 
 ### prose context
-- **Definition**: glossary drift check が identifier context 以外として扱う文脈。prose の見出し語と照合し、複数形と見出し行の大小だけを同じ語として許容する。
+- **Definition**: Any context the glossary drift check does not treat as an identifier context; it is matched against prose terms, accepting only plurals and heading-line capitalization as the same term.
 - **Related**: [architecture/claude-code/glossary-check/matching-rules.md](../architecture/claude-code/glossary-check/matching-rules.md)
 
 ### review criteria
-- **Definition**: plan review の 4 format、code review、CC fallback reviewer が共通に参照する review 基準。範囲、網羅、報告の最低条件、severity の定義、NFR の遵守を 1 か所に置く。
+- **Definition**: The review rules shared by the four plan review formats, code review, and the CC fallback reviewers: scope, coverage, the reporting minimum, severity definitions, and NFR (non-functional requirement) compliance, kept in one place.
 - **Related**: [skills/_shared/review-criteria.md](../../skills/_shared/review-criteria.md)
 
 ### review round
@@ -88,27 +89,28 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/claude-code/root-names.md](../architecture/claude-code/root-names.md)
 
 ### section heading
-- **Definition**: plan や context の markdown 見出し（`## Issues` など）。各セクションが何であるかを読み手に示す。
+- **Definition**: A markdown heading of a plan or context file, such as `## Issues`, that tells the reader what the section is.
 - **Related**: [architecture/claude-code/state-dirs.md](../architecture/claude-code/state-dirs.md)
 
 ### session chain
 
-- **Definition**: 一つのセッションでは足りず、--from で次のセッションを継ぎ足していった連なり。先頭の世代が第一世代。
+- **Definition**: The sequence of sessions formed when work outgrows one session and each next session resumes the previous one with `--from`; its head is the first generation.
 - **Related**: [architecture/claude-code/progress-file.md](../architecture/claude-code/progress-file.md)
 
 ### session-downstream
 
-- **Definition**: 引き継ぎ先のセッション。`--from` で再開した側の世代。不採用の同義語は heir。
+- **Definition**: The session that takes over: the generation that resumed another with `--from`.
 - **Related**: [architecture/claude-code/session-id-resolution.md](../architecture/claude-code/session-id-resolution.md#session-inheritance-identifiers)
 
 ### session-upstream
 
-- **Definition**: 引き継ぎ元のセッション。`--from` で再開されるときの、再開元の世代。不採用の同義語は donor。
+- **Definition**: The session handed over from: the generation that `--from` resumes.
 - **Related**: [architecture/claude-code/session-id-resolution.md](../architecture/claude-code/session-id-resolution.md#session-inheritance-identifiers)
 
 ### state handoff reader
 
-- **Definition**: 指定した session の state handoff record を読み、時刻順に並べて返すコード。`/resume-session --from` と `--list` では、session-downstream が session-upstream の記録を読む。supervisor の codex 入力では、自分の session の記録を読む。移行期間中は、同じ session の旧 handoff.md も合わせて読む(この部分は Migration Code Blocks で囲む)。
+- **Definition**: The code that reads a given session's state handoff records and returns them in time order: the session-downstream reads the session-upstream's records for `/resume-session --from` and `--list`, and the supervisor codex input reads its own session's.
+  During the migration it also reads that session's legacy handoff.md, inside Migration Code Blocks.
 - **Related**: [architecture/claude-code/state-handoff-record.md](../architecture/claude-code/state-handoff-record.md)
 
 ### step table
@@ -131,5 +133,5 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Related**: [architecture/claude-code/test-language-registry.md](../architecture/claude-code/test-language-registry.md)
 
 ### user course correction
-- **Definition**: 承認済みの上位 plan に無い事実、または上位 plan と矛盾する事実をユーザーが述べて、作業の方向を修正させる発言。CLI が transcript から写して記録にする。記録は plan の本文の外に置き、承認の hash を変えない。
+- **Definition**: A user statement of a fact missing from, or contradicting, an approved earlier plan that redirects the work; a CLI copies it from the transcript into a record kept outside the plan body, so the approval hash does not change.
 - **Related**: [skills/_shared/priority-hierarchy/core.md](../../skills/_shared/priority-hierarchy/core.md)
