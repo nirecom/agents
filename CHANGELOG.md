@@ -148,3 +148,7 @@ Changes: The test workflow works in any repo through .agents.json, and /migrate 
 ### FEATURE: PR #2954 (2026-11-09)
 Background: fix(#2951): detect staged test renames in run-tests-baseline rename s...
 Changes: Fixed `run-tests-baseline` missing a test rename that was only staged, which left run_tests unable to complete.
+
+### FEATURE: PR #2964 (2026-11-09)
+Background: feat(#2759): unify session-inheritance terms on session-upstream / session-downstream
+Changes: Session-inheritance terms are now session-upstream / session-downstream everywhere; donor / heir are retired.
