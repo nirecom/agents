@@ -42,6 +42,10 @@ The `timeout` value of each registration is in `settings.json`; `tests/hooks/fea
 - **Fail-open exception**: a caller passes `failOpenOnTimeout` to `limited-child-process.js` to keep its own timeout while the limit is armed. Only `hooks/workflow-gate/code-size-gate.js` declares it: its review is advisory, so a hung `bin/review-code-size` fails open after 3 s instead of spending the decision budget (#2781). Every other caller keeps the ask.
 - **Override**: `WORKFLOW_DECISION_TIME_LIMIT_MS` replaces the 10 s value (`resolveDecisionLimitMs(env)`). The commit-push worker sets it for its gate child to `GATE_TIMEOUT_MS` minus 10 s, so a commit's doc and code-size checks are not cut at the hook path's limit (#2849). The hook path sets nothing; a hung check still asks there.
 
+## Stop confirm-plan guard budget (#2936)
+
+`hooks/stop-confirm-plan-guard.js` is not an allow-deny hook and does not use the decision time limit above. It builds one deadline from the process start (`createDeadline` in `hooks/stop-confirm-plan-guard/deadline.js`, `STOP_HOOK_TIMEOUT_MS` 5000), reads only a bounded transcript tail, and measures the flush retry and the continue's re-read against that deadline. An overrun falls to the undecidable path, so the receipt is written before the 5 s Stop timeout.
+
 ## Decision timing log
 
 The 5 s margin is an estimate, so every armed allow-deny hook process records its timing at exit; a process that never arms writes nothing. The callers stay unchanged: `armDecisionTimeLimit()` registers the exit listener once.
@@ -96,7 +100,7 @@ Traced by running each hook on a deny-side and a permitted-side input with every
 | `block-memory-direct`、`block-history-direct`、`block-shell-config`、`block-tests-direct`、`block-send-user-file` | allow-deny hook | なし (none) | Path and command-text checks plus the session state file; no child process, no file scan |
 | `enforce-issue-close`、`block-subagent-sentinels`、`gate-plan-skip-sentinel`、`gate-plan-skill-advance` | allow-deny hook | なし (none) | Command / skill-name match plus the session state file; no child process, no file scan |
 | `block-comment-block-size`、`gate-plan-lang` | allow-deny hook | なし (none) | Reads only the content being written; no child process, no file scan |
-| `confirm-checkpoint` | allow-deny hook | なし (none) | Denies through `emitDeny`, so it is an allow-deny hook by definition; left out of #2676 by scope (classified only). No child process on the traced paths |
+| `confirm-checkpoint` | allow-deny hook | なし (none) | Denies through `emitDeny`, so it is an allow-deny hook by definition; left out of #2676 by scope (classified only). No child process on the traced paths, except the no-receipt recovery (#2936): it reads gate state through `probesFor`, which can launch gate probes for steps other than the target, bounded by its own `CONFIRM_HOOK_TIMEOUT_MS` (15000) deadline |
 | `rtk-rewrite`、`subagent-dispatch-prompt` | non-allow-deny hook | — | Rewrites the input through `updatedInput` only |
 | `show-user-verified-context`、`jev-shadow-pre` | non-allow-deny hook | — | Displays or records only; never a permission decision |
 
