@@ -106,7 +106,7 @@ case_begin "WH3 GitHub: bin/find-peer --issue reads the Projects v2 holder and p
 for row in \
     "present, branch session-id|$HOLDER||session-id|0|working|$HOLDER|$HOLDER|session-id|" \
     "present, branch ref|$HOLDER||ref|0|working|$HOLDER|r1|ref|" \
-    "present, branch name|$HOLDER||name|0|working|$HOLDER|$HOLDER_NAME|name|" \
+    "present, branch name|$HOLDER||name|0|working|$HOLDER|$HOLDER_NAME [r1]|name|" \
     "empty field|||session-id|3|||||no-holder" \
     "graphql failure|$HOLDER|graphql|session-id|7|||||forge-read-failed"; do
     IFS='|' read -r label fp failmode branch wantrc wantrole wantsid wantdest wantkind wantreason <<<"$row"

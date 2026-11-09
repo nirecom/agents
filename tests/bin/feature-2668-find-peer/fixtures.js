@@ -22,9 +22,9 @@ function agentsListText(entries) {
 
 // realAgentsListText(entries) renders the ListAgents dump observed on Claude Code 2.1.319: two header
 // lines, then per peer "  <name> [<ref6>]  ·  <kind>  ·  <state>  ·  started 7h ago"; e.raw replaces a row.
-function realAgentsListText(entries) {
+function realAgentsListText(entries, own = { name: "#1 Self [00000000]", ref: "000000" }) {
   const rows = entries.map((e) => (e.raw !== undefined ? e.raw : `  ${e.name} [${e.ref}]  ·  ${e.kind || "interactive"}  ·  ${e.state || "idle"}  ·  started 7h ago`));
-  return `This session is "#1 Self [00000000]" [000000].\nPeer sessions (${entries.length}):\n${rows.join("\n")}\n`;
+  return `This session is "${own.name}" [${own.ref}].\nPeer sessions (${entries.length}):\n${rows.join("\n")}\n`;
 }
 
 // uuid(prefix8) ->a lower-case UUID that starts with prefix8 (8 hex digits); the rest is fixed so

@@ -88,7 +88,7 @@ caseEnd();
 caseBegin("FP3 branch 3 (name) accepts only a name whose suffix is the first 8 hex digits of the session", "bin/find-peer.d/agents-list.js");
 test("FP3 name: found by the suffix", () => {
   const name = `#42 Fix it${sfx(U)}`;
-  ok(run(["--issue", "42"], { policy: "name", holder: U, list: [{ ref: "r9", name: `#7 Other${sfx(OTHER)}` }, { ref: "r1", name }] }), { SESSION_ID: U, DESTINATION: name, DESTINATION_KIND: "name" });
+  ok(run(["--issue", "42"], { policy: "name", holder: U, list: [{ ref: "r9", name: `#7 Other${sfx(OTHER)}` }, { ref: "r1", name }] }), { SESSION_ID: U, DESTINATION: `${name} [r1]`, DESTINATION_KIND: "name" });
 });
 for (const [label, list, code, reason] of [
   ["the suffix was removed by /rename (the title still matches)", [{ ref: "r1", name: "#42 Fix it" }], 5, "not-in-list"],
@@ -159,7 +159,7 @@ caseBegin("FP7 --session self and usage errors", "bin/find-peer.d/main.js");
 test("FP7 --session self resolves this session", () => ok(run(["--session", "self"], { self: U }), { ROLE: "self", SESSION_ID: U, DESTINATION: U }));
 test("FP7 a name with quotes is returned exactly", () => {
   const name = `#42 "quoted" 'x' $HOME${sfx(U)}`;
-  ok(run(["--session", U], { policy: "name", list: [{ ref: "r1", name }] }), { SESSION_ID: U, DESTINATION: name });
+  ok(run(["--session", U], { policy: "name", list: [{ ref: "r1", name }] }), { SESSION_ID: U, DESTINATION: `${name} [r1]` });
 });
 for (const [label, argv] of [
   ["no arguments", []],
@@ -207,17 +207,17 @@ test("FP8 CLI on a GitLab origin: the wip-fp label holder is the working session
 });
 caseEnd();
 
-caseBegin("FP10 the real ListAgents row format resolves the name kind to the bare name", "bin/find-peer.d/agents-list.js");
+caseBegin("FP10 the real ListAgents row format resolves the name kind to the name plus the [ref6]", "bin/find-peer.d/agents-list.js");
 const peer = { ref: "9f9f9f", name: `#7 Other${sfx(OTHER)}`, kind: "interactive", state: "busy" };
 for (const [label, entries, code, reason, want] of [
-  ["found by the suffix: the bare name without the trailing [ref6]", [peer, { ref: "a1b2c3", name: `#42 Fix it${sfx(U)}` }], 0, null, `#42 Fix it${sfx(U)}`],
+  ["found by the suffix: the name with the trailing [ref6]", [peer, { ref: "a1b2c3", name: `#42 Fix it${sfx(U)}` }], 0, null, `#42 Fix it${sfx(U)} [a1b2c3]`],
   ["the suffix is absent", [peer, { ref: "a1b2c3", name: "#42 Fix it" }], 5, "not-in-list"],
   ["two rows carry the same 8 digits", [{ ref: "a1b2c3", name: `#42 Fix it${sfx(U)}` }, { ref: "d4e5f6", name: `#43 Twin${sfx(U_TWIN)}` }], 6, "ambiguous"],
   ["a row without the middle-dot part", [peer, { raw: `  #42 Fix it${sfx(U)} [a1b2c3]  interactive  idle` }], 2, "agents-list-unparsable"],
   ["a row without the [ref6]", [peer, { raw: `  #42 Fix it${sfx(U)}  ·  interactive  ·  idle` }], 2, "agents-list-unparsable"],
-  ["a title with [ brackets", [peer, { ref: "a1b2c3", name: `#42 [WIP] fix [a] b${sfx(U)}` }], 0, null, `#42 [WIP] fix [a] b${sfx(U)}`],
-  ["a title with a 6-hex [ ] inside", [peer, { ref: "a1b2c3", name: `#42 fix [abc123] b${sfx(U)}` }], 0, null, `#42 fix [abc123] b${sfx(U)}`],
-  ...["-", "*", "x", "✓"].map((pre) => [`a title starting with the status prefix ${pre}`, [peer, { ref: "a1b2c3", name: `${pre} #42 Fix it${sfx(U)}` }], 0, null, `${pre} #42 Fix it${sfx(U)}`]),
+  ["a title with [ brackets", [peer, { ref: "a1b2c3", name: `#42 [WIP] fix [a] b${sfx(U)}` }], 0, null, `#42 [WIP] fix [a] b${sfx(U)} [a1b2c3]`],
+  ["a title with a 6-hex [ ] inside", [peer, { ref: "a1b2c3", name: `#42 fix [abc123] b${sfx(U)}` }], 0, null, `#42 fix [abc123] b${sfx(U)} [a1b2c3]`],
+  ...["-", "*", "x", "✓"].map((pre) => [`a title starting with the status prefix ${pre}`, [peer, { ref: "a1b2c3", name: `${pre} #42 Fix it${sfx(U)}` }], 0, null, `${pre} #42 Fix it${sfx(U)} [a1b2c3]`]),
 ]) {
   test(`FP10 real format: ${label} -> ${code}${reason ? ` ${reason}` : ""}`, () => {
     const r = run(["--issue", "42"], { policy: "name", holder: U, list: realAgentsListText(entries) });
@@ -225,4 +225,13 @@ for (const [label, entries, code, reason, want] of [
     else failed(r, code, reason);
   });
 }
+// The own session is listed only on the "This session is" header line, never as a row.
+const own = { name: `#42 Self${sfx(U)}`, ref: "c0ffee" };
+test("FP10 real format: --session self resolves from the header line (name policy)", () => {
+  const r = run(["--session", "self"], { policy: "name", self: U, list: realAgentsListText([peer], own) });
+  ok(r, { ROLE: "self", SESSION_ID: U, DESTINATION: `${own.name} [${own.ref}]`, DESTINATION_KIND: "name" });
+});
+test("FP10 real format: --session self on a ref policy -> 5 not-in-list (no row carries a session id)", () => {
+  failed(run(["--session", "self"], { policy: "ref", self: U, list: realAgentsListText([peer], own) }), 5, "not-in-list");
+});
 caseEnd();

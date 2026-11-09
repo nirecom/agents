@@ -9,6 +9,7 @@ const { SESSION_NAME_SUFFIX_RE } = require(path.join(__dirname, "..", "..", "hoo
 
 const LEGACY_ENTRY_RE = /^- \[([^\]\s]+)\] (.+?)(?: session=([A-Za-z0-9_-]+))?$/;
 const LISTING_ENTRY_RE = /^\s+(\S.*?) \[([0-9a-f]{6})\]\s+·\s+.+$/;
+const OWN_SESSION_RE = /^This session is "(.+)" \[([0-9a-f]{6})\]\.?$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 
@@ -26,7 +27,10 @@ function parseAgentsList(text) {
     }
     const real = line.match(LISTING_ENTRY_RE);
     if (!real) {
-      if (/^(This session is|Peer sessions \()/.test(line)) continue; // ListAgents header lines
+      // The own session is listed only on this header line, never as a row; a --session self lookup needs it.
+      const own = line.match(OWN_SESSION_RE);
+      if (own) { entries.push({ ref: own[2], name: own[1], sessionId: null }); continue; }
+      if (/^(This session is|Peer sessions \()/.test(line)) continue; // other ListAgents header lines
       return null;
     }
     entries.push({ ref: real[2], name: real[1], sessionId: null });
@@ -41,10 +45,12 @@ function nameMatches(name, sid) {
 }
 
 // resolveFromList(entries, kind, sid) -> {destination} | {code, reason}. Only "ref" and "name" read a list.
+// The "name" destination is "<name> [<ref6>]": a bare name ending in " [xxxxxxxx]" is read as a [ref]
+// and refused as unreachable (observed 2026-11-09), so the harness [ref] is always appended.
 function resolveFromList(entries, kind, sid) {
   const hits = kind === "ref"
     ? entries.filter((e) => e.sessionId === sid).map((e) => e.ref)
-    : entries.filter((e) => nameMatches(e.name, sid)).map((e) => e.name);
+    : entries.filter((e) => nameMatches(e.name, sid)).map((e) => `${e.name} [${e.ref}]`);
   if (hits.length === 0) return { code: 5, reason: "not-in-list" };
   if (hits.length > 1) return { code: 6, reason: "ambiguous" };
   return { destination: hits[0] };
