@@ -59,10 +59,26 @@ function artifactOnly(F) {
     y.r.code === 0 && y.carried === 1 && y.rec.grants.length === 1, y.all);
 }
 
+// #2962: a glossary-only change carries the grant unless a matching field of its term moved.
+function glossaryOnly(F) {
+  const d = granted(F, "carry-def");
+  F.touchDefinition(d.repo);
+  const x = rerecord(F, d);
+  F.check("a glossary Definition-only change: exit 0, the grant moves to the new fingerprint (#2962)",
+    x.r.code === 0 && x.rec.fingerprint !== d.rec.fingerprint && x.carried === 1 && x.rec.grants.length === 1, x.all);
+  F.check("a glossary Definition-only change: the re-record keeps term_fields for the granted norm",
+    !!x.rec.term_fields && typeof x.rec.term_fields[F.TERM] === "string", x.all);
+  const v = evaluate(F, d);
+  F.check("a glossary Definition-only change: evaluateGlossaryCheck passes after the re-record", !!v && v.ok === true, JSON.stringify(v));
+}
+
 function notCarried(F) {
-  const g = granted(F, "carry-glo");
-  F.writeFile(g.repo, "docs/glossary/user.md", F.GLOSSARY_FILES["docs/glossary/user.md"].replace("differs from", "deviates from"));
-  expectDropped(F, "a glossary definition change", g);
+  const g = granted(F, "carry-fields");
+  F.touchMatch(g.repo);
+  const x = rerecord(F, g);
+  F.check("a glossary matching-field change: exit 1, the grant lapses with the fields cause",
+    x.r.code === 1 && (x.rec.grants || []).length === 0 && /EXPIRED: grant for "glossary drift" — its `Identifier` \/ `Short forms` \/ heading changed;/.test(x.r.all),
+    x.all);
 
   const v = granted(F, "carry-var");
   F.stageFile(v.repo, SRC, `${BODY}// and the glossarydrift spelling\n`);
@@ -119,8 +135,48 @@ function unit(F) {
     (pi.grants || []).length === 0, JSON.stringify(pi));
 }
 
+// #2962 checkRecordEvents directly: a glossary-only change carries the grant only when the granted
+// norm's entry fingerprint (term_fields) is the same; the record stores term_fields for its
+// findings' and grants' norms; an old record (no term_fields) never carries over a glossary change.
+function unitFields(F) {
+  const R = F.mod(RECORD);
+  if (!R) return;
+  const I = { artifact: F.FP("1"), glossary: F.FP("2"), intent_rows: F.FP("3"), rules: F.FP("4") };
+  const find = (variant) => ({ term: F.TERM, norm: F.TERM, variant, where: `${SRC}:2` });
+  const TF = { [F.TERM]: F.FP("e") };
+  const prev = { fingerprint: F.FP("a"), inputs: I, findings: [find("glossary-drift")], term_fields: TF,
+    grants: [{ norm: F.TERM, fingerprint: F.FP("a"), reason: "fixture" }], ledger_grants: [] };
+  const valueOf = (evs) => (evs && evs[0] && (evs[0].value || evs[0])) || {};
+  const at = (over, termFields) => ({ fingerprint: F.FP("b"), inputs: Object.assign({}, I, over), termFields });
+  const kept = (v) => (v.grants || []).length === 1 && v.grants[0].fingerprint === F.FP("b") && v.grants[0].norm === F.TERM;
+
+  const same = valueOf(R.checkRecordEvents(prev, "review_security", at({ glossary: F.FP("8") }, TF), [find("glossary-drift")]));
+  F.check("checkRecordEvents: glossary-only change, same term_fields: the grant moves to the new fingerprint", kept(same), JSON.stringify(same));
+  F.check("checkRecordEvents: the written record stores term_fields for the finding's norm",
+    !!same.term_fields && same.term_fields[F.TERM] === F.FP("e"), JSON.stringify(same));
+
+  const moved = valueOf(R.checkRecordEvents(prev, "review_security", at({ glossary: F.FP("8") }, { [F.TERM]: F.FP("f") }), [find("glossary-drift")]));
+  F.check("checkRecordEvents: glossary-only change, the granted norm's term_fields moved: the grant is not carried",
+    (moved.grants || []).length === 0 && moved.term_fields && moved.term_fields[F.TERM] === F.FP("f"), JSON.stringify(moved));
+
+  const old = Object.assign({}, prev);
+  delete old.term_fields;
+  const legacy = valueOf(R.checkRecordEvents(old, "review_security", at({ glossary: F.FP("8") }, TF), [find("glossary-drift")]));
+  F.check("checkRecordEvents: glossary-only change on an old record without term_fields: the grant is not carried (fail-safe)",
+    (legacy.grants || []).length === 0, JSON.stringify(legacy));
+
+  const both = valueOf(R.checkRecordEvents(prev, "review_security", at({ glossary: F.FP("8"), rules: F.FP("9") }, TF), [find("glossary-drift")]));
+  F.check("checkRecordEvents: glossary and rules both change, same term_fields: the grant is not carried",
+    (both.grants || []).length === 0, JSON.stringify(both));
+  const ag = valueOf(R.checkRecordEvents(prev, "review_security", at({ glossary: F.FP("8"), artifact: F.FP("9") }, TF), [find("glossary-drift")]));
+  F.check("checkRecordEvents: glossary and artifact both change, same term_fields: the grant is not carried",
+    (ag.grants || []).length === 0, JSON.stringify(ag));
+}
+
 function run(F) {
   artifactOnly(F);
+  glossaryOnly(F);
+  unitFields(F);
   notCarried(F);
   unit(F);
 }

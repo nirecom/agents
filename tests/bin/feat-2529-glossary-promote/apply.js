@@ -5,7 +5,7 @@
 // every counter, keeps an add of an existing same-category term as SKIPPED_EXISTING, and a
 // same-category definition rewrite goes through one redefine row (delete + add is refused).
 
-const { check, eq, ok, promote, snapshot, unchanged, userTerms, internalTerms, counters, session, readFile } = require("./lib");
+const { check, eq, ok, promote, snapshot, unchanged, userTerms, internalTerms, counters, session, readFile, LINK } = require("./lib");
 
 function appliesAllOperations() {
   const NEW_ALPHA = "The first fixture term, redefined.";
@@ -19,7 +19,7 @@ function appliesAllOperations() {
   const { repo, intent } = session("apply", rows);
   let r;
   check("T3-5 add + delete + redefine + session rows: exit 0 with every counter", () => {
-    r = promote(intent, repo);
+    r = promote(intent, repo, { beta: LINK, lima: LINK });
     eq(r.code, 0, `exit (out: ${r.all})`);
     eq(counters(r.out), { ADDED: 2, DELETED: 1, REDEFINED: 1, SKIPPED_EXISTING: 0, SKIPPED_SESSION: 1 }, "counters");
   });
@@ -60,7 +60,7 @@ function sameCategoryRewrite() {
   const pair = session("use-redefine", [["alpha", "user", "delete", ""], ["alpha", "user", "add", NEW]]);
   const before = snapshot(pair.repo);
   check("T3-5 a same-category delete + add pair is refused (use-redefine) and nothing is written", () => {
-    const r = promote(pair.intent, pair.repo);
+    const r = promote(pair.intent, pair.repo, { alpha: LINK });
     eq(r.code, 1, `exit (out: ${r.all})`);
     ok(/use-redefine|intent-unreadable/.test(r.err), `stderr: ${r.err}`);
     unchanged(pair.repo, before);
@@ -82,7 +82,7 @@ function caseOnlyRename() {
   const { repo, intent } = session("case-rename", [["alpha", "user", "delete", ""], ["Alpha", "user", "add", NEW]]);
   let r;
   check("T3-5 a case-only rename pair (alpha delete + Alpha add) applies: exit 0, ADDED=1 DELETED=1", () => {
-    r = promote(intent, repo);
+    r = promote(intent, repo, { Alpha: LINK });
     eq(r.code, 0, `exit (out: ${r.all})`);
     const n = counters(r.out);
     eq([n.ADDED, n.DELETED, n.REDEFINED, n.SKIPPED_EXISTING], [1, 1, 0, 0], "ADDED / DELETED / REDEFINED / SKIPPED_EXISTING");
@@ -114,7 +114,7 @@ function writesIdentifierFields() {
     `| alpha | user | redefine | ${NEW} | \`ALPHA\` |  |\n`;
   const { repo, intent } = session("v3-fields", [], { glossary: v3 });
   check("T3-5 V3 add + redefine rows: exit 0, ADDED=1 REDEFINED=1", () => {
-    const r = promote(intent, repo);
+    const r = promote(intent, repo, { "beta gate": LINK });
     eq(r.code, 0, `exit (out: ${r.all})`);
     const n = counters(r.out);
     eq([n.ADDED, n.REDEFINED], [1, 1], "ADDED / REDEFINED");
@@ -162,7 +162,7 @@ function emptyCellsWriteNoFields() {
   check("T3-5 V3 add + redefine rows with empty cells: exit 0, ADDED=1 REDEFINED=2", () => {
     ok(/Identifier/.test(tagged), `fixture alpha entry carries an Identifier: ${tagged}`);
     ok(/### alpha gate\n[\s\S]*- \*\*Short forms\*\*: `gate`/.test(tagged), `fixture alpha gate entry carries Short forms: ${tagged}`);
-    const r = promote(c.intentPath(sid), repo);
+    const r = promote(c.intentPath(sid), repo, { "gamma gate": LINK });
     eq(r.code, 0, `exit (out: ${r.all})`);
     const n = counters(r.out);
     eq([n.ADDED, n.REDEFINED], [1, 2], "ADDED / REDEFINED");

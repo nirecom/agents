@@ -34,14 +34,16 @@ function glossaryOnly(step) {
   const s = G.completedStep(`ginput-${step}`, step);
   G.recordOk(label, F.drift(s.sid, step, s.repo), 0);
   G.passes(`${label}: record current`, G.scan(s.sid, s.repo), step);
-  F.touchGlossary(s.repo);
+  // #2962: a glossary-only change stales a clean record only through a new finding.
+  F.addDriftingEntry(s.repo);
   const reason = G.blocks(`${label}: main glossary changed, index untouched`, G.scan(s.sid, s.repo), step,
     "glossary-check-stale", true);
   const text = componentText(reason);
   F.check(`${label}: the reason names the glossary component`, /\bglossary\b/.test(text), reason);
   F.check(`${label}: the reason does not name the artifact component`, !/\bartifact\b/.test(text), reason);
-  G.recordOk(`${label} re-record`, F.drift(s.sid, step, s.repo), 0);
-  G.passes(`${label}: after re-record`, G.scan(s.sid, s.repo), step);
+  G.recordOk(`${label} re-record`, F.drift(s.sid, step, s.repo), 1);
+  F.check(`${label}: grant written for the new finding`, F.grantFindings(s.sid, step), "no record to grant");
+  G.passes(`${label}: after re-record and grant`, G.scan(s.sid, s.repo), step);
 }
 
 // #2909: with a granted finding, the glossary-only stale reason names the term whose grant lapses.
@@ -52,7 +54,7 @@ function glossaryOnlyGranted(step) {
   G.recordOk(label, F.drift(s.sid, step, s.repo), 1);
   F.check(`${label}: grant written`, F.grantFindings(s.sid, step), "no record to grant");
   G.passes(`${label}: record current and granted`, G.scan(s.sid, s.repo), step);
-  F.touchGlossary(s.repo);
+  F.touchGlossaryMatch(s.repo);
   const reason = G.blocks(`${label}: main glossary changed`, G.scan(s.sid, s.repo), step, "glossary-check-stale", true);
   F.check(`${label}: the reason names the term whose grant lapses`,
     reason.includes(`the grants for ${F.TERM} lapse`) && reason.includes(`term=${F.TERM} step=${step}`), reason);

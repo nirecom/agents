@@ -147,7 +147,7 @@ function expectDone(tag, s) {
 caseBegin("A: final_report complete keeps every plan stage complete against a stale glossary", "hooks/workflow-state/effective-state.js");
 test("A: final_report complete keeps every plan stage complete against a stale glossary", verdict("A", () => {
   const s = prepare("a-final", {});
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   for (const step of RA_STEPS) {
     const code = glossaryRefusalOfComplete(s.sid, step, F.readState(s.sid), { repoDir: s.repo });
     F.check(`A: glossaryRefusalOfComplete(${step}) is still glossary-check-stale (record.js unchanged)`,
@@ -165,7 +165,7 @@ test("B: control - before merge_to_main a stale glossary still demotes every pla
   // #2909: a pushed branch only warns, so the demote control is a session before push_branch.
   const s = prepare("b-pre", Object.assign({}, PRE_DELIVERY, { push_branch: null, user_verification: null }));
   F.check("B: push_branch is not recorded (pending)", F.statusOf(s.sid, "push_branch") === "pending", F.statusOf(s.sid, "push_branch"));
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   const eff = expectReadOnly("B", s, RA_STEPS);
   for (const step of RA_STEPS) {
     F.check(`B: ${step} reads pending (glossary-check-stale)`,
@@ -193,7 +193,7 @@ function expectNotPlanStage(tag, s) {
 caseBegin("C: merge_to_main complete without final_report keeps every plan stage complete", "hooks/workflow-state/effective-state.js");
 test("C: merge_to_main complete without final_report keeps every plan stage complete", verdict("C", () => {
   const s = prepare("c-merged", { cleanup: null, pre_final_report_gate: null, final_report: null });
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   expectKept("C", s, RA_STEPS);
   const cur = resolveCurrentStep(F.readState(s.sid), { sessionId: s.sid, repoDir: s.repo });
   F.check("C: resolveCurrentStep is cleanup, not a plan stage", cur === "cleanup", String(cur));
@@ -205,7 +205,7 @@ caseBegin("D: merge_to_main recorded skipped counts as post-delivery", "hooks/wo
 test("D: merge_to_main recorded skipped counts as post-delivery", verdict("D", () => {
   const s = prepare("d-skipped", Object.assign({}, PRE_DELIVERY, { merge_to_main: "skipped" }));
   F.check("D: merge_to_main is recorded skipped", F.statusOf(s.sid, "merge_to_main") === "skipped", F.statusOf(s.sid, "merge_to_main"));
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   expectKept("D", s, RA_STEPS);
   const cur = resolveCurrentStep(F.readState(s.sid), { sessionId: s.sid, repoDir: s.repo });
   F.check("D: resolveCurrentStep is cleanup, not a plan stage", cur === "cleanup", String(cur));
@@ -223,7 +223,7 @@ test("E: control - a WF-META session whose merge_to_main is only table-skipped i
     eff.merge_to_main && eff.merge_to_main.status === "skipped" && eff.merge_to_main.resolved_from === "table-skip",
     JSON.stringify(eff.merge_to_main));
   F.check("E: a current record keeps outline complete", eff.outline && eff.outline.status === "complete", JSON.stringify(eff.outline));
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   eff = expectReadOnly("E", s, ["clarify_intent", "outline"], profile);
   for (const step of ["clarify_intent", "outline"]) {
     F.check(`E: ${step} reads pending (glossary-check-stale)`,
@@ -236,7 +236,7 @@ caseBegin("F: a WF-META session with final_report complete keeps outline complet
 test("F: a WF-META session with final_report complete keeps outline complete", verdict("F", () => {
   const s = prepareMeta("f-meta");
   F.appendRaw(s.sid, ["research", "pre_final_report_gate", "final_report"].map((step) => F.stepStatusEvent(step, "complete")));
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   const profile = resolveSessionProfile(F.readState(s.sid), s.sid, { repoDir: s.repo });
   expectKept("F", s, ["clarify_intent", "outline"], profile);
   expectDone("F", s);
@@ -264,7 +264,7 @@ caseBegin("H: a veto annotation on a complete outline after delivery still repor
 test("H: a veto annotation on a complete outline after delivery still reports done", verdict("H", () => {
   const s = prepare("h-veto", {});
   F.appendRaw(s.sid, [F.annotationEvent("outline", "skip_verdict", { verdict: "veto", source: "fixture", recorded_at: new Date().toISOString() })]);
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   const eff = snapshot(s);
   F.check("H: the veto verdict is read on outline", eff.outline && eff.outline.skip_verdict_state === "veto", JSON.stringify(eff.outline));
   expectKept("H", s, ["outline", "detail"]);

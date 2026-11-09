@@ -11,7 +11,7 @@ const { spawnSync } = require("child_process");
 const { toWindowsPath } = require("../../lib/branch-diff");
 const { DOCS_ONLY_ALLOWLIST } = require("../../workflow-gate/staged-evidence");
 const { sha256, artifactRA, artifactRS } = require("./scope/artifact");
-const { combinedGlossary, intentRowsOf } = require("./scope/sources");
+const { combinedGlossary, intentRowsOf, termFieldsOf } = require("./scope/sources");
 
 // R-A: the plan steps (their plan artifact); R-S: the review steps (the staged files).
 const RA_STEPS = Object.freeze(["clarify_intent", "outline", "detail"]);
@@ -93,14 +93,15 @@ function loadStepInputs(sid, step, opts) {
 
 const fingerprintOfDigests = (d) => sha256(JSON.stringify(d));
 
-// fingerprintOf(inputs) -> { ok, fingerprint, inputs } from a loadStepInputs result.
+// fingerprintOf(inputs) -> { ok, fingerprint, inputs, termFields } from a loadStepInputs result.
+// termFields (#2962) stays out of the fingerprint, or a Definition edit could not be told apart.
 function fingerprintOf(loaded) {
   if (!loaded || !loaded.ok) return { ok: false, error: loaded ? loaded.error : "no-inputs", detail: loaded && loaded.detail };
   const inputs = {
     artifact: loaded.artifact.digest, glossary: loaded.glossary.digest,
     intent_rows: loaded.intentRows.digest, rules: loaded.rules.digest,
   };
-  return { ok: true, fingerprint: fingerprintOfDigests(inputs), inputs };
+  return { ok: true, fingerprint: fingerprintOfDigests(inputs), inputs, termFields: termFieldsOf(loaded.glossary.terms) };
 }
 
 function stepFingerprint(sid, step, opts) {

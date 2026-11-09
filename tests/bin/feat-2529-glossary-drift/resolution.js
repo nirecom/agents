@@ -6,14 +6,14 @@
 // fingerprint is neither counted nor carried, an artifact change drops the grants but keeps the
 // ledger_grants, and the record shape has no "resolved" field.
 
-const RECORD_KEYS = ["findings", "fingerprint", "grants", "inputs", "ledger_grants", "step", "v"];
+const RECORD_KEYS = ["findings", "fingerprint", "grants", "inputs", "ledger_grants", "step", "term_fields", "v"];
 const INPUT_KEYS = ["artifact", "glossary", "intent_rows", "rules"];
 const FINDING_KEYS = ["class", "norm", "source", "term", "variant", "where"];
 const keys = (o) => Object.keys(o || {}).sort().join(",");
 const plan = (extra) => `# Outline\n\n## Approach\n\nMid-line the glossary-drift appears.\n${extra || ""}`;
 
 function shape(F, rec) {
-  F.check("T5-3 record: top-level keys are exactly v/step/fingerprint/inputs/findings/grants/ledger_grants",
+  F.check("T5-3 record: top-level keys are exactly v/step/fingerprint/inputs/findings/grants/ledger_grants/term_fields",
     keys(rec) === RECORD_KEYS.join(","), keys(rec));
   if (!rec) return;
   F.check("T5-3 record: v=1, step=outline, fingerprint is a non-empty string",

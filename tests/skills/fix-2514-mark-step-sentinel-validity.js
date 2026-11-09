@@ -1,6 +1,6 @@
 "use strict";
 // Tests: hooks/workflow-mark/mark-step-handler.js, hooks/lib/sentinel-patterns.js
-// Tags: fix-2514, fix-1981, skills, sentinel, mark-step, static-scan, scope:common, TL1, pwsh-not-required, workflow-mark, refusal, TL2, prototype-key
+// Tags: fix-2514, fix-1981, skills, sentinel, mark-step, static-scan, scope:common, TL1, pwsh-not-required, workflow-mark, refusal, TL2, prototype-key, glossary
 // #2514: a skill document told the model to emit a MARK_STEP sentinel that no workflow step
 // accepts (l2_findings_surfaced_complete, docs_complete, plan_complete). Every MARK_STEP literal
 // under skills/**/*.md must name a VALID_STEPS step, match MARKER_RE_DQ, and not be a step that
@@ -346,6 +346,34 @@ test("prototype-key-step-names-get-only-the-unknown-step-refusal", () => {
   const ts = callHandle(M("toString", "complete"), sid, X.REPO);
   assert.deepStrictEqual(ts, { handled: false, messages: [], unapplied: [] }, `toString: ${JSON.stringify(ts)}`);
   assert.strictEqual(X.raw(sid), before, "state must not change");
+});
+caseEnd();
+
+// #2962: the GLOSSARY_ACCEPTED pattern takes the batch discriminator (`term=* batch=definition-only`);
+// the existing shapes keep matching and an unknown discriminator name still does not.
+const GA = (body) => `echo "<<WORKFLOW_GLOSSARY_ACCEPTED: ${body} — user accepted the reworded definitions>>"`;
+const GLOSSARY_MATRIX = [
+  [true, "batch-definition-only", "term=* batch=definition-only", "*", " batch=definition-only"],
+  [true, "batch-with-cat", "term=* batch=definition-only cat=user", "*", " batch=definition-only cat=user"],
+  [true, "existing-step-form", "term=glossary drift step=review_security", "glossary drift", " step=review_security"],
+  [true, "existing-op-cat-form", "term=glossary drift op=redefine cat=user", "glossary drift", " op=redefine cat=user"],
+  [false, "unknown-discriminator", "term=* bulk=definition-only", null, null],
+  [false, "batch-upper-case-value", "term=* batch=DEFINITION", null, null],
+];
+
+caseBegin("glossary-accepted-pattern-takes-the-batch-discriminator", "hooks/lib/sentinel-patterns.js");
+test("glossary-accepted-pattern-takes-the-batch-discriminator", () => {
+  const SP = require(path.join(ROOT, "hooks", "lib", "sentinel-patterns.js"));
+  if (Array.isArray(SP.GLOSSARY_DISCRIMINATOR_NAMES)) {
+    assert.ok(SP.GLOSSARY_DISCRIMINATOR_NAMES.includes("batch"), "GLOSSARY_DISCRIMINATOR_NAMES lacks batch");
+  }
+  const wrong = [];
+  for (const [want, name, body, term, discs] of GLOSSARY_MATRIX) {
+    const m = SP.GLOSSARY_ACCEPTED_RE_DQ.exec(GA(body));
+    if (!!m !== want) { wrong.push(`${name}: want match=${want}, got ${!!m}`); continue; }
+    if (m && (m[1] !== term || m[2] !== discs)) wrong.push(`${name}: captured term=${m[1]} discriminators=${m[2]}`);
+  }
+  assert.deepStrictEqual(wrong, [], wrong.join("\n"));
 });
 caseEnd();
 

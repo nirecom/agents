@@ -9,6 +9,7 @@ const { parseIntentGlossary } = require("../../../lib/intent-glossary");
 const { listMainGlossaryFiles } = require("../../../../bin/lib/glossary-format/files");
 const { parseGlossaryFile, entryFields } = require("../../../../bin/lib/glossary-format/entries");
 const { normalizeDefinition } = require("../../../../bin/lib/glossary-provenance");
+const { normalizeTerm } = require("../../../lib/glossary-term");
 const { sha256, git } = require("./artifact");
 
 function worktreeRootOf(repoDir) {
@@ -17,17 +18,32 @@ function worktreeRootOf(repoDir) {
   return toWindowsPath(top);
 }
 
-// One record per exact term: the entries of one term (in several files) pool their Identifier
-// spellings. Short forms stay out: the drift matcher never matches them.
+// One record per exact term: the entries of one term (in several files) pool their Identifier and
+// Short forms spellings. The drift matcher never matches Short forms; they feed termFieldsOf only.
 function addRecord(records, e) {
-  const { identifiers } = entryFields(e);
+  const { identifiers, shortForms } = entryFields(e);
   const prev = records.get(e.term);
-  if (!prev) { records.set(e.term, { term: e.term, identifiers }); return; }
+  if (!prev) { records.set(e.term, { term: e.term, identifiers, shortForms }); return; }
   prev.identifiers = [...new Set(prev.identifiers.concat(identifiers))];
+  prev.shortForms = [...new Set(prev.shortForms.concat(shortForms))];
+}
+
+// termFieldsOf(terms) -> { norm: sha } over the matching fields (heading, Identifier, Short forms)
+// of the records sharing that norm (#2962); Definition and Related stay out.
+function termFieldsOf(terms) {
+  const byNorm = new Map();
+  for (const t of Array.isArray(terms) ? terms : []) {
+    const norm = normalizeTerm(t.term);
+    const key = [t.term, [...(t.identifiers || [])].sort(), [...(t.shortForms || [])].sort()];
+    byNorm.set(norm, (byNorm.get(norm) || []).concat([JSON.stringify(key)]));
+  }
+  const out = Object.create(null); // a norm such as "__proto__" stays an own key
+  for (const [norm, keys] of byNorm) out[norm] = sha256(JSON.stringify(keys.sort()));
+  return out;
 }
 
 // combinedGlossary(opts) -> { ok, files: [{ label, category, sha }], terms, digest, legacy };
-// terms are the records { term, identifiers } (#2763), one per exact term.
+// terms are the records { term, identifiers, shortForms } (#2763), one per exact term.
 function combinedGlossary(opts) {
   try {
     const listed = listMainGlossaryFiles(worktreeRootOf(opts.repoDir));
@@ -82,4 +98,4 @@ function intentRowsOf(sid, rangeText) {
   return Object.assign({ ok: true }, rowsOfText(text));
 }
 
-module.exports = { worktreeRootOf, combinedGlossary, intentRowsOf };
+module.exports = { worktreeRootOf, combinedGlossary, intentRowsOf, termFieldsOf };

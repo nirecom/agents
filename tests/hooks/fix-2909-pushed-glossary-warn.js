@@ -95,7 +95,7 @@ caseBegin("pushed session: a stale glossary keeps the plan steps and next-step o
 test("pushed session: a stale glossary keeps the plan steps and next-step only warns", verdict("P", () => {
   const s = prepare("p-pushed", PUSHED);
   F.check("P: push_branch is recorded complete", F.statusOf(s.sid, "push_branch") === "complete", F.statusOf(s.sid, "push_branch"));
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   const bytesBefore = fs.readFileSync(F.statePath(s.sid));
   const eff = snapshot(s);
   for (const step of RA_STEPS) {
@@ -143,7 +143,7 @@ caseEnd();
 caseBegin("push_branch reset to pending demotes the stale plan steps again", "hooks/workflow-state/effective-state/post-delivery.js");
 test("push_branch reset to pending demotes the stale plan steps again", verdict("R", () => {
   const s = prepare("r-reset", PUSHED);
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   F.appendRaw(s.sid, [F.stepStatusEvent("push_branch", "pending")]);
   F.check("R: push_branch is recorded pending after the reset", F.statusOf(s.sid, "push_branch") === "pending", F.statusOf(s.sid, "push_branch"));
   expectDemoted("R", s, "glossary-check-stale");
@@ -155,12 +155,12 @@ caseEnd();
 caseBegin("before push_branch a stale glossary still demotes, after delivery no warning", "bin/workflow/lib/next-step/glossary-after-push-note.js");
 test("before push_branch a stale glossary still demotes, after delivery no warning", verdict("B", () => {
   const pre = prepare("b-pre", BEFORE_PUSH);
-  F.touchGlossary(pre.repo);
+  F.addDriftingEntry(pre.repo);
   expectDemoted("B", pre, "glossary-check-stale");
   const N = noteMod();
   if (N) F.check("B: no line before the push", N.glossaryAfterPushNoteLine(F.readState(pre.sid), pre.sid, pre.repo) === "", "line printed");
   const post = prepare("b-post", {});
-  F.touchGlossary(post.repo);
+  F.addDriftingEntry(post.repo);
   const r = nextStep(post);
   F.check("B: a post-delivery session gets no GLOSSARY_AFTER_PUSH line", r.code === 0 && !NOTE_RE.test(r.out), `${r.out}${r.err}`);
   if (N) F.check("B: glossaryAfterPushNoteLine is empty after delivery", N.glossaryAfterPushNoteLine(F.readState(post.sid), post.sid, post.repo) === "", "line printed");
@@ -206,7 +206,7 @@ test("pushed and user-verified but not merged: still warn-only, not demoted", ve
   const s = prepare("v-verified", Object.assign({}, PUSHED, { user_verification: "complete" }));
   F.check("V: user_verification is recorded complete", F.statusOf(s.sid, "user_verification") === "complete", F.statusOf(s.sid, "user_verification"));
   F.check("V: merge_to_main is unrecorded", F.statusOf(s.sid, "merge_to_main") !== "complete", F.statusOf(s.sid, "merge_to_main"));
-  F.touchGlossary(s.repo);
+  F.addDriftingEntry(s.repo);
   const eff = snapshot(s);
   for (const step of RA_STEPS) {
     F.check(`V: ${step} reads complete from the state`,

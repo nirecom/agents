@@ -118,6 +118,14 @@ run_promote() {
   PROMOTE_OUT="$(run_with_timeout 120 node "$(np "$PROMOTE")" "$@" 2>&1)" || PROMOTE_RC=$?
 }
 
+# rel <term>... — the --related pairs (#2962) giving each new entry the fixture owner link.
+OWNER_LINK="[owner](architecture/owner.md)"
+rel() {
+  local t
+  REL=()
+  for t in "$@"; do REL+=(--related "$t=$OWNER_LINK"); done
+}
+
 expect_promote_rc() {
   if [[ "$PROMOTE_RC" == "$2" ]]; then pass "$1 (rc=$2)"
   else fail "$1" "want rc=$2 got rc=$PROMOTE_RC; output: ${PROMOTE_OUT:0:600}"; fi
@@ -215,7 +223,8 @@ R="$T/promote-order"
 gloss "$R/docs/glossary/user.md" alpha omega
 gloss "$R/docs/glossary/internal.md" kilo
 approved_intent "f2529-fmt-order" "Gamma|user|The third fixture term." "delta|internal|An internal fixture term." "scratch|session|Session-only word."
-run_promote "$INTENT" "$(np "$R")"
+rel Gamma delta
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "promote with user/internal/session rows" 0
 expect_promote_out "summary line" "ADDED=2 DELETED=0 REDEFINED=0 SKIPPED_EXISTING=0 SKIPPED_SESSION=1"
 a="$(heading_line "$R/docs/glossary/user.md" alpha)"
@@ -227,8 +236,8 @@ d="$(heading_line "$R/docs/glossary/internal.md" delta)"
 k="$(heading_line "$R/docs/glossary/internal.md" kilo)"
 if [[ -n "$d" && -n "$k" ]] && ((d < k)); then pass "delta inserted before kilo in internal"
 else fail "delta inserted before kilo in internal" "lines delta=$d kilo=$k"; fi
-if grep -q -x -F -- "- **Definition**: The third fixture term." "$R/docs/glossary/user.md" && grep -q -x -F -- "- **Related**: TODO" "$R/docs/glossary/user.md"; then pass "generated entry carries Definition and Related TODO"
-else fail "generated entry carries Definition and Related TODO" "$(cat "$R/docs/glossary/user.md")"; fi
+if grep -q -x -F -- "- **Definition**: The third fixture term." "$R/docs/glossary/user.md" && grep -A3 -x -F -- "### Gamma" "$R/docs/glossary/user.md" | grep -q -x -F -- "- **Related**: $OWNER_LINK" && ! grep -q -F -- "TODO" "$R/docs/glossary/user.md"; then pass "generated entry carries Definition and the --related link (no TODO)"
+else fail "generated entry carries Definition and the --related link (no TODO)" "$(cat "$R/docs/glossary/user.md")"; fi
 expect_no_term "session row not in user file" "$R/docs/glossary/user.md" scratch
 expect_no_term "session row not in internal file" "$R/docs/glossary/internal.md" scratch
 case_end
@@ -238,10 +247,11 @@ R="$T/promote-idem"
 gloss "$R/docs/glossary/user.md" alpha omega
 gloss "$R/docs/glossary/internal.md" kilo
 approved_intent "f2529-fmt-idem" "Gamma|user|The third fixture term." "delta|internal|An internal fixture term." "scratch|session|Session-only word."
-run_promote "$INTENT" "$(np "$R")"
+rel Gamma delta
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 cp "$R/docs/glossary/user.md" "$T/idem-user.1"
 cp "$R/docs/glossary/internal.md" "$T/idem-internal.1"
-run_promote "$INTENT" "$(np "$R")"
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "second run" 0
 expect_promote_out "second run adds nothing" "ADDED=0 DELETED=0 REDEFINED=0 SKIPPED_EXISTING=2 SKIPPED_SESSION=1"
 expect_same_file "user file unchanged by second run" "$T/idem-user.1" "$R/docs/glossary/user.md"
@@ -252,7 +262,8 @@ case_begin "promote-never-creates-missing-glossary-file" "bin/glossary-promote"
 R="$T/promote-missing"
 gloss "$R/docs/glossary/user.md" alpha
 approved_intent "f2529-fmt-missing" "delta|internal|An internal fixture term."
-run_promote "$INTENT" "$(np "$R")"
+rel delta
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "internal row with no internal file" 0
 expect_promote_out "missing internal file warns not promoted" "not promoted"
 expect_promote_out "missing internal file adds nothing" "ADDED=0"
@@ -261,7 +272,8 @@ else fail "glossary/internal.md not created" "file was created"; fi
 R="$T/promote-none"
 mkdir -p "$R"
 approved_intent "f2529-fmt-none" "Gamma|user|A user fixture term."
-run_promote "$INTENT" "$(np "$R")"
+rel Gamma
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "repo with no glossary files" 0
 expect_promote_out "glossary-less repo warns not promoted" "not promoted"
 expect_promote_out "glossary-less repo adds nothing" "ADDED=0"
@@ -307,7 +319,8 @@ gloss "$R/docs/glossary/internal.md" kilo
 cp "$R/docs/glossary/user.md" "$T/cross-user.before"
 cp "$R/docs/glossary/internal.md" "$T/cross-internal.before"
 approved_intent "f2529-fmt-cross" "kilo|user|Already defined as an internal term."
-run_promote "$INTENT" "$(np "$R")"
+rel kilo
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "term in the opposite category is refused" 1
 expect_promote_out "refusal names category-conflict" "category-conflict"
 expect_same_file "user file untouched by a cross-category term" "$T/cross-user.before" "$R/docs/glossary/user.md"
@@ -319,7 +332,8 @@ R="$T/promote-ranged"
 gloss "$R/docs/glossary/user-a-m.md" alpha mike
 gloss "$R/docs/glossary/user-n-z.md" november
 approved_intent "f2529-fmt-ranged" "beta|user|A fixture term." "zulu|user|A fixture term." "_priv|user|A fixture term."
-run_promote "$INTENT" "$(np "$R")"
+rel beta zulu _priv
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "ranged insert" 0
 expect_has_term "beta in a-m" "$R/docs/glossary/user-a-m.md" beta
 expect_has_term "_priv in a-m (non a-z leading)" "$R/docs/glossary/user-a-m.md" _priv
@@ -334,7 +348,8 @@ gloss "$R/docs/glossary/user-m-z.md" zulu
 cp "$R/docs/glossary/user-a-m.md" "$T/overlap-am.before"
 cp "$R/docs/glossary/user-m-z.md" "$T/overlap-mz.before"
 approved_intent "f2529-fmt-overlap" "beta|user|A fixture term."
-run_promote "$INTENT" "$(np "$R")"
+rel beta
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "overlapping ranges" 1
 expect_same_file "a-m untouched" "$T/overlap-am.before" "$R/docs/glossary/user-a-m.md"
 expect_same_file "m-z untouched" "$T/overlap-mz.before" "$R/docs/glossary/user-m-z.md"
@@ -353,9 +368,9 @@ gloss "$R/docs/glossary/user-n-z.md" november
 git -C "$R" add docs
 git -C "$R" commit -q -m "glossary before promote"
 approved_intent "f2529-fmt-roundtrip" "beta|user|A fixture term." "zulu|user|A fixture term." "_priv|user|A fixture term."
-run_promote "$INTENT" "$(np "$R")"
+rel beta zulu _priv
+run_promote "$INTENT" "$(np "$R")" "${REL[@]}"
 expect_promote_rc "round-trip promotion" 0
-sed -i 's#^- \*\*Related\*\*: TODO$#- **Related**: [owner](architecture/owner.md)#' "$R/docs/glossary/user-a-m.md" "$R/docs/glossary/user-n-z.md"
 git -C "$R" add docs
 GATE_RC=127
 if [[ -f "$GATE" ]]; then
@@ -364,8 +379,8 @@ if [[ -f "$GATE" ]]; then
 else
   GATE_OUT="TOOL NOT FOUND: bin/review-doc-glossary"
 fi
-if [[ "$GATE_RC" == 0 ]]; then pass "promoted files pass the glossary gate after Related is filled"
-else fail "promoted files pass the glossary gate after Related is filled" "rc=$GATE_RC: ${GATE_OUT:0:600}"; fi
+if [[ "$GATE_RC" == 0 ]]; then pass "promoted files pass the glossary gate as written (Related from --related)"
+else fail "promoted files pass the glossary gate as written (Related from --related)" "rc=$GATE_RC: ${GATE_OUT:0:600}"; fi
 case_end
 
 case_begin "promote-empty-glossary-section-is-noop" "bin/glossary-promote"

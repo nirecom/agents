@@ -139,6 +139,54 @@ test("check-files-short-forms-cross-file-overlap", () => noNewFailures(fails, ()
 }));
 caseEnd();
 
+// #2962: termFieldsOf(terms) fingerprints each term's matching fields (heading, Identifier, Short
+// forms; order-insensitive), so a Definition or Related edit leaves the map as it was.
+const AG = (o) => {
+  const x = Object.assign({ term: "alpha gate", def: "A gated term.", ids: "`alpha_gate`, `alphaGate`",
+    sf: "`gate`, `ag`", rel: "[README.md](../../README.md)" }, o);
+  return `# Glossary — user terms\n\n### ${x.term}\n\n- **Definition**: ${x.def}\n- **Identifier**: ${x.ids}\n` +
+    `- **Short forms**: ${x.sf}\n- **Related**: ${x.rel}\n`;
+};
+const fieldsMapOf = (o) => {
+  const g = sources().combinedGlossary({ repoDir: c.mkRepo("fields", { "docs/glossary/user.md": AG(o) }) });
+  ok(g.ok === true, JSON.stringify(g));
+  ok(typeof sources().termFieldsOf === "function", "sources.termFieldsOf is not exported");
+  return { g, map: sources().termFieldsOf(g.terms) };
+};
+
+caseBegin("term-fields-moves-only-with-a-matching-field", "hooks/workflow-state/glossary-check/scope/sources.js");
+test("term-fields-moves-only-with-a-matching-field", () => noNewFailures(fails, () => {
+  let base = null;
+  check("termFieldsOf: one 64-hex fingerprint per term of the combined glossary", () => {
+    base = fieldsMapOf({}).map;
+    const vals = Object.values(base || {});
+    eq(vals.length, 1, `map: ${JSON.stringify(base)}`);
+    ok(/^[0-9a-f]{64}$/.test(String(vals[0])), `map: ${JSON.stringify(base)}`);
+  });
+  const rows = [
+    ["a Definition edit", { def: "A gated term, reworded." }, true],
+    ["a Related edit", { rel: "[docs](../../docs/README.md)" }, true],
+    ["a reordered Identifier list", { ids: "`alphaGate`, `alpha_gate`" }, true],
+    ["a reordered Short forms list", { sf: "`ag`, `gate`" }, true],
+    ["an Identifier edit", { ids: "`alpha_gate`" }, false],
+    ["a Short forms edit", { sf: "`gate`" }, false],
+    ["a heading edit", { term: "alpha gates" }, false],
+  ];
+  for (const [label, over, same] of rows) {
+    check(`termFieldsOf: ${label} ${same ? "keeps" : "moves"} the fingerprint map`, () => {
+      ok(base !== null, "no base map");
+      const map = fieldsMapOf(over).map;
+      ok((JSON.stringify(map) === JSON.stringify(base)) === same, `base=${JSON.stringify(base)} now=${JSON.stringify(map)}`);
+    });
+  }
+  check("addRecord: the combined glossary record carries the entry's Short forms", () => {
+    const rec = (fieldsMapOf({}).g.terms || []).find((t) => t.term === "alpha gate");
+    ok(!!rec && Array.isArray(rec.shortForms), `record: ${JSON.stringify(rec)}`);
+    eq([...rec.shortForms].sort(), ["ag", "gate"], "shortForms");
+  });
+}));
+caseEnd();
+
 caseBegin("invalid-name-codex-block-keeps-its-fail-open-shape", "bin/lib/codex-glossary.sh");
 test("invalid-name-codex-block-keeps-its-fail-open-shape", () => noNewFailures(fails, () => {
   check("codex_glossary_block: the instruction part only, no data block, no misc.md term", () => {

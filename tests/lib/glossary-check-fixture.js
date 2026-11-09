@@ -221,6 +221,30 @@ function touchGlossary(repo, mark) {
   writeFile(repo, rel, GLOSSARY_FILES[rel].replace("fixture step list.", `fixture step list${mark || "!"}`));
 }
 
+// #2962: a glossary edit that changes a matching field (`Short forms`) of the finding's entry — the
+// change that keeps a recorded glossary_check stale, unlike a Definition-only edit (touchGlossary).
+function touchGlossaryMatch(repo) {
+  const rel = "docs/glossary/user.md";
+  writeFile(repo, rel, GLOSSARY_FILES[rel].replace("fixture step list.\n", "fixture step list.\n- **Short forms**: `step`\n"));
+}
+
+// #2962: adds an entry ("is-checked") that every fixture artifact ("... is checked") spells as a
+// variant — the glossary-only change that makes even a clean record (no finding, so an empty
+// term_fields map) stale, through a new finding. A re-record then reports that finding (exit 1).
+const DRIFTING_TERM = "is-checked";
+function addDriftingEntry(repo) {
+  const rel = "docs/glossary/internal.md";
+  writeFile(repo, rel, GLOSSARY_FILES[rel] + `\n### ${DRIFTING_TERM}\n\n- **Definition**: A fixture entry the artifacts spell apart.\n` +
+    "- **Related**: [README.md](../../README.md)\n");
+}
+
+// #2962: adds an entry no artifact spells — a glossary-only change that moves no finding.
+function addUnrelatedEntry(repo) {
+  const rel = "docs/glossary/internal.md";
+  writeFile(repo, rel, GLOSSARY_FILES[rel] + "\n### zebra crossing\n\n- **Definition**: A fixture entry no artifact spells.\n" +
+    "- **Related**: [README.md](../../README.md)\n");
+}
+
 // The commit gate's glossary checker for one step, against the current state and index.
 function gateCheck(checker, sid, step, repo) {
   try {
@@ -333,5 +357,5 @@ module.exports = {
   GLOSSARY_FILES, TARGET, targetBody, planBody, newSid, slash, git, writeFile, stageFile, commit, mkRepo,
   addWorktree, planPath, writePlan, statePath, stepStatusEvent, annotationEvent, implSha, approvalEvent,
   writeState, appendRaw, readState, statusOf, recordOf, seedSession, runNode, drift, driftLegacy, mark, advance,
-  completeInProcess, refusedWith, grantFindings, setupStep, touchGlossary, gateCheck, gatePasses, gateBlocks, mod, sha256, check, finish, failureCount, clip,
+  completeInProcess, refusedWith, grantFindings, setupStep, touchGlossary, touchGlossaryMatch, addUnrelatedEntry, addDriftingEntry, DRIFTING_TERM, gateCheck, gatePasses, gateBlocks, mod, sha256, check, finish, failureCount, clip,
 };

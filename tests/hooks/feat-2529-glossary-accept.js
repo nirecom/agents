@@ -97,3 +97,19 @@ caseEnd();
 caseBegin("#2820 clarify_intent is a grantable glossary step", "hooks/workflow-mark/glossary-accept-handler.js");
 test("#2820 clarify_intent is a grantable glossary step", verdict(() => compat.clarify(F)));
 caseEnd();
+
+caseBegin("#2962 batch=definition-only grants every definition-only redefine block", "hooks/workflow-mark/glossary-accept-handler.js");
+test("#2962 batch=definition-only grants every definition-only redefine block", verdict(() => require("./feat-2529-glossary-accept/batch").run(F)));
+caseEnd();
+
+caseBegin("#2962 the provenance grant reply names each covered term", "hooks/workflow-mark/glossary-accept-handler.js");
+test("#2962 the provenance grant reply names each covered term", verdict(() => require("./feat-2529-glossary-accept/batch").reply(F)));
+caseEnd();
+
+caseBegin("#2962 term=* without batch= is refused", "hooks/workflow-mark/glossary-accept-handler.js");
+test("#2962 term=* without batch= is refused", verdict(() => require("./feat-2529-glossary-accept/batch").starNeedsBatch(F)));
+caseEnd();
+
+caseBegin("#2962 a repeated batch grant adds no duplicate grant", "hooks/workflow-mark/glossary-accept-handler.js");
+test("#2962 a repeated batch grant adds no duplicate grant", verdict(() => require("./feat-2529-glossary-accept/batch").idempotent(F)));
+caseEnd();

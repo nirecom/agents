@@ -126,8 +126,8 @@ const REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_TE
 // because selected tests could not run. Same reason charset as WARNINGS_ACCEPTED.
 const RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ = /^echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED: ([^>()\x60;|&]+)>>"$/;
 const RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RUN_TESTS_UNRUNNABLE_ACCEPTED([: ].*)?>>"\s*$/;
-// Glossary grant (#2529): term (no `=`), up to 3 op=/cat=/step= discriminators, reason.
-const GLOSSARY_DISCRIMINATOR_NAMES = ["op", "cat", "step"];
+// Glossary grant (#2529): term (no `=`), up to 3 op=/cat=/step=/batch= discriminators, reason.
+const GLOSSARY_DISCRIMINATOR_NAMES = ["op", "cat", "step", "batch"];
 // --- BEGIN temporary: workflow stage -> workflow step migration added 2026-11-02 ---
 // deletion-condition: remove once 30 days (the control dir lifetime) have passed since merge and no --stage caller remains in this repo or the global instructions
 GLOSSARY_DISCRIMINATOR_NAMES.push("stage");
@@ -338,7 +338,7 @@ module.exports = {
   REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE,
   RUN_TESTS_UNRUNNABLE_ACCEPTED_RE_DQ,
   RUN_TESTS_UNRUNNABLE_ACCEPTED_LOOKSLIKE_RE,
-  GLOSSARY_ACCEPTED_RE_DQ, GLOSSARY_ACCEPTED_LOOKSLIKE_RE,
+  GLOSSARY_ACCEPTED_RE_DQ, GLOSSARY_ACCEPTED_LOOKSLIKE_RE, GLOSSARY_DISCRIMINATOR_NAMES,
   SUPERVISOR_VERDICT_ACCEPTED_RE_DQ,
   SUPERVISOR_VERDICT_ACCEPTED_LOOKSLIKE_RE,
   SUPERVISOR_BLOCK_ACCEPTED_RETIRED_RE_DQ,
