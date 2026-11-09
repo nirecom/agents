@@ -42,10 +42,12 @@ Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 - **Definition**: The third-party typed classifier from TypeSafe AI that returns one probability per yes/no question; with `JEV=on` it makes several automatic judgments in this repository.
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
-### JEV_AUTO_SKIP_ASKUSER
+### JEV_AUTO_CLARIFICATIONS
+- **Definition**: clarifications（AskUserQuestion の dialog）に、Jev がユーザーに代わって回答することを許す `.env` の switch。AskUserQuestion で承認を求める dialog もこの対象に入るが、その auto user-input risk level は `high` なので Jev は回答しない。Jev が回答するのは `low` の dialog だけである。`off` にすると、他の Jev 判定は動いたまま、すべての AskUserQuestion がユーザーに届く。tool approvals は対象外で、`JEV_AUTO_TOOL_APPROVALS` が別に扱う。
+- **Related**: [architecture/jev.md](../architecture/jev.md)
 
-- **Definition**: The `.env` switch that lets Jev answer, for the user, an AskUserQuestion dialog Claude marked as eligible with `metadata.source`.
-  With `off`, every AskUserQuestion dialog reaches the user while the other Jev judgments keep running.
+### JEV_AUTO_TOOL_APPROVALS
+- **Definition**: tool approvals（permission rule や permission mode で自動許可されないツール呼び出しの許可）に、Jev がユーザーに代わって回答することを許す `.env` の switch。Jev が回答するのは、auto user-input risk level が `low` の呼び出しだけである。`off` にすると、すべての tool approvals がユーザーに届く。switch の実装は #2948 で行う。
 - **Related**: [architecture/jev.md](../architecture/jev.md)
 
 ### meta

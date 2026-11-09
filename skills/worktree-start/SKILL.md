@@ -7,7 +7,7 @@ user-invocable: false
 Set up a new linked worktree and initialize its gitignored state before starting work.
 
 **Personal config:** Set `WORKTREE_BASE_DIR` in your agents config to customize the worktree
-base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\git\worktrees`.
+base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=D:\src\worktrees`.
 
 ## Procedure
 
@@ -19,7 +19,7 @@ WS-1. Verify the task fits the worktree criteria in `rules/worktree.md` (fit tab
    and work on main directly instead.
 
 WS-2. Derive the task name and branch type — always automatic, never asked of the user:
-   Run `bash "$AGENTS_MAIN_ROOT/skills/worktree-start/scripts/derive-worktree-name.sh"`, adding `--headless <label>` when the caller cannot present `AskUserQuestion` (running as a subagent or forked execution context) or when no workflow session hosts this run.
+   Run `bash "$AGENTS_MAIN_ROOT/skills/worktree-start/scripts/derive-worktree-name.sh"`, adding `--headless <label>` when the caller cannot present `AskUserQuestion` (running as a subagent or forked execution context) or when no workflow session hosts this run. <!-- askuser-none -->
    Read `TASK_NAME=`, `BRANCH_TYPE=`, and `REPO_NAME=` from its stdout — `REPO_NAME` is the validated `<REPO_NAME>` path component; never infer it yourself. Non-zero exit → surface its stderr and stop; never substitute a name of your own and never ask the user for one.
    **Reuse-safety check**: run `git worktree list --porcelain` and find the entry whose `worktree` line equals `<WORKTREE_BASE_DIR>/<TASK_NAME>/<REPO_NAME>` — normalize both sides before comparing: convert every backslash to a forward slash and every MSYS-style `/c/<rest>` path to its `C:/<rest>` form (or vice versa), then strip any trailing slash, then lowercase both sides when the filesystem is case-insensitive (Windows, and default macOS). No entry → continue to WS-3. An entry exists → an existing path is not proof it is safe to attach to, so reuse only when all three hold:
    - Its `branch` line equals `refs/heads/<BRANCH_TYPE>/<TASK_NAME>`; a different branch is a naming collision, not a reusable worktree — surface both paths and branches to the user and stop.
@@ -55,7 +55,7 @@ WS-6. Create the worktree (isolated command — same chaining caveat as WS-5):
 
 WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md`. Payload: `worktree_path` (WS-3 path), `branch` (`<BRANCH_TYPE>/<TASK_NAME>`), `session_id` (omit when unknown), `artifact_dir` (the `PLANS_DIR` from WD-1).
 
-   `--headless` (WS-2): skip the gate check and treat it as `proceed` (`CONFIRM_WORKTREE` pinned OFF) — no workflow session, or a subagent/fork context where `AskUserQuestion` is unreachable.
+   `--headless` (WS-2): skip the gate check and treat it as `proceed` (`CONFIRM_WORKTREE` pinned OFF) — no workflow session, or a subagent/fork context where `AskUserQuestion` is unreachable. <!-- askuser-none -->
    Gate check: apply skills/_shared/confirm-plan.md CPA-3 — run next-step --gate and follow GATE_ACTION.
 
    Response handling when `GATE_ACTION=proceed`:
@@ -64,8 +64,8 @@ WS-7. Dispatch the `worktree-copy` worker per `skills/_shared/worker-dispatch.md
    - `status: failed` → surface error and stop.
 
    Response handling when `GATE_ACTION=ask`:
-   - `status: complete` → call `AskUserQuestion` to confirm copy results before proceeding.
-   - `status: partial` → call `AskUserQuestion` in main (surface denied/errors via artifact log path); user must confirm or abort.
+   - `status: complete` → call `AskUserQuestion` (`metadata.source=worktree-start.copy-complete`) to confirm copy results before proceeding.
+   - `status: partial` → call `AskUserQuestion` (`metadata.source=worktree-start.copy-partial`) in main (surface denied/errors via artifact log path); user must confirm or abort.
    - `status: failed` → surface error and stop.
 
 WS-7a. Build the CodeGraph index for the new worktree — one Bash call:
@@ -89,7 +89,7 @@ WS-9. Final report: worktree path, branch, which gitignored state was copied, an
 - Always record copied state in `WORKTREE_NOTES.md` so `/worktree-end` can inventory it later.
 - Task-name validation lives in `scripts/derive-worktree-name.sh` (D5); it is the sole TASK_NAME validator (CPR-SSOT) and rejects any derived name failing `[a-zA-Z0-9][a-zA-Z0-9_-]*`, exiting non-zero. Never bypass it or hand-write a name.
 - `<REPO_NAME>` in the worktree path is validated by the same script (D0) and emitted as `REPO_NAME=`; use that value verbatim.
-- Never call `AskUserQuestion` to choose a task name or branch type — WS-2 is fully automatic in every context.
+- Never call `AskUserQuestion` to choose a task name or branch type — WS-2 is fully automatic in every context. <!-- askuser-none -->
 - WORKTREE_NOTES.md generation is owned by `bin/worktree-write-notes.js`. Do not write the
   file or edit `.git/info/exclude` manually.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).

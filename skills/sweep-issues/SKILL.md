@@ -19,12 +19,12 @@ Read `rules/github-issues.md` before SI-1 — on-demand-only, never auto-injecte
 SI-1. Run `bash "$AGENTS_MAIN_ROOT/bin/sweep-issues.sh"` forwarding the user's other flags verbatim (pass 1).
 SI-2. Print stdout verbatim. Do not summarize or filter.
 SI-3. Stop here when the output carries no `<<<TIER2-GATE-SI3` block.
-SI-4. With the block: use `AskUserQuestion` to separate false positives (artifact not built yet) from real staleness.
+SI-4. With the block: use `AskUserQuestion` (`metadata.source=sweep-issues.false-positive`) to separate false positives (artifact not built yet) from real staleness.
    Write the survivors to `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-sweep-issues-survivors.tsv`.
    Columns: `number` / `tokens_csv` / `class`. Copy columns 1-2 from the gate template rows.
    `class` ∈ `resolved` | `refactored-away` | `duplicate` | `obsolete` | `partial`.
 SI-5. Re-run with `--verify-candidates <survivors.tsv> --deep` (pass 2) and print every `EVIDENCE-` line verbatim.
-SI-6. Present the `<<<TIER2-GATE-SI5` candidates plus their evidence in one batched `AskUserQuestion`.
+SI-6. Present the `<<<TIER2-GATE-SI5` candidates plus their evidence in one batched `AskUserQuestion` (`metadata.source=sweep-issues.close-decisions`).
    Write only the approved rows to `<session-id>-sweep-issues-decisions.tsv`.
    Columns: `number` / `action` / `arg` / `rationale`. `arg` is the surviving issue for `migrated`, else `-`.
 SI-7. Emit `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: sweep-issues batch triage>>`, re-run with `--decisions <decisions.tsv> --deep` (pass 3), then emit `<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: sweep-issues batch triage done>>`.
@@ -36,7 +36,7 @@ SI-7. Emit `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: sweep-issues batch triage>>`, re-ru
 - `--deep` never changes the write mode, and never widens the candidate set — SI-2 scans identically with and without it. It decides only whether the tier-2 candidates reach the human gate or are dropped after being listed.
 - `--verify-candidates` / `--decisions` are this skill's protocol with the script, not user flags. Never surface them in a suggestion to the user; never expect the user to pass one.
 - Pass `--deep` on every tier-2 call (SI-5 and SI-7); omitting it exits 2.
-- The flagless run is non-interactive. Never place `AskUserQuestion` on the default path.
+- The flagless run is non-interactive. Never place `AskUserQuestion` on the default path. <!-- askuser-none -->
 - Pair `--deep` with a small band (e.g. `--band-size 20`) — SI-5 runs real tests and large bands do not finish in usable time.
 - pass-1 scans every band by default; the loop runs in the script, not here. pass-2/3 have no band concept.
 - `--deep` aggregates all-bands candidates into one gate block; total candidates scale linearly with open-issue count. To bound the gate size, use `--max-bands N`, not `--band-size`.

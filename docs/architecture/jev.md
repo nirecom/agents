@@ -130,22 +130,29 @@ subagent and no ticket; only a confident yes acts.
 - **`continue-on-stop`**: where the Stop guard would let a stop pass,
   it asks whether work remains; a confident yes blocks the stop once per turn.
   It never asks while a human or a delegated step is waited on.
-- **AskUserQuestion**: a PreToolUse hook answers only a dialog Claude marked
-  eligible (`metadata.source` = `jev-auto-skip-askuser`), and only when every
-  question has exactly one confident option. The marker is an allowlist: an
-  unmarked dialog reaches the user with no Jev call and no record; plan-approval
-  waits, `user_verification` and multi-select stay excluded even when marked.
-  `JEV_AUTO_SKIP_ASKUSER=off` turns it off alone.
-  - Marker policy: Claude marks only a choice it raises itself whose answer the
-    user's own conversation already settles; a dialog a skill or rule defines
-    for consent, approval, deletion, release, or a gate is never marked, so it
-    always reaches the user.
-  - Skill-in-turn guard: when a Skill ran since the last real user prompt (a
-    `Skill` tool call, or a `<command-name>` slash-command injection), the
-    dialog is the skill's own and reaches the user with no Jev call. Tool
-    results and meta, compaction-summary and sidechain entries do not open a
-    new prompt. A missing or unreadable transcript, or any unparsable line,
-    also sends the dialog to the user.
+- **AskUserQuestion**: every skill dialog carries a dialog ID
+  (`metadata.source=<namespace>.<name>`; one trailing `_<digits>` is dropped).
+  The classification table `hooks/lib/askuser-dialog-levels.json` rates each ID
+  `low` or `high`; a `low` row also names the workflow steps it may be raised in.
+  A PreToolUse hook asks Jev only when the ID is `low` and the session's current
+  step is one the row names (not `user_verification`, no approval wait, no
+  multi-select), and answers only when every question has one confident option.
+  - Routes: `invalid-input`, `jev-off`, `flag-off`, `no-id`, `malformed-id`,
+    `unclassified`, `high`, `no-sid`, `no-state`, `no-step`, `step-mismatch`,
+    `approval-wait`, `adapter-reject`, `multiselect`, `answered`,
+    `jev-declined`, `error`. Each identified dialog appends one record
+    (`askuser-routes.jsonl` in the log directory; `session_id` null without a
+    session); `jev-report` counts them per dialog ID.
+  - `JEV_AUTO_CLARIFICATIONS=off` sends every dialog back to the user. The old
+    name `JEV_AUTO_SKIP_ASKUSER` is still read, with a warning, while the new
+    one is unset (a temporary migration module).
+  - `bin/check-askuser-dialog-ids` (a quality gate) fails a dialog line without
+    an ID or an `askuser-none` note, an ID the table lacks, and a table row no
+    line uses; it lists added or changed rows for the user to review.
+  - Levels: `high` covers approval, consent or destructive operations; gates and
+    recoveries; and publication outside the machine (GitHub, push). When the
+    step a dialog can arise in is unclear, rate it `high`. Review every added
+    or changed ID against these criteria.
 - An optional `user-instructions-jev.md` at the checkout root adds the user's
   own rules to the input.
 
@@ -307,7 +314,7 @@ With `JEV=on`, data leaves the machine for `api.typesafe.ai`:
 |---|---|
 | `complexity-judge`, `outline-skip`, `detail-skip` | The stage's sources (issue body, plan sections), redacted and capped |
 | `continuation` (next-step invoke, Stop) | The current turn: user and assistant text, tool inputs and results, redacted, capped at `MAX_STATE_CHARS` |
-| `askuser-answer` (marked AskUserQuestion only) | The current turn's user and assistant text and tool names (no tool inputs or results), and the dialog's questions and options |
+| `askuser-answer` (`low` AskUserQuestion only) | The current turn's user and assistant text and tool names (no tool inputs or results), and the dialog's questions and options |
 
 Both conversation points also send the user prompt that opened the turn, in its own block that
 the turn's truncation never cuts: it is the user's own words, the evidence a judgment rests on.
@@ -315,7 +322,7 @@ Meta injections (skill expansions, hook context), compaction summaries and sidec
 never sent as the user's words.
 `user-instructions-jev.md`, when present, goes with both conversation points.
 Redaction removes secret-shaped strings only; `JEV=off` stops every send and
-`JEV_AUTO_SKIP_ASKUSER=off` stops the dialog point's.
+`JEV_AUTO_CLARIFICATIONS=off` stops the dialog point's.
 
 ## Known limits
 

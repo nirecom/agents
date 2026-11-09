@@ -56,7 +56,7 @@ CC evaluates each item inline. Companion to the forward filter in
 
 ### Phase 3 — Apply (optional)
 
-7. If the user confirms redaction for one or more IDs, invoke:
+7. If the user confirms redaction for one or more IDs via `AskUserQuestion` (`metadata.source=scan-offensive.redaction-confirm`), invoke:
    `scripts/scan-repo.sh <repo> --apply --manifest-path <tmp.jsonl> --confirm-ids <id1>[,<id2>...]`
 8. Canary semantics: the script redacts the first confirmed ID and exits 0. CC re-invokes with `--canary-skip` for the rest after the user re-confirms.
 9. Exit code 5 means the body was edited since the scan (`STALE`). Surface to the user and re-run Phase 1.

@@ -33,7 +33,7 @@ MOP-0. **Surface premise contradictions** from Research artifacts.
 
 MOP-1. Locate the intent file:
    a. `<INTENT_MD>` exists → use it (it already follows a resumed session's upstream).
-   b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
+   b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` (`metadata.source=make-outline-plan.intent-select`) to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
    c. After (b) only, rerun the outline CLI with `--session <the chosen file's session-id>` and use its output as `<OUTLINE_MD>`. After (a), keep `<OUTLINE_MD>`: it already names the session chain's first_session_id.
    d. Judge the outline skip: follow `skills/_shared/jev-two-stage-judge.md` with point=`outline-skip` stage=`outline`; on `SKIP=true` (outline already settled skipped by finalize) skip to Completion.
 
@@ -107,7 +107,7 @@ MOP-6. **Cap outcome dispatch.**
 
    **exit 6 (HIGH_UNRESOLVED):** run `bash "$AGENTS_MAIN_ROOT/bin/review-loop-summarize-concerns" --budget-remaining 0 --ledger <CONTROL_DIR>/outline-plan-concern-ledger.txt --raw <RAW_FILE> --label outline-plan`; confirm artifact via `bash "$AGENTS_MAIN_ROOT/bin/concern-ledger" check-finalized --plans-dir <PLANS_DIR> --session-id <session-id> --format outline-plan`; stop loop, then re-run `/clarify-intent`.
 
-   `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/outline-plan-last-round.txt`. Exit 8: AskUserQuestion per exit-codes.md "Escalation by format".
+   `<RAW_FILE>` for terminal exits (2 or 6) = `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`; `<N>` = value from `<CONTROL_DIR>/outline-plan-last-round.txt`. Exit 8: AskUserQuestion (`metadata.source=codex-review-loop.unchanged-rerun`) per exit-codes.md "Escalation by format".
 
 MOP-7. On `APPROVED`:
    Retrieve `<CONV_LANG>` from the stdout of the standalone call `bash "$AGENTS_MAIN_ROOT/bin/get-config-var" CONV_LANG`.
@@ -153,9 +153,9 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 - Write every orchestrator-authored outline.md body — both the MOP-3 minimal single-approach file and the MOP-8 chosen-approach file — in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `next-step --advance --step detail` is NOT called here; only `make-detail-plan` completes `detail`. This skill completes `outline` via MOP-C1's `next-step --advance --step outline --complete --next` call.
-- **Confirmation dialogs per run**: OFF mode fires none. ON mode fires exactly one: the MOP-8 `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel. The MOP-7 AskUserQuestion and the multi-approach passthrough bypass option are abolished (#1522); the orchestrator auto-selects the recommended approach. `CONFIRM_OUTLINE=off` is the sole remaining MOP-8 bypass path. The AskUserQuestion that confirms accepting a `[glossary-drift ` concern unfixed does not count toward this (exception below; `skills/_shared/glossary-drift-check.md`).
-- **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the MOP-7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
-- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`. Second exception: a `[upstream-inconsistency ` concern pauses the round for the user's decision, per `skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`.
+- **Confirmation dialogs per run**: OFF mode fires none. ON mode fires exactly one: the MOP-8 `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel. The MOP-7 AskUserQuestion and the multi-approach passthrough bypass option are abolished (#1522); the orchestrator auto-selects the recommended approach. `CONFIRM_OUTLINE=off` is the sole remaining MOP-8 bypass path. The AskUserQuestion that confirms accepting a `[glossary-drift ` concern unfixed does not count toward this (exception below; `skills/_shared/glossary-drift-check.md`). <!-- askuser-none -->
+- **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the MOP-7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable. <!-- askuser-none -->
+- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only. Exception: pause mid-round only to confirm via AskUserQuestion (`metadata.source=glossary-drift.accept-unfixed`) whether to accept a `[glossary-drift ` concern unfixed, per `skills/_shared/glossary-drift-check.md`. Second exception: a `[upstream-inconsistency ` concern pauses the round (`metadata.source=codex-review-loop.upstream-inconsistency`) for the user's decision, per `skills/_shared/codex-review-loop/upstream-inconsistency-pause.md`.
 - Report observations via /supervisor-report (trigger conditions: rules/supervisor-reporting.md).
 
 ## Completion

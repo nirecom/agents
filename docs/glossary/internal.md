@@ -4,10 +4,18 @@
 Terms the user never sees but many components reference as design concepts.
 Entry criteria and form: [rules/docs/glossary.md](../../rules/docs/glossary.md).
 
+### auto user-input risk level
+- **Definition**: Jev がユーザーに代わって user input（公式の総称で、clarifications と tool approvals の 2 場面を指す）に回答した場合のリスクの段階。2 場面で 1 つの尺度を共有する。`low` と `high` の 2 段階で、`high` は人の承認、同意、破壊的操作または外部への公開、gate、recovery の選択が目的の場面である。段階と回答者の対応は別に定め、現在は `low` を Jev、`high` を必ずユーザーとする。段階が分からない場面は `high` と同じに扱う。
+- **Related**: [architecture/jev.md](../architecture/jev.md)
+
 ### delivery operation
 
 - **Definition**: The hard-to-undo act of landing the change on the default branch — a PR merge or a direct commit and push — performed by `/merge-to-main` right after the USER_VERIFIED confirmation.
 - **Related**: [skills/merge-to-main/SKILL.md](../../skills/merge-to-main/SKILL.md)
+
+### dialog ID
+- **Definition**: SKILL.md の手順の行に書き、AskUserQuestion の `metadata.source` に入れる、言語に依存しない dialog の識別子。hook 側の分類表で、各 dialog ID に auto user-input risk level を 1 つ割り当てる。
+- **Related**: [architecture/jev.md](../architecture/jev.md)
 
 ### first_session_id
 
